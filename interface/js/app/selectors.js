@@ -1,5 +1,5 @@
-define(["jquery", "app/rspamd"],
-    ($, rspamd) => {
+define(["jquery", "app/common"],
+    ($, common) => {
         "use strict";
         const ui = {};
 
@@ -11,23 +11,23 @@ define(["jquery", "app/rspamd"],
         }
 
         function get_server() {
-            const checked_server = rspamd.getSelector("selSrv");
+            const checked_server = common.getSelector("selSrv");
             return (checked_server === "All SERVERS") ? "local" : checked_server;
         }
 
         function checkMsg(data) {
             const selector = $("#selectorsSelArea").val();
-            rspamd.query("plugins/selectors/check_message?selector=" + encodeURIComponent(selector), {
+            common.query("plugins/selectors/check_message?selector=" + encodeURIComponent(selector), {
                 data: data,
                 method: "POST",
                 success: function (neighbours_status) {
                     const json = neighbours_status[0].data;
                     if (json.success) {
-                        rspamd.alertMessage("alert-success", "Message successfully processed");
+                        common.alertMessage("alert-success", "Message successfully processed");
                         $("#selectorsResArea")
                             .val(Object.prototype.hasOwnProperty.call(json, "data") ? json.data.toString() : "");
                     } else {
-                        rspamd.alertMessage("alert-error", "Unexpected error processing message");
+                        common.alertMessage("alert-error", "Unexpected error processing message");
                     }
                 },
                 server: get_server()
@@ -40,8 +40,8 @@ define(["jquery", "app/rspamd"],
                 enable_disable_check_btn();
             }
             const selector = $("#selectorsSelArea").val();
-            if (selector.length && !rspamd.read_only) {
-                rspamd.query("plugins/selectors/check_selector?selector=" + encodeURIComponent(selector), {
+            if (selector.length && !common.read_only) {
+                common.query("plugins/selectors/check_selector?selector=" + encodeURIComponent(selector), {
                     method: "GET",
                     success: function (json) {
                         if (json[0].data.success) {
@@ -70,7 +70,7 @@ define(["jquery", "app/rspamd"],
             }
 
             function getList(list) {
-                rspamd.query("plugins/selectors/list_" + list, {
+                common.query("plugins/selectors/list_" + list, {
                     method: "GET",
                     success: function (neighbours_status) {
                         const json = neighbours_status[0].data;
@@ -85,7 +85,7 @@ define(["jquery", "app/rspamd"],
         }
 
         ui.displayUI = function () {
-            if (!rspamd.read_only &&
+            if (!common.read_only &&
                 !$("#selectorsTable-extractors>tbody>tr").length &&
                 !$("#selectorsTable-transforms>tbody>tr").length) buildLists();
             if (!$("#selectorsSelArea").is(".is-valid, .is-invalid")) checkSelectors();

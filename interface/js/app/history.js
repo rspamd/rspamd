@@ -24,8 +24,8 @@
 
 /* global FooTable */
 
-define(["jquery", "app/rspamd", "d3", "footable"],
-    ($, rspamd, d3) => {
+define(["jquery", "app/common", "app/libft", "d3", "footable"],
+    ($, common, libft, d3) => {
         "use strict";
         const ui = {};
         let prevVersion = null;
@@ -38,15 +38,15 @@ define(["jquery", "app/rspamd", "d3", "footable"],
             $("#selSymOrder_history, label[for='selSymOrder_history']").hide();
 
             $.each(data, (i, item) => {
-                item.time = rspamd.unix_time_format(item.unix_time);
-                rspamd.preprocess_item(item);
+                item.time = libft.unix_time_format(item.unix_time);
+                libft.preprocess_item(item);
                 item.symbols = Object.keys(item.symbols)
                     .map((key) => item.symbols[key])
                     .sort(compare)
                     .map((e) => e.name)
                     .join(", ");
                 item.time = {
-                    value: rspamd.unix_time_format(item.unix_time),
+                    value: libft.unix_time_format(item.unix_time),
                     options: {
                         sortValue: item.unix_time
                     }
@@ -234,7 +234,7 @@ define(["jquery", "app/rspamd", "d3", "footable"],
 
         function process_history_data(data) {
             const process_functions = {
-                2: rspamd.process_history_v2,
+                2: libft.process_history_v2,
                 legacy: process_history_legacy
             };
             let pf = process_functions.legacy;
@@ -263,12 +263,12 @@ define(["jquery", "app/rspamd", "d3", "footable"],
         }
 
         ui.getHistory = function () {
-            rspamd.query("history", {
+            common.query("history", {
                 success: function (req_data) {
                     function differentVersions(neighbours_data) {
                         const dv = neighbours_data.some((e) => e.version !== neighbours_data[0].version);
                         if (dv) {
-                            rspamd.alertMessage("alert-error",
+                            common.alertMessage("alert-error",
                                 "Neighbours history backend versions do not match. Cannot display history.");
                             return true;
                         }
@@ -293,21 +293,21 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                         }
                         const o = process_history_data(data);
                         const {items} = o;
-                        rspamd.symbols.history = o.symbols;
+                        common.symbols.history = o.symbols;
 
-                        if (Object.prototype.hasOwnProperty.call(rspamd.tables, "history") &&
+                        if (Object.prototype.hasOwnProperty.call(common.tables, "history") &&
                             version === prevVersion) {
-                            rspamd.tables.history.rows.load(items);
+                            common.tables.history.rows.load(items);
                         } else {
-                            rspamd.destroyTable("history");
+                            libft.destroyTable("history");
                             // Is there a way to get an event when the table is destroyed?
                             setTimeout(() => {
-                                rspamd.initHistoryTable(data, items, "history", get_history_columns(data), false);
+                                libft.initHistoryTable(data, items, "history", get_history_columns(data), false);
                             }, 200);
                         }
                         prevVersion = version;
                     } else {
-                        rspamd.destroyTable("history");
+                        libft.destroyTable("history");
                     }
                 },
                 complete: function () { $("#refresh").removeAttr("disabled").removeClass("disabled"); },
@@ -316,7 +316,7 @@ define(["jquery", "app/rspamd", "d3", "footable"],
         };
 
         function initErrorsTable(rows) {
-            rspamd.tables.errors = FooTable.init("#errorsLog", {
+            common.tables.errors = FooTable.init("#errorsLog", {
                 columns: [
                     {sorted: true,
                         direction: "DESC",
@@ -340,7 +340,7 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                 paging: {
                     enabled: true,
                     limit: 5,
-                    size: rspamd.page_size.errors
+                    size: common.page_size.errors
                 },
                 filtering: {
                     enabled: true,
@@ -354,9 +354,9 @@ define(["jquery", "app/rspamd", "d3", "footable"],
         }
 
         ui.getErrors = function () {
-            if (rspamd.read_only) return;
+            if (common.read_only) return;
 
-            rspamd.query("errors", {
+            common.query("errors", {
                 success: function (data) {
                     const neighbours_data = data
                         .filter((d) => d.status) // filter out unavailable neighbours
@@ -364,14 +364,14 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                     const rows = [].concat.apply([], neighbours_data);
                     $.each(rows, (i, item) => {
                         item.ts = {
-                            value: rspamd.unix_time_format(item.ts),
+                            value: libft.unix_time_format(item.ts),
                             options: {
                                 sortValue: item.ts
                             }
                         };
                     });
-                    if (Object.prototype.hasOwnProperty.call(rspamd.tables, "errors")) {
-                        rspamd.tables.errors.rows.load(rows);
+                    if (Object.prototype.hasOwnProperty.call(common.tables, "errors")) {
+                        common.tables.errors.rows.load(rows);
                     } else {
                         initErrorsTable(rows);
                     }
@@ -386,8 +386,8 @@ define(["jquery", "app/rspamd", "d3", "footable"],
         };
 
 
-        rspamd.set_page_size("history", $("#history_page_size").val());
-        rspamd.bindHistoryTableEventHandlers("history", 8);
+        libft.set_page_size("history", $("#history_page_size").val());
+        libft.bindHistoryTableEventHandlers("history", 8);
 
         $("#updateHistory").off("click");
         $("#updateHistory").on("click", (e) => {
@@ -402,10 +402,10 @@ define(["jquery", "app/rspamd", "d3", "footable"],
             if (!confirm("Are you sure you want to reset history log?")) { // eslint-disable-line no-alert
                 return;
             }
-            rspamd.destroyTable("history");
-            rspamd.destroyTable("errors");
+            libft.destroyTable("history");
+            libft.destroyTable("errors");
 
-            rspamd.query("historyreset", {
+            common.query("historyreset", {
                 success: function () {
                     ui.getHistory();
                     ui.getErrors();

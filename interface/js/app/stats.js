@@ -22,8 +22,8 @@
  THE SOFTWARE.
  */
 
-define(["jquery", "app/rspamd", "d3pie", "d3"],
-    ($, rspamd, D3Pie, d3) => {
+define(["jquery", "app/common", "d3pie", "d3"],
+    ($, common, D3Pie, d3) => {
         "use strict";
         // @ ms to date
         function msToTime(seconds) {
@@ -254,7 +254,7 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
                 ["no action", "soft reject", "add header", "rewrite subject", "greylist", "reject"]
                     .forEach((action) => {
                         data.push({
-                            color: rspamd.chartLegend.find((item) => item.label === action).color,
+                            color: common.chartLegend.find((item) => item.label === action).color,
                             label: action,
                             value: actions[action]
                         });
@@ -266,7 +266,7 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
         // Public API
         const ui = {
             statWidgets: function (graphs, checked_server) {
-                rspamd.query("stat", {
+                common.query("stat", {
                     success: function (neighbours_status) {
                         const neighbours_sum = {
                             version: neighbours_status[0].data.version,
@@ -315,7 +315,7 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
                             const alerted = "alerted_stats_legacy_" + neighbours_status[e].name;
                             promises.push($.ajax({
                                 url: neighbours_status[e].url + "auth",
-                                headers: {Password: rspamd.getPassword()},
+                                headers: {Password: common.getPassword()},
                                 success: function (data) {
                                     sessionStorage.removeItem(alerted);
                                     ["config_id", "version", "uptime"].forEach((p) => {
@@ -326,7 +326,7 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
                                 error: function (jqXHR, textStatus, errorThrown) {
                                     if (!(alerted in sessionStorage)) {
                                         sessionStorage.setItem(alerted, true);
-                                        rspamd.alertMessage("alert-error", neighbours_status[e].name + " > " +
+                                        common.alertMessage("alert-error", neighbours_status[e].name + " > " +
                                           "Cannot receive legacy stats data" + (errorThrown ? ": " + errorThrown : ""));
                                     }
                                     process_node_stat(e);

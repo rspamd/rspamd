@@ -24,13 +24,13 @@
 
 /* global require */
 
-define(["jquery", "app/rspamd"],
-    ($, rspamd) => {
+define(["jquery", "app/common"],
+    ($, common) => {
         "use strict";
         const ui = {};
 
         ui.getActions = function getActions(checked_server) {
-            rspamd.query("actions", {
+            common.query("actions", {
                 success: function (data) {
                     $("#actionsFormField").empty();
                     const items = [];
@@ -88,15 +88,15 @@ define(["jquery", "app/rspamd"],
             // String to array for comparison
             const eltsArray = JSON.parse(elts);
             if (eltsArray[0] < 0) {
-                rspamd.alertMessage("alert-modal alert-error", "Spam can not be negative");
+                common.alertMessage("alert-modal alert-error", "Spam can not be negative");
             } else if (eltsArray[1] < 0) {
-                rspamd.alertMessage("alert-modal alert-error", "Rewrite subject can not be negative");
+                common.alertMessage("alert-modal alert-error", "Rewrite subject can not be negative");
             } else if (eltsArray[2] < 0) {
-                rspamd.alertMessage("alert-modal alert-error", "Probable spam can not be negative");
+                common.alertMessage("alert-modal alert-error", "Probable spam can not be negative");
             } else if (eltsArray[3] < 0) {
-                rspamd.alertMessage("alert-modal alert-error", "Greylist can not be negative");
+                common.alertMessage("alert-modal alert-error", "Greylist can not be negative");
             } else if (descending(eltsArray)) {
-                rspamd.query("saveactions", {
+                common.query("saveactions", {
                     method: "POST",
                     params: {
                         data: elts,
@@ -105,14 +105,14 @@ define(["jquery", "app/rspamd"],
                     server: server
                 });
             } else {
-                rspamd.alertMessage("alert-modal alert-error", "Incorrect order of actions thresholds");
+                common.alertMessage("alert-modal alert-error", "Incorrect order of actions thresholds");
             }
         };
 
         ui.getMaps = function (checked_server) {
             const $listmaps = $("#listMaps");
             $listmaps.closest(".card").hide();
-            rspamd.query("maps", {
+            common.query("maps", {
                 success: function (json) {
                     const [{data}] = json;
                     $listmaps.empty();
@@ -121,7 +121,7 @@ define(["jquery", "app/rspamd"],
 
                     $.each(data, (i, item) => {
                         let $td = '<td><span class="badge text-bg-secondary">Read</span></td>';
-                        if (!(item.editable === false || rspamd.read_only)) {
+                        if (!(item.editable === false || common.read_only)) {
                             $td = $($td).append('&nbsp;<span class="badge text-bg-success">Write</span>');
                         }
                         const $tr = $("<tr>").append($td);
@@ -158,9 +158,9 @@ define(["jquery", "app/rspamd"],
 
         // Modal form for maps
         $(document).on("click", "[data-bs-toggle=\"modal\"]", function () {
-            const checked_server = rspamd.getSelector("selSrv");
+            const checked_server = common.getSelector("selSrv");
             const item = $(this).data("item");
-            rspamd.query("getmap", {
+            common.query("getmap", {
                 headers: {
                     Map: item.map
                 },
@@ -180,11 +180,11 @@ define(["jquery", "app/rspamd"],
                             jar.updateCode(data[0].data);
                         });
                     } else {
-                        document.querySelector("#editor").innerHTML = rspamd.escapeHTML(data[0].data);
+                        document.querySelector("#editor").innerHTML = common.escapeHTML(data[0].data);
                     }
 
                     let icon = "fa-edit";
-                    if (item.editable === false || rspamd.read_only) {
+                    if (item.editable === false || common.read_only) {
                         $("#editor").attr(editor[mode].readonly_attr);
                         icon = "fa-eye";
                         $("#modalSaveGroup").hide();
@@ -218,9 +218,9 @@ define(["jquery", "app/rspamd"],
         });
 
         function saveMap(server) {
-            rspamd.query("savemap", {
+            common.query("savemap", {
                 success: function () {
-                    rspamd.alertMessage("alert-success", "Map data successfully saved");
+                    common.alertMessage("alert-success", "Map data successfully saved");
                     $("#modalDialog").modal("hide");
                 },
                 errorMessage: "Save map error",

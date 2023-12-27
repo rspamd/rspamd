@@ -24,8 +24,8 @@
 
 /* global require */
 
-define(["jquery", "app/rspamd"],
-    ($, rspamd) => {
+define(["jquery", "app/common", "app/libft"],
+    ($, common, libft) => {
         "use strict";
         const ui = {};
 
@@ -47,15 +47,15 @@ define(["jquery", "app/rspamd"],
             }
 
             function server() {
-                if (rspamd.getSelector("selSrv") === "All SERVERS" &&
-                    rspamd.getSelector("selLearnServers") === "random") {
+                if (common.getSelector("selSrv") === "All SERVERS" &&
+                    common.getSelector("selLearnServers") === "random") {
                     const servers = $("#selSrv option").slice(1).map((_, o) => o.value);
                     return servers[Math.floor(Math.random() * servers.length)];
                 }
                 return null;
             }
 
-            rspamd.query(url, {
+            common.query(url, {
                 data: data,
                 params: {
                     processData: false,
@@ -64,9 +64,9 @@ define(["jquery", "app/rspamd"],
                 headers: headers,
                 success: function (json, jqXHR) {
                     cleanTextUpload(source);
-                    rspamd.alertMessage("alert-success", "Data successfully uploaded");
+                    common.alertMessage("alert-success", "Data successfully uploaded");
                     if (jqXHR.status !== 200) {
-                        rspamd.alertMessage("alert-info", jqXHR.statusText);
+                        common.alertMessage("alert-info", jqXHR.statusText);
                     }
                 },
                 server: server()
@@ -128,13 +128,13 @@ define(["jquery", "app/rspamd"],
         }
 
         function get_server() {
-            const checked_server = rspamd.getSelector("selSrv");
+            const checked_server = common.getSelector("selSrv");
             return (checked_server === "All SERVERS") ? "local" : checked_server;
         }
 
         // @upload text
         function scanText(data, headers) {
-            rspamd.query("checkv2", {
+            common.query("checkv2", {
                 data: data,
                 params: {
                     processData: false,
@@ -144,7 +144,7 @@ define(["jquery", "app/rspamd"],
                 success: function (neighbours_status) {
                     function scrollTop(rows_total) {
                         // Is there a way to get an event when all rows are loaded?
-                        rspamd.waitForRowsDisplayed("scan", rows_total, () => {
+                        libft.waitForRowsDisplayed("scan", rows_total, () => {
                             $("#cleanScanHistory").removeAttr("disabled", true);
                             $("html, body").animate({
                                 scrollTop: $("#scanResult").offset().top
@@ -154,40 +154,40 @@ define(["jquery", "app/rspamd"],
 
                     const json = neighbours_status[0].data;
                     if (json.action) {
-                        rspamd.alertMessage("alert-success", "Data successfully scanned");
+                        common.alertMessage("alert-success", "Data successfully scanned");
 
                         const rows_total = $("#historyTable_scan > tbody > tr:not(.footable-detail-row)").length + 1;
-                        const o = rspamd.process_history_v2({rows: [json]}, "scan");
+                        const o = libft.process_history_v2({rows: [json]}, "scan");
                         const {items} = o;
-                        rspamd.symbols.scan.push(o.symbols[0]);
+                        common.symbols.scan.push(o.symbols[0]);
 
-                        if (Object.prototype.hasOwnProperty.call(rspamd.tables, "scan")) {
-                            rspamd.tables.scan.rows.load(items, true);
+                        if (Object.prototype.hasOwnProperty.call(common.tables, "scan")) {
+                            common.tables.scan.rows.load(items, true);
                             scrollTop(rows_total);
                         } else {
-                            rspamd.destroyTable("scan");
+                            libft.destroyTable("scan");
                             require(["footable"], () => {
                                 // Is there a way to get an event when the table is destroyed?
                                 setTimeout(() => {
-                                    rspamd.initHistoryTable(data, items, "scan", columns_v2(), true);
+                                    libft.initHistoryTable(data, items, "scan", columns_v2(), true);
                                     scrollTop(rows_total);
                                 }, 200);
                             });
                         }
                     } else {
-                        rspamd.alertMessage("alert-error", "Cannot scan data");
+                        common.alertMessage("alert-error", "Cannot scan data");
                     }
                 },
                 errorMessage: "Cannot upload data",
                 statusCode: {
                     404: function () {
-                        rspamd.alertMessage("alert-error", "Cannot upload data, no server found");
+                        common.alertMessage("alert-error", "Cannot upload data, no server found");
                     },
                     500: function () {
-                        rspamd.alertMessage("alert-error", "Cannot tokenize message: no text data");
+                        common.alertMessage("alert-error", "Cannot tokenize message: no text data");
                     },
                     503: function () {
-                        rspamd.alertMessage("alert-error", "Cannot tokenize message: no text data");
+                        common.alertMessage("alert-error", "Cannot tokenize message: no text data");
                     }
                 },
                 server: get_server()
@@ -207,7 +207,7 @@ define(["jquery", "app/rspamd"],
                 $("#hash-card").slideDown();
             }
 
-            rspamd.query("plugins/fuzzy/hashes?flag=" + $("#fuzzy-flag").val(), {
+            common.query("plugins/fuzzy/hashes?flag=" + $("#fuzzy-flag").val(), {
                 data: data,
                 params: {
                     processData: false,
@@ -216,10 +216,10 @@ define(["jquery", "app/rspamd"],
                 success: function (neighbours_status) {
                     const json = neighbours_status[0].data;
                     if (json.success) {
-                        rspamd.alertMessage("alert-success", "Message successfully processed");
+                        common.alertMessage("alert-success", "Message successfully processed");
                         fillHashTable(json.hashes);
                     } else {
-                        rspamd.alertMessage("alert-error", "Unexpected error processing message");
+                        common.alertMessage("alert-error", "Unexpected error processing message");
                     }
                 },
                 server: get_server()
@@ -227,8 +227,8 @@ define(["jquery", "app/rspamd"],
         }
 
 
-        rspamd.set_page_size("scan", $("#scan_page_size").val());
-        rspamd.bindHistoryTableEventHandlers("scan", 3);
+        libft.set_page_size("scan", $("#scan_page_size").val());
+        libft.bindHistoryTableEventHandlers("scan", 3);
 
         $("#cleanScanHistory").off("click");
         $("#cleanScanHistory").on("click", (e) => {
@@ -236,8 +236,8 @@ define(["jquery", "app/rspamd"],
             if (!confirm("Are you sure you want to clean scan history?")) { // eslint-disable-line no-alert
                 return;
             }
-            rspamd.destroyTable("scan");
-            rspamd.symbols.scan.length = 0;
+            libft.destroyTable("scan");
+            common.symbols.scan.length = 0;
             $("#cleanScanHistory").attr("disabled", true);
         });
 
@@ -288,7 +288,7 @@ define(["jquery", "app/rspamd"],
                     uploadText(data, source, headers);
                 }
             } else {
-                rspamd.alertMessage("alert-error", "Message source field cannot be blank");
+                common.alertMessage("alert-error", "Message source field cannot be blank");
             }
             return false;
         });
