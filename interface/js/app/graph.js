@@ -25,8 +25,8 @@
 
 /* global FooTable */
 
-define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
-    ($, rspamd, D3Evolution, D3Pie, d3) => {
+define(["jquery", "app/common", "d3evolution", "d3pie", "d3", "footable"],
+    ($, common, D3Evolution, D3Pie, d3) => {
         "use strict";
 
         const rrd_pie_config = {
@@ -68,16 +68,16 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
 
                 legend: {
                     space: 140,
-                    entries: rspamd.chartLegend
+                    entries: common.chartLegend
                 }
             };
 
             function initGraph() {
                 const graph = new D3Evolution("graph", $.extend({}, graph_options, {
-                    yScale: rspamd.getSelector("selYScale"),
-                    type: rspamd.getSelector("selType"),
-                    interpolate: rspamd.getSelector("selInterpolate"),
-                    convert: rspamd.getSelector("selConvert"),
+                    yScale: common.getSelector("selYScale"),
+                    type: common.getSelector("selType"),
+                    interpolate: common.getSelector("selInterpolate"),
+                    convert: common.getSelector("selConvert"),
                 }));
                 $("#selYScale").change(function () {
                     graph.yScale(this.value);
@@ -127,7 +127,7 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
             }
 
             function initSummaryTable(rows, unit) {
-                rspamd.tables.rrd_summary = FooTable.init("#rrd-table", {
+                common.tables.rrd_summary = FooTable.init("#rrd-table", {
                     sorting: {
                         enabled: true
                     },
@@ -151,8 +151,8 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
             }
 
             function drawRrdTable(rows, unit) {
-                if (Object.prototype.hasOwnProperty.call(rspamd.tables, "rrd_summary")) {
-                    $.each(rspamd.tables.rrd_summary.rows.all, (i, row) => {
+                if (Object.prototype.hasOwnProperty.call(common.tables, "rrd_summary")) {
+                    $.each(common.tables.rrd_summary.rows.all, (i, row) => {
                         row.val(rows[i], false, true);
                     });
                 } else {
@@ -199,7 +199,7 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
             }
 
 
-            rspamd.query("graph", {
+            common.query("graph", {
                 success: function (req_data) {
                     let data = null;
                     const neighbours_data = req_data
@@ -214,7 +214,7 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
                             if ((curr[0][0].x !== res[0][0].x) ||
                             (curr[0][curr[0].length - 1].x !== res[0][res[0].length - 1].x)) {
                                 time_match = false;
-                                rspamd.alertMessage("alert-error",
+                                common.alertMessage("alert-error",
                                     "Neighbours time extents do not match. Check if time is synchronized on all servers.");
                                 arr.splice(1); // Break out of .reduce() by mutating the source array
                             }

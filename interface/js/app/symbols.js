@@ -24,8 +24,8 @@
 
 /* global FooTable */
 
-define(["jquery", "app/rspamd", "footable"],
-    ($, rspamd) => {
+define(["jquery", "app/common", "footable"],
+    ($, common) => {
         "use strict";
         const ui = {};
         let altered = {};
@@ -41,10 +41,10 @@ define(["jquery", "app/rspamd", "footable"],
             const values = [];
             Object.entries(altered).forEach(([key, value]) => values.push({name: key, value: value}));
 
-            rspamd.query("./savesymbols", {
+            common.query("./savesymbols", {
                 success: function () {
                     clear_altered();
-                    rspamd.alertMessage("alert-modal alert-success", "Symbols successfully saved");
+                    common.alertMessage("alert-modal alert-success", "Symbols successfully saved");
                 },
                 complete: () => $("#save-alert button").removeAttr("disabled", true),
                 errorMessage: "Save symbols error",
@@ -124,7 +124,7 @@ define(["jquery", "app/rspamd", "footable"],
         // @get symbols into modal form
         ui.getSymbols = function (checked_server) {
             clear_altered();
-            rspamd.query("symbols", {
+            common.query("symbols", {
                 success: function (json) {
                     const [{data}] = json;
                     const items = process_symbols_data(data);
@@ -182,7 +182,7 @@ define(["jquery", "app/rspamd", "footable"],
                     });
                     /* eslint-enable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
 
-                    rspamd.tables.symbols = FooTable.init("#symbolsTable", {
+                    common.tables.symbols = FooTable.init("#symbolsTable", {
                         columns: [
                             {sorted: true, direction: "ASC", name: "group", title: "Group"},
                             {name: "symbol", title: "Symbol"},
@@ -213,7 +213,7 @@ define(["jquery", "app/rspamd", "footable"],
                         },
                         on: {
                             "ready.ft.table": function () {
-                                if (rspamd.read_only) {
+                                if (common.read_only) {
                                     $(".mb-disabled").attr("disabled", true);
                                 }
                             }
@@ -228,11 +228,11 @@ define(["jquery", "app/rspamd", "footable"],
         $("#updateSymbols").on("click", (e) => {
             e.preventDefault();
             clear_altered();
-            const checked_server = rspamd.getSelector("selSrv");
-            rspamd.query("symbols", {
+            const checked_server = common.getSelector("selSrv");
+            common.query("symbols", {
                 success: function (data) {
                     const [items] = process_symbols_data(data[0].data);
-                    rspamd.tables.symbols.rows.load(items);
+                    common.tables.symbols.rows.load(items);
                 },
                 server: (checked_server === "All SERVERS") ? "local" : checked_server
             });
