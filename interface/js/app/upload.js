@@ -90,7 +90,8 @@ define(["jquery", "app/common", "app/libft"],
                 style: {minwidth: 82}
             }, {
                 name: "passthrough_module",
-                title: '<div title="The module that has set the pre-result">Pass-through module</div>'
+                title: '<div title="The module that has set the pre-result">Pass-through module</div>',
+                breakpoints: "xs sm md"
             }, {
                 name: "score",
                 title: "Score",
@@ -119,6 +120,7 @@ define(["jquery", "app/common", "app/libft"],
                 style: {maxWidth: 72},
                 sortValue: function (val) { return Number(val); }
             }, {
+                classes: "history-col-time",
                 sorted: true,
                 direction: "DESC",
                 name: "time",
