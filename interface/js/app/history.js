@@ -58,118 +58,6 @@ define(["jquery", "app/common", "app/libft", "d3", "footable"],
             return {items: items};
         }
 
-        function columns_v2() {
-            return [{
-                name: "id",
-                title: "ID",
-                style: {
-                    minWidth: 130,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    wordBreak: "break-all",
-                    whiteSpace: "normal"
-                }
-            }, {
-                name: "ip",
-                title: "IP address",
-                breakpoints: "xs sm md",
-                style: {
-                    "minWidth": "calc(7.6em + 8px)",
-                    "word-break": "break-all"
-                }
-            }, {
-                name: "sender_mime",
-                title: "[Envelope From] From",
-                breakpoints: "xs sm md",
-                style: {
-                    "minWidth": 100,
-                    "maxWidth": 200,
-                    "word-wrap": "break-word"
-                }
-            }, {
-                name: "rcpt_mime_short",
-                title: "[Envelope To] To/Cc/Bcc",
-                breakpoints: "xs sm md",
-                filterable: false,
-                classes: "d-none d-xl-table-cell",
-                style: {
-                    "minWidth": 100,
-                    "maxWidth": 200,
-                    "word-wrap": "break-word"
-                }
-            }, {
-                name: "rcpt_mime",
-                title: "[Envelope To] To/Cc/Bcc",
-                breakpoints: "all",
-                style: {"word-wrap": "break-word"}
-            }, {
-                name: "subject",
-                title: "Subject",
-                breakpoints: "xs sm md",
-                style: {
-                    "word-break": "break-all",
-                    "minWidth": 150
-                }
-            }, {
-                name: "action",
-                title: "Action",
-                style: {minwidth: 82}
-            }, {
-                name: "score",
-                title: "Score",
-                style: {
-                    "maxWidth": 110,
-                    "text-align": "right",
-                    "white-space": "nowrap"
-                },
-                sortValue: function (val) { return Number(val.options.sortValue); }
-            }, {
-                name: "symbols",
-                title: "Symbols" +
-                        '<div class="sym-order-toggle">' +
-                            '<br><span style="font-weight:normal;">Sort by:</span><br>' +
-                            '<div class="btn-group btn-group-xs btn-sym-order-history">' +
-                                '<label type="button" class="btn btn-outline-secondary btn-sym-history-magnitude">' +
-                                    '<input type="radio" class="btn-check" value="magnitude">Magnitude</label>' +
-                                '<label type="button" class="btn btn-outline-secondary btn-sym-history-score">' +
-                                    '<input type="radio" class="btn-check" value="score">Value</label>' +
-                                '<label type="button" class="btn btn-outline-secondary btn-sym-history-name">' +
-                                    '<input type="radio" class="btn-check" value="name">Name</label>' +
-                            "</div>" +
-                        "</div>",
-                breakpoints: "all",
-                style: {width: 550, maxWidth: 550}
-            }, {
-                name: "size",
-                title: "Msg size",
-                breakpoints: "xs sm md",
-                style: {minwidth: 50},
-                formatter: d3.format(".3~s")
-            }, {
-                name: "time_real",
-                title: "Scan time",
-                breakpoints: "xs sm md",
-                style: {maxWidth: 72},
-                sortValue: function (val) { return Number(val); }
-            }, {
-                classes: "history-col-time",
-                sorted: true,
-                direction: "DESC",
-                name: "time",
-                title: "Time",
-                sortValue: function (val) { return Number(val.options.sortValue); }
-            }, {
-                name: "user",
-                title: "Authenticated user",
-                breakpoints: "xs sm md",
-                style: {
-                    "minWidth": 100,
-                    "maxWidth": 130,
-                    "word-wrap": "break-word"
-                }
-            }];
-        }
-
         function columns_legacy() {
             return [{
                 name: "id",
@@ -228,8 +116,8 @@ define(["jquery", "app/common", "app/libft", "d3", "footable"],
         }
 
         const columns = {
-            2: columns_v2,
-            legacy: columns_legacy
+            2: libft.columns_v2("history"),
+            legacy: columns_legacy()
         };
 
         function process_history_data(data) {
@@ -259,7 +147,7 @@ define(["jquery", "app/common", "app/libft", "d3", "footable"],
                 }
             }
 
-            return func();
+            return func;
         }
 
         ui.getHistory = function () {

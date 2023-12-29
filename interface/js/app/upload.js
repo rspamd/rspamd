@@ -73,62 +73,6 @@ define(["jquery", "app/common", "app/libft"],
             });
         }
 
-        function columns_v2() {
-            return [{
-                name: "id",
-                title: "ID",
-                style: {
-                    minWidth: 130,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    wordBreak: "break-all",
-                    whiteSpace: "normal"
-                }
-            }, {
-                name: "action",
-                title: "Action",
-                style: {minwidth: 82}
-            }, {
-                name: "passthrough_module",
-                title: '<div title="The module that has set the pre-result">Pass-through module</div>',
-                breakpoints: "xs sm md"
-            }, {
-                name: "score",
-                title: "Score",
-                style: {maxWidth: 110},
-                sortValue: function (val) { return Number(val.options.sortValue); }
-            }, {
-                name: "symbols",
-                title: "Symbols" +
-                        '<div class="sym-order-toggle">' +
-                            '<br><span style="font-weight:normal;">Sort by:</span><br>' +
-                            '<div class="btn-group btn-group-xs btn-sym-order-scan">' +
-                                '<label type="button" class="btn btn-outline-secondary btn-sym-scan-magnitude">' +
-                                    '<input type="radio" class="btn-check" value="magnitude">Magnitude</label>' +
-                                '<label type="button" class="btn btn-outline-secondary btn-sym-scan-score">' +
-                                    '<input type="radio" class="btn-check" value="score">Value</label>' +
-                                '<label type="button" class="btn btn-outline-secondary btn-sym-scan-name">' +
-                                    '<input type="radio" class="btn-check" value="name">Name</label>' +
-                            "</div>" +
-                        "</div>",
-                breakpoints: "all",
-                style: {width: 550, maxWidth: 550}
-            }, {
-                name: "time_real",
-                title: "Scan time",
-                breakpoints: "xs sm md",
-                style: {maxWidth: 72},
-                sortValue: function (val) { return Number(val); }
-            }, {
-                classes: "history-col-time",
-                sorted: true,
-                direction: "DESC",
-                name: "time",
-                title: "Time",
-                sortValue: function (val) { return Number(val.options.sortValue); }
-            }];
-        }
-
         function get_server() {
             const checked_server = common.getSelector("selSrv");
             return (checked_server === "All SERVERS") ? "local" : checked_server;
@@ -171,7 +115,7 @@ define(["jquery", "app/common", "app/libft"],
                             require(["footable"], () => {
                                 // Is there a way to get an event when the table is destroyed?
                                 setTimeout(() => {
-                                    libft.initHistoryTable(data, items, "scan", columns_v2(), true);
+                                    libft.initHistoryTable(data, items, "scan", libft.columns_v2("scan"), true);
                                     scrollTop(rows_total);
                                 }, 200);
                             });
