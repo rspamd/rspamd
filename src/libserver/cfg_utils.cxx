@@ -326,7 +326,7 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 	 */
 	cfg->enable_shutdown_workaround = TRUE;
 
-	cfg->ssl_ciphers = rspamd_mempool_strdup(cfg->cfg_pool, "HIGH:!anullptr:!kRSA:!PSK:!SRP:!MD5:!RC4");
+	cfg->ssl_ciphers = rspamd_mempool_strdup(cfg->cfg_pool, "HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4");
 	cfg->max_message = DEFAULT_MAX_MESSAGE;
 	cfg->max_pic_size = DEFAULT_MAX_PIC;
 	cfg->images_cache_size = 256;
