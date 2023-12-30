@@ -2049,7 +2049,7 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   rspamd_rcl_parse_struct_string,
 									   G_STRUCT_OFFSET(struct rspamd_config, ssl_ciphers),
 									   0,
-									   "List of ssl ciphers (e.g. HIGH:!anullptr:!kRSA:!PSK:!SRP:!MD5:!RC4)");
+									   "List of ssl ciphers (e.g. HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4)");
 		rspamd_rcl_add_default_handler(sub,
 									   "max_message",
 									   rspamd_rcl_parse_struct_integer,
