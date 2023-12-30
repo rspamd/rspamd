@@ -10,6 +10,9 @@
     "globals": {
         "define": false
     },
+    "parserOptions": {
+        "ecmaVersion": 2016
+    },
     "plugins": [
       "@stylistic"
     ],

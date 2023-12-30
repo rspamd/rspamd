@@ -24,8 +24,8 @@
 
 /* global FooTable */
 
-define(["jquery", "app/common", "app/libft", "d3", "footable"],
-    ($, common, libft, d3) => {
+define(["jquery", "app/common", "app/libft", "footable"],
+    ($, common, libft) => {
         "use strict";
         const ui = {};
         let prevVersion = null;
@@ -94,7 +94,7 @@ define(["jquery", "app/common", "app/libft", "d3", "footable"],
                 title: "Message size",
                 breakpoints: "xs sm",
                 style: {width: 120, maxWidth: 120},
-                formatter: d3.format(".3~s")
+                formatter: libft.formatBytesIEC
             }, {
                 name: "scan_time",
                 title: "Scan time",

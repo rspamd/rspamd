@@ -1,7 +1,7 @@
 /* global FooTable */
 
-define(["jquery", "app/common", "d3", "footable"],
-    ($, common, d3) => {
+define(["jquery", "app/common", "footable"],
+    ($, common) => {
         "use strict";
         const ui = {};
 
@@ -34,6 +34,22 @@ define(["jquery", "app/common", "d3", "footable"],
 
 
         // Public functions
+
+        ui.formatBytesIEC = function (bytes) {
+            // FooTable represents data as text even column type is "number".
+            if (!Number.isInteger(Number(bytes)) || bytes < 0) return "NaN";
+
+            const base = 1024;
+            const exponent = Math.floor(Math.log(bytes) / Math.log(base));
+
+            if (exponent > 8) return "∞";
+
+            const value = parseFloat((bytes / (base ** exponent)).toPrecision(3));
+            let unit = "BKMGTPEZY"[exponent];
+            if (exponent) unit += "iB";
+
+            return value + " " + unit;
+        };
 
         ui.columns_v2 = function (table) {
             return [{
@@ -125,7 +141,7 @@ define(["jquery", "app/common", "d3", "footable"],
                 title: "Msg size",
                 breakpoints: "xs sm md",
                 style: {minwidth: 50},
-                formatter: d3.format(".3~s")
+                formatter: ui.formatBytesIEC
             }, {
                 name: "time_real",
                 title: "Scan time",
