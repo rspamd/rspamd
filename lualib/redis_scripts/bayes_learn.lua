@@ -31,12 +31,14 @@ for i, token in ipairs(input_tokens) do
     local tok1 = text_tokens[i * 2 - 1]
     local tok2 = text_tokens[i * 2]
 
-    if tok2 then
-      redis.call('HSET', token, 'tokens', string.format('%s:%s', tok1, tok2))
-    else
-      redis.call('HSET', token, 'tokens', tok1)
-    end
+    if tok1 then
+      if tok2 then
+        redis.call('HSET', token, 'tokens', string.format('%s:%s', tok1, tok2))
+      else
+        redis.call('HSET', token, 'tokens', tok1)
+      end
 
-    redis.call('ZINCRBY', prefix .. '_z', token, is_unlearn and -1 or 1)
+      redis.call('ZINCRBY', prefix .. '_z', token, is_unlearn and -1 or 1)
+    end
   end
 end
