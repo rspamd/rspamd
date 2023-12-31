@@ -69,7 +69,9 @@ define(["jquery", "app/common", "footable"],
                 style: {
                     "minWidth": "calc(7.6em + 8px)",
                     "word-break": "break-all"
-                }
+                },
+                // Normalize IPv4
+                sortValue: (ip) => ((typeof ip === "string") ? ip.split(".").map((x) => x.padStart(3, "0")).join("") : "0")
             }, {
                 name: "sender_mime",
                 title: "[Envelope From] From",
