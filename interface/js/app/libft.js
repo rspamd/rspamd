@@ -35,6 +35,148 @@ define(["jquery", "app/common", "footable"],
 
         // Public functions
 
+        ui.formatBytesIEC = function (bytes) {
+            // FooTable represents data as text even column type is "number".
+            if (!Number.isInteger(Number(bytes)) || bytes < 0) return "NaN";
+
+            const base = 1024;
+            const exponent = Math.floor(Math.log(bytes) / Math.log(base));
+
+            if (exponent > 8) return "∞";
+
+            const value = parseFloat((bytes / (base ** exponent)).toPrecision(3));
+            let unit = "BKMGTPEZY"[exponent];
+            if (exponent) unit += "iB";
+
+            return value + " " + unit;
+        };
+
+        ui.columns_v2 = function (table) {
+            return [{
+                name: "id",
+                title: "ID",
+                style: {
+                    minWidth: 130,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    wordBreak: "break-all",
+                    whiteSpace: "normal"
+                }
+            }, {
+                name: "ip",
+                title: "IP address",
+                breakpoints: "xs sm md",
+                style: {
+                    "minWidth": "calc(7.6em + 8px)",
+                    "word-break": "break-all"
+                }
+            }, {
+                name: "sender_mime",
+                title: "[Envelope From] From",
+                breakpoints: "xs sm md",
+                style: {
+                    "minWidth": 100,
+                    "maxWidth": 200,
+                    "word-wrap": "break-word"
+                }
+            }, {
+                name: "rcpt_mime_short",
+                title: "[Envelope To] To/Cc/Bcc",
+                breakpoints: "xs sm md",
+                filterable: false,
+                classes: "d-none d-xl-table-cell",
+                style: {
+                    "minWidth": 100,
+                    "maxWidth": 200,
+                    "word-wrap": "break-word"
+                }
+            }, {
+                name: "rcpt_mime",
+                title: "[Envelope To] To/Cc/Bcc",
+                breakpoints: "all",
+                style: {"word-wrap": "break-word"}
+            }, {
+                name: "subject",
+                title: "Subject",
+                breakpoints: "xs sm md",
+                style: {
+                    "word-break": "break-all",
+                    "minWidth": 150
+                }
+            }, {
+                name: "action",
+                title: "Action",
+                style: {minwidth: 82}
+            }, {
+                name: "passthrough_module",
+                title: '<div title="The module that has set the pre-result">Pass-through module</div>',
+                breakpoints: "xs sm md"
+            }, {
+                name: "score",
+                title: "Score",
+                style: {
+                    "maxWidth": 110,
+                    "text-align": "right",
+                    "white-space": "nowrap"
+                },
+                sortValue: function (val) { return Number(val.options.sortValue); }
+            }, {
+                name: "symbols",
+                title: "Symbols" +
+                        '<div class="sym-order-toggle">' +
+                            '<br><span style="font-weight:normal;">Sort by:</span><br>' +
+                            '<div class="btn-group btn-group-xs btn-sym-order-' + table + '">' +
+                                '<label type="button" class="btn btn-outline-secondary btn-sym-' + table + '-magnitude">' +
+                                    '<input type="radio" class="btn-check" value="magnitude">Magnitude</label>' +
+                                '<label type="button" class="btn btn-outline-secondary btn-sym-' + table + '-score">' +
+                                    '<input type="radio" class="btn-check" value="score">Value</label>' +
+                                '<label type="button" class="btn btn-outline-secondary btn-sym-' + table + '-name">' +
+                                    '<input type="radio" class="btn-check" value="name">Name</label>' +
+                            "</div>" +
+                        "</div>",
+                breakpoints: "all",
+                style: {width: 550, maxWidth: 550}
+            }, {
+                name: "size",
+                title: "Msg size",
+                breakpoints: "xs sm md",
+                style: {minwidth: 50},
+                formatter: ui.formatBytesIEC
+            }, {
+                name: "time_real",
+                title: "Scan time",
+                breakpoints: "xs sm md",
+                style: {maxWidth: 72},
+                sortValue: function (val) { return Number(val); }
+            }, {
+                classes: "history-col-time",
+                sorted: true,
+                direction: "DESC",
+                name: "time",
+                title: "Time",
+                sortValue: function (val) { return Number(val.options.sortValue); }
+            }, {
+                name: "user",
+                title: "Authenticated user",
+                breakpoints: "xs sm md",
+                style: {
+                    "minWidth": 100,
+                    "maxWidth": 130,
+                    "word-wrap": "break-word"
+                }
+            }].filter((col) => {
+                switch (table) {
+                    case "history":
+                        return (col.name !== "passthrough_module");
+                    case "scan":
+                        return ["ip", "sender_mime", "rcpt_mime_short", "rcpt_mime", "subject", "size", "user"]
+                            .every((name) => col.name !== name);
+                    default:
+                        return null;
+                }
+            });
+        };
+
         ui.set_page_size = function (table, page_size, changeTablePageSize) {
             const n = parseInt(page_size, 10); // HTML Input elements return string representing a number
             if (n > 0) {
