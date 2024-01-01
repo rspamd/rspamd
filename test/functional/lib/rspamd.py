@@ -24,6 +24,15 @@ def Check_JSON(j):
     assert 'error' not in d
     return d
 
+def check_json_log(fn):
+    line_count = 0
+    f = open(fn, 'r')
+    for l in f.readlines():
+        d = demjson.decode(l, strict=True)
+        assert len(d) > 0
+        line_count = line_count + 1
+    assert line_count > 0
+
 def cleanup_temporary_directory(directory):
     shutil.rmtree(directory)
 

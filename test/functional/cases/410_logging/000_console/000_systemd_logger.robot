@@ -6,7 +6,10 @@ Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}                         ${RSPAMD_TESTDIR}/configs/systemd.conf
+${CONFIG}                         ${RSPAMD_TESTDIR}/configs/loggingtest.conf
+${RSPAMD_LOGGINGTYPE}             console
+${RSPAMD_JSON}                    false
+${RSPAMD_SYSTEMD}                 true
 ${RSPAMD_SCOPE}                   Suite
 
 *** Test Cases ***
