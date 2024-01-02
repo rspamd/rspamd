@@ -73,11 +73,6 @@ define(["jquery", "app/common", "app/libft"],
             });
         }
 
-        function get_server() {
-            const checked_server = common.getSelector("selSrv");
-            return (checked_server === "All SERVERS") ? "local" : checked_server;
-        }
-
         // @upload text
         function scanText(data, headers) {
             common.query("checkv2", {
@@ -136,7 +131,7 @@ define(["jquery", "app/common", "app/libft"],
                         common.alertMessage("alert-error", "Cannot tokenize message: no text data");
                     }
                 },
-                server: get_server()
+                server: common.getServer()
             });
         }
 
@@ -168,7 +163,7 @@ define(["jquery", "app/common", "app/libft"],
                         common.alertMessage("alert-error", "Unexpected error processing message");
                     }
                 },
-                server: get_server()
+                server: common.getServer()
             });
         }
 

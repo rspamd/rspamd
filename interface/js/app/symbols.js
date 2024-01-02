@@ -122,7 +122,7 @@ define(["jquery", "app/common", "footable"],
             return [items, distinct_groups];
         }
         // @get symbols into modal form
-        ui.getSymbols = function (checked_server) {
+        ui.getSymbols = function () {
             clear_altered();
             common.query("symbols", {
                 success: function (json) {
@@ -220,7 +220,7 @@ define(["jquery", "app/common", "footable"],
                         }
                     });
                 },
-                server: (checked_server === "All SERVERS") ? "local" : checked_server
+                server: common.getServer()
             });
         };
 
@@ -228,13 +228,12 @@ define(["jquery", "app/common", "footable"],
         $("#updateSymbols").on("click", (e) => {
             e.preventDefault();
             clear_altered();
-            const checked_server = common.getSelector("selSrv");
             common.query("symbols", {
                 success: function (data) {
                     const [items] = process_symbols_data(data[0].data);
                     common.tables.symbols.rows.load(items);
                 },
-                server: (checked_server === "All SERVERS") ? "local" : checked_server
+                server: common.getServer()
             });
         });
 

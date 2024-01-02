@@ -138,6 +138,11 @@ define(["jquery", "nprogress"],
             return e.options[e.selectedIndex].value;
         };
 
+        ui.getServer = function () {
+            const checked_server = ui.getSelector("selSrv");
+            return (checked_server === "All SERVERS") ? "local" : checked_server;
+        };
+
         /**
          * @param {string} url - A string containing the URL to which the request is sent
          * @param {Object} [options] - A set of key/value pairs that configure the Ajax request. All settings are optional.
