@@ -267,7 +267,14 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
     if settings.reporting.exclude_domains then
       if settings.reporting.exclude_domains:get_key(policy.domain) or
           settings.reporting.exclude_domains:get_key(rspamd_util.get_tld(policy.domain)) then
-        rspamd_logger.infox(task, 'DMARC reporting suppressed for %s', policy.domain)
+        rspamd_logger.info(task, 'DMARC reporting suppressed for sender domain %s', policy.domain)
+        return
+      end
+    end
+    if settings.reporting.exclude_recipients then
+      local rcpt = task:get_principal_recipient()
+      if rcpt and settings.reporting.exclude_recipients:get_key(rcpt) then
+        rspamd_logger.info(task, 'DMARC reporting suppressed for recipient %s', rcpt)
         return
       end
     end
@@ -514,6 +521,11 @@ if type(settings.reporting) == 'table' then
       optional = true,
       type = 'map',
       description = 'Domains not to store DMARC reports about'
+    },
+    exclude_recipients = {
+      optional = true,
+      type = 'map',
+      description = 'Recipients not to store DMARC reports for'
     },
   })
 end
