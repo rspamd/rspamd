@@ -15,7 +15,7 @@ SET(BACKENDSSRC 	${CMAKE_CURRENT_SOURCE_DIR}/backends/mmaped_file.c
 					${CMAKE_CURRENT_SOURCE_DIR}/backends/redis_backend.cxx)
 
 SET(CACHESSRC 	${CMAKE_CURRENT_SOURCE_DIR}/learn_cache/sqlite3_cache.c
-					${CMAKE_CURRENT_SOURCE_DIR}/learn_cache/redis_cache.c)
+        ${CMAKE_CURRENT_SOURCE_DIR}/learn_cache/redis_cache.cxx)
 
 SET(RSPAMD_STAT ${LIBSTATSRC}
 			${TOKENIZERSSRC}
