@@ -54,12 +54,12 @@ local function gen_learn_functor(redis_params, learn_script_id)
 
     if maybe_text_tokens then
       lua_redis.exec_redis_script(learn_script_id,
-          { task = task, is_write = false, key = expanded_key },
+          { task = task, is_write = true, key = expanded_key },
           learn_redis_cb,
           { expanded_key, tostring(is_spam), symbol, tostring(is_unlearn), stat_tokens, maybe_text_tokens })
     else
       lua_redis.exec_redis_script(learn_script_id,
-          { task = task, is_write = false, key = expanded_key },
+          { task = task, is_write = true, key = expanded_key },
           learn_redis_cb, { expanded_key, tostring(is_spam), symbol, tostring(is_unlearn), stat_tokens })
     end
 
@@ -136,7 +136,6 @@ exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol,
   rspamd_config:add_periodic(ev_base, 0.0, function(cfg, _)
 
     local function stat_redis_cb(err, data)
-      -- TODO: write this function
       lua_util.debugm(N, cfg, 'stat redis cb: %s, %s', err, data)
 
       if err then
@@ -172,12 +171,54 @@ exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol,
   return gen_classify_functor(redis_params, classify_script_id), gen_learn_functor(redis_params, learn_script_id)
 end
 
+local function gen_cache_check_functor(redis_params, check_script_id)
+  return function(task, cache_id, callback)
+
+    local function classify_redis_cb(err, data)
+      lua_util.debugm(N, task, 'classify redis cb: %s, %s', err, data)
+      if err then
+        callback(task, false, err)
+      else
+        callback(task, true, data[1], data[2], data[3], data[4])
+      end
+    end
+
+    lua_redis.exec_redis_script(check_script_id,
+        { task = task, is_write = false, key = cache_id },
+        classify_redis_cb, { cache_id })
+  end
+end
+
+local function gen_cache_learn_functor(redis_params, learn_script_id)
+  return function(task, cache_id, callback)
+    local function learn_redis_cb(err, data)
+      lua_util.debugm(N, task, 'learn_cache redis cb: %s, %s', err, data)
+      if err then
+        callback(task, false, err)
+      else
+        callback(task, true)
+      end
+    end
+
+    lua_redis.exec_redis_script(learn_script_id,
+        { task = task, is_write = true, key = cache_id },
+        learn_redis_cb,
+        { cache_id })
+
+  end
+end
+
 exports.lua_bayes_init_cache = function(classifier_ucl, statfile_ucl)
   local redis_params = load_redis_params(classifier_ucl, statfile_ucl)
 
   if not redis_params then
     return nil
   end
+
+  local check_script_id = lua_redis.load_redis_script_from_file("bayes_cache_check.lua", redis_params)
+  local learn_script_id = lua_redis.load_redis_script_from_file("bayes_cache_learn.lua", redis_params)
+
+  return gen_cache_check_functor(redis_params, check_script_id), gen_cache_learn_functor(redis_params, learn_script_id)
 end
 
 return exports

@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 #include "config.h"
+// Include early to avoid `extern "C"` issues
+#include "lua/lua_common.h"
 #include "learn_cache.h"
 #include "rspamd.h"
 #include "stat_api.h"
 #include "stat_internal.h"
 #include "cryptobox.h"
 #include "ucl.h"
-#include "hiredis.h"
-#include "adapters/libev.h"
-#include "lua/lua_common.h"
 #include "libmime/message.h"
 
 #define DEFAULT_REDIS_KEY "learned_ids"
@@ -153,13 +152,45 @@ rspamd_stat_cache_redis_init(struct rspamd_stat_ctx *ctx,
 {
 	std::unique_ptr<rspamd_redis_cache_ctx> cache_ctx = std::make_unique<rspamd_redis_cache_ctx>(RSPAMD_LUA_CFG_STATE(cfg));
 
-	const auto *obj = ucl_object_lookup(st->classifier->cfg->opts, "cache_key");
+	auto *L = RSPAMD_LUA_CFG_STATE(cfg);
+	lua_settop(L, 0);
 
-	if (obj) {
-		cache_ctx->redis_object = ucl_object_tostring(obj);
+	lua_pushcfunction(L, &rspamd_lua_traceback);
+	auto err_idx = lua_gettop(L);
+
+	/* Obtain function */
+	if (!rspamd_lua_require_function(L, "lua_bayes_redis", "lua_bayes_init_cache")) {
+		msg_err_config("cannot require lua_bayes_redis.lua_bayes_init_cache");
+		lua_settop(L, err_idx - 1);
+
+		return nullptr;
 	}
 
-	cache_ctx->stcf = st->stcf;
+	/* Push arguments */
+	ucl_object_push_lua(L, st->classifier->cfg->opts, false);
+	ucl_object_push_lua(L, st->stcf->opts, false);
+
+	if (lua_pcall(L, 2, 2, err_idx) != 0) {
+		msg_err("call to lua_bayes_init_cache "
+				"script failed: %s",
+				lua_tostring(L, -1));
+		lua_settop(L, err_idx - 1);
+
+		return nullptr;
+	}
+
+	/*
+	 * Results are in the stack:
+	 * top - 1 - check function (idx = -2)
+	 * top - learn function (idx = -1)
+	 */
+	lua_pushvalue(L, -2);
+	cache_ctx->check_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+	lua_pushvalue(L, -1);
+	cache_ctx->learn_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+	lua_settop(L, err_idx - 1);
 
 	return (gpointer) cache_ctx.release();
 }
