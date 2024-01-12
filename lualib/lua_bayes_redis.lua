@@ -66,12 +66,7 @@ local function gen_learn_functor(redis_params, learn_script_id)
   end
 end
 
----
---- Init bayes classifier
---- @param classifier_ucl ucl of the classifier config
---- @param statfile_ucl ucl of the statfile config
---- @return a pair of (classify_functor, learn_functor) or `nil` in case of error
-exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol, is_spam, ev_base, stat_periodic_cb)
+local function load_redis_params(classifier_ucl, statfile_ucl)
   local redis_params
 
   -- Try load from statfile options
@@ -105,6 +100,22 @@ exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol,
 
   if not redis_params then
     logger.err(rspamd_config, "cannot load Redis parameters for the classifier")
+    return nil
+  end
+
+  return redis_params
+end
+
+---
+--- Init bayes classifier
+--- @param classifier_ucl ucl of the classifier config
+--- @param statfile_ucl ucl of the statfile config
+--- @return a pair of (classify_functor, learn_functor) or `nil` in case of error
+exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol, is_spam, ev_base, stat_periodic_cb)
+
+  local redis_params = load_redis_params(classifier_ucl, statfile_ucl)
+
+  if not redis_params then
     return nil
   end
 
@@ -159,6 +170,14 @@ exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol,
   end)
 
   return gen_classify_functor(redis_params, classify_script_id), gen_learn_functor(redis_params, learn_script_id)
+end
+
+exports.lua_bayes_init_cache = function(classifier_ucl, statfile_ucl)
+  local redis_params = load_redis_params(classifier_ucl, statfile_ucl)
+
+  if not redis_params then
+    return nil
+  end
 end
 
 return exports
