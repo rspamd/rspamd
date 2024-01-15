@@ -217,21 +217,27 @@ static gint
 rspamd_stat_cache_checked(lua_State *L)
 {
 	auto *task = lua_check_task(L, 1);
-	auto val = lua_tointeger(L, 2);
+	auto res = lua_toboolean(L, 2);
 
-	if ((val > 0 && (task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM)) ||
-		(val < 0 && (task->flags & RSPAMD_TASK_FLAG_LEARN_HAM))) {
-		/* Already learned */
-		msg_info_task("<%s> has been already "
-					  "learned as %s, ignore it",
-					  MESSAGE_FIELD(task, message_id),
-					  (task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM) ? "spam" : "ham");
-		task->flags |= RSPAMD_TASK_FLAG_ALREADY_LEARNED;
+	if (res) {
+		auto val = lua_tointeger(L, 3);
+
+		if ((val > 0 && (task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM)) ||
+			(val < 0 && (task->flags & RSPAMD_TASK_FLAG_LEARN_HAM))) {
+			/* Already learned */
+			msg_info_task("<%s> has been already "
+						  "learned as %s, ignore it",
+						  MESSAGE_FIELD(task, message_id),
+						  (task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM) ? "spam" : "ham");
+			task->flags |= RSPAMD_TASK_FLAG_ALREADY_LEARNED;
+		}
+		else if (val != 0) {
+			/* Unlearn flag */
+			task->flags |= RSPAMD_TASK_FLAG_UNLEARN;
+		}
 	}
-	else if (val != 0) {
-		/* Unlearn flag */
-		task->flags |= RSPAMD_TASK_FLAG_UNLEARN;
-	}
+
+	/* Ignore errors for now, as we can do nothing about them at the moment */
 
 	return 0;
 }

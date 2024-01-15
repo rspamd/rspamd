@@ -179,7 +179,7 @@ local function gen_cache_check_functor(redis_params, check_script_id)
       if err then
         callback(task, false, err)
       else
-        callback(task, true, data[1], data[2], data[3], data[4])
+        callback(task, true, tonumber(data))
       end
     end
 
@@ -190,20 +190,15 @@ local function gen_cache_check_functor(redis_params, check_script_id)
 end
 
 local function gen_cache_learn_functor(redis_params, learn_script_id)
-  return function(task, cache_id, callback)
+  return function(task, cache_id, is_spam)
     local function learn_redis_cb(err, data)
       lua_util.debugm(N, task, 'learn_cache redis cb: %s, %s', err, data)
-      if err then
-        callback(task, false, err)
-      else
-        callback(task, true)
-      end
     end
 
     lua_redis.exec_redis_script(learn_script_id,
         { task = task, is_write = true, key = cache_id },
         learn_redis_cb,
-        { cache_id })
+        { cache_id, is_spam and "1" or "0" })
 
   end
 end
