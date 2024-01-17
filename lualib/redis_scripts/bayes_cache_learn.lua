@@ -3,12 +3,10 @@
 -- key1 - cache id
 -- key3 - is spam (1 or 0)
 -- key3 - configuration table in message pack
--- key4 - is per user (1 or 0)
 
 local cache_id = KEYS[1]
 local is_spam = KEYS[2]
 local conf = cmsgpack.unpack(KEYS[3])
-local is_per_user = KEYS[4] == "1"
 cache_id = string.sub(cache_id, 1, conf.cache_elt_len)
 
 -- Try each prefix that is in Redis (as some other instance might have set it)
@@ -23,7 +21,7 @@ for i = 0, conf.cache_max_keys do
 end
 
 local added = false
-local lim = is_per_user and conf.cache_max_elt * conf.cache_per_user_mult or conf.cache_max_elt
+local lim = conf.cache_max_elt
 for i = 0, conf.cache_max_keys do
   if not added then
     local prefix = conf.cache_prefix .. string.rep("X", i)

@@ -199,7 +199,6 @@ end
 local function gen_cache_learn_functor(redis_params, learn_script_id, conf)
   local packed_conf = ucl.to_format(conf, 'msgpack')
   return function(task, cache_id, is_spam)
-    local is_per_user = task:get_mempool():has_variable('stat_user')
     local function learn_redis_cb(err, data)
       lua_util.debugm(N, task, 'learn_cache redis cb: %s, %s', err, data)
     end
@@ -208,7 +207,7 @@ local function gen_cache_learn_functor(redis_params, learn_script_id, conf)
     lua_redis.exec_redis_script(learn_script_id,
         { task = task, is_write = true, key = cache_id },
         learn_redis_cb,
-        { cache_id, is_spam and "1" or "0", packed_conf, is_per_user and "1" or "0" })
+        { cache_id, is_spam and "1" or "0", packed_conf })
 
   end
 end
@@ -224,7 +223,6 @@ exports.lua_bayes_init_cache = function(classifier_ucl, statfile_ucl)
     cache_prefix = "learned_ids",
     cache_max_elt = 10000, -- Maximum number of elements in the cache key
     cache_max_keys = 5, -- Maximum number of keys in the cache
-    cache_per_user_mult = 0.1, -- Multiplier for per user cache size
     cache_elt_len = 32, -- Length of the element in the cache (will trim id to that value)
   }
 
