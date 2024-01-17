@@ -5,7 +5,7 @@
 
 local cache_id = KEYS[1]
 local conf = cmsgpack.unpack(KEYS[2])
-cache_id = string.sub(cache_id, 1, conf.cache_prefix_len)
+cache_id = string.sub(cache_id, 1, conf.cache_elt_len)
 
 -- Try each prefix that is in Redis
 for i = 0, conf.cache_max_keys do

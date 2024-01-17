@@ -1,13 +1,15 @@
 -- Lua script to perform cache checking for bayes classification
 -- This script accepts the following parameters:
 -- key1 - cache id
--- key3 - is spam
+-- key3 - is spam (1 or 0)
 -- key3 - configuration table in message pack
+-- key4 - is per user (1 or 0)
 
 local cache_id = KEYS[1]
 local is_spam = KEYS[2]
 local conf = cmsgpack.unpack(KEYS[3])
-cache_id = string.sub(cache_id, 1, conf.cache_prefix_len)
+local is_per_user = KEYS[4] == "1"
+cache_id = string.sub(cache_id, 1, conf.cache_elt_len)
 
 -- Try each prefix that is in Redis (as some other instance might have set it)
 for i = 0, conf.cache_max_keys do
@@ -21,12 +23,13 @@ for i = 0, conf.cache_max_keys do
 end
 
 local added = false
+local lim = is_per_user and conf.cache_max_elt * conf.cache_per_user_mult or conf.cache_max_elt
 for i = 0, conf.cache_max_keys do
   if not added then
     local prefix = conf.cache_prefix .. string.rep("X", i)
     local count = redis.call('HLEN', prefix)
 
-    if count < conf.cache_max_elt then
+    if count < lim then
       -- We can add it to this prefix
       redis.call('HSET', prefix, cache_id, is_spam)
       added = true
@@ -36,16 +39,23 @@ end
 
 if not added then
   -- Need to expire some keys
+  local expired = false
   for i = 0, conf.cache_max_keys do
     local prefix = conf.cache_prefix .. string.rep("X", i)
     local exists = redis.call('EXISTS', prefix)
 
     if exists then
-      redis.call('DEL', prefix)
-      redis.call('HSET', prefix, cache_id, is_spam)
+      if expired then
+        redis.call('DEL', prefix)
+        redis.call('HSET', prefix, cache_id, is_spam)
 
-      -- Do not expire anything else
-      return true
+        -- Do not expire anything else
+        expired = true
+      elseif i > 0 then
+        -- Move key to a shorter prefix, so we will rotate them eventually from lower to upper
+        local new_prefix = conf.cache_prefix .. string.rep("X", i - 1)
+        redis.call('RENAME', prefix, new_prefix)
+      end
     end
   end
 end

@@ -199,6 +199,7 @@ end
 local function gen_cache_learn_functor(redis_params, learn_script_id, conf)
   local packed_conf = ucl.to_format(conf, 'msgpack')
   return function(task, cache_id, is_spam)
+    local is_per_user = task:get_mempool():has_variable('stat_user')
     local function learn_redis_cb(err, data)
       lua_util.debugm(N, task, 'learn_cache redis cb: %s, %s', err, data)
     end
@@ -207,7 +208,7 @@ local function gen_cache_learn_functor(redis_params, learn_script_id, conf)
     lua_redis.exec_redis_script(learn_script_id,
         { task = task, is_write = true, key = cache_id },
         learn_redis_cb,
-        { cache_id, is_spam and "1" or "0", packed_conf })
+        { cache_id, is_spam and "1" or "0", packed_conf, is_per_user and "1" or "0" })
 
   end
 end
