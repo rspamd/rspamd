@@ -20,6 +20,7 @@ local exports = {}
 local lua_redis = require "lua_redis"
 local logger = require "rspamd_logger"
 local lua_util = require "lua_util"
+local ucl = require "ucl"
 
 local N = "bayes"
 
@@ -54,24 +55,19 @@ local function gen_learn_functor(redis_params, learn_script_id)
 
     if maybe_text_tokens then
       lua_redis.exec_redis_script(learn_script_id,
-          { task = task, is_write = false, key = expanded_key },
+          { task = task, is_write = true, key = expanded_key },
           learn_redis_cb,
           { expanded_key, tostring(is_spam), symbol, tostring(is_unlearn), stat_tokens, maybe_text_tokens })
     else
       lua_redis.exec_redis_script(learn_script_id,
-          { task = task, is_write = false, key = expanded_key },
+          { task = task, is_write = true, key = expanded_key },
           learn_redis_cb, { expanded_key, tostring(is_spam), symbol, tostring(is_unlearn), stat_tokens })
     end
 
   end
 end
 
----
---- Init bayes classifier
---- @param classifier_ucl ucl of the classifier config
---- @param statfile_ucl ucl of the statfile config
---- @return a pair of (classify_functor, learn_functor) or `nil` in case of error
-exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol, is_spam, ev_base, stat_periodic_cb)
+local function load_redis_params(classifier_ucl, statfile_ucl)
   local redis_params
 
   -- Try load from statfile options
@@ -108,6 +104,22 @@ exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol,
     return nil
   end
 
+  return redis_params
+end
+
+---
+--- Init bayes classifier
+--- @param classifier_ucl ucl of the classifier config
+--- @param statfile_ucl ucl of the statfile config
+--- @return a pair of (classify_functor, learn_functor) or `nil` in case of error
+exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol, is_spam, ev_base, stat_periodic_cb)
+
+  local redis_params = load_redis_params(classifier_ucl, statfile_ucl)
+
+  if not redis_params then
+    return nil
+  end
+
   local classify_script_id = lua_redis.load_redis_script_from_file("bayes_classify.lua", redis_params)
   local learn_script_id = lua_redis.load_redis_script_from_file("bayes_learn.lua", redis_params)
   local stat_script_id = lua_redis.load_redis_script_from_file("bayes_stat.lua", redis_params)
@@ -125,7 +137,6 @@ exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol,
   rspamd_config:add_periodic(ev_base, 0.0, function(cfg, _)
 
     local function stat_redis_cb(err, data)
-      -- TODO: write this function
       lua_util.debugm(N, cfg, 'stat redis cb: %s, %s', err, data)
 
       if err then
@@ -159,6 +170,75 @@ exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol,
   end)
 
   return gen_classify_functor(redis_params, classify_script_id), gen_learn_functor(redis_params, learn_script_id)
+end
+
+local function gen_cache_check_functor(redis_params, check_script_id, conf)
+  local packed_conf = ucl.to_format(conf, 'msgpack')
+  return function(task, cache_id, callback)
+
+    local function classify_redis_cb(err, data)
+      lua_util.debugm(N, task, 'check cache redis cb: %s, %s (%s)', err, data, type(data))
+      if err then
+        callback(task, false, err)
+      else
+        if type(data) == 'number' then
+          callback(task, true, data)
+        else
+          callback(task, false, 'not found')
+        end
+      end
+    end
+
+    lua_util.debugm(N, task, 'checking cache: %s', cache_id)
+    lua_redis.exec_redis_script(check_script_id,
+        { task = task, is_write = false, key = cache_id },
+        classify_redis_cb, { cache_id, packed_conf })
+  end
+end
+
+local function gen_cache_learn_functor(redis_params, learn_script_id, conf)
+  local packed_conf = ucl.to_format(conf, 'msgpack')
+  return function(task, cache_id, is_spam)
+    local function learn_redis_cb(err, data)
+      lua_util.debugm(N, task, 'learn_cache redis cb: %s, %s', err, data)
+    end
+
+    lua_util.debugm(N, task, 'try to learn cache: %s', cache_id)
+    lua_redis.exec_redis_script(learn_script_id,
+        { task = task, is_write = true, key = cache_id },
+        learn_redis_cb,
+        { cache_id, is_spam and "1" or "0", packed_conf })
+
+  end
+end
+
+exports.lua_bayes_init_cache = function(classifier_ucl, statfile_ucl)
+  local redis_params = load_redis_params(classifier_ucl, statfile_ucl)
+
+  if not redis_params then
+    return nil
+  end
+
+  local default_conf = {
+    cache_prefix = "learned_ids",
+    cache_max_elt = 10000, -- Maximum number of elements in the cache key
+    cache_max_keys = 5, -- Maximum number of keys in the cache
+    cache_elt_len = 32, -- Length of the element in the cache (will trim id to that value)
+  }
+
+  local conf = lua_util.override_defaults(default_conf, classifier_ucl)
+  -- Clean all not known configurations
+  for k, _ in pairs(conf) do
+    if default_conf[k] == nil then
+      conf[k] = nil
+    end
+  end
+
+  local check_script_id = lua_redis.load_redis_script_from_file("bayes_cache_check.lua", redis_params)
+  local learn_script_id = lua_redis.load_redis_script_from_file("bayes_cache_learn.lua", redis_params)
+
+  return gen_cache_check_functor(redis_params, check_script_id, conf), gen_cache_learn_functor(redis_params,
+      learn_script_id, conf)
 end
 
 return exports

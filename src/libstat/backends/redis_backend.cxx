@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1032,7 +1032,7 @@ rspamd_redis_learn_tokens(struct rspamd_task *task,
 	lua_pushcclosure(L, &rspamd_redis_learned, 1);
 
 	if (lua_pcall(L, nargs, 0, err_idx) != 0) {
-		msg_err_task("call to redis failed: %s", lua_tostring(L, -1));
+		msg_err_task("call to script failed: %s", lua_tostring(L, -1));
 		lua_settop(L, err_idx - 1);
 		return FALSE;
 	}
