@@ -177,11 +177,15 @@ local function gen_cache_check_functor(redis_params, check_script_id, conf)
   return function(task, cache_id, callback)
 
     local function classify_redis_cb(err, data)
-      lua_util.debugm(N, task, 'check cache redis cb: %s, %s', err, data)
+      lua_util.debugm(N, task, 'check cache redis cb: %s, %s (%s)', err, data, type(data))
       if err then
         callback(task, false, err)
       else
-        callback(task, true, tonumber(data))
+        if type(data) == 'number' then
+          callback(task, true, data)
+        else
+          callback(task, false, 'not found')
+        end
       end
     end
 
@@ -217,12 +221,19 @@ exports.lua_bayes_init_cache = function(classifier_ucl, statfile_ucl)
 
   local default_conf = {
     cache_prefix = "learned_ids",
-    max_elt = 10000, -- Maximum number of elements in the cache key
-    max_keys = 10, -- Maximum number of keys in the cache
-    per_user_mult = 0.1, -- Multiplier for per user cache size
+    cache_max_elt = 10000, -- Maximum number of elements in the cache key
+    cache_max_keys = 5, -- Maximum number of keys in the cache
+    cache_per_user_mult = 0.1, -- Multiplier for per user cache size
+    cache_elt_len = 32, -- Length of the element in the cache (will trim id to that value)
   }
 
   local conf = lua_util.override_defaults(default_conf, classifier_ucl)
+  -- Clean all not known configurations
+  for k, _ in pairs(conf) do
+    if default_conf[k] == nil then
+      conf[k] = nil
+    end
+  end
 
   local check_script_id = lua_redis.load_redis_script_from_file("bayes_cache_check.lua", redis_params)
   local learn_script_id = lua_redis.load_redis_script_from_file("bayes_cache_learn.lua", redis_params)

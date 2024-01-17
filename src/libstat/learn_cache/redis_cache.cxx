@@ -223,7 +223,7 @@ rspamd_stat_cache_checked(lua_State *L)
 		auto val = lua_tointeger(L, 3);
 
 		if ((val > 0 && (task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM)) ||
-			(val < 0 && (task->flags & RSPAMD_TASK_FLAG_LEARN_HAM))) {
+			(val <= 0 && (task->flags & RSPAMD_TASK_FLAG_LEARN_HAM))) {
 			/* Already learned */
 			msg_info_task("<%s> has been already "
 						  "learned as %s, ignore it",
@@ -293,7 +293,7 @@ gint rspamd_stat_cache_redis_learn(struct rspamd_task *task,
 	gint err_idx = lua_gettop(L);
 
 	/* Function arguments */
-	lua_rawgeti(L, LUA_REGISTRYINDEX, ctx->check_ref);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, ctx->learn_ref);
 	rspamd_lua_task_push(L, task);
 	lua_pushstring(L, h);
 	lua_pushboolean(L, is_spam);
