@@ -24,12 +24,11 @@
 #include "ucl.h"
 #include "libmime/message.h"
 
-#define DEFAULT_REDIS_KEY "learned_ids"
+#include <memory>
 
 struct rspamd_redis_cache_ctx {
 	lua_State *L;
 	struct rspamd_statfile_config *stcf;
-	std::string redis_object = DEFAULT_REDIS_KEY;
 	int check_ref = -1;
 	int learn_ref = -1;
 
@@ -51,75 +50,15 @@ struct rspamd_redis_cache_ctx {
 	}
 };
 
-#if 0
-/* Called when we have checked the specified message id */
-static void
-rspamd_stat_cache_redis_get(redisAsyncContext *c, gpointer r, gpointer priv)
-{
-	struct rspamd_redis_cache_runtime *rt = priv;
-	redisReply *reply = r;
-	struct rspamd_task *task;
-	glong val = 0;
-
-	task = rt->task;
-
-	if (c->err == 0) {
-		if (reply) {
-			if (G_LIKELY(reply->type == REDIS_REPLY_INTEGER)) {
-				val = reply->integer;
-			}
-			else if (reply->type == REDIS_REPLY_STRING) {
-				rspamd_strtol(reply->str, reply->len, &val);
-			}
-			else {
-				if (reply->type == REDIS_REPLY_ERROR) {
-					msg_err_task("cannot learn %s: redis error: \"%s\"",
-								 rt->ctx->stcf->symbol, reply->str);
-				}
-				else if (reply->type != REDIS_REPLY_NIL) {
-					msg_err_task("bad learned type for %s: %d",
-								 rt->ctx->stcf->symbol, reply->type);
-				}
-
-				val = 0;
-			}
-		}
-
-		if ((val > 0 && (task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM)) ||
-			(val < 0 && (task->flags & RSPAMD_TASK_FLAG_LEARN_HAM))) {
-			/* Already learned */
-			msg_info_task("<%s> has been already "
-						  "learned as %s, ignore it",
-						  MESSAGE_FIELD(task, message_id),
-						  (task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM) ? "spam" : "ham");
-			task->flags |= RSPAMD_TASK_FLAG_ALREADY_LEARNED;
-		}
-		else if (val != 0) {
-			/* Unlearn flag */
-			task->flags |= RSPAMD_TASK_FLAG_UNLEARN;
-		}
-
-		rspamd_upstream_ok(rt->selected);
-	}
-	else {
-		rspamd_upstream_fail(rt->selected, FALSE, c->errstr);
-	}
-
-	if (rt->has_event) {
-		rspamd_session_remove_event(task->s, rspamd_redis_cache_fin, rt);
-	}
-}
-#endif
-
 static void
 rspamd_stat_cache_redis_generate_id(struct rspamd_task *task)
 {
 	rspamd_cryptobox_hash_state_t st;
-	rspamd_cryptobox_hash_init(&st, NULL, 0);
+	rspamd_cryptobox_hash_init(&st, nullptr, 0);
 
 	const auto *user = (const char *) rspamd_mempool_get_variable(task->task_pool, "stat_user");
 	/* Use dedicated hash space for per users cache */
-	if (user != NULL) {
+	if (user != nullptr) {
 		rspamd_cryptobox_hash_update(&st, (const unsigned char *) user, strlen(user));
 	}
 
@@ -140,7 +79,7 @@ rspamd_stat_cache_redis_generate_id(struct rspamd_task *task)
 	if (out_sz > 0) {
 		/* Zero terminate */
 		b32out[out_sz] = '\0';
-		rspamd_mempool_set_variable(task->task_pool, "words_hash", b32out, NULL);
+		rspamd_mempool_set_variable(task->task_pool, "words_hash", b32out, nullptr);
 	}
 }
 
@@ -201,8 +140,8 @@ rspamd_stat_cache_redis_runtime(struct rspamd_task *task,
 {
 	auto *ctx = (struct rspamd_redis_cache_ctx *) c;
 
-	if (task->tokens == NULL || task->tokens->len == 0) {
-		return NULL;
+	if (task->tokens == nullptr || task->tokens->len == 0) {
+		return nullptr;
 	}
 
 	if (!learn) {
@@ -249,7 +188,7 @@ gint rspamd_stat_cache_redis_check(struct rspamd_task *task,
 	auto *ctx = (struct rspamd_redis_cache_ctx *) runtime;
 	auto *h = (char *) rspamd_mempool_get_variable(task->task_pool, "words_hash");
 
-	if (h == NULL) {
+	if (h == nullptr) {
 		return RSPAMD_LEARN_IGNORE;
 	}
 
@@ -286,7 +225,7 @@ gint rspamd_stat_cache_redis_learn(struct rspamd_task *task,
 	}
 
 	auto *h = (char *) rspamd_mempool_get_variable(task->task_pool, "words_hash");
-	g_assert(h != NULL);
+	g_assert(h != nullptr);
 	auto *L = ctx->L;
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
