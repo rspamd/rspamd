@@ -139,7 +139,9 @@ if (${STACK_DETAILS_AUTO_DETECT})
 		# If we attempt to link against static bfd, make sure to link its dependencies, too
 		get_filename_component(bfd_lib_ext "${LIBBFD_LIBRARY}" EXT)
 		if (bfd_lib_ext STREQUAL "${CMAKE_STATIC_LIBRARY_SUFFIX}")
-			list(APPEND _BACKWARD_LIBRARIES iberty z)
+			if (NOT APPLE)
+				list(APPEND _BACKWARD_LIBRARIES iberty z)
+			endif()
 		endif()
 
 		set(STACK_DETAILS_DW FALSE)
