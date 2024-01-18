@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -403,6 +403,7 @@ gdouble rspamd_random_double(void);
  */
 gdouble rspamd_random_double_fast(void);
 gdouble rspamd_random_double_fast_seed(guint64 *seed);
+uint64_t rspamd_random_uint64_fast_seed(uint64_t *seed);
 guint64 rspamd_random_uint64_fast(void);
 
 /**

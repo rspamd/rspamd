@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -359,7 +359,7 @@ rspamd_language_detector_read_file(struct rspamd_config *cfg,
 	khash_t(rspamd_trigram_hash) *htb = NULL;
 	gchar *pos;
 	guint total = 0, total_latin = 0, total_ngramms = 0, i, skipped,
-		  loaded, nstop = 0;
+		  loaded;
 	gdouble mean = 0, std = 0, delta = 0, delta2 = 0, m2 = 0;
 	enum rspamd_language_category cat = RSPAMD_LANGUAGE_MAX;
 
@@ -492,7 +492,6 @@ rspamd_language_detector_read_file(struct rspamd_config *cfg,
 													word, wlen,
 													mp_flags);
 				nelt->stop_words++;
-				nstop++;
 
 				/* Also lemmatise and store normalised */
 				if (stem) {
@@ -938,7 +937,8 @@ end:
 
 static void
 rspamd_language_detector_random_select(GArray *ucs_tokens, guint nwords,
-									   goffset *offsets_out)
+									   goffset *offsets_out,
+									   guint64 *seed)
 {
 	guint step_len, remainder, i, out_idx;
 	guint64 coin, sel;
@@ -967,14 +967,14 @@ rspamd_language_detector_random_select(GArray *ucs_tokens, guint nwords,
 	remainder = ucs_tokens->len % nwords;
 
 	out_idx = 0;
-	coin = rspamd_random_uint64_fast();
+	coin = rspamd_random_uint64_fast_seed(seed);
 	sel = coin % (step_len + remainder);
 	offsets_out[out_idx] = sel;
 
 	for (i = step_len + remainder; i < ucs_tokens->len;
 		 i += step_len, out_idx++) {
 		guint ntries = 0;
-		coin = rspamd_random_uint64_fast();
+		coin = rspamd_random_uint64_fast_seed(seed);
 		sel = (coin % step_len) + i;
 
 		for (;;) {
@@ -990,7 +990,7 @@ rspamd_language_detector_random_select(GArray *ucs_tokens, guint nwords,
 			}
 			else {
 				ntries++;
-				coin = rspamd_random_uint64_fast();
+				coin = rspamd_random_uint64_fast_seed(seed);
 
 				if (ntries < step_len) {
 					sel = (coin % step_len) + i;
@@ -1225,15 +1225,19 @@ rspamd_language_detector_detect_type(struct rspamd_task *task,
 									 struct rspamd_lang_detector *d,
 									 GArray *words,
 									 enum rspamd_language_category cat,
-									 khash_t(rspamd_candidates_hash) * candidates)
+									 khash_t(rspamd_candidates_hash) * candidates,
+									 struct rspamd_mime_text_part *part)
 {
 	guint nparts = MIN(words->len, nwords);
 	goffset *selected_words;
 	rspamd_stat_token_t *tok;
 	guint i;
+	guint64 seed;
 
+	/* Seed PRNG with part digest to provide some sort of determinism */
+	memcpy(&seed, part->mime_part->digest, sizeof(seed));
 	selected_words = g_new0(goffset, nparts);
-	rspamd_language_detector_random_select(words, nparts, selected_words);
+	rspamd_language_detector_random_select(words, nparts, selected_words, &seed);
 	msg_debug_lang_det("randomly selected %d words", nparts);
 
 	for (i = 0; i < nparts; i++) {
@@ -1280,7 +1284,8 @@ rspamd_language_detector_try_ngramm(struct rspamd_task *task,
 									struct rspamd_lang_detector *d,
 									GArray *ucs_tokens,
 									enum rspamd_language_category cat,
-									khash_t(rspamd_candidates_hash) * candidates)
+									khash_t(rspamd_candidates_hash) * candidates,
+									struct rspamd_mime_text_part *part)
 {
 	guint cand_len = 0;
 	struct rspamd_lang_detector_res *cand;
@@ -1290,7 +1295,8 @@ rspamd_language_detector_try_ngramm(struct rspamd_task *task,
 										 d,
 										 ucs_tokens,
 										 cat,
-										 candidates);
+										 candidates,
+										 part);
 
 	kh_foreach_value(candidates, cand, {
 		if (!isnan(cand->prob)) {
@@ -1931,7 +1937,8 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 														d,
 														part->utf_words,
 														cat,
-														candidates);
+														candidates,
+														part);
 
 				if (r == rs_detect_none) {
 					msg_debug_lang_det("no trigrams found, fallback to english");

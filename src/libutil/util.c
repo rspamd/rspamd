@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1754,7 +1754,7 @@ rspamd_fast_random_seed(void)
 }
 
 /* wyrand */
-static inline uint64_t
+inline uint64_t
 rspamd_random_uint64_fast_seed(uint64_t *seed)
 {
 	*seed += UINT64_C(0xa0761d6478bd642f);
