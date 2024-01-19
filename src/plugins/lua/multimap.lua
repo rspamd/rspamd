@@ -460,7 +460,7 @@ local function apply_content_filter(task, filter)
   elseif filter == 'rawtext' then
     local ret = {}
     for _, p in ipairs(task:get_text_parts()) do
-      table.insert(ret, p:get_raw_content())
+      table.insert(ret, p:get_content('raw_parsed'))
     end
     return ret
   elseif filter == 'oneline' then
