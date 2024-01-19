@@ -1,3 +1,40 @@
+3.8.0: 19 Jan 2024
+  * [Project] Rspamadm fuzzyping command
+  * [Project] Use Redis scripts for Bayes statistics and cache
+  * [Project] Support  JSON logging
+  * [CritFix] - Fix reported length of logging structure
+  * [Feature] Allow to set `max_users` for Redis bayes backend
+  * [Feature] Escape JSON when needed
+  * [Feature] Proxy: Allow `encrypted_only` option
+  * [Feature] Reiterate on gtube patterns
+  * [Feature] Support ping command in fuzzy storage
+  * [Feature] Support suppressing DMARC reporting for particular recipients
+  * [Feature] rbl: support disabling or replacing url_whitelist per RBL
+  * [Fix] Another try to fix setproctitle
+  * [Fix] Cleanup session on exit
+  * [Fix] Do not cleanup hyperscan files unless new ones are loaded
+  * [Fix] Fix bad access when printing pending events on failure path
+  * [Fix] Fix issues with the raw header on header insertion/modification
+  * [Fix] Fix overflow in fuzzy_stats command
+  * [Fix] Fix some corner cases when parsing maps with no newlines
+  * [Fix] Fix various issues with canonicalisation of the paths
+  * [Fix] Fix wrong raw_len usage
+  * [Fix] Make words selection random deterministic upon content
+  * [Fix] Properly set config field when creating tasks from Lua
+  * [Fix] Really fix the language detector statistical heuristic
+  * [Fix] Set loaded variable explicitly
+  * [Fix] dkim_signing: siging_table: lowercase before lookup
+  * [Fix] known_senders: fix config handling
+  * [Fix] rbl: fix `exclude_local`
+
+3.7.5: 15 Dec 2023
+  * Add support for loongarch
+  * [Fix] Fix rspamadm lua logger
+  * [Fix] Fix systemd logging
+  * [Fix] dkim_signing: siging_table: lowercase before lookup
+  * [Minor] Fix build with no hyperscan
+  * [Minor] Try improve test stability
+
 3.7.4: 14 Nov 2023
   * [Enhancement] Add composite rule for suspicious URLs in suspicious messages
   * [Fix] Another try to fix setproctitle
