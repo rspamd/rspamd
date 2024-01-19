@@ -2045,8 +2045,12 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 		cand = g_ptr_array_index(part->languages, 0);
 		if (cand->elt) {
 			cand->elt->occurrences++;
+			d->total_occurrences++;
+
+			msg_debug_lang_det("updated stat for %s: %d occurrences, %z total detected",
+							   cand->elt->name, cand->elt->occurrences,
+							   d->total_occurrences);
 		}
-		d->total_occurrences++;
 	}
 
 	end_ticks = rspamd_get_ticks(TRUE);
