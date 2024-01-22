@@ -561,7 +561,7 @@ exports.rspamd_maybe_check_map = rspamd_maybe_check_map
 --     optional = true,
 --   }
 -- }
--- -- Then this function will look for opts.my_map parameter and try to replace it's with
+-- -- Then this function will look for opts.my_map parameter and try to replace it with
 -- -- a map with the specific type, description but not failing if it was empty.
 -- -- It will also set options.my_map_orig to the original value defined in the map.
 --]]
