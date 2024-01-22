@@ -1017,11 +1017,6 @@ rspamd_redis_learn_tokens(struct rspamd_task *task,
 	}
 	lua_new_text(L, tokens_buf, tokens_len, false);
 
-	if (text_tokens_len) {
-		nargs = 9;
-		lua_new_text(L, text_tokens_buf, text_tokens_len, false);
-	}
-
 	/* Store rt in random cookie */
 	char *cookie = (char *) rspamd_mempool_alloc(task->task_pool, 16);
 	rspamd_random_hex(cookie, 16);
@@ -1030,6 +1025,11 @@ rspamd_redis_learn_tokens(struct rspamd_task *task,
 	/* Callback */
 	lua_pushstring(L, cookie);
 	lua_pushcclosure(L, &rspamd_redis_learned, 1);
+
+	if (text_tokens_len) {
+		nargs = 9;
+		lua_new_text(L, text_tokens_buf, text_tokens_len, false);
+	}
 
 	if (lua_pcall(L, nargs, 0, err_idx) != 0) {
 		msg_err_task("call to script failed: %s", lua_tostring(L, -1));

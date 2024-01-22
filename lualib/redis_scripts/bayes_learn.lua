@@ -38,7 +38,7 @@ for i, token in ipairs(input_tokens) do
         redis.call('HSET', token, 'tokens', tok1)
       end
 
-      redis.call('ZINCRBY', prefix .. '_z', token, is_unlearn and -1 or 1)
+      redis.call('ZINCRBY', prefix .. '_z', is_unlearn and -1 or 1, token)
     end
   end
 end
