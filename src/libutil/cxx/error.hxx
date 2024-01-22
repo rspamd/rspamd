@@ -1,11 +1,11 @@
-/*-
- * Copyright 2022 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -123,6 +123,27 @@ public:
 	{
 		if (err && *err == nullptr) {
 			*err = into_g_error();
+		}
+	}
+
+	/**
+	 * Convert into GError
+	 * @return
+	 */
+	auto into_g_error(GQuark quark) const -> GError *
+	{
+		return g_error_new(quark, error_code, "%s",
+						   error_message.data());
+	}
+
+	/**
+	 * Convenience alias for the `into_g_error`
+	 * @param err
+	 */
+	auto into_g_error_set(GQuark quark, GError **err) const -> void
+	{
+		if (err && *err == nullptr) {
+			*err = into_g_error(quark);
 		}
 	}
 
