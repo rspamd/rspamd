@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1121,7 +1121,11 @@ void rspamd_message_set_modified_header(struct rspamd_task *task,
 			kh_value(htb, k) = hdr_elt;
 
 			if (order_ptr) {
-				DL_APPEND(*order_ptr, hdr_elt);
+				/*
+				 * This iterates over all headers in O(N), but we have no other options here, as the
+				 * list is already set.
+				 */
+				LL_APPEND2(*order_ptr, hdr_elt, ord_next);
 			}
 		}
 		else {
