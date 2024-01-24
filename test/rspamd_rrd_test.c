@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -46,13 +46,13 @@ void rspamd_rrd_test_func(void)
 	rrd_make_default_rra("AVERAGE", pdp_per_cdp / 2, rows_cnt, &rra[1]);
 	rrd_make_default_rra("AVERAGE", pdp_per_cdp / 4, rows_cnt, &rra[2]);
 	rrd_make_default_rra("AVERAGE", pdp_per_cdp / 10, rows_cnt, &rra[3]);
-	ar.data = rra;
+	ar.data = (char *) rra;
 	ar.len = sizeof(rra);
 	g_assert(rspamd_rrd_add_rra(rrd, &ar, &err));
 	/* Add DS */
 	rrd_make_default_ds("test", "COUNTER", 1, &ds[0]);
 	rrd_make_default_ds("test1", "COUNTER", 1, &ds[1]);
-	ar.data = ds;
+	ar.data = (char *) ds;
 	ar.len = sizeof(ds);
 	g_assert(rspamd_rrd_add_ds(rrd, &ar, &err));
 	/* Finalize */
@@ -66,7 +66,7 @@ void rspamd_rrd_test_func(void)
 	for (i = 0; i < pdp_per_cdp * rows_cnt / 2; i++) {
 		t[0] = i;
 		t[1] = cnt++;
-		ar.data = t;
+		ar.data = (char *) t;
 		ar.len = sizeof(t);
 		ticks += 1.0;
 		g_assert(rspamd_rrd_add_record(rrd, &ar, ticks, &err));
@@ -76,7 +76,7 @@ void rspamd_rrd_test_func(void)
 	for (i = 0; i < pdp_per_cdp * rows_cnt / 4; i++) {
 		t[0] = i + rspamd_time_jitter(1.0, 0.0);
 		t[1] = cnt++;
-		ar.data = t;
+		ar.data = (char *) t;
 		ar.len = sizeof(t);
 		ticks += 1.0;
 		g_assert(rspamd_rrd_add_record(rrd, &ar, ticks, &err));
@@ -89,7 +89,7 @@ void rspamd_rrd_test_func(void)
 	for (i = 0; i < pdp_per_cdp * rows_cnt / 8; i++) {
 		t[0] = i;
 		t[1] = cnt++;
-		ar.data = t;
+		ar.data = (char *) t;
 		ar.len = sizeof(t);
 		ticks += 1.0;
 		g_assert(rspamd_rrd_add_record(rrd, &ar, ticks, &err));

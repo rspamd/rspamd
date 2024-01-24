@@ -905,6 +905,7 @@ rspamd_redis_process_tokens(struct rspamd_task *task,
 		/* No need to do anything, as it is already done in the opposite class processing */
 		/* However, we need to store id as it is needed for further tokens processing */
 		rt->id = id;
+		rt->tokens = g_ptr_array_ref(tokens);
 
 		return TRUE;
 	}
