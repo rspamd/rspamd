@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1127,13 +1127,13 @@ rspamd_re_cache_exec_re(struct rspamd_task *task,
 	guint ret = 0, i, re_id;
 	struct rspamd_mime_header *rh;
 	const gchar *in;
-	const guchar **scvec;
-	guint *lenvec;
+	const guchar **scvec = NULL;
+	guint *lenvec = NULL;
 	gboolean raw = FALSE, processed_hyperscan = FALSE;
 	struct rspamd_mime_text_part *text_part;
 	struct rspamd_mime_part *mime_part;
 	struct rspamd_url *url;
-	guint len, cnt;
+	guint len = 0, cnt = 0;
 	const gchar *class_name;
 
 	class_name = rspamd_re_cache_type_to_string(re_class->type);
