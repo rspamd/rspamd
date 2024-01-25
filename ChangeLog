@@ -1,3 +1,11 @@
+3.8.1: 25 Jan 2024
+  * [Fix] Fix headers insertion in the ordered list
+  * [Fix] Fix learn error propagation
+  * [Fix] Fix learning with long prefixes
+  * [Fix] Fix potential double free by expclicitly zeroing pointers
+  * [Fix] Fix storing of the bayes tokens
+  * [Fix] Use short comments rather than long one
+
 3.8.0: 19 Jan 2024
   * [Project] Rspamadm fuzzyping command
   * [Project] Use Redis scripts for Bayes statistics and cache
