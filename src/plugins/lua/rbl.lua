@@ -1342,7 +1342,7 @@ for key, rbl in pairs(opts.rbls) do
       rspamd_logger.errx(rspamd_config, 'invalid config for %s: %s, RBL is DISABLED',
           key, err)
     else
-      res = rbl_common.convert_checks(res)
+      res = rbl_common.convert_checks(res, rbl.symbol or key:upper())
       -- Aliases
       if res.return_codes then
         res.returncodes = res.return_codes

@@ -149,7 +149,7 @@ local rule_schema_tbl = {
   exclude_checks = ts.array_of(ts.one_of(lua_util.keys(check_types))):is_optional(),
 }
 
-local function convert_checks(rule)
+local function convert_checks(rule, name)
   local rspamd_logger = require "rspamd_logger"
   if rule.checks then
     local all_connfilter = true
@@ -160,7 +160,7 @@ local function convert_checks(rule)
         if check_type.require_argument then
           if not rule[check] then
             rspamd_logger.errx(rspamd_config, 'rbl rule %s has check %s which requires an argument',
-                rule.symbol, check)
+                name, check)
             return nil
           end
         end
@@ -173,12 +173,12 @@ local function convert_checks(rule)
 
         if not check_type then
           rspamd_logger.errx(rspamd_config, 'rbl rule %s has invalid check type: %s',
-              rule.symbol, check)
+              name, check)
           return nil
         end
       else
         rspamd_logger.infox(rspamd_config, 'disable check %s in %s: excluded explicitly',
-            check, rule.symbol)
+            check, name)
       end
     end
     rule.connfilter = all_connfilter
@@ -196,7 +196,7 @@ local function convert_checks(rule)
   if not check_found then
     -- Enable implicit `from` check to allow upgrade
     rspamd_logger.warnx(rspamd_config, 'rbl rule %s has no check enabled, enable default `from` check',
-        rule.symbol)
+        name)
     rule.from = true
   end
 
@@ -204,7 +204,7 @@ local function convert_checks(rule)
     for _, v in pairs(rule.returncodes) do
       for _, e in ipairs(v) do
         if e:find('[%%%[]') then
-          rspamd_logger.warn(rspamd_config, 'implicitly enabling luapattern returncodes_matcher for rule %s', rule.symbol)
+          rspamd_logger.warn(rspamd_config, 'implicitly enabling luapattern returncodes_matcher for rule %s', name)
           rule.returncodes_matcher = 'luapattern'
           break
         end
