@@ -1290,7 +1290,7 @@ local function add_redis_script(script, redis_params, caller_level, maybe_filena
   if not caller_level then
     caller_level = 2
   end
-  local caller = debug.getinfo(caller_level)
+  local caller = debug.getinfo(caller_level) or debug.getinfo(caller_level - 1) or E
 
   local new_script = {
     caller = caller,
