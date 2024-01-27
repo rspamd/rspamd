@@ -887,12 +887,36 @@ local function multimap_callback(task, rule)
       end
     end,
     from = function()
-      if task:has_from('smtp') then
-        local from = task:get_from('smtp')
-        match_addr(rule, from)
-      elseif task:has_from('mime') then
+      local extract_from = rule.extract_from or 'default'
+
+      if extract_from == 'mime' then
         local from = task:get_from('mime')
-        match_addr(rule, from)
+        if from then
+          match_addr(rule, from)
+        end
+      elseif extract_from == 'smtp' then
+        local from = task:get_from('smtp')
+        if from then
+          match_addr(rule, from)
+        end
+      elseif extract_from == 'both' then
+        local from = task:get_from('smtp')
+        if from then
+          match_addr(rule, from)
+        end
+        from = task:get_from('mime')
+        if from then
+          match_addr(rule, from)
+        end
+      else
+        -- Default algorithm
+        if task:has_from('smtp') then
+          local from = task:get_from('smtp')
+          match_addr(rule, from)
+        elseif task:has_from('mime') then
+          local from = task:get_from('mime')
+          match_addr(rule, from)
+        end
       end
     end,
     helo = function()
