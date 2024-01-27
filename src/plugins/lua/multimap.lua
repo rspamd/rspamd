@@ -878,12 +878,42 @@ local function multimap_callback(task, rule)
       end
     end,
     rcpt = function()
-      if task:has_recipients('smtp') then
-        local rcpts = task:get_recipients('smtp')
-        match_addr(rule, rcpts)
-      elseif task:has_recipients('mime') then
+      local extract_from = rule.extract_from or 'default'
+
+      if extract_from == 'mime' then
         local rcpts = task:get_recipients('mime')
-        match_addr(rule, rcpts)
+        if rcpts then
+          lua_util.debugm(N, task, 'checking mime rcpts against the map')
+          match_addr(rule, rcpts)
+        end
+      elseif extract_from == 'smtp' then
+        local rcpts = task:get_recipients('smtp')
+        if rcpts then
+          lua_util.debugm(N, task, 'checking smtp rcpts against the map')
+          match_addr(rule, rcpts)
+        end
+      elseif extract_from == 'both' then
+        local rcpts = task:get_recipients('smtp')
+        if rcpts then
+          lua_util.debugm(N, task, 'checking smtp rcpts against the map')
+          match_addr(rule, rcpts)
+        end
+        rcpts = task:get_recipients('mime')
+        if rcpts then
+          lua_util.debugm(N, task, 'checking mime rcpts against the map')
+          match_addr(rule, rcpts)
+        end
+      else
+        -- Default algorithm
+        if task:has_recipients('smtp') then
+          local rcpts = task:get_recipients('smtp')
+          lua_util.debugm(N, task, 'checking smtp rcpts against the map')
+          match_addr(rule, rcpts)
+        elseif task:has_recipients('mime') then
+          local rcpts = task:get_recipients('mime')
+          lua_util.debugm(N, task, 'checking mime rcpts against the map')
+          match_addr(rule, rcpts)
+        end
       end
     end,
     from = function()
@@ -892,29 +922,35 @@ local function multimap_callback(task, rule)
       if extract_from == 'mime' then
         local from = task:get_from('mime')
         if from then
+          lua_util.debugm(N, task, 'checking mime from against the map')
           match_addr(rule, from)
         end
       elseif extract_from == 'smtp' then
         local from = task:get_from('smtp')
         if from then
+          lua_util.debugm(N, task, 'checking smtp from against the map')
           match_addr(rule, from)
         end
       elseif extract_from == 'both' then
         local from = task:get_from('smtp')
         if from then
+          lua_util.debugm(N, task, 'checking smtp from against the map')
           match_addr(rule, from)
         end
         from = task:get_from('mime')
         if from then
+          lua_util.debugm(N, task, 'checking mime from against the map')
           match_addr(rule, from)
         end
       else
         -- Default algorithm
         if task:has_from('smtp') then
           local from = task:get_from('smtp')
+          lua_util.debugm(N, task, 'checking smtp from against the map')
           match_addr(rule, from)
         elseif task:has_from('mime') then
           local from = task:get_from('mime')
+          lua_util.debugm(N, task, 'checking mime from against the map')
           match_addr(rule, from)
         end
       end
