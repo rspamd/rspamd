@@ -10,11 +10,6 @@ define(["jquery", "app/common"],
             ));
         }
 
-        function get_server() {
-            const checked_server = common.getSelector("selSrv");
-            return (checked_server === "All SERVERS") ? "local" : checked_server;
-        }
-
         function checkMsg(data) {
             const selector = $("#selectorsSelArea").val();
             common.query("plugins/selectors/check_message?selector=" + encodeURIComponent(selector), {
@@ -30,7 +25,7 @@ define(["jquery", "app/common"],
                         common.alertMessage("alert-error", "Unexpected error processing message");
                     }
                 },
-                server: get_server()
+                server: common.getServer()
             });
         }
 
@@ -50,7 +45,7 @@ define(["jquery", "app/common"],
                             toggle_form_group_class("valid", "invalid");
                         }
                     },
-                    server: get_server()
+                    server: common.getServer()
                 });
             } else {
                 $("#selectorsSelArea").removeClass("is-valid is-invalid");
@@ -76,7 +71,7 @@ define(["jquery", "app/common"],
                         const json = neighbours_status[0].data;
                         build_table_from_json(json, "#selectorsTable-" + list);
                     },
-                    server: get_server()
+                    server: common.getServer()
                 });
             }
 

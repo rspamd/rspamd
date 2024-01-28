@@ -29,7 +29,7 @@ define(["jquery", "app/common"],
         "use strict";
         const ui = {};
 
-        ui.getActions = function getActions(checked_server) {
+        ui.getActions = function getActions() {
             common.query("actions", {
                 success: function (data) {
                     $("#actionsFormField").empty();
@@ -57,7 +57,7 @@ define(["jquery", "app/common"],
                     $("#actionsFormField").html(
                         items.map((e) => e.html).join(""));
                 },
-                server: (checked_server === "All SERVERS") ? "local" : checked_server
+                server: common.getServer()
             });
         };
 
@@ -109,7 +109,7 @@ define(["jquery", "app/common"],
             }
         };
 
-        ui.getMaps = function (checked_server) {
+        ui.getMaps = function () {
             const $listmaps = $("#listMaps");
             $listmaps.closest(".card").hide();
             common.query("maps", {
@@ -135,7 +135,7 @@ define(["jquery", "app/common"],
                     $tbody.appendTo($listmaps);
                     $listmaps.closest(".card").show();
                 },
-                server: (checked_server === "All SERVERS") ? "local" : checked_server
+                server: common.getServer()
             });
         };
 
@@ -158,7 +158,6 @@ define(["jquery", "app/common"],
 
         // Modal form for maps
         $(document).on("click", "[data-bs-toggle=\"modal\"]", function () {
-            const checked_server = common.getSelector("selSrv");
             const item = $(this).data("item");
             common.query("getmap", {
                 headers: {
@@ -197,7 +196,7 @@ define(["jquery", "app/common"],
                     $("#modalDialog").modal("show");
                 },
                 errorMessage: "Cannot receive maps data",
-                server: (checked_server === "All SERVERS") ? "local" : checked_server
+                server: common.getServer()
             });
             return false;
         });

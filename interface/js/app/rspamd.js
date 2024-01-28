@@ -168,12 +168,12 @@ define(["jquery", "app/common", "stickytabs", "visibility",
                 break;
             case "#configuration_nav":
                 require(["app/config"], (module) => {
-                    module.getActions(checked_server);
-                    module.getMaps(checked_server);
+                    module.getActions();
+                    module.getMaps();
                 });
                 break;
             case "#symbols_nav":
-                require(["app/symbols"], (module) => module.getSymbols(checked_server));
+                require(["app/symbols"], (module) => module.getSymbols());
                 break;
             case "#scan_nav":
                 require(["app/upload"]);
