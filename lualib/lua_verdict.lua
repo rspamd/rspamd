@@ -186,23 +186,4 @@ exports.describe = function(verdict, what)
   return nil
 end
 
----[[[
--- @function lua_verdict.adjust_passthrough_action(task)
--- If an action is `soft reject` then this function extracts a module that has set this action
--- and returns an adjusted action (e.g. 'greylist' or 'ratelimit').
--- Otherwise an action is returned as is.
---]]
-exports.adjust_passthrough_action = function(task)
-  local action = task:get_metric_action()
-  if action == 'soft reject' then
-    local has_pr, _, _, module = task:has_pre_result()
-
-    if has_pr and module then
-      action = module
-    end
-  end
-
-  return action
-end
-
 return exports

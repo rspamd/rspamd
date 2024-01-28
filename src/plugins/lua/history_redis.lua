@@ -47,7 +47,6 @@ local lua_redis = require "lua_redis"
 local fun = require "fun"
 local ucl = require "ucl"
 local ts = (require "tableshape").types
-local lua_verdict = require "lua_verdict"
 local E = {}
 local N = "history_redis"
 local hostname = rspamd_util.get_hostname()
@@ -115,7 +114,7 @@ local function normalise_results(tbl, task)
   tbl.rmilter = nil
   tbl.messages = nil
   tbl.urls = nil
-  tbl.action = lua_verdict.adjust_passthrough_action(task)
+  tbl.action = task:get_metric_action()
 
   local seconds = task:get_timeval()['tv_sec']
   tbl.unix_time = seconds
