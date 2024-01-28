@@ -111,8 +111,10 @@ define(["jquery", "app/common", "footable"],
                 style: {minwidth: 82}
             }, {
                 name: "passthrough_module",
-                title: '<div title="The module that has set the pre-result">Pass-through module</div>',
-                breakpoints: "xs sm md"
+                title: '<div title="The module that has set the pre-result"><nobr>Pass-through</nobr> module</div>',
+                breakpoints: "xs",
+                style: {minWidth: 98, maxWidth: 98},
+                sortValue: (val) => ((typeof val === "undefined") ? "" : val)
             }, {
                 name: "score",
                 title: "Score",
@@ -169,7 +171,7 @@ define(["jquery", "app/common", "footable"],
             }].filter((col) => {
                 switch (table) {
                     case "history":
-                        return (col.name !== "passthrough_module");
+                        return true;
                     case "scan":
                         return ["ip", "sender_mime", "rcpt_mime_short", "rcpt_mime", "subject", "size", "user"]
                             .every((name) => col.name !== name);
