@@ -20,7 +20,7 @@ if confighelp then
       [[
 redis_history {
   # History key name
-  key_prefix = 'rs_history';
+  key_prefix = 'rs_history{{HOSTNAME}}{{COMPRESS}}';
   # History expire in seconds
   expire = 0;
   # History rows limit
