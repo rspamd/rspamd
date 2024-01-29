@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1443,6 +1443,14 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 			continue;
 		}
 
+		const char *up_name = rspamd_upstream_name(bk_conn->up);
+
+		if (up_name) {
+			rspamd_http_message_remove_header(msg, "Host");
+			rspamd_http_message_add_header(msg, "Host", up_name);
+		}
+		rspamd_http_message_add_header(msg, "Connection", "close");
+
 		if (msg->url->len == 0) {
 			msg->url = rspamd_fstring_append(msg->url, "/check", strlen("/check"));
 		}
@@ -1927,7 +1935,13 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 		if (backend == NULL) {
 			backend = session->ctx->default_upstream;
 		}
+
+		/* Remove the original Host header */
+		rspamd_http_message_remove_header(session->client_message, "Host");
 	}
+
+	/* Remove the original `Connection` header */
+	rspamd_http_message_remove_header(session->client_message, "Connection");
 
 	if (backend == NULL) {
 		/* No backend */
@@ -2003,6 +2017,14 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 
 			goto err; /* No fallback here */
 		}
+
+		/* Add new Host header */
+		const char *up_name = rspamd_upstream_name(session->master_conn->up);
+
+		if (up_name) {
+			rspamd_http_message_add_header(msg, "Host", up_name);
+		}
+		rspamd_http_message_add_header(msg, "Connection", "close");
 
 		session->master_conn->backend_conn = rspamd_http_connection_new_client_socket(
 			session->ctx->http_ctx,
