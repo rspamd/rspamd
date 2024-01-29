@@ -49,12 +49,15 @@ local ucl = require "ucl"
 local ts = (require "tableshape").types
 local E = {}
 local N = "history_redis"
-local hostname = rspamd_util.get_hostname()
+
+local template_env = {
+  HOSTNAME = rspamd_util.get_hostname(),
+}
 
 local redis_params
 
 local settings = {
-  key_prefix = 'rs_history', -- default key name
+  key_prefix = 'rs_history{{HOSTNAME}}{{COMPRESS}}', -- default key name template
   expire = nil, -- default no expire
   nrows = 200, -- default rows limit
   compress = true, -- use zstd compression when storing data in redis
@@ -146,7 +149,7 @@ local function history_save(task)
   end
 
   local data = task:get_protocol_reply { 'metrics', 'basic' }
-  local prefix = settings.key_prefix .. hostname
+  local prefix = lua_util.jinja_template(settings.key_prefix, template_env)
 
   if data then
     normalise_results(data, task)
@@ -159,8 +162,6 @@ local function history_save(task)
 
   if settings.compress then
     json = rspamd_util.zstd_compress(json)
-    -- Distinguish between compressed and non-compressed options
-    prefix = prefix .. '_zst'
   end
 
   local ret, conn, _ = lua_redis.rspamd_redis_make_request(task,
@@ -182,11 +183,7 @@ local function history_save(task)
 end
 
 local function handle_history_request(task, conn, from, to, reset)
-  local prefix = settings.key_prefix .. hostname
-  if settings.compress then
-    -- Distinguish between compressed and non-compressed options
-    prefix = prefix .. '_zst'
-  end
+  local prefix = lua_util.jinja_template(settings.key_prefix, template_env)
 
   if reset then
     local function redis_ltrim_cb(err, _)
@@ -290,6 +287,12 @@ if opts then
   end
   settings = res
 
+  if settings.compress then
+    template_env.COMPRESS = '_zst'
+  else
+    template_env.COMPRESS = ''
+  end
+
   redis_params = lua_redis.parse_redis_server('history_redis')
   if not redis_params then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
@@ -302,7 +305,7 @@ if opts then
       flags = 'empty,explicit_disable,ignore_passthrough',
       augmentations = { string.format("timeout=%f", redis_params.timeout or 0.0) }
     })
-    lua_redis.register_prefix(settings.key_prefix .. hostname, N,
+    lua_redis.register_prefix(lua_util.jinja_template(settings.key_prefix, template_env), N,
         "Redis history", {
           type = 'list',
         })
