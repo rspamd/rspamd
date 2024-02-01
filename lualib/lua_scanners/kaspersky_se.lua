@@ -120,7 +120,7 @@ local function kaspersky_se_check(task, content, digest, rule, maybe_part)
 
     local ip = task:get_from_ip()
     if ip and ip:is_valid() then
-      hdrs['X-KAV-SourceIP'] = tostring(ip)
+      hdrs['X-KAV-HostIP'] = tostring(ip)
     end
 
     if task:has_from() then
