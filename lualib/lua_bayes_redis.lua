@@ -134,40 +134,43 @@ exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol,
     revision = 0, -- number of learns
   }
   local cursor = 0
-  rspamd_config:add_periodic(ev_base, 0.0, function(cfg, _)
 
-    local function stat_redis_cb(err, data)
-      lua_util.debugm(N, cfg, 'stat redis cb: %s, %s', err, data)
+  if ev_base then
+    rspamd_config:add_periodic(ev_base, 0.0, function(cfg, _)
 
-      if err then
-        logger.warn(cfg, 'cannot get bayes statistics for %s: %s', symbol, err)
-      else
-        local new_cursor = data[1]
-        current_data.users = current_data.users + data[2]
-        current_data.revision = current_data.revision + data[3]
-        if new_cursor == 0 then
-          -- Done iteration
-          final_data = lua_util.shallowcopy(current_data)
-          current_data = {
-            users = 0,
-            revision = 0,
-          }
-          lua_util.debugm(N, cfg, 'final data: %s', final_data)
-          stat_periodic_cb(cfg, final_data)
+      local function stat_redis_cb(err, data)
+        lua_util.debugm(N, cfg, 'stat redis cb: %s, %s', err, data)
+
+        if err then
+          logger.warn(cfg, 'cannot get bayes statistics for %s: %s', symbol, err)
+        else
+          local new_cursor = data[1]
+          current_data.users = current_data.users + data[2]
+          current_data.revision = current_data.revision + data[3]
+          if new_cursor == 0 then
+            -- Done iteration
+            final_data = lua_util.shallowcopy(current_data)
+            current_data = {
+              users = 0,
+              revision = 0,
+            }
+            lua_util.debugm(N, cfg, 'final data: %s', final_data)
+            stat_periodic_cb(cfg, final_data)
+          end
+
+          cursor = new_cursor
         end
-
-        cursor = new_cursor
       end
-    end
 
-    lua_redis.exec_redis_script(stat_script_id,
-        { ev_base = ev_base, cfg = cfg, is_write = false },
-        stat_redis_cb, { tostring(cursor),
-                         symbol,
-                         is_spam and "learns_spam" or "learns_ham",
-                         tostring(max_users) })
-    return statfile_ucl.monitor_timeout or classifier_ucl.monitor_timeout or 30.0
-  end)
+      lua_redis.exec_redis_script(stat_script_id,
+          { ev_base = ev_base, cfg = cfg, is_write = false },
+          stat_redis_cb, { tostring(cursor),
+                           symbol,
+                           is_spam and "learns_spam" or "learns_ham",
+                           tostring(max_users) })
+      return statfile_ucl.monitor_timeout or classifier_ucl.monitor_timeout or 30.0
+    end)
+  end
 
   return gen_classify_functor(redis_params, classify_script_id), gen_learn_functor(redis_params, learn_script_id)
 end

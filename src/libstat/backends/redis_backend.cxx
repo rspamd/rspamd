@@ -542,9 +542,16 @@ rspamd_redis_init(struct rspamd_stat_ctx *ctx,
 	ucl_object_push_lua(L, st->stcf->opts, false);
 	lua_pushstring(L, backend->stcf->symbol);
 	lua_pushboolean(L, backend->stcf->is_spam);
-	auto **pev_base = (struct ev_loop **) lua_newuserdata(L, sizeof(struct ev_loop *));
-	*pev_base = ctx->event_loop;
-	rspamd_lua_setclass(L, "rspamd{ev_base}", -1);
+
+	/* Push event loop if there is one available (e.g. we are not in rspamadm mode) */
+	if (ctx->event_loop) {
+		auto **pev_base = (struct ev_loop **) lua_newuserdata(L, sizeof(struct ev_loop *));
+		*pev_base = ctx->event_loop;
+		rspamd_lua_setclass(L, "rspamd{ev_base}", -1);
+	}
+	else {
+		lua_pushnil(L);
+	}
 
 	/* Store backend in random cookie */
 	char *cookie = (char *) rspamd_mempool_alloc(cfg->cfg_pool, 16);
