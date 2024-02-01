@@ -118,6 +118,11 @@ local function kaspersky_se_check(task, content, digest, rule, maybe_part)
       ['X-KAV-Timeout'] = tostring(rule.timeout * 1000),
     }
 
+    local ip = task:get_from_ip()
+    if ip and ip:is_valid() then
+      hdrs['X-KAV-SourceIP'] = tostring(ip)
+    end
+
     if task:has_from() then
       hdrs['X-KAV-ObjectURL'] = string.format('[from:%s]', task:get_from()[1].addr)
     end
