@@ -635,7 +635,7 @@ LUA_FUNCTION_DEF(task, get_user);
 LUA_FUNCTION_DEF(task, set_user);
 /***
  * @method task:get_from_ip()
- * Returns [ip_addr](ip.md) object of a sender that is provided by MTA
+ * Returns [rspamd_ip](rspamd_ip.md) object of a sender that is provided by MTA
  * @return {rspamd_ip} ip address object
  */
 LUA_FUNCTION_DEF(task, get_from_ip);
@@ -648,7 +648,7 @@ LUA_FUNCTION_DEF(task, set_from_ip);
 LUA_FUNCTION_DEF(task, get_from_ip_num);
 /***
  * @method task:get_client_ip()
- * Returns [ip_addr](ip.md) object of a client connected to rspamd (normally, it is an IP address of MTA)
+ * Returns [rspamd_ip](rspamd_ip.md) object of a client connected to rspamd (normally, it is an IP address of MTA)
  * @return {rspamd_ip} ip address object
  */
 LUA_FUNCTION_DEF(task, get_client_ip);
