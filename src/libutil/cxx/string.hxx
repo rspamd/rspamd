@@ -21,6 +21,7 @@
 #ifndef RSPAMD_STRING_HXX
 #define RSPAMD_STRING_HXX
 
+#include <cstdint>// Stringzilla does not do it for some reason and uses std::<int> types
 #include <stringzilla/stringzilla.hpp>
 #include <fmt/core.h>
 #include <string_view>
