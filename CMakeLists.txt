@@ -125,6 +125,7 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/"
         "${CMAKE_SOURCE_DIR}/contrib/lua-lpeg"
         "${CMAKE_SOURCE_DIR}/contrib/frozen/include"
         "${CMAKE_SOURCE_DIR}/contrib/fu2/include"
+        "${CMAKE_SOURCE_DIR}/contrib/stringzilla/include"
         "${CMAKE_BINARY_DIR}/src" #Stored in the binary dir
         "${CMAKE_BINARY_DIR}/src/libcryptobox")
 
@@ -662,6 +663,13 @@ IF (ENABLE_LUA_REPL MATCHES "ON")
     SET(WITH_LUA_REPL 1)
     LIST(APPEND RSPAMD_REQUIRED_LIBRARIES rspamd-replxx)
 ENDIF ()
+
+ADD_SUBDIRECTORY(contrib/stringzilla)
+LIST(APPEND RSPAMD_REQUIRED_LIBRARIES rspamd-stringzilla)
+# Propagate to all targets, as we use those in the includes
+FOREACH (DEFINITION ${SZ_DEFINITIONS})
+    ADD_DEFINITIONS(${DEFINITION})
+ENDFOREACH ()
 
 IF (ENABLE_SNOWBALL MATCHES "ON")
     LIST(APPEND RSPAMD_REQUIRED_LIBRARIES stemmer)
