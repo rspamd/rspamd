@@ -1,11 +1,11 @@
-/*-
- * Copyright 2020 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -88,11 +88,148 @@ bool rspamd_log_syslog_log(const gchar *module, const gchar *id,
 		}
 	}
 
-	syslog(syslog_level, "<%.*s>; %s; %s: %.*s",
-		   RSPAMD_LOG_ID_LEN, id != NULL ? id : "",
-		   module != NULL ? module : "",
-		   function != NULL ? function : "",
-		   (gint) mlen, message);
+	bool log_json = (rspamd_log->flags & RSPAMD_LOG_FLAG_JSON);
+
+	/* Ensure safety as %.*s is used */
+	char idbuf[RSPAMD_LOG_ID_LEN + 1];
+
+	if (id != NULL) {
+		rspamd_strlcpy(idbuf, id, RSPAMD_LOG_ID_LEN + 1);
+	}
+	else {
+		idbuf[0] = '\0';
+	}
+
+	if (log_json) {
+		long now = rspamd_get_calendar_ticks();
+		if (rspamd_memcspn(message, "\"\\\r\n\b\t\v", mlen) == mlen) {
+			/* Fast path */
+			syslog(syslog_level, "{\"ts\": %ld, "
+								 "\"pid\": %d, "
+								 "\"severity\": \"%s\", "
+								 "\"worker_type\": \"%s\", "
+								 "\"id\": \"%s\", "
+								 "\"module\": \"%s\", "
+								 "\"function\": \"%s\", "
+								 "\"message\": \"%.*s\"}",
+				   now,
+				   (int) rspamd_log->pid,
+				   rspamd_get_log_severity_string(level_flags),
+				   rspamd_log->process_type,
+				   idbuf,
+				   module != NULL ? module : "",
+				   function != NULL ? function : "",
+				   (gint) mlen, message);
+		}
+		else {
+			/* Escaped version */
+			/* We need to do JSON escaping of the quotes */
+			const char *p, *end = message + mlen;
+			long escaped_len;
+
+			for (p = message, escaped_len = 0; p < end; p++, escaped_len++) {
+				switch (*p) {
+				case '\v':
+				case '\0':
+					escaped_len += 5;
+					break;
+				case '\\':
+				case '"':
+				case '\n':
+				case '\r':
+				case '\b':
+				case '\t':
+					escaped_len++;
+					break;
+				default:
+					break;
+				}
+			}
+
+
+			char *dst = g_malloc(escaped_len + 1);
+			char *d;
+
+			for (p = message, d = dst; p < end; p++, d++) {
+				switch (*p) {
+				case '\n':
+					*d++ = '\\';
+					*d = 'n';
+					break;
+				case '\r':
+					*d++ = '\\';
+					*d = 'r';
+					break;
+				case '\b':
+					*d++ = '\\';
+					*d = 'b';
+					break;
+				case '\t':
+					*d++ = '\\';
+					*d = 't';
+					break;
+				case '\f':
+					*d++ = '\\';
+					*d = 'f';
+					break;
+				case '\0':
+					*d++ = '\\';
+					*d++ = 'u';
+					*d++ = '0';
+					*d++ = '0';
+					*d++ = '0';
+					*d = '0';
+					break;
+				case '\v':
+					*d++ = '\\';
+					*d++ = 'u';
+					*d++ = '0';
+					*d++ = '0';
+					*d++ = '0';
+					*d = 'B';
+					break;
+				case '\\':
+					*d++ = '\\';
+					*d = '\\';
+					break;
+				case '"':
+					*d++ = '\\';
+					*d = '"';
+					break;
+				default:
+					*d = *p;
+					break;
+				}
+			}
+
+			*d = '\0';
+
+			syslog(syslog_level, "{\"ts\": %ld, "
+								 "\"pid\": %d, "
+								 "\"severity\": \"%s\", "
+								 "\"worker_type\": \"%s\", "
+								 "\"id\": \"%s\", "
+								 "\"module\": \"%s\", "
+								 "\"function\": \"%s\", "
+								 "\"message\": \"%s\"}",
+				   now,
+				   (int) rspamd_log->pid,
+				   rspamd_get_log_severity_string(level_flags),
+				   rspamd_log->process_type,
+				   idbuf,
+				   module != NULL ? module : "",
+				   function != NULL ? function : "",
+				   dst);
+			g_free(dst);
+		}
+	}
+	else {
+		syslog(syslog_level, "<%s>; %s; %s: %.*s",
+			   idbuf,
+			   module != NULL ? module : "",
+			   function != NULL ? function : "",
+			   (gint) mlen, message);
+	}
 
 	return true;
 }
