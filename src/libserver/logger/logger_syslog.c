@@ -43,7 +43,7 @@ rspamd_log_syslog_init(rspamd_logger_t *logger, struct rspamd_config *cfg,
 	priv = g_malloc0(sizeof(*priv));
 
 	priv->log_facility = cfg->log_facility;
-	openlog("rspamd", LOG_NDELAY | LOG_PID, priv->log_facility);
+	openlog("rspamd", LOG_CONS | LOG_NDELAY | LOG_PID, priv->log_facility);
 
 	return priv;
 }
