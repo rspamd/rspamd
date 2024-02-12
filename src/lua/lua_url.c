@@ -858,38 +858,41 @@ lua_url_create(lua_State *L)
 	}
 	else {
 		pool = static_lua_url_pool;
-		t = lua_check_text_or_string(L, 2);
+		t = lua_check_text_or_string(L, 1);
 	}
 
-	if (pool == NULL || t == NULL) {
-		return luaL_error(L, "invalid arguments");
+	if (pool == NULL) {
+		return luaL_error(L, "invalid arguments: mempool is expected as the second argument");
 	}
-	else {
-		rspamd_url_find_single(pool, t->start, t->len, RSPAMD_URL_FIND_ALL,
-							   lua_url_single_inserter, L);
 
-		if (lua_type(L, -1) != LUA_TUSERDATA) {
-			/* URL is actually not found */
-			lua_pushnil(L);
+	if (t == NULL) {
+		return luaL_error(L, "invalid arguments: string/text is expected as the first argument");
+	}
 
-			return 1;
-		}
+	rspamd_url_find_single(pool, t->start, t->len, RSPAMD_URL_FIND_ALL,
+						   lua_url_single_inserter, L);
 
-		u = (struct rspamd_lua_url *) lua_touserdata(L, -1);
+	if (lua_type(L, -1) != LUA_TUSERDATA) {
+		/* URL is actually not found */
+		lua_pushnil(L);
 
-		if (lua_type(L, 3) == LUA_TTABLE) {
-			/* Add flags */
-			for (lua_pushnil(L); lua_next(L, 3); lua_pop(L, 1)) {
-				int nmask = 0;
-				const gchar *fname = lua_tostring(L, -1);
+		return 1;
+	}
 
-				if (rspamd_url_flag_from_string(fname, &nmask)) {
-					u->url->flags |= nmask;
-				}
-				else {
-					lua_pop(L, 1);
-					return luaL_error(L, "invalid flag: %s", fname);
-				}
+	u = (struct rspamd_lua_url *) lua_touserdata(L, -1);
+
+	if (lua_type(L, 3) == LUA_TTABLE) {
+		/* Add flags */
+		for (lua_pushnil(L); lua_next(L, 3); lua_pop(L, 1)) {
+			int nmask = 0;
+			const gchar *fname = lua_tostring(L, -1);
+
+			if (rspamd_url_flag_from_string(fname, &nmask)) {
+				u->url->flags |= nmask;
+			}
+			else {
+				lua_pop(L, 1);
+				return luaL_error(L, "invalid flag: %s", fname);
 			}
 		}
 	}
