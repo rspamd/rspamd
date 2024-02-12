@@ -1,11 +1,11 @@
-/*-
- * Copyright 2019 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -85,7 +85,21 @@ rspamd_http_message_from_url(const gchar *url)
 	}
 	else {
 		path = url + pu.field_data[UF_PATH].off;
-		pathlen = urllen - pu.field_data[UF_PATH].off;
+		pathlen = pu.field_data[UF_PATH].len;
+
+		if (path > url && *(path - 1) == '/') {
+			path--;
+			pathlen++;
+		}
+
+
+		/* Include query if needed */
+		if ((pu.field_set & (1 << UF_QUERY)) != 0) {
+			/* Include both ? and query */
+			pathlen += pu.field_data[UF_QUERY].len + 1;
+		}
+
+		/* Do not include fragment here! */
 	}
 
 	msg = rspamd_http_new_message(HTTP_REQUEST);
