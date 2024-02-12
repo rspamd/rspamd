@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 #include "libmime/mime_headers.h"
 #include "contrib/libottery/ottery.h"
 #include "libcryptobox/cryptobox.h"
+#include "libserver/http/http_message.h"
 
 #include <vector>
 #include <utility>
@@ -201,6 +202,32 @@ TEST_SUITE("rspamd_utils")
 				auto nlen = rspamd_message_header_unfold_inplace(cpy, c.first.size());
 				CHECK(std::string{cpy, nlen} == c.second);
 				delete[] cpy;
+			}
+		}
+	}
+
+	TEST_CASE("rspamd_http_message_from_url")
+	{
+		std::vector<std::pair<std::string, std::string>> cases{
+			{"http://example.com", "/"},
+			{"http://example.com/", "/"},
+			{"http://example.com/lol", "/lol"},
+			{"http://example.com/lol#keke", "/lol"},
+			{"http://example.com/lol?omg=huh&oh", "/lol?omg=huh&oh"},
+			{"http://example.com/lol?omg=huh&oh#", "/lol?omg=huh&oh"},
+			{"http://example.com/lol?omg=huh&oh#keke", "/lol?omg=huh&oh"},
+			{"http://example.com/lol?", "/lol"},
+			{"http://example.com/lol?#", "/lol"},
+		};
+
+		for (const auto &c: cases) {
+			SUBCASE(("rspamd_http_message_from_url: " + c.first).c_str())
+			{
+				auto *msg = rspamd_http_message_from_url(c.first.c_str());
+				std::size_t nlen;
+				auto *path = rspamd_http_message_get_url(msg, &nlen);
+				CHECK(std::string{path, nlen} == c.second);
+				rspamd_http_message_unref(msg);
 			}
 		}
 	}

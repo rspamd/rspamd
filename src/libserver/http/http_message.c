@@ -737,3 +737,13 @@ bool rspamd_http_message_is_standard_port(struct rspamd_http_message *msg)
 
 	return msg->port == 80;
 }
+
+const gchar *rspamd_http_message_get_url(struct rspamd_http_message *msg, gsize *len)
+{
+	if (msg->url) {
+		*len = msg->url->len;
+		return msg->url->str;
+	}
+
+	return NULL;
+}
