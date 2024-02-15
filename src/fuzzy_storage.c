@@ -133,6 +133,7 @@ struct fuzzy_key {
 	struct fuzzy_key_stat *stat;
 	khash_t(fuzzy_key_flag_stat) * flags_stat;
 	khash_t(fuzzy_key_ids_set) * forbidden_ids;
+	ref_entry_t ref;
 };
 
 KHASH_INIT(rspamd_fuzzy_keys_hash,
@@ -519,7 +520,7 @@ fuzzy_hash_table_dtor(khash_t(rspamd_fuzzy_keys_hash) * hash)
 {
 	struct fuzzy_key *key;
 	kh_foreach_value(hash, key, {
-		fuzzy_key_dtor(key);
+		REF_RELEASE(key);
 	});
 	kh_destroy(rspamd_fuzzy_keys_hash, hash);
 }
@@ -1503,8 +1504,6 @@ rspamd_fuzzy_decrypt_command(struct fuzzy_session *s, guchar *buf, gsize buflen)
 		key = kh_val(s->ctx->keys, k);
 	}
 
-	s->key = key;
-
 	/* Now process the remote pubkey */
 	rk = rspamd_pubkey_from_bin(hdr.pubkey, sizeof(hdr.pubkey),
 								RSPAMD_KEYPAIR_KEX, RSPAMD_CRYPTOBOX_MODE_25519);
@@ -1528,6 +1527,9 @@ rspamd_fuzzy_decrypt_command(struct fuzzy_session *s, guchar *buf, gsize buflen)
 
 		return FALSE;
 	}
+
+	s->key = key;
+	REF_RETAIN(key);
 
 	memcpy(s->nm, rspamd_pubkey_get_nm(rk, key->key), sizeof(s->nm));
 	rspamd_pubkey_unref(rk);
@@ -1782,6 +1784,10 @@ fuzzy_session_destroy(gpointer d)
 
 	if (session->extensions) {
 		g_free(session->extensions);
+	}
+
+	if (session->key) {
+		REF_RELEASE(session->key);
 	}
 
 	g_free(session);
@@ -2636,6 +2642,7 @@ fuzzy_parse_keypair(rspamd_mempool_t *pool,
 		}
 
 		key = g_malloc0(sizeof(*key));
+		REF_INIT_RETAIN(key, fuzzy_key_dtor);
 		key->key = kp;
 		keystat = g_malloc0(sizeof(*keystat));
 		REF_INIT_RETAIN(keystat, fuzzy_key_stat_dtor);
@@ -2660,14 +2667,14 @@ fuzzy_parse_keypair(rspamd_mempool_t *pool,
 		if (r == 0) {
 			msg_err("duplicate keypair found: pk=%*bs",
 					32, pk);
-			fuzzy_key_dtor(key);
+			REF_RELEASE(key);
 
 			return FALSE;
 		}
 		else if (r == -1) {
 			msg_err("hash insertion error: pk=%*bs",
 					32, pk);
-			fuzzy_key_dtor(key);
+			REF_RELEASE(key);
 
 			return FALSE;
 		}
