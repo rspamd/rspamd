@@ -48,6 +48,8 @@ local function kaspersky_se_config(opts)
     scan_mime_parts = true,
     scan_text_mime = false,
     scan_image_mime = false,
+    keepalive = true,
+    auth_string = nil
   }
 
   default_conf = lua_util.override_defaults(default_conf, opts)
@@ -118,6 +120,15 @@ local function kaspersky_se_check(task, content, digest, rule, maybe_part)
       ['X-KAV-Timeout'] = tostring(rule.timeout * 1000),
     }
 
+    local ip = task:get_from_ip()
+    if ip and ip:is_valid() then
+      hdrs['X-KAV-HostIP'] = tostring(ip)
+    end
+
+    if rule.auth_string then
+      hdrs['Authorization'] = rule.auth_string
+    end
+
     if task:has_from() then
       hdrs['X-KAV-ObjectURL'] = string.format('[from:%s]', task:get_from()[1].addr)
     end
@@ -158,6 +169,7 @@ local function kaspersky_se_check(task, content, digest, rule, maybe_part)
       body = req_body,
       headers = hdrs,
       timeout = rule.timeout,
+      keepalive = rule.keepalive,
     }
 
     local function kas_callback(http_err, code, body, headers)
