@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -995,7 +995,7 @@ rspamd_map_periodic_dtor(struct map_periodic_cbdata *periodic)
 	struct rspamd_map *map;
 
 	map = periodic->map;
-	msg_debug_map("periodic dtor %p", periodic);
+	msg_debug_map("periodic dtor %p; need_modify=%d", periodic, periodic->need_modify);
 
 	if (periodic->need_modify || periodic->cbdata.errored) {
 		/* Need to notify the real data structure */
@@ -1062,6 +1062,8 @@ rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 		return;
 	}
 
+	map->seen = true;
+
 	if (map->non_trivial && map->next_check != 0) {
 		timeout = map->next_check - rspamd_get_calendar_ticks();
 		map->next_check = 0;
@@ -1107,7 +1109,7 @@ rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 		timeout = map->poll_timeout;
 
 		if (how & RSPAMD_MAP_SCHEDULE_INIT) {
-			if (map->active_http) {
+			if (map->non_trivial && map->active_http) {
 				/* Spill maps load to get better chances to hit ssl cache */
 				timeout = rspamd_time_jitter(0.0, 2.0);
 			}
@@ -2189,7 +2191,7 @@ void rspamd_map_watch(struct rspamd_config *cfg,
 
 				data = bk->data.fd;
 
-				if (map->user_data == NULL || *map->user_data == NULL) {
+				if (!map->seen || map->user_data == NULL || *map->user_data == NULL) {
 					/* Map has not been read, init it's reading if possible */
 					struct stat st;
 
@@ -2317,6 +2319,8 @@ void rspamd_map_preload(struct rspamd_config *cfg)
 				if (map->on_load_function) {
 					map->on_load_function(map, map->on_load_ud);
 				}
+
+				map->seen = true;
 			}
 			else {
 				msg_info_map("preload of %s failed", map->name);

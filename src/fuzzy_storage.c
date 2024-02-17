@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -107,7 +107,38 @@ struct rspamd_leaky_bucket_elt {
 };
 
 static const guint64 rspamd_fuzzy_storage_magic = 0x291a3253eb1b3ea5ULL;
+
+static int64_t
+fuzzy_kp_hash(const unsigned char *p)
+{
+	int64_t res;
+
+	memcpy(&res, p, sizeof(res));
+	return res;
+}
+static bool
+fuzzy_kp_equal(gconstpointer a, gconstpointer b)
+{
+	const guchar *pa = a, *pb = b;
+
+	return (memcmp(pa, pb, RSPAMD_FUZZY_KEYLEN) == 0);
+}
+
 KHASH_SET_INIT_INT(fuzzy_key_ids_set);
+KHASH_INIT(fuzzy_key_flag_stat, int, struct fuzzy_key_stat, 1, kh_int_hash_func,
+		   kh_int_hash_equal);
+struct fuzzy_key {
+	struct rspamd_cryptobox_keypair *key;
+	struct rspamd_cryptobox_pubkey *pk;
+	struct fuzzy_key_stat *stat;
+	khash_t(fuzzy_key_flag_stat) * flags_stat;
+	khash_t(fuzzy_key_ids_set) * forbidden_ids;
+	ref_entry_t ref;
+};
+
+KHASH_INIT(rspamd_fuzzy_keys_hash,
+		   const unsigned char *, struct fuzzy_key *, 1,
+		   fuzzy_kp_hash, fuzzy_kp_equal);
 
 struct rspamd_fuzzy_storage_ctx {
 	guint64 magic;
@@ -133,6 +164,7 @@ struct rspamd_fuzzy_storage_ctx {
 	const ucl_object_t *delay_whitelist_map;
 	const ucl_object_t *blocked_map;
 	const ucl_object_t *ratelimit_whitelist_map;
+	const ucl_object_t *dynamic_keys_map;
 
 	guint keypair_cache_size;
 	ev_timer stat_ev;
@@ -141,7 +173,10 @@ struct rspamd_fuzzy_storage_ctx {
 	/* Local keypair */
 	struct rspamd_cryptobox_keypair *default_keypair; /* Bad clash, need for parse keypair */
 	struct fuzzy_key *default_key;
-	GHashTable *keys;
+	khash_t(rspamd_fuzzy_keys_hash) * keys;
+	/* Those are loaded via map */
+	khash_t(rspamd_fuzzy_keys_hash) * dynamic_keys;
+
 	gboolean encrypted_only;
 	gboolean read_only;
 	gboolean dedicated_update_worker;
@@ -207,16 +242,6 @@ struct fuzzy_peer_request {
 	struct fuzzy_peer_cmd cmd;
 };
 
-KHASH_INIT(fuzzy_key_flag_stat, int, struct fuzzy_key_stat, 1, kh_int_hash_func,
-		   kh_int_hash_equal);
-struct fuzzy_key {
-	struct rspamd_cryptobox_keypair *key;
-	struct rspamd_cryptobox_pubkey *pk;
-	struct fuzzy_key_stat *stat;
-	khash_t(fuzzy_key_flag_stat) * flags_stat;
-	khash_t(fuzzy_key_ids_set) * forbidden_ids;
-};
-
 struct rspamd_updates_cbdata {
 	GArray *updates_pending;
 	struct rspamd_fuzzy_storage_ctx *ctx;
@@ -233,6 +258,151 @@ static gboolean rspamd_fuzzy_check_client(struct rspamd_fuzzy_storage_ctx *ctx,
 static void rspamd_fuzzy_maybe_call_blacklisted(struct rspamd_fuzzy_storage_ctx *ctx,
 												rspamd_inet_addr_t *addr,
 												const gchar *reason);
+static struct fuzzy_key *fuzzy_add_keypair_from_ucl(const ucl_object_t *obj,
+													khash_t(rspamd_fuzzy_keys_hash) * target);
+
+struct fuzzy_keymap_ucl_buf {
+	rspamd_fstring_t *buf;
+	struct rspamd_fuzzy_storage_ctx *ctx;
+};
+
+/* Callbacks for reading json dynamic rules */
+static gchar *
+ucl_keymap_read_cb(gchar *chunk,
+				   gint len,
+				   struct map_cb_data *data,
+				   gboolean final)
+{
+	struct fuzzy_keymap_ucl_buf *jb, *pd;
+
+	pd = data->prev_data;
+
+	g_assert(pd != NULL);
+
+	if (data->cur_data == NULL) {
+		jb = g_malloc0(sizeof(*jb));
+		jb->ctx = pd->ctx;
+		data->cur_data = jb;
+	}
+	else {
+		jb = data->cur_data;
+	}
+
+	if (jb->buf == NULL) {
+		/* Allocate memory for buffer */
+		jb->buf = rspamd_fstring_sized_new(MAX(len, 4096));
+	}
+
+	jb->buf = rspamd_fstring_append(jb->buf, chunk, len);
+
+	return NULL;
+}
+
+static void
+ucl_keymap_fin_cb(struct map_cb_data *data, void **target)
+{
+	struct fuzzy_keymap_ucl_buf *jb;
+	ucl_object_t *top;
+	struct ucl_parser *parser;
+	struct rspamd_config *cfg;
+
+	/* Now parse ucl */
+	if (data->cur_data) {
+		jb = data->cur_data;
+		cfg = jb->ctx->cfg;
+	}
+	else {
+		msg_err("no cur data in the map! might be a bug");
+		return;
+	}
+
+	if (jb->buf->len == 0) {
+		msg_err_config("no data read");
+
+		return;
+	}
+
+	parser = ucl_parser_new(UCL_PARSER_NO_FILEVARS);
+
+	if (!ucl_parser_add_chunk(parser, jb->buf->str, jb->buf->len)) {
+		msg_err_config("cannot load ucl data: parse error %s",
+					   ucl_parser_get_error(parser));
+		ucl_parser_free(parser);
+		return;
+	}
+
+	top = ucl_parser_get_object(parser);
+	ucl_parser_free(parser);
+
+	if (ucl_object_type(top) != UCL_ARRAY) {
+		ucl_object_unref(top);
+		msg_err_config("loaded ucl is not an array");
+		return;
+	}
+
+	if (target) {
+		*target = data->cur_data;
+	}
+
+	if (data->prev_data) {
+		jb = data->prev_data;
+		/* Clean prev data */
+		if (jb->buf) {
+			rspamd_fstring_free(jb->buf);
+		}
+
+		/* Clean the existing keys */
+		struct fuzzy_key *key;
+		kh_foreach_value(jb->ctx->dynamic_keys, key, {
+			REF_RELEASE(key);
+		});
+		kh_clear(rspamd_fuzzy_keys_hash, jb->ctx->dynamic_keys);
+
+		/* Insert new keys */
+		const ucl_object_t *cur;
+		ucl_object_iter_t it = NULL;
+		int success = 0;
+
+		while ((cur = ucl_object_iterate(top, &it, true)) != NULL) {
+			struct fuzzy_key *nk;
+
+			nk = fuzzy_add_keypair_from_ucl(cur, jb->ctx->dynamic_keys);
+
+			if (nk == NULL) {
+				msg_warn_config("cannot add dynamic keypair");
+			}
+			success++;
+		}
+
+		msg_info_config("loaded %d dynamic keypairs", success);
+
+		g_free(jb);
+	}
+
+	ucl_object_unref(top);
+}
+
+static void
+ucl_keymap_dtor_cb(struct map_cb_data *data)
+{
+	struct fuzzy_keymap_ucl_buf *jb;
+
+	if (data->cur_data) {
+		jb = data->cur_data;
+		/* Clean prev data */
+		if (jb->buf) {
+			rspamd_fstring_free(jb->buf);
+		}
+
+		struct fuzzy_key *key;
+		kh_foreach_value(jb->ctx->dynamic_keys, key, {
+			REF_RELEASE(key);
+		});
+		kh_destroy(rspamd_fuzzy_keys_hash, jb->ctx->dynamic_keys);
+
+		g_free(jb);
+	}
+}
 
 static gboolean
 rspamd_fuzzy_check_ratelimit(struct fuzzy_session *session)
@@ -491,6 +661,16 @@ fuzzy_key_dtor(gpointer p)
 
 		g_free(key);
 	}
+}
+
+static void
+fuzzy_hash_table_dtor(khash_t(rspamd_fuzzy_keys_hash) * hash)
+{
+	struct fuzzy_key *key;
+	kh_foreach_value(hash, key, {
+		REF_RELEASE(key);
+	});
+	kh_destroy(rspamd_fuzzy_keys_hash, hash);
 }
 
 static void
@@ -1446,7 +1626,7 @@ rspamd_fuzzy_decrypt_command(struct fuzzy_session *s, guchar *buf, gsize buflen)
 {
 	struct rspamd_fuzzy_encrypted_req_hdr hdr;
 	struct rspamd_cryptobox_pubkey *rk;
-	struct fuzzy_key *key;
+	struct fuzzy_key *key = NULL;
 
 	if (s->ctx->default_key == NULL) {
 		msg_warn("received encrypted request when encryption is not enabled");
@@ -1463,16 +1643,25 @@ rspamd_fuzzy_decrypt_command(struct fuzzy_session *s, guchar *buf, gsize buflen)
 	buflen -= sizeof(hdr);
 
 	/* Try to find the desired key */
-	key = g_hash_table_lookup(s->ctx->keys, hdr.key_id);
+	khiter_t k = kh_get(rspamd_fuzzy_keys_hash, s->ctx->keys, hdr.key_id);
+	if (k == kh_end(s->ctx->keys)) {
 
-	if (key == NULL) {
-		/* Unknown key, assume default one */
 		key = s->ctx->default_key;
+
+		/* Check dynamic keys */
+		if (s->ctx->dynamic_keys) {
+			k = kh_get(rspamd_fuzzy_keys_hash, s->ctx->dynamic_keys, hdr.key_id);
+
+			if (k != kh_end(s->ctx->keys)) {
+				key = kh_val(s->ctx->dynamic_keys, k);
+			}
+		}
+	}
+	else {
+		key = kh_val(s->ctx->keys, k);
 	}
 
-	s->key = key;
-
-	/* Now process keypair */
+	/* Now process the remote pubkey */
 	rk = rspamd_pubkey_from_bin(hdr.pubkey, sizeof(hdr.pubkey),
 								RSPAMD_KEYPAIR_KEX, RSPAMD_CRYPTOBOX_MODE_25519);
 
@@ -1482,6 +1671,7 @@ rspamd_fuzzy_decrypt_command(struct fuzzy_session *s, guchar *buf, gsize buflen)
 		return FALSE;
 	}
 
+	/* Try to get the cached NM */
 	rspamd_keypair_cache_process(s->ctx->keypair_cache, key->key, rk);
 
 	/* Now decrypt request */
@@ -1494,6 +1684,9 @@ rspamd_fuzzy_decrypt_command(struct fuzzy_session *s, guchar *buf, gsize buflen)
 
 		return FALSE;
 	}
+
+	s->key = key;
+	REF_RETAIN(key);
 
 	memcpy(s->nm, rspamd_pubkey_get_nm(rk, key->key), sizeof(s->nm));
 	rspamd_pubkey_unref(rk);
@@ -1748,6 +1941,10 @@ fuzzy_session_destroy(gpointer d)
 
 	if (session->extensions) {
 		g_free(session->extensions);
+	}
+
+	if (session->key) {
+		REF_RELEASE(session->key);
 	}
 
 	g_free(session);
@@ -2088,64 +2285,65 @@ rspamd_fuzzy_storage_stat_key(const struct fuzzy_key_stat *key_stat)
 	return res;
 }
 
+static void
+rspamd_fuzzy_key_stat_iter(const unsigned char *pk_iter, struct fuzzy_key *fuzzy_key, ucl_object_t *keys_obj, gboolean ip_stat)
+{
+	struct fuzzy_key_stat *key_stat = fuzzy_key->stat;
+	gchar keyname[17];
+
+	if (key_stat) {
+		rspamd_snprintf(keyname, sizeof(keyname), "%8bs", pk_iter);
+
+		ucl_object_t *elt = rspamd_fuzzy_storage_stat_key(key_stat);
+
+		if (key_stat->last_ips && ip_stat) {
+			int i = 0;
+			ucl_object_t *ip_elt = ucl_object_typed_new(UCL_OBJECT);
+			gpointer k, v;
+
+			while ((i = rspamd_lru_hash_foreach(key_stat->last_ips,
+												i, &k, &v)) != -1) {
+				ucl_object_t *ip_cur = rspamd_fuzzy_storage_stat_key(v);
+				ucl_object_insert_key(ip_elt, ip_cur,
+									  rspamd_inet_address_to_string(k), 0, true);
+			}
+			ucl_object_insert_key(elt, ip_elt, "ips", 0, false);
+		}
+
+		int flag;
+		struct fuzzy_key_stat *flag_stat;
+		ucl_object_t *flags_ucl = ucl_object_typed_new(UCL_OBJECT);
+
+		kh_foreach_key_value_ptr(fuzzy_key->flags_stat, flag, flag_stat, {
+			char intbuf[16];
+			rspamd_snprintf(intbuf, sizeof(intbuf), "%d", flag);
+			ucl_object_insert_key(flags_ucl, rspamd_fuzzy_storage_stat_key(flag_stat),
+								  intbuf, 0, true);
+		});
+
+		ucl_object_insert_key(elt, flags_ucl, "flags", 0, false);
+
+		ucl_object_insert_key(elt,
+							  rspamd_keypair_to_ucl(fuzzy_key->key, RSPAMD_KEYPAIR_DUMP_NO_SECRET | RSPAMD_KEYPAIR_DUMP_FLATTENED),
+							  "keypair", 0, false);
+		ucl_object_insert_key(keys_obj, elt, keyname, 0, true);
+	}
+}
+
 static ucl_object_t *
 rspamd_fuzzy_stat_to_ucl(struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat)
 {
-	struct fuzzy_key_stat *key_stat;
-	GHashTableIter it;
 	struct fuzzy_key *fuzzy_key;
-	ucl_object_t *obj, *keys_obj, *elt, *ip_elt, *ip_cur;
-	gpointer k, v;
-	gint i;
-	gchar keyname[17];
+	ucl_object_t *obj, *keys_obj, *elt, *ip_elt;
+	const unsigned char *pk_iter;
 
 	obj = ucl_object_typed_new(UCL_OBJECT);
 
 	keys_obj = ucl_object_typed_new(UCL_OBJECT);
-	g_hash_table_iter_init(&it, ctx->keys);
 
-	while (g_hash_table_iter_next(&it, &k, &v)) {
-		fuzzy_key = v;
-		key_stat = fuzzy_key->stat;
-
-		if (key_stat) {
-			rspamd_snprintf(keyname, sizeof(keyname), "%8bs", k);
-
-			elt = rspamd_fuzzy_storage_stat_key(key_stat);
-
-			if (key_stat->last_ips && ip_stat) {
-				i = 0;
-
-				ip_elt = ucl_object_typed_new(UCL_OBJECT);
-
-				while ((i = rspamd_lru_hash_foreach(key_stat->last_ips,
-													i, &k, &v)) != -1) {
-					ip_cur = rspamd_fuzzy_storage_stat_key(v);
-					ucl_object_insert_key(ip_elt, ip_cur,
-										  rspamd_inet_address_to_string(k), 0, true);
-				}
-				ucl_object_insert_key(elt, ip_elt, "ips", 0, false);
-			}
-
-			int flag;
-			struct fuzzy_key_stat *flag_stat;
-			ucl_object_t *flags_ucl = ucl_object_typed_new(UCL_OBJECT);
-
-			kh_foreach_key_value_ptr(fuzzy_key->flags_stat, flag, flag_stat, {
-				char intbuf[16];
-				rspamd_snprintf(intbuf, sizeof(intbuf), "%d", flag);
-				ucl_object_insert_key(flags_ucl, rspamd_fuzzy_storage_stat_key(flag_stat),
-									  intbuf, 0, true);
-			});
-
-			ucl_object_insert_key(elt, flags_ucl, "flags", 0, false);
-
-			ucl_object_insert_key(elt,
-								  rspamd_keypair_to_ucl(fuzzy_key->key, RSPAMD_KEYPAIR_DUMP_NO_SECRET | RSPAMD_KEYPAIR_DUMP_FLATTENED),
-								  "keypair", 0, false);
-			ucl_object_insert_key(keys_obj, elt, keyname, 0, true);
-		}
-	}
+	kh_foreach(ctx->keys, pk_iter, fuzzy_key, {
+		rspamd_fuzzy_key_stat_iter(pk_iter, fuzzy_key, keys_obj, ip_stat);
+	});
 
 	ucl_object_insert_key(obj, keys_obj, "keys", 0, false);
 
@@ -2172,8 +2370,8 @@ rspamd_fuzzy_stat_to_ucl(struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat)
 						  false);
 
 	if (ctx->errors_ips && ip_stat) {
-		i = 0;
-
+		gpointer k, v;
+		int i = 0;
 		ip_elt = ucl_object_typed_new(UCL_OBJECT);
 
 		while ((i = rspamd_lru_hash_foreach(ctx->errors_ips, i, &k, &v)) != -1) {
@@ -2192,7 +2390,7 @@ rspamd_fuzzy_stat_to_ucl(struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat)
 	/* Checked by epoch */
 	elt = ucl_object_typed_new(UCL_ARRAY);
 
-	for (i = RSPAMD_FUZZY_EPOCH10; i < RSPAMD_FUZZY_EPOCH_MAX; i++) {
+	for (int i = RSPAMD_FUZZY_EPOCH10; i < RSPAMD_FUZZY_EPOCH_MAX; i++) {
 		ucl_array_append(elt,
 						 ucl_object_fromint(ctx->stat.fuzzy_hashes_checked[i]));
 	}
@@ -2202,7 +2400,7 @@ rspamd_fuzzy_stat_to_ucl(struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat)
 	/* Shingles by epoch */
 	elt = ucl_object_typed_new(UCL_ARRAY);
 
-	for (i = RSPAMD_FUZZY_EPOCH10; i < RSPAMD_FUZZY_EPOCH_MAX; i++) {
+	for (int i = RSPAMD_FUZZY_EPOCH10; i < RSPAMD_FUZZY_EPOCH_MAX; i++) {
 		ucl_array_append(elt,
 						 ucl_object_fromint(ctx->stat.fuzzy_shingles_checked[i]));
 	}
@@ -2212,7 +2410,7 @@ rspamd_fuzzy_stat_to_ucl(struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat)
 	/* Matched by epoch */
 	elt = ucl_object_typed_new(UCL_ARRAY);
 
-	for (i = RSPAMD_FUZZY_EPOCH10; i < RSPAMD_FUZZY_EPOCH_MAX; i++) {
+	for (int i = RSPAMD_FUZZY_EPOCH10; i < RSPAMD_FUZZY_EPOCH_MAX; i++) {
 		ucl_array_append(elt,
 						 ucl_object_fromint(ctx->stat.fuzzy_hashes_found[i]));
 	}
@@ -2558,6 +2756,87 @@ fuzzy_parse_ids(rspamd_mempool_t *pool,
 	return FALSE;
 }
 
+static struct fuzzy_key *
+fuzzy_add_keypair_from_ucl(const ucl_object_t *obj, khash_t(rspamd_fuzzy_keys_hash) * target)
+{
+	struct rspamd_cryptobox_keypair *kp = rspamd_keypair_from_ucl(obj);
+
+	if (kp == NULL) {
+		return NULL;
+	}
+
+	if (rspamd_keypair_alg(kp) != RSPAMD_CRYPTOBOX_MODE_25519 ||
+		rspamd_keypair_type(kp) != RSPAMD_KEYPAIR_KEX) {
+		return FALSE;
+	}
+
+	struct fuzzy_key *key = g_malloc0(sizeof(*key));
+	REF_INIT_RETAIN(key, fuzzy_key_dtor);
+	key->key = kp;
+	struct fuzzy_key_stat *keystat = g_malloc0(sizeof(*keystat));
+	REF_INIT_RETAIN(keystat, fuzzy_key_stat_dtor);
+	/* Hash of ip -> fuzzy_key_stat */
+	keystat->last_ips = rspamd_lru_hash_new_full(1024,
+												 (GDestroyNotify) rspamd_inet_address_free,
+												 fuzzy_key_stat_unref,
+												 rspamd_inet_address_hash, rspamd_inet_address_equal);
+	key->stat = keystat;
+	key->flags_stat = kh_init(fuzzy_key_flag_stat);
+	/* Preallocate some space for flags */
+	kh_resize(fuzzy_key_flag_stat, key->flags_stat, 8);
+	const guchar *pk = rspamd_keypair_component(kp, RSPAMD_KEYPAIR_COMPONENT_PK,
+												NULL);
+	keystat->keypair = rspamd_keypair_ref(kp);
+	/* We map entries by pubkey in binary form for faster lookup */
+	khiter_t k;
+	int r;
+
+	k = kh_put(rspamd_fuzzy_keys_hash, target, pk, &r);
+
+	if (r == 0) {
+		msg_err("duplicate keypair found: pk=%*bs",
+				32, pk);
+		REF_RELEASE(key);
+
+		return FALSE;
+	}
+	else if (r == -1) {
+		msg_err("hash insertion error: pk=%*bs",
+				32, pk);
+		REF_RELEASE(key);
+
+		return FALSE;
+	}
+
+	kh_val(target, k) = key;
+
+	const ucl_object_t *extensions = rspamd_keypair_get_extensions(kp);
+
+	if (extensions) {
+		const ucl_object_t *forbidden_ids = ucl_object_lookup(extensions, "forbidden_ids");
+
+		if (forbidden_ids && ucl_object_type(forbidden_ids) == UCL_ARRAY) {
+			key->forbidden_ids = kh_init(fuzzy_key_ids_set);
+			const ucl_object_t *cur;
+			ucl_object_iter_t it = NULL;
+
+			while ((cur = ucl_object_iterate(forbidden_ids, &it, true)) != NULL) {
+				if (ucl_object_type(cur) == UCL_INT || ucl_object_type(cur) == UCL_FLOAT) {
+					int id = ucl_object_toint(cur);
+					int r;
+
+					kh_put(fuzzy_key_ids_set, key->forbidden_ids, id, &r);
+				}
+			}
+		}
+	}
+
+	msg_debug("loaded keypair %*bs", rspamd_cryptobox_pk_bytes(RSPAMD_CRYPTOBOX_MODE_25519), pk);
+
+	return key;
+}
+
+
 static gboolean
 fuzzy_parse_keypair(rspamd_mempool_t *pool,
 					const ucl_object_t *obj,
@@ -2567,11 +2846,8 @@ fuzzy_parse_keypair(rspamd_mempool_t *pool,
 {
 	struct rspamd_rcl_struct_parser *pd = ud;
 	struct rspamd_fuzzy_storage_ctx *ctx;
-	struct rspamd_cryptobox_keypair *kp;
-	struct fuzzy_key_stat *keystat;
 	struct fuzzy_key *key;
 	const ucl_object_t *cur;
-	const guchar *pk;
 	ucl_object_iter_t it = NULL;
 	gboolean ret;
 
@@ -2588,57 +2864,14 @@ fuzzy_parse_keypair(rspamd_mempool_t *pool,
 			return ret;
 		}
 
-		/* Insert key to the hash table */
-		kp = ctx->default_keypair;
+		key = fuzzy_add_keypair_from_ucl(obj, ctx->keys);
 
-		if (kp == NULL) {
+		if (key == NULL) {
 			return FALSE;
 		}
 
-		if (rspamd_keypair_alg(kp) != RSPAMD_CRYPTOBOX_MODE_25519 ||
-			rspamd_keypair_type(kp) != RSPAMD_KEYPAIR_KEX) {
-			return FALSE;
-		}
-
-		key = g_malloc0(sizeof(*key));
-		key->key = kp;
-		keystat = g_malloc0(sizeof(*keystat));
-		REF_INIT_RETAIN(keystat, fuzzy_key_stat_dtor);
-		/* Hash of ip -> fuzzy_key_stat */
-		keystat->last_ips = rspamd_lru_hash_new_full(1024,
-													 (GDestroyNotify) rspamd_inet_address_free,
-													 fuzzy_key_stat_unref,
-													 rspamd_inet_address_hash, rspamd_inet_address_equal);
-		key->stat = keystat;
-		key->flags_stat = kh_init(fuzzy_key_flag_stat);
-		/* Preallocate some space for flags */
-		kh_resize(fuzzy_key_flag_stat, key->flags_stat, 8);
-		pk = rspamd_keypair_component(kp, RSPAMD_KEYPAIR_COMPONENT_PK,
-									  NULL);
-		keystat->keypair = rspamd_keypair_ref(kp);
-		/* We map entries by pubkey in binary form for faster lookup */
-		g_hash_table_insert(ctx->keys, (gpointer) pk, key);
+		/* Use the last one ? */
 		ctx->default_key = key;
-
-		const ucl_object_t *extensions = rspamd_keypair_get_extensions(kp);
-
-		if (extensions) {
-			const ucl_object_t *forbidden_ids = ucl_object_lookup(extensions, "forbidden_ids");
-
-			if (forbidden_ids && ucl_object_type(forbidden_ids) == UCL_ARRAY) {
-				key->forbidden_ids = kh_init(fuzzy_key_ids_set);
-				while ((cur = ucl_object_iterate(forbidden_ids, &it, true)) != NULL) {
-					if (ucl_object_type(cur) == UCL_INT || ucl_object_type(cur) == UCL_FLOAT) {
-						int id = ucl_object_toint(cur);
-						int r;
-
-						kh_put(fuzzy_key_ids_set, key->forbidden_ids, id, &r);
-					}
-				}
-			}
-		}
-
-		msg_debug_pool_check("loaded keypair %*xs", 8, pk);
 	}
 	else if (ucl_object_type(obj) == UCL_ARRAY) {
 		while ((cur = ucl_object_iterate(obj, &it, true)) != NULL) {
@@ -2649,20 +2882,6 @@ fuzzy_parse_keypair(rspamd_mempool_t *pool,
 	}
 
 	return TRUE;
-}
-
-static guint
-fuzzy_kp_hash(gconstpointer p)
-{
-	return *(guint *) p;
-}
-
-static gboolean
-fuzzy_kp_equal(gconstpointer a, gconstpointer b)
-{
-	const guchar *pa = a, *pb = b;
-
-	return (memcmp(pa, pb, RSPAMD_FUZZY_KEYLEN) == 0);
 }
 
 gpointer
@@ -2682,10 +2901,9 @@ init_fuzzy(struct rspamd_config *cfg)
 	ctx->lua_pre_handler_cbref = -1;
 	ctx->lua_post_handler_cbref = -1;
 	ctx->lua_blacklist_cbref = -1;
-	ctx->keys = g_hash_table_new_full(fuzzy_kp_hash, fuzzy_kp_equal,
-									  NULL, fuzzy_key_dtor);
+	ctx->keys = kh_init(rspamd_fuzzy_keys_hash);
 	rspamd_mempool_add_destructor(cfg->cfg_pool,
-								  (rspamd_mempool_destruct_t) g_hash_table_unref, ctx->keys);
+								  (rspamd_mempool_destruct_t) fuzzy_hash_table_dtor, ctx->keys);
 	ctx->errors_ips = rspamd_lru_hash_new_full(1024,
 											   (GDestroyNotify) rspamd_inet_address_free, g_free,
 											   rspamd_inet_address_hash, rspamd_inet_address_equal);
@@ -2767,6 +2985,15 @@ init_fuzzy(struct rspamd_config *cfg)
 									  0,
 									  RSPAMD_CL_FLAG_MULTIPLE,
 									  "Encryption keypair (can be repeated for different keys)");
+
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "dynamic_keys_map",
+									  rspamd_rcl_parse_struct_ucl,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_fuzzy_storage_ctx, dynamic_keys_map),
+									  0,
+									  "Dynamic encryption keypairs (can be repeated for different keys)");
 
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
@@ -3143,6 +3370,31 @@ start_fuzzy(struct rspamd_worker *worker)
 									 &ctx->ratelimit_whitelist,
 									 NULL,
 									 worker, "fuzzy ratelimit whitelist");
+	}
+
+	if (ctx->dynamic_keys_map) {
+		struct fuzzy_keymap_ucl_buf *jb, **pjb;
+
+		ctx->dynamic_keys = kh_init(rspamd_fuzzy_keys_hash);
+		/* Now try to add map with ucl data */
+		jb = g_malloc(sizeof(struct fuzzy_keymap_ucl_buf));
+		pjb = g_malloc(sizeof(struct fuzzy_keymap_ucl_buf *));
+		jb->buf = NULL;
+		jb->ctx = ctx;
+		*pjb = jb;
+		rspamd_mempool_add_destructor(ctx->cfg->cfg_pool,
+									  (rspamd_mempool_destruct_t) g_free,
+									  pjb);
+
+		if (!rspamd_map_add_from_ucl(cfg,
+									 ctx->dynamic_keys_map,
+									 "Dynamic fuzzy keys map",
+									 ucl_keymap_read_cb,
+									 ucl_keymap_fin_cb,
+									 ucl_keymap_dtor_cb,
+									 (void **) pjb, worker, RSPAMD_MAP_DEFAULT)) {
+			msg_err("cannot add map for dynamic keys");
+		}
 	}
 
 	if (!isnan(ctx->delay) && ctx->delay_whitelist_map != NULL) {

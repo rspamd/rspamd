@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -166,6 +166,7 @@ struct rspamd_map {
 	bool file_only;    /* No HTTP backends found */
 	bool static_only;  /* No need to check */
 	bool no_file_read; /* Do not read files */
+	bool seen;         /* This map has already been watched or pre-loaded */
 	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
 	gint *locked;
 	gchar tag[MEMPOOL_UID_LEN];
