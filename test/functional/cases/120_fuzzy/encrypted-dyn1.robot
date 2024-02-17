@@ -1,5 +1,5 @@
 *** Settings ***
-Suite Setup     Fuzzy Setup Encrypted Siphash
+Suite Setup     Fuzzy Setup Encrypted Dyn1 Siphash
 Suite Teardown  Rspamd Redis Teardown
 Resource        lib.robot
 

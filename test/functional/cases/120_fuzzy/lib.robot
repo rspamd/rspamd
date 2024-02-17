@@ -107,6 +107,25 @@ Fuzzy Setup Encrypted
   Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  ${algorithm}
   Set Suite Variable  ${RSPAMD_FUZZY_ENCRYPTED_ONLY}  true
   Set Suite Variable  ${RSPAMD_FUZZY_ENCRYPTION_KEY}  ${RSPAMD_KEY_PUB1}
+  Set Suite Variable  ${RSPAMD_FUZZY_CLIENT_ENCRYPTION_KEY}  ${RSPAMD_KEY_PUB1}
+  Set Suite Variable  ${RSPAMD_FUZZY_INCLUDE}  ${RSPAMD_TESTDIR}/configs/fuzzy-encryption-key.conf
+  Rspamd Redis Setup
+
+Fuzzy Setup Encrypted Dyn1
+  [Arguments]  ${algorithm}
+  Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  ${algorithm}
+  Set Suite Variable  ${RSPAMD_FUZZY_ENCRYPTED_ONLY}  true
+  Set Suite Variable  ${RSPAMD_FUZZY_ENCRYPTION_KEY}  ${RSPAMD_KEY_PUB1}
+  Set Suite Variable  ${RSPAMD_FUZZY_CLIENT_ENCRYPTION_KEY}  ${RSPAMD_KEY_PUB2}
+  Set Suite Variable  ${RSPAMD_FUZZY_INCLUDE}  ${RSPAMD_TESTDIR}/configs/fuzzy-encryption-key.conf
+  Rspamd Redis Setup
+
+Fuzzy Setup Encrypted Dyn2
+  [Arguments]  ${algorithm}
+  Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  ${algorithm}
+  Set Suite Variable  ${RSPAMD_FUZZY_ENCRYPTED_ONLY}  true
+  Set Suite Variable  ${RSPAMD_FUZZY_ENCRYPTION_KEY}  ${RSPAMD_KEY_PUB1}
+  Set Suite Variable  ${RSPAMD_FUZZY_CLIENT_ENCRYPTION_KEY}  ${RSPAMD_KEY_PUB3}
   Set Suite Variable  ${RSPAMD_FUZZY_INCLUDE}  ${RSPAMD_TESTDIR}/configs/fuzzy-encryption-key.conf
   Rspamd Redis Setup
 
@@ -115,7 +134,7 @@ Fuzzy Setup Encrypted Keyed
   Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  ${algorithm}
   Set Suite Variable  ${RSPAMD_FUZZY_ENCRYPTED_ONLY}  true
   Set Suite Variable  ${RSPAMD_FUZZY_ENCRYPTION_KEY}  ${RSPAMD_KEY_PUB1}
-
+  Set Suite Variable  ${RSPAMD_FUZZY_CLIENT_ENCRYPTION_KEY}  ${RSPAMD_KEY_PUB1}
   Set Suite Variable  ${RSPAMD_FUZZY_KEY}  mYN888sydwLTfE32g2hN
   Set Suite Variable  ${RSPAMD_FUZZY_SHINGLES_KEY}  hXUCgul9yYY3Zlk1QIT2
   Rspamd Redis Setup
@@ -158,6 +177,12 @@ Fuzzy Setup Keyed Xxhash
 
 Fuzzy Setup Encrypted Siphash
   Fuzzy Setup Encrypted  siphash
+
+Fuzzy Setup Encrypted Dyn1 Siphash
+  Fuzzy Setup Encrypted Dyn1  siphash
+
+Fuzzy Setup Encrypted Dyn2 Siphash
+  Fuzzy Setup Encrypted Dyn2  siphash
 
 Fuzzy Skip Hash Test Message
   FOR  ${i}  IN  @{MESSAGES_SKIP}
