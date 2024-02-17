@@ -304,17 +304,20 @@ ucl_keymap_fin_cb(struct map_cb_data *data, void **target)
 	struct fuzzy_keymap_ucl_buf *jb;
 	ucl_object_t *top;
 	struct ucl_parser *parser;
+	struct rspamd_config *cfg;
 
 	/* Now parse ucl */
 	if (data->cur_data) {
 		jb = data->cur_data;
+		cfg = jb->ctx->cfg;
 	}
 	else {
+		msg_err("no cur data in the map! might be a bug");
 		return;
 	}
 
 	if (jb->buf->len == 0) {
-		msg_err("no data read");
+		msg_err_config("no data read");
 
 		return;
 	}
@@ -322,8 +325,8 @@ ucl_keymap_fin_cb(struct map_cb_data *data, void **target)
 	parser = ucl_parser_new(UCL_PARSER_NO_FILEVARS);
 
 	if (!ucl_parser_add_chunk(parser, jb->buf->str, jb->buf->len)) {
-		msg_err("cannot load ucl data: parse error %s",
-				ucl_parser_get_error(parser));
+		msg_err_config("cannot load ucl data: parse error %s",
+					   ucl_parser_get_error(parser));
 		ucl_parser_free(parser);
 		return;
 	}
@@ -333,7 +336,7 @@ ucl_keymap_fin_cb(struct map_cb_data *data, void **target)
 
 	if (ucl_object_type(top) != UCL_ARRAY) {
 		ucl_object_unref(top);
-		msg_err("loaded ucl is not an array");
+		msg_err_config("loaded ucl is not an array");
 		return;
 	}
 
@@ -358,6 +361,7 @@ ucl_keymap_fin_cb(struct map_cb_data *data, void **target)
 		/* Insert new keys */
 		const ucl_object_t *cur;
 		ucl_object_iter_t it = NULL;
+		int success = 0;
 
 		while ((cur = ucl_object_iterate(top, &it, true)) != NULL) {
 			struct fuzzy_key *nk;
@@ -365,9 +369,12 @@ ucl_keymap_fin_cb(struct map_cb_data *data, void **target)
 			nk = fuzzy_add_keypair_from_ucl(cur, jb->ctx->dynamic_keys);
 
 			if (nk == NULL) {
-				msg_warn("cannot add dynamic keypair");
+				msg_warn_config("cannot add dynamic keypair");
 			}
+			success++;
 		}
+
+		msg_info_config("loaded %d dynamic keypairs", success);
 
 		g_free(jb);
 	}
@@ -2824,7 +2831,7 @@ fuzzy_add_keypair_from_ucl(const ucl_object_t *obj, khash_t(rspamd_fuzzy_keys_ha
 		}
 	}
 
-	msg_debug("loaded keypair %*xs", 8, pk);
+	msg_debug("loaded keypair %*bs", rspamd_cryptobox_pk_bytes(RSPAMD_CRYPTOBOX_MODE_25519), pk);
 
 	return key;
 }
