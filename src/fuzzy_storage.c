@@ -1628,7 +1628,7 @@ rspamd_fuzzy_decrypt_command(struct fuzzy_session *s, guchar *buf, gsize buflen)
 	struct rspamd_cryptobox_pubkey *rk;
 	struct fuzzy_key *key = NULL;
 
-	if (s->ctx->default_key == NULL) {
+	if (s->ctx->default_key == NULL && s->ctx->dynamic_keys == NULL) {
 		msg_warn("received encrypted request when encryption is not enabled");
 		return FALSE;
 	}
@@ -1659,6 +1659,12 @@ rspamd_fuzzy_decrypt_command(struct fuzzy_session *s, guchar *buf, gsize buflen)
 	}
 	else {
 		key = kh_val(s->ctx->keys, k);
+	}
+
+	if (key == NULL) {
+		/* Cannot find any suitable decryption key */
+		msg_debug("cannot find suitable decryption key");
+		return FALSE;
 	}
 
 	/* Now process the remote pubkey */
