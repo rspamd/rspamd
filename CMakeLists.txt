@@ -788,10 +788,14 @@ ADD_CUSTOM_TARGET(dist ${CMAKE_SOURCE_DIR}/dist.sh
 
 IF (NOT DEBIAN_BUILD)
     ADD_CUSTOM_TARGET(check DEPENDS rspamd-test-cxx rspamd-test)
-    ADD_CUSTOM_TARGET(run-test DEPENDS check
-            COMMAND test/rspamd-test-cxx
-            COMMAND sh -c 'LUA_PATH="${CMAKE_SOURCE_DIR}/lualib/?.lua\;${CMAKE_SOURCE_DIR}/lualib/?/?.lua\;${CMAKE_SOURCE_DIR}/lualib/?/init.lua\;${CMAKE_SOURCE_DIR}/contrib/lua-?/?.lua"
+    ADD_CUSTOM_TARGET(run-test DEPENDS check test-cmd)
+    ADD_CUSTOM_COMMAND(OUTPUT test-cmd
+            COMMAND test/rspamd-test-cxx)
+    IF (ENABLE_LUAJIT MATCHES "ON")
+	    ADD_CUSTOM_COMMAND(OUTPUT test-cmd APPEND
+                COMMAND sh -c 'LUA_PATH="${CMAKE_SOURCE_DIR}/lualib/?.lua\;${CMAKE_SOURCE_DIR}/lualib/?/?.lua\;${CMAKE_SOURCE_DIR}/lualib/?/init.lua\;${CMAKE_SOURCE_DIR}/contrib/lua-?/?.lua"
             test/rspamd-test -p /rspamd/lua')
+    ENDIF ()
 ENDIF (NOT DEBIAN_BUILD)
 
 
