@@ -171,7 +171,7 @@ end
 -- @param {boolean} skip_global_env don't export Rspamd superglobals
 -- @return {string} string containing replaced values
 -- @example
--- lua_util.jinja_template("HELLO {{FOO}} {{BAR}}!", {['FOO'] = 'LUA', ['BAR'] = 'WORLD'})
+-- lua_util.jinja_template("HELLO {=FOO=} {=BAR=}!", {['FOO'] = 'LUA', ['BAR'] = 'WORLD'})
 -- "HELLO LUA WORLD!"
 --]]
 exports.jinja_template = function(text, env, skip_global_env)
@@ -190,7 +190,7 @@ end
 -- @param {boolean} skip_global_env don't export Rspamd superglobals
 -- @return {string} string containing replaced values
 -- @example
--- lua_util.jinja_template("HELLO {{FOO}} {{BAR}}!", {['FOO'] = 'LUA', ['BAR'] = 'WORLD'})
+-- lua_util.jinja_template("HELLO {=FOO=} {=BAR=}!", {['FOO'] = 'LUA', ['BAR'] = 'WORLD'})
 -- "HELLO LUA WORLD!"
 --]]
 exports.jinja_template_file = function(filename, env, skip_global_env)
