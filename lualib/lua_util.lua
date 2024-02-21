@@ -32,6 +32,37 @@ local nospace = 1 - space
 local ptrim = space ^ 0 * lpeg.C((space ^ 0 * nospace ^ 1) ^ 0)
 local match = lpeg.match
 
+local function shallowcopy(orig)
+  local orig_type = type(orig)
+  local copy
+  if orig_type == 'table' then
+    copy = {}
+    for orig_key, orig_value in pairs(orig) do
+      copy[orig_key] = orig_value
+    end
+  else
+    copy = orig
+  end
+  return copy
+end
+local function deepcopy(orig)
+  local orig_type = type(orig)
+  local copy
+  if orig_type == 'table' then
+    copy = {}
+    for orig_key, orig_value in next, orig, nil do
+      copy[deepcopy(orig_key)] = deepcopy(orig_value)
+    end
+    if getmetatable(orig) then
+      setmetatable(copy, deepcopy(getmetatable(orig)))
+    end
+  else
+    -- number, string, boolean, etc
+    copy = orig
+  end
+  return copy
+end
+
 lupa.configure('{%', '%}', '{=', '=}', '{#', '#}', {
   keep_trailing_newline = true,
   autoescape = false,
@@ -41,6 +72,10 @@ lupa.filters.pbkdf = function(s)
   local cr = require "rspamd_cryptobox"
   return cr.pbkdf(s)
 end
+
+-- Dirty hacks to avoid shared state
+package.loaded['lupa'] = nil
+local lupa_orig = require "lupa"
 
 local function rspamd_str_split(s, sep)
   local gr
@@ -157,7 +192,7 @@ exports.template = function(tmpl, keys)
 end
 
 local function enrich_template_with_globals(env)
-  local newenv = exports.shallowcopy(env)
+  local newenv = shallowcopy(env)
   newenv.paths = rspamd_paths
   newenv.env = rspamd_env
 
@@ -169,17 +204,18 @@ end
 -- @param {string} text text containing variables
 -- @param {table} replacements key/value pairs for replacements
 -- @param {boolean} skip_global_env don't export Rspamd superglobals
+-- @param {boolean} is_orig use the original lupa configuration with `{{` for variables
 -- @return {string} string containing replaced values
 -- @example
--- lua_util.jinja_template("HELLO {{FOO}} {{BAR}}!", {['FOO'] = 'LUA', ['BAR'] = 'WORLD'})
+-- lua_util.jinja_template("HELLO {=FOO=} {=BAR=}!", {['FOO'] = 'LUA', ['BAR'] = 'WORLD'})
 -- "HELLO LUA WORLD!"
 --]]
-exports.jinja_template = function(text, env, skip_global_env)
+exports.jinja_template = function(text, env, skip_global_env, is_orig)
   if not skip_global_env then
     env = enrich_template_with_globals(env)
   end
 
-  return lupa.expand(text, env)
+  return is_orig and lupa_orig.expand(text, env) or lupa.expand(text, env)
 end
 
 --[[[
@@ -188,17 +224,18 @@ end
 -- @param {string} filename name of file to expand
 -- @param {table} replacements key/value pairs for replacements
 -- @param {boolean} skip_global_env don't export Rspamd superglobals
+-- @param {boolean} is_orig use the original lupa configuration with `{{` for variables
 -- @return {string} string containing replaced values
 -- @example
--- lua_util.jinja_template("HELLO {{FOO}} {{BAR}}!", {['FOO'] = 'LUA', ['BAR'] = 'WORLD'})
+-- lua_util.jinja_template("HELLO {=FOO=} {=BAR=}!", {['FOO'] = 'LUA', ['BAR'] = 'WORLD'})
 -- "HELLO LUA WORLD!"
 --]]
-exports.jinja_template_file = function(filename, env, skip_global_env)
+exports.jinja_template_file = function(filename, env, skip_global_env, is_orig)
   if not skip_global_env then
     env = enrich_template_with_globals(env)
   end
 
-  return lupa.expand_file(filename, env)
+  return is_orig and lupa_orig.expand_file(filename, env) or lupa.expand_file(filename, env)
 end
 
 exports.remove_email_aliases = function(email_addr)
@@ -1019,6 +1056,7 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
   return exports.filter_specific_urls(urls, params)
 end
 
+
 --[[[
 -- @function lua_util.deepcopy(table)
 -- params: {
@@ -1026,24 +1064,6 @@ end
 -- }
 -- Performs deep copy of the table. Including metatables
 --]]
-local function deepcopy(orig)
-  local orig_type = type(orig)
-  local copy
-  if orig_type == 'table' then
-    copy = {}
-    for orig_key, orig_value in next, orig, nil do
-      copy[deepcopy(orig_key)] = deepcopy(orig_value)
-    end
-    if getmetatable(orig) then
-      setmetatable(copy, deepcopy(getmetatable(orig)))
-    end
-  else
-    -- number, string, boolean, etc
-    copy = orig
-  end
-  return copy
-end
-
 exports.deepcopy = deepcopy
 
 --[[[
@@ -1077,19 +1097,7 @@ exports.deepsort = deepsort
 -- @function lua_util.shallowcopy(tbl)
 -- Performs shallow (and fast) copy of a table or another Lua type
 --]]
-exports.shallowcopy = function(orig)
-  local orig_type = type(orig)
-  local copy
-  if orig_type == 'table' then
-    copy = {}
-    for orig_key, orig_value in pairs(orig) do
-      copy[orig_key] = orig_value
-    end
-  else
-    copy = orig
-  end
-  return copy
-end
+exports.shallowcopy = shallowcopy
 
 -- Debugging support
 local logger = require "rspamd_logger"
