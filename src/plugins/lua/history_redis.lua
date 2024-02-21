@@ -57,7 +57,7 @@ local template_env = {
 local redis_params
 
 local settings = {
-  key_prefix = 'rs_history{=HOSTNAME=}{=COMPRESS=}', -- default key name template
+  key_prefix = 'rs_history{{HOSTNAME}}{{COMPRESS}}', -- default key name template
   expire = nil, -- default no expire
   nrows = 200, -- default rows limit
   compress = true, -- use zstd compression when storing data in redis
