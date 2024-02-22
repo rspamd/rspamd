@@ -1,3 +1,6 @@
+3.8.3: 22 Feb 2024
+  * [Fix] Fix issue with history redis
+
 3.8.2: 20 Feb 2024
   * [Feature] Add extraction type for `from` maps
   * [Feature] Allow to add templates to redis history prefix
