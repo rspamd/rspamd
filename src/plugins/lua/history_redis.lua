@@ -57,7 +57,7 @@ local template_env = {
 local redis_params
 
 local settings = {
-  key_prefix = 'rs_history{=HOSTNAME=}{=COMPRESS=}', -- default key name template
+  key_prefix = 'rs_history{{HOSTNAME}}{{COMPRESS}}', -- default key name template
   expire = nil, -- default no expire
   nrows = 200, -- default rows limit
   compress = true, -- use zstd compression when storing data in redis
@@ -149,7 +149,7 @@ local function history_save(task)
   end
 
   local data = task:get_protocol_reply { 'metrics', 'basic' }
-  local prefix = lua_util.jinja_template(settings.key_prefix, template_env)
+  local prefix = lua_util.jinja_template(settings.key_prefix, template_env, false, true)
 
   if data then
     normalise_results(data, task)
@@ -183,7 +183,7 @@ local function history_save(task)
 end
 
 local function handle_history_request(task, conn, from, to, reset)
-  local prefix = lua_util.jinja_template(settings.key_prefix, template_env)
+  local prefix = lua_util.jinja_template(settings.key_prefix, template_env, false, true)
 
   if reset then
     local function redis_ltrim_cb(err, _)
@@ -305,7 +305,7 @@ if opts then
       flags = 'empty,explicit_disable,ignore_passthrough',
       augmentations = { string.format("timeout=%f", redis_params.timeout or 0.0) }
     })
-    lua_redis.register_prefix(lua_util.jinja_template(settings.key_prefix, template_env), N,
+    lua_redis.register_prefix(lua_util.jinja_template(settings.key_prefix, template_env, false, true), N,
         "Redis history", {
           type = 'list',
         })
