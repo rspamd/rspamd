@@ -225,7 +225,31 @@ local function replies_check_cookie(task)
   if irt == nil then
     return
   end
-
+  local recipients = task:get_recipients(0)
+  if recipients == nil then
+    return
+  end
+  local sender = task:get_from(0)
+  if sender == nil then
+    return
+  end
+  local _, conn, _ = lua_redis.redis_make_request(task, -- making local replies_set (sender - recipients)
+          redis_params, -- connect params
+          key, -- hash key
+          true, -- is write
+          redis_set_cb, --callback
+          'ZADD', -- command
+          { sender, recipients } -- arguments
+  )
+  conn:add_cmd('PSETEX', { key, tostring(math.floor(settings['expire'] * 1000)), sender_hash }) --setting expire for individual  replies_set
+  lua_redis.redis_make_request(task, -- making global replies_set for verified recipients
+          redis_params, -- connect params
+          key, -- hash key
+          true, -- is write
+          redis_set_cb, --callback
+          'ZADD', -- command
+          { 'verified_recipients', recipients } -- arguments
+  )
   local cr = require "rspamd_cryptobox"
   -- Extract user part if needed
   local extracted_cookie = irt:match('^%<?([^@]+)@.*$')
