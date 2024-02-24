@@ -250,6 +250,7 @@ local function replies_check_cookie(task)
           'ZADD', -- command
           { 'verified_recipients', recipients } -- arguments
   )
+
   local cr = require "rspamd_cryptobox"
   -- Extract user part if needed
   local extracted_cookie = irt:match('^%<?([^@]+)@.*$')
