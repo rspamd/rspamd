@@ -194,8 +194,6 @@ define(["jquery", "app/common", "app/libft"],
         $("#scanClean").on("click", () => {
             $("#scan button:not(#cleanScanHistory, #scanOptionsToggle)").attr("disabled", true);
             $("#scanForm")[0].reset();
-            $("#scanResult").hide();
-            $("#scanOutput tbody").remove();
             $("html, body").animate({scrollTop: 0}, 1000);
             return false;
         });
