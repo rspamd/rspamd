@@ -158,6 +158,7 @@ local function replies_check(task)
     params = {next = params, value = i}
     params = {next = params, value = recipient}
   end
+
   local _, conn, _ = lua_redis.redis_make_request(task, -- making local replies set (sender - recipients)
           redis_params, -- connect params
           key, -- hash key
