@@ -19,7 +19,6 @@ local lua_util = require "lua_util"
 local logger = require "rspamd_logger"
 local lua_redis = require "lua_redis"
 local dmarc_common = require "plugins/dmarc"
-local lupa = require "lupa"
 local rspamd_mempool = require "rspamd_mempool"
 local rspamd_url = require "rspamd_url"
 local rspamd_text = require "rspamd_text"
@@ -176,8 +175,6 @@ local function escape_xml(input)
 
   return ''
 end
--- Enable xml escaping in lupa templates
-lupa.filters.escape_xml = escape_xml
 
 -- Creates report XML header
 local function report_header(reporting_domain, report_start, report_end, domain_policy)
@@ -211,7 +208,10 @@ local function report_header(reporting_domain, report_start, report_end, domain_
     report_end = report_end,
     domain_policy = domain_policy,
     reporting_domain = reporting_domain,
-  }, true)
+  }, true, false,
+      {
+        escape_xml = escape_xml
+      })
 end
 
 -- Generate xml entry for a preprocessed redis row
@@ -248,7 +248,10 @@ local function entry_to_xml(data)
   </auth_results>
 </record>
 ]]
-  return lua_util.jinja_template(xml_template, { data = data }, true)
+  return lua_util.jinja_template(xml_template, { data = data }, true,
+      false, {
+        escape_xml = escape_xml
+      })
 end
 
 -- Process a report entry stored in Redis splitting it to a lua table
@@ -534,10 +537,15 @@ local function prepare_report(opts, start_time, end_time, rep_key)
     message_id = rspamd_util.random_hex(16) .. '@' .. report_settings.msgid_from,
     report_start = start_time,
     report_end = end_time
-  }, true)
+  }, true,
+      false, {
+        escape_xml = escape_xml
+      })
   local rfooter = lua_util.jinja_template(report_footer, {
     uuid = uuid,
-  }, true)
+  }, true, false, {
+    escape_xml = escape_xml
+  })
   local message = rspamd_text.fromtable {
     (rhead:gsub("\n", "\r\n")),
     rspamd_util.encode_base64(rspamd_util.gzip_compress(xml_to_compress), 73),
