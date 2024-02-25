@@ -33,7 +33,6 @@ define(["jquery", "app/common", "app/libft"],
             $("#" + source + "TextSource").val("");
         }
 
-        // @upload text
         function uploadText(data, source, headers) {
             let url = null;
             if (source === "spam") {
@@ -73,8 +72,13 @@ define(["jquery", "app/common", "app/libft"],
             });
         }
 
-        // @upload text
+        function enable_disable_scan_btn(disable) {
+            $("#scan button:not(#cleanScanHistory, #scanOptionsToggle)")
+                .prop("disabled", (disable || $.trim($("textarea").val()).length === 0));
+        }
+
         function scanText(data, headers) {
+            enable_disable_scan_btn(true);
             common.query("checkv2", {
                 data: data,
                 params: {
@@ -83,42 +87,33 @@ define(["jquery", "app/common", "app/libft"],
                 method: "POST",
                 headers: headers,
                 success: function (neighbours_status) {
-                    function scrollTop(rows_total) {
-                        // Is there a way to get an event when all rows are loaded?
-                        libft.waitForRowsDisplayed("scan", rows_total, () => {
-                            $("#cleanScanHistory").removeAttr("disabled", true);
-                            $("html, body").animate({
-                                scrollTop: $("#scanResult").offset().top
-                            }, 1000);
-                        });
-                    }
-
                     const json = neighbours_status[0].data;
                     if (json.action) {
                         common.alertMessage("alert-success", "Data successfully scanned");
 
-                        const rows_total = $("#historyTable_scan > tbody > tr:not(.footable-detail-row)").length + 1;
                         const o = libft.process_history_v2({rows: [json]}, "scan");
                         const {items} = o;
                         common.symbols.scan.push(o.symbols[0]);
 
                         if (Object.prototype.hasOwnProperty.call(common.tables, "scan")) {
                             common.tables.scan.rows.load(items, true);
-                            scrollTop(rows_total);
                         } else {
-                            libft.destroyTable("scan");
                             require(["footable"], () => {
-                                // Is there a way to get an event when the table is destroyed?
-                                setTimeout(() => {
-                                    libft.initHistoryTable(data, items, "scan", libft.columns_v2("scan"), true);
-                                    scrollTop(rows_total);
-                                }, 200);
+                                libft.initHistoryTable(data, items, "scan", libft.columns_v2("scan"), true,
+                                    () => {
+                                        enable_disable_scan_btn();
+                                        $("#cleanScanHistory").removeAttr("disabled");
+                                        $("html, body").animate({
+                                            scrollTop: $("#scanResult").offset().top
+                                        }, 1000);
+                                    });
                             });
                         }
                     } else {
                         common.alertMessage("alert-error", "Cannot scan data");
                     }
                 },
+                error: enable_disable_scan_btn,
                 errorMessage: "Cannot upload data",
                 statusCode: {
                     404: function () {
@@ -182,17 +177,13 @@ define(["jquery", "app/common", "app/libft"],
             $("#cleanScanHistory").attr("disabled", true);
         });
 
-        function enable_disable_scan_btn() {
-            $("#scan button:not(#cleanScanHistory, #scanOptionsToggle)")
-                .prop("disabled", ($.trim($("textarea").val()).length === 0));
-        }
         enable_disable_scan_btn();
         $("textarea").on("input", () => {
             enable_disable_scan_btn();
         });
 
         $("#scanClean").on("click", () => {
-            $("#scan button:not(#cleanScanHistory, #scanOptionsToggle)").attr("disabled", true);
+            enable_disable_scan_btn(true);
             $("#scanForm")[0].reset();
             $("html, body").animate({scrollTop: 0}, 1000);
             return false;

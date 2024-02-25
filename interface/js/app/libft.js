@@ -231,7 +231,7 @@ define(["jquery", "app/common", "footable"],
             }
         };
 
-        ui.initHistoryTable = function (data, items, table, columns, expandFirst) {
+        ui.initHistoryTable = function (data, items, table, columns, expandFirst, postdrawCallback) {
             /* eslint-disable no-underscore-dangle */
             FooTable.Cell.extend("collapse", function () {
                 // call the original method
@@ -339,7 +339,8 @@ define(["jquery", "app/common", "footable"],
                             detail_row.find(".btn-sym-" + table + "-" + order)
                                 .addClass("active").siblings().removeClass("active");
                         }, 5);
-                    }
+                    },
+                    "postdraw.ft.table": postdrawCallback
                 }
             });
         };
@@ -506,20 +507,6 @@ define(["jquery", "app/common", "footable"],
                 });
 
             return {items: items, symbols: unsorted_symbols};
-        };
-
-        ui.waitForRowsDisplayed = function (table, rows_total, callback, iteration) {
-            let i = (typeof iteration === "undefined") ? 10 : iteration;
-            const num_rows = $("#historyTable_" + table + " > tbody > tr:not(.footable-detail-row)").length;
-            if (num_rows === common.page_size[table] ||
-                num_rows === rows_total) {
-                return callback();
-            } else if (--i) {
-                setTimeout(() => {
-                    ui.waitForRowsDisplayed(table, rows_total, callback, i);
-                }, 500);
-            }
-            return null;
         };
 
         return ui;
