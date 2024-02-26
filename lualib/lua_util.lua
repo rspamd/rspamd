@@ -199,43 +199,81 @@ local function enrich_template_with_globals(env)
   return newenv
 end
 --[[[
--- @function lua_util.jinja_template(text, env[, skip_global_env])
+-- @function lua_util.jinja_template(text, env[, skip_global_env][, is_orig][, custom_filters])
 -- Replaces values in a text template according to jinja2 syntax
 -- @param {string} text text containing variables
 -- @param {table} replacements key/value pairs for replacements
 -- @param {boolean} skip_global_env don't export Rspamd superglobals
 -- @param {boolean} is_orig use the original lupa configuration with `{{` for variables
+-- @param {table} custom_filters custom filters to use (or nil if not needed)
 -- @return {string} string containing replaced values
 -- @example
 -- lua_util.jinja_template("HELLO {=FOO=} {=BAR=}!", {['FOO'] = 'LUA', ['BAR'] = 'WORLD'})
 -- "HELLO LUA WORLD!"
 --]]
-exports.jinja_template = function(text, env, skip_global_env, is_orig)
+exports.jinja_template = function(text, env, skip_global_env, is_orig, custom_filters)
+  local lupa_to_use = is_orig and lupa_orig or lupa
   if not skip_global_env then
     env = enrich_template_with_globals(env)
   end
 
-  return is_orig and lupa_orig.expand(text, env) or lupa.expand(text, env)
+  local orig_filters = {}
+  if type(custom_filters) == 'table' then
+    for k, v in pairs(custom_filters) do
+      orig_filters[k] = lupa_to_use.filters[k]
+      lupa_to_use.filters[k] = v
+    end
+  end
+
+  local result = lupa_to_use.expand(text, env)
+
+  -- Restore custom filters
+  if type(custom_filters) == 'table' then
+    for k, _ in pairs(custom_filters) do
+      lupa_to_use.filters[k] = orig_filters[k]
+    end
+  end
+
+  return result
 end
 
 --[[[
--- @function lua_util.jinja_file(filename, env[, skip_global_env])
+-- @function lua_util.jinja_file(filename, env[, skip_global_env][, is_orig][, custom_filters])
 -- Replaces values in a text template according to jinja2 syntax
 -- @param {string} filename name of file to expand
 -- @param {table} replacements key/value pairs for replacements
 -- @param {boolean} skip_global_env don't export Rspamd superglobals
 -- @param {boolean} is_orig use the original lupa configuration with `{{` for variables
+-- @param {table} custom_filters custom filters to use (or nil if not needed)
 -- @return {string} string containing replaced values
 -- @example
 -- lua_util.jinja_template("HELLO {=FOO=} {=BAR=}!", {['FOO'] = 'LUA', ['BAR'] = 'WORLD'})
 -- "HELLO LUA WORLD!"
 --]]
-exports.jinja_template_file = function(filename, env, skip_global_env, is_orig)
+exports.jinja_template_file = function(filename, env, skip_global_env, is_orig, custom_filters)
+  local lupa_to_use = is_orig and lupa_orig or lupa
   if not skip_global_env then
     env = enrich_template_with_globals(env)
   end
 
-  return is_orig and lupa_orig.expand_file(filename, env) or lupa.expand_file(filename, env)
+  local orig_filters = {}
+  if type(custom_filters) == 'table' then
+    for k, v in pairs(custom_filters) do
+      orig_filters[k] = lupa_to_use.filters[k]
+      lupa_to_use.filters[k] = v
+    end
+  end
+
+  local result = lupa_to_use.expand_file(filename, env)
+
+  -- Restore custom filters
+  if type(custom_filters) == 'table' then
+    for k, _ in pairs(custom_filters) do
+      lupa_to_use.filters[k] = orig_filters[k]
+    end
+  end
+
+  return result
 end
 
 exports.remove_email_aliases = function(email_addr)
