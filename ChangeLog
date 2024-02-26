@@ -1,3 +1,6 @@
+3.8.4: 26 Feb 2024
+  * [Fix] Fix issue with dmarc reports
+
 3.8.3: 22 Feb 2024
   * [Fix] Fix issue with history redis
 
