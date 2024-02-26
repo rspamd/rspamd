@@ -204,7 +204,7 @@ end
 -- @param {string} text text containing variables
 -- @param {table} replacements key/value pairs for replacements
 -- @param {boolean} skip_global_env don't export Rspamd superglobals
--- @param {boolean} is_orig use the original lupa configuration with `{{` for variables
+-- @param {boolean} is_orig use the original lupa configuration with {% raw %}`{{`{% endraw %} for variables
 -- @param {table} custom_filters custom filters to use (or nil if not needed)
 -- @return {string} string containing replaced values
 -- @example
@@ -243,7 +243,7 @@ end
 -- @param {string} filename name of file to expand
 -- @param {table} replacements key/value pairs for replacements
 -- @param {boolean} skip_global_env don't export Rspamd superglobals
--- @param {boolean} is_orig use the original lupa configuration with `{{` for variables
+-- @param {boolean} is_orig use the original lupa configuration with {% raw %}`{{`{% endraw %} for variables
 -- @param {table} custom_filters custom filters to use (or nil if not needed)
 -- @return {string} string containing replaced values
 -- @example
