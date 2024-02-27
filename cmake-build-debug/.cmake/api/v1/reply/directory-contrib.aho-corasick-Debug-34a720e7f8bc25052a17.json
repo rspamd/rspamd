@@ -1,0 +1,45 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"INSTALL"
+		],
+		"files" : 
+		[
+			"contrib/aho-corasick/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 9,
+				"parent" : 0
+			}
+		]
+	},
+	"installers" : 
+	[
+		{
+			"backtrace" : 1,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/lib/rspamd",
+			"paths" : 
+			[
+				"contrib/aho-corasick/librspamd-actrie.so"
+			],
+			"targetId" : "rspamd-actrie::@1a93d623fd3c6db4ee5c",
+			"targetIndex" : 65,
+			"type" : "target"
+		}
+	],
+	"paths" : 
+	{
+		"build" : "contrib/aho-corasick",
+		"source" : "contrib/aho-corasick"
+	}
+}

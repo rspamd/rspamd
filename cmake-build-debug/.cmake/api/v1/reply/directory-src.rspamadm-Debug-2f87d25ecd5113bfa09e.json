@@ -1,0 +1,46 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"INSTALL"
+		],
+		"files" : 
+		[
+			"src/rspamadm/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 31,
+				"parent" : 0
+			}
+		]
+	},
+	"installers" : 
+	[
+		{
+			"backtrace" : 1,
+			"component" : "Unspecified",
+			"destination" : "bin",
+			"paths" : 
+			[
+				"src/rspamadm/rspamadm-3.9.0",
+				"src/rspamadm/rspamadm"
+			],
+			"targetId" : "rspamadm::@8886d49ecb53141c4abb",
+			"targetIndex" : 62,
+			"type" : "target"
+		}
+	],
+	"paths" : 
+	{
+		"build" : "src/rspamadm",
+		"source" : "src/rspamadm"
+	}
+}
