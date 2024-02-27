@@ -1,0 +1,628 @@
+{
+	"archive" : {},
+	"artifacts" : 
+	[
+		{
+			"path" : "contrib/librdns/librdns.a"
+		}
+	],
+	"backtrace" : 1,
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"ADD_LIBRARY",
+			"ADD_COMPILE_OPTIONS",
+			"INCLUDE",
+			"include",
+			"ADD_DEFINITIONS",
+			"INCLUDE_DIRECTORIES",
+			"ProcessPackage"
+		],
+		"files" : 
+		[
+			"contrib/librdns/CMakeLists.txt",
+			"cmake/ArchDep.cmake",
+			"CMakeLists.txt",
+			"cmake/OSDep.cmake",
+			"cmake/CompilerWarnings.cmake",
+			"cmake/ProcessPackage.cmake"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 10,
+				"parent" : 0
+			},
+			{
+				"file" : 2
+			},
+			{
+				"command" : 2,
+				"file" : 2,
+				"line" : 95,
+				"parent" : 2
+			},
+			{
+				"file" : 1,
+				"parent" : 3
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 95,
+				"parent" : 4
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 96,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 2,
+				"line" : 132,
+				"parent" : 2
+			},
+			{
+				"file" : 3,
+				"parent" : 7
+			},
+			{
+				"command" : 1,
+				"file" : 3,
+				"line" : 34,
+				"parent" : 8
+			},
+			{
+				"command" : 3,
+				"file" : 2,
+				"line" : 250,
+				"parent" : 2
+			},
+			{
+				"file" : 4,
+				"parent" : 10
+			},
+			{
+				"command" : 1,
+				"file" : 4,
+				"line" : 27,
+				"parent" : 11
+			},
+			{
+				"command" : 1,
+				"file" : 4,
+				"line" : 30,
+				"parent" : 11
+			},
+			{
+				"command" : 1,
+				"file" : 4,
+				"line" : 33,
+				"parent" : 11
+			},
+			{
+				"command" : 1,
+				"file" : 4,
+				"line" : 36,
+				"parent" : 11
+			},
+			{
+				"command" : 1,
+				"file" : 4,
+				"line" : 39,
+				"parent" : 11
+			},
+			{
+				"command" : 1,
+				"file" : 4,
+				"line" : 42,
+				"parent" : 11
+			},
+			{
+				"command" : 1,
+				"file" : 4,
+				"line" : 46,
+				"parent" : 11
+			},
+			{
+				"command" : 1,
+				"file" : 4,
+				"line" : 50,
+				"parent" : 11
+			},
+			{
+				"command" : 1,
+				"file" : 4,
+				"line" : 53,
+				"parent" : 11
+			},
+			{
+				"command" : 1,
+				"file" : 4,
+				"line" : 54,
+				"parent" : 11
+			},
+			{
+				"command" : 1,
+				"file" : 4,
+				"line" : 60,
+				"parent" : 11
+			},
+			{
+				"command" : 1,
+				"file" : 4,
+				"line" : 63,
+				"parent" : 11
+			},
+			{
+				"command" : 1,
+				"file" : 4,
+				"line" : 69,
+				"parent" : 11
+			},
+			{
+				"command" : 1,
+				"file" : 4,
+				"line" : 72,
+				"parent" : 11
+			},
+			{
+				"command" : 1,
+				"file" : 4,
+				"line" : 75,
+				"parent" : 11
+			},
+			{
+				"command" : 1,
+				"file" : 4,
+				"line" : 78,
+				"parent" : 11
+			},
+			{
+				"command" : 1,
+				"file" : 4,
+				"line" : 81,
+				"parent" : 11
+			},
+			{
+				"command" : 1,
+				"file" : 4,
+				"line" : 88,
+				"parent" : 11
+			},
+			{
+				"command" : 1,
+				"file" : 2,
+				"line" : 414,
+				"parent" : 2
+			},
+			{
+				"command" : 4,
+				"file" : 2,
+				"line" : 262,
+				"parent" : 2
+			},
+			{
+				"command" : 4,
+				"file" : 2,
+				"line" : 265,
+				"parent" : 2
+			},
+			{
+				"command" : 4,
+				"file" : 2,
+				"line" : 263,
+				"parent" : 2
+			},
+			{
+				"command" : 4,
+				"file" : 2,
+				"line" : 261,
+				"parent" : 2
+			},
+			{
+				"command" : 4,
+				"file" : 2,
+				"line" : 266,
+				"parent" : 2
+			},
+			{
+				"command" : 5,
+				"file" : 2,
+				"line" : 586,
+				"parent" : 2
+			},
+			{
+				"command" : 5,
+				"file" : 2,
+				"line" : 107,
+				"parent" : 2
+			},
+			{
+				"command" : 6,
+				"file" : 2,
+				"line" : 139,
+				"parent" : 2
+			},
+			{
+				"command" : 5,
+				"file" : 5,
+				"line" : 43,
+				"parent" : 38
+			},
+			{
+				"command" : 6,
+				"file" : 2,
+				"line" : 212,
+				"parent" : 2
+			},
+			{
+				"command" : 5,
+				"file" : 5,
+				"line" : 43,
+				"parent" : 40
+			},
+			{
+				"command" : 5,
+				"file" : 5,
+				"line" : 43,
+				"parent" : 40
+			},
+			{
+				"command" : 5,
+				"file" : 2,
+				"line" : 601,
+				"parent" : 2
+			}
+		]
+	},
+	"compileGroups" : 
+	[
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : "  -fdiagnostics-color=always -g -Og  -g -ggdb -g3 -ggdb3 -DXXH_NO_INLINE_HINTS=1 -std=gnu11 -fPIC -fdiagnostics-color=always"
+				},
+				{
+					"fragment" : "-DUSE_RSPAMD_CRYPTOBOX"
+				},
+				{
+					"backtrace" : 5,
+					"fragment" : "-msse2"
+				},
+				{
+					"backtrace" : 6,
+					"fragment" : "-m64"
+				},
+				{
+					"backtrace" : 9,
+					"fragment" : "-D_GNU_SOURCE"
+				},
+				{
+					"backtrace" : 9,
+					"fragment" : "-DLINUX"
+				},
+				{
+					"backtrace" : 12,
+					"fragment" : "-Wextra"
+				},
+				{
+					"backtrace" : 13,
+					"fragment" : "-Wall"
+				},
+				{
+					"backtrace" : 14,
+					"fragment" : "-Wpointer-arith"
+				},
+				{
+					"backtrace" : 15,
+					"fragment" : "-Wno-unused-parameter"
+				},
+				{
+					"backtrace" : 16,
+					"fragment" : "-Wno-unused-function"
+				},
+				{
+					"backtrace" : 17,
+					"fragment" : "-Wunused-variable"
+				},
+				{
+					"backtrace" : 18,
+					"fragment" : "-Wno-pointer-sign"
+				},
+				{
+					"backtrace" : 19,
+					"fragment" : "-Wstrict-prototypes"
+				},
+				{
+					"backtrace" : 20,
+					"fragment" : "-Wno-strict-aliasing"
+				},
+				{
+					"backtrace" : 21,
+					"fragment" : "-fno-strict-aliasing"
+				},
+				{
+					"backtrace" : 22,
+					"fragment" : "-Wnull-dereference"
+				},
+				{
+					"backtrace" : 23,
+					"fragment" : "-Wduplicated-cond"
+				},
+				{
+					"backtrace" : 24,
+					"fragment" : "-Wno-unused-const-variable"
+				},
+				{
+					"backtrace" : 25,
+					"fragment" : "-Wno-sign-compare"
+				},
+				{
+					"backtrace" : 26,
+					"fragment" : "-Wno-implicit-fallthrough"
+				},
+				{
+					"backtrace" : 27,
+					"fragment" : "-Wmissing-noreturn"
+				},
+				{
+					"backtrace" : 28,
+					"fragment" : "-Wmissing-format-attribute"
+				},
+				{
+					"backtrace" : 29,
+					"fragment" : "-Wno-deprecated-declarations"
+				},
+				{
+					"backtrace" : 30,
+					"fragment" : "-fPIC"
+				}
+			],
+			"defines" : 
+			[
+				{
+					"backtrace" : 31,
+					"define" : "DOCTEST_CONFIG_NO_MULTI_LANE_ATOMICS"
+				},
+				{
+					"backtrace" : 32,
+					"define" : "DOCTEST_CONFIG_USE_STD_HEADERS"
+				},
+				{
+					"backtrace" : 33,
+					"define" : "FMT_HEADER_ONLY"
+				},
+				{
+					"backtrace" : 34,
+					"define" : "HAVE_CONFIG_H"
+				},
+				{
+					"backtrace" : 35,
+					"define" : "U_CHARSET_IS_UTF8"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 36,
+					"path" : "/home/fum/CLionProjects/rspamd/contrib/hiredis"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/src"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/src/libutil"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/src/libserver"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/src/libmime"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/src/libstat"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/src/libcryptobox"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/contrib/libucl"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/contrib/replxx/include"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/contrib/uthash"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/contrib/http-parser"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/contrib/fpconv"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/contrib/libottery"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/contrib/cdb"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/contrib/snowball/include"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/contrib/librdns"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/contrib/aho-corasick"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/contrib/lc-btrie"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/contrib/lua-lpeg"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/contrib/frozen/include"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/contrib/fu2/include"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/cmake-build-debug/src"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/fum/CLionProjects/rspamd/cmake-build-debug/src/libcryptobox"
+				},
+				{
+					"backtrace" : 39,
+					"path" : "/usr/local/include/luajit-2.1"
+				},
+				{
+					"backtrace" : 41,
+					"path" : "/usr/local/include/glib-2.0"
+				},
+				{
+					"backtrace" : 42,
+					"path" : "/usr/local/lib/x86_64-linux-gnu/glib-2.0/include"
+				},
+				{
+					"backtrace" : 43,
+					"path" : "/home/fum/CLionProjects/rspamd/contrib/xxhash"
+				}
+			],
+			"language" : "C",
+			"languageStandard" : 
+			{
+				"backtraces" : 
+				[
+					1
+				],
+				"standard" : "11"
+			},
+			"sourceIndexes" : 
+			[
+				0,
+				1,
+				2,
+				3,
+				4,
+				5,
+				6,
+				7
+			]
+		}
+	],
+	"id" : "rdns::@1baca140721b561d883a",
+	"name" : "rdns",
+	"nameOnDisk" : "librdns.a",
+	"paths" : 
+	{
+		"build" : "contrib/librdns",
+		"source" : "contrib/librdns"
+	},
+	"sourceGroups" : 
+	[
+		{
+			"name" : "Source Files",
+			"sourceIndexes" : 
+			[
+				0,
+				1,
+				2,
+				3,
+				4,
+				5,
+				6,
+				7
+			]
+		}
+	],
+	"sources" : 
+	[
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "contrib/librdns/util.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "contrib/librdns/logger.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "contrib/librdns/compression.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "contrib/librdns/punycode.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "contrib/librdns/curve.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "contrib/librdns/parse.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "contrib/librdns/packet.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "contrib/librdns/resolver.c",
+			"sourceGroupIndex" : 0
+		}
+	],
+	"type" : "STATIC_LIBRARY"
+}

@@ -1,0 +1,45 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"install"
+		],
+		"files" : 
+		[
+			"contrib/replxx/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 82,
+				"parent" : 0
+			}
+		]
+	},
+	"installers" : 
+	[
+		{
+			"backtrace" : 1,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/lib/rspamd",
+			"paths" : 
+			[
+				"contrib/replxx/librspamd-replxx.so"
+			],
+			"targetId" : "rspamd-replxx::@509ba17594d4e9546cdc",
+			"targetIndex" : 75,
+			"type" : "target"
+		}
+	],
+	"paths" : 
+	{
+		"build" : "contrib/replxx",
+		"source" : "contrib/replxx"
+	}
+}

@@ -1,0 +1,7931 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"INSTALL"
+		],
+		"files" : 
+		[
+			"CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 695,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 696,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 697,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 698,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 699,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 710,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 711,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 721,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 722,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 727,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 731,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 734,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 736,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 743,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 744,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 743,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 744,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 743,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 744,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 743,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 744,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 743,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 744,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 743,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 744,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 743,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 744,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 743,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 744,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 743,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 744,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 743,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 744,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 743,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 744,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 743,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 744,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 743,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 744,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 743,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 744,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 743,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 744,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 743,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 744,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 743,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 744,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 743,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 744,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 743,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 744,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 743,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 744,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 752,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 753,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 757,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 758,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 759,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 760,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 761,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 769,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 770,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 771,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 774,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 778,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 782,
+				"parent" : 0
+			}
+		]
+	},
+	"installers" : 
+	[
+		{
+			"backtrace" : 1,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 2,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 3,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 4,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 5,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 6,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 7,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd",
+			"paths" : 
+			[
+				"conf/actions.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 8,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 9,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd",
+			"paths" : 
+			[
+				"conf/cgp.inc"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 10,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 11,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd",
+			"paths" : 
+			[
+				"conf/common.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 12,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 13,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd",
+			"paths" : 
+			[
+				"conf/composites.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 14,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 15,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd",
+			"paths" : 
+			[
+				"conf/groups.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 16,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 17,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd",
+			"paths" : 
+			[
+				"conf/lang_detection.inc"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 18,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 19,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd",
+			"paths" : 
+			[
+				"conf/logging.inc"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 20,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 21,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/maps.d",
+			"paths" : 
+			[
+				"conf/maps.d/dmarc_whitelist.inc"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 22,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 23,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/maps.d",
+			"paths" : 
+			[
+				"conf/maps.d/maillist.inc"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 24,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 25,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/maps.d",
+			"paths" : 
+			[
+				"conf/maps.d/mid.inc"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 26,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 27,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/maps.d",
+			"paths" : 
+			[
+				"conf/maps.d/mime_types.inc"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 28,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 29,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/maps.d",
+			"paths" : 
+			[
+				"conf/maps.d/redirectors.inc"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 30,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 31,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/maps.d",
+			"paths" : 
+			[
+				"conf/maps.d/spf_dkim_whitelist.inc"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 32,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 33,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/maps.d",
+			"paths" : 
+			[
+				"conf/maps.d/surbl-whitelist.inc"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 34,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 35,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd",
+			"paths" : 
+			[
+				"conf/metrics.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 36,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 37,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd",
+			"paths" : 
+			[
+				"conf/modules.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 38,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 39,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/antivirus.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 40,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 41,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/arc.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 42,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 43,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/asn.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 44,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 45,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/aws_s3.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 46,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 47,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/bimi.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 48,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 49,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/chartable.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 50,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 51,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/clickhouse.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 52,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 53,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/dcc.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 54,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 55,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/dkim.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 56,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 57,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/dkim_signing.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 58,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 59,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/dmarc.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 60,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 61,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/elastic.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 62,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 63,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/emails.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 64,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 65,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/external_relay.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 66,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 67,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/external_services.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 68,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 69,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/force_actions.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 70,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 71,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/forged_recipients.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 72,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 73,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/fuzzy_check.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 74,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 75,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/greylist.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 76,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 77,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/hfilter.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 78,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 79,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/history_redis.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 80,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 81,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/http_headers.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 82,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 83,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/known_senders.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 84,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 85,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/maillist.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 86,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 87,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/metadata_exporter.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 88,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 89,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/metric_exporter.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 90,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 91,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/mid.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 92,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 93,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/milter_headers.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 94,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 95,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/mime_types.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 96,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 97,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/multimap.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 98,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 99,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/mx_check.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 100,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 101,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/neural.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 102,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 103,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/once_received.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 104,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 105,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/p0f.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 106,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 107,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/phishing.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 108,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 109,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/ratelimit.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 110,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 111,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/rbl.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 112,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 113,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/redis.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 114,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 115,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/regexp.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 116,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 117,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/replies.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 118,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 119,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/reputation.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 120,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 121,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/rspamd_update.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 122,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 123,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/spamassassin.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 124,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 125,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/spamtrap.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 126,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 127,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/spf.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 128,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 129,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/surbl.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 130,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 131,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/trie.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 132,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 133,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/url_redirector.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 134,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 135,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/modules.d",
+			"paths" : 
+			[
+				"conf/modules.d/whitelist.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 136,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 137,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd",
+			"paths" : 
+			[
+				"conf/options.inc"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 138,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 139,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd",
+			"paths" : 
+			[
+				"conf/rspamd.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 140,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 141,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/scores.d",
+			"paths" : 
+			[
+				"conf/scores.d/content_group.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 142,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 143,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/scores.d",
+			"paths" : 
+			[
+				"conf/scores.d/fuzzy_group.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 144,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 145,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/scores.d",
+			"paths" : 
+			[
+				"conf/scores.d/headers_group.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 146,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 147,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/scores.d",
+			"paths" : 
+			[
+				"conf/scores.d/hfilter_group.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 148,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 149,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/scores.d",
+			"paths" : 
+			[
+				"conf/scores.d/mime_types_group.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 150,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 151,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/scores.d",
+			"paths" : 
+			[
+				"conf/scores.d/mua_group.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 152,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 153,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/scores.d",
+			"paths" : 
+			[
+				"conf/scores.d/phishing_group.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 154,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 155,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/scores.d",
+			"paths" : 
+			[
+				"conf/scores.d/policies_group.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 156,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 157,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/scores.d",
+			"paths" : 
+			[
+				"conf/scores.d/rbl_group.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 158,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 159,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/scores.d",
+			"paths" : 
+			[
+				"conf/scores.d/statistics_group.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 160,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 161,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/scores.d",
+			"paths" : 
+			[
+				"conf/scores.d/subject_group.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 162,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 163,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/scores.d",
+			"paths" : 
+			[
+				"conf/scores.d/surbl_group.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 164,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 165,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd/scores.d",
+			"paths" : 
+			[
+				"conf/scores.d/whitelist_group.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 166,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 167,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd",
+			"paths" : 
+			[
+				"conf/settings.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 168,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 169,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd",
+			"paths" : 
+			[
+				"conf/statistic.conf"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 170,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 171,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd",
+			"paths" : 
+			[
+				"conf/worker-controller.inc"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 172,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 173,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd",
+			"paths" : 
+			[
+				"conf/worker-fuzzy.inc"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 174,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 175,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd",
+			"paths" : 
+			[
+				"conf/worker-normal.inc"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 176,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 177,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/etc/rspamd",
+			"paths" : 
+			[
+				"conf/worker-proxy.inc"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 178,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 179,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/antivirus.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 180,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 181,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/arc.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 182,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 183,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/asn.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 184,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 185,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/aws_s3.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 186,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 187,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/bayes_expiry.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 188,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 189,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/bimi.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 190,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 191,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/clickhouse.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 192,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 193,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/clustering.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 194,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 195,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/dcc.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 196,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 197,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/dkim_signing.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 198,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 199,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/dmarc.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 200,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 201,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/dynamic_conf.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 202,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 203,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/elastic.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 204,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 205,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/emails.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 206,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 207,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/external_relay.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 208,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 209,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/external_services.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 210,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 211,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/force_actions.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 212,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 213,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/forged_recipients.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 214,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 215,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/fuzzy_collect.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 216,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 217,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/greylist.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 218,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 219,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/hfilter.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 220,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 221,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/history_redis.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 222,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 223,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/http_headers.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 224,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 225,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/ip_score.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 226,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 227,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/known_senders.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 228,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 229,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/maillist.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 230,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 231,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/maps_stats.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 232,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 233,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/metadata_exporter.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 234,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 235,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/metric_exporter.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 236,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 237,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/mid.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 238,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 239,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/milter_headers.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 240,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 241,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/mime_types.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 242,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 243,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/multimap.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 244,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 245,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/mx_check.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 246,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 247,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/neural.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 248,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 249,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/once_received.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 250,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 251,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/p0f.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 252,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 253,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/phishing.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 254,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 255,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/ratelimit.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 256,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 257,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/rbl.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 258,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 259,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/replies.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 260,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 261,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/reputation.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 262,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 263,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/rspamd_update.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 264,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 265,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/settings.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 266,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 267,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/spamassassin.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 268,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 269,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/spamtrap.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 270,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 271,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/spf.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 272,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 273,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/trie.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 274,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 275,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/url_redirector.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 276,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 277,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/plugins",
+			"paths" : 
+			[
+				"src/plugins/lua/whitelist.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 278,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd",
+			"paths" : 
+			[
+				"contrib/publicsuffix/effective_tld_names.dat"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 279,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 280,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/af.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 281,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/an.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 282,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/ar.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 283,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/bg.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 284,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/bn.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 285,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/br.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 286,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/cs.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 287,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/cy.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 288,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/da.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 289,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/de.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 290,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/en.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 291,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/es.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 292,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/et.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 293,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/eu.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 294,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/fa.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 295,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/fi.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 296,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/fr.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 297,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/ga.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 298,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/hi.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 299,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/hr.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 300,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/hu.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 301,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/id.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 302,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/is.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 303,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/it.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 304,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/lt.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 305,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/lv.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 306,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/mr.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 307,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/ms.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 308,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/ne.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 309,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/nl.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 310,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/no.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 311,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/pa.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 312,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/pl.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 313,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/pt.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 314,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/ro.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 315,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/ru.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 316,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/sl.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 317,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/so.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 318,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/sq.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 319,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/sr.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 320,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/sv.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 321,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/sw.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 322,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/tr.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 323,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/uk.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 324,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/ur.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 325,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/vi.json"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 326,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/languages",
+			"paths" : 
+			[
+				"contrib/languages-data/stop_words"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 327,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 328,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/rules",
+			"paths" : 
+			[
+				"rules/bitcoin.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 329,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 330,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/rules",
+			"paths" : 
+			[
+				"rules/bounce.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 331,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 332,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/rules",
+			"paths" : 
+			[
+				"rules/content.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 333,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 334,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/rules/controller",
+			"paths" : 
+			[
+				"rules/controller/fuzzy.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 335,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 336,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/rules/controller",
+			"paths" : 
+			[
+				"rules/controller/init.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 337,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 338,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/rules/controller",
+			"paths" : 
+			[
+				"rules/controller/maps.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 339,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 340,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/rules/controller",
+			"paths" : 
+			[
+				"rules/controller/neural.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 341,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 342,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/rules/controller",
+			"paths" : 
+			[
+				"rules/controller/selectors.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 343,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 344,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/rules",
+			"paths" : 
+			[
+				"rules/forwarding.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 345,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 346,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/rules",
+			"paths" : 
+			[
+				"rules/headers_checks.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 347,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 348,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/rules",
+			"paths" : 
+			[
+				"rules/html.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 349,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 350,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/rules",
+			"paths" : 
+			[
+				"rules/mid.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 351,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 352,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/rules",
+			"paths" : 
+			[
+				"rules/misc.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 353,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 354,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/rules",
+			"paths" : 
+			[
+				"rules/parts.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 355,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 356,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/rules/regexp",
+			"paths" : 
+			[
+				"rules/regexp/compromised_hosts.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 357,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 358,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/rules/regexp",
+			"paths" : 
+			[
+				"rules/regexp/headers.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 359,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 360,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/rules/regexp",
+			"paths" : 
+			[
+				"rules/regexp/misc.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 361,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 362,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/rules/regexp",
+			"paths" : 
+			[
+				"rules/regexp/upstream_spam_filters.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 363,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 364,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/rules",
+			"paths" : 
+			[
+				"rules/rspamd.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 365,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 366,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/rules",
+			"paths" : 
+			[
+				"rules/subject_checks.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 367,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 368,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/ansicolors.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 369,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 370,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/global_functions.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 371,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 372,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_auth_results.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 373,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 374,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_aws.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 375,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 376,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_bayes_learn.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 377,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 378,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_bayes_redis.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 379,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 380,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_cfg_transform.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 381,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 382,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_cfg_utils.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 383,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 384,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_clickhouse.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 385,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 386,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_content",
+			"paths" : 
+			[
+				"lualib/lua_content/ical.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 387,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 388,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_content",
+			"paths" : 
+			[
+				"lualib/lua_content/init.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 389,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 390,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_content",
+			"paths" : 
+			[
+				"lualib/lua_content/pdf.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 391,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 392,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_content",
+			"paths" : 
+			[
+				"lualib/lua_content/vcard.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 393,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 394,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_dkim_tools.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 395,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 396,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_ffi",
+			"paths" : 
+			[
+				"lualib/lua_ffi/common.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 397,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 398,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_ffi",
+			"paths" : 
+			[
+				"lualib/lua_ffi/dkim.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 399,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 400,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_ffi",
+			"paths" : 
+			[
+				"lualib/lua_ffi/init.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 401,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 402,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_ffi",
+			"paths" : 
+			[
+				"lualib/lua_ffi/linalg.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 403,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 404,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_ffi",
+			"paths" : 
+			[
+				"lualib/lua_ffi/spf.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 405,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 406,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_fuzzy.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 407,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 408,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_lexer.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 409,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 410,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_magic",
+			"paths" : 
+			[
+				"lualib/lua_magic/heuristics.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 411,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 412,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_magic",
+			"paths" : 
+			[
+				"lualib/lua_magic/init.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 413,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 414,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_magic",
+			"paths" : 
+			[
+				"lualib/lua_magic/patterns.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 415,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 416,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_magic",
+			"paths" : 
+			[
+				"lualib/lua_magic/types.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 417,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 418,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_maps.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 419,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 420,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_maps_expressions.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 421,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 422,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_meta.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 423,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 424,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_mime.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 425,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 426,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_mime_types.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 427,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 428,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_redis.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 429,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 430,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_scanners",
+			"paths" : 
+			[
+				"lualib/lua_scanners/avast.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 431,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 432,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_scanners",
+			"paths" : 
+			[
+				"lualib/lua_scanners/clamav.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 433,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 434,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_scanners",
+			"paths" : 
+			[
+				"lualib/lua_scanners/cloudmark.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 435,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 436,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_scanners",
+			"paths" : 
+			[
+				"lualib/lua_scanners/common.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 437,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 438,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_scanners",
+			"paths" : 
+			[
+				"lualib/lua_scanners/dcc.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 439,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 440,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_scanners",
+			"paths" : 
+			[
+				"lualib/lua_scanners/fprot.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 441,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 442,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_scanners",
+			"paths" : 
+			[
+				"lualib/lua_scanners/icap.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 443,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 444,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_scanners",
+			"paths" : 
+			[
+				"lualib/lua_scanners/init.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 445,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 446,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_scanners",
+			"paths" : 
+			[
+				"lualib/lua_scanners/kaspersky_av.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 447,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 448,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_scanners",
+			"paths" : 
+			[
+				"lualib/lua_scanners/kaspersky_se.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 449,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 450,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_scanners",
+			"paths" : 
+			[
+				"lualib/lua_scanners/oletools.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 451,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 452,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_scanners",
+			"paths" : 
+			[
+				"lualib/lua_scanners/p0f.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 453,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 454,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_scanners",
+			"paths" : 
+			[
+				"lualib/lua_scanners/pyzor.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 455,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 456,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_scanners",
+			"paths" : 
+			[
+				"lualib/lua_scanners/razor.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 457,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 458,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_scanners",
+			"paths" : 
+			[
+				"lualib/lua_scanners/savapi.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 459,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 460,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_scanners",
+			"paths" : 
+			[
+				"lualib/lua_scanners/sophos.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 461,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 462,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_scanners",
+			"paths" : 
+			[
+				"lualib/lua_scanners/spamassassin.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 463,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 464,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_scanners",
+			"paths" : 
+			[
+				"lualib/lua_scanners/vadesecure.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 465,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 466,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_scanners",
+			"paths" : 
+			[
+				"lualib/lua_scanners/virustotal.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 467,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 468,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_selectors",
+			"paths" : 
+			[
+				"lualib/lua_selectors/common.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 469,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 470,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_selectors",
+			"paths" : 
+			[
+				"lualib/lua_selectors/extractors.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 471,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 472,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_selectors",
+			"paths" : 
+			[
+				"lualib/lua_selectors/init.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 473,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 474,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_selectors",
+			"paths" : 
+			[
+				"lualib/lua_selectors/maps.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 475,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 476,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/lua_selectors",
+			"paths" : 
+			[
+				"lualib/lua_selectors/transforms.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 477,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 478,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_settings.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 479,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 480,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_smtp.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 481,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 482,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_stat.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 483,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 484,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_tcp_sync.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 485,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 486,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_urls_compose.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 487,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 488,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_util.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 489,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 490,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/lua_verdict.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 491,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 492,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/plugins",
+			"paths" : 
+			[
+				"lualib/plugins/dmarc.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 493,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 494,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/plugins",
+			"paths" : 
+			[
+				"lualib/plugins/neural.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 495,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 496,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/plugins",
+			"paths" : 
+			[
+				"lualib/plugins/rbl.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 497,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 498,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"lualib/plugins_stats.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 499,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 500,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/redis_scripts",
+			"paths" : 
+			[
+				"lualib/redis_scripts/bayes_cache_check.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 501,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 502,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/redis_scripts",
+			"paths" : 
+			[
+				"lualib/redis_scripts/bayes_cache_learn.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 503,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 504,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/redis_scripts",
+			"paths" : 
+			[
+				"lualib/redis_scripts/bayes_classify.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 505,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 506,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/redis_scripts",
+			"paths" : 
+			[
+				"lualib/redis_scripts/bayes_learn.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 507,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 508,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/redis_scripts",
+			"paths" : 
+			[
+				"lualib/redis_scripts/bayes_stat.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 509,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 510,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/redis_scripts",
+			"paths" : 
+			[
+				"lualib/redis_scripts/neural_maybe_invalidate.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 511,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 512,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/redis_scripts",
+			"paths" : 
+			[
+				"lualib/redis_scripts/neural_maybe_lock.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 513,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 514,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/redis_scripts",
+			"paths" : 
+			[
+				"lualib/redis_scripts/neural_save_unlock.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 515,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 516,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/redis_scripts",
+			"paths" : 
+			[
+				"lualib/redis_scripts/neural_train_size.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 517,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 518,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/redis_scripts",
+			"paths" : 
+			[
+				"lualib/redis_scripts/ratelimit_check.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 519,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 520,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/redis_scripts",
+			"paths" : 
+			[
+				"lualib/redis_scripts/ratelimit_cleanup_pending.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 521,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 522,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/redis_scripts",
+			"paths" : 
+			[
+				"lualib/redis_scripts/ratelimit_update.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 523,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 524,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/rspamadm",
+			"paths" : 
+			[
+				"lualib/rspamadm/clickhouse.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 525,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 526,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/rspamadm",
+			"paths" : 
+			[
+				"lualib/rspamadm/configgraph.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 527,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 528,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/rspamadm",
+			"paths" : 
+			[
+				"lualib/rspamadm/confighelp.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 529,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 530,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/rspamadm",
+			"paths" : 
+			[
+				"lualib/rspamadm/configwizard.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 531,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 532,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/rspamadm",
+			"paths" : 
+			[
+				"lualib/rspamadm/cookie.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 533,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 534,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/rspamadm",
+			"paths" : 
+			[
+				"lualib/rspamadm/corpus_test.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 535,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 536,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/rspamadm",
+			"paths" : 
+			[
+				"lualib/rspamadm/dkim_keygen.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 537,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 538,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/rspamadm",
+			"paths" : 
+			[
+				"lualib/rspamadm/dmarc_report.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 539,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 540,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/rspamadm",
+			"paths" : 
+			[
+				"lualib/rspamadm/dns_tool.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 541,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 542,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/rspamadm",
+			"paths" : 
+			[
+				"lualib/rspamadm/fuzzy_convert.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 543,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 544,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/rspamadm",
+			"paths" : 
+			[
+				"lualib/rspamadm/fuzzy_ping.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 545,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 546,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/rspamadm",
+			"paths" : 
+			[
+				"lualib/rspamadm/fuzzy_stat.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 547,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 548,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/rspamadm",
+			"paths" : 
+			[
+				"lualib/rspamadm/grep.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 549,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 550,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/rspamadm",
+			"paths" : 
+			[
+				"lualib/rspamadm/keypair.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 551,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 552,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/rspamadm",
+			"paths" : 
+			[
+				"lualib/rspamadm/mime.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 553,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 554,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/rspamadm",
+			"paths" : 
+			[
+				"lualib/rspamadm/neural_test.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 555,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 556,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/rspamadm",
+			"paths" : 
+			[
+				"lualib/rspamadm/publicsuffix.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 557,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 558,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/rspamadm",
+			"paths" : 
+			[
+				"lualib/rspamadm/stat_convert.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 559,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 560,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/rspamadm",
+			"paths" : 
+			[
+				"lualib/rspamadm/statistics_dump.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 561,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 562,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/rspamadm",
+			"paths" : 
+			[
+				"lualib/rspamadm/template.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 563,
+			"component" : "Unspecified",
+			"type" : "code"
+		},
+		{
+			"backtrace" : 564,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib/rspamadm",
+			"paths" : 
+			[
+				"lualib/rspamadm/vault.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 565,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"contrib/lua-fun/fun.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 566,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"contrib/lua-argparse/argparse.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 567,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"contrib/lua-tableshape/tableshape.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 568,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"contrib/lua-lupa/lupa.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 569,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/lualib",
+			"paths" : 
+			[
+				"contrib/lua-lpeg/lpegre.lua"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 570,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/man/man8",
+			"paths" : 
+			[
+				"doc/rspamd.8"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 571,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/man/man1",
+			"paths" : 
+			[
+				"doc/rspamc.1"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 572,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/man/man1",
+			"paths" : 
+			[
+				"doc/rspamadm.1"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 573,
+			"component" : "Unspecified",
+			"destination" : "bin",
+			"paths" : 
+			[
+				{
+					"from" : "utils/rspamd_stats.pl",
+					"to" : "rspamd_stats"
+				}
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 574,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/www",
+			"paths" : 
+			[
+				{
+					"from" : "interface",
+					"to" : "."
+				}
+			],
+			"type" : "directory"
+		},
+		{
+			"backtrace" : 575,
+			"component" : "Unspecified",
+			"destination" : "/usr/local/share/rspamd/elastic",
+			"paths" : 
+			[
+				{
+					"from" : "contrib/elastic",
+					"to" : "."
+				}
+			],
+			"type" : "directory"
+		}
+	],
+	"paths" : 
+	{
+		"build" : ".",
+		"source" : "."
+	}
+}

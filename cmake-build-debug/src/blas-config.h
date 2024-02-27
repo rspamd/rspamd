@@ -1,0 +1,11 @@
+#ifndef RSPAMD_BLAS_CONFIG_H_IN
+#define RSPAMD_BLAS_CONFIG_H_IN
+
+/* #undef HAVE_CBLAS_SGEMM */
+/* #undef HAVE_CBLAS_SAXPY */
+/* #undef HAVE_OPENBLAS_SET_NUM_THREADS */
+/* #undef HAVE_BLI_THREAD_SET_NUM_THREADS */
+/* #undef HAVE_CBLAS_H */
+/* #undef HAVE_CBLAS */
+
+#endif
