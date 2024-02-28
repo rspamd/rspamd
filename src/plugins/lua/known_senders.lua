@@ -208,7 +208,7 @@ local function check_known_incoming_mail_callback(task)
     return nil
   end
 
-  lua_util.debugm(N, task, 'Making sender key')
+  -- making sender key
   local sender_key = lua_util.maybe_obfuscate_string(sender, settings, settings.sender_prefix)
 
   local list_of_senders = {}
