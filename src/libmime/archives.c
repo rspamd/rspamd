@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,6 +23,9 @@
 #include <unicode/utf8.h>
 #include <unicode/utf16.h>
 #include <unicode/ucnv.h>
+
+#include <archive.h>
+#include <archive_entry.h>
 
 #define msg_debug_archive(...) rspamd_conditional_debug_fast(NULL, NULL,                                                 \
 															 rspamd_archive_log_id, "archive", task->task_pool->tag.uid, \
@@ -1643,7 +1646,8 @@ end:
 static const guchar *
 rspamd_7zip_read_next_section(struct rspamd_task *task,
 							  const guchar *p, const guchar *end,
-							  struct rspamd_archive *arch)
+							  struct rspamd_archive *arch,
+							  struct rspamd_mime_part *part)
 {
 	guchar t = *p;
 
@@ -1660,10 +1664,37 @@ rspamd_7zip_read_next_section(struct rspamd_task *task,
 		 * In fact, headers are just packed, but we assume it as
 		 * encrypted to distinguish from the normal archives
 		 */
-		msg_debug_archive("7zip: encoded header, needs to be uncompressed");
-		arch->flags |= RSPAMD_ARCHIVE_CANNOT_READ;
-		p = NULL; /* Cannot get anything useful */
-		break;
+		{
+			msg_debug_archive("7zip: encoded header, needs to be uncompressed");
+			struct archive *a = archive_read_new();
+			archive_read_support_format_7zip(a);
+			int r = archive_read_open_memory(a, part->parsed_data.begin, part->parsed_data.len);
+			if (r != ARCHIVE_OK) {
+				msg_debug_archive("7zip: cannot open memory archive: %s", archive_error_string(a));
+				archive_read_free(a);
+				return NULL;
+			}
+
+			/* Clean the existing files if any */
+			rspamd_archive_dtor(arch);
+			arch->files = g_ptr_array_new();
+
+			struct archive_entry *ae;
+
+			while (archive_read_next_header(a, &ae) == ARCHIVE_OK) {
+				const char *name = archive_entry_pathname(ae);
+				if (name) {
+					msg_debug_archive("7zip: found file %s", name);
+					struct rspamd_archive_file *f = g_malloc0(sizeof(*f));
+					f->fname = g_string_new(name);
+					g_ptr_array_add(arch->files, f);
+				}
+				archive_read_data_skip(a);
+			}
+			archive_read_free(a);
+			p = NULL; /* Stop internal processor, as we rely on libarchive here */
+			break;
+		}
 	case kArchiveProperties:
 		p = rspamd_7zip_read_archive_props(task, p, end, arch);
 		break;
@@ -1739,7 +1770,7 @@ rspamd_archive_process_7zip(struct rspamd_task *task,
 		return;
 	}
 
-	while ((p = rspamd_7zip_read_next_section(task, p, end, arch)) != NULL)
+	while ((p = rspamd_7zip_read_next_section(task, p, end, arch, part)) != NULL)
 		;
 
 	part->part_type = RSPAMD_MIME_PART_ARCHIVE;
