@@ -53,6 +53,11 @@ local settings = {
   symbol = 'KNOWN_SENDER',
   symbol_unknown = 'UNKNOWN_SENDER',
   redis_key = 'rs_known_senders',
+  sender_prefix = 'rsrk',
+  rsrk_privacy = false,
+  rsrk_privacy_alg = 'blake2',
+  rsrk_privacy_prefix = 'obf',
+  rsrk_privacy_length = 16,
 }
 
 local settings_schema = lua_redis.enrich_schema({
@@ -195,6 +200,50 @@ local function known_senders_callback(task)
     -- Check smtp key
     check_redis_key(task, smtp_key, 'smtp')
   end
+end
+
+local function check_known_incoming_mail_callback(task)
+  local sender = task:get_from(0)
+  if not sender then
+    return nil
+  end
+
+  lua_util.debugm(N, task, 'Making sender key')
+  local sender_key = lua_util.maybe_obfuscate_string(sender, settings, settings.sender_prefix)
+
+  local list_of_senders = {}
+
+  local function redis_zrange_cb(err, data)
+    if err ~= nil then
+      rspamd_logger.errx(task, 'Couldn\'t get data from global replies set. Ended with error: %s', err)
+      return
+    end
+    list_of_senders = data
+    rspamd_logger.infox(task, 'Successfully got list: %data of verified senders', data)
+  end
+
+  lua_util.debugm(N, task, 'Making redis request to global replies set')
+  lua_redis.redis_make_request(task,
+          redis_params, -- connect params
+          sender_key, -- hash key
+          false, -- is write
+          redis_zrange_cb, --callback
+          'ZRANGE', -- command
+          { 'rsrk_verified_recipients', 0, -1 } -- arguments
+  )
+
+  if list_of_senders then
+    for _, sndr in ipairs(list_of_senders) do
+      if sndr == sender then
+        lua_util.debugm(N, task, 'Incoming mail and it\'s sender is known')
+        return true
+      else
+        lua_util.debugm(N, task, 'Incoming mail and it\'s sender is unknown')
+        return false
+      end
+      end
+  end
+
 end
 
 local opts = rspamd_config:get_all_opt('known_senders')
