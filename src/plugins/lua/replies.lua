@@ -48,7 +48,7 @@ local settings = {
   rsrk_privacy = false,
   rsrk_privacy_alg = 'blake2',
   rsrk_privacy_prefix = 'obf',
-  rsrk_privacy_length = 16
+  rsrk_privacy_length = 16,
 }
 
 local N = "replies"
