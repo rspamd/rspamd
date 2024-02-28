@@ -1683,7 +1683,7 @@ rspamd_7zip_read_next_section(struct rspamd_task *task,
 			struct archive_entry *ae;
 
 			while (archive_read_next_header(a, &ae) == ARCHIVE_OK) {
-				const char *name = archive_entry_pathname(ae);
+				const char *name = archive_entry_pathname_utf8(ae);
 				if (name) {
 					msg_debug_archive("7zip: found file %s", name);
 					struct rspamd_archive_file *f = g_malloc0(sizeof(*f));
