@@ -1135,6 +1135,7 @@ rspamd_7zip_read_folder(struct rspamd_task *task,
 		msg_debug_archive("7zip: read codec id: %L", tmp);
 
 		if (IS_SZ_ENCRYPTED(tmp)) {
+			msg_debug_archive("7zip: encrypted codec: %L", tmp);
 			arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
 		}
 
@@ -1691,6 +1692,12 @@ rspamd_7zip_read_next_section(struct rspamd_task *task,
 				}
 				archive_read_data_skip(a);
 			}
+
+			if (archive_read_has_encrypted_entries(a) > 0) {
+				msg_debug_archive("7zip: found encrypted stuff");
+				arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+			}
+
 			archive_read_free(a);
 			p = NULL; /* Stop internal processor, as we rely on libarchive here */
 			break;
