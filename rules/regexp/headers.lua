@@ -938,6 +938,13 @@ reconf['HAS_GOOGLE_FIREBASE_URL'] = {
   group = 'url'
 }
 
+reconf['HAS_FILE_URL'] = {
+  re = '/^file:\\/\\//{url}i',
+  description = 'Contains file:// URL',
+  score = 2.0,
+  group = 'url'
+}
+
 reconf['XM_UA_NO_VERSION'] = {
   re = string.format('(!%s && !%s) && (%s || %s)',
       'X-Mailer=/https?:/H',
