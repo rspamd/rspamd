@@ -204,11 +204,12 @@ Redis SET
   Should Be Equal As Integers  ${result.rc}  0
 
 Redis Teardown
-  ${redis_pid} =  Get Variable Value  ${REDIS_PID}
-  Shutdown Process With Children  ${redis_pid}
+  Terminate Process  ${REDIS_PROCESS}
+  Wait For Process  ${REDIS_PROCESS}
   Cleanup Temporary Directory  ${REDIS_TMPDIR}
 
 Rspamd Setup
+  [Arguments]  ${check_port}=${RSPAMD_PORT_NORMAL}
   # Create and chown temporary directory
   ${RSPAMD_TMPDIR} =  Make Temporary Directory
   Set Directory Ownership  ${RSPAMD_TMPDIR}  ${RSPAMD_USER}  ${RSPAMD_GROUP}
@@ -216,7 +217,7 @@ Rspamd Setup
   # Export ${RSPAMD_TMPDIR} to appropriate scope according to ${RSPAMD_SCOPE}
   Export Scoped Variables  ${RSPAMD_SCOPE}  RSPAMD_TMPDIR=${RSPAMD_TMPDIR}
 
-  Run Rspamd
+  Run Rspamd  check_port=${check_port}
 
 Rspamd Redis Setup
   Run Redis
@@ -226,7 +227,8 @@ Rspamd Teardown
   IF  '${CONTROLLER_ERRORS}' == 'True'
     Run Keyword And Warn On Failure  Check Controller Errors
   END
-  Shutdown Process With Children  ${RSPAMD_PID}
+  Terminate Process  ${RSPAMD_PROCESS}
+  Wait For Process  ${RSPAMD_PROCESS}
   Save Run Results  ${RSPAMD_TMPDIR}  configdump.stdout configdump.stderr rspamd.stderr rspamd.stdout rspamd.conf rspamd.log redis.log clickhouse-config.xml
   Log does not contain segfault record
   Collect Lua Coverage
@@ -242,20 +244,17 @@ Run Redis
   ${config} =  Replace Variables  ${template}
   Create File  ${RSPAMD_TMPDIR}/redis-server.conf  ${config}
   Log  ${config}
-  ${result} =  Run Process  redis-server  ${RSPAMD_TMPDIR}/redis-server.conf
-  IF  ${result.rc} != 0
-    Log  ${result.stderr}
-  END
-  Should Be Equal As Integers  ${result.rc}  0
+  ${result} =  Start Process  redis-server  ${RSPAMD_TMPDIR}/redis-server.conf
   Wait Until Keyword Succeeds  5x  1 sec  Check Pidfile  ${RSPAMD_TMPDIR}/redis.pid  timeout=0.5s
   Wait Until Keyword Succeeds  5x  1 sec  Redis Check  ${RSPAMD_REDIS_ADDR}  ${RSPAMD_REDIS_PORT}
   ${REDIS_PID} =  Get File  ${RSPAMD_TMPDIR}/redis.pid
   ${REDIS_PID} =  Convert To Number  ${REDIS_PID}
-  Export Scoped Variables  ${REDIS_SCOPE}  REDIS_PID=${REDIS_PID}  REDIS_TMPDIR=${RSPAMD_TMPDIR}
+  Export Scoped Variables  ${REDIS_SCOPE}  REDIS_PID=${REDIS_PID}  REDIS_PROCESS=${result}  REDIS_TMPDIR=${RSPAMD_TMPDIR}
   ${redis_log} =  Get File  ${RSPAMD_TMPDIR}/redis.log
   Log  ${redis_log}
 
 Run Rspamd
+  [Arguments]  ${check_port}=${RSPAMD_PORT_NORMAL}
   Export Rspamd Variables To Environment
 
   # Dump templated config or errors to log
@@ -284,7 +283,7 @@ Run Rspamd
   Set Directory Ownership  ${RSPAMD_TMPDIR}  ${RSPAMD_USER}  ${RSPAMD_GROUP}
 
   # Run Rspamd
-  ${result} =  Run Process  ${RSPAMD}  -u  ${RSPAMD_USER}  -g  ${RSPAMD_GROUP}
+  ${result} =  Start Process  ${RSPAMD}  -f  -u  ${RSPAMD_USER}  -g  ${RSPAMD_GROUP}
   ...  -c  ${CONFIG}
   ...  --var\=TMPDIR\=${RSPAMD_TMPDIR}
   ...  --var\=DBDIR\=${RSPAMD_TMPDIR}
@@ -298,24 +297,11 @@ Run Rspamd
   ...  env:ASAN_OPTIONS=quarantine_size_mb=2048:malloc_context_size=20:fast_unwind_on_malloc=0:log_path=${RSPAMD_TMPDIR}/rspamd-asan
   ...  stdout=${RSPAMD_TMPDIR}/rspamd.stdout  stderr=${RSPAMD_TMPDIR}/rspamd.stderr
 
-  # Log stdout/stderr
-  ${rspamd_stdout} =  Get File  ${RSPAMD_TMPDIR}/rspamd.stdout  encoding_errors=ignore
-  ${rspamd_stderror} =  Get File  ${RSPAMD_TMPDIR}/rspamd.stderr  encoding_errors=ignore
-  Log  ${rspamd_stdout}
-  Log  ${rspamd_stderror}
-
-  # Abort if it failed
-  Should Be Equal As Integers  ${result.rc}  0
-
-  # Wait for pid file to be written
-  Wait Until Keyword Succeeds  10x  1 sec  Check Pidfile  ${RSPAMD_TMPDIR}/rspamd.pid  timeout=0.5s
+  Export Scoped Variables  ${RSPAMD_SCOPE}  RSPAMD_PROCESS=${result}
 
   # Confirm worker is reachable
-  Wait Until Keyword Succeeds  5x  1 sec  Ping Rspamd  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_NORMAL}
+  Wait Until Keyword Succeeds  15x  1 sec  Ping Rspamd  ${RSPAMD_LOCAL_ADDR}  ${check_port}
 
-  # Read PID from PIDfile and export it to appropriate scope as ${RSPAMD_PID}
-  ${RSPAMD_PID} =  Get File  ${RSPAMD_TMPDIR}/rspamd.pid
-  Export Scoped Variables  ${RSPAMD_SCOPE}  RSPAMD_PID=${RSPAMD_PID}
 
 Run Nginx
   ${template} =  Get File  ${RSPAMD_TESTDIR}/configs/nginx.conf
@@ -370,29 +356,21 @@ Sync Fuzzy Storage
   Sleep  0.1s  Try give fuzzy storage time to sync
 
 Run Dummy Http
-  ${fileExists} =  File Exists  /tmp/dummy_http.pid
-  IF  ${fileExists} is True
-    ${http_pid} =  Get File  /tmp/dummy_http.pid
-    Shutdown Process With Children  ${http_pid}
-  END
   ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py  -pf  /tmp/dummy_http.pid
   Wait Until Created  /tmp/dummy_http.pid  timeout=2 second
+  Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_HTTP_PROC=${result}
 
 Run Dummy Https
-  ${fileExists} =  File Exists  /tmp/dummy_https.pid
-  IF  ${fileExists} is True
-    ${http_pid} =  Get File  /tmp/dummy_https.pid
-    Shutdown Process With Children  ${http_pid}
-  END
   ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py
   ...  -c  ${RSPAMD_TESTDIR}/util/server.pem  -k  ${RSPAMD_TESTDIR}/util/server.pem
   ...  -pf  /tmp/dummy_https.pid  -p  18081
   Wait Until Created  /tmp/dummy_https.pid  timeout=2 second
+  Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_HTTPS_PROC=${result}
 
 Dummy Http Teardown
-  ${http_pid} =  Get File  /tmp/dummy_http.pid
-  Shutdown Process With Children  ${http_pid}
+  Terminate Process  ${DUMMY_HTTP_PROC}
+  Wait For Process  ${DUMMY_HTTP_PROC}
 
 Dummy Https Teardown
-  ${https_pid} =  Get File  /tmp/dummy_https.pid
-  Shutdown Process With Children  ${https_pid}
+  Terminate Process  ${DUMMY_HTTPS_PROC}
+  Wait For Process  ${DUMMY_HTTPS_PROC}

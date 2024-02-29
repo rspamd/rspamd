@@ -244,6 +244,13 @@ def TCP_Connect(addr, port):
     s.close()
 
 
+def try_reap_zombies():
+    try:
+        os.waitpid(-1, os.WNOHANG)
+    except ChildProcessError:
+        pass
+
+
 def ping_rspamd(addr, port):
     return str(urlopen("http://%s:%s/ping" % (addr, port)).read())
 
