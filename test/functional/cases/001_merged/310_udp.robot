@@ -1,6 +1,6 @@
 *** Settings ***
-Test Setup      UDP Setup
-Test Teardown   UDP Teardown
+Suite Setup      UDP Setup
+Suite Teardown   UDP Teardown
 Library         Process
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
@@ -31,10 +31,11 @@ UDP Setup
   Run Dummy UDP
 
 UDP Teardown
-  ${udp_pid} =  Get File  /tmp/dummy_udp.pid
-  Shutdown Process With Children  ${udp_pid}
+  Terminate Process  ${DUMMY_UDP_PROC}
+  Wait For Process  ${DUMMY_UDP_PROC}
 
 Run Dummy UDP
   [Arguments]
   ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_udp.py  5005
   Wait Until Created  /tmp/dummy_udp.pid
+  Set Suite Variable  ${DUMMY_UDP_PROC}  ${result}
