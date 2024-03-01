@@ -367,6 +367,9 @@ if opts then
         settings.cookie_valid_time = lua_util.parse_time_interval(settings.cookie_valid_time)
       end
 
+      lua_redis.register_prefix(settings.sender_prefix, N,
+              'Prefix to identify replies sets')
+
       local id = rspamd_config:register_symbol({
         name = 'REPLIES_CHECK',
         type = 'prefilter',

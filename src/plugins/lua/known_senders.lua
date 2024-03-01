@@ -270,6 +270,8 @@ if opts then
         'Known elements redis key', {
           type = 'zset/bloom filter',
         })
+    lua_redis.register_prefix(settings.sender_prefix, N,
+        'Prefix to identify replies sets')
     local id = rspamd_config:register_symbol({
       name = settings.symbol,
       type = 'normal',
@@ -277,6 +279,12 @@ if opts then
       one_shot = true,
       score = -1.0,
       augmentations = { string.format("timeout=%f", redis_params.timeout or 0.0) }
+    })
+
+    rspamd_config:register_symbol({
+      name = 'CHECK_INC_MAIL',
+      type = 'normal',
+      callback = check_known_incoming_mail_callback
     })
 
     if settings.symbol_unknown and #settings.symbol_unknown > 0 then
