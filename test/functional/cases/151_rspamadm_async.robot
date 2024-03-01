@@ -9,6 +9,8 @@ Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 *** Variables ***
 ${CONFIG}          ${RSPAMD_TESTDIR}/configs/plugins.conf
 ${REDIS_SCOPE}     Test
+# For dummy http
+${RSPAMD_SCOPE}    Test
 ${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***

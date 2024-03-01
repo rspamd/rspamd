@@ -1,6 +1,6 @@
 *** Settings ***
 Suite Setup     Multi Setup
-Suite Teardown  Rspamd Redis Teardown
+Suite Teardown  Multi Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
@@ -26,3 +26,4 @@ Multi Teardown
   Dummy Http Teardown
   Dummy Https Teardown
   Redis Teardown
+  Try Reap Zombies

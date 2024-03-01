@@ -30,21 +30,21 @@ Proxy Setup
   # Run slave & copy variables
   Set Suite Variable  ${CONFIG}  ${RSPAMD_TESTDIR}/configs/lua_test.conf
   Rspamd Setup
-  Set Suite Variable  ${SLAVE_PID}  ${RSPAMD_PID}
+  Set Suite Variable  ${SLAVE_PROCESS}  ${RSPAMD_PROCESS}
   Set Suite Variable  ${SLAVE_TMPDIR}  ${RSPAMD_TMPDIR}
 
   # Run proxy & copy variables
   Set Suite Variable  ${CONFIG}  ${RSPAMD_TESTDIR}/configs/proxy.conf
-  Rspamd Setup
-  Set Suite Variable  ${PROXY_PID}  ${RSPAMD_PID}
+  Rspamd Setup  check_port=${RSPAMD_PORT_PROXY}
+  Set Suite Variable  ${PROXY_PROCESS}  ${RSPAMD_PROCESS}
   Set Suite Variable  ${PROXY_TMPDIR}  ${RSPAMD_TMPDIR}
 
 Proxy Teardown
   # Restore variables & run normal teardown
-  Set Suite Variable  ${RSPAMD_PID}  ${PROXY_PID}
+  Set Suite Variable  ${RSPAMD_PROCESS}  ${PROXY_PROCESS}
   Set Suite Variable  ${RSPAMD_TMPDIR}  ${PROXY_TMPDIR}
   Rspamd Teardown
   # Do it again for slave
-  Set Suite Variable  ${RSPAMD_PID}  ${SLAVE_PID}
+  Set Suite Variable  ${RSPAMD_PROCESS}  ${SLAVE_PROCESS}
   Set Suite Variable  ${RSPAMD_TMPDIR}  ${SLAVE_TMPDIR}
   Rspamd Teardown
