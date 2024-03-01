@@ -63,6 +63,11 @@ define(["jquery", "app/common", "footable"],
                     whiteSpace: "normal"
                 }
             }, {
+                name: "file",
+                title: "File name",
+                breakpoints: "xs",
+                sortValue: (val) => ((typeof val === "undefined") ? "" : val)
+            }, {
                 name: "ip",
                 title: "IP address",
                 breakpoints: "xs sm md",
@@ -171,7 +176,7 @@ define(["jquery", "app/common", "footable"],
             }].filter((col) => {
                 switch (table) {
                     case "history":
-                        return true;
+                        return (col.name !== "file");
                     case "scan":
                         return ["ip", "sender_mime", "rcpt_mime_short", "rcpt_mime", "subject", "size", "user"]
                             .every((name) => col.name !== name);
