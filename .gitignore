@@ -1,6 +1,8 @@
 # Code::TidyAll
 /.tidyall.d/
 .idea
+# Added by CLion
+cmake-build-debug/
 # Logs and databases #
 ######################
 *.log
