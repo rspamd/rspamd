@@ -1101,6 +1101,8 @@ proxy_session_dtor(struct rspamd_proxy_session *session)
 		rspamd_mempool_delete(session->pool);
 	}
 
+	session->worker->nconns--;
+
 	g_free(session);
 }
 
@@ -2274,6 +2276,8 @@ proxy_accept_socket(EV_P_ ev_io *w, int revents)
 		rspamd_inet_address_free(addr);
 		return;
 	}
+
+	worker->nconns++;
 
 	session = g_malloc0(sizeof(*session));
 	REF_INIT_RETAIN(session, proxy_session_dtor);
