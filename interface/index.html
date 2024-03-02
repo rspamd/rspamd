@@ -378,16 +378,20 @@
 
 			<div class="tab-pane" id="scan">
 				<div class="card bg-light shadow my-3">
-					<div class="card-header text-secondary py-2">
+					<div class="card-header text-secondary py-1 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-envelope"></i></span>
 						<span class="h6 fw-bolder my-2">Scan suspected message</span>
+						<div class="d-flex input-group-sm align-items-center ms-auto">
+							<label for="formFile" class="col-auto col-form-label-sm me-1">Choose a file:</label>
+							<input class="form-control form-control-sm btn btn-secondary" id="formFile" type="file">
+						</div>
 					</div>
 					<div class="card-body">
 						<div class="row">
 							<form class="col-lg-12" id="scanForm">
 								<div class="mb-0">
 									<label class="form-label" for="scanMsgSource">Message source:</label>
-									<textarea class="form-control" id="scanMsgSource" rows="10" placeholder="Paste raw message source"></textarea>
+									<textarea class="form-control" id="scanMsgSource" rows="10" placeholder='Paste raw message source, drag and drop files here or use "Browse..." button.'></textarea>
 								</div>
 								<div class="collapse row mt-3" id="scanOptions">
 									<div class="col-lg-6">
