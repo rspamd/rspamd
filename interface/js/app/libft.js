@@ -72,7 +72,7 @@ define(["jquery", "app/common", "footable"],
                 title: "IP address",
                 breakpoints: "xs sm md",
                 style: {
-                    "minWidth": "calc(7.6em + 8px)",
+                    "minWidth": "calc(14ch + 8px)",
                     "word-break": "break-all"
                 },
                 // Normalize IPv4
