@@ -465,9 +465,9 @@ define(["jquery", "app/common", "stickytabs", "visibility",
         checked_server = this.value;
         $("#selSrv [value=\"" + checked_server + "\"]").prop("checked", true);
         if (checked_server === "All SERVERS") {
-            $("#learnServers").show();
+            $("#learnServers").removeClass("invisible");
         } else {
-            $("#learnServers").hide();
+            $("#learnServers").addClass("invisible");
         }
         tabClick("#" + $("#tablist > .nav-item > .nav-link.active").attr("id"));
     });

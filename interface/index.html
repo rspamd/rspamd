@@ -164,9 +164,9 @@
 				<div class="row">
 					<div class="col-lg-6">
 						<div class="card bg-light shadow my-3">
-							<div class="card-header text-secondary py-2">
+							<div class="card-header text-secondary py-2 d-flex align-items-center">
 								<span class="icon me-3"><i class="fas fa-server"></i></span>
-								<span class="h6 fw-bolder my-2">Servers</span>
+								<span class="h6 fw-bolder my-auto">Servers</span>
 							</div>
 								<div class="card-body p-0 table-responsive">
 									<table class="table status-table table-sm table-hover table-bordered text-nowrap mb-0" id="clusterTable">
@@ -188,9 +188,9 @@
 								</div>
 						</div>
 						<div class="card bg-light shadow my-3">
-							<div class="card-header text-secondary py-2">
+							<div class="card-header text-secondary py-2 d-flex align-items-center">
 								<span class="icon me-3"><i class="fas fa-dice"></i></span>
-								<span class="h6 fw-bolder my-2">Bayesian statistics</span>
+								<span class="h6 fw-bolder my-auto">Bayesian statistics</span>
 							</div>
 								<div class="card-body p-0 table-responsive">
 									<table class="table status-table table-sm table-bordered text-nowrap mb-0" id="bayesTable">
@@ -209,9 +209,9 @@
 								</div>
 						</div>
 						<div class="card bg-light shadow my-3">
-							<div class="card-header text-secondary py-2">
+							<div class="card-header text-secondary py-2 d-flex align-items-center">
 								<span class="icon me-3"><i class="fas fa-hashtag"></i></span>
-								<span class="h6 fw-bolder my-2">Fuzzy hashes</span>
+								<span class="h6 fw-bolder my-auto">Fuzzy hashes</span>
 							</div>
 								<div class="card-body p-0 table-responsive">
 									<table class="table status-table table-sm table-bordered text-nowrap mb-0" id="fuzzyTable">
@@ -230,9 +230,9 @@
 					</div>
 					<div class="col-lg-6">
 						<div class="card bg-light shadow my-3">
-							<div class="card-header text-secondary py-2">
+							<div class="card-header text-secondary py-2 d-flex align-items-center">
 								<span class="icon me-3"><i class="fas fa-chart-pie"></i></span>
-								<span class="h6 fw-bolder my-2">Statistics</span>
+								<span class="h6 fw-bolder my-auto">Statistics</span>
 							</div>
 							<div class="card-body">
 								<div class="row">
@@ -246,9 +246,9 @@
 
 			<div class="tab-pane" id="throughput">
 				<div class="card bg-light shadow my-3">
-					<div class="card-header text-secondary py-2">
+					<div class="card-header text-secondary py-2 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-chart-area"></i></span>
-						<span class="h6 fw-bolder my-2">Throughput</span>
+						<span class="h6 fw-bolder my-auto">Throughput</span>
 					</div>
 					<div class="card-body text-center">
 						<div class="d-inline-block bg-white">
@@ -289,7 +289,7 @@
 								<option value="line" selected>Line</option>
 								<option value="area">Stacked area</option>
 							</select>
-							<a title="&ldquo;Curves&rdquo; section of &ldquo;d3-shape&rdquo; library documentation" href="https://github.com/d3/d3-shape#curves" target="_blank">Interpolation mode</a>:
+							<a title="&ldquo;Curves&rdquo; section of &ldquo;d3-shape&rdquo; module documentation" href="https://d3js.org/d3-shape/curve" target="_blank">Interpolation mode</a>:
 							<select id="selInterpolate" class="form-select">
 								<option value="curveLinear" selected>linear</option>
 								<option value="curveStep">step</option>
@@ -309,9 +309,9 @@
 
 			<div class="tab-pane" id="configuration">
 				<div class="card bg-light shadow my-3">
-					<div class="card-header text-secondary py-2">
+					<div class="card-header text-secondary py-2 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-tasks"></i></span>
-						<span class="h6 fw-bolder my-2">Actions</span>
+						<span class="h6 fw-bolder my-auto">Actions</span>
 					</div>
 					<div class="card-body pb-2">
 						<form id="actionsForm">
@@ -326,10 +326,10 @@
 					</div>
 				</div>
 				<div class="card bg-light shadow my-3">
-					<div class="card-header text-secondary py-2 d-flex">
+					<div class="card-header text-secondary py-2 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-list"></i></span>
-						<span class="h6 fw-bolder my-2">Lists</span>
-						<div class="input-group-sm align-self-center ms-auto me-1">
+						<span class="h6 fw-bolder my-auto">Lists</span>
+						<div class="input-group-sm ms-auto me-1">
 							Editor:
 							<div id="btnGroupEditor" class="btn-group btn-group-xs ms-1">
 								<input type="radio" class="btn-check" name="editorMode" id="editorModeBascic" autocomplete="off" value="basic">
@@ -349,12 +349,12 @@
 
 			<div class="tab-pane" id="symbols">
 				<div class="card bg-light shadow my-3">
-					<div class="card-header text-secondary py-1 d-flex">
+					<div class="card-header text-secondary py-1 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-tasks"></i></span>
-						<span class="h6 fw-bolder my-2 ms-0">Symbols and rules</span>
-						<div class="align-self-center ms-auto me-1">
-							<button class="btn btn-info btn-sm" id="updateSymbols">
-								<i class="fas fa-redo-alt"></i> Update
+						<span class="h6 fw-bolder my-auto ms-0">Symbols and rules</span>
+						<div class="ms-auto me-1">
+							<button class="btn btn-info btn-sm d-flex align-items-center" id="updateSymbols">
+								<i class="fas fa-redo-alt me-1"></i>Update
 							</button>
 						</div>
 					</div>
@@ -380,7 +380,7 @@
 				<div class="card bg-light shadow my-3">
 					<div class="card-header text-secondary py-1 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-envelope"></i></span>
-						<span class="h6 fw-bolder my-2">Scan suspected message</span>
+						<span class="h6 fw-bolder my-auto">Scan suspected message</span>
 						<div class="d-flex input-group-sm align-items-center ms-auto">
 							<label for="formFile" class="col-auto col-form-label-sm me-1">Choose a file:</label>
 							<input class="form-control form-control-sm btn btn-secondary" id="formFile" type="file">
@@ -446,23 +446,23 @@
 					</div>
 					<div class="card-footer d-md-flex justify-content-between py-1">
 						<div class="input-group d-inline-flex w-auto my-1">
-							<button type="submit" class="btn btn-primary" data-upload="scan"><i class="fas fa-search"></i> Scan message</button>
-							<button class="btn btn-secondary d-inline-block" id="scanOptionsToggle" data-bs-toggle="collapse" data-bs-target="#scanOptions"><i class="fas 	fa-bars"></i> Options</button>
+							<button type="submit" class="btn btn-primary d-flex align-items-center" data-upload="scan"><i class="fas fa-search me-2"></i>Scan message</button>
+							<button class="btn btn-secondary d-flex align-items-center" id="scanOptionsToggle" data-bs-toggle="collapse" data-bs-target="#scanOptions"><i class="fas fa-bars me-2"></i>Options</button>
 						</div>
 						<div class="input-group d-inline-flex w-auto my-1">
 							<label for="fuzzy-flag" class="input-group-text">Flag</label>
 							<input id="fuzzy-flag" class="form-control" value="1" min="1" type="number">
-							<button class="btn btn-warning" data-upload="compute-fuzzy"><i class="fas fa-hashtag"></i> Compute fuzzy hashes</button>
+							<button class="btn btn-warning d-flex align-items-center" data-upload="compute-fuzzy"><i class="fas fa-hashtag me-2"></i>Compute fuzzy hashes</button>
 						</div>
 						<div class="float-end my-1">
-							<button class="btn btn-secondary" id="scanClean"><i class="fas fa-trash-alt"></i> Clean form</button>
+							<button class="btn btn-secondary d-flex align-items-center" id="scanClean"><i class="fas fa-trash-alt me-2"></i>Clean form</button>
 						</div>
 					</div>
 				</div>
 				<div class="card ro-hide" style="display: none;">
-					<div class="card-header text-secondary py-1 d-flex">
+					<div class="card-header text-secondary py-1 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-graduation-cap"></i></span>
-						<span class="h6 fw-bolder my-2">Learn Rspamd</span>
+						<span class="h6 fw-bolder my-auto">Learn Rspamd</span>
 						<div id="learnServers" class="input-group-sm align-items-center text-nowrap ms-auto me-1">
 							<label for="selLearnServers">Learn servers:</label>
 							<select id="selLearnServers" class="form-select ms-1">
@@ -478,8 +478,8 @@
 									<p>Learn Bayesian classifier:</p>
 									<form>
 										<div class="btn-group">
-											<button class="btn btn-success" type="button" data-upload="ham" disabled><i class="fas fa-thumbs-up"></i> Upload HAM</button>
-											<button class="btn btn-danger" type="button" data-upload="spam" disabled><i class="fas fa-thumbs-down"></i> Upload SPAM</button>
+											<button class="btn btn-success d-flex align-items-center" type="button" data-upload="ham" disabled><i class="fas fa-thumbs-up me-2"></i>Upload HAM</button>
+											<button class="btn btn-danger d-flex align-items-center" type="button" data-upload="spam" disabled><i class="fas fa-thumbs-down me-2"></i>Upload SPAM</button>
 										</div>
 									</form>
 								</div>
@@ -496,7 +496,7 @@
 											<label for="fuzzyWeightText">Weight:</label>
 											<input name="fuzzyWeightText" id="fuzzyWeightText" class="form-control ms-1" type="number" value="1"/>
 										</div>
-										<button class="btn btn-warning ms-2" data-upload="fuzzy" disabled><i class="fas fa-upload"></i> Upload FUZZY</button>
+										<button class="btn btn-warning ms-2 d-flex align-items-center" data-upload="fuzzy" disabled><i class="fas fa-upload me-2"></i>Upload FUZZY</button>
 									</form>
 								</div>
 							</div>
@@ -505,9 +505,9 @@
 				</div>
 
 				<div id="hash-card" class="card bg-light shadow my-3" style="display: none;">
-					<div class="card-header text-secondary py-2">
+					<div class="card-header text-secondary py-2 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-hashtag"></i></span>
-						<span class="h6 fw-bolder my-2">Fuzzy hashes</span>
+						<span class="h6 fw-bolder my-auto">Fuzzy hashes</span>
 						<button type="button" class="card-close-btn btn-close float-end" aria-label="Close"></button>
 					</div>
 						<div class="card-body p-0 table-responsive">
@@ -525,9 +525,9 @@
 				</div>
 
 				<div class="card bg-light shadow my-3">
-					<div class="card-header text-secondary py-1 d-flex">
+					<div class="card-header text-secondary py-1 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-eye"></i></span>
-						<span class="h6 fw-bolder my-2 ms-0">Scan results history</span>
+						<span class="h6 fw-bolder my-auto ms-0">Scan results history</span>
 						<div id="scanResult" class="d-flex input-group-sm align-items-center text-nowrap ms-auto me-1">
 								<label for="selSymOrder_scan">Symbols order:</label>
 								<select id="selSymOrder_scan" class="form-select ms-1">
@@ -537,8 +537,8 @@
 								</select>
 							<label for="scan_page_size" class="ms-2">Rows per page:</label>
 							<input id="scan_page_size" class="form-control ms-1" value="25" min="1" type="number">
-							<button class="btn btn-secondary btn-sm ms-2" id="cleanScanHistory" disabled>
-								<i class="fas fa-trash-alt"></i> Clean history
+							<button class="btn btn-secondary btn-sm ms-2 d-flex align-items-center" id="cleanScanHistory" disabled>
+								<i class="fas fa-trash-alt me-1"></i>Clean history
 							</button>
 						</div>
 					</div>
@@ -552,9 +552,9 @@
 
 			<div class="tab-pane" id="selectors">
 				<div class="card bg-light shadow my-3">
-					<div class="card-header text-secondary py-2">
+					<div class="card-header text-secondary py-2 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-envelope"></i></span>
-						<span class="h6 fw-bolder my-2">Test Rspamd selectors</span>
+						<span class="h6 fw-bolder my-auto">Test Rspamd selectors</span>
 					</div>
 					<div class="card-body p-0">
 						<div class="row h-100 m-0" id="row-main">
@@ -585,7 +585,7 @@
 															<label class="form-label" for="selectorsMsgArea">Message source:</label>
 															<textarea class="form-control" id="selectorsMsgArea" rows="9" placeholder="Paste raw message source"></textarea>
 														</div>
-														<button class="btn btn-secondary float-end" id="selectorsMsgClean"><i class="fas fa-trash-alt"></i> Clean form</button>
+														<button class="btn btn-secondary d-flex align-items-center float-end" id="selectorsMsgClean"><i class="fas fa-trash-alt me-2"></i>Clean form</button>
 													</div>
 												</div>
 												<div class="row pt-3">
@@ -594,8 +594,8 @@
 															<label class="form-label" for="selectorsSelArea">Selector(s):</label>
 															<textarea class="form-control" id="selectorsSelArea" rows="1" placeholder="extractor.transform(arg);extractor.transform(arg);..."></textarea>
 														</div>
-														<button type="submit" class="btn btn-primary" id="selectorsChkMsgBtn"><i class="fas fa-search"></i> Check message</button>
-														<button class="btn btn-secondary float-end" id="selectorsClean"><i class="fas fa-trash-alt"></i> Clean form</button>
+														<button type="submit" class="btn btn-primary d-inline-flex align-items-center" id="selectorsChkMsgBtn"><i class="fas fa-search me-2"></i>Check message</button>
+														<button class="btn btn-secondary d-inline-flex align-items-center float-end" id="selectorsClean"><i class="fas fa-trash-alt me-2"></i>Clean form</button>
 													</div>
 												</div>
 												<div class="row pt-3 flex-grow-1">
@@ -634,9 +634,9 @@
 			<div class="tab-pane" id="history">
 
 				<div class="card bg-light shadow my-3">
-					<div class="card-header text-secondary py-1 d-flex">
+					<div class="card-header text-secondary py-1 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-eye"></i></span>
-						<span class="h6 fw-bolder my-2 ms-0">History</span>
+						<span class="h6 fw-bolder my-auto ms-0">History</span>
 						<a href="https://rspamd.com/doc/modules/history_redis.html" target="_blank" rel="noopener noreferrer"
 							title="If you'd like to use the modern version of History, please enable History redis module."
 							 id="legacy-history-badge" class="my-2 ms-2 badge text-bg-info" style="display: none;">Legacy version</a>
@@ -649,11 +649,11 @@
 							</select>
 							<label for="history_page_size" class="ms-2">Rows per page:</label>
 							<input id="history_page_size" class="form-control ms-1" value="25" min="1" type="number">
-							<button class="btn btn-danger btn-sm ms-2 ro-hide" id="resetHistory">
-								<i class="fas fa-times-circle"></i> Reset
+							<button class="btn btn-danger btn-sm ms-2 d-flex align-items-center ro-hide" id="resetHistory">
+								<i class="fas fa-times-circle me-1"></i>Reset
 							</button>
-							<button class="btn btn-info btn-sm ms-2" id="updateHistory">
-								<i class="fas fa-redo-alt"></i> Update
+							<button class="btn btn-info btn-sm ms-2 d-flex align-items-center" id="updateHistory">
+								<i class="fas fa-redo-alt me-1"></i>Update
 							</button>
 						</div>
 					</div>
@@ -664,12 +664,12 @@
 					</div>
 				</div>
 				<div class="card bg-light shadow my-3 ro-hide" id="errors-history">
-					<div class="card-header text-secondary py-1 d-flex">
+					<div class="card-header text-secondary py-1 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-exclamation-triangle"></i></span>
-						<span class="h6 fw-bolder my-2 ms-0">Errors</span>
+						<span class="h6 fw-bolder my-auto ms-0">Errors</span>
 						<div class="align-self-center ms-auto me-1">
-							<button class="btn btn-info btn-sm" id="updateErrors">
-								<i class="fas fa-redo-alt"></i> Update
+							<button class="btn btn-info btn-sm d-flex align-items-center" id="updateErrors">
+								<i class="fas fa-redo-alt me-1"></i>Update
 							</button>
 						</div>
 					</div>
