@@ -9,11 +9,6 @@
 #include <windows.h> // `DllMain`
 #endif
 
-// If we don't have the LibC, the `malloc` definition in `stringzilla.h` will be illformed.
-#if SZ_AVOID_LIBC
-typedef __SIZE_TYPE__ size_t;
-#endif
-
 // Overwrite `SZ_DYNAMIC_DISPATCH` before including StringZilla.
 #ifdef SZ_DYNAMIC_DISPATCH
 #undef SZ_DYNAMIC_DISPATCH
@@ -22,6 +17,13 @@ typedef __SIZE_TYPE__ size_t;
 #include <stringzilla/stringzilla.h>
 
 #if SZ_AVOID_LIBC
+// If we don't have the LibC, the `malloc` definition in `stringzilla.h` will be illformed.
+#ifdef _MSC_VER
+typedef sz_size_t size_t; // Reuse the type definition we've inferred from `stringzilla.h`
+#else
+typedef __SIZE_TYPE__ size_t; // For GCC/Clang
+#endif
+int rand(void) { return 0; }
 void free(void *start) { sz_unused(start); }
 void *malloc(size_t length) {
     sz_unused(length);
@@ -116,7 +118,6 @@ typedef struct sz_implementations_t {
     sz_find_set_t find_from_set;
     sz_find_set_t rfind_from_set;
 
-    // TODO: Upcoming vectorization
     sz_edit_distance_t edit_distance;
     sz_alignment_score_t alignment_score;
     sz_hashes_t hashes;
@@ -255,11 +256,32 @@ SZ_DYNAMIC sz_cptr_t sz_rfind_charset(sz_cptr_t text, sz_size_t length, sz_chars
     return sz_dispatch_table.rfind_from_set(text, length, set);
 }
 
+SZ_DYNAMIC sz_size_t sz_hamming_distance( //
+    sz_cptr_t a, sz_size_t a_length,      //
+    sz_cptr_t b, sz_size_t b_length,      //
+    sz_size_t bound) {
+    return sz_hamming_distance_serial(a, a_length, b, b_length, bound);
+}
+
+SZ_DYNAMIC sz_size_t sz_hamming_distance_utf8( //
+    sz_cptr_t a, sz_size_t a_length,           //
+    sz_cptr_t b, sz_size_t b_length,           //
+    sz_size_t bound) {
+    return sz_hamming_distance_utf8_serial(a, a_length, b, b_length, bound);
+}
+
 SZ_DYNAMIC sz_size_t sz_edit_distance( //
     sz_cptr_t a, sz_size_t a_length,   //
     sz_cptr_t b, sz_size_t b_length,   //
     sz_size_t bound, sz_memory_allocator_t *alloc) {
     return sz_dispatch_table.edit_distance(a, a_length, b, b_length, bound, alloc);
+}
+
+SZ_DYNAMIC sz_size_t sz_edit_distance_utf8( //
+    sz_cptr_t a, sz_size_t a_length,        //
+    sz_cptr_t b, sz_size_t b_length,        //
+    sz_size_t bound, sz_memory_allocator_t *alloc) {
+    return _sz_edit_distance_wagner_fisher_serial(a, a_length, b, b_length, bound, sz_true_k, alloc);
 }
 
 SZ_DYNAMIC sz_ssize_t sz_alignment_score(sz_cptr_t a, sz_size_t a_length, sz_cptr_t b, sz_size_t b_length,
@@ -301,4 +323,15 @@ SZ_DYNAMIC sz_cptr_t sz_rfind_char_not_from(sz_cptr_t h, sz_size_t h_length, sz_
     for (; n_length; ++n, --n_length) sz_charset_add(&set, *n);
     sz_charset_invert(&set);
     return sz_rfind_charset(h, h_length, &set);
+}
+
+sz_u64_t _sz_random_generator(void *empty_state) {
+    sz_unused(empty_state);
+    return (sz_u64_t)rand();
+}
+
+SZ_DYNAMIC void sz_generate(sz_cptr_t alphabet, sz_size_t alphabet_size, sz_ptr_t result, sz_size_t result_length,
+                            sz_random_generator_t generator, void *generator_user_data) {
+    if (!generator) generator = _sz_random_generator;
+    sz_generate_serial(alphabet, alphabet_size, result, result_length, generator, generator_user_data);
 }
