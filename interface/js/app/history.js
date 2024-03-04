@@ -151,6 +151,7 @@ define(["jquery", "app/common", "app/libft", "footable"],
         }
 
         ui.getHistory = function () {
+            $("#refresh, #updateHistory").attr("disabled", true);
             common.query("history", {
                 success: function (req_data) {
                     function differentVersions(neighbours_data) {
@@ -190,7 +191,8 @@ define(["jquery", "app/common", "app/libft", "footable"],
                             libft.destroyTable("history");
                             // Is there a way to get an event when the table is destroyed?
                             setTimeout(() => {
-                                libft.initHistoryTable(data, items, "history", get_history_columns(data), false);
+                                libft.initHistoryTable(data, items, "history", get_history_columns(data), false,
+                                    () => $("#refresh, #updateHistory").removeAttr("disabled"));
                             }, 200);
                         }
                         prevVersion = version;
@@ -198,7 +200,7 @@ define(["jquery", "app/common", "app/libft", "footable"],
                         libft.destroyTable("history");
                     }
                 },
-                complete: function () { $("#refresh").removeAttr("disabled").removeClass("disabled"); },
+                error: () => $("#refresh, #updateHistory").removeAttr("disabled"),
                 errorMessage: "Cannot receive history",
             });
         };

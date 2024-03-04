@@ -46,7 +46,7 @@ define(["jquery", "app/common", "footable"],
                     clear_altered();
                     common.alertMessage("alert-modal alert-success", "Symbols successfully saved");
                 },
-                complete: () => $("#save-alert button").removeAttr("disabled", true),
+                complete: () => $("#save-alert button").removeAttr("disabled"),
                 errorMessage: "Save symbols error",
                 method: "POST",
                 params: {
@@ -123,6 +123,7 @@ define(["jquery", "app/common", "footable"],
         }
         // @get symbols into modal form
         ui.getSymbols = function () {
+            $("#refresh, #updateSymbols").attr("disabled", true);
             clear_altered();
             common.query("symbols", {
                 success: function (json) {
@@ -216,10 +217,13 @@ define(["jquery", "app/common", "footable"],
                                 if (common.read_only) {
                                     $(".mb-disabled").attr("disabled", true);
                                 }
-                            }
+                            },
+                            "postdraw.ft.table":
+                                () => $("#refresh, #updateSymbols").removeAttr("disabled")
                         }
                     });
                 },
+                error: () => $("#refresh, #updateSymbols").removeAttr("disabled"),
                 server: common.getServer()
             });
         };
@@ -227,12 +231,14 @@ define(["jquery", "app/common", "footable"],
 
         $("#updateSymbols").on("click", (e) => {
             e.preventDefault();
+            $("#refresh, #updateSymbols").attr("disabled", true);
             clear_altered();
             common.query("symbols", {
                 success: function (data) {
                     const [items] = process_symbols_data(data[0].data);
                     common.tables.symbols.rows.load(items);
                 },
+                error: () => $("#refresh, #updateSymbols").removeAttr("disabled"),
                 server: common.getServer()
             });
         });

@@ -8,8 +8,8 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.12 FATAL_ERROR)
 
 SET(RSPAMD_VERSION_MAJOR 3)
-SET(RSPAMD_VERSION_MINOR 8)
-SET(RSPAMD_VERSION_PATCH 2)
+SET(RSPAMD_VERSION_MINOR 9)
+SET(RSPAMD_VERSION_PATCH 0)
 
 # Keep two digits all the time
 SET(RSPAMD_VERSION_MAJOR_NUM ${RSPAMD_VERSION_MAJOR}0)
@@ -87,6 +87,7 @@ ENDIF ()
 
 FIND_PACKAGE(PkgConfig REQUIRED)
 FIND_PACKAGE(Perl REQUIRED)
+
 
 option(SANITIZE "Enable sanitizer: address, memory, undefined, leak (comma separated list)" "")
 INCLUDE(Toolset)
@@ -241,6 +242,8 @@ ProcessPackage(LIBZ LIBRARY z INCLUDE zlib.h INCLUDE_SUFFIXES include/zlib
 ProcessPackage(SODIUM LIBRARY sodium INCLUDE sodium.h
         INCLUDE_SUFFIXES include/libsodium include/sodium
         ROOT ${LIBSODIUM_ROOT_DIR} MODULES libsodium>=1.0.0)
+ProcessPackage(LIBARCHIVE LIBRARY archive INCLUDE archive.h
+        ROOT ${LIBARCHIVE_ROOT_DIR} MODULES libarchive>=3.0.0)
 
 if (ENABLE_FASTTEXT MATCHES "ON")
     ProcessPackage(FASTTEXT LIBRARY fasttext INCLUDE fasttext/fasttext.h
@@ -687,6 +690,7 @@ IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
 ENDIF ()
 
 ADD_SUBDIRECTORY(src)
+enable_testing()
 ADD_SUBDIRECTORY(test)
 ADD_SUBDIRECTORY(utils)
 

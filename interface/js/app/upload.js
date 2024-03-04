@@ -28,12 +28,14 @@ define(["jquery", "app/common", "app/libft"],
     ($, common, libft) => {
         "use strict";
         const ui = {};
+        let files = null;
+        let filesIdx = null;
+        let scanTextHeaders = {};
 
         function cleanTextUpload(source) {
             $("#" + source + "TextSource").val("");
         }
 
-        // @upload text
         function uploadText(data, source, headers) {
             let url = null;
             if (source === "spam") {
@@ -73,52 +75,72 @@ define(["jquery", "app/common", "app/libft"],
             });
         }
 
-        // @upload text
-        function scanText(data, headers) {
+        function enable_disable_scan_btn(disable) {
+            $("#scan button:not(#cleanScanHistory, #scanOptionsToggle)")
+                .prop("disabled", (disable || $.trim($("textarea").val()).length === 0));
+        }
+
+        function setFileInputFiles(i) {
+            const dt = new DataTransfer();
+            if (arguments.length) dt.items.add(files[i]);
+            $("#formFile").prop("files", dt.files);
+        }
+
+        function readFile(callback, i) {
+            const reader = new FileReader();
+            reader.readAsText(files[(arguments.length === 1) ? 0 : i]);
+            reader.onload = () => callback(reader.result);
+        }
+
+        function scanText(data) {
+            enable_disable_scan_btn(true);
             common.query("checkv2", {
                 data: data,
                 params: {
                     processData: false,
                 },
                 method: "POST",
-                headers: headers,
+                headers: scanTextHeaders,
                 success: function (neighbours_status) {
-                    function scrollTop(rows_total) {
-                        // Is there a way to get an event when all rows are loaded?
-                        libft.waitForRowsDisplayed("scan", rows_total, () => {
-                            $("#cleanScanHistory").removeAttr("disabled", true);
-                            $("html, body").animate({
-                                scrollTop: $("#scanResult").offset().top
-                            }, 1000);
-                        });
-                    }
-
                     const json = neighbours_status[0].data;
                     if (json.action) {
                         common.alertMessage("alert-success", "Data successfully scanned");
 
-                        const rows_total = $("#historyTable_scan > tbody > tr:not(.footable-detail-row)").length + 1;
                         const o = libft.process_history_v2({rows: [json]}, "scan");
                         const {items} = o;
                         common.symbols.scan.push(o.symbols[0]);
 
+                        if (files) items[0].file = files[filesIdx].name;
+
                         if (Object.prototype.hasOwnProperty.call(common.tables, "scan")) {
                             common.tables.scan.rows.load(items, true);
-                            scrollTop(rows_total);
                         } else {
-                            libft.destroyTable("scan");
                             require(["footable"], () => {
-                                // Is there a way to get an event when the table is destroyed?
-                                setTimeout(() => {
-                                    libft.initHistoryTable(data, items, "scan", libft.columns_v2("scan"), true);
-                                    scrollTop(rows_total);
-                                }, 200);
+                                libft.initHistoryTable(data, items, "scan", libft.columns_v2("scan"), true,
+                                    () => {
+                                        if (files && filesIdx < files.length - 1) {
+                                            readFile((result) => {
+                                                if (filesIdx === files.length - 1) {
+                                                    $("#scanMsgSource").val(result);
+                                                    setFileInputFiles(filesIdx);
+                                                }
+                                                scanText(result);
+                                            }, ++filesIdx);
+                                        } else {
+                                            enable_disable_scan_btn();
+                                            $("#cleanScanHistory").removeAttr("disabled");
+                                            $("html, body").animate({
+                                                scrollTop: $("#scanResult").offset().top
+                                            }, 1000);
+                                        }
+                                    });
                             });
                         }
                     } else {
                         common.alertMessage("alert-error", "Cannot scan data");
                     }
                 },
+                error: enable_disable_scan_btn,
                 errorMessage: "Cannot upload data",
                 statusCode: {
                     404: function () {
@@ -182,20 +204,18 @@ define(["jquery", "app/common", "app/libft"],
             $("#cleanScanHistory").attr("disabled", true);
         });
 
-        function enable_disable_scan_btn() {
-            $("#scan button:not(#cleanScanHistory, #scanOptionsToggle)")
-                .prop("disabled", ($.trim($("textarea").val()).length === 0));
-        }
         enable_disable_scan_btn();
         $("textarea").on("input", () => {
             enable_disable_scan_btn();
+            if (files) {
+                files = null;
+                setFileInputFiles();
+            }
         });
 
         $("#scanClean").on("click", () => {
-            $("#scan button:not(#cleanScanHistory, #scanOptionsToggle)").attr("disabled", true);
+            enable_disable_scan_btn(true);
             $("#scanForm")[0].reset();
-            $("#scanResult").hide();
-            $("#scanOutput tbody").remove();
             $("html, body").animate({scrollTop: 0}, 1000);
             return false;
         });
@@ -204,22 +224,26 @@ define(["jquery", "app/common", "app/libft"],
             $(this).closest(".card").slideUp();
         });
 
+        function getScanTextHeaders() {
+            scanTextHeaders = ["IP", "User", "From", "Rcpt", "Helo", "Hostname"].reduce((o, header) => {
+                const value = $("#scan-opt-" + header.toLowerCase()).val();
+                if (value !== "") o[header] = value;
+                return o;
+            }, {});
+            if ($("#scan-opt-pass-all").prop("checked")) scanTextHeaders.Pass = "all";
+        }
+
         $("[data-upload]").on("click", function () {
             const source = $(this).data("upload");
             const data = $("#scanMsgSource").val();
-            let headers = {};
             if ($.trim(data).length > 0) {
                 if (source === "scan") {
-                    headers = ["IP", "User", "From", "Rcpt", "Helo", "Hostname"].reduce((o, header) => {
-                        const value = $("#scan-opt-" + header.toLowerCase()).val();
-                        if (value !== "") o[header] = value;
-                        return o;
-                    }, {});
-                    if ($("#scan-opt-pass-all").prop("checked")) headers.Pass = "all";
-                    scanText(data, headers);
+                    getScanTextHeaders();
+                    scanText(data);
                 } else if (source === "compute-fuzzy") {
                     getFuzzyHashes(data);
                 } else {
+                    let headers = {};
                     if (source === "fuzzy") {
                         headers = {
                             flag: $("#fuzzyFlagText").val(),
@@ -233,6 +257,36 @@ define(["jquery", "app/common", "app/libft"],
             }
             return false;
         });
+
+        const dragoverClassList = "outline-dashed-primary bg-primary-subtle";
+        $("#scanMsgSource")
+            .on("dragenter dragover dragleave drop", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            })
+            .on("dragenter dragover", () => {
+                $("#scanMsgSource").addClass(dragoverClassList);
+            })
+            .on("dragleave drop", () => {
+                $("#scanMsgSource").removeClass(dragoverClassList);
+            })
+            .on("drop", (e) => {
+                ({files} = e.originalEvent.dataTransfer);
+                filesIdx = 0;
+
+                if (files.length === 1) {
+                    setFileInputFiles(0);
+                    enable_disable_scan_btn();
+                    readFile((result) => {
+                        $("#scanMsgSource").val(result);
+                        enable_disable_scan_btn();
+                    });
+                // eslint-disable-next-line no-alert
+                } else if (files.length < 10 || confirm("Are you sure you want to scan " + files.length + " files?")) {
+                    getScanTextHeaders();
+                    readFile((result) => scanText(result));
+                }
+            });
 
         return ui;
     });

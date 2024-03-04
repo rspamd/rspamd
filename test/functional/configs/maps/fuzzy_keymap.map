@@ -1,0 +1,16 @@
+[{
+    privkey = "achyfduzs74yc1p95bk9apoknhtzn596pzeai5ybi5tftencoray";
+    id = "xb66rsu7e5i3o95sr7ifd3rxgjruktn8ptsesdxrf4biyc5ckyu6zcye54pkw3cmkhbyoebow85bsqxhryfyy4eep5gai4x1a8s3u5d";
+    pubkey = "mbggdnw3tdx7r3ruakjecpf5hcqr4cb4nmdp1fxynx3drbyujb3y";
+    type = "kex";
+    algorithm = "curve25519";
+    encoding = "base32";
+},
+{
+    privkey = "y1z16mw4n8eaefgwhgneyrntb8rxx911r4q7pgweb7t8sj1q8goy";
+    id = "id8kmo7im37bszdoorpm6cjjg8saazz71bc9ijz974wip3gaockbpymb5e91r8cwsf7kmcbbbygap9bss8r3zkhth5i7pdnyazpkppy";
+    pubkey = "zhypei8sartqrtow84dddgp5exh3gsr65kbw88wj7ppot1bwmuiy";
+    type = "kex";
+    algorithm = "curve25519";
+    encoding = "base32";
+}]

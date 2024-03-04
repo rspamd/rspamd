@@ -323,10 +323,11 @@ local pushers = {
         if type(v) == 'table' then
           hdrs[pfx .. k] = ucl.to_format(v, 'json-compact')
         else
-          hdrs[pfx .. k] = v
+          hdrs[pfx .. k] = rspamd_util.mime_header_encode(v)
         end
       end
     end
+
     rspamd_http.request({
       task = task,
       url = rule.url,
@@ -366,12 +367,12 @@ local pushers = {
       return true
     end
     rspamd_tcp.request({
-      task=task,
-      host=rule.host,
-      port=rule.port,
-      data=formatted,
-      callback=json_raw_tcp_callback,
-      read=false,
+      task = task,
+      host = rule.host,
+      port = rule.port,
+      data = formatted,
+      callback = json_raw_tcp_callback,
+      read = false,
     })
   end,
 }

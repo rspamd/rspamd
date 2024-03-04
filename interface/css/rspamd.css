@@ -213,14 +213,10 @@ table#symbolsTable input[type="number"] {
     padding-bottom: 0.1rem;
 }
 
-/* widget */
 .card-header,
 .modal-header {
     background-color: #f3f3f3;
     background-image: linear-gradient(to bottom, #fdfdfd, #eaeaea);
-}
-.card-header > .icon > svg {
-    vertical-align: middle;
 }
 .card-header .h6 {
     font-size: 0.857rem;
@@ -393,6 +389,8 @@ table#symbolsTable input[type="number"] {
     width: 6em !important;
     text-align: center;
 }
+
+.outline-dashed-primary { outline: 2px dashed var(--bs-primary); }
 
 .scorebar-spam {
     background-color: rgba(240 0 0 / 0.1) !important;

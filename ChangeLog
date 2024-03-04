@@ -1,3 +1,18 @@
+3.8.2: 20 Feb 2024
+  * [Feature] Add extraction type for `from` maps
+  * [Feature] Allow to add templates to redis history prefix
+  * [Feature] Implement dynamic keys map in fuzzy storage
+  * [Feature] Lua_url: Add `to_http` method
+  * [Feature] Support JSON logging when in syslog mode
+  * [Fix] Deal with `Connection` and `Host` headers on proxying
+  * [Fix] Encode headers in metadata exporter
+  * [Fix] Fix initial maps load
+  * [Fix] Make stat tokens allocation consistent
+  * [Fix] Resolve issue with bayes stat in `rspamadm` mode
+  * [Fix] Try to fix url path issue
+  * [Rework] Breaking: Do not report module as action
+  * [Rework] Use khash instead of glib hashes for many reasons
+
 3.8.1: 25 Jan 2024
   * [Fix] Fix headers insertion in the ordered list
   * [Fix] Fix learn error propagation
