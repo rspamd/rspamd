@@ -71,4 +71,12 @@ extern const char *rspamd_worker_classname;
 extern const char *rspamd_zstd_compress_classname;
 extern const char *rspamd_zstd_decompress_classname;
 
+/* Keep it consistent when adding new classes */
+#define RSPAMD_MAX_LUA_CLASSES 48
+
+/*
+ * Return a static class name for a given name (only for known classes) or NULL
+ */
+const char *rspamd_lua_static_classname(const char *name, guint len);
+
 #endif//RSPAMD_LUA_CLASSNAMES_H

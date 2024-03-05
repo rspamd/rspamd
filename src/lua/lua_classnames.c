@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include "config.h"
+#include "libutil/str_util.h"
+#include "khash.h"
 #include "lua_classnames.h"
 
 const char *rspamd_archive_classname = "rspamd{archive}";
@@ -64,3 +67,100 @@ const char *rspamd_url_classname = "rspamd{url}";
 const char *rspamd_worker_classname = "rspamd{worker}";
 const char *rspamd_zstd_compress_classname = "rspamd{zstd_compress}";
 const char *rspamd_zstd_decompress_classname = "rspamd{zstd_decompress}";
+
+KHASH_INIT(rspamd_lua_static_classes, const char *, const char *, 1, rspamd_str_hash, rspamd_str_equal);
+
+static khash_t(rspamd_lua_static_classes) *lua_static_classes = NULL;
+
+#define CLASS_PUT_STR(s)                                                              \
+	do {                                                                              \
+		int _r = 0;                                                                   \
+		khiter_t it = kh_put(rspamd_lua_static_classes, lua_static_classes, #s, &_r); \
+		g_assert(_r > 0);                                                             \
+		kh_value(lua_static_classes, it) = rspamd_##s##_classname;                    \
+	} while (0)
+
+RSPAMD_CONSTRUCTOR(rspamd_lua_init_classnames)
+{
+	lua_static_classes = kh_init(rspamd_lua_static_classes);
+	kh_resize(rspamd_lua_static_classes, lua_static_classes, RSPAMD_MAX_LUA_CLASSES);
+
+	CLASS_PUT_STR(archive);
+	CLASS_PUT_STR(cdb_builder);
+	CLASS_PUT_STR(cdb);
+	CLASS_PUT_STR(classifier);
+	CLASS_PUT_STR(config);
+	CLASS_PUT_STR(cryptobox_hash);
+	CLASS_PUT_STR(cryptobox_keypair);
+	CLASS_PUT_STR(cryptobox_pubkey);
+	CLASS_PUT_STR(cryptobox_secretbox);
+	CLASS_PUT_STR(cryptobox_signature);
+	CLASS_PUT_STR(csession);
+	CLASS_PUT_STR(ev_base);
+	CLASS_PUT_STR(expr);
+	CLASS_PUT_STR(html_tag);
+	CLASS_PUT_STR(html);
+	CLASS_PUT_STR(image);
+	CLASS_PUT_STR(int64);
+	CLASS_PUT_STR(ip);
+	CLASS_PUT_STR(kann_node);
+	CLASS_PUT_STR(kann);
+	CLASS_PUT_STR(map);
+	CLASS_PUT_STR(mempool);
+	CLASS_PUT_STR(mimepart);
+	CLASS_PUT_STR(monitored);
+	CLASS_PUT_STR(redis);
+	CLASS_PUT_STR(regexp);
+	CLASS_PUT_STR(resolver);
+	CLASS_PUT_STR(rsa_privkey);
+	CLASS_PUT_STR(rsa_pubkey);
+	CLASS_PUT_STR(rsa_signature);
+	CLASS_PUT_STR(session);
+	CLASS_PUT_STR(spf_record);
+	CLASS_PUT_STR(sqlite3_stmt);
+	CLASS_PUT_STR(sqlite3);
+	CLASS_PUT_STR(statfile);
+	CLASS_PUT_STR(task);
+	CLASS_PUT_STR(tcp_sync);
+	CLASS_PUT_STR(tcp);
+	CLASS_PUT_STR(tensor);
+	CLASS_PUT_STR(textpart);
+	CLASS_PUT_STR(text);
+	CLASS_PUT_STR(trie);
+	CLASS_PUT_STR(upstream_list);
+	CLASS_PUT_STR(upstream);
+	CLASS_PUT_STR(url);
+	CLASS_PUT_STR(worker);
+	CLASS_PUT_STR(zstd_compress);
+	CLASS_PUT_STR(zstd_decompress);
+
+	/* Check consistency */
+	g_assert(kh_size(lua_static_classes) == RSPAMD_MAX_LUA_CLASSES);
+}
+
+const char *
+rspamd_lua_static_classname(const char *name, guint len)
+{
+	khiter_t k;
+
+	g_assert(lua_static_classes != NULL);
+	char classbuf[128];
+
+	rspamd_strlcpy(classbuf, name, MIN(sizeof(classbuf), len + 1));
+	name = classbuf;
+
+	k = kh_get(rspamd_lua_static_classes, lua_static_classes, name);
+
+	if (k != kh_end(lua_static_classes)) {
+		return kh_value(lua_static_classes, k);
+	}
+
+	return NULL;
+}
+
+RSPAMD_DESTRUCTOR(rspamd_lua_deinit_classnames)
+{
+	if (lua_static_classes != NULL) {
+		kh_destroy(rspamd_lua_static_classes, lua_static_classes);
+	}
+}

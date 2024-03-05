@@ -1326,7 +1326,6 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 	const gchar *p, *key = NULL, *end, *cls;
 	va_list ap;
 	gboolean required = FALSE, failed = FALSE, is_table;
-	gchar classbuf[128];
 	enum {
 		read_key = 0,
 		read_arg,
@@ -1818,15 +1817,14 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 					return FALSE;
 				}
 
-				rspamd_snprintf(classbuf, sizeof(classbuf), "rspamd{%*s}",
-								(gint) clslen, cls);
-
+				const char *static_cls = rspamd_lua_static_classname(cls, clslen);
 
 				/*
 				 * We skip class check here for speed in non-table mode
 				 */
 				if (!failed && (!is_table ||
-								rspamd_lua_check_class(L, idx, classbuf))) {
+								static_cls == NULL ||
+								rspamd_lua_check_class(L, idx, static_cls))) {
 					if (direct_userdata) {
 						void **arg_p = (va_arg(ap, void **));
 						*arg_p = lua_touserdata(L, idx);
@@ -1844,7 +1842,7 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 									"invalid class for key %.*s, expected %s, got %s",
 									(gint) keylen,
 									key,
-									classbuf,
+									static_cls,
 									rspamd_lua_class_tostring_buf(L, FALSE, idx));
 						va_end(ap);
 
