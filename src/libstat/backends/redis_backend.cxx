@@ -218,7 +218,7 @@ gsize rspamd_redis_expand_object(const gchar *pattern,
 			lua_rawgeti(L, LUA_REGISTRYINDEX, ctx->cbref_user);
 			ptask = (struct rspamd_task **) lua_newuserdata(L, sizeof(struct rspamd_task *));
 			*ptask = task;
-			rspamd_lua_setclass(L, "rspamd{task}", -1);
+			rspamd_lua_setclass(L, rspamd_task_classname, -1);
 
 			if (lua_pcall(L, 1, 1, err_idx) != 0) {
 				msg_err_task("call to user extraction script failed: %s",

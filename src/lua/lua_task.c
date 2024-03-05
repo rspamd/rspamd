@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1382,7 +1382,7 @@ static const struct luaL_reg archivelib_m[] = {
 struct rspamd_task *
 lua_check_task(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{task}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_task_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'task' expected");
 	return ud ? *((struct rspamd_task **) ud) : NULL;
 }
@@ -1390,7 +1390,7 @@ lua_check_task(lua_State *L, gint pos)
 struct rspamd_task *
 lua_check_task_maybe(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata_maybe(L, pos, "rspamd{task}");
+	void *ud = rspamd_lua_check_udata_maybe(L, pos, rspamd_task_classname);
 
 	return ud ? *((struct rspamd_task **) ud) : NULL;
 }
@@ -1781,7 +1781,7 @@ lua_task_load_from_file(lua_State *L)
 	if (res) {
 		ptask = lua_newuserdata(L, sizeof(*ptask));
 		*ptask = task;
-		rspamd_lua_setclass(L, "rspamd{task}", -1);
+		rspamd_lua_setclass(L, rspamd_task_classname, -1);
 	}
 	else {
 		if (err) {
@@ -1832,7 +1832,7 @@ lua_task_load_from_string(lua_State *L)
 
 	ptask = lua_newuserdata(L, sizeof(*ptask));
 	*ptask = task;
-	rspamd_lua_setclass(L, "rspamd{task}", -1);
+	rspamd_lua_setclass(L, rspamd_task_classname, -1);
 
 	return 2;
 }
@@ -1868,7 +1868,7 @@ lua_task_create(lua_State *L)
 
 	ptask = lua_newuserdata(L, sizeof(*ptask));
 	*ptask = task;
-	rspamd_lua_setclass(L, "rspamd{task}", -1);
+	rspamd_lua_setclass(L, rspamd_task_classname, -1);
 
 	return 1;
 }
@@ -7271,7 +7271,7 @@ luaopen_archive(lua_State *L)
 
 void luaopen_task(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{task}", tasklib_m);
+	rspamd_lua_new_class(L, rspamd_task_classname, tasklib_m);
 	lua_pop(L, 1);
 
 	rspamd_lua_add_preload(L, "rspamd_task", lua_load_task);
@@ -7290,6 +7290,6 @@ void rspamd_lua_task_push(lua_State *L, struct rspamd_task *task)
 	struct rspamd_task **ptask;
 
 	ptask = lua_newuserdata(L, sizeof(gpointer));
-	rspamd_lua_setclass(L, "rspamd{task}", -1);
+	rspamd_lua_setclass(L, rspamd_task_classname, -1);
 	*ptask = task;
 }

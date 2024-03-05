@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -566,7 +566,7 @@ rspamd_task_insert_result_full(struct rspamd_task *task,
 
 				if (!rspamd_lua_universal_pcall(L, mres->symbol_cbref,
 												G_STRLOC, 1, "uss", &err,
-												"rspamd{task}", task, symbol, mres->name ? mres->name : "default")) {
+												rspamd_task_classname, task, symbol, mres->name ? mres->name : "default")) {
 					msg_warn_task("cannot call for symbol_cbref for result %s: %e",
 								  mres->name ? mres->name : "default", err);
 					g_error_free(err);

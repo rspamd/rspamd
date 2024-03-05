@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -177,7 +177,7 @@ rspamd_sqlite3_get_user(struct rspamd_stat_sqlite3_db *db,
 		lua_rawgeti(L, LUA_REGISTRYINDEX, db->cbref_user);
 		ptask = lua_newuserdata(L, sizeof(struct rspamd_task *));
 		*ptask = task;
-		rspamd_lua_setclass(L, "rspamd{task}", -1);
+		rspamd_lua_setclass(L, rspamd_task_classname, -1);
 
 		if (lua_pcall(L, 1, 1, err_idx) != 0) {
 			msg_err_task("call to user extraction script failed: %s",
@@ -246,7 +246,7 @@ rspamd_sqlite3_get_language(struct rspamd_stat_sqlite3_db *db,
 		lua_rawgeti(L, LUA_REGISTRYINDEX, db->cbref_language);
 		ptask = lua_newuserdata(L, sizeof(struct rspamd_task *));
 		*ptask = task;
-		rspamd_lua_setclass(L, "rspamd{task}", -1);
+		rspamd_lua_setclass(L, rspamd_task_classname, -1);
 
 		if (lua_pcall(L, 1, 1, err_idx) != 0) {
 			msg_err_task("call to language extraction script failed: %s",

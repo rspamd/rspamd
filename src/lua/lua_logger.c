@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -653,7 +653,7 @@ lua_logger_get_id(lua_State *L, gint pos, GError **err)
 
 		clsname = lua_tostring(L, -1);
 
-		if (strcmp(clsname, "rspamd{task}") == 0) {
+		if (strcmp(clsname, rspamd_task_classname) == 0) {
 			struct rspamd_task *task = lua_check_task(L, pos);
 
 			if (task) {

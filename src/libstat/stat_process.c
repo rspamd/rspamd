@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,6 +21,7 @@
 #include "libmime/images.h"
 #include "libserver/html/html.h"
 #include "lua/lua_common.h"
+#include "lua/lua_classnames.h"
 #include "libserver/mempool_vars_internal.h"
 #include "utlist.h"
 #include <math.h>
@@ -54,7 +55,7 @@ rspamd_stat_tokenize_parts_metadata(struct rspamd_stat_ctx *st_ctx,
 
 		ptask = lua_newuserdata(L, sizeof(*ptask));
 		*ptask = task;
-		rspamd_lua_setclass(L, "rspamd{task}", -1);
+		rspamd_lua_setclass(L, rspamd_task_classname, -1);
 
 		if ((ret = lua_pcall(L, 1, 1, err_idx)) != 0) {
 			msg_err_task("call to stat_tokens lua "
@@ -210,7 +211,7 @@ rspamd_stat_classifier_is_skipped(struct rspamd_task *task,
 		/* Push task and two booleans: is_spam and is_unlearn */
 		struct rspamd_task **ptask = lua_newuserdata(L, sizeof(*ptask));
 		*ptask = task;
-		rspamd_lua_setclass(L, "rspamd{task}", -1);
+		rspamd_lua_setclass(L, rspamd_task_classname, -1);
 
 		if (is_learn) {
 			lua_pushboolean(L, is_spam);
@@ -1063,7 +1064,7 @@ rspamd_stat_check_autolearn(struct rspamd_task *task)
 
 						ptask = lua_newuserdata(L, sizeof(struct rspamd_task *));
 						*ptask = task;
-						rspamd_lua_setclass(L, "rspamd{task}", -1);
+						rspamd_lua_setclass(L, rspamd_task_classname, -1);
 
 						if (lua_pcall(L, 1, 1, err_idx) != 0) {
 							msg_err_task("call to autolearn script failed: "
@@ -1118,7 +1119,7 @@ rspamd_stat_check_autolearn(struct rspamd_task *task)
 
 					ptask = lua_newuserdata(L, sizeof(struct rspamd_task *));
 					*ptask = task;
-					rspamd_lua_setclass(L, "rspamd{task}", -1);
+					rspamd_lua_setclass(L, rspamd_task_classname, -1);
 					/* Push the whole object as well */
 					ucl_object_push_lua(L, obj, true);
 

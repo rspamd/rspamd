@@ -25,6 +25,7 @@
 #include "lua/lua_common.h"
 #include "libstat/stat_api.h"
 #include "contrib/uthash/utlist.h"
+#include "lua/lua_classnames.h"
 
 #include "khash.h"
 
@@ -562,7 +563,7 @@ rspamd_re_cache_check_lua_condition(struct rspamd_task *task,
 
 	if (!rspamd_lua_universal_pcall(L, lua_cbref,
 									G_STRLOC, 1, "utii", &err,
-									"rspamd{task}", task,
+									rspamd_task_classname, task,
 									text_pos, start, end)) {
 		msg_warn_task("cannot call for re_cache_check_lua_condition for re %s: %e",
 					  rspamd_regexp_get_pattern(re), err);
@@ -908,7 +909,7 @@ rspamd_re_cache_process_selector(struct rspamd_task *task,
 	lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
 	ptask = lua_newuserdata(L, sizeof(*ptask));
 	*ptask = task;
-	rspamd_lua_setclass(L, "rspamd{task}", -1);
+	rspamd_lua_setclass(L, rspamd_task_classname, -1);
 
 	if ((ret = lua_pcall(L, 1, 1, err_idx)) != 0) {
 		msg_err_task("call to selector %s "

@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -448,7 +448,7 @@ rspamadm_lua_message_handler(lua_State *L, gint argc, gchar **argv)
 			lua_pushvalue(L, func_idx);
 			ptask = lua_newuserdata(L, sizeof(*ptask));
 			*ptask = task;
-			rspamd_lua_setclass(L, "rspamd{task}", -1);
+			rspamd_lua_setclass(L, rspamd_task_classname, -1);
 
 
 			if (lua_repl_thread_call(thread, 1, argv[i], lua_thread_str_error_cb) == 0) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -475,7 +475,7 @@ rspamd_lua_call_expression_func(struct ucl_lua_funcdata *lua_data,
 	lua_rawgeti(L, LUA_REGISTRYINDEX, lua_data->idx);
 	/* Now we got function in top of stack */
 	ptask = lua_newuserdata(L, sizeof(struct rspamd_task *));
-	rspamd_lua_setclass(L, "rspamd{task}", -1);
+	rspamd_lua_setclass(L, rspamd_task_classname, -1);
 	*ptask = task;
 
 	/* Now push all arguments */

@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #define RSPAMD_LUA_H
 
 #include "config.h"
+
 
 /* Lua headers do not have __cplusplus guards... */
 #ifdef __cplusplus
@@ -40,6 +41,7 @@ extern "C" {
 #include "rspamd.h"
 #include "ucl.h"
 #include "lua_ucl.h"
+#include "lua_classnames.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@
 #include "utlist.h"
 #include "libmime/lang_detection.h"
 #include "mempool_vars_internal.h"
+#include "lua/lua_classnames.h"
 #include <math.h>
 
 /* 60 seconds for worker's IO */
@@ -1555,7 +1556,7 @@ rspamd_controller_handle_lua_history(lua_State *L,
 
 				ptask = lua_newuserdata(L, sizeof(*ptask));
 				*ptask = task;
-				rspamd_lua_setclass(L, "rspamd{task}", -1);
+				rspamd_lua_setclass(L, rspamd_task_classname, -1);
 				pconn_ent = lua_newuserdata(L, sizeof(*pconn_ent));
 				*pconn_ent = conn_ent;
 				rspamd_lua_setclass(L, "rspamd{csession}", -1);
@@ -1916,7 +1917,7 @@ rspamd_controller_handle_lua(struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	ptask = lua_newuserdata(L, sizeof(*ptask));
-	rspamd_lua_setclass(L, "rspamd{task}", -1);
+	rspamd_lua_setclass(L, rspamd_task_classname, -1);
 	*ptask = task;
 
 	pconn = lua_newuserdata(L, sizeof(*pconn));
@@ -3541,7 +3542,7 @@ rspamd_controller_handle_lua_plugin(struct rspamd_http_connection_entry *conn_en
 
 	/* Task */
 	ptask = lua_newuserdata(L, sizeof(*ptask));
-	rspamd_lua_setclass(L, "rspamd{task}", -1);
+	rspamd_lua_setclass(L, rspamd_task_classname, -1);
 	*ptask = task;
 
 	/* Connection */

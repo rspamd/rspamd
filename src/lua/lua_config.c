@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1242,7 +1242,7 @@ lua_metric_symbol_callback(struct rspamd_task *task,
 	}
 
 	ptask = lua_newuserdata(L, sizeof(struct rspamd_task *));
-	rspamd_lua_setclass(L, "rspamd{task}", -1);
+	rspamd_lua_setclass(L, rspamd_task_classname, -1);
 	*ptask = task;
 
 	if ((ret = lua_pcall(L, 1, LUA_MULTRET, err_idx)) != 0) {
@@ -1382,7 +1382,7 @@ lua_metric_symbol_callback_coro(struct rspamd_task *task,
 	}
 
 	ptask = lua_newuserdata(thread, sizeof(struct rspamd_task *));
-	rspamd_lua_setclass(thread, "rspamd{task}", -1);
+	rspamd_lua_setclass(thread, rspamd_task_classname, -1);
 	*ptask = task;
 
 	thread_entry->finish_callback = lua_metric_symbol_callback_return;
@@ -4773,7 +4773,7 @@ void lua_call_finish_script(struct rspamd_config_cfg_lua_script *sc,
 	lua_rawgeti(L, LUA_REGISTRYINDEX, sc->cbref);
 
 	ptask = lua_newuserdata(L, sizeof(struct rspamd_task *));
-	rspamd_lua_setclass(L, "rspamd{task}", -1);
+	rspamd_lua_setclass(L, rspamd_task_classname, -1);
 	*ptask = task;
 
 	lua_thread_call(thread, 1);
