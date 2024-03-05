@@ -104,7 +104,7 @@ static const struct luaL_reg cdblib_f[] = {
 static struct cdb *
 lua_check_cdb(lua_State *L, int pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{cdb}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_cdb_classname);
 
 	luaL_argcheck(L, ud != NULL, pos, "'cdb' expected");
 	return ud ? *((struct cdb **) ud) : NULL;
@@ -113,7 +113,7 @@ lua_check_cdb(lua_State *L, int pos)
 static struct cdb_make *
 lua_check_cdb_builder(lua_State *L, int pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{cdb_builder}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_cdb_builder_classname);
 
 	luaL_argcheck(L, ud != NULL, pos, "'cdb_builder' expected");
 	return ud ? ((struct cdb_make *) ud) : NULL;
@@ -135,14 +135,14 @@ lua_cdb_get_input(lua_State *L, int pos, gsize *olen)
 		return numbuf;
 	}
 	case LUA_TUSERDATA: {
-		void *p = rspamd_lua_check_udata_maybe(L, pos, "rspamd{text}");
+		void *p = rspamd_lua_check_udata_maybe(L, pos, rspamd_text_classname);
 		if (p) {
 			struct rspamd_lua_text *t = (struct rspamd_lua_text *) p;
 			*olen = t->len;
 			return t->start;
 		}
 
-		p = rspamd_lua_check_udata_maybe(L, pos, "rspamd{int64}");
+		p = rspamd_lua_check_udata_maybe(L, pos, rspamd_int64_classname);
 		if (p) {
 			static char numbuf[sizeof(gint64)];
 
@@ -210,7 +210,7 @@ lua_cdb_create(lua_State *L)
 				cdb_add_timer(cdb, ev_base, CDB_REFRESH_TIME);
 			}
 			pcdb = lua_newuserdata(L, sizeof(struct cdb *));
-			rspamd_lua_setclass(L, "rspamd{cdb}", -1);
+			rspamd_lua_setclass(L, rspamd_cdb_classname, -1);
 			*pcdb = cdb;
 		}
 	}
@@ -301,7 +301,7 @@ lua_cdb_build(lua_State *L)
 	struct cdb_make *cdbm = lua_newuserdata(L, sizeof(struct cdb_make));
 
 	g_assert(cdb_make_start(cdbm, fd) == 0);
-	rspamd_lua_setclass(L, "rspamd{cdb_builder}", -1);
+	rspamd_lua_setclass(L, rspamd_cdb_builder_classname, -1);
 
 	return 1;
 }
@@ -383,9 +383,9 @@ lua_load_cdb(lua_State *L)
 
 void luaopen_cdb(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{cdb}", cdblib_m);
+	rspamd_lua_new_class(L, rspamd_cdb_classname, cdblib_m);
 	lua_pop(L, 1);
-	rspamd_lua_new_class(L, "rspamd{cdb_builder}", cdbbuilderlib_m);
+	rspamd_lua_new_class(L, rspamd_cdb_builder_classname, cdbbuilderlib_m);
 	lua_pop(L, 1);
 	rspamd_lua_add_preload(L, "rspamd_cdb", lua_load_cdb);
 }

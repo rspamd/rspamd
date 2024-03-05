@@ -23,8 +23,8 @@
  * `rspamd_kann` is a Lua interface to kann library
  */
 
-#define KANN_NODE_CLASS "rspamd{kann_node}"
-#define KANN_NETWORK_CLASS "rspamd{kann}"
+#define KANN_NODE_CLASS rspamd_kann_node_classname
+#define KANN_NETWORK_CLASS rspamd_kann_classname
 
 /* Simple macros to define behaviour */
 #define KANN_LAYER_DEF(name) static int lua_kann_layer_##name(lua_State *L)
@@ -928,7 +928,7 @@ lua_kann_save(lua_State *L)
 			fclose(f);
 
 			t = lua_newuserdata(L, sizeof(*t));
-			rspamd_lua_setclass(L, "rspamd{text}", -1);
+			rspamd_lua_setclass(L, rspamd_text_classname, -1);
 			t->flags = RSPAMD_TEXT_FLAG_OWN;
 			t->start = (const gchar *) buf;
 			t->len = buflen;

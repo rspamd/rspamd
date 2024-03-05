@@ -194,7 +194,7 @@ static const struct luaL_reg taglib_m[] = {
 static struct rspamd::html::html_content *
 lua_check_html(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{html}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_html_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'html' expected");
 	return ud ? *((struct rspamd::html::html_content **) ud) : NULL;
 }
@@ -207,7 +207,7 @@ struct lua_html_tag {
 static struct lua_html_tag *
 lua_check_html_tag(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{html_tag}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_html_tag_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'html_tag' expected");
 	return ud ? ((struct lua_html_tag *) ud) : NULL;
 }
@@ -286,7 +286,7 @@ lua_html_push_image(lua_State *L, const struct html_image *img)
 			t->len = strlen(img->src);
 			t->flags = 0;
 
-			rspamd_lua_setclass(L, "rspamd{text}", -1);
+			rspamd_lua_setclass(L, rspamd_text_classname, -1);
 		}
 		else {
 			lua_pushstring(L, img->src);
@@ -299,7 +299,7 @@ lua_html_push_image(lua_State *L, const struct html_image *img)
 		lua_pushstring(L, "url");
 		purl = static_cast<rspamd_url **>(lua_newuserdata(L, sizeof(gpointer)));
 		*purl = img->url;
-		rspamd_lua_setclass(L, "rspamd{url}", -1);
+		rspamd_lua_setclass(L, rspamd_url_classname, -1);
 		lua_settable(L, -3);
 	}
 
@@ -308,7 +308,7 @@ lua_html_push_image(lua_State *L, const struct html_image *img)
 		ltag = static_cast<lua_html_tag *>(lua_newuserdata(L, sizeof(struct lua_html_tag)));
 		ltag->tag = static_cast<rspamd::html::html_tag *>(img->tag);
 		ltag->html = NULL;
-		rspamd_lua_setclass(L, "rspamd{html_tag}", -1);
+		rspamd_lua_setclass(L, rspamd_html_tag_classname, -1);
 		lua_settable(L, -3);
 	}
 
@@ -456,7 +456,7 @@ lua_html_foreach_tag(lua_State *L)
 				ltag->tag = tag;
 				ltag->html = hc;
 				auto ct = ltag->tag->get_content(hc);
-				rspamd_lua_setclass(L, "rspamd{html_tag}", -1);
+				rspamd_lua_setclass(L, rspamd_html_tag_classname, -1);
 				lua_pushinteger(L, ct.size());
 
 				/* Leaf flag */
@@ -544,7 +544,7 @@ lua_html_tag_get_parent(lua_State *L)
 			ptag = static_cast<lua_html_tag *>(lua_newuserdata(L, sizeof(*ptag)));
 			ptag->tag = static_cast<rspamd::html::html_tag *>(parent);
 			ptag->html = ltag->html;
-			rspamd_lua_setclass(L, "rspamd{html_tag}", -1);
+			rspamd_lua_setclass(L, rspamd_html_tag_classname, -1);
 		}
 		else {
 			lua_pushnil(L);
@@ -608,7 +608,7 @@ lua_html_tag_get_content(lua_State *L)
 			auto ct = ltag->tag->get_content(ltag->html);
 			if (ct.size() > 0) {
 				t = static_cast<rspamd_lua_text *>(lua_newuserdata(L, sizeof(*t)));
-				rspamd_lua_setclass(L, "rspamd{text}", -1);
+				rspamd_lua_setclass(L, rspamd_text_classname, -1);
 				t->start = ct.data();
 				t->len = ct.size();
 				t->flags = 0;
@@ -667,7 +667,7 @@ lua_html_tag_get_extra(lua_State *L)
 				/* For A that's URL */
 				auto *lua_url = static_cast<rspamd_lua_url *>(lua_newuserdata(L, sizeof(rspamd_lua_url)));
 				lua_url->url = std::get<struct rspamd_url *>(ltag->tag->extra);
-				rspamd_lua_setclass(L, "rspamd{url}", -1);
+				rspamd_lua_setclass(L, rspamd_url_classname, -1);
 			}
 			else {
 				/* Unknown extra ? */
@@ -731,8 +731,8 @@ lua_html_tag_get_attribute(lua_State *L)
 
 void luaopen_html(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{html}", htmllib_m);
+	rspamd_lua_new_class(L, rspamd_html_classname, htmllib_m);
 	lua_pop(L, 1);
-	rspamd_lua_new_class(L, "rspamd{html_tag}", taglib_m);
+	rspamd_lua_new_class(L, rspamd_html_tag_classname, taglib_m);
 	lua_pop(L, 1);
 }

@@ -1,11 +1,11 @@
-/*-
- * Copyright 2020 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -96,7 +96,7 @@ lua_newtensor(lua_State *L, int ndims, const int *dim, bool zero_fill, bool own)
 		res->size = -(res->size);
 	}
 
-	rspamd_lua_setclass(L, TENSOR_CLASS, -1);
+	rspamd_lua_setclass(L, rspamd_tensor_classname, -1);
 
 	return res;
 }
@@ -802,7 +802,7 @@ lua_load_tensor(lua_State *L)
 void luaopen_tensor(lua_State *L)
 {
 	/* Metatables */
-	rspamd_lua_new_class(L, TENSOR_CLASS, rspamd_tensor_m);
+	rspamd_lua_new_class(L, rspamd_tensor_classname, rspamd_tensor_m);
 	lua_pop(L, 1); /* No need in metatable... */
 	rspamd_lua_add_preload(L, "rspamd_tensor", lua_load_tensor);
 	lua_settop(L, 0);
@@ -811,7 +811,7 @@ void luaopen_tensor(lua_State *L)
 struct rspamd_lua_tensor *
 lua_check_tensor(lua_State *L, int pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, TENSOR_CLASS);
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_tensor_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'tensor' expected");
 	return ud ? ((struct rspamd_lua_tensor *) ud) : NULL;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include "libserver/mempool_vars_internal.h"
 #include "contrib/fastutf8/fastutf8.h"
 #include "task.h"
+#include "lua/lua_classnames.h"
 #include <math.h>
 
 #ifdef SYS_ZSTD
@@ -1923,7 +1924,7 @@ void rspamd_protocol_write_log_pipe(struct rspamd_task *task)
 				if (lua_isfunction(L, -1)) {
 					ptask = lua_newuserdata(L, sizeof(*ptask));
 					*ptask = task;
-					rspamd_lua_setclass(L, "rspamd{task}", -1);
+					rspamd_lua_setclass(L, rspamd_task_classname, -1);
 					/* stack:
 					 * -1: task
 					 * -2: func

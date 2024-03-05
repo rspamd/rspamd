@@ -73,7 +73,7 @@ static const struct luaL_reg dns_resolverlib_m[] = {
 struct rspamd_dns_resolver *
 lua_check_dns_resolver(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{resolver}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_resolver_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'resolver' expected");
 	return ud ? *((struct rspamd_dns_resolver **) ud) : NULL;
 }
@@ -133,7 +133,7 @@ lua_dns_resolver_callback(struct rdns_reply *reply, gpointer arg)
 	lua_rawgeti(L, LUA_REGISTRYINDEX, cd->cbref);
 
 	presolver = lua_newuserdata(L, sizeof(gpointer));
-	rspamd_lua_setclass(L, "rspamd{resolver}", -1);
+	rspamd_lua_setclass(L, rspamd_resolver_classname, -1);
 
 	*presolver = cd->resolver;
 	lua_pushstring(L, cd->to_resolve);
@@ -304,10 +304,10 @@ lua_dns_resolver_init(lua_State *L)
 	struct ev_loop *base, **pbase;
 
 	/* Check args */
-	pbase = rspamd_lua_check_udata(L, 1, "rspamd{ev_base}");
+	pbase = rspamd_lua_check_udata(L, 1, rspamd_ev_base_classname);
 	luaL_argcheck(L, pbase != NULL, 1, "'ev_base' expected");
 	base = pbase ? *(pbase) : NULL;
-	pcfg = rspamd_lua_check_udata(L, 2, "rspamd{config}");
+	pcfg = rspamd_lua_check_udata(L, 2, rspamd_config_classname);
 	luaL_argcheck(L, pcfg != NULL, 2, "'config' expected");
 	cfg = pcfg ? *(pcfg) : NULL;
 
@@ -315,7 +315,7 @@ lua_dns_resolver_init(lua_State *L)
 		resolver = rspamd_dns_resolver_init(NULL, base, cfg);
 		if (resolver) {
 			presolver = lua_newuserdata(L, sizeof(gpointer));
-			rspamd_lua_setclass(L, "rspamd{resolver}", -1);
+			rspamd_lua_setclass(L, rspamd_resolver_classname, -1);
 			*presolver = resolver;
 		}
 		else {
@@ -692,7 +692,7 @@ lua_dns_resolver_idna_convert_utf8(lua_State *L)
 	guint conv_len = 0;
 	const gchar *hname = luaL_checklstring(L, 2, &hlen);
 	gchar *converted;
-	rspamd_mempool_t *pool = rspamd_lua_check_udata_maybe(L, 3, "rspamd{mempool}");
+	rspamd_mempool_t *pool = rspamd_lua_check_udata_maybe(L, 3, rspamd_mempool_classname);
 
 
 	if (dns_resolver && hname) {
@@ -735,7 +735,7 @@ lua_load_dns_resolver(lua_State *L)
 void luaopen_dns_resolver(lua_State *L)
 {
 
-	rspamd_lua_new_class(L, "rspamd{resolver}", dns_resolverlib_m);
+	rspamd_lua_new_class(L, rspamd_resolver_classname, dns_resolverlib_m);
 	{
 		LUA_ENUM(L, DNS_A, RDNS_REQUEST_A);
 		LUA_ENUM(L, DNS_PTR, RDNS_REQUEST_PTR);

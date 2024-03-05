@@ -95,7 +95,7 @@ static const struct luaL_reg upstream_m[] = {
 struct rspamd_lua_upstream *
 lua_check_upstream(lua_State *L, int pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{upstream}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_upstream_classname);
 
 	luaL_argcheck(L, ud != NULL, 1, "'upstream' expected");
 	return ud ? (struct rspamd_lua_upstream *) ud : NULL;
@@ -232,7 +232,7 @@ lua_upstream_destroy(lua_State *L)
 static struct upstream_list *
 lua_check_upstream_list(lua_State *L)
 {
-	void *ud = rspamd_lua_check_udata(L, 1, "rspamd{upstream_list}");
+	void *ud = rspamd_lua_check_udata(L, 1, rspamd_upstream_list_classname);
 
 	luaL_argcheck(L, ud != NULL, 1, "'upstream_list' expected");
 	return ud ? *((struct upstream_list **) ud) : NULL;
@@ -249,7 +249,7 @@ lua_push_upstream(lua_State *L, gint up_idx, struct upstream *up)
 
 	lua_ups = lua_newuserdata(L, sizeof(*lua_ups));
 	lua_ups->up = up;
-	rspamd_lua_setclass(L, "rspamd{upstream}", -1);
+	rspamd_lua_setclass(L, rspamd_upstream_classname, -1);
 	/* Store parent in the upstream to prevent gc */
 	lua_pushvalue(L, up_idx);
 	lua_ups->upref = luaL_ref(L, LUA_REGISTRYINDEX);
@@ -295,7 +295,7 @@ lua_upstream_list_create(lua_State *L)
 
 		if (rspamd_upstreams_parse_line(new, def, default_port, NULL)) {
 			pnew = lua_newuserdata(L, sizeof(struct upstream_list *));
-			rspamd_lua_setclass(L, "rspamd{upstream_list}", -1);
+			rspamd_lua_setclass(L, rspamd_upstream_list_classname, -1);
 			*pnew = new;
 		}
 		else {
@@ -306,7 +306,7 @@ lua_upstream_list_create(lua_State *L)
 	else if (lua_type(L, top) == LUA_TTABLE) {
 		new = rspamd_upstreams_create(cfg ? cfg->ups_ctx : NULL);
 		pnew = lua_newuserdata(L, sizeof(struct upstream_list *));
-		rspamd_lua_setclass(L, "rspamd{upstream_list}", -1);
+		rspamd_lua_setclass(L, rspamd_upstream_list_classname, -1);
 		*pnew = new;
 
 		lua_pushvalue(L, top);
@@ -563,7 +563,7 @@ lua_upstream_watch_func(struct upstream *up,
 
 	struct rspamd_lua_upstream *lua_ups = lua_newuserdata(L, sizeof(*lua_ups));
 	lua_ups->up = up;
-	rspamd_lua_setclass(L, "rspamd{upstream}", -1);
+	rspamd_lua_setclass(L, rspamd_upstream_classname, -1);
 	/* Store parent in the upstream to prevent gc */
 	lua_rawgeti(L, LUA_REGISTRYINDEX, cdata->parent_cbref);
 	lua_ups->upref = luaL_ref(L, LUA_REGISTRYINDEX);
@@ -663,10 +663,10 @@ lua_load_upstream_list(lua_State *L)
 
 void luaopen_upstream(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{upstream_list}", upstream_list_m);
+	rspamd_lua_new_class(L, rspamd_upstream_list_classname, upstream_list_m);
 	lua_pop(L, 1);
 	rspamd_lua_add_preload(L, "rspamd_upstream_list", lua_load_upstream_list);
 
-	rspamd_lua_new_class(L, "rspamd{upstream}", upstream_m);
+	rspamd_lua_new_class(L, rspamd_upstream_classname, upstream_m);
 	lua_pop(L, 1);
 }

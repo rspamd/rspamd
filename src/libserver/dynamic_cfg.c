@@ -482,7 +482,7 @@ rspamd_maybe_add_lua_dynsym(struct rspamd_config *cfg,
 			if (lua_type(L, -1) == LUA_TFUNCTION) {
 				pcfg = lua_newuserdata(L, sizeof(*pcfg));
 				*pcfg = cfg;
-				rspamd_lua_setclass(L, "rspamd{config}", -1);
+				rspamd_lua_setclass(L, rspamd_config_classname, -1);
 				lua_pushstring(L, sym);
 				lua_pushnumber(L, score);
 
@@ -530,7 +530,7 @@ rspamd_maybe_add_lua_dynact(struct rspamd_config *cfg,
 			if (lua_type(L, -1) == LUA_TFUNCTION) {
 				pcfg = lua_newuserdata(L, sizeof(*pcfg));
 				*pcfg = cfg;
-				rspamd_lua_setclass(L, "rspamd{config}", -1);
+				rspamd_lua_setclass(L, rspamd_config_classname, -1);
 				lua_pushstring(L, action);
 				lua_pushnumber(L, score);
 

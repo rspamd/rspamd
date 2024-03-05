@@ -63,7 +63,7 @@ const luaL_reg worker_reg[] = {
 static struct rspamd_worker *
 lua_check_worker(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{worker}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_worker_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'worker' expected");
 	return ud ? *((struct rspamd_worker **) ud) : NULL;
 }
@@ -309,7 +309,7 @@ lua_worker_control_handler(struct rspamd_main *rspamd_main,
 	err_idx = lua_gettop(L);
 	lua_rawgeti(L, LUA_REGISTRYINDEX, cbd->cbref);
 	psession = lua_newuserdata(L, sizeof(*psession));
-	rspamd_lua_setclass(L, "rspamd{session}", -1);
+	rspamd_lua_setclass(L, rspamd_session_classname, -1);
 	*psession = session;
 
 	/* Command name */
@@ -879,5 +879,5 @@ lua_worker_spawn_process(lua_State *L)
 
 void luaopen_worker(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{worker}", worker_reg);
+	rspamd_lua_new_class(L, rspamd_worker_classname, worker_reg);
 }

@@ -424,7 +424,7 @@ lua_udp_sendto(lua_State *L)
 		if (task == NULL) {
 			lua_pushstring(L, "ev_base");
 			lua_gettable(L, -2);
-			if (rspamd_lua_check_udata_maybe(L, -1, "rspamd{ev_base}")) {
+			if (rspamd_lua_check_udata_maybe(L, -1, rspamd_ev_base_classname)) {
 				ev_base = *(struct ev_loop **) lua_touserdata(L, -1);
 			}
 			else {
@@ -434,7 +434,7 @@ lua_udp_sendto(lua_State *L)
 
 			lua_pushstring(L, "session");
 			lua_gettable(L, -2);
-			if (rspamd_lua_check_udata_maybe(L, -1, "rspamd{session}")) {
+			if (rspamd_lua_check_udata_maybe(L, -1, rspamd_session_classname)) {
 				session = *(struct rspamd_async_session **) lua_touserdata(L, -1);
 			}
 			else {
@@ -444,7 +444,7 @@ lua_udp_sendto(lua_State *L)
 
 			lua_pushstring(L, "pool");
 			lua_gettable(L, -2);
-			if (rspamd_lua_check_udata_maybe(L, -1, "rspamd{mempool}")) {
+			if (rspamd_lua_check_udata_maybe(L, -1, rspamd_mempool_classname)) {
 				pool = *(rspamd_mempool_t **) lua_touserdata(L, -1);
 			}
 			else {

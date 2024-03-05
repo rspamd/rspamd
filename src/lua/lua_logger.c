@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -653,7 +653,7 @@ lua_logger_get_id(lua_State *L, gint pos, GError **err)
 
 		clsname = lua_tostring(L, -1);
 
-		if (strcmp(clsname, "rspamd{task}") == 0) {
+		if (strcmp(clsname, rspamd_task_classname) == 0) {
 			struct rspamd_task *task = lua_check_task(L, pos);
 
 			if (task) {
@@ -664,7 +664,7 @@ lua_logger_get_id(lua_State *L, gint pos, GError **err)
 							EINVAL, "invalid rspamd{task}");
 			}
 		}
-		else if (strcmp(clsname, "rspamd{mempool}") == 0) {
+		else if (strcmp(clsname, rspamd_mempool_classname) == 0) {
 			rspamd_mempool_t *pool;
 
 			pool = rspamd_lua_check_mempool(L, pos);
@@ -677,7 +677,7 @@ lua_logger_get_id(lua_State *L, gint pos, GError **err)
 							EINVAL, "invalid rspamd{mempool}");
 			}
 		}
-		else if (strcmp(clsname, "rspamd{config}") == 0) {
+		else if (strcmp(clsname, rspamd_config_classname) == 0) {
 			struct rspamd_config *cfg;
 
 			cfg = lua_check_config(L, pos);
@@ -692,7 +692,7 @@ lua_logger_get_id(lua_State *L, gint pos, GError **err)
 							EINVAL, "invalid rspamd{config}");
 			}
 		}
-		else if (strcmp(clsname, "rspamd{map}") == 0) {
+		else if (strcmp(clsname, rspamd_map_classname) == 0) {
 			struct rspamd_lua_map *map;
 
 			map = lua_check_map(L, pos);

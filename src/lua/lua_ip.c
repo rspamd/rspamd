@@ -212,7 +212,7 @@ lua_ip_new(lua_State *L, struct rspamd_lua_ip *old)
 	}
 
 	pip = lua_newuserdata(L, sizeof(struct rspamd_lua_ip *));
-	rspamd_lua_setclass(L, "rspamd{ip}", -1);
+	rspamd_lua_setclass(L, rspamd_ip_classname, -1);
 	*pip = ip;
 
 
@@ -222,7 +222,7 @@ lua_ip_new(lua_State *L, struct rspamd_lua_ip *old)
 struct rspamd_lua_ip *
 lua_check_ip(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{ip}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_ip_classname);
 
 	luaL_argcheck(L, ud != NULL, pos, "'ip' expected");
 	return ud ? *((struct rspamd_lua_ip **) ud) : NULL;
@@ -588,7 +588,7 @@ void rspamd_lua_ip_push(lua_State *L, rspamd_inet_addr_t *addr)
 		ip = g_malloc0(sizeof(struct rspamd_lua_ip));
 		ip->addr = rspamd_inet_address_copy(addr, NULL);
 		pip = lua_newuserdata(L, sizeof(struct rspamd_lua_ip *));
-		rspamd_lua_setclass(L, "rspamd{ip}", -1);
+		rspamd_lua_setclass(L, rspamd_ip_classname, -1);
 		*pip = ip;
 	}
 	else {
@@ -610,7 +610,7 @@ void rspamd_lua_ip_push_fromstring(lua_State *L, const gchar *ip_str)
 									  ip_str, strlen(ip_str), RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 
 			pip = lua_newuserdata(L, sizeof(struct rspamd_lua_ip *));
-			rspamd_lua_setclass(L, "rspamd{ip}", -1);
+			rspamd_lua_setclass(L, rspamd_ip_classname, -1);
 			*pip = ip;
 		}
 		else {
@@ -631,7 +631,7 @@ lua_load_ip(lua_State *L)
 
 void luaopen_ip(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{ip}", iplib_m);
+	rspamd_lua_new_class(L, rspamd_ip_classname, iplib_m);
 	lua_pop(L, 1);
 	rspamd_lua_add_preload(L, "rspamd_ip", lua_load_ip);
 }
