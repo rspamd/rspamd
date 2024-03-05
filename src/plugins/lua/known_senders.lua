@@ -284,7 +284,9 @@ if opts then
     rspamd_config:register_symbol({
       name = 'CHECK_INC_MAIL',
       type = 'normal',
-      callback = check_known_incoming_mail_callback
+      callback = check_known_incoming_mail_callback,
+      one_shot = true,
+      score = 1.0
     })
 
     if settings.symbol_unknown and #settings.symbol_unknown > 0 then

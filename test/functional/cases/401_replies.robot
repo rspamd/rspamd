@@ -13,8 +13,8 @@ ${RSPAMD_SCOPE}                   Suite
 *** Test Cases ***
 Reply to 1 sender 1 recipients
   Scan File  ${RSPAMD_TESTDIR}/messages/replyto_1_1.eml
-  ...  Settings={symbols_enabled [REPLIES_CHECK]}
-  Expect Symbol  REPLIES_CHECK
+  ...  Settings={symbols_enabled [REPLIES_SET]}
+  Expect Symbol  REPLIES_SET
   
 Reply to 1 sender another 2 recipients
   Scan File  ${RSPAMD_TESTDIR}/messages/replyto_1_1.eml
