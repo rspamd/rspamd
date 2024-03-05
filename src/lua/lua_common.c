@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ lua_error_quark(void)
 /*
  * Used to map string to a pointer
  */
-KHASH_INIT(lua_class_set, const char *, int, 1, rspamd_str_hash, rspamd_str_equal);
+KHASH_INIT(lua_class_set, int, int, 1, kh_int_hash_func, kh_int_hash_equal);
 struct rspamd_lua_context {
 	lua_State *L;
 	khash_t(lua_class_set) * classes;
@@ -76,7 +76,7 @@ rspamd_lua_ctx_by_state(lua_State *L)
 /**
  * Create new class and store metatable on top of the stack (must be popped if not needed)
  * @param L
- * @param classname name of class
+ * @param classname name of class, **MUST** be a static string
  * @param func table of class methods
  */
 void rspamd_lua_new_class(lua_State *L,
@@ -120,7 +120,7 @@ void rspamd_lua_new_class(lua_State *L,
 
 	lua_pushvalue(L, -1); /* Preserves metatable */
 	int offset = luaL_ref(L, LUA_REGISTRYINDEX);
-	k = kh_put(lua_class_set, ctx->classes, classname, &r);
+	k = kh_put(lua_class_set, ctx->classes, GPOINTER_TO_INT(classname), &r);
 	kh_value(ctx->classes, k) = offset;
 	/* MT is left on stack ! */
 }
@@ -183,7 +183,7 @@ void rspamd_lua_setclass(lua_State *L, const gchar *classname, gint objidx)
 	khiter_t k;
 	struct rspamd_lua_context *ctx = rspamd_lua_ctx_by_state(L);
 
-	k = kh_get(lua_class_set, ctx->classes, classname);
+	k = kh_get(lua_class_set, ctx->classes, GPOINTER_TO_INT(classname));
 
 	g_assert(k != kh_end(ctx->classes));
 	lua_rawgeti(L, LUA_REGISTRYINDEX, kh_value(ctx->classes, k));
@@ -199,7 +199,7 @@ void rspamd_lua_class_metatable(lua_State *L, const gchar *classname)
 	khiter_t k;
 	struct rspamd_lua_context *ctx = rspamd_lua_ctx_by_state(L);
 
-	k = kh_get(lua_class_set, ctx->classes, classname);
+	k = kh_get(lua_class_set, ctx->classes, GPOINTER_TO_INT(classname));
 
 	g_assert(k != kh_end(ctx->classes));
 	lua_rawgeti(L, LUA_REGISTRYINDEX, kh_value(ctx->classes, k));
@@ -211,7 +211,7 @@ void rspamd_lua_add_metamethod(lua_State *L, const gchar *classname,
 	khiter_t k;
 	struct rspamd_lua_context *ctx = rspamd_lua_ctx_by_state(L);
 
-	k = kh_get(lua_class_set, ctx->classes, classname);
+	k = kh_get(lua_class_set, ctx->classes, GPOINTER_TO_INT(classname));
 
 	g_assert(k != kh_end(ctx->classes));
 	lua_rawgeti(L, LUA_REGISTRYINDEX, kh_value(ctx->classes, k));
@@ -1277,7 +1277,7 @@ rspamd_lua_check_class(lua_State *L, gint index, const gchar *name)
 			if (lua_getmetatable(L, index)) {
 				struct rspamd_lua_context *ctx = rspamd_lua_ctx_by_state(L);
 
-				k = kh_get(lua_class_set, ctx->classes, name);
+				k = kh_get(lua_class_set, ctx->classes, GPOINTER_TO_INT(name));
 
 				if (k == kh_end(ctx->classes)) {
 					lua_pop(L, 1);
@@ -1984,7 +1984,7 @@ rspamd_lua_check_udata_common(lua_State *L, gint pos, const gchar *classname,
 		if (lua_getmetatable(L, pos)) {
 			struct rspamd_lua_context *ctx = rspamd_lua_ctx_by_state(L);
 
-			k = kh_get(lua_class_set, ctx->classes, classname);
+			k = kh_get(lua_class_set, ctx->classes, GPOINTER_TO_INT(classname));
 
 			if (k == kh_end(ctx->classes)) {
 				goto err;

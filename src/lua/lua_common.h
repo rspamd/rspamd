@@ -176,6 +176,8 @@ void rspamd_lua_new_class(lua_State *L,
 
 /**
 * Set class name for object at @param objidx position
+* @param L
+ * @param classname **MUST BE STATIC**, direct address is used for comparisons!
 */
 void rspamd_lua_setclass(lua_State *L, const gchar *classname, gint objidx);
 
@@ -537,7 +539,7 @@ gsize lua_logger_out_type(lua_State *L, gint pos, gchar *outbuf,
 * Safely checks userdata to match specified class
 * @param L
 * @param pos
-* @param classname
+* @param classname **MUST BE STATIC**, direct address is used for comparisons!
 */
 void *rspamd_lua_check_udata(lua_State *L, gint pos, const gchar *classname);
 
@@ -554,7 +556,7 @@ void *rspamd_lua_check_udata(lua_State *L, gint pos, const gchar *classname);
 * Safely checks userdata to match specified class
 * @param L
 * @param pos
-* @param classname
+* @param classname **MUST BE STATIC**, direct address is used for comparisons!
 */
 void *rspamd_lua_check_udata_maybe(lua_State *L, gint pos, const gchar *classname);
 
