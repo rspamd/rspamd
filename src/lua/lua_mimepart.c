@@ -609,7 +609,7 @@ static const struct luaL_reg mimepartlib_m[] = {
 static struct rspamd_mime_text_part *
 lua_check_textpart(lua_State *L)
 {
-	void *ud = rspamd_lua_check_udata(L, 1, "rspamd{textpart}");
+	void *ud = rspamd_lua_check_udata(L, 1, rspamd_textpart_classname);
 	luaL_argcheck(L, ud != NULL, 1, "'textpart' expected");
 	return ud ? *((struct rspamd_mime_text_part **) ud) : NULL;
 }
@@ -617,7 +617,7 @@ lua_check_textpart(lua_State *L)
 static struct rspamd_mime_part *
 lua_check_mimepart(lua_State *L)
 {
-	void *ud = rspamd_lua_check_udata(L, 1, "rspamd{mimepart}");
+	void *ud = rspamd_lua_check_udata(L, 1, rspamd_mimepart_classname);
 	luaL_argcheck(L, ud != NULL, 1, "'mimepart' expected");
 	return ud ? *((struct rspamd_mime_part **) ud) : NULL;
 }
@@ -759,7 +759,7 @@ lua_textpart_get_content(lua_State *L)
 	}
 
 	t = lua_newuserdata(L, sizeof(*t));
-	rspamd_lua_setclass(L, "rspamd{text}", -1);
+	rspamd_lua_setclass(L, rspamd_text_classname, -1);
 
 	t->start = start;
 	t->len = len;
@@ -781,7 +781,7 @@ lua_textpart_get_raw_content(lua_State *L)
 	}
 
 	t = lua_newuserdata(L, sizeof(*t));
-	rspamd_lua_setclass(L, "rspamd{text}", -1);
+	rspamd_lua_setclass(L, rspamd_text_classname, -1);
 	t->start = part->raw.begin;
 	t->len = part->raw.len;
 	t->flags = 0;
@@ -1095,7 +1095,7 @@ lua_textpart_get_html(lua_State *L)
 	}
 	else {
 		phc = lua_newuserdata(L, sizeof(*phc));
-		rspamd_lua_setclass(L, "rspamd{html}", -1);
+		rspamd_lua_setclass(L, rspamd_html_classname, -1);
 		*phc = part->html;
 	}
 
@@ -1328,7 +1328,7 @@ lua_textpart_get_mimepart(lua_State *L)
 	if (part != NULL) {
 		if (part->mime_part != NULL) {
 			pmime = lua_newuserdata(L, sizeof(struct rspamd_mime_part *));
-			rspamd_lua_setclass(L, "rspamd{mimepart}", -1);
+			rspamd_lua_setclass(L, rspamd_mimepart_classname, -1);
 			*pmime = part->mime_part;
 
 			return 1;
@@ -1410,7 +1410,7 @@ lua_mimepart_get_content(lua_State *L)
 	}
 
 	t = lua_newuserdata(L, sizeof(*t));
-	rspamd_lua_setclass(L, "rspamd{text}", -1);
+	rspamd_lua_setclass(L, rspamd_text_classname, -1);
 	t->start = part->parsed_data.begin;
 	t->len = part->parsed_data.len;
 	t->flags = 0;
@@ -1435,7 +1435,7 @@ lua_mimepart_get_raw_content(lua_State *L)
 	}
 
 	t = lua_newuserdata(L, sizeof(*t));
-	rspamd_lua_setclass(L, "rspamd{text}", -1);
+	rspamd_lua_setclass(L, rspamd_text_classname, -1);
 	t->start = part->raw_data.begin;
 	t->len = part->raw_data.len;
 	t->flags = 0;
@@ -1733,7 +1733,7 @@ lua_mimepart_get_raw_headers(lua_State *L)
 
 	if (part) {
 		t = lua_newuserdata(L, sizeof(*t));
-		rspamd_lua_setclass(L, "rspamd{text}", -1);
+		rspamd_lua_setclass(L, rspamd_text_classname, -1);
 		t->start = part->raw_headers_str;
 		t->len = part->raw_headers_len;
 		t->flags = 0;
@@ -1932,7 +1932,7 @@ lua_mimepart_get_image(lua_State *L)
 	else {
 		pimg = lua_newuserdata(L, sizeof(*pimg));
 		*pimg = part->specific.img;
-		rspamd_lua_setclass(L, "rspamd{image}", -1);
+		rspamd_lua_setclass(L, rspamd_image_classname, -1);
 	}
 
 	return 1;
@@ -1955,7 +1955,7 @@ lua_mimepart_get_archive(lua_State *L)
 	else {
 		parch = lua_newuserdata(L, sizeof(*parch));
 		*parch = part->specific.arch;
-		rspamd_lua_setclass(L, "rspamd{archive}", -1);
+		rspamd_lua_setclass(L, rspamd_archive_classname, -1);
 	}
 
 	return 1;
@@ -1983,7 +1983,7 @@ lua_mimepart_get_children(lua_State *L)
 		{
 			pcur = lua_newuserdata(L, sizeof(*pcur));
 			*pcur = cur;
-			rspamd_lua_setclass(L, "rspamd{mimepart}", -1);
+			rspamd_lua_setclass(L, rspamd_mimepart_classname, -1);
 			lua_rawseti(L, -2, i + 1);
 		}
 	}
@@ -2005,7 +2005,7 @@ lua_mimepart_get_parent(lua_State *L)
 	if (part->parent_part) {
 		pparent = lua_newuserdata(L, sizeof(*pparent));
 		*pparent = part->parent_part;
-		rspamd_lua_setclass(L, "rspamd{mimepart}", -1);
+		rspamd_lua_setclass(L, rspamd_mimepart_classname, -1);
 	}
 	else {
 		lua_pushnil(L);
@@ -2032,7 +2032,7 @@ lua_mimepart_get_text(lua_State *L)
 	else {
 		ppart = lua_newuserdata(L, sizeof(*ppart));
 		*ppart = part->specific.txt;
-		rspamd_lua_setclass(L, "rspamd{textpart}", -1);
+		rspamd_lua_setclass(L, rspamd_textpart_classname, -1);
 	}
 
 	return 1;
@@ -2106,7 +2106,7 @@ lua_mimepart_headers_foreach(lua_State *L)
 			lua_gettable(L, 3);
 
 			if (lua_isuserdata(L, -1)) {
-				RSPAMD_LUA_CHECK_UDATA_PTR_OR_RETURN(L, -1, "rspamd{regexp}",
+				RSPAMD_LUA_CHECK_UDATA_PTR_OR_RETURN(L, -1, rspamd_regexp_classname,
 													 struct rspamd_lua_regexp, re);
 			}
 
@@ -2273,7 +2273,7 @@ lua_mimepart_set_specific(lua_State *L)
 		part->specific.lua_specific.type = RSPAMD_LUA_PART_STRING;
 		break;
 	case LUA_TUSERDATA:
-		if (rspamd_lua_check_udata_maybe(L, 2, "rspamd{text}")) {
+		if (rspamd_lua_check_udata_maybe(L, 2, rspamd_text_classname)) {
 			part->specific.lua_specific.type = RSPAMD_LUA_PART_TEXT;
 		}
 		else {
@@ -2293,12 +2293,12 @@ lua_mimepart_set_specific(lua_State *L)
 
 void luaopen_textpart(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{textpart}", textpartlib_m);
+	rspamd_lua_new_class(L, rspamd_textpart_classname, textpartlib_m);
 	lua_pop(L, 1);
 }
 
 void luaopen_mimepart(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{mimepart}", mimepartlib_m);
+	rspamd_lua_new_class(L, rspamd_mimepart_classname, mimepartlib_m);
 	lua_pop(L, 1);
 }

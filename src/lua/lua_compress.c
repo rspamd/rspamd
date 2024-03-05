@@ -69,7 +69,7 @@ static const struct luaL_reg zstd_decompress_lib_m[] = {
 static ZSTD_CStream *
 lua_check_zstd_compress_ctx(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{zstd_compress}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_zstd_compress_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'zstd_compress' expected");
 	return ud ? *(ZSTD_CStream **) ud : NULL;
 }
@@ -77,7 +77,7 @@ lua_check_zstd_compress_ctx(lua_State *L, gint pos)
 static ZSTD_DStream *
 lua_check_zstd_decompress_ctx(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{zstd_decompress}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_zstd_decompress_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'zstd_decompress' expected");
 	return ud ? *(ZSTD_DStream **) ud : NULL;
 }
@@ -119,7 +119,7 @@ gint lua_compress_zstd_compress(lua_State *L)
 	res = lua_newuserdata(L, sizeof(*res));
 	res->start = g_malloc(sz);
 	res->flags = RSPAMD_TEXT_FLAG_OWN;
-	rspamd_lua_setclass(L, "rspamd{text}", -1);
+	rspamd_lua_setclass(L, rspamd_text_classname, -1);
 	r = ZSTD_compress((void *) res->start, sz, t->start, t->len, comp_level);
 
 	if (ZSTD_isError(r)) {
@@ -194,7 +194,7 @@ gint lua_compress_zstd_decompress(lua_State *L)
 	res = lua_newuserdata(L, sizeof(*res));
 	res->start = out;
 	res->flags = RSPAMD_TEXT_FLAG_OWN;
-	rspamd_lua_setclass(L, "rspamd{text}", -1);
+	rspamd_lua_setclass(L, rspamd_text_classname, -1);
 	res->len = zout.pos;
 
 	return 2;
@@ -254,7 +254,7 @@ gint lua_compress_zlib_decompress(lua_State *L, bool is_gzip)
 	res = lua_newuserdata(L, sizeof(*res));
 	res->start = g_malloc(sz);
 	res->flags = RSPAMD_TEXT_FLAG_OWN;
-	rspamd_lua_setclass(L, "rspamd{text}", -1);
+	rspamd_lua_setclass(L, rspamd_text_classname, -1);
 
 	p = (guchar *) res->start;
 	remain = sz;
@@ -351,7 +351,7 @@ gint lua_compress_zlib_compress(lua_State *L)
 	res = lua_newuserdata(L, sizeof(*res));
 	res->start = g_malloc(sz);
 	res->flags = RSPAMD_TEXT_FLAG_OWN;
-	rspamd_lua_setclass(L, "rspamd{text}", -1);
+	rspamd_lua_setclass(L, rspamd_text_classname, -1);
 
 	p = (guchar *) res->start;
 	remain = sz;
@@ -417,7 +417,7 @@ lua_zstd_compress_ctx(lua_State *L)
 	}
 
 	*pctx = ctx;
-	rspamd_lua_setclass(L, "rspamd{zstd_compress}", -1);
+	rspamd_lua_setclass(L, rspamd_zstd_compress_classname, -1);
 	return 1;
 }
 
@@ -535,7 +535,7 @@ lua_zstd_decompress_ctx(lua_State *L)
 	}
 
 	*pctx = ctx;
-	rspamd_lua_setclass(L, "rspamd{zstd_decompress}", -1);
+	rspamd_lua_setclass(L, rspamd_zstd_decompress_classname, -1);
 	return 1;
 }
 
@@ -614,8 +614,8 @@ lua_load_zstd(lua_State *L)
 
 void luaopen_compress(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{zstd_compress}", zstd_compress_lib_m);
-	rspamd_lua_new_class(L, "rspamd{zstd_decompress}", zstd_decompress_lib_m);
+	rspamd_lua_new_class(L, rspamd_zstd_compress_classname, zstd_compress_lib_m);
+	rspamd_lua_new_class(L, rspamd_zstd_decompress_classname, zstd_decompress_lib_m);
 	lua_pop(L, 2);
 
 	rspamd_lua_add_preload(L, "rspamd_zstd", lua_load_zstd);

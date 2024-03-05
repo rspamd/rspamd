@@ -159,7 +159,7 @@ struct lua_redis_result {
 static struct lua_redis_ctx *
 lua_check_redis(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{redis}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_redis_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'redis' expected");
 	return ud ? *((struct lua_redis_ctx **) ud) : NULL;
 }
@@ -350,7 +350,7 @@ lua_redis_push_reply(lua_State *L, const redisReply *r, gboolean text_data)
 	case REDIS_REPLY_STATUS:
 		if (text_data) {
 			t = lua_newuserdata(L, sizeof(*t));
-			rspamd_lua_setclass(L, "rspamd{text}", -1);
+			rspamd_lua_setclass(L, rspamd_text_classname, -1);
 			t->flags = 0;
 			t->start = r->str;
 			t->len = r->len;
@@ -1206,7 +1206,7 @@ lua_redis_make_request(lua_State *L)
 	if (ret) {
 		pctx = lua_newuserdata(L, sizeof(ctx));
 		*pctx = ctx;
-		rspamd_lua_setclass(L, "rspamd{redis}", -1);
+		rspamd_lua_setclass(L, rspamd_redis_classname, -1);
 	}
 	else {
 		lua_pushnil(L);
@@ -1402,7 +1402,7 @@ lua_redis_connect(lua_State *L)
 	lua_pushboolean(L, TRUE);
 	pctx = lua_newuserdata(L, sizeof(ctx));
 	*pctx = ctx;
-	rspamd_lua_setclass(L, "rspamd{redis}", -1);
+	rspamd_lua_setclass(L, rspamd_redis_classname, -1);
 
 	return 2;
 }
@@ -1438,7 +1438,7 @@ lua_redis_connect_sync(lua_State *L)
 		lua_pushboolean(L, TRUE);
 		pctx = lua_newuserdata(L, sizeof(ctx));
 		*pctx = ctx;
-		rspamd_lua_setclass(L, "rspamd{redis}", -1);
+		rspamd_lua_setclass(L, rspamd_redis_classname, -1);
 	}
 	else {
 		lua_pushboolean(L, FALSE);
@@ -1649,7 +1649,7 @@ lua_redis_null_mt(lua_State *L)
  */
 void luaopen_redis(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{redis}", redislib_m);
+	rspamd_lua_new_class(L, rspamd_redis_classname, redislib_m);
 	lua_pop(L, 1);
 	rspamd_lua_add_preload(L, "rspamd_redis", lua_load_redis);
 

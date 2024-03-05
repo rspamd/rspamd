@@ -763,7 +763,7 @@ static const struct luaL_reg ev_baselib_m[] = {
 static gint64
 lua_check_int64(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{int64}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_int64_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'int64' expected");
 	return ud ? *((gint64 *) ud) : 0LL;
 }
@@ -776,7 +776,7 @@ lua_util_create_event_base(lua_State *L)
 	struct ev_loop **pev_base;
 
 	pev_base = lua_newuserdata(L, sizeof(struct ev_loop *));
-	rspamd_lua_setclass(L, "rspamd{ev_base}", -1);
+	rspamd_lua_setclass(L, rspamd_ev_base_classname, -1);
 	*pev_base = ev_loop_new(EVFLAG_SIGNALFD | EVBACKEND_ALL);
 
 	return 1;
@@ -802,7 +802,7 @@ lua_util_load_rspamd_config(lua_State *L)
 		else {
 			rspamd_config_post_load(cfg, 0);
 			pcfg = lua_newuserdata(L, sizeof(struct rspamd_config *));
-			rspamd_lua_setclass(L, "rspamd{config}", -1);
+			rspamd_lua_setclass(L, rspamd_config_classname, -1);
 			*pcfg = cfg;
 		}
 	}
@@ -898,7 +898,7 @@ lua_util_config_from_ucl(lua_State *L)
 
 			rspamd_config_post_load(cfg, int_options);
 			pcfg = lua_newuserdata(L, sizeof(struct rspamd_config *));
-			rspamd_lua_setclass(L, "rspamd{config}", -1);
+			rspamd_lua_setclass(L, rspamd_config_classname, -1);
 			*pcfg = cfg;
 		}
 
@@ -1085,7 +1085,7 @@ lua_util_encode_qp(lua_State *L)
 
 		if (out != NULL) {
 			t = lua_newuserdata(L, sizeof(*t));
-			rspamd_lua_setclass(L, "rspamd{text}", -1);
+			rspamd_lua_setclass(L, rspamd_text_classname, -1);
 			t->start = out;
 			t->len = outlen;
 			/* Need destruction */
@@ -1125,7 +1125,7 @@ lua_util_decode_qp(lua_State *L)
 	}
 	else {
 		out = lua_newuserdata(L, sizeof(*t));
-		rspamd_lua_setclass(L, "rspamd{text}", -1);
+		rspamd_lua_setclass(L, rspamd_text_classname, -1);
 		out->start = g_malloc(inlen + 1);
 		out->flags = RSPAMD_TEXT_FLAG_OWN;
 		outlen = rspamd_decode_qp_buf(s, inlen, (gchar *) out->start, inlen + 1);
@@ -1167,7 +1167,7 @@ lua_util_decode_base64(lua_State *L)
 
 	if (s != NULL) {
 		t = lua_newuserdata(L, sizeof(*t));
-		rspamd_lua_setclass(L, "rspamd{text}", -1);
+		rspamd_lua_setclass(L, rspamd_text_classname, -1);
 		t->len = (inlen / 4) * 3 + 3;
 		t->start = g_malloc(t->len);
 
@@ -1222,7 +1222,7 @@ lua_util_encode_base32(lua_State *L)
 		if (out != NULL) {
 			t = lua_newuserdata(L, sizeof(*t));
 			outlen = strlen(out);
-			rspamd_lua_setclass(L, "rspamd{text}", -1);
+			rspamd_lua_setclass(L, rspamd_text_classname, -1);
 			t->start = out;
 			t->len = outlen;
 			/* Need destruction */
@@ -1272,7 +1272,7 @@ lua_util_decode_base32(lua_State *L)
 
 		if (decoded) {
 			t = lua_newuserdata(L, sizeof(*t));
-			rspamd_lua_setclass(L, "rspamd{text}", -1);
+			rspamd_lua_setclass(L, rspamd_text_classname, -1);
 			t->start = (const gchar *) decoded;
 			t->len = outlen;
 			t->flags = RSPAMD_TEXT_FLAG_OWN;
@@ -2077,7 +2077,7 @@ lua_util_caseless_hash(lua_State *L)
 	h = rspamd_icase_hash(t->start, t->len, seed);
 	r = lua_newuserdata(L, sizeof(*r));
 	*r = h;
-	rspamd_lua_setclass(L, "rspamd{int64}", -1);
+	rspamd_lua_setclass(L, rspamd_int64_classname, -1);
 
 	return 1;
 }
@@ -3468,9 +3468,9 @@ lua_load_int64(lua_State *L)
 
 void luaopen_util(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{ev_base}", ev_baselib_m);
+	rspamd_lua_new_class(L, rspamd_ev_base_classname, ev_baselib_m);
 	lua_pop(L, 1);
-	rspamd_lua_new_class(L, "rspamd{int64}", int64lib_m);
+	rspamd_lua_new_class(L, rspamd_int64_classname, int64lib_m);
 	lua_pop(L, 1);
 	rspamd_lua_add_preload(L, "rspamd_util", lua_load_util);
 	rspamd_lua_add_preload(L, "rspamd_int64", lua_load_int64);
@@ -3530,7 +3530,7 @@ lua_int64_fromstring(lua_State *L)
 		}
 
 		gint64 *i64_p = lua_newuserdata(L, sizeof(gint64));
-		rspamd_lua_setclass(L, "rspamd{int64}", -1);
+		rspamd_lua_setclass(L, rspamd_int64_classname, -1);
 		memcpy(i64_p, &u64, sizeof(u64));
 
 		if (neg) {

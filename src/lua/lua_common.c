@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ lua_error_quark(void)
 /*
  * Used to map string to a pointer
  */
-KHASH_INIT(lua_class_set, const char *, int, 1, rspamd_str_hash, rspamd_str_equal);
+KHASH_INIT(lua_class_set, int, int, 1, kh_int_hash_func, kh_int_hash_equal);
 struct rspamd_lua_context {
 	lua_State *L;
 	khash_t(lua_class_set) * classes;
@@ -76,7 +76,7 @@ rspamd_lua_ctx_by_state(lua_State *L)
 /**
  * Create new class and store metatable on top of the stack (must be popped if not needed)
  * @param L
- * @param classname name of class
+ * @param classname name of class, **MUST** be a static string
  * @param func table of class methods
  */
 void rspamd_lua_new_class(lua_State *L,
@@ -120,7 +120,7 @@ void rspamd_lua_new_class(lua_State *L,
 
 	lua_pushvalue(L, -1); /* Preserves metatable */
 	int offset = luaL_ref(L, LUA_REGISTRYINDEX);
-	k = kh_put(lua_class_set, ctx->classes, classname, &r);
+	k = kh_put(lua_class_set, ctx->classes, GPOINTER_TO_INT(classname), &r);
 	kh_value(ctx->classes, k) = offset;
 	/* MT is left on stack ! */
 }
@@ -183,7 +183,7 @@ void rspamd_lua_setclass(lua_State *L, const gchar *classname, gint objidx)
 	khiter_t k;
 	struct rspamd_lua_context *ctx = rspamd_lua_ctx_by_state(L);
 
-	k = kh_get(lua_class_set, ctx->classes, classname);
+	k = kh_get(lua_class_set, ctx->classes, GPOINTER_TO_INT(classname));
 
 	g_assert(k != kh_end(ctx->classes));
 	lua_rawgeti(L, LUA_REGISTRYINDEX, kh_value(ctx->classes, k));
@@ -199,7 +199,7 @@ void rspamd_lua_class_metatable(lua_State *L, const gchar *classname)
 	khiter_t k;
 	struct rspamd_lua_context *ctx = rspamd_lua_ctx_by_state(L);
 
-	k = kh_get(lua_class_set, ctx->classes, classname);
+	k = kh_get(lua_class_set, ctx->classes, GPOINTER_TO_INT(classname));
 
 	g_assert(k != kh_end(ctx->classes));
 	lua_rawgeti(L, LUA_REGISTRYINDEX, kh_value(ctx->classes, k));
@@ -211,7 +211,7 @@ void rspamd_lua_add_metamethod(lua_State *L, const gchar *classname,
 	khiter_t k;
 	struct rspamd_lua_context *ctx = rspamd_lua_ctx_by_state(L);
 
-	k = kh_get(lua_class_set, ctx->classes, classname);
+	k = kh_get(lua_class_set, ctx->classes, GPOINTER_TO_INT(classname));
 
 	g_assert(k != kh_end(ctx->classes));
 	lua_rawgeti(L, LUA_REGISTRYINDEX, kh_value(ctx->classes, k));
@@ -855,7 +855,7 @@ void rspamd_lua_set_globals(struct rspamd_config *cfg, lua_State *L)
 
 	if (cfg != NULL) {
 		pcfg = lua_newuserdata(L, sizeof(struct rspamd_config *));
-		rspamd_lua_setclass(L, "rspamd{config}", -1);
+		rspamd_lua_setclass(L, rspamd_config_classname, -1);
 		*pcfg = cfg;
 		lua_setglobal(L, "rspamd_config");
 	}
@@ -987,7 +987,7 @@ rspamd_lua_init(bool wipe_mem)
 	lua_settop(L, 0);
 #endif
 
-	rspamd_lua_new_class(L, "rspamd{session}", NULL);
+	rspamd_lua_new_class(L, rspamd_session_classname, NULL);
 	lua_pop(L, 1);
 
 	rspamd_lua_add_preload(L, "lpeg", luaopen_lpeg);
@@ -1122,7 +1122,7 @@ rspamd_init_lua_filters(struct rspamd_config *cfg, bool force_load, bool strict)
 	gint err_idx, i;
 
 	pcfg = lua_newuserdata(L, sizeof(struct rspamd_config *));
-	rspamd_lua_setclass(L, "rspamd{config}", -1);
+	rspamd_lua_setclass(L, rspamd_config_classname, -1);
 	*pcfg = cfg;
 	lua_setglobal(L, "rspamd_config");
 
@@ -1277,7 +1277,7 @@ rspamd_lua_check_class(lua_State *L, gint index, const gchar *name)
 			if (lua_getmetatable(L, index)) {
 				struct rspamd_lua_context *ctx = rspamd_lua_ctx_by_state(L);
 
-				k = kh_get(lua_class_set, ctx->classes, name);
+				k = kh_get(lua_class_set, ctx->classes, GPOINTER_TO_INT(name));
 
 				if (k == kh_end(ctx->classes)) {
 					lua_pop(L, 1);
@@ -1326,7 +1326,6 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 	const gchar *p, *key = NULL, *end, *cls;
 	va_list ap;
 	gboolean required = FALSE, failed = FALSE, is_table;
-	gchar classbuf[128];
 	enum {
 		read_key = 0,
 		read_arg,
@@ -1818,15 +1817,14 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 					return FALSE;
 				}
 
-				rspamd_snprintf(classbuf, sizeof(classbuf), "rspamd{%*s}",
-								(gint) clslen, cls);
-
+				const char *static_cls = rspamd_lua_static_classname(cls, clslen);
 
 				/*
 				 * We skip class check here for speed in non-table mode
 				 */
 				if (!failed && (!is_table ||
-								rspamd_lua_check_class(L, idx, classbuf))) {
+								static_cls == NULL ||
+								rspamd_lua_check_class(L, idx, static_cls))) {
 					if (direct_userdata) {
 						void **arg_p = (va_arg(ap, void **));
 						*arg_p = lua_touserdata(L, idx);
@@ -1844,7 +1842,7 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 									"invalid class for key %.*s, expected %s, got %s",
 									(gint) keylen,
 									key,
-									classbuf,
+									static_cls,
 									rspamd_lua_class_tostring_buf(L, FALSE, idx));
 						va_end(ap);
 
@@ -1984,7 +1982,7 @@ rspamd_lua_check_udata_common(lua_State *L, gint pos, const gchar *classname,
 		if (lua_getmetatable(L, pos)) {
 			struct rspamd_lua_context *ctx = rspamd_lua_ctx_by_state(L);
 
-			k = kh_get(lua_class_set, ctx->classes, classname);
+			k = kh_get(lua_class_set, ctx->classes, GPOINTER_TO_INT(classname));
 
 			if (k == kh_end(ctx->classes)) {
 				goto err;
@@ -2084,7 +2082,7 @@ rspamd_lua_check_udata_maybe(lua_State *L, gint pos, const gchar *classname)
 struct rspamd_async_session *
 lua_check_session(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{session}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_session_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'session' expected");
 	return ud ? *((struct rspamd_async_session **) ud) : NULL;
 }
@@ -2092,7 +2090,7 @@ lua_check_session(lua_State *L, gint pos)
 struct ev_loop *
 lua_check_ev_base(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{ev_base}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_ev_base_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'event_base' expected");
 	return ud ? *((struct ev_loop **) ud) : NULL;
 }
@@ -2117,15 +2115,15 @@ void rspamd_lua_run_postloads(lua_State *L, struct rspamd_config *cfg,
 		lua_rawgeti(L, LUA_REGISTRYINDEX, sc->cbref);
 		pcfg = lua_newuserdata(L, sizeof(*pcfg));
 		*pcfg = cfg;
-		rspamd_lua_setclass(L, "rspamd{config}", -1);
+		rspamd_lua_setclass(L, rspamd_config_classname, -1);
 
 		pev_base = lua_newuserdata(L, sizeof(*pev_base));
 		*pev_base = ev_base;
-		rspamd_lua_setclass(L, "rspamd{ev_base}", -1);
+		rspamd_lua_setclass(L, rspamd_ev_base_classname, -1);
 
 		pw = lua_newuserdata(L, sizeof(*pw));
 		*pw = w;
-		rspamd_lua_setclass(L, "rspamd{worker}", -1);
+		rspamd_lua_setclass(L, rspamd_worker_classname, -1);
 
 		lua_thread_call(thread, 3);
 	}
@@ -2145,7 +2143,7 @@ void rspamd_lua_run_config_post_init(lua_State *L, struct rspamd_config *cfg)
 		lua_rawgeti(L, LUA_REGISTRYINDEX, sc->cbref);
 		pcfg = lua_newuserdata(L, sizeof(*pcfg));
 		*pcfg = cfg;
-		rspamd_lua_setclass(L, "rspamd{config}", -1);
+		rspamd_lua_setclass(L, rspamd_config_classname, -1);
 
 		if (lua_pcall(L, 1, 0, err_idx) != 0) {
 			msg_err_config("cannot run config post init script: %s; priority = %d",
@@ -2170,7 +2168,7 @@ void rspamd_lua_run_config_unload(lua_State *L, struct rspamd_config *cfg)
 		lua_rawgeti(L, LUA_REGISTRYINDEX, sc->cbref);
 		pcfg = lua_newuserdata(L, sizeof(*pcfg));
 		*pcfg = cfg;
-		rspamd_lua_setclass(L, "rspamd{config}", -1);
+		rspamd_lua_setclass(L, rspamd_config_classname, -1);
 
 		if (lua_pcall(L, 1, 0, err_idx) != 0) {
 			msg_err_config("cannot run config post init script: %s",
@@ -2365,7 +2363,7 @@ rspamd_lua_try_load_redis(lua_State *L, const ucl_object_t *obj,
 	/* Function arguments */
 	ucl_object_push_lua(L, obj, false);
 	pcfg = lua_newuserdata(L, sizeof(*pcfg));
-	rspamd_lua_setclass(L, "rspamd{config}", -1);
+	rspamd_lua_setclass(L, rspamd_config_classname, -1);
 	*pcfg = cfg;
 	lua_pushboolean(L, false); /* no_fallback */
 

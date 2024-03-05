@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1566,11 +1566,11 @@ fuzzy_rule_check_mimepart(struct rspamd_task *task,
 
 		ptask = lua_newuserdata(L, sizeof(*ptask));
 		*ptask = task;
-		rspamd_lua_setclass(L, "rspamd{task}", -1);
+		rspamd_lua_setclass(L, rspamd_task_classname, -1);
 
 		ppart = lua_newuserdata(L, sizeof(*ppart));
 		*ppart = part;
-		rspamd_lua_setclass(L, "rspamd{mimepart}", -1);
+		rspamd_lua_setclass(L, rspamd_mimepart_classname, -1);
 
 		lua_pushnumber(L, rule->lua_id);
 
@@ -3510,7 +3510,7 @@ fuzzy_process_handler(struct rspamd_http_connection_entry *conn_ent,
 			lua_rawgeti(L, LUA_REGISTRYINDEX, rule->learn_condition_cb);
 			ptask = lua_newuserdata(L, sizeof(struct rspamd_task *));
 			*ptask = task;
-			rspamd_lua_setclass(L, "rspamd{task}", -1);
+			rspamd_lua_setclass(L, rspamd_task_classname, -1);
 
 			if (lua_pcall(L, 1, LUA_MULTRET, err_idx) != 0) {
 				msg_err_task("call to fuzzy learn condition failed: %s",

@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include "libserver/cfg_file_private.h"
 #include "libmime/lang_detection.h"
 #include "libmime/scan_result_private.h"
+#include "lua/lua_classnames.h"
 
 #ifdef WITH_JEMALLOC
 #include <jemalloc/jemalloc.h>
@@ -1616,7 +1617,7 @@ void rspamd_task_write_log(struct rspamd_task *task)
 			L = task->cfg->lua_state;
 			lua_rawgeti(L, LUA_REGISTRYINDEX, GPOINTER_TO_INT(lf->data));
 			ptask = lua_newuserdata(L, sizeof(*ptask));
-			rspamd_lua_setclass(L, "rspamd{task}", -1);
+			rspamd_lua_setclass(L, rspamd_task_classname, -1);
 			*ptask = task;
 
 			if (lua_pcall(L, 1, 1, 0) != 0) {

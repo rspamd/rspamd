@@ -484,7 +484,7 @@ lua_tcp_fin(gpointer arg)
 static struct lua_tcp_cbdata *
 lua_check_tcp(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{tcp}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_tcp_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'tcp' expected");
 	return ud ? *((struct lua_tcp_cbdata **) ud) : NULL;
 }
@@ -589,7 +589,7 @@ lua_tcp_push_error(struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 			/* Connection */
 			pcbd = lua_newuserdata(L, sizeof(*pcbd));
 			*pcbd = cbd;
-			rspamd_lua_setclass(L, "rspamd{tcp}", -1);
+			rspamd_lua_setclass(L, rspamd_tcp_classname, -1);
 			TCP_RETAIN(cbd);
 
 			if (cbd->item) {
@@ -676,7 +676,7 @@ lua_tcp_push_data(struct lua_tcp_cbdata *cbd, const guint8 *str, gsize len)
 
 		if (hdl->type == LUA_WANT_READ) {
 			t = lua_newuserdata(L, sizeof(*t));
-			rspamd_lua_setclass(L, "rspamd{text}", -1);
+			rspamd_lua_setclass(L, rspamd_text_classname, -1);
 			t->start = (const gchar *) str;
 			t->len = len;
 			t->flags = 0;
@@ -688,7 +688,7 @@ lua_tcp_push_data(struct lua_tcp_cbdata *cbd, const guint8 *str, gsize len)
 		/* Connection */
 		pcbd = lua_newuserdata(L, sizeof(*pcbd));
 		*pcbd = cbd;
-		rspamd_lua_setclass(L, "rspamd{tcp}", -1);
+		rspamd_lua_setclass(L, rspamd_tcp_classname, -1);
 
 		TCP_RETAIN(cbd);
 
@@ -792,7 +792,7 @@ lua_tcp_connect_helper(struct lua_tcp_cbdata *cbd)
 	lua_thread_pool_set_running_entry(cbd->cfg->lua_thread_pool, cbd->thread);
 	pcbd = lua_newuserdata(L, sizeof(*pcbd));
 	*pcbd = cbd;
-	rspamd_lua_setclass(L, "rspamd{tcp_sync}", -1);
+	rspamd_lua_setclass(L, rspamd_tcp_sync_classname, -1);
 	msg_debug_tcp("tcp connected");
 
 	lua_tcp_shift_handler(cbd);
@@ -1145,7 +1145,7 @@ lua_tcp_handler(int fd, short what, gpointer ud)
 					pcbd = lua_newuserdata(L, sizeof(*pcbd));
 					*pcbd = cbd;
 					TCP_RETAIN(cbd);
-					rspamd_lua_setclass(L, "rspamd{tcp}", -1);
+					rspamd_lua_setclass(L, rspamd_tcp_classname, -1);
 
 					if (cbd->item) {
 						rspamd_symcache_set_cur_item(cbd->task, cbd->item);
@@ -1588,7 +1588,7 @@ lua_tcp_request(lua_State *L)
 		if (task == NULL) {
 			lua_pushstring(L, "ev_base");
 			lua_gettable(L, -2);
-			if (rspamd_lua_check_udata_maybe(L, -1, "rspamd{ev_base}")) {
+			if (rspamd_lua_check_udata_maybe(L, -1, rspamd_ev_base_classname)) {
 				event_loop = *(struct ev_loop **) lua_touserdata(L, -1);
 			}
 			else {
@@ -1600,7 +1600,7 @@ lua_tcp_request(lua_State *L)
 
 			lua_pushstring(L, "session");
 			lua_gettable(L, -2);
-			if (rspamd_lua_check_udata_maybe(L, -1, "rspamd{session}")) {
+			if (rspamd_lua_check_udata_maybe(L, -1, rspamd_session_classname)) {
 				session = *(struct rspamd_async_session **) lua_touserdata(L, -1);
 			}
 			else {
@@ -1610,7 +1610,7 @@ lua_tcp_request(lua_State *L)
 
 			lua_pushstring(L, "config");
 			lua_gettable(L, -2);
-			if (rspamd_lua_check_udata_maybe(L, -1, "rspamd{config}")) {
+			if (rspamd_lua_check_udata_maybe(L, -1, rspamd_config_classname)) {
 				cfg = *(struct rspamd_config **) lua_touserdata(L, -1);
 			}
 			else {
@@ -1620,7 +1620,7 @@ lua_tcp_request(lua_State *L)
 
 			lua_pushstring(L, "resolver");
 			lua_gettable(L, -2);
-			if (rspamd_lua_check_udata_maybe(L, -1, "rspamd{resolver}")) {
+			if (rspamd_lua_check_udata_maybe(L, -1, rspamd_resolver_classname)) {
 				resolver = *(struct rspamd_dns_resolver **) lua_touserdata(L, -1);
 			}
 			else {
@@ -2318,7 +2318,7 @@ lua_tcp_shift_callback(lua_State *L)
 static struct lua_tcp_cbdata *
 lua_check_sync_tcp(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{tcp_sync}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_tcp_sync_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'tcp' expected");
 	return ud ? *((struct lua_tcp_cbdata **) ud) : NULL;
 }
@@ -2560,7 +2560,7 @@ lua_load_tcp(lua_State *L)
 void luaopen_tcp(lua_State *L)
 {
 	rspamd_lua_add_preload(L, "rspamd_tcp", lua_load_tcp);
-	rspamd_lua_new_class(L, "rspamd{tcp}", tcp_libm);
-	rspamd_lua_new_class(L, "rspamd{tcp_sync}", tcp_sync_libm);
+	rspamd_lua_new_class(L, rspamd_tcp_classname, tcp_libm);
+	rspamd_lua_new_class(L, rspamd_tcp_sync_classname, tcp_sync_libm);
 	lua_pop(L, 1);
 }

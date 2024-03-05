@@ -270,7 +270,7 @@ static const struct luaL_reg textlib_m[] = {
 struct rspamd_lua_text *
 lua_check_text(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{text}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_text_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'text' expected");
 	return ud ? (struct rspamd_lua_text *) ud : NULL;
 }
@@ -281,7 +281,7 @@ lua_check_text_or_string(lua_State *L, gint pos)
 	gint pos_type = lua_type(L, pos);
 
 	if (pos_type == LUA_TUSERDATA) {
-		void *ud = rspamd_lua_check_udata(L, pos, "rspamd{text}");
+		void *ud = rspamd_lua_check_udata(L, pos, rspamd_text_classname);
 		luaL_argcheck(L, ud != NULL, pos, "'text' expected");
 		return ud ? (struct rspamd_lua_text *) ud : NULL;
 	}
@@ -341,7 +341,7 @@ lua_new_text(lua_State *L, const gchar *start, gsize len, gboolean own)
 	}
 
 	t->len = len;
-	rspamd_lua_setclass(L, "rspamd{text}", -1);
+	rspamd_lua_setclass(L, rspamd_text_classname, -1);
 
 	return t;
 }
@@ -376,7 +376,7 @@ lua_new_text_task(lua_State *L, struct rspamd_task *task,
 	}
 
 	t->len = len;
-	rspamd_lua_setclass(L, "rspamd{text}", -1);
+	rspamd_lua_setclass(L, rspamd_text_classname, -1);
 
 	return t;
 }
@@ -572,7 +572,7 @@ lua_text_fromtable(lua_State *L)
 	t->start = dest;
 	t->len = textlen;
 	t->flags = RSPAMD_TEXT_FLAG_OWN;
-	rspamd_lua_setclass(L, "rspamd{text}", -1);
+	rspamd_lua_setclass(L, rspamd_text_classname, -1);
 
 	lua_pushvalue(L, 1);
 	lua_text_tbl_append(L, delim, dlen, &dest, 0);
@@ -792,7 +792,7 @@ rspamd_lua_text_push_line(lua_State *L,
 		struct rspamd_lua_text *ntext;
 
 		ntext = lua_newuserdata(L, sizeof(*ntext));
-		rspamd_lua_setclass(L, "rspamd{text}", -1);
+		rspamd_lua_setclass(L, rspamd_text_classname, -1);
 		ntext->start = start;
 		ntext->len = len;
 		ntext->flags = 0; /* Not own as it must be owned by a top object */
@@ -907,7 +907,7 @@ rspamd_lua_text_regexp_split(lua_State *L)
 				}
 				else {
 					new_t = lua_newuserdata(L, sizeof(*t));
-					rspamd_lua_setclass(L, "rspamd{text}", -1);
+					rspamd_lua_setclass(L, rspamd_text_classname, -1);
 					new_t->start = old_start;
 					new_t->len = start - old_start;
 					new_t->flags = 0;
@@ -943,7 +943,7 @@ rspamd_lua_text_regexp_split(lua_State *L)
 		}
 		else {
 			new_t = lua_newuserdata(L, sizeof(*t));
-			rspamd_lua_setclass(L, "rspamd{text}", -1);
+			rspamd_lua_setclass(L, rspamd_text_classname, -1);
 			new_t->start = end;
 			new_t->len = (t->start + t->len) - end;
 			new_t->flags = 0;
@@ -1013,7 +1013,7 @@ lua_text_split(lua_State *L)
 		if (own_re) {
 			struct rspamd_lua_regexp **pre;
 			pre = lua_newuserdata(L, sizeof(struct rspamd_lua_regexp *));
-			rspamd_lua_setclass(L, "rspamd{regexp}", -1);
+			rspamd_lua_setclass(L, rspamd_regexp_classname, -1);
 			*pre = re;
 		}
 		else {
@@ -1378,7 +1378,7 @@ lua_text_base64(lua_State *L)
 		out->start = rspamd_encode_base64_common(t->start, t->len,
 												 line_len, &sz_len, fold, how);
 		out->len = sz_len;
-		rspamd_lua_setclass(L, "rspamd{text}", -1);
+		rspamd_lua_setclass(L, rspamd_text_classname, -1);
 	}
 	else {
 		return luaL_error(L, "invalid arguments");
@@ -1480,7 +1480,7 @@ lua_text_exclude_chars(lua_State *L)
 
 			dest = g_malloc(t->len);
 			nt = lua_newuserdata(L, sizeof(*nt));
-			rspamd_lua_setclass(L, "rspamd{text}", -1);
+			rspamd_lua_setclass(L, rspamd_text_classname, -1);
 			nt->len = t->len;
 			nt->flags = RSPAMD_TEXT_FLAG_OWN;
 			memcpy(dest, t->start, t->len);
@@ -1592,7 +1592,7 @@ lua_text_oneline(lua_State *L)
 
 			dest = g_malloc(t->len);
 			nt = lua_newuserdata(L, sizeof(*nt));
-			rspamd_lua_setclass(L, "rspamd{text}", -1);
+			rspamd_lua_setclass(L, rspamd_text_classname, -1);
 			nt->len = t->len;
 			nt->flags = RSPAMD_TEXT_FLAG_OWN;
 			memcpy(dest, t->start, t->len);
@@ -1779,7 +1779,7 @@ lua_load_text(lua_State *L)
 
 void luaopen_text(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{text}", textlib_m);
+	rspamd_lua_new_class(L, rspamd_text_classname, textlib_m);
 	lua_pushstring(L, "cookie");
 	lua_pushnumber(L, rspamd_lua_text_cookie);
 	lua_settable(L, -3);

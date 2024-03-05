@@ -336,17 +336,17 @@ rspamadm_add_lua_globals(struct rspamd_dns_resolver *resolver)
 											 NULL, (event_finalizer_t) NULL, NULL);
 
 	psession = lua_newuserdata(L, sizeof(struct rspamd_async_session *));
-	rspamd_lua_setclass(L, "rspamd{session}", -1);
+	rspamd_lua_setclass(L, rspamd_session_classname, -1);
 	*psession = rspamadm_session;
 	lua_setglobal(L, "rspamadm_session");
 
 	pev_base = lua_newuserdata(L, sizeof(struct ev_loop *));
-	rspamd_lua_setclass(L, "rspamd{ev_base}", -1);
+	rspamd_lua_setclass(L, rspamd_ev_base_classname, -1);
 	*pev_base = rspamd_main->event_loop;
 	lua_setglobal(L, "rspamadm_ev_base");
 
 	presolver = lua_newuserdata(L, sizeof(struct rspamd_dns_resolver *));
-	rspamd_lua_setclass(L, "rspamd{resolver}", -1);
+	rspamd_lua_setclass(L, rspamd_resolver_classname, -1);
 	*presolver = resolver;
 	lua_setglobal(L, "rspamadm_dns_resolver");
 }

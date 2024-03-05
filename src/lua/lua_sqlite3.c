@@ -64,7 +64,7 @@ static void lua_sqlite3_push_row(lua_State *L, sqlite3_stmt *stmt);
 static sqlite3 *
 lua_check_sqlite3(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{sqlite3}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_sqlite3_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'sqlite3' expected");
 	return ud ? *((sqlite3 **) ud) : NULL;
 }
@@ -72,7 +72,7 @@ lua_check_sqlite3(lua_State *L, gint pos)
 static sqlite3_stmt *
 lua_check_sqlite3_stmt(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{sqlite3_stmt}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_sqlite3_stmt_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'sqlite3_stmt' expected");
 	return ud ? *((sqlite3_stmt **) ud) : NULL;
 }
@@ -110,7 +110,7 @@ lua_sqlite3_open(lua_State *L)
 
 	pdb = lua_newuserdata(L, sizeof(db));
 	*pdb = db;
-	rspamd_lua_setclass(L, "rspamd{sqlite3}", -1);
+	rspamd_lua_setclass(L, rspamd_sqlite3_classname, -1);
 
 	return 1;
 }
@@ -317,7 +317,7 @@ lua_sqlite3_rows(lua_State *L)
 			/* Create C closure */
 			pstmt = lua_newuserdata(L, sizeof(stmt));
 			*pstmt = stmt;
-			rspamd_lua_setclass(L, "rspamd{sqlite3_stmt}", -1);
+			rspamd_lua_setclass(L, rspamd_sqlite3_stmt_classname, -1);
 
 			lua_pushcclosure(L, lua_sqlite3_next_row, 1);
 		}
@@ -369,10 +369,10 @@ lua_load_sqlite3(lua_State *L)
  */
 void luaopen_sqlite3(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{sqlite3}", sqlitelib_m);
+	rspamd_lua_new_class(L, rspamd_sqlite3_classname, sqlitelib_m);
 	lua_pop(L, 1);
 
-	rspamd_lua_new_class(L, "rspamd{sqlite3_stmt}", sqlitestmtlib_m);
+	rspamd_lua_new_class(L, rspamd_sqlite3_stmt_classname, sqlitestmtlib_m);
 	lua_pop(L, 1);
 
 	rspamd_lua_add_preload(L, "rspamd_sqlite3", lua_load_sqlite3);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -991,10 +991,10 @@ rspamd_message_from_data(struct rspamd_task *task, const guchar *start,
 			struct rspamd_task **ptask;
 
 			pmime = lua_newuserdata(L, sizeof(struct rspamd_mime_part *));
-			rspamd_lua_setclass(L, "rspamd{mimepart}", -1);
+			rspamd_lua_setclass(L, rspamd_mimepart_classname, -1);
 			*pmime = part;
 			ptask = lua_newuserdata(L, sizeof(struct rspamd_task *));
-			rspamd_lua_setclass(L, "rspamd{task}", -1);
+			rspamd_lua_setclass(L, rspamd_task_classname, -1);
 			*ptask = task;
 
 			if (lua_pcall(L, 2, 2, 0) != 0) {
@@ -1444,10 +1444,10 @@ void rspamd_message_process(struct rspamd_task *task)
 			gint err_idx = lua_gettop(L);
 			lua_pushvalue(L, magic_func_pos);
 			pmime = lua_newuserdata(L, sizeof(struct rspamd_mime_part *));
-			rspamd_lua_setclass(L, "rspamd{mimepart}", -1);
+			rspamd_lua_setclass(L, rspamd_mimepart_classname, -1);
 			*pmime = part;
 			ptask = lua_newuserdata(L, sizeof(struct rspamd_task *));
-			rspamd_lua_setclass(L, "rspamd{task}", -1);
+			rspamd_lua_setclass(L, rspamd_task_classname, -1);
 			*ptask = task;
 
 			if (lua_pcall(L, 2, 2, err_idx) != 0) {
@@ -1516,10 +1516,10 @@ void rspamd_message_process(struct rspamd_task *task)
 			gint err_idx = lua_gettop(L);
 			lua_pushvalue(L, content_func_pos);
 			pmime = lua_newuserdata(L, sizeof(struct rspamd_mime_part *));
-			rspamd_lua_setclass(L, "rspamd{mimepart}", -1);
+			rspamd_lua_setclass(L, rspamd_mimepart_classname, -1);
 			*pmime = part;
 			ptask = lua_newuserdata(L, sizeof(struct rspamd_task *));
-			rspamd_lua_setclass(L, "rspamd{task}", -1);
+			rspamd_lua_setclass(L, rspamd_task_classname, -1);
 			*ptask = task;
 
 			if (lua_pcall(L, 2, 0, err_idx) != 0) {

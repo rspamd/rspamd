@@ -73,7 +73,7 @@ rspamd_mempool_t *regexp_static_pool = NULL;
 struct rspamd_lua_regexp *
 lua_check_regexp(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{regexp}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_regexp_classname);
 
 	luaL_argcheck(L, ud != NULL, pos, "'regexp' expected");
 	return ud ? *((struct rspamd_lua_regexp **) ud) : NULL;
@@ -119,7 +119,7 @@ lua_regexp_create(lua_State *L)
 			new->re_pattern = g_strdup(string);
 			new->module = rspamd_lua_get_module_name(L);
 			pnew = lua_newuserdata(L, sizeof(struct rspamd_lua_regexp *));
-			rspamd_lua_setclass(L, "rspamd{regexp}", -1);
+			rspamd_lua_setclass(L, rspamd_regexp_classname, -1);
 			*pnew = new;
 		}
 	}
@@ -178,7 +178,7 @@ lua_regexp_import_glob(lua_State *L)
 			new->re_pattern = escaped;
 			new->module = rspamd_lua_get_module_name(L);
 			pnew = lua_newuserdata(L, sizeof(struct rspamd_lua_regexp *));
-			rspamd_lua_setclass(L, "rspamd{regexp}", -1);
+			rspamd_lua_setclass(L, rspamd_regexp_classname, -1);
 			*pnew = new;
 		}
 	}
@@ -237,7 +237,7 @@ lua_regexp_import_plain(lua_State *L)
 			new->re_pattern = escaped;
 			new->module = rspamd_lua_get_module_name(L);
 			pnew = lua_newuserdata(L, sizeof(struct rspamd_lua_regexp *));
-			rspamd_lua_setclass(L, "rspamd{regexp}", -1);
+			rspamd_lua_setclass(L, rspamd_regexp_classname, -1);
 			*pnew = new;
 		}
 	}
@@ -278,7 +278,7 @@ lua_regexp_get_cached(lua_State *L)
 			new->re_pattern = g_strdup(string);
 			new->module = rspamd_lua_get_module_name(L);
 			pnew = lua_newuserdata(L, sizeof(struct rspamd_lua_regexp *));
-			rspamd_lua_setclass(L, "rspamd{regexp}", -1);
+			rspamd_lua_setclass(L, rspamd_regexp_classname, -1);
 			*pnew = new;
 		}
 		else {
@@ -331,7 +331,7 @@ lua_regexp_create_cached(lua_State *L)
 			new->module = rspamd_lua_get_module_name(L);
 			pnew = lua_newuserdata(L, sizeof(struct rspamd_lua_regexp *));
 
-			rspamd_lua_setclass(L, "rspamd{regexp}", -1);
+			rspamd_lua_setclass(L, rspamd_regexp_classname, -1);
 			*pnew = new;
 		}
 		else {
@@ -349,7 +349,7 @@ lua_regexp_create_cached(lua_State *L)
 				new->re_pattern = g_strdup(string);
 				new->module = rspamd_lua_get_module_name(L);
 				pnew = lua_newuserdata(L, sizeof(struct rspamd_lua_regexp *));
-				rspamd_lua_setclass(L, "rspamd{regexp}", -1);
+				rspamd_lua_setclass(L, rspamd_regexp_classname, -1);
 				*pnew = new;
 			}
 		}
@@ -740,7 +740,7 @@ lua_regexp_split(lua_State *L)
 					}
 					else {
 						t = lua_newuserdata(L, sizeof(*t));
-						rspamd_lua_setclass(L, "rspamd{text}", -1);
+						rspamd_lua_setclass(L, rspamd_text_classname, -1);
 						t->start = old_start;
 						t->len = start - old_start;
 						t->flags = 0;
@@ -765,7 +765,7 @@ lua_regexp_split(lua_State *L)
 				}
 				else {
 					t = lua_newuserdata(L, sizeof(*t));
-					rspamd_lua_setclass(L, "rspamd{text}", -1);
+					rspamd_lua_setclass(L, rspamd_text_classname, -1);
 					t->start = end;
 					t->len = (data + len) - end;
 					t->flags = 0;
@@ -845,7 +845,7 @@ void luaopen_regexp(lua_State *L)
 												"regexp_lua_pool", 0);
 	}
 
-	rspamd_lua_new_class(L, "rspamd{regexp}", regexplib_m);
+	rspamd_lua_new_class(L, rspamd_regexp_classname, regexplib_m);
 	lua_pop(L, 1);
 	rspamd_lua_add_preload(L, "rspamd_regexp", lua_load_regexp);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@
 #include "utlist.h"
 #include "libmime/lang_detection.h"
 #include "mempool_vars_internal.h"
+#include "lua/lua_classnames.h"
 #include <math.h>
 
 /* 60 seconds for worker's IO */
@@ -1555,10 +1556,10 @@ rspamd_controller_handle_lua_history(lua_State *L,
 
 				ptask = lua_newuserdata(L, sizeof(*ptask));
 				*ptask = task;
-				rspamd_lua_setclass(L, "rspamd{task}", -1);
+				rspamd_lua_setclass(L, rspamd_task_classname, -1);
 				pconn_ent = lua_newuserdata(L, sizeof(*pconn_ent));
 				*pconn_ent = conn_ent;
-				rspamd_lua_setclass(L, "rspamd{csession}", -1);
+				rspamd_lua_setclass(L, rspamd_csession_classname, -1);
 				lua_pushinteger(L, from);
 				lua_pushinteger(L, to);
 				lua_pushboolean(L, reset);
@@ -1916,11 +1917,11 @@ rspamd_controller_handle_lua(struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	ptask = lua_newuserdata(L, sizeof(*ptask));
-	rspamd_lua_setclass(L, "rspamd{task}", -1);
+	rspamd_lua_setclass(L, rspamd_task_classname, -1);
 	*ptask = task;
 
 	pconn = lua_newuserdata(L, sizeof(*pconn));
-	rspamd_lua_setclass(L, "rspamd{csession}", -1);
+	rspamd_lua_setclass(L, rspamd_csession_classname, -1);
 	*pconn = conn_ent;
 
 	if (lua_pcall(L, 2, 0, 0) != 0) {
@@ -3541,12 +3542,12 @@ rspamd_controller_handle_lua_plugin(struct rspamd_http_connection_entry *conn_en
 
 	/* Task */
 	ptask = lua_newuserdata(L, sizeof(*ptask));
-	rspamd_lua_setclass(L, "rspamd{task}", -1);
+	rspamd_lua_setclass(L, rspamd_task_classname, -1);
 	*ptask = task;
 
 	/* Connection */
 	pconn = lua_newuserdata(L, sizeof(*pconn));
-	rspamd_lua_setclass(L, "rspamd{csession}", -1);
+	rspamd_lua_setclass(L, rspamd_csession_classname, -1);
 	*pconn = conn_ent;
 
 	/* Query arguments */
@@ -3820,14 +3821,14 @@ static const struct luaL_reg lua_csessionlib_m[] = {
 static void
 luaopen_controller(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{csession}", lua_csessionlib_m);
+	rspamd_lua_new_class(L, rspamd_csession_classname, lua_csessionlib_m);
 	lua_pop(L, 1);
 }
 
 struct rspamd_http_connection_entry *
 lua_check_controller_entry(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{csession}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_csession_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'csession' expected");
 	return ud ? *((struct rspamd_http_connection_entry **) ud) : NULL;
 }
@@ -3842,7 +3843,7 @@ lua_csession_get_ev_base(lua_State *L)
 	if (c) {
 		s = c->ud;
 		pbase = lua_newuserdata(L, sizeof(struct ev_loop *));
-		rspamd_lua_setclass(L, "rspamd{ev_base}", -1);
+		rspamd_lua_setclass(L, rspamd_ev_base_classname, -1);
 		*pbase = s->ctx->event_loop;
 	}
 	else {
@@ -3862,7 +3863,7 @@ lua_csession_get_cfg(lua_State *L)
 	if (c) {
 		s = c->ud;
 		pcfg = lua_newuserdata(L, sizeof(gpointer));
-		rspamd_lua_setclass(L, "rspamd{config}", -1);
+		rspamd_lua_setclass(L, rspamd_config_classname, -1);
 		*pcfg = s->ctx->cfg;
 	}
 	else {
