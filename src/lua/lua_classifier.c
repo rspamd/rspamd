@@ -48,7 +48,7 @@ static struct rspamd_statfile_config *lua_check_statfile(lua_State *L);
 static struct rspamd_classifier_config *
 lua_check_classifier(lua_State *L)
 {
-	void *ud = rspamd_lua_check_udata(L, 1, "rspamd{classifier}");
+	void *ud = rspamd_lua_check_udata(L, 1, rspamd_classifier_classname);
 	luaL_argcheck(L, ud != NULL, 1, "'classifier' expected");
 	return ud ? *((struct rspamd_classifier_config **) ud) : NULL;
 }
@@ -69,7 +69,7 @@ lua_classifier_get_statfiles(lua_State *L)
 		while (cur) {
 			st = cur->data;
 			pst = lua_newuserdata(L, sizeof(struct rspamd_statfile_config *));
-			rspamd_lua_setclass(L, "rspamd{statfile}", -1);
+			rspamd_lua_setclass(L, rspamd_statfile_classname, -1);
 			*pst = st;
 			lua_rawseti(L, -2, i++);
 
@@ -127,7 +127,7 @@ lua_classifier_get_statfile_by_label(lua_State *L)
 				pst =
 					lua_newuserdata(L,
 									sizeof(struct rspamd_statfile_config *));
-				rspamd_lua_setclass(L, "rspamd{statfile}", -1);
+				rspamd_lua_setclass(L, rspamd_statfile_classname, -1);
 				*pst = st;
 				lua_rawseti(L, -2, i++);
 				cur = g_list_next(cur);
@@ -209,7 +209,7 @@ lua_statfile_get_param(lua_State *L)
 static struct rspamd_statfile_config *
 lua_check_statfile(lua_State *L)
 {
-	void *ud = rspamd_lua_check_udata(L, 1, "rspamd{statfile}");
+	void *ud = rspamd_lua_check_udata(L, 1, rspamd_statfile_classname);
 	luaL_argcheck(L, ud != NULL, 1, "'statfile' expected");
 	return ud ? *((struct rspamd_statfile_config **) ud) : NULL;
 }
@@ -219,12 +219,12 @@ lua_check_statfile(lua_State *L)
 
 void luaopen_classifier(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{classifier}", classifierlib_m);
+	rspamd_lua_new_class(L, rspamd_classifier_classname, classifierlib_m);
 	lua_pop(L, 1); /* remove metatable from stack */
 }
 
 void luaopen_statfile(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{statfile}", statfilelib_m);
+	rspamd_lua_new_class(L, rspamd_statfile_classname, statfilelib_m);
 	lua_pop(L, 1); /* remove metatable from stack */
 }

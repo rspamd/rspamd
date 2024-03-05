@@ -3762,7 +3762,7 @@ rspamd_config_read(struct rspamd_config *cfg,
 
 				void *pcfg = lua_newuserdata(RSPAMD_LUA_CFG_STATE(cfg), sizeof(void *));
 				memcpy(pcfg, &cfg, sizeof(void *));
-				rspamd_lua_setclass(RSPAMD_LUA_CFG_STATE(cfg), "rspamd{config}", -1);
+				rspamd_lua_setclass(RSPAMD_LUA_CFG_STATE(cfg), rspamd_config_classname, -1);
 
 				if (lua_pcall(RSPAMD_LUA_CFG_STATE(cfg), 1, 0, err_idx) != 0) {
 					msg_err_config("cannot call lua init_debug_logging script: %s",

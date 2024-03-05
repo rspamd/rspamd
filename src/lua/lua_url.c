@@ -119,7 +119,7 @@ static const struct luaL_reg urllib_f[] = {
 struct rspamd_lua_url *
 lua_check_url(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{url}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_url_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'url' expected");
 	return ud ? ((struct rspamd_lua_url *) ud) : NULL;
 }
@@ -132,7 +132,7 @@ lua_url_single_inserter(struct rspamd_url *url, gsize start_offset,
 	struct rspamd_lua_url *lua_url;
 
 	lua_url = lua_newuserdata(L, sizeof(struct rspamd_lua_url));
-	rspamd_lua_setclass(L, "rspamd{url}", -1);
+	rspamd_lua_setclass(L, rspamd_url_classname, -1);
 	lua_url->url = url;
 
 	return TRUE;
@@ -572,7 +572,7 @@ lua_url_get_phished(lua_State *L)
 			if (url->url->flags &
 				(RSPAMD_URL_FLAG_PHISHED | RSPAMD_URL_FLAG_REDIRECTED)) {
 				purl = lua_newuserdata(L, sizeof(struct rspamd_lua_url));
-				rspamd_lua_setclass(L, "rspamd{url}", -1);
+				rspamd_lua_setclass(L, rspamd_url_classname, -1);
 				purl->url = url->url->ext->linked_url;
 
 				return 1;
@@ -928,7 +928,7 @@ lua_url_table_inserter(struct rspamd_url *url, gsize start_offset,
 
 	n = rspamd_lua_table_size(L, -1);
 	lua_url = lua_newuserdata(L, sizeof(struct rspamd_lua_url));
-	rspamd_lua_setclass(L, "rspamd{url}", -1);
+	rspamd_lua_setclass(L, rspamd_url_classname, -1);
 	lua_url->url = url;
 	lua_rawseti(L, -2, n + 1);
 
@@ -1353,7 +1353,7 @@ lua_url_cbdata_fill(lua_State *L,
 	cbd->flags_mask = flags_mask;
 
 	/* This needs to be removed from the stack */
-	rspamd_lua_class_metatable(L, "rspamd{url}");
+	rspamd_lua_class_metatable(L, rspamd_url_classname);
 	cbd->metatable_pos = lua_gettop(L);
 	(void) lua_checkstack(L, cbd->metatable_pos + 4);
 
@@ -1470,7 +1470,7 @@ lua_url_cbdata_fill_exclude_include(lua_State *L,
 	cbd->flags_exclude_mask = exclude_flags_mask;
 
 	/* This needs to be removed from the stack */
-	rspamd_lua_class_metatable(L, "rspamd{url}");
+	rspamd_lua_class_metatable(L, rspamd_url_classname);
 	cbd->metatable_pos = lua_gettop(L);
 	(void) lua_checkstack(L, cbd->metatable_pos + 4);
 
@@ -1562,7 +1562,7 @@ lua_load_url(lua_State *L)
 
 void luaopen_url(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{url}", urllib_m);
+	rspamd_lua_new_class(L, rspamd_url_classname, urllib_m);
 	lua_pop(L, 1);
 
 	rspamd_lua_add_preload(L, "rspamd_url", lua_load_url);

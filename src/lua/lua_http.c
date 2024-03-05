@@ -278,7 +278,7 @@ lua_http_finish_handler(struct rspamd_http_connection *conn,
 		struct rspamd_lua_text *t;
 
 		t = lua_newuserdata(L, sizeof(*t));
-		rspamd_lua_setclass(L, "rspamd{text}", -1);
+		rspamd_lua_setclass(L, rspamd_text_classname, -1);
 		t->start = body;
 		t->len = body_len;
 		t->flags = 0;
@@ -363,7 +363,7 @@ lua_http_resume_handler(struct rspamd_http_connection *conn,
 			struct rspamd_lua_text *t;
 
 			t = lua_newuserdata(L, sizeof(*t));
-			rspamd_lua_setclass(L, "rspamd{text}", -1);
+			rspamd_lua_setclass(L, rspamd_text_classname, -1);
 			t->start = body;
 			t->len = body_len;
 			t->flags = 0;
@@ -653,21 +653,21 @@ lua_http_request(lua_State *L)
 		lua_pushvalue(L, 2);
 		cbref = luaL_ref(L, LUA_REGISTRYINDEX);
 
-		if (lua_gettop(L) >= 3 && rspamd_lua_check_udata_maybe(L, 3, "rspamd{ev_base}")) {
+		if (lua_gettop(L) >= 3 && rspamd_lua_check_udata_maybe(L, 3, rspamd_ev_base_classname)) {
 			ev_base = *(struct ev_loop **) lua_touserdata(L, 3);
 		}
 		else {
 			ev_base = NULL;
 		}
 
-		if (lua_gettop(L) >= 4 && rspamd_lua_check_udata_maybe(L, 4, "rspamd{resolver}")) {
+		if (lua_gettop(L) >= 4 && rspamd_lua_check_udata_maybe(L, 4, rspamd_resolver_classname)) {
 			resolver = *(struct rspamd_dns_resolver **) lua_touserdata(L, 4);
 		}
 		else {
 			resolver = lua_http_global_resolver(ev_base);
 		}
 
-		if (lua_gettop(L) >= 5 && rspamd_lua_check_udata_maybe(L, 5, "rspamd{session}")) {
+		if (lua_gettop(L) >= 5 && rspamd_lua_check_udata_maybe(L, 5, rspamd_session_classname)) {
 			session = *(struct rspamd_async_session **) lua_touserdata(L, 5);
 		}
 		else {
@@ -722,7 +722,7 @@ lua_http_request(lua_State *L)
 		if (task == NULL) {
 			lua_pushstring(L, "ev_base");
 			lua_gettable(L, 1);
-			if (rspamd_lua_check_udata_maybe(L, -1, "rspamd{ev_base}")) {
+			if (rspamd_lua_check_udata_maybe(L, -1, rspamd_ev_base_classname)) {
 				ev_base = *(struct ev_loop **) lua_touserdata(L, -1);
 			}
 			else {
@@ -733,7 +733,7 @@ lua_http_request(lua_State *L)
 
 			lua_pushstring(L, "session");
 			lua_gettable(L, 1);
-			if (rspamd_lua_check_udata_maybe(L, -1, "rspamd{session}")) {
+			if (rspamd_lua_check_udata_maybe(L, -1, rspamd_session_classname)) {
 				session = *(struct rspamd_async_session **) lua_touserdata(L, -1);
 			}
 			else {
@@ -743,7 +743,7 @@ lua_http_request(lua_State *L)
 
 			lua_pushstring(L, "config");
 			lua_gettable(L, 1);
-			if (rspamd_lua_check_udata_maybe(L, -1, "rspamd{config}")) {
+			if (rspamd_lua_check_udata_maybe(L, -1, rspamd_config_classname)) {
 				cfg = *(struct rspamd_config **) lua_touserdata(L, -1);
 			}
 			else {
@@ -755,7 +755,7 @@ lua_http_request(lua_State *L)
 			lua_pushstring(L, "resolver");
 			lua_gettable(L, 1);
 
-			if (rspamd_lua_check_udata_maybe(L, -1, "rspamd{resolver}")) {
+			if (rspamd_lua_check_udata_maybe(L, -1, rspamd_resolver_classname)) {
 				resolver = *(struct rspamd_dns_resolver **) lua_touserdata(L, -1);
 			}
 			else {

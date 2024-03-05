@@ -291,24 +291,33 @@ table#symbolsTable input[type="number"] {
     margin-right: 9px;
 }
 
+.status-table thead th:first-child,
+.status-table td:first-child {
+    border-left: none;
+}
+.status-table thead th:last-child,
 .status-table td:last-child {
     border-right: none;
 }
+.status-table thead tr {
+    border-top: none;
+}
+.status-table tr:last-child,
 .status-table tr:last-child td {
     border-bottom: none;
 }
-.status-table thead th:last-child {
-    border-right: none;
-}
+
 .footable-header,
 .footable tr:not(.footable-detail-row) > td {
     font-size: 11px;
 }
-.status-table tr:last-child td:first-child {
-    border-radius: 0 0 0 calc(.25rem - 1px);
-}
+
 .status-table tr:last-child td:last-child {
-    border-radius: 0 0 calc(.25rem - 1px) 0;
+    border-radius: 0 0 calc(var(--bs-border-radius) + 1px) 0;
+}
+.status-table :not(:has([rowspan])) tr:last-child td:first-child,
+.status-table :nth-last-child(1 of tr:has([rowspan])) td:first-child  {
+    border-radius: 0 0 0 calc(var(--bs-border-radius) + 1px);
 }
 
 /* RRD summary */

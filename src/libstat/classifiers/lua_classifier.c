@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -145,10 +145,10 @@ lua_classifier_classify(struct rspamd_classifier *cl,
 	lua_rawgeti(L, LUA_REGISTRYINDEX, ctx->classify_ref);
 	ptask = lua_newuserdata(L, sizeof(*ptask));
 	*ptask = task;
-	rspamd_lua_setclass(L, "rspamd{task}", -1);
+	rspamd_lua_setclass(L, rspamd_task_classname, -1);
 	pcfg = lua_newuserdata(L, sizeof(*pcfg));
 	*pcfg = cl->cfg;
-	rspamd_lua_setclass(L, "rspamd{classifier}", -1);
+	rspamd_lua_setclass(L, rspamd_classifier_classname, -1);
 
 	lua_createtable(L, tokens->len, 0);
 
@@ -200,10 +200,10 @@ lua_classifier_learn_spam(struct rspamd_classifier *cl,
 	lua_rawgeti(L, LUA_REGISTRYINDEX, ctx->learn_ref);
 	ptask = lua_newuserdata(L, sizeof(*ptask));
 	*ptask = task;
-	rspamd_lua_setclass(L, "rspamd{task}", -1);
+	rspamd_lua_setclass(L, rspamd_task_classname, -1);
 	pcfg = lua_newuserdata(L, sizeof(*pcfg));
 	*pcfg = cl->cfg;
-	rspamd_lua_setclass(L, "rspamd{classifier}", -1);
+	rspamd_lua_setclass(L, rspamd_classifier_classname, -1);
 
 	lua_createtable(L, tokens->len, 0);
 

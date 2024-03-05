@@ -149,7 +149,7 @@ struct lua_mempool_udata {
 struct memory_pool_s *
 rspamd_lua_check_mempool(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{mempool}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_mempool_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'mempool' expected");
 	return ud ? *((struct memory_pool_s **) ud) : NULL;
 }
@@ -165,7 +165,7 @@ lua_mempool_create(lua_State *L)
 
 	if (mempool) {
 		pmempool = lua_newuserdata(L, sizeof(struct memory_pool_s *));
-		rspamd_lua_setclass(L, "rspamd{mempool}", -1);
+		rspamd_lua_setclass(L, rspamd_mempool_classname, -1);
 		*pmempool = mempool;
 	}
 	else {
@@ -606,7 +606,7 @@ lua_load_mempool(lua_State *L)
 
 void luaopen_mempool(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{mempool}", mempoollib_m);
+	rspamd_lua_new_class(L, rspamd_mempool_classname, mempoollib_m);
 	lua_pop(L, 1);
 	rspamd_lua_add_preload(L, "rspamd_mempool", lua_load_mempool);
 }

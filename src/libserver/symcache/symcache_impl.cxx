@@ -1052,7 +1052,7 @@ auto symcache::periodic_resort(struct ev_loop *ev_loop, double cur_time, double 
 				lua_rawgeti(L, LUA_REGISTRYINDEX, peak_cb);
 				pbase = (struct ev_loop **) lua_newuserdata(L, sizeof(*pbase));
 				*pbase = ev_loop;
-				rspamd_lua_setclass(L, "rspamd{ev_base}", -1);
+				rspamd_lua_setclass(L, rspamd_ev_base_classname, -1);
 				lua_pushlstring(L, item->symbol.c_str(), item->symbol.size());
 				lua_pushnumber(L, item->st->avg_frequency);
 				lua_pushnumber(L, ::sqrt(item->st->stddev_frequency));

@@ -123,7 +123,7 @@ lua_expr_quark(void)
 struct lua_expression *
 rspamd_lua_expression(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{expr}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_expr_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'expr' expected");
 	return ud ? *((struct lua_expression **) ud) : NULL;
 }
@@ -429,7 +429,7 @@ lua_expr_create(lua_State *L)
 
 		rspamd_mempool_add_destructor(pool, lua_expr_dtor, e);
 		pe = lua_newuserdata(L, sizeof(struct lua_expression *));
-		rspamd_lua_setclass(L, "rspamd{expr}", -1);
+		rspamd_lua_setclass(L, rspamd_expr_classname, -1);
 		*pe = e;
 		lua_pushnil(L);
 	}
@@ -506,7 +506,7 @@ lua_load_expression(lua_State *L)
 
 void luaopen_expression(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{expr}", exprlib_m);
+	rspamd_lua_new_class(L, rspamd_expr_classname, exprlib_m);
 	lua_pop(L, 1);
 	rspamd_lua_add_preload(L, "rspamd_expression", lua_load_expression);
 }

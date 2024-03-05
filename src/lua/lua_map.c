@@ -183,7 +183,7 @@ struct lua_map_callback_data {
 struct rspamd_lua_map *
 lua_check_map(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{map}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_map_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'map' expected");
 	return ud ? *((struct rspamd_lua_map **) ud) : NULL;
 }
@@ -219,7 +219,7 @@ gint lua_config_add_radix_map(lua_State *L)
 		m->lua_map = map;
 		pmap = lua_newuserdata(L, sizeof(void *));
 		*pmap = map;
-		rspamd_lua_setclass(L, "rspamd{map}", -1);
+		rspamd_lua_setclass(L, rspamd_map_classname, -1);
 	}
 	else {
 		return luaL_error(L, "invalid arguments");
@@ -277,7 +277,7 @@ gint lua_config_radix_from_config(lua_State *L)
 			map->map = m;
 			m->lua_map = map;
 			*pmap = map;
-			rspamd_lua_setclass(L, "rspamd{map}", -1);
+			rspamd_lua_setclass(L, rspamd_map_classname, -1);
 		}
 		else {
 			msg_warn_config("Couldnt find config option [%s][%s]", mname,
@@ -339,7 +339,7 @@ gint lua_config_radix_from_ucl(lua_State *L)
 		map->map = m;
 		m->lua_map = map;
 		*pmap = map;
-		rspamd_lua_setclass(L, "rspamd{map}", -1);
+		rspamd_lua_setclass(L, rspamd_map_classname, -1);
 	}
 	else {
 		return luaL_error(L, "invalid arguments");
@@ -378,7 +378,7 @@ gint lua_config_add_hash_map(lua_State *L)
 		m->lua_map = map;
 		pmap = lua_newuserdata(L, sizeof(void *));
 		*pmap = map;
-		rspamd_lua_setclass(L, "rspamd{map}", -1);
+		rspamd_lua_setclass(L, rspamd_map_classname, -1);
 	}
 	else {
 		return luaL_error(L, "invalid arguments");
@@ -418,7 +418,7 @@ gint lua_config_add_kv_map(lua_State *L)
 		m->lua_map = map;
 		pmap = lua_newuserdata(L, sizeof(void *));
 		*pmap = map;
-		rspamd_lua_setclass(L, "rspamd{map}", -1);
+		rspamd_lua_setclass(L, rspamd_map_classname, -1);
 	}
 	else {
 		return luaL_error(L, "invalid arguments");
@@ -507,7 +507,7 @@ lua_map_fin(struct map_cb_data *data, void **target)
 				struct rspamd_lua_text *t;
 
 				t = lua_newuserdata(cbdata->L, sizeof(*t));
-				rspamd_lua_setclass(cbdata->L, "rspamd{text}", -1);
+				rspamd_lua_setclass(cbdata->L, rspamd_text_classname, -1);
 				t->flags = 0;
 				t->len = cbdata->data->len;
 				t->start = cbdata->data->str;
@@ -515,7 +515,7 @@ lua_map_fin(struct map_cb_data *data, void **target)
 
 			pmap = lua_newuserdata(cbdata->L, sizeof(void *));
 			*pmap = cbdata->lua_map;
-			rspamd_lua_setclass(cbdata->L, "rspamd{map}", -1);
+			rspamd_lua_setclass(cbdata->L, rspamd_map_classname, -1);
 
 			gint ret = lua_pcall(cbdata->L, 2, 0, err_idx);
 
@@ -781,7 +781,7 @@ gint lua_config_add_map(lua_State *L)
 		map->map = m;
 		pmap = lua_newuserdata(L, sizeof(void *));
 		*pmap = map;
-		rspamd_lua_setclass(L, "rspamd{map}", -1);
+		rspamd_lua_setclass(L, rspamd_map_classname, -1);
 	}
 	else {
 		return luaL_error(L, "invalid arguments");
@@ -833,7 +833,7 @@ gint lua_config_get_maps(lua_State *L)
 
 			pmap = lua_newuserdata(L, sizeof(*pmap));
 			*pmap = map;
-			rspamd_lua_setclass(L, "rspamd{map}", -1);
+			rspamd_lua_setclass(L, rspamd_map_classname, -1);
 			lua_rawseti(L, -2, i);
 
 			cur = g_list_next(cur);
@@ -897,7 +897,7 @@ lua_map_get_key(lua_State *L)
 				}
 			}
 			else if (lua_type(L, 2) == LUA_TUSERDATA) {
-				ud = rspamd_lua_check_udata(L, 2, "rspamd{ip}");
+				ud = rspamd_lua_check_udata(L, 2, rspamd_ip_classname);
 				if (ud != NULL) {
 					addr = *((struct rspamd_lua_ip **) ud);
 
@@ -1415,7 +1415,7 @@ lua_map_on_load(lua_State *L)
 
 void luaopen_map(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{map}", maplib_m);
+	rspamd_lua_new_class(L, rspamd_map_classname, maplib_m);
 
 	lua_pop(L, 1);
 }

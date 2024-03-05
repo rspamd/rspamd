@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1382,7 +1382,7 @@ static const struct luaL_reg archivelib_m[] = {
 struct rspamd_task *
 lua_check_task(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{task}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_task_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'task' expected");
 	return ud ? *((struct rspamd_task **) ud) : NULL;
 }
@@ -1390,7 +1390,7 @@ lua_check_task(lua_State *L, gint pos)
 struct rspamd_task *
 lua_check_task_maybe(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata_maybe(L, pos, "rspamd{task}");
+	void *ud = rspamd_lua_check_udata_maybe(L, pos, rspamd_task_classname);
 
 	return ud ? *((struct rspamd_task **) ud) : NULL;
 }
@@ -1398,7 +1398,7 @@ lua_check_task_maybe(lua_State *L, gint pos)
 static struct rspamd_image *
 lua_check_image(lua_State *L)
 {
-	void *ud = rspamd_lua_check_udata(L, 1, "rspamd{image}");
+	void *ud = rspamd_lua_check_udata(L, 1, rspamd_image_classname);
 	luaL_argcheck(L, ud != NULL, 1, "'image' expected");
 	return ud ? *((struct rspamd_image **) ud) : NULL;
 }
@@ -1406,7 +1406,7 @@ lua_check_image(lua_State *L)
 static struct rspamd_archive *
 lua_check_archive(lua_State *L)
 {
-	void *ud = rspamd_lua_check_udata(L, 1, "rspamd{archive}");
+	void *ud = rspamd_lua_check_udata(L, 1, rspamd_archive_classname);
 	luaL_argcheck(L, ud != NULL, 1, "'archive' expected");
 	return ud ? *((struct rspamd_archive **) ud) : NULL;
 }
@@ -1505,7 +1505,7 @@ lua_task_get_cfg(lua_State *L)
 
 	if (task) {
 		pcfg = lua_newuserdata(L, sizeof(gpointer));
-		rspamd_lua_setclass(L, "rspamd{config}", -1);
+		rspamd_lua_setclass(L, rspamd_config_classname, -1);
 		*pcfg = task->cfg;
 	}
 	else {
@@ -1520,7 +1520,7 @@ lua_task_set_cfg(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task(L, 1);
-	void *ud = rspamd_lua_check_udata(L, 2, "rspamd{config}");
+	void *ud = rspamd_lua_check_udata(L, 2, rspamd_config_classname);
 
 	if (task) {
 		luaL_argcheck(L, ud != NULL, 1, "'config' expected");
@@ -1555,7 +1555,7 @@ lua_task_get_message(lua_State *L)
 
 	if (task) {
 		t = lua_newuserdata(L, sizeof(*t));
-		rspamd_lua_setclass(L, "rspamd{text}", -1);
+		rspamd_lua_setclass(L, rspamd_text_classname, -1);
 		t->flags = 0;
 		t->start = task->msg.begin;
 		t->len = task->msg.len;
@@ -1719,7 +1719,7 @@ lua_task_load_from_file(lua_State *L)
 
 		if (lua_type(L, 2) == LUA_TUSERDATA) {
 			gpointer p;
-			p = rspamd_lua_check_udata_maybe(L, 2, "rspamd{config}");
+			p = rspamd_lua_check_udata_maybe(L, 2, rspamd_config_classname);
 
 			if (p) {
 				cfg = *(struct rspamd_config **) p;
@@ -1781,7 +1781,7 @@ lua_task_load_from_file(lua_State *L)
 	if (res) {
 		ptask = lua_newuserdata(L, sizeof(*ptask));
 		*ptask = task;
-		rspamd_lua_setclass(L, "rspamd{task}", -1);
+		rspamd_lua_setclass(L, rspamd_task_classname, -1);
 	}
 	else {
 		if (err) {
@@ -1810,7 +1810,7 @@ lua_task_load_from_string(lua_State *L)
 
 		if (lua_type(L, 2) == LUA_TUSERDATA) {
 			gpointer p;
-			p = rspamd_lua_check_udata_maybe(L, 2, "rspamd{config}");
+			p = rspamd_lua_check_udata_maybe(L, 2, rspamd_config_classname);
 
 			if (p) {
 				cfg = *(struct rspamd_config **) p;
@@ -1832,7 +1832,7 @@ lua_task_load_from_string(lua_State *L)
 
 	ptask = lua_newuserdata(L, sizeof(*ptask));
 	*ptask = task;
-	rspamd_lua_setclass(L, "rspamd{task}", -1);
+	rspamd_lua_setclass(L, rspamd_task_classname, -1);
 
 	return 2;
 }
@@ -1847,7 +1847,7 @@ lua_task_create(lua_State *L)
 
 	if (lua_type(L, 1) == LUA_TUSERDATA) {
 		gpointer p;
-		p = rspamd_lua_check_udata_maybe(L, 1, "rspamd{config}");
+		p = rspamd_lua_check_udata_maybe(L, 1, rspamd_config_classname);
 
 		if (p) {
 			cfg = *(struct rspamd_config **) p;
@@ -1856,7 +1856,7 @@ lua_task_create(lua_State *L)
 
 	if (lua_type(L, 2) == LUA_TUSERDATA) {
 		gpointer p;
-		p = rspamd_lua_check_udata_maybe(L, 2, "rspamd{ev_base}");
+		p = rspamd_lua_check_udata_maybe(L, 2, rspamd_ev_base_classname);
 
 		if (p) {
 			ev_base = *(struct ev_loop **) p;
@@ -1868,7 +1868,7 @@ lua_task_create(lua_State *L)
 
 	ptask = lua_newuserdata(L, sizeof(*ptask));
 	*ptask = task;
-	rspamd_lua_setclass(L, "rspamd{task}", -1);
+	rspamd_lua_setclass(L, rspamd_task_classname, -1);
 
 	return 1;
 }
@@ -1882,7 +1882,7 @@ lua_task_get_mempool(lua_State *L)
 
 	if (task != NULL) {
 		ppool = lua_newuserdata(L, sizeof(rspamd_mempool_t *));
-		rspamd_lua_setclass(L, "rspamd{mempool}", -1);
+		rspamd_lua_setclass(L, rspamd_mempool_classname, -1);
 		*ppool = task->task_pool;
 	}
 	else {
@@ -1901,7 +1901,7 @@ lua_task_get_session(lua_State *L)
 
 	if (task != NULL) {
 		psession = lua_newuserdata(L, sizeof(void *));
-		rspamd_lua_setclass(L, "rspamd{session}", -1);
+		rspamd_lua_setclass(L, rspamd_session_classname, -1);
 		*psession = task->s;
 	}
 	else {
@@ -1935,7 +1935,7 @@ lua_task_get_ev_base(lua_State *L)
 
 	if (task != NULL) {
 		pbase = lua_newuserdata(L, sizeof(struct ev_loop *));
-		rspamd_lua_setclass(L, "rspamd{ev_base}", -1);
+		rspamd_lua_setclass(L, rspamd_ev_base_classname, -1);
 		*pbase = task->event_loop;
 	}
 	else {
@@ -1954,7 +1954,7 @@ lua_task_get_worker(lua_State *L)
 	if (task != NULL) {
 		if (task->worker) {
 			pworker = lua_newuserdata(L, sizeof(struct rspamd_worker *));
-			rspamd_lua_setclass(L, "rspamd{worker}", -1);
+			rspamd_lua_setclass(L, rspamd_worker_classname, -1);
 			*pworker = task->worker;
 		}
 		else {
@@ -2636,7 +2636,7 @@ lua_task_inject_url(lua_State *L)
 	if (lua_isuserdata(L, 3)) {
 		/* We also have a mime part there */
 		mpart = *((struct rspamd_mime_part **) rspamd_lua_check_udata_maybe(L,
-																			3, "rspamd{mimepart}"));
+																			3, rspamd_mimepart_classname));
 	}
 
 	if (task && task->message && url && url->url) {
@@ -2663,7 +2663,7 @@ lua_task_get_content(lua_State *L)
 
 	if (task) {
 		t = lua_newuserdata(L, sizeof(*t));
-		rspamd_lua_setclass(L, "rspamd{text}", -1);
+		rspamd_lua_setclass(L, rspamd_text_classname, -1);
 		t->len = task->msg.len;
 		t->start = task->msg.begin;
 		t->flags = 0;
@@ -2802,7 +2802,7 @@ lua_task_get_text_parts(lua_State *L)
 				{
 					ppart = lua_newuserdata(L, sizeof(struct rspamd_mime_text_part *));
 					*ppart = part;
-					rspamd_lua_setclass(L, "rspamd{textpart}", -1);
+					rspamd_lua_setclass(L, rspamd_textpart_classname, -1);
 					/* Make it array */
 					lua_rawseti(L, -2, i + 1);
 				}
@@ -2837,7 +2837,7 @@ lua_task_get_parts(lua_State *L)
 			{
 				ppart = lua_newuserdata(L, sizeof(struct rspamd_mime_part *));
 				*ppart = part;
-				rspamd_lua_setclass(L, "rspamd{mimepart}", -1);
+				rspamd_lua_setclass(L, rspamd_mimepart_classname, -1);
 				/* Make it array */
 				lua_rawseti(L, -2, i + 1);
 			}
@@ -2869,7 +2869,7 @@ lua_task_get_request_header(lua_State *L)
 
 		if (hdr) {
 			t = lua_newuserdata(L, sizeof(*t));
-			rspamd_lua_setclass(L, "rspamd{text}", -1);
+			rspamd_lua_setclass(L, rspamd_text_classname, -1);
 			t->start = hdr->begin;
 			t->len = hdr->len;
 			t->flags = 0;
@@ -3181,7 +3181,7 @@ lua_task_get_raw_headers(lua_State *L)
 
 	if (task && task->message) {
 		t = lua_newuserdata(L, sizeof(*t));
-		rspamd_lua_setclass(L, "rspamd{text}", -1);
+		rspamd_lua_setclass(L, rspamd_text_classname, -1);
 		t->start = MESSAGE_FIELD(task, raw_headers_content).begin;
 		t->len = MESSAGE_FIELD(task, raw_headers_content).len;
 		t->flags = 0;
@@ -3272,7 +3272,7 @@ lua_task_get_resolver(lua_State *L)
 
 	if (task != NULL && task->resolver != NULL) {
 		presolver = lua_newuserdata(L, sizeof(void *));
-		rspamd_lua_setclass(L, "rspamd{resolver}", -1);
+		rspamd_lua_setclass(L, rspamd_resolver_classname, -1);
 		*presolver = task->resolver;
 	}
 	else {
@@ -4472,7 +4472,7 @@ lua_task_get_images(lua_State *L)
 				{
 					if (part->part_type == RSPAMD_MIME_PART_IMAGE) {
 						pimg = lua_newuserdata(L, sizeof(struct rspamd_image *));
-						rspamd_lua_setclass(L, "rspamd{image}", -1);
+						rspamd_lua_setclass(L, rspamd_image_classname, -1);
 						*pimg = part->specific.img;
 						lua_rawseti(L, -2, ++nelt);
 					}
@@ -4510,7 +4510,7 @@ lua_task_get_archives(lua_State *L)
 				{
 					if (part->part_type == RSPAMD_MIME_PART_ARCHIVE) {
 						parch = lua_newuserdata(L, sizeof(struct rspamd_archive *));
-						rspamd_lua_setclass(L, "rspamd{archive}", -1);
+						rspamd_lua_setclass(L, rspamd_archive_classname, -1);
 						*parch = part->specific.arch;
 						lua_rawseti(L, -2, ++nelt);
 					}
@@ -6685,7 +6685,7 @@ lua_task_headers_foreach(lua_State *L)
 				lua_gettable(L, 3);
 
 				if (lua_isuserdata(L, -1)) {
-					RSPAMD_LUA_CHECK_UDATA_PTR_OR_RETURN(L, -1, "rspamd{regexp}",
+					RSPAMD_LUA_CHECK_UDATA_PTR_OR_RETURN(L, -1, rspamd_regexp_classname,
 														 struct rspamd_lua_regexp, re);
 				}
 
@@ -7265,13 +7265,13 @@ lua_load_task(lua_State *L)
 static void
 luaopen_archive(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{archive}", archivelib_m);
+	rspamd_lua_new_class(L, rspamd_archive_classname, archivelib_m);
 	lua_pop(L, 1);
 }
 
 void luaopen_task(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{task}", tasklib_m);
+	rspamd_lua_new_class(L, rspamd_task_classname, tasklib_m);
 	lua_pop(L, 1);
 
 	rspamd_lua_add_preload(L, "rspamd_task", lua_load_task);
@@ -7281,7 +7281,7 @@ void luaopen_task(lua_State *L)
 
 void luaopen_image(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{image}", imagelib_m);
+	rspamd_lua_new_class(L, rspamd_image_classname, imagelib_m);
 	lua_pop(L, 1);
 }
 
@@ -7290,6 +7290,6 @@ void rspamd_lua_task_push(lua_State *L, struct rspamd_task *task)
 	struct rspamd_task **ptask;
 
 	ptask = lua_newuserdata(L, sizeof(gpointer));
-	rspamd_lua_setclass(L, "rspamd{task}", -1);
+	rspamd_lua_setclass(L, rspamd_task_classname, -1);
 	*ptask = task;
 }
