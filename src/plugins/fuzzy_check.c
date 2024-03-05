@@ -1570,7 +1570,7 @@ fuzzy_rule_check_mimepart(struct rspamd_task *task,
 
 		ppart = lua_newuserdata(L, sizeof(*ppart));
 		*ppart = part;
-		rspamd_lua_setclass(L, "rspamd{mimepart}", -1);
+		rspamd_lua_setclass(L, rspamd_mimepart_classname, -1);
 
 		lua_pushnumber(L, rule->lua_id);
 

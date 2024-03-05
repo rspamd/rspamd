@@ -2551,7 +2551,7 @@ static int
 lua_fuzzy_add_pre_handler(lua_State *L)
 {
 	struct rspamd_worker *wrk, **pwrk = (struct rspamd_worker **)
-								   rspamd_lua_check_udata(L, 1, "rspamd{worker}");
+								   rspamd_lua_check_udata(L, 1, rspamd_worker_classname);
 	struct rspamd_fuzzy_storage_ctx *ctx;
 
 	if (!pwrk) {
@@ -2582,7 +2582,7 @@ static int
 lua_fuzzy_add_post_handler(lua_State *L)
 {
 	struct rspamd_worker *wrk, **pwrk = (struct rspamd_worker **)
-								   rspamd_lua_check_udata(L, 1, "rspamd{worker}");
+								   rspamd_lua_check_udata(L, 1, rspamd_worker_classname);
 	struct rspamd_fuzzy_storage_ctx *ctx;
 
 	if (!pwrk) {
@@ -2613,7 +2613,7 @@ static int
 lua_fuzzy_add_blacklist_handler(lua_State *L)
 {
 	struct rspamd_worker *wrk, **pwrk = (struct rspamd_worker **)
-								   rspamd_lua_check_udata(L, 1, "rspamd{worker}");
+								   rspamd_lua_check_udata(L, 1, rspamd_worker_classname);
 	struct rspamd_fuzzy_storage_ctx *ctx;
 
 	if (!pwrk) {
@@ -3458,17 +3458,17 @@ start_fuzzy(struct rspamd_worker *worker)
 		.name = "add_fuzzy_pre_handler",
 		.func = lua_fuzzy_add_pre_handler,
 	};
-	rspamd_lua_add_metamethod(ctx->cfg->lua_state, "rspamd{worker}", &fuzzy_lua_reg);
+	rspamd_lua_add_metamethod(ctx->cfg->lua_state, rspamd_worker_classname, &fuzzy_lua_reg);
 	fuzzy_lua_reg = (luaL_Reg){
 		.name = "add_fuzzy_post_handler",
 		.func = lua_fuzzy_add_post_handler,
 	};
-	rspamd_lua_add_metamethod(ctx->cfg->lua_state, "rspamd{worker}", &fuzzy_lua_reg);
+	rspamd_lua_add_metamethod(ctx->cfg->lua_state, rspamd_worker_classname, &fuzzy_lua_reg);
 	fuzzy_lua_reg = (luaL_Reg){
 		.name = "add_fuzzy_blacklist_handler",
 		.func = lua_fuzzy_add_blacklist_handler,
 	};
-	rspamd_lua_add_metamethod(ctx->cfg->lua_state, "rspamd{worker}", &fuzzy_lua_reg);
+	rspamd_lua_add_metamethod(ctx->cfg->lua_state, rspamd_worker_classname, &fuzzy_lua_reg);
 
 	rspamd_lua_run_postloads(ctx->cfg->lua_state, ctx->cfg, ctx->event_loop,
 							 worker);

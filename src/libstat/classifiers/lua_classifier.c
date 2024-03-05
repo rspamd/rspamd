@@ -148,7 +148,7 @@ lua_classifier_classify(struct rspamd_classifier *cl,
 	rspamd_lua_setclass(L, rspamd_task_classname, -1);
 	pcfg = lua_newuserdata(L, sizeof(*pcfg));
 	*pcfg = cl->cfg;
-	rspamd_lua_setclass(L, "rspamd{classifier}", -1);
+	rspamd_lua_setclass(L, rspamd_classifier_classname, -1);
 
 	lua_createtable(L, tokens->len, 0);
 
@@ -203,7 +203,7 @@ lua_classifier_learn_spam(struct rspamd_classifier *cl,
 	rspamd_lua_setclass(L, rspamd_task_classname, -1);
 	pcfg = lua_newuserdata(L, sizeof(*pcfg));
 	*pcfg = cl->cfg;
-	rspamd_lua_setclass(L, "rspamd{classifier}", -1);
+	rspamd_lua_setclass(L, rspamd_classifier_classname, -1);
 
 	lua_createtable(L, tokens->len, 0);
 

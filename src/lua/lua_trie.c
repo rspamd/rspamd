@@ -62,7 +62,7 @@ static const struct luaL_reg trielib_f[] = {
 static struct rspamd_multipattern *
 lua_check_trie(lua_State *L, gint idx)
 {
-	void *ud = rspamd_lua_check_udata(L, 1, "rspamd{trie}");
+	void *ud = rspamd_lua_check_udata(L, 1, rspamd_trie_classname);
 
 	luaL_argcheck(L, ud != NULL, 1, "'trie' expected");
 	return ud ? *((struct rspamd_multipattern **) ud) : NULL;
@@ -150,7 +150,7 @@ lua_trie_create(lua_State *L)
 		}
 		else {
 			ptrie = lua_newuserdata(L, sizeof(void *));
-			rspamd_lua_setclass(L, "rspamd{trie}", -1);
+			rspamd_lua_setclass(L, rspamd_trie_classname, -1);
 			*ptrie = trie;
 		}
 	}
@@ -494,7 +494,7 @@ lua_load_trie(lua_State *L)
 
 void luaopen_trie(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{trie}", trielib_m);
+	rspamd_lua_new_class(L, rspamd_trie_classname, trielib_m);
 	lua_pop(L, 1);
 	rspamd_lua_add_preload(L, "rspamd_trie", lua_load_trie);
 }

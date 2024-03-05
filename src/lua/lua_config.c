@@ -947,7 +947,7 @@ static const guint64 rspamd_lua_callback_magic = 0x32c118af1e3263c7ULL;
 struct rspamd_config *
 lua_check_config(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{config}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_config_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'config' expected");
 	return ud ? *((struct rspamd_config **) ud) : NULL;
 }
@@ -955,7 +955,7 @@ lua_check_config(lua_State *L, gint pos)
 static struct rspamd_monitored *
 lua_check_monitored(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{monitored}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_monitored_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'monitored' expected");
 	return ud ? *((struct rspamd_monitored **) ud) : NULL;
 }
@@ -1002,7 +1002,7 @@ lua_config_get_mempool(lua_State *L)
 
 	if (cfg != NULL) {
 		ppool = lua_newuserdata(L, sizeof(rspamd_mempool_t *));
-		rspamd_lua_setclass(L, "rspamd{mempool}", -1);
+		rspamd_lua_setclass(L, rspamd_mempool_classname, -1);
 		*ppool = cfg->cfg_pool;
 	}
 	else {
@@ -1020,7 +1020,7 @@ lua_config_get_resolver(lua_State *L)
 
 	if (cfg != NULL && cfg->dns_resolver) {
 		pres = lua_newuserdata(L, sizeof(*pres));
-		rspamd_lua_setclass(L, "rspamd{resolver}", -1);
+		rspamd_lua_setclass(L, rspamd_resolver_classname, -1);
 		*pres = cfg->dns_resolver;
 	}
 	else {
@@ -1160,7 +1160,7 @@ lua_config_get_classifier(lua_State *L)
 		if (pclc) {
 			pclc = lua_newuserdata(L,
 								   sizeof(struct rspamd_classifier_config *));
-			rspamd_lua_setclass(L, "rspamd{classifier}", -1);
+			rspamd_lua_setclass(L, rspamd_classifier_classname, -1);
 			*pclc = clc;
 			return 1;
 		}
@@ -3361,11 +3361,11 @@ lua_periodic_callback(struct ev_loop *loop, ev_timer *w, int revents)
 
 	lua_rawgeti(L, LUA_REGISTRYINDEX, periodic->cbref);
 	pcfg = lua_newuserdata(L, sizeof(*pcfg));
-	rspamd_lua_setclass(L, "rspamd{config}", -1);
+	rspamd_lua_setclass(L, rspamd_config_classname, -1);
 	cfg = periodic->cfg;
 	*pcfg = cfg;
 	pev_base = lua_newuserdata(L, sizeof(*pev_base));
-	rspamd_lua_setclass(L, "rspamd{ev_base}", -1);
+	rspamd_lua_setclass(L, rspamd_ev_base_classname, -1);
 	*pev_base = periodic->event_loop;
 	lua_pushnumber(L, ev_now(periodic->event_loop));
 
@@ -3532,7 +3532,7 @@ lua_config_get_symbols_cksum(lua_State *L)
 
 	pres = lua_newuserdata(L, sizeof(res));
 	*pres = res;
-	rspamd_lua_setclass(L, "rspamd{int64}", -1);
+	rspamd_lua_setclass(L, rspamd_int64_classname, -1);
 
 	return 1;
 }
@@ -4094,7 +4094,7 @@ lua_config_register_monitored(lua_State *L)
 			if (m) {
 				pm = lua_newuserdata(L, sizeof(*pm));
 				*pm = m;
-				rspamd_lua_setclass(L, "rspamd{monitored}", -1);
+				rspamd_lua_setclass(L, rspamd_monitored_classname, -1);
 			}
 			else {
 				lua_pushnil(L);
@@ -4591,7 +4591,7 @@ lua_config_register_re_selector(lua_State *L)
 					lua_pushvalue(L, -2);
 
 					pcfg = lua_newuserdata(L, sizeof(*pcfg));
-					rspamd_lua_setclass(L, "rspamd{config}", -1);
+					rspamd_lua_setclass(L, rspamd_config_classname, -1);
 					*pcfg = cfg;
 					lua_pushstring(L, selector_str);
 					lua_pushstring(L, delimiter);
@@ -4749,11 +4749,11 @@ lua_monitored_latency(lua_State *L)
 
 void luaopen_config(lua_State *L)
 {
-	rspamd_lua_new_class(L, "rspamd{config}", configlib_m);
+	rspamd_lua_new_class(L, rspamd_config_classname, configlib_m);
 
 	lua_pop(L, 1);
 
-	rspamd_lua_new_class(L, "rspamd{monitored}", monitoredlib_m);
+	rspamd_lua_new_class(L, rspamd_monitored_classname, monitoredlib_m);
 
 	lua_pop(L, 1);
 }

@@ -22,7 +22,7 @@
 #include "libserver/spf.h"
 #include "libutil/ref.h"
 
-#define SPF_RECORD_CLASS "rspamd{spf_record}"
+#define SPF_RECORD_CLASS rspamd_spf_record_classname
 
 LUA_FUNCTION_DEF(spf, resolve);
 LUA_FUNCTION_DEF(spf, config);

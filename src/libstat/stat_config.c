@@ -214,7 +214,7 @@ void rspamd_stat_init(struct rspamd_config *cfg, struct ev_loop *ev_base)
 
 				pcfg = lua_newuserdata(L, sizeof(*pcfg));
 				*pcfg = cfg;
-				rspamd_lua_setclass(L, "rspamd{config}", -1);
+				rspamd_lua_setclass(L, rspamd_config_classname, -1);
 
 				if ((ret = lua_pcall(L, 1, 1, err_idx)) != 0) {
 					msg_err_config("call to gen_stat_tokens lua "

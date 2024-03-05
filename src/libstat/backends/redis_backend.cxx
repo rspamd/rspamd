@@ -547,7 +547,7 @@ rspamd_redis_init(struct rspamd_stat_ctx *ctx,
 	if (ctx->event_loop) {
 		auto **pev_base = (struct ev_loop **) lua_newuserdata(L, sizeof(struct ev_loop *));
 		*pev_base = ctx->event_loop;
-		rspamd_lua_setclass(L, "rspamd{ev_base}", -1);
+		rspamd_lua_setclass(L, rspamd_ev_base_classname, -1);
 	}
 	else {
 		lua_pushnil(L);

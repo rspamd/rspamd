@@ -855,7 +855,7 @@ void rspamd_lua_set_globals(struct rspamd_config *cfg, lua_State *L)
 
 	if (cfg != NULL) {
 		pcfg = lua_newuserdata(L, sizeof(struct rspamd_config *));
-		rspamd_lua_setclass(L, "rspamd{config}", -1);
+		rspamd_lua_setclass(L, rspamd_config_classname, -1);
 		*pcfg = cfg;
 		lua_setglobal(L, "rspamd_config");
 	}
@@ -987,7 +987,7 @@ rspamd_lua_init(bool wipe_mem)
 	lua_settop(L, 0);
 #endif
 
-	rspamd_lua_new_class(L, "rspamd{session}", NULL);
+	rspamd_lua_new_class(L, rspamd_session_classname, NULL);
 	lua_pop(L, 1);
 
 	rspamd_lua_add_preload(L, "lpeg", luaopen_lpeg);
@@ -1122,7 +1122,7 @@ rspamd_init_lua_filters(struct rspamd_config *cfg, bool force_load, bool strict)
 	gint err_idx, i;
 
 	pcfg = lua_newuserdata(L, sizeof(struct rspamd_config *));
-	rspamd_lua_setclass(L, "rspamd{config}", -1);
+	rspamd_lua_setclass(L, rspamd_config_classname, -1);
 	*pcfg = cfg;
 	lua_setglobal(L, "rspamd_config");
 
@@ -2084,7 +2084,7 @@ rspamd_lua_check_udata_maybe(lua_State *L, gint pos, const gchar *classname)
 struct rspamd_async_session *
 lua_check_session(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{session}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_session_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'session' expected");
 	return ud ? *((struct rspamd_async_session **) ud) : NULL;
 }
@@ -2092,7 +2092,7 @@ lua_check_session(lua_State *L, gint pos)
 struct ev_loop *
 lua_check_ev_base(lua_State *L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, "rspamd{ev_base}");
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_ev_base_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'event_base' expected");
 	return ud ? *((struct ev_loop **) ud) : NULL;
 }
@@ -2117,15 +2117,15 @@ void rspamd_lua_run_postloads(lua_State *L, struct rspamd_config *cfg,
 		lua_rawgeti(L, LUA_REGISTRYINDEX, sc->cbref);
 		pcfg = lua_newuserdata(L, sizeof(*pcfg));
 		*pcfg = cfg;
-		rspamd_lua_setclass(L, "rspamd{config}", -1);
+		rspamd_lua_setclass(L, rspamd_config_classname, -1);
 
 		pev_base = lua_newuserdata(L, sizeof(*pev_base));
 		*pev_base = ev_base;
-		rspamd_lua_setclass(L, "rspamd{ev_base}", -1);
+		rspamd_lua_setclass(L, rspamd_ev_base_classname, -1);
 
 		pw = lua_newuserdata(L, sizeof(*pw));
 		*pw = w;
-		rspamd_lua_setclass(L, "rspamd{worker}", -1);
+		rspamd_lua_setclass(L, rspamd_worker_classname, -1);
 
 		lua_thread_call(thread, 3);
 	}
@@ -2145,7 +2145,7 @@ void rspamd_lua_run_config_post_init(lua_State *L, struct rspamd_config *cfg)
 		lua_rawgeti(L, LUA_REGISTRYINDEX, sc->cbref);
 		pcfg = lua_newuserdata(L, sizeof(*pcfg));
 		*pcfg = cfg;
-		rspamd_lua_setclass(L, "rspamd{config}", -1);
+		rspamd_lua_setclass(L, rspamd_config_classname, -1);
 
 		if (lua_pcall(L, 1, 0, err_idx) != 0) {
 			msg_err_config("cannot run config post init script: %s; priority = %d",
@@ -2170,7 +2170,7 @@ void rspamd_lua_run_config_unload(lua_State *L, struct rspamd_config *cfg)
 		lua_rawgeti(L, LUA_REGISTRYINDEX, sc->cbref);
 		pcfg = lua_newuserdata(L, sizeof(*pcfg));
 		*pcfg = cfg;
-		rspamd_lua_setclass(L, "rspamd{config}", -1);
+		rspamd_lua_setclass(L, rspamd_config_classname, -1);
 
 		if (lua_pcall(L, 1, 0, err_idx) != 0) {
 			msg_err_config("cannot run config post init script: %s",
@@ -2365,7 +2365,7 @@ rspamd_lua_try_load_redis(lua_State *L, const ucl_object_t *obj,
 	/* Function arguments */
 	ucl_object_push_lua(L, obj, false);
 	pcfg = lua_newuserdata(L, sizeof(*pcfg));
-	rspamd_lua_setclass(L, "rspamd{config}", -1);
+	rspamd_lua_setclass(L, rspamd_config_classname, -1);
 	*pcfg = cfg;
 	lua_pushboolean(L, false); /* no_fallback */
 
