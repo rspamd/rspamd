@@ -401,6 +401,14 @@ table#symbolsTable input[type="number"] {
 
 .outline-dashed-primary { outline: 2px dashed var(--bs-primary); }
 
+#scanMsgSource:placeholder-shown {
+  background-image: url("../img/drop-area.svg");
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.8;
+}
+#scanMsgSource:not(:placeholder-shown) { background-image: none;}
+
 .scorebar-spam {
     background-color: rgba(240 0 0 / 0.1) !important;
 }
