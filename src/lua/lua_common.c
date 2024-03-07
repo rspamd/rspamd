@@ -122,6 +122,9 @@ void rspamd_lua_new_class(lua_State *L,
 	int offset = luaL_ref(L, LUA_REGISTRYINDEX);
 	k = kh_put(lua_class_set, ctx->classes, GPOINTER_TO_INT(classname), &r);
 	kh_value(ctx->classes, k) = offset;
+	/* Set class name as a metatable[1] converted to an integer for faster comparisons */
+	lua_pushinteger(L, GPOINTER_TO_INT(classname));
+	lua_rawseti(L, -2, 1);
 	/* MT is left on stack ! */
 }
 
@@ -1980,17 +1983,18 @@ rspamd_lua_check_udata_common(lua_State *L, gint pos, const gchar *classname,
 	else {
 		/* Match class */
 		if (lua_getmetatable(L, pos)) {
-			struct rspamd_lua_context *ctx = rspamd_lua_ctx_by_state(L);
+			/* Get mt[1] and check if it is an iteger */
+			lua_rawgeti(L, -1, 1);
 
-			k = kh_get(lua_class_set, ctx->classes, GPOINTER_TO_INT(classname));
-
-			if (k == kh_end(ctx->classes)) {
+			if (!lua_isnumber(L, -1)) {
+				lua_pop(L, 1);
 				goto err;
 			}
 
-			lua_rawgeti(L, LUA_REGISTRYINDEX, kh_value(ctx->classes, k));
+			lua_Integer idx = lua_tointeger(L, -1);
+			lua_pop(L, 1);
 
-			if (!lua_rawequal(L, -1, -2)) {
+			if (idx != GPOINTER_TO_INT(classname)) {
 				goto err;
 			}
 		}
