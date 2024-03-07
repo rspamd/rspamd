@@ -37,5 +37,5 @@ UNKNOWN SENDER WRONG DOMAIN RESCAN
   
 CHECK INCOMING EMAIL
   Scan File  ${RSPAMD_TESTDIR}/messages/replyto_1_1.eml
-  ...  Settings={symbols_enabled [CHECK_INC_EMAIL]}
-  Expect Symbol  CHECK_INC_EMAIL
+  ...  Settings={symbols_enabled [CHECK_INC_MAIL]}
+  Expect Symbol  CHECK_INC_MAIL

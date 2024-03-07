@@ -205,6 +205,7 @@ end
 local function check_known_incoming_mail_callback(task)
   local sender = task:get_from(0)
   if not sender then
+    rspamd_logger.errx(task, 'Couldn\'t get sender')
     return nil
   end
 
@@ -235,15 +236,13 @@ local function check_known_incoming_mail_callback(task)
   if list_of_senders then
     for _, sndr in ipairs(list_of_senders) do
       if sndr == sender then
-        lua_util.debugm(N, task, 'Incoming mail and it\'s sender is known')
-        return true
+        task:insert_result('CHECK_INC_MAIL', 1.0, string.format('Incoming mail and it\'s sender is known'))
       else
-        lua_util.debugm(N, task, 'Incoming mail and it\'s sender is unknown')
-        return false
+        task:insert_result('CHECK_INC_MAIL', 1.0, string.format('Incoming mail and it\'s sender is unknown'))
       end
-      end
+    end
   end
-
+  task:insert_result('CHECK_INC_MAIL', 1.0, string.format('Nothing happened'))
 end
 
 local opts = rspamd_config:get_all_opt('known_senders')
