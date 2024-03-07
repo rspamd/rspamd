@@ -242,7 +242,6 @@ local function check_known_incoming_mail_callback(task)
       end
     end
   end
-  task:insert_result('CHECK_INC_MAIL', 1.0, string.format('Nothing happened'))
 end
 
 local opts = rspamd_config:get_all_opt('known_senders')
