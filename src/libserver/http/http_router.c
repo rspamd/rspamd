@@ -44,6 +44,7 @@ static const struct _rspamd_http_magic {
 	[HTTP_MAGIC_ICO] = {"ico", "image/x-icon"},
 	[HTTP_MAGIC_PNG] = {"png", "image/png"},
 	[HTTP_MAGIC_JPG] = {"jpg", "image/jpeg"},
+	[HTTP_MAGIC_JPG] = {"svg", "image/svg+xml"},
 };
 
 /*
