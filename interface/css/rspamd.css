@@ -311,6 +311,10 @@ table#symbolsTable input[type="number"] {
 .footable tr:not(.footable-detail-row) > td {
     font-size: 11px;
 }
+.footable-dropdown-btn-group {
+    padding: 0 20px;
+    margin: 7px 0;
+}
 
 .status-table tr:last-child td:last-child {
     border-radius: 0 0 calc(var(--bs-border-radius) + 1px) 0;
