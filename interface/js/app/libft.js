@@ -293,6 +293,8 @@ define(["jquery", "app/common", "footable"],
                     $.each(self.actions, (i, action) => {
                         self.$action.append($("<option/>").text(action));
                     });
+
+                    common.appendButtonsToFtFilterDropdown(self);
                 },
                 _onStatusDropdownChanged: function (e) {
                     const {self} = e.data;
