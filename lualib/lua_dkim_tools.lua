@@ -641,22 +641,27 @@ exports.sign_using_vault = function(N, task, settings, selectors, sign_func, err
               full_url, body))
         else
           local elts = obj.data.selectors or {}
+          local errs = {}
+          local nvalid = 0
 
           -- Filter selectors by time/sanity
           local function is_selector_valid(p)
             if not p.key or not p.selector then
+              table.insert(errs, { "missing key/selector", p })
               return false
             end
 
             if p.valid_start then
               -- Check start time
               if rspamd_util.get_time() < tonumber(p.valid_start) then
+                table.insert(errs, { "start time is in the future", p })
                 return false
               end
             end
 
             if p.valid_end then
               if rspamd_util.get_time() >= tonumber(p.valid_end) then
+                table.insert(errs, { "end time is in the past", p })
                 return false
               end
             end
@@ -672,8 +677,17 @@ exports.sign_using_vault = function(N, task, settings, selectors, sign_func, err
             }
             lua_util.debugm(N, task, 'found and parsed key for %s:%s in Vault',
                 dkim_sign_data.domain, dkim_sign_data.selector)
+            nvalid = nvalid + 1
             sign_func(task, dkim_sign_data)
           end, fun.filter(is_selector_valid, elts))
+          for _, e in errs do
+            lua_util.debugm(N, task, 'error found during processing Vault selectors: %s:%s',
+                e[1], e[2])
+          end
+
+          if nvalid == 0 then
+            lua_util.debugm(N, task, 'no valid selectors have been returned from the Vault, skip signing')
+          end
         end
       end
     end
