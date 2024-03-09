@@ -614,12 +614,12 @@ exports.sign_using_redis = function(N, task, settings, selectors, sign_func, err
   end
 end
 
-exports.sign_using_vault = function(N, task, settings, selectors, sign_func, err_func)
+exports.sign_using_vault = function(N, task, settings, selector, sign_func, err_func)
   local http = require "rspamd_http"
   local ucl = require "ucl"
 
   local full_url = string.format('%s/v1/%s/%s',
-      settings.vault_url, settings.vault_path or 'dkim', selectors.domain)
+      settings.vault_url, settings.vault_path or 'dkim', selector.domain)
   local upstream_list = lua_util.http_upstreams_by_url(rspamd_config:get_mempool(), settings.vault_url)
 
   local function vault_callback(err, code, body, _)
@@ -671,7 +671,7 @@ exports.sign_using_vault = function(N, task, settings, selectors, sign_func, err
             local dkim_sign_data = {
               rawkey = p.key,
               selector = p.selector,
-              domain = p.domain or selectors.domain,
+              domain = p.domain or selector.domain,
               alg = p.alg,
             }
             lua_util.debugm(N, task, 'found and parsed key for %s:%s in Vault',
@@ -707,7 +707,7 @@ exports.sign_using_vault = function(N, task, settings, selectors, sign_func, err
 
   if not ret then
     err_func(task, string.format("cannot make HTTP request to load DKIM data domain %s",
-        selectors.domain))
+        selector.domain))
   end
 end
 
