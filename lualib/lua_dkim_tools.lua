@@ -461,21 +461,20 @@ local function prepare_dkim_signing(N, task, settings)
   if settings.use_vault then
     if settings.vault_domains then
       if settings.vault_domains:get_key(dkim_domain) then
-        return true, {
+        table.insert(p, {
           domain = dkim_domain,
           vault = true,
-        }
+        })
       else
         lua_util.debugm(N, task, 'domain %s is not designated for vault',
             dkim_domain)
-        return false, {}
       end
     else
       -- TODO: try every domain in the vault
-      return true, {
+      table.insert(p, {
         domain = dkim_domain,
         vault = true,
-      }
+      })
     end
   end
 
@@ -546,7 +545,7 @@ local function prepare_dkim_signing(N, task, settings)
   insert_or_update_prop(N, task, p, 'domain', 'dkim_domain',
       dkim_domain)
 
-  return true, p
+  return #p > 0 and true or false, p
 end
 
 exports.prepare_dkim_signing = prepare_dkim_signing

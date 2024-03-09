@@ -108,7 +108,7 @@ end
 local function dkim_signing_cb(task)
   local ret, selectors = dkim_sign_tools.prepare_dkim_signing(N, task, settings)
 
-  if not ret then
+  if not ret or #selectors == 0 then
     return
   end
 
