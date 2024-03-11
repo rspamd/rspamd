@@ -1636,7 +1636,7 @@ rspamd_protocol_write_ucl(struct rspamd_task *task,
 }
 
 void rspamd_protocol_http_reply(struct rspamd_http_message *msg,
-								struct rspamd_task *task, ucl_object_t **pobj)
+								struct rspamd_task *task, ucl_object_t **pobj, int how)
 {
 	struct rspamd_scan_result *metric_res;
 	const struct rspamd_re_cache_stat *restat;
@@ -1695,7 +1695,7 @@ void rspamd_protocol_http_reply(struct rspamd_http_message *msg,
 
 	if (msg->method < HTTP_SYMBOLS && !RSPAMD_TASK_IS_SPAMC(task)) {
 		msg_debug_protocol("writing json reply");
-		rspamd_ucl_emit_fstring(top, UCL_EMIT_JSON_COMPACT, &reply);
+		rspamd_ucl_emit_fstring(top, how, &reply);
 	}
 	else {
 		if (RSPAMD_TASK_IS_SPAMC(task)) {
@@ -2111,6 +2111,16 @@ void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout)
 						  MESSAGE_FIELD_CHECK(task, message_id));
 	}
 
+	const rspamd_ftok_t *accept_hdr;
+	int out_type = UCL_EMIT_JSON_COMPACT;
+	accept_hdr = rspamd_task_get_request_header(task, "Accept");
+
+	if (accept_hdr && rspamd_substring_search(accept_hdr->begin, accept_hdr->len,
+											  "application/msgpack", sizeof("application/msgpack") - 1)) {
+		ctype = "application/msgpack";
+		out_type = UCL_EMIT_MSGPACK;
+	}
+
 	/* Compatibility */
 	if (task->cmd == CMD_CHECK_RSPAMC) {
 		msg->method = HTTP_SYMBOLS;
@@ -2134,15 +2144,15 @@ void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout)
 							  ucl_object_fromstring(g_quark_to_string(task->err->domain)),
 							  "error_domain", 0, false);
 		reply = rspamd_fstring_sized_new(256);
-		rspamd_ucl_emit_fstring(top, UCL_EMIT_JSON_COMPACT, &reply);
+		rspamd_ucl_emit_fstring(top, out_type, &reply);
 		ucl_object_unref(top);
 
 		/* We also need to validate utf8 */
-		if (rspamd_fast_utf8_validate(reply->str, reply->len) != 0) {
+		if (out_type != UCL_EMIT_MSGPACK && rspamd_fast_utf8_validate(reply->str, reply->len) != 0) {
 			gsize valid_len;
 			gchar *validated;
 
-			/* We copy reply several times here but it should be a rare case */
+			/* We copy reply several times here, but it should be a rare case */
 			validated = rspamd_str_make_utf_valid(reply->str, reply->len,
 												  &valid_len, task->task_pool);
 			rspamd_http_message_set_body(msg, validated, valid_len);
@@ -2161,7 +2171,7 @@ void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout)
 		case CMD_CHECK_SPAMC:
 		case CMD_SKIP:
 		case CMD_CHECK_V2:
-			rspamd_protocol_http_reply(msg, task, NULL);
+			rspamd_protocol_http_reply(msg, task, NULL, out_type);
 			rspamd_protocol_write_log_pipe(task);
 			break;
 		case CMD_PING:

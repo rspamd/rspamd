@@ -1713,7 +1713,15 @@ rspamd_proxy_scan_self_reply(struct rspamd_task *task)
 	struct rspamd_http_message *msg;
 	struct rspamd_proxy_session *session = task->fin_arg, *nsession;
 	ucl_object_t *rep = NULL;
+	int out_type = UCL_EMIT_JSON_COMPACT;
 	const char *ctype = "application/json";
+	const rspamd_ftok_t *accept_hdr = rspamd_task_get_request_header(task, "Accept");
+
+	if (accept_hdr && rspamd_substring_search(accept_hdr->begin, accept_hdr->len,
+											  "application/msgpack", sizeof("application/msgpack") - 1)) {
+		ctype = "application/msgpack";
+		out_type = UCL_EMIT_MSGPACK;
+	}
 
 	msg = rspamd_http_new_message(HTTP_RESPONSE);
 	msg->date = time(NULL);
@@ -1726,7 +1734,7 @@ rspamd_proxy_scan_self_reply(struct rspamd_task *task)
 	case CMD_CHECK_SPAMC:
 	case CMD_CHECK_V2:
 		rspamd_task_set_finish_time(task);
-		rspamd_protocol_http_reply(msg, task, &rep);
+		rspamd_protocol_http_reply(msg, task, &rep, out_type);
 		rspamd_protocol_write_log_pipe(task);
 		break;
 	case CMD_PING:

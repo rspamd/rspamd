@@ -1574,7 +1574,6 @@ rspamd_controller_handle_lua_history(lua_State *L,
 				}
 
 				task->http_conn = rspamd_http_connection_ref(conn_ent->conn);
-				;
 				task->sock = -1;
 				session->task = task;
 
@@ -1904,7 +1903,6 @@ rspamd_controller_handle_lua(struct rspamd_http_connection_entry *conn_ent,
 									task);
 	task->fin_arg = conn_ent;
 	task->http_conn = rspamd_http_connection_ref(conn_ent->conn);
-	;
 	task->sock = -1;
 	session->task = task;
 
@@ -2005,16 +2003,25 @@ rspamd_controller_scan_reply(struct rspamd_task *task)
 {
 	struct rspamd_http_message *msg;
 	struct rspamd_http_connection_entry *conn_ent;
+	int out_type = UCL_EMIT_JSON_COMPACT;
+	const char *ctype = "application/json";
+	const rspamd_ftok_t *accept_hdr = rspamd_task_get_request_header(task, "Accept");
+
+	if (accept_hdr && rspamd_substring_search(accept_hdr->begin, accept_hdr->len,
+											  "application/msgpack", sizeof("application/msgpack") - 1)) {
+		ctype = "application/msgpack";
+		out_type = UCL_EMIT_MSGPACK;
+	}
 
 	conn_ent = task->fin_arg;
 	msg = rspamd_http_new_message(HTTP_RESPONSE);
 	msg->date = time(NULL);
 	msg->code = 200;
-	rspamd_protocol_http_reply(msg, task, NULL);
+	rspamd_protocol_http_reply(msg, task, NULL, out_type);
 	rspamd_http_connection_reset(conn_ent->conn);
 	rspamd_http_router_insert_headers(conn_ent->rt, msg);
 	rspamd_http_connection_write_message(conn_ent->conn, msg, NULL,
-										 "application/json", conn_ent, conn_ent->rt->timeout);
+										 ctype, conn_ent, conn_ent->rt->timeout);
 	conn_ent->is_reply = TRUE;
 }
 
