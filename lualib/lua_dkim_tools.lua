@@ -461,21 +461,20 @@ local function prepare_dkim_signing(N, task, settings)
   if settings.use_vault then
     if settings.vault_domains then
       if settings.vault_domains:get_key(dkim_domain) then
-        return true, {
+        table.insert(p, {
           domain = dkim_domain,
           vault = true,
-        }
+        })
       else
         lua_util.debugm(N, task, 'domain %s is not designated for vault',
             dkim_domain)
-        return false, {}
       end
     else
       -- TODO: try every domain in the vault
-      return true, {
+      table.insert(p, {
         domain = dkim_domain,
         vault = true,
-      }
+      })
     end
   end
 
@@ -546,7 +545,7 @@ local function prepare_dkim_signing(N, task, settings)
   insert_or_update_prop(N, task, p, 'domain', 'dkim_domain',
       dkim_domain)
 
-  return true, p
+  return #p > 0 and true or false, p
 end
 
 exports.prepare_dkim_signing = prepare_dkim_signing
@@ -615,12 +614,12 @@ exports.sign_using_redis = function(N, task, settings, selectors, sign_func, err
   end
 end
 
-exports.sign_using_vault = function(N, task, settings, selectors, sign_func, err_func)
+exports.sign_using_vault = function(N, task, settings, selector, sign_func, err_func)
   local http = require "rspamd_http"
   local ucl = require "ucl"
 
   local full_url = string.format('%s/v1/%s/%s',
-      settings.vault_url, settings.vault_path or 'dkim', selectors.domain)
+      settings.vault_url, settings.vault_path or 'dkim', selector.domain)
   local upstream_list = lua_util.http_upstreams_by_url(rspamd_config:get_mempool(), settings.vault_url)
 
   local function vault_callback(err, code, body, _)
@@ -641,22 +640,27 @@ exports.sign_using_vault = function(N, task, settings, selectors, sign_func, err
               full_url, body))
         else
           local elts = obj.data.selectors or {}
+          local errs = {}
+          local nvalid = 0
 
           -- Filter selectors by time/sanity
           local function is_selector_valid(p)
             if not p.key or not p.selector then
+              table.insert(errs, { "missing key/selector", p })
               return false
             end
 
             if p.valid_start then
               -- Check start time
               if rspamd_util.get_time() < tonumber(p.valid_start) then
+                table.insert(errs, { "start time is in the future", p })
                 return false
               end
             end
 
             if p.valid_end then
               if rspamd_util.get_time() >= tonumber(p.valid_end) then
+                table.insert(errs, { "end time is in the past", p })
                 return false
               end
             end
@@ -667,13 +671,22 @@ exports.sign_using_vault = function(N, task, settings, selectors, sign_func, err
             local dkim_sign_data = {
               rawkey = p.key,
               selector = p.selector,
-              domain = p.domain or selectors.domain,
+              domain = p.domain or selector.domain,
               alg = p.alg,
             }
             lua_util.debugm(N, task, 'found and parsed key for %s:%s in Vault',
                 dkim_sign_data.domain, dkim_sign_data.selector)
+            nvalid = nvalid + 1
             sign_func(task, dkim_sign_data)
           end, fun.filter(is_selector_valid, elts))
+          for _, e in errs do
+            lua_util.debugm(N, task, 'error found during processing Vault selectors: %s:%s',
+                e[1], e[2])
+          end
+
+          if nvalid == 0 then
+            lua_util.debugm(N, task, 'no valid selectors have been returned from the Vault, skip signing')
+          end
         end
       end
     end
@@ -694,7 +707,7 @@ exports.sign_using_vault = function(N, task, settings, selectors, sign_func, err
 
   if not ret then
     err_func(task, string.format("cannot make HTTP request to load DKIM data domain %s",
-        selectors.domain))
+        selector.domain))
   end
 end
 
