@@ -2008,7 +2008,7 @@ rspamd_controller_scan_reply(struct rspamd_task *task)
 	const rspamd_ftok_t *accept_hdr = rspamd_task_get_request_header(task, "Accept");
 
 	if (accept_hdr && rspamd_substring_search(accept_hdr->begin, accept_hdr->len,
-											  "application/msgpack", sizeof("application/msgpack") - 1)) {
+											  "application/msgpack", sizeof("application/msgpack") - 1) != -1) {
 		ctype = "application/msgpack";
 		out_type = UCL_EMIT_MSGPACK;
 	}
