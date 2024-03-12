@@ -403,7 +403,7 @@ if opts then
       group = "replies"
     })
     rspamd_config:register_symbol({
-      name = settings['symbol'],
+      name = 'REPLY',
       parent = id,
       type = 'virtual',
       score = settings.score,
