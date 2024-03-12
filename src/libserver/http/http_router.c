@@ -30,7 +30,8 @@ enum http_magic_type {
 	HTTP_MAGIC_JS,
 	HTTP_MAGIC_ICO,
 	HTTP_MAGIC_PNG,
-	HTTP_MAGIC_JPG
+	HTTP_MAGIC_JPG,
+	HTTP_MAGIC_SVG
 };
 
 static const struct _rspamd_http_magic {
@@ -44,6 +45,7 @@ static const struct _rspamd_http_magic {
 	[HTTP_MAGIC_ICO] = {"ico", "image/x-icon"},
 	[HTTP_MAGIC_PNG] = {"png", "image/png"},
 	[HTTP_MAGIC_JPG] = {"jpg", "image/jpeg"},
+	[HTTP_MAGIC_SVG] = {"svg", "image/svg+xml"},
 };
 
 /*

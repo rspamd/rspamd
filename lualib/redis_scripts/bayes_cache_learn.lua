@@ -43,7 +43,7 @@ if not added then
     local exists = redis.call('EXISTS', prefix)
 
     if exists then
-      if expired then
+      if not expired then
         redis.call('DEL', prefix)
         redis.call('HSET', prefix, cache_id, is_spam)
 

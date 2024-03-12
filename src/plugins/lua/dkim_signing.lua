@@ -108,34 +108,31 @@ end
 local function dkim_signing_cb(task)
   local ret, selectors = dkim_sign_tools.prepare_dkim_signing(N, task, settings)
 
-  if not ret then
+  if not ret or #selectors == 0 then
+    return
+  end
+  if settings.use_redis then
+    -- Use only redis stuff here
+    dkim_sign_tools.sign_using_redis(N, task, settings, selectors, do_sign, sign_error)
     return
   end
 
-  if settings.use_redis then
-    dkim_sign_tools.sign_using_redis(N, task, settings, selectors, do_sign, sign_error)
-  else
-    if selectors.vault then
-      dkim_sign_tools.sign_using_vault(N, task, settings, selectors, do_sign, sign_error)
+  for _, k in ipairs(selectors) do
+    if k.vault then
+      dkim_sign_tools.sign_using_vault(N, task, settings, k, do_sign, sign_error)
     else
-      if #selectors > 0 then
-        for _, k in ipairs(selectors) do
-          -- templates
-          if k.key then
-            k.key = lua_util.template(k.key, {
-              domain = k.domain,
-              selector = k.selector
-            })
-            lua_util.debugm(N, task, 'using key "%s", use selector "%s" for domain "%s"',
-                k.key, k.selector, k.domain)
-          end
-
-          do_sign(task, k)
-        end
-      else
-        rspamd_logger.infox(task, 'key path or dkim selector unconfigured; no signing')
-        return false
+      -- templates
+      if k.key then
+        k.key = lua_util.template(k.key, {
+          domain = k.domain,
+          selector = k.selector
+        })
+        lua_util.debugm(N, task, 'using key "%s", use selector "%s" for domain "%s"',
+            k.key, k.selector, k.domain)
       end
+
+      do_sign(task, k)
+
     end
   end
 end
