@@ -234,5 +234,24 @@ define(["jquery", "nprogress"],
             return String(string).replace(htmlEscaper, (match) => htmlEscapes[match]);
         };
 
+        ui.appendButtonsToFtFilterDropdown = (ftFilter) => {
+            function button(text, classes, check) {
+                return $("<button/>", {
+                    type: "button",
+                    class: "btn btn-xs " + classes,
+                    text: text,
+                    click: () => {
+                        const checkboxes = ftFilter.$dropdown.find(".checkbox input");
+                        return (check) ? checkboxes.attr("checked", "checked") : checkboxes.removeAttr("checked");
+                    }
+                });
+            }
+
+            $("<div/>", {class: "d-flex justify-content-between footable-dropdown-btn-group"}).append(
+                button("Check all", "btn-secondary", true),
+                button("Uncheck all", "btn-outline-secondary ms-1")
+            ).appendTo(ftFilter.$dropdown);
+        };
+
         return ui;
     });

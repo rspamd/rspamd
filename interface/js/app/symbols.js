@@ -160,6 +160,8 @@ define(["jquery", "app/common", "footable"],
                             $.each(self.groups, (i, group) => {
                                 self.$group.append($("<option/>").text(group));
                             });
+
+                            common.appendButtonsToFtFilterDropdown(self);
                         },
                         _onStatusDropdownChanged: function (e) {
                             const {self} = e.data;
