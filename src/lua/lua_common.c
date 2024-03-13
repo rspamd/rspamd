@@ -1974,8 +1974,7 @@ rspamd_lua_check_udata_common(lua_State *L, gint pos, const gchar *classname,
 							  gboolean fatal)
 {
 	void *p = lua_touserdata(L, pos);
-	guint i, top = lua_gettop(L);
-	khiter_t k;
+	gint i, top = lua_gettop(L);
 
 	if (p == NULL) {
 		goto err;
