@@ -295,9 +295,9 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
 
     if opt[1] then
       local function check_plain_map(line)
-        return lua_util.str_startswith('http', line)
-            or lua_util.str_startswith('file:', line)
-            or lua_util.str_startswith('/', line)
+        return lua_util.str_startswith(line, 'http')
+            or lua_util.str_startswith(line, 'file:')
+            or lua_util.str_startswith(line, '/')
       end
       -- Adjust each element if needed
       local adjusted
