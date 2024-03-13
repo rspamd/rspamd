@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ static gboolean ucl_reply = FALSE;
 static gboolean extended_urls = FALSE;
 static gboolean mime_output = FALSE;
 static gboolean empty_input = FALSE;
-static gboolean compressed = FALSE;
+static gboolean compressed = TRUE;
 static gboolean profile = FALSE;
 static gboolean skip_images = FALSE;
 static gboolean skip_attachments = FALSE;
