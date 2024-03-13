@@ -2984,7 +2984,7 @@ ucl_parser_add_chunk_full (struct ucl_parser *parser, const unsigned char *data,
 
 		if (parse_type == UCL_PARSE_AUTO && len > 0) {
 			/* We need to detect parse type by the first symbol */
-			if ((*data & 0x80) == 0x80 && (*data >= 0xdc && *data <= 0xdf)) {
+			if ((*data & 0x80) == 0x80) {
 				parse_type = UCL_PARSE_MSGPACK;
 			}
 			else if (*data == '(') {
