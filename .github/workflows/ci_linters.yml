@@ -1,0 +1,14 @@
+name: ci_linters
+
+on:
+  workflow_call:
+
+jobs:
+  eslint:
+    uses: ./.github/workflows/ci_eslint.yml
+
+  luacheck:
+    uses: ./.github/workflows/ci_luacheck.yml
+
+  tidyall:
+    uses: ./.github/workflows/ci_tidyall.yml

@@ -1,0 +1,23 @@
+name: ci_tidyall
+
+on:
+  workflow_call:
+
+jobs:
+  tidyall:
+    runs-on: ubuntu-latest
+    container:
+      image: rspamd/ci:perl-tidyall
+      options: --user root
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v4
+
+      - name: Show tidyall version
+        run: tidyall --version
+
+      - name: Show perltidy version
+        run: perltidy --version | head -1
+
+      - name: Run tidyall
+        run: tidyall --all --check-only --no-cache --data-dir /tmp/tidyall

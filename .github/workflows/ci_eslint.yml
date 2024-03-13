@@ -1,0 +1,25 @@
+name: ci_eslint
+
+on:
+  workflow_call:
+
+jobs:
+  eslint:
+    runs-on: ubuntu-latest
+    container:
+      image: node:18-alpine
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Show installed packages
+        run: npm ls
+
+      - name: Run eslint
+        run: ./node_modules/.bin/eslint ./
+
+      - name: Run stylelint
+        run: ./node_modules/.bin/stylelint ./**/*.css ./**/*.html ./**/*.js
