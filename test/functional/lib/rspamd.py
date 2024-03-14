@@ -12,17 +12,6 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
 
 from urllib.request import urlopen
 import glob
@@ -41,11 +30,11 @@ import tempfile
 
 from robot.api import logger
 from robot.libraries.BuiltIn import BuiltIn
-import demjson
+import json
 
 
 def Check_JSON(j):
-    d = demjson.decode(j, strict=True)
+    d = json.JSONDecoder(strict=True).decode(j)
     logger.debug('got json %s' % d)
     assert len(d) > 0
     assert 'error' not in d
@@ -56,7 +45,7 @@ def check_json_log(fn):
     line_count = 0
     f = open(fn, 'r')
     for l in f.readlines():
-        d = demjson.decode(l, strict=True)
+        d = json.JSONDecoder(strict=True).decode(l)
         assert len(d) > 0
         line_count = line_count + 1
     assert line_count > 0
@@ -201,7 +190,7 @@ def Scan_File(filename, **headers):
     c.request("POST", "/checkv2", open(filename, "rb"), headers)
     r = c.getresponse()
     assert r.status == 200
-    d = demjson.decode(r.read())
+    d = json.JSONDecoder(strict=True).decode(r.read().decode('utf-8'))
     c.close()
     BuiltIn().set_test_variable("${SCAN_RESULT}", d)
     return
