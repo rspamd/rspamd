@@ -12,7 +12,7 @@ on:
 
 env:
   CTEST_OUTPUT_ON_FAILURE: 1
-  JOB_WORKDIR: ${{ github.workspace }}/${{ github.job }}-${{ inputs.name }}-${{ github.run_number }}
+  CONTAINER_WORKSPACE: ${GITHUB_WORKSPACE}
   RSPAMD_LUA_EXPENSIVE_TESTS: 1
 
 jobs:
@@ -23,12 +23,12 @@ jobs:
     steps:
       - name: Create directories
         run: |
-          sudo mkdir -p ${JOB_WORKDIR}
-          sudo chown -R build:build ${JOB_WORKDIR}
+          sudo mkdir -p ${GITHUB_WORKSPACE}
+          sudo chown -R build:build ${GITHUB_WORKSPACE}
 
       - name: Check out the repo
         run: |
-          cd ${JOB_WORKDIR}
+          cd ${GITHUB_WORKSPACE}
           git clone ${{ github.server_url }}/${{ github.repository }} --branch ${{ github.ref_name }} --single-branch src
 
       - name: Set variables on ARM64
@@ -37,13 +37,13 @@ jobs:
 
       - name: Run cmake
         run: |
-          mkdir ${JOB_WORKDIR}/build
-          cd ${JOB_WORKDIR}/build
-          cmake -DCMAKE_INSTALL_PREFIX=${JOB_WORKDIR}/install -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DENABLE_HYPERSCAN=ON ${{ env.HYPERSCAN_ALTROOT }} -GNinja ${JOB_WORKDIR}/src
+          mkdir ${GITHUB_WORKSPACE}/build
+          cd ${GITHUB_WORKSPACE}/build
+          cmake -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/install -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DENABLE_HYPERSCAN=ON ${{ env.HYPERSCAN_ALTROOT }} -GNinja ${GITHUB_WORKSPACE}/src
 
       - name: Build rspamd
         run: |
-          cd ${JOB_WORKDIR}/build
+          cd ${GITHUB_WORKSPACE}/build
           ncpu=$(getconf _NPROCESSORS_ONLN)
           ninja -j $ncpu install
           ninja -j $ncpu rspamd-test
@@ -52,7 +52,7 @@ jobs:
       - name: Run unit tests
         if: "!(inputs.name == 'ubuntu-ci' && runner.arch == 'ARM64')"
         run: |
-          cd ${JOB_WORKDIR}/build
+          cd ${GITHUB_WORKSPACE}/build
           ninja test
 
       - name: Apply Fedora specifics
@@ -62,11 +62,11 @@ jobs:
 
       - name: Run functional tests
         run: |
-          cd ${JOB_WORKDIR}/build
+          cd ${GITHUB_WORKSPACE}/build
           ulimit -c unlimited
           ulimit -s unlimited
           set +e
-          RSPAMD_INSTALLROOT=${JOB_WORKDIR}/install robot --removekeywords wuks --exclude isbroken ${JOB_WORKDIR}/src/test/functional/cases; EXIT_CODE=$?
+          RSPAMD_INSTALLROOT=${GITHUB_WORKSPACE}/install robot --removekeywords wuks --exclude isbroken ${GITHUB_WORKSPACE}/src/test/functional/cases; EXIT_CODE=$?
           set -e
           core_files=$(find /var/tmp/ -name '*.core')
           for core in $core_files; do exe=$(gdb --batch -ex 'info proc mappings' -c $core | tail -1 | awk '{print $5}'); gdb --batch -ex 'bt' -c $core $exe; echo '---'; done
@@ -79,7 +79,7 @@ jobs:
         with:
           name: robotlog-${{ inputs.name }}
           path: |
-            ${{ env.JOB_WORKDIR }}/build/*.*ml
+            ${{ env.CONTAINER_WORKSPACE }}/build/*.*ml
           retention-days: 1
 
       - name: Upload rspamd logs
@@ -87,10 +87,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rspamdlog-${{ inputs.name }}
-          path: ${{ env.JOB_WORKDIR }}/build/robot-save
+          path: ${{ env.CONTAINER_WORKSPACE }}/build/robot-save
           retention-days: 1
-
-      - name: Cleanup working directory
-        if: always()
-        run: |
-          sudo rm -rf ${JOB_WORKDIR}
