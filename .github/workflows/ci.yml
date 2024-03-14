@@ -15,11 +15,11 @@ jobs:
   fedora:
     uses: ./.github/workflows/ci_rspamd.yml
     with:
-      image: ghcr.io/fatalbanana/gha-images:fedora-ci
+      image: ghcr.io/rspamd/rspamd-build-docker:fedora-ci
       name: fedora-ci
 
   ubuntu:
     uses: ./.github/workflows/ci_rspamd.yml
     with:
-      image: ghcr.io/fatalbanana/gha-images:ubuntu-ci
+      image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-ci
       name: ubuntu-ci
