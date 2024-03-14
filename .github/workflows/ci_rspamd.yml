@@ -17,10 +17,7 @@ env:
 
 jobs:
   test:
-    runs-on: ["self-hosted", "linux", "${{ matrix.arch }}"]
-    strategy:
-      matrix:
-        arch: [ARM64, X64]
+    runs-on: ["ubuntu-latest"]
     container:
       image: ${{ inputs.image }}
     steps:
