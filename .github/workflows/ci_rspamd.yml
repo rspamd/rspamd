@@ -17,9 +17,10 @@ env:
 
 jobs:
   test:
-    runs-on: ["ubuntu-latest"]
+    runs-on: [ "ubuntu-latest" ]
     container:
       image: ${{ inputs.image }}
+      options: --user root
     steps:
       - name: Create directories
         run: |
