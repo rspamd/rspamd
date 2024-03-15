@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -466,7 +466,7 @@ rspamd_multipattern_try_save_hs(struct rspamd_multipattern *mp,
 #endif
 
 gboolean
-rspamd_multipattern_compile(struct rspamd_multipattern *mp, GError **err)
+rspamd_multipattern_compile(struct rspamd_multipattern *mp, int flags, GError **err)
 {
 	g_assert(mp != NULL);
 	g_assert(!mp->compiled);
@@ -483,7 +483,7 @@ rspamd_multipattern_compile(struct rspamd_multipattern *mp, GError **err)
 			rspamd_cryptobox_hash_update(&mp->hash_state, (void *) &plt, sizeof(plt));
 			rspamd_cryptobox_hash_final(&mp->hash_state, hash);
 
-			if (!rspamd_multipattern_try_load_hs(mp, hash)) {
+			if ((flags & RSPAMD_MULTIPATTERN_COMPILE_NO_FS) || !rspamd_multipattern_try_load_hs(mp, hash)) {
 				hs_database_t *db = NULL;
 
 				if (hs_compile_multi((const char *const *) mp->hs_pats->data,
@@ -504,18 +504,23 @@ rspamd_multipattern_compile(struct rspamd_multipattern *mp, GError **err)
 					return FALSE;
 				}
 
-				if (hs_cache_dir != NULL) {
-					char fpath[PATH_MAX];
-					rspamd_snprintf(fpath, sizeof(fpath), "%s/%*xs.hsmp", hs_cache_dir,
-									(gint) rspamd_cryptobox_HASHBYTES / 2, hash);
-					mp->hs_db = rspamd_hyperscan_from_raw_db(db, fpath);
+				if (!(flags & RSPAMD_MULTIPATTERN_COMPILE_NO_FS)) {
+					if (hs_cache_dir != NULL) {
+						char fpath[PATH_MAX];
+						rspamd_snprintf(fpath, sizeof(fpath), "%s/%*xs.hsmp", hs_cache_dir,
+										(gint) rspamd_cryptobox_HASHBYTES / 2, hash);
+						mp->hs_db = rspamd_hyperscan_from_raw_db(db, fpath);
+					}
+					else {
+						/* Should not happen in the real life */
+						mp->hs_db = rspamd_hyperscan_from_raw_db(db, NULL);
+					}
+
+					rspamd_multipattern_try_save_hs(mp, hash);
 				}
 				else {
-					/* Should not happen in the real life */
 					mp->hs_db = rspamd_hyperscan_from_raw_db(db, NULL);
 				}
-
-				rspamd_multipattern_try_save_hs(mp, hash);
 			}
 
 			for (i = 0; i < MAX_SCRATCH; i++) {

@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -117,12 +117,15 @@ void rspamd_multipattern_add_pattern(struct rspamd_multipattern *mp,
 void rspamd_multipattern_add_pattern_len(struct rspamd_multipattern *mp,
 										 const gchar *pattern, gsize patlen, gint flags);
 
+
+#define RSPAMD_MULTIPATTERN_COMPILE_NO_FS (0x1u << 0u)
 /**
  * Compiles multipattern structure
  * @param mp
  * @return
  */
 gboolean rspamd_multipattern_compile(struct rspamd_multipattern *mp,
+									 int flags,
 									 GError **err);
 
 /**
