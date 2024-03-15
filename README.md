@@ -1,6 +1,6 @@
 # <a href="https://rspamd.com"><img src="https://rspamd.com/img/rspamd_logo_black.png" alt="Rspamd" width="220px"/></a>
 
-[![DroneCI](https://ci.rspamd.com/api/badges/rspamd/rspamd/status.svg)](https://ci.rspamd.com/rspamd/rspamd)
+[![GHA](https://github.com/rspamd/rspamd/actions/workflows/ci.yml/badge.svg)](https://github.com/rspamd/rspamd/actions/workflows/ci.yml)
 
 
 ## Introduction
