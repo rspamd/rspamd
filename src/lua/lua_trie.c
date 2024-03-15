@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -142,7 +142,7 @@ lua_trie_create(lua_State *L)
 
 		lua_pop(L, 1); /* table */
 
-		if (!rspamd_multipattern_compile(trie, &err)) {
+		if (!rspamd_multipattern_compile(trie, 0, &err)) {
 			msg_err("cannot compile multipattern: %e", err);
 			g_error_free(err);
 			rspamd_multipattern_destroy(trie);
