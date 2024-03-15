@@ -12,7 +12,6 @@ on:
 
 env:
   CTEST_OUTPUT_ON_FAILURE: 1
-  CONTAINER_WORKSPACE: ${GITHUB_WORKSPACE}
   RSPAMD_LUA_EXPENSIVE_TESTS: 1
 
 jobs:
@@ -72,6 +71,9 @@ jobs:
           core_files=$(find /var/tmp/ -name '*.core')
           for core in $core_files; do exe=$(gdb --batch -ex 'info proc mappings' -c $core | tail -1 | awk '{print $5}'); gdb --batch -ex 'bt' -c $core $exe; echo '---'; done
           exit $EXIT_CODE
+
+      - name: Save workspace directory
+        run: echo "CONTAINER_WORKSPACE=${GITHUB_WORKSPACE}" >> "$GITHUB_ENV"
 
       # FIXME: upload test logs even on ARM
       - name: Upload robot logs
