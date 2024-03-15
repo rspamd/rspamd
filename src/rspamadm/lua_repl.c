@@ -604,7 +604,7 @@ lua_syntax_highlighter(const char *str, ReplxxColor *colours, int size, void *ud
 static void
 rspamadm_lua_run_repl(lua_State *L, bool is_batch)
 {
-	gchar *input;
+	gchar *input = NULL;
 #ifdef WITH_LUA_REPL
 	gboolean is_multiline = FALSE;
 	GString *tb = NULL;
