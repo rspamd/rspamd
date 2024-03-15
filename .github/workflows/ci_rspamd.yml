@@ -26,10 +26,8 @@ jobs:
           sudo mkdir -p ${GITHUB_WORKSPACE}
           sudo chown -R build:build ${GITHUB_WORKSPACE}
 
-      - name: Check out the repo
-        run: |
-          cd ${GITHUB_WORKSPACE}
-          git clone ${{ github.server_url }}/${{ github.repository }} --branch ${{ github.ref_name }} --single-branch src
+      - name: Check out source code
+        uses: actions/checkout@v4
 
       - name: Set variables on ARM64
         if: runner.arch == 'ARM64'
