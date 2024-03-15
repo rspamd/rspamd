@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -539,6 +539,7 @@ void rspamd_url_init(const gchar *tld_file)
 {
 	GError *err = NULL;
 	gboolean ret = TRUE;
+	int mp_compile_flags = 0;
 
 	if (url_scanner != NULL) {
 		rspamd_url_deinit();
@@ -564,6 +565,7 @@ void rspamd_url_init(const gchar *tld_file)
 		url_scanner->matchers_full = NULL;
 		url_scanner->search_trie_full = NULL;
 		url_scanner->has_tld_file = false;
+		mp_compile_flags |= RSPAMD_MULTIPATTERN_COMPILE_NO_FS;
 	}
 
 	rspamd_url_add_static_matchers(url_scanner);
@@ -577,13 +579,13 @@ void rspamd_url_init(const gchar *tld_file)
 				 url_scanner->matchers_full->len);
 	}
 
-	if (!rspamd_multipattern_compile(url_scanner->search_trie_strict, &err)) {
+	if (!rspamd_multipattern_compile(url_scanner->search_trie_strict, mp_compile_flags, &err)) {
 		msg_err("cannot compile url matcher static patterns, fatal error: %e", err);
 		abort();
 	}
 
 	if (url_scanner->search_trie_full) {
-		if (!rspamd_multipattern_compile(url_scanner->search_trie_full, &err)) {
+		if (!rspamd_multipattern_compile(url_scanner->search_trie_full, mp_compile_flags, &err)) {
 			msg_err("cannot compile tld patterns, url matching will be "
 					"incomplete: %e",
 					err);
