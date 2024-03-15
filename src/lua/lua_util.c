@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2469,7 +2469,7 @@ lua_util_readline(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	const gchar *prompt = "";
-	gchar *input;
+	gchar *input = NULL;
 
 	if (lua_type(L, 1) == LUA_TSTRING) {
 		prompt = lua_tostring(L, 1);
