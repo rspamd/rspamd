@@ -67,7 +67,7 @@ jobs:
           ulimit -c unlimited
           ulimit -s unlimited
           set +e
-          RSPAMD_INSTALLROOT=${GITHUB_WORKSPACE}/install robot --removekeywords wuks --exclude isbroken ${GITHUB_WORKSPACE}/src/test/functional/cases; EXIT_CODE=$?
+          RSPAMD_INSTALLROOT=${GITHUB_WORKSPACE}/install robot  -v RSPAMD_USER:root -v RSPAMD_GROUP:root --removekeywords wuks --exclude isbroken ${GITHUB_WORKSPACE}/src/test/functional/cases; EXIT_CODE=$?
           set -e
           core_files=$(find /var/tmp/ -name '*.core')
           for core in $core_files; do exe=$(gdb --batch -ex 'info proc mappings' -c $core | tail -1 | awk '{print $5}'); gdb --batch -ex 'bt' -c $core $exe; echo '---'; done
