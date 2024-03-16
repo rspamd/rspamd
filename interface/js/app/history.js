@@ -192,7 +192,8 @@ define(["jquery", "app/common", "app/libft", "footable"],
                             // Is there a way to get an event when the table is destroyed?
                             setTimeout(() => {
                                 libft.initHistoryTable(data, items, "history", get_history_columns(data), false,
-                                    () => $("#refresh, #updateHistory").removeAttr("disabled"));
+                                    () => $("#refresh, #updateHistory, #history .ft-columns-dropdown .btn-dropdown-apply")
+                                        .removeAttr("disabled"));
                             }, 200);
                         }
                         prevVersion = version;

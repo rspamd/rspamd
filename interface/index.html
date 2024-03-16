@@ -537,6 +537,10 @@
 								</select>
 							<label for="scan_page_size" class="ms-2">Rows per page:</label>
 							<input id="scan_page_size" class="form-control ms-1" value="25" min="1" type="number">
+							<button class="btn btn-outline-secondary btn-sm ms-2 d-flex align-items-center dropdown-toggle ft-columns-btn" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" disabled>
+								<i class="fas fa-columns me-1"></i>Columns
+							</button>
+							<div class="dropdown-menu ft-columns-dropdown p-2"></div>
 							<button class="btn btn-secondary btn-sm ms-2 d-flex align-items-center" id="cleanScanHistory" disabled>
 								<i class="fas fa-trash-alt me-1"></i>Clean history
 							</button>
@@ -649,6 +653,11 @@
 							</select>
 							<label for="history_page_size" class="ms-2">Rows per page:</label>
 							<input id="history_page_size" class="form-control ms-1" value="25" min="1" type="number">
+							<button class="btn btn-outline-secondary btn-sm ms-2 d-flex align-items-center dropdown-toggle ft-columns-btn" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" disabled>
+								<i class="fas fa-columns me-1"></i>Columns
+							</button>
+							<div class="dropdown-menu ft-columns-dropdown p-2"></div>
+
 							<button class="btn btn-danger btn-sm ms-2 d-flex align-items-center ro-hide" id="resetHistory">
 								<i class="fas fa-times-circle me-1"></i>Reset
 							</button>
