@@ -76,7 +76,7 @@ define(["jquery", "app/common", "app/libft"],
         }
 
         function enable_disable_scan_btn(disable) {
-            $("#scan button:not(#cleanScanHistory, #scanOptionsToggle)")
+            $("#scan button:not(#cleanScanHistory, #scanOptionsToggle, .ft-columns-btn)")
                 .prop("disabled", (disable || $.trim($("textarea").val()).length === 0));
         }
 
@@ -128,7 +128,8 @@ define(["jquery", "app/common", "app/libft"],
                                             }, ++filesIdx);
                                         } else {
                                             enable_disable_scan_btn();
-                                            $("#cleanScanHistory").removeAttr("disabled");
+                                            $("#cleanScanHistory, #scan .ft-columns-dropdown .btn-dropdown-apply")
+                                                .removeAttr("disabled");
                                             $("html, body").animate({
                                                 scrollTop: $("#scanResult").offset().top
                                             }, 1000);
