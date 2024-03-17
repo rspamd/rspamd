@@ -283,7 +283,6 @@ if opts then
       name = 'CHECK_INC_MAIL',
       type = 'normal',
       callback = check_known_incoming_mail_callback,
-      one_shot = true,
       score = 1.0
     })
 
