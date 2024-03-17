@@ -71,7 +71,7 @@ define(["jquery", "app/common", "footable"],
             }, {
                 name: "ip",
                 title: "IP address",
-                breakpoints: "xs sm md",
+                breakpoints: "md",
                 style: {
                     "minWidth": "calc(14ch + 8px)",
                     "word-break": "break-all"
@@ -81,7 +81,7 @@ define(["jquery", "app/common", "footable"],
             }, {
                 name: "sender_mime",
                 title: "[Envelope From] From",
-                breakpoints: "xs sm md",
+                breakpoints: "md",
                 style: {
                     "minWidth": 100,
                     "maxWidth": 200,
@@ -90,7 +90,7 @@ define(["jquery", "app/common", "footable"],
             }, {
                 name: "rcpt_mime_short",
                 title: "[Envelope To] To/Cc/Bcc",
-                breakpoints: "xs sm md",
+                breakpoints: "md",
                 filterable: false,
                 classes: "d-none d-xl-table-cell",
                 style: {
@@ -106,7 +106,7 @@ define(["jquery", "app/common", "footable"],
             }, {
                 name: "subject",
                 title: "Subject",
-                breakpoints: "xs sm md",
+                breakpoints: "md",
                 style: {
                     "word-break": "break-all",
                     "minWidth": 150
@@ -149,13 +149,13 @@ define(["jquery", "app/common", "footable"],
             }, {
                 name: "size",
                 title: "Msg size",
-                breakpoints: "xs sm md",
+                breakpoints: "md",
                 style: {minwidth: 50},
                 formatter: ui.formatBytesIEC
             }, {
                 name: "time_real",
                 title: "Scan time",
-                breakpoints: "xs sm md",
+                breakpoints: "md",
                 style: {maxWidth: 72},
                 sortValue: function (val) { return Number(val); }
             }, {
@@ -168,7 +168,7 @@ define(["jquery", "app/common", "footable"],
             }, {
                 name: "user",
                 title: "Authenticated user",
-                breakpoints: "xs sm md",
+                breakpoints: "md",
                 style: {
                     "minWidth": 100,
                     "maxWidth": 130,
@@ -326,6 +326,7 @@ define(["jquery", "app/common", "footable"],
                 : columnsDefault.map((column) => column);
 
             common.tables[table] = FooTable.init("#historyTable_" + table, {
+                cascade: true,
                 columns: columns,
                 rows: items,
                 expandFirst: expandFirst,
