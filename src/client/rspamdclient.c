@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -232,7 +232,9 @@ rspamd_client_finish_handler(struct rspamd_http_connection *conn,
 		}
 
 		parser = ucl_parser_new(0);
-		if (!ucl_parser_add_chunk(parser, start, len)) {
+		if (!ucl_parser_add_chunk_full(parser, start, len,
+									   ucl_parser_get_default_priority(parser),
+									   UCL_DUPLICATE_APPEND, UCL_PARSE_AUTO)) {
 			err = g_error_new(RCLIENT_ERROR, msg->code, "Cannot parse UCL: %s",
 							  ucl_parser_get_error(parser));
 			ucl_parser_free(parser);
@@ -453,6 +455,11 @@ rspamd_client_command(struct rspamd_client_connection *conn,
 	if (filename) {
 		rspamd_http_message_add_header(req->msg, "Filename", filename);
 	}
+
+	/*
+	 * Allow messagepack reply if supported
+	 */
+	rspamd_http_message_add_header(req->msg, "Accept", "application/msgpack");
 
 	req->msg->url = rspamd_fstring_append(req->msg->url, "/", 1);
 	req->msg->url = rspamd_fstring_append(req->msg->url, command, strlen(command));

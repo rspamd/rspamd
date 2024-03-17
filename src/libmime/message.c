@@ -674,7 +674,7 @@ rspamd_check_gtube(struct rspamd_task *task, struct rspamd_mime_text_part *part)
 										RSPAMD_MULTIPATTERN_DEFAULT);
 
 		GError *err = NULL;
-		rspamd_multipattern_compile(gtube_matcher, &err);
+		rspamd_multipattern_compile(gtube_matcher, RSPAMD_MULTIPATTERN_COMPILE_NO_FS, &err);
 
 		if (err != NULL) {
 			/* It will be expensive, but I don't care, still better than to abort */

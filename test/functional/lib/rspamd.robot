@@ -289,6 +289,7 @@ Run Rspamd
   ...  --var\=DBDIR\=${RSPAMD_TMPDIR}
   ...  --var\=LOCAL_CONFDIR\=/non-existent
   ...  --var\=CONFDIR\=${RSPAMD_TESTDIR}/../../conf/
+  ...  --insecure
   ...  env:RSPAMD_LOCAL_CONFDIR=/non-existent
   ...  env:RSPAMD_TMPDIR=${RSPAMD_TMPDIR}
   ...  env:RSPAMD_CONFDIR=${RSPAMD_TESTDIR}/../../conf/
@@ -302,6 +303,21 @@ Run Rspamd
   # Confirm worker is reachable
   Wait Until Keyword Succeeds  15x  1 sec  Ping Rspamd  ${RSPAMD_LOCAL_ADDR}  ${check_port}
 
+Rspamadm Setup
+  ${RSPAMADM_TMPDIR} =  Make Temporary Directory
+  Set Suite Variable  ${RSPAMADM_TMPDIR}
+
+Rspamadm Teardown
+  Cleanup Temporary Directory  ${RSPAMADM_TMPDIR}
+
+Rspamadm
+  [Arguments]  @{args}
+  ${result} =  Run Process  ${RSPAMADM}
+  ...  --var\=TMPDIR\=${RSPAMADM_TMPDIR}
+  ...  --var\=DBDIR\=${RSPAMADM_TMPDIR}
+  ...  --var\=LOCAL_CONFDIR\=/nonexistent
+  ...  @{args}
+  [Return]  ${result}
 
 Run Nginx
   ${template} =  Get File  ${RSPAMD_TESTDIR}/configs/nginx.conf

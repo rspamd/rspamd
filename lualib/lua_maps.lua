@@ -294,6 +294,11 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
     end
 
     if opt[1] then
+      local function check_plain_map(line)
+        return lua_util.str_startswith(line, 'http')
+            or lua_util.str_startswith(line, 'file:')
+            or lua_util.str_startswith(line, '/')
+      end
       -- Adjust each element if needed
       local adjusted
       for i, source in ipairs(opt) do
@@ -311,6 +316,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
       if mtype == 'radix' then
 
         if string.find(opt[1], '^%d') then
+          -- List of numeric stuff (hope it's ipnets definitions)
           local map = rspamd_config:radix_from_ucl(opt)
 
           if map then
@@ -338,7 +344,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
           end
         end
       elseif mtype == 'regexp' or mtype == 'glob' then
-        if string.find(opt[1], '^/%a') or string.find(opt[1], '^http') then
+        if check_plain_map(opt[1]) then
           -- Plain table
           local map = rspamd_config:add_map {
             type = mtype,
@@ -372,7 +378,8 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
           end
         end
       else
-        if string.find(opt[1], '^/%a') or string.find(opt[1], '^http') then
+        -- Not regexp/glob
+        if check_plain_map(opt[1]) then
           -- Plain table
           local map = rspamd_config:add_map {
             type = mtype,

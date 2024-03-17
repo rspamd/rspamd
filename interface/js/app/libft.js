@@ -4,6 +4,7 @@ define(["jquery", "app/common", "footable"],
     ($, common) => {
         "use strict";
         const ui = {};
+        const columnsCustom = JSON.parse(localStorage.getItem("columns")) || {};
 
         let pageSizeTimerId = null;
         let pageSizeInvocationCounter = 0;
@@ -230,13 +231,15 @@ define(["jquery", "app/common", "footable"],
         };
 
         ui.destroyTable = function (table) {
+            $("#" + table + " .ft-columns-btn.show").trigger("click.bs.dropdown"); // Hide dropdown
+            $("#" + table + " .ft-columns-btn").attr("disabled", true);
             if (common.tables[table]) {
                 common.tables[table].destroy();
                 delete common.tables[table];
             }
         };
 
-        ui.initHistoryTable = function (data, items, table, columns, expandFirst, postdrawCallback) {
+        ui.initHistoryTable = function (data, items, table, columnsDefault, expandFirst, postdrawCallback) {
             /* eslint-disable no-underscore-dangle */
             FooTable.Cell.extend("collapse", function () {
                 // call the original method
@@ -318,6 +321,10 @@ define(["jquery", "app/common", "footable"],
             });
             /* eslint-enable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
 
+            const columns = (table in columnsCustom)
+                ? columnsDefault.map((column) => $.extend({}, column, columnsCustom[table][column.name]))
+                : columnsDefault.map((column) => column);
+
             common.tables[table] = FooTable.init("#historyTable_" + table, {
                 columns: columns,
                 rows: items,
@@ -350,6 +357,107 @@ define(["jquery", "app/common", "footable"],
                     "postdraw.ft.table": postdrawCallback
                 }
             });
+
+            // Column options dropdown
+            (() => {
+                function updateValue(checked, column, cellIdx) {
+                    const option = ["breakpoints", "visible"][cellIdx];
+                    const value = [(checked) ? "all" : column.breakpoints, !checked][cellIdx];
+
+                    FooTable.get("#historyTable_" + table).columns.get(column.name)[option] = value;
+                    return value;
+                }
+
+                const tbody = $("<tbody/>", {class: "table-group-divider"});
+                $("#" + table + " .ft-columns-dropdown").empty().append(
+                    $("<table/>", {class: "table table-sm table-striped text-center"}).append(
+                        $("<thead/>").append(
+                            $("<tr/>").append(
+                                $("<th/>", {text: "Row", title: "Display column cells in a detail row on all screen widths"}),
+                                $("<th/>", {text: "Hidden", title: "Hide column completely"}),
+                                $("<th/>", {text: "Column name", class: "text-start"})
+                            )
+                        ),
+                        tbody
+                    ),
+                    $("<button/>", {
+                        type: "button",
+                        class: "btn btn-xs btn-secondary float-start",
+                        text: "Reset to default",
+                        click: () => {
+                            columnsDefault.forEach((column, i) => {
+                                const row = tbody[0].rows[i];
+                                [(column.breakpoints === "all"), (column.visible === false)].forEach((checked, cellIdx) => {
+                                    if (row.cells[cellIdx].getElementsByTagName("input")[0].checked !== checked) {
+                                        row.cells[cellIdx].getElementsByTagName("input")[0].checked = checked;
+
+                                        updateValue(checked, column, cellIdx);
+                                        delete columnsCustom[table];
+                                    }
+                                });
+                            });
+                        }
+                    }),
+                    $("<button/>", {
+                        type: "button",
+                        class: "btn btn-xs btn-primary float-end btn-dropdown-apply",
+                        text: "Apply",
+                        title: "Save settings and redraw the table",
+                        click: (e) => {
+                            $(e.target).attr("disabled", true);
+                            FooTable.get("#historyTable_" + table).draw();
+                            localStorage.setItem("columns", JSON.stringify(columnsCustom));
+                        }
+                    })
+                );
+
+                function checkbox(i, column, cellIdx) {
+                    const option = ["breakpoints", "visible"][cellIdx];
+                    return $("<td/>").append($("<input/>", {
+                        "type": "checkbox",
+                        "class": "form-check-input",
+                        "data-table": table,
+                        "data-name": column.name,
+                        "checked": (option === "breakpoints" && column.breakpoints === "all") ||
+                            (option === "visible" && column.visible === false),
+                        "disabled": (option === "breakpoints" && columnsDefault[i].breakpoints === "all")
+                    }).change((e) => {
+                        const value = updateValue(e.target.checked, columnsDefault[i], cellIdx);
+                        if (value == null) { // eslint-disable-line no-eq-null, eqeqeq
+                            delete columnsCustom[table][column.name][option];
+                        } else {
+                            $.extend(true, columnsCustom, {
+                                [table]: {
+                                    [column.name]: {
+                                        [option]: value
+                                    }
+                                }
+                            });
+                        }
+                    }));
+                }
+
+                $.each(columns, (i, column) => {
+                    tbody.append(
+                        $("<tr/>").append(
+                            checkbox(i, column, 0),
+                            checkbox(i, column, 1),
+                            $("<td/>", {
+                                class: "text-start",
+                                text: () => {
+                                    switch (column.name) {
+                                        case "passthrough_module": return "Pass-through module";
+                                        case "symbols": return "Symbols";
+                                        default: return column.title;
+                                    }
+                                }
+                            })
+                        )
+                    );
+                });
+
+                $("#" + table + " .ft-columns-btn").removeAttr("disabled");
+            })();
         };
 
         ui.preprocess_item = function (item) {

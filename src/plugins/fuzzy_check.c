@@ -3467,8 +3467,13 @@ fuzzy_process_handler(struct rspamd_http_connection_entry *conn_ent,
 	if (!is_hash) {
 		/* Allocate message from string */
 		/* XXX: what about encrypted messages ? */
-		task->msg.begin = msg->body_buf.begin;
-		task->msg.len = msg->body_buf.len;
+		if (!rspamd_task_load_message(task, msg, msg->body_buf.begin, msg->body_buf.len)) {
+			msg_warn_task("cannot load message for fuzzy");
+			rspamd_controller_send_error(conn_ent, 400, "Message load error");
+			rspamd_task_free(task);
+
+			return;
+		}
 
 		r = rspamd_message_parse(task);
 

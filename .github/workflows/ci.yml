@@ -1,0 +1,25 @@
+name: ci
+
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+
+jobs:
+  linters:
+    uses: ./.github/workflows/ci_linters.yml
+
+  fedora:
+    uses: ./.github/workflows/ci_rspamd.yml
+    with:
+      image: ghcr.io/rspamd/rspamd-build-docker:fedora-ci
+      name: fedora-ci
+
+  ubuntu:
+    uses: ./.github/workflows/ci_rspamd.yml
+    with:
+      image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-ci
+      name: ubuntu-ci

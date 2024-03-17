@@ -1,8 +1,8 @@
 *** Settings ***
 Suite Setup     Rspamadm Setup
 Suite Teardown  Rspamadm Teardown
-Library         Process
-Library         ../lib/rspamd.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 
 *** Test Cases ***
 Config Test
@@ -46,20 +46,3 @@ Verbose mode
   Should Match Regexp  ${result.stderr}  ^$
   Should Match Regexp  ${result.stdout}  hello world\n
   Should Be Equal As Integers  ${result.rc}  0
-
-*** Keywords ***
-Rspamadm Setup
-  ${RSPAMADM_TMPDIR} =  Make Temporary Directory
-  Set Suite Variable  ${RSPAMADM_TMPDIR}
-
-Rspamadm Teardown
-  Cleanup Temporary Directory  ${RSPAMADM_TMPDIR}
-
-Rspamadm
-  [Arguments]  @{args}
-  ${result} =  Run Process  ${RSPAMADM}
-  ...  --var\=TMPDIR\=${RSPAMADM_TMPDIR}
-  ...  --var\=DBDIR\=${RSPAMADM_TMPDIR}
-  ...  --var\=LOCAL_CONFDIR\=/nonexistent
-  ...  @{args}
-  [Return]  ${result}

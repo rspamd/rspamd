@@ -1,0 +1,16 @@
+name: ci_luacheck
+
+on:
+  workflow_call:
+
+jobs:
+  luacheck:
+    runs-on: ubuntu-latest
+    container:
+      image: pipelinecomponents/luacheck
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v4
+
+      - name: Run luacheck
+        run: luacheck -q --no-color .
