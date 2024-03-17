@@ -1,6 +1,4 @@
 *** Settings ***
-Suite Setup     Rspamd Redis Setup
-Suite Teardown  Rspamd Redis Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
