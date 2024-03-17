@@ -186,17 +186,18 @@ define(["jquery", "app/common", "footable"],
                     /* eslint-enable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
 
                     common.tables.symbols = FooTable.init("#symbolsTable", {
+                        breakpoints: common.breakpoints,
                         cascade: true,
                         columns: [
                             {sorted: true, direction: "ASC", name: "group", title: "Group"},
                             {name: "symbol", title: "Symbol"},
-                            {name: "description", title: "Description", breakpoints: "sm"},
+                            {name: "description", title: "Description", breakpoints: "md"},
                             {name: "weight", title: "Score"},
                             {name: "frequency",
                                 title: "Frequency",
-                                breakpoints: "sm",
+                                breakpoints: "md",
                                 sortValue: function (value) { return Number(value).toFixed(2); }},
-                            {name: "time", title: "Avg. time", breakpoints: "sm"},
+                            {name: "time", title: "Avg. time", breakpoints: "md"},
                         ],
                         rows: items[0],
                         paging: {

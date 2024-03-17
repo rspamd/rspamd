@@ -66,12 +66,12 @@ define(["jquery", "app/common", "footable"],
             }, {
                 name: "file",
                 title: "File name",
-                breakpoints: "xs",
+                breakpoints: "sm",
                 sortValue: (val) => ((typeof val === "undefined") ? "" : val)
             }, {
                 name: "ip",
                 title: "IP address",
-                breakpoints: "md",
+                breakpoints: "lg",
                 style: {
                     "minWidth": "calc(14ch + 8px)",
                     "word-break": "break-all"
@@ -81,7 +81,7 @@ define(["jquery", "app/common", "footable"],
             }, {
                 name: "sender_mime",
                 title: "[Envelope From] From",
-                breakpoints: "md",
+                breakpoints: "lg",
                 style: {
                     "minWidth": 100,
                     "maxWidth": 200,
@@ -90,7 +90,7 @@ define(["jquery", "app/common", "footable"],
             }, {
                 name: "rcpt_mime_short",
                 title: "[Envelope To] To/Cc/Bcc",
-                breakpoints: "md",
+                breakpoints: "lg",
                 filterable: false,
                 classes: "d-none d-xl-table-cell",
                 style: {
@@ -106,7 +106,7 @@ define(["jquery", "app/common", "footable"],
             }, {
                 name: "subject",
                 title: "Subject",
-                breakpoints: "md",
+                breakpoints: "lg",
                 style: {
                     "word-break": "break-all",
                     "minWidth": 150
@@ -118,7 +118,7 @@ define(["jquery", "app/common", "footable"],
             }, {
                 name: "passthrough_module",
                 title: '<div title="The module that has set the pre-result"><nobr>Pass-through</nobr> module</div>',
-                breakpoints: "xs",
+                breakpoints: "sm",
                 style: {minWidth: 98, maxWidth: 98},
                 sortValue: (val) => ((typeof val === "undefined") ? "" : val)
             }, {
@@ -149,13 +149,13 @@ define(["jquery", "app/common", "footable"],
             }, {
                 name: "size",
                 title: "Msg size",
-                breakpoints: "md",
+                breakpoints: "lg",
                 style: {minwidth: 50},
                 formatter: ui.formatBytesIEC
             }, {
                 name: "time_real",
                 title: "Scan time",
-                breakpoints: "md",
+                breakpoints: "lg",
                 style: {maxWidth: 72},
                 sortValue: function (val) { return Number(val); }
             }, {
@@ -168,7 +168,7 @@ define(["jquery", "app/common", "footable"],
             }, {
                 name: "user",
                 title: "Authenticated user",
-                breakpoints: "md",
+                breakpoints: "lg",
                 style: {
                     "minWidth": 100,
                     "maxWidth": 130,
@@ -326,6 +326,7 @@ define(["jquery", "app/common", "footable"],
                 : columnsDefault.map((column) => column);
 
             common.tables[table] = FooTable.init("#historyTable_" + table, {
+                breakpoints: common.breakpoints,
                 cascade: true,
                 columns: columns,
                 rows: items,

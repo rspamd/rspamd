@@ -73,7 +73,7 @@ define(["jquery", "app/common", "app/libft", "footable"],
             }, {
                 name: "ip",
                 title: "IP address",
-                breakpoints: "sm",
+                breakpoints: "md",
                 style: {width: 150, maxWidth: 150}
             }, {
                 name: "action",
@@ -92,13 +92,13 @@ define(["jquery", "app/common", "app/libft", "footable"],
             }, {
                 name: "size",
                 title: "Message size",
-                breakpoints: "sm",
+                breakpoints: "md",
                 style: {width: 120, maxWidth: 120},
                 formatter: libft.formatBytesIEC
             }, {
                 name: "scan_time",
                 title: "Scan time",
-                breakpoints: "sm",
+                breakpoints: "md",
                 style: {maxWidth: 80},
                 sortValue: function (val) { return Number(val); }
             }, {
@@ -110,7 +110,7 @@ define(["jquery", "app/common", "app/libft", "footable"],
             }, {
                 name: "user",
                 title: "Authenticated user",
-                breakpoints: "sm",
+                breakpoints: "md",
                 style: {width: 200, maxWidth: 200}
             }];
         }
@@ -208,6 +208,7 @@ define(["jquery", "app/common", "app/libft", "footable"],
 
         function initErrorsTable(rows) {
             common.tables.errors = FooTable.init("#errorsLog", {
+                breakpoints: common.breakpoints,
                 cascade: true,
                 columns: [
                     {sorted: true,
@@ -218,15 +219,15 @@ define(["jquery", "app/common", "app/libft", "footable"],
                         sortValue: function (val) { return Number(val.options.sortValue); }},
                     {name: "type",
                         title: "Worker type",
-                        breakpoints: "sm",
+                        breakpoints: "md",
                         style: {width: 150, maxWidth: 150}},
                     {name: "pid",
                         title: "PID",
-                        breakpoints: "sm",
+                        breakpoints: "md",
                         style: {width: 110, maxWidth: 110}},
                     {name: "module", title: "Module"},
                     {name: "id", title: "Internal ID"},
-                    {name: "message", title: "Message", breakpoints: "sm"},
+                    {name: "message", title: "Message", breakpoints: "md"},
                 ],
                 rows: rows,
                 paging: {

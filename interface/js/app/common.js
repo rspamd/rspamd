@@ -4,6 +4,14 @@ define(["jquery", "nprogress"],
     ($, NProgress) => {
         "use strict";
         const ui = {
+            breakpoints: {
+                xs: 0,
+                sm: 576,
+                md: 768,
+                lg: 992,
+                xl: 1200,
+                xxl: 1400
+            },
             chartLegend: [
                 {label: "reject", color: "#FF0000"},
                 {label: "soft reject", color: "#BF8040"},
