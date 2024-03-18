@@ -41,7 +41,7 @@ local function symbol_callback(task)
 end
  */
 
-static const gchar *M = "rspamd lua dns resolver";
+static const char *M = "rspamd lua dns resolver";
 
 /* Lua bindings */
 LUA_FUNCTION_DEF(dns_resolver, init);
@@ -71,7 +71,7 @@ static const struct luaL_reg dns_resolverlib_m[] = {
 	{NULL, NULL}};
 
 struct rspamd_dns_resolver *
-lua_check_dns_resolver(lua_State *L, gint pos)
+lua_check_dns_resolver(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_resolver_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'resolver' expected");
@@ -82,9 +82,9 @@ struct lua_dns_cbdata {
 	struct rspamd_task *task;
 	rspamd_mempool_t *pool;
 	struct rspamd_dns_resolver *resolver;
-	gint cbref;
-	gchar *to_resolve;
-	gchar *user_str;
+	int cbref;
+	char *to_resolve;
+	char *user_str;
 	struct rspamd_symcache_dynamic_item *item;
 	struct rspamd_async_session *s;
 };
@@ -93,7 +93,7 @@ static int
 lua_dns_get_type(lua_State *L, int argno)
 {
 	int type = RDNS_REQUEST_A;
-	const gchar *strtype;
+	const char *strtype;
 
 	if (lua_type(L, argno) != LUA_TSTRING) {
 		lua_pushvalue(L, argno);
@@ -121,7 +121,7 @@ lua_dns_resolver_callback(struct rdns_reply *reply, gpointer arg)
 	lua_State *L;
 	struct lua_callback_state cbs;
 	rspamd_mempool_t *pool;
-	gint err_idx;
+	int err_idx;
 
 	pool = cd->pool;
 	lua_thread_pool_prepare_callback(cd->resolver->cfg->lua_thread_pool, &cbs);
@@ -162,7 +162,7 @@ lua_dns_resolver_callback(struct rdns_reply *reply, gpointer arg)
 
 	lua_pushboolean(L, reply->flags & RDNS_AUTH);
 
-	const gchar *servname = rdns_request_get_server(reply->request);
+	const char *servname = rdns_request_get_server(reply->request);
 
 	if (servname) {
 		lua_pushstring(L, servname);
@@ -200,7 +200,7 @@ lua_dns_resolver_callback(struct rdns_reply *reply, gpointer arg)
 
 void lua_push_dns_reply(lua_State *L, const struct rdns_reply *reply)
 {
-	gint i = 0, naddrs = 0;
+	int i = 0, naddrs = 0;
 	struct rdns_reply_entry *elt;
 	rspamd_inet_addr_t *addr;
 
@@ -338,9 +338,9 @@ lua_dns_resolver_resolve_common(lua_State *L,
 	LUA_TRACE_POINT;
 	struct rspamd_async_session *session = NULL;
 	rspamd_mempool_t *pool = NULL;
-	const gchar *to_resolve = NULL, *user_str = NULL;
+	const char *to_resolve = NULL, *user_str = NULL;
 	struct lua_dns_cbdata *cbdata;
-	gint cbref = -1, ret;
+	int cbref = -1, ret;
 	struct rspamd_task *task = NULL;
 	GError *err = NULL;
 	gboolean forced = FALSE;
@@ -689,9 +689,9 @@ lua_dns_resolver_idna_convert_utf8(lua_State *L)
 {
 	struct rspamd_dns_resolver *dns_resolver = lua_check_dns_resolver(L, 1);
 	gsize hlen;
-	guint conv_len = 0;
-	const gchar *hname = luaL_checklstring(L, 2, &hlen);
-	gchar *converted;
+	unsigned int conv_len = 0;
+	const char *hname = luaL_checklstring(L, 2, &hlen);
+	char *converted;
 	rspamd_mempool_t *pool = rspamd_lua_check_udata_maybe(L, 3, rspamd_mempool_classname);
 
 
@@ -723,7 +723,7 @@ lua_dns_resolver_idna_convert_utf8(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_load_dns_resolver(lua_State *L)
 {
 	lua_newtable(L);

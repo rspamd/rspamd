@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -28,8 +28,8 @@ struct rspamd_client_connection;
 struct rspamd_http_message;
 
 struct rspamd_http_client_header {
-	gchar *name;
-	gchar *value;
+	char *name;
+	char *value;
 };
 
 /**
@@ -43,13 +43,13 @@ struct rspamd_http_client_header {
 typedef void (*rspamd_client_callback)(
 	struct rspamd_client_connection *conn,
 	struct rspamd_http_message *msg,
-	const gchar *name,
+	const char *name,
 	ucl_object_t *result,
 	GString *input,
 	gpointer ud,
-	gdouble start_time,
-	gdouble send_time,
-	const gchar *body,
+	double start_time,
+	double send_time,
+	const char *body,
 	gsize body_len,
 	GError *err);
 
@@ -66,10 +66,10 @@ struct rspamd_http_context;
 struct rspamd_client_connection *rspamd_client_init(
 	struct rspamd_http_context *http_ctx,
 	struct ev_loop *ev_base,
-	const gchar *name,
-	guint16 port,
-	gdouble timeout,
-	const gchar *key);
+	const char *name,
+	uint16_t port,
+	double timeout,
+	const char *key);
 
 /**
  *
@@ -83,14 +83,14 @@ struct rspamd_client_connection *rspamd_client_init(
  */
 gboolean rspamd_client_command(
 	struct rspamd_client_connection *conn,
-	const gchar *command,
+	const char *command,
 	GQueue *attrs,
 	FILE *in,
 	rspamd_client_callback cb,
 	gpointer ud,
 	gboolean compressed,
-	const gchar *comp_dictionary,
-	const gchar *filename,
+	const char *comp_dictionary,
+	const char *filename,
 	GError **err);
 
 /**

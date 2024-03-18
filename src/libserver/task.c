@@ -70,7 +70,7 @@ rspamd_task_new(struct rspamd_worker *worker,
 {
 	struct rspamd_task *new_task;
 	rspamd_mempool_t *task_pool;
-	guint flags = 0;
+	unsigned int flags = 0;
 
 	if (pool == NULL) {
 		task_pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
@@ -173,8 +173,8 @@ rspamd_task_fin(void *arg)
 void rspamd_task_free(struct rspamd_task *task)
 {
 	struct rspamd_email_address *addr;
-	static guint free_iters = 0;
-	guint i;
+	static unsigned int free_iters = 0;
+	unsigned int i;
 
 	if (task) {
 		debug_task("free pointer %p", task);
@@ -253,7 +253,7 @@ void rspamd_task_free(struct rspamd_task *task)
 				/* Perform more expensive cleanup cycle */
 				gsize allocated = 0, active = 0, metadata = 0,
 					  resident = 0, mapped = 0, old_lua_mem = 0;
-				gdouble t1, t2;
+				double t1, t2;
 
 				old_lua_mem = lua_gc(task->cfg->lua_state, LUA_GCCOUNT, 0);
 				t1 = rspamd_get_ticks(FALSE);
@@ -280,7 +280,7 @@ void rspamd_task_free(struct rspamd_task *task)
 								old_lua_mem, lua_gc(task->cfg->lua_state, LUA_GCCOUNT, 0),
 								(t2 - t1) * 1000.0);
 				free_iters = rspamd_time_jitter(0,
-												(gdouble) task->cfg->full_gc_iters / 2);
+												(double) task->cfg->full_gc_iters / 2);
 			}
 
 			REF_RELEASE(task->cfg);
@@ -307,7 +307,7 @@ void rspamd_task_free(struct rspamd_task *task)
 struct rspamd_task_map {
 	gpointer begin;
 	gulong len;
-	gint fd;
+	int fd;
 };
 
 static void
@@ -321,19 +321,19 @@ rspamd_task_unmapper(gpointer ud)
 
 gboolean
 rspamd_task_load_message(struct rspamd_task *task,
-						 struct rspamd_http_message *msg, const gchar *start, gsize len)
+						 struct rspamd_http_message *msg, const char *start, gsize len)
 {
-	guint control_len, r;
+	unsigned int control_len, r;
 	struct ucl_parser *parser;
 	ucl_object_t *control_obj;
-	gchar filepath[PATH_MAX], *fp;
-	gint fd, flen;
+	char filepath[PATH_MAX], *fp;
+	int fd, flen;
 	gulong offset = 0, shmem_size = 0;
 	rspamd_ftok_t *tok;
 	gpointer map;
 	struct stat st;
 	struct rspamd_task_map *m;
-	const gchar *ft;
+	const char *ft;
 
 #ifdef HAVE_SANE_SHMEM
 	ft = "shm";
@@ -425,7 +425,7 @@ rspamd_task_load_message(struct rspamd_task *task,
 			}
 		}
 
-		task->msg.begin = ((guchar *) map) + offset;
+		task->msg.begin = ((unsigned char *) map) + offset;
 		task->msg.len = shmem_size;
 		m = rspamd_mempool_alloc(task->task_pool, sizeof(*m));
 		m->begin = map;
@@ -532,7 +532,7 @@ rspamd_task_load_message(struct rspamd_task *task,
 			ZSTD_DStream *zstream;
 			ZSTD_inBuffer zin;
 			ZSTD_outBuffer zout;
-			guchar *out;
+			unsigned char *out;
 			gsize outlen, r;
 			gulong dict_id;
 
@@ -665,10 +665,10 @@ rspamd_task_load_message(struct rspamd_task *task,
 	return TRUE;
 }
 
-static guint
-rspamd_task_select_processing_stage(struct rspamd_task *task, guint stages)
+static unsigned int
+rspamd_task_select_processing_stage(struct rspamd_task *task, unsigned int stages)
 {
-	guint st, mask;
+	unsigned int st, mask;
 
 	mask = task->processed_stages;
 
@@ -697,9 +697,9 @@ rspamd_task_select_processing_stage(struct rspamd_task *task, guint stages)
 }
 
 gboolean
-rspamd_task_process(struct rspamd_task *task, guint stages)
+rspamd_task_process(struct rspamd_task *task, unsigned int stages)
 {
-	guint st;
+	unsigned int st;
 	gboolean ret = TRUE, all_done = TRUE;
 	GError *stat_error = NULL;
 
@@ -884,11 +884,11 @@ rspamd_task_get_sender(struct rspamd_task *task)
 	return task->from_envelope;
 }
 
-static const gchar *
+static const char *
 rspamd_task_cache_principal_recipient(struct rspamd_task *task,
-									  const gchar *rcpt, gsize len)
+									  const char *rcpt, gsize len)
 {
-	gchar *rcpt_lc;
+	char *rcpt_lc;
 
 	if (rcpt == NULL) {
 		return NULL;
@@ -904,12 +904,12 @@ rspamd_task_cache_principal_recipient(struct rspamd_task *task,
 	return rcpt_lc;
 }
 
-const gchar *
+const char *
 rspamd_task_get_principal_recipient(struct rspamd_task *task)
 {
-	const gchar *val;
+	const char *val;
 	struct rspamd_email_address *addr;
-	guint i;
+	unsigned int i;
 
 	val = rspamd_mempool_get_variable(task->task_pool,
 									  RSPAMD_MEMPOOL_PRINCIPAL_RECIPIENT);
@@ -950,7 +950,7 @@ rspamd_task_get_principal_recipient(struct rspamd_task *task)
 gboolean
 rspamd_learn_task_spam(struct rspamd_task *task,
 					   gboolean is_spam,
-					   const gchar *classifier,
+					   const char *classifier,
 					   GError **err)
 {
 	if (is_spam) {
@@ -1043,12 +1043,12 @@ rspamd_task_log_check_condition(struct rspamd_task *task,
 /*
  * Sort by symbol's score -> name
  */
-static gint
+static int
 rspamd_task_compare_log_sym(gconstpointer a, gconstpointer b)
 {
 	const struct rspamd_symbol_result *s1 = *(const struct rspamd_symbol_result **) a,
 									  *s2 = *(const struct rspamd_symbol_result **) b;
-	gdouble w1, w2;
+	double w1, w2;
 
 
 	w1 = fabs(s1->score);
@@ -1061,7 +1061,7 @@ rspamd_task_compare_log_sym(gconstpointer a, gconstpointer b)
 	return (w2 - w1) * 1000.0;
 }
 
-static gint
+static int
 rspamd_task_compare_log_group(gconstpointer a, gconstpointer b)
 {
 	const struct rspamd_symbols_group *s1 = *(const struct rspamd_symbols_group **) a,
@@ -1075,7 +1075,7 @@ static rspamd_ftok_t
 rspamd_task_log_metric_res(struct rspamd_task *task,
 						   struct rspamd_log_format *lf)
 {
-	static gchar scorebuf[32];
+	static char scorebuf[32];
 	rspamd_ftok_t res = {.begin = NULL, .len = 0};
 	struct rspamd_scan_result *mres;
 	gboolean first = TRUE;
@@ -1084,9 +1084,9 @@ rspamd_task_log_metric_res(struct rspamd_task *task,
 	GPtrArray *sorted_symbols;
 	struct rspamd_action *act;
 	struct rspamd_symbols_group *gr;
-	guint i, j;
+	unsigned int i, j;
 	khiter_t k;
-	guint max_log_elts = task->cfg->log_task_max_elts;
+	unsigned int max_log_elts = task->cfg->log_task_max_elts;
 
 	mres = task->result;
 	act = rspamd_check_action_metric(task, NULL, NULL);
@@ -1152,7 +1152,7 @@ rspamd_task_log_metric_res(struct rspamd_task *task,
 						DL_FOREACH(sym->opts_head, opt)
 						{
 							rspamd_printf_fstring(&symbuf, "%*s;",
-												  (gint) opt->optlen, opt->option);
+												  (int) opt->optlen, opt->option);
 
 							if (j >= max_log_elts && opt->next) {
 								rspamd_printf_fstring(&symbuf, "...;");
@@ -1237,7 +1237,7 @@ rspamd_task_log_write_var(struct rspamd_task *task, rspamd_fstring_t *logbuf,
 						  const rspamd_ftok_t *var, const rspamd_ftok_t *content)
 {
 	rspamd_fstring_t *res = logbuf;
-	const gchar *p, *c, *end;
+	const char *p, *c, *end;
 
 	if (content == NULL) {
 		/* Just output variable */
@@ -1274,16 +1274,16 @@ rspamd_task_log_write_var(struct rspamd_task *task, rspamd_fstring_t *logbuf,
 
 static rspamd_fstring_t *
 rspamd_task_write_ialist(struct rspamd_task *task,
-						 GPtrArray *addrs, gint lim,
+						 GPtrArray *addrs, int lim,
 						 struct rspamd_log_format *lf,
 						 rspamd_fstring_t *logbuf)
 {
 	rspamd_fstring_t *res = logbuf, *varbuf;
 	rspamd_ftok_t var = {.begin = NULL, .len = 0};
 	struct rspamd_email_address *addr;
-	gint i, nchars = 0, wr = 0, cur_chars;
+	int i, nchars = 0, wr = 0, cur_chars;
 	gboolean has_orig = FALSE;
-	guint max_log_elts = task->cfg->log_task_max_elts;
+	unsigned int max_log_elts = task->cfg->log_task_max_elts;
 
 	if (addrs && lim <= 0) {
 		lim = addrs->len;
@@ -1344,15 +1344,15 @@ rspamd_task_write_ialist(struct rspamd_task *task,
 
 static rspamd_fstring_t *
 rspamd_task_write_addr_list(struct rspamd_task *task,
-							GPtrArray *addrs, gint lim,
+							GPtrArray *addrs, int lim,
 							struct rspamd_log_format *lf,
 							rspamd_fstring_t *logbuf)
 {
 	rspamd_fstring_t *res = logbuf, *varbuf;
 	rspamd_ftok_t var = {.begin = NULL, .len = 0};
 	struct rspamd_email_address *addr;
-	guint max_log_elts = task->cfg->log_task_max_elts;
-	guint i;
+	unsigned int max_log_elts = task->cfg->log_task_max_elts;
+	unsigned int i;
 
 	if (lim <= 0) {
 		lim = addrs->len;
@@ -1396,8 +1396,8 @@ rspamd_task_log_variable(struct rspamd_task *task,
 {
 	rspamd_fstring_t *res = logbuf;
 	rspamd_ftok_t var = {.begin = NULL, .len = 0};
-	static gchar numbuf[128];
-	static const gchar undef[] = "undef";
+	static char numbuf[128];
+	static const char undef[] = "undef";
 
 	switch (lf->type) {
 	/* String vars */
@@ -1508,7 +1508,7 @@ rspamd_task_log_variable(struct rspamd_task *task,
 	case RSPAMD_LOG_DIGEST:
 		if (task->message) {
 			var.len = rspamd_snprintf(numbuf, sizeof(numbuf), "%*xs",
-									  (gint) sizeof(MESSAGE_FIELD(task, digest)),
+									  (int) sizeof(MESSAGE_FIELD(task, digest)),
 									  MESSAGE_FIELD(task, digest));
 			var.begin = numbuf;
 		}
@@ -1593,7 +1593,7 @@ void rspamd_task_write_log(struct rspamd_task *task)
 	rspamd_fstring_t *logbuf;
 	struct rspamd_log_format *lf;
 	struct rspamd_task **ptask;
-	const gchar *lua_str;
+	const char *lua_str;
 	gsize lua_str_len;
 	lua_State *L;
 
@@ -1652,7 +1652,7 @@ void rspamd_task_write_log(struct rspamd_task *task)
 	rspamd_fstring_free(logbuf);
 }
 
-gdouble
+double
 rspamd_task_get_required_score(struct rspamd_task *task, struct rspamd_scan_result *m)
 {
 	if (m == NULL) {
@@ -1663,7 +1663,7 @@ rspamd_task_get_required_score(struct rspamd_task *task, struct rspamd_scan_resu
 		}
 	}
 
-	for (guint i = m->nactions; i-- > 0;) {
+	for (unsigned int i = m->nactions; i-- > 0;) {
 		struct rspamd_action_config *action_lim = &m->actions_config[i];
 
 
@@ -1678,7 +1678,7 @@ rspamd_task_get_required_score(struct rspamd_task *task, struct rspamd_scan_resu
 
 rspamd_ftok_t *
 rspamd_task_get_request_header(struct rspamd_task *task,
-							   const gchar *name)
+							   const char *name)
 {
 	struct rspamd_request_header_chain *ret =
 		rspamd_task_get_request_header_multiple(task, name);
@@ -1692,13 +1692,13 @@ rspamd_task_get_request_header(struct rspamd_task *task,
 
 struct rspamd_request_header_chain *
 rspamd_task_get_request_header_multiple(struct rspamd_task *task,
-										const gchar *name)
+										const char *name)
 {
 	struct rspamd_request_header_chain *ret = NULL;
 	rspamd_ftok_t srch;
 	khiter_t k;
 
-	srch.begin = (gchar *) name;
+	srch.begin = (char *) name;
 	srch.len = strlen(name);
 
 	k = kh_get(rspamd_req_headers_hash, task->request_headers,
@@ -1717,7 +1717,7 @@ void rspamd_task_add_request_header(struct rspamd_task *task,
 {
 
 	khiter_t k;
-	gint res;
+	int res;
 	struct rspamd_request_header_chain *chain, *nchain;
 
 	k = kh_put(rspamd_req_headers_hash, task->request_headers,
@@ -1743,11 +1743,11 @@ void rspamd_task_add_request_header(struct rspamd_task *task,
 }
 
 
-void rspamd_task_profile_set(struct rspamd_task *task, const gchar *key,
-							 gdouble value)
+void rspamd_task_profile_set(struct rspamd_task *task, const char *key,
+							 double value)
 {
 	GHashTable *tbl;
-	gdouble *pval;
+	double *pval;
 
 	if (key == NULL) {
 		return;
@@ -1773,11 +1773,11 @@ void rspamd_task_profile_set(struct rspamd_task *task, const gchar *key,
 	}
 }
 
-gdouble *
-rspamd_task_profile_get(struct rspamd_task *task, const gchar *key)
+double *
+rspamd_task_profile_get(struct rspamd_task *task, const char *key)
 {
 	GHashTable *tbl;
-	gdouble *pval = NULL;
+	double *pval = NULL;
 
 	tbl = rspamd_mempool_get_variable(task->task_pool, RSPAMD_MEMPOOL_PROFILE);
 
@@ -1801,10 +1801,10 @@ rspamd_task_set_finish_time(struct rspamd_task *task)
 	return FALSE;
 }
 
-const gchar *
+const char *
 rspamd_task_stage_name(enum rspamd_task_stage stg)
 {
-	const gchar *ret = "unknown stage";
+	const char *ret = "unknown stage";
 
 	switch (stg) {
 	case RSPAMD_TASK_STAGE_CONNECT:
@@ -1937,7 +1937,7 @@ void rspamd_task_timeout(EV_P_ ev_timer *w, int revents)
 void rspamd_worker_guard_handler(EV_P_ ev_io *w, int revents)
 {
 	struct rspamd_task *task = (struct rspamd_task *) w->data;
-	gchar fake_buf[1024];
+	char fake_buf[1024];
 	gssize r;
 
 	r = read(w->fd, fake_buf, sizeof(fake_buf));

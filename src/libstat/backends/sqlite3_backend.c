@@ -28,15 +28,15 @@
 
 struct rspamd_stat_sqlite3_db {
 	sqlite3 *sqlite;
-	gchar *fname;
+	char *fname;
 	GArray *prstmt;
 	lua_State *L;
 	rspamd_mempool_t *pool;
 	gboolean in_transaction;
 	gboolean enable_users;
 	gboolean enable_languages;
-	gint cbref_user;
-	gint cbref_language;
+	int cbref_user;
+	int cbref_language;
 };
 
 struct rspamd_stat_sqlite3_rt {
@@ -161,8 +161,8 @@ rspamd_sqlite3_get_user(struct rspamd_stat_sqlite3_db *db,
 						struct rspamd_task *task, gboolean learn)
 {
 	int64_t id = 0; /* Default user is 0 */
-	gint rc, err_idx;
-	const gchar *user = NULL;
+	int rc, err_idx;
+	const char *user = NULL;
 	struct rspamd_task **ptask;
 	lua_State *L = db->L;
 
@@ -220,9 +220,9 @@ rspamd_sqlite3_get_language(struct rspamd_stat_sqlite3_db *db,
 							struct rspamd_task *task, gboolean learn)
 {
 	int64_t id = 0; /* Default language is 0 */
-	gint rc, err_idx;
-	guint i;
-	const gchar *language = NULL;
+	int rc, err_idx;
+	unsigned int i;
+	const char *language = NULL;
 	struct rspamd_mime_text_part *tp;
 	struct rspamd_task **ptask;
 	lua_State *L = db->L;
@@ -286,7 +286,7 @@ rspamd_sqlite3_get_language(struct rspamd_stat_sqlite3_db *db,
 static struct rspamd_stat_sqlite3_db *
 rspamd_sqlite3_opendb(rspamd_mempool_t *pool,
 					  struct rspamd_statfile_config *stcf,
-					  const gchar *path, const ucl_object_t *opts,
+					  const char *path, const ucl_object_t *opts,
 					  gboolean create, GError **err)
 {
 	struct rspamd_stat_sqlite3_db *bk;
@@ -294,9 +294,9 @@ rspamd_sqlite3_opendb(rspamd_mempool_t *pool,
 	gpointer tk_conf;
 	gsize sz = 0;
 	int64_t sz64 = 0;
-	gchar *tok_conf_encoded;
-	gint ret, ntries = 0;
-	const gint max_tries = 100;
+	char *tok_conf_encoded;
+	int ret, ntries = 0;
+	const int max_tries = 100;
 	struct timespec sleep_ts = {
 		.tv_sec = 0,
 		.tv_nsec = 1000000};
@@ -375,7 +375,7 @@ rspamd_sqlite3_init(struct rspamd_stat_ctx *ctx,
 	struct rspamd_classifier_config *clf = st->classifier->cfg;
 	struct rspamd_statfile_config *stf = st->stcf;
 	const ucl_object_t *filenameo, *lang_enabled, *users_enabled;
-	const gchar *filename, *lua_script;
+	const char *filename, *lua_script;
 	struct rspamd_stat_sqlite3_db *bk;
 	GError *err = NULL;
 
@@ -502,7 +502,7 @@ void rspamd_sqlite3_close(gpointer p)
 
 gpointer
 rspamd_sqlite3_runtime(struct rspamd_task *task,
-					   struct rspamd_statfile_config *stcf, gboolean learn, gpointer p, gint _id)
+					   struct rspamd_statfile_config *stcf, gboolean learn, gpointer p, int _id)
 {
 	struct rspamd_stat_sqlite3_rt *rt = NULL;
 	struct rspamd_stat_sqlite3_db *bk = p;
@@ -522,12 +522,12 @@ rspamd_sqlite3_runtime(struct rspamd_task *task,
 gboolean
 rspamd_sqlite3_process_tokens(struct rspamd_task *task,
 							  GPtrArray *tokens,
-							  gint id, gpointer p)
+							  int id, gpointer p)
 {
 	struct rspamd_stat_sqlite3_db *bk;
 	struct rspamd_stat_sqlite3_rt *rt = p;
 	int64_t iv = 0;
-	guint i;
+	unsigned int i;
 	rspamd_token_t *tok;
 
 	g_assert(p != NULL);
@@ -625,12 +625,12 @@ rspamd_sqlite3_finalize_process(struct rspamd_task *task, gpointer runtime,
 
 gboolean
 rspamd_sqlite3_learn_tokens(struct rspamd_task *task, GPtrArray *tokens,
-							gint id, gpointer p)
+							int id, gpointer p)
 {
 	struct rspamd_stat_sqlite3_db *bk;
 	struct rspamd_stat_sqlite3_rt *rt = p;
 	int64_t iv = 0;
-	guint i;
+	unsigned int i;
 	rspamd_token_t *tok;
 
 	g_assert(tokens != NULL);
@@ -691,7 +691,7 @@ rspamd_sqlite3_finalize_learn(struct rspamd_task *task, gpointer runtime,
 {
 	struct rspamd_stat_sqlite3_rt *rt = runtime;
 	struct rspamd_stat_sqlite3_db *bk;
-	gint wal_frames, wal_checkpointed, mode;
+	int wal_frames, wal_checkpointed, mode;
 
 	g_assert(rt != NULL);
 	bk = rt->db;

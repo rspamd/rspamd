@@ -28,8 +28,8 @@ extern "C" {
 
 struct rspamd_min_heap_elt {
 	gpointer data;
-	guint pri;
-	guint idx;
+	unsigned int pri;
+	unsigned int idx;
 };
 
 struct rspamd_min_heap;
@@ -64,7 +64,7 @@ struct rspamd_min_heap_elt *rspamd_min_heap_pop(struct rspamd_min_heap *heap);
  * @param npri new priority
  */
 void rspamd_min_heap_update_elt(struct rspamd_min_heap *heap,
-								struct rspamd_min_heap_elt *elt, guint npri);
+								struct rspamd_min_heap_elt *elt, unsigned int npri);
 
 
 /**
@@ -88,7 +88,7 @@ void rspamd_min_heap_destroy(struct rspamd_min_heap *heap);
  * @return
  */
 struct rspamd_min_heap_elt *rspamd_min_heap_index(struct rspamd_min_heap *heap,
-												  guint idx);
+												  unsigned int idx);
 
 #ifdef __cplusplus
 }

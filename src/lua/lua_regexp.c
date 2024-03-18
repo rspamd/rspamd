@@ -71,7 +71,7 @@ static const struct luaL_reg regexplib_f[] = {
 rspamd_mempool_t *regexp_static_pool = NULL;
 
 struct rspamd_lua_regexp *
-lua_check_regexp(lua_State *L, gint pos)
+lua_check_regexp(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_regexp_classname);
 
@@ -96,7 +96,7 @@ lua_regexp_create(lua_State *L)
 	LUA_TRACE_POINT;
 	rspamd_regexp_t *re;
 	struct rspamd_lua_regexp *new, **pnew;
-	const gchar *string, *flags_str = NULL;
+	const char *string, *flags_str = NULL;
 	GError *err = NULL;
 
 	string = luaL_checkstring(L, 1);
@@ -147,8 +147,8 @@ lua_regexp_import_glob(lua_State *L)
 	LUA_TRACE_POINT;
 	rspamd_regexp_t *re;
 	struct rspamd_lua_regexp *new, **pnew;
-	const gchar *string, *flags_str = NULL;
-	gchar *escaped;
+	const char *string, *flags_str = NULL;
+	char *escaped;
 	gsize pat_len;
 	GError *err = NULL;
 
@@ -206,8 +206,8 @@ lua_regexp_import_plain(lua_State *L)
 	LUA_TRACE_POINT;
 	rspamd_regexp_t *re;
 	struct rspamd_lua_regexp *new, **pnew;
-	const gchar *string, *flags_str = NULL;
-	gchar *escaped;
+	const char *string, *flags_str = NULL;
+	char *escaped;
 	gsize pat_len;
 	GError *err = NULL;
 
@@ -262,7 +262,7 @@ lua_regexp_get_cached(lua_State *L)
 	LUA_TRACE_POINT;
 	rspamd_regexp_t *re;
 	struct rspamd_lua_regexp *new, **pnew;
-	const gchar *string, *flags_str = NULL;
+	const char *string, *flags_str = NULL;
 
 	string = luaL_checkstring(L, 1);
 	if (lua_gettop(L) == 2) {
@@ -313,7 +313,7 @@ lua_regexp_create_cached(lua_State *L)
 	LUA_TRACE_POINT;
 	rspamd_regexp_t *re;
 	struct rspamd_lua_regexp *new, **pnew;
-	const gchar *string, *flags_str = NULL;
+	const char *string, *flags_str = NULL;
 	GError *err = NULL;
 
 	string = luaL_checkstring(L, 1);
@@ -420,7 +420,7 @@ lua_regexp_set_max_hits(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_regexp *re = lua_check_regexp(L, 1);
-	guint lim;
+	unsigned int lim;
 
 	lim = luaL_checkinteger(L, 2);
 
@@ -487,10 +487,10 @@ lua_regexp_search(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_regexp *re = lua_check_regexp(L, 1);
-	const gchar *data = NULL;
+	const char *data = NULL;
 	struct rspamd_lua_text *t;
-	const gchar *start = NULL, *end = NULL;
-	gint i;
+	const char *start = NULL, *end = NULL;
+	int i;
 	gsize len = 0, capn;
 	gboolean matched = FALSE, capture = FALSE, raw = FALSE;
 	GArray *captures = NULL;
@@ -580,7 +580,7 @@ lua_regexp_match(lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_lua_regexp *re = lua_check_regexp(L, 1);
 	struct rspamd_lua_text *t;
-	const gchar *data = NULL;
+	const char *data = NULL;
 	gsize len = 0;
 	gboolean raw = FALSE;
 
@@ -637,8 +637,8 @@ lua_regexp_matchn(lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_lua_regexp *re = lua_check_regexp(L, 1);
 	struct rspamd_lua_text *t;
-	const gchar *data = NULL, *start = NULL, *end = NULL;
-	gint max_matches, matches;
+	const char *data = NULL, *start = NULL, *end = NULL;
+	int max_matches, matches;
 	gsize len = 0;
 	gboolean raw = FALSE;
 
@@ -703,12 +703,12 @@ lua_regexp_split(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_regexp *re = lua_check_regexp(L, 1);
-	const gchar *data = NULL;
+	const char *data = NULL;
 	struct rspamd_lua_text *t;
 	gboolean matched = FALSE, is_text = FALSE;
 	gsize len = 0;
-	const gchar *start = NULL, *end = NULL, *old_start;
-	gint i;
+	const char *start = NULL, *end = NULL, *old_start;
+	int i;
 
 	if (re && !IS_DESTROYED(re)) {
 		if (lua_type(L, 2) == LUA_TSTRING) {
@@ -794,7 +794,7 @@ lua_regexp_split(lua_State *L)
  * @method re:destroy()
  * Destroy regexp from caches if needed (the pointer is removed by garbage collector)
  */
-static gint
+static int
 lua_regexp_destroy(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -810,7 +810,7 @@ lua_regexp_destroy(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_regexp_gc(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -829,7 +829,7 @@ lua_regexp_gc(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_load_regexp(lua_State *L)
 {
 	lua_newtable(L);

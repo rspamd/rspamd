@@ -19,11 +19,11 @@
 #include "heap.h"
 #include "ottery.h"
 
-static const guint niter = 100500;
-static const guint nrem = 100;
+static const unsigned int niter = 100500;
+static const unsigned int nrem = 100;
 
 static inline struct rspamd_min_heap_elt *
-new_elt(guint pri)
+new_elt(unsigned int pri)
 {
 	struct rspamd_min_heap_elt *elt;
 
@@ -33,13 +33,13 @@ new_elt(guint pri)
 	return elt;
 }
 
-static gdouble
-heap_nelts_test(guint nelts)
+static double
+heap_nelts_test(unsigned int nelts)
 {
 	struct rspamd_min_heap *heap;
 	struct rspamd_min_heap_elt *elts;
-	gdouble t1, t2;
-	guint i;
+	double t1, t2;
+	unsigned int i;
 
 	heap = rspamd_min_heap_create(nelts);
 	/* Preallocate all elts */
@@ -70,9 +70,9 @@ void rspamd_heap_test_func(void)
 {
 	struct rspamd_min_heap *heap;
 	struct rspamd_min_heap_elt *elt, *telt;
-	guint i;
-	guint prev;
-	gdouble t[16];
+	unsigned int i;
+	unsigned int prev;
+	double t[16];
 
 	/* Push + update */
 	heap = rspamd_min_heap_create(32);

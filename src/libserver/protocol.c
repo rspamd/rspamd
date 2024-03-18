@@ -64,11 +64,11 @@ rspamd_protocol_quark(void)
 /*
  * Remove <> from the fixed string and copy it to the pool
  */
-static gchar *
+static char *
 rspamd_protocol_escape_braces(struct rspamd_task *task, rspamd_ftok_t *in)
 {
-	guint nchars = 0;
-	const gchar *p;
+	unsigned int nchars = 0;
+	const char *p;
 	rspamd_ftok_t tok;
 	gboolean has_obrace = FALSE;
 
@@ -112,7 +112,7 @@ rspamd_protocol_handle_url(struct rspamd_task *task,
 	GHashTable *query_args;
 	GHashTableIter it;
 	struct http_parser_url u;
-	const gchar *p;
+	const char *p;
 	gsize pathlen;
 	rspamd_ftok_t *key, *value;
 	gpointer k, v;
@@ -222,7 +222,7 @@ rspamd_protocol_handle_url(struct rspamd_task *task,
 		g_hash_table_iter_init(&it, query_args);
 
 		while (g_hash_table_iter_next(&it, &k, &v)) {
-			gchar *key_cpy;
+			char *key_cpy;
 			key = k;
 			value = v;
 
@@ -254,7 +254,7 @@ rspamd_protocol_process_recipients(struct rspamd_task *task,
 		quoted_string,
 		normal_string,
 	} state = skip_spaces;
-	const gchar *p, *end, *start_addr;
+	const char *p, *end, *start_addr;
 	struct rspamd_email_address *addr;
 
 	p = hdr->begin;
@@ -375,7 +375,7 @@ rspamd_protocol_process_recipients(struct rspamd_task *task,
 	} while (0)
 
 static void
-rspamd_protocol_handle_flag(struct rspamd_task *task, const gchar *str,
+rspamd_protocol_handle_flag(struct rspamd_task *task, const char *str,
 							gsize len)
 {
 	gboolean known = FALSE;
@@ -395,7 +395,7 @@ rspamd_protocol_handle_flag(struct rspamd_task *task, const gchar *str,
 	CHECK_PROTOCOL_FLAG("groups", RSPAMD_TASK_PROTOCOL_FLAG_GROUPS);
 
 	if (!known) {
-		msg_warn_protocol("unknown flag: %*s", (gint) len, str);
+		msg_warn_protocol("unknown flag: %*s", (int) len, str);
 	}
 }
 
@@ -409,7 +409,7 @@ rspamd_protocol_process_flags(struct rspamd_task *task, const rspamd_ftok_t *hdr
 		skip_spaces,
 		read_flag,
 	} state = skip_spaces;
-	const gchar *p, *end, *start;
+	const char *p, *end, *start;
 
 	p = hdr->begin;
 	end = hdr->begin + hdr->len;
@@ -460,7 +460,7 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 	rspamd_ftok_t *hn_tok, *hv_tok, srch;
 	gboolean has_ip = FALSE, seen_settings_header = FALSE;
 	struct rspamd_http_header *header, *h;
-	gchar *ntok;
+	char *ntok;
 
 	kh_foreach_value (msg->headers, header, {
 		DL_FOREACH (header, h) {
@@ -705,7 +705,7 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 		}
 		IF_HEADER(MTA_TAG_HEADER)
 		{
-			gchar *mta_tag;
+			char *mta_tag;
 			mta_tag = rspamd_mempool_ftokdup(task->task_pool, hv_tok);
 			rspamd_mempool_set_variable(task->task_pool,
 										RSPAMD_MEMPOOL_MTA_TAG,
@@ -714,7 +714,7 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 		}
 		IF_HEADER(MTA_NAME_HEADER)
 		{
-			gchar *mta_name;
+			char *mta_name;
 			mta_name = rspamd_mempool_ftokdup(task->task_pool, hv_tok);
 			rspamd_mempool_set_variable(task->task_pool,
 										RSPAMD_MEMPOOL_MTA_NAME,
@@ -774,11 +774,11 @@ rspamd_protocol_parse_task_flags(rspamd_mempool_t *pool,
 								 GError **err)
 {
 	struct rspamd_rcl_struct_parser *pd = ud;
-	gint *target;
-	const gchar *key;
+	int *target;
+	const char *key;
 	gboolean value;
 
-	target = (gint *) (((gchar *) pd->user_struct) + pd->offset);
+	target = (int *) (((char *) pd->user_struct) + pd->offset);
 	key = ucl_object_key(obj);
 	value = ucl_object_toboolean(obj);
 
@@ -909,7 +909,7 @@ struct tree_cb_data {
 static ucl_object_t *
 rspamd_protocol_extended_url(struct rspamd_task *task,
 							 struct rspamd_url *url,
-							 const gchar *encoded, gsize enclen)
+							 const char *encoded, gsize enclen)
 {
 	ucl_object_t *obj, *elt;
 
@@ -958,9 +958,9 @@ urls_protocol_cb(struct rspamd_url *url, struct tree_cb_data *cb)
 {
 	ucl_object_t *obj;
 	struct rspamd_task *task = cb->task;
-	const gchar *user_field = "unknown", *encoded = NULL;
+	const char *user_field = "unknown", *encoded = NULL;
 	gboolean has_user = FALSE;
-	guint len = 0;
+	unsigned int len = 0;
 	gsize enclen = 0;
 
 	if (!(task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_EXT_URLS)) {
@@ -1014,7 +1014,7 @@ urls_protocol_cb(struct rspamd_url *url, struct tree_cb_data *cb)
 								  has_user ? "user" : "from",
 								  len, user_field,
 								  rspamd_inet_address_to_string(task->from_addr),
-								  (gint) enclen, encoded);
+								  (int) enclen, encoded);
 	}
 }
 
@@ -1078,12 +1078,12 @@ rspamd_emails_tree_ucl(khash_t(rspamd_url_hash) * set,
 
 
 /* Write new subject */
-static const gchar *
+static const char *
 rspamd_protocol_rewrite_subject(struct rspamd_task *task)
 {
 	GString *subj_buf;
-	gchar *res;
-	const gchar *s, *c, *p;
+	char *res;
+	const char *s, *c, *p;
 	gsize slen = 0;
 
 	c = rspamd_mempool_get_variable(task->task_pool, "metric_subject");
@@ -1157,7 +1157,7 @@ static ucl_object_t *
 rspamd_metric_symbol_ucl(struct rspamd_task *task, struct rspamd_symbol_result *sym)
 {
 	ucl_object_t *obj = NULL, *ar;
-	const gchar *description = NULL;
+	const char *description = NULL;
 	struct rspamd_symbol_option *opt;
 
 	if (sym->sym != NULL) {
@@ -1200,7 +1200,7 @@ rspamd_metric_symbol_ucl(struct rspamd_task *task, struct rspamd_symbol_result *
 
 static ucl_object_t *
 rspamd_metric_group_ucl(struct rspamd_task *task,
-						struct rspamd_symbols_group *gr, gdouble score)
+						struct rspamd_symbols_group *gr, double score)
 {
 	ucl_object_t *obj = NULL;
 
@@ -1224,7 +1224,7 @@ rspamd_scan_result_ucl(struct rspamd_task *task,
 	gboolean is_spam;
 	struct rspamd_action *action;
 	ucl_object_t *obj = NULL, *sobj;
-	const gchar *subject;
+	const char *subject;
 	struct rspamd_passthrough_result *pr = NULL;
 
 	action = rspamd_check_action_metric(task, &pr, NULL);
@@ -1338,7 +1338,7 @@ rspamd_scan_result_ucl(struct rspamd_task *task,
 	/* Handle groups if needed */
 	if (task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_GROUPS) {
 		struct rspamd_symbols_group *gr;
-		gdouble gr_score;
+		double gr_score;
 
 		obj = ucl_object_typed_new(UCL_OBJECT);
 		ucl_object_reserve(obj, kh_size(mres->sym_groups));
@@ -1462,7 +1462,7 @@ rspamd_protocol_output_profiling(struct rspamd_task *task,
 	GHashTableIter it;
 	gpointer k, v;
 	ucl_object_t *prof;
-	gdouble val;
+	double val;
 
 	prof = ucl_object_typed_new(UCL_OBJECT);
 	tbl = rspamd_mempool_get_variable(task->task_pool, "profile");
@@ -1471,7 +1471,7 @@ rspamd_protocol_output_profiling(struct rspamd_task *task,
 		g_hash_table_iter_init(&it, tbl);
 
 		while (g_hash_table_iter_next(&it, &k, &v)) {
-			val = *(gdouble *) v;
+			val = *(double *) v;
 			ucl_object_insert_key(prof, ucl_object_fromdouble(val),
 								  (const char *) k, 0, false);
 		}
@@ -1643,7 +1643,7 @@ void rspamd_protocol_http_reply(struct rspamd_http_message *msg,
 
 	ucl_object_t *top = NULL;
 	rspamd_fstring_t *reply;
-	gint flags = RSPAMD_PROTOCOL_DEFAULT;
+	int flags = RSPAMD_PROTOCOL_DEFAULT;
 	struct rspamd_action *action;
 
 	/* Removed in 2.0 */
@@ -1722,7 +1722,7 @@ void rspamd_protocol_http_reply(struct rspamd_http_message *msg,
 
 			/* In case of milter, we append just body, otherwise - full message */
 			if (task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_MILTER) {
-				const gchar *start;
+				const char *start;
 				goffset len, hdr_off;
 
 				start = task->msg.begin;
@@ -1816,7 +1816,7 @@ void rspamd_protocol_http_reply(struct rspamd_http_message *msg,
 
 		if (task->cfg->libs_ctx->out_dict &&
 			task->cfg->libs_ctx->out_dict->id != 0) {
-			gchar dict_str[32];
+			char dict_str[32];
 
 			rspamd_snprintf(dict_str, sizeof(dict_str), "%ud",
 							task->cfg->libs_ctx->out_dict->id);
@@ -1889,7 +1889,7 @@ void rspamd_protocol_write_log_pipe(struct rspamd_task *task)
 	lua_State *L = task->cfg->lua_state;
 	struct rspamd_scan_result *mres;
 	struct rspamd_symbol_result *sym;
-	gint id, i;
+	int id, i;
 	uint32_t n = 0, nextra = 0;
 	gsize sz;
 	GArray *extra;
@@ -2101,7 +2101,7 @@ void rspamd_protocol_write_log_pipe(struct rspamd_task *task)
 void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout)
 {
 	struct rspamd_http_message *msg;
-	const gchar *ctype = "application/json";
+	const char *ctype = "application/json";
 	rspamd_fstring_t *reply;
 
 	msg = rspamd_http_new_message(HTTP_RESPONSE);
@@ -2150,7 +2150,7 @@ void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout)
 		/* We also need to validate utf8 */
 		if (out_type != UCL_EMIT_MSGPACK && rspamd_fast_utf8_validate(reply->str, reply->len) != 0) {
 			gsize valid_len;
-			gchar *validated;
+			char *validated;
 
 			/* We copy reply several times here, but it should be a rare case */
 			validated = rspamd_str_make_utf_valid(reply->str, reply->len,

@@ -80,11 +80,11 @@ rspamd_lua_ctx_by_state(lua_State *L)
  * @param func table of class methods
  */
 void rspamd_lua_new_class(lua_State *L,
-						  const gchar *classname,
+						  const char *classname,
 						  const struct luaL_reg *methods)
 {
 	khiter_t k;
-	gint r, nmethods = 0;
+	int r, nmethods = 0;
 	gboolean seen_index = false;
 	struct rspamd_lua_context *ctx = rspamd_lua_ctx_by_state(L);
 
@@ -128,12 +128,12 @@ void rspamd_lua_new_class(lua_State *L,
 	/* MT is left on stack ! */
 }
 
-static const gchar *
-rspamd_lua_class_tostring_buf(lua_State *L, gboolean print_pointer, gint pos)
+static const char *
+rspamd_lua_class_tostring_buf(lua_State *L, gboolean print_pointer, int pos)
 {
-	static gchar buf[64];
-	const gchar *ret = NULL;
-	gint pop = 0;
+	static char buf[64];
+	const char *ret = NULL;
+	int pop = 0;
 
 	if (!lua_getmetatable(L, pos)) {
 		goto err;
@@ -164,9 +164,9 @@ err:
 	return ret;
 }
 
-gint rspamd_lua_class_tostring(lua_State *L)
+int rspamd_lua_class_tostring(lua_State *L)
 {
-	const gchar *p;
+	const char *p;
 
 	p = rspamd_lua_class_tostring_buf(L, TRUE, 1);
 
@@ -181,7 +181,7 @@ gint rspamd_lua_class_tostring(lua_State *L)
 }
 
 
-void rspamd_lua_setclass(lua_State *L, const gchar *classname, gint objidx)
+void rspamd_lua_setclass(lua_State *L, const char *classname, int objidx)
 {
 	khiter_t k;
 	struct rspamd_lua_context *ctx = rspamd_lua_ctx_by_state(L);
@@ -197,7 +197,7 @@ void rspamd_lua_setclass(lua_State *L, const gchar *classname, gint objidx)
 	lua_setmetatable(L, objidx);
 }
 
-void rspamd_lua_class_metatable(lua_State *L, const gchar *classname)
+void rspamd_lua_class_metatable(lua_State *L, const char *classname)
 {
 	khiter_t k;
 	struct rspamd_lua_context *ctx = rspamd_lua_ctx_by_state(L);
@@ -208,7 +208,7 @@ void rspamd_lua_class_metatable(lua_State *L, const gchar *classname)
 	lua_rawgeti(L, LUA_REGISTRYINDEX, kh_value(ctx->classes, k));
 }
 
-void rspamd_lua_add_metamethod(lua_State *L, const gchar *classname,
+void rspamd_lua_add_metamethod(lua_State *L, const char *classname,
 							   luaL_Reg *meth)
 {
 	khiter_t k;
@@ -225,7 +225,7 @@ void rspamd_lua_add_metamethod(lua_State *L, const gchar *classname,
 }
 
 /* assume that table is at the top */
-void rspamd_lua_table_set(lua_State *L, const gchar *index, const gchar *value)
+void rspamd_lua_table_set(lua_State *L, const char *index, const char *value)
 {
 	lua_pushstring(L, index);
 	if (value) {
@@ -237,10 +237,10 @@ void rspamd_lua_table_set(lua_State *L, const gchar *index, const gchar *value)
 	lua_settable(L, -3);
 }
 
-const gchar *
-rspamd_lua_table_get(lua_State *L, const gchar *index)
+const char *
+rspamd_lua_table_get(lua_State *L, const char *index)
 {
-	const gchar *result;
+	const char *result;
 
 	lua_pushstring(L, index);
 	lua_gettable(L, -2);
@@ -255,7 +255,7 @@ rspamd_lua_table_get(lua_State *L, const gchar *index)
 static void
 lua_add_actions_global(lua_State *L)
 {
-	gint i;
+	int i;
 
 	lua_newtable(L);
 
@@ -276,14 +276,14 @@ lua_add_actions_global(lua_State *L)
 
 void rspamd_lua_set_path(lua_State *L, const ucl_object_t *cfg_obj, GHashTable *vars)
 {
-	const gchar *old_path, *additional_path = NULL;
+	const char *old_path, *additional_path = NULL;
 	const ucl_object_t *opts = NULL;
-	const gchar *rulesdir = RSPAMD_RULESDIR,
-				*lualibdir = RSPAMD_LUALIBDIR,
-				*libdir = RSPAMD_LIBDIR;
-	const gchar *t;
+	const char *rulesdir = RSPAMD_RULESDIR,
+			   *lualibdir = RSPAMD_LUALIBDIR,
+			   *libdir = RSPAMD_LIBDIR;
+	const char *t;
 
-	gchar path_buf[PATH_MAX];
+	char path_buf[PATH_MAX];
 
 	lua_getglobal(L, "package");
 	lua_getfield(L, -1, "path");
@@ -408,10 +408,10 @@ void rspamd_lua_set_path(lua_State *L, const ucl_object_t *cfg_obj, GHashTable *
 	lua_pop(L, 1);
 }
 
-static gint
-rspamd_lua_cmp_version_components(const gchar *comp1, const gchar *comp2)
+static int
+rspamd_lua_cmp_version_components(const char *comp1, const char *comp2)
 {
-	guint v1, v2;
+	unsigned int v1, v2;
 
 	v1 = strtoul(comp1, NULL, 10);
 	v2 = strtoul(comp2, NULL, 10);
@@ -422,9 +422,9 @@ rspamd_lua_cmp_version_components(const gchar *comp1, const gchar *comp2)
 static int
 rspamd_lua_rspamd_version_cmp(lua_State *L)
 {
-	const gchar *ver;
-	gchar **components;
-	gint ret = 0;
+	const char *ver;
+	char **components;
+	int ret = 0;
 
 	if (lua_type(L, 2) == LUA_TSTRING) {
 		ver = lua_tostring(L, 2);
@@ -472,7 +472,7 @@ static int
 rspamd_lua_rspamd_version_numeric(lua_State *L)
 {
 	static int64_t version_num = RSPAMD_VERSION_NUM;
-	const gchar *type;
+	const char *type;
 
 	if (lua_gettop(L) >= 2 && lua_type(L, 1) == LUA_TSTRING) {
 		type = lua_tostring(L, 1);
@@ -505,7 +505,7 @@ rspamd_lua_rspamd_version_numeric(lua_State *L)
 static int
 rspamd_lua_rspamd_version(lua_State *L)
 {
-	const gchar *result = NULL, *type;
+	const char *result = NULL, *type;
 
 	if (lua_gettop(L) == 0) {
 		result = RVERSION;
@@ -547,9 +547,9 @@ rspamd_lua_rspamd_version(lua_State *L)
 }
 
 static gboolean
-rspamd_lua_load_env(lua_State *L, const char *fname, gint tbl_pos, GError **err)
+rspamd_lua_load_env(lua_State *L, const char *fname, int tbl_pos, GError **err)
 {
-	gint orig_top = lua_gettop(L), err_idx;
+	int orig_top = lua_gettop(L), err_idx;
 	gboolean ret = TRUE;
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
@@ -594,24 +594,24 @@ rspamd_lua_load_env(lua_State *L, const char *fname, gint tbl_pos, GError **err)
 gboolean
 rspamd_lua_set_env(lua_State *L, GHashTable *vars, char **lua_env, GError **err)
 {
-	gint orig_top = lua_gettop(L);
-	gchar **env = g_get_environ();
+	int orig_top = lua_gettop(L);
+	char **env = g_get_environ();
 
 	/* Set known paths as rspamd_paths global */
 	lua_getglobal(L, "rspamd_paths");
 	if (lua_isnil(L, -1)) {
-		const gchar *confdir = RSPAMD_CONFDIR,
-					*local_confdir = RSPAMD_LOCAL_CONFDIR,
-					*rundir = RSPAMD_RUNDIR,
-					*dbdir = RSPAMD_DBDIR,
-					*logdir = RSPAMD_LOGDIR,
-					*wwwdir = RSPAMD_WWWDIR,
-					*pluginsdir = RSPAMD_PLUGINSDIR,
-					*rulesdir = RSPAMD_RULESDIR,
-					*lualibdir = RSPAMD_LUALIBDIR,
-					*prefix = RSPAMD_PREFIX,
-					*sharedir = RSPAMD_SHAREDIR;
-		const gchar *t;
+		const char *confdir = RSPAMD_CONFDIR,
+				   *local_confdir = RSPAMD_LOCAL_CONFDIR,
+				   *rundir = RSPAMD_RUNDIR,
+				   *dbdir = RSPAMD_DBDIR,
+				   *logdir = RSPAMD_LOGDIR,
+				   *wwwdir = RSPAMD_WWWDIR,
+				   *pluginsdir = RSPAMD_PLUGINSDIR,
+				   *rulesdir = RSPAMD_RULESDIR,
+				   *lualibdir = RSPAMD_LUALIBDIR,
+				   *prefix = RSPAMD_PREFIX,
+				   *sharedir = RSPAMD_SHAREDIR;
+		const char *t;
 
 		/* Try environment */
 		t = g_environ_getenv(env, "SHAREDIR");
@@ -749,7 +749,7 @@ rspamd_lua_set_env(lua_State *L, GHashTable *vars, char **lua_env, GError **err)
 			}
 		}
 
-		gint hostlen = sysconf(_SC_HOST_NAME_MAX);
+		int hostlen = sysconf(_SC_HOST_NAME_MAX);
 
 		if (hostlen <= 0) {
 			hostlen = 256;
@@ -758,7 +758,7 @@ rspamd_lua_set_env(lua_State *L, GHashTable *vars, char **lua_env, GError **err)
 			hostlen++;
 		}
 
-		gchar *hostbuf = g_alloca(hostlen);
+		char *hostbuf = g_alloca(hostlen);
 		memset(hostbuf, 0, hostlen);
 		gethostname(hostbuf, hostlen - 1);
 
@@ -773,12 +773,12 @@ rspamd_lua_set_env(lua_State *L, GHashTable *vars, char **lua_env, GError **err)
 		lua_settable(L, -3);
 
 		if (env) {
-			gint lim = g_strv_length(env);
+			int lim = g_strv_length(env);
 
-			for (gint i = 0; i < lim; i++) {
+			for (int i = 0; i < lim; i++) {
 				if (RSPAMD_LEN_CHECK_STARTS_WITH(env[i], strlen(env[i]), "RSPAMD_")) {
 					const char *var = env[i] + sizeof("RSPAMD_") - 1, *value;
-					gint varlen;
+					int varlen;
 
 					varlen = strcspn(var, "=");
 					value = var + varlen;
@@ -795,9 +795,9 @@ rspamd_lua_set_env(lua_State *L, GHashTable *vars, char **lua_env, GError **err)
 		}
 
 		if (lua_env) {
-			gint lim = g_strv_length(lua_env);
+			int lim = g_strv_length(lua_env);
 
-			for (gint i = 0; i < lim; i++) {
+			for (int i = 0; i < lim; i++) {
 				if (!rspamd_lua_load_env(L, lua_env[i], lua_gettop(L), err)) {
 					return FALSE;
 				}
@@ -816,7 +816,7 @@ rspamd_lua_set_env(lua_State *L, GHashTable *vars, char **lua_env, GError **err)
 void rspamd_lua_set_globals(struct rspamd_config *cfg, lua_State *L)
 {
 	struct rspamd_config **pcfg;
-	gint orig_top = lua_gettop(L);
+	int orig_top = lua_gettop(L);
 
 	/* First check for global variable 'config' */
 	lua_getglobal(L, "config");
@@ -867,7 +867,7 @@ void rspamd_lua_set_globals(struct rspamd_config *cfg, lua_State *L)
 }
 
 #ifdef WITH_LUA_TRACE
-static gint
+static int
 lua_push_trace_data(lua_State *L)
 {
 	if (lua_traces) {
@@ -1092,8 +1092,8 @@ void rspamd_lua_start_gc(struct rspamd_config *cfg)
 }
 
 
-void rspamd_plugins_table_push_elt(lua_State *L, const gchar *field_name,
-								   const gchar *new_elt)
+void rspamd_plugins_table_push_elt(lua_State *L, const char *field_name,
+								   const char *new_elt)
 {
 	lua_getglobal(L, rspamd_modules_state_global);
 
@@ -1122,7 +1122,7 @@ rspamd_init_lua_filters(struct rspamd_config *cfg, bool force_load, bool strict)
 	struct rspamd_config **pcfg;
 	struct script_module *module;
 	lua_State *L = cfg->lua_state;
-	gint err_idx, i;
+	int err_idx, i;
 
 	pcfg = lua_newuserdata(L, sizeof(struct rspamd_config *));
 	rspamd_lua_setclass(L, rspamd_config_classname, -1);
@@ -1142,10 +1142,10 @@ rspamd_init_lua_filters(struct rspamd_config *cfg, bool force_load, bool strict)
 			err_idx = lua_gettop(L);
 
 			gsize fsize;
-			guint8 *data = rspamd_file_xmap(module->path,
-											PROT_READ, &fsize, TRUE);
-			guchar digest[rspamd_cryptobox_HASHBYTES];
-			gchar *lua_fname;
+			uint8_t *data = rspamd_file_xmap(module->path,
+											 PROT_READ, &fsize, TRUE);
+			unsigned char digest[rspamd_cryptobox_HASHBYTES];
+			char *lua_fname;
 
 			if (data == NULL) {
 				msg_err_config("cannot mmap %s failed: %s", module->path,
@@ -1225,9 +1225,9 @@ rspamd_init_lua_filters(struct rspamd_config *cfg, bool force_load, bool strict)
 
 void rspamd_lua_dumpstack(lua_State *L)
 {
-	gint i, t, r = 0;
-	gint top = lua_gettop(L);
-	gchar buf[BUFSIZ];
+	int i, t, r = 0;
+	int top = lua_gettop(L);
+	char buf[BUFSIZ];
 
 	r += rspamd_snprintf(buf + r, sizeof(buf) - r, "lua stack: ");
 	for (i = 1; i <= top; i++) { /* repeat for each level */
@@ -1269,7 +1269,7 @@ void rspamd_lua_dumpstack(lua_State *L)
 }
 
 gpointer
-rspamd_lua_check_class(lua_State *L, gint index, const gchar *name)
+rspamd_lua_check_class(lua_State *L, int index, const char *name)
 {
 	gpointer p;
 	khiter_t k;
@@ -1309,7 +1309,7 @@ int rspamd_lua_typerror(lua_State *L, int narg, const char *tname)
 }
 
 
-void rspamd_lua_add_preload(lua_State *L, const gchar *name, lua_CFunction func)
+void rspamd_lua_add_preload(lua_State *L, const char *name, lua_CFunction func)
 {
 	lua_getglobal(L, "package");
 	lua_pushstring(L, "preload");
@@ -1321,12 +1321,12 @@ void rspamd_lua_add_preload(lua_State *L, const gchar *name, lua_CFunction func)
 
 
 gboolean
-rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
+rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 								 GError **err,
 								 enum rspamd_lua_parse_arguments_flags how,
-								 const gchar *extraction_pattern, ...)
+								 const char *extraction_pattern, ...)
 {
-	const gchar *p, *key = NULL, *end, *cls;
+	const char *p, *key = NULL, *end, *cls;
 	va_list ap;
 	gboolean required = FALSE, failed = FALSE, is_table;
 	enum {
@@ -1337,7 +1337,7 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 		read_semicolon
 	} state = read_key;
 	gsize keylen = 0, *valuelen, clslen;
-	gint idx = 0, t, direct_userdata = 0;
+	int idx = 0, t, direct_userdata = 0;
 
 	g_assert(extraction_pattern != NULL);
 
@@ -1395,16 +1395,16 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 			switch (*p) {
 			case 'S':
 				if (t == LUA_TSTRING) {
-					*(va_arg(ap, const gchar **)) = lua_tostring(L, idx);
+					*(va_arg(ap, const char **)) = lua_tostring(L, idx);
 				}
 				else if (t == LUA_TNIL || t == LUA_TNONE) {
 					failed = TRUE;
 
 					if (how != RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING) {
-						*(va_arg(ap, const gchar **)) = NULL;
+						*(va_arg(ap, const char **)) = NULL;
 					}
 					else {
-						(void) va_arg(ap, gchar **);
+						(void) va_arg(ap, char **);
 					}
 				}
 				else {
@@ -1413,7 +1413,7 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 								1,
 								"bad type for key:"
 								" %.*s: '%s', '%s' is expected",
-								(gint) keylen,
+								(int) keylen,
 								key,
 								lua_typename(L, lua_type(L, idx)), "string");
 					va_end(ap);
@@ -1445,7 +1445,7 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 								1,
 								"bad type for key:"
 								" %.*s: '%s', '%s' is expected",
-								(gint) keylen,
+								(int) keylen,
 								key,
 								lua_typename(L, lua_type(L, idx)),
 								"int64");
@@ -1477,7 +1477,7 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 								1,
 								"bad type for key:"
 								" %.*s: '%s', '%s' is expected",
-								(gint) keylen,
+								(int) keylen,
 								key,
 								lua_typename(L, lua_type(L, idx)),
 								"int64");
@@ -1496,16 +1496,16 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 						lua_pushvalue(L, idx);
 					}
 
-					*(va_arg(ap, gint *)) = luaL_ref(L, LUA_REGISTRYINDEX);
+					*(va_arg(ap, int *)) = luaL_ref(L, LUA_REGISTRYINDEX);
 				}
 				else if (t == LUA_TNIL || t == LUA_TNONE) {
 					failed = TRUE;
 
 					if (how != RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING) {
-						*(va_arg(ap, gint *)) = -1;
+						*(va_arg(ap, int *)) = -1;
 					}
 					else {
-						(void) va_arg(ap, gint *);
+						(void) va_arg(ap, int *);
 					}
 
 					if (is_table) {
@@ -1518,7 +1518,7 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 								1,
 								"bad type for key:"
 								" %.*s: '%s', '%s' is expected",
-								(gint) keylen,
+								(int) keylen,
 								key,
 								lua_typename(L, lua_type(L, idx)),
 								"function");
@@ -1550,7 +1550,7 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 								1,
 								"bad type for key:"
 								" %.*s: '%s', '%s' is expected",
-								(gint) keylen,
+								(int) keylen,
 								key,
 								lua_typename(L, lua_type(L, idx)),
 								"bool");
@@ -1566,16 +1566,16 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 
 			case 'N':
 				if (t == LUA_TNUMBER) {
-					*(va_arg(ap, gdouble *)) = lua_tonumber(L, idx);
+					*(va_arg(ap, double *)) = lua_tonumber(L, idx);
 				}
 				else if (t == LUA_TNIL || t == LUA_TNONE) {
 					failed = TRUE;
 
 					if (how != RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING) {
-						*(va_arg(ap, gdouble *)) = 0;
+						*(va_arg(ap, double *)) = 0;
 					}
 					else {
-						(void) va_arg(ap, gdouble *);
+						(void) va_arg(ap, double *);
 					}
 				}
 				else {
@@ -1584,7 +1584,7 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 								1,
 								"bad type for key:"
 								" %.*s: '%s', '%s' is expected",
-								(gint) keylen,
+								(int) keylen,
 								key,
 								lua_typename(L, lua_type(L, idx)),
 								"double");
@@ -1600,16 +1600,16 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 
 			case 'D':
 				if (t == LUA_TNUMBER) {
-					*(va_arg(ap, gdouble *)) = lua_tonumber(L, idx);
+					*(va_arg(ap, double *)) = lua_tonumber(L, idx);
 				}
 				else if (t == LUA_TNIL || t == LUA_TNONE) {
 					failed = TRUE;
 
 					if (how != RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING) {
-						*(va_arg(ap, gdouble *)) = NAN;
+						*(va_arg(ap, double *)) = NAN;
 					}
 					else {
-						(void) va_arg(ap, gdouble *);
+						(void) va_arg(ap, double *);
 					}
 				}
 				else {
@@ -1618,7 +1618,7 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 								1,
 								"bad type for key:"
 								" %.*s: '%s', '%s' is expected",
-								(gint) keylen,
+								(int) keylen,
 								key,
 								lua_typename(L, lua_type(L, idx)),
 								"double");
@@ -1636,8 +1636,8 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 				valuelen = va_arg(ap, gsize *);
 
 				if (t == LUA_TSTRING) {
-					*(va_arg(ap, const gchar **)) = lua_tolstring(L, idx,
-																  valuelen);
+					*(va_arg(ap, const char **)) = lua_tolstring(L, idx,
+																 valuelen);
 				}
 				else if (t == LUA_TNIL || t == LUA_TNONE) {
 					failed = TRUE;
@@ -1656,7 +1656,7 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 								1,
 								"bad type for key:"
 								" %.*s: '%s', '%s' is expected",
-								(gint) keylen,
+								(int) keylen,
 								key,
 								lua_typename(L, lua_type(L, idx)),
 								"string");
@@ -1706,7 +1706,7 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 								1,
 								"bad type for key:"
 								" %.*s: '%s', '%s' is expected",
-								(gint) keylen,
+								(int) keylen,
 								key,
 								lua_typename(L, lua_type(L, idx)),
 								"int64");
@@ -1738,7 +1738,7 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 								1,
 								"bad type for key:"
 								" %.*s: '%s', '%s' is expected",
-								(gint) keylen,
+								(int) keylen,
 								key,
 								lua_typename(L, lua_type(L, idx)),
 								"int64");
@@ -1761,7 +1761,7 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 			if (failed && required) {
 				g_set_error(err, lua_error_quark(), 2, "required parameter "
 													   "%.*s is missing",
-							(gint) keylen, key);
+							(int) keylen, key);
 				va_end(ap);
 
 				return FALSE;
@@ -1792,7 +1792,7 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 
 				g_set_error(err, lua_error_quark(), 2, "missing classname for "
 													   "%.*s",
-							(gint) keylen, key);
+							(int) keylen, key);
 				va_end(ap);
 
 				return FALSE;
@@ -1813,7 +1813,7 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 								2,
 								"empty classname for "
 								"%*.s",
-								(gint) keylen,
+								(int) keylen,
 								key);
 					va_end(ap);
 
@@ -1843,7 +1843,7 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 									lua_error_quark(),
 									2,
 									"invalid class for key %.*s, expected %s, got %s",
-									(gint) keylen,
+									(int) keylen,
 									key,
 									static_cls,
 									rspamd_lua_class_tostring_buf(L, FALSE, idx));
@@ -1866,7 +1866,7 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 								2,
 								"required parameter "
 								"%.*s is missing",
-								(gint) keylen,
+								(int) keylen,
 								key);
 					va_end(ap);
 
@@ -1912,9 +1912,9 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 static void
 rspamd_lua_traceback_string(lua_State *L, luaL_Buffer *buf)
 {
-	gint i = 1, r;
+	int i = 1, r;
 	lua_Debug d;
-	gchar tmp[256];
+	char tmp[256];
 
 	while (lua_getstack(L, i++, &d)) {
 		lua_getinfo(L, "nSl", &d);
@@ -1925,7 +1925,7 @@ rspamd_lua_traceback_string(lua_State *L, luaL_Buffer *buf)
 	}
 }
 
-gint rspamd_lua_traceback(lua_State *L)
+int rspamd_lua_traceback(lua_State *L)
 {
 	luaL_Buffer b;
 
@@ -1938,7 +1938,7 @@ gint rspamd_lua_traceback(lua_State *L)
 
 void rspamd_lua_get_traceback_string(lua_State *L, luaL_Buffer *buf)
 {
-	const gchar *msg = lua_tostring(L, -1);
+	const char *msg = lua_tostring(L, -1);
 
 	if (msg) {
 		luaL_addstring(buf, msg);
@@ -1952,9 +1952,9 @@ void rspamd_lua_get_traceback_string(lua_State *L, luaL_Buffer *buf)
 	rspamd_lua_traceback_string(L, buf);
 }
 
-guint rspamd_lua_table_size(lua_State *L, gint tbl_pos)
+unsigned int rspamd_lua_table_size(lua_State *L, int tbl_pos)
 {
-	guint tbl_size = 0;
+	unsigned int tbl_size = 0;
 
 	if (!lua_istable(L, tbl_pos)) {
 		return 0;
@@ -1970,11 +1970,11 @@ guint rspamd_lua_table_size(lua_State *L, gint tbl_pos)
 }
 
 static void *
-rspamd_lua_check_udata_common(lua_State *L, gint pos, const gchar *classname,
+rspamd_lua_check_udata_common(lua_State *L, int pos, const char *classname,
 							  gboolean fatal)
 {
 	void *p = lua_touserdata(L, pos);
-	gint i, top = lua_gettop(L);
+	int i, top = lua_gettop(L);
 
 	if (p == NULL) {
 		goto err;
@@ -2008,7 +2008,7 @@ rspamd_lua_check_udata_common(lua_State *L, gint pos, const gchar *classname,
 
 err:
 	if (fatal) {
-		const gchar *actual_classname = NULL;
+		const char *actual_classname = NULL;
 
 		if (lua_type(L, pos) == LUA_TUSERDATA && lua_getmetatable(L, pos)) {
 			lua_pushstring(L, "__index");
@@ -2022,8 +2022,8 @@ err:
 		}
 
 		luaL_Buffer buf;
-		gchar tmp[512];
-		gint r;
+		char tmp[512];
+		int r;
 
 		luaL_buffinit(L, &buf);
 		r = rspamd_snprintf(tmp, sizeof(tmp),
@@ -2071,19 +2071,19 @@ err:
 }
 
 void *
-rspamd_lua_check_udata(lua_State *L, gint pos, const gchar *classname)
+rspamd_lua_check_udata(lua_State *L, int pos, const char *classname)
 {
 	return rspamd_lua_check_udata_common(L, pos, classname, TRUE);
 }
 
 void *
-rspamd_lua_check_udata_maybe(lua_State *L, gint pos, const gchar *classname)
+rspamd_lua_check_udata_maybe(lua_State *L, int pos, const char *classname)
 {
 	return rspamd_lua_check_udata_common(L, pos, classname, FALSE);
 }
 
 struct rspamd_async_session *
-lua_check_session(lua_State *L, gint pos)
+lua_check_session(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_session_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'session' expected");
@@ -2091,7 +2091,7 @@ lua_check_session(lua_State *L, gint pos)
 }
 
 struct ev_loop *
-lua_check_ev_base(lua_State *L, gint pos)
+lua_check_ev_base(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_ev_base_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'event_base' expected");
@@ -2141,7 +2141,7 @@ void rspamd_lua_run_config_post_init(lua_State *L, struct rspamd_config *cfg)
 	LL_FOREACH(cfg->post_init_scripts, sc)
 	{
 		lua_pushcfunction(L, &rspamd_lua_traceback);
-		gint err_idx = lua_gettop(L);
+		int err_idx = lua_gettop(L);
 
 		lua_rawgeti(L, LUA_REGISTRYINDEX, sc->cbref);
 		pcfg = lua_newuserdata(L, sizeof(*pcfg));
@@ -2166,7 +2166,7 @@ void rspamd_lua_run_config_unload(lua_State *L, struct rspamd_config *cfg)
 	LL_FOREACH(cfg->config_unload_scripts, sc)
 	{
 		lua_pushcfunction(L, &rspamd_lua_traceback);
-		gint err_idx = lua_gettop(L);
+		int err_idx = lua_gettop(L);
 
 		lua_rawgeti(L, LUA_REGISTRYINDEX, sc->cbref);
 		pcfg = lua_newuserdata(L, sizeof(*pcfg));
@@ -2193,7 +2193,7 @@ rspamd_lua_run_postloads_error(struct thread_entry *thread, int ret, const char 
 
 struct rspamd_lua_ref_cbdata {
 	lua_State *L;
-	gint cbref;
+	int cbref;
 };
 
 static void
@@ -2205,7 +2205,7 @@ rspamd_lua_ref_dtor(gpointer p)
 }
 
 void rspamd_lua_add_ref_dtor(lua_State *L, rspamd_mempool_t *pool,
-							 gint ref)
+							 int ref)
 {
 	struct rspamd_lua_ref_cbdata *cbdata;
 
@@ -2219,10 +2219,10 @@ void rspamd_lua_add_ref_dtor(lua_State *L, rspamd_mempool_t *pool,
 }
 
 gboolean
-rspamd_lua_require_function(lua_State *L, const gchar *modname,
-							const gchar *funcname)
+rspamd_lua_require_function(lua_State *L, const char *modname,
+							const char *funcname)
 {
-	gint table_pos, err_pos;
+	int table_pos, err_pos;
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
 	err_pos = lua_gettop(L);
@@ -2291,10 +2291,10 @@ rspamd_lua_require_function(lua_State *L, const gchar *modname,
 	}
 }
 
-gint rspamd_lua_function_ref_from_str(lua_State *L, const gchar *str, gsize slen,
-									  const gchar *modname, GError **err)
+int rspamd_lua_function_ref_from_str(lua_State *L, const char *str, gsize slen,
+									 const char *modname, GError **err)
 {
-	gint err_idx, ref_idx;
+	int err_idx, ref_idx;
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
 	err_idx = lua_gettop(L);
@@ -2347,9 +2347,9 @@ gint rspamd_lua_function_ref_from_str(lua_State *L, const gchar *str, gsize slen
 
 gboolean
 rspamd_lua_try_load_redis(lua_State *L, const ucl_object_t *obj,
-						  struct rspamd_config *cfg, gint *ref_id)
+						  struct rspamd_config *cfg, int *ref_id)
 {
-	gint err_idx;
+	int err_idx;
 	struct rspamd_config **pcfg;
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
@@ -2402,7 +2402,7 @@ rspamd_lua_try_load_redis(lua_State *L, const ucl_object_t *obj,
 
 void rspamd_lua_push_full_word(lua_State *L, rspamd_stat_token_t *w)
 {
-	gint fl_cnt;
+	int fl_cnt;
 
 	lua_createtable(L, 4, 0);
 
@@ -2477,11 +2477,11 @@ void rspamd_lua_push_full_word(lua_State *L, rspamd_stat_token_t *w)
 	lua_rawseti(L, -2, 4);
 }
 
-gint rspamd_lua_push_words(lua_State *L, GArray *words,
-						   enum rspamd_lua_words_type how)
+int rspamd_lua_push_words(lua_State *L, GArray *words,
+						  enum rspamd_lua_words_type how)
 {
 	rspamd_stat_token_t *w;
-	guint i, cnt;
+	unsigned int i, cnt;
 
 	lua_createtable(L, words->len, 0);
 
@@ -2520,12 +2520,12 @@ gint rspamd_lua_push_words(lua_State *L, GArray *words,
 	return 1;
 }
 
-gchar *
+char *
 rspamd_lua_get_module_name(lua_State *L)
 {
 	lua_Debug d;
-	gchar *p;
-	gchar func_buf[128];
+	char *p;
+	char func_buf[128];
 
 	if (lua_getstack(L, 1, &d) == 1) {
 		(void) lua_getinfo(L, "Sl", &d);
@@ -2551,12 +2551,12 @@ rspamd_lua_get_module_name(lua_State *L)
 	return NULL;
 }
 
-bool rspamd_lua_universal_pcall(lua_State *L, gint cbref, const gchar *strloc,
-								gint nret, const gchar *args, GError **err, ...)
+bool rspamd_lua_universal_pcall(lua_State *L, int cbref, const char *strloc,
+								int nret, const char *args, GError **err, ...)
 {
 	va_list ap;
-	const gchar *argp = args, *classname;
-	gint err_idx, nargs = 0;
+	const char *argp = args, *classname;
+	int err_idx, nargs = 0;
 	gpointer *cls_ptr;
 	gsize sz;
 
@@ -2576,9 +2576,9 @@ bool rspamd_lua_universal_pcall(lua_State *L, gint cbref, const gchar *strloc,
 	/*
 	 * Possible arguments
 	 * - i - lua_integer, argument - int64_t
-	 * - n - lua_number, argument - gdouble
-	 * - s - lua_string, argument - const gchar * (zero terminated)
-	 * - l - lua_lstring, argument - (size_t + const gchar *) pair
+	 * - n - lua_number, argument - double
+	 * - s - lua_string, argument - const char * (zero terminated)
+	 * - l - lua_lstring, argument - (size_t + const char *) pair
 	 * - u - lua_userdata, argument - (const char * + void *) - classname + pointer
 	 * - b - lua_boolean, argument - gboolean (not bool due to varargs promotion)
 	 * - f - lua_function, argument - int - position of the function on stack (not lua_registry)
@@ -2591,16 +2591,16 @@ bool rspamd_lua_universal_pcall(lua_State *L, gint cbref, const gchar *strloc,
 			nargs++;
 			break;
 		case 'n':
-			lua_pushnumber(L, va_arg(ap, gdouble));
+			lua_pushnumber(L, va_arg(ap, double));
 			nargs++;
 			break;
 		case 's':
-			lua_pushstring(L, va_arg(ap, const gchar *));
+			lua_pushstring(L, va_arg(ap, const char *));
 			nargs++;
 			break;
 		case 'l':
 			sz = va_arg(ap, gsize);
-			lua_pushlstring(L, va_arg(ap, const gchar *), sz);
+			lua_pushlstring(L, va_arg(ap, const char *), sz);
 			nargs++;
 			break;
 		case 'b':
@@ -2608,7 +2608,7 @@ bool rspamd_lua_universal_pcall(lua_State *L, gint cbref, const gchar *strloc,
 			nargs++;
 			break;
 		case 'u':
-			classname = va_arg(ap, const gchar *);
+			classname = va_arg(ap, const char *);
 			cls_ptr = (gpointer *) lua_newuserdata(L, sizeof(gpointer));
 			*cls_ptr = va_arg(ap, gpointer);
 			rspamd_lua_setclass(L, classname, -1);
@@ -2616,7 +2616,7 @@ bool rspamd_lua_universal_pcall(lua_State *L, gint cbref, const gchar *strloc,
 			break;
 		case 'f':
 		case 't':
-			lua_pushvalue(L, va_arg(ap, gint));
+			lua_pushvalue(L, va_arg(ap, int));
 			nargs++;
 			break;
 		default:
@@ -2649,7 +2649,7 @@ bool rspamd_lua_universal_pcall(lua_State *L, gint cbref, const gchar *strloc,
 }
 
 #if defined(LUA_VERSION_NUM) && LUA_VERSION_NUM <= 502
-gint rspamd_lua_geti(lua_State *L, int pos, int i)
+int rspamd_lua_geti(lua_State *L, int pos, int i)
 {
 	pos = lua_absindex(L, pos);
 	lua_pushinteger(L, i);

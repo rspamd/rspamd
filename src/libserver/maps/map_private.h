@@ -29,7 +29,7 @@ extern "C" {
 
 typedef void (*rspamd_map_tmp_dtor)(gpointer p);
 
-extern guint rspamd_map_log_id;
+extern unsigned int rspamd_map_log_id;
 #define msg_err_map(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
 													 "map", map->tag,      \
 													 RSPAMD_LOG_FUNC,      \
@@ -58,7 +58,7 @@ enum fetch_proto {
  * Data specific to file maps
  */
 struct file_map_data {
-	gchar *filename;
+	char *filename;
 	gboolean need_modify;
 	ev_stat st_ev;
 };
@@ -77,10 +77,10 @@ struct rspamd_http_map_cached_cbdata {
 };
 
 struct rspamd_map_cachepoint {
-	gint available;
+	int available;
 	gsize len;
 	time_t last_modified;
-	gchar shmem_name[256];
+	char shmem_name[256];
 };
 
 /**
@@ -91,20 +91,20 @@ struct http_map_data {
 	struct rspamd_map_cachepoint *cache;
 	/* Non-shared for cache owner, used to cleanup cache */
 	struct rspamd_http_map_cached_cbdata *cur_cache_cbd;
-	gchar *userinfo;
-	gchar *path;
-	gchar *host;
-	gchar *rest;
+	char *userinfo;
+	char *path;
+	char *host;
+	char *rest;
 	rspamd_fstring_t *etag;
 	time_t last_modified;
 	time_t last_checked;
 	gboolean request_sent;
 	uint64_t gen;
-	guint16 port;
+	uint16_t port;
 };
 
 struct static_map_data {
-	guchar *data;
+	unsigned char *data;
 	gsize len;
 	gboolean processed;
 };
@@ -127,7 +127,7 @@ struct rspamd_map_backend {
 	uint32_t id;
 	struct rspamd_cryptobox_pubkey *trusted_pubkey;
 	union rspamd_map_backend_data data;
-	gchar *uri;
+	char *uri;
 	ref_entry_t ref;
 };
 
@@ -144,8 +144,8 @@ struct rspamd_map {
 	void **user_data;
 	struct ev_loop *event_loop;
 	struct rspamd_worker *wrk;
-	gchar *description;
-	gchar *name;
+	char *description;
+	char *name;
 	uint32_t id;
 	struct map_periodic_cbdata *scheduled_check;
 	rspamd_map_tmp_dtor tmp_dtor;
@@ -159,7 +159,7 @@ struct rspamd_map {
 	uint64_t digest;
 	/* Should we check HTTP or just load cached data */
 	ev_tstamp timeout;
-	gdouble poll_timeout;
+	double poll_timeout;
 	time_t next_check;
 	bool active_http;
 	bool non_trivial;  /* E.g. has http backends in active mode */
@@ -168,8 +168,8 @@ struct rspamd_map {
 	bool no_file_read; /* Do not read files */
 	bool seen;         /* This map has already been watched or pre-loaded */
 	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
-	gint *locked;
-	gchar tag[MEMPOOL_UID_LEN];
+	int *locked;
+	char tag[MEMPOOL_UID_LEN];
 };
 
 enum rspamd_map_http_stage {
@@ -186,15 +186,15 @@ struct map_periodic_cbdata {
 	gboolean need_modify;
 	gboolean errored;
 	gboolean locked;
-	guint cur_backend;
+	unsigned int cur_backend;
 	ref_entry_t ref;
 };
 
-static const gchar rspamd_http_file_magic[] =
+static const char rspamd_http_file_magic[] =
 	{'r', 'm', 'c', 'd', '2', '0', '0', '0'};
 
 struct rspamd_http_file_data {
-	guchar magic[sizeof(rspamd_http_file_magic)];
+	unsigned char magic[sizeof(rspamd_http_file_magic)];
 	goffset data_off;
 	gulong mtime;
 	gulong next_check;

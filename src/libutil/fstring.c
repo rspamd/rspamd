@@ -72,7 +72,7 @@ rspamd_fstring_sized_new(gsize initial_size)
 }
 
 rspamd_fstring_t *
-rspamd_fstring_new_init(const gchar *init, gsize len)
+rspamd_fstring_new_init(const char *init, gsize len)
 {
 	rspamd_fstring_t *s;
 	gsize real_size = MAX(default_initial_size, len);
@@ -92,7 +92,7 @@ rspamd_fstring_new_init(const gchar *init, gsize len)
 }
 
 rspamd_fstring_t *
-rspamd_fstring_assign(rspamd_fstring_t *str, const gchar *init, gsize len)
+rspamd_fstring_assign(rspamd_fstring_t *str, const char *init, gsize len)
 {
 	gsize avail;
 
@@ -244,7 +244,7 @@ rspamd_fstrhash_lc(const rspamd_ftok_t *str, gboolean is_utf)
 {
 	gsize i;
 	uint64_t hval;
-	const gchar *p, *end = NULL;
+	const char *p, *end = NULL;
 	gunichar uc;
 
 	if (str == NULL) {
@@ -301,10 +301,10 @@ rspamd_fstring_equal(const rspamd_fstring_t *s1,
 	return FALSE;
 }
 
-gint rspamd_fstring_casecmp(const rspamd_fstring_t *s1,
-							const rspamd_fstring_t *s2)
+int rspamd_fstring_casecmp(const rspamd_fstring_t *s1,
+						   const rspamd_fstring_t *s2)
 {
-	gint ret = 0;
+	int ret = 0;
 
 	g_assert(s1 != NULL && s2 != NULL);
 
@@ -318,8 +318,8 @@ gint rspamd_fstring_casecmp(const rspamd_fstring_t *s1,
 	return ret;
 }
 
-gint rspamd_fstring_cmp(const rspamd_fstring_t *s1,
-						const rspamd_fstring_t *s2)
+int rspamd_fstring_cmp(const rspamd_fstring_t *s1,
+					   const rspamd_fstring_t *s2)
 {
 	g_assert(s1 != NULL && s2 != NULL);
 
@@ -330,10 +330,10 @@ gint rspamd_fstring_cmp(const rspamd_fstring_t *s1,
 	return s1->len - s2->len;
 }
 
-gint rspamd_ftok_casecmp(const rspamd_ftok_t *s1,
-						 const rspamd_ftok_t *s2)
+int rspamd_ftok_casecmp(const rspamd_ftok_t *s1,
+						const rspamd_ftok_t *s2)
 {
-	gint ret = 0;
+	int ret = 0;
 
 	g_assert(s1 != NULL && s2 != NULL);
 
@@ -347,8 +347,8 @@ gint rspamd_ftok_casecmp(const rspamd_ftok_t *s1,
 	return ret;
 }
 
-gint rspamd_ftok_cmp(const rspamd_ftok_t *s1,
-					 const rspamd_ftok_t *s2)
+int rspamd_ftok_cmp(const rspamd_ftok_t *s1,
+					const rspamd_ftok_t *s2)
 {
 	g_assert(s1 != NULL && s2 != NULL);
 
@@ -429,7 +429,7 @@ rspamd_ftok_cstr(const rspamd_ftok_t *s)
 }
 
 gboolean
-rspamd_ftok_cstr_equal(const rspamd_ftok_t *s, const gchar *pat,
+rspamd_ftok_cstr_equal(const rspamd_ftok_t *s, const char *pat,
 					   gboolean icase)
 {
 	gsize slen;
@@ -449,10 +449,10 @@ rspamd_ftok_cstr_equal(const rspamd_ftok_t *s, const gchar *pat,
 	return (rspamd_ftok_cmp(s, &srch) == 0);
 }
 
-gchar *
+char *
 rspamd_ftokdup(const rspamd_ftok_t *src)
 {
-	gchar *newstr;
+	char *newstr;
 
 	if (src == NULL) {
 		return NULL;
@@ -465,10 +465,10 @@ rspamd_ftokdup(const rspamd_ftok_t *src)
 	return newstr;
 }
 
-gchar *
+char *
 rspamd_fstringdup(const rspamd_fstring_t *src)
 {
-	gchar *newstr;
+	char *newstr;
 
 	if (src == NULL) {
 		return NULL;

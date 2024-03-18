@@ -21,7 +21,7 @@
 #include "rspamadm.h"
 #include "unix-std.h"
 
-static void rspamadm_pw(gint argc, gchar **argv,
+static void rspamadm_pw(int argc, char **argv,
 						const struct rspamadm_command *cmd);
 static const char *rspamadm_pw_help(gboolean full_help,
 									const struct rspamadm_command *cmd);
@@ -31,8 +31,8 @@ static gboolean do_encrypt = FALSE;
 static gboolean do_check = FALSE;
 static gboolean quiet = FALSE;
 static gboolean list = FALSE;
-static gchar *type = "catena";
-static gchar *password = NULL;
+static char *type = "catena";
+static char *password = NULL;
 
 struct rspamadm_command pw_command = {
 	.name = "pw",
@@ -84,7 +84,7 @@ static const struct rspamd_controller_pbkdf *
 rspamadm_get_pbkdf(void)
 {
 	const struct rspamd_controller_pbkdf *pbkdf;
-	guint i;
+	unsigned int i;
 
 	for (i = 0; i < RSPAMD_PBKDF_ID_MAX - 1; i++) {
 		pbkdf = &pbkdf_list[i];
@@ -104,8 +104,8 @@ static char *
 rspamadm_pw_encrypt(char *password)
 {
 	const struct rspamd_controller_pbkdf *pbkdf;
-	guchar *salt, *key;
-	gchar *encoded_salt, *encoded_key;
+	unsigned char *salt, *key;
+	char *encoded_salt, *encoded_key;
 	GString *result;
 	gsize plen;
 
@@ -151,11 +151,11 @@ rspamadm_pw_encrypt(char *password)
 	return password;
 }
 
-static const gchar *
-rspamd_encrypted_password_get_str(const gchar *password, gsize skip,
+static const char *
+rspamd_encrypted_password_get_str(const char *password, gsize skip,
 								  gsize *length)
 {
-	const gchar *str, *start, *end;
+	const char *str, *start, *end;
 	gsize size;
 
 	start = password + skip;
@@ -182,13 +182,13 @@ static void
 rspamadm_pw_check(void)
 {
 	const struct rspamd_controller_pbkdf *pbkdf = NULL;
-	const gchar *salt, *hash;
-	const gchar *start, *end;
-	guchar *salt_decoded, *key_decoded, *local_key;
+	const char *salt, *hash;
+	const char *start, *end;
+	unsigned char *salt_decoded, *key_decoded, *local_key;
 	gsize salt_len, key_len, size;
-	gchar test_password[8192], encrypted_password[8192];
+	char test_password[8192], encrypted_password[8192];
 	gsize plen, i;
-	gint id;
+	int id;
 	gboolean ret = FALSE;
 
 	if (password == NULL) {
@@ -211,7 +211,7 @@ rspamadm_pw_check(void)
 		}
 
 		if (size > 0) {
-			gchar *endptr;
+			char *endptr;
 			id = strtoul(start, &endptr, 10);
 
 			if ((endptr == NULL || *endptr == *end)) {
@@ -307,11 +307,11 @@ rspamadm_pw_check(void)
 	}
 }
 
-static gint
+static int
 rspamadm_pw_lua_encrypt(lua_State *L)
 {
-	const gchar *pw_in = NULL;
-	gchar *ret, *tmp = NULL;
+	const char *pw_in = NULL;
+	char *ret, *tmp = NULL;
 
 	if (lua_type(L, 1) == LUA_TSTRING) {
 		pw_in = lua_tostring(L, 1);
@@ -341,7 +341,7 @@ static void
 rspamadm_alg_list(void)
 {
 	const struct rspamd_controller_pbkdf *pbkdf;
-	guint i;
+	unsigned int i;
 
 	for (i = 0; i < RSPAMD_PBKDF_ID_MAX - 1; i++) {
 		pbkdf = &pbkdf_list[i];
@@ -352,7 +352,7 @@ rspamadm_alg_list(void)
 }
 
 static void
-rspamadm_pw(gint argc, gchar **argv, const struct rspamadm_command *cmd)
+rspamadm_pw(int argc, char **argv, const struct rspamadm_command *cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;
@@ -382,7 +382,7 @@ rspamadm_pw(gint argc, gchar **argv, const struct rspamadm_command *cmd)
 	}
 
 	if (do_encrypt) {
-		gchar *encr = rspamadm_pw_encrypt(password);
+		char *encr = rspamadm_pw_encrypt(password);
 		rspamd_printf("%s\n", encr);
 		g_free(encr);
 	}

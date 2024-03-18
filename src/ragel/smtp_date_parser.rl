@@ -19,7 +19,7 @@ rspamd_parse_smtp_date (const unsigned char *data, size_t len, GError **err)
   const unsigned char *p = data, *pe = data + len, *eof = data + len, *tmp = data;
   struct tm tm;
   glong tz = 0;
-  gint cs = 0, *stack = NULL;;
+  int cs = 0, *stack = NULL;;
   gsize top = 0;
 
   memset (&tm, 0, sizeof (tm));

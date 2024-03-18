@@ -71,8 +71,8 @@ enum rspamd_log_cfg_flags {
 };
 
 struct rspamd_worker_log_pipe {
-	gint fd;
-	gint type;
+	int fd;
+	int type;
 	struct rspamd_worker_log_pipe *prev, *next;
 };
 
@@ -80,9 +80,9 @@ struct rspamd_worker_log_pipe {
  * script module list item
  */
 struct script_module {
-	gchar *name; /**< name of module   */
-	gchar *path; /**< path to module   */
-	gchar *digest;
+	char *name; /**< name of module   */
+	char *path; /**< path to module   */
+	char *digest;
 };
 
 enum rspamd_symbol_group_flags {
@@ -98,11 +98,11 @@ enum rspamd_symbol_group_flags {
  */
 struct rspamd_symbol;
 struct rspamd_symbols_group {
-	gchar *name;
-	gchar *description;
+	char *name;
+	char *description;
 	GHashTable *symbols;
-	gdouble max_score;
-	guint flags;
+	double max_score;
+	unsigned int flags;
 };
 
 enum rspamd_symbol_flags {
@@ -118,24 +118,24 @@ enum rspamd_symbol_flags {
  * Symbol config definition
  */
 struct rspamd_symbol {
-	gchar *name;
-	gchar *description;
-	gdouble *weight_ptr;
-	gdouble score;
-	guint priority;
+	char *name;
+	char *description;
+	double *weight_ptr;
+	double score;
+	unsigned int priority;
 	struct rspamd_symbols_group *gr; /* Main group */
 	GPtrArray *groups;               /* Other groups */
-	guint flags;
+	unsigned int flags;
 	void *cache_item;
-	gint nshots;
+	int nshots;
 };
 
 /**
  * Statfile config definition
  */
 struct rspamd_statfile_config {
-	gchar *symbol;                         /**< symbol of statfile									*/
-	gchar *label;                          /**< label of this statfile								*/
+	char *symbol;                          /**< symbol of statfile									*/
+	char *label;                           /**< label of this statfile								*/
 	ucl_object_t *opts;                    /**< other options										*/
 	gboolean is_spam;                      /**< spam flag											*/
 	struct rspamd_classifier_config *clcf; /**< parent pointer of classifier configuration			*/
@@ -144,7 +144,7 @@ struct rspamd_statfile_config {
 
 struct rspamd_tokenizer_config {
 	const ucl_object_t *opts; /**< other options										*/
-	const gchar *name;        /**< name of tokenizer									*/
+	const char *name;         /**< name of tokenizer									*/
 };
 
 
@@ -166,33 +166,33 @@ struct rspamd_tokenizer_config {
 struct rspamd_classifier_config {
 	GList *statfiles;                          /**< statfiles list                                     */
 	GHashTable *labels;                        /**< statfiles with labels								*/
-	gchar *metric;                             /**< metric of this classifier                          */
-	gchar *classifier;                         /**< classifier interface                               */
+	char *metric;                              /**< metric of this classifier                          */
+	char *classifier;                          /**< classifier interface                               */
 	struct rspamd_tokenizer_config *tokenizer; /**< tokenizer used for classifier						*/
-	const gchar *backend;                      /**< name of statfile's backend							*/
+	const char *backend;                       /**< name of statfile's backend							*/
 	ucl_object_t *opts;                        /**< other options                                      */
 	GList *learn_conditions;                   /**< list of learn condition callbacks					*/
 	GList *classify_conditions;                /**< list of classify condition callbacks					*/
-	gchar *name;                               /**< unique name of classifier							*/
+	char *name;                                /**< unique name of classifier							*/
 	uint32_t min_tokens;                       /**< minimal number of tokens to process classifier 	*/
 	uint32_t max_tokens;                       /**< maximum number of tokens							*/
-	guint min_token_hits;                      /**< minimum number of hits for a token to be considered */
-	gdouble min_prob_strength;                 /**< use only tokens with probability in [0.5 - MPS, 0.5 + MPS] */
-	guint min_learns;                          /**< minimum number of learns for each statfile			*/
-	guint flags;
+	unsigned int min_token_hits;               /**< minimum number of hits for a token to be considered */
+	double min_prob_strength;                  /**< use only tokens with probability in [0.5 - MPS, 0.5 + MPS] */
+	unsigned int min_learns;                   /**< minimum number of learns for each statfile			*/
+	unsigned int flags;
 };
 
 struct rspamd_worker_bind_conf {
 	GPtrArray *addrs;
-	guint cnt;
-	gchar *name;
-	gchar *bind_line;
+	unsigned int cnt;
+	char *name;
+	char *bind_line;
 	gboolean is_systemd;
 	struct rspamd_worker_bind_conf *next;
 };
 
 struct rspamd_worker_lua_script {
-	gint cbref;
+	int cbref;
 	struct rspamd_worker_lua_script *prev, *next;
 };
 
@@ -203,7 +203,7 @@ struct rspamd_worker_conf {
 	struct worker_s *worker;                   /**< pointer to worker type								*/
 	GQuark type;                               /**< type of worker										*/
 	struct rspamd_worker_bind_conf *bind_conf; /**< bind configuration									*/
-	gint16 count;                              /**< number of workers									*/
+	int16_t count;                             /**< number of workers									*/
 	GList *listen_socks;                       /**< listening sockets descriptors						*/
 	uint64_t rlimit_nofile;                    /**< max files limit									*/
 	uint64_t rlimit_maxcore;                   /**< maximum core file size								*/
@@ -258,7 +258,7 @@ enum rspamd_log_format_flags {
 
 struct rspamd_log_format {
 	enum rspamd_log_format_type type;
-	guint flags;
+	unsigned int flags;
 	gsize len;
 	gpointer data;
 	struct rspamd_log_format *prev, *next;
@@ -292,14 +292,14 @@ enum rspamd_action_flags {
 struct rspamd_action;
 
 struct rspamd_config_cfg_lua_script {
-	gint cbref;
-	gint priority;
-	gchar *lua_src_pos;
+	int cbref;
+	int priority;
+	char *lua_src_pos;
 	struct rspamd_config_cfg_lua_script *prev, *next;
 };
 
 struct rspamd_config_post_init_script {
-	gint cbref;
+	int cbref;
 	struct rspamd_config_post_init_script *prev, *next;
 };
 
@@ -321,7 +321,7 @@ enum rspamd_gtube_patterns_policy {
 struct rspamd_config_settings_elt {
 	uint32_t id;
 	enum rspamd_config_settings_policy policy;
-	const gchar *name;
+	const char *name;
 	ucl_object_t *symbols_enabled;
 	ucl_object_t *symbols_disabled;
 	struct rspamd_config_settings_elt *prev, *next;
@@ -332,23 +332,23 @@ struct rspamd_config_settings_elt {
  * Structure that stores all config data
  */
 struct rspamd_config {
-	gchar *rspamd_user;              /**< user to run as										*/
-	gchar *rspamd_group;             /**< group to run as									*/
+	char *rspamd_user;               /**< user to run as										*/
+	char *rspamd_group;              /**< group to run as									*/
 	rspamd_mempool_t *cfg_pool;      /**< memory pool for config								*/
-	gchar *cfg_name;                 /**< name of config file								*/
-	gchar *pid_file;                 /**< name of pid file									*/
-	gchar *temp_dir;                 /**< dir for temp files									*/
-	gchar *control_socket_path;      /**< path to the control socket							*/
+	char *cfg_name;                  /**< name of config file								*/
+	char *pid_file;                  /**< name of pid file									*/
+	char *temp_dir;                  /**< dir for temp files									*/
+	char *control_socket_path;       /**< path to the control socket							*/
 	const ucl_object_t *local_addrs; /**< tree of local addresses							*/
 #ifdef WITH_GPERF_TOOLS
-	gchar *profile_path;
+	char *profile_path;
 #endif
-	gdouble unknown_weight; /**< weight of unknown symbols						*/
-	gdouble grow_factor;    /**< grow factor for metric							*/
-	GHashTable *symbols;    /**< weights of symbols in metric					*/
-	const gchar *subject;   /**< subject rewrite string							*/
-	GHashTable *groups;     /**< groups of symbols								*/
-	void *actions;          /**< all actions of the metric (opaque type)		*/
+	double unknown_weight; /**< weight of unknown symbols						*/
+	double grow_factor;    /**< grow factor for metric							*/
+	GHashTable *symbols;   /**< weights of symbols in metric					*/
+	const char *subject;   /**< subject rewrite string							*/
+	GHashTable *groups;    /**< groups of symbols								*/
+	void *actions;         /**< all actions of the metric (opaque type)		*/
 
 	gboolean one_shot_mode;                                  /**< rules add only one symbol							*/
 	gboolean check_text_attachements;                        /**< check text attachements as text					*/
@@ -369,19 +369,19 @@ struct rspamd_config {
 
 	gsize max_cores_size;        /**< maximum size occupied by rspamd core files			*/
 	gsize max_cores_count;       /**< maximum number of core files						*/
-	gchar *cores_dir;            /**< directory for core files							*/
+	char *cores_dir;             /**< directory for core files							*/
 	gsize max_message;           /**< maximum size for messages							*/
 	gsize max_pic_size;          /**< maximum size for a picture to process				*/
 	gsize images_cache_size;     /**< size of LRU cache for DCT data from images			*/
-	gdouble task_timeout;        /**< maximum message processing time					*/
-	gint default_max_shots;      /**< default maximum count of symbols hits permitted (-1 for unlimited) */
+	double task_timeout;         /**< maximum message processing time					*/
+	int default_max_shots;       /**< default maximum count of symbols hits permitted (-1 for unlimited) */
 	int32_t heartbeats_loss_max; /**< number of heartbeats lost to consider worker's termination */
-	gdouble heartbeat_interval;  /**< interval for heartbeats for workers				*/
+	double heartbeat_interval;   /**< interval for heartbeats for workers				*/
 
 	enum rspamd_log_type log_type;                      /**< log type											*/
-	gint log_facility;                                  /**< log facility in case of syslog						*/
-	gint log_level;                                     /**< log level trigger									*/
-	gchar *log_file;                                    /**< path to logfile in case of file logging			*/
+	int log_facility;                                   /**< log facility in case of syslog						*/
+	int log_level;                                      /**< log level trigger									*/
+	char *log_file;                                     /**< path to logfile in case of file logging			*/
 	gboolean log_buffered;                              /**< whether logging is buffered						*/
 	gboolean log_silent_workers;                        /**< silence info messages from workers					*/
 	uint32_t log_buf_size;                              /**< length of log buffer								*/
@@ -389,10 +389,10 @@ struct rspamd_config {
 	gboolean log_urls;                                  /**< whether we should log URLs                         */
 	GHashTable *debug_modules;                          /**< logging modules to debug							*/
 	struct rspamd_cryptobox_pubkey *log_encryption_key; /**< encryption key for logs						*/
-	guint log_flags;                                    /**< logging flags										*/
-	guint log_error_elts;                               /**< number of elements in error logbuf					*/
-	guint log_error_elt_maxlen;                         /**< maximum size of error log element					*/
-	guint log_task_max_elts;                            /**< maximum number of elements in task logging			*/
+	unsigned int log_flags;                             /**< logging flags										*/
+	unsigned int log_error_elts;                        /**< number of elements in error logbuf					*/
+	unsigned int log_error_elt_maxlen;                  /**< maximum size of error log element					*/
+	unsigned int log_task_max_elts;                     /**< maximum number of elements in task logging			*/
 	struct rspamd_worker_log_pipe *log_pipes;
 
 	gboolean compat_messages; /**< use old messages in the protocol (array) 			*/
@@ -412,66 +412,66 @@ struct rspamd_config {
 	GList *statfiles;                                /**< list of all statfiles in config file order         */
 	GHashTable *classifiers_symbols;                 /**< hashtable indexed by symbol name of classifiers    */
 	GHashTable *cfg_params;                          /**< all cfg params indexed by its name in this structure */
-	gchar *dynamic_conf;                             /**< path to dynamic configuration						*/
+	char *dynamic_conf;                              /**< path to dynamic configuration						*/
 	ucl_object_t *current_dynamic_conf;              /**< currently loaded dynamic configuration				*/
-	gint clock_res;                                  /**< resolution of clock used							*/
+	int clock_res;                                   /**< resolution of clock used							*/
 
-	GList *maps;                       /**< maps active										*/
-	gdouble map_timeout;               /**< maps watch timeout									*/
-	gdouble map_file_watch_multiplier; /**< multiplier for watch timeout when maps are files	*/
-	gchar *maps_cache_dir;             /**< where to save HTTP cached data						*/
+	GList *maps;                      /**< maps active										*/
+	double map_timeout;               /**< maps watch timeout									*/
+	double map_file_watch_multiplier; /**< multiplier for watch timeout when maps are files	*/
+	char *maps_cache_dir;             /**< where to save HTTP cached data						*/
 
-	gdouble monitored_interval; /**< interval between monitored checks					*/
+	double monitored_interval;  /**< interval between monitored checks					*/
 	gboolean disable_monitored; /**< disable monitoring completely						*/
 	gboolean fips_mode;         /**< turn on fips mode for openssl						*/
 
 	struct rspamd_symcache *cache; /**< symbols cache object								*/
-	gchar *cache_filename;         /**< filename of cache file								*/
-	gdouble cache_reload_time;     /**< how often cache reload should be performed			*/
-	gchar *checksum;               /**< real checksum of config file						*/
+	char *cache_filename;          /**< filename of cache file								*/
+	double cache_reload_time;      /**< how often cache reload should be performed			*/
+	char *checksum;                /**< real checksum of config file						*/
 	gpointer lua_state;            /**< pointer to lua state								*/
 	gpointer lua_thread_pool;      /**< pointer to lua thread (coroutine) pool				*/
 
-	gchar *rrd_file;       /**< rrd file to store statistics						*/
-	gchar *history_file;   /**< file to save rolling history						*/
-	gchar *stats_file;     /**< file to save stats 						*/
-	gchar *tld_file;       /**< file to load effective tld list from				*/
-	gchar *hs_cache_dir;   /**< directory to save hyperscan databases				*/
-	gchar *events_backend; /**< string representation of the events backend used	*/
+	char *rrd_file;       /**< rrd file to store statistics						*/
+	char *history_file;   /**< file to save rolling history						*/
+	char *stats_file;     /**< file to save stats 						*/
+	char *tld_file;       /**< file to load effective tld list from				*/
+	char *hs_cache_dir;   /**< directory to save hyperscan databases				*/
+	char *events_backend; /**< string representation of the events backend used	*/
 
-	gdouble dns_timeout;             /**< timeout in milliseconds for waiting for dns reply	*/
+	double dns_timeout;              /**< timeout in milliseconds for waiting for dns reply	*/
 	uint32_t dns_retransmits;        /**< maximum retransmits count							*/
 	uint32_t dns_io_per_server;      /**< number of sockets per DNS server					*/
 	const ucl_object_t *nameservers; /**< list of nameservers or NULL to parse resolv.conf	*/
 	uint32_t dns_max_requests;       /**< limit of DNS requests per task 					*/
 	gboolean enable_dnssec;          /**< enable dnssec stub resolver						*/
 
-	guint upstream_max_errors;                /**< upstream max errors before shutting off			*/
-	gdouble upstream_error_time;              /**< rate of upstream errors							*/
-	gdouble upstream_revive_time;             /**< revive timeout for upstreams						*/
-	gdouble upstream_lazy_resolve_time;       /**< lazy resolve time for upstreams					*/
+	unsigned int upstream_max_errors;         /**< upstream max errors before shutting off			*/
+	double upstream_error_time;               /**< rate of upstream errors							*/
+	double upstream_revive_time;              /**< revive timeout for upstreams						*/
+	double upstream_lazy_resolve_time;        /**< lazy resolve time for upstreams					*/
 	struct upstream_ctx *ups_ctx;             /**< upstream context									*/
 	struct rspamd_dns_resolver *dns_resolver; /**< dns resolver if loaded								*/
 
-	guint min_word_len;       /**< minimum length of the word to be considered		*/
-	guint max_word_len;       /**< maximum length of the word to be considered		*/
-	guint words_decay;        /**< limit for words for starting adaptive ignoring		*/
-	guint history_rows;       /**< number of history rows stored						*/
-	guint max_sessions_cache; /**< maximum number of sessions cache elts				*/
-	guint lua_gc_step;        /**< lua gc step 										*/
-	guint lua_gc_pause;       /**< lua gc pause										*/
-	guint full_gc_iters;      /**< iterations between full gc cycle					*/
-	guint max_lua_urls;       /**< maximum number of urls to be passed to Lua			*/
-	guint max_urls;           /**< maximum number of urls to be processed in general	*/
-	gint max_recipients;      /**< maximum number of recipients to be processed	*/
-	guint max_blas_threads;   /**< maximum threads for openblas when learning ANN		*/
-	guint max_opts_len;       /**< maximum length for all options for a symbol		*/
-	gsize max_html_len;       /**< maximum length of HTML document					*/
+	unsigned int min_word_len;       /**< minimum length of the word to be considered		*/
+	unsigned int max_word_len;       /**< maximum length of the word to be considered		*/
+	unsigned int words_decay;        /**< limit for words for starting adaptive ignoring		*/
+	unsigned int history_rows;       /**< number of history rows stored						*/
+	unsigned int max_sessions_cache; /**< maximum number of sessions cache elts				*/
+	unsigned int lua_gc_step;        /**< lua gc step 										*/
+	unsigned int lua_gc_pause;       /**< lua gc pause										*/
+	unsigned int full_gc_iters;      /**< iterations between full gc cycle					*/
+	unsigned int max_lua_urls;       /**< maximum number of urls to be passed to Lua			*/
+	unsigned int max_urls;           /**< maximum number of urls to be processed in general	*/
+	int max_recipients;              /**< maximum number of recipients to be processed	*/
+	unsigned int max_blas_threads;   /**< maximum threads for openblas when learning ANN		*/
+	unsigned int max_opts_len;       /**< maximum length for all options for a symbol		*/
+	gsize max_html_len;              /**< maximum length of HTML document					*/
 
 	struct module_s **compiled_modules;   /**< list of compiled C modules							*/
 	struct worker_s **compiled_workers;   /**< list of compiled C modules							*/
 	struct rspamd_log_format *log_format; /**< parsed log format									*/
-	gchar *log_format_str;                /**< raw log format string								*/
+	char *log_format_str;                 /**< raw log format string								*/
 
 	struct rspamd_external_libs_ctx *libs_ctx;  /**< context for external libraries						*/
 	struct rspamd_monitored_ctx *monitored_ctx; /**< context for monitored resources					*/
@@ -486,11 +486,11 @@ struct rspamd_config {
 	struct rspamd_config_cfg_lua_script *on_term_scripts;       /**< list of callbacks called on worker's termination	*/
 	struct rspamd_config_cfg_lua_script *config_unload_scripts; /**< list of scripts executed on config unload			*/
 
-	gchar *ssl_ca_path;            /**< path to CA certs									*/
-	gchar *ssl_ciphers;            /**< set of preferred ciphers							*/
-	gchar *zstd_input_dictionary;  /**< path to zstd input dictionary						*/
-	gchar *zstd_output_dictionary; /**< path to zstd output dictionary						*/
-	ucl_object_t *neighbours;      /**< other servers in the cluster						*/
+	char *ssl_ca_path;            /**< path to CA certs									*/
+	char *ssl_ciphers;            /**< set of preferred ciphers							*/
+	char *zstd_input_dictionary;  /**< path to zstd input dictionary						*/
+	char *zstd_output_dictionary; /**< path to zstd output dictionary						*/
+	ucl_object_t *neighbours;     /**< other servers in the cluster						*/
 
 	struct rspamd_config_settings_elt *setting_ids; /**< preprocessed settings ids							*/
 	struct rspamd_lang_detector *lang_det;          /**< language detector									*/
@@ -508,7 +508,7 @@ struct rspamd_config {
  * @return 1 if line was successfully parsed and 0 in case of error
  */
 gboolean rspamd_parse_bind_line(struct rspamd_config *cfg,
-								struct rspamd_worker_conf *cf, const gchar *str);
+								struct rspamd_worker_conf *cf, const char *str);
 
 
 enum rspamd_config_init_flags {
@@ -537,8 +537,8 @@ void rspamd_config_free(struct rspamd_config *cfg);
  * @return module value or NULL if option does not defined
  */
 const ucl_object_t *rspamd_config_get_module_opt(struct rspamd_config *cfg,
-												 const gchar *module_name,
-												 const gchar *opt_name) G_GNUC_WARN_UNUSED_RESULT;
+												 const char *module_name,
+												 const char *opt_name) G_GNUC_WARN_UNUSED_RESULT;
 
 
 /**
@@ -546,7 +546,7 @@ const ucl_object_t *rspamd_config_get_module_opt(struct rspamd_config *cfg,
  * @param str string representation of flag (eg. 'on')
  * @return numeric value of flag (0 or 1)
  */
-gint rspamd_config_parse_flag(const gchar *str, guint len);
+int rspamd_config_parse_flag(const char *str, unsigned int len);
 
 enum rspamd_post_load_options {
 	RSPAMD_CONFIG_INIT_URL = 1 << 0,
@@ -595,7 +595,7 @@ void rspamd_config_init_metric(struct rspamd_config *cfg);
  */
 struct rspamd_symbols_group *rspamd_config_new_group(
 	struct rspamd_config *cfg,
-	const gchar *name);
+	const char *name);
 
 /*
  * Return a new statfile structure, setting default and non-conflicting attributes
@@ -619,7 +619,7 @@ gboolean rspamd_config_check_statfiles(struct rspamd_classifier_config *cf);
  */
 struct rspamd_classifier_config *rspamd_config_find_classifier(
 	struct rspamd_config *cfg,
-	const gchar *name);
+	const char *name);
 
 void rspamd_ucl_add_conf_macros(struct ucl_parser *parser,
 								struct rspamd_config *cfg);
@@ -649,13 +649,13 @@ gboolean rspamd_init_filters(struct rspamd_config *cfg, bool reconfig, bool stri
  * @return TRUE if symbol has been inserted or FALSE if symbol already exists with higher priority
  */
 gboolean rspamd_config_add_symbol(struct rspamd_config *cfg,
-								  const gchar *symbol,
-								  gdouble score,
-								  const gchar *description,
-								  const gchar *group,
-								  guint flags,
-								  guint priority,
-								  gint nshots);
+								  const char *symbol,
+								  double score,
+								  const char *description,
+								  const char *group,
+								  unsigned int flags,
+								  unsigned int priority,
+								  int nshots);
 
 /**
  * Adds new group for a symbol
@@ -665,8 +665,8 @@ gboolean rspamd_config_add_symbol(struct rspamd_config *cfg,
  * @return
  */
 gboolean rspamd_config_add_symbol_group(struct rspamd_config *cfg,
-										const gchar *symbol,
-										const gchar *group);
+										const char *symbol,
+										const char *group);
 
 /**
  * Sets action score for a specified metric with the specified priority
@@ -677,7 +677,7 @@ gboolean rspamd_config_add_symbol_group(struct rspamd_config *cfg,
  * @return TRUE if symbol has been inserted or FALSE if action already exists with higher priority
  */
 gboolean rspamd_config_set_action_score(struct rspamd_config *cfg,
-										const gchar *action_name,
+										const char *action_name,
 										const ucl_object_t *obj);
 
 /**
@@ -688,8 +688,8 @@ gboolean rspamd_config_set_action_score(struct rspamd_config *cfg,
  * @return
  */
 gboolean rspamd_config_maybe_disable_action(struct rspamd_config *cfg,
-											const gchar *action_name,
-											guint priority);
+											const char *action_name,
+											unsigned int priority);
 
 /**
  * Checks if a specified C or lua module is enabled or disabled in the config.
@@ -705,7 +705,7 @@ gboolean rspamd_config_maybe_disable_action(struct rspamd_config *cfg,
  * @return TRUE if a module is enabled
  */
 gboolean rspamd_config_is_module_enabled(struct rspamd_config *cfg,
-										 const gchar *module_name);
+										 const char *module_name);
 
 /**
  * Verifies enabled/disabled combination in the specified object
@@ -718,14 +718,14 @@ gboolean rspamd_config_is_enabled_from_ucl(rspamd_mempool_t *pool,
 /*
  * Get action from a string
  */
-gboolean rspamd_action_from_str(const gchar *data, enum rspamd_action_type *result);
+gboolean rspamd_action_from_str(const char *data, enum rspamd_action_type *result);
 
 /*
  * Return textual representation of action enumeration
  */
-const gchar *rspamd_action_to_str(enum rspamd_action_type action);
+const char *rspamd_action_to_str(enum rspamd_action_type action);
 
-const gchar *rspamd_action_to_str_alt(enum rspamd_action_type action);
+const char *rspamd_action_to_str_alt(enum rspamd_action_type action);
 
 /**
  * Parse radix tree or radix map from ucl object
@@ -737,9 +737,9 @@ const gchar *rspamd_action_to_str_alt(enum rspamd_action_type action);
  */
 struct rspamd_radix_map_helper;
 
-gboolean rspamd_config_radix_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj, const gchar *description,
+gboolean rspamd_config_radix_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj, const char *description,
 									  struct rspamd_radix_map_helper **target, GError **err,
-									  struct rspamd_worker *worker, const gchar *map_name);
+									  struct rspamd_worker *worker, const char *map_name);
 
 /**
  * Adds new settings id to be preprocessed
@@ -749,7 +749,7 @@ gboolean rspamd_config_radix_from_ucl(struct rspamd_config *cfg, const ucl_objec
  * @param symbols_disabled (ownership is transferred to callee)
  */
 void rspamd_config_register_settings_id(struct rspamd_config *cfg,
-										const gchar *name,
+										const char *name,
 										ucl_object_t *symbols_enabled,
 										ucl_object_t *symbols_disabled,
 										enum rspamd_config_settings_policy policy);
@@ -760,7 +760,7 @@ void rspamd_config_register_settings_id(struct rspamd_config *cfg,
  * @param namelen
  * @return
  */
-uint32_t rspamd_config_name_to_id(const gchar *name, gsize namelen);
+uint32_t rspamd_config_name_to_id(const char *name, gsize namelen);
 
 /**
  * Finds settings id element and obtain reference count (must be unrefed by caller)
@@ -780,7 +780,7 @@ struct rspamd_config_settings_elt *rspamd_config_find_settings_id_ref(
  */
 struct rspamd_config_settings_elt *rspamd_config_find_settings_name_ref(
 	struct rspamd_config *cfg,
-	const gchar *name, gsize namelen);
+	const char *name, gsize namelen);
 
 /**
  * Returns action object by name
@@ -789,7 +789,7 @@ struct rspamd_config_settings_elt *rspamd_config_find_settings_name_ref(
  * @return
  */
 struct rspamd_action *rspamd_config_get_action(struct rspamd_config *cfg,
-											   const gchar *name);
+											   const char *name);
 
 struct rspamd_action *rspamd_config_get_action_by_type(struct rspamd_config *cfg,
 													   enum rspamd_action_type type);
@@ -821,7 +821,7 @@ void rspamd_config_actions_foreach_enumerate(struct rspamd_config *cfg,
 gsize rspamd_config_actions_size(struct rspamd_config *cfg);
 
 int rspamd_config_ev_backend_get(struct rspamd_config *cfg);
-const gchar *rspamd_config_ev_backend_to_string(int ev_backend, gboolean *effective);
+const char *rspamd_config_ev_backend_to_string(int ev_backend, gboolean *effective);
 
 struct rspamd_external_libs_ctx;
 
@@ -864,9 +864,9 @@ gboolean rspamd_config_libs(struct rspamd_external_libs_ctx *ctx,
 														cfg->cfg_pool->tag.tagname, cfg->checksum, \
 														RSPAMD_LOG_FUNC,                           \
 														__VA_ARGS__)
-#define msg_err_config_forced(...) rspamd_default_log_function((gint) G_LOG_LEVEL_CRITICAL | (gint) RSPAMD_LOG_FORCED, \
-															   cfg->cfg_pool->tag.tagname, cfg->checksum,              \
-															   RSPAMD_LOG_FUNC,                                        \
+#define msg_err_config_forced(...) rspamd_default_log_function((int) G_LOG_LEVEL_CRITICAL | (int) RSPAMD_LOG_FORCED, \
+															   cfg->cfg_pool->tag.tagname, cfg->checksum,            \
+															   RSPAMD_LOG_FUNC,                                      \
 															   __VA_ARGS__)
 #define msg_warn_config(...) rspamd_default_log_function(G_LOG_LEVEL_WARNING,                       \
 														 cfg->cfg_pool->tag.tagname, cfg->checksum, \
@@ -876,7 +876,7 @@ gboolean rspamd_config_libs(struct rspamd_external_libs_ctx *ctx,
 														 cfg->cfg_pool->tag.tagname, cfg->checksum, \
 														 RSPAMD_LOG_FUNC,                           \
 														 __VA_ARGS__)
-extern guint rspamd_config_log_id;
+extern unsigned int rspamd_config_log_id;
 #define msg_debug_config(...) rspamd_conditional_debug_fast(NULL, NULL,                                    \
 															rspamd_config_log_id, "config", cfg->checksum, \
 															RSPAMD_LOG_FUNC,                               \

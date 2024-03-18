@@ -25,13 +25,13 @@
 #include "libutil/util.h"
 #include "lua/lua_common.h"
 
-static gchar *control_path = RSPAMD_DBDIR "/rspamd.sock";
+static char *control_path = RSPAMD_DBDIR "/rspamd.sock";
 static gboolean json = FALSE;
 static gboolean ucl = TRUE;
 static gboolean compact = FALSE;
-static gdouble timeout = 1.0;
+static double timeout = 1.0;
 
-static void rspamadm_control(gint argc, gchar **argv,
+static void rspamadm_control(int argc, char **argv,
 							 const struct rspamadm_command *cmd);
 static const char *rspamadm_control_help(gboolean full_help,
 										 const struct rspamadm_command *cmd);
@@ -45,9 +45,9 @@ struct rspamadm_command control_command = {
 };
 
 struct rspamadm_control_cbdata {
-	const gchar *path;
-	gint argc;
-	gchar **argv;
+	const char *path;
+	int argc;
+	char **argv;
 };
 
 static GOptionEntry entries[] = {
@@ -100,14 +100,14 @@ rspamd_control_error_handler(struct rspamd_http_connection *conn, GError *err)
 	ev_break(rspamd_main->event_loop, EVBREAK_ALL);
 }
 
-static gint
+static int
 rspamd_control_finish_handler(struct rspamd_http_connection *conn,
 							  struct rspamd_http_message *msg)
 {
 	struct ucl_parser *parser;
 	ucl_object_t *obj;
 	rspamd_fstring_t *out;
-	const gchar *body;
+	const char *body;
 	gsize body_len;
 	struct rspamadm_control_cbdata *cbdata = conn->ud;
 
@@ -161,11 +161,11 @@ end:
 }
 
 static void
-rspamadm_control(gint argc, gchar **argv, const struct rspamadm_command *_cmd)
+rspamadm_control(int argc, char **argv, const struct rspamadm_command *_cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;
-	const gchar *cmd, *path = NULL;
+	const char *cmd, *path = NULL;
 	struct rspamd_http_connection *conn;
 	struct rspamd_http_message *msg;
 	rspamd_inet_addr_t *addr;

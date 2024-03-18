@@ -43,14 +43,14 @@ struct rspamd_classifier {
 	gpointer cachecf;
 	gulong spam_learns;
 	gulong ham_learns;
-	gint autolearn_cbref;
+	int autolearn_cbref;
 	struct rspamd_classifier_config *cfg;
 	struct rspamd_stat_classifier *subrs;
 	gpointer specific;
 };
 
 struct rspamd_statfile {
-	gint id;
+	int id;
 	struct rspamd_statfile_config *stcf;
 	struct rspamd_classifier *classifier;
 	struct rspamd_stat_backend *backend;
@@ -70,7 +70,7 @@ struct rspamd_stat_async_elt {
 	rspamd_stat_async_cleanup cleanup;
 	struct ev_loop *event_loop;
 	ev_timer timer_ev;
-	gdouble timeout;
+	double timeout;
 	gboolean enabled;
 	gpointer ud;
 	ref_entry_t ref;
@@ -79,13 +79,13 @@ struct rspamd_stat_async_elt {
 struct rspamd_stat_ctx {
 	/* Subroutines for all objects */
 	struct rspamd_stat_classifier *classifiers_subrs;
-	guint classifiers_count;
+	unsigned int classifiers_count;
 	struct rspamd_stat_tokenizer *tokenizers_subrs;
-	guint tokenizers_count;
+	unsigned int tokenizers_count;
 	struct rspamd_stat_backend *backends_subrs;
-	guint backends_count;
+	unsigned int backends_count;
 	struct rspamd_stat_cache *caches_subrs;
-	guint caches_count;
+	unsigned int caches_count;
 
 	/* Runtime configuration */
 	GPtrArray *statfiles;   /* struct rspamd_statfile */
@@ -93,7 +93,7 @@ struct rspamd_stat_ctx {
 	GQueue *async_elts;     /* struct rspamd_stat_async_elt */
 	struct rspamd_config *cfg;
 
-	gint lua_stat_tokens_ref;
+	int lua_stat_tokens_ref;
 
 	/* Global tokenizer */
 	struct rspamd_stat_tokenizer *tokenizer;
@@ -110,17 +110,17 @@ typedef enum rspamd_learn_cache_result {
 
 struct rspamd_stat_ctx *rspamd_stat_get_ctx(void);
 
-struct rspamd_stat_classifier *rspamd_stat_get_classifier(const gchar *name);
+struct rspamd_stat_classifier *rspamd_stat_get_classifier(const char *name);
 
-struct rspamd_stat_backend *rspamd_stat_get_backend(const gchar *name);
+struct rspamd_stat_backend *rspamd_stat_get_backend(const char *name);
 
-struct rspamd_stat_tokenizer *rspamd_stat_get_tokenizer(const gchar *name);
+struct rspamd_stat_tokenizer *rspamd_stat_get_tokenizer(const char *name);
 
-struct rspamd_stat_cache *rspamd_stat_get_cache(const gchar *name);
+struct rspamd_stat_cache *rspamd_stat_get_cache(const char *name);
 
 struct rspamd_stat_async_elt *rspamd_stat_ctx_register_async(
 	rspamd_stat_async_handler handler, rspamd_stat_async_cleanup cleanup,
-	gpointer d, gdouble timeout);
+	gpointer d, double timeout);
 
 static GQuark rspamd_stat_quark(void)
 {

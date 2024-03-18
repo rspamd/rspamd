@@ -43,7 +43,7 @@ enum rspamd_shingle_alg {
  * @return shingle value
  */
 typedef uint64_t (*rspamd_shingles_filter)(uint64_t *input, gsize count,
-										   gint shno, const guchar *key, gpointer ud);
+										   int shno, const unsigned char *key, gpointer ud);
 
 /**
  * Generate shingles from the input of fixed size strings using lemmatizer
@@ -56,7 +56,7 @@ typedef uint64_t (*rspamd_shingles_filter)(uint64_t *input, gsize count,
  * @return shingles array
  */
 struct rspamd_shingle *rspamd_shingles_from_text(GArray *input,
-												 const guchar key[16],
+												 const unsigned char key[16],
 												 rspamd_mempool_t *pool,
 												 rspamd_shingles_filter filter,
 												 gpointer filterd,
@@ -71,8 +71,8 @@ struct rspamd_shingle *rspamd_shingles_from_text(GArray *input,
  * @param filterd opaque data for filtering function
  * @return shingles array
  */
-struct rspamd_shingle *rspamd_shingles_from_image(guchar *dct,
-												  const guchar key[16],
+struct rspamd_shingle *rspamd_shingles_from_image(unsigned char *dct,
+												  const unsigned char key[16],
 												  rspamd_mempool_t *pool,
 												  rspamd_shingles_filter filter,
 												  gpointer filterd,
@@ -85,14 +85,14 @@ struct rspamd_shingle *rspamd_shingles_from_image(guchar *dct,
  * @param b
  * @return
  */
-gdouble rspamd_shingles_compare(const struct rspamd_shingle *a,
-								const struct rspamd_shingle *b);
+double rspamd_shingles_compare(const struct rspamd_shingle *a,
+							   const struct rspamd_shingle *b);
 
 /**
  * Default filtering function
  */
 uint64_t rspamd_shingles_default_filter(uint64_t *input, gsize count,
-										gint shno, const guchar *key, gpointer ud);
+										int shno, const unsigned char *key, gpointer ud);
 
 #ifdef __cplusplus
 }

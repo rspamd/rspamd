@@ -169,7 +169,7 @@ public:
 
 #define GET_TASK_ELT(task, elt) (task == nullptr ? nullptr : (task)->elt)
 
-static const gchar *M = "redis statistics";
+static const char *M = "redis statistics";
 
 static GQuark
 rspamd_redis_stat_quark(void)
@@ -180,14 +180,14 @@ rspamd_redis_stat_quark(void)
 /*
  * Non-static for lua unit testing
  */
-gsize rspamd_redis_expand_object(const gchar *pattern,
+gsize rspamd_redis_expand_object(const char *pattern,
 								 struct redis_stat_ctx *ctx,
 								 struct rspamd_task *task,
-								 gchar **target)
+								 char **target)
 {
 	gsize tlen = 0;
-	const gchar *p = pattern, *elt;
-	gchar *d, *end;
+	const char *p = pattern, *elt;
+	char *d, *end;
 	enum {
 		just_char,
 		percent_char,
@@ -196,8 +196,8 @@ gsize rspamd_redis_expand_object(const gchar *pattern,
 	struct rspamd_statfile_config *stcf;
 	lua_State *L = nullptr;
 	struct rspamd_task **ptask;
-	const gchar *rcpt = nullptr;
-	gint err_idx;
+	const char *rcpt = nullptr;
+	int err_idx;
 
 	g_assert(ctx != nullptr);
 	g_assert(task != nullptr);
@@ -315,7 +315,7 @@ gsize rspamd_redis_expand_object(const gchar *pattern,
 		return -1;
 	}
 
-	*target = (gchar *) rspamd_mempool_alloc(task->task_pool, tlen + 1);
+	*target = (char *) rspamd_mempool_alloc(task->task_pool, tlen + 1);
 	d = *target;
 	end = d + tlen + 1;
 	d[tlen] = '\0';
@@ -441,7 +441,7 @@ rspamd_redis_parse_classifier_opts(struct redis_stat_ctx *backend,
 								   const ucl_object_t *classifier_obj,
 								   struct rspamd_config *cfg)
 {
-	const gchar *lua_script;
+	const char *lua_script;
 	const ucl_object_t *elt, *users_enabled;
 	auto *L = RSPAMD_LUA_CFG_STATE(cfg);
 
@@ -590,7 +590,7 @@ rspamd_redis_init(struct rspamd_stat_ctx *ctx,
 gpointer
 rspamd_redis_runtime(struct rspamd_task *task,
 					 struct rspamd_statfile_config *stcf,
-					 gboolean learn, gpointer c, gint _id)
+					 gboolean learn, gpointer c, int _id)
 {
 	struct redis_stat_ctx *ctx = REDIS_CTX(c);
 	char *object_expanded = nullptr;
@@ -708,7 +708,7 @@ msgpack_str_len(std::size_t len) -> std::size_t
  * Serialise stat tokens to message pack
  */
 static char *
-rspamd_redis_serialize_tokens(struct rspamd_task *task, const gchar *prefix, GPtrArray *tokens, gsize *ser_len)
+rspamd_redis_serialize_tokens(struct rspamd_task *task, const char *prefix, GPtrArray *tokens, gsize *ser_len)
 {
 	/* Each token is int64_t that requires 10 bytes (2 int32_t) + 4 bytes array len + 1 byte array magic */
 	char max_int64_str[] = "18446744073709551615";
@@ -719,16 +719,16 @@ rspamd_redis_serialize_tokens(struct rspamd_task *task, const gchar *prefix, GPt
 	/* Calculate required length */
 	req_len += tokens->len * (msgpack_str_len(sizeof(max_int64_str) + prefix_len) + 1);
 
-	auto *buf = (gchar *) rspamd_mempool_alloc(task->task_pool, req_len);
+	auto *buf = (char *) rspamd_mempool_alloc(task->task_pool, req_len);
 	auto *p = buf;
 
 	/* Array */
-	*p++ = (gchar) 0xdd;
+	*p++ = (char) 0xdd;
 	/* Length in big-endian (4 bytes) */
-	*p++ = (gchar) ((tokens->len >> 24) & 0xff);
-	*p++ = (gchar) ((tokens->len >> 16) & 0xff);
-	*p++ = (gchar) ((tokens->len >> 8) & 0xff);
-	*p++ = (gchar) (tokens->len & 0xff);
+	*p++ = (char) ((tokens->len >> 24) & 0xff);
+	*p++ = (char) ((tokens->len >> 16) & 0xff);
+	*p++ = (char) ((tokens->len >> 8) & 0xff);
+	*p++ = (char) (tokens->len & 0xff);
 
 
 	int i;
@@ -772,13 +772,13 @@ rspamd_redis_serialize_text_tokens(struct rspamd_task *task, GPtrArray *tokens, 
 		}
 	}
 
-	auto *buf = (gchar *) rspamd_mempool_alloc(task->task_pool, req_len);
+	auto *buf = (char *) rspamd_mempool_alloc(task->task_pool, req_len);
 	auto *p = buf;
 
 	/* Array */
 	std::uint32_t nlen = tokens->len * 2;
 	nlen = GUINT32_TO_BE(nlen);
-	*p++ = (gchar) 0xdd;
+	*p++ = (char) 0xdd;
 	/* Length in big-endian (4 bytes) */
 	memcpy(p, &nlen, sizeof(nlen));
 	p += sizeof(nlen);
@@ -807,7 +807,7 @@ rspamd_redis_serialize_text_tokens(struct rspamd_task *task, GPtrArray *tokens, 
 	return buf;
 }
 
-static gint
+static int
 rspamd_redis_classified(lua_State *L)
 {
 	const auto *cookie = lua_tostring(L, lua_upvalueindex(1));
@@ -895,7 +895,7 @@ rspamd_redis_classified(lua_State *L)
 gboolean
 rspamd_redis_process_tokens(struct rspamd_task *task,
 							GPtrArray *tokens,
-							gint id, gpointer p)
+							int id, gpointer p)
 {
 	auto *rt = REDIS_RUNTIME(p);
 	auto *L = rt->ctx->L;
@@ -918,11 +918,11 @@ rspamd_redis_process_tokens(struct rspamd_task *task,
 	}
 
 	gsize tokens_len;
-	gchar *tokens_buf = rspamd_redis_serialize_tokens(task, rt->redis_object_expanded, tokens, &tokens_len);
+	char *tokens_buf = rspamd_redis_serialize_tokens(task, rt->redis_object_expanded, tokens, &tokens_len);
 	rt->id = id;
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
-	gint err_idx = lua_gettop(L);
+	int err_idx = lua_gettop(L);
 
 	/* Function arguments */
 	lua_rawgeti(L, LUA_REGISTRYINDEX, rt->ctx->cbref_classify);
@@ -963,7 +963,7 @@ rspamd_redis_finalize_process(struct rspamd_task *task, gpointer runtime,
 }
 
 
-static gint
+static int
 rspamd_redis_learned(lua_State *L)
 {
 	const auto *cookie = lua_tostring(L, lua_upvalueindex(1));
@@ -994,7 +994,7 @@ rspamd_redis_learned(lua_State *L)
 gboolean
 rspamd_redis_learn_tokens(struct rspamd_task *task,
 						  GPtrArray *tokens,
-						  gint id, gpointer p)
+						  int id, gpointer p)
 {
 	auto *rt = REDIS_RUNTIME(p);
 	auto *L = rt->ctx->L;
@@ -1008,19 +1008,19 @@ rspamd_redis_learn_tokens(struct rspamd_task *task,
 	}
 
 	gsize tokens_len;
-	gchar *tokens_buf = rspamd_redis_serialize_tokens(task, rt->redis_object_expanded, tokens, &tokens_len);
+	char *tokens_buf = rspamd_redis_serialize_tokens(task, rt->redis_object_expanded, tokens, &tokens_len);
 
 	rt->id = id;
 
 	gsize text_tokens_len = 0;
-	gchar *text_tokens_buf = nullptr;
+	char *text_tokens_buf = nullptr;
 
 	if (rt->ctx->store_tokens) {
 		text_tokens_buf = rspamd_redis_serialize_text_tokens(task, tokens, &text_tokens_len);
 	}
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
-	gint err_idx = lua_gettop(L);
+	int err_idx = lua_gettop(L);
 	auto nargs = 8;
 
 	/* Function arguments */

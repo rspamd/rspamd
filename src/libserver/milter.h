@@ -52,9 +52,9 @@ struct rspamd_http_message;
 struct rspamd_config;
 
 struct rspamd_milter_context {
-	const gchar *spam_header;
-	const gchar *client_ca_name;
-	const gchar *reject_message;
+	const char *spam_header;
+	const char *client_ca_name;
+	const char *reject_message;
 	void *sessions_cache;
 	struct rspamd_config *cfg;
 	gboolean discard_on_reject;
@@ -73,10 +73,10 @@ struct rspamd_milter_session {
 	ref_entry_t ref;
 };
 
-typedef void (*rspamd_milter_finish)(gint fd,
+typedef void (*rspamd_milter_finish)(int fd,
 									 struct rspamd_milter_session *session, void *ud);
 
-typedef void (*rspamd_milter_error)(gint fd,
+typedef void (*rspamd_milter_error)(int fd,
 									struct rspamd_milter_session *session,
 									void *ud, GError *err);
 
@@ -88,7 +88,7 @@ typedef void (*rspamd_milter_error)(gint fd,
  * @param ud
  * @return
  */
-gboolean rspamd_milter_handle_socket(gint fd, ev_tstamp timeout,
+gboolean rspamd_milter_handle_socket(int fd, ev_tstamp timeout,
 									 rspamd_mempool_t *pool,
 									 struct ev_loop *ev_base, rspamd_milter_finish finish_cb,
 									 rspamd_milter_error error_cb, void *ud);
@@ -164,7 +164,7 @@ struct rspamd_http_message *rspamd_milter_to_http(
  */
 void rspamd_milter_send_task_results(struct rspamd_milter_session *session,
 									 const ucl_object_t *results,
-									 const gchar *new_body,
+									 const char *new_body,
 									 gsize bodylen);
 
 /**

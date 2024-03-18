@@ -50,14 +50,14 @@ typedef struct rspamd_stat_token_s {
 	rspamd_ftok_unicode_t unicode; /* array of unicode characters, normalized, lowercased */
 	rspamd_ftok_t normalized;      /* normalized and lowercased utf8 */
 	rspamd_ftok_t stemmed;         /* stemmed utf8 */
-	guint flags;
+	unsigned int flags;
 } rspamd_stat_token_t;
 
 #define RSPAMD_TOKEN_VALUE_TYPE float
 typedef struct token_node_s {
 	uint64_t data;
-	guint window_idx;
-	guint flags;
+	unsigned int window_idx;
+	unsigned int flags;
 	rspamd_stat_token_t *t1;
 	rspamd_stat_token_t *t2;
 	RSPAMD_TOKEN_VALUE_TYPE values[0];
@@ -104,7 +104,7 @@ void rspamd_stat_process_tokenize(struct rspamd_stat_ctx *st_ctx,
  * @return TRUE if task has been classified
  */
 rspamd_stat_result_t rspamd_stat_classify(struct rspamd_task *task,
-										  lua_State *L, guint stage, GError **err);
+										  lua_State *L, unsigned int stage, GError **err);
 
 
 /**
@@ -124,8 +124,8 @@ gboolean rspamd_stat_check_autolearn(struct rspamd_task *task);
  * @return TRUE if task has been learned
  */
 rspamd_stat_result_t rspamd_stat_learn(struct rspamd_task *task,
-									   gboolean spam, lua_State *L, const gchar *classifier,
-									   guint stage,
+									   gboolean spam, lua_State *L, const char *classifier,
+									   unsigned int stage,
 									   GError **err);
 
 /**

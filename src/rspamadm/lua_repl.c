@@ -32,14 +32,14 @@
 #include <luajit.h>
 #endif
 
-static gchar **paths = NULL;
-static gchar **scripts = NULL;
-static gchar **lua_args = NULL;
-static gchar *histfile = NULL;
-static guint max_history = 2000;
-static gchar *serve = NULL;
-static gchar *exec_line = NULL;
-static gint batch = -1;
+static char **paths = NULL;
+static char **scripts = NULL;
+static char **lua_args = NULL;
+static char *histfile = NULL;
+static unsigned int max_history = 2000;
+static char *serve = NULL;
+static char *exec_line = NULL;
+static int batch = -1;
 extern struct rspamd_async_session *rspamadm_session;
 
 static const char *default_history_file = ".rspamd_repl.hist";
@@ -55,7 +55,7 @@ static Replxx *rx_instance = NULL;
 #endif
 #define MULTILINE_PROMPT "... "
 
-static void rspamadm_lua(gint argc, gchar **argv,
+static void rspamadm_lua(int argc, char **argv,
 						 const struct rspamadm_command *cmd);
 static const char *rspamadm_lua_help(gboolean full_help,
 									 const struct rspamadm_command *cmd);
@@ -71,17 +71,17 @@ struct rspamadm_command lua_command = {
 /*
  * Dot commands
  */
-typedef void (*rspamadm_lua_dot_handler)(lua_State *L, gint argc, gchar **argv);
+typedef void (*rspamadm_lua_dot_handler)(lua_State *L, int argc, char **argv);
 struct rspamadm_lua_dot_command {
-	const gchar *name;
-	const gchar *description;
+	const char *name;
+	const char *description;
 	rspamadm_lua_dot_handler handler;
 };
 
-static void rspamadm_lua_help_handler(lua_State *L, gint argc, gchar **argv);
-static void rspamadm_lua_load_handler(lua_State *L, gint argc, gchar **argv);
-static void rspamadm_lua_exec_handler(lua_State *L, gint argc, gchar **argv);
-static void rspamadm_lua_message_handler(lua_State *L, gint argc, gchar **argv);
+static void rspamadm_lua_help_handler(lua_State *L, int argc, char **argv);
+static void rspamadm_lua_load_handler(lua_State *L, int argc, char **argv);
+static void rspamadm_lua_exec_handler(lua_State *L, int argc, char **argv);
+static void rspamadm_lua_message_handler(lua_State *L, int argc, char **argv);
 
 static void lua_thread_error_cb(struct thread_entry *thread, int ret, const char *msg);
 static void lua_thread_finish_cb(struct thread_entry *thread, int ret);
@@ -147,9 +147,9 @@ rspamadm_lua_help(gboolean full_help, const struct rspamadm_command *cmd)
 }
 
 static void
-rspamadm_lua_add_path(lua_State *L, const gchar *path)
+rspamadm_lua_add_path(lua_State *L, const char *path)
 {
-	const gchar *old_path;
+	const char *old_path;
 	gsize len;
 	GString *new_path;
 
@@ -203,7 +203,7 @@ lua_thread_str_error_cb(struct thread_entry *thread, int ret, const char *msg)
 }
 
 static gboolean
-rspamadm_lua_load_script(lua_State *L, const gchar *path)
+rspamadm_lua_load_script(lua_State *L, const char *path)
 {
 	struct thread_entry *thread = lua_thread_pool_get_for_config(rspamd_main->cfg);
 	L = thread->lua_state;
@@ -226,12 +226,12 @@ rspamadm_lua_load_script(lua_State *L, const gchar *path)
 }
 
 static void
-rspamadm_exec_input(lua_State *L, const gchar *input)
+rspamadm_exec_input(lua_State *L, const char *input)
 {
 	GString *tb;
-	gint i, cbref;
+	int i, cbref;
 	int top = 0;
-	gchar outbuf[8192];
+	char outbuf[8192];
 	struct lua_logger_trace tr;
 
 	struct thread_entry *thread = lua_thread_pool_get_for_config(rspamd_main->cfg);
@@ -292,7 +292,7 @@ wait_session_events(void)
 	msg_debug("finished events waiting, terminating session");
 }
 
-gint lua_repl_thread_call(struct thread_entry *thread, gint narg, gpointer ud, lua_thread_error_t error_func)
+int lua_repl_thread_call(struct thread_entry *thread, int narg, gpointer ud, lua_thread_error_t error_func)
 {
 	int ret;
 	struct lua_call_data *cd = g_new0(struct lua_call_data, 1);
@@ -320,9 +320,9 @@ gint lua_repl_thread_call(struct thread_entry *thread, gint narg, gpointer ud, l
 }
 
 static void
-rspamadm_lua_help_handler(lua_State *L, gint argc, gchar **argv)
+rspamadm_lua_help_handler(lua_State *L, int argc, char **argv)
 {
-	guint i;
+	unsigned int i;
 	struct rspamadm_lua_dot_command *cmd;
 
 	if (argv[1] == NULL) {
@@ -349,9 +349,9 @@ rspamadm_lua_help_handler(lua_State *L, gint argc, gchar **argv)
 }
 
 static void
-rspamadm_lua_load_handler(lua_State *L, gint argc, gchar **argv)
+rspamadm_lua_load_handler(lua_State *L, int argc, char **argv)
 {
-	guint i;
+	unsigned int i;
 	gboolean ret;
 
 	for (i = 1; argv[i] != NULL; i++) {
@@ -361,9 +361,9 @@ rspamadm_lua_load_handler(lua_State *L, gint argc, gchar **argv)
 }
 
 static void
-rspamadm_lua_exec_handler(lua_State *L, gint argc, gchar **argv)
+rspamadm_lua_exec_handler(lua_State *L, int argc, char **argv)
 {
-	gint i;
+	int i;
 
 	struct thread_entry *thread = lua_thread_pool_get_for_config(rspamd_main->cfg);
 	L = thread->lua_state;
@@ -385,14 +385,14 @@ rspamadm_lua_exec_handler(lua_State *L, gint argc, gchar **argv)
 }
 
 static void
-rspamadm_lua_message_handler(lua_State *L, gint argc, gchar **argv)
+rspamadm_lua_message_handler(lua_State *L, int argc, char **argv)
 {
 	gulong cbref;
-	gint old_top, func_idx, i, j;
+	int old_top, func_idx, i, j;
 	struct rspamd_task *task, **ptask;
 	gpointer map;
 	gsize len;
-	gchar outbuf[8192];
+	char outbuf[8192];
 	struct lua_logger_trace tr;
 
 	if (argv[1] == NULL) {
@@ -474,10 +474,10 @@ rspamadm_lua_message_handler(lua_State *L, gint argc, gchar **argv)
 
 
 static gboolean
-rspamadm_lua_try_dot_command(lua_State *L, const gchar *input)
+rspamadm_lua_try_dot_command(lua_State *L, const char *input)
 {
 	struct rspamadm_lua_dot_command *cmd;
-	gchar **argv;
+	char **argv;
 
 	argv = g_strsplit_set(input + 1, " ", -1);
 
@@ -504,7 +504,7 @@ rspamadm_lua_try_dot_command(lua_State *L, const gchar *input)
 }
 
 #ifdef WITH_LUA_REPL
-static gint lex_ref_idx = -1;
+static int lex_ref_idx = -1;
 
 static void
 lua_syntax_highlighter(const char *str, ReplxxColor *colours, int size, void *ud)
@@ -539,7 +539,7 @@ lua_syntax_highlighter(const char *str, ReplxxColor *colours, int size, void *ud
 			 * 3 - line num (int), always 1...
 			 * 4 - column num (must be less than size)
 			 */
-			const gchar *what;
+			const char *what;
 			gsize column, tlen, cur_top, elt_pos;
 			ReplxxColor elt_color = REPLXX_COLOR_DEFAULT;
 
@@ -604,7 +604,7 @@ lua_syntax_highlighter(const char *str, ReplxxColor *colours, int size, void *ud
 static void
 rspamadm_lua_run_repl(lua_State *L, bool is_batch)
 {
-	gchar *input = NULL;
+	char *input = NULL;
 #ifdef WITH_LUA_REPL
 	gboolean is_multiline = FALSE;
 	GString *tb = NULL;
@@ -649,7 +649,7 @@ rspamadm_lua_run_repl(lua_State *L, bool is_batch)
 											L);
 
 			if (!is_multiline) {
-				input = (gchar *) replxx_input(rx_instance, MAIN_PROMPT);
+				input = (char *) replxx_input(rx_instance, MAIN_PROMPT);
 
 				if (input == NULL) {
 					return;
@@ -677,7 +677,7 @@ rspamadm_lua_run_repl(lua_State *L, bool is_batch)
 				lua_settop(L, 0);
 			}
 			else {
-				input = (gchar *) replxx_input(rx_instance, MULTILINE_PROMPT);
+				input = (char *) replxx_input(rx_instance, MULTILINE_PROMPT);
 
 				if (input == NULL) {
 					g_string_free(tb, TRUE);
@@ -719,7 +719,7 @@ struct rspamadm_lua_repl_session {
 	struct rspamd_http_connection_router *rt;
 	rspamd_inet_addr_t *addr;
 	struct rspamadm_lua_repl_context *ctx;
-	gint sock;
+	int sock;
 };
 
 static void
@@ -729,7 +729,7 @@ rspamadm_lua_accept_cb(EV_P_ ev_io *w, int revents)
 		(struct rspamadm_lua_repl_context *) w->data;
 	rspamd_inet_addr_t *addr = NULL;
 	struct rspamadm_lua_repl_session *session;
-	gint nfd;
+	int nfd;
 
 	if ((nfd =
 			 rspamd_accept_from_socket(w->fd, &addr, NULL, NULL)) == -1) {
@@ -789,10 +789,10 @@ rspamadm_lua_handle_exec(struct rspamd_http_connection_entry *conn_ent,
 						 struct rspamd_http_message *msg)
 {
 	GString *tb;
-	gint err_idx, i;
+	int err_idx, i;
 	lua_State *L;
 	ucl_object_t *obj, *elt;
-	const gchar *body;
+	const char *body;
 	gsize body_len;
 	struct thread_entry *thread = lua_thread_pool_get_for_config(rspamd_main->cfg);
 
@@ -811,7 +811,7 @@ rspamadm_lua_handle_exec(struct rspamd_http_connection_entry *conn_ent,
 
 	/* First try return + input */
 	tb = g_string_sized_new(body_len + sizeof("return "));
-	rspamd_printf_gstring(tb, "return %*s", (gint) body_len, body);
+	rspamd_printf_gstring(tb, "return %*s", (int) body_len, body);
 
 	if (luaL_loadstring(L, tb->str) != 0) {
 		/* Reset stack */
@@ -855,12 +855,12 @@ rspamadm_lua_handle_exec(struct rspamd_http_connection_entry *conn_ent,
 }
 
 static void
-rspamadm_lua(gint argc, gchar **argv, const struct rspamadm_command *cmd)
+rspamadm_lua(int argc, char **argv, const struct rspamadm_command *cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;
-	gchar **elt;
-	guint i;
+	char **elt;
+	unsigned int i;
 	lua_State *L = rspamd_main->cfg->lua_state;
 
 	context = g_option_context_new("lua - run lua interpreter");
@@ -923,10 +923,10 @@ rspamadm_lua(gint argc, gchar **argv, const struct rspamadm_command *cmd)
 	if (serve) {
 		/* HTTP Server mode */
 		GPtrArray *addrs = NULL;
-		gchar *name = NULL;
+		char *name = NULL;
 		struct ev_loop *ev_base;
 		struct rspamd_http_connection_router *http;
-		gint fd;
+		int fd;
 		struct rspamadm_lua_repl_context *ctx;
 
 		if (rspamd_parse_host_port_priority(serve, &addrs, NULL, &name,
@@ -971,7 +971,7 @@ rspamadm_lua(gint argc, gchar **argv, const struct rspamadm_command *cmd)
 	}
 
 	if (histfile == NULL) {
-		const gchar *homedir;
+		const char *homedir;
 		GString *hist_path;
 
 		homedir = getenv("HOME");

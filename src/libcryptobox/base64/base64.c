@@ -340,7 +340,7 @@ static const base64_impl_t *base64_ref = &base64_list[0];
 const char *
 base64_load(void)
 {
-	guint i;
+	unsigned int i;
 	const base64_impl_t *opt_impl = base64_ref;
 
 	/* Enable reference */
@@ -360,12 +360,12 @@ base64_load(void)
 }
 
 gboolean
-rspamd_cryptobox_base64_decode(const gchar *in, gsize inlen,
-							   guchar *out, gsize *outlen)
+rspamd_cryptobox_base64_decode(const char *in, gsize inlen,
+							   unsigned char *out, gsize *outlen)
 {
 	const base64_impl_t *opt_impl = base64_ref;
 
-	for (gint i = G_N_ELEMENTS(base64_list) - 1; i > 0; i--) {
+	for (int i = G_N_ELEMENTS(base64_list) - 1; i > 0; i--) {
 		if (base64_list[i].enabled && base64_list[i].min_len <= inlen) {
 			opt_impl = &base64_list[i];
 			break;
@@ -379,8 +379,8 @@ double
 base64_test(bool generic, size_t niters, size_t len, size_t str_len)
 {
 	size_t cycles;
-	guchar *in, *out, *tmp;
-	gdouble t1, t2, total = 0;
+	unsigned char *in, *out, *tmp;
+	double t1, t2, total = 0;
 	gsize outlen;
 
 	g_assert(len > 0);
@@ -421,9 +421,9 @@ base64_test(bool generic, size_t niters, size_t len, size_t str_len)
 
 
 gboolean
-rspamd_cryptobox_base64_is_valid(const gchar *in, gsize inlen)
+rspamd_cryptobox_base64_is_valid(const char *in, gsize inlen)
 {
-	const guchar *p, *end;
+	const unsigned char *p, *end;
 
 	if (inlen == 0) {
 		return FALSE;

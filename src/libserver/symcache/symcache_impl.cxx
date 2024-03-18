@@ -249,7 +249,7 @@ auto symcache::load_items() -> bool
 	}
 
 
-	if (cached_map->get_size() < (gint) sizeof(symcache_header)) {
+	if (cached_map->get_size() < (int) sizeof(symcache_header)) {
 		msg_info_cache("cannot use file %s, truncated: %z", cfg->cache_filename,
 					   errno, strerror(errno));
 		return false;
@@ -531,7 +531,7 @@ auto symcache::get_item_by_name_mut(std::string_view name, bool resolve_parent) 
 
 auto symcache::add_dependency(int id_from, std::string_view to, int virtual_id_from) -> void
 {
-	g_assert(id_from >= 0 && id_from < (gint) items_by_id.size());
+	g_assert(id_from >= 0 && id_from < (int) items_by_id.size());
 	const auto &source = items_by_id[id_from];
 	g_assert(source.get() != nullptr);
 
@@ -542,7 +542,7 @@ auto symcache::add_dependency(int id_from, std::string_view to, int virtual_id_f
 
 
 	if (virtual_id_from >= 0) {
-		g_assert(virtual_id_from < (gint) items_by_id.size());
+		g_assert(virtual_id_from < (int) items_by_id.size());
 		/* We need that for settings id propagation */
 		const auto &vsource = items_by_id[virtual_id_from];
 		g_assert(vsource.get() != nullptr);

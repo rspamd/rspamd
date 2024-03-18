@@ -28,7 +28,7 @@
 
 #include <unicode/uidna.h>
 
-static const gchar *M = "rspamd dns";
+static const char *M = "rspamd dns";
 
 static struct rdns_upstream_elt *rspamd_dns_select_upstream(const char *name,
 															size_t len, void *ups_data);
@@ -40,7 +40,7 @@ static struct rdns_upstream_elt *rspamd_dns_select_upstream_retransmit(
 static void rspamd_dns_upstream_ok(struct rdns_upstream_elt *elt,
 								   void *ups_data);
 static void rspamd_dns_upstream_fail(struct rdns_upstream_elt *elt,
-									 void *ups_data, const gchar *reason);
+									 void *ups_data, const char *reason);
 static unsigned int rspamd_dns_upstream_count(void *ups_data);
 
 static struct rdns_upstream_context rspamd_ups_ctx = {
@@ -68,7 +68,7 @@ struct rspamd_dns_fail_cache_entry {
 	enum rdns_request_type type;
 };
 
-static const gint8 ascii_dns_table[128] = {
+static const int8_t ascii_dns_table[128] = {
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 	/* HYPHEN-MINUS..FULL STOP */
@@ -83,7 +83,7 @@ static const gint8 ascii_dns_table[128] = {
 	-1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1};
 
-static guint
+static unsigned int
 rspamd_dns_fail_hash(gconstpointer ptr)
 {
 	struct rspamd_dns_fail_cache_entry *elt =
@@ -157,15 +157,15 @@ rspamd_dns_callback(struct rdns_reply *reply, gpointer ud)
 			reqdata->task->resolver->fails_cache) {
 
 			/* Add to cache... */
-			const gchar *name = reqdata->req->requested_names[0].name;
-			gchar *target;
+			const char *name = reqdata->req->requested_names[0].name;
+			char *target;
 			gsize namelen;
 			struct rspamd_dns_fail_cache_entry *nentry;
 
 			/* Allocate in a single entry to allow further free in a single call */
 			namelen = strlen(name);
 			nentry = g_malloc(sizeof(nentry) + namelen + 1);
-			target = ((gchar *) nentry) + sizeof(nentry);
+			target = ((char *) nentry) + sizeof(nentry);
 			rspamd_strlcpy(target, name, namelen + 1);
 			nentry->type = reqdata->req->requested_names[0].type;
 			nentry->name = target;
@@ -206,8 +206,8 @@ rspamd_dns_resolver_request(struct rspamd_dns_resolver *resolver,
 {
 	struct rdns_request *req;
 	struct rspamd_dns_request_ud *reqdata = NULL;
-	guint nlen = strlen(name);
-	gchar *real_name = NULL;
+	unsigned int nlen = strlen(name);
+	char *real_name = NULL;
 
 	g_assert(resolver != NULL);
 
@@ -419,7 +419,7 @@ static void rspamd_rnds_log_bridge(
 }
 
 static void
-rspamd_dns_server_init(struct upstream *up, guint idx, gpointer ud)
+rspamd_dns_server_init(struct upstream *up, unsigned int idx, gpointer ud)
 {
 	struct rspamd_dns_resolver *r = ud;
 	rspamd_inet_addr_t *addr;
@@ -447,7 +447,7 @@ rspamd_dns_server_init(struct upstream *up, guint idx, gpointer ud)
 }
 
 static void
-rspamd_dns_server_reorder(struct upstream *up, guint idx, gpointer ud)
+rspamd_dns_server_reorder(struct upstream *up, unsigned int idx, gpointer ud)
 {
 	struct rspamd_dns_resolver *r = ud;
 
@@ -462,7 +462,7 @@ rspamd_dns_resolv_conf_on_server(struct rdns_resolver *resolver,
 	struct rspamd_dns_resolver *dns_resolver = ud;
 	struct rspamd_config *cfg;
 	rspamd_inet_addr_t *addr;
-	gint test_fd;
+	int test_fd;
 
 	cfg = dns_resolver->cfg;
 
@@ -510,7 +510,7 @@ rspamd_process_fake_reply(struct rspamd_config *cfg,
 		enum rdns_request_type rtype = RDNS_REQUEST_A;
 		enum dns_rcode rcode = RDNS_RC_NOERROR;
 		struct rdns_reply_entry *replies = NULL;
-		const gchar *name = NULL;
+		const char *name = NULL;
 
 		if (ucl_object_type(cur) != UCL_OBJECT) {
 			continue;
@@ -560,9 +560,9 @@ rspamd_process_fake_reply(struct rspamd_config *cfg,
 			rep_it = ucl_object_iterate_new(replies_obj);
 
 			while ((rep_obj = ucl_object_iterate_safe(rep_it, true))) {
-				const gchar *str_rep = ucl_object_tostring(rep_obj);
+				const char *str_rep = ucl_object_tostring(rep_obj);
 				struct rdns_reply_entry *rep;
-				gchar **svec;
+				char **svec;
 
 				if (str_rep == NULL) {
 					msg_err_config("invalid reply element for fake DNS record %s",
@@ -666,7 +666,7 @@ rspamd_process_fake_reply(struct rspamd_config *cfg,
 
 			if (replies) {
 				struct rdns_reply_entry *tmp_entry;
-				guint i = 0;
+				unsigned int i = 0;
 				DL_COUNT(replies, tmp_entry, i);
 
 				msg_info_config("added fake record: %s(%s); %d replies", name,
@@ -700,13 +700,13 @@ rspamd_process_fake_reply(struct rspamd_config *cfg,
 static bool
 rspamd_dns_read_hosts_file(struct rspamd_config *cfg,
 						   struct rspamd_dns_resolver *dns_resolver,
-						   const gchar *fname)
+						   const char *fname)
 {
-	gchar *linebuf = NULL;
+	char *linebuf = NULL;
 	gsize buflen = 0;
 	gssize r;
 	FILE *fp;
-	guint nadded = 0;
+	unsigned int nadded = 0;
 
 	fp = fopen(fname, "r");
 
@@ -732,7 +732,7 @@ rspamd_dns_read_hosts_file(struct rspamd_config *cfg,
 
 		g_strchomp(linebuf);
 
-		gchar **elts = g_strsplit_set(linebuf, " \t\v", -1);
+		char **elts = g_strsplit_set(linebuf, " \t\v", -1);
 		rspamd_inet_addr_t *addr;
 
 		if (!rspamd_parse_inet_address(&addr, elts[0], strlen(elts[0]),
@@ -741,7 +741,7 @@ rspamd_dns_read_hosts_file(struct rspamd_config *cfg,
 		}
 		else {
 			/* Add all FQDN + aliases if any */
-			gchar **cur_name = &elts[1];
+			char **cur_name = &elts[1];
 
 			while (*cur_name) {
 				if (strlen(*cur_name) == 0) {
@@ -1054,7 +1054,7 @@ rspamd_dns_upstream_ok(struct rdns_upstream_elt *elt,
 
 static void
 rspamd_dns_upstream_fail(struct rdns_upstream_elt *elt,
-						 void *ups_data, const gchar *reason)
+						 void *ups_data, const char *reason)
 {
 	struct upstream *up = elt->lib_data;
 
@@ -1069,18 +1069,18 @@ rspamd_dns_upstream_count(void *ups_data)
 	return rspamd_upstreams_alive(ups);
 }
 
-gchar *
+char *
 rspamd_dns_resolver_idna_convert_utf8(struct rspamd_dns_resolver *resolver,
 									  rspamd_mempool_t *pool,
 									  const char *name,
-									  gint namelen,
-									  guint *outlen)
+									  int namelen,
+									  unsigned int *outlen)
 {
 	if (resolver == NULL || resolver->uidna == NULL || name == NULL || namelen > DNS_D_MAXNAME) {
 		return NULL;
 	}
 
-	guint dest_len;
+	unsigned int dest_len;
 	UErrorCode uc_err = U_ZERO_ERROR;
 	UIDNAInfo info = UIDNA_INFO_INITIALIZER;
 	/* Calculate length required */
@@ -1088,7 +1088,7 @@ rspamd_dns_resolver_idna_convert_utf8(struct rspamd_dns_resolver *resolver,
 									  NULL, 0, &info, &uc_err);
 
 	if (uc_err == U_BUFFER_OVERFLOW_ERROR) {
-		gchar *dest;
+		char *dest;
 
 		if (pool) {
 			dest = rspamd_mempool_alloc(pool, dest_len + 1);

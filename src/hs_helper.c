@@ -37,8 +37,8 @@ worker_t hs_helper_worker = {
 	RSPAMD_WORKER_VER /* Version info */
 };
 
-static const gdouble default_max_time = 1.0;
-static const gdouble default_recompile_time = 60.0;
+static const double default_max_time = 1.0;
+static const double default_recompile_time = 60.0;
 static const uint64_t rspamd_hs_helper_magic = 0x22d310157a2288a0ULL;
 
 /*
@@ -53,10 +53,10 @@ struct hs_helper_ctx {
 	/* Config */
 	struct rspamd_config *cfg;
 	/* END OF COMMON PART */
-	gchar *hs_dir;
+	char *hs_dir;
 	gboolean loaded;
-	gdouble max_time;
-	gdouble recompile_time;
+	double max_time;
+	double recompile_time;
 	ev_timer recompile_timer;
 };
 
@@ -119,9 +119,9 @@ rspamd_hs_helper_cleanup_dir(struct hs_helper_ctx *ctx, gboolean forced)
 {
 	struct stat st;
 	glob_t globbuf;
-	guint len, i;
-	gint rc;
-	gchar *pattern;
+	unsigned int len, i;
+	int rc;
+	char *pattern;
 	gboolean ret = TRUE;
 	pid_t our_pid = getpid();
 
@@ -186,9 +186,9 @@ rspamd_hs_helper_cleanup_dir(struct hs_helper_ctx *ctx, gboolean forced)
 	if ((rc = glob(pattern, 0, NULL, &globbuf)) == 0) {
 		for (i = 0; i < globbuf.gl_pathc; i++) {
 			/* Check if we have a pid in the filename */
-			const gchar *end_num = globbuf.gl_pathv[i] +
-								   strlen(globbuf.gl_pathv[i]) - (sizeof(".hs.new") - 1);
-			const gchar *p = end_num - 1;
+			const char *end_num = globbuf.gl_pathv[i] +
+								  strlen(globbuf.gl_pathv[i]) - (sizeof(".hs.new") - 1);
+			const char *p = end_num - 1;
 			pid_t foreign_pid = -1;
 
 			while (p > globbuf.gl_pathv[i]) {
@@ -270,7 +270,7 @@ rspamd_rs_delayed_cb(EV_P_ ev_timer *w, int revents)
 }
 
 static void
-rspamd_rs_compile_cb(guint ncompiled, GError *err, void *cbd)
+rspamd_rs_compile_cb(unsigned int ncompiled, GError *err, void *cbd)
 {
 	struct rspamd_worker *worker = (struct rspamd_worker *) cbd;
 	ev_timer *tm;
@@ -343,8 +343,8 @@ rspamd_rs_compile(struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 
 static gboolean
 rspamd_hs_helper_reload(struct rspamd_main *rspamd_main,
-						struct rspamd_worker *worker, gint fd,
-						gint attached_fd,
+						struct rspamd_worker *worker, int fd,
+						int attached_fd,
 						struct rspamd_control_command *cmd,
 						gpointer ud)
 {

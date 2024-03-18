@@ -63,14 +63,14 @@ unsigned cpu_config = 0;
 
 static gboolean cryptobox_loaded = FALSE;
 
-static const guchar n0[16] = {0};
+static const unsigned char n0[16] = {0};
 
 #define CRYPTOBOX_ALIGNMENT 16
 #define cryptobox_align_ptr(p, a) \
 	(void *) (((uintptr_t) (p) + ((uintptr_t) a - 1)) & ~((uintptr_t) a - 1))
 
 static void
-rspamd_cryptobox_cpuid(gint cpu[4], gint info)
+rspamd_cryptobox_cpuid(int cpu[4], int info)
 {
 	uint32_t __attribute__((unused)) eax, __attribute__((unused)) ecx = 0, __attribute__((unused)) ebx = 0, __attribute__((unused)) edx = 0;
 
@@ -93,7 +93,7 @@ rspamd_cryptobox_cpuid(gint cpu[4], gint info)
 	cpu[2] = ecx;
 	cpu[3] = edx;
 #else
-	memset(cpu, 0, sizeof(gint) * 4);
+	memset(cpu, 0, sizeof(int) * 4);
 #endif
 }
 
@@ -108,7 +108,7 @@ rspamd_cryptobox_ill_handler(int signo)
 }
 
 static gboolean
-rspamd_cryptobox_test_instr(gint instr)
+rspamd_cryptobox_test_instr(int instr)
 {
 	void (*old_handler)(int);
 	uint32_t rd;
@@ -186,7 +186,7 @@ rspamd_cryptobox_test_instr(gint instr)
 struct rspamd_cryptobox_library_ctx *
 rspamd_cryptobox_init(void)
 {
-	gint cpu[4], nid;
+	int cpu[4], nid;
 	const uint32_t osxsave_mask = (1 << 27);
 	const uint32_t fma_movbe_osxsave_mask = ((1 << 12) | (1 << 22) | (1 << 27));
 	const uint32_t avx2_bmi12_mask = (1 << 5) | (1 << 3) | (1 << 8);
@@ -357,7 +357,7 @@ void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
 		unsigned char *buf = NULL; /* Thanks openssl for this API (no) */
 		len = EC_POINT_point2buf(EC_KEY_get0_group(ec_sec), ec_pub,
 								 POINT_CONVERSION_UNCOMPRESSED, &buf, NULL);
-		g_assert(len <= (gint) rspamd_cryptobox_pk_bytes(mode));
+		g_assert(len <= (int) rspamd_cryptobox_pk_bytes(mode));
 		memcpy(pk, buf, len);
 		OPENSSL_free(buf);
 #else
@@ -365,13 +365,13 @@ void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
 		bn_pub = EC_POINT_point2bn(EC_KEY_get0_group(ec_sec),
 								   ec_pub, POINT_CONVERSION_UNCOMPRESSED, NULL, NULL);
 		len = BN_num_bytes(bn_pub);
-		g_assert(len <= (gint) rspamd_cryptobox_pk_bytes(mode));
+		g_assert(len <= (int) rspamd_cryptobox_pk_bytes(mode));
 		BN_bn2bin(bn_pub, pk);
 		BN_free(bn_pub);
 #endif
 
 		len = BN_num_bytes(bn_sec);
-		g_assert(len <= (gint) sizeof(rspamd_sk_t));
+		g_assert(len <= (int) sizeof(rspamd_sk_t));
 		BN_bn2bin(bn_sec, sk);
 
 		EC_KEY_free(ec_sec);
@@ -407,7 +407,7 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 		unsigned char *buf = NULL; /* Thanks openssl for this API (no) */
 		len = EC_POINT_point2buf(EC_KEY_get0_group(ec_sec), ec_pub,
 								 POINT_CONVERSION_UNCOMPRESSED, &buf, NULL);
-		g_assert(len <= (gint) rspamd_cryptobox_pk_bytes(mode));
+		g_assert(len <= (int) rspamd_cryptobox_pk_bytes(mode));
 		memcpy(pk, buf, len);
 		OPENSSL_free(buf);
 #else
@@ -415,13 +415,13 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 		bn_pub = EC_POINT_point2bn(EC_KEY_get0_group(ec_sec),
 								   ec_pub, POINT_CONVERSION_UNCOMPRESSED, NULL, NULL);
 		len = BN_num_bytes(bn_pub);
-		g_assert(len <= (gint) rspamd_cryptobox_pk_bytes(mode));
+		g_assert(len <= (int) rspamd_cryptobox_pk_bytes(mode));
 		BN_bn2bin(bn_pub, pk);
 		BN_free(bn_pub);
 #endif
 
 		len = BN_num_bytes(bn_sec);
-		g_assert(len <= (gint) sizeof(rspamd_sk_t));
+		g_assert(len <= (int) sizeof(rspamd_sk_t));
 		BN_bn2bin(bn_sec, sk);
 		EC_KEY_free(ec_sec);
 #endif
@@ -476,8 +476,8 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm,
 						 enum rspamd_cryptobox_mode mode)
 {
 	if (G_LIKELY(mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
-		guchar s[32];
-		guchar e[32];
+		unsigned char s[32];
+		unsigned char e[32];
 
 		memcpy(e, sk, 32);
 		e[0] &= 248;
@@ -497,8 +497,8 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm,
 		EC_KEY *lk;
 		EC_POINT *ec_pub;
 		BIGNUM *bn_pub, *bn_sec;
-		gint len;
-		guchar s[32];
+		int len;
+		unsigned char s[32];
 
 		lk = EC_KEY_new_by_curve_name(CRYPTOBOX_CURVE_NID);
 		g_assert(lk != NULL);
@@ -525,8 +525,8 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm,
 	}
 }
 
-void rspamd_cryptobox_sign(guchar *sig, unsigned long long *siglen_p,
-						   const guchar *m, gsize mlen,
+void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,
+						   const unsigned char *m, gsize mlen,
 						   const rspamd_sk_t sk,
 						   enum rspamd_cryptobox_mode mode)
 {
@@ -541,7 +541,7 @@ void rspamd_cryptobox_sign(guchar *sig, unsigned long long *siglen_p,
 		BIGNUM *bn_sec;
 		EVP_MD_CTX *sha_ctx;
 		unsigned char h[64];
-		guint diglen = rspamd_cryptobox_signature_bytes(mode);
+		unsigned int diglen = rspamd_cryptobox_signature_bytes(mode);
 
 		/* Prehash */
 		sha_ctx = EVP_MD_CTX_create();
@@ -571,9 +571,9 @@ void rspamd_cryptobox_sign(guchar *sig, unsigned long long *siglen_p,
 	}
 }
 
-bool rspamd_cryptobox_verify(const guchar *sig,
+bool rspamd_cryptobox_verify(const unsigned char *sig,
 							 gsize siglen,
-							 const guchar *m,
+							 const unsigned char *m,
 							 gsize mlen,
 							 const rspamd_pk_t pk,
 							 enum rspamd_cryptobox_mode mode)
@@ -700,7 +700,7 @@ rspamd_cryptobox_auth_init(void *auth_ctx, void *enc_ctx,
 {
 	if (G_LIKELY(mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
 		crypto_onetimeauth_state *mac_ctx;
-		guchar RSPAMD_ALIGNED(32) subkey[CHACHA_BLOCKBYTES];
+		unsigned char RSPAMD_ALIGNED(32) subkey[CHACHA_BLOCKBYTES];
 
 		mac_ctx = cryptobox_align_ptr(auth_ctx, CRYPTOBOX_ALIGNMENT);
 		memset(subkey, 0, sizeof(subkey));
@@ -724,8 +724,8 @@ rspamd_cryptobox_auth_init(void *auth_ctx, void *enc_ctx,
 }
 
 static gboolean
-rspamd_cryptobox_encrypt_update(void *enc_ctx, const guchar *in, gsize inlen,
-								guchar *out, gsize *outlen,
+rspamd_cryptobox_encrypt_update(void *enc_ctx, const unsigned char *in, gsize inlen,
+								unsigned char *out, gsize *outlen,
 								enum rspamd_cryptobox_mode mode)
 {
 	if (G_LIKELY(mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
@@ -747,7 +747,7 @@ rspamd_cryptobox_encrypt_update(void *enc_ctx, const guchar *in, gsize inlen,
 		g_assert(0);
 #else
 		EVP_CIPHER_CTX **s = enc_ctx;
-		gint r;
+		int r;
 
 		r = inlen;
 		g_assert(EVP_EncryptUpdate(*s, out, &r, in, inlen) == 1);
@@ -764,7 +764,7 @@ rspamd_cryptobox_encrypt_update(void *enc_ctx, const guchar *in, gsize inlen,
 }
 
 static gboolean
-rspamd_cryptobox_auth_update(void *auth_ctx, const guchar *in, gsize inlen,
+rspamd_cryptobox_auth_update(void *auth_ctx, const unsigned char *in, gsize inlen,
 							 enum rspamd_cryptobox_mode mode)
 {
 	if (G_LIKELY(mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
@@ -787,7 +787,7 @@ rspamd_cryptobox_auth_update(void *auth_ctx, const guchar *in, gsize inlen,
 }
 
 static gsize
-rspamd_cryptobox_encrypt_final(void *enc_ctx, guchar *out, gsize remain,
+rspamd_cryptobox_encrypt_final(void *enc_ctx, unsigned char *out, gsize remain,
 							   enum rspamd_cryptobox_mode mode)
 {
 	if (G_LIKELY(mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
@@ -801,7 +801,7 @@ rspamd_cryptobox_encrypt_final(void *enc_ctx, guchar *out, gsize remain,
 		g_assert(0);
 #else
 		EVP_CIPHER_CTX **s = enc_ctx;
-		gint r = remain;
+		int r = remain;
 
 		g_assert(EVP_EncryptFinal_ex(*s, out, &r) == 1);
 
@@ -884,7 +884,7 @@ rspamd_cryptobox_auth_verify_init(void *auth_ctx, void *enc_ctx,
 {
 	if (G_LIKELY(mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
 		crypto_onetimeauth_state *mac_ctx;
-		guchar RSPAMD_ALIGNED(32) subkey[CHACHA_BLOCKBYTES];
+		unsigned char RSPAMD_ALIGNED(32) subkey[CHACHA_BLOCKBYTES];
 
 		mac_ctx = cryptobox_align_ptr(auth_ctx, CRYPTOBOX_ALIGNMENT);
 		memset(subkey, 0, sizeof(subkey));
@@ -908,8 +908,8 @@ rspamd_cryptobox_auth_verify_init(void *auth_ctx, void *enc_ctx,
 }
 
 static gboolean
-rspamd_cryptobox_decrypt_update(void *enc_ctx, const guchar *in, gsize inlen,
-								guchar *out, gsize *outlen,
+rspamd_cryptobox_decrypt_update(void *enc_ctx, const unsigned char *in, gsize inlen,
+								unsigned char *out, gsize *outlen,
 								enum rspamd_cryptobox_mode mode)
 {
 	if (G_LIKELY(mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
@@ -930,7 +930,7 @@ rspamd_cryptobox_decrypt_update(void *enc_ctx, const guchar *in, gsize inlen,
 		g_assert(0);
 #else
 		EVP_CIPHER_CTX **s = enc_ctx;
-		gint r;
+		int r;
 
 		r = outlen ? *outlen : inlen;
 		g_assert(EVP_DecryptUpdate(*s, out, &r, in, inlen) == 1);
@@ -946,7 +946,7 @@ rspamd_cryptobox_decrypt_update(void *enc_ctx, const guchar *in, gsize inlen,
 
 static gboolean
 rspamd_cryptobox_auth_verify_update(void *auth_ctx,
-									const guchar *in, gsize inlen,
+									const unsigned char *in, gsize inlen,
 									enum rspamd_cryptobox_mode mode)
 {
 	if (G_LIKELY(mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
@@ -969,7 +969,7 @@ rspamd_cryptobox_auth_verify_update(void *auth_ctx,
 }
 
 static gboolean
-rspamd_cryptobox_decrypt_final(void *enc_ctx, guchar *out, gsize remain,
+rspamd_cryptobox_decrypt_final(void *enc_ctx, unsigned char *out, gsize remain,
 							   enum rspamd_cryptobox_mode mode)
 {
 	if (G_LIKELY(mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
@@ -985,7 +985,7 @@ rspamd_cryptobox_decrypt_final(void *enc_ctx, guchar *out, gsize remain,
 		g_assert(0);
 #else
 		EVP_CIPHER_CTX **s = enc_ctx;
-		gint r = remain;
+		int r = remain;
 
 		if (EVP_DecryptFinal_ex(*s, out, &r) < 0) {
 			return FALSE;
@@ -1021,7 +1021,7 @@ rspamd_cryptobox_auth_verify_final(void *auth_ctx, const rspamd_mac_t sig,
 #else
 		EVP_CIPHER_CTX **s = auth_ctx;
 
-		if (EVP_CIPHER_CTX_ctrl(*s, EVP_CTRL_GCM_SET_TAG, 16, (guchar *) sig) != 1) {
+		if (EVP_CIPHER_CTX_ctrl(*s, EVP_CTRL_GCM_SET_TAG, 16, (unsigned char *) sig) != 1) {
 			return FALSE;
 		}
 
@@ -1055,7 +1055,7 @@ rspamd_cryptobox_cleanup(void *enc_ctx, void *auth_ctx,
 	}
 }
 
-void rspamd_cryptobox_encrypt_nm_inplace(guchar *data, gsize len,
+void rspamd_cryptobox_encrypt_nm_inplace(unsigned char *data, gsize len,
 										 const rspamd_nonce_t nonce,
 										 const rspamd_nm_t nm,
 										 rspamd_mac_t sig,
@@ -1081,7 +1081,7 @@ void rspamd_cryptobox_encrypt_nm_inplace(guchar *data, gsize len,
 
 static void
 rspamd_cryptobox_flush_outbuf(struct rspamd_cryptobox_segment *st,
-							  const guchar *buf, gsize len, gsize offset)
+							  const unsigned char *buf, gsize len, gsize offset)
 {
 	gsize cpy_len;
 
@@ -1102,9 +1102,9 @@ void rspamd_cryptobox_encryptv_nm_inplace(struct rspamd_cryptobox_segment *segme
 										  enum rspamd_cryptobox_mode mode)
 {
 	struct rspamd_cryptobox_segment *cur = segments, *start_seg = segments;
-	guchar outbuf[CHACHA_BLOCKBYTES * 16];
+	unsigned char outbuf[CHACHA_BLOCKBYTES * 16];
 	void *enc_ctx, *auth_ctx;
-	guchar *out, *in;
+	unsigned char *out, *in;
 	gsize r, remain, inremain, seg_offset;
 
 	enc_ctx = g_alloca(rspamd_cryptobox_encrypt_ctx_len(mode));
@@ -1119,7 +1119,7 @@ void rspamd_cryptobox_encryptv_nm_inplace(struct rspamd_cryptobox_segment *segme
 	seg_offset = 0;
 
 	for (;;) {
-		if (cur - segments == (gint) cnt) {
+		if (cur - segments == (int) cnt) {
 			break;
 		}
 
@@ -1205,7 +1205,7 @@ void rspamd_cryptobox_encryptv_nm_inplace(struct rspamd_cryptobox_segment *segme
 }
 
 gboolean
-rspamd_cryptobox_decrypt_nm_inplace(guchar *data, gsize len,
+rspamd_cryptobox_decrypt_nm_inplace(unsigned char *data, gsize len,
 									const rspamd_nonce_t nonce, const rspamd_nm_t nm,
 									const rspamd_mac_t sig, enum rspamd_cryptobox_mode mode)
 {
@@ -1235,13 +1235,13 @@ rspamd_cryptobox_decrypt_nm_inplace(guchar *data, gsize len,
 }
 
 gboolean
-rspamd_cryptobox_decrypt_inplace(guchar *data, gsize len,
+rspamd_cryptobox_decrypt_inplace(unsigned char *data, gsize len,
 								 const rspamd_nonce_t nonce,
 								 const rspamd_pk_t pk, const rspamd_sk_t sk,
 								 const rspamd_mac_t sig,
 								 enum rspamd_cryptobox_mode mode)
 {
-	guchar nm[rspamd_cryptobox_MAX_NMBYTES];
+	unsigned char nm[rspamd_cryptobox_MAX_NMBYTES];
 	gboolean ret;
 
 	rspamd_cryptobox_nm(nm, pk, sk, mode);
@@ -1252,13 +1252,13 @@ rspamd_cryptobox_decrypt_inplace(guchar *data, gsize len,
 	return ret;
 }
 
-void rspamd_cryptobox_encrypt_inplace(guchar *data, gsize len,
+void rspamd_cryptobox_encrypt_inplace(unsigned char *data, gsize len,
 									  const rspamd_nonce_t nonce,
 									  const rspamd_pk_t pk, const rspamd_sk_t sk,
 									  rspamd_mac_t sig,
 									  enum rspamd_cryptobox_mode mode)
 {
-	guchar nm[rspamd_cryptobox_MAX_NMBYTES];
+	unsigned char nm[rspamd_cryptobox_MAX_NMBYTES];
 
 	rspamd_cryptobox_nm(nm, pk, sk, mode);
 	rspamd_cryptobox_encrypt_nm_inplace(data, len, nonce, nm, sig, mode);
@@ -1272,7 +1272,7 @@ void rspamd_cryptobox_encryptv_inplace(struct rspamd_cryptobox_segment *segments
 									   rspamd_mac_t sig,
 									   enum rspamd_cryptobox_mode mode)
 {
-	guchar nm[rspamd_cryptobox_MAX_NMBYTES];
+	unsigned char nm[rspamd_cryptobox_MAX_NMBYTES];
 
 	rspamd_cryptobox_nm(nm, pk, sk, mode);
 	rspamd_cryptobox_encryptv_nm_inplace(segments, cnt, nonce, nm, sig, mode);
@@ -1293,11 +1293,11 @@ void rspamd_cryptobox_siphash(unsigned char *out, const unsigned char *in,
  */
 static gboolean
 rspamd_cryptobox_pbkdf2(const char *pass, gsize pass_len,
-						const guint8 *salt, gsize salt_len, guint8 *key, gsize key_len,
+						const uint8_t *salt, gsize salt_len, uint8_t *key, gsize key_len,
 						unsigned int rounds)
 {
-	guint8 *asalt, obuf[crypto_generichash_blake2b_BYTES_MAX];
-	guint8 d1[crypto_generichash_blake2b_BYTES_MAX],
+	uint8_t *asalt, obuf[crypto_generichash_blake2b_BYTES_MAX];
+	uint8_t d1[crypto_generichash_blake2b_BYTES_MAX],
 		d2[crypto_generichash_blake2b_BYTES_MAX];
 	unsigned int i, j;
 	unsigned int count;
@@ -1324,7 +1324,7 @@ rspamd_cryptobox_pbkdf2(const char *pass, gsize pass_len,
 									   pass, pass_len);
 		}
 		else {
-			guint8 k[crypto_generichash_blake2b_BYTES_MAX];
+			uint8_t k[crypto_generichash_blake2b_BYTES_MAX];
 
 			/*
 			 * We use additional blake2 iteration to store large key
@@ -1344,7 +1344,7 @@ rspamd_cryptobox_pbkdf2(const char *pass, gsize pass_len,
 										   pass, pass_len);
 			}
 			else {
-				guint8 k[crypto_generichash_blake2b_BYTES_MAX];
+				uint8_t k[crypto_generichash_blake2b_BYTES_MAX];
 
 				/*
 				 * We use additional blake2 iteration to store large key
@@ -1380,7 +1380,7 @@ rspamd_cryptobox_pbkdf2(const char *pass, gsize pass_len,
 
 gboolean
 rspamd_cryptobox_pbkdf(const char *pass, gsize pass_len,
-					   const guint8 *salt, gsize salt_len, guint8 *key, gsize key_len,
+					   const uint8_t *salt, gsize salt_len, uint8_t *key, gsize key_len,
 					   unsigned int complexity, enum rspamd_cryptobox_pbkdf_type type)
 {
 	gboolean ret = FALSE;
@@ -1402,7 +1402,7 @@ rspamd_cryptobox_pbkdf(const char *pass, gsize pass_len,
 	return ret;
 }
 
-guint rspamd_cryptobox_pk_bytes(enum rspamd_cryptobox_mode mode)
+unsigned int rspamd_cryptobox_pk_bytes(enum rspamd_cryptobox_mode mode)
 {
 	if (G_UNLIKELY(mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
 		return 32;
@@ -1412,7 +1412,7 @@ guint rspamd_cryptobox_pk_bytes(enum rspamd_cryptobox_mode mode)
 	}
 }
 
-guint rspamd_cryptobox_pk_sig_bytes(enum rspamd_cryptobox_mode mode)
+unsigned int rspamd_cryptobox_pk_sig_bytes(enum rspamd_cryptobox_mode mode)
 {
 	if (G_UNLIKELY(mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
 		return 32;
@@ -1422,7 +1422,7 @@ guint rspamd_cryptobox_pk_sig_bytes(enum rspamd_cryptobox_mode mode)
 	}
 }
 
-guint rspamd_cryptobox_nonce_bytes(enum rspamd_cryptobox_mode mode)
+unsigned int rspamd_cryptobox_nonce_bytes(enum rspamd_cryptobox_mode mode)
 {
 	if (G_UNLIKELY(mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
 		return 24;
@@ -1433,12 +1433,12 @@ guint rspamd_cryptobox_nonce_bytes(enum rspamd_cryptobox_mode mode)
 }
 
 
-guint rspamd_cryptobox_sk_bytes(enum rspamd_cryptobox_mode mode)
+unsigned int rspamd_cryptobox_sk_bytes(enum rspamd_cryptobox_mode mode)
 {
 	return 32;
 }
 
-guint rspamd_cryptobox_sk_sig_bytes(enum rspamd_cryptobox_mode mode)
+unsigned int rspamd_cryptobox_sk_sig_bytes(enum rspamd_cryptobox_mode mode)
 {
 	if (G_UNLIKELY(mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
 		return 64;
@@ -1448,9 +1448,9 @@ guint rspamd_cryptobox_sk_sig_bytes(enum rspamd_cryptobox_mode mode)
 	}
 }
 
-guint rspamd_cryptobox_signature_bytes(enum rspamd_cryptobox_mode mode)
+unsigned int rspamd_cryptobox_signature_bytes(enum rspamd_cryptobox_mode mode)
 {
-	static guint ssl_keylen;
+	static unsigned int ssl_keylen;
 
 	if (G_UNLIKELY(mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
 		return 64;
@@ -1470,17 +1470,17 @@ guint rspamd_cryptobox_signature_bytes(enum rspamd_cryptobox_mode mode)
 	}
 }
 
-guint rspamd_cryptobox_nm_bytes(enum rspamd_cryptobox_mode mode)
+unsigned int rspamd_cryptobox_nm_bytes(enum rspamd_cryptobox_mode mode)
 {
 	return 32;
 }
 
-guint rspamd_cryptobox_mac_bytes(enum rspamd_cryptobox_mode mode)
+unsigned int rspamd_cryptobox_mac_bytes(enum rspamd_cryptobox_mode mode)
 {
 	return 16;
 }
 
-void rspamd_cryptobox_hash_init(rspamd_cryptobox_hash_state_t *p, const guchar *key, gsize keylen)
+void rspamd_cryptobox_hash_init(rspamd_cryptobox_hash_state_t *p, const unsigned char *key, gsize keylen)
 {
 	crypto_generichash_blake2b_state *st = cryptobox_align_ptr(p,
 															   RSPAMD_ALIGNOF(crypto_generichash_blake2b_state));
@@ -1491,7 +1491,7 @@ void rspamd_cryptobox_hash_init(rspamd_cryptobox_hash_state_t *p, const guchar *
 /**
  * Update hash with data portion
  */
-void rspamd_cryptobox_hash_update(rspamd_cryptobox_hash_state_t *p, const guchar *data, gsize len)
+void rspamd_cryptobox_hash_update(rspamd_cryptobox_hash_state_t *p, const unsigned char *data, gsize len)
 {
 	crypto_generichash_blake2b_state *st = cryptobox_align_ptr(p,
 															   RSPAMD_ALIGNOF(crypto_generichash_blake2b_state));
@@ -1501,7 +1501,7 @@ void rspamd_cryptobox_hash_update(rspamd_cryptobox_hash_state_t *p, const guchar
 /**
  * Output hash to the buffer of rspamd_cryptobox_HASHBYTES length
  */
-void rspamd_cryptobox_hash_final(rspamd_cryptobox_hash_state_t *p, guchar *out)
+void rspamd_cryptobox_hash_final(rspamd_cryptobox_hash_state_t *p, unsigned char *out)
 {
 	crypto_generichash_blake2b_state *st = cryptobox_align_ptr(p,
 															   RSPAMD_ALIGNOF(crypto_generichash_blake2b_state));
@@ -1511,10 +1511,10 @@ void rspamd_cryptobox_hash_final(rspamd_cryptobox_hash_state_t *p, guchar *out)
 /**
  * One in all function
  */
-void rspamd_cryptobox_hash(guchar *out,
-						   const guchar *data,
+void rspamd_cryptobox_hash(unsigned char *out,
+						   const unsigned char *data,
 						   gsize len,
-						   const guchar *key,
+						   const unsigned char *key,
 						   gsize keylen)
 {
 	crypto_generichash_blake2b(out, crypto_generichash_blake2b_BYTES_MAX,
@@ -1636,7 +1636,7 @@ void rspamd_cryptobox_fast_hash_update(rspamd_cryptobox_fast_hash_state_t *st,
 		case RSPAMD_CRYPTOBOX_MUMHASH: {
 			struct _mum_iuf *iuf = (struct _mum_iuf *) st->opaque;
 			gsize drem = len;
-			const guchar *p = data;
+			const unsigned char *p = data;
 
 			if (iuf->rem > 0) {
 				/* Process remainder */

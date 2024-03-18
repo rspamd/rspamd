@@ -31,14 +31,14 @@
 
 struct upstream_inet_addr_entry {
 	rspamd_inet_addr_t *addr;
-	guint priority;
+	unsigned int priority;
 	struct upstream_inet_addr_entry *next;
 };
 
 struct upstream_addr_elt {
 	rspamd_inet_addr_t *addr;
-	guint priority;
-	guint errors;
+	unsigned int priority;
+	unsigned int errors;
 };
 
 struct upstream_list_watcher {
@@ -50,17 +50,17 @@ struct upstream_list_watcher {
 };
 
 struct upstream {
-	guint weight;
-	guint cur_weight;
-	guint errors;
-	guint checked;
-	guint dns_requests;
-	gint active_idx;
-	guint ttl;
-	gchar *name;
+	unsigned int weight;
+	unsigned int cur_weight;
+	unsigned int errors;
+	unsigned int checked;
+	unsigned int dns_requests;
+	int active_idx;
+	unsigned int ttl;
+	char *name;
 	ev_timer ev;
-	gdouble last_fail;
-	gdouble last_resolve;
+	double last_fail;
+	double last_resolve;
 	gpointer ud;
 	enum rspamd_upstream_flag flags;
 	struct upstream_list *ls;
@@ -69,12 +69,12 @@ struct upstream {
 
 	struct {
 		GPtrArray *addr; /* struct upstream_addr_elt */
-		guint cur;
+		unsigned int cur;
 	} addrs;
 
 	struct upstream_inet_addr_entry *new_addrs;
 	gpointer data;
-	gchar uid[8];
+	char uid[8];
 	ref_entry_t ref;
 #ifdef UPSTREAMS_THREAD_SAFE
 	rspamd_mutex_t *lock;
@@ -82,17 +82,17 @@ struct upstream {
 };
 
 struct upstream_limits {
-	gdouble revive_time;
-	gdouble revive_jitter;
-	gdouble error_time;
-	gdouble dns_timeout;
-	gdouble lazy_resolve_time;
-	guint max_errors;
-	guint dns_retransmits;
+	double revive_time;
+	double revive_jitter;
+	double error_time;
+	double dns_timeout;
+	double lazy_resolve_time;
+	unsigned int max_errors;
+	unsigned int dns_retransmits;
 };
 
 struct upstream_list {
-	gchar *ups_line;
+	char *ups_line;
 	struct upstream_ctx *ctx;
 	GPtrArray *ups;
 	GPtrArray *alive;
@@ -100,7 +100,7 @@ struct upstream_list {
 	uint64_t hash_seed;
 	const struct upstream_limits *limits;
 	enum rspamd_upstream_flag flags;
-	guint cur_elt;
+	unsigned int cur_elt;
 	enum rspamd_upstream_rotation rot_alg;
 #ifdef UPSTREAMS_THREAD_SAFE
 	rspamd_mutex_t *lock;
@@ -146,20 +146,20 @@ INIT_LOG_MODULE(upstream)
 
 /* 4 errors in 10 seconds */
 #define DEFAULT_MAX_ERRORS 4
-static const guint default_max_errors = DEFAULT_MAX_ERRORS;
+static const unsigned int default_max_errors = DEFAULT_MAX_ERRORS;
 #define DEFAULT_REVIVE_TIME 60
-static const gdouble default_revive_time = DEFAULT_REVIVE_TIME;
+static const double default_revive_time = DEFAULT_REVIVE_TIME;
 #define DEFAULT_REVIVE_JITTER 0.4
-static const gdouble default_revive_jitter = DEFAULT_REVIVE_JITTER;
+static const double default_revive_jitter = DEFAULT_REVIVE_JITTER;
 #define DEFAULT_ERROR_TIME 10
-static const gdouble default_error_time = DEFAULT_ERROR_TIME;
+static const double default_error_time = DEFAULT_ERROR_TIME;
 #define DEFAULT_DNS_TIMEOUT 1.0
-static const gdouble default_dns_timeout = DEFAULT_DNS_TIMEOUT;
+static const double default_dns_timeout = DEFAULT_DNS_TIMEOUT;
 #define DEFAULT_DNS_RETRANSMITS 2
-static const guint default_dns_retransmits = DEFAULT_DNS_RETRANSMITS;
+static const unsigned int default_dns_retransmits = DEFAULT_DNS_RETRANSMITS;
 /* TODO: make it configurable */
 #define DEFAULT_LAZY_RESOLVE_TIME 3600.0
-static const gdouble default_lazy_resolve_time = DEFAULT_LAZY_RESOLVE_TIME;
+static const double default_lazy_resolve_time = DEFAULT_LAZY_RESOLVE_TIME;
 
 static const struct upstream_limits default_limits = {
 	.revive_time = DEFAULT_REVIVE_TIME,
@@ -215,7 +215,7 @@ void rspamd_upstreams_library_config(struct rspamd_config *cfg,
 			upstream = cur->data;
 			if (!ev_can_stop(&upstream->ev) && upstream->ls &&
 				!(upstream->flags & RSPAMD_UPSTREAM_FLAG_NORESOLVE)) {
-				gdouble when;
+				double when;
 
 				if (upstream->flags & RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE) {
 					/* Resolve them immediately ! */
@@ -278,7 +278,7 @@ rspamd_upstreams_library_init(void)
 	return ctx;
 }
 
-static gint
+static int
 rspamd_upstream_af_to_weight(const rspamd_inet_addr_t *addr)
 {
 	int ret;
@@ -301,12 +301,12 @@ rspamd_upstream_af_to_weight(const rspamd_inet_addr_t *addr)
 /*
  * Select IPv4 addresses before IPv6
  */
-static gint
+static int
 rspamd_upstream_addr_sort_func(gconstpointer a, gconstpointer b)
 {
 	const struct upstream_addr_elt *ip1 = *(const struct upstream_addr_elt **) a,
 								   *ip2 = *(const struct upstream_addr_elt **) b;
-	gint w1, w2;
+	int w1, w2;
 
 	if (ip1->priority == 0 && ip2->priority == 0) {
 		w1 = rspamd_upstream_af_to_weight(ip1->addr);
@@ -336,7 +336,7 @@ rspamd_upstream_set_active(struct upstream_list *ls, struct upstream *upstream)
 		}
 
 		/* Start lazy (or not so lazy) names resolution */
-		gdouble when;
+		double when;
 
 		if (upstream->flags & RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE) {
 			/* Resolve them immediately ! */
@@ -371,7 +371,7 @@ rspamd_upstream_addr_elt_dtor(gpointer a)
 static void
 rspamd_upstream_update_addrs(struct upstream *upstream)
 {
-	guint addr_cnt, i, port;
+	unsigned int addr_cnt, i, port;
 	gboolean seen_addr, reset_errors = FALSE;
 	struct upstream_inet_addr_entry *cur, *tmp;
 	GPtrArray *new_addrs;
@@ -500,9 +500,9 @@ rspamd_upstream_dns_cb(struct rdns_reply *reply, void *arg)
 
 struct rspamd_upstream_srv_dns_cb {
 	struct upstream *up;
-	guint priority;
-	guint port;
-	guint requests_inflight;
+	unsigned int priority;
+	unsigned int port;
+	unsigned int requests_inflight;
 };
 
 /* Used when we have resolved SRV record and resolved addrs */
@@ -642,14 +642,14 @@ rspamd_upstream_resolve_addrs(const struct upstream_list *ls,
 							  struct upstream *upstream)
 {
 	/* XXX: maybe make it configurable */
-	static const gdouble min_resolve_interval = 60.0;
+	static const double min_resolve_interval = 60.0;
 
 	if (upstream->ctx->res != NULL &&
 		upstream->ctx->configured &&
 		upstream->dns_requests == 0 &&
 		!(upstream->flags & RSPAMD_UPSTREAM_FLAG_NORESOLVE)) {
 
-		gdouble now = ev_now(upstream->ctx->event_loop);
+		double now = ev_now(upstream->ctx->event_loop);
 
 		if (now - upstream->last_resolve < min_resolve_interval) {
 			msg_info_upstream("do not resolve upstream %s as it was checked %.0f "
@@ -751,8 +751,8 @@ rspamd_upstream_lazy_resolve_cb(struct ev_loop *loop, ev_timer *w, int revents)
 static void
 rspamd_upstream_set_inactive(struct upstream_list *ls, struct upstream *upstream)
 {
-	gdouble ntim;
-	guint i;
+	double ntim;
+	unsigned int i;
 	struct upstream *cur;
 	struct upstream_list_watcher *w;
 
@@ -799,10 +799,10 @@ rspamd_upstream_set_inactive(struct upstream_list *ls, struct upstream *upstream
 
 void rspamd_upstream_fail(struct upstream *upstream,
 						  gboolean addr_failure,
-						  const gchar *reason)
+						  const char *reason)
 {
-	gdouble error_rate = 0, max_error_rate = 0;
-	gdouble sec_last, sec_cur;
+	double error_rate = 0, max_error_rate = 0;
+	double sec_last, sec_cur;
 	struct upstream_addr_elt *addr_elt;
 	struct upstream_list_watcher *w;
 
@@ -847,8 +847,8 @@ void rspamd_upstream_fail(struct upstream *upstream,
 				}
 
 				if (sec_cur - sec_last >= upstream->ls->limits->error_time) {
-					error_rate = ((gdouble) upstream->errors) / (sec_cur - sec_last);
-					max_error_rate = ((gdouble) upstream->ls->limits->max_errors) /
+					error_rate = ((double) upstream->errors) / (sec_cur - sec_last);
+					max_error_rate = ((double) upstream->ls->limits->max_errors) /
 									 upstream->ls->limits->error_time;
 				}
 
@@ -942,7 +942,7 @@ void rspamd_upstream_ok(struct upstream *upstream)
 	RSPAMD_UPSTREAM_UNLOCK(upstream);
 }
 
-void rspamd_upstream_set_weight(struct upstream *up, guint weight)
+void rspamd_upstream_set_weight(struct upstream *up, unsigned int weight)
 {
 	RSPAMD_UPSTREAM_LOCK(up);
 	up->weight = weight;
@@ -1026,7 +1026,7 @@ rspamd_upstream_dtor(struct upstream *up)
 rspamd_inet_addr_t *
 rspamd_upstream_addr_next(struct upstream *up)
 {
-	guint idx, next_idx;
+	unsigned int idx, next_idx;
 	struct upstream_addr_elt *e1, *e2;
 
 	do {
@@ -1050,13 +1050,13 @@ rspamd_upstream_addr_cur(const struct upstream *up)
 	return elt->addr;
 }
 
-const gchar *
+const char *
 rspamd_upstream_name(struct upstream *up)
 {
 	return up->name;
 }
 
-gint rspamd_upstream_port(struct upstream *up)
+int rspamd_upstream_port(struct upstream *up)
 {
 	struct upstream_addr_elt *elt;
 
@@ -1065,13 +1065,13 @@ gint rspamd_upstream_port(struct upstream *up)
 }
 
 gboolean
-rspamd_upstreams_add_upstream(struct upstream_list *ups, const gchar *str,
-							  guint16 def_port, enum rspamd_upstream_parse_type parse_type,
+rspamd_upstreams_add_upstream(struct upstream_list *ups, const char *str,
+							  uint16_t def_port, enum rspamd_upstream_parse_type parse_type,
 							  void *data)
 {
 	struct upstream *upstream;
 	GPtrArray *addrs = NULL;
-	guint i, slen;
+	unsigned int i, slen;
 	rspamd_inet_addr_t *addr;
 	enum rspamd_parse_host_port_result ret = RSPAMD_PARSE_ADDR_FAIL;
 
@@ -1082,7 +1082,7 @@ rspamd_upstreams_add_upstream(struct upstream_list *ups, const gchar *str,
 	case RSPAMD_UPSTREAM_PARSE_DEFAULT:
 		if (slen > sizeof("service=") &&
 			RSPAMD_LEN_CHECK_STARTS_WITH(str, slen, "service=")) {
-			const gchar *plus_pos, *service_pos, *semicolon_pos;
+			const char *plus_pos, *service_pos, *semicolon_pos;
 
 			/* Accept service=srv_name+hostname[:priority] */
 			service_pos = str + sizeof("service=") - 1;
@@ -1103,17 +1103,17 @@ rspamd_upstreams_add_upstream(struct upstream_list *ups, const gchar *str,
 				 * where <domain> is string between semicolon_pos and plus_pos +1
 				 * while service is a string between service_pos and plus_pos
 				 */
-				guint namelen = (semicolon_pos - (plus_pos + 1)) +
-								(plus_pos - service_pos) +
-								(sizeof("tcp") - 1) +
-								4;
+				unsigned int namelen = (semicolon_pos - (plus_pos + 1)) +
+									   (plus_pos - service_pos) +
+									   (sizeof("tcp") - 1) +
+									   4;
 				addrs = g_ptr_array_sized_new(1);
 				upstream->name = ups->ctx ? rspamd_mempool_alloc(ups->ctx->pool, namelen + 1) : g_malloc(namelen + 1);
 
 				rspamd_snprintf(upstream->name, namelen + 1,
 								"_%*s._tcp.%*s",
-								(gint) (plus_pos - service_pos), service_pos,
-								(gint) (semicolon_pos - (plus_pos + 1)), plus_pos + 1);
+								(int) (plus_pos - service_pos), service_pos,
+								(int) (semicolon_pos - (plus_pos + 1)), plus_pos + 1);
 				upstream->flags |= RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE;
 				ret = RSPAMD_PARSE_ADDR_RESOLVED;
 			}
@@ -1200,10 +1200,10 @@ rspamd_upstreams_add_upstream(struct upstream_list *ups, const gchar *str,
 		upstream->ctx_pos = g_queue_peek_tail_link(ups->ctx->upstreams);
 	}
 
-	guint h = rspamd_cryptobox_fast_hash(upstream->name,
-										 strlen(upstream->name), 0);
+	unsigned int h = rspamd_cryptobox_fast_hash(upstream->name,
+												strlen(upstream->name), 0);
 	memset(upstream->uid, 0, sizeof(upstream->uid));
-	rspamd_encode_base32_buf((const guchar *) &h, sizeof(h),
+	rspamd_encode_base32_buf((const unsigned char *) &h, sizeof(h),
 							 upstream->uid, sizeof(upstream->uid) - 1, RSPAMD_BASE32_DEFAULT);
 
 	msg_debug_upstream("added upstream %s (%s)", upstream->name,
@@ -1247,12 +1247,12 @@ rspamd_upstream_add_addr(struct upstream *up, rspamd_inet_addr_t *addr)
 
 gboolean
 rspamd_upstreams_parse_line_len(struct upstream_list *ups,
-								const gchar *str, gsize len, guint16 def_port, void *data)
+								const char *str, gsize len, uint16_t def_port, void *data)
 {
-	const gchar *end = str + len, *p = str;
-	const gchar *separators = ";, \n\r\t";
-	gchar *tmp;
-	guint span_len;
+	const char *end = str + len, *p = str;
+	const char *separators = ";, \n\r\t";
+	char *tmp;
+	unsigned int span_len;
 	gboolean ret = FALSE;
 
 	if (RSPAMD_LEN_CHECK_STARTS_WITH(p, len, "random:")) {
@@ -1306,7 +1306,7 @@ rspamd_upstreams_parse_line_len(struct upstream_list *ups,
 
 gboolean
 rspamd_upstreams_parse_line(struct upstream_list *ups,
-							const gchar *str, guint16 def_port, void *data)
+							const char *str, uint16_t def_port, void *data)
 {
 	return rspamd_upstreams_parse_line_len(ups, str, strlen(str),
 										   def_port, data);
@@ -1314,7 +1314,7 @@ rspamd_upstreams_parse_line(struct upstream_list *ups,
 
 gboolean
 rspamd_upstreams_from_ucl(struct upstream_list *ups,
-						  const ucl_object_t *in, guint16 def_port, void *data)
+						  const ucl_object_t *in, uint16_t def_port, void *data)
 {
 	gboolean ret = FALSE;
 	const ucl_object_t *cur;
@@ -1336,7 +1336,7 @@ rspamd_upstreams_from_ucl(struct upstream_list *ups,
 
 void rspamd_upstreams_destroy(struct upstream_list *ups)
 {
-	guint i;
+	unsigned int i;
 	struct upstream *up;
 	struct upstream_list_watcher *w, *tmp;
 
@@ -1401,7 +1401,7 @@ rspamd_upstream_get_random(struct upstream_list *ups,
 						   struct upstream *except)
 {
 	for (;;) {
-		guint idx = ottery_rand_range(ups->alive->len - 1);
+		unsigned int idx = ottery_rand_range(ups->alive->len - 1);
 		struct upstream *up;
 
 		up = g_ptr_array_index(ups->alive, idx);
@@ -1419,9 +1419,9 @@ rspamd_upstream_get_round_robin(struct upstream_list *ups,
 								struct upstream *except,
 								gboolean use_cur)
 {
-	guint max_weight = 0, min_checked = G_MAXUINT;
+	unsigned int max_weight = 0, min_checked = G_MAXUINT;
 	struct upstream *up = NULL, *selected = NULL, *min_checked_sel = NULL;
-	guint i;
+	unsigned int i;
 
 	/* Select upstream with the maximum cur_weight */
 	RSPAMD_UPSTREAM_LOCK(ups);
@@ -1509,11 +1509,11 @@ rspamd_consistent_hash(uint64_t key, uint32_t nbuckets)
 static struct upstream *
 rspamd_upstream_get_hashed(struct upstream_list *ups,
 						   struct upstream *except,
-						   const guint8 *key, guint keylen)
+						   const uint8_t *key, unsigned int keylen)
 {
 	uint64_t k;
 	uint32_t idx;
-	static const guint max_tries = 20;
+	static const unsigned int max_tries = 20;
 	struct upstream *up = NULL;
 
 	/* Generate 64 bits input key */
@@ -1524,7 +1524,7 @@ rspamd_upstream_get_hashed(struct upstream_list *ups,
 	/*
 	 * Select new upstream from all upstreams
 	 */
-	for (guint i = 0; i < max_tries; i++) {
+	for (unsigned int i = 0; i < max_tries; i++) {
 		idx = rspamd_consistent_hash(k, ups->ups->len);
 		up = g_ptr_array_index(ups->ups, idx);
 
@@ -1554,7 +1554,7 @@ static struct upstream *
 rspamd_upstream_get_common(struct upstream_list *ups,
 						   struct upstream *except,
 						   enum rspamd_upstream_rotation default_type,
-						   const guchar *key, gsize keylen,
+						   const unsigned char *key, gsize keylen,
 						   gboolean forced)
 {
 	enum rspamd_upstream_rotation type;
@@ -1622,7 +1622,7 @@ end:
 struct upstream *
 rspamd_upstream_get(struct upstream_list *ups,
 					enum rspamd_upstream_rotation default_type,
-					const guchar *key, gsize keylen)
+					const unsigned char *key, gsize keylen)
 {
 	return rspamd_upstream_get_common(ups, NULL, default_type, key, keylen, FALSE);
 }
@@ -1630,7 +1630,7 @@ rspamd_upstream_get(struct upstream_list *ups,
 struct upstream *
 rspamd_upstream_get_forced(struct upstream_list *ups,
 						   enum rspamd_upstream_rotation forced_type,
-						   const guchar *key, gsize keylen)
+						   const unsigned char *key, gsize keylen)
 {
 	return rspamd_upstream_get_common(ups, NULL, forced_type, key, keylen, TRUE);
 }
@@ -1638,7 +1638,7 @@ rspamd_upstream_get_forced(struct upstream_list *ups,
 struct upstream *rspamd_upstream_get_except(struct upstream_list *ups,
 											struct upstream *except,
 											enum rspamd_upstream_rotation default_type,
-											const guchar *key, gsize keylen)
+											const unsigned char *key, gsize keylen)
 {
 	return rspamd_upstream_get_common(ups, except, default_type, key, keylen, FALSE);
 }
@@ -1679,7 +1679,7 @@ void rspamd_upstreams_foreach(struct upstream_list *ups,
 							  rspamd_upstream_traverse_func cb, void *ud)
 {
 	struct upstream *up;
-	guint i;
+	unsigned int i;
 
 	for (i = 0; i < ups->ups->len; i++) {
 		up = g_ptr_array_index(ups->ups, i);
@@ -1689,12 +1689,12 @@ void rspamd_upstreams_foreach(struct upstream_list *ups,
 }
 
 void rspamd_upstreams_set_limits(struct upstream_list *ups,
-								 gdouble revive_time,
-								 gdouble revive_jitter,
-								 gdouble error_time,
-								 gdouble dns_timeout,
-								 guint max_errors,
-								 guint dns_retransmits)
+								 double revive_time,
+								 double revive_jitter,
+								 double error_time,
+								 double dns_timeout,
+								 unsigned int max_errors,
+								 unsigned int dns_retransmits)
 {
 	struct upstream_limits *nlimits;
 	g_assert(ups != NULL);

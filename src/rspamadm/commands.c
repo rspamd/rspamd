@@ -44,11 +44,11 @@ const struct rspamadm_command *commands[] = {
 
 
 const struct rspamadm_command *
-rspamadm_search_command(const gchar *name, GPtrArray *all_commands)
+rspamadm_search_command(const char *name, GPtrArray *all_commands)
 {
 	const struct rspamadm_command *ret = NULL, *cmd;
-	const gchar *alias;
-	guint i, j;
+	const char *alias;
+	unsigned int i, j;
 
 	if (name == NULL) {
 		name = "help";
@@ -75,7 +75,7 @@ rspamadm_search_command(const gchar *name, GPtrArray *all_commands)
 
 void rspamadm_fill_internal_commands(GPtrArray *dest)
 {
-	guint i;
+	unsigned int i;
 
 	for (i = 0; i < G_N_ELEMENTS(commands); i++) {
 		if (commands[i]) {
@@ -92,15 +92,15 @@ lua_thread_str_error_cb(struct thread_entry *thread, int ret, const char *msg)
 }
 
 static void
-rspamadm_lua_command_run(gint argc, gchar **argv,
+rspamadm_lua_command_run(int argc, char **argv,
 						 const struct rspamadm_command *cmd)
 {
 	struct thread_entry *thread = lua_thread_pool_get_for_config(rspamd_main->cfg);
 
 	lua_State *L = thread->lua_state;
 
-	gint table_idx = GPOINTER_TO_INT(cmd->command_data);
-	gint i;
+	int table_idx = GPOINTER_TO_INT(cmd->command_data);
+	int i;
 
 	/* Function */
 	lua_rawgeti(L, LUA_REGISTRYINDEX, table_idx);
@@ -122,11 +122,11 @@ rspamadm_lua_command_run(gint argc, gchar **argv,
 	lua_settop(L, 0);
 }
 
-static const gchar *
+static const char *
 rspamadm_lua_command_help(gboolean full_help,
 						  const struct rspamadm_command *cmd)
 {
-	gint table_idx = GPOINTER_TO_INT(cmd->command_data);
+	int table_idx = GPOINTER_TO_INT(cmd->command_data);
 
 	if (full_help) {
 		struct thread_entry *thread = lua_thread_pool_get_for_config(rspamd_main->cfg);
@@ -172,13 +172,13 @@ rspamadm_lua_command_help(gboolean full_help,
 
 void rspamadm_fill_lua_commands(lua_State *L, GPtrArray *dest)
 {
-	gint i;
+	int i;
 
 	GPtrArray *lua_paths;
 	GError *err = NULL;
-	const gchar *lualibdir = RSPAMD_LUALIBDIR, *path;
+	const char *lualibdir = RSPAMD_LUALIBDIR, *path;
 	struct rspamadm_command *lua_cmd;
-	gchar search_dir[PATH_MAX];
+	char search_dir[PATH_MAX];
 
 	if (g_hash_table_lookup(ucl_vars, "LUALIBDIR")) {
 		lualibdir = g_hash_table_lookup(ucl_vars, "LUALIBDIR");
@@ -230,7 +230,7 @@ void rspamadm_fill_lua_commands(lua_State *L, GPtrArray *dest)
 			}
 			else {
 				goffset ext_pos;
-				gchar *name;
+				char *name;
 
 				name = g_path_get_basename(path);
 				/* Remove .lua */

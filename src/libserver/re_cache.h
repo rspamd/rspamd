@@ -50,10 +50,10 @@ enum rspamd_re_type {
 struct rspamd_re_cache_stat {
 	uint64_t bytes_scanned;
 	uint64_t bytes_scanned_pcre;
-	guint regexp_checked;
-	guint regexp_matched;
-	guint regexp_total;
-	guint regexp_fast_cached;
+	unsigned int regexp_checked;
+	unsigned int regexp_matched;
+	unsigned int regexp_total;
+	unsigned int regexp_fast_cached;
 };
 
 /**
@@ -74,7 +74,7 @@ rspamd_regexp_t *
 rspamd_re_cache_add(struct rspamd_re_cache *cache, rspamd_regexp_t *re,
 					enum rspamd_re_type type,
 					gconstpointer type_data, gsize datalen,
-					gint lua_cbref);
+					int lua_cbref);
 
 /**
  * Replace regexp in the cache with another regexp
@@ -128,12 +128,12 @@ rspamd_re_cache_get_stat(struct rspamd_re_runtime *rt);
  * @param datalen associated data length
  * @param is_strong use case sensitive match when looking for headers
  */
-gint rspamd_re_cache_process(struct rspamd_task *task,
-							 rspamd_regexp_t *re,
-							 enum rspamd_re_type type,
-							 gconstpointer type_data,
-							 gsize datalen,
-							 gboolean is_strong);
+int rspamd_re_cache_process(struct rspamd_task *task,
+							rspamd_regexp_t *re,
+							enum rspamd_re_type type,
+							gconstpointer type_data,
+							gsize datalen,
+							gboolean is_strong);
 
 int rspamd_re_cache_process_ffi(void *ptask,
 								void *pre,
@@ -159,12 +159,12 @@ struct rspamd_re_cache *rspamd_re_cache_ref(struct rspamd_re_cache *cache);
 /**
  * Set limit for all regular expressions in the cache, returns previous limit
  */
-guint rspamd_re_cache_set_limit(struct rspamd_re_cache *cache, guint limit);
+unsigned int rspamd_re_cache_set_limit(struct rspamd_re_cache *cache, unsigned int limit);
 
 /**
  * Convert re type to a human readable string (constant one)
  */
-const gchar *rspamd_re_cache_type_to_string(enum rspamd_re_type type);
+const char *rspamd_re_cache_type_to_string(enum rspamd_re_type type);
 
 /**
  * Convert re type string to the type enum
@@ -175,13 +175,13 @@ struct ev_loop;
 /**
  * Compile expressions to the hyperscan tree and store in the `cache_dir`
  */
-gint rspamd_re_cache_compile_hyperscan(struct rspamd_re_cache *cache,
-									   const char *cache_dir,
-									   gdouble max_time,
-									   gboolean silent,
-									   struct ev_loop *event_loop,
-									   void (*cb)(guint ncompiled, GError *err, void *cbd),
-									   void *cbd);
+int rspamd_re_cache_compile_hyperscan(struct rspamd_re_cache *cache,
+									  const char *cache_dir,
+									  double max_time,
+									  gboolean silent,
+									  struct ev_loop *event_loop,
+									  void (*cb)(unsigned int ncompiled, GError *err, void *cbd),
+									  void *cbd);
 
 /**
  * Returns TRUE if the specified file is valid hyperscan cache
@@ -203,7 +203,7 @@ enum rspamd_hyperscan_status rspamd_re_cache_load_hyperscan(
  * Registers lua selector in the cache
  */
 void rspamd_re_cache_add_selector(struct rspamd_re_cache *cache,
-								  const gchar *sname, gint ref);
+								  const char *sname, int ref);
 
 #ifdef __cplusplus
 }

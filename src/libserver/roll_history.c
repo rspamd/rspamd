@@ -20,7 +20,7 @@
 #include "unix-std.h"
 #include "cfg_file_private.h"
 
-static const gchar rspamd_history_magic_old[] = {'r', 's', 'h', '1'};
+static const char rspamd_history_magic_old[] = {'r', 's', 'h', '1'};
 
 /**
  * Returns new roll history
@@ -28,7 +28,7 @@ static const gchar rspamd_history_magic_old[] = {'r', 's', 'h', '1'};
  * @return new structure
  */
 struct roll_history *
-rspamd_roll_history_new(rspamd_mempool_t *pool, guint max_rows,
+rspamd_roll_history_new(rspamd_mempool_t *pool, unsigned int max_rows,
 						struct rspamd_config *cfg)
 {
 	struct roll_history *history;
@@ -68,8 +68,8 @@ rspamd_roll_history_new(rspamd_mempool_t *pool, guint max_rows,
 }
 
 struct history_metric_callback_data {
-	gchar *pos;
-	gint remain;
+	char *pos;
+	int remain;
 };
 
 static void
@@ -77,7 +77,7 @@ roll_history_symbols_callback(gpointer key, gpointer value, void *user_data)
 {
 	struct history_metric_callback_data *cb = user_data;
 	struct rspamd_symbol_result *s = value;
-	guint wr;
+	unsigned int wr;
 
 	if (s->flags & RSPAMD_SYMBOL_RESULT_IGNORED) {
 		return;
@@ -98,7 +98,7 @@ roll_history_symbols_callback(gpointer key, gpointer value, void *user_data)
 void rspamd_roll_history_update(struct roll_history *history,
 								struct rspamd_task *task)
 {
-	guint row_num;
+	unsigned int row_num;
 	struct roll_history_row *row;
 	struct rspamd_scan_result *metric_res;
 	struct history_metric_callback_data cbdata;
@@ -187,16 +187,16 @@ void rspamd_roll_history_update(struct roll_history *history,
  * @return TRUE if history has been loaded
  */
 gboolean
-rspamd_roll_history_load(struct roll_history *history, const gchar *filename)
+rspamd_roll_history_load(struct roll_history *history, const char *filename)
 {
-	gint fd;
+	int fd;
 	struct stat st;
-	gchar magic[sizeof(rspamd_history_magic_old)];
+	char magic[sizeof(rspamd_history_magic_old)];
 	ucl_object_t *top;
 	const ucl_object_t *cur, *elt;
 	struct ucl_parser *parser;
 	struct roll_history_row *row;
-	guint n, i;
+	unsigned int n, i;
 
 	g_assert(history != NULL);
 	if (history->disabled) {
@@ -365,12 +365,12 @@ rspamd_roll_history_load(struct roll_history *history, const gchar *filename)
  * @return TRUE if history has been saved
  */
 gboolean
-rspamd_roll_history_save(struct roll_history *history, const gchar *filename)
+rspamd_roll_history_save(struct roll_history *history, const char *filename)
 {
-	gint fd;
+	int fd;
 	FILE *fp;
 	ucl_object_t *obj, *elt;
-	guint i;
+	unsigned int i;
 	struct roll_history_row *row;
 	struct ucl_emitter_functions *emitter_func;
 

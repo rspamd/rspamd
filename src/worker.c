@@ -69,7 +69,7 @@ worker_t normal_worker = {
 struct rspamd_worker_session {
 	int64_t magic;
 	struct rspamd_task *task;
-	gint fd;
+	int fd;
 	rspamd_inet_addr_t *addr;
 	struct rspamd_worker_ctx *ctx;
 	struct rspamd_http_connection *http_conn;
@@ -102,10 +102,10 @@ reduce_tasks_count(gpointer arg)
 	}
 }
 
-static gint
+static int
 rspamd_worker_body_handler(struct rspamd_http_connection *conn,
 						   struct rspamd_http_message *msg,
-						   const gchar *chunk, gsize len)
+						   const char *chunk, gsize len)
 {
 	struct rspamd_worker_session *session = (struct rspamd_worker_session *) conn->ud;
 	struct rspamd_task *task;
@@ -292,7 +292,7 @@ rspamd_worker_error_handler(struct rspamd_http_connection *conn, GError *err)
 	}
 }
 
-static gint
+static int
 rspamd_worker_finish_handler(struct rspamd_http_connection *conn,
 							 struct rspamd_http_message *msg)
 {
@@ -343,7 +343,7 @@ accept_socket(EV_P_ ev_io *w, int revents)
 	struct rspamd_worker_ctx *ctx;
 	struct rspamd_worker_session *session;
 	rspamd_inet_addr_t *addr = NULL;
-	gint nfd, http_opts = 0;
+	int nfd, http_opts = 0;
 
 	ctx = worker->ctx;
 

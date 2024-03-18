@@ -25,32 +25,32 @@
 #define FILE_LOG_QUARK g_quark_from_static_string("file_logger")
 
 struct rspamd_file_logger_priv {
-	gint fd;
+	int fd;
 	struct {
 		uint32_t size;
 		uint32_t used;
 		u_char *buf;
 	} io_buf;
 	gboolean throttling;
-	gchar *log_file;
+	char *log_file;
 	gboolean is_buffered;
 	gboolean log_severity;
 	time_t throttling_time;
 	uint32_t repeats;
 	uint64_t last_line_cksum;
-	gchar *saved_message;
+	char *saved_message;
 	gsize saved_mlen;
-	gchar *saved_function;
-	gchar *saved_module;
-	gchar *saved_id;
-	guint saved_loglevel;
+	char *saved_function;
+	char *saved_module;
+	char *saved_id;
+	unsigned int saved_loglevel;
 };
 
 /**
  * Calculate checksum for log line (used for repeating logic)
  */
 static inline uint64_t
-rspamd_log_calculate_cksum(const gchar *message, size_t mlen)
+rspamd_log_calculate_cksum(const char *message, size_t mlen)
 {
 	return rspamd_cryptobox_fast_hash(message, mlen, rspamd_hash_seed());
 }
@@ -64,12 +64,12 @@ direct_write_log_line(rspamd_logger_t *rspamd_log,
 					  void *data,
 					  gsize count,
 					  gboolean is_iov,
-					  gint level_flags)
+					  int level_flags)
 {
 	struct iovec *iov;
-	const gchar *line;
+	const char *line;
 	glong r;
-	gint fd;
+	int fd;
 	gboolean locked = FALSE;
 
 	iov = (struct iovec *) data;
@@ -81,7 +81,7 @@ direct_write_log_line(rspamd_logger_t *rspamd_log,
 		if (is_iov) {
 			tlen = 0;
 
-			for (guint i = 0; i < count; i++) {
+			for (unsigned int i = 0; i < count; i++) {
 				tlen += iov[i].iov_len;
 			}
 		}
@@ -109,7 +109,7 @@ direct_write_log_line(rspamd_logger_t *rspamd_log,
 		r = writev(fd, iov, count);
 	}
 	else {
-		line = (const gchar *) data;
+		line = (const char *) data;
 		r = write(fd, line, count);
 	}
 
@@ -159,9 +159,9 @@ direct_write_log_line(rspamd_logger_t *rspamd_log,
 static void
 fill_buffer(rspamd_logger_t *rspamd_log,
 			struct rspamd_file_logger_priv *priv,
-			const struct iovec *iov, gint iovcnt)
+			const struct iovec *iov, int iovcnt)
 {
-	gint i;
+	int i;
 
 	for (i = 0; i < iovcnt; i++) {
 		memcpy(priv->io_buf.buf + priv->io_buf.used,
@@ -192,11 +192,11 @@ static bool
 file_log_helper(rspamd_logger_t *rspamd_log,
 				struct rspamd_file_logger_priv *priv,
 				const struct iovec *iov,
-				guint iovcnt,
-				gint level_flags)
+				unsigned int iovcnt,
+				int level_flags)
 {
 	size_t len = 0;
-	guint i;
+	unsigned int i;
 
 	if (!priv->is_buffered) {
 		/* Write string directly */
@@ -233,7 +233,7 @@ static void
 rspamd_log_reset_repeated(rspamd_logger_t *rspamd_log,
 						  struct rspamd_file_logger_priv *priv)
 {
-	gchar tmpbuf[256];
+	char tmpbuf[256];
 	gssize r;
 
 	if (priv->repeats > REPEATS_MIN) {
@@ -275,13 +275,13 @@ rspamd_log_reset_repeated(rspamd_logger_t *rspamd_log,
 	}
 }
 
-static gint
+static int
 rspamd_try_open_log_fd(rspamd_logger_t *rspamd_log,
 					   struct rspamd_file_logger_priv *priv,
 					   uid_t uid, gid_t gid,
 					   GError **err)
 {
-	gint fd;
+	int fd;
 
 	fd = open(priv->log_file,
 			  O_CREAT | O_WRONLY | O_APPEND,
@@ -366,16 +366,16 @@ void rspamd_log_file_dtor(rspamd_logger_t *logger, gpointer arg)
 	g_free(priv);
 }
 
-bool rspamd_log_file_log(const gchar *module, const gchar *id,
-						 const gchar *function,
-						 gint level_flags,
-						 const gchar *message,
+bool rspamd_log_file_log(const char *module, const char *id,
+						 const char *function,
+						 int level_flags,
+						 const char *message,
 						 gsize mlen,
 						 rspamd_logger_t *rspamd_log,
 						 gpointer arg)
 {
 	struct rspamd_file_logger_priv *priv = (struct rspamd_file_logger_priv *) arg;
-	gdouble now;
+	double now;
 	uint64_t cksum;
 	gboolean got_time = FALSE;
 

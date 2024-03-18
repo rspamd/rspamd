@@ -36,12 +36,12 @@
 
 
 static const uint64_t map_hash_seed = 0xdeadbabeULL;
-static const gchar *const hash_fill = "1";
+static const char *const hash_fill = "1";
 
 struct rspamd_map_helper_value {
 	gsize hits;
 	gconstpointer key;
-	gchar value[]; /* Null terminated */
+	char value[]; /* Null terminated */
 };
 
 #define rspamd_map_ftok_hash(t) (rspamd_icase_hash((t).begin, (t).len, rspamd_hash_seed()))
@@ -75,7 +75,7 @@ struct rspamd_cdb_map_helper {
 
 struct rspamd_regexp_map_helper {
 	rspamd_cryptobox_hash_state_t hst;
-	guchar re_digest[rspamd_cryptobox_HASHBYTES];
+	unsigned char re_digest[rspamd_cryptobox_HASHBYTES];
 	rspamd_mempool_t *pool;
 	struct rspamd_map *map;
 	GPtrArray *regexps;
@@ -85,9 +85,9 @@ struct rspamd_regexp_map_helper {
 #ifdef WITH_HYPERSCAN
 	rspamd_hyperscan_t *hs_db;
 	hs_scratch_t *hs_scratch;
-	gchar **patterns;
-	gint *flags;
-	gint *ids;
+	char **patterns;
+	int *flags;
+	int *ids;
 #endif
 };
 
@@ -111,13 +111,13 @@ struct rspamd_regexp_map_helper {
 		stripped_value = g_strstrip(value);           \
 	} while (0)
 
-gchar *
+char *
 rspamd_parse_kv_list(
-	gchar *chunk,
-	gint len,
+	char *chunk,
+	int len,
 	struct map_cb_data *data,
 	rspamd_map_insert_func func,
-	const gchar *default_value,
+	const char *default_value,
 	gboolean final)
 {
 	enum {
@@ -135,9 +135,9 @@ rspamd_parse_kv_list(
 		map_read_eol,
 	};
 
-	gchar *c, *p, *key = NULL, *value = NULL, *stripped_key, *stripped_value, *end;
+	char *c, *p, *key = NULL, *value = NULL, *stripped_key, *stripped_value, *end;
 	struct rspamd_map *map = data->map;
-	guint line_number = 0;
+	unsigned int line_number = 0;
 
 	p = chunk;
 	c = p;
@@ -470,7 +470,7 @@ void rspamd_map_helper_insert_radix(gpointer st, gconstpointer key, gconstpointe
 	khiter_t k;
 	gconstpointer nk;
 	rspamd_ftok_t tok;
-	gint res;
+	int res;
 	struct rspamd_map *map;
 
 	map = r->map;
@@ -524,7 +524,7 @@ void rspamd_map_helper_insert_radix_resolve(gpointer st, gconstpointer key, gcon
 	khiter_t k;
 	gconstpointer nk;
 	rspamd_ftok_t tok;
-	gint res;
+	int res;
 	struct rspamd_map *map;
 
 	map = r->map;
@@ -583,7 +583,7 @@ void rspamd_map_helper_insert_hash(gpointer st, gconstpointer key, gconstpointer
 	khiter_t k;
 	gconstpointer nk;
 	gsize vlen;
-	gint r;
+	int r;
 	rspamd_ftok_t tok;
 	struct rspamd_map *map;
 
@@ -629,16 +629,16 @@ void rspamd_map_helper_insert_re(gpointer st, gconstpointer key, gconstpointer v
 	struct rspamd_regexp_map_helper *re_map = st;
 	struct rspamd_map *map;
 	rspamd_regexp_t *re;
-	gchar *escaped;
+	char *escaped;
 	GError *err = NULL;
-	gint pcre_flags;
+	int pcre_flags;
 	gsize escaped_len;
 	struct rspamd_map_helper_value *val;
 	khiter_t k;
 	rspamd_ftok_t tok;
 	gconstpointer nk;
 	gsize vlen;
-	gint r;
+	int r;
 
 	map = re_map->map;
 
@@ -801,7 +801,7 @@ rspamd_map_helper_new_radix(struct rspamd_map *map)
 {
 	struct rspamd_radix_map_helper *r;
 	rspamd_mempool_t *pool;
-	const gchar *name = "unnamed";
+	const char *name = "unnamed";
 
 	if (map) {
 		pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
@@ -882,7 +882,7 @@ rspamd_map_helper_new_regexp(struct rspamd_map *map,
 void rspamd_map_helper_destroy_regexp(struct rspamd_regexp_map_helper *re_map)
 {
 	rspamd_regexp_t *re;
-	guint i;
+	unsigned int i;
 
 	if (!re_map || !re_map->regexps) {
 		return;
@@ -924,10 +924,10 @@ void rspamd_map_helper_destroy_regexp(struct rspamd_regexp_map_helper *re_map)
 	rspamd_mempool_delete(pool);
 }
 
-gchar *
+char *
 rspamd_kv_list_read(
-	gchar *chunk,
-	gint len,
+	char *chunk,
+	int len,
 	struct map_cb_data *data,
 	gboolean final)
 {
@@ -990,10 +990,10 @@ void rspamd_kv_list_dtor(struct map_cb_data *data)
 	}
 }
 
-gchar *
+char *
 rspamd_radix_read(
-	gchar *chunk,
-	gint len,
+	char *chunk,
+	int len,
 	struct map_cb_data *data,
 	gboolean final)
 {
@@ -1065,7 +1065,7 @@ void rspamd_radix_dtor(struct map_cb_data *data)
 static gboolean
 rspamd_try_load_re_map_cache(struct rspamd_regexp_map_helper *re_map)
 {
-	gchar fp[PATH_MAX];
+	char fp[PATH_MAX];
 	struct rspamd_map *map;
 
 	map = re_map->map;
@@ -1076,7 +1076,7 @@ rspamd_try_load_re_map_cache(struct rspamd_regexp_map_helper *re_map)
 
 	rspamd_snprintf(fp, sizeof(fp), "%s/%*xs.hsmc",
 					map->cfg->hs_cache_dir,
-					(gint) rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
+					(int) rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
 
 	re_map->hs_db = rspamd_hyperscan_maybe_load(fp, 0);
 
@@ -1086,9 +1086,9 @@ rspamd_try_load_re_map_cache(struct rspamd_regexp_map_helper *re_map)
 static gboolean
 rspamd_try_save_re_map_cache(struct rspamd_regexp_map_helper *re_map)
 {
-	gchar fp[PATH_MAX], np[PATH_MAX];
+	char fp[PATH_MAX], np[PATH_MAX];
 	gsize len;
-	gint fd;
+	int fd;
 	char *bytes = NULL;
 	struct rspamd_map *map;
 
@@ -1115,7 +1115,7 @@ rspamd_try_save_re_map_cache(struct rspamd_regexp_map_helper *re_map)
 
 				rspamd_snprintf(np, sizeof(np), "%s/%*xs.hsmc",
 								re_map->map->cfg->hs_cache_dir,
-								(gint) rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
+								(int) rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
 
 				if (rename(fp, np) == -1) {
 					msg_warn_map("cannot rename hyperscan cache from %s to %s: %s",
@@ -1148,12 +1148,12 @@ static void
 rspamd_re_map_finalize(struct rspamd_regexp_map_helper *re_map)
 {
 #ifdef WITH_HYPERSCAN
-	guint i;
+	unsigned int i;
 	hs_platform_info_t plt;
 	hs_compile_error_t *err;
 	struct rspamd_map *map;
 	rspamd_regexp_t *re;
-	gint pcre_flags;
+	int pcre_flags;
 
 	map = re_map->map;
 
@@ -1170,14 +1170,14 @@ rspamd_re_map_finalize(struct rspamd_regexp_map_helper *re_map)
 		return;
 	}
 
-	re_map->patterns = g_new(gchar *, re_map->regexps->len);
-	re_map->flags = g_new(gint, re_map->regexps->len);
-	re_map->ids = g_new(gint, re_map->regexps->len);
+	re_map->patterns = g_new(char *, re_map->regexps->len);
+	re_map->flags = g_new(int, re_map->regexps->len);
+	re_map->ids = g_new(int, re_map->regexps->len);
 
 	for (i = 0; i < re_map->regexps->len; i++) {
-		const gchar *pat;
-		gchar *escaped;
-		gint pat_flags;
+		const char *pat;
+		char *escaped;
+		int pat_flags;
 
 		re = g_ptr_array_index(re_map->regexps, i);
 		pcre_flags = rspamd_regexp_get_pcre_flags(re);
@@ -1225,10 +1225,10 @@ rspamd_re_map_finalize(struct rspamd_regexp_map_helper *re_map)
 	if (re_map->regexps->len > 0 && re_map->patterns) {
 
 		if (!rspamd_try_load_re_map_cache(re_map)) {
-			gdouble ts1 = rspamd_get_ticks(FALSE);
+			double ts1 = rspamd_get_ticks(FALSE);
 			hs_database_t *hs_db = NULL;
 
-			if (hs_compile_multi((const gchar **) re_map->patterns,
+			if (hs_compile_multi((const char **) re_map->patterns,
 								 re_map->flags,
 								 re_map->ids,
 								 re_map->regexps->len,
@@ -1249,7 +1249,7 @@ rspamd_re_map_finalize(struct rspamd_regexp_map_helper *re_map)
 				char fpath[PATH_MAX];
 				rspamd_snprintf(fpath, sizeof(fpath), "%s/%*xs.hsmc",
 								re_map->map->cfg->hs_cache_dir,
-								(gint) rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
+								(int) rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
 				re_map->hs_db = rspamd_hyperscan_from_raw_db(hs_db, fpath);
 			}
 			else {
@@ -1278,10 +1278,10 @@ rspamd_re_map_finalize(struct rspamd_regexp_map_helper *re_map)
 #endif
 }
 
-gchar *
+char *
 rspamd_regexp_list_read_single(
-	gchar *chunk,
-	gint len,
+	char *chunk,
+	int len,
 	struct map_cb_data *data,
 	gboolean final)
 {
@@ -1301,10 +1301,10 @@ rspamd_regexp_list_read_single(
 		final);
 }
 
-gchar *
+char *
 rspamd_glob_list_read_single(
-	gchar *chunk,
-	gint len,
+	char *chunk,
+	int len,
 	struct map_cb_data *data,
 	gboolean final)
 {
@@ -1324,10 +1324,10 @@ rspamd_glob_list_read_single(
 		final);
 }
 
-gchar *
+char *
 rspamd_regexp_list_read_multiple(
-	gchar *chunk,
-	gint len,
+	char *chunk,
+	int len,
 	struct map_cb_data *data,
 	gboolean final)
 {
@@ -1348,10 +1348,10 @@ rspamd_regexp_list_read_multiple(
 		final);
 }
 
-gchar *
+char *
 rspamd_glob_list_read_multiple(
-	gchar *chunk,
-	gint len,
+	char *chunk,
+	int len,
 	struct map_cb_data *data,
 	gboolean final)
 {
@@ -1423,7 +1423,7 @@ rspamd_match_hs_single_handler(unsigned int id, unsigned long long from,
 							   unsigned long long to,
 							   unsigned int flags, void *context)
 {
-	guint *i = context;
+	unsigned int *i = context;
 	/* Always return non-zero as we need a single match here */
 
 	*i = id;
@@ -1434,11 +1434,11 @@ rspamd_match_hs_single_handler(unsigned int id, unsigned long long from,
 
 gconstpointer
 rspamd_match_regexp_map_single(struct rspamd_regexp_map_helper *map,
-							   const gchar *in, gsize len)
+							   const char *in, gsize len)
 {
-	guint i;
+	unsigned int i;
 	rspamd_regexp_t *re;
-	gint res = 0;
+	int res = 0;
 	gpointer ret = NULL;
 	struct rspamd_map_helper_value *val;
 	gboolean validated = FALSE;
@@ -1526,12 +1526,12 @@ rspamd_match_hs_multiple_handler(unsigned int id, unsigned long long from,
 
 GPtrArray *
 rspamd_match_regexp_map_all(struct rspamd_regexp_map_helper *map,
-							const gchar *in, gsize len)
+							const char *in, gsize len)
 {
-	guint i;
+	unsigned int i;
 	rspamd_regexp_t *re;
 	GPtrArray *ret;
-	gint res = 0;
+	int res = 0;
 	gboolean validated = FALSE;
 	struct rspamd_map_helper_value *val;
 
@@ -1594,7 +1594,7 @@ rspamd_match_regexp_map_all(struct rspamd_regexp_map_helper *map,
 }
 
 gconstpointer
-rspamd_match_hash_map(struct rspamd_hash_map_helper *map, const gchar *in,
+rspamd_match_hash_map(struct rspamd_hash_map_helper *map, const char *in,
 					  gsize len)
 {
 	khiter_t k;
@@ -1622,7 +1622,7 @@ rspamd_match_hash_map(struct rspamd_hash_map_helper *map, const gchar *in,
 
 gconstpointer
 rspamd_match_radix_map(struct rspamd_radix_map_helper *map,
-					   const guchar *in, gsize inlen)
+					   const unsigned char *in, gsize inlen)
 {
 	struct rspamd_map_helper_value *val;
 
@@ -1706,9 +1706,9 @@ void rspamd_map_helper_destroy_cdb(struct rspamd_cdb_map_helper *c)
 	g_free(c);
 }
 
-gchar *
-rspamd_cdb_list_read(gchar *chunk,
-					 gint len,
+char *
+rspamd_cdb_list_read(char *chunk,
+					 int len,
 					 struct map_cb_data *data,
 					 gboolean final)
 {
@@ -1741,7 +1741,7 @@ rspamd_cdb_list_read(gchar *chunk,
 
 	if (found == NULL) {
 		/* New cdb */
-		gint fd;
+		int fd;
 		struct cdb *cdb;
 
 		fd = rspamd_file_xopen(chunk, O_RDONLY, 0, TRUE);
@@ -1813,7 +1813,7 @@ void rspamd_cdb_list_dtor(struct map_cb_data *data)
 
 gconstpointer
 rspamd_match_cdb_map(struct rspamd_cdb_map_helper *map,
-					 const gchar *in, gsize inlen)
+					 const char *in, gsize inlen)
 {
 	if (map == NULL || map->cdbs.head == NULL) {
 		return NULL;

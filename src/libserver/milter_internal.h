@@ -43,7 +43,7 @@ struct rspamd_milter_parser {
 	goffset cmd_start;
 	gsize datalen;
 	enum rspamd_milter_state state;
-	gchar cur_cmd;
+	char cur_cmd;
 };
 
 struct rspamd_milter_outbuf {
@@ -70,7 +70,7 @@ struct rspamd_milter_private {
 	struct ev_loop *event_loop;
 	rspamd_mempool_t *pool;
 	khash_t(milter_headers_hash_t) * headers;
-	gint cur_hdr;
+	int cur_hdr;
 	rspamd_milter_finish fin_cb;
 	rspamd_milter_error err_cb;
 	void *ud;

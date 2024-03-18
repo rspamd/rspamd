@@ -31,7 +31,7 @@ struct rspamd_image {
 	uint32_t width;
 	uint32_t height;
 	gboolean is_normalized;
-	guchar *dct;
+	unsigned char *dct;
 };
 
 /*
@@ -65,7 +65,7 @@ struct rspamd_image *rspamd_maybe_process_image(rspamd_mempool_t *pool,
 /*
  * Get textual representation of an image's type
  */
-const gchar *rspamd_image_type_str(enum rspamd_image_type type);
+const char *rspamd_image_type_str(enum rspamd_image_type type);
 
 void rspamd_image_normalize(struct rspamd_task *task, struct rspamd_image *img);
 

@@ -52,20 +52,20 @@ struct rspamd_ssl_ctx {
 };
 
 struct rspamd_ssl_connection {
-	gint fd;
+	int fd;
 	enum rspamd_ssl_state state;
 	enum rspamd_ssl_shutdown shut;
 	gboolean verify_peer;
 	SSL *ssl;
 	struct rspamd_ssl_ctx *ssl_ctx;
-	gchar *hostname;
+	char *hostname;
 	struct rspamd_io_ev *ev;
 	struct rspamd_io_ev *shut_ev;
 	struct ev_loop *event_loop;
 	rspamd_ssl_handler_t handler;
 	rspamd_ssl_error_handler_t err_handler;
 	gpointer handler_data;
-	gchar log_tag[8];
+	char log_tag[8];
 };
 
 #define msg_debug_ssl(...) rspamd_conditional_debug_fast(NULL, NULL,                              \
@@ -73,7 +73,7 @@ struct rspamd_ssl_connection {
 														 RSPAMD_LOG_FUNC,                         \
 														 __VA_ARGS__)
 
-static void rspamd_ssl_event_handler(gint fd, short what, gpointer ud);
+static void rspamd_ssl_event_handler(int fd, short what, gpointer ud);
 
 INIT_LOG_MODULE(ssl)
 
@@ -227,7 +227,7 @@ rspamd_tls_check_subject_altname(X509 *cert, const char *name)
 				data = (const char *) ASN1_STRING_data(altname->d.dNSName);
 				len = ASN1_STRING_length(altname->d.dNSName);
 
-				if (len < 0 || len != (gint) strlen(data)) {
+				if (len < 0 || len != (int) strlen(data)) {
 					ret = FALSE;
 					break;
 				}
@@ -303,7 +303,7 @@ rspamd_tls_check_common_name(X509 *cert, const char *name)
 							  common_name_len + 1);
 
 	/* NUL bytes in CN? */
-	if (common_name_len != (gint) strlen(common_name)) {
+	if (common_name_len != (int) strlen(common_name)) {
 		goto out;
 	}
 
@@ -393,11 +393,11 @@ rspamd_ssl_peer_verify(struct rspamd_ssl_connection *c)
 }
 
 static void
-rspamd_tls_set_error(gint retcode, const gchar *stage, GError **err)
+rspamd_tls_set_error(int retcode, const char *stage, GError **err)
 {
 	GString *reason;
-	gchar buf[120];
-	gint err_code = 0;
+	char buf[120];
+	int err_code = 0;
 
 	reason = g_string_sized_new(sizeof(buf));
 
@@ -454,8 +454,8 @@ rspamd_ssl_connection_dtor(struct rspamd_ssl_connection *conn)
 static void
 rspamd_ssl_shutdown(struct rspamd_ssl_connection *conn)
 {
-	gint ret = 0, nret, retries;
-	static const gint max_retries = 5;
+	int ret = 0, nret, retries;
+	static const int max_retries = 5;
 
 	/*
 	 * Fucking openssl...
@@ -538,10 +538,10 @@ rspamd_ssl_shutdown(struct rspamd_ssl_connection *conn)
 }
 
 static void
-rspamd_ssl_event_handler(gint fd, short what, gpointer ud)
+rspamd_ssl_event_handler(int fd, short what, gpointer ud)
 {
 	struct rspamd_ssl_connection *conn = ud;
-	gint ret;
+	int ret;
 	GError *err = NULL;
 
 	if (what == EV_TIMER) {
@@ -633,7 +633,7 @@ rspamd_ssl_event_handler(gint fd, short what, gpointer ud)
 
 struct rspamd_ssl_connection *
 rspamd_ssl_connection_new(gpointer ssl_ctx, struct ev_loop *ev_base,
-						  gboolean verify_peer, const gchar *log_tag)
+						  gboolean verify_peer, const char *log_tag)
 {
 	struct rspamd_ssl_connection *conn;
 	struct rspamd_ssl_ctx *ctx = (struct rspamd_ssl_ctx *) ssl_ctx;
@@ -657,12 +657,12 @@ rspamd_ssl_connection_new(gpointer ssl_ctx, struct ev_loop *ev_base,
 
 
 gboolean
-rspamd_ssl_connect_fd(struct rspamd_ssl_connection *conn, gint fd,
-					  const gchar *hostname, struct rspamd_io_ev *ev, ev_tstamp timeout,
+rspamd_ssl_connect_fd(struct rspamd_ssl_connection *conn, int fd,
+					  const char *hostname, struct rspamd_io_ev *ev, ev_tstamp timeout,
 					  rspamd_ssl_handler_t handler, rspamd_ssl_error_handler_t err_handler,
 					  gpointer handler_data)
 {
-	gint ret;
+	int ret;
 	SSL_SESSION *session = NULL;
 
 	g_assert(conn != NULL);
@@ -689,7 +689,7 @@ rspamd_ssl_connect_fd(struct rspamd_ssl_connection *conn, gint fd,
 	}
 
 	/* We dup fd to allow graceful closing */
-	gint nfd = dup(fd);
+	int nfd = dup(fd);
 
 	if (nfd == -1) {
 		return FALSE;
@@ -775,7 +775,7 @@ gssize
 rspamd_ssl_read(struct rspamd_ssl_connection *conn, gpointer buf,
 				gsize buflen)
 {
-	gint ret;
+	int ret;
 	short what;
 	GError *err = NULL;
 
@@ -850,7 +850,7 @@ gssize
 rspamd_ssl_write(struct rspamd_ssl_connection *conn, gconstpointer buf,
 				 gsize buflen)
 {
-	gint ret;
+	int ret;
 	short what;
 	GError *err = NULL;
 
@@ -927,8 +927,8 @@ rspamd_ssl_writev(struct rspamd_ssl_connection *conn, struct iovec *iov,
 	 * Static is needed to avoid issue:
 	 * https://github.com/openssl/openssl/issues/6865
 	 */
-	static guchar ssl_buf[16384];
-	guchar *p;
+	static unsigned char ssl_buf[16384];
+	unsigned char *p;
 	struct iovec *cur;
 	gsize i, remain;
 
@@ -999,8 +999,8 @@ rspamd_init_ssl_ctx_common(void)
 {
 	struct rspamd_ssl_ctx *ret;
 	SSL_CTX *ssl_ctx;
-	gint ssl_options;
-	static const guint client_cache_size = 1024;
+	int ssl_options;
+	static const unsigned int client_cache_size = 1024;
 
 	rspamd_openssl_maybe_init();
 
@@ -1080,7 +1080,7 @@ void rspamd_openssl_maybe_init(void)
 		OPENSSL_config(NULL);
 #endif
 		if (RAND_status() == 0) {
-			guchar seed[128];
+			unsigned char seed[128];
 
 			/* Try to use ottery to seed rand */
 			ottery_rand_bytes(seed, sizeof(seed));

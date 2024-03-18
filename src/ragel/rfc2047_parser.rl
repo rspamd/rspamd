@@ -58,15 +58,15 @@
 %% write data;
 
 gboolean
-rspamd_rfc2047_parser (const gchar *in, gsize len, gint *pencoding,
-  const gchar **charset, gsize *charset_len,
-  const gchar **encoded, gsize *encoded_len)
+rspamd_rfc2047_parser (const char *in, gsize len, int *pencoding,
+  const char **charset, gsize *charset_len,
+  const char **encoded, gsize *encoded_len)
 {
   const char *p = in, *pe = in + len,
     *encoded_start = NULL, *encoded_end = NULL,
     *charset_start = NULL, *charset_end = NULL,
     *eof = in + len;
-  gint encoding = RSPAMD_RFC2047_QP, cs = 0;
+  int encoding = RSPAMD_RFC2047_QP, cs = 0;
 
   %% write init;
   %% write exec;

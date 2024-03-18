@@ -27,7 +27,7 @@ extern "C" {
  *	%[0][width][x][X]O		    off_t
  *	%[0][width]T			    time_t
  *	%[0][width][u][x|X|h|H|b|B]z	    ssize_t/size_t
- *	%[0][width][u][x|X|h|H|b|B]d	    gint/guint
+ *	%[0][width][u][x|X|h|H|b|B]d	    int/unsigned int
  *	%[0][width][u][x|X|h|H|b|B]l	    long
  *	%[0][width][u][x|X|h|H|b|B]D	    int32_t/uint32_t
  *	%[0][width][u][x|X|h|H|b|B]L	    int64_t/uint64_t
@@ -48,7 +48,7 @@ extern "C" {
  *	%*s					        length and string
  *	%Z						    '\0'
  *	%N						    '\n'
- *	%c						    gchar
+ *	%c						    char
  *	%t						    time_t
  *	%e                          GError *
  *	%%						    %
@@ -62,31 +62,31 @@ extern "C" {
  * @param ud opaque pointer
  * @return number of characters written
  */
-typedef glong (*rspamd_printf_append_func)(const gchar *buf, glong buflen,
+typedef glong (*rspamd_printf_append_func)(const char *buf, glong buflen,
 										   gpointer ud);
 
-glong rspamd_fprintf(FILE *f, const gchar *fmt, ...);
+glong rspamd_fprintf(FILE *f, const char *fmt, ...);
 
-glong rspamd_printf(const gchar *fmt, ...);
+glong rspamd_printf(const char *fmt, ...);
 
-glong rspamd_log_fprintf(FILE *f, const gchar *fmt, ...);
+glong rspamd_log_fprintf(FILE *f, const char *fmt, ...);
 
-glong rspamd_snprintf(gchar *buf, glong max, const gchar *fmt, ...);
+glong rspamd_snprintf(char *buf, glong max, const char *fmt, ...);
 
-gchar *rspamd_vsnprintf(gchar *buf, glong max, const gchar *fmt,
-						va_list args);
+char *rspamd_vsnprintf(char *buf, glong max, const char *fmt,
+					   va_list args);
 
-glong rspamd_printf_gstring(GString *s, const gchar *fmt, ...);
+glong rspamd_printf_gstring(GString *s, const char *fmt, ...);
 
-glong rspamd_vprintf_gstring(GString *s, const gchar *fmt, va_list args);
+glong rspamd_vprintf_gstring(GString *s, const char *fmt, va_list args);
 
-glong rspamd_printf_fstring(rspamd_fstring_t **s, const gchar *fmt, ...);
+glong rspamd_printf_fstring(rspamd_fstring_t **s, const char *fmt, ...);
 
-glong rspamd_vprintf_fstring(rspamd_fstring_t **s, const gchar *fmt, va_list args);
+glong rspamd_vprintf_fstring(rspamd_fstring_t **s, const char *fmt, va_list args);
 
 glong rspamd_vprintf_common(rspamd_printf_append_func func,
 							gpointer apd,
-							const gchar *fmt,
+							const char *fmt,
 							va_list args);
 
 #ifdef __cplusplus

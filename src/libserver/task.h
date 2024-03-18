@@ -145,9 +145,9 @@ enum rspamd_newlines_type;
 struct rspamd_message;
 
 struct rspamd_task_data_storage {
-	const gchar *begin;
+	const char *begin;
 	gsize len;
-	gchar *fpath;
+	char *fpath;
 };
 
 struct rspamd_request_header_chain {
@@ -158,8 +158,8 @@ struct rspamd_request_header_chain {
 __KHASH_TYPE(rspamd_req_headers_hash, rspamd_ftok_t *, struct rspamd_request_header_chain *);
 
 struct rspamd_lua_cached_entry {
-	gint ref;
-	guint id;
+	int ref;
+	unsigned int id;
 };
 
 KHASH_INIT(rspamd_task_lua_cache, char *, struct rspamd_lua_cached_entry, 1, kh_str_hash_func, kh_str_hash_equal);
@@ -170,18 +170,18 @@ KHASH_INIT(rspamd_task_lua_cache, char *, struct rspamd_lua_cached_entry, 1, kh_
 struct rspamd_task {
 	struct rspamd_worker *worker; /**< pointer to worker object						*/
 	enum rspamd_command cmd;      /**< command										*/
-	gint sock;                    /**< socket descriptor								*/
+	int sock;                     /**< socket descriptor								*/
 	uint32_t dns_requests;        /**< number of DNS requests per this task			*/
 	uint32_t flags;               /**< Bit flags										*/
 	uint32_t protocol_flags;
 	uint32_t processed_stages;                          /**< bits of stages that are processed			*/
-	gchar *helo;                                        /**< helo header value								*/
-	gchar *queue_id;                                    /**< queue id if specified							*/
+	char *helo;                                         /**< helo header value								*/
+	char *queue_id;                                     /**< queue id if specified							*/
 	rspamd_inet_addr_t *from_addr;                      /**< from addr for a task							*/
 	rspamd_inet_addr_t *client_addr;                    /**< address of connected socket					*/
-	gchar *deliver_to;                                  /**< address to deliver								*/
-	gchar *auth_user;                                   /**< SMTP authenticated user								*/
-	const gchar *hostname;                              /**< hostname reported by MTA						*/
+	char *deliver_to;                                   /**< address to deliver								*/
+	char *auth_user;                                    /**< SMTP authenticated user								*/
+	const char *hostname;                               /**< hostname reported by MTA						*/
 	khash_t(rspamd_req_headers_hash) * request_headers; /**< HTTP headers in a request						*/
 	struct rspamd_task_data_storage msg;                /**< message buffer									*/
 	struct rspamd_http_connection *http_conn;           /**< HTTP server connection							*/
@@ -218,7 +218,7 @@ struct rspamd_task {
 	ucl_object_t *settings;                          /**< Settings applied to task						*/
 	struct rspamd_config_settings_elt *settings_elt; /**< preprocessed settings id elt				*/
 
-	const gchar *classifier;               /**< Classifier to learn (if needed)				*/
+	const char *classifier;                /**< Classifier to learn (if needed)				*/
 	struct rspamd_lang_detector *lang_det; /**< Languages detector								*/
 	struct rspamd_message *message;
 };
@@ -254,14 +254,14 @@ gboolean rspamd_task_fin(void *arg);
  */
 gboolean rspamd_task_load_message(struct rspamd_task *task,
 								  struct rspamd_http_message *msg,
-								  const gchar *start, gsize len);
+								  const char *start, gsize len);
 
 /**
  * Process task
  * @param task task to process
  * @return task has been successfully parsed and processed
  */
-gboolean rspamd_task_process(struct rspamd_task *task, guint stages);
+gboolean rspamd_task_process(struct rspamd_task *task, unsigned int stages);
 
 /**
  * Return address of sender or NULL
@@ -278,7 +278,7 @@ struct rspamd_email_address *rspamd_task_get_sender(struct rspamd_task *task);
  * @param task
  * @return
  */
-const gchar *rspamd_task_get_principal_recipient(struct rspamd_task *task);
+const char *rspamd_task_get_principal_recipient(struct rspamd_task *task);
 
 /**
  * Add a recipient for a task
@@ -286,7 +286,7 @@ const gchar *rspamd_task_get_principal_recipient(struct rspamd_task *task);
  * @param rcpt string representation of recipient address
  * @return TRUE if an address has been parsed and added
  */
-gboolean rspamd_task_add_recipient(struct rspamd_task *task, const gchar *rcpt);
+gboolean rspamd_task_add_recipient(struct rspamd_task *task, const char *rcpt);
 
 /**
  * Learn specified statfile with message in a task
@@ -297,7 +297,7 @@ gboolean rspamd_task_add_recipient(struct rspamd_task *task, const gchar *rcpt);
  */
 gboolean rspamd_learn_task_spam(struct rspamd_task *task,
 								gboolean is_spam,
-								const gchar *classifier,
+								const char *classifier,
 								GError **err);
 
 /**
@@ -308,8 +308,8 @@ gboolean rspamd_learn_task_spam(struct rspamd_task *task,
  */
 struct rspamd_scan_result;
 
-gdouble rspamd_task_get_required_score(struct rspamd_task *task,
-									   struct rspamd_scan_result *m);
+double rspamd_task_get_required_score(struct rspamd_task *task,
+									  struct rspamd_scan_result *m);
 
 /**
  * Returns the first header as value for a header
@@ -318,7 +318,7 @@ gdouble rspamd_task_get_required_score(struct rspamd_task *task,
  * @return
  */
 rspamd_ftok_t *rspamd_task_get_request_header(struct rspamd_task *task,
-											  const gchar *name);
+											  const char *name);
 
 /**
  * Returns all headers with the specific name
@@ -328,7 +328,7 @@ rspamd_ftok_t *rspamd_task_get_request_header(struct rspamd_task *task,
  */
 struct rspamd_request_header_chain *rspamd_task_get_request_header_multiple(
 	struct rspamd_task *task,
-	const gchar *name);
+	const char *name);
 
 /**
  * Adds a new request header to task (name and value should be mapped to fstring)
@@ -350,8 +350,8 @@ void rspamd_task_write_log(struct rspamd_task *task);
  * @param key
  * @param value
  */
-void rspamd_task_profile_set(struct rspamd_task *task, const gchar *key,
-							 gdouble value);
+void rspamd_task_profile_set(struct rspamd_task *task, const char *key,
+							 double value);
 
 /**
  * Get value for a specific profiling key
@@ -359,7 +359,7 @@ void rspamd_task_profile_set(struct rspamd_task *task, const gchar *key,
  * @param key
  * @return
  */
-gdouble *rspamd_task_profile_get(struct rspamd_task *task, const gchar *key);
+double *rspamd_task_profile_get(struct rspamd_task *task, const char *key);
 
 /**
  * Sets finishing time for a task if not yet set
@@ -373,7 +373,7 @@ gboolean rspamd_task_set_finish_time(struct rspamd_task *task);
  * @param stg
  * @return
  */
-const gchar *rspamd_task_stage_name(enum rspamd_task_stage stg);
+const char *rspamd_task_stage_name(enum rspamd_task_stage stg);
 
 /*
  * Called on forced timeout

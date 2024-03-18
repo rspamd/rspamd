@@ -48,7 +48,7 @@ rspamd_email_address_unescape(struct rspamd_email_address *addr)
 }
 
 struct rspamd_email_address *
-rspamd_email_address_from_smtp(const gchar *str, guint len)
+rspamd_email_address_from_smtp(const char *str, unsigned int len)
 {
 	struct rspamd_email_address addr, *ret;
 	gsize nlen;
@@ -73,8 +73,8 @@ rspamd_email_address_from_smtp(const gchar *str, guint len)
 			nlen = ret->domain_len + ret->user_len + 2;
 			ret->addr = g_malloc(nlen + 1);
 			ret->addr_len = rspamd_snprintf((char *) ret->addr, nlen, "%*s@%*s",
-											(gint) ret->user_len, ret->user,
-											(gint) ret->domain_len, ret->domain);
+											(int) ret->user_len, ret->user,
+											(int) ret->domain_len, ret->domain);
 			ret->flags |= RSPAMD_EMAIL_ADDR_ADDR_ALLOCATED;
 		}
 
@@ -106,7 +106,7 @@ rspamd_email_address_add(rspamd_mempool_t *pool,
 						 GString *name)
 {
 	struct rspamd_email_address *elt;
-	guint nlen;
+	unsigned int nlen;
 
 	elt = g_malloc0(sizeof(*elt));
 	rspamd_mempool_notify_alloc(pool, sizeof(*elt));
@@ -134,8 +134,8 @@ rspamd_email_address_add(rspamd_mempool_t *pool,
 		elt->addr = g_malloc(nlen + 1);
 		rspamd_mempool_notify_alloc(pool, nlen + 1);
 		elt->addr_len = rspamd_snprintf((char *) elt->addr, nlen, "%*s@%*s",
-										(gint) elt->user_len, elt->user,
-										(gint) elt->domain_len, elt->domain);
+										(int) elt->user_len, elt->user,
+										(int) elt->domain_len, elt->domain);
 		elt->flags |= RSPAMD_EMAIL_ADDR_ADDR_ALLOCATED;
 	}
 
@@ -155,7 +155,7 @@ static gboolean
 rspamd_email_address_parse_heuristic(const char *data, size_t len,
 									 struct rspamd_email_address *addr)
 {
-	const gchar *p = data, *at = NULL, *end = data + len;
+	const char *p = data, *at = NULL, *end = data + len;
 	gboolean ret = FALSE;
 
 	memset(addr, 0, sizeof(*addr));
@@ -199,11 +199,11 @@ rspamd_email_address_parse_heuristic(const char *data, size_t len,
 }
 
 static inline int
-rspamd_email_address_check_and_add(const gchar *start, gsize len,
+rspamd_email_address_check_and_add(const char *start, gsize len,
 								   GPtrArray *res,
 								   rspamd_mempool_t *pool,
 								   GString *ns,
-								   gint max_elements)
+								   int max_elements)
 {
 	struct rspamd_email_address addr;
 
@@ -241,17 +241,17 @@ rspamd_email_address_check_and_add(const gchar *start, gsize len,
 }
 
 GPtrArray *
-rspamd_email_address_from_mime(rspamd_mempool_t *pool, const gchar *hdr,
-							   guint len,
+rspamd_email_address_from_mime(rspamd_mempool_t *pool, const char *hdr,
+							   unsigned int len,
 							   GPtrArray *src,
-							   gint max_elements)
+							   int max_elements)
 {
 	GPtrArray *res = src;
 	gboolean seen_at = FALSE, seen_obrace = FALSE;
 
-	const gchar *p = hdr, *end = hdr + len, *c = hdr, *t;
+	const char *p = hdr, *end = hdr + len, *c = hdr, *t;
 	GString *ns, *cpy;
-	gint obraces, ebraces;
+	int obraces, ebraces;
 	enum {
 		parse_name = 0,
 		parse_quoted,
@@ -343,7 +343,7 @@ rspamd_email_address_from_mime(rspamd_mempool_t *pool, const gchar *hdr,
 			if (*p == '"') {
 				/* We need to strip last spaces and update `ns` */
 				if (p > c) {
-					guint nspaces = 0;
+					unsigned int nspaces = 0;
 
 					t = p - 1;
 
@@ -551,7 +551,7 @@ end:
 void rspamd_email_address_list_destroy(gpointer ptr)
 {
 	GPtrArray *ar = ptr;
-	guint i;
+	unsigned int i;
 	struct rspamd_email_address *addr;
 
 	PTR_ARRAY_FOREACH(ar, i, addr)

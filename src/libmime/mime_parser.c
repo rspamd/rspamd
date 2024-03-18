@@ -29,14 +29,14 @@
 
 struct rspamd_mime_parser_lib_ctx {
 	struct rspamd_multipattern *mp_boundary;
-	guchar hkey[rspamd_cryptobox_SIPKEYBYTES]; /* Key for hashing */
-	guint key_usages;
+	unsigned char hkey[rspamd_cryptobox_SIPKEYBYTES]; /* Key for hashing */
+	unsigned int key_usages;
 };
 
 struct rspamd_mime_parser_lib_ctx *lib_ctx = NULL;
 
-static const guint max_nested = 64;
-static const guint max_key_usages = 10000;
+static const unsigned int max_nested = 64;
+static const unsigned int max_key_usages = 10000;
 
 #define msg_debug_mime(...) rspamd_conditional_debug_fast(NULL, task->from_addr,                                \
 														  rspamd_mime_log_id, "mime", task->task_pool->tag.uid, \
@@ -53,17 +53,17 @@ struct rspamd_mime_boundary {
 	goffset start;
 	uint64_t hash;
 	uint64_t closed_hash;
-	gint flags;
+	int flags;
 };
 
 struct rspamd_mime_parser_ctx {
 	GPtrArray *stack;   /* Stack of parts */
 	GArray *boundaries; /* Boundaries found in the whole message */
-	const gchar *start;
-	const gchar *pos;
-	const gchar *end;
+	const char *start;
+	const char *pos;
+	const char *end;
 	struct rspamd_task *task;
-	guint nesting;
+	unsigned int nesting;
 };
 
 static enum rspamd_mime_parse_error
@@ -87,7 +87,7 @@ static enum rspamd_mime_parse_error
 rspamd_mime_process_multipart_node(struct rspamd_task *task,
 								   struct rspamd_mime_parser_ctx *st,
 								   struct rspamd_mime_part *multipart,
-								   const gchar *start, const gchar *end,
+								   const char *start, const char *end,
 								   gboolean is_finished,
 								   GError **err);
 
@@ -99,10 +99,10 @@ rspamd_mime_parser_quark(void)
 	return g_quark_from_static_string("mime-parser");
 }
 
-const gchar *
+const char *
 rspamd_cte_to_string(enum rspamd_cte ct)
 {
-	const gchar *ret = "unknown";
+	const char *ret = "unknown";
 
 	switch (ct) {
 	case RSPAMD_CTE_7BIT:
@@ -128,7 +128,7 @@ rspamd_cte_to_string(enum rspamd_cte ct)
 }
 
 enum rspamd_cte
-rspamd_cte_from_string(const gchar *str)
+rspamd_cte_from_string(const char *str)
 {
 	enum rspamd_cte ret = RSPAMD_CTE_UNKNOWN;
 
@@ -178,7 +178,7 @@ rspamd_mime_parser_init_lib(void)
 }
 
 static enum rspamd_cte
-rspamd_mime_parse_cte(const gchar *in, gsize len)
+rspamd_mime_parse_cte(const char *in, gsize len)
 {
 	uint64_t h;
 	enum rspamd_cte ret = RSPAMD_CTE_UNKNOWN;
@@ -216,15 +216,15 @@ static enum rspamd_cte
 rspamd_mime_part_get_cte_heuristic(struct rspamd_task *task,
 								   struct rspamd_mime_part *part)
 {
-	const guint check_len = 128;
-	guint real_len, nspaces = 0, neqsign = 0, n8bit = 0, nqpencoded = 0,
-					padeqsign = 0, nupper = 0, nlower = 0;
+	const unsigned int check_len = 128;
+	unsigned int real_len, nspaces = 0, neqsign = 0, n8bit = 0, nqpencoded = 0,
+						   padeqsign = 0, nupper = 0, nlower = 0;
 	gboolean b64_chars = TRUE;
-	const guchar *p, *end;
+	const unsigned char *p, *end;
 	enum rspamd_cte ret = RSPAMD_CTE_UNKNOWN;
 
 	real_len = MIN(check_len, part->raw_data.len);
-	p = (const guchar *) part->raw_data.begin;
+	p = (const unsigned char *) part->raw_data.begin;
 	end = p + part->raw_data.len;
 
 	while (p < end && g_ascii_isspace(*p)) {
@@ -232,7 +232,7 @@ rspamd_mime_part_get_cte_heuristic(struct rspamd_task *task,
 	}
 
 	if (end - p > sizeof("begin-base64 ")) {
-		const guchar *uue_start;
+		const unsigned char *uue_start;
 
 		if (memcmp(p, "begin ", sizeof("begin ") - 1) == 0) {
 			uue_start = p + sizeof("begin ") - 1;
@@ -342,7 +342,7 @@ rspamd_mime_part_get_cte_heuristic(struct rspamd_task *task,
 		}
 		else {
 
-			if (((end - (const guchar *) part->raw_data.begin) + padeqsign) % 4 == 0) {
+			if (((end - (const unsigned char *) part->raw_data.begin) + padeqsign) % 4 == 0) {
 				if (padeqsign == 0) {
 					/*
 					 * It can be either base64 or plain text, hard to say
@@ -421,7 +421,7 @@ rspamd_mime_part_get_cte(struct rspamd_task *task,
 		DL_FOREACH(hdr, cur)
 		{
 			gsize hlen;
-			gchar lc_buf[128];
+			char lc_buf[128];
 
 			hlen = rspamd_snprintf(lc_buf, sizeof(lc_buf), "%s", cur->value);
 			rspamd_str_lc(lc_buf, hlen);
@@ -571,7 +571,7 @@ rspamd_mime_part_get_cd(struct rspamd_task *task, struct rspamd_mime_part *part)
 void rspamd_mime_parser_calc_digest(struct rspamd_mime_part *part)
 {
 	/* Blake2b applied to string 'rspamd' */
-	static const guchar hash_key[] = {
+	static const unsigned char hash_key[] = {
 		0xef,
 		0x43,
 		0xae,
@@ -815,8 +815,8 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 							 * Since ASN.1 structures are freed, we need to copy
 							 * the content
 							 */
-							gchar *cpy = rspamd_mempool_alloc(task->task_pool,
-															  p7_signed_content->d.data->length);
+							char *cpy = rspamd_mempool_alloc(task->task_pool,
+															 p7_signed_content->d.data->length);
 							memcpy(cpy, p7_signed_content->d.data->data,
 								   p7_signed_content->d.data->length);
 							ret = rspamd_mime_process_multipart_node(task,
@@ -849,7 +849,7 @@ struct rspamd_mime_multipart_cbdata {
 	struct rspamd_task *task;
 	struct rspamd_mime_part *multipart;
 	struct rspamd_mime_parser_ctx *st;
-	const gchar *part_start;
+	const char *part_start;
 	rspamd_ftok_t *cur_boundary;
 	uint64_t bhash;
 	GError **err;
@@ -859,7 +859,7 @@ static enum rspamd_mime_parse_error
 rspamd_mime_process_multipart_node(struct rspamd_task *task,
 								   struct rspamd_mime_parser_ctx *st,
 								   struct rspamd_mime_part *multipart,
-								   const gchar *start, const gchar *end,
+								   const char *start, const char *end,
 								   gboolean is_finished,
 								   GError **err)
 {
@@ -871,7 +871,7 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 	enum rspamd_mime_parse_error ret = RSPAMD_MIME_PARSE_FATAL;
 
 
-	str.str = (gchar *) start;
+	str.str = (char *) start;
 	str.len = end - start;
 
 	if (*start == '\n' || *start == '\r') {
@@ -885,7 +885,7 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 
 		if (!is_finished) {
 			/* Ignore garbage */
-			const gchar *p = start;
+			const char *p = start;
 			gboolean seen_something = FALSE;
 
 			while (p < end) {
@@ -1009,7 +1009,7 @@ rspamd_mime_parse_multipart_cb(struct rspamd_task *task,
 							   struct rspamd_mime_multipart_cbdata *cb,
 							   struct rspamd_mime_boundary *b)
 {
-	const gchar *pos = st->start + b->boundary;
+	const char *pos = st->start + b->boundary;
 	enum rspamd_mime_parse_error ret;
 
 	task = cb->task;
@@ -1053,7 +1053,7 @@ rspamd_multipart_boundaries_filter(struct rspamd_task *task,
 {
 	struct rspamd_mime_boundary *cur;
 	goffset last_offset;
-	guint i, sel = 0;
+	unsigned int i, sel = 0;
 	enum rspamd_mime_parse_error ret;
 
 	last_offset = (multipart->raw_data.begin - st->start) +
@@ -1183,7 +1183,7 @@ rspamd_mime_parse_multipart_part(struct rspamd_task *task,
 	if (part->ct->boundary.len > 0) {
 		/* We know our boundary */
 		cbdata.cur_boundary = &part->ct->boundary;
-		rspamd_cryptobox_siphash((guchar *) &cbdata.bhash,
+		rspamd_cryptobox_siphash((unsigned char *) &cbdata.bhash,
 								 cbdata.cur_boundary->begin, cbdata.cur_boundary->len,
 								 lib_ctx->hkey);
 		msg_debug_mime("hash: %T -> %L", cbdata.cur_boundary, cbdata.bhash);
@@ -1203,16 +1203,16 @@ rspamd_mime_parse_multipart_part(struct rspamd_task *task,
 }
 
 /* Process boundary like structures in a message */
-static gint
+static int
 rspamd_mime_preprocess_cb(struct rspamd_multipattern *mp,
-						  guint strnum,
-						  gint match_start,
-						  gint match_pos,
-						  const gchar *text,
+						  unsigned int strnum,
+						  int match_start,
+						  int match_pos,
+						  const char *text,
 						  gsize len,
 						  void *context)
 {
-	const gchar *end = text + len, *p = text + match_pos, *bend;
+	const char *end = text + len, *p = text + match_pos, *bend;
 	gsize blen;
 	gboolean closing = FALSE;
 	struct rspamd_mime_boundary b;
@@ -1281,7 +1281,7 @@ rspamd_mime_preprocess_cb(struct rspamd_multipattern *mp,
 			b.start = bend - st->start;
 
 			/* Small optimisation as boundaries are usually short strings */
-			gchar *lc_copy, lc_copy_buf[128];
+			char *lc_copy, lc_copy_buf[128];
 
 			if (blen + 2 < sizeof(lc_copy_buf)) {
 				lc_copy = lc_copy_buf;
@@ -1299,18 +1299,18 @@ rspamd_mime_preprocess_cb(struct rspamd_multipattern *mp,
 				rspamd_str_lc(lc_copy, blen);
 			}
 
-			rspamd_cryptobox_siphash((guchar *) &b.hash, lc_copy, blen,
+			rspamd_cryptobox_siphash((unsigned char *) &b.hash, lc_copy, blen,
 									 lib_ctx->hkey);
 			msg_debug_mime("normal hash: %*s -> %L, %d boffset, %d data offset",
-						   (gint) blen, lc_copy, b.hash, (int) b.boundary, (int) b.start);
+						   (int) blen, lc_copy, b.hash, (int) b.boundary, (int) b.start);
 
 			if (closing) {
 				b.flags = RSPAMD_MIME_BOUNDARY_FLAG_CLOSED;
-				rspamd_cryptobox_siphash((guchar *) &b.closed_hash, lc_copy,
+				rspamd_cryptobox_siphash((unsigned char *) &b.closed_hash, lc_copy,
 										 blen + 2,
 										 lib_ctx->hkey);
 				msg_debug_mime("closing hash: %*s -> %L, %d boffset, %d data offset",
-							   (gint) blen + 2, lc_copy,
+							   (int) blen + 2, lc_copy,
 							   b.closed_hash,
 							   (int) b.boundary, (int) b.start);
 			}
@@ -1335,7 +1335,7 @@ rspamd_mime_parser_headers_heuristic(GString *input, goffset *body_start)
 {
 	const gsize default_max_len = 76;
 	gsize max_len = MIN(input->len, default_max_len);
-	const gchar *p, *end;
+	const char *p, *end;
 	enum {
 		st_before_colon = 0,
 		st_colon,
@@ -1434,11 +1434,11 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 {
 	struct rspamd_content_type *ct, *sel = NULL;
 	struct rspamd_mime_header *hdr = NULL, *cur;
-	const gchar *pbegin, *p;
+	const char *pbegin, *p;
 	gsize plen, len;
 	struct rspamd_mime_part *npart;
 	goffset hdr_pos, body_pos;
-	guint i;
+	unsigned int i;
 	enum rspamd_mime_parse_error ret = RSPAMD_MIME_PARSE_OK;
 	GString str;
 	struct rspamd_mime_parser_ctx *nst = st;
@@ -1458,7 +1458,7 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 		p = task->msg.begin;
 		len = task->msg.len;
 
-		str.str = (gchar *) p;
+		str.str = (char *) p;
 		str.len = len;
 
 		hdr_pos = rspamd_string_find_eoh(&str, &body_pos);
@@ -1545,7 +1545,7 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 		nst->nesting = st->nesting;
 		st->nesting++;
 
-		str.str = (gchar *) part->parsed_data.begin;
+		str.str = (char *) part->parsed_data.begin;
 		str.len = part->parsed_data.len;
 
 		hdr_pos = rspamd_string_find_eoh(&str, &body_pos);
@@ -1660,7 +1660,7 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 											   *end_boundary = NULL;
 		goffset cur_offset = nst->pos - nst->start,
 				end_offset = st->end - st->start;
-		guint sel_idx = 0;
+		unsigned int sel_idx = 0;
 
 		for (;;) {
 			start_boundary = NULL;
@@ -1679,7 +1679,7 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 			}
 
 			if (start_boundary) {
-				const gchar *start, *end;
+				const char *start, *end;
 
 				if (nst->boundaries->len > sel_idx + 1) {
 					end_boundary = &g_array_index(nst->boundaries,

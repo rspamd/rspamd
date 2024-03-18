@@ -90,10 +90,10 @@ rspamd_http_context_new_default(struct rspamd_config *cfg,
 	struct rspamd_http_context *ctx;
 
 	static const int default_kp_size = 1024;
-	static const gdouble default_rotate_time = 120;
-	static const gdouble default_keepalive_interval = 65;
-	static const gchar *default_user_agent = "rspamd-" RSPAMD_VERSION_FULL;
-	static const gchar *default_server_hdr = "rspamd/" RSPAMD_VERSION_FULL;
+	static const double default_rotate_time = 120;
+	static const double default_keepalive_interval = 65;
+	static const char *default_user_agent = "rspamd-" RSPAMD_VERSION_FULL;
+	static const char *default_server_hdr = "rspamd/" RSPAMD_VERSION_FULL;
 
 	ctx = g_malloc0(sizeof(*ctx));
 	ctx->config.kp_cache_size_client = default_kp_size;
@@ -122,7 +122,7 @@ rspamd_http_context_new_default(struct rspamd_config *cfg,
 
 static void
 rspamd_http_context_parse_proxy(struct rspamd_http_context *ctx,
-								const gchar *name,
+								const char *name,
 								struct upstream_list **pls)
 {
 	struct http_parser_url u;
@@ -401,7 +401,7 @@ bool rspamd_keep_alive_key_equal(struct rspamd_keepalive_hash_key *k1,
 struct rspamd_http_connection *
 rspamd_http_context_check_keepalive(struct rspamd_http_context *ctx,
 									const rspamd_inet_addr_t *addr,
-									const gchar *host,
+									const char *host,
 									bool is_ssl)
 {
 	struct rspamd_keepalive_hash_key hk, *phk;
@@ -412,7 +412,7 @@ rspamd_http_context_check_keepalive(struct rspamd_http_context *ctx,
 	}
 
 	hk.addr = (rspamd_inet_addr_t *) addr;
-	hk.host = (gchar *) host;
+	hk.host = (char *) host;
 	hk.port = rspamd_inet_address_get_port(addr);
 	hk.is_ssl = is_ssl;
 
@@ -427,8 +427,8 @@ rspamd_http_context_check_keepalive(struct rspamd_http_context *ctx,
 		if (g_queue_get_length(conns) > 0) {
 			struct rspamd_http_keepalive_cbdata *cbd;
 			struct rspamd_http_connection *conn;
-			gint err;
-			socklen_t len = sizeof(gint);
+			int err;
+			socklen_t len = sizeof(int);
 
 			cbd = g_queue_pop_head(conns);
 			rspamd_ev_watcher_stop(ctx->event_loop, &cbd->ev);
@@ -475,7 +475,7 @@ rspamd_http_context_check_keepalive(struct rspamd_http_context *ctx,
 
 const rspamd_inet_addr_t *
 rspamd_http_context_has_keepalive(struct rspamd_http_context *ctx,
-								  const gchar *host,
+								  const char *host,
 								  unsigned port,
 								  bool is_ssl)
 {
@@ -486,7 +486,7 @@ rspamd_http_context_has_keepalive(struct rspamd_http_context *ctx,
 		ctx = rspamd_http_context_default();
 	}
 
-	hk.host = (gchar *) host;
+	hk.host = (char *) host;
 	hk.port = port;
 	hk.is_ssl = is_ssl;
 
@@ -507,14 +507,14 @@ rspamd_http_context_has_keepalive(struct rspamd_http_context *ctx,
 void rspamd_http_context_prepare_keepalive(struct rspamd_http_context *ctx,
 										   struct rspamd_http_connection *conn,
 										   const rspamd_inet_addr_t *addr,
-										   const gchar *host,
+										   const char *host,
 										   bool is_ssl)
 {
 	struct rspamd_keepalive_hash_key hk, *phk;
 	khiter_t k;
 
 	hk.addr = (rspamd_inet_addr_t *) addr;
-	hk.host = (gchar *) host;
+	hk.host = (char *) host;
 	hk.is_ssl = is_ssl;
 	hk.port = rspamd_inet_address_get_port(addr);
 
@@ -530,7 +530,7 @@ void rspamd_http_context_prepare_keepalive(struct rspamd_http_context *ctx,
 	else {
 		/* Create new one */
 		GQueue empty_init = G_QUEUE_INIT;
-		gint r;
+		int r;
 
 		phk = g_malloc(sizeof(*phk));
 		phk->conns = empty_init;
@@ -550,7 +550,7 @@ void rspamd_http_context_prepare_keepalive(struct rspamd_http_context *ctx,
 }
 
 static void
-rspamd_http_keepalive_handler(gint fd, short what, gpointer ud)
+rspamd_http_keepalive_handler(int fd, short what, gpointer ud)
 {
 	struct rspamd_http_keepalive_cbdata *cbdata =
 		(struct rspamd_http_keepalive_cbdata *) ud; /*
@@ -607,7 +607,7 @@ void rspamd_http_context_push_keepalive(struct rspamd_http_context *ctx,
 										struct ev_loop *event_loop)
 {
 	struct rspamd_http_keepalive_cbdata *cbdata;
-	gdouble timeout = ctx->config.keepalive_interval;
+	double timeout = ctx->config.keepalive_interval;
 
 	g_assert(conn->keepalive_hash_key != NULL);
 

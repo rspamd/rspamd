@@ -18,22 +18,22 @@
 #include "libutil/printf.h"
 #include "libutil/util.h"
 
-static const gchar *http_week[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-static const gchar *http_month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-									"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+static const char *http_week[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+static const char *http_month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+								   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
 /*
  * Obtained from nginx
  * Copyright (C) Igor Sysoev
  */
-static guint mday[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+static unsigned int mday[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
 time_t
-rspamd_http_parse_date(const gchar *header, gsize len)
+rspamd_http_parse_date(const char *header, gsize len)
 {
-	const gchar *p, *end;
-	gint month;
-	guint day, year, hour, min, sec;
+	const char *p, *end;
+	int month;
+	unsigned int day, year, hour, min, sec;
 	uint64_t time;
 	enum {
 		no = 0,
@@ -282,7 +282,7 @@ rspamd_http_parse_date(const gchar *header, gsize len)
 	return (time_t) time;
 }
 
-glong rspamd_http_date_format(gchar *buf, gsize len, time_t time)
+glong rspamd_http_date_format(char *buf, gsize len, time_t time)
 {
 	struct tm tms;
 

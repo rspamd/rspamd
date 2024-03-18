@@ -39,9 +39,9 @@ apply_dynamic_conf(const ucl_object_t *top, struct rspamd_config *cfg)
 	enum rspamd_action_type test_act;
 	const ucl_object_t *cur_elt, *cur_nm, *it_val;
 	ucl_object_iter_t it = NULL;
-	const gchar *name;
-	gdouble nscore;
-	static const guint priority = 3;
+	const char *name;
+	double nscore;
+	static const unsigned int priority = 3;
 
 	while ((cur_elt = ucl_object_iterate(top, &it, true))) {
 		if (ucl_object_type(cur_elt) != UCL_OBJECT) {
@@ -143,9 +143,9 @@ apply_dynamic_conf(const ucl_object_t *top, struct rspamd_config *cfg)
 }
 
 /* Callbacks for reading json dynamic rules */
-static gchar *
-json_config_read_cb(gchar *chunk,
-					gint len,
+static char *
+json_config_read_cb(char *chunk,
+					int len,
 					struct map_cb_data *data,
 					gboolean final)
 {
@@ -296,8 +296,8 @@ gboolean
 dump_dynamic_config(struct rspamd_config *cfg)
 {
 	struct stat st;
-	gchar *dir, pathbuf[PATH_MAX];
-	gint fd;
+	char *dir, pathbuf[PATH_MAX];
+	int fd;
 
 	if (cfg->dynamic_conf == NULL || cfg->current_dynamic_conf == NULL) {
 		/* No dynamic conf has been specified, so do not try to dump it */
@@ -377,7 +377,7 @@ dump_dynamic_config(struct rspamd_config *cfg)
 }
 
 static ucl_object_t *
-new_dynamic_metric(const gchar *metric_name, ucl_object_t *top)
+new_dynamic_metric(const char *metric_name, ucl_object_t *top)
 {
 	ucl_object_t *metric;
 
@@ -396,7 +396,7 @@ new_dynamic_metric(const gchar *metric_name, ucl_object_t *top)
 }
 
 static ucl_object_t *
-dynamic_metric_find_elt(const ucl_object_t *arr, const gchar *name)
+dynamic_metric_find_elt(const ucl_object_t *arr, const char *name)
 {
 	ucl_object_iter_t it = NULL;
 	const ucl_object_t *cur, *n;
@@ -421,7 +421,7 @@ dynamic_metric_find_elt(const ucl_object_t *arr, const gchar *name)
 }
 
 static ucl_object_t *
-dynamic_metric_find_metric(const ucl_object_t *arr, const gchar *metric)
+dynamic_metric_find_metric(const ucl_object_t *arr, const char *metric)
 {
 	ucl_object_iter_t it = NULL;
 	const ucl_object_t *cur, *n;
@@ -446,7 +446,7 @@ dynamic_metric_find_metric(const ucl_object_t *arr, const gchar *metric)
 }
 
 static ucl_object_t *
-new_dynamic_elt(ucl_object_t *arr, const gchar *name, gdouble value)
+new_dynamic_elt(ucl_object_t *arr, const char *name, double value)
 {
 	ucl_object_t *n;
 
@@ -461,13 +461,13 @@ new_dynamic_elt(ucl_object_t *arr, const gchar *name, gdouble value)
 	return n;
 }
 
-static gint
+static int
 rspamd_maybe_add_lua_dynsym(struct rspamd_config *cfg,
-							const gchar *sym,
-							gdouble score)
+							const char *sym,
+							double score)
 {
 	lua_State *L = cfg->lua_state;
-	gint ret = -1;
+	int ret = -1;
 	struct rspamd_config **pcfg;
 
 	lua_getglobal(L, "rspamd_plugins");
@@ -509,13 +509,13 @@ rspamd_maybe_add_lua_dynsym(struct rspamd_config *cfg,
 	return ret;
 }
 
-static gint
+static int
 rspamd_maybe_add_lua_dynact(struct rspamd_config *cfg,
-							const gchar *action,
-							gdouble score)
+							const char *action,
+							double score)
 {
 	lua_State *L = cfg->lua_state;
-	gint ret = -1;
+	int ret = -1;
 	struct rspamd_config **pcfg;
 
 	lua_getglobal(L, "rspamd_plugins");
@@ -567,12 +567,12 @@ rspamd_maybe_add_lua_dynact(struct rspamd_config *cfg,
  */
 gboolean
 add_dynamic_symbol(struct rspamd_config *cfg,
-				   const gchar *metric_name,
-				   const gchar *symbol,
-				   gdouble value)
+				   const char *metric_name,
+				   const char *symbol,
+				   double value)
 {
 	ucl_object_t *metric, *syms;
-	gint ret;
+	int ret;
 
 	if ((ret = rspamd_maybe_add_lua_dynsym(cfg, symbol, value)) != -1) {
 		return ret == 0 ? FALSE : TRUE;
@@ -609,8 +609,8 @@ add_dynamic_symbol(struct rspamd_config *cfg,
 
 gboolean
 remove_dynamic_symbol(struct rspamd_config *cfg,
-					  const gchar *metric_name,
-					  const gchar *symbol)
+					  const char *metric_name,
+					  const char *symbol)
 {
 	ucl_object_t *metric, *syms;
 	gboolean ret = FALSE;
@@ -659,13 +659,13 @@ remove_dynamic_symbol(struct rspamd_config *cfg,
  */
 gboolean
 add_dynamic_action(struct rspamd_config *cfg,
-				   const gchar *metric_name,
-				   guint action,
-				   gdouble value)
+				   const char *metric_name,
+				   unsigned int action,
+				   double value)
 {
 	ucl_object_t *metric, *acts;
-	const gchar *action_name = rspamd_action_to_str(action);
-	gint ret;
+	const char *action_name = rspamd_action_to_str(action);
+	int ret;
 
 	if ((ret = rspamd_maybe_add_lua_dynact(cfg, action_name, value)) != -1) {
 		return ret == 0 ? FALSE : TRUE;
@@ -702,11 +702,11 @@ add_dynamic_action(struct rspamd_config *cfg,
 
 gboolean
 remove_dynamic_action(struct rspamd_config *cfg,
-					  const gchar *metric_name,
-					  guint action)
+					  const char *metric_name,
+					  unsigned int action)
 {
 	ucl_object_t *metric, *acts;
-	const gchar *action_name = rspamd_action_to_str(action);
+	const char *action_name = rspamd_action_to_str(action);
 	gboolean ret = FALSE;
 
 	if (cfg->dynamic_conf == NULL) {

@@ -57,7 +57,7 @@ struct rspamd_re_capture {
  * @param err error pointer set if compilation failed
  * @return new regexp object
  */
-rspamd_regexp_t *rspamd_regexp_new(const gchar *pattern, const gchar *flags,
+rspamd_regexp_t *rspamd_regexp_new(const char *pattern, const char *flags,
 								   GError **err);
 
 /**
@@ -67,7 +67,7 @@ rspamd_regexp_t *rspamd_regexp_new(const gchar *pattern, const gchar *flags,
  * @param err error pointer set if compilation failed
  * @return new regexp object
  */
-rspamd_regexp_t *rspamd_regexp_new_len(const gchar *pattern, gsize len, const gchar *flags,
+rspamd_regexp_t *rspamd_regexp_new_len(const char *pattern, gsize len, const char *flags,
 									   GError **err);
 
 /**
@@ -82,8 +82,8 @@ rspamd_regexp_t *rspamd_regexp_new_len(const gchar *pattern, gsize len, const gc
  * @return
  */
 gboolean rspamd_regexp_search(const rspamd_regexp_t *re,
-							  const gchar *text, gsize len,
-							  const gchar **start, const gchar **end, gboolean raw,
+							  const char *text, gsize len,
+							  const char **start, const char **end, gboolean raw,
 							  GArray *captures);
 
 
@@ -95,7 +95,7 @@ gboolean rspamd_regexp_search(const rspamd_regexp_t *re,
  * @return
  */
 gboolean rspamd_regexp_match(const rspamd_regexp_t *re,
-							 const gchar *text, gsize len, gboolean raw);
+							 const char *text, gsize len, gboolean raw);
 
 /**
  * Increase refcount for a regexp object
@@ -139,27 +139,27 @@ const char *rspamd_regexp_get_pattern(const rspamd_regexp_t *re);
 /**
  * Get PCRE flags for the regexp
  */
-guint rspamd_regexp_get_pcre_flags(const rspamd_regexp_t *re);
+unsigned int rspamd_regexp_get_pcre_flags(const rspamd_regexp_t *re);
 
 /**
  * Get rspamd flags for the regexp
  */
-guint rspamd_regexp_get_flags(const rspamd_regexp_t *re);
+unsigned int rspamd_regexp_get_flags(const rspamd_regexp_t *re);
 
 /**
  * Set rspamd flags for the regexp
  */
-guint rspamd_regexp_set_flags(rspamd_regexp_t *re, guint new_flags);
+unsigned int rspamd_regexp_set_flags(rspamd_regexp_t *re, unsigned int new_flags);
 
 /**
  * Set regexp maximum hits
  */
-guint rspamd_regexp_get_maxhits(const rspamd_regexp_t *re);
+unsigned int rspamd_regexp_get_maxhits(const rspamd_regexp_t *re);
 
 /**
  * Get regexp maximum hits
  */
-guint rspamd_regexp_set_maxhits(rspamd_regexp_t *re, guint new_maxhits);
+unsigned int rspamd_regexp_set_maxhits(rspamd_regexp_t *re, unsigned int new_maxhits);
 
 /**
  * Returns cache id for a regexp
@@ -206,8 +206,8 @@ struct rspamd_regexp_cache *rspamd_regexp_cache_new(void);
  * @return
  */
 rspamd_regexp_t *rspamd_regexp_cache_query(struct rspamd_regexp_cache *cache,
-										   const gchar *pattern,
-										   const gchar *flags);
+										   const char *pattern,
+										   const char *flags);
 
 /**
  * Create or get cached regexp from the specified cache
@@ -218,8 +218,8 @@ rspamd_regexp_t *rspamd_regexp_cache_query(struct rspamd_regexp_cache *cache,
  * @return new regexp object
  */
 rspamd_regexp_t *rspamd_regexp_cache_create(struct rspamd_regexp_cache *cache,
-											const gchar *pattern,
-											const gchar *flags, GError **err);
+											const char *pattern,
+											const char *flags, GError **err);
 
 /**
  * Remove regexp from the cache
@@ -254,7 +254,7 @@ gboolean rspamd_regexp_equal(gconstpointer a, gconstpointer b);
 /**
  * Acts like memcmp but for regexp
  */
-gint rspamd_regexp_cmp(gconstpointer a, gconstpointer b);
+int rspamd_regexp_cmp(gconstpointer a, gconstpointer b);
 
 /**
  * Initialize superglobal regexp cache and library
@@ -267,7 +267,7 @@ void rspamd_regexp_library_init(struct rspamd_config *cfg);
  * @param err
  * @return
  */
-rspamd_regexp_t *rspamd_regexp_from_glob(const gchar *gl, gsize sz, GError **err);
+rspamd_regexp_t *rspamd_regexp_from_glob(const char *gl, gsize sz, GError **err);
 
 #ifdef __cplusplus
 }

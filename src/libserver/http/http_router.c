@@ -35,8 +35,8 @@ enum http_magic_type {
 };
 
 static const struct _rspamd_http_magic {
-	const gchar *ext;
-	const gchar *ct;
+	const char *ext;
+	const char *ct;
 } http_file_types[] = {
 	[HTTP_MAGIC_PLAIN] = {"txt", "text/plain"},
 	[HTTP_MAGIC_HTML] = {"html", "text/html"},
@@ -101,11 +101,11 @@ rspamd_http_router_error_handler(struct rspamd_http_connection *conn,
 	}
 }
 
-static const gchar *
-rspamd_http_router_detect_ct(const gchar *path)
+static const char *
+rspamd_http_router_detect_ct(const char *path)
 {
-	const gchar *dot;
-	guint i;
+	const char *dot;
+	unsigned int i;
 
 	dot = strrchr(path, '.');
 	if (dot == NULL) {
@@ -123,7 +123,7 @@ rspamd_http_router_detect_ct(const gchar *path)
 }
 
 static gboolean
-rspamd_http_router_is_subdir(const gchar *parent, const gchar *sub)
+rspamd_http_router_is_subdir(const char *parent, const char *sub)
 {
 	if (parent == NULL || sub == NULL || *parent == '\0') {
 		return FALSE;
@@ -150,8 +150,8 @@ rspamd_http_router_try_file(struct rspamd_http_connection_entry *entry,
 							rspamd_ftok_t *lookup, gboolean expand_path)
 {
 	struct stat st;
-	gint fd;
-	gchar filebuf[PATH_MAX], realbuf[PATH_MAX], *dir;
+	int fd;
+	char filebuf[PATH_MAX], realbuf[PATH_MAX], *dir;
 	struct rspamd_http_message *reply_msg;
 
 	rspamd_snprintf(filebuf, sizeof(filebuf), "%s%c%T",
@@ -256,10 +256,10 @@ rspamd_http_router_finish_handler(struct rspamd_http_connection *conn,
 	rspamd_ftok_t lookup;
 	const rspamd_ftok_t *encoding;
 	struct http_parser_url u;
-	guint i;
+	unsigned int i;
 	rspamd_regexp_t *re;
 	struct rspamd_http_connection_router *router;
-	gchar *pathbuf = NULL;
+	char *pathbuf = NULL;
 
 	G_STATIC_ASSERT(sizeof(rspamd_http_router_handler_t) ==
 					sizeof(gpointer));
@@ -439,7 +439,7 @@ void rspamd_http_router_set_key(struct rspamd_http_connection_router *router,
 }
 
 void rspamd_http_router_add_path(struct rspamd_http_connection_router *router,
-								 const gchar *path, rspamd_http_router_handler_t handler)
+								 const char *path, rspamd_http_router_handler_t handler)
 {
 	gpointer ptr;
 	rspamd_ftok_t *key;
@@ -466,7 +466,7 @@ void rspamd_http_router_set_unknown_handler(struct rspamd_http_connection_router
 }
 
 void rspamd_http_router_add_header(struct rspamd_http_connection_router *router,
-								   const gchar *name, const gchar *value)
+								   const char *name, const char *value)
 {
 	if (name != NULL && value != NULL && router != NULL) {
 		g_hash_table_replace(router->response_headers, g_strdup(name),
@@ -504,7 +504,7 @@ void rspamd_http_router_add_regexp(struct rspamd_http_connection_router *router,
 }
 
 void rspamd_http_router_handle_socket(struct rspamd_http_connection_router *router,
-									  gint fd, gpointer ud)
+									  int fd, gpointer ud)
 {
 	struct rspamd_http_connection_entry *conn;
 
@@ -532,7 +532,7 @@ void rspamd_http_router_free(struct rspamd_http_connection_router *router)
 {
 	struct rspamd_http_connection_entry *conn, *tmp;
 	rspamd_regexp_t *re;
-	guint i;
+	unsigned int i;
 
 	if (router) {
 		DL_FOREACH_SAFE(router->conns, conn, tmp)

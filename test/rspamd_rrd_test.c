@@ -25,15 +25,15 @@ const int pdp_per_cdp = 60;
 
 void rspamd_rrd_test_func(void)
 {
-	gchar tmpfile[PATH_MAX];
+	char tmpfile[PATH_MAX];
 	struct rrd_rra_def rra[4];
 	struct rrd_ds_def ds[2];
 	GArray ar;
 	GError *err = NULL;
 	struct rspamd_rrd_file *rrd;
-	gdouble ticks;
-	gint i;
-	gdouble t[2], cnt = 0.0;
+	double ticks;
+	int i;
+	double t[2], cnt = 0.0;
 
 	rspamd_snprintf(tmpfile, sizeof(tmpfile), "/tmp/rspamd_rrd.rrd");
 	unlink(tmpfile);

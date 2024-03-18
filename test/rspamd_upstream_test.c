@@ -27,7 +27,7 @@ extern struct ev_loop *event_loop;
 
 static void
 rspamd_upstream_test_method(struct upstream_list *ls,
-							enum rspamd_upstream_rotation rot, const gchar *expected)
+							enum rspamd_upstream_rotation rot, const char *expected)
 {
 	struct upstream *up;
 
@@ -58,9 +58,9 @@ void rspamd_upstream_test_func(void)
 	struct upstream *up, *upn;
 	struct rspamd_dns_resolver *resolver;
 	struct rspamd_config *cfg;
-	gint i, success = 0;
-	const gint assumptions = 100500;
-	gdouble p;
+	int i, success = 0;
+	const int assumptions = 100500;
+	double p;
 	static ev_timer ev;
 	rspamd_inet_addr_t *addr, *next_addr, *paddr;
 
@@ -149,7 +149,7 @@ void rspamd_upstream_test_func(void)
 		}
 	}
 
-	p = 1.0 - fabs(3.0 / 4.0 - (gdouble) success / (gdouble) assumptions);
+	p = 1.0 - fabs(3.0 / 4.0 - (double) success / (double) assumptions);
 	/*
 	 * P value is calculated as following:
 	 * when we add/remove M upstreams from the list, the probability of hash

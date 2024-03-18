@@ -140,9 +140,9 @@ rspamd_min_heap_pop(struct rspamd_min_heap *heap)
 }
 
 void rspamd_min_heap_update_elt(struct rspamd_min_heap *heap,
-								struct rspamd_min_heap_elt *elt, guint npri)
+								struct rspamd_min_heap_elt *elt, unsigned int npri)
 {
-	guint oldpri;
+	unsigned int oldpri;
 
 	g_assert(heap != NULL);
 	g_assert(elt->idx > 0 && elt->idx <= heap->ar->len);
@@ -188,7 +188,7 @@ void rspamd_min_heap_destroy(struct rspamd_min_heap *heap)
 }
 
 struct rspamd_min_heap_elt *
-rspamd_min_heap_index(struct rspamd_min_heap *heap, guint idx)
+rspamd_min_heap_index(struct rspamd_min_heap *heap, unsigned int idx)
 {
 	g_assert(heap != NULL);
 	g_assert(idx < heap->ar->len);

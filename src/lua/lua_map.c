@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -174,25 +174,25 @@ static const struct luaL_reg maplib_m[] = {
 
 struct lua_map_callback_data {
 	lua_State *L;
-	gint ref;
+	int ref;
 	gboolean opaque;
 	rspamd_fstring_t *data;
 	struct rspamd_lua_map *lua_map;
 };
 
 struct rspamd_lua_map *
-lua_check_map(lua_State *L, gint pos)
+lua_check_map(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_map_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'map' expected");
 	return ud ? *((struct rspamd_lua_map **) ud) : NULL;
 }
 
-gint lua_config_add_radix_map(lua_State *L)
+int lua_config_add_radix_map(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *map_line, *description;
+	const char *map_line, *description;
 	struct rspamd_lua_map *map, **pmap;
 	struct rspamd_map *m;
 
@@ -228,11 +228,11 @@ gint lua_config_add_radix_map(lua_State *L)
 	return 1;
 }
 
-gint lua_config_radix_from_config(lua_State *L)
+int lua_config_radix_from_config(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *mname, *optname;
+	const char *mname, *optname;
 	const ucl_object_t *obj;
 	struct rspamd_lua_map *map, **pmap;
 	ucl_object_t *fake_obj;
@@ -293,7 +293,7 @@ gint lua_config_radix_from_config(lua_State *L)
 }
 
 
-gint lua_config_radix_from_ucl(lua_State *L)
+int lua_config_radix_from_ucl(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
@@ -348,11 +348,11 @@ gint lua_config_radix_from_ucl(lua_State *L)
 	return 1;
 }
 
-gint lua_config_add_hash_map(lua_State *L)
+int lua_config_add_hash_map(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *map_line, *description;
+	const char *map_line, *description;
 	struct rspamd_lua_map *map, **pmap;
 	struct rspamd_map *m;
 
@@ -387,11 +387,11 @@ gint lua_config_add_hash_map(lua_State *L)
 	return 1;
 }
 
-gint lua_config_add_kv_map(lua_State *L)
+int lua_config_add_kv_map(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *map_line, *description;
+	const char *map_line, *description;
 	struct rspamd_lua_map *map, **pmap;
 	struct rspamd_map *m;
 
@@ -428,8 +428,8 @@ gint lua_config_add_kv_map(lua_State *L)
 }
 
 
-static gchar *
-lua_map_read(gchar *chunk, gint len,
+static char *
+lua_map_read(char *chunk, int len,
 			 struct map_cb_data *data,
 			 gboolean final)
 {
@@ -517,7 +517,7 @@ lua_map_fin(struct map_cb_data *data, void **target)
 			*pmap = cbdata->lua_map;
 			rspamd_lua_setclass(cbdata->L, rspamd_map_classname, -1);
 
-			gint ret = lua_pcall(cbdata->L, 2, 0, err_idx);
+			int ret = lua_pcall(cbdata->L, 2, 0, err_idx);
 
 			if (ret != 0) {
 				msg_info_map("call to %s failed (%d): %s", "map fin function",
@@ -557,12 +557,12 @@ lua_map_dtor(struct map_cb_data *data)
 	}
 }
 
-gint lua_config_add_map(lua_State *L)
+int lua_config_add_map(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
 	const char *description = NULL;
-	const gchar *type = NULL;
+	const char *type = NULL;
 	ucl_object_t *map_obj = NULL;
 	struct lua_map_callback_data *cbdata;
 	struct rspamd_lua_map *map, **pmap;
@@ -792,13 +792,13 @@ gint lua_config_add_map(lua_State *L)
 	return 1;
 }
 
-gint lua_config_get_maps(lua_State *L)
+int lua_config_get_maps(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
 	struct rspamd_lua_map *map, **pmap;
 	struct rspamd_map *m;
-	gint i = 1;
+	int i = 1;
 	GList *cur;
 
 	if (cfg) {
@@ -847,8 +847,8 @@ gint lua_config_get_maps(lua_State *L)
 	return 1;
 }
 
-static const gchar *
-lua_map_process_string_key(lua_State *L, gint pos, gsize *len)
+static const char *
+lua_map_process_string_key(lua_State *L, int pos, gsize *len)
 {
 	struct rspamd_lua_text *t;
 
@@ -868,14 +868,14 @@ lua_map_process_string_key(lua_State *L, gint pos, gsize *len)
 }
 
 /* Radix and hash table functions */
-static gint
+static int
 lua_map_get_key(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_map *map = lua_check_map(L, 1);
 	struct rspamd_radix_map_helper *radix;
 	struct rspamd_lua_ip *addr = NULL;
-	const gchar *key, *value = NULL;
+	const char *key, *value = NULL;
 	gpointer ud;
 	gsize len;
 	uint32_t key_num = 0;
@@ -886,7 +886,7 @@ lua_map_get_key(lua_State *L)
 			radix = map->data.radix;
 
 			if (lua_type(L, 2) == LUA_TSTRING) {
-				const gchar *addr_str;
+				const char *addr_str;
 
 				addr_str = luaL_checklstring(L, 2, &len);
 				addr = g_alloca(sizeof(*addr));
@@ -927,7 +927,7 @@ lua_map_get_key(lua_State *L)
 				}
 				else if (key_num != 0) {
 					if ((p = rspamd_match_radix_map(radix,
-													(guint8 *) &key_num, sizeof(key_num))) != NULL) {
+													(uint8_t *) &key_num, sizeof(key_num))) != NULL) {
 						ret = TRUE;
 					}
 					else {
@@ -965,8 +965,8 @@ lua_map_get_key(lua_State *L)
 		}
 		else if (map->type == RSPAMD_LUA_MAP_REGEXP_MULTIPLE) {
 			GPtrArray *ar;
-			guint i;
-			const gchar *val;
+			unsigned int i;
+			const char *val;
 
 			key = lua_map_process_string_key(L, 2, &len);
 
@@ -1044,7 +1044,7 @@ lua_map_traverse_cb(gconstpointer key,
 	return TRUE;
 }
 
-static gint
+static int
 lua_map_get_stats(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1071,7 +1071,7 @@ lua_map_get_stats(lua_State *L)
 
 struct lua_map_traverse_cbdata {
 	lua_State *L;
-	gint cbref;
+	int cbref;
 	gboolean use_text;
 };
 
@@ -1111,7 +1111,7 @@ lua_map_foreach_cb(gconstpointer key, gconstpointer value, gsize _hits, gpointer
 	return TRUE;
 }
 
-static gint
+static int
 lua_map_foreach(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1143,12 +1143,12 @@ lua_map_foreach(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_map_get_data_digest(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_map *map = lua_check_map(L, 1);
-	gchar numbuf[64];
+	char numbuf[64];
 
 	if (map != NULL) {
 		rspamd_snprintf(numbuf, sizeof(numbuf), "%uL", map->map->digest);
@@ -1161,7 +1161,7 @@ lua_map_get_data_digest(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_map_get_nelts(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1184,7 +1184,7 @@ lua_map_is_signed(lua_State *L)
 	struct rspamd_lua_map *map = lua_check_map(L, 1);
 	gboolean ret = FALSE;
 	struct rspamd_map_backend *bk;
-	guint i;
+	unsigned int i;
 
 	if (map != NULL) {
 		if (map->map) {
@@ -1210,9 +1210,9 @@ lua_map_get_proto(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_map *map = lua_check_map(L, 1);
-	const gchar *ret = "undefined";
+	const char *ret = "undefined";
 	struct rspamd_map_backend *bk;
-	guint i;
+	unsigned int i;
 
 	if (map != NULL) {
 		for (i = 0; i < map->map->backends->len; i++) {
@@ -1248,7 +1248,7 @@ lua_map_get_sign_key(lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_lua_map *map = lua_check_map(L, 1);
 	struct rspamd_map_backend *bk;
-	guint i;
+	unsigned int i;
 	GString *ret = NULL;
 
 	if (map != NULL) {
@@ -1285,10 +1285,10 @@ lua_map_set_sign_key(lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_lua_map *map = lua_check_map(L, 1);
 	struct rspamd_map_backend *bk;
-	const gchar *pk_str;
+	const char *pk_str;
 	struct rspamd_cryptobox_pubkey *pk;
 	gsize len;
-	guint i;
+	unsigned int i;
 
 	pk_str = lua_tolstring(L, 2, &len);
 
@@ -1346,7 +1346,7 @@ lua_map_get_uri(lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_lua_map *map = lua_check_map(L, 1);
 	struct rspamd_map_backend *bk;
-	guint i;
+	unsigned int i;
 
 	if (map != NULL) {
 		for (i = 0; i < map->map->backends->len; i++) {
@@ -1363,7 +1363,7 @@ lua_map_get_uri(lua_State *L)
 
 struct lua_map_on_load_cbdata {
 	lua_State *L;
-	gint ref;
+	int ref;
 };
 
 static void
@@ -1388,7 +1388,7 @@ lua_map_on_load_handler(struct rspamd_map *map, gpointer ud)
 	}
 }
 
-static gint
+static int
 lua_map_on_load(lua_State *L)
 {
 	LUA_TRACE_POINT;

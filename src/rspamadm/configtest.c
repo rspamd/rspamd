@@ -21,7 +21,7 @@
 #include "lua/lua_common.h"
 
 static gboolean quiet = FALSE;
-static gchar *config = NULL;
+static char *config = NULL;
 static gboolean strict = FALSE;
 static gboolean skip_template = FALSE;
 extern struct rspamd_main *rspamd_main;
@@ -29,7 +29,7 @@ extern struct rspamd_main *rspamd_main;
 extern module_t *modules[];
 extern worker_t *workers[];
 
-static void rspamadm_configtest(gint argc, gchar **argv,
+static void rspamadm_configtest(int argc, char **argv,
 								const struct rspamadm_command *cmd);
 static const char *rspamadm_configtest_help(gboolean full_help,
 											const struct rspamadm_command *cmd);
@@ -79,11 +79,11 @@ config_logger(rspamd_mempool_t *pool, gpointer ud)
 }
 
 static void
-rspamadm_configtest(gint argc, gchar **argv, const struct rspamadm_command *cmd)
+rspamadm_configtest(int argc, char **argv, const struct rspamadm_command *cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;
-	const gchar *confdir;
+	const char *confdir;
 	struct rspamd_config *cfg = rspamd_main->cfg;
 	gboolean ret = TRUE;
 	worker_t **pworker;
@@ -106,7 +106,7 @@ rspamadm_configtest(gint argc, gchar **argv, const struct rspamadm_command *cmd)
 	g_option_context_free(context);
 
 	if (config == NULL) {
-		static gchar fbuf[PATH_MAX];
+		static char fbuf[PATH_MAX];
 
 		if ((confdir = g_hash_table_lookup(ucl_vars, "CONFDIR")) == NULL) {
 			confdir = RSPAMD_CONFDIR;

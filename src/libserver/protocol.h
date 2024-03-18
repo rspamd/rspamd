@@ -46,8 +46,8 @@ struct rspamd_protocol_log_message_sum {
 	uint32_t nresults;
 	uint32_t nextra;
 	uint32_t settings_id;
-	gdouble score;
-	gdouble required_score;
+	double score;
+	double required_score;
 	struct rspamd_protocol_log_symbol_result results[];
 };
 

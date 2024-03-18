@@ -68,7 +68,7 @@ rspamd_stat_cache_redis_generate_id(struct rspamd_task *task)
 									 sizeof(tok->data));
 	}
 
-	guchar out[rspamd_cryptobox_HASHBYTES];
+	unsigned char out[rspamd_cryptobox_HASHBYTES];
 	rspamd_cryptobox_hash_final(&st, out);
 
 	auto *b32out = rspamd_mempool_alloc_array_type(task->task_pool,
@@ -152,7 +152,7 @@ rspamd_stat_cache_redis_runtime(struct rspamd_task *task,
 	return (void *) ctx;
 }
 
-static gint
+static int
 rspamd_stat_cache_checked(lua_State *L)
 {
 	auto *task = lua_check_task(L, 1);
@@ -181,9 +181,9 @@ rspamd_stat_cache_checked(lua_State *L)
 	return 0;
 }
 
-gint rspamd_stat_cache_redis_check(struct rspamd_task *task,
-								   gboolean is_spam,
-								   gpointer runtime)
+int rspamd_stat_cache_redis_check(struct rspamd_task *task,
+								  gboolean is_spam,
+								  gpointer runtime)
 {
 	auto *ctx = (struct rspamd_redis_cache_ctx *) runtime;
 	auto *h = (char *) rspamd_mempool_get_variable(task->task_pool, "words_hash");
@@ -195,7 +195,7 @@ gint rspamd_stat_cache_redis_check(struct rspamd_task *task,
 	auto *L = ctx->L;
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
-	gint err_idx = lua_gettop(L);
+	int err_idx = lua_gettop(L);
 
 	/* Function arguments */
 	lua_rawgeti(L, LUA_REGISTRYINDEX, ctx->check_ref);
@@ -214,9 +214,9 @@ gint rspamd_stat_cache_redis_check(struct rspamd_task *task,
 	return RSPAMD_LEARN_OK;
 }
 
-gint rspamd_stat_cache_redis_learn(struct rspamd_task *task,
-								   gboolean is_spam,
-								   gpointer runtime)
+int rspamd_stat_cache_redis_learn(struct rspamd_task *task,
+								  gboolean is_spam,
+								  gpointer runtime)
 {
 	auto *ctx = (struct rspamd_redis_cache_ctx *) runtime;
 
@@ -229,7 +229,7 @@ gint rspamd_stat_cache_redis_learn(struct rspamd_task *task,
 	auto *L = ctx->L;
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
-	gint err_idx = lua_gettop(L);
+	int err_idx = lua_gettop(L);
 
 	/* Function arguments */
 	lua_rawgeti(L, LUA_REGISTRYINDEX, ctx->learn_ref);

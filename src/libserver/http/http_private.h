@@ -54,20 +54,20 @@ struct rspamd_http_message {
 
 	struct _rspamd_body_buf_s {
 		/* Data start */
-		const gchar *begin;
+		const char *begin;
 		/* Data len */
 		gsize len;
 		/* Allocated len */
 		gsize allocated_len;
 		/* Data buffer (used to write data inside) */
-		gchar *str;
+		char *str;
 
 		/* Internal storage */
 		union _rspamd_storage_u {
 			rspamd_fstring_t *normal;
 			struct _rspamd_storage_shared_s {
 				struct rspamd_storage_shmem *name;
-				gint shm_fd;
+				int shm_fd;
 			} shared;
 		} c;
 	} body_buf;
@@ -77,15 +77,15 @@ struct rspamd_http_message {
 	time_t last_modified;
 	unsigned port;
 	int type;
-	gint code;
+	int code;
 	enum http_method method;
-	gint flags;
+	int flags;
 	ref_entry_t ref;
 };
 
 struct rspamd_keepalive_hash_key {
 	rspamd_inet_addr_t *addr;
-	gchar *host;
+	char *host;
 	gboolean is_ssl;
 	unsigned port;
 	GQueue conns;

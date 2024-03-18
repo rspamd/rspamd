@@ -21,7 +21,7 @@
 #include "libutil/printf.h"
 #include "contrib/libottery/ottery.h"
 
-const guchar encrypted_magic[7] = {'r', 'u', 'c', 'l', 'e', 'v', '1'};
+const unsigned char encrypted_magic[7] = {'r', 'u', 'c', 'l', 'e', 'v', '1'};
 
 static GQuark
 rspamd_keypair_quark(void)
@@ -34,7 +34,7 @@ rspamd_keypair_quark(void)
  */
 static void *
 rspamd_cryptobox_keypair_sk(struct rspamd_cryptobox_keypair *kp,
-							guint *len)
+							unsigned int *len)
 {
 	g_assert(kp != NULL);
 
@@ -65,7 +65,7 @@ rspamd_cryptobox_keypair_sk(struct rspamd_cryptobox_keypair *kp,
 
 static void *
 rspamd_cryptobox_keypair_pk(struct rspamd_cryptobox_keypair *kp,
-							guint *len)
+							unsigned int *len)
 {
 	g_assert(kp != NULL);
 
@@ -96,7 +96,7 @@ rspamd_cryptobox_keypair_pk(struct rspamd_cryptobox_keypair *kp,
 
 static void *
 rspamd_cryptobox_pubkey_pk(const struct rspamd_cryptobox_pubkey *kp,
-						   guint *len)
+						   unsigned int *len)
 {
 	g_assert(kp != NULL);
 
@@ -130,7 +130,7 @@ rspamd_cryptobox_keypair_alloc(enum rspamd_cryptobox_keypair_type type,
 							   enum rspamd_cryptobox_mode alg)
 {
 	struct rspamd_cryptobox_keypair *kp;
-	guint size = 0;
+	unsigned int size = 0;
 
 	if (alg == RSPAMD_CRYPTOBOX_MODE_25519) {
 		if (type == RSPAMD_KEYPAIR_KEX) {
@@ -165,7 +165,7 @@ rspamd_cryptobox_pubkey_alloc(enum rspamd_cryptobox_keypair_type type,
 							  enum rspamd_cryptobox_mode alg)
 {
 	struct rspamd_cryptobox_pubkey *pk;
-	guint size = 0;
+	unsigned int size = 0;
 
 	if (alg == RSPAMD_CRYPTOBOX_MODE_25519) {
 		if (type == RSPAMD_KEYPAIR_KEX) {
@@ -205,7 +205,7 @@ void rspamd_cryptobox_nm_dtor(struct rspamd_cryptobox_nm *nm)
 void rspamd_cryptobox_keypair_dtor(struct rspamd_cryptobox_keypair *kp)
 {
 	void *sk;
-	guint len = 0;
+	unsigned int len = 0;
 
 	sk = rspamd_cryptobox_keypair_sk(kp, &len);
 	g_assert(sk != NULL && len > 0);
@@ -235,7 +235,7 @@ rspamd_keypair_new(enum rspamd_cryptobox_keypair_type type,
 {
 	struct rspamd_cryptobox_keypair *kp;
 	void *pk, *sk;
-	guint size;
+	unsigned int size;
 
 	kp = rspamd_cryptobox_keypair_alloc(type, alg);
 	kp->alg = alg;
@@ -319,16 +319,16 @@ rspamd_pubkey_alg(struct rspamd_cryptobox_pubkey *p)
 }
 
 struct rspamd_cryptobox_pubkey *
-rspamd_pubkey_from_base32(const gchar *b32,
+rspamd_pubkey_from_base32(const char *b32,
 						  gsize len,
 						  enum rspamd_cryptobox_keypair_type type,
 						  enum rspamd_cryptobox_mode alg)
 {
-	guchar *decoded;
+	unsigned char *decoded;
 	gsize dlen, expected_len;
-	guint pklen;
+	unsigned int pklen;
 	struct rspamd_cryptobox_pubkey *pk;
-	guchar *pk_data;
+	unsigned char *pk_data;
 
 	g_assert(b32 != NULL);
 
@@ -363,16 +363,16 @@ rspamd_pubkey_from_base32(const gchar *b32,
 }
 
 struct rspamd_cryptobox_pubkey *
-rspamd_pubkey_from_hex(const gchar *hex,
+rspamd_pubkey_from_hex(const char *hex,
 					   gsize len,
 					   enum rspamd_cryptobox_keypair_type type,
 					   enum rspamd_cryptobox_mode alg)
 {
-	guchar *decoded;
+	unsigned char *decoded;
 	gsize dlen, expected_len;
-	guint pklen;
+	unsigned int pklen;
 	struct rspamd_cryptobox_pubkey *pk;
-	guchar *pk_data;
+	unsigned char *pk_data;
 
 	g_assert(hex != NULL);
 
@@ -409,15 +409,15 @@ rspamd_pubkey_from_hex(const gchar *hex,
 }
 
 struct rspamd_cryptobox_pubkey *
-rspamd_pubkey_from_bin(const guchar *raw,
+rspamd_pubkey_from_bin(const unsigned char *raw,
 					   gsize len,
 					   enum rspamd_cryptobox_keypair_type type,
 					   enum rspamd_cryptobox_mode alg)
 {
 	gsize expected_len;
-	guint pklen;
+	unsigned int pklen;
 	struct rspamd_cryptobox_pubkey *pk;
-	guchar *pk_data;
+	unsigned char *pk_data;
 
 	g_assert(raw != NULL && len > 0);
 
@@ -440,14 +440,14 @@ rspamd_pubkey_from_bin(const guchar *raw,
 }
 
 
-const guchar *
+const unsigned char *
 rspamd_pubkey_get_nm(struct rspamd_cryptobox_pubkey *p,
 					 struct rspamd_cryptobox_keypair *kp)
 {
 	g_assert(p != NULL);
 
 	if (p->nm) {
-		if (memcmp(kp->id, (const guchar *) &p->nm->sk_id, sizeof(uint64_t)) == 0) {
+		if (memcmp(kp->id, (const unsigned char *) &p->nm->sk_id, sizeof(uint64_t)) == 0) {
 			return p->nm->nm;
 		}
 
@@ -459,7 +459,7 @@ rspamd_pubkey_get_nm(struct rspamd_cryptobox_pubkey *p,
 	return NULL;
 }
 
-const guchar *
+const unsigned char *
 rspamd_pubkey_calculate_nm(struct rspamd_cryptobox_pubkey *p,
 						   struct rspamd_cryptobox_keypair *kp)
 {
@@ -496,7 +496,7 @@ rspamd_pubkey_calculate_nm(struct rspamd_cryptobox_pubkey *p,
 	return p->nm->nm;
 }
 
-const guchar *
+const unsigned char *
 rspamd_keypair_get_id(struct rspamd_cryptobox_keypair *kp)
 {
 	g_assert(kp != NULL);
@@ -512,7 +512,7 @@ rspamd_keypair_get_extensions(struct rspamd_cryptobox_keypair *kp)
 	return kp->extensions;
 }
 
-const guchar *
+const unsigned char *
 rspamd_pubkey_get_id(struct rspamd_cryptobox_pubkey *pk)
 {
 	g_assert(pk != NULL);
@@ -520,12 +520,12 @@ rspamd_pubkey_get_id(struct rspamd_cryptobox_pubkey *pk)
 	return pk->id;
 }
 
-const guchar *
+const unsigned char *
 rspamd_pubkey_get_pk(struct rspamd_cryptobox_pubkey *pk,
-					 guint *len)
+					 unsigned int *len)
 {
-	guchar *ret = NULL;
-	guint rlen;
+	unsigned char *ret = NULL;
+	unsigned int rlen;
 
 	ret = rspamd_cryptobox_pubkey_pk(pk, &rlen);
 
@@ -537,10 +537,10 @@ rspamd_pubkey_get_pk(struct rspamd_cryptobox_pubkey *pk,
 }
 
 static void
-rspamd_keypair_print_component(guchar *data, gsize datalen,
-							   GString *res, guint how, const gchar *description)
+rspamd_keypair_print_component(unsigned char *data, gsize datalen,
+							   GString *res, unsigned int how, const char *description)
 {
-	gint olen, b32_len;
+	int olen, b32_len;
 
 	if (how & RSPAMD_KEYPAIR_HUMAN) {
 		rspamd_printf_gstring(res, "%s: ", description);
@@ -559,7 +559,7 @@ rspamd_keypair_print_component(guchar *data, gsize datalen,
 		}
 	}
 	else if (how & RSPAMD_KEYPAIR_HEX) {
-		rspamd_printf_gstring(res, "%*xs", (gint) datalen, data);
+		rspamd_printf_gstring(res, "%*xs", (int) datalen, data);
 	}
 	else {
 		g_string_append_len(res, data, datalen);
@@ -571,10 +571,10 @@ rspamd_keypair_print_component(guchar *data, gsize datalen,
 }
 
 GString *
-rspamd_keypair_print(struct rspamd_cryptobox_keypair *kp, guint how)
+rspamd_keypair_print(struct rspamd_cryptobox_keypair *kp, unsigned int how)
 {
 	GString *res;
-	guint len;
+	unsigned int len;
 	gpointer p;
 
 	g_assert(kp != NULL);
@@ -601,10 +601,10 @@ rspamd_keypair_print(struct rspamd_cryptobox_keypair *kp, guint how)
 }
 
 GString *
-rspamd_pubkey_print(struct rspamd_cryptobox_pubkey *pk, guint how)
+rspamd_pubkey_print(struct rspamd_cryptobox_pubkey *pk, unsigned int how)
 {
 	GString *res;
-	guint len;
+	unsigned int len;
 	gpointer p;
 
 	g_assert(pk != NULL);
@@ -627,12 +627,12 @@ rspamd_pubkey_print(struct rspamd_cryptobox_pubkey *pk, guint how)
 	return res;
 }
 
-const guchar *
+const unsigned char *
 rspamd_keypair_component(struct rspamd_cryptobox_keypair *kp,
-						 guint ncomp, guint *len)
+						 unsigned int ncomp, unsigned int *len)
 {
-	guint rlen = 0;
-	const guchar *ret = NULL;
+	unsigned int rlen = 0;
+	const unsigned char *ret = NULL;
 
 	g_assert(kp != NULL);
 
@@ -660,14 +660,14 @@ struct rspamd_cryptobox_keypair *
 rspamd_keypair_from_ucl(const ucl_object_t *obj)
 {
 	const ucl_object_t *privkey, *pubkey, *elt;
-	const gchar *str;
+	const char *str;
 	enum rspamd_cryptobox_keypair_type type = RSPAMD_KEYPAIR_KEX;
 	enum rspamd_cryptobox_mode mode = RSPAMD_CRYPTOBOX_MODE_25519;
 	gboolean is_hex = FALSE;
 	struct rspamd_cryptobox_keypair *kp;
-	guint len;
+	unsigned int len;
 	gsize ucl_len;
-	gint dec_len;
+	int dec_len;
 	gpointer target;
 
 	if (ucl_object_type(obj) != UCL_OBJECT) {
@@ -744,7 +744,7 @@ rspamd_keypair_from_ucl(const ucl_object_t *obj)
 		dec_len = rspamd_decode_base32_buf(str, ucl_len, target, len, RSPAMD_BASE32_DEFAULT);
 	}
 
-	if (dec_len != (gint) len) {
+	if (dec_len != (int) len) {
 		rspamd_keypair_unref(kp);
 
 		return NULL;
@@ -760,7 +760,7 @@ rspamd_keypair_from_ucl(const ucl_object_t *obj)
 		dec_len = rspamd_decode_base32_buf(str, ucl_len, target, len, RSPAMD_BASE32_DEFAULT);
 	}
 
-	if (dec_len != (gint) len) {
+	if (dec_len != (int) len) {
 		rspamd_keypair_unref(kp);
 
 		return NULL;
@@ -782,9 +782,9 @@ rspamd_keypair_to_ucl(struct rspamd_cryptobox_keypair *kp,
 					  enum rspamd_keypair_dump_flags flags)
 {
 	ucl_object_t *ucl_out, *elt;
-	gint how = 0;
+	int how = 0;
 	GString *keypair_out;
-	const gchar *encoding;
+	const char *encoding;
 
 	g_assert(kp != NULL);
 
@@ -857,11 +857,11 @@ rspamd_keypair_to_ucl(struct rspamd_cryptobox_keypair *kp,
 
 gboolean
 rspamd_keypair_decrypt(struct rspamd_cryptobox_keypair *kp,
-					   const guchar *in, gsize inlen,
-					   guchar **out, gsize *outlen,
+					   const unsigned char *in, gsize inlen,
+					   unsigned char **out, gsize *outlen,
 					   GError **err)
 {
-	const guchar *nonce, *mac, *data, *pubkey;
+	const unsigned char *nonce, *mac, *data, *pubkey;
 
 	g_assert(kp != NULL);
 	g_assert(in != NULL);
@@ -924,11 +924,11 @@ rspamd_keypair_decrypt(struct rspamd_cryptobox_keypair *kp,
 
 gboolean
 rspamd_keypair_encrypt(struct rspamd_cryptobox_keypair *kp,
-					   const guchar *in, gsize inlen,
-					   guchar **out, gsize *outlen,
+					   const unsigned char *in, gsize inlen,
+					   unsigned char **out, gsize *outlen,
 					   GError **err)
 {
-	guchar *nonce, *mac, *data, *pubkey;
+	unsigned char *nonce, *mac, *data, *pubkey;
 	struct rspamd_cryptobox_keypair *local;
 	gsize olen;
 
@@ -973,11 +973,11 @@ rspamd_keypair_encrypt(struct rspamd_cryptobox_keypair *kp,
 
 gboolean
 rspamd_pubkey_encrypt(struct rspamd_cryptobox_pubkey *pk,
-					  const guchar *in, gsize inlen,
-					  guchar **out, gsize *outlen,
+					  const unsigned char *in, gsize inlen,
+					  unsigned char **out, gsize *outlen,
 					  GError **err)
 {
-	guchar *nonce, *mac, *data, *pubkey;
+	unsigned char *nonce, *mac, *data, *pubkey;
 	struct rspamd_cryptobox_keypair *local;
 	gsize olen;
 

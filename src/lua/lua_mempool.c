@@ -142,12 +142,12 @@ static const struct luaL_reg mempoollib_f[] = {
 
 struct lua_mempool_udata {
 	lua_State *L;
-	gint cbref;
+	int cbref;
 	rspamd_mempool_t *mempool;
 };
 
 struct memory_pool_s *
-rspamd_lua_check_mempool(lua_State *L, gint pos)
+rspamd_lua_check_mempool(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_mempool_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'mempool' expected");
@@ -269,8 +269,8 @@ lua_mempool_suggest_size(lua_State *L)
 }
 
 struct lua_numbers_bucket {
-	guint nelts;
-	gdouble elts[0];
+	unsigned int nelts;
+	double elts[0];
 };
 
 static int
@@ -278,13 +278,13 @@ lua_mempool_set_bucket(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool(L, 1);
-	const gchar *var = luaL_checkstring(L, 2);
+	const char *var = luaL_checkstring(L, 2);
 	struct lua_numbers_bucket *bucket;
-	gint nelts = luaL_checknumber(L, 3), i;
+	int nelts = luaL_checknumber(L, 3), i;
 
 	if (var && nelts > 0) {
 		bucket = rspamd_mempool_alloc(mempool,
-									  sizeof(*bucket) + sizeof(gdouble) * nelts);
+									  sizeof(*bucket) + sizeof(double) * nelts);
 		bucket->nelts = nelts;
 
 		if (lua_type(L, 4) == LUA_TTABLE) {
@@ -315,17 +315,17 @@ lua_mempool_set_variable(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool(L, 1);
-	const gchar *var = luaL_checkstring(L, 2);
+	const char *var = luaL_checkstring(L, 2);
 	gpointer value;
 	struct lua_numbers_bucket *bucket;
-	gchar *vp;
+	char *vp;
 	union {
-		gdouble d;
-		const gchar *s;
+		double d;
+		const char *s;
 		gboolean b;
 	} val;
 	gsize slen;
-	gint i, j, len = 0, type;
+	int i, j, len = 0, type;
 
 	if (mempool && var) {
 
@@ -334,7 +334,7 @@ lua_mempool_set_variable(lua_State *L)
 
 			if (type == LUA_TNUMBER) {
 				/* We have some ambiguity here between integer and double */
-				len += sizeof(gdouble);
+				len += sizeof(double);
 			}
 			else if (type == LUA_TBOOLEAN) {
 				len += sizeof(gboolean);
@@ -346,7 +346,7 @@ lua_mempool_set_variable(lua_State *L)
 			else if (type == LUA_TTABLE) {
 				/* We assume it as a bucket of numbers so far */
 				slen = rspamd_lua_table_size(L, i);
-				len += sizeof(gdouble) * slen + sizeof(*bucket);
+				len += sizeof(double) * slen + sizeof(*bucket);
 			}
 			else {
 				msg_err("cannot handle lua type %s", lua_typename(L, type));
@@ -365,8 +365,8 @@ lua_mempool_set_variable(lua_State *L)
 
 				if (type == LUA_TNUMBER) {
 					val.d = lua_tonumber(L, i);
-					memcpy(vp, &val, sizeof(gdouble));
-					vp += sizeof(gdouble);
+					memcpy(vp, &val, sizeof(double));
+					vp += sizeof(double);
 				}
 				else if (type == LUA_TBOOLEAN) {
 					val.b = lua_toboolean(L, i);
@@ -390,7 +390,7 @@ lua_mempool_set_variable(lua_State *L)
 						lua_pop(L, 1);
 					}
 
-					vp += sizeof(gdouble) * slen + sizeof(*bucket);
+					vp += sizeof(double) * slen + sizeof(*bucket);
 				}
 				else {
 					msg_err("cannot handle lua type %s", lua_typename(L, type));
@@ -415,11 +415,11 @@ lua_mempool_get_variable(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool(L, 1);
-	const gchar *var = luaL_checkstring(L, 2);
-	const gchar *type = NULL, *pt;
+	const char *var = luaL_checkstring(L, 2);
+	const char *type = NULL, *pt;
 	struct lua_numbers_bucket bucket;
-	const gchar *value, *pv;
-	guint len, nvar, slen, i;
+	const char *value, *pv;
+	unsigned int len, nvar, slen, i;
 
 	if (mempool && var) {
 		value = rspamd_mempool_get_variable(mempool, var);
@@ -438,17 +438,17 @@ lua_mempool_get_variable(lua_State *L)
 				while ((len = strcspn(pt, ", ")) > 0) {
 					if (len == sizeof("double") - 1 &&
 						g_ascii_strncasecmp(pt, "double", len) == 0) {
-						gdouble num;
-						memcpy(&num, pv, sizeof(gdouble));
+						double num;
+						memcpy(&num, pv, sizeof(double));
 						lua_pushnumber(L, num);
-						pv += sizeof(gdouble);
+						pv += sizeof(double);
 					}
 					else if (len == sizeof("int") - 1 &&
 							 g_ascii_strncasecmp(pt, "int", len) == 0) {
-						gint num;
-						memcpy(&num, pv, sizeof(gint));
+						int num;
+						memcpy(&num, pv, sizeof(int));
 						lua_pushinteger(L, num);
-						pv += sizeof(gint);
+						pv += sizeof(int);
 					}
 					else if (len == sizeof("int64") - 1 &&
 							 g_ascii_strncasecmp(pt, "int64", len) == 0) {
@@ -466,8 +466,8 @@ lua_mempool_get_variable(lua_State *L)
 					}
 					else if (len == sizeof("string") - 1 &&
 							 g_ascii_strncasecmp(pt, "string", len) == 0) {
-						slen = strlen((const gchar *) pv);
-						lua_pushlstring(L, (const gchar *) pv, slen);
+						slen = strlen((const char *) pv);
+						lua_pushlstring(L, (const char *) pv, slen);
 						pv += slen + 1;
 					}
 					else if (len == sizeof("gstring") - 1 &&
@@ -483,7 +483,7 @@ lua_mempool_get_variable(lua_State *L)
 						pv += sizeof(struct lua_numbers_bucket);
 
 						for (i = 0; i < bucket.nelts; i++) {
-							gdouble num;
+							double num;
 							memcpy(&num, pv, sizeof(num));
 							lua_pushnumber(L, num);
 							lua_rawseti(L, -2, i + 1);
@@ -543,7 +543,7 @@ lua_mempool_has_variable(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool(L, 1);
-	const gchar *var = luaL_checkstring(L, 2);
+	const char *var = luaL_checkstring(L, 2);
 	gboolean ret = FALSE;
 
 	if (mempool && var) {
@@ -562,7 +562,7 @@ lua_mempool_delete_variable(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool(L, 1);
-	const gchar *var = luaL_checkstring(L, 2);
+	const char *var = luaL_checkstring(L, 2);
 	gboolean ret = FALSE;
 
 	if (mempool && var) {
@@ -578,7 +578,7 @@ lua_mempool_delete_variable(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mempool_topointer(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -595,7 +595,7 @@ lua_mempool_topointer(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_load_mempool(lua_State *L)
 {
 	lua_newtable(L);

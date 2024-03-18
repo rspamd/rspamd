@@ -60,8 +60,8 @@ enum rspamd_language_elt_flags {
 };
 
 struct rspamd_lang_detector_res {
-	gdouble prob;
-	const gchar *lang;
+	double prob;
+	const char *lang;
 	struct rspamd_language_elt *elt;
 };
 
@@ -95,14 +95,14 @@ gboolean rspamd_language_detector_detect(struct rspamd_task *task,
  * @return
  */
 gboolean rspamd_language_detector_is_stop_word(struct rspamd_lang_detector *d,
-											   const gchar *word, gsize wlen);
+											   const char *word, gsize wlen);
 
 /**
  * Return language flags for a specific language elt
  * @param elt
  * @return
  */
-gint rspamd_language_detector_elt_flags(const struct rspamd_language_elt *elt);
+int rspamd_language_detector_elt_flags(const struct rspamd_language_elt *elt);
 #ifdef __cplusplus
 }
 #endif

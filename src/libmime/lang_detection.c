@@ -33,14 +33,14 @@
 
 static const gsize default_short_text_limit = 10;
 static const gsize default_words = 80;
-static const gdouble update_prob = 0.6;
-static const gchar *default_languages_path = RSPAMD_SHAREDIR "/languages";
+static const double update_prob = 0.6;
+static const char *default_languages_path = RSPAMD_SHAREDIR "/languages";
 
 #undef EXTRA_LANGDET_DEBUG
 
 struct rspamd_language_unicode_match {
-	const gchar *lang;
-	gint unicode_code;
+	const char *lang;
+	int unicode_code;
 };
 
 /*
@@ -63,10 +63,10 @@ static const struct rspamd_language_unicode_match unicode_langs[] = {
 /*
  * Top languages
  */
-static const gchar *tier0_langs[] = {
+static const char *tier0_langs[] = {
 	"en",
 };
-static const gchar *tier1_langs[] = {
+static const char *tier1_langs[] = {
 	"fr", "it", "de", "es", "nl",
 	"pt", "ru", "pl", "tk", "th", "ar"};
 
@@ -79,31 +79,31 @@ enum rspamd_language_category {
 };
 
 struct rspamd_language_elt {
-	const gchar *name; /* e.g. "en" or "ru" */
-	gint flags;        /* enum rspamd_language_elt_flags */
+	const char *name; /* e.g. "en" or "ru" */
+	int flags;        /* enum rspamd_language_elt_flags */
 	enum rspamd_language_category category;
-	guint trigrams_words;
-	guint stop_words;
-	gdouble mean;
-	gdouble std;
-	guint occurrences; /* total number of parts with this language */
+	unsigned int trigrams_words;
+	unsigned int stop_words;
+	double mean;
+	double std;
+	unsigned int occurrences; /* total number of parts with this language */
 };
 
 struct rspamd_ngramm_elt {
 	struct rspamd_language_elt *elt;
-	gdouble prob;
+	double prob;
 };
 
 struct rspamd_ngramm_chain {
 	GPtrArray *languages;
-	gdouble mean;
-	gdouble std;
-	gchar *utf;
+	double mean;
+	double std;
+	char *utf;
 };
 
 struct rspamd_stop_word_range {
-	guint start;
-	guint stop;
+	unsigned int start;
+	unsigned int stop;
 	struct rspamd_language_elt *elt;
 };
 
@@ -124,7 +124,7 @@ struct rspamd_stop_word_elt {
 INIT_LOG_MODULE_PUBLIC(langdet)
 
 static const struct rspamd_language_unicode_match *
-rspamd_language_search_unicode_match(const gchar *key,
+rspamd_language_search_unicode_match(const char *key,
 									 const struct rspamd_language_unicode_match *elts, size_t nelts)
 {
 	size_t i;
@@ -139,7 +139,7 @@ rspamd_language_search_unicode_match(const gchar *key,
 }
 
 static gboolean
-rspamd_language_search_str(const gchar *key, const gchar *elts[], size_t nelts)
+rspamd_language_search_str(const char *key, const char *elts[], size_t nelts)
 {
 	size_t i;
 
@@ -151,7 +151,7 @@ rspamd_language_search_str(const gchar *key, const gchar *elts[], size_t nelts)
 	return FALSE;
 }
 
-static guint
+static unsigned int
 rspamd_trigram_hash_func(gconstpointer key)
 {
 	return rspamd_cryptobox_fast_hash(key, 3 * sizeof(UChar32),
@@ -166,14 +166,14 @@ rspamd_trigram_equal_func(gconstpointer v, gconstpointer v2)
 
 KHASH_INIT(rspamd_trigram_hash, const UChar32 *, struct rspamd_ngramm_chain, true,
 		   rspamd_trigram_hash_func, rspamd_trigram_equal_func);
-KHASH_INIT(rspamd_candidates_hash, const gchar *,
+KHASH_INIT(rspamd_candidates_hash, const char *,
 		   struct rspamd_lang_detector_res *, true,
 		   rspamd_str_hash, rspamd_str_equal);
 KHASH_INIT(rspamd_stopwords_hash, rspamd_ftok_t *,
 		   char, false,
 		   rspamd_ftok_hash, rspamd_ftok_equal);
 
-KHASH_INIT(rspamd_languages_hash, const gchar *, struct rspamd_language_elt *, true,
+KHASH_INIT(rspamd_languages_hash, const char *, struct rspamd_language_elt *, true,
 		   rspamd_str_hash, rspamd_str_equal);
 struct rspamd_lang_detector {
 	khash_t(rspamd_languages_hash) * languages;
@@ -215,8 +215,8 @@ rspamd_language_detector_ucs_is_latin(const UChar32 *s, gsize len)
 }
 
 struct rspamd_language_ucs_elt {
-	guint freq;
-	const gchar *utf;
+	unsigned int freq;
+	const char *utf;
 	UChar32 s[0];
 };
 
@@ -225,15 +225,15 @@ rspamd_language_detector_init_ngramm(struct rspamd_config *cfg,
 									 struct rspamd_lang_detector *d,
 									 struct rspamd_language_elt *lelt,
 									 struct rspamd_language_ucs_elt *ucs,
-									 guint len,
-									 guint freq,
-									 guint total,
+									 unsigned int len,
+									 unsigned int freq,
+									 unsigned int total,
 									 khash_t(rspamd_trigram_hash) * htb)
 {
 	struct rspamd_ngramm_chain *chain = NULL, st_chain;
 	struct rspamd_ngramm_elt *elt;
 	khiter_t k;
-	guint i;
+	unsigned int i;
 	gboolean found;
 
 	switch (len) {
@@ -262,7 +262,7 @@ rspamd_language_detector_init_ngramm(struct rspamd_config *cfg,
 		chain->utf = rspamd_mempool_strdup(cfg->cfg_pool, ucs->utf);
 		elt = rspamd_mempool_alloc(cfg->cfg_pool, sizeof(*elt));
 		elt->elt = lelt;
-		elt->prob = ((gdouble) freq) / ((gdouble) total);
+		elt->prob = ((double) freq) / ((double) total);
 		g_ptr_array_add(chain->languages, elt);
 
 		k = kh_put(rspamd_trigram_hash, htb, ucs->s, &i);
@@ -276,7 +276,7 @@ rspamd_language_detector_init_ngramm(struct rspamd_config *cfg,
 		{
 			if (strcmp(elt->elt->name, lelt->name) == 0) {
 				found = TRUE;
-				elt->prob += ((gdouble) freq) / ((gdouble) total);
+				elt->prob += ((double) freq) / ((double) total);
 				break;
 			}
 		}
@@ -284,14 +284,14 @@ rspamd_language_detector_init_ngramm(struct rspamd_config *cfg,
 		if (!found) {
 			elt = rspamd_mempool_alloc(cfg->cfg_pool, sizeof(*elt));
 			elt->elt = lelt;
-			elt->prob = ((gdouble) freq) / ((gdouble) total);
+			elt->prob = ((double) freq) / ((double) total);
 			g_ptr_array_add(chain->languages, elt);
 		}
 	}
 }
 
 static inline enum rspamd_language_category
-rspamd_language_detector_get_category(guint uflags)
+rspamd_language_detector_get_category(unsigned int uflags)
 {
 	enum rspamd_language_category cat = RSPAMD_LANGUAGE_LATIN;
 
@@ -308,10 +308,10 @@ rspamd_language_detector_get_category(guint uflags)
 	return cat;
 }
 
-static const gchar *
+static const char *
 rspamd_language_detector_print_flags(struct rspamd_language_elt *elt)
 {
-	static gchar flags_buf[256];
+	static char flags_buf[256];
 	goffset r = 0;
 
 	if (elt->flags & RS_LANGUAGE_TIER1) {
@@ -334,19 +334,19 @@ rspamd_language_detector_print_flags(struct rspamd_language_elt *elt)
 	return flags_buf;
 }
 
-static gint
+static int
 rspamd_language_detector_cmp_ngramm(gconstpointer a, gconstpointer b)
 {
 	struct rspamd_language_ucs_elt *e1 = *(struct rspamd_language_ucs_elt **) a;
 	struct rspamd_language_ucs_elt *e2 = *(struct rspamd_language_ucs_elt **) b;
 
-	return (gint) e2->freq - (gint) e1->freq;
+	return (int) e2->freq - (int) e1->freq;
 }
 
 static void
 rspamd_language_detector_read_file(struct rspamd_config *cfg,
 								   struct rspamd_lang_detector *d,
-								   const gchar *path,
+								   const char *path,
 								   const ucl_object_t *stop_words)
 {
 	struct ucl_parser *parser;
@@ -357,10 +357,10 @@ rspamd_language_detector_read_file(struct rspamd_config *cfg,
 	struct rspamd_language_elt *nelt;
 	struct rspamd_language_ucs_elt *ucs_elt;
 	khash_t(rspamd_trigram_hash) *htb = NULL;
-	gchar *pos;
-	guint total = 0, total_latin = 0, total_ngramms = 0, i, skipped,
-		  loaded;
-	gdouble mean = 0, std = 0, delta = 0, delta2 = 0, m2 = 0;
+	char *pos;
+	unsigned int total = 0, total_latin = 0, total_ngramms = 0, i, skipped,
+				 loaded;
+	double mean = 0, std = 0, delta = 0, delta2 = 0, m2 = 0;
 	enum rspamd_language_category cat = RSPAMD_LANGUAGE_MAX;
 
 	parser = ucl_parser_new(UCL_PARSER_NO_FILEVARS);
@@ -416,7 +416,7 @@ rspamd_language_detector_read_file(struct rspamd_config *cfg,
 		return;
 	}
 	else {
-		const gchar *stype = ucl_object_tostring(type);
+		const char *stype = ucl_object_tostring(type);
 
 		if (strcmp(stype, "latin") == 0) {
 			cat = RSPAMD_LANGUAGE_LATIN;
@@ -445,7 +445,7 @@ rspamd_language_detector_read_file(struct rspamd_config *cfg,
 		const ucl_object_t *cur;
 
 		while ((cur = ucl_object_iterate(flags, &it, true)) != NULL) {
-			const gchar *fl = ucl_object_tostring(cur);
+			const char *fl = ucl_object_tostring(cur);
 
 			if (cur) {
 				if (strcmp(fl, "diacritics") == 0) {
@@ -473,7 +473,7 @@ rspamd_language_detector_read_file(struct rspamd_config *cfg,
 			struct sb_stemmer *stem = NULL;
 			it = NULL;
 			const ucl_object_t *w;
-			guint start, stop;
+			unsigned int start, stop;
 
 			stem = sb_stemmer_new(nelt->name, "UTF_8");
 			start = rspamd_multipattern_get_npatterns(d->stop_words[cat].mp);
@@ -482,7 +482,7 @@ rspamd_language_detector_read_file(struct rspamd_config *cfg,
 				gsize wlen;
 				const char *word = ucl_object_tolstring(w, &wlen);
 				const char *saved;
-				guint mp_flags = RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8;
+				unsigned int mp_flags = RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8;
 
 				if (rspamd_multipattern_has_hyperscan()) {
 					mp_flags |= RSPAMD_MULTIPATTERN_RE;
@@ -511,13 +511,13 @@ rspamd_language_detector_read_file(struct rspamd_config *cfg,
 				}
 
 				if (saved) {
-					gint rc;
+					int rc;
 					rspamd_ftok_t *tok;
-					gchar *dst;
+					char *dst;
 
 					tok = rspamd_mempool_alloc(cfg->cfg_pool,
 											   sizeof(*tok) + wlen + 1);
-					dst = ((gchar *) tok) + sizeof(*tok);
+					dst = ((char *) tok) + sizeof(*tok);
 					rspamd_strlcpy(dst, saved, wlen + 1);
 					tok->begin = dst;
 					tok->len = wlen;
@@ -548,7 +548,7 @@ rspamd_language_detector_read_file(struct rspamd_config *cfg,
 	htb = d->trigrams[cat];
 
 	GPtrArray *ngramms;
-	guint nsym;
+	unsigned int nsym;
 
 	if (rspamd_language_search_str(nelt->name, tier1_langs,
 								   G_N_ELEMENTS(tier1_langs))) {
@@ -567,9 +567,9 @@ rspamd_language_detector_read_file(struct rspamd_config *cfg,
 	loaded = 0;
 
 	while ((cur = ucl_object_iterate(freqs, &it, true)) != NULL) {
-		const gchar *key;
+		const char *key;
 		gsize keylen;
-		guint freq;
+		unsigned int freq;
 
 		key = ucl_object_keyl(cur, &keylen);
 		freq = ucl_object_toint(cur);
@@ -603,7 +603,7 @@ rspamd_language_detector_read_file(struct rspamd_config *cfg,
 
 			if (!U_SUCCESS(uc_err)) {
 				msg_warn_config("cannot convert key %*s to unicode: %s",
-								(gint) keylen, key, u_errorName(uc_err));
+								(int) keylen, key, u_errorName(uc_err));
 
 				continue;
 			}
@@ -684,7 +684,7 @@ rspamd_language_detector_read_file(struct rspamd_config *cfg,
 						   "std=%.2f, mean=%.2f, skipped=%d, loaded=%d, stop_words=%d; "
 						   "(%s)",
 						   nelt->name,
-						   (gint) nelt->trigrams_words,
+						   (int) nelt->trigrams_words,
 						   total,
 						   std, mean,
 						   skipped, loaded, nelt->stop_words,
@@ -698,7 +698,7 @@ rspamd_language_detector_read_file(struct rspamd_config *cfg,
 }
 
 static gboolean
-rspamd_ucl_array_find_str(const gchar *str, const ucl_object_t *ar)
+rspamd_ucl_array_find_str(const char *str, const ucl_object_t *ar)
 {
 	ucl_object_iter_t it = NULL;
 	const ucl_object_t *cur;
@@ -722,8 +722,8 @@ rspamd_language_detector_process_chain(struct rspamd_config *cfg,
 									   struct rspamd_ngramm_chain *chain)
 {
 	struct rspamd_ngramm_elt *elt;
-	guint i;
-	gdouble delta, mean = 0, delta2, m2 = 0, std;
+	unsigned int i;
+	double delta, mean = 0, delta2, m2 = 0, std;
 
 	if (chain->languages->len > 3) {
 		PTR_ARRAY_FOREACH(chain->languages, i, elt)
@@ -767,7 +767,7 @@ static void
 rspamd_language_detector_dtor(struct rspamd_lang_detector *d)
 {
 	if (d) {
-		for (guint i = 0; i < RSPAMD_LANGUAGE_MAX; i++) {
+		for (unsigned int i = 0; i < RSPAMD_LANGUAGE_MAX; i++) {
 			kh_destroy(rspamd_trigram_hash, d->trigrams[i]);
 			rspamd_multipattern_destroy(d->stop_words[i].mp);
 			g_array_free(d->stop_words[i].ranges, TRUE);
@@ -787,13 +787,13 @@ rspamd_language_detector_init(struct rspamd_config *cfg)
 {
 	const ucl_object_t *section, *elt, *languages_enable = NULL,
 									   *languages_disable = NULL;
-	const gchar *languages_path = default_languages_path;
+	const char *languages_path = default_languages_path;
 	glob_t gl;
 	size_t i, short_text_limit = default_short_text_limit, total = 0;
 	UErrorCode uc_err = U_ZERO_ERROR;
 	GString *languages_pattern;
 	struct rspamd_ngramm_chain *chain, schain;
-	gchar *fname;
+	char *fname;
 	struct rspamd_lang_detector *ret = NULL;
 	struct ucl_parser *parser;
 	ucl_object_t *stop_words;
@@ -912,8 +912,8 @@ rspamd_language_detector_init(struct rspamd_config *cfg)
 
 	msg_info_config("loaded %d languages, "
 					"%d trigrams; %s",
-					(gint) kh_size(ret->languages),
-					(gint) total, fasttext_status);
+					(int) kh_size(ret->languages),
+					(int) total, fasttext_status);
 	g_free(fasttext_status);
 
 	if (stop_words) {
@@ -936,11 +936,11 @@ end:
 }
 
 static void
-rspamd_language_detector_random_select(GArray *ucs_tokens, guint nwords,
+rspamd_language_detector_random_select(GArray *ucs_tokens, unsigned int nwords,
 									   goffset *offsets_out,
 									   uint64_t *seed)
 {
-	guint step_len, remainder, i, out_idx;
+	unsigned int step_len, remainder, i, out_idx;
 	uint64_t coin, sel;
 	rspamd_stat_token_t *tok;
 
@@ -973,7 +973,7 @@ rspamd_language_detector_random_select(GArray *ucs_tokens, guint nwords,
 
 	for (i = step_len + remainder; i < ucs_tokens->len;
 		 i += step_len, out_idx++) {
-		guint ntries = 0;
+		unsigned int ntries = 0;
 		coin = rspamd_random_uint64_fast_seed(seed);
 		sel = (coin % step_len) + i;
 
@@ -1028,9 +1028,9 @@ rspamd_language_detector_random_select(GArray *ucs_tokens, guint nwords,
 
 static goffset
 rspamd_language_detector_next_ngramm(rspamd_stat_token_t *tok, UChar32 *window,
-									 guint wlen, goffset cur_off)
+									 unsigned int wlen, goffset cur_off)
 {
-	guint i;
+	unsigned int i;
 
 	if (wlen > 1) {
 		/* Deal with spaces at the beginning and ending */
@@ -1081,13 +1081,13 @@ rspamd_language_detector_process_ngramm_full(struct rspamd_task *task,
 											 khash_t(rspamd_candidates_hash) * candidates,
 											 khash_t(rspamd_trigram_hash) * trigrams)
 {
-	guint i;
-	gint ret;
+	unsigned int i;
+	int ret;
 	struct rspamd_ngramm_chain *chain = NULL;
 	struct rspamd_ngramm_elt *elt;
 	struct rspamd_lang_detector_res *cand;
 	khiter_t k;
-	gdouble prob;
+	double prob;
 
 	k = kh_get(rspamd_trigram_hash, trigrams, window);
 	if (k != kh_end(trigrams)) {
@@ -1140,7 +1140,7 @@ rspamd_language_detector_detect_word(struct rspamd_task *task,
 									 khash_t(rspamd_candidates_hash) * candidates,
 									 khash_t(rspamd_trigram_hash) * trigrams)
 {
-	const guint wlen = 3;
+	const unsigned int wlen = 3;
 	UChar32 window[3];
 	goffset cur = 0;
 
@@ -1151,7 +1151,7 @@ rspamd_language_detector_detect_word(struct rspamd_task *task,
 	}
 }
 
-static const gdouble cutoff_limit = -8.0;
+static const double cutoff_limit = -8.0;
 /*
  * Converts frequencies to log probabilities, filter those candidates who
  * has the lowest probabilities
@@ -1160,7 +1160,7 @@ static const gdouble cutoff_limit = -8.0;
 static inline void
 rspamd_language_detector_filter_step1(struct rspamd_task *task,
 									  struct rspamd_lang_detector_res *cand,
-									  gdouble *max_prob, guint *filtered)
+									  double *max_prob, unsigned int *filtered)
 {
 	if (!isnan(cand->prob)) {
 		if (cand->prob == 0) {
@@ -1189,7 +1189,7 @@ rspamd_language_detector_filter_step1(struct rspamd_task *task,
 static inline void
 rspamd_language_detector_filter_step2(struct rspamd_task *task,
 									  struct rspamd_lang_detector_res *cand,
-									  gdouble max_prob, guint *filtered)
+									  double max_prob, unsigned int *filtered)
 {
 	/*
 		 * Probabilities are logarithmic, so if prob1 - prob2 > 4, it means that
@@ -1208,8 +1208,8 @@ rspamd_language_detector_filter_negligible(struct rspamd_task *task,
 										   khash_t(rspamd_candidates_hash) * candidates)
 {
 	struct rspamd_lang_detector_res *cand;
-	guint filtered = 0;
-	gdouble max_prob = -(G_MAXDOUBLE);
+	unsigned int filtered = 0;
+	double max_prob = -(G_MAXDOUBLE);
 
 	kh_foreach_value(candidates, cand,
 					 rspamd_language_detector_filter_step1(task, cand, &max_prob, &filtered));
@@ -1221,17 +1221,17 @@ rspamd_language_detector_filter_negligible(struct rspamd_task *task,
 
 static void
 rspamd_language_detector_detect_type(struct rspamd_task *task,
-									 guint nwords,
+									 unsigned int nwords,
 									 struct rspamd_lang_detector *d,
 									 GArray *words,
 									 enum rspamd_language_category cat,
 									 khash_t(rspamd_candidates_hash) * candidates,
 									 struct rspamd_mime_text_part *part)
 {
-	guint nparts = MIN(words->len, nwords);
+	unsigned int nparts = MIN(words->len, nwords);
 	goffset *selected_words;
 	rspamd_stat_token_t *tok;
-	guint i;
+	unsigned int i;
 	uint64_t seed;
 
 	/* Seed PRNG with part digest to provide some sort of determinism */
@@ -1255,7 +1255,7 @@ rspamd_language_detector_detect_type(struct rspamd_task *task,
 	g_free(selected_words);
 }
 
-static gint
+static int
 rspamd_language_detector_cmp(gconstpointer a, gconstpointer b)
 {
 	const struct rspamd_lang_detector_res
@@ -1280,14 +1280,14 @@ enum rspamd_language_detected_type {
 
 static enum rspamd_language_detected_type
 rspamd_language_detector_try_ngramm(struct rspamd_task *task,
-									guint nwords,
+									unsigned int nwords,
 									struct rspamd_lang_detector *d,
 									GArray *ucs_tokens,
 									enum rspamd_language_category cat,
 									khash_t(rspamd_candidates_hash) * candidates,
 									struct rspamd_mime_text_part *part)
 {
-	guint cand_len = 0;
+	unsigned int cand_len = 0;
 	struct rspamd_lang_detector_res *cand;
 
 	rspamd_language_detector_detect_type(task,
@@ -1322,15 +1322,15 @@ enum rspamd_language_sort_flags {
 struct rspamd_frequency_sort_cbdata {
 	struct rspamd_lang_detector *d;
 	enum rspamd_language_sort_flags flags;
-	gdouble std;
-	gdouble mean;
+	double std;
+	double mean;
 };
 
-static const gdouble tier0_adjustment = 1.2;
-static const gdouble tier1_adjustment = 0.8;
-static const gdouble frequency_adjustment = 0.8;
+static const double tier0_adjustment = 1.2;
+static const double tier1_adjustment = 0.8;
+static const double frequency_adjustment = 0.8;
 
-static gint
+static int
 rspamd_language_detector_cmp_heuristic(gconstpointer a, gconstpointer b,
 									   gpointer ud)
 {
@@ -1338,18 +1338,18 @@ rspamd_language_detector_cmp_heuristic(gconstpointer a, gconstpointer b,
 	struct rspamd_lang_detector_res
 		*canda = *(struct rspamd_lang_detector_res **) a,
 		*candb = *(struct rspamd_lang_detector_res **) b;
-	gdouble adj;
-	gdouble proba_adjusted, probb_adjusted, freqa, freqb;
+	double adj;
+	double proba_adjusted, probb_adjusted, freqa, freqb;
 
 	if (cbd->d->total_occurrences == 0) {
 		/* Not enough data, compare directly */
 		return rspamd_language_detector_cmp(a, b);
 	}
 
-	freqa = ((gdouble) canda->elt->occurrences) /
-			(gdouble) cbd->d->total_occurrences;
-	freqb = ((gdouble) candb->elt->occurrences) /
-			(gdouble) cbd->d->total_occurrences;
+	freqa = ((double) canda->elt->occurrences) /
+			(double) cbd->d->total_occurrences;
+	freqb = ((double) candb->elt->occurrences) /
+			(double) cbd->d->total_occurrences;
 
 	proba_adjusted = canda->prob;
 	probb_adjusted = candb->prob;
@@ -1405,15 +1405,15 @@ rspamd_language_detector_cmp_heuristic(gconstpointer a, gconstpointer b,
 static void
 rspamd_language_detector_unicode_scripts(struct rspamd_task *task,
 										 struct rspamd_mime_text_part *part,
-										 guint *pchinese,
-										 guint *pspecial)
+										 unsigned int *pchinese,
+										 unsigned int *pspecial)
 {
-	const gchar *p = part->utf_stripped_content->data, *end;
-	guint i = 0, cnt = 0;
+	const char *p = part->utf_stripped_content->data, *end;
+	unsigned int i = 0, cnt = 0;
 	end = p + part->utf_stripped_content->len;
 	int32_t uc, sc;
-	guint nlatin = 0, nchinese = 0, nspecial = 0;
-	const guint cutoff_limit = 32;
+	unsigned int nlatin = 0, nchinese = 0, nspecial = 0;
+	const unsigned int cutoff_limit = 32;
 
 	while (p + i < end) {
 		U8_NEXT(p, i, part->utf_stripped_content->len, uc);
@@ -1527,7 +1527,7 @@ rspamd_language_detector_unicode_scripts(struct rspamd_task *task,
 static inline void
 rspamd_language_detector_set_language(struct rspamd_task *task,
 									  struct rspamd_mime_text_part *part,
-									  const gchar *code,
+									  const char *code,
 									  struct rspamd_language_elt *elt)
 {
 	struct rspamd_lang_detector_res *r;
@@ -1548,10 +1548,10 @@ rspamd_language_detector_set_language(struct rspamd_task *task,
 static gboolean
 rspamd_language_detector_try_uniscript(struct rspamd_task *task,
 									   struct rspamd_mime_text_part *part,
-									   guint nchinese,
-									   guint nspecial)
+									   unsigned int nchinese,
+									   unsigned int nspecial)
 {
-	guint i;
+	unsigned int i;
 
 	for (i = 0; i < G_N_ELEMENTS(unicode_langs); i++) {
 		if (unicode_langs[i].unicode_code & part->unicode_scripts) {
@@ -1598,7 +1598,7 @@ rspamd_language_detector_try_uniscript(struct rspamd_task *task,
 	return FALSE;
 }
 
-static guint
+static unsigned int
 rspamd_langelt_hash_func(gconstpointer key)
 {
 	const struct rspamd_language_elt *elt = (const struct rspamd_language_elt *) key;
@@ -1626,10 +1626,10 @@ struct rspamd_sw_cbdata {
 	GArray *ranges;
 };
 
-static gint
+static int
 rspamd_ranges_cmp(const void *k, const void *memb)
 {
-	gint pos = GPOINTER_TO_INT(k);
+	int pos = GPOINTER_TO_INT(k);
 	const struct rspamd_stop_word_range *r = (struct rspamd_stop_word_range *) memb;
 
 	if (pos >= r->start && pos < r->stop) {
@@ -1642,17 +1642,17 @@ rspamd_ranges_cmp(const void *k, const void *memb)
 	return 1;
 }
 
-static gint
+static int
 rspamd_language_detector_sw_cb(struct rspamd_multipattern *mp,
-							   guint strnum,
-							   gint match_start,
-							   gint match_pos,
-							   const gchar *text,
+							   unsigned int strnum,
+							   int match_start,
+							   int match_pos,
+							   const char *text,
 							   gsize len,
 							   void *context)
 {
 	/* Check if boundary */
-	const gchar *prev = text, *next = text + len;
+	const char *prev = text, *next = text + len;
 	struct rspamd_stop_word_range *r;
 	struct rspamd_sw_cbdata *cbdata = (struct rspamd_sw_cbdata *) context;
 	khiter_t k;
@@ -1683,7 +1683,7 @@ rspamd_language_detector_sw_cb(struct rspamd_multipattern *mp,
 	g_assert(r != NULL);
 
 	k = kh_get(rspamd_sw_hash, cbdata->res, r->elt);
-	gint nwords = 1;
+	int nwords = 1;
 
 	if (k != kh_end(cbdata->res)) {
 		khiter_t set_k;
@@ -1704,7 +1704,7 @@ rspamd_language_detector_sw_cb(struct rspamd_multipattern *mp,
 		}
 	}
 	else {
-		gint tt;
+		int tt;
 
 		k = kh_put(rspamd_sw_hash, cbdata->res, r->elt, &tt);
 		kh_value(cbdata->res, k) = kh_init(rspamd_sw_res_set);
@@ -1824,8 +1824,8 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 {
 	khash_t(rspamd_candidates_hash) * candidates;
 	GPtrArray *result;
-	gdouble mean, std, start_ticks, end_ticks;
-	guint cand_len;
+	double mean, std, start_ticks, end_ticks;
+	unsigned int cand_len;
 	enum rspamd_language_category cat;
 	struct rspamd_lang_detector_res *cand;
 	enum rspamd_language_detected_type r;
@@ -1839,7 +1839,7 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 
 	start_ticks = rspamd_get_ticks(TRUE);
 
-	guint nchinese = 0, nspecial = 0;
+	unsigned int nchinese = 0, nspecial = 0;
 	rspamd_language_detector_unicode_scripts(task, part, &nchinese, &nspecial);
 
 	/* Disable internal language detection heuristics if we have fasttext */
@@ -1968,7 +1968,7 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 						mean /= cand_len;
 
 						kh_foreach_value(candidates, cand, {
-							gdouble err;
+							double err;
 							if (!isnan(cand->prob)) {
 								err = cand->prob - mean;
 								std += fabs(err);
@@ -2076,7 +2076,7 @@ void rspamd_language_detector_unref(struct rspamd_lang_detector *d)
 
 gboolean
 rspamd_language_detector_is_stop_word(struct rspamd_lang_detector *d,
-									  const gchar *word, gsize wlen)
+									  const char *word, gsize wlen)
 {
 	khiter_t k;
 	rspamd_ftok_t search;
@@ -2093,7 +2093,7 @@ rspamd_language_detector_is_stop_word(struct rspamd_lang_detector *d,
 	return FALSE;
 }
 
-gint rspamd_language_detector_elt_flags(const struct rspamd_language_elt *elt)
+int rspamd_language_detector_elt_flags(const struct rspamd_language_elt *elt)
 {
 	if (elt) {
 		return elt->flags;

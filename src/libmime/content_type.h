@@ -46,13 +46,13 @@ enum rspamd_content_param_flags {
 struct rspamd_content_type_param {
 	rspamd_ftok_t name;
 	rspamd_ftok_t value;
-	guint rfc2231_id;
+	unsigned int rfc2231_id;
 	enum rspamd_content_param_flags flags;
 	struct rspamd_content_type_param *prev, *next;
 };
 
 struct rspamd_content_type {
-	gchar *cpy;
+	char *cpy;
 	rspamd_ftok_t type;
 	rspamd_ftok_t subtype;
 	rspamd_ftok_t charset;
@@ -69,7 +69,7 @@ enum rspamd_content_disposition_type {
 };
 
 struct rspamd_content_disposition {
-	gchar *lc_data;
+	char *lc_data;
 	enum rspamd_content_disposition_type type;
 	rspamd_ftok_t filename;
 	GHashTable *attrs; /* Can be empty */
@@ -85,8 +85,8 @@ struct rspamd_content_disposition {
  */
 void rspamd_content_type_add_param(rspamd_mempool_t *pool,
 								   struct rspamd_content_type *ct,
-								   gchar *name_start, gchar *name_end,
-								   gchar *value_start, gchar *value_end);
+								   char *name_start, char *name_end,
+								   char *value_start, char *value_end);
 
 /**
  * Parse content type from the header (performs copy + lowercase)
@@ -95,7 +95,7 @@ void rspamd_content_type_add_param(rspamd_mempool_t *pool,
  * @param pool
  * @return
  */
-struct rspamd_content_type *rspamd_content_type_parse(const gchar *in,
+struct rspamd_content_type *rspamd_content_type_parse(const char *in,
 													  gsize len, rspamd_mempool_t *pool);
 
 /**
@@ -109,8 +109,8 @@ struct rspamd_content_type *rspamd_content_type_parse(const gchar *in,
  */
 void rspamd_content_disposition_add_param(rspamd_mempool_t *pool,
 										  struct rspamd_content_disposition *cd,
-										  const gchar *name_start, const gchar *name_end,
-										  const gchar *value_start, const gchar *value_end);
+										  const char *name_start, const char *name_end,
+										  const char *value_start, const char *value_end);
 
 /**
  * Parse content-disposition header
@@ -119,7 +119,7 @@ void rspamd_content_disposition_add_param(rspamd_mempool_t *pool,
  * @param pool
  * @return
  */
-struct rspamd_content_disposition *rspamd_content_disposition_parse(const gchar *in,
+struct rspamd_content_disposition *rspamd_content_disposition_parse(const char *in,
 																	gsize len,
 																	rspamd_mempool_t *pool);
 

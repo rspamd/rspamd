@@ -46,14 +46,14 @@
 #define SET_PART_RAW(part) ((part)->flags &= ~RSPAMD_MIME_TEXT_PART_FLAG_UTF)
 #define SET_PART_UTF(part) ((part)->flags |= RSPAMD_MIME_TEXT_PART_FLAG_UTF)
 
-static const gchar gtube_pattern_reject[] = "XJS*C4JDBQADN1.NSBN3*2IDNEN*"
-											"GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
-static const gchar gtube_pattern_add_header[] = "YJS*C4JDBQADN1.NSBN3*2IDNEN*"
-												"GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
-static const gchar gtube_pattern_rewrite_subject[] = "ZJS*C4JDBQADN1.NSBN3*2IDNEN*"
-													 "GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
-static const gchar gtube_pattern_no_action[] = "AJS*C4JDBQADN1.NSBN3*2IDNEN*"
+static const char gtube_pattern_reject[] = "XJS*C4JDBQADN1.NSBN3*2IDNEN*"
+										   "GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
+static const char gtube_pattern_add_header[] = "YJS*C4JDBQADN1.NSBN3*2IDNEN*"
 											   "GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
+static const char gtube_pattern_rewrite_subject[] = "ZJS*C4JDBQADN1.NSBN3*2IDNEN*"
+													"GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
+static const char gtube_pattern_no_action[] = "AJS*C4JDBQADN1.NSBN3*2IDNEN*"
+											  "GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
 struct rspamd_multipattern *gtube_matcher = NULL;
 static const uint64_t words_hash_seed = 0xdeadbabe;
 
@@ -69,7 +69,7 @@ rspamd_mime_part_extract_words(struct rspamd_task *task,
 							   struct rspamd_mime_text_part *part)
 {
 	rspamd_stat_token_t *w;
-	guint i, total_len = 0, short_len = 0;
+	unsigned int i, total_len = 0, short_len = 0;
 
 	if (part->utf_words) {
 		rspamd_stem_words(part->utf_words, task->task_pool, part->language,
@@ -109,7 +109,7 @@ rspamd_mime_part_extract_words(struct rspamd_task *task,
 		}
 
 		if (part->utf_words->len) {
-			gdouble *avg_len_p, *short_len_p;
+			double *avg_len_p, *short_len_p;
 
 			avg_len_p = rspamd_mempool_get_variable(task->task_pool,
 													RSPAMD_MEMPOOL_AVG_WORDS_LEN);
@@ -152,8 +152,8 @@ rspamd_mime_part_create_words(struct rspamd_task *task,
 
 #if U_ICU_VERSION_MAJOR_NUM < 50
 		/* Hack to prevent hang with Thai in old libicu */
-		const gchar *p = part->utf_stripped_content->data, *end;
-		guint i = 0;
+		const char *p = part->utf_stripped_content->data, *end;
+		unsigned int i = 0;
 		end = p + part->utf_stripped_content->len;
 		int32_t uc, sc;
 
@@ -225,10 +225,10 @@ rspamd_mime_part_detect_language(struct rspamd_task *task,
 
 static void
 rspamd_strip_newlines_parse(struct rspamd_task *task,
-							const gchar *begin, const gchar *pe,
+							const char *begin, const char *pe,
 							struct rspamd_mime_text_part *part)
 {
-	const gchar *p = begin, *c = begin;
+	const char *p = begin, *c = begin;
 	gboolean crlf_added = FALSE, is_utf = IS_TEXT_PART_UTF(part);
 	gboolean url_open_bracket = FALSE;
 	UChar32 uc;
@@ -253,7 +253,7 @@ rspamd_strip_newlines_parse(struct rspamd_task *task,
 
 						if (p > c) {
 							g_byte_array_append(part->utf_stripped_content,
-												(const guint8 *) c, p - c);
+												(const uint8_t *) c, p - c);
 							c = begin + off;
 							p = c;
 						}
@@ -290,7 +290,7 @@ rspamd_strip_newlines_parse(struct rspamd_task *task,
 				state = seen_cr;
 				if (p > c) {
 					g_byte_array_append(part->utf_stripped_content,
-										(const guint8 *) c, p - c);
+										(const uint8_t *) c, p - c);
 				}
 
 				crlf_added = FALSE;
@@ -300,7 +300,7 @@ rspamd_strip_newlines_parse(struct rspamd_task *task,
 				/* Double \r\r */
 				if (!crlf_added) {
 					g_byte_array_append(part->utf_stripped_content,
-										(const guint8 *) " ", 1);
+										(const uint8_t *) " ", 1);
 					crlf_added = TRUE;
 					g_ptr_array_add(part->newlines,
 									(((gpointer) (goffset) (part->utf_stripped_content->len))));
@@ -328,14 +328,14 @@ rspamd_strip_newlines_parse(struct rspamd_task *task,
 
 				if (p > c) {
 					g_byte_array_append(part->utf_stripped_content,
-										(const guint8 *) c, p - c);
+										(const uint8_t *) c, p - c);
 				}
 
 				c = p + 1;
 
 				if (IS_TEXT_PART_HTML(part) || !url_open_bracket) {
 					g_byte_array_append(part->utf_stripped_content,
-										(const guint8 *) " ", 1);
+										(const uint8_t *) " ", 1);
 					g_ptr_array_add(part->newlines,
 									(((gpointer) (goffset) (part->utf_stripped_content->len))));
 					crlf_added = TRUE;
@@ -350,7 +350,7 @@ rspamd_strip_newlines_parse(struct rspamd_task *task,
 				if (!crlf_added) {
 					if (IS_TEXT_PART_HTML(part) || !url_open_bracket) {
 						g_byte_array_append(part->utf_stripped_content,
-											(const guint8 *) " ", 1);
+											(const uint8_t *) " ", 1);
 						crlf_added = TRUE;
 					}
 
@@ -366,7 +366,7 @@ rspamd_strip_newlines_parse(struct rspamd_task *task,
 				/* Double \n\n */
 				if (!crlf_added) {
 					g_byte_array_append(part->utf_stripped_content,
-										(const guint8 *) " ", 1);
+										(const uint8_t *) " ", 1);
 					crlf_added = TRUE;
 					g_ptr_array_add(part->newlines,
 									(((gpointer) (goffset) (part->utf_stripped_content->len))));
@@ -430,7 +430,7 @@ rspamd_strip_newlines_parse(struct rspamd_task *task,
 				if (*p == ' ') {
 					if (!crlf_added) {
 						g_byte_array_append(part->utf_stripped_content,
-											(const guint8 *) " ", 1);
+											(const uint8_t *) " ", 1);
 					}
 
 					while (p < pe && *p == ' ') {
@@ -461,7 +461,7 @@ rspamd_strip_newlines_parse(struct rspamd_task *task,
 		switch (state) {
 		case normal_char:
 			g_byte_array_append(part->utf_stripped_content,
-								(const guint8 *) c, p - c);
+								(const uint8_t *) c, p - c);
 
 			while (c < p) {
 				if (*c == ' ') {
@@ -489,7 +489,7 @@ rspamd_strip_newlines_parse(struct rspamd_task *task,
 
 			if (!crlf_added) {
 				g_byte_array_append(part->utf_stripped_content,
-									(const guint8 *) " ", 1);
+									(const uint8_t *) " ", 1);
 				g_ptr_array_add(part->newlines,
 								(((gpointer) (goffset) (part->utf_stripped_content->len))));
 			}
@@ -510,8 +510,8 @@ static void
 rspamd_normalize_text_part(struct rspamd_task *task,
 						   struct rspamd_mime_text_part *part)
 {
-	const gchar *p, *end;
-	guint i;
+	const char *p, *end;
+	unsigned int i;
 	goffset off;
 	struct rspamd_process_exception *ex;
 	UErrorCode uc_err = U_ZERO_ERROR;
@@ -524,7 +524,7 @@ rspamd_normalize_text_part(struct rspamd_task *task,
 	else {
 		part->utf_stripped_content = g_byte_array_sized_new(part->utf_content.len);
 
-		p = (const gchar *) part->utf_content.begin;
+		p = (const char *) part->utf_content.begin;
 		end = p + part->utf_content.len;
 
 		rspamd_strip_newlines_parse(task, p, end, part);
@@ -569,15 +569,15 @@ rspamd_normalize_text_part(struct rspamd_task *task,
 
 #define MIN3(a, b, c) ((a) < (b) ? ((a) < (c) ? (a) : (c)) : ((b) < (c) ? (b) : (c)))
 
-static guint
+static unsigned int
 rspamd_words_levenshtein_distance(struct rspamd_task *task,
 								  GArray *w1, GArray *w2)
 {
-	guint s1len, s2len, x, y, lastdiag, olddiag;
-	guint *column, ret;
+	unsigned int s1len, s2len, x, y, lastdiag, olddiag;
+	unsigned int *column, ret;
 	uint64_t h1, h2;
-	gint eq;
-	static const guint max_words = 8192;
+	int eq;
+	static const unsigned int max_words = 8192;
 
 	s1len = w1->len;
 	s2len = w2->len;
@@ -596,7 +596,7 @@ rspamd_words_levenshtein_distance(struct rspamd_task *task,
 		}
 	}
 
-	column = g_malloc0((s1len + 1) * sizeof(guint));
+	column = g_malloc0((s1len + 1) * sizeof(unsigned int));
 
 	for (y = 1; y <= s1len; y++) {
 		column[y] = y;
@@ -626,12 +626,12 @@ rspamd_words_levenshtein_distance(struct rspamd_task *task,
 	return ret;
 }
 
-static gint
+static int
 rspamd_multipattern_gtube_cb(struct rspamd_multipattern *mp,
-							 guint strnum,
-							 gint match_start,
-							 gint match_pos,
-							 const gchar *text,
+							 unsigned int strnum,
+							 int match_start,
+							 int match_pos,
+							 const char *text,
 							 gsize len,
 							 void *context)
 {
@@ -652,7 +652,7 @@ static enum rspamd_action_type
 rspamd_check_gtube(struct rspamd_task *task, struct rspamd_mime_text_part *part)
 {
 	static const gsize max_check_size = 8 * 1024;
-	gint ret;
+	int ret;
 	enum rspamd_action_type act = METRIC_ACTION_NOACTION;
 	enum rspamd_gtube_patterns_policy policy = task->cfg ? task->cfg->gtube_patterns_policy : RSPAMD_GTUBE_REJECT;
 	g_assert(part != NULL);
@@ -719,7 +719,7 @@ rspamd_check_gtube(struct rspamd_task *task, struct rspamd_mime_text_part *part)
 	return act;
 }
 
-static gint
+static int
 exceptions_compare_func(gconstpointer a, gconstpointer b)
 {
 	const struct rspamd_process_exception *ea = a, *eb = b;
@@ -741,7 +741,7 @@ rspamd_message_process_plain_text_part(struct rspamd_task *task,
 
 	if (text_part->utf_raw_content != NULL) {
 		/* Just have the same content */
-		text_part->utf_content.begin = (const gchar *) text_part->utf_raw_content->data;
+		text_part->utf_content.begin = (const char *) text_part->utf_raw_content->data;
 		text_part->utf_content.len = text_part->utf_raw_content->len;
 	}
 	else {
@@ -845,7 +845,7 @@ rspamd_message_process_text_part_maybe(struct rspamd_task *task,
 									   uint16_t *cur_url_order)
 {
 	struct rspamd_mime_text_part *text_part;
-	guint flags = 0;
+	unsigned int flags = 0;
 	enum rspamd_action_type act;
 
 	/* Skip attachments */
@@ -881,7 +881,7 @@ rspamd_message_process_text_part_maybe(struct rspamd_task *task,
 	act = rspamd_check_gtube(task, text_part);
 	if (act != METRIC_ACTION_NOACTION) {
 		struct rspamd_action *action;
-		gdouble score = NAN;
+		double score = NAN;
 
 		action = rspamd_config_get_action_by_type(task->cfg, act);
 
@@ -950,15 +950,15 @@ rspamd_message_process_text_part_maybe(struct rspamd_task *task,
 
 /* Creates message from various data using libmagic to detect type */
 static void
-rspamd_message_from_data(struct rspamd_task *task, const guchar *start,
+rspamd_message_from_data(struct rspamd_task *task, const unsigned char *start,
 						 gsize len)
 {
 	struct rspamd_content_type *ct = NULL;
 	struct rspamd_mime_part *part;
 	const char *mb = "application/octet-stream";
-	gchar *mid;
+	char *mid;
 	rspamd_ftok_t srch, *tok;
-	gchar cdbuf[1024];
+	char cdbuf[1024];
 
 	g_assert(start != NULL);
 
@@ -1075,7 +1075,7 @@ rspamd_message_from_data(struct rspamd_task *task, const guchar *start,
 static void
 rspamd_message_dtor(struct rspamd_message *msg)
 {
-	guint i;
+	unsigned int i;
 	struct rspamd_mime_part *p;
 	struct rspamd_mime_text_part *tp;
 
@@ -1146,9 +1146,9 @@ rspamd_message_new(struct rspamd_task *task)
 gboolean
 rspamd_message_parse(struct rspamd_task *task)
 {
-	const gchar *p;
+	const char *p;
 	gsize len;
-	guint i;
+	unsigned int i;
 	GError *err = NULL;
 	uint64_t n[2], seed;
 
@@ -1205,7 +1205,7 @@ rspamd_message_parse(struct rspamd_task *task)
 		enum rspamd_mime_parse_error ret;
 
 		debug_task("construct mime parser from string length %d",
-				   (gint) task->msg.len);
+				   (int) task->msg.len);
 		ret = rspamd_mime_parse_task(task, &err);
 
 		switch (ret) {
@@ -1257,7 +1257,7 @@ rspamd_message_parse(struct rspamd_task *task)
 	struct rspamd_mime_part *part;
 
 	/* Blake2b applied to string 'rspamd' */
-	static const guchar RSPAMD_ALIGNED(32) hash_key[] = {
+	static const unsigned char RSPAMD_ALIGNED(32) hash_key[] = {
 		0xef,
 		0x43,
 		0xae,
@@ -1350,13 +1350,13 @@ rspamd_message_parse(struct rspamd_task *task)
 		msg_info_task("loaded message; id: <%s>; queue-id: <%s>; size: %z; "
 					  "checksum: <%*xs>",
 					  MESSAGE_FIELD(task, message_id), task->queue_id, task->msg.len,
-					  (gint) sizeof(MESSAGE_FIELD(task, digest)), MESSAGE_FIELD(task, digest));
+					  (int) sizeof(MESSAGE_FIELD(task, digest)), MESSAGE_FIELD(task, digest));
 	}
 	else {
 		msg_info_task("loaded message; id: <%s>; size: %z; "
 					  "checksum: <%*xs>",
 					  MESSAGE_FIELD(task, message_id), task->msg.len,
-					  (gint) sizeof(MESSAGE_FIELD(task, digest)), MESSAGE_FIELD(task, digest));
+					  (int) sizeof(MESSAGE_FIELD(task, digest)), MESSAGE_FIELD(task, digest));
 	}
 
 	return TRUE;
@@ -1394,13 +1394,13 @@ rspamd_mime_text_part_position_compare_func(const void *v1, const void *v2)
 
 void rspamd_message_process(struct rspamd_task *task)
 {
-	guint i;
+	unsigned int i;
 	struct rspamd_mime_text_part *p1, *p2;
-	gdouble diff, *pdiff;
-	guint tw, *ptw, dw;
+	double diff, *pdiff;
+	unsigned int tw, *ptw, dw;
 	struct rspamd_mime_part *part;
 	lua_State *L = NULL;
-	gint magic_func_pos = -1, content_func_pos = -1, old_top = -1, funcs_top = -1;
+	int magic_func_pos = -1, content_func_pos = -1, old_top = -1, funcs_top = -1;
 
 	if (task->cfg) {
 		L = task->cfg->lua_state;
@@ -1441,7 +1441,7 @@ void rspamd_message_process(struct rspamd_task *task)
 			struct rspamd_task **ptask;
 
 			lua_pushcfunction(L, &rspamd_lua_traceback);
-			gint err_idx = lua_gettop(L);
+			int err_idx = lua_gettop(L);
 			lua_pushvalue(L, magic_func_pos);
 			pmime = lua_newuserdata(L, sizeof(struct rspamd_mime_part *));
 			rspamd_lua_setclass(L, rspamd_mimepart_classname, -1);
@@ -1455,7 +1455,7 @@ void rspamd_message_process(struct rspamd_task *task)
 			}
 			else {
 				if (lua_istable(L, -1)) {
-					const gchar *mb;
+					const char *mb;
 
 					/* First returned value */
 					part->detected_ext = rspamd_mempool_strdup(task->task_pool,
@@ -1513,7 +1513,7 @@ void rspamd_message_process(struct rspamd_task *task)
 			struct rspamd_task **ptask;
 
 			lua_pushcfunction(L, &rspamd_lua_traceback);
-			gint err_idx = lua_gettop(L);
+			int err_idx = lua_gettop(L);
 			lua_pushvalue(L, content_func_pos);
 			pmime = lua_newuserdata(L, sizeof(struct rspamd_mime_part *));
 			rspamd_lua_setclass(L, rspamd_mimepart_classname, -1);
@@ -1572,8 +1572,8 @@ void rspamd_message_process(struct rspamd_task *task)
 
 	/* Calculate average words length and number of short words */
 	struct rspamd_mime_text_part *text_part;
-	gdouble *var;
-	guint total_words = 0;
+	double *var;
+	unsigned int total_words = 0;
 
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, text_part)
 	{
@@ -1651,7 +1651,7 @@ void rspamd_message_process(struct rspamd_task *task)
 						dw = rspamd_words_levenshtein_distance(task,
 															   p1->normalized_hashes,
 															   p2->normalized_hashes);
-						diff = dw / (gdouble) tw;
+						diff = dw / (double) tw;
 
 						msg_debug_task(
 							"different words: %d, total words: %d, "
@@ -1660,14 +1660,14 @@ void rspamd_message_process(struct rspamd_task *task)
 							diff);
 
 						pdiff = rspamd_mempool_alloc(task->task_pool,
-													 sizeof(gdouble));
+													 sizeof(double));
 						*pdiff = diff;
 						rspamd_mempool_set_variable(task->task_pool,
 													"parts_distance",
 													pdiff,
 													NULL);
 						ptw = rspamd_mempool_alloc(task->task_pool,
-												   sizeof(gint));
+												   sizeof(int));
 						*ptw = tw;
 						rspamd_mempool_set_variable(task->task_pool,
 													"total_words",

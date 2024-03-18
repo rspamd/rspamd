@@ -31,7 +31,7 @@ struct rspamd_fuzzy_backend_sqlite;
  * @param err error pointer
  * @return backend structure or NULL
  */
-struct rspamd_fuzzy_backend_sqlite *rspamd_fuzzy_backend_sqlite_open(const gchar *path,
+struct rspamd_fuzzy_backend_sqlite *rspamd_fuzzy_backend_sqlite_open(const char *path,
 																	 gboolean vacuum,
 																	 GError **err);
 
@@ -50,7 +50,7 @@ struct rspamd_fuzzy_reply rspamd_fuzzy_backend_sqlite_check(
  * Prepare storage for updates (by starting transaction)
  */
 gboolean rspamd_fuzzy_backend_sqlite_prepare_update(struct rspamd_fuzzy_backend_sqlite *backend,
-													const gchar *source);
+													const char *source);
 
 /**
  * Add digest to the database
@@ -75,7 +75,7 @@ gboolean rspamd_fuzzy_backend_sqlite_del(
  * Commit updates to storage
  */
 gboolean rspamd_fuzzy_backend_sqlite_finish_update(struct rspamd_fuzzy_backend_sqlite *backend,
-												   const gchar *source, gboolean version_bump);
+												   const char *source, gboolean version_bump);
 
 /**
  * Sync storage
@@ -94,11 +94,11 @@ void rspamd_fuzzy_backend_sqlite_close(struct rspamd_fuzzy_backend_sqlite *backe
 
 gsize rspamd_fuzzy_backend_sqlite_count(struct rspamd_fuzzy_backend_sqlite *backend);
 
-gint rspamd_fuzzy_backend_sqlite_version(struct rspamd_fuzzy_backend_sqlite *backend, const gchar *source);
+int rspamd_fuzzy_backend_sqlite_version(struct rspamd_fuzzy_backend_sqlite *backend, const char *source);
 
 gsize rspamd_fuzzy_backend_sqlite_expired(struct rspamd_fuzzy_backend_sqlite *backend);
 
-const gchar *rspamd_fuzzy_sqlite_backend_id(struct rspamd_fuzzy_backend_sqlite *backend);
+const char *rspamd_fuzzy_sqlite_backend_id(struct rspamd_fuzzy_backend_sqlite *backend);
 
 #ifdef __cplusplus
 }

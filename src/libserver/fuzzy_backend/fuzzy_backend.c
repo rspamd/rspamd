@@ -35,18 +35,18 @@ static void rspamd_fuzzy_backend_check_sqlite(struct rspamd_fuzzy_backend *bk,
 											  rspamd_fuzzy_check_cb cb, void *ud,
 											  void *subr_ud);
 static void rspamd_fuzzy_backend_update_sqlite(struct rspamd_fuzzy_backend *bk,
-											   GArray *updates, const gchar *src,
+											   GArray *updates, const char *src,
 											   rspamd_fuzzy_update_cb cb, void *ud,
 											   void *subr_ud);
 static void rspamd_fuzzy_backend_count_sqlite(struct rspamd_fuzzy_backend *bk,
 											  rspamd_fuzzy_count_cb cb, void *ud,
 											  void *subr_ud);
 static void rspamd_fuzzy_backend_version_sqlite(struct rspamd_fuzzy_backend *bk,
-												const gchar *src,
+												const char *src,
 												rspamd_fuzzy_version_cb cb, void *ud,
 												void *subr_ud);
-static const gchar *rspamd_fuzzy_backend_id_sqlite(struct rspamd_fuzzy_backend *bk,
-												   void *subr_ud);
+static const char *rspamd_fuzzy_backend_id_sqlite(struct rspamd_fuzzy_backend *bk,
+												  void *subr_ud);
 static void rspamd_fuzzy_backend_expire_sqlite(struct rspamd_fuzzy_backend *bk,
 											   void *subr_ud);
 static void rspamd_fuzzy_backend_close_sqlite(struct rspamd_fuzzy_backend *bk,
@@ -61,17 +61,17 @@ struct rspamd_fuzzy_backend_subr {
 				  rspamd_fuzzy_check_cb cb, void *ud,
 				  void *subr_ud);
 	void (*update)(struct rspamd_fuzzy_backend *bk,
-				   GArray *updates, const gchar *src,
+				   GArray *updates, const char *src,
 				   rspamd_fuzzy_update_cb cb, void *ud,
 				   void *subr_ud);
 	void (*count)(struct rspamd_fuzzy_backend *bk,
 				  rspamd_fuzzy_count_cb cb, void *ud,
 				  void *subr_ud);
 	void (*version)(struct rspamd_fuzzy_backend *bk,
-					const gchar *src,
+					const char *src,
 					rspamd_fuzzy_version_cb cb, void *ud,
 					void *subr_ud);
-	const gchar *(*id)(struct rspamd_fuzzy_backend *bk, void *subr_ud);
+	const char *(*id)(struct rspamd_fuzzy_backend *bk, void *subr_ud);
 	void (*periodic)(struct rspamd_fuzzy_backend *bk, void *subr_ud);
 	void (*close)(struct rspamd_fuzzy_backend *bk, void *subr_ud);
 };
@@ -100,8 +100,8 @@ static const struct rspamd_fuzzy_backend_subr fuzzy_subrs[] = {
 
 struct rspamd_fuzzy_backend {
 	enum rspamd_fuzzy_backend_type type;
-	gdouble expire;
-	gdouble sync;
+	double expire;
+	double sync;
 	struct ev_loop *event_loop;
 	rspamd_fuzzy_periodic_cb periodic_cb;
 	void *periodic_ud;
@@ -153,17 +153,17 @@ rspamd_fuzzy_backend_check_sqlite(struct rspamd_fuzzy_backend *bk,
 
 static void
 rspamd_fuzzy_backend_update_sqlite(struct rspamd_fuzzy_backend *bk,
-								   GArray *updates, const gchar *src,
+								   GArray *updates, const char *src,
 								   rspamd_fuzzy_update_cb cb, void *ud,
 								   void *subr_ud)
 {
 	struct rspamd_fuzzy_backend_sqlite *sq = subr_ud;
 	gboolean success = FALSE;
-	guint i;
+	unsigned int i;
 	struct fuzzy_peer_cmd *io_cmd;
 	struct rspamd_fuzzy_cmd *cmd;
 	gpointer ptr;
-	guint nupdates = 0, nadded = 0, ndeleted = 0, nextended = 0, nignored = 0;
+	unsigned int nupdates = 0, nadded = 0, ndeleted = 0, nextended = 0, nignored = 0;
 
 	if (rspamd_fuzzy_backend_sqlite_prepare_update(sq, src)) {
 		for (i = 0; i < updates->len; i++) {
@@ -226,7 +226,7 @@ rspamd_fuzzy_backend_count_sqlite(struct rspamd_fuzzy_backend *bk,
 
 static void
 rspamd_fuzzy_backend_version_sqlite(struct rspamd_fuzzy_backend *bk,
-									const gchar *src,
+									const char *src,
 									rspamd_fuzzy_version_cb cb, void *ud,
 									void *subr_ud)
 {
@@ -240,7 +240,7 @@ rspamd_fuzzy_backend_version_sqlite(struct rspamd_fuzzy_backend *bk,
 	}
 }
 
-static const gchar *
+static const char *
 rspamd_fuzzy_backend_id_sqlite(struct rspamd_fuzzy_backend *bk,
 							   void *subr_ud)
 {
@@ -276,7 +276,7 @@ rspamd_fuzzy_backend_create(struct ev_loop *ev_base,
 	struct rspamd_fuzzy_backend *bk;
 	enum rspamd_fuzzy_backend_type type = RSPAMD_FUZZY_BACKEND_SQLITE;
 	const ucl_object_t *elt;
-	gdouble expire = DEFAULT_EXPIRE;
+	double expire = DEFAULT_EXPIRE;
 
 	if (config != NULL) {
 		elt = ucl_object_lookup(config, "backend");
@@ -328,10 +328,10 @@ void rspamd_fuzzy_backend_check(struct rspamd_fuzzy_backend *bk,
 	bk->subr->check(bk, cmd, cb, ud, bk->subr_ud);
 }
 
-static guint
+static unsigned int
 rspamd_fuzzy_digest_hash(gconstpointer key)
 {
-	guint ret;
+	unsigned int ret;
 
 	/* Distributed uniformly already */
 	memcpy(&ret, key, sizeof(ret));
@@ -352,8 +352,8 @@ rspamd_fuzzy_backend_deduplicate_queue(GArray *updates)
 										rspamd_fuzzy_digest_equal);
 	struct fuzzy_peer_cmd *io_cmd, *found;
 	struct rspamd_fuzzy_cmd *cmd;
-	guchar *digest;
-	guint i;
+	unsigned char *digest;
+	unsigned int i;
 
 	for (i = 0; i < updates->len; i++) {
 		io_cmd = &g_array_index(updates, struct fuzzy_peer_cmd, i);
@@ -428,7 +428,7 @@ rspamd_fuzzy_backend_deduplicate_queue(GArray *updates)
 }
 
 void rspamd_fuzzy_backend_process_updates(struct rspamd_fuzzy_backend *bk,
-										  GArray *updates, const gchar *src, rspamd_fuzzy_update_cb cb,
+										  GArray *updates, const char *src, rspamd_fuzzy_update_cb cb,
 										  void *ud)
 {
 	g_assert(bk != NULL);
@@ -454,7 +454,7 @@ void rspamd_fuzzy_backend_count(struct rspamd_fuzzy_backend *bk,
 
 
 void rspamd_fuzzy_backend_version(struct rspamd_fuzzy_backend *bk,
-								  const gchar *src,
+								  const char *src,
 								  rspamd_fuzzy_version_cb cb, void *ud)
 {
 	g_assert(bk != NULL);
@@ -462,7 +462,7 @@ void rspamd_fuzzy_backend_version(struct rspamd_fuzzy_backend *bk,
 	bk->subr->version(bk, src, cb, ud, bk->subr_ud);
 }
 
-const gchar *
+const char *
 rspamd_fuzzy_backend_id(struct rspamd_fuzzy_backend *bk)
 {
 	g_assert(bk != NULL);
@@ -495,7 +495,7 @@ static void
 rspamd_fuzzy_backend_periodic_cb(EV_P_ ev_timer *w, int revents)
 {
 	struct rspamd_fuzzy_backend *bk = (struct rspamd_fuzzy_backend *) w->data;
-	gdouble jittered;
+	double jittered;
 
 	jittered = rspamd_time_jitter(bk->sync, bk->sync / 2.0);
 	w->repeat = jittered;
@@ -504,11 +504,11 @@ rspamd_fuzzy_backend_periodic_cb(EV_P_ ev_timer *w, int revents)
 }
 
 void rspamd_fuzzy_backend_start_update(struct rspamd_fuzzy_backend *bk,
-									   gdouble timeout,
+									   double timeout,
 									   rspamd_fuzzy_periodic_cb cb,
 									   void *ud)
 {
-	gdouble jittered;
+	double jittered;
 
 	g_assert(bk != NULL);
 
@@ -553,7 +553,7 @@ rspamd_fuzzy_backend_event_base(struct rspamd_fuzzy_backend *backend)
 	return backend->event_loop;
 }
 
-gdouble
+double
 rspamd_fuzzy_backend_get_expire(struct rspamd_fuzzy_backend *backend)
 {
 	return backend->expire;

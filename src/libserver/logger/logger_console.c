@@ -24,15 +24,15 @@
 
 #define CONSOLE_LOG_QUARK g_quark_from_static_string("console_logger")
 
-static const gchar lf_chr = '\n';
+static const char lf_chr = '\n';
 struct rspamd_console_logger_priv {
-	gint fd;
-	gint crit_fd;
+	int fd;
+	int crit_fd;
 };
 
 /* Copy & paste :( */
 static inline void
-log_time(gdouble now, rspamd_logger_t *rspamd_log, gchar *timebuf,
+log_time(double now, rspamd_logger_t *rspamd_log, char *timebuf,
 		 size_t len)
 {
 	time_t sec = (time_t) now;
@@ -43,10 +43,10 @@ log_time(gdouble now, rspamd_logger_t *rspamd_log, gchar *timebuf,
 	r = strftime(timebuf, len, "%F %H:%M:%S", &tms);
 
 	if (rspamd_log->flags & RSPAMD_LOG_FLAG_USEC) {
-		gchar usec_buf[16];
+		char usec_buf[16];
 
 		rspamd_snprintf(usec_buf, sizeof(usec_buf), "%.5f",
-						now - (gdouble) sec);
+						now - (double) sec);
 		rspamd_snprintf(timebuf + r, len - r,
 						"%s", usec_buf + 1);
 	}
@@ -136,16 +136,16 @@ void rspamd_log_console_dtor(rspamd_logger_t *logger, gpointer arg)
 	g_free(priv);
 }
 
-bool rspamd_log_console_log(const gchar *module, const gchar *id,
-							const gchar *function,
-							gint level_flags,
-							const gchar *message,
+bool rspamd_log_console_log(const char *module, const char *id,
+							const char *function,
+							int level_flags,
+							const char *message,
 							gsize mlen,
 							rspamd_logger_t *rspamd_log,
 							gpointer arg)
 {
 	struct rspamd_console_logger_priv *priv = (struct rspamd_console_logger_priv *) arg;
-	gint fd, r;
+	int fd, r;
 	double now;
 
 	if (level_flags & G_LOG_LEVEL_CRITICAL) {

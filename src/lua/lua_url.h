@@ -26,9 +26,9 @@ struct lua_tree_cb_data {
 	lua_State *L;
 	int i;
 	int metatable_pos;
-	guint flags_mask;
-	guint flags_exclude_mask;
-	guint protocols_mask;
+	unsigned int flags_mask;
+	unsigned int flags_exclude_mask;
+	unsigned int protocols_mask;
 	enum {
 		url_flags_mode_include_any,
 		url_flags_mode_include_explicit,
@@ -36,7 +36,7 @@ struct lua_tree_cb_data {
 	} flags_mode;
 	gboolean sort;
 	gsize max_urls;
-	gdouble skip_prob;
+	double skip_prob;
 	uint64_t random_seed;
 };
 
@@ -49,15 +49,15 @@ void lua_tree_url_callback(gpointer key, gpointer value, gpointer ud);
  * @param cbd
  * @return
  */
-gboolean lua_url_cbdata_fill(lua_State *L, gint pos,
+gboolean lua_url_cbdata_fill(lua_State *L, int pos,
 							 struct lua_tree_cb_data *cbd,
-							 guint default_protocols,
-							 guint default_flags,
+							 unsigned int default_protocols,
+							 unsigned int default_flags,
 							 gsize max_urls);
 
-gboolean lua_url_cbdata_fill_exclude_include(lua_State *L, gint pos,
+gboolean lua_url_cbdata_fill_exclude_include(lua_State *L, int pos,
 											 struct lua_tree_cb_data *cbd,
-											 guint default_protocols,
+											 unsigned int default_protocols,
 											 gsize max_urls);
 
 /**
@@ -76,7 +76,7 @@ void lua_url_cbdata_dtor(struct lua_tree_cb_data *cbd);
  * @return
  */
 gsize lua_url_adjust_skip_prob(float timestamp,
-							   guchar digest[16],
+							   unsigned char digest[16],
 							   struct lua_tree_cb_data *cb,
 							   gsize sz);
 

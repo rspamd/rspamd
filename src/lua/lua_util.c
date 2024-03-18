@@ -761,7 +761,7 @@ static const struct luaL_reg ev_baselib_m[] = {
 	{NULL, NULL}};
 
 static int64_t
-lua_check_int64(lua_State *L, gint pos)
+lua_check_int64(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_int64_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'int64' expected");
@@ -769,7 +769,7 @@ lua_check_int64(lua_State *L, gint pos)
 }
 
 
-static gint
+static int
 lua_util_create_event_base(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -782,12 +782,12 @@ lua_util_create_event_base(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_load_rspamd_config(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg, **pcfg;
-	const gchar *cfg_name;
+	const char *cfg_name;
 
 	cfg_name = luaL_checkstring(L, 1);
 
@@ -810,13 +810,13 @@ lua_util_load_rspamd_config(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 parse_config_options(const char *str_options)
 {
-	gint ret = 0;
-	gchar **vec;
-	const gchar *str;
-	guint i, l;
+	int ret = 0;
+	char **vec;
+	const char *str;
+	unsigned int i, l;
 
 	vec = g_strsplit_set(str_options, ",;", -1);
 	if (vec) {
@@ -853,7 +853,7 @@ parse_config_options(const char *str_options)
 	return ret;
 }
 
-static gint
+static int
 lua_util_config_from_ucl(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -862,7 +862,7 @@ lua_util_config_from_ucl(lua_State *L)
 	GError *err = NULL;
 	ucl_object_t *obj;
 	const char *str_options = NULL;
-	gint int_options = 0;
+	int int_options = 0;
 
 
 	obj = ucl_object_lua_import(L, 1);
@@ -919,12 +919,12 @@ lua_util_task_fin(struct rspamd_task *task, void *ud)
 	return TRUE;
 }
 
-static gint
+static int
 lua_util_process_message(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *message;
+	const char *message;
 	gsize mlen;
 	struct rspamd_task *task;
 	struct ev_loop *base;
@@ -979,12 +979,12 @@ lua_util_process_message(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_encode_base64(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t;
-	gchar *out;
+	char *out;
 	gsize outlen;
 	long str_lim = 0;
 	gboolean fold = FALSE;
@@ -1008,7 +1008,7 @@ lua_util_encode_base64(lua_State *L)
 			enum rspamd_newlines_type how = RSPAMD_TASK_NEWLINES_CRLF;
 
 			if (lua_type(L, 3) == LUA_TSTRING) {
-				const gchar *how_str = lua_tostring(L, 3);
+				const char *how_str = lua_tostring(L, 3);
 
 				if (g_ascii_strcasecmp(how_str, "cr") == 0) {
 					how = RSPAMD_TASK_NEWLINES_CR;
@@ -1035,15 +1035,15 @@ lua_util_encode_base64(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_encode_qp(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t;
-	const gchar *s = NULL;
-	gchar *out;
+	const char *s = NULL;
+	char *out;
 	gsize inlen, outlen;
-	guint str_lim = 0;
+	unsigned int str_lim = 0;
 
 	if (lua_type(L, 1) == LUA_TSTRING) {
 		s = luaL_checklstring(L, 1, &inlen);
@@ -1068,7 +1068,7 @@ lua_util_encode_qp(lua_State *L)
 		enum rspamd_newlines_type how = RSPAMD_TASK_NEWLINES_CRLF;
 
 		if (lua_type(L, 3) == LUA_TSTRING) {
-			const gchar *how_str = lua_tostring(L, 3);
+			const char *how_str = lua_tostring(L, 3);
 
 			if (g_ascii_strcasecmp(how_str, "cr") == 0) {
 				how = RSPAMD_TASK_NEWLINES_CR;
@@ -1099,12 +1099,12 @@ lua_util_encode_qp(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_decode_qp(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t, *out;
-	const gchar *s = NULL;
+	const char *s = NULL;
 	gsize inlen = 0;
 	gssize outlen;
 
@@ -1128,7 +1128,7 @@ lua_util_decode_qp(lua_State *L)
 		rspamd_lua_setclass(L, rspamd_text_classname, -1);
 		out->start = g_malloc(inlen + 1);
 		out->flags = RSPAMD_TEXT_FLAG_OWN;
-		outlen = rspamd_decode_qp_buf(s, inlen, (gchar *) out->start, inlen + 1);
+		outlen = rspamd_decode_qp_buf(s, inlen, (char *) out->start, inlen + 1);
 
 		if (outlen > 0) {
 			out->len = outlen;
@@ -1145,12 +1145,12 @@ lua_util_decode_qp(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_decode_base64(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t;
-	const gchar *s = NULL;
+	const char *s = NULL;
 	gsize inlen = 0, outlen;
 
 	if (lua_type(L, 1) == LUA_TSTRING) {
@@ -1171,7 +1171,7 @@ lua_util_decode_base64(lua_State *L)
 		t->len = (inlen / 4) * 3 + 3;
 		t->start = g_malloc(t->len);
 
-		rspamd_cryptobox_base64_decode(s, inlen, (guchar *) t->start,
+		rspamd_cryptobox_base64_decode(s, inlen, (unsigned char *) t->start,
 									   &outlen);
 		t->len = outlen;
 		t->flags = RSPAMD_TEXT_FLAG_OWN;
@@ -1183,13 +1183,13 @@ lua_util_decode_base64(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_encode_base32(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t;
-	const gchar *s = NULL;
-	gchar *out;
+	const char *s = NULL;
+	char *out;
 	enum rspamd_base32_type btype = RSPAMD_BASE32_DEFAULT;
 	gsize inlen, outlen;
 
@@ -1236,12 +1236,12 @@ lua_util_encode_base32(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_decode_base32(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t;
-	const gchar *s = NULL;
+	const char *s = NULL;
 	gsize inlen, outlen;
 	enum rspamd_base32_type btype = RSPAMD_BASE32_DEFAULT;
 
@@ -1266,14 +1266,14 @@ lua_util_decode_base32(lua_State *L)
 	}
 
 	if (s != NULL) {
-		guchar *decoded;
+		unsigned char *decoded;
 
 		decoded = rspamd_decode_base32(s, inlen, &outlen, btype);
 
 		if (decoded) {
 			t = lua_newuserdata(L, sizeof(*t));
 			rspamd_lua_setclass(L, rspamd_text_classname, -1);
-			t->start = (const gchar *) decoded;
+			t->start = (const char *) decoded;
 			t->len = outlen;
 			t->flags = RSPAMD_TEXT_FLAG_OWN;
 		}
@@ -1288,7 +1288,7 @@ lua_util_decode_base32(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_decode_url(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1309,36 +1309,36 @@ lua_util_decode_url(lua_State *L)
 }
 
 
-static gint
+static int
 lua_util_tokenize_text(lua_State *L)
 {
 	return lua_parsers_tokenize_text(L);
 }
 
-static gint
+static int
 lua_util_tanh(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gdouble in = luaL_checknumber(L, 1);
+	double in = luaL_checknumber(L, 1);
 
 	lua_pushnumber(L, tanh(in));
 
 	return 1;
 }
 
-static gint
+static int
 lua_util_parse_html(lua_State *L)
 {
 	return lua_parsers_parse_html(L);
 }
 
-static gint
+static int
 lua_util_levenshtein_distance(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t1, *t2;
-	gint dist = 0;
-	guint replace_cost = 1;
+	int dist = 0;
+	unsigned int replace_cost = 1;
 
 	t1 = lua_check_text_or_string(L, 1);
 	t2 = lua_check_text_or_string(L, 2);
@@ -1359,11 +1359,11 @@ lua_util_levenshtein_distance(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_fold_header(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *how, *stop_chars = NULL;
+	const char *how, *stop_chars = NULL;
 	struct rspamd_lua_text *name, *value;
 	GString *folded;
 
@@ -1415,13 +1415,13 @@ lua_util_fold_header(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_is_uppercase(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	int32_t i = 0;
 	UChar32 uc;
-	guint nlc = 0, nuc = 0;
+	unsigned int nlc = 0, nuc = 0;
 
 	struct rspamd_lua_text *t = lua_check_text_or_string(L, 1);
 	if (t) {
@@ -1451,12 +1451,12 @@ lua_util_is_uppercase(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_humanize_number(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	int64_t number = luaL_checkinteger(L, 1);
-	gchar numbuf[32];
+	char numbuf[32];
 
 
 	rspamd_snprintf(numbuf, sizeof(numbuf), "%hL", number);
@@ -1465,11 +1465,11 @@ lua_util_humanize_number(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_get_tld(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *host;
+	const char *host;
 	gsize hostlen;
 	rspamd_ftok_t tld;
 
@@ -1491,13 +1491,13 @@ lua_util_get_tld(lua_State *L)
 }
 
 
-static gint
+static int
 lua_util_glob(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *pattern;
+	const char *pattern;
 	glob_t gl;
-	gint top, i, flags = 0;
+	int top, i, flags = 0;
 
 	top = lua_gettop(L);
 	memset(&gl, 0, sizeof(gl));
@@ -1518,7 +1518,7 @@ lua_util_glob(lua_State *L)
 
 	lua_createtable(L, gl.gl_pathc, 0);
 	/* Push results */
-	for (i = 0; i < (gint) gl.gl_pathc; i++) {
+	for (i = 0; i < (int) gl.gl_pathc; i++) {
 		lua_pushstring(L, gl.gl_pathv[i]);
 		lua_rawseti(L, -2, i + 1);
 	}
@@ -1528,13 +1528,13 @@ lua_util_glob(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_parse_mail_address(lua_State *L)
 {
 	return lua_parsers_parse_mail_address(L);
 }
 
-static gint
+static int
 lua_util_strlen_utf8(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1547,7 +1547,7 @@ lua_util_strlen_utf8(lua_State *L)
 		UChar32 uc;
 
 		while (i < t->len) {
-			U8_NEXT((guint8 *) t->start, i, t->len, uc);
+			U8_NEXT((uint8_t *) t->start, i, t->len, uc);
 			nchars++;
 		}
 
@@ -1560,13 +1560,13 @@ lua_util_strlen_utf8(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_lower_utf8(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t;
 
-	gchar *dst;
+	char *dst;
 	UChar32 uc;
 	UBool err = 0;
 	int32_t i = 0, j = 0;
@@ -1577,7 +1577,7 @@ lua_util_lower_utf8(lua_State *L)
 		dst = g_malloc(t->len);
 
 		while (i < t->len && err == 0) {
-			U8_NEXT((guint8 *) t->start, i, t->len, uc);
+			U8_NEXT((uint8_t *) t->start, i, t->len, uc);
 			uc = u_tolower(uc);
 			U8_APPEND(dst, j, t->len, uc, err);
 		}
@@ -1599,7 +1599,7 @@ lua_util_lower_utf8(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_normalize_utf8(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1632,7 +1632,7 @@ lua_util_normalize_utf8(lua_State *L)
 	return 2;
 }
 
-static gint
+static int
 lua_util_transliterate(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1650,12 +1650,12 @@ lua_util_transliterate(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_strequal_caseless(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t1, *t2;
-	gint ret = -1;
+	int ret = -1;
 
 	t1 = lua_check_text_or_string(L, 1);
 	t2 = lua_check_text_or_string(L, 2);
@@ -1677,12 +1677,12 @@ lua_util_strequal_caseless(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_strequal_caseless_utf8(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t1, *t2;
-	gint ret = -1;
+	int ret = -1;
 
 	t1 = lua_check_text_or_string(L, 1);
 	t2 = lua_check_text_or_string(L, 2);
@@ -1699,11 +1699,11 @@ lua_util_strequal_caseless_utf8(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_get_ticks(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gdouble ticks;
+	double ticks;
 	gboolean rdtsc = FALSE;
 
 	if (lua_isboolean(L, 1)) {
@@ -1716,7 +1716,7 @@ lua_util_get_ticks(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_get_time(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1726,11 +1726,11 @@ lua_util_get_time(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_time_to_string(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gdouble seconds;
+	double seconds;
 	char timebuf[128];
 
 	if (lua_isnumber(L, 1)) {
@@ -1746,11 +1746,11 @@ lua_util_time_to_string(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_stat(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *fpath;
+	const char *fpath;
 	struct stat st;
 
 	fpath = luaL_checkstring(L, 1);
@@ -1792,12 +1792,12 @@ lua_util_stat(lua_State *L)
 	return 2;
 }
 
-static gint
+static int
 lua_util_unlink(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *fpath;
-	gint ret;
+	const char *fpath;
+	int ret;
 
 	fpath = luaL_checkstring(L, 1);
 
@@ -1820,12 +1820,12 @@ lua_util_unlink(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_lock_file(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *fpath;
-	gint fd = -1;
+	const char *fpath;
+	int fd = -1;
 	gboolean own = FALSE;
 
 #if !HAVE_FLOCK
@@ -1878,11 +1878,11 @@ lua_util_lock_file(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_unlock_file(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gint fd = -1, ret, serrno;
+	int fd = -1, ret, serrno;
 	gboolean do_close = TRUE;
 
 #if !HAVE_FLOCK
@@ -1928,12 +1928,12 @@ lua_util_unlock_file(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_create_file(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gint fd, mode = 00644;
-	const gchar *fpath;
+	int fd, mode = 00644;
+	const char *fpath;
 
 	fpath = luaL_checkstring(L, 1);
 
@@ -1960,11 +1960,11 @@ lua_util_create_file(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_close_file(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gint fd = -1;
+	int fd = -1;
 
 	if (lua_isnumber(L, 1)) {
 		fd = lua_tointeger(L, 1);
@@ -1985,12 +1985,12 @@ lua_util_close_file(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_random_hex(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gchar *buf;
-	gint buflen;
+	char *buf;
+	int buflen;
 
 	buflen = lua_tointeger(L, 1);
 
@@ -2006,41 +2006,41 @@ lua_util_random_hex(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_zstd_compress(lua_State *L)
 {
 	return lua_compress_zstd_compress(L);
 }
 
-static gint
+static int
 lua_util_zstd_decompress(lua_State *L)
 {
 	return lua_compress_zstd_decompress(L);
 }
 
-static gint
+static int
 lua_util_gzip_compress(lua_State *L)
 {
 	return lua_compress_zlib_compress(L);
 }
 
-static gint
+static int
 lua_util_gzip_decompress(lua_State *L)
 {
 	return lua_compress_zlib_decompress(L, true);
 }
 
-static gint
+static int
 lua_util_inflate(lua_State *L)
 {
 	return lua_compress_zlib_decompress(L, false);
 }
 
-static gint
+static int
 lua_util_normalize_prob(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gdouble x, bias = 0.5;
+	double x, bias = 0.5;
 
 	x = lua_tonumber(L, 1);
 
@@ -2053,7 +2053,7 @@ lua_util_normalize_prob(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_caseless_hash(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -2082,7 +2082,7 @@ lua_util_caseless_hash(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_caseless_hash_fast(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -2118,14 +2118,14 @@ lua_util_caseless_hash_fast(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_is_utf_spoofed(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	gsize l1, l2;
-	gint ret, nres = 2;
-	const gchar *s1 = lua_tolstring(L, 1, &l1),
-				*s2 = lua_tolstring(L, 2, &l2);
+	int ret, nres = 2;
+	const char *s1 = lua_tolstring(L, 1, &l1),
+			   *s2 = lua_tolstring(L, 2, &l2);
 	static USpoofChecker *spc, *spc_sgl;
 	UErrorCode uc_err = U_ZERO_ERROR;
 
@@ -2195,12 +2195,12 @@ lua_util_is_utf_spoofed(lua_State *L)
 	return nres;
 }
 
-static gint
+static int
 lua_util_is_utf_mixed_script(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	gsize len_of_string;
-	const guchar *string_to_check = lua_tolstring(L, 1, &len_of_string);
+	const unsigned char *string_to_check = lua_tolstring(L, 1, &len_of_string);
 	UScriptCode last_script_code = USCRIPT_INVALID_CODE;
 	UErrorCode uc_err = U_ZERO_ERROR;
 
@@ -2250,17 +2250,17 @@ lua_util_is_utf_mixed_script(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_get_string_stats(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gint num_of_digits = 0, num_of_letters = 0;
+	int num_of_digits = 0, num_of_letters = 0;
 	struct rspamd_lua_text *t;
 
 	t = lua_check_text_or_string(L, 1);
 
 	if (t) {
-		const gchar *p = t->start, *end = t->start + t->len;
+		const char *p = t->start, *end = t->start + t->len;
 		while (p < end) {
 			if (g_ascii_isdigit(*p)) {
 				num_of_digits++;
@@ -2287,11 +2287,11 @@ lua_util_get_string_stats(lua_State *L)
 }
 
 
-static gint
+static int
 lua_util_is_utf_outside_range(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gint ret;
+	int ret;
 	struct rspamd_lua_text *t = lua_check_text_or_string(L, 1);
 	uint32_t range_start = lua_tointeger(L, 2);
 	uint32_t range_end = lua_tointeger(L, 3);
@@ -2358,11 +2358,11 @@ lua_util_is_utf_outside_range(lua_State *L)
 }
 
 
-static gint
+static int
 lua_util_get_hostname(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gchar *hostbuf;
+	char *hostbuf;
 	gsize hostlen;
 
 	hostlen = sysconf(_SC_HOST_NAME_MAX);
@@ -2383,20 +2383,20 @@ lua_util_get_hostname(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_parse_content_type(lua_State *L)
 {
 	return lua_parsers_parse_content_type(L);
 }
 
 
-static gint
+static int
 lua_util_mime_header_encode(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	gsize len;
-	const gchar *hdr = luaL_checklstring(L, 1, &len);
-	gchar *encoded;
+	const char *hdr = luaL_checklstring(L, 1, &len);
+	char *encoded;
 
 	if (!hdr) {
 		return luaL_error(L, "invalid arguments");
@@ -2409,7 +2409,7 @@ lua_util_mime_header_encode(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_is_valid_utf8(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -2435,7 +2435,7 @@ lua_util_is_valid_utf8(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_has_obscured_unicode(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -2464,12 +2464,12 @@ lua_util_has_obscured_unicode(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_readline(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *prompt = "";
-	gchar *input = NULL;
+	const char *prompt = "";
+	char *input = NULL;
 
 	if (lua_type(L, 1) == LUA_TSTRING) {
 		prompt = lua_tostring(L, 1);
@@ -2483,7 +2483,7 @@ lua_util_readline(lua_State *L)
 		replxx_history_add(rx_instance, "");
 	}
 
-	input = (gchar *) replxx_input(rx_instance, prompt);
+	input = (char *) replxx_input(rx_instance, prompt);
 
 	if (input) {
 		lua_pushstring(L, input);
@@ -2515,11 +2515,11 @@ lua_util_readline(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_readpassphrase(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gchar test_password[8192];
+	char test_password[8192];
 	gsize r;
 
 	r = rspamd_read_passphrase(test_password, sizeof(test_password), 0, NULL);
@@ -2537,12 +2537,12 @@ lua_util_readpassphrase(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_file_exists(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *fname = luaL_checkstring(L, 1);
-	gint serrno;
+	const char *fname = luaL_checkstring(L, 1);
+	int serrno;
 
 	if (fname) {
 		if (access(fname, R_OK) == -1) {
@@ -2562,13 +2562,13 @@ lua_util_file_exists(lua_State *L)
 	return 2;
 }
 
-static gint
+static int
 lua_util_mkdir(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *dname = luaL_checkstring(L, 1);
+	const char *dname = luaL_checkstring(L, 1);
 	gboolean recursive = FALSE;
-	gint r = -1;
+	int r = -1;
 
 	if (dname) {
 		if (lua_isboolean(L, 2)) {
@@ -2626,14 +2626,14 @@ lua_util_mkdir(lua_State *L)
 }
 
 
-static gint
+static int
 lua_util_umask(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	mode_t mask = 0, old;
 
 	if (lua_type(L, 1) == LUA_TSTRING) {
-		const gchar *str = lua_tostring(L, 1);
+		const char *str = lua_tostring(L, 1);
 
 		if (str[0] == '0') {
 			/* e.g. '022' */
@@ -2658,7 +2658,7 @@ lua_util_umask(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_util_isatty(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -3418,7 +3418,7 @@ lua_util_btc_polymod(lua_State *L)
 	}
 
 	for (lua_pushnil(L); lua_next(L, 1); lua_pop(L, 1)) {
-		guint8 c0 = c >> 35;
+		uint8_t c0 = c >> 35;
 		uint64_t d = lua_tointeger(L, -1);
 
 		c = ((c & 0x07ffffffff) << 5) ^ d;
@@ -3447,7 +3447,7 @@ lua_util_parse_smtp_date(lua_State *L)
 }
 
 
-static gint
+static int
 lua_load_util(lua_State *L)
 {
 	lua_newtable(L);
@@ -3456,7 +3456,7 @@ lua_load_util(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_load_int64(lua_State *L)
 {
 	lua_newtable(L);
@@ -3480,7 +3480,7 @@ static int
 lua_int64_tostring(lua_State *L)
 {
 	int64_t n = lua_check_int64(L, 1);
-	gchar buf[32];
+	char buf[32];
 	bool is_signed = false;
 
 	if (lua_isboolean(L, 2)) {
@@ -3547,7 +3547,7 @@ static int
 lua_int64_tonumber(lua_State *L)
 {
 	int64_t n = lua_check_int64(L, 1);
-	gdouble d;
+	double d;
 
 	d = n;
 	lua_pushinteger(L, d);
@@ -3559,7 +3559,7 @@ static int
 lua_int64_hex(lua_State *L)
 {
 	int64_t n = lua_check_int64(L, 1);
-	gchar buf[32];
+	char buf[32];
 
 	rspamd_snprintf(buf, sizeof(buf), "%XL", n);
 	lua_pushstring(L, buf);

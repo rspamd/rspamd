@@ -36,12 +36,12 @@ INIT_LOG_MODULE(images)
 static rspamd_lru_hash_t *images_hash = NULL;
 #endif
 
-static const guint8 png_signature[] = {137, 80, 78, 71, 13, 10, 26, 10};
-static const guint8 jpg_sig1[] = {0xff, 0xd8};
-static const guint8 jpg_sig_jfif[] = {0xff, 0xe0};
-static const guint8 jpg_sig_exif[] = {0xff, 0xe1};
-static const guint8 gif_signature[] = {'G', 'I', 'F', '8'};
-static const guint8 bmp_signature[] = {'B', 'M'};
+static const uint8_t png_signature[] = {137, 80, 78, 71, 13, 10, 26, 10};
+static const uint8_t jpg_sig1[] = {0xff, 0xd8};
+static const uint8_t jpg_sig_jfif[] = {0xff, 0xe0};
+static const uint8_t jpg_sig_exif[] = {0xff, 0xe1};
+static const uint8_t gif_signature[] = {'G', 'I', 'F', '8'};
+static const uint8_t bmp_signature[] = {'B', 'M'};
 
 static bool process_image(struct rspamd_task *task, struct rspamd_mime_part *part);
 
@@ -63,7 +63,7 @@ bool rspamd_images_process_mime_part_maybe(struct rspamd_task *task,
 
 void rspamd_images_process(struct rspamd_task *task)
 {
-	guint i;
+	unsigned int i;
 	struct rspamd_mime_part *part;
 
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, parts), i, part)
@@ -108,7 +108,7 @@ process_png_image(rspamd_mempool_t *pool, rspamd_ftok_t *data)
 {
 	struct rspamd_image *img;
 	uint32_t t;
-	const guint8 *p;
+	const uint8_t *p;
 
 	if (data->len < 24) {
 		msg_info_pool("bad png detected (maybe striped)");
@@ -140,8 +140,8 @@ process_png_image(rspamd_mempool_t *pool, rspamd_ftok_t *data)
 static struct rspamd_image *
 process_jpg_image(rspamd_mempool_t *pool, rspamd_ftok_t *data)
 {
-	const guint8 *p, *end;
-	guint16 h, w;
+	const uint8_t *p, *end;
+	uint16_t h, w;
 	struct rspamd_image *img;
 
 	img = rspamd_mempool_alloc0(pool, sizeof(struct rspamd_image));
@@ -154,13 +154,13 @@ process_jpg_image(rspamd_mempool_t *pool, rspamd_ftok_t *data)
 
 	while (p < end) {
 		if (p[0] == 0xFF && p[1] != 0xFF) {
-			guint len = p[2] * 256 + p[3];
+			unsigned int len = p[2] * 256 + p[3];
 
 			p++;
 
 			if (*p == 0xc0 || *p == 0xc1 || *p == 0xc2 || *p == 0xc3 ||
 				*p == 0xc9 || *p == 0xca || *p == 0xcb) {
-				memcpy(&h, p + 4, sizeof(guint16));
+				memcpy(&h, p + 4, sizeof(uint16_t));
 				h = p[4] * 0xff + p[5];
 				img->height = h;
 				w = p[6] * 0xff + p[7];
@@ -184,8 +184,8 @@ static struct rspamd_image *
 process_gif_image(rspamd_mempool_t *pool, rspamd_ftok_t *data)
 {
 	struct rspamd_image *img;
-	const guint8 *p;
-	guint16 t;
+	const uint8_t *p;
+	uint16_t t;
 
 	if (data->len < 10) {
 		msg_info_pool("bad gif detected (maybe striped)");
@@ -197,9 +197,9 @@ process_gif_image(rspamd_mempool_t *pool, rspamd_ftok_t *data)
 	img->data = data;
 
 	p = data->begin + 6;
-	memcpy(&t, p, sizeof(guint16));
+	memcpy(&t, p, sizeof(uint16_t));
 	img->width = GUINT16_FROM_LE(t);
-	memcpy(&t, p + 2, sizeof(guint16));
+	memcpy(&t, p + 2, sizeof(uint16_t));
 	img->height = GUINT16_FROM_LE(t);
 
 	return img;
@@ -210,7 +210,7 @@ process_bmp_image(rspamd_mempool_t *pool, rspamd_ftok_t *data)
 {
 	struct rspamd_image *img;
 	int32_t t;
-	const guint8 *p;
+	const uint8_t *p;
 
 	if (data->len < 28) {
 		msg_info_pool("bad bmp detected (maybe striped)");
@@ -235,20 +235,20 @@ process_bmp_image(rspamd_mempool_t *pool, rspamd_ftok_t *data)
  * http://unix4lyfe.org/dct/
  */
 static void
-rspamd_image_dct_block(gint pixels[8][8], gdouble *out)
+rspamd_image_dct_block(int pixels[8][8], double *out)
 {
-	gint i;
-	gint rows[8][8];
+	int i;
+	int rows[8][8];
 
-	static const gint c1 = 1004 /* cos(pi/16) << 10 */,
-					  s1 = 200 /* sin(pi/16) */,
-					  c3 = 851 /* cos(3pi/16) << 10 */,
-					  s3 = 569 /* sin(3pi/16) << 10 */,
-					  r2c6 = 554 /* sqrt(2)*cos(6pi/16) << 10 */,
-					  r2s6 = 1337 /* sqrt(2)*sin(6pi/16) << 10 */,
-					  r2 = 181; /* sqrt(2) << 7*/
+	static const int c1 = 1004 /* cos(pi/16) << 10 */,
+					 s1 = 200 /* sin(pi/16) */,
+					 c3 = 851 /* cos(3pi/16) << 10 */,
+					 s3 = 569 /* sin(3pi/16) << 10 */,
+					 r2c6 = 554 /* sqrt(2)*cos(6pi/16) << 10 */,
+					 r2s6 = 1337 /* sqrt(2)*sin(6pi/16) << 10 */,
+					 r2 = 181; /* sqrt(2) << 7*/
 
-	gint x0, x1, x2, x3, x4, x5, x6, x7, x8;
+	int x0, x1, x2, x3, x4, x5, x6, x7, x8;
 
 	/* transform rows */
 	for (i = 0; i < 8; i++) {
@@ -362,8 +362,8 @@ rspamd_image_dct_block(gint pixels[8][8], gdouble *out)
 }
 
 struct rspamd_image_cache_entry {
-	guchar digest[64];
-	guchar dct[RSPAMD_DCT_LEN / NBBY];
+	unsigned char digest[64];
+	unsigned char dct[RSPAMD_DCT_LEN / NBBY];
 };
 
 static void
@@ -447,8 +447,8 @@ void rspamd_image_normalize(struct rspamd_task *task, struct rspamd_image *img)
 {
 #ifdef USABLE_GD
 	gdImagePtr src = NULL, dst = NULL;
-	guint i, j, k, l;
-	gdouble *dct;
+	unsigned int i, j, k, l;
+	double *dct;
 
 	if (img->data->len == 0 || img->data->len > G_MAXINT32) {
 		return;
@@ -496,7 +496,7 @@ void rspamd_image_normalize(struct rspamd_task *task, struct rspamd_image *img)
 		gdImageDestroy(src);
 
 		img->is_normalized = TRUE;
-		dct = g_malloc0(sizeof(gdouble) * RSPAMD_DCT_LEN);
+		dct = g_malloc0(sizeof(double) * RSPAMD_DCT_LEN);
 		img->dct = g_malloc0(RSPAMD_DCT_LEN / NBBY);
 		rspamd_mempool_add_destructor(task->task_pool, g_free,
 									  img->dct);
@@ -520,7 +520,7 @@ void rspamd_image_normalize(struct rspamd_task *task, struct rspamd_image *img)
 		 */
 		for (i = 0; i < RSPAMD_NORMALIZED_DIM; i += 8) {
 			for (j = 0; j < RSPAMD_NORMALIZED_DIM; j += 8) {
-				gint p[8][8];
+				int p[8][8];
 
 				for (k = 0; k < 8; k++) {
 					p[k][0] = gdImageGetPixel(dst, i + k, j);
@@ -536,20 +536,20 @@ void rspamd_image_normalize(struct rspamd_task *task, struct rspamd_image *img)
 				rspamd_image_dct_block(p,
 									   dct + i * RSPAMD_NORMALIZED_DIM + j);
 
-				gdouble avg = 0.0;
+				double avg = 0.0;
 
 				for (k = 0; k < 8; k++) {
 					for (l = 0; l < 8; l++) {
-						gdouble x = *(dct +
-									  i * RSPAMD_NORMALIZED_DIM + j + k * 8 + l);
-						avg += (x - avg) / (gdouble) (k * 8 + l + 1);
+						double x = *(dct +
+									 i * RSPAMD_NORMALIZED_DIM + j + k * 8 + l);
+						avg += (x - avg) / (double) (k * 8 + l + 1);
 					}
 				}
 
 
 				for (k = 0; k < 8; k++) {
 					for (l = 0; l < 8; l++) {
-						guint idx = i * RSPAMD_NORMALIZED_DIM + j + k * 8 + l;
+						unsigned int idx = i * RSPAMD_NORMALIZED_DIM + j + k * 8 + l;
 
 						if (dct[idx] >= avg) {
 							setbit(img->dct, idx);
@@ -623,7 +623,7 @@ process_image(struct rspamd_task *task, struct rspamd_mime_part *part)
 	return false;
 }
 
-const gchar *
+const char *
 rspamd_image_type_str(enum rspamd_image_type type)
 {
 	switch (type) {
@@ -652,8 +652,8 @@ rspamd_image_process_part(struct rspamd_task *task, struct rspamd_mime_part *par
 	struct rspamd_mime_header *rh;
 	struct rspamd_mime_text_part *tp;
 	struct html_image *himg;
-	const gchar *cid;
-	guint cid_len, i;
+	const char *cid;
+	unsigned int cid_len, i;
 	struct rspamd_image *img;
 
 	img = (struct rspamd_image *) part->specific.img;
@@ -707,7 +707,7 @@ rspamd_image_process_part(struct rspamd_task *task, struct rspamd_mime_part *par
 void rspamd_images_link(struct rspamd_task *task)
 {
 	struct rspamd_mime_part *part;
-	guint i;
+	unsigned int i;
 
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, parts), i, part)
 	{

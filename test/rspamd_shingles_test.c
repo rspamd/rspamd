@@ -19,10 +19,10 @@
 #include "ottery.h"
 #include <math.h>
 
-static const gchar *
+static const char *
 algorithm_to_string(enum rspamd_shingle_alg alg)
 {
-	const gchar *ret = "unknown";
+	const char *ret = "unknown";
 
 	switch (alg) {
 	case RSPAMD_SHINGLES_OLD:
@@ -77,7 +77,7 @@ generate_fuzzy_words(gsize cnt, gsize max_len)
 }
 
 static void
-permute_vector(GArray *in, gdouble prob)
+permute_vector(GArray *in, double prob)
 {
 	gsize i, total = 0;
 	rspamd_ftok_t *w;
@@ -85,7 +85,7 @@ permute_vector(GArray *in, gdouble prob)
 	for (i = 0; i < in->len; i++) {
 		if (ottery_rand_unsigned() <= G_MAXUINT * prob) {
 			w = &g_array_index(in, rspamd_ftok_t, i);
-			generate_random_string((gchar *) w->begin, w->len);
+			generate_random_string((char *) w->begin, w->len);
 			total++;
 		}
 	}
@@ -105,14 +105,14 @@ free_fuzzy_words(GArray *ar)
 }
 
 static void
-test_case(gsize cnt, gsize max_len, gdouble perm_factor,
+test_case(gsize cnt, gsize max_len, double perm_factor,
 		  enum rspamd_shingle_alg alg)
 {
 	GArray *input;
 	struct rspamd_shingle *sgl, *sgl_permuted;
-	gdouble res;
-	guchar key[16];
-	gdouble ts1, ts2;
+	double res;
+	unsigned char key[16];
+	double ts1, ts2;
 
 	ottery_rand_bytes(key, sizeof(key));
 	input = generate_fuzzy_words(cnt, max_len);
@@ -280,7 +280,7 @@ void rspamd_shingles_test_func(void)
 {
 	enum rspamd_shingle_alg alg = RSPAMD_SHINGLES_OLD;
 	struct rspamd_shingle *sgl;
-	guchar key[16];
+	unsigned char key[16];
 	GArray *input;
 	rspamd_ftok_t tok;
 	int i;
@@ -289,7 +289,7 @@ void rspamd_shingles_test_func(void)
 	input = g_array_sized_new(FALSE, FALSE, sizeof(rspamd_ftok_t), 5);
 
 	for (i = 0; i < 5; i++) {
-		gchar *b = g_alloca(8);
+		char *b = g_alloca(8);
 		memset(b, 0, 8);
 		memcpy(b + 1, "test", 4);
 		b[0] = 'a' + i;

@@ -20,7 +20,7 @@
 #include <math.h>
 #include <src/libutil/libev_helper.h>
 
-static const gchar *M = "rspamd lua udp";
+static const char *M = "rspamd lua udp";
 
 /***
  * @module rspamd_udp
@@ -69,10 +69,10 @@ struct lua_udp_cbdata {
 	struct rspamd_async_session *s;
 	struct iovec *iov;
 	lua_State *L;
-	guint retransmits;
-	guint iovlen;
-	gint sock;
-	gint cbref;
+	unsigned int retransmits;
+	unsigned int iovlen;
+	int sock;
+	int cbref;
 	gboolean sent;
 };
 
@@ -85,7 +85,7 @@ INIT_LOG_MODULE(lua_udp)
 
 static inline void
 lua_fill_iov(lua_State *L, rspamd_mempool_t *pool,
-			 struct iovec *iov, gint pos)
+			 struct iovec *iov, int pos)
 {
 	if (lua_type(L, pos) == LUA_TUSERDATA) {
 		struct rspamd_lua_text *t = lua_check_text(L, pos);
@@ -97,7 +97,7 @@ lua_fill_iov(lua_State *L, rspamd_mempool_t *pool,
 		}
 	}
 	else {
-		const gchar *s;
+		const char *s;
 		gsize len;
 
 		s = lua_tolstring(L, pos, &len);
@@ -154,7 +154,7 @@ static enum rspamd_udp_send_result
 lua_try_send_request(struct lua_udp_cbdata *cbd)
 {
 	struct msghdr msg;
-	gint r;
+	int r;
 
 	memset(&msg, 0, sizeof(msg));
 	msg.msg_iov = cbd->iov;
@@ -175,10 +175,10 @@ lua_try_send_request(struct lua_udp_cbdata *cbd)
 }
 
 static void
-lua_udp_maybe_push_error(struct lua_udp_cbdata *cbd, const gchar *err)
+lua_udp_maybe_push_error(struct lua_udp_cbdata *cbd, const char *err)
 {
 	if (cbd->cbref != -1) {
-		gint top;
+		int top;
 		lua_State *L = cbd->L;
 
 		top = lua_gettop(L);
@@ -203,11 +203,11 @@ lua_udp_maybe_push_error(struct lua_udp_cbdata *cbd, const gchar *err)
 }
 
 static void
-lua_udp_push_data(struct lua_udp_cbdata *cbd, const gchar *data,
+lua_udp_push_data(struct lua_udp_cbdata *cbd, const char *data,
 				  gssize len)
 {
 	if (cbd->cbref != -1) {
-		gint top;
+		int top;
 		lua_State *L = cbd->L;
 
 		top = lua_gettop(L);
@@ -259,7 +259,7 @@ lua_udp_maybe_register_event(struct lua_udp_cbdata *cbd)
 }
 
 static void
-lua_udp_io_handler(gint fd, short what, gpointer p)
+lua_udp_io_handler(int fd, short what, gpointer p)
 {
 	struct lua_udp_cbdata *cbd = (struct lua_udp_cbdata *) p;
 	gssize r;
@@ -311,7 +311,7 @@ lua_udp_io_handler(gint fd, short what, gpointer p)
 		}
 	}
 	else if (what == EV_READ) {
-		guchar udpbuf[4096];
+		unsigned char udpbuf[4096];
 		socklen_t slen;
 		struct sockaddr *sa;
 
@@ -343,19 +343,19 @@ lua_udp_io_handler(gint fd, short what, gpointer p)
  * - `callback`: optional callback if reply should be read
  * @return {boolean} true if request has been sent (additional string if it has not)
  */
-static gint
+static int
 lua_udp_sendto(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *host;
-	guint port;
+	const char *host;
+	unsigned int port;
 	struct ev_loop *ev_base = NULL;
 	struct lua_udp_cbdata *cbd;
 	struct rspamd_async_session *session = NULL;
 	struct rspamd_task *task = NULL;
 	rspamd_inet_addr_t *addr;
 	rspamd_mempool_t *pool = NULL;
-	gdouble timeout = default_udp_timeout;
+	double timeout = default_udp_timeout;
 
 	if (lua_type(L, 1) == LUA_TTABLE) {
 		lua_pushstring(L, "port");
@@ -579,7 +579,7 @@ lua_udp_sendto(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_load_udp(lua_State *L)
 {
 	lua_newtable(L);

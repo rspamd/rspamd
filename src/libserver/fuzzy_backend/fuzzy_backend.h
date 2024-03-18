@@ -33,10 +33,10 @@ struct rspamd_config;
 typedef void (*rspamd_fuzzy_check_cb)(struct rspamd_fuzzy_reply *rep, void *ud);
 
 typedef void (*rspamd_fuzzy_update_cb)(gboolean success,
-									   guint nadded,
-									   guint ndeleted,
-									   guint nextended,
-									   guint nignored,
+									   unsigned int nadded,
+									   unsigned int ndeleted,
+									   unsigned int nextended,
+									   unsigned int nignored,
 									   void *ud);
 
 typedef void (*rspamd_fuzzy_version_cb)(uint64_t rev, void *ud);
@@ -75,7 +75,7 @@ void rspamd_fuzzy_backend_check(struct rspamd_fuzzy_backend *bk,
  * @param src
  */
 void rspamd_fuzzy_backend_process_updates(struct rspamd_fuzzy_backend *bk,
-										  GArray *updates, const gchar *src, rspamd_fuzzy_update_cb cb,
+										  GArray *updates, const char *src, rspamd_fuzzy_update_cb cb,
 										  void *ud);
 
 /**
@@ -95,7 +95,7 @@ void rspamd_fuzzy_backend_count(struct rspamd_fuzzy_backend *bk,
  * @param ud
  */
 void rspamd_fuzzy_backend_version(struct rspamd_fuzzy_backend *bk,
-								  const gchar *src,
+								  const char *src,
 								  rspamd_fuzzy_version_cb cb, void *ud);
 
 /**
@@ -103,20 +103,20 @@ void rspamd_fuzzy_backend_version(struct rspamd_fuzzy_backend *bk,
  * @param backend
  * @return
  */
-const gchar *rspamd_fuzzy_backend_id(struct rspamd_fuzzy_backend *backend);
+const char *rspamd_fuzzy_backend_id(struct rspamd_fuzzy_backend *backend);
 
 /**
  * Starts expire process for the backend
  * @param backend
  */
 void rspamd_fuzzy_backend_start_update(struct rspamd_fuzzy_backend *backend,
-									   gdouble timeout,
+									   double timeout,
 									   rspamd_fuzzy_periodic_cb cb,
 									   void *ud);
 
 struct ev_loop *rspamd_fuzzy_backend_event_base(struct rspamd_fuzzy_backend *backend);
 
-gdouble rspamd_fuzzy_backend_get_expire(struct rspamd_fuzzy_backend *backend);
+double rspamd_fuzzy_backend_get_expire(struct rspamd_fuzzy_backend *backend);
 
 /**
  * Closes backend

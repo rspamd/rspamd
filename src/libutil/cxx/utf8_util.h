@@ -49,7 +49,7 @@ enum rspamd_utf8_normalise_result {
  * @param len
  * @return TRUE if a string has been normalised
  */
-enum rspamd_utf8_normalise_result rspamd_normalise_unicode_inplace(gchar *start, gsize *len);
+enum rspamd_utf8_normalise_result rspamd_normalise_unicode_inplace(char *start, gsize *len);
 
 /**
  * Transliterate a string to ASCII
@@ -58,7 +58,7 @@ enum rspamd_utf8_normalise_result rspamd_normalise_unicode_inplace(gchar *start,
  * @param target_len
  * @return a new string that should be freed with g_free
  */
-gchar *rspamd_utf8_transliterate(const gchar *start, gsize len, gsize *target_len);
+char *rspamd_utf8_transliterate(const char *start, gsize len, gsize *target_len);
 
 /**
  * Compare two strings using libicu collator

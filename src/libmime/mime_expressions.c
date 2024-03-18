@@ -88,10 +88,10 @@ static gboolean rspamd_has_symbol_expr(struct rspamd_task *task,
 									   GArray *args,
 									   void *unused);
 
-static rspamd_expression_atom_t *rspamd_mime_expr_parse(const gchar *line, gsize len,
+static rspamd_expression_atom_t *rspamd_mime_expr_parse(const char *line, gsize len,
 														rspamd_mempool_t *pool, gpointer ud, GError **err);
-static gdouble rspamd_mime_expr_process(void *ud, rspamd_expression_atom_t *atom);
-static gint rspamd_mime_expr_priority(rspamd_expression_atom_t *atom);
+static double rspamd_mime_expr_process(void *ud, rspamd_expression_atom_t *atom);
+static int rspamd_mime_expr_priority(rspamd_expression_atom_t *atom);
 static void rspamd_mime_expr_destroy(rspamd_expression_atom_t *atom);
 
 /**
@@ -99,11 +99,11 @@ static void rspamd_mime_expr_destroy(rspamd_expression_atom_t *atom);
  */
 struct rspamd_regexp_atom {
 	enum rspamd_re_type type; /**< regexp type										*/
-	gchar *regexp_text;       /**< regexp text representation							*/
+	char *regexp_text;        /**< regexp text representation							*/
 	rspamd_regexp_t *regexp;  /**< regexp structure									*/
 	union {
-		const gchar *header;   /**< header name for header regexps						*/
-		const gchar *selector; /**< selector name for lua selector regexp				*/
+		const char *header;   /**< header name for header regexps						*/
+		const char *selector; /**< selector name for lua selector regexp				*/
 	} extra;
 	gboolean is_test;     /**< true if this expression must be tested				*/
 	gboolean is_strong;   /**< true if headers search must be case sensitive		*/
@@ -114,7 +114,7 @@ struct rspamd_regexp_atom {
  * Rspamd expression function
  */
 struct rspamd_function_atom {
-	gchar *name;  /**< name of function								*/
+	char *name;   /**< name of function								*/
 	GArray *args; /**< its args										*/
 };
 
@@ -126,12 +126,12 @@ enum rspamd_mime_atom_type {
 };
 
 struct rspamd_mime_atom {
-	gchar *str;
+	char *str;
 	union {
 		struct rspamd_regexp_atom *re;
 		struct rspamd_function_atom *func;
-		const gchar *lua_function;
-		gint lua_cbref;
+		const char *lua_function;
+		int lua_cbref;
 	} d;
 	enum rspamd_mime_atom_type type;
 };
@@ -141,7 +141,7 @@ struct rspamd_mime_atom {
  * Sorted by name to use bsearch
  */
 static struct _fl {
-	const gchar *name;
+	const char *name;
 	rspamd_internal_func_t func;
 	void *user_data;
 } rspamd_functions_list[] = {
@@ -180,7 +180,7 @@ static uint32_t functions_number = sizeof(rspamd_functions_list) /
 static gboolean list_allocated = FALSE;
 
 /* Bsearch routine */
-static gint
+static int
 fl_cmp(const void *s1, const void *s2)
 {
 	struct _fl *fl1 = (struct _fl *) s1;
@@ -196,7 +196,7 @@ rspamd_mime_expr_quark(void)
 
 #define TYPE_CHECK(str, type, len) (sizeof(type) - 1 == (len) && rspamd_lc_cmp((str), (type), (len)) == 0)
 static gboolean
-rspamd_parse_long_option(const gchar *start, gsize len,
+rspamd_parse_long_option(const char *start, gsize len,
 						 struct rspamd_regexp_atom *a)
 {
 	gboolean ret = FALSE;
@@ -277,11 +277,11 @@ rspamd_parse_long_option(const gchar *start, gsize len,
  * Rspamd regexp utility functions
  */
 static struct rspamd_regexp_atom *
-rspamd_mime_expr_parse_regexp_atom(rspamd_mempool_t *pool, const gchar *line,
+rspamd_mime_expr_parse_regexp_atom(rspamd_mempool_t *pool, const char *line,
 								   struct rspamd_config *cfg)
 {
-	const gchar *begin, *end, *p, *src, *start, *brace;
-	gchar *dbegin, *dend, *extra = NULL;
+	const char *begin, *end, *p, *src, *start, *brace;
+	char *dbegin, *dend, *extra = NULL;
 	struct rspamd_regexp_atom *result;
 	GError *err = NULL;
 	GString *re_flags;
@@ -531,11 +531,11 @@ rspamd_mime_expr_parse_regexp_atom(rspamd_mempool_t *pool, const gchar *line,
 }
 
 struct rspamd_function_atom *
-rspamd_mime_expr_parse_function_atom(rspamd_mempool_t *pool, const gchar *input)
+rspamd_mime_expr_parse_function_atom(rspamd_mempool_t *pool, const char *input)
 {
-	const gchar *obrace, *ebrace, *p, *c;
-	gchar t, *databuf;
-	guint len;
+	const char *obrace, *ebrace, *p, *c;
+	char t, *databuf;
+	unsigned int len;
 	struct rspamd_function_atom *res;
 	struct expression_argument arg;
 	GError *err = NULL;
@@ -645,17 +645,17 @@ rspamd_mime_expr_parse_function_atom(rspamd_mempool_t *pool, const gchar *input)
 }
 
 static rspamd_expression_atom_t *
-rspamd_mime_expr_parse(const gchar *line, gsize len,
+rspamd_mime_expr_parse(const char *line, gsize len,
 					   rspamd_mempool_t *pool, gpointer ud, GError **err)
 {
 	rspamd_expression_atom_t *a = NULL;
 	struct rspamd_mime_atom *mime_atom = NULL;
-	const gchar *p, *end, *c = NULL;
+	const char *p, *end, *c = NULL;
 	struct rspamd_mime_expr_ud *real_ud = (struct rspamd_mime_expr_ud *) ud;
 	struct rspamd_config *cfg;
 	rspamd_regexp_t *own_re;
-	gchar t;
-	gint type = MIME_ATOM_REGEXP, obraces = 0, ebraces = 0;
+	char t;
+	int type = MIME_ATOM_REGEXP, obraces = 0, ebraces = 0;
 	enum {
 		in_header = 0,
 		got_slash,
@@ -786,8 +786,8 @@ rspamd_mime_expr_parse(const gchar *line, gsize len,
 			g_set_error(err, rspamd_mime_expr_quark(), 100, "cannot parse"
 															" mime atom '%s' when reading symbol '%c' at offset %d, "
 															"near %.*s",
-						line, t, (gint) (p - line),
-						(gint) MIN(end - p, 10), p);
+						line, t, (int) (p - line),
+						(int) MIN(end - p, 10), p);
 			return NULL;
 		case end_atom:
 			goto set;
@@ -817,7 +817,7 @@ set:
 			goto err;
 		}
 		else {
-			gint lua_cbref = -1;
+			int lua_cbref = -1;
 
 			/* Check regexp condition */
 			if (real_ud->conf_obj != NULL) {
@@ -1011,11 +1011,11 @@ err:
 	return NULL;
 }
 
-static gint
+static int
 rspamd_mime_expr_process_regexp(struct rspamd_regexp_atom *re,
 								struct rspamd_task *task)
 {
-	gint ret;
+	int ret;
 
 	if (re == NULL) {
 		msg_info_task("invalid regexp passed");
@@ -1057,11 +1057,11 @@ rspamd_mime_expr_process_regexp(struct rspamd_regexp_atom *re,
 }
 
 
-static gint
+static int
 rspamd_mime_expr_priority(rspamd_expression_atom_t *atom)
 {
 	struct rspamd_mime_atom *mime_atom = atom->data;
-	gint ret = 0;
+	int ret = 0;
 
 	switch (mime_atom->type) {
 	case MIME_ATOM_INTERNAL_FUNCTION:
@@ -1137,13 +1137,13 @@ rspamd_mime_expr_process_function(struct rspamd_function_atom *func,
 	return selected->func(task, func->args, selected->user_data);
 }
 
-static gdouble
+static double
 rspamd_mime_expr_process(void *ud, rspamd_expression_atom_t *atom)
 {
 	struct rspamd_task *task = (struct rspamd_task *) ud;
 	struct rspamd_mime_atom *mime_atom;
 	lua_State *L;
-	gdouble ret = 0;
+	double ret = 0;
 
 	g_assert(task != NULL);
 	g_assert(atom != NULL);
@@ -1181,7 +1181,7 @@ rspamd_mime_expr_process(void *ud, rspamd_expression_atom_t *atom)
 		}
 	}
 	else if (mime_atom->type == MIME_ATOM_LOCAL_LUA_FUNCTION) {
-		gint err_idx;
+		int err_idx;
 
 		L = task->cfg->lua_state;
 		lua_pushcfunction(L, &rspamd_lua_traceback);
@@ -1218,7 +1218,7 @@ rspamd_mime_expr_process(void *ud, rspamd_expression_atom_t *atom)
 	return ret;
 }
 
-void register_expression_function(const gchar *name,
+void register_expression_function(const char *name,
 								  rspamd_internal_func_t func,
 								  void *user_data)
 {
@@ -1276,9 +1276,9 @@ rspamd_header_exists(struct rspamd_task *task, GArray *args, void *unused)
 	}
 
 	rh = rspamd_message_get_header_array(task,
-										 (gchar *) arg->data, FALSE);
+										 (char *) arg->data, FALSE);
 
-	debug_task("try to get header %s: %d", (gchar *) arg->data,
+	debug_task("try to get header %s: %d", (char *) arg->data,
 			   (rh != NULL));
 
 	if (rh) {
@@ -1298,9 +1298,9 @@ rspamd_header_exists(struct rspamd_task *task, GArray *args, void *unused)
 gboolean
 rspamd_parts_distance(struct rspamd_task *task, GArray *args, void *unused)
 {
-	gint threshold, threshold2 = -1;
+	int threshold, threshold2 = -1;
 	struct expression_argument *arg;
-	gdouble *pdiff, diff;
+	double *pdiff, diff;
 
 	if (args == NULL || args->len == 0) {
 		debug_task("no threshold is specified, assume it 100");
@@ -1314,10 +1314,10 @@ rspamd_parts_distance(struct rspamd_task *task, GArray *args, void *unused)
 			return FALSE;
 		}
 
-		threshold = strtoul((gchar *) arg->data, NULL, 10);
+		threshold = strtoul((char *) arg->data, NULL, 10);
 		if (errno != 0) {
 			msg_info_task("bad numeric value for threshold \"%s\", assume it 100",
-						  (gchar *) arg->data);
+						  (char *) arg->data);
 			threshold = 100;
 		}
 		if (args->len >= 2) {
@@ -1328,10 +1328,10 @@ rspamd_parts_distance(struct rspamd_task *task, GArray *args, void *unused)
 			}
 
 			errno = 0;
-			threshold2 = strtoul((gchar *) arg->data, NULL, 10);
+			threshold2 = strtoul((char *) arg->data, NULL, 10);
 			if (errno != 0) {
 				msg_info_task("bad numeric value for threshold \"%s\", ignore it",
-							  (gchar *) arg->data);
+							  (char *) arg->data);
 				threshold2 = -1;
 			}
 		}
@@ -1366,13 +1366,13 @@ rspamd_parts_distance(struct rspamd_task *task, GArray *args, void *unused)
 }
 
 struct addr_list {
-	const gchar *name;
-	guint namelen;
-	const gchar *addr;
-	guint addrlen;
+	const char *name;
+	unsigned int namelen;
+	const char *addr;
+	unsigned int addrlen;
 };
 
-static gint
+static int
 addr_list_cmp_func(const void *a, const void *b)
 {
 	const struct addr_list *addra = (struct addr_list *) a,
@@ -1396,7 +1396,7 @@ rspamd_recipients_distance(struct rspamd_task *task, GArray *args,
 	struct rspamd_email_address *cur;
 	double threshold;
 	struct addr_list *ar;
-	gint num, i, hits = 0;
+	int num, i, hits = 0;
 
 	if (args == NULL) {
 		msg_warn_task("no parameters to function");
@@ -1410,11 +1410,11 @@ rspamd_recipients_distance(struct rspamd_task *task, GArray *args,
 	}
 
 	errno = 0;
-	threshold = strtod((gchar *) arg->data, NULL);
+	threshold = strtod((char *) arg->data, NULL);
 
 	if (errno != 0) {
 		msg_warn_task("invalid numeric value '%s': %s",
-					  (gchar *) arg->data,
+					  (char *) arg->data,
 					  strerror(errno));
 		return FALSE;
 	}
@@ -1469,7 +1469,7 @@ rspamd_has_only_html_part(struct rspamd_task *task, GArray *args,
 						  void *unused)
 {
 	struct rspamd_mime_text_part *p;
-	guint i, cnt_html = 0, cnt_txt = 0;
+	unsigned int i, cnt_html = 0, cnt_txt = 0;
 
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, p)
 	{
@@ -1492,7 +1492,7 @@ is_recipient_list_sorted(GPtrArray *ar)
 	struct rspamd_email_address *addr;
 	gboolean res = TRUE;
 	rspamd_ftok_t cur, prev;
-	gint i;
+	int i;
 
 	/* Do not check to short address lists */
 	if (ar == NULL || ar->len < MIN_RCPT_TO_COMPARE) {
@@ -1540,7 +1540,7 @@ rspamd_compare_transfer_encoding(struct rspamd_task *task,
 								 void *unused)
 {
 	struct expression_argument *arg;
-	guint i;
+	unsigned int i;
 	struct rspamd_mime_part *part;
 	enum rspamd_cte cte;
 
@@ -1586,7 +1586,7 @@ rspamd_has_html_tag(struct rspamd_task *task, GArray *args, void *unused)
 {
 	struct rspamd_mime_text_part *p;
 	struct expression_argument *arg;
-	guint i;
+	unsigned int i;
 	gboolean res = FALSE;
 
 	if (args == NULL) {
@@ -1618,7 +1618,7 @@ gboolean
 rspamd_has_fake_html(struct rspamd_task *task, GArray *args, void *unused)
 {
 	struct rspamd_mime_text_part *p;
-	guint i;
+	unsigned int i;
 	gboolean res = FALSE;
 
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, p)
@@ -1656,10 +1656,10 @@ rspamd_raw_header_exists(struct rspamd_task *task, GArray *args, void *unused)
 static gboolean
 match_smtp_data(struct rspamd_task *task,
 				struct expression_argument *arg,
-				const gchar *what, gsize len)
+				const char *what, gsize len)
 {
 	rspamd_regexp_t *re;
-	gint r = 0;
+	int r = 0;
 
 	if (arg->type == EXPRESSION_ARGUMENT_REGEXP) {
 		/* This is a regexp */
@@ -1690,8 +1690,8 @@ rspamd_check_smtp_data(struct rspamd_task *task, GArray *args, void *unused)
 	struct expression_argument *arg;
 	struct rspamd_email_address *addr = NULL;
 	GPtrArray *rcpts = NULL;
-	const gchar *type, *str = NULL;
-	guint i;
+	const char *type, *str = NULL;
+	unsigned int i;
 
 	if (args == NULL) {
 		msg_warn_task("no parameters to function");
@@ -1799,7 +1799,7 @@ rspamd_check_smtp_data(struct rspamd_task *task, GArray *args, void *unused)
 }
 
 static inline gboolean
-rspamd_check_ct_attr(const gchar *begin, gsize len,
+rspamd_check_ct_attr(const char *begin, gsize len,
 					 struct expression_argument *arg_pattern)
 {
 	rspamd_regexp_t *re;
@@ -1840,10 +1840,10 @@ rspamd_content_type_compare_param(struct rspamd_task *task,
 	struct expression_argument *arg, *arg1, *arg_pattern;
 	gboolean recursive = FALSE;
 	struct rspamd_mime_part *cur_part;
-	guint i;
+	unsigned int i;
 	rspamd_ftok_t srch;
 	struct rspamd_content_type_param *found = NULL, *cur;
-	const gchar *param_name;
+	const char *param_name;
 
 	if (args == NULL || args->len < 2) {
 		msg_warn_task("no parameters to function");
@@ -1923,10 +1923,10 @@ rspamd_content_type_has_param(struct rspamd_task *task,
 	struct expression_argument *arg, *arg1;
 	gboolean recursive = FALSE;
 	struct rspamd_mime_part *cur_part;
-	guint i;
+	unsigned int i;
 	rspamd_ftok_t srch;
 	struct rspamd_content_type_param *found = NULL;
-	const gchar *param_name;
+	const char *param_name;
 
 	if (args == NULL || args->len < 1) {
 		msg_warn_task("no parameters to function");
@@ -1999,8 +1999,8 @@ rspamd_content_type_check(struct rspamd_task *task,
 	rspamd_regexp_t *re;
 	struct expression_argument *arg1, *arg_pattern;
 	struct rspamd_content_type *ct;
-	gint r = 0;
-	guint i;
+	int r = 0;
+	unsigned int i;
 	gboolean recursive = FALSE;
 	struct rspamd_mime_part *cur_part;
 
@@ -2092,7 +2092,7 @@ compare_subtype(struct rspamd_task *task, struct rspamd_content_type *ct,
 {
 	rspamd_regexp_t *re;
 	rspamd_ftok_t srch;
-	gint r = 0;
+	int r = 0;
 
 	if (subtype == NULL || ct == NULL) {
 		msg_warn_task("invalid parameters passed");
@@ -2120,7 +2120,7 @@ compare_subtype(struct rspamd_task *task, struct rspamd_content_type *ct,
 }
 
 static gboolean
-compare_len(struct rspamd_mime_part *part, guint min, guint max)
+compare_len(struct rspamd_mime_part *part, unsigned int min, unsigned int max)
 {
 	if (min == 0 && max == 0) {
 		return TRUE;
@@ -2141,15 +2141,15 @@ static gboolean
 common_has_content_part(struct rspamd_task *task,
 						struct expression_argument *param_type,
 						struct expression_argument *param_subtype,
-						gint min_len,
-						gint max_len)
+						int min_len,
+						int max_len)
 {
 	rspamd_regexp_t *re;
 	struct rspamd_mime_part *part;
 	struct rspamd_content_type *ct;
 	rspamd_ftok_t srch;
-	gint r = 0;
-	guint i;
+	int r = 0;
+	unsigned int i;
 
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, parts), i, part)
 	{
@@ -2224,7 +2224,7 @@ rspamd_has_content_part_len(struct rspamd_task *task,
 							void *unused)
 {
 	struct expression_argument *param_type = NULL, *param_subtype = NULL;
-	gint min = 0, max = 0;
+	int min = 0, max = 0;
 	struct expression_argument *arg;
 
 	if (args == NULL) {
@@ -2245,7 +2245,7 @@ rspamd_has_content_part_len(struct rspamd_task *task,
 
 			if (errno != 0) {
 				msg_warn_task("invalid numeric value '%s': %s",
-							  (gchar *) arg->data,
+							  (char *) arg->data,
 							  strerror(errno));
 				return FALSE;
 			}
@@ -2257,7 +2257,7 @@ rspamd_has_content_part_len(struct rspamd_task *task,
 
 				if (errno != 0) {
 					msg_warn_task("invalid numeric value '%s': %s",
-								  (gchar *) arg->data,
+								  (char *) arg->data,
 								  strerror(errno));
 					return FALSE;
 				}
@@ -2274,7 +2274,7 @@ rspamd_is_empty_body(struct rspamd_task *task,
 					 void *unused)
 {
 	struct rspamd_mime_part *part;
-	guint i;
+	unsigned int i;
 
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, parts), i, part)
 	{
@@ -2320,7 +2320,7 @@ rspamd_has_flag_expr(struct rspamd_task *task,
 {
 	gboolean found = FALSE, result = FALSE;
 	struct expression_argument *flag_arg;
-	const gchar *flag_str;
+	const char *flag_str;
 
 	if (args == NULL) {
 		msg_warn_task("no parameters to function");
@@ -2334,7 +2334,7 @@ rspamd_has_flag_expr(struct rspamd_task *task,
 		return FALSE;
 	}
 
-	flag_str = (const gchar *) flag_arg->data;
+	flag_str = (const char *) flag_arg->data;
 
 	TASK_GET_FLAG(flag_str, "pass_all", RSPAMD_TASK_FLAG_PASS_ALL);
 	TASK_GET_FLAG(flag_str, "no_log", RSPAMD_TASK_FLAG_NO_LOG);
@@ -2368,7 +2368,7 @@ rspamd_has_symbol_expr(struct rspamd_task *task,
 					   void *unused)
 {
 	struct expression_argument *sym_arg;
-	const gchar *symbol_str;
+	const char *symbol_str;
 
 	if (args == NULL) {
 		msg_warn_task("no parameters to function");
@@ -2382,7 +2382,7 @@ rspamd_has_symbol_expr(struct rspamd_task *task,
 		return FALSE;
 	}
 
-	symbol_str = (const gchar *) sym_arg->data;
+	symbol_str = (const char *) sym_arg->data;
 
 	if (rspamd_task_find_symbol_result(task, symbol_str, NULL)) {
 		return TRUE;

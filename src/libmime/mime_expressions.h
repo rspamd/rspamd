@@ -47,7 +47,7 @@ typedef gboolean (*rspamd_internal_func_t)(struct rspamd_task *,
  * @param name name of function
  * @param func pointer to function
  */
-void register_expression_function(const gchar *name,
+void register_expression_function(const char *name,
 								  rspamd_internal_func_t func,
 								  void *user_data);
 
@@ -56,7 +56,7 @@ void register_expression_function(const gchar *name,
  * @param limit new limit in bytes
  * @return old limit value
  */
-guint rspamd_mime_expression_set_re_limit(guint limit);
+unsigned int rspamd_mime_expression_set_re_limit(unsigned int limit);
 
 #ifdef __cplusplus
 }

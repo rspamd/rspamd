@@ -380,7 +380,7 @@ rspamd_cdb_runtime(struct rspamd_task *task,
 				   struct rspamd_statfile_config *stcf,
 				   gboolean learn,
 				   gpointer ctx,
-				   gint _id)
+				   int _id)
 {
 	/* In CDB we don't have any dynamic stuff */
 	return ctx;
@@ -389,7 +389,7 @@ rspamd_cdb_runtime(struct rspamd_task *task,
 gboolean
 rspamd_cdb_process_tokens(struct rspamd_task *task,
 						  GPtrArray *tokens,
-						  gint id,
+						  int id,
 						  gpointer runtime)
 {
 	auto *cdbp = CDB_FROM_RAW(runtime);
@@ -431,7 +431,7 @@ rspamd_cdb_finalize_process(struct rspamd_task *task,
 gboolean
 rspamd_cdb_learn_tokens(struct rspamd_task *task,
 						GPtrArray *tokens,
-						gint id,
+						int id,
 						gpointer ctx)
 {
 	return false;

@@ -43,20 +43,20 @@ struct rspamd_control_reply_elt {
 	GQuark wrk_type;
 	pid_t wrk_pid;
 	gpointer ud;
-	gint attached_fd;
+	int attached_fd;
 	GHashTable *pending_elts;
 	struct rspamd_control_reply_elt *prev, *next;
 };
 
 struct rspamd_control_session {
-	gint fd;
+	int fd;
 	struct ev_loop *event_loop;
 	struct rspamd_main *rspamd_main;
 	struct rspamd_http_connection *conn;
 	struct rspamd_control_command cmd;
 	struct rspamd_control_reply_elt *replies;
 	rspamd_inet_addr_t *addr;
-	guint replies_remain;
+	unsigned int replies_remain;
 	gboolean is_reply;
 };
 
@@ -89,7 +89,7 @@ rspamd_control_stop_pending(struct rspamd_control_reply_elt *elt)
 }
 
 void rspamd_control_send_error(struct rspamd_control_session *session,
-							   gint code, const gchar *error_msg, ...)
+							   int code, const char *error_msg, ...)
 {
 	struct rspamd_http_message *msg;
 	rspamd_fstring_t *reply;
@@ -165,10 +165,10 @@ rspamd_control_write_reply(struct rspamd_control_session *session)
 {
 	ucl_object_t *rep, *cur, *workers;
 	struct rspamd_control_reply_elt *elt;
-	gchar tmpbuf[64];
-	gdouble total_utime = 0, total_systime = 0;
+	char tmpbuf[64];
+	double total_utime = 0, total_systime = 0;
 	struct ucl_parser *parser;
-	guint total_conns = 0;
+	unsigned int total_conns = 0;
 
 	rep = ucl_object_typed_new(UCL_OBJECT);
 	workers = ucl_object_typed_new(UCL_OBJECT);
@@ -287,11 +287,11 @@ rspamd_control_write_reply(struct rspamd_control_session *session)
 }
 
 static void
-rspamd_control_wrk_io(gint fd, short what, gpointer ud)
+rspamd_control_wrk_io(int fd, short what, gpointer ud)
 {
 	struct rspamd_control_reply_elt *elt = ud;
 	struct rspamd_control_session *session;
-	guchar fdspace[CMSG_SPACE(sizeof(int))];
+	unsigned char fdspace[CMSG_SPACE(sizeof(int))];
 	struct iovec iov;
 	struct msghdr msg;
 	gssize r;
@@ -364,7 +364,7 @@ void rspamd_pending_control_free(gpointer p)
 static struct rspamd_control_reply_elt *
 rspamd_control_broadcast_cmd(struct rspamd_main *rspamd_main,
 							 struct rspamd_control_command *cmd,
-							 gint attached_fd,
+							 int attached_fd,
 							 rspamd_ev_cb handler,
 							 gpointer ud,
 							 pid_t except_pid)
@@ -376,7 +376,7 @@ rspamd_control_broadcast_cmd(struct rspamd_main *rspamd_main,
 	struct msghdr msg;
 	struct cmsghdr *cmsg;
 	struct iovec iov;
-	guchar fdspace[CMSG_SPACE(sizeof(int))];
+	unsigned char fdspace[CMSG_SPACE(sizeof(int))];
 	gssize r;
 
 	g_hash_table_iter_init(&it, rspamd_main->workers);
@@ -457,13 +457,13 @@ void rspamd_control_broadcast_srv_cmd(struct rspamd_main *rspamd_main,
 								 rspamd_control_ignore_io_handler, NULL, except_pid);
 }
 
-static gint
+static int
 rspamd_control_finish_handler(struct rspamd_http_connection *conn,
 							  struct rspamd_http_message *msg)
 {
 	struct rspamd_control_session *session = conn->ud;
 	rspamd_ftok_t srch;
-	guint i;
+	unsigned int i;
 	gboolean found = FALSE;
 	struct rspamd_control_reply_elt *cur;
 
@@ -512,7 +512,7 @@ rspamd_control_finish_handler(struct rspamd_http_connection *conn,
 }
 
 void rspamd_control_process_client_socket(struct rspamd_main *rspamd_main,
-										  gint fd, rspamd_inet_addr_t *addr)
+										  int fd, rspamd_inet_addr_t *addr)
 {
 	struct rspamd_control_session *session;
 
@@ -543,8 +543,8 @@ struct rspamd_worker_control_data {
 };
 
 static void
-rspamd_control_default_cmd_handler(gint fd,
-								   gint attached_fd,
+rspamd_control_default_cmd_handler(int fd,
+								   int attached_fd,
 								   struct rspamd_worker_control_data *cd,
 								   struct rspamd_control_command *cmd)
 {
@@ -624,8 +624,8 @@ rspamd_control_default_worker_handler(EV_P_ ev_io *w, int revents)
 	static struct rspamd_control_command cmd;
 	static struct msghdr msg;
 	static struct iovec iov;
-	static guchar fdspace[CMSG_SPACE(sizeof(int))];
-	gint rfd = -1;
+	static unsigned char fdspace[CMSG_SPACE(sizeof(int))];
+	int rfd = -1;
 	gssize r;
 
 	iov.iov_base = &cmd;
@@ -652,16 +652,16 @@ rspamd_control_default_worker_handler(EV_P_ ev_io *w, int revents)
 			close(w->fd);
 		}
 	}
-	else if (r < (gint) sizeof(cmd)) {
-		msg_err("short read of control command: %d of %d", (gint) r,
-				(gint) sizeof(cmd));
+	else if (r < (int) sizeof(cmd)) {
+		msg_err("short read of control command: %d of %d", (int) r,
+				(int) sizeof(cmd));
 
 		if (r == 0) {
 			ev_io_stop(cd->ev_base, &cd->io_ev);
 			close(w->fd);
 		}
 	}
-	else if ((gint) cmd.type >= 0 && cmd.type < RSPAMD_CONTROL_MAX) {
+	else if ((int) cmd.type >= 0 && cmd.type < RSPAMD_CONTROL_MAX) {
 
 		if (msg.msg_controllen >= CMSG_LEN(sizeof(int))) {
 			rfd = *(int *) CMSG_DATA(CMSG_FIRSTHDR(&msg));
@@ -680,7 +680,7 @@ rspamd_control_default_worker_handler(EV_P_ ev_io *w, int revents)
 		}
 	}
 	else {
-		msg_err("unknown command: %d", (gint) cmd.type);
+		msg_err("unknown command: %d", (int) cmd.type);
 	}
 }
 
@@ -723,7 +723,7 @@ void rspamd_control_worker_add_cmd_handler(struct rspamd_worker *worker,
 struct rspamd_srv_reply_data {
 	struct rspamd_worker *worker;
 	struct rspamd_main *srv;
-	gint fd;
+	int fd;
 	struct rspamd_srv_reply rep;
 };
 
@@ -843,9 +843,9 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 	struct msghdr msg;
 	struct cmsghdr *cmsg;
 	static struct iovec iov;
-	static guchar fdspace[CMSG_SPACE(sizeof(int))];
-	gint *spair, rfd = -1;
-	gchar *nid;
+	static unsigned char fdspace[CMSG_SPACE(sizeof(int))];
+	int *spair, rfd = -1;
+	char *nid;
 	struct rspamd_control_command wcmd;
 	gssize r;
 
@@ -882,7 +882,7 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 		}
 		else if (r != sizeof(cmd)) {
 			msg_err_main("cannot read from worker's srv pipe incomplete command: %d != %d; command = %s",
-						 (gint) r, (gint) sizeof(cmd), rspamd_srv_command_to_string(cmd.type));
+						 (int) r, (int) sizeof(cmd), rspamd_srv_command_to_string(cmd.type));
 		}
 		else {
 			rdata = g_malloc0(sizeof(*rdata));
@@ -901,7 +901,7 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 			case RSPAMD_SRV_SOCKETPAIR:
 				spair = g_hash_table_lookup(rspamd_main->spairs, cmd.cmd.spair.pair_id);
 				if (spair == NULL) {
-					spair = g_malloc(sizeof(gint) * 2);
+					spair = g_malloc(sizeof(int) * 2);
 
 					if (rspamd_socketpair(spair, cmd.cmd.spair.af) == -1) {
 						rdata->rep.reply.spair.code = errno;
@@ -1073,7 +1073,7 @@ void rspamd_srv_start_watching(struct rspamd_main *srv,
 struct rspamd_srv_request_data {
 	struct rspamd_worker *worker;
 	struct rspamd_srv_command cmd;
-	gint attached_fd;
+	int attached_fd;
 	struct rspamd_srv_reply rep;
 	rspamd_srv_reply_handler handler;
 	ev_io io_ev;
@@ -1086,10 +1086,10 @@ rspamd_srv_request_handler(EV_P_ ev_io *w, int revents)
 	struct rspamd_srv_request_data *rd = (struct rspamd_srv_request_data *) w->data;
 	struct msghdr msg;
 	struct iovec iov;
-	guchar fdspace[CMSG_SPACE(sizeof(int))];
+	unsigned char fdspace[CMSG_SPACE(sizeof(int))];
 	struct cmsghdr *cmsg;
 	gssize r;
-	gint rfd = -1;
+	int rfd = -1;
 
 	if (revents == EV_WRITE) {
 		/* Send request to server */
@@ -1156,9 +1156,9 @@ rspamd_srv_request_handler(EV_P_ ev_io *w, int revents)
 			goto cleanup;
 		}
 
-		if (r != (gint) sizeof(rd->rep)) {
+		if (r != (int) sizeof(rd->rep)) {
 			msg_err("cannot read from server pipe, invalid length: %d != %d; command = %s",
-					(gint) r, (int) sizeof(rd->rep), rspamd_srv_command_to_string(rd->cmd.type));
+					(int) r, (int) sizeof(rd->rep), rspamd_srv_command_to_string(rd->cmd.type));
 			goto cleanup;
 		}
 
@@ -1185,7 +1185,7 @@ cleanup:
 void rspamd_srv_send_command(struct rspamd_worker *worker,
 							 struct ev_loop *ev_base,
 							 struct rspamd_srv_command *cmd,
-							 gint attached_fd,
+							 int attached_fd,
 							 rspamd_srv_reply_handler handler,
 							 gpointer ud)
 {
@@ -1211,7 +1211,7 @@ void rspamd_srv_send_command(struct rspamd_worker *worker,
 }
 
 enum rspamd_control_type
-rspamd_control_command_from_string(const gchar *str)
+rspamd_control_command_from_string(const char *str)
 {
 	enum rspamd_control_type ret = RSPAMD_CONTROL_MAX;
 
@@ -1253,10 +1253,10 @@ rspamd_control_command_from_string(const gchar *str)
 	return ret;
 }
 
-const gchar *
+const char *
 rspamd_control_command_to_string(enum rspamd_control_type cmd)
 {
-	const gchar *reply = "unknown";
+	const char *reply = "unknown";
 
 	switch (cmd) {
 	case RSPAMD_CONTROL_STAT:
@@ -1296,9 +1296,9 @@ rspamd_control_command_to_string(enum rspamd_control_type cmd)
 	return reply;
 }
 
-const gchar *rspamd_srv_command_to_string(enum rspamd_srv_type cmd)
+const char *rspamd_srv_command_to_string(enum rspamd_srv_type cmd)
 {
-	const gchar *reply = "unknown";
+	const char *reply = "unknown";
 
 	switch (cmd) {
 	case RSPAMD_SRV_SOCKETPAIR:

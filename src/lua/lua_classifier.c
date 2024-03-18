@@ -54,13 +54,13 @@ lua_check_classifier(lua_State *L)
 }
 
 /* Return table of statfiles indexed by name */
-static gint
+static int
 lua_classifier_get_statfiles(lua_State *L)
 {
 	struct rspamd_classifier_config *ccf = lua_check_classifier(L);
 	GList *cur;
 	struct rspamd_statfile_config *st, **pst;
-	gint i;
+	int i;
 
 	if (ccf) {
 		lua_newtable(L);
@@ -83,11 +83,11 @@ lua_classifier_get_statfiles(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_classifier_get_param(lua_State *L)
 {
 	struct rspamd_classifier_config *ccf = lua_check_classifier(L);
-	const gchar *param;
+	const char *param;
 	const ucl_object_t *value;
 
 	param = luaL_checkstring(L, 2);
@@ -107,14 +107,14 @@ lua_classifier_get_param(lua_State *L)
 }
 
 /* Get statfile with specified label */
-static gint
+static int
 lua_classifier_get_statfile_by_label(lua_State *L)
 {
 	struct rspamd_classifier_config *ccf = lua_check_classifier(L);
 	struct rspamd_statfile_config *st, **pst;
-	const gchar *label;
+	const char *label;
 	GList *cur;
-	gint i;
+	int i;
 
 	label = luaL_checkstring(L, 2);
 	if (ccf && label) {
@@ -140,7 +140,7 @@ lua_classifier_get_statfile_by_label(lua_State *L)
 }
 
 /* Statfile functions */
-static gint
+static int
 lua_statfile_get_symbol(lua_State *L)
 {
 	struct rspamd_statfile_config *st = lua_check_statfile(L);
@@ -155,7 +155,7 @@ lua_statfile_get_symbol(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_statfile_get_label(lua_State *L)
 {
 	struct rspamd_statfile_config *st = lua_check_statfile(L);
@@ -170,7 +170,7 @@ lua_statfile_get_label(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_statfile_is_spam(lua_State *L)
 {
 	struct rspamd_statfile_config *st = lua_check_statfile(L);
@@ -185,11 +185,11 @@ lua_statfile_is_spam(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_statfile_get_param(lua_State *L)
 {
 	struct rspamd_statfile_config *st = lua_check_statfile(L);
-	const gchar *param;
+	const char *param;
 	const ucl_object_t *value;
 
 	param = luaL_checkstring(L, 2);

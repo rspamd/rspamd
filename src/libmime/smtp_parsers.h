@@ -35,9 +35,9 @@ gboolean rspamd_content_disposition_parser(const char *data, size_t len,
 										   rspamd_mempool_t *pool);
 
 gboolean
-rspamd_rfc2047_parser(const gchar *in, gsize len, gint *pencoding,
-					  const gchar **charset, gsize *charset_len,
-					  const gchar **encoded, gsize *encoded_len);
+rspamd_rfc2047_parser(const char *in, gsize len, int *pencoding,
+					  const char **charset, gsize *charset_len,
+					  const char **encoded, gsize *encoded_len);
 
 rspamd_inet_addr_t *rspamd_parse_smtp_ip(const char *data, size_t len,
 										 rspamd_mempool_t *pool);

@@ -1,11 +1,11 @@
-/*-
- * Copyright 2017 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -90,12 +90,12 @@ rspamd_milter_obuf_free(struct rspamd_milter_outbuf *obuf)
 
 static void
 rspamd_milter_session_reset(struct rspamd_milter_session *session,
-							guint how)
+							unsigned int how)
 {
 	struct rspamd_milter_outbuf *obuf, *obuf_tmp;
 	struct rspamd_milter_private *priv = session->priv;
 	struct rspamd_email_address *cur;
-	guint i;
+	unsigned int i;
 
 	if (how & RSPAMD_MILTER_RESET_IO) {
 		msg_debug_milter("cleanup IO on abort");
@@ -127,7 +127,7 @@ rspamd_milter_session_reset(struct rspamd_milter_session *session,
 			}
 
 			msg_debug_milter("cleanup %d recipients on abort",
-							 (gint) session->rcpts->len);
+							 (int) session->rcpts->len);
 
 			g_ptr_array_free(session->rcpts, TRUE);
 			session->rcpts = NULL;
@@ -141,7 +141,7 @@ rspamd_milter_session_reset(struct rspamd_milter_session *session,
 
 		if (priv->headers) {
 			msg_debug_milter("cleanup headers");
-			gchar *k;
+			char *k;
 			GArray *ar;
 
 			kh_foreach(priv->headers, k, ar, {
@@ -206,7 +206,7 @@ rspamd_milter_session_dtor(struct rspamd_milter_session *session)
 		}
 
 		if (priv->headers) {
-			gchar *k;
+			char *k;
 			GArray *ar;
 
 			kh_foreach(priv->headers, k, ar, {
@@ -247,16 +247,16 @@ rspamd_milter_on_protocol_ping(struct rspamd_milter_session *session,
 							   struct rspamd_milter_private *priv)
 {
 	GError *err = NULL;
-	static const gchar reply[] = "HTTP/1.1 200 OK\r\n"
-								 "Connection: close\r\n"
-								 "Server: rspamd/2.7 (milter mode)\r\n"
-								 "Content-Length: 6\r\n"
-								 "Content-Type: text/plain\r\n"
-								 "\r\n"
-								 "pong\r\n";
+	static const char reply[] = "HTTP/1.1 200 OK\r\n"
+								"Connection: close\r\n"
+								"Server: rspamd/2.7 (milter mode)\r\n"
+								"Content-Length: 6\r\n"
+								"Content-Type: text/plain\r\n"
+								"\r\n"
+								"pong\r\n";
 
 	if (write(priv->fd, reply, sizeof(reply)) == -1) {
-		gint serrno = errno;
+		int serrno = errno;
 		msg_err_milter("cannot write pong reply: %s", strerror(serrno));
 		g_set_error(&err, rspamd_milter_quark(), serrno, "ping command IO error: %s",
 					strerror(serrno));
@@ -272,8 +272,8 @@ rspamd_milter_on_protocol_ping(struct rspamd_milter_session *session,
 	}
 }
 
-static gint
-rspamd_milter_http_on_url(http_parser *parser, const gchar *at, size_t length)
+static int
+rspamd_milter_http_on_url(http_parser *parser, const char *at, size_t length)
 {
 	GString *url = (GString *) parser->data;
 
@@ -283,7 +283,7 @@ rspamd_milter_http_on_url(http_parser *parser, const gchar *at, size_t length)
 }
 
 static void
-rspamd_milter_io_handler(gint fd, gshort what, void *ud)
+rspamd_milter_io_handler(int fd, gshort what, void *ud)
 {
 	struct rspamd_milter_session *session = ud;
 	struct rspamd_milter_private *priv;
@@ -329,8 +329,8 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 {
 	GError *err;
 	rspamd_fstring_t *buf;
-	const guchar *pos, *end, *zero;
-	guint cmdlen;
+	const unsigned char *pos, *end, *zero;
+	unsigned int cmdlen;
 	uint32_t version, actions, protocol;
 
 	buf = priv->parser.buf;
@@ -364,7 +364,7 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 		 */
 		zero = memchr(pos, '\0', cmdlen);
 
-		if (zero == NULL || zero > (end - sizeof(guint16) + 1)) {
+		if (zero == NULL || zero > (end - sizeof(uint16_t) + 1)) {
 			err = g_error_new(rspamd_milter_quark(), EINVAL, "invalid "
 															 "connect command (no name)");
 			rspamd_milter_on_protocol_error(session, priv, err);
@@ -372,9 +372,9 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 			return FALSE;
 		}
 		else {
-			guchar proto;
-			guint16 port;
-			gchar ip6_str[INET6_ADDRSTRLEN + 3];
+			unsigned char proto;
+			uint16_t port;
+			char ip6_str[INET6_ADDRSTRLEN + 3];
 			gsize r;
 
 			/*
@@ -524,7 +524,7 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 			else {
 				rspamd_fstring_t *name, *value;
 				rspamd_ftok_t *name_tok, *value_tok;
-				const guchar *zero_val;
+				const unsigned char *zero_val;
 
 				zero_val = memchr(zero + 1, '\0', end - zero - 1);
 
@@ -607,16 +607,16 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 		else {
 			if (end > zero && *(end - 1) == '\0') {
 				khiter_t k;
-				gint res;
+				int res;
 
-				k = kh_get(milter_headers_hash_t, priv->headers, (gchar *) pos);
+				k = kh_get(milter_headers_hash_t, priv->headers, (char *) pos);
 
 				if (k == kh_end(priv->headers)) {
 					GArray *ar;
 
 					k = kh_put(milter_headers_hash_t, priv->headers,
 							   g_strdup(pos), &res);
-					ar = g_array_new(FALSE, FALSE, sizeof(gint));
+					ar = g_array_new(FALSE, FALSE, sizeof(int));
 					g_array_append_val(ar, priv->cur_hdr);
 					kh_value(priv->headers, k) = ar;
 				}
@@ -644,7 +644,7 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 
 		while (pos < end) {
 			struct rspamd_email_address *addr;
-			gchar *cpy;
+			char *cpy;
 
 			zero = memchr(pos, '\0', end - pos);
 
@@ -748,7 +748,7 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 
 		while (pos < end) {
 			struct rspamd_email_address *addr;
-			gchar *cpy;
+			char *cpy;
 
 			zero = memchr(pos, '\0', end - pos);
 
@@ -807,7 +807,7 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 }
 
 static gboolean
-rspamd_milter_is_valid_cmd(guchar c)
+rspamd_milter_is_valid_cmd(unsigned char c)
 {
 	switch (c) {
 	case RSPAMD_MILTER_CMD_ABORT:
@@ -837,7 +837,7 @@ static gboolean
 rspamd_milter_consume_input(struct rspamd_milter_session *session,
 							struct rspamd_milter_private *priv)
 {
-	const guchar *p, *end;
+	const unsigned char *p, *end;
 	GError *err;
 
 	p = priv->parser.buf->str + priv->parser.pos;
@@ -845,7 +845,7 @@ rspamd_milter_consume_input(struct rspamd_milter_session *session,
 
 	while (p < end) {
 		msg_debug_milter("offset: %d, state: %d",
-						 (gint) (p - (const guchar *) priv->parser.buf->str),
+						 (int) (p - (const unsigned char *) priv->parser.buf->str),
 						 priv->parser.state);
 
 		switch (priv->parser.state) {
@@ -891,7 +891,7 @@ rspamd_milter_consume_input(struct rspamd_milter_session *session,
 			}
 
 			p++;
-			priv->parser.cmd_start = p - (const guchar *) priv->parser.buf->str;
+			priv->parser.cmd_start = p - (const unsigned char *) priv->parser.buf->str;
 			break;
 		case st_read_data:
 			/* We might need some more data in buffer for further steps */
@@ -959,7 +959,7 @@ rspamd_milter_consume_input(struct rspamd_milter_session *session,
 				return FALSE;
 			}
 			if (priv->parser.buf->allocated < priv->parser.datalen) {
-				priv->parser.pos = p - (const guchar *) priv->parser.buf->str;
+				priv->parser.pos = p - (const unsigned char *) priv->parser.buf->str;
 				priv->parser.buf = rspamd_fstring_grow(priv->parser.buf,
 													   priv->parser.buf->len + priv->parser.datalen);
 				/* This can realloc buffer */
@@ -981,7 +981,7 @@ rspamd_milter_consume_input(struct rspamd_milter_session *session,
 				}
 				else {
 					/* Need to read more */
-					priv->parser.pos = p - (const guchar *) priv->parser.buf->str;
+					priv->parser.pos = p - (const unsigned char *) priv->parser.buf->str;
 					rspamd_milter_plan_io(session, priv, EV_READ);
 					goto end;
 				}
@@ -1190,14 +1190,14 @@ rspamd_milter_handle_session(struct rspamd_milter_session *session,
 
 
 gboolean
-rspamd_milter_handle_socket(gint fd, ev_tstamp timeout,
+rspamd_milter_handle_socket(int fd, ev_tstamp timeout,
 							rspamd_mempool_t *pool,
 							struct ev_loop *ev_base, rspamd_milter_finish finish_cb,
 							rspamd_milter_error error_cb, void *ud)
 {
 	struct rspamd_milter_session *session;
 	struct rspamd_milter_private *priv;
-	gint nfd = dup(fd);
+	int nfd = dup(fd);
 
 	if (nfd == -1) {
 		GError *err = g_error_new(rspamd_milter_quark(), errno,
@@ -1266,16 +1266,16 @@ rspamd_milter_set_reply(struct rspamd_milter_session *session,
 	return ret;
 }
 
-#define SET_COMMAND(cmd, sz, reply, pos)                         \
-	do {                                                         \
-		uint32_t _len;                                           \
-		_len = (sz) + 1;                                         \
-		(reply) = rspamd_fstring_sized_new(sizeof(_len) + _len); \
-		(reply)->len = sizeof(_len) + _len;                      \
-		_len = htonl(_len);                                      \
-		memcpy((reply)->str, &_len, sizeof(_len));               \
-		(reply)->str[sizeof(_len)] = (cmd);                      \
-		(pos) = (guchar *) (reply)->str + sizeof(_len) + 1;      \
+#define SET_COMMAND(cmd, sz, reply, pos)                           \
+	do {                                                           \
+		uint32_t _len;                                             \
+		_len = (sz) + 1;                                           \
+		(reply) = rspamd_fstring_sized_new(sizeof(_len) + _len);   \
+		(reply)->len = sizeof(_len) + _len;                        \
+		_len = htonl(_len);                                        \
+		memcpy((reply)->str, &_len, sizeof(_len));                 \
+		(reply)->str[sizeof(_len)] = (cmd);                        \
+		(pos) = (unsigned char *) (reply)->str + sizeof(_len) + 1; \
 	} while (0)
 
 gboolean
@@ -1284,7 +1284,7 @@ rspamd_milter_send_action(struct rspamd_milter_session *session,
 {
 	uint32_t ver, actions, protocol, idx;
 	va_list ap;
-	guchar cmd, *pos;
+	unsigned char cmd, *pos;
 	rspamd_fstring_t *reply = NULL;
 	gsize len;
 	GString *name, *value;
@@ -1418,7 +1418,7 @@ rspamd_milter_del_header(struct rspamd_milter_session *session,
 	GString value;
 	uint32_t idx = 1;
 
-	value.str = (gchar *) "";
+	value.str = (char *) "";
 	value.len = 0;
 
 	return rspamd_milter_send_action(session, RSPAMD_MILTER_CHGHEADER,
@@ -1584,7 +1584,7 @@ struct rspamd_http_message *
 rspamd_milter_to_http(struct rspamd_milter_session *session)
 {
 	struct rspamd_http_message *msg;
-	guint i;
+	unsigned int i;
 	struct rspamd_email_address *rcpt;
 	struct rspamd_milter_private *priv = session->priv;
 
@@ -1662,9 +1662,9 @@ rspamd_milter_update_userdata(struct rspamd_milter_session *session,
 
 static void
 rspamd_milter_remove_header_safe(struct rspamd_milter_session *session,
-								 const gchar *key, gint nhdr)
+								 const char *key, int nhdr)
 {
-	gint i;
+	int i;
 	GString *hname, *hvalue;
 	struct rspamd_milter_private *priv = session->priv;
 	khiter_t k;
@@ -1717,11 +1717,11 @@ rspamd_milter_remove_header_safe(struct rspamd_milter_session *session,
 
 static void
 rspamd_milter_extract_single_header(struct rspamd_milter_session *session,
-									const gchar *hdr, const ucl_object_t *obj)
+									const char *hdr, const ucl_object_t *obj)
 {
 	GString *hname, *hvalue;
 	struct rspamd_milter_private *priv = session->priv;
-	gint idx = -1;
+	int idx = -1;
 	const ucl_object_t *val;
 
 	val = ucl_object_lookup(obj, "value");
@@ -1995,12 +1995,12 @@ rspamd_milter_process_milter_block(struct rspamd_milter_session *session,
 
 void rspamd_milter_send_task_results(struct rspamd_milter_session *session,
 									 const ucl_object_t *results,
-									 const gchar *new_body,
+									 const char *new_body,
 									 gsize bodylen)
 {
 	const ucl_object_t *elt;
 	struct rspamd_milter_private *priv = session->priv;
-	const gchar *str_action;
+	const char *str_action;
 	struct rspamd_action *action;
 	rspamd_fstring_t *xcode = NULL, *rcode = NULL, *reply = NULL;
 	GString *hname, *hvalue;
@@ -2035,7 +2035,7 @@ void rspamd_milter_send_task_results(struct rspamd_milter_session *session,
 	elt = ucl_object_lookup(results, "messages");
 	if (elt) {
 		const ucl_object_t *smtp_res;
-		const gchar *msg;
+		const char *msg;
 		gsize len = 0;
 
 		smtp_res = ucl_object_lookup(elt, "smtp_message");

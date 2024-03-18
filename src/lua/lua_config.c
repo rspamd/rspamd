@@ -945,7 +945,7 @@ static const struct luaL_reg monitoredlib_m[] = {
 static const uint64_t rspamd_lua_callback_magic = 0x32c118af1e3263c7ULL;
 
 struct rspamd_config *
-lua_check_config(lua_State *L, gint pos)
+lua_check_config(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_config_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'config' expected");
@@ -953,7 +953,7 @@ lua_check_config(lua_State *L, gint pos)
 }
 
 static struct rspamd_monitored *
-lua_check_monitored(lua_State *L, gint pos)
+lua_check_monitored(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_monitored_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'monitored' expected");
@@ -961,7 +961,7 @@ lua_check_monitored(lua_State *L, gint pos)
 }
 
 /*** Config functions ***/
-static gint
+static int
 lua_config_get_api_version(lua_State *L)
 {
 	msg_warn("get_api_version is deprecated, do not use it");
@@ -970,12 +970,12 @@ lua_config_get_api_version(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_get_module_opt(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *mname, *optname;
+	const char *mname, *optname;
 	const ucl_object_t *obj;
 
 	if (cfg) {
@@ -1030,15 +1030,15 @@ lua_config_get_resolver(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_get_all_opt(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *mname;
+	const char *mname;
 	const ucl_object_t *obj, *cur, *cur_elt;
 	ucl_object_iter_t it = NULL;
-	gint i;
+	int i;
 
 	if (cfg) {
 		mname = luaL_checkstring(L, 2);
@@ -1089,7 +1089,7 @@ lua_config_get_all_opt(lua_State *L)
 
 struct rspamd_lua_cached_config {
 	lua_State *L;
-	gint ref;
+	int ref;
 };
 
 static void
@@ -1100,7 +1100,7 @@ lua_config_ucl_dtor(gpointer p)
 	luaL_unref(cached->L, LUA_REGISTRYINDEX, cached->ref);
 }
 
-static gint
+static int
 lua_config_get_ucl(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1136,13 +1136,13 @@ lua_config_get_ucl(lua_State *L)
 }
 
 
-static gint
+static int
 lua_config_get_classifier(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
 	struct rspamd_classifier_config *clc = NULL, **pclc = NULL;
-	const gchar *name;
+	const char *name;
 	GList *cur;
 
 	if (cfg) {
@@ -1173,17 +1173,17 @@ lua_config_get_classifier(lua_State *L)
 struct lua_callback_data {
 	uint64_t magic;
 	lua_State *L;
-	gchar *symbol;
+	char *symbol;
 
 	union {
-		gchar *name;
-		gint ref;
+		char *name;
+		int ref;
 	} callback;
 	gboolean cb_is_ref;
 
 	/* Dynamic data */
-	gint stack_level;
-	gint order;
+	int stack_level;
+	int order;
 	struct rspamd_symcache_dynamic_item *item;
 };
 
@@ -1201,13 +1201,13 @@ lua_destroy_cfg_symbol(gpointer ud)
 	}
 }
 
-static gint
+static int
 lua_config_register_module_option(lua_State *L)
 {
 	return 0;
 }
 
-static gint
+static int
 rspamd_compare_order_func(gconstpointer a, gconstpointer b)
 {
 	const struct lua_callback_data *cb1 = a, *cb2 = b;
@@ -1223,7 +1223,7 @@ lua_metric_symbol_callback(struct rspamd_task *task,
 {
 	struct lua_callback_data *cd = ud;
 	struct rspamd_task **ptask;
-	gint level = lua_gettop(cd->L), nresults, err_idx, ret;
+	int level = lua_gettop(cd->L), nresults, err_idx, ret;
 	lua_State *L = cd->L;
 	struct rspamd_symbol_result *s;
 
@@ -1255,10 +1255,10 @@ lua_metric_symbol_callback(struct rspamd_task *task,
 
 		if (nresults >= 1) {
 			/* Function returned boolean, so maybe we need to insert result? */
-			gint res = 0;
-			gint i;
-			gdouble flag = 1.0;
-			gint type;
+			int res = 0;
+			int i;
+			double flag = 1.0;
+			int type;
 
 			type = lua_type(cd->L, level + 1);
 
@@ -1280,7 +1280,7 @@ lua_metric_symbol_callback(struct rspamd_task *task,
 			}
 
 			if (res) {
-				gint first_opt = 2;
+				int first_opt = 2;
 
 				if (lua_type(L, level + 2) == LUA_TNUMBER) {
 					flag = lua_tonumber(L, level + 2);
@@ -1294,7 +1294,7 @@ lua_metric_symbol_callback(struct rspamd_task *task,
 				s = rspamd_task_insert_result(task, cd->symbol, flag, NULL);
 
 				if (s) {
-					guint last_pos = lua_gettop(L);
+					unsigned int last_pos = lua_gettop(L);
 
 					for (i = level + first_opt; i <= last_pos; i++) {
 						if (lua_type(L, i) == LUA_TSTRING) {
@@ -1314,7 +1314,7 @@ lua_metric_symbol_callback(struct rspamd_task *task,
 						else if (lua_type(L, i) == LUA_TTABLE) {
 							gsize objlen = rspamd_lua_table_size(L, i);
 
-							for (guint j = 1; j <= objlen; j++) {
+							for (unsigned int j = 1; j <= objlen; j++) {
 								lua_rawgeti(L, i, j);
 
 								if (lua_type(L, -1) == LUA_TSTRING) {
@@ -1419,10 +1419,10 @@ lua_metric_symbol_callback_return(struct thread_entry *thread_entry, int ret)
 
 	if (nresults >= 1) {
 		/* Function returned boolean, so maybe we need to insert result? */
-		gint res = 0;
-		gint i;
-		gdouble flag = 1.0;
-		gint type;
+		int res = 0;
+		int i;
+		double flag = 1.0;
+		int type;
 
 		type = lua_type(L, cd->stack_level + 1);
 
@@ -1437,7 +1437,7 @@ lua_metric_symbol_callback_return(struct thread_entry *thread_entry, int ret)
 		}
 
 		if (res) {
-			gint first_opt = 2;
+			int first_opt = 2;
 
 			if (lua_type(L, cd->stack_level + 2) == LUA_TNUMBER) {
 				flag = lua_tonumber(L, cd->stack_level + 2);
@@ -1451,7 +1451,7 @@ lua_metric_symbol_callback_return(struct thread_entry *thread_entry, int ret)
 			s = rspamd_task_insert_result(task, cd->symbol, flag, NULL);
 
 			if (s) {
-				guint last_pos = lua_gettop(L);
+				unsigned int last_pos = lua_gettop(L);
 
 				for (i = cd->stack_level + first_opt; i <= last_pos; i++) {
 					if (lua_type(L, i) == LUA_TSTRING) {
@@ -1471,7 +1471,7 @@ lua_metric_symbol_callback_return(struct thread_entry *thread_entry, int ret)
 					else if (lua_type(L, i) == LUA_TTABLE) {
 						gsize objlen = rspamd_lua_table_size(L, i);
 
-						for (guint j = 1; j <= objlen; j++) {
+						for (unsigned int j = 1; j <= objlen; j++) {
 							lua_rawgeti(L, i, j);
 
 							if (lua_type(L, -1) == LUA_TSTRING) {
@@ -1506,16 +1506,16 @@ lua_metric_symbol_callback_return(struct thread_entry *thread_entry, int ret)
 }
 
 static GArray *
-rspamd_process_id_list(const gchar *entries)
+rspamd_process_id_list(const char *entries)
 {
-	gchar **sym_elts;
+	char **sym_elts;
 	GArray *ret;
 
 	sym_elts = g_strsplit_set(entries, ",;", -1);
-	guint nids = g_strv_length(sym_elts);
+	unsigned int nids = g_strv_length(sym_elts);
 	ret = g_array_sized_new(FALSE, FALSE, sizeof(uint32_t), nids);
 
-	for (guint i = 0; i < nids; i++) {
+	for (unsigned int i = 0; i < nids; i++) {
 		uint32_t v = rspamd_config_name_to_id(sym_elts[i], strlen(sym_elts[i]));
 		g_array_append_val(ret, v);
 	}
@@ -1525,21 +1525,21 @@ rspamd_process_id_list(const gchar *entries)
 	return ret;
 }
 
-static gint
+static int
 rspamd_register_symbol_fromlua(lua_State *L,
 							   struct rspamd_config *cfg,
-							   const gchar *name,
-							   gint ref,
-							   gdouble weight,
-							   gint priority,
+							   const char *name,
+							   int ref,
+							   double weight,
+							   int priority,
 							   enum rspamd_symbol_type type,
-							   gint parent,
+							   int parent,
 							   GArray *allowed_ids,
 							   GArray *forbidden_ids,
 							   gboolean optional)
 {
 	struct lua_callback_data *cd;
-	gint ret = -1;
+	int ret = -1;
 
 	if (priority == 0 && weight < 0) {
 		priority = 1;
@@ -1624,12 +1624,12 @@ rspamd_register_symbol_fromlua(lua_State *L,
 	return ret;
 }
 
-static gint
+static int
 lua_config_register_post_filter(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	gint order = 0, cbref, ret;
+	int order = 0, cbref, ret;
 
 	if (cfg) {
 		if (lua_type(L, 3) == LUA_TNUMBER) {
@@ -1669,12 +1669,12 @@ lua_config_register_post_filter(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_register_pre_filter(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	gint order = 0, cbref, ret;
+	int order = 0, cbref, ret;
 
 	if (cfg) {
 		if (lua_type(L, 3) == LUA_TNUMBER) {
@@ -1714,12 +1714,12 @@ lua_config_register_pre_filter(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_get_key(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *name;
+	const char *name;
 	size_t namelen;
 	const ucl_object_t *val;
 
@@ -1740,10 +1740,10 @@ lua_config_get_key(lua_State *L)
 	return 1;
 }
 
-static guint
-lua_parse_symbol_flags(const gchar *str)
+static unsigned int
+lua_parse_symbol_flags(const char *str)
 {
-	guint ret = 0;
+	unsigned int ret = 0;
 
 	if (str) {
 		if (strstr(str, "fine") != NULL) {
@@ -1790,12 +1790,12 @@ lua_parse_symbol_flags(const gchar *str)
 	return ret;
 }
 
-static guint
-lua_parse_symbol_type(const gchar *str)
+static unsigned int
+lua_parse_symbol_type(const char *str)
 {
-	guint ret = SYMBOL_TYPE_NORMAL;
-	gchar **vec;
-	guint i, l;
+	unsigned int ret = SYMBOL_TYPE_NORMAL;
+	char **vec;
+	unsigned int i, l;
 
 	if (str) {
 		vec = g_strsplit_set(str, ",;", -1);
@@ -1837,7 +1837,7 @@ lua_parse_symbol_type(const gchar *str)
 						   SYMBOL_TYPE_IDEMPOTENT | SYMBOL_TYPE_CALLBACK;
 				}
 				else {
-					gint fl = 0;
+					int fl = 0;
 
 					fl = lua_parse_symbol_flags(str);
 
@@ -1879,9 +1879,9 @@ enum lua_push_symbol_flags_opts {
 	} while (0)
 
 static void
-lua_push_symbol_flags(lua_State *L, guint flags, enum lua_push_symbol_flags_opts fl)
+lua_push_symbol_flags(lua_State *L, unsigned int flags, enum lua_push_symbol_flags_opts fl)
 {
-	guint i = 1;
+	unsigned int i = 1;
 
 	if (LUA_SYMOPT_IS_CREATE(fl)) {
 		lua_newtable(L);
@@ -1932,12 +1932,12 @@ lua_push_symbol_flags(lua_State *L, guint flags, enum lua_push_symbol_flags_opts
 	}
 }
 
-static gint
+static int
 lua_config_get_symbol_flags(lua_State *L)
 {
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *name = luaL_checkstring(L, 2);
-	guint flags;
+	const char *name = luaL_checkstring(L, 2);
+	unsigned int flags;
 
 	if (cfg && name) {
 		flags = rspamd_symcache_get_symbol_flags(cfg->cache,
@@ -1957,17 +1957,17 @@ lua_config_get_symbol_flags(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_register_symbol(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *name = NULL, *type_str = NULL,
-				*description = NULL, *group = NULL;
+	const char *name = NULL, *type_str = NULL,
+			   *description = NULL, *group = NULL;
 	double weight = 0, score = NAN, parent_float = NAN;
 	gboolean one_shot = FALSE;
-	gint ret = -1, cbref = -1;
-	guint type = 0, flags = 0;
+	int ret = -1, cbref = -1;
+	unsigned int type = 0, flags = 0;
 	int64_t parent = 0, priority = 0, nshots = 0;
 	GArray *allowed_ids = NULL, *forbidden_ids = NULL;
 	GError *err = NULL;
@@ -2163,14 +2163,14 @@ lua_config_register_symbol(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_register_symbols(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	gint i, top, idx, ret = -1;
-	const gchar *sym;
-	gdouble weight = 1.0;
+	int i, top, idx, ret = -1;
+	const char *sym;
+	double weight = 1.0;
 
 	if (lua_gettop(L) < 3) {
 		if (cfg) {
@@ -2237,14 +2237,14 @@ lua_config_register_symbols(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_register_virtual_symbol(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *name;
+	const char *name;
 	double weight;
-	gint ret = -1, parent = -1;
+	int ret = -1, parent = -1;
 
 	if (cfg) {
 		name = luaL_checkstring(L, 2);
@@ -2266,14 +2266,14 @@ lua_config_register_virtual_symbol(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_register_callback_symbol(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *name = NULL;
+	const char *name = NULL;
 	double weight;
-	gint ret = -1, top = 2;
+	int ret = -1, top = 2;
 
 	if (cfg) {
 		if (lua_type(L, 2) == LUA_TSTRING) {
@@ -2307,14 +2307,14 @@ lua_config_register_callback_symbol(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_register_callback_symbol_priority(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *name = NULL;
+	const char *name = NULL;
 	double weight;
-	gint priority, ret = -1, top = 2;
+	int priority, ret = -1, top = 2;
 
 	if (cfg) {
 		if (lua_type(L, 2) == LUA_TSTRING) {
@@ -2351,13 +2351,13 @@ lua_config_register_callback_symbol_priority(lua_State *L)
 }
 
 
-static gint
+static int
 lua_config_register_dependency(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *parent = NULL, *child = NULL;
-	gint child_id;
+	const char *parent = NULL, *child = NULL;
+	int child_id;
 
 	if (cfg == NULL) {
 		lua_error(L);
@@ -2384,18 +2384,18 @@ lua_config_register_dependency(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_config_set_metric_symbol(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *description = NULL,
-				*group = NULL, *name = NULL, *flags_str = NULL;
+	const char *description = NULL,
+			   *group = NULL, *name = NULL, *flags_str = NULL;
 	double score;
 	gboolean one_shot = FALSE, one_param = FALSE;
 	GError *err = NULL;
-	gdouble priority = 0.0;
-	guint flags = 0;
+	double priority = 0.0;
+	unsigned int flags = 0;
 	int64_t nshots = 0;
 
 	if (cfg) {
@@ -2457,7 +2457,7 @@ lua_config_set_metric_symbol(lua_State *L)
 		}
 
 		rspamd_config_add_symbol(cfg, name,
-								 score, description, group, flags, (guint) priority, nshots);
+								 score, description, group, flags, (unsigned int) priority, nshots);
 
 
 		if (lua_type(L, 2) == LUA_TTABLE) {
@@ -2486,15 +2486,15 @@ lua_config_set_metric_symbol(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_config_set_metric_action(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *name = NULL;
+	const char *name = NULL;
 	double threshold = NAN;
 	GError *err = NULL;
-	gdouble priority = 0.0;
+	double priority = 0.0;
 	ucl_object_t *obj_tbl = NULL;
 
 	if (cfg) {
@@ -2551,12 +2551,12 @@ lua_config_set_metric_action(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_config_get_metric_action(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *act_name = luaL_checkstring(L, 2);
+	const char *act_name = luaL_checkstring(L, 2);
 	struct rspamd_action *act;
 
 	if (cfg && act_name) {
@@ -2593,7 +2593,7 @@ lua_config_actions_cb(struct rspamd_action *act, void *cbd)
 	}
 }
 
-static gint
+static int
 lua_config_get_all_actions(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -2610,13 +2610,13 @@ lua_config_get_all_actions(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_add_composite(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	gchar *name;
-	const gchar *expr_str;
+	char *name;
+	const char *expr_str;
 	struct rspamd_composite *composite;
 	gboolean ret = FALSE;
 
@@ -2641,15 +2641,15 @@ lua_config_add_composite(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_newindex(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *name;
+	const char *name;
 	GArray *allowed_ids = NULL, *forbidden_ids = NULL;
-	gint id, nshots;
-	guint flags = 0;
+	int id, nshots;
+	unsigned int flags = 0;
 	gboolean optional = FALSE;
 
 	name = luaL_checkstring(L, 2);
@@ -2671,9 +2671,9 @@ lua_config_newindex(lua_State *L)
 										   FALSE);
 		}
 		else if (lua_type(L, 3) == LUA_TTABLE) {
-			guint type = SYMBOL_TYPE_NORMAL, priority = 0;
-			gint idx;
-			gdouble weight = 1.0, score = NAN;
+			unsigned int type = SYMBOL_TYPE_NORMAL, priority = 0;
+			int idx;
+			double weight = 1.0, score = NAN;
 			const char *type_str, *group = NULL, *description = NULL;
 
 			/*
@@ -2803,7 +2803,7 @@ lua_config_newindex(lua_State *L)
 				lua_gettable(L, -2);
 
 				if (lua_type(L, -1) == LUA_TFUNCTION) {
-					gint condref;
+					int condref;
 
 					/* Here we pop function from the stack, so no lua_pop is required */
 					condref = luaL_ref(L, LUA_REGISTRYINDEX);
@@ -2965,14 +2965,14 @@ lua_config_newindex(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_config_add_condition(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *sym = luaL_checkstring(L, 2);
+	const char *sym = luaL_checkstring(L, 2);
 	gboolean ret = FALSE;
-	gint condref;
+	int condref;
 
 	if (cfg && sym && lua_type(L, 3) == LUA_TFUNCTION) {
 		lua_pushvalue(L, 3);
@@ -2990,12 +2990,12 @@ lua_config_add_condition(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_set_peak_cb(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	gint condref;
+	int condref;
 
 	if (cfg && lua_type(L, 2) == LUA_TFUNCTION) {
 		lua_pushvalue(L, 2);
@@ -3007,7 +3007,7 @@ lua_config_set_peak_cb(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_config_enable_symbol(lua_State *L)
 {
 	struct rspamd_config *cfg = lua_check_config(L, 1);
@@ -3022,7 +3022,7 @@ lua_config_enable_symbol(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_config_disable_symbol(lua_State *L)
 {
 	struct rspamd_config *cfg = lua_check_config(L, 1);
@@ -3037,14 +3037,14 @@ lua_config_disable_symbol(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_config_register_regexp(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
 	struct rspamd_lua_regexp *re = NULL;
 	rspamd_regexp_t *cache_re;
-	const gchar *type_str = NULL, *header_str = NULL;
+	const char *type_str = NULL, *header_str = NULL;
 	gsize header_len = 0;
 	GError *err = NULL;
 	enum rspamd_re_type type = RSPAMD_RE_BODY;
@@ -3125,7 +3125,7 @@ lua_config_register_regexp(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_config_replace_regexp(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -3139,8 +3139,8 @@ lua_config_replace_regexp(lua_State *L)
 											  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
 											  "*old_re=U{regexp};*new_re=U{regexp};pcre_only=B",
 											  &old_re, &new_re, &pcre_only)) {
-			gint ret = luaL_error(L, "cannot get parameters list: %s",
-								  err ? err->message : "invalid arguments");
+			int ret = luaL_error(L, "cannot get parameters list: %s",
+								 err ? err->message : "invalid arguments");
 
 			if (err) {
 				g_error_free(err);
@@ -3162,12 +3162,12 @@ lua_config_replace_regexp(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_config_register_worker_script(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *worker_type = luaL_checkstring(L, 2), *wtype;
+	const char *worker_type = luaL_checkstring(L, 2), *wtype;
 	struct rspamd_worker_conf *cf;
 	GList *cur;
 	struct rspamd_worker_lua_script *sc;
@@ -3195,7 +3195,7 @@ lua_config_register_worker_script(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_add_on_load(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -3222,15 +3222,15 @@ rspamd_post_init_sc_sort(const struct rspamd_config_cfg_lua_script *pra,
 	return prb->priority - pra->priority;
 }
 
-static gint
+static int
 lua_config_add_post_init(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
 	struct rspamd_config_cfg_lua_script *sc;
-	guint priority = 0;
+	unsigned int priority = 0;
 	lua_Debug d;
-	gchar tmp[256], *p;
+	char tmp[256], *p;
 
 	if (cfg == NULL || lua_type(L, 2) != LUA_TFUNCTION) {
 		return luaL_error(L, "invalid arguments");
@@ -3270,14 +3270,14 @@ lua_config_add_post_init(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_config_add_config_unload(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
 	struct rspamd_config_cfg_lua_script *sc;
 	lua_Debug d;
-	gchar tmp[256], *p;
+	char tmp[256], *p;
 
 	if (cfg == NULL || lua_type(L, 2) != LUA_TFUNCTION) {
 		return luaL_error(L, "invalid arguments");
@@ -3318,11 +3318,11 @@ static void lua_periodic_callback_error(struct thread_entry *thread, int ret, co
 struct rspamd_lua_periodic {
 	struct ev_loop *event_loop;
 	struct rspamd_config *cfg;
-	gchar *lua_src_pos;
+	char *lua_src_pos;
 	lua_State *L;
-	gdouble timeout;
+	double timeout;
 	ev_timer ev;
-	gint cbref;
+	int cbref;
 	gboolean need_jitter;
 	ref_entry_t ref;
 };
@@ -3378,7 +3378,7 @@ lua_periodic_callback_finish(struct thread_entry *thread, int ret)
 	lua_State *L;
 	struct rspamd_lua_periodic *periodic = thread->cd;
 	gboolean plan_more = FALSE;
-	gdouble timeout = 0.0;
+	double timeout = 0.0;
 
 	L = thread->lua_state;
 
@@ -3433,17 +3433,17 @@ lua_periodic_callback_error(struct thread_entry *thread, int ret, const char *ms
 }
 
 
-static gint
+static int
 lua_config_add_periodic(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
 	struct ev_loop *ev_base = lua_check_ev_base(L, 2);
-	gdouble timeout = lua_tonumber(L, 3);
+	double timeout = lua_tonumber(L, 3);
 	struct rspamd_lua_periodic *periodic;
 	gboolean need_jitter = FALSE;
 	lua_Debug d;
-	gchar tmp[256], *p;
+	char tmp[256], *p;
 
 	if (cfg == NULL || timeout < 0 || lua_type(L, 4) != LUA_TFUNCTION) {
 		return luaL_error(L, "invalid arguments");
@@ -3497,12 +3497,12 @@ lua_config_add_periodic(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_config_get_symbols_count(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	guint res = 0;
+	unsigned int res = 0;
 
 	if (cfg != NULL) {
 		res = rspamd_symcache_stats_symbols_count(cfg->cache);
@@ -3516,7 +3516,7 @@ lua_config_get_symbols_count(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_get_symbols_cksum(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -3537,7 +3537,7 @@ lua_config_get_symbols_cksum(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_get_symbols_counters(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -3567,10 +3567,10 @@ lua_metric_symbol_inserter(gpointer k, gpointer v, gpointer ud)
 {
 	struct lua_metric_symbols_cbdata *cbd = (struct lua_metric_symbols_cbdata *) ud;
 	lua_State *L;
-	const gchar *sym = k;
+	const char *sym = k;
 	struct rspamd_symbol *s = (struct rspamd_symbol *) v;
 	struct rspamd_symbols_group *gr;
-	gint i;
+	int i;
 
 	L = cbd->L;
 
@@ -3611,13 +3611,13 @@ lua_metric_symbol_inserter(gpointer k, gpointer v, gpointer ud)
 	}
 
 	if (s->cache_item) {
-		guint sflags = rspamd_symcache_get_symbol_flags(cbd->cfg->cache, sym);
+		unsigned int sflags = rspamd_symcache_get_symbol_flags(cbd->cfg->cache, sym);
 
 		lua_push_symbol_flags(L, sflags, LUA_SYMOPT_FLAG_USE_MAP);
 
-		guint nids;
-		const guint *allowed_ids = rspamd_symcache_get_allowed_settings_ids(cbd->cfg->cache,
-																			sym, &nids);
+		unsigned int nids;
+		const unsigned int *allowed_ids = rspamd_symcache_get_allowed_settings_ids(cbd->cfg->cache,
+																				   sym, &nids);
 
 		if (allowed_ids && nids > 0) {
 			lua_createtable(L, nids, 0);
@@ -3630,7 +3630,7 @@ lua_metric_symbol_inserter(gpointer k, gpointer v, gpointer ud)
 			lua_setfield(L, -2, "allowed_ids");
 		}
 
-		const guint *forbidden_ids = rspamd_symcache_get_forbidden_settings_ids(
+		const unsigned int *forbidden_ids = rspamd_symcache_get_forbidden_settings_ids(
 			cbd->cfg->cache,
 			sym, &nids);
 
@@ -3680,7 +3680,7 @@ lua_metric_symbol_inserter(gpointer k, gpointer v, gpointer ud)
 	}
 }
 
-static gint
+static int
 lua_config_get_symbols(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -3705,12 +3705,12 @@ lua_config_get_symbols(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_get_symbol(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *sym_name = luaL_checkstring(L, 2);
+	const char *sym_name = luaL_checkstring(L, 2);
 
 	if (cfg != NULL && sym_name != NULL) {
 		struct lua_metric_symbols_cbdata cbd;
@@ -3734,12 +3734,12 @@ lua_config_get_symbol(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_get_symbol_callback(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *sym = luaL_checkstring(L, 2);
+	const char *sym = luaL_checkstring(L, 2);
 	struct rspamd_abstract_callback_data *abs_cbdata;
 	struct lua_callback_data *cbd;
 
@@ -3767,12 +3767,12 @@ lua_config_get_symbol_callback(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_set_symbol_callback(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *sym = luaL_checkstring(L, 2);
+	const char *sym = luaL_checkstring(L, 2);
 	struct rspamd_abstract_callback_data *abs_cbdata;
 	struct lua_callback_data *cbd;
 
@@ -3804,14 +3804,14 @@ lua_config_set_symbol_callback(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_get_symbol_stat(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *sym = luaL_checkstring(L, 2);
-	gdouble freq, stddev, tm;
-	guint hits;
+	const char *sym = luaL_checkstring(L, 2);
+	double freq, stddev, tm;
+	unsigned int hits;
 
 	if (cfg != NULL && sym != NULL) {
 		if (!rspamd_symcache_stat_symbol(cfg->cache, sym, &freq,
@@ -3841,12 +3841,12 @@ lua_config_get_symbol_stat(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_get_symbol_parent(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *sym = luaL_checkstring(L, 2), *parent;
+	const char *sym = luaL_checkstring(L, 2), *parent;
 
 	if (cfg != NULL && sym != NULL) {
 		parent = rspamd_symcache_get_parent(cfg->cache, sym);
@@ -3865,12 +3865,12 @@ lua_config_get_symbol_parent(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_get_group_symbols(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *gr_name = luaL_checkstring(L, 2);
+	const char *gr_name = luaL_checkstring(L, 2);
 
 	if (cfg != NULL && gr_name != NULL) {
 		struct rspamd_symbols_group *group;
@@ -3881,7 +3881,7 @@ lua_config_get_group_symbols(lua_State *L)
 			lua_pushnil(L);
 		}
 		else {
-			guint i = 1;
+			unsigned int i = 1;
 			gpointer k, v;
 			GHashTableIter it;
 
@@ -3902,7 +3902,7 @@ lua_config_get_group_symbols(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_get_groups(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -3949,7 +3949,7 @@ lua_config_get_groups(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_register_finish_script(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -3993,12 +3993,12 @@ rspamd_lua_config_check_settings_symbols_object(const ucl_object_t *obj)
 	return false;
 }
 
-static gint
+static int
 lua_config_register_settings_id(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *settings_name = luaL_checkstring(L, 2);
+	const char *settings_name = luaL_checkstring(L, 2);
 
 	if (cfg != NULL && settings_name) {
 		ucl_object_t *sym_enabled, *sym_disabled;
@@ -4023,7 +4023,7 @@ lua_config_register_settings_id(lua_State *L)
 
 		/* Check policy */
 		if (lua_isstring(L, 5)) {
-			const gchar *policy_str = lua_tostring(L, 5);
+			const char *policy_str = lua_tostring(L, 5);
 
 			if (strcmp(policy_str, "default") == 0) {
 				policy = RSPAMD_SETTINGS_POLICY_DEFAULT;
@@ -4063,13 +4063,13 @@ lua_config_register_settings_id(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_config_register_monitored(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
 	struct rspamd_monitored *m, **pm;
-	const gchar *url, *type;
+	const char *url, *type;
 	ucl_object_t *params = NULL;
 
 	url = lua_tostring(L, 2);
@@ -4115,13 +4115,13 @@ lua_config_register_monitored(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_add_doc(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg;
-	const gchar *path = NULL, *option, *doc_string;
-	const gchar *type_str = NULL, *default_value = NULL;
+	const char *path = NULL, *option, *doc_string;
+	const char *type_str = NULL, *default_value = NULL;
 	ucl_type_t type = UCL_NULL;
 	gboolean required = FALSE;
 	GError *err = NULL;
@@ -4165,12 +4165,12 @@ lua_config_add_doc(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_config_add_example(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg;
-	const gchar *path = NULL, *option, *doc_string, *example;
+	const char *path = NULL, *option, *doc_string, *example;
 	gsize example_len;
 
 	cfg = lua_check_config(L, 1);
@@ -4195,7 +4195,7 @@ lua_config_add_example(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_config_get_cpu_flags(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -4249,7 +4249,7 @@ lua_config_get_cpu_flags(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_has_torch(lua_State *L)
 {
 	msg_warn("use of the obsoleted `has_torch` function");
@@ -4258,7 +4258,7 @@ lua_config_has_torch(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_experimental_enabled(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -4276,7 +4276,7 @@ lua_config_experimental_enabled(lua_State *L)
 
 struct rspamd_lua_include_trace_cbdata {
 	lua_State *L;
-	gint cbref;
+	int cbref;
 };
 
 static void
@@ -4289,7 +4289,7 @@ lua_include_trace_cb(struct ucl_parser *parser,
 {
 	struct rspamd_lua_include_trace_cbdata *cbdata =
 		(struct rspamd_lua_include_trace_cbdata *) user_data;
-	gint err_idx;
+	int err_idx;
 	lua_State *L;
 
 	L = cbdata->L;
@@ -4333,11 +4333,11 @@ lua_include_trace_cb(struct ucl_parser *parser,
 		lua_pop(L, 1);                                                        \
 	} while (0)
 
-static gint
+static int
 lua_config_load_ucl(lua_State *L)
 {
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *filename;
+	const char *filename;
 	GHashTable *paths = g_hash_table_new_full(rspamd_str_hash, rspamd_str_equal,
 											  NULL, g_free);
 	GError *err = NULL;
@@ -4415,7 +4415,7 @@ lua_config_load_ucl(lua_State *L)
 
 #undef IDX_TO_HASH
 
-static gint
+static int
 lua_config_parse_rcl(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -4460,7 +4460,7 @@ lua_config_parse_rcl(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_init_modules(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -4477,14 +4477,14 @@ lua_config_init_modules(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_init_subsystem(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *subsystem = luaL_checkstring(L, 2);
-	gchar **parts;
-	guint nparts, i;
+	const char *subsystem = luaL_checkstring(L, 2);
+	char **parts;
+	unsigned int nparts, i;
 
 	if (cfg != NULL && subsystem != NULL) {
 		parts = g_strsplit_set(subsystem, ";,", -1);
@@ -4540,16 +4540,16 @@ lua_config_init_subsystem(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_config_register_re_selector(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const gchar *name = luaL_checkstring(L, 2);
-	const gchar *selector_str = luaL_checkstring(L, 3);
-	const gchar *delimiter = "";
+	const char *name = luaL_checkstring(L, 2);
+	const char *selector_str = luaL_checkstring(L, 3);
+	const char *delimiter = "";
 	bool flatten = false;
-	gint top = lua_gettop(L);
+	int top = lua_gettop(L);
 	bool res = false;
 
 	if (cfg && name && selector_str) {
@@ -4581,7 +4581,7 @@ lua_config_register_re_selector(lua_State *L)
 									lua_typename(L, lua_type(L, -1)));
 				}
 				else {
-					gint err_idx, ret;
+					int err_idx, ret;
 					struct rspamd_config **pcfg;
 
 					lua_pushcfunction(L, &rspamd_lua_traceback);
@@ -4635,7 +4635,7 @@ lua_config_register_re_selector(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_get_tld_path(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -4651,7 +4651,7 @@ lua_config_get_tld_path(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_get_dns_max_requests(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -4667,7 +4667,7 @@ lua_config_get_dns_max_requests(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_config_get_dns_timeout(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -4683,7 +4683,7 @@ lua_config_get_dns_timeout(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_monitored_alive(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -4699,7 +4699,7 @@ lua_monitored_alive(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_monitored_offline(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -4715,7 +4715,7 @@ lua_monitored_offline(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_monitored_total_offline(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -4731,7 +4731,7 @@ lua_monitored_total_offline(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_monitored_latency(lua_State *L)
 {
 	LUA_TRACE_POINT;

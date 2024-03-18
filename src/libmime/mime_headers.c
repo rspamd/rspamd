@@ -24,7 +24,7 @@
 #include "libutil/util.h"
 #include <unicode/utf8.h>
 
-KHASH_INIT(rspamd_mime_headers_htb, gchar *,
+KHASH_INIT(rspamd_mime_headers_htb, char *,
 		   struct rspamd_mime_header *, 1,
 		   rspamd_strcase_hash, rspamd_strcase_equal);
 
@@ -38,9 +38,9 @@ rspamd_mime_header_check_special(struct rspamd_task *task,
 								 struct rspamd_mime_header *rh)
 {
 	uint64_t h;
-	const gchar *p, *end;
-	gchar *id;
-	gint max_recipients = -1, len;
+	const char *p, *end;
+	char *id;
+	int max_recipients = -1, len;
 
 	if (task->cfg) {
 		max_recipients = task->cfg->max_recipients;
@@ -93,7 +93,7 @@ rspamd_mime_header_check_special(struct rspamd_task *task,
 		}
 
 		if (end > p) {
-			gchar *d;
+			char *d;
 
 			if (*(end - 1) == '>') {
 				end--;
@@ -186,16 +186,16 @@ rspamd_mime_header_add(struct rspamd_task *task,
 void rspamd_mime_headers_process(struct rspamd_task *task,
 								 struct rspamd_mime_headers_table *target,
 								 struct rspamd_mime_header **order_ptr,
-								 const gchar *in, gsize len,
+								 const char *in, gsize len,
 								 gboolean check_newlines)
 {
 	struct rspamd_mime_header *nh = NULL;
-	const gchar *p, *c, *end;
-	gchar *tmp, *tp;
-	gint state = 0, l, next_state = 100, err_state = 100, t_state;
+	const char *p, *c, *end;
+	char *tmp, *tp;
+	int state = 0, l, next_state = 100, err_state = 100, t_state;
 	gboolean valid_folding = FALSE, shift_by_one = FALSE;
-	guint nlines_count[RSPAMD_TASK_NEWLINES_MAX];
-	guint norder = 0;
+	unsigned int nlines_count[RSPAMD_TASK_NEWLINES_MAX];
+	unsigned int norder = 0;
 
 	p = in;
 	end = p + len;
@@ -485,12 +485,12 @@ void rspamd_mime_headers_process(struct rspamd_task *task,
 	LL_REVERSE(*order_ptr);
 
 	if (check_newlines) {
-		guint max_cnt = 0;
-		gint sel = 0;
+		unsigned int max_cnt = 0;
+		int sel = 0;
 		rspamd_cryptobox_hash_state_t hs;
-		guchar hout[rspamd_cryptobox_HASHBYTES], *hexout;
+		unsigned char hout[rspamd_cryptobox_HASHBYTES], *hexout;
 
-		for (gint i = RSPAMD_TASK_NEWLINES_CR; i < RSPAMD_TASK_NEWLINES_MAX; i++) {
+		for (int i = RSPAMD_TASK_NEWLINES_CR; i < RSPAMD_TASK_NEWLINES_MAX; i++) {
 			if (nlines_count[i] > max_cnt) {
 				max_cnt = nlines_count[i];
 				sel = i;
@@ -572,7 +572,7 @@ static void
 rspamd_mime_header_sanity_check(GString *str)
 {
 	gsize i;
-	gchar t;
+	char t;
 
 	for (i = 0; i < str->len; i++) {
 		t = str->str[i];
@@ -588,20 +588,20 @@ rspamd_mime_header_sanity_check(GString *str)
 	}
 }
 
-gchar *
-rspamd_mime_header_decode(rspamd_mempool_t *pool, const gchar *in,
+char *
+rspamd_mime_header_decode(rspamd_mempool_t *pool, const char *in,
 						  gsize inlen, gboolean *invalid_utf)
 {
 	GString *out;
-	const guchar *c, *p, *end;
-	const gchar *tok_start = NULL;
+	const unsigned char *c, *p, *end;
+	const char *tok_start = NULL;
 	gsize tok_len = 0, pos;
 	GByteArray *token = NULL, *decoded;
 	rspamd_ftok_t cur_charset = {0, NULL}, old_charset = {0, NULL};
-	gint encoding;
+	int encoding;
 	gssize r;
-	guint qmarks = 0;
-	gchar *ret;
+	unsigned int qmarks = 0;
+	char *ret;
 	enum {
 		parse_normal = 0,
 		got_eqsign,
@@ -628,7 +628,7 @@ rspamd_mime_header_decode(rspamd_mempool_t *pool, const gchar *in,
 				state = got_eqsign;
 			}
 			else if (*p >= 128) {
-				gint off = 0;
+				int off = 0;
 				UChar32 uc;
 				/* Unencoded character */
 				g_string_append_len(out, c, p - c);
@@ -815,17 +815,17 @@ rspamd_mime_header_decode(rspamd_mempool_t *pool, const gchar *in,
 	return ret;
 }
 
-gchar *
-rspamd_mime_header_encode(const gchar *in, gsize len)
+char *
+rspamd_mime_header_encode(const char *in, gsize len)
 {
-	const gchar *p = in, *end = in + len;
-	gchar *out, encode_buf[80 * sizeof(uint32_t)];
+	const char *p = in, *end = in + len;
+	char *out, encode_buf[80 * sizeof(uint32_t)];
 	GString *res;
 	gboolean need_encoding = FALSE;
 
 	/* Check if we need to encode */
 	while (p < end) {
-		if ((((guchar) *p) & 0x80) != 0) {
+		if ((((unsigned char) *p) & 0x80) != 0) {
 			need_encoding = TRUE;
 			break;
 		}
@@ -839,17 +839,17 @@ rspamd_mime_header_encode(const gchar *in, gsize len)
 	else {
 		/* Need encode */
 		gsize ulen, pos;
-		gint r;
-		const gchar *prev;
+		int r;
+		const char *prev;
 		/* Choose step: =?UTF-8?Q?<qp>?= should be less than 76 chars */
-		guint step = (76 - 12) / 3 + 1;
+		unsigned int step = (76 - 12) / 3 + 1;
 
 		ulen = g_utf8_strlen(in, len);
 		res = g_string_sized_new(len * 2 + 1);
 		pos = 0;
 		prev = in;
 		/* Adjust chunk size for unicode average length */
-		step *= 1.0 * ulen / (gdouble) len;
+		step *= 1.0 * ulen / (double) len;
 
 		while (pos < ulen) {
 			p = g_utf8_offset_to_pointer(in, pos);
@@ -898,8 +898,8 @@ rspamd_mime_header_encode(const gchar *in, gsize len)
 	return out;
 }
 
-gchar *
-rspamd_mime_message_id_generate(const gchar *fqdn)
+char *
+rspamd_mime_message_id_generate(const char *fqdn)
 {
 	GString *out;
 	uint64_t rnd, clk;
@@ -909,8 +909,8 @@ rspamd_mime_message_id_generate(const gchar *fqdn)
 	clk = rspamd_get_calendar_ticks() * 1e6;
 
 	rspamd_printf_gstring(out, "%*bs.%*bs@%s",
-						  (gint) sizeof(uint64_t) - 3, (guchar *) &clk,
-						  (gint) sizeof(uint64_t), (gchar *) &rnd,
+						  (int) sizeof(uint64_t) - 3, (unsigned char *) &clk,
+						  (int) sizeof(uint64_t), (char *) &rnd,
 						  fqdn);
 
 	return g_string_free(out, FALSE);
@@ -918,7 +918,7 @@ rspamd_mime_message_id_generate(const gchar *fqdn)
 
 struct rspamd_mime_header *
 rspamd_message_get_header_from_hash(struct rspamd_mime_headers_table *hdrs,
-									const gchar *field,
+									const char *field,
 									gboolean need_modified)
 {
 	if (hdrs == NULL) {
@@ -930,7 +930,7 @@ rspamd_message_get_header_from_hash(struct rspamd_mime_headers_table *hdrs,
 	struct rspamd_mime_header *hdr;
 
 	if (htb) {
-		k = kh_get(rspamd_mime_headers_htb, htb, (gchar *) field);
+		k = kh_get(rspamd_mime_headers_htb, htb, (char *) field);
 
 		if (k == kh_end(htb)) {
 			return NULL;
@@ -958,7 +958,7 @@ rspamd_message_get_header_from_hash(struct rspamd_mime_headers_table *hdrs,
 }
 
 struct rspamd_mime_header *
-rspamd_message_get_header_array(struct rspamd_task *task, const gchar *field,
+rspamd_message_get_header_array(struct rspamd_task *task, const char *field,
 								gboolean need_modified)
 {
 	return rspamd_message_get_header_from_hash(
@@ -978,7 +978,7 @@ gsize rspamd_mime_headers_count(struct rspamd_mime_headers_table *hdrs)
 bool rspamd_mime_headers_foreach(const struct rspamd_mime_headers_table *hdrs,
 								 rspamd_hdr_traverse_func_t func, void *ud)
 {
-	const gchar *name;
+	const char *name;
 	struct rspamd_mime_header *hdr;
 
 	kh_foreach(&hdrs->htb, name, hdr, {
@@ -1097,7 +1097,7 @@ gsize rspamd_message_header_unfold_inplace(char *hdr, gsize len)
 
 void rspamd_message_set_modified_header(struct rspamd_task *task,
 										struct rspamd_mime_headers_table *hdrs,
-										const gchar *hdr_name,
+										const char *hdr_name,
 										const ucl_object_t *obj,
 										struct rspamd_mime_header **order_ptr)
 {
@@ -1107,7 +1107,7 @@ void rspamd_message_set_modified_header(struct rspamd_task *task,
 	int i;
 
 	if (htb) {
-		k = kh_get(rspamd_mime_headers_htb, htb, (gchar *) hdr_name);
+		k = kh_get(rspamd_mime_headers_htb, htb, (char *) hdr_name);
 
 		if (k == kh_end(htb)) {
 			hdr_elt = rspamd_mempool_alloc0(task->task_pool, sizeof(*hdr_elt));
@@ -1353,7 +1353,7 @@ void rspamd_message_set_modified_header(struct rspamd_task *task,
 	}
 }
 
-gsize rspamd_strip_smtp_comments_inplace(gchar *input, gsize len)
+gsize rspamd_strip_smtp_comments_inplace(char *input, gsize len)
 {
 	enum parser_state {
 		parse_normal,
@@ -1363,8 +1363,8 @@ gsize rspamd_strip_smtp_comments_inplace(gchar *input, gsize len)
 		parse_quoted_ignore,
 	} state = parse_normal,
 	  next_state = parse_normal;
-	gchar *d = input, *end = input + len, *start = input;
-	gchar t;
+	char *d = input, *end = input + len, *start = input;
+	char t;
 	int obraces = 0, ebraces = 0;
 
 	while (input < end) {

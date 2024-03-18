@@ -49,7 +49,7 @@ static const int primes[] = {
 	3277,
 };
 
-static const guchar osb_tokenizer_magic[] = {'o', 's', 'b', 't', 'o', 'k', 'v', '2'};
+static const unsigned char osb_tokenizer_magic[] = {'o', 's', 'b', 't', 'o', 'k', 'v', '2'};
 
 enum rspamd_osb_hash_type {
 	RSPAMD_OSB_HASH_COMPAT = 0,
@@ -58,7 +58,7 @@ enum rspamd_osb_hash_type {
 };
 
 struct rspamd_osb_tokenizer_config {
-	guchar magic[8];
+	unsigned char magic[8];
 	gshort version;
 	gshort window_size;
 	enum rspamd_osb_hash_type ht;
@@ -92,7 +92,7 @@ rspamd_tokenizer_osb_config_from_ucl(rspamd_mempool_t *pool,
 {
 	const ucl_object_t *elt;
 	struct rspamd_osb_tokenizer_config *cf, *def;
-	guchar *key = NULL;
+	unsigned char *key = NULL;
 	gsize keylen;
 
 
@@ -266,12 +266,12 @@ struct token_pipe_entry {
 	rspamd_stat_token_t *t;
 };
 
-gint rspamd_tokenizer_osb(struct rspamd_stat_ctx *ctx,
-						  struct rspamd_task *task,
-						  GArray *words,
-						  gboolean is_utf,
-						  const gchar *prefix,
-						  GPtrArray *result)
+int rspamd_tokenizer_osb(struct rspamd_stat_ctx *ctx,
+						 struct rspamd_task *task,
+						 GArray *words,
+						 gboolean is_utf,
+						 const char *prefix,
+						 GPtrArray *result)
 {
 	rspamd_token_t *new_tok = NULL;
 	rspamd_stat_token_t *token;
@@ -280,7 +280,7 @@ gint rspamd_tokenizer_osb(struct rspamd_stat_ctx *ctx,
 	struct token_pipe_entry *hashpipe;
 	uint32_t h1, h2;
 	gsize token_size;
-	guint processed = 0, i, w, window_size, token_flags = 0;
+	unsigned int processed = 0, i, w, window_size, token_flags = 0;
 
 	if (words == NULL) {
 		return FALSE;
@@ -309,7 +309,7 @@ gint rspamd_tokenizer_osb(struct rspamd_stat_ctx *ctx,
 	for (w = 0; w < words->len; w++) {
 		token = &g_array_index(words, rspamd_stat_token_t, w);
 		token_flags = token->flags;
-		const gchar *begin;
+		const char *begin;
 		gsize len;
 
 		if (token->flags &
@@ -341,7 +341,7 @@ gint rspamd_tokenizer_osb(struct rspamd_stat_ctx *ctx,
 														  begin, len, osb_cf->seed);
 			}
 			else {
-				rspamd_cryptobox_siphash((guchar *) &cur, begin,
+				rspamd_cryptobox_siphash((unsigned char *) &cur, begin,
 										 len, osb_cf->sk);
 
 				if (prefix) {
@@ -373,8 +373,8 @@ gint rspamd_tokenizer_osb(struct rspamd_stat_ctx *ctx,
 				 ((uint32_t) hashpipe[i].h) * primes[i << 1];                           \
 			h2 = ((uint32_t) hashpipe[0].h) * primes[1] +                               \
 				 ((uint32_t) hashpipe[i].h) * primes[(i << 1) - 1];                     \
-			memcpy((guchar *) &new_tok->data, &h1, sizeof(h1));                         \
-			memcpy(((guchar *) &new_tok->data) + sizeof(h1), &h2, sizeof(h2));          \
+			memcpy((unsigned char *) &new_tok->data, &h1, sizeof(h1));                  \
+			memcpy(((unsigned char *) &new_tok->data) + sizeof(h1), &h2, sizeof(h2));   \
 		}                                                                               \
 		else {                                                                          \
 			new_tok->data = hashpipe[0].h * primes[0] + hashpipe[i].h * primes[i << 1]; \

@@ -104,8 +104,8 @@ rspamd_stat_cache_sqlite3_init(struct rspamd_stat_ctx *ctx,
 {
 	struct rspamd_stat_sqlite3_ctx *new = NULL;
 	const ucl_object_t *elt;
-	gchar dbpath[PATH_MAX];
-	const gchar *path = SQLITE_CACHE_PATH;
+	char dbpath[PATH_MAX];
+	const char *path = SQLITE_CACHE_PATH;
 	sqlite3 *sqlite;
 	GError *err = NULL;
 
@@ -154,17 +154,17 @@ rspamd_stat_cache_sqlite3_runtime(struct rspamd_task *task,
 	return ctx;
 }
 
-gint rspamd_stat_cache_sqlite3_check(struct rspamd_task *task,
-									 gboolean is_spam,
-									 gpointer runtime)
+int rspamd_stat_cache_sqlite3_check(struct rspamd_task *task,
+									gboolean is_spam,
+									gpointer runtime)
 {
 	struct rspamd_stat_sqlite3_ctx *ctx = runtime;
 	rspamd_cryptobox_hash_state_t st;
 	rspamd_token_t *tok;
-	guchar *out;
-	gchar *user = NULL;
-	guint i;
-	gint rc;
+	unsigned char *out;
+	char *user = NULL;
+	unsigned int i;
+	int rc;
 	int64_t flag;
 
 	if (task->tokens == NULL || task->tokens->len == 0) {
@@ -184,7 +184,7 @@ gint rspamd_stat_cache_sqlite3_check(struct rspamd_task *task,
 
 		for (i = 0; i < task->tokens->len; i++) {
 			tok = g_ptr_array_index(task->tokens, i);
-			rspamd_cryptobox_hash_update(&st, (guchar *) &tok->data,
+			rspamd_cryptobox_hash_update(&st, (unsigned char *) &tok->data,
 										 sizeof(tok->data));
 		}
 
@@ -219,13 +219,13 @@ gint rspamd_stat_cache_sqlite3_check(struct rspamd_task *task,
 	return RSPAMD_LEARN_OK;
 }
 
-gint rspamd_stat_cache_sqlite3_learn(struct rspamd_task *task,
-									 gboolean is_spam,
-									 gpointer runtime)
+int rspamd_stat_cache_sqlite3_learn(struct rspamd_task *task,
+									gboolean is_spam,
+									gpointer runtime)
 {
 	struct rspamd_stat_sqlite3_ctx *ctx = runtime;
 	gboolean unlearn = !!(task->flags & RSPAMD_TASK_FLAG_UNLEARN);
-	guchar *h;
+	unsigned char *h;
 	int64_t flag;
 
 	h = rspamd_mempool_get_variable(task->task_pool, "words_hash");

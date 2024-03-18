@@ -50,34 +50,33 @@ typedef uint8_t btrie_oct_t;
  * in btrie_walk() --- btrie_add_prefix() and btrie_lookup() impose no
  * limit on the length of bitstrings
  */
-#define BTRIE_MAX_PREFIX          128
+#define BTRIE_MAX_PREFIX 128
 
 struct btrie;
 struct memory_pool_s;
 
-struct btrie * btrie_init(struct memory_pool_s *mp);
+struct btrie *btrie_init(struct memory_pool_s *mp);
 
-enum btrie_result
-{
+enum btrie_result {
 	BTRIE_OKAY = 0,
 	BTRIE_ALLOC_FAILED = -1,
 	BTRIE_DUPLICATE_PREFIX = 1
 };
 
 enum btrie_result btrie_add_prefix(struct btrie *btrie,
-		const btrie_oct_t *prefix, unsigned len, const void *data);
+								   const btrie_oct_t *prefix, unsigned len, const void *data);
 
 const void *btrie_lookup(const struct btrie *btrie, const btrie_oct_t *pfx,
-		unsigned len);
+						 unsigned len);
 
-const char *btrie_stats(const struct btrie *btrie, guint duplicates);
+const char *btrie_stats(const struct btrie *btrie, unsigned int duplicates);
 
 #ifndef NO_MASTER_DUMP
 typedef void btrie_walk_cb_t(const btrie_oct_t *prefix, unsigned len,
-		const void *data, int post, void *user_data);
+							 const void *data, int post, void *user_data);
 
 void btrie_walk(const struct btrie *btrie, btrie_walk_cb_t *callback,
-		void *user_data);
+				void *user_data);
 #endif /* not NO_MASTER_DUMP */
 
 #endif /* _BTRIE_H_INCLUDED */

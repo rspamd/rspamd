@@ -101,14 +101,14 @@ struct rspamd_ucl_map_cbdata {
 	{
 	}
 };
-static gchar *rspamd_ucl_read_cb(gchar *chunk,
-								 gint len,
-								 struct map_cb_data *data,
-								 gboolean final);
+static char *rspamd_ucl_read_cb(char *chunk,
+								int len,
+								struct map_cb_data *data,
+								gboolean final);
 static void rspamd_ucl_fin_cb(struct map_cb_data *data, void **target);
 static void rspamd_ucl_dtor_cb(struct map_cb_data *data);
 
-guint rspamd_config_log_id = (guint) -1;
+unsigned int rspamd_config_log_id = (unsigned int) -1;
 RSPAMD_CONSTRUCTOR(rspamd_config_log_init)
 {
 	rspamd_config_log_id = rspamd_logger_add_debug_module("config");
@@ -162,10 +162,10 @@ struct rspamd_actions_list {
 gboolean
 rspamd_parse_bind_line(struct rspamd_config *cfg,
 					   struct rspamd_worker_conf *cf,
-					   const gchar *str)
+					   const char *str)
 {
 	struct rspamd_worker_bind_conf *cnf;
-	const gchar *fdname;
+	const char *fdname;
 	gboolean ret = TRUE;
 
 	if (str == nullptr) {
@@ -437,8 +437,8 @@ void rspamd_config_free(struct rspamd_config *cfg)
 
 const ucl_object_t *
 rspamd_config_get_module_opt(struct rspamd_config *cfg,
-							 const gchar *module_name,
-							 const gchar *opt_name)
+							 const char *module_name,
+							 const char *opt_name)
 {
 	const ucl_object_t *res = nullptr, *sec;
 
@@ -450,9 +450,9 @@ rspamd_config_get_module_opt(struct rspamd_config *cfg,
 	return res;
 }
 
-gint rspamd_config_parse_flag(const gchar *str, guint len)
+int rspamd_config_parse_flag(const char *str, unsigned int len)
 {
-	gint c;
+	int c;
 
 	if (!str || !*str) {
 		return -1;
@@ -627,8 +627,8 @@ rspamd_config_process_var(struct rspamd_config *cfg, const rspamd_ftok_t *var,
 static gboolean
 rspamd_config_parse_log_format(struct rspamd_config *cfg)
 {
-	const gchar *p, *c, *end, *s;
-	gchar *d;
+	const char *p, *c, *end, *s;
+	char *d;
 	struct rspamd_log_format *lf = nullptr;
 	rspamd_ftok_t var, var_content;
 	enum {
@@ -637,7 +637,7 @@ rspamd_config_parse_log_format(struct rspamd_config *cfg)
 		parse_var_name,
 		parse_var_content,
 	} state = parse_str;
-	gint braces = 0;
+	int braces = 0;
 
 	g_assert(cfg != nullptr);
 	c = cfg->log_format_str;
@@ -1026,7 +1026,7 @@ void rspamd_config_init_metric(struct rspamd_config *cfg)
 }
 
 struct rspamd_symbols_group *
-rspamd_config_new_group(struct rspamd_config *cfg, const gchar *name)
+rspamd_config_new_group(struct rspamd_config *cfg, const char *name)
 {
 	struct rspamd_symbols_group *gr;
 
@@ -1093,7 +1093,7 @@ rspamd_config_new_worker(struct rspamd_config *cfg,
 
 
 static bool
-rspamd_include_map_handler(const guchar *data, gsize len,
+rspamd_include_map_handler(const unsigned char *data, gsize len,
 						   const ucl_object_t *args, void *ud)
 {
 	auto *cfg = (struct rspamd_config *) ud;
@@ -1236,7 +1236,7 @@ void rspamd_config_insert_classify_symbols(struct rspamd_config *cfg)
 }
 
 struct rspamd_classifier_config *
-rspamd_config_find_classifier(struct rspamd_config *cfg, const gchar *name)
+rspamd_config_find_classifier(struct rspamd_config *cfg, const char *name)
 {
 	if (name == nullptr) {
 		return nullptr;
@@ -1312,9 +1312,9 @@ rspamd_config_check_statfiles(struct rspamd_classifier_config *cf)
 	return res;
 }
 
-static gchar *
-rspamd_ucl_read_cb(gchar *chunk,
-				   gint len,
+static char *
+rspamd_ucl_read_cb(char *chunk,
+				   int len,
 				   struct map_cb_data *data,
 				   gboolean final)
 {
@@ -1388,7 +1388,7 @@ rspamd_check_module(struct rspamd_config *cfg, module_t *mod)
 	if (mod != nullptr) {
 		if (mod->module_version != RSPAMD_CUR_MODULE_VERSION) {
 			msg_err_config("module %s has incorrect version %xd (%xd expected)",
-						   mod->name, (gint) mod->module_version, RSPAMD_CUR_MODULE_VERSION);
+						   mod->name, (int) mod->module_version, RSPAMD_CUR_MODULE_VERSION);
 			ret = FALSE;
 		}
 		if (ret && mod->rspamd_version != RSPAMD_VERSION_NUM) {
@@ -1443,7 +1443,7 @@ rspamd_init_filters(struct rspamd_config *cfg, bool reconfig, bool strict)
 {
 	GList *cur;
 	module_t *mod, **pmod;
-	guint i = 0;
+	unsigned int i = 0;
 	struct module_ctx *mod_ctx, *cur_ctx;
 	gboolean ret = TRUE;
 
@@ -1470,7 +1470,7 @@ rspamd_init_filters(struct rspamd_config *cfg, bool reconfig, bool strict)
 		PTR_ARRAY_FOREACH(cfg->c_modules, i, cur_ctx)
 		{
 			if (g_ascii_strcasecmp(cur_ctx->mod->name,
-								   (const gchar *) cur->data) == 0) {
+								   (const char *) cur->data) == 0) {
 				mod_ctx = cur_ctx;
 				break;
 			}
@@ -1513,9 +1513,9 @@ rspamd_init_filters(struct rspamd_config *cfg, bool reconfig, bool strict)
 }
 
 static void
-rspamd_config_new_symbol(struct rspamd_config *cfg, const gchar *symbol,
-						 gdouble score, const gchar *description, const gchar *group,
-						 guint flags, guint priority, gint nshots)
+rspamd_config_new_symbol(struct rspamd_config *cfg, const char *symbol,
+						 double score, const char *description, const char *group,
+						 unsigned int flags, unsigned int priority, int nshots)
 {
 	struct rspamd_symbols_group *sym_group;
 	struct rspamd_symbol *sym_def;
@@ -1585,17 +1585,17 @@ rspamd_config_new_symbol(struct rspamd_config *cfg, const gchar *symbol,
 
 gboolean
 rspamd_config_add_symbol(struct rspamd_config *cfg,
-						 const gchar *symbol,
-						 gdouble score,
-						 const gchar *description,
-						 const gchar *group,
-						 guint flags,
-						 guint priority,
-						 gint nshots)
+						 const char *symbol,
+						 double score,
+						 const char *description,
+						 const char *group,
+						 unsigned int flags,
+						 unsigned int priority,
+						 int nshots)
 {
 	struct rspamd_symbol *sym_def;
 	struct rspamd_symbols_group *sym_group;
-	guint i;
+	unsigned int i;
 
 	g_assert(cfg != nullptr);
 	g_assert(symbol != nullptr);
@@ -1724,12 +1724,12 @@ rspamd_config_add_symbol(struct rspamd_config *cfg,
 
 gboolean
 rspamd_config_add_symbol_group(struct rspamd_config *cfg,
-							   const gchar *symbol,
-							   const gchar *group)
+							   const char *symbol,
+							   const char *group)
 {
 	struct rspamd_symbol *sym_def;
 	struct rspamd_symbols_group *sym_group;
-	guint i;
+	unsigned int i;
 
 	g_assert(cfg != nullptr);
 	g_assert(symbol != nullptr);
@@ -1787,7 +1787,7 @@ rspamd_config_is_enabled_from_ucl(rspamd_mempool_t *pool,
 			return ucl_object_toboolean(enabled);
 		}
 		else if (ucl_object_type(enabled) == UCL_STRING) {
-			gint ret = rspamd_config_parse_flag(ucl_object_tostring(enabled), 0);
+			int ret = rspamd_config_parse_flag(ucl_object_tostring(enabled), 0);
 
 			if (ret == 0) {
 				return FALSE;
@@ -1811,7 +1811,7 @@ rspamd_config_is_enabled_from_ucl(rspamd_mempool_t *pool,
 			return !ucl_object_toboolean(disabled);
 		}
 		else if (ucl_object_type(disabled) == UCL_STRING) {
-			gint ret = rspamd_config_parse_flag(ucl_object_tostring(disabled), 0);
+			int ret = rspamd_config_parse_flag(ucl_object_tostring(disabled), 0);
 
 			if (ret == 0) {
 				return TRUE;
@@ -1831,7 +1831,7 @@ rspamd_config_is_enabled_from_ucl(rspamd_mempool_t *pool,
 
 gboolean
 rspamd_config_is_module_enabled(struct rspamd_config *cfg,
-								const gchar *module_name)
+								const char *module_name)
 {
 	gboolean is_c = FALSE, enabled;
 	const ucl_object_t *conf;
@@ -1839,7 +1839,7 @@ rspamd_config_is_module_enabled(struct rspamd_config *cfg,
 	struct rspamd_symbols_group *gr;
 	lua_State *L = RSPAMD_LUA_CFG_STATE(cfg);
 	struct module_ctx *cur_ctx;
-	guint i;
+	unsigned int i;
 
 	PTR_ARRAY_FOREACH(cfg->c_modules, i, cur_ctx)
 	{
@@ -1931,7 +1931,7 @@ static gboolean
 rspamd_config_action_from_ucl(struct rspamd_config *cfg,
 							  struct rspamd_action *act,
 							  const ucl_object_t *obj,
-							  guint priority)
+							  unsigned int priority)
 {
 	auto threshold = NAN;
 	int flags = 0;
@@ -1955,7 +1955,7 @@ rspamd_config_action_from_ucl(struct rspamd_config *cfg,
 
 			while ((cur = ucl_object_iterate(elt, &it, true)) != nullptr) {
 				if (ucl_object_type(cur) == UCL_STRING) {
-					const gchar *fl_str = ucl_object_tostring(cur);
+					const char *fl_str = ucl_object_tostring(cur);
 
 					if (g_ascii_strcasecmp(fl_str, "no_threshold") == 0) {
 						flags |= RSPAMD_ACTION_NO_THRESHOLD;
@@ -1976,7 +1976,7 @@ rspamd_config_action_from_ucl(struct rspamd_config *cfg,
 		elt = ucl_object_lookup(obj, "milter");
 
 		if (elt) {
-			const gchar *milter_action = ucl_object_tostring(elt);
+			const char *milter_action = ucl_object_tostring(elt);
 
 			if (strcmp(milter_action, "discard") == 0) {
 				flags |= RSPAMD_ACTION_MILTER;
@@ -2024,12 +2024,12 @@ rspamd_config_action_from_ucl(struct rspamd_config *cfg,
 
 gboolean
 rspamd_config_set_action_score(struct rspamd_config *cfg,
-							   const gchar *action_name,
+							   const char *action_name,
 							   const ucl_object_t *obj)
 {
 	enum rspamd_action_type std_act;
 	const ucl_object_t *elt;
-	guint priority = ucl_object_get_priority(obj), obj_type;
+	unsigned int priority = ucl_object_get_priority(obj), obj_type;
 
 	g_assert(cfg != nullptr);
 	g_assert(action_name != nullptr);
@@ -2107,8 +2107,8 @@ rspamd_config_set_action_score(struct rspamd_config *cfg,
 
 gboolean
 rspamd_config_maybe_disable_action(struct rspamd_config *cfg,
-								   const gchar *action_name,
-								   guint priority)
+								   const char *action_name,
+								   unsigned int priority)
 {
 	auto actions = RSPAMD_CFG_ACTIONS(cfg);
 	auto maybe_act = rspamd::find_map(actions->actions_by_name, action_name);
@@ -2140,7 +2140,7 @@ rspamd_config_maybe_disable_action(struct rspamd_config *cfg,
 }
 
 struct rspamd_action *
-rspamd_config_get_action(struct rspamd_config *cfg, const gchar *name)
+rspamd_config_get_action(struct rspamd_config *cfg, const char *name)
 {
 	auto actions = RSPAMD_CFG_ACTIONS(cfg);
 	auto maybe_act = rspamd::find_map(actions->actions_by_name, name);
@@ -2189,14 +2189,14 @@ gsize rspamd_config_actions_size(struct rspamd_config *cfg)
 }
 
 gboolean
-rspamd_config_radix_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj, const gchar *description,
+rspamd_config_radix_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj, const char *description,
 							 struct rspamd_radix_map_helper **target, GError **err,
-							 struct rspamd_worker *worker, const gchar *map_name)
+							 struct rspamd_worker *worker, const char *map_name)
 {
 	ucl_type_t type;
 	ucl_object_iter_t it = nullptr;
 	const ucl_object_t *cur, *cur_elt;
-	const gchar *str;
+	const char *str;
 
 	/* Cleanup */
 	*target = nullptr;
@@ -2317,7 +2317,7 @@ constexpr const auto action_types = frozen::make_unordered_map<frozen::string, e
 });
 
 gboolean
-rspamd_action_from_str(const gchar *data, enum rspamd_action_type *result)
+rspamd_action_from_str(const char *data, enum rspamd_action_type *result)
 {
 	auto maybe_action = rspamd::find_map(action_types, std::string_view{data});
 
@@ -2330,7 +2330,7 @@ rspamd_action_from_str(const gchar *data, enum rspamd_action_type *result)
 	}
 }
 
-const gchar *
+const char *
 rspamd_action_to_str(enum rspamd_action_type action)
 {
 	switch (action) {
@@ -2359,7 +2359,7 @@ rspamd_action_to_str(enum rspamd_action_type action)
 	return "unknown action";
 }
 
-const gchar *
+const char *
 rspamd_action_to_str_alt(enum rspamd_action_type action)
 {
 	switch (action) {
@@ -2400,7 +2400,7 @@ rspamd_config_settings_elt_dtor(struct rspamd_config_settings_elt *e)
 }
 
 uint32_t
-rspamd_config_name_to_id(const gchar *name, gsize namelen)
+rspamd_config_name_to_id(const char *name, gsize namelen)
 {
 	uint64_t h;
 
@@ -2429,7 +2429,7 @@ rspamd_config_find_settings_id_ref(struct rspamd_config *cfg,
 
 struct rspamd_config_settings_elt *rspamd_config_find_settings_name_ref(
 	struct rspamd_config *cfg,
-	const gchar *name, gsize namelen)
+	const char *name, gsize namelen)
 {
 	uint32_t id;
 
@@ -2439,7 +2439,7 @@ struct rspamd_config_settings_elt *rspamd_config_find_settings_name_ref(
 }
 
 void rspamd_config_register_settings_id(struct rspamd_config *cfg,
-										const gchar *name,
+										const char *name,
 										ucl_object_t *symbols_enabled,
 										ucl_object_t *symbols_disabled,
 										enum rspamd_config_settings_policy policy)
@@ -2561,7 +2561,7 @@ int rspamd_config_ev_backend_get(struct rspamd_config *cfg)
 	return AUTO_BACKEND;
 }
 
-const gchar *
+const char *
 rspamd_config_ev_backend_to_string(int ev_backend, gboolean *effective)
 {
 #define SET_EFFECTIVE(b)                              \
@@ -2638,7 +2638,7 @@ rspamd_init_libs(void)
 #endif
 
 	/* Configure utf8 library */
-	guint utf8_flags = 0;
+	unsigned int utf8_flags = 0;
 
 	if ((ctx->crypto_ctx->cpu_config & CPUID_SSE41)) {
 		utf8_flags |= RSPAMD_FAST_UTF8_FLAG_SSE41;

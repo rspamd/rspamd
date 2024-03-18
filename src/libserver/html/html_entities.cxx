@@ -2237,7 +2237,7 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 	 * e - begin of entity
 	 */
 	char *t = s, *h = s, *e = s;
-	const gchar *end;
+	const char *end;
 	bool seen_hash = false, seen_hex = false;
 	enum {
 		do_undefined,

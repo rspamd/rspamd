@@ -137,7 +137,7 @@ auto html_url_is_phished(rspamd_mempool_t *pool,
 	struct rspamd_url *text_url;
 	std::string_view disp_tok, href_tok;
 	goffset url_pos;
-	gchar *url_str = NULL;
+	char *url_str = NULL;
 
 	auto sz = text_data.size();
 	const auto *trimmed = rspamd_string_unicode_trim_inplace(text_data.data(), &sz);
@@ -234,7 +234,7 @@ void html_check_displayed_url(rspamd_mempool_t *pool,
 	struct rspamd_url *displayed_url = nullptr;
 	struct rspamd_url *turl;
 	struct rspamd_process_exception *ex;
-	guint saved_flags = 0;
+	unsigned int saved_flags = 0;
 	gsize dlen;
 
 	if (visible_part.empty()) {
@@ -311,13 +311,13 @@ auto html_process_url(rspamd_mempool_t *pool, std::string_view &input)
 	-> std::optional<struct rspamd_url *>
 {
 	struct rspamd_url *url;
-	guint saved_flags = 0;
-	gint rc;
-	const gchar *s, *prefix = "http://";
-	gchar *d;
+	unsigned int saved_flags = 0;
+	int rc;
+	const char *s, *prefix = "http://";
+	char *d;
 	gsize dlen;
 	gboolean has_bad_chars = FALSE, no_prefix = FALSE;
-	static const gchar hexdigests[] = "0123456789abcdef";
+	static const char hexdigests[] = "0123456789abcdef";
 
 	auto sz = input.length();
 	const auto *trimmed = rspamd_string_unicode_trim_inplace(input.data(), &sz);
@@ -328,7 +328,7 @@ auto html_process_url(rspamd_mempool_t *pool, std::string_view &input)
 	dlen = 0;
 
 	for (auto i = 0; i < sz; i++) {
-		if (G_UNLIKELY(((guint) s[i]) < 0x80 && !g_ascii_isgraph(s[i]))) {
+		if (G_UNLIKELY(((unsigned int) s[i]) < 0x80 && !g_ascii_isgraph(s[i]))) {
 			dlen += 3;
 		}
 		else {
@@ -397,7 +397,7 @@ auto html_process_url(rspamd_mempool_t *pool, std::string_view &input)
 		if (G_UNLIKELY(g_ascii_isspace(s[i]))) {
 			continue;
 		}
-		else if (G_UNLIKELY(((guint) s[i]) < 0x80 && !g_ascii_isgraph(s[i]))) {
+		else if (G_UNLIKELY(((unsigned int) s[i]) < 0x80 && !g_ascii_isgraph(s[i]))) {
 			/* URL encode */
 			*d++ = '%';
 			*d++ = hexdigests[(s[i] >> 4) & 0xf];

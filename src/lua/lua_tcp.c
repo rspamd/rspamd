@@ -20,7 +20,7 @@
 #include "unix-std.h"
 #include <math.h>
 
-static const gchar *M = "rspamd lua tcp";
+static const char *M = "rspamd lua tcp";
 
 /***
  * @module rspamd_tcp
@@ -262,15 +262,15 @@ static const struct luaL_reg tcp_sync_libm[] = {
 	{NULL, NULL}};
 
 struct lua_tcp_read_handler {
-	gchar *stop_pattern;
-	guint plen;
-	gint cbref;
+	char *stop_pattern;
+	unsigned int plen;
+	int cbref;
 };
 
 struct lua_tcp_write_handler {
 	struct iovec *iov;
-	guint iovlen;
-	gint cbref;
+	unsigned int iovlen;
+	int cbref;
 	gsize pos;
 	gsize total_bytes;
 };
@@ -329,11 +329,11 @@ struct lua_tcp_cbdata {
 	rspamd_inet_addr_t *addr;
 	GByteArray *in;
 	GQueue *handlers;
-	gint fd;
-	gint connect_cb;
-	guint port;
-	guint flags;
-	gchar tag[7];
+	int fd;
+	int connect_cb;
+	unsigned int port;
+	unsigned int flags;
+	char tag[7];
 	struct rspamd_io_ev ev;
 	struct lua_tcp_dtor *dtors;
 	ref_entry_t ref;
@@ -342,7 +342,7 @@ struct lua_tcp_cbdata {
 	struct thread_entry *thread;
 	struct rspamd_config *cfg;
 	struct rspamd_ssl_connection *ssl_conn;
-	gchar *hostname;
+	char *hostname;
 	struct upstream *up;
 	gboolean eof;
 };
@@ -366,7 +366,7 @@ lua_tcp_void_finalyser(gpointer arg)
 {
 }
 
-static const gdouble default_tcp_timeout = 5.0;
+static const double default_tcp_timeout = 5.0;
 
 static struct rspamd_dns_resolver *
 lua_tcp_global_resolver(struct ev_loop *ev_base,
@@ -482,7 +482,7 @@ lua_tcp_fin(gpointer arg)
 }
 
 static struct lua_tcp_cbdata *
-lua_check_tcp(lua_State *L, gint pos)
+lua_check_tcp(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_tcp_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'tcp' expected");
@@ -530,7 +530,7 @@ lua_tcp_push_error(struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 				   const char *err, ...) __attribute__((format(printf, 3, 4)));
 #endif
 
-static void lua_tcp_resume_thread_error_argp(struct lua_tcp_cbdata *cbd, const gchar *error, va_list argp);
+static void lua_tcp_resume_thread_error_argp(struct lua_tcp_cbdata *cbd, const char *error, va_list argp);
 
 static void
 lua_tcp_push_error(struct lua_tcp_cbdata *cbd, gboolean is_fatal,
@@ -539,7 +539,7 @@ lua_tcp_push_error(struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 	va_list ap, ap_copy;
 	struct lua_tcp_cbdata **pcbd;
 	struct lua_tcp_handler *hdl;
-	gint cbref, top;
+	int cbref, top;
 	struct lua_callback_state cbs;
 	lua_State *L;
 	gboolean callback_called = FALSE;
@@ -636,15 +636,15 @@ lua_tcp_push_error(struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 	lua_thread_pool_restore_callback(&cbs);
 }
 
-static void lua_tcp_resume_thread(struct lua_tcp_cbdata *cbd, const guint8 *str, gsize len);
+static void lua_tcp_resume_thread(struct lua_tcp_cbdata *cbd, const uint8_t *str, gsize len);
 
 static void
-lua_tcp_push_data(struct lua_tcp_cbdata *cbd, const guint8 *str, gsize len)
+lua_tcp_push_data(struct lua_tcp_cbdata *cbd, const uint8_t *str, gsize len)
 {
 	struct rspamd_lua_text *t;
 	struct lua_tcp_cbdata **pcbd;
 	struct lua_tcp_handler *hdl;
-	gint cbref, arg_cnt, top;
+	int cbref, arg_cnt, top;
 	struct lua_callback_state cbs;
 	lua_State *L;
 
@@ -677,7 +677,7 @@ lua_tcp_push_data(struct lua_tcp_cbdata *cbd, const guint8 *str, gsize len)
 		if (hdl->type == LUA_WANT_READ) {
 			t = lua_newuserdata(L, sizeof(*t));
 			rspamd_lua_setclass(L, rspamd_text_classname, -1);
-			t->start = (const gchar *) str;
+			t->start = (const char *) str;
 			t->len = len;
 			t->flags = 0;
 			arg_cnt = 3;
@@ -714,7 +714,7 @@ lua_tcp_push_data(struct lua_tcp_cbdata *cbd, const guint8 *str, gsize len)
 }
 
 static void
-lua_tcp_resume_thread_error_argp(struct lua_tcp_cbdata *cbd, const gchar *error, va_list argp)
+lua_tcp_resume_thread_error_argp(struct lua_tcp_cbdata *cbd, const char *error, va_list argp)
 {
 	struct thread_entry *thread = cbd->thread;
 	lua_State *L = thread->lua_state;
@@ -730,7 +730,7 @@ lua_tcp_resume_thread_error_argp(struct lua_tcp_cbdata *cbd, const gchar *error,
 }
 
 static void
-lua_tcp_resume_thread(struct lua_tcp_cbdata *cbd, const guint8 *str, gsize len)
+lua_tcp_resume_thread(struct lua_tcp_cbdata *cbd, const uint8_t *str, gsize len)
 {
 	/*
 	 * typical call returns:
@@ -806,8 +806,8 @@ static void
 lua_tcp_write_helper(struct lua_tcp_cbdata *cbd)
 {
 	struct iovec *start;
-	guint niov, i;
-	gint flags = 0;
+	unsigned int niov, i;
+	int flags = 0;
 	bool allocated_iov = false;
 	gsize remain;
 	gssize r;
@@ -887,7 +887,7 @@ lua_tcp_write_helper(struct lua_tcp_cbdata *cbd)
 			else {
 				lua_tcp_push_error(cbd, TRUE,
 								   "IO write error while trying to write %d bytes: %s",
-								   (gint) remain, strerror(errno));
+								   (int) remain, strerror(errno));
 
 				msg_debug_tcp("write error, terminate connection");
 				TCP_RELEASE(cbd);
@@ -945,7 +945,7 @@ static gboolean
 lua_tcp_process_read_handler(struct lua_tcp_cbdata *cbd,
 							 struct lua_tcp_read_handler *rh, gboolean eof)
 {
-	guint slen;
+	unsigned int slen;
 	goffset pos;
 
 	if (rh->stop_pattern) {
@@ -1006,7 +1006,7 @@ lua_tcp_process_read_handler(struct lua_tcp_cbdata *cbd,
 
 static void
 lua_tcp_process_read(struct lua_tcp_cbdata *cbd,
-					 guchar *in, gssize r)
+					 unsigned char *in, gssize r)
 {
 	struct lua_tcp_handler *hdl;
 	struct lua_tcp_read_handler *rh;
@@ -1089,9 +1089,9 @@ static void
 lua_tcp_handler(int fd, short what, gpointer ud)
 {
 	struct lua_tcp_cbdata *cbd = ud;
-	guchar inbuf[8192];
+	unsigned char inbuf[8192];
 	gssize r;
-	gint so_error = 0;
+	int so_error = 0;
 	socklen_t so_len = sizeof(so_error);
 	struct lua_callback_state cbs;
 	lua_State *L;
@@ -1135,7 +1135,7 @@ lua_tcp_handler(int fd, short what, gpointer ud)
 
 				if (cbd->connect_cb != -1) {
 					struct lua_tcp_cbdata **pcbd;
-					gint top;
+					int top;
 
 					lua_thread_pool_prepare_callback(cbd->cfg->lua_thread_pool, &cbs);
 					L = cbs.L;
@@ -1450,12 +1450,12 @@ lua_tcp_dns_handler(struct rdns_reply *reply, gpointer ud)
 }
 
 static gboolean
-lua_tcp_arg_toiovec(lua_State *L, gint pos, struct lua_tcp_cbdata *cbd,
+lua_tcp_arg_toiovec(lua_State *L, int pos, struct lua_tcp_cbdata *cbd,
 					struct iovec *vec)
 {
 	struct rspamd_lua_text *t;
 	gsize len;
-	const gchar *str;
+	const char *str;
 	struct lua_tcp_dtor *dtor;
 
 	if (lua_type(L, pos) == LUA_TUSERDATA) {
@@ -1521,14 +1521,14 @@ lua_tcp_arg_toiovec(lua_State *L, gint pos, struct lua_tcp_cbdata *cbd,
  * - `upstream`: optional upstream object that would be used to get an address
  * @return {boolean} true if request has been sent
  */
-static gint
+static int
 lua_tcp_request(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *host;
-	gchar *stop_pattern = NULL;
-	guint port;
-	gint cbref, tp, conn_cbref = -1;
+	const char *host;
+	char *stop_pattern = NULL;
+	unsigned int port;
+	int cbref, tp, conn_cbref = -1;
 	gsize plen = 0;
 	struct ev_loop *event_loop = NULL;
 	struct lua_tcp_cbdata *cbd;
@@ -1538,9 +1538,9 @@ lua_tcp_request(lua_State *L)
 	struct rspamd_config *cfg = NULL;
 	struct iovec *iov = NULL;
 	struct upstream *up = NULL;
-	guint niov = 0, total_out;
+	unsigned int niov = 0, total_out;
 	uint64_t h;
-	gdouble timeout = default_tcp_timeout;
+	double timeout = default_tcp_timeout;
 	gboolean partial = FALSE, do_shutdown = FALSE, do_read = TRUE,
 			 ssl = FALSE, ssl_noverify = FALSE;
 
@@ -1639,7 +1639,7 @@ lua_tcp_request(lua_State *L)
 		lua_pushstring(L, "stop_pattern");
 		lua_gettable(L, -2);
 		if (lua_type(L, -1) == LUA_TSTRING) {
-			const gchar *p;
+			const char *p;
 
 			p = lua_tolstring(L, -1, &plen);
 
@@ -1967,16 +1967,16 @@ lua_tcp_request(lua_State *L)
  * - `timeout`: floating point value that specifies timeout for IO operations in **seconds**
  * @return {boolean} true if request has been sent
  */
-static gint
+static int
 lua_tcp_connect_sync(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	GError *err = NULL;
 
 	int64_t port = -1;
-	gdouble timeout = default_tcp_timeout;
-	const gchar *host = NULL;
-	gint ret;
+	double timeout = default_tcp_timeout;
+	const char *host = NULL;
+	int ret;
 	uint64_t h;
 
 	struct rspamd_task *task = NULL;
@@ -2021,7 +2021,7 @@ lua_tcp_connect_sync(lua_State *L)
 	cbd = g_new0(struct lua_tcp_cbdata, 1);
 
 	if (task) {
-		static const gchar hexdigests[16] = "0123456789abcdef";
+		static const char hexdigests[16] = "0123456789abcdef";
 
 		cfg = task->cfg;
 		ev_base = task->event_loop;
@@ -2055,7 +2055,7 @@ lua_tcp_connect_sync(lua_State *L)
 	cbd->event_loop = ev_base;
 	cbd->flags |= LUA_TCP_FLAG_SYNC;
 	cbd->fd = -1;
-	cbd->port = (guint16) port;
+	cbd->port = (uint16_t) port;
 
 	cbd->in = g_byte_array_new();
 
@@ -2088,7 +2088,7 @@ lua_tcp_connect_sync(lua_State *L)
 
 	if (rspamd_parse_inet_address(&cbd->addr,
 								  host, strlen(host), RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
-		rspamd_inet_address_set_port(cbd->addr, (guint16) port);
+		rspamd_inet_address_set_port(cbd->addr, (uint16_t) port);
 		/* Host is numeric IP, no need to resolve */
 		if (!lua_tcp_make_connection(cbd)) {
 			lua_pushboolean(L, FALSE);
@@ -2135,7 +2135,7 @@ lua_tcp_connect_sync(lua_State *L)
 	return lua_thread_yield(cbd->thread, 0);
 }
 
-static gint
+static int
 lua_tcp_close(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -2174,16 +2174,16 @@ lua_tcp_close(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_tcp_add_read(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct lua_tcp_cbdata *cbd = lua_check_tcp(L, 1);
 	struct lua_tcp_handler *rh;
-	gchar *stop_pattern = NULL;
-	const gchar *p;
+	char *stop_pattern = NULL;
+	const char *p;
 	gsize plen = 0;
-	gint cbref = -1;
+	int cbref = -1;
 
 	if (cbd == NULL) {
 		return luaL_error(L, "invalid arguments");
@@ -2215,15 +2215,15 @@ lua_tcp_add_read(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_tcp_add_write(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct lua_tcp_cbdata *cbd = lua_check_tcp(L, 1);
 	struct lua_tcp_handler *wh;
-	gint cbref = -1, tp;
+	int cbref = -1, tp;
 	struct iovec *iov = NULL;
-	guint niov = 0, total_out = 0;
+	unsigned int niov = 0, total_out = 0;
 
 	if (cbd == NULL) {
 		return luaL_error(L, "invalid arguments");
@@ -2299,7 +2299,7 @@ lua_tcp_add_write(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_tcp_shift_callback(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -2316,7 +2316,7 @@ lua_tcp_shift_callback(lua_State *L)
 }
 
 static struct lua_tcp_cbdata *
-lua_check_sync_tcp(lua_State *L, gint pos)
+lua_check_sync_tcp(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_tcp_sync_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'tcp' expected");
@@ -2396,9 +2396,9 @@ lua_tcp_sync_write(lua_State *L)
 	LUA_TRACE_POINT;
 	struct lua_tcp_cbdata *cbd = lua_check_sync_tcp(L, 1);
 	struct lua_tcp_handler *wh;
-	gint tp;
+	int tp;
 	struct iovec *iov = NULL;
-	guint niov = 0;
+	unsigned int niov = 0;
 	gsize total_out = 0;
 
 	if (cbd == NULL) {
@@ -2471,7 +2471,7 @@ lua_tcp_sync_write(lua_State *L)
 	return lua_thread_yield(thread, 0);
 }
 
-static gint
+static int
 lua_tcp_sync_eof(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -2485,7 +2485,7 @@ lua_tcp_sync_eof(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_tcp_sync_shutdown(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -2499,7 +2499,7 @@ lua_tcp_sync_shutdown(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_tcp_starttls(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -2534,7 +2534,7 @@ lua_tcp_starttls(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_tcp_sync_gc(lua_State *L)
 {
 	struct lua_tcp_cbdata *cbd = lua_check_sync_tcp(L, 1);
@@ -2548,7 +2548,7 @@ lua_tcp_sync_gc(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_load_tcp(lua_State *L)
 {
 	lua_newtable(L);

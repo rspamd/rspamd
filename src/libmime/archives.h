@@ -63,7 +63,7 @@ void rspamd_archives_process(struct rspamd_task *task);
 /**
  * Get textual representation of an archive's type
  */
-const gchar *rspamd_archive_type_str(enum rspamd_archive_type type);
+const char *rspamd_archive_type_str(enum rspamd_archive_type type);
 
 #ifdef __cplusplus
 }

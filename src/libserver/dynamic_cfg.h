@@ -46,13 +46,13 @@ gboolean dump_dynamic_config(struct rspamd_config *cfg);
  * @return
  */
 gboolean add_dynamic_symbol(struct rspamd_config *cfg,
-							const gchar *metric,
-							const gchar *symbol,
-							gdouble value);
+							const char *metric,
+							const char *symbol,
+							double value);
 
 gboolean remove_dynamic_symbol(struct rspamd_config *cfg,
-							   const gchar *metric,
-							   const gchar *symbol);
+							   const char *metric,
+							   const char *symbol);
 
 /**
  * Add action for specified metric
@@ -63,16 +63,16 @@ gboolean remove_dynamic_symbol(struct rspamd_config *cfg,
  * @return
  */
 gboolean add_dynamic_action(struct rspamd_config *cfg,
-							const gchar *metric,
-							guint action,
-							gdouble value);
+							const char *metric,
+							unsigned int action,
+							double value);
 
 /**
  * Removes dynamic action
  */
 gboolean remove_dynamic_action(struct rspamd_config *cfg,
-							   const gchar *metric,
-							   guint action);
+							   const char *metric,
+							   unsigned int action);
 
 #ifdef __cplusplus
 }

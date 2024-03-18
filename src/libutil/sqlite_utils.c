@@ -28,10 +28,10 @@ rspamd_sqlite3_quark(void)
 GArray *
 rspamd_sqlite3_init_prstmt(sqlite3 *db,
 						   struct rspamd_sqlite3_prstmt *init_stmt,
-						   gint max_idx,
+						   int max_idx,
 						   GError **err)
 {
-	gint i;
+	int i;
 	GArray *res;
 	struct rspamd_sqlite3_prstmt *nst;
 
@@ -58,18 +58,18 @@ rspamd_sqlite3_init_prstmt(sqlite3 *db,
 }
 
 int rspamd_sqlite3_run_prstmt(rspamd_mempool_t *pool, sqlite3 *db, GArray *stmts,
-							  gint idx, ...)
+							  int idx, ...)
 {
-	gint retcode;
+	int retcode;
 	va_list ap;
 	sqlite3_stmt *stmt;
-	gint i, rowid, nargs, j;
+	int i, rowid, nargs, j;
 	int64_t len;
 	gpointer p;
 	struct rspamd_sqlite3_prstmt *nst;
 	const char *argtypes;
 
-	if (idx < 0 || idx >= (gint) stmts->len) {
+	if (idx < 0 || idx >= (int) stmts->len) {
 
 		return -1;
 	}
@@ -119,13 +119,13 @@ int rspamd_sqlite3_run_prstmt(rspamd_mempool_t *pool, sqlite3 *db, GArray *stmts
 		case 'S':
 
 			for (j = 0; j < nargs; j++, rowid++) {
-				sqlite3_bind_int(stmt, rowid, va_arg(ap, gint));
+				sqlite3_bind_int(stmt, rowid, va_arg(ap, int));
 			}
 
 			nargs = 1;
 			break;
 		case '*':
-			nargs = va_arg(ap, gint);
+			nargs = va_arg(ap, int);
 			break;
 		}
 	}
@@ -186,7 +186,7 @@ int rspamd_sqlite3_run_prstmt(rspamd_mempool_t *pool, sqlite3 *db, GArray *stmts
 
 void rspamd_sqlite3_close_prstmt(sqlite3 *db, GArray *stmts)
 {
-	guint i;
+	unsigned int i;
 	struct rspamd_sqlite3_prstmt *nst;
 
 	for (i = 0; i < stmts->len; i++) {
@@ -202,9 +202,9 @@ void rspamd_sqlite3_close_prstmt(sqlite3 *db, GArray *stmts)
 }
 
 static gboolean
-rspamd_sqlite3_wait(rspamd_mempool_t *pool, const gchar *lock)
+rspamd_sqlite3_wait(rspamd_mempool_t *pool, const char *lock)
 {
-	gint fd;
+	int fd;
 	pid_t pid;
 	gssize r;
 	struct timespec sleep_ts = {
@@ -278,11 +278,11 @@ rspamd_sqlite3_wait(rspamd_mempool_t *pool, const gchar *lock)
 #define RSPAMD_SQLITE_CACHE_SIZE 262144
 
 sqlite3 *
-rspamd_sqlite3_open_or_create(rspamd_mempool_t *pool, const gchar *path, const gchar *create_sql, guint version, GError **err)
+rspamd_sqlite3_open_or_create(rspamd_mempool_t *pool, const char *path, const char *create_sql, unsigned int version, GError **err)
 {
 	sqlite3 *sqlite;
-	gint rc, flags, lock_fd;
-	gchar lock_path[PATH_MAX], dbdir[PATH_MAX], *pdir;
+	int rc, flags, lock_fd;
+	char lock_path[PATH_MAX], dbdir[PATH_MAX], *pdir;
 	static const char sqlite_wal[] =
 		"PRAGMA journal_mode=\"wal\";"
 		"PRAGMA wal_autocheckpoint = 16;"
@@ -587,9 +587,9 @@ rspamd_sqlite3_open_or_create(rspamd_mempool_t *pool, const gchar *path, const g
 }
 
 gboolean
-rspamd_sqlite3_sync(sqlite3 *db, gint *wal_frames, gint *wal_checkpoints)
+rspamd_sqlite3_sync(sqlite3 *db, int *wal_frames, int *wal_checkpoints)
 {
-	gint wf = 0, wc = 0, mode;
+	int wf = 0, wc = 0, mode;
 
 #ifdef SQLITE_OPEN_WAL
 #ifdef SQLITE_CHECKPOINT_TRUNCATE

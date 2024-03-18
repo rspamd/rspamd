@@ -30,13 +30,13 @@ static gboolean modules_state = FALSE;
 static gboolean symbol_groups_only = FALSE;
 static gboolean symbol_full_details = FALSE;
 static gboolean skip_template = FALSE;
-static gchar *config = NULL;
+static char *config = NULL;
 extern struct rspamd_main *rspamd_main;
 /* Defined in modules.c */
 extern module_t *modules[];
 extern worker_t *workers[];
 
-static void rspamadm_configdump(gint argc, gchar **argv, const struct rspamadm_command *);
+static void rspamadm_configdump(int argc, char **argv, const struct rspamadm_command *);
 static const char *rspamadm_configdump_help(gboolean full_help, const struct rspamadm_command *);
 
 struct rspamadm_command configdump_command = {
@@ -234,16 +234,16 @@ rspamadm_dump_section_obj(struct rspamd_config *cfg,
 }
 
 __attribute__((noreturn)) static void
-rspamadm_configdump(gint argc, gchar **argv, const struct rspamadm_command *cmd)
+rspamadm_configdump(int argc, char **argv, const struct rspamadm_command *cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;
-	const gchar *confdir;
+	const char *confdir;
 	const ucl_object_t *obj = NULL, *cur, *doc_obj;
 	struct rspamd_config *cfg = rspamd_main->cfg;
 	gboolean ret = TRUE;
 	worker_t **pworker;
-	gint i;
+	int i;
 
 	context = g_option_context_new(
 		"configdump - dumps Rspamd configuration");
@@ -319,7 +319,7 @@ rspamadm_configdump(gint argc, gchar **argv, const struct rspamadm_command *cmd)
 			const ucl_object_t *all_symbols_ucl = ucl_object_lookup(cfg->cfg_ucl_obj, "symbols");
 
 			while (g_hash_table_iter_next(&it, &sk, &sv)) {
-				const gchar *sym_name = (const gchar *) sk;
+				const char *sym_name = (const char *) sk;
 				struct rspamd_symbol *s = (struct rspamd_symbol *) sv;
 				ucl_object_t *this_sym_ucl = ucl_object_typed_new(UCL_OBJECT);
 
@@ -364,7 +364,7 @@ rspamadm_configdump(gint argc, gchar **argv, const struct rspamadm_command *cmd)
 
 					if (s->groups) {
 						ucl_object_t *add_groups = ucl_object_typed_new(UCL_ARRAY);
-						guint j;
+						unsigned int j;
 						struct rspamd_symbols_group *add_gr;
 						bool has_extra_groups = false;
 
@@ -428,7 +428,7 @@ rspamadm_configdump(gint argc, gchar **argv, const struct rspamadm_command *cmd)
 			g_hash_table_iter_init(&it, cfg->groups);
 
 			while (g_hash_table_iter_next(&it, &k, &v)) {
-				const gchar *gr_name = (const gchar *) k;
+				const char *gr_name = (const char *) k;
 				struct rspamd_symbols_group *gr = (struct rspamd_symbols_group *) v;
 				ucl_object_t *gr_ucl = ucl_object_typed_new(UCL_OBJECT);
 
@@ -456,7 +456,7 @@ rspamadm_configdump(gint argc, gchar **argv, const struct rspamadm_command *cmd)
 					ucl_object_t *sym_ucl = ucl_object_typed_new(UCL_OBJECT);
 
 					while (g_hash_table_iter_next(&sit, &sk, &sv)) {
-						const gchar *sym_name = (const gchar *) sk;
+						const char *sym_name = (const char *) sk;
 						struct rspamd_symbol *s = (struct rspamd_symbol *) sv;
 						ucl_object_t *spec_sym = ucl_object_typed_new(UCL_OBJECT);
 
@@ -486,7 +486,7 @@ rspamadm_configdump(gint argc, gchar **argv, const struct rspamadm_command *cmd)
 						}
 
 						ucl_object_t *add_groups = ucl_object_typed_new(UCL_ARRAY);
-						guint j;
+						unsigned int j;
 						struct rspamd_symbols_group *add_gr;
 
 						PTR_ARRAY_FOREACH(s->groups, j, add_gr)

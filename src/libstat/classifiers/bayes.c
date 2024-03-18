@@ -49,11 +49,11 @@ bayes_error_quark(void)
  * @param freedom_deg number of degrees of freedom
  * @return
  */
-static gdouble
-inv_chi_square(struct rspamd_task *task, gdouble value, gint freedom_deg)
+static double
+inv_chi_square(struct rspamd_task *task, double value, int freedom_deg)
 {
 	double prob, sum, m;
-	gint i;
+	int i;
 
 	errno = 0;
 	m = -value;
@@ -85,7 +85,7 @@ inv_chi_square(struct rspamd_task *task, gdouble value, gint freedom_deg)
 	 * from 1.0 (no confidence) to 0.0 (full confidence)
 	 */
 	for (i = 1; i < freedom_deg; i++) {
-		prob *= m / (gdouble) i;
+		prob *= m / (double) i;
 		sum += prob;
 		msg_debug_bayes("i=%d, probability: %g, sum: %g", i, prob, sum);
 	}
@@ -96,7 +96,7 @@ inv_chi_square(struct rspamd_task *task, gdouble value, gint freedom_deg)
 struct bayes_task_closure {
 	double ham_prob;
 	double spam_prob;
-	gdouble meta_skip_prob;
+	double meta_skip_prob;
 	uint64_t processed_tokens;
 	uint64_t total_hits;
 	uint64_t text_tokens;
@@ -117,12 +117,12 @@ static void
 bayes_classify_token(struct rspamd_classifier *ctx,
 					 rspamd_token_t *tok, struct bayes_task_closure *cl)
 {
-	guint i;
-	gint id;
-	guint spam_count = 0, ham_count = 0, total_count = 0;
+	unsigned int i;
+	int id;
+	unsigned int spam_count = 0, ham_count = 0, total_count = 0;
 	struct rspamd_statfile *st;
 	struct rspamd_task *task;
-	const gchar *token_type = "txt";
+	const char *token_type = "txt";
 	double spam_prob, spam_freq, ham_freq, bayes_spam_prob, bayes_ham_prob,
 		ham_prob, fw, w, val;
 
@@ -152,7 +152,7 @@ bayes_classify_token(struct rspamd_classifier *ctx,
 	}
 
 	for (i = 0; i < ctx->statfiles_ids->len; i++) {
-		id = g_array_index(ctx->statfiles_ids, gint, i);
+		id = g_array_index(ctx->statfiles_ids, int, i);
 		st = g_ptr_array_index(ctx->ctx->statfiles, id);
 		g_assert(st != NULL);
 		val = tok->values[id];
@@ -269,12 +269,12 @@ bayes_classify(struct rspamd_classifier *ctx,
 			   struct rspamd_task *task)
 {
 	double final_prob, h, s, *pprob;
-	gchar sumbuf[32];
+	char sumbuf[32];
 	struct rspamd_statfile *st = NULL;
 	struct bayes_task_closure cl;
 	rspamd_token_t *tok;
-	guint i, text_tokens = 0;
-	gint id;
+	unsigned int i, text_tokens = 0;
+	int id;
 
 	g_assert(ctx != NULL);
 	g_assert(tokens != NULL);
@@ -340,13 +340,13 @@ bayes_classify(struct rspamd_classifier *ctx,
 	}
 
 	if (ctx->cfg->min_tokens > 0 &&
-		cl.text_tokens < (gint) (ctx->cfg->min_tokens * 0.1)) {
+		cl.text_tokens < (int) (ctx->cfg->min_tokens * 0.1)) {
 		msg_info_bayes("ignore bayes probability since we have "
 					   "found too few text tokens: %uL (of %ud checked), "
 					   "at least %d required",
 					   cl.text_tokens,
 					   text_tokens,
-					   (gint) (ctx->cfg->min_tokens * 0.1));
+					   (int) (ctx->cfg->min_tokens * 0.1));
 
 		return TRUE;
 	}
@@ -413,7 +413,7 @@ bayes_classify(struct rspamd_classifier *ctx,
 	if (cl.processed_tokens > 0 && fabs(final_prob - 0.5) > 0.05) {
 		/* Now we can have exactly one HAM and exactly one SPAM statfiles per classifier */
 		for (i = 0; i < ctx->statfiles_ids->len; i++) {
-			id = g_array_index(ctx->statfiles_ids, gint, i);
+			id = g_array_index(ctx->statfiles_ids, int, i);
 			st = g_ptr_array_index(ctx->ctx->statfiles, id);
 
 			if (final_prob > 0.5 && st->stcf->is_spam) {
@@ -468,8 +468,8 @@ bayes_learn_spam(struct rspamd_classifier *ctx,
 				 gboolean unlearn,
 				 GError **err)
 {
-	guint i, j, total_cnt, spam_cnt, ham_cnt;
-	gint id;
+	unsigned int i, j, total_cnt, spam_cnt, ham_cnt;
+	int id;
 	struct rspamd_statfile *st;
 	rspamd_token_t *tok;
 	gboolean incrementing;
@@ -486,7 +486,7 @@ bayes_learn_spam(struct rspamd_classifier *ctx,
 		tok = g_ptr_array_index(tokens, i);
 
 		for (j = 0; j < ctx->statfiles_ids->len; j++) {
-			id = g_array_index(ctx->statfiles_ids, gint, j);
+			id = g_array_index(ctx->statfiles_ids, int, j);
 			st = g_ptr_array_index(ctx->ctx->statfiles, id);
 			g_assert(st != NULL);
 

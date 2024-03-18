@@ -565,7 +565,7 @@ rspamd_controller_maybe_compress(struct rspamd_http_connection_entry *entry,
 }
 
 void rspamd_controller_send_error(struct rspamd_http_connection_entry *entry,
-								  gint code, const gchar *error_msg, ...)
+								  int code, const char *error_msg, ...)
 {
 	struct rspamd_http_message *msg;
 	va_list args;
@@ -619,7 +619,7 @@ void rspamd_controller_send_openmetrics(struct rspamd_http_connection_entry *ent
 }
 
 void rspamd_controller_send_string(struct rspamd_http_connection_entry *entry,
-								   const gchar *str)
+								   const char *str)
 {
 	struct rspamd_http_message *msg;
 	rspamd_fstring_t *reply;
@@ -680,7 +680,7 @@ rspamd_worker_drop_priv(struct rspamd_main *rspamd_main)
 	if (rspamd_main->is_privileged) {
 		if (setgid(rspamd_main->workers_gid) == -1) {
 			msg_err_main("cannot setgid to %d (%s), aborting",
-						 (gint) rspamd_main->workers_gid,
+						 (int) rspamd_main->workers_gid,
 						 strerror(errno));
 			exit(-errno);
 		}
@@ -694,7 +694,7 @@ rspamd_worker_drop_priv(struct rspamd_main *rspamd_main)
 
 		if (setuid(rspamd_main->workers_uid) == -1) {
 			msg_err_main("cannot setuid to %d (%s), aborting",
-						 (gint) rspamd_main->workers_uid,
+						 (int) rspamd_main->workers_uid,
 						 strerror(errno));
 			exit(-errno);
 		}
@@ -848,13 +848,13 @@ static void
 rspamd_main_heartbeat_cb(EV_P_ ev_timer *w, int revents)
 {
 	struct rspamd_worker *wrk = (struct rspamd_worker *) w->data;
-	gdouble time_from_last = ev_time();
+	double time_from_last = ev_time();
 	struct rspamd_main *rspamd_main;
 	static struct rspamd_control_command cmd;
 	struct tm tm;
-	gchar timebuf[64];
-	gchar usec_buf[16];
-	gint r;
+	char timebuf[64];
+	char usec_buf[16];
+	int r;
 
 	time_from_last -= wrk->hb.last_event;
 	rspamd_main = wrk->srv;
@@ -866,7 +866,7 @@ rspamd_main_heartbeat_cb(EV_P_ ev_timer *w, int revents)
 		rspamd_localtime(wrk->hb.last_event, &tm);
 		r = strftime(timebuf, sizeof(timebuf), "%F %H:%M:%S", &tm);
 		rspamd_snprintf(usec_buf, sizeof(usec_buf), "%.5f",
-						wrk->hb.last_event - (gdouble) (time_t) wrk->hb.last_event);
+						wrk->hb.last_event - (double) (time_t) wrk->hb.last_event);
 		rspamd_snprintf(timebuf + r, sizeof(timebuf) - r,
 						"%s", usec_buf + 1);
 
@@ -922,7 +922,7 @@ rspamd_main_heartbeat_cb(EV_P_ ev_timer *w, int revents)
 		rspamd_localtime(wrk->hb.last_event, &tm);
 		r = strftime(timebuf, sizeof(timebuf), "%F %H:%M:%S", &tm);
 		rspamd_snprintf(usec_buf, sizeof(usec_buf), "%.5f",
-						wrk->hb.last_event - (gdouble) (time_t) wrk->hb.last_event);
+						wrk->hb.last_event - (double) (time_t) wrk->hb.last_event);
 		rspamd_snprintf(timebuf + r, sizeof(timebuf) - r,
 						"%s", usec_buf + 1);
 
@@ -968,7 +968,7 @@ rspamd_maybe_reuseport_socket(struct rspamd_worker_listen_socket *ls)
 	}
 
 #if defined(SO_REUSEPORT) && defined(SO_REUSEADDR) && defined(LINUX)
-	gint nfd = -1;
+	int nfd = -1;
 
 	if (ls->type == RSPAMD_WORKER_SOCKET_UDP) {
 		nfd = rspamd_inet_address_listen(ls->addr,
@@ -1026,7 +1026,7 @@ rspamd_handle_child_fork(struct rspamd_worker *wrk,
 						 struct rspamd_worker_conf *cf,
 						 GHashTable *listen_sockets)
 {
-	gint rc;
+	int rc;
 	struct rlimit rlim;
 
 	/* Update pid for logging */
@@ -1245,7 +1245,7 @@ rspamd_handle_main_fork(struct rspamd_worker *wrk,
 struct rspamd_worker *
 rspamd_fork_worker(struct rspamd_main *rspamd_main,
 				   struct rspamd_worker_conf *cf,
-				   guint index,
+				   unsigned int index,
 				   struct ev_loop *ev_base,
 				   rspamd_worker_term_cb term_handler,
 				   GHashTable *listen_sockets)
@@ -1461,8 +1461,8 @@ rspamd_worker_check_controller_presence(struct rspamd_worker *w)
 
 struct rspamd_worker_session_elt {
 	void *ptr;
-	guint *pref;
-	const gchar *tag;
+	unsigned int *pref;
+	const char *tag;
 	time_t when;
 };
 
@@ -1473,7 +1473,7 @@ struct rspamd_worker_session_cache {
 	struct ev_timer periodic;
 };
 
-static gint
+static int
 rspamd_session_cache_sort_cmp(gconstpointer pa, gconstpointer pb)
 {
 	const struct rspamd_worker_session_elt
@@ -1489,12 +1489,12 @@ rspamd_sessions_cache_periodic(EV_P_ ev_timer *w, int revents)
 	struct rspamd_worker_session_cache *c =
 		(struct rspamd_worker_session_cache *) w->data;
 	GHashTableIter it;
-	gchar timebuf[32];
+	char timebuf[32];
 	gpointer k, v;
 	struct rspamd_worker_session_elt *elt;
 	struct tm tms;
 	GPtrArray *res;
-	guint i;
+	unsigned int i;
 
 	if (g_hash_table_size(c->cache) > c->cfg->max_sessions_cache) {
 		res = g_ptr_array_sized_new(g_hash_table_size(c->cache));
@@ -1505,7 +1505,7 @@ rspamd_sessions_cache_periodic(EV_P_ ev_timer *w, int revents)
 		}
 
 		msg_err("sessions cache is overflowed %d elements where %d is limit",
-				(gint) res->len, (gint) c->cfg->max_sessions_cache);
+				(int) res->len, (int) c->cfg->max_sessions_cache);
 		g_ptr_array_sort(res, rspamd_session_cache_sort_cmp);
 
 		PTR_ARRAY_FOREACH(res, i, elt)
@@ -1529,7 +1529,7 @@ rspamd_worker_session_cache_new(struct rspamd_worker *w,
 								struct ev_loop *ev_base)
 {
 	struct rspamd_worker_session_cache *c;
-	static const gdouble periodic_interval = 60.0;
+	static const double periodic_interval = 60.0;
 
 	c = g_malloc0(sizeof(*c));
 	c->ev_base = ev_base;
@@ -1545,8 +1545,8 @@ rspamd_worker_session_cache_new(struct rspamd_worker *w,
 }
 
 
-void rspamd_worker_session_cache_add(void *cache, const gchar *tag,
-									 guint *pref, void *ptr)
+void rspamd_worker_session_cache_add(void *cache, const char *tag,
+									 unsigned int *pref, void *ptr)
 {
 	struct rspamd_worker_session_cache *c = cache;
 	struct rspamd_worker_session_elt *elt;
@@ -1576,7 +1576,7 @@ rspamd_worker_monitored_on_change(struct rspamd_monitored_ctx *ctx,
 	struct rspamd_worker *worker = ud;
 	struct rspamd_config *cfg = worker->srv->cfg;
 	struct ev_loop *ev_base;
-	guchar tag[RSPAMD_MONITORED_TAG_LEN];
+	unsigned char tag[RSPAMD_MONITORED_TAG_LEN];
 	static struct rspamd_srv_command srv_cmd;
 
 	rspamd_monitored_get_tag(m, tag);
@@ -1721,10 +1721,10 @@ rspamd_enable_accept_event(EV_P_ ev_timer *w, int revents)
 	ev_io_start(EV_A_ & ac_ev->accept_ev);
 }
 
-void rspamd_worker_throttle_accept_events(gint sock, void *data)
+void rspamd_worker_throttle_accept_events(int sock, void *data)
 {
 	struct rspamd_worker_accept_event *head, *cur;
-	const gdouble throttling = 0.5;
+	const double throttling = 0.5;
 
 	head = (struct rspamd_worker_accept_event *) data;
 
@@ -1853,8 +1853,8 @@ rspamd_check_termination_clause(struct rspamd_main *rspamd_main,
 #ifdef WITH_HYPERSCAN
 gboolean
 rspamd_worker_hyperscan_ready(struct rspamd_main *rspamd_main,
-							  struct rspamd_worker *worker, gint fd,
-							  gint attached_fd,
+							  struct rspamd_worker *worker, int fd,
+							  int attached_fd,
 							  struct rspamd_control_command *cmd,
 							  gpointer ud)
 {
@@ -1893,8 +1893,8 @@ rspamd_worker_check_context(gpointer ctx, uint64_t magic)
 
 static gboolean
 rspamd_worker_log_pipe_handler(struct rspamd_main *rspamd_main,
-							   struct rspamd_worker *worker, gint fd,
-							   gint attached_fd,
+							   struct rspamd_worker *worker, int fd,
+							   int attached_fd,
 							   struct rspamd_control_command *cmd,
 							   gpointer ud)
 {
@@ -1928,8 +1928,8 @@ rspamd_worker_log_pipe_handler(struct rspamd_main *rspamd_main,
 
 static gboolean
 rspamd_worker_monitored_handler(struct rspamd_main *rspamd_main,
-								struct rspamd_worker *worker, gint fd,
-								gint attached_fd,
+								struct rspamd_worker *worker, int fd,
+								int attached_fd,
 								struct rspamd_control_command *cmd,
 								gpointer ud)
 {
@@ -1996,9 +1996,9 @@ void rspamd_controller_store_saved_stats(struct rspamd_main *rspamd_main,
 	struct rspamd_stat *stat;
 	ucl_object_t *top, *sub;
 	struct ucl_emitter_functions *efuncs;
-	gint i, fd;
+	int i, fd;
 	FILE *fp;
-	gchar fpath[PATH_MAX];
+	char fpath[PATH_MAX];
 
 	if (cfg->stats_file == NULL) {
 		return;
@@ -2082,7 +2082,7 @@ rspamd_controller_load_saved_stats(struct rspamd_main *rspamd_main,
 	ucl_object_t *obj;
 	const ucl_object_t *elt, *subelt;
 	struct rspamd_stat *stat, stat_copy;
-	gint i;
+	int i;
 
 	if (cfg->stats_file == NULL) {
 		return;
@@ -2164,9 +2164,9 @@ rspamd_controller_rrd_update(EV_P_ ev_timer *w, int revents)
 		(struct rspamd_controller_periodics_cbdata *) w->data;
 	struct rspamd_stat *stat;
 	GArray ar;
-	gdouble points[METRIC_ACTION_MAX];
+	double points[METRIC_ACTION_MAX];
 	GError *err = NULL;
-	guint i;
+	unsigned int i;
 
 	g_assert(cbd->rrd != NULL);
 	stat = cbd->stat;
@@ -2175,7 +2175,7 @@ rspamd_controller_rrd_update(EV_P_ ev_timer *w, int revents)
 		points[i] = stat->actions_stat[i];
 	}
 
-	ar.data = (gchar *) points;
+	ar.data = (char *) points;
 	ar.len = sizeof(points);
 
 	if (!rspamd_rrd_add_record(cbd->rrd, &ar, rspamd_get_calendar_ticks(),
@@ -2265,8 +2265,8 @@ void rspamd_worker_init_controller(struct rspamd_worker *worker,
 	}
 }
 
-gdouble
-rspamd_worker_check_and_adjust_timeout(struct rspamd_config *cfg, gdouble timeout)
+double
+rspamd_worker_check_and_adjust_timeout(struct rspamd_config *cfg, double timeout)
 {
 	if (isnan(timeout)) {
 		/* Use implicit timeout from cfg->task_timeout */

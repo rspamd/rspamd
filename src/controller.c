@@ -140,9 +140,9 @@ struct rspamd_controller_worker_ctx {
 	/* Whether we use ssl for this server */
 	gboolean use_ssl;
 	/* Webui password */
-	gchar *password;
+	char *password;
 	/* Privileged password */
-	gchar *enable_password;
+	char *enable_password;
 	/* Cached versions of the passwords */
 	rspamd_ftok_t cached_password;
 	rspamd_ftok_t cached_enable_password;
@@ -154,15 +154,15 @@ struct rspamd_controller_worker_ctx {
 	/* Main server */
 	struct rspamd_main *srv;
 	/* SSL cert */
-	gchar *ssl_cert;
+	char *ssl_cert;
 	/* SSL private key */
-	gchar *ssl_key;
+	char *ssl_key;
 	/* A map of secure IP */
 	const ucl_object_t *secure_ip;
 	struct rspamd_radix_map_helper *secure_map;
 
 	/* Static files dir */
-	gchar *static_files_dir;
+	char *static_files_dir;
 
 	/* Custom commands registered by plugins */
 	GHashTable *custom_commands;
@@ -178,31 +178,31 @@ struct rspamd_controller_worker_ctx {
 
 	struct rspamd_rrd_file *rrd;
 	struct rspamd_lang_detector *lang_det;
-	gdouble task_timeout;
+	double task_timeout;
 
 	/* Health check stuff */
-	guint workers_count;
-	guint scanners_count;
-	guint workers_hb_lost;
+	unsigned int workers_count;
+	unsigned int scanners_count;
+	unsigned int workers_hb_lost;
 	ev_timer health_check_timer;
 };
 
 struct rspamd_controller_plugin_cbdata {
 	lua_State *L;
 	struct rspamd_controller_worker_ctx *ctx;
-	gchar *plugin;
+	char *plugin;
 	struct ucl_lua_funcdata *handler;
 	ucl_object_t *obj;
 	gboolean is_enable;
 	gboolean need_task;
-	guint version;
+	unsigned int version;
 };
 
 static gboolean
-rspamd_is_encrypted_password(const gchar *password,
+rspamd_is_encrypted_password(const char *password,
 							 struct rspamd_controller_pbkdf const **pbkdf)
 {
-	const gchar *start, *end;
+	const char *start, *end;
 	int64_t id;
 	gsize size, i;
 	gboolean ret = FALSE;
@@ -220,7 +220,7 @@ rspamd_is_encrypted_password(const gchar *password,
 		}
 
 		if (size > 0) {
-			gchar *endptr;
+			char *endptr;
 			id = strtoul(start, &endptr, 10);
 
 			if ((endptr == NULL || *endptr == *end)) {
@@ -243,11 +243,11 @@ rspamd_is_encrypted_password(const gchar *password,
 	return ret;
 }
 
-static const gchar *
-rspamd_encrypted_password_get_str(const gchar *password, gsize skip,
+static const char *
+rspamd_encrypted_password_get_str(const char *password, gsize skip,
 								  gsize *length)
 {
-	const gchar *str, *start, *end;
+	const char *str, *start, *end;
 	gsize size;
 
 	start = password + skip;
@@ -272,15 +272,15 @@ rspamd_encrypted_password_get_str(const gchar *password, gsize skip,
 
 static gboolean
 rspamd_check_encrypted_password(struct rspamd_controller_worker_ctx *ctx,
-								const rspamd_ftok_t *password, const gchar *check,
+								const rspamd_ftok_t *password, const char *check,
 								const struct rspamd_controller_pbkdf *pbkdf,
 								gboolean is_enable)
 {
-	const gchar *salt, *hash;
-	gchar *salt_decoded, *key_decoded;
+	const char *salt, *hash;
+	char *salt_decoded, *key_decoded;
 	gsize salt_len = 0, key_len = 0;
 	gboolean ret = TRUE;
-	guchar *local_key;
+	unsigned char *local_key;
 	rspamd_ftok_t *cache;
 	gpointer m;
 
@@ -412,17 +412,17 @@ check_uncached:
  * @return 0 if no forwarded found, 1 if forwarded found and it is yet trusted
  * and -1 if forwarded is denied
  */
-static gint
+static int
 rspamd_controller_check_forwarded(struct rspamd_controller_session *session,
 								  struct rspamd_http_message *msg,
 								  struct rspamd_controller_worker_ctx *ctx)
 {
 	const rspamd_ftok_t *hdr;
-	const gchar *comma;
+	const char *comma;
 	const char *hdr_name = "X-Forwarded-For", *alt_hdr_name = "X-Real-IP";
 	char ip_buf[INET6_ADDRSTRLEN + 1];
 	rspamd_inet_addr_t *addr = NULL;
-	gint ret = 0;
+	int ret = 0;
 
 	hdr = rspamd_http_message_find_header(msg, hdr_name);
 
@@ -508,7 +508,7 @@ rspamd_controller_check_password(struct rspamd_http_connection_entry *entry,
 								 struct rspamd_controller_session *session,
 								 struct rspamd_http_message *msg, gboolean is_enable)
 {
-	const gchar *check;
+	const char *check;
 	const rspamd_ftok_t *password;
 	rspamd_ftok_t lookup;
 	GHashTable *query_args = NULL;
@@ -562,7 +562,7 @@ rspamd_controller_check_password(struct rspamd_http_connection_entry *entry,
 		/* Try to get password from query args */
 		query_args = rspamd_http_message_parse_query(msg);
 
-		lookup.begin = (gchar *) "password";
+		lookup.begin = (char *) "password";
 		lookup.len = sizeof("password") - 1;
 
 		password = g_hash_table_lookup(query_args, &lookup);
@@ -830,7 +830,7 @@ rspamd_controller_handle_symbols(struct rspamd_http_connection_entry *conn_ent,
 		group_symbols = ucl_object_typed_new(UCL_ARRAY);
 
 		while (g_hash_table_iter_next(&sit, &k, &v)) {
-			gdouble tm = 0.0, freq = 0, freq_dev = 0;
+			double tm = 0.0, freq = 0, freq_dev = 0;
 
 			sym = v;
 			sym_obj = ucl_object_typed_new(UCL_OBJECT);
@@ -918,7 +918,7 @@ rspamd_controller_handle_actions(struct rspamd_http_connection_entry *conn_ent,
 static gboolean
 rspamd_controller_can_edit_map(struct rspamd_map_backend *bk)
 {
-	gchar *fpath;
+	char *fpath;
 
 	if (access(bk->uri, W_OK) == 0) {
 		return TRUE;
@@ -961,7 +961,7 @@ rspamd_controller_handle_maps(struct rspamd_http_connection_entry *conn_ent,
 	GList *cur;
 	struct rspamd_map *map;
 	struct rspamd_map_backend *bk;
-	guint i;
+	unsigned int i;
 	gboolean editable;
 	ucl_object_t *obj, *top;
 
@@ -1026,7 +1026,7 @@ rspamd_controller_handle_get_map(struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_map_backend *bk = NULL;
 	const rspamd_ftok_t *idstr;
 	struct stat st;
-	gint fd;
+	int fd;
 	gulong id, i;
 	gboolean found = FALSE;
 	struct rspamd_http_message *reply;
@@ -1111,7 +1111,7 @@ rspamd_controller_handle_get_map(struct rspamd_http_connection_entry *conn_ent,
 
 static ucl_object_t *
 rspamd_controller_pie_element(enum rspamd_action_type action,
-							  const char *label, gdouble data)
+							  const char *label, double data)
 {
 	ucl_object_t *res = ucl_object_typed_new(UCL_OBJECT);
 	const char *colors[METRIC_ACTION_MAX] = {
@@ -1148,7 +1148,7 @@ rspamd_controller_handle_pie_chart(
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct rspamd_controller_worker_ctx *ctx;
-	gdouble data[5], total;
+	double data[5], total;
 	ucl_object_t *top;
 
 	ctx = session->ctx;
@@ -1190,13 +1190,13 @@ rspamd_controller_handle_pie_chart(
 
 void rspamd_controller_graph_point(gulong t, gulong step,
 								   struct rspamd_rrd_query_result *rrd_result,
-								   gdouble *acc,
+								   double *acc,
 								   ucl_object_t **elt)
 {
-	guint nan_cnt;
-	gdouble sum = 0.0, yval;
+	unsigned int nan_cnt;
+	double sum = 0.0, yval;
 	ucl_object_t *data_elt;
-	guint i, j;
+	unsigned int i, j;
 
 	for (i = 0; i < rrd_result->ds_count; i++) {
 		sum = 0.0;
@@ -1219,7 +1219,7 @@ void rspamd_controller_graph_point(gulong t, gulong step,
 		}
 		else {
 			ucl_object_insert_key(data_elt,
-								  ucl_object_fromdouble(sum / (gdouble) step), "y", 1,
+								  ucl_object_fromdouble(sum / (double) step), "y", 1,
 								  false);
 		}
 		ucl_array_append(elt[i], data_elt);
@@ -1247,7 +1247,7 @@ rspamd_controller_handle_graph(
 	rspamd_ftok_t srch, *value;
 	struct rspamd_rrd_query_result *rrd_result;
 	gulong i, k, start_row, cnt, t, ts, step;
-	gdouble *acc;
+	double *acc;
 	ucl_object_t *res, *elt[METRIC_ACTION_MAX];
 	enum {
 		rra_day = 0,
@@ -1257,7 +1257,7 @@ rspamd_controller_handle_graph(
 		rra_invalid
 	} rra_num = rra_invalid;
 	/* How many points are we going to send to display */
-	static const guint desired_points = 500;
+	static const unsigned int desired_points = 500;
 
 	ctx = session->ctx;
 
@@ -1273,7 +1273,7 @@ rspamd_controller_handle_graph(
 	}
 
 	query = rspamd_http_message_parse_query(msg);
-	srch.begin = (gchar *) "type";
+	srch.begin = (char *) "type";
 	srch.len = 4;
 
 	if (query == NULL || (value = g_hash_table_lookup(query, &srch)) == NULL) {
@@ -1333,7 +1333,7 @@ rspamd_controller_handle_graph(
 	k = 0;
 
 	/* Create window */
-	step = ceil(((gdouble) rrd_result->rra_rows) / desired_points);
+	step = ceil(((double) rrd_result->rra_rows) / desired_points);
 	g_assert(step >= 1);
 	acc = g_malloc0(sizeof(double) * rrd_result->ds_count * step);
 
@@ -1342,7 +1342,7 @@ rspamd_controller_handle_graph(
 
 		memcpy(&acc[k * rrd_result->ds_count],
 			   &rrd_result->data[i * rrd_result->ds_count],
-			   sizeof(gdouble) * rrd_result->ds_count);
+			   sizeof(double) * rrd_result->ds_count);
 
 		if (k < step - 1) {
 			k++;
@@ -1389,9 +1389,9 @@ rspamd_controller_handle_legacy_history(
 	struct rspamd_http_message *msg)
 {
 	struct roll_history_row *row, *copied_rows;
-	guint i, rows_proc, row_num;
+	unsigned int i, rows_proc, row_num;
 	struct tm tm;
-	gchar timebuf[32], **syms;
+	char timebuf[32], **syms;
 	ucl_object_t *top, *obj;
 
 	top = ucl_object_typed_new(UCL_ARRAY);
@@ -1446,11 +1446,11 @@ rspamd_controller_handle_legacy_history(
 			syms = g_strsplit_set(row->symbols, ", ", -1);
 
 			if (syms) {
-				guint nelts = g_strv_length(syms);
+				unsigned int nelts = g_strv_length(syms);
 				ucl_object_t *syms_obj = ucl_object_typed_new(UCL_OBJECT);
 				ucl_object_reserve(syms_obj, nelts);
 
-				for (guint j = 0; j < nelts; j++) {
+				for (unsigned int j = 0; j < nelts; j++) {
 					g_strstrip(syms[j]);
 
 					if (strlen(syms[j]) == 0) {
@@ -1755,7 +1755,7 @@ rspamd_controller_handle_history_reset(struct rspamd_http_connection_entry *conn
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct rspamd_controller_worker_ctx *ctx;
 	struct roll_history_row *row;
-	guint completed_rows, i, t;
+	unsigned int completed_rows, i, t;
 	lua_State *L;
 
 	ctx = session->ctx;
@@ -1820,7 +1820,7 @@ rspamd_controller_handle_lua(struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_task *task, **ptask;
 	struct rspamd_http_connection_entry **pconn;
 	struct rspamd_controller_worker_ctx *ctx;
-	gchar filebuf[PATH_MAX], realbuf[PATH_MAX];
+	char filebuf[PATH_MAX], realbuf[PATH_MAX];
 	struct http_parser_url u;
 	rspamd_ftok_t lookup;
 	struct stat st;
@@ -2237,9 +2237,9 @@ rspamd_controller_handle_saveactions(
 	ucl_object_t *obj;
 	const ucl_object_t *cur;
 	struct rspamd_controller_worker_ctx *ctx;
-	const gchar *error;
-	gdouble score;
-	gint i, added = 0;
+	const char *error;
+	double score;
+	int i, added = 0;
 	enum rspamd_action_type act;
 	ucl_object_iter_t it = NULL;
 
@@ -2361,8 +2361,8 @@ rspamd_controller_handle_savesymbols(
 	const ucl_object_t *cur, *jname, *jvalue;
 	ucl_object_iter_t iter = NULL;
 	struct rspamd_controller_worker_ctx *ctx;
-	const gchar *error;
-	gdouble val;
+	const char *error;
+	double val;
 	struct rspamd_symbol *sym;
 	int added = 0;
 
@@ -2492,8 +2492,8 @@ rspamd_controller_handle_savemap(struct rspamd_http_connection_entry *conn_ent,
 	const rspamd_ftok_t *idstr;
 	gulong id, i;
 	gboolean found = FALSE;
-	gchar tempname[PATH_MAX];
-	gint fd;
+	char tempname[PATH_MAX];
+	int fd;
 
 	ctx = session->ctx;
 
@@ -2658,7 +2658,7 @@ rspamd_controller_handle_stat_common(
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	ucl_object_t *top, *sub;
-	gint i;
+	int i;
 	int64_t uptime;
 	uint64_t spam = 0, ham = 0;
 	rspamd_mempool_stat_t mem_st;
@@ -2839,7 +2839,7 @@ rspamd_controller_metrics_fin_task(void *ud)
 	ucl_object_t *top;
 	struct rspamd_fuzzy_stat_entry *entry;
 	rspamd_fstring_t *output;
-	gint i;
+	int i;
 
 	conn_ent = cbdata->conn_ent;
 	top = cbdata->top;
@@ -3095,7 +3095,7 @@ rspamd_controller_handle_metrics_common(
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	ucl_object_t *top, *sub;
-	gint i;
+	int i;
 	int64_t uptime;
 	uint64_t spam = 0, ham = 0;
 	rspamd_mempool_stat_t mem_st;
@@ -3270,7 +3270,7 @@ rspamd_controller_handle_custom(struct rspamd_http_connection_entry *conn_ent,
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct rspamd_custom_controller_command *cmd;
-	gchar *url_str;
+	char *url_str;
 	struct http_parser_url u;
 	rspamd_ftok_t lookup;
 
@@ -3281,7 +3281,7 @@ rspamd_controller_handle_custom(struct rspamd_http_connection_entry *conn_ent,
 		lookup.begin = msg->url->str + u.field_data[UF_PATH].off;
 		lookup.len = u.field_data[UF_PATH].len;
 
-		rspamd_normalize_path_inplace((gchar *) lookup.begin,
+		rspamd_normalize_path_inplace((char *) lookup.begin,
 									  lookup.len,
 									  &unnorm_len);
 		lookup.len = unnorm_len;
@@ -3488,7 +3488,7 @@ rspamd_controller_handle_lua_plugin(struct rspamd_http_connection_entry *conn_en
 		lookup.begin = msg->url->str + u.field_data[UF_PATH].off;
 		lookup.len = u.field_data[UF_PATH].len;
 
-		rspamd_normalize_path_inplace((gchar *) lookup.begin,
+		rspamd_normalize_path_inplace((char *) lookup.begin,
 									  lookup.len,
 									  &unnorm_len);
 		lookup.len = unnorm_len;
@@ -3631,7 +3631,7 @@ rspamd_controller_accept_socket(EV_P_ ev_io *w, int revents)
 	struct rspamd_controller_worker_ctx *ctx;
 	struct rspamd_controller_session *session;
 	rspamd_inet_addr_t *addr = NULL;
-	gint nfd;
+	int nfd;
 
 	ctx = worker->ctx;
 
@@ -3664,7 +3664,7 @@ rspamd_controller_accept_socket(EV_P_ ev_io *w, int revents)
 
 static void
 rspamd_controller_password_sane(struct rspamd_controller_worker_ctx *ctx,
-								const gchar *password, const gchar *type)
+								const char *password, const char *type)
 {
 	const struct rspamd_controller_pbkdf *pbkdf = &pbkdf_list[0];
 
@@ -3833,7 +3833,7 @@ luaopen_controller(lua_State *L)
 }
 
 struct rspamd_http_connection_entry *
-lua_check_controller_entry(lua_State *L, gint pos)
+lua_check_controller_entry(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_csession_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'csession' expected");
@@ -3903,8 +3903,8 @@ static int
 lua_csession_send_error(lua_State *L)
 {
 	struct rspamd_http_connection_entry *c = lua_check_controller_entry(L, 1);
-	guint err_code = lua_tonumber(L, 2);
-	const gchar *err_str = lua_tostring(L, 3);
+	unsigned int err_code = lua_tonumber(L, 2);
+	const char *err_str = lua_tostring(L, 3);
 
 	if (c) {
 		rspamd_controller_send_error(c, err_code, "%s", err_str);
@@ -3920,7 +3920,7 @@ static int
 lua_csession_send_string(lua_State *L)
 {
 	struct rspamd_http_connection_entry *c = lua_check_controller_entry(L, 1);
-	const gchar *str = lua_tostring(L, 2);
+	const char *str = lua_tostring(L, 2);
 
 	if (c) {
 		rspamd_controller_send_string(c, str);
@@ -3947,8 +3947,8 @@ rspamd_controller_register_plugin_path(lua_State *L,
 									   struct rspamd_controller_worker_ctx *ctx,
 									   const ucl_object_t *webui_data,
 									   const ucl_object_t *handler,
-									   const gchar *path,
-									   const gchar *plugin_name)
+									   const char *path,
+									   const char *plugin_name)
 {
 	struct rspamd_controller_plugin_cbdata *cbd;
 	const ucl_object_t *elt;
@@ -4040,7 +4040,7 @@ rspamd_controller_register_plugins_paths(struct rspamd_controller_worker_ctx *ct
 
 static void
 rspamd_controller_health_rep(struct rspamd_worker *worker,
-							 struct rspamd_srv_reply *rep, gint rep_fd,
+							 struct rspamd_srv_reply *rep, int rep_fd,
 							 gpointer ud)
 {
 	struct rspamd_controller_worker_ctx *ctx = (struct rspamd_controller_worker_ctx *) ud;
@@ -4075,7 +4075,7 @@ start_controller_worker(struct rspamd_worker *worker)
 	struct module_ctx *mctx;
 	GHashTableIter iter;
 	gpointer key, value;
-	guint i;
+	unsigned int i;
 	gpointer m;
 
 	g_assert(rspamd_worker_check_context(worker->ctx, rspamd_controller_ctx_magic));

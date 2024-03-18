@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,7 +79,7 @@ void rspamd_upstreams_library_config(struct rspamd_config *cfg,
 /**
  * Add an error to an upstream
  */
-void rspamd_upstream_fail(struct upstream *upstream, gboolean addr_failure, const gchar *reason);
+void rspamd_upstream_fail(struct upstream *upstream, gboolean addr_failure, const char *reason);
 
 /**
  * Increase upstream successes count
@@ -90,7 +90,7 @@ void rspamd_upstream_ok(struct upstream *up);
  * Set weight for an upstream
  * @param up
  */
-void rspamd_upstream_set_weight(struct upstream *up, guint weight);
+void rspamd_upstream_set_weight(struct upstream *up, unsigned int weight);
 
 /**
  * Create new list of upstreams
@@ -119,12 +119,12 @@ void rspamd_upstreams_set_flags(struct upstream_list *ups,
  * @param dns_retransmits
  */
 void rspamd_upstreams_set_limits(struct upstream_list *ups,
-								 gdouble revive_time,
-								 gdouble revive_jitter,
-								 gdouble error_time,
-								 gdouble dns_timeout,
-								 guint max_errors,
-								 guint dns_retransmits);
+								 double revive_time,
+								 double revive_jitter,
+								 double error_time,
+								 double dns_timeout,
+								 unsigned int max_errors,
+								 unsigned int dns_retransmits);
 
 /**
  * Sets rotation policy for upstreams list
@@ -167,8 +167,8 @@ enum rspamd_upstream_parse_type {
  * @param data optional userdata
  * @return TRUE if upstream has been added
  */
-gboolean rspamd_upstreams_add_upstream(struct upstream_list *ups, const gchar *str,
-									   guint16 def_port, enum rspamd_upstream_parse_type parse_type,
+gboolean rspamd_upstreams_add_upstream(struct upstream_list *ups, const char *str,
+									   uint16_t def_port, enum rspamd_upstream_parse_type parse_type,
 									   void *data);
 
 /**
@@ -180,12 +180,12 @@ gboolean rspamd_upstreams_add_upstream(struct upstream_list *ups, const gchar *s
  * @return TRUE if **any** of upstreams has been added
  */
 gboolean rspamd_upstreams_parse_line(struct upstream_list *ups,
-									 const gchar *str, guint16 def_port, void *data);
+									 const char *str, uint16_t def_port, void *data);
 
 
 gboolean rspamd_upstreams_parse_line_len(struct upstream_list *ups,
-										 const gchar *str, gsize len,
-										 guint16 def_port,
+										 const char *str, gsize len,
+										 uint16_t def_port,
 										 void *data);
 
 /**
@@ -197,10 +197,10 @@ gboolean rspamd_upstreams_parse_line_len(struct upstream_list *ups,
  * @return
  */
 gboolean rspamd_upstreams_from_ucl(struct upstream_list *ups,
-								   const ucl_object_t *in, guint16 def_port, void *data);
+								   const ucl_object_t *in, uint16_t def_port, void *data);
 
 
-typedef void (*rspamd_upstream_traverse_func)(struct upstream *up, guint idx,
+typedef void (*rspamd_upstream_traverse_func)(struct upstream *up, unsigned int idx,
 											  void *ud);
 
 /**
@@ -222,7 +222,7 @@ enum rspamd_upstreams_watch_event {
 
 typedef void (*rspamd_upstream_watch_func)(struct upstream *up,
 										   enum rspamd_upstreams_watch_event event,
-										   guint cur_errors,
+										   unsigned int cur_errors,
 										   void *ud);
 
 /**
@@ -265,14 +265,14 @@ gboolean rspamd_upstream_add_addr(struct upstream *up,
  * @param up
  * @return
  */
-const gchar *rspamd_upstream_name(struct upstream *up);
+const char *rspamd_upstream_name(struct upstream *up);
 
 /**
  * Returns the port of the current address for the upstream
  * @param up
  * @return
  */
-gint rspamd_upstream_port(struct upstream *up);
+int rspamd_upstream_port(struct upstream *up);
 
 /**
  * Sets opaque user data associated with this upstream
@@ -297,7 +297,7 @@ gpointer rspamd_upstream_get_data(struct upstream *up);
  */
 struct upstream *rspamd_upstream_get(struct upstream_list *ups,
 									 enum rspamd_upstream_rotation default_type,
-									 const guchar *key, gsize keylen);
+									 const unsigned char *key, gsize keylen);
 
 /**
  * Get new upstream from the list
@@ -307,7 +307,7 @@ struct upstream *rspamd_upstream_get(struct upstream_list *ups,
  */
 struct upstream *rspamd_upstream_get_forced(struct upstream_list *ups,
 											enum rspamd_upstream_rotation forced_type,
-											const guchar *key, gsize keylen);
+											const unsigned char *key, gsize keylen);
 
 /**
  * Get new upstream from the list excepting the upstream specified
@@ -318,7 +318,7 @@ struct upstream *rspamd_upstream_get_forced(struct upstream_list *ups,
 struct upstream *rspamd_upstream_get_except(struct upstream_list *ups,
 											struct upstream *except,
 											enum rspamd_upstream_rotation default_type,
-											const guchar *key, gsize keylen);
+											const unsigned char *key, gsize keylen);
 
 /**
  * Re-resolve addresses for all upstreams registered

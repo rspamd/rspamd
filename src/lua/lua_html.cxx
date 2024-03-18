@@ -192,7 +192,7 @@ static const struct luaL_reg taglib_m[] = {
 	{NULL, NULL}};
 
 static struct rspamd::html::html_content *
-lua_check_html(lua_State *L, gint pos)
+lua_check_html(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_html_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'html' expected");
@@ -205,19 +205,19 @@ struct lua_html_tag {
 };
 
 static struct lua_html_tag *
-lua_check_html_tag(lua_State *L, gint pos)
+lua_check_html_tag(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_html_tag_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'html_tag' expected");
 	return ud ? ((struct lua_html_tag *) ud) : NULL;
 }
 
-static gint
+static int
 lua_html_has_tag(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	auto *hc = lua_check_html(L, 1);
-	const gchar *tagname = luaL_checkstring(L, 2);
+	const char *tagname = luaL_checkstring(L, 2);
 	gboolean ret = FALSE;
 
 	if (hc && tagname) {
@@ -245,12 +245,12 @@ constexpr const auto prop_map = frozen::make_unordered_map<frozen::string, int>(
 	{"data_urls", RSPAMD_HTML_FLAG_HAS_DATA_URLS},
 });
 
-static gint
+static int
 lua_html_has_property(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	auto *hc = lua_check_html(L, 1);
-	const gchar *propname = luaL_checkstring(L, 2);
+	const char *propname = luaL_checkstring(L, 2);
 	gboolean ret = FALSE;
 
 	if (hc && propname) {
@@ -326,12 +326,12 @@ lua_html_push_image(lua_State *L, const struct html_image *img)
 	lua_settable(L, -3);
 }
 
-static gint
+static int
 lua_html_get_images(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	auto *hc = lua_check_html(L, 1);
-	guint i = 1;
+	unsigned int i = 1;
 
 	if (hc != NULL) {
 		lua_createtable(L, hc->images.size(), 0);
@@ -397,13 +397,13 @@ lua_html_push_block(lua_State *L, const struct rspamd::html::html_block *bl)
 	lua_settable(L, -3);
 }
 
-static gint
+static int
 lua_html_foreach_tag(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	auto *hc = lua_check_html(L, 1);
-	const gchar *tagname;
-	gint id;
+	const char *tagname;
+	int id;
 	auto any = false;
 	ankerl::unordered_dense::set<int> tags;
 
@@ -491,7 +491,7 @@ lua_html_foreach_tag(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_html_get_invisible(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -507,12 +507,12 @@ lua_html_get_invisible(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_html_tag_get_type(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct lua_html_tag *ltag = lua_check_html_tag(L, 1);
-	const gchar *tagname;
+	const char *tagname;
 
 	if (ltag != NULL) {
 		tagname = rspamd_html_tag_by_id(ltag->tag->id);
@@ -531,7 +531,7 @@ lua_html_tag_get_type(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_html_tag_get_parent(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -557,12 +557,12 @@ lua_html_tag_get_parent(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_html_tag_get_flags(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct lua_html_tag *ltag = lua_check_html_tag(L, 1);
-	gint i = 1;
+	int i = 1;
 
 	if (ltag && ltag->tag) {
 		/* Push flags */
@@ -595,7 +595,7 @@ lua_html_tag_get_flags(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_html_tag_get_content(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -628,7 +628,7 @@ lua_html_tag_get_content(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_html_tag_get_content_length(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -650,7 +650,7 @@ lua_html_tag_get_content_length(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_html_tag_get_extra(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -685,7 +685,7 @@ lua_html_tag_get_extra(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_html_tag_get_style(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -703,13 +703,13 @@ lua_html_tag_get_style(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_html_tag_get_attribute(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct lua_html_tag *ltag = lua_check_html_tag(L, 1);
 	gsize slen;
-	const gchar *attr_name = luaL_checklstring(L, 2, &slen);
+	const char *attr_name = luaL_checklstring(L, 2, &slen);
 
 	if (ltag && attr_name) {
 		auto maybe_attr = ltag->tag->find_component(

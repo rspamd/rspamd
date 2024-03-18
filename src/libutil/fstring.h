@@ -32,7 +32,7 @@ extern "C" {
 typedef struct f_str_s {
 	gsize len;
 	gsize allocated;
-	gchar str[];
+	char str[];
 } rspamd_fstring_t;
 
 #define RSPAMD_FSTRING_DATA(s) ((s)->str)
@@ -41,7 +41,7 @@ typedef struct f_str_s {
 
 typedef struct f_str_tok {
 	gsize len;
-	const gchar *begin;
+	const char *begin;
 } rspamd_ftok_t;
 
 typedef struct f_str_unicode_tok {
@@ -64,14 +64,14 @@ rspamd_fstring_t *rspamd_fstring_sized_new(gsize initial_size)
 /**
  * Create new fixed length string and initialize it with the initial data
  */
-rspamd_fstring_t *rspamd_fstring_new_init(const gchar *init, gsize len)
+rspamd_fstring_t *rspamd_fstring_new_init(const char *init, gsize len)
 	G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Assign new value to fixed string
  */
 rspamd_fstring_t *rspamd_fstring_assign(rspamd_fstring_t *str,
-										const gchar *init, gsize len) G_GNUC_WARN_UNUSED_RESULT;
+										const char *init, gsize len) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Free fixed length string
@@ -125,26 +125,26 @@ gboolean rspamd_fstring_equal(const rspamd_fstring_t *s1,
 /**
  * Compare two fixed strings ignoring case
  */
-gint rspamd_fstring_casecmp(const rspamd_fstring_t *s1,
-							const rspamd_fstring_t *s2);
+int rspamd_fstring_casecmp(const rspamd_fstring_t *s1,
+						   const rspamd_fstring_t *s2);
 
 /**
  * Compare two fixed strings
  */
-gint rspamd_fstring_cmp(const rspamd_fstring_t *s1,
-						const rspamd_fstring_t *s2);
+int rspamd_fstring_cmp(const rspamd_fstring_t *s1,
+					   const rspamd_fstring_t *s2);
 
 /**
  * Compare two fixed tokens ignoring case
  */
-gint rspamd_ftok_casecmp(const rspamd_ftok_t *s1,
-						 const rspamd_ftok_t *s2);
+int rspamd_ftok_casecmp(const rspamd_ftok_t *s1,
+						const rspamd_ftok_t *s2);
 
 /**
  * Compare two fixed tokens
  */
-gint rspamd_ftok_cmp(const rspamd_ftok_t *s1,
-					 const rspamd_ftok_t *s2);
+int rspamd_ftok_cmp(const rspamd_ftok_t *s1,
+					const rspamd_ftok_t *s2);
 
 /**
  * Returns true if `s1` starts with `s2`
@@ -159,7 +159,7 @@ gboolean rspamd_ftok_starts_with(const rspamd_ftok_t *s1,
  * Return TRUE if ftok is equal to specified C string
  */
 gboolean rspamd_ftok_cstr_equal(const rspamd_ftok_t *s,
-								const gchar *pat, gboolean icase);
+								const char *pat, gboolean icase);
 
 /**
  * Free fstring_t that is mapped to ftok_t
@@ -199,14 +199,14 @@ rspamd_fstring_t *rspamd_fstring_grow(rspamd_fstring_t *str,
  * @param src
  * @return
  */
-gchar *rspamd_ftokdup(const rspamd_ftok_t *src) G_GNUC_WARN_UNUSED_RESULT;
+char *rspamd_ftokdup(const rspamd_ftok_t *src) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Copies fstring to zero terminated string (must be freed using g_free)
  * @param src
  * @return
  */
-gchar *rspamd_fstringdup(const rspamd_fstring_t *src) G_GNUC_WARN_UNUSED_RESULT;
+char *rspamd_fstringdup(const rspamd_fstring_t *src) G_GNUC_WARN_UNUSED_RESULT;
 
 #define RSPAMD_FTOK_ASSIGN(t, lit)  \
 	do {                            \

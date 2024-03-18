@@ -45,7 +45,7 @@ struct rspamd_composite {
 	std::string str_expr;
 	std::string sym;
 	struct rspamd_expression *expr;
-	gint id;
+	int id;
 	rspamd_composite_policy policy;
 };
 

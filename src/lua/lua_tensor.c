@@ -78,7 +78,7 @@ lua_newtensor(lua_State *L, int ndims, const int *dim, bool zero_fill, bool own)
 	res->ndims = ndims;
 	res->size = 1;
 
-	for (guint i = 0; i < ndims; i++) {
+	for (unsigned int i = 0; i < ndims; i++) {
 		res->size *= dim[i];
 		res->dim[i] = dim[i];
 	}
@@ -106,15 +106,15 @@ lua_newtensor(lua_State *L, int ndims, const int *dim, bool zero_fill, bool own)
  * Creates a new zero filled tensor with the specific number of dimensions
  * @return
  */
-static gint
+static int
 lua_tensor_new(lua_State *L)
 {
-	gint ndims = luaL_checkinteger(L, 1);
+	int ndims = luaL_checkinteger(L, 1);
 
 	if (ndims > 0 && ndims <= 2) {
-		gint *dims = g_alloca(sizeof(gint) * ndims);
+		int *dims = g_alloca(sizeof(int) * ndims);
 
-		for (guint i = 0; i < ndims; i++) {
+		for (unsigned int i = 0; i < ndims; i++) {
 			dims[i] = lua_tointeger(L, i + 2);
 		}
 
@@ -132,7 +132,7 @@ lua_tensor_new(lua_State *L)
  * Creates a new zero filled tensor with the specific number of dimensions
  * @return
  */
-static gint
+static int
 lua_tensor_fromtable(lua_State *L)
 {
 	if (lua_istable(L, 1)) {
@@ -141,14 +141,14 @@ lua_tensor_fromtable(lua_State *L)
 		if (lua_isnumber(L, -1)) {
 			lua_pop(L, 1);
 			/* Input vector */
-			gint dims[2];
+			int dims[2];
 			dims[0] = 1;
 			dims[1] = rspamd_lua_table_size(L, 1);
 
 			struct rspamd_lua_tensor *res = lua_newtensor(L, 2,
 														  dims, false, true);
 
-			for (guint i = 0; i < dims[1]; i++) {
+			for (unsigned int i = 0; i < dims[1]; i++) {
 				lua_rawgeti(L, 1, i + 1);
 				res->data[i] = lua_tonumber(L, -1);
 				lua_pop(L, 1);
@@ -159,10 +159,10 @@ lua_tensor_fromtable(lua_State *L)
 			lua_pop(L, 1);
 
 			/* Calculate the overall size */
-			gint nrows = rspamd_lua_table_size(L, 1), ncols = 0;
-			gint err;
+			int nrows = rspamd_lua_table_size(L, 1), ncols = 0;
+			int err;
 
-			for (gint i = 0; i < nrows; i++) {
+			for (int i = 0; i < nrows; i++) {
 				lua_rawgeti(L, 1, i + 1);
 
 				if (ncols == 0) {
@@ -180,7 +180,7 @@ lua_tensor_fromtable(lua_State *L)
 				}
 				else {
 					if (ncols != rspamd_lua_table_size(L, -1)) {
-						gint t = rspamd_lua_table_size(L, -1);
+						int t = rspamd_lua_table_size(L, -1);
 
 						lua_pop(L, 1);
 						err = luaL_error(L, "invalid params at pos %d: "
@@ -196,17 +196,17 @@ lua_tensor_fromtable(lua_State *L)
 				lua_pop(L, 1);
 			}
 
-			gint dims[2];
+			int dims[2];
 			dims[0] = nrows;
 			dims[1] = ncols;
 
 			struct rspamd_lua_tensor *res = lua_newtensor(L, 2,
 														  dims, false, true);
 
-			for (gint i = 0; i < nrows; i++) {
+			for (int i = 0; i < nrows; i++) {
 				lua_rawgeti(L, 1, i + 1);
 
-				for (gint j = 0; j < ncols; j++) {
+				for (int j = 0; j < ncols; j++) {
 					lua_rawgeti(L, -1, j + 1);
 
 					res->data[i * ncols + j] = lua_tonumber(L, -1);
@@ -235,7 +235,7 @@ lua_tensor_fromtable(lua_State *L)
  * Tensor destructor
  * @return
  */
-static gint
+static int
 lua_tensor_destroy(lua_State *L)
 {
 	struct rspamd_lua_tensor *t = lua_check_tensor(L, 1);
@@ -254,11 +254,11 @@ lua_tensor_destroy(lua_State *L)
  * Tensor serialisation function
  * @return
  */
-static gint
+static int
 lua_tensor_save(lua_State *L)
 {
 	struct rspamd_lua_tensor *t = lua_check_tensor(L, 1);
-	gint size;
+	int size;
 
 	if (t) {
 		if (t->size > 0) {
@@ -268,8 +268,8 @@ lua_tensor_save(lua_State *L)
 			size = -(t->size);
 		}
 
-		gsize sz = sizeof(gint) * 4 + size * sizeof(rspamd_tensor_num_t);
-		guchar *data;
+		gsize sz = sizeof(int) * 4 + size * sizeof(rspamd_tensor_num_t);
+		unsigned char *data;
 
 		struct rspamd_lua_text *out = lua_new_text(L, NULL, 0, TRUE);
 
@@ -280,7 +280,7 @@ lua_tensor_save(lua_State *L)
 		memcpy(data + 4 * sizeof(int), t->data,
 			   size * sizeof(rspamd_tensor_num_t));
 
-		out->start = (const gchar *) data;
+		out->start = (const char *) data;
 		out->len = sz;
 	}
 	else {
@@ -290,7 +290,7 @@ lua_tensor_save(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_tensor_tostring(lua_State *L)
 {
 	struct rspamd_lua_tensor *t = lua_check_tensor(L, 1);
@@ -300,15 +300,15 @@ lua_tensor_tostring(lua_State *L)
 
 		if (t->ndims == 1) {
 			/* Print as a vector */
-			for (gint i = 0; i < t->dim[0]; i++) {
+			for (int i = 0; i < t->dim[0]; i++) {
 				rspamd_printf_gstring(out, "%.4f ", t->data[i]);
 			}
 			/* Trim last space */
 			out->len--;
 		}
 		else {
-			for (gint i = 0; i < t->dim[0]; i++) {
-				for (gint j = 0; j < t->dim[1]; j++) {
+			for (int i = 0; i < t->dim[0]; i++) {
+				for (int j = 0; j < t->dim[1]; j++) {
 					rspamd_printf_gstring(out, "%.4f ",
 										  t->data[i * t->dim[1] + j]);
 				}
@@ -331,11 +331,11 @@ lua_tensor_tostring(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_tensor_index(lua_State *L)
 {
 	struct rspamd_lua_tensor *t = lua_check_tensor(L, 1);
-	gint idx;
+	int idx;
 
 	if (t) {
 		if (lua_isnumber(L, 2)) {
@@ -352,7 +352,7 @@ lua_tensor_index(lua_State *L)
 			}
 			else {
 				/* Push row */
-				gint dim = t->dim[1];
+				int dim = t->dim[1];
 
 
 				if (idx <= t->dim[0]) {
@@ -376,11 +376,11 @@ lua_tensor_index(lua_State *L)
 
 	return 1;
 }
-static gint
+static int
 lua_tensor_newindex(lua_State *L)
 {
 	struct rspamd_lua_tensor *t = lua_check_tensor(L, 1);
-	gint idx;
+	int idx;
 
 	if (t) {
 		if (lua_isnumber(L, 2)) {
@@ -451,7 +451,7 @@ lua_tensor_newindex(lua_State *L)
  * Multiply two tensors (optionally transposed) and return a new tensor
  * @return
  */
-static gint
+static int
 lua_tensor_mul(lua_State *L)
 {
 	struct rspamd_lua_tensor *t1 = lua_check_tensor(L, 1),
@@ -467,7 +467,7 @@ lua_tensor_mul(lua_State *L)
 	}
 
 	if (t1 && t2) {
-		gint dims[2], shadow_dims[2];
+		int dims[2], shadow_dims[2];
 		dims[0] = abs(transA ? t1->dim[1] : t1->dim[0]);
 		shadow_dims[0] = abs(transB ? t2->dim[1] : t2->dim[0]);
 		dims[1] = abs(transB ? t2->dim[0] : t2->dim[1]);
@@ -517,10 +517,10 @@ lua_tensor_mul(lua_State *L)
  * Deserialize tensor
  * @return
  */
-static gint
+static int
 lua_tensor_load(lua_State *L)
 {
-	const guchar *data;
+	const unsigned char *data;
 	gsize sz;
 
 	if (lua_type(L, 1) == LUA_TUSERDATA) {
@@ -530,14 +530,14 @@ lua_tensor_load(lua_State *L)
 			return luaL_error(L, "invalid argument");
 		}
 
-		data = (const guchar *) t->start;
+		data = (const unsigned char *) t->start;
 		sz = t->len;
 	}
 	else {
-		data = (const guchar *) lua_tolstring(L, 1, &sz);
+		data = (const unsigned char *) lua_tolstring(L, 1, &sz);
 	}
 
-	if (sz >= sizeof(gint) * 4) {
+	if (sz >= sizeof(int) * 4) {
 		int ndims, nelts, dims[2];
 
 		memcpy(&ndims, data, sizeof(int));
@@ -582,11 +582,11 @@ lua_tensor_load(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_tensor_len(lua_State *L)
 {
 	struct rspamd_lua_tensor *t = lua_check_tensor(L, 1);
-	gint nret = 1;
+	int nret = 1;
 
 	if (t) {
 		/* Return the main dimension first */
@@ -606,7 +606,7 @@ lua_tensor_len(lua_State *L)
 	return nret;
 }
 
-static gint
+static int
 lua_tensor_eigen(lua_State *L)
 {
 	struct rspamd_lua_tensor *t = lua_check_tensor(L, 1), *eigen;
@@ -638,7 +638,7 @@ mean_vec(rspamd_tensor_num_t *x, gsize n)
 	return sum / (rspamd_tensor_num_t) n;
 }
 
-static gint
+static int
 lua_tensor_mean(lua_State *L)
 {
 	struct rspamd_lua_tensor *t = lua_check_tensor(L, 1);
@@ -666,7 +666,7 @@ lua_tensor_mean(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_tensor_transpose(lua_State *L)
 {
 	struct rspamd_lua_tensor *t = lua_check_tensor(L, 1), *res;
@@ -707,7 +707,7 @@ lua_tensor_transpose(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_tensor_has_blas(lua_State *L)
 {
 #ifdef HAVE_CBLAS
@@ -719,7 +719,7 @@ lua_tensor_has_blas(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_tensor_scatter_matrix(lua_State *L)
 {
 	struct rspamd_lua_tensor *t = lua_check_tensor(L, 1), *res;
@@ -789,7 +789,7 @@ lua_tensor_scatter_matrix(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_load_tensor(lua_State *L)
 {
 	lua_newtable(L);
