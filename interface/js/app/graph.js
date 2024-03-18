@@ -128,6 +128,8 @@ define(["jquery", "app/common", "d3evolution", "d3pie", "d3", "footable"],
 
             function initSummaryTable(rows, unit) {
                 common.tables.rrd_summary = FooTable.init("#rrd-table", {
+                    breakpoints: common.breakpoints,
+                    cascade: true,
                     sorting: {
                         enabled: true
                     },
