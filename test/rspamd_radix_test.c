@@ -38,7 +38,7 @@ struct _tv {
 	const char *ip;
 	const char *nip;
 	const char *m;
-	guint32 mask;
+	uint32_t mask;
 	guint8 *addr;
 	guint8 *naddr;
 	gsize len;
@@ -207,10 +207,10 @@ void rspamd_radix_test_func(void)
 	struct btrie *btrie;
 	rspamd_mempool_t *pool;
 	struct {
-		guint32 addr;
-		guint32 mask;
+		uint32_t addr;
+		uint32_t mask;
 		guint8 addr6[16];
-		guint32 mask6;
+		uint32_t mask6;
 		guint8 addr64[16];
 	} *addrs;
 	gsize nelts, i, check;

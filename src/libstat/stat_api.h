@@ -55,7 +55,7 @@ typedef struct rspamd_stat_token_s {
 
 #define RSPAMD_TOKEN_VALUE_TYPE float
 typedef struct token_node_s {
-	guint64 data;
+	uint64_t data;
 	guint window_idx;
 	guint flags;
 	rspamd_stat_token_t *t1;
@@ -136,7 +136,7 @@ rspamd_stat_result_t rspamd_stat_learn(struct rspamd_task *task,
  */
 rspamd_stat_result_t rspamd_stat_statistics(struct rspamd_task *task,
 											struct rspamd_config *cfg,
-											guint64 *total_learns,
+											uint64_t *total_learns,
 											ucl_object_t **res);
 
 void rspamd_stat_unload(void);

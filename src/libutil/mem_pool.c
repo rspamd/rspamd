@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,9 +94,9 @@ static gboolean always_malloc = FALSE;
 static gsize
 pool_chain_free(struct _pool_chain *chain)
 {
-	gint64 occupied = chain->pos - chain->begin + MIN_MEM_ALIGNMENT;
+	int64_t occupied = chain->pos - chain->begin + MIN_MEM_ALIGNMENT;
 
-	return (occupied < (gint64) chain->slice_size ? chain->slice_size - occupied : 0);
+	return (occupied < (int64_t) chain->slice_size ? chain->slice_size - occupied : 0);
 }
 
 /* By default allocate 4Kb chunks of memory */

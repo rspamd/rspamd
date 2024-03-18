@@ -464,7 +464,7 @@ enum rspamd_lua_parse_arguments_flags {
 * Extract an arguments from lua table according to format string. Supported arguments are:
 * [*]key=S|I|N|B|V|U{a-z};[key=...]
 * - S - const char *
-* - I - gint64_t
+* - I - int64_t_t
 * - i - int32_t
 * - N - double
 * - B - gboolean
@@ -654,7 +654,7 @@ gchar *rspamd_lua_get_module_name(lua_State *L);
 
 /**
 * Call Lua function in a universal way. Arguments string:
-* - i - lua_integer, argument - gint64
+* - i - lua_integer, argument - int64_t
 * - n - lua_number, argument - gdouble
 * - s - lua_string, argument - const gchar * (zero terminated)
 * - l - lua_lstring, argument - (size_t + const gchar *) pair

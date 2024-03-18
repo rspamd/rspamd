@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -143,7 +143,7 @@ gint rspamd_lc_cmp(const gchar *s, const gchar *d, gsize l)
 	guchar c1, c2, c3, c4;
 	union {
 		guchar c[4];
-		guint32 n;
+		uint32_t n;
 	} cmp1, cmp2;
 	gsize leftover = l % 4;
 	gint ret = 0;
@@ -188,7 +188,7 @@ gint rspamd_lc_cmp(const gchar *s, const gchar *d, gsize l)
 guint rspamd_str_lc_utf8(gchar *str, guint size)
 {
 	guchar *d = (guchar *) str, tst[6];
-	gint32 i = 0, prev = 0;
+	int32_t i = 0, prev = 0;
 	UChar32 uc;
 
 	while (i < size) {
@@ -197,7 +197,7 @@ guint rspamd_str_lc_utf8(gchar *str, guint size)
 		U8_NEXT((guint8 *) str, i, size, uc);
 		uc = u_tolower(uc);
 
-		gint32 olen = 0;
+		int32_t olen = 0;
 		U8_APPEND_UNSAFE(tst, olen, uc);
 
 		if (olen <= (i - prev)) {
@@ -223,19 +223,19 @@ rspamd_strcase_equal(gconstpointer v, gconstpointer v2)
 	return FALSE;
 }
 
-guint64
-rspamd_icase_hash(const gchar *in, gsize len, guint64 seed)
+uint64_t
+rspamd_icase_hash(const gchar *in, gsize len, uint64_t seed)
 {
-	guint leftover = len % sizeof(guint64);
+	guint leftover = len % sizeof(uint64_t);
 	guint fp, i;
 	const uint8_t *s = (const uint8_t *) in;
 	union {
 		struct {
 			guchar c1, c2, c3, c4, c5, c6, c7, c8;
 		} c;
-		guint64 pp;
+		uint64_t pp;
 	} u;
-	guint64 h = seed;
+	uint64_t h = seed;
 
 	fp = len - leftover;
 
@@ -346,10 +346,10 @@ guint rspamd_gstring_icase_hash(gconstpointer key)
 /* https://graphics.stanford.edu/~seander/bithacks.html#ZeroInWord */
 #define MEM_ALIGN (sizeof(gsize) - 1)
 #if defined(__LP64__) || defined(_LP64)
-#define WORD_TYPE guint64
+#define WORD_TYPE uint64_t
 #define ZEROMASK 0x7F7F7F7F7F7F7F7FLLU
 #else
-#define WORD_TYPE guint32
+#define WORD_TYPE uint32_t
 #define ZEROMASK 0x7F7F7F7FU
 #endif
 
@@ -535,12 +535,12 @@ rspamd_strtoul(const gchar *s, gsize len, gulong *value)
 }
 
 gboolean
-rspamd_strtou64(const gchar *s, gsize len, guint64 *value)
+rspamd_strtou64(const gchar *s, gsize len, uint64_t *value)
 {
 	const gchar *p = s, *end = s + len;
 	gchar c;
-	guint64 v = 0;
-	const guint64 cutoff = G_MAXUINT64 / 10, cutlim = G_MAXUINT64 % 10;
+	uint64_t v = 0;
+	const uint64_t cutoff = G_MAXUINT64 / 10, cutlim = G_MAXUINT64 % 10;
 
 	/* Some preparations for range errors */
 	CONV_STR_LIM_DECIMAL(G_MAXUINT64);
@@ -1265,8 +1265,8 @@ rspamd_encode_base64_common(const guchar *in, gsize inlen, gint str_len,
 
 	gsize allocated_len = (inlen / 3) * 4 + 5;
 	gchar *out, *o;
-	guint64 n;
-	guint32 rem, t, carry;
+	uint64_t n;
+	uint32_t rem, t, carry;
 	gint cols, shift;
 	static const char b64_enc[] =
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -3508,7 +3508,7 @@ rspamd_str_regexp_escape(const gchar *pattern, gsize slen,
 				else {
 					if (flags & (RSPAMD_REGEXP_ESCAPE_RE | RSPAMD_REGEXP_ESCAPE_GLOB)) {
 						UChar32 uc;
-						gint32 off = p - pattern - 1;
+						int32_t off = p - pattern - 1;
 						U8_NEXT(pattern, off, slen, uc);
 
 						if (uc > 0) {
@@ -3821,11 +3821,11 @@ rspamd_str_has_8bit_u64(const guchar *beg, gsize len)
 	guint8 orb = 0;
 
 	if (len >= 16) {
-		const guchar *nextd = beg + sizeof(guint64);
-		guint64 n1 = 0, n2 = 0;
+		const guchar *nextd = beg + sizeof(uint64_t);
+		uint64_t n1 = 0, n2 = 0;
 
 		do {
-			guint64 t;
+			uint64_t t;
 			memcpy(&t, beg, sizeof(t));
 			n1 |= t;
 			memcpy(&t, nextd, sizeof(t));

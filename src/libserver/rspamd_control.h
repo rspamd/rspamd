@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -55,7 +55,7 @@ enum rspamd_srv_type {
 enum rspamd_log_pipe_type {
 	RSPAMD_LOG_PIPE_SYMBOLS = 0,
 };
-#define CONTROL_PATHLEN MIN(PATH_MAX, PIPE_BUF - sizeof(int) * 2 - sizeof(gint64) * 2)
+#define CONTROL_PATHLEN MIN(PATH_MAX, PIPE_BUF - sizeof(int) * 2 - sizeof(int64_t) * 2)
 struct rspamd_control_command {
 	enum rspamd_control_type type;
 	union {
@@ -154,7 +154,7 @@ struct rspamd_control_reply {
 
 struct rspamd_srv_command {
 	enum rspamd_srv_type type;
-	guint64 id;
+	uint64_t id;
 	union {
 		struct {
 			gint af;
@@ -206,7 +206,7 @@ struct rspamd_srv_command {
 
 struct rspamd_srv_reply {
 	enum rspamd_srv_type type;
-	guint64 id;
+	uint64_t id;
 	union {
 		struct {
 			gint code;

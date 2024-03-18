@@ -1183,7 +1183,7 @@ lua_textpart_get_languages(lua_State *L)
 }
 
 struct lua_shingle_data {
-	guint64 hash;
+	uint64_t hash;
 	rspamd_ftok_t t1;
 	rspamd_ftok_t t2;
 	rspamd_ftok_t t3;
@@ -1203,11 +1203,11 @@ struct lua_shingle_filter_cbdata {
 		}                                                                     \
 	} while (0)
 
-static guint64
-lua_shingles_filter(guint64 *input, gsize count,
+static uint64_t
+lua_shingles_filter(uint64_t *input, gsize count,
 					gint shno, const guchar *key, gpointer ud)
 {
-	guint64 minimal = G_MAXUINT64;
+	uint64_t minimal = G_MAXUINT64;
 	gsize i, min_idx = 0;
 	struct lua_shingle_data *sd;
 	rspamd_stat_token_t *word;

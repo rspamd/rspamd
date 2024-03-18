@@ -120,11 +120,11 @@ struct rspamd_shingle *RSPAMD_OPTIMIZE("unroll-loops")
 							  enum rspamd_shingle_alg alg)
 {
 	struct rspamd_shingle *res;
-	guint64 **hashes;
+	uint64_t **hashes;
 	guchar **keys;
 	rspamd_fstring_t *row;
 	rspamd_stat_token_t *word;
-	guint64 val;
+	uint64_t val;
 	gint i, j, k;
 	gsize hlen, ilen = 0, beg = 0, widx = 0;
 	enum rspamd_cryptobox_fast_hash_type ht;
@@ -152,7 +152,7 @@ struct rspamd_shingle *RSPAMD_OPTIMIZE("unroll-loops")
 	keys = rspamd_shingles_get_keys_cached(key);
 
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i++) {
-		hashes[i] = g_malloc(hlen * sizeof(guint64));
+		hashes[i] = g_malloc(hlen * sizeof(uint64_t));
 	}
 
 	/* Now parse input words into a vector of hashes using rolling window */
@@ -210,7 +210,7 @@ struct rspamd_shingle *RSPAMD_OPTIMIZE("unroll-loops")
 		}
 	}
 	else {
-		guint64 window[SHINGLES_WINDOW * RSPAMD_SHINGLE_SIZE], seed;
+		uint64_t window[SHINGLES_WINDOW * RSPAMD_SHINGLE_SIZE], seed;
 
 		switch (alg) {
 		case RSPAMD_SHINGLES_XXHASH:
@@ -309,14 +309,14 @@ struct rspamd_shingle *RSPAMD_OPTIMIZE("unroll-loops")
 							   enum rspamd_shingle_alg alg)
 {
 	struct rspamd_shingle *shingle;
-	guint64 **hashes;
+	uint64_t **hashes;
 	guchar **keys;
-	guint64 d;
-	guint64 val;
+	uint64_t d;
+	uint64_t val;
 	gint i, j;
 	gsize hlen, beg = 0;
 	enum rspamd_cryptobox_fast_hash_type ht;
-	guint64 res[SHINGLES_WINDOW * RSPAMD_SHINGLE_SIZE], seed;
+	uint64_t res[SHINGLES_WINDOW * RSPAMD_SHINGLE_SIZE], seed;
 
 	if (pool != NULL) {
 		shingle = rspamd_mempool_alloc(pool, sizeof(*shingle));
@@ -331,7 +331,7 @@ struct rspamd_shingle *RSPAMD_OPTIMIZE("unroll-loops")
 	keys = rspamd_shingles_get_keys_cached(key);
 
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i++) {
-		hashes[i] = g_malloc(hlen * sizeof(guint64));
+		hashes[i] = g_malloc(hlen * sizeof(uint64_t));
 	}
 
 	switch (alg) {
@@ -380,11 +380,11 @@ struct rspamd_shingle *RSPAMD_OPTIMIZE("unroll-loops")
 	return shingle;
 }
 
-guint64
-rspamd_shingles_default_filter(guint64 *input, gsize count,
+uint64_t
+rspamd_shingles_default_filter(uint64_t *input, gsize count,
 							   gint shno, const guchar *key, gpointer ud)
 {
-	guint64 minimal = G_MAXUINT64;
+	uint64_t minimal = G_MAXUINT64;
 	gsize i;
 
 	for (i = 0; i < count; i++) {

@@ -104,7 +104,7 @@ void rspamd_keypair_cache_process(struct rspamd_keypair_cache *c,
 		memcpy(new->pair, rk->id, rspamd_cryptobox_HASHBYTES);
 		memcpy(&new->pair[rspamd_cryptobox_HASHBYTES], lk->id,
 			   rspamd_cryptobox_HASHBYTES);
-		memcpy(&new->nm->sk_id, lk->id, sizeof(guint64));
+		memcpy(&new->nm->sk_id, lk->id, sizeof(uint64_t));
 
 		if (rk->alg == RSPAMD_CRYPTOBOX_MODE_25519) {
 			struct rspamd_cryptobox_pubkey_25519 *rk_25519 =

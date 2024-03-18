@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -107,7 +107,7 @@ static struct rspamd_image *
 process_png_image(rspamd_mempool_t *pool, rspamd_ftok_t *data)
 {
 	struct rspamd_image *img;
-	guint32 t;
+	uint32_t t;
 	const guint8 *p;
 
 	if (data->len < 24) {
@@ -128,10 +128,10 @@ process_png_image(rspamd_mempool_t *pool, rspamd_ftok_t *data)
 	img->data = data;
 
 	p += 4;
-	memcpy(&t, p, sizeof(guint32));
+	memcpy(&t, p, sizeof(uint32_t));
 	img->width = ntohl(t);
 	p += 4;
-	memcpy(&t, p, sizeof(guint32));
+	memcpy(&t, p, sizeof(uint32_t));
 	img->height = ntohl(t);
 
 	return img;
@@ -209,7 +209,7 @@ static struct rspamd_image *
 process_bmp_image(rspamd_mempool_t *pool, rspamd_ftok_t *data)
 {
 	struct rspamd_image *img;
-	gint32 t;
+	int32_t t;
 	const guint8 *p;
 
 	if (data->len < 28) {
@@ -221,9 +221,9 @@ process_bmp_image(rspamd_mempool_t *pool, rspamd_ftok_t *data)
 	img->type = IMAGE_TYPE_BMP;
 	img->data = data;
 	p = data->begin + 18;
-	memcpy(&t, p, sizeof(guint32));
+	memcpy(&t, p, sizeof(uint32_t));
 	img->width = GUINT32_FROM_LE(t);
-	memcpy(&t, p + 4, sizeof(gint32));
+	memcpy(&t, p + 4, sizeof(int32_t));
 	img->height = GUINT32_FROM_LE(t);
 
 	return img;
@@ -373,7 +373,7 @@ rspamd_image_cache_entry_dtor(gpointer p)
 	g_free(entry);
 }
 
-static guint32
+static uint32_t
 rspamd_image_dct_hash(gconstpointer p)
 {
 	return rspamd_cryptobox_fast_hash(p, rspamd_cryptobox_HASHBYTES,

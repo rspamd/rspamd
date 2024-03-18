@@ -65,7 +65,7 @@ GArray *rspamd_tokenize_text(const gchar *text, gsize len,
 							 enum rspamd_tokenize_type how,
 							 struct rspamd_config *cfg,
 							 GList *exceptions,
-							 guint64 *hash,
+							 uint64_t *hash,
 							 GArray *cur_words,
 							 rspamd_mempool_t *pool);
 

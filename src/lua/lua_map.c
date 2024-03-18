@@ -878,7 +878,7 @@ lua_map_get_key(lua_State *L)
 	const gchar *key, *value = NULL;
 	gpointer ud;
 	gsize len;
-	guint32 key_num = 0;
+	uint32_t key_num = 0;
 	gboolean ret = FALSE;
 
 	if (map) {

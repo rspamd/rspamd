@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -181,7 +181,7 @@ spf_record_cached_unref_dtor(gpointer p)
 void spf_library_config(const ucl_object_t *obj)
 {
 	const ucl_object_t *value;
-	gint64 ival;
+	int64_t ival;
 	bool bval;
 
 	if (obj == NULL) {
@@ -569,14 +569,14 @@ rspamd_spf_record_postprocess(struct spf_resolved *rec, struct rspamd_task *task
 		struct spf_addr *cur_addr = &g_array_index(rec->elts, struct spf_addr, i);
 
 		if (cur_addr->flags & RSPAMD_SPF_FLAG_IPV6) {
-			guint64 t[3];
+			uint64_t t[3];
 
 			/*
 			 * Fill hash entry for ipv6 addr with 2 int64 from ipv6 address,
 			 * the remaining int64 has mech + mask
 			 */
-			memcpy(t, cur_addr->addr6, sizeof(guint64) * 2);
-			t[2] = ((guint64) (cur_addr->mech)) << 48u;
+			memcpy(t, cur_addr->addr6, sizeof(uint64_t) * 2);
+			t[2] = ((uint64_t) (cur_addr->mech)) << 48u;
 			t[2] |= cur_addr->m.dual.mask_v6;
 
 			for (guint j = 0; j < G_N_ELEMENTS(t); j++) {
@@ -584,11 +584,11 @@ rspamd_spf_record_postprocess(struct spf_resolved *rec, struct rspamd_task *task
 			}
 		}
 		else if (cur_addr->flags & RSPAMD_SPF_FLAG_IPV4) {
-			guint64 t = 0;
+			uint64_t t = 0;
 
-			memcpy(&t, cur_addr->addr4, sizeof(guint32));
-			t |= ((guint64) (cur_addr->mech)) << 48u;
-			t |= ((guint64) cur_addr->m.dual.mask_v4) << 32u;
+			memcpy(&t, cur_addr->addr4, sizeof(uint32_t));
+			t |= ((uint64_t) (cur_addr->mech)) << 48u;
+			t |= ((uint64_t) cur_addr->m.dual.mask_v4) << 32u;
 
 			rec->digest = mum_hash_step(rec->digest, t);
 		}
@@ -1433,8 +1433,8 @@ parse_spf_ip4(struct spf_record *rec, struct spf_addr *addr)
 	const gchar *semicolon, *slash;
 	gsize len;
 	gchar ipbuf[INET_ADDRSTRLEN + 1];
-	guint32 mask;
-	static const guint32 min_valid_mask = 8;
+	uint32_t mask;
+	static const uint32_t min_valid_mask = 8;
 
 	semicolon = strchr(addr->spf_string, ':');
 
@@ -1509,8 +1509,8 @@ parse_spf_ip6(struct spf_record *rec, struct spf_addr *addr)
 	const gchar *semicolon, *slash;
 	gsize len;
 	gchar ipbuf[INET6_ADDRSTRLEN + 1];
-	guint32 mask;
-	static const guint32 min_valid_mask = 8;
+	uint32_t mask;
+	static const uint32_t min_valid_mask = 8;
 
 	semicolon = strchr(addr->spf_string, ':');
 

@@ -49,12 +49,12 @@ static void
 check_result(const rspamd_nm_t key, const rspamd_nonce_t nonce,
 			 const rspamd_mac_t mac, guchar *begin, guchar *end)
 {
-	guint64 *t = (guint64 *) begin;
+	uint64_t *t = (uint64_t *) begin;
 
 	g_assert(rspamd_cryptobox_decrypt_nm_inplace(begin, end - begin, nonce, key,
 												 mac, mode));
 
-	while (t < (guint64 *) end) {
+	while (t < (uint64_t *) end) {
 		g_assert(*t == 0);
 		t++;
 	}

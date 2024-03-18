@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -327,7 +327,7 @@ rspamd_mime_text_to_utf8(rspamd_mempool_t *pool,
 						 gsize *olen, GError **err)
 {
 	gchar *d;
-	gint32 r, clen, dlen;
+	int32_t r, clen, dlen;
 	UChar *tmp_buf;
 
 	UErrorCode uc_err = U_ZERO_ERROR;
@@ -407,7 +407,7 @@ rspamd_mime_text_part_utf8_convert(struct rspamd_task *task,
 								   GError **err)
 {
 	gchar *d;
-	gint32 r, clen, dlen, uc_len;
+	int32_t r, clen, dlen, uc_len;
 	UChar *tmp_buf;
 	UErrorCode uc_err = U_ZERO_ERROR;
 	UConverter *utf8_converter;
@@ -484,7 +484,7 @@ rspamd_mime_to_utf8_byte_array(GByteArray *in,
 							   rspamd_mempool_t *pool,
 							   const gchar *enc)
 {
-	gint32 r, clen, dlen;
+	int32_t r, clen, dlen;
 	UChar *tmp_buf;
 	UErrorCode uc_err = U_ZERO_ERROR;
 	UConverter *utf8_converter;
@@ -568,10 +568,10 @@ void rspamd_mime_charset_utf_enforce(gchar *in, gsize len)
 
 	while (p < end && len > 0 && (err_offset = rspamd_fast_utf8_validate(p, len)) > 0) {
 		err_offset--; /* As it returns it 1 indexed */
-		gint32 cur_offset = err_offset;
+		int32_t cur_offset = err_offset;
 
 		while (cur_offset < len) {
-			gint32 tmp = cur_offset;
+			int32_t tmp = cur_offset;
 
 			U8_NEXT(p, cur_offset, len, uc);
 

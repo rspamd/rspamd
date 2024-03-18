@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -174,8 +174,8 @@ struct rspamd_classifier_config {
 	GList *learn_conditions;                   /**< list of learn condition callbacks					*/
 	GList *classify_conditions;                /**< list of classify condition callbacks					*/
 	gchar *name;                               /**< unique name of classifier							*/
-	guint32 min_tokens;                        /**< minimal number of tokens to process classifier 	*/
-	guint32 max_tokens;                        /**< maximum number of tokens							*/
+	uint32_t min_tokens;                       /**< minimal number of tokens to process classifier 	*/
+	uint32_t max_tokens;                       /**< maximum number of tokens							*/
 	guint min_token_hits;                      /**< minimum number of hits for a token to be considered */
 	gdouble min_prob_strength;                 /**< use only tokens with probability in [0.5 - MPS, 0.5 + MPS] */
 	guint min_learns;                          /**< minimum number of learns for each statfile			*/
@@ -205,8 +205,8 @@ struct rspamd_worker_conf {
 	struct rspamd_worker_bind_conf *bind_conf; /**< bind configuration									*/
 	gint16 count;                              /**< number of workers									*/
 	GList *listen_socks;                       /**< listening sockets descriptors						*/
-	guint64 rlimit_nofile;                     /**< max files limit									*/
-	guint64 rlimit_maxcore;                    /**< maximum core file size								*/
+	uint64_t rlimit_nofile;                    /**< max files limit									*/
+	uint64_t rlimit_maxcore;                   /**< maximum core file size								*/
 	GHashTable *params;                        /**< params for worker									*/
 	GQueue *active_workers;                    /**< linked list of spawned workers						*/
 	gpointer ctx;                              /**< worker's context									*/
@@ -319,7 +319,7 @@ enum rspamd_gtube_patterns_policy {
 };
 
 struct rspamd_config_settings_elt {
-	guint32 id;
+	uint32_t id;
 	enum rspamd_config_settings_policy policy;
 	const gchar *name;
 	ucl_object_t *symbols_enabled;
@@ -367,16 +367,16 @@ struct rspamd_config {
 	enum rspamd_gtube_patterns_policy gtube_patterns_policy; /**< Enable test patterns								*/
 	gboolean enable_css_parser;                              /**< Enable css parsing in HTML							*/
 
-	gsize max_cores_size;       /**< maximum size occupied by rspamd core files			*/
-	gsize max_cores_count;      /**< maximum number of core files						*/
-	gchar *cores_dir;           /**< directory for core files							*/
-	gsize max_message;          /**< maximum size for messages							*/
-	gsize max_pic_size;         /**< maximum size for a picture to process				*/
-	gsize images_cache_size;    /**< size of LRU cache for DCT data from images			*/
-	gdouble task_timeout;       /**< maximum message processing time					*/
-	gint default_max_shots;     /**< default maximum count of symbols hits permitted (-1 for unlimited) */
-	gint32 heartbeats_loss_max; /**< number of heartbeats lost to consider worker's termination */
-	gdouble heartbeat_interval; /**< interval for heartbeats for workers				*/
+	gsize max_cores_size;        /**< maximum size occupied by rspamd core files			*/
+	gsize max_cores_count;       /**< maximum number of core files						*/
+	gchar *cores_dir;            /**< directory for core files							*/
+	gsize max_message;           /**< maximum size for messages							*/
+	gsize max_pic_size;          /**< maximum size for a picture to process				*/
+	gsize images_cache_size;     /**< size of LRU cache for DCT data from images			*/
+	gdouble task_timeout;        /**< maximum message processing time					*/
+	gint default_max_shots;      /**< default maximum count of symbols hits permitted (-1 for unlimited) */
+	int32_t heartbeats_loss_max; /**< number of heartbeats lost to consider worker's termination */
+	gdouble heartbeat_interval;  /**< interval for heartbeats for workers				*/
 
 	enum rspamd_log_type log_type;                      /**< log type											*/
 	gint log_facility;                                  /**< log facility in case of syslog						*/
@@ -384,7 +384,7 @@ struct rspamd_config {
 	gchar *log_file;                                    /**< path to logfile in case of file logging			*/
 	gboolean log_buffered;                              /**< whether logging is buffered						*/
 	gboolean log_silent_workers;                        /**< silence info messages from workers					*/
-	guint32 log_buf_size;                               /**< length of log buffer								*/
+	uint32_t log_buf_size;                              /**< length of log buffer								*/
 	const ucl_object_t *debug_ip_map;                   /**< turn on debugging for specified ip addresses       */
 	gboolean log_urls;                                  /**< whether we should log URLs                         */
 	GHashTable *debug_modules;                          /**< logging modules to debug							*/
@@ -440,10 +440,10 @@ struct rspamd_config {
 	gchar *events_backend; /**< string representation of the events backend used	*/
 
 	gdouble dns_timeout;             /**< timeout in milliseconds for waiting for dns reply	*/
-	guint32 dns_retransmits;         /**< maximum retransmits count							*/
-	guint32 dns_io_per_server;       /**< number of sockets per DNS server					*/
+	uint32_t dns_retransmits;        /**< maximum retransmits count							*/
+	uint32_t dns_io_per_server;      /**< number of sockets per DNS server					*/
 	const ucl_object_t *nameservers; /**< list of nameservers or NULL to parse resolv.conf	*/
-	guint32 dns_max_requests;        /**< limit of DNS requests per task 					*/
+	uint32_t dns_max_requests;       /**< limit of DNS requests per task 					*/
 	gboolean enable_dnssec;          /**< enable dnssec stub resolver						*/
 
 	guint upstream_max_errors;                /**< upstream max errors before shutting off			*/
@@ -760,7 +760,7 @@ void rspamd_config_register_settings_id(struct rspamd_config *cfg,
  * @param namelen
  * @return
  */
-guint32 rspamd_config_name_to_id(const gchar *name, gsize namelen);
+uint32_t rspamd_config_name_to_id(const gchar *name, gsize namelen);
 
 /**
  * Finds settings id element and obtain reference count (must be unrefed by caller)
@@ -770,7 +770,7 @@ guint32 rspamd_config_name_to_id(const gchar *name, gsize namelen);
  */
 struct rspamd_config_settings_elt *rspamd_config_find_settings_id_ref(
 	struct rspamd_config *cfg,
-	guint32 id);
+	uint32_t id);
 
 /**
  * Finds settings id element and obtain reference count (must be unrefed by callee)

@@ -43,8 +43,8 @@ struct rspamd_stat_sqlite3_rt {
 	struct rspamd_task *task;
 	struct rspamd_stat_sqlite3_db *db;
 	struct rspamd_statfile_config *cf;
-	gint64 user_id;
-	gint64 lang_id;
+	int64_t user_id;
+	int64_t lang_id;
 };
 
 static const char *create_tables_sql =
@@ -156,11 +156,11 @@ rspamd_sqlite3_backend_quark(void)
 	return g_quark_from_static_string("sqlite3-stat-backend");
 }
 
-static gint64
+static int64_t
 rspamd_sqlite3_get_user(struct rspamd_stat_sqlite3_db *db,
 						struct rspamd_task *task, gboolean learn)
 {
-	gint64 id = 0; /* Default user is 0 */
+	int64_t id = 0; /* Default user is 0 */
 	gint rc, err_idx;
 	const gchar *user = NULL;
 	struct rspamd_task **ptask;
@@ -215,11 +215,11 @@ rspamd_sqlite3_get_user(struct rspamd_stat_sqlite3_db *db,
 	return id;
 }
 
-static gint64
+static int64_t
 rspamd_sqlite3_get_language(struct rspamd_stat_sqlite3_db *db,
 							struct rspamd_task *task, gboolean learn)
 {
-	gint64 id = 0; /* Default language is 0 */
+	int64_t id = 0; /* Default language is 0 */
 	gint rc, err_idx;
 	guint i;
 	const gchar *language = NULL;
@@ -293,7 +293,7 @@ rspamd_sqlite3_opendb(rspamd_mempool_t *pool,
 	struct rspamd_stat_tokenizer *tokenizer;
 	gpointer tk_conf;
 	gsize sz = 0;
-	gint64 sz64 = 0;
+	int64_t sz64 = 0;
 	gchar *tok_conf_encoded;
 	gint ret, ntries = 0;
 	const gint max_tries = 100;
@@ -347,7 +347,7 @@ rspamd_sqlite3_opendb(rspamd_mempool_t *pool,
 
 		if (rspamd_sqlite3_run_prstmt(pool, bk->sqlite, bk->prstmt,
 									  RSPAMD_STAT_BACKEND_SAVE_TOKENIZER,
-									  (gint64) strlen(tok_conf_encoded),
+									  (int64_t) strlen(tok_conf_encoded),
 									  tok_conf_encoded) != SQLITE_OK) {
 			sqlite3_close(bk->sqlite);
 			g_free(bk);
@@ -526,7 +526,7 @@ rspamd_sqlite3_process_tokens(struct rspamd_task *task,
 {
 	struct rspamd_stat_sqlite3_db *bk;
 	struct rspamd_stat_sqlite3_rt *rt = p;
-	gint64 iv = 0;
+	int64_t iv = 0;
 	guint i;
 	rspamd_token_t *tok;
 
@@ -629,7 +629,7 @@ rspamd_sqlite3_learn_tokens(struct rspamd_task *task, GPtrArray *tokens,
 {
 	struct rspamd_stat_sqlite3_db *bk;
 	struct rspamd_stat_sqlite3_rt *rt = p;
-	gint64 iv = 0;
+	int64_t iv = 0;
 	guint i;
 	rspamd_token_t *tok;
 
@@ -735,7 +735,7 @@ rspamd_sqlite3_total_learns(struct rspamd_task *task, gpointer runtime,
 {
 	struct rspamd_stat_sqlite3_rt *rt = runtime;
 	struct rspamd_stat_sqlite3_db *bk;
-	guint64 res;
+	uint64_t res;
 
 	g_assert(rt != NULL);
 	bk = rt->db;
@@ -751,7 +751,7 @@ rspamd_sqlite3_inc_learns(struct rspamd_task *task, gpointer runtime,
 {
 	struct rspamd_stat_sqlite3_rt *rt = runtime;
 	struct rspamd_stat_sqlite3_db *bk;
-	guint64 res;
+	uint64_t res;
 
 	g_assert(rt != NULL);
 	bk = rt->db;
@@ -780,7 +780,7 @@ rspamd_sqlite3_dec_learns(struct rspamd_task *task, gpointer runtime,
 {
 	struct rspamd_stat_sqlite3_rt *rt = runtime;
 	struct rspamd_stat_sqlite3_db *bk;
-	guint64 res;
+	uint64_t res;
 
 	g_assert(rt != NULL);
 	bk = rt->db;
@@ -809,7 +809,7 @@ rspamd_sqlite3_learns(struct rspamd_task *task, gpointer runtime,
 {
 	struct rspamd_stat_sqlite3_rt *rt = runtime;
 	struct rspamd_stat_sqlite3_db *bk;
-	guint64 res;
+	uint64_t res;
 
 	g_assert(rt != NULL);
 	bk = rt->db;
@@ -828,7 +828,7 @@ rspamd_sqlite3_get_stat(gpointer runtime,
 	struct rspamd_stat_sqlite3_db *bk;
 	rspamd_mempool_t *pool;
 	struct stat st;
-	gint64 rev;
+	int64_t rev;
 
 	g_assert(rt != NULL);
 	bk = rt->db;
@@ -873,7 +873,7 @@ rspamd_sqlite3_load_tokenizer_config(gpointer runtime,
 									 gsize *len)
 {
 	gpointer tk_conf, copied_conf;
-	guint64 sz;
+	uint64_t sz;
 	struct rspamd_stat_sqlite3_rt *rt = runtime;
 	struct rspamd_stat_sqlite3_db *bk;
 

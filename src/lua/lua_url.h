@@ -37,7 +37,7 @@ struct lua_tree_cb_data {
 	gboolean sort;
 	gsize max_urls;
 	gdouble skip_prob;
-	guint64 random_seed;
+	uint64_t random_seed;
 };
 
 void lua_tree_url_callback(gpointer key, gpointer value, gpointer ud);

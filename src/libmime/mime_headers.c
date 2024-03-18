@@ -37,7 +37,7 @@ static void
 rspamd_mime_header_check_special(struct rspamd_task *task,
 								 struct rspamd_mime_header *rh)
 {
-	guint64 h;
+	uint64_t h;
 	const gchar *p, *end;
 	gchar *id;
 	gint max_recipients = -1, len;
@@ -819,7 +819,7 @@ gchar *
 rspamd_mime_header_encode(const gchar *in, gsize len)
 {
 	const gchar *p = in, *end = in + len;
-	gchar *out, encode_buf[80 * sizeof(guint32)];
+	gchar *out, encode_buf[80 * sizeof(uint32_t)];
 	GString *res;
 	gboolean need_encoding = FALSE;
 
@@ -902,15 +902,15 @@ gchar *
 rspamd_mime_message_id_generate(const gchar *fqdn)
 {
 	GString *out;
-	guint64 rnd, clk;
+	uint64_t rnd, clk;
 
 	out = g_string_sized_new(strlen(fqdn) + 22);
 	rnd = ottery_rand_uint64();
 	clk = rspamd_get_calendar_ticks() * 1e6;
 
 	rspamd_printf_gstring(out, "%*bs.%*bs@%s",
-						  (gint) sizeof(guint64) - 3, (guchar *) &clk,
-						  (gint) sizeof(guint64), (gchar *) &rnd,
+						  (gint) sizeof(uint64_t) - 3, (guchar *) &clk,
+						  (gint) sizeof(uint64_t), (gchar *) &rnd,
 						  fqdn);
 
 	return g_string_free(out, FALSE);

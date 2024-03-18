@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -50,11 +50,11 @@ static const gchar _hex[] = "0123456789abcdef";
 static const gchar _HEX[] = "0123456789ABCDEF";
 
 static gchar *
-rspamd_humanize_number(gchar *buf, gchar *last, gint64 num, gboolean bytes)
+rspamd_humanize_number(gchar *buf, gchar *last, int64_t num, gboolean bytes)
 {
 	const gchar *prefixes;
 	int i, r, remainder, sign;
-	gint64 divisor;
+	int64_t divisor;
 	gsize len = last - buf;
 
 	remainder = 0;
@@ -107,9 +107,9 @@ rspamd_humanize_number(gchar *buf, gchar *last, gint64 num, gboolean bytes)
 
 
 static inline unsigned
-rspamd_decimal_digits32(guint32 val)
+rspamd_decimal_digits32(uint32_t val)
 {
-	static const guint32 powers_of_10[] = {
+	static const uint32_t powers_of_10[] = {
 		0,
 		10,
 		100,
@@ -134,7 +134,7 @@ rspamd_decimal_digits32(guint32 val)
 											  11, 14, 16, 18, 22, 25, 3, 30,
 											  8, 12, 20, 28, 15, 17, 24, 7,
 											  19, 27, 23, 6, 26, 5, 4, 31};
-	guint32 v = val | 1;
+	uint32_t v = val | 1;
 
 	v |= v >> 1;
 	v |= v >> 2;
@@ -147,9 +147,9 @@ rspamd_decimal_digits32(guint32 val)
 }
 
 static inline unsigned
-rspamd_decimal_digits64(guint64 val)
+rspamd_decimal_digits64(uint64_t val)
 {
-	static const guint64 powers_of_10[] = {
+	static const uint64_t powers_of_10[] = {
 		0,
 		10ULL,
 		100ULL,
@@ -175,7 +175,7 @@ rspamd_decimal_digits64(guint64 val)
 #if defined(_MSC_VER)
 #if _M_IX86
 	unsigned long r = 0;
-	guint64 m = val | 1;
+	uint64_t m = val | 1;
 	if (_BitScanReverse(&r, m >> 32)) {
 		r += 32;
 	}
@@ -195,7 +195,7 @@ rspamd_decimal_digits64(guint64 val)
 											  11, 14, 16, 18, 22, 25, 3, 30,
 											  8, 12, 20, 28, 15, 17, 24, 7,
 											  19, 27, 23, 6, 26, 5, 4, 31};
-	guint32 v = val >> 32;
+	uint32_t v = val >> 32;
 
 	if (v) {
 		v |= 1;
@@ -256,7 +256,7 @@ static const char int_lookup_table[200] = {
 	'9', '5', '9', '6', '9', '7', '9', '8', '9', '9'};
 
 static inline guint
-rspamd_uint32_print(guint32 in, gchar *out)
+rspamd_uint32_print(uint32_t in, gchar *out)
 {
 	guint ndigits = rspamd_decimal_digits32(in);
 	gchar *p;
@@ -287,17 +287,17 @@ rspamd_uint32_print(guint32 in, gchar *out)
 }
 
 static inline guint
-rspamd_uint64_print(guint64 in, gchar *out)
+rspamd_uint64_print(uint64_t in, gchar *out)
 {
 	guint ndigits = rspamd_decimal_digits64(in);
-	guint32 v32;
+	uint32_t v32;
 	gchar *p;
 
 	p = out + ndigits - 1;
 
 	while (in >= 100000000) {
-		v32 = (guint32) (in % 100000000);
-		guint32 a, b, a1, a2, b1, b2;
+		v32 = (uint32_t) (in % 100000000);
+		uint32_t a, b, a1, a2, b1, b2;
 
 		/* Initial spill */
 		a = v32 / 10000;
@@ -321,7 +321,7 @@ rspamd_uint64_print(guint64 in, gchar *out)
 	}
 
 	/* Remaining 32 bit */
-	v32 = (guint32) in;
+	v32 = (uint32_t) in;
 
 	while (v32 >= 100) {
 		unsigned idx = (v32 % 100) << 1;
@@ -377,7 +377,7 @@ rspamd_ffsll(long long n)
 }
 
 static gchar *
-rspamd_sprintf_num(gchar *buf, gchar *last, guint64 ui64, gchar zero,
+rspamd_sprintf_num(gchar *buf, gchar *last, uint64_t ui64, gchar zero,
 				   guint hexadecimal, guint binary, guint width)
 {
 	gchar *p, temp[64];
@@ -387,7 +387,7 @@ rspamd_sprintf_num(gchar *buf, gchar *last, guint64 ui64, gchar zero,
 		p = temp;
 
 		if (ui64 < G_MAXUINT32) {
-			len = rspamd_uint32_print((guint32) ui64, temp);
+			len = rspamd_uint32_print((uint32_t) ui64, temp);
 		}
 		else {
 			len = rspamd_uint64_print(ui64, temp);
@@ -396,7 +396,7 @@ rspamd_sprintf_num(gchar *buf, gchar *last, guint64 ui64, gchar zero,
 	else if (hexadecimal == 1) {
 		p = temp + sizeof(temp);
 		do {
-			*--p = _hex[(guint32) (ui64 & 0xf)];
+			*--p = _hex[(uint32_t) (ui64 & 0xf)];
 		} while (ui64 >>= 4);
 
 		len = (temp + sizeof(temp)) - p;
@@ -404,7 +404,7 @@ rspamd_sprintf_num(gchar *buf, gchar *last, guint64 ui64, gchar zero,
 	else if (hexadecimal == 2) { /* hexadecimal == 2 */
 		p = temp + sizeof(temp);
 		do {
-			*--p = _HEX[(guint32) (ui64 & 0xf)];
+			*--p = _HEX[(uint32_t) (ui64 & 0xf)];
 		} while (ui64 >>= 4);
 
 		len = (temp + sizeof(temp)) - p;
@@ -625,8 +625,8 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 	gint d;
 	gdouble f;
 	glong written = 0, wr, slen;
-	gint64 i64;
-	guint64 ui64;
+	int64_t i64;
+	uint64_t ui64;
 	guint width, sign, hex, humanize, bytes, frac_width, b32, b64;
 	rspamd_fstring_t *v;
 	rspamd_ftok_t *tok;
@@ -917,62 +917,62 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 				continue;
 
 			case 'O':
-				i64 = (gint64) va_arg(args, off_t);
+				i64 = (int64_t) va_arg(args, off_t);
 				sign = 1;
 				break;
 
 			case 'P':
-				i64 = (gint64) va_arg(args, pid_t);
+				i64 = (int64_t) va_arg(args, pid_t);
 				sign = 1;
 				break;
 
 			case 't':
-				i64 = (gint64) va_arg(args, time_t);
+				i64 = (int64_t) va_arg(args, time_t);
 				sign = 1;
 				break;
 
 			case 'z':
 				if (sign) {
-					i64 = (gint64) va_arg(args, ssize_t);
+					i64 = (int64_t) va_arg(args, ssize_t);
 				}
 				else {
-					ui64 = (guint64) va_arg(args, size_t);
+					ui64 = (uint64_t) va_arg(args, size_t);
 				}
 				break;
 
 			case 'd':
 				if (sign) {
-					i64 = (gint64) va_arg(args, gint);
+					i64 = (int64_t) va_arg(args, gint);
 				}
 				else {
-					ui64 = (guint64) va_arg(args, guint);
+					ui64 = (uint64_t) va_arg(args, guint);
 				}
 				break;
 
 			case 'l':
 				if (sign) {
-					i64 = (gint64) va_arg(args, glong);
+					i64 = (int64_t) va_arg(args, glong);
 				}
 				else {
-					ui64 = (guint64) va_arg(args, gulong);
+					ui64 = (uint64_t) va_arg(args, gulong);
 				}
 				break;
 
 			case 'D':
 				if (sign) {
-					i64 = (gint64) va_arg(args, gint32);
+					i64 = (int64_t) va_arg(args, int32_t);
 				}
 				else {
-					ui64 = (guint64) va_arg(args, guint32);
+					ui64 = (uint64_t) va_arg(args, uint32_t);
 				}
 				break;
 
 			case 'L':
 				if (sign) {
-					i64 = va_arg(args, gint64);
+					i64 = va_arg(args, int64_t);
 				}
 				else {
-					ui64 = va_arg(args, guint64);
+					ui64 = va_arg(args, uint64_t);
 				}
 				break;
 
@@ -1062,10 +1062,10 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 			if (sign) {
 				if (i64 < 0) {
 					*p++ = '-';
-					ui64 = (guint64) -i64;
+					ui64 = (uint64_t) -i64;
 				}
 				else {
-					ui64 = (guint64) i64;
+					ui64 = (uint64_t) i64;
 				}
 			}
 

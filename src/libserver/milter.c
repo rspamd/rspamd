@@ -331,7 +331,7 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 	rspamd_fstring_t *buf;
 	const guchar *pos, *end, *zero;
 	guint cmdlen;
-	guint32 version, actions, protocol;
+	uint32_t version, actions, protocol;
 
 	buf = priv->parser.buf;
 	pos = buf->str + priv->parser.cmd_start;
@@ -689,7 +689,7 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 												 "\r\n", 2);
 		break;
 	case RSPAMD_MILTER_CMD_OPTNEG:
-		if (cmdlen != sizeof(guint32) * 3) {
+		if (cmdlen != sizeof(uint32_t) * 3) {
 			err = g_error_new(rspamd_milter_quark(), EINVAL, "invalid "
 															 "optneg command");
 			rspamd_milter_on_protocol_error(session, priv, err);
@@ -1268,7 +1268,7 @@ rspamd_milter_set_reply(struct rspamd_milter_session *session,
 
 #define SET_COMMAND(cmd, sz, reply, pos)                         \
 	do {                                                         \
-		guint32 _len;                                            \
+		uint32_t _len;                                           \
 		_len = (sz) + 1;                                         \
 		(reply) = rspamd_fstring_sized_new(sizeof(_len) + _len); \
 		(reply)->len = sizeof(_len) + _len;                      \
@@ -1282,7 +1282,7 @@ gboolean
 rspamd_milter_send_action(struct rspamd_milter_session *session,
 						  enum rspamd_milter_reply act, ...)
 {
-	guint32 ver, actions, protocol, idx;
+	uint32_t ver, actions, protocol, idx;
 	va_list ap;
 	guchar cmd, *pos;
 	rspamd_fstring_t *reply = NULL;
@@ -1331,14 +1331,14 @@ rspamd_milter_send_action(struct rspamd_milter_session *session,
 		break;
 	case RSPAMD_MILTER_CHGHEADER:
 	case RSPAMD_MILTER_INSHEADER:
-		idx = va_arg(ap, guint32);
+		idx = va_arg(ap, uint32_t);
 		name = va_arg(ap, GString *);
 		value = va_arg(ap, GString *);
 
 		msg_debug_milter("change/insert header command pos = %d- \"%v\"=\"%v\"",
 						 idx, name, value);
 		/* Name and value must be zero terminated */
-		SET_COMMAND(cmd, name->len + value->len + 2 + sizeof(guint32),
+		SET_COMMAND(cmd, name->len + value->len + 2 + sizeof(uint32_t),
 					reply, pos);
 		idx = htonl(idx);
 		memcpy(pos, &idx, sizeof(idx));
@@ -1366,16 +1366,16 @@ rspamd_milter_send_action(struct rspamd_milter_session *session,
 		memcpy(pos, value->str, value->len + 1);
 		break;
 	case RSPAMD_MILTER_OPTNEG:
-		ver = va_arg(ap, guint32);
-		actions = va_arg(ap, guint32);
-		protocol = va_arg(ap, guint32);
+		ver = va_arg(ap, uint32_t);
+		actions = va_arg(ap, uint32_t);
+		protocol = va_arg(ap, uint32_t);
 
 		msg_debug_milter("optneg reply: ver=%d, actions=%d, protocol=%d",
 						 ver, actions, protocol);
 		ver = htonl(ver);
 		actions = htonl(actions);
 		protocol = htonl(protocol);
-		SET_COMMAND(cmd, sizeof(guint32) * 3, reply, pos);
+		SET_COMMAND(cmd, sizeof(uint32_t) * 3, reply, pos);
 		memcpy(pos, &ver, sizeof(ver));
 		pos += sizeof(ver);
 		memcpy(pos, &actions, sizeof(actions));
@@ -1416,7 +1416,7 @@ rspamd_milter_del_header(struct rspamd_milter_session *session,
 						 GString *name)
 {
 	GString value;
-	guint32 idx = 1;
+	uint32_t idx = 1;
 
 	value.str = (gchar *) "";
 	value.len = 0;
@@ -1960,7 +1960,7 @@ rspamd_milter_process_milter_block(struct rspamd_milter_session *session,
 				hname = g_string_new(milter_ctx->spam_header);
 				hvalue = g_string_new(ucl_object_tostring(elt));
 				rspamd_milter_send_action(session, RSPAMD_MILTER_CHGHEADER,
-										  (guint32) 1, hname, hvalue);
+										  (uint32_t) 1, hname, hvalue);
 				g_string_free(hname, TRUE);
 				g_string_free(hvalue, TRUE);
 				rspamd_milter_send_action(session, RSPAMD_MILTER_ACCEPT);
@@ -1978,7 +1978,7 @@ rspamd_milter_process_milter_block(struct rspamd_milter_session *session,
 					hname = g_string_new(ucl_object_key(cur));
 					hvalue = g_string_new(ucl_object_tostring(cur));
 					rspamd_milter_send_action(session, RSPAMD_MILTER_CHGHEADER,
-											  (guint32) 1, hname, hvalue);
+											  (uint32_t) 1, hname, hvalue);
 					g_string_free(hname, TRUE);
 					g_string_free(hvalue, TRUE);
 				}
@@ -2169,7 +2169,7 @@ void rspamd_milter_send_task_results(struct rspamd_milter_session *session,
 			hvalue = g_string_new(ucl_object_tostring(elt));
 
 			rspamd_milter_send_action(session, RSPAMD_MILTER_CHGHEADER,
-									  (guint32) 1, hname, hvalue);
+									  (uint32_t) 1, hname, hvalue);
 			g_string_free(hname, TRUE);
 			g_string_free(hvalue, TRUE);
 		}
@@ -2186,7 +2186,7 @@ void rspamd_milter_send_task_results(struct rspamd_milter_session *session,
 		hname = g_string_new(milter_ctx->spam_header);
 		hvalue = g_string_new("Yes");
 		rspamd_milter_send_action(session, RSPAMD_MILTER_CHGHEADER,
-								  (guint32) 1, hname, hvalue);
+								  (uint32_t) 1, hname, hvalue);
 		g_string_free(hname, TRUE);
 		g_string_free(hvalue, TRUE);
 		rspamd_milter_send_action(session, RSPAMD_MILTER_ACCEPT);

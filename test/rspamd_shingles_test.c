@@ -136,7 +136,7 @@ test_case(gsize cnt, gsize max_len, gdouble perm_factor,
 	g_free(sgl_permuted);
 }
 
-static const guint64 expected_old[RSPAMD_SHINGLE_SIZE] = {
+static const uint64_t expected_old[RSPAMD_SHINGLE_SIZE] = {
 	0x2a97e024235cedc5,
 	0x46238acbcc55e9e0,
 	0x2378ff151af075b3,
@@ -171,7 +171,7 @@ static const guint64 expected_old[RSPAMD_SHINGLE_SIZE] = {
 	0x99fbca9f8563080,
 };
 
-static const guint64 expected_xxhash[RSPAMD_SHINGLE_SIZE] = {
+static const uint64_t expected_xxhash[RSPAMD_SHINGLE_SIZE] = {
 	0x33b134be11a705a,
 	0x36e2ea657aa36903,
 	0x6547b57f7470ce9d,
@@ -206,7 +206,7 @@ static const guint64 expected_xxhash[RSPAMD_SHINGLE_SIZE] = {
 	0x68454ef43da9c748,
 };
 
-static const guint64 expected_mumhash[RSPAMD_SHINGLE_SIZE] = {
+static const uint64_t expected_mumhash[RSPAMD_SHINGLE_SIZE] = {
 	0x38d35473b80a7fc3,
 	0x1300531adc2d16a1,
 	0x26883bc89f78f4bd,
@@ -241,7 +241,7 @@ static const guint64 expected_mumhash[RSPAMD_SHINGLE_SIZE] = {
 	0x33cb9190905e049a,
 };
 
-static const guint64 expected_fasthash[RSPAMD_SHINGLE_SIZE] = {
+static const uint64_t expected_fasthash[RSPAMD_SHINGLE_SIZE] = {
 	0x3843a716f94828a6,
 	0x13fd5386dda3b28d,
 	0x71cb09de527c40a,

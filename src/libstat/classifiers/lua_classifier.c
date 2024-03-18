@@ -136,7 +136,7 @@ lua_classifier_classify(struct rspamd_classifier *cl,
 	lua_State *L;
 	rspamd_token_t *tok;
 	guint i;
-	guint64 v;
+	uint64_t v;
 
 	ctx = g_hash_table_lookup(lua_classifiers, cl->subrs->name);
 	g_assert(ctx != NULL);
@@ -157,9 +157,9 @@ lua_classifier_classify(struct rspamd_classifier *cl,
 		v = tok->data;
 		lua_createtable(L, 3, 0);
 		/* High word, low word, order */
-		lua_pushinteger(L, (guint32) (v >> 32));
+		lua_pushinteger(L, (uint32_t) (v >> 32));
 		lua_rawseti(L, -2, 1);
-		lua_pushinteger(L, (guint32) (v));
+		lua_pushinteger(L, (uint32_t) (v));
 		lua_rawseti(L, -2, 2);
 		lua_pushinteger(L, tok->window_idx);
 		lua_rawseti(L, -2, 3);
@@ -191,7 +191,7 @@ lua_classifier_learn_spam(struct rspamd_classifier *cl,
 	lua_State *L;
 	rspamd_token_t *tok;
 	guint i;
-	guint64 v;
+	uint64_t v;
 
 	ctx = g_hash_table_lookup(lua_classifiers, cl->subrs->name);
 	g_assert(ctx != NULL);
@@ -213,9 +213,9 @@ lua_classifier_learn_spam(struct rspamd_classifier *cl,
 		v = tok->data;
 		lua_createtable(L, 3, 0);
 		/* High word, low word, order */
-		lua_pushinteger(L, (guint32) (v >> 32));
+		lua_pushinteger(L, (uint32_t) (v >> 32));
 		lua_rawseti(L, -2, 1);
-		lua_pushinteger(L, (guint32) (v));
+		lua_pushinteger(L, (uint32_t) (v));
 		lua_rawseti(L, -2, 2);
 		lua_pushinteger(L, tok->window_idx);
 		lua_rawseti(L, -2, 3);

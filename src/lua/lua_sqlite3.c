@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -133,7 +133,7 @@ lua_sqlite3_bind_statements(lua_State *L, gint start, gint end,
 		case LUA_TNUMBER:
 			n = lua_tonumber(L, i);
 
-			if (n == (gdouble) ((gint64) n)) {
+			if (n == (gdouble) ((int64_t) n)) {
 				sqlite3_bind_int64(stmt, num, n);
 			}
 			else {
@@ -214,7 +214,7 @@ lua_sqlite3_push_row(lua_State *L, sqlite3_stmt *stmt)
 {
 	const gchar *str;
 	gsize slen;
-	gint64 num;
+	int64_t num;
 	gchar numbuf[32];
 	gint nresults, i, type;
 

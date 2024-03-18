@@ -938,10 +938,10 @@ end:
 static void
 rspamd_language_detector_random_select(GArray *ucs_tokens, guint nwords,
 									   goffset *offsets_out,
-									   guint64 *seed)
+									   uint64_t *seed)
 {
 	guint step_len, remainder, i, out_idx;
-	guint64 coin, sel;
+	uint64_t coin, sel;
 	rspamd_stat_token_t *tok;
 
 	g_assert(nwords != 0);
@@ -1232,7 +1232,7 @@ rspamd_language_detector_detect_type(struct rspamd_task *task,
 	goffset *selected_words;
 	rspamd_stat_token_t *tok;
 	guint i;
-	guint64 seed;
+	uint64_t seed;
 
 	/* Seed PRNG with part digest to provide some sort of determinism */
 	memcpy(&seed, part->mime_part->digest, sizeof(seed));
@@ -1411,14 +1411,14 @@ rspamd_language_detector_unicode_scripts(struct rspamd_task *task,
 	const gchar *p = part->utf_stripped_content->data, *end;
 	guint i = 0, cnt = 0;
 	end = p + part->utf_stripped_content->len;
-	gint32 uc, sc;
+	int32_t uc, sc;
 	guint nlatin = 0, nchinese = 0, nspecial = 0;
 	const guint cutoff_limit = 32;
 
 	while (p + i < end) {
 		U8_NEXT(p, i, part->utf_stripped_content->len, uc);
 
-		if (((gint32) uc) < 0) {
+		if (((int32_t) uc) < 0) {
 			break;
 		}
 

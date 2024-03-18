@@ -55,7 +55,7 @@ static const gchar gtube_pattern_rewrite_subject[] = "ZJS*C4JDBQADN1.NSBN3*2IDNE
 static const gchar gtube_pattern_no_action[] = "AJS*C4JDBQADN1.NSBN3*2IDNEN*"
 											   "GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
 struct rspamd_multipattern *gtube_matcher = NULL;
-static const guint64 words_hash_seed = 0xdeadbabe;
+static const uint64_t words_hash_seed = 0xdeadbabe;
 
 static void
 free_byte_array_callback(void *pointer)
@@ -76,7 +76,7 @@ rspamd_mime_part_extract_words(struct rspamd_task *task,
 						  task->lang_det);
 
 		for (i = 0; i < part->utf_words->len; i++) {
-			guint64 h;
+			uint64_t h;
 
 			w = &g_array_index(part->utf_words, rspamd_stat_token_t, i);
 
@@ -155,14 +155,14 @@ rspamd_mime_part_create_words(struct rspamd_task *task,
 		const gchar *p = part->utf_stripped_content->data, *end;
 		guint i = 0;
 		end = p + part->utf_stripped_content->len;
-		gint32 uc, sc;
+		int32_t uc, sc;
 
 		tok_type = RSPAMD_TOKENIZE_UTF;
 
 		while (p + i < end) {
 			U8_NEXT(p, i, part->utf_stripped_content->len, uc);
 
-			if (((gint32) uc) < 0) {
+			if (((int32_t) uc) < 0) {
 				tok_type = RSPAMD_TOKENIZE_RAW;
 				break;
 			}
@@ -198,7 +198,7 @@ rspamd_mime_part_create_words(struct rspamd_task *task,
 
 	if (part->utf_words) {
 		part->normalized_hashes = g_array_sized_new(FALSE, FALSE,
-													sizeof(guint64), part->utf_words->len);
+													sizeof(uint64_t), part->utf_words->len);
 		rspamd_normalize_words(part->utf_words, task->task_pool);
 	}
 }
@@ -241,7 +241,7 @@ rspamd_strip_newlines_parse(struct rspamd_task *task,
 
 	while (p < pe) {
 		if (U8_IS_LEAD(*p) && is_utf) {
-			gint32 off = p - begin;
+			int32_t off = p - begin;
 			U8_NEXT(begin, off, pe - begin, uc);
 
 			if (uc != -1) {
@@ -575,7 +575,7 @@ rspamd_words_levenshtein_distance(struct rspamd_task *task,
 {
 	guint s1len, s2len, x, y, lastdiag, olddiag;
 	guint *column, ret;
-	guint64 h1, h2;
+	uint64_t h1, h2;
 	gint eq;
 	static const guint max_words = 8192;
 
@@ -607,8 +607,8 @@ rspamd_words_levenshtein_distance(struct rspamd_task *task,
 
 		for (y = 1, lastdiag = x - 1; y <= s1len; y++) {
 			olddiag = column[y];
-			h1 = g_array_index(w1, guint64, y - 1);
-			h2 = g_array_index(w2, guint64, x - 1);
+			h1 = g_array_index(w1, uint64_t, y - 1);
+			h2 = g_array_index(w2, uint64_t, x - 1);
 			eq = (h1 == h2) ? 1 : 0;
 			/*
 			 * Cost of replacement is twice higher than cost of add/delete
@@ -1150,7 +1150,7 @@ rspamd_message_parse(struct rspamd_task *task)
 	gsize len;
 	guint i;
 	GError *err = NULL;
-	guint64 n[2], seed;
+	uint64_t n[2], seed;
 
 	if (RSPAMD_TASK_IS_EMPTY(task)) {
 		/* Don't do anything with empty task */
@@ -1722,7 +1722,7 @@ void rspamd_message_unref(struct rspamd_message *msg)
 void rspamd_message_update_digest(struct rspamd_message *msg,
 								  const void *input, gsize len)
 {
-	guint64 n[2];
+	uint64_t n[2];
 	/* Sanity */
 	G_STATIC_ASSERT(sizeof(n) == sizeof(msg->digest));
 

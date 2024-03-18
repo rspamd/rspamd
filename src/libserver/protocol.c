@@ -1867,7 +1867,7 @@ end:
 #endif
 
 		/* Set average processing time */
-		guint32 slot;
+		uint32_t slot;
 		float processing_time = task->time_real_finish - task->task_timestamp;
 
 #ifndef HAVE_ATOMIC_BUILTINS
@@ -1890,7 +1890,7 @@ void rspamd_protocol_write_log_pipe(struct rspamd_task *task)
 	struct rspamd_scan_result *mres;
 	struct rspamd_symbol_result *sym;
 	gint id, i;
-	guint32 n = 0, nextra = 0;
+	uint32_t n = 0, nextra = 0;
 	gsize sz;
 	GArray *extra;
 	struct rspamd_protocol_log_symbol_result er;

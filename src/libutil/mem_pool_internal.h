@@ -33,15 +33,15 @@ enum rspamd_mempool_chain_type {
 #define ENTRY_NELTS 64
 
 struct entry_elt {
-	guint32 fragmentation;
-	guint32 leftover;
+	uint32_t fragmentation;
+	uint32_t leftover;
 };
 
 struct rspamd_mempool_entry_point {
 	gchar src[ENTRY_LEN];
-	guint32 cur_suggestion;
-	guint32 cur_elts;
-	guint32 cur_vars;
+	uint32_t cur_suggestion;
+	uint32_t cur_elts;
+	uint32_t cur_vars;
 	struct entry_elt elts[ENTRY_NELTS];
 };
 
@@ -63,7 +63,7 @@ struct rspamd_mempool_variable {
 };
 
 KHASH_INIT(rspamd_mempool_vars_hash,
-		   guint32, struct rspamd_mempool_variable, 1,
+		   uint32_t, struct rspamd_mempool_variable, 1,
 		   kh_int_hash_func, kh_int_hash_equal);
 
 struct rspamd_mempool_specific {

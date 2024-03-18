@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,7 +97,7 @@ struct upstream_list {
 	GPtrArray *ups;
 	GPtrArray *alive;
 	struct upstream_list_watcher *watchers;
-	guint64 hash_seed;
+	uint64_t hash_seed;
 	const struct upstream_limits *limits;
 	enum rspamd_upstream_flag flags;
 	guint cur_elt;
@@ -1492,10 +1492,10 @@ rspamd_upstream_get_round_robin(struct upstream_list *ups,
  *
  * http://arxiv.org/abs/1406.2294
  */
-static guint32
-rspamd_consistent_hash(guint64 key, guint32 nbuckets)
+static uint32_t
+rspamd_consistent_hash(uint64_t key, uint32_t nbuckets)
 {
-	gint64 b = -1, j = 0;
+	int64_t b = -1, j = 0;
 
 	while (j < nbuckets) {
 		b = j;
@@ -1511,8 +1511,8 @@ rspamd_upstream_get_hashed(struct upstream_list *ups,
 						   struct upstream *except,
 						   const guint8 *key, guint keylen)
 {
-	guint64 k;
-	guint32 idx;
+	uint64_t k;
+	uint32_t idx;
 	static const guint max_tries = 20;
 	struct upstream *up = NULL;
 

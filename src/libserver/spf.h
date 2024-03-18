@@ -75,7 +75,7 @@ struct spf_addr {
 			guint16 mask_v4;
 			guint16 mask_v6;
 		} dual;
-		guint32 idx;
+		uint32_t idx;
 	} m;
 	guint flags;
 	spf_mech_t mech;
@@ -96,7 +96,7 @@ struct spf_resolved {
 	guint ttl;
 	gint flags;
 	gdouble timestamp;
-	guint64 digest;
+	uint64_t digest;
 	GArray *elts;    /* Flat list of struct spf_addr */
 	ref_entry_t ref; /* Refcounting */
 };

@@ -78,7 +78,7 @@ lua_worker_get_stat(lua_State *L)
 		struct rspamd_stat *stat, stat_copy;
 		ucl_object_t *top, *sub;
 		gint i;
-		guint64 spam = 0, ham = 0;
+		uint64_t spam = 0, ham = 0;
 
 		memset(&mem_st, 0, sizeof(mem_st));
 		rspamd_mempool_stat(&mem_st);
@@ -481,7 +481,7 @@ struct rspamd_lua_process_cbdata {
 	gboolean is_error;
 	pid_t cpid;
 	lua_State *L;
-	guint64 sz;
+	uint64_t sz;
 	GString *io_buf;
 	GString *out_buf;
 	goffset out_pos;
@@ -495,7 +495,7 @@ rspamd_lua_execute_lua_subprocess(lua_State *L,
 								  struct rspamd_lua_process_cbdata *cbdata)
 {
 	gint err_idx, r;
-	guint64 wlen = 0;
+	uint64_t wlen = 0;
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
 	err_idx = lua_gettop(L);
@@ -639,12 +639,12 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 		(struct rspamd_lua_process_cbdata *) w->data;
 	gssize r;
 
-	if (cbdata->sz == (guint64) -1) {
-		guint64 sz;
+	if (cbdata->sz == (uint64_t) -1) {
+		uint64_t sz;
 
 		/* We read size of reply + flags first */
 		r = read(cbdata->sp[0], cbdata->io_buf->str + cbdata->io_buf->len,
-				 sizeof(guint64) - cbdata->io_buf->len);
+				 sizeof(uint64_t) - cbdata->io_buf->len);
 
 		if (r == 0) {
 			ev_io_stop(cbdata->event_loop, &cbdata->ev);
@@ -672,7 +672,7 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 
 		cbdata->io_buf->len += r;
 
-		if (cbdata->io_buf->len == sizeof(guint64)) {
+		if (cbdata->io_buf->len == sizeof(uint64_t)) {
 			memcpy((guchar *) &sz, cbdata->io_buf->str, sizeof(sz));
 
 			if (sz & (1ULL << 63)) {
@@ -790,7 +790,7 @@ lua_worker_spawn_process(lua_State *L)
 	cbdata->wrk = w;
 	cbdata->L = L;
 	cbdata->event_loop = actx->event_loop;
-	cbdata->sz = (guint64) -1;
+	cbdata->sz = (uint64_t) -1;
 
 	pid = fork();
 

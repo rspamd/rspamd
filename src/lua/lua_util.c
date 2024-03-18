@@ -760,12 +760,12 @@ static const struct luaL_reg ev_baselib_m[] = {
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
-static gint64
+static int64_t
 lua_check_int64(lua_State *L, gint pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_int64_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'int64' expected");
-	return ud ? *((gint64 *) ud) : 0LL;
+	return ud ? *((int64_t *) ud) : 0LL;
 }
 
 
@@ -1419,7 +1419,7 @@ static gint
 lua_util_is_uppercase(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gint32 i = 0;
+	int32_t i = 0;
 	UChar32 uc;
 	guint nlc = 0, nuc = 0;
 
@@ -1455,7 +1455,7 @@ static gint
 lua_util_humanize_number(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gint64 number = luaL_checkinteger(L, 1);
+	int64_t number = luaL_checkinteger(L, 1);
 	gchar numbuf[32];
 
 
@@ -1543,7 +1543,7 @@ lua_util_strlen_utf8(lua_State *L)
 	t = lua_check_text_or_string(L, 1);
 
 	if (t) {
-		gint32 i = 0, nchars = 0;
+		int32_t i = 0, nchars = 0;
 		UChar32 uc;
 
 		while (i < t->len) {
@@ -1569,7 +1569,7 @@ lua_util_lower_utf8(lua_State *L)
 	gchar *dst;
 	UChar32 uc;
 	UBool err = 0;
-	gint32 i = 0, j = 0;
+	int32_t i = 0, j = 0;
 
 	t = lua_check_text_or_string(L, 1);
 
@@ -2057,9 +2057,9 @@ static gint
 lua_util_caseless_hash(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	guint64 seed = 0xdeadbabe, h;
+	uint64_t seed = 0xdeadbabe, h;
 	struct rspamd_lua_text *t = NULL;
-	gint64 *r;
+	int64_t *r;
 
 	t = lua_check_text_or_string(L, 1);
 
@@ -2086,10 +2086,10 @@ static gint
 lua_util_caseless_hash_fast(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	guint64 seed = 0xdeadbabe, h;
+	uint64_t seed = 0xdeadbabe, h;
 	struct rspamd_lua_text *t = NULL;
 	union {
-		guint64 i;
+		uint64_t i;
 		double d;
 	} u;
 
@@ -2293,8 +2293,8 @@ lua_util_is_utf_outside_range(lua_State *L)
 	LUA_TRACE_POINT;
 	gint ret;
 	struct rspamd_lua_text *t = lua_check_text_or_string(L, 1);
-	guint32 range_start = lua_tointeger(L, 2);
-	guint32 range_end = lua_tointeger(L, 3);
+	uint32_t range_start = lua_tointeger(L, 2);
+	uint32_t range_end = lua_tointeger(L, 3);
 
 	static rspamd_lru_hash_t *validators;
 
@@ -2303,7 +2303,7 @@ lua_util_is_utf_outside_range(lua_State *L)
 	}
 
 	if (t) {
-		guint64 hash_key = (guint64) range_end << 32 || range_start;
+		uint64_t hash_key = (uint64_t) range_end << 32 || range_start;
 
 		USpoofChecker *validator = rspamd_lru_hash_lookup(validators, &hash_key, 0);
 
@@ -2311,7 +2311,7 @@ lua_util_is_utf_outside_range(lua_State *L)
 
 		if (validator == NULL) {
 			USet *allowed_chars;
-			guint64 *creation_hash_key = g_malloc(sizeof(guint64));
+			uint64_t *creation_hash_key = g_malloc(sizeof(uint64_t));
 			*creation_hash_key = hash_key;
 
 			validator = uspoof_open(&uc_err);
@@ -2344,7 +2344,7 @@ lua_util_is_utf_outside_range(lua_State *L)
 								   0, 0);
 		}
 
-		gint32 pos = 0;
+		int32_t pos = 0;
 		ret = uspoof_checkUTF8(validator, t->start, t->len, &pos,
 							   &uc_err);
 	}
@@ -2439,7 +2439,7 @@ static gint
 lua_util_has_obscured_unicode(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gint32 i = 0, prev_i;
+	int32_t i = 0, prev_i;
 	UChar32 uc;
 
 	struct rspamd_lua_text *t = lua_check_text_or_string(L, 1);
@@ -3411,7 +3411,7 @@ lua_util_unpack(lua_State *L)
 static int
 lua_util_btc_polymod(lua_State *L)
 {
-	guint64 c = 1;
+	uint64_t c = 1;
 
 	if (lua_type(L, 1) != LUA_TTABLE) {
 		return luaL_error(L, "invalid arguments");
@@ -3419,7 +3419,7 @@ lua_util_btc_polymod(lua_State *L)
 
 	for (lua_pushnil(L); lua_next(L, 1); lua_pop(L, 1)) {
 		guint8 c0 = c >> 35;
-		guint64 d = lua_tointeger(L, -1);
+		uint64_t d = lua_tointeger(L, -1);
 
 		c = ((c & 0x07ffffffff) << 5) ^ d;
 
@@ -3479,7 +3479,7 @@ void luaopen_util(lua_State *L)
 static int
 lua_int64_tostring(lua_State *L)
 {
-	gint64 n = lua_check_int64(L, 1);
+	int64_t n = lua_check_int64(L, 1);
 	gchar buf[32];
 	bool is_signed = false;
 
@@ -3504,7 +3504,7 @@ lua_int64_fromstring(lua_State *L)
 	struct rspamd_lua_text *t = lua_check_text_or_string(L, 1);
 
 	if (t && t->len > 0) {
-		guint64 u64;
+		uint64_t u64;
 		const char *p = t->start;
 		gsize len = t->len;
 		bool neg = false;
@@ -3529,7 +3529,7 @@ lua_int64_fromstring(lua_State *L)
 			return 2;
 		}
 
-		gint64 *i64_p = lua_newuserdata(L, sizeof(gint64));
+		int64_t *i64_p = lua_newuserdata(L, sizeof(int64_t));
 		rspamd_lua_setclass(L, rspamd_int64_classname, -1);
 		memcpy(i64_p, &u64, sizeof(u64));
 
@@ -3546,7 +3546,7 @@ lua_int64_fromstring(lua_State *L)
 static int
 lua_int64_tonumber(lua_State *L)
 {
-	gint64 n = lua_check_int64(L, 1);
+	int64_t n = lua_check_int64(L, 1);
 	gdouble d;
 
 	d = n;
@@ -3558,7 +3558,7 @@ lua_int64_tonumber(lua_State *L)
 static int
 lua_int64_hex(lua_State *L)
 {
-	gint64 n = lua_check_int64(L, 1);
+	int64_t n = lua_check_int64(L, 1);
 	gchar buf[32];
 
 	rspamd_snprintf(buf, sizeof(buf), "%XL", n);

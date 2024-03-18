@@ -61,7 +61,7 @@ rspamd_event_equal(const struct rspamd_async_event *ev1, const struct rspamd_asy
 	return ev1->fin == ev2->fin && ev1->user_data == ev2->user_data;
 }
 
-static inline guint64
+static inline uint64_t
 rspamd_event_hash(const struct rspamd_async_event *ev)
 {
 	union _pointer_fp_thunk {

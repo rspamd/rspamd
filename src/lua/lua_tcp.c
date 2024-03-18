@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -1539,7 +1539,7 @@ lua_tcp_request(lua_State *L)
 	struct iovec *iov = NULL;
 	struct upstream *up = NULL;
 	guint niov = 0, total_out;
-	guint64 h;
+	uint64_t h;
 	gdouble timeout = default_tcp_timeout;
 	gboolean partial = FALSE, do_shutdown = FALSE, do_read = TRUE,
 			 ssl = FALSE, ssl_noverify = FALSE;
@@ -1973,11 +1973,11 @@ lua_tcp_connect_sync(lua_State *L)
 	LUA_TRACE_POINT;
 	GError *err = NULL;
 
-	gint64 port = -1;
+	int64_t port = -1;
 	gdouble timeout = default_tcp_timeout;
 	const gchar *host = NULL;
 	gint ret;
-	guint64 h;
+	uint64_t h;
 
 	struct rspamd_task *task = NULL;
 	struct rspamd_async_session *session = NULL;

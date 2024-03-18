@@ -48,10 +48,10 @@ struct rspamd_logger_error_elt {
 struct rspamd_logger_error_log {
 	struct rspamd_logger_error_elt *elts;
 	rspamd_mempool_t *pool;
-	guint32 max_elts;
-	guint32 elt_len;
+	uint32_t max_elts;
+	uint32_t elt_len;
 	/* Avoid false cache sharing */
-	guchar __padding[64 - sizeof(gpointer) * 2 - sizeof(guint64)];
+	guchar __padding[64 - sizeof(gpointer) * 2 - sizeof(uint64_t)];
 	guint cur_row;
 };
 
@@ -78,7 +78,7 @@ struct rspamd_logger_s {
 	struct rspamd_radix_map_helper *debug_ip;
 	rspamd_mempool_mutex_t *mtx;
 	rspamd_mempool_t *pool;
-	guint64 log_cnt[4];
+	uint64_t log_cnt[4];
 };
 
 /*

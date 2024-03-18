@@ -181,7 +181,7 @@ guint rspamd_symcache_stats_symbols_count(struct rspamd_symcache *cache)
 	return real_cache->get_stats_symbols_count();
 }
 
-guint64
+uint64_t
 rspamd_symcache_get_cksum(struct rspamd_symcache *cache)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
@@ -362,7 +362,7 @@ void rspamd_symcache_process_settings_elt(struct rspamd_symcache *cache,
 
 bool rspamd_symcache_set_allowed_settings_ids(struct rspamd_symcache *cache,
 											  const gchar *symbol,
-											  const guint32 *ids,
+											  const uint32_t *ids,
 											  guint nids)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
@@ -379,7 +379,7 @@ bool rspamd_symcache_set_allowed_settings_ids(struct rspamd_symcache *cache,
 
 bool rspamd_symcache_set_forbidden_settings_ids(struct rspamd_symcache *cache,
 												const gchar *symbol,
-												const guint32 *ids,
+												const uint32_t *ids,
 												guint nids)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
@@ -394,7 +394,7 @@ bool rspamd_symcache_set_forbidden_settings_ids(struct rspamd_symcache *cache,
 	return true;
 }
 
-const guint32 *
+const uint32_t *
 rspamd_symcache_get_allowed_settings_ids(struct rspamd_symcache *cache,
 										 const gchar *symbol,
 										 guint *nids)
@@ -405,7 +405,7 @@ rspamd_symcache_get_allowed_settings_ids(struct rspamd_symcache *cache,
 	return item->allowed_ids.get_ids(*nids);
 }
 
-const guint32 *
+const uint32_t *
 rspamd_symcache_get_forbidden_settings_ids(struct rspamd_symcache *cache,
 										   const gchar *symbol,
 										   guint *nids)

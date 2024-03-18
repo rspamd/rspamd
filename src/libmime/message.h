@@ -138,7 +138,7 @@ struct rspamd_mime_text_part {
 	rspamd_ftok_t utf_content;        /* utf8 encoded processed content */
 	GByteArray *utf_raw_content;      /* utf raw content */
 	GByteArray *utf_stripped_content; /* utf content with no newlines */
-	GArray *normalized_hashes;        /* Array of guint64 */
+	GArray *normalized_hashes;        /* Array of uint64_t */
 	GArray *utf_words;                /* Array of rspamd_stat_token_t */
 	UText utf_stripped_text;          /* Used by libicu to represent the utf8 content */
 

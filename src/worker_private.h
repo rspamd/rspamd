@@ -27,12 +27,12 @@
 extern "C" {
 #endif
 
-static const guint64 rspamd_worker_magic = 0xb48abc69d601dc1dULL;
+static const uint64_t rspamd_worker_magic = 0xb48abc69d601dc1dULL;
 
 struct rspamd_lang_detector;
 
 struct rspamd_worker_ctx {
-	guint64 magic;
+	uint64_t magic;
 	/* Events base */
 	struct ev_loop *event_loop;
 	/* DNS resolver */
@@ -46,7 +46,7 @@ struct rspamd_worker_ctx {
 	/* Allow encrypted requests only using network */
 	gboolean encrypted_only;
 	/* Limit of tasks */
-	guint32 max_tasks;
+	uint32_t max_tasks;
 	/* Maximum time for task processing */
 	ev_tstamp task_timeout;
 	/* Encryption key */

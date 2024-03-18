@@ -26,33 +26,33 @@
  * Common statfile header
  */
 struct stat_file_header {
-	u_char magic[3];            /**< magic signature ('r' 's' 'd')      */
-	u_char version[2];          /**< version of statfile				*/
-	u_char padding[3];          /**< padding							*/
-	guint64 create_time;        /**< create time (time_t->guint64)		*/
-	guint64 revision;           /**< revision number					*/
-	guint64 rev_time;           /**< revision time						*/
-	guint64 used_blocks;        /**< used blocks number					*/
-	guint64 total_blocks;       /**< total number of blocks				*/
-	guint64 tokenizer_conf_len; /**< length of tokenizer configuration	*/
-	u_char unused[231];         /**< some bytes that can be used in future */
+	u_char magic[3];             /**< magic signature ('r' 's' 'd')      */
+	u_char version[2];           /**< version of statfile				*/
+	u_char padding[3];           /**< padding							*/
+	uint64_t create_time;        /**< create time (time_t->uint64_t)		*/
+	uint64_t revision;           /**< revision number					*/
+	uint64_t rev_time;           /**< revision time						*/
+	uint64_t used_blocks;        /**< used blocks number					*/
+	uint64_t total_blocks;       /**< total number of blocks				*/
+	uint64_t tokenizer_conf_len; /**< length of tokenizer configuration	*/
+	u_char unused[231];          /**< some bytes that can be used in future */
 };
 
 /**
  * Section header
  */
 struct stat_file_section {
-	guint64 code;   /**< section's code						*/
-	guint64 length; /**< section's length in blocks			*/
+	uint64_t code;   /**< section's code						*/
+	uint64_t length; /**< section's length in blocks			*/
 };
 
 /**
  * Block of data in statfile
  */
 struct stat_file_block {
-	guint32 hash1; /**< hash1 (also acts as index)			*/
-	guint32 hash2; /**< hash2								*/
-	double value;  /**< double value                       */
+	uint32_t hash1; /**< hash1 (also acts as index)			*/
+	uint32_t hash2; /**< hash2								*/
+	double value;   /**< double value                       */
 };
 
 /**
@@ -91,7 +91,7 @@ typedef struct {
 
 static void rspamd_mmaped_file_set_block_common(rspamd_mempool_t *pool,
 												rspamd_mmaped_file_t *file,
-												guint32 h1, guint32 h2, double value);
+												uint32_t h1, uint32_t h2, double value);
 
 rspamd_mmaped_file_t *rspamd_mmaped_file_open(rspamd_mempool_t *pool,
 											  const gchar *filename, size_t size,
@@ -104,8 +104,8 @@ gint rspamd_mmaped_file_close_file(rspamd_mempool_t *pool,
 
 double
 rspamd_mmaped_file_get_block(rspamd_mmaped_file_t *file,
-							 guint32 h1,
-							 guint32 h2)
+							 uint32_t h1,
+							 uint32_t h2)
 {
 	struct stat_file_block *block;
 	guint i, blocknum;
@@ -137,7 +137,7 @@ rspamd_mmaped_file_get_block(rspamd_mmaped_file_t *file,
 static void
 rspamd_mmaped_file_set_block_common(rspamd_mempool_t *pool,
 									rspamd_mmaped_file_t *file,
-									guint32 h1, guint32 h2, double value)
+									uint32_t h1, uint32_t h2, double value)
 {
 	struct stat_file_block *block, *to_expire = NULL;
 	struct stat_file_header *header;
@@ -215,15 +215,15 @@ rspamd_mmaped_file_set_block_common(rspamd_mempool_t *pool,
 
 void rspamd_mmaped_file_set_block(rspamd_mempool_t *pool,
 								  rspamd_mmaped_file_t *file,
-								  guint32 h1,
-								  guint32 h2,
+								  uint32_t h1,
+								  uint32_t h2,
 								  double value)
 {
 	rspamd_mmaped_file_set_block_common(pool, file, h1, h2, value);
 }
 
 gboolean
-rspamd_mmaped_file_set_revision(rspamd_mmaped_file_t *file, guint64 rev, time_t time)
+rspamd_mmaped_file_set_revision(rspamd_mmaped_file_t *file, uint64_t rev, time_t time)
 {
 	struct stat_file_header *header;
 
@@ -273,7 +273,7 @@ rspamd_mmaped_file_dec_revision(rspamd_mmaped_file_t *file)
 
 
 gboolean
-rspamd_mmaped_file_get_revision(rspamd_mmaped_file_t *file, guint64 *rev, time_t *time)
+rspamd_mmaped_file_get_revision(rspamd_mmaped_file_t *file, uint64_t *rev, time_t *time)
 {
 	struct stat_file_header *header;
 
@@ -293,13 +293,13 @@ rspamd_mmaped_file_get_revision(rspamd_mmaped_file_t *file, guint64 *rev, time_t
 	return TRUE;
 }
 
-guint64
+uint64_t
 rspamd_mmaped_file_get_used(rspamd_mmaped_file_t *file)
 {
 	struct stat_file_header *header;
 
 	if (file == NULL || file->map == NULL) {
-		return (guint64) -1;
+		return (uint64_t) -1;
 	}
 
 	header = (struct stat_file_header *) file->map;
@@ -307,13 +307,13 @@ rspamd_mmaped_file_get_used(rspamd_mmaped_file_t *file)
 	return header->used_blocks;
 }
 
-guint64
+uint64_t
 rspamd_mmaped_file_get_total(rspamd_mmaped_file_t *file)
 {
 	struct stat_file_header *header;
 
 	if (file == NULL || file->map == NULL) {
-		return (guint64) -1;
+		return (uint64_t) -1;
 	}
 
 	header = (struct stat_file_header *) file->map;
@@ -752,14 +752,14 @@ create:
 					 0,
 					 sizeof(header) + sizeof(section) + sizeof(block) * nblocks);
 
-	header.create_time = (guint64) time(NULL);
+	header.create_time = (uint64_t) time(NULL);
 	g_assert(stcf->clcf != NULL);
 	g_assert(stcf->clcf->tokenizer != NULL);
 	tokenizer = rspamd_stat_get_tokenizer(stcf->clcf->tokenizer->name);
 	g_assert(tokenizer != NULL);
 	tok_conf = tokenizer->get_config(pool, stcf->clcf->tokenizer, &tok_conf_len);
 	header.tokenizer_conf_len = tok_conf_len;
-	g_assert(tok_conf_len < sizeof(header.unused) - sizeof(guint64));
+	g_assert(tok_conf_len < sizeof(header.unused) - sizeof(uint64_t));
 	memcpy(header.unused, tok_conf, tok_conf_len);
 
 	if (write(fd, &header, sizeof(header)) == -1) {
@@ -775,7 +775,7 @@ create:
 		return -1;
 	}
 
-	section.length = (guint64) nblocks;
+	section.length = (uint64_t) nblocks;
 	if (write(fd, &section, sizeof(section)) == -1) {
 		msg_info_pool("cannot write section header to file %s, error %d, %s",
 					  filename,
@@ -944,7 +944,7 @@ rspamd_mmaped_file_process_tokens(struct rspamd_task *task, GPtrArray *tokens,
 								  gpointer p)
 {
 	rspamd_mmaped_file_t *mf = p;
-	guint32 h1, h2;
+	uint32_t h1, h2;
 	rspamd_token_t *tok;
 	guint i;
 
@@ -974,7 +974,7 @@ rspamd_mmaped_file_learn_tokens(struct rspamd_task *task, GPtrArray *tokens,
 								gpointer p)
 {
 	rspamd_mmaped_file_t *mf = p;
-	guint32 h1, h2;
+	uint32_t h1, h2;
 	rspamd_token_t *tok;
 	guint i;
 
@@ -997,7 +997,7 @@ rspamd_mmaped_file_total_learns(struct rspamd_task *task, gpointer runtime,
 								gpointer ctx)
 {
 	rspamd_mmaped_file_t *mf = (rspamd_mmaped_file_t *) runtime;
-	guint64 rev = 0;
+	uint64_t rev = 0;
 	time_t t;
 
 	if (mf != NULL) {
@@ -1012,7 +1012,7 @@ rspamd_mmaped_file_inc_learns(struct rspamd_task *task, gpointer runtime,
 							  gpointer ctx)
 {
 	rspamd_mmaped_file_t *mf = (rspamd_mmaped_file_t *) runtime;
-	guint64 rev = 0;
+	uint64_t rev = 0;
 	time_t t;
 
 	if (mf != NULL) {
@@ -1028,7 +1028,7 @@ rspamd_mmaped_file_dec_learns(struct rspamd_task *task, gpointer runtime,
 							  gpointer ctx)
 {
 	rspamd_mmaped_file_t *mf = (rspamd_mmaped_file_t *) runtime;
-	guint64 rev = 0;
+	uint64_t rev = 0;
 	time_t t;
 
 	if (mf != NULL) {
@@ -1045,7 +1045,7 @@ rspamd_mmaped_file_get_stat(gpointer runtime,
 							gpointer ctx)
 {
 	ucl_object_t *res = NULL;
-	guint64 rev;
+	uint64_t rev;
 	rspamd_mmaped_file_t *mf = (rspamd_mmaped_file_t *) runtime;
 
 	if (mf != NULL) {

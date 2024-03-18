@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -144,7 +144,7 @@ lua_cdb_get_input(lua_State *L, int pos, gsize *olen)
 
 		p = rspamd_lua_check_udata_maybe(L, pos, rspamd_int64_classname);
 		if (p) {
-			static char numbuf[sizeof(gint64)];
+			static char numbuf[sizeof(int64_t)];
 
 			memcpy(numbuf, p, sizeof(numbuf));
 			*olen = sizeof(numbuf);

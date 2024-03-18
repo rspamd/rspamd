@@ -3356,7 +3356,7 @@ lua_task_str_to_get_type(lua_State *L, struct rspamd_task *task, gint pos, gint 
 {
 	const gchar *type = NULL;
 	gint ret = LUA_ADDRESS_ANY;
-	guint64 h;
+	uint64_t h;
 	gsize sz;
 
 	/* Get what value */
@@ -5982,7 +5982,7 @@ lua_task_set_settings_id(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task(L, 1);
-	guint32 id = lua_tointeger(L, 2);
+	uint32_t id = lua_tointeger(L, 2);
 
 	if (task != NULL && id != 0) {
 

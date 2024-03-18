@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -361,7 +361,7 @@ rspamd_http_context_default(void)
 	return default_ctx;
 }
 
-gint32
+int32_t
 rspamd_keep_alive_key_hash(struct rspamd_keepalive_hash_key *k)
 {
 	rspamd_cryptobox_fast_hash_state_t hst;

@@ -34,7 +34,7 @@ rspamd_http_parse_date(const gchar *header, gsize len)
 	const gchar *p, *end;
 	gint month;
 	guint day, year, hour, min, sec;
-	guint64 time;
+	uint64_t time;
 	enum {
 		no = 0,
 		rfc822, /* Tue, 10 Nov 2002 23:50:13   */
@@ -257,7 +257,7 @@ rspamd_http_parse_date(const gchar *header, gsize len)
 
 	/* Gauss' formula for Gregorian days since March 1, 1 BC */
 
-	time = (guint64) (
+	time = (uint64_t) (
 			   /* days in years including leap years since March 1, 1 BC */
 
 			   365 * year + year / 4 - year / 100 + year / 400

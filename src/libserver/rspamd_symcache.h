@@ -66,7 +66,7 @@ enum rspamd_symbol_type {
  * Abstract structure for saving callback data for symbols
  */
 struct rspamd_abstract_callback_data {
-	guint64 magic;
+	uint64_t magic;
 	char data[];
 };
 
@@ -78,7 +78,7 @@ struct rspamd_symcache_item_stat {
 	gdouble avg_time;
 	gdouble weight;
 	guint hits;
-	guint64 total_hits;
+	uint64_t total_hits;
 	struct rspamd_counter_data frequency_counter;
 	gdouble avg_frequency;
 	gdouble stddev_frequency;
@@ -297,7 +297,7 @@ gboolean rspamd_symcache_is_checked(struct rspamd_task *task,
  * @param cache
  * @return
  */
-guint64 rspamd_symcache_get_cksum(struct rspamd_symcache *cache);
+uint64_t rspamd_symcache_get_cksum(struct rspamd_symcache *cache);
 
 /**
  * Checks if a symbols is enabled (not checked and conditions return true if present)
@@ -452,7 +452,7 @@ void rspamd_symcache_composites_foreach(struct rspamd_task *task,
  */
 bool rspamd_symcache_set_allowed_settings_ids(struct rspamd_symcache *cache,
 											  const gchar *symbol,
-											  const guint32 *ids,
+											  const uint32_t *ids,
 											  guint nids);
 /**
  * Sets denied settings ids for a symbol
@@ -463,7 +463,7 @@ bool rspamd_symcache_set_allowed_settings_ids(struct rspamd_symcache *cache,
  */
 bool rspamd_symcache_set_forbidden_settings_ids(struct rspamd_symcache *cache,
 												const gchar *symbol,
-												const guint32 *ids,
+												const uint32_t *ids,
 												guint nids);
 
 /**
@@ -473,9 +473,9 @@ bool rspamd_symcache_set_forbidden_settings_ids(struct rspamd_symcache *cache,
  * @param nids
  * @return
  */
-const guint32 *rspamd_symcache_get_allowed_settings_ids(struct rspamd_symcache *cache,
-														const gchar *symbol,
-														guint *nids);
+const uint32_t *rspamd_symcache_get_allowed_settings_ids(struct rspamd_symcache *cache,
+														 const gchar *symbol,
+														 guint *nids);
 
 /**
  * Returns denied ids for a symbol as a constant array
@@ -484,9 +484,9 @@ const guint32 *rspamd_symcache_get_allowed_settings_ids(struct rspamd_symcache *
  * @param nids
  * @return
  */
-const guint32 *rspamd_symcache_get_forbidden_settings_ids(struct rspamd_symcache *cache,
-														  const gchar *symbol,
-														  guint *nids);
+const uint32_t *rspamd_symcache_get_forbidden_settings_ids(struct rspamd_symcache *cache,
+														   const gchar *symbol,
+														   guint *nids);
 
 
 /**

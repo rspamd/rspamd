@@ -1802,7 +1802,7 @@ rspamd_url_maybe_regenerate_from_ip(struct rspamd_url *uri, rspamd_mempool_t *po
 	struct in_addr in4;
 	struct in6_addr in6;
 	gboolean ret = FALSE, check_num = TRUE;
-	guint32 n, dots, t = 0, i = 0, shift, nshift;
+	uint32_t n, dots, t = 0, i = 0, shift, nshift;
 
 	p = rspamd_url_host_unsafe(uri);
 	end = p + uri->hostlen;
@@ -2360,7 +2360,7 @@ rspamd_url_parse(struct rspamd_url *uri,
 	}
 
 	UChar *utf16_hostname, *norm_utf16;
-	gint32 utf16_len, norm_utf16_len, norm_utf8_len;
+	int32_t utf16_len, norm_utf16_len, norm_utf8_len;
 	UParseError parse_error;
 
 	utf16_hostname = rspamd_mempool_alloc(pool, uri->hostlen * sizeof(UChar));

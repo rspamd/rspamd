@@ -2399,20 +2399,20 @@ rspamd_config_settings_elt_dtor(struct rspamd_config_settings_elt *e)
 	}
 }
 
-guint32
+uint32_t
 rspamd_config_name_to_id(const gchar *name, gsize namelen)
 {
-	guint64 h;
+	uint64_t h;
 
 	h = rspamd_cryptobox_fast_hash_specific(RSPAMD_CRYPTOBOX_XXHASH64,
 											name, namelen, 0x0);
 	/* Take the lower part of hash as LE number */
-	return ((guint32) GUINT64_TO_LE(h));
+	return ((uint32_t) GUINT64_TO_LE(h));
 }
 
 struct rspamd_config_settings_elt *
 rspamd_config_find_settings_id_ref(struct rspamd_config *cfg,
-								   guint32 id)
+								   uint32_t id)
 {
 	struct rspamd_config_settings_elt *cur;
 
@@ -2431,7 +2431,7 @@ struct rspamd_config_settings_elt *rspamd_config_find_settings_name_ref(
 	struct rspamd_config *cfg,
 	const gchar *name, gsize namelen)
 {
-	guint32 id;
+	uint32_t id;
 
 	id = rspamd_config_name_to_id(name, namelen);
 
@@ -2445,7 +2445,7 @@ void rspamd_config_register_settings_id(struct rspamd_config *cfg,
 										enum rspamd_config_settings_policy policy)
 {
 	struct rspamd_config_settings_elt *elt;
-	guint32 id;
+	uint32_t id;
 
 	id = rspamd_config_name_to_id(name, strlen(name));
 	elt = rspamd_config_find_settings_id_ref(cfg, id);

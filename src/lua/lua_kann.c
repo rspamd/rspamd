@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1052,9 +1052,9 @@ lua_kann_train1(lua_State *L)
 
 	/* Default train params */
 	double lr = 0.001;
-	gint64 mini_size = 64;
-	gint64 max_epoch = 25;
-	gint64 max_drop_streak = 10;
+	int64_t mini_size = 64;
+	int64_t max_epoch = 25;
+	int64_t max_drop_streak = 10;
 	double frac_val = 0.1;
 	gint cbref = -1;
 

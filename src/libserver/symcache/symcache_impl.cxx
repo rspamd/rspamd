@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -856,7 +856,7 @@ auto symcache::validate(bool strict) -> bool
 
 	for (auto &pair: items_by_symbol) {
 		auto &item = pair.second;
-		auto ghost = item->st->weight == 0 ? true : false;
+		auto ghost = item->st->weight == 0;
 		auto skipped = !ghost;
 
 		if (item->is_scoreable() && g_hash_table_lookup(cfg->symbols, item->symbol.c_str()) == nullptr) {

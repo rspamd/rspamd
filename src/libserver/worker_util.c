@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -726,8 +726,8 @@ rspamd_worker_set_limits(struct rspamd_main *rspamd_main,
 		}
 		else {
 			msg_info_main("set max file descriptors limit: %HL cur and %HL max",
-						  (guint64) rlmt.rlim_cur,
-						  (guint64) rlmt.rlim_max);
+						  (uint64_t) rlmt.rlim_cur,
+						  (uint64_t) rlmt.rlim_max);
 		}
 	}
 	else {
@@ -739,8 +739,8 @@ rspamd_worker_set_limits(struct rspamd_main *rspamd_main,
 		}
 		else {
 			msg_info_main("use system max file descriptors limit: %HL cur and %HL max",
-						  (guint64) rlmt.rlim_cur,
-						  (guint64) rlmt.rlim_max);
+						  (uint64_t) rlmt.rlim_cur,
+						  (uint64_t) rlmt.rlim_max);
 		}
 	}
 
@@ -780,13 +780,13 @@ rspamd_worker_set_limits(struct rspamd_main *rspamd_main,
 								  "%HL was wanted, "
 								  "but we have %HL cur and %HL max",
 								  cf->rlimit_maxcore,
-								  (guint64) rlmt.rlim_cur,
-								  (guint64) rlmt.rlim_max);
+								  (uint64_t) rlmt.rlim_cur,
+								  (uint64_t) rlmt.rlim_max);
 				}
 				else {
 					msg_info_main("set max core size limit: %HL cur and %HL max",
-								  (guint64) rlmt.rlim_cur,
-								  (guint64) rlmt.rlim_max);
+								  (uint64_t) rlmt.rlim_cur,
+								  (uint64_t) rlmt.rlim_max);
 				}
 			}
 		}
@@ -799,8 +799,8 @@ rspamd_worker_set_limits(struct rspamd_main *rspamd_main,
 			}
 			else {
 				msg_info_main("use system max core size limit: %HL cur and %HL max",
-							  (guint64) rlmt.rlim_cur,
-							  (guint64) rlmt.rlim_max);
+							  (uint64_t) rlmt.rlim_cur,
+							  (uint64_t) rlmt.rlim_max);
 			}
 		}
 	}
@@ -1808,8 +1808,8 @@ rspamd_check_termination_clause(struct rspamd_main *rspamd_main,
 					WEXITSTATUS(res),
 					g_strsignal(WTERMSIG(res)),
 					wrk->cores_throttled ? "yes" : "no",
-					(gint64) rlmt.rlim_cur,
-					(gint64) rlmt.rlim_max);
+					(int64_t) rlmt.rlim_cur,
+					(int64_t) rlmt.rlim_max);
 #else
 				msg_warn_main(
 					"%s process %P terminated abnormally with exit code %d by signal: %s"
@@ -1884,7 +1884,7 @@ rspamd_worker_hyperscan_ready(struct rspamd_main *rspamd_main,
 #endif /* With Hyperscan */
 
 gboolean
-rspamd_worker_check_context(gpointer ctx, guint64 magic)
+rspamd_worker_check_context(gpointer ctx, uint64_t magic)
 {
 	struct rspamd_abstract_worker_ctx *actx = (struct rspamd_abstract_worker_ctx *) ctx;
 

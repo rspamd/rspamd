@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,8 +58,8 @@ RSPAMD_PACKED(rspamd_fuzzy_cmd)
 	guint8 cmd;
 	guint8 shingles_count;
 	guint8 flag;
-	gint32 value;
-	guint32 tag;
+	int32_t value;
+	uint32_t tag;
 	gchar digest[rspamd_cryptobox_HASHBYTES];
 };
 
@@ -71,9 +71,9 @@ RSPAMD_PACKED(rspamd_fuzzy_shingle_cmd)
 
 RSPAMD_PACKED(rspamd_fuzzy_reply_v1)
 {
-	gint32 value;
-	guint32 flag;
-	guint32 tag;
+	int32_t value;
+	uint32_t flag;
+	uint32_t tag;
 	float prob;
 };
 
@@ -81,7 +81,7 @@ RSPAMD_PACKED(rspamd_fuzzy_reply)
 {
 	struct rspamd_fuzzy_reply_v1 v1;
 	gchar digest[rspamd_cryptobox_HASHBYTES];
-	guint32 ts;
+	uint32_t ts;
 	guchar reserved[12];
 };
 
@@ -135,12 +135,12 @@ struct rspamd_fuzzy_cmd_extension {
 
 struct rspamd_fuzzy_stat_entry {
 	const gchar *name;
-	guint64 fuzzy_cnt;
+	uint64_t fuzzy_cnt;
 };
 
 RSPAMD_PACKED(fuzzy_peer_cmd)
 {
-	gint32 is_shingle;
+	int32_t is_shingle;
 	union {
 		struct rspamd_fuzzy_cmd normal;
 		struct rspamd_fuzzy_shingle_cmd shingle;

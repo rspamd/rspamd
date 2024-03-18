@@ -373,7 +373,7 @@ rspamd_log_write_ringbuffer(rspamd_logger_t *rspamd_log,
 							const gchar *module, const gchar *id,
 							const gchar *data, glong len)
 {
-	guint32 row_num;
+	uint32_t row_num;
 	struct rspamd_logger_error_log *elog;
 	struct rspamd_logger_error_elt *elt;
 
@@ -644,7 +644,7 @@ bool rspamd_conditional_debug_fast(rspamd_logger_t *rspamd_log,
 
 bool rspamd_conditional_debug_fast_num_id(rspamd_logger_t *rspamd_log,
 										  rspamd_inet_addr_t *addr,
-										  gint mod_id, const gchar *module, guint64 id,
+										  gint mod_id, const gchar *module, uint64_t id,
 										  const gchar *function, const gchar *fmt, ...)
 {
 	static gchar logbuf[LOGBUF_LEN], idbuf[64];
@@ -725,7 +725,7 @@ void rspamd_log_nodebug(rspamd_logger_t *rspamd_log)
 	rspamd_log->is_debug = FALSE;
 }
 
-const guint64 *
+const uint64_t *
 rspamd_log_counters(rspamd_logger_t *logger)
 {
 	if (logger) {
@@ -905,7 +905,7 @@ rspamd_log_line_hex_escape(const guchar *src, gsize srclen,
 	static const gchar hexdigests[16] = "0123456789ABCDEF";
 	gchar *d = dst;
 
-	static guint32 escape[] = {
+	static uint32_t escape[] = {
 		0xffffffff, /* 1111 1111 1111 1111  1111 1111 1111 1111 */
 
 		/* ?>=< ;:98 7654 3210  /.-, +*)( '&%$ #"!  */
@@ -952,7 +952,7 @@ rspamd_log_line_hex_escape(const guchar *src, gsize srclen,
 
 gsize rspamd_log_line_need_escape(const guchar *src, gsize srclen)
 {
-	static guint32 escape[] = {
+	static uint32_t escape[] = {
 		0xffffffff, /* 1111 1111 1111 1111  1111 1111 1111 1111 */
 
 		/* ?>=< ;:98 7654 3210  /.-, +*)( '&%$ #"!  */

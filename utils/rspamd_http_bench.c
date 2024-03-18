@@ -42,10 +42,10 @@ static gboolean csv_output = FALSE;
 
 /* Dynamic vars */
 static rspamd_inet_addr_t *addr;
-static guint32 workers_left = 0;
-static guint32 *conns_done = NULL;
+static uint32_t workers_left = 0;
+static uint32_t *conns_done = NULL;
 static const guint store_latencies = 1000;
-static guint32 conns_pending = 0;
+static uint32_t conns_pending = 0;
 
 static GOptionEntry entries[] = {
 	{"port", 'p', 0, G_OPTION_ARG_INT, &port,
@@ -91,7 +91,7 @@ rspamd_client_body(struct rspamd_http_connection *conn,
 
 struct client_cbdata {
 	struct lat_elt *lat;
-	guint32 *wconns;
+	uint32_t *wconns;
 	gdouble ts;
 	struct ev_loop *ev_base;
 };
@@ -130,7 +130,7 @@ rspamd_client_finish(struct rspamd_http_connection *conn,
 
 static void
 rspamd_http_client_func(struct ev_loop *ev_base, struct lat_elt *latency,
-						guint32 *wconns,
+						uint32_t *wconns,
 						struct rspamd_cryptobox_pubkey *peer_key,
 						struct rspamd_cryptobox_keypair *client_key,
 						struct rspamd_keypair_cache *c)
@@ -174,7 +174,7 @@ rspamd_http_client_func(struct ev_loop *ev_base, struct lat_elt *latency,
 }
 
 static void
-rspamd_worker_func(struct lat_elt *plat, guint32 *wconns)
+rspamd_worker_func(struct lat_elt *plat, uint32_t *wconns)
 {
 	guint i, j;
 	struct ev_loop *ev_base;
@@ -314,7 +314,7 @@ int main(int argc, char **argv)
 	struct ev_loop *ev_base;
 	rspamd_mempool_t *pool = rspamd_mempool_new(8192, "http-bench");
 	struct event term_ev, int_ev, cld_ev;
-	guint64 total_done;
+	uint64_t total_done;
 	FILE *lat_file;
 	gdouble mean, std;
 	guint i;
@@ -341,8 +341,8 @@ int main(int argc, char **argv)
 	latencies = rspamd_mempool_alloc_shared(pool,
 											nworkers * pconns * store_latencies * sizeof(*latencies));
 	sfd = g_malloc(sizeof(*sfd) * nworkers);
-	conns_done = rspamd_mempool_alloc_shared(pool, sizeof(guint32) * nworkers);
-	memset(conns_done, 0, sizeof(guint32) * nworkers);
+	conns_done = rspamd_mempool_alloc_shared(pool, sizeof(uint32_t) * nworkers);
+	memset(conns_done, 0, sizeof(uint32_t) * nworkers);
 
 	rspamd_http_start_workers(sfd);
 

@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -163,7 +163,7 @@ rspamd_param_maybe_rfc2231_process(rspamd_mempool_t *pool,
 	return TRUE;
 }
 
-static gint32
+static int32_t
 rspamd_cmp_pieces(struct rspamd_content_type_param *p1, struct rspamd_content_type_param *p2)
 {
 	return p1->rfc2231_id - p2->rfc2231_id;

@@ -27,7 +27,7 @@
 #define PCRE_FLAG(x) G_PASTE(PCRE2_, x)
 #endif
 
-#define RSPAMD_INVALID_ID ((guint64) -1LL)
+#define RSPAMD_INVALID_ID ((uint64_t) -1LL)
 #define RSPAMD_REGEXP_FLAG_RAW (1 << 1)
 #define RSPAMD_REGEXP_FLAG_NOOPT (1 << 2)
 #define RSPAMD_REGEXP_FLAG_FULL_MATCH (1 << 3)
@@ -164,12 +164,12 @@ guint rspamd_regexp_set_maxhits(rspamd_regexp_t *re, guint new_maxhits);
 /**
  * Returns cache id for a regexp
  */
-guint64 rspamd_regexp_get_cache_id(const rspamd_regexp_t *re);
+uint64_t rspamd_regexp_get_cache_id(const rspamd_regexp_t *re);
 
 /**
  * Sets cache id for a regexp
  */
-guint64 rspamd_regexp_set_cache_id(rspamd_regexp_t *re, guint64 id);
+uint64_t rspamd_regexp_set_cache_id(rspamd_regexp_t *re, uint64_t id);
 
 /**
  * Returns match limit for a regexp
@@ -241,7 +241,7 @@ void rspamd_regexp_cache_destroy(struct rspamd_regexp_cache *cache);
  * @param a
  * @return
  */
-guint32 rspamd_regexp_hash(gconstpointer a);
+uint32_t rspamd_regexp_hash(gconstpointer a);
 
 /**
  * Compare two regexp objects based on theirs ID

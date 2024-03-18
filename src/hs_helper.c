@@ -39,13 +39,13 @@ worker_t hs_helper_worker = {
 
 static const gdouble default_max_time = 1.0;
 static const gdouble default_recompile_time = 60.0;
-static const guint64 rspamd_hs_helper_magic = 0x22d310157a2288a0ULL;
+static const uint64_t rspamd_hs_helper_magic = 0x22d310157a2288a0ULL;
 
 /*
  * Worker's context
  */
 struct hs_helper_ctx {
-	guint64 magic;
+	uint64_t magic;
 	/* Events base */
 	struct ev_loop *event_loop;
 	/* DNS resolver */

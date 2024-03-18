@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -124,12 +124,12 @@ struct rspamd_charset_converter *rspamd_mime_get_converter_cached(
  * @param pErrorCode
  * @return
  */
-gint32
+int32_t
 rspamd_converter_to_uchars(struct rspamd_charset_converter *cnv,
 						   UChar *dest,
-						   gint32 destCapacity,
+						   int32_t destCapacity,
 						   const char *src,
-						   gint32 srcLength,
+						   int32_t srcLength,
 						   UErrorCode *pErrorCode);
 
 /**

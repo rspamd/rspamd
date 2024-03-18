@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -460,7 +460,7 @@ rspamd_parse_inet_address_ip4(const guchar *text, gsize len, gpointer target)
 {
 	const guchar *p;
 	guchar c;
-	guint32 addr = 0, *addrptr = target;
+	uint32_t addr = 0, *addrptr = target;
 	guint octet = 0, n = 0;
 
 	g_assert(text != NULL);
@@ -1728,7 +1728,7 @@ rspamd_inet_address_from_rnds(const struct rdns_reply_entry *rep)
 
 void rspamd_inet_address_apply_mask(rspamd_inet_addr_t *addr, guint mask)
 {
-	guint32 umsk, *p;
+	uint32_t umsk, *p;
 
 	if (mask > 0 && addr != NULL) {
 		if (addr->af == AF_INET && mask <= 32) {
@@ -1890,7 +1890,7 @@ guint rspamd_inet_address_hash(gconstpointer a)
 		int af;
 	} layout;
 
-	gint32 k;
+	int32_t k;
 
 	if (addr->af == AF_UNIX && addr->u.un) {
 		rspamd_cryptobox_fast_hash_state_t st;
@@ -1931,7 +1931,7 @@ guint rspamd_inet_address_port_hash(gconstpointer a)
 		int af;
 	} layout;
 
-	gint32 k;
+	int32_t k;
 
 	if (addr->af == AF_UNIX && addr->u.un) {
 		rspamd_cryptobox_fast_hash_state_t st;

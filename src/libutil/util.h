@@ -370,14 +370,14 @@ void rspamd_gstring_free_soft(gpointer p);
  * Returns some statically initialized random hash seed
  * @return hash seed
  */
-guint64 rspamd_hash_seed(void);
+uint64_t rspamd_hash_seed(void);
 
 /**
  * Returns random hex string of the specified length
  * @param buf
  * @param len
  */
-void rspamd_random_hex(gchar *buf, guint64 len);
+void rspamd_random_hex(gchar *buf, uint64_t len);
 
 /**
  * Returns
@@ -402,9 +402,9 @@ gdouble rspamd_random_double(void);
  * @return
  */
 gdouble rspamd_random_double_fast(void);
-gdouble rspamd_random_double_fast_seed(guint64 *seed);
+gdouble rspamd_random_double_fast_seed(uint64_t *seed);
 uint64_t rspamd_random_uint64_fast_seed(uint64_t *seed);
-guint64 rspamd_random_uint64_fast(void);
+uint64_t rspamd_random_uint64_fast(void);
 
 /**
  * Seed fast rng
@@ -459,21 +459,21 @@ gdouble rspamd_normalize_probability(gdouble x, gdouble bias);
  * @param tz timezone in format (hours * 100) + minutes
  * @return
  */
-guint64 rspamd_tm_to_time(const struct tm *tm, glong tz);
+uint64_t rspamd_tm_to_time(const struct tm *tm, glong tz);
 
 /**
  * Splits unix timestamp into struct tm using GMT timezone
  * @param ts
  * @param dest
  */
-void rspamd_gmtime(gint64 ts, struct tm *dest);
+void rspamd_gmtime(int64_t ts, struct tm *dest);
 
 /**
  * Split unix timestamp into struct tm using local timezone
  * @param ts
  * @param dest
  */
-void rspamd_localtime(gint64 ts, struct tm *dest);
+void rspamd_localtime(int64_t ts, struct tm *dest);
 
 #define PTR_ARRAY_FOREACH(ar, i, cur) for ((i) = 0; (ar) != NULL && (i) < (ar)->len && (((cur) = (__typeof__(cur)) g_ptr_array_index((ar), (i))) || 1); ++(i))
 
@@ -509,7 +509,7 @@ GPtrArray *rspamd_glob_path(const gchar *dir,
 struct rspamd_counter_data {
 	float mean;
 	float stddev;
-	guint64 number;
+	uint64_t number;
 };
 
 /**

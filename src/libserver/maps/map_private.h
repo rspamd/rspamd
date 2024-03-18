@@ -72,7 +72,7 @@ struct rspamd_http_map_cached_cbdata {
 	struct rspamd_storage_shmem *shm;
 	struct rspamd_map *map;
 	struct http_map_data *data;
-	guint64 gen;
+	uint64_t gen;
 	time_t last_checked;
 };
 
@@ -99,7 +99,7 @@ struct http_map_data {
 	time_t last_modified;
 	time_t last_checked;
 	gboolean request_sent;
-	guint64 gen;
+	uint64_t gen;
 	guint16 port;
 };
 
@@ -124,7 +124,7 @@ struct rspamd_map_backend {
 	gboolean is_fallback;
 	struct rspamd_map *map;
 	struct ev_loop *event_loop;
-	guint32 id;
+	uint32_t id;
 	struct rspamd_cryptobox_pubkey *trusted_pubkey;
 	union rspamd_map_backend_data data;
 	gchar *uri;
@@ -146,7 +146,7 @@ struct rspamd_map {
 	struct rspamd_worker *wrk;
 	gchar *description;
 	gchar *name;
-	guint32 id;
+	uint32_t id;
 	struct map_periodic_cbdata *scheduled_check;
 	rspamd_map_tmp_dtor tmp_dtor;
 	gpointer tmp_dtor_data;
@@ -156,7 +156,7 @@ struct rspamd_map {
 	GDestroyNotify on_load_ud_dtor;
 	gpointer lua_map;
 	gsize nelts;
-	guint64 digest;
+	uint64_t digest;
 	/* Should we check HTTP or just load cached data */
 	ev_tstamp timeout;
 	gdouble poll_timeout;

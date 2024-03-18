@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -452,10 +452,10 @@ lua_mempool_get_variable(lua_State *L)
 					}
 					else if (len == sizeof("int64") - 1 &&
 							 g_ascii_strncasecmp(pt, "int64", len) == 0) {
-						gint64 num;
-						memcpy(&num, pv, sizeof(gint64));
+						int64_t num;
+						memcpy(&num, pv, sizeof(int64_t));
 						lua_pushinteger(L, num);
-						pv += sizeof(gint64);
+						pv += sizeof(int64_t);
 					}
 					else if (len == sizeof("bool") - 1 &&
 							 g_ascii_strncasecmp(pt, "bool", len) == 0) {

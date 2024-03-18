@@ -84,7 +84,7 @@ static const guchar rspamd_hs_magic[] = {'r', 's', 'h', 's', 'r', 'e', '1', '1'}
 
 
 struct rspamd_re_class {
-	guint64 id;
+	uint64_t id;
 	enum rspamd_re_type type;
 	gboolean has_utf8; /* if there are any utf8 regexps */
 	gpointer type_data;
@@ -157,7 +157,7 @@ rspamd_re_cache_quark(void)
 	return g_quark_from_static_string("re_cache");
 }
 
-static guint64
+static uint64_t
 rspamd_re_cache_class_id(enum rspamd_re_type type,
 						 gconstpointer type_data,
 						 gsize datalen)
@@ -279,7 +279,7 @@ rspamd_re_cache_add(struct rspamd_re_cache *cache,
 					gconstpointer type_data, gsize datalen,
 					gint lua_cbref)
 {
-	guint64 class_id;
+	uint64_t class_id;
 	struct rspamd_re_class *re_class;
 	rspamd_regexp_t *nre;
 	struct rspamd_re_cache_elt *elt;
@@ -334,7 +334,7 @@ void rspamd_re_cache_replace(struct rspamd_re_cache *cache,
 							 rspamd_regexp_t *what,
 							 rspamd_regexp_t *with)
 {
-	guint64 re_id;
+	uint64_t re_id;
 	struct rspamd_re_class *re_class;
 	rspamd_regexp_t *src;
 	struct rspamd_re_cache_elt *elt;
@@ -590,7 +590,7 @@ rspamd_re_cache_process_pcre(struct rspamd_re_runtime *rt,
 	guint r = 0;
 	const gchar *start = NULL, *end = NULL;
 	guint max_hits = rspamd_regexp_get_maxhits(re);
-	guint64 id = rspamd_regexp_get_cache_id(re);
+	uint64_t id = rspamd_regexp_get_cache_id(re);
 	gdouble t1 = NAN, t2, pr;
 	const gdouble slow_time = 1e8;
 
@@ -736,7 +736,7 @@ rspamd_re_cache_process_regexp_data(struct rspamd_re_runtime *rt,
 									gboolean *processed_hyperscan)
 {
 
-	guint64 re_id;
+	uint64_t re_id;
 	guint ret = 0;
 	guint i;
 	struct rspamd_re_cache_elt *cache_elt;
@@ -834,7 +834,7 @@ rspamd_re_cache_finish_class(struct rspamd_task *task,
 {
 #ifdef WITH_HYPERSCAN
 	guint i;
-	guint64 re_id;
+	uint64_t re_id;
 	guint found = 0;
 
 	/* Set all bits that are not checked and included in hyperscan to 1 */
@@ -1504,7 +1504,7 @@ gint rspamd_re_cache_process(struct rspamd_task *task,
 							 gsize datalen,
 							 gboolean is_strong)
 {
-	guint64 re_id;
+	uint64_t re_id;
 	struct rspamd_re_class *re_class;
 	struct rspamd_re_cache *cache;
 	struct rspamd_re_runtime *rt;
@@ -1678,7 +1678,7 @@ enum rspamd_re_type
 rspamd_re_cache_type_from_string(const char *str)
 {
 	enum rspamd_re_type ret;
-	guint64 h;
+	uint64_t h;
 
 	/*
 	 * To optimize this function, we apply hash to input string and
@@ -1889,7 +1889,7 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 	hs_database_t *test_db;
 	gint fd, i, n, *hs_ids = NULL, pcre_flags, re_flags;
 	rspamd_cryptobox_fast_hash_state_t crc_st;
-	guint64 crc;
+	uint64_t crc;
 	rspamd_regexp_t *re;
 	hs_compile_error_t *hs_errors = NULL;
 	guint *hs_flags = NULL;
@@ -2273,7 +2273,7 @@ rspamd_re_cache_is_valid_hyperscan_file(struct rspamd_re_cache *cache,
 	hs_database_t *test_db = NULL;
 	guchar *map, *p, *end;
 	rspamd_cryptobox_fast_hash_state_t crc_st;
-	guint64 crc, valid_crc;
+	uint64_t crc, valid_crc;
 
 	len = strlen(path);
 
@@ -2406,7 +2406,7 @@ rspamd_re_cache_is_valid_hyperscan_file(struct rspamd_re_cache *cache,
 				p += sizeof(gint);
 
 				if (n <= 0 || 2 * n * sizeof(gint) +        /* IDs + flags */
-									  sizeof(guint64) +     /* crc */
+									  sizeof(uint64_t) +    /* crc */
 									  RSPAMD_HS_MAGIC_LEN + /* header */
 									  sizeof(cache->plt) >
 								  len) {
@@ -2437,7 +2437,7 @@ rspamd_re_cache_is_valid_hyperscan_file(struct rspamd_re_cache *cache,
 				rspamd_cryptobox_fast_hash_update(&crc_st, p + n * sizeof(gint),
 												  n * sizeof(gint));
 				/* HS database */
-				p += n * sizeof(gint) * 2 + sizeof(guint64);
+				p += n * sizeof(gint) * 2 + sizeof(uint64_t);
 				rspamd_cryptobox_fast_hash_update(&crc_st, p, end - p);
 				valid_crc = rspamd_cryptobox_fast_hash_final(&crc_st);
 
@@ -2539,7 +2539,7 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 			n = *(gint *) p;
 
 			if (n <= 0 || 2 * n * sizeof(gint) +        /* IDs + flags */
-								  sizeof(guint64) +     /* crc */
+								  sizeof(uint64_t) +    /* crc */
 								  RSPAMD_HS_MAGIC_LEN + /* header */
 								  sizeof(cache->plt) >
 							  (gsize) st.st_size) {
@@ -2567,7 +2567,7 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 			memcpy(hs_flags, p, n * sizeof(*hs_flags));
 
 			/* Skip crc */
-			p += n * sizeof(*hs_ids) + sizeof(guint64);
+			p += n * sizeof(*hs_ids) + sizeof(uint64_t);
 
 			/* Cleanup */
 			if (re_class->hs_scratch != NULL) {

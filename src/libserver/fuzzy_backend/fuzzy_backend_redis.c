@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1094,7 +1094,7 @@ rspamd_fuzzy_update_append_command(struct rspamd_fuzzy_backend *bk,
 		g_string_append(key, session->backend->redis_object);
 		g_string_append_len(key, cmd->digest, sizeof(cmd->digest));
 		value = g_string_sized_new(sizeof("18446744073709551616"));
-		rspamd_printf_gstring(value, "%L", (gint64) rspamd_get_calendar_ticks());
+		rspamd_printf_gstring(value, "%L", (int64_t) rspamd_get_calendar_ticks());
 		session->argv[cur_shift] = g_strdup("HSETNX");
 		session->argv_lens[cur_shift++] = sizeof("HSETNX") - 1;
 		session->argv[cur_shift] = key->str;

@@ -97,12 +97,12 @@ union rspamd_dkim_header_stat {
 		guint16 count;
 		guint16 flags;
 	} s;
-	guint32 n;
+	uint32_t n;
 };
 
 struct rspamd_dkim_common_ctx {
 	rspamd_mempool_t *pool;
-	guint64 sig_hash;
+	uint64_t sig_hash;
 	gsize len;
 	GPtrArray *hlist;
 	GHashTable *htable; /* header -> count mapping */
@@ -2469,7 +2469,7 @@ rspamd_dkim_canonize_header(struct rspamd_dkim_common_ctx *ctx,
 				}
 
 				if ((rh->flags & RSPAMD_HEADER_UNIQUE) && hdr_cnt > 1) {
-					guint64 random_cookie = ottery_rand_uint64();
+					uint64_t random_cookie = ottery_rand_uint64();
 
 					msg_warn_dkim("header %s is intended to be unique by"
 								  " email standards, but we have %d headers of this"
@@ -2586,8 +2586,8 @@ rspamd_dkim_canonize_header(struct rspamd_dkim_common_ctx *ctx,
 
 				DL_FOREACH(rh, cur)
 				{
-					guint64 th = rspamd_cryptobox_fast_hash(cur->decoded,
-															strlen(cur->decoded), rspamd_hash_seed());
+					uint64_t th = rspamd_cryptobox_fast_hash(cur->decoded,
+															 strlen(cur->decoded), rspamd_hash_seed());
 
 					if (th == ctx->sig_hash) {
 						rspamd_dkim_signature_update(ctx, cur->raw_value,

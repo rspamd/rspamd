@@ -402,7 +402,7 @@ lua_ip_to_number(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_ip *ip = lua_check_ip(L, 1);
-	guint32 c;
+	uint32_t c;
 	guint max, i;
 	guchar *ptr;
 

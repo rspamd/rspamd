@@ -35,7 +35,7 @@
 #endif
 
 
-static const guint64 map_hash_seed = 0xdeadbabeULL;
+static const uint64_t map_hash_seed = 0xdeadbabeULL;
 static const gchar *const hash_fill = "1";
 
 struct rspamd_map_helper_value {

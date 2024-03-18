@@ -114,7 +114,7 @@ char *rspamd_ftok_cstr(const rspamd_ftok_t *str)
 /*
  * Return fast hash value for fixed string converted to lowercase
  */
-guint32 rspamd_fstrhash_lc(const rspamd_ftok_t *str, gboolean is_utf);
+uint32_t rspamd_fstrhash_lc(const rspamd_ftok_t *str, gboolean is_utf);
 
 /**
  * Return true if two strings are equal

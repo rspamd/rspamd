@@ -942,7 +942,7 @@ static const struct luaL_reg monitoredlib_m[] = {
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
-static const guint64 rspamd_lua_callback_magic = 0x32c118af1e3263c7ULL;
+static const uint64_t rspamd_lua_callback_magic = 0x32c118af1e3263c7ULL;
 
 struct rspamd_config *
 lua_check_config(lua_State *L, gint pos)
@@ -1171,7 +1171,7 @@ lua_config_get_classifier(lua_State *L)
 }
 
 struct lua_callback_data {
-	guint64 magic;
+	uint64_t magic;
 	lua_State *L;
 	gchar *symbol;
 
@@ -1513,10 +1513,10 @@ rspamd_process_id_list(const gchar *entries)
 
 	sym_elts = g_strsplit_set(entries, ",;", -1);
 	guint nids = g_strv_length(sym_elts);
-	ret = g_array_sized_new(FALSE, FALSE, sizeof(guint32), nids);
+	ret = g_array_sized_new(FALSE, FALSE, sizeof(uint32_t), nids);
 
 	for (guint i = 0; i < nids; i++) {
-		guint32 v = rspamd_config_name_to_id(sym_elts[i], strlen(sym_elts[i]));
+		uint32_t v = rspamd_config_name_to_id(sym_elts[i], strlen(sym_elts[i]));
 		g_array_append_val(ret, v);
 	}
 
@@ -1613,12 +1613,12 @@ rspamd_register_symbol_fromlua(lua_State *L,
 
 	if (allowed_ids) {
 		rspamd_symcache_set_allowed_settings_ids(cfg->cache, name,
-												 &g_array_index(allowed_ids, guint32, 0), allowed_ids->len);
+												 &g_array_index(allowed_ids, uint32_t, 0), allowed_ids->len);
 	}
 
 	if (forbidden_ids) {
 		rspamd_symcache_set_forbidden_settings_ids(cfg->cache, name,
-												   &g_array_index(forbidden_ids, guint32, 0), forbidden_ids->len);
+												   &g_array_index(forbidden_ids, uint32_t, 0), forbidden_ids->len);
 	}
 
 	return ret;
@@ -1968,7 +1968,7 @@ lua_config_register_symbol(lua_State *L)
 	gboolean one_shot = FALSE;
 	gint ret = -1, cbref = -1;
 	guint type = 0, flags = 0;
-	gint64 parent = 0, priority = 0, nshots = 0;
+	int64_t parent = 0, priority = 0, nshots = 0;
 	GArray *allowed_ids = NULL, *forbidden_ids = NULL;
 	GError *err = NULL;
 	int prev_top = lua_gettop(L);
@@ -2007,10 +2007,10 @@ lua_config_register_symbol(lua_State *L)
 			allowed_ids = rspamd_process_id_list(lua_tostring(L, -1));
 		}
 		else if (lua_type(L, -1) == LUA_TTABLE) {
-			allowed_ids = g_array_sized_new(FALSE, FALSE, sizeof(guint32),
+			allowed_ids = g_array_sized_new(FALSE, FALSE, sizeof(uint32_t),
 											rspamd_lua_table_size(L, -1));
 			for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
-				guint32 v = lua_tointeger(L, -1);
+				uint32_t v = lua_tointeger(L, -1);
 				g_array_append_val(allowed_ids, v);
 			}
 		}
@@ -2022,10 +2022,10 @@ lua_config_register_symbol(lua_State *L)
 			forbidden_ids = rspamd_process_id_list(lua_tostring(L, -1));
 		}
 		else if (lua_type(L, -1) == LUA_TTABLE) {
-			forbidden_ids = g_array_sized_new(FALSE, FALSE, sizeof(guint32),
+			forbidden_ids = g_array_sized_new(FALSE, FALSE, sizeof(uint32_t),
 											  rspamd_lua_table_size(L, -1));
 			for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
-				guint32 v = lua_tointeger(L, -1);
+				uint32_t v = lua_tointeger(L, -1);
 				g_array_append_val(forbidden_ids, v);
 			}
 		}
@@ -2396,7 +2396,7 @@ lua_config_set_metric_symbol(lua_State *L)
 	GError *err = NULL;
 	gdouble priority = 0.0;
 	guint flags = 0;
-	gint64 nshots = 0;
+	int64_t nshots = 0;
 
 	if (cfg) {
 
@@ -2754,10 +2754,10 @@ lua_config_newindex(lua_State *L)
 				allowed_ids = rspamd_process_id_list(lua_tostring(L, -1));
 			}
 			else if (lua_type(L, -1) == LUA_TTABLE) {
-				allowed_ids = g_array_sized_new(FALSE, FALSE, sizeof(guint32),
+				allowed_ids = g_array_sized_new(FALSE, FALSE, sizeof(uint32_t),
 												rspamd_lua_table_size(L, -1));
 				for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
-					guint32 v = lua_tointeger(L, -1);
+					uint32_t v = lua_tointeger(L, -1);
 					g_array_append_val(allowed_ids, v);
 				}
 			}
@@ -2769,10 +2769,10 @@ lua_config_newindex(lua_State *L)
 				forbidden_ids = rspamd_process_id_list(lua_tostring(L, -1));
 			}
 			else if (lua_type(L, -1) == LUA_TTABLE) {
-				forbidden_ids = g_array_sized_new(FALSE, FALSE, sizeof(guint32),
+				forbidden_ids = g_array_sized_new(FALSE, FALSE, sizeof(uint32_t),
 												  rspamd_lua_table_size(L, -1));
 				for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
-					guint32 v = lua_tointeger(L, -1);
+					uint32_t v = lua_tointeger(L, -1);
 					g_array_append_val(forbidden_ids, v);
 				}
 			}
@@ -3521,7 +3521,7 @@ lua_config_get_symbols_cksum(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	guint64 res = 0, *pres;
+	uint64_t res = 0, *pres;
 
 	if (cfg != NULL) {
 		res = rspamd_symcache_get_cksum(cfg->cache);

@@ -74,7 +74,7 @@ void rspamd_sqlite3_close_prstmt(sqlite3 *db, GArray *stmts);
  */
 sqlite3 *rspamd_sqlite3_open_or_create(rspamd_mempool_t *pool,
 									   const gchar *path, const gchar *create_sql,
-									   guint32 version, GError **err);
+									   uint32_t version, GError **err);
 
 
 /**

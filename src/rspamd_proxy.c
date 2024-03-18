@@ -110,10 +110,10 @@ struct rspamd_http_mirror {
 	gboolean compress;
 };
 
-static const guint64 rspamd_rspamd_proxy_magic = 0xcdeb4fd1fc351980ULL;
+static const uint64_t rspamd_rspamd_proxy_magic = 0xcdeb4fd1fc351980ULL;
 
 struct rspamd_proxy_ctx {
-	guint64 magic;
+	uint64_t magic;
 	/* Events base */
 	struct ev_loop *event_loop;
 	/* DNS resolver */

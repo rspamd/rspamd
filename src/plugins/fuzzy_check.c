@@ -63,7 +63,7 @@ static const gchar *M = "fuzzy check";
 struct fuzzy_ctx;
 
 struct fuzzy_mapping {
-	guint64 fuzzy_flag;
+	uint64_t fuzzy_flag;
 	const gchar *symbol;
 	double weight;
 };
@@ -89,7 +89,7 @@ struct fuzzy_rule {
 	gboolean no_share;
 	gboolean no_subject;
 	gint learn_condition_cb;
-	guint32 retransmits;
+	uint32_t retransmits;
 	struct rspamd_hash_map_helper *skip_map;
 	struct fuzzy_ctx *ctx;
 	gint lua_id;
@@ -109,7 +109,7 @@ struct fuzzy_ctx {
 	gint check_mime_part_ref; /* Lua callback */
 	gint process_rule_ref;    /* Lua callback */
 	gint cleanup_rules_ref;
-	guint32 retransmits;
+	uint32_t retransmits;
 	gboolean enabled;
 };
 
@@ -170,8 +170,8 @@ struct fuzzy_learn_session {
 #define FUZZY_CHECK_FLAG_NOTEXT (1 << 2)
 
 struct fuzzy_cmd_io {
-	guint32 tag;
-	guint32 flags;
+	uint32_t tag;
+	uint32_t flags;
 	struct iovec io;
 	struct rspamd_mime_part *part;
 	struct rspamd_fuzzy_cmd cmd;
@@ -297,7 +297,7 @@ parse_fuzzy_headers(struct rspamd_config *cfg, const gchar *str)
 }
 
 static double
-fuzzy_normalize(gint32 in, double weight)
+fuzzy_normalize(int32_t in, double weight)
 {
 	if (weight == 0) {
 		return 0;
@@ -1335,7 +1335,7 @@ static struct fuzzy_cmd_io *
 fuzzy_cmd_stat(struct fuzzy_rule *rule,
 			   int c,
 			   gint flag,
-			   guint32 weight,
+			   uint32_t weight,
 			   rspamd_mempool_t *pool)
 {
 	struct rspamd_fuzzy_cmd *cmd;
@@ -1431,7 +1431,7 @@ fuzzy_cmd_hash(struct fuzzy_rule *rule,
 			   int c,
 			   const rspamd_ftok_t *hash,
 			   gint flag,
-			   guint32 weight,
+			   uint32_t weight,
 			   rspamd_mempool_t *pool)
 {
 	struct rspamd_fuzzy_cmd *cmd;
@@ -1708,7 +1708,7 @@ fuzzy_cmd_from_text_part(struct rspamd_task *task,
 						 struct fuzzy_rule *rule,
 						 int c,
 						 gint flag,
-						 guint32 weight,
+						 uint32_t weight,
 						 gboolean short_text,
 						 struct rspamd_mime_text_part *part,
 						 struct rspamd_mime_part *mp)
@@ -1940,7 +1940,7 @@ static struct fuzzy_cmd_io *
 fuzzy_cmd_from_image_part (struct fuzzy_rule *rule,
 						   int c,
 						   gint flag,
-						   guint32 weight,
+						   uint32_t weight,
 						   struct rspamd_task *task,
 						   struct rspamd_image *img,
 						   struct rspamd_mime_part *mp)
@@ -2038,7 +2038,7 @@ static struct fuzzy_cmd_io *
 fuzzy_cmd_from_data_part(struct fuzzy_rule *rule,
 						 int c,
 						 gint flag,
-						 guint32 weight,
+						 uint32_t weight,
 						 struct rspamd_task *task,
 						 guchar digest[rspamd_cryptobox_HASHBYTES],
 						 struct rspamd_mime_part *mp)
@@ -2477,7 +2477,7 @@ fuzzy_check_try_read(struct fuzzy_client_session *session)
 						g_hash_table_insert(stats_hash, (char *) pval->name, pval);
 					}
 
-					pval->fuzzy_cnt = (((guint64) rep->v1.value) << 32) + rep->v1.flag;
+					pval->fuzzy_cnt = (((uint64_t) rep->v1.value) << 32) + rep->v1.flag;
 				}
 			}
 			else if (rep->v1.value == 403) {
@@ -3089,7 +3089,7 @@ cleanup:
 
 static GPtrArray *
 fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
-						gint c, gint flag, guint32 value, guint flags)
+						gint c, gint flag, uint32_t value, guint flags)
 {
 	struct rspamd_mime_text_part *part;
 	struct rspamd_mime_part *mime_part;

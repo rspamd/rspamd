@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -864,7 +864,7 @@ rspamd_parse_expression(const gchar *line, gsize len,
 	e->evals = 0;
 	e->next_resort = ottery_rand_range(MAX_RESORT_EVALS) + MIN_RESORT_EVALS;
 	e->log_id = g_malloc0(RSPAMD_LOG_ID_LEN + 1);
-	guint64 h = rspamd_cryptobox_fast_hash(line, len, 0xdeadbabe);
+	uint64_t h = rspamd_cryptobox_fast_hash(line, len, 0xdeadbabe);
 	rspamd_snprintf(e->log_id, RSPAMD_LOG_ID_LEN + 1, "%xL", h);
 	msg_debug_expression("start to parse expression '%*s'", (int) len, line);
 
@@ -1538,8 +1538,8 @@ rspamd_ast_string_traverse(GNode *n, gpointer d)
 							  (int) elt->p.atom->len, elt->p.atom->str);
 	}
 	else if (elt->type == ELT_LIMIT) {
-		if (elt->p.lim == (double) (gint64) elt->p.lim) {
-			rspamd_printf_gstring(res, "%L", (gint64) elt->p.lim);
+		if (elt->p.lim == (double) (int64_t) elt->p.lim) {
+			rspamd_printf_gstring(res, "%L", (int64_t) elt->p.lim);
 		}
 		else {
 			rspamd_printf_gstring(res, "%f", elt->p.lim);

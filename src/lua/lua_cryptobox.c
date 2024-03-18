@@ -1124,35 +1124,35 @@ rspamd_lua_hash_create(const gchar *type, const gchar *key, gsize keylen)
 			h->content.fh = rspamd_cryptobox_fast_hash_new();
 			rspamd_cryptobox_fast_hash_init_specific(h->content.fh,
 													 RSPAMD_CRYPTOBOX_XXHASH64, 0);
-			h->out_len = sizeof(guint64);
+			h->out_len = sizeof(uint64_t);
 		}
 		else if (g_ascii_strcasecmp(type, "xxh32") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_XXHASH32;
 			h->content.fh = rspamd_cryptobox_fast_hash_new();
 			rspamd_cryptobox_fast_hash_init_specific(h->content.fh,
 													 RSPAMD_CRYPTOBOX_XXHASH32, 0);
-			h->out_len = sizeof(guint32);
+			h->out_len = sizeof(uint32_t);
 		}
 		else if (g_ascii_strcasecmp(type, "xxh3") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_XXHASH3;
 			h->content.fh = rspamd_cryptobox_fast_hash_new();
 			rspamd_cryptobox_fast_hash_init_specific(h->content.fh,
 													 RSPAMD_CRYPTOBOX_XXHASH3, 0);
-			h->out_len = sizeof(guint64);
+			h->out_len = sizeof(uint64_t);
 		}
 		else if (g_ascii_strcasecmp(type, "mum") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_MUM;
 			h->content.fh = rspamd_cryptobox_fast_hash_new();
 			rspamd_cryptobox_fast_hash_init_specific(h->content.fh,
 													 RSPAMD_CRYPTOBOX_MUMHASH, 0);
-			h->out_len = sizeof(guint64);
+			h->out_len = sizeof(uint64_t);
 		}
 		else if (g_ascii_strcasecmp(type, "t1ha") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_T1HA;
 			h->content.fh = rspamd_cryptobox_fast_hash_new();
 			rspamd_cryptobox_fast_hash_init_specific(h->content.fh,
 													 RSPAMD_CRYPTOBOX_T1HA, 0);
-			h->out_len = sizeof(guint64);
+			h->out_len = sizeof(uint64_t);
 		}
 		else if (g_ascii_strcasecmp(type, "blake2") == 0) {
 			rspamd_lua_hash_init_default(h, key, keylen);
@@ -1500,7 +1500,7 @@ lua_cryptobox_hash_reset(lua_State *L)
 static void
 lua_cryptobox_hash_finish(struct rspamd_lua_cryptobox_hash *h)
 {
-	guint64 ll;
+	uint64_t ll;
 	guchar out[rspamd_cryptobox_HASHBYTES];
 	guint ssl_outlen = sizeof(out);
 
@@ -2288,7 +2288,7 @@ lua_cryptobox_encrypt_cookie(lua_State *L)
 	guchar nonce[RSPAMD_CRYPTOBOX_AES_BLOCKSIZE];
 	guchar aes_key[RSPAMD_CRYPTOBOX_AES_KEYSIZE];
 	guchar result[RSPAMD_CRYPTOBOX_AES_BLOCKSIZE * 2];
-	guint32 ts;
+	uint32_t ts;
 
 	const gchar *sk, *cookie;
 	gsize sklen, cookie_len;
@@ -2315,10 +2315,10 @@ lua_cryptobox_encrypt_cookie(lua_State *L)
 		}
 
 		/* Fill nonce */
-		ottery_rand_bytes(nonce, sizeof(guint64) + sizeof(guint32));
-		ts = (guint32) rspamd_get_calendar_ticks();
+		ottery_rand_bytes(nonce, sizeof(uint64_t) + sizeof(uint32_t));
+		ts = (uint32_t) rspamd_get_calendar_ticks();
 		ts = GUINT32_TO_LE(ts);
-		memcpy(nonce + sizeof(guint64) + sizeof(guint32), &ts, sizeof(ts));
+		memcpy(nonce + sizeof(uint64_t) + sizeof(uint32_t), &ts, sizeof(ts));
 
 		/* Prepare padded cookie */
 		memset(padded_cookie, 0, sizeof(padded_cookie));
@@ -2379,7 +2379,7 @@ lua_cryptobox_decrypt_cookie(lua_State *L)
 	guchar nonce[RSPAMD_CRYPTOBOX_AES_BLOCKSIZE];
 	guchar aes_key[RSPAMD_CRYPTOBOX_AES_KEYSIZE];
 	guchar *src;
-	guint32 ts;
+	uint32_t ts;
 
 	const gchar *sk, *cookie;
 	gsize sklen, cookie_len;
@@ -2420,7 +2420,7 @@ lua_cryptobox_decrypt_cookie(lua_State *L)
 		EVP_CIPHER_CTX_set_padding(ctx, 0);
 
 		/* Copy time */
-		memcpy(&ts, src + sizeof(guint64) + sizeof(guint32), sizeof(ts));
+		memcpy(&ts, src + sizeof(uint64_t) + sizeof(uint32_t), sizeof(ts));
 		ts = GUINT32_FROM_LE(ts);
 		bklen = sizeof(nonce);
 		blk = nonce;

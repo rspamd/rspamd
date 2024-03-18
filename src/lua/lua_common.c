@@ -471,7 +471,7 @@ set:
 static int
 rspamd_lua_rspamd_version_numeric(lua_State *L)
 {
-	static gint64 version_num = RSPAMD_VERSION_NUM;
+	static int64_t version_num = RSPAMD_VERSION_NUM;
 	const gchar *type;
 
 	if (lua_gettop(L) >= 2 && lua_type(L, 1) == LUA_TSTRING) {
@@ -1428,15 +1428,15 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 
 			case 'I':
 				if (t == LUA_TNUMBER) {
-					*(va_arg(ap, gint64 *)) = lua_tointeger(L, idx);
+					*(va_arg(ap, int64_t *)) = lua_tointeger(L, idx);
 				}
 				else if (t == LUA_TNIL || t == LUA_TNONE) {
 					failed = TRUE;
 					if (how != RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING) {
-						*(va_arg(ap, gint64 *)) = 0;
+						*(va_arg(ap, int64_t *)) = 0;
 					}
 					else {
-						(void) va_arg(ap, gint64 *);
+						(void) va_arg(ap, int64_t *);
 					}
 				}
 				else {
@@ -1460,15 +1460,15 @@ rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
 
 			case 'i':
 				if (t == LUA_TNUMBER) {
-					*(va_arg(ap, gint32 *)) = lua_tointeger(L, idx);
+					*(va_arg(ap, int32_t *)) = lua_tointeger(L, idx);
 				}
 				else if (t == LUA_TNIL || t == LUA_TNONE) {
 					failed = TRUE;
 					if (how != RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING) {
-						*(va_arg(ap, gint32 *)) = 0;
+						*(va_arg(ap, int32_t *)) = 0;
 					}
 					else {
-						(void) va_arg(ap, gint32 *);
+						(void) va_arg(ap, int32_t *);
 					}
 				}
 				else {
@@ -2575,7 +2575,7 @@ bool rspamd_lua_universal_pcall(lua_State *L, gint cbref, const gchar *strloc,
 	}
 	/*
 	 * Possible arguments
-	 * - i - lua_integer, argument - gint64
+	 * - i - lua_integer, argument - int64_t
 	 * - n - lua_number, argument - gdouble
 	 * - s - lua_string, argument - const gchar * (zero terminated)
 	 * - l - lua_lstring, argument - (size_t + const gchar *) pair
@@ -2587,7 +2587,7 @@ bool rspamd_lua_universal_pcall(lua_State *L, gint cbref, const gchar *strloc,
 	while (*argp) {
 		switch (*argp) {
 		case 'i':
-			lua_pushinteger(L, va_arg(ap, gint64));
+			lua_pushinteger(L, va_arg(ap, int64_t));
 			nargs++;
 			break;
 		case 'n':

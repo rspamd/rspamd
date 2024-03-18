@@ -13,7 +13,7 @@
 
 %% write data;
 
-guint64
+uint64_t
 rspamd_parse_smtp_date (const unsigned char *data, size_t len, GError **err)
 {
   const unsigned char *p = data, *pe = data + len, *eof = data + len, *tmp = data;
@@ -40,7 +40,7 @@ rspamd_parse_smtp_date (const unsigned char *data, size_t len, GError **err)
   if ( cs < %%{ write first_final; }%% ) {
     g_set_error (err, g_quark_from_static_string ("smtp_date"), cs, "invalid date at offset %d (%c), state %d",
 			(int)(p - data), (*p > 0 && *p < 128) ? *p : '?', cs);
-    return (guint64)(-1);
+    return (uint64_t)(-1);
   }
 
   return rspamd_tm_to_time (&tm, tz);

@@ -59,7 +59,7 @@ guint rspamd_str_lc_utf8(gchar *str, guint size);
 /*
  * Hash table utility functions for case insensitive hashing
  */
-guint64 rspamd_icase_hash(const gchar *in, gsize len, guint64 seed);
+uint64_t rspamd_icase_hash(const gchar *in, gsize len, uint64_t seed);
 
 guint rspamd_strcase_hash(gconstpointer key);
 
@@ -140,7 +140,7 @@ gboolean rspamd_strtol(const gchar *s, gsize len, glong *value);
  * Try to convert a string of length to unsigned long
  */
 gboolean rspamd_strtoul(const gchar *s, gsize len, gulong *value);
-gboolean rspamd_strtou64(const gchar *s, gsize len, guint64 *value);
+gboolean rspamd_strtou64(const gchar *s, gsize len, uint64_t *value);
 
 /*
  * Try to convert a hex string of length to unsigned long

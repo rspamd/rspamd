@@ -62,7 +62,7 @@ struct rspamd_osb_tokenizer_config {
 	gshort version;
 	gshort window_size;
 	enum rspamd_osb_hash_type ht;
-	guint64 seed;
+	uint64_t seed;
 	rspamd_sipkey_t sk;
 };
 
@@ -262,7 +262,7 @@ rspamd_tokenizer_osb_is_compat (struct rspamd_tokenizer_runtime *rt)
 #endif
 
 struct token_pipe_entry {
-	guint64 h;
+	uint64_t h;
 	rspamd_stat_token_t *t;
 };
 
@@ -276,9 +276,9 @@ gint rspamd_tokenizer_osb(struct rspamd_stat_ctx *ctx,
 	rspamd_token_t *new_tok = NULL;
 	rspamd_stat_token_t *token;
 	struct rspamd_osb_tokenizer_config *osb_cf;
-	guint64 cur, seed;
+	uint64_t cur, seed;
 	struct token_pipe_entry *hashpipe;
-	guint32 h1, h2;
+	uint32_t h1, h2;
 	gsize token_size;
 	guint processed = 0, i, w, window_size, token_flags = 0;
 
@@ -369,10 +369,10 @@ gint rspamd_tokenizer_osb(struct rspamd_stat_ctx *ctx,
 		new_tok->t1 = hashpipe[0].t;                                                    \
 		new_tok->t2 = hashpipe[i].t;                                                    \
 		if (osb_cf->ht == RSPAMD_OSB_HASH_COMPAT) {                                     \
-			h1 = ((guint32) hashpipe[0].h) * primes[0] +                                \
-				 ((guint32) hashpipe[i].h) * primes[i << 1];                            \
-			h2 = ((guint32) hashpipe[0].h) * primes[1] +                                \
-				 ((guint32) hashpipe[i].h) * primes[(i << 1) - 1];                      \
+			h1 = ((uint32_t) hashpipe[0].h) * primes[0] +                               \
+				 ((uint32_t) hashpipe[i].h) * primes[i << 1];                           \
+			h2 = ((uint32_t) hashpipe[0].h) * primes[1] +                               \
+				 ((uint32_t) hashpipe[i].h) * primes[(i << 1) - 1];                     \
 			memcpy((guchar *) &new_tok->data, &h1, sizeof(h1));                         \
 			memcpy(((guchar *) &new_tok->data) + sizeof(h1), &h2, sizeof(h2));          \
 		}                                                                               \

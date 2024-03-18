@@ -65,7 +65,7 @@ rspamd_prepare_worker(struct rspamd_worker *worker, const char *name,
  * @param magic
  * @return
  */
-gboolean rspamd_worker_check_context(gpointer ctx, guint64 magic);
+gboolean rspamd_worker_check_context(gpointer ctx, uint64_t magic);
 
 /**
  * Set special signal handler for a worker

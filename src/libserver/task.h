@@ -171,10 +171,10 @@ struct rspamd_task {
 	struct rspamd_worker *worker; /**< pointer to worker object						*/
 	enum rspamd_command cmd;      /**< command										*/
 	gint sock;                    /**< socket descriptor								*/
-	guint32 dns_requests;         /**< number of DNS requests per this task			*/
-	guint32 flags;                /**< Bit flags										*/
-	guint32 protocol_flags;
-	guint32 processed_stages;                           /**< bits of stages that are processed			*/
+	uint32_t dns_requests;        /**< number of DNS requests per this task			*/
+	uint32_t flags;               /**< Bit flags										*/
+	uint32_t protocol_flags;
+	uint32_t processed_stages;                          /**< bits of stages that are processed			*/
 	gchar *helo;                                        /**< helo header value								*/
 	gchar *queue_id;                                    /**< queue id if specified							*/
 	rspamd_inet_addr_t *from_addr;                      /**< from addr for a task							*/

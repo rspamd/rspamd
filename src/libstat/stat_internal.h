@@ -31,8 +31,8 @@ extern "C" {
 struct rspamd_statfile_runtime {
 	struct rspamd_statfile_config *st;
 	gpointer backend_runtime;
-	guint64 hits;
-	guint64 total_hits;
+	uint64_t hits;
+	uint64_t total_hits;
 };
 
 /* Common classifier structure */

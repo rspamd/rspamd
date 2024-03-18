@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -29,8 +29,8 @@ extern "C" {
  *	%[0][width][u][x|X|h|H|b|B]z	    ssize_t/size_t
  *	%[0][width][u][x|X|h|H|b|B]d	    gint/guint
  *	%[0][width][u][x|X|h|H|b|B]l	    long
- *	%[0][width][u][x|X|h|H|b|B]D	    gint32/guint32
- *	%[0][width][u][x|X|h|H|b|B]L	    gint64/guint64
+ *	%[0][width][u][x|X|h|H|b|B]D	    int32_t/uint32_t
+ *	%[0][width][u][x|X|h|H|b|B]L	    int64_t/uint64_t
  *	%[0][width][.width]f	    double
  *	%[0][width][.width]F	    long double
  *	%[0][width][.width]g	    double

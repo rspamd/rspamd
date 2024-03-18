@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ struct rspamd_dns_request_ud {
 
 struct rspamd_dns_fail_cache_entry {
 	const char *name;
-	gint32 namelen;
+	int32_t namelen;
 	enum rdns_request_type type;
 };
 

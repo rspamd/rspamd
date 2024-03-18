@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -162,8 +162,8 @@ static inline gboolean
 rspamd_tokenize_check_limit(gboolean decay,
 							guint word_decay,
 							guint nwords,
-							guint64 *hv,
-							guint64 *prob,
+							uint64_t *hv,
+							uint64_t *prob,
 							const rspamd_stat_token_t *token,
 							gssize remain,
 							gssize total)
@@ -171,8 +171,8 @@ rspamd_tokenize_check_limit(gboolean decay,
 	static const gdouble avg_word_len = 6.0;
 
 	if (!decay) {
-		if (token->original.len >= sizeof(guint64)) {
-			guint64 tmp;
+		if (token->original.len >= sizeof(uint64_t)) {
+			uint64_t tmp;
 			memcpy(&tmp, token->original.begin, sizeof(tmp));
 			*hv = mum_hash_step(*hv, tmp);
 		}
@@ -192,7 +192,7 @@ rspamd_tokenize_check_limit(gboolean decay,
 				*prob = G_MAXUINT64;
 			}
 			else {
-				*prob = (guint64) (decay_prob * (double) G_MAXUINT64);
+				*prob = (uint64_t) (decay_prob * (double) G_MAXUINT64);
 			}
 
 			return TRUE;
@@ -213,7 +213,7 @@ rspamd_tokenize_check_limit(gboolean decay,
 
 static inline gboolean
 rspamd_utf_word_valid(const guchar *text, const guchar *end,
-					  gint32 start, gint32 finish)
+					  int32_t start, int32_t finish)
 {
 	const guchar *st = text + start, *fin = text + finish;
 	UChar32 c;
@@ -283,7 +283,7 @@ rspamd_tokenize_text(const gchar *text, gsize len,
 					 enum rspamd_tokenize_type how,
 					 struct rspamd_config *cfg,
 					 GList *exceptions,
-					 guint64 *hash,
+					 uint64_t *hash,
 					 GArray *cur_words,
 					 rspamd_mempool_t *pool)
 {
@@ -293,9 +293,9 @@ rspamd_tokenize_text(const gchar *text, gsize len,
 	GArray *res;
 	GList *cur = exceptions;
 	guint min_len = 0, max_len = 0, word_decay = 0, initial_size = 128;
-	guint64 hv = 0;
+	uint64_t hv = 0;
 	gboolean decay = FALSE, long_text_mode = FALSE;
-	guint64 prob = 0;
+	uint64_t prob = 0;
 	static UBreakIterator *bi = NULL;
 	static const gsize long_text_limit = 1 * 1024 * 1024;
 	static const ev_tstamp max_exec_time = 0.2; /* 200 ms */
@@ -422,7 +422,7 @@ rspamd_tokenize_text(const gchar *text, gsize len,
 							if (last > p) {
 								/* Exception spread over the boundaries */
 								while (last > p && p != UBRK_DONE) {
-									gint32 old_p = p;
+									int32_t old_p = p;
 									p = ubrk_next(bi);
 
 									if (p != UBRK_DONE && p <= old_p) {
@@ -462,7 +462,7 @@ rspamd_tokenize_text(const gchar *text, gsize len,
 							if (last > p) {
 								/* Exception spread over the boundaries */
 								while (last > p && p != UBRK_DONE) {
-									gint32 old_p = p;
+									int32_t old_p = p;
 									p = ubrk_next(bi);
 									if (p != UBRK_DONE && p <= old_p) {
 										msg_warn_pool_check(
@@ -607,14 +607,14 @@ rspamd_add_metawords_from_str(const gchar *beg, gsize len,
 	while (i < len) {
 		U8_NEXT(beg, i, len, uc);
 
-		if (((gint32) uc) < 0) {
+		if (((int32_t) uc) < 0) {
 			valid_utf = FALSE;
 			break;
 		}
 
 #if U_ICU_VERSION_MAJOR_NUM < 50
 		if (u_isalpha(uc)) {
-			gint32 sc = ublock_getCode(uc);
+			int32_t sc = ublock_getCode(uc);
 
 			if (sc == UBLOCK_THAI) {
 				valid_utf = FALSE;
@@ -697,7 +697,7 @@ rspamd_uchars_to_ucs32(const UChar *src, gsize srclen,
 					   rspamd_mempool_t *pool)
 {
 	UChar32 *dest, t, *d;
-	gint32 i = 0;
+	int32_t i = 0;
 
 	dest = rspamd_mempool_alloc(pool, srclen * sizeof(UChar32));
 	d = dest;
@@ -787,7 +787,7 @@ void rspamd_normalize_single_word(rspamd_stat_token_t *tok, rspamd_mempool_t *po
 		else {
 #if U_ICU_VERSION_MAJOR_NUM >= 44
 			const UNormalizer2 *norm = rspamd_get_unicode_normalizer();
-			gint32 end;
+			int32_t end;
 
 			/* We can now check if we need to decompose */
 			end = unorm2_spanQuickCheckYes(norm, tmpbuf, ulen, &uc_err);

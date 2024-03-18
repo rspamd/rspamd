@@ -97,9 +97,9 @@ struct bayes_task_closure {
 	double ham_prob;
 	double spam_prob;
 	gdouble meta_skip_prob;
-	guint64 processed_tokens;
-	guint64 total_hits;
-	guint64 text_tokens;
+	uint64_t processed_tokens;
+	uint64_t total_hits;
+	uint64_t text_tokens;
 	struct rspamd_task *task;
 };
 

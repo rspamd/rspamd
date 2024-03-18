@@ -215,7 +215,7 @@ rspamd_fuzzy_backend_count_sqlite(struct rspamd_fuzzy_backend *bk,
 								  void *subr_ud)
 {
 	struct rspamd_fuzzy_backend_sqlite *sq = subr_ud;
-	guint64 nhashes;
+	uint64_t nhashes;
 
 	nhashes = rspamd_fuzzy_backend_sqlite_count(sq);
 
@@ -231,7 +231,7 @@ rspamd_fuzzy_backend_version_sqlite(struct rspamd_fuzzy_backend *bk,
 									void *subr_ud)
 {
 	struct rspamd_fuzzy_backend_sqlite *sq = subr_ud;
-	guint64 rev;
+	uint64_t rev;
 
 	rev = rspamd_fuzzy_backend_sqlite_version(sq, src);
 

@@ -68,7 +68,7 @@ rspamd_archive_file_try_utf(struct rspamd_task *task,
 	if (charset) {
 		UChar *tmp;
 		UErrorCode uc_err = U_ZERO_ERROR;
-		gint32 r, clen, dlen;
+		int32_t r, clen, dlen;
 		struct rspamd_charset_converter *conv;
 		UConverter *utf8_converter;
 
@@ -174,10 +174,10 @@ rspamd_archive_process_zip(struct rspamd_task *task,
 						   struct rspamd_mime_part *part)
 {
 	const guchar *p, *start, *end, *eocd = NULL, *cd;
-	const guint32 eocd_magic = 0x06054b50, cd_basic_len = 46;
+	const uint32_t eocd_magic = 0x06054b50, cd_basic_len = 46;
 	const guchar cd_magic[] = {0x50, 0x4b, 0x01, 0x02};
 	const guint max_processed = 1024;
-	guint32 cd_offset, cd_size, comp_size, uncomp_size, processed = 0;
+	uint32_t cd_offset, cd_size, comp_size, uncomp_size, processed = 0;
 	guint16 extra_len, fname_len, comment_len;
 	struct rspamd_archive *arch;
 	struct rspamd_archive_file *f = NULL;
@@ -193,8 +193,8 @@ rspamd_archive_process_zip(struct rspamd_task *task,
 	 */
 	p -= 21;
 
-	while (p > start + sizeof(guint32)) {
-		guint32 t;
+	while (p > start + sizeof(uint32_t)) {
+		uint32_t t;
 
 		if (processed > max_processed) {
 			break;
@@ -263,9 +263,9 @@ rspamd_archive_process_zip(struct rspamd_task *task,
 
 		memcpy(&flags, cd + 8, sizeof(guint16));
 		flags = GUINT16_FROM_LE(flags);
-		memcpy(&comp_size, cd + 20, sizeof(guint32));
+		memcpy(&comp_size, cd + 20, sizeof(uint32_t));
 		comp_size = GUINT32_FROM_LE(comp_size);
-		memcpy(&uncomp_size, cd + 24, sizeof(guint32));
+		memcpy(&uncomp_size, cd + 24, sizeof(uint32_t));
 		uncomp_size = GUINT32_FROM_LE(uncomp_size);
 		memcpy(&fname_len, cd + 28, sizeof(fname_len));
 		fname_len = GUINT16_FROM_LE(fname_len);
@@ -333,7 +333,7 @@ rspamd_archive_process_zip(struct rspamd_task *task,
 }
 
 static inline gint
-rspamd_archive_rar_read_vint(const guchar *start, gsize remain, guint64 *res)
+rspamd_archive_rar_read_vint(const guchar *start, gsize remain, uint64_t *res)
 {
 	/*
 	 * From http://www.rarlab.com/technote.htm:
@@ -344,16 +344,16 @@ rspamd_archive_rar_read_vint(const guchar *start, gsize remain, guint64 *res)
 	 * So first byte contains 7 least significant bits of integer and
 	 * continuation flag. Second byte, if present, contains next 7 bits and so on.
 	 */
-	guint64 t = 0;
+	uint64_t t = 0;
 	guint shift = 0;
 	const guchar *p = start;
 
 	while (remain > 0 && shift <= 57) {
 		if (*p & 0x80) {
-			t |= ((guint64) (*p & 0x7f)) << shift;
+			t |= ((uint64_t) (*p & 0x7f)) << shift;
 		}
 		else {
-			t |= ((guint64) (*p & 0x7f)) << shift;
+			t |= ((uint64_t) (*p & 0x7f)) << shift;
 			p++;
 			break;
 		}
@@ -420,12 +420,12 @@ rspamd_archive_rar_read_vint(const guchar *start, gsize remain, guint64 *res)
 
 #define RAR_READ_UINT32(n)                                                                    \
 	do {                                                                                      \
-		if (end - p < (glong) sizeof(guint32)) {                                              \
+		if (end - p < (glong) sizeof(uint32_t)) {                                             \
 			msg_debug_archive("rar archive is invalid (bad int32)");                          \
 			return;                                                                           \
 		}                                                                                     \
 		n = (guint) p[0] + ((guint) p[1] << 8) + ((guint) p[2] << 16) + ((guint) p[3] << 24); \
-		p += sizeof(guint32);                                                                 \
+		p += sizeof(uint32_t);                                                                \
 	} while (0)
 
 static void
@@ -435,7 +435,7 @@ rspamd_archive_process_rar_v4(struct rspamd_task *task, const guchar *start,
 	const guchar *p = start, *start_section;
 	guint8 type;
 	guint flags;
-	guint64 sz, comp_sz = 0, uncomp_sz = 0;
+	uint64_t sz, comp_sz = 0, uncomp_sz = 0;
 	struct rspamd_archive *arch;
 	struct rspamd_archive_file *f;
 
@@ -468,7 +468,7 @@ rspamd_archive_process_rar_v4(struct rspamd_task *task, const guchar *start,
 
 		if (flags & 0x8000) {
 			/* We also need to read ADD_SIZE element */
-			guint32 tmp;
+			uint32_t tmp;
 
 			RAR_READ_UINT32(tmp);
 			sz += tmp;
@@ -505,7 +505,7 @@ rspamd_archive_process_rar_v4(struct rspamd_task *task, const guchar *start,
 
 			if (flags & 0x100) {
 				/* We also need to read HIGH_PACK_SIZE */
-				guint32 tmp;
+				uint32_t tmp;
 
 				RAR_READ_UINT32(tmp);
 				sz += tmp;
@@ -579,8 +579,8 @@ rspamd_archive_process_rar(struct rspamd_task *task,
 				 rar_v4_magic[] = {0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00};
 	const guint rar_encrypted_header = 4, rar_main_header = 1,
 				rar_file_header = 2;
-	guint64 vint, sz, comp_sz = 0, uncomp_sz = 0, flags = 0, type = 0,
-					  extra_sz = 0;
+	uint64_t vint, sz, comp_sz = 0, uncomp_sz = 0, flags = 0, type = 0,
+					   extra_sz = 0;
 	struct rspamd_archive *arch;
 	struct rspamd_archive_file *f;
 	gint r;
@@ -621,7 +621,7 @@ rspamd_archive_process_rar(struct rspamd_task *task,
 
 	/* Now we can have either encryption header or archive header */
 	/* Crc 32 */
-	RAR_SKIP_BYTES(sizeof(guint32));
+	RAR_SKIP_BYTES(sizeof(uint32_t));
 	/* Size */
 	RAR_READ_VINT_SKIP();
 	sz = vint;
@@ -662,7 +662,7 @@ rspamd_archive_process_rar(struct rspamd_task *task,
 		gboolean has_extra = FALSE;
 		/* Read the next header */
 		/* Crc 32 */
-		RAR_SKIP_BYTES(sizeof(guint32));
+		RAR_SKIP_BYTES(sizeof(uint32_t));
 		/* Size */
 		RAR_READ_VINT_SKIP();
 
@@ -702,7 +702,7 @@ rspamd_archive_process_rar(struct rspamd_task *task,
 		}
 		else {
 			/* We have a file header, go forward */
-			guint64 fname_len;
+			uint64_t fname_len;
 			bool is_directory = false;
 
 			/* File header specific flags */
@@ -717,11 +717,11 @@ rspamd_archive_process_rar(struct rspamd_task *task,
 
 			if (flags & 0x2) {
 				/* Unix mtime */
-				RAR_SKIP_BYTES(sizeof(guint32));
+				RAR_SKIP_BYTES(sizeof(uint32_t));
 			}
 			if (flags & 0x4) {
 				/* Crc32 */
-				RAR_SKIP_BYTES(sizeof(guint32));
+				RAR_SKIP_BYTES(sizeof(uint32_t));
 			}
 			if (flags & 0x1) {
 				/* Ignore directories for sanity purposes */
@@ -768,7 +768,7 @@ rspamd_archive_process_rar(struct rspamd_task *task,
 
 					while (ex < p + extra_sz) {
 						const guchar *t;
-						gint64 cur_sz = 0, sec_type = 0;
+						int64_t cur_sz = 0, sec_type = 0;
 
 						r = rspamd_archive_rar_read_vint(ex, extra_sz, &cur_sz);
 						if (r == -1) {
@@ -808,7 +808,7 @@ end:
 }
 
 static inline gint
-rspamd_archive_7zip_read_vint(const guchar *start, gsize remain, guint64 *res)
+rspamd_archive_7zip_read_vint(const guchar *start, gsize remain, uint64_t *res)
 {
 	/*
 	 * REAL_UINT64 means real UINT64.
@@ -839,17 +839,17 @@ rspamd_archive_7zip_read_vint(const guchar *start, gsize remain, guint64 *res)
 		return 1;
 	}
 	else if (t == 0xFF) {
-		if (remain >= sizeof(guint64) + 1) {
-			memcpy(res, start + 1, sizeof(guint64));
+		if (remain >= sizeof(uint64_t) + 1) {
+			memcpy(res, start + 1, sizeof(uint64_t));
 			*res = GUINT64_FROM_LE(*res);
 
-			return sizeof(guint64) + 1;
+			return sizeof(uint64_t) + 1;
 		}
 	}
 	else {
 		gint cur_bit = 6, intlen = 1;
 		const guchar bmask = 0xFF;
-		guint64 tgt;
+		uint64_t tgt;
 
 		while (cur_bit > 0) {
 			if (!isset(&t, cur_bit)) {
@@ -859,7 +859,7 @@ rspamd_archive_7zip_read_vint(const guchar *start, gsize remain, guint64 *res)
 					/* Shift back */
 					tgt >>= sizeof(tgt) - NBBY * intlen;
 					/* Add masked value */
-					tgt += (guint64) (t & (bmask >> (NBBY - cur_bit)))
+					tgt += (uint64_t) (t & (bmask >> (NBBY - cur_bit)))
 						   << (NBBY * intlen);
 					*res = tgt;
 
@@ -896,13 +896,13 @@ rspamd_archive_7zip_read_vint(const guchar *start, gsize remain, guint64 *res)
 
 #define SZ_READ_UINT64(n)                                                            \
 	do {                                                                             \
-		if (end - p < (goffset) sizeof(guint64)) {                                   \
+		if (end - p < (goffset) sizeof(uint64_t)) {                                  \
 			msg_debug_archive("7zip archive is invalid (bad uint64): %s", G_STRLOC); \
 			return;                                                                  \
 		}                                                                            \
-		memcpy(&(n), p, sizeof(guint64));                                            \
+		memcpy(&(n), p, sizeof(uint64_t));                                           \
 		n = GUINT64_FROM_LE(n);                                                      \
-		p += sizeof(guint64);                                                        \
+		p += sizeof(uint64_t);                                                       \
 	} while (0)
 #define SZ_SKIP_BYTES(n)                                                                                                                             \
 	do {                                                                                                                                             \
@@ -985,11 +985,11 @@ static const guchar *
 rspamd_7zip_read_digest(struct rspamd_task *task,
 						const guchar *p, const guchar *end,
 						struct rspamd_archive *arch,
-						guint64 num_streams,
+						uint64_t num_streams,
 						guint *pdigest_read)
 {
 	guchar all_defined = *p;
-	guint64 i;
+	uint64_t i;
 	guint num_defined = 0;
 	/*
 	 * BYTE AllAreDefined
@@ -1019,7 +1019,7 @@ rspamd_7zip_read_digest(struct rspamd_task *task,
 	}
 
 	for (i = 0; i < num_defined; i++) {
-		SZ_SKIP_BYTES(sizeof(guint32));
+		SZ_SKIP_BYTES(sizeof(uint32_t));
 	}
 
 	if (pdigest_read) {
@@ -1034,7 +1034,7 @@ rspamd_7zip_read_pack_info(struct rspamd_task *task,
 						   const guchar *p, const guchar *end,
 						   struct rspamd_archive *arch)
 {
-	guint64 pack_pos = 0, pack_streams = 0, i, cur_sz;
+	uint64_t pack_pos = 0, pack_streams = 0, i, cur_sz;
 	guint num_digests = 0;
 	guchar t;
 	/*
@@ -1094,12 +1094,12 @@ rspamd_7zip_read_folder(struct rspamd_task *task,
 						const guchar *p, const guchar *end,
 						struct rspamd_archive *arch, guint *pnstreams, guint *ndigests)
 {
-	guint64 ncoders = 0, i, j, noutstreams = 0, ninstreams = 0;
+	uint64_t ncoders = 0, i, j, noutstreams = 0, ninstreams = 0;
 
 	SZ_READ_VINT(ncoders);
 
 	for (i = 0; i < ncoders && p != NULL && p < end; i++) {
-		guint64 sz, tmp;
+		uint64_t sz, tmp;
 		guchar t;
 		/*
 		 * BYTE
@@ -1163,21 +1163,21 @@ rspamd_7zip_read_folder(struct rspamd_task *task,
 	if (noutstreams > 1) {
 		/* BindPairs, WTF, huh */
 		for (i = 0; i < noutstreams - 1; i++) {
-			guint64 tmp;
+			uint64_t tmp;
 
 			SZ_READ_VINT(tmp);
 			SZ_READ_VINT(tmp);
 		}
 	}
 
-	gint64 npacked = (gint64) ninstreams - (gint64) noutstreams + 1;
+	int64_t npacked = (int64_t) ninstreams - (int64_t) noutstreams + 1;
 	msg_debug_archive("7zip: instreams=%L, outstreams=%L, packed=%L",
 					  ninstreams, noutstreams, npacked);
 
 	if (npacked > 1) {
 		/* Gah... */
 		for (i = 0; i < npacked; i++) {
-			guint64 tmp;
+			uint64_t tmp;
 
 			SZ_READ_VINT(tmp);
 		}
@@ -1195,7 +1195,7 @@ rspamd_7zip_read_coders_info(struct rspamd_task *task,
 							 struct rspamd_archive *arch,
 							 guint *pnum_folders, guint *pnum_nodigest)
 {
-	guint64 num_folders = 0, i, tmp;
+	uint64_t num_folders = 0, i, tmp;
 	guchar t;
 	guint *folder_nstreams = NULL, num_digests = 0, digests_read = 0;
 
@@ -1323,15 +1323,15 @@ rspamd_7zip_read_substreams_info(struct rspamd_task *task,
 {
 	guchar t;
 	guint i;
-	guint64 *folder_nstreams;
+	uint64_t *folder_nstreams;
 
 	if (num_folders > 8192) {
 		/* Gah */
 		return NULL;
 	}
 
-	folder_nstreams = g_alloca(sizeof(guint64) * num_folders);
-	memset(folder_nstreams, 0, sizeof(guint64) * num_folders);
+	folder_nstreams = g_alloca(sizeof(uint64_t) * num_folders);
+	memset(folder_nstreams, 0, sizeof(uint64_t) * num_folders);
 
 	while (p != NULL && p < end) {
 		/*
@@ -1360,7 +1360,7 @@ rspamd_7zip_read_substreams_info(struct rspamd_task *task,
 		switch (t) {
 		case kNumUnPackStream:
 			for (i = 0; i < num_folders; i++) {
-				guint64 tmp;
+				uint64_t tmp;
 
 				SZ_READ_VINT(tmp);
 				folder_nstreams[i] = tmp;
@@ -1381,7 +1381,7 @@ rspamd_7zip_read_substreams_info(struct rspamd_task *task,
 			 */
 			for (i = 0; i < num_folders; i++) {
 				for (guint j = 0; j < folder_nstreams[i]; j++) {
-					guint64 tmp;
+					uint64_t tmp;
 
 					SZ_READ_VINT(tmp); /* Who cares indeed */
 				}
@@ -1465,7 +1465,7 @@ rspamd_7zip_read_archive_props(struct rspamd_task *task,
 							   struct rspamd_archive *arch)
 {
 	guchar proptype;
-	guint64 proplen;
+	uint64_t proplen;
 
 	/*
 	 * for (;;)
@@ -1543,7 +1543,7 @@ rspamd_7zip_read_files_info(struct rspamd_task *task,
 							const guchar *p, const guchar *end,
 							struct rspamd_archive *arch)
 {
-	guint64 nfiles = 0, sz, i;
+	uint64_t nfiles = 0, sz, i;
 	guchar t, b;
 	struct rspamd_archive_file *fentry;
 
@@ -1584,7 +1584,7 @@ rspamd_7zip_read_files_info(struct rspamd_task *task,
 				/* TODO: for the god sake, do something about external
 				 * filenames...
 				 */
-				guint64 tmp;
+				uint64_t tmp;
 
 				SZ_READ_VINT(tmp);
 			}
@@ -1734,13 +1734,13 @@ rspamd_archive_process_7zip(struct rspamd_task *task,
 	struct rspamd_archive *arch;
 	const guchar *start, *p, *end;
 	const guchar sz_magic[] = {'7', 'z', 0xBC, 0xAF, 0x27, 0x1C};
-	guint64 section_offset = 0, section_length = 0;
+	uint64_t section_offset = 0, section_length = 0;
 
 	start = part->parsed_data.begin;
 	p = start;
 	end = p + part->parsed_data.len;
 
-	if (end - p <= sizeof(guint64) + sizeof(guint32) ||
+	if (end - p <= sizeof(uint64_t) + sizeof(uint32_t) ||
 		memcmp(p, sz_magic, sizeof(sz_magic)) != 0) {
 		msg_debug_archive("7z archive is invalid (no 7z magic)");
 
@@ -1754,13 +1754,13 @@ rspamd_archive_process_7zip(struct rspamd_task *task,
 								  arch);
 
 	/* Magic (6 bytes) + version (2 bytes) + crc32 (4 bytes) */
-	p += sizeof(guint64) + sizeof(guint32);
+	p += sizeof(uint64_t) + sizeof(uint32_t);
 
 	SZ_READ_UINT64(section_offset);
 	SZ_READ_UINT64(section_length);
 
-	if (end - p > sizeof(guint32)) {
-		p += sizeof(guint32);
+	if (end - p > sizeof(uint32_t)) {
+		p += sizeof(uint32_t);
 	}
 	else {
 		msg_debug_archive("7z archive is invalid (truncated crc)");

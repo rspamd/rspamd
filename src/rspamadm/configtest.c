@@ -87,7 +87,7 @@ rspamadm_configtest(gint argc, gchar **argv, const struct rspamadm_command *cmd)
 	struct rspamd_config *cfg = rspamd_main->cfg;
 	gboolean ret = TRUE;
 	worker_t **pworker;
-	const guint64 *log_cnt;
+	const uint64_t *log_cnt;
 
 	context = g_option_context_new(
 		"configtest - perform configuration file test");

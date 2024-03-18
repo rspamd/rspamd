@@ -1189,7 +1189,7 @@ rspamd_stat_check_autolearn(struct rspamd_task *task)
 rspamd_stat_result_t
 rspamd_stat_statistics(struct rspamd_task *task,
 					   struct rspamd_config *cfg,
-					   guint64 *total_learns,
+					   uint64_t *total_learns,
 					   ucl_object_t **target)
 {
 	struct rspamd_stat_ctx *st_ctx;
@@ -1197,7 +1197,7 @@ rspamd_stat_statistics(struct rspamd_task *task,
 	struct rspamd_statfile *st;
 	gpointer backend_runtime;
 	ucl_object_t *res = NULL, *elt;
-	guint64 learns = 0;
+	uint64_t learns = 0;
 	guint i, j;
 	gint id;
 

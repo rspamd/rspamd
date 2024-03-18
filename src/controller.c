@@ -108,7 +108,7 @@ INIT_LOG_MODULE(controller)
 #define COLOR_REJECT "#CB4B4B"
 #define COLOR_TOTAL "#9440ED"
 
-static const guint64 rspamd_controller_ctx_magic = 0xf72697805e6941faULL;
+static const uint64_t rspamd_controller_ctx_magic = 0xf72697805e6941faULL;
 
 extern void fuzzy_stat_command(struct rspamd_task *task);
 
@@ -128,7 +128,7 @@ worker_t controller_worker = {
  * Worker's context
  */
 struct rspamd_controller_worker_ctx {
-	guint64 magic;
+	uint64_t magic;
 	/* Events base */
 	struct ev_loop *event_loop;
 	/* DNS resolver */
@@ -203,7 +203,7 @@ rspamd_is_encrypted_password(const gchar *password,
 							 struct rspamd_controller_pbkdf const **pbkdf)
 {
 	const gchar *start, *end;
-	gint64 id;
+	int64_t id;
 	gsize size, i;
 	gboolean ret = FALSE;
 	const struct rspamd_controller_pbkdf *p;
@@ -2590,7 +2590,7 @@ struct rspamd_stat_cbdata {
 	ucl_object_t *top;
 	ucl_object_t *stat;
 	struct rspamd_task *task;
-	guint64 learned;
+	uint64_t learned;
 };
 
 static gboolean
@@ -2660,7 +2660,7 @@ rspamd_controller_handle_stat_common(
 	ucl_object_t *top, *sub;
 	gint i;
 	int64_t uptime;
-	guint64 spam = 0, ham = 0;
+	uint64_t spam = 0, ham = 0;
 	rspamd_mempool_stat_t mem_st;
 	struct rspamd_stat *stat, stat_copy;
 	struct rspamd_controller_worker_ctx *ctx;
@@ -3097,7 +3097,7 @@ rspamd_controller_handle_metrics_common(
 	ucl_object_t *top, *sub;
 	gint i;
 	int64_t uptime;
-	guint64 spam = 0, ham = 0;
+	uint64_t spam = 0, ham = 0;
 	rspamd_mempool_stat_t mem_st;
 	struct rspamd_stat *stat, stat_copy;
 	struct rspamd_controller_worker_ctx *ctx;

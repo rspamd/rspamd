@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,7 +84,7 @@ typedef void (*rspamd_worker_term_cb)(EV_P_ ev_child *, struct rspamd_main *,
 struct rspamd_worker_heartbeat {
 	ev_timer heartbeat_ev; /**< used by main for checking heartbeats and by workers to send heartbeats */
 	ev_tstamp last_event;  /**< last heartbeat received timestamp */
-	gint64 nbeats;         /**< positive for beats received, negative for beats missed */
+	int64_t nbeats;        /**< positive for beats received, negative for beats missed */
 };
 
 enum rspamd_worker_state {
@@ -128,7 +128,7 @@ struct rspamd_worker {
 };
 
 struct rspamd_abstract_worker_ctx {
-	guint64 magic;
+	uint64_t magic;
 	/* Events base */
 	struct ev_loop *event_loop;
 	/* DNS resolver */
@@ -221,7 +221,7 @@ typedef struct module_s {
 										 GHashTable *custom_commands);
 
 	guint module_version;
-	guint64 rspamd_version;
+	uint64_t rspamd_version;
 	const gchar *rspamd_features;
 	guint ctx_offset;
 } module_t;
@@ -249,7 +249,7 @@ typedef struct worker_s {
 	int flags;
 	int listen_type;
 	guint worker_version;
-	guint64 rspamd_version;
+	uint64_t rspamd_version;
 	const gchar *rspamd_features;
 } worker_t;
 
@@ -281,7 +281,7 @@ struct rspamd_cryptobox_library_ctx;
 
 #define MAX_AVG_TIME_SLOTS 31
 struct RSPAMD_ALIGNED(64) rspamd_avg_time {
-	guint32 cur_slot;
+	uint32_t cur_slot;
 	float avg_time[MAX_AVG_TIME_SLOTS];
 };
 /**

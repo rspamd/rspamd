@@ -51,8 +51,8 @@ INIT_LOG_MODULE(mime)
 struct rspamd_mime_boundary {
 	goffset boundary;
 	goffset start;
-	guint64 hash;
-	guint64 closed_hash;
+	uint64_t hash;
+	uint64_t closed_hash;
 	gint flags;
 };
 
@@ -180,7 +180,7 @@ rspamd_mime_parser_init_lib(void)
 static enum rspamd_cte
 rspamd_mime_parse_cte(const gchar *in, gsize len)
 {
-	guint64 h;
+	uint64_t h;
 	enum rspamd_cte ret = RSPAMD_CTE_UNKNOWN;
 
 	in = rspamd_string_len_strip(in, &len, " \t;,.+-#!`~'");
@@ -851,7 +851,7 @@ struct rspamd_mime_multipart_cbdata {
 	struct rspamd_mime_parser_ctx *st;
 	const gchar *part_start;
 	rspamd_ftok_t *cur_boundary;
-	guint64 bhash;
+	uint64_t bhash;
 	GError **err;
 };
 

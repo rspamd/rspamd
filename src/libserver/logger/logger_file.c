@@ -27,8 +27,8 @@
 struct rspamd_file_logger_priv {
 	gint fd;
 	struct {
-		guint32 size;
-		guint32 used;
+		uint32_t size;
+		uint32_t used;
 		u_char *buf;
 	} io_buf;
 	gboolean throttling;
@@ -36,8 +36,8 @@ struct rspamd_file_logger_priv {
 	gboolean is_buffered;
 	gboolean log_severity;
 	time_t throttling_time;
-	guint32 repeats;
-	guint64 last_line_cksum;
+	uint32_t repeats;
+	uint64_t last_line_cksum;
 	gchar *saved_message;
 	gsize saved_mlen;
 	gchar *saved_function;
@@ -49,7 +49,7 @@ struct rspamd_file_logger_priv {
 /**
  * Calculate checksum for log line (used for repeating logic)
  */
-static inline guint64
+static inline uint64_t
 rspamd_log_calculate_cksum(const gchar *message, size_t mlen)
 {
 	return rspamd_cryptobox_fast_hash(message, mlen, rspamd_hash_seed());
@@ -376,7 +376,7 @@ bool rspamd_log_file_log(const gchar *module, const gchar *id,
 {
 	struct rspamd_file_logger_priv *priv = (struct rspamd_file_logger_priv *) arg;
 	gdouble now;
-	guint64 cksum;
+	uint64_t cksum;
 	gboolean got_time = FALSE;
 
 

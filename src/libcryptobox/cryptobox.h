@@ -375,7 +375,7 @@ void rspamd_cryptobox_fast_hash_free(rspamd_cryptobox_fast_hash_state_t *st);
  * non-keyed hash is generated
  */
 void rspamd_cryptobox_fast_hash_init(rspamd_cryptobox_fast_hash_state_t *st,
-									 guint64 seed);
+									 uint64_t seed);
 
 /**
  * Init cryptobox hash state using key if needed, `st` must point to the buffer
@@ -384,7 +384,7 @@ void rspamd_cryptobox_fast_hash_init(rspamd_cryptobox_fast_hash_state_t *st,
  */
 void rspamd_cryptobox_fast_hash_init_specific(rspamd_cryptobox_fast_hash_state_t *st,
 											  enum rspamd_cryptobox_fast_hash_type type,
-											  guint64 seed);
+											  uint64_t seed);
 
 /**
  * Update hash with data portion
@@ -395,21 +395,21 @@ void rspamd_cryptobox_fast_hash_update(rspamd_cryptobox_fast_hash_state_t *st,
 /**
  * Output hash to the buffer of rspamd_cryptobox_HASHBYTES length
  */
-guint64 rspamd_cryptobox_fast_hash_final(rspamd_cryptobox_fast_hash_state_t *st);
+uint64_t rspamd_cryptobox_fast_hash_final(rspamd_cryptobox_fast_hash_state_t *st);
 
 /**
  * One in all function
  */
-guint64 rspamd_cryptobox_fast_hash(const void *data,
-								   gsize len, guint64 seed);
+uint64_t rspamd_cryptobox_fast_hash(const void *data,
+									gsize len, uint64_t seed);
 
 /**
  * Platform independent version
  */
-guint64 rspamd_cryptobox_fast_hash_specific(
+uint64_t rspamd_cryptobox_fast_hash_specific(
 	enum rspamd_cryptobox_fast_hash_type type,
 	const void *data,
-	gsize len, guint64 seed);
+	gsize len, uint64_t seed);
 
 /**
  * Decode base64 using platform optimized code

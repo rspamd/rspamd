@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -72,7 +72,7 @@ static const guchar n0[16] = {0};
 static void
 rspamd_cryptobox_cpuid(gint cpu[4], gint info)
 {
-	guint32 __attribute__((unused)) eax, __attribute__((unused)) ecx = 0, __attribute__((unused)) ebx = 0, __attribute__((unused)) edx = 0;
+	uint32_t __attribute__((unused)) eax, __attribute__((unused)) ecx = 0, __attribute__((unused)) ebx = 0, __attribute__((unused)) edx = 0;
 
 	eax = info;
 #if defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
@@ -111,7 +111,7 @@ static gboolean
 rspamd_cryptobox_test_instr(gint instr)
 {
 	void (*old_handler)(int);
-	guint32 rd;
+	uint32_t rd;
 
 #if defined(__GNUC__)
 	ok = 1;
@@ -187,9 +187,9 @@ struct rspamd_cryptobox_library_ctx *
 rspamd_cryptobox_init(void)
 {
 	gint cpu[4], nid;
-	const guint32 osxsave_mask = (1 << 27);
-	const guint32 fma_movbe_osxsave_mask = ((1 << 12) | (1 << 22) | (1 << 27));
-	const guint32 avx2_bmi12_mask = (1 << 5) | (1 << 3) | (1 << 8);
+	const uint32_t osxsave_mask = (1 << 27);
+	const uint32_t fma_movbe_osxsave_mask = ((1 << 12) | (1 << 22) | (1 << 27));
+	const uint32_t avx2_bmi12_mask = (1 << 5) | (1 << 3) | (1 << 8);
 	gulong bit;
 	static struct rspamd_cryptobox_library_ctx *ctx;
 	GString *buf;
@@ -207,32 +207,32 @@ rspamd_cryptobox_init(void)
 	rspamd_cryptobox_cpuid(cpu, 1);
 
 	if (nid > 1) {
-		if ((cpu[3] & ((guint32) 1 << 26))) {
+		if ((cpu[3] & ((uint32_t) 1 << 26))) {
 			if (rspamd_cryptobox_test_instr(CPUID_SSE2)) {
 				cpu_config |= CPUID_SSE2;
 			}
 		}
-		if ((cpu[2] & ((guint32) 1 << 0))) {
+		if ((cpu[2] & ((uint32_t) 1 << 0))) {
 			if (rspamd_cryptobox_test_instr(CPUID_SSE3)) {
 				cpu_config |= CPUID_SSE3;
 			}
 		}
-		if ((cpu[2] & ((guint32) 1 << 9))) {
+		if ((cpu[2] & ((uint32_t) 1 << 9))) {
 			if (rspamd_cryptobox_test_instr(CPUID_SSSE3)) {
 				cpu_config |= CPUID_SSSE3;
 			}
 		}
-		if ((cpu[2] & ((guint32) 1 << 19))) {
+		if ((cpu[2] & ((uint32_t) 1 << 19))) {
 			if (rspamd_cryptobox_test_instr(CPUID_SSE41)) {
 				cpu_config |= CPUID_SSE41;
 			}
 		}
-		if ((cpu[2] & ((guint32) 1 << 20))) {
+		if ((cpu[2] & ((uint32_t) 1 << 20))) {
 			if (rspamd_cryptobox_test_instr(CPUID_SSE42)) {
 				cpu_config |= CPUID_SSE42;
 			}
 		}
-		if ((cpu[2] & ((guint32) 1 << 30))) {
+		if ((cpu[2] & ((uint32_t) 1 << 30))) {
 			if (rspamd_cryptobox_test_instr(CPUID_RDRAND)) {
 				cpu_config |= CPUID_RDRAND;
 			}
@@ -240,7 +240,7 @@ rspamd_cryptobox_init(void)
 
 		/* OSXSAVE */
 		if ((cpu[2] & osxsave_mask) == osxsave_mask) {
-			if ((cpu[2] & ((guint32) 1 << 28))) {
+			if ((cpu[2] & ((uint32_t) 1 << 28))) {
 				if (rspamd_cryptobox_test_instr(CPUID_AVX)) {
 					cpu_config |= CPUID_AVX;
 				}
@@ -1529,10 +1529,10 @@ G_STATIC_ASSERT(sizeof(struct XXH3_state_s) <=
 
 struct RSPAMD_ALIGNED(16) _mum_iuf {
 	union {
-		gint64 ll;
-		unsigned char b[sizeof(guint64)];
+		int64_t ll;
+		unsigned char b[sizeof(uint64_t)];
 	} buf;
-	gint64 h;
+	int64_t h;
 	unsigned rem;
 };
 
@@ -1556,7 +1556,7 @@ void rspamd_cryptobox_fast_hash_free(rspamd_cryptobox_fast_hash_state_t *st)
 }
 
 void rspamd_cryptobox_fast_hash_init(rspamd_cryptobox_fast_hash_state_t *st,
-									 guint64 seed)
+									 uint64_t seed)
 {
 	XXH3_state_t *xst = (XXH3_state_t *) st->opaque;
 	st->type = RSPAMD_CRYPTOBOX_XXHASH3;
@@ -1566,7 +1566,7 @@ void rspamd_cryptobox_fast_hash_init(rspamd_cryptobox_fast_hash_state_t *st,
 
 void rspamd_cryptobox_fast_hash_init_specific(rspamd_cryptobox_fast_hash_state_t *st,
 											  enum rspamd_cryptobox_fast_hash_type type,
-											  guint64 seed)
+											  uint64_t seed)
 {
 	switch (type) {
 	case RSPAMD_CRYPTOBOX_T1HA:
@@ -1664,7 +1664,7 @@ void rspamd_cryptobox_fast_hash_update(rspamd_cryptobox_fast_hash_state_t *st,
 
 			/* Leftover */
 			if (drem > 0) {
-				iuf->rem = sizeof(guint64) - drem;
+				iuf->rem = sizeof(uint64_t) - drem;
 				iuf->buf.ll = 0;
 				memcpy(iuf->buf.b, p, drem);
 			}
@@ -1681,10 +1681,10 @@ void rspamd_cryptobox_fast_hash_update(rspamd_cryptobox_fast_hash_state_t *st,
 	}
 }
 
-guint64
+uint64_t
 rspamd_cryptobox_fast_hash_final(rspamd_cryptobox_fast_hash_state_t *st)
 {
-	guint64 ret;
+	uint64_t ret;
 
 	if (st->type == RSPAMD_CRYPTOBOX_T1HA) {
 		t1ha_context_t *rst = (t1ha_context_t *) st->opaque;
@@ -1731,32 +1731,32 @@ rspamd_cryptobox_fast_hash_final(rspamd_cryptobox_fast_hash_state_t *st)
 /**
  * One in all function
  */
-static inline guint64
+static inline uint64_t
 rspamd_cryptobox_fast_hash_machdep(const void *data,
-								   gsize len, guint64 seed)
+								   gsize len, uint64_t seed)
 {
 	return XXH3_64bits_withSeed(data, len, seed);
 }
 
-static inline guint64
+static inline uint64_t
 rspamd_cryptobox_fast_hash_indep(const void *data,
-								 gsize len, guint64 seed)
+								 gsize len, uint64_t seed)
 {
 	return XXH3_64bits_withSeed(data, len, seed);
 }
 
-guint64
+uint64_t
 rspamd_cryptobox_fast_hash(const void *data,
-						   gsize len, guint64 seed)
+						   gsize len, uint64_t seed)
 {
 	return rspamd_cryptobox_fast_hash_machdep(data, len, seed);
 }
 
-guint64
+uint64_t
 rspamd_cryptobox_fast_hash_specific(
 	enum rspamd_cryptobox_fast_hash_type type,
 	const void *data,
-	gsize len, guint64 seed)
+	gsize len, uint64_t seed)
 {
 	switch (type) {
 	case RSPAMD_CRYPTOBOX_XXHASH32:

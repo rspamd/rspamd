@@ -39,13 +39,13 @@ extern "C" {
 #define RSPAMD_STATFILE_ERROR RSPAMD_BASE_ERROR + 5
 
 struct rspamd_protocol_log_symbol_result {
-	guint32 id;
+	uint32_t id;
 	float score;
 };
 struct rspamd_protocol_log_message_sum {
-	guint32 nresults;
-	guint32 nextra;
-	guint32 settings_id;
+	uint32_t nresults;
+	uint32_t nextra;
+	uint32_t settings_id;
 	gdouble score;
 	gdouble required_score;
 	struct rspamd_protocol_log_symbol_result results[];

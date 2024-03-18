@@ -26,7 +26,7 @@ extern "C" {
 #endif
 
 struct rspamd_shingle {
-	guint64 hashes[RSPAMD_SHINGLE_SIZE];
+	uint64_t hashes[RSPAMD_SHINGLE_SIZE];
 };
 
 enum rspamd_shingle_alg {
@@ -42,8 +42,8 @@ enum rspamd_shingle_alg {
  * @param count number of hashes in the vector
  * @return shingle value
  */
-typedef guint64 (*rspamd_shingles_filter)(guint64 *input, gsize count,
-										  gint shno, const guchar *key, gpointer ud);
+typedef uint64_t (*rspamd_shingles_filter)(uint64_t *input, gsize count,
+										   gint shno, const guchar *key, gpointer ud);
 
 /**
  * Generate shingles from the input of fixed size strings using lemmatizer
@@ -91,8 +91,8 @@ gdouble rspamd_shingles_compare(const struct rspamd_shingle *a,
 /**
  * Default filtering function
  */
-guint64 rspamd_shingles_default_filter(guint64 *input, gsize count,
-									   gint shno, const guchar *key, gpointer ud);
+uint64_t rspamd_shingles_default_filter(uint64_t *input, gsize count,
+										gint shno, const guchar *key, gpointer ud);
 
 #ifdef __cplusplus
 }

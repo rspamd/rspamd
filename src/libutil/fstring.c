@@ -229,8 +229,8 @@ void rspamd_fstring_erase(rspamd_fstring_t *str, gsize pos, gsize len)
 }
 
 /* Compat code */
-static guint64
-fstrhash_c(guint64 c, guint64 hval)
+static uint64_t
+fstrhash_c(uint64_t c, uint64_t hval)
 {
 	return mum_hash_step(hval, c);
 }
@@ -239,11 +239,11 @@ fstrhash_c(guint64 c, guint64 hval)
 /*
  * Return hash value for a string
  */
-guint32
+uint32_t
 rspamd_fstrhash_lc(const rspamd_ftok_t *str, gboolean is_utf)
 {
 	gsize i;
-	guint64 hval;
+	uint64_t hval;
 	const gchar *p, *end = NULL;
 	gunichar uc;
 
@@ -266,20 +266,20 @@ rspamd_fstrhash_lc(const rspamd_ftok_t *str, gboolean is_utf)
 		}
 	}
 	else {
-		gsize large_steps = str->len / sizeof(guint64);
-		for (i = 0; i < large_steps; i++, p += sizeof(guint64)) {
+		gsize large_steps = str->len / sizeof(uint64_t);
+		for (i = 0; i < large_steps; i++, p += sizeof(uint64_t)) {
 			/* Copy to the uint64 lowercasing each byte */
 			union {
-				char c[sizeof(guint64)];
-				guint64 iu64;
+				char c[sizeof(uint64_t)];
+				uint64_t iu64;
 			} t;
-			for (int j = 0; j < sizeof(guint64); j++) {
+			for (int j = 0; j < sizeof(uint64_t); j++) {
 				t.c[j] = g_ascii_tolower(p[j]);
 			}
 			hval = fstrhash_c(t.iu64, hval);
 		}
 
-		gsize remain = str->len % sizeof(guint64);
+		gsize remain = str->len % sizeof(uint64_t);
 		for (i = 0; i < remain; i++, p++) {
 			hval = fstrhash_c(g_ascii_tolower(*p), hval);
 		}

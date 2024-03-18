@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -110,9 +110,9 @@ struct lua_redis_userdata {
 };
 
 #define msg_debug_lua_redis(...) rspamd_conditional_debug_fast(NULL, NULL,                                        \
-																 rspamd_lua_redis_log_id, "lua_redis", ud->log_tag, \
-																 G_STRFUNC,                                         \
-																 __VA_ARGS__)
+															   rspamd_lua_redis_log_id, "lua_redis", ud->log_tag, \
+															   G_STRFUNC,                                         \
+															   __VA_ARGS__)
 INIT_LOG_MODULE(lua_redis)
 
 #define LUA_REDIS_SPECIFIC_REPLIED (1 << 0)
@@ -830,9 +830,9 @@ lua_redis_parse_args(lua_State *L, gint idx, const gchar *cmd,
 				gint r;
 				gchar numbuf[64];
 
-				if (val == (gdouble) ((gint64) val)) {
+				if (val == (gdouble) ((int64_t) val)) {
 					r = rspamd_snprintf(numbuf, sizeof(numbuf), "%L",
-										(gint64) val);
+										(int64_t) val);
 				}
 				else {
 					r = rspamd_snprintf(numbuf, sizeof(numbuf), "%f",

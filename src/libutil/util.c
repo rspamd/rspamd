@@ -1091,11 +1091,11 @@ void g_ptr_array_unref(GPtrArray *array)
 gboolean
 g_int64_equal(gconstpointer v1, gconstpointer v2)
 {
-	return *((const gint64 *) v1) == *((const gint64 *) v2);
+	return *((const int64_t *) v1) == *((const int64_t *) v2);
 }
 guint g_int64_hash(gconstpointer v)
 {
-	guint64 v64 = *(guint64 *) v;
+	uint64_t v64 = *(uint64_t *) v;
 
 	return (guint) (v ^ (v >> 32));
 }
@@ -1467,7 +1467,7 @@ rspamd_get_ticks(gboolean rdtsc_ok)
 
 #ifdef HAVE_RDTSC
 #ifdef __x86_64__
-	guint64 r64;
+	uint64_t r64;
 
 	if (rdtsc_ok) {
 		__builtin_ia32_lfence();
@@ -1586,16 +1586,16 @@ rspamd_get_calendar_ticks(void)
 	return res;
 }
 
-void rspamd_random_hex(gchar *buf, guint64 len)
+void rspamd_random_hex(gchar *buf, uint64_t len)
 {
 	static const gchar hexdigests[16] = "0123456789abcdef";
-	gint64 i;
+	int64_t i;
 
 	g_assert(len > 0);
 
 	ottery_rand_bytes((void *) buf, ceil(len / 2.0));
 
-	for (i = (gint64) len - 1; i >= 0; i -= 2) {
+	for (i = (int64_t) len - 1; i >= 0; i -= 2) {
 		buf[i] = hexdigests[buf[i / 2] & 0xf];
 
 		if (i > 0) {
@@ -1698,11 +1698,11 @@ RSPAMD_CONSTRUCTOR(blis_thread_fix_ctor)
 }
 #endif
 
-guint64
+uint64_t
 rspamd_hash_seed(void)
 {
 #if 0
-	static guint64 seed;
+	static uint64_t seed;
 
 	if (seed == 0) {
 		seed = ottery_rand_uint64 ();
@@ -1719,10 +1719,10 @@ rspamd_hash_seed(void)
 }
 
 static inline gdouble
-rspamd_double_from_int64(guint64 x)
+rspamd_double_from_int64(uint64_t x)
 {
 	const union {
-		guint64 i;
+		uint64_t i;
 		double d;
 	} u = {
 		.i = G_GUINT64_CONSTANT(0x3FF) << 52 | x >> 12};
@@ -1733,7 +1733,7 @@ rspamd_double_from_int64(guint64 x)
 gdouble
 rspamd_random_double(void)
 {
-	guint64 rnd_int;
+	uint64_t rnd_int;
 
 	rnd_int = ottery_rand_uint64();
 
@@ -1741,10 +1741,10 @@ rspamd_random_double(void)
 }
 
 
-static guint64 *
+static uint64_t *
 rspamd_fast_random_seed(void)
 {
-	static guint64 seed;
+	static uint64_t seed;
 
 	if (G_UNLIKELY(seed == 0)) {
 		ottery_rand_bytes((void *) &seed, sizeof(seed));
@@ -1799,12 +1799,12 @@ rspamd_random_double_fast(void)
 
 /* xoshiro256+ */
 inline gdouble
-rspamd_random_double_fast_seed(guint64 *seed)
+rspamd_random_double_fast_seed(uint64_t *seed)
 {
 	return rspamd_double_from_int64(rspamd_random_uint64_fast_seed(seed));
 }
 
-guint64
+uint64_t
 rspamd_random_uint64_fast(void)
 {
 	return rspamd_random_uint64_fast_seed(rspamd_fast_random_seed());
@@ -1852,7 +1852,7 @@ rspamd_constant_memcmp(const void *a, const void *b, gsize len)
 		r |= (d & m);
 	}
 
-	return (((gint32) (guint16) ((guint32) r + 0x8000) - 0x8000) == 0);
+	return (((int32_t) (guint16) ((uint32_t) r + 0x8000) - 0x8000) == 0);
 }
 
 int rspamd_file_xopen(const char *fname, int oflags, guint mode,
@@ -2032,10 +2032,10 @@ rspamd_normalize_probability(gdouble x, gdouble bias)
 /*
  * Calculations from musl libc
  */
-guint64
+uint64_t
 rspamd_tm_to_time(const struct tm *tm, glong tz)
 {
-	guint64 result;
+	uint64_t result;
 	gboolean is_leap = FALSE;
 	gint leaps, y = tm->tm_year, cycles, rem, centuries;
 	glong offset = (tz / 100) * 3600 + (tz % 100) * 60;
@@ -2125,19 +2125,19 @@ rspamd_tm_to_time(const struct tm *tm, glong tz)
 }
 
 
-void rspamd_gmtime(gint64 ts, struct tm *dest)
+void rspamd_gmtime(int64_t ts, struct tm *dest)
 {
-	guint64 days, secs, years;
+	uint64_t days, secs, years;
 	int remdays, remsecs, remyears;
 	int leap_400_cycles, leap_100_cycles, leap_4_cycles;
 	int months;
 	int wday, yday, leap;
 	/* From March */
 	static const uint8_t days_in_month[] = {31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 31, 29};
-	static const guint64 leap_epoch = 946684800ULL + 86400 * (31 + 29);
-	static const guint64 days_per_400y = 365 * 400 + 97;
-	static const guint64 days_per_100y = 365 * 100 + 24;
-	static const guint64 days_per_4y = 365 * 4 + 1;
+	static const uint64_t leap_epoch = 946684800ULL + 86400 * (31 + 29);
+	static const uint64_t days_per_400y = 365 * 400 + 97;
+	static const uint64_t days_per_100y = 365 * 100 + 24;
+	static const uint64_t days_per_4y = 365 * 4 + 1;
 
 	secs = ts - leap_epoch;
 	days = secs / 86400;
@@ -2218,7 +2218,7 @@ void rspamd_gmtime(gint64 ts, struct tm *dest)
 #endif
 }
 
-void rspamd_localtime(gint64 ts, struct tm *dest)
+void rspamd_localtime(int64_t ts, struct tm *dest)
 {
 	time_t t = ts;
 	localtime_r(&t, dest);

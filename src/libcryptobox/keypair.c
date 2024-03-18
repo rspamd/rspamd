@@ -447,7 +447,7 @@ rspamd_pubkey_get_nm(struct rspamd_cryptobox_pubkey *p,
 	g_assert(p != NULL);
 
 	if (p->nm) {
-		if (memcmp(kp->id, (const guchar *) &p->nm->sk_id, sizeof(guint64)) == 0) {
+		if (memcmp(kp->id, (const guchar *) &p->nm->sk_id, sizeof(uint64_t)) == 0) {
 			return p->nm->nm;
 		}
 
@@ -472,7 +472,7 @@ rspamd_pubkey_calculate_nm(struct rspamd_cryptobox_pubkey *p,
 			abort();
 		}
 
-		memcpy(&p->nm->sk_id, kp->id, sizeof(guint64));
+		memcpy(&p->nm->sk_id, kp->id, sizeof(uint64_t));
 		REF_INIT_RETAIN(p->nm, rspamd_cryptobox_nm_dtor);
 	}
 

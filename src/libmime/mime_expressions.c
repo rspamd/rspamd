@@ -175,8 +175,8 @@ const struct rspamd_atom_subr mime_expr_subr = {
 	.destroy = rspamd_mime_expr_destroy};
 
 static struct _fl *list_ptr = &rspamd_functions_list[0];
-static guint32 functions_number = sizeof(rspamd_functions_list) /
-								  sizeof(struct _fl);
+static uint32_t functions_number = sizeof(rspamd_functions_list) /
+								   sizeof(struct _fl);
 static gboolean list_allocated = FALSE;
 
 /* Bsearch routine */

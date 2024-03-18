@@ -25,10 +25,10 @@
 #include "libserver/maps/map.h"
 #include "lua/lua_common.h"
 
-static const guint64 rspamd_regexp_cb_magic = 0xca9d9649fc3e2659ULL;
+static const uint64_t rspamd_regexp_cb_magic = 0xca9d9649fc3e2659ULL;
 
 struct regexp_module_item {
-	guint64 magic;
+	uint64_t magic;
 	struct rspamd_expression *expr;
 	const gchar *symbol;
 	struct ucl_lua_funcdata *lua_function;

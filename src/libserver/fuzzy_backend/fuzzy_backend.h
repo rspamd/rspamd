@@ -39,9 +39,9 @@ typedef void (*rspamd_fuzzy_update_cb)(gboolean success,
 									   guint nignored,
 									   void *ud);
 
-typedef void (*rspamd_fuzzy_version_cb)(guint64 rev, void *ud);
+typedef void (*rspamd_fuzzy_version_cb)(uint64_t rev, void *ud);
 
-typedef void (*rspamd_fuzzy_count_cb)(guint64 count, void *ud);
+typedef void (*rspamd_fuzzy_count_cb)(uint64_t count, void *ud);
 
 typedef gboolean (*rspamd_fuzzy_periodic_cb)(void *ud);
 

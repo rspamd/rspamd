@@ -1,11 +1,11 @@
-/*-
- * Copyright 2019 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -667,7 +667,7 @@ lua_text_span(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t = lua_check_text(L, 1);
-	gint64 start = lua_tointeger(L, 2), len = -1;
+	int64_t start = lua_tointeger(L, 2), len = -1;
 
 	if (t && start >= 1 && start <= t->len) {
 		if (lua_isnumber(L, 3)) {
@@ -760,16 +760,16 @@ lua_text_sub(lua_State *L)
 	return 1;
 }
 
-static gint64
+static int64_t
 rspamd_lua_text_push_line(lua_State *L,
 						  struct rspamd_lua_text *t,
-						  gint64 start_offset,
+						  int64_t start_offset,
 						  const gchar *sep_pos,
 						  gboolean stringify)
 {
 	const gchar *start;
 	gsize len;
-	gint64 ret;
+	int64_t ret;
 
 	start = t->start + start_offset;
 	len = sep_pos ? (sep_pos - start) : (t->len - start_offset);
@@ -806,7 +806,7 @@ rspamd_lua_text_readline(lua_State *L)
 {
 	struct rspamd_lua_text *t = lua_touserdata(L, lua_upvalueindex(1));
 	gboolean stringify = lua_toboolean(L, lua_upvalueindex(2));
-	gint64 pos = lua_tointeger(L, lua_upvalueindex(3));
+	int64_t pos = lua_tointeger(L, lua_upvalueindex(3));
 
 	if (pos < 0) {
 		return luaL_error(L, "invalid pos: %d", (gint) pos);
@@ -878,7 +878,7 @@ rspamd_lua_text_regexp_split(lua_State *L)
 	struct rspamd_lua_regexp *re = *(struct rspamd_lua_regexp **)
 									   lua_touserdata(L, lua_upvalueindex(2));
 	gboolean stringify = lua_toboolean(L, lua_upvalueindex(3));
-	gint64 pos = lua_tointeger(L, lua_upvalueindex(4));
+	int64_t pos = lua_tointeger(L, lua_upvalueindex(4));
 	gboolean matched;
 
 	if (pos < 0) {
@@ -1447,7 +1447,7 @@ lua_text_find(lua_State *L)
 }
 
 #define BITOP(a, b, op) \
-	((a)[(guint64) (b) / (8u * sizeof *(a))] op(guint64) 1 << ((guint64) (b) % (8u * sizeof *(a))))
+	((a)[(uint64_t) (b) / (8u * sizeof *(a))] op(uint64_t) 1 << ((uint64_t) (b) % (8u * sizeof *(a))))
 
 static gint
 lua_text_exclude_chars(lua_State *L)
@@ -1457,7 +1457,7 @@ lua_text_exclude_chars(lua_State *L)
 	gssize patlen;
 	const gchar *pat = lua_tolstring(L, 2, &patlen), *p, *end;
 	gchar *dest, *d;
-	guint64 byteset[32 / sizeof(guint64)]; /* Bitset for ascii */
+	uint64_t byteset[32 / sizeof(uint64_t)]; /* Bitset for ascii */
 	gboolean copy = TRUE;
 	guint *plen;
 
@@ -1569,7 +1569,7 @@ lua_text_oneline(lua_State *L)
 	struct rspamd_lua_text *t = lua_check_text(L, 1);
 	const gchar *p, *end;
 	gchar *dest, *d;
-	guint64 byteset[32 / sizeof(guint64)]; /* Bitset for ascii */
+	uint64_t byteset[32 / sizeof(uint64_t)]; /* Bitset for ascii */
 	gboolean copy = TRUE, seen_8bit = FALSE;
 	guint *plen;
 

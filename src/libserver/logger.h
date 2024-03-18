@@ -189,7 +189,7 @@ bool rspamd_conditional_debug_fast(rspamd_logger_t *logger,
 bool rspamd_conditional_debug_fast_num_id(rspamd_logger_t *logger,
 										  rspamd_inet_addr_t *addr,
 										  gint mod_id,
-										  const gchar *module, guint64 id,
+										  const gchar *module, uint64_t id,
 										  const gchar *function, const gchar *fmt, ...);
 gboolean rspamd_logger_need_log(rspamd_logger_t *rspamd_log,
 								GLogLevelFlags log_level,
@@ -234,7 +234,7 @@ void rspamd_log_nodebug(rspamd_logger_t *logger);
  * 2 - info messages
  * 3 - debug messages
  */
-const guint64 *rspamd_log_counters(rspamd_logger_t *logger);
+const uint64_t *rspamd_log_counters(rspamd_logger_t *logger);
 
 /**
  * Returns errors ring buffer as ucl array

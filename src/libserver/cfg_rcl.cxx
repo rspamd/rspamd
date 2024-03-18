@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2792,16 +2792,16 @@ rspamd_rcl_parse_struct_integer(rspamd_mempool_t *pool,
 	auto *pd = (struct rspamd_rcl_struct_parser *) ud;
 	union {
 		gint *ip;
-		gint32 *i32p;
+		int32_t *i32p;
 		gint16 *i16p;
-		gint64 *i64p;
+		int64_t *i64p;
 		guint *up;
 		gsize *sp;
 	} target;
 	int64_t val;
 
 	if (pd->flags == RSPAMD_CL_FLAG_INT_32) {
-		target.i32p = (gint32 *) (((gchar *) pd->user_struct) + pd->offset);
+		target.i32p = (int32_t *) (((gchar *) pd->user_struct) + pd->offset);
 		if (!ucl_object_toint_safe(obj, &val)) {
 			g_set_error(err,
 						CFG_RCL_ERROR,
@@ -2814,7 +2814,7 @@ rspamd_rcl_parse_struct_integer(rspamd_mempool_t *pool,
 		*target.i32p = val;
 	}
 	else if (pd->flags == RSPAMD_CL_FLAG_INT_64) {
-		target.i64p = (gint64 *) (((gchar *) pd->user_struct) + pd->offset);
+		target.i64p = (int64_t *) (((gchar *) pd->user_struct) + pd->offset);
 		if (!ucl_object_toint_safe(obj, &val)) {
 			g_set_error(err,
 						CFG_RCL_ERROR,
@@ -2917,7 +2917,7 @@ rspamd_rcl_parse_struct_time(rspamd_mempool_t *pool,
 	auto *pd = (struct rspamd_rcl_struct_parser *) ud;
 	union {
 		gint *psec;
-		guint32 *pu32;
+		uint32_t *pu32;
 		gdouble *pdv;
 		struct timeval *ptv;
 		struct timespec *pts;
@@ -2955,7 +2955,7 @@ rspamd_rcl_parse_struct_time(rspamd_mempool_t *pool,
 		*target.psec = val * 1000;
 	}
 	else if (pd->flags == RSPAMD_CL_FLAG_TIME_UINT_32) {
-		target.pu32 = (guint32 *) (((gchar *) pd->user_struct) + pd->offset);
+		target.pu32 = (uint32_t *) (((gchar *) pd->user_struct) + pd->offset);
 		*target.pu32 = val * 1000;
 	}
 	else {
@@ -3385,7 +3385,7 @@ static int
 rspamd_rcl_emitter_append_c(unsigned char c, size_t nchars, void *ud)
 {
 	auto *hs = (rspamd_cryptobox_hash_state_t *) ud;
-	guint64 d[2];
+	uint64_t d[2];
 
 	d[0] = nchars;
 	d[1] = c;

@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -165,7 +165,7 @@ gint rspamd_stat_cache_sqlite3_check(struct rspamd_task *task,
 	gchar *user = NULL;
 	guint i;
 	gint rc;
-	gint64 flag;
+	int64_t flag;
 
 	if (task->tokens == NULL || task->tokens->len == 0) {
 		return RSPAMD_LEARN_IGNORE;
@@ -193,7 +193,7 @@ gint rspamd_stat_cache_sqlite3_check(struct rspamd_task *task,
 		rspamd_sqlite3_run_prstmt(task->task_pool, ctx->db, ctx->prstmt,
 								  RSPAMD_STAT_CACHE_TRANSACTION_START_DEF);
 		rc = rspamd_sqlite3_run_prstmt(task->task_pool, ctx->db, ctx->prstmt,
-									   RSPAMD_STAT_CACHE_GET_LEARN, (gint64) rspamd_cryptobox_HASHBYTES,
+									   RSPAMD_STAT_CACHE_GET_LEARN, (int64_t) rspamd_cryptobox_HASHBYTES,
 									   out, &flag);
 		rspamd_sqlite3_run_prstmt(task->task_pool, ctx->db, ctx->prstmt,
 								  RSPAMD_STAT_CACHE_TRANSACTION_COMMIT);
@@ -226,7 +226,7 @@ gint rspamd_stat_cache_sqlite3_learn(struct rspamd_task *task,
 	struct rspamd_stat_sqlite3_ctx *ctx = runtime;
 	gboolean unlearn = !!(task->flags & RSPAMD_TASK_FLAG_UNLEARN);
 	guchar *h;
-	gint64 flag;
+	int64_t flag;
 
 	h = rspamd_mempool_get_variable(task->task_pool, "words_hash");
 
@@ -242,7 +242,7 @@ gint rspamd_stat_cache_sqlite3_learn(struct rspamd_task *task,
 								  RSPAMD_STAT_CACHE_TRANSACTION_START_IM);
 		rspamd_sqlite3_run_prstmt(task->task_pool, ctx->db, ctx->prstmt,
 								  RSPAMD_STAT_CACHE_ADD_LEARN,
-								  (gint64) rspamd_cryptobox_HASHBYTES, h, flag);
+								  (int64_t) rspamd_cryptobox_HASHBYTES, h, flag);
 		rspamd_sqlite3_run_prstmt(task->task_pool, ctx->db, ctx->prstmt,
 								  RSPAMD_STAT_CACHE_TRANSACTION_COMMIT);
 	}
@@ -252,7 +252,7 @@ gint rspamd_stat_cache_sqlite3_learn(struct rspamd_task *task,
 		rspamd_sqlite3_run_prstmt(task->task_pool, ctx->db, ctx->prstmt,
 								  RSPAMD_STAT_CACHE_UPDATE_LEARN,
 								  flag,
-								  (gint64) rspamd_cryptobox_HASHBYTES, h);
+								  (int64_t) rspamd_cryptobox_HASHBYTES, h);
 		rspamd_sqlite3_run_prstmt(task->task_pool, ctx->db, ctx->prstmt,
 								  RSPAMD_STAT_CACHE_TRANSACTION_COMMIT);
 	}

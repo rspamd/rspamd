@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -64,7 +64,7 @@ int rspamd_sqlite3_run_prstmt(rspamd_mempool_t *pool, sqlite3 *db, GArray *stmts
 	va_list ap;
 	sqlite3_stmt *stmt;
 	gint i, rowid, nargs, j;
-	gint64 len;
+	int64_t len;
 	gpointer p;
 	struct rspamd_sqlite3_prstmt *nst;
 	const char *argtypes;
@@ -101,7 +101,7 @@ int rspamd_sqlite3_run_prstmt(rspamd_mempool_t *pool, sqlite3 *db, GArray *stmts
 		case 'B':
 
 			for (j = 0; j < nargs; j++, rowid++) {
-				len = va_arg(ap, gint64);
+				len = va_arg(ap, int64_t);
 				sqlite3_bind_text(stmt, rowid, va_arg(ap, const char *), len,
 								  SQLITE_STATIC);
 			}
@@ -111,7 +111,7 @@ int rspamd_sqlite3_run_prstmt(rspamd_mempool_t *pool, sqlite3 *db, GArray *stmts
 		case 'I':
 
 			for (j = 0; j < nargs; j++, rowid++) {
-				sqlite3_bind_int64(stmt, rowid, va_arg(ap, gint64));
+				sqlite3_bind_int64(stmt, rowid, va_arg(ap, int64_t));
 			}
 
 			nargs = 1;
@@ -141,20 +141,20 @@ int rspamd_sqlite3_run_prstmt(rspamd_mempool_t *pool, sqlite3 *db, GArray *stmts
 				*va_arg(ap, char **) = g_strdup(sqlite3_column_text(stmt, i));
 				break;
 			case 'I':
-				*va_arg(ap, gint64 *) = sqlite3_column_int64(stmt, i);
+				*va_arg(ap, int64_t *) = sqlite3_column_int64(stmt, i);
 				break;
 			case 'S':
 				*va_arg(ap, int *) = sqlite3_column_int(stmt, i);
 				break;
 			case 'L':
-				*va_arg(ap, gint64 *) = sqlite3_last_insert_rowid(db);
+				*va_arg(ap, int64_t *) = sqlite3_last_insert_rowid(db);
 				break;
 			case 'B':
 				len = sqlite3_column_bytes(stmt, i);
 				g_assert(len >= 0);
 				p = g_malloc(len);
 				memcpy(p, sqlite3_column_blob(stmt, i), len);
-				*va_arg(ap, gint64 *) = len;
+				*va_arg(ap, int64_t *) = len;
 				*va_arg(ap, gpointer *) = p;
 				break;
 			}
@@ -464,7 +464,7 @@ rspamd_sqlite3_open_or_create(rspamd_mempool_t *pool, const gchar *path, const g
 	else if (has_lock && version > 0) {
 		/* Check user version */
 		sqlite3_stmt *stmt = NULL;
-		guint32 db_ver;
+		uint32_t db_ver;
 		GString *new_ver_sql;
 
 		if (sqlite3_prepare(sqlite, db_version, -1, &stmt, NULL) != SQLITE_OK) {

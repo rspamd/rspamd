@@ -65,7 +65,7 @@ struct rspamd_regexp_s {
 	ref_entry_t ref;
 	gpointer ud;
 	gpointer re_class;
-	guint64 cache_id;
+	uint64_t cache_id;
 	gsize match_limit;
 	guint max_hits;
 	gint flags;
@@ -901,7 +901,7 @@ guint rspamd_regexp_set_maxhits(rspamd_regexp_t *re, guint new_maxhits)
 	return old_hits;
 }
 
-guint64
+uint64_t
 rspamd_regexp_get_cache_id(const rspamd_regexp_t *re)
 {
 	g_assert(re != NULL);
@@ -909,10 +909,10 @@ rspamd_regexp_get_cache_id(const rspamd_regexp_t *re)
 	return re->cache_id;
 }
 
-guint64
-rspamd_regexp_set_cache_id(rspamd_regexp_t *re, guint64 id)
+uint64_t
+rspamd_regexp_set_cache_id(rspamd_regexp_t *re, uint64_t id)
 {
-	guint64 old;
+	uint64_t old;
 
 	g_assert(re != NULL);
 	old = re->cache_id;
@@ -999,11 +999,11 @@ rspamd_regexp_equal(gconstpointer a, gconstpointer b)
 	return (memcmp(ia, ib, sizeof(regexp_id_t)) == 0);
 }
 
-guint32
+uint32_t
 rspamd_regexp_hash(gconstpointer a)
 {
 	const guchar *ia = a;
-	guint32 res;
+	uint32_t res;
 
 	memcpy(&res, ia, sizeof(res));
 

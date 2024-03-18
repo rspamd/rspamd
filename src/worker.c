@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -67,7 +67,7 @@ worker_t normal_worker = {
 													  __VA_ARGS__)
 
 struct rspamd_worker_session {
-	gint64 magic;
+	int64_t magic;
 	struct rspamd_task *task;
 	gint fd;
 	rspamd_inet_addr_t *addr;
@@ -226,7 +226,7 @@ rspamd_worker_error_handler(struct rspamd_http_connection *conn, GError *err)
 	 * Hence, we need to distinguish our arguments...
 	 *
 	 * The approach here is simple:
-	 * - struct rspamd_worker_session starts with gint64 `magic` and we set it to
+	 * - struct rspamd_worker_session starts with int64_t `magic` and we set it to
 	 * MAX_INT64
 	 * - struct rspamd_task starts with a pointer (or pointer + command on 32 bit system)
 	 *
