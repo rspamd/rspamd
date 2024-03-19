@@ -237,7 +237,7 @@ local function check_known_incoming_mail_callback(task)
   if list_of_senders then
     for _, sndr in ipairs(list_of_senders) do
       if sndr == sender then
-        task:insert_result('CHECK_INC_MAIL', 1.0, string.format('Incoming mail and it\'s sender is known'))
+        task:insert_result('INC_MAIL_KNOWN', 1.0, string.format('Incoming mail and it\'s sender is known'))
       end
     end
   end
@@ -279,7 +279,7 @@ if opts then
     })
 
     rspamd_config:register_symbol({
-      name = 'CHECK_INC_MAIL',
+      name = 'INC_MAIL_KNOWN',
       type = 'normal',
       callback = check_known_incoming_mail_callback,
       score = 1.0
