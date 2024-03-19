@@ -6,7 +6,7 @@ Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 *** Variables ***
 ${REDIS_SCOPE}                    Suite
 ${RSPAMD_SCOPE}                   Suite
-${SETTINGS_REPLIES}  {symbols_enabled = [REPLIES_CHECK, REPLIES_SET, REPLY]}
+${SETTINGS_REPLIES}               {symbols_enabled = [REPLIES_CHECK, REPLIES_SET, REPLY]}
 
 *** Test Cases ***
 Reply to 1 sender 1 recipients
