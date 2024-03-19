@@ -30,16 +30,16 @@
 static gboolean openssl = FALSE;
 static gboolean verify = FALSE;
 static gboolean quiet = FALSE;
-static gchar *suffix = NULL;
-static gchar *pubkey_file = NULL;
-static gchar *pubkey = NULL;
-static gchar *pubout = NULL;
-static gchar *keypair_file = NULL;
-static gchar *editor = NULL;
+static char *suffix = NULL;
+static char *pubkey_file = NULL;
+static char *pubkey = NULL;
+static char *pubout = NULL;
+static char *keypair_file = NULL;
+static char *editor = NULL;
 static gboolean edit = FALSE;
 enum rspamd_cryptobox_mode mode = RSPAMD_CRYPTOBOX_MODE_25519;
 
-static void rspamadm_signtool(gint argc, gchar **argv,
+static void rspamadm_signtool(int argc, char **argv,
 							  const struct rspamadm_command *cmd);
 static const char *rspamadm_signtool_help(gboolean full_help,
 										  const struct rspamadm_command *cmd);
@@ -103,15 +103,15 @@ rspamadm_signtool_help(gboolean full_help,
 	return help_str;
 }
 
-static gint
-rspamadm_edit_file(const gchar *fname)
+static int
+rspamadm_edit_file(const char *fname)
 {
-	gchar tmppath[PATH_MAX], run_cmdline[PATH_MAX];
-	guchar *map;
+	char tmppath[PATH_MAX], run_cmdline[PATH_MAX];
+	unsigned char *map;
 	gsize len = 0;
-	gint fd_out, retcode, child_argc;
+	int fd_out, retcode, child_argc;
 	GPid child_pid;
-	gchar *tmpdir, **child_argv = NULL;
+	char *tmpdir, **child_argv = NULL;
 	struct stat st;
 	GError *err = NULL;
 
@@ -278,14 +278,14 @@ rspamadm_edit_file(const gchar *fname)
 }
 
 static bool
-rspamadm_sign_file(const gchar *fname, struct rspamd_cryptobox_keypair *kp)
+rspamadm_sign_file(const char *fname, struct rspamd_cryptobox_keypair *kp)
 {
-	gint fd_sig, fd_input;
-	guchar sig[rspamd_cryptobox_MAX_SIGBYTES], *map;
-	gchar sigpath[PATH_MAX];
+	int fd_sig, fd_input;
+	unsigned char sig[rspamd_cryptobox_MAX_SIGBYTES], *map;
+	char sigpath[PATH_MAX];
 	FILE *pub_fp;
 	struct stat st;
-	const guchar *sk;
+	const unsigned char *sk;
 
 	if (suffix == NULL) {
 		suffix = ".sig";
@@ -392,11 +392,11 @@ rspamadm_sign_file(const gchar *fname, struct rspamd_cryptobox_keypair *kp)
 }
 
 static bool
-rspamadm_verify_file(const gchar *fname, const guchar *pk)
+rspamadm_verify_file(const char *fname, const unsigned char *pk)
 {
-	gint fd_sig, fd_input;
-	guchar *map, *map_sig;
-	gchar sigpath[PATH_MAX];
+	int fd_sig, fd_input;
+	unsigned char *map, *map_sig;
+	char sigpath[PATH_MAX];
 	struct stat st, st_sig;
 	bool ret;
 
@@ -442,7 +442,7 @@ rspamadm_verify_file(const gchar *fname, const guchar *pk)
 	if (st_sig.st_size != rspamd_cryptobox_signature_bytes(mode)) {
 		close(fd_sig);
 		rspamd_fprintf(stderr, "invalid signature size %s: %ud\n", fname,
-					   (guint) st_sig.st_size);
+					   (unsigned int) st_sig.st_size);
 		munmap(map, st.st_size);
 		exit(EXIT_FAILURE);
 	}
@@ -476,7 +476,7 @@ rspamadm_verify_file(const gchar *fname, const guchar *pk)
 
 
 static void
-rspamadm_signtool(gint argc, gchar **argv, const struct rspamadm_command *cmd)
+rspamadm_signtool(int argc, char **argv, const struct rspamadm_command *cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;
@@ -485,7 +485,7 @@ rspamadm_signtool(gint argc, gchar **argv, const struct rspamadm_command *cmd)
 	struct rspamd_cryptobox_pubkey *pk;
 	struct rspamd_cryptobox_keypair *kp;
 	gsize fsize, flen;
-	gint i;
+	int i;
 
 	context = g_option_context_new(
 		"keypair - create encryption keys");
@@ -520,8 +520,8 @@ rspamadm_signtool(gint argc, gchar **argv, const struct rspamadm_command *cmd)
 		g_assert(pubkey || pubkey_file);
 
 		if (pubkey_file) {
-			gint fd;
-			gchar *map;
+			int fd;
+			char *map;
 			struct stat st;
 
 			fd = open(pubkey_file, O_RDONLY);
@@ -555,7 +555,7 @@ rspamadm_signtool(gint argc, gchar **argv, const struct rspamadm_command *cmd)
 			if (pk == NULL) {
 				rspamd_fprintf(stderr, "bad size %s: %ud, %ud expected\n",
 							   pubkey_file,
-							   (guint) flen,
+							   (unsigned int) flen,
 							   rspamd_cryptobox_pk_sig_bytes(mode));
 				exit(EXIT_FAILURE);
 			}
@@ -569,7 +569,7 @@ rspamadm_signtool(gint argc, gchar **argv, const struct rspamadm_command *cmd)
 			if (pk == NULL) {
 				rspamd_fprintf(stderr, "bad size %s: %ud, %ud expected\n",
 							   pubkey_file,
-							   (guint) strlen(pubkey),
+							   (unsigned int) strlen(pubkey),
 							   rspamd_cryptobox_pk_sig_bytes(mode));
 				exit(EXIT_FAILURE);
 			}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,7 +65,7 @@
 static inline uint32_t
 rspamd_entry_hash(const char *str)
 {
-	return (guint) rspamd_cryptobox_fast_hash(str, strlen(str), rspamd_hash_seed());
+	return (unsigned int) rspamd_cryptobox_fast_hash(str, strlen(str), rspamd_hash_seed());
 }
 
 static inline int
@@ -75,7 +75,7 @@ rspamd_entry_equal(const char *k1, const char *k2)
 }
 
 
-KHASH_INIT(mempool_entry, const gchar *, struct rspamd_mempool_entry_point *,
+KHASH_INIT(mempool_entry, const char *, struct rspamd_mempool_entry_point *,
 		   1, rspamd_entry_hash, rspamd_entry_equal)
 
 static khash_t(mempool_entry) *mempool_entries = NULL;
@@ -94,19 +94,19 @@ static gboolean always_malloc = FALSE;
 static gsize
 pool_chain_free(struct _pool_chain *chain)
 {
-	gint64 occupied = chain->pos - chain->begin + MIN_MEM_ALIGNMENT;
+	int64_t occupied = chain->pos - chain->begin + MIN_MEM_ALIGNMENT;
 
-	return (occupied < (gint64) chain->slice_size ? chain->slice_size - occupied : 0);
+	return (occupied < (int64_t) chain->slice_size ? chain->slice_size - occupied : 0);
 }
 
 /* By default allocate 4Kb chunks of memory */
 #define FIXED_POOL_SIZE 4096
 
 static inline struct rspamd_mempool_entry_point *
-rspamd_mempool_entry_new(const gchar *loc)
+rspamd_mempool_entry_new(const char *loc)
 {
 	struct rspamd_mempool_entry_point **pentry, *entry;
-	gint r;
+	int r;
 	khiter_t k;
 
 	k = kh_put(mempool_entry, mempool_entries, loc, &r);
@@ -150,7 +150,7 @@ RSPAMD_DESTRUCTOR(rspamd_mempool_entries_dtor)
 }
 
 static inline struct rspamd_mempool_entry_point *
-rspamd_mempool_get_entry(const gchar *loc)
+rspamd_mempool_get_entry(const char *loc)
 {
 	khiter_t k;
 	struct rspamd_mempool_entry_point *elt;
@@ -194,9 +194,9 @@ rspamd_mempool_chain_new(gsize size, gsize alignment, enum rspamd_mempool_chain_
 			abort();
 		}
 		chain = map;
-		chain->begin = ((guint8 *) chain) + sizeof(struct _pool_chain);
+		chain->begin = ((uint8_t *) chain) + sizeof(struct _pool_chain);
 #elif defined(HAVE_MMAP_ZERO)
-		gint fd;
+		int fd;
 
 		fd = open("/dev/zero", O_RDWR);
 		if (fd == -1) {
@@ -214,7 +214,7 @@ rspamd_mempool_chain_new(gsize size, gsize alignment, enum rspamd_mempool_chain_
 			abort();
 		}
 		chain = map;
-		chain->begin = ((guint8 *) chain) + sizeof(struct _pool_chain);
+		chain->begin = ((uint8_t *) chain) + sizeof(struct _pool_chain);
 #else
 #error No mmap methods are defined
 #endif
@@ -226,7 +226,7 @@ rspamd_mempool_chain_new(gsize size, gsize alignment, enum rspamd_mempool_chain_
 		optimal_size = sys_alloc_size(total_size);
 #endif
 		total_size = MAX(total_size, optimal_size);
-		gint ret = posix_memalign(&map, alignment, total_size);
+		int ret = posix_memalign(&map, alignment, total_size);
 
 		if (ret != 0 || map == NULL) {
 			g_error("%s: failed to allocate %" G_GSIZE_FORMAT " bytes: %d - %s",
@@ -235,7 +235,7 @@ rspamd_mempool_chain_new(gsize size, gsize alignment, enum rspamd_mempool_chain_
 		}
 
 		chain = map;
-		chain->begin = ((guint8 *) chain) + sizeof(struct _pool_chain);
+		chain->begin = ((uint8_t *) chain) + sizeof(struct _pool_chain);
 		g_atomic_int_add(&mem_pool_stat->bytes_allocated, total_size);
 		g_atomic_int_inc(&mem_pool_stat->chunks_allocated);
 	}
@@ -280,7 +280,7 @@ rspamd_mempool_append_chain(rspamd_mempool_t *pool,
  * @return new memory pool object
  */
 rspamd_mempool_t *
-rspamd_mempool_new_(gsize size, const gchar *tag, gint flags, const gchar *loc)
+rspamd_mempool_new_(gsize size, const char *tag, int flags, const char *loc)
 {
 	rspamd_mempool_t *new_pool;
 	gpointer map;
@@ -301,7 +301,7 @@ rspamd_mempool_new_(gsize size, const gchar *tag, gint flags, const gchar *loc)
 		}
 		mem_pool_stat = (rspamd_mempool_stat_t *) map;
 #elif defined(HAVE_MMAP_ZERO)
-		gint fd;
+		int fd;
 
 		fd = open("/dev/zero", O_RDWR);
 		g_assert(fd != -1);
@@ -359,9 +359,9 @@ rspamd_mempool_new_(gsize size, const gchar *tag, gint flags, const gchar *loc)
 	 * alignment (if needed)
 	 * memory chunk
 	 */
-	guchar *mem_chunk;
-	gint ret = posix_memalign((void **) &mem_chunk, MIN_MEM_ALIGNMENT,
-							  total_size);
+	unsigned char *mem_chunk;
+	int ret = posix_memalign((void **) &mem_chunk, MIN_MEM_ALIGNMENT,
+							 total_size);
 	gsize priv_offset;
 
 	if (ret != 0 || mem_chunk == NULL) {
@@ -416,10 +416,10 @@ rspamd_mempool_new_(gsize size, const gchar *tag, gint flags, const gchar *loc)
 									 priv_offset +
 									 sizeof(struct rspamd_mempool_specific));
 
-	guchar *unaligned = mem_chunk +
-						priv_offset +
-						sizeof(struct rspamd_mempool_specific) +
-						sizeof(struct _pool_chain);
+	unsigned char *unaligned = mem_chunk +
+							   priv_offset +
+							   sizeof(struct rspamd_mempool_specific) +
+							   sizeof(struct _pool_chain);
 
 	nchain->slice_size = size;
 	nchain->begin = unaligned;
@@ -430,7 +430,7 @@ rspamd_mempool_new_(gsize size, const gchar *tag, gint flags, const gchar *loc)
 
 	/* Adjust stats */
 	g_atomic_int_add(&mem_pool_stat->bytes_allocated,
-					 (gint) size);
+					 (int) size);
 	g_atomic_int_add(&mem_pool_stat->chunks_allocated, 1);
 
 	return new_pool;
@@ -439,14 +439,14 @@ rspamd_mempool_new_(gsize size, const gchar *tag, gint flags, const gchar *loc)
 static void *
 memory_pool_alloc_common(rspamd_mempool_t *pool, gsize size, gsize alignment,
 						 enum rspamd_mempool_chain_type pool_type,
-						 const gchar *loc)
+						 const char *loc)
 	RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
 
 
-void rspamd_mempool_notify_alloc_(rspamd_mempool_t *pool, gsize size, const gchar *loc)
+void rspamd_mempool_notify_alloc_(rspamd_mempool_t *pool, gsize size, const char *loc)
 {
 	if (pool && G_UNLIKELY(pool->priv->flags & RSPAMD_MEMPOOL_DEBUG)) {
-		GHashTable *debug_tbl = *(GHashTable **) (((guchar *) pool + sizeof(*pool)));
+		GHashTable *debug_tbl = *(GHashTable **) (((unsigned char *) pool + sizeof(*pool)));
 		gpointer ptr;
 
 		ptr = g_hash_table_lookup(debug_tbl, loc);
@@ -464,9 +464,9 @@ void rspamd_mempool_notify_alloc_(rspamd_mempool_t *pool, gsize size, const gcha
 
 static void *
 memory_pool_alloc_common(rspamd_mempool_t *pool, gsize size, gsize alignment,
-						 enum rspamd_mempool_chain_type pool_type, const gchar *loc)
+						 enum rspamd_mempool_chain_type pool_type, const char *loc)
 {
-	guint8 *tmp;
+	uint8_t *tmp;
 	struct _pool_chain *new, *cur;
 	gsize free = 0;
 
@@ -549,7 +549,7 @@ memory_pool_alloc_common(rspamd_mempool_t *pool, gsize size, gsize alignment,
 
 
 void *
-rspamd_mempool_alloc_(rspamd_mempool_t *pool, gsize size, gsize alignment, const gchar *loc)
+rspamd_mempool_alloc_(rspamd_mempool_t *pool, gsize size, gsize alignment, const char *loc)
 {
 	return memory_pool_alloc_common(pool, size, alignment, RSPAMD_MEMPOOL_NORMAL, loc);
 }
@@ -561,7 +561,7 @@ rspamd_mempool_alloc_(rspamd_mempool_t *pool, gsize size, gsize alignment, const
 #define MUL_NO_OVERFLOW (1UL << (sizeof(gsize) * 4))
 
 void *
-rspamd_mempool_alloc_array_(rspamd_mempool_t *pool, gsize nmemb, gsize size, gsize alignment, const gchar *loc)
+rspamd_mempool_alloc_array_(rspamd_mempool_t *pool, gsize nmemb, gsize size, gsize alignment, const char *loc)
 {
 	if ((nmemb >= MUL_NO_OVERFLOW || size >= MUL_NO_OVERFLOW) &&
 		nmemb > 0 && G_MAXSIZE / nmemb < size) {
@@ -574,7 +574,7 @@ rspamd_mempool_alloc_array_(rspamd_mempool_t *pool, gsize nmemb, gsize size, gsi
 }
 
 void *
-rspamd_mempool_alloc0_(rspamd_mempool_t *pool, gsize size, gsize alignment, const gchar *loc)
+rspamd_mempool_alloc0_(rspamd_mempool_t *pool, gsize size, gsize alignment, const char *loc)
 {
 	void *pointer = rspamd_mempool_alloc_(pool, size, alignment, loc);
 	memset(pointer, 0, size);
@@ -582,7 +582,7 @@ rspamd_mempool_alloc0_(rspamd_mempool_t *pool, gsize size, gsize alignment, cons
 	return pointer;
 }
 void *
-rspamd_mempool_alloc0_shared_(rspamd_mempool_t *pool, gsize size, gsize alignment, const gchar *loc)
+rspamd_mempool_alloc0_shared_(rspamd_mempool_t *pool, gsize size, gsize alignment, const char *loc)
 {
 	void *pointer = rspamd_mempool_alloc_shared_(pool, size, alignment, loc);
 
@@ -591,14 +591,14 @@ rspamd_mempool_alloc0_shared_(rspamd_mempool_t *pool, gsize size, gsize alignmen
 }
 
 void *
-rspamd_mempool_alloc_shared_(rspamd_mempool_t *pool, gsize size, gsize alignment, const gchar *loc)
+rspamd_mempool_alloc_shared_(rspamd_mempool_t *pool, gsize size, gsize alignment, const char *loc)
 {
 	return memory_pool_alloc_common(pool, size, alignment, RSPAMD_MEMPOOL_SHARED, loc);
 }
 
 
-gchar *
-rspamd_mempool_strdup_(rspamd_mempool_t *pool, const gchar *src, const gchar *loc)
+char *
+rspamd_mempool_strdup_(rspamd_mempool_t *pool, const char *src, const char *loc)
 {
 	if (src == NULL) {
 		return NULL;
@@ -606,10 +606,10 @@ rspamd_mempool_strdup_(rspamd_mempool_t *pool, const gchar *src, const gchar *lo
 	return rspamd_mempool_strdup_len_(pool, src, strlen(src), loc);
 }
 
-gchar *
-rspamd_mempool_strdup_len_(rspamd_mempool_t *pool, const gchar *src, gsize len, const gchar *loc)
+char *
+rspamd_mempool_strdup_len_(rspamd_mempool_t *pool, const char *src, gsize len, const char *loc)
 {
-	gchar *newstr;
+	char *newstr;
 
 	if (src == NULL) {
 		return NULL;
@@ -622,11 +622,11 @@ rspamd_mempool_strdup_len_(rspamd_mempool_t *pool, const gchar *src, gsize len, 
 	return newstr;
 }
 
-gchar *
+char *
 rspamd_mempool_ftokdup_(rspamd_mempool_t *pool, const rspamd_ftok_t *src,
-						const gchar *loc)
+						const char *loc)
 {
-	gchar *newstr;
+	char *newstr;
 
 	if (src == NULL) {
 		return NULL;
@@ -642,8 +642,8 @@ rspamd_mempool_ftokdup_(rspamd_mempool_t *pool, const rspamd_ftok_t *src,
 void rspamd_mempool_add_destructor_full(rspamd_mempool_t *pool,
 										rspamd_mempool_destruct_t func,
 										void *data,
-										const gchar *function,
-										const gchar *line)
+										const char *function,
+										const char *line)
 {
 	struct _pool_destructors *cur;
 
@@ -685,10 +685,10 @@ void rspamd_mempool_replace_destructor(rspamd_mempool_t *pool,
 	}
 }
 
-static gint
+static int
 cmp_int(gconstpointer a, gconstpointer b)
 {
-	gint i1 = *(const gint *) a, i2 = *(const gint *) b;
+	int i1 = *(const int *) a, i2 = *(const int *) b;
 
 	return i1 - i2;
 }
@@ -696,14 +696,14 @@ cmp_int(gconstpointer a, gconstpointer b)
 static void
 rspamd_mempool_adjust_entry(struct rspamd_mempool_entry_point *e)
 {
-	gint sz[G_N_ELEMENTS(e->elts)], sel_pos, sel_neg;
-	guint i, jitter;
+	int sz[G_N_ELEMENTS(e->elts)], sel_pos, sel_neg;
+	unsigned int i, jitter;
 
 	for (i = 0; i < G_N_ELEMENTS(sz); i++) {
-		sz[i] = e->elts[i].fragmentation - (gint) e->elts[i].leftover;
+		sz[i] = e->elts[i].fragmentation - (int) e->elts[i].leftover;
 	}
 
-	qsort(sz, G_N_ELEMENTS(sz), sizeof(gint), cmp_int);
+	qsort(sz, G_N_ELEMENTS(sz), sizeof(int), cmp_int);
 	jitter = rspamd_random_uint64_fast() % 10;
 	/*
 	 * Take stochastic quantiles
@@ -751,11 +751,11 @@ rspamd_mempool_variables_cleanup(rspamd_mempool_t *pool)
 			 * previous count
 			 * 3) Our variables count is less than some hard limit
 			 */
-			static const guint max_preallocated_vars = 512;
+			static const unsigned int max_preallocated_vars = 512;
 
-			guint cur_size = kh_size(pool->priv->variables);
-			guint old_guess = pool->priv->entry->cur_vars;
-			guint new_guess;
+			unsigned int cur_size = kh_size(pool->priv->variables);
+			unsigned int old_guess = pool->priv->entry->cur_vars;
+			unsigned int new_guess;
 
 			if (old_guess == 0) {
 				new_guess = MIN(cur_size, max_preallocated_vars);
@@ -801,16 +801,16 @@ void rspamd_mempool_destructors_enforce(rspamd_mempool_t *pool)
 
 struct mempool_debug_elt {
 	gsize sz;
-	const gchar *loc;
+	const char *loc;
 };
 
-static gint
+static int
 rspamd_mempool_debug_elt_cmp(const void *a, const void *b)
 {
 	const struct mempool_debug_elt *e1 = a, *e2 = b;
 
 	/* Inverse order */
-	return (gint) ((gssize) e2->sz) - ((gssize) e1->sz);
+	return (int) ((gssize) e2->sz) - ((gssize) e1->sz);
 }
 
 void rspamd_mempool_delete(rspamd_mempool_t *pool)
@@ -818,7 +818,7 @@ void rspamd_mempool_delete(rspamd_mempool_t *pool)
 	struct _pool_chain *cur, *tmp;
 	struct _pool_destructors *destructor;
 	gpointer ptr;
-	guint i;
+	unsigned int i;
 	gsize len;
 
 	POOL_MTX_LOCK();
@@ -826,7 +826,7 @@ void rspamd_mempool_delete(rspamd_mempool_t *pool)
 	cur = pool->priv->pools[RSPAMD_MEMPOOL_NORMAL];
 
 	if (G_UNLIKELY(pool->priv->flags & RSPAMD_MEMPOOL_DEBUG)) {
-		GHashTable *debug_tbl = *(GHashTable **) (((guchar *) pool) + sizeof(*pool));
+		GHashTable *debug_tbl = *(GHashTable **) (((unsigned char *) pool) + sizeof(*pool));
 		/* Show debug info */
 		gsize ndtor = 0;
 		LL_COUNT(pool->priv->dtors_head, destructor, ndtor);
@@ -850,14 +850,14 @@ void rspamd_mempool_delete(rspamd_mempool_t *pool)
 
 		while (g_hash_table_iter_next(&it, &k, &v)) {
 			struct mempool_debug_elt e;
-			e.loc = (const gchar *) k;
+			e.loc = (const char *) k;
 			e.sz = GPOINTER_TO_SIZE(v);
 			g_array_append_val(sorted_debug_size, e);
 		}
 
 		g_array_sort(sorted_debug_size, rspamd_mempool_debug_elt_cmp);
 
-		for (guint _i = 0; _i < sorted_debug_size->len; _i++) {
+		for (unsigned int _i = 0; _i < sorted_debug_size->len; _i++) {
 			struct mempool_debug_elt *e;
 
 			e = &g_array_index(sorted_debug_size, struct mempool_debug_elt, _i);
@@ -905,7 +905,7 @@ void rspamd_mempool_delete(rspamd_mempool_t *pool)
 			LL_FOREACH_SAFE(pool->priv->pools[i], cur, tmp)
 			{
 				g_atomic_int_add(&mem_pool_stat->bytes_allocated,
-								 -((gint) cur->slice_size));
+								 -((int) cur->slice_size));
 				g_atomic_int_add(&mem_pool_stat->chunks_allocated, -1);
 
 				len = cur->slice_size + sizeof(struct _pool_chain);
@@ -957,7 +957,7 @@ gsize rspamd_mempool_suggest_size_(const char *loc)
 /*
  * Own emulation
  */
-static inline gint
+static inline int
 __mutex_spin(rspamd_mempool_mutex_t *mutex)
 {
 	/* check spin count */
@@ -1159,7 +1159,7 @@ void rspamd_mempool_wunlock_rwlock(rspamd_mempool_rwlock_t *lock)
 
 #define RSPAMD_MEMPOOL_VARS_HASH_SEED 0xb32ad7c55eb2e647ULL
 void rspamd_mempool_set_variable(rspamd_mempool_t *pool,
-								 const gchar *name,
+								 const char *name,
 								 gpointer value,
 								 rspamd_mempool_destruct_t destructor)
 {
@@ -1175,10 +1175,10 @@ void rspamd_mempool_set_variable(rspamd_mempool_t *pool,
 		}
 	}
 
-	gint hv = rspamd_cryptobox_fast_hash(name, strlen(name),
-										 RSPAMD_MEMPOOL_VARS_HASH_SEED);
+	int hv = rspamd_cryptobox_fast_hash(name, strlen(name),
+										RSPAMD_MEMPOOL_VARS_HASH_SEED);
 	khiter_t it;
-	gint r;
+	int r;
 
 	it = kh_put(rspamd_mempool_vars_hash, pool->priv->variables, hv, &r);
 
@@ -1204,15 +1204,15 @@ void rspamd_mempool_set_variable(rspamd_mempool_t *pool,
 }
 
 gpointer
-rspamd_mempool_get_variable(rspamd_mempool_t *pool, const gchar *name)
+rspamd_mempool_get_variable(rspamd_mempool_t *pool, const char *name)
 {
 	if (pool->priv->variables == NULL) {
 		return NULL;
 	}
 
 	khiter_t it;
-	gint hv = rspamd_cryptobox_fast_hash(name, strlen(name),
-										 RSPAMD_MEMPOOL_VARS_HASH_SEED);
+	int hv = rspamd_cryptobox_fast_hash(name, strlen(name),
+										RSPAMD_MEMPOOL_VARS_HASH_SEED);
 
 	it = kh_get(rspamd_mempool_vars_hash, pool->priv->variables, hv);
 
@@ -1227,15 +1227,15 @@ rspamd_mempool_get_variable(rspamd_mempool_t *pool, const gchar *name)
 }
 
 gpointer
-rspamd_mempool_steal_variable(rspamd_mempool_t *pool, const gchar *name)
+rspamd_mempool_steal_variable(rspamd_mempool_t *pool, const char *name)
 {
 	if (pool->priv->variables == NULL) {
 		return NULL;
 	}
 
 	khiter_t it;
-	gint hv = rspamd_cryptobox_fast_hash(name, strlen(name),
-										 RSPAMD_MEMPOOL_VARS_HASH_SEED);
+	int hv = rspamd_cryptobox_fast_hash(name, strlen(name),
+										RSPAMD_MEMPOOL_VARS_HASH_SEED);
 
 	it = kh_get(rspamd_mempool_vars_hash, pool->priv->variables, hv);
 
@@ -1251,12 +1251,12 @@ rspamd_mempool_steal_variable(rspamd_mempool_t *pool, const gchar *name)
 	return NULL;
 }
 
-void rspamd_mempool_remove_variable(rspamd_mempool_t *pool, const gchar *name)
+void rspamd_mempool_remove_variable(rspamd_mempool_t *pool, const char *name)
 {
 	if (pool->priv->variables != NULL) {
 		khiter_t it;
-		gint hv = rspamd_cryptobox_fast_hash(name, strlen(name),
-											 RSPAMD_MEMPOOL_VARS_HASH_SEED);
+		int hv = rspamd_cryptobox_fast_hash(name, strlen(name),
+											RSPAMD_MEMPOOL_VARS_HASH_SEED);
 
 		it = kh_get(rspamd_mempool_vars_hash, pool->priv->variables, hv);
 

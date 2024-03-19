@@ -45,17 +45,17 @@ enum rspamd_email_address_flags {
  * Structure that represents email address in a convenient way
  */
 struct rspamd_email_address {
-	const gchar *raw;
-	const gchar *addr;
-	const gchar *user;
-	const gchar *domain;
-	const gchar *name;
+	const char *raw;
+	const char *addr;
+	const char *user;
+	const char *domain;
+	const char *name;
 
-	guint raw_len;
-	guint addr_len;
-	guint domain_len;
-	guint user_len;
-	guint flags;
+	unsigned int raw_len;
+	unsigned int addr_len;
+	unsigned int domain_len;
+	unsigned int user_len;
+	unsigned int flags;
 };
 
 struct rspamd_task;
@@ -66,7 +66,7 @@ struct rspamd_task;
  * @param len length of string
  * @return
  */
-struct rspamd_email_address *rspamd_email_address_from_smtp(const gchar *str, guint len);
+struct rspamd_email_address *rspamd_email_address_from_smtp(const char *str, unsigned int len);
 
 /**
  * Parses email address from the mime header, decodes names and return the array
@@ -78,8 +78,8 @@ struct rspamd_email_address *rspamd_email_address_from_smtp(const gchar *str, gu
  * @return
  */
 GPtrArray *
-rspamd_email_address_from_mime(rspamd_mempool_t *pool, const gchar *hdr, guint len,
-							   GPtrArray *src, gint max_elements);
+rspamd_email_address_from_mime(rspamd_mempool_t *pool, const char *hdr, unsigned int len,
+							   GPtrArray *src, int max_elements);
 
 /**
  * Destroys list of email addresses

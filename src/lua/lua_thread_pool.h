@@ -16,7 +16,7 @@ typedef void (*lua_thread_error_t)(struct thread_entry *thread, int ret, const c
 
 struct thread_entry {
 	lua_State *lua_state;
-	gint thread_index;
+	int thread_index;
 	gpointer cd;
 
 	/* function to handle result of called method, can be NULL */
@@ -82,7 +82,7 @@ lua_thread_pool_get_for_config(struct rspamd_config *cfg);
  */
 void lua_thread_pool_return_full(struct lua_thread_pool *pool,
 								 struct thread_entry *thread_entry,
-								 const gchar *loc);
+								 const char *loc);
 
 #define lua_thread_pool_return(pool, thread_entry) \
 	lua_thread_pool_return_full(pool, thread_entry, G_STRLOC)
@@ -95,7 +95,7 @@ void lua_thread_pool_return_full(struct lua_thread_pool *pool,
  */
 struct thread_entry *
 lua_thread_pool_get_running_entry_full(struct lua_thread_pool *pool,
-									   const gchar *loc);
+									   const char *loc);
 
 #define lua_thread_pool_get_running_entry(pool) \
 	lua_thread_pool_get_running_entry_full(pool, G_STRLOC)
@@ -108,7 +108,7 @@ lua_thread_pool_get_running_entry_full(struct lua_thread_pool *pool,
  */
 void lua_thread_pool_set_running_entry_full(struct lua_thread_pool *pool,
 											struct thread_entry *thread_entry,
-											const gchar *loc);
+											const char *loc);
 
 #define lua_thread_pool_set_running_entry(pool, thread_entry) \
 	lua_thread_pool_set_running_entry_full(pool, thread_entry, G_STRLOC)
@@ -120,7 +120,7 @@ void lua_thread_pool_set_running_entry_full(struct lua_thread_pool *pool,
  * @param cbs
  */
 void lua_thread_pool_prepare_callback_full(struct lua_thread_pool *pool,
-										   struct lua_callback_state *cbs, const gchar *loc);
+										   struct lua_callback_state *cbs, const char *loc);
 
 #define lua_thread_pool_prepare_callback(pool, cbs) \
 	lua_thread_pool_prepare_callback_full(pool, cbs, G_STRLOC)
@@ -131,7 +131,7 @@ void lua_thread_pool_prepare_callback_full(struct lua_thread_pool *pool,
  * @param cbs
  */
 void lua_thread_pool_restore_callback_full(struct lua_callback_state *cbs,
-										   const gchar *loc);
+										   const char *loc);
 
 #define lua_thread_pool_restore_callback(cbs) \
 	lua_thread_pool_restore_callback_full(cbs, G_STRLOC)
@@ -145,7 +145,7 @@ void lua_thread_pool_restore_callback_full(struct lua_callback_state *cbs,
  */
 void lua_thread_call_full(struct thread_entry *thread_entry,
 						  int narg,
-						  const gchar *loc);
+						  const char *loc);
 
 #define lua_thread_call(thread_entry, narg) \
 	lua_thread_call_full(thread_entry, narg, G_STRLOC)
@@ -157,7 +157,7 @@ void lua_thread_call_full(struct thread_entry *thread_entry,
  * @return
  */
 int lua_thread_yield_full(struct thread_entry *thread_entry, int nresults,
-						  const gchar *loc);
+						  const char *loc);
 
 #define lua_thread_yield(thread_entry, narg) \
 	lua_thread_yield_full(thread_entry, narg, G_STRLOC)
@@ -170,7 +170,7 @@ int lua_thread_yield_full(struct thread_entry *thread_entry, int nresults,
  */
 void lua_thread_resume_full(struct thread_entry *thread_entry,
 							int narg,
-							const gchar *loc);
+							const char *loc);
 
 #define lua_thread_resume(thread_entry, narg) \
 	lua_thread_resume_full(thread_entry, narg, G_STRLOC)
@@ -183,7 +183,7 @@ void lua_thread_resume_full(struct thread_entry *thread_entry,
  */
 void lua_thread_pool_terminate_entry_full(struct lua_thread_pool *pool,
 										  struct thread_entry *thread_entry,
-										  const gchar *loc, bool enforce);
+										  const char *loc, bool enforce);
 #define lua_thread_pool_terminate_entry(pool, thread_entry) \
 	lua_thread_pool_terminate_entry_full(pool, thread_entry, G_STRLOC, false)
 

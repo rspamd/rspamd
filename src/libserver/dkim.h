@@ -118,10 +118,10 @@ struct rspamd_dkim_check_result {
 	enum rspamd_dkim_check_rcode rcode;
 	rspamd_dkim_context_t *ctx;
 	/* Processed parts */
-	const gchar *selector;
-	const gchar *domain;
-	const gchar *short_b;
-	const gchar *fail_reason;
+	const char *selector;
+	const char *domain;
+	const char *short_b;
+	const char *fail_reason;
 };
 
 
@@ -137,10 +137,10 @@ typedef void (*dkim_key_handler_f)(rspamd_dkim_key_t *key, gsize keylen,
  * @param err pointer to error object
  * @return new context or NULL
  */
-rspamd_dkim_context_t *rspamd_create_dkim_context(const gchar *sig,
+rspamd_dkim_context_t *rspamd_create_dkim_context(const char *sig,
 												  rspamd_mempool_t *pool,
 												  struct rspamd_dns_resolver *resolver,
-												  guint time_jitter,
+												  unsigned int time_jitter,
 												  enum rspamd_dkim_type type,
 												  GError **err);
 
@@ -153,9 +153,9 @@ rspamd_dkim_context_t *rspamd_create_dkim_context(const gchar *sig,
  */
 rspamd_dkim_sign_context_t *rspamd_create_dkim_sign_context(struct rspamd_task *task,
 															rspamd_dkim_sign_key_t *priv_key,
-															gint headers_canon,
-															gint body_canon,
-															const gchar *dkim_headers,
+															int headers_canon,
+															int body_canon,
+															const char *dkim_headers,
 															enum rspamd_dkim_type type,
 															GError **err);
 
@@ -165,7 +165,7 @@ rspamd_dkim_sign_context_t *rspamd_create_dkim_sign_context(struct rspamd_task *
  * @param err
  * @return
  */
-rspamd_dkim_sign_key_t *rspamd_dkim_sign_key_load(const gchar *what, gsize len,
+rspamd_dkim_sign_key_t *rspamd_dkim_sign_key_load(const char *what, gsize len,
 												  enum rspamd_dkim_key_format type,
 												  GError **err);
 
@@ -206,12 +206,12 @@ rspamd_dkim_create_result(rspamd_dkim_context_t *ctx,
 						  struct rspamd_task *task);
 
 GString *rspamd_dkim_sign(struct rspamd_task *task,
-						  const gchar *selector,
-						  const gchar *domain,
+						  const char *selector,
+						  const char *domain,
 						  time_t expire,
 						  gsize len,
-						  guint idx,
-						  const gchar *arc_cv,
+						  unsigned int idx,
+						  const char *arc_cv,
 						  rspamd_dkim_sign_context_t *ctx);
 
 rspamd_dkim_key_t *rspamd_dkim_key_ref(rspamd_dkim_key_t *k);
@@ -222,13 +222,13 @@ rspamd_dkim_sign_key_t *rspamd_dkim_sign_key_ref(rspamd_dkim_sign_key_t *k);
 
 void rspamd_dkim_sign_key_unref(rspamd_dkim_sign_key_t *k);
 
-const gchar *rspamd_dkim_get_domain(rspamd_dkim_context_t *ctx);
+const char *rspamd_dkim_get_domain(rspamd_dkim_context_t *ctx);
 
-const gchar *rspamd_dkim_get_selector(rspamd_dkim_context_t *ctx);
+const char *rspamd_dkim_get_selector(rspamd_dkim_context_t *ctx);
 
-const gchar *rspamd_dkim_get_dns_key(rspamd_dkim_context_t *ctx);
+const char *rspamd_dkim_get_dns_key(rspamd_dkim_context_t *ctx);
 
-guint rspamd_dkim_key_get_ttl(rspamd_dkim_key_t *k);
+unsigned int rspamd_dkim_key_get_ttl(rspamd_dkim_key_t *k);
 
 /**
  * Create DKIM public key from a raw data
@@ -238,7 +238,7 @@ guint rspamd_dkim_key_get_ttl(rspamd_dkim_key_t *k);
  * @param err
  * @return
  */
-rspamd_dkim_key_t *rspamd_dkim_make_key(const gchar *keydata, guint keylen,
+rspamd_dkim_key_t *rspamd_dkim_make_key(const char *keydata, unsigned int keylen,
 										enum rspamd_dkim_key_type type,
 										GError **err);
 
@@ -249,7 +249,7 @@ rspamd_dkim_key_t *rspamd_dkim_make_key(const gchar *keydata, guint keylen,
  * @param key
  * @return
  */
-const guchar *rspamd_dkim_key_id(rspamd_dkim_key_t *key);
+const unsigned char *rspamd_dkim_key_id(rspamd_dkim_key_t *key);
 
 /**
  * Parse DKIM public key from a TXT record
@@ -258,7 +258,7 @@ const guchar *rspamd_dkim_key_id(rspamd_dkim_key_t *key);
  * @param err
  * @return
  */
-rspamd_dkim_key_t *rspamd_dkim_parse_key(const gchar *txt, gsize *keylen,
+rspamd_dkim_key_t *rspamd_dkim_parse_key(const char *txt, gsize *keylen,
 										 GError **err);
 
 /**
@@ -269,9 +269,9 @@ rspamd_dkim_key_t *rspamd_dkim_parse_key(const gchar *txt, gsize *keylen,
  * @param outlen
  * @return
  */
-goffset rspamd_dkim_canonize_header_relaxed_str(const gchar *hname,
-												const gchar *hvalue,
-												gchar *out,
+goffset rspamd_dkim_canonize_header_relaxed_str(const char *hname,
+												const char *hvalue,
+												char *out,
 												gsize outlen);
 
 /**

@@ -22,7 +22,7 @@ static const struct luaL_reg dns_f[] = {
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
-static const gchar *M = "rspamd lua dns";
+static const char *M = "rspamd lua dns";
 
 void lua_dns_callback(struct rdns_reply *reply, void *arg);
 
@@ -34,18 +34,18 @@ struct lua_rspamd_dns_cbdata {
 	struct rspamd_async_session *s;
 };
 
-static gint
+static int
 lua_dns_request(lua_State *L)
 {
 	GError *err = NULL;
 	struct rspamd_async_session *session = NULL;
 	struct rspamd_config *cfg = NULL;
 	struct lua_rspamd_dns_cbdata *cbdata = NULL;
-	const gchar *to_resolve = NULL;
-	const gchar *type_str = NULL;
+	const char *to_resolve = NULL;
+	const char *type_str = NULL;
 	struct rspamd_task *task = NULL;
 	rspamd_mempool_t *pool = NULL;
-	gint ret = 0;
+	int ret = 0;
 	gboolean forced = FALSE;
 
 	/* Check arguments */
@@ -183,7 +183,7 @@ void lua_dns_callback(struct rdns_reply *reply, void *arg)
 	}
 }
 
-static gint
+static int
 lua_load_dns(lua_State *L)
 {
 	lua_newtable(L);

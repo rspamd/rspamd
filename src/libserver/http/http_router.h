@@ -53,7 +53,7 @@ struct rspamd_http_connection_router {
 	ev_tstamp timeout;
 	struct ev_loop *event_loop;
 	struct rspamd_http_context *ctx;
-	gchar *default_fs_path;
+	char *default_fs_path;
 	rspamd_http_router_handler_t unknown_method_handler;
 	struct rspamd_cryptobox_keypair *key;
 	rspamd_http_router_error_handler_t error_handler;
@@ -87,7 +87,7 @@ void rspamd_http_router_set_key(struct rspamd_http_connection_router *router,
  * Add new path to the router
  */
 void rspamd_http_router_add_path(struct rspamd_http_connection_router *router,
-								 const gchar *path, rspamd_http_router_handler_t handler);
+								 const char *path, rspamd_http_router_handler_t handler);
 
 /**
  * Add custom header to append to router replies
@@ -96,7 +96,7 @@ void rspamd_http_router_add_path(struct rspamd_http_connection_router *router,
  * @param value
  */
 void rspamd_http_router_add_header(struct rspamd_http_connection_router *router,
-								   const gchar *name, const gchar *value);
+								   const char *name, const char *value);
 
 /**
  * Sets method to handle unknown request methods
@@ -133,7 +133,7 @@ void rspamd_http_router_add_regexp(struct rspamd_http_connection_router *router,
  */
 void rspamd_http_router_handle_socket(
 	struct rspamd_http_connection_router *router,
-	gint fd,
+	int fd,
 	gpointer ud);
 
 /**

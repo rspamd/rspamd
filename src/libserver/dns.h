@@ -41,8 +41,8 @@ struct rspamd_dns_resolver {
 	double fails_cache_time;
 	struct upstream_list *ups;
 	struct rspamd_config *cfg;
-	gdouble request_timeout;
-	guint max_retransmits;
+	double request_timeout;
+	unsigned int max_retransmits;
 };
 
 /* Rspamd DNS API */
@@ -97,11 +97,11 @@ gboolean rspamd_dns_resolver_request_task_forced(struct rspamd_task *task,
  * @param namelen length of input (-1 for zero terminated)
  * @return encoded string
  */
-gchar *rspamd_dns_resolver_idna_convert_utf8(struct rspamd_dns_resolver *resolver,
-											 rspamd_mempool_t *pool,
-											 const char *name,
-											 gint namelen,
-											 guint *outlen);
+char *rspamd_dns_resolver_idna_convert_utf8(struct rspamd_dns_resolver *resolver,
+											rspamd_mempool_t *pool,
+											const char *name,
+											int namelen,
+											unsigned int *outlen);
 
 #ifdef __cplusplus
 }

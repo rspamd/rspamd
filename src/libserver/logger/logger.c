@@ -27,9 +27,9 @@ static rspamd_logger_t *default_logger = NULL;
 static rspamd_logger_t *emergency_logger = NULL;
 static struct rspamd_log_modules *log_modules = NULL;
 
-static const gchar lf_chr = '\n';
+static const char lf_chr = '\n';
 
-guint rspamd_task_log_id = (guint) -1;
+unsigned int rspamd_task_log_id = (unsigned int) -1;
 RSPAMD_CONSTRUCTOR(rspamd_task_log_init)
 {
 	rspamd_task_log_id = rspamd_logger_add_debug_module("task");
@@ -47,7 +47,7 @@ rspamd_log_emergency_logger(void)
 	return emergency_logger;
 }
 
-void rspamd_log_set_log_level(rspamd_logger_t *logger, gint level)
+void rspamd_log_set_log_level(rspamd_logger_t *logger, int level)
 {
 	if (logger == NULL) {
 		logger = default_logger;
@@ -56,7 +56,7 @@ void rspamd_log_set_log_level(rspamd_logger_t *logger, gint level)
 	logger->log_level = level;
 }
 
-gint rspamd_log_get_log_level(rspamd_logger_t *logger)
+int rspamd_log_get_log_level(rspamd_logger_t *logger)
 {
 	if (logger == NULL) {
 		logger = default_logger;
@@ -65,7 +65,7 @@ gint rspamd_log_get_log_level(rspamd_logger_t *logger)
 	return logger->log_level;
 }
 
-void rspamd_log_set_log_flags(rspamd_logger_t *logger, gint flags)
+void rspamd_log_set_log_flags(rspamd_logger_t *logger, int flags)
 {
 	g_assert(logger != NULL);
 
@@ -139,7 +139,7 @@ rspamd_emergency_logger_dtor(gpointer d)
 }
 
 rspamd_logger_t *
-rspamd_log_open_emergency(rspamd_mempool_t *pool, gint flags)
+rspamd_log_open_emergency(rspamd_mempool_t *pool, int flags)
 {
 	rspamd_logger_t *logger;
 	GError *err = NULL;
@@ -185,7 +185,7 @@ rspamd_log_open_emergency(rspamd_mempool_t *pool, gint flags)
 rspamd_logger_t *
 rspamd_log_open_specific(rspamd_mempool_t *pool,
 						 struct rspamd_config *cfg,
-						 const gchar *ptype,
+						 const char *ptype,
 						 uid_t uid, gid_t gid)
 {
 	rspamd_logger_t *logger;
@@ -314,7 +314,7 @@ void rspamd_log_on_fork(GQuark ptype, struct rspamd_config *cfg,
 
 inline gboolean
 rspamd_logger_need_log(rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
-					   gint module_id)
+					   int module_id)
 {
 	g_assert(rspamd_log != NULL);
 
@@ -330,15 +330,15 @@ rspamd_logger_need_log(rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
 	return FALSE;
 }
 
-static gchar *
-rspamd_log_encrypt_message(const gchar *begin, const gchar *end, gsize *enc_len,
+static char *
+rspamd_log_encrypt_message(const char *begin, const char *end, gsize *enc_len,
 						   rspamd_logger_t *rspamd_log)
 {
-	guchar *out;
-	gchar *b64;
-	guchar *p, *nonce, *mac;
-	const guchar *comp;
-	guint len, inlen;
+	unsigned char *out;
+	char *b64;
+	unsigned char *p, *nonce, *mac;
+	const unsigned char *comp;
+	unsigned int len, inlen;
 
 	g_assert(end > begin);
 	/* base64 (pubkey | nonce | message) */
@@ -370,10 +370,10 @@ rspamd_log_encrypt_message(const gchar *begin, const gchar *end, gsize *enc_len,
 
 static void
 rspamd_log_write_ringbuffer(rspamd_logger_t *rspamd_log,
-							const gchar *module, const gchar *id,
-							const gchar *data, glong len)
+							const char *module, const char *id,
+							const char *data, glong len)
 {
-	guint32 row_num;
+	uint32_t row_num;
 	struct rspamd_logger_error_log *elog;
 	struct rspamd_logger_error_elt *elt;
 
@@ -391,7 +391,7 @@ rspamd_log_write_ringbuffer(rspamd_logger_t *rspamd_log,
 #endif
 
 	if (row_num < elog->max_elts) {
-		elt = (struct rspamd_logger_error_elt *) (((guchar *) elog->elts) +
+		elt = (struct rspamd_logger_error_elt *) (((unsigned char *) elog->elts) +
 												  (sizeof(*elt) + elog->elt_len) * row_num);
 		g_atomic_int_set(&elt->completed, 0);
 	}
@@ -423,14 +423,14 @@ rspamd_log_write_ringbuffer(rspamd_logger_t *rspamd_log,
 	g_atomic_int_set(&elt->completed, 1);
 }
 
-bool rspamd_common_logv(rspamd_logger_t *rspamd_log, gint level_flags,
-						const gchar *module, const gchar *id, const gchar *function,
-						const gchar *fmt, va_list args)
+bool rspamd_common_logv(rspamd_logger_t *rspamd_log, int level_flags,
+						const char *module, const char *id, const char *function,
+						const char *fmt, va_list args)
 {
-	gchar *end;
-	gint level = level_flags & (RSPAMD_LOG_LEVEL_MASK & G_LOG_LEVEL_MASK), mod_id;
+	char *end;
+	int level = level_flags & (RSPAMD_LOG_LEVEL_MASK & G_LOG_LEVEL_MASK), mod_id;
 	bool ret = false;
-	gchar logbuf[RSPAMD_LOGBUF_SIZE], *log_line;
+	char logbuf[RSPAMD_LOGBUF_SIZE], *log_line;
 	gsize nescaped;
 
 	if (G_UNLIKELY(rspamd_log == NULL)) {
@@ -443,7 +443,7 @@ bool rspamd_common_logv(rspamd_logger_t *rspamd_log, gint level_flags,
 		/* Just fprintf message to stderr */
 		if (level >= G_LOG_LEVEL_INFO) {
 			end = rspamd_vsnprintf(logbuf, sizeof(logbuf), fmt, args);
-			rspamd_fprintf(stderr, "%*s\n", (gint) (end - log_line),
+			rspamd_fprintf(stderr, "%*s\n", (int) (end - log_line),
 						   log_line);
 		}
 	}
@@ -461,7 +461,7 @@ bool rspamd_common_logv(rspamd_logger_t *rspamd_log, gint level_flags,
 			if (!(rspamd_log->flags & RSPAMD_LOG_FLAG_RSPAMADM)) {
 				if ((nescaped = rspamd_log_line_need_escape(logbuf, end - logbuf)) != 0) {
 					gsize unescaped_len = end - logbuf;
-					gchar *logbuf_escaped = g_alloca(unescaped_len + nescaped * 4);
+					char *logbuf_escaped = g_alloca(unescaped_len + nescaped * 4);
 					log_line = logbuf_escaped;
 
 					end = rspamd_log_line_hex_escape(logbuf, unescaped_len,
@@ -470,7 +470,7 @@ bool rspamd_common_logv(rspamd_logger_t *rspamd_log, gint level_flags,
 			}
 
 			if ((level_flags & RSPAMD_LOG_ENCRYPTED) && rspamd_log->pk) {
-				gchar *encrypted;
+				char *encrypted;
 				gsize enc_len;
 
 				encrypted = rspamd_log_encrypt_message(log_line, end, &enc_len,
@@ -522,10 +522,10 @@ bool rspamd_common_logv(rspamd_logger_t *rspamd_log, gint level_flags,
  * This log functions select real logger and write message if level is less or equal to configured log level
  */
 bool rspamd_common_log_function(rspamd_logger_t *rspamd_log,
-								gint level_flags,
-								const gchar *module, const gchar *id,
-								const gchar *function,
-								const gchar *fmt,
+								int level_flags,
+								const char *module, const char *id,
+								const char *function,
+								const char *fmt,
 								...)
 {
 	va_list vp;
@@ -537,16 +537,16 @@ bool rspamd_common_log_function(rspamd_logger_t *rspamd_log,
 	return ret;
 }
 
-bool rspamd_default_logv(gint level_flags, const gchar *module, const gchar *id,
-						 const gchar *function,
-						 const gchar *fmt, va_list args)
+bool rspamd_default_logv(int level_flags, const char *module, const char *id,
+						 const char *function,
+						 const char *fmt, va_list args)
 {
 	return rspamd_common_logv(NULL, level_flags, module, id, function, fmt, args);
 }
 
-bool rspamd_default_log_function(gint level_flags,
-								 const gchar *module, const gchar *id,
-								 const gchar *function, const gchar *fmt, ...)
+bool rspamd_default_log_function(int level_flags,
+								 const char *module, const char *id,
+								 const char *function, const char *fmt, ...)
 {
 
 	va_list vp;
@@ -566,13 +566,13 @@ bool rspamd_default_log_function(gint level_flags,
  * Write log line depending on ip
  */
 bool rspamd_conditional_debug(rspamd_logger_t *rspamd_log,
-							  rspamd_inet_addr_t *addr, const gchar *module, const gchar *id,
-							  const gchar *function, const gchar *fmt, ...)
+							  rspamd_inet_addr_t *addr, const char *module, const char *id,
+							  const char *function, const char *fmt, ...)
 {
-	static gchar logbuf[LOGBUF_LEN];
+	static char logbuf[LOGBUF_LEN];
 	va_list vp;
-	gchar *end;
-	gint mod_id;
+	char *end;
+	int mod_id;
 
 	if (rspamd_log == NULL) {
 		rspamd_log = default_logger;
@@ -607,12 +607,12 @@ bool rspamd_conditional_debug(rspamd_logger_t *rspamd_log,
 
 bool rspamd_conditional_debug_fast(rspamd_logger_t *rspamd_log,
 								   rspamd_inet_addr_t *addr,
-								   gint mod_id, const gchar *module, const gchar *id,
-								   const gchar *function, const gchar *fmt, ...)
+								   int mod_id, const char *module, const char *id,
+								   const char *function, const char *fmt, ...)
 {
-	static gchar logbuf[LOGBUF_LEN];
+	static char logbuf[LOGBUF_LEN];
 	va_list vp;
-	gchar *end;
+	char *end;
 
 	if (rspamd_log == NULL) {
 		rspamd_log = default_logger;
@@ -644,12 +644,12 @@ bool rspamd_conditional_debug_fast(rspamd_logger_t *rspamd_log,
 
 bool rspamd_conditional_debug_fast_num_id(rspamd_logger_t *rspamd_log,
 										  rspamd_inet_addr_t *addr,
-										  gint mod_id, const gchar *module, guint64 id,
-										  const gchar *function, const gchar *fmt, ...)
+										  int mod_id, const char *module, uint64_t id,
+										  const char *function, const char *fmt, ...)
 {
-	static gchar logbuf[LOGBUF_LEN], idbuf[64];
+	static char logbuf[LOGBUF_LEN], idbuf[64];
 	va_list vp;
-	gchar *end;
+	char *end;
 
 	if (rspamd_log == NULL) {
 		rspamd_log = default_logger;
@@ -683,9 +683,9 @@ bool rspamd_conditional_debug_fast_num_id(rspamd_logger_t *rspamd_log,
 /**
  * Wrapper for glib logger
  */
-void rspamd_glib_log_function(const gchar *log_domain,
+void rspamd_glib_log_function(const char *log_domain,
 							  GLogLevelFlags log_level,
-							  const gchar *message,
+							  const char *message,
 							  gpointer arg)
 {
 	rspamd_logger_t *rspamd_log = (rspamd_logger_t *) arg;
@@ -702,7 +702,7 @@ void rspamd_glib_log_function(const gchar *log_domain,
 	}
 }
 
-void rspamd_glib_printerr_function(const gchar *message)
+void rspamd_glib_printerr_function(const char *message)
 {
 	rspamd_common_log_function(NULL, G_LOG_LEVEL_CRITICAL, "glib",
 							   NULL, G_STRFUNC,
@@ -725,7 +725,7 @@ void rspamd_log_nodebug(rspamd_logger_t *rspamd_log)
 	rspamd_log->is_debug = FALSE;
 }
 
-const guint64 *
+const uint64_t *
 rspamd_log_counters(rspamd_logger_t *logger)
 {
 	if (logger) {
@@ -735,7 +735,7 @@ rspamd_log_counters(rspamd_logger_t *logger)
 	return NULL;
 }
 
-static gint
+static int
 rspamd_log_errlog_cmp(const ucl_object_t **o1, const ucl_object_t **o2)
 {
 	const ucl_object_t *ts1, *ts2;
@@ -744,7 +744,7 @@ rspamd_log_errlog_cmp(const ucl_object_t **o1, const ucl_object_t **o2)
 	ts2 = ucl_object_lookup(*o2, "ts");
 
 	if (ts1 && ts2) {
-		gdouble t1 = ucl_object_todouble(ts1), t2 = ucl_object_todouble(ts2);
+		double t1 = ucl_object_todouble(ts1), t2 = ucl_object_todouble(ts2);
 
 		if (t1 > t2) {
 			return -1;
@@ -762,7 +762,7 @@ rspamd_log_errorbuf_export(const rspamd_logger_t *logger)
 {
 	struct rspamd_logger_error_elt *cpy, *cur;
 	ucl_object_t *top = ucl_object_typed_new(UCL_ARRAY);
-	guint i;
+	unsigned int i;
 
 	if (logger->errlog == NULL) {
 		return top;
@@ -773,7 +773,7 @@ rspamd_log_errorbuf_export(const rspamd_logger_t *logger)
 	memcpy(cpy, logger->errlog->elts, logger->errlog->max_elts * (sizeof(*cpy) + logger->errlog->elt_len));
 
 	for (i = 0; i < logger->errlog->max_elts; i++) {
-		cur = (struct rspamd_logger_error_elt *) ((guchar *) cpy +
+		cur = (struct rspamd_logger_error_elt *) ((unsigned char *) cpy +
 												  i * ((sizeof(*cpy) + logger->errlog->elt_len)));
 		if (cur->completed) {
 			ucl_object_t *obj = ucl_object_typed_new(UCL_OBJECT);
@@ -802,7 +802,7 @@ rspamd_log_errorbuf_export(const rspamd_logger_t *logger)
 	return top;
 }
 
-static guint
+static unsigned int
 rspamd_logger_allocate_mod_bit(void)
 {
 	if (log_modules->bitset_allocated * NBBY > log_modules->bitset_len + 1) {
@@ -828,7 +828,7 @@ RSPAMD_DESTRUCTOR(rspamd_debug_modules_dtor)
 	}
 }
 
-gint rspamd_logger_add_debug_module(const gchar *mname)
+int rspamd_logger_add_debug_module(const char *mname)
 {
 	struct rspamd_log_module *m;
 
@@ -864,7 +864,7 @@ void rspamd_logger_configure_modules(GHashTable *mods_enabled)
 {
 	GHashTableIter it;
 	gpointer k, v;
-	guint id;
+	unsigned int id;
 
 	/* Clear all in bitset_allocated -> this are bytes not bits */
 	memset(log_modules->bitset, 0, log_modules->bitset_allocated);
@@ -872,16 +872,16 @@ void rspamd_logger_configure_modules(GHashTable *mods_enabled)
 	g_hash_table_iter_init(&it, mods_enabled);
 
 	while (g_hash_table_iter_next(&it, &k, &v)) {
-		rspamd_logger_add_debug_module((const gchar *) k);
+		rspamd_logger_add_debug_module((const char *) k);
 	}
 
 	g_hash_table_iter_init(&it, mods_enabled);
 
 	while (g_hash_table_iter_next(&it, &k, &v)) {
-		id = rspamd_logger_add_debug_module((const gchar *) k);
+		id = rspamd_logger_add_debug_module((const char *) k);
 
 		if (isclr(log_modules->bitset, id)) {
-			msg_info("enable debugging for module %s (%d)", (const gchar *) k,
+			msg_info("enable debugging for module %s (%d)", (const char *) k,
 					 id);
 			setbit(log_modules->bitset, id);
 		}
@@ -898,14 +898,14 @@ rspamd_logger_set_log_function(rspamd_logger_t *logger,
 }
 
 
-gchar *
-rspamd_log_line_hex_escape(const guchar *src, gsize srclen,
-						   gchar *dst, gsize dstlen)
+char *
+rspamd_log_line_hex_escape(const unsigned char *src, gsize srclen,
+						   char *dst, gsize dstlen)
 {
-	static const gchar hexdigests[16] = "0123456789ABCDEF";
-	gchar *d = dst;
+	static const char hexdigests[16] = "0123456789ABCDEF";
+	char *d = dst;
 
-	static guint32 escape[] = {
+	static uint32_t escape[] = {
 		0xffffffff, /* 1111 1111 1111 1111  1111 1111 1111 1111 */
 
 		/* ?>=< ;:98 7654 3210  /.-, +*)( '&%$ #"!  */
@@ -950,9 +950,9 @@ rspamd_log_line_hex_escape(const guchar *src, gsize srclen,
 	return d;
 }
 
-gsize rspamd_log_line_need_escape(const guchar *src, gsize srclen)
+gsize rspamd_log_line_need_escape(const unsigned char *src, gsize srclen)
 {
-	static guint32 escape[] = {
+	static uint32_t escape[] = {
 		0xffffffff, /* 1111 1111 1111 1111  1111 1111 1111 1111 */
 
 		/* ?>=< ;:98 7654 3210  /.-, +*)( '&%$ #"!  */
@@ -984,8 +984,8 @@ gsize rspamd_log_line_need_escape(const guchar *src, gsize srclen)
 	return n;
 }
 
-const gchar *
-rspamd_get_log_severity_string(gint level_flags)
+const char *
+rspamd_get_log_severity_string(int level_flags)
 {
 	unsigned int bitnum;
 	static const char *level_strs[G_LOG_LEVEL_USER_SHIFT] = {
@@ -1008,7 +1008,7 @@ rspamd_get_log_severity_string(gint level_flags)
 }
 
 static inline void
-log_time(gdouble now, rspamd_logger_t *rspamd_log, gchar *timebuf,
+log_time(double now, rspamd_logger_t *rspamd_log, char *timebuf,
 		 size_t len)
 {
 	time_t sec = (time_t) now;
@@ -1019,10 +1019,10 @@ log_time(gdouble now, rspamd_logger_t *rspamd_log, gchar *timebuf,
 	r = strftime(timebuf, len, "%F %H:%M:%S", &tms);
 
 	if (rspamd_log->flags & RSPAMD_LOG_FLAG_USEC) {
-		gchar usec_buf[16];
+		char usec_buf[16];
 
 		rspamd_snprintf(usec_buf, sizeof(usec_buf), "%.5f",
-						now - (gdouble) sec);
+						now - (double) sec);
 		rspamd_snprintf(timebuf + r, len - r,
 						"%s", usec_buf + 1);
 	}
@@ -1030,11 +1030,11 @@ log_time(gdouble now, rspamd_logger_t *rspamd_log, gchar *timebuf,
 
 void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
 						 double ts,
-						 const gchar *module,
-						 const gchar *id,
-						 const gchar *function,
-						 gint level_flags,
-						 const gchar *message,
+						 const char *module,
+						 const char *id,
+						 const char *function,
+						 int level_flags,
+						 const char *message,
 						 gsize mlen,
 						 rspamd_logger_t *logger)
 {
@@ -1052,8 +1052,8 @@ void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
 	}
 
 	glong r;
-	static gchar timebuf[64], modulebuf[64];
-	static gchar tmpbuf[256];
+	static char timebuf[64], modulebuf[64];
+	static char tmpbuf[256];
 
 	if (!log_json && !log_systemd) {
 		log_time(ts, logger, timebuf, sizeof(timebuf));
@@ -1061,7 +1061,7 @@ void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
 
 	if (G_UNLIKELY(log_json)) {
 		/* Perform JSON logging */
-		guint slen = id ? strlen(id) : strlen("(NULL)");
+		unsigned int slen = id ? strlen(id) : strlen("(NULL)");
 		slen = MIN(RSPAMD_LOG_ID_LEN, slen);
 		r = rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "{\"ts\": %f, "
 													"\"pid\": %P, "
@@ -1237,7 +1237,7 @@ void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
 		m = modulebuf;
 
 		if (id != NULL) {
-			guint slen = strlen(id);
+			unsigned int slen = strlen(id);
 			slen = MIN(RSPAMD_LOG_ID_LEN, slen);
 			mr = rspamd_snprintf(m, mremain, "<%*.s>; ", slen,
 								 id);

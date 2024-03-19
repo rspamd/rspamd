@@ -72,7 +72,7 @@ rspamd_fstring_sized_new(gsize initial_size)
 }
 
 rspamd_fstring_t *
-rspamd_fstring_new_init(const gchar *init, gsize len)
+rspamd_fstring_new_init(const char *init, gsize len)
 {
 	rspamd_fstring_t *s;
 	gsize real_size = MAX(default_initial_size, len);
@@ -92,7 +92,7 @@ rspamd_fstring_new_init(const gchar *init, gsize len)
 }
 
 rspamd_fstring_t *
-rspamd_fstring_assign(rspamd_fstring_t *str, const gchar *init, gsize len)
+rspamd_fstring_assign(rspamd_fstring_t *str, const char *init, gsize len)
 {
 	gsize avail;
 
@@ -229,8 +229,8 @@ void rspamd_fstring_erase(rspamd_fstring_t *str, gsize pos, gsize len)
 }
 
 /* Compat code */
-static guint64
-fstrhash_c(guint64 c, guint64 hval)
+static uint64_t
+fstrhash_c(uint64_t c, uint64_t hval)
 {
 	return mum_hash_step(hval, c);
 }
@@ -239,12 +239,12 @@ fstrhash_c(guint64 c, guint64 hval)
 /*
  * Return hash value for a string
  */
-guint32
+uint32_t
 rspamd_fstrhash_lc(const rspamd_ftok_t *str, gboolean is_utf)
 {
 	gsize i;
-	guint64 hval;
-	const gchar *p, *end = NULL;
+	uint64_t hval;
+	const char *p, *end = NULL;
 	gunichar uc;
 
 	if (str == NULL) {
@@ -266,20 +266,20 @@ rspamd_fstrhash_lc(const rspamd_ftok_t *str, gboolean is_utf)
 		}
 	}
 	else {
-		gsize large_steps = str->len / sizeof(guint64);
-		for (i = 0; i < large_steps; i++, p += sizeof(guint64)) {
+		gsize large_steps = str->len / sizeof(uint64_t);
+		for (i = 0; i < large_steps; i++, p += sizeof(uint64_t)) {
 			/* Copy to the uint64 lowercasing each byte */
 			union {
-				char c[sizeof(guint64)];
-				guint64 iu64;
+				char c[sizeof(uint64_t)];
+				uint64_t iu64;
 			} t;
-			for (int j = 0; j < sizeof(guint64); j++) {
+			for (int j = 0; j < sizeof(uint64_t); j++) {
 				t.c[j] = g_ascii_tolower(p[j]);
 			}
 			hval = fstrhash_c(t.iu64, hval);
 		}
 
-		gsize remain = str->len % sizeof(guint64);
+		gsize remain = str->len % sizeof(uint64_t);
 		for (i = 0; i < remain; i++, p++) {
 			hval = fstrhash_c(g_ascii_tolower(*p), hval);
 		}
@@ -301,10 +301,10 @@ rspamd_fstring_equal(const rspamd_fstring_t *s1,
 	return FALSE;
 }
 
-gint rspamd_fstring_casecmp(const rspamd_fstring_t *s1,
-							const rspamd_fstring_t *s2)
+int rspamd_fstring_casecmp(const rspamd_fstring_t *s1,
+						   const rspamd_fstring_t *s2)
 {
-	gint ret = 0;
+	int ret = 0;
 
 	g_assert(s1 != NULL && s2 != NULL);
 
@@ -318,8 +318,8 @@ gint rspamd_fstring_casecmp(const rspamd_fstring_t *s1,
 	return ret;
 }
 
-gint rspamd_fstring_cmp(const rspamd_fstring_t *s1,
-						const rspamd_fstring_t *s2)
+int rspamd_fstring_cmp(const rspamd_fstring_t *s1,
+					   const rspamd_fstring_t *s2)
 {
 	g_assert(s1 != NULL && s2 != NULL);
 
@@ -330,10 +330,10 @@ gint rspamd_fstring_cmp(const rspamd_fstring_t *s1,
 	return s1->len - s2->len;
 }
 
-gint rspamd_ftok_casecmp(const rspamd_ftok_t *s1,
-						 const rspamd_ftok_t *s2)
+int rspamd_ftok_casecmp(const rspamd_ftok_t *s1,
+						const rspamd_ftok_t *s2)
 {
-	gint ret = 0;
+	int ret = 0;
 
 	g_assert(s1 != NULL && s2 != NULL);
 
@@ -347,8 +347,8 @@ gint rspamd_ftok_casecmp(const rspamd_ftok_t *s1,
 	return ret;
 }
 
-gint rspamd_ftok_cmp(const rspamd_ftok_t *s1,
-					 const rspamd_ftok_t *s2)
+int rspamd_ftok_cmp(const rspamd_ftok_t *s1,
+					const rspamd_ftok_t *s2)
 {
 	g_assert(s1 != NULL && s2 != NULL);
 
@@ -429,7 +429,7 @@ rspamd_ftok_cstr(const rspamd_ftok_t *s)
 }
 
 gboolean
-rspamd_ftok_cstr_equal(const rspamd_ftok_t *s, const gchar *pat,
+rspamd_ftok_cstr_equal(const rspamd_ftok_t *s, const char *pat,
 					   gboolean icase)
 {
 	gsize slen;
@@ -449,10 +449,10 @@ rspamd_ftok_cstr_equal(const rspamd_ftok_t *s, const gchar *pat,
 	return (rspamd_ftok_cmp(s, &srch) == 0);
 }
 
-gchar *
+char *
 rspamd_ftokdup(const rspamd_ftok_t *src)
 {
-	gchar *newstr;
+	char *newstr;
 
 	if (src == NULL) {
 		return NULL;
@@ -465,10 +465,10 @@ rspamd_ftokdup(const rspamd_ftok_t *src)
 	return newstr;
 }
 
-gchar *
+char *
 rspamd_fstringdup(const rspamd_fstring_t *src)
 {
-	gchar *newstr;
+	char *newstr;
 
 	if (src == NULL) {
 		return NULL;

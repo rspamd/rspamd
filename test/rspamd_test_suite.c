@@ -9,10 +9,10 @@ struct rspamd_main *rspamd_main = NULL;
 struct ev_loop *event_loop = NULL;
 worker_t *workers[] = {NULL};
 
-gchar *lua_test = NULL;
-gchar *lua_test_case = NULL;
+char *lua_test = NULL;
+char *lua_test_case = NULL;
 gboolean verbose = FALSE;
-gchar *argv0_dirname = NULL;
+char *argv0_dirname = NULL;
 
 static GOptionEntry entries[] =
 	{

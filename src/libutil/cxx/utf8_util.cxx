@@ -161,8 +161,8 @@ rspamd_normalise_unicode_inplace(char *start, size_t *len)
 	return static_cast<enum rspamd_utf8_normalise_result>(ret);
 }
 
-gchar *
-rspamd_utf8_transliterate(const gchar *start, gsize len, gsize *target_len)
+char *
+rspamd_utf8_transliterate(const char *start, gsize len, gsize *target_len)
 {
 	UErrorCode uc_err = U_ZERO_ERROR;
 
@@ -195,7 +195,7 @@ rspamd_utf8_transliterate(const gchar *start, gsize len, gsize *target_len)
 
 	// We assume that all characters are now ascii
 	auto dest_len = uc_string.length();
-	gchar *dest = (gchar *) g_malloc(dest_len + 1);
+	char *dest = (char *) g_malloc(dest_len + 1);
 	auto sink = icu::CheckedArrayByteSink(dest, dest_len);
 	uc_string.toUTF8(sink);
 

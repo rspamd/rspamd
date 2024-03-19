@@ -22,12 +22,12 @@
 #include "logger.h"
 #include "contrib/uthash/utlist.h"
 
-static const gdouble default_monitoring_interval = 60.0;
-static const guint default_max_errors = 2;
-static const gdouble default_max_monitored_mult = 32;
-static const gdouble default_min_monitored_mult = 0.1;
-static const gdouble default_initial_monitored_mult = default_min_monitored_mult;
-static const gdouble default_offline_monitored_mult = 8.0;
+static const double default_monitoring_interval = 60.0;
+static const unsigned int default_max_errors = 2;
+static const double default_max_monitored_mult = 32;
+static const double default_min_monitored_mult = 0.1;
+static const double default_initial_monitored_mult = default_min_monitored_mult;
+static const double default_offline_monitored_mult = 8.0;
 
 struct rspamd_monitored_methods {
 	void *(*monitored_config)(struct rspamd_monitored *m,
@@ -48,31 +48,31 @@ struct rspamd_monitored_ctx {
 	GHashTable *helts;
 	mon_change_cb change_cb;
 	gpointer ud;
-	gdouble monitoring_interval;
-	gdouble max_monitored_mult;
-	gdouble min_monitored_mult;
-	gdouble initial_monitored_mult;
-	gdouble offline_monitored_mult;
-	guint max_errors;
+	double monitoring_interval;
+	double max_monitored_mult;
+	double min_monitored_mult;
+	double initial_monitored_mult;
+	double offline_monitored_mult;
+	unsigned int max_errors;
 	gboolean initialized;
 };
 
 struct rspamd_monitored {
-	gchar *url;
-	gdouble monitoring_mult;
-	gdouble offline_time;
-	gdouble total_offline_time;
-	gdouble latency;
-	guint nchecks;
-	guint max_errors;
-	guint cur_errors;
+	char *url;
+	double monitoring_mult;
+	double offline_time;
+	double total_offline_time;
+	double latency;
+	unsigned int nchecks;
+	unsigned int max_errors;
+	unsigned int cur_errors;
 	gboolean alive;
 	enum rspamd_monitored_type type;
 	enum rspamd_monitored_flags flags;
 	struct rspamd_monitored_ctx *ctx;
 	struct rspamd_monitored_methods proc;
 	ev_timer periodic;
-	gchar tag[RSPAMD_MONITORED_TAG_LEN];
+	char tag[RSPAMD_MONITORED_TAG_LEN];
 };
 
 #define msg_err_mon(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
@@ -100,7 +100,7 @@ INIT_LOG_MODULE(monitored)
 
 static inline void
 rspamd_monitored_propagate_error(struct rspamd_monitored *m,
-								 const gchar *error)
+								 const char *error)
 {
 	if (m->alive) {
 		if (m->cur_errors < m->max_errors) {
@@ -154,9 +154,9 @@ rspamd_monitored_propagate_error(struct rspamd_monitored *m,
 }
 
 static inline void
-rspamd_monitored_propagate_success(struct rspamd_monitored *m, gdouble lat)
+rspamd_monitored_propagate_success(struct rspamd_monitored *m, double lat)
 {
-	gdouble t;
+	double t;
 
 	m->cur_errors = 0;
 
@@ -201,7 +201,7 @@ static void
 rspamd_monitored_periodic(EV_P_ ev_timer *w, int revents)
 {
 	struct rspamd_monitored *m = (struct rspamd_monitored *) w->data;
-	gdouble jittered;
+	double jittered;
 	gboolean ret = FALSE;
 
 	if (m->proc.monitored_update) {
@@ -222,17 +222,17 @@ struct rspamd_dns_monitored_conf {
 	GString *request;
 	radix_compressed_t *expected;
 	struct rspamd_monitored *m;
-	gint expected_code;
-	gdouble check_tm;
+	int expected_code;
+	double check_tm;
 };
 
 static void
 rspamd_monitored_dns_random(struct rspamd_monitored *m,
 							struct rspamd_dns_monitored_conf *conf)
 {
-	gchar random_prefix[32];
-	const gchar dns_chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
-	gint len;
+	char random_prefix[32];
+	const char dns_chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
+	int len;
 
 	len = rspamd_random_uint64_fast() % sizeof(random_prefix);
 
@@ -240,8 +240,8 @@ rspamd_monitored_dns_random(struct rspamd_monitored *m,
 		len = 8;
 	}
 
-	for (guint i = 0; i < len; i++) {
-		guint idx = rspamd_random_uint64_fast() % (sizeof(dns_chars) - 1);
+	for (unsigned int i = 0; i < len; i++) {
+		unsigned int idx = rspamd_random_uint64_fast() % (sizeof(dns_chars) - 1);
 		random_prefix[i] = dns_chars[idx];
 	}
 
@@ -257,7 +257,7 @@ rspamd_monitored_dns_conf(struct rspamd_monitored *m,
 {
 	struct rspamd_dns_monitored_conf *conf;
 	const ucl_object_t *elt;
-	gint rt;
+	int rt;
 	GString *req = g_string_sized_new(127);
 
 	conf = g_malloc0(sizeof(*conf));
@@ -337,7 +337,7 @@ rspamd_monitored_dns_cb(struct rdns_reply *reply, void *arg)
 	struct rspamd_monitored *m;
 	struct rdns_reply_entry *cur;
 	gboolean is_special_reply = FALSE;
-	gdouble lat;
+	double lat;
 
 	m = conf->m;
 	lat = rspamd_get_calendar_ticks() - conf->check_tm;
@@ -365,7 +365,7 @@ rspamd_monitored_dns_cb(struct rdns_reply *reply, void *arg)
 					LL_FOREACH(reply->entries, cur)
 					{
 						if (cur->type == RDNS_REQUEST_A) {
-							if ((guint32) cur->content.a.addr.s_addr ==
+							if ((uint32_t) cur->content.a.addr.s_addr ==
 								htonl(INADDR_LOOPBACK)) {
 								is_special_reply = TRUE;
 							}
@@ -499,7 +499,7 @@ void rspamd_monitored_ctx_config(struct rspamd_monitored_ctx *ctx,
 								 gpointer ud)
 {
 	struct rspamd_monitored *m;
-	guint i;
+	unsigned int i;
 
 	g_assert(ctx != NULL);
 	ctx->event_loop = ev_base;
@@ -532,15 +532,15 @@ rspamd_monitored_ctx_get_ev_base(struct rspamd_monitored_ctx *ctx)
 
 struct rspamd_monitored *
 rspamd_monitored_create_(struct rspamd_monitored_ctx *ctx,
-						 const gchar *line,
+						 const char *line,
 						 enum rspamd_monitored_type type,
 						 enum rspamd_monitored_flags flags,
 						 const ucl_object_t *opts,
-						 const gchar *loc)
+						 const char *loc)
 {
 	struct rspamd_monitored *m;
 	rspamd_cryptobox_hash_state_t st;
-	gchar *cksum_encoded, cksum[rspamd_cryptobox_HASHBYTES];
+	char *cksum_encoded, cksum[rspamd_cryptobox_HASHBYTES];
 
 	g_assert(ctx != NULL);
 
@@ -633,7 +633,7 @@ rspamd_monitored_set_alive(struct rspamd_monitored *m, gboolean alive)
 	return st;
 }
 
-gdouble
+double
 rspamd_monitored_offline_time(struct rspamd_monitored *m)
 {
 	g_assert(m != NULL);
@@ -645,7 +645,7 @@ rspamd_monitored_offline_time(struct rspamd_monitored *m)
 	return 0;
 }
 
-gdouble
+double
 rspamd_monitored_total_offline_time(struct rspamd_monitored *m)
 {
 	g_assert(m != NULL);
@@ -658,7 +658,7 @@ rspamd_monitored_total_offline_time(struct rspamd_monitored *m)
 	return m->total_offline_time;
 }
 
-gdouble
+double
 rspamd_monitored_latency(struct rspamd_monitored *m)
 {
 	g_assert(m != NULL);
@@ -675,7 +675,7 @@ void rspamd_monitored_stop(struct rspamd_monitored *m)
 
 void rspamd_monitored_start(struct rspamd_monitored *m)
 {
-	gdouble jittered;
+	double jittered;
 
 	g_assert(m != NULL);
 	jittered = rspamd_time_jitter(m->ctx->monitoring_interval * m->monitoring_mult,
@@ -695,7 +695,7 @@ void rspamd_monitored_start(struct rspamd_monitored *m)
 void rspamd_monitored_ctx_destroy(struct rspamd_monitored_ctx *ctx)
 {
 	struct rspamd_monitored *m;
-	guint i;
+	unsigned int i;
 
 	g_assert(ctx != NULL);
 
@@ -714,10 +714,10 @@ void rspamd_monitored_ctx_destroy(struct rspamd_monitored_ctx *ctx)
 
 struct rspamd_monitored *
 rspamd_monitored_by_tag(struct rspamd_monitored_ctx *ctx,
-						guchar tag[RSPAMD_MONITORED_TAG_LEN])
+						unsigned char tag[RSPAMD_MONITORED_TAG_LEN])
 {
 	struct rspamd_monitored *res;
-	gchar rtag[RSPAMD_MONITORED_TAG_LEN];
+	char rtag[RSPAMD_MONITORED_TAG_LEN];
 
 	rspamd_strlcpy(rtag, tag, sizeof(rtag));
 	res = g_hash_table_lookup(ctx->helts, rtag);
@@ -727,7 +727,7 @@ rspamd_monitored_by_tag(struct rspamd_monitored_ctx *ctx,
 
 
 void rspamd_monitored_get_tag(struct rspamd_monitored *m,
-							  guchar tag_out[RSPAMD_MONITORED_TAG_LEN])
+							  unsigned char tag_out[RSPAMD_MONITORED_TAG_LEN])
 {
 	g_assert(m != NULL);
 

@@ -22,7 +22,7 @@
 #define SYSLOG_LOG_QUARK g_quark_from_static_string("syslog_logger")
 
 struct rspamd_syslog_logger_priv {
-	gint log_facility;
+	int log_facility;
 };
 
 #ifdef HAVE_SYSLOG_H
@@ -55,24 +55,24 @@ void rspamd_log_syslog_dtor(rspamd_logger_t *logger, gpointer arg)
 	closelog();
 	g_free(priv);
 }
-bool rspamd_log_syslog_log(const gchar *module, const gchar *id,
-						   const gchar *function,
-						   gint level_flags,
-						   const gchar *message,
+bool rspamd_log_syslog_log(const char *module, const char *id,
+						   const char *function,
+						   int level_flags,
+						   const char *message,
 						   gsize mlen,
 						   rspamd_logger_t *rspamd_log,
 						   gpointer arg)
 {
 	static const struct {
 		GLogLevelFlags glib_level;
-		gint syslog_level;
+		int syslog_level;
 	} levels_match[] = {
 		{G_LOG_LEVEL_DEBUG, LOG_DEBUG},
 		{G_LOG_LEVEL_INFO, LOG_INFO},
 		{G_LOG_LEVEL_WARNING, LOG_WARNING},
 		{G_LOG_LEVEL_CRITICAL, LOG_ERR}};
 	unsigned i;
-	gint syslog_level;
+	int syslog_level;
 
 	if (!(level_flags & RSPAMD_LOG_FORCED) && !rspamd_log->enabled) {
 		return false;
@@ -119,7 +119,7 @@ bool rspamd_log_syslog_log(const gchar *module, const gchar *id,
 				   idbuf,
 				   module != NULL ? module : "",
 				   function != NULL ? function : "",
-				   (gint) mlen, message);
+				   (int) mlen, message);
 		}
 		else {
 			/* Escaped version */
@@ -228,7 +228,7 @@ bool rspamd_log_syslog_log(const gchar *module, const gchar *id,
 			   idbuf,
 			   module != NULL ? module : "",
 			   function != NULL ? function : "",
-			   (gint) mlen, message);
+			   (int) mlen, message);
 	}
 
 	return true;
@@ -245,10 +245,10 @@ rspamd_log_syslog_init(rspamd_logger_t *logger, struct rspamd_config *cfg,
 	return NULL;
 }
 
-bool rspamd_log_syslog_log(const gchar *module, const gchar *id,
-						   const gchar *function,
-						   gint level_flags,
-						   const gchar *message,
+bool rspamd_log_syslog_log(const char *module, const char *id,
+						   const char *function,
+						   int level_flags,
+						   const char *message,
 						   gsize mlen,
 						   rspamd_logger_t *rspamd_log,
 						   gpointer arg)

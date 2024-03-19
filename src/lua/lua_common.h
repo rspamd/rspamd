@@ -62,7 +62,7 @@ extern "C" {
 
 #if LUA_VERSION_NUM > 501 && !defined LUA_COMPAT_MODULE
 static inline void
-luaL_register(lua_State *L, const gchar *name, const struct luaL_reg *methods)
+luaL_register(lua_State *L, const char *name, const struct luaL_reg *methods)
 {
 	if (name != NULL) {
 		lua_newtable(L);
@@ -114,9 +114,9 @@ struct rspamd_lua_ip {
 #define RSPAMD_TEXT_FLAG_FAKE (1u << 4u)
 #define RSPAMD_TEXT_FLAG_BINARY (1u << 5u)
 struct rspamd_lua_text {
-	const gchar *start;
-	guint len;
-	guint flags;
+	const char *start;
+	unsigned int len;
+	unsigned int flags;
 };
 
 struct rspamd_lua_url {
@@ -125,9 +125,9 @@ struct rspamd_lua_url {
 
 struct rspamd_lua_regexp {
 	rspamd_regexp_t *re;
-	gchar *module;
-	gchar *re_pattern;
-	gint re_flags;
+	char *module;
+	char *re_pattern;
+	int re_flags;
 };
 
 struct rspamd_map;
@@ -149,7 +149,7 @@ enum rspamd_lua_map_type {
 struct rspamd_lua_map {
 	struct rspamd_map *map;
 	enum rspamd_lua_map_type type;
-	guint flags;
+	unsigned int flags;
 
 	union {
 		struct rspamd_radix_map_helper *radix;
@@ -162,7 +162,7 @@ struct rspamd_lua_map {
 
 struct rspamd_lua_upstream {
 	struct upstream *up;
-	gint upref;
+	int upref;
 };
 
 /* Common utility functions */
@@ -171,7 +171,7 @@ struct rspamd_lua_upstream {
 * Create and register new class
 */
 void rspamd_lua_new_class(lua_State *L,
-						  const gchar *classname,
+						  const char *classname,
 						  const struct luaL_reg *methods);
 
 /**
@@ -179,14 +179,14 @@ void rspamd_lua_new_class(lua_State *L,
 * @param L
  * @param classname **MUST BE STATIC**, direct address is used for comparisons!
 */
-void rspamd_lua_setclass(lua_State *L, const gchar *classname, gint objidx);
+void rspamd_lua_setclass(lua_State *L, const char *classname, int objidx);
 
 /**
 * Pushes the metatable for specific class on top of the stack
 * @param L
 * @param classname
 */
-void rspamd_lua_class_metatable(lua_State *L, const gchar *classname);
+void rspamd_lua_class_metatable(lua_State *L, const char *classname);
 
 /**
 * Adds a new field to the class (metatable) identified by `classname`
@@ -194,28 +194,28 @@ void rspamd_lua_class_metatable(lua_State *L, const gchar *classname);
 * @param classname
 * @param meth
 */
-void rspamd_lua_add_metamethod(lua_State *L, const gchar *classname,
+void rspamd_lua_add_metamethod(lua_State *L, const char *classname,
 							   luaL_Reg *meth);
 
 /**
 * Set index of table to value (like t['index'] = value)
 */
-void rspamd_lua_table_set(lua_State *L, const gchar *index, const gchar *value);
+void rspamd_lua_table_set(lua_State *L, const char *index, const char *value);
 
 /**
 * Get string value of index in a table (return t['index'])
 */
-const gchar *rspamd_lua_table_get(lua_State *L, const gchar *index);
+const char *rspamd_lua_table_get(lua_State *L, const char *index);
 
 /**
 * Convert classname to string
 */
-gint rspamd_lua_class_tostring(lua_State *L);
+int rspamd_lua_class_tostring(lua_State *L);
 
 /**
 * Check whether the argument at specified index is of the specified class
 */
-gpointer rspamd_lua_check_class(lua_State *L, gint index, const gchar *name);
+gpointer rspamd_lua_check_class(lua_State *L, int index, const char *name);
 
 /**
 * Initialize lua and bindings
@@ -237,8 +237,8 @@ void rspamd_lua_start_gc(struct rspamd_config *cfg);
 * @param field_name
 * @param new_elt
 */
-void rspamd_plugins_table_push_elt(lua_State *L, const gchar *field_name,
-								   const gchar *new_elt);
+void rspamd_plugins_table_push_elt(lua_State *L, const char *field_name,
+								   const char *new_elt);
 
 /**
 * Load and initialize lua plugins
@@ -260,9 +260,9 @@ void rspamd_lua_task_push(lua_State *L, struct rspamd_task *task);
 /**
 * Return lua ip structure at the specified address
 */
-struct rspamd_lua_ip *lua_check_ip(lua_State *L, gint pos);
+struct rspamd_lua_ip *lua_check_ip(lua_State *L, int pos);
 
-struct rspamd_lua_text *lua_check_text(lua_State *L, gint pos);
+struct rspamd_lua_text *lua_check_text(lua_State *L, int pos);
 /**
 * Checks for a text or a string. In case of string a pointer to static structure is returned.
 * So it should not be reused or placed to Lua stack anyhow!
@@ -271,7 +271,7 @@ struct rspamd_lua_text *lua_check_text(lua_State *L, gint pos);
 * @param pos
 * @return
 */
-struct rspamd_lua_text *lua_check_text_or_string(lua_State *L, gint pos);
+struct rspamd_lua_text *lua_check_text_or_string(lua_State *L, int pos);
 /**
  * Create new text object
  * @param L
@@ -280,7 +280,7 @@ struct rspamd_lua_text *lua_check_text_or_string(lua_State *L, gint pos);
  * @param own
  * @return
  */
-struct rspamd_lua_text *lua_new_text(lua_State *L, const gchar *start,
+struct rspamd_lua_text *lua_new_text(lua_State *L, const char *start,
 									 gsize len, gboolean own);
 /**
  * Create new text object from task pool if allocation is needed
@@ -292,7 +292,7 @@ struct rspamd_lua_text *lua_new_text(lua_State *L, const gchar *start,
  * @return
  */
 struct rspamd_lua_text *lua_new_text_task(lua_State *L, struct rspamd_task *task,
-										  const gchar *start, gsize len, gboolean own);
+										  const char *start, gsize len, gboolean own);
 /**
  * Checks if a text has binary characters (non ascii and non-utf8 characters)
  * @param t
@@ -300,7 +300,7 @@ struct rspamd_lua_text *lua_new_text_task(lua_State *L, struct rspamd_task *task
  */
 bool lua_is_text_binary(struct rspamd_lua_text *t);
 
-struct rspamd_lua_regexp *lua_check_regexp(lua_State *L, gint pos);
+struct rspamd_lua_regexp *lua_check_regexp(lua_State *L, int pos);
 
 struct rspamd_lua_upstream *lua_check_upstream(lua_State *L, int pos);
 
@@ -312,32 +312,32 @@ enum rspamd_lua_task_header_type {
 	RSPAMD_TASK_HEADER_PUSH_HAS,
 };
 
-gint rspamd_lua_push_header(lua_State *L,
-							struct rspamd_mime_header *h,
-							enum rspamd_lua_task_header_type how);
+int rspamd_lua_push_header(lua_State *L,
+						   struct rspamd_mime_header *h,
+						   enum rspamd_lua_task_header_type how);
 
 /**
 * Push specific header to lua
 */
-gint rspamd_lua_push_header_array(lua_State *L,
-								  const gchar *name,
-								  struct rspamd_mime_header *rh,
-								  enum rspamd_lua_task_header_type how,
-								  gboolean strong);
+int rspamd_lua_push_header_array(lua_State *L,
+								 const char *name,
+								 struct rspamd_mime_header *rh,
+								 enum rspamd_lua_task_header_type how,
+								 gboolean strong);
 
 /**
 * Check for task at the specified position
 */
-struct rspamd_task *lua_check_task(lua_State *L, gint pos);
+struct rspamd_task *lua_check_task(lua_State *L, int pos);
 
-struct rspamd_task *lua_check_task_maybe(lua_State *L, gint pos);
+struct rspamd_task *lua_check_task_maybe(lua_State *L, int pos);
 
-struct rspamd_lua_map *lua_check_map(lua_State *L, gint pos);
+struct rspamd_lua_map *lua_check_map(lua_State *L, int pos);
 
 /**
 * Push ip address from a string (nil is pushed if a string cannot be converted)
 */
-void rspamd_lua_ip_push_fromstring(lua_State *L, const gchar *ip_str);
+void rspamd_lua_ip_push_fromstring(lua_State *L, const char *ip_str);
 
 /**
 * Create type error
@@ -350,7 +350,7 @@ int rspamd_lua_typerror(lua_State *L, int narg, const char *tname);
 /**
 * Add preload function
 */
-void rspamd_lua_add_preload(lua_State *L, const gchar *name, lua_CFunction func);
+void rspamd_lua_add_preload(lua_State *L, const char *name, lua_CFunction func);
 
 void luaopen_task(lua_State *L);
 
@@ -422,7 +422,7 @@ void luaopen_tensor(lua_State *L);
 
 void luaopen_parsers(lua_State *L);
 
-void rspamd_lua_dostring(const gchar *line);
+void rspamd_lua_dostring(const char *line);
 
 double rspamd_lua_normalize(struct rspamd_config *cfg,
 							long double score,
@@ -443,17 +443,17 @@ gboolean rspamd_lua_set_env(lua_State *L, GHashTable *vars, char **lua_env,
 
 void rspamd_lua_set_globals(struct rspamd_config *cfg, lua_State *L);
 
-struct memory_pool_s *rspamd_lua_check_mempool(lua_State *L, gint pos);
+struct memory_pool_s *rspamd_lua_check_mempool(lua_State *L, int pos);
 
-struct rspamd_config *lua_check_config(lua_State *L, gint pos);
+struct rspamd_config *lua_check_config(lua_State *L, int pos);
 
-struct rspamd_async_session *lua_check_session(lua_State *L, gint pos);
+struct rspamd_async_session *lua_check_session(lua_State *L, int pos);
 
-struct ev_loop *lua_check_ev_base(lua_State *L, gint pos);
+struct ev_loop *lua_check_ev_base(lua_State *L, int pos);
 
-struct rspamd_dns_resolver *lua_check_dns_resolver(lua_State *L, gint pos);
+struct rspamd_dns_resolver *lua_check_dns_resolver(lua_State *L, int pos);
 
-struct rspamd_lua_url *lua_check_url(lua_State *L, gint pos);
+struct rspamd_lua_url *lua_check_url(lua_State *L, int pos);
 
 enum rspamd_lua_parse_arguments_flags {
 	RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT = 0,
@@ -464,7 +464,7 @@ enum rspamd_lua_parse_arguments_flags {
 * Extract an arguments from lua table according to format string. Supported arguments are:
 * [*]key=S|I|N|B|V|U{a-z};[key=...]
 * - S - const char *
-* - I - gint64_t
+* - I - int64_t_t
 * - i - int32_t
 * - N - double
 * - B - gboolean
@@ -483,13 +483,13 @@ enum rspamd_lua_parse_arguments_flags {
 * @param extraction_pattern static pattern
 * @return TRUE if a table has been parsed
 */
-gboolean rspamd_lua_parse_table_arguments(lua_State *L, gint pos,
+gboolean rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 										  GError **err,
 										  enum rspamd_lua_parse_arguments_flags how,
-										  const gchar *extraction_pattern, ...);
+										  const char *extraction_pattern, ...);
 
 
-gint rspamd_lua_traceback(lua_State *L);
+int rspamd_lua_traceback(lua_State *L);
 
 /**
 * Returns stack trace as a string. Caller should clear memory.
@@ -501,7 +501,7 @@ void rspamd_lua_get_traceback_string(lua_State *L, luaL_Buffer *buf);
 /**
 * Returns size of table at position `tbl_pos`
 */
-guint rspamd_lua_table_size(lua_State *L, gint tbl_pos);
+unsigned int rspamd_lua_table_size(lua_State *L, int tbl_pos);
 
 void lua_push_emails_address_list(lua_State *L, GPtrArray *addrs, int flags);
 
@@ -509,7 +509,7 @@ void lua_push_emails_address_list(lua_State *L, GPtrArray *addrs, int flags);
 #define TRACE_POINTS 6
 
 struct lua_logger_trace {
-	gint cur_level;
+	int cur_level;
 	gconstpointer traces[TRACE_POINTS];
 };
 
@@ -531,7 +531,7 @@ enum lua_logger_escape_type {
 * @param len
 * @return
 */
-gsize lua_logger_out_type(lua_State *L, gint pos, gchar *outbuf,
+gsize lua_logger_out_type(lua_State *L, int pos, char *outbuf,
 						  gsize len, struct lua_logger_trace *trace,
 						  enum lua_logger_escape_type esc_type);
 
@@ -541,7 +541,7 @@ gsize lua_logger_out_type(lua_State *L, gint pos, gchar *outbuf,
 * @param pos
 * @param classname **MUST BE STATIC**, direct address is used for comparisons!
 */
-void *rspamd_lua_check_udata(lua_State *L, gint pos, const gchar *classname);
+void *rspamd_lua_check_udata(lua_State *L, int pos, const char *classname);
 
 #define RSPAMD_LUA_CHECK_UDATA_PTR_OR_RETURN(L, pos, classname, type, dest)                                        \
 	do {                                                                                                           \
@@ -558,7 +558,7 @@ void *rspamd_lua_check_udata(lua_State *L, gint pos, const gchar *classname);
 * @param pos
 * @param classname **MUST BE STATIC**, direct address is used for comparisons!
 */
-void *rspamd_lua_check_udata_maybe(lua_State *L, gint pos, const gchar *classname);
+void *rspamd_lua_check_udata_maybe(lua_State *L, int pos, const char *classname);
 
 /**
 * Call finishing script with the specified task
@@ -588,7 +588,7 @@ void rspamd_lua_run_config_unload(lua_State *L, struct rspamd_config *cfg);
 * @param ref
 */
 void rspamd_lua_add_ref_dtor(lua_State *L, rspamd_mempool_t *pool,
-							 gint ref);
+							 int ref);
 
 /**
  * Returns a lua reference from a function like string, e.g. `return function(...) end`
@@ -596,8 +596,8 @@ void rspamd_lua_add_ref_dtor(lua_State *L, rspamd_mempool_t *pool,
  * @param str
  * @return
  */
-gint rspamd_lua_function_ref_from_str(lua_State *L, const gchar *str, gsize slen,
-									  const gchar *modname, GError **err);
+int rspamd_lua_function_ref_from_str(lua_State *L, const char *str, gsize slen,
+									 const char *modname, GError **err);
 
 /**
 * Tries to load some module using `require` and get some method from it
@@ -606,8 +606,8 @@ gint rspamd_lua_function_ref_from_str(lua_State *L, const gchar *str, gsize slen
 * @param funcname
 * @return TRUE if function exists in that module, the function is pushed in stack, otherwise stack is unchanged and FALSE is returned
 */
-gboolean rspamd_lua_require_function(lua_State *L, const gchar *modname,
-									 const gchar *funcname);
+gboolean rspamd_lua_require_function(lua_State *L, const char *modname,
+									 const char *funcname);
 
 /**
 * Tries to load redis server definition from ucl object specified
@@ -617,7 +617,7 @@ gboolean rspamd_lua_require_function(lua_State *L, const gchar *modname,
 * @return
 */
 gboolean rspamd_lua_try_load_redis(lua_State *L, const ucl_object_t *obj,
-								   struct rspamd_config *cfg, gint *ref_id);
+								   struct rspamd_config *cfg, int *ref_id);
 
 struct rspamd_stat_token_s;
 
@@ -642,22 +642,22 @@ enum rspamd_lua_words_type {
 * @param words
 * @param how
 */
-gint rspamd_lua_push_words(lua_State *L, GArray *words,
-						   enum rspamd_lua_words_type how);
+int rspamd_lua_push_words(lua_State *L, GArray *words,
+						  enum rspamd_lua_words_type how);
 
 /**
 * Returns newly allocated name for caller module name
 * @param L
 * @return
 */
-gchar *rspamd_lua_get_module_name(lua_State *L);
+char *rspamd_lua_get_module_name(lua_State *L);
 
 /**
 * Call Lua function in a universal way. Arguments string:
-* - i - lua_integer, argument - gint64
-* - n - lua_number, argument - gdouble
-* - s - lua_string, argument - const gchar * (zero terminated)
-* - l - lua_lstring, argument - (size_t + const gchar *) pair
+* - i - lua_integer, argument - int64_t
+* - n - lua_number, argument - double
+* - s - lua_string, argument - const char * (zero terminated)
+* - l - lua_lstring, argument - (size_t + const char *) pair
 * - u - lua_userdata, argument - (const char * + void *) - classname + pointer
 * - b - lua_boolean, argument - gboolean (not bool due to varargs promotion)
 * - f - lua_function, argument - int - position of the function on stack (not lua_registry)
@@ -671,8 +671,8 @@ gchar *rspamd_lua_get_module_name(lua_State *L);
 * @param ... arguments
 * @return true of pcall returned 0, false + err otherwise
 */
-bool rspamd_lua_universal_pcall(lua_State *L, gint cbref, const gchar *strloc,
-								gint nret, const gchar *args, GError **err, ...);
+bool rspamd_lua_universal_pcall(lua_State *L, int cbref, const char *strloc,
+								int nret, const char *args, GError **err, ...);
 
 /**
  * Returns true if lua is initialised
@@ -688,7 +688,7 @@ bool rspamd_lua_is_initialised(void);
 * @return
 */
 #if defined(LUA_VERSION_NUM) && LUA_VERSION_NUM <= 502
-gint rspamd_lua_geti(lua_State *L, int index, int i);
+int rspamd_lua_geti(lua_State *L, int index, int i);
 #else
 #define rspamd_lua_geti lua_geti
 #endif

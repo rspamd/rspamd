@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -55,28 +55,28 @@ enum rspamd_srv_type {
 enum rspamd_log_pipe_type {
 	RSPAMD_LOG_PIPE_SYMBOLS = 0,
 };
-#define CONTROL_PATHLEN MIN(PATH_MAX, PIPE_BUF - sizeof(int) * 2 - sizeof(gint64) * 2)
+#define CONTROL_PATHLEN MIN(PATH_MAX, PIPE_BUF - sizeof(int) * 2 - sizeof(int64_t) * 2)
 struct rspamd_control_command {
 	enum rspamd_control_type type;
 	union {
 		struct {
-			guint unused;
+			unsigned int unused;
 		} stat;
 		struct {
-			guint unused;
+			unsigned int unused;
 		} reload;
 		struct {
-			guint unused;
+			unsigned int unused;
 		} reresolve;
 		struct {
-			guint unused;
+			unsigned int unused;
 		} recompile;
 		struct {
 			gboolean forced;
-			gchar cache_dir[CONTROL_PATHLEN];
+			char cache_dir[CONTROL_PATHLEN];
 		} hs_loaded;
 		struct {
-			gchar tag[32];
+			char tag[32];
 			gboolean alive;
 			pid_t sender;
 		} monitored_change;
@@ -84,10 +84,10 @@ struct rspamd_control_command {
 			enum rspamd_log_pipe_type type;
 		} log_pipe;
 		struct {
-			guint unused;
+			unsigned int unused;
 		} fuzzy_stat;
 		struct {
-			guint unused;
+			unsigned int unused;
 		} fuzzy_sync;
 		struct {
 			enum {
@@ -96,7 +96,7 @@ struct rspamd_control_command {
 				rspamd_child_terminated,
 			} what;
 			pid_t pid;
-			guint additional;
+			unsigned int additional;
 		} child_change;
 		struct {
 			union {
@@ -113,39 +113,39 @@ struct rspamd_control_reply {
 	enum rspamd_control_type type;
 	union {
 		struct {
-			guint conns;
-			gdouble uptime;
-			gdouble utime;
-			gdouble systime;
+			unsigned int conns;
+			double uptime;
+			double utime;
+			double systime;
 			gulong maxrss;
 		} stat;
 		struct {
-			guint status;
+			unsigned int status;
 		} reload;
 		struct {
-			guint status;
+			unsigned int status;
 		} reresolve;
 		struct {
-			guint status;
+			unsigned int status;
 		} recompile;
 		struct {
-			guint status;
+			unsigned int status;
 		} hs_loaded;
 		struct {
-			guint status;
+			unsigned int status;
 		} monitored_change;
 		struct {
-			guint status;
+			unsigned int status;
 		} log_pipe;
 		struct {
-			guint status;
-			gchar storage_id[MEMPOOL_UID_LEN];
+			unsigned int status;
+			char storage_id[MEMPOOL_UID_LEN];
 		} fuzzy_stat;
 		struct {
-			guint status;
+			unsigned int status;
 		} fuzzy_sync;
 		struct {
-			guint status;
+			unsigned int status;
 		} fuzzy_blocked;
 	} reply;
 };
@@ -154,19 +154,19 @@ struct rspamd_control_reply {
 
 struct rspamd_srv_command {
 	enum rspamd_srv_type type;
-	guint64 id;
+	uint64_t id;
 	union {
 		struct {
-			gint af;
-			gchar pair_id[PAIR_ID_LEN];
-			guint pair_num;
+			int af;
+			char pair_id[PAIR_ID_LEN];
+			unsigned int pair_num;
 		} spair;
 		struct {
 			gboolean forced;
-			gchar cache_dir[CONTROL_PATHLEN];
+			char cache_dir[CONTROL_PATHLEN];
 		} hs_loaded;
 		struct {
-			gchar tag[32];
+			char tag[32];
 			gboolean alive;
 			pid_t sender;
 		} monitored_change;
@@ -182,11 +182,11 @@ struct rspamd_srv_command {
 			} state;
 		} on_fork;
 		struct {
-			guint status;
+			unsigned int status;
 			/* TODO: add more fields */
 		} heartbeat;
 		struct {
-			guint status;
+			unsigned int status;
 		} health;
 		/* Used when a worker loads a valid hyperscan file */
 		struct {
@@ -206,31 +206,31 @@ struct rspamd_srv_command {
 
 struct rspamd_srv_reply {
 	enum rspamd_srv_type type;
-	guint64 id;
+	uint64_t id;
 	union {
 		struct {
-			gint code;
+			int code;
 		} spair;
 		struct {
-			gint forced;
+			int forced;
 		} hs_loaded;
 		struct {
-			gint status;
+			int status;
 		};
 		struct {
 			enum rspamd_log_pipe_type type;
 		} log_pipe;
 		struct {
-			gint status;
+			int status;
 		} on_fork;
 		struct {
-			gint status;
+			int status;
 		} heartbeat;
 		struct {
-			guint status;
-			guint workers_count;
-			guint scanners_count;
-			guint workers_hb_lost;
+			unsigned int status;
+			unsigned int workers_count;
+			unsigned int scanners_count;
+			unsigned int workers_hb_lost;
 		} health;
 		struct {
 			int unused;
@@ -243,20 +243,20 @@ struct rspamd_srv_reply {
 
 typedef gboolean (*rspamd_worker_control_handler)(struct rspamd_main *rspamd_main,
 												  struct rspamd_worker *worker,
-												  gint fd,
-												  gint attached_fd,
+												  int fd,
+												  int attached_fd,
 												  struct rspamd_control_command *cmd,
 												  gpointer ud);
 
 typedef void (*rspamd_srv_reply_handler)(struct rspamd_worker *worker,
-										 struct rspamd_srv_reply *rep, gint rep_fd,
+										 struct rspamd_srv_reply *rep, int rep_fd,
 										 gpointer ud);
 
 /**
  * Process client socket connection
  */
 void rspamd_control_process_client_socket(struct rspamd_main *rspamd_main,
-										  gint fd, rspamd_inet_addr_t *addr);
+										  int fd, rspamd_inet_addr_t *addr);
 
 /**
  * Register default handlers for a worker
@@ -287,7 +287,7 @@ void rspamd_srv_start_watching(struct rspamd_main *srv,
 void rspamd_srv_send_command(struct rspamd_worker *worker,
 							 struct ev_loop *ev_base,
 							 struct rspamd_srv_command *cmd,
-							 gint attached_fd,
+							 int attached_fd,
 							 rspamd_srv_reply_handler handler,
 							 gpointer ud);
 
@@ -306,16 +306,16 @@ void rspamd_control_broadcast_srv_cmd(struct rspamd_main *rspamd_main,
  * @param str
  * @return
  */
-enum rspamd_control_type rspamd_control_command_from_string(const gchar *str);
+enum rspamd_control_type rspamd_control_command_from_string(const char *str);
 
 /**
  * Returns command name from it's type
  * @param cmd
  * @return
  */
-const gchar *rspamd_control_command_to_string(enum rspamd_control_type cmd);
+const char *rspamd_control_command_to_string(enum rspamd_control_type cmd);
 
-const gchar *rspamd_srv_command_to_string(enum rspamd_srv_type cmd);
+const char *rspamd_srv_command_to_string(enum rspamd_srv_type cmd);
 
 /**
  * Used to cleanup pending events

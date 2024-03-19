@@ -94,9 +94,9 @@ const struct rspamd_controller_pbkdf pbkdf_list[] = {
 	 .salt_len = 20,
 	 .key_len = rspamd_cryptobox_HASHBYTES / 2}};
 
-gint rspamd_socket_nonblocking(gint fd)
+int rspamd_socket_nonblocking(int fd)
 {
-	gint ofl;
+	int ofl;
 
 	ofl = fcntl(fd, F_GETFL, 0);
 
@@ -106,9 +106,9 @@ gint rspamd_socket_nonblocking(gint fd)
 	return 0;
 }
 
-gint rspamd_socket_blocking(gint fd)
+int rspamd_socket_blocking(int fd)
 {
-	gint ofl;
+	int ofl;
 
 	ofl = fcntl(fd, F_GETFL, 0);
 
@@ -118,9 +118,9 @@ gint rspamd_socket_blocking(gint fd)
 	return 0;
 }
 
-gint rspamd_socket_poll(gint fd, gint timeout, short events)
+int rspamd_socket_poll(int fd, int timeout, short events)
 {
-	gint r;
+	int r;
 	struct pollfd fds[1];
 
 	fds->fd = fd;
@@ -135,9 +135,9 @@ gint rspamd_socket_poll(gint fd, gint timeout, short events)
 	return r;
 }
 
-gint rspamd_socket_create(gint af, gint type, gint protocol, gboolean async)
+int rspamd_socket_create(int af, int type, int protocol, gboolean async)
 {
-	gint fd;
+	int fd;
 
 	fd = socket(af, type, protocol);
 	if (fd == -1) {
@@ -159,11 +159,11 @@ gint rspamd_socket_create(gint af, gint type, gint protocol, gboolean async)
 	return fd;
 }
 
-static gint
-rspamd_inet_socket_create(gint type, struct addrinfo *addr, gboolean is_server,
+static int
+rspamd_inet_socket_create(int type, struct addrinfo *addr, gboolean is_server,
 						  gboolean async, GList **list)
 {
-	gint fd = -1, r, on = 1, s_error;
+	int fd = -1, r, on = 1, s_error;
 	struct addrinfo *cur;
 	gpointer ptr;
 	socklen_t optlen;
@@ -178,11 +178,11 @@ rspamd_inet_socket_create(gint type, struct addrinfo *addr, gboolean is_server,
 
 		if (is_server) {
 			(void) setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const void *) &on,
-							  sizeof(gint));
+							  sizeof(int));
 #ifdef HAVE_IPV6_V6ONLY
 			if (cur->ai_family == AF_INET6) {
 				setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, (const void *) &on,
-						   sizeof(gint));
+						   sizeof(int));
 			}
 #endif
 			r = bind(fd, cur->ai_addr, cur->ai_addrlen);
@@ -242,25 +242,25 @@ rspamd_inet_socket_create(gint type, struct addrinfo *addr, gboolean is_server,
 	return (fd);
 }
 
-gint rspamd_socket_tcp(struct addrinfo *addr, gboolean is_server, gboolean async)
+int rspamd_socket_tcp(struct addrinfo *addr, gboolean is_server, gboolean async)
 {
 	return rspamd_inet_socket_create(SOCK_STREAM, addr, is_server, async, NULL);
 }
 
-gint rspamd_socket_udp(struct addrinfo *addr, gboolean is_server, gboolean async)
+int rspamd_socket_udp(struct addrinfo *addr, gboolean is_server, gboolean async)
 {
 	return rspamd_inet_socket_create(SOCK_DGRAM, addr, is_server, async, NULL);
 }
 
-gint rspamd_socket_unix(const gchar *path,
-						struct sockaddr_un *addr,
-						gint type,
-						gboolean is_server,
-						gboolean async)
+int rspamd_socket_unix(const char *path,
+					   struct sockaddr_un *addr,
+					   int type,
+					   gboolean is_server,
+					   gboolean async)
 {
 
 	socklen_t optlen;
-	gint fd = -1, s_error, r, serrno, on = 1;
+	int fd = -1, s_error, r, serrno, on = 1;
 	struct stat st;
 
 	if (path == NULL)
@@ -302,7 +302,7 @@ gint rspamd_socket_unix(const gchar *path,
 	}
 	if (is_server) {
 		(void) setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const void *) &on,
-						  sizeof(gint));
+						  sizeof(int));
 		r = bind(fd, (struct sockaddr *) addr, SUN_LEN(addr));
 	}
 	else {
@@ -365,14 +365,14 @@ rspamd_prefer_v4_hack(const struct addrinfo *a1, const struct addrinfo *a2)
  * @param is_server make this socket as server socket
  * @param try_resolve try name resolution for a socket (BLOCKING)
  */
-gint rspamd_socket(const gchar *credits, guint16 port,
-				   gint type, gboolean async, gboolean is_server, gboolean try_resolve)
+int rspamd_socket(const char *credits, uint16_t port,
+				  int type, gboolean async, gboolean is_server, gboolean try_resolve)
 {
 	struct sockaddr_un un;
 	struct stat st;
 	struct addrinfo hints, *res;
-	gint r;
-	gchar portbuf[8];
+	int r;
+	char portbuf[8];
 
 	if (*credits == '/') {
 		if (is_server) {
@@ -430,9 +430,9 @@ gint rspamd_socket(const gchar *credits, guint16 port,
 }
 
 gboolean
-rspamd_socketpair(gint pair[2], gint af)
+rspamd_socketpair(int pair[2], int af)
 {
-	gint r = -1, serrno;
+	int r = -1, serrno;
 
 #ifdef HAVE_SOCK_SEQPACKET
 	if (af == SOCK_SEQPACKET) {
@@ -471,11 +471,11 @@ out:
 }
 
 #ifdef HAVE_SA_SIGINFO
-void rspamd_signals_init(struct sigaction *signals, void (*sig_handler)(gint,
+void rspamd_signals_init(struct sigaction *signals, void (*sig_handler)(int,
 																		siginfo_t *,
 																		void *))
 #else
-void rspamd_signals_init(struct sigaction *signals, void (*sig_handler)(gint))
+void rspamd_signals_init(struct sigaction *signals, void (*sig_handler)(int))
 #endif
 {
 	struct sigaction sigpipe_act;
@@ -530,10 +530,10 @@ void rspamd_signals_init(struct sigaction *signals, void (*sig_handler)(gint))
 #ifndef HAVE_SETPROCTITLE
 
 #ifdef LINUX
-static gchar *title_buffer = NULL;
+static char *title_buffer = NULL;
 static size_t title_buffer_size = 0;
-static gchar *title_progname, *title_progname_full;
-gchar **old_environ = NULL;
+static char *title_progname, *title_progname_full;
+char **old_environ = NULL;
 
 static void
 rspamd_title_dtor(gpointer d)
@@ -543,8 +543,8 @@ rspamd_title_dtor(gpointer d)
 		environ = old_environ;
 	}
 
-	gchar **env = (gchar **) d;
-	guint i;
+	char **env = (char **) d;
+	unsigned int i;
 
 	for (i = 0; env[i] != NULL; i++) {
 		g_free(env[i]);
@@ -556,12 +556,12 @@ rspamd_title_dtor(gpointer d)
 
 #endif /* ifndef HAVE_SETPROCTITLE */
 
-gint rspamd_init_title(rspamd_mempool_t *pool,
-					   gint argc, gchar *argv[], gchar *envp[])
+int rspamd_init_title(rspamd_mempool_t *pool,
+					  int argc, char *argv[], char *envp[])
 {
 #if defined(LINUX) && !defined(HAVE_SETPROCTITLE)
-	gchar *begin_of_buffer = 0, *end_of_buffer = 0;
-	gint i;
+	char *begin_of_buffer = 0, *end_of_buffer = 0;
+	int i;
 
 	for (i = 0; i < argc; ++i) {
 		if (!begin_of_buffer) {
@@ -585,7 +585,7 @@ gint rspamd_init_title(rspamd_mempool_t *pool,
 		return 0;
 	}
 
-	gchar **new_environ = g_malloc((i + 1) * sizeof(envp[0]));
+	char **new_environ = g_malloc((i + 1) * sizeof(envp[0]));
 
 	for (i = 0; envp[i]; ++i) {
 		new_environ[i] = g_strdup(envp[i]);
@@ -596,7 +596,7 @@ gint rspamd_init_title(rspamd_mempool_t *pool,
 	if (program_invocation_name) {
 		title_progname_full = g_strdup(program_invocation_name);
 
-		gchar *p = strrchr(title_progname_full, '/');
+		char *p = strrchr(title_progname_full, '/');
 
 		if (p) {
 			title_progname = p + 1;
@@ -622,7 +622,7 @@ gint rspamd_init_title(rspamd_mempool_t *pool,
 	return 0;
 }
 
-gint rspamd_setproctitle(const gchar *fmt, ...)
+int rspamd_setproctitle(const char *fmt, ...)
 {
 #ifdef HAVE_SETPROCTITLE
 	if (fmt) {
@@ -697,9 +697,9 @@ gint rspamd_setproctitle(const gchar *fmt, ...)
 
 
 #ifndef HAVE_PIDFILE
-static gint _rspamd_pidfile_remove(rspamd_pidfh_t *pfh, gint freeit);
+static int _rspamd_pidfile_remove(rspamd_pidfh_t *pfh, int freeit);
 
-static gint
+static int
 rspamd_pidfile_verify(rspamd_pidfh_t *pfh)
 {
 	struct stat sb;
@@ -716,11 +716,11 @@ rspamd_pidfile_verify(rspamd_pidfh_t *pfh)
 	return 0;
 }
 
-static gint
-rspamd_pidfile_read(const gchar *path, pid_t *pidptr)
+static int
+rspamd_pidfile_read(const char *path, pid_t *pidptr)
 {
-	gchar buf[16], *endptr;
-	gint error, fd, i;
+	char buf[16], *endptr;
+	int error, fd, i;
 
 	fd = open(path, O_RDONLY);
 	if (fd == -1)
@@ -743,11 +743,11 @@ rspamd_pidfile_read(const gchar *path, pid_t *pidptr)
 }
 
 rspamd_pidfh_t *
-rspamd_pidfile_open(const gchar *path, mode_t mode, pid_t *pidptr)
+rspamd_pidfile_open(const char *path, mode_t mode, pid_t *pidptr)
 {
 	rspamd_pidfh_t *pfh;
 	struct stat sb;
-	gint error, fd, len, count;
+	int error, fd, len, count;
 	struct timespec rqtp;
 
 	pfh = g_malloc(sizeof(*pfh));
@@ -761,7 +761,7 @@ rspamd_pidfile_open(const gchar *path, mode_t mode, pid_t *pidptr)
 					   g_get_prgname());
 	else
 		len = snprintf(pfh->pf_path, sizeof(pfh->pf_path), "%s", path);
-	if (len >= (gint) sizeof(pfh->pf_path)) {
+	if (len >= (int) sizeof(pfh->pf_path)) {
 		g_free(pfh);
 		errno = ENAMETOOLONG;
 		return NULL;
@@ -814,10 +814,10 @@ rspamd_pidfile_open(const gchar *path, mode_t mode, pid_t *pidptr)
 	return pfh;
 }
 
-gint rspamd_pidfile_write(rspamd_pidfh_t *pfh)
+int rspamd_pidfile_write(rspamd_pidfh_t *pfh)
 {
-	gchar pidstr[16];
-	gint error, fd;
+	char pidstr[16];
+	int error, fd;
 
 	/*
 	 * Check remembered descriptor, so we don't overwrite some other
@@ -853,9 +853,9 @@ gint rspamd_pidfile_write(rspamd_pidfh_t *pfh)
 	return 0;
 }
 
-gint rspamd_pidfile_close(rspamd_pidfh_t *pfh)
+int rspamd_pidfile_close(rspamd_pidfh_t *pfh)
 {
-	gint error;
+	int error;
 
 	error = rspamd_pidfile_verify(pfh);
 	if (error != 0) {
@@ -873,10 +873,10 @@ gint rspamd_pidfile_close(rspamd_pidfh_t *pfh)
 	return 0;
 }
 
-static gint
-_rspamd_pidfile_remove(rspamd_pidfh_t *pfh, gint freeit)
+static int
+_rspamd_pidfile_remove(rspamd_pidfh_t *pfh, int freeit)
 {
-	gint error;
+	int error;
 
 	error = rspamd_pidfile_verify(pfh);
 	if (error != 0) {
@@ -905,7 +905,7 @@ _rspamd_pidfile_remove(rspamd_pidfh_t *pfh, gint freeit)
 	return 0;
 }
 
-gint rspamd_pidfile_remove(rspamd_pidfh_t *pfh)
+int rspamd_pidfile_remove(rspamd_pidfh_t *pfh)
 {
 
 	return (_rspamd_pidfile_remove(pfh, 1));
@@ -913,15 +913,15 @@ gint rspamd_pidfile_remove(rspamd_pidfh_t *pfh)
 #endif
 
 /* Replace %r with rcpt value and %f with from value, new string is allocated in pool */
-gchar *
+char *
 resolve_stat_filename(rspamd_mempool_t *pool,
-					  gchar *pattern,
-					  gchar *rcpt,
-					  gchar *from)
+					  char *pattern,
+					  char *rcpt,
+					  char *from)
 {
-	gint need_to_format = 0, len = 0;
-	gint rcptlen, fromlen;
-	gchar *c = pattern, *new, *s;
+	int need_to_format = 0, len = 0;
+	int rcptlen, fromlen;
+	char *c = pattern, *new, *s;
 
 	if (rcpt) {
 		rcptlen = strlen(rcpt);
@@ -980,28 +980,28 @@ resolve_stat_filename(rspamd_mempool_t *pool,
 	return new;
 }
 
-const gchar *
-rspamd_log_check_time(gdouble start, gdouble end, gint resolution)
+const char *
+rspamd_log_check_time(double start, double end, int resolution)
 {
-	gdouble diff;
-	static gchar res[64];
-	gchar fmt[32];
+	double diff;
+	static char res[64];
+	char fmt[32];
 
 	diff = (end - start) * 1000.0;
 
 	rspamd_snprintf(fmt, sizeof(fmt), "%%.%dfms", resolution);
 	rspamd_snprintf(res, sizeof(res), fmt, diff);
 
-	return (const gchar *) res;
+	return (const char *) res;
 }
 
 
 #ifdef HAVE_FLOCK
 /* Flock version */
 gboolean
-rspamd_file_lock(gint fd, gboolean async)
+rspamd_file_lock(int fd, gboolean async)
 {
-	gint flags;
+	int flags;
 
 	if (async) {
 		flags = LOCK_EX | LOCK_NB;
@@ -1018,9 +1018,9 @@ rspamd_file_lock(gint fd, gboolean async)
 }
 
 gboolean
-rspamd_file_unlock(gint fd, gboolean async)
+rspamd_file_unlock(int fd, gboolean async)
 {
-	gint flags;
+	int flags;
 
 	if (async) {
 		flags = LOCK_UN | LOCK_NB;
@@ -1042,7 +1042,7 @@ rspamd_file_unlock(gint fd, gboolean async)
 #else  /* HAVE_FLOCK */
 /* Fctnl version */
 gboolean
-rspamd_file_lock(gint fd, gboolean async)
+rspamd_file_lock(int fd, gboolean async)
 {
 	struct flock fl = {
 		.l_type = F_WRLCK,
@@ -1062,7 +1062,7 @@ rspamd_file_lock(gint fd, gboolean async)
 }
 
 gboolean
-rspamd_file_unlock(gint fd, gboolean async)
+rspamd_file_unlock(int fd, gboolean async)
 {
 	struct flock fl = {
 		.l_type = F_UNLCK,
@@ -1091,13 +1091,13 @@ void g_ptr_array_unref(GPtrArray *array)
 gboolean
 g_int64_equal(gconstpointer v1, gconstpointer v2)
 {
-	return *((const gint64 *) v1) == *((const gint64 *) v2);
+	return *((const int64_t *) v1) == *((const int64_t *) v2);
 }
-guint g_int64_hash(gconstpointer v)
+unsigned int g_int64_hash(gconstpointer v)
 {
-	guint64 v64 = *(guint64 *) v;
+	uint64_t v64 = *(uint64_t *) v;
 
-	return (guint) (v ^ (v >> 32));
+	return (unsigned int) (v ^ (v >> 32));
 }
 #endif
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 14))
@@ -1112,7 +1112,7 @@ void g_queue_clear(GQueue *queue)
 #endif
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 30))
 GPtrArray *
-g_ptr_array_new_full(guint reserved_size,
+g_ptr_array_new_full(unsigned int reserved_size,
 					 GDestroyNotify element_free_func)
 {
 	GPtrArray *array;
@@ -1140,11 +1140,11 @@ void g_queue_free_full(GQueue *queue, GDestroyNotify free_func)
 #endif
 
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 40))
-void g_ptr_array_insert(GPtrArray *array, gint index_, gpointer data)
+void g_ptr_array_insert(GPtrArray *array, int index_, gpointer data)
 {
 	g_return_if_fail(array);
 	g_return_if_fail(index_ >= -1);
-	g_return_if_fail(index_ <= (gint) array->len);
+	g_return_if_fail(index_ <= (int) array->len);
 
 	g_ptr_array_set_size(array, array->len + 1);
 
@@ -1162,11 +1162,11 @@ void g_ptr_array_insert(GPtrArray *array, gint index_, gpointer data)
 #endif
 
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 32))
-const gchar *
-g_environ_getenv(gchar **envp, const gchar *variable)
+const char *
+g_environ_getenv(char **envp, const char *variable)
 {
 	gsize len;
-	gint i;
+	int i;
 
 	if (envp == NULL) {
 		return NULL;
@@ -1184,7 +1184,7 @@ g_environ_getenv(gchar **envp, const gchar *variable)
 }
 #endif
 
-gint rspamd_fallocate(gint fd, off_t offset, off_t len)
+int rspamd_fallocate(int fd, off_t offset, off_t len)
 {
 #if defined(HAVE_FALLOCATE)
 	return fallocate(fd, 0, offset, len);
@@ -1253,8 +1253,8 @@ void rspamd_mutex_free(rspamd_mutex_t *mtx)
 }
 
 struct rspamd_thread_data {
-	gchar *name;
-	gint id;
+	char *name;
+	int id;
 	GThreadFunc func;
 	gpointer data;
 };
@@ -1340,7 +1340,7 @@ read_pass_tmp_sig_handler(int s)
 #define _PATH_TTY "/dev/tty"
 #endif
 
-gint rspamd_read_passphrase_with_prompt(const gchar *prompt, gchar *buf, gint size, bool echo, gpointer key)
+int rspamd_read_passphrase_with_prompt(const char *prompt, char *buf, int size, bool echo, gpointer key)
 {
 #ifdef HAVE_READPASSPHRASE_H
 	int flags = echo ? RPP_ECHO_ON : RPP_ECHO_OFF;
@@ -1353,8 +1353,8 @@ gint rspamd_read_passphrase_with_prompt(const gchar *prompt, gchar *buf, gint si
 	struct sigaction sa, savealrm, saveint, savehup, savequit, saveterm;
 	struct sigaction savetstp, savettin, savettou, savepipe;
 	struct termios term, oterm;
-	gint input, output, i;
-	gchar *end, *p, ch;
+	int input, output, i;
+	char *end, *p, ch;
 
 restart:
 	if ((input = output = open(_PATH_TTY, O_RDWR)) == -1) {
@@ -1460,14 +1460,14 @@ restart:
 #endif
 #endif
 
-gdouble
+double
 rspamd_get_ticks(gboolean rdtsc_ok)
 {
-	gdouble res;
+	double res;
 
 #ifdef HAVE_RDTSC
 #ifdef __x86_64__
-	guint64 r64;
+	uint64_t r64;
 
 	if (rdtsc_ok) {
 		__builtin_ia32_lfence();
@@ -1480,7 +1480,7 @@ rspamd_get_ticks(gboolean rdtsc_ok)
 #endif
 #ifdef HAVE_CLOCK_GETTIME
 	struct timespec ts;
-	gint clk_id = RSPAMD_FAST_MONOTONIC_CLOCK;
+	int clk_id = RSPAMD_FAST_MONOTONIC_CLOCK;
 
 	clock_gettime(clk_id, &ts);
 
@@ -1512,10 +1512,10 @@ rspamd_get_ticks(gboolean rdtsc_ok)
 	return res;
 }
 
-gdouble
+double
 rspamd_get_virtual_ticks(void)
 {
-	gdouble res;
+	double res;
 
 #ifdef HAVE_CLOCK_GETTIME
 	struct timespec ts;
@@ -1548,7 +1548,7 @@ rspamd_get_virtual_ticks(void)
 	}
 
 	res = info.user_time.seconds + info.system_time.seconds;
-	res += ((gdouble) (info.user_time.microseconds + info.system_time.microseconds)) / 1e6;
+	res += ((double) (info.user_time.microseconds + info.system_time.microseconds)) / 1e6;
 	mach_port_deallocate(mach_task_self(), thread);
 #elif defined(HAVE_RUSAGE_SELF)
 	struct rusage rusage;
@@ -1563,10 +1563,10 @@ rspamd_get_virtual_ticks(void)
 	return res;
 }
 
-gdouble
+double
 rspamd_get_calendar_ticks(void)
 {
-	gdouble res;
+	double res;
 #ifdef HAVE_CLOCK_GETTIME
 	struct timespec ts;
 
@@ -1586,16 +1586,16 @@ rspamd_get_calendar_ticks(void)
 	return res;
 }
 
-void rspamd_random_hex(gchar *buf, guint64 len)
+void rspamd_random_hex(char *buf, uint64_t len)
 {
-	static const gchar hexdigests[16] = "0123456789abcdef";
-	gint64 i;
+	static const char hexdigests[16] = "0123456789abcdef";
+	int64_t i;
 
 	g_assert(len > 0);
 
 	ottery_rand_bytes((void *) buf, ceil(len / 2.0));
 
-	for (i = (gint64) len - 1; i >= 0; i -= 2) {
+	for (i = (int64_t) len - 1; i >= 0; i -= 2) {
 		buf[i] = hexdigests[buf[i / 2] & 0xf];
 
 		if (i > 0) {
@@ -1604,10 +1604,10 @@ void rspamd_random_hex(gchar *buf, guint64 len)
 	}
 }
 
-gint rspamd_shmem_mkstemp(gchar *pattern)
+int rspamd_shmem_mkstemp(char *pattern)
 {
-	gint fd = -1;
-	gchar *nbuf, *xpos;
+	int fd = -1;
+	char *nbuf, *xpos;
 	gsize blen;
 
 	xpos = strchr(pattern, 'X');
@@ -1698,11 +1698,11 @@ RSPAMD_CONSTRUCTOR(blis_thread_fix_ctor)
 }
 #endif
 
-guint64
+uint64_t
 rspamd_hash_seed(void)
 {
 #if 0
-	static guint64 seed;
+	static uint64_t seed;
 
 	if (seed == 0) {
 		seed = ottery_rand_uint64 ();
@@ -1718,11 +1718,11 @@ rspamd_hash_seed(void)
 	return 0xabf9727ba290690bULL;
 }
 
-static inline gdouble
-rspamd_double_from_int64(guint64 x)
+static inline double
+rspamd_double_from_int64(uint64_t x)
 {
 	const union {
-		guint64 i;
+		uint64_t i;
 		double d;
 	} u = {
 		.i = G_GUINT64_CONSTANT(0x3FF) << 52 | x >> 12};
@@ -1730,10 +1730,10 @@ rspamd_double_from_int64(guint64 x)
 	return u.d - 1.0;
 }
 
-gdouble
+double
 rspamd_random_double(void)
 {
-	guint64 rnd_int;
+	uint64_t rnd_int;
 
 	rnd_int = ottery_rand_uint64();
 
@@ -1741,10 +1741,10 @@ rspamd_random_double(void)
 }
 
 
-static guint64 *
+static uint64_t *
 rspamd_fast_random_seed(void)
 {
-	static guint64 seed;
+	static uint64_t seed;
 
 	if (G_UNLIKELY(seed == 0)) {
 		ottery_rand_bytes((void *) &seed, sizeof(seed));
@@ -1791,20 +1791,20 @@ rspamd_random_uint64_fast_seed(uint64_t *seed)
 #endif
 }
 
-gdouble
+double
 rspamd_random_double_fast(void)
 {
 	return rspamd_random_double_fast_seed(rspamd_fast_random_seed());
 }
 
 /* xoshiro256+ */
-inline gdouble
-rspamd_random_double_fast_seed(guint64 *seed)
+inline double
+rspamd_random_double_fast_seed(uint64_t *seed)
 {
 	return rspamd_double_from_int64(rspamd_random_uint64_fast_seed(seed));
 }
 
-guint64
+uint64_t
 rspamd_random_uint64_fast(void)
 {
 	return rspamd_random_uint64_fast_seed(rspamd_fast_random_seed());
@@ -1815,8 +1815,8 @@ void rspamd_random_seed_fast(void)
 	(void) rspamd_fast_random_seed();
 }
 
-gdouble
-rspamd_time_jitter(gdouble in, gdouble jitter)
+double
+rspamd_time_jitter(double in, double jitter)
 {
 	if (jitter == 0) {
 		jitter = in;
@@ -1829,10 +1829,10 @@ gboolean
 rspamd_constant_memcmp(const void *a, const void *b, gsize len)
 {
 	gsize lena, lenb, i;
-	guint16 d, r = 0, m;
-	guint16 v;
-	const guint8 *aa = (const guint8 *) a,
-				 *bb = (const guint8 *) b;
+	uint16_t d, r = 0, m;
+	uint16_t v;
+	const uint8_t *aa = (const uint8_t *) a,
+				  *bb = (const uint8_t *) b;
 
 	if (len == 0) {
 		lena = strlen((const char *) a);
@@ -1846,16 +1846,16 @@ rspamd_constant_memcmp(const void *a, const void *b, gsize len)
 	}
 
 	for (i = 0; i < len; i++) {
-		v = ((guint16) (guint8) r) + 255;
+		v = ((uint16_t) (uint8_t) r) + 255;
 		m = v / 256 - 1;
-		d = (guint16) ((int) aa[i] - (int) bb[i]);
+		d = (uint16_t) ((int) aa[i] - (int) bb[i]);
 		r |= (d & m);
 	}
 
-	return (((gint32) (guint16) ((guint32) r + 0x8000) - 0x8000) == 0);
+	return (((int32_t) (uint16_t) ((uint32_t) r + 0x8000) - 0x8000) == 0);
 }
 
-int rspamd_file_xopen(const char *fname, int oflags, guint mode,
+int rspamd_file_xopen(const char *fname, int oflags, unsigned int mode,
 					  gboolean allow_symlink)
 {
 	struct stat sb;
@@ -1911,10 +1911,10 @@ int rspamd_file_xopen(const char *fname, int oflags, guint mode,
 }
 
 gpointer
-rspamd_file_xmap(const char *fname, guint mode, gsize *size,
+rspamd_file_xmap(const char *fname, unsigned int mode, gsize *size,
 				 gboolean allow_symlink)
 {
-	gint fd;
+	int fd;
 	struct stat sb;
 	gpointer map;
 
@@ -1960,10 +1960,10 @@ rspamd_file_xmap(const char *fname, guint mode, gsize *size,
 
 
 gpointer
-rspamd_shmem_xmap(const char *fname, guint mode,
+rspamd_shmem_xmap(const char *fname, unsigned int mode,
 				  gsize *size)
 {
-	gint fd;
+	int fd;
 	struct stat sb;
 	gpointer map;
 
@@ -2019,10 +2019,10 @@ rspamd_shmem_xmap(const char *fname, guint mode,
  * New approach:
  * y = ((x - bias)*2)^8
  */
-gdouble
-rspamd_normalize_probability(gdouble x, gdouble bias)
+double
+rspamd_normalize_probability(double x, double bias)
 {
-	gdouble xx;
+	double xx;
 
 	xx = (x - bias) * 2.0;
 
@@ -2032,16 +2032,16 @@ rspamd_normalize_probability(gdouble x, gdouble bias)
 /*
  * Calculations from musl libc
  */
-guint64
+uint64_t
 rspamd_tm_to_time(const struct tm *tm, glong tz)
 {
-	guint64 result;
+	uint64_t result;
 	gboolean is_leap = FALSE;
-	gint leaps, y = tm->tm_year, cycles, rem, centuries;
+	int leaps, y = tm->tm_year, cycles, rem, centuries;
 	glong offset = (tz / 100) * 3600 + (tz % 100) * 60;
 
 	/* How many seconds in each month from the beginning of the year */
-	static const gint secs_through_month[] = {
+	static const int secs_through_month[] = {
 		0, 31 * 86400, 59 * 86400, 90 * 86400,
 		120 * 86400, 151 * 86400, 181 * 86400, 212 * 86400,
 		243 * 86400, 273 * 86400, 304 * 86400, 334 * 86400};
@@ -2102,7 +2102,7 @@ rspamd_tm_to_time(const struct tm *tm, glong tz)
 			}
 		}
 
-		leaps += 97 * cycles + 24 * centuries - (gint) is_leap;
+		leaps += 97 * cycles + 24 * centuries - (int) is_leap;
 		result = (y - 100) * 31536000LL + leaps * 86400LL + 946684800 + 86400;
 	}
 
@@ -2125,19 +2125,19 @@ rspamd_tm_to_time(const struct tm *tm, glong tz)
 }
 
 
-void rspamd_gmtime(gint64 ts, struct tm *dest)
+void rspamd_gmtime(int64_t ts, struct tm *dest)
 {
-	guint64 days, secs, years;
+	uint64_t days, secs, years;
 	int remdays, remsecs, remyears;
 	int leap_400_cycles, leap_100_cycles, leap_4_cycles;
 	int months;
 	int wday, yday, leap;
 	/* From March */
 	static const uint8_t days_in_month[] = {31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 31, 29};
-	static const guint64 leap_epoch = 946684800ULL + 86400 * (31 + 29);
-	static const guint64 days_per_400y = 365 * 400 + 97;
-	static const guint64 days_per_100y = 365 * 100 + 24;
-	static const guint64 days_per_4y = 365 * 4 + 1;
+	static const uint64_t leap_epoch = 946684800ULL + 86400 * (31 + 29);
+	static const uint64_t days_per_400y = 365 * 400 + 97;
+	static const uint64_t days_per_100y = 365 * 100 + 24;
+	static const uint64_t days_per_4y = 365 * 4 + 1;
 
 	secs = ts - leap_epoch;
 	days = secs / 86400;
@@ -2218,7 +2218,7 @@ void rspamd_gmtime(gint64 ts, struct tm *dest)
 #endif
 }
 
-void rspamd_localtime(gint64 ts, struct tm *dest)
+void rspamd_localtime(int64_t ts, struct tm *dest)
 {
 	time_t t = ts;
 	localtime_r(&t, dest);
@@ -2350,16 +2350,16 @@ rspamd_fstring_gunzip(rspamd_fstring_t **in)
 }
 
 static gboolean
-rspamd_glob_dir(const gchar *full_path, const gchar *pattern,
-				gboolean recursive, guint rec_len,
+rspamd_glob_dir(const char *full_path, const char *pattern,
+				gboolean recursive, unsigned int rec_len,
 				GPtrArray *res, GError **err)
 {
 	glob_t globbuf;
-	const gchar *path;
-	static gchar pathbuf[PATH_MAX]; /* Static to help recursion */
-	guint i;
-	gint rc;
-	static const guint rec_lim = 16;
+	const char *path;
+	static char pathbuf[PATH_MAX]; /* Static to help recursion */
+	unsigned int i;
+	int rc;
+	static const unsigned int rec_lim = 16;
 	struct stat st;
 
 	if (rec_len > rec_lim) {
@@ -2425,12 +2425,12 @@ rspamd_glob_dir(const gchar *full_path, const gchar *pattern,
 }
 
 GPtrArray *
-rspamd_glob_path(const gchar *dir,
-				 const gchar *pattern,
+rspamd_glob_path(const char *dir,
+				 const char *pattern,
 				 gboolean recursive,
 				 GError **err)
 {
-	gchar path[PATH_MAX];
+	char path[PATH_MAX];
 	GPtrArray *res;
 
 	res = g_ptr_array_new_full(32, (GDestroyNotify) g_free);
@@ -2446,9 +2446,9 @@ rspamd_glob_path(const gchar *dir,
 }
 
 double
-rspamd_set_counter(struct rspamd_counter_data *cd, gdouble value)
+rspamd_set_counter(struct rspamd_counter_data *cd, double value)
 {
-	gdouble cerr;
+	double cerr;
 
 	/* Cumulative moving average using per-process counter data */
 	if (cd->number == 0) {
@@ -2456,9 +2456,9 @@ rspamd_set_counter(struct rspamd_counter_data *cd, gdouble value)
 		cd->stddev = 0;
 	}
 
-	cd->mean += (value - cd->mean) / (gdouble) (++cd->number);
+	cd->mean += (value - cd->mean) / (double) (++cd->number);
 	cerr = (value - cd->mean) * (value - cd->mean);
-	cd->stddev += (cerr - cd->stddev) / (gdouble) (cd->number);
+	cd->stddev += (cerr - cd->stddev) / (double) (cd->number);
 
 	return cd->mean;
 }
@@ -2490,10 +2490,10 @@ void rspamd_ptr_array_shuffle(GPtrArray *ar)
 		return;
 	}
 
-	guint n = ar->len;
+	unsigned int n = ar->len;
 
-	for (guint i = 0; i < n - 1; i++) {
-		guint j = i + rspamd_random_uint64_fast() % (n - i);
+	for (unsigned int i = 0; i < n - 1; i++) {
+		unsigned int j = i + rspamd_random_uint64_fast() % (n - i);
 		gpointer t = g_ptr_array_index(ar, j);
 		g_ptr_array_index(ar, j) = g_ptr_array_index(ar, i);
 		g_ptr_array_index(ar, i) = t;
@@ -2522,10 +2522,10 @@ float rspamd_sum_floats(float *ar, gsize *nelts)
 	return sum;
 }
 
-void rspamd_normalize_path_inplace(gchar *path, guint len, gsize *nlen)
+void rspamd_normalize_path_inplace(char *path, unsigned int len, gsize *nlen)
 {
-	const gchar *p, *end, *slash = NULL, *dot = NULL;
-	gchar *o;
+	const char *p, *end, *slash = NULL, *dot = NULL;
+	char *o;
 	enum {
 		st_normal = 0,
 		st_got_dot,
@@ -2637,7 +2637,7 @@ void rspamd_normalize_path_inplace(gchar *path, guint len, gsize *nlen)
 					}
 
 					if (slash) {
-						o = (gchar *) slash;
+						o = (char *) slash;
 					}
 					/* Otherwise we keep these dots */
 					slash = p;
@@ -2701,7 +2701,7 @@ void rspamd_normalize_path_inplace(gchar *path, guint len, gsize *nlen)
 
 			if (slash) {
 				/* Remove last / */
-				o = (gchar *) slash;
+				o = (char *) slash;
 			}
 		}
 		else {

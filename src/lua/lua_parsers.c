@@ -99,10 +99,10 @@ static const struct luaL_reg parserslib_f[] = {
 
 	{NULL, NULL}};
 
-gint lua_parsers_tokenize_text(lua_State *L)
+int lua_parsers_tokenize_text(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *in = NULL;
+	const char *in = NULL;
 	gsize len = 0, pos, ex_len, i;
 	GList *exceptions = NULL, *cur;
 	struct rspamd_lua_text *t;
@@ -165,7 +165,7 @@ gint lua_parsers_tokenize_text(lua_State *L)
 				   len,
 				   &uc_err);
 
-	res = rspamd_tokenize_text((gchar *) in, len,
+	res = rspamd_tokenize_text((char *) in, len,
 							   &utxt,
 							   RSPAMD_TOKENIZE_UTF, NULL,
 							   exceptions,
@@ -197,11 +197,11 @@ gint lua_parsers_tokenize_text(lua_State *L)
 	return 1;
 }
 
-gint lua_parsers_parse_html(lua_State *L)
+int lua_parsers_parse_html(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t;
-	const gchar *start = NULL;
+	const char *start = NULL;
 	gsize len;
 	GByteArray *in;
 	rspamd_mempool_t *pool;
@@ -240,13 +240,13 @@ gint lua_parsers_parse_html(lua_State *L)
 	return 1;
 }
 
-gint lua_parsers_parse_mail_address(lua_State *L)
+int lua_parsers_parse_mail_address(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	GPtrArray *addrs;
 	gsize len;
-	const gchar *str = luaL_checklstring(L, 1, &len);
-	gint max_addrs = luaL_optinteger(L, 3, 10240);
+	const char *str = luaL_checklstring(L, 1, &len);
+	int max_addrs = luaL_optinteger(L, 3, 10240);
 	rspamd_mempool_t *pool;
 	gboolean own_pool = FALSE;
 
@@ -285,11 +285,11 @@ gint lua_parsers_parse_mail_address(lua_State *L)
 	return 1;
 }
 
-gint lua_parsers_parse_content_type(lua_State *L)
+int lua_parsers_parse_content_type(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	gsize len;
-	const gchar *ct_str = luaL_checklstring(L, 1, &len);
+	const char *ct_str = luaL_checklstring(L, 1, &len);
 	rspamd_mempool_t *pool = rspamd_lua_check_mempool(L, 2);
 	struct rspamd_content_type *ct;
 
@@ -339,7 +339,7 @@ gint lua_parsers_parse_content_type(lua_State *L)
 				struct rspamd_content_type_param *param =
 													 (struct rspamd_content_type_param *) v,
 												 *cur;
-				guint i = 1;
+				unsigned int i = 1;
 
 				lua_pushlstring(L, param->name.begin, param->name.len);
 				lua_createtable(L, 1, 0);
@@ -361,7 +361,7 @@ gint lua_parsers_parse_content_type(lua_State *L)
 int lua_parsers_parse_smtp_date(lua_State *L)
 {
 	gsize slen;
-	const gchar *str = lua_tolstring(L, 1, &slen);
+	const char *str = lua_tolstring(L, 1, &slen);
 	GError *err = NULL;
 
 	if (str == NULL) {
@@ -395,7 +395,7 @@ int lua_parsers_parse_smtp_date(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_load_parsers(lua_State *L)
 {
 	lua_newtable(L);

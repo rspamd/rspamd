@@ -1,11 +1,11 @@
-/*-
- * Copyright 2021 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -59,7 +59,7 @@ TEST_SUITE("html")
 			SUBCASE((std::string("extract tags from: ") + c.first).c_str())
 			{
 				GByteArray *tmp = g_byte_array_sized_new(c.first.size());
-				g_byte_array_append(tmp, (const guint8 *) c.first.data(), c.first.size());
+				g_byte_array_append(tmp, (const uint8_t *) c.first.data(), c.first.size());
 				auto *hc = html_process_input(&fake_task, tmp, nullptr, nullptr, nullptr, true, nullptr);
 				CHECK(hc != nullptr);
 				auto dump = html_debug_structure(*hc);
@@ -230,7 +230,7 @@ TEST_SUITE("html")
 			SUBCASE((fmt::format("html extraction case {}", i)).c_str())
 			{
 				GByteArray *tmp = g_byte_array_sized_new(c.first.size());
-				g_byte_array_append(tmp, (const guint8 *) c.first.data(), c.first.size());
+				g_byte_array_append(tmp, (const uint8_t *) c.first.data(), c.first.size());
 				auto *hc = html_process_input(&fake_task, tmp, nullptr, nullptr, nullptr, true, nullptr);
 				CHECK(hc != nullptr);
 				replace_newlines(hc->parsed);
@@ -278,7 +278,7 @@ TEST_SUITE("html")
 				GPtrArray *purls = g_ptr_array_new();
 				auto input = std::get<0>(c);
 				GByteArray *tmp = g_byte_array_sized_new(input.size());
-				g_byte_array_append(tmp, (const guint8 *) input.data(), input.size());
+				g_byte_array_append(tmp, (const uint8_t *) input.data(), input.size());
 				auto *hc = html_process_input(&fake_task, tmp, nullptr, nullptr, purls, true, nullptr);
 				CHECK(hc != nullptr);
 				auto &expected_text = std::get<2>(c);

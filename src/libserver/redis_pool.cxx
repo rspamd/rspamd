@@ -53,7 +53,7 @@ struct redis_pool_connection {
 	redis_pool *pool;
 	conn_iter_t elt_pos;
 	ev_timer timeout;
-	gchar tag[MEMPOOL_UID_LEN];
+	char tag[MEMPOOL_UID_LEN];
 	rspamd_redis_pool_connection_state state;
 
 	auto schedule_timeout() -> void;
@@ -102,8 +102,8 @@ public:
 	redis_pool_elt(redis_pool_elt &&other) = default;
 
 	explicit redis_pool_elt(redis_pool *_pool,
-							const gchar *_db, const gchar *_username,
-							const gchar *_password,
+							const char *_db, const char *_username,
+							const char *_password,
 							const char *_ip, int _port)
 		: pool(_pool), ip(_ip), port(_port),
 		  key(redis_pool_elt::make_key(_db, _username, _password, _ip, _port))
@@ -150,8 +150,8 @@ public:
 		conn->elt_pos = std::prev(std::end(terminating));
 	}
 
-	inline static auto make_key(const gchar *db, const gchar *username,
-								const gchar *password, const char *ip, int port) -> redis_pool_key_t
+	inline static auto make_key(const char *db, const char *username,
+								const char *password, const char *ip, int port) -> redis_pool_key_t
 	{
 		rspamd_cryptobox_fast_hash_state_t st;
 
@@ -241,8 +241,8 @@ public:
 		cfg = _cfg;
 	}
 
-	auto new_connection(const gchar *db, const gchar *username,
-						const gchar *password, const char *ip, int port) -> redisAsyncContext *;
+	auto new_connection(const char *db, const char *username,
+						const char *password, const char *ip, int port) -> redisAsyncContext *;
 
 	auto release_connection(redisAsyncContext *ctx,
 							enum rspamd_redis_pool_release_type how) -> void;
@@ -452,8 +452,8 @@ auto redis_pool_elt::new_connection() -> redisAsyncContext *
 		g_assert(conn->state != rspamd_redis_pool_connection_state::RSPAMD_REDIS_POOL_CONN_ACTIVE);
 		if (conn->ctx->err == REDIS_OK) {
 			/* Also check SO_ERROR */
-			gint err;
-			socklen_t len = sizeof(gint);
+			int err;
+			socklen_t len = sizeof(int);
 
 			if (getsockopt(conn->ctx->c.fd, SOL_SOCKET, SO_ERROR,
 						   (void *) &err, &len) == -1) {
@@ -504,8 +504,8 @@ auto redis_pool_elt::new_connection() -> redisAsyncContext *
 	RSPAMD_UNREACHABLE;
 }
 
-auto redis_pool::new_connection(const gchar *db, const gchar *username,
-								const gchar *password, const char *ip, int port) -> redisAsyncContext *
+auto redis_pool::new_connection(const char *db, const char *username,
+								const char *password, const char *ip, int port) -> redisAsyncContext *
 {
 
 	if (!wanna_die) {
@@ -602,8 +602,8 @@ void rspamd_redis_pool_config(void *p,
 
 struct redisAsyncContext *
 rspamd_redis_pool_connect(void *p,
-						  const gchar *db, const gchar *username,
-						  const gchar *password, const char *ip, int port)
+						  const char *db, const char *username,
+						  const char *password, const char *ip, int port)
 {
 	g_assert(p != NULL);
 	auto *pool = reinterpret_cast<class rspamd::redis_pool *>(p);
@@ -631,10 +631,10 @@ void rspamd_redis_pool_destroy(void *p)
 	delete pool;
 }
 
-const gchar *
+const char *
 rspamd_redis_type_to_string(int type)
 {
-	const gchar *ret = "unknown";
+	const char *ret = "unknown";
 
 	switch (type) {
 	case REDIS_REPLY_STRING:

@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -36,8 +36,8 @@ struct rspamd_charset_converter;
  * @param in
  * @return
  */
-const gchar *rspamd_mime_detect_charset(const rspamd_ftok_t *in,
-										rspamd_mempool_t *pool);
+const char *rspamd_mime_detect_charset(const rspamd_ftok_t *in,
+									   rspamd_mempool_t *pool);
 
 /**
  * Convert text chunk to utf-8. Input encoding is substituted using
@@ -52,9 +52,9 @@ const gchar *rspamd_mime_detect_charset(const rspamd_ftok_t *in,
  * @param err
  * @return
  */
-gchar *rspamd_mime_text_to_utf8(rspamd_mempool_t *pool,
-								gchar *input, gsize len, const gchar *in_enc,
-								gsize *olen, GError **err);
+char *rspamd_mime_text_to_utf8(rspamd_mempool_t *pool,
+							   char *input, gsize len, const char *in_enc,
+							   gsize *olen, GError **err);
 
 /**
  * Converts data from `in` to `out`,
@@ -70,7 +70,7 @@ gchar *rspamd_mime_text_to_utf8(rspamd_mempool_t *pool,
 gboolean rspamd_mime_to_utf8_byte_array(GByteArray *in,
 										GByteArray *out,
 										rspamd_mempool_t *pool,
-										const gchar *enc);
+										const char *enc);
 
 /**
  * Maybe convert part to utf-8
@@ -89,7 +89,7 @@ void rspamd_mime_text_part_maybe_convert(struct rspamd_task *task,
  * @return
  */
 gboolean rspamd_mime_charset_utf_check(rspamd_ftok_t *charset,
-									   gchar *in, gsize len,
+									   char *in, gsize len,
 									   gboolean content_check);
 
 /**
@@ -98,7 +98,7 @@ gboolean rspamd_mime_charset_utf_check(rspamd_ftok_t *charset,
  * @param in
  * @param len
  */
-void rspamd_mime_charset_utf_enforce(gchar *in, gsize len);
+void rspamd_mime_charset_utf_enforce(char *in, gsize len);
 
 /**
   * Gets cached converter
@@ -109,7 +109,7 @@ void rspamd_mime_charset_utf_enforce(gchar *in, gsize len);
   * @return converter
   */
 struct rspamd_charset_converter *rspamd_mime_get_converter_cached(
-	const gchar *enc,
+	const char *enc,
 	rspamd_mempool_t *pool,
 	gboolean is_canon,
 	UErrorCode *err);
@@ -124,12 +124,12 @@ struct rspamd_charset_converter *rspamd_mime_get_converter_cached(
  * @param pErrorCode
  * @return
  */
-gint32
+int32_t
 rspamd_converter_to_uchars(struct rspamd_charset_converter *cnv,
 						   UChar *dest,
-						   gint32 destCapacity,
+						   int32_t destCapacity,
 						   const char *src,
-						   gint32 srcLength,
+						   int32_t srcLength,
 						   UErrorCode *pErrorCode);
 
 /**
@@ -138,7 +138,7 @@ rspamd_converter_to_uchars(struct rspamd_charset_converter *cnv,
  * @param inlen
  * @return detected charset name or NULL
  */
-const char *rspamd_mime_charset_find_by_content(const gchar *in, gsize inlen,
+const char *rspamd_mime_charset_find_by_content(const char *in, gsize inlen,
 												bool check_utf8);
 
 #ifdef __cplusplus

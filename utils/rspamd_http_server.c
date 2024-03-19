@@ -29,12 +29,12 @@
 #include <sys/wait.h>
 #endif
 
-static guint port = 43000;
-static guint cache_size = 10;
-static guint nworkers = 1;
+static unsigned int port = 43000;
+static unsigned int cache_size = 10;
+static unsigned int nworkers = 1;
 static gboolean openssl_mode = FALSE;
 static GHashTable *maps = NULL;
-static gchar *key = NULL;
+static char *key = NULL;
 static struct rspamd_keypair_cache *c;
 static struct rspamd_cryptobox_keypair *server_key;
 static struct timeval io_tv = {
@@ -57,9 +57,9 @@ static GOptionEntry entries[] = {
 struct rspamd_http_server_session {
 	struct rspamd_http_connection *conn;
 	struct ev_loop *ev_base;
-	guint req_size;
+	unsigned int req_size;
 	gboolean reply;
-	gint fd;
+	int fd;
 };
 
 static void
@@ -81,8 +81,8 @@ rspamd_server_finish(struct rspamd_http_connection *conn,
 	struct rspamd_http_server_session *session = conn->ud;
 	struct rspamd_http_message *reply;
 	gulong size;
-	const gchar *url_str;
-	guint url_len;
+	const char *url_str;
+	unsigned int url_len;
 	rspamd_fstring_t *body;
 
 	if (!session->reply) {
@@ -127,12 +127,12 @@ rspamd_server_finish(struct rspamd_http_connection *conn,
 }
 
 static void
-rspamd_server_accept(gint fd, short what, void *arg)
+rspamd_server_accept(int fd, short what, void *arg)
 {
 	struct ev_loop *ev_base = arg;
 	struct rspamd_http_server_session *session;
 	rspamd_inet_addr_t *addr;
-	gint nfd;
+	int nfd;
 
 	do {
 		if ((nfd =
@@ -168,7 +168,7 @@ rspamd_server_accept(gint fd, short what, void *arg)
 }
 
 static void
-rspamd_http_term_handler(gint fd, short what, void *arg)
+rspamd_http_term_handler(int fd, short what, void *arg)
 {
 	struct ev_loop *ev_base = arg;
 	struct timeval tv = {0, 0};
@@ -177,7 +177,7 @@ rspamd_http_term_handler(gint fd, short what, void *arg)
 }
 
 static void
-rspamd_http_server_func(gint fd, rspamd_inet_addr_t *addr)
+rspamd_http_server_func(int fd, rspamd_inet_addr_t *addr)
 {
 	struct ev_loop *ev_base = event_init();
 	struct event accept_ev, term_ev;
@@ -196,8 +196,8 @@ rspamd_http_server_func(gint fd, rspamd_inet_addr_t *addr)
 static void
 rspamd_http_start_servers(pid_t *sfd, rspamd_inet_addr_t *addr)
 {
-	guint i;
-	gint fd;
+	unsigned int i;
+	int fd;
 
 	fd = rspamd_inet_address_listen(addr, SOCK_STREAM, TRUE);
 	g_assert(fd != -1);
@@ -218,8 +218,8 @@ rspamd_http_start_servers(pid_t *sfd, rspamd_inet_addr_t *addr)
 static void
 rspamd_http_stop_servers(pid_t *sfd)
 {
-	guint i;
-	gint res;
+	unsigned int i;
+	int res;
 
 	for (i = 0; i < nworkers; i++) {
 		kill(sfd[i], SIGTERM);
@@ -236,7 +236,7 @@ rspamd_http_server_term(int fd, short what, void *arg)
 	event_loopexit(NULL);
 }
 
-int main(int argc, gchar **argv)
+int main(int argc, char **argv)
 {
 	GOptionContext *context;
 	GError *error = NULL;

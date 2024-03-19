@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,16 +22,16 @@
  * LRU hashing
  */
 
-static const guint log_base = 10;
-static const guint eviction_candidates = 16;
-static const gdouble lfu_base_value = 5.0;
+static const unsigned int log_base = 10;
+static const unsigned int eviction_candidates = 16;
+static const double lfu_base_value = 5.0;
 
 struct rspamd_lru_volatile_element_s;
 
 struct rspamd_lru_hash_s {
-	guint maxsize;
-	guint eviction_min_prio;
-	guint eviction_used;
+	unsigned int maxsize;
+	unsigned int eviction_min_prio;
+	unsigned int eviction_used;
 	struct rspamd_lru_element_s **eviction_pool;
 
 	GDestroyNotify value_destroy;
@@ -52,10 +52,10 @@ enum rspamd_lru_element_flags {
 };
 
 struct rspamd_lru_element_s {
-	guint16 last;
-	guint8 lg_usages;
-	guint8 eviction_pos;
-	guint8 flags;
+	uint16_t last;
+	uint8_t lg_usages;
+	uint8_t eviction_pos;
+	uint8_t flags;
 	gpointer data;
 };
 
@@ -66,7 +66,7 @@ struct rspamd_lru_volatile_element_s {
 };
 typedef struct rspamd_lru_volatile_element_s rspamd_lru_vol_element_t;
 
-#define TIME_TO_TS(t) ((guint16) (((t) / 60) & 0xFFFFU))
+#define TIME_TO_TS(t) ((uint16_t) (((t) / 60) & 0xFFFFU))
 
 static rspamd_lru_vol_element_t *
 rspamd_lru_hash_get(const rspamd_lru_hash_t *h, gconstpointer key)
@@ -153,7 +153,7 @@ rspamd_lru_hash_resize(rspamd_lru_hash_t *h,
 				khint_t new_mask;
 				new_mask = new_n_buckets - 1;
 				val = h->vals[j];
-				val.e.eviction_pos = (guint8) -1;
+				val.e.eviction_pos = (uint8_t) -1;
 				__ac_set_isdel_true(h->flags, j);
 
 				while (1) { /* kick-out process; sort of like in Cuckoo hashing */
@@ -178,7 +178,7 @@ rspamd_lru_hash_resize(rspamd_lru_hash_t *h,
 							rspamd_lru_vol_element_t tmp = h->vals[i];
 							h->vals[i] = val;
 							val = tmp;
-							val.e.eviction_pos = (guint8) -1;
+							val.e.eviction_pos = (uint8_t) -1;
 						}
 						__ac_set_isdel_true(h->flags, i);
 						/* mark it as deleted in the old hash table */
@@ -310,7 +310,7 @@ static void
 rspamd_lru_hash_remove_evicted(rspamd_lru_hash_t *hash,
 							   rspamd_lru_element_t *elt)
 {
-	guint i;
+	unsigned int i;
 	rspamd_lru_element_t *cur;
 
 	g_assert(hash->eviction_used > 0);
@@ -345,7 +345,7 @@ rspamd_lru_hash_remove_evicted(rspamd_lru_hash_t *hash,
 static void
 rspamd_lru_hash_update_counter(rspamd_lru_element_t *elt)
 {
-	guint8 counter = elt->lg_usages;
+	uint8_t counter = elt->lg_usages;
 
 	if (counter != 255) {
 		double r, baseval, p;
@@ -378,10 +378,10 @@ static gboolean
 rspamd_lru_hash_maybe_evict(rspamd_lru_hash_t *hash,
 							rspamd_lru_element_t *elt)
 {
-	guint i;
+	unsigned int i;
 	rspamd_lru_element_t *cur;
 
-	if (elt->eviction_pos == (guint8) -1) {
+	if (elt->eviction_pos == (uint8_t) -1) {
 		if (hash->eviction_used < eviction_candidates) {
 			/* There are free places in eviction pool */
 			hash->eviction_pool[hash->eviction_used] = elt;
@@ -424,7 +424,7 @@ rspamd_lru_hash_maybe_evict(rspamd_lru_hash_t *hash,
 static void
 rspamd_lru_hash_remove_node(rspamd_lru_hash_t *hash, rspamd_lru_element_t *elt)
 {
-	if (elt->eviction_pos != (guint8) -1) {
+	if (elt->eviction_pos != (uint8_t) -1) {
 		rspamd_lru_hash_remove_evicted(hash, elt);
 	}
 
@@ -435,9 +435,9 @@ static void
 rspamd_lru_hash_evict(rspamd_lru_hash_t *hash, time_t now)
 {
 	double r;
-	guint i;
+	unsigned int i;
 	rspamd_lru_element_t *elt = NULL;
-	guint nexpired = 0;
+	unsigned int nexpired = 0;
 
 	/*
 	 * We either evict one node from the eviction list
@@ -503,7 +503,7 @@ rspamd_lru_hash_evict(rspamd_lru_hash_t *hash, time_t now)
 }
 
 rspamd_lru_hash_t *
-rspamd_lru_hash_new_full(gint maxsize,
+rspamd_lru_hash_new_full(int maxsize,
 						 GDestroyNotify key_destroy,
 						 GDestroyNotify value_destroy,
 						 GHashFunc hf,
@@ -532,7 +532,7 @@ rspamd_lru_hash_new_full(gint maxsize,
 }
 
 rspamd_lru_hash_t *
-rspamd_lru_hash_new(gint maxsize,
+rspamd_lru_hash_new(int maxsize,
 					GDestroyNotify key_destroy,
 					GDestroyNotify value_destroy)
 {
@@ -593,11 +593,11 @@ void rspamd_lru_hash_insert(rspamd_lru_hash_t *hash,
 							gpointer key,
 							gpointer value,
 							time_t now,
-							guint ttl)
+							unsigned int ttl)
 {
 	rspamd_lru_element_t *node;
 	rspamd_lru_vol_element_t *vnode;
-	gint ret;
+	int ret;
 
 	vnode = rspamd_lru_hash_put(hash, key, &ret);
 	node = &vnode->e;
@@ -629,9 +629,9 @@ void rspamd_lru_hash_insert(rspamd_lru_hash_t *hash,
 	}
 
 	node->data = value;
-	node->lg_usages = (guint8) lfu_base_value;
+	node->lg_usages = (uint8_t) lfu_base_value;
 	node->last = TIME_TO_TS(now);
-	node->eviction_pos = (guint8) -1;
+	node->eviction_pos = (uint8_t) -1;
 
 	if (ret != 0) {
 		/* Also need to check maxsize */
@@ -679,7 +679,7 @@ rspamd_lru_hash_element_data(rspamd_lru_element_t *elt)
 int rspamd_lru_hash_foreach(rspamd_lru_hash_t *h, int it, gpointer *k,
 							gpointer *v)
 {
-	gint i;
+	int i;
 	g_assert(it >= 0);
 
 	for (i = it; i != kh_end(h); ++i) {
@@ -701,7 +701,7 @@ int rspamd_lru_hash_foreach(rspamd_lru_hash_t *h, int it, gpointer *k,
 }
 
 
-guint rspamd_lru_hash_size(rspamd_lru_hash_t *hash)
+unsigned int rspamd_lru_hash_size(rspamd_lru_hash_t *hash)
 {
 	return kh_size(hash);
 }
@@ -710,7 +710,7 @@ guint rspamd_lru_hash_size(rspamd_lru_hash_t *hash)
  * Returns hash capacity
  * @param hash hash object
  */
-guint rspamd_lru_hash_capacity(rspamd_lru_hash_t *hash)
+unsigned int rspamd_lru_hash_capacity(rspamd_lru_hash_t *hash)
 {
 	return hash->maxsize;
 }

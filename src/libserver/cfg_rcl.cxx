@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,7 +95,7 @@ struct rspamd_worker_cfg_parser {
 	ankerl::unordered_dense::map<std::pair<std::string, gpointer>,
 								 rspamd_worker_param_parser, pair_hash>
 		parsers;                                                /**< parsers hash										*/
-	gint type;                                                  /**< workers quark										*/
+	int type;                                                   /**< workers quark										*/
 	gboolean (*def_obj_parser)(ucl_object_t *obj, gpointer ud); /**< default object parser								*/
 	gpointer def_ud;
 };
@@ -122,11 +122,11 @@ rspamd_rcl_section_parse_defaults(struct rspamd_config *cfg,
  */
 static gboolean
 rspamd_rcl_logging_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
-						   const gchar *key, gpointer ud, struct rspamd_rcl_section *section,
+						   const char *key, gpointer ud, struct rspamd_rcl_section *section,
 						   GError **err)
 {
 	const ucl_object_t *val;
-	const gchar *facility = nullptr, *log_type = nullptr, *log_level = nullptr;
+	const char *facility = nullptr, *log_type = nullptr, *log_level = nullptr;
 	auto *cfg = (struct rspamd_config *) ud;
 
 	val = ucl_object_lookup(obj, "type");
@@ -305,7 +305,7 @@ rspamd_rcl_logging_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 static gboolean
 rspamd_rcl_options_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
-						   const gchar *key, gpointer ud,
+						   const char *key, gpointer ud,
 						   struct rspamd_rcl_section *section, GError **err)
 {
 	const ucl_object_t *dns, *upstream, *neighbours;
@@ -402,7 +402,7 @@ struct rspamd_rcl_symbol_data {
 
 static gboolean
 rspamd_rcl_group_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
-						 const gchar *key, gpointer ud,
+						 const char *key, gpointer ud,
 						 struct rspamd_rcl_section *section, GError **err)
 {
 	auto *cfg = static_cast<rspamd_config *>(ud);
@@ -523,16 +523,16 @@ rspamd_rcl_group_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 static gboolean
 rspamd_rcl_symbol_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
-						  const gchar *key, gpointer ud,
+						  const char *key, gpointer ud,
 						  struct rspamd_rcl_section *section, GError **err)
 {
 	auto *sd = static_cast<rspamd_rcl_symbol_data *>(ud);
 	struct rspamd_config *cfg;
 	const ucl_object_t *elt;
-	const gchar *description = nullptr;
-	gdouble score = NAN;
-	guint priority = 1, flags = 0;
-	gint nshots = 0;
+	const char *description = nullptr;
+	double score = NAN;
+	unsigned int priority = 1, flags = 0;
+	int nshots = 0;
 
 	g_assert(key != nullptr);
 	cfg = sd->cfg;
@@ -697,7 +697,7 @@ rspamd_rcl_symbol_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 static gboolean
 rspamd_rcl_actions_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
-						   const gchar *key, gpointer ud,
+						   const char *key, gpointer ud,
 						   struct rspamd_rcl_section *section, GError **err)
 {
 	auto *cfg = static_cast<rspamd_config *>(ud);
@@ -707,7 +707,7 @@ rspamd_rcl_actions_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 	it = ucl_object_iterate_new(obj);
 
 	while ((cur = ucl_object_iterate_safe(it, true)) != nullptr) {
-		gint type = ucl_object_type(cur);
+		int type = ucl_object_type(cur);
 
 		if (type == UCL_NULL) {
 			rspamd_config_maybe_disable_action(cfg, ucl_object_key(cur),
@@ -759,7 +759,7 @@ constexpr const auto known_worker_attributes = frozen::make_unordered_set<frozen
 });
 static gboolean
 rspamd_rcl_worker_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
-						  const gchar *key, gpointer ud,
+						  const char *key, gpointer ud,
 						  struct rspamd_rcl_section *section, GError **err)
 {
 	auto *cfg = static_cast<rspamd_config *>(ud);
@@ -883,7 +883,7 @@ rspamd_rcl_worker_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 static gboolean
 rspamd_rcl_lua_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
-					   const gchar *key, gpointer ud,
+					   const char *key, gpointer ud,
 					   struct rspamd_rcl_section *section, GError **err)
 {
 	namespace fs = std::filesystem;
@@ -973,7 +973,7 @@ rspamd_lua_mod_sort_fn(gconstpointer a, gconstpointer b)
 gboolean
 rspamd_rcl_add_lua_plugins_path(struct rspamd_rcl_sections_map *sections,
 								struct rspamd_config *cfg,
-								const gchar *path,
+								const char *path,
 								gboolean main_path,
 								GError **err)
 {
@@ -1040,7 +1040,7 @@ rspamd_rcl_add_lua_plugins_path(struct rspamd_rcl_sections_map *sections,
 
 static gboolean
 rspamd_rcl_modules_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
-						   const gchar *key, gpointer ud,
+						   const char *key, gpointer ud,
 						   struct rspamd_rcl_section *section, GError **err)
 {
 	auto *cfg = static_cast<rspamd_config *>(ud);
@@ -1134,7 +1134,7 @@ struct statfile_parser_data {
 
 static gboolean
 rspamd_rcl_statfile_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
-							const gchar *key, gpointer ud,
+							const char *key, gpointer ud,
 							struct rspamd_rcl_section *section, GError **err)
 {
 	auto *stud = (struct statfile_parser_data *) ud;
@@ -1211,7 +1211,7 @@ rspamd_rcl_statfile_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 static gboolean
 rspamd_rcl_classifier_handler(rspamd_mempool_t *pool,
 							  const ucl_object_t *obj,
-							  const gchar *key,
+							  const char *key,
 							  gpointer ud,
 							  struct rspamd_rcl_section *section,
 							  GError **err)
@@ -1305,9 +1305,9 @@ rspamd_rcl_classifier_handler(rspamd_mempool_t *pool,
 		LL_FOREACH(val, cur)
 		{
 			if (ucl_object_type(cur) == UCL_STRING) {
-				const gchar *lua_script;
+				const char *lua_script;
 				gsize slen;
-				gint ref_idx;
+				int ref_idx;
 
 				lua_script = ucl_object_tolstring(cur, &slen);
 				ref_idx = rspamd_lua_function_ref_from_str(RSPAMD_LUA_CFG_STATE(cfg),
@@ -1333,9 +1333,9 @@ rspamd_rcl_classifier_handler(rspamd_mempool_t *pool,
 		LL_FOREACH(val, cur)
 		{
 			if (ucl_object_type(cur) == UCL_STRING) {
-				const gchar *lua_script;
+				const char *lua_script;
 				gsize slen;
-				gint ref_idx;
+				int ref_idx;
 
 				lua_script = ucl_object_tolstring(cur, &slen);
 				ref_idx = rspamd_lua_function_ref_from_str(RSPAMD_LUA_CFG_STATE(cfg),
@@ -1363,14 +1363,14 @@ rspamd_rcl_classifier_handler(rspamd_mempool_t *pool,
 static gboolean
 rspamd_rcl_composite_handler(rspamd_mempool_t *pool,
 							 const ucl_object_t *obj,
-							 const gchar *key,
+							 const char *key,
 							 gpointer ud,
 							 struct rspamd_rcl_section *section,
 							 GError **err)
 {
 	auto *cfg = static_cast<rspamd_config *>(ud);
 	void *composite;
-	const gchar *composite_name;
+	const char *composite_name;
 
 	g_assert(key != nullptr);
 
@@ -1394,7 +1394,7 @@ rspamd_rcl_composite_handler(rspamd_mempool_t *pool,
 static gboolean
 rspamd_rcl_composites_handler(rspamd_mempool_t *pool,
 							  const ucl_object_t *obj,
-							  const gchar *key,
+							  const char *key,
 							  gpointer ud,
 							  struct rspamd_rcl_section *section,
 							  GError **err)
@@ -1420,14 +1420,14 @@ rspamd_rcl_composites_handler(rspamd_mempool_t *pool,
 static gboolean
 rspamd_rcl_neighbours_handler(rspamd_mempool_t *pool,
 							  const ucl_object_t *obj,
-							  const gchar *key,
+							  const char *key,
 							  gpointer ud,
 							  struct rspamd_rcl_section *section,
 							  GError **err)
 {
 	auto *cfg = static_cast<rspamd_config *>(ud);
 	auto has_port = FALSE, has_proto = FALSE;
-	const gchar *p;
+	const char *p;
 
 	if (key == nullptr) {
 		g_set_error(err,
@@ -1493,7 +1493,7 @@ rspamd_rcl_neighbours_handler(rspamd_mempool_t *pool,
 struct rspamd_rcl_section *
 rspamd_rcl_add_section(struct rspamd_rcl_sections_map **top,
 					   struct rspamd_rcl_section *parent_section,
-					   const gchar *name, const gchar *key_attr, rspamd_rcl_handler_t handler,
+					   const char *name, const char *key_attr, rspamd_rcl_handler_t handler,
 					   enum ucl_type type, gboolean required, gboolean strict_type)
 {
 	return rspamd_rcl_add_section_doc(top, parent_section, name, key_attr, handler,
@@ -1503,10 +1503,10 @@ rspamd_rcl_add_section(struct rspamd_rcl_sections_map **top,
 struct rspamd_rcl_section *
 rspamd_rcl_add_section_doc(struct rspamd_rcl_sections_map **top,
 						   struct rspamd_rcl_section *parent_section,
-						   const gchar *name, const gchar *key_attr, rspamd_rcl_handler_t handler,
+						   const char *name, const char *key_attr, rspamd_rcl_handler_t handler,
 						   enum ucl_type type, gboolean required, gboolean strict_type,
 						   ucl_object_t *doc_target,
-						   const gchar *doc_string)
+						   const char *doc_string)
 {
 	if (top == nullptr) {
 		g_error("invalid arguments to rspamd_rcl_add_section");
@@ -1581,11 +1581,11 @@ rspamd_rcl_add_section_doc(struct rspamd_rcl_sections_map **top,
 
 struct rspamd_rcl_default_handler_data *
 rspamd_rcl_add_default_handler(struct rspamd_rcl_section *section,
-							   const gchar *name,
+							   const char *name,
 							   rspamd_rcl_default_handler_t handler,
 							   goffset offset,
-							   gint flags,
-							   const gchar *doc_string)
+							   int flags,
+							   const char *doc_string)
 {
 	auto it = section->default_parser.emplace(std::make_pair(std::string{name}, rspamd_rcl_default_handler_data{}));
 
@@ -2529,7 +2529,7 @@ rspamd_rcl_process_section(struct rspamd_config *cfg,
 	ucl_object_iter_t it;
 	const ucl_object_t *cur;
 	auto is_nested = true;
-	const gchar *key = nullptr;
+	const char *key = nullptr;
 
 	if (sec.processed) {
 		/* Section has been already processed */
@@ -2746,22 +2746,22 @@ rspamd_rcl_parse_struct_string(rspamd_mempool_t *pool,
 	auto *pd = (struct rspamd_rcl_struct_parser *) ud;
 	const gsize num_str_len = 32;
 
-	auto target = (gchar **) (((gchar *) pd->user_struct) + pd->offset);
+	auto target = (char **) (((char *) pd->user_struct) + pd->offset);
 	switch (obj->type) {
 	case UCL_STRING:
 		*target =
 			rspamd_mempool_strdup(pool, ucl_copy_value_trash(obj));
 		break;
 	case UCL_INT:
-		*target = (gchar *) rspamd_mempool_alloc(pool, num_str_len);
+		*target = (char *) rspamd_mempool_alloc(pool, num_str_len);
 		rspamd_snprintf(*target, num_str_len, "%L", obj->value.iv);
 		break;
 	case UCL_FLOAT:
-		*target = (gchar *) rspamd_mempool_alloc(pool, num_str_len);
+		*target = (char *) rspamd_mempool_alloc(pool, num_str_len);
 		rspamd_snprintf(*target, num_str_len, "%f", obj->value.dv);
 		break;
 	case UCL_BOOLEAN:
-		*target = (gchar *) rspamd_mempool_alloc(pool, num_str_len);
+		*target = (char *) rspamd_mempool_alloc(pool, num_str_len);
 		rspamd_snprintf(*target, num_str_len, "%s",
 						((gboolean) obj->value.iv) ? "true" : "false");
 		break;
@@ -2791,17 +2791,17 @@ rspamd_rcl_parse_struct_integer(rspamd_mempool_t *pool,
 {
 	auto *pd = (struct rspamd_rcl_struct_parser *) ud;
 	union {
-		gint *ip;
-		gint32 *i32p;
-		gint16 *i16p;
-		gint64 *i64p;
-		guint *up;
+		int *ip;
+		int32_t *i32p;
+		int16_t *i16p;
+		int64_t *i64p;
+		unsigned int *up;
 		gsize *sp;
 	} target;
 	int64_t val;
 
 	if (pd->flags == RSPAMD_CL_FLAG_INT_32) {
-		target.i32p = (gint32 *) (((gchar *) pd->user_struct) + pd->offset);
+		target.i32p = (int32_t *) (((char *) pd->user_struct) + pd->offset);
 		if (!ucl_object_toint_safe(obj, &val)) {
 			g_set_error(err,
 						CFG_RCL_ERROR,
@@ -2814,7 +2814,7 @@ rspamd_rcl_parse_struct_integer(rspamd_mempool_t *pool,
 		*target.i32p = val;
 	}
 	else if (pd->flags == RSPAMD_CL_FLAG_INT_64) {
-		target.i64p = (gint64 *) (((gchar *) pd->user_struct) + pd->offset);
+		target.i64p = (int64_t *) (((char *) pd->user_struct) + pd->offset);
 		if (!ucl_object_toint_safe(obj, &val)) {
 			g_set_error(err,
 						CFG_RCL_ERROR,
@@ -2827,7 +2827,7 @@ rspamd_rcl_parse_struct_integer(rspamd_mempool_t *pool,
 		*target.i64p = val;
 	}
 	else if (pd->flags == RSPAMD_CL_FLAG_INT_SIZE) {
-		target.sp = (gsize *) (((gchar *) pd->user_struct) + pd->offset);
+		target.sp = (gsize *) (((char *) pd->user_struct) + pd->offset);
 		if (!ucl_object_toint_safe(obj, &val)) {
 			g_set_error(err,
 						CFG_RCL_ERROR,
@@ -2840,7 +2840,7 @@ rspamd_rcl_parse_struct_integer(rspamd_mempool_t *pool,
 		*target.sp = val;
 	}
 	else if (pd->flags == RSPAMD_CL_FLAG_INT_16) {
-		target.i16p = (gint16 *) (((gchar *) pd->user_struct) + pd->offset);
+		target.i16p = (int16_t *) (((char *) pd->user_struct) + pd->offset);
 		if (!ucl_object_toint_safe(obj, &val)) {
 			g_set_error(err,
 						CFG_RCL_ERROR,
@@ -2853,7 +2853,7 @@ rspamd_rcl_parse_struct_integer(rspamd_mempool_t *pool,
 		*target.i16p = val;
 	}
 	else if (pd->flags == RSPAMD_CL_FLAG_UINT) {
-		target.up = (guint *) (((gchar *) pd->user_struct) + pd->offset);
+		target.up = (unsigned int *) (((char *) pd->user_struct) + pd->offset);
 		if (!ucl_object_toint_safe(obj, &val)) {
 			g_set_error(err,
 						CFG_RCL_ERROR,
@@ -2866,7 +2866,7 @@ rspamd_rcl_parse_struct_integer(rspamd_mempool_t *pool,
 		*target.up = val;
 	}
 	else {
-		target.ip = (gint *) (((gchar *) pd->user_struct) + pd->offset);
+		target.ip = (int *) (((char *) pd->user_struct) + pd->offset);
 		if (!ucl_object_toint_safe(obj, &val)) {
 			g_set_error(err,
 						CFG_RCL_ERROR,
@@ -2890,9 +2890,9 @@ rspamd_rcl_parse_struct_double(rspamd_mempool_t *pool,
 							   GError **err)
 {
 	auto *pd = (struct rspamd_rcl_struct_parser *) ud;
-	gdouble *target;
+	double *target;
 
-	target = (gdouble *) (((gchar *) pd->user_struct) + pd->offset);
+	target = (double *) (((char *) pd->user_struct) + pd->offset);
 
 	if (!ucl_object_todouble_safe(obj, target)) {
 		g_set_error(err,
@@ -2916,13 +2916,13 @@ rspamd_rcl_parse_struct_time(rspamd_mempool_t *pool,
 {
 	auto *pd = (struct rspamd_rcl_struct_parser *) ud;
 	union {
-		gint *psec;
-		guint32 *pu32;
-		gdouble *pdv;
+		int *psec;
+		uint32_t *pu32;
+		double *pdv;
 		struct timeval *ptv;
 		struct timespec *pts;
 	} target;
-	gdouble val;
+	double val;
 
 	if (!ucl_object_todouble_safe(obj, &val)) {
 		g_set_error(err,
@@ -2936,26 +2936,26 @@ rspamd_rcl_parse_struct_time(rspamd_mempool_t *pool,
 
 	if (pd->flags == RSPAMD_CL_FLAG_TIME_TIMEVAL) {
 		target.ptv =
-			(struct timeval *) (((gchar *) pd->user_struct) + pd->offset);
+			(struct timeval *) (((char *) pd->user_struct) + pd->offset);
 		target.ptv->tv_sec = (glong) val;
 		target.ptv->tv_usec = (val - (glong) val) * 1000000;
 	}
 	else if (pd->flags == RSPAMD_CL_FLAG_TIME_TIMESPEC) {
 		target.pts =
-			(struct timespec *) (((gchar *) pd->user_struct) + pd->offset);
+			(struct timespec *) (((char *) pd->user_struct) + pd->offset);
 		target.pts->tv_sec = (glong) val;
 		target.pts->tv_nsec = (val - (glong) val) * 1000000000000LL;
 	}
 	else if (pd->flags == RSPAMD_CL_FLAG_TIME_FLOAT) {
-		target.pdv = (double *) (((gchar *) pd->user_struct) + pd->offset);
+		target.pdv = (double *) (((char *) pd->user_struct) + pd->offset);
 		*target.pdv = val;
 	}
 	else if (pd->flags == RSPAMD_CL_FLAG_TIME_INTEGER) {
-		target.psec = (gint *) (((gchar *) pd->user_struct) + pd->offset);
+		target.psec = (int *) (((char *) pd->user_struct) + pd->offset);
 		*target.psec = val * 1000;
 	}
 	else if (pd->flags == RSPAMD_CL_FLAG_TIME_UINT_32) {
-		target.pu32 = (guint32 *) (((gchar *) pd->user_struct) + pd->offset);
+		target.pu32 = (uint32_t *) (((char *) pd->user_struct) + pd->offset);
 		*target.pu32 = val * 1000;
 	}
 	else {
@@ -2981,7 +2981,7 @@ rspamd_rcl_parse_struct_keypair(rspamd_mempool_t *pool,
 	auto *pd = (struct rspamd_rcl_struct_parser *) ud;
 	struct rspamd_cryptobox_keypair **target, *kp;
 
-	target = (struct rspamd_cryptobox_keypair **) (((gchar *) pd->user_struct) +
+	target = (struct rspamd_cryptobox_keypair **) (((char *) pd->user_struct) +
 												   pd->offset);
 	if (obj->type == UCL_OBJECT) {
 		kp = rspamd_keypair_from_ucl(obj);
@@ -2992,7 +2992,7 @@ rspamd_rcl_parse_struct_keypair(rspamd_mempool_t *pool,
 			*target = kp;
 		}
 		else {
-			gchar *dump = (char *) ucl_object_emit(obj, UCL_EMIT_JSON_COMPACT);
+			char *dump = (char *) ucl_object_emit(obj, UCL_EMIT_JSON_COMPACT);
 			g_set_error(err,
 						CFG_RCL_ERROR,
 						EINVAL,
@@ -3025,7 +3025,7 @@ rspamd_rcl_parse_struct_pubkey(rspamd_mempool_t *pool,
 	auto *pd = (struct rspamd_rcl_struct_parser *) ud;
 	struct rspamd_cryptobox_pubkey **target, *pk;
 	gsize len;
-	const gchar *str;
+	const char *str;
 	rspamd_cryptobox_keypair_type keypair_type = RSPAMD_KEYPAIR_KEX;
 	rspamd_cryptobox_mode keypair_mode = RSPAMD_CRYPTOBOX_MODE_25519;
 
@@ -3036,7 +3036,7 @@ rspamd_rcl_parse_struct_pubkey(rspamd_mempool_t *pool,
 		keypair_mode = RSPAMD_CRYPTOBOX_MODE_NIST;
 	}
 
-	target = (struct rspamd_cryptobox_pubkey **) (((gchar *) pd->user_struct) +
+	target = (struct rspamd_cryptobox_pubkey **) (((char *) pd->user_struct) +
 												  pd->offset);
 	if (obj->type == UCL_STRING) {
 		str = ucl_object_tolstring(obj, &len);
@@ -3079,7 +3079,7 @@ rspamd_rcl_insert_string_list_item(gpointer *target, rspamd_mempool_t *pool,
 		GList *lv;
 		gpointer p;
 	} d;
-	gchar *val;
+	char *val;
 
 	d.p = *target;
 
@@ -3114,7 +3114,7 @@ rspamd_rcl_parse_struct_string_list(rspamd_mempool_t *pool,
 
 
 	auto is_hash = pd->flags & RSPAMD_CL_FLAG_STRING_LIST_HASH;
-	auto *target = (gpointer *) (((gchar *) pd->user_struct) + pd->offset);
+	auto *target = (gpointer *) (((char *) pd->user_struct) + pd->offset);
 
 	if (!is_hash && *target != nullptr) {
 		need_destructor = FALSE;
@@ -3134,19 +3134,19 @@ rspamd_rcl_parse_struct_string_list(rspamd_mempool_t *pool,
 			continue;
 		}
 		case UCL_INT: {
-			auto *val = (gchar *) rspamd_mempool_alloc(pool, num_str_len);
+			auto *val = (char *) rspamd_mempool_alloc(pool, num_str_len);
 			rspamd_snprintf(val, num_str_len, "%L", cur->value.iv);
 			rspamd_rcl_insert_string_list_item(target, pool, val, is_hash);
 			break;
 		}
 		case UCL_FLOAT: {
-			auto *val = (gchar *) rspamd_mempool_alloc(pool, num_str_len);
+			auto *val = (char *) rspamd_mempool_alloc(pool, num_str_len);
 			rspamd_snprintf(val, num_str_len, "%f", cur->value.dv);
 			rspamd_rcl_insert_string_list_item(target, pool, val, is_hash);
 			break;
 		}
 		case UCL_BOOLEAN: {
-			auto *val = (gchar *) rspamd_mempool_alloc(pool, num_str_len);
+			auto *val = (char *) rspamd_mempool_alloc(pool, num_str_len);
 			rspamd_snprintf(val, num_str_len, "%s",
 							((gboolean) cur->value.iv) ? "true" : "false");
 			rspamd_rcl_insert_string_list_item(target, pool, val, is_hash);
@@ -3204,7 +3204,7 @@ rspamd_rcl_parse_struct_ucl(rspamd_mempool_t *pool,
 	auto *pd = (struct rspamd_rcl_struct_parser *) ud;
 	const ucl_object_t **target;
 
-	target = (const ucl_object_t **) (((gchar *) pd->user_struct) + pd->offset);
+	target = (const ucl_object_t **) (((char *) pd->user_struct) + pd->offset);
 
 	*target = obj;
 
@@ -3222,7 +3222,7 @@ rspamd_rcl_parse_struct_boolean(rspamd_mempool_t *pool,
 	auto *pd = (struct rspamd_rcl_struct_parser *) ud;
 	gboolean *target;
 
-	target = (gboolean *) (((gchar *) pd->user_struct) + pd->offset);
+	target = (gboolean *) (((char *) pd->user_struct) + pd->offset);
 
 	if (obj->type == UCL_BOOLEAN) {
 		*target = obj->value.iv;
@@ -3256,10 +3256,10 @@ rspamd_rcl_parse_struct_addr(rspamd_mempool_t *pool,
 {
 	auto *pd = (struct rspamd_rcl_struct_parser *) ud;
 	rspamd_inet_addr_t **target;
-	const gchar *val;
+	const char *val;
 	gsize size;
 
-	target = (rspamd_inet_addr_t **) (((gchar *) pd->user_struct) + pd->offset);
+	target = (rspamd_inet_addr_t **) (((char *) pd->user_struct) + pd->offset);
 
 	if (ucl_object_type(obj) == UCL_STRING) {
 		val = ucl_object_tolstring(obj, &size);
@@ -3295,11 +3295,11 @@ rspamd_rcl_parse_struct_mime_addr(rspamd_mempool_t *pool,
 {
 	auto *pd = (struct rspamd_rcl_struct_parser *) ud;
 	GPtrArray **target, *tmp_addr = nullptr;
-	const gchar *val;
+	const char *val;
 	ucl_object_iter_t it;
 	const ucl_object_t *cur;
 
-	target = (GPtrArray **) (((gchar *) pd->user_struct) + pd->offset);
+	target = (GPtrArray **) (((char *) pd->user_struct) + pd->offset);
 	it = ucl_object_iterate_new(obj);
 
 	while ((cur = ucl_object_iterate_safe(it, true)) != nullptr) {
@@ -3328,12 +3328,12 @@ rspamd_rcl_parse_struct_mime_addr(rspamd_mempool_t *pool,
 
 void rspamd_rcl_register_worker_option(struct rspamd_config *cfg,
 									   GQuark type,
-									   const gchar *name,
+									   const char *name,
 									   rspamd_rcl_default_handler_t handler,
 									   gpointer target,
 									   glong offset,
-									   gint flags,
-									   const gchar *doc_string)
+									   int flags,
+									   const char *doc_string)
 {
 	auto parser_it = cfg->rcl_top_section->workers_parser.try_emplace(type, rspamd_worker_cfg_parser{});
 	auto &parser = parser_it.first->second;
@@ -3385,12 +3385,12 @@ static int
 rspamd_rcl_emitter_append_c(unsigned char c, size_t nchars, void *ud)
 {
 	auto *hs = (rspamd_cryptobox_hash_state_t *) ud;
-	guint64 d[2];
+	uint64_t d[2];
 
 	d[0] = nchars;
 	d[1] = c;
 
-	rspamd_cryptobox_hash_update(hs, (const guchar *) d, sizeof(d));
+	rspamd_cryptobox_hash_update(hs, (const unsigned char *) d, sizeof(d));
 
 	return 0;
 }
@@ -3409,7 +3409,7 @@ rspamd_rcl_emitter_append_int(int64_t elt, void *ud)
 {
 	auto *hs = (rspamd_cryptobox_hash_state_t *) ud;
 
-	rspamd_cryptobox_hash_update(hs, (const guchar *) &elt, sizeof(elt));
+	rspamd_cryptobox_hash_update(hs, (const unsigned char *) &elt, sizeof(elt));
 
 	return 0;
 }
@@ -3419,7 +3419,7 @@ rspamd_rcl_emitter_append_double(double elt, void *ud)
 {
 	auto *hs = (rspamd_cryptobox_hash_state_t *) ud;
 
-	rspamd_cryptobox_hash_update(hs, (const guchar *) &elt, sizeof(elt));
+	rspamd_cryptobox_hash_update(hs, (const unsigned char *) &elt, sizeof(elt));
 
 	return 0;
 }
@@ -3597,7 +3597,7 @@ void rspamd_config_calculate_cksum(struct rspamd_config *cfg)
 
 gboolean
 rspamd_config_parse_ucl(struct rspamd_config *cfg,
-						const gchar *filename,
+						const char *filename,
 						GHashTable *vars,
 						ucl_include_trace_func_t inc_trace,
 						void *trace_data,
@@ -3691,12 +3691,12 @@ rspamd_config_parse_ucl(struct rspamd_config *cfg,
 
 gboolean
 rspamd_config_read(struct rspamd_config *cfg,
-				   const gchar *filename,
+				   const char *filename,
 				   rspamd_rcl_section_fin_t logger_fin,
 				   gpointer logger_ud,
 				   GHashTable *vars,
 				   gboolean skip_jinja,
-				   gchar **lua_env)
+				   char **lua_env)
 {
 	GError *err = nullptr;
 
@@ -3802,7 +3802,7 @@ rspamd_config_read(struct rspamd_config *cfg,
 static void
 rspamd_rcl_doc_obj_from_handler(ucl_object_t *doc_obj,
 								rspamd_rcl_default_handler_t handler,
-								gint flags)
+								int flags)
 {
 	auto has_example = ucl_object_lookup(doc_obj, "example") != nullptr;
 	auto has_type = ucl_object_lookup(doc_obj, "type") != nullptr;
@@ -3920,7 +3920,7 @@ rspamd_rcl_add_doc_obj(ucl_object_t *doc_target,
 					   const char *doc_name,
 					   ucl_type_t type,
 					   rspamd_rcl_default_handler_t handler,
-					   gint flags,
+					   int flags,
 					   const char *default_value,
 					   gboolean required)
 {
@@ -3968,12 +3968,12 @@ rspamd_rcl_add_doc_obj(ucl_object_t *doc_target,
 
 ucl_object_t *
 rspamd_rcl_add_doc_by_path(struct rspamd_config *cfg,
-						   const gchar *doc_path,
+						   const char *doc_path,
 						   const char *doc_string,
 						   const char *doc_name,
 						   ucl_type_t type,
 						   rspamd_rcl_default_handler_t handler,
-						   gint flags,
+						   int flags,
 						   const char *default_value,
 						   gboolean required)
 {
@@ -4080,10 +4080,10 @@ rspamd_rcl_add_doc_from_comments(struct rspamd_config *cfg,
 
 ucl_object_t *
 rspamd_rcl_add_doc_by_example(struct rspamd_config *cfg,
-							  const gchar *root_path,
-							  const gchar *doc_string,
-							  const gchar *doc_name,
-							  const gchar *example_data, gsize example_len)
+							  const char *root_path,
+							  const char *doc_string,
+							  const char *doc_name,
+							  const char *example_data, gsize example_len)
 {
 	auto parser = std::shared_ptr<ucl_parser>(ucl_parser_new(UCL_PARSER_NO_FILEVARS | UCL_PARSER_SAVE_COMMENTS), ucl_parser_free);
 

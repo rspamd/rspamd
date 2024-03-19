@@ -27,13 +27,13 @@ extern "C" {
 #endif
 
 struct rspamd_sqlite3_prstmt {
-	gint idx;
-	const gchar *sql;
-	const gchar *args;
+	int idx;
+	const char *sql;
+	const char *args;
 	sqlite3_stmt *stmt;
-	gint result;
-	const gchar *ret;
-	gint flags;
+	int result;
+	const char *ret;
+	int flags;
 };
 
 /**
@@ -45,7 +45,7 @@ struct rspamd_sqlite3_prstmt {
  */
 GArray *rspamd_sqlite3_init_prstmt(sqlite3 *db,
 								   struct rspamd_sqlite3_prstmt *init_stmt,
-								   gint max_idx,
+								   int max_idx,
 								   GError **err);
 
 /**
@@ -56,8 +56,8 @@ GArray *rspamd_sqlite3_init_prstmt(sqlite3 *db,
  * @param idx
  * @return
  */
-gint rspamd_sqlite3_run_prstmt(rspamd_mempool_t *pool, sqlite3 *db, GArray *stmts,
-							   gint idx, ...);
+int rspamd_sqlite3_run_prstmt(rspamd_mempool_t *pool, sqlite3 *db, GArray *stmts,
+							  int idx, ...);
 
 /**
  * Close and free prepared statements
@@ -73,15 +73,15 @@ void rspamd_sqlite3_close_prstmt(sqlite3 *db, GArray *stmts);
  * @return
  */
 sqlite3 *rspamd_sqlite3_open_or_create(rspamd_mempool_t *pool,
-									   const gchar *path, const gchar *create_sql,
-									   guint32 version, GError **err);
+									   const char *path, const char *create_sql,
+									   uint32_t version, GError **err);
 
 
 /**
  * Sync sqlite3 db ensuring that all wal things are done
  * @param db
  */
-gboolean rspamd_sqlite3_sync(sqlite3 *db, gint *wal_frames, gint *wal_checkpoints);
+gboolean rspamd_sqlite3_sync(sqlite3 *db, int *wal_frames, int *wal_checkpoints);
 
 #ifdef __cplusplus
 }

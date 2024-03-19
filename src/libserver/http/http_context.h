@@ -33,14 +33,14 @@ struct rspamd_http_message;
 struct upstream_ctx;
 
 struct rspamd_http_context_cfg {
-	guint kp_cache_size_client;
-	guint kp_cache_size_server;
-	guint ssl_cache_size;
-	gdouble keepalive_interval;
-	gdouble client_key_rotate_time;
-	const gchar *user_agent;
-	const gchar *http_proxy;
-	const gchar *server_hdr;
+	unsigned int kp_cache_size_client;
+	unsigned int kp_cache_size_server;
+	unsigned int ssl_cache_size;
+	double keepalive_interval;
+	double client_key_rotate_time;
+	const char *user_agent;
+	const char *http_proxy;
+	const char *server_hdr;
 };
 
 /**
@@ -76,7 +76,7 @@ struct rspamd_http_context *rspamd_http_context_default(void);
  */
 struct rspamd_http_connection *rspamd_http_context_check_keepalive(struct rspamd_http_context *ctx,
 																   const rspamd_inet_addr_t *addr,
-																   const gchar *host,
+																   const char *host,
 																   bool is_ssl);
 
 /**
@@ -88,7 +88,7 @@ struct rspamd_http_connection *rspamd_http_context_check_keepalive(struct rspamd
  * @return
  */
 const rspamd_inet_addr_t *rspamd_http_context_has_keepalive(struct rspamd_http_context *ctx,
-															const gchar *host,
+															const char *host,
 															unsigned port,
 															bool is_ssl);
 
@@ -101,7 +101,7 @@ const rspamd_inet_addr_t *rspamd_http_context_has_keepalive(struct rspamd_http_c
  * @param host
  */
 void rspamd_http_context_prepare_keepalive(struct rspamd_http_context *ctx, struct rspamd_http_connection *conn,
-										   const rspamd_inet_addr_t *addr, const gchar *host, bool is_ssl);
+										   const rspamd_inet_addr_t *addr, const char *host, bool is_ssl);
 
 /**
  * Pushes a connection to keepalive pool after client request is finished,

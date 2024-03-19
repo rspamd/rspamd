@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,8 +20,8 @@
 #include "btrie.h"
 
 const gsize max_elts = 500 * 1024;
-const gint lookup_cycles = 1 * 1024;
-const gint lookup_divisor = 10;
+const int lookup_cycles = 1 * 1024;
+const int lookup_divisor = 10;
 
 const uint masks[] = {
 	8,
@@ -38,9 +38,9 @@ struct _tv {
 	const char *ip;
 	const char *nip;
 	const char *m;
-	guint32 mask;
-	guint8 *addr;
-	guint8 *naddr;
+	uint32_t mask;
+	uint8_t *addr;
+	uint8_t *naddr;
 	gsize len;
 } test_vec[] = {
 	{"192.168.1.1", "192.168.1.2", "32", 0, 0, 0, 0},
@@ -207,16 +207,16 @@ void rspamd_radix_test_func(void)
 	struct btrie *btrie;
 	rspamd_mempool_t *pool;
 	struct {
-		guint32 addr;
-		guint32 mask;
-		guint8 addr6[16];
-		guint32 mask6;
-		guint8 addr64[16];
+		uint32_t addr;
+		uint32_t mask;
+		uint8_t addr6[16];
+		uint32_t mask6;
+		uint8_t addr64[16];
 	} *addrs;
 	gsize nelts, i, check;
-	gint lc;
+	int lc;
 	gboolean all_good = TRUE;
-	gdouble ts1, ts2;
+	double ts1, ts2;
 	double diff;
 
 	/* Test suite for the compressed trie */
@@ -277,7 +277,7 @@ void rspamd_radix_test_func(void)
 
 	msg_notice("Checked %hz elements in %.0f ticks (%.2f ticks per lookup)",
 			   nelts * lookup_cycles / lookup_divisor, diff,
-			   diff / ((gdouble) nelts * lookup_cycles / lookup_divisor));
+			   diff / ((double) nelts * lookup_cycles / lookup_divisor));
 	rspamd_mempool_delete(pool);
 
 	/*
@@ -289,7 +289,7 @@ void rspamd_radix_test_func(void)
 
 	ts1 = rspamd_get_ticks(TRUE);
 	for (i = 0; i < nelts; i++) {
-		btrie_add_prefix(btrie, (guchar *) &addrs[i].addr,
+		btrie_add_prefix(btrie, (unsigned char *) &addrs[i].addr,
 						 addrs[i].mask, GSIZE_TO_POINTER(i + 1));
 	}
 	ts2 = rspamd_get_ticks(TRUE);
@@ -303,12 +303,12 @@ void rspamd_radix_test_func(void)
 		for (i = 0; i < nelts / lookup_divisor; i++) {
 			check = rspamd_random_uint64_fast() % nelts;
 
-			if (btrie_lookup(btrie, (guchar *) &addrs[check].addr, sizeof(addrs[check].addr) * 8) == NULL) {
+			if (btrie_lookup(btrie, (unsigned char *) &addrs[check].addr, sizeof(addrs[check].addr) * 8) == NULL) {
 				char ipbuf[INET6_ADDRSTRLEN + 1];
 
 				all_good = FALSE;
 
-				inet_ntop(AF_INET, (guchar *) &addrs[check].addr, ipbuf, sizeof(ipbuf));
+				inet_ntop(AF_INET, (unsigned char *) &addrs[check].addr, ipbuf, sizeof(ipbuf));
 				msg_notice("BAD btrie: {\"%s\", NULL, \"%ud\", 0, 0, 0, 0},",
 						   ipbuf,
 						   addrs[check].mask);
@@ -322,7 +322,7 @@ void rspamd_radix_test_func(void)
 
 	msg_notice("Checked %hz elements in %.0f ticks (%.2f ticks per lookup)",
 			   nelts * lookup_cycles / lookup_divisor, diff,
-			   diff / ((gdouble) nelts * lookup_cycles / lookup_divisor));
+			   diff / ((double) nelts * lookup_cycles / lookup_divisor));
 	rspamd_mempool_delete(pool);
 
 	/*
@@ -355,7 +355,7 @@ void rspamd_radix_test_func(void)
 
 				all_good = FALSE;
 
-				inet_ntop(AF_INET, (guchar *) &addrs[check].addr, ipbuf, sizeof(ipbuf));
+				inet_ntop(AF_INET, (unsigned char *) &addrs[check].addr, ipbuf, sizeof(ipbuf));
 				msg_notice("BAD btrie: {\"%s\", NULL, \"%ud\", 0, 0, 0, 0},",
 						   ipbuf,
 						   addrs[check].mask);
@@ -369,7 +369,7 @@ void rspamd_radix_test_func(void)
 
 	msg_notice("Checked %hz elements in %.0f ticks (%.2f ticks per lookup)",
 			   nelts * lookup_cycles / lookup_divisor, diff,
-			   diff / ((gdouble) nelts * lookup_cycles / lookup_divisor));
+			   diff / ((double) nelts * lookup_cycles / lookup_divisor));
 	rspamd_mempool_delete(pool);
 
 	g_free(addrs);

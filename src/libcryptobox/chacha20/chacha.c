@@ -94,7 +94,7 @@ chacha_is_aligned(const void *p)
 const char *
 chacha_load(void)
 {
-	guint i;
+	unsigned int i;
 
 	if (cpu_config != 0) {
 		for (i = 0; i < G_N_ELEMENTS(chacha_list); i++) {

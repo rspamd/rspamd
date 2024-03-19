@@ -31,7 +31,7 @@ struct rspamd_keypair_cache;
  * @param max_items defines maximum count of elements in the cache
  * @return new cache
  */
-struct rspamd_keypair_cache *rspamd_keypair_cache_new(guint max_items);
+struct rspamd_keypair_cache *rspamd_keypair_cache_new(unsigned int max_items);
 
 
 /**

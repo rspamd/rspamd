@@ -75,11 +75,11 @@ struct ev_loop *rspamd_monitored_ctx_get_ev_base(struct rspamd_monitored_ctx *ct
  */
 struct rspamd_monitored *rspamd_monitored_create_(
 	struct rspamd_monitored_ctx *ctx,
-	const gchar *line,
+	const char *line,
 	enum rspamd_monitored_type type,
 	enum rspamd_monitored_flags flags,
 	const ucl_object_t *opts,
-	const gchar *loc);
+	const char *loc);
 
 #define rspamd_monitored_create(ctx, line, type, flags, opts) \
 	rspamd_monitored_create_(ctx, line, type, flags, opts, G_STRFUNC)
@@ -91,7 +91,7 @@ struct rspamd_monitored *rspamd_monitored_create_(
  * @return
  */
 struct rspamd_monitored *rspamd_monitored_by_tag(struct rspamd_monitored_ctx *ctx,
-												 guchar tag[RSPAMD_MONITORED_TAG_LEN]);
+												 unsigned char tag[RSPAMD_MONITORED_TAG_LEN]);
 
 /**
  * Sets `tag_out` to the monitored tag
@@ -99,7 +99,7 @@ struct rspamd_monitored *rspamd_monitored_by_tag(struct rspamd_monitored_ctx *ct
  * @param tag_out
  */
 void rspamd_monitored_get_tag(struct rspamd_monitored *m,
-							  guchar tag_out[RSPAMD_MONITORED_TAG_LEN]);
+							  unsigned char tag_out[RSPAMD_MONITORED_TAG_LEN]);
 
 /**
  * Return TRUE if monitored object is alive
@@ -120,21 +120,21 @@ gboolean rspamd_monitored_set_alive(struct rspamd_monitored *m, gboolean alive);
  * @param m
  * @return
  */
-gdouble rspamd_monitored_offline_time(struct rspamd_monitored *m);
+double rspamd_monitored_offline_time(struct rspamd_monitored *m);
 
 /**
  * Returns the total offline time for a monitored object
  * @param m
  * @return
  */
-gdouble rspamd_monitored_total_offline_time(struct rspamd_monitored *m);
+double rspamd_monitored_total_offline_time(struct rspamd_monitored *m);
 
 /**
  * Returns the latency for monitored object (in seconds)
  * @param m
  * @return
  */
-gdouble rspamd_monitored_latency(struct rspamd_monitored *m);
+double rspamd_monitored_latency(struct rspamd_monitored *m);
 
 /**
  * Explicitly disable monitored object

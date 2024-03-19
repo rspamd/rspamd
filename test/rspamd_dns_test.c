@@ -7,7 +7,7 @@
 #include "async_session.h"
 #include "cfg_file.h"
 
-static guint requests = 0;
+static unsigned int requests = 0;
 extern struct ev_loop *event_loop;
 struct rspamd_dns_resolver *resolver;
 

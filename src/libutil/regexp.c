@@ -45,13 +45,13 @@
 #define PCRE_FLAG(x) G_PASTE(PCRE2_, x)
 #endif
 
-typedef guchar regexp_id_t[rspamd_cryptobox_HASHBYTES];
+typedef unsigned char regexp_id_t[rspamd_cryptobox_HASHBYTES];
 
 #undef DISABLE_JIT_FAST
 
 struct rspamd_regexp_s {
-	gdouble exec_time;
-	gchar *pattern;
+	double exec_time;
+	char *pattern;
 	PCRE_T *re;
 	PCRE_T *raw_re;
 #ifndef WITH_PCRE2
@@ -65,12 +65,12 @@ struct rspamd_regexp_s {
 	ref_entry_t ref;
 	gpointer ud;
 	gpointer re_class;
-	guint64 cache_id;
+	uint64_t cache_id;
 	gsize match_limit;
-	guint max_hits;
-	gint flags;
-	gint pcre_flags;
-	gint ncaptures;
+	unsigned int max_hits;
+	int flags;
+	int pcre_flags;
+	int ncaptures;
 };
 
 struct rspamd_regexp_cache {
@@ -96,7 +96,7 @@ rspamd_regexp_quark(void)
 }
 
 static void
-rspamd_regexp_generate_id(const gchar *pattern, const gchar *flags,
+rspamd_regexp_generate_id(const char *pattern, const char *flags,
 						  regexp_id_t out)
 {
 	rspamd_cryptobox_hash_state_t st;
@@ -164,7 +164,7 @@ rspamd_regexp_post_process(rspamd_regexp_t *r)
 		rspamd_regexp_library_init(NULL);
 	}
 #if defined(WITH_PCRE2)
-	static const guint max_recursion_depth = 100000, max_backtrack = 1000000;
+	static const unsigned int max_recursion_depth = 100000, max_backtrack = 1000000;
 
 	/* Create match context */
 	r->mcontext = pcre2_match_context_create(NULL);
@@ -186,7 +186,7 @@ rspamd_regexp_post_process(rspamd_regexp_t *r)
 	}
 
 #ifdef HAVE_PCRE_JIT
-	guint jit_flags = can_jit ? PCRE2_JIT_COMPLETE : 0;
+	unsigned int jit_flags = can_jit ? PCRE2_JIT_COMPLETE : 0;
 	gsize jsz;
 	PCRE2_UCHAR errstr[128];
 	int errcode;
@@ -231,9 +231,9 @@ rspamd_regexp_post_process(rspamd_regexp_t *r)
 #endif
 
 #else
-	const gchar *err_str = "unknown";
+	const char *err_str = "unknown";
 	gboolean try_jit = TRUE, try_raw_jit = TRUE;
-	gint study_flags = 0;
+	int study_flags = 0;
 
 #if defined(HAVE_PCRE_JIT)
 	study_flags |= PCRE_STUDY_JIT_COMPILE;
@@ -270,7 +270,7 @@ rspamd_regexp_post_process(rspamd_regexp_t *r)
 	/* JIT path */
 	if (try_jit) {
 #ifdef HAVE_PCRE_JIT
-		gint jit, n;
+		int jit, n;
 
 		if (can_jit) {
 			jit = 0;
@@ -295,7 +295,7 @@ rspamd_regexp_post_process(rspamd_regexp_t *r)
 
 	if (try_raw_jit) {
 #ifdef HAVE_PCRE_JIT
-		gint jit, n;
+		int jit, n;
 
 		if (can_jit) {
 
@@ -320,21 +320,21 @@ rspamd_regexp_post_process(rspamd_regexp_t *r)
 }
 
 rspamd_regexp_t *
-rspamd_regexp_new_len(const gchar *pattern, gsize len, const gchar *flags,
+rspamd_regexp_new_len(const char *pattern, gsize len, const char *flags,
 					  GError **err)
 {
-	const gchar *start = pattern, *end = start + len, *flags_str = NULL, *flags_end = NULL;
-	gchar *err_str;
+	const char *start = pattern, *end = start + len, *flags_str = NULL, *flags_end = NULL;
+	char *err_str;
 	rspamd_regexp_t *res;
 	gboolean explicit_utf = FALSE;
 	PCRE_T *r;
-	gchar sep = 0, *real_pattern;
+	char sep = 0, *real_pattern;
 #ifndef WITH_PCRE2
-	gint err_off;
+	int err_off;
 #else
 	gsize err_off;
 #endif
-	gint regexp_flags = 0, rspamd_flags = 0, err_code, ncaptures;
+	int regexp_flags = 0, rspamd_flags = 0, err_code, ncaptures;
 	gboolean strict_flags = FALSE;
 
 	rspamd_regexp_library_init(NULL);
@@ -367,7 +367,7 @@ rspamd_regexp_new_len(const gchar *pattern, gsize len, const gchar *flags,
 			rspamd_flags &= ~RSPAMD_REGEXP_FLAG_FULL_MATCH;
 		}
 		else {
-			gchar *last_sep = rspamd_memrchr(pattern, sep, len);
+			char *last_sep = rspamd_memrchr(pattern, sep, len);
 
 			if (last_sep == NULL || last_sep <= start) {
 				g_set_error(err, rspamd_regexp_quark(), EINVAL,
@@ -480,7 +480,7 @@ fin:
 	if (r == NULL) {
 		g_set_error(err, rspamd_regexp_quark(), EINVAL,
 					"regexp parsing error: '%s' at position %d; pattern: %s",
-					err_str, (gint) err_off, real_pattern);
+					err_str, (int) err_off, real_pattern);
 		g_free(real_pattern);
 
 		return NULL;
@@ -516,7 +516,7 @@ fin:
 #endif
 		if (res->raw_re == NULL) {
 			msg_warn("raw regexp parsing error: '%s': '%s' at position %d",
-					 err_str, real_pattern, (gint) err_off);
+					 err_str, real_pattern, (int) err_off);
 		}
 	}
 
@@ -541,7 +541,7 @@ fin:
 }
 
 rspamd_regexp_t *
-rspamd_regexp_new(const gchar *pattern, const gchar *flags,
+rspamd_regexp_new(const char *pattern, const char *flags,
 				  GError **err)
 {
 	return rspamd_regexp_new_len(pattern, strlen(pattern), flags, err);
@@ -549,8 +549,8 @@ rspamd_regexp_new(const gchar *pattern, const gchar *flags,
 
 #ifndef WITH_PCRE2
 gboolean
-rspamd_regexp_search(const rspamd_regexp_t *re, const gchar *text, gsize len,
-					 const gchar **start, const gchar **end, gboolean raw,
+rspamd_regexp_search(const rspamd_regexp_t *re, const char *text, gsize len,
+					 const char **start, const char **end, gboolean raw,
 					 GArray *captures)
 {
 	pcre *r;
@@ -558,9 +558,9 @@ rspamd_regexp_search(const rspamd_regexp_t *re, const gchar *text, gsize len,
 #if defined(HAVE_PCRE_JIT) && defined(HAVE_PCRE_JIT_FAST) && !defined(DISABLE_JIT_FAST)
 	pcre_jit_stack *st = NULL;
 #endif
-	const gchar *mt;
+	const char *mt;
 	gsize remain = 0;
-	gint rc, match_flags = 0, *ovec, ncaptures, i;
+	int rc, match_flags = 0, *ovec, ncaptures, i;
 	const int junk = 0xdeadbabe;
 
 	g_assert(re != NULL);
@@ -578,7 +578,7 @@ rspamd_regexp_search(const rspamd_regexp_t *re, const gchar *text, gsize len,
 		/* Incremental search */
 		mt = (*end);
 
-		if ((gint) len > (mt - text)) {
+		if ((int) len > (mt - text)) {
 			remain = len - (mt - text);
 		}
 	}
@@ -620,7 +620,7 @@ rspamd_regexp_search(const rspamd_regexp_t *re, const gchar *text, gsize len,
 	}
 
 	ncaptures = (re->ncaptures + 1) * 3;
-	ovec = g_alloca(sizeof(gint) * ncaptures);
+	ovec = g_alloca(sizeof(int) * ncaptures);
 
 
 	for (i = 0; i < ncaptures; i++) {
@@ -697,7 +697,7 @@ rspamd_regexp_search(const rspamd_regexp_t *re, const gchar *text, gsize len,
 
 		if (re->flags & RSPAMD_REGEXP_FLAG_FULL_MATCH) {
 			/* We also ensure that the match is full */
-			if (ovec[0] != 0 || (guint) ovec[1] < len) {
+			if (ovec[0] != 0 || (unsigned int) ovec[1] < len) {
 				return FALSE;
 			}
 		}
@@ -710,17 +710,17 @@ rspamd_regexp_search(const rspamd_regexp_t *re, const gchar *text, gsize len,
 #else
 /* PCRE 2 version */
 gboolean
-rspamd_regexp_search(const rspamd_regexp_t *re, const gchar *text, gsize len,
-					 const gchar **start, const gchar **end, gboolean raw,
+rspamd_regexp_search(const rspamd_regexp_t *re, const char *text, gsize len,
+					 const char **start, const char **end, gboolean raw,
 					 GArray *captures)
 {
 	pcre2_match_data *match_data;
 	pcre2_match_context *mcontext;
 	PCRE_T *r;
-	const gchar *mt;
+	const char *mt;
 	PCRE2_SIZE remain = 0, *ovec;
 	const PCRE2_SIZE junk = 0xdeadbabeeeeeeeeULL;
-	gint rc, match_flags, novec, i;
+	int rc, match_flags, novec, i;
 	gboolean ret = FALSE;
 
 	g_assert(re != NULL);
@@ -738,7 +738,7 @@ rspamd_regexp_search(const rspamd_regexp_t *re, const gchar *text, gsize len,
 		/* Incremental search */
 		mt = (*end);
 
-		if ((gint) len > (mt - text)) {
+		if ((int) len > (mt - text)) {
 			remain = len - (mt - text);
 		}
 	}
@@ -838,7 +838,7 @@ rspamd_regexp_search(const rspamd_regexp_t *re, const gchar *text, gsize len,
 
 		if (re->flags & RSPAMD_REGEXP_FLAG_FULL_MATCH) {
 			/* We also ensure that the match is full */
-			if (ovec[0] != 0 || (guint) ovec[1] < len) {
+			if (ovec[0] != 0 || (unsigned int) ovec[1] < len) {
 				ret = FALSE;
 			}
 		}
@@ -858,9 +858,9 @@ rspamd_regexp_get_pattern(const rspamd_regexp_t *re)
 	return re->pattern;
 }
 
-guint rspamd_regexp_set_flags(rspamd_regexp_t *re, guint new_flags)
+unsigned int rspamd_regexp_set_flags(rspamd_regexp_t *re, unsigned int new_flags)
 {
-	guint old_flags;
+	unsigned int old_flags;
 
 	g_assert(re != NULL);
 	old_flags = re->flags;
@@ -869,30 +869,30 @@ guint rspamd_regexp_set_flags(rspamd_regexp_t *re, guint new_flags)
 	return old_flags;
 }
 
-guint rspamd_regexp_get_flags(const rspamd_regexp_t *re)
+unsigned int rspamd_regexp_get_flags(const rspamd_regexp_t *re)
 {
 	g_assert(re != NULL);
 
 	return re->flags;
 }
 
-guint rspamd_regexp_get_pcre_flags(const rspamd_regexp_t *re)
+unsigned int rspamd_regexp_get_pcre_flags(const rspamd_regexp_t *re)
 {
 	g_assert(re != NULL);
 
 	return re->pcre_flags;
 }
 
-guint rspamd_regexp_get_maxhits(const rspamd_regexp_t *re)
+unsigned int rspamd_regexp_get_maxhits(const rspamd_regexp_t *re)
 {
 	g_assert(re != NULL);
 
 	return re->max_hits;
 }
 
-guint rspamd_regexp_set_maxhits(rspamd_regexp_t *re, guint new_maxhits)
+unsigned int rspamd_regexp_set_maxhits(rspamd_regexp_t *re, unsigned int new_maxhits)
 {
-	guint old_hits;
+	unsigned int old_hits;
 
 	g_assert(re != NULL);
 	old_hits = re->max_hits;
@@ -901,7 +901,7 @@ guint rspamd_regexp_set_maxhits(rspamd_regexp_t *re, guint new_maxhits)
 	return old_hits;
 }
 
-guint64
+uint64_t
 rspamd_regexp_get_cache_id(const rspamd_regexp_t *re)
 {
 	g_assert(re != NULL);
@@ -909,10 +909,10 @@ rspamd_regexp_get_cache_id(const rspamd_regexp_t *re)
 	return re->cache_id;
 }
 
-guint64
-rspamd_regexp_set_cache_id(rspamd_regexp_t *re, guint64 id)
+uint64_t
+rspamd_regexp_set_cache_id(rspamd_regexp_t *re, uint64_t id)
 {
-	guint64 old;
+	uint64_t old;
 
 	g_assert(re != NULL);
 	old = re->cache_id;
@@ -940,10 +940,10 @@ gsize rspamd_regexp_set_match_limit(rspamd_regexp_t *re, gsize lim)
 }
 
 gboolean
-rspamd_regexp_match(const rspamd_regexp_t *re, const gchar *text, gsize len,
+rspamd_regexp_match(const rspamd_regexp_t *re, const char *text, gsize len,
 					gboolean raw)
 {
-	const gchar *start = NULL, *end = NULL;
+	const char *start = NULL, *end = NULL;
 
 	g_assert(re != NULL);
 	g_assert(text != NULL);
@@ -994,16 +994,16 @@ rspamd_regexp_get_ud(const rspamd_regexp_t *re)
 gboolean
 rspamd_regexp_equal(gconstpointer a, gconstpointer b)
 {
-	const guchar *ia = a, *ib = b;
+	const unsigned char *ia = a, *ib = b;
 
 	return (memcmp(ia, ib, sizeof(regexp_id_t)) == 0);
 }
 
-guint32
+uint32_t
 rspamd_regexp_hash(gconstpointer a)
 {
-	const guchar *ia = a;
-	guint32 res;
+	const unsigned char *ia = a;
+	uint32_t res;
 
 	memcpy(&res, ia, sizeof(res));
 
@@ -1013,7 +1013,7 @@ rspamd_regexp_hash(gconstpointer a)
 gboolean
 rspamd_regexp_cmp(gconstpointer a, gconstpointer b)
 {
-	const guchar *ia = a, *ib = b;
+	const unsigned char *ia = a, *ib = b;
 
 	return memcmp(ia, ib, sizeof(regexp_id_t));
 }
@@ -1039,8 +1039,8 @@ rspamd_regexp_cache_new(void)
 
 rspamd_regexp_t *
 rspamd_regexp_cache_query(struct rspamd_regexp_cache *cache,
-						  const gchar *pattern,
-						  const gchar *flags)
+						  const char *pattern,
+						  const char *flags)
 {
 	rspamd_regexp_t *res = NULL;
 	regexp_id_t id;
@@ -1061,8 +1061,8 @@ rspamd_regexp_cache_query(struct rspamd_regexp_cache *cache,
 
 rspamd_regexp_t *
 rspamd_regexp_cache_create(struct rspamd_regexp_cache *cache,
-						   const gchar *pattern,
-						   const gchar *flags, GError **err)
+						   const char *pattern,
+						   const char *flags, GError **err)
 {
 	rspamd_regexp_t *res;
 
@@ -1160,8 +1160,8 @@ void rspamd_regexp_library_init(struct rspamd_config *cfg)
 
 	if (check_jit) {
 #ifdef HAVE_PCRE_JIT
-		gint jit, rc;
-		gchar *str;
+		int jit, rc;
+		char *str;
 
 #ifndef WITH_PCRE2
 		rc = pcre_config(PCRE_CONFIG_JIT, &jit);
@@ -1243,13 +1243,13 @@ rspamd_regexp_set_class(rspamd_regexp_t *re, gpointer re_class)
 }
 
 rspamd_regexp_t *
-rspamd_regexp_from_glob(const gchar *gl, gsize sz, GError **err)
+rspamd_regexp_from_glob(const char *gl, gsize sz, GError **err)
 {
 	GString *out;
 	rspamd_regexp_t *re;
-	const gchar *end;
+	const char *end;
 	gboolean escaping = FALSE;
-	gint nbraces = 0;
+	int nbraces = 0;
 
 	g_assert(gl != NULL);
 

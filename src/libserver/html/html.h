@@ -49,10 +49,10 @@ extern "C" {
 struct rspamd_image;
 
 struct html_image {
-	guint height;
-	guint width;
-	guint flags;
-	gchar *src;
+	unsigned int height;
+	unsigned int width;
+	unsigned int flags;
+	char *src;
 	struct rspamd_url *url;
 	struct rspamd_image *embedded_image;
 	void *tag;
@@ -65,7 +65,7 @@ struct rspamd_task;
 /*
  * Decode HTML entitles in text. Text is modified in place.
  */
-guint rspamd_html_decode_entitles_inplace(gchar *s, gsize len);
+unsigned int rspamd_html_decode_entitles_inplace(char *s, gsize len);
 
 void *rspamd_html_process_part(rspamd_mempool_t *pool,
 							   GByteArray *in);
@@ -80,21 +80,21 @@ void *rspamd_html_process_part_full(struct rspamd_task *task,
 /*
  * Returns true if a specified tag has been seen in a part
  */
-gboolean rspamd_html_tag_seen(void *ptr, const gchar *tagname);
+gboolean rspamd_html_tag_seen(void *ptr, const char *tagname);
 
 /**
  * Returns name for the specified tag id
  * @param id
  * @return
  */
-const gchar *rspamd_html_tag_by_id(gint id);
+const char *rspamd_html_tag_by_id(int id);
 
 /**
  * Returns HTML tag id by name
  * @param name
  * @return
  */
-gint rspamd_html_tag_by_name(const gchar *name);
+int rspamd_html_tag_by_name(const char *name);
 
 /**
  * Gets a name for a tag
@@ -102,7 +102,7 @@ gint rspamd_html_tag_by_name(const gchar *name);
  * @param len
  * @return
  */
-const gchar *rspamd_html_tag_name(void *tag, gsize *len);
+const char *rspamd_html_tag_name(void *tag, gsize *len);
 
 /**
  * Find HTML image by content id

@@ -118,9 +118,9 @@ void rspamd_stat_init(struct rspamd_config *cfg, struct ev_loop *ev_base)
 	struct rspamd_statfile *st;
 	struct rspamd_classifier *cl;
 	const ucl_object_t *cache_obj = NULL, *cache_name_obj;
-	const gchar *cache_name = NULL;
+	const char *cache_name = NULL;
 	lua_State *L = cfg->lua_state;
-	guint lua_classifiers_cnt = 0, i;
+	unsigned int lua_classifiers_cnt = 0, i;
 	gboolean skip_cache = FALSE;
 
 	if (stat_ctx == NULL) {
@@ -205,7 +205,7 @@ void rspamd_stat_init(struct rspamd_config *cfg, struct ev_loop *ev_base)
 			}
 			else {
 				/* Call this function to obtain closure */
-				gint err_idx, ret;
+				int err_idx, ret;
 				struct rspamd_config **pcfg;
 
 				lua_pushcfunction(L, &rspamd_lua_traceback);
@@ -248,7 +248,7 @@ void rspamd_stat_init(struct rspamd_config *cfg, struct ev_loop *ev_base)
 		cl = g_malloc0(sizeof(*cl));
 		cl->cfg = clf;
 		cl->ctx = stat_ctx;
-		cl->statfiles_ids = g_array_new(FALSE, FALSE, sizeof(gint));
+		cl->statfiles_ids = g_array_new(FALSE, FALSE, sizeof(int));
 		cl->subrs = rspamd_stat_get_classifier(clf->classifier);
 
 		if (cl->subrs == NULL) {
@@ -391,8 +391,8 @@ void rspamd_stat_close(void)
 	struct rspamd_stat_ctx *st_ctx;
 	struct rspamd_stat_async_elt *aelt;
 	GList *cur;
-	guint i, j;
-	gint id;
+	unsigned int i, j;
+	int id;
 
 	st_ctx = rspamd_stat_get_ctx();
 	g_assert(st_ctx != NULL);
@@ -401,7 +401,7 @@ void rspamd_stat_close(void)
 		cl = g_ptr_array_index(st_ctx->classifiers, i);
 
 		for (j = 0; j < cl->statfiles_ids->len; j++) {
-			id = g_array_index(cl->statfiles_ids, gint, j);
+			id = g_array_index(cl->statfiles_ids, int, j);
 			st = g_ptr_array_index(st_ctx->statfiles, id);
 			if (!(st->classifier->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND)) {
 				st->backend->close(st->bkcf);
@@ -454,9 +454,9 @@ rspamd_stat_get_ctx(void)
 }
 
 struct rspamd_stat_classifier *
-rspamd_stat_get_classifier(const gchar *name)
+rspamd_stat_get_classifier(const char *name)
 {
-	guint i;
+	unsigned int i;
 
 	if (name == NULL || name[0] == '\0') {
 		name = RSPAMD_DEFAULT_CLASSIFIER;
@@ -474,9 +474,9 @@ rspamd_stat_get_classifier(const gchar *name)
 }
 
 struct rspamd_stat_backend *
-rspamd_stat_get_backend(const gchar *name)
+rspamd_stat_get_backend(const char *name)
 {
-	guint i;
+	unsigned int i;
 
 	if (name == NULL || name[0] == '\0') {
 		name = RSPAMD_DEFAULT_BACKEND;
@@ -494,9 +494,9 @@ rspamd_stat_get_backend(const gchar *name)
 }
 
 struct rspamd_stat_tokenizer *
-rspamd_stat_get_tokenizer(const gchar *name)
+rspamd_stat_get_tokenizer(const char *name)
 {
-	guint i;
+	unsigned int i;
 
 	if (name == NULL || name[0] == '\0') {
 		name = RSPAMD_DEFAULT_TOKENIZER;
@@ -514,9 +514,9 @@ rspamd_stat_get_tokenizer(const gchar *name)
 }
 
 struct rspamd_stat_cache *
-rspamd_stat_get_cache(const gchar *name)
+rspamd_stat_get_cache(const char *name)
 {
-	guint i;
+	unsigned int i;
 
 	if (name == NULL || name[0] == '\0') {
 		name = RSPAMD_DEFAULT_CACHE;
@@ -548,7 +548,7 @@ static void
 rspamd_async_elt_on_timer(EV_P_ ev_timer *w, int revents)
 {
 	struct rspamd_stat_async_elt *elt = (struct rspamd_stat_async_elt *) w->data;
-	gdouble jittered_time;
+	double jittered_time;
 
 
 	if (elt->enabled) {
@@ -564,7 +564,7 @@ struct rspamd_stat_async_elt *
 rspamd_stat_ctx_register_async(rspamd_stat_async_handler handler,
 							   rspamd_stat_async_cleanup cleanup,
 							   gpointer d,
-							   gdouble timeout)
+							   double timeout)
 {
 	struct rspamd_stat_async_elt *elt;
 	struct rspamd_stat_ctx *st_ctx;

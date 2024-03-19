@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -144,7 +144,7 @@ lua_cdb_get_input(lua_State *L, int pos, gsize *olen)
 
 		p = rspamd_lua_check_udata_maybe(L, pos, rspamd_int64_classname);
 		if (p) {
-			static char numbuf[sizeof(gint64)];
+			static char numbuf[sizeof(int64_t)];
 
 			memcpy(numbuf, p, sizeof(numbuf));
 			*olen = sizeof(numbuf);
@@ -158,12 +158,12 @@ lua_cdb_get_input(lua_State *L, int pos, gsize *olen)
 	return NULL;
 }
 
-static gint
+static int
 lua_cdb_create(lua_State *L)
 {
 	struct cdb *cdb, **pcdb;
-	const gchar *filename;
-	gint fd;
+	const char *filename;
+	int fd;
 
 	struct ev_loop *ev_base = NULL;
 
@@ -218,7 +218,7 @@ lua_cdb_create(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_cdb_get_name(lua_State *L)
 {
 	struct cdb *cdb = lua_check_cdb(L, 1);
@@ -231,12 +231,12 @@ lua_cdb_get_name(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_cdb_lookup(lua_State *L)
 {
 	struct cdb *cdb = lua_check_cdb(L, 1);
 	gsize klen;
-	const gchar *what = lua_cdb_get_input(L, 2, &klen);
+	const char *what = lua_cdb_get_input(L, 2, &klen);
 
 	if (!cdb || what == NULL) {
 		return lua_error(L);
@@ -253,7 +253,7 @@ lua_cdb_lookup(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_cdb_destroy(lua_State *L)
 {
 	struct cdb *cdb = lua_check_cdb(L, 1);
@@ -270,7 +270,7 @@ lua_cdb_destroy(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_cdb_build(lua_State *L)
 {
 	const char *filename = luaL_checkstring(L, 1);
@@ -306,7 +306,7 @@ lua_cdb_build(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_cdb_builder_add(lua_State *L)
 {
 	struct cdb_make *cdbm = lua_check_cdb_builder(L, 1);
@@ -330,7 +330,7 @@ lua_cdb_builder_add(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_cdb_builder_finalize(lua_State *L)
 {
 	struct cdb_make *cdbm = lua_check_cdb_builder(L, 1);
@@ -354,7 +354,7 @@ lua_cdb_builder_finalize(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_cdb_builder_dtor(lua_State *L)
 {
 	struct cdb_make *cdbm = lua_check_cdb_builder(L, 1);
@@ -372,7 +372,7 @@ lua_cdb_builder_dtor(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_load_cdb(lua_State *L)
 {
 	lua_newtable(L);

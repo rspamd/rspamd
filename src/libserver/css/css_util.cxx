@@ -141,10 +141,10 @@ std::string_view unescape_css(rspamd_mempool_t *pool,
 }// namespace rspamd::css
 
 /* C API */
-const gchar *rspamd_css_unescape(rspamd_mempool_t *pool,
-								 const guchar *begin,
-								 gsize len,
-								 gsize *outlen)
+const char *rspamd_css_unescape(rspamd_mempool_t *pool,
+								const unsigned char *begin,
+								gsize len,
+								gsize *outlen)
 {
 	auto sv = rspamd::css::unescape_css(pool, {(const char *) begin, len});
 	const auto *v = sv.begin();

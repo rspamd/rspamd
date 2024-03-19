@@ -35,7 +35,7 @@ struct rspamd_settings;
 struct rspamd_classifier_config;
 
 struct rspamd_symbol_option {
-	gchar *option;
+	char *option;
 	gsize optlen;
 	struct rspamd_symbol_option *prev, *next;
 };
@@ -54,10 +54,10 @@ struct rspamd_symbol_result {
 	double score;                             /**< symbol's score							*/
 	struct kh_rspamd_options_hash_s *options; /**< list of symbol's options				*/
 	struct rspamd_symbol_option *opts_head;   /**< head of linked list of options			*/
-	const gchar *name;
+	const char *name;
 	struct rspamd_symbol *sym; /**< symbol configuration					*/
 	gssize opts_len;           /**< total size of all options (negative if truncated option is added) */
-	guint nshots;
+	unsigned int nshots;
 	int flags;
 	struct rspamd_symbol_result *next; /**< for shadow results */
 };
@@ -74,11 +74,11 @@ struct rspamd_symbol_result {
 
 struct rspamd_passthrough_result {
 	struct rspamd_action *action;
-	guint priority;
-	guint flags;
+	unsigned int priority;
+	unsigned int flags;
 	double target_score;
-	const gchar *message;
-	const gchar *module;
+	const char *message;
+	const char *module;
 	struct rspamd_passthrough_result *prev, *next;
 };
 
@@ -89,7 +89,7 @@ enum rspamd_action_config_flags {
 	RSPAMD_ACTION_RESULT_DISABLED = (1u << 1u),
 };
 struct rspamd_action_config {
-	gdouble cur_limit;
+	double cur_limit;
 	int flags;
 	struct rspamd_action *action;
 };
@@ -107,14 +107,14 @@ struct rspamd_scan_result {
 	struct kh_rspamd_symbols_hash_s *symbols;          /**< symbols of metric						*/
 	struct kh_rspamd_symbols_group_hash_s *sym_groups; /**< groups of symbols						*/
 	struct rspamd_action_config *actions_config;
-	const gchar *name;        /**< for named results, NULL is the default result */
+	const char *name;         /**< for named results, NULL is the default result */
 	struct rspamd_task *task; /**< back reference */
-	gint symbol_cbref;        /**< lua function that defines if a symbol can be inserted, -1 if unused */
-	guint nactions;
-	guint npositive;
-	guint nnegative;
-	guint nresults;                         /**< all results: positive, negative, passthrough etc */
-	guint nresults_postfilters;             /**< how many results are there before postfilters stage */
+	int symbol_cbref;         /**< lua function that defines if a symbol can be inserted, -1 if unused */
+	unsigned int nactions;
+	unsigned int npositive;
+	unsigned int nnegative;
+	unsigned int nresults;                  /**< all results: positive, negative, passthrough etc */
+	unsigned int nresults_postfilters;      /**< how many results are there before postfilters stage */
 	struct rspamd_scan_result *prev, *next; /**< double linked list of results */
 };
 
@@ -124,7 +124,7 @@ struct rspamd_scan_result {
  * @return metric result or NULL if metric `name` has not been found
  */
 struct rspamd_scan_result *rspamd_create_metric_result(struct rspamd_task *task,
-													   const gchar *name, gint lua_sym_cbref);
+													   const char *name, int lua_sym_cbref);
 
 /**
  * Find result with a specific name (NULL means the default result)
@@ -133,7 +133,7 @@ struct rspamd_scan_result *rspamd_create_metric_result(struct rspamd_task *task,
  * @return
  */
 struct rspamd_scan_result *rspamd_find_metric_result(struct rspamd_task *task,
-													 const gchar *name);
+													 const char *name);
 
 /**
  * Adds a new passthrough result to a task
@@ -145,9 +145,9 @@ struct rspamd_scan_result *rspamd_find_metric_result(struct rspamd_task *task,
  * @param module
  */
 bool rspamd_add_passthrough_result(struct rspamd_task *task,
-								   struct rspamd_action *action, guint priority,
-								   double target_score, const gchar *message,
-								   const gchar *module, guint flags,
+								   struct rspamd_action *action, unsigned int priority,
+								   double target_score, const char *message,
+								   const char *module, unsigned int flags,
 								   struct rspamd_scan_result *scan_result);
 
 enum rspamd_symbol_insert_flags {
@@ -165,9 +165,9 @@ enum rspamd_symbol_insert_flags {
  * @param opts list of symbol's options
  */
 struct rspamd_symbol_result *rspamd_task_insert_result_full(struct rspamd_task *task,
-															const gchar *symbol,
+															const char *symbol,
 															double weight,
-															const gchar *opts,
+															const char *opts,
 															enum rspamd_symbol_insert_flags flags,
 															struct rspamd_scan_result *result);
 
@@ -185,7 +185,7 @@ struct rspamd_symbol_result *rspamd_task_insert_result_full(struct rspamd_task *
  */
 struct rspamd_symbol_result *rspamd_task_remove_symbol_result(
 	struct rspamd_task *task,
-	const gchar *symbol,
+	const char *symbol,
 	struct rspamd_scan_result *result);
 /**
  * Adds new option to symbol
@@ -195,7 +195,7 @@ struct rspamd_symbol_result *rspamd_task_remove_symbol_result(
  */
 gboolean rspamd_task_add_result_option(struct rspamd_task *task,
 									   struct rspamd_symbol_result *s,
-									   const gchar *opt,
+									   const char *opt,
 									   gsize vlen);
 
 /**
@@ -227,8 +227,8 @@ void rspamd_task_symbol_result_foreach(struct rspamd_task *task,
  * @return result metric weight
  */
 double rspamd_factor_consolidation_func(struct rspamd_task *task,
-										const gchar *metric_name,
-										const gchar *unused);
+										const char *metric_name,
+										const char *unused);
 
 
 /**

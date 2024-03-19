@@ -29,9 +29,9 @@ extern "C" {
 struct rspamd_action {
 	enum rspamd_action_type action_type;
 	int flags; /* enum rspamd_action_flags */
-	guint priority;
-	gdouble threshold;
-	gchar *name;
+	unsigned int priority;
+	double threshold;
+	char *name;
 };
 
 #ifdef __cplusplus

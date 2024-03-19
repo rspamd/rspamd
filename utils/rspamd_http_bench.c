@@ -28,24 +28,24 @@
 #include <sys/wait.h>
 #endif
 
-static guint port = 43000;
-static gchar *host = "127.0.0.1";
-static gchar *server_key = NULL;
-static guint cache_size = 10;
-static guint nworkers = 1;
+static unsigned int port = 43000;
+static char *host = "127.0.0.1";
+static char *server_key = NULL;
+static unsigned int cache_size = 10;
+static unsigned int nworkers = 1;
 static gboolean openssl_mode = FALSE;
-static guint file_size = 500;
-static guint pconns = 100;
-static gdouble test_time = 10.0;
-static gchar *latencies_file = NULL;
+static unsigned int file_size = 500;
+static unsigned int pconns = 100;
+static double test_time = 10.0;
+static char *latencies_file = NULL;
 static gboolean csv_output = FALSE;
 
 /* Dynamic vars */
 static rspamd_inet_addr_t *addr;
-static guint32 workers_left = 0;
-static guint32 *conns_done = NULL;
-static const guint store_latencies = 1000;
-static guint32 conns_pending = 0;
+static uint32_t workers_left = 0;
+static uint32_t *conns_done = NULL;
+static const unsigned int store_latencies = 1000;
+static uint32_t conns_pending = 0;
 
 static GOptionEntry entries[] = {
 	{"port", 'p', 0, G_OPTION_ARG_INT, &port,
@@ -73,16 +73,16 @@ static GOptionEntry entries[] = {
 	{NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL}};
 
 struct lat_elt {
-	gdouble lat;
-	guchar checked;
+	double lat;
+	unsigned char checked;
 };
 
 static struct lat_elt *latencies;
 
-static gint
+static int
 rspamd_client_body(struct rspamd_http_connection *conn,
 				   struct rspamd_http_message *msg,
-				   const gchar *chunk, gsize len)
+				   const char *chunk, gsize len)
 {
 	g_assert(chunk[0] == '\0');
 
@@ -91,8 +91,8 @@ rspamd_client_body(struct rspamd_http_connection *conn,
 
 struct client_cbdata {
 	struct lat_elt *lat;
-	guint32 *wconns;
-	gdouble ts;
+	uint32_t *wconns;
+	double ts;
 	struct ev_loop *ev_base;
 };
 
@@ -107,7 +107,7 @@ rspamd_client_err(struct rspamd_http_connection *conn, GError *err)
 	rspamd_http_connection_unref(conn);
 }
 
-static gint
+static int
 rspamd_client_finish(struct rspamd_http_connection *conn,
 					 struct rspamd_http_message *msg)
 {
@@ -130,16 +130,16 @@ rspamd_client_finish(struct rspamd_http_connection *conn,
 
 static void
 rspamd_http_client_func(struct ev_loop *ev_base, struct lat_elt *latency,
-						guint32 *wconns,
+						uint32_t *wconns,
 						struct rspamd_cryptobox_pubkey *peer_key,
 						struct rspamd_cryptobox_keypair *client_key,
 						struct rspamd_keypair_cache *c)
 {
 	struct rspamd_http_message *msg;
 	struct rspamd_http_connection *conn;
-	gchar urlbuf[PATH_MAX];
+	char urlbuf[PATH_MAX];
 	struct client_cbdata *cb;
-	gint fd, flags;
+	int fd, flags;
 
 	fd = rspamd_inet_address_connect(addr, SOCK_STREAM, TRUE);
 	g_assert(fd != -1);
@@ -174,9 +174,9 @@ rspamd_http_client_func(struct ev_loop *ev_base, struct lat_elt *latency,
 }
 
 static void
-rspamd_worker_func(struct lat_elt *plat, guint32 *wconns)
+rspamd_worker_func(struct lat_elt *plat, uint32_t *wconns)
 {
-	guint i, j;
+	unsigned int i, j;
 	struct ev_loop *ev_base;
 	struct itimerval itv;
 	struct rspamd_keypair_cache *c = NULL;
@@ -224,8 +224,8 @@ cmpd(const void *p1, const void *p2)
 double
 rspamd_http_calculate_mean(struct lat_elt *lats, double *std)
 {
-	guint i, cnt, checked = 0;
-	gdouble mean = 0., dev = 0.;
+	unsigned int i, cnt, checked = 0;
+	double mean = 0., dev = 0.;
 
 	cnt = store_latencies * pconns;
 	qsort(lats, cnt, sizeof(*lats), cmpd);
@@ -255,7 +255,7 @@ rspamd_http_calculate_mean(struct lat_elt *lats, double *std)
 static void
 rspamd_http_start_workers(pid_t *sfd)
 {
-	guint i;
+	unsigned int i;
 	for (i = 0; i < nworkers; i++) {
 		sfd[i] = fork();
 		g_assert(sfd[i] != -1);
@@ -275,8 +275,8 @@ rspamd_http_start_workers(pid_t *sfd)
 static void
 rspamd_http_stop_workers(pid_t *sfd)
 {
-	guint i;
-	gint res;
+	unsigned int i;
+	int res;
 
 	for (i = 0; i < nworkers; i++) {
 		kill(sfd[i], SIGTERM);
@@ -296,7 +296,7 @@ rspamd_http_bench_term(int fd, short what, void *arg)
 static void
 rspamd_http_bench_cld(int fd, short what, void *arg)
 {
-	gint res;
+	int res;
 
 	while (waitpid(-1, &res, WNOHANG) > 0) {
 		if (--workers_left == 0) {
@@ -314,10 +314,10 @@ int main(int argc, char **argv)
 	struct ev_loop *ev_base;
 	rspamd_mempool_t *pool = rspamd_mempool_new(8192, "http-bench");
 	struct event term_ev, int_ev, cld_ev;
-	guint64 total_done;
+	uint64_t total_done;
 	FILE *lat_file;
-	gdouble mean, std;
-	guint i;
+	double mean, std;
+	unsigned int i;
 
 	rspamd_init_libs();
 
@@ -341,8 +341,8 @@ int main(int argc, char **argv)
 	latencies = rspamd_mempool_alloc_shared(pool,
 											nworkers * pconns * store_latencies * sizeof(*latencies));
 	sfd = g_malloc(sizeof(*sfd) * nworkers);
-	conns_done = rspamd_mempool_alloc_shared(pool, sizeof(guint32) * nworkers);
-	memset(conns_done, 0, sizeof(guint32) * nworkers);
+	conns_done = rspamd_mempool_alloc_shared(pool, sizeof(uint32_t) * nworkers);
+	memset(conns_done, 0, sizeof(uint32_t) * nworkers);
 
 	rspamd_http_start_workers(sfd);
 

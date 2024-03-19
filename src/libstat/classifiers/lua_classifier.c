@@ -20,9 +20,9 @@
 #include "lua/lua_common.h"
 
 struct rspamd_lua_classifier_ctx {
-	gchar *name;
-	gint classify_ref;
-	gint learn_ref;
+	char *name;
+	int classify_ref;
+	int learn_ref;
 };
 
 static GHashTable *lua_classifiers = NULL;
@@ -53,7 +53,7 @@ lua_classifier_init(struct rspamd_config *cfg,
 {
 	struct rspamd_lua_classifier_ctx *ctx;
 	lua_State *L = cl->ctx->cfg->lua_state;
-	gint cb_classify = -1, cb_learn = -1;
+	int cb_classify = -1, cb_learn = -1;
 
 	if (lua_classifiers == NULL) {
 		lua_classifiers = g_hash_table_new_full(rspamd_strcase_hash,
@@ -135,8 +135,8 @@ lua_classifier_classify(struct rspamd_classifier *cl,
 	struct rspamd_classifier_config **pcfg;
 	lua_State *L;
 	rspamd_token_t *tok;
-	guint i;
-	guint64 v;
+	unsigned int i;
+	uint64_t v;
 
 	ctx = g_hash_table_lookup(lua_classifiers, cl->subrs->name);
 	g_assert(ctx != NULL);
@@ -157,9 +157,9 @@ lua_classifier_classify(struct rspamd_classifier *cl,
 		v = tok->data;
 		lua_createtable(L, 3, 0);
 		/* High word, low word, order */
-		lua_pushinteger(L, (guint32) (v >> 32));
+		lua_pushinteger(L, (uint32_t) (v >> 32));
 		lua_rawseti(L, -2, 1);
-		lua_pushinteger(L, (guint32) (v));
+		lua_pushinteger(L, (uint32_t) (v));
 		lua_rawseti(L, -2, 2);
 		lua_pushinteger(L, tok->window_idx);
 		lua_rawseti(L, -2, 3);
@@ -190,8 +190,8 @@ lua_classifier_learn_spam(struct rspamd_classifier *cl,
 	struct rspamd_classifier_config **pcfg;
 	lua_State *L;
 	rspamd_token_t *tok;
-	guint i;
-	guint64 v;
+	unsigned int i;
+	uint64_t v;
 
 	ctx = g_hash_table_lookup(lua_classifiers, cl->subrs->name);
 	g_assert(ctx != NULL);
@@ -213,9 +213,9 @@ lua_classifier_learn_spam(struct rspamd_classifier *cl,
 		v = tok->data;
 		lua_createtable(L, 3, 0);
 		/* High word, low word, order */
-		lua_pushinteger(L, (guint32) (v >> 32));
+		lua_pushinteger(L, (uint32_t) (v >> 32));
 		lua_rawseti(L, -2, 1);
-		lua_pushinteger(L, (guint32) (v));
+		lua_pushinteger(L, (uint32_t) (v));
 		lua_rawseti(L, -2, 2);
 		lua_pushinteger(L, tok->window_idx);
 		lua_rawseti(L, -2, 3);

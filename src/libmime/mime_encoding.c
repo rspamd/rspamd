@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -44,9 +44,9 @@
 static rspamd_regexp_t *utf_compatible_re = NULL;
 
 struct rspamd_charset_substitution {
-	const gchar *input;
-	const gchar *canon;
-	gint flags;
+	const char *input;
+	const char *canon;
+	int flags;
 };
 
 #include "mime_encoding_list.h"
@@ -72,7 +72,7 @@ static const UChar iso_8859_16_map[] = {
 	0x0171, 0x00F9, 0x00FA, 0x00FB, 0x00FC, 0x0119, 0x021B, 0x00FF};
 
 struct rspamd_charset_converter {
-	gchar *canon_name;
+	char *canon_name;
 	union {
 		UConverter *conv;
 		const UChar *cnv_table;
@@ -115,7 +115,7 @@ rspamd_converter_to_uchars(struct rspamd_charset_converter *cnv,
 	}
 	else {
 		UChar *d = dest, *dend = dest + destCapacity;
-		const guchar *p = src, *end = src + srcLength;
+		const unsigned char *p = src, *end = src + srcLength;
 
 		while (p < end && d < dend) {
 			if (*p <= 127) {
@@ -134,12 +134,12 @@ rspamd_converter_to_uchars(struct rspamd_charset_converter *cnv,
 
 
 struct rspamd_charset_converter *
-rspamd_mime_get_converter_cached(const gchar *enc,
+rspamd_mime_get_converter_cached(const char *enc,
 								 rspamd_mempool_t *pool,
 								 gboolean is_canon,
 								 UErrorCode *err)
 {
-	const gchar *canon_name;
+	const char *canon_name;
 	static rspamd_lru_hash_t *cache;
 	struct rspamd_charset_converter *conv;
 
@@ -208,7 +208,7 @@ rspamd_mime_get_converter_cached(const gchar *enc,
 static void
 rspamd_mime_encoding_substitute_init(void)
 {
-	guint i;
+	unsigned int i;
 
 	sub_hash = g_hash_table_new(rspamd_strcase_hash, rspamd_strcase_equal);
 
@@ -218,14 +218,14 @@ rspamd_mime_encoding_substitute_init(void)
 }
 
 static void
-rspamd_charset_normalize(gchar *in)
+rspamd_charset_normalize(char *in)
 {
 	/*
 	 * This is a simple routine to validate input charset
 	 * we just check that charset starts with alphanumeric and ends
 	 * with alphanumeric
 	 */
-	gchar *begin, *end;
+	char *begin, *end;
 	gboolean changed = FALSE;
 
 	begin = in;
@@ -248,12 +248,12 @@ rspamd_charset_normalize(gchar *in)
 	}
 }
 
-const gchar *
+const char *
 rspamd_mime_detect_charset(const rspamd_ftok_t *in, rspamd_mempool_t *pool)
 {
-	gchar *ret = NULL, *h, *t;
+	char *ret = NULL, *h, *t;
 	struct rspamd_charset_substitution *s;
-	const gchar *cset;
+	const char *cset;
 	rspamd_ftok_t utf8_tok;
 	UErrorCode uc_err = U_ZERO_ERROR;
 
@@ -321,13 +321,13 @@ rspamd_mime_detect_charset(const rspamd_ftok_t *in, rspamd_mempool_t *pool)
 	return cset;
 }
 
-gchar *
+char *
 rspamd_mime_text_to_utf8(rspamd_mempool_t *pool,
-						 gchar *input, gsize len, const gchar *in_enc,
+						 char *input, gsize len, const char *in_enc,
 						 gsize *olen, GError **err)
 {
-	gchar *d;
-	gint32 r, clen, dlen;
+	char *d;
+	int32_t r, clen, dlen;
 	UChar *tmp_buf;
 
 	UErrorCode uc_err = U_ZERO_ERROR;
@@ -403,11 +403,11 @@ static gboolean
 rspamd_mime_text_part_utf8_convert(struct rspamd_task *task,
 								   struct rspamd_mime_text_part *text_part,
 								   GByteArray *input,
-								   const gchar *charset,
+								   const char *charset,
 								   GError **err)
 {
-	gchar *d;
-	gint32 r, clen, dlen, uc_len;
+	char *d;
+	int32_t r, clen, dlen, uc_len;
 	UChar *tmp_buf;
 	UErrorCode uc_err = U_ZERO_ERROR;
 	UConverter *utf8_converter;
@@ -482,9 +482,9 @@ gboolean
 rspamd_mime_to_utf8_byte_array(GByteArray *in,
 							   GByteArray *out,
 							   rspamd_mempool_t *pool,
-							   const gchar *enc)
+							   const char *enc)
 {
-	gint32 r, clen, dlen;
+	int32_t r, clen, dlen;
 	UChar *tmp_buf;
 	UErrorCode uc_err = U_ZERO_ERROR;
 	UConverter *utf8_converter;
@@ -511,7 +511,7 @@ rspamd_mime_to_utf8_byte_array(GByteArray *in,
 
 	RSPAMD_FTOK_FROM_STR(&charset_tok, enc);
 
-	if (rspamd_mime_charset_utf_check(&charset_tok, (gchar *) in->data, in->len,
+	if (rspamd_mime_charset_utf_check(&charset_tok, (char *) in->data, in->len,
 									  FALSE)) {
 		g_byte_array_set_size(out, in->len);
 		memcpy(out->data, in->data, out->len);
@@ -556,9 +556,9 @@ rspamd_mime_to_utf8_byte_array(GByteArray *in,
 	return TRUE;
 }
 
-void rspamd_mime_charset_utf_enforce(gchar *in, gsize len)
+void rspamd_mime_charset_utf_enforce(char *in, gsize len)
 {
-	gchar *p, *end;
+	char *p, *end;
 	goffset err_offset;
 	UChar32 uc = 0;
 
@@ -568,10 +568,10 @@ void rspamd_mime_charset_utf_enforce(gchar *in, gsize len)
 
 	while (p < end && len > 0 && (err_offset = rspamd_fast_utf8_validate(p, len)) > 0) {
 		err_offset--; /* As it returns it 1 indexed */
-		gint32 cur_offset = err_offset;
+		int32_t cur_offset = err_offset;
 
 		while (cur_offset < len) {
-			gint32 tmp = cur_offset;
+			int32_t tmp = cur_offset;
 
 			U8_NEXT(p, cur_offset, len, uc);
 
@@ -594,12 +594,12 @@ void rspamd_mime_charset_utf_enforce(gchar *in, gsize len)
 }
 
 const char *
-rspamd_mime_charset_find_by_content(const gchar *in, gsize inlen,
+rspamd_mime_charset_find_by_content(const char *in, gsize inlen,
 									bool check_utf8)
 {
 	int nconsumed;
 	bool is_reliable;
-	const gchar *ced_name;
+	const char *ced_name;
 
 	if (check_utf8) {
 		if (rspamd_fast_utf8_validate(in, inlen) == 0) {
@@ -621,13 +621,13 @@ rspamd_mime_charset_find_by_content(const gchar *in, gsize inlen,
 }
 
 static const char *
-rspamd_mime_charset_find_by_content_maybe_split(const gchar *in, gsize inlen)
+rspamd_mime_charset_find_by_content_maybe_split(const char *in, gsize inlen)
 {
 	if (inlen < RSPAMD_CHARSET_MAX_CONTENT * 3) {
 		return rspamd_mime_charset_find_by_content(in, inlen, false);
 	}
 	else {
-		const gchar *c1, *c2, *c3;
+		const char *c1, *c2, *c3;
 
 		c1 = rspamd_mime_charset_find_by_content(in, RSPAMD_CHARSET_MAX_CONTENT, false);
 		c2 = rspamd_mime_charset_find_by_content(in + inlen / 2,
@@ -678,9 +678,9 @@ rspamd_mime_charset_find_by_content_maybe_split(const gchar *in, gsize inlen)
 
 gboolean
 rspamd_mime_charset_utf_check(rspamd_ftok_t *charset,
-							  gchar *in, gsize len, gboolean content_check)
+							  char *in, gsize len, gboolean content_check)
 {
-	const gchar *real_charset;
+	const char *real_charset;
 
 	if (utf_compatible_re == NULL) {
 		utf_compatible_re = rspamd_regexp_new(
@@ -729,7 +729,7 @@ void rspamd_mime_text_part_maybe_convert(struct rspamd_task *task,
 										 struct rspamd_mime_text_part *text_part)
 {
 	GError *err = NULL;
-	const gchar *charset = NULL;
+	const char *charset = NULL;
 	gboolean checked = FALSE, need_charset_heuristic = TRUE, valid_utf8 = FALSE;
 	GByteArray *part_content;
 	rspamd_ftok_t charset_tok;

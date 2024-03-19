@@ -91,10 +91,10 @@ std::vector<GPid> children;
 static GPatternSpec **exclude_compiled = nullptr;
 static struct rspamd_http_context *http_ctx;
 
-static gint retcode = EXIT_SUCCESS;
+static int retcode = EXIT_SUCCESS;
 
-static gboolean rspamc_password_callback(const gchar *option_name,
-										 const gchar *value,
+static gboolean rspamc_password_callback(const char *option_name,
+										 const char *value,
 										 gpointer data,
 										 GError **error);
 
@@ -496,8 +496,8 @@ auto sort_ucl_container_with_default(T &cont, const char *default_sort,
 
 
 static gboolean
-rspamc_password_callback(const gchar *option_name,
-						 const gchar *value,
+rspamc_password_callback(const char *option_name,
+						 const char *value,
 						 gpointer data,
 						 GError **error)
 {
@@ -558,7 +558,7 @@ rspamc_password_callback(const gchar *option_name,
  * Parse command line
  */
 static void
-read_cmd_line(gint *argc, gchar ***argv)
+read_cmd_line(int *argc, char ***argv)
 {
 	GError *error = nullptr;
 	GOptionContext *context;
@@ -672,7 +672,7 @@ check_rspamc_command(const char *cmd) -> std::optional<rspamc_command>
 static void
 print_commands_list()
 {
-	guint cmd_len = 0;
+	unsigned int cmd_len = 0;
 
 	rspamc_print(stdout, "Rspamc commands summary:\n");
 
@@ -1584,10 +1584,10 @@ rspamc_output_headers(FILE *out, struct rspamd_http_message *msg)
 
 static void
 rspamc_mime_output(FILE *out, ucl_object_t *result, GString *input,
-				   gdouble time, GError *err)
+				   double time, GError *err)
 {
-	const gchar *action = "no action", *line_end = "\r\n", *p;
-	gdouble score = 0.0, required_score = 0.0;
+	const char *action = "no action", *line_end = "\r\n", *p;
+	double score = 0.0, required_score = 0.0;
 	gboolean is_spam = FALSE;
 	auto nl_type = RSPAMD_TASK_NEWLINES_CRLF;
 
@@ -1748,10 +1748,10 @@ rspamc_mime_output(FILE *out, ucl_object_t *result, GString *input,
 
 static void
 rspamc_client_execute_cmd(const struct rspamc_command &cmd, ucl_object_t *result,
-						  GString *input, gdouble time, GError *err)
+						  GString *input, double time, GError *err)
 {
-	gchar **eargv;
-	gint eargc, infd, outfd, errfd;
+	char **eargv;
+	int eargc, infd, outfd, errfd;
 	GError *exec_err = nullptr;
 	GPid cld;
 
@@ -1814,13 +1814,13 @@ static void
 rspamc_client_cb(struct rspamd_client_connection *conn,
 				 struct rspamd_http_message *msg,
 				 const char *name, ucl_object_t *result, GString *input,
-				 gpointer ud, gdouble start_time, gdouble send_time,
+				 gpointer ud, double start_time, double send_time,
 				 const char *body, gsize bodylen,
 				 GError *err)
 {
 	struct rspamc_callback_data *cbdata = (struct rspamc_callback_data *) ud;
 	FILE *out = stdout;
-	gdouble finish = rspamd_get_ticks(FALSE), diff;
+	double finish = rspamd_get_ticks(FALSE), diff;
 
 	auto &cmd = cbdata->cmd;
 
@@ -1939,7 +1939,7 @@ rspamc_process_input(struct ev_loop *ev_base, const struct rspamc_command &cmd,
 {
 	struct rspamd_client_connection *conn;
 	const char *p;
-	guint16 port;
+	uint16_t port;
 	GError *err = nullptr;
 	std::string hostbuf;
 

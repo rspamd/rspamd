@@ -51,11 +51,11 @@ INIT_LOG_MODULE(composites)
 
 
 namespace rspamd::composites {
-static rspamd_expression_atom_t *rspamd_composite_expr_parse(const gchar *line, gsize len,
+static rspamd_expression_atom_t *rspamd_composite_expr_parse(const char *line, gsize len,
 															 rspamd_mempool_t *pool,
 															 gpointer ud, GError **err);
-static gdouble rspamd_composite_expr_process(void *ud, rspamd_expression_atom_t *atom);
-static gint rspamd_composite_expr_priority(rspamd_expression_atom_t *atom);
+static double rspamd_composite_expr_process(void *ud, rspamd_expression_atom_t *atom);
+static int rspamd_composite_expr_priority(rspamd_expression_atom_t *atom);
 static void rspamd_composite_expr_destroy(rspamd_expression_atom_t *atom);
 static void composites_foreach_callback(gpointer key, gpointer value, void *data);
 
@@ -234,12 +234,12 @@ rspamd_composite_atom_dtor(void *ptr)
 }
 
 static rspamd_expression_atom_t *
-rspamd_composite_expr_parse(const gchar *line, gsize len,
+rspamd_composite_expr_parse(const char *line, gsize len,
 							rspamd_mempool_t *pool,
 							gpointer ud, GError **err)
 {
 	gsize clen = 0;
-	const gchar *p, *end;
+	const char *p, *end;
 	enum composite_expr_state {
 		comp_state_read_symbol = 0,
 		comp_state_read_obrace,
@@ -350,7 +350,7 @@ rspamd_composite_expr_parse(const gchar *line, gsize len,
 	res->str = line;
 
 	/* Full state machine to fill a composite atom */
-	const gchar *opt_start = nullptr;
+	const char *opt_start = nullptr;
 
 	while (p < end) {
 		if (state == comp_state_read_end) {
@@ -406,7 +406,7 @@ rspamd_composite_expr_parse(const gchar *line, gsize len,
 		case comp_state_read_option:
 			if (*p == ',' || *p == ']') {
 				/* Plain match, copy option to ensure string_view validity */
-				gint opt_len = p - opt_start;
+				int opt_len = p - opt_start;
 				auto *opt_buf = rspamd_mempool_alloc_buffer(pool, opt_len + 1);
 				rspamd_strlcpy(opt_buf, opt_start, opt_len + 1);
 				opt_buf = g_strstrip(opt_buf);
@@ -573,7 +573,7 @@ process_single_symbol(struct composites_data *cd,
 					  struct rspamd_composite_atom *atom) -> double
 {
 	struct rspamd_symbol_result *ms = nullptr;
-	gdouble rc = 0;
+	double rc = 0;
 	struct rspamd_task *task = cd->task;
 
 	if ((ms = rspamd_task_find_symbol_result(cd->task, sym.data(), cd->metric_res)) == nullptr) {
@@ -674,7 +674,7 @@ rspamd_composite_expr_process(void *ud, rspamd_expression_atom_t *atom) -> doubl
 
 	struct rspamd_symbol_result *ms = NULL;
 	struct rspamd_task *task = cd->task;
-	gdouble rc = 0;
+	double rc = 0;
 
 	if (cd->checked[cd->composite->id * 2]) {
 		/* We have already checked this composite, so just return its value */
@@ -784,7 +784,7 @@ rspamd_composite_expr_process(void *ud, rspamd_expression_atom_t *atom) -> doubl
 /*
  * We don't have preferences for composites
  */
-static gint
+static int
 rspamd_composite_expr_priority(rspamd_expression_atom_t *atom)
 {
 	return 0;
@@ -801,9 +801,9 @@ composites_foreach_callback(gpointer key, gpointer value, void *data)
 {
 	auto *cd = (struct composites_data *) data;
 	auto *comp = (struct rspamd_composite *) value;
-	auto *str_key = (const gchar *) key;
+	auto *str_key = (const char *) key;
 	struct rspamd_task *task;
-	gdouble rc;
+	double rc;
 
 	cd->composite = comp;
 	task = cd->task;
@@ -869,8 +869,8 @@ remove_symbols(const composites_data &cd, const std::vector<symbol_remove_data> 
 			 want_remove_score = TRUE,
 			 want_remove_symbol = TRUE,
 			 want_forced = FALSE;
-	const gchar *disable_score_reason = "no policy",
-				*disable_symbol_reason = "no policy";
+	const char *disable_score_reason = "no policy",
+			   *disable_symbol_reason = "no policy";
 
 	task = cd.task;
 

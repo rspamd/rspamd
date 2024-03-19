@@ -38,23 +38,23 @@ struct rspamd_config;
 
 struct roll_history_row {
 	ev_tstamp timestamp;
-	gchar message_id[HISTORY_MAX_ID];
-	gchar symbols[HISTORY_MAX_SYMBOLS];
-	gchar user[HISTORY_MAX_USER];
-	gchar from_addr[HISTORY_MAX_ADDR];
+	char message_id[HISTORY_MAX_ID];
+	char symbols[HISTORY_MAX_SYMBOLS];
+	char user[HISTORY_MAX_USER];
+	char from_addr[HISTORY_MAX_ADDR];
 	gsize len;
-	gdouble scan_time;
-	gdouble score;
-	gdouble required_score;
-	gint action;
-	guint completed;
+	double scan_time;
+	double score;
+	double required_score;
+	int action;
+	unsigned int completed;
 };
 
 struct roll_history {
 	struct roll_history_row *rows;
 	gboolean disabled;
-	guint nrows;
-	guint cur_row;
+	unsigned int nrows;
+	unsigned int cur_row;
 };
 
 /**
@@ -63,7 +63,7 @@ struct roll_history {
  * @return new structure
  */
 struct roll_history *rspamd_roll_history_new(rspamd_mempool_t *pool,
-											 guint max_rows, struct rspamd_config *cfg);
+											 unsigned int max_rows, struct rspamd_config *cfg);
 
 /**
  * Update roll history with data from task
@@ -80,7 +80,7 @@ void rspamd_roll_history_update(struct roll_history *history,
  * @return TRUE if history has been loaded
  */
 gboolean rspamd_roll_history_load(struct roll_history *history,
-								  const gchar *filename);
+								  const char *filename);
 
 /**
  * Save history to file
@@ -89,7 +89,7 @@ gboolean rspamd_roll_history_load(struct roll_history *history,
  * @return TRUE if history has been saved
  */
 gboolean rspamd_roll_history_save(struct roll_history *history,
-								  const gchar *filename);
+								  const char *filename);
 
 #ifdef __cplusplus
 }

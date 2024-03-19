@@ -20,25 +20,25 @@
 #include "contrib/uthash/utlist.h"
 
 /* Common */
-static gchar *config_file = NULL;
-static gchar *symbol_ham = NULL;
-static gchar *symbol_spam = NULL;
+static char *config_file = NULL;
+static char *symbol_ham = NULL;
+static char *symbol_spam = NULL;
 
-static gdouble expire = 0.0;
+static double expire = 0.0;
 
 /* Inputs */
-static gchar *spam_db = NULL;
-static gchar *ham_db = NULL;
-static gchar *cache_db = NULL;
+static char *spam_db = NULL;
+static char *ham_db = NULL;
+static char *cache_db = NULL;
 
 /* Outputs */
-static gchar *redis_host = NULL;
-static gchar *redis_db = NULL;
-static gchar *redis_username = NULL;
-static gchar *redis_password = NULL;
+static char *redis_host = NULL;
+static char *redis_db = NULL;
+static char *redis_username = NULL;
+static char *redis_password = NULL;
 static gboolean reset_previous = FALSE;
 
-static void rspamadm_statconvert(gint argc, gchar **argv,
+static void rspamadm_statconvert(int argc, char **argv,
 								 const struct rspamadm_command *cmd);
 static const char *rspamadm_statconvert_help(gboolean full_help,
 											 const struct rspamadm_command *cmd);
@@ -111,7 +111,7 @@ rspamadm_statconvert_help(gboolean full_help, const struct rspamadm_command *cmd
 }
 
 static void
-rspamadm_statconvert(gint argc, gchar **argv, const struct rspamadm_command *cmd)
+rspamadm_statconvert(int argc, char **argv, const struct rspamadm_command *cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;

@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -41,14 +41,14 @@ INIT_LOG_MODULE(radix)
 struct radix_tree_compressed {
 	rspamd_mempool_t *pool;
 	struct btrie *tree;
-	const gchar *name;
+	const char *name;
 	size_t size;
-	guint duplicates;
+	unsigned int duplicates;
 	gboolean own_pool;
 };
 
 uintptr_t
-radix_find_compressed(radix_compressed_t *tree, const guint8 *key, gsize keylen)
+radix_find_compressed(radix_compressed_t *tree, const uint8_t *key, gsize keylen)
 {
 	gconstpointer ret;
 
@@ -66,14 +66,14 @@ radix_find_compressed(radix_compressed_t *tree, const guint8 *key, gsize keylen)
 
 uintptr_t
 radix_insert_compressed(radix_compressed_t *tree,
-						guint8 *key, gsize keylen,
+						uint8_t *key, gsize keylen,
 						gsize masklen,
 						uintptr_t value)
 {
-	static const guint max_duplicates = 32;
-	guint keybits = keylen * NBBY;
+	static const unsigned int max_duplicates = 32;
+	unsigned int keybits = keylen * NBBY;
 	uintptr_t old;
-	gchar ip_str[INET6_ADDRSTRLEN + 1];
+	char ip_str[INET6_ADDRSTRLEN + 1];
 	int ret;
 
 	g_assert(tree != NULL);
@@ -103,14 +103,14 @@ radix_insert_compressed(radix_compressed_t *tree,
 							  tree->name,
 							  (gpointer) value,
 							  inet_ntop(AF_INET, key, ip_str, sizeof(ip_str) - 1),
-							  (gint) (keybits - masklen));
+							  (int) (keybits - masklen));
 			}
 			else if (keybits == 128) {
 				msg_err_radix("%s: cannot insert %p, key: [%s]/%d, duplicate value",
 							  tree->name,
 							  (gpointer) value,
 							  inet_ntop(AF_INET6, key, ip_str, sizeof(ip_str) - 1),
-							  (gint) (keybits - masklen));
+							  (int) (keybits - masklen));
 			}
 			else {
 				msg_err_radix("%s: cannot insert %p with mask %z, key: %*xs, duplicate value",
@@ -130,7 +130,7 @@ radix_insert_compressed(radix_compressed_t *tree,
 
 
 radix_compressed_t *
-radix_create_compressed(const gchar *tree_name)
+radix_create_compressed(const char *tree_name)
 {
 	radix_compressed_t *tree;
 
@@ -150,7 +150,7 @@ radix_create_compressed(const gchar *tree_name)
 }
 
 radix_compressed_t *
-radix_create_compressed_with_pool(rspamd_mempool_t *pool, const gchar *tree_name)
+radix_create_compressed_with_pool(rspamd_mempool_t *pool, const char *tree_name)
 {
 	radix_compressed_t *tree;
 
@@ -179,9 +179,9 @@ uintptr_t
 radix_find_compressed_addr(radix_compressed_t *tree,
 						   const rspamd_inet_addr_t *addr)
 {
-	const guchar *key;
-	guint klen = 0;
-	guchar buf[16];
+	const unsigned char *key;
+	unsigned int klen = 0;
+	unsigned char buf[16];
 
 	if (addr == NULL) {
 		return RADIX_NO_VALUE;
@@ -207,19 +207,19 @@ radix_find_compressed_addr(radix_compressed_t *tree,
 	return RADIX_NO_VALUE;
 }
 
-gint rspamd_radix_add_iplist(const gchar *list, const gchar *separators,
-							 radix_compressed_t *tree, gconstpointer value,
-							 gboolean resolve, const gchar *tree_name)
+int rspamd_radix_add_iplist(const char *list, const char *separators,
+							radix_compressed_t *tree, gconstpointer value,
+							gboolean resolve, const char *tree_name)
 {
-	gchar *token, *ipnet, *err_str, **strv, **cur, *brace;
+	char *token, *ipnet, *err_str, **strv, **cur, *brace;
 	union {
 		struct in_addr ina;
 		struct in6_addr ina6;
-		guchar buf[16];
+		unsigned char buf[16];
 	} addr_buf;
-	guint k = G_MAXINT;
-	gint af;
-	gint res = 0, r;
+	unsigned int k = G_MAXINT;
+	int af;
+	int res = 0, r;
 	struct addrinfo hints, *ai_res, *cur_ai;
 
 	/* Split string if there are multiple items inside a single string */
@@ -388,8 +388,8 @@ gint rspamd_radix_add_iplist(const gchar *list, const gchar *separators,
 }
 
 gboolean
-radix_add_generic_iplist(const gchar *ip_list, radix_compressed_t **tree,
-						 gboolean resolve, const gchar *tree_name)
+radix_add_generic_iplist(const char *ip_list, radix_compressed_t **tree,
+						 gboolean resolve, const char *tree_name)
 {
 	static const char fill_ptr[] = "1";
 
@@ -423,7 +423,7 @@ radix_get_pool(radix_compressed_t *tree)
 	return NULL;
 }
 
-const gchar *
+const char *
 radix_get_info(radix_compressed_t *tree)
 {
 	if (tree == NULL) {

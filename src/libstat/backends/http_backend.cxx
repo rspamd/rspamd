@@ -91,7 +91,7 @@ public:
 
 	auto process_tokens(struct rspamd_task *task,
 						GPtrArray *tokens,
-						gint id,
+						int id,
 						bool learn) -> bool;
 
 private:
@@ -158,7 +158,7 @@ auto http_backend_runtime::create(struct rspamd_task *task, bool is_learn) -> ht
 	return new (allocated_runtime) http_backend_runtime{task, is_learn};
 }
 
-auto http_backend_runtime::process_tokens(struct rspamd_task *task, GPtrArray *tokens, gint id, bool learn) -> bool
+auto http_backend_runtime::process_tokens(struct rspamd_task *task, GPtrArray *tokens, int id, bool learn) -> bool
 {
 	if (!learn) {
 		if (id == seen_statfiles.size() - 1) {
@@ -322,7 +322,7 @@ rspamd_http_runtime(struct rspamd_task *task,
 					struct rspamd_statfile_config *stcf,
 					gboolean learn,
 					gpointer ctx,
-					gint id)
+					int id)
 {
 	auto maybe_existing = rspamd_mempool_get_variable(task->task_pool, RSPAMD_MEMPOOL_HTTP_STAT_BACKEND_RUNTIME);
 
@@ -347,7 +347,7 @@ rspamd_http_runtime(struct rspamd_task *task,
 gboolean
 rspamd_http_process_tokens(struct rspamd_task *task,
 						   GPtrArray *tokens,
-						   gint id,
+						   int id,
 						   gpointer runtime)
 {
 	auto real_runtime = (rspamd::stat::http::http_backend_runtime *) runtime;
@@ -371,7 +371,7 @@ rspamd_http_finalize_process(struct rspamd_task *task,
 gboolean
 rspamd_http_learn_tokens(struct rspamd_task *task,
 						 GPtrArray *tokens,
-						 gint id,
+						 int id,
 						 gpointer runtime)
 {
 	auto real_runtime = (rspamd::stat::http::http_backend_runtime *) runtime;

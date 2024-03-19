@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ union sa_inet {
 
 struct rspamd_addr_unix {
 	struct sockaddr_un addr;
-	gint mode;
+	int mode;
 	uid_t owner;
 	gid_t group;
 };
@@ -69,7 +69,7 @@ struct rspamd_inet_addr_s {
 		struct rspamd_addr_inet in;
 		struct rspamd_addr_unix *un;
 	} u;
-	gint af;
+	int af;
 	socklen_t slen;
 };
 
@@ -109,7 +109,7 @@ rspamd_ip_validate_af(rspamd_inet_addr_t *addr)
 	(pool != NULL) ? rspamd_mempool_alloc0((pool), (sz)) : g_malloc0(sz)
 
 static rspamd_inet_addr_t *
-rspamd_inet_addr_create(gint af, rspamd_mempool_t *pool)
+rspamd_inet_addr_create(int af, rspamd_mempool_t *pool)
 {
 	rspamd_inet_addr_t *addr;
 
@@ -144,7 +144,7 @@ static void
 rspamd_ip_check_ipv6(void)
 {
 	if (ipv6_status == RSPAMD_IPV6_UNDEFINED) {
-		gint s;
+		int s;
 
 		s = socket(AF_INET6, SOCK_STREAM, 0);
 
@@ -200,11 +200,11 @@ rspamd_ip_is_valid(const rspamd_inet_addr_t *addr)
 	return ret;
 }
 
-gint rspamd_accept_from_socket(gint sock, rspamd_inet_addr_t **target,
-							   rspamd_accept_throttling_handler hdl,
-							   void *hdl_data)
+int rspamd_accept_from_socket(int sock, rspamd_inet_addr_t **target,
+							  rspamd_accept_throttling_handler hdl,
+							  void *hdl_data)
 {
-	gint nfd, serrno;
+	int nfd, serrno;
 	union sa_union su;
 	socklen_t len = sizeof(su);
 	rspamd_inet_addr_t *addr = NULL;
@@ -232,12 +232,12 @@ gint rspamd_accept_from_socket(gint sock, rspamd_inet_addr_t **target,
 	if (su.sa.sa_family == AF_INET6) {
 		/* Deal with bloody v4 mapped to v6 addresses */
 
-		static const guint8 mask[] = {
+		static const uint8_t mask[] = {
 			0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-		const guint8 *p;
+		const uint8_t *p;
 
-		if (memcmp((const guint8 *) &su.s6.sin6_addr, mask, sizeof(mask)) == 0) {
-			p = (const guint8 *) &su.s6.sin6_addr;
+		if (memcmp((const uint8_t *) &su.s6.sin6_addr, mask, sizeof(mask)) == 0) {
+			p = (const uint8_t *) &su.s6.sin6_addr;
 
 			if ((p[10] == 0xff && p[11] == 0xff)) {
 				addr = rspamd_inet_addr_create(AF_INET, NULL);
@@ -313,7 +313,7 @@ rspamd_parse_unix_path(rspamd_inet_addr_t **target,
 					   rspamd_mempool_t *pool,
 					   enum rspamd_inet_address_parse_flags how)
 {
-	gchar **tokens, **cur_tok, *p, *pwbuf;
+	char **tokens, **cur_tok, *p, *pwbuf;
 	glong pwlen;
 	struct passwd pw, *ppw;
 	struct group gr, *pgr;
@@ -456,12 +456,12 @@ err:
 }
 
 gboolean
-rspamd_parse_inet_address_ip4(const guchar *text, gsize len, gpointer target)
+rspamd_parse_inet_address_ip4(const unsigned char *text, gsize len, gpointer target)
 {
-	const guchar *p;
-	guchar c;
-	guint32 addr = 0, *addrptr = target;
-	guint octet = 0, n = 0;
+	const unsigned char *p;
+	unsigned char c;
+	uint32_t addr = 0, *addrptr = target;
+	unsigned int octet = 0, n = 0;
 
 	g_assert(text != NULL);
 	g_assert(target != NULL);
@@ -504,12 +504,12 @@ rspamd_parse_inet_address_ip4(const guchar *text, gsize len, gpointer target)
 }
 
 gboolean
-rspamd_parse_inet_address_ip6(const guchar *text, gsize len, gpointer target)
+rspamd_parse_inet_address_ip6(const unsigned char *text, gsize len, gpointer target)
 {
-	guchar t, *zero = NULL, *s, *d, *addr = target;
-	const guchar *p, *digit = NULL, *percent;
+	unsigned char t, *zero = NULL, *s, *d, *addr = target;
+	const unsigned char *p, *digit = NULL, *percent;
 	gsize len4 = 0;
-	guint n = 8, nibbles = 0, word = 0;
+	unsigned int n = 8, nibbles = 0, word = 0;
 
 	g_assert(text != NULL);
 	g_assert(target != NULL);
@@ -582,8 +582,8 @@ rspamd_parse_inet_address_ip6(const guchar *text, gsize len, gpointer target)
 			}
 
 			word = ntohl(word);
-			*addr++ = (guchar) ((word >> 24) & 0xff);
-			*addr++ = (guchar) ((word >> 16) & 0xff);
+			*addr++ = (unsigned char) ((word >> 24) & 0xff);
+			*addr++ = (unsigned char) ((word >> 16) & 0xff);
 			n--;
 			break;
 		}
@@ -613,8 +613,8 @@ rspamd_parse_inet_address_ip6(const guchar *text, gsize len, gpointer target)
 		return FALSE;
 	}
 
-	*addr++ = (guchar) (word >> 8);
-	*addr++ = (guchar) (word & 0xff);
+	*addr++ = (unsigned char) (word >> 8);
+	*addr++ = (unsigned char) (word & 0xff);
 
 	if (--n) {
 		if (zero) {
@@ -645,12 +645,12 @@ rspamd_inet_address_v6_maybe_map(const struct sockaddr_in6 *sin6,
 {
 	rspamd_inet_addr_t *addr = NULL;
 	/* 10 zero bytes or 80 bits */
-	static const guint8 mask[] = {
+	static const uint8_t mask[] = {
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-	const guint8 *p;
+	const uint8_t *p;
 
-	if (memcmp((const guint8 *) &sin6->sin6_addr, mask, sizeof(mask)) == 0) {
-		p = (const guint8 *) &sin6->sin6_addr;
+	if (memcmp((const uint8_t *) &sin6->sin6_addr, mask, sizeof(mask)) == 0) {
+		p = (const uint8_t *) &sin6->sin6_addr;
 
 		if ((p[10] == 0xff && p[11] == 0xff)) {
 			addr = rspamd_inet_addr_create(AF_INET, pool);
@@ -678,12 +678,12 @@ rspamd_inet_address_v6_maybe_map_static(const struct sockaddr_in6 *sin6,
 										rspamd_inet_addr_t *addr)
 {
 	/* 10 zero bytes or 80 bits */
-	static const guint8 mask[] = {
+	static const uint8_t mask[] = {
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-	const guint8 *p;
+	const uint8_t *p;
 
-	if (memcmp((const guint8 *) &sin6->sin6_addr, mask, sizeof(mask)) == 0) {
-		p = (const guint8 *) &sin6->sin6_addr;
+	if (memcmp((const uint8_t *) &sin6->sin6_addr, mask, sizeof(mask)) == 0) {
+		p = (const uint8_t *) &sin6->sin6_addr;
 
 		if ((p[10] == 0xff && p[11] == 0xff)) {
 			memcpy(&addr->u.in.addr.s4.sin_addr, &p[12],
@@ -719,7 +719,7 @@ rspamd_parse_inet_address_common(rspamd_inet_addr_t **target,
 	union sa_inet su;
 	const char *end = NULL;
 	char ipbuf[INET6_ADDRSTRLEN + 1];
-	guint iplen;
+	unsigned int iplen;
 	gulong portnum;
 
 	if (srclen == 0) {
@@ -737,7 +737,7 @@ rspamd_parse_inet_address_common(rspamd_inet_addr_t **target,
 	}
 
 	if (src[0] == '[') {
-		const gchar *ip_start;
+		const char *ip_start;
 		/* Ipv6 address in format [::1]:port or just [::1] */
 		end = memchr(src + 1, ']', srclen - 1);
 
@@ -851,7 +851,7 @@ rspamd_parse_inet_address_ip(const char *src, gsize srclen,
 {
 	const char *end;
 	char ipbuf[INET6_ADDRSTRLEN + 1];
-	guint iplen;
+	unsigned int iplen;
 	gulong portnum;
 	gboolean ret = FALSE;
 	union sa_inet su;
@@ -951,7 +951,7 @@ const char *
 rspamd_inet_address_to_string(const rspamd_inet_addr_t *addr)
 {
 	static char addr_str[NADDR_BUFS][INET6_ADDRSTRLEN + 1];
-	static guint cur_addr = 0;
+	static unsigned int cur_addr = 0;
 	char *addr_buf;
 
 	if (addr == NULL) {
@@ -980,7 +980,7 @@ const char *
 rspamd_inet_address_to_string_pretty(const rspamd_inet_addr_t *addr)
 {
 	static char addr_str[NADDR_BUFS][PRETTY_IP_BUFSIZE];
-	static guint cur_addr = 0;
+	static unsigned int cur_addr = 0;
 	char *addr_buf;
 
 	if (addr == NULL) {
@@ -1034,7 +1034,7 @@ void rspamd_inet_address_set_port(rspamd_inet_addr_t *addr, uint16_t port)
 	}
 }
 
-int rspamd_inet_address_connect(const rspamd_inet_addr_t *addr, gint type,
+int rspamd_inet_address_connect(const rspamd_inet_addr_t *addr, int type,
 								gboolean async)
 {
 	int fd, r;
@@ -1084,12 +1084,12 @@ int rspamd_inet_address_connect(const rspamd_inet_addr_t *addr, gint type,
 	return fd;
 }
 
-int rspamd_inet_address_listen(const rspamd_inet_addr_t *addr, gint type,
+int rspamd_inet_address_listen(const rspamd_inet_addr_t *addr, int type,
 							   enum rspamd_inet_address_listen_opts opts,
-							   gint listen_queue)
+							   int listen_queue)
 {
-	gint fd, r;
-	gint on = 1, serrno;
+	int fd, r;
+	int on = 1, serrno;
 	const struct sockaddr *sa;
 	const char *path;
 
@@ -1116,7 +1116,7 @@ int rspamd_inet_address_listen(const rspamd_inet_addr_t *addr, gint type,
 	}
 
 #if defined(SO_REUSEADDR)
-	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const void *) &on, sizeof(gint)) == -1) {
+	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const void *) &on, sizeof(int)) == -1) {
 		msg_err("cannot set SO_REUSEADDR on %s (fd=%d): %s",
 				rspamd_inet_address_to_string_pretty(addr),
 				fd, strerror(errno));
@@ -1128,7 +1128,7 @@ int rspamd_inet_address_listen(const rspamd_inet_addr_t *addr, gint type,
 	if (opts & RSPAMD_INET_ADDRESS_LISTEN_REUSEPORT) {
 		on = 1;
 
-		if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, (const void *) &on, sizeof(gint)) == -1) {
+		if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, (const void *) &on, sizeof(int)) == -1) {
 			msg_err("cannot set SO_REUSEPORT on %s (fd=%d): %s",
 					rspamd_inet_address_to_string_pretty(addr),
 					fd, strerror(errno));
@@ -1142,9 +1142,9 @@ int rspamd_inet_address_listen(const rspamd_inet_addr_t *addr, gint type,
 		/* We need to set this flag to avoid errors */
 		on = 1;
 #ifdef SOL_IPV6
-		(void) setsockopt(fd, SOL_IPV6, IPV6_V6ONLY, (const void *) &on, sizeof(gint));
+		(void) setsockopt(fd, SOL_IPV6, IPV6_V6ONLY, (const void *) &on, sizeof(int));
 #elif defined(IPPROTO_IPV6)
-		(void) setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, (const void *) &on, sizeof(gint));
+		(void) setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, (const void *) &on, sizeof(int));
 #endif
 	}
 #endif
@@ -1210,7 +1210,7 @@ err:
 }
 
 gssize
-rspamd_inet_address_recvfrom(gint fd, void *buf, gsize len, gint fl,
+rspamd_inet_address_recvfrom(int fd, void *buf, gsize len, int fl,
 							 rspamd_inet_addr_t **target)
 {
 	gssize ret;
@@ -1245,7 +1245,7 @@ rspamd_inet_address_recvfrom(gint fd, void *buf, gsize len, gint fl,
 }
 
 gssize
-rspamd_inet_address_sendto(gint fd, const void *buf, gsize len, gint fl,
+rspamd_inet_address_sendto(int fd, const void *buf, gsize len, int fl,
 						   const rspamd_inet_addr_t *addr)
 {
 	gssize r;
@@ -1271,12 +1271,12 @@ rspamd_inet_address_sendto(gint fd, const void *buf, gsize len, gint fl,
 }
 
 static gboolean
-rspamd_check_port_priority(const char *line, guint default_port,
-						   guint *priority, gchar *out,
+rspamd_check_port_priority(const char *line, unsigned int default_port,
+						   unsigned int *priority, char *out,
 						   gsize outlen, rspamd_mempool_t *pool)
 {
-	guint real_port = default_port, real_priority = 0;
-	gchar *err_str, *err_str_prio;
+	unsigned int real_port = default_port, real_priority = 0;
+	char *err_str, *err_str_prio;
 
 	if (line && line[0] == ':') {
 		errno = 0;
@@ -1318,13 +1318,13 @@ rspamd_check_port_priority(const char *line, guint default_port,
 
 static enum rspamd_parse_host_port_result
 rspamd_resolve_addrs(const char *begin, size_t len, GPtrArray **addrs,
-					 const gchar *portbuf, gint flags,
+					 const char *portbuf, int flags,
 					 rspamd_mempool_t *pool)
 {
 	struct addrinfo hints, *res, *cur;
 	rspamd_inet_addr_t *cur_addr = NULL;
-	gint r, addr_cnt;
-	gchar *addr_cpy = NULL;
+	int r, addr_cnt;
+	char *addr_cpy = NULL;
 	enum rspamd_parse_host_port_result ret = RSPAMD_PARSE_ADDR_FAIL;
 
 	rspamd_ip_check_ipv6();
@@ -1428,16 +1428,16 @@ rspamd_resolve_addrs(const char *begin, size_t len, GPtrArray **addrs,
 }
 
 enum rspamd_parse_host_port_result
-rspamd_parse_host_port_priority(const gchar *str,
+rspamd_parse_host_port_priority(const char *str,
 								GPtrArray **addrs,
-								guint *priority,
-								gchar **name_ptr,
-								guint default_port,
+								unsigned int *priority,
+								char **name_ptr,
+								unsigned int default_port,
 								gboolean allow_listen,
 								rspamd_mempool_t *pool)
 {
-	gchar portbuf[8];
-	const gchar *p, *name = NULL;
+	char portbuf[8];
+	const char *p, *name = NULL;
 	gsize namelen;
 	rspamd_inet_addr_t *cur_addr = NULL;
 	enum rspamd_parse_host_port_result ret = RSPAMD_PARSE_ADDR_FAIL;
@@ -1571,7 +1571,7 @@ rspamd_parse_host_port_priority(const gchar *str,
 									   portbuf, 0, pool);
 		}
 		else {
-			const gchar *second_semicolon = strchr(p + 1, ':');
+			const char *second_semicolon = strchr(p + 1, ':');
 
 			name = str;
 
@@ -1608,10 +1608,10 @@ rspamd_parse_host_port_priority(const gchar *str,
 	return ret;
 }
 
-guchar *
-rspamd_inet_address_get_hash_key(const rspamd_inet_addr_t *addr, guint *klen)
+unsigned char *
+rspamd_inet_address_get_hash_key(const rspamd_inet_addr_t *addr, unsigned int *klen)
 {
-	guchar *res = NULL;
+	unsigned char *res = NULL;
 	static struct in_addr local = {INADDR_LOOPBACK};
 
 	g_assert(addr != NULL);
@@ -1619,15 +1619,15 @@ rspamd_inet_address_get_hash_key(const rspamd_inet_addr_t *addr, guint *klen)
 
 	if (addr->af == AF_INET) {
 		*klen = sizeof(struct in_addr);
-		res = (guchar *) &addr->u.in.addr.s4.sin_addr;
+		res = (unsigned char *) &addr->u.in.addr.s4.sin_addr;
 	}
 	else if (addr->af == AF_INET6) {
 		*klen = sizeof(struct in6_addr);
-		res = (guchar *) &addr->u.in.addr.s6.sin6_addr;
+		res = (unsigned char *) &addr->u.in.addr.s6.sin6_addr;
 	}
 	else if (addr->af == AF_UNIX) {
 		*klen = sizeof(struct in_addr);
-		res = (guchar *) &local;
+		res = (unsigned char *) &local;
 	}
 	else {
 		*klen = 0;
@@ -1726,9 +1726,9 @@ rspamd_inet_address_from_rnds(const struct rdns_reply_entry *rep)
 	return addr;
 }
 
-void rspamd_inet_address_apply_mask(rspamd_inet_addr_t *addr, guint mask)
+void rspamd_inet_address_apply_mask(rspamd_inet_addr_t *addr, unsigned int mask)
 {
-	guint32 umsk, *p;
+	uint32_t umsk, *p;
 
 	if (mask > 0 && addr != NULL) {
 		if (addr->af == AF_INET && mask <= 32) {
@@ -1757,7 +1757,7 @@ void rspamd_inet_address_apply_mask(rspamd_inet_addr_t *addr, guint mask)
 	}
 }
 
-static gint
+static int
 rspamd_inet_address_af_order(const rspamd_inet_addr_t *addr)
 {
 	int ret;
@@ -1777,8 +1777,8 @@ rspamd_inet_address_af_order(const rspamd_inet_addr_t *addr)
 	return ret;
 }
 
-gint rspamd_inet_address_compare(const rspamd_inet_addr_t *a1,
-								 const rspamd_inet_addr_t *a2, gboolean compare_ports)
+int rspamd_inet_address_compare(const rspamd_inet_addr_t *a1,
+								const rspamd_inet_addr_t *a2, gboolean compare_ports)
 {
 	g_assert(a1 != NULL);
 	g_assert(a2 != NULL);
@@ -1828,8 +1828,8 @@ gint rspamd_inet_address_compare(const rspamd_inet_addr_t *a1,
 	return 0;
 }
 
-gint rspamd_inet_address_compare_ptr(gconstpointer a1,
-									 gconstpointer a2)
+int rspamd_inet_address_compare_ptr(gconstpointer a1,
+									gconstpointer a2)
 {
 	const rspamd_inet_addr_t **i1 = (const rspamd_inet_addr_t **) a1,
 							 **i2 = (const rspamd_inet_addr_t **) a2;
@@ -1858,7 +1858,7 @@ rspamd_inet_address_copy(const rspamd_inet_addr_t *addr, rspamd_mempool_t *pool)
 	return n;
 }
 
-gint rspamd_inet_address_get_af(const rspamd_inet_addr_t *addr)
+int rspamd_inet_address_get_af(const rspamd_inet_addr_t *addr)
 {
 	g_assert(addr != NULL);
 
@@ -1882,15 +1882,15 @@ rspamd_inet_address_get_sa(const rspamd_inet_addr_t *addr,
 }
 
 
-guint rspamd_inet_address_hash(gconstpointer a)
+unsigned int rspamd_inet_address_hash(gconstpointer a)
 {
 	const rspamd_inet_addr_t *addr = a;
 	struct {
-		gchar buf[sizeof(struct in6_addr)]; /* 16 bytes */
+		char buf[sizeof(struct in6_addr)]; /* 16 bytes */
 		int af;
 	} layout;
 
-	gint32 k;
+	int32_t k;
 
 	if (addr->af == AF_UNIX && addr->u.un) {
 		rspamd_cryptobox_fast_hash_state_t st;
@@ -1922,16 +1922,16 @@ guint rspamd_inet_address_hash(gconstpointer a)
 	return k;
 }
 
-guint rspamd_inet_address_port_hash(gconstpointer a)
+unsigned int rspamd_inet_address_port_hash(gconstpointer a)
 {
 	const rspamd_inet_addr_t *addr = a;
 	struct {
-		gchar buf[sizeof(struct in6_addr)]; /* 16 bytes */
+		char buf[sizeof(struct in6_addr)]; /* 16 bytes */
 		int port;
 		int af;
 	} layout;
 
-	gint32 k;
+	int32_t k;
 
 	if (addr->af == AF_UNIX && addr->u.un) {
 		rspamd_cryptobox_fast_hash_state_t st;

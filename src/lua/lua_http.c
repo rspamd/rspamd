@@ -48,7 +48,7 @@ local function symbol_callback(task)
 
 #define MAX_HEADERS_SIZE 8192
 
-static const gchar *M = "rspamd lua http";
+static const char *M = "rspamd lua http";
 
 LUA_FUNCTION_DEF(http, request);
 
@@ -75,20 +75,20 @@ struct lua_http_cbdata {
 	struct rspamd_cryptobox_keypair *local_kp;
 	struct rspamd_cryptobox_pubkey *peer_pk;
 	rspamd_inet_addr_t *addr;
-	gchar *mime_type;
-	gchar *host;
-	gchar *auth;
+	char *mime_type;
+	char *host;
+	char *auth;
 	struct upstream *up;
-	const gchar *url;
+	const char *url;
 	gsize max_size;
-	gint flags;
-	gint fd;
-	gint cbref;
+	int flags;
+	int fd;
+	int cbref;
 	struct thread_entry *thread;
 	ref_entry_t ref;
 };
 
-static const gdouble default_http_timeout = 5.0;
+static const double default_http_timeout = 5.0;
 
 static struct rspamd_dns_resolver *
 lua_http_global_resolver(struct ev_loop *ev_base)
@@ -237,7 +237,7 @@ lua_http_finish_handler(struct rspamd_http_connection *conn,
 {
 	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *) conn->ud;
 	struct rspamd_http_header *h;
-	const gchar *body;
+	const char *body;
 	gsize body_len;
 
 	struct lua_callback_state lcbd;
@@ -330,7 +330,7 @@ lua_http_resume_handler(struct rspamd_http_connection *conn,
 {
 	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *) conn->ud;
 	lua_State *L = cbd->thread->lua_state;
-	const gchar *body;
+	const char *body;
 	gsize body_len;
 	struct rspamd_http_header *h;
 
@@ -557,7 +557,7 @@ static void
 lua_http_push_headers(lua_State *L, struct rspamd_http_message *msg)
 {
 	const char *name, *value;
-	gint i, sz;
+	int i, sz;
 
 	lua_pushnil(L);
 	while (lua_next(L, -2) != 0) {
@@ -614,7 +614,7 @@ lua_http_push_headers(lua_State *L, struct rspamd_http_message *msg)
  * @return {boolean} `true`, in **async** mode, if a request has been successfully scheduled. If this value is `false` then some error occurred, the callback thus will not be called.
  * @return In **sync** mode `string|nil, nil|table` In sync mode  error message if any and response as table: `int` _code_, `string` _content_ and `table` _headers_ (header -> value)
  */
-static gint
+static int
 lua_http_request(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -629,14 +629,14 @@ lua_http_request(lua_State *L)
 	struct rspamd_cryptobox_pubkey *peer_key = NULL;
 	struct rspamd_cryptobox_keypair *local_kp = NULL;
 	struct upstream *up = NULL;
-	const gchar *url, *lua_body;
+	const char *url, *lua_body;
 	rspamd_fstring_t *body = NULL;
-	gint cbref = -1;
+	int cbref = -1;
 	gsize bodylen;
-	gdouble timeout = default_http_timeout;
-	gint flags = 0;
-	gchar *mime_type = NULL;
-	gchar *auth = NULL;
+	double timeout = default_http_timeout;
+	int flags = 0;
+	char *mime_type = NULL;
+	char *auth = NULL;
 	gsize max_size = 0;
 	gboolean gzip = FALSE;
 
@@ -903,7 +903,7 @@ lua_http_request(lua_State *L)
 		lua_gettable(L, 1);
 
 		if (lua_type(L, -1) == LUA_TSTRING) {
-			const gchar *in;
+			const char *in;
 			gsize inlen;
 
 			in = lua_tolstring(L, -1, &inlen);
@@ -997,14 +997,14 @@ lua_http_request(lua_State *L)
 		lua_gettable(L, 1);
 
 		if (lua_type(L, -1) == LUA_TSTRING) {
-			const gchar *user = lua_tostring(L, -1);
+			const char *user = lua_tostring(L, -1);
 
 			lua_pushstring(L, "password");
 			lua_gettable(L, 1);
 
 			if (lua_type(L, -1) == LUA_TSTRING) {
-				const gchar *password = lua_tostring(L, -1);
-				gchar *tmpbuf;
+				const char *password = lua_tostring(L, -1);
+				char *tmpbuf;
 				gsize tlen;
 
 				tlen = strlen(user) + strlen(password) + 1;
@@ -1124,7 +1124,7 @@ lua_http_request(lua_State *L)
 	/* Check if we can skip resolving */
 
 	gsize hostlen = 0;
-	const gchar *host = rspamd_http_message_get_http_host(msg, &hostlen);
+	const char *host = rspamd_http_message_get_http_host(msg, &hostlen);
 
 	if (host) {
 		cbd->host = g_malloc(hostlen + 1);
@@ -1255,7 +1255,7 @@ lua_http_request(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_load_http(lua_State *L)
 {
 	lua_newtable(L);

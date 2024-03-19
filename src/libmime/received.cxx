@@ -50,7 +50,7 @@ struct received_part {
 };
 
 static inline auto
-received_part_set_or_append(const gchar *begin,
+received_part_set_or_append(const char *begin,
 							gsize len,
 							mime_string &dest) -> void
 {
@@ -427,7 +427,7 @@ received_process_rdns(rspamd_mempool_t *pool,
 													RSPAMD_INET_ADDRESS_PARSE_RECEIVED);
 
 		if (addr) {
-			const gchar *addr_str;
+			const char *addr_str;
 
 			if (rspamd_inet_address_get_port(addr) != 0) {
 				addr_str = rspamd_inet_address_to_string_pretty(addr);

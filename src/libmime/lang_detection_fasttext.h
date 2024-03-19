@@ -60,7 +60,7 @@ rspamd_fasttext_predict_result_t rspamd_lang_detection_fasttext_detect(void *ud,
  * @param ud
  * @return
  */
-guint rspamd_lang_detection_fasttext_get_nlangs(rspamd_fasttext_predict_result_t ud);
+unsigned int rspamd_lang_detection_fasttext_get_nlangs(rspamd_fasttext_predict_result_t ud);
 /**
  * Get language from fasttext result
  * @param res

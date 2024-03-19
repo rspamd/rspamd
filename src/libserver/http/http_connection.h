@@ -51,7 +51,7 @@ struct rspamd_http_connection_entry;
 struct rspamd_keepalive_hash_key;
 
 struct rspamd_storage_shmem {
-	gchar *shm_name;
+	char *shm_name;
 	ref_entry_t ref;
 };
 
@@ -98,7 +98,7 @@ enum rspamd_http_options {
 
 typedef int (*rspamd_http_body_handler_t)(struct rspamd_http_connection *conn,
 										  struct rspamd_http_message *msg,
-										  const gchar *chunk,
+										  const char *chunk,
 										  gsize len);
 
 typedef void (*rspamd_http_error_handler_t)(struct rspamd_http_connection *conn,
@@ -116,15 +116,15 @@ struct rspamd_http_connection {
 	rspamd_http_error_handler_t error_handler;
 	rspamd_http_finish_handler_t finish_handler;
 	gpointer ud;
-	const gchar *log_tag;
+	const char *log_tag;
 	/* Used for keepalive */
 	struct rspamd_keepalive_hash_key *keepalive_hash_key;
 	gsize max_size;
 	unsigned opts;
 	enum rspamd_http_connection_type type;
 	gboolean finished;
-	gint fd;
-	gint ref;
+	int fd;
+	int ref;
 };
 
 /**
@@ -139,7 +139,7 @@ struct rspamd_http_connection {
  */
 struct rspamd_http_connection *rspamd_http_connection_new_server(
 	struct rspamd_http_context *ctx,
-	gint fd,
+	int fd,
 	rspamd_http_body_handler_t body_handler,
 	rspamd_http_error_handler_t error_handler,
 	rspamd_http_finish_handler_t finish_handler,
@@ -162,7 +162,7 @@ struct rspamd_http_connection *rspamd_http_connection_new_client_keepalive(
 	rspamd_http_finish_handler_t finish_handler,
 	unsigned opts,
 	rspamd_inet_addr_t *addr,
-	const gchar *host);
+	const char *host);
 
 /**
  * Creates an ordinary connection using the address specified (if proxy is not set)
@@ -198,7 +198,7 @@ struct rspamd_http_connection *rspamd_http_connection_new_client_socket(
 	rspamd_http_error_handler_t error_handler,
 	rspamd_http_finish_handler_t finish_handler,
 	unsigned opts,
-	gint fd);
+	int fd);
 
 /**
  * Set key pointed by an opaque pointer
@@ -255,16 +255,16 @@ void rspamd_http_connection_read_message_shared(
 gboolean rspamd_http_connection_write_message(
 	struct rspamd_http_connection *conn,
 	struct rspamd_http_message *msg,
-	const gchar *host,
-	const gchar *mime_type,
+	const char *host,
+	const char *mime_type,
 	gpointer ud,
 	ev_tstamp timeout);
 
 gboolean rspamd_http_connection_write_message_shared(
 	struct rspamd_http_connection *conn,
 	struct rspamd_http_message *msg,
-	const gchar *host,
-	const gchar *mime_type,
+	const char *host,
+	const char *mime_type,
 	gpointer ud,
 	ev_tstamp timeout);
 

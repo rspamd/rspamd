@@ -25,12 +25,12 @@
 #include "libserver/maps/map.h"
 #include "lua/lua_common.h"
 
-static const guint64 rspamd_regexp_cb_magic = 0xca9d9649fc3e2659ULL;
+static const uint64_t rspamd_regexp_cb_magic = 0xca9d9649fc3e2659ULL;
 
 struct regexp_module_item {
-	guint64 magic;
+	uint64_t magic;
 	struct rspamd_expression *expr;
-	const gchar *symbol;
+	const char *symbol;
 	struct ucl_lua_funcdata *lua_function;
 };
 
@@ -45,9 +45,9 @@ static void process_regexp_item(struct rspamd_task *task,
 
 
 /* Initialization */
-gint regexp_module_init(struct rspamd_config *cfg, struct module_ctx **ctx);
-gint regexp_module_config(struct rspamd_config *cfg, bool validate);
-gint regexp_module_reconfig(struct rspamd_config *cfg);
+int regexp_module_init(struct rspamd_config *cfg, struct module_ctx **ctx);
+int regexp_module_config(struct rspamd_config *cfg, bool validate);
+int regexp_module_reconfig(struct rspamd_config *cfg);
 
 module_t regexp_module = {
 	"regexp",
@@ -56,7 +56,7 @@ module_t regexp_module = {
 	regexp_module_reconfig,
 	NULL,
 	RSPAMD_MODULE_VER,
-	(guint) -1,
+	(unsigned int) -1,
 };
 
 
@@ -71,8 +71,8 @@ regexp_get_context(struct rspamd_config *cfg)
 static gboolean
 read_regexp_expression(rspamd_mempool_t *pool,
 					   struct regexp_module_item *chain,
-					   const gchar *symbol,
-					   const gchar *line,
+					   const char *symbol,
+					   const char *line,
 					   struct rspamd_mime_expr_ud *ud)
 {
 	struct rspamd_expression *e = NULL;
@@ -96,7 +96,7 @@ read_regexp_expression(rspamd_mempool_t *pool,
 
 
 /* Init function */
-gint regexp_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
+int regexp_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 {
 	struct regexp_ctx *regexp_module_ctx;
 
@@ -128,13 +128,13 @@ gint regexp_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 	return 0;
 }
 
-gint regexp_module_config(struct rspamd_config *cfg, bool validate)
+int regexp_module_config(struct rspamd_config *cfg, bool validate)
 {
 	struct regexp_ctx *regexp_module_ctx = regexp_get_context(cfg);
 	struct regexp_module_item *cur_item = NULL;
 	const ucl_object_t *sec, *value, *elt;
 	ucl_object_iter_t it = NULL;
-	gint res = TRUE, nre = 0, nlua = 0, nshots = cfg->default_max_shots;
+	int res = TRUE, nre = 0, nlua = 0, nshots = cfg->default_max_shots;
 
 	if (!rspamd_config_is_module_enabled(cfg, "regexp")) {
 		return TRUE;
@@ -203,9 +203,9 @@ gint regexp_module_config(struct rspamd_config *cfg, bool validate)
 			nlua++;
 		}
 		else if (value->type == UCL_OBJECT) {
-			const gchar *description = NULL, *group = NULL;
-			gdouble score = 0.0;
-			guint flags = 0, priority = 0;
+			const char *description = NULL, *group = NULL;
+			double score = 0.0;
+			unsigned int flags = 0, priority = 0;
 			gboolean is_lua = FALSE, valid_expression = TRUE;
 			struct rspamd_mime_expr_ud ud;
 
@@ -456,7 +456,7 @@ gint regexp_module_config(struct rspamd_config *cfg, bool validate)
 	return res;
 }
 
-gint regexp_module_reconfig(struct rspamd_config *cfg)
+int regexp_module_reconfig(struct rspamd_config *cfg)
 {
 	return regexp_module_config(cfg, false);
 }
@@ -464,13 +464,13 @@ gint regexp_module_reconfig(struct rspamd_config *cfg)
 static gboolean
 rspamd_lua_call_expression_func(struct ucl_lua_funcdata *lua_data,
 								struct rspamd_task *task,
-								GArray *args, gdouble *res,
-								const gchar *symbol)
+								GArray *args, double *res,
+								const char *symbol)
 {
 	lua_State *L = lua_data->L;
 	struct rspamd_task **ptask;
 	struct expression_argument *arg;
-	gint pop = 0, i, nargs = 0;
+	int pop = 0, i, nargs = 0;
 
 	lua_rawgeti(L, LUA_REGISTRYINDEX, lua_data->idx);
 	/* Now we got function in top of stack */
@@ -480,12 +480,12 @@ rspamd_lua_call_expression_func(struct ucl_lua_funcdata *lua_data,
 
 	/* Now push all arguments */
 	if (args) {
-		for (i = 0; i < (gint) args->len; i++) {
+		for (i = 0; i < (int) args->len; i++) {
 			arg = &g_array_index(args, struct expression_argument, i);
 			if (arg) {
 				switch (arg->type) {
 				case EXPRESSION_ARGUMENT_NORMAL:
-					lua_pushstring(L, (const gchar *) arg->data);
+					lua_pushstring(L, (const char *) arg->data);
 					break;
 				case EXPRESSION_ARGUMENT_BOOL:
 					lua_pushboolean(L, (gboolean) GPOINTER_TO_SIZE(arg->data));
@@ -533,7 +533,7 @@ process_regexp_item(struct rspamd_task *task,
 					void *user_data)
 {
 	struct regexp_module_item *item = user_data;
-	gdouble res = FALSE;
+	double res = FALSE;
 
 	/* Non-threaded version */
 	if (item->lua_function) {

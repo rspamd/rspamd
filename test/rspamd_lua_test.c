@@ -24,9 +24,9 @@
 #endif
 
 static const char *lua_src_name = "lua/tests.lua";
-extern gchar *lua_test;
-extern gchar *lua_test_case;
-extern gchar *argv0_dirname;
+extern char *lua_test;
+extern char *lua_test_case;
+extern char *argv0_dirname;
 extern struct rspamd_main *rspamd_main;
 
 static int
@@ -60,10 +60,10 @@ _Noreturn void
 rspamd_lua_test_func(void)
 {
 	lua_State *L = (lua_State *) rspamd_main->cfg->lua_state;
-	gchar *lua_src, *rp, rp_buf[PATH_MAX], path_buf[PATH_MAX], *tmp, *dir, *pattern;
-	const gchar *old_path;
+	char *lua_src, *rp, rp_buf[PATH_MAX], path_buf[PATH_MAX], *tmp, *dir, *pattern;
+	const char *old_path;
 	glob_t globbuf;
-	gint i, len;
+	int i, len;
 
 	rspamd_lua_set_env(L, NULL, NULL, NULL);
 	rspamd_lua_set_globals(rspamd_main->cfg, L);
@@ -105,14 +105,14 @@ rspamd_lua_test_func(void)
 	pattern = g_malloc(len);
 	rspamd_snprintf(pattern, len, "%s/unit/%s", dir, "*.lua");
 
-	gint lua_test_len = 0;
-	gint inserted_file = 1;
-	gint path_start;
+	int lua_test_len = 0;
+	int inserted_file = 1;
+	int path_start;
 	if (lua_test) {
 		lua_test_len = strlen(lua_test);
 	}
 	if (glob(pattern, GLOB_DOOFFS, NULL, &globbuf) == 0) {
-		for (i = 0; i < (gint) globbuf.gl_pathc; i++) {
+		for (i = 0; i < (int) globbuf.gl_pathc; i++) {
 			if (lua_test) {
 				path_start = strlen(globbuf.gl_pathv[i]) - lua_test_len;
 				if (path_start < 0 ||

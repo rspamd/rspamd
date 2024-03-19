@@ -44,17 +44,17 @@ struct rspamd_stat_backend {
 	gpointer (*runtime)(struct rspamd_task *task,
 						struct rspamd_statfile_config *stcf,
 						gboolean learn, gpointer ctx,
-						gint id);
+						int id);
 
 	gboolean (*process_tokens)(struct rspamd_task *task, GPtrArray *tokens,
-							   gint id,
+							   int id,
 							   gpointer ctx);
 
 	gboolean (*finalize_process)(struct rspamd_task *task,
 								 gpointer runtime, gpointer ctx);
 
 	gboolean (*learn_tokens)(struct rspamd_task *task, GPtrArray *tokens,
-							 gint id,
+							 int id,
 							 gpointer ctx);
 
 	gulong (*total_learns)(struct rspamd_task *task,
@@ -83,15 +83,15 @@ struct rspamd_stat_backend {
 								  struct rspamd_config *cfg, struct rspamd_statfile *st); \
 	gpointer rspamd_##name##_runtime(struct rspamd_task *task,                            \
 									 struct rspamd_statfile_config *stcf,                 \
-									 gboolean learn, gpointer ctx, gint id);              \
+									 gboolean learn, gpointer ctx, int id);               \
 	gboolean rspamd_##name##_process_tokens(struct rspamd_task *task,                     \
-											GPtrArray *tokens, gint id,                   \
+											GPtrArray *tokens, int id,                    \
 											gpointer runtime);                            \
 	gboolean rspamd_##name##_finalize_process(struct rspamd_task *task,                   \
 											  gpointer runtime,                           \
 											  gpointer ctx);                              \
 	gboolean rspamd_##name##_learn_tokens(struct rspamd_task *task,                       \
-										  GPtrArray *tokens, gint id,                     \
+										  GPtrArray *tokens, int id,                      \
 										  gpointer runtime);                              \
 	gboolean rspamd_##name##_finalize_learn(struct rspamd_task *task,                     \
 											gpointer runtime,                             \

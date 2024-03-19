@@ -1,3 +1,19 @@
+/*
+ * Copyright 2024 Vsevolod Stakhov
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #ifndef RSPAMD_SPF_H
 #define RSPAMD_SPF_H
 
@@ -22,7 +38,7 @@ typedef enum spf_mech_e {
 	SPF_NEUTRAL
 } spf_mech_t;
 
-static inline gchar spf_mech_char(spf_mech_t mech)
+static inline char spf_mech_char(spf_mech_t mech)
 {
 	switch (mech) {
 	case SPF_FAIL:
@@ -68,18 +84,18 @@ typedef enum spf_action_e {
 #define SPF_MIN_CACHE_TTL (60 * 5) /* 5 minutes */
 
 struct spf_addr {
-	guchar addr6[sizeof(struct in6_addr)];
-	guchar addr4[sizeof(struct in_addr)];
+	unsigned char addr6[sizeof(struct in6_addr)];
+	unsigned char addr4[sizeof(struct in_addr)];
 	union {
 		struct {
-			guint16 mask_v4;
-			guint16 mask_v6;
+			uint16_t mask_v4;
+			uint16_t mask_v6;
 		} dual;
-		guint32 idx;
+		uint32_t idx;
 	} m;
-	guint flags;
+	unsigned int flags;
 	spf_mech_t mech;
-	gchar *spf_string;
+	char *spf_string;
 	struct spf_addr *prev, *next;
 };
 
@@ -91,20 +107,20 @@ enum rspamd_spf_resolved_flags {
 };
 
 struct spf_resolved {
-	gchar *domain;
-	gchar *top_record;
-	guint ttl;
-	gint flags;
-	gdouble timestamp;
-	guint64 digest;
+	char *domain;
+	char *top_record;
+	unsigned int ttl;
+	int flags;
+	double timestamp;
+	uint64_t digest;
 	GArray *elts;    /* Flat list of struct spf_addr */
 	ref_entry_t ref; /* Refcounting */
 };
 
 struct rspamd_spf_cred {
-	gchar *local_part;
-	gchar *domain;
-	gchar *sender;
+	char *local_part;
+	char *domain;
+	char *sender;
 };
 
 /*
@@ -118,19 +134,19 @@ gboolean rspamd_spf_resolve(struct rspamd_task *task,
 /*
  * Get a domain for spf for specified task
  */
-const gchar *rspamd_spf_get_domain(struct rspamd_task *task);
+const char *rspamd_spf_get_domain(struct rspamd_task *task);
 
 struct rspamd_spf_cred *rspamd_spf_get_cred(struct rspamd_task *task);
 /*
  * Increase refcount
  */
-struct spf_resolved *_spf_record_ref(struct spf_resolved *rec, const gchar *loc);
+struct spf_resolved *_spf_record_ref(struct spf_resolved *rec, const char *loc);
 #define spf_record_ref(rec) \
 	_spf_record_ref((rec), G_STRLOC)
 /*
  * Decrease refcount
  */
-void _spf_record_unref(struct spf_resolved *rec, const gchar *loc);
+void _spf_record_unref(struct spf_resolved *rec, const char *loc);
 #define spf_record_unref(rec) \
 	_spf_record_unref((rec), G_STRLOC)
 
@@ -139,7 +155,7 @@ void _spf_record_unref(struct spf_resolved *rec, const gchar *loc);
  * @param addr
  * @return
  */
-gchar *spf_addr_mask_to_string(struct spf_addr *addr);
+char *spf_addr_mask_to_string(struct spf_addr *addr);
 
 /**
  * Returns spf address that matches the specific task (or nil if not matched)

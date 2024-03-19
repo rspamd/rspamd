@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -55,7 +55,7 @@ rrd_error_quark(void)
  * Convert rrd dst type from string to numeric value
  */
 enum rrd_dst_type
-rrd_dst_from_string(const gchar *str)
+rrd_dst_from_string(const char *str)
 {
 	if (g_ascii_strcasecmp(str, "counter") == 0) {
 		return RRD_DST_COUNTER;
@@ -79,7 +79,7 @@ rrd_dst_from_string(const gchar *str)
 /**
  * Convert numeric presentation of dst to string
  */
-const gchar *
+const char *
 rrd_dst_to_string(enum rrd_dst_type type)
 {
 	switch (type) {
@@ -104,7 +104,7 @@ rrd_dst_to_string(enum rrd_dst_type type)
  * Convert rrd consolidation function type from string to numeric value
  */
 enum rrd_cf_type
-rrd_cf_from_string(const gchar *str)
+rrd_cf_from_string(const char *str)
 {
 	if (g_ascii_strcasecmp(str, "average") == 0) {
 		return RRD_CF_AVERAGE;
@@ -126,7 +126,7 @@ rrd_cf_from_string(const gchar *str)
 /**
  * Convert numeric presentation of cf to string
  */
-const gchar *
+const char *
 rrd_cf_to_string(enum rrd_cf_type type)
 {
 	switch (type) {
@@ -147,7 +147,7 @@ rrd_cf_to_string(enum rrd_cf_type type)
 	return "U";
 }
 
-void rrd_make_default_rra(const gchar *cf_name,
+void rrd_make_default_rra(const char *cf_name,
 						  gulong pdp_cnt,
 						  gulong rows,
 						  struct rrd_rra_def *rra)
@@ -162,8 +162,8 @@ void rrd_make_default_rra(const gchar *cf_name,
 	rra->par[RRA_cdp_xff_val].dv = 0.5;
 }
 
-void rrd_make_default_ds(const gchar *name,
-						 const gchar *type,
+void rrd_make_default_ds(const char *name,
+						 const char *type,
 						 gulong pdp_step,
 						 struct rrd_ds_def *ds)
 {
@@ -183,13 +183,13 @@ void rrd_make_default_ds(const gchar *name,
  * Check rrd file for correctness (size, cookies, etc)
  */
 static gboolean
-rspamd_rrd_check_file(const gchar *filename, gboolean need_data, GError **err)
+rspamd_rrd_check_file(const char *filename, gboolean need_data, GError **err)
 {
-	gint fd, i;
+	int fd, i;
 	struct stat st;
 	struct rrd_file_head head;
 	struct rrd_rra_def rra;
-	gint head_size;
+	int head_size;
 
 	fd = open(filename, O_RDWR);
 	if (fd == -1) {
@@ -207,7 +207,7 @@ rspamd_rrd_check_file(const gchar *filename, gboolean need_data, GError **err)
 	if (st.st_size < (goffset) sizeof(struct rrd_file_head)) {
 		/* We have trimmed file */
 		g_set_error(err, rrd_error_quark(), EINVAL, "rrd size is bad: %ud",
-					(guint) st.st_size);
+					(unsigned int) st.st_size);
 		close(fd);
 		return FALSE;
 	}
@@ -268,7 +268,7 @@ rspamd_rrd_check_file(const gchar *filename, gboolean need_data, GError **err)
 			close(fd);
 			return FALSE;
 		}
-		for (i = 0; i < (gint) head.rra_cnt; i++) {
+		for (i = 0; i < (int) head.rra_cnt; i++) {
 			if (read(fd, &rra, sizeof(rra)) != sizeof(rra)) {
 				g_set_error(err,
 							rrd_error_quark(), errno, "rrd read rra error: %s",
@@ -276,13 +276,13 @@ rspamd_rrd_check_file(const gchar *filename, gboolean need_data, GError **err)
 				close(fd);
 				return FALSE;
 			}
-			head_size += rra.row_cnt * head.ds_cnt * sizeof(gdouble);
+			head_size += rra.row_cnt * head.ds_cnt * sizeof(double);
 		}
 
 		if (st.st_size != head_size) {
 			g_set_error(err,
 						rrd_error_quark(), EINVAL, "rrd file seems to have incorrect size: %d, must be %d",
-						(gint) st.st_size, head_size);
+						(int) st.st_size, head_size);
 			close(fd);
 			return FALSE;
 		}
@@ -299,7 +299,7 @@ rspamd_rrd_check_file(const gchar *filename, gboolean need_data, GError **err)
 static void
 rspamd_rrd_adjust_pointers(struct rspamd_rrd_file *file, gboolean completed)
 {
-	guint8 *ptr;
+	uint8_t *ptr;
 
 	ptr = file->map;
 	file->stat_head = (struct rrd_file_head *) ptr;
@@ -318,7 +318,7 @@ rspamd_rrd_adjust_pointers(struct rspamd_rrd_file *file, gboolean completed)
 	file->rra_ptr = (struct rrd_rra_ptr *) ptr;
 	if (completed) {
 		ptr += sizeof(struct rrd_rra_ptr) * file->stat_head->rra_cnt;
-		file->rrd_value = (gdouble *) ptr;
+		file->rrd_value = (double *) ptr;
 	}
 	else {
 		file->rrd_value = NULL;
@@ -328,9 +328,9 @@ rspamd_rrd_adjust_pointers(struct rspamd_rrd_file *file, gboolean completed)
 static void
 rspamd_rrd_calculate_checksum(struct rspamd_rrd_file *file)
 {
-	guchar sigbuf[rspamd_cryptobox_HASHBYTES];
+	unsigned char sigbuf[rspamd_cryptobox_HASHBYTES];
 	struct rrd_ds_def *ds;
-	guint i;
+	unsigned int i;
 	rspamd_cryptobox_hash_state_t st;
 
 	if (file->finalized) {
@@ -349,12 +349,12 @@ rspamd_rrd_calculate_checksum(struct rspamd_rrd_file *file)
 }
 
 static int
-rspamd_rrd_open_exclusive(const gchar *filename)
+rspamd_rrd_open_exclusive(const char *filename)
 {
 	struct timespec sleep_ts = {
 		.tv_sec = 0,
 		.tv_nsec = 1000000};
-	gint fd;
+	int fd;
 
 	fd = open(filename, O_RDWR);
 
@@ -389,10 +389,10 @@ rspamd_rrd_open_exclusive(const gchar *filename)
  * @return
  */
 static struct rspamd_rrd_file *
-rspamd_rrd_open_common(const gchar *filename, gboolean completed, GError **err)
+rspamd_rrd_open_common(const char *filename, gboolean completed, GError **err)
 {
 	struct rspamd_rrd_file *file;
-	gint fd;
+	int fd;
 	struct stat st;
 
 	if (!rspamd_rrd_check_file(filename, completed, err)) {
@@ -453,7 +453,7 @@ rspamd_rrd_open_common(const gchar *filename, gboolean completed, GError **err)
  * @return rrd file structure
  */
 struct rspamd_rrd_file *
-rspamd_rrd_open(const gchar *filename, GError **err)
+rspamd_rrd_open(const char *filename, GError **err)
 {
 	struct rspamd_rrd_file *file;
 
@@ -474,11 +474,11 @@ rspamd_rrd_open(const gchar *filename, GError **err)
  * @return TRUE if file has been created
  */
 struct rspamd_rrd_file *
-rspamd_rrd_create(const gchar *filename,
+rspamd_rrd_create(const char *filename,
 				  gulong ds_count,
 				  gulong rra_count,
 				  gulong pdp_step,
-				  gdouble initial_ticks,
+				  double initial_ticks,
 				  GError **err)
 {
 	struct rspamd_rrd_file *new;
@@ -489,8 +489,8 @@ rspamd_rrd_create(const gchar *filename,
 	struct rrd_pdp_prep pdp;
 	struct rrd_cdp_prep cdp;
 	struct rrd_rra_ptr rra_ptr;
-	gint fd;
-	guint i, j;
+	int fd;
+	unsigned int i, j;
 
 	/* Open file */
 	fd = open(filename, O_RDWR | O_CREAT | O_EXCL, 0644);
@@ -680,10 +680,10 @@ rspamd_rrd_add_rra(struct rspamd_rrd_file *file, GArray *rra, GError **err)
 gboolean
 rspamd_rrd_finalize(struct rspamd_rrd_file *file, GError **err)
 {
-	gint fd;
-	guint i;
-	gint count = 0;
-	gdouble vbuf[1024];
+	int fd;
+	unsigned int i;
+	int count = 0;
+	double vbuf[1024];
 	struct stat st;
 
 	if (file == NULL || file->filename == NULL || file->fd == -1) {
@@ -720,7 +720,7 @@ rspamd_rrd_finalize(struct rspamd_rrd_file *file, GError **err)
 	while (count > 0) {
 		/* Write values in buffered matter */
 		if (write(fd, vbuf,
-				  MIN((gint) G_N_ELEMENTS(vbuf), count) * sizeof(gdouble)) == -1) {
+				  MIN((int) G_N_ELEMENTS(vbuf), count) * sizeof(double)) == -1) {
 			g_set_error(err,
 						rrd_error_quark(), errno, "rrd write error: %s",
 						strerror(errno));
@@ -769,11 +769,11 @@ rspamd_rrd_finalize(struct rspamd_rrd_file *file, GError **err)
  */
 static gboolean
 rspamd_rrd_update_pdp_prep(struct rspamd_rrd_file *file,
-						   gdouble *vals,
-						   gdouble *pdp_new,
-						   gdouble interval)
+						   double *vals,
+						   double *pdp_new,
+						   double interval)
 {
-	guint i;
+	unsigned int i;
 	enum rrd_dst_type type;
 
 	for (i = 0; i < file->stat_head->ds_cnt; i++) {
@@ -840,12 +840,12 @@ rspamd_rrd_update_pdp_prep(struct rspamd_rrd_file *file,
  */
 static void
 rspamd_rrd_update_pdp_step(struct rspamd_rrd_file *file,
-						   gdouble *pdp_new,
-						   gdouble *pdp_temp,
-						   gdouble interval,
+						   double *pdp_new,
+						   double *pdp_temp,
+						   double interval,
 						   gulong pdp_diff)
 {
-	guint i;
+	unsigned int i;
 	rrd_value_t *scratch;
 	gulong heartbeat;
 
@@ -896,17 +896,17 @@ rspamd_rrd_update_pdp_step(struct rspamd_rrd_file *file,
  */
 static void
 rspamd_rrd_update_cdp(struct rspamd_rrd_file *file,
-					  gdouble pdp_steps,
-					  gdouble pdp_offset,
+					  double pdp_steps,
+					  double pdp_offset,
 					  gulong *rra_steps,
 					  gulong rra_index,
-					  gdouble *pdp_temp)
+					  double *pdp_temp)
 {
-	guint i;
+	unsigned int i;
 	struct rrd_rra_def *rra;
 	rrd_value_t *scratch;
 	enum rrd_cf_type cf;
-	gdouble last_cdp = INFINITY, cur_cdp = INFINITY;
+	double last_cdp = INFINITY, cur_cdp = INFINITY;
 	gulong pdp_in_cdp;
 
 	rra = &file->rra_def[rra_index];
@@ -1064,10 +1064,10 @@ rspamd_rrd_update_cdp(struct rspamd_rrd_file *file,
  */
 void rspamd_rrd_write_rra(struct rspamd_rrd_file *file, gulong *rra_steps)
 {
-	guint i, j, ds_cnt;
+	unsigned int i, j, ds_cnt;
 	struct rrd_rra_def *rra;
 	struct rrd_cdp_prep *cdp;
-	gdouble *rra_row = file->rrd_value, *cur_row;
+	double *rra_row = file->rrd_value, *cur_row;
 
 
 	ds_cnt = file->stat_head->ds_cnt;
@@ -1105,16 +1105,16 @@ void rspamd_rrd_write_rra(struct rspamd_rrd_file *file, gulong *rra_steps)
 gboolean
 rspamd_rrd_add_record(struct rspamd_rrd_file *file,
 					  GArray *points,
-					  gdouble ticks,
+					  double ticks,
 					  GError **err)
 {
-	gdouble interval, *pdp_new, *pdp_temp;
-	guint i;
+	double interval, *pdp_new, *pdp_temp;
+	unsigned int i;
 	glong seconds, microseconds;
 	gulong pdp_steps, cur_pdp_count, prev_pdp_step, cur_pdp_step,
 		prev_pdp_age, cur_pdp_age, *rra_steps, pdp_offset;
 
-	if (file == NULL || file->stat_head->ds_cnt * sizeof(gdouble) !=
+	if (file == NULL || file->stat_head->ds_cnt * sizeof(double) !=
 							points->len) {
 		g_set_error(err,
 					rrd_error_quark(), EINVAL,
@@ -1125,18 +1125,18 @@ rspamd_rrd_add_record(struct rspamd_rrd_file *file,
 	/* Get interval */
 	seconds = (glong) ticks;
 	microseconds = (glong) ((ticks - seconds) * 1000000.);
-	interval = ticks - ((gdouble) file->live_head->last_up +
+	interval = ticks - ((double) file->live_head->last_up +
 						file->live_head->last_up_usec / 1000000.);
 
 	msg_debug_rrd("update rrd record after %.3f seconds", interval);
 
 	/* Update PDP preparation values */
-	pdp_new = g_malloc0(sizeof(gdouble) * file->stat_head->ds_cnt);
-	pdp_temp = g_malloc0(sizeof(gdouble) * file->stat_head->ds_cnt);
+	pdp_new = g_malloc0(sizeof(double) * file->stat_head->ds_cnt);
+	pdp_temp = g_malloc0(sizeof(double) * file->stat_head->ds_cnt);
 	/* How much steps need to be updated in each RRA */
 	rra_steps = g_malloc0(sizeof(gulong) * file->stat_head->rra_cnt);
 
-	if (!rspamd_rrd_update_pdp_prep(file, (gdouble *) points->data, pdp_new,
+	if (!rspamd_rrd_update_pdp_prep(file, (double *) points->data, pdp_new,
 									interval)) {
 		g_set_error(err,
 					rrd_error_quark(), EINVAL,
@@ -1239,7 +1239,7 @@ rspamd_rrd_add_record(struct rspamd_rrd_file *file,
  * @param file
  * @return
  */
-gint rspamd_rrd_close(struct rspamd_rrd_file *file)
+int rspamd_rrd_close(struct rspamd_rrd_file *file)
 {
 	if (file == NULL) {
 		errno = EINVAL;
@@ -1257,12 +1257,12 @@ gint rspamd_rrd_close(struct rspamd_rrd_file *file)
 }
 
 static struct rspamd_rrd_file *
-rspamd_rrd_create_file(const gchar *path, gboolean finalize, GError **err)
+rspamd_rrd_create_file(const char *path, gboolean finalize, GError **err)
 {
 	struct rspamd_rrd_file *file;
 	struct rrd_ds_def ds[RSPAMD_RRD_DS_COUNT];
 	struct rrd_rra_def rra[RSPAMD_RRD_RRA_COUNT];
-	gint i;
+	int i;
 	GArray ar;
 
 	/* Try to create new rrd file */
@@ -1281,7 +1281,7 @@ rspamd_rrd_create_file(const gchar *path, gboolean finalize, GError **err)
 							rrd_dst_to_string(RRD_DST_COUNTER), 1, &ds[i]);
 	}
 
-	ar.data = (gchar *) ds;
+	ar.data = (char *) ds;
 	ar.len = sizeof(ds);
 
 	if (!rspamd_rrd_add_ds(file, &ar, err)) {
@@ -1301,7 +1301,7 @@ rspamd_rrd_create_file(const gchar *path, gboolean finalize, GError **err)
 	/* Once per hour for 1 year */
 	rrd_make_default_rra(rrd_cf_to_string(RRD_CF_AVERAGE),
 						 60 * 60, 365 * 24, &rra[3]);
-	ar.data = (gchar *) rra;
+	ar.data = (char *) rra;
 	ar.len = sizeof(rra);
 
 	if (!rspamd_rrd_add_rra(file, &ar, err)) {
@@ -1319,11 +1319,11 @@ rspamd_rrd_create_file(const gchar *path, gboolean finalize, GError **err)
 
 static void
 rspamd_rrd_convert_ds(struct rspamd_rrd_file *old,
-					  struct rspamd_rrd_file *cur, gint idx_old, gint idx_new)
+					  struct rspamd_rrd_file *cur, int idx_old, int idx_new)
 {
 	struct rrd_pdp_prep *pdp_prep_old, *pdp_prep_new;
 	struct rrd_cdp_prep *cdp_prep_old, *cdp_prep_new;
-	gdouble *val_old, *val_new;
+	double *val_old, *val_new;
 	gulong rra_cnt, i, j, points_cnt, old_ds, new_ds;
 
 	rra_cnt = old->stat_head->rra_cnt;
@@ -1351,11 +1351,11 @@ rspamd_rrd_convert_ds(struct rspamd_rrd_file *old,
 }
 
 static struct rspamd_rrd_file *
-rspamd_rrd_convert(const gchar *path, struct rspamd_rrd_file *old,
+rspamd_rrd_convert(const char *path, struct rspamd_rrd_file *old,
 				   GError **err)
 {
 	struct rspamd_rrd_file *rrd;
-	gchar tpath[PATH_MAX];
+	char tpath[PATH_MAX];
 
 	g_assert(old != NULL);
 
@@ -1403,7 +1403,7 @@ rspamd_rrd_convert(const gchar *path, struct rspamd_rrd_file *old,
 }
 
 struct rspamd_rrd_file *
-rspamd_rrd_file_default(const gchar *path,
+rspamd_rrd_file_default(const char *path,
 						GError **err)
 {
 	struct rspamd_rrd_file *file, *nf;
@@ -1465,8 +1465,8 @@ rspamd_rrd_query(struct rspamd_rrd_file *file,
 {
 	struct rspamd_rrd_query_result *res;
 	struct rrd_rra_def *rra;
-	const gdouble *rra_offset = NULL;
-	guint i;
+	const double *rra_offset = NULL;
+	unsigned int i;
 
 	g_assert(file != NULL);
 
@@ -1479,8 +1479,8 @@ rspamd_rrd_query(struct rspamd_rrd_file *file,
 
 	res = g_malloc0(sizeof(*res));
 	res->ds_count = file->stat_head->ds_cnt;
-	res->last_update = (gdouble) file->live_head->last_up +
-					   ((gdouble) file->live_head->last_up_usec / 1e6f);
+	res->last_update = (double) file->live_head->last_up +
+					   ((double) file->live_head->last_up_usec / 1e6f);
 	res->pdp_per_cdp = file->rra_def[rra_num].pdp_cnt;
 	res->rra_rows = file->rra_def[rra_num].row_cnt;
 	rra_offset = file->rrd_value;

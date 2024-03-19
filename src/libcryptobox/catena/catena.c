@@ -1,23 +1,17 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
- * Copyright (c) 2014 cforler
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include "config.h"
@@ -424,16 +418,16 @@ int simple_catena(const uint8_t *pwd, const uint32_t pwdlen,
 int catena_test(void)
 {
 	/* From catena-v3.1 spec */
-	guint8 pw[] = {0x70, 0x61, 0x73, 0x73, 0x77, 0x6f, 0x72, 0x64};
-	guint8 salt[] = {0x73, 0x61, 0x6c, 0x74};
-	guint8 ad[] = {0x64, 0x61, 0x74, 0x61};
-	guint8 expected[] = {
+	uint8_t pw[] = {0x70, 0x61, 0x73, 0x73, 0x77, 0x6f, 0x72, 0x64};
+	uint8_t salt[] = {0x73, 0x61, 0x6c, 0x74};
+	uint8_t ad[] = {0x64, 0x61, 0x74, 0x61};
+	uint8_t expected[] = {
 		0x20, 0xc5, 0x91, 0x93, 0x8f, 0xc3, 0xaf, 0xcc, 0x3b, 0xba, 0x91, 0xd2, 0xfb,
 		0x84, 0xbf, 0x7b, 0x44, 0x04, 0xf9, 0x4c, 0x45, 0xed, 0x4d, 0x11, 0xa7, 0xe2,
 		0xb4, 0x12, 0x3e, 0xab, 0x0b, 0x77, 0x4a, 0x12, 0xb4, 0x22, 0xd0, 0xda, 0xb5,
 		0x25, 0x29, 0x02, 0xfc, 0x54, 0x47, 0xea, 0x82, 0x63, 0x8c, 0x1a, 0xfb, 0xa7,
 		0xa9, 0x94, 0x24, 0x13, 0x0e, 0x44, 0x36, 0x3b, 0x9d, 0x9f, 0xc9, 0x60};
-	guint8 real[H_LEN];
+	uint8_t real[H_LEN];
 
 	if (catena(pw, sizeof(pw), salt, sizeof(salt), ad, sizeof(ad),
 			   4, 10, 10, H_LEN, real) != 0) {

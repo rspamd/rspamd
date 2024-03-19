@@ -61,14 +61,14 @@ const luaL_reg worker_reg[] = {
 	{NULL, NULL}};
 
 static struct rspamd_worker *
-lua_check_worker(lua_State *L, gint pos)
+lua_check_worker(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_worker_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'worker' expected");
 	return ud ? *((struct rspamd_worker **) ud) : NULL;
 }
 
-static gint
+static int
 lua_worker_get_stat(lua_State *L)
 {
 	struct rspamd_worker *w = lua_check_worker(L, 1);
@@ -77,8 +77,8 @@ lua_worker_get_stat(lua_State *L)
 		rspamd_mempool_stat_t mem_st;
 		struct rspamd_stat *stat, stat_copy;
 		ucl_object_t *top, *sub;
-		gint i;
-		guint64 spam = 0, ham = 0;
+		int i;
+		uint64_t spam = 0, ham = 0;
 
 		memset(&mem_st, 0, sizeof(mem_st));
 		rspamd_mempool_stat(&mem_st);
@@ -150,7 +150,7 @@ lua_worker_get_stat(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_worker_get_name(lua_State *L)
 {
 	struct rspamd_worker *w = lua_check_worker(L, 1);
@@ -165,7 +165,7 @@ lua_worker_get_name(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_worker_get_index(lua_State *L)
 {
 	struct rspamd_worker *w = lua_check_worker(L, 1);
@@ -180,7 +180,7 @@ lua_worker_get_index(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_worker_get_count(lua_State *L)
 {
 	struct rspamd_worker *w = lua_check_worker(L, 1);
@@ -195,7 +195,7 @@ lua_worker_get_count(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_worker_get_pid(lua_State *L)
 {
 	struct rspamd_worker *w = lua_check_worker(L, 1);
@@ -211,7 +211,7 @@ lua_worker_get_pid(lua_State *L)
 }
 
 
-static gint
+static int
 lua_worker_is_scanner(lua_State *L)
 {
 	struct rspamd_worker *w = lua_check_worker(L, 1);
@@ -226,7 +226,7 @@ lua_worker_is_scanner(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_worker_is_primary_controller(lua_State *L)
 {
 	struct rspamd_worker *w = lua_check_worker(L, 1);
@@ -249,8 +249,8 @@ struct rspamd_control_cbdata {
 	struct ev_loop *event_loop;
 	struct rspamd_async_session *session;
 	enum rspamd_control_type cmd;
-	gint cbref;
-	gint fd;
+	int cbref;
+	int fd;
 };
 
 static gboolean
@@ -284,8 +284,8 @@ lua_worker_control_session_dtor(void *ud)
 static gboolean
 lua_worker_control_handler(struct rspamd_main *rspamd_main,
 						   struct rspamd_worker *worker,
-						   gint fd,
-						   gint attached_fd,
+						   int fd,
+						   int attached_fd,
 						   struct rspamd_control_command *cmd,
 						   gpointer ud)
 {
@@ -293,7 +293,7 @@ lua_worker_control_handler(struct rspamd_main *rspamd_main,
 	struct rspamd_control_cbdata *cbd = (struct rspamd_control_cbdata *) ud;
 	rspamd_mempool_t *pool;
 	lua_State *L;
-	gint err_idx, status;
+	int err_idx, status;
 
 	L = cbd->L;
 	pool = cbd->pool;
@@ -403,13 +403,13 @@ lua_worker_control_handler(struct rspamd_main *rspamd_main,
 	return TRUE;
 }
 
-static gint
+static int
 lua_worker_add_control_handler(lua_State *L)
 {
 	struct rspamd_worker *w = lua_check_worker(L, 1);
 	struct rspamd_config *cfg = lua_check_config(L, 2);
 	struct ev_loop *event_loop = lua_check_ev_base(L, 3);
-	const gchar *cmd_name = luaL_checkstring(L, 4);
+	const char *cmd_name = luaL_checkstring(L, 4);
 	enum rspamd_control_type cmd;
 	struct rspamd_control_cbdata *cbd;
 
@@ -454,7 +454,7 @@ lua_worker_jemalloc_stats_cb(void *ud, const char *msg)
 }
 #endif
 
-static gint
+static int
 lua_worker_get_mem_stats(lua_State *L)
 {
 	struct rspamd_worker *w = lua_check_worker(L, 1);
@@ -474,14 +474,14 @@ lua_worker_get_mem_stats(lua_State *L)
 }
 
 struct rspamd_lua_process_cbdata {
-	gint sp[2];
-	gint func_cbref;
-	gint cb_cbref;
+	int sp[2];
+	int func_cbref;
+	int cb_cbref;
 	gboolean replied;
 	gboolean is_error;
 	pid_t cpid;
 	lua_State *L;
-	guint64 sz;
+	uint64_t sz;
 	GString *io_buf;
 	GString *out_buf;
 	goffset out_pos;
@@ -494,8 +494,8 @@ static void
 rspamd_lua_execute_lua_subprocess(lua_State *L,
 								  struct rspamd_lua_process_cbdata *cbdata)
 {
-	gint err_idx, r;
-	guint64 wlen = 0;
+	int err_idx, r;
+	uint64_t wlen = 0;
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
 	err_idx = lua_gettop(L);
@@ -503,7 +503,7 @@ rspamd_lua_execute_lua_subprocess(lua_State *L,
 	lua_rawgeti(L, LUA_REGISTRYINDEX, cbdata->func_cbref);
 
 	if (lua_pcall(L, 0, 1, err_idx) != 0) {
-		const gchar *s = lua_tostring(L, -1);
+		const char *s = lua_tostring(L, -1);
 		gsize slen = strlen(s);
 
 		msg_err("call to subprocess failed: %s", s);
@@ -549,10 +549,10 @@ rspamd_lua_execute_lua_subprocess(lua_State *L,
 static void
 rspamd_lua_call_on_complete(lua_State *L,
 							struct rspamd_lua_process_cbdata *cbdata,
-							const gchar *err_msg,
-							const gchar *data, gsize datalen)
+							const char *err_msg,
+							const char *data, gsize datalen)
 {
-	gint err_idx;
+	int err_idx;
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
 	err_idx = lua_gettop(L);
@@ -588,7 +588,7 @@ rspamd_lua_cld_handler(struct rspamd_worker_signal_handler *sigh, void *ud)
 	struct rspamd_srv_command srv_cmd;
 	lua_State *L;
 	pid_t died;
-	gint res = 0;
+	int res = 0;
 
 	/* Are we called by a correct children ? */
 	died = waitpid(cbdata->cpid, &res, WNOHANG);
@@ -639,12 +639,12 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 		(struct rspamd_lua_process_cbdata *) w->data;
 	gssize r;
 
-	if (cbdata->sz == (guint64) -1) {
-		guint64 sz;
+	if (cbdata->sz == (uint64_t) -1) {
+		uint64_t sz;
 
 		/* We read size of reply + flags first */
 		r = read(cbdata->sp[0], cbdata->io_buf->str + cbdata->io_buf->len,
-				 sizeof(guint64) - cbdata->io_buf->len);
+				 sizeof(uint64_t) - cbdata->io_buf->len);
 
 		if (r == 0) {
 			ev_io_stop(cbdata->event_loop, &cbdata->ev);
@@ -672,8 +672,8 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 
 		cbdata->io_buf->len += r;
 
-		if (cbdata->io_buf->len == sizeof(guint64)) {
-			memcpy((guchar *) &sz, cbdata->io_buf->str, sizeof(sz));
+		if (cbdata->io_buf->len == sizeof(uint64_t)) {
+			memcpy((unsigned char *) &sz, cbdata->io_buf->str, sizeof(sz));
 
 			if (sz & (1ULL << 63)) {
 				cbdata->is_error = TRUE;
@@ -718,7 +718,7 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 		cbdata->io_buf->len += r;
 
 		if (cbdata->io_buf->len == cbdata->sz) {
-			gchar rep[4];
+			char rep[4];
 
 			ev_io_stop(cbdata->event_loop, &cbdata->ev);
 			/* Finished reading data */
@@ -742,18 +742,18 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 	}
 }
 
-static gint
+static int
 lua_worker_spawn_process(lua_State *L)
 {
 	struct rspamd_worker *w = lua_check_worker(L, 1);
 	struct rspamd_lua_process_cbdata *cbdata;
 	struct rspamd_abstract_worker_ctx *actx;
 	struct rspamd_srv_command srv_cmd;
-	const gchar *cmdline = NULL, *input = NULL, *proctitle = NULL;
+	const char *cmdline = NULL, *input = NULL, *proctitle = NULL;
 	gsize inputlen = 0;
 	pid_t pid;
 	GError *err = NULL;
-	gint func_cbref, cb_cbref;
+	int func_cbref, cb_cbref;
 
 	if (!rspamd_lua_parse_table_arguments(L, 2, &err,
 										  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
@@ -790,7 +790,7 @@ lua_worker_spawn_process(lua_State *L)
 	cbdata->wrk = w;
 	cbdata->L = L;
 	cbdata->event_loop = actx->event_loop;
-	cbdata->sz = (guint64) -1;
+	cbdata->sz = (uint64_t) -1;
 
 	pid = fork();
 
@@ -806,8 +806,8 @@ lua_worker_spawn_process(lua_State *L)
 	}
 	else if (pid == 0) {
 		/* Child */
-		gint rc;
-		gchar inbuf[4];
+		int rc;
+		char inbuf[4];
 
 		rspamd_log_on_fork(w->cf->type, w->srv->cfg, w->srv->logger);
 		rc = ottery_init(w->srv->cfg->libs_ctx->ottery_cfg);

@@ -24,35 +24,35 @@
 #define LOGBUF_LEN 8192
 
 struct rspamd_log_module {
-	gchar *mname;
-	guint id;
+	char *mname;
+	unsigned int id;
 };
 
 struct rspamd_log_modules {
-	guchar *bitset;
-	guint bitset_len;       /* Number of BITS used in bitset */
-	guint bitset_allocated; /* Size of bitset allocated in BYTES */
+	unsigned char *bitset;
+	unsigned int bitset_len;       /* Number of BITS used in bitset */
+	unsigned int bitset_allocated; /* Size of bitset allocated in BYTES */
 	GHashTable *modules;
 };
 
 struct rspamd_logger_error_elt {
-	gint completed;
+	int completed;
 	GQuark ptype;
 	pid_t pid;
-	gdouble ts;
-	gchar id[RSPAMD_LOG_ID_LEN + 1];
-	gchar module[9];
-	gchar message[];
+	double ts;
+	char id[RSPAMD_LOG_ID_LEN + 1];
+	char module[9];
+	char message[];
 };
 
 struct rspamd_logger_error_log {
 	struct rspamd_logger_error_elt *elts;
 	rspamd_mempool_t *pool;
-	guint32 max_elts;
-	guint32 elt_len;
+	uint32_t max_elts;
+	uint32_t elt_len;
 	/* Avoid false cache sharing */
-	guchar __padding[64 - sizeof(gpointer) * 2 - sizeof(guint64)];
-	guint cur_row;
+	unsigned char __padding[64 - sizeof(gpointer) * 2 - sizeof(uint64_t)];
+	unsigned int cur_row;
 };
 
 /**
@@ -61,24 +61,24 @@ struct rspamd_logger_error_log {
  */
 struct rspamd_logger_s {
 	struct rspamd_logger_funcs ops;
-	gint log_level;
+	int log_level;
 
 	struct rspamd_logger_error_log *errlog;
 	struct rspamd_cryptobox_pubkey *pk;
 	struct rspamd_cryptobox_keypair *keypair;
 
-	guint flags;
+	unsigned int flags;
 	gboolean closed;
 	gboolean enabled;
 	gboolean is_debug;
 	gboolean no_lock;
 
 	pid_t pid;
-	const gchar *process_type;
+	const char *process_type;
 	struct rspamd_radix_map_helper *debug_ip;
 	rspamd_mempool_mutex_t *mtx;
 	rspamd_mempool_t *pool;
-	guint64 log_cnt[4];
+	uint64_t log_cnt[4];
 };
 
 /*
@@ -93,10 +93,10 @@ void *rspamd_log_file_init(rspamd_logger_t *logger, struct rspamd_config *cfg,
 void *rspamd_log_file_reload(rspamd_logger_t *logger, struct rspamd_config *cfg,
 							 gpointer arg, uid_t uid, gid_t gid, GError **err);
 void rspamd_log_file_dtor(rspamd_logger_t *logger, gpointer arg);
-bool rspamd_log_file_log(const gchar *module, const gchar *id,
-						 const gchar *function,
-						 gint level_flags,
-						 const gchar *message,
+bool rspamd_log_file_log(const char *module, const char *id,
+						 const char *function,
+						 int level_flags,
+						 const char *message,
 						 gsize mlen,
 						 rspamd_logger_t *rspamd_log,
 						 gpointer arg);
@@ -128,10 +128,10 @@ struct rspamd_logger_iov_ctx {
  */
 void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
 						 double ts,
-						 const gchar *module, const gchar *id,
-						 const gchar *function,
-						 gint level_flags,
-						 const gchar *message,
+						 const char *module, const char *id,
+						 const char *function,
+						 int level_flags,
+						 const char *message,
 						 gsize mlen,
 						 rspamd_logger_t *rspamd_log);
 
@@ -148,8 +148,8 @@ void rspamd_log_iov_free(struct rspamd_logger_iov_ctx *iov_ctx);
  * @param dstlen
  * @return end of the escaped buffer
  */
-gchar *rspamd_log_line_hex_escape(const guchar *src, gsize srclen,
-								  gchar *dst, gsize dstlen);
+char *rspamd_log_line_hex_escape(const unsigned char *src, gsize srclen,
+								 char *dst, gsize dstlen);
 /**
  * Returns number of characters to be escaped, e.g. a caller can allocate a new buffer
  * the desired number of characters
@@ -157,7 +157,7 @@ gchar *rspamd_log_line_hex_escape(const guchar *src, gsize srclen,
  * @param srclen
  * @return number of characters to be escaped
  */
-gsize rspamd_log_line_need_escape(const guchar *src, gsize srclen);
+gsize rspamd_log_line_need_escape(const unsigned char *src, gsize srclen);
 
 static const struct rspamd_logger_funcs file_log_funcs = {
 	.init = rspamd_log_file_init,
@@ -175,10 +175,10 @@ void *rspamd_log_syslog_init(rspamd_logger_t *logger, struct rspamd_config *cfg,
 void *rspamd_log_syslog_reload(rspamd_logger_t *logger, struct rspamd_config *cfg,
 							   gpointer arg, uid_t uid, gid_t gid, GError **err);
 void rspamd_log_syslog_dtor(rspamd_logger_t *logger, gpointer arg);
-bool rspamd_log_syslog_log(const gchar *module, const gchar *id,
-						   const gchar *function,
-						   gint level_flags,
-						   const gchar *message,
+bool rspamd_log_syslog_log(const char *module, const char *id,
+						   const char *function,
+						   int level_flags,
+						   const char *message,
 						   gsize mlen,
 						   rspamd_logger_t *rspamd_log,
 						   gpointer arg);
@@ -199,10 +199,10 @@ void *rspamd_log_console_init(rspamd_logger_t *logger, struct rspamd_config *cfg
 void *rspamd_log_console_reload(rspamd_logger_t *logger, struct rspamd_config *cfg,
 								gpointer arg, uid_t uid, gid_t gid, GError **err);
 void rspamd_log_console_dtor(rspamd_logger_t *logger, gpointer arg);
-bool rspamd_log_console_log(const gchar *module, const gchar *id,
-							const gchar *function,
-							gint level_flags,
-							const gchar *message,
+bool rspamd_log_console_log(const char *module, const char *id,
+							const char *function,
+							int level_flags,
+							const char *message,
 							gsize mlen,
 							rspamd_logger_t *rspamd_log,
 							gpointer arg);

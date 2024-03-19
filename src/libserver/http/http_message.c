@@ -47,13 +47,13 @@ rspamd_http_new_message(enum rspamd_http_message_type type)
 }
 
 struct rspamd_http_message *
-rspamd_http_message_from_url(const gchar *url)
+rspamd_http_message_from_url(const char *url)
 {
 	struct http_parser_url pu;
 	struct rspamd_http_message *msg;
-	const gchar *host, *path;
+	const char *host, *path;
 	size_t pathlen, urllen;
-	guint flags = 0;
+	unsigned int flags = 0;
 
 	if (url == NULL) {
 		return NULL;
@@ -127,11 +127,11 @@ rspamd_http_message_from_url(const gchar *url)
 	return msg;
 }
 
-const gchar *
+const char *
 rspamd_http_message_get_body(struct rspamd_http_message *msg,
 							 gsize *blen)
 {
-	const gchar *ret = NULL;
+	const char *ret = NULL;
 
 	if (msg->body_buf.len > 0) {
 		ret = msg->body_buf.begin;
@@ -169,7 +169,7 @@ rspamd_http_message_shmem_ref(struct rspamd_http_message *msg)
 	return NULL;
 }
 
-guint rspamd_http_message_get_flags(struct rspamd_http_message *msg)
+unsigned int rspamd_http_message_get_flags(struct rspamd_http_message *msg)
 {
 	return msg->flags;
 }
@@ -181,7 +181,7 @@ void rspamd_http_message_shmem_unref(struct rspamd_storage_shmem *p)
 
 gboolean
 rspamd_http_message_set_body(struct rspamd_http_message *msg,
-							 const gchar *data, gsize len)
+							 const char *data, gsize len)
 {
 	union _rspamd_storage_u *storage;
 	storage = &msg->body_buf.c;
@@ -264,9 +264,9 @@ rspamd_http_message_set_body(struct rspamd_http_message *msg,
 }
 
 void rspamd_http_message_set_method(struct rspamd_http_message *msg,
-									const gchar *method)
+									const char *method)
 {
-	gint i;
+	int i;
 
 	/* Linear search: not very efficient method */
 	for (i = 0; i < HTTP_METHOD_MAX; i++) {
@@ -278,7 +278,7 @@ void rspamd_http_message_set_method(struct rspamd_http_message *msg,
 
 gboolean
 rspamd_http_message_set_body_from_fd(struct rspamd_http_message *msg,
-									 gint fd)
+									 int fd)
 {
 	union _rspamd_storage_u *storage;
 	struct stat st;
@@ -413,7 +413,7 @@ rspamd_http_message_grow_body(struct rspamd_http_message *msg, gsize len)
 
 gboolean
 rspamd_http_message_append_body(struct rspamd_http_message *msg,
-								const gchar *data, gsize len)
+								const char *data, gsize len)
 {
 	union _rspamd_storage_u *storage;
 
@@ -522,14 +522,14 @@ void rspamd_http_message_set_peer_key(struct rspamd_http_message *msg,
 }
 
 void rspamd_http_message_add_header_len(struct rspamd_http_message *msg,
-										const gchar *name,
-										const gchar *value,
+										const char *name,
+										const char *value,
 										gsize len)
 {
 	struct rspamd_http_header *hdr, *found;
-	guint nlen, vlen;
+	unsigned int nlen, vlen;
 	khiter_t k;
-	gint r;
+	int r;
 
 	if (msg != NULL && name != NULL && value != NULL) {
 		hdr = g_malloc0(sizeof(struct rspamd_http_header));
@@ -541,7 +541,7 @@ void rspamd_http_message_add_header_len(struct rspamd_http_message *msg,
 		}
 
 		hdr->combined = rspamd_fstring_sized_new(nlen + vlen + 4);
-		rspamd_printf_fstring(&hdr->combined, "%s: %*s\r\n", name, (gint) vlen,
+		rspamd_printf_fstring(&hdr->combined, "%s: %*s\r\n", name, (int) vlen,
 							  value);
 		hdr->name.begin = hdr->combined->str;
 		hdr->name.len = nlen;
@@ -564,8 +564,8 @@ void rspamd_http_message_add_header_len(struct rspamd_http_message *msg,
 }
 
 void rspamd_http_message_add_header(struct rspamd_http_message *msg,
-									const gchar *name,
-									const gchar *value)
+									const char *name,
+									const char *value)
 {
 	if (value) {
 		rspamd_http_message_add_header_len(msg, name, value, strlen(value));
@@ -573,13 +573,13 @@ void rspamd_http_message_add_header(struct rspamd_http_message *msg,
 }
 
 void rspamd_http_message_add_header_fstr(struct rspamd_http_message *msg,
-										 const gchar *name,
+										 const char *name,
 										 rspamd_fstring_t *value)
 {
 	struct rspamd_http_header *hdr, *found = NULL;
-	guint nlen, vlen;
+	unsigned int nlen, vlen;
 	khiter_t k;
-	gint r;
+	int r;
 
 	if (msg != NULL && name != NULL && value != NULL) {
 		hdr = g_malloc0(sizeof(struct rspamd_http_header));
@@ -609,11 +609,11 @@ void rspamd_http_message_add_header_fstr(struct rspamd_http_message *msg,
 
 const rspamd_ftok_t *
 rspamd_http_message_find_header(struct rspamd_http_message *msg,
-								const gchar *name)
+								const char *name)
 {
 	const rspamd_ftok_t *res = NULL;
 	rspamd_ftok_t srch;
-	guint slen = strlen(name);
+	unsigned int slen = strlen(name);
 	khiter_t k;
 
 	if (msg != NULL) {
@@ -633,15 +633,15 @@ rspamd_http_message_find_header(struct rspamd_http_message *msg,
 GPtrArray *
 rspamd_http_message_find_header_multiple(
 	struct rspamd_http_message *msg,
-	const gchar *name)
+	const char *name)
 {
 	GPtrArray *res = NULL;
 	struct rspamd_http_header *hdr, *cur;
 	rspamd_ftok_t srch;
 	khiter_t k;
-	guint cnt = 0;
+	unsigned int cnt = 0;
 
-	guint slen = strlen(name);
+	unsigned int slen = strlen(name);
 
 	if (msg != NULL) {
 		srch.begin = name;
@@ -669,11 +669,11 @@ rspamd_http_message_find_header_multiple(
 
 gboolean
 rspamd_http_message_remove_header(struct rspamd_http_message *msg,
-								  const gchar *name)
+								  const char *name)
 {
 	struct rspamd_http_header *hdr, *hcur, *hcurtmp;
 	gboolean res = FALSE;
-	guint slen = strlen(name);
+	unsigned int slen = strlen(name);
 	rspamd_ftok_t srch;
 	khiter_t k;
 
@@ -699,7 +699,7 @@ rspamd_http_message_remove_header(struct rspamd_http_message *msg,
 	return res;
 }
 
-const gchar *
+const char *
 rspamd_http_message_get_http_host(struct rspamd_http_message *msg,
 								  gsize *hostlen)
 {
@@ -738,7 +738,7 @@ bool rspamd_http_message_is_standard_port(struct rspamd_http_message *msg)
 	return msg->port == 80;
 }
 
-const gchar *rspamd_http_message_get_url(struct rspamd_http_message *msg, gsize *len)
+const char *rspamd_http_message_get_url(struct rspamd_http_message *msg, gsize *len)
 {
 	if (msg->url) {
 		*len = msg->url->len;

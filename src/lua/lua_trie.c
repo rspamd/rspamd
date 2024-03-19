@@ -60,7 +60,7 @@ static const struct luaL_reg trielib_f[] = {
 	{NULL, NULL}};
 
 static struct rspamd_multipattern *
-lua_check_trie(lua_State *L, gint idx)
+lua_check_trie(lua_State *L, int idx)
 {
 	void *ud = rspamd_lua_check_udata(L, 1, rspamd_trie_classname);
 
@@ -68,7 +68,7 @@ lua_check_trie(lua_State *L, gint idx)
 	return ud ? *((struct rspamd_multipattern **) ud) : NULL;
 }
 
-static gint
+static int
 lua_trie_destroy(lua_State *L)
 {
 	struct rspamd_multipattern *trie = lua_check_trie(L, 1);
@@ -86,7 +86,7 @@ lua_trie_destroy(lua_State *L)
  *
  * @return {bool} true if hyperscan is supported
  */
-static gint
+static int
 lua_trie_has_hyperscan(lua_State *L)
 {
 	lua_pushboolean(L, rspamd_multipattern_has_hyperscan());
@@ -99,11 +99,11 @@ lua_trie_has_hyperscan(lua_State *L)
  * @param {table} array of string patterns
  * @return {trie} new trie object
  */
-static gint
+static int
 lua_trie_create(lua_State *L)
 {
 	struct rspamd_multipattern *trie, **ptrie;
-	gint npat = 0, flags = RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_GLOB;
+	int npat = 0, flags = RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_GLOB;
 	GError *err = NULL;
 
 	if (lua_isnumber(L, 2)) {
@@ -130,7 +130,7 @@ lua_trie_create(lua_State *L)
 
 		while (lua_next(L, -2) != 0) {
 			if (lua_isstring(L, -1)) {
-				const gchar *pat;
+				const char *pat;
 				gsize patlen;
 
 				pat = lua_tolstring(L, -1, &patlen);
@@ -173,17 +173,17 @@ lua_trie_create(lua_State *L)
 	} while (0)
 
 /* Normal callback type */
-static gint
+static int
 lua_trie_lua_cb_callback(struct rspamd_multipattern *mp,
-						 guint strnum,
-						 gint match_start,
-						 gint textpos,
-						 const gchar *text,
+						 unsigned int strnum,
+						 int match_start,
+						 int textpos,
+						 const char *text,
 						 gsize len,
 						 void *context)
 {
 	lua_State *L = context;
-	gint ret;
+	int ret;
 
 	gboolean report_start = lua_toboolean(L, -1);
 
@@ -208,18 +208,18 @@ lua_trie_lua_cb_callback(struct rspamd_multipattern *mp,
 }
 
 /* Table like callback, expect result table on top of the stack */
-static gint
+static int
 lua_trie_table_callback(struct rspamd_multipattern *mp,
-						guint strnum,
-						gint match_start,
-						gint textpos,
-						const gchar *text,
+						unsigned int strnum,
+						int match_start,
+						int textpos,
+						const char *text,
 						gsize len,
 						void *context)
 {
 	lua_State *L = context;
 
-	gint report_start = lua_toboolean(L, -2);
+	int report_start = lua_toboolean(L, -2);
 	/* Set table, indexed by pattern number */
 	lua_rawgeti(L, -1, strnum + 1);
 
@@ -247,12 +247,12 @@ lua_trie_table_callback(struct rspamd_multipattern *mp,
 /*
  * We assume that callback argument is at pos 3 and icase is in position 4
  */
-static gint
+static int
 lua_trie_search_str(lua_State *L, struct rspamd_multipattern *trie,
-					const gchar *str, gsize len, rspamd_multipattern_cb_t cb)
+					const char *str, gsize len, rspamd_multipattern_cb_t cb)
 {
-	gint ret;
-	guint nfound = 0;
+	int ret;
+	unsigned int nfound = 0;
 
 	if ((ret = rspamd_multipattern_lookup(trie, str, len,
 										  cb, L, &nfound)) == 0) {
@@ -270,18 +270,18 @@ lua_trie_search_str(lua_State *L, struct rspamd_multipattern *trie,
  * @param {boolean} report_start report both start and end offset when matching patterns
  * @return {boolean} `true` if any pattern has been found (`cb` might be called multiple times however). If `cb` is not defined then it returns a table of match positions indexed by pattern number
  */
-static gint
+static int
 lua_trie_match(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_multipattern *trie = lua_check_trie(L, 1);
-	const gchar *text;
+	const char *text;
 	gsize len;
 	gboolean found = FALSE, report_start = FALSE;
 	struct rspamd_lua_text *t;
 	rspamd_multipattern_cb_t cb = lua_trie_lua_cb_callback;
 
-	gint old_top = lua_gettop(L);
+	int old_top = lua_gettop(L);
 
 	if (trie) {
 		if (lua_type(L, 3) != LUA_TFUNCTION) {
@@ -360,14 +360,14 @@ lua_trie_match(lua_State *L)
  * @param {boolean} caseless if `true` then match ignores symbols case (ASCII only)
  * @return {boolean} `true` if any pattern has been found (`cb` might be called multiple times however)
  */
-static gint
+static int
 lua_trie_search_mime(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_multipattern *trie = lua_check_trie(L, 1);
 	struct rspamd_task *task = lua_check_task(L, 2);
 	struct rspamd_mime_text_part *part;
-	const gchar *text;
+	const char *text;
 	gsize len, i;
 	gboolean found = FALSE;
 	rspamd_multipattern_cb_t cb = lua_trie_lua_cb_callback;
@@ -398,13 +398,13 @@ lua_trie_search_mime(lua_State *L)
  * @param {boolean} caseless if `true` then match ignores symbols case (ASCII only)
  * @return {boolean} `true` if any pattern has been found (`cb` might be called multiple times however)
  */
-static gint
+static int
 lua_trie_search_rawmsg(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_multipattern *trie = lua_check_trie(L, 1);
 	struct rspamd_task *task = lua_check_task(L, 2);
-	const gchar *text;
+	const char *text;
 	gsize len;
 	gboolean found = FALSE;
 
@@ -429,13 +429,13 @@ lua_trie_search_rawmsg(lua_State *L)
  * @param {boolean} caseless if `true` then match ignores symbols case (ASCII only)
  * @return {boolean} `true` if any pattern has been found (`cb` might be called multiple times however)
  */
-static gint
+static int
 lua_trie_search_rawbody(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_multipattern *trie = lua_check_trie(L, 1);
 	struct rspamd_task *task = lua_check_task(L, 2);
-	const gchar *text;
+	const char *text;
 	gsize len;
 	gboolean found = FALSE;
 
@@ -459,7 +459,7 @@ lua_trie_search_rawbody(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_load_trie(lua_State *L)
 {
 	lua_newtable(L);

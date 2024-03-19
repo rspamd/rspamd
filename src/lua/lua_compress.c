@@ -67,7 +67,7 @@ static const struct luaL_reg zstd_decompress_lib_m[] = {
 	{NULL, NULL}};
 
 static ZSTD_CStream *
-lua_check_zstd_compress_ctx(lua_State *L, gint pos)
+lua_check_zstd_compress_ctx(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_zstd_compress_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'zstd_compress' expected");
@@ -75,7 +75,7 @@ lua_check_zstd_compress_ctx(lua_State *L, gint pos)
 }
 
 static ZSTD_DStream *
-lua_check_zstd_decompress_ctx(lua_State *L, gint pos)
+lua_check_zstd_decompress_ctx(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_zstd_decompress_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'zstd_decompress' expected");
@@ -90,12 +90,12 @@ int lua_zstd_push_error(lua_State *L, int err)
 	return 2;
 }
 
-gint lua_compress_zstd_compress(lua_State *L)
+int lua_compress_zstd_compress(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t = NULL, *res;
 	gsize sz, r;
-	gint comp_level = 1;
+	int comp_level = 1;
 
 	t = lua_check_text_or_string(L, 1);
 
@@ -135,7 +135,7 @@ gint lua_compress_zstd_compress(lua_State *L)
 	return 1;
 }
 
-gint lua_compress_zstd_decompress(lua_State *L)
+int lua_compress_zstd_decompress(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t = NULL, *res;
@@ -143,7 +143,7 @@ gint lua_compress_zstd_decompress(lua_State *L)
 	ZSTD_DStream *zstream;
 	ZSTD_inBuffer zin;
 	ZSTD_outBuffer zout;
-	gchar *out;
+	char *out;
 
 	t = lua_check_text_or_string(L, 1);
 
@@ -200,14 +200,14 @@ gint lua_compress_zstd_decompress(lua_State *L)
 	return 2;
 }
 
-gint lua_compress_zlib_decompress(lua_State *L, bool is_gzip)
+int lua_compress_zlib_decompress(lua_State *L, bool is_gzip)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t = NULL, *res;
 	gsize sz;
 	z_stream strm;
-	gint rc;
-	guchar *p;
+	int rc;
+	unsigned char *p;
 	gsize remain;
 	gssize size_limit = -1;
 
@@ -249,14 +249,14 @@ gint lua_compress_zlib_decompress(lua_State *L, bool is_gzip)
 	}
 
 	strm.avail_in = t->len;
-	strm.next_in = (guchar *) t->start;
+	strm.next_in = (unsigned char *) t->start;
 
 	res = lua_newuserdata(L, sizeof(*res));
 	res->start = g_malloc(sz);
 	res->flags = RSPAMD_TEXT_FLAG_OWN;
 	rspamd_lua_setclass(L, rspamd_text_classname, -1);
 
-	p = (guchar *) res->start;
+	p = (unsigned char *) res->start;
 	remain = sz;
 
 	while (strm.avail_in != 0) {
@@ -298,7 +298,7 @@ gint lua_compress_zlib_decompress(lua_State *L, bool is_gzip)
 			remain = res->len;
 			res->start = g_realloc((gpointer) res->start, res->len * 2);
 			sz = res->len * 2;
-			p = (guchar *) res->start + remain;
+			p = (unsigned char *) res->start + remain;
 			remain = sz - remain;
 		}
 	}
@@ -309,14 +309,14 @@ gint lua_compress_zlib_decompress(lua_State *L, bool is_gzip)
 	return 1;
 }
 
-gint lua_compress_zlib_compress(lua_State *L)
+int lua_compress_zlib_compress(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t = NULL, *res;
 	gsize sz;
 	z_stream strm;
-	gint rc, comp_level = Z_DEFAULT_COMPRESSION;
-	guchar *p;
+	int rc, comp_level = Z_DEFAULT_COMPRESSION;
+	unsigned char *p;
 	gsize remain;
 
 	t = lua_check_text_or_string(L, 1);
@@ -346,14 +346,14 @@ gint lua_compress_zlib_compress(lua_State *L)
 	sz = deflateBound(&strm, t->len);
 
 	strm.avail_in = t->len;
-	strm.next_in = (guchar *) t->start;
+	strm.next_in = (unsigned char *) t->start;
 
 	res = lua_newuserdata(L, sizeof(*res));
 	res->start = g_malloc(sz);
 	res->flags = RSPAMD_TEXT_FLAG_OWN;
 	rspamd_lua_setclass(L, rspamd_text_classname, -1);
 
-	p = (guchar *) res->start;
+	p = (unsigned char *) res->start;
 	remain = sz;
 
 	while (strm.avail_in != 0) {
@@ -384,7 +384,7 @@ gint lua_compress_zlib_compress(lua_State *L)
 			remain = res->len;
 			res->start = g_realloc((gpointer) res->start, strm.avail_in + sz);
 			sz = strm.avail_in + sz;
-			p = (guchar *) res->start + remain;
+			p = (unsigned char *) res->start + remain;
 			remain = sz - remain;
 		}
 	}
@@ -404,7 +404,7 @@ static const char *const zstd_stream_op[] = {
 	"end",
 	NULL};
 
-static gint
+static int
 lua_zstd_compress_ctx(lua_State *L)
 {
 	ZSTD_CCtx *ctx, **pctx;
@@ -421,7 +421,7 @@ lua_zstd_compress_ctx(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_zstd_compress_dtor(lua_State *L)
 {
 	ZSTD_CCtx *ctx = lua_check_zstd_compress_ctx(L, 1);
@@ -433,7 +433,7 @@ lua_zstd_compress_dtor(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_zstd_compress_reset(lua_State *L)
 {
 	ZSTD_CCtx *ctx = lua_check_zstd_compress_ctx(L, 1);
@@ -448,7 +448,7 @@ lua_zstd_compress_reset(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_zstd_compress_stream(lua_State *L)
 {
 	ZSTD_CStream *ctx = lua_check_zstd_compress_ctx(L, 1);
@@ -509,7 +509,7 @@ lua_zstd_compress_stream(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_zstd_decompress_dtor(lua_State *L)
 {
 	ZSTD_DStream *ctx = lua_check_zstd_decompress_ctx(L, 1);
@@ -522,7 +522,7 @@ lua_zstd_decompress_dtor(lua_State *L)
 }
 
 
-static gint
+static int
 lua_zstd_decompress_ctx(lua_State *L)
 {
 	ZSTD_DStream *ctx, **pctx;
@@ -539,7 +539,7 @@ lua_zstd_decompress_ctx(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_zstd_decompress_stream(lua_State *L)
 {
 	ZSTD_DStream *ctx = lua_check_zstd_decompress_ctx(L, 1);
@@ -603,7 +603,7 @@ lua_zstd_decompress_stream(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_load_zstd(lua_State *L)
 {
 	lua_newtable(L);

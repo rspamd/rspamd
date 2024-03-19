@@ -38,7 +38,7 @@ struct rspamd_client_request;
  * Since rspamd uses untagged HTTP we can pass a single message per socket
  */
 struct rspamd_client_connection {
-	gint fd;
+	int fd;
 	GString *server_name;
 	struct rspamd_cryptobox_pubkey *key;
 	struct rspamd_cryptobox_keypair *keypair;
@@ -46,8 +46,8 @@ struct rspamd_client_connection {
 	ev_tstamp timeout;
 	struct rspamd_http_connection *http_conn;
 	gboolean req_sent;
-	gdouble start_time;
-	gdouble send_time;
+	double start_time;
+	double send_time;
 	struct rspamd_client_request *req;
 	struct rspamd_keypair_cache *keys_cache;
 };
@@ -82,10 +82,10 @@ rspamd_client_request_free(struct rspamd_client_request *req)
 	}
 }
 
-static gint
+static int
 rspamd_client_body_handler(struct rspamd_http_connection *conn,
 						   struct rspamd_http_message *msg,
-						   const gchar *chunk, gsize len)
+						   const char *chunk, gsize len)
 {
 	/* Do nothing here */
 	return 0;
@@ -104,7 +104,7 @@ rspamd_client_error_handler(struct rspamd_http_connection *conn, GError *err)
 			c->start_time, c->send_time, NULL, 0, err);
 }
 
-static gint
+static int
 rspamd_client_finish_handler(struct rspamd_http_connection *conn,
 							 struct rspamd_http_message *msg)
 {
@@ -114,8 +114,8 @@ rspamd_client_finish_handler(struct rspamd_http_connection *conn,
 	struct ucl_parser *parser;
 	GError *err;
 	const rspamd_ftok_t *tok;
-	const gchar *start, *body = NULL;
-	guchar *out = NULL;
+	const char *start, *body = NULL;
+	unsigned char *out = NULL;
 	gsize len, bodylen = 0;
 
 	c = req->conn;
@@ -134,7 +134,7 @@ rspamd_client_finish_handler(struct rspamd_http_connection *conn,
 		if (rspamd_http_message_get_body(msg, NULL) == NULL || msg->code / 100 != 2) {
 			err = g_error_new(RCLIENT_ERROR, msg->code, "HTTP error: %d, %.*s",
 							  msg->code,
-							  (gint) msg->status->len, msg->status->str);
+							  (int) msg->status->len, msg->status->str);
 			req->cb(c, msg, c->server_name->str, NULL, req->input, req->ud,
 					c->start_time, c->send_time, body, bodylen, err);
 			g_error_free(err);
@@ -263,11 +263,11 @@ end:
 
 struct rspamd_client_connection *
 rspamd_client_init(struct rspamd_http_context *http_ctx,
-				   struct ev_loop *ev_base, const gchar *name,
-				   guint16 port, gdouble timeout, const gchar *key)
+				   struct ev_loop *ev_base, const char *name,
+				   uint16_t port, double timeout, const char *key)
 {
 	struct rspamd_client_connection *conn;
-	gint fd;
+	int fd;
 
 	fd = rspamd_socket(name, port, SOCK_STREAM, TRUE, FALSE, TRUE);
 
@@ -321,21 +321,21 @@ rspamd_client_init(struct rspamd_http_context *http_ctx,
 
 gboolean
 rspamd_client_command(struct rspamd_client_connection *conn,
-					  const gchar *command, GQueue *attrs,
+					  const char *command, GQueue *attrs,
 					  FILE *in, rspamd_client_callback cb,
 					  gpointer ud, gboolean compressed,
-					  const gchar *comp_dictionary,
-					  const gchar *filename,
+					  const char *comp_dictionary,
+					  const char *filename,
 					  GError **err)
 {
 	struct rspamd_client_request *req;
 	struct rspamd_http_client_header *nh;
-	gchar *p;
+	char *p;
 	gsize remain, old_len;
 	GList *cur;
 	GString *input = NULL;
 	rspamd_fstring_t *body;
-	guint dict_id = 0;
+	unsigned int dict_id = 0;
 	gsize dict_len = 0;
 	void *dict = NULL;
 	ZSTD_CCtx *zctx;
@@ -445,7 +445,7 @@ rspamd_client_command(struct rspamd_client_connection *conn,
 		rspamd_http_message_add_header(req->msg, COMPRESSION_HEADER, "zstd");
 
 		if (dict_id != 0) {
-			gchar dict_str[32];
+			char dict_str[32];
 
 			rspamd_snprintf(dict_str, sizeof(dict_str), "%ud", dict_id);
 			rspamd_http_message_add_header(req->msg, "Dictionary", dict_str);

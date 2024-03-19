@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,7 +74,7 @@ static void rspamd_cld_handler(EV_P_ ev_child *w,
 							   struct rspamd_worker *wrk);
 
 /* Control socket */
-static gint control_fd;
+static int control_fd;
 static ev_io control_ev;
 static struct rspamd_stat old_stat;
 static ev_timer stat_ev;
@@ -84,17 +84,17 @@ static gboolean valgrind_mode = FALSE;
 /* Cmdline options */
 static gboolean no_fork = FALSE;
 static gboolean show_version = FALSE;
-static gchar **cfg_names = NULL;
-static gchar *rspamd_user = NULL;
-static gchar *rspamd_group = NULL;
-static gchar *rspamd_pidfile = NULL;
+static char **cfg_names = NULL;
+static char *rspamd_user = NULL;
+static char *rspamd_group = NULL;
+static char *rspamd_pidfile = NULL;
 static gboolean is_debug = FALSE;
 static gboolean is_insecure = FALSE;
 static GHashTable *ucl_vars = NULL;
-static gchar **lua_env = NULL;
+static char **lua_env = NULL;
 static gboolean skip_template = FALSE;
 
-static gint term_attempts = 0;
+static int term_attempts = 0;
 
 /* List of active listen sockets indexed by worker type */
 static GHashTable *listen_sockets = NULL;
@@ -104,8 +104,8 @@ extern module_t *modules[];
 extern worker_t *workers[];
 
 /* Command line options */
-static gboolean rspamd_parse_var(const gchar *option_name,
-								 const gchar *value, gpointer data,
+static gboolean rspamd_parse_var(const char *option_name,
+								 const char *value, gpointer data,
 								 GError **error);
 static GOptionEntry entries[] =
 	{
@@ -134,11 +134,11 @@ static GOptionEntry entries[] =
 		{NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL}};
 
 static gboolean
-rspamd_parse_var(const gchar *option_name,
-				 const gchar *value, gpointer data,
+rspamd_parse_var(const char *option_name,
+				 const char *value, gpointer data,
 				 GError **error)
 {
-	gchar *k, *v, *t;
+	char *k, *v, *t;
 
 	t = strchr(value, '=');
 
@@ -165,11 +165,11 @@ rspamd_parse_var(const gchar *option_name,
 }
 
 static void
-read_cmd_line(gint *argc, gchar ***argv, struct rspamd_config *cfg)
+read_cmd_line(int *argc, char ***argv, struct rspamd_config *cfg)
 {
 	GError *error = NULL;
 	GOptionContext *context;
-	guint cfg_num;
+	unsigned int cfg_num;
 
 	context = g_option_context_new("- run rspamd daemon");
 #if defined(GIT_VERSION) && GIT_VERSION == 1
@@ -311,7 +311,7 @@ static gboolean
 reread_config(struct rspamd_main *rspamd_main)
 {
 	struct rspamd_config *tmp_cfg, *old_cfg;
-	gchar *cfg_file;
+	char *cfg_file;
 	int load_opts = RSPAMD_CONFIG_INIT_VALIDATE | RSPAMD_CONFIG_INIT_SYMCACHE |
 					RSPAMD_CONFIG_INIT_LIBS | RSPAMD_CONFIG_INIT_URL;
 
@@ -362,7 +362,7 @@ struct waiting_worker {
 	struct rspamd_main *rspamd_main;
 	struct ev_timer wait_ev;
 	struct rspamd_worker_conf *cf;
-	guint oldindex;
+	unsigned int oldindex;
 };
 
 static void
@@ -381,7 +381,7 @@ rspamd_fork_delayed_cb(EV_P_ ev_timer *w, int revents)
 
 static void
 rspamd_fork_delayed(struct rspamd_worker_conf *cf,
-					guint index,
+					unsigned int index,
 					struct rspamd_main *rspamd_main)
 {
 	struct waiting_worker *nw;
@@ -397,12 +397,12 @@ rspamd_fork_delayed(struct rspamd_worker_conf *cf,
 }
 
 static GList *
-create_listen_socket(GPtrArray *addrs, guint cnt,
+create_listen_socket(GPtrArray *addrs, unsigned int cnt,
 					 enum rspamd_worker_socket_type listen_type)
 {
 	GList *result = NULL;
-	gint fd;
-	guint i;
+	int fd;
+	unsigned int i;
 	static const int listen_opts = RSPAMD_INET_ADDRESS_LISTEN_ASYNC;
 	struct rspamd_worker_listen_socket *ls;
 
@@ -442,13 +442,13 @@ create_listen_socket(GPtrArray *addrs, guint cnt,
 }
 
 static GList *
-systemd_get_socket(struct rspamd_main *rspamd_main, const gchar *fdname)
+systemd_get_socket(struct rspamd_main *rspamd_main, const char *fdname)
 {
 	int number, sock, num_passed, flags;
 	GList *result = NULL;
-	const gchar *e;
-	gchar **fdnames;
-	gchar *end;
+	const char *e;
+	char **fdnames;
+	char *end;
 	struct stat st;
 	static const int sd_listen_fds_start = 3; /* SD_LISTEN_FDS_START */
 	struct rspamd_worker_listen_socket *ls;
@@ -460,7 +460,7 @@ systemd_get_socket(struct rspamd_main *rspamd_main, const gchar *fdname)
 		struct sockaddr_in6 s6;
 	} addr_storage;
 	socklen_t slen = sizeof(addr_storage);
-	gint stype;
+	int stype;
 
 	number = strtoul(fdname, &end, 10);
 	if (end != NULL && *end != '\0') {
@@ -561,13 +561,13 @@ static void
 pass_signal_cb(gpointer key, gpointer value, gpointer ud)
 {
 	struct rspamd_worker *cur = value;
-	gint signo = GPOINTER_TO_INT(ud);
+	int signo = GPOINTER_TO_INT(ud);
 
 	kill(cur->pid, signo);
 }
 
 static void
-rspamd_pass_signal(GHashTable *workers, gint signo)
+rspamd_pass_signal(GHashTable *workers, int signo)
 {
 	g_hash_table_foreach(workers, pass_signal_cb, GINT_TO_POINTER(signo));
 }
@@ -576,10 +576,10 @@ static inline uintptr_t
 make_listen_key(struct rspamd_worker_bind_conf *cf)
 {
 	rspamd_cryptobox_fast_hash_state_t st;
-	guint i, keylen = 0;
-	guint8 *key;
+	unsigned int i, keylen = 0;
+	uint8_t *key;
 	rspamd_inet_addr_t *addr;
-	guint16 port;
+	uint16_t port;
 
 	rspamd_cryptobox_fast_hash_init(&st, rspamd_hash_seed());
 	if (cf->is_systemd) {
@@ -605,7 +605,7 @@ static void
 spawn_worker_type(struct rspamd_main *rspamd_main, struct ev_loop *event_loop,
 				  struct rspamd_worker_conf *cf)
 {
-	gint i;
+	int i;
 
 	if (cf->count < 0) {
 		msg_info_main("skip spawning of worker %s: disabled in configuration",
@@ -645,7 +645,7 @@ spawn_workers(struct rspamd_main *rspamd_main, struct ev_loop *ev_base)
 	gboolean listen_ok = FALSE;
 	GPtrArray *seen_mandatory_workers;
 	worker_t **cw, *wrk;
-	guint i;
+	unsigned int i;
 
 	/* Special hack for hs_helper if it's not defined in a config */
 	seen_mandatory_workers = g_ptr_array_new();
@@ -851,9 +851,9 @@ struct core_check_cbdata {
 
 static struct core_check_cbdata cores_cbdata;
 
-static gint
-rspamd_check_core_cb(const gchar *path, const struct stat *st,
-					 gint flag, struct FTW *ft)
+static int
+rspamd_check_core_cb(const char *path, const struct stat *st,
+					 int flag, struct FTW *ft)
 {
 	if (S_ISREG(st->st_mode)) {
 		cores_cbdata.total_count++;
@@ -1052,7 +1052,7 @@ rspamd_term_handler(struct ev_loop *loop, ev_signal *w, int revents)
 		shutdown_ts = MAX(SOFT_SHUTDOWN_TIME,
 						  rspamd_main->cfg->task_timeout * 2.0);
 		msg_info_main("catch termination signal, waiting for %d children for %.2f seconds",
-					  (gint) g_hash_table_size(rspamd_main->workers),
+					  (int) g_hash_table_size(rspamd_main->workers),
 					  valgrind_mode ? shutdown_ts * 10 : shutdown_ts);
 		/* Stop srv events to avoid false notifications */
 		g_hash_table_foreach(rspamd_main->workers, stop_srv_ev, rspamd_main);
@@ -1099,22 +1099,22 @@ rspamd_stat_update_handler(struct ev_loop *loop, ev_timer *w, int revents)
 {
 	struct rspamd_main *rspamd_main = (struct rspamd_main *) w->data;
 	struct rspamd_stat cur_stat;
-	gchar proctitle[128];
+	char proctitle[128];
 
 	memcpy(&cur_stat, rspamd_main->stat, sizeof(cur_stat));
 
 	if (old_stat.messages_scanned > 0 &&
 		cur_stat.messages_scanned > old_stat.messages_scanned) {
-		gdouble rate = (double) (cur_stat.messages_scanned - old_stat.messages_scanned) /
-					   w->repeat;
-		gdouble old_spam = old_stat.actions_stat[METRIC_ACTION_REJECT] +
-						   old_stat.actions_stat[METRIC_ACTION_ADD_HEADER] +
-						   old_stat.actions_stat[METRIC_ACTION_REWRITE_SUBJECT];
-		gdouble old_ham = old_stat.actions_stat[METRIC_ACTION_NOACTION];
-		gdouble new_spam = cur_stat.actions_stat[METRIC_ACTION_REJECT] +
-						   cur_stat.actions_stat[METRIC_ACTION_ADD_HEADER] +
-						   cur_stat.actions_stat[METRIC_ACTION_REWRITE_SUBJECT];
-		gdouble new_ham = cur_stat.actions_stat[METRIC_ACTION_NOACTION];
+		double rate = (double) (cur_stat.messages_scanned - old_stat.messages_scanned) /
+					  w->repeat;
+		double old_spam = old_stat.actions_stat[METRIC_ACTION_REJECT] +
+						  old_stat.actions_stat[METRIC_ACTION_ADD_HEADER] +
+						  old_stat.actions_stat[METRIC_ACTION_REWRITE_SUBJECT];
+		double old_ham = old_stat.actions_stat[METRIC_ACTION_NOACTION];
+		double new_spam = cur_stat.actions_stat[METRIC_ACTION_REJECT] +
+						  cur_stat.actions_stat[METRIC_ACTION_ADD_HEADER] +
+						  cur_stat.actions_stat[METRIC_ACTION_REWRITE_SUBJECT];
+		double new_ham = cur_stat.actions_stat[METRIC_ACTION_NOACTION];
 
 		gsize cnt = MAX_AVG_TIME_SLOTS;
 		float sum = rspamd_sum_floats(cur_stat.avg_time.avg_time, &cnt);
@@ -1227,7 +1227,7 @@ rspamd_control_handler(EV_P_ ev_io *w, int revents)
 {
 	struct rspamd_main *rspamd_main = (struct rspamd_main *) w->data;
 	rspamd_inet_addr_t *addr = NULL;
-	gint nfd;
+	int nfd;
 
 	if ((nfd =
 			 rspamd_accept_from_socket(w->fd, &addr, NULL, NULL)) == -1) {
@@ -1246,7 +1246,7 @@ rspamd_control_handler(EV_P_ ev_io *w, int revents)
 	rspamd_control_process_client_socket(rspamd_main, nfd, addr);
 }
 
-static guint
+static unsigned int
 rspamd_spair_hash(gconstpointer p)
 {
 	return rspamd_cryptobox_fast_hash(p, PAIR_ID_LEN, rspamd_hash_seed());
@@ -1261,7 +1261,7 @@ rspamd_spair_equal(gconstpointer a, gconstpointer b)
 static void
 rspamd_spair_close(gpointer p)
 {
-	gint *fds = p;
+	int *fds = p;
 
 	close(fds[0]);
 	close(fds[1]);
@@ -1399,9 +1399,9 @@ rspamd_main_daemon(struct rspamd_main *rspamd_main)
 	return TRUE;
 }
 
-gint main(gint argc, gchar **argv, gchar **env)
+int main(int argc, char **argv, char **env)
 {
-	gint i, res = 0;
+	int i, res = 0;
 	struct sigaction signals, sigpipe_act;
 	worker_t **pworker;
 	GQuark type;
@@ -1458,7 +1458,7 @@ gint main(gint argc, gchar **argv, gchar **env)
 		/* Parse variables */
 		for (i = 0; i < argc; i++) {
 			if (strchr(argv[i], '=') != NULL) {
-				gchar *k, *v, *t;
+				char *k, *v, *t;
 
 				k = g_strdup(argv[i]);
 				t = strchr(k, '=');
@@ -1626,7 +1626,7 @@ gint main(gint argc, gchar **argv, gchar **env)
 	if (event_loop) {
 		int loop_type = ev_backend(event_loop);
 		gboolean effective_backend;
-		const gchar *loop_str;
+		const char *loop_str;
 
 		loop_str =
 			rspamd_config_ev_backend_to_string(loop_type, &effective_backend);
