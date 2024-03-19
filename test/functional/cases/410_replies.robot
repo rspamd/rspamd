@@ -7,12 +7,29 @@ Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
 ${CONFIG}                         ${RSPAMD_TESTDIR}/configs/replies.conf
+${SETTINGS_REPLIES}               {symbols_enabled = [REPLIES_CHECK, REPLIES_SET, REPLY]}
+${SYMBOL}                         REPLY
 ${REDIS_SCOPE}                    Suite
 ${RSPAMD_SCOPE}                   Suite
 
 *** Test Cases ***
-REPLY 1 to 1
+Reply to 1 sender 1 recipients
   Scan File  ${RSPAMD_TESTDIR}/messages/replyto_1_1.eml
-  ...  Settings={symbols_enabled [REPLY]}
-  Expect Symbol  REPLY
+  ...  Settings=${SETTINGS_REPLIES}
+  Expect Symbol  ${SYMBOL}
+  
+Reply to 1 sender another 2 recipients
+  Scan File  ${RSPAMD_TESTDIR}/messages/replyto_1_1.eml
+  ...  Settings=${SETTINGS_REPLIES}
+  Expect Symbol  ${SYMBOL}
+
+Reply to 1 sender 2 recipients 1 rcpt is same
+  Scan File  ${RSPAMD_TESTDIR}/messages/replyto_1_1.eml
+  ...  Settings=${SETTINGS_REPLIES}
+  Expect Symbol  ${SYMBOL}
+
+Reply to another sender 2 recipients
+  Scan File  ${RSPAMD_TESTDIR}/messages/replyto_2_2.eml
+   ...  Settings=${SETTINGS_REPLIES}
+  Expect Symbol  ${SYMBOL}
 
