@@ -35,7 +35,12 @@ UNKNOWN SENDER WRONG DOMAIN RESCAN
   Do Not Expect Symbol  KNOWN_SENDER
   Do Not Expect Symbol  UNKNOWN_SENDER
   
-CHECK INCOMING EMAIL
+INCOMING MAIL SENDER IS KNOWN
   Scan File  ${RSPAMD_TESTDIR}/messages/replyto_1_1.eml
-  ...  Settings={symbols_enabled [CHECK_INC_MAIL]}
-  Expect Symbol  CHECK_INC_MAIL
+  ...  Settings={symbols_enabled [INC_MAIL_KNOWN]}
+  Expect Symbol  INC_MAIL_KNOWN
+  
+INCOMING MAIL SENDER IS UNKNOWN
+  Scan File  ${RSPAMD_TESTDIR}/messages/replyto_1_1.eml
+  ...  Settings={symbols_enabled [INC_MAIL_KNOWN]}
+  Do Not Expect Symbol  INC_MAIL_KNOWN
