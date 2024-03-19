@@ -74,7 +74,8 @@ local function replies_check(task)
   local in_reply_to
   local function check_recipient(stored_rcpt)
     local rcpts = task:get_recipients('mime')
-
+    rspamd_logger.infox(task, 'Recipients: %s', rcpts)
+    rspamd_logger.infox(task, 'Storet rcpt: %s', stored_rcpt)
     if rcpts then
       local filter_predicate = function(input_rcpt)
         local real_rcpt_h = make_key(input_rcpt:lower(), 8)
@@ -113,7 +114,8 @@ local function replies_check(task)
       table.insert(params, i, tostring(recipient))
     end
 
-    local sender_key = lua_util.maybe_obfuscate_string(sender, settings, settings.sender_prefix)
+    local sender_key = lua_util.maybe_obfuscate_string(tostring(sender), settings, settings.sender_prefix)
+    local sender_hash = make_key(sender:lower(), 8)
 
     lua_util.debugm(N, task, 'add  recipients %s to sender %s local replies set', params, sender_key)
 
@@ -197,6 +199,7 @@ local function replies_check(task)
   end
   -- If in-reply-to header not present return
   in_reply_to = task:get_header_raw('in-reply-to')
+  lua_util.debugm(N, task, tostring(in_reply_to))
   if not in_reply_to then
     return
   end
