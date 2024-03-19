@@ -34,14 +34,14 @@
 #include "rspamadm.h"
 #include "lua/lua_common.h"
 
-static gchar *source_db = NULL;
-static gchar *redis_host = NULL;
-static gchar *redis_db = NULL;
-static gchar *redis_username = NULL;
-static gchar *redis_password = NULL;
+static char *source_db = NULL;
+static char *redis_host = NULL;
+static char *redis_db = NULL;
+static char *redis_username = NULL;
+static char *redis_password = NULL;
 static int64_t fuzzy_expiry = 0;
 
-static void rspamadm_fuzzyconvert(gint argc, gchar **argv,
+static void rspamadm_fuzzyconvert(int argc, char **argv,
 								  const struct rspamadm_command *cmd);
 static const char *rspamadm_fuzzyconvert_help(gboolean full_help,
 											  const struct rspamadm_command *cmd);
@@ -93,7 +93,7 @@ rspamadm_fuzzyconvert_help(gboolean full_help, const struct rspamadm_command *cm
 }
 
 static void
-rspamadm_fuzzyconvert(gint argc, gchar **argv, const struct rspamadm_command *cmd)
+rspamadm_fuzzyconvert(int argc, char **argv, const struct rspamadm_command *cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;

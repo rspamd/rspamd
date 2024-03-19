@@ -139,7 +139,7 @@ RSPAMD_CONSTRUCTOR(rspamd_lua_init_classnames)
 }
 
 const char *
-rspamd_lua_static_classname(const char *name, guint len)
+rspamd_lua_static_classname(const char *name, unsigned int len)
 {
 	khiter_t k;
 

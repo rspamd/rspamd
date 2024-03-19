@@ -37,11 +37,11 @@ static void thread_entry_free(lua_State *L, struct thread_entry *ent);
 struct lua_thread_pool {
 	std::vector<struct thread_entry *> available_items;
 	lua_State *L;
-	gint max_items;
+	int max_items;
 	struct thread_entry *running_entry;
 	static const int default_max_items = 100;
 
-	lua_thread_pool(lua_State *L, gint max_items = default_max_items)
+	lua_thread_pool(lua_State *L, int max_items = default_max_items)
 		: L(L), max_items(max_items)
 	{
 		running_entry = nullptr;
@@ -77,7 +77,7 @@ struct lua_thread_pool {
 		return ent;
 	}
 
-	auto return_thread(struct thread_entry *thread_entry, const gchar *loc) -> void
+	auto return_thread(struct thread_entry *thread_entry, const char *loc) -> void
 	{
 		/* we can't return a running/yielded thread into the pool */
 		g_assert(lua_status(thread_entry->lua_state) == 0);
@@ -108,7 +108,7 @@ struct lua_thread_pool {
 	}
 
 	auto terminate_thread(struct thread_entry *thread_entry,
-						  const gchar *loc,
+						  const char *loc,
 						  bool enforce) -> void
 	{
 		struct thread_entry *ent = NULL;
@@ -197,13 +197,13 @@ lua_thread_pool_get_for_config(struct rspamd_config *cfg)
 }
 
 void lua_thread_pool_return_full(struct lua_thread_pool *pool,
-								 struct thread_entry *thread_entry, const gchar *loc)
+								 struct thread_entry *thread_entry, const char *loc)
 {
 	pool->return_thread(thread_entry, loc);
 }
 
 void lua_thread_pool_terminate_entry_full(struct lua_thread_pool *pool,
-										  struct thread_entry *thread_entry, const gchar *loc,
+										  struct thread_entry *thread_entry, const char *loc,
 										  bool enforce)
 {
 	pool->terminate_thread(thread_entry, loc, enforce);
@@ -211,7 +211,7 @@ void lua_thread_pool_terminate_entry_full(struct lua_thread_pool *pool,
 
 struct thread_entry *
 lua_thread_pool_get_running_entry_full(struct lua_thread_pool *pool,
-									   const gchar *loc)
+									   const char *loc)
 {
 	msg_debug_lua_threads("%s: lua_thread_pool_get_running_entry_full", loc);
 	return pool->get_running_entry();
@@ -219,7 +219,7 @@ lua_thread_pool_get_running_entry_full(struct lua_thread_pool *pool,
 
 void lua_thread_pool_set_running_entry_full(struct lua_thread_pool *pool,
 											struct thread_entry *thread_entry,
-											const gchar *loc)
+											const char *loc)
 {
 	msg_debug_lua_threads("%s: lua_thread_pool_set_running_entry_full", loc);
 	pool->set_running_entry(thread_entry);
@@ -227,7 +227,7 @@ void lua_thread_pool_set_running_entry_full(struct lua_thread_pool *pool,
 
 static void
 lua_thread_pool_set_running_entry_for_thread(struct thread_entry *thread_entry,
-											 const gchar *loc)
+											 const char *loc)
 {
 	struct lua_thread_pool *pool;
 
@@ -243,7 +243,7 @@ lua_thread_pool_set_running_entry_for_thread(struct thread_entry *thread_entry,
 
 void lua_thread_pool_prepare_callback_full(struct lua_thread_pool *pool,
 										   struct lua_callback_state *cbs,
-										   const gchar *loc)
+										   const char *loc)
 {
 	msg_debug_lua_threads("%s: lua_thread_pool_prepare_callback_full", loc);
 	cbs->thread_pool = pool;
@@ -253,15 +253,15 @@ void lua_thread_pool_prepare_callback_full(struct lua_thread_pool *pool,
 }
 
 void lua_thread_pool_restore_callback_full(struct lua_callback_state *cbs,
-										   const gchar *loc)
+										   const char *loc)
 {
 	lua_thread_pool_return_full(cbs->thread_pool, cbs->my_thread, loc);
 	lua_thread_pool_set_running_entry_full(cbs->thread_pool,
 										   cbs->previous_thread, loc);
 }
 
-static gint
-lua_do_resume_full(lua_State *L, gint narg, const gchar *loc)
+static int
+lua_do_resume_full(lua_State *L, int narg, const char *loc)
 {
 #if LUA_VERSION_NUM >= 504
 	int nres;
@@ -280,9 +280,9 @@ lua_do_resume_full(lua_State *L, gint narg, const gchar *loc)
 
 static void
 lua_resume_thread_internal_full(struct thread_entry *thread_entry,
-								gint narg, const gchar *loc)
+								int narg, const char *loc)
 {
-	gint ret;
+	int ret;
 	struct lua_thread_pool *pool;
 	struct rspamd_task *task;
 
@@ -335,8 +335,8 @@ lua_resume_thread_internal_full(struct thread_entry *thread_entry,
 	}
 }
 
-void lua_thread_resume_full(struct thread_entry *thread_entry, gint narg,
-							const gchar *loc)
+void lua_thread_resume_full(struct thread_entry *thread_entry, int narg,
+							const char *loc)
 {
 	/*
 	 * The only state where we can resume from is LUA_YIELD
@@ -350,7 +350,7 @@ void lua_thread_resume_full(struct thread_entry *thread_entry, gint narg,
 }
 
 void lua_thread_call_full(struct thread_entry *thread_entry,
-						  int narg, const gchar *loc)
+						  int narg, const char *loc)
 {
 	g_assert(lua_status(thread_entry->lua_state) == 0);                /* we can't call running/yielded thread */
 	g_assert(thread_entry->task != NULL || thread_entry->cfg != NULL); /* we can't call without pool */
@@ -358,9 +358,9 @@ void lua_thread_call_full(struct thread_entry *thread_entry,
 	lua_resume_thread_internal_full(thread_entry, narg, loc);
 }
 
-gint lua_thread_yield_full(struct thread_entry *thread_entry,
-						   gint nresults,
-						   const gchar *loc)
+int lua_thread_yield_full(struct thread_entry *thread_entry,
+						  int nresults,
+						  const char *loc)
 {
 	g_assert(lua_status(thread_entry->lua_state) == 0);
 

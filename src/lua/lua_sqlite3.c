@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -62,7 +62,7 @@ static const struct luaL_reg sqlitestmtlib_m[] = {
 static void lua_sqlite3_push_row(lua_State *L, sqlite3_stmt *stmt);
 
 static sqlite3 *
-lua_check_sqlite3(lua_State *L, gint pos)
+lua_check_sqlite3(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_sqlite3_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'sqlite3' expected");
@@ -70,7 +70,7 @@ lua_check_sqlite3(lua_State *L, gint pos)
 }
 
 static sqlite3_stmt *
-lua_check_sqlite3_stmt(lua_State *L, gint pos)
+lua_check_sqlite3_stmt(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_sqlite3_stmt_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'sqlite3_stmt' expected");
@@ -84,10 +84,10 @@ lua_check_sqlite3_stmt(lua_State *L, gint pos)
  * @param {string} path path to db
  * @return {sqlite3} sqlite3 handle
  */
-static gint
+static int
 lua_sqlite3_open(lua_State *L)
 {
-	const gchar *path = luaL_checkstring(L, 1);
+	const char *path = luaL_checkstring(L, 1);
 	sqlite3 *db, **pdb;
 	GError *err = NULL;
 
@@ -116,13 +116,13 @@ lua_sqlite3_open(lua_State *L)
 }
 
 static void
-lua_sqlite3_bind_statements(lua_State *L, gint start, gint end,
+lua_sqlite3_bind_statements(lua_State *L, int start, int end,
 							sqlite3_stmt *stmt)
 {
-	gint i, type, num = 1;
-	const gchar *str;
+	int i, type, num = 1;
+	const char *str;
 	gsize slen;
-	gdouble n;
+	double n;
 
 	g_assert(start <= end && start > 0 && end > 0);
 
@@ -133,7 +133,7 @@ lua_sqlite3_bind_statements(lua_State *L, gint start, gint end,
 		case LUA_TNUMBER:
 			n = lua_tonumber(L, i);
 
-			if (n == (gdouble) ((gint64) n)) {
+			if (n == (double) ((int64_t) n)) {
 				sqlite3_bind_int64(stmt, num, n);
 			}
 			else {
@@ -162,15 +162,15 @@ lua_sqlite3_bind_statements(lua_State *L, gint start, gint end,
  * @param {string|number} args... variable number of arguments
  * @return {boolean} `true` if a statement has been successfully executed
  */
-static gint
+static int
 lua_sqlite3_sql(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	sqlite3 *db = lua_check_sqlite3(L, 1);
-	const gchar *query = luaL_checkstring(L, 2);
+	const char *query = luaL_checkstring(L, 2);
 	sqlite3_stmt *stmt;
 	gboolean ret = FALSE;
-	gint top = 1, rc;
+	int top = 1, rc;
 
 	if (db && query) {
 		if (sqlite3_prepare_v2(db, query, -1, &stmt, NULL) != SQLITE_OK) {
@@ -212,11 +212,11 @@ lua_sqlite3_sql(lua_State *L)
 static void
 lua_sqlite3_push_row(lua_State *L, sqlite3_stmt *stmt)
 {
-	const gchar *str;
+	const char *str;
 	gsize slen;
-	gint64 num;
-	gchar numbuf[32];
-	gint nresults, i, type;
+	int64_t num;
+	char numbuf[32];
+	int nresults, i, type;
 
 	nresults = sqlite3_column_count(stmt);
 	lua_createtable(L, 0, nresults);
@@ -257,12 +257,12 @@ lua_sqlite3_push_row(lua_State *L, sqlite3_stmt *stmt)
 	}
 }
 
-static gint
+static int
 lua_sqlite3_next_row(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	sqlite3_stmt *stmt = *(sqlite3_stmt **) lua_touserdata(L, lua_upvalueindex(1));
-	gint rc;
+	int rc;
 
 	if (stmt != NULL) {
 		rc = sqlite3_step(stmt);
@@ -291,14 +291,14 @@ for row in db:rows([[ SELECT * FROM x ]]) do
   print(string.format('%d -> %s', row.id, row.value))
 end
  */
-static gint
+static int
 lua_sqlite3_rows(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	sqlite3 *db = lua_check_sqlite3(L, 1);
-	const gchar *query = luaL_checkstring(L, 2);
+	const char *query = luaL_checkstring(L, 2);
 	sqlite3_stmt *stmt, **pstmt;
-	gint top;
+	int top;
 
 	if (db && query) {
 		if (sqlite3_prepare_v2(db, query, -1, &stmt, NULL) != SQLITE_OK) {
@@ -329,7 +329,7 @@ lua_sqlite3_rows(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_sqlite3_close(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -342,7 +342,7 @@ lua_sqlite3_close(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_sqlite3_stmt_close(lua_State *L)
 {
 	sqlite3_stmt *stmt = lua_check_sqlite3_stmt(L, 1);
@@ -354,7 +354,7 @@ lua_sqlite3_stmt_close(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_load_sqlite3(lua_State *L)
 {
 	lua_newtable(L);

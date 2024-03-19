@@ -96,9 +96,9 @@ static const struct luaL_reg exprlib_f[] = {
 	LUA_INTERFACE_DEF(expr, create),
 	{NULL, NULL}};
 
-static rspamd_expression_atom_t *lua_atom_parse(const gchar *line, gsize len,
+static rspamd_expression_atom_t *lua_atom_parse(const char *line, gsize len,
 												rspamd_mempool_t *pool, gpointer ud, GError **err);
-static gdouble lua_atom_process(gpointer runtime_ud, rspamd_expression_atom_t *atom);
+static double lua_atom_process(gpointer runtime_ud, rspamd_expression_atom_t *atom);
 
 static const struct rspamd_atom_subr lua_atom_subr = {
 	.parse = lua_atom_parse,
@@ -108,8 +108,8 @@ static const struct rspamd_atom_subr lua_atom_subr = {
 
 struct lua_expression {
 	struct rspamd_expression *expr;
-	gint parse_idx;
-	gint process_idx;
+	int parse_idx;
+	int process_idx;
 	lua_State *L;
 	rspamd_mempool_t *pool;
 };
@@ -121,7 +121,7 @@ lua_expr_quark(void)
 }
 
 struct lua_expression *
-rspamd_lua_expression(lua_State *L, gint pos)
+rspamd_lua_expression(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_expr_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'expr' expected");
@@ -143,13 +143,13 @@ lua_expr_dtor(gpointer p)
 }
 
 static rspamd_expression_atom_t *
-lua_atom_parse(const gchar *line, gsize len,
+lua_atom_parse(const char *line, gsize len,
 			   rspamd_mempool_t *pool, gpointer ud, GError **err)
 {
 	struct lua_expression *e = (struct lua_expression *) ud;
 	rspamd_expression_atom_t *atom;
 	gsize rlen;
-	const gchar *tok;
+	const char *tok;
 
 	lua_rawgeti(e->L, LUA_REGISTRYINDEX, e->parse_idx);
 	lua_pushlstring(e->L, line, len);
@@ -180,17 +180,17 @@ lua_atom_parse(const gchar *line, gsize len,
 struct lua_atom_process_data {
 	lua_State *L;
 	struct lua_expression *e;
-	gint process_cb_pos;
-	gint stack_item;
+	int process_cb_pos;
+	int stack_item;
 };
 
-static gdouble
+static double
 lua_atom_process(gpointer runtime_ud, rspamd_expression_atom_t *atom)
 {
 	struct lua_atom_process_data *pd = (struct lua_atom_process_data *) runtime_ud;
-	gdouble ret = 0;
-	guint nargs;
-	gint err_idx;
+	double ret = 0;
+	unsigned int nargs;
+	int err_idx;
 
 	if (pd->stack_item != -1) {
 		nargs = 2;
@@ -224,14 +224,14 @@ lua_atom_process(gpointer runtime_ud, rspamd_expression_atom_t *atom)
 	return ret;
 }
 
-static gint
+static int
 lua_expr_process(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct lua_expression *e = rspamd_lua_expression(L, 1);
 	struct lua_atom_process_data pd;
-	gdouble res;
-	gint flags = 0, old_top;
+	double res;
+	int flags = 0, old_top;
 
 	pd.L = L;
 	pd.e = e;
@@ -279,14 +279,14 @@ lua_expr_process(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_expr_process_traced(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct lua_expression *e = rspamd_lua_expression(L, 1);
 	struct lua_atom_process_data pd;
-	gdouble res;
-	gint flags = 0, old_top;
+	double res;
+	int flags = 0, old_top;
 	GPtrArray *trace;
 
 	pd.L = L;
@@ -322,7 +322,7 @@ lua_expr_process_traced(lua_State *L)
 
 	lua_createtable(L, trace->len, 0);
 
-	for (guint i = 0; i < trace->len; i++) {
+	for (unsigned int i = 0; i < trace->len; i++) {
 		struct rspamd_expression_atom_s *atom = g_ptr_array_index(trace, i);
 
 		lua_pushlstring(L, atom->str, atom->len);
@@ -334,7 +334,7 @@ lua_expr_process_traced(lua_State *L)
 	return 2;
 }
 
-static gint
+static int
 lua_expr_create(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -437,7 +437,7 @@ lua_expr_create(lua_State *L)
 	return 2;
 }
 
-static gint
+static int
 lua_expr_to_string(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -463,7 +463,7 @@ lua_expr_to_string(lua_State *L)
 
 struct lua_expr_atoms_cbdata {
 	lua_State *L;
-	gint idx;
+	int idx;
 };
 
 static void
@@ -475,7 +475,7 @@ lua_exr_atom_cb(const rspamd_ftok_t *tok, gpointer ud)
 	lua_rawseti(cbdata->L, -2, cbdata->idx++);
 }
 
-static gint
+static int
 lua_expr_atoms(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -495,7 +495,7 @@ lua_expr_atoms(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_load_expression(lua_State *L)
 {
 	lua_newtable(L);

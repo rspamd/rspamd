@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -46,15 +46,15 @@
  * From FreeBSD libutil code
  */
 static const int maxscale = 6;
-static const gchar _hex[] = "0123456789abcdef";
-static const gchar _HEX[] = "0123456789ABCDEF";
+static const char _hex[] = "0123456789abcdef";
+static const char _HEX[] = "0123456789ABCDEF";
 
-static gchar *
-rspamd_humanize_number(gchar *buf, gchar *last, gint64 num, gboolean bytes)
+static char *
+rspamd_humanize_number(char *buf, char *last, int64_t num, gboolean bytes)
 {
-	const gchar *prefixes;
+	const char *prefixes;
 	int i, r, remainder, sign;
-	gint64 divisor;
+	int64_t divisor;
 	gsize len = last - buf;
 
 	remainder = 0;
@@ -96,7 +96,7 @@ rspamd_humanize_number(gchar *buf, gchar *last, gint64 num, gboolean bytes)
 	else {
 		/* Floating point version */
 		r = rspamd_snprintf(buf, len, "%.2f%s",
-							sign * (num + remainder / (gdouble) divisor),
+							sign * (num + remainder / (double) divisor),
 							SCALE2PREFIX(i));
 	}
 
@@ -107,9 +107,9 @@ rspamd_humanize_number(gchar *buf, gchar *last, gint64 num, gboolean bytes)
 
 
 static inline unsigned
-rspamd_decimal_digits32(guint32 val)
+rspamd_decimal_digits32(uint32_t val)
 {
-	static const guint32 powers_of_10[] = {
+	static const uint32_t powers_of_10[] = {
 		0,
 		10,
 		100,
@@ -134,7 +134,7 @@ rspamd_decimal_digits32(guint32 val)
 											  11, 14, 16, 18, 22, 25, 3, 30,
 											  8, 12, 20, 28, 15, 17, 24, 7,
 											  19, 27, 23, 6, 26, 5, 4, 31};
-	guint32 v = val | 1;
+	uint32_t v = val | 1;
 
 	v |= v >> 1;
 	v |= v >> 2;
@@ -147,9 +147,9 @@ rspamd_decimal_digits32(guint32 val)
 }
 
 static inline unsigned
-rspamd_decimal_digits64(guint64 val)
+rspamd_decimal_digits64(uint64_t val)
 {
-	static const guint64 powers_of_10[] = {
+	static const uint64_t powers_of_10[] = {
 		0,
 		10ULL,
 		100ULL,
@@ -175,7 +175,7 @@ rspamd_decimal_digits64(guint64 val)
 #if defined(_MSC_VER)
 #if _M_IX86
 	unsigned long r = 0;
-	guint64 m = val | 1;
+	uint64_t m = val | 1;
 	if (_BitScanReverse(&r, m >> 32)) {
 		r += 32;
 	}
@@ -195,7 +195,7 @@ rspamd_decimal_digits64(guint64 val)
 											  11, 14, 16, 18, 22, 25, 3, 30,
 											  8, 12, 20, 28, 15, 17, 24, 7,
 											  19, 27, 23, 6, 26, 5, 4, 31};
-	guint32 v = val >> 32;
+	uint32_t v = val >> 32;
 
 	if (v) {
 		v |= 1;
@@ -255,11 +255,11 @@ static const char int_lookup_table[200] = {
 	'9', '0', '9', '1', '9', '2', '9', '3', '9', '4',
 	'9', '5', '9', '6', '9', '7', '9', '8', '9', '9'};
 
-static inline guint
-rspamd_uint32_print(guint32 in, gchar *out)
+static inline unsigned int
+rspamd_uint32_print(uint32_t in, char *out)
 {
-	guint ndigits = rspamd_decimal_digits32(in);
-	gchar *p;
+	unsigned int ndigits = rspamd_decimal_digits32(in);
+	char *p;
 
 	p = out + ndigits - 1;
 
@@ -286,18 +286,18 @@ rspamd_uint32_print(guint32 in, gchar *out)
 	return ndigits;
 }
 
-static inline guint
-rspamd_uint64_print(guint64 in, gchar *out)
+static inline unsigned int
+rspamd_uint64_print(uint64_t in, char *out)
 {
-	guint ndigits = rspamd_decimal_digits64(in);
-	guint32 v32;
-	gchar *p;
+	unsigned int ndigits = rspamd_decimal_digits64(in);
+	uint32_t v32;
+	char *p;
 
 	p = out + ndigits - 1;
 
 	while (in >= 100000000) {
-		v32 = (guint32) (in % 100000000);
-		guint32 a, b, a1, a2, b1, b2;
+		v32 = (uint32_t) (in % 100000000);
+		uint32_t a, b, a1, a2, b1, b2;
 
 		/* Initial spill */
 		a = v32 / 10000;
@@ -321,7 +321,7 @@ rspamd_uint64_print(guint64 in, gchar *out)
 	}
 
 	/* Remaining 32 bit */
-	v32 = (guint32) in;
+	v32 = (uint32_t) in;
 
 	while (v32 >= 100) {
 		unsigned idx = (v32 % 100) << 1;
@@ -376,18 +376,18 @@ rspamd_ffsll(long long n)
 #endif
 }
 
-static gchar *
-rspamd_sprintf_num(gchar *buf, gchar *last, guint64 ui64, gchar zero,
-				   guint hexadecimal, guint binary, guint width)
+static char *
+rspamd_sprintf_num(char *buf, char *last, uint64_t ui64, char zero,
+				   unsigned int hexadecimal, unsigned int binary, unsigned int width)
 {
-	gchar *p, temp[64];
+	char *p, temp[64];
 	size_t len = 0;
 
 	if (G_LIKELY(hexadecimal == 0 && binary == 0)) {
 		p = temp;
 
 		if (ui64 < G_MAXUINT32) {
-			len = rspamd_uint32_print((guint32) ui64, temp);
+			len = rspamd_uint32_print((uint32_t) ui64, temp);
 		}
 		else {
 			len = rspamd_uint64_print(ui64, temp);
@@ -396,7 +396,7 @@ rspamd_sprintf_num(gchar *buf, gchar *last, guint64 ui64, gchar zero,
 	else if (hexadecimal == 1) {
 		p = temp + sizeof(temp);
 		do {
-			*--p = _hex[(guint32) (ui64 & 0xf)];
+			*--p = _hex[(uint32_t) (ui64 & 0xf)];
 		} while (ui64 >>= 4);
 
 		len = (temp + sizeof(temp)) - p;
@@ -404,7 +404,7 @@ rspamd_sprintf_num(gchar *buf, gchar *last, guint64 ui64, gchar zero,
 	else if (hexadecimal == 2) { /* hexadecimal == 2 */
 		p = temp + sizeof(temp);
 		do {
-			*--p = _HEX[(guint32) (ui64 & 0xf)];
+			*--p = _HEX[(uint32_t) (ui64 & 0xf)];
 		} while (ui64 >>= 4);
 
 		len = (temp + sizeof(temp)) - p;
@@ -436,7 +436,7 @@ rspamd_sprintf_num(gchar *buf, gchar *last, guint64 ui64, gchar zero,
 		len = last - buf;
 	}
 
-	return ((gchar *) memcpy(buf, p, len)) + len;
+	return ((char *) memcpy(buf, p, len)) + len;
 }
 
 struct rspamd_printf_char_buf {
@@ -446,7 +446,7 @@ struct rspamd_printf_char_buf {
 };
 
 static glong
-rspamd_printf_append_char(const gchar *buf, glong buflen, gpointer ud)
+rspamd_printf_append_char(const char *buf, glong buflen, gpointer ud)
 {
 	struct rspamd_printf_char_buf *dst = (struct rspamd_printf_char_buf *) ud;
 	glong wr;
@@ -464,7 +464,7 @@ rspamd_printf_append_char(const gchar *buf, glong buflen, gpointer ud)
 }
 
 static glong
-rspamd_printf_append_file(const gchar *buf, glong buflen, gpointer ud)
+rspamd_printf_append_file(const char *buf, glong buflen, gpointer ud)
 {
 	FILE *dst = (FILE *) ud;
 	if (buflen > 0) {
@@ -476,7 +476,7 @@ rspamd_printf_append_file(const gchar *buf, glong buflen, gpointer ud)
 }
 
 static glong
-rspamd_printf_append_gstring(const gchar *buf, glong buflen, gpointer ud)
+rspamd_printf_append_gstring(const char *buf, glong buflen, gpointer ud)
 {
 	GString *dst = (GString *) ud;
 
@@ -488,7 +488,7 @@ rspamd_printf_append_gstring(const gchar *buf, glong buflen, gpointer ud)
 }
 
 static glong
-rspamd_printf_append_fstring(const gchar *buf, glong buflen, gpointer ud)
+rspamd_printf_append_fstring(const char *buf, glong buflen, gpointer ud)
 {
 	rspamd_fstring_t **dst = ud;
 
@@ -499,7 +499,7 @@ rspamd_printf_append_fstring(const gchar *buf, glong buflen, gpointer ud)
 	return buflen;
 }
 
-glong rspamd_fprintf(FILE *f, const gchar *fmt, ...)
+glong rspamd_fprintf(FILE *f, const char *fmt, ...)
 {
 	va_list args;
 	glong r;
@@ -511,7 +511,7 @@ glong rspamd_fprintf(FILE *f, const gchar *fmt, ...)
 	return r;
 }
 
-glong rspamd_printf(const gchar *fmt, ...)
+glong rspamd_printf(const char *fmt, ...)
 {
 	va_list args;
 	glong r;
@@ -523,7 +523,7 @@ glong rspamd_printf(const gchar *fmt, ...)
 	return r;
 }
 
-glong rspamd_log_fprintf(FILE *f, const gchar *fmt, ...)
+glong rspamd_log_fprintf(FILE *f, const char *fmt, ...)
 {
 	va_list args;
 	glong r;
@@ -538,9 +538,9 @@ glong rspamd_log_fprintf(FILE *f, const gchar *fmt, ...)
 }
 
 
-glong rspamd_snprintf(gchar *buf, glong max, const gchar *fmt, ...)
+glong rspamd_snprintf(char *buf, glong max, const char *fmt, ...)
 {
-	gchar *r;
+	char *r;
 	va_list args;
 
 	va_start(args, fmt);
@@ -550,8 +550,8 @@ glong rspamd_snprintf(gchar *buf, glong max, const gchar *fmt, ...)
 	return (r - buf);
 }
 
-gchar *
-rspamd_vsnprintf(gchar *buf, glong max, const gchar *fmt, va_list args)
+char *
+rspamd_vsnprintf(char *buf, glong max, const char *fmt, va_list args)
 {
 	struct rspamd_printf_char_buf dst;
 
@@ -564,7 +564,7 @@ rspamd_vsnprintf(gchar *buf, glong max, const gchar *fmt, va_list args)
 	return dst.pos;
 }
 
-glong rspamd_printf_gstring(GString *s, const gchar *fmt, ...)
+glong rspamd_printf_gstring(GString *s, const char *fmt, ...)
 {
 	va_list args;
 	glong r;
@@ -576,12 +576,12 @@ glong rspamd_printf_gstring(GString *s, const gchar *fmt, ...)
 	return r;
 }
 
-glong rspamd_vprintf_gstring(GString *s, const gchar *fmt, va_list args)
+glong rspamd_vprintf_gstring(GString *s, const char *fmt, va_list args)
 {
 	return rspamd_vprintf_common(rspamd_printf_append_gstring, s, fmt, args);
 }
 
-glong rspamd_printf_fstring(rspamd_fstring_t **s, const gchar *fmt, ...)
+glong rspamd_printf_fstring(rspamd_fstring_t **s, const char *fmt, ...)
 {
 	va_list args;
 	glong r;
@@ -593,7 +593,7 @@ glong rspamd_printf_fstring(rspamd_fstring_t **s, const gchar *fmt, ...)
 	return r;
 }
 
-glong rspamd_vprintf_fstring(rspamd_fstring_t **s, const gchar *fmt, va_list args)
+glong rspamd_vprintf_fstring(rspamd_fstring_t **s, const char *fmt, va_list args)
 {
 	return rspamd_vprintf_common(rspamd_printf_append_fstring, s, fmt, args);
 }
@@ -616,18 +616,18 @@ glong rspamd_vprintf_fstring(rspamd_fstring_t **s, const gchar *fmt, va_list arg
 
 glong rspamd_vprintf_common(rspamd_printf_append_func func,
 							gpointer apd,
-							const gchar *fmt,
+							const char *fmt,
 							va_list args)
 {
-	gchar zero, numbuf[G_ASCII_DTOSTR_BUF_SIZE], dtoabuf[32], *p, *last;
-	guchar c;
-	const gchar *buf_start = fmt;
-	gint d;
-	gdouble f;
+	char zero, numbuf[G_ASCII_DTOSTR_BUF_SIZE], dtoabuf[32], *p, *last;
+	unsigned char c;
+	const char *buf_start = fmt;
+	int d;
+	double f;
 	glong written = 0, wr, slen;
-	gint64 i64;
-	guint64 ui64;
-	guint width, sign, hex, humanize, bytes, frac_width, b32, b64;
+	int64_t i64;
+	uint64_t ui64;
+	unsigned int width, sign, hex, humanize, bytes, frac_width, b32, b64;
 	rspamd_fstring_t *v;
 	rspamd_ftok_t *tok;
 	GString *gs;
@@ -654,7 +654,7 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 			i64 = 0;
 			ui64 = 0;
 
-			zero = (gchar) ((*++fmt == '0') ? '0' : ' ');
+			zero = (char) ((*++fmt == '0') ? '0' : ' ');
 			width = 0;
 			sign = 1;
 			hex = 0;
@@ -718,11 +718,11 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 					fmt++;
 
 					if (*fmt == '*') {
-						d = (gint) va_arg(args, gint);
+						d = (int) va_arg(args, int);
 						if (G_UNLIKELY(d < 0)) {
 							return 0;
 						}
-						frac_width = (guint) d;
+						frac_width = (unsigned int) d;
 						fmt++;
 					}
 					else {
@@ -734,7 +734,7 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 					break;
 
 				case '*':
-					d = (gint) va_arg(args, gint);
+					d = (int) va_arg(args, int);
 					if (G_UNLIKELY(d < 0)) {
 						return 0;
 					}
@@ -824,14 +824,14 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 				continue;
 
 			case 's':
-				p = va_arg(args, gchar *);
+				p = va_arg(args, char *);
 				if (p == NULL) {
 					p = "(NULL)";
 					slen = sizeof("(NULL)") - 1;
 				}
 
 				if (G_UNLIKELY(b32)) {
-					gchar *b32buf;
+					char *b32buf;
 
 					if (G_UNLIKELY(slen == -1)) {
 						if (G_LIKELY(width != 0)) {
@@ -854,7 +854,7 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 					}
 				}
 				else if (G_UNLIKELY(hex)) {
-					gchar hexbuf[2];
+					char hexbuf[2];
 
 					if (G_UNLIKELY(slen == -1)) {
 						if (G_LIKELY(width != 0)) {
@@ -878,7 +878,7 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 					buf_start = fmt;
 				}
 				else if (G_UNLIKELY(b64)) {
-					gchar *b64buf;
+					char *b64buf;
 					gsize olen = 0;
 
 					if (G_UNLIKELY(slen == -1)) {
@@ -917,68 +917,68 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 				continue;
 
 			case 'O':
-				i64 = (gint64) va_arg(args, off_t);
+				i64 = (int64_t) va_arg(args, off_t);
 				sign = 1;
 				break;
 
 			case 'P':
-				i64 = (gint64) va_arg(args, pid_t);
+				i64 = (int64_t) va_arg(args, pid_t);
 				sign = 1;
 				break;
 
 			case 't':
-				i64 = (gint64) va_arg(args, time_t);
+				i64 = (int64_t) va_arg(args, time_t);
 				sign = 1;
 				break;
 
 			case 'z':
 				if (sign) {
-					i64 = (gint64) va_arg(args, ssize_t);
+					i64 = (int64_t) va_arg(args, ssize_t);
 				}
 				else {
-					ui64 = (guint64) va_arg(args, size_t);
+					ui64 = (uint64_t) va_arg(args, size_t);
 				}
 				break;
 
 			case 'd':
 				if (sign) {
-					i64 = (gint64) va_arg(args, gint);
+					i64 = (int64_t) va_arg(args, int);
 				}
 				else {
-					ui64 = (guint64) va_arg(args, guint);
+					ui64 = (uint64_t) va_arg(args, unsigned int);
 				}
 				break;
 
 			case 'l':
 				if (sign) {
-					i64 = (gint64) va_arg(args, glong);
+					i64 = (int64_t) va_arg(args, glong);
 				}
 				else {
-					ui64 = (guint64) va_arg(args, gulong);
+					ui64 = (uint64_t) va_arg(args, gulong);
 				}
 				break;
 
 			case 'D':
 				if (sign) {
-					i64 = (gint64) va_arg(args, gint32);
+					i64 = (int64_t) va_arg(args, int32_t);
 				}
 				else {
-					ui64 = (guint64) va_arg(args, guint32);
+					ui64 = (uint64_t) va_arg(args, uint32_t);
 				}
 				break;
 
 			case 'L':
 				if (sign) {
-					i64 = va_arg(args, gint64);
+					i64 = va_arg(args, int64_t);
 				}
 				else {
-					ui64 = va_arg(args, guint64);
+					ui64 = va_arg(args, uint64_t);
 				}
 				break;
 
 
 			case 'f':
-				f = (gdouble) va_arg(args, double);
+				f = (double) va_arg(args, double);
 				slen = fpconv_dtoa(f, dtoabuf, frac_width, false);
 
 				RSPAMD_PRINTF_APPEND(dtoabuf, slen);
@@ -986,14 +986,14 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 				continue;
 
 			case 'g':
-				f = (gdouble) va_arg(args, double);
+				f = (double) va_arg(args, double);
 				slen = fpconv_dtoa(f, dtoabuf, 0, true);
 				RSPAMD_PRINTF_APPEND(dtoabuf, slen);
 
 				continue;
 
 			case 'F':
-				f = (gdouble) va_arg(args, long double);
+				f = (double) va_arg(args, long double);
 				slen = fpconv_dtoa(f, dtoabuf, frac_width, false);
 
 				RSPAMD_PRINTF_APPEND(dtoabuf, slen);
@@ -1001,7 +1001,7 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 				continue;
 
 			case 'G':
-				f = (gdouble) va_arg(args, long double);
+				f = (double) va_arg(args, long double);
 				slen = fpconv_dtoa(f, dtoabuf, 0, true);
 				RSPAMD_PRINTF_APPEND(dtoabuf, slen);
 
@@ -1016,10 +1016,10 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 				break;
 
 			case 'c':
-				c = va_arg(args, gint);
+				c = va_arg(args, int);
 				c &= 0xffu;
 				if (G_UNLIKELY(hex)) {
-					gchar hexbuf[2];
+					char hexbuf[2];
 					hexbuf[0] = hex == 2 ? _HEX[(c >> 4u) & 0xfu] : _hex[(c >> 4u) & 0xfu];
 					hexbuf[1] = hex == 2 ? _HEX[c & 0xfu] : _hex[c & 0xfu];
 
@@ -1062,10 +1062,10 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 			if (sign) {
 				if (i64 < 0) {
 					*p++ = '-';
-					ui64 = (guint64) -i64;
+					ui64 = (uint64_t) -i64;
 				}
 				else {
-					ui64 = (guint64) i64;
+					ui64 = (uint64_t) i64;
 				}
 			}
 

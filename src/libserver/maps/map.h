@@ -30,8 +30,8 @@ struct rspamd_map;
 /**
  * Callback types
  */
-typedef gchar *(*map_cb_t)(gchar *chunk, gint len,
-						   struct map_cb_data *data, gboolean final);
+typedef char *(*map_cb_t)(char *chunk, int len,
+						  struct map_cb_data *data, gboolean final);
 
 typedef void (*map_fin_cb_t)(struct map_cb_data *data, void **target);
 
@@ -50,7 +50,7 @@ typedef void (*rspamd_map_on_load_function)(struct rspamd_map *map, gpointer ud)
  */
 struct map_cb_data {
 	struct rspamd_map *map;
-	gint state;
+	int state;
 	bool errored;
 	void *prev_data;
 	void *cur_data;
@@ -61,7 +61,7 @@ struct map_cb_data {
  * @param map_line
  * @return
  */
-gboolean rspamd_map_is_map(const gchar *map_line);
+gboolean rspamd_map_is_map(const char *map_line);
 
 enum rspamd_map_flags {
 	RSPAMD_MAP_DEFAULT = 0,
@@ -73,8 +73,8 @@ enum rspamd_map_flags {
  * Add map from line
  */
 struct rspamd_map *rspamd_map_add(struct rspamd_config *cfg,
-								  const gchar *map_line,
-								  const gchar *description,
+								  const char *map_line,
+								  const char *description,
 								  map_cb_t read_callback,
 								  map_fin_cb_t fin_callback,
 								  map_dtor_t dtor,
@@ -87,7 +87,7 @@ struct rspamd_map *rspamd_map_add(struct rspamd_config *cfg,
  */
 struct rspamd_map *rspamd_map_add_from_ucl(struct rspamd_config *cfg,
 										   const ucl_object_t *obj,
-										   const gchar *description,
+										   const char *description,
 										   map_cb_t read_callback,
 										   map_fin_cb_t fin_callback,
 										   map_dtor_t dtor,
@@ -102,8 +102,8 @@ struct rspamd_map *rspamd_map_add_from_ucl(struct rspamd_config *cfg,
  * @return
  */
 struct rspamd_map *rspamd_map_add_fake(struct rspamd_config *cfg,
-									   const gchar *description,
-									   const gchar *name);
+									   const char *description,
+									   const char *name);
 
 
 enum rspamd_map_watch_type {

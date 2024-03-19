@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -27,10 +27,10 @@ extern "C" {
  *	%[0][width][x][X]O		    off_t
  *	%[0][width]T			    time_t
  *	%[0][width][u][x|X|h|H|b|B]z	    ssize_t/size_t
- *	%[0][width][u][x|X|h|H|b|B]d	    gint/guint
+ *	%[0][width][u][x|X|h|H|b|B]d	    int/unsigned int
  *	%[0][width][u][x|X|h|H|b|B]l	    long
- *	%[0][width][u][x|X|h|H|b|B]D	    gint32/guint32
- *	%[0][width][u][x|X|h|H|b|B]L	    gint64/guint64
+ *	%[0][width][u][x|X|h|H|b|B]D	    int32_t/uint32_t
+ *	%[0][width][u][x|X|h|H|b|B]L	    int64_t/uint64_t
  *	%[0][width][.width]f	    double
  *	%[0][width][.width]F	    long double
  *	%[0][width][.width]g	    double
@@ -48,7 +48,7 @@ extern "C" {
  *	%*s					        length and string
  *	%Z						    '\0'
  *	%N						    '\n'
- *	%c						    gchar
+ *	%c						    char
  *	%t						    time_t
  *	%e                          GError *
  *	%%						    %
@@ -62,31 +62,31 @@ extern "C" {
  * @param ud opaque pointer
  * @return number of characters written
  */
-typedef glong (*rspamd_printf_append_func)(const gchar *buf, glong buflen,
+typedef glong (*rspamd_printf_append_func)(const char *buf, glong buflen,
 										   gpointer ud);
 
-glong rspamd_fprintf(FILE *f, const gchar *fmt, ...);
+glong rspamd_fprintf(FILE *f, const char *fmt, ...);
 
-glong rspamd_printf(const gchar *fmt, ...);
+glong rspamd_printf(const char *fmt, ...);
 
-glong rspamd_log_fprintf(FILE *f, const gchar *fmt, ...);
+glong rspamd_log_fprintf(FILE *f, const char *fmt, ...);
 
-glong rspamd_snprintf(gchar *buf, glong max, const gchar *fmt, ...);
+glong rspamd_snprintf(char *buf, glong max, const char *fmt, ...);
 
-gchar *rspamd_vsnprintf(gchar *buf, glong max, const gchar *fmt,
-						va_list args);
+char *rspamd_vsnprintf(char *buf, glong max, const char *fmt,
+					   va_list args);
 
-glong rspamd_printf_gstring(GString *s, const gchar *fmt, ...);
+glong rspamd_printf_gstring(GString *s, const char *fmt, ...);
 
-glong rspamd_vprintf_gstring(GString *s, const gchar *fmt, va_list args);
+glong rspamd_vprintf_gstring(GString *s, const char *fmt, va_list args);
 
-glong rspamd_printf_fstring(rspamd_fstring_t **s, const gchar *fmt, ...);
+glong rspamd_printf_fstring(rspamd_fstring_t **s, const char *fmt, ...);
 
-glong rspamd_vprintf_fstring(rspamd_fstring_t **s, const gchar *fmt, va_list args);
+glong rspamd_vprintf_fstring(rspamd_fstring_t **s, const char *fmt, va_list args);
 
 glong rspamd_vprintf_common(rspamd_printf_append_func func,
 							gpointer apd,
-							const gchar *fmt,
+							const char *fmt,
 							va_list args);
 
 #ifdef __cplusplus

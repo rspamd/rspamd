@@ -54,28 +54,28 @@ typedef struct rspamd_expression_atom_s {
 	/* Opaque userdata */
 	gpointer data;
 	/* String representation of atom */
-	const gchar *str;
+	const char *str;
 	/* Length of the string representation of atom */
-	guint len;
+	unsigned int len;
 	/* Relative priority */
-	gint priority;
-	guint hits;
+	int priority;
+	unsigned int hits;
 	struct rspamd_counter_data exec_time;
 } rspamd_expression_atom_t;
 
-typedef gdouble (*rspamd_expression_process_cb)(gpointer runtime_data,
-												rspamd_expression_atom_t *atom);
+typedef double (*rspamd_expression_process_cb)(gpointer runtime_data,
+											   rspamd_expression_atom_t *atom);
 
 struct rspamd_atom_subr {
 	/* Parses atom from string and returns atom structure */
-	rspamd_expression_atom_t *(*parse)(const gchar *line, gsize len,
+	rspamd_expression_atom_t *(*parse)(const char *line, gsize len,
 									   rspamd_mempool_t *pool, gpointer ud, GError **err);
 
 	/* Process atom via the opaque pointer (e.g. struct rspamd_task *) */
 	rspamd_expression_process_cb process;
 
 	/* Calculates the relative priority of the expression */
-	gint (*priority)(rspamd_expression_atom_t *atom);
+	int (*priority)(rspamd_expression_atom_t *atom);
 
 	void (*destroy)(rspamd_expression_atom_t *atom);
 };
@@ -94,7 +94,7 @@ struct rspamd_expression;
  * @param target the target expression
  * @return TRUE if an expression have been parsed
  */
-gboolean rspamd_parse_expression(const gchar *line, gsize len,
+gboolean rspamd_parse_expression(const char *line, gsize len,
 								 const struct rspamd_atom_subr *subr, gpointer subr_data,
 								 rspamd_mempool_t *pool, GError **err,
 								 struct rspamd_expression **target);
@@ -105,9 +105,9 @@ gboolean rspamd_parse_expression(const gchar *line, gsize len,
  * @param data opaque data pointer for all the atoms
  * @return the value of expression
  */
-gdouble rspamd_process_expression(struct rspamd_expression *expr,
-								  gint flags,
-								  gpointer runtime_ud);
+double rspamd_process_expression(struct rspamd_expression *expr,
+								 int flags,
+								 gpointer runtime_ud);
 
 /**
  * Process the expression and return its value using atom 'process' functions with the specified data pointer.
@@ -117,10 +117,10 @@ gdouble rspamd_process_expression(struct rspamd_expression *expr,
  * @param track pointer array to atoms tracking
  * @return the value of expression
  */
-gdouble rspamd_process_expression_track(struct rspamd_expression *expr,
-										gint flags,
-										gpointer runtime_ud,
-										GPtrArray **track);
+double rspamd_process_expression_track(struct rspamd_expression *expr,
+									   int flags,
+									   gpointer runtime_ud,
+									   GPtrArray **track);
 
 /**
  * Process the expression with the custom processor
@@ -129,11 +129,11 @@ gdouble rspamd_process_expression_track(struct rspamd_expression *expr,
  * @param process_data
  * @return
  */
-gdouble rspamd_process_expression_closure(struct rspamd_expression *expr,
-										  rspamd_expression_process_cb cb,
-										  gint flags,
-										  gpointer runtime_ud,
-										  GPtrArray **track);
+double rspamd_process_expression_closure(struct rspamd_expression *expr,
+										 rspamd_expression_process_cb cb,
+										 int flags,
+										 gpointer runtime_ud,
+										 GPtrArray **track);
 
 /**
  * Shows string representation of an expression

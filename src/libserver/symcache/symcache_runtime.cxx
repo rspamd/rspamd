@@ -678,7 +678,7 @@ rspamd_delayed_timer_dtor(gpointer d)
 auto symcache_runtime::finalize_item(struct rspamd_task *task, cache_dynamic_item *dyn_item) -> void
 {
 	/* Limit to consider a rule as slow (in milliseconds) */
-	constexpr const gdouble slow_diff_limit = 300;
+	constexpr const double slow_diff_limit = 300;
 	auto *item = get_item_by_dynamic_item(dyn_item);
 	/* Sanity checks */
 	g_assert(items_inflight > 0);

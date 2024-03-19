@@ -36,17 +36,17 @@ struct rspamd_stat_ctx;
 
 /* Common tokenizer structure */
 struct rspamd_stat_tokenizer {
-	gchar *name;
+	char *name;
 
 	gpointer (*get_config)(rspamd_mempool_t *pool,
 						   struct rspamd_tokenizer_config *cf, gsize *len);
 
-	gint (*tokenize_func)(struct rspamd_stat_ctx *ctx,
-						  struct rspamd_task *task,
-						  GArray *words,
-						  gboolean is_utf,
-						  const gchar *prefix,
-						  GPtrArray *result);
+	int (*tokenize_func)(struct rspamd_stat_ctx *ctx,
+						 struct rspamd_task *task,
+						 GArray *words,
+						 gboolean is_utf,
+						 const char *prefix,
+						 GPtrArray *result);
 };
 
 enum rspamd_tokenize_type {
@@ -56,26 +56,26 @@ enum rspamd_tokenize_type {
 };
 
 /* Compare two token nodes */
-gint token_node_compare_func(gconstpointer a, gconstpointer b);
+int token_node_compare_func(gconstpointer a, gconstpointer b);
 
 
 /* Tokenize text into array of words (rspamd_stat_token_t type) */
-GArray *rspamd_tokenize_text(const gchar *text, gsize len,
+GArray *rspamd_tokenize_text(const char *text, gsize len,
 							 const UText *utxt,
 							 enum rspamd_tokenize_type how,
 							 struct rspamd_config *cfg,
 							 GList *exceptions,
-							 guint64 *hash,
+							 uint64_t *hash,
 							 GArray *cur_words,
 							 rspamd_mempool_t *pool);
 
 /* OSB tokenize function */
-gint rspamd_tokenizer_osb(struct rspamd_stat_ctx *ctx,
-						  struct rspamd_task *task,
-						  GArray *words,
-						  gboolean is_utf,
-						  const gchar *prefix,
-						  GPtrArray *result);
+int rspamd_tokenizer_osb(struct rspamd_stat_ctx *ctx,
+						 struct rspamd_task *task,
+						 GArray *words,
+						 gboolean is_utf,
+						 const char *prefix,
+						 GPtrArray *result);
 
 gpointer rspamd_tokenizer_osb_get_config(rspamd_mempool_t *pool,
 										 struct rspamd_tokenizer_config *cf,
@@ -88,7 +88,7 @@ void rspamd_normalize_single_word(rspamd_stat_token_t *tok, rspamd_mempool_t *po
 void rspamd_normalize_words(GArray *words, rspamd_mempool_t *pool);
 
 void rspamd_stem_words(GArray *words, rspamd_mempool_t *pool,
-					   const gchar *language,
+					   const char *language,
 					   struct rspamd_lang_detector *lang_detector);
 
 void rspamd_tokenize_meta_words(struct rspamd_task *task);

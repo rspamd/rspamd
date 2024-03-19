@@ -53,7 +53,7 @@ void rspamd_redis_pool_config(void *pool,
  */
 struct redisAsyncContext *rspamd_redis_pool_connect(
 	void *pool,
-	const gchar *db, const gchar *username, const gchar *password,
+	const char *db, const char *username, const char *password,
 	const char *ip, int port);
 
 enum rspamd_redis_pool_release_type {
@@ -82,7 +82,7 @@ void rspamd_redis_pool_destroy(void *pool);
  * @param type
  * @return
  */
-const gchar *rspamd_redis_type_to_string(int type);
+const char *rspamd_redis_type_to_string(int type);
 
 #ifdef __cplusplus
 }

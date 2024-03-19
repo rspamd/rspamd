@@ -20,18 +20,18 @@
 #include "unix-std.h"
 
 static const char *lua_src_name = "lua/pcall_test.lua";
-extern gchar *argv0_dirname;
+extern char *argv0_dirname;
 
 extern struct rspamd_main *rspamd_main;
 
 const int N = 20000;
 
 
-static gdouble
-test_pcall(lua_State *L, gint function_call)
+static double
+test_pcall(lua_State *L, int function_call)
 {
-	gdouble t1, t2;
-	gint i;
+	double t1, t2;
+	int i;
 	t1 = rspamd_get_virtual_ticks();
 
 	for (i = 0; i < N; i++) {
@@ -45,11 +45,11 @@ test_pcall(lua_State *L, gint function_call)
 	return t2 - t1;
 }
 
-static gdouble
-test_resume(lua_State *L, gint function_call)
+static double
+test_resume(lua_State *L, int function_call)
 {
-	gdouble t1, t2;
-	gint i;
+	double t1, t2;
+	int i;
 	t1 = rspamd_get_virtual_ticks();
 
 	for (i = 0; i < N; i++) {
@@ -69,11 +69,11 @@ test_resume(lua_State *L, gint function_call)
 	return t2 - t1;
 }
 
-static gdouble
-test_resume_get_thread(gint function_call)
+static double
+test_resume_get_thread(int function_call)
 {
-	gdouble t1, t2;
-	gint i;
+	double t1, t2;
+	int i;
 	struct thread_entry *ent;
 
 	t1 = rspamd_get_virtual_ticks();
@@ -99,11 +99,11 @@ test_resume_get_thread(gint function_call)
 	return t2 - t1;
 }
 
-static gdouble
-test_resume_get_new_thread(gint function_call)
+static double
+test_resume_get_new_thread(int function_call)
 {
-	gdouble t1, t2;
-	gint i;
+	double t1, t2;
+	int i;
 	struct thread_entry *ent;
 
 	t1 = rspamd_get_virtual_ticks();
@@ -132,8 +132,8 @@ test_resume_get_new_thread(gint function_call)
 void rspamd_lua_lua_pcall_vs_resume_test_func(void)
 {
 	lua_State *L = rspamd_main->cfg->lua_state;
-	gchar *lua_src;
-	gdouble t1, reference;
+	char *lua_src;
+	double t1, reference;
 
 	lua_src = g_build_filename(argv0_dirname, lua_src_name, NULL);
 	if (luaL_dofile(L, lua_src) != 0) {
@@ -142,19 +142,19 @@ void rspamd_lua_lua_pcall_vs_resume_test_func(void)
 	}
 	g_free(lua_src);
 
-	gint function_call = luaL_ref(L, LUA_REGISTRYINDEX);
+	int function_call = luaL_ref(L, LUA_REGISTRYINDEX);
 
 	msg_info("calling");
 
 	reference = t1 = test_pcall(L, function_call);
-	msg_notice("pcall stat: ts: %1.5f, avg:%1.5f, slow=%1.2f", t1, t1 / (gdouble) N, t1 / reference);
+	msg_notice("pcall stat: ts: %1.5f, avg:%1.5f, slow=%1.2f", t1, t1 / (double) N, t1 / reference);
 
 	t1 = test_resume(L, function_call);
-	msg_notice("resume stat: ts: %1.5f, avg:%1.5f, slow=%1.2f", t1, t1 / (gdouble) N, t1 / reference);
+	msg_notice("resume stat: ts: %1.5f, avg:%1.5f, slow=%1.2f", t1, t1 / (double) N, t1 / reference);
 
 	t1 = test_resume_get_thread(function_call);
-	msg_notice("resume+get thread stat: ts: %1.5f, avg:%1.5f, slow=%1.2f", t1, t1 / (gdouble) N, t1 / reference);
+	msg_notice("resume+get thread stat: ts: %1.5f, avg:%1.5f, slow=%1.2f", t1, t1 / (double) N, t1 / reference);
 
 	t1 = test_resume_get_new_thread(function_call);
-	msg_notice("resume+get [new] thread stat: ts: %1.5f, avg:%1.5f, slow=%1.2f", t1, t1 / (gdouble) N, t1 / reference);
+	msg_notice("resume+get [new] thread stat: ts: %1.5f, avg:%1.5f, slow=%1.2f", t1, t1 / (double) N, t1 / reference);
 }

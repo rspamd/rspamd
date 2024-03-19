@@ -1,11 +1,11 @@
-/*-
- * Copyright 2019 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -56,11 +56,11 @@ struct rspamd_lua_spf_cbdata {
 	struct rspamd_task *task;
 	lua_State *L;
 	struct rspamd_symcache_dynamic_item *item;
-	gint cbref;
+	int cbref;
 	ref_entry_t ref;
 };
 
-static gint
+static int
 lua_load_spf(lua_State *L)
 {
 	lua_newtable(L);
@@ -107,14 +107,14 @@ void luaopen_spf(lua_State *L)
 }
 
 static void
-lua_spf_push_result(struct rspamd_lua_spf_cbdata *cbd, gint code_flags,
-					struct spf_resolved *resolved, const gchar *err)
+lua_spf_push_result(struct rspamd_lua_spf_cbdata *cbd, int code_flags,
+					struct spf_resolved *resolved, const char *err)
 {
 	g_assert(cbd != NULL);
 	REF_RETAIN(cbd);
 
 	lua_pushcfunction(cbd->L, &rspamd_lua_traceback);
-	gint err_idx = lua_gettop(cbd->L);
+	int err_idx = lua_gettop(cbd->L);
 
 	lua_rawgeti(cbd->L, LUA_REGISTRYINDEX, cbd->cbref);
 
@@ -211,7 +211,7 @@ spf_lua_lib_callback(struct spf_resolved *record, struct rspamd_task *task,
  * @param {rspamd_task} task task
  * @param {function} callback callback that is called on spf resolution
 */
-gint lua_spf_resolve(lua_State *L)
+int lua_spf_resolve(lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task(L, 1);
 
@@ -254,7 +254,7 @@ gint lua_spf_resolve(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_spf_record_dtor(lua_State *L)
 {
 	struct spf_resolved *record;
@@ -273,7 +273,7 @@ lua_spf_record_dtor(lua_State *L)
 static void
 lua_spf_push_spf_addr(lua_State *L, struct spf_addr *addr)
 {
-	gchar *addr_mask;
+	char *addr_mask;
 
 	lua_createtable(L, 0, 4);
 
@@ -296,13 +296,13 @@ lua_spf_push_spf_addr(lua_State *L, struct spf_addr *addr)
 	}
 }
 
-static gint
+static int
 spf_check_element(lua_State *L, struct spf_resolved *rec, struct spf_addr *addr,
 				  struct rspamd_lua_ip *ip)
 {
 	gboolean res = FALSE;
-	const guint8 *s, *d;
-	guint af, mask, bmask, addrlen;
+	const uint8_t *s, *d;
+	unsigned int af, mask, bmask, addrlen;
 
 
 	if (addr->flags & RSPAMD_SPF_FLAG_TEMPFAIL) {
@@ -318,11 +318,11 @@ spf_check_element(lua_State *L, struct spf_resolved *rec, struct spf_addr *addr,
 		d = rspamd_inet_address_get_hash_key(ip->addr, &addrlen);
 
 		if (af == AF_INET6) {
-			s = (const guint8 *) addr->addr6;
+			s = (const uint8_t *) addr->addr6;
 			mask = addr->m.dual.mask_v6;
 		}
 		else {
-			s = (const guint8 *) addr->addr4;
+			s = (const uint8_t *) addr->addr4;
 			mask = addr->m.dual.mask_v4;
 		}
 
@@ -396,7 +396,7 @@ spf_check_element(lua_State *L, struct spf_resolved *rec, struct spf_addr *addr,
  * @param {rspamd_ip|string} ip address
  * @return {result,flag_or_policy,error_or_addr} - triplet
 */
-static gint
+static int
 lua_spf_record_check_ip(lua_State *L)
 {
 	struct spf_resolved *record;
@@ -404,14 +404,14 @@ lua_spf_record_check_ip(lua_State *L)
 										 struct spf_resolved,
 										 record);
 	struct rspamd_lua_ip *ip = NULL;
-	gint nres = 0;
+	int nres = 0;
 	gboolean need_free_ip = FALSE;
 
 	if (lua_type(L, 2) == LUA_TUSERDATA) {
 		ip = lua_check_ip(L, 2);
 	}
 	else if (lua_type(L, 2) == LUA_TSTRING) {
-		const gchar *ip_str;
+		const char *ip_str;
 		gsize iplen;
 
 		ip = g_malloc0(sizeof(struct rspamd_lua_ip));
@@ -428,7 +428,7 @@ lua_spf_record_check_ip(lua_State *L)
 	}
 
 	if (record && ip && ip->addr) {
-		for (guint i = 0; i < record->elts->len; i++) {
+		for (unsigned int i = 0; i < record->elts->len; i++) {
 			struct spf_addr *addr = &g_array_index(record->elts, struct spf_addr, i);
 			if ((nres = spf_check_element(L, record, addr, ip)) > 0) {
 				if (need_free_ip) {
@@ -473,7 +473,7 @@ lua_spf_record_check_ip(lua_State *L)
  * @method rspamd_spf_record:get_domain()
  * Returns domain for the specific spf record
 */
-static gint
+static int
 lua_spf_record_get_domain(lua_State *L)
 {
 	struct spf_resolved *record;
@@ -495,7 +495,7 @@ lua_spf_record_get_domain(lua_State *L)
  * @method rspamd_spf_record:get_ttl()
  * Returns ttl for the specific spf record
 */
-static gint
+static int
 lua_spf_record_get_ttl(lua_State *L)
 {
 	struct spf_resolved *record;
@@ -517,7 +517,7 @@ lua_spf_record_get_ttl(lua_State *L)
  * @method rspamd_spf_record:get_timestamp()
  * Returns ttl for the specific spf record
 */
-static gint
+static int
 lua_spf_record_get_timestamp(lua_State *L)
 {
 	struct spf_resolved *record;
@@ -539,7 +539,7 @@ lua_spf_record_get_timestamp(lua_State *L)
  * @method rspamd_spf_record:get_digest()
  * Returns string hex representation of the record digest (fast hash function)
 */
-static gint
+static int
 lua_spf_record_get_digest(lua_State *L)
 {
 	struct spf_resolved *record;
@@ -548,7 +548,7 @@ lua_spf_record_get_digest(lua_State *L)
 										 record);
 
 	if (record) {
-		gchar hexbuf[64];
+		char hexbuf[64];
 
 		rspamd_snprintf(hexbuf, sizeof(hexbuf), "%xuL", record->digest);
 		lua_pushstring(L, hexbuf);
@@ -570,7 +570,7 @@ lua_spf_record_get_digest(lua_State *L)
  * - addr - address and mask as a string
  * - str - string representation (if available)
 */
-static gint
+static int
 lua_spf_record_get_elts(lua_State *L)
 {
 	struct spf_resolved *record;
@@ -579,7 +579,7 @@ lua_spf_record_get_elts(lua_State *L)
 										 record);
 
 	if (record) {
-		guint i;
+		unsigned int i;
 		struct spf_addr *addr;
 
 		lua_createtable(L, record->elts->len, 0);
@@ -604,7 +604,7 @@ lua_spf_record_get_elts(lua_State *L)
  * Configures SPF library according to the UCL config
  * @param {table} object configuration object
 */
-gint lua_spf_config(lua_State *L)
+int lua_spf_config(lua_State *L)
 {
 	ucl_object_t *config_obj = ucl_object_lua_import(L, 1);
 

@@ -46,7 +46,7 @@ enum rspamd_exception_type {
  */
 struct rspamd_process_exception {
 	goffset pos;
-	guint len;
+	unsigned int len;
 	gpointer ptr;
 	enum rspamd_exception_type type;
 };
@@ -59,26 +59,26 @@ struct rspamd_process_exception {
  * @param async set non-blocking on a socket
  * @return socket FD or -1 in case of error
  */
-gint rspamd_socket_create(gint af, gint type, gint protocol, gboolean async);
+int rspamd_socket_create(int af, int type, int protocol, gboolean async);
 
 /*
  * Create socket and bind or connect it to specified address and port
  */
-gint rspamd_socket_tcp(struct addrinfo *, gboolean is_server, gboolean async);
+int rspamd_socket_tcp(struct addrinfo *, gboolean is_server, gboolean async);
 
 /*
  * Create socket and bind or connect it to specified address and port
  */
-gint rspamd_socket_udp(struct addrinfo *, gboolean is_server, gboolean async);
+int rspamd_socket_udp(struct addrinfo *, gboolean is_server, gboolean async);
 
 /*
  * Create and bind or connect unix socket
  */
-gint rspamd_socket_unix(const gchar *,
-						struct sockaddr_un *,
-						gint type,
-						gboolean is_server,
-						gboolean async);
+int rspamd_socket_unix(const char *,
+					   struct sockaddr_un *,
+					   int type,
+					   gboolean is_server,
+					   gboolean async);
 
 /**
  * Make a universal socket
@@ -89,75 +89,75 @@ gint rspamd_socket_unix(const gchar *,
  * @param is_server make this socket as server socket
  * @param try_resolve try name resolution for a socket (BLOCKING)
  */
-gint rspamd_socket(const gchar *credits, guint16 port, gint type,
-				   gboolean async, gboolean is_server, gboolean try_resolve);
+int rspamd_socket(const char *credits, uint16_t port, int type,
+				  gboolean async, gboolean is_server, gboolean try_resolve);
 
 
 /*
  * Create socketpair
  */
-gboolean rspamd_socketpair(gint pair[2], gint af);
+gboolean rspamd_socketpair(int pair[2], int af);
 
 /*
  * Make specified socket non-blocking
  */
-gint rspamd_socket_nonblocking(gint);
+int rspamd_socket_nonblocking(int);
 
 /*
  * Make specified socket blocking
  */
-gint rspamd_socket_blocking(gint);
+int rspamd_socket_blocking(int);
 
 /*
  * Poll a sync socket for specified events
  */
-gint rspamd_socket_poll(gint fd, gint timeout, short events);
+int rspamd_socket_poll(int fd, int timeout, short events);
 
 /*
  * Init signals
  */
 #ifdef HAVE_SA_SIGINFO
 
-void rspamd_signals_init(struct sigaction *sa, void (*sig_handler)(gint,
+void rspamd_signals_init(struct sigaction *sa, void (*sig_handler)(int,
 																   siginfo_t *,
 																   void *));
 
 #else
-void rspamd_signals_init(struct sigaction *sa, void (*sig_handler)(gint));
+void rspamd_signals_init(struct sigaction *sa, void (*sig_handler)(int));
 #endif
 
 /*
  * Process title utility functions
  */
-gint rspamd_init_title(rspamd_mempool_t *pool, gint argc, gchar *argv[], gchar *envp[]);
-gint rspamd_setproctitle(const gchar *fmt, ...);
+int rspamd_init_title(rspamd_mempool_t *pool, int argc, char *argv[], char *envp[]);
+int rspamd_setproctitle(const char *fmt, ...);
 
 #ifndef HAVE_PIDFILE
 /*
  * Pidfile functions from FreeBSD libutil code
  */
 typedef struct rspamd_pidfh_s {
-	gint pf_fd;
+	int pf_fd;
 #ifdef HAVE_PATH_MAX
-	gchar pf_path[PATH_MAX + 1];
+	char pf_path[PATH_MAX + 1];
 #elif defined(HAVE_MAXPATHLEN)
-	gchar pf_path[MAXPATHLEN + 1];
+	char pf_path[MAXPATHLEN + 1];
 #else
-	gchar pf_path[1024 + 1];
+	char pf_path[1024 + 1];
 #endif
 	dev_t pf_dev;
 	ino_t pf_ino;
 } rspamd_pidfh_t;
 
-rspamd_pidfh_t *rspamd_pidfile_open(const gchar *path,
+rspamd_pidfh_t *rspamd_pidfile_open(const char *path,
 									mode_t mode,
 									pid_t *pidptr);
 
-gint rspamd_pidfile_write(rspamd_pidfh_t *pfh);
+int rspamd_pidfile_write(rspamd_pidfh_t *pfh);
 
-gint rspamd_pidfile_close(rspamd_pidfh_t *pfh);
+int rspamd_pidfile_close(rspamd_pidfh_t *pfh);
 
-gint rspamd_pidfile_remove(rspamd_pidfh_t *pfh);
+int rspamd_pidfile_remove(rspamd_pidfh_t *pfh);
 
 #else
 typedef struct pidfh rspamd_pidfh_t;
@@ -170,20 +170,20 @@ typedef struct pidfh rspamd_pidfh_t;
 /*
  * Replace %r with rcpt value and %f with from value, new string is allocated in pool
  */
-gchar *resolve_stat_filename(rspamd_mempool_t *pool,
-							 gchar *pattern,
-							 gchar *rcpt,
-							 gchar *from);
+char *resolve_stat_filename(rspamd_mempool_t *pool,
+							char *pattern,
+							char *rcpt,
+							char *from);
 
-const gchar *
-rspamd_log_check_time(gdouble start, gdouble end, gint resolution);
+const char *
+rspamd_log_check_time(double start, double end, int resolution);
 
 /*
  * File locking functions
  */
-gboolean rspamd_file_lock(gint fd, gboolean async);
+gboolean rspamd_file_lock(int fd, gboolean async);
 
-gboolean rspamd_file_unlock(gint fd, gboolean async);
+gboolean rspamd_file_unlock(int fd, gboolean async);
 
 /*
  * Workarounds for older versions of glib
@@ -191,7 +191,7 @@ gboolean rspamd_file_unlock(gint fd, gboolean async);
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 22))
 void g_ptr_array_unref(GPtrArray *array);
 gboolean g_int64_equal(gconstpointer v1, gconstpointer v2);
-guint g_int64_hash(gconstpointer v);
+unsigned int g_int64_hash(gconstpointer v);
 #endif
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 14))
 void g_queue_clear(GQueue *queue);
@@ -200,14 +200,14 @@ void g_queue_clear(GQueue *queue);
 void g_queue_free_full(GQueue *queue, GDestroyNotify free_func);
 #endif
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 40))
-void g_ptr_array_insert(GPtrArray *array, gint index_, gpointer data);
+void g_ptr_array_insert(GPtrArray *array, int index_, gpointer data);
 #endif
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 30))
-GPtrArray *g_ptr_array_new_full(guint reserved_size,
+GPtrArray *g_ptr_array_new_full(unsigned int reserved_size,
 								GDestroyNotify element_free_func);
 #endif
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 32))
-const gchar *g_environ_getenv(gchar **envp, const gchar *variable);
+const char *g_environ_getenv(char **envp, const char *variable);
 #endif
 
 /*
@@ -244,7 +244,7 @@ const gchar *g_environ_getenv(gchar **envp, const gchar *variable);
  * @param len length to allocate
  * @return -1 in case of failure
  */
-gint rspamd_fallocate(gint fd, off_t offset, off_t len);
+int rspamd_fallocate(int fd, off_t offset, off_t len);
 
 /**
  * Utils for working with threads to be compatible with all glib versions
@@ -315,25 +315,25 @@ void rspamd_hash_table_copy(GHashTable *src, GHashTable *dst,
  * @param key unused key
  * @return
  */
-gint rspamd_read_passphrase_with_prompt(const gchar *prompt, gchar *buf, gint size, bool echo, gpointer key);
+int rspamd_read_passphrase_with_prompt(const char *prompt, char *buf, int size, bool echo, gpointer key);
 
 /**
  * Portably return the current clock ticks as seconds
  * @return
  */
-gdouble rspamd_get_ticks(gboolean rdtsc_ok);
+double rspamd_get_ticks(gboolean rdtsc_ok);
 
 /**
  * Portably return the current virtual clock ticks as seconds
  * @return
  */
-gdouble rspamd_get_virtual_ticks(void);
+double rspamd_get_virtual_ticks(void);
 
 
 /**
  * Return the real timestamp as unixtime
  */
-gdouble rspamd_get_calendar_ticks(void);
+double rspamd_get_calendar_ticks(void);
 
 /**
  * Special utility to help array freeing in rspamd_mempool
@@ -370,41 +370,41 @@ void rspamd_gstring_free_soft(gpointer p);
  * Returns some statically initialized random hash seed
  * @return hash seed
  */
-guint64 rspamd_hash_seed(void);
+uint64_t rspamd_hash_seed(void);
 
 /**
  * Returns random hex string of the specified length
  * @param buf
  * @param len
  */
-void rspamd_random_hex(gchar *buf, guint64 len);
+void rspamd_random_hex(char *buf, uint64_t len);
 
 /**
  * Returns
  * @param pattern pattern to create (should end with some number of X symbols), modified by this function
  * @return
  */
-gint rspamd_shmem_mkstemp(gchar *pattern);
+int rspamd_shmem_mkstemp(char *pattern);
 
 /**
  * Return jittered time value
  */
-gdouble rspamd_time_jitter(gdouble in, gdouble jitter);
+double rspamd_time_jitter(double in, double jitter);
 
 /**
  * Return random double in range [0..1)
  * @return
  */
-gdouble rspamd_random_double(void);
+double rspamd_random_double(void);
 
 /**
  * Return random double in range [0..1) using xoroshiro128+ algorithm (not crypto secure)
  * @return
  */
-gdouble rspamd_random_double_fast(void);
-gdouble rspamd_random_double_fast_seed(guint64 *seed);
+double rspamd_random_double_fast(void);
+double rspamd_random_double_fast_seed(uint64_t *seed);
 uint64_t rspamd_random_uint64_fast_seed(uint64_t *seed);
-guint64 rspamd_random_uint64_fast(void);
+uint64_t rspamd_random_uint64_fast(void);
 
 /**
  * Seed fast rng
@@ -423,7 +423,7 @@ gboolean rspamd_constant_memcmp(const void *a, const void *b, gsize len);
  * @param mode mode to open
  * @return fd or -1 in case of error
  */
-int rspamd_file_xopen(const char *fname, int oflags, guint mode,
+int rspamd_file_xopen(const char *fname, int oflags, unsigned int mode,
 					  gboolean allow_symlink);
 
 /**
@@ -433,7 +433,7 @@ int rspamd_file_xopen(const char *fname, int oflags, guint mode,
  * @param size target size (must NOT be NULL)
  * @return pointer to memory (should be freed using munmap) or NULL in case of error
  */
-gpointer rspamd_file_xmap(const char *fname, guint mode, gsize *size,
+gpointer rspamd_file_xmap(const char *fname, unsigned int mode, gsize *size,
 						  gboolean allow_symlink);
 
 /**
@@ -443,7 +443,7 @@ gpointer rspamd_file_xmap(const char *fname, guint mode, gsize *size,
  * @param size target size (must NOT be NULL)
  * @return pointer to memory (should be freed using munmap) or NULL in case of error
  */
-gpointer rspamd_shmem_xmap(const char *fname, guint mode,
+gpointer rspamd_shmem_xmap(const char *fname, unsigned int mode,
 						   gsize *size);
 
 /**
@@ -451,7 +451,7 @@ gpointer rspamd_shmem_xmap(const char *fname, guint mode,
  * @param x probability (bias .. 1)
  * @return
  */
-gdouble rspamd_normalize_probability(gdouble x, gdouble bias);
+double rspamd_normalize_probability(double x, double bias);
 
 /**
  * Converts struct tm to time_t
@@ -459,21 +459,21 @@ gdouble rspamd_normalize_probability(gdouble x, gdouble bias);
  * @param tz timezone in format (hours * 100) + minutes
  * @return
  */
-guint64 rspamd_tm_to_time(const struct tm *tm, glong tz);
+uint64_t rspamd_tm_to_time(const struct tm *tm, glong tz);
 
 /**
  * Splits unix timestamp into struct tm using GMT timezone
  * @param ts
  * @param dest
  */
-void rspamd_gmtime(gint64 ts, struct tm *dest);
+void rspamd_gmtime(int64_t ts, struct tm *dest);
 
 /**
  * Split unix timestamp into struct tm using local timezone
  * @param ts
  * @param dest
  */
-void rspamd_localtime(gint64 ts, struct tm *dest);
+void rspamd_localtime(int64_t ts, struct tm *dest);
 
 #define PTR_ARRAY_FOREACH(ar, i, cur) for ((i) = 0; (ar) != NULL && (i) < (ar)->len && (((cur) = (__typeof__(cur)) g_ptr_array_index((ar), (i))) || 1); ++(i))
 
@@ -499,17 +499,17 @@ gboolean rspamd_fstring_gunzip(rspamd_fstring_t **in);
  * @param pattern
  * @param recursive
  * @param err
- * @return GPtrArray of gchar *, elements are freed when array is freed
+ * @return GPtrArray of char *, elements are freed when array is freed
  */
-GPtrArray *rspamd_glob_path(const gchar *dir,
-							const gchar *pattern,
+GPtrArray *rspamd_glob_path(const char *dir,
+							const char *pattern,
 							gboolean recursive,
 							GError **err);
 
 struct rspamd_counter_data {
 	float mean;
 	float stddev;
-	guint64 number;
+	uint64_t number;
 };
 
 /**
@@ -530,7 +530,7 @@ float rspamd_set_counter_ema(struct rspamd_counter_data *cd,
  * @return new counter value
  */
 double rspamd_set_counter(struct rspamd_counter_data *cd,
-						  gdouble value);
+						  double value);
 
 /**
  * Shuffle elements in an array inplace
@@ -549,8 +549,8 @@ struct rspamd_controller_pbkdf {
 	const char *alias;
 	const char *description;
 	int type; /* enum rspamd_cryptobox_pbkdf_type */
-	gint id;
-	guint complexity;
+	int id;
+	unsigned int complexity;
 	gsize salt_len;
 	gsize key_len;
 };
@@ -572,7 +572,7 @@ float rspamd_sum_floats(float *ar, gsize *nelts);
  * @param len
  * @param nlen
  */
-void rspamd_normalize_path_inplace(gchar *path, guint len, gsize *nlen);
+void rspamd_normalize_path_inplace(char *path, unsigned int len, gsize *nlen);
 
 #ifdef __cplusplus
 }

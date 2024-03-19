@@ -49,8 +49,8 @@ static struct rspamd_counter_data events_count;
 
 
 struct rspamd_async_event {
-	const gchar *subsystem;
-	const gchar *event_source;
+	const char *subsystem;
+	const char *event_source;
 	event_finalizer_t fin;
 	void *user_data;
 };
@@ -61,7 +61,7 @@ rspamd_event_equal(const struct rspamd_async_event *ev1, const struct rspamd_asy
 	return ev1->fin == ev2->fin && ev1->user_data == ev2->user_data;
 }
 
-static inline guint64
+static inline uint64_t
 rspamd_event_hash(const struct rspamd_async_event *ev)
 {
 	union _pointer_fp_thunk {
@@ -94,7 +94,7 @@ struct rspamd_async_session {
 	khash_t(rspamd_events_hash) * events;
 	void *user_data;
 	rspamd_mempool_t *pool;
-	guint flags;
+	unsigned int flags;
 };
 
 static void
@@ -134,11 +134,11 @@ struct rspamd_async_event *
 rspamd_session_add_event_full(struct rspamd_async_session *session,
 							  event_finalizer_t fin,
 							  gpointer user_data,
-							  const gchar *subsystem,
-							  const gchar *event_source)
+							  const char *subsystem,
+							  const char *event_source)
 {
 	struct rspamd_async_event *new_event;
-	gint ret;
+	int ret;
 
 	if (session == NULL) {
 		msg_err("session is NULL");
@@ -176,7 +176,7 @@ rspamd_session_add_event_full(struct rspamd_async_session *session,
 void rspamd_session_remove_event_full(struct rspamd_async_session *session,
 									  event_finalizer_t fin,
 									  void *ud,
-									  const gchar *event_source)
+									  const char *event_source)
 {
 	struct rspamd_async_event search_ev, *found_ev;
 	khiter_t k;
@@ -335,9 +335,9 @@ rspamd_session_pending(struct rspamd_async_session *session)
 	return ret;
 }
 
-guint rspamd_session_events_pending(struct rspamd_async_session *session)
+unsigned int rspamd_session_events_pending(struct rspamd_async_session *session)
 {
-	guint npending;
+	unsigned int npending;
 
 	g_assert(session != NULL);
 

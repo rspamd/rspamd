@@ -32,7 +32,7 @@ static gboolean list_commands = FALSE;
 static gboolean show_help = FALSE;
 static gboolean show_version = FALSE;
 GHashTable *ucl_vars = NULL;
-gchar **lua_env = NULL;
+char **lua_env = NULL;
 struct rspamd_main *rspamd_main = NULL;
 struct rspamd_async_session *rspamadm_session = NULL;
 lua_State *L = NULL;
@@ -41,7 +41,7 @@ lua_State *L = NULL;
 extern module_t *modules[];
 extern worker_t *workers[];
 
-static void rspamadm_help(gint argc, gchar **argv, const struct rspamadm_command *);
+static void rspamadm_help(int argc, char **argv, const struct rspamadm_command *);
 static const char *rspamadm_help_help(gboolean full_help, const struct rspamadm_command *);
 
 struct rspamadm_command help_command = {
@@ -50,8 +50,8 @@ struct rspamadm_command help_command = {
 	.help = rspamadm_help_help,
 	.run = rspamadm_help};
 
-static gboolean rspamadm_parse_ucl_var(const gchar *option_name,
-									   const gchar *value, gpointer data,
+static gboolean rspamadm_parse_ucl_var(const char *option_name,
+									   const char *value, gpointer data,
 									   GError **error);
 
 
@@ -85,7 +85,7 @@ rspamadm_version(void)
 static void
 rspamadm_usage(GOptionContext *context)
 {
-	gchar *help_str;
+	char *help_str;
 
 	help_str = g_option_context_get_help(context, TRUE, NULL);
 	rspamd_printf("%s", help_str);
@@ -95,7 +95,7 @@ static void
 rspamadm_commands(GPtrArray *all_commands)
 {
 	const struct rspamadm_command *cmd;
-	guint i;
+	unsigned int i;
 
 	rspamd_printf("Rspamadm %s\n", RVERSION);
 	rspamd_printf("Usage: rspamadm [global_options] command [command_options]\n");
@@ -131,9 +131,9 @@ rspamadm_help_help(gboolean full_help, const struct rspamadm_command *cmd)
 }
 
 static void
-rspamadm_help(gint argc, gchar **argv, const struct rspamadm_command *command)
+rspamadm_help(int argc, char **argv, const struct rspamadm_command *command)
 {
-	const gchar *cmd_name;
+	const char *cmd_name;
 	const struct rspamadm_command *cmd;
 	GPtrArray *all_commands = (GPtrArray *) command->command_data;
 
@@ -156,7 +156,7 @@ rspamadm_help(gint argc, gchar **argv, const struct rspamadm_command *command)
 	}
 
 	if (strcmp(cmd_name, "help") == 0) {
-		guint i;
+		unsigned int i;
 		rspamd_printf("Available commands:\n");
 
 		PTR_ARRAY_FOREACH(all_commands, i, cmd)
@@ -185,11 +185,11 @@ rspamadm_help(gint argc, gchar **argv, const struct rspamadm_command *command)
 }
 
 static gboolean
-rspamadm_parse_ucl_var(const gchar *option_name,
-					   const gchar *value, gpointer data,
+rspamadm_parse_ucl_var(const char *option_name,
+					   const char *value, gpointer data,
 					   GError **error)
 {
-	gchar *k, *v, *t;
+	char *k, *v, *t;
 
 	t = strchr(value, '=');
 
@@ -221,17 +221,17 @@ lua_thread_str_error_cb(struct thread_entry *thread, int ret, const char *msg)
 }
 
 gboolean
-rspamadm_execute_lua_ucl_subr(gint argc, gchar **argv,
+rspamadm_execute_lua_ucl_subr(int argc, char **argv,
 							  const ucl_object_t *res,
-							  const gchar *script_name,
+							  const char *script_name,
 							  gboolean rspamadm_subcommand)
 {
 	struct thread_entry *thread = lua_thread_pool_get_for_config(rspamd_main->cfg);
 
 	lua_State *L = thread->lua_state;
 
-	gint i;
-	gchar str[PATH_MAX];
+	int i;
+	char str[PATH_MAX];
 
 	g_assert(script_name != NULL);
 	g_assert(res != NULL);
@@ -293,7 +293,7 @@ rspamadm_execute_lua_ucl_subr(gint argc, gchar **argv,
 	return TRUE;
 }
 
-static gint
+static int
 rspamdadm_commands_sort_func(gconstpointer a, gconstpointer b)
 {
 	const struct rspamadm_command *cmda = *((struct rspamadm_command const **) a),
@@ -303,7 +303,7 @@ rspamdadm_commands_sort_func(gconstpointer a, gconstpointer b)
 }
 
 static gboolean
-rspamadm_command_maybe_match_name(const gchar *cmd, const gchar *input)
+rspamadm_command_maybe_match_name(const char *cmd, const char *input)
 {
 	gsize clen, inplen;
 
@@ -366,23 +366,23 @@ rspamadm_cmd_dtor(gpointer p)
 	}
 }
 
-gint main(gint argc, gchar **argv, gchar **env)
+int main(int argc, char **argv, char **env)
 {
 	GError *error = NULL;
 	GOptionContext *context;
 	GOptionGroup *og;
 	struct rspamd_config *cfg;
 	GQuark process_quark;
-	gchar **nargv, **targv;
-	const gchar *cmd_name;
+	char **nargv, **targv;
+	const char *cmd_name;
 	const struct rspamadm_command *cmd;
 	struct rspamd_dns_resolver *resolver;
 	GPtrArray *all_commands = g_ptr_array_new_full(32,
 												   rspamadm_cmd_dtor); /* Discovered during check */
-	gint i, nargc, targc;
+	int i, nargc, targc;
 	worker_t **pworker;
 	gboolean lua_file = FALSE;
-	gint retcode = 0;
+	int retcode = 0;
 
 	ucl_vars = g_hash_table_new_full(rspamd_strcase_hash,
 									 rspamd_strcase_equal, g_free, g_free);
@@ -400,7 +400,7 @@ gint main(gint argc, gchar **argv, gchar **env)
 	help_command.command_data = all_commands;
 
 	/* Now read options and store everything till the first non-dash argument */
-	nargv = g_malloc0(sizeof(gchar *) * (argc + 1));
+	nargv = g_malloc0(sizeof(char *) * (argc + 1));
 	nargv[0] = g_strdup(argv[0]);
 
 	for (i = 1, nargc = 1; i < argc; i++) {
@@ -541,8 +541,8 @@ gint main(gint argc, gchar **argv, gchar **env)
 		rspamd_fprintf(stderr, "Suggested commands:\n");
 		PTR_ARRAY_FOREACH(all_commands, i, cmd)
 		{
-			guint j;
-			const gchar *alias;
+			unsigned int j;
+			const char *alias;
 
 			if (rspamadm_command_maybe_match_name(cmd->name, cmd_name)) {
 				rspamd_fprintf(stderr, "%s\n", cmd->name);
@@ -564,13 +564,13 @@ gint main(gint argc, gchar **argv, gchar **env)
 	if (nargc < argc) {
 
 		if (lua_file) {
-			nargv = g_malloc0(sizeof(gchar *) * (argc - nargc + 2));
+			nargv = g_malloc0(sizeof(char *) * (argc - nargc + 2));
 			nargv[1] = g_strdup(argv[nargc]);
 			i = 2;
 			argc++;
 		}
 		else {
-			nargv = g_malloc0(sizeof(gchar *) * (argc - nargc + 1));
+			nargv = g_malloc0(sizeof(char *) * (argc - nargc + 1));
 			i = 1;
 		}
 

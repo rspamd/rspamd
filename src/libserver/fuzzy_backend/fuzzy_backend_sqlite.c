@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -25,14 +25,14 @@
 struct rspamd_fuzzy_backend_sqlite {
 	sqlite3 *db;
 	char *path;
-	gchar id[MEMPOOL_UID_LEN];
+	char id[MEMPOOL_UID_LEN];
 	gsize count;
 	gsize expired;
 	rspamd_mempool_t *pool;
 };
 
-static const gdouble sql_sleep_time = 0.1;
-static const guint max_retries = 10;
+static const double sql_sleep_time = 0.1;
+static const unsigned int max_retries = 10;
 
 #define msg_err_fuzzy_backend(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL,                               \
 															   backend->pool->tag.tagname, backend->pool->tag.uid, \
@@ -107,10 +107,10 @@ enum rspamd_fuzzy_statement_idx {
 };
 static struct rspamd_fuzzy_stmts {
 	enum rspamd_fuzzy_statement_idx idx;
-	const gchar *sql;
-	const gchar *args;
+	const char *sql;
+	const char *args;
 	sqlite3_stmt *stmt;
-	gint result;
+	int result;
 } prepared_stmts[RSPAMD_FUZZY_BACKEND_MAX] =
 	{
 		{.idx = RSPAMD_FUZZY_BACKEND_TRANSACTION_START,
@@ -267,7 +267,7 @@ rspamd_fuzzy_backend_sqlite_run_stmt(struct rspamd_fuzzy_backend_sqlite *backend
 	sqlite3_stmt *stmt;
 	int i;
 	const char *argtypes;
-	guint retries = 0;
+	unsigned int retries = 0;
 	struct timespec ts;
 
 	if (idx < 0 || idx >= RSPAMD_FUZZY_BACKEND_MAX) {
@@ -303,10 +303,10 @@ rspamd_fuzzy_backend_sqlite_run_stmt(struct rspamd_fuzzy_backend_sqlite *backend
 							  SQLITE_STATIC);
 			break;
 		case 'I':
-			sqlite3_bind_int64(stmt, i + 1, va_arg(ap, gint64));
+			sqlite3_bind_int64(stmt, i + 1, va_arg(ap, int64_t));
 			break;
 		case 'S':
-			sqlite3_bind_int(stmt, i + 1, va_arg(ap, gint));
+			sqlite3_bind_int(stmt, i + 1, va_arg(ap, int));
 			break;
 		case 'D':
 			/* Special case for digests variable */
@@ -361,12 +361,12 @@ rspamd_fuzzy_backend_sqlite_close_stmts(struct rspamd_fuzzy_backend_sqlite *bk)
 }
 
 static gboolean
-rspamd_fuzzy_backend_sqlite_run_sql(const gchar *sql, struct rspamd_fuzzy_backend_sqlite *bk,
+rspamd_fuzzy_backend_sqlite_run_sql(const char *sql, struct rspamd_fuzzy_backend_sqlite *bk,
 									GError **err)
 {
-	guint retries = 0;
+	unsigned int retries = 0;
 	struct timespec ts;
-	gint ret;
+	int ret;
 
 	do {
 		ret = sqlite3_exec(bk->db, sql, NULL, NULL, NULL);
@@ -385,11 +385,11 @@ rspamd_fuzzy_backend_sqlite_run_sql(const gchar *sql, struct rspamd_fuzzy_backen
 }
 
 static struct rspamd_fuzzy_backend_sqlite *
-rspamd_fuzzy_backend_sqlite_open_db(const gchar *path, GError **err)
+rspamd_fuzzy_backend_sqlite_open_db(const char *path, GError **err)
 {
 	struct rspamd_fuzzy_backend_sqlite *bk;
 	rspamd_cryptobox_hash_state_t st;
-	guchar hash_out[rspamd_cryptobox_HASHBYTES];
+	unsigned char hash_out[rspamd_cryptobox_HASHBYTES];
 
 	g_assert(path != NULL);
 
@@ -424,7 +424,7 @@ rspamd_fuzzy_backend_sqlite_open_db(const gchar *path, GError **err)
 }
 
 struct rspamd_fuzzy_backend_sqlite *
-rspamd_fuzzy_backend_sqlite_open(const gchar *path,
+rspamd_fuzzy_backend_sqlite_open(const char *path,
 								 gboolean vacuum,
 								 GError **err)
 {
@@ -451,23 +451,23 @@ rspamd_fuzzy_backend_sqlite_open(const gchar *path,
 	return backend;
 }
 
-static gint
+static int
 rspamd_fuzzy_backend_sqlite_int64_cmp(const void *a, const void *b)
 {
-	gint64 ia = *(gint64 *) a, ib = *(gint64 *) b;
+	int64_t ia = *(int64_t *) a, ib = *(int64_t *) b;
 
 	return (ia - ib);
 }
 
 struct rspamd_fuzzy_reply
 rspamd_fuzzy_backend_sqlite_check(struct rspamd_fuzzy_backend_sqlite *backend,
-								  const struct rspamd_fuzzy_cmd *cmd, gint64 expire)
+								  const struct rspamd_fuzzy_cmd *cmd, int64_t expire)
 {
 	struct rspamd_fuzzy_reply rep;
 	const struct rspamd_fuzzy_shingle_cmd *shcmd;
 	int rc;
-	gint64 timestamp;
-	gint64 shingle_values[RSPAMD_SHINGLE_SIZE], i, sel_id, cur_id,
+	int64_t timestamp;
+	int64_t shingle_values[RSPAMD_SHINGLE_SIZE], i, sel_id, cur_id,
 		cur_cnt, max_cnt;
 
 	memset(&rep, 0, sizeof(rep));
@@ -524,7 +524,7 @@ rspamd_fuzzy_backend_sqlite_check(struct rspamd_fuzzy_backend_sqlite *backend,
 		rspamd_fuzzy_backend_sqlite_cleanup_stmt(backend,
 												 RSPAMD_FUZZY_BACKEND_CHECK_SHINGLE);
 
-		qsort(shingle_values, RSPAMD_SHINGLE_SIZE, sizeof(gint64),
+		qsort(shingle_values, RSPAMD_SHINGLE_SIZE, sizeof(int64_t),
 			  rspamd_fuzzy_backend_sqlite_int64_cmp);
 		sel_id = -1;
 		cur_id = -1;
@@ -605,9 +605,9 @@ rspamd_fuzzy_backend_sqlite_check(struct rspamd_fuzzy_backend_sqlite *backend,
 
 gboolean
 rspamd_fuzzy_backend_sqlite_prepare_update(struct rspamd_fuzzy_backend_sqlite *backend,
-										   const gchar *source)
+										   const char *source)
 {
-	gint rc;
+	int rc;
 
 	if (backend == NULL) {
 		return FALSE;
@@ -630,7 +630,7 @@ rspamd_fuzzy_backend_sqlite_add(struct rspamd_fuzzy_backend_sqlite *backend,
 								const struct rspamd_fuzzy_cmd *cmd)
 {
 	int rc, i;
-	gint64 id, flag;
+	int64_t id, flag;
 	const struct rspamd_fuzzy_shingle_cmd *shcmd;
 
 	if (backend == NULL) {
@@ -652,13 +652,13 @@ rspamd_fuzzy_backend_sqlite_add(struct rspamd_fuzzy_backend_sqlite *backend,
 			/* We need to increase weight */
 			rc = rspamd_fuzzy_backend_sqlite_run_stmt(backend, TRUE,
 													  RSPAMD_FUZZY_BACKEND_UPDATE,
-													  (gint64) cmd->value,
+													  (int64_t) cmd->value,
 													  cmd->digest);
 			if (rc != SQLITE_OK) {
 				msg_warn_fuzzy_backend("cannot update hash to %d -> "
 									   "%*xs: %s",
-									   (gint) cmd->flag,
-									   (gint) sizeof(cmd->digest), cmd->digest,
+									   (int) cmd->flag,
+									   (int) sizeof(cmd->digest), cmd->digest,
 									   sqlite3_errmsg(backend->db));
 			}
 		}
@@ -667,15 +667,15 @@ rspamd_fuzzy_backend_sqlite_add(struct rspamd_fuzzy_backend_sqlite *backend,
 
 			rc = rspamd_fuzzy_backend_sqlite_run_stmt(backend, TRUE,
 													  RSPAMD_FUZZY_BACKEND_UPDATE_FLAG,
-													  (gint64) cmd->value,
-													  (gint64) cmd->flag,
+													  (int64_t) cmd->value,
+													  (int64_t) cmd->flag,
 													  cmd->digest);
 
 			if (rc != SQLITE_OK) {
 				msg_warn_fuzzy_backend("cannot update hash to %d -> "
 									   "%*xs: %s",
-									   (gint) cmd->flag,
-									   (gint) sizeof(cmd->digest), cmd->digest,
+									   (int) cmd->flag,
+									   (int) sizeof(cmd->digest), cmd->digest,
 									   sqlite3_errmsg(backend->db));
 			}
 		}
@@ -684,9 +684,9 @@ rspamd_fuzzy_backend_sqlite_add(struct rspamd_fuzzy_backend_sqlite *backend,
 		rspamd_fuzzy_backend_sqlite_cleanup_stmt(backend, RSPAMD_FUZZY_BACKEND_CHECK);
 		rc = rspamd_fuzzy_backend_sqlite_run_stmt(backend, FALSE,
 												  RSPAMD_FUZZY_BACKEND_INSERT,
-												  (gint) cmd->flag,
+												  (int) cmd->flag,
 												  cmd->digest,
-												  (gint64) cmd->value);
+												  (int64_t) cmd->value);
 
 		if (rc == SQLITE_OK) {
 			if (cmd->shingles_count > 0) {
@@ -696,7 +696,7 @@ rspamd_fuzzy_backend_sqlite_add(struct rspamd_fuzzy_backend_sqlite *backend,
 				for (i = 0; i < RSPAMD_SHINGLE_SIZE; i++) {
 					rc = rspamd_fuzzy_backend_sqlite_run_stmt(backend, TRUE,
 															  RSPAMD_FUZZY_BACKEND_INSERT_SHINGLE,
-															  shcmd->sgl.hashes[i], (gint64) i, id);
+															  shcmd->sgl.hashes[i], (int64_t) i, id);
 					msg_debug_fuzzy_backend("add shingle %d -> %L: %L",
 											i,
 											shcmd->sgl.hashes[i],
@@ -715,8 +715,8 @@ rspamd_fuzzy_backend_sqlite_add(struct rspamd_fuzzy_backend_sqlite *backend,
 		else {
 			msg_warn_fuzzy_backend("cannot add hash to %d -> "
 								   "%*xs: %s",
-								   (gint) cmd->flag,
-								   (gint) sizeof(cmd->digest), cmd->digest,
+								   (int) cmd->flag,
+								   (int) sizeof(cmd->digest), cmd->digest,
 								   sqlite3_errmsg(backend->db));
 		}
 
@@ -729,9 +729,9 @@ rspamd_fuzzy_backend_sqlite_add(struct rspamd_fuzzy_backend_sqlite *backend,
 
 gboolean
 rspamd_fuzzy_backend_sqlite_finish_update(struct rspamd_fuzzy_backend_sqlite *backend,
-										  const gchar *source, gboolean version_bump)
+										  const char *source, gboolean version_bump)
 {
-	gint rc = SQLITE_OK, wal_frames, wal_checkpointed, ver;
+	int rc = SQLITE_OK, wal_frames, wal_checkpointed, ver;
 
 	/* Get and update version */
 	if (version_bump) {
@@ -740,7 +740,7 @@ rspamd_fuzzy_backend_sqlite_finish_update(struct rspamd_fuzzy_backend_sqlite *ba
 
 		rc = rspamd_fuzzy_backend_sqlite_run_stmt(backend, TRUE,
 												  RSPAMD_FUZZY_BACKEND_SET_VERSION,
-												  (gint64) ver, (gint64) time(NULL), source);
+												  (int64_t) ver, (int64_t) time(NULL), source);
 	}
 
 	if (rc == SQLITE_OK) {
@@ -800,8 +800,8 @@ rspamd_fuzzy_backend_sqlite_del(struct rspamd_fuzzy_backend_sqlite *backend,
 		if (rc != SQLITE_OK) {
 			msg_warn_fuzzy_backend("cannot update hash to %d -> "
 								   "%*xs: %s",
-								   (gint) cmd->flag,
-								   (gint) sizeof(cmd->digest), cmd->digest,
+								   (int) cmd->flag,
+								   (int) sizeof(cmd->digest), cmd->digest,
 								   sqlite3_errmsg(backend->db));
 		}
 	}
@@ -815,25 +815,25 @@ rspamd_fuzzy_backend_sqlite_del(struct rspamd_fuzzy_backend_sqlite *backend,
 
 gboolean
 rspamd_fuzzy_backend_sqlite_sync(struct rspamd_fuzzy_backend_sqlite *backend,
-								 gint64 expire,
+								 int64_t expire,
 								 gboolean clean_orphaned)
 {
 	struct orphaned_shingle_elt {
-		gint64 value;
-		gint64 number;
+		int64_t value;
+		int64_t number;
 	};
 
 	/* Do not do more than 5k ops per step */
-	const guint64 max_changes = 5000;
+	const uint64_t max_changes = 5000;
 	gboolean ret = FALSE;
-	gint64 expire_lim, expired;
-	gint rc, i, orphaned_cnt = 0;
+	int64_t expire_lim, expired;
+	int rc, i, orphaned_cnt = 0;
 	GError *err = NULL;
-	static const gchar orphaned_shingles[] = "SELECT shingles.value,shingles.number "
-											 "FROM shingles "
-											 "LEFT JOIN digests ON "
-											 "shingles.digest_id=digests.id WHERE "
-											 "digests.id IS NULL;";
+	static const char orphaned_shingles[] = "SELECT shingles.value,shingles.number "
+											"FROM shingles "
+											"LEFT JOIN digests ON "
+											"shingles.digest_id=digests.id WHERE "
+											"digests.id IS NULL;";
 	sqlite3_stmt *stmt;
 	GArray *orphaned;
 	struct orphaned_shingle_elt orphaned_elt, *pelt;
@@ -925,7 +925,7 @@ rspamd_fuzzy_backend_sqlite_sync(struct rspamd_fuzzy_backend_sqlite *backend,
 						"going to delete %ud orphaned shingles",
 						orphaned_cnt);
 					/* Need to delete orphaned elements */
-					for (i = 0; i < (gint) orphaned_cnt; i++) {
+					for (i = 0; i < (int) orphaned_cnt; i++) {
 						pelt = &g_array_index(orphaned,
 											  struct orphaned_shingle_elt,
 											  i);
@@ -999,10 +999,10 @@ gsize rspamd_fuzzy_backend_sqlite_count(struct rspamd_fuzzy_backend_sqlite *back
 	return 0;
 }
 
-gint rspamd_fuzzy_backend_sqlite_version(struct rspamd_fuzzy_backend_sqlite *backend,
-										 const gchar *source)
+int rspamd_fuzzy_backend_sqlite_version(struct rspamd_fuzzy_backend_sqlite *backend,
+										const char *source)
 {
-	gint ret = 0;
+	int ret = 0;
 
 	if (backend) {
 		if (rspamd_fuzzy_backend_sqlite_run_stmt(backend, FALSE,
@@ -1022,7 +1022,7 @@ gsize rspamd_fuzzy_backend_sqlite_expired(struct rspamd_fuzzy_backend_sqlite *ba
 	return backend != NULL ? backend->expired : 0;
 }
 
-const gchar *
+const char *
 rspamd_fuzzy_sqlite_backend_id(struct rspamd_fuzzy_backend_sqlite *backend)
 {
 	return backend != NULL ? backend->id : 0;

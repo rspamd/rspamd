@@ -26,7 +26,7 @@ extern "C" {
 
 struct rspamd_ssl_connection;
 
-typedef void (*rspamd_ssl_handler_t)(gint fd, short what, gpointer d);
+typedef void (*rspamd_ssl_handler_t)(int fd, short what, gpointer d);
 
 typedef void (*rspamd_ssl_error_handler_t)(gpointer d, GError *err);
 
@@ -38,7 +38,7 @@ typedef void (*rspamd_ssl_error_handler_t)(gpointer d, GError *err);
 struct rspamd_ssl_connection *rspamd_ssl_connection_new(gpointer ssl_ctx,
 														struct ev_loop *ev_base,
 														gboolean verify_peer,
-														const gchar *log_tag);
+														const char *log_tag);
 
 /**
  * Connects SSL session using the specified (connected) FD
@@ -51,8 +51,8 @@ struct rspamd_ssl_connection *rspamd_ssl_connection_new(gpointer ssl_ctx,
  * @param handler_data opaque data
  * @return TRUE if a session has been connected
  */
-gboolean rspamd_ssl_connect_fd(struct rspamd_ssl_connection *conn, gint fd,
-							   const gchar *hostname, struct rspamd_io_ev *ev, ev_tstamp timeout,
+gboolean rspamd_ssl_connect_fd(struct rspamd_ssl_connection *conn, int fd,
+							   const char *hostname, struct rspamd_io_ev *ev, ev_tstamp timeout,
 							   rspamd_ssl_handler_t handler, rspamd_ssl_error_handler_t err_handler,
 							   gpointer handler_data);
 

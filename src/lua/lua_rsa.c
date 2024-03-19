@@ -118,11 +118,11 @@ lua_check_rsa_sign(lua_State *L, int pos)
 	return ud ? *((rspamd_fstring_t **) ud) : NULL;
 }
 
-static gint
+static int
 lua_rsa_pubkey_load(lua_State *L)
 {
 	RSA *rsa = NULL, **prsa;
-	const gchar *filename;
+	const char *filename;
 	FILE *f;
 
 	filename = luaL_checkstring(L, 1);
@@ -154,11 +154,11 @@ lua_rsa_pubkey_load(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_rsa_privkey_save(lua_State *L)
 {
-	const gchar *filename;
-	const gchar *type = "pem";
+	const char *filename;
+	const char *type = "pem";
 	FILE *f;
 	int ret;
 
@@ -220,11 +220,11 @@ lua_rsa_privkey_save(lua_State *L)
 }
 
 
-static gint
+static int
 lua_rsa_pubkey_create(lua_State *L)
 {
 	RSA *rsa = NULL, **prsa;
-	const gchar *buf;
+	const char *buf;
 	BIO *bp;
 
 	buf = luaL_checkstring(L, 1);
@@ -249,7 +249,7 @@ lua_rsa_pubkey_create(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_rsa_pubkey_gc(lua_State *L)
 {
 	RSA *rsa = lua_check_rsa_pubkey(L, 1);
@@ -261,14 +261,14 @@ lua_rsa_pubkey_gc(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_rsa_pubkey_tostring(lua_State *L)
 {
 	RSA *rsa = lua_check_rsa_pubkey(L, 1);
 
 	if (rsa != NULL) {
 		BIO *pubout = BIO_new(BIO_s_mem());
-		const gchar *pubdata;
+		const char *pubdata;
 		gsize publen;
 		int rc = i2d_RSA_PUBKEY_bio(pubout, rsa);
 
@@ -289,11 +289,11 @@ lua_rsa_pubkey_tostring(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_rsa_privkey_load_file(lua_State *L)
 {
 	RSA *rsa = NULL, **prsa;
-	const gchar *filename;
+	const char *filename;
 	FILE *f;
 
 	filename = luaL_checkstring(L, 1);
@@ -325,13 +325,13 @@ lua_rsa_privkey_load_file(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_rsa_privkey_load_pem(lua_State *L)
 {
 	RSA *rsa = NULL, **prsa;
 	BIO *b;
 	struct rspamd_lua_text *t;
-	const gchar *data;
+	const char *data;
 	gsize len;
 
 	if (lua_isuserdata(L, 1)) {
@@ -371,13 +371,13 @@ lua_rsa_privkey_load_pem(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_rsa_privkey_load_raw(lua_State *L)
 {
 	RSA *rsa = NULL, **prsa;
 	BIO *b;
 	struct rspamd_lua_text *t;
-	const gchar *data;
+	const char *data;
 	gsize len;
 
 	if (lua_isuserdata(L, 1)) {
@@ -418,15 +418,15 @@ lua_rsa_privkey_load_raw(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_rsa_privkey_load_base64(lua_State *L)
 {
 	RSA *rsa = NULL, **prsa;
 	BIO *b;
 	EVP_PKEY *evp = NULL;
 	struct rspamd_lua_text *t;
-	const gchar *data;
-	guchar *decoded;
+	const char *data;
+	unsigned char *decoded;
 	gsize len, dec_len;
 
 	if (lua_isuserdata(L, 1)) {
@@ -486,11 +486,11 @@ lua_rsa_privkey_load_base64(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_rsa_privkey_create(lua_State *L)
 {
 	RSA *rsa = NULL, **prsa;
-	const gchar *buf;
+	const char *buf;
 	BIO *bp;
 
 	buf = luaL_checkstring(L, 1);
@@ -515,7 +515,7 @@ lua_rsa_privkey_create(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_rsa_privkey_gc(lua_State *L)
 {
 	RSA *rsa = lua_check_rsa_privkey(L, 1);
@@ -527,11 +527,11 @@ lua_rsa_privkey_gc(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_rsa_signature_load(lua_State *L)
 {
 	rspamd_fstring_t *sig, **psig;
-	const gchar *filename;
+	const char *filename;
 	gpointer data;
 	int fd;
 	struct stat st;
@@ -567,12 +567,12 @@ lua_rsa_signature_load(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_rsa_signature_save(lua_State *L)
 {
 	rspamd_fstring_t *sig;
-	gint fd, flags;
-	const gchar *filename;
+	int fd, flags;
+	const char *filename;
 	gboolean forced = FALSE, res = TRUE;
 
 	sig = lua_check_rsa_sign(L, 1);
@@ -618,11 +618,11 @@ lua_rsa_signature_save(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_rsa_signature_create(lua_State *L)
 {
 	rspamd_fstring_t *sig, **psig;
-	const gchar *data;
+	const char *data;
 	gsize dlen;
 
 	data = luaL_checklstring(L, 1, &dlen);
@@ -636,7 +636,7 @@ lua_rsa_signature_create(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_rsa_signature_gc(lua_State *L)
 {
 	rspamd_fstring_t *sig = lua_check_rsa_sign(L, 1);
@@ -646,12 +646,12 @@ lua_rsa_signature_gc(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_rsa_signature_base64(lua_State *L)
 {
 	rspamd_fstring_t *sig = lua_check_rsa_sign(L, 1);
-	guint boundary = 0;
-	gchar *b64;
+	unsigned int boundary = 0;
+	char *b64;
 	gsize outlen;
 	enum rspamd_newlines_type how = RSPAMD_TASK_NEWLINES_CRLF;
 
@@ -660,7 +660,7 @@ lua_rsa_signature_base64(lua_State *L)
 	}
 
 	if (lua_isstring(L, 3)) {
-		const gchar *how_str = lua_tostring(L, 3);
+		const char *how_str = lua_tostring(L, 3);
 
 		if (strcmp(how_str, "cr") == 0) {
 			how = RSPAMD_TASK_NEWLINES_CR;
@@ -696,14 +696,14 @@ lua_rsa_signature_base64(lua_State *L)
  * true - if string match rsa signature
  * false - otherwise
  */
-static gint
+static int
 lua_rsa_verify_memory(lua_State *L)
 {
 	RSA *rsa;
 	rspamd_fstring_t *signature;
-	const gchar *data;
+	const char *data;
 	gsize sz;
-	gint ret;
+	int ret;
 
 	rsa = lua_check_rsa_pubkey(L, 1);
 	signature = lua_check_rsa_sign(L, 2);
@@ -740,14 +740,14 @@ lua_rsa_verify_memory(lua_State *L)
  * rspamd_signature object
  * nil - otherwise
  */
-static gint
+static int
 lua_rsa_sign_memory(lua_State *L)
 {
 	RSA *rsa;
 	rspamd_fstring_t *signature, **psig;
-	const gchar *data;
+	const char *data;
 	gsize sz;
-	gint ret;
+	int ret;
 
 	rsa = lua_check_rsa_privkey(L, 1);
 	data = luaL_checklstring(L, 2, &sz);
@@ -755,7 +755,7 @@ lua_rsa_sign_memory(lua_State *L)
 	if (rsa != NULL && data != NULL) {
 		signature = rspamd_fstring_sized_new(RSA_size(rsa));
 
-		guint siglen = signature->len;
+		unsigned int siglen = signature->len;
 		ret = RSA_sign(NID_sha256, data, sz,
 					   signature->str, &siglen, rsa);
 
@@ -779,12 +779,12 @@ lua_rsa_sign_memory(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_rsa_keypair(lua_State *L)
 {
 	BIGNUM *e;
 	RSA *rsa, *pub_rsa, *priv_rsa, **prsa;
-	gint bits = lua_gettop(L) > 0 ? lua_tointeger(L, 1) : 1024;
+	int bits = lua_gettop(L) > 0 ? lua_tointeger(L, 1) : 1024;
 
 	if (bits > 4096 || bits < 512) {
 		return luaL_error(L, "invalid bits count");
@@ -811,7 +811,7 @@ lua_rsa_keypair(lua_State *L)
 	return 2;
 }
 
-static gint
+static int
 lua_load_pubkey(lua_State *L)
 {
 	lua_newtable(L);
@@ -820,7 +820,7 @@ lua_load_pubkey(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_load_privkey(lua_State *L)
 {
 	lua_newtable(L);
@@ -829,7 +829,7 @@ lua_load_privkey(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_load_signature(lua_State *L)
 {
 	lua_newtable(L);
@@ -838,7 +838,7 @@ lua_load_signature(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_load_rsa(lua_State *L)
 {
 	lua_newtable(L);

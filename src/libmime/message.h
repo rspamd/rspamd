@@ -75,15 +75,15 @@ enum rspamd_lua_specific_type {
 };
 
 struct rspamd_lua_specific_part {
-	gint cbref;
+	int cbref;
 	enum rspamd_lua_specific_type type;
 };
 
 struct rspamd_mime_part {
 	struct rspamd_content_type *ct;
 	struct rspamd_content_type *detected_ct;
-	gchar *detected_type;
-	gchar *detected_ext;
+	char *detected_type;
+	char *detected_ext;
 	struct rspamd_content_disposition *cd;
 	rspamd_ftok_t raw_data;
 	rspamd_ftok_t parsed_data;
@@ -93,13 +93,13 @@ struct rspamd_mime_part {
 	struct rspamd_mime_headers_table *raw_headers;
 	GPtrArray *urls;
 
-	gchar *raw_headers_str;
+	char *raw_headers_str;
 	gsize raw_headers_len;
 
 	enum rspamd_cte cte;
-	guint flags;
+	unsigned int flags;
 	enum rspamd_mime_part_type part_type;
-	guint part_number;
+	unsigned int part_number;
 
 	union {
 		struct rspamd_mime_multipart *mp;
@@ -109,7 +109,7 @@ struct rspamd_mime_part {
 		struct rspamd_lua_specific_part lua_specific;
 	} specific;
 
-	guchar digest[rspamd_cryptobox_HASHBYTES];
+	unsigned char digest[rspamd_cryptobox_HASHBYTES];
 };
 
 #define RSPAMD_MIME_TEXT_PART_FLAG_UTF (1 << 0)
@@ -126,9 +126,9 @@ struct rspamd_mime_part {
 
 
 struct rspamd_mime_text_part {
-	const gchar *language;
+	const char *language;
 	GPtrArray *languages;
-	const gchar *real_charset;
+	const char *real_charset;
 
 	/* Raw data in native encoding */
 	rspamd_ftok_t raw;
@@ -138,7 +138,7 @@ struct rspamd_mime_text_part {
 	rspamd_ftok_t utf_content;        /* utf8 encoded processed content */
 	GByteArray *utf_raw_content;      /* utf raw content */
 	GByteArray *utf_stripped_content; /* utf content with no newlines */
-	GArray *normalized_hashes;        /* Array of guint64 */
+	GArray *normalized_hashes;        /* Array of uint64_t */
 	GArray *utf_words;                /* Array of rspamd_stat_token_t */
 	UText utf_stripped_text;          /* Used by libicu to represent the utf8 content */
 
@@ -147,29 +147,29 @@ struct rspamd_mime_text_part {
 	GList *exceptions; /**< list of offsets of urls						*/
 	struct rspamd_mime_part *mime_part;
 
-	guint flags;
-	guint nlines;
-	guint spaces;
-	guint nwords;
-	guint non_ascii_chars;
-	guint ascii_chars;
-	guint double_spaces;
-	guint non_spaces;
-	guint empty_lines;
-	guint capital_letters;
-	guint numeric_characters;
-	guint unicode_scripts;
+	unsigned int flags;
+	unsigned int nlines;
+	unsigned int spaces;
+	unsigned int nwords;
+	unsigned int non_ascii_chars;
+	unsigned int ascii_chars;
+	unsigned int double_spaces;
+	unsigned int non_spaces;
+	unsigned int empty_lines;
+	unsigned int capital_letters;
+	unsigned int numeric_characters;
+	unsigned int unicode_scripts;
 };
 
 struct rspamd_message_raw_headers_content {
-	const gchar *begin;
+	const char *begin;
 	gsize len;
-	const gchar *body_start;
+	const char *body_start;
 };
 
 struct rspamd_message {
-	const gchar *message_id;
-	gchar *subject;
+	const char *message_id;
+	char *subject;
 
 	GPtrArray *parts;      /**< list of parsed parts							*/
 	GPtrArray *text_parts; /**< list of text parts								*/
@@ -181,7 +181,7 @@ struct rspamd_message {
 	struct rspamd_task *task;
 	GPtrArray *rcpt_mime;
 	GPtrArray *from_mime;
-	guchar digest[16];
+	unsigned char digest[16];
 	enum rspamd_newlines_type nlines_type; /**< type of newlines (detected on most of headers 	*/
 	ref_entry_t ref;
 };
@@ -208,14 +208,14 @@ void rspamd_message_process(struct rspamd_task *task);
  * @param str
  * @return
  */
-enum rspamd_cte rspamd_cte_from_string(const gchar *str);
+enum rspamd_cte rspamd_cte_from_string(const char *str);
 
 /**
  * Converts cte to string
  * @param ct
  * @return
  */
-const gchar *rspamd_cte_to_string(enum rspamd_cte ct);
+const char *rspamd_cte_to_string(enum rspamd_cte ct);
 
 struct rspamd_message *rspamd_message_new(struct rspamd_task *task);
 

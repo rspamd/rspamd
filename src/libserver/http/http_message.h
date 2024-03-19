@@ -83,7 +83,7 @@ void rspamd_http_message_set_peer_key(struct rspamd_http_message *msg,
  * @param url
  * @return new message or NULL
  */
-struct rspamd_http_message *rspamd_http_message_from_url(const gchar *url);
+struct rspamd_http_message *rspamd_http_message_from_url(const char *url);
 
 /**
  * Returns body for a message
@@ -91,8 +91,8 @@ struct rspamd_http_message *rspamd_http_message_from_url(const gchar *url);
  * @param blen pointer where to save body length
  * @return pointer to body start
  */
-const gchar *rspamd_http_message_get_body(struct rspamd_http_message *msg,
-										  gsize *blen);
+const char *rspamd_http_message_get_body(struct rspamd_http_message *msg,
+										 gsize *blen);
 
 /**
  * Set message's body from the string
@@ -102,7 +102,7 @@ const gchar *rspamd_http_message_get_body(struct rspamd_http_message *msg,
  * @return TRUE if a message's body has been set
  */
 gboolean rspamd_http_message_set_body(struct rspamd_http_message *msg,
-									  const gchar *data, gsize len);
+									  const char *data, gsize len);
 
 /**
  * Set message's method by name
@@ -110,7 +110,7 @@ gboolean rspamd_http_message_set_body(struct rspamd_http_message *msg,
  * @param method
  */
 void rspamd_http_message_set_method(struct rspamd_http_message *msg,
-									const gchar *method);
+									const char *method);
 
 /**
  * Maps fd as message's body
@@ -119,7 +119,7 @@ void rspamd_http_message_set_method(struct rspamd_http_message *msg,
  * @return TRUE if a message's body has been set
  */
 gboolean rspamd_http_message_set_body_from_fd(struct rspamd_http_message *msg,
-											  gint fd);
+											  int fd);
 
 /**
  * Uses rspamd_fstring_t as message's body, string is consumed by this operation
@@ -147,7 +147,7 @@ gboolean rspamd_http_message_set_body_from_fstring_copy(struct rspamd_http_messa
  * @return TRUE if a message's body has been set
  */
 gboolean rspamd_http_message_append_body(struct rspamd_http_message *msg,
-										 const gchar *data, gsize len);
+										 const char *data, gsize len);
 
 /**
  * Append a header to http message
@@ -156,16 +156,16 @@ gboolean rspamd_http_message_append_body(struct rspamd_http_message *msg,
  * @param value
  */
 void rspamd_http_message_add_header(struct rspamd_http_message *msg,
-									const gchar *name,
-									const gchar *value);
+									const char *name,
+									const char *value);
 
 void rspamd_http_message_add_header_len(struct rspamd_http_message *msg,
-										const gchar *name,
-										const gchar *value,
+										const char *name,
+										const char *value,
 										gsize len);
 
 void rspamd_http_message_add_header_fstr(struct rspamd_http_message *msg,
-										 const gchar *name,
+										 const char *name,
 										 rspamd_fstring_t *value);
 
 /**
@@ -175,7 +175,7 @@ void rspamd_http_message_add_header_fstr(struct rspamd_http_message *msg,
  */
 const rspamd_ftok_t *rspamd_http_message_find_header(
 	struct rspamd_http_message *msg,
-	const gchar *name);
+	const char *name);
 
 /**
  * Search for a header that has multiple values
@@ -185,7 +185,7 @@ const rspamd_ftok_t *rspamd_http_message_find_header(
  */
 GPtrArray *rspamd_http_message_find_header_multiple(
 	struct rspamd_http_message *msg,
-	const gchar *name);
+	const char *name);
 
 /**
  * Remove specific header from a message
@@ -194,7 +194,7 @@ GPtrArray *rspamd_http_message_find_header_multiple(
  * @return
  */
 gboolean rspamd_http_message_remove_header(struct rspamd_http_message *msg,
-										   const gchar *name);
+										   const char *name);
 
 /**
  * Free HTTP message
@@ -228,7 +228,7 @@ void rspamd_http_message_shmem_unref(struct rspamd_storage_shmem *p);
  * @param msg
  * @return
  */
-guint rspamd_http_message_get_flags(struct rspamd_http_message *msg);
+unsigned int rspamd_http_message_get_flags(struct rspamd_http_message *msg);
 
 /**
  * Returns an HTTP hostname for a message, derived from a header if it has it
@@ -237,8 +237,8 @@ guint rspamd_http_message_get_flags(struct rspamd_http_message *msg);
  * @param hostlen output of the host length
  * @return
  */
-const gchar *rspamd_http_message_get_http_host(struct rspamd_http_message *msg,
-											   gsize *hostlen);
+const char *rspamd_http_message_get_http_host(struct rspamd_http_message *msg,
+											  gsize *hostlen);
 
 /**
  * Returns true if a message has standard port (80 or 443 for https)
@@ -247,7 +247,7 @@ const gchar *rspamd_http_message_get_http_host(struct rspamd_http_message *msg,
  */
 bool rspamd_http_message_is_standard_port(struct rspamd_http_message *msg);
 
-const gchar *rspamd_http_message_get_url(struct rspamd_http_message *msg, gsize *len);
+const char *rspamd_http_message_get_url(struct rspamd_http_message *msg, gsize *len);
 
 #ifdef __cplusplus
 }

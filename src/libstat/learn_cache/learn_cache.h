@@ -41,13 +41,13 @@ struct rspamd_stat_cache {
 	gpointer (*runtime)(struct rspamd_task *task,
 						gpointer ctx, gboolean learn);
 
-	gint (*check)(struct rspamd_task *task,
-				  gboolean is_spam,
-				  gpointer runtime);
+	int (*check)(struct rspamd_task *task,
+				 gboolean is_spam,
+				 gpointer runtime);
 
-	gint (*learn)(struct rspamd_task *task,
-				  gboolean is_spam,
-				  gpointer runtime);
+	int (*learn)(struct rspamd_task *task,
+				 gboolean is_spam,
+				 gpointer runtime);
 
 	void (*close)(gpointer ctx);
 
@@ -61,12 +61,12 @@ struct rspamd_stat_cache {
 											 const ucl_object_t *cf);          \
 	gpointer rspamd_stat_cache_##name##_runtime(struct rspamd_task *task,      \
 												gpointer ctx, gboolean learn); \
-	gint rspamd_stat_cache_##name##_check(struct rspamd_task *task,            \
-										  gboolean is_spam,                    \
-										  gpointer runtime);                   \
-	gint rspamd_stat_cache_##name##_learn(struct rspamd_task *task,            \
-										  gboolean is_spam,                    \
-										  gpointer runtime);                   \
+	int rspamd_stat_cache_##name##_check(struct rspamd_task *task,             \
+										 gboolean is_spam,                     \
+										 gpointer runtime);                    \
+	int rspamd_stat_cache_##name##_learn(struct rspamd_task *task,             \
+										 gboolean is_spam,                     \
+										 gpointer runtime);                    \
 	void rspamd_stat_cache_##name##_close(gpointer ctx)
 
 RSPAMD_STAT_CACHE_DEF(sqlite3);

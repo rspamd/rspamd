@@ -623,7 +623,7 @@ lua_check_mimepart(lua_State *L)
 }
 
 
-static gint
+static int
 lua_textpart_is_utf(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -640,7 +640,7 @@ lua_textpart_is_utf(lua_State *L)
 }
 
 
-static gint
+static int
 lua_textpart_has_8bit_raw(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -661,7 +661,7 @@ lua_textpart_has_8bit_raw(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_textpart_has_8bit(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -683,14 +683,14 @@ lua_textpart_has_8bit(lua_State *L)
 }
 
 
-static gint
+static int
 lua_textpart_get_content(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_mime_text_part *part = lua_check_textpart(L);
 	struct rspamd_lua_text *t;
 	gsize len;
-	const gchar *start, *type = NULL;
+	const char *start, *type = NULL;
 
 	if (part == NULL) {
 		lua_pushnil(L);
@@ -768,7 +768,7 @@ lua_textpart_get_content(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_textpart_get_raw_content(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -789,7 +789,7 @@ lua_textpart_get_raw_content(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_textpart_get_content_oneline(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -805,7 +805,7 @@ lua_textpart_get_content_oneline(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_textpart_get_length(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -826,7 +826,7 @@ lua_textpart_get_length(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_textpart_get_raw_length(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -842,13 +842,13 @@ lua_textpart_get_raw_length(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_textpart_get_urls_length(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_mime_text_part *part = lua_check_textpart(L);
 	GList *cur;
-	guint total = 0;
+	unsigned int total = 0;
 	struct rspamd_process_exception *ex;
 
 	if (part == NULL) {
@@ -869,7 +869,7 @@ lua_textpart_get_urls_length(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_textpart_get_lines_count(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -890,7 +890,7 @@ lua_textpart_get_lines_count(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_textpart_get_words_count(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -912,7 +912,7 @@ lua_textpart_get_words_count(lua_State *L)
 }
 
 static inline enum rspamd_lua_words_type
-word_extract_type_from_string(const gchar *how_str)
+word_extract_type_from_string(const char *how_str)
 {
 	enum rspamd_lua_words_type how = RSPAMD_LUA_WORDS_MAX;
 
@@ -932,7 +932,7 @@ word_extract_type_from_string(const gchar *how_str)
 	return how;
 }
 
-static gint
+static int
 lua_textpart_get_words(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -948,7 +948,7 @@ lua_textpart_get_words(lua_State *L)
 	}
 	else {
 		if (lua_type(L, 2) == LUA_TSTRING) {
-			const gchar *how_str = lua_tostring(L, 2);
+			const char *how_str = lua_tostring(L, 2);
 
 			how = word_extract_type_from_string(how_str);
 
@@ -963,13 +963,13 @@ lua_textpart_get_words(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_textpart_filter_words(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_mime_text_part *part = lua_check_textpart(L);
 	struct rspamd_lua_regexp *re = lua_check_regexp(L, 2);
-	gint lim = -1;
+	int lim = -1;
 	enum rspamd_lua_words_type how = RSPAMD_LUA_WORDS_STEM;
 
 	if (part == NULL || re == NULL) {
@@ -981,7 +981,7 @@ lua_textpart_filter_words(lua_State *L)
 	}
 	else {
 		if (lua_type(L, 3) == LUA_TSTRING) {
-			const gchar *how_str = lua_tostring(L, 3);
+			const char *how_str = lua_tostring(L, 3);
 
 			how = word_extract_type_from_string(how_str);
 
@@ -994,7 +994,7 @@ lua_textpart_filter_words(lua_State *L)
 			lim = lua_tointeger(L, 4);
 		}
 
-		guint cnt, i;
+		unsigned int cnt, i;
 
 		lua_createtable(L, 8, 0);
 
@@ -1051,7 +1051,7 @@ lua_textpart_filter_words(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_textpart_is_empty(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1067,7 +1067,7 @@ lua_textpart_is_empty(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_textpart_is_html(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1083,7 +1083,7 @@ lua_textpart_is_html(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_textpart_get_html(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1102,7 +1102,7 @@ lua_textpart_get_html(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_textpart_get_language(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1124,7 +1124,7 @@ lua_textpart_get_language(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_textpart_get_charset(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1146,12 +1146,12 @@ lua_textpart_get_charset(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_textpart_get_languages(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_mime_text_part *part = lua_check_textpart(L);
-	guint i;
+	unsigned int i;
 	struct rspamd_lang_detector_res *cur;
 
 	if (part != NULL) {
@@ -1183,7 +1183,7 @@ lua_textpart_get_languages(lua_State *L)
 }
 
 struct lua_shingle_data {
-	guint64 hash;
+	uint64_t hash;
 	rspamd_ftok_t t1;
 	rspamd_ftok_t t2;
 	rspamd_ftok_t t3;
@@ -1203,11 +1203,11 @@ struct lua_shingle_filter_cbdata {
 		}                                                                     \
 	} while (0)
 
-static guint64
-lua_shingles_filter(guint64 *input, gsize count,
-					gint shno, const guchar *key, gpointer ud)
+static uint64_t
+lua_shingles_filter(uint64_t *input, gsize count,
+					int shno, const unsigned char *key, gpointer ud)
 {
-	guint64 minimal = G_MAXUINT64;
+	uint64_t minimal = G_MAXUINT64;
 	gsize i, min_idx = 0;
 	struct lua_shingle_data *sd;
 	rspamd_stat_token_t *word;
@@ -1236,16 +1236,16 @@ lua_shingles_filter(guint64 *input, gsize count,
 
 #undef STORE_TOKEN
 
-static gint
+static int
 lua_textpart_get_fuzzy_hashes(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_mime_text_part *part = lua_check_textpart(L);
 	rspamd_mempool_t *pool = rspamd_lua_check_mempool(L, 2);
-	guchar key[rspamd_cryptobox_HASHBYTES], digest[rspamd_cryptobox_HASHBYTES],
+	unsigned char key[rspamd_cryptobox_HASHBYTES], digest[rspamd_cryptobox_HASHBYTES],
 		hexdigest[rspamd_cryptobox_HASHBYTES * 2 + 1], numbuf[64];
 	struct rspamd_shingle *sgl;
-	guint i;
+	unsigned int i;
 	struct lua_shingle_data *sd;
 	rspamd_cryptobox_hash_state_t st;
 	rspamd_stat_token_t *word;
@@ -1318,7 +1318,7 @@ lua_textpart_get_fuzzy_hashes(lua_State *L)
 	return 2;
 }
 
-static gint
+static int
 lua_textpart_get_mimepart(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1351,7 +1351,7 @@ lua_textpart_get_mimepart(lua_State *L)
  * - `ascii_characters`: number of ascii characters
  * @return {table} table of stats
  */
-static gint
+static int
 lua_textpart_get_stats(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1397,7 +1397,7 @@ lua_textpart_get_stats(lua_State *L)
 
 /* Mimepart implementation */
 
-static gint
+static int
 lua_mimepart_get_content(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1422,7 +1422,7 @@ lua_mimepart_get_content(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_get_raw_content(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1443,7 +1443,7 @@ lua_mimepart_get_raw_content(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_get_length(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1459,7 +1459,7 @@ lua_mimepart_get_length(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_get_type_common(lua_State *L, struct rspamd_content_type *ct,
 							 gboolean full)
 {
@@ -1513,7 +1513,7 @@ lua_mimepart_get_type_common(lua_State *L, struct rspamd_content_type *ct,
 	return 3;
 }
 
-static gint
+static int
 lua_mimepart_get_type(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1526,7 +1526,7 @@ lua_mimepart_get_type(lua_State *L)
 	return lua_mimepart_get_type_common(L, part->ct, FALSE);
 }
 
-static gint
+static int
 lua_mimepart_get_type_full(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1539,7 +1539,7 @@ lua_mimepart_get_type_full(lua_State *L)
 	return lua_mimepart_get_type_common(L, part->ct, TRUE);
 }
 
-static gint
+static int
 lua_mimepart_get_detected_type(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1552,7 +1552,7 @@ lua_mimepart_get_detected_type(lua_State *L)
 	return lua_mimepart_get_type_common(L, part->detected_ct, FALSE);
 }
 
-static gint
+static int
 lua_mimepart_get_detected_type_full(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1565,7 +1565,7 @@ lua_mimepart_get_detected_type_full(lua_State *L)
 	return lua_mimepart_get_type_common(L, part->detected_ct, TRUE);
 }
 
-static gint
+static int
 lua_mimepart_get_detected_ext(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1585,7 +1585,7 @@ lua_mimepart_get_detected_ext(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_get_cte(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1601,7 +1601,7 @@ lua_mimepart_get_cte(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_get_filename(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1617,7 +1617,7 @@ lua_mimepart_get_filename(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_get_boundary(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1646,7 +1646,7 @@ lua_mimepart_get_boundary(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_get_enclosing_boundary(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1669,11 +1669,11 @@ lua_mimepart_get_enclosing_boundary(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_get_header_common(lua_State *L, enum rspamd_lua_task_header_type how)
 {
 	struct rspamd_mime_part *part = lua_check_mimepart(L);
-	const gchar *name;
+	const char *name;
 	gboolean strong = FALSE;
 
 	name = luaL_checkstring(L, 2);
@@ -1696,35 +1696,35 @@ lua_mimepart_get_header_common(lua_State *L, enum rspamd_lua_task_header_type ho
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_get_header_full(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	return lua_mimepart_get_header_common(L, RSPAMD_TASK_HEADER_PUSH_FULL);
 }
 
-static gint
+static int
 lua_mimepart_get_header(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	return lua_mimepart_get_header_common(L, RSPAMD_TASK_HEADER_PUSH_SIMPLE);
 }
 
-static gint
+static int
 lua_mimepart_get_header_raw(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	return lua_mimepart_get_header_common(L, RSPAMD_TASK_HEADER_PUSH_RAW);
 }
 
-static gint
+static int
 lua_mimepart_get_header_count(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	return lua_mimepart_get_header_common(L, RSPAMD_TASK_HEADER_PUSH_COUNT);
 }
 
-static gint
+static int
 lua_mimepart_get_raw_headers(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1746,7 +1746,7 @@ lua_mimepart_get_raw_headers(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_get_headers(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1784,7 +1784,7 @@ lua_mimepart_get_headers(lua_State *L)
 }
 
 
-static gint
+static int
 lua_mimepart_is_image(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1799,7 +1799,7 @@ lua_mimepart_is_image(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_is_archive(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1814,7 +1814,7 @@ lua_mimepart_is_archive(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_is_multipart(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1829,7 +1829,7 @@ lua_mimepart_is_multipart(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_is_message(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1844,7 +1844,7 @@ lua_mimepart_is_message(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_is_attachment(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1880,7 +1880,7 @@ lua_mimepart_is_attachment(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_is_text(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1895,7 +1895,7 @@ lua_mimepart_is_text(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_is_broken(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1915,7 +1915,7 @@ lua_mimepart_is_broken(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_get_image(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1938,7 +1938,7 @@ lua_mimepart_get_image(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_get_archive(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1961,13 +1961,13 @@ lua_mimepart_get_archive(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_get_children(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_mime_part *part = lua_check_mimepart(L);
 	struct rspamd_mime_part **pcur, *cur;
-	guint i;
+	unsigned int i;
 
 	if (part == NULL) {
 		return luaL_error(L, "invalid arguments");
@@ -1991,7 +1991,7 @@ lua_mimepart_get_children(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_get_parent(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -2015,7 +2015,7 @@ lua_mimepart_get_parent(lua_State *L)
 }
 
 
-static gint
+static int
 lua_mimepart_get_text(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -2038,12 +2038,12 @@ lua_mimepart_get_text(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_get_digest(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_mime_part *part = lua_check_mimepart(L);
-	gchar digestbuf[rspamd_cryptobox_HASHBYTES * 2 + 1];
+	char digestbuf[rspamd_cryptobox_HASHBYTES * 2 + 1];
 
 	if (part == NULL) {
 		return luaL_error(L, "invalid arguments");
@@ -2057,7 +2057,7 @@ lua_mimepart_get_digest(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_get_id(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -2072,7 +2072,7 @@ lua_mimepart_get_id(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_headers_foreach(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -2080,7 +2080,7 @@ lua_mimepart_headers_foreach(lua_State *L)
 	enum rspamd_lua_task_header_type how = RSPAMD_TASK_HEADER_PUSH_SIMPLE;
 	struct rspamd_lua_regexp *re = NULL;
 	struct rspamd_mime_header *hdr, *cur;
-	gint old_top;
+	int old_top;
 
 	if (part && lua_isfunction(L, 2)) {
 		if (lua_istable(L, 3)) {
@@ -2155,7 +2155,7 @@ lua_mimepart_headers_foreach(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_mimepart_get_specific(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -2175,7 +2175,7 @@ lua_mimepart_get_specific(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_get_urls(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -2187,8 +2187,8 @@ lua_mimepart_get_urls(lua_State *L)
 
 	struct lua_tree_cb_data cb;
 	struct rspamd_url *u;
-	static const gint default_protocols_mask = PROTOCOL_HTTP | PROTOCOL_HTTPS |
-											   PROTOCOL_FILE | PROTOCOL_FTP;
+	static const int default_protocols_mask = PROTOCOL_HTTP | PROTOCOL_HTTPS |
+											  PROTOCOL_FILE | PROTOCOL_FTP;
 	gsize sz, max_urls = 0, i;
 
 	if (part->urls == NULL) {
@@ -2216,7 +2216,7 @@ lua_mimepart_get_urls(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_is_specific(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -2231,7 +2231,7 @@ lua_mimepart_is_specific(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_mimepart_set_specific(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -2263,7 +2263,7 @@ lua_mimepart_set_specific(lua_State *L)
 	part->specific.lua_specific.cbref = luaL_ref(L, LUA_REGISTRYINDEX);
 	/* Now stack has just a return value as luaL_ref removes value from stack */
 
-	gint ltype = lua_type(L, 2);
+	int ltype = lua_type(L, 2);
 
 	switch (ltype) {
 	case LUA_TTABLE:

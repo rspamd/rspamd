@@ -30,7 +30,7 @@
 #define RSPAMD_LEARN_OP 1
 #define RSPAMD_UNLEARN_OP 2
 
-static const gdouble similarity_threshold = 80.0;
+static const double similarity_threshold = 80.0;
 
 static void
 rspamd_stat_tokenize_parts_metadata(struct rspamd_stat_ctx *st_ctx,
@@ -38,7 +38,7 @@ rspamd_stat_tokenize_parts_metadata(struct rspamd_stat_ctx *st_ctx,
 {
 	GArray *ar;
 	rspamd_stat_token_t elt;
-	guint i;
+	unsigned int i;
 	lua_State *L = task->cfg->lua_state;
 
 	ar = g_array_sized_new(FALSE, FALSE, sizeof(elt), 16);
@@ -46,7 +46,7 @@ rspamd_stat_tokenize_parts_metadata(struct rspamd_stat_ctx *st_ctx,
 	elt.flags = RSPAMD_STAT_TOKEN_FLAG_META;
 
 	if (st_ctx->lua_stat_tokens_ref != -1) {
-		gint err_idx, ret;
+		int err_idx, ret;
 		struct rspamd_task **ptask;
 
 		lua_pushcfunction(L, &rspamd_lua_traceback);
@@ -69,7 +69,7 @@ rspamd_stat_tokenize_parts_metadata(struct rspamd_stat_ctx *st_ctx,
 							 lua_typename(L, lua_type(L, -1)));
 			}
 			else {
-				guint vlen;
+				unsigned int vlen;
 				rspamd_ftok_t tok;
 
 				vlen = rspamd_lua_table_size(L, -1);
@@ -121,10 +121,10 @@ void rspamd_stat_process_tokenize(struct rspamd_stat_ctx *st_ctx,
 	struct rspamd_mime_text_part *part;
 	rspamd_cryptobox_hash_state_t hst;
 	rspamd_token_t *st_tok;
-	guint i, reserved_len = 0;
-	gdouble *pdiff;
-	guchar hout[rspamd_cryptobox_HASHBYTES];
-	gchar *b32_hout;
+	unsigned int i, reserved_len = 0;
+	double *pdiff;
+	unsigned char hout[rspamd_cryptobox_HASHBYTES];
+	char *b32_hout;
 
 	if (st_ctx == NULL) {
 		st_ctx = rspamd_stat_get_ctx();
@@ -179,7 +179,7 @@ void rspamd_stat_process_tokenize(struct rspamd_stat_ctx *st_ctx,
 
 	PTR_ARRAY_FOREACH(task->tokens, i, st_tok)
 	{
-		rspamd_cryptobox_hash_update(&hst, (guchar *) &st_tok->data,
+		rspamd_cryptobox_hash_update(&hst, (unsigned char *) &st_tok->data,
 									 sizeof(st_tok->data));
 	}
 
@@ -203,9 +203,9 @@ rspamd_stat_classifier_is_skipped(struct rspamd_task *task,
 	gboolean ret = FALSE;
 
 	while (cur) {
-		gint cb_ref = GPOINTER_TO_INT(cur->data);
-		gint old_top = lua_gettop(L);
-		gint nargs;
+		int cb_ref = GPOINTER_TO_INT(cur->data);
+		int old_top = lua_gettop(L);
+		int nargs;
 
 		lua_rawgeti(L, LUA_REGISTRYINDEX, cb_ref);
 		/* Push task and two booleans: is_spam and is_unlearn */
@@ -269,7 +269,7 @@ static void
 rspamd_stat_preprocess(struct rspamd_stat_ctx *st_ctx,
 					   struct rspamd_task *task, gboolean is_learn, gboolean is_spam)
 {
-	guint i;
+	unsigned int i;
 	struct rspamd_statfile *st;
 	gpointer bk_run;
 
@@ -303,7 +303,7 @@ rspamd_stat_preprocess(struct rspamd_stat_ctx *st_ctx,
 		if (skip_classifier) {
 			/* Set NULL for all statfiles indexed by id */
 			for (int j = 0; j < cl->statfiles_ids->len; j++) {
-				int id = g_array_index(cl->statfiles_ids, gint, j);
+				int id = g_array_index(cl->statfiles_ids, int, j);
 				g_ptr_array_index(task->stat_runtimes, id) = NULL;
 			}
 		}
@@ -347,7 +347,7 @@ static void
 rspamd_stat_backends_process(struct rspamd_stat_ctx *st_ctx,
 							 struct rspamd_task *task)
 {
-	guint i;
+	unsigned int i;
 	struct rspamd_statfile *st;
 	gpointer bk_run;
 
@@ -367,7 +367,7 @@ static void
 rspamd_stat_classifiers_process(struct rspamd_stat_ctx *st_ctx,
 								struct rspamd_task *task)
 {
-	guint i, j, id;
+	unsigned int i, j, id;
 	struct rspamd_classifier *cl;
 	struct rspamd_statfile *st;
 	gpointer bk_run;
@@ -429,7 +429,7 @@ rspamd_stat_classifiers_process(struct rspamd_stat_ctx *st_ctx,
 
 		/* Do not process classifiers on backend failures */
 		for (j = 0; j < cl->statfiles_ids->len; j++) {
-			id = g_array_index(cl->statfiles_ids, gint, j);
+			id = g_array_index(cl->statfiles_ids, int, j);
 			bk_run = g_ptr_array_index(task->stat_runtimes, id);
 			st = g_ptr_array_index(st_ctx->statfiles, id);
 
@@ -444,7 +444,7 @@ rspamd_stat_classifiers_process(struct rspamd_stat_ctx *st_ctx,
 		/* Ensure that all symbols enabled */
 		if (!skip && !(cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND)) {
 			for (j = 0; j < cl->statfiles_ids->len; j++) {
-				id = g_array_index(cl->statfiles_ids, gint, j);
+				id = g_array_index(cl->statfiles_ids, int, j);
 				bk_run = g_ptr_array_index(task->stat_runtimes, id);
 				st = g_ptr_array_index(st_ctx->statfiles, id);
 
@@ -483,7 +483,7 @@ rspamd_stat_classifiers_process(struct rspamd_stat_ctx *st_ctx,
 }
 
 rspamd_stat_result_t
-rspamd_stat_classify(struct rspamd_task *task, lua_State *L, guint stage,
+rspamd_stat_classify(struct rspamd_task *task, lua_State *L, unsigned int stage,
 					 GError **err)
 {
 	struct rspamd_stat_ctx *st_ctx;
@@ -518,14 +518,14 @@ rspamd_stat_classify(struct rspamd_task *task, lua_State *L, guint stage,
 static gboolean
 rspamd_stat_cache_check(struct rspamd_stat_ctx *st_ctx,
 						struct rspamd_task *task,
-						const gchar *classifier,
+						const char *classifier,
 						gboolean spam,
 						GError **err)
 {
 	rspamd_learn_t learn_res = RSPAMD_LEARN_OK;
 	struct rspamd_classifier *cl, *sel = NULL;
 	gpointer rt;
-	guint i;
+	unsigned int i;
 
 	/* Check whether we have learned that file */
 	for (i = 0; i < st_ctx->classifiers->len; i++) {
@@ -579,12 +579,12 @@ rspamd_stat_cache_check(struct rspamd_stat_ctx *st_ctx,
 static gboolean
 rspamd_stat_classifiers_learn(struct rspamd_stat_ctx *st_ctx,
 							  struct rspamd_task *task,
-							  const gchar *classifier,
+							  const char *classifier,
 							  gboolean spam,
 							  GError **err)
 {
 	struct rspamd_classifier *cl, *sel = NULL;
-	guint i;
+	unsigned int i;
 	gboolean learned = FALSE, too_small = FALSE, too_large = FALSE;
 
 	if ((task->flags & RSPAMD_TASK_FLAG_ALREADY_LEARNED) && err != NULL &&
@@ -680,15 +680,15 @@ rspamd_stat_classifiers_learn(struct rspamd_stat_ctx *st_ctx,
 static gboolean
 rspamd_stat_backends_learn(struct rspamd_stat_ctx *st_ctx,
 						   struct rspamd_task *task,
-						   const gchar *classifier,
+						   const char *classifier,
 						   gboolean spam,
 						   GError **err)
 {
 	struct rspamd_classifier *cl, *sel = NULL;
 	struct rspamd_statfile *st;
 	gpointer bk_run;
-	guint i, j;
-	gint id;
+	unsigned int i, j;
+	int id;
 	gboolean res = FALSE, backend_found = FALSE;
 
 	for (i = 0; i < st_ctx->classifiers->len; i++) {
@@ -708,7 +708,7 @@ rspamd_stat_backends_learn(struct rspamd_stat_ctx *st_ctx,
 		sel = cl;
 
 		for (j = 0; j < cl->statfiles_ids->len; j++) {
-			id = g_array_index(cl->statfiles_ids, gint, j);
+			id = g_array_index(cl->statfiles_ids, int, j);
 			st = g_ptr_array_index(st_ctx->statfiles, id);
 			bk_run = g_ptr_array_index(task->stat_runtimes, id);
 
@@ -802,15 +802,15 @@ end:
 static gboolean
 rspamd_stat_backends_post_learn(struct rspamd_stat_ctx *st_ctx,
 								struct rspamd_task *task,
-								const gchar *classifier,
+								const char *classifier,
 								gboolean spam,
 								GError **err)
 {
 	struct rspamd_classifier *cl;
 	struct rspamd_statfile *st;
 	gpointer bk_run, cache_run;
-	guint i, j;
-	gint id;
+	unsigned int i, j;
+	int id;
 	gboolean res = TRUE;
 
 	for (i = 0; i < st_ctx->classifiers->len; i++) {
@@ -828,7 +828,7 @@ rspamd_stat_backends_post_learn(struct rspamd_stat_ctx *st_ctx,
 		}
 
 		for (j = 0; j < cl->statfiles_ids->len; j++) {
-			id = g_array_index(cl->statfiles_ids, gint, j);
+			id = g_array_index(cl->statfiles_ids, int, j);
 			st = g_ptr_array_index(st_ctx->statfiles, id);
 			bk_run = g_ptr_array_index(task->stat_runtimes, id);
 
@@ -857,7 +857,7 @@ rspamd_stat_backends_post_learn(struct rspamd_stat_ctx *st_ctx,
 
 rspamd_stat_result_t
 rspamd_stat_learn(struct rspamd_task *task,
-				  gboolean spam, lua_State *L, const gchar *classifier, guint stage,
+				  gboolean spam, lua_State *L, const char *classifier, unsigned int stage,
 				  GError **err)
 {
 	struct rspamd_stat_ctx *st_ctx;
@@ -925,8 +925,8 @@ rspamd_stat_has_classifier_symbols(struct rspamd_task *task,
 								   struct rspamd_scan_result *mres,
 								   struct rspamd_classifier *cl)
 {
-	guint i;
-	gint id;
+	unsigned int i;
+	int id;
 	struct rspamd_statfile *st;
 	struct rspamd_stat_ctx *st_ctx;
 	gboolean is_spam;
@@ -939,7 +939,7 @@ rspamd_stat_has_classifier_symbols(struct rspamd_task *task,
 	is_spam = !!(task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM);
 
 	for (i = 0; i < cl->statfiles_ids->len; i++) {
-		id = g_array_index(cl->statfiles_ids, gint, i);
+		id = g_array_index(cl->statfiles_ids, int, i);
 		st = g_ptr_array_index(st_ctx->statfiles, id);
 
 		if (rspamd_task_find_symbol_result(task, st->stcf->symbol, NULL)) {
@@ -965,11 +965,11 @@ rspamd_stat_check_autolearn(struct rspamd_task *task)
 	struct rspamd_scan_result *mres = NULL;
 	struct rspamd_task **ptask;
 	lua_State *L;
-	guint i;
-	gint err_idx;
+	unsigned int i;
+	int err_idx;
 	gboolean ret = FALSE;
-	gdouble ham_score, spam_score;
-	const gchar *lua_script, *lua_ret;
+	double ham_score, spam_score;
+	const char *lua_script, *lua_ret;
 
 	g_assert(RSPAMD_TASK_IS_CLASSIFIED(task));
 	st_ctx = rspamd_stat_get_ctx();
@@ -1025,7 +1025,7 @@ rspamd_stat_check_autolearn(struct rspamd_task *task)
 					spam_score = ucl_object_todouble(elt2);
 
 					if (ham_score > spam_score) {
-						gdouble t;
+						double t;
 
 						t = ham_score;
 						ham_score = spam_score;
@@ -1189,7 +1189,7 @@ rspamd_stat_check_autolearn(struct rspamd_task *task)
 rspamd_stat_result_t
 rspamd_stat_statistics(struct rspamd_task *task,
 					   struct rspamd_config *cfg,
-					   guint64 *total_learns,
+					   uint64_t *total_learns,
 					   ucl_object_t **target)
 {
 	struct rspamd_stat_ctx *st_ctx;
@@ -1197,9 +1197,9 @@ rspamd_stat_statistics(struct rspamd_task *task,
 	struct rspamd_statfile *st;
 	gpointer backend_runtime;
 	ucl_object_t *res = NULL, *elt;
-	guint64 learns = 0;
-	guint i, j;
-	gint id;
+	uint64_t learns = 0;
+	unsigned int i, j;
+	int id;
 
 	st_ctx = rspamd_stat_get_ctx();
 	g_assert(st_ctx != NULL);
@@ -1214,7 +1214,7 @@ rspamd_stat_statistics(struct rspamd_task *task,
 		}
 
 		for (j = 0; j < cl->statfiles_ids->len; j++) {
-			id = g_array_index(cl->statfiles_ids, gint, j);
+			id = g_array_index(cl->statfiles_ids, int, j);
 			st = g_ptr_array_index(st_ctx->statfiles, id);
 			backend_runtime = st->backend->runtime(task, st->stcf, FALSE,
 												   st->bkcf, id);

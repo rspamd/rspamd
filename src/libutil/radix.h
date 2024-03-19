@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -39,7 +39,7 @@ typedef struct radix_tree_compressed radix_compressed_t;
  */
 uintptr_t
 radix_insert_compressed(radix_compressed_t *tree,
-						guint8 *key, gsize keylen,
+						uint8_t *key, gsize keylen,
 						gsize masklen,
 						uintptr_t value);
 
@@ -50,7 +50,7 @@ radix_insert_compressed(radix_compressed_t *tree,
  * @param keylen length of a key
  * @return opaque pointer or `RADIX_NO_VALUE` if no value has been found
  */
-uintptr_t radix_find_compressed(radix_compressed_t *tree, const guint8 *key,
+uintptr_t radix_find_compressed(radix_compressed_t *tree, const uint8_t *key,
 								gsize keylen);
 
 /**
@@ -72,9 +72,9 @@ void radix_destroy_compressed(radix_compressed_t *tree);
  * Create new radix trie
  * @return
  */
-radix_compressed_t *radix_create_compressed(const gchar *tree_name);
+radix_compressed_t *radix_create_compressed(const char *tree_name);
 
-radix_compressed_t *radix_create_compressed_with_pool(rspamd_mempool_t *pool, const gchar *tree_name);
+radix_compressed_t *radix_create_compressed_with_pool(rspamd_mempool_t *pool, const char *tree_name);
 
 /**
  * Insert list of ip addresses and masks to the radix tree
@@ -83,19 +83,19 @@ radix_compressed_t *radix_create_compressed_with_pool(rspamd_mempool_t *pool, co
  * @param tree target tree
  * @return number of elements inserted
  */
-gint rspamd_radix_add_iplist(const gchar *list, const gchar *separators,
-							 radix_compressed_t *tree, gconstpointer value,
-							 gboolean resolve, const gchar *tree_name);
+int rspamd_radix_add_iplist(const char *list, const char *separators,
+							radix_compressed_t *tree, gconstpointer value,
+							gboolean resolve, const char *tree_name);
 
 /**
  * Generic version of @see rspamd_radix_add_iplist. This function creates tree
  * if `tree` is NULL.
  */
 gboolean
-radix_add_generic_iplist(const gchar *ip_list,
+radix_add_generic_iplist(const char *ip_list,
 						 radix_compressed_t **tree,
 						 gboolean resolve,
-						 const gchar *tree_name);
+						 const char *tree_name);
 
 /**
  * Returns number of elements in the tree
@@ -109,7 +109,7 @@ gsize radix_get_size(radix_compressed_t *tree);
  * @param tree
  * @return constant string
  */
-const gchar *radix_get_info(radix_compressed_t *tree);
+const char *radix_get_info(radix_compressed_t *tree);
 
 /**
  * Returns memory pool associated with the radix tree

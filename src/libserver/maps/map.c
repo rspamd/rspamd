@@ -65,19 +65,19 @@ static void rspamd_map_process_periodic(struct map_periodic_cbdata *cbd);
 static void rspamd_map_schedule_periodic(struct rspamd_map *map, int how);
 static gboolean read_map_file_chunks(struct rspamd_map *map,
 									 struct map_cb_data *cbdata,
-									 const gchar *fname,
+									 const char *fname,
 									 gsize len,
 									 goffset off);
 static gboolean rspamd_map_save_http_cached_file(struct rspamd_map *map,
 												 struct rspamd_map_backend *bk,
 												 struct http_map_data *htdata,
-												 const guchar *data,
+												 const unsigned char *data,
 												 gsize len);
 static gboolean rspamd_map_update_http_cached_file(struct rspamd_map *map,
 												   struct rspamd_map_backend *bk,
 												   struct http_map_data *htdata);
 
-guint rspamd_map_log_id = (guint) -1;
+unsigned int rspamd_map_log_id = (unsigned int) -1;
 RSPAMD_CONSTRUCTOR(rspamd_map_log_init)
 {
 	rspamd_map_log_id = rspamd_logger_add_debug_module("map");
@@ -89,7 +89,7 @@ RSPAMD_CONSTRUCTOR(rspamd_map_log_init)
 static void
 write_http_request(struct http_callback_data *cbd)
 {
-	gchar datebuf[128];
+	char datebuf[128];
 	struct rspamd_http_message *msg;
 
 	msg = rspamd_http_new_message(HTTP_REQUEST);
@@ -153,7 +153,7 @@ free_http_cbdata_common(struct http_callback_data *cbd, gboolean plan_new)
 
 	if (cbd->addrs) {
 		rspamd_inet_addr_t *addr;
-		guint i;
+		unsigned int i;
 
 		PTR_ARRAY_FOREACH(cbd->addrs, i, addr)
 		{
@@ -306,7 +306,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 	struct rspamd_http_map_cached_cbdata *cache_cbd;
 	const rspamd_ftok_t *expires_hdr, *etag_hdr;
 	char next_check_date[128];
-	guchar *in = NULL;
+	unsigned char *in = NULL;
 	gsize dlen = 0;
 
 	map = cbd->map;
@@ -444,7 +444,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 			ZSTD_DStream *zstream;
 			ZSTD_inBuffer zin;
 			ZSTD_outBuffer zout;
-			guchar *out;
+			unsigned char *out;
 			gsize outlen, r;
 
 			zstream = ZSTD_createDStream();
@@ -585,12 +585,12 @@ err:
 
 static gboolean
 read_map_file_chunks(struct rspamd_map *map, struct map_cb_data *cbdata,
-					 const gchar *fname, gsize len, goffset off)
+					 const char *fname, gsize len, goffset off)
 {
-	gint fd;
+	int fd;
 	gssize r, avail;
 	gsize buflen = 1024 * 1024;
-	gchar *pos, *bytes;
+	char *pos, *bytes;
 
 	fd = rspamd_file_xopen(fname, O_RDONLY, 0, TRUE);
 
@@ -602,7 +602,7 @@ read_map_file_chunks(struct rspamd_map *map, struct map_cb_data *cbdata,
 
 	if (lseek(fd, off, SEEK_SET) == -1) {
 		msg_err_map("can't seek in map to pos %d for buffered reading %s: %s",
-					(gint) off, fname, strerror(errno));
+					(int) off, fname, strerror(errno));
 		close(fd);
 
 		return FALSE;
@@ -614,13 +614,13 @@ read_map_file_chunks(struct rspamd_map *map, struct map_cb_data *cbdata,
 	pos = bytes;
 
 	while ((r = read(fd, pos, avail)) > 0) {
-		gchar *end = bytes + (pos - bytes) + r;
+		char *end = bytes + (pos - bytes) + r;
 		msg_debug_map("%s: read map chunk, %z bytes", fname,
 					  r);
 		pos = map->read_callback(bytes, end - bytes, cbdata, r == len);
 
 		if (pos && pos > bytes && pos < end) {
-			guint remain = end - pos;
+			unsigned int remain = end - pos;
 
 			memmove(bytes, pos, remain);
 			pos = bytes + remain;
@@ -660,10 +660,10 @@ read_map_file_chunks(struct rspamd_map *map, struct map_cb_data *cbdata,
 }
 
 static gboolean
-rspamd_map_check_sig_pk_mem(const guchar *sig,
+rspamd_map_check_sig_pk_mem(const unsigned char *sig,
 							gsize siglen,
 							struct rspamd_map *map,
-							const guchar *input,
+							const unsigned char *input,
 							gsize inlen,
 							struct rspamd_cryptobox_pubkey *pk)
 {
@@ -698,15 +698,15 @@ static gboolean
 rspamd_map_check_file_sig(const char *fname,
 						  struct rspamd_map *map,
 						  struct rspamd_map_backend *bk,
-						  const guchar *input,
+						  const unsigned char *input,
 						  gsize inlen)
 {
-	guchar *data;
+	unsigned char *data;
 	struct rspamd_cryptobox_pubkey *pk = NULL;
 	GString *b32_key;
 	gboolean ret = TRUE;
 	gsize len = 0;
-	gchar fpath[PATH_MAX];
+	char fpath[PATH_MAX];
 
 	if (bk->trusted_pubkey == NULL) {
 		/* Try to load and check pubkey */
@@ -772,7 +772,7 @@ static gboolean
 read_map_file(struct rspamd_map *map, struct file_map_data *data,
 			  struct rspamd_map_backend *bk, struct map_periodic_cbdata *periodic)
 {
-	gchar *bytes;
+	char *bytes;
 	gsize len;
 	struct stat st;
 
@@ -836,7 +836,7 @@ read_map_file(struct rspamd_map *map, struct file_map_data *data,
 				ZSTD_DStream *zstream;
 				ZSTD_inBuffer zin;
 				ZSTD_outBuffer zout;
-				guchar *out;
+				unsigned char *out;
 				gsize outlen, r;
 
 				zstream = ZSTD_createDStream();
@@ -908,7 +908,7 @@ static gboolean
 read_map_static(struct rspamd_map *map, struct static_map_data *data,
 				struct rspamd_map_backend *bk, struct map_periodic_cbdata *periodic)
 {
-	guchar *bytes;
+	unsigned char *bytes;
 	gsize len;
 
 	if (map->read_callback == NULL || map->fin_callback == NULL) {
@@ -925,7 +925,7 @@ read_map_static(struct rspamd_map *map, struct static_map_data *data,
 			ZSTD_DStream *zstream;
 			ZSTD_inBuffer zin;
 			ZSTD_outBuffer zout;
-			guchar *out;
+			unsigned char *out;
 			gsize outlen, r;
 
 			zstream = ZSTD_createDStream();
@@ -1041,11 +1041,11 @@ rspamd_map_periodic_callback(struct ev_loop *loop, ev_timer *w, int revents)
 static void
 rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 {
-	const gdouble error_mult = 20.0, lock_mult = 0.1;
-	static const gdouble min_timer_interval = 2.0;
-	const gchar *reason = "unknown reason";
-	gdouble jittered_sec;
-	gdouble timeout;
+	const double error_mult = 20.0, lock_mult = 0.1;
+	static const double min_timer_interval = 2.0;
+	const char *reason = "unknown reason";
+	double jittered_sec;
+	double timeout;
 	struct map_periodic_cbdata *cbd;
 
 	if (map->scheduled_check || (map->wrk &&
@@ -1070,7 +1070,7 @@ rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 
 		if (timeout > 0 && timeout < map->poll_timeout) {
 			/* Early check case, jitter */
-			gdouble poll_timeout = map->poll_timeout;
+			double poll_timeout = map->poll_timeout;
 
 			if (how & RSPAMD_MAP_SCHEDULE_ERROR) {
 				poll_timeout = map->poll_timeout * error_mult;
@@ -1172,7 +1172,7 @@ rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 				  cbd, jittered_sec, map->name, reason);
 }
 
-static gint
+static int
 rspamd_map_af_to_weight(const rspamd_inet_addr_t *addr)
 {
 	int ret;
@@ -1192,12 +1192,12 @@ rspamd_map_af_to_weight(const rspamd_inet_addr_t *addr)
 	return ret;
 }
 
-static gint
+static int
 rspamd_map_dns_address_sort_func(gconstpointer a, gconstpointer b)
 {
 	const rspamd_inet_addr_t *ip1 = *(const rspamd_inet_addr_t **) a,
 							 *ip2 = *(const rspamd_inet_addr_t **) b;
-	gint w1, w2;
+	int w1, w2;
 
 	w1 = rspamd_map_af_to_weight(ip1);
 	w2 = rspamd_map_af_to_weight(ip2);
@@ -1212,7 +1212,7 @@ rspamd_map_dns_callback(struct rdns_reply *reply, void *arg)
 	struct http_callback_data *cbd = arg;
 	struct rdns_reply_entry *cur_rep;
 	struct rspamd_map *map;
-	guint flags = RSPAMD_HTTP_CLIENT_SIMPLE | RSPAMD_HTTP_CLIENT_SHARED;
+	unsigned int flags = RSPAMD_HTTP_CLIENT_SIMPLE | RSPAMD_HTTP_CLIENT_SHARED;
 
 	map = cbd->map;
 
@@ -1264,7 +1264,7 @@ rspamd_map_dns_callback(struct rdns_reply *reply, void *arg)
 
 	if (cbd->stage == http_map_http_conn && cbd->addrs->len > 0) {
 		rspamd_ptr_array_shuffle(cbd->addrs);
-		gint idx = 0;
+		int idx = 0;
 		/*
 		 * For the existing addr we can just select any address as we have
 		 * data available
@@ -1328,7 +1328,7 @@ rspamd_map_dns_callback(struct rdns_reply *reply, void *arg)
 
 static gboolean
 rspamd_map_read_cached(struct rspamd_map *map, struct rspamd_map_backend *bk,
-					   struct map_periodic_cbdata *periodic, const gchar *host)
+					   struct map_periodic_cbdata *periodic, const char *host)
 {
 	gsize mmap_len, len;
 	gpointer in;
@@ -1366,7 +1366,7 @@ rspamd_map_read_cached(struct rspamd_map *map, struct rspamd_map_backend *bk,
 		ZSTD_DStream *zstream;
 		ZSTD_inBuffer zin;
 		ZSTD_outBuffer zout;
-		guchar *out;
+		unsigned char *out;
 		gsize outlen, r;
 
 		zstream = ZSTD_createDStream();
@@ -1429,8 +1429,8 @@ static gboolean
 rspamd_map_has_http_cached_file(struct rspamd_map *map,
 								struct rspamd_map_backend *bk)
 {
-	gchar path[PATH_MAX];
-	guchar digest[rspamd_cryptobox_HASHBYTES];
+	char path[PATH_MAX];
+	unsigned char digest[rspamd_cryptobox_HASHBYTES];
 	struct rspamd_config *cfg = map->cfg;
 	struct stat st;
 
@@ -1454,13 +1454,13 @@ static gboolean
 rspamd_map_save_http_cached_file(struct rspamd_map *map,
 								 struct rspamd_map_backend *bk,
 								 struct http_map_data *htdata,
-								 const guchar *data,
+								 const unsigned char *data,
 								 gsize len)
 {
-	gchar path[PATH_MAX];
-	guchar digest[rspamd_cryptobox_HASHBYTES];
+	char path[PATH_MAX];
+	unsigned char digest[rspamd_cryptobox_HASHBYTES];
 	struct rspamd_config *cfg = map->cfg;
-	gint fd;
+	int fd;
 	struct rspamd_http_file_data header;
 
 	if (cfg->maps_cache_dir == NULL || cfg->maps_cache_dir[0] == '\0') {
@@ -1539,10 +1539,10 @@ rspamd_map_update_http_cached_file(struct rspamd_map *map,
 								   struct rspamd_map_backend *bk,
 								   struct http_map_data *htdata)
 {
-	gchar path[PATH_MAX];
-	guchar digest[rspamd_cryptobox_HASHBYTES];
+	char path[PATH_MAX];
+	unsigned char digest[rspamd_cryptobox_HASHBYTES];
 	struct rspamd_config *cfg = map->cfg;
-	gint fd;
+	int fd;
 	struct rspamd_http_file_data header;
 
 	if (!rspamd_map_has_http_cached_file(map, bk)) {
@@ -1612,10 +1612,10 @@ rspamd_map_read_http_cached_file(struct rspamd_map *map,
 								 struct http_map_data *htdata,
 								 struct map_cb_data *cbdata)
 {
-	gchar path[PATH_MAX];
-	guchar digest[rspamd_cryptobox_HASHBYTES];
+	char path[PATH_MAX];
+	unsigned char digest[rspamd_cryptobox_HASHBYTES];
 	struct rspamd_config *cfg = map->cfg;
-	gint fd;
+	int fd;
 	struct stat st;
 	struct rspamd_http_file_data header;
 
@@ -1707,7 +1707,7 @@ rspamd_map_read_http_cached_file(struct rspamd_map *map,
 	}
 
 	struct tm tm;
-	gchar ncheck_buf[32], lm_buf[32];
+	char ncheck_buf[32], lm_buf[32];
 
 	rspamd_localtime(map->next_check, &tm);
 	strftime(ncheck_buf, sizeof(ncheck_buf) - 1, "%Y-%m-%d %H:%M:%S", &tm);
@@ -1737,7 +1737,7 @@ rspamd_map_common_http_callback(struct rspamd_map *map,
 {
 	struct http_map_data *data;
 	struct http_callback_data *cbd;
-	guint flags = RSPAMD_HTTP_CLIENT_SIMPLE | RSPAMD_HTTP_CLIENT_SHARED;
+	unsigned int flags = RSPAMD_HTTP_CLIENT_SIMPLE | RSPAMD_HTTP_CLIENT_SHARED;
 
 	data = bk->data.hd;
 
@@ -1846,7 +1846,7 @@ check:
 	}
 	else if (map->r->r) {
 		/* Send both A and AAAA requests */
-		guint nreq = 0;
+		unsigned int nreq = 0;
 
 		if (rdns_make_request_full(map->r->r, rspamd_map_dns_callback, cbd,
 								   map->cfg->dns_timeout, map->cfg->dns_retransmits, 1,
@@ -2107,7 +2107,7 @@ rspamd_map_on_stat(struct ev_loop *loop, ev_stat *w, int revents)
 
 		/* Fire need modify flag */
 		struct rspamd_map_backend *bk;
-		guint i;
+		unsigned int i;
 
 		PTR_ARRAY_FOREACH(map->backends, i, bk)
 		{
@@ -2138,7 +2138,7 @@ void rspamd_map_watch(struct rspamd_config *cfg,
 	GList *cur = cfg->maps;
 	struct rspamd_map *map;
 	struct rspamd_map_backend *bk;
-	guint i;
+	unsigned int i;
 
 	g_assert(how > RSPAMD_MAP_WATCH_MIN && how < RSPAMD_MAP_WATCH_MAX);
 
@@ -2228,7 +2228,7 @@ void rspamd_map_preload(struct rspamd_config *cfg)
 	GList *cur = cfg->maps;
 	struct rspamd_map *map;
 	struct rspamd_map_backend *bk;
-	guint i;
+	unsigned int i;
 	gboolean map_ok;
 
 	/* First of all do synced read of data */
@@ -2337,7 +2337,7 @@ void rspamd_map_remove_all(struct rspamd_config *cfg)
 	GList *cur;
 	struct rspamd_map_backend *bk;
 	struct map_cb_data cbdata;
-	guint i;
+	unsigned int i;
 
 	for (cur = cfg->maps; cur != NULL; cur = g_list_next(cur)) {
 		map = cur->data;
@@ -2374,11 +2374,11 @@ void rspamd_map_remove_all(struct rspamd_config *cfg)
 	cfg->maps = NULL;
 }
 
-static const gchar *
+static const char *
 rspamd_map_check_proto(struct rspamd_config *cfg,
-					   const gchar *map_line, struct rspamd_map_backend *bk)
+					   const char *map_line, struct rspamd_map_backend *bk)
 {
-	const gchar *pos = map_line, *end, *end_key;
+	const char *pos = map_line, *end, *end_key;
 
 	g_assert(bk != NULL);
 	g_assert(pos != NULL);
@@ -2489,7 +2489,7 @@ rspamd_map_check_proto(struct rspamd_config *cfg,
 }
 
 gboolean
-rspamd_map_is_map(const gchar *map_line)
+rspamd_map_is_map(const char *map_line)
 {
 	gboolean ret = FALSE;
 
@@ -2589,14 +2589,14 @@ rspamd_map_backend_dtor(struct rspamd_map_backend *bk)
 }
 
 static struct rspamd_map_backend *
-rspamd_map_parse_backend(struct rspamd_config *cfg, const gchar *map_line)
+rspamd_map_parse_backend(struct rspamd_config *cfg, const char *map_line)
 {
 	struct rspamd_map_backend *bk;
 	struct file_map_data *fdata = NULL;
 	struct http_map_data *hdata = NULL;
 	struct static_map_data *sdata = NULL;
 	struct http_parser_url up;
-	const gchar *end, *p;
+	const char *end, *p;
 	rspamd_ftok_t tok;
 
 	bk = g_malloc0(sizeof(*bk));
@@ -2693,8 +2693,8 @@ rspamd_map_parse_backend(struct rspamd_config *cfg, const gchar *map_line)
 
 			if (up.field_set & (1u << UF_USERINFO)) {
 				/* Create authorisation header for basic auth */
-				guint len = sizeof("Basic ") +
-							up.field_data[UF_USERINFO].len * 8 / 5 + 4;
+				unsigned int len = sizeof("Basic ") +
+								   up.field_data[UF_USERINFO].len * 8 / 5 + 4;
 				hdata->userinfo = g_malloc(len);
 				rspamd_snprintf(hdata->userinfo, len, "Basic %*Bs",
 								(int) up.field_data[UF_USERINFO].len,
@@ -2731,7 +2731,7 @@ rspamd_map_parse_backend(struct rspamd_config *cfg, const gchar *map_line)
 								ucl_object_type(user_obj) == UCL_STRING &&
 								ucl_object_type(password_obj) == UCL_STRING) {
 
-								gchar *tmpbuf;
+								char *tmpbuf;
 								unsigned tlen;
 
 								/* User + password + ':' */
@@ -2793,9 +2793,9 @@ static void
 rspamd_map_calculate_hash(struct rspamd_map *map)
 {
 	struct rspamd_map_backend *bk;
-	guint i;
+	unsigned int i;
 	rspamd_cryptobox_hash_state_t st;
-	gchar *cksum_encoded, cksum[rspamd_cryptobox_HASHBYTES];
+	char *cksum_encoded, cksum[rspamd_cryptobox_HASHBYTES];
 
 	rspamd_cryptobox_hash_init(&st, NULL, 0);
 
@@ -2816,7 +2816,7 @@ rspamd_map_add_static_string(struct rspamd_config *cfg,
 							 GString *target)
 {
 	gsize sz;
-	const gchar *dline;
+	const char *dline;
 
 	if (ucl_object_type(elt) != UCL_STRING) {
 		msg_err_config("map has static backend but `data` is "
@@ -2841,8 +2841,8 @@ rspamd_map_add_static_string(struct rspamd_config *cfg,
 
 struct rspamd_map *
 rspamd_map_add(struct rspamd_config *cfg,
-			   const gchar *map_line,
-			   const gchar *description,
+			   const char *map_line,
+			   const char *description,
 			   map_cb_t read_callback,
 			   map_fin_cb_t fin_callback,
 			   map_dtor_t dtor,
@@ -2873,7 +2873,7 @@ rspamd_map_add(struct rspamd_config *cfg,
 	map->cfg = cfg;
 	map->id = rspamd_random_uint64_fast();
 	map->locked =
-		rspamd_mempool_alloc0_shared(cfg->cfg_pool, sizeof(gint));
+		rspamd_mempool_alloc0_shared(cfg->cfg_pool, sizeof(int));
 	map->backends = g_ptr_array_sized_new(1);
 	map->wrk = worker;
 	rspamd_mempool_add_destructor(cfg->cfg_pool, rspamd_ptr_array_free_hard,
@@ -2904,8 +2904,8 @@ rspamd_map_add(struct rspamd_config *cfg,
 
 struct rspamd_map *
 rspamd_map_add_fake(struct rspamd_config *cfg,
-					const gchar *description,
-					const gchar *name)
+					const char *description,
+					const char *name)
 {
 	struct rspamd_map *map;
 
@@ -2943,19 +2943,19 @@ rspamd_map_add_backend(struct rspamd_map *map, struct rspamd_map_backend *bk)
 struct rspamd_map *
 rspamd_map_add_from_ucl(struct rspamd_config *cfg,
 						const ucl_object_t *obj,
-						const gchar *description,
+						const char *description,
 						map_cb_t read_callback,
 						map_fin_cb_t fin_callback,
 						map_dtor_t dtor,
 						void **user_data,
 						struct rspamd_worker *worker,
-						gint flags)
+						int flags)
 {
 	ucl_object_iter_t it = NULL;
 	const ucl_object_t *cur, *elt;
 	struct rspamd_map *map;
 	struct rspamd_map_backend *bk;
-	guint i;
+	unsigned int i;
 
 	g_assert(obj != NULL);
 
@@ -2973,7 +2973,7 @@ rspamd_map_add_from_ucl(struct rspamd_config *cfg,
 	map->cfg = cfg;
 	map->id = rspamd_random_uint64_fast();
 	map->locked =
-		rspamd_mempool_alloc0_shared(cfg->cfg_pool, sizeof(gint));
+		rspamd_mempool_alloc0_shared(cfg->cfg_pool, sizeof(int));
 	map->backends = g_ptr_array_new();
 	map->wrk = worker;
 	map->no_file_read = (flags & RSPAMD_MAP_FILE_NO_READ);

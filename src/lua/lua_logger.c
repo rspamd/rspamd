@@ -177,13 +177,13 @@ static const struct luaL_reg loggerlib_f[] = {
 static void
 lua_common_log_line(GLogLevelFlags level,
 					lua_State *L,
-					const gchar *msg,
-					const gchar *uid,
-					const gchar *module,
-					gint stack_level)
+					const char *msg,
+					const char *uid,
+					const char *module,
+					int stack_level)
 {
 	lua_Debug d;
-	gchar func_buf[128], *p;
+	char func_buf[128], *p;
 
 	if (lua_getstack(L, stack_level, &d) == 1) {
 		(void) lua_getinfo(L, "Sl", &d);
@@ -223,31 +223,31 @@ lua_common_log_line(GLogLevelFlags level,
 }
 
 /*** Logger interface ***/
-static gint
+static int
 lua_logger_err(lua_State *L)
 {
 	return lua_logger_errx(L);
 }
 
-static gint
+static int
 lua_logger_warn(lua_State *L)
 {
 	return lua_logger_warnx(L);
 }
 
-static gint
+static int
 lua_logger_info(lua_State *L)
 {
 	return lua_logger_infox(L);
 }
 
-static gint
+static int
 lua_logger_message(lua_State *L)
 {
 	return lua_logger_messagex(L);
 }
 
-static gint
+static int
 lua_logger_debug(lua_State *L)
 {
 	return lua_logger_debugx(L);
@@ -280,14 +280,14 @@ lua_logger_char_safe(int t, unsigned int esc_type)
 }
 
 static gsize
-lua_logger_out_str(lua_State *L, gint pos,
-				   gchar *outbuf, gsize len,
+lua_logger_out_str(lua_State *L, int pos,
+				   char *outbuf, gsize len,
 				   struct lua_logger_trace *trace,
 				   enum lua_logger_escape_type esc_type)
 {
 	gsize slen, flen;
-	const gchar *str = lua_tolstring(L, pos, &slen);
-	static const gchar hexdigests[16] = "0123456789abcdef";
+	const char *str = lua_tolstring(L, pos, &slen);
+	static const char hexdigests[16] = "0123456789abcdef";
 	gsize r = 0, s;
 
 	if (str) {
@@ -339,14 +339,14 @@ lua_logger_out_str(lua_State *L, gint pos,
 }
 
 static gsize
-lua_logger_out_num(lua_State *L, gint pos, gchar *outbuf, gsize len,
+lua_logger_out_num(lua_State *L, int pos, char *outbuf, gsize len,
 				   struct lua_logger_trace *trace)
 {
-	gdouble num = lua_tonumber(L, pos);
+	double num = lua_tonumber(L, pos);
 	glong inum;
 	gsize r = 0;
 
-	if ((gdouble) (glong) num == num) {
+	if ((double) (glong) num == num) {
 		inum = num;
 		r = rspamd_snprintf(outbuf, len + 1, "%l", inum);
 	}
@@ -358,7 +358,7 @@ lua_logger_out_num(lua_State *L, gint pos, gchar *outbuf, gsize len,
 }
 
 static gsize
-lua_logger_out_boolean(lua_State *L, gint pos, gchar *outbuf, gsize len,
+lua_logger_out_boolean(lua_State *L, int pos, char *outbuf, gsize len,
 					   struct lua_logger_trace *trace)
 {
 	gboolean val = lua_toboolean(L, pos);
@@ -370,11 +370,11 @@ lua_logger_out_boolean(lua_State *L, gint pos, gchar *outbuf, gsize len,
 }
 
 static gsize
-lua_logger_out_userdata(lua_State *L, gint pos, gchar *outbuf, gsize len,
+lua_logger_out_userdata(lua_State *L, int pos, char *outbuf, gsize len,
 						struct lua_logger_trace *trace)
 {
-	gint r = 0, top;
-	const gchar *str = NULL;
+	int r = 0, top;
+	const char *str = NULL;
 	gboolean converted_to_str = FALSE;
 
 	top = lua_gettop(L);
@@ -469,15 +469,15 @@ lua_logger_out_userdata(lua_State *L, gint pos, gchar *outbuf, gsize len,
 	}
 
 static gsize
-lua_logger_out_table(lua_State *L, gint pos, gchar *outbuf, gsize len,
+lua_logger_out_table(lua_State *L, int pos, char *outbuf, gsize len,
 					 struct lua_logger_trace *trace,
 					 enum lua_logger_escape_type esc_type)
 {
-	gchar *d = outbuf;
+	char *d = outbuf;
 	gsize remain = len, r;
 	gboolean first = TRUE;
 	gconstpointer self = NULL;
-	gint i, tpos, last_seq = -1, old_top;
+	int i, tpos, last_seq = -1, old_top;
 
 	if (!lua_istable(L, pos) || remain == 0) {
 		return 0;
@@ -587,12 +587,12 @@ lua_logger_out_table(lua_State *L, gint pos, gchar *outbuf, gsize len,
 
 #undef MOVE_BUF
 
-gsize lua_logger_out_type(lua_State *L, gint pos,
-						  gchar *outbuf, gsize len,
+gsize lua_logger_out_type(lua_State *L, int pos,
+						  char *outbuf, gsize len,
 						  struct lua_logger_trace *trace,
 						  enum lua_logger_escape_type esc_type)
 {
-	gint type;
+	int type;
 	gsize r = 0;
 
 	if (len == 0) {
@@ -638,10 +638,10 @@ gsize lua_logger_out_type(lua_State *L, gint pos,
 	return r;
 }
 
-static const gchar *
-lua_logger_get_id(lua_State *L, gint pos, GError **err)
+static const char *
+lua_logger_get_id(lua_State *L, int pos, GError **err)
 {
-	const gchar *uid = NULL, *clsname;
+	const char *uid = NULL, *clsname;
 
 	if (lua_getmetatable(L, pos) != 0) {
 		uid = "";
@@ -728,13 +728,13 @@ lua_logger_get_id(lua_State *L, gint pos, GError **err)
 }
 
 static gboolean
-lua_logger_log_format(lua_State *L, gint fmt_pos, gboolean is_string,
-					  gchar *logbuf, gsize remain)
+lua_logger_log_format(lua_State *L, int fmt_pos, gboolean is_string,
+					  char *logbuf, gsize remain)
 {
-	gchar *d;
-	const gchar *s, *c;
+	char *d;
+	const char *s, *c;
 	gsize r, cpylen = 0;
-	guint arg_num = 0, cur_arg;
+	unsigned int arg_num = 0, cur_arg;
 	bool num_arg = false;
 	struct lua_logger_trace tr;
 	enum {
@@ -799,7 +799,7 @@ lua_logger_log_format(lua_State *L, gint fmt_pos, gboolean is_string,
 					s++;
 				}
 
-				if (arg_num < 1 || arg_num > (guint) lua_gettop(L) + 1) {
+				if (arg_num < 1 || arg_num > (unsigned int) lua_gettop(L) + 1) {
 					msg_err("wrong argument number: %ud", arg_num);
 
 					return FALSE;
@@ -828,7 +828,7 @@ lua_logger_log_format(lua_State *L, gint fmt_pos, gboolean is_string,
 			arg_num = cur_arg;
 		}
 
-		if (arg_num < 1 || arg_num > (guint) lua_gettop(L) + 1) {
+		if (arg_num < 1 || arg_num > (unsigned int) lua_gettop(L) + 1) {
 			msg_err("wrong argument number: %ud", arg_num);
 
 			return FALSE;
@@ -854,16 +854,16 @@ lua_logger_log_format(lua_State *L, gint fmt_pos, gboolean is_string,
 	return TRUE;
 }
 
-static gint
+static int
 lua_logger_do_log(lua_State *L,
 				  GLogLevelFlags level,
 				  gboolean is_string,
-				  gint start_pos)
+				  int start_pos)
 {
-	gchar logbuf[RSPAMD_LOGBUF_SIZE - 128];
-	const gchar *uid = NULL;
-	gint fmt_pos = start_pos;
-	gint ret;
+	char logbuf[RSPAMD_LOGBUF_SIZE - 128];
+	const char *uid = NULL;
+	int fmt_pos = start_pos;
+	int ret;
 	GError *err = NULL;
 
 	if (lua_type(L, start_pos) == LUA_TSTRING) {
@@ -914,50 +914,50 @@ lua_logger_do_log(lua_State *L,
 	return 0;
 }
 
-static gint
+static int
 lua_logger_errx(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	return lua_logger_do_log(L, G_LOG_LEVEL_CRITICAL, FALSE, 1);
 }
 
-static gint
+static int
 lua_logger_warnx(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	return lua_logger_do_log(L, G_LOG_LEVEL_WARNING, FALSE, 1);
 }
 
-static gint
+static int
 lua_logger_infox(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	return lua_logger_do_log(L, G_LOG_LEVEL_INFO, FALSE, 1);
 }
 
-static gint
+static int
 lua_logger_messagex(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	return lua_logger_do_log(L, G_LOG_LEVEL_MESSAGE, FALSE, 1);
 }
 
-static gint
+static int
 lua_logger_debugx(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	return lua_logger_do_log(L, G_LOG_LEVEL_DEBUG, FALSE, 1);
 }
 
-static gint
+static int
 lua_logger_logx(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	GLogLevelFlags flags = lua_tonumber(L, 1);
-	const gchar *modname = lua_tostring(L, 2), *uid = NULL;
-	gchar logbuf[RSPAMD_LOGBUF_SIZE - 128];
+	const char *modname = lua_tostring(L, 2), *uid = NULL;
+	char logbuf[RSPAMD_LOGBUF_SIZE - 128];
 	gboolean ret;
-	gint stack_pos = 1;
+	int stack_pos = 1;
 
 	if (lua_type(L, 3) == LUA_TSTRING) {
 		uid = luaL_checkstring(L, 3);
@@ -993,13 +993,13 @@ lua_logger_logx(lua_State *L)
 }
 
 
-static gint
+static int
 lua_logger_debugm(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gchar logbuf[RSPAMD_LOGBUF_SIZE - 128];
-	const gchar *uid = NULL, *module = NULL;
-	gint stack_pos = 1;
+	char logbuf[RSPAMD_LOGBUF_SIZE - 128];
+	const char *uid = NULL, *module = NULL;
+	int stack_pos = 1;
 	gboolean ret;
 
 	module = luaL_checkstring(L, 1);
@@ -1035,16 +1035,16 @@ lua_logger_debugm(lua_State *L)
 }
 
 
-static gint
+static int
 lua_logger_slog(lua_State *L)
 {
 	return lua_logger_do_log(L, 0, TRUE, 1);
 }
 
-static gint
+static int
 lua_logger_log_level(lua_State *L)
 {
-	gint log_level = rspamd_log_get_log_level(NULL);
+	int log_level = rspamd_log_get_log_level(NULL);
 
 	lua_pushstring(L, rspamd_get_log_severity_string(log_level));
 
@@ -1053,7 +1053,7 @@ lua_logger_log_level(lua_State *L)
 
 /*** Init functions ***/
 
-static gint
+static int
 lua_load_logger(lua_State *L)
 {
 	lua_newtable(L);

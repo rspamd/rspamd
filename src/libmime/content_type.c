@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,9 +23,9 @@
 static gboolean
 rspamd_rfc2231_decode(rspamd_mempool_t *pool,
 					  struct rspamd_content_type_param *param,
-					  gchar *value_start, gchar *value_end)
+					  char *value_start, char *value_end)
 {
-	gchar *quote_pos;
+	char *quote_pos;
 
 	quote_pos = memchr(value_start, '\'', value_end - value_start);
 
@@ -42,7 +42,7 @@ rspamd_rfc2231_decode(rspamd_mempool_t *pool,
 		 * encoding'data (in theory).
 		 * Try to handle both...
 		 */
-		const gchar *charset = NULL;
+		const char *charset = NULL;
 		rspamd_ftok_t ctok;
 
 		ctok.begin = value_start;
@@ -102,10 +102,10 @@ rspamd_rfc2231_decode(rspamd_mempool_t *pool,
 static gboolean
 rspamd_param_maybe_rfc2231_process(rspamd_mempool_t *pool,
 								   struct rspamd_content_type_param *param,
-								   gchar *name_start, gchar *name_end,
-								   gchar *value_start, gchar *value_end)
+								   char *name_start, char *name_end,
+								   char *value_start, char *value_end)
 {
-	const gchar *star_pos;
+	const char *star_pos;
 
 	star_pos = memchr(name_start, '*', name_end - name_start);
 
@@ -163,7 +163,7 @@ rspamd_param_maybe_rfc2231_process(rspamd_mempool_t *pool,
 	return TRUE;
 }
 
-static gint32
+static int32_t
 rspamd_cmp_pieces(struct rspamd_content_type_param *p1, struct rspamd_content_type_param *p2)
 {
 	return p1->rfc2231_id - p2->rfc2231_id;
@@ -191,7 +191,7 @@ rspamd_postprocess_ct_attributes(rspamd_mempool_t *pool,
 		if (param->flags & RSPAMD_CONTENT_PARAM_PIECEWISE) {
 			/* Reconstruct param */
 			gsize tlen = 0;
-			gchar *ndata, *pos;
+			char *ndata, *pos;
 
 			sorted = param;
 			DL_SORT(sorted, rspamd_cmp_pieces);
@@ -267,7 +267,7 @@ rspamd_content_type_postprocess(rspamd_mempool_t *pool,
 
 	if (rspamd_ftok_icase_equal(&param->name, &srch)) {
 		found = param;
-		gchar *lc_boundary;
+		char *lc_boundary;
 		/* Adjust boundary */
 		lc_boundary = rspamd_mempool_alloc(pool, param->value.len);
 		memcpy(lc_boundary, param->value.begin, param->value.len);
@@ -283,7 +283,7 @@ rspamd_content_type_postprocess(rspamd_mempool_t *pool,
 		RSPAMD_FTOK_ASSIGN(&srch, "name");
 		if (!rspamd_ftok_icase_equal(&param->name, &srch)) {
 			/* Just lowercase */
-			rspamd_str_lc_utf8((gchar *) param->value.begin, param->value.len);
+			rspamd_str_lc_utf8((char *) param->value.begin, param->value.len);
 		}
 	}
 }
@@ -308,8 +308,8 @@ rspamd_content_disposition_postprocess(rspamd_mempool_t *pool,
 
 void rspamd_content_type_add_param(rspamd_mempool_t *pool,
 								   struct rspamd_content_type *ct,
-								   gchar *name_start, gchar *name_end,
-								   gchar *value_start, gchar *value_end)
+								   char *name_start, char *name_end,
+								   char *value_start, char *value_end)
 {
 	struct rspamd_content_type_param *nparam;
 	rspamd_ftok_t srch;
@@ -349,10 +349,10 @@ void rspamd_content_type_add_param(rspamd_mempool_t *pool,
 }
 
 static struct rspamd_content_type *
-rspamd_content_type_parser(gchar *in, gsize len, rspamd_mempool_t *pool)
+rspamd_content_type_parser(char *in, gsize len, rspamd_mempool_t *pool)
 {
-	guint obraces = 0, ebraces = 0, qlen = 0;
-	gchar *p, *c, *end, *pname_start = NULL, *pname_end = NULL;
+	unsigned int obraces = 0, ebraces = 0, qlen = 0;
+	char *p, *c, *end, *pname_start = NULL, *pname_end = NULL;
 	struct rspamd_content_type *res = NULL, val;
 	gboolean eqsign_seen = FALSE;
 	enum {
@@ -662,7 +662,7 @@ rspamd_content_type_parser(gchar *in, gsize len, rspamd_mempool_t *pool)
 	}
 
 	if (val.type.len > 0) {
-		gchar *tmp;
+		char *tmp;
 
 		res = rspamd_mempool_alloc(pool, sizeof(val));
 		memcpy(res, &val, sizeof(val));
@@ -688,12 +688,12 @@ rspamd_content_type_parser(gchar *in, gsize len, rspamd_mempool_t *pool)
 }
 
 struct rspamd_content_type *
-rspamd_content_type_parse(const gchar *in,
+rspamd_content_type_parse(const char *in,
 						  gsize len, rspamd_mempool_t *pool)
 {
 	struct rspamd_content_type *res = NULL;
 	rspamd_ftok_t srch;
-	gchar *cpy;
+	char *cpy;
 
 	cpy = rspamd_mempool_alloc(pool, len + 1);
 	rspamd_strlcpy(cpy, in, len + 1);
@@ -793,7 +793,7 @@ rspamd_content_type_parse(const gchar *in,
 		}
 	}
 	else {
-		msg_warn_pool("cannot parse content type: %*s", (gint) len, cpy);
+		msg_warn_pool("cannot parse content type: %*s", (int) len, cpy);
 	}
 
 	return res;
@@ -801,11 +801,11 @@ rspamd_content_type_parse(const gchar *in,
 
 void rspamd_content_disposition_add_param(rspamd_mempool_t *pool,
 										  struct rspamd_content_disposition *cd,
-										  const gchar *name_start, const gchar *name_end,
-										  const gchar *value_start, const gchar *value_end)
+										  const char *name_start, const char *name_end,
+										  const char *value_start, const char *value_end)
 {
 	rspamd_ftok_t srch;
-	gchar *name_cpy, *value_cpy, *name_cpy_end, *value_cpy_end;
+	char *name_cpy, *value_cpy, *name_cpy_end, *value_cpy_end;
 	struct rspamd_content_type_param *found = NULL, *nparam;
 
 	g_assert(cd != NULL);
@@ -850,7 +850,7 @@ void rspamd_content_disposition_add_param(rspamd_mempool_t *pool,
 }
 
 struct rspamd_content_disposition *
-rspamd_content_disposition_parse(const gchar *in,
+rspamd_content_disposition_parse(const char *in,
 								 gsize len, rspamd_mempool_t *pool)
 {
 	struct rspamd_content_disposition *res = NULL, val;
@@ -877,7 +877,7 @@ rspamd_content_disposition_parse(const gchar *in,
 	}
 	else {
 		msg_warn_pool("cannot parse content disposition: %*s",
-					  (gint) len, in);
+					  (int) len, in);
 	}
 
 	return res;

@@ -106,7 +106,7 @@ lua_check_upstream(lua_State *L, int pos)
  * Get ip of upstream
  * @return {ip} ip address object
  */
-static gint
+static int
 lua_upstream_get_addr(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -127,7 +127,7 @@ lua_upstream_get_addr(lua_State *L)
  * Get name of upstream
  * @return {string} name of the upstream
  */
-static gint
+static int
 lua_upstream_get_name(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -148,7 +148,7 @@ lua_upstream_get_name(lua_State *L)
  * Get port of upstream
  * @return {int} port of the upstream
  */
-static gint
+static int
 lua_upstream_get_port(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -168,13 +168,13 @@ lua_upstream_get_port(lua_State *L)
  * @method upstream:fail()
  * Indicate upstream failure. After certain amount of failures during specified time frame, an upstream is marked as down and does not participate in rotations.
  */
-static gint
+static int
 lua_upstream_fail(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_upstream *up = lua_check_upstream(L, 1);
 	gboolean fail_addr = FALSE;
-	const gchar *reason = "unknown";
+	const char *reason = "unknown";
 
 	if (up) {
 
@@ -199,7 +199,7 @@ lua_upstream_fail(lua_State *L)
  * @method upstream:ok()
  * Indicates upstream success. Resets errors count for an upstream.
  */
-static gint
+static int
 lua_upstream_ok(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -212,7 +212,7 @@ lua_upstream_ok(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_upstream_destroy(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -239,7 +239,7 @@ lua_check_upstream_list(lua_State *L)
 }
 
 static struct rspamd_lua_upstream *
-lua_push_upstream(lua_State *L, gint up_idx, struct upstream *up)
+lua_push_upstream(lua_State *L, int up_idx, struct upstream *up)
 {
 	struct rspamd_lua_upstream *lua_ups;
 
@@ -265,15 +265,15 @@ lua_push_upstream(lua_State *L, gint up_idx, struct upstream *up)
  * @param {number} default_port default port for upstreams
  * @return {upstream_list} upstream list structure
  */
-static gint
+static int
 lua_upstream_list_create(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct upstream_list *new = NULL, **pnew;
 	struct rspamd_config *cfg = NULL;
-	const gchar *def;
-	guint default_port = 0;
-	gint top;
+	const char *def;
+	unsigned int default_port = 0;
+	int top;
 
 
 	if (lua_type(L, 1) == LUA_TUSERDATA) {
@@ -333,7 +333,7 @@ lua_upstream_list_create(lua_State *L)
  * @param L
  * @return
  */
-static gint
+static int
 lua_upstream_list_destroy(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -350,13 +350,13 @@ lua_upstream_list_destroy(lua_State *L)
  * @param {string} key a string used as input for stable hash algorithm
  * @return {upstream} upstream from a list corresponding to the given key
  */
-static gint
+static int
 lua_upstream_list_get_upstream_by_hash(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct upstream_list *upl;
 	struct upstream *selected;
-	const gchar *key;
+	const char *key;
 	gsize keyl;
 
 	upl = lua_check_upstream_list(L);
@@ -364,7 +364,7 @@ lua_upstream_list_get_upstream_by_hash(lua_State *L)
 		key = luaL_checklstring(L, 2, &keyl);
 		if (key) {
 			selected = rspamd_upstream_get(upl, RSPAMD_UPSTREAM_HASHED, key,
-										   (guint) keyl);
+										   (unsigned int) keyl);
 
 			if (selected) {
 				lua_push_upstream(L, 1, selected);
@@ -389,7 +389,7 @@ lua_upstream_list_get_upstream_by_hash(lua_State *L)
  * Get upstream round robin (by current weight)
  * @return {upstream} upstream from a list in round-robin matter
  */
-static gint
+static int
 lua_upstream_list_get_upstream_round_robin(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -419,7 +419,7 @@ lua_upstream_list_get_upstream_round_robin(lua_State *L)
  * Get upstream master slave order (by static priority)
  * @return {upstream} upstream from a list in master-slave order
  */
-static gint
+static int
 lua_upstream_list_get_upstream_master_slave(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -448,10 +448,10 @@ lua_upstream_list_get_upstream_master_slave(lua_State *L)
 
 struct upstream_foreach_cbdata {
 	lua_State *L;
-	gint ups_pos;
+	int ups_pos;
 };
 
-static void lua_upstream_inserter(struct upstream *up, guint idx, void *ud)
+static void lua_upstream_inserter(struct upstream *up, unsigned int idx, void *ud)
 {
 	struct upstream_foreach_cbdata *cbd = (struct upstream_foreach_cbdata *) ud;
 
@@ -463,7 +463,7 @@ static void lua_upstream_inserter(struct upstream *up, guint idx, void *ud)
  * Returns all upstreams for this list
  * @return {table|upstream} all upstreams defined
  */
-static gint
+static int
 lua_upstream_list_all_upstreams(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -486,7 +486,7 @@ lua_upstream_list_all_upstreams(lua_State *L)
 }
 
 static inline enum rspamd_upstreams_watch_event
-lua_str_to_upstream_flag(const gchar *str)
+lua_str_to_upstream_flag(const char *str)
 {
 	enum rspamd_upstreams_watch_event fl = 0;
 
@@ -509,10 +509,10 @@ lua_str_to_upstream_flag(const gchar *str)
 	return fl;
 }
 
-static inline const gchar *
+static inline const char *
 lua_upstream_flag_to_str(enum rspamd_upstreams_watch_event fl)
 {
-	const gchar *res = "unknown";
+	const char *res = "unknown";
 
 	/* Works with single flags, not combinations */
 	if (fl & RSPAMD_UPSTREAM_WATCH_SUCCESS) {
@@ -536,22 +536,22 @@ lua_upstream_flag_to_str(enum rspamd_upstreams_watch_event fl)
 
 struct rspamd_lua_upstream_watcher_cbdata {
 	lua_State *L;
-	gint cbref;
-	gint parent_cbref; /* Reference to the upstream list */
+	int cbref;
+	int parent_cbref; /* Reference to the upstream list */
 	struct upstream_list *upl;
 };
 
 static void
 lua_upstream_watch_func(struct upstream *up,
 						enum rspamd_upstreams_watch_event event,
-						guint cur_errors,
+						unsigned int cur_errors,
 						void *ud)
 {
 	struct rspamd_lua_upstream_watcher_cbdata *cdata =
 		(struct rspamd_lua_upstream_watcher_cbdata *) ud;
 	lua_State *L;
-	const gchar *what;
-	gint err_idx;
+	const char *what;
+	int err_idx;
 
 	L = cdata->L;
 	what = lua_upstream_flag_to_str(event);
@@ -604,7 +604,7 @@ ups:add_watcher('success', function(what, up, cur_errors) ... end)
 ups:add_watcher({'online', 'offline'}, function(what, up, cur_errors) ... end)
  * @return nothing
  */
-static gint
+static int
 lua_upstream_list_add_watcher(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -652,7 +652,7 @@ lua_upstream_list_add_watcher(lua_State *L)
 	return 0;
 }
 
-static gint
+static int
 lua_load_upstream_list(lua_State *L)
 {
 	lua_newtable(L);

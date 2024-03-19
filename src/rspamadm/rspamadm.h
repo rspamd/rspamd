@@ -27,17 +27,17 @@ extern "C" {
 #endif
 
 extern GHashTable *ucl_vars;
-extern gchar **lua_env;
+extern char **lua_env;
 extern struct rspamd_main *rspamd_main;
 
 GQuark rspamadm_error(void);
 
 struct rspamadm_command;
 
-typedef const gchar *(*rspamadm_help_func)(gboolean full_help,
-										   const struct rspamadm_command *cmd);
+typedef const char *(*rspamadm_help_func)(gboolean full_help,
+										  const struct rspamadm_command *cmd);
 
-typedef void (*rspamadm_run_func)(gint argc, gchar **argv,
+typedef void (*rspamadm_run_func)(int argc, char **argv,
 								  const struct rspamadm_command *cmd);
 
 typedef void (*rspamadm_lua_exports_func)(gpointer lua_state);
@@ -47,8 +47,8 @@ typedef void (*rspamadm_lua_exports_func)(gpointer lua_state);
 #define RSPAMADM_FLAG_DYNAMIC (1u << 2u)
 
 struct rspamadm_command {
-	const gchar *name;
-	guint flags;
+	const char *name;
+	unsigned int flags;
 	rspamadm_help_func help;
 	rspamadm_run_func run;
 	rspamadm_lua_exports_func lua_subrs;
@@ -59,16 +59,16 @@ struct rspamadm_command {
 extern const struct rspamadm_command *commands[];
 extern struct rspamadm_command help_command;
 
-const struct rspamadm_command *rspamadm_search_command(const gchar *name,
+const struct rspamadm_command *rspamadm_search_command(const char *name,
 													   GPtrArray *all_commands);
 
 void rspamadm_fill_internal_commands(GPtrArray *dest);
 
 void rspamadm_fill_lua_commands(lua_State *L, GPtrArray *dest);
 
-gboolean rspamadm_execute_lua_ucl_subr(gint argc, gchar **argv,
+gboolean rspamadm_execute_lua_ucl_subr(int argc, char **argv,
 									   const ucl_object_t *res,
-									   const gchar *script_name,
+									   const char *script_name,
 									   gboolean rspamadm_subcommand);
 
 struct thread_entry;
@@ -77,13 +77,13 @@ typedef void (*lua_thread_error_t)(struct thread_entry *thread, int ret, const c
 
 
 struct lua_call_data {
-	gint top;
-	gint ret;
+	int top;
+	int ret;
 	gpointer ud;
 };
 
-gint lua_repl_thread_call(struct thread_entry *thread, gint narg,
-						  gpointer ud, lua_thread_error_t error_func);
+int lua_repl_thread_call(struct thread_entry *thread, int narg,
+						 gpointer ud, lua_thread_error_t error_func);
 
 #ifdef __cplusplus
 }

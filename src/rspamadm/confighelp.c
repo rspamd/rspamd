@@ -24,13 +24,13 @@
 static gboolean json = FALSE;
 static gboolean compact = FALSE;
 static gboolean keyword = FALSE;
-static const gchar *plugins_path = RSPAMD_PLUGINSDIR;
+static const char *plugins_path = RSPAMD_PLUGINSDIR;
 extern struct rspamd_main *rspamd_main;
 /* Defined in modules.c */
 extern module_t *modules[];
 extern worker_t *workers[];
 
-static void rspamadm_confighelp(gint argc, gchar **argv,
+static void rspamadm_confighelp(int argc, char **argv,
 								const struct rspamadm_command *cmd);
 
 static const char *rspamadm_confighelp_help(gboolean full_help,
@@ -81,7 +81,7 @@ rspamadm_confighelp_help(gboolean full_help, const struct rspamadm_command *cmd)
 }
 
 static void
-rspamadm_confighelp_show(struct rspamd_config *cfg, gint argc, gchar **argv,
+rspamadm_confighelp_show(struct rspamd_config *cfg, int argc, char **argv,
 						 const char *key, const ucl_object_t *obj)
 {
 	rspamd_fstring_t *out;
@@ -124,13 +124,13 @@ rspamadm_confighelp_show(struct rspamd_config *cfg, gint argc, gchar **argv,
 static void
 rspamadm_confighelp_search_word_step(const ucl_object_t *obj,
 									 ucl_object_t *res,
-									 const gchar *str,
+									 const char *str,
 									 gsize len,
 									 GString *path)
 {
 	ucl_object_iter_t it = NULL;
 	const ucl_object_t *cur, *elt;
-	const gchar *dot_pos;
+	const char *dot_pos;
 
 	while ((cur = ucl_object_iterate(obj, &it, true)) != NULL) {
 		if (cur->keylen > 0) {
@@ -175,7 +175,7 @@ rspamadm_confighelp_search_word_step(const ucl_object_t *obj,
 }
 
 static ucl_object_t *
-rspamadm_confighelp_search_word(const ucl_object_t *obj, const gchar *str)
+rspamadm_confighelp_search_word(const ucl_object_t *obj, const char *str)
 {
 	gsize len = strlen(str);
 	GString *path = g_string_new("");
@@ -190,7 +190,7 @@ rspamadm_confighelp_search_word(const ucl_object_t *obj, const gchar *str)
 }
 
 __attribute__((noreturn)) static void
-rspamadm_confighelp(gint argc, gchar **argv, const struct rspamadm_command *cmd)
+rspamadm_confighelp(int argc, char **argv, const struct rspamadm_command *cmd)
 {
 	struct rspamd_config *cfg;
 	ucl_object_t *doc_obj;
@@ -200,7 +200,7 @@ rspamadm_confighelp(gint argc, gchar **argv, const struct rspamadm_command *cmd)
 	module_t *mod, **pmod;
 	worker_t **pworker;
 	struct module_ctx *mod_ctx;
-	gint i, ret = 0, processed_args = 0;
+	int i, ret = 0, processed_args = 0;
 
 	context = g_option_context_new(
 		"confighelp - displays help for the configuration options");

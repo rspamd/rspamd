@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -37,9 +37,9 @@ typedef union {
 
 struct rrd_file_head {
 	/* Data Base Identification Section ** */
-	gchar cookie[4];      /* RRD */
-	gchar version[5];     /* version of the format */
-	gdouble float_cookie; /* is it the correct double representation ?  */
+	char cookie[4];      /* RRD */
+	char version[5];     /* version of the format */
+	double float_cookie; /* is it the correct double representation ?  */
 
 	/* Data Base Structure Definition **** */
 	gulong ds_cnt;   /* how many different ds provide input to the rrd */
@@ -75,9 +75,9 @@ enum rrd_ds_param {
 #define RRD_DST_SIZE 20
 
 struct rrd_ds_def {
-	gchar ds_nam[RRD_DS_NAM_SIZE]; /* Name of the data source (null terminated) */
-	gchar dst[RRD_DST_SIZE];       /* Type of data source (null terminated) */
-	rrd_value_t par[10];           /* index of this array see ds_param_en */
+	char ds_nam[RRD_DS_NAM_SIZE]; /* Name of the data source (null terminated) */
+	char dst[RRD_DST_SIZE];       /* Type of data source (null terminated) */
+	rrd_value_t par[10];          /* index of this array see ds_param_en */
 };
 
 /* RRA definition */
@@ -103,7 +103,7 @@ enum rrd_rra_param {
 #define RRD_CF_NAM_SIZE 20
 
 struct rrd_rra_def {
-	gchar cf_nam[RRD_CF_NAM_SIZE];   /* consolidation function (null term) */
+	char cf_nam[RRD_CF_NAM_SIZE];    /* consolidation function (null term) */
 	gulong row_cnt;                  /* number of entries in the store */
 	gulong pdp_cnt;                  /* how many primary data points are
 	                  * required for a consolidated data point?*/
@@ -125,12 +125,12 @@ enum rrd_pdp_param {
                            this depends on dst */
 
 struct rrd_pdp_prep {
-	gchar last_ds[RRD_LAST_DS_LEN]; /* the last reading from the data
+	char last_ds[RRD_LAST_DS_LEN]; /* the last reading from the data
 	                                 * source.  this is stored in ASCII
 	                                 * to cater for very large counters
 	                                 * we might encounter in connection
 	                                 * with SNMP. */
-	rrd_value_t scratch[10];        /* contents according to pdp_par_en */
+	rrd_value_t scratch[10];       /* contents according to pdp_par_en */
 };
 
 #define RRD_MAX_CDP_PAR_EN 10
@@ -200,14 +200,14 @@ struct rspamd_rrd_file {
 	struct rrd_pdp_prep *pdp_prep;   /* pdp data prep area */
 	struct rrd_cdp_prep *cdp_prep;   /* cdp prep area */
 	struct rrd_rra_ptr *rra_ptr;     /* list of rra pointers */
-	gdouble *rrd_value;              /* list of rrd values */
+	double *rrd_value;               /* list of rrd values */
 
-	gchar *filename;
-	guint8 *map; /* mmapped area */
-	gsize size;  /* its size */
+	char *filename;
+	uint8_t *map; /* mmapped area */
+	gsize size;   /* its size */
 	gboolean finalized;
-	gchar *id;
-	gint fd;
+	char *id;
+	int fd;
 };
 
 
@@ -219,7 +219,7 @@ struct rspamd_rrd_file {
  * @param err error pointer
  * @return rrd file structure
  */
-struct rspamd_rrd_file *rspamd_rrd_open(const gchar *filename, GError **err);
+struct rspamd_rrd_file *rspamd_rrd_open(const char *filename, GError **err);
 
 /**
  * Create basic header for rrd file
@@ -230,11 +230,11 @@ struct rspamd_rrd_file *rspamd_rrd_open(const gchar *filename, GError **err);
  * @param err error pointer
  * @return TRUE if file has been created
  */
-struct rspamd_rrd_file *rspamd_rrd_create(const gchar *filename,
+struct rspamd_rrd_file *rspamd_rrd_create(const char *filename,
 										  gulong ds_count,
 										  gulong rra_count,
 										  gulong pdp_step,
-										  gdouble initial_ticks,
+										  double initial_ticks,
 										  GError **err);
 
 /**
@@ -276,7 +276,7 @@ gboolean rspamd_rrd_finalize(struct rspamd_rrd_file *file, GError **err);
  */
 gboolean rspamd_rrd_add_record(struct rspamd_rrd_file *file,
 							   GArray *points,
-							   gdouble ticks,
+							   double ticks,
 							   GError **err);
 
 /**
@@ -284,7 +284,7 @@ gboolean rspamd_rrd_add_record(struct rspamd_rrd_file *file,
  * @param file
  * @return
  */
-gint rspamd_rrd_close(struct rspamd_rrd_file *file);
+int rspamd_rrd_close(struct rspamd_rrd_file *file);
 
 /*
  * Conversion functions
@@ -293,29 +293,29 @@ gint rspamd_rrd_close(struct rspamd_rrd_file *file);
 /**
  * Convert rrd dst type from string to numeric value
  */
-enum rrd_dst_type rrd_dst_from_string(const gchar *str);
+enum rrd_dst_type rrd_dst_from_string(const char *str);
 
 /**
  * Convert numeric presentation of dst to string
  */
-const gchar *rrd_dst_to_string(enum rrd_dst_type type);
+const char *rrd_dst_to_string(enum rrd_dst_type type);
 
 /**
  * Convert rrd consolidation function type from string to numeric value
  */
-enum rrd_cf_type rrd_cf_from_string(const gchar *str);
+enum rrd_cf_type rrd_cf_from_string(const char *str);
 
 /**
  * Convert numeric presentation of cf to string
  */
-const gchar *rrd_cf_to_string(enum rrd_cf_type type);
+const char *rrd_cf_to_string(enum rrd_cf_type type);
 
 /* Default RRA and DS */
 
 /**
  * Create default RRA
  */
-void rrd_make_default_rra(const gchar *cf_name,
+void rrd_make_default_rra(const char *cf_name,
 						  gulong pdp_cnt,
 						  gulong rows,
 						  struct rrd_rra_def *rra);
@@ -323,15 +323,15 @@ void rrd_make_default_rra(const gchar *cf_name,
 /**
  * Create default DS
  */
-void rrd_make_default_ds(const gchar *name,
-						 const gchar *type,
+void rrd_make_default_ds(const char *name,
+						 const char *type,
 						 gulong pdp_step,
 						 struct rrd_ds_def *ds);
 
 /**
  * Open or create the default rspamd rrd file
  */
-struct rspamd_rrd_file *rspamd_rrd_file_default(const gchar *path,
+struct rspamd_rrd_file *rspamd_rrd_file_default(const char *path,
 												GError **err);
 
 /**
@@ -341,9 +341,9 @@ struct rspamd_rrd_query_result {
 	gulong rra_rows;
 	gulong pdp_per_cdp;
 	gulong ds_count;
-	gdouble last_update;
+	double last_update;
 	gulong cur_row;
-	const gdouble *data;
+	const double *data;
 };
 
 /**

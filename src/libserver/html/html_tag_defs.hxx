@@ -28,7 +28,7 @@ namespace rspamd::html {
 struct html_tag_def {
 	std::string name;
 	tag_id_t id;
-	guint flags;
+	unsigned int flags;
 };
 
 #define TAG_DEF(id, name, flags) \

@@ -56,15 +56,15 @@ enum rspamd_mime_header_flags {
 };
 
 struct rspamd_mime_header {
-	const gchar *raw_value; /* As it is in the message (unfolded and unparsed) */
+	const char *raw_value; /* As it is in the message (unfolded and unparsed) */
 	gsize raw_len;
-	guint order;
+	unsigned int order;
 	int flags; /* see enum rspamd_mime_header_flags */
 	/* These are zero terminated (historically) */
-	gchar *name; /* Also used for key */
-	gchar *value;
-	gchar *separator;
-	gchar *decoded;
+	char *name; /* Also used for key */
+	char *value;
+	char *separator;
+	char *decoded;
 	struct rspamd_mime_header *modified_chain; /* Headers modified during transform */
 	struct rspamd_mime_header *prev, *next;    /* Headers with the same name */
 	struct rspamd_mime_header *ord_next;       /* Overall order of headers, slist */
@@ -83,7 +83,7 @@ struct rspamd_mime_headers_table;
 void rspamd_mime_headers_process(struct rspamd_task *task,
 								 struct rspamd_mime_headers_table *target,
 								 struct rspamd_mime_header **order_ptr,
-								 const gchar *in, gsize len,
+								 const char *in, gsize len,
 								 gboolean check_newlines);
 
 /**
@@ -93,8 +93,8 @@ void rspamd_mime_headers_process(struct rspamd_task *task,
  * @param inlen
  * @return
  */
-gchar *rspamd_mime_header_decode(rspamd_mempool_t *pool, const gchar *in,
-								 gsize inlen, gboolean *invalid_utf);
+char *rspamd_mime_header_decode(rspamd_mempool_t *pool, const char *in,
+								gsize inlen, gboolean *invalid_utf);
 
 /**
  * Encode mime header if needed
@@ -102,14 +102,14 @@ gchar *rspamd_mime_header_decode(rspamd_mempool_t *pool, const gchar *in,
  * @param len
  * @return newly allocated encoded header
  */
-gchar *rspamd_mime_header_encode(const gchar *in, gsize len);
+char *rspamd_mime_header_encode(const char *in, gsize len);
 
 /**
  * Generate new unique message id
  * @param fqdn
  * @return
  */
-gchar *rspamd_mime_message_id_generate(const gchar *fqdn);
+char *rspamd_mime_message_id_generate(const char *fqdn);
 
 /**
  * Get an array of header's values with specified header's name using raw headers
@@ -119,7 +119,7 @@ gchar *rspamd_mime_message_id_generate(const gchar *fqdn);
  */
 struct rspamd_mime_header *
 rspamd_message_get_header_array(struct rspamd_task *task,
-								const gchar *field,
+								const char *field,
 								gboolean need_modified);
 
 /**
@@ -130,7 +130,7 @@ rspamd_message_get_header_array(struct rspamd_task *task,
  */
 struct rspamd_mime_header *
 rspamd_message_get_header_from_hash(struct rspamd_mime_headers_table *hdrs,
-									const gchar *field,
+									const char *field,
 									gboolean need_modified);
 
 /**
@@ -142,7 +142,7 @@ rspamd_message_get_header_from_hash(struct rspamd_mime_headers_table *hdrs,
  */
 void rspamd_message_set_modified_header(struct rspamd_task *task,
 										struct rspamd_mime_headers_table *hdrs,
-										const gchar *hdr_name,
+										const char *hdr_name,
 										const ucl_object_t *obj,
 										struct rspamd_mime_header **order_ptr);
 
@@ -167,7 +167,7 @@ struct rspamd_mime_headers_table *rspamd_message_headers_new(void);
  */
 gsize rspamd_mime_headers_count(struct rspamd_mime_headers_table *hdrs);
 
-typedef bool(rspamd_hdr_traverse_func_t)(const gchar *, const struct rspamd_mime_header *, void *);
+typedef bool(rspamd_hdr_traverse_func_t)(const char *, const struct rspamd_mime_header *, void *);
 /**
  * Traverse all headers in a table
  * @param func
@@ -183,7 +183,7 @@ bool rspamd_mime_headers_foreach(const struct rspamd_mime_headers_table *,
  * @param len length of the input
  * @return new length of the input
  */
-gsize rspamd_strip_smtp_comments_inplace(gchar *input, gsize len);
+gsize rspamd_strip_smtp_comments_inplace(char *input, gsize len);
 
 /**
  * Unfold header in place

@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -45,11 +45,11 @@
 INIT_LOG_MODULE(chartable)
 
 /* Initialization */
-gint chartable_module_init(struct rspamd_config *cfg, struct module_ctx **ctx);
+int chartable_module_init(struct rspamd_config *cfg, struct module_ctx **ctx);
 
-gint chartable_module_config(struct rspamd_config *cfg, bool validate);
+int chartable_module_config(struct rspamd_config *cfg, bool validate);
 
-gint chartable_module_reconfig(struct rspamd_config *cfg);
+int chartable_module_reconfig(struct rspamd_config *cfg);
 
 module_t chartable_module = {
 	"chartable",
@@ -58,15 +58,15 @@ module_t chartable_module = {
 	chartable_module_reconfig,
 	nullptr,
 	RSPAMD_MODULE_VER,
-	(guint) -1,
+	(unsigned int) -1,
 };
 
 struct chartable_ctx {
 	struct module_ctx ctx;
-	const gchar *symbol;
-	const gchar *url_symbol;
+	const char *symbol;
+	const char *url_symbol;
 	double threshold;
-	guint max_word_len;
+	unsigned int max_word_len;
 };
 
 static inline struct chartable_ctx *
@@ -84,7 +84,7 @@ static void chartable_url_symbol_callback(struct rspamd_task *task,
 										  struct rspamd_symcache_dynamic_item *item,
 										  void *unused);
 
-gint chartable_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
+int chartable_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 {
 	struct chartable_ctx *chartable_module_ctx;
 
@@ -98,10 +98,10 @@ gint chartable_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 }
 
 
-gint chartable_module_config(struct rspamd_config *cfg, bool _)
+int chartable_module_config(struct rspamd_config *cfg, bool _)
 {
 	const ucl_object_t *value;
-	gint res = TRUE;
+	int res = TRUE;
 	struct chartable_ctx *chartable_module_ctx = chartable_get_context(cfg);
 
 	if (!rspamd_config_is_module_enabled(cfg, "chartable")) {
@@ -160,7 +160,7 @@ gint chartable_module_config(struct rspamd_config *cfg, bool _)
 	return res;
 }
 
-gint chartable_module_reconfig(struct rspamd_config *cfg)
+int chartable_module_reconfig(struct rspamd_config *cfg)
 {
 	return chartable_module_config(cfg, false);
 }
@@ -1689,26 +1689,26 @@ static const auto latin_confusable = ankerl::unordered_dense::set<int>{
 };
 
 static gboolean
-rspamd_can_alias_latin(gint ch)
+rspamd_can_alias_latin(int ch)
 {
 	return latin_confusable.contains(ch);
 }
 
-static gdouble
+static double
 rspamd_chartable_process_word_utf(struct rspamd_task *task,
 								  rspamd_stat_token_t *w,
 								  gboolean is_url,
-								  guint *ncap,
+								  unsigned int *ncap,
 								  struct chartable_ctx *chartable_module_ctx,
 								  gboolean ignore_diacritics)
 {
 	const UChar32 *p, *end;
-	gdouble badness = 0.0;
+	double badness = 0.0;
 	UChar32 uc;
 	UBlockCode sc;
-	guint cat;
-	gint last_is_latin = -1;
-	guint same_script_count = 0, nsym = 0, nspecial = 0;
+	unsigned int cat;
+	int last_is_latin = -1;
+	unsigned int same_script_count = 0, nsym = 0, nspecial = 0;
 	enum {
 		start_process = 0,
 		got_alpha,
@@ -1725,7 +1725,7 @@ rspamd_chartable_process_word_utf(struct rspamd_task *task,
 	while (p < end) {
 		uc = *p++;
 
-		if (((gint32) uc) < 0) {
+		if (((int32_t) uc) < 0) {
 			break;
 		}
 
@@ -1773,7 +1773,7 @@ rspamd_chartable_process_word_utf(struct rspamd_task *task,
 					if (sc != UBLOCK_BASIC_LATIN && last_is_latin) {
 
 						if (rspamd_can_alias_latin(uc)) {
-							badness += 1.0 / (gdouble) same_script_count;
+							badness += 1.0 / (double) same_script_count;
 						}
 
 						last_is_latin = 0;
@@ -1834,25 +1834,25 @@ rspamd_chartable_process_word_utf(struct rspamd_task *task,
 	}
 
 	msg_debug_chartable("word %*s, badness: %.2f",
-						(gint) w->normalized.len, w->normalized.begin,
+						(int) w->normalized.len, w->normalized.begin,
 						badness);
 
 	return badness;
 }
 
-static gdouble
+static double
 rspamd_chartable_process_word_ascii(struct rspamd_task *task,
 									rspamd_stat_token_t *w,
 									gboolean is_url,
 									struct chartable_ctx *chartable_module_ctx)
 {
-	gdouble badness = 0.0;
+	double badness = 0.0;
 	enum {
 		ascii = 1,
 		non_ascii
 	} sc,
 		last_sc;
-	gint same_script_count = 0, seen_alpha = FALSE;
+	int same_script_count = 0, seen_alpha = FALSE;
 	enum {
 		start_process = 0,
 		got_alpha,
@@ -1884,7 +1884,7 @@ rspamd_chartable_process_word_ascii(struct rspamd_task *task,
 
 				if (same_script_count > 0) {
 					if (sc != last_sc) {
-						badness += 1.0 / (gdouble) same_script_count;
+						badness += 1.0 / (double) same_script_count;
 						last_sc = sc;
 						same_script_count = 1;
 					}
@@ -1919,7 +1919,7 @@ rspamd_chartable_process_word_ascii(struct rspamd_task *task,
 	}
 
 	msg_debug_chartable("word %*s, badness: %.2f",
-						(gint) w->normalized.len, w->normalized.begin,
+						(int) w->normalized.len, w->normalized.begin,
 						badness);
 
 	return badness;
@@ -1932,8 +1932,8 @@ rspamd_chartable_process_part(struct rspamd_task *task,
 							  gboolean ignore_diacritics)
 {
 	rspamd_stat_token_t *w;
-	guint i, ncap = 0;
-	gdouble cur_score = 0.0;
+	unsigned int i, ncap = 0;
+	double cur_score = 0.0;
 
 	if (part == nullptr || part->utf_words == nullptr ||
 		part->utf_words->len == 0 || part->nwords == 0) {
@@ -1963,7 +1963,7 @@ rspamd_chartable_process_part(struct rspamd_task *task,
 	 */
 	part->capital_letters += ncap;
 
-	cur_score /= (gdouble) part->nwords;
+	cur_score /= (double) part->nwords;
 
 	if (cur_score > 1.0) {
 		cur_score = 1.0;
@@ -1983,7 +1983,7 @@ chartable_symbol_callback(struct rspamd_task *task,
 						  struct rspamd_symcache_dynamic_item *item,
 						  void *_)
 {
-	guint i;
+	unsigned int i;
 	struct rspamd_mime_text_part *part;
 	struct chartable_ctx *chartable_module_ctx = chartable_get_context(task->cfg);
 	gboolean ignore_diacritics = TRUE, seen_violated_part = FALSE;
@@ -1993,7 +1993,7 @@ chartable_symbol_callback(struct rspamd_task *task,
 	{
 		if (part->languages && part->languages->len > 0) {
 			auto *lang = (struct rspamd_lang_detector_res *) g_ptr_array_index(part->languages, 0);
-			gint flags;
+			int flags;
 
 			flags = rspamd_language_detector_elt_flags(lang->elt);
 
@@ -2017,7 +2017,7 @@ chartable_symbol_callback(struct rspamd_task *task,
 
 	if (task->meta_words != nullptr && task->meta_words->len > 0) {
 		rspamd_stat_token_t *w;
-		gdouble cur_score = 0;
+		double cur_score = 0;
 		gsize arlen = task->meta_words->len;
 
 		for (i = 0; i < arlen; i++) {
@@ -2026,7 +2026,7 @@ chartable_symbol_callback(struct rspamd_task *task,
 														   nullptr, chartable_module_ctx, ignore_diacritics);
 		}
 
-		cur_score /= (gdouble) (arlen + 1);
+		cur_score /= (double) (arlen + 1);
 
 		if (cur_score > 1.0) {
 			cur_score = 1.0;
@@ -2059,7 +2059,7 @@ chartable_url_symbol_callback(struct rspamd_task *task,
 	GHashTableIter it;
 	gpointer k, v;
 	rspamd_stat_token_t w;
-	gdouble cur_score = 0.0;
+	double cur_score = 0.0;
 	struct chartable_ctx *chartable_module_ctx = chartable_get_context (task->cfg);
 
 	g_hash_table_iter_init (&it, task->urls);

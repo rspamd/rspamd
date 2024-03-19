@@ -26,10 +26,10 @@ extern "C" {
 #endif
 
 #ifndef HAVE_SA_SIGINFO
-typedef void (*rspamd_sig_handler_t)(gint);
+typedef void (*rspamd_sig_handler_t)(int);
 #else
 
-typedef void (*rspamd_sig_handler_t)(gint, siginfo_t *, void *);
+typedef void (*rspamd_sig_handler_t)(int, siginfo_t *, void *);
 
 #endif
 
@@ -65,7 +65,7 @@ rspamd_prepare_worker(struct rspamd_worker *worker, const char *name,
  * @param magic
  * @return
  */
-gboolean rspamd_worker_check_context(gpointer ctx, guint64 magic);
+gboolean rspamd_worker_check_context(gpointer ctx, uint64_t magic);
 
 /**
  * Set special signal handler for a worker
@@ -82,13 +82,13 @@ void rspamd_worker_set_signal_handler(int signo,
  */
 void rspamd_worker_stop_accept(struct rspamd_worker *worker);
 
-typedef gint (*rspamd_controller_func_t)(
+typedef int (*rspamd_controller_func_t)(
 	struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message *msg,
 	struct module_ctx *ctx);
 
 struct rspamd_custom_controller_command {
-	const gchar *command;
+	const char *command;
 	struct module_ctx *ctx;
 	gboolean privileged;
 	gboolean require_message;
@@ -103,7 +103,7 @@ struct rspamd_controller_session {
 	struct rspamd_worker *wrk;
 	rspamd_mempool_t *pool;
 	struct rspamd_task *task;
-	gchar *classifier;
+	char *classifier;
 	rspamd_inet_addr_t *from_addr;
 	struct rspamd_config *cfg;
 	struct rspamd_lang_detector *lang_det;
@@ -118,7 +118,7 @@ struct rspamd_controller_session {
  * @param error_msg error message
  */
 void rspamd_controller_send_error(struct rspamd_http_connection_entry *entry,
-								  gint code, const gchar *error_msg, ...);
+								  int code, const char *error_msg, ...);
 
 /**
  * Send openmetrics-formatted strings using HTTP
@@ -134,7 +134,7 @@ void rspamd_controller_send_openmetrics(struct rspamd_http_connection_entry *ent
  * @param str string to send
  */
 void rspamd_controller_send_string(struct rspamd_http_connection_entry *entry,
-								   const gchar *str);
+								   const char *str);
 
 /**
  * Send UCL using HTTP and JSON serialization
@@ -180,8 +180,8 @@ gboolean rspamd_worker_is_scanner(struct rspamd_worker *w);
  * @param timeout
  * @return
  */
-gdouble rspamd_worker_check_and_adjust_timeout(struct rspamd_config *cfg,
-											   gdouble timeout);
+double rspamd_worker_check_and_adjust_timeout(struct rspamd_config *cfg,
+											  double timeout);
 
 /**
  * Returns TRUE if a specific worker is a primary controller
@@ -210,8 +210,8 @@ void *rspamd_worker_session_cache_new(struct rspamd_worker *w,
  * @param pref
  * @param ptr
  */
-void rspamd_worker_session_cache_add(void *cache, const gchar *tag,
-									 guint *pref, void *ptr);
+void rspamd_worker_session_cache_add(void *cache, const char *tag,
+									 unsigned int *pref, void *ptr);
 
 /**
  * Removes session from cache
@@ -224,7 +224,7 @@ void rspamd_worker_session_cache_remove(void *cache, void *ptr);
  * Fork new worker with the specified configuration
  */
 struct rspamd_worker *rspamd_fork_worker(struct rspamd_main *,
-										 struct rspamd_worker_conf *, guint idx,
+										 struct rspamd_worker_conf *, unsigned int idx,
 										 struct ev_loop *ev_base,
 										 rspamd_worker_term_cb term_handler,
 										 GHashTable *listen_sockets);
@@ -254,7 +254,7 @@ void rspamd_worker_init_monitored(struct rspamd_worker *worker,
  * @param sock
  * @param data struct rspamd_worker_accept_event * list
  */
-void rspamd_worker_throttle_accept_events(gint sock, void *data);
+void rspamd_worker_throttle_accept_events(int sock, void *data);
 
 /**
  * Checks (and logs) the worker's termination status. Returns TRUE if a worker
@@ -303,8 +303,8 @@ void rspamd_controller_store_saved_stats(struct rspamd_main *rspamd_main,
 struct rspamd_control_command;
 
 gboolean rspamd_worker_hyperscan_ready(struct rspamd_main *rspamd_main,
-									   struct rspamd_worker *worker, gint fd,
-									   gint attached_fd,
+									   struct rspamd_worker *worker, int fd,
+									   int attached_fd,
 									   struct rspamd_control_command *cmd,
 									   gpointer ud);
 

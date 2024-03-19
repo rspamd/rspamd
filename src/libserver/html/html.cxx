@@ -43,7 +43,7 @@
 
 namespace rspamd::html {
 
-static const guint max_tags = 8192; /* Ignore tags if this maximum is reached */
+static const unsigned int max_tags = 8192; /* Ignore tags if this maximum is reached */
 
 static const html_tags_storage html_tags_defs;
 
@@ -658,7 +658,7 @@ html_process_url_tag(rspamd_mempool_t *pool,
 														  "%*s%s%*s",
 														  (int) hc->base_url->urllen, hc->base_url->string,
 														  need_slash ? "/" : "",
-														  (gint) orig_len, href_value.data());
+														  (int) orig_len, href_value.data());
 				href_value = {buf, nlen};
 			}
 			else if (href_value.size() > 2 && href_value[0] == '/' && href_value[1] != '/') {
@@ -670,7 +670,7 @@ html_process_url_tag(rspamd_mempool_t *pool,
 				auto nlen = (std::size_t) rspamd_snprintf(buf, len + 1, "%*s://%*s/%*s",
 														  (int) hc->base_url->protocollen, hc->base_url->string,
 														  (int) hc->base_url->hostlen, rspamd_url_host_unsafe(hc->base_url),
-														  (gint) orig_len, href_value.data());
+														  (int) orig_len, href_value.data());
 				href_value = {buf, nlen};
 			}
 		}
@@ -769,21 +769,21 @@ html_process_data_image(rspamd_mempool_t *pool,
 	 * We ignore content type so far
 	 */
 	struct rspamd_image *parsed_image;
-	const gchar *semicolon_pos = input.data(),
-				*end = input.data() + input.size();
+	const char *semicolon_pos = input.data(),
+			   *end = input.data() + input.size();
 
-	if ((semicolon_pos = (const gchar *) memchr(semicolon_pos, ';', end - semicolon_pos)) != NULL) {
+	if ((semicolon_pos = (const char *) memchr(semicolon_pos, ';', end - semicolon_pos)) != NULL) {
 		if (end - semicolon_pos > sizeof("base64,")) {
 			if (memcmp(semicolon_pos + 1, "base64,", sizeof("base64,") - 1) == 0) {
-				const gchar *data_pos = semicolon_pos + sizeof("base64,");
-				gchar *decoded;
+				const char *data_pos = semicolon_pos + sizeof("base64,");
+				char *decoded;
 				gsize encoded_len = end - data_pos, decoded_len;
 				rspamd_ftok_t inp;
 
 				decoded_len = (encoded_len / 4 * 3) + 12;
 				decoded = rspamd_mempool_alloc_buffer(pool, decoded_len);
 				rspamd_cryptobox_base64_decode(data_pos, encoded_len,
-											   reinterpret_cast<guchar *>(decoded), &decoded_len);
+											   reinterpret_cast<unsigned char *>(decoded), &decoded_len);
 				inp.begin = decoded;
 				inp.len = decoded_len;
 
@@ -1108,7 +1108,7 @@ html_process_displayed_href_tag(rspamd_mempool_t *pool,
 
 static auto
 html_append_tag_content(rspamd_mempool_t *pool,
-						const gchar *start, gsize len,
+						const char *start, gsize len,
 						struct html_content *hc,
 						html_tag *tag,
 						GList **exceptions,
@@ -1329,12 +1329,12 @@ auto html_process_input(struct rspamd_task *task,
 						bool allow_css,
 						std::uint16_t *cur_url_order) -> html_content *
 {
-	const gchar *p, *c, *end, *start;
-	guchar t;
+	const char *p, *c, *end, *start;
+	unsigned char t;
 	auto closing = false;
-	guint obrace = 0, ebrace = 0;
+	unsigned int obrace = 0, ebrace = 0;
 	struct rspamd_url *url = nullptr;
-	gint href_offset = -1;
+	int href_offset = -1;
 	auto overflow_input = false;
 	struct html_tag *cur_tag = nullptr, *parent_tag = nullptr, cur_closing_tag;
 	struct tag_content_parser_state content_parser_env;
@@ -1819,8 +1819,8 @@ auto html_process_input(struct rspamd_task *task,
 				 * Since closing tags must not have attributes, these assumptions
 				 * seems to be reasonable enough for our toy parser.
 				 */
-				gint cur_lookahead = 1;
-				gint max_lookahead = MIN(end - p, 30);
+				int cur_lookahead = 1;
+				int max_lookahead = MIN(end - p, 30);
 				bool valid_closing_tag = true;
 
 				if (p + 1 < end && !g_ascii_isalpha(p[1])) {
@@ -1828,7 +1828,7 @@ auto html_process_input(struct rspamd_task *task,
 				}
 				else {
 					while (cur_lookahead < max_lookahead) {
-						gchar tt = p[cur_lookahead];
+						char tt = p[cur_lookahead];
 						if (tt == '>') {
 							break;
 						}
@@ -2296,12 +2296,12 @@ rspamd_html_process_part(rspamd_mempool_t *pool,
 										 NULL, NULL, FALSE, &order);
 }
 
-guint rspamd_html_decode_entitles_inplace(gchar *s, gsize len)
+unsigned int rspamd_html_decode_entitles_inplace(char *s, gsize len)
 {
 	return rspamd::html::decode_html_entitles_inplace(s, len);
 }
 
-gint rspamd_html_tag_by_name(const gchar *name)
+int rspamd_html_tag_by_name(const char *name)
 {
 	const auto *td = rspamd::html::html_tags_defs.by_name(name);
 
@@ -2313,9 +2313,9 @@ gint rspamd_html_tag_by_name(const gchar *name)
 }
 
 gboolean
-rspamd_html_tag_seen(void *ptr, const gchar *tagname)
+rspamd_html_tag_seen(void *ptr, const char *tagname)
 {
-	gint id;
+	int id;
 	auto *hc = rspamd::html::html_content::from_ptr(ptr);
 
 	g_assert(hc != NULL);
@@ -2329,8 +2329,8 @@ rspamd_html_tag_seen(void *ptr, const gchar *tagname)
 	return FALSE;
 }
 
-const gchar *
-rspamd_html_tag_by_id(gint id)
+const char *
+rspamd_html_tag_by_id(int id)
 {
 	if (id > Tag_UNKNOWN && id < Tag_MAX) {
 		const auto *td = rspamd::html::html_tags_defs.by_id(id);
@@ -2343,7 +2343,7 @@ rspamd_html_tag_by_id(gint id)
 	return nullptr;
 }
 
-const gchar *
+const char *
 rspamd_html_tag_name(void *p, gsize *len)
 {
 	auto *tag = reinterpret_cast<rspamd::html::html_tag *>(p);

@@ -74,7 +74,7 @@ struct rspamd_rcl_struct_parser {
  */
 typedef gboolean (*rspamd_rcl_handler_t)(rspamd_mempool_t *pool,
 										 const ucl_object_t *obj,
-										 const gchar *key,
+										 const char *key,
 										 gpointer ud,
 										 struct rspamd_rcl_section *section,
 										 GError **err);
@@ -103,11 +103,11 @@ typedef void (*rspamd_rcl_section_fin_t)(rspamd_mempool_t *pool, gpointer ud);
  */
 struct rspamd_rcl_default_handler_data *rspamd_rcl_add_default_handler(
 	struct rspamd_rcl_section *section,
-	const gchar *name,
+	const char *name,
 	rspamd_rcl_default_handler_t handler,
 	goffset offset,
-	gint flags,
-	const gchar *doc_string);
+	int flags,
+	const char *doc_string);
 
 /**
  * Add new section to the configuration
@@ -123,8 +123,8 @@ struct rspamd_rcl_default_handler_data *rspamd_rcl_add_default_handler(
 struct rspamd_rcl_section *rspamd_rcl_add_section(
 	struct rspamd_rcl_sections_map **top,
 	struct rspamd_rcl_section *parent_section,
-	const gchar *name,
-	const gchar *key_attr,
+	const char *name,
+	const char *key_attr,
 	rspamd_rcl_handler_t handler,
 	enum ucl_type type,
 	gboolean required,
@@ -133,12 +133,12 @@ struct rspamd_rcl_section *rspamd_rcl_add_section(
 struct rspamd_rcl_section *rspamd_rcl_add_section_doc(
 	struct rspamd_rcl_sections_map **top,
 	struct rspamd_rcl_section *parent_section,
-	const gchar *name, const gchar *key_attr,
+	const char *name, const char *key_attr,
 	rspamd_rcl_handler_t handler,
 	enum ucl_type type, gboolean required,
 	gboolean strict_type,
 	ucl_object_t *doc_target,
-	const gchar *doc_string);
+	const char *doc_string);
 
 /**
  * Init common sections known to rspamd
@@ -350,12 +350,12 @@ gboolean rspamd_rcl_parse_struct_ucl(rspamd_mempool_t *pool,
  */
 void rspamd_rcl_register_worker_option(struct rspamd_config *cfg,
 									   GQuark type,
-									   const gchar *name,
+									   const char *name,
 									   rspamd_rcl_default_handler_t handler,
 									   gpointer target,
 									   glong offset,
-									   gint flags,
-									   const gchar *doc_string);
+									   int flags,
+									   const char *doc_string);
 
 /**
  * Adds new documentation object to the configuration
@@ -367,7 +367,7 @@ ucl_object_t *rspamd_rcl_add_doc_obj(ucl_object_t *doc_target,
 									 const char *doc_name,
 									 ucl_type_t type,
 									 rspamd_rcl_default_handler_t handler,
-									 gint flags,
+									 int flags,
 									 const char *default_value,
 									 gboolean required);
 
@@ -376,12 +376,12 @@ ucl_object_t *rspamd_rcl_add_doc_obj(ucl_object_t *doc_target,
  * split by dots
  */
 ucl_object_t *rspamd_rcl_add_doc_by_path(struct rspamd_config *cfg,
-										 const gchar *doc_path,
+										 const char *doc_path,
 										 const char *doc_string,
 										 const char *doc_name,
 										 ucl_type_t type,
 										 rspamd_rcl_default_handler_t handler,
-										 gint flags,
+										 int flags,
 										 const char *default_value,
 										 gboolean required);
 
@@ -408,10 +408,10 @@ ucl_object_t *rspamd_rcl_add_doc_by_path(struct rspamd_config *cfg,
  * @return
  */
 ucl_object_t *rspamd_rcl_add_doc_by_example(struct rspamd_config *cfg,
-											const gchar *root_path,
-											const gchar *doc_string,
-											const gchar *doc_name,
-											const gchar *example_data, gsize example_len);
+											const char *root_path,
+											const char *doc_string,
+											const char *doc_name,
+											const char *example_data, gsize example_len);
 
 /**
  * Add lua modules path
@@ -422,7 +422,7 @@ ucl_object_t *rspamd_rcl_add_doc_by_example(struct rspamd_config *cfg,
  */
 gboolean rspamd_rcl_add_lua_plugins_path(struct rspamd_rcl_sections_map *sections,
 										 struct rspamd_config *cfg,
-										 const gchar *path,
+										 const char *path,
 										 gboolean main_path,
 										 GError **err);
 
@@ -455,19 +455,19 @@ void rspamd_config_calculate_cksum(struct rspamd_config *cfg);
  * Read configuration file
  */
 gboolean rspamd_config_parse_ucl(struct rspamd_config *cfg,
-								 const gchar *filename,
+								 const char *filename,
 								 GHashTable *vars,
 								 ucl_include_trace_func_t inc_trace,
 								 void *trace_data,
 								 gboolean skip_jinja,
 								 GError **err);
 gboolean rspamd_config_read(struct rspamd_config *cfg,
-							const gchar *filename,
+							const char *filename,
 							rspamd_rcl_section_fin_t logger_fin,
 							gpointer logger_ud,
 							GHashTable *vars,
 							gboolean skip_jinja,
-							gchar **lua_env);
+							char **lua_env);
 
 #ifdef __cplusplus
 }

@@ -29,7 +29,7 @@ extern "C" {
  * @param len length of header
  * @return time_t or (time_t)-1 in case of error
  */
-time_t rspamd_http_parse_date(const gchar *header, gsize len);
+time_t rspamd_http_parse_date(const char *header, gsize len);
 
 /**
  * Prints HTTP date from `time` to `buf` using standard HTTP date format
@@ -38,7 +38,7 @@ time_t rspamd_http_parse_date(const gchar *header, gsize len);
  * @param time time in unix seconds
  * @return number of bytes written
  */
-glong rspamd_http_date_format(gchar *buf, gsize len, time_t time);
+glong rspamd_http_date_format(char *buf, gsize len, time_t time);
 
 #ifdef __cplusplus
 }

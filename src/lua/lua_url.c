@@ -117,7 +117,7 @@ static const struct luaL_reg urllib_f[] = {
 	{NULL, NULL}};
 
 struct rspamd_lua_url *
-lua_check_url(lua_State *L, gint pos)
+lua_check_url(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_url_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'url' expected");
@@ -143,7 +143,7 @@ lua_url_single_inserter(struct rspamd_url *url, gsize start_offset,
  * Get length of the url
  * @return {number} length of url in bytes
  */
-static gint
+static int
 lua_url_get_length(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -163,7 +163,7 @@ lua_url_get_length(lua_State *L)
  * Get domain part of the url
  * @return {string} domain part of URL
  */
-static gint
+static int
 lua_url_get_host(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -183,7 +183,7 @@ lua_url_get_host(lua_State *L)
  * Get port of the url
  * @return {number} url port
  */
-static gint
+static int
 lua_url_get_port(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -208,7 +208,7 @@ lua_url_get_port(lua_State *L)
  * Get user part of the url (e.g. username in email)
  * @return {string} user part of URL
  */
-static gint
+static int
 lua_url_get_user(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -229,7 +229,7 @@ lua_url_get_user(lua_State *L)
  * Get path of the url
  * @return {string} path part of URL
  */
-static gint
+static int
 lua_url_get_path(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -250,7 +250,7 @@ lua_url_get_path(lua_State *L)
  * Get query of the url
  * @return {string} query part of URL
  */
-static gint
+static int
 lua_url_get_query(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -271,7 +271,7 @@ lua_url_get_query(lua_State *L)
  * Get fragment of the url
  * @return {string} fragment part of URL
  */
-static gint
+static int
 lua_url_get_fragment(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -292,7 +292,7 @@ lua_url_get_fragment(lua_State *L)
  * Get full content of the url
  * @return {string} url string
  */
-static gint
+static int
 lua_url_get_text(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -313,7 +313,7 @@ lua_url_get_text(lua_State *L)
  * Get full content of the url or user@domain in case of email
  * @return {string} url as a string
  */
-static gint
+static int
 lua_url_tostring(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -321,8 +321,8 @@ lua_url_tostring(lua_State *L)
 
 	if (url != NULL && url->url != NULL) {
 		if (url->url->protocol == PROTOCOL_MAILTO) {
-			gchar *tmp = g_malloc(url->url->userlen + 1 +
-								  url->url->hostlen);
+			char *tmp = g_malloc(url->url->userlen + 1 +
+								 url->url->hostlen);
 			if (url->url->userlen) {
 				memcpy(tmp, url->url->string + url->url->usershift, url->url->userlen);
 			}
@@ -350,7 +350,7 @@ lua_url_tostring(lua_State *L)
  * Get URL suitable for HTTP request (e.g. by trimming fragment and user parts)
  * @return {string} url as a string
  */
-static gint
+static int
 lua_url_to_http(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -373,8 +373,8 @@ lua_url_to_http(lua_State *L)
 						len--;
 					}
 				}
-				gchar *nstr = g_malloc(len);
-				gchar *d = nstr, *end = nstr + len;
+				char *nstr = g_malloc(len);
+				char *d = nstr, *end = nstr + len;
 				memcpy(nstr, url->url->string, url->url->protocollen);
 				d += url->url->protocollen;
 				*d++ = ':';
@@ -433,7 +433,7 @@ lua_url_to_http(lua_State *L)
  * Get full content of the url as it was parsed (e.g. with urldecode)
  * @return {string} url string
  */
-static gint
+static int
 lua_url_get_raw(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -454,7 +454,7 @@ lua_url_get_raw(lua_State *L)
  * Check whether URL is treated as phished
  * @return {boolean} `true` if URL is phished
  */
-static gint
+static int
 lua_url_is_phished(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -475,7 +475,7 @@ lua_url_is_phished(lua_State *L)
  * Check whether URL was redirected
  * @return {boolean} `true` if URL is redirected
  */
-static gint
+static int
 lua_url_is_redirected(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -496,7 +496,7 @@ lua_url_is_redirected(lua_State *L)
  * Check whether URL is treated as obscured or obfuscated (e.g. numbers in IP address or other hacks)
  * @return {boolean} `true` if URL is obscured
  */
-static gint
+static int
 lua_url_is_obscured(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -518,7 +518,7 @@ lua_url_is_obscured(lua_State *L)
  * Check whether URL is just displayed in HTML (e.g. NOT a real href)
  * @return {boolean} `true` if URL is displayed only
  */
-static gint
+static int
 lua_url_is_html_displayed(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -539,7 +539,7 @@ lua_url_is_html_displayed(lua_State *L)
  * Check whether URL is found in subject
  * @return {boolean} `true` if URL is found in subject
  */
-static gint
+static int
 lua_url_is_subject(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -560,7 +560,7 @@ lua_url_is_subject(lua_State *L)
  * Get another URL that pretends to be this URL (e.g. used in phishing)
  * @return {url} phished URL
  */
-static gint
+static int
 lua_url_get_phished(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -591,7 +591,7 @@ lua_url_get_phished(lua_State *L)
  * @param {pool} pool memory pool to allocate memory if needed
  * @return {url} parsed redirected url (if needed)
  */
-static gint
+static int
 lua_url_set_redirected(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -615,7 +615,7 @@ lua_url_set_redirected(lua_State *L)
 		}
 
 		gsize len;
-		const gchar *urlstr = lua_tolstring(L, 2, &len);
+		const char *urlstr = lua_tolstring(L, 2, &len);
 
 		rspamd_url_find_single(pool, urlstr, len, RSPAMD_URL_FIND_ALL,
 							   lua_url_single_inserter, L);
@@ -666,7 +666,7 @@ lua_url_set_redirected(lua_State *L)
  * Get effective second level domain part (eSLD) of the url host
  * @return {string} effective second level domain part (eSLD) of the url host
  */
-static gint
+static int
 lua_url_get_tld(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -687,7 +687,7 @@ lua_url_get_tld(lua_State *L)
  * Get protocol name
  * @return {string} protocol as a string
  */
-static gint
+static int
 lua_url_get_protocol(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -708,7 +708,7 @@ lua_url_get_protocol(lua_State *L)
  * Return number of occurrences for this particular URL
  * @return {number} number of occurrences
  */
-static gint
+static int
 lua_url_get_count(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -729,7 +729,7 @@ lua_url_get_count(lua_State *L)
 * Get visible part of the url with html tags stripped
 * @return {string} url string
 */
-static gint
+static int
 lua_url_get_visible(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -757,7 +757,7 @@ lua_url_get_visible(lua_State *L)
  * - `protocol`: url protocol
  * @return {table} URL as a table
  */
-static gint
+static int
 lua_url_to_table(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -844,7 +844,7 @@ RSPAMD_DESTRUCTOR(rspamd_urls_static_pool_dtor)
  * @param {string} text that contains URL (can also contain other stuff)
  * @return {url} new url object that exists as long as the corresponding mempool exists
  */
-static gint
+static int
 lua_url_create(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -885,7 +885,7 @@ lua_url_create(lua_State *L)
 		/* Add flags */
 		for (lua_pushnil(L); lua_next(L, 3); lua_pop(L, 1)) {
 			int nmask = 0;
-			const gchar *fname = lua_tostring(L, -1);
+			const char *fname = lua_tostring(L, -1);
 
 			if (rspamd_url_flag_from_string(fname, &nmask)) {
 				u->url->flags |= nmask;
@@ -906,10 +906,10 @@ lua_url_create(lua_State *L)
  * @param {string} tld_file path to effective_tld_names.dat file (public suffix list)
  * @return nothing
  */
-static gint
+static int
 lua_url_init(lua_State *L)
 {
-	const gchar *tld_path;
+	const char *tld_path;
 
 	tld_path = luaL_checkstring(L, 1);
 
@@ -924,7 +924,7 @@ lua_url_table_inserter(struct rspamd_url *url, gsize start_offset,
 {
 	lua_State *L = ud;
 	struct rspamd_lua_url *lua_url;
-	gint n;
+	int n;
 
 	n = rspamd_lua_table_size(L, -1);
 	lua_url = lua_newuserdata(L, sizeof(struct rspamd_lua_url));
@@ -936,12 +936,12 @@ lua_url_table_inserter(struct rspamd_url *url, gsize start_offset,
 }
 
 
-static gint
+static int
 lua_url_all(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	rspamd_mempool_t *pool = rspamd_lua_check_mempool(L, 1);
-	const gchar *text;
+	const char *text;
 	size_t length;
 
 	if (pool == NULL) {
@@ -999,7 +999,7 @@ lua_url_all(lua_State *L)
 		}                                                     \
 	} while (0)
 
-static gint
+static int
 lua_url_get_flags(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1011,7 +1011,7 @@ lua_url_get_flags(lua_State *L)
 
 		lua_createtable(L, 0, 4);
 
-		for (gint i = 0; i < RSPAMD_URL_MAX_FLAG_SHIFT; i++) {
+		for (int i = 0; i < RSPAMD_URL_MAX_FLAG_SHIFT; i++) {
 			PUSH_FLAG(1u << i);
 		}
 	}
@@ -1024,7 +1024,7 @@ lua_url_get_flags(lua_State *L)
 
 #undef PUSH_FLAG
 
-static gint
+static int
 lua_url_get_flags_num(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1040,7 +1040,7 @@ lua_url_get_flags_num(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_url_get_order(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1061,7 +1061,7 @@ lua_url_get_order(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_url_get_part_order(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1113,7 +1113,7 @@ void lua_tree_url_callback(gpointer key, gpointer value, gpointer ud)
 		}
 
 		if (cb->skip_prob > 0) {
-			gdouble coin = rspamd_random_double_fast_seed(&cb->random_seed);
+			double coin = rspamd_random_double_fast_seed(&cb->random_seed);
 
 			if (coin < cb->skip_prob) {
 				return;
@@ -1130,16 +1130,16 @@ void lua_tree_url_callback(gpointer key, gpointer value, gpointer ud)
 
 gboolean
 lua_url_cbdata_fill(lua_State *L,
-					gint pos,
+					int pos,
 					struct lua_tree_cb_data *cbd,
-					guint default_protocols,
-					guint default_flags,
+					unsigned int default_protocols,
+					unsigned int default_flags,
 					gsize max_urls)
 {
-	gint protocols_mask = 0;
+	int protocols_mask = 0;
 
-	gint pos_arg_type = lua_type(L, pos);
-	guint flags_mask = default_flags;
+	int pos_arg_type = lua_type(L, pos);
+	unsigned int flags_mask = default_flags;
 	gboolean seen_flags = FALSE, seen_protocols = FALSE;
 
 	memset(cbd, 0, sizeof(*cbd));
@@ -1157,11 +1157,11 @@ lua_url_cbdata_fill(lua_State *L,
 
 			lua_getfield(L, pos, "flags");
 			if (lua_istable(L, -1)) {
-				gint top = lua_gettop(L);
+				int top = lua_gettop(L);
 
 				lua_getfield(L, pos, "flags_mode");
 				if (lua_isstring(L, -1)) {
-					const gchar *mode_str = lua_tostring(L, -1);
+					const char *mode_str = lua_tostring(L, -1);
 
 					if (strcmp(mode_str, "explicit") == 0) {
 						cbd->flags_mode = url_flags_mode_include_explicit;
@@ -1179,7 +1179,7 @@ lua_url_cbdata_fill(lua_State *L,
 
 
 					if (lua_type(L, -1) == LUA_TSTRING) {
-						const gchar *fname = lua_tostring(L, -1);
+						const char *fname = lua_tostring(L, -1);
 
 
 						if (rspamd_url_flag_from_string(fname, &nmask)) {
@@ -1204,11 +1204,11 @@ lua_url_cbdata_fill(lua_State *L,
 
 			lua_getfield(L, pos, "protocols");
 			if (lua_istable(L, -1)) {
-				gint top = lua_gettop(L);
+				int top = lua_gettop(L);
 
 				for (lua_pushnil(L); lua_next(L, top); lua_pop(L, 1)) {
 					int nmask;
-					const gchar *pname = lua_tostring(L, -1);
+					const char *pname = lua_tostring(L, -1);
 
 					nmask = rspamd_url_protocol_from_string(pname);
 
@@ -1285,7 +1285,7 @@ lua_url_cbdata_fill(lua_State *L,
 			/* Plain table of the protocols */
 			for (lua_pushnil(L); lua_next(L, pos); lua_pop(L, 1)) {
 				int nmask;
-				const gchar *pname = lua_tostring(L, -1);
+				const char *pname = lua_tostring(L, -1);
 
 				nmask = rspamd_url_protocol_from_string(pname);
 
@@ -1302,9 +1302,9 @@ lua_url_cbdata_fill(lua_State *L,
 		lua_pop(L, 1); /* After rspamd_lua_geti */
 	}
 	else if (pos_arg_type == LUA_TSTRING) {
-		const gchar *plist = lua_tostring(L, pos);
-		gchar **strvec;
-		gchar *const *cvec;
+		const char *plist = lua_tostring(L, pos);
+		char **strvec;
+		char *const *cvec;
 
 		strvec = g_strsplit_set(plist, ",;", -1);
 		cvec = strvec;
@@ -1362,15 +1362,15 @@ lua_url_cbdata_fill(lua_State *L,
 
 gboolean
 lua_url_cbdata_fill_exclude_include(lua_State *L,
-									gint pos,
+									int pos,
 									struct lua_tree_cb_data *cbd,
-									guint default_protocols,
+									unsigned int default_protocols,
 									gsize max_urls)
 {
-	guint protocols_mask = default_protocols;
-	guint include_flags_mask, exclude_flags_mask;
+	unsigned int protocols_mask = default_protocols;
+	unsigned int include_flags_mask, exclude_flags_mask;
 
-	gint pos_arg_type = lua_type(L, pos);
+	int pos_arg_type = lua_type(L, pos);
 
 	memset(cbd, 0, sizeof(*cbd));
 	cbd->flags_mode = url_flags_mode_exclude_include;
@@ -1383,7 +1383,7 @@ lua_url_cbdata_fill_exclude_include(lua_State *L,
 			int nmask = 0;
 
 			if (lua_type(L, -1) == LUA_TSTRING) {
-				const gchar *fname = lua_tostring(L, -1);
+				const char *fname = lua_tostring(L, -1);
 
 				if (rspamd_url_flag_from_string(fname, &nmask)) {
 					include_flags_mask |= nmask;
@@ -1416,7 +1416,7 @@ lua_url_cbdata_fill_exclude_include(lua_State *L,
 			int nmask = 0;
 
 			if (lua_type(L, -1) == LUA_TSTRING) {
-				const gchar *fname = lua_tostring(L, -1);
+				const char *fname = lua_tostring(L, -1);
 
 				if (rspamd_url_flag_from_string(fname, &nmask)) {
 					exclude_flags_mask |= nmask;
@@ -1445,7 +1445,7 @@ lua_url_cbdata_fill_exclude_include(lua_State *L,
 
 		for (lua_pushnil(L); lua_next(L, pos + 2); lua_pop(L, 1)) {
 			int nmask;
-			const gchar *pname = lua_tostring(L, -1);
+			const char *pname = lua_tostring(L, -1);
 
 			nmask = rspamd_url_protocol_from_string(pname);
 
@@ -1486,12 +1486,12 @@ void lua_url_cbdata_dtor(struct lua_tree_cb_data *cbd)
 }
 
 gsize lua_url_adjust_skip_prob(float timestamp,
-							   guchar digest[16],
+							   unsigned char digest[16],
 							   struct lua_tree_cb_data *cb,
 							   gsize sz)
 {
 	if (cb->max_urls > 0 && sz > cb->max_urls) {
-		cb->skip_prob = 1.0 - ((gdouble) cb->max_urls) / (gdouble) sz;
+		cb->skip_prob = 1.0 - ((double) cb->max_urls) / (double) sz;
 		/*
 		 * Use task dependent probabilistic seed to ensure that
 		 * consequent task:get_urls return the same list of urls
@@ -1506,7 +1506,7 @@ gsize lua_url_adjust_skip_prob(float timestamp,
 	return sz;
 }
 
-static gint
+static int
 lua_url_eq(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1523,7 +1523,7 @@ lua_url_eq(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_url_lt(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1540,7 +1540,7 @@ lua_url_lt(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_load_url(lua_State *L)
 {
 	lua_newtable(L);
@@ -1549,7 +1549,7 @@ lua_load_url(lua_State *L)
 	/* Push flags */
 	lua_createtable(L, 0, RSPAMD_URL_MAX_FLAG_SHIFT);
 	for (int i = 0; i < RSPAMD_URL_MAX_FLAG_SHIFT; i++) {
-		guint flag = 1u << i;
+		unsigned int flag = 1u << i;
 
 		lua_pushinteger(L, flag);
 		lua_setfield(L, -2, rspamd_url_flag_to_string(flag));

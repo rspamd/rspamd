@@ -187,7 +187,7 @@ rspamd_fasttext_predict_result_t rspamd_lang_detection_fasttext_detect(void *ud,
 	return nullptr;
 #else
 	/* Avoid too long inputs */
-	static const guint max_fasttext_input_len = 1024 * 1024;
+	static const unsigned int max_fasttext_input_len = 1024 * 1024;
 	auto *real_model = FASTTEXT_MODEL_TO_C_API(ud);
 	std::vector<std::int32_t> words_vec;
 	words_vec.reserve(utf_words->len);
@@ -215,7 +215,7 @@ void rspamd_lang_detection_fasttext_destroy(void *ud)
 }
 
 
-guint rspamd_lang_detection_fasttext_get_nlangs(rspamd_fasttext_predict_result_t res)
+unsigned int rspamd_lang_detection_fasttext_get_nlangs(rspamd_fasttext_predict_result_t res)
 {
 #ifdef WITH_FASTTEXT
 	auto *real_res = FASTTEXT_RESULT_TO_C_API(res);

@@ -21,7 +21,7 @@
 
 struct rspamd_keypair_elt {
 	struct rspamd_cryptobox_nm *nm;
-	guchar pair[rspamd_cryptobox_HASHBYTES * 2];
+	unsigned char pair[rspamd_cryptobox_HASHBYTES * 2];
 };
 
 struct rspamd_keypair_cache {
@@ -37,7 +37,7 @@ rspamd_keypair_destroy(gpointer ptr)
 	g_free(elt);
 }
 
-static guint
+static unsigned int
 rspamd_keypair_hash(gconstpointer ptr)
 {
 	struct rspamd_keypair_elt *elt = (struct rspamd_keypair_elt *) ptr;
@@ -56,7 +56,7 @@ rspamd_keypair_equal(gconstpointer p1, gconstpointer p2)
 }
 
 struct rspamd_keypair_cache *
-rspamd_keypair_cache_new(guint max_items)
+rspamd_keypair_cache_new(unsigned int max_items)
 {
 	struct rspamd_keypair_cache *c;
 
@@ -104,7 +104,7 @@ void rspamd_keypair_cache_process(struct rspamd_keypair_cache *c,
 		memcpy(new->pair, rk->id, rspamd_cryptobox_HASHBYTES);
 		memcpy(&new->pair[rspamd_cryptobox_HASHBYTES], lk->id,
 			   rspamd_cryptobox_HASHBYTES);
-		memcpy(&new->nm->sk_id, lk->id, sizeof(guint64));
+		memcpy(&new->nm->sk_id, lk->id, sizeof(uint64_t));
 
 		if (rk->alg == RSPAMD_CRYPTOBOX_MODE_25519) {
 			struct rspamd_cryptobox_pubkey_25519 *rk_25519 =

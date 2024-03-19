@@ -77,6 +77,6 @@ extern const char *rspamd_zstd_decompress_classname;
 /*
  * Return a static class name for a given name (only for known classes) or NULL
  */
-const char *rspamd_lua_static_classname(const char *name, guint len);
+const char *rspamd_lua_static_classname(const char *name, unsigned int len);
 
 #endif//RSPAMD_LUA_CLASSNAMES_H

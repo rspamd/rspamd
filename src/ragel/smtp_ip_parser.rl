@@ -42,7 +42,7 @@ rspamd_parse_smtp_ip (const char *data, size_t len, rspamd_mempool_t *pool)
   const char *p = data, *pe = data + len, *eof = data + len;
   const char *ip_start = NULL, *ip_end = NULL;
   gboolean in_v6 = FALSE;
-  gint cs = 0;
+  int cs = 0;
 
   %% write init;
   %% write exec;

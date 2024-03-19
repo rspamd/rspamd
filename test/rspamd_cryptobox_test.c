@@ -27,7 +27,7 @@ static const int random_fuzz_cnt = 10000;
 enum rspamd_cryptobox_mode mode = RSPAMD_CRYPTOBOX_MODE_25519;
 
 static void *
-create_mapping(int mapping_len, guchar **beg, guchar **end)
+create_mapping(int mapping_len, unsigned char **beg, unsigned char **end)
 {
 	void *map;
 	int psize = getpagesize();
@@ -38,7 +38,7 @@ create_mapping(int mapping_len, guchar **beg, guchar **end)
 	memset(map, 0, mapping_len + psize * 3);
 	mprotect(map, psize, PROT_NONE);
 	/* Misalign pointer */
-	*beg = ((guchar *) map) + psize + 1;
+	*beg = ((unsigned char *) map) + psize + 1;
 	*end = *beg + mapping_len;
 	mprotect(*beg + mapping_len - 1 + psize, psize, PROT_NONE);
 
@@ -47,14 +47,14 @@ create_mapping(int mapping_len, guchar **beg, guchar **end)
 
 static void
 check_result(const rspamd_nm_t key, const rspamd_nonce_t nonce,
-			 const rspamd_mac_t mac, guchar *begin, guchar *end)
+			 const rspamd_mac_t mac, unsigned char *begin, unsigned char *end)
 {
-	guint64 *t = (guint64 *) begin;
+	uint64_t *t = (uint64_t *) begin;
 
 	g_assert(rspamd_cryptobox_decrypt_nm_inplace(begin, end - begin, nonce, key,
 												 mac, mode));
 
-	while (t < (guint64 *) end) {
+	while (t < (uint64_t *) end) {
 		g_assert(*t == 0);
 		t++;
 	}
@@ -62,10 +62,10 @@ check_result(const rspamd_nm_t key, const rspamd_nonce_t nonce,
 
 static int
 create_random_split(struct rspamd_cryptobox_segment *seg, int mseg,
-					guchar *begin, guchar *end)
+					unsigned char *begin, unsigned char *end)
 {
 	gsize remain = end - begin;
-	gint used = 0;
+	int used = 0;
 
 	while (remain > 0 && used < mseg - 1) {
 		seg->data = begin;
@@ -88,10 +88,10 @@ create_random_split(struct rspamd_cryptobox_segment *seg, int mseg,
 
 static int
 create_realistic_split(struct rspamd_cryptobox_segment *seg, int mseg,
-					   guchar *begin, guchar *end)
+					   unsigned char *begin, unsigned char *end)
 {
 	gsize remain = end - begin;
-	gint used = 0;
+	int used = 0;
 	static const int small_seg = 512, medium_seg = 2048;
 
 	while (remain > 0 && used < mseg - 1) {
@@ -126,10 +126,10 @@ create_realistic_split(struct rspamd_cryptobox_segment *seg, int mseg,
 static int
 create_constrained_split(struct rspamd_cryptobox_segment *seg, int mseg,
 						 int constraint,
-						 guchar *begin, guchar *end)
+						 unsigned char *begin, unsigned char *end)
 {
 	gsize remain = end - begin;
-	gint used = 0;
+	int used = 0;
 
 	while (remain > 0 && used < mseg - 1) {
 		seg->data = begin;
@@ -155,13 +155,13 @@ create_constrained_split(struct rspamd_cryptobox_segment *seg, int mseg,
 void rspamd_cryptobox_test_func(void)
 {
 	void *map;
-	guchar *begin, *end;
+	unsigned char *begin, *end;
 	rspamd_nm_t key;
 	rspamd_nonce_t nonce;
 	rspamd_mac_t mac;
 	struct rspamd_cryptobox_segment *seg;
 	double t1, t2;
-	gint i, cnt, ms;
+	int i, cnt, ms;
 	gboolean checked_openssl = FALSE;
 
 	map = create_mapping(mapping_size, &begin, &end);

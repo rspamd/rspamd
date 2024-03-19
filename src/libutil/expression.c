@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -47,8 +47,8 @@ enum rspamd_expression_op_flag {
 
 struct rspamd_expression_operation {
 	enum rspamd_expression_op op;
-	guint logical_priority;
-	guint op_flags;
+	unsigned int logical_priority;
+	unsigned int op_flags;
 };
 
 struct rspamd_expression_elt {
@@ -56,12 +56,12 @@ struct rspamd_expression_elt {
 	union {
 		rspamd_expression_atom_t *atom;
 		struct rspamd_expression_operation op;
-		gdouble lim;
+		double lim;
 	} p;
 
-	gint flags;
-	gint priority;
-	gdouble value;
+	int flags;
+	int priority;
+	double value;
 };
 
 struct rspamd_expression {
@@ -69,14 +69,14 @@ struct rspamd_expression {
 	GArray *expressions;
 	GPtrArray *expression_stack;
 	GNode *ast;
-	gchar *log_id;
-	guint next_resort;
-	guint evals;
+	char *log_id;
+	unsigned int next_resort;
+	unsigned int evals;
 };
 
 struct rspamd_expr_process_data {
 	gpointer *ud;
-	gint flags;
+	int flags;
 	/* != NULL if trace is collected */
 	GPtrArray *trace;
 	rspamd_expression_process_cb process_closure;
@@ -106,12 +106,12 @@ rspamd_expr_quark(void)
 	return g_quark_from_static_string("rspamd-expression");
 }
 
-static const gchar *RSPAMD_CONST_FUNCTION
+static const char *RSPAMD_CONST_FUNCTION
 rspamd_expr_op_to_str(enum rspamd_expression_op op);
-static const gchar *
+static const char *
 rspamd_expr_op_to_str(enum rspamd_expression_op op)
 {
-	const gchar *op_str = NULL;
+	const char *op_str = NULL;
 
 	switch (op) {
 	case OP_AND:
@@ -181,7 +181,7 @@ static gpointer
 rspamd_expr_stack_elt_pop(GPtrArray *stack)
 {
 	gpointer e;
-	gint idx;
+	int idx;
 
 	if (stack->len == 0) {
 		return NULL;
@@ -212,7 +212,7 @@ static gpointer
 rspamd_expr_stack_peek(struct rspamd_expression *expr)
 {
 	gpointer e;
-	gint idx;
+	int idx;
 	GPtrArray *stack = expr->expression_stack;
 
 	if (stack->len == 0) {
@@ -228,12 +228,12 @@ rspamd_expr_stack_peek(struct rspamd_expression *expr)
 /*
  * Return operation priority
  */
-static gint RSPAMD_CONST_FUNCTION
+static int RSPAMD_CONST_FUNCTION
 rspamd_expr_logic_priority(enum rspamd_expression_op op);
-static gint
+static int
 rspamd_expr_logic_priority(enum rspamd_expression_op op)
 {
-	gint ret = 0;
+	int ret = 0;
 
 	switch (op) {
 	case OP_NOT:
@@ -273,13 +273,13 @@ rspamd_expr_logic_priority(enum rspamd_expression_op op)
 	return ret;
 }
 
-static guint RSPAMD_CONST_FUNCTION
+static unsigned int RSPAMD_CONST_FUNCTION
 rspamd_expr_op_flags(enum rspamd_expression_op op);
 
-static guint
+static unsigned int
 rspamd_expr_op_flags(enum rspamd_expression_op op)
 {
-	guint ret = 0;
+	unsigned int ret = 0;
 
 	switch (op) {
 	case OP_NOT:
@@ -323,9 +323,9 @@ rspamd_expr_op_flags(enum rspamd_expression_op op)
  * Return TRUE if symbol is operation symbol
  */
 static gboolean RSPAMD_CONST_FUNCTION
-rspamd_expr_is_operation_symbol(gchar a);
+rspamd_expr_is_operation_symbol(char a);
 static gboolean
-rspamd_expr_is_operation_symbol(gchar a)
+rspamd_expr_is_operation_symbol(char a)
 {
 	switch (a) {
 	case '!':
@@ -348,18 +348,18 @@ rspamd_expr_is_operation_symbol(gchar a)
 
 static gboolean
 rspamd_expr_is_operation(struct rspamd_expression *e,
-						 const gchar *p, const gchar *end, rspamd_regexp_t *num_re)
+						 const char *p, const char *end, rspamd_regexp_t *num_re)
 {
 	if (rspamd_expr_is_operation_symbol(*p)) {
 		if (p + 1 < end) {
-			gchar t = *(p + 1);
+			char t = *(p + 1);
 
 			if (t == ':') {
 				/* Special case, treat it as an atom */
 			}
 			else if (*p == '/') {
 				/* Lookahead for division operation to distinguish from regexp */
-				const gchar *track = p + 1;
+				const char *track = p + 1;
 
 				/* Skip spaces */
 				while (track < end && g_ascii_isspace(*track)) {
@@ -409,7 +409,7 @@ rspamd_expr_is_operation(struct rspamd_expression *e,
 
 /* Return character representation of operation */
 static enum rspamd_expression_op
-rspamd_expr_str_to_op(const gchar *a, const gchar *end, const gchar **next)
+rspamd_expr_str_to_op(const char *a, const char *end, const char **next)
 {
 	enum rspamd_expression_op op = OP_INVALID;
 
@@ -538,7 +538,7 @@ rspamd_expr_str_to_op(const gchar *a, const gchar *end, const gchar **next)
 static void
 rspamd_expression_destroy(struct rspamd_expression *expr)
 {
-	guint i;
+	unsigned int i;
 	struct rspamd_expression_elt *elt;
 
 	if (expr != NULL) {
@@ -714,7 +714,7 @@ rspamd_ast_priority_traverse(GNode *node, gpointer d)
 {
 	struct rspamd_expression_elt *elt = node->data, *cur_elt;
 	struct rspamd_expression *expr = d;
-	gint cnt = 0;
+	int cnt = 0;
 	GNode *cur;
 
 	if (node->children) {
@@ -750,11 +750,11 @@ rspamd_ast_priority_traverse(GNode *node, gpointer d)
 
 #define ATOM_PRIORITY(a) ((a)->p.atom->hits / ((a)->p.atom->exec_time.mean > 0 ? (a)->p.atom->exec_time.mean * 10000000 : 1.0))
 
-static gint
+static int
 rspamd_ast_priority_cmp(GNode *a, GNode *b)
 {
 	struct rspamd_expression_elt *ea = a->data, *eb = b->data;
-	gdouble w1, w2;
+	double w1, w2;
 
 	if (ea->type == ELT_LIMIT) {
 		return 1;
@@ -819,7 +819,7 @@ rspamd_expr_dup_elt(rspamd_mempool_t *pool, struct rspamd_expression_elt *elt)
 }
 
 gboolean
-rspamd_parse_expression(const gchar *line, gsize len,
+rspamd_parse_expression(const char *line, gsize len,
 						const struct rspamd_atom_subr *subr, gpointer subr_data,
 						rspamd_mempool_t *pool, GError **err,
 						struct rspamd_expression **target)
@@ -829,7 +829,7 @@ rspamd_parse_expression(const gchar *line, gsize len,
 	rspamd_expression_atom_t *atom;
 	rspamd_regexp_t *num_re;
 	enum rspamd_expression_op op, op_stack;
-	const gchar *p, *c, *end;
+	const char *p, *c, *end;
 	GPtrArray *operand_stack;
 	GNode *tmp;
 
@@ -864,7 +864,7 @@ rspamd_parse_expression(const gchar *line, gsize len,
 	e->evals = 0;
 	e->next_resort = ottery_rand_range(MAX_RESORT_EVALS) + MIN_RESORT_EVALS;
 	e->log_id = g_malloc0(RSPAMD_LOG_ID_LEN + 1);
-	guint64 h = rspamd_cryptobox_fast_hash(line, len, 0xdeadbabe);
+	uint64_t h = rspamd_cryptobox_fast_hash(line, len, 0xdeadbabe);
 	rspamd_snprintf(e->log_id, RSPAMD_LOG_ID_LEN + 1, "%xL", h);
 	msg_debug_expression("start to parse expression '%*s'", (int) len, line);
 
@@ -1020,7 +1020,7 @@ rspamd_parse_expression(const gchar *line, gsize len,
 						goto error_label;
 					}
 
-					guint op_priority = rspamd_expr_logic_priority(op);
+					unsigned int op_priority = rspamd_expr_logic_priority(op);
 					msg_debug_expression("found op: %s; priority = %d",
 										 rspamd_expr_op_to_str(op), op_priority);
 
@@ -1064,8 +1064,8 @@ rspamd_parse_expression(const gchar *line, gsize len,
 					}
 
 					/* We ignore associativity for now */
-					guint op_priority = rspamd_expr_logic_priority(op),
-						  stack_op_priority = rspamd_expr_logic_priority(op_stack);
+					unsigned int op_priority = rspamd_expr_logic_priority(op),
+								 stack_op_priority = rspamd_expr_logic_priority(op_stack);
 
 					msg_debug_expression("operators stack %d; operands stack: %d; "
 										 "process operation '%s'(%d); pop operation '%s'(%d)",
@@ -1201,7 +1201,7 @@ error_label:
  *  Node optimizer function: skip nodes that are not relevant
  */
 static gboolean
-rspamd_ast_node_done(struct rspamd_expression_elt *elt, gdouble acc)
+rspamd_ast_node_done(struct rspamd_expression_elt *elt, double acc)
 {
 	gboolean ret = FALSE;
 
@@ -1225,10 +1225,10 @@ rspamd_ast_node_done(struct rspamd_expression_elt *elt, gdouble acc)
 }
 
 
-static gdouble
-rspamd_ast_do_unary_op(struct rspamd_expression_elt *elt, gdouble operand)
+static double
+rspamd_ast_do_unary_op(struct rspamd_expression_elt *elt, double operand)
 {
-	gdouble ret;
+	double ret;
 	g_assert(elt->type == ELT_OP);
 
 	switch (elt->p.op.op) {
@@ -1242,10 +1242,10 @@ rspamd_ast_do_unary_op(struct rspamd_expression_elt *elt, gdouble operand)
 	return ret;
 }
 
-static gdouble
-rspamd_ast_do_binary_op(struct rspamd_expression_elt *elt, gdouble op1, gdouble op2)
+static double
+rspamd_ast_do_binary_op(struct rspamd_expression_elt *elt, double op1, double op2)
 {
-	gdouble ret;
+	double ret;
 
 	g_assert(elt->type == ELT_OP);
 
@@ -1288,10 +1288,10 @@ rspamd_ast_do_binary_op(struct rspamd_expression_elt *elt, gdouble op1, gdouble 
 	return ret;
 }
 
-static gdouble
-rspamd_ast_do_nary_op(struct rspamd_expression_elt *elt, gdouble val, gdouble acc)
+static double
+rspamd_ast_do_nary_op(struct rspamd_expression_elt *elt, double val, double acc)
 {
-	gdouble ret;
+	double ret;
 
 	g_assert(elt->type == ELT_OP);
 
@@ -1329,17 +1329,17 @@ rspamd_ast_do_nary_op(struct rspamd_expression_elt *elt, gdouble val, gdouble ac
 	return ret;
 }
 
-static gdouble
+static double
 rspamd_ast_process_node(struct rspamd_expression *e, GNode *node,
 						struct rspamd_expr_process_data *process_data)
 {
 	struct rspamd_expression_elt *elt;
 	GNode *cld;
-	gdouble acc = NAN;
+	double acc = NAN;
 	float t1, t2;
-	gdouble val;
+	double val;
 	gboolean calc_ticks = FALSE;
-	__attribute__((unused)) const gchar *op_name = NULL;
+	__attribute__((unused)) const char *op_name = NULL;
 
 	elt = node->data;
 
@@ -1412,7 +1412,7 @@ rspamd_ast_process_node(struct rspamd_expression *e, GNode *node,
 
 			c2 = c1->next;
 			g_assert(c2->next == NULL);
-			gdouble val1, val2;
+			double val1, val2;
 
 			msg_debug_expression_verbose("proceed binary operation %s",
 										 op_name);
@@ -1457,15 +1457,15 @@ rspamd_ast_cleanup_traverse(GNode *n, gpointer d)
 	return FALSE;
 }
 
-gdouble
+double
 rspamd_process_expression_closure(struct rspamd_expression *expr,
 								  rspamd_expression_process_cb cb,
-								  gint flags,
+								  int flags,
 								  gpointer runtime_ud,
 								  GPtrArray **track)
 {
 	struct rspamd_expr_process_data pd;
-	gdouble ret = 0;
+	double ret = 0;
 
 	g_assert(expr != NULL);
 	/* Ensure that stack is empty at this point */
@@ -1505,9 +1505,9 @@ rspamd_process_expression_closure(struct rspamd_expression *expr,
 	return ret;
 }
 
-gdouble
+double
 rspamd_process_expression_track(struct rspamd_expression *expr,
-								gint flags,
+								int flags,
 								gpointer runtime_ud,
 								GPtrArray **track)
 {
@@ -1515,9 +1515,9 @@ rspamd_process_expression_track(struct rspamd_expression *expr,
 											 expr->subr->process, flags, runtime_ud, track);
 }
 
-gdouble
+double
 rspamd_process_expression(struct rspamd_expression *expr,
-						  gint flags,
+						  int flags,
 						  gpointer runtime_ud)
 {
 	return rspamd_process_expression_closure(expr,
@@ -1528,7 +1528,7 @@ static gboolean
 rspamd_ast_string_traverse(GNode *n, gpointer d)
 {
 	GString *res = d;
-	gint cnt;
+	int cnt;
 	GNode *cur;
 	struct rspamd_expression_elt *elt = n->data;
 	const char *op_str = NULL;
@@ -1538,8 +1538,8 @@ rspamd_ast_string_traverse(GNode *n, gpointer d)
 							  (int) elt->p.atom->len, elt->p.atom->str);
 	}
 	else if (elt->type == ELT_LIMIT) {
-		if (elt->p.lim == (double) (gint64) elt->p.lim) {
-			rspamd_printf_gstring(res, "%L", (gint64) elt->p.lim);
+		if (elt->p.lim == (double) (int64_t) elt->p.lim) {
+			rspamd_printf_gstring(res, "%L", (int64_t) elt->p.lim);
 		}
 		else {
 			rspamd_printf_gstring(res, "%f", elt->p.lim);

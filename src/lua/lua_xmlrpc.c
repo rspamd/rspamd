@@ -60,26 +60,26 @@ enum lua_xmlrpc_stack {
 struct lua_xmlrpc_ud {
 	enum lua_xmlrpc_state parser_state;
 	GQueue *st;
-	gint param_count;
+	int param_count;
 	gboolean got_text;
 	lua_State *L;
 };
 
 static void xmlrpc_start_element(GMarkupParseContext *context,
-								 const gchar *name,
-								 const gchar **attribute_names,
-								 const gchar **attribute_values,
+								 const char *name,
+								 const char **attribute_names,
+								 const char **attribute_values,
 								 gpointer user_data,
 								 GError **error);
 static void xmlrpc_end_element(GMarkupParseContext *context,
-							   const gchar *element_name,
+							   const char *element_name,
 							   gpointer user_data,
 							   GError **error);
 static void xmlrpc_error(GMarkupParseContext *context,
 						 GError *error,
 						 gpointer user_data);
 static void xmlrpc_text(GMarkupParseContext *context,
-						const gchar *text,
+						const char *text,
 						gsize text_len,
 						gpointer user_data,
 						GError **error);
@@ -100,9 +100,9 @@ xmlrpc_error_quark(void)
 
 static void
 xmlrpc_start_element(GMarkupParseContext *context,
-					 const gchar *name,
-					 const gchar **attribute_names,
-					 const gchar **attribute_values,
+					 const char *name,
+					 const char **attribute_names,
+					 const char **attribute_values,
 					 gpointer user_data,
 					 GError **error)
 {
@@ -328,7 +328,7 @@ xmlrpc_start_element(GMarkupParseContext *context,
 
 static void
 xmlrpc_end_element(GMarkupParseContext *context,
-				   const gchar *name,
+				   const char *name,
 				   gpointer user_data,
 				   GError **error)
 {
@@ -521,7 +521,7 @@ xmlrpc_end_element(GMarkupParseContext *context,
 	case read_array_element:
 		/* Got tag value */
 		if (g_ascii_strcasecmp(name, "value") == 0) {
-			guint tbl_len = rspamd_lua_table_size(ud->L, -2);
+			unsigned int tbl_len = rspamd_lua_table_size(ud->L, -2);
 			lua_rawseti(ud->L, -2, tbl_len + 1);
 			msg_debug_xmlrpc("set array element idx: %d", tbl_len + 1);
 			ud->parser_state = read_array_value;
@@ -547,14 +547,14 @@ xmlrpc_end_element(GMarkupParseContext *context,
 
 static void
 xmlrpc_text(GMarkupParseContext *context,
-			const gchar *text,
+			const char *text,
 			gsize text_len,
 			gpointer user_data,
 			GError **error)
 {
 	struct lua_xmlrpc_ud *ud = user_data;
 	gulong num;
-	gdouble dnum;
+	double dnum;
 
 	/* Strip line */
 	while (text_len > 0 && g_ascii_isspace(*text)) {
@@ -599,11 +599,11 @@ xmlrpc_error(GMarkupParseContext *context, GError *error, gpointer user_data)
 	msg_err("xmlrpc parser error: %s", error->message);
 }
 
-static gint
+static int
 lua_xmlrpc_parse_reply(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *data;
+	const char *data;
 	GMarkupParseContext *ctx;
 	GError *err = NULL;
 	struct lua_xmlrpc_ud ud;
@@ -635,14 +635,14 @@ lua_xmlrpc_parse_reply(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_xmlrpc_parse_table(lua_State *L,
-					   gint pos,
-					   gchar *databuf,
-					   gint pr,
+					   int pos,
+					   char *databuf,
+					   int pr,
 					   gsize size)
 {
-	gint r = pr, num;
+	int r = pr, num;
 	double dnum;
 
 	r += rspamd_snprintf(databuf + r, size - r, "<struct>");
@@ -705,13 +705,13 @@ lua_xmlrpc_parse_table(lua_State *L,
  * Internal limitation: xmlrpc request must NOT be more than
  * BUFSIZ * 2 (16384 bytes)
  */
-static gint
+static int
 lua_xmlrpc_make_request(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gchar databuf[BUFSIZ * 2];
-	const gchar *func;
-	gint r, top, i, num;
+	char databuf[BUFSIZ * 2];
+	const char *func;
+	int r, top, i, num;
 	double dnum;
 
 	func = luaL_checkstring(L, 1);
@@ -781,7 +781,7 @@ lua_xmlrpc_make_request(lua_State *L)
 	return 1;
 }
 
-static gint
+static int
 lua_load_xmlrpc(lua_State *L)
 {
 	lua_newtable(L);

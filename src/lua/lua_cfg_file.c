@@ -23,11 +23,11 @@
 
 /* Process a single item in 'metrics' table */
 static void
-lua_process_metric(lua_State *L, const gchar *name, struct rspamd_config *cfg)
+lua_process_metric(lua_State *L, const char *name, struct rspamd_config *cfg)
 {
-	gchar *symbol;
-	const gchar *desc = NULL;
-	gdouble *score;
+	char *symbol;
+	const char *desc = NULL;
+	double *score;
 	struct rspamd_symbol *s;
 
 	/* Now iterate through module table */
@@ -91,7 +91,7 @@ lua_process_metric(lua_State *L, const gchar *name, struct rspamd_config *cfg)
 void rspamd_lua_post_load_config(struct rspamd_config *cfg)
 {
 	lua_State *L = cfg->lua_state;
-	const gchar *name;
+	const char *name;
 	ucl_object_t *obj;
 	gsize keylen, i;
 
@@ -104,7 +104,7 @@ void rspamd_lua_post_load_config(struct rspamd_config *cfg)
 												g_free);
 
 		for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 2)) {
-			gchar *tmp;
+			char *tmp;
 			lua_pushvalue(L, -2);
 			name = luaL_checklstring(L, -1, &keylen);
 

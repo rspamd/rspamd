@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -31,7 +31,7 @@ struct rspamd_fuzzy_backend_sqlite;
  * @param err error pointer
  * @return backend structure or NULL
  */
-struct rspamd_fuzzy_backend_sqlite *rspamd_fuzzy_backend_sqlite_open(const gchar *path,
+struct rspamd_fuzzy_backend_sqlite *rspamd_fuzzy_backend_sqlite_open(const char *path,
 																	 gboolean vacuum,
 																	 GError **err);
 
@@ -44,13 +44,13 @@ struct rspamd_fuzzy_backend_sqlite *rspamd_fuzzy_backend_sqlite_open(const gchar
 struct rspamd_fuzzy_reply rspamd_fuzzy_backend_sqlite_check(
 	struct rspamd_fuzzy_backend_sqlite *backend,
 	const struct rspamd_fuzzy_cmd *cmd,
-	gint64 expire);
+	int64_t expire);
 
 /**
  * Prepare storage for updates (by starting transaction)
  */
 gboolean rspamd_fuzzy_backend_sqlite_prepare_update(struct rspamd_fuzzy_backend_sqlite *backend,
-													const gchar *source);
+													const char *source);
 
 /**
  * Add digest to the database
@@ -75,7 +75,7 @@ gboolean rspamd_fuzzy_backend_sqlite_del(
  * Commit updates to storage
  */
 gboolean rspamd_fuzzy_backend_sqlite_finish_update(struct rspamd_fuzzy_backend_sqlite *backend,
-												   const gchar *source, gboolean version_bump);
+												   const char *source, gboolean version_bump);
 
 /**
  * Sync storage
@@ -83,7 +83,7 @@ gboolean rspamd_fuzzy_backend_sqlite_finish_update(struct rspamd_fuzzy_backend_s
  * @return
  */
 gboolean rspamd_fuzzy_backend_sqlite_sync(struct rspamd_fuzzy_backend_sqlite *backend,
-										  gint64 expire,
+										  int64_t expire,
 										  gboolean clean_orphaned);
 
 /**
@@ -94,11 +94,11 @@ void rspamd_fuzzy_backend_sqlite_close(struct rspamd_fuzzy_backend_sqlite *backe
 
 gsize rspamd_fuzzy_backend_sqlite_count(struct rspamd_fuzzy_backend_sqlite *backend);
 
-gint rspamd_fuzzy_backend_sqlite_version(struct rspamd_fuzzy_backend_sqlite *backend, const gchar *source);
+int rspamd_fuzzy_backend_sqlite_version(struct rspamd_fuzzy_backend_sqlite *backend, const char *source);
 
 gsize rspamd_fuzzy_backend_sqlite_expired(struct rspamd_fuzzy_backend_sqlite *backend);
 
-const gchar *rspamd_fuzzy_sqlite_backend_id(struct rspamd_fuzzy_backend_sqlite *backend);
+const char *rspamd_fuzzy_sqlite_backend_id(struct rspamd_fuzzy_backend_sqlite *backend);
 
 #ifdef __cplusplus
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -185,7 +185,7 @@ rspamd_kann_table_to_flags(lua_State *L, int table_pos)
 	return result;
 }
 
-static gint
+static int
 lua_load_kann(lua_State *L)
 {
 	lua_newtable(L);
@@ -326,7 +326,7 @@ void luaopen_kann(lua_State *L)
 static int
 lua_kann_layer_input(lua_State *L)
 {
-	gint nnodes = luaL_checkinteger(L, 1);
+	int nnodes = luaL_checkinteger(L, 1);
 
 	if (nnodes > 0) {
 		kad_node_t *t;
@@ -355,7 +355,7 @@ static int
 lua_kann_layer_dense(lua_State *L)
 {
 	kad_node_t *in = lua_check_kann_node(L, 1);
-	gint nnodes = luaL_checkinteger(L, 2);
+	int nnodes = luaL_checkinteger(L, 2);
 
 	if (in != NULL && nnodes > 0) {
 		kad_node_t *t;
@@ -441,8 +441,8 @@ static int
 lua_kann_layer_rnn(lua_State *L)
 {
 	kad_node_t *in = lua_check_kann_node(L, 1);
-	gint nnodes = luaL_checkinteger(L, 2);
-	gint rnnflags = 0;
+	int nnodes = luaL_checkinteger(L, 2);
+	int rnnflags = 0;
 
 	if (in != NULL && nnodes > 0) {
 		kad_node_t *t;
@@ -476,8 +476,8 @@ static int
 lua_kann_layer_lstm(lua_State *L)
 {
 	kad_node_t *in = lua_check_kann_node(L, 1);
-	gint nnodes = luaL_checkinteger(L, 2);
-	gint rnnflags = 0;
+	int nnodes = luaL_checkinteger(L, 2);
+	int rnnflags = 0;
 
 	if (in != NULL && nnodes > 0) {
 		kad_node_t *t;
@@ -511,8 +511,8 @@ static int
 lua_kann_layer_gru(lua_State *L)
 {
 	kad_node_t *in = lua_check_kann_node(L, 1);
-	gint nnodes = luaL_checkinteger(L, 2);
-	gint rnnflags = 0;
+	int nnodes = luaL_checkinteger(L, 2);
+	int rnnflags = 0;
 
 	if (in != NULL && nnodes > 0) {
 		kad_node_t *t;
@@ -743,7 +743,7 @@ lua_kann_loss_ce_multi_weighted(lua_State *L)
 static int
 lua_kann_new_scalar(lua_State *L)
 {
-	gint flag = luaL_checkinteger(L, 1);
+	int flag = luaL_checkinteger(L, 1);
 	double x = luaL_checknumber(L, 2);
 	kad_node_t *t;
 
@@ -758,8 +758,8 @@ lua_kann_new_scalar(lua_State *L)
 static int
 lua_kann_new_weight(lua_State *L)
 {
-	gint nrow = luaL_checkinteger(L, 1);
-	gint ncol = luaL_checkinteger(L, 2);
+	int nrow = luaL_checkinteger(L, 1);
+	int ncol = luaL_checkinteger(L, 2);
 	kad_node_t *t;
 
 	t = kann_new_weight(nrow, ncol);
@@ -773,7 +773,7 @@ lua_kann_new_weight(lua_State *L)
 static int
 lua_kann_new_bias(lua_State *L)
 {
-	gint n = luaL_checkinteger(L, 1);
+	int n = luaL_checkinteger(L, 1);
 	kad_node_t *t;
 
 	t = kann_new_bias(n);
@@ -787,10 +787,10 @@ lua_kann_new_bias(lua_State *L)
 static int
 lua_kann_new_weight_conv2d(lua_State *L)
 {
-	gint nout = luaL_checkinteger(L, 1);
-	gint nin = luaL_checkinteger(L, 2);
-	gint krow = luaL_checkinteger(L, 3);
-	gint kcol = luaL_checkinteger(L, 4);
+	int nout = luaL_checkinteger(L, 1);
+	int nin = luaL_checkinteger(L, 2);
+	int krow = luaL_checkinteger(L, 3);
+	int kcol = luaL_checkinteger(L, 4);
 	kad_node_t *t;
 
 	t = kann_new_weight_conv2d(nout, nin, krow, kcol);
@@ -804,9 +804,9 @@ lua_kann_new_weight_conv2d(lua_State *L)
 static int
 lua_kann_new_weight_conv1d(lua_State *L)
 {
-	gint nout = luaL_checkinteger(L, 1);
-	gint nin = luaL_checkinteger(L, 2);
-	gint klen = luaL_checkinteger(L, 3);
+	int nout = luaL_checkinteger(L, 1);
+	int nin = luaL_checkinteger(L, 2);
+	int klen = luaL_checkinteger(L, 3);
 	kad_node_t *t;
 
 	t = kann_new_weight_conv1d(nout, nin, klen);
@@ -886,7 +886,7 @@ lua_kann_save(lua_State *L)
 			lua_getfield(L, 2, "filename");
 
 			if (lua_isstring(L, -1)) {
-				const gchar *fname = lua_tostring(L, -1);
+				const char *fname = lua_tostring(L, -1);
 				FILE *f;
 
 				f = fopen(fname, "w");
@@ -930,7 +930,7 @@ lua_kann_save(lua_State *L)
 			t = lua_newuserdata(L, sizeof(*t));
 			rspamd_lua_setclass(L, rspamd_text_classname, -1);
 			t->flags = RSPAMD_TEXT_FLAG_OWN;
-			t->start = (const gchar *) buf;
+			t->start = (const char *) buf;
 			t->len = buflen;
 		}
 	}
@@ -951,7 +951,7 @@ lua_kann_load(lua_State *L)
 		lua_getfield(L, 2, "filename");
 
 		if (lua_isstring(L, -1)) {
-			const gchar *fname = lua_tostring(L, -1);
+			const char *fname = lua_tostring(L, -1);
 
 			f = fopen(fname, "rb");
 		}
@@ -965,7 +965,7 @@ lua_kann_load(lua_State *L)
 	}
 	else if (lua_isstring(L, 1)) {
 		gsize dlen;
-		const gchar *data;
+		const char *data;
 
 		data = lua_tolstring(L, 1, &dlen);
 
@@ -1009,7 +1009,7 @@ lua_kann_load(lua_State *L)
 struct rspamd_kann_train_cbdata {
 	lua_State *L;
 	kann_t *k;
-	gint cbref;
+	int cbref;
 };
 
 static void
@@ -1018,7 +1018,7 @@ lua_kann_train_cb(int iter, float train_cost, float val_cost, void *ud)
 	struct rspamd_kann_train_cbdata *cbd = (struct rspamd_kann_train_cbdata *) ud;
 
 	if (cbd->cbref != -1) {
-		gint err_idx;
+		int err_idx;
 		lua_State *L = cbd->L;
 
 		lua_pushcfunction(L, &rspamd_lua_traceback);
@@ -1052,11 +1052,11 @@ lua_kann_train1(lua_State *L)
 
 	/* Default train params */
 	double lr = 0.001;
-	gint64 mini_size = 64;
-	gint64 max_epoch = 25;
-	gint64 max_drop_streak = 10;
+	int64_t mini_size = 64;
+	int64_t max_epoch = 25;
+	int64_t max_drop_streak = 10;
 	double frac_val = 0.1;
-	gint cbref = -1;
+	int cbref = -1;
 
 	if (k && lua_istable(L, 2) && lua_istable(L, 3)) {
 		int n = rspamd_lua_table_size(L, 2);
@@ -1338,7 +1338,7 @@ lua_kann_apply1(lua_State *L)
 				kann_feed_bind(k, KANN_F_IN, 0, &t->data);
 				kad_eval_at(k->n, k->v, i_out);
 
-				gint outlen = kad_len(k->v[i_out]);
+				int outlen = kad_len(k->v[i_out]);
 				struct rspamd_lua_tensor *out;
 				out = lua_newtensor(L, 1, &outlen, false, false);
 				/* Ensure that kann and tensor have the same understanding of floats */

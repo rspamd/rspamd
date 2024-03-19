@@ -56,19 +56,19 @@ struct rspamd_cryptobox_library_ctx;
  * @param context userdata
  * @return if 0 then search for another pattern, otherwise return this value to caller
  */
-typedef gint (*rspamd_multipattern_cb_t)(struct rspamd_multipattern *mp,
-										 guint strnum,
-										 gint match_start,
-										 gint match_pos,
-										 const gchar *text,
-										 gsize len,
-										 void *context);
+typedef int (*rspamd_multipattern_cb_t)(struct rspamd_multipattern *mp,
+										unsigned int strnum,
+										int match_start,
+										int match_pos,
+										const char *text,
+										gsize len,
+										void *context);
 
 /**
  * Init multipart library and set the appropriate cache dir
  * @param cache_dir
  */
-void rspamd_multipattern_library_init(const gchar *cache_dir);
+void rspamd_multipattern_library_init(const char *cache_dir);
 
 /**
  * Creates empty multipattern structure
@@ -84,7 +84,7 @@ struct rspamd_multipattern *rspamd_multipattern_create(
  * @param reserved
  * @return
  */
-struct rspamd_multipattern *rspamd_multipattern_create_sized(guint reserved,
+struct rspamd_multipattern *rspamd_multipattern_create_sized(unsigned int reserved,
 															 enum rspamd_multipattern_flags flags);
 
 /**
@@ -95,8 +95,8 @@ struct rspamd_multipattern *rspamd_multipattern_create_sized(guint reserved,
  * @return new multipattern structure
  */
 struct rspamd_multipattern *rspamd_multipattern_create_full(
-	const gchar **patterns,
-	guint npatterns,
+	const char **patterns,
+	unsigned int npatterns,
 	enum rspamd_multipattern_flags flags);
 
 /**
@@ -105,7 +105,7 @@ struct rspamd_multipattern *rspamd_multipattern_create_full(
  * @param pattern
  */
 void rspamd_multipattern_add_pattern(struct rspamd_multipattern *mp,
-									 const gchar *pattern, gint flags);
+									 const char *pattern, int flags);
 
 /**
  * Adds new pattern from arbitrary string
@@ -115,7 +115,7 @@ void rspamd_multipattern_add_pattern(struct rspamd_multipattern *mp,
  * @param flags
  */
 void rspamd_multipattern_add_pattern_len(struct rspamd_multipattern *mp,
-										 const gchar *pattern, gsize patlen, gint flags);
+										 const char *pattern, gsize patlen, int flags);
 
 
 #define RSPAMD_MULTIPATTERN_COMPILE_NO_FS (0x1u << 0u)
@@ -137,9 +137,9 @@ gboolean rspamd_multipattern_compile(struct rspamd_multipattern *mp,
  * @param ud callback data
  * @return
  */
-gint rspamd_multipattern_lookup(struct rspamd_multipattern *mp,
-								const gchar *in, gsize len, rspamd_multipattern_cb_t cb,
-								gpointer ud, guint *pnfound);
+int rspamd_multipattern_lookup(struct rspamd_multipattern *mp,
+							   const char *in, gsize len, rspamd_multipattern_cb_t cb,
+							   gpointer ud, unsigned int *pnfound);
 
 /**
  * Get pattern string from multipattern identified by index
@@ -147,15 +147,15 @@ gint rspamd_multipattern_lookup(struct rspamd_multipattern *mp,
  * @param index
  * @return
  */
-const gchar *rspamd_multipattern_get_pattern(struct rspamd_multipattern *mp,
-											 guint index);
+const char *rspamd_multipattern_get_pattern(struct rspamd_multipattern *mp,
+											unsigned int index);
 
 /**
  * Returns number of patterns in a multipattern matcher
  * @param mp
  * @return
  */
-guint rspamd_multipattern_get_npatterns(struct rspamd_multipattern *mp);
+unsigned int rspamd_multipattern_get_npatterns(struct rspamd_multipattern *mp);
 
 /**
  * Destroys multipattern structure

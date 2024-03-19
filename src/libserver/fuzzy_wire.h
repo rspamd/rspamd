@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,13 +54,13 @@ enum rspamd_fuzzy_epoch {
 
 RSPAMD_PACKED(rspamd_fuzzy_cmd)
 {
-	guint8 version;
-	guint8 cmd;
-	guint8 shingles_count;
-	guint8 flag;
-	gint32 value;
-	guint32 tag;
-	gchar digest[rspamd_cryptobox_HASHBYTES];
+	uint8_t version;
+	uint8_t cmd;
+	uint8_t shingles_count;
+	uint8_t flag;
+	int32_t value;
+	uint32_t tag;
+	char digest[rspamd_cryptobox_HASHBYTES];
 };
 
 RSPAMD_PACKED(rspamd_fuzzy_shingle_cmd)
@@ -71,27 +71,27 @@ RSPAMD_PACKED(rspamd_fuzzy_shingle_cmd)
 
 RSPAMD_PACKED(rspamd_fuzzy_reply_v1)
 {
-	gint32 value;
-	guint32 flag;
-	guint32 tag;
+	int32_t value;
+	uint32_t flag;
+	uint32_t tag;
 	float prob;
 };
 
 RSPAMD_PACKED(rspamd_fuzzy_reply)
 {
 	struct rspamd_fuzzy_reply_v1 v1;
-	gchar digest[rspamd_cryptobox_HASHBYTES];
-	guint32 ts;
-	guchar reserved[12];
+	char digest[rspamd_cryptobox_HASHBYTES];
+	uint32_t ts;
+	unsigned char reserved[12];
 };
 
 RSPAMD_PACKED(rspamd_fuzzy_encrypted_req_hdr)
 {
-	guchar magic[4];
-	guchar key_id[RSPAMD_FUZZY_KEYLEN];
-	guchar pubkey[32];
-	guchar nonce[rspamd_cryptobox_MAX_NONCEBYTES];
-	guchar mac[rspamd_cryptobox_MAX_MACBYTES];
+	unsigned char magic[4];
+	unsigned char key_id[RSPAMD_FUZZY_KEYLEN];
+	unsigned char pubkey[32];
+	unsigned char nonce[rspamd_cryptobox_MAX_NONCEBYTES];
+	unsigned char mac[rspamd_cryptobox_MAX_MACBYTES];
 };
 
 RSPAMD_PACKED(rspamd_fuzzy_encrypted_cmd)
@@ -108,8 +108,8 @@ RSPAMD_PACKED(rspamd_fuzzy_encrypted_shingle_cmd)
 
 RSPAMD_PACKED(rspamd_fuzzy_encrypted_rep_hdr)
 {
-	guchar nonce[rspamd_cryptobox_MAX_NONCEBYTES];
-	guchar mac[rspamd_cryptobox_MAX_MACBYTES];
+	unsigned char nonce[rspamd_cryptobox_MAX_NONCEBYTES];
+	unsigned char mac[rspamd_cryptobox_MAX_MACBYTES];
 };
 
 RSPAMD_PACKED(rspamd_fuzzy_encrypted_reply)
@@ -118,7 +118,7 @@ RSPAMD_PACKED(rspamd_fuzzy_encrypted_reply)
 	struct rspamd_fuzzy_reply rep;
 };
 
-static const guchar fuzzy_encrypted_magic[4] = {'r', 's', 'f', 'e'};
+static const unsigned char fuzzy_encrypted_magic[4] = {'r', 's', 'f', 'e'};
 
 enum rspamd_fuzzy_extension_type {
 	RSPAMD_FUZZY_EXT_SOURCE_DOMAIN = 'd',
@@ -128,19 +128,19 @@ enum rspamd_fuzzy_extension_type {
 
 struct rspamd_fuzzy_cmd_extension {
 	enum rspamd_fuzzy_extension_type ext;
-	guint length;
+	unsigned int length;
 	struct rspamd_fuzzy_cmd_extension *next;
-	guchar *payload;
+	unsigned char *payload;
 };
 
 struct rspamd_fuzzy_stat_entry {
-	const gchar *name;
-	guint64 fuzzy_cnt;
+	const char *name;
+	uint64_t fuzzy_cnt;
 };
 
 RSPAMD_PACKED(fuzzy_peer_cmd)
 {
-	gint32 is_shingle;
+	int32_t is_shingle;
 	union {
 		struct rspamd_fuzzy_cmd normal;
 		struct rspamd_fuzzy_shingle_cmd shingle;
