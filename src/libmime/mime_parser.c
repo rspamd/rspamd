@@ -1055,6 +1055,7 @@ rspamd_multipart_boundaries_filter(struct rspamd_task *task,
 	goffset last_offset;
 	unsigned int i, sel = 0;
 	enum rspamd_mime_parse_error ret;
+	bool enforce_closing = false;
 
 	last_offset = (multipart->raw_data.begin - st->start) +
 				  multipart->raw_data.len;
@@ -1099,6 +1100,12 @@ rspamd_multipart_boundaries_filter(struct rspamd_task *task,
 		cur = &g_array_index(st->boundaries, struct rspamd_mime_boundary, i);
 
 		if (cur->boundary > last_offset) {
+			/*
+			 * We have reached the end of the part, so we have to close it implicitly
+			 * like MUA do
+			 */
+			task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
+			enforce_closing = true;
 			break;
 		}
 
@@ -1136,7 +1143,7 @@ rspamd_multipart_boundaries_filter(struct rspamd_task *task,
 		}
 	}
 
-	if (i == st->boundaries->len && cb->cur_boundary) {
+	if (enforce_closing || (i == st->boundaries->len && cb->cur_boundary)) {
 		/* Process the last part */
 		struct rspamd_mime_boundary fb;
 
