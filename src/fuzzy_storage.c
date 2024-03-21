@@ -62,8 +62,8 @@ worker_t fuzzy_worker = {
 	init_fuzzy,  /* Init function */
 	start_fuzzy, /* Start function */
 	RSPAMD_WORKER_HAS_SOCKET | RSPAMD_WORKER_NO_STRICT_CONFIG,
-	RSPAMD_WORKER_SOCKET_UDP, /* UDP socket */
-	RSPAMD_WORKER_VER         /* Version info */
+	RSPAMD_WORKER_SOCKET_UDP | RSPAMD_WORKER_SOCKET_TCP, /* UDP + TCP socket */
+	RSPAMD_WORKER_VER                                    /* Version info */
 };
 
 struct fuzzy_global_stat {
@@ -1970,11 +1970,41 @@ union sa_union {
 	struct sockaddr_un su;
 	struct sockaddr_storage ss;
 };
+
+static void
+accept_tcp_fuzzy_socket(EV_P_ ev_io *w, int revents)
+{
+	struct rspamd_worker *worker = (struct rspamd_worker *) w->data;
+	struct rspamd_fuzzy_storage_ctx *ctx;
+	struct fuzzy_session *session;
+
+	ctx = (struct rspamd_fuzzy_storage_ctx *) worker->ctx;
+
+	int nfd;
+	rspamd_inet_addr_t *addr = NULL;
+
+	if ((nfd =
+			 rspamd_accept_from_socket(w->fd, &addr,
+									   rspamd_worker_throttle_accept_events, worker->accept_events)) == -1) {
+		msg_err("accept failed: %s", strerror(errno));
+		return;
+	}
+
+	if (!rspamd_fuzzy_check_client(worker->ctx, addr)) {
+		/* Disallow forbidden clients silently (maybe we should even tarpit?) */
+		rspamd_inet_address_free(addr);
+		close(nfd);
+
+		return;
+	}
+}
+
+
 /*
  * Accept new connection and construct task
  */
 static void
-accept_fuzzy_socket(EV_P_ ev_io *w, int revents)
+accept_udp_fuzzy_socket(EV_P_ ev_io *w, int revents)
 {
 	struct rspamd_worker *worker = (struct rspamd_worker *) w->data;
 	struct rspamd_fuzzy_storage_ctx *ctx;
@@ -3207,14 +3237,19 @@ fuzzy_peer_rep(struct rspamd_worker *worker,
 				ac_ev = g_malloc0(sizeof(*ac_ev));
 				ac_ev->accept_ev.data = worker;
 				ac_ev->event_loop = ctx->event_loop;
-				ev_io_init(&ac_ev->accept_ev, accept_fuzzy_socket, ls->fd,
+				ev_io_init(&ac_ev->accept_ev, accept_udp_fuzzy_socket, ls->fd,
 						   EV_READ);
 				ev_io_start(ctx->event_loop, &ac_ev->accept_ev);
 				DL_APPEND(worker->accept_events, ac_ev);
 			}
 			else {
-				/* We allow TCP listeners only for a update worker */
-				g_assert_not_reached();
+				ac_ev = g_malloc0(sizeof(*ac_ev));
+				ac_ev->accept_ev.data = worker;
+				ac_ev->event_loop = ctx->event_loop;
+				ev_io_init(&ac_ev->accept_ev, accept_tcp_fuzzy_socket, ls->fd,
+						   EV_READ);
+				ev_io_start(ctx->event_loop, &ac_ev->accept_ev);
+				DL_APPEND(worker->accept_events, ac_ev);
 			}
 		}
 
