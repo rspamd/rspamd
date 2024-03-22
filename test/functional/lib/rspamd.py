@@ -41,11 +41,11 @@ import tempfile
 
 from robot.api import logger
 from robot.libraries.BuiltIn import BuiltIn
-import demjson
+import json
 
 
 def Check_JSON(j):
-    d = demjson.decode(j, strict=True)
+    d = json.JSONDecoder(strict=True).decode(j.decode('utf-8'))
     logger.debug('got json %s' % d)
     assert len(d) > 0
     assert 'error' not in d
@@ -54,9 +54,9 @@ def Check_JSON(j):
 
 def check_json_log(fn):
     line_count = 0
-    f = open(fn, 'r')
+    f = open(fn, 'r', encoding="utf-8")
     for l in f.readlines():
-        d = demjson.decode(l, strict=True)
+        d = json.JSONDecoder(strict=True).decode(l)
         assert len(d) > 0
         line_count = line_count + 1
     assert line_count > 0
@@ -201,7 +201,7 @@ def Scan_File(filename, **headers):
     c.request("POST", "/checkv2", open(filename, "rb"), headers)
     r = c.getresponse()
     assert r.status == 200
-    d = demjson.decode(r.read())
+    d = json.JSONDecoder(strict=True).decode(r.read().decode('utf-8'))
     c.close()
     BuiltIn().set_test_variable("${SCAN_RESULT}", d)
     return
@@ -242,6 +242,13 @@ def TCP_Connect(addr, port):
     s.settimeout(5)  # seconds
     s.connect((addr, port))
     s.close()
+
+
+def try_reap_zombies():
+    try:
+        os.waitpid(-1, os.WNOHANG)
+    except ChildProcessError:
+        pass
 
 
 def ping_rspamd(addr, port):

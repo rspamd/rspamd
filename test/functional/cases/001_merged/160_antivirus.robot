@@ -1,5 +1,4 @@
 *** Settings ***
-Suite Teardown  Antivirus Teardown
 Library         Process
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
@@ -14,19 +13,19 @@ ${SETTINGS_FPROT}   {symbols_enabled = [FPROT_VIRUS, FPROT2_VIRUS_DUPLICATE_DEFA
 
 *** Test Cases ***
 CLAMAV MISS
-  Run Dummy Clam  ${RSPAMD_PORT_CLAM}
+  ${process} =  Run Dummy Clam  ${RSPAMD_PORT_CLAM}
   Scan File  ${MESSAGE}
   ...  Settings=${SETTINGS_CLAM}
   Do Not Expect Symbol  CLAM_VIRUS
-  Shutdown clamav
+  [Teardown]  Terminate Process  ${process}
 
 CLAMAV HIT
-  Run Dummy Clam  ${RSPAMD_PORT_CLAM}  1
+  ${process} =  Run Dummy Clam  ${RSPAMD_PORT_CLAM}  1
   Scan File  ${MESSAGE2}
   ...  Settings=${SETTINGS_CLAM}
   Expect Symbol  CLAM_VIRUS
   Do Not Expect Symbol  CLAMAV_VIRUS_FAIL
-  Shutdown clamav
+  [Teardown]  Terminate Process  ${process}
 
 CLAMAV CACHE HIT
   Scan File  ${MESSAGE2}
@@ -41,16 +40,16 @@ CLAMAV CACHE MISS
   Do Not Expect Symbol  CLAMAV_VIRUS_FAIL
 
 FPROT MISS
-  Run Dummy Fprot  ${RSPAMD_PORT_FPROT}
+  ${process} =  Run Dummy Fprot  ${RSPAMD_PORT_FPROT}
   Scan File  ${MESSAGE2}
   ...  Settings=${SETTINGS_FPROT}
   Do Not Expect Symbol  FPROT_VIRUS
   Do Not Expect Symbol  FPROT_EICAR
-  Shutdown fport
+  [Teardown]  Terminate Process  ${process}
 
 FPROT HIT - PATTERN
-  Run Dummy Fprot  ${RSPAMD_PORT_FPROT}  1
-  Run Dummy Fprot  ${RSPAMD_PORT_FPROT2_DUPLICATE}  1  /tmp/dummy_fprot_dupe.pid
+  ${process1} =  Run Dummy Fprot  ${RSPAMD_PORT_FPROT}  1
+  ${process2} =  Run Dummy Fprot  ${RSPAMD_PORT_FPROT2_DUPLICATE}  1  /tmp/dummy_fprot_dupe.pid
   Scan File  ${MESSAGE}
   ...  Settings=${SETTINGS_FPROT}
   Expect Symbol  FPROT_EICAR
@@ -58,8 +57,7 @@ FPROT HIT - PATTERN
   Expect Symbol  FPROT2_VIRUS_DUPLICATE_PATTERN
   Do Not Expect Symbol  FPROT2_VIRUS_DUPLICATE_DEFAULT
   Do Not Expect Symbol  FPROT2_VIRUS_DUPLICATE_NOPE
-  Shutdown fport
-  Shutdown fport duplicate
+  [Teardown]  Double FProt Teardown  ${process1}  ${process2}
 
 FPROT CACHE HIT
   Scan File  ${MESSAGE}
@@ -76,19 +74,19 @@ FPROT CACHE MISS
   Do Not Expect Symbol  FPROT_VIRUS
 
 AVAST MISS
-  Run Dummy Avast  ${RSPAMD_PORT_AVAST}
+  ${process} =  Run Dummy Avast  ${RSPAMD_PORT_AVAST}
   Scan File  ${MESSAGE}
   ...  Settings=${SETTINGS_AVAST}
   Do Not Expect Symbol  AVAST_VIRUS
-  Shutdown avast
+  [Teardown]  Terminate Process  ${process}
 
 AVAST HIT
-  Run Dummy Avast  ${RSPAMD_PORT_AVAST}  1
+  ${process} =  Run Dummy Avast  ${RSPAMD_PORT_AVAST}  1
   Scan File  ${MESSAGE2}
   ...  Settings=${SETTINGS_AVAST}
   Expect Symbol  AVAST_VIRUS
   Do Not Expect Symbol  AVAST_VIRUS_FAIL
-  Shutdown avast
+  [Teardown]  Terminate Process  ${process}
 
 AVAST CACHE HIT
   Scan File  ${MESSAGE2}
@@ -103,26 +101,10 @@ AVAST CACHE MISS
   Do Not Expect Symbol  AVAST_VIRUS_FAIL
 
 *** Keywords ***
-Antivirus Teardown
-  Shutdown clamav
-  Shutdown fport
-  Shutdown avast
-
-Shutdown clamav
-  ${clamav_pid} =  Get File if exists  /tmp/dummy_clamav.pid
-  Run Keyword if  ${clamav_pid}  Shutdown Process With Children  ${clamav_pid}
-
-Shutdown fport
-  ${fport_pid} =  Get File if exists  /tmp/dummy_fprot.pid
-  Run Keyword if  ${fport_pid}  Shutdown Process With Children  ${fport_pid}
-
-Shutdown fport duplicate
-  ${fport_pid} =  Get File if exists  /tmp/dummy_fprot_dupe.pid
-  Run Keyword if  ${fport_pid}  Shutdown Process With Children  ${fport_pid}
-
-Shutdown avast
-  ${avast_pid} =  Get File if exists  /tmp/dummy_avast.pid
-  Run Keyword if  ${avast_pid}  Shutdown Process With Children  ${avast_pid}
+Double FProt Teardown
+  [Arguments]  ${process1}  ${process2}
+  Terminate Process  ${process1}
+  Terminate Process  ${process2}
 
 Run Dummy
   [Arguments]  @{varargs}
@@ -137,15 +119,19 @@ Run Dummy
   Log To Console  ${res.stdout}
   Log To Console  ${res.stderr}
   Fail  Dummy server failed to start
+  [Return]  ${process}
 
 Run Dummy Clam
   [Arguments]  ${port}  ${found}=  ${pid}=/tmp/dummy_clamav.pid
-  Run Dummy  ${RSPAMD_TESTDIR}/util/dummy_clam.py  ${port}  ${found}  ${pid}
+  ${process} =  Run Dummy  ${RSPAMD_TESTDIR}/util/dummy_clam.py  ${port}  ${found}  ${pid}
+  [Return]  ${process}
 
 Run Dummy Fprot
   [Arguments]  ${port}  ${found}=  ${pid}=/tmp/dummy_fprot.pid
-  Run Dummy  ${RSPAMD_TESTDIR}/util/dummy_fprot.py  ${port}  ${found}  ${pid}
+  ${process} =  Run Dummy  ${RSPAMD_TESTDIR}/util/dummy_fprot.py  ${port}  ${found}  ${pid}
+  [Return]  ${process}
 
 Run Dummy Avast
   [Arguments]  ${port}  ${found}=  ${pid}=/tmp/dummy_avast.pid
-  Run Dummy  ${RSPAMD_TESTDIR}/util/dummy_avast.py  ${port}  ${found}  ${pid}
+  ${process} =  Run Dummy  ${RSPAMD_TESTDIR}/util/dummy_avast.py  ${port}  ${found}  ${pid}
+  [Return]  ${process}
