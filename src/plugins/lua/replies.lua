@@ -126,8 +126,64 @@ local function replies_check(task)
         rspamd_logger.errx(task, 'Adding to %s failed with error: %s', sender_key, err)
         return
       end
-      lua_util.debugm(N, task, "Added data: %s to sender: %s", data, sender_key)
+      lua_util.debugm(N, task, "Added data: %s to sender: %s", params, sender_key)
+
+      local last_score = -1
+
+      -- getting last score of recipients
+      local function redis_zrange_cb(err, data)
+        if err ~= nil then
+          rspamd_logger.errx(task, 'redis_zrange_cb error when reading zrange withscores from %s replies set with error: %s', sender_key, err)
+          return
+        end
+        last_score = tonumber(data[#data])
+        rspamd_logger.infox(task, 'last score %s of sender %s was received', last_score, sender_key)
+
+        -- updating params considering last score of existing sender
+        for i = 1, #params, 2 do
+          params[i] = i + last_score
+        end
+
+        lua_util.debugm(N, task, 'add recipients %s to global replies set', params)
+
+        local function zadd_global_set_cb(err, data)
+          if err ~= nil then
+            rspamd_logger.errx(task, 'Failed to add sender %s to global set with error: %s', sender_key, err)
+            return
+          end
+          rspamd_logger.infox(task, 'Added sender %s to global set successfully', sender_key)
+        end
+
+        for i = 1, #params, 2 do
+          lua_redis.redis_make_request(task, -- making global replies set for verified recipients
+                  redis_params, -- connect params
+                  sender_key, -- hash key
+                  true, -- is write
+                  zadd_global_set_cb, --callback
+                  'ZADD', -- command
+                  { 'rsrk_verified_recipients', params[i], params[i + 1] } -- arguments
+          )
+        end
+      end
+
+      lua_util.debugm(N, task, 'getting recipients withscores from %s to get last score', sender_key)
+
+      -- getting scores of recipients connected to sender
+      lua_redis.redis_make_request(task,
+              redis_params,
+              sender_key,
+              false,
+              redis_zrange_cb,
+              'ZRANGE',
+              {sender_key, '0', '-1', 'WITHSCORES'}
+      )
+
+      if last_score == -1 then
+        rspamd_logger.errx(task, 'have not found %s replies set', sender_key)
+        return
+      end
     end
+
     for i = 1, #params, 2 do
       local _, conn, _ = lua_redis.redis_make_request(task, -- making local replies set (sender - recipients)
               redis_params, -- connect params
@@ -140,60 +196,8 @@ local function replies_check(task)
       conn:add_cmd('EXPIRE', { sender_key, tostring(math.floor(settings['expire'] * 1000)) }) --setting expire for individual  replies set
     end
 
-    local last_score = -1
 
-    -- getting last score of recipients
-    local function redis_zrange_cb(err, data)
-      if err ~= nil then
-        rspamd_logger.errx(task, 'redis_zrange_cb error when reading zrange withscores from %s replies set with error: %s', sender_key, err)
-        return
-      end
-      last_score = tonumber(data[#data])
-      rspamd_logger.infox(task, 'last score %s of sender %s was received', last_score, sender_key)
-    end
 
-    lua_util.debugm(N, task, 'getting recipients withscores from %s to get last score', sender_key)
-
-    -- getting scores of recipients connected to sender
-    lua_redis.redis_make_request(task,
-            redis_params,
-            sender_key,
-            false,
-            redis_zrange_cb,
-            'ZRANGE',
-            {sender_key, '0', '-1', 'WITHSCORES'}
-    )
-
-    if last_score == -1 then
-      rspamd_logger.errx(task, 'have not found %s replies set', sender_key)
-      return
-    end
-
-    -- updating params considering last score of existing sender
-    for i = 1, #params, 2 do
-      params[i] = i + last_score
-    end
-
-    lua_util.debugm(N, task, 'add recipients %s to global replies set', params)
-
-    local function zadd_global_set_cb(err, data)
-      if err ~= nil then
-        rspamd_logger.errx(task, 'Failed to add sender %s to global set with error: %s', sender_key, err)
-        return
-      end
-      rspamd_logger.infox(task, 'Added sender %s to global set successfully', sender_key)
-    end
-
-    for i = 1, #params, 2 do
-      lua_redis.redis_make_request(task, -- making global replies set for verified recipients
-              redis_params, -- connect params
-              sender_key, -- hash key
-              true, -- is write
-              zadd_global_set_cb, --callback
-              'ZADD', -- command
-              { 'rsrk_verified_recipients', params[i], params[i + 1] } -- arguments
-      )
-    end
   end
 
   local function redis_get_cb(err, data, addr)
