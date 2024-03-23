@@ -75,7 +75,7 @@ local function replies_check(task)
   local function check_recipient(stored_rcpt)
     local rcpts = task:get_recipients('mime')
     rspamd_logger.infox(task, 'Recipients: %s', rcpts)
-    rspamd_logger.infox(task, 'Storet rcpt: %s', stored_rcpt)
+    rspamd_logger.infox(task, 'Stored rcpt: %s', stored_rcpt)
     if rcpts then
       local filter_predicate = function(input_rcpt)
         local real_rcpt_h = make_key(input_rcpt:lower(), 8)
@@ -102,32 +102,43 @@ local function replies_check(task)
 
 
   local function add_to_replies_set(recipients)
-    local sender = task:get_from('mime')
+    local sender = task:get_reply_sender()
+    lua_util.debugm(N, task, "Sender to add to replies set: %s", sender)
 
     local task_time = task:get_timeval(true)
 
     local params = {}
     -- making params out of recipients list for replies set
-    for i, recipient in pairs(recipients) do
+    local j = 1
+    for i = 1, #recipients * 2, 2 do
       table.insert(params, i, tostring(task_time))
-      i = i + 1
-      table.insert(params, i, tostring(recipient))
+      table.insert(params, i + 1, tostring(recipients[j]))
+      j = j + 1
     end
 
-    local sender_key = lua_util.maybe_obfuscate_string(tostring(sender), settings, settings.sender_prefix)
-    local sender_hash = make_key(sender:lower(), 8)
+    local sender_string = lua_util.maybe_obfuscate_string(tostring(sender), settings, settings.sender_prefix)
+    local sender_key = make_key(sender_string:lower(), 8)
 
     lua_util.debugm(N, task, 'add  recipients %s to sender %s local replies set', params, sender_key)
 
-    local _, conn, _ = lua_redis.redis_make_request(task, -- making local replies set (sender - recipients)
-            redis_params, -- connect params
-            sender_key, -- hash key
-            true, -- is write
-            nil, --callback
-            'ZADD', -- command
-            { sender_key, params } -- arguments
-    )
-    conn:add_cmd('PSETEX', { sender_key, tostring(math.floor(settings['expire'] * 1000)), sender_hash }) --setting expire for individual  replies set
+    local function zadd_cb(err, data)
+      if err ~= nil then
+        rspamd_logger.errx(task, 'Adding to %s failed with error: %s', sender_key, err)
+        return
+      end
+      lua_util.debugm(N, task, "Added data: %s to sender: %s", data, sender_key)
+    end
+    for i = 1, #params, 2 do
+      local _, conn, _ = lua_redis.redis_make_request(task, -- making local replies set (sender - recipients)
+              redis_params, -- connect params
+              sender_key, -- hash key
+              true, -- is write
+              zadd_cb, --callback
+              'ZADD', -- command
+              { sender_key, params[i], params[i + 1] } -- arguments
+      )
+      conn:add_cmd('EXPIRE', { sender_key, tostring(math.floor(settings['expire'] * 1000)) }) --setting expire for individual  replies set
+    end
 
     local last_score = -1
 
@@ -138,7 +149,7 @@ local function replies_check(task)
         return
       end
       last_score = tonumber(data[#data])
-      rspamd_logger.infox(task, 'last score %s of sender %s was received', sender_key, last_score)
+      rspamd_logger.infox(task, 'last score %s of sender %s was received', last_score, sender_key)
     end
 
     lua_util.debugm(N, task, 'getting recipients withscores from %s to get last score', sender_key)
@@ -165,14 +176,24 @@ local function replies_check(task)
 
     lua_util.debugm(N, task, 'add recipients %s to global replies set', params)
 
-    lua_redis.redis_make_request(task, -- making global replies set for verified recipients
-            redis_params, -- connect params
-            sender_key, -- hash key
-            true, -- is write
-            nil, --callback
-            'ZADD', -- command
-            { 'rsrk_verified_recipients', params } -- arguments
-    )
+    local function zadd_global_set_cb(err, data)
+      if err ~= nil then
+        rspamd_logger.errx(task, 'Failed to add sender %s to global set with error: %s', sender_key, err)
+        return
+      end
+      rspamd_logger.infox(task, 'Added sender %s to global set successfully', sender_key)
+    end
+
+    for i = 1, #params, 2 do
+      lua_redis.redis_make_request(task, -- making global replies set for verified recipients
+              redis_params, -- connect params
+              sender_key, -- hash key
+              true, -- is write
+              zadd_global_set_cb, --callback
+              'ZADD', -- command
+              { 'rsrk_verified_recipients', params[i], params[i + 1] } -- arguments
+      )
+    end
   end
 
   local function redis_get_cb(err, data, addr)
@@ -180,6 +201,7 @@ local function replies_check(task)
       rspamd_logger.errx(task, 'redis_get_cb error when reading data from %s: %s', addr:get_addr(), err)
       return
     end
+    rspamd_logger.infox(task, 'Data: %s', tostring(data))
     local recipients = check_recipient(data)
     if data and type(data) == 'string' and recipients then
       -- Hash was found
@@ -199,7 +221,6 @@ local function replies_check(task)
   end
   -- If in-reply-to header not present return
   in_reply_to = task:get_header_raw('in-reply-to')
-  lua_util.debugm(N, task, tostring(in_reply_to))
   if not in_reply_to then
     return
   end
@@ -235,7 +256,7 @@ local function replies_set(task)
   elseif settings.use_local and (ip and ip:is_local()) then
     lua_util.debugm(N, task, 'sender is from local network')
   else
-    return
+    --return
   end
   -- If no message-id present return
   local msg_id = task:get_header_raw('message-id')
@@ -246,6 +267,7 @@ local function replies_set(task)
   local key = make_key(msg_id, settings.key_size, settings.key_prefix)
 
   local sender = task:get_reply_sender()
+  lua_util.debugm(N, task, "Sender: %s", tostring(sender))
 
   if sender then
     local sender_hash = make_key(sender:lower(), 8)
