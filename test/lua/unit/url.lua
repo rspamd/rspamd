@@ -250,4 +250,15 @@ context("URL check functions", function()
       assert_equal(v[2], res, 'expected ' .. v[2] .. ' but got ' .. res .. ' in url ' .. v[1])
     end)
   end
+
+  test("URL regexp issue", function()
+    local rspamd_regexp = require "rspamd_regexp"
+    local u = url.create(pool,
+        'https://cls21.bullhornstaffing.com/MailerUnsubscribe.cfm?privateLabelID=3D26028&email=xpto&updKey=3D%3B%28U%2B%2F%200T%3EI%3B%2FQEI%5E%29%25XR%3FZ%40%5B%2EGJY%3CF%23%3F%25%22%29%5D%2D%0A')
+    assert_not_nil(u, "we are able to parse url")
+    local re = rspamd_regexp.create_cached("^$|^[?].*|^[#].*|[^#?]+")
+    assert_not_nil(re, "regexp is valid")
+    local res = re:search('/' .. u:get_path() .. '?' .. u:get_query())
+    assert_equal(res[#res], '')
+  end)
 end)
