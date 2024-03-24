@@ -7,6 +7,7 @@ Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
 ${CONFIG}                         ${RSPAMD_TESTDIR}/configs/known_senders.conf
+${SETTINGS_REPLIES}               {symbols_enabled = [REPLIES_CHECK, REPLIES_SET, REPLY]}
 ${REDIS_SCOPE}                    Suite
 ${RSPAMD_SCOPE}                   Suite
 
@@ -36,7 +37,11 @@ UNKNOWN SENDER WRONG DOMAIN RESCAN
   Do Not Expect Symbol  UNKNOWN_SENDER
   
 INCOMING MAIL SENDER IS KNOWN
+  Scan File  ${RSPAMD_TESTDIR}/messages/set_replyto_1_1.eml
+  ...  Settings=${SETTINGS_REPLIES}
   Scan File  ${RSPAMD_TESTDIR}/messages/replyto_1_1.eml
+  ...  Settings=${SETTINGS_REPLIES}
+  Scan File  ${RSPAMD_TESTDIR}/messages/inc_mail_known_sender.eml
   ...  Settings={symbols_enabled [INC_MAIL_KNOWN]}
   Expect Symbol  INC_MAIL_KNOWN
   
