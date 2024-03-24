@@ -77,6 +77,23 @@ local function make_key(input)
   return hash:hex()
 end
 
+local function make_key_replies(goop, sz, prefix)
+  local h = rspamd_cryptobox_hash.create()
+  h:update(goop)
+  local key
+  if sz then
+    key = h:base32():sub(1, sz)
+  else
+    key = h:base32()
+  end
+
+  if prefix then
+    key = prefix .. key
+  end
+
+  return key
+end
+
 local function check_redis_key(task, key, key_ty)
   lua_util.debugm(N, task, 'check key %s, type: %s', key, key_ty)
   local function redis_zset_callback(err, data)
@@ -203,15 +220,19 @@ local function known_senders_callback(task)
 end
 
 local function check_known_incoming_mail_callback(task)
-  local sender = task:get_from(0)
+  local sender = task:get_reply_sender()
   if not sender then
     rspamd_logger.errx(task, 'Couldn\'t get sender')
     return nil
   end
 
   -- making sender key
-  lua_util.debugm(N, task, 'Sender: %s', tostring(sender))
-  local sender_key = lua_util.maybe_obfuscate_string(tostring(sender), settings, settings.sender_prefix)
+  lua_util.debugm(N, task, 'Sender: %s', sender)
+
+  local sender_string = lua_util.maybe_obfuscate_string(tostring(sender), settings, settings.sender_prefix)
+  local sender_key = make_key_replies(sender_string:lower(), 8)
+
+  lua_util.debugm(N, task, 'Sender key: %s', sender_key)
 
   local list_of_senders = {}
 
@@ -220,8 +241,21 @@ local function check_known_incoming_mail_callback(task)
       rspamd_logger.errx(task, 'Couldn\'t get data from global replies set. Ended with error: %s', err)
       return
     end
+
     list_of_senders = data
-    rspamd_logger.infox(task, 'Successfully got list: %data of verified senders', data)
+    rspamd_logger.infox(task, 'Successfully got list: %s of verified senders', data)
+
+    lua_util.debugm(N, task, 'List of senders: %s', list_of_senders)
+
+    -- searching for sender in global replies set
+    if list_of_senders then
+      for _, sndr in ipairs(list_of_senders) do
+        if sndr == sender then
+          task:insert_result('INC_MAIL_KNOWN', 1.0,
+                  string.format('Incoming mail and it\'s sender is known'))
+        end
+      end
+    end
   end
 
   lua_util.debugm(N, task, 'Making redis request to global replies set')
@@ -231,16 +265,9 @@ local function check_known_incoming_mail_callback(task)
           false, -- is write
           redis_zrange_cb, --callback
           'ZRANGE', -- command
-          { 'rsrk_verified_recipients', 0, -1 } -- arguments
+          { 'rsrk_verified_recipients', '0', '-1' } -- arguments
   )
-  lua_util.debugm(N, task, 'List of senders: %s', tostring(list_of_senders))
-  if list_of_senders then
-    for _, sndr in ipairs(list_of_senders) do
-      if sndr == sender then
-        task:insert_result('INC_MAIL_KNOWN', 1.0, string.format('Incoming mail and it\'s sender is known'))
-      end
-    end
-  end
+
 end
 
 local opts = rspamd_config:get_all_opt('known_senders')
@@ -256,7 +283,8 @@ if opts then
 
   if redis_params then
     local map_conf = settings.domains
-    settings.domains = lua_maps.map_add_from_ucl(settings.domains, 'set', 'domains to track senders from')
+    settings.domains = lua_maps.map_add_from_ucl(settings.domains,
+            'set', 'domains to track senders from')
     if not settings.domains then
       rspamd_logger.errx(rspamd_config, "couldn't add map %s, disable module",
           map_conf)
