@@ -74,8 +74,7 @@ local function replies_check(task)
   local in_reply_to
   local function check_recipient(stored_rcpt)
     local rcpts = task:get_recipients('mime')
-    rspamd_logger.infox(task, 'Recipients: %s', rcpts)
-    rspamd_logger.infox(task, 'Stored rcpt: %s', stored_rcpt)
+    rspamd_logger.infox(task, 'recipients: %s', rcpts)
     if rcpts then
       local filter_predicate = function(input_rcpt)
         local real_rcpt_h = make_key(input_rcpt:lower(), 8)
@@ -87,6 +86,11 @@ local function replies_check(task)
         return rcpt.addr or ''
       end, rcpts)) then
         lua_util.debugm(N, task, 'reply to %s validated', in_reply_to)
+
+        --storing only addr of rcpt
+        for i = 1, #rcpts, 1 do
+          rcpts[i] = rcpts[i].addr
+        end
         return rcpts
       end
 
@@ -137,6 +141,12 @@ local function replies_check(task)
       last_score = tonumber(data[#data])
       rspamd_logger.infox(task, 'last score %s of sender %s was received', last_score, sender_key)
 
+      -- if last score wasn't found
+      if last_score == -1 or last_score == nil then
+        rspamd_logger.errx(task, 'have not found %s replies set', sender_key)
+        return
+      end
+
       -- updating params considering last score of existing sender
       for i = 1, #params, 2 do
         params[i] = i + last_score
@@ -156,12 +166,6 @@ local function replies_check(task)
             'ZRANGE',
             {sender_key, '0', '-1', 'WITHSCORES'}
     )
-
-    -- if last score wasn't found
-    if last_score == -1 or last_score == nil then
-      rspamd_logger.errx(task, 'have not found %s replies set', sender_key)
-      return
-    end
   end
 
   local function add_to_replies_set(recipients)
@@ -174,7 +178,7 @@ local function replies_check(task)
     -- making params out of recipients list for replies set
     local j = 1
     for i = 1, #recipients * 2, 2 do
-      table.insert(params, i, tostring(task_time))
+      table.insert(params, i, task_time)
       table.insert(params, i + 1, tostring(recipients[j]))
       j = j + 1
     end
@@ -189,7 +193,7 @@ local function replies_check(task)
         rspamd_logger.errx(task, 'Adding to %s failed with error: %s', sender_key, err)
         return
       end
-      lua_util.infox(task, "added data: %s to sender: %s with code: %s", params, sender_key, data)
+      rspamd_logger.infox(task, "added data: %s to sender: %s with code: %s", params, sender_key, data)
 
       update_global_replies_set(params, sender_key)
 
@@ -217,7 +221,6 @@ local function replies_check(task)
       rspamd_logger.errx(task, 'redis_get_cb error when reading data from %s: %s', addr:get_addr(), err)
       return
     end
-    rspamd_logger.infox(task, 'Data: %s', tostring(data))
     local recipients = check_recipient(data)
     if data and type(data) == 'string' and recipients then
       -- Hash was found
