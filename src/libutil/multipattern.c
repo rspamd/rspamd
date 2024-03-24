@@ -717,6 +717,10 @@ int rspamd_multipattern_lookup(struct rspamd_multipattern *mp,
 										&end,
 										TRUE,
 										NULL)) {
+				if (start >= end) {
+					/* We found all matches, so no more hits are possible (protect from empty patterns) */
+					break;
+				}
 				if (rspamd_multipattern_acism_cb(i, end - in, &cbd)) {
 					goto out;
 				}

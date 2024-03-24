@@ -543,6 +543,11 @@ lua_regexp_search(lua_State *L)
 				}
 
 				matched = TRUE;
+
+				if (start >= end) {
+					/* We found all matches, so no more hits are possible (protect from empty patterns) */
+					break;
+				}
 			}
 
 			if (!matched) {
@@ -749,7 +754,7 @@ lua_regexp_split(lua_State *L)
 					lua_rawseti(L, -2, ++i);
 					matched = TRUE;
 				}
-				else if (start == end) {
+				else if (start >= end) {
 					break;
 				}
 				old_start = end;

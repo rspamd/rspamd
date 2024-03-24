@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -567,7 +567,8 @@ rspamd_regexp_search(const rspamd_regexp_t *re, const char *text, gsize len,
 	g_assert(text != NULL);
 
 	if (len == 0) {
-		len = strlen(text);
+		/* No length, no match! */
+		return FALSE;
 	}
 
 	if (re->match_limit > 0 && len > re->match_limit) {
@@ -727,7 +728,8 @@ rspamd_regexp_search(const rspamd_regexp_t *re, const char *text, gsize len,
 	g_assert(text != NULL);
 
 	if (len == 0) {
-		len = strlen(text);
+		/* No length, no match! */
+		return FALSE;
 	}
 
 	if (re->match_limit > 0 && len > re->match_limit) {
@@ -947,10 +949,6 @@ rspamd_regexp_match(const rspamd_regexp_t *re, const char *text, gsize len,
 
 	g_assert(re != NULL);
 	g_assert(text != NULL);
-
-	if (len == 0) {
-		len = strlen(text);
-	}
 
 	if (rspamd_regexp_search(re, text, len, &start, &end, raw, NULL)) {
 		if (start == text && end == text + len) {
@@ -1252,10 +1250,6 @@ rspamd_regexp_from_glob(const char *gl, gsize sz, GError **err)
 	int nbraces = 0;
 
 	g_assert(gl != NULL);
-
-	if (sz == 0) {
-		sz = strlen(gl);
-	}
 
 	end = gl + sz;
 	out = g_string_sized_new(sz + 2);
