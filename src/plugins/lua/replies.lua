@@ -100,6 +100,69 @@ local function replies_check(task)
     return nil
   end
 
+  local function add_to_global_replies_set(params, sender_key)
+    lua_util.debugm(N, task, 'Adding recipients %s to global replies set', params)
+
+    local function zadd_global_set_cb(err, data)
+      if err ~= nil then
+        rspamd_logger.errx(task, 'failed to add sender %s to global set with error: %s', sender_key, err)
+        return
+      end
+      rspamd_logger.infox(task, 'added sender %s to global set with code: %s', sender_key, data)
+    end
+
+    for i = 1, #params, 2 do
+      lua_redis.redis_make_request(task, -- making global replies set for verified recipients
+              redis_params, -- connect params
+              sender_key, -- hash key
+              true, -- is write
+              zadd_global_set_cb, --callback
+              'ZADD', -- command
+              { 'rsrk_verified_recipients', params[i], params[i + 1] } -- arguments
+      )
+    end
+  end
+
+  local function update_global_replies_set(params, sender_key)
+    local last_score = -1
+
+    -- getting last score of recipients
+    local function redis_zrange_cb(err, data)
+      if err ~= nil then
+        rspamd_logger.errx(task,
+                'redis_zrange_cb error when reading zrange withscores from %s replies set with error: %s',
+                sender_key, err)
+        return
+      end
+      last_score = tonumber(data[#data])
+      rspamd_logger.infox(task, 'last score %s of sender %s was received', last_score, sender_key)
+
+      -- updating params considering last score of existing sender
+      for i = 1, #params, 2 do
+        params[i] = i + last_score
+      end
+
+      add_to_global_replies_set(params, sender_key)
+    end
+
+    lua_util.debugm(N, task, 'Getting recipients withscores from %s to get last score', sender_key)
+
+    -- getting scores of recipients connected to sender
+    lua_redis.redis_make_request(task,
+            redis_params,
+            sender_key,
+            false,
+            redis_zrange_cb,
+            'ZRANGE',
+            {sender_key, '0', '-1', 'WITHSCORES'}
+    )
+
+    -- if last score wasn't found
+    if last_score == -1 or last_score == nil then
+      rspamd_logger.errx(task, 'have not found %s replies set', sender_key)
+      return
+    end
+  end
 
   local function add_to_replies_set(recipients)
     local sender = task:get_reply_sender()
@@ -119,69 +182,17 @@ local function replies_check(task)
     local sender_string = lua_util.maybe_obfuscate_string(tostring(sender), settings, settings.sender_prefix)
     local sender_key = make_key(sender_string:lower(), 8)
 
-    lua_util.debugm(N, task, 'add  recipients %s to sender %s local replies set', params, sender_key)
+    lua_util.debugm(N, task, 'Adding  recipients %s to sender %s local replies set', params, sender_key)
 
     local function zadd_cb(err, data)
       if err ~= nil then
         rspamd_logger.errx(task, 'Adding to %s failed with error: %s', sender_key, err)
         return
       end
-      lua_util.debugm(N, task, "Added data: %s to sender: %s", params, sender_key)
+      lua_util.infox(task, "added data: %s to sender: %s with code: %s", params, sender_key, data)
 
-      local last_score = -1
+      update_global_replies_set(params, sender_key)
 
-      -- getting last score of recipients
-      local function redis_zrange_cb(err, data)
-        if err ~= nil then
-          rspamd_logger.errx(task, 'redis_zrange_cb error when reading zrange withscores from %s replies set with error: %s', sender_key, err)
-          return
-        end
-        last_score = tonumber(data[#data])
-        rspamd_logger.infox(task, 'last score %s of sender %s was received', last_score, sender_key)
-
-        -- updating params considering last score of existing sender
-        for i = 1, #params, 2 do
-          params[i] = i + last_score
-        end
-
-        lua_util.debugm(N, task, 'add recipients %s to global replies set', params)
-
-        local function zadd_global_set_cb(err, data)
-          if err ~= nil then
-            rspamd_logger.errx(task, 'Failed to add sender %s to global set with error: %s', sender_key, err)
-            return
-          end
-          rspamd_logger.infox(task, 'Added sender %s to global set successfully', sender_key)
-        end
-
-        for i = 1, #params, 2 do
-          lua_redis.redis_make_request(task, -- making global replies set for verified recipients
-                  redis_params, -- connect params
-                  sender_key, -- hash key
-                  true, -- is write
-                  zadd_global_set_cb, --callback
-                  'ZADD', -- command
-                  { 'rsrk_verified_recipients', params[i], params[i + 1] } -- arguments
-          )
-        end
-      end
-
-      lua_util.debugm(N, task, 'getting recipients withscores from %s to get last score', sender_key)
-
-      -- getting scores of recipients connected to sender
-      lua_redis.redis_make_request(task,
-              redis_params,
-              sender_key,
-              false,
-              redis_zrange_cb,
-              'ZRANGE',
-              {sender_key, '0', '-1', 'WITHSCORES'}
-      )
-
-      if last_score == -1 then
-        rspamd_logger.errx(task, 'have not found %s replies set', sender_key)
-        return
-      end
     end
 
     for i = 1, #params, 2 do
@@ -193,7 +204,8 @@ local function replies_check(task)
               'ZADD', -- command
               { sender_key, params[i], params[i + 1] } -- arguments
       )
-      conn:add_cmd('EXPIRE', { sender_key, tostring(math.floor(settings['expire'] * 1000)) }) --setting expire for individual  replies set
+      -- adding expiration to the local replies set
+      conn:add_cmd('EXPIRE', { sender_key, tostring(math.floor(settings['expire'] * 1000)) })
     end
 
 
@@ -271,7 +283,6 @@ local function replies_set(task)
   local key = make_key(msg_id, settings.key_size, settings.key_prefix)
 
   local sender = task:get_reply_sender()
-  lua_util.debugm(N, task, "Sender: %s", tostring(sender))
 
   if sender then
     local sender_hash = make_key(sender:lower(), 8)
