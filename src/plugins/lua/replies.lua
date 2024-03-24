@@ -267,12 +267,13 @@ local function replies_set(task)
   end
   -- If sender is unauthenticated return
   local ip = task:get_ip()
+  lua_util.debugm(N, task, 'User: %s', task:get_user())
   if settings.use_auth and task:get_user() then
     lua_util.debugm(N, task, 'sender is authenticated')
   elseif settings.use_local and (ip and ip:is_local()) then
     lua_util.debugm(N, task, 'sender is from local network')
   else
-    --return
+    return
   end
   -- If no message-id present return
   local msg_id = task:get_header_raw('message-id')
