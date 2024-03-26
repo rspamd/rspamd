@@ -115,16 +115,17 @@ local function replies_check(task)
       rspamd_logger.infox(task, 'added sender %s to global set with code: %s', sender_key, data)
     end
 
-    for i = 1, #params, 2 do
-      lua_redis.redis_make_request(task, -- making global replies set for verified recipients
-              redis_params, -- connect params
-              sender_key, -- hash key
-              true, -- is write
-              zadd_global_set_cb, --callback
-              'ZADD', -- command
-              { 'rsrk_verified_recipients', params[i], params[i + 1] } -- arguments
-      )
-    end
+    table.insert(params, 1, 'rsrk_verified_recipients')
+
+    lua_redis.redis_make_request(task, -- making global replies set for verified recipients
+            redis_params, -- connect params
+            sender_key, -- hash key
+            true, -- is write
+            zadd_global_set_cb, --callback
+            'ZADD', -- command
+            params -- arguments
+    )
+
   end
 
   local function update_global_replies_set(params, sender_key)
@@ -178,7 +179,7 @@ local function replies_check(task)
     -- making params out of recipients list for replies set
     local j = 1
     for i = 1, #recipients * 2, 2 do
-      table.insert(params, i, task_time)
+      table.insert(params, i, tostring(task_time))
       table.insert(params, i + 1, tostring(recipients[j]))
       j = j + 1
     end
@@ -199,18 +200,19 @@ local function replies_check(task)
 
     end
 
-    for i = 1, #params, 2 do
-      local _, conn, _ = lua_redis.redis_make_request(task, -- making local replies set (sender - recipients)
-              redis_params, -- connect params
-              sender_key, -- hash key
-              true, -- is write
-              zadd_cb, --callback
-              'ZADD', -- command
-              { sender_key, params[i], params[i + 1] } -- arguments
-      )
-      -- adding expiration to the local replies set
-      conn:add_cmd('EXPIRE', { sender_key, tostring(math.floor(settings['expire'] * 1000)) })
-    end
+    table.insert(params, 1, sender_key)
+
+    local _, conn, _ = lua_redis.redis_make_request(task, -- making local replies set (sender - recipients)
+            redis_params, -- connect params
+            sender_key, -- hash key
+            true, -- is write
+            zadd_cb, --callback
+            'ZADD', -- command
+            params -- arguments
+    )
+    -- adding expiration to the local replies set
+    conn:add_cmd('EXPIRE', { sender_key, tostring(math.floor(settings['expire'] * 1000)) })
+
 
 
 
@@ -276,7 +278,7 @@ local function replies_set(task)
   elseif settings.use_local and (ip and ip:is_local()) then
     lua_util.debugm(N, task, 'sender is from local network')
   else
-    return
+    --return
   end
   -- If no message-id present return
   local msg_id = task:get_header_raw('message-id')
