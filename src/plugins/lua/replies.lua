@@ -278,7 +278,7 @@ local function replies_set(task)
   elseif settings.use_local and (ip and ip:is_local()) then
     lua_util.debugm(N, task, 'sender is from local network')
   else
-    --return
+    return
   end
   -- If no message-id present return
   local msg_id = task:get_header_raw('message-id')
