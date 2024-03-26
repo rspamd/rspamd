@@ -233,26 +233,32 @@ local check_replyto_id = rspamd_config:register_symbol({
           if (util.strequal_caseless(from[1].domain, rt[1].domain)) then
             task:insert_result('REPLYTO_DOM_EQ_FROM_DOM', 1.0)
           else
-            -- See if Reply-To matches the To address
-            local to = task:get_recipients(2)
-            if (to and to[1] and to[1].addr:lower() == rt[1].addr:lower()) then
-              -- Ignore this for mailing-lists and automatic submissions
-              if (not (task:get_header('List-Unsubscribe') or
-                  task:get_header('X-To-Get-Off-This-List') or
-                  task:get_header('X-List') or
-                  task:get_header('Auto-Submitted')))
-              then
-                task:insert_result('REPLYTO_EQ_TO_ADDR', 1.0)
-              end
-            else
-              task:insert_result('REPLYTO_DOM_NEQ_FROM_DOM', 1.0)
-            end
+            task:insert_result('REPLYTO_DOM_NEQ_FROM_DOM', 1.0)
           end
         end
         -- See if the Display Names match
         if (from[1].name and rt[1].name and
             util.strequal_caseless(from[1].name, rt[1].name)) then
           task:insert_result('REPLYTO_DN_EQ_FROM_DN', 1.0)
+        end
+      end
+
+      -- See if Reply-To matches the To address
+      local to = task:get_recipients(2)
+      if (to and to[1] and to[1].addr:lower() == rt[1].addr:lower()) then
+        -- Ignore this for mailing-lists and automatic submissions
+        if (not (task:get_header('List-Unsubscribe') or
+          task:get_header('X-To-Get-Off-This-List') or
+          task:get_header('X-List') or
+          task:get_header('Auto-Submitted')))
+        then
+          task:insert_result('REPLYTO_EQ_TO_ADDR', 1.0)
+        end
+      elseif to[1].domain and rt[1].domain then
+        if (util.strequal_caseless(to[1].domain, rt[1].domain)) then
+          task:insert_result('REPLYTO_DOM_EQ_TO_DOM', 1.0)
+        else
+          task:insert_result('REPLYTO_DOM_NEQ_TO_DOM', 1.0)
         end
       end
     end
@@ -329,6 +335,22 @@ rspamd_config:register_symbol {
   parent = check_replyto_id,
   type = 'virtual',
   description = 'Reply-To is the same as the To address',
+  group = 'headers',
+}
+rspamd_config:register_symbol {
+  name = 'REPLYTO_DOM_EQ_TO_DOM',
+  score = 0.0,
+  parent = check_replyto_id,
+  type = 'virtual',
+  description = 'Reply-To domain matches the To domain',
+  group = 'headers',
+}
+rspamd_config:register_symbol {
+  name = 'REPLYTO_DOM_NEQ_TO_DOM',
+  score = 0.0,
+  parent = check_replyto_id,
+  type = 'virtual',
+  description = 'Reply-To domain does not match the To domain',
   group = 'headers',
 }
 
