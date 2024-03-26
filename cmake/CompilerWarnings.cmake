@@ -23,6 +23,9 @@ CHECK_C_COMPILER_FLAG(-Wdeprecated-declarations SUPPORT_WDEPRECATED_DECLARATIONS
 # Disable -Wsuggest-attribute=format: it is too noisy with FPs around fmt C++ library
 CHECK_C_COMPILER_FLAG(-Wsuggest-attribute SUPPORT_WSUGGEST_ATTRIBUTE)
 
+# Disable -Wunknown-pragmas: we have both clang and gcc pragmas
+CHECK_C_COMPILER_FLAG(-Wunknown-pragmas SUPPORT_WUNKNOWN_PRAGMAS)
+
 IF(SUPPORT_WEXTRA)
     ADD_COMPILE_OPTIONS("-Wextra")
 ENDIF(SUPPORT_WEXTRA)
@@ -86,4 +89,8 @@ ENDIF()
 
 IF(SUPPORT_WDEPRECATED_DECLARATIONS)
     ADD_COMPILE_OPTIONS("-Wno-deprecated-declarations")
+ENDIF()
+
+IF(SUPPORT_WUNKNOWN_PRAGMAS)
+    ADD_COMPILE_OPTIONS("-Wno-unknown-pragmas")
 ENDIF()

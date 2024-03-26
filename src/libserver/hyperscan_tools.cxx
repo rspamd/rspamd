@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,11 @@
 #include "config.h"
 
 #ifdef WITH_HYPERSCAN
-#include <string>
 #include <filesystem>
 #include "contrib/ankerl/unordered_dense.h"
 #include "contrib/ankerl/svector.h"
 #include "fmt/core.h"
+#include "libutil/cxx/string.hxx"
 #include "libutil/cxx/file_util.hxx"
 #include "libutil/cxx/error.hxx"
 #include "hs.h"
@@ -91,9 +91,9 @@ namespace rspamd::util {
 class hs_known_files_cache {
 private:
 	// These fields are filled when we add new known cache files
-	ankerl::svector<std::string, 4> cache_dirs;
-	ankerl::svector<std::string, 8> cache_extensions;
-	ankerl::unordered_dense::set<std::string> known_cached_files;
+	ankerl::svector<sz::string, 4> cache_dirs;
+	ankerl::svector<sz::string, 8> cache_extensions;
+	ankerl::unordered_dense::set<sz::string> known_cached_files;
 	bool loaded = false;
 
 private:
@@ -132,16 +132,16 @@ public:
 			return;
 		}
 
-		auto dir = fpath.parent_path();
-		auto ext = fpath.extension();
+		auto dir = sz::string{fpath.parent_path().c_str()};
+		auto ext = sz::string{fpath.extension().c_str()};
 
 		if (std::find_if(cache_dirs.begin(), cache_dirs.end(),
 						 [&](const auto &item) { return item == dir; }) == std::end(cache_dirs)) {
-			cache_dirs.emplace_back(std::string{dir});
+			cache_dirs.emplace_back(sz::string{dir});
 		}
 		if (std::find_if(cache_extensions.begin(), cache_extensions.end(),
 						 [&](const auto &item) { return item == ext; }) == std::end(cache_extensions)) {
-			cache_extensions.emplace_back(std::string{ext});
+			cache_extensions.emplace_back(sz::string{ext});
 		}
 
 		auto is_known = known_cached_files.insert(fpath.string());
@@ -162,16 +162,16 @@ public:
 			return;
 		}
 
-		auto dir = fpath.parent_path();
-		auto ext = fpath.extension();
+		auto dir = sz::string{fpath.parent_path().c_str()};
+		auto ext = sz::string{fpath.extension().c_str()};
 
 		if (std::find_if(cache_dirs.begin(), cache_dirs.end(),
 						 [&](const auto &item) { return item == dir; }) == std::end(cache_dirs)) {
-			cache_dirs.emplace_back(dir.string());
+			cache_dirs.emplace_back(dir);
 		}
 		if (std::find_if(cache_extensions.begin(), cache_extensions.end(),
 						 [&](const auto &item) { return item == ext; }) == std::end(cache_extensions)) {
-			cache_extensions.emplace_back(ext.string());
+			cache_extensions.emplace_back(ext);
 		}
 
 		auto is_known = known_cached_files.insert(fpath.string());
@@ -215,7 +215,7 @@ public:
 		/* We clean dir merely if we are running from the main process */
 		if (rspamd_current_worker == nullptr && env_cleanup_disable == nullptr && loaded) {
 			const auto *log_func = RSPAMD_LOG_FUNC;
-			auto cleanup_dir = [&](std::string_view dir) -> void {
+			auto cleanup_dir = [&](sz::string_view dir) -> void {
 				for (const auto &ext: cache_extensions) {
 					glob_t globbuf;
 
@@ -227,7 +227,7 @@ public:
 
 					if (glob(glob_pattern.c_str(), 0, nullptr, &globbuf) == 0) {
 						for (auto i = 0; i < globbuf.gl_pathc; i++) {
-							auto path = std::string{globbuf.gl_pathv[i]};
+							auto path = sz::string{globbuf.gl_pathv[i]};
 							std::size_t nsz;
 							struct stat st;
 
@@ -287,7 +287,7 @@ public:
 struct hs_shared_database {
 	hs_database_t *db = nullptr; /**< internal database (might be in a shared memory) */
 	std::optional<raii_mmaped_file> maybe_map;
-	std::string cached_path;
+	sz::string cached_path;
 
 	~hs_shared_database()
 	{
@@ -335,7 +335,7 @@ struct real_hs_db {
 	std::uint32_t crc32;
 };
 static auto
-hs_is_valid_database(void *raw, std::size_t len, std::string_view fname) -> tl::expected<bool, std::string>
+hs_is_valid_database(void *raw, std::size_t len, sz::string_view fname) -> tl::expected<bool, sz::string>
 {
 	if (len < sizeof(real_hs_db)) {
 		return tl::make_unexpected(fmt::format("cannot load hyperscan database from {}: too short", fname));
@@ -416,7 +416,7 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 											 else {
 												 auto &tmpfile_checked = tmpfile.value();
 												 // Store owned string
-												 auto tmpfile_name = std::string{tmpfile_checked.get_name()};
+												 auto tmpfile_name = sz::string{tmpfile_checked.get_name()};
 												 std::size_t unserialized_size;
 
 												 if (auto ret = hs_serialized_database_size(((const char *) cached_serialized.get_map()) + offset,

@@ -31,6 +31,7 @@ IF("${ARCH}" STREQUAL "x86_64" OR "${ARCH}" STREQUAL "i386")
 #include <stddef.h>
 #pragma GCC push_options
 #pragma GCC target(\"avx2\")
+#pragma clang attribute push(__attribute__((target(\"avx2\"))))
 #ifndef __SSE2__
 #define __SSE2__
 #endif
