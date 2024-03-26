@@ -632,6 +632,11 @@ rspamd_re_cache_process_pcre(struct rspamd_re_runtime *rt,
 			if (max_hits > 0 && r >= max_hits) {
 				break;
 			}
+
+			if (start >= end) {
+				/* We found all matches, so no more hits are possible (protect from empty patterns) */
+				break;
+			}
 		}
 
 		rt->results[id] += r;

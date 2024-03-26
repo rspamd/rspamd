@@ -38,7 +38,7 @@ spf {
   # Maximum count of DNS requests per record
   max_dns_requests = 30;
   # Minimum TTL enforced for all elements in SPF records
-  min_cache_ttl = 5m;
+  min_cache_ttl = 5min;
   # Disable all IPv6 lookups
   disable_ipv6 = false;
   # Use IP address from a received header produced by this relay (using by attribute)
