@@ -109,6 +109,7 @@ local function cloudmark_config(opts)
     symbol_fail = 'CLOUDMARK_FAIL',
     symbol = 'CLOUDMARK_CHECK',
     symbol_spam = 'CLOUDMARK_SPAM',
+    add_score_header = false, -- Add X-CMAE-Score header
     add_headers = false, -- allow addition of the headers from Cloudmark
   }
 
@@ -235,6 +236,17 @@ local function parse_cloudmark_reply(task, rule, body)
     end, obj.appendHeaders))
     lua_mime.modify_headers(task, {
       add = headers_add
+    })
+  end
+
+  if rule.add_score_header then
+    lua_mime.modify_headers(task, {
+      add = {
+        ['X-CMAE-Score'] = {
+          order = 1,
+          value = tostring(score)
+        }
+      }
     })
   end
 
