@@ -800,6 +800,13 @@ reconf['INVALID_POSTFIX_RECEIVED'] = {
   group = 'headers'
 }
 
+reconf['RECEIVED_HELO_LOCALHOST'] = {
+  re = 'Received=/from (localhost|\\[127\\.0\\.0\\.1\\])\\s+/X',
+  score = 0.0,
+  description = 'Localhost HELO seen in Received header',
+  group = 'headers'
+}
+
 reconf['X_PHP_FORGED_0X'] = {
   re = "X-PHP-Originating-Script=/^0\\d/X",
   score = 4.0,
