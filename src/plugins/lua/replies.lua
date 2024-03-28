@@ -109,7 +109,7 @@ local function replies_check(task)
 
     local function zadd_global_set_cb(err, data)
       if err ~= nil then
-        rspamd_logger.errx(task, 'failed to add sender %s to global set with error: %s', sender_key, err)
+        rspamd_logger.errx(task, 'failed to add sender %s to global replies set with error: %s', sender_key, err)
         return
       end
       rspamd_logger.infox(task, 'added sender %s to global set with code: %s', sender_key, data)
@@ -135,28 +135,27 @@ local function replies_check(task)
     local function redis_zrange_cb(err, data)
       if err ~= nil then
         rspamd_logger.errx(task,
-                'redis_zrange_cb error when reading zrange withscores from %s replies set with error: %s',
-                sender_key, err)
+                'redis_zrange_cb error when reading zrange withscores from global replies set with error: %s', err)
         return
       end
       last_score = tonumber(data[#data])
-      rspamd_logger.infox(task, 'last score %s of sender %s was received', last_score, sender_key)
+      rspamd_logger.infox(task, 'last score %s of global replies set was received', last_score)
 
       -- if last score wasn't found
       if last_score == -1 or last_score == nil then
-        rspamd_logger.errx(task, 'have not found %s replies set', sender_key)
-        return
+        rspamd_logger.errx(task, 'have not found any senders in global replies set, considering last score as 0')
+        last_score = 0
       end
 
       -- updating params considering last score of existing sender
       for i = 1, #params, 2 do
-        params[i] = i + last_score
+        params[i] = params[i] + last_score
       end
 
       add_to_global_replies_set(params, sender_key)
     end
 
-    lua_util.debugm(N, task, 'Getting recipients withscores from %s to get last score', sender_key)
+    lua_util.debugm(N, task, 'Getting recipients withscores from global replies set to get last score')
 
     -- getting scores of recipients connected to sender
     lua_redis.redis_make_request(task,
@@ -165,13 +164,12 @@ local function replies_check(task)
             false,
             redis_zrange_cb,
             'ZRANGE',
-            {sender_key, '0', '-1', 'WITHSCORES'}
+            {'rsrk_verified_recipients', '0', '-1', 'WITHSCORES'}
     )
   end
 
   local function add_to_replies_set(recipients)
     local sender = task:get_reply_sender()
-    lua_util.debugm(N, task, "Sender to add to replies set: %s", sender)
 
     local task_time = task:get_timeval(true)
 
@@ -189,18 +187,21 @@ local function replies_check(task)
 
     lua_util.debugm(N, task, 'Adding  recipients %s to sender %s local replies set', params, sender_key)
 
+    table.insert(params, 1, sender_key)
+
     local function zadd_cb(err, data)
       if err ~= nil then
-        rspamd_logger.errx(task, 'Adding to %s failed with error: %s', sender_key, err)
+        rspamd_logger.errx(task, 'adding to %s failed with error: %s', sender_key, err)
         return
       end
-      rspamd_logger.infox(task, "added data: %s to sender: %s with code: %s", params, sender_key, data)
+
+      table.remove(params, 1)
+
+      rspamd_logger.infox(task, 'added data: %s to sender: %s with code: %s', params, sender_key, data)
 
       update_global_replies_set(params, sender_key)
 
     end
-
-    table.insert(params, 1, sender_key)
 
     local _, conn, _ = lua_redis.redis_make_request(task, -- making local replies set (sender - recipients)
             redis_params, -- connect params
@@ -272,7 +273,6 @@ local function replies_set(task)
   end
   -- If sender is unauthenticated return
   local ip = task:get_ip()
-  lua_util.debugm(N, task, 'User: %s', task:get_user())
   if settings.use_auth and task:get_user() then
     lua_util.debugm(N, task, 'sender is authenticated')
   elseif settings.use_local and (ip and ip:is_local()) then
