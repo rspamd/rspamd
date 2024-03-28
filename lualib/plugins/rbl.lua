@@ -33,6 +33,7 @@ local check_types = {
   numeric_urls = {},
   emails = {},
   replyto = {},
+  mid = {},
   dkim = {},
   rdns = {
     connfilter = true,
@@ -118,6 +119,7 @@ local rule_schema_tbl = {
   received_min_pos = ts.number:is_optional(),
   received_nflags = ts.array_of(ts.string):is_optional(),
   replyto = ts.boolean:is_optional(),
+  mid = ts.boolean:is_optional(),
   requests_limit = (ts.integer + ts.string / tonumber):is_optional(),
   require_symbols = (
       ts.array_of(ts.string) + (ts.string / function(s)
