@@ -38,10 +38,13 @@ UNKNOWN SENDER WRONG DOMAIN RESCAN
   
 INCOMING MAIL SENDER IS KNOWN
   Scan File  ${RSPAMD_TESTDIR}/messages/set_replyto_1_1.eml
+  ...  IP=8.8.8.8  User=user@emailbl.com
   ...  Settings=${SETTINGS_REPLIES}
   Scan File  ${RSPAMD_TESTDIR}/messages/replyto_1_1.eml
+  ...  IP=8.8.8.8  User=user@emailbl.com
   ...  Settings=${SETTINGS_REPLIES}
   Scan File  ${RSPAMD_TESTDIR}/messages/inc_mail_known_sender.eml
+  ...  IP=8.8.8.8  User=user@emailbl.com
   ...  Settings={symbols_enabled [INC_MAIL_KNOWN]}
   Expect Symbol  INC_MAIL_KNOWN
   
