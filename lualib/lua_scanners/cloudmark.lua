@@ -203,8 +203,8 @@ local function table_to_multipart_body(tbl, boundary)
 end
 
 local function get_specific_symbol(scores_symbols, score)
-  local selected = nil
-  local sel_thr = 0
+  local selected
+  local sel_thr = -1
 
   for threshold, sym in pairs(scores_symbols) do
     if sel_thr < threshold and threshold <= score then
@@ -223,6 +223,8 @@ assert(get_specific_symbol({ [90] = 'CLOUDMARK_SPAM', [80] = 'CLOUDMARK_SPAM2' }
 assert(get_specific_symbol({ [90] = 'CLOUDMARK_SPAM', [80] = 'CLOUDMARK_SPAM2' }, 70) == nil)
 assert(get_specific_symbol({ [90] = 'CLOUDMARK_SPAM', [80] = 'CLOUDMARK_SPAM2' }, 90) == 'CLOUDMARK_SPAM')
 assert(get_specific_symbol({ }, 80) == nil)
+assert(get_specific_symbol({ [100] = 'CLOUDMARK_SPAM' }, 100) == 'CLOUDMARK_SPAM')
+assert(get_specific_symbol({ [0] = 'CLOUDMARK_SPAM' }, 0) == 'CLOUDMARK_SPAM')
 
 local function parse_cloudmark_reply(task, rule, body)
   local parser = ucl.parser()
