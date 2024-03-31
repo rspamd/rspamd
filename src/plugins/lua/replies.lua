@@ -45,10 +45,10 @@ local settings = {
   cookie_is_pattern = false,
   cookie_valid_time = '2w', -- 2 weeks by default
   min_message_id = 2, -- minimum length of the message-id header
-  rsrk_privacy = false,
-  rsrk_privacy_alg = 'blake2',
-  rsrk_privacy_prefix = 'obf',
-  rsrk_privacy_length = 16,
+  reply_sender_privacy = false,
+  reply_sender_privacy_alg = 'blake2',
+  reply_sender_privacy_prefix = 'obf',
+  reply_sender_privacy_length = 16,
 }
 
 local N = "replies"
@@ -56,17 +56,7 @@ local N = "replies"
 local function make_key(goop, sz, prefix)
   local h = hash.create()
   h:update(goop)
-  local key
-  if sz then
-    key = h:base32():sub(1, sz)
-  else
-    key = h:base32()
-  end
-
-  if prefix then
-    key = prefix .. key
-  end
-
+  local key = (prefix or '') .. h:base32():sub(1, sz)
   return key
 end
 
@@ -74,7 +64,7 @@ local function replies_check(task)
   local in_reply_to
   local function check_recipient(stored_rcpt)
     local rcpts = task:get_recipients('mime')
-    rspamd_logger.infox(task, 'recipients: %s', rcpts)
+    lua_util.debugm(N, task, 'recipients: %s', rcpts)
     if rcpts then
       local filter_predicate = function(input_rcpt)
         local real_rcpt_h = make_key(input_rcpt:lower(), 8)
@@ -88,7 +78,7 @@ local function replies_check(task)
         lua_util.debugm(N, task, 'reply to %s validated', in_reply_to)
 
         --storing only addr of rcpt
-        for i = 1, #rcpts, 1 do
+        for i = 1, #rcpts do
           rcpts[i] = rcpts[i].addr
         end
         return rcpts
@@ -139,11 +129,12 @@ local function replies_check(task)
         return
       end
       last_score = tonumber(data[#data])
-      rspamd_logger.infox(task, 'last score %s of global replies set was received', last_score)
+      lua_util.debugm(N, task, 'last score %s of global replies set was received', last_score)
 
       -- if last score wasn't found
       if last_score == -1 or last_score == nil then
-        rspamd_logger.errx(task, 'have not found any senders in global replies set, considering last score as 0')
+        lua_util.debugm(N,
+                task, 'have not found any senders in global replies set, considering last score as 0')
         last_score = 0
       end
 
@@ -175,17 +166,17 @@ local function replies_check(task)
 
     local params = {}
     -- making params out of recipients list for replies set
-    local j = 1
-    for i = 1, #recipients * 2, 2 do
-      table.insert(params, i, tostring(task_time))
-      table.insert(params, i + 1, tostring(recipients[j]))
-      j = j + 1
+    local task_time_str = tostring(task_time)
+    for _, rcpt in ipairs(recipients) do
+      table.insert(params, task_time_str)
+      table.insert(params, tostring(rcpt))
     end
 
     local sender_string = lua_util.maybe_obfuscate_string(tostring(sender), settings, settings.sender_prefix)
     local sender_key = make_key(sender_string:lower(), 8)
 
-    lua_util.debugm(N, task, 'Adding  recipients %s to sender %s local replies set', params, sender_key)
+    lua_util.debugm(N, task,
+            'Adding recipients %s to sender %s local replies set', recipients, sender_key)
 
     table.insert(params, 1, sender_key)
 
@@ -194,13 +185,10 @@ local function replies_check(task)
         rspamd_logger.errx(task, 'adding to %s failed with error: %s', sender_key, err)
         return
       end
-
       table.remove(params, 1)
 
-      rspamd_logger.infox(task, 'added data: %s to sender: %s with code: %s', params, sender_key, data)
-
+      lua_util.debugm(N, task, 'added data: %s to sender: %s with code: %s', params, sender_key, data)
       update_global_replies_set(params, sender_key)
-
     end
 
     local _, conn, _ = lua_redis.redis_make_request(task, -- making local replies set (sender - recipients)
@@ -212,11 +200,7 @@ local function replies_check(task)
             params -- arguments
     )
     -- adding expiration to the local replies set
-    conn:add_cmd('EXPIRE', { sender_key, tostring(math.floor(settings['expire'] * 1000)) })
-
-
-
-
+    conn:add_cmd('EXPIRE', { sender_key, tostring(math.floor(settings['expire'])) })
   end
 
   local function redis_get_cb(err, data, addr)
@@ -225,7 +209,7 @@ local function replies_check(task)
       return
     end
     local recipients = check_recipient(data)
-    if data and type(data) == 'string' and recipients then
+    if type(data) == 'string' and recipients then
       -- Hash was found
       add_to_replies_set(recipients)
       task:insert_result(settings['symbol'], 1.0)
@@ -449,7 +433,7 @@ if opts then
       group = "replies"
     })
     rspamd_config:register_symbol({
-      name = 'REPLY',
+      name = settings['symbol'],
       parent = id,
       type = 'virtual',
       score = settings.score,

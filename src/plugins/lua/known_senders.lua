@@ -36,7 +36,7 @@ known_senders {
   # Maximum time to live (when not using bloom filters)
   max_ttl = 30d;
   # Use bloom filters (must be enabled in Redis as a plugin)
-  use_bloom = false;
+  use_bloom = falsereply_sender_;
   # Insert symbol for new senders from the specific domains
   symbol_unknown = 'UNKNOWN_SENDER';
 }
@@ -52,12 +52,13 @@ local settings = {
   use_bloom = false,
   symbol = 'KNOWN_SENDER',
   symbol_unknown = 'UNKNOWN_SENDER',
+  symbol_check_mail = 'INC_MAIL_KNOWN',
   redis_key = 'rs_known_senders',
   sender_prefix = 'rsrk',
-  rsrk_privacy = false,
-  rsrk_privacy_alg = 'blake2',
-  rsrk_privacy_prefix = 'obf',
-  rsrk_privacy_length = 16,
+  reply_sender_privacy = false,
+  reply_sender_privacy_alg = 'blake2',
+  reply_sender_privacy_prefix = 'obf',
+  reply_sender_privacy_length = 16,
 }
 
 local settings_schema = lua_redis.enrich_schema({
@@ -80,17 +81,7 @@ end
 local function make_key_replies(goop, sz, prefix)
   local h = rspamd_cryptobox_hash.create()
   h:update(goop)
-  local key
-  if sz then
-    key = h:base32():sub(1, sz)
-  else
-    key = h:base32()
-  end
-
-  if prefix then
-    key = prefix .. key
-  end
-
+  local key = (prefix or '') .. h:base32():sub(1, sz)
   return key
 end
 
@@ -222,7 +213,7 @@ end
 local function check_known_incoming_mail_callback(task)
   local sender = task:get_reply_sender()
   if not sender then
-    rspamd_logger.errx(task, 'Couldn\'t get sender')
+    lua_util.debugm(N, task, 'Could not get sender')
     return nil
   end
 
@@ -251,8 +242,8 @@ local function check_known_incoming_mail_callback(task)
     if list_of_senders then
       for _, sndr in ipairs(list_of_senders) do
         if sndr == sender then
-          task:insert_result('INC_MAIL_KNOWN', 1.0,
-                  string.format('Incoming mail and it\'s sender is known'))
+          task:insert_result(settings.symbol_check_mail, 1.0,
+                  string.format('Incoming mail with sender %s is known', sndr))
         end
       end
     end
@@ -307,7 +298,7 @@ if opts then
     })
 
     rspamd_config:register_symbol({
-      name = 'INC_MAIL_KNOWN',
+      name = settings.symbol_check_mail,
       type = 'normal',
       callback = check_known_incoming_mail_callback,
       score = 1.0
