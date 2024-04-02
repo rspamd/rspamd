@@ -246,7 +246,7 @@ local function replies_check(task)
       update_global_replies_set(params, sender_key, global_key)
     end
 
-    local _, conn, _ = lua_redis.redis_make_request(task, -- making local replies set (sender - recipients)
+    lua_redis.redis_make_request(task, -- making local replies set (sender - recipients)
             redis_params, -- connect params
             sender_key, -- hash key
             true, -- is write
@@ -254,8 +254,6 @@ local function replies_check(task)
             'ZADD', -- command
             params -- arguments
     )
-    -- adding expiration to the local replies set
-    --conn:add_cmd('EXPIRE', { sender_key, tostring(math.floor(settings['expire'])) })
   end
 
   local function redis_get_cb(err, data, addr)
