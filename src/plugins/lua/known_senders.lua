@@ -36,7 +36,7 @@ known_senders {
   # Maximum time to live (when not using bloom filters)
   max_ttl = 30d;
   # Use bloom filters (must be enabled in Redis as a plugin)
-  use_bloom = falsereply_sender_;
+  use_bloom = false;
   # Insert symbol for new senders from the specific domains
   symbol_unknown = 'UNKNOWN_SENDER';
 }
@@ -55,6 +55,8 @@ local settings = {
   symbol_check_mail = 'INC_MAIL_KNOWN',
   redis_key = 'rs_known_senders',
   sender_prefix = 'rsrk',
+  sender_key_global = 'verified_senders',
+  sender_key_size = 20,
   reply_sender_privacy = false,
   reply_sender_privacy_alg = 'blake2',
   reply_sender_privacy_prefix = 'obf',
@@ -225,7 +227,6 @@ local function check_known_incoming_mail_callback(task)
 
   lua_util.debugm(N, task, 'Sender key: %s', sender_key)
 
-  local list_of_senders = {}
 
   local function redis_zrange_cb(err, data)
     if err ~= nil then
@@ -233,21 +234,20 @@ local function check_known_incoming_mail_callback(task)
       return
     end
 
-    list_of_senders = data
     rspamd_logger.infox(task, 'Successfully got list: %s of verified senders', data)
 
-    lua_util.debugm(N, task, 'List of senders: %s', list_of_senders)
-
     -- searching for sender in global replies set
-    if list_of_senders then
-      for _, sndr in ipairs(list_of_senders) do
+    if data then
+      for _, sndr in ipairs(data) do
         if sndr == sender then
-          task:insert_result(settings.symbol_check_mail, 1.0,
-                  string.format('Incoming mail with sender %s is known', sndr))
+          task:insert_result(settings.symbol_check_mail, 1.0, sndr)
         end
       end
     end
   end
+
+  -- key for global replies set
+  local global_key = make_key(settings.sender_key_global, settings.sender_key_size, settings.sender_prefix)
 
   lua_util.debugm(N, task, 'Making redis request to global replies set')
   lua_redis.redis_make_request(task,
@@ -256,7 +256,7 @@ local function check_known_incoming_mail_callback(task)
           false, -- is write
           redis_zrange_cb, --callback
           'ZRANGE', -- command
-          { 'rsrk_verified_recipients', '0', '-1' } -- arguments
+          { global_key, '0', '-1' } -- arguments
   )
 
 end
