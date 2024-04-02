@@ -247,7 +247,7 @@ local function check_known_incoming_mail_callback(task)
   end
 
   -- key for global replies set
-  local global_key = make_key(settings.sender_key_global, settings.sender_key_size, settings.sender_prefix)
+  local global_key = make_key_replies(settings.sender_key_global, settings.sender_key_size, settings.sender_prefix)
 
   lua_util.debugm(N, task, 'Making redis request to global replies set')
   lua_redis.redis_make_request(task,
