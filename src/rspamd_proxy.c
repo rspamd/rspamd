@@ -150,8 +150,10 @@ struct rspamd_proxy_ctx {
 	char *spam_header;
 	/* CA name that can be used for client certificates */
 	char *client_ca_name;
-	/* Milter rejection message */
+	/* Milter messages */
 	char *reject_message;
+	char *quarantine_message;
+	char *tempfail_message;
 	/* Sessions cache */
 	void *sessions_cache;
 	struct rspamd_milter_context milter_ctx;
@@ -874,6 +876,22 @@ init_rspamd_proxy(struct rspamd_config *cfg)
 									  G_STRUCT_OFFSET(struct rspamd_proxy_ctx, reject_message),
 									  0,
 									  "Use custom rejection message");
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "quarantine_message",
+									  rspamd_rcl_parse_struct_string,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_proxy_ctx, quarantine_message),
+									  0,
+									  "Use custom quarantine message");
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "tempfail_message",
+									  rspamd_rcl_parse_struct_string,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_proxy_ctx, tempfail_message),
+									  0,
+									  "Use custom tempfail message");
 
 	return ctx;
 }
@@ -2435,6 +2453,8 @@ start_rspamd_proxy(struct rspamd_worker *worker)
 	ctx->milter_ctx.sessions_cache = ctx->sessions_cache;
 	ctx->milter_ctx.client_ca_name = ctx->client_ca_name;
 	ctx->milter_ctx.reject_message = ctx->reject_message;
+	ctx->milter_ctx.quarantine_message = ctx->quarantine_message;
+	ctx->milter_ctx.tempfail_message = ctx->tempfail_message;
 	ctx->milter_ctx.cfg = ctx->cfg;
 	rspamd_milter_init_library(&ctx->milter_ctx);
 
