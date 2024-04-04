@@ -1288,9 +1288,10 @@ rspamd_milter_send_action(struct rspamd_milter_session *session,
 	rspamd_fstring_t *reply = NULL;
 	gsize len;
 	GString *name, *value;
-	const char *reason, *body_str;
+	const char *body_str;
 	struct rspamd_milter_outbuf *obuf;
 	struct rspamd_milter_private *priv = session->priv;
+	const rspamd_fstring_t *reason;
 
 	va_start(ap, act);
 	cmd = act;
@@ -1307,16 +1308,21 @@ rspamd_milter_send_action(struct rspamd_milter_session *session,
 		SET_COMMAND(cmd, 0, reply, pos);
 		break;
 	case RSPAMD_MILTER_QUARANTINE:
-		reason = va_arg(ap, const char *);
+		reason = va_arg(ap, const rspamd_fstring_t *);
 
-		if (reason == NULL) {
-			reason = "";
+		if (reason != NULL) {
+			len = reason->len;
+			msg_debug_milter("send quarantine action %*s", (int) len, reason->str);
+			SET_COMMAND(cmd, len + 1, reply, pos);
+			memcpy(pos, reason->str, len);
+			pos[len] = '\0';
+		}
+		else {
+			msg_debug_milter("send quarantine action with no specific string");
+			SET_COMMAND(cmd, 1, reply, pos);
+			*pos = '\0';
 		}
 
-		len = strlen(reason);
-		msg_debug_milter("send quarantine action %s", reason);
-		SET_COMMAND(cmd, len + 1, reply, pos);
-		memcpy(pos, reason, len + 1);
 		break;
 	case RSPAMD_MILTER_ADDHEADER:
 		name = va_arg(ap, GString *);
@@ -2119,9 +2125,18 @@ void rspamd_milter_send_task_results(struct rspamd_milter_session *session,
 			rspamd_milter_send_action(session, RSPAMD_MILTER_DISCARD);
 		}
 		else if (priv->quarantine_on_reject) {
-			/* TODO: be more flexible about SMTP messages */
-			rspamd_milter_send_action(session, RSPAMD_MILTER_QUARANTINE,
-									  RSPAMD_MILTER_QUARANTINE_MESSAGE);
+			if (!reply) {
+				if (milter_ctx->quarantine_message == NULL) {
+					reply = rspamd_fstring_new_init(
+						RSPAMD_MILTER_QUARANTINE_MESSAGE,
+						sizeof(RSPAMD_MILTER_QUARANTINE_MESSAGE) - 1);
+				}
+				else {
+					reply = rspamd_fstring_new_init(milter_ctx->quarantine_message,
+													strlen(milter_ctx->quarantine_message));
+				}
+				rspamd_milter_send_action(session, RSPAMD_MILTER_QUARANTINE, reply);
+			}
 
 			/* Quarantine also requires accept action, all hail Sendmail */
 			rspamd_milter_send_action(session, RSPAMD_MILTER_ACCEPT);
@@ -2154,8 +2169,15 @@ void rspamd_milter_send_task_results(struct rspamd_milter_session *session,
 										sizeof(RSPAMD_MILTER_XCODE_TEMPFAIL) - 1);
 
 		if (!reply) {
-			reply = rspamd_fstring_new_init(RSPAMD_MILTER_TEMPFAIL_MESSAGE,
-											sizeof(RSPAMD_MILTER_TEMPFAIL_MESSAGE) - 1);
+			if (milter_ctx->tempfail_message == NULL) {
+				reply = rspamd_fstring_new_init(
+					RSPAMD_MILTER_TEMPFAIL_MESSAGE,
+					sizeof(RSPAMD_MILTER_TEMPFAIL_MESSAGE) - 1);
+			}
+			else {
+				reply = rspamd_fstring_new_init(milter_ctx->tempfail_message,
+												strlen(milter_ctx->tempfail_message));
+			}
 		}
 
 		rspamd_milter_set_reply(session, rcode, xcode, reply);
@@ -2193,9 +2215,18 @@ void rspamd_milter_send_task_results(struct rspamd_milter_session *session,
 		break;
 
 	case METRIC_ACTION_QUARANTINE:
-		/* TODO: be more flexible about SMTP messages */
-		rspamd_milter_send_action(session, RSPAMD_MILTER_QUARANTINE,
-								  RSPAMD_MILTER_QUARANTINE_MESSAGE);
+		if (!reply) {
+			if (milter_ctx->quarantine_message == NULL) {
+				reply = rspamd_fstring_new_init(
+					RSPAMD_MILTER_QUARANTINE_MESSAGE,
+					sizeof(RSPAMD_MILTER_QUARANTINE_MESSAGE) - 1);
+			}
+			else {
+				reply = rspamd_fstring_new_init(milter_ctx->quarantine_message,
+												strlen(milter_ctx->quarantine_message));
+			}
+			rspamd_milter_send_action(session, RSPAMD_MILTER_QUARANTINE, reply);
+		}
 
 		/* Quarantine also requires accept action, all hail Sendmail */
 		rspamd_milter_send_action(session, RSPAMD_MILTER_ACCEPT);
