@@ -66,6 +66,8 @@ end
 
 local function replies_check(task)
   local in_reply_to
+  local script_ids = {}
+
   local function check_recipient(stored_rcpt)
     local rcpts = task:get_recipients('mime')
     lua_util.debugm(N, task, 'recipients: %s', rcpts)
@@ -98,84 +100,79 @@ local function replies_check(task)
     return nil
   end
 
-  local function add_to_global_replies_set(params, sender_key, global_key)
-    lua_util.debugm(N, task, 'Adding recipients %s to global replies set', params)
-
-    local function zrem_cb(err, data)
-      if err ~= nil then
-        rspamd_logger.errx(task, 'failed to remove extra senders from global replies set with error: %s', err)
-        return
+  local function configure_redis_scripts(recipients, task_time_str)
+    local redis_script_zadd_global = [[
+      local global_size = redis.call('ZCARD', KEYS[1])
+      if global_size > {= mgs =} then
+        redis.call('ZREMRANGEBYRANK', KEYS[1], '{= mgs =}', global_size)
       end
-      rspamd_logger.infox(task, 'if necessary, additional senders were deleted from global replies set')
-    end
+      -- adding recipients to the global replies set
+      redis.call('ZADD', KEYS[1], ARGV[1], ARGV[2])
+      ]]
+    local set_script_zadd_global = lua_util.jinja_template(redis_script_zadd_global,
+              { mgs = settings['max_global_size'] })
+    table.insert(script_ids, lua_redis.add_redis_script(set_script_zadd_global, redis_params))
+
+    local redis_script_zadd_local = [[
+      local local_replies_set_size = redis.call('ZCARD', KEYS[1])
+      if local_replies_set_size > {= mls =} then
+        redis.call('ZREMRANGEBYRANK', KEYS[1], '{= mls =}', local_replies_set_size)
+      end
+      -- adding recipients for the local replies set
+      redis.call('ZADD', KEYS[1], ARGV[1], ARGV[2])
+      -- setting expire for local replies set
+      redis.call('EXPIRE', KEYS[1], tostring(math.floor('{= exp =}')))
+    ]]
+    local set_script_zadd_local = lua_util.jinja_template(redis_script_zadd_local,
+      { exp = settings['expire'], mls = settings['max_local_size'] })
+    table.insert(script_ids, lua_redis.add_redis_script(set_script_zadd_local, redis_params))
+  end
+
+  local function add_to_global_replies_set(recipients, sender_key, global_key, task_time_str)
+    lua_util.debugm(N, task, 'Adding recipients %s to global replies set', recipients)
 
     local function zadd_global_set_cb(err, data)
       if err ~= nil then
         rspamd_logger.errx(task, 'failed to add sender %s to global replies set with error: %s', sender_key, err)
         return
       end
-      rspamd_logger.infox(task, 'added sender %s to global set with code: %s', sender_key, data)
-
-      local redis_script_zadd_global = [[
-      local global_size = redis.call('ZCARD', KEYS[1])
-      if global_size > {= mgs =} then
-        redis.call('ZREMRANGEBYRANK', KEYS[1], '{= mgs =}', global_size)
-      end
-      ]]
-
-      local set_script_zadd_global = lua_util.jinja_template(redis_script_zadd_global,
-              { mgs = settings['max_global_size'] })
-      local zadd_id = lua_redis.add_redis_script(set_script_zadd_global, redis_params)
-      lua_redis.exec_redis_script(zadd_id,
-              { task=task, is_write = true },
-              zrem_cb,
-              { global_key })
-
+      rspamd_logger.infox(task, 'added sender %s to global set', sender_key)
     end
-
-    table.insert(params, 1, global_key)
-
-    lua_redis.redis_make_request(task, -- making global replies set for verified recipients
-            redis_params, -- connect params
-            sender_key, -- hash key
-            true, -- is write
-            zadd_global_set_cb, --callback
-            'ZADD', -- command
-            params -- arguments
-    )
+    for _, rcpt in ipairs(recipients) do
+      lua_redis.exec_redis_script(script_ids[2],
+              { task=task, is_write = true },
+              zadd_global_set_cb,
+              { global_key },
+              { task_time_str, rcpt })
+    end
   end
 
-  local function update_global_replies_set(params, sender_key, global_key)
-    local last_score = -1
-
-    -- getting last score of recipients
+  local function update_global_replies_set(recipients, sender_key, global_key, task_time)
     local function redis_zrange_cb(err, data)
       if err ~= nil then
         rspamd_logger.errx(task,
                 'redis_zrange_cb error when reading zrange withscores from global replies set with error: %s', err)
         return
       end
-      last_score = tonumber(data[#data])
+      local last_score = tonumber(data[#data])
       lua_util.debugm(N, task, 'last score %s of global replies set was received', last_score)
 
       -- if last score wasn't found
-      if last_score == -1 or last_score == nil then
-        lua_util.debugm(N,
-                task, 'have not found any senders in global replies set, considering last score as 0')
+      if last_score == nil then
+        lua_util.debugm(N, task,
+                'have not found any senders in global replies set, considering last score as 0')
         last_score = 0
       end
 
       -- updating params considering last score of existing sender
-      for i = 1, #params, 2 do
-        params[i] = params[i] + last_score
-      end
+      task_time = task_time + last_score
 
-      add_to_global_replies_set(params, sender_key, global_key)
+      add_to_global_replies_set(recipients, sender_key, global_key, tostring(task_time))
     end
 
     lua_util.debugm(N, task, 'Getting recipients withscores from global replies set to get last score')
 
-    -- getting scores of recipients connected to sender
+    -- getting scores of recipients in global replies set
     lua_redis.redis_make_request(task,
             redis_params,
             sender_key,
@@ -194,10 +191,6 @@ local function replies_check(task)
     local params = {}
     -- making params out of recipients list for replies set
     local task_time_str = tostring(task_time)
-    for _, rcpt in ipairs(recipients) do
-      table.insert(params, task_time_str)
-      table.insert(params, tostring(rcpt))
-    end
 
     local sender_string = lua_util.maybe_obfuscate_string(tostring(sender), settings, settings.sender_prefix)
     local sender_key = make_key(sender_string:lower(), 8)
@@ -205,55 +198,27 @@ local function replies_check(task)
     lua_util.debugm(N, task,
             'Adding recipients %s to sender %s local replies set', recipients, sender_key)
 
-    table.insert(params, 1, sender_key)
-
     local global_key = make_key(settings.sender_key_global, settings.sender_key_size, settings.sender_prefix)
 
-    local function zrem_cb(err, data)
-      if err ~= nil then
-      rspamd_logger.errx(task, 'failed to remove extra recipients from %s replies set with error: %s', sender_key, err)
-      return
-      end
-      rspamd_logger.infox(task, 'if necessary, additional recipients were deleted from the %s replies set', sender_key)
-    end
+    configure_redis_scripts(recipients, task_time_str)
 
     local function zadd_cb(err, data)
       if err ~= nil then
         rspamd_logger.errx(task, 'adding to %s failed with error: %s', sender_key, err)
         return
       end
-      table.remove(params, 1)
 
-      lua_util.debugm(N, task, 'added data: %s to sender: %s with code: %s', params, sender_key, data)
+      lua_util.debugm(N, task, 'added data: %s to sender: %s', recipients, sender_key)
 
-      local redis_script_zadd_local = [[
-      local local_replies_set_size = redis.call('ZCARD', KEYS[1])
-      if local_replies_set_size > {= mls =} then
-        redis.call('ZREMRANGEBYRANK', KEYS[1], '{= mls =}', local_replies_set_size)
-      end
-      redis.call('EXPIRE', KEYS[1], tostring(math.floor('{= exp =}')))
-    ]]
-
-      local set_script_zadd_local = lua_util.jinja_template(redis_script_zadd_local,
-              { exp = settings['expire'], mls = settings['max_local_size'] })
-      local zadd_id = lua_redis.add_redis_script(set_script_zadd_local, redis_params)
-
-      lua_redis.exec_redis_script(zadd_id,
-              {task = task, is_write = true},
-              zrem_cb,
-              { sender_key })
-
-      update_global_replies_set(params, sender_key, global_key)
+      update_global_replies_set(recipients, sender_key, global_key, task_time)
     end
-
-    lua_redis.redis_make_request(task, -- making local replies set (sender - recipients)
-            redis_params, -- connect params
-            sender_key, -- hash key
-            true, -- is write
-            zadd_cb, --callback
-            'ZADD', -- command
-            params -- arguments
-    )
+    for _, rcpt in ipairs(recipients) do
+      lua_redis.exec_redis_script(script_ids[1],
+              {task = task, is_write = true},
+              zadd_cb,
+              { sender_key },
+              { task_time_str, rcpt })
+    end
   end
 
   local function redis_get_cb(err, data, addr)
