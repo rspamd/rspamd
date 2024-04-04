@@ -188,7 +188,6 @@ local function replies_check(task)
 
     local task_time = task:get_timeval(true)
 
-    local params = {}
     -- making params out of recipients list for replies set
     local task_time_str = tostring(task_time)
 
