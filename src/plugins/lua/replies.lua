@@ -133,10 +133,10 @@ local function replies_check(task)
 
     local function zadd_global_set_cb(err, data)
       if err ~= nil then
-        rspamd_logger.errx(task, 'failed to add sender %s to global replies set with error: %s', sender_key, err)
+        rspamd_logger.errx(task, 'failed to add recipients %s to global replies set with error: %s', recipients, err)
         return
       end
-      rspamd_logger.infox(task, 'added sender %s to global set', sender_key)
+      rspamd_logger.infox(task, 'added recipients %s to global set', recipients)
     end
     for _, rcpt in ipairs(recipients) do
       lua_redis.exec_redis_script(script_ids[2],
@@ -211,12 +211,20 @@ local function replies_check(task)
 
       update_global_replies_set(recipients, sender_key, global_key, task_time)
     end
-    for _, rcpt in ipairs(recipients) do
-      lua_redis.exec_redis_script(script_ids[1],
-              {task = task, is_write = true},
-              zadd_cb,
-              { sender_key },
-              { task_time_str, rcpt })
+    for i = 1, #recipients do
+      if i ~= #recipients then
+        lua_redis.exec_redis_script(script_ids[1],
+                {task = task, is_write = true},
+                nil,
+                { sender_key },
+                { task_time_str, recipients[i] })
+      else
+        lua_redis.exec_redis_script(script_ids[1],
+                {task = task, is_write = true},
+                zadd_cb,
+                { sender_key },
+                { task_time_str, recipients[i] })
+      end
     end
   end
 
