@@ -330,7 +330,7 @@ local function greylist_set(task)
   end
 
   -- We need to update this on each scan, as it can vary per settings or be redefined dynamically
-  local greylist_min_score = settings.greylist_min_score or rspamd_config:get_metric_action('greylist')
+  local greylist_min_score = settings.greylist_min_score or task:get_metric_threshold('greylist')
   if greylist_min_score then
     local score = task:get_metric_score()[1]
     if score < greylist_min_score then
