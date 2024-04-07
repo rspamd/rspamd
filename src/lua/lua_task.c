@@ -872,6 +872,14 @@ LUA_FUNCTION_DEF(task, get_metric_result);
  * @return {number,number} 2 numbers containing the current score and required score of the metric
  */
 LUA_FUNCTION_DEF(task, get_metric_score);
+
+/***
+ * @method task:get_metric_threshold(action)
+ * Get the current threshold of the action `action` for the default metric. Should be used after settings have been applied.
+ * @param {string} action name of a action
+ * @return {number} the current threshold of the action
+ */
+LUA_FUNCTION_DEF(task, get_metric_threshold);
 /***
  * @method task:get_metric_action(name)
  * Get the current action of metric `name` (must be nil or 'default'). Should be used in idempotent filters only.
@@ -1307,6 +1315,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, get_metric_result),
 	LUA_INTERFACE_DEF(task, get_metric_score),
 	LUA_INTERFACE_DEF(task, get_metric_action),
+	LUA_INTERFACE_DEF(task, get_metric_threshold),
 	LUA_INTERFACE_DEF(task, set_metric_score),
 	LUA_INTERFACE_DEF(task, set_metric_subject),
 	LUA_INTERFACE_DEF(task, learn),
@@ -6343,6 +6352,38 @@ lua_task_get_metric_action(lua_State *L)
 
 		action = rspamd_check_action_metric(task, NULL, mres);
 		lua_pushstring(L, action->name);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_task_get_metric_threshold(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+	const char *act_name = luaL_checkstring(L, 2);
+
+	if (task && act_name && task->result) {
+		struct rspamd_action *action = rspamd_config_get_action(task->cfg, act_name);
+
+		if (action == NULL) {
+			lua_pushnil(L);
+		}
+		else {
+			struct rspamd_action_config *act_config =
+				rspamd_find_action_config_for_action(task->result, action);
+
+			if (act_config) {
+				lua_pushnumber(L, act_config->cur_limit);
+			}
+			else {
+				lua_pushnil(L);
+			}
+		}
 	}
 	else {
 		return luaL_error(L, "invalid arguments");
