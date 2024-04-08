@@ -1078,3 +1078,45 @@ rspamd_find_metric_result(struct rspamd_task *task,
 
 	return NULL;
 }
+
+void rspamd_task_result_adjust_grow_factor(struct rspamd_task *task,
+										   struct rspamd_scan_result *result,
+										   double grow_factor)
+{
+	const char *kk;
+	struct rspamd_symbol_result *res;
+	double final_grow_factor = grow_factor;
+	double max_limit = G_MINDOUBLE;
+
+	for (unsigned int i = 0; i < result->nactions; i++) {
+		struct rspamd_action_config *cur = &result->actions_config[i];
+
+		if (cur->cur_limit > 0 && max_limit < cur->cur_limit) {
+			max_limit = cur->cur_limit;
+		}
+	}
+
+	if (grow_factor > 1.0) {
+
+
+		kh_foreach(result->symbols, kk, res, {
+			if (res->score > 0) {
+				double mult = 1.0 - grow_factor;
+				if (max_limit > 0 && !isnan(res->score)) {
+					mult *= res->score / max_limit;
+					final_grow_factor *= 1.0 + mult;
+				}
+			}
+		});
+
+		if (final_grow_factor > grow_factor) {
+			msg_info_task("calculated final grow factor for task: %.3f (%.2f the original one)",
+						  final_grow_factor, grow_factor);
+			kh_foreach(result->symbols, kk, res, {
+				if (res->score > 0) {
+					res->score *= final_grow_factor;
+				}
+			});
+		}
+	}
+}
