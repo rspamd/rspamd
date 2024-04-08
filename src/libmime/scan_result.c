@@ -1088,20 +1088,21 @@ void rspamd_task_result_adjust_grow_factor(struct rspamd_task *task,
 	double final_grow_factor = grow_factor;
 	double max_limit = G_MINDOUBLE;
 
-	for (unsigned int i = 0; i < result->nactions; i++) {
-		struct rspamd_action_config *cur = &result->actions_config[i];
-
-		if (cur->cur_limit > 0 && max_limit < cur->cur_limit) {
-			max_limit = cur->cur_limit;
-		}
-	}
-
 	if (grow_factor > 1.0) {
 
+		for (unsigned int i = 0; i < result->nactions; i++) {
+			struct rspamd_action_config *cur = &result->actions_config[i];
 
+			if (cur->cur_limit > 0 && max_limit < cur->cur_limit) {
+				max_limit = cur->cur_limit;
+			}
+		}
+
+		/* Adjust factor by selecting all symbols and checking those with positive scores */
 		kh_foreach(result->symbols, kk, res, {
 			if (res->score > 0) {
 				double mult = 1.0 - grow_factor;
+				/* We adjust the factor by the ratio of the score to the max limit */
 				if (max_limit > 0 && !isnan(res->score)) {
 					mult *= res->score / max_limit;
 					final_grow_factor *= 1.0 + mult;
@@ -1109,12 +1110,15 @@ void rspamd_task_result_adjust_grow_factor(struct rspamd_task *task,
 			}
 		});
 
-		if (final_grow_factor > grow_factor) {
+		/* At this stage we know that we have some grow factor to apply */
+		if (final_grow_factor > 1.0) {
 			msg_info_task("calculated final grow factor for task: %.3f (%.2f the original one)",
 						  final_grow_factor, grow_factor);
 			kh_foreach(result->symbols, kk, res, {
 				if (res->score > 0) {
+					result->score -= res->score;
 					res->score *= final_grow_factor;
+					result->score += res->score;
 				}
 			});
 		}
