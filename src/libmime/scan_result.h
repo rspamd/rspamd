@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,8 +99,7 @@ struct kh_rspamd_symbols_group_hash_s;
 
 
 struct rspamd_scan_result {
-	double score;       /**< total score							*/
-	double grow_factor; /**< current grow factor					*/
+	double score; /**< total score							*/
 	struct rspamd_passthrough_result *passthrough_result;
 	double positive_score;
 	double negative_score;
@@ -220,16 +219,11 @@ void rspamd_task_symbol_result_foreach(struct rspamd_task *task,
 									   gpointer ud);
 
 /**
- * Default consolidation function for metric, it get all symbols and multiply symbol
- * weight by some factor that is specified in config. Default factor is 1.
- * @param task worker's task that present message from user
- * @param metric_name name of metric
- * @return result metric weight
+ * Adjust symbol results to the grow factor for a specific task; should be called after postfilters
  */
-double rspamd_factor_consolidation_func(struct rspamd_task *task,
-										const char *metric_name,
-										const char *unused);
-
+void rspamd_task_result_adjust_grow_factor(struct rspamd_task *task,
+										   struct rspamd_scan_result *result,
+										   double grow_factor);
 
 /**
  * Check thresholds and return action for a task
