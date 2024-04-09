@@ -491,9 +491,7 @@ define(["jquery", "app/common", "footable"],
                         });
                         break;
                     default:
-                        if (typeof item[prop] === "string") {
-                            item[prop] = common.escapeHTML(item[prop]);
-                        }
+                        if (typeof item[prop] === "string") item[prop] = common.escapeHTML(item[prop]);
                 }
             }
 
