@@ -1322,15 +1322,13 @@ rspamd_scan_result_ucl(struct rspamd_task *task,
 			sobj = rspamd_metric_symbol_ucl(task, sym);
 			ucl_object_insert_key(obj, sobj, sym->name, 0, false);
 		}
-	})
+	});
 
-		if (task->cmd != CMD_CHECK)
-	{
+	if (task->cmd != CMD_CHECK) {
 		/* For checkv2 we insert symbols as a separate object */
 		ucl_object_insert_key(top, obj, "symbols", 0, false);
 	}
-	else
-	{
+	else {
 		/* For legacy check we just insert it as "default" all together */
 		ucl_object_insert_key(top, obj, DEFAULT_METRIC, 0, false);
 	}

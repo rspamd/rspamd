@@ -758,6 +758,10 @@ rspamd_task_process(struct rspamd_task *task, unsigned int stages)
 		all_done = rspamd_symcache_process_symbols(task, task->cfg->cache,
 												   st);
 
+		if (all_done) {
+			rspamd_task_result_adjust_grow_factor(task, task->result, task->cfg->grow_factor);
+		}
+
 		if (all_done && (task->flags & RSPAMD_TASK_FLAG_LEARN_AUTO) &&
 			!RSPAMD_TASK_IS_EMPTY(task) &&
 			!(task->flags & (RSPAMD_TASK_FLAG_LEARN_SPAM | RSPAMD_TASK_FLAG_LEARN_HAM))) {

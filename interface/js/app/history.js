@@ -262,6 +262,10 @@ define(["jquery", "app/common", "app/libft", "footable"],
                                 sortValue: item.ts
                             }
                         };
+                        for (const prop in item) {
+                            if (!{}.hasOwnProperty.call(item, prop)) continue;
+                            if (typeof item[prop] === "string") item[prop] = common.escapeHTML(item[prop]);
+                        }
                     });
                     if (Object.prototype.hasOwnProperty.call(common.tables, "errors")) {
                         common.tables.errors.rows.load(rows);
