@@ -397,7 +397,12 @@ local function check_mime_type(task)
       if ext2 then
         local score1 = check_tables(ext)
         local score2 = check_tables(ext2)
-        check_extension(score1, score2)
+        -- Check if detected extension match real extension
+        if detected_ext and detected_ext == ext then
+            check_extension(score1, nil)
+        else
+            check_extension(score1, score2)
+        end
         -- Check for archive cloaking like .zip.gz
         if settings['archive_extensions'][ext2]
             -- Exclude multipart archive extensions, e.g. .zip.001
