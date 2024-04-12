@@ -1101,7 +1101,7 @@ void rspamd_task_result_adjust_grow_factor(struct rspamd_task *task,
 		/* Adjust factor by selecting all symbols and checking those with positive scores */
 		kh_foreach(result->symbols, kk, res, {
 			if (res->score > 0) {
-				double mult = 1.0 - grow_factor;
+				double mult = grow_factor - 1.0;
 				/* We adjust the factor by the ratio of the score to the max limit */
 				if (max_limit > 0 && !isnan(res->score)) {
 					mult *= res->score / max_limit;

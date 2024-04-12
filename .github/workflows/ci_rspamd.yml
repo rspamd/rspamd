@@ -73,11 +73,11 @@ jobs:
           exit $EXIT_CODE
 
       - name: Save workspace directory
+        if: (success() || failure())
         run: echo "CONTAINER_WORKSPACE=${GITHUB_WORKSPACE}" >> "$GITHUB_ENV"
 
-      # FIXME: upload test logs even on ARM
       - name: Upload robot logs
-        if: runner.arch == 'X64' && (success() || failure())
+        if: (success() || failure())
         uses: actions/upload-artifact@v4
         with:
           name: robotlog-${{ inputs.name }}
@@ -86,7 +86,7 @@ jobs:
           retention-days: 1
 
       - name: Upload rspamd logs
-        if: runner.arch == 'X64' && (success() || failure())
+        if: (success() || failure())
         uses: actions/upload-artifact@v4
         with:
           name: rspamdlog-${{ inputs.name }}
