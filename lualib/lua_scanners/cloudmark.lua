@@ -89,6 +89,20 @@ local function cloudmark_preload(rule, cfg, ev_base, _)
   })
 end
 
+local function numerify(d)
+  local l = {}
+  for k in pairs(d) do
+    table.insert(l, k)
+  end
+  for _, k in ipairs(l) do
+    local new_key = tonumber(k)
+    if new_key then
+      d[new_key] = d[k]
+      d[k] = nil
+    end
+  end
+end
+
 local function cloudmark_config(opts)
 
   local cloudmark_conf = {
@@ -115,6 +129,10 @@ local function cloudmark_config(opts)
   }
 
   cloudmark_conf = lua_util.override_defaults(cloudmark_conf, opts)
+
+  if type(cloudmark_conf.scores_symbols) == 'table' then
+    numerify(cloudmark_conf.scores_symbols)
+  end
 
   if not cloudmark_conf.prefix then
     cloudmark_conf.prefix = 'rs_' .. cloudmark_conf.name .. '_'
