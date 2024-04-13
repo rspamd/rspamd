@@ -136,8 +136,8 @@ textarea {
     height: 50px;
 }
 .btn-group > .btn.radius-right {
-    border-top-right-radius: .25rem !important;
-    border-bottom-right-radius: .25rem !important;
+    border-top-right-radius: var(--bs-btn-border-radius) !important;
+    border-bottom-right-radius: var(--bs-btn-border-radius) !important;
 }
 
 input.form-control[type="number"] {
