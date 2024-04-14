@@ -20,8 +20,10 @@ local lua_util = require "lua_util"
 local lua_clickhouse = require "lua_clickhouse"
 local lua_settings = require "lua_settings"
 local fun = require "fun"
+local rspamd_util = require "rspamd_util"
 
 local N = "clickhouse"
+local HOSTNAME = rspamd_util.get_hostname()
 
 if confighelp then
   return
@@ -33,7 +35,7 @@ local nrows = 0
 local used_memory = 0
 local last_collection = 0
 local final_call = false -- If the final collection has been started
-local schema_version = 9 -- Current schema version
+local schema_version = 10 -- Current schema version
 
 local settings = {
   limits = { -- Collection limits
@@ -101,6 +103,7 @@ CREATE TABLE IF NOT EXISTS rspamd
 (
     Date Date COMMENT 'Date (used for partitioning)',
     TS DateTime COMMENT 'Date and time of the request start (UTC)',
+    RspamdServer LowCardinality(String) COMMENT 'rspamd filtering server',
     From String COMMENT 'Domain part of the return address (RFC5321.MailFrom)',
     MimeFrom String COMMENT 'Domain part of the address in From: header (RFC5322.From)',
     IP String COMMENT 'SMTP client IP as provided by MTA or from Received: header',
@@ -255,6 +258,14 @@ local migrations = {
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (9)]],
   },
+  [9] = {
+    -- Add new columns
+    [[ALTER TABLE rspamd
+      ADD COLUMN IF NOT EXISTS `RspamdServer` LowCardinality(String) COMMENT 'rspamd filtering server' AFTER `TS`
+    ]],
+    -- New version
+    [[INSERT INTO rspamd_version (Version) Values (10)]],
+  }
 }
 
 local predefined_actions = {
@@ -303,6 +314,8 @@ local function clickhouse_main_row(res)
     -- 2.0 +
     'AuthUser',
     'SettingsId',
+    -- 3.8 +
+    'RspamdServer',
   }
 
   for _, v in ipairs(fields) do
@@ -714,6 +727,8 @@ local function clickhouse_collect(task)
     settings_id = ''
   end
 
+  local rspamd_server = HOSTNAME
+
   local row = {
     today(timestamp),
     timestamp,
@@ -746,7 +761,8 @@ local function clickhouse_collect(task)
     scan_real,
     custom_action,
     auth_user,
-    settings_id
+    settings_id,
+    rspamd_server
   }
 
   -- Attachments step
