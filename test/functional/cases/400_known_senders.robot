@@ -8,6 +8,8 @@ Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 *** Variables ***
 ${CONFIG}                         ${RSPAMD_TESTDIR}/configs/known_senders.conf
 ${SETTINGS_REPLIES}               {symbols_enabled = [REPLIES_CHECK, REPLIES_SET, REPLY]}
+${SYMBOL_GLOBAL}                  INC_MAIL_KNOWN_GLOBALLY
+${SYMBOL_LOCAL}                   INC_MAIL_KNOWN_LOCALLY
 ${REDIS_SCOPE}                    Suite
 ${RSPAMD_SCOPE}                   Suite
 
@@ -35,8 +37,14 @@ UNKNOWN SENDER WRONG DOMAIN RESCAN
   ...  Settings={symbols_enabled [KNOWN_SENDER]}
   Do Not Expect Symbol  KNOWN_SENDER
   Do Not Expect Symbol  UNKNOWN_SENDER
-  
-INCOMING MAIL SENDER IS KNOWN
+
+INCOMING MAIL SENDER IS UNKNOWN
+  Scan File  ${RSPAMD_TESTDIR}/messages/inc_mail_unknown_sender.eml
+  ...  Settings={symbols_enabled [${SYMBOL_GLOBAL}, ${SYMBOL_LOCAL}]}
+  Do Not Expect Symbol  ${SYMBOL_GLOBAL}
+  Do Not Expect Symbol  ${SYMBOL_LOCAL}
+
+INCOMING MAIL SENDER IS KNOWN RECIPIENTS KNOWN
   Scan File  ${RSPAMD_TESTDIR}/messages/set_replyto_1_1.eml
   ...  IP=8.8.8.8  User=user@emailbl.com
   ...  Settings=${SETTINGS_REPLIES}
@@ -45,10 +53,10 @@ INCOMING MAIL SENDER IS KNOWN
   ...  Settings=${SETTINGS_REPLIES}
   Scan File  ${RSPAMD_TESTDIR}/messages/inc_mail_known_sender.eml
   ...  IP=8.8.8.8  User=user@emailbl.com
-  ...  Settings={symbols_enabled [INC_MAIL_KNOWN]}
-  Expect Symbol  INC_MAIL_KNOWN
-  
-INCOMING MAIL SENDER IS UNKNOWN
-  Scan File  ${RSPAMD_TESTDIR}/messages/replyto_1_1.eml
-  ...  Settings={symbols_enabled [INC_MAIL_KNOWN]}
-  Do Not Expect Symbol  INC_MAIL_KNOWN
+  ...  Settings=${SETTINGS_REPLIES}
+  Scan File  ${RSPAMD_TESTDIR}/messages/inc_mail_known_sender.eml
+  ...  IP=8.8.8.8  User=user@emailbl.com
+  ...  Settings={symbols_enabled [${SYMBOL_GLOBAL}, ${SYMBOL_LOCAL}]}
+  Expect Symbol  ${SYMBOL_GLOBAL}
+  Expect Symbol  ${SYMBOL_LOCAL}
+
