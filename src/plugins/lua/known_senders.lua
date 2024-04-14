@@ -52,7 +52,8 @@ local settings = {
   use_bloom = false,
   symbol = 'KNOWN_SENDER',
   symbol_unknown = 'UNKNOWN_SENDER',
-  symbol_check_mail = 'INC_MAIL_KNOWN',
+  symbol_check_mail_global = 'INC_MAIL_KNOWN_GLOBALLY',
+  symbol_check_mail_local = 'INC_MAIL_KNOWN_LOCALLY',
   redis_key = 'rs_known_senders',
   sender_prefix = 'rsrk',
   sender_key_global = 'verified_senders',
@@ -212,6 +213,67 @@ local function known_senders_callback(task)
   end
 end
 
+local function verify_local_replies_set(task)
+  local sender = task:get_reply_sender()
+  if not sender then
+    lua_util.debugm(N, task, 'Could not get sender')
+    return nil
+  end
+
+  local sender_string = lua_util.maybe_obfuscate_string(tostring(sender), settings, settings.sender_prefix)
+  local sender_key = make_key_replies(sender_string:lower(), 8)
+
+  local function redis_zscore_local_cb(err, data)
+    if err ~= nil then
+      rspamd_logger.errx(task, 'Couldn\'t find sender %s local replies set with error: %s', sender_key, err)
+      return
+    end
+    rspamd_logger.infox(task, 'Recipient: %s', data[2])
+    if next(data[2]) == nil then
+      rspamd_logger.infox(task, 'Recipients was not verified')
+      return
+    end
+  end
+
+  local function redis_zscore_local_last_cb(err, data)
+    if err ~= nil then
+      rspamd_logger.errx(task, 'Couldn\'t find sender %s local replies set with error: %s', sender_key, err)
+      return
+    end
+    rspamd_logger.infox(task, 'Recipient: %s', data[2])
+    if next(data[2]) == nil then
+      rspamd_logger.infox(task, 'Recipients was not verified')
+      return
+    end
+    rspamd_logger.infox(task, 'Recipients was verified')
+    task:insert_result(settings.symbol_check_mail_local, 1.0, sender_key)
+  end
+
+  local recipients = task:get_recipients('mime')
+
+  for i, rcpt in pairs(recipients) do
+    if i ~= #recipients then
+      lua_redis.redis_make_request(task,
+              redis_params,
+              sender_key,
+              false,
+              redis_zscore_local_cb,
+              'ZSCAN',
+              { sender_key, '0', 'MATCH', rcpt.addr }
+      )
+    else
+      lua_redis.redis_make_request(task,
+              redis_params,
+              sender_key,
+              false,
+              redis_zscore_local_last_cb,
+              'ZSCAN',
+              { sender_key, '0', 'MATCH', rcpt.addr }
+      )
+    end
+  end
+end
+
 local function check_known_incoming_mail_callback(task)
   local sender = task:get_reply_sender()
   if not sender then
@@ -227,38 +289,33 @@ local function check_known_incoming_mail_callback(task)
 
   lua_util.debugm(N, task, 'Sender key: %s', sender_key)
 
-
-  local function redis_zrange_cb(err, data)
+  local function redis_zscore_global_cb(err, data)
     if err ~= nil then
-      rspamd_logger.errx(task, 'Couldn\'t get data from global replies set. Ended with error: %s', err)
+      rspamd_logger.errx(task, 'Couldn\'t find sender %s in global replies set. Ended with error: %s', sender, err)
       return
     end
-
-    rspamd_logger.infox(task, 'Successfully got list: %s of verified senders', data)
-
-    -- searching for sender in global replies set
-    if data then
-      for _, sndr in ipairs(data) do
-        if sndr == sender then
-          task:insert_result(settings.symbol_check_mail, 1.0, sndr)
-        end
-      end
+    --checking if zscan have not found value of sender
+    if next(data[2]) ~= nil then
+      rspamd_logger.infox(task, 'Sender: %s verified. Output: %s', sender, data)
+      task:insert_result(settings.symbol_check_mail_global, 1.0, sender)
+    else
+      rspamd_logger.infox(task, 'Sender: %s was not verified', sender)
     end
   end
 
   -- key for global replies set
   local global_key = make_key_replies(settings.sender_key_global, settings.sender_key_size, settings.sender_prefix)
 
+  -- zscan to find sender in global set
   lua_util.debugm(N, task, 'Making redis request to global replies set')
   lua_redis.redis_make_request(task,
           redis_params, -- connect params
           sender_key, -- hash key
           false, -- is write
-          redis_zrange_cb, --callback
-          'ZRANGE', -- command
-          { global_key, '0', '-1' } -- arguments
+          redis_zscore_global_cb, --callback
+          'ZSCAN', -- command
+          { global_key, '0', 'MATCH', sender } -- arguments
   )
-
 end
 
 local opts = rspamd_config:get_all_opt('known_senders')
@@ -298,7 +355,14 @@ if opts then
     })
 
     rspamd_config:register_symbol({
-      name = settings.symbol_check_mail,
+      name = settings.symbol_check_mail_local,
+      type = 'normal',
+      callback = verify_local_replies_set,
+      score = 1.0
+    })
+
+    rspamd_config:register_symbol({
+      name = settings.symbol_check_mail_global,
       type = 'normal',
       callback = check_known_incoming_mail_callback,
       score = 1.0
