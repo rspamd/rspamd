@@ -92,7 +92,7 @@ define(["jquery", "app/common", "stickytabs", "visibility",
             tab_id = "#" + $(".nav-link.active").attr("id");
         }
 
-        $("#autoRefresh").hide();
+        $("#autoRefresh").addClass("invisible");
         $("#refresh").addClass("radius-right");
 
         function setAutoRefresh(refreshInterval, timer, callback) {
@@ -113,7 +113,7 @@ define(["jquery", "app/common", "stickytabs", "visibility",
             }
 
             $("#refresh").removeClass("radius-right");
-            $("#autoRefresh").show();
+            $("#autoRefresh").removeClass("invisible");
 
             countdown(refreshInterval);
             if (!refreshInterval) return;
@@ -126,9 +126,9 @@ define(["jquery", "app/common", "stickytabs", "visibility",
         }
 
         if (["#scan_nav", "#selectors_nav", "#disconnect"].indexOf(tab_id) !== -1) {
-            $("#refresh").hide();
+            $("#refresh").addClass("invisible");
         } else {
-            $("#refresh").show();
+            $("#refresh").removeClass("invisible");
         }
 
         switch (tab_id) {
