@@ -25,6 +25,8 @@ local maps = require "lua_selectors/maps"
 local E = {}
 local M = "selectors"
 
+local HOSTNAME = rspamd_util.get_hostname()
+
 local url_flags_ts = ts.array_of(ts.one_of(lua_util.keys(rspamd_url.flags))):is_optional()
 
 local function gen_exclude_flags_filter(exclude_flags)
@@ -563,7 +565,7 @@ The first argument must be header name.]],
   },
   ['rspamd_hostname'] = {
     ['get_value'] = function(task)
-      return rspamd_util.get_hostname(), 'string'
+      return HOSTNAME, 'string'
     end,
     ['description'] = 'Get hostname of the filter server',
   },
