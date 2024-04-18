@@ -259,6 +259,24 @@ define(["jquery", "app/common", "app/libft"],
             return false;
         });
 
+        function fileInputHandler(obj) {
+            ({files} = obj);
+            filesIdx = 0;
+
+            if (files.length === 1) {
+                setFileInputFiles(0);
+                enable_disable_scan_btn();
+                readFile((result) => {
+                    $("#scanMsgSource").val(result);
+                    enable_disable_scan_btn();
+                });
+            // eslint-disable-next-line no-alert
+            } else if (files.length < 10 || confirm("Are you sure you want to scan " + files.length + " files?")) {
+                getScanTextHeaders();
+                readFile((result) => scanText(result));
+            }
+        }
+
         const dragoverClassList = "outline-dashed-primary bg-primary-subtle";
         $("#scanMsgSource")
             .on("dragenter dragover dragleave drop", (e) => {
@@ -271,23 +289,9 @@ define(["jquery", "app/common", "app/libft"],
             .on("dragleave drop", () => {
                 $("#scanMsgSource").removeClass(dragoverClassList);
             })
-            .on("drop", (e) => {
-                ({files} = e.originalEvent.dataTransfer);
-                filesIdx = 0;
+            .on("drop", (e) => fileInputHandler(e.originalEvent.dataTransfer));
 
-                if (files.length === 1) {
-                    setFileInputFiles(0);
-                    enable_disable_scan_btn();
-                    readFile((result) => {
-                        $("#scanMsgSource").val(result);
-                        enable_disable_scan_btn();
-                    });
-                // eslint-disable-next-line no-alert
-                } else if (files.length < 10 || confirm("Are you sure you want to scan " + files.length + " files?")) {
-                    getScanTextHeaders();
-                    readFile((result) => scanText(result));
-                }
-            });
+        $("#formFile").on("change", (e) => fileInputHandler(e.target));
 
         return ui;
     });

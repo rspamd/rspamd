@@ -28,13 +28,13 @@
 </head>
 
 <body>
-
-<nav class="navbar navbar-light bg-light navbar-expand-xl d-none" id="navBar">
+<!-- .vw-100 and .pe-3 prevent navbar layout shift caused by scrollbar -->
+<nav class="navbar navbar-light bg-light navbar-expand-xl vw-100 pe-3 d-none" id="navBar">
 	<div class="container-fluid">
 		<div class="navbar-header navbar-brand p-0">
 			<img src="./img/rspamd_logo_navbar.png" alt="Rspamd">
 		</div>
-		<div class="collapse navbar-collapse order-3 order-xl-2">
+		<div class="collapse navbar-collapse order-3 order-xl-2 flex-grow-0">
 			<form class="my-2 me-auto">
 				<select id="selSrv" class="form-select"></select>
 			</form>
@@ -57,7 +57,7 @@
 		<div class="d-flex flex-row order-2 order-xl-4">
 			<form class="ms-auto">
 				<div class="btn-group">
-					<button class="btn btn-outline-secondary" id="refresh" style="display: none;"><i class="fas fa-sync-alt"></i> Refresh</button>
+					<button class="btn btn-outline-secondary invisible" id="refresh"><i class="fas fa-sync-alt"></i> Refresh</button>
 					<button class="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" id="autoRefresh" title="Auto-refresh time interval">
 						<span id="countdown">--:--</span>
 					</button>
@@ -383,7 +383,7 @@
 						<span class="h6 fw-bolder my-auto">Scan suspected message</span>
 						<div class="d-flex input-group-sm align-items-center ms-auto">
 							<label for="formFile" class="col-auto col-form-label-sm me-1">Choose a file:</label>
-							<input class="form-control form-control-sm btn btn-secondary" id="formFile" type="file">
+							<input class="form-control form-control-sm btn btn-secondary" id="formFile" type="file" multiple>
 						</div>
 					</div>
 					<div class="card-body">
