@@ -26,7 +26,7 @@ redis.call('HSET', prefix, 'version', '2') -- new schema
 redis.call('HINCRBY', prefix, learned_key, is_unlearn and -1 or 1) -- increase or decrease learned count
 
 for i, token in ipairs(input_tokens) do
-  redis.call('HINCRBY', token, hash_key, 1)
+  redis.call('HINCRBY', token, hash_key, is_unlearn and -1 or 1)
   if text_tokens then
     local tok1 = text_tokens[i * 2 - 1]
     local tok2 = text_tokens[i * 2]
