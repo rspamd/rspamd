@@ -329,6 +329,18 @@ rspamd_stat_preprocess(struct rspamd_stat_ctx *st_ctx,
 			g_ptr_array_index(task->stat_runtimes, i) = NULL;
 			msg_debug_bayes("symbol %s is disabled, skip classification",
 							st->stcf->symbol);
+			/* We need to disable the whole classifier for this! */
+			struct rspamd_classifier *cl = st->classifier;
+			for (int j = 0; j < st_ctx->statfiles->len; j++) {
+				struct rspamd_statfile *nst = g_ptr_array_index(st_ctx->statfiles, j);
+
+				if (st != nst && nst->classifier == cl) {
+					g_ptr_array_index(task->stat_runtimes, j) = NULL;
+					msg_debug_bayes("symbol %s is disabled, skip classification for %s as well",
+									st->stcf->symbol, nst->stcf->symbol);
+				}
+			}
+
 			continue;
 		}
 
