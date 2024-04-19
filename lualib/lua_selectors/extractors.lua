@@ -17,12 +17,15 @@ limitations under the License.
 local fun = require 'fun'
 local meta_functions = require "lua_meta"
 local lua_util = require "lua_util"
+local rspamd_util = require "rspamd_util"
 local rspamd_url = require "rspamd_url"
 local common = require "lua_selectors/common"
 local ts = require("tableshape").types
 local maps = require "lua_selectors/maps"
 local E = {}
 local M = "selectors"
+
+local HOSTNAME = rspamd_util.get_hostname()
 
 local url_flags_ts = ts.array_of(ts.one_of(lua_util.keys(rspamd_url.flags))):is_optional()
 
@@ -559,6 +562,12 @@ The first argument must be header name.]],
       return res, 'string_list'
     end,
     ['description'] = 'Get metatokens for a message as strings',
+  },
+  ['rspamd_hostname'] = {
+    ['get_value'] = function(task)
+      return HOSTNAME, 'string'
+    end,
+    ['description'] = 'Get hostname of the filter server',
   },
 }
 

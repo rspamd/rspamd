@@ -15,7 +15,8 @@ for i = 0, conf.cache_max_keys do
   local have = redis.call('HGET', prefix, cache_id)
 
   if have then
-    -- Already in cache
+    -- Already in cache, but is_spam changes when relearning
+    redis.call('HSET', prefix, cache_id, is_spam)
     return false
   end
 end

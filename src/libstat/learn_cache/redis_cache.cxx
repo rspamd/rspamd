@@ -170,7 +170,7 @@ rspamd_stat_cache_checked(lua_State *L)
 						  (task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM) ? "spam" : "ham");
 			task->flags |= RSPAMD_TASK_FLAG_ALREADY_LEARNED;
 		}
-		else if (val != 0) {
+		else {
 			/* Unlearn flag */
 			task->flags |= RSPAMD_TASK_FLAG_UNLEARN;
 		}
