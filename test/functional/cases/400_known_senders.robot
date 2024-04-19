@@ -43,8 +43,21 @@ INCOMING MAIL SENDER IS UNKNOWN
   ...  Settings={symbols_enabled [${SYMBOL_GLOBAL}, ${SYMBOL_LOCAL}]}
   Do Not Expect Symbol  ${SYMBOL_GLOBAL}
   Do Not Expect Symbol  ${SYMBOL_LOCAL}
+  
+INCOMING MAIL SENDER IS KNOWN RECIPIENTS ARE UNKNOWN
+  Scan File  ${RSPAMD_TESTDIR}/messages/set_replyto_1_1.eml
+  ...  IP=8.8.8.8  User=user@emailbl.com
+  ...  Settings=${SETTINGS_REPLIES}
+  Scan File  ${RSPAMD_TESTDIR}/messages/replyto_1_1.eml
+  ...  IP=8.8.8.8  User=user@emailbl.com
+  ...  Settings=${SETTINGS_REPLIES}
+  Scan File  ${RSPAMD_TESTDIR}/messages/inc_mail_known_sender.eml
+  ...  IP=8.8.8.8  User=user@emailbl.com
+  ...  Settings={symbols_enabled [${SYMBOL_GLOBAL}, ${SYMBOL_LOCAL}]}
+  Expect Symbol  ${SYMBOL_GLOBAL}
+  Do Not Expect Symbol   ${SYMBOL_LOCAL}
 
-INCOMING MAIL SENDER IS KNOWN RECIPIENTS KNOWN
+INCOMING MAIL SENDER IS KNOWN RECIPIENTS ARE KNOWN
   Scan File  ${RSPAMD_TESTDIR}/messages/set_replyto_1_1.eml
   ...  IP=8.8.8.8  User=user@emailbl.com
   ...  Settings=${SETTINGS_REPLIES}
