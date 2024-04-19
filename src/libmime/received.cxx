@@ -1,11 +1,11 @@
-/*-
- * Copyright 2021 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -616,13 +616,25 @@ received_header_parse(received_header_chain &chain, rspamd_mempool_t *pool,
 
 	static constexpr const auto protos_map = frozen::make_unordered_map<frozen::string, received_flags>({{"smtp", received_flags::SMTP},
 																										 {"esmtp", received_flags::ESMTP},
+																										 {"utf8esmtp", received_flags::ESMTP |
+																														   received_flags::UTF8},
 																										 {"esmtpa", received_flags::ESMTPA |
 																														received_flags::AUTHENTICATED},
+																										 {"utf8esmtpa", received_flags::ESMTPA |
+																															received_flags::AUTHENTICATED |
+																															received_flags::UTF8},
 																										 {"esmtpsa", received_flags::ESMTPSA |
 																														 received_flags::SSL |
 																														 received_flags::AUTHENTICATED},
+																										 {"utf8esmtpsa", received_flags::ESMTPSA |
+																															 received_flags::SSL |
+																															 received_flags::AUTHENTICATED |
+																															 received_flags::UTF8},
 																										 {"esmtps", received_flags::ESMTPS |
 																														received_flags::SSL},
+																										 {"utf8esmtps", received_flags::ESMTPS |
+																															received_flags::SSL |
+																															received_flags::UTF8},
 																										 {"lmtp", received_flags::LMTP},
 																										 {"imap", received_flags::IMAP},
 																										 {"imaps", received_flags::IMAP |
@@ -800,6 +812,7 @@ received_export_to_lua(received_header_chain *chain, lua_State *L) -> bool
 		push_flag(rh, received_flags::ARTIFICIAL, "artificial");
 		push_flag(rh, received_flags::AUTHENTICATED, "authenticated");
 		push_flag(rh, received_flags::SSL, "ssl");
+		push_flag(rh, received_flags::UTF8, "utf8");
 		lua_setfield(L, -2, "flags");
 
 		auto push_nullable_string = [L](const mime_string &st, const char *field) {
