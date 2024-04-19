@@ -252,15 +252,14 @@ local function verify_local_replies_set(task)
     table.insert(params, rcpt.addr)
   end
   table.insert(params, 1, sender_key)
-  --for _, rcpt in ipairs(recipients) do
-    lua_redis.redis_make_request(task,
-            redis_params,
-            sender_key,
-            false,
-            redis_zscore_cb,
-            'ZMSCORE',
-            params)
-  --end
+
+  lua_redis.redis_make_request(task,
+          redis_params,
+          sender_key,
+          false,
+          redis_zscore_cb,
+          'ZMSCORE',
+          params)
 end
 
 local function check_known_incoming_mail_callback(task)
