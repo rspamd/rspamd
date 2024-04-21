@@ -229,7 +229,7 @@ local function verify_local_replies_set(task)
     if err ~= nil then
       rspamd_logger.errx(task, 'Could not verify %s local replies set %s', sender_key, err)
     end
-    if type(data[1]) ~= 'userdata' then
+    if type(data[1]) ~= 'userdata' and data[1] ~= nil and data ~= nil and type(data) ~= 'userdata' then
       for _, score in ipairs(data) do
         if score == nil then
           rspamd_logger.infox(task, 'Recipients was not verified')
