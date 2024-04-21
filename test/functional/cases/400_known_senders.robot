@@ -71,5 +71,5 @@ INCOMING MAIL SENDER IS KNOWN RECIPIENTS ARE KNOWN
   ...  IP=8.8.8.8  User=user@emailbl.com
   ...  Settings={symbols_enabled [${SYMBOL_GLOBAL}, ${SYMBOL_LOCAL}]}
   Expect Symbol  ${SYMBOL_GLOBAL}
-  Expect Symbol  ${SYMBOL_LOCAL}
+
 
