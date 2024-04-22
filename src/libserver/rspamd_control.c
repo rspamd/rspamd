@@ -358,7 +358,11 @@ void rspamd_pending_control_free(gpointer p)
 {
 	struct rspamd_control_reply_elt *rep_elt = (struct rspamd_control_reply_elt *) p;
 
-	rspamd_ev_watcher_stop(rep_elt->event_loop, &rep_elt->ev);
+	if (rep_elt->sent) {
+		rspamd_ev_watcher_stop(rep_elt->event_loop, &rep_elt->ev);
+	}
+
+	g_hash_table_unref(rep_elt->pending_elts);
 	g_free(rep_elt);
 }
 
@@ -405,7 +409,7 @@ rspamd_control_stop_pending(struct rspamd_control_reply_elt *elt)
 					  g_quark_to_string(elt->wrk_type),
 					  (int) pending);
 
-	if (pending != 0) {
+	if (elt->worker->state != rspamd_worker_state_terminating && pending != 0) {
 		/* Invoke another event from the queue */
 		GHashTableIter it;
 		gpointer k, v;
@@ -445,8 +449,6 @@ rspamd_control_stop_pending(struct rspamd_control_reply_elt *elt)
 								 cur->worker->control_pipe[0],
 								 strerror(errno));
 					g_hash_table_remove(elt->pending_elts, cur);
-					/* Free one refcounter on a hash table as it was taken by `cur` */
-					g_hash_table_unref(htb);
 				}
 			}
 		}
@@ -454,9 +456,6 @@ rspamd_control_stop_pending(struct rspamd_control_reply_elt *elt)
 
 	/* Remove from hash and performs the cleanup */
 	g_hash_table_remove(elt->pending_elts, elt);
-
-	/* Release hash reference */
-	g_hash_table_unref(htb);
 }
 
 static struct rspamd_control_reply_elt *
@@ -500,7 +499,6 @@ rspamd_control_broadcast_cmd(struct rspamd_main *rspamd_main,
 		rep_elt->event_loop = rspamd_main->event_loop;
 		rep_elt->ud = ud;
 		rep_elt->handler = handler;
-		rep_elt->pending_elts = g_hash_table_ref(wrk->control_events_pending);
 		memcpy(&rep_elt->cmd, cmd, sizeof(*cmd));
 		rep_elt->sent = false;
 
@@ -516,8 +514,9 @@ rspamd_control_broadcast_cmd(struct rspamd_main *rspamd_main,
 									   rep_elt);
 				rspamd_ev_watcher_start(rspamd_main->event_loop,
 										&rep_elt->ev, worker_io_timeout);
-				g_hash_table_insert(wrk->control_events_pending, rep_elt, rep_elt);
 				rep_elt->sent = true;
+				rep_elt->pending_elts = g_hash_table_ref(wrk->control_events_pending);
+				g_hash_table_insert(wrk->control_events_pending, rep_elt, rep_elt);
 
 				DL_APPEND(res, rep_elt);
 				msg_debug_control("sent command %d to the worker %P(%s), fd: %d",
@@ -542,6 +541,7 @@ rspamd_control_broadcast_cmd(struct rspamd_main *rspamd_main,
 							  wrk->pid,
 							  g_quark_to_string(wrk->type),
 							  (int) g_hash_table_size(wrk->control_events_pending));
+			rep_elt->pending_elts = g_hash_table_ref(wrk->control_events_pending);
 			g_hash_table_insert(wrk->control_events_pending, rep_elt, rep_elt);
 			DL_APPEND(res, rep_elt);
 		}
