@@ -368,10 +368,10 @@ void rspamd_pending_control_free(gpointer p)
 
 static inline void
 rspamd_control_fill_msghdr(struct rspamd_control_command *cmd,
-						   int attached_fd, struct msghdr *msg)
+						   int attached_fd, struct msghdr *msg,
+						   struct iovec *iov)
 {
 	struct cmsghdr *cmsg;
-	struct iovec iov;
 	unsigned char fdspace[CMSG_SPACE(sizeof(int))];
 
 	memset(msg, 0, sizeof(*msg));
@@ -388,9 +388,9 @@ rspamd_control_fill_msghdr(struct rspamd_control_command *cmd,
 		memcpy(CMSG_DATA(cmsg), &attached_fd, sizeof(int));
 	}
 
-	iov.iov_base = cmd;
-	iov.iov_len = sizeof(*cmd);
-	msg->msg_iov = &iov;
+	iov->iov_base = cmd;
+	iov->iov_len = sizeof(*cmd);
+	msg->msg_iov = iov;
 	msg->msg_iovlen = 1;
 }
 
@@ -421,9 +421,10 @@ rspamd_control_stop_pending(struct rspamd_control_reply_elt *elt)
 
 			if (!cur->sent) {
 				struct msghdr msg;
+				struct iovec iov;
 
 				rspamd_main = cur->worker->srv;
-				rspamd_control_fill_msghdr(&cur->cmd, cur->attached_fd, &msg);
+				rspamd_control_fill_msghdr(&cur->cmd, cur->attached_fd, &msg, &iov);
 				ssize_t r = sendmsg(cur->worker->control_pipe[0], &msg, 0);
 
 				if (r == sizeof(cur->cmd)) {
@@ -470,7 +471,6 @@ rspamd_control_broadcast_cmd(struct rspamd_main *rspamd_main,
 	struct rspamd_worker *wrk;
 	struct rspamd_control_reply_elt *rep_elt, *res = NULL;
 	gpointer k, v;
-	struct msghdr msg;
 	gssize r;
 
 	g_hash_table_iter_init(&it, rspamd_main->workers);
@@ -504,7 +504,10 @@ rspamd_control_broadcast_cmd(struct rspamd_main *rspamd_main,
 
 		if (g_hash_table_size(wrk->control_events_pending) == 0) {
 			/* We can send command */
-			rspamd_control_fill_msghdr(cmd, attached_fd, &msg);
+			struct msghdr msg;
+			struct iovec iov;
+
+			rspamd_control_fill_msghdr(cmd, attached_fd, &msg, &iov);
 			r = sendmsg(wrk->control_pipe[0], &msg, 0);
 
 			if (r == sizeof(*cmd)) {
