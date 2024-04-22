@@ -361,6 +361,10 @@ void rspamd_pending_control_free(gpointer p)
 	if (rep_elt->sent) {
 		rspamd_ev_watcher_stop(rep_elt->event_loop, &rep_elt->ev);
 	}
+	else if (rep_elt->attached_fd != -1) {
+		/* Only for non-sent requests! */
+		close(rep_elt->attached_fd);
+	}
 
 	g_hash_table_unref(rep_elt->pending_elts);
 	g_free(rep_elt);
@@ -439,6 +443,11 @@ rspamd_control_stop_pending(struct rspamd_control_reply_elt *elt)
 					rspamd_ev_watcher_start(cur->event_loop,
 											&cur->ev, worker_io_timeout);
 					cur->sent = true;
+					if (cur->attached_fd != -1) {
+						/* Since `sendmsg` performs `dup` for us, we need to remove our own descriptor */
+						close(cur->attached_fd);
+						cur->attached_fd = -1;
+					}
 
 					break; /* Exit the outer loop as we have invoked something */
 				}
@@ -501,6 +510,7 @@ rspamd_control_broadcast_cmd(struct rspamd_main *rspamd_main,
 		rep_elt->handler = handler;
 		memcpy(&rep_elt->cmd, cmd, sizeof(*cmd));
 		rep_elt->sent = false;
+		rep_elt->attached_fd = -1;
 
 		if (g_hash_table_size(wrk->control_events_pending) == 0) {
 			/* We can send command */
@@ -545,8 +555,35 @@ rspamd_control_broadcast_cmd(struct rspamd_main *rspamd_main,
 							  g_quark_to_string(wrk->type),
 							  (int) g_hash_table_size(wrk->control_events_pending));
 			rep_elt->pending_elts = g_hash_table_ref(wrk->control_events_pending);
-			g_hash_table_insert(wrk->control_events_pending, rep_elt, rep_elt);
-			DL_APPEND(res, rep_elt);
+			/*
+			 * Here are dragons:
+			 * If we have a descriptor to send, the callee expects that we follow
+			 * sendmsg semantics that performs `dup` on it. So we need to clone fd and keep it there.
+			 */
+			if (attached_fd != -1) {
+				rep_elt->attached_fd = dup(attached_fd);
+
+				if (rep_elt->attached_fd == -1) {
+					/*
+					 * We have a problem: file descriptors limit is reached, so we cannot really deal with this
+					 * request
+					 */
+					msg_err_main("cannot duplicate file descriptor to send command to worker %P(%s): %s; failed to send command",
+								 wrk->pid,
+								 g_quark_to_string(wrk->type),
+								 strerror(errno));
+					g_hash_table_unref(rep_elt->pending_elts);
+					g_free(rep_elt);
+				}
+				else {
+					g_hash_table_insert(wrk->control_events_pending, rep_elt, rep_elt);
+					DL_APPEND(res, rep_elt);
+				}
+			}
+			else {
+				g_hash_table_insert(wrk->control_events_pending, rep_elt, rep_elt);
+				DL_APPEND(res, rep_elt);
+			}
 		}
 	}
 
