@@ -59,7 +59,7 @@
 #define RSPAMD_FUZZY_PLUGIN_VERSION RSPAMD_FUZZY_VERSION
 
 static const int rspamd_fuzzy_hash_len = 5;
-static const char *M = "fuzzy check";
+static const char *M = "fuzzy_check";
 struct fuzzy_ctx;
 
 struct fuzzy_mapping {
@@ -207,6 +207,13 @@ module_t fuzzy_check_module = {
 	RSPAMD_MODULE_VER,
 	(unsigned int) -1,
 };
+
+INIT_LOG_MODULE(N)
+#define msg_debug_fuzzy_check(...) rspamd_conditional_debug_fast(NULL,                                                          \
+																 task ? task->from_addr : NULL,                                 \
+																 rspamd_task_log_id, M, task ? task->task_pool->tag.uid : NULL, \
+																 RSPAMD_LOG_FUNC,                                               \
+																 __VA_ARGS__)
 
 static inline struct fuzzy_ctx *
 fuzzy_get_context(struct rspamd_config *cfg)
@@ -1842,9 +1849,9 @@ fuzzy_cmd_from_text_part(struct rspamd_task *task,
 
 			rspamd_cryptobox_hash_final(&st, shcmd->basic.digest);
 
-			msg_debug_task("loading shingles of type %s with key %*xs",
-						   rule->algorithm_str,
-						   16, rule->shingles_key->str);
+			msg_debug_fuzzy_check("loading shingles of type %s with key %*xs",
+								  rule->algorithm_str,
+								  16, rule->shingles_key->str);
 			sh = rspamd_shingles_from_text(words,
 										   rule->shingles_key->str, task->task_pool,
 										   rspamd_shingles_default_filter, NULL,
@@ -1987,7 +1994,7 @@ fuzzy_cmd_from_image_part (struct fuzzy_rule *rule,
 				(const unsigned char *)img->dct, RSPAMD_DCT_LEN / NBBY,
 				rule->hash_key->str, rule->hash_key->len);
 
-		msg_debug_task ("loading shingles of type %s with key %*xs",
+		msg_debug_fuzzy_check ("loading shingles of type %s with key %*xs",
 				rule->algorithm_str,
 				16, rule->shingles_key->str);
 
@@ -4228,9 +4235,9 @@ fuzzy_lua_hex_hashes_handler(lua_State *L)
 		/* Check for flag */
 		if (g_hash_table_lookup(rule->mappings,
 								GINT_TO_POINTER(flag)) == NULL) {
-			msg_debug_task("skip rule %s as it has no flag %d defined"
-						   " false",
-						   rule->name, flag);
+			msg_debug_fuzzy_check("skip rule %s as it has no flag %d defined"
+								  " false",
+								  rule->name, flag);
 			continue;
 		}
 
