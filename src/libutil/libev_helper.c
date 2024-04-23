@@ -109,3 +109,33 @@ void rspamd_ev_watcher_reschedule(struct ev_loop *loop,
 		}
 	}
 }
+
+void rspamd_ev_watcher_reschedule_at(struct ev_loop *loop,
+									 struct rspamd_io_ev *ev,
+									 short what,
+									 ev_tstamp at)
+{
+	g_assert(ev->cb != NULL);
+
+	if (ev_can_stop(&ev->io)) {
+		ev_io_stop(EV_A, &ev->io);
+		ev_io_set(&ev->io, ev->io.fd, what);
+		ev_io_start(EV_A, &ev->io);
+	}
+	else {
+		ev->io.data = ev;
+		ev_io_init(&ev->io, rspamd_ev_watcher_io_cb, ev->io.fd, what);
+		ev_io_start(EV_A, &ev->io);
+	}
+
+	if (at > 0) {
+		if (!(ev_can_stop(&ev->tm))) {
+			/* Update timestamp to avoid timers running early */
+			ev_now_update_if_cheap(loop);
+
+			ev->tm.data = ev;
+			ev_timer_init(&ev->tm, rspamd_ev_watcher_timer_cb, at, 0.0);
+			ev_timer_start(EV_A, &ev->tm);
+		}
+	}
+}
