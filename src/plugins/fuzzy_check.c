@@ -2682,6 +2682,7 @@ fuzzy_check_timer_callback(int fd, short what, void *arg)
 			/* Do not make delay more than 500ms for performance considerations */
 			backpressure_time = MIN(backpressure_time, 0.5);
 			backpressure_time = rspamd_time_jitter(backpressure_time * 0.5, 0.0);
+			backpressure_time = MAX(backpressure_time, 0.1);
 			/* Inverse to distinguish */
 			msg_debug_fuzzy_check("backpressure for %.2f milliseconds (server=%s), retransmits: %d;",
 								  backpressure_time * 1000,
@@ -2870,6 +2871,7 @@ fuzzy_controller_timer_callback(int fd, short what, void *arg)
 			/* Do not make delay more than 500ms for performance considerations */
 			backpressure_time = MIN(backpressure_time, 0.5);
 			backpressure_time = rspamd_time_jitter(backpressure_time * 0.5, 0.0);
+			backpressure_time = MAX(backpressure_time, 0.1);
 			/* Inverse to distinguish */
 			msg_debug_fuzzy_check("backpressure for %.2f milliseconds (server=%s), retransmits: %d;",
 								  backpressure_time * 1000,
