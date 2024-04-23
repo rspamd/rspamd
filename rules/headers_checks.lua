@@ -254,7 +254,7 @@ local check_replyto_id = rspamd_config:register_symbol({
         then
           task:insert_result('REPLYTO_EQ_TO_ADDR', 1.0)
         end
-      elseif to[1].domain and rt[1].domain then
+      elseif (to and to[1] and to[1].domain and rt[1].domain) then
         if (util.strequal_caseless(to[1].domain, rt[1].domain)) then
           task:insert_result('REPLYTO_DOM_EQ_TO_DOM', 1.0)
         else
