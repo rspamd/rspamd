@@ -353,7 +353,7 @@ unsigned int rspamd_gstring_icase_hash(gconstpointer key)
 #define ZEROMASK 0x7F7F7F7FU
 #endif
 
-#define HASZERO(x) ~(((((x) &ZEROMASK) + ZEROMASK) | (x)) | ZEROMASK)
+#define HASZERO(x) ~(((((x) & ZEROMASK) + ZEROMASK) | (x)) | ZEROMASK)
 
 gsize rspamd_strlcpy_fast(char *dst, const char *src, gsize siz)
 {
@@ -1303,7 +1303,7 @@ rspamd_encode_base64_common(const unsigned char *in, gsize inlen, int str_len,
 	o = out;
 	cols = 0;
 
-	while (inlen > 6) {
+	while (inlen >= sizeof(n)) {
 		memcpy(&n, in, sizeof(n));
 		n = GUINT64_TO_BE(n);
 
@@ -3502,7 +3502,7 @@ rspamd_str_regexp_escape(const char *pattern, gsize slen,
 					*d++ = '\\';
 					*d++ = 'x';
 					*d++ = hexdigests[((t >> 4) & 0xF)];
-					*d++ = hexdigests[((t) &0xF)];
+					*d++ = hexdigests[((t) & 0xF)];
 					continue; /* To avoid *d++ = t; */
 				}
 				else {
