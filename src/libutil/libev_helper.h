@@ -1,11 +1,11 @@
-/*-
- * Copyright 2019 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -78,6 +78,17 @@ void rspamd_ev_watcher_stop(struct ev_loop *loop,
 void rspamd_ev_watcher_reschedule(struct ev_loop *loop,
 								  struct rspamd_io_ev *ev,
 								  short what);
+
+/**
+ * Convenience function to reschedule watcher with different events and different timeout
+ * @param loop
+ * @param ev
+ * @param what
+ */
+void rspamd_ev_watcher_reschedule_at(struct ev_loop *loop,
+									 struct rspamd_io_ev *ev,
+									 short what,
+									 ev_tstamp at);
 
 #ifdef __cplusplus
 }
