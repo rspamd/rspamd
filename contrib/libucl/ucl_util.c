@@ -67,7 +67,7 @@ typedef kvec_t(ucl_object_t *) ucl_array_t;
 #include <fetch.h>
 #endif
 
-#if defined(_MSC_VER)
+#if defined(_WIN32)
 #include <windows.h>
 #include <io.h>
 #include <direct.h>
@@ -866,6 +866,8 @@ ucl_fetch_url (const unsigned char *url, unsigned char **buf, size_t *buflen,
 	*buf = cbdata.buf;
 	*buflen = cbdata.buflen;
 
+	curl_easy_cleanup (curl);
+
 	return true;
 #else
 	ucl_create_err (err, "URL support is disabled");
@@ -1020,6 +1022,9 @@ ucl_include_url (const unsigned char *data, size_t len,
 	snprintf (urlbuf, sizeof (urlbuf), "%.*s", (int)len, data);
 
 	if (!ucl_fetch_url (urlbuf, &buf, &buflen, &parser->err, params->must_exist)) {
+		if (!params->must_exist) {
+			ucl_parser_clear_error (parser);
+		}
 		return !params->must_exist;
 	}
 
@@ -1095,6 +1100,11 @@ ucl_include_file_single (const unsigned char *data, size_t len,
 	ucl_hash_t *container = NULL;
 	struct ucl_stack *st = NULL;
 
+	if (parser->state == UCL_STATE_ERROR) {
+		/* Return immediately if we are in the error state... */
+		return false;
+	}
+
 	snprintf (filebuf, sizeof (filebuf), "%.*s", (int)len, data);
 	if (ucl_realpath (filebuf, realbuf) == NULL) {
 		if (params->soft_fail) {
@@ -1130,6 +1140,8 @@ ucl_include_file_single (const unsigned char *data, size_t len,
 			/* The case of fatal errors */
 			return false;
 		}
+
+		ucl_parser_clear_error (parser);
 
 		return true;
 	}
@@ -1849,6 +1861,10 @@ ucl_load_handler (const unsigned char *data, size_t len,
 		if (!ucl_fetch_file (load_file, &buf, &buflen, &parser->err,
 				!try_load)) {
 			free (load_file);
+
+			if (try_load) {
+				ucl_parser_clear_error (parser);
+			}
 
 			return (try_load || false);
 		}
@@ -3078,13 +3094,13 @@ ucl_object_type (const ucl_object_t *obj)
 ucl_object_t*
 ucl_object_fromstring (const char *str)
 {
-	return ucl_object_fromstring_common (str, 0, UCL_STRING_ESCAPE);
+	return ucl_object_fromstring_common (str, 0, UCL_STRING_RAW);
 }
 
 ucl_object_t *
 ucl_object_fromlstring (const char *str, size_t len)
 {
-	return ucl_object_fromstring_common (str, len, UCL_STRING_ESCAPE);
+	return ucl_object_fromstring_common (str, len, UCL_STRING_RAW);
 }
 
 ucl_object_t *
@@ -3375,10 +3391,20 @@ ucl_elt_append (ucl_object_t *head, ucl_object_t *elt)
 		head = elt;
 	}
 	else {
-		elt->prev = head->prev;
-		head->prev->next = elt;
-		head->prev = elt;
-		elt->next = NULL;
+		if (head->type == UCL_USERDATA) {
+			/* Userdata objects are VERY special! */
+			struct ucl_object_userdata *ud = (struct ucl_object_userdata *)head;
+			elt->prev = ud->obj.prev;
+			ud->obj.prev->next = elt;
+			ud->obj.prev = elt;
+			elt->next = NULL;
+		}
+		else {
+			elt->prev = head->prev;
+			head->prev->next = elt;
+			head->prev = elt;
+			elt->next = NULL;
+		}
 	}
 
 	return head;
@@ -3588,11 +3614,15 @@ ucl_object_copy_internal (const ucl_object_t *other, bool allow_array)
 	ucl_object_t *new;
 	ucl_object_iter_t it = NULL;
 	const ucl_object_t *cur;
+	size_t sz = sizeof(*new);
 
-	new = malloc (sizeof (*new));
+	if (other->type == UCL_USERDATA) {
+		sz = sizeof (struct ucl_object_userdata);
+	}
+	new = malloc (sz);
 
 	if (new != NULL) {
-		memcpy (new, other, sizeof (*new));
+		memcpy (new, other, sz);
 		if (other->flags & UCL_OBJECT_EPHEMERAL) {
 			/* Copied object is always non ephemeral */
 			new->flags &= ~UCL_OBJECT_EPHEMERAL;

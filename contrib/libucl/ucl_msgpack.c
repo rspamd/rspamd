@@ -438,7 +438,7 @@ static ssize_t ucl_msgpack_parse_ignore (struct ucl_parser *parser,
 /*
  * Search tree packed in array
  */
-static struct ucl_msgpack_parser {
+struct ucl_msgpack_parser {
 	uint8_t prefix;						/* Prefix byte					*/
 	uint8_t prefixlen;					/* Length of prefix in bits		*/
 	uint8_t fmt;						/* The desired format 			*/
@@ -1019,6 +1019,8 @@ ucl_msgpack_consume (struct ucl_parser *parser)
 			}
 			else {
 				/* Length is not embedded */
+				remain --;
+
 				if (remain < obj_parser->len) {
 					ucl_create_err (&parser->err, "not enough data remain to "
 							"read object's length: %u remain, %u needed",
@@ -1028,7 +1030,6 @@ ucl_msgpack_consume (struct ucl_parser *parser)
 				}
 
 				p ++;
-				remain --;
 
 				switch (obj_parser->len) {
 				case 1:
@@ -1044,8 +1045,10 @@ ucl_msgpack_consume (struct ucl_parser *parser)
 					len = FROM_BE64 (*(uint64_t *)p);
 					break;
 				default:
-					assert (0);
-					break;
+					ucl_create_err (&parser->err, "invalid length of the length field: %u",
+							(unsigned)obj_parser->len);
+
+					return false;
 				}
 
 				p += obj_parser->len;
@@ -1131,7 +1134,9 @@ ucl_msgpack_consume (struct ucl_parser *parser)
 			 */
 			container = parser->stack;
 
-			if (container == NULL) {
+			if (parser->stack == NULL) {
+				ucl_create_err (&parser->err,
+						"read assoc value when no container represented");
 				return false;
 			}
 
@@ -1141,9 +1146,14 @@ ucl_msgpack_consume (struct ucl_parser *parser)
 
 
 			/* Insert value to the container and check if we have finished array */
-			if (!ucl_msgpack_insert_object (parser, NULL, 0,
+			if (parser->cur_obj) {
+				if (!ucl_msgpack_insert_object(parser, NULL, 0,
 					parser->cur_obj)) {
-				return false;
+					return false;
+				}
+			}
+			else {
+				/* We have parsed ext, ignore it */
 			}
 
 			if (ucl_msgpack_is_container_finished (container)) {
@@ -1191,6 +1201,8 @@ ucl_msgpack_consume (struct ucl_parser *parser)
 			container = parser->stack;
 
 			if (container == NULL) {
+				ucl_create_err (&parser->err,
+						"read assoc value when no container represented");
 				return false;
 			}
 
@@ -1200,9 +1212,12 @@ ucl_msgpack_consume (struct ucl_parser *parser)
 
 			assert (key != NULL && keylen > 0);
 
-			if (!ucl_msgpack_insert_object (parser, key, keylen,
+			if (parser->cur_obj) {
+				if (!ucl_msgpack_insert_object(parser, key, keylen,
 					parser->cur_obj)) {
-				return false;
+
+					return false;
+				}
 			}
 
 			key = NULL;
@@ -1237,7 +1252,9 @@ ucl_msgpack_consume (struct ucl_parser *parser)
 	case start_assoc:
 		/* Empty container at the end */
 		if (len != 0) {
-			ucl_create_err (&parser->err, "invalid non-empty container at the end");
+			ucl_create_err (&parser->err,
+					"invalid non-empty container at the end; len=%zu",
+					(uintmax_t)len);
 
 			return false;
 		}
@@ -1245,6 +1262,12 @@ ucl_msgpack_consume (struct ucl_parser *parser)
 		parser->cur_obj = ucl_object_new_full (
 				state == start_array ? UCL_ARRAY : UCL_OBJECT,
 				parser->chunks->priority);
+
+		if (parser->stack == NULL) {
+			ucl_create_err (&parser->err,
+					"read assoc value when no container represented");
+			return false;
+		}
 		/* Insert to the previous level container */
 		if (!ucl_msgpack_insert_object (parser,
 				key, keylen, parser->cur_obj)) {
@@ -1271,7 +1294,9 @@ ucl_msgpack_consume (struct ucl_parser *parser)
 
 		container = parser->stack;
 
-		if (container == NULL) {
+		if (parser->stack == NULL) {
+			ucl_create_err (&parser->err,
+					"read assoc value when no container represented");
 			return false;
 		}
 
@@ -1281,9 +1306,11 @@ ucl_msgpack_consume (struct ucl_parser *parser)
 
 
 		/* Insert value to the container and check if we have finished array */
-		if (!ucl_msgpack_insert_object (parser, NULL, 0,
+		if (parser->cur_obj) {
+			if (!ucl_msgpack_insert_object(parser, NULL, 0,
 				parser->cur_obj)) {
-			return false;
+				return false;
+			}
 		}
 		break;
 	case finish_array_value:
@@ -1301,7 +1328,12 @@ ucl_msgpack_consume (struct ucl_parser *parser)
 
 	/* Rewind to the top level container */
 	ucl_msgpack_get_next_container (parser);
-	assert (parser->stack == NULL);
+
+	if (parser->stack != NULL) {
+		ucl_create_err (&parser->err, "incomplete container");
+
+		return false;
+	}
 
 	return true;
 }
@@ -1610,6 +1642,8 @@ ucl_msgpack_parse_ignore (struct ucl_parser *parser,
 		ucl_create_err (&parser->err, "bad type: %x", (unsigned)fmt);
 		return -1;
 	}
+
+	parser->cur_obj = NULL;
 
 	return len;
 }
