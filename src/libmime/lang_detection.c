@@ -1831,7 +1831,7 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 	enum rspamd_language_detected_type r;
 	struct rspamd_frequency_sort_cbdata cbd;
 	/* Check if we have sorted candidates based on frequency */
-	gboolean frequency_heuristic_applied = FALSE, ret = FALSE;
+	gboolean frequency_heuristic_applied = FALSE, ret = FALSE, internal_heuristic_applied = FALSE;
 
 	if (!part->utf_stripped_content) {
 		return FALSE;
@@ -1854,6 +1854,8 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 		if (!ret && rspamd_language_detector_try_stop_words(task, d, part, cat)) {
 			ret = TRUE;
 		}
+
+		internal_heuristic_applied = TRUE;
 	}
 
 	if (!ret) {
@@ -1906,91 +1908,111 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 
 			rspamd_fasttext_predict_result_destroy(fasttext_predict_result);
 		}
+
 		if (ndetected == 0) {
-			if (part->utf_words->len < default_short_text_limit) {
-				r = rs_detect_none;
-				msg_debug_lang_det("text is too short for trigrams detection: "
-								   "%d words; at least %d words required",
-								   (int) part->utf_words->len,
-								   (int) default_short_text_limit);
-				switch (cat) {
-				case RSPAMD_LANGUAGE_CYRILLIC:
-					rspamd_language_detector_set_language(task, part, "ru", NULL);
-					break;
-				case RSPAMD_LANGUAGE_DEVANAGARI:
-					rspamd_language_detector_set_language(task, part, "hi", NULL);
-					break;
-				case RSPAMD_LANGUAGE_ARAB:
-					rspamd_language_detector_set_language(task, part, "ar", NULL);
-					break;
-				default:
-				case RSPAMD_LANGUAGE_LATIN:
-					rspamd_language_detector_set_language(task, part, "en", NULL);
-					break;
+			if (!internal_heuristic_applied) {
+				/* Apply unicode scripts heuristic */
+				if (rspamd_language_detector_try_uniscript(task, part, nchinese, nspecial)) {
+					ret = TRUE;
 				}
-				msg_debug_lang_det("set %s language based on symbols category",
-								   part->language);
 
-				candidates = kh_init(rspamd_candidates_hash);
+				cat = rspamd_language_detector_get_category(part->unicode_scripts);
+
+				if (!ret && rspamd_language_detector_try_stop_words(task, d, part, cat)) {
+					ret = TRUE;
+				}
+
+				internal_heuristic_applied = TRUE;
 			}
-			else {
-				candidates = kh_init(rspamd_candidates_hash);
-				kh_resize(rspamd_candidates_hash, candidates, 32);
 
-				r = rspamd_language_detector_try_ngramm(task,
-														default_words,
-														d,
-														part->utf_words,
-														cat,
-														candidates,
-														part);
+			if (!ret) {
 
-				if (r == rs_detect_none) {
-					msg_debug_lang_det("no trigrams found, fallback to english");
-					rspamd_language_detector_set_language(task, part, "en", NULL);
+				/* Apply trigramms detection */
+				if (part->utf_words->len < default_short_text_limit) {
+					r = rs_detect_none;
+					msg_debug_lang_det("text is too short for trigrams detection: "
+									   "%d words; at least %d words required",
+									   (int) part->utf_words->len,
+									   (int) default_short_text_limit);
+					switch (cat) {
+					case RSPAMD_LANGUAGE_CYRILLIC:
+						rspamd_language_detector_set_language(task, part, "ru", NULL);
+						break;
+					case RSPAMD_LANGUAGE_DEVANAGARI:
+						rspamd_language_detector_set_language(task, part, "hi", NULL);
+						break;
+					case RSPAMD_LANGUAGE_ARAB:
+						rspamd_language_detector_set_language(task, part, "ar", NULL);
+						break;
+					default:
+					case RSPAMD_LANGUAGE_LATIN:
+						rspamd_language_detector_set_language(task, part, "en", NULL);
+						break;
+					}
+					msg_debug_lang_det("set %s language based on symbols category",
+									   part->language);
+
+					candidates = kh_init(rspamd_candidates_hash);
 				}
-				else if (r == rs_detect_multiple) {
-					/* Check our guess */
+				else {
+					candidates = kh_init(rspamd_candidates_hash);
+					kh_resize(rspamd_candidates_hash, candidates, 32);
 
-					mean = 0.0;
-					std = 0.0;
-					cand_len = 0;
+					r = rspamd_language_detector_try_ngramm(task,
+															default_words,
+															d,
+															part->utf_words,
+															cat,
+															candidates,
+															part);
 
-					/* Check distribution */
-					kh_foreach_value(candidates, cand, {
-						if (!isnan(cand->prob)) {
-							mean += cand->prob;
-							cand_len++;
-						}
-					});
+					if (r == rs_detect_none) {
+						msg_debug_lang_det("no trigrams found, fallback to english");
+						rspamd_language_detector_set_language(task, part, "en", NULL);
+					}
+					else if (r == rs_detect_multiple) {
+						/* Check our guess */
 
-					if (cand_len > 0) {
-						mean /= cand_len;
+						mean = 0.0;
+						std = 0.0;
+						cand_len = 0;
 
+						/* Check distribution */
 						kh_foreach_value(candidates, cand, {
-							double err;
 							if (!isnan(cand->prob)) {
-								err = cand->prob - mean;
-								std += fabs(err);
+								mean += cand->prob;
+								cand_len++;
 							}
 						});
 
-						std /= cand_len;
-					}
+						if (cand_len > 0) {
+							mean /= cand_len;
 
-					msg_debug_lang_det("trigrams checked, %d candidates, %.3f mean, %.4f stddev",
-									   cand_len, mean, std);
+							kh_foreach_value(candidates, cand, {
+								double err;
+								if (!isnan(cand->prob)) {
+									err = cand->prob - mean;
+									std += fabs(err);
+								}
+							});
 
-					if (cand_len > 0 && std / fabs(mean) < 0.25) {
-						msg_debug_lang_det("apply frequency heuristic sorting");
-						frequency_heuristic_applied = TRUE;
-						cbd.d = d;
-						cbd.mean = mean;
-						cbd.std = std;
-						cbd.flags = RSPAMD_LANG_FLAG_DEFAULT;
+							std /= cand_len;
+						}
 
-						if (part->nwords < default_words / 2) {
-							cbd.flags |= RSPAMD_LANG_FLAG_SHORT;
+						msg_debug_lang_det("trigrams checked, %d candidates, %.3f mean, %.4f stddev",
+										   cand_len, mean, std);
+
+						if (cand_len > 0 && std / fabs(mean) < 0.25) {
+							msg_debug_lang_det("apply frequency heuristic sorting");
+							frequency_heuristic_applied = TRUE;
+							cbd.d = d;
+							cbd.mean = mean;
+							cbd.std = std;
+							cbd.flags = RSPAMD_LANG_FLAG_DEFAULT;
+
+							if (part->nwords < default_words / 2) {
+								cbd.flags |= RSPAMD_LANG_FLAG_SHORT;
+							}
 						}
 					}
 				}
