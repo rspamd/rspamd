@@ -1744,7 +1744,7 @@ rspamd_fuzzy_decrypt_command(struct fuzzy_session *s, unsigned char *buf, gsize 
 
 
 static gboolean
-rspamd_fuzzy_extensions_from_wire(struct fuzzy_session *s, unsigned char *buf, gsize buflen)
+rspamd_fuzzy_extensions_from_wire(struct rspamd_fuzzy_cmd_extension **extensions, unsigned char *buf, gsize buflen)
 {
 	struct rspamd_fuzzy_cmd_extension *ext, *prev_ext;
 	unsigned char *storage, *p = buf, *end = buf + buflen;
@@ -1871,7 +1871,7 @@ rspamd_fuzzy_extensions_from_wire(struct fuzzy_session *s, unsigned char *buf, g
 
 		/* Rewind to the begin */
 		ext = (struct rspamd_fuzzy_cmd_extension *) storage;
-		s->extensions = ext;
+		*extensions = ext;
 	}
 
 	return TRUE;
@@ -1884,7 +1884,7 @@ rspamd_fuzzy_cmd_from_wire(unsigned char *buf, unsigned int buflen, struct fuzzy
 	gboolean encrypted = FALSE;
 
 	if (buflen < sizeof(struct rspamd_fuzzy_cmd)) {
-		msg_debug("truncated fuzzy command of size %d received", buflen);
+		msg_debug_fuzzy_storage("truncated fuzzy command of size %d received", buflen);
 		return FALSE;
 	}
 
@@ -1964,7 +1964,7 @@ rspamd_fuzzy_cmd_from_wire(unsigned char *buf, unsigned int buflen, struct fuzzy
 
 	if (buflen > 0) {
 		/* Process possible extensions */
-		if (!rspamd_fuzzy_extensions_from_wire(s, buf, buflen)) {
+		if (!rspamd_fuzzy_extensions_from_wire(&s->extensions, buf, buflen)) {
 			msg_debug("truncated fuzzy shingles command of size %d received", buflen);
 			return FALSE;
 		}
