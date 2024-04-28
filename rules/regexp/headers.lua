@@ -903,6 +903,13 @@ reconf['HAS_ORG_HEADER'] = {
   group = 'headers'
 }
 
+reconf['HAS_CD_HEADER'] = {
+  re = string.format('header_exists(Content-Description)'),
+  description = 'Has Content-Description header',
+  score = 0.0,
+  group = 'headers'
+}
+
 reconf['X_PHPOS_FAKE'] = {
   re = 'X-PHP-Originating-Script=/^\\d{7}:/Hi',
   description = 'Fake X-PHP-Originating-Script header',
