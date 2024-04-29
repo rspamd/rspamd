@@ -1682,7 +1682,7 @@ rspamd_controller_handle_history(struct rspamd_http_connection_entry *conn_ent,
 
 	L = ctx->cfg->lua_state;
 
-	if (!ctx->srv->history->disabled) {
+	if (ctx->srv->history && !ctx->srv->history->disabled) {
 		rspamd_controller_handle_legacy_history(session, ctx, conn_ent, msg);
 	}
 	else {
@@ -1765,7 +1765,7 @@ rspamd_controller_handle_history_reset(struct rspamd_http_connection_entry *conn
 		return 0;
 	}
 
-	if (!ctx->srv->history->disabled) {
+	if (ctx->srv->history && !ctx->srv->history->disabled) {
 		/* Clean from start to the current row */
 		completed_rows = g_atomic_int_get(&ctx->srv->history->cur_row);
 

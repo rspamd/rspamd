@@ -1666,7 +1666,9 @@ void rspamd_protocol_http_reply(struct rspamd_http_message *msg,
 	}
 
 	if (!(task->flags & RSPAMD_TASK_FLAG_NO_LOG)) {
-		rspamd_roll_history_update(task->worker->srv->history, task);
+		if (task->worker->srv->history) {
+			rspamd_roll_history_update(task->worker->srv->history, task);
+		}
 	}
 	else {
 		msg_debug_protocol("skip history update due to no log flag");
