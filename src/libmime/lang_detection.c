@@ -1822,7 +1822,7 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 								struct rspamd_lang_detector *d,
 								struct rspamd_mime_text_part *part)
 {
-	khash_t(rspamd_candidates_hash) * candidates;
+	khash_t(rspamd_candidates_hash) *candidates = NULL;
 	GPtrArray *result;
 	double mean, std, start_ticks, end_ticks;
 	unsigned int cand_len;
@@ -1908,8 +1908,10 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 
 			rspamd_fasttext_predict_result_destroy(fasttext_predict_result);
 		}
+		else {
+			/* Fasttext has failed to apply anything */
+			r = rs_detect_none;
 
-		if (ndetected == 0) {
 			if (!internal_heuristic_applied) {
 				/* Apply unicode scripts heuristic */
 				if (rspamd_language_detector_try_uniscript(task, part, nchinese, nspecial)) {
@@ -1926,8 +1928,8 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 			}
 
 			if (!ret) {
-
 				/* Apply trigramms detection */
+				candidates = kh_init(rspamd_candidates_hash);
 				if (part->utf_words->len < default_short_text_limit) {
 					r = rs_detect_none;
 					msg_debug_lang_det("text is too short for trigrams detection: "
@@ -1951,11 +1953,8 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 					}
 					msg_debug_lang_det("set %s language based on symbols category",
 									   part->language);
-
-					candidates = kh_init(rspamd_candidates_hash);
 				}
 				else {
-					candidates = kh_init(rspamd_candidates_hash);
 					kh_resize(rspamd_candidates_hash, candidates, 32);
 
 					r = rspamd_language_detector_try_ngramm(task,
@@ -2020,7 +2019,7 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 		}
 
 		/* Now, convert hash to array and sort it */
-		if (r != rs_detect_none && kh_size(candidates) > 0) {
+		if (r != rs_detect_none && candidates != NULL && kh_size(candidates) > 0) {
 			result = g_ptr_array_sized_new(kh_size(candidates));
 
 			kh_foreach_value(candidates, cand, {
@@ -2059,7 +2058,9 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 			rspamd_language_detector_set_language(task, part, "en", NULL);
 		}
 
-		kh_destroy(rspamd_candidates_hash, candidates);
+		if (candidates != NULL) {
+			kh_destroy(rspamd_candidates_hash, candidates);
+		}
 	}
 
 	/* Update internal stat */
