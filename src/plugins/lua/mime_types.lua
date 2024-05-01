@@ -196,10 +196,14 @@ local settings = {
 
   -- Something that should not be in archive
   bad_archive_extensions = {
+    chm = 4,
     docx = 0.1,
+    exe = 0.1,
     hta = 4,
+    iso = 4,
     jar = 3,
     js = 0.5,
+    lnk = 4,
     pdf = 0.1,
     pptx = 0.1,
     vbs = 4,

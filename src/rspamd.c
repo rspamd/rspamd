@@ -1532,7 +1532,8 @@ int main(int argc, char **argv, char **env)
 
 	/* Create rolling history */
 	rspamd_main->history = rspamd_roll_history_new(rspamd_main->server_pool,
-												   rspamd_main->cfg->history_rows, rspamd_main->cfg);
+												   rspamd_main->cfg->history_rows,
+												   rspamd_main->cfg);
 
 	msg_info_main("rspamd " RVERSION
 				  " is starting, build id: " RID);
@@ -1609,7 +1610,7 @@ int main(int argc, char **argv, char **env)
 	}
 
 	/* Maybe read roll history */
-	if (rspamd_main->cfg->history_file) {
+	if (rspamd_main->history && rspamd_main->cfg->history_file) {
 		rspamd_roll_history_load(rspamd_main->history,
 								 rspamd_main->cfg->history_file);
 	}
@@ -1692,7 +1693,7 @@ int main(int argc, char **argv, char **env)
 	ev_loop(event_loop, 0);
 
 	/* Maybe save roll history */
-	if (rspamd_main->cfg->history_file) {
+	if (rspamd_main->history && rspamd_main->cfg->history_file) {
 		rspamd_roll_history_save(rspamd_main->history,
 								 rspamd_main->cfg->history_file);
 	}
