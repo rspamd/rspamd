@@ -911,7 +911,7 @@ reconf['HAS_CD_HEADER'] = {
 }
 
 reconf['CD_MM_BODY'] = {
-  re = 'Content-Description=/Mail message body/Hi',
+  re = 'Content-Description=/^Mail message body$/Hi',
   description = 'Content-Description header reads "Mail message body", commonly seen in spam',
   score = 2.0,
   group = 'headers'
