@@ -904,7 +904,7 @@ reconf['HAS_ORG_HEADER'] = {
 }
 
 reconf['HAS_CD_HEADER'] = {
-  re = string.format('header_exists(Content-Description)'),
+  re = 'header_exists(Content-Description)',
   description = 'Has Content-Description header',
   score = 0.0,
   group = 'headers'
