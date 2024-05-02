@@ -1421,7 +1421,7 @@ lua_util_is_uppercase(lua_State *L)
 	LUA_TRACE_POINT;
 	int32_t i = 0;
 	UChar32 uc;
-	unsigned int nlc = 0, nuc = 0;
+	bool is_upper = false, is_lower = false, is_other = false;
 
 	struct rspamd_lua_text *t = lua_check_text_or_string(L, 1);
 	if (t) {
@@ -1433,15 +1433,20 @@ lua_util_is_uppercase(lua_State *L)
 			}
 
 			if (u_isupper(uc)) {
-				nuc++;
+				is_upper = true;
 			}
 			else if (u_islower(uc)) {
-				nlc++;
+				is_lower = true;
+				break;
+			}
+			else if (u_charType(uc) == U_OTHER_LETTER) {
+				is_other = true;
+				break;
 			}
 		}
 	}
 
-	if (nuc > 0 && nlc == 0) {
+	if (is_upper && !is_lower && !is_other) {
 		lua_pushboolean(L, TRUE);
 	}
 	else {
