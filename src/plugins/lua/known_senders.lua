@@ -94,30 +94,24 @@ local zscore_script_id
 local function configure_scripts(_, _, _)
   -- script checks if given recipients are in the local replies set of the sender
   local redis_zscore_script = [[
-    local results = {}
-    local replies_recipients_addrs = {}
-    replies_recipients_addrs = ARGV
-    if replies_recipients_addrs ~= nil then
+    local replies_recipients_addrs = ARGV
 
+    if replies_recipients_addrs ~= nil then
       for _, rcpt in ipairs(replies_recipients_addrs) do
         local score = redis.call('ZSCORE', KEYS[1], rcpt)
-
+        -- check if score is nil (for some reason redis script does not see if score is a nil value)
         if type(score) == 'boolean' then
           score = nil
-          table.insert(results, score)
           -- 0 is stand for failure code
-          return { 0, results }
+          return 0
         end
-
-        table.insert(results, score)
       end
-
       -- first number in return statement is stands for the success/failure code
       -- where success code is 1 and failure code is 0
-      return { 1, results }
+      return 1
     else
     -- 0 is a failure code
-      return { 0, results }
+      return 0
     end
   ]]
   local zscore_script = lua_util.jinja_template(redis_zscore_script, {  })
@@ -266,12 +260,13 @@ local function verify_local_replies_set(task)
     if err ~= nil then
       rspamd_logger.errx(task, 'Could not verify %s local replies set %s', replies_sender_key, err)
     end
-    if data[1] ~= 1 then
-      rspamd_logger.infox(task, 'Recipients was not verified')
-    else
-      rspamd_logger.infox(task, 'Recipients was verified')
-      task:insert_result(settings.symbol_check_mail_local, 1.0, replies_sender_key)
+    rspamd_logger.infox(task, 'DATA: %s', data)
+    if data ~= 1 then
+      rspamd_logger.infox(task, 'Recipients were not verified')
+      return
     end
+    rspamd_logger.infox(task, 'Recipients were verified')
+    task:insert_result(settings.symbol_check_mail_local, 1.0, replies_sender_key)
   end
 
   local replies_recipients_addrs = {}

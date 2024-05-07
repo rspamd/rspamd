@@ -82,15 +82,18 @@ local function configure_redis_scripts(_, _)
         redis.call('ZREMRANGEBYRANK', KEYS[1], '{= mgs =}', global_size)
       end
 
-      local recipients_addrs = {}
-      recipients_addrs = ARGV
+      local recipients_addrs = ARGV
       if recipients_addrs ~= nil then
+        local params = {}
+        --table.insert(params, KEYS[1])
         for _, rcpt in ipairs(recipients_addrs) do
           -- score is using here as a one-based numeration just like in lua
           score = score + 1
-          -- adding recipients to the global replies set
-          redis.call('ZADD', KEYS[1], score, rcpt)
+          table.insert(params, score)
+          table.insert(params, tostring(rcpt))
         end
+        -- adding recipients to the global replies set
+        redis.call('ZADD', KEYS[1], unpack(params))
       end
       ]]
   local set_script_zadd_global = lua_util.jinja_template(redis_script_zadd_global,
@@ -103,16 +106,18 @@ local function configure_redis_scripts(_, _)
       if local_replies_set_size > {= mls =} then
         redis.call('ZREMRANGEBYRANK', KEYS[1], '{= mls =}', local_replies_set_size)
       end
-      local params = {}
-      params = ARGV
-      if params ~= nil then
-          local task_time = params[1]
-          table.remove(params, 1)
-
-          for _, rcpt in ipairs(params) do
+      local given_params = ARGV
+      if given_params ~= nil then
+          local task_time = given_params[1]
+          table.remove(given_params, 1)
+          -- passing_params is a table that will be passed to the redis
+          local passing_params = {}
+          for _, rcpt in ipairs(given_params) do
             -- adding recipients for the local replies set
-            redis.call('ZADD', KEYS[1], task_time, rcpt)
+            table.insert(passing_params, task_time)
+            table.insert(passing_params, rcpt)
           end
+          redis.call('ZADD', KEYS[1], unpack(passing_params))
 
           -- setting expire for local replies set
           redis.call('EXPIRE', KEYS[1], tostring(math.floor('{= exp =}')))
@@ -159,7 +164,9 @@ local function replies_check(task)
     return nil
   end
 
-  local function add_to_global_replies_set(recipients, global_key)
+  local function add_to_global_replies_set(recipients)
+    local global_key = make_key(settings.sender_key_global, settings.sender_key_size, settings.sender_prefix)
+
     lua_util.debugm(N, task, 'Adding recipients %s to global replies set', recipients)
 
     local function zadd_global_set_cb(err, _)
@@ -171,7 +178,7 @@ local function replies_check(task)
     end
 
     lua_redis.exec_redis_script(global_replies_set_script,
-            { task=task, is_write = true },
+            { task = task, is_write = true },
             zadd_global_set_cb,
             { global_key }, recipients)
   end
@@ -187,10 +194,10 @@ local function replies_check(task)
     local sender_string = lua_util.maybe_obfuscate_string(tostring(sender), settings, settings.sender_prefix)
     local sender_key = make_key(sender_string:lower(), 8)
 
-    lua_util.debugm(N, task,
-            'Adding recipients %s to sender %s local replies set', recipients, sender_key)
+    local params = recipients
 
-    local global_key = make_key(settings.sender_key_global, settings.sender_key_size, settings.sender_prefix)
+    lua_util.debugm(N, task,
+    'Adding recipients %s to sender %s local replies set', recipients, sender_key)
 
     local function zadd_cb(err, _)
       if err ~= nil then
@@ -200,10 +207,11 @@ local function replies_check(task)
 
       lua_util.debugm(N, task, 'added data: %s to sender: %s', recipients, sender_key)
 
-      add_to_global_replies_set(recipients, global_key)
+      table.remove(params, 1)
+
+      add_to_global_replies_set(params)
     end
 
-    local params = recipients
     table.insert(params, 1, task_time_str)
 
     lua_redis.exec_redis_script(local_replies_set_script,
