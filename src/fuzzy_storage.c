@@ -1132,7 +1132,7 @@ rspamd_fuzzy_make_udp_reply(struct rspamd_fuzzy_cmd *cmd,
 							struct fuzzy_udp_session *session,
 							int flags)
 {
-	gsize len;
+	gsize len = 0;
 
 	if (cmd) {
 		result->v1.tag = cmd->tag;
@@ -1169,6 +1169,10 @@ rspamd_fuzzy_make_udp_reply(struct rspamd_fuzzy_cmd *cmd,
 		}
 
 		if (flags & RSPAMD_FUZZY_REPLY_ENCRYPTED) {
+			msg_debug_fuzzy_storage("write encrypted reply: len=%z, prob=%.2f, flag=%d, value=%d",
+									len, session->reply.rep.v1.prob,
+									session->reply.rep.v1.flag,
+									session->reply.rep.v1.value);
 			/* We need also to encrypt reply */
 			ottery_rand_bytes(session->reply.hdr.nonce,
 							  sizeof(session->reply.hdr.nonce));
@@ -1191,6 +1195,13 @@ rspamd_fuzzy_make_udp_reply(struct rspamd_fuzzy_cmd *cmd,
 												session->common.nm,
 												session->reply.hdr.mac,
 												RSPAMD_CRYPTOBOX_MODE_25519);
+		}
+		else {
+			msg_debug_fuzzy_storage("write unencrypted reply: len=%z, prob=%.2f, flag=%d, value=%d, shingles=%d",
+									len, session->reply.rep.v1.prob,
+									session->reply.rep.v1.flag,
+									session->reply.rep.v1.value,
+									(int) cmd->shingles_count);
 		}
 	}
 
@@ -1546,32 +1557,35 @@ rspamd_fuzzy_prepare_cmd(struct fuzzy_common_session *session,
 						 struct rspamd_fuzzy_reply *result,
 						 int *send_flags,
 						 size_t *up_len,
+						 bool *is_shingle,
 						 bool *final)
 {
 	struct fuzzy_key_stat *ip_stat = NULL;
 	struct rspamd_fuzzy_cmd *cmd = NULL;
-	bool is_encrypted = false, is_shingle = false;
+	bool is_encrypted = false;
 
 	cmd = &session->cmd.basic;
 
 	switch (session->cmd_type) {
 	case CMD_NORMAL:
+		*is_shingle = false;
 		*up_len = sizeof(session->cmd.basic);
 		break;
 	case CMD_SHINGLE:
 		*up_len = sizeof(session->cmd);
-		is_shingle = true;
+		*is_shingle = true;
 		*send_flags |= RSPAMD_FUZZY_REPLY_SHINGLE;
 		break;
 	case CMD_ENCRYPTED_NORMAL:
 		*up_len = sizeof(session->cmd.basic);
 		is_encrypted = true;
+		*is_shingle = false;
 		*send_flags |= RSPAMD_FUZZY_REPLY_ENCRYPTED;
 		break;
 	case CMD_ENCRYPTED_SHINGLE:
 		*up_len = sizeof(session->cmd);
 		is_encrypted = true;
-		is_shingle = true;
+		*is_shingle = true;
 		*send_flags |= RSPAMD_FUZZY_REPLY_SHINGLE | RSPAMD_FUZZY_REPLY_ENCRYPTED;
 		break;
 	default:
@@ -1602,7 +1616,7 @@ rspamd_fuzzy_prepare_cmd(struct fuzzy_common_session *session,
 		/* command value (push as rspamd_text) */
 		(void) lua_new_text(L, cmd->digest, sizeof(cmd->digest), FALSE);
 		/* is shingle */
-		lua_pushboolean(L, is_shingle);
+		lua_pushboolean(L, *is_shingle);
 		/* TODO: add additional data maybe (encryption, pubkey, etc) */
 		rspamd_fuzzy_extensions_tolua(L, session->extensions);
 
@@ -1683,16 +1697,16 @@ rspamd_fuzzy_prepare_cmd(struct fuzzy_common_session *session,
 static void
 rspamd_fuzzy_process_udp_session(struct fuzzy_udp_session *session)
 {
-	gboolean is_shingle = FALSE, __attribute__((unused)) encrypted = FALSE;
+	gboolean __attribute__((unused)) encrypted = FALSE;
 	char hexbuf[rspamd_cryptobox_HASHBYTES * 2 + 1];
 	rspamd_inet_addr_t *naddr;
 	gpointer ptr;
 	int send_flags = 0;
-	bool final = false;
+	bool final = false, is_shingle = false;
 	size_t up_len;
 
 	struct rspamd_fuzzy_cmd *cmd = rspamd_fuzzy_prepare_cmd(&session->common, &session->reply.rep,
-															&send_flags, &up_len, &final);
+															&send_flags, &up_len, &is_shingle, &final);
 
 
 	if (final) {
@@ -2239,7 +2253,8 @@ tcp_session_dtor(struct fuzzy_tcp_session *tcp_session)
 static bool
 rspamd_fuzzy_process_tcp_frame(struct fuzzy_tcp_session *tcp_session, unsigned char *buf, size_t buflen)
 {
-	gboolean is_shingle = FALSE, __attribute__((unused)) encrypted = FALSE;
+	gboolean __attribute__((unused)) encrypted = FALSE;
+	bool is_shingle = false;
 	struct rspamd_fuzzy_reply result;
 	struct fuzzy_peer_cmd up_cmd;
 	struct fuzzy_peer_request *up_req;
@@ -2282,7 +2297,8 @@ rspamd_fuzzy_process_tcp_frame(struct fuzzy_tcp_session *tcp_session, unsigned c
 
 	bool final = false;
 	size_t up_len = 0;
-	struct rspamd_fuzzy_cmd *cmd = rspamd_fuzzy_prepare_cmd(&tcp_session->common, &result, &send_flags, &up_len, &final);
+	struct rspamd_fuzzy_cmd *cmd = rspamd_fuzzy_prepare_cmd(&tcp_session->common, &result, &send_flags,
+															&up_len, &is_shingle, &final);
 
 	if (G_UNLIKELY(cmd == NULL || final)) {
 		struct fuzzy_tcp_reply_queue_elt *reply = rspamd_fuzzy_make_tcp_reply(cmd, &result, tcp_session, send_flags);
