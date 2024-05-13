@@ -973,7 +973,7 @@ reconf['XM_UA_NO_VERSION'] = {
       'X-Mailer=/^[^0-9]+$/H',
       'User-Agent=/^[^0-9]+$/H'),
   description = 'X-Mailer/User-Agent header has no version number',
-  score = 0.01,
+  score = 0.0,
   group = 'experimental'
 }
 
