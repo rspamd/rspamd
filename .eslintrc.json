@@ -50,6 +50,7 @@
         "@stylistic/function-call-argument-newline": "off",
         "@stylistic/max-len": ["error", { "code": 128 }],
         "@stylistic/max-statements-per-line": ["error", { "max": 2 }],
+        "@stylistic/multiline-comment-style": "off",
         "@stylistic/multiline-ternary": ["error", "always-multiline"],
         "@stylistic/newline-per-chained-call": ["error", { "ignoreChainWithDepth": 5 }],
         "@stylistic/no-extra-parens": ["error", "functions"],
