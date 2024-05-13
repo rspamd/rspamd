@@ -361,7 +361,7 @@ rspamd_worker_term_handler(struct rspamd_worker_signal_handler *sigh, void *arg)
 									sigh->worker->srv->server_pool->tag.tagname,
 									sigh->worker->srv->server_pool->tag.uid,
 									G_STRFUNC,
-									"terminating in %.0f second after receiving signal %s",
+									"terminating in up to %.0f second after receiving signal %s",
 									shutdown_ts,
 									g_strsignal(sigh->signo));
 
