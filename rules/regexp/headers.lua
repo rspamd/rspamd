@@ -967,7 +967,7 @@ reconf['HAS_FILE_URL'] = {
 }
 
 reconf['XM_UA_NO_VERSION'] = {
-  re = string.format('(!%s && !%s) && (%s || %s) !%s',
+  re = string.format('(!%s && !%s) && (%s || %s) && !%s',
       'X-Mailer=/https?:/H',
       'User-Agent=/https?:/H',
       'X-Mailer=/^[^0-9]+$/H',
