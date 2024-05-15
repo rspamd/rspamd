@@ -29,7 +29,6 @@ override_dh_auto_configure: $(patsubst %,configure_%,$(FLAVORS))
 configure_%:
 	mkdir -p $(builddir)$*
 	cd $(builddir)$* && cmake ../../../  -DCONFDIR=/etc/rspamd \
-		-DENABLE_FASTTEXT=ON \
 		-DMANDIR=/usr/share/man \
 		-DRUNDIR=/run/rspamd \
 		-DDBDIR=/var/lib/rspamd \
