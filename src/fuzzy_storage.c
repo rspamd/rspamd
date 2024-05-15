@@ -2231,7 +2231,7 @@ union sa_union {
 static void
 tcp_session_dtor(struct fuzzy_tcp_session *tcp_session)
 {
-	struct fuzzy_tcp_reply_queue_elt *rep;
+	struct fuzzy_tcp_reply_queue_elt *rep, *tmp;
 
 	fuzzy_common_session_dtor(&tcp_session->common);
 
@@ -2240,7 +2240,7 @@ tcp_session_dtor(struct fuzzy_tcp_session *tcp_session)
 		ev_io_stop(tcp_session->common.ctx->event_loop, &tcp_session->common.io);
 	}
 
-	DL_FOREACH(tcp_session->replies_queue, rep)
+	DL_FOREACH_SAFE(tcp_session->replies_queue, rep, tmp)
 	{
 		g_free(rep);
 	}
