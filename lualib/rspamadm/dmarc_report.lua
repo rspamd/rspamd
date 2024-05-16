@@ -291,7 +291,7 @@ end
 local function process_rua(dmarc_domain, rua)
   -- Remove size limitation, as we don't care about them
   local addrs = {}
-  for rua_part in fun.map(lua_util.str_trim, lua_util.str_split(rua, ',')) do
+  for _, rua_part in fun.map(lua_util.str_trim, lua_util.str_split(rua, ',')) do
     local u = rspamd_url.create(pool, rua_part:gsub('!%d+[kmg]?$', ''))
     local u2 = rspamd_url.create(pool, dmarc_domain)
     if u and (u:get_protocol() or '') == 'mailto' and u:get_user() then
