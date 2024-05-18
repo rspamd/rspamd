@@ -304,6 +304,7 @@ local function check_known_incoming_mail_callback(task)
     if type(data) ~= 'userdata' then
       lua_util.debugm(N, task, 'Sender: %s verified. Output: %s', replies_sender, data)
       task:insert_result(settings.symbol_check_mail_global, 1.0, replies_sender)
+      return
     end
     lua_util.debugm(N, task, 'Sender: %s was not verified', replies_sender)
   end
