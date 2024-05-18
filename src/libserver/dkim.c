@@ -2129,7 +2129,8 @@ end:
 }
 
 static gboolean
-rspamd_dkim_canonize_body(struct rspamd_dkim_common_ctx *ctx,
+rspamd_dkim_canonize_body(struct rspamd_task *task,
+						  struct rspamd_dkim_common_ctx *ctx,
 						  const char *start,
 						  const char *end,
 						  gboolean sign)
@@ -2149,7 +2150,20 @@ rspamd_dkim_canonize_body(struct rspamd_dkim_common_ctx *ctx,
 			EVP_DigestUpdate(ctx->body_hash, "", 0);
 		}
 	}
-	else {
+	else if (end > start) {
+		/* Add sanity checks for ctx->len */
+		if (ctx->len > 0) {
+			if (ctx->len < 2 && end - start > 2) {
+				msg_info_task("DKIM l tag is invalid: %d (%d actual size)", (int) ctx->len, (int) (end - start));
+				return FALSE;
+			}
+			if (ctx->len + 2 < (double) (end - start) * 0.9) {
+				msg_info_task("DKIM l tag does not cover enough of the body: %d (%d actual size)",
+							  (int) ctx->len, (int) (end - start));
+				return FALSE;
+			}
+		}
+
 		/* Strip extra ending CRLF */
 		p = rspamd_dkim_skip_empty_lines(start, end, ctx->body_canon_type,
 										 sign, &need_crlf);
