@@ -95,7 +95,7 @@ local function configure_scripts(_, _, _)
   -- script checks if given recipients are in the local replies set of the sender
   local redis_zscore_script = [[
     local replies_recipients_addrs = ARGV
-    if replies_recipients_addrs ~= nil then
+    if replies_recipients_addrs then
       for _, rcpt in ipairs(replies_recipients_addrs) do
         local score = redis.call('ZSCORE', KEYS[1], rcpt)
         -- check if score is nil (for some reason redis script does not see if score is a nil value)
@@ -301,12 +301,11 @@ local function check_known_incoming_mail_callback(task)
     end
 
     --checking if zcore have not found score of a sender
-    if data ~= nil and data ~= '' and type(data) ~= 'userdata' then
+    if type(data) ~= 'userdata' then
       lua_util.debugm(N, task, 'Sender: %s verified. Output: %s', replies_sender, data)
       task:insert_result(settings.symbol_check_mail_global, 1.0, replies_sender)
-    else
-      lua_util.debugm(N, task, 'Sender: %s was not verified', replies_sender)
     end
+    lua_util.debugm(N, task, 'Sender: %s was not verified', replies_sender)
   end
 
   -- key for global replies set
