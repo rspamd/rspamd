@@ -152,8 +152,6 @@ rspamd_worker_body_handler(struct rspamd_http_connection *conn,
 	task->http_conn = session->http_conn;
 
 	task->resolver = ctx->resolver;
-	/* TODO: allow to disable autolearn in protocol */
-	task->flags |= RSPAMD_TASK_FLAG_LEARN_AUTO;
 
 	session->worker->nconns++;
 	rspamd_mempool_add_destructor(task->task_pool,

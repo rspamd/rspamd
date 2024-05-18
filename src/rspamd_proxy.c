@@ -1887,8 +1887,6 @@ rspamd_proxy_self_scan(struct rspamd_proxy_session *session)
 
 	task->fin_arg = session;
 	task->resolver = session->ctx->resolver;
-	/* TODO: allow to disable autolearn in protocol */
-	task->flags |= RSPAMD_TASK_FLAG_LEARN_AUTO;
 	task->s = rspamd_session_create(task->task_pool, rspamd_proxy_task_fin,
 									NULL, (event_finalizer_t) rspamd_task_free, task);
 	data = rspamd_http_message_get_body(msg, &len);
