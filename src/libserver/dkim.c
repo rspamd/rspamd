@@ -2150,9 +2150,9 @@ rspamd_dkim_canonize_body(struct rspamd_task *task,
 			EVP_DigestUpdate(ctx->body_hash, "", 0);
 		}
 	}
-	else if (end > start) {
+	else if (end >= start) {
 		/* Add sanity checks for ctx->len */
-		if (ctx->len > 0) {
+		if (ctx->body_canon_type == DKIM_CANON_SIMPLE && ctx->len > 0) {
 			if (ctx->len < 2 && end - start > 2) {
 				msg_info_task("DKIM l tag is invalid: %d (%d actual size)", (int) ctx->len, (int) (end - start));
 				return FALSE;
@@ -2217,9 +2217,18 @@ rspamd_dkim_canonize_body(struct rspamd_task *task,
 				}
 			}
 			else {
+				size_t orig_len = remain;
+
 				while (rspamd_dkim_relaxed_body_step(ctx, ctx->body_hash,
 													 &start, end - start, &remain))
 					;
+
+				if (ctx->len > 0 && remain > (double) orig_len * 0.1) {
+					msg_info_task("DKIM l tag does not cover enough of the body: %d (%d actual size)",
+								  (int) ctx->len, (int) (end - start));
+					return FALSE;
+				}
+
 				if (need_crlf) {
 					start = "\r\n";
 					end = start + 2;
