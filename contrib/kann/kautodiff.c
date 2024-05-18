@@ -1061,12 +1061,12 @@ bool kad_ssyev_simple(int N, float *A, float *eigenvals)
 	ssyev("Vectors", "Upper", &n, A, &lda, eigenvals, work, &lwork, &info);
 	/* Check for convergence */
 	if (info > 0) {
-		g_g_free(work);
+		g_free(work);
 
 		return false;
 	}
 
-	g_g_free(work);
+	g_free(work);
 
 	return true;
 #endif
