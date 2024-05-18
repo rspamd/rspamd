@@ -2733,7 +2733,7 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 
 		if (!cached_bh->digest_normal) {
 			/* Start canonization of body part */
-			if (!rspamd_dkim_canonize_body(&ctx->common, body_start, body_end,
+			if (!rspamd_dkim_canonize_body(task, &ctx->common, body_start, body_end,
 										   FALSE)) {
 				res->rcode = DKIM_RECORD_ERROR;
 				return res;
@@ -3356,7 +3356,7 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 
 		if (!cached_bh->digest_normal) {
 			/* Start canonization of body part */
-			if (!rspamd_dkim_canonize_body(&ctx->common, body_start, body_end,
+			if (!rspamd_dkim_canonize_body(task, &ctx->common, body_start, body_end,
 										   TRUE)) {
 				return NULL;
 			}
