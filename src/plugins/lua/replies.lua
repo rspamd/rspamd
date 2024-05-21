@@ -69,26 +69,13 @@ local local_replies_set_script
 
 local function configure_redis_scripts(_, _)
   local redis_script_zadd_global = [[
-      -- getting last score of the recipients from the global replies set
-      local data = {}
-      data = redis.call('ZRANGE', KEYS[1], '-1', '-1', 'WITHSCORES')
-      local score = tonumber(data[#data])
-      if score == nil then
-        score = 0
-      end
-
       redis.call('ZREMRANGEBYRANK', KEYS[1], 0, -({= max_global_size =} + 1)) -- keeping size of global replies set
       local recipients_addrs = ARGV
       if recipients_addrs ~= nil then
-        local params = {}
         for _, rcpt in ipairs(recipients_addrs) do
-          -- score is using here as a one-based numeration just like in lua
-          score = score + 1
-          table.insert(params, score)
-          table.insert(params, tostring(rcpt))
+          -- adding recipients to the global replies set
+          redis.call('ZINCRBY', KEYS[1], 1, tostring(rcpt))
         end
-        -- adding recipients to the global replies set
-        redis.call('ZADD', KEYS[1], unpack(params))
       end
       ]]
   local set_script_zadd_global = lua_util.jinja_template(redis_script_zadd_global,
@@ -111,11 +98,11 @@ local function configure_redis_scripts(_, _)
           redis.call('ZADD', KEYS[1], unpack(passing_params))
 
           -- setting expire for local replies set
-          redis.call('EXPIRE', KEYS[1], tostring(math.floor('{= expiration =}')))
+          redis.call('EXPIRE', KEYS[1], tostring(math.floor('{= expire_time =}')))
       end
     ]]
   local set_script_zadd_local = lua_util.jinja_template(redis_script_zadd_local,
-          { expiration = settings.expire, max_local_size = settings.max_local_size })
+          { expire_time = settings.expire, max_local_size = settings.max_local_size })
   local_replies_set_script = lua_redis.add_redis_script(set_script_zadd_local, redis_params)
 end
 
