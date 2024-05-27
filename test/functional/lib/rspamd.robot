@@ -90,6 +90,7 @@ Expect Required Score To Be Null
 Expect Score
   [Arguments]  ${score}
   Should Be Equal As Numbers  ${SCAN_RESULT}[score]  ${score}
+  ...  msg="Expected message score of ${score} but got ${SCAN_RESULT}[score]"
 
 Expect Symbol
   [Arguments]  ${symbol}
