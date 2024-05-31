@@ -231,7 +231,7 @@ insert_metric_result(struct rspamd_task *task,
 					 bool *new_sym)
 {
 	struct rspamd_symbol_result *symbol_result = NULL;
-	double final_score, *gr_score = NULL, diff;
+	double final_score, *gr_score = NULL, next_gf = 1.0, diff;
 	struct rspamd_symbol *sdef;
 	struct rspamd_symbols_group *gr = NULL;
 	const ucl_object_t *mobj, *sobj;
@@ -368,6 +368,17 @@ insert_metric_result(struct rspamd_task *task,
 		}
 
 		if (diff) {
+			/* Handle grow factor */
+			if (metric_res->grow_factor && diff > 0) {
+				diff *= metric_res->grow_factor;
+				next_gf *= task->cfg->grow_factor;
+			}
+			else if (diff > 0) {
+				next_gf = task->cfg->grow_factor;
+			}
+
+			msg_debug_metric("adjust grow factor to %.2f for symbol %s (%.2f final)",
+							 next_gf, symbol, diff);
 
 			if (sdef) {
 				PTR_ARRAY_FOREACH(sdef->groups, i, gr)
@@ -407,6 +418,8 @@ insert_metric_result(struct rspamd_task *task,
 			}
 
 			if (!isnan(diff)) {
+				metric_res->score += diff;
+				metric_res->grow_factor = next_gf;
 
 				if (single) {
 					msg_debug_metric("final score for single symbol %s = %.2f; %.2f diff",
@@ -433,6 +446,18 @@ insert_metric_result(struct rspamd_task *task,
 		g_assert(ret > 0);
 		symbol_result = rspamd_mempool_alloc0(task->task_pool, sizeof(*symbol_result));
 		kh_value(metric_res->symbols, k) = symbol_result;
+
+		/* Handle grow factor */
+		if (metric_res->grow_factor && final_score > 0) {
+			final_score *= metric_res->grow_factor;
+			next_gf *= task->cfg->grow_factor;
+		}
+		else if (final_score > 0) {
+			next_gf = task->cfg->grow_factor;
+		}
+
+		msg_debug_metric("adjust grow factor to %.2f for symbol %s (%.2f final)",
+						 next_gf, symbol, final_score);
 
 		symbol_result->name = sym_cpy;
 		symbol_result->sym = sdef;
@@ -478,6 +503,7 @@ insert_metric_result(struct rspamd_task *task,
 			const double epsilon = DBL_EPSILON;
 
 			metric_res->score += final_score;
+			metric_res->grow_factor = next_gf;
 			symbol_result->score = final_score;
 
 			if (final_score > epsilon) {
