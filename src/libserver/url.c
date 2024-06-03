@@ -559,7 +559,6 @@ void rspamd_url_init(const char *tld_file)
 													   sizeof(struct url_matcher), 13000);
 		url_scanner->search_trie_full = rspamd_multipattern_create_sized(13000,
 																		 RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8);
-		url_scanner->has_tld_file = true;
 	}
 	else {
 		url_scanner->matchers_full = NULL;
@@ -572,6 +571,10 @@ void rspamd_url_init(const char *tld_file)
 
 	if (tld_file != NULL) {
 		ret = rspamd_url_parse_tld_file(tld_file, url_scanner);
+
+		if (ret) {
+			url_scanner->has_tld_file = true;
+		}
 	}
 
 	if (url_scanner->matchers_full && url_scanner->matchers_full->len > 1000) {
@@ -2525,8 +2528,13 @@ rspamd_url_parse(struct rspamd_url *uri,
 					}
 				}
 				else {
-					/* Ignore IP like domains for mailto, as it is really never supported */
-					return URI_ERRNO_TLD_MISSING;
+					if (url_scanner->has_tld_file) {
+						/* Ignore IP like domains for mailto, as it is really never supported */
+						return URI_ERRNO_TLD_MISSING;
+					}
+					else {
+						uri->flags |= RSPAMD_URL_FLAG_NO_TLD;
+					}
 				}
 			}
 		}

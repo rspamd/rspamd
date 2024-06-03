@@ -70,7 +70,7 @@ rspamd_task_new(struct rspamd_worker *worker,
 {
 	struct rspamd_task *new_task;
 	rspamd_mempool_t *task_pool;
-	unsigned int flags = 0;
+	unsigned int flags = RSPAMD_TASK_FLAG_LEARN_AUTO;
 
 	if (pool == NULL) {
 		task_pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
@@ -956,6 +956,9 @@ rspamd_learn_task_spam(struct rspamd_task *task,
 					   const char *classifier,
 					   GError **err)
 {
+	/* Disable learn auto flag to avoid bad learn codes */
+	task->flags &= ~RSPAMD_TASK_FLAG_LEARN_AUTO;
+
 	if (is_spam) {
 		task->flags |= RSPAMD_TASK_FLAG_LEARN_SPAM;
 	}

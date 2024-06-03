@@ -240,6 +240,41 @@ rspamd_worker_shutdown_check(EV_P_ ev_timer *w, int revents)
 	}
 }
 
+static void
+rspamd_worker_shutdown_check_nconns(EV_P_ ev_timer *w, int revents)
+{
+	struct rspamd_worker *worker = (struct rspamd_worker *) w->data;
+
+	if (worker->state != rspamd_worker_wanna_die) {
+		if (worker->state != rspamd_worker_wait_connections) {
+			rspamd_worker_terminate_handlers(worker);
+		}
+
+		/* Check again, as rspamd_worker_terminate_handlers could change the worker's state */
+		if (worker->state == rspamd_worker_wanna_die) {
+			/* We are done, kill event loop */
+			ev_timer_stop(EV_A_ w);
+			ev_break(EV_A_ EVBREAK_ALL);
+		}
+		else {
+			/* Try again later */
+
+			if (worker->nconns > 0) {
+				ev_timer_again(EV_A_ w);
+			}
+			else {
+				/* No connections left, can close everything */
+				ev_timer_stop(EV_A_ w);
+				ev_break(EV_A_ EVBREAK_ALL);
+			}
+		}
+	}
+	else {
+		ev_timer_stop(EV_A_ w);
+		ev_break(EV_A_ EVBREAK_ALL);
+	}
+}
+
 /*
  * Config reload is designed by sending sigusr2 to active workers and pending shutdown of them
  */
@@ -326,7 +361,8 @@ rspamd_worker_term_handler(struct rspamd_worker_signal_handler *sigh, void *arg)
 									sigh->worker->srv->server_pool->tag.tagname,
 									sigh->worker->srv->server_pool->tag.uid,
 									G_STRFUNC,
-									"terminating after receiving signal %s",
+									"terminating in up to %.0f second after receiving signal %s",
+									shutdown_ts,
 									g_strsignal(sigh->signo));
 
 		rspamd_worker_stop_accept(sigh->worker);
@@ -344,6 +380,13 @@ rspamd_worker_term_handler(struct rspamd_worker_signal_handler *sigh, void *arg)
 				/* This timer checks if we are ready to die and is called frequently */
 				shutdown_check_ev.data = sigh->worker;
 				ev_timer_init(&shutdown_check_ev, rspamd_worker_shutdown_check,
+							  0.5, 0.5);
+				ev_timer_start(sigh->event_loop, &shutdown_check_ev);
+			}
+			else {
+				/* This timer checks if we have no active connections pending and terminates once all conns are done */
+				shutdown_check_ev.data = sigh->worker;
+				ev_timer_init(&shutdown_check_ev, rspamd_worker_shutdown_check_nconns,
 							  0.5, 0.5);
 				ev_timer_start(sigh->event_loop, &shutdown_check_ev);
 			}
