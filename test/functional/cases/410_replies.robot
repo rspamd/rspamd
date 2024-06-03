@@ -21,7 +21,7 @@ Reply to 1 sender 1 recipients
   ...  IP=8.8.8.8  User=user@emailbl.com
   ...  Settings=${SETTINGS_REPLIES}
   Expect Symbol  ${SYMBOL}
-  
+
 Reply to 1 sender 2 recipients first is set second is not
   Scan File  ${RSPAMD_TESTDIR}/messages/set_replyto_1_2_first.eml
   ...  IP=8.8.8.8  User=user@emailbl.com
@@ -45,4 +45,3 @@ Reply to another sender 2 recipients
   ...  IP=8.8.8.8  User=another@emailbl.com
    ...  Settings=${SETTINGS_REPLIES}
   Expect Symbol  ${SYMBOL}
-
