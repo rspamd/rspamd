@@ -17,7 +17,7 @@ useful features including a comprehensive [Lua API](https://rspamd.com/doc/lua/)
 
 ## Getting Started
 
-A good starting point to study how to install and configure Rspamd is [the quick start guide](https://rspamd.com/doc/quickstart.html).
+A good starting point to study how to install and configure Rspamd is [the quick start guide](https://rspamd.com/doc/tutorials/quickstart.html).
 
 Rspamd is [packaged](https://rspamd.com/downloads.html) for the major Linux distributions, and is also available via [FreeBSD ports](https://freshports.org/mail/rspamd), NetBSD [pkgsrc](https://pkgsrc.org) and [OpenBSD ports](http://openports.se/mail/rspamd).
 
