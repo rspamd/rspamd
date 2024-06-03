@@ -4,7 +4,7 @@ Suite Teardown  Rspamd Redis Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
-
+https://github.com/LeftTry/rspamd/blob/master/test/functional/cases/420_replies.robot
 *** Variables ***
 ${CONFIG}              ${RSPAMD_TESTDIR}/configs/replies.conf
 ${SETTINGS_REPLIES}    {symbols_enabled = [REPLIES_CHECK, REPLIES_SET, REPLY]}
