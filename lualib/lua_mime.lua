@@ -582,8 +582,11 @@ exports.modify_headers = function(task, hdr_alterations, mode)
       hdr_flattened[hname].remove = {}
     end
     local remove_tbl = hdr_flattened[hname].remove
-    if type(hdr) == 'number' then
+    local t_hdr = type(hdr)
+    if t_hdr == 'number' then
       table.insert(remove_tbl, hdr)
+    elseif t_hdr == 'userdata' then
+      hdr_alterations.remove[hname] = nil
     else
       for _, num in ipairs(hdr) do
         table.insert(remove_tbl, num)
