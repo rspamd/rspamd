@@ -25,6 +25,7 @@ local local_conf = rspamd_paths['LOCAL_CONFDIR']
 local local_rules = rspamd_paths['RULESDIR']
 local rspamd_util = require "rspamd_util"
 
+dofile(local_rules .. '/archives.lua')
 dofile(local_rules .. '/regexp/headers.lua')
 dofile(local_rules .. '/regexp/misc.lua')
 dofile(local_rules .. '/regexp/upstream_spam_filters.lua')
