@@ -407,7 +407,7 @@ insert_metric_result(struct rspamd_task *task,
 			}
 
 			if (!isnan(diff)) {
-
+				metric_res->score += diff;
 				if (single) {
 					msg_debug_metric("final score for single symbol %s = %.2f; %.2f diff",
 									 symbol, final_score, diff);
