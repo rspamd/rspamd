@@ -2891,7 +2891,7 @@ rspamd_controller_metrics_fin_task(void *ud)
 	rspamd_controller_metrics_add_integer(&output, top,
 										  "rspamd_ham_total",
 										  "counter",
-										  "Messages classified as spam.",
+										  "Messages classified as ham.",
 										  "ham_count");
 	rspamd_controller_metrics_add_integer(&output, top,
 										  "rspamd_connections",
