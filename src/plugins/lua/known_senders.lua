@@ -364,14 +364,14 @@ if opts then
       name = settings.symbol_check_mail_local,
       type = 'normal',
       callback = verify_local_replies_set,
-      score = 1.0
+      score = -1.0
     })
 
     rspamd_config:register_symbol({
       name = settings.symbol_check_mail_global,
       type = 'normal',
       callback = check_known_incoming_mail_callback,
-      score = 1.0
+      score = -1.0
     })
 
     if settings.symbol_unknown and #settings.symbol_unknown > 0 then
