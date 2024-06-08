@@ -2285,6 +2285,12 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   G_STRUCT_OFFSET(struct rspamd_config, upstream_lazy_resolve_time),
 									   RSPAMD_CL_FLAG_TIME_FLOAT,
 									   "Time to resolve upstreams addresses in lazy mode");
+		rspamd_rcl_add_default_handler(ssub,
+									   "resolve_min_interval",
+									   rspamd_rcl_parse_struct_time,
+									   G_STRUCT_OFFSET(struct rspamd_config, upstream_resolve_min_interval),
+									   RSPAMD_CL_FLAG_TIME_FLOAT,
+									   "Minumum interval to perform resolving (60 seconds by default)");
 	}
 
 	if (!(skip_sections && g_hash_table_lookup(skip_sections, "actions"))) {
