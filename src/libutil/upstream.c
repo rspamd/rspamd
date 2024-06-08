@@ -87,6 +87,7 @@ struct upstream_limits {
 	double error_time;
 	double dns_timeout;
 	double lazy_resolve_time;
+	double resolve_min_interval;
 	unsigned int max_errors;
 	unsigned int dns_retransmits;
 };
@@ -157,9 +158,10 @@ static const double default_error_time = DEFAULT_ERROR_TIME;
 static const double default_dns_timeout = DEFAULT_DNS_TIMEOUT;
 #define DEFAULT_DNS_RETRANSMITS 2
 static const unsigned int default_dns_retransmits = DEFAULT_DNS_RETRANSMITS;
-/* TODO: make it configurable */
 #define DEFAULT_LAZY_RESOLVE_TIME 3600.0
 static const double default_lazy_resolve_time = DEFAULT_LAZY_RESOLVE_TIME;
+#define DEFAULT_RESOLVE_MIN_INTERVAL 60.0
+static const double default_resolve_min_interval = DEFAULT_RESOLVE_MIN_INTERVAL;
 
 static const struct upstream_limits default_limits = {
 	.revive_time = DEFAULT_REVIVE_TIME,
@@ -169,6 +171,7 @@ static const struct upstream_limits default_limits = {
 	.dns_retransmits = DEFAULT_DNS_RETRANSMITS,
 	.max_errors = DEFAULT_MAX_ERRORS,
 	.lazy_resolve_time = DEFAULT_LAZY_RESOLVE_TIME,
+	.resolve_min_interval = DEFAULT_RESOLVE_MIN_INTERVAL,
 };
 
 static void rspamd_upstream_lazy_resolve_cb(struct ev_loop *, ev_timer *, int);
@@ -198,6 +201,15 @@ void rspamd_upstreams_library_config(struct rspamd_config *cfg,
 	}
 	if (cfg->dns_timeout) {
 		ctx->limits.dns_timeout = cfg->dns_timeout;
+	}
+	if (cfg->upstream_resolve_min_interval) {
+		ctx->limits.resolve_min_interval = cfg->upstream_resolve_min_interval;
+	}
+
+	/* Some sanity checks */
+	if (ctx->limits.resolve_min_interval > ctx->limits.revive_time) {
+		/* We must be able to resolve host during the revive time */
+		ctx->limits.resolve_min_interval = ctx->limits.revive_time;
 	}
 
 	ctx->event_loop = event_loop;
@@ -641,8 +653,6 @@ static void
 rspamd_upstream_resolve_addrs(const struct upstream_list *ls,
 							  struct upstream *upstream)
 {
-	/* XXX: maybe make it configurable */
-	static const double min_resolve_interval = 60.0;
 
 	if (upstream->ctx->res != NULL &&
 		upstream->ctx->configured &&
@@ -651,11 +661,11 @@ rspamd_upstream_resolve_addrs(const struct upstream_list *ls,
 
 		double now = ev_now(upstream->ctx->event_loop);
 
-		if (now - upstream->last_resolve < min_resolve_interval) {
+		if (now - upstream->last_resolve < upstream->ctx->limits.resolve_min_interval) {
 			msg_info_upstream("do not resolve upstream %s as it was checked %.0f "
 							  "seconds ago (%.0f is minimum)",
 							  upstream->name, now - upstream->last_resolve,
-							  min_resolve_interval);
+							  upstream->ctx->limits.resolve_min_interval);
 
 			return;
 		}
@@ -756,6 +766,7 @@ rspamd_upstream_set_inactive(struct upstream_list *ls, struct upstream *upstream
 	struct upstream *cur;
 	struct upstream_list_watcher *w;
 
+	g_assert(upstream != NULL);
 	RSPAMD_UPSTREAM_LOCK(ls);
 	g_ptr_array_remove_index(ls->alive, upstream->active_idx);
 	upstream->active_idx = -1;
@@ -806,6 +817,7 @@ void rspamd_upstream_fail(struct upstream *upstream,
 	struct upstream_addr_elt *addr_elt;
 	struct upstream_list_watcher *w;
 
+	g_assert(upstream != NULL);
 	msg_debug_upstream("upstream %s failed; reason: %s",
 					   upstream->name,
 					   reason);
@@ -1652,6 +1664,7 @@ void rspamd_upstream_reresolve(struct upstream_ctx *ctx)
 
 	while (cur) {
 		up = cur->data;
+		g_assert(up != NULL);
 		REF_RETAIN(up);
 		rspamd_upstream_resolve_addrs(up->ls, up);
 		REF_RELEASE(up);

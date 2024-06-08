@@ -630,5 +630,10 @@ return function(cfg)
     cfg.emails = {}
   end
 
+  -- Common misprint options.upstreams -> options.upstream
+  if type(cfg.options) == 'table' and type(cfg.options.upstreams) == 'table' and not cfg.options.upstream then
+    cfg.options.upstream = cfg.options.upstreams
+  end
+
   return ret, cfg
 end
