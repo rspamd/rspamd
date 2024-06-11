@@ -23,7 +23,7 @@
 #include "libmime/lang_detection.h"
 
 /* Size for features pipe */
-#define DEFAULT_FEATURE_WINDOW_SIZE 5
+#define DEFAULT_FEATURE_WINDOW_SIZE 2
 #define DEFAULT_OSB_VERSION 2
 
 static const int primes[] = {
