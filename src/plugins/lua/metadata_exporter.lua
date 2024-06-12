@@ -27,6 +27,7 @@ local rspamd_http = require "rspamd_http"
 local rspamd_util = require "rspamd_util"
 local rspamd_logger = require "rspamd_logger"
 local rspamd_tcp = require "rspamd_tcp"
+local lua_redis = require "lua_redis"
 local ucl = require "ucl"
 local E = {}
 local N = 'metadata_exporter'
@@ -63,6 +64,7 @@ Message-ID: $message_id
 Action: $action
 Score: $score
 Symbols: $symbols]],
+  timeout = 5.0,
 }
 
 local function get_general_metadata(task, flatten, no_content)
@@ -286,7 +288,7 @@ local pushers = {
       end
       return true
     end
-    ret, _, upstream = rspamd_redis_make_request(task,
+    ret, _, upstream = lua_redis.redis_make_request(task,
         redis_params, -- connect params
         nil, -- hash key
         true, -- is write
@@ -337,6 +339,7 @@ local pushers = {
       callback = http_callback,
       mime_type = rule.mime_type or settings.mime_type,
       headers = hdrs,
+      timeout = rule.timeout or settings.timeout,
     })
   end,
   send_mail = function(task, formatted, rule, extra)
@@ -372,6 +375,7 @@ local pushers = {
       port = rule.port,
       data = formatted,
       callback = json_raw_tcp_callback,
+      timeout = rule.timeout or settings.timeout,
       read = false,
     })
   end,
@@ -502,7 +506,7 @@ if type(settings.rules) ~= 'table' then
     end
   end
   if settings.pusher_enabled.redis_pubsub then
-    redis_params = rspamd_parse_redis_server(N)
+    redis_params = lua_redis.parse_redis_server(N)
     if not redis_params then
       rspamd_logger.errx(rspamd_config, 'No redis servers are specified')
       settings.pusher_enabled.redis_pubsub = nil
@@ -529,7 +533,6 @@ if type(settings.rules) ~= 'table' then
       r.defer = settings.defer
       r.selector = settings.pusher_select.http
       r.formatter = settings.pusher_format.http
-      r.timeout = settings.timeout or 0.0
       settings.rules[r.backend:upper()] = r
     end
   end
@@ -547,7 +550,6 @@ if type(settings.rules) ~= 'table' then
       r.smtp_port = settings.smtp_port
       r.email_template = settings.email_template
       r.defer = settings.defer
-      r.timeout = settings.timeout or 0.0
       r.selector = settings.pusher_select.send_mail
       r.formatter = settings.pusher_format.send_mail
       settings.rules[r.backend:upper()] = r
@@ -703,6 +705,6 @@ for k, r in pairs(settings.rules) do
     type = 'idempotent',
     callback = gen_exporter(r),
     flags = 'empty,explicit_disable,ignore_passthrough',
-    augmentations = { string.format("timeout=%f", r.timeout or 0.0) }
+    augmentations = { string.format("timeout=%f", r.timeout or settings.timeout or 0.0) }
   })
 end
