@@ -26,6 +26,8 @@
 #include <optional>
 #include <algorithm>
 #include <functional>
+#include <iostream>
+#include <fstream>
 #include <cstdint>
 #include <cstdio>
 #include <cmath>
@@ -86,6 +88,7 @@ static gboolean skip_images = FALSE;
 static gboolean skip_attachments = FALSE;
 static const char *pubkey = nullptr;
 static const char *user_agent = "rspamc";
+static const char *files_list = nullptr;
 
 std::vector<GPid> children;
 static GPatternSpec **exclude_compiled = nullptr;
@@ -176,6 +179,8 @@ static GOptionEntry entries[] =
 		 "Skip attachments when learning/unlearning fuzzy", nullptr},
 		{"user-agent", 'U', 0, G_OPTION_ARG_STRING, &user_agent,
 		 "Use specific User-Agent instead of \"rspamc\"", nullptr},
+		{"files-list", '\0', 0, G_OPTION_ARG_FILENAME, &files_list,
+		 "Read one or more newline separated filenames to scan from file", nullptr},
 		{nullptr, 0, 0, G_OPTION_ARG_NONE, nullptr, nullptr, nullptr}};
 
 static void rspamc_symbols_output(FILE *out, ucl_object_t *obj);
@@ -2302,29 +2307,57 @@ int main(int argc, char **argv, char **env)
 	else {
 		auto cur_req = 0;
 
+		/* Process files from arguments and `files_list` */
+		std::vector<std::string> files;
+		files.reserve(argc - start_argc);
+
 		for (auto i = start_argc; i < argc; i++) {
+			files.emplace_back(argv[i]);
+		}
+
+		/* If we have list of files, read it and enrich our list */
+		if (files_list) {
+			std::ifstream in_files(files_list);
+			if (!in_files.is_open()) {
+				rspamc_print(stderr, "cannot open file {}\n", files_list);
+				exit(EXIT_FAILURE);
+			}
+			std::string line;
+			while (std::getline(in_files, line)) {
+				/* Trim spaces before inserting */
+				line.erase(0, line.find_first_not_of(" \n\r\t"));
+				line.erase(line.find_last_not_of(" \n\r\t") + 1);
+
+				/* Ignore empty lines */
+				if (!line.empty()) {
+					files.emplace_back(line);
+				}
+			}
+		}
+
+		for (const auto &file: files) {
 			if (cmd.cmd == RSPAMC_COMMAND_FUZZY_DELHASH) {
-				add_client_header(kwattrs, "Hash", argv[i]);
+				add_client_header(kwattrs, "Hash", file.c_str());
 			}
 			else {
 				struct stat st;
 
-				if (stat(argv[i], &st) == -1) {
-					rspamc_print(stderr, "cannot stat file {}\n", argv[i]);
+				if (stat(file.c_str(), &st) == -1) {
+					rspamc_print(stderr, "cannot stat file {}\n", file);
 					exit(EXIT_FAILURE);
 				}
 				if (S_ISDIR(st.st_mode)) {
 					/* Directories are processed with a separate limit */
-					rspamc_process_dir(event_loop, cmd, argv[i], kwattrs);
+					rspamc_process_dir(event_loop, cmd, file.c_str(), kwattrs);
 					cur_req = 0;
 				}
 				else {
-					in = fopen(argv[i], "r");
+					in = fopen(file.c_str(), "r");
 					if (in == nullptr) {
-						rspamc_print(stderr, "cannot open file {}\n", argv[i]);
+						rspamc_print(stderr, "cannot open file {}\n", file);
 						exit(EXIT_FAILURE);
 					}
-					rspamc_process_input(event_loop, cmd, in, argv[i], kwattrs);
+					rspamc_process_input(event_loop, cmd, in, file.c_str(), kwattrs);
 					cur_req++;
 					fclose(in);
 				}
