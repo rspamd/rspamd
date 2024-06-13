@@ -1,7 +1,6 @@
 local rspamd_util = require "rspamd_util"
 local lua_util = require "lua_util"
 local argparse = require "argparse"
-local fun = require "fun"
 local ucl = require "ucl"
 local rspamd_logger = require "rspamd_logger"
 
@@ -57,36 +56,43 @@ local function split_table(t, fraction)
   return part1, part2
 end
 
-local function shell_quote(argument)
-  if argument:match('^[%w%+%-%.,:/=@_]+$') then
-    return argument
-  end
-  argument = argument:gsub('[$`"\\]', '\\%0')
-  return '"' .. argument .. '"'
-end
-
 -- Utility function to get all files in a directory
 local function get_files(dir)
-  return fun.totable(fun.map(shell_quote, rspamd_util.glob(dir .. '/*')))
+  return rspamd_util.glob(dir .. '/*')
+end
+
+local function list_to_file(list, fname)
+  local out = assert(io.open(fname, "w"))
+  for _, v in ipairs(list) do
+    out:write(v)
+    out:write("\n")
+  end
+  out:close()
 end
 
 -- Function to train the classifier with given files
-local function train_classifier(files, command, connections)
-  local rspamc_command = string.format("%s --connect %s -j --compact -n %s -t %.3f %s %s",
-      opts.rspamc, opts.connect, opts.nconns, opts.timeout, command, table.concat(files, " "))
+local function train_classifier(files, command)
+  local fname = os.tmpname()
+  list_to_file(files, fname)
+  local rspamc_command = string.format("%s --connect %s -j --compact -n %s -t %.3f %s --files-list=%s",
+      opts.rspamc, opts.connect, opts.nconns, opts.timeout, command, fname)
   local result = assert(io.popen(rspamc_command))
   result = result:read("*all")
+  os.remove(fname)
 end
 
 -- Function to classify files and return results
 local function classify_files(files)
+  local fname = os.tmpname()
+  list_to_file(files, fname)
+
   local settings_header = '--header Settings=\"{symbols_enabled=[BAYES_SPAM, BAYES_HAM]}\"'
-  local rspamc_command = string.format("%s %s --connect %s --compact -n %s -t %.3f %s",
+  local rspamc_command = string.format("%s %s --connect %s --compact -n %s -t %.3f --files-list=%s",
       opts.rspamc,
       settings_header,
       opts.connect,
       opts.nconns,
-      opts.timeout, table.concat(files, " "))
+      opts.timeout, fname)
   local result = assert(io.popen(rspamc_command))
   local results = {}
   for line in result:lines() do
@@ -94,6 +100,7 @@ local function classify_files(files)
     local is_good, err = ucl_parser:parse_string(line)
     if not is_good then
       rspamd_logger.errx("Parser error: %1", err)
+      os.remove(fname)
       return nil
     end
     local obj = ucl_parser:get_object()
@@ -106,6 +113,8 @@ local function classify_files(files)
       table.insert(results, { result = "ham", file = file })
     end
   end
+
+  os.remove(fname)
 
   return results
 end
