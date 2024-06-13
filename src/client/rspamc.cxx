@@ -2295,7 +2295,7 @@ int main(int argc, char **argv, char **env)
 	add_options(kwattrs);
 	auto cmd = maybe_cmd.value();
 
-	if (start_argc == argc) {
+	if (start_argc == argc && files_list == nullptr) {
 		/* Do command without input or with stdin */
 		if (empty_input) {
 			rspamc_process_input(event_loop, cmd, nullptr, "empty", kwattrs);
