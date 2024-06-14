@@ -2644,8 +2644,8 @@ lua_task_inject_url(lua_State *L)
 
 	if (lua_isuserdata(L, 3)) {
 		/* We also have a mime part there */
-		mpart = *((struct rspamd_mime_part **) rspamd_lua_check_udata_maybe(L,
-																			3, rspamd_mimepart_classname));
+		mpart = *((struct rspamd_mime_part **)
+					  rspamd_lua_check_udata_maybe(L,3,rspamd_mimepart_classname));
 	}
 
 	if (task && task->message && url && url->url) {
@@ -2658,6 +2658,13 @@ lua_task_inject_url(lua_State *L)
 	}
 	else {
 		return luaL_error(L, "invalid arguments");
+	}
+
+	if (url->url->querylen > 0) {
+		rspamd_url_text_extract(task->task_pool, task,
+								(struct rspamd_mime_text_part *) mpart,
+								&url->url->order,
+								RSPAMD_URL_FIND_ALL);
 	}
 
 	return 0;

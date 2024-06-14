@@ -48,3 +48,7 @@ Rule conditions
 External Maps Simple
   Scan File  ${MESSAGE}  Settings={symbols_enabled = [EXTERNAL_MAP]}
   Expect Symbol With Exact Options  EXTERNAL_MAP  +hello map
+  
+Task Inject Url
+  Scan File  ${MESSAGE}  Settings={symbols_enabled = [TASK_INJECT_URL]}
+  Expect Symbol  TASK_INJECT_URL
