@@ -2666,7 +2666,6 @@ lua_task_inject_url(lua_State *L)
 								&url->url->order,
 								RSPAMD_URL_FIND_ALL);
 	}
-
 	return 0;
 }
 
