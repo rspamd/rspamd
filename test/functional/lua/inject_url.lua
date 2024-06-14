@@ -2,8 +2,8 @@ local url = require('rspamd_url')
 
 local function task_inject_cb (task)
     local url_text = 'http://example.com?redir=http://another.com'
-    local url = url.create(task:get_mempool(), url_text)
-    task:inject_url(url)
+    local url_to_inject = url.create(task:get_mempool(), url_text)
+    task:inject_url(url_to_inject)
     return true
 end
 
