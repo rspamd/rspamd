@@ -855,11 +855,14 @@ lua_url_create(lua_State *L)
 	if (lua_type(L, 1) == LUA_TUSERDATA) {
 		pool = rspamd_lua_check_mempool(L, 1);
 		t = lua_check_text_or_string(L, 2);
-		return luaL_error(L, "LUA_TUSERDATA");
 	}
 	else {
 		pool = static_lua_url_pool;
 		t = lua_check_text_or_string(L, 1);
+	}
+
+	if (*t->start == 'q') {
+		return luaL_error(L, "DEBUG ERROR");
 	}
 
 	if (pool == NULL) {
