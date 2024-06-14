@@ -308,11 +308,7 @@ lua_check_text_or_string(lua_State *L, int pos)
 		return &fake_text[sel_idx];
 	}
 
-	struct rspamd_lua_text ft[4];
-	char x = 'q';
-	ft[0].start = &x;
-
-	return ft;
+	return NULL;
 }
 
 struct rspamd_lua_text *
