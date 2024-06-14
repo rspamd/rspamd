@@ -1,7 +1,5 @@
 local rspamd_url = require('rspamd_url')
 
-local N = 'ibject_url'
-
 local function task_inject_cb (task)
     local url_text = 'http://example.com?redir=http://another.com'
     local url = rspamd_url:create(url_text)

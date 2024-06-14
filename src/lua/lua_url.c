@@ -858,7 +858,7 @@ lua_url_create(lua_State *L)
 	}
 	else {
 		pool = static_lua_url_pool;
-		t = lua_check_text_or_string(L, 2);
+		t = lua_check_text_or_string(L, 1);
 	}
 
 	if (pool == NULL) {
