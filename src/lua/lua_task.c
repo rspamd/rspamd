@@ -2660,7 +2660,10 @@ lua_task_inject_url(lua_State *L)
 		return luaL_error(L, "invalid arguments");
 	}
 	struct rspamd_mime_text_part mime_text_part;
-	g_byte_array_append(mime_text_part.utf_stripped_content, url->url->raw, url->url->rawlen);
+	mime_text_part.mime_part = mpart;
+	g_byte_array_append(mime_text_part.utf_stripped_content, url->url->string, url->url->urllen);
+	mime_text_part.utf_stripped_content->len = url->url->urllen;
+	mime_text_part.newlines = 0;
 	rspamd_url_text_extract(task->task_pool, task,
 							&mime_text_part,
 							&(url->url->order),
