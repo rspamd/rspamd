@@ -2669,10 +2669,16 @@ lua_task_inject_url(lua_State *L)
 	//g_byte_array_append(mime_text_part->utf_stripped_content, url->url->string, url->url->urllen);
 	//mime_text_part->utf_stripped_content->len = url->url->urllen;
 	//mime_text_part->newlines = 0;
-	rspamd_url_text_extract(task->task_pool, task,
-							mime_text_part,
-							&(url->url->order),
-							RSPAMD_URL_FIND_ALL);
+	if (task && task->message && url && url->url) {
+		if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false)) {
+			if (mime_text_part->mime_part && mime_text_part->mime_part->urls) {
+				rspamd_url_text_extract(task->task_pool, task,
+										mime_text_part,
+										&(url->url->order),
+										RSPAMD_URL_FIND_ALL);
+			}
+		}
+	}
 	return 0;
 }
 
