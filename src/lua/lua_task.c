@@ -2662,6 +2662,7 @@ lua_task_inject_url(lua_State *L)
 	struct rspamd_mime_text_part mime_text_part;
 	mime_text_part.mime_part = mpart;
 	mime_text_part.utf_stripped_content = g_byte_array_new();
+	mime_text_part.exceptions = g_list_alloc();
 	g_byte_array_append(mime_text_part.utf_stripped_content, url->url->string, url->url->urllen);
 	mime_text_part.utf_stripped_content->len = url->url->urllen;
 	mime_text_part.newlines = 0;
