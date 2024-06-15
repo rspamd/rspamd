@@ -2660,12 +2660,10 @@ lua_task_inject_url(lua_State *L)
 		return luaL_error(L, "invalid arguments");
 	}
 
-//	if (url->url->querylen > 0) {
-//		rspamd_url_text_extract(task->task_pool, task,
-//								(struct rspamd_mime_text_part *) mpart,
-//								&url->url->order,
-//								RSPAMD_URL_FIND_ALL);
-//	}
+	rspamd_url_text_extract(task->task_pool, task,
+							(struct rspamd_mime_text_part *) mpart,
+							&(url->url->order),
+							RSPAMD_URL_FIND_ALL);
 	return 0;
 }
 
