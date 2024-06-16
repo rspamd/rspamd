@@ -2653,7 +2653,7 @@ lua_task_inject_url(lua_State *L)
 			if (mime_text_part->mime_part && mime_text_part->mime_part->urls) {
 				/* Also add url to the mime part */
 				//g_ptr_array_add(mime_text_part->mime_part->urls, url->url);
-
+				g_byte_array_append(mime_text_part->utf_stripped_content, url->url->raw, url->url->rawlen);
 				rspamd_url_text_extract(task->task_pool, task,
 										mime_text_part,
 										0,
