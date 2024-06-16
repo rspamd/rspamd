@@ -2640,26 +2640,22 @@ lua_task_inject_url(lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task(L, 1);
 	struct rspamd_lua_url *url = lua_check_url(L, 2);
-	struct rspamd_mime_part *mpart = NULL;
 	struct rspamd_mime_text_part *mime_text_part = NULL;
 
 	if (lua_isuserdata(L, 3)) {
 		/* We also have a mime part there */
-		mpart = *((struct rspamd_mime_part **)
-					  rspamd_lua_check_udata_maybe(L,3,rspamd_mimepart_classname));
 		mime_text_part = *((struct rspamd_mime_text_part **)
 							   rspamd_lua_check_udata_maybe(L,3,rspamd_mimepart_classname));
 	}
 
 	if (task && task->message && url && url->url) {
 		if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false)) {
-			if (mpart && mpart->urls) {
+			if (mime_text_part->mime_part && mime_text_part->mime_part->urls) {
 				/* Also add url to the mime part */
-				g_ptr_array_add(mpart->urls, url->url);
-				/*
-				mime_text_part->mime_part = mpart;
+				g_ptr_array_add(mime_text_part->mime_part->urls, url->url);
 				g_byte_array_append(mime_text_part->utf_stripped_content, url->url->string,
 									url->url->urllen);
+				/*
 				rspamd_url_text_extract(task->task_pool, task,
 										mime_text_part,
 										(uint16_t *) mpart->urls->len,
@@ -2670,20 +2666,6 @@ lua_task_inject_url(lua_State *L)
 	}
 	else {
 		return luaL_error(L, "invalid arguments");
-	}
-
-	//mime_text_part->mime_part = mpart;
-	//mime_text_part->utf_stripped_content = g_byte_array_new();
-	//mime_text_part->exceptions = g_list_alloc();
-	//mime_text_part->utf_stripped_content->len = url->url->urllen;
-	//mime_text_part->newlines = 0;
-	if(url->url->querylen > 0) {
-		if (task && task->message && url && url->url) {
-			if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false)) {
-				if (mime_text_part->mime_part && mime_text_part->mime_part->urls) {
-				}
-			}
-		}
 	}
 	return 0;
 }

@@ -1,5 +1,4 @@
 local url = require('rspamd_url')
-local lua_util = require('lua_util')
 
 local function task_inject_cb (task)
     local url_text = 'http://example.com?redir=http://another.com'
