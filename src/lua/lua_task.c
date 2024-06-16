@@ -2656,6 +2656,7 @@ lua_task_inject_url(lua_State *L)
 			if (mpart && mpart->urls) {
 				/* Also add url to the mime part */
 				g_ptr_array_add(mpart->urls, url->url);
+				/*
 				mime_text_part->mime_part = mpart;
 				g_byte_array_append(mime_text_part->utf_stripped_content, url->url->string,
 									url->url->urllen);
@@ -2663,6 +2664,7 @@ lua_task_inject_url(lua_State *L)
 										mime_text_part,
 										(uint16_t *) mpart->urls->len,
 										RSPAMD_URL_FIND_ALL);
+										*/
 			}
 		}
 	}
