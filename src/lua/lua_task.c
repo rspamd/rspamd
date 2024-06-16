@@ -2661,7 +2661,7 @@ lua_task_inject_url(lua_State *L)
 				rspamd_url_text_extract(task->task_pool, task,
 										mime_text_part,
 										&(url->url->order),
-										RSPAMD_URL_FIND_ALL);
+										RSPAMD_URL_FIND_STRICT);
 			}
 		}
 	}
