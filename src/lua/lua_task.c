@@ -2657,11 +2657,12 @@ lua_task_inject_url(lua_State *L)
 				/* Also add url to the mime part */
 				//g_ptr_array_add(mpart->urls, url->url);
 				mime_text_part->mime_part = mpart;
-				g_byte_array_append(mime_text_part->utf_stripped_content, url->url->string, url->url->urllen);
+				g_byte_array_append(mime_text_part->utf_stripped_content, url->url->string,
+									url->url->urllen);
 				rspamd_url_text_extract(task->task_pool, task,
 										mime_text_part,
-										&(url->url->order),
-										RSPAMD_URL_FIND_STRICT);
+										(uint16_t *) mpart->urls->len,
+										RSPAMD_URL_FIND_ALL);
 			}
 		}
 	}
