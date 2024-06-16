@@ -2656,7 +2656,6 @@ lua_task_inject_url(lua_State *L)
 			if (mpart && mpart->urls) {
 				/* Also add url to the mime part */
 				g_ptr_array_add(mpart->urls, url->url);
-				g_ptr_array_add(mime_text_part->mime_part->urls, url->url);
 			}
 		}
 	}
@@ -2669,6 +2668,7 @@ lua_task_inject_url(lua_State *L)
 	//mime_text_part->exceptions = g_list_alloc();
 	//mime_text_part->utf_stripped_content->len = url->url->urllen;
 	//mime_text_part->newlines = 0;
+	mime_text_part->mime_part = mpart;
 	if(url->url->querylen > 0) {
 		if (task && task->message && url && url->url) {
 			if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false)) {
