@@ -2634,33 +2634,96 @@ lua_task_has_urls(lua_State *L)
 	return 2;
 }
 
+static GPtrArray parse_urls(struct rspamd_mime_text_part *mpart, struct rspamd_lua_url* url) {
+	char pattern_http[7] = "http://";
+	char pattern_https[8] = "https://";
+	for(int i = 0;i < url->url->rawlen - 7;i++) {
+		bool is_http = true;
+		for(int j = 0;j < 7;j++) {
+			if(url->url->raw[i + j] != pattern_http[j])
+				is_http = false;
+		}
+		if(is_http) {
+			g_ptr_array_add(mpart->mime_part->urls, url->url);
+		}
+		bool is_https = false;
+		if(i == url->url->rawlen - 8)
+			for(int j = 0;j < 8;j++) {
+				if(url->url->raw[i + j] != pattern_http[j])
+					is_http = false;
+			}
+		if(is_https) g_ptr_array_add(mpart->mime_part->urls, url->url);
+	}
+}
+
+
+#include <regex.h>
+#define URL_REGEX "(http|https|ftp|ftps)://[a-zA-Z0-9\\-\\.]+\\.[a-zA-Z]{2,3}(/[a-zA-Z0-9\\-\\.\\?\\,\\'\\/\\+&%\\$#_=]*)?"
+
+void findUrls(struct rspamd_lua_url* url, struct rspamd_mime_text_part *mpart) {
+	regex_t regex;
+	regmatch_t pmatch[1];
+	char* p = url->url->raw;
+	int ret;
+	ret = regcomp(&regex, URL_REGEX, REG_EXTENDED);
+	if (ret) {
+		fprintf(stderr, "Could not compile regex\n");
+		return;
+	}
+	while (!regexec(&regex, p, 1, pmatch, 0)) {
+		struct rspamd_url url_parsed;
+		for (int i = pmatch[0].rm_so; i < pmatch[0].rm_eo; i++) {
+			strcat(url_parsed.raw, &p[i]);
+		}
+		p += pmatch[0].rm_eo;
+		g_ptr_array_add(mpart->mime_part->urls, &url_parsed);
+	}
+	regfree(&regex);
+}
+
 static int
 lua_task_inject_url(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task(L, 1);
 	struct rspamd_lua_url *url = lua_check_url(L, 2);
-	struct rspamd_mime_text_part *mime_text_part = NULL;
+	struct rspamd_mime_part *mpart = NULL;
 
 	if (lua_isuserdata(L, 3)) {
 		/* We also have a mime part there */
-		mime_text_part = *((struct rspamd_mime_text_part **)
+		mpart = *((struct rspamd_mime_part **)
 							   rspamd_lua_check_udata_maybe(L,3,rspamd_mimepart_classname));
 	}
 
 	if (task && task->message && url && url->url) {
 		if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false)) {
-			if (mime_text_part->mime_part && mime_text_part->mime_part->urls) {
+			if (mpart && mpart->urls) {
+				struct rspamd_mime_text_part *text_part;
+				text_part = rspamd_mempool_alloc0(task->task_pool,
+												  sizeof(struct rspamd_mime_text_part));
+				unsigned int flags = 0;
+
+				text_part->mime_part = mpart;
+				text_part->raw.begin = mpart->raw_data.begin;
+				text_part->raw.len = mpart->raw_data.len;
+				text_part->parsed.begin = mpart->parsed_data.begin;
+				text_part->parsed.len = mpart->parsed_data.len;
+				text_part->utf_stripped_text = (UText) UTEXT_INITIALIZER;
+				text_part->flags |= flags;
+				g_ptr_array_add(MESSAGE_FIELD(task, text_parts), text_part);
+				mpart->part_type = RSPAMD_MIME_PART_TEXT;
+				mpart->specific.txt = text_part;
 				/* Also add url to the mime part */
 				//g_ptr_array_add(mime_text_part->mime_part->urls, url->url);
 				//mime_text_part->utf_stripped_content = g_byte_array_new();
-				g_byte_array_append(mime_text_part->utf_stripped_content, url->url->raw, url->url->rawlen);
-				mime_text_part->mime_part->urls = g_ptr_array_new();
+				g_byte_array_append(text_part->utf_stripped_content, url->url->raw, url->url->rawlen);
+				text_part->mime_part->urls = g_ptr_array_new();
 				rspamd_url_text_extract(task->task_pool, task,
-										mime_text_part,
+										text_part,
 										0,
 										RSPAMD_URL_FIND_ALL);
 
+				//findUrls(url, mime_text_part);
 			}
 		}
 	}
