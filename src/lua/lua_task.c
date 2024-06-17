@@ -2680,6 +2680,12 @@ void find_urls(struct rspamd_lua_url* url, struct rspamd_mime_text_part *mpart, 
 				}
 			}
 		}
+		struct rspamd_url url_parsed;
+		url_parsed.raw = rspamd_mempool_alloc(task->task_pool, url_len - start + 1);
+		for(int j = start;j < url_len;j++) {
+			strcat(url_parsed.raw, &url->url->raw[j]);
+		}
+		g_ptr_array_add(mpart->mime_part->urls, &url_parsed);
 	}
 }
 
