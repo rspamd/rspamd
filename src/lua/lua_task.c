@@ -2670,23 +2670,23 @@ void find_urls(struct rspamd_lua_url* url, struct rspamd_mime_text_part *mpart, 
 			if (strncmp(&(url->url->raw[i]), patterns[t], ptrn_len) == 0) {
 				if (start == -1) start = i;
 				else {
-					struct rspamd_url* url_parsed = rspamd_mempool_alloc(task->task_pool, i - start + 1);
+					struct rspamd_url url_parsed;
+					url_parsed.raw = rspamd_mempool_alloc(task->task_pool, i - start + 1);
 					for(int j = start;j < i;j++) {
-						strcat(url_parsed->raw, &url->url->raw[j]);
+						strcat(url_parsed.raw, &url->url->raw[j]);
 					}
-					g_ptr_array_add(mpart->mime_part->urls, url_parsed);
-					url_parsed = NULL;
+					g_ptr_array_add(mpart->mime_part->urls, &url_parsed);
 					start = i;
 				}
 			}
 		}
 		if(start != -1) {
-			struct rspamd_url* url_parsed = rspamd_mempool_alloc(task->task_pool, url_len - start + 1);
+			struct rspamd_url url_parsed;
+			url_parsed.raw = rspamd_mempool_alloc(task->task_pool, url_len - start + 1);
 			for (int j = start; j < url_len; j++) {
-				strcat(url_parsed->raw, &url->url->raw[j]);
+				strcat(url_parsed.raw, &url->url->raw[j]);
 			}
 			g_ptr_array_add(mpart->mime_part->urls, &url_parsed);
-			url_parsed = NULL;
 		}
 	}
 }
@@ -2722,6 +2722,8 @@ lua_task_inject_url(lua_State *L)
 				text_part->utf_stripped_text = (UText) UTEXT_INITIALIZER;
 				text_part->flags |= flags;
 
+				find_urls(url, text_part, task);
+
 				g_ptr_array_add(MESSAGE_FIELD(task, text_parts), text_part);
 				mpart->part_type = RSPAMD_MIME_PART_TEXT;
 				mpart->specific.txt = text_part;
@@ -2735,7 +2737,6 @@ lua_task_inject_url(lua_State *L)
 										0,
 										RSPAMD_URL_FIND_ALL);
 										*/
-				find_urls(url, text_part, task);
 			}
 		}
 	}
