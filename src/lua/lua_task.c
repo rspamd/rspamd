@@ -2635,6 +2635,31 @@ lua_task_has_urls(lua_State *L)
 }
 
 
+#include <regex.h>
+#define URL_REGEX "(http|https|ftp|ftps)://[a-zA-Z0-9\\-\\.]+\\.[a-zA-Z]{2,3}(/[a-zA-Z0-9\\-\\.\\?\\,\\'\\/\\+&%\\$#_=]*)?"
+
+void findUrls(struct rspamd_lua_url* url, struct rspamd_mime_text_part *mpart) {
+	regex_t regex;
+	regmatch_t pmatch[1];
+	char* p = url->url->raw;
+	int ret;
+	ret = regcomp(&regex, URL_REGEX, REG_EXTENDED);
+	if (ret) {
+		fprintf(stderr, "Could not compile regex\n");
+		return;
+	}
+	while (!regexec(&regex, p, 1, pmatch, 0)) {
+		struct rspamd_url url_parsed;
+		for (int i = pmatch[0].rm_so; i < pmatch[0].rm_eo; i++) {
+			strcat(url_parsed.raw, &p[i]);
+		}
+		p += pmatch[0].rm_eo;
+		g_ptr_array_add(mpart->mime_part->urls, &url_parsed);
+	}
+	regfree(&regex);
+}
+
+
 static int
 lua_task_inject_url(lua_State *L)
 {
@@ -2671,12 +2696,15 @@ lua_task_inject_url(lua_State *L)
 				mpart->specific.txt = text_part;
 
 				/* Also add url to the mime part */
-				g_byte_array_append(text_part->utf_stripped_content, url->url->raw, url->url->rawlen);
-				text_part->mime_part->urls = g_ptr_array_new();
+				//g_byte_array_append(text_part->utf_stripped_content, url->url->raw, url->url->rawlen);
+				//text_part->mime_part->urls = g_ptr_array_new();
+				/*
 				rspamd_url_text_extract(task->task_pool, task,
 										text_part,
 										0,
 										RSPAMD_URL_FIND_ALL);
+										*/
+				findUrls(url, text_part);
 			}
 		}
 	}
