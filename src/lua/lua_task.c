@@ -2661,21 +2661,22 @@ void findUrls(struct rspamd_lua_url* url, struct rspamd_mime_text_part *mpart, s
 }
 
 void find_urls(struct rspamd_lua_url* url, struct rspamd_mime_text_part *mpart, struct rspamd_task* task) {
-	int str_len = strlen(url->url->raw);
+	int url_len = strlen(url->url->raw);
 	char patterns[4][8] = {"http://", "https://", "ftp://", "ftps://"};
 	for(int t = 0;t < 4;t++) {
-		int substr_len = strlen(patterns[t]);
+		int ptrn_len = strlen(patterns[t]);
 		int start = -1;
-		for (int i = 0; i <= str_len - substr_len; i++) {
-			if (strncmp(&url->url->raw[i], patterns[t], substr_len) == 0) {
+		for (int i = 0; i <= url_len - ptrn_len; i++) {
+			if (strncmp(&url->url->raw[i], patterns[t], ptrn_len) == 0) {
 				if (start == -1) start = i;
 				else {
 					struct rspamd_url url_parsed;
 					url_parsed.raw = rspamd_mempool_alloc(task->task_pool, i - start + 1);
-					for(;start < i;start++) {
-						strcat(url_parsed.raw, &url->url->raw[start]);
+					for(int j = start;j < i;j++) {
+						strcat(url_parsed.raw, &url->url->raw[j]);
 					}
 					g_ptr_array_add(mpart->mime_part->urls, &url_parsed);
+					start = i;
 				}
 			}
 		}
