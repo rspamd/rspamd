@@ -4,7 +4,7 @@ local function task_inject_cb (task)
     local url_text = 'http://example.com?redir=http://another.com'
     local url_to_inject = url.create(task:get_mempool(), url_text)
     task:inject_url(url_to_inject)
-    if task:has_urls() then
+    if #(task:get_urls()) == 2 then
         return true
     end
     return false
