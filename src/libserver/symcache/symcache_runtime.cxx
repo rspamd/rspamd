@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,12 @@ auto symcache_runtime::create(struct rspamd_task *task, symcache &cache) -> symc
 	checkpoint->profile_start = now;
 	checkpoint->lim = rspamd_task_get_required_score(task, task->result);
 
+	/*
+	 * We enable profiling if the following conditions are met:
+	 * - we have not profiled for a long time
+	 * - message is large
+	 * - random probability
+	 */
 	if ((cache.get_last_profile() == 0.0 || now > cache.get_last_profile() + PROFILE_MAX_TIME) ||
 		(task->msg.len >= PROFILE_MESSAGE_SIZE_THRESHOLD) ||
 		(rspamd_random_double_fast() >= (1 - PROFILE_PROBABILITY))) {
@@ -332,10 +338,7 @@ auto symcache_runtime::process_pre_postfilters(struct rspamd_task *task,
 		auto dyn_item = get_dynamic_item(item->id);
 
 		if (!dyn_item->started && !dyn_item->finished) {
-			if (has_slow) {
-				/* Delay */
-				has_slow = false;
-
+			if (slow_status == slow_status::enabled) {
 				return false;
 			}
 
@@ -424,10 +427,7 @@ auto symcache_runtime::process_filters(struct rspamd_task *task, symcache &cache
 
 			process_symbol(task, cache, item.get(), dyn_item);
 
-			if (has_slow) {
-				/* Delay */
-				has_slow = false;
-
+			if (slow_status == slow_status::enabled) {
 				return false;
 			}
 		}
@@ -654,7 +654,7 @@ rspamd_symcache_delayed_item_cb(EV_P_ ev_timer *w, int what)
 	if (cbd->event) {
 		cbd->event = nullptr;
 
-		/* Timer will be stopped here */
+		/* Timer will be stopped here; `has_slow` is also reset there */
 		rspamd_session_remove_event(cbd->task->s,
 									rspamd_symcache_delayed_item_fin, cbd);
 
@@ -732,7 +732,7 @@ auto symcache_runtime::finalize_item(struct rspamd_task *task, cache_dynamic_ite
 		}
 		else {
 			/* Just reset as no timer is added */
-			has_slow = FALSE;
+			slow_status = slow_status::none;
 			return false;
 		}
 
@@ -744,33 +744,31 @@ auto symcache_runtime::finalize_item(struct rspamd_task *task, cache_dynamic_ite
 		auto diff = ((ev_now(task->event_loop) - profile_start) * 1e3 -
 					 dyn_item->start_msec);
 
-		if (diff > slow_diff_limit) {
-
-			if (!has_slow) {
-				has_slow = true;
-
-				msg_info_task("slow rule: %s(%d): %.2f ms; enable slow timer delay",
-							  item->symbol.c_str(), item->id,
-							  diff);
-
-				if (enable_slow_timer()) {
-					/* Allow network execution */
-					return;
-				}
-			}
-			else {
-				msg_info_task("slow rule: %s(%d): %.2f ms",
-							  item->symbol.c_str(), item->id,
-							  diff);
-			}
-		}
-
 		if (G_UNLIKELY(RSPAMD_TASK_IS_PROFILING(task))) {
 			rspamd_task_profile_set(task, item->symbol.c_str(), diff);
 		}
 
 		if (rspamd_worker_is_scanner(task->worker)) {
 			rspamd_set_counter(item->cd, diff);
+		}
+
+		if (diff > slow_diff_limit) {
+
+			if (slow_status == slow_status::none) {
+				slow_status = slow_status::enabled;
+
+				msg_info_task("slow rule: %s(%d): %.2f ms; enable 100ms idle timer to allow other rules to be finished",
+							  item->symbol.c_str(), item->id,
+							  diff);
+				if (enable_slow_timer()) {
+					return;
+				}
+			}
+			else {
+				msg_info_task("slow rule: %s(%d): %.2f ms; idle timer has already been activated for this scan",
+							  item->symbol.c_str(), item->id,
+							  diff);
+			}
 		}
 	}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,10 +46,16 @@ struct cache_dynamic_item {
 static_assert(sizeof(cache_dynamic_item) == sizeof(std::uint64_t));
 static_assert(std::is_trivial_v<cache_dynamic_item>);
 
+
 class symcache_runtime {
 	unsigned items_inflight;
+	enum class slow_status : std::uint8_t {
+		none = 0,
+		enabled = 1,
+		disabled = 2,
+	} slow_status;
+
 	bool profile;
-	bool has_slow;
 
 	double profile_start;
 	double lim;
@@ -199,7 +205,9 @@ public:
 	/* XXX: a helper to allow hiding internal implementation of the slow timer structure */
 	auto unset_slow() -> void
 	{
-		has_slow = false;
+		if (slow_status == slow_status::enabled) {
+			slow_status = slow_status::disabled;
+		}
 	}
 };
 
