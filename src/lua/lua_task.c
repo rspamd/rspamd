@@ -2660,30 +2660,23 @@ void findUrls(struct rspamd_lua_url* url, struct rspamd_mime_text_part *mpart, s
 	regfree(&regex);
 }
 
-void parse_urls(struct rspamd_lua_url* url, struct rspamd_mime_text_part *tpart, struct rspamd_task* task) {
-	char pattern_http[7] = "http://";
-	char pattern_https[8] = "https://";
-	bool was_http = true;
-	int start_index = -1;
-	for(int i = 0;i < url->url->rawlen - 8;i++) {
-		bool is_http = true;
-		for(int j = 0;j < 7;j++) {
-			if(url->url->raw[i + j] != pattern_http[j]) {
-				is_http = false;
-				break;
-			}
-		}
-		if(is_http) {
-			if(start_index == -1) {
-				start_index = i;
-			} else {
-				was_http = false;
-				struct rspamd_url parsed_url;
-				parsed_url.raw = rspamd_mempool_alloc(task->task_pool, i - start_index + 1);
-				for(;start_index < i;start_index++) {
-					strcat(parsed_url.raw, &(url->url->raw[start_index]));
+void find_urls(struct rspamd_lua_url* url, struct rspamd_mime_text_part *mpart, struct rspamd_task* task) {
+	int str_len = strlen(url->url->raw);
+	char patterns[4][8] = {"http://", "https://", "ftp://", "ftps://"};
+	for(int t = 0;t < 4;t++) {
+		int substr_len = strlen(patterns[t]);
+		int start = -1;
+		for (int i = 0; i <= str_len - substr_len; i++) {
+			if (strncmp(&url->url->raw[i], patterns[t], substr_len) == 0) {
+				if (start == -1) start = i;
+				else {
+					struct rspamd_url url_parsed;
+					url_parsed.raw = rspamd_mempool_alloc(task->task_pool, i - start + 1);
+					for(;start < i;start++) {
+						strcat(url_parsed.raw, &url->url->raw[start]);
+					}
+					g_ptr_array_add(mpart->mime_part->urls, &url_parsed);
 				}
-				start_index++;
 			}
 		}
 	}
@@ -2733,7 +2726,7 @@ lua_task_inject_url(lua_State *L)
 										0,
 										RSPAMD_URL_FIND_ALL);
 										*/
-				findUrls(url, text_part, task);
+				find_urls(url, text_part, task);
 			}
 		}
 	}
