@@ -2648,7 +2648,7 @@ void findUrls(struct rspamd_lua_url* url, struct rspamd_mime_text_part *mpart, s
 		fprintf(stderr, "Could not compile regex\n");
 		return;
 	}
-	while (!regexec(&regex, p, 1, pmatch, 0)) {
+	while (!regexec(&regex, p, 0, NULL, 0)) {
 		struct rspamd_url url_parsed;
 		url_parsed.raw = rspamd_mempool_alloc(task->task_pool, pmatch[0].rm_eo - pmatch[0].rm_so + 1);
 		for (int i = pmatch[0].rm_so; i < pmatch[0].rm_eo; i++) {
