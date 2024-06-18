@@ -3581,8 +3581,6 @@ void rspamd_url_text_extract(rspamd_mempool_t *pool,
 	struct rspamd_url_mimepart_cbdata mcbd;
 
 	if (part->utf_stripped_content == NULL || part->utf_stripped_content->len == 0) {
-		msg_debug("Content: %s", part->utf_stripped_content);
-		msg_debug("Content len: %d", part->utf_stripped_content->len);
 		msg_warn_task("got empty text part");
 		return;
 	}

@@ -2701,7 +2701,6 @@ static int
 lua_task_inject_url(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	msg_debug("Injection Started");
 	struct rspamd_task *task = lua_check_task(L, 1);
 	struct rspamd_lua_url *url = lua_check_url(L, 2);
 	struct rspamd_mime_part *mpart = NULL;
@@ -2710,7 +2709,6 @@ lua_task_inject_url(lua_State *L)
 		/* We also have a mime part there */
 		mpart = *((struct rspamd_mime_part **)
 							   rspamd_lua_check_udata_maybe(L,3,rspamd_mimepart_classname));
-		msg_debug("Got MIME part");
 	}
 	if (task && task->message && url && url->url) {
 		if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false)) {
@@ -2718,13 +2716,8 @@ lua_task_inject_url(lua_State *L)
 			text_part = rspamd_mempool_alloc0(task->task_pool,
 											  sizeof(struct rspamd_mime_text_part));
 			text_part->utf_stripped_text = (UText) UTEXT_INITIALIZER;
-
-			//find_urls(url, text_part, task);
+			unsigned int flags = 0;
 			if (mpart && mpart->urls) {
-				msg_debug("Entered URL Inject Algorithm");
-
-				unsigned int flags = 0;
-
 				/* Making  rspamd_mime_text_part out of mime_part */
 				text_part->mime_part = mpart;
 				text_part->raw.begin = mpart->raw_data.begin;
@@ -2733,18 +2726,17 @@ lua_task_inject_url(lua_State *L)
 				text_part->parsed.len = mpart->parsed_data.len;
 				text_part->flags |= flags;
 
-				//find_urls(url, text_part, task);
-
+				/* Adding mime_text_part to mime_part */
 				g_ptr_array_add(MESSAGE_FIELD(task, text_parts), text_part);
 				mpart->part_type = RSPAMD_MIME_PART_TEXT;
 				mpart->specific.txt = text_part;
-
-				/* Also add url to the mime part */
 			} else {
+				/* Creating empty mime_part if no mime_part was got from lua_state */
 				struct rspamd_mime_part *mime_part = rspamd_mempool_alloc0(task->task_pool,
 																		   sizeof(struct rspamd_mime_part));
 				text_part->mime_part = mime_part;
 			}
+			/* Adding url to the text_part so it will be parsed by text_extract function */
 			text_part->utf_stripped_content = g_byte_array_new();
 			g_byte_array_append(text_part->utf_stripped_content, url->url->raw, url->url->rawlen);
 			text_part->mime_part->urls = g_ptr_array_new();
