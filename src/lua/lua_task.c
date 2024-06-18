@@ -2712,14 +2712,16 @@ lua_task_inject_url(lua_State *L)
 							   rspamd_lua_check_udata_maybe(L,3,rspamd_mimepart_classname));
 		msg_debug("Got MIME part");
 	}
-
 	if (task && task->message && url && url->url) {
 		if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false)) {
+			struct rspamd_mime_text_part *text_part;
+			text_part = rspamd_mempool_alloc0(task->task_pool,
+											  sizeof(struct rspamd_mime_text_part));
+			text_part->utf_stripped_text = (UText) UTEXT_INITIALIZER;
+			find_urls(url, text_part, task);
 			if (mpart && mpart->urls) {
 				msg_debug("Entered URL Inject Algorithm");
-				struct rspamd_mime_text_part *text_part;
-				text_part = rspamd_mempool_alloc0(task->task_pool,
-												  sizeof(struct rspamd_mime_text_part));
+
 				unsigned int flags = 0;
 
 				/* Making  rspamd_mime_text_part out of mime_part */
@@ -2728,10 +2730,9 @@ lua_task_inject_url(lua_State *L)
 				text_part->raw.len = mpart->raw_data.len;
 				text_part->parsed.begin = mpart->parsed_data.begin;
 				text_part->parsed.len = mpart->parsed_data.len;
-				text_part->utf_stripped_text = (UText) UTEXT_INITIALIZER;
 				text_part->flags |= flags;
 
-				find_urls(url, text_part, task);
+				//find_urls(url, text_part, task);
 
 				g_ptr_array_add(MESSAGE_FIELD(task, text_parts), text_part);
 				mpart->part_type = RSPAMD_MIME_PART_TEXT;
@@ -2753,7 +2754,7 @@ lua_task_inject_url(lua_State *L)
 		return luaL_error(L, "invalid arguments");
 	}
 	return 0;
-}
+}task:inject_url(url_to_inject)
 
 static int
 lua_task_get_content(lua_State *L)
