@@ -211,6 +211,8 @@ auto cache_item::process_deps(const symcache &cache) -> void
 	// Remove empty deps
 	for (auto it = deps.begin(); it != deps.end();) {
 		if (it->second.item == nullptr) {
+			msg_info_cache("remove empty dependency on %s for symbol %s",
+						   it->second.sym.c_str(), symbol.c_str());
 			it = deps.erase(it);
 		}
 		else {
