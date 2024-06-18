@@ -2634,69 +2634,6 @@ lua_task_has_urls(lua_State *L)
 	return 2;
 }
 
-
-#include <regex.h>
-#define URL_REGEX "(http|https|ftp|ftps)://[a-zA-Z0-9\\-\\.]+\\.[a-zA-Z]{2,3}(/[a-zA-Z0-9\\-\\.\\?\\,\\'\\/\\+&%\\$#_=]*)?"
-
-void findUrls(struct rspamd_lua_url* url, struct rspamd_mime_text_part *mpart, struct rspamd_task* task) {
-	regex_t regex;
-	regmatch_t pmatch[1];
-	char* p = url->url->raw;
-	int ret;
-	ret = regcomp(&regex, URL_REGEX, REG_EXTENDED);
-	if (ret) {
-		fprintf(stderr, "Could not compile regex\n");
-		return;
-	}
-	while (!regexec(&regex, p, 0, NULL, 0)) {
-		struct rspamd_url url_parsed;
-		url_parsed.raw = rspamd_mempool_alloc(task->task_pool, pmatch[0].rm_eo - pmatch[0].rm_so + 1);
-		for (int i = pmatch[0].rm_so; i < pmatch[0].rm_eo; i++) {
-			strcat(url_parsed.raw, &p[i]);
-		}
-		p += pmatch[0].rm_eo;
-		g_ptr_array_add(mpart->mime_part->urls, &url_parsed);
-	}
-	regfree(&regex);
-}
-
-void find_urls(struct rspamd_lua_url* url, struct rspamd_mime_text_part *mpart, struct rspamd_task* task) {
-	int url_len = strlen(url->url->raw);
-	char patterns[4][8] = {"http://", "https://", "ftp://", "ftps://"};
-	for(int t = 0;t < 4;t++) {
-		int ptrn_len = strlen(patterns[t]);
-		int start = -1;
-		for (int i = 0; i <= url_len - ptrn_len; i++) {
-			if (strncmp(&(url->url->raw[i]), patterns[t], ptrn_len) == 0) {
-				if (start == -1) start = i;
-				else {
-					struct rspamd_url *url_parsed = rspamd_mempool_alloc(task->task_pool,
-																		 sizeof(struct rspamd_url));
-					url_parsed->raw = rspamd_mempool_alloc(task->task_pool, i - start);
-					char raw_part[i - start];
-					for(int j = start;j < i;j++) {
-						raw_part[j - start] = url->url->raw[j];
-					}
-					url_parsed->raw = raw_part;
-					g_ptr_array_add(mpart->mime_part->urls, url_parsed);
-					start = i;
-				}
-			}
-		}
-		if(start != -1) {
-			struct rspamd_url* url_parsed = rspamd_mempool_alloc(task->task_pool,
-																 sizeof(struct rspamd_url));
-			url_parsed->raw = rspamd_mempool_alloc(task->task_pool, url_len - start);
-			char raw_part[url_len - start];
-			for (int j = start; j < url_len; j++) {
-				raw_part[j - start] = url->url->raw[j];
-			}
-			url_parsed->raw = raw_part;
-			g_ptr_array_add(mpart->mime_part->urls, url_parsed);
-		}
-	}
-}
-
 static int
 lua_task_inject_url(lua_State *L)
 {
