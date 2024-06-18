@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -425,13 +425,16 @@ public:
 		return false;
 	}
 
-	auto call(struct rspamd_task *task, cache_dynamic_item *dyn_item) const -> void
+	auto call(struct rspamd_task *task, cache_dynamic_item *dyn_item) const -> bool
 	{
 		if (std::holds_alternative<normal_item>(specific)) {
 			const auto &filter_data = std::get<normal_item>(specific);
 
 			filter_data.call(task, (struct rspamd_symcache_dynamic_item *) dyn_item);
+			return true;
 		}
+
+		return false;
 	}
 
 	/**

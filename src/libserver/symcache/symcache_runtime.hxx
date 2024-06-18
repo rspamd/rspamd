@@ -30,6 +30,12 @@
 struct rspamd_scan_result;
 
 namespace rspamd::symcache {
+enum class cache_item_status : std::uint16_t {
+	not_started = 0,
+	started = 1,
+	pending = 2,
+	finished = 3,
+};
 /**
  * These items are saved within task structure and are used to track
  * symbols execution.
@@ -38,8 +44,7 @@ namespace rspamd::symcache {
  */
 struct cache_dynamic_item {
 	std::uint16_t start_msec; /* Relative to task time */
-	bool started;
-	bool finished;
+	cache_item_status status;
 	std::uint32_t async_events;
 };
 
@@ -49,12 +54,12 @@ static_assert(std::is_trivial_v<cache_dynamic_item>);
 
 class symcache_runtime {
 	unsigned items_inflight;
+
 	enum class slow_status : std::uint8_t {
 		none = 0,
 		enabled = 1,
 		disabled = 2,
 	} slow_status;
-
 	bool profile;
 
 	double profile_start;
@@ -78,12 +83,7 @@ class symcache_runtime {
 
 public:
 	/* Dropper for a shared ownership */
-	auto savepoint_dtor() -> void
-	{
-
-		/* Drop shared ownership */
-		order.reset();
-	}
+	auto savepoint_dtor(struct rspamd_task *task) -> void;
 	/**
 	 * Creates a cache runtime using task mempool
 	 * @param task

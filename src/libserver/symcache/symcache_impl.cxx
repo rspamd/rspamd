@@ -638,6 +638,7 @@ auto symcache::resort() -> void
 	 */
 	total_hits = 0;
 	auto used_items = ord->d.size();
+	msg_debug_cache("topologically sort %d filters", used_items);
 
 	for (const auto &it: ord->d) {
 		if (it->order == 0) {
@@ -696,7 +697,8 @@ auto symcache::resort() -> void
 	 * We enrich ord with all other symbol types without any sorting,
 	 * as it is done in another place
 	 */
-	constexpr auto append_items_vec = [](const auto &vec, auto &out) {
+	const auto append_items_vec = [&](const auto &vec, auto &out, const char *what) {
+		msg_debug_cache_lambda("append %d items; type = %s", (int) vec.size(), what);
 		for (const auto &it: vec) {
 			if (it) {
 				out.emplace_back(it->getptr());
@@ -704,12 +706,12 @@ auto symcache::resort() -> void
 		}
 	};
 
-	append_items_vec(connfilters, ord->d);
-	append_items_vec(prefilters, ord->d);
-	append_items_vec(postfilters, ord->d);
-	append_items_vec(idempotent, ord->d);
-	append_items_vec(composites, ord->d);
-	append_items_vec(classifiers, ord->d);
+	append_items_vec(connfilters, ord->d, "connection filters");
+	append_items_vec(prefilters, ord->d, "prefilters");
+	append_items_vec(postfilters, ord->d, "postfilters");
+	append_items_vec(idempotent, ord->d, "idempotent filters");
+	append_items_vec(composites, ord->d, "composites");
+	append_items_vec(classifiers, ord->d, "classifiers");
 
 	/* After sorting is done, we can assign all elements in the by_symbol hash */
 	for (const auto [i, it]: rspamd::enumerate(ord->d)) {

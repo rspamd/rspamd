@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -199,12 +199,6 @@ auto cache_item::resolve_parent(const symcache &cache) -> bool
 
 	if (is_virtual()) {
 		auto &virt = std::get<virtual_item>(specific);
-
-		if (virt.get_parent(cache)) {
-			msg_debug_cache("trying to resolve parent twice for %s", symbol.c_str());
-
-			return false;
-		}
 
 		return virt.resolve_parent(cache);
 	}
