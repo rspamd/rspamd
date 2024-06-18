@@ -2754,7 +2754,7 @@ lua_task_inject_url(lua_State *L)
 		return luaL_error(L, "invalid arguments");
 	}
 	return 0;
-}task:inject_url(url_to_inject)
+}
 
 static int
 lua_task_get_content(lua_State *L)
