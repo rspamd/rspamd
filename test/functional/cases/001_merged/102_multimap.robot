@@ -17,6 +17,7 @@ ${URL4}            ${RSPAMD_TESTDIR}/messages/url4.eml
 ${URL5}            ${RSPAMD_TESTDIR}/messages/url5.eml
 ${URL_ICS}         ${RSPAMD_TESTDIR}/messages/ics.eml
 ${UTF_MESSAGE}     ${RSPAMD_TESTDIR}/messages/utf.eml
+${WORDS_MESSAGE}   ${RSPAMD_TESTDIR}/messages/words.eml
 
 *** Test Cases ***
 URL_ICS
@@ -420,13 +421,13 @@ MAP - EXTERNAL MISS
 MAP - DYNAMIC SYMBOLS - SYM1
   Scan File  ${MESSAGE}  IP=127.0.0.1  Hostname=foo
   ...   Settings={symbols_enabled = [DYN_TEST1,DYN_TEST2,DYN_MULTIMAP]}
-  Expect Symbol  DYN_TEST1
+  Expect Symbol With Score  DYN_TEST1  10
   Do Not Expect Symbol  DYN_TEST2
 
 MAP - DYNAMIC SYMBOLS - SYM2
   Scan File  ${MESSAGE}  IP=127.0.0.1  Hostname=bar
   ...   Settings={symbols_enabled = [DYN_TEST1,DYN_TEST2,DYN_MULTIMAP]}
-  Expect Symbol  DYN_TEST2
+  Expect Symbol With Score  DYN_TEST2  20
   Do Not Expect Symbol  DYN_TEST1
 
 MAP - DYNAMIC SYMBOLS - MISS
@@ -434,3 +435,9 @@ MAP - DYNAMIC SYMBOLS - MISS
   ...   Settings={symbols_enabled = [DYN_TEST1,DYN_TEST2,DYN_MULTIMAP]}
   Do Not Expect Symbol  DYN_TEST2
   Do Not Expect Symbol  DYN_TEST1
+
+REGEXP MULTI SCORES - ISSUE 4981
+  Scan File  ${WORDS_MESSAGE}
+  ...   Settings={symbols_enabled = [WORDTEST4981]}
+  Expect Symbol With Score  WORDTEST4981  4
+  Expect Score  4

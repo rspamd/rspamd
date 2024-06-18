@@ -17,7 +17,7 @@ useful features including a comprehensive [Lua API](https://rspamd.com/doc/lua/)
 
 ## Getting Started
 
-A good starting point to study how to install and configure Rspamd is [the quick start guide](https://rspamd.com/doc/quickstart.html).
+A good starting point to study how to install and configure Rspamd is [the quick start guide](https://rspamd.com/doc/tutorials/quickstart.html).
 
 Rspamd is [packaged](https://rspamd.com/downloads.html) for the major Linux distributions, and is also available via [FreeBSD ports](https://freshports.org/mail/rspamd), NetBSD [pkgsrc](https://pkgsrc.org) and [OpenBSD ports](http://openports.se/mail/rspamd).
 
@@ -28,7 +28,7 @@ We advice to use packages provided by Rspamd project if available for your OS in
 Rspamd is shipped with various spam filtering modules and features enabled just out of the box.
 The full list of built-in modules could be found in the [Rspamd documentation](https://rspamd.com/doc/modules/).
 
-If that is not enough, Rspamd provides an extensive [Lua API](https://rspamd.com/doc/lua/) to write your own rules and plugins: <https://rspamd.com/doc/tutorials/writing_rules.html>
+If that is not enough, Rspamd provides an extensive [Lua API](https://rspamd.com/doc/lua/) to write your own rules and plugins: <https://rspamd.com/doc/developers/writing_rules.html>
 
 ## License
 

@@ -24,6 +24,7 @@ local rspamd_url = require "rspamd_url"
 local rspamd_text = require "rspamd_text"
 local rspamd_util = require "rspamd_util"
 local rspamd_dns = require "rspamd_dns"
+local fun = require "fun"
 
 local N = 'dmarc_report'
 
@@ -288,11 +289,9 @@ end
 
 -- Process a single rua entry, validating in DNS if needed
 local function process_rua(dmarc_domain, rua)
-  local parts = lua_util.str_split(rua, ',')
-
   -- Remove size limitation, as we don't care about them
   local addrs = {}
-  for _, rua_part in ipairs(parts) do
+  for _, rua_part in fun.map(lua_util.str_trim, lua_util.str_split(rua, ',')) do
     local u = rspamd_url.create(pool, rua_part:gsub('!%d+[kmg]?$', ''))
     local u2 = rspamd_url.create(pool, dmarc_domain)
     if u and (u:get_protocol() or '') == 'mailto' and u:get_user() then
@@ -331,7 +330,7 @@ local function process_rua(dmarc_domain, rua)
         end
       end
     else
-      logger.errx('invalid rua url: "%s""', tostring(u or 'null'))
+      logger.errx('invalid rua url: "%s""', rua_part)
     end
   end
 

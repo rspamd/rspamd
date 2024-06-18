@@ -317,7 +317,7 @@ table#symbolsTable input[type="number"] {
 }
 
 .status-table tr:last-child td:last-child {
-    border-radius: 0 0 calc(var(--bs-border-radius) + 1px) 0;
+    border-radius: 0 0 calc(var(--bs-border-radius) + 1px);
 }
 .status-table :not(:has([rowspan])) tr:last-child td:first-child,
 .status-table :nth-last-child(1 of tr:has([rowspan])) td:first-child  {

@@ -1,2 +1,2 @@
-foo DYN_TEST1:10:opt1,opt2
-bar DYN_TEST2:20:opt3,opt4
+/foo/ DYN_TEST1:10:opt1,opt2
+/bar/ DYN_TEST2:20:opt3,opt4

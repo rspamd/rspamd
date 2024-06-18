@@ -1747,7 +1747,7 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 											   FALSE,
 											   TRUE,
 											   cfg->doc_strings,
-											   "Global rspamd options");
+											   "Global Rspamd options");
 		rspamd_rcl_add_default_handler(sub,
 									   "cache_file",
 									   rspamd_rcl_parse_struct_string,
@@ -2210,7 +2210,7 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 		/* New DNS configuration */
 		auto *ssub = rspamd_rcl_add_section_doc(&top, sub, "dns", nullptr, nullptr,
 												UCL_OBJECT, FALSE, TRUE,
-												cfg->doc_strings,
+												nullptr,
 												"Options for DNS resolver");
 		rspamd_rcl_add_default_handler(ssub,
 									   "nameserver",
@@ -2259,7 +2259,7 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 		/* New upstreams configuration */
 		ssub = rspamd_rcl_add_section_doc(&top, sub, "upstream", nullptr, nullptr,
 										  UCL_OBJECT, FALSE, TRUE,
-										  cfg->doc_strings,
+										  nullptr,
 										  "Upstreams configuration parameters");
 		rspamd_rcl_add_default_handler(ssub,
 									   "max_errors",
@@ -2285,6 +2285,12 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   G_STRUCT_OFFSET(struct rspamd_config, upstream_lazy_resolve_time),
 									   RSPAMD_CL_FLAG_TIME_FLOAT,
 									   "Time to resolve upstreams addresses in lazy mode");
+		rspamd_rcl_add_default_handler(ssub,
+									   "resolve_min_interval",
+									   rspamd_rcl_parse_struct_time,
+									   G_STRUCT_OFFSET(struct rspamd_config, upstream_resolve_min_interval),
+									   RSPAMD_CL_FLAG_TIME_FLOAT,
+									   "Minumum interval to perform resolving (60 seconds by default)");
 	}
 
 	if (!(skip_sections && g_hash_table_lookup(skip_sections, "actions"))) {

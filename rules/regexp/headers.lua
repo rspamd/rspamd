@@ -903,6 +903,20 @@ reconf['HAS_ORG_HEADER'] = {
   group = 'headers'
 }
 
+reconf['HAS_CD_HEADER'] = {
+  re = 'header_exists(Content-Description)',
+  description = 'Has Content-Description header',
+  score = 0.0,
+  group = 'headers'
+}
+
+reconf['CD_MM_BODY'] = {
+  re = 'Content-Description=/^Mail message body$/Hi',
+  description = 'Content-Description header reads "Mail message body", commonly seen in spam',
+  score = 2.0,
+  group = 'headers'
+}
+
 reconf['X_PHPOS_FAKE'] = {
   re = 'X-PHP-Originating-Script=/^\\d{7}:/Hi',
   description = 'Fake X-PHP-Originating-Script header',
@@ -953,11 +967,12 @@ reconf['HAS_FILE_URL'] = {
 }
 
 reconf['XM_UA_NO_VERSION'] = {
-  re = string.format('(!%s && !%s) && (%s || %s)',
+  re = string.format('(!%s && !%s) && (%s || %s) && !%s',
       'X-Mailer=/https?:/H',
       'User-Agent=/https?:/H',
       'X-Mailer=/^[^0-9]+$/H',
-      'User-Agent=/^[^0-9]+$/H'),
+      'User-Agent=/^[^0-9]+$/H',
+      'User-Agent=/^\\s*Mozilla Thunderbird/H'),
   description = 'X-Mailer/User-Agent header has no version number',
   score = 0.01,
   group = 'experimental'

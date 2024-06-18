@@ -450,6 +450,7 @@ struct rspamd_config {
 	double upstream_error_time;               /**< rate of upstream errors							*/
 	double upstream_revive_time;              /**< revive timeout for upstreams						*/
 	double upstream_lazy_resolve_time;        /**< lazy resolve time for upstreams					*/
+	double upstream_resolve_min_interval;     /**< minimum interval for resolving attempts (60 seconds by default) */
 	struct upstream_ctx *ups_ctx;             /**< upstream context									*/
 	struct rspamd_dns_resolver *dns_resolver; /**< dns resolver if loaded								*/
 

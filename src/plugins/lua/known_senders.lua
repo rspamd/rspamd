@@ -52,7 +52,17 @@ local settings = {
   use_bloom = false,
   symbol = 'KNOWN_SENDER',
   symbol_unknown = 'UNKNOWN_SENDER',
+  symbol_check_mail_global = 'INC_MAIL_KNOWN_GLOBALLY',
+  symbol_check_mail_local = 'INC_MAIL_KNOWN_LOCALLY',
+  max_recipients = 15,
   redis_key = 'rs_known_senders',
+  sender_prefix = 'rsrk',
+  sender_key_global = 'verified_senders',
+  sender_key_size = 20,
+  reply_sender_privacy = false,
+  reply_sender_privacy_alg = 'blake2',
+  reply_sender_privacy_prefix = 'obf',
+  reply_sender_privacy_length = 16,
 }
 
 local settings_schema = lua_redis.enrich_schema({
@@ -70,6 +80,40 @@ local function make_key(input)
   local hash = rspamd_cryptobox_hash.create_specific('md5')
   hash:update(input.addr)
   return hash:hex()
+end
+
+local function make_key_replies(goop, sz, prefix)
+  local h = rspamd_cryptobox_hash.create()
+  h:update(goop)
+  local key = (prefix or '') .. h:base32():sub(1, sz)
+  return key
+end
+
+local zscore_script_id
+
+local function configure_scripts(_, _, _)
+  -- script checks if given recipients are in the local replies set of the sender
+  local redis_zscore_script = [[
+    local replies_recipients_addrs = ARGV
+    if replies_recipients_addrs then
+      for _, rcpt in ipairs(replies_recipients_addrs) do
+        local score = redis.call('ZSCORE', KEYS[1], rcpt)
+        -- check if score is nil (for some reason redis script does not see if score is a nil value)
+        if type(score) == 'boolean' then
+          score = nil
+          -- 0 is stand for failure code
+          return 0
+        end
+      end
+      -- first number in return statement is stands for the success/failure code
+      -- where success code is 1 and failure code is 0
+      return 1
+    else
+    -- 0 is a failure code
+      return 0
+    end
+  ]]
+  zscore_script_id = lua_redis.add_redis_script(redis_zscore_script, redis_params)
 end
 
 local function check_redis_key(task, key, key_ty)
@@ -197,6 +241,89 @@ local function known_senders_callback(task)
   end
 end
 
+local function verify_local_replies_set(task)
+  local replies_sender = task:get_reply_sender()
+  if not replies_sender then
+    lua_util.debugm(N, task, 'Could not get sender')
+    return nil
+  end
+
+  local replies_recipients = task:get_recipients('mime')
+
+  local replies_sender_string = lua_util.maybe_obfuscate_string(tostring(replies_sender), settings, settings.sender_prefix)
+  local replies_sender_key = make_key_replies(replies_sender_string:lower(), 8)
+
+  local function redis_zscore_script_cb(err, data)
+    if err ~= nil then
+      rspamd_logger.errx(task, 'Could not verify %s local replies set %s', replies_sender_key, err)
+    end
+    if data ~= 1 then
+      lua_util.debugm(N, task, 'Recipients were not verified')
+      return
+    end
+    lua_util.debugm(N, task, 'Recipients were verified')
+    task:insert_result(settings.symbol_check_mail_local, 1.0, replies_sender_key)
+  end
+
+  local replies_recipients_addrs = {}
+  -- assigning addresses of recipients for params and limiting number of recipients to be checked
+  local max_rcpts = math.min(settings.max_recipients, #replies_recipients)
+  for i = 1, max_rcpts do
+    table.insert(replies_recipients_addrs, replies_recipients[i].addr)
+  end
+
+  lua_util.debugm(N, task, 'Making redis request to local replies set')
+  lua_redis.exec_redis_script(zscore_script_id,
+          {task = task, is_write = true},
+          redis_zscore_script_cb,
+          { replies_sender_key },
+          replies_recipients_addrs  )
+end
+
+local function check_known_incoming_mail_callback(task)
+  local replies_sender = task:get_reply_sender()
+  if not replies_sender then
+    lua_util.debugm(N, task, 'Could not get sender')
+    return nil
+  end
+
+  -- making sender key
+  lua_util.debugm(N, task, 'Sender: %s', replies_sender)
+  local replies_sender_string = lua_util.maybe_obfuscate_string(tostring(replies_sender), settings, settings.sender_prefix)
+  local replies_sender_key = make_key_replies(replies_sender_string:lower(), 8)
+
+  lua_util.debugm(N, task, 'Sender key: %s', replies_sender_key)
+
+  local function redis_zscore_global_cb(err, data)
+    if err ~= nil then
+      rspamd_logger.errx(task, 'Couldn\'t find sender %s in global replies set. Ended with error: %s', replies_sender, err)
+      return
+    end
+
+    --checking if zcore have not found score of a sender
+    if type(data) ~= 'userdata' then
+      lua_util.debugm(N, task, 'Sender: %s verified. Output: %s', replies_sender, data)
+      task:insert_result(settings.symbol_check_mail_global, 1.0, replies_sender)
+      return
+    end
+    lua_util.debugm(N, task, 'Sender: %s was not verified', replies_sender)
+  end
+
+  -- key for global replies set
+  local replies_global_key = make_key_replies(settings.sender_key_global,
+          settings.sender_key_size, settings.sender_prefix)
+  -- using zscore to find sender in global set
+  lua_util.debugm(N, task, 'Making redis request to global replies set')
+  lua_redis.redis_make_request(task,
+          redis_params, -- connect params
+          replies_sender_key, -- hash key
+          false, -- is write
+          redis_zscore_global_cb, --callback
+          'ZSCORE', -- command
+          { replies_global_key, replies_sender } -- arguments
+  )
+end
+
 local opts = rspamd_config:get_all_opt('known_senders')
 if opts then
   settings = lua_util.override_defaults(settings, opts)
@@ -210,7 +337,8 @@ if opts then
 
   if redis_params then
     local map_conf = settings.domains
-    settings.domains = lua_maps.map_add_from_ucl(settings.domains, 'set', 'domains to track senders from')
+    settings.domains = lua_maps.map_add_from_ucl(settings.domains,
+            'set', 'domains to track senders from')
     if not settings.domains then
       rspamd_logger.errx(rspamd_config, "couldn't add map %s, disable module",
           map_conf)
@@ -221,6 +349,8 @@ if opts then
         'Known elements redis key', {
           type = 'zset/bloom filter',
         })
+    lua_redis.register_prefix(settings.sender_prefix, N,
+        'Prefix to identify replies sets')
     local id = rspamd_config:register_symbol({
       name = settings.symbol,
       type = 'normal',
@@ -228,6 +358,20 @@ if opts then
       one_shot = true,
       score = -1.0,
       augmentations = { string.format("timeout=%f", redis_params.timeout or 0.0) }
+    })
+
+    rspamd_config:register_symbol({
+      name = settings.symbol_check_mail_local,
+      type = 'normal',
+      callback = verify_local_replies_set,
+      score = -1.0
+    })
+
+    rspamd_config:register_symbol({
+      name = settings.symbol_check_mail_global,
+      type = 'normal',
+      callback = check_known_incoming_mail_callback,
+      score = -1.0
     })
 
     if settings.symbol_unknown and #settings.symbol_unknown > 0 then
@@ -243,3 +387,7 @@ if opts then
     lua_util.disable_module(N, "redis")
   end
 end
+
+rspamd_config:add_post_init(function(cfg, ev_base, worker)
+  configure_scripts(cfg, ev_base, worker)
+end)

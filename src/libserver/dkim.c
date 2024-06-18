@@ -2129,7 +2129,8 @@ end:
 }
 
 static gboolean
-rspamd_dkim_canonize_body(struct rspamd_dkim_common_ctx *ctx,
+rspamd_dkim_canonize_body(struct rspamd_task *task,
+						  struct rspamd_dkim_common_ctx *ctx,
 						  const char *start,
 						  const char *end,
 						  gboolean sign)
@@ -2149,7 +2150,20 @@ rspamd_dkim_canonize_body(struct rspamd_dkim_common_ctx *ctx,
 			EVP_DigestUpdate(ctx->body_hash, "", 0);
 		}
 	}
-	else {
+	else if (end >= start) {
+		/* Add sanity checks for ctx->len */
+		if (ctx->body_canon_type == DKIM_CANON_SIMPLE && ctx->len > 0) {
+			if (ctx->len < 2 && end - start > 2) {
+				msg_info_task("DKIM l tag is invalid: %d (%d actual size)", (int) ctx->len, (int) (end - start));
+				return FALSE;
+			}
+			if (ctx->len + 2 < (double) (end - start) * 0.9) {
+				msg_info_task("DKIM l tag does not cover enough of the body: %d (%d actual size)",
+							  (int) ctx->len, (int) (end - start));
+				return FALSE;
+			}
+		}
+
 		/* Strip extra ending CRLF */
 		p = rspamd_dkim_skip_empty_lines(start, end, ctx->body_canon_type,
 										 sign, &need_crlf);
@@ -2203,9 +2217,18 @@ rspamd_dkim_canonize_body(struct rspamd_dkim_common_ctx *ctx,
 				}
 			}
 			else {
+				size_t orig_len = remain;
+
 				while (rspamd_dkim_relaxed_body_step(ctx, ctx->body_hash,
 													 &start, end - start, &remain))
 					;
+
+				if (ctx->len > 0 && remain > (double) orig_len * 0.1) {
+					msg_info_task("DKIM l tag does not cover enough of the body: %d (%d actual size)",
+								  (int) ctx->len, (int) (end - start));
+					return FALSE;
+				}
+
 				if (need_crlf) {
 					start = "\r\n";
 					end = start + 2;
@@ -2719,7 +2742,7 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 
 		if (!cached_bh->digest_normal) {
 			/* Start canonization of body part */
-			if (!rspamd_dkim_canonize_body(&ctx->common, body_start, body_end,
+			if (!rspamd_dkim_canonize_body(task, &ctx->common, body_start, body_end,
 										   FALSE)) {
 				res->rcode = DKIM_RECORD_ERROR;
 				return res;
@@ -3342,7 +3365,7 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 
 		if (!cached_bh->digest_normal) {
 			/* Start canonization of body part */
-			if (!rspamd_dkim_canonize_body(&ctx->common, body_start, body_end,
+			if (!rspamd_dkim_canonize_body(task, &ctx->common, body_start, body_end,
 										   TRUE)) {
 				return NULL;
 			}
