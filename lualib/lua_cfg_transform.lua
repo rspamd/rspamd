@@ -544,7 +544,7 @@ return function(cfg)
   end
 
   -- If neural network is enabled we MUST have `check_all_filters` flag
-  if cfg.neural and cfg.neural.enabled then
+  if cfg.neural and cfg.neural.enabled ~= false and next(cfg.neural.rules or {}) then
     if not cfg.options then
       cfg.options = {}
     end
