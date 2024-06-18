@@ -2668,26 +2668,32 @@ void find_urls(struct rspamd_lua_url* url, struct rspamd_mime_text_part *mpart, 
 		int start = -1;
 		for (int i = 0; i <= url_len - ptrn_len; i++) {
 			if (strncmp(&(url->url->raw[i]), patterns[t], ptrn_len) == 0) {
+				msg_debug("Pattern found");
 				if (start == -1) start = i;
 				else {
 					struct rspamd_url *url_parsed = rspamd_mempool_alloc(task->task_pool,
 																		 sizeof(struct rspamd_url));
-					url_parsed->raw = rspamd_mempool_alloc(task->task_pool, i - start + 1);
+					url_parsed->raw = rspamd_mempool_alloc(task->task_pool, i - start);
+					char raw_part[i - start];
 					for(int j = start;j < i;j++) {
-						url_parsed->raw[j - start] = url->url->raw[j];
+						raw_part[j - start] = url->url->raw[j];
 					}
+					url_parsed->raw = raw_part;
 					g_ptr_array_add(mpart->mime_part->urls, url_parsed);
 					start = i;
 				}
 			}
 		}
 		if(start != -1) {
+			msg_debug("Last Pattern Found");
 			struct rspamd_url* url_parsed = rspamd_mempool_alloc(task->task_pool,
 																 sizeof(struct rspamd_url));
-			url_parsed->raw = rspamd_mempool_alloc(task->task_pool, url_len - start + 1);
+			url_parsed->raw = rspamd_mempool_alloc(task->task_pool, url_len - start);
+			char raw_part[url_len - start];
 			for (int j = start; j < url_len; j++) {
-				url_parsed->raw[j - start] = url->url->raw[j];
+				raw_part[j - start] = url->url->raw[j];
 			}
+			url_parsed->raw = raw_part;
 			g_ptr_array_add(mpart->mime_part->urls, url_parsed);
 		}
 	}
