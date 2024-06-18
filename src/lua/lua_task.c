@@ -2662,15 +2662,16 @@ void findUrls(struct rspamd_lua_url* url, struct rspamd_mime_text_part *mpart, s
 
 void find_urls(struct rspamd_lua_url* url, struct rspamd_mime_text_part *mpart, struct rspamd_task* task) {
 	int url_len = strlen(url->url->raw);
+	msg_debug("UrlRaw: %s", url->url->raw);
 	char patterns[4][8] = {"http://", "https://", "ftp://", "ftps://"};
 	for(int t = 0;t < 4;t++) {
 		int ptrn_len = strlen(patterns[t]);
 		int start = -1;
 		for (int i = 0; i <= url_len - ptrn_len; i++) {
 			if (strncmp(&(url->url->raw[i]), patterns[t], ptrn_len) == 0) {
-				msg_debug("Pattern found");
 				if (start == -1) start = i;
 				else {
+					msg_debug("Pattern Found");
 					struct rspamd_url *url_parsed = rspamd_mempool_alloc(task->task_pool,
 																		 sizeof(struct rspamd_url));
 					url_parsed->raw = rspamd_mempool_alloc(task->task_pool, i - start);
@@ -2685,7 +2686,7 @@ void find_urls(struct rspamd_lua_url* url, struct rspamd_mime_text_part *mpart, 
 			}
 		}
 		if(start != -1) {
-			msg_debug("Last Pattern Found");
+			msg_debug("Pattern Found");
 			struct rspamd_url* url_parsed = rspamd_mempool_alloc(task->task_pool,
 																 sizeof(struct rspamd_url));
 			url_parsed->raw = rspamd_mempool_alloc(task->task_pool, url_len - start);
