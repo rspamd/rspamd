@@ -2718,7 +2718,8 @@ lua_task_inject_url(lua_State *L)
 			text_part = rspamd_mempool_alloc0(task->task_pool,
 											  sizeof(struct rspamd_mime_text_part));
 			text_part->utf_stripped_text = (UText) UTEXT_INITIALIZER;
-			find_urls(url, text_part, task);
+
+			//find_urls(url, text_part, task);
 			if (mpart && mpart->urls) {
 				msg_debug("Entered URL Inject Algorithm");
 
@@ -2739,15 +2740,17 @@ lua_task_inject_url(lua_State *L)
 				mpart->specific.txt = text_part;
 
 				/* Also add url to the mime part */
-				//g_byte_array_append(text_part->utf_stripped_content, url->url->raw, url->url->rawlen);
-				//text_part->mime_part->urls = g_ptr_array_new();
-				/*
-				rspamd_url_text_extract(task->task_pool, task,
-										text_part,
-										0,
-										RSPAMD_URL_FIND_ALL);
-										*/
+			} else {
+				struct rspamd_mime_part *mime_part = rspamd_mempool_alloc0(task->task_pool,
+																		   sizeof(struct rspamd_mime_part));
+				text_part->mime_part = mime_part;
 			}
+			g_byte_array_append(text_part->utf_stripped_content, url->url->raw, url->url->rawlen);
+			text_part->mime_part->urls = g_ptr_array_new();
+			rspamd_url_text_extract(task->task_pool, task,
+									text_part,
+									0,
+									RSPAMD_URL_FIND_ALL);
 		}
 	}
 	else {
