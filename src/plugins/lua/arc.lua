@@ -639,7 +639,7 @@ local function prepare_arc_selector(task, sel)
       local ar_header = task:get_header('Authentication-Results')
 
       if ar_header then
-        local arc_match = string.match(ar_header, 'arc=(%w+)')
+        local arc_match = string.match(ar_header, '[; ]arc=(%w+)')
 
         if arc_match then
           if arc_match == 'none' or arc_match == 'pass' then
