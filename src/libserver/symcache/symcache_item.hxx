@@ -246,9 +246,9 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 		augmentations;
 
 	/* Dependencies */
-	std::vector<cache_dependency> deps;
+	ankerl::unordered_dense::map<int, cache_dependency> deps;
 	/* Reverse dependencies */
-	std::vector<cache_dependency> rdeps;
+	ankerl::unordered_dense::map<int, cache_dependency> rdeps;
 
 public:
 	/**

@@ -535,10 +535,19 @@ auto symcache::add_dependency(int id_from, std::string_view to, int virtual_id_f
 	const auto &source = items_by_id[id_from];
 	g_assert(source.get() != nullptr);
 
-	source->deps.emplace_back(nullptr,
-							  std::string(to),
-							  id_from,
-							  -1);
+	if (!source->deps.contains(id_from)) {
+		msg_debug_cache("add dependency %s -> %s",
+						source->symbol.c_str(), to.data());
+		source->deps.emplace(id_from, cache_dependency{nullptr,
+													   std::string(to),
+													   id_from,
+													   -1});
+	}
+	else {
+		msg_debug_cache("duplicate dependency %s -> %s",
+						source->symbol.c_str(), to.data());
+		return;
+	}
 
 
 	if (virtual_id_from >= 0) {
@@ -546,10 +555,19 @@ auto symcache::add_dependency(int id_from, std::string_view to, int virtual_id_f
 		/* We need that for settings id propagation */
 		const auto &vsource = items_by_id[virtual_id_from];
 		g_assert(vsource.get() != nullptr);
-		vsource->deps.emplace_back(nullptr,
-								   std::string(to),
-								   -1,
-								   virtual_id_from);
+
+		if (!vsource->deps.contains(virtual_id_from)) {
+			msg_debug_cache("add virtual dependency %s -> %s",
+							vsource->symbol.c_str(), to.data());
+			vsource->deps.emplace(virtual_id_from, cache_dependency{nullptr,
+																	std::string(to),
+																	-1,
+																	virtual_id_from});
+		}
+		else {
+			msg_debug_cache("duplicate virtual dependency %s -> %s",
+							vsource->symbol.c_str(), to.data());
+		}
 	}
 }
 
@@ -625,7 +643,7 @@ auto symcache::resort() -> void
 		tsort_mark(it, tsort_mask::TEMP);
 		msg_debug_cache_lambda("visiting node: %s (%d)", it->symbol.c_str(), cur_order);
 
-		for (const auto &dep: it->deps) {
+		for (const auto &[id, dep]: it->deps) {
 			msg_debug_cache_lambda("visiting dep: %s (%d)", dep.item->symbol.c_str(), cur_order + 1);
 			rec(dep.item, cur_order + 1, rec);
 		}
@@ -1217,7 +1235,7 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 		auto own_timeout = get_item_timeout(it);
 		auto max_child_timeout = 0.0;
 
-		for (const auto &dep: it->deps) {
+		for (const auto &[id, dep]: it->deps) {
 			auto cld_timeout = self(dep.item, self);
 
 			if (cld_timeout > max_child_timeout) {

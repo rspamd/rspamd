@@ -588,7 +588,7 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 
 		auto ret = true;
 
-		for (const auto &dep: item->deps) {
+		for (const auto &[id, dep]: item->deps) {
 			if (!dep.item) {
 				/* Assume invalid deps as done */
 				msg_debug_cache_task_lambda("symbol %d(%s) has invalid dependencies on %d(%s)",
@@ -814,7 +814,7 @@ auto symcache_runtime::process_item_rdeps(struct rspamd_task *task, cache_item *
 		return;
 	}
 
-	for (const auto &rdep: item->rdeps) {
+	for (const auto &[id, rdep]: item->rdeps.values()) {
 		if (rdep.item) {
 			auto *dyn_item = get_dynamic_item(rdep.item->id);
 			if (dyn_item->status == cache_item_status::not_started) {

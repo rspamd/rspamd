@@ -78,7 +78,7 @@ auto cache_item::process_deps(const symcache &cache) -> void
 	/* Allow logging macros to work */
 	auto log_tag = [&]() { return cache.log_tag(); };
 
-	for (auto &dep: deps) {
+	for (auto &[_id, dep]: deps) {
 		msg_debug_cache("process real dependency %s on %s", symbol.c_str(), dep.sym.c_str());
 		auto *dit = cache.get_item_by_name_mut(dep.sym, true);
 
@@ -148,6 +148,8 @@ auto cache_item::process_deps(const symcache &cache) -> void
 
 					continue;
 				}
+
+				dep.item = dit;
 			}
 			else {
 				if (dit->id == id) {
@@ -161,20 +163,35 @@ auto cache_item::process_deps(const symcache &cache) -> void
 						auto *parent = get_parent_mut(cache);
 
 						if (parent) {
-							dit->rdeps.emplace_back(parent, parent->symbol, parent->id, -1);
+							if (!dit->rdeps.contains(parent->id)) {
+								dit->rdeps.emplace(parent->id, cache_dependency{parent, parent->symbol, parent->id, -1});
+								msg_debug_cache("added reverse dependency from %d on %d", parent->id,
+												dit->id);
+							}
+							else {
+								msg_debug_cache("reverse dependency from %d on %d already exists",
+												parent->id, dit->id);
+							}
 							dep.item = dit;
 							dep.id = dit->id;
-
-							msg_debug_cache("added reverse dependency from %d on %d", parent->id,
-											dit->id);
+						}
+						else {
+							msg_err_cache("cannot find parent for virtual symbol %s, when resolving dependency %s",
+										  symbol.c_str(), dep.sym.c_str());
 						}
 					}
 					else {
 						dep.item = dit;
 						dep.id = dit->id;
-						dit->rdeps.emplace_back(this, symbol, id, -1);
-						msg_debug_cache("added reverse dependency from %d on %d", id,
-										dit->id);
+						if (!dit->rdeps.contains(id)) {
+							dit->rdeps.emplace(id, cache_dependency{this, symbol, id, -1});
+							msg_debug_cache("added reverse dependency from %d on %d", id,
+											dit->id);
+						}
+						else {
+							msg_debug_cache("reverse dependency from %d on %d already exists",
+											id, dit->id);
+						}
 					}
 				}
 			}
@@ -185,12 +202,21 @@ auto cache_item::process_deps(const symcache &cache) -> void
 
 			continue;
 		}
+		else {
+			msg_err_cache("cannot find dependency named %s for symbol %s",
+						  dep.sym.c_str(), symbol.c_str());
+		}
 	}
 
 	// Remove empty deps
-	deps.erase(std::remove_if(std::begin(deps), std::end(deps),
-							  [](const auto &dep) { return !dep.item; }),
-			   std::end(deps));
+	for (auto it = deps.begin(); it != deps.end();) {
+		if (it->second.item == nullptr) {
+			it = deps.erase(it);
+		}
+		else {
+			++it;
+		}
+	}
 }
 
 auto cache_item::resolve_parent(const symcache &cache) -> bool
