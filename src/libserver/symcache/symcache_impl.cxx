@@ -876,8 +876,7 @@ auto symcache::validate(bool strict) -> bool
 
 	for (auto &pair: items_by_symbol) {
 		auto &item = pair.second;
-		auto ghost = item->st->weight == 0;
-		auto skipped = !ghost;
+		auto skipped = item->st->weight != 0;
 
 		if (item->is_scoreable() && g_hash_table_lookup(cfg->symbols, item->symbol.c_str()) == nullptr) {
 			if (!std::isnan(cfg->unknown_weight)) {
@@ -891,29 +890,24 @@ auto symcache::validate(bool strict) -> bool
 
 				msg_info_cache("adding unknown symbol %s with weight: %.2f",
 							   item->symbol.c_str(), cfg->unknown_weight);
-				ghost = false;
 				skipped = false;
 			}
 			else {
+				/* No `unknown weight`, no static score, and no dynamic score */
 				skipped = true;
 			}
 		}
 		else {
+			/* We have a score, so we are not skipped */
 			skipped = false;
 		}
 
-		if (!ghost && skipped) {
+		if (skipped) {
 			if (!(item->flags & SYMBOL_TYPE_SKIPPED)) {
 				item->flags |= SYMBOL_TYPE_SKIPPED;
 				msg_warn_cache("symbol %s has no score registered, skip its check",
 							   item->symbol.c_str());
 			}
-		}
-
-		if (ghost) {
-			msg_debug_cache("symbol %s is registered as ghost symbol, it won't be inserted "
-							"to any metric",
-							item->symbol.c_str());
 		}
 
 		if (item->st->weight < 0 && item->priority == 0) {
