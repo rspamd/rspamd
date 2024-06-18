@@ -2701,6 +2701,7 @@ static int
 lua_task_inject_url(lua_State *L)
 {
 	LUA_TRACE_POINT;
+	msg_debug("Injection Started");
 	struct rspamd_task *task = lua_check_task(L, 1);
 	struct rspamd_lua_url *url = lua_check_url(L, 2);
 	struct rspamd_mime_part *mpart = NULL;
@@ -2709,11 +2710,13 @@ lua_task_inject_url(lua_State *L)
 		/* We also have a mime part there */
 		mpart = *((struct rspamd_mime_part **)
 							   rspamd_lua_check_udata_maybe(L,3,rspamd_mimepart_classname));
+		msg_debug("Got MIME part");
 	}
 
 	if (task && task->message && url && url->url) {
 		if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false)) {
 			if (mpart && mpart->urls) {
+				msg_debug("Entered URL Inject Algorithm");
 				struct rspamd_mime_text_part *text_part;
 				text_part = rspamd_mempool_alloc0(task->task_pool,
 												  sizeof(struct rspamd_mime_text_part));
