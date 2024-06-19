@@ -2696,11 +2696,6 @@ lua_task_inject_url(lua_State *L)
 	}
 	if (task && task->message && url && url->url) {
 		if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false)) {
-			//if(mpart == NULL) {
-				/* Allocating memory if mime_part is NULL */
-			//	mpart = rspamd_mempool_alloc0(task->task_pool, sizeof(struct rspamd_mime_part));
-			//}
-			//mpart->urls = g_ptr_array_new();
 			GPtrArray* part_urls = g_ptr_array_new();
 			inject_url_query(task, url->url, part_urls);
 		}
