@@ -2737,6 +2737,7 @@ lua_task_inject_url(lua_State *L)
 			if(!mpart) {
 				struct rspamd_mime_part *mime_part = rspamd_mempool_alloc0(task->task_pool,
 																		   sizeof(struct rspamd_mime_part));
+				mime_part->urls = g_ptr_array_new();
 			}
 			inject_url_query(task, url->url, mpart->urls);
 			g_ptr_array_add(MESSAGE_FIELD(task, parts), mpart);
