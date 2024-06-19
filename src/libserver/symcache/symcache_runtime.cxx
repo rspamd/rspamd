@@ -489,6 +489,8 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 		cur_item = dyn_item;
 		items_inflight++;
 		/* Callback now must finalize itself */
+
+
 		if (item->call(task, dyn_item)) {
 			cur_item = nullptr;
 
@@ -505,10 +507,10 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 								   item->symbol.data());
 				g_assert_not_reached();
 			}
-
-			msg_debug_cache_task("item %s, %d is now pending", item->symbol.data(),
-								 item->id);
-			dyn_item->status = cache_item_status::pending;
+			else if (dyn_item->async_events > 0) {
+				msg_debug_cache_task("item %s, %d is now pending with %d async events", item->symbol.data(),
+									 item->id, dyn_item->async_events);
+			}
 
 			return false;
 		}
@@ -588,11 +590,11 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 
 		auto ret = true;
 
-		for (const auto &[id, dep]: item->deps) {
+		for (const auto &[dest_id, dep]: item->deps) {
 			if (!dep.item) {
 				/* Assume invalid deps as done */
 				msg_debug_cache_task_lambda("symbol %d(%s) has invalid dependencies on %d(%s)",
-											item->id, item->symbol.c_str(), dep.id, dep.sym.c_str());
+											item->id, item->symbol.c_str(), dest_id, dep.sym.c_str());
 				continue;
 			}
 
@@ -610,7 +612,7 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 							ret = false;
 							msg_debug_cache_task_lambda("delayed dependency %d(%s) for "
 														"symbol %d(%s)",
-														dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
+														dest_id, dep.sym.c_str(), item->id, item->symbol.c_str());
 						}
 						else if (!process_symbol(task, cache, dep.item, dep_dyn_item)) {
 							/* Now started, but has events pending */
@@ -618,18 +620,18 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 							msg_debug_cache_task_lambda("started check of %d(%s) symbol "
 														"as dep for "
 														"%d(%s)",
-														dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
+														dest_id, dep.sym.c_str(), item->id, item->symbol.c_str());
 						}
 						else {
 							msg_debug_cache_task_lambda("dependency %d(%s) for symbol %d(%s) is "
 														"already processed",
-														dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
+														dest_id, dep.sym.c_str(), item->id, item->symbol.c_str());
 						}
 					}
 					else {
 						msg_debug_cache_task_lambda("dependency %d(%s) for symbol %d(%s) "
 													"cannot be started now",
-													dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
+													dest_id, dep.sym.c_str(), item->id, item->symbol.c_str());
 						ret = false;
 					}
 				}
@@ -637,7 +639,7 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 					/* Started but not finished */
 					msg_debug_cache_task_lambda("dependency %d(%s) for symbol %d(%s) is "
 												"still executing (%d events pending)",
-												dep.id, dep.sym.c_str(),
+												dest_id, dep.sym.c_str(),
 												item->id, item->symbol.c_str(),
 												dep_dyn_item->async_events);
 					g_assert(dep_dyn_item->async_events > 0);
@@ -647,7 +649,7 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 			else {
 				msg_debug_cache_task_lambda("dependency %d(%s) for symbol %d(%s) is already "
 											"finished",
-											dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
+											dest_id, dep.sym.c_str(), item->id, item->symbol.c_str());
 			}
 		}
 

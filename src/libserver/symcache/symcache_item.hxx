@@ -177,14 +177,13 @@ public:
 };
 
 struct cache_dependency {
-	cache_item *item; /* Real dependency */
-	std::string sym;  /* Symbolic dep name */
-	int id;           /* Real from */
-	int vid;          /* Virtual from */
+	cache_item *item;      /* Real dependency */
+	std::string sym;       /* Symbolic dep name */
+	int virtual_source_id; /* Virtual source */
 public:
 	/* Default piecewise constructor */
-	explicit cache_dependency(cache_item *_item, std::string _sym, int _id, int _vid)
-		: item(_item), sym(std::move(_sym)), id(_id), vid(_vid)
+	explicit cache_dependency(cache_item *_item, std::string _sym, int _vid)
+		: item(_item), sym(std::move(_sym)), virtual_source_id(_vid)
 	{
 	}
 };

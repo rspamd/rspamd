@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -365,7 +365,7 @@ public:
 	 * @param virtual_id_from
 	 * @return
 	 */
-	auto add_dependency(int id_from, std::string_view to, int virtual_id_from) -> void;
+	auto add_dependency(int id_from, std::string_view to, int id_to, int virtual_id_from) -> void;
 
 	/**
 	 * Add a delayed dependency between symbols that will be resolved on the init stage

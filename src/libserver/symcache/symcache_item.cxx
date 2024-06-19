@@ -82,7 +82,7 @@ auto cache_item::process_deps(const symcache &cache) -> void
 		msg_debug_cache("process real dependency %s on %s", symbol.c_str(), dep.sym.c_str());
 		auto *dit = cache.get_item_by_name_mut(dep.sym, true);
 
-		if (dep.vid >= 0) {
+		if (dep.virtual_source_id >= 0) {
 			/* Case of the virtual symbol that depends on another (maybe virtual) symbol */
 			const auto *vdit = cache.get_item_by_name(dep.sym, false);
 
@@ -94,7 +94,7 @@ auto cache_item::process_deps(const symcache &cache) -> void
 			}
 			else {
 				msg_debug_cache("process virtual dependency %s(%d) on %s(%d)", symbol.c_str(),
-								dep.vid, vdit->symbol.c_str(), vdit->id);
+								dep.virtual_source_id, vdit->symbol.c_str(), vdit->id);
 
 				unsigned nids = 0;
 
@@ -164,7 +164,7 @@ auto cache_item::process_deps(const symcache &cache) -> void
 
 						if (parent) {
 							if (!dit->rdeps.contains(parent->id)) {
-								dit->rdeps.emplace(parent->id, cache_dependency{parent, parent->symbol, parent->id, -1});
+								dit->rdeps.emplace(parent->id, cache_dependency{parent, parent->symbol, -1});
 								msg_debug_cache("added reverse dependency from %d on %d", parent->id,
 												dit->id);
 							}
@@ -173,7 +173,6 @@ auto cache_item::process_deps(const symcache &cache) -> void
 												parent->id, dit->id);
 							}
 							dep.item = dit;
-							dep.id = dit->id;
 						}
 						else {
 							msg_err_cache("cannot find parent for virtual symbol %s, when resolving dependency %s",
@@ -182,9 +181,8 @@ auto cache_item::process_deps(const symcache &cache) -> void
 					}
 					else {
 						dep.item = dit;
-						dep.id = dit->id;
 						if (!dit->rdeps.contains(id)) {
-							dit->rdeps.emplace(id, cache_dependency{this, symbol, id, -1});
+							dit->rdeps.emplace(id, cache_dependency{this, symbol, -1});
 							msg_debug_cache("added reverse dependency from %d on %d", id,
 											dit->id);
 						}
@@ -195,12 +193,6 @@ auto cache_item::process_deps(const symcache &cache) -> void
 					}
 				}
 			}
-		}
-		else if (dep.id >= 0) {
-			msg_err_cache("cannot find dependency on symbol %s for symbol %s",
-						  dep.sym.c_str(), symbol.c_str());
-
-			continue;
 		}
 		else {
 			msg_err_cache("cannot find dependency named %s for symbol %s",
