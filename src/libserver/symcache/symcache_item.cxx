@@ -334,11 +334,11 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 	}
 
 	/* Static checks */
-	if (!enabled ||
+	if (!(internal_flags & cache_item::bit_enabled) ||
 		(RSPAMD_TASK_IS_EMPTY(task) && !(flags & SYMBOL_TYPE_EMPTY)) ||
 		(flags & SYMBOL_TYPE_MIME_ONLY && !RSPAMD_TASK_IS_MIME(task))) {
 
-		if (!enabled) {
+		if (!(internal_flags & cache_item::bit_enabled)) {
 			msg_debug_cache_task("skipping %s of %s as it is permanently disabled",
 								 what, symbol.c_str());
 

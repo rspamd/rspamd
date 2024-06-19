@@ -978,7 +978,7 @@ auto symcache::validate(bool strict) -> bool
 			auto item = get_item_by_name_mut((const char *) k, false);
 
 			if (item) {
-				item->enabled = FALSE;
+				item->internal_flags &= ~cache_item::bit_enabled;
 			}
 		}
 	}

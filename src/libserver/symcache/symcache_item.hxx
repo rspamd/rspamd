@@ -214,15 +214,18 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 	struct rspamd_symcache_item_stat *st = nullptr;
 	struct rspamd_counter_data *cd = nullptr;
 
+	std::string symbol;
+
 	/* Unique id - counter */
 	int id;
 	std::uint64_t last_count = 0;
-	std::string symbol;
 	symcache_item_type type;
 	int flags;
 
-	/* Condition of execution */
-	bool enabled = true;
+	static constexpr const auto bit_enabled = 0b0001;
+	static constexpr const auto bit_sync = 0b0010;
+	static constexpr const auto bit_slow = 0b0100;
+	int internal_flags = bit_enabled;
 
 	/* Priority */
 	int priority = 0;
@@ -514,8 +517,8 @@ private:
 			   void *user_data,
 			   symcache_item_type _type,
 			   int _flags)
-		: id(_id),
-		  symbol(std::move(name)),
+		: symbol(std::move(name)),
+		  id(_id),
 		  type(_type),
 		  flags(_flags),
 		  priority(_priority),
@@ -543,8 +546,8 @@ private:
 			   int parent,
 			   symcache_item_type _type,
 			   int _flags)
-		: id(_id),
-		  symbol(std::move(name)),
+		: symbol(std::move(name)),
+		  id(_id),
 		  type(_type),
 		  flags(_flags),
 		  specific(virtual_item{parent})
