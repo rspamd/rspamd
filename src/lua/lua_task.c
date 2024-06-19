@@ -2696,45 +2696,8 @@ lua_task_inject_url(lua_State *L)
 	}
 	if (task && task->message && url && url->url) {
 		if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false)) {
-			/*
-			struct rspamd_mime_text_part *text_part;
-			text_part = rspamd_mempool_alloc0(task->task_pool,
-											  sizeof(struct rspamd_mime_text_part));
-			text_part->utf_stripped_text = (UText) UTEXT_INITIALIZER;
-			unsigned int flags = 0;
-			if (mpart && mpart->urls) {
-				/* Making  rspamd_mime_text_part out of mime_part */
-			/*
-				text_part->mime_part = mpart;
-				text_part->raw.begin = mpart->raw_data.begin;
-				text_part->raw.len = mpart->raw_data.len;
-				text_part->parsed.begin = mpart->parsed_data.begin;
-				text_part->parsed.len = mpart->parsed_data.len;
-				text_part->flags |= flags;
-
-				/* Adding mime_text_part to mime_part */
-			/*
-				g_ptr_array_add(MESSAGE_FIELD(task, text_parts), text_part);
-				mpart->part_type = RSPAMD_MIME_PART_TEXT;
-				mpart->specific.txt = text_part;
-			} else {
-				/* Creating empty mime_part if no mime_part was got from lua_state */
-			/*
-				struct rspamd_mime_part *mime_part = rspamd_mempool_alloc0(task->task_pool,
-																		   sizeof(struct rspamd_mime_part));
-				text_part->mime_part = mime_part;
-			}
-			/* Adding url to the text_part so it will be parsed by text_extract function */
-			/*
-			text_part->utf_stripped_content = g_byte_array_new();
-			g_byte_array_append(text_part->utf_stripped_content, url->url->raw, url->url->rawlen);
-			text_part->mime_part->urls = g_ptr_array_new();
-			rspamd_url_text_extract(task->task_pool, task,
-									text_part,
-									0,
-									RSPAMD_URL_FIND_ALL);
-			*/
 			if(mpart == NULL) {
+				/* Allocating memory if mime_part is NULL */
 				mpart = rspamd_mempool_alloc0(task->task_pool, sizeof(struct rspamd_mime_part));
 				mpart->urls = g_ptr_array_new();
 			}
