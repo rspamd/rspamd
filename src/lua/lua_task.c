@@ -2740,8 +2740,6 @@ lua_task_inject_url(lua_State *L)
 				mime_part->urls = g_ptr_array_new();
 			}
 			inject_url_query(task, url->url, mpart->urls);
-			if(!task->message->parts) task->message->parts = g_ptr_array_new();
-			g_ptr_array_add(MESSAGE_FIELD(task, parts), mpart);
 		}
 	}
 	else {
