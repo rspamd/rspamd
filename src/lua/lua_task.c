@@ -2700,8 +2700,9 @@ lua_task_inject_url(lua_State *L)
 				/* Allocating memory if mime_part is NULL */
 			//	mpart = rspamd_mempool_alloc0(task->task_pool, sizeof(struct rspamd_mime_part));
 			//}
-			mpart->urls = g_ptr_array_new();
-			inject_url_query(task, url->url, mpart->urls);
+			//mpart->urls = g_ptr_array_new();
+			GPtrArray* part_urls = g_ptr_array_new();
+			inject_url_query(task, url->url, part_urls);
 		}
 	}
 	else {
