@@ -2734,7 +2734,7 @@ lua_task_inject_url(lua_State *L)
 									0,
 									RSPAMD_URL_FIND_ALL);
 			*/
-			if(!mpart) {
+			if(mpart == NULL) {
 				struct rspamd_mime_part *mime_part = rspamd_mempool_alloc0(task->task_pool,
 																		   sizeof(struct rspamd_mime_part));
 				mime_part->urls = g_ptr_array_new();
