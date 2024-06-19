@@ -602,8 +602,14 @@ unsigned int rspamd_symcache_item_async_inc_full(struct rspamd_task *task,
 						 "subsystem %s (%s)",
 						 static_item->symbol.c_str(), static_item->id,
 						 real_dyn_item->async_events, subsystem, loc);
+	auto nevents = ++real_dyn_item->async_events;
 
-	return ++real_dyn_item->async_events;
+	if (nevents > 1) {
+		/* Item is async */
+		static_item->internal_flags &= ~rspamd::symcache::cache_item::bit_sync;
+	}
+
+	return nevents;
 }
 
 unsigned int rspamd_symcache_item_async_dec_full(struct rspamd_task *task,

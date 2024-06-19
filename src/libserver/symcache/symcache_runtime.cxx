@@ -771,7 +771,8 @@ auto symcache_runtime::finalize_item(struct rspamd_task *task, cache_dynamic_ite
 		return true;
 	};
 
-	if (profile) {
+	/* Check if we need to profile symbol (always profile when we have seen this item to be slow */
+	if (profile || item->flags & cache_item::bit_slow) {
 		ev_now_update_if_cheap(task->event_loop);
 		auto diff = ((ev_now(task->event_loop) - profile_start) * 1e3 -
 					 dyn_item->start_msec);
@@ -786,21 +787,33 @@ auto symcache_runtime::finalize_item(struct rspamd_task *task, cache_dynamic_ite
 
 		if (diff > slow_diff_limit) {
 
-			if (slow_status == slow_status::none) {
-				slow_status = slow_status::enabled;
+			item->internal_flags |= cache_item::bit_slow;
 
-				msg_info_task("slow rule: %s(%d): %.2f ms; enable 100ms idle timer to allow other rules to be finished",
-							  item->symbol.c_str(), item->id,
-							  diff);
-				if (enable_slow_timer()) {
-					return;
+			if (!(item->internal_flags & cache_item::bit_sync)) {
+				if (slow_status == slow_status::none) {
+					slow_status = slow_status::enabled;
+
+					msg_info_task("slow rule: %s(%d): %.2f ms; enable 100ms idle timer to allow other rules to be finished",
+								  item->symbol.c_str(), item->id,
+								  diff);
+					if (enable_slow_timer()) {
+						return;
+					}
+				}
+				else {
+					msg_info_task("slow rule: %s(%d): %.2f ms; idle timer has already been activated for this scan",
+								  item->symbol.c_str(), item->id,
+								  diff);
 				}
 			}
 			else {
-				msg_info_task("slow rule: %s(%d): %.2f ms; idle timer has already been activated for this scan",
-							  item->symbol.c_str(), item->id,
-							  diff);
+				msg_notice_task("slow synchronous rule: %s(%d): %.2f ms; no idle timer is needed",
+								item->symbol.c_str(), item->id,
+								diff);
 			}
+		}
+		else {
+			item->internal_flags &= ~cache_item::bit_slow;
 		}
 	}
 

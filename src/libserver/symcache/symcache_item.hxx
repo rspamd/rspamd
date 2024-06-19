@@ -225,7 +225,7 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 	static constexpr const auto bit_enabled = 0b0001;
 	static constexpr const auto bit_sync = 0b0010;
 	static constexpr const auto bit_slow = 0b0100;
-	int internal_flags = bit_enabled;
+	int internal_flags = bit_enabled | bit_sync;
 
 	/* Priority */
 	int priority = 0;
