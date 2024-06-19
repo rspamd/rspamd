@@ -2634,6 +2634,53 @@ lua_task_has_urls(lua_State *L)
 	return 2;
 }
 
+struct rspamd_url_query_to_inject_cbd {
+	struct rspamd_task *task;
+	struct rspamd_url *url;
+	GPtrArray *mpart_urls;
+};
+
+static gboolean
+inject_url_query_callback(struct rspamd_url *url, gsize start_offset,
+						gsize end_offset, gpointer ud)
+{
+	struct rspamd_url_query_to_inject_cbd *cbd =
+		(struct rspamd_url_query_to_inject_cbd *) ud;
+	struct rspamd_task *task;
+
+	task = cbd->task;
+
+	url->flags |= RSPAMD_URL_FLAG_QUERY;
+
+	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false) && cbd->mpart_urls) {
+		g_ptr_array_add(cbd->mpart_urls, url);
+	}
+
+	return TRUE;
+}
+
+static void
+inject_url_query(struct rspamd_task *task, struct rspamd_url *url,
+					   GPtrArray *part_urls)
+{
+	if (url->querylen > 0) {
+		struct rspamd_url_query_to_inject_cbd cbd;
+
+		cbd.task = task;
+		cbd.url = url;
+		cbd.mpart_urls = part_urls;
+
+		rspamd_url_find_multiple(task->task_pool,
+								 rspamd_url_query_unsafe(url), url->querylen,
+								 RSPAMD_URL_FIND_ALL, NULL,
+								 inject_url_query_callback, &cbd);
+	}
+
+	if (part_urls) {
+		g_ptr_array_add(part_urls, url);
+	}
+}
+
 static int
 lua_task_inject_url(lua_State *L)
 {
@@ -2649,6 +2696,7 @@ lua_task_inject_url(lua_State *L)
 	}
 	if (task && task->message && url && url->url) {
 		if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false)) {
+			/*
 			struct rspamd_mime_text_part *text_part;
 			text_part = rspamd_mempool_alloc0(task->task_pool,
 											  sizeof(struct rspamd_mime_text_part));
@@ -2656,6 +2704,7 @@ lua_task_inject_url(lua_State *L)
 			unsigned int flags = 0;
 			if (mpart && mpart->urls) {
 				/* Making  rspamd_mime_text_part out of mime_part */
+			/*
 				text_part->mime_part = mpart;
 				text_part->raw.begin = mpart->raw_data.begin;
 				text_part->raw.len = mpart->raw_data.len;
@@ -2664,16 +2713,19 @@ lua_task_inject_url(lua_State *L)
 				text_part->flags |= flags;
 
 				/* Adding mime_text_part to mime_part */
+			/*
 				g_ptr_array_add(MESSAGE_FIELD(task, text_parts), text_part);
 				mpart->part_type = RSPAMD_MIME_PART_TEXT;
 				mpart->specific.txt = text_part;
 			} else {
 				/* Creating empty mime_part if no mime_part was got from lua_state */
+			/*
 				struct rspamd_mime_part *mime_part = rspamd_mempool_alloc0(task->task_pool,
 																		   sizeof(struct rspamd_mime_part));
 				text_part->mime_part = mime_part;
 			}
 			/* Adding url to the text_part so it will be parsed by text_extract function */
+			/*
 			text_part->utf_stripped_content = g_byte_array_new();
 			g_byte_array_append(text_part->utf_stripped_content, url->url->raw, url->url->rawlen);
 			text_part->mime_part->urls = g_ptr_array_new();
@@ -2681,6 +2733,13 @@ lua_task_inject_url(lua_State *L)
 									text_part,
 									0,
 									RSPAMD_URL_FIND_ALL);
+			*/
+			if(!mpart) {
+				struct rspamd_mime_part *mime_part = rspamd_mempool_alloc0(task->task_pool,
+																		   sizeof(struct rspamd_mime_part));
+			}
+			inject_url_query(task, url->url, mpart->urls);
+			g_ptr_array_add(MESSAGE_FIELD(task, parts), mpart);
 		}
 	}
 	else {
