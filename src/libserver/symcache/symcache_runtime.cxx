@@ -789,11 +789,33 @@ auto symcache_runtime::finalize_item(struct rspamd_task *task, cache_dynamic_ite
 
 			item->internal_flags |= cache_item::bit_slow;
 
-			if (!(item->internal_flags & cache_item::bit_sync)) {
+			if (item->internal_flags & cache_item::bit_sync) {
+
+				/*
+				 * We also need to adjust start timer for all async rules that
+				 * are started before this rule, as this rule could delay them
+				 * on its own. Hence, we need to make some corrections for all
+				 * rules pending
+				 */
+
+				for (const auto &[i, other_item]: rspamd::enumerate(order->d)) {
+					auto *other_dyn_item = &dynamic_items[i];
+
+					if (other_dyn_item->status == cache_item_status::pending && other_dyn_item->start_msec <= dyn_item->start_msec) {
+						other_dyn_item->start_msec += diff;
+
+						msg_debug_cache_task("adjust start time for %s(%d) by %.2fms to %dms",
+											 other_item->symbol.c_str(),
+											 other_item->id,
+											 diff,
+											 (int) other_dyn_item->start_msec);
+					}
+				}
+
 				if (slow_status == slow_status::none) {
 					slow_status = slow_status::enabled;
 
-					msg_info_task("slow rule: %s(%d): %.2f ms; enable 100ms idle timer to allow other rules to be finished",
+					msg_info_task("slow synchronous rule: %s(%d): %.2f ms; enable 100ms idle timer to allow other rules to be finished",
 								  item->symbol.c_str(), item->id,
 								  diff);
 					if (enable_slow_timer()) {
@@ -801,13 +823,13 @@ auto symcache_runtime::finalize_item(struct rspamd_task *task, cache_dynamic_ite
 					}
 				}
 				else {
-					msg_info_task("slow rule: %s(%d): %.2f ms; idle timer has already been activated for this scan",
+					msg_info_task("slow synchronous rule: %s(%d): %.2f ms; idle timer has already been activated for this scan",
 								  item->symbol.c_str(), item->id,
 								  diff);
 				}
 			}
 			else {
-				msg_notice_task("slow synchronous rule: %s(%d): %.2f ms; no idle timer is needed",
+				msg_notice_task("slow asynchronous rule: %s(%d): %.2f ms; no idle timer is needed",
 								item->symbol.c_str(), item->id,
 								diff);
 			}
