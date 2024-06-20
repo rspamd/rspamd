@@ -607,6 +607,7 @@ unsigned int rspamd_symcache_item_async_inc_full(struct rspamd_task *task,
 	if (nevents > 1) {
 		/* Item is async */
 		static_item->internal_flags &= ~rspamd::symcache::cache_item::bit_sync;
+		real_dyn_item->status = rspamd::symcache::cache_item_status::pending;
 	}
 
 	return nevents;
