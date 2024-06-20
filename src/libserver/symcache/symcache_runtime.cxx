@@ -797,22 +797,25 @@ auto symcache_runtime::finalize_item(struct rspamd_task *task, cache_dynamic_ite
 				 * on its own. Hence, we need to make some corrections for all
 				 * rules pending
 				 */
-
+				bool need_slow = false;
 				for (const auto &[i, other_item]: rspamd::enumerate(order->d)) {
 					auto *other_dyn_item = &dynamic_items[i];
 
 					if (other_dyn_item->status == cache_item_status::pending && other_dyn_item->start_msec <= dyn_item->start_msec) {
 						other_dyn_item->start_msec += diff;
 
-						msg_debug_cache_task("adjust start time for %s(%d) by %.2fms to %dms",
+						msg_debug_cache_task("slow sync rule %s(%d); adjust start time for pending rule %s(%d) by %.2fms to %dms",
+											 item->symbol.c_str(), item->id,
 											 other_item->symbol.c_str(),
 											 other_item->id,
 											 diff,
 											 (int) other_dyn_item->start_msec);
+						/* We have something pending, so we need to enable slow timer */
+						need_slow = true;
 					}
 				}
 
-				if (slow_status == slow_status::none) {
+				if (need_slow && slow_status != slow_status::enabled) {
 					slow_status = slow_status::enabled;
 
 					msg_info_task("slow synchronous rule: %s(%d): %.2f ms; enable 100ms idle timer to allow other rules to be finished",
