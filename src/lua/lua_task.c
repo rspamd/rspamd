@@ -2696,8 +2696,7 @@ lua_task_inject_url(lua_State *L)
 	}
 	if (task && task->message && url && url->url) {
 		if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false)) {
-			if(mpart) {
-				msg_debug("MIMEPART");
+			if(mpart && mpart->urls) {
 				inject_url_query(task, url->url, mpart->urls);
 			}
 		}
