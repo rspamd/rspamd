@@ -389,8 +389,8 @@ end
 --]]
 
 local unpack_function = table.unpack or unpack
-exports.unpack = function(t)
-  return unpack_function(t)
+exports.unpack = function(...)
+  return unpack_function(...)
 end
 
 --[[[
