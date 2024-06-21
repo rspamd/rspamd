@@ -1,4 +1,4 @@
-local url = require('rspamd_url')\
+local url = require('rspamd_url')
 
 local function task_inject_cb (task)
     local url_text = 'http://example.com?redir=https://another.com'
