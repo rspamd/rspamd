@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -602,8 +602,15 @@ unsigned int rspamd_symcache_item_async_inc_full(struct rspamd_task *task,
 						 "subsystem %s (%s)",
 						 static_item->symbol.c_str(), static_item->id,
 						 real_dyn_item->async_events, subsystem, loc);
+	auto nevents = ++real_dyn_item->async_events;
 
-	return ++real_dyn_item->async_events;
+	if (nevents > 1) {
+		/* Item is async */
+		static_item->internal_flags &= ~rspamd::symcache::cache_item::bit_sync;
+		real_dyn_item->status = rspamd::symcache::cache_item_status::pending;
+	}
+
+	return nevents;
 }
 
 unsigned int rspamd_symcache_item_async_dec_full(struct rspamd_task *task,
@@ -673,10 +680,10 @@ void rspamd_symcache_composites_foreach(struct rspamd_task *task,
 	real_cache->composites_foreach([&](const auto *item) {
 		auto *dyn_item = cache_runtime->get_dynamic_item(item->id);
 
-		if (dyn_item && !dyn_item->started) {
+		if (dyn_item && dyn_item->status == rspamd::symcache::cache_item_status::not_started) {
 			auto *old_item = cache_runtime->set_cur_item(dyn_item);
 			func((void *) item->get_name().c_str(), item->get_cbdata(), fd);
-			dyn_item->finished = true;
+			dyn_item->status = rspamd::symcache::cache_item_status::finished;
 			cache_runtime->set_cur_item(old_item);
 		}
 	});
@@ -711,5 +718,5 @@ void rspamd_symcache_finalize_item(struct rspamd_task *task,
 void rspamd_symcache_runtime_destroy(struct rspamd_task *task)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
-	cache_runtime->savepoint_dtor();
+	cache_runtime->savepoint_dtor(task);
 }

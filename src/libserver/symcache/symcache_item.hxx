@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -177,14 +177,13 @@ public:
 };
 
 struct cache_dependency {
-	cache_item *item; /* Real dependency */
-	std::string sym;  /* Symbolic dep name */
-	int id;           /* Real from */
-	int vid;          /* Virtual from */
+	cache_item *item;      /* Real dependency */
+	std::string sym;       /* Symbolic dep name */
+	int virtual_source_id; /* Virtual source */
 public:
 	/* Default piecewise constructor */
-	explicit cache_dependency(cache_item *_item, std::string _sym, int _id, int _vid)
-		: item(_item), sym(std::move(_sym)), id(_id), vid(_vid)
+	explicit cache_dependency(cache_item *_item, std::string _sym, int _vid)
+		: item(_item), sym(std::move(_sym)), virtual_source_id(_vid)
 	{
 	}
 };
@@ -215,15 +214,18 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 	struct rspamd_symcache_item_stat *st = nullptr;
 	struct rspamd_counter_data *cd = nullptr;
 
+	std::string symbol;
+
 	/* Unique id - counter */
 	int id;
 	std::uint64_t last_count = 0;
-	std::string symbol;
 	symcache_item_type type;
 	int flags;
 
-	/* Condition of execution */
-	bool enabled = true;
+	static constexpr const auto bit_enabled = 0b0001;
+	static constexpr const auto bit_sync = 0b0010;
+	static constexpr const auto bit_slow = 0b0100;
+	int internal_flags = bit_enabled | bit_sync;
 
 	/* Priority */
 	int priority = 0;
@@ -246,9 +248,9 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 		augmentations;
 
 	/* Dependencies */
-	std::vector<cache_dependency> deps;
+	ankerl::unordered_dense::map<int, cache_dependency> deps;
 	/* Reverse dependencies */
-	std::vector<cache_dependency> rdeps;
+	ankerl::unordered_dense::map<int, cache_dependency> rdeps;
 
 public:
 	/**
@@ -425,13 +427,16 @@ public:
 		return false;
 	}
 
-	auto call(struct rspamd_task *task, cache_dynamic_item *dyn_item) const -> void
+	auto call(struct rspamd_task *task, cache_dynamic_item *dyn_item) const -> bool
 	{
 		if (std::holds_alternative<normal_item>(specific)) {
 			const auto &filter_data = std::get<normal_item>(specific);
 
 			filter_data.call(task, (struct rspamd_symcache_dynamic_item *) dyn_item);
+			return true;
 		}
+
+		return false;
 	}
 
 	/**
@@ -512,8 +517,8 @@ private:
 			   void *user_data,
 			   symcache_item_type _type,
 			   int _flags)
-		: id(_id),
-		  symbol(std::move(name)),
+		: symbol(std::move(name)),
+		  id(_id),
 		  type(_type),
 		  flags(_flags),
 		  priority(_priority),
@@ -541,8 +546,8 @@ private:
 			   int parent,
 			   symcache_item_type _type,
 			   int _flags)
-		: id(_id),
-		  symbol(std::move(name)),
+		: symbol(std::move(name)),
+		  id(_id),
 		  type(_type),
 		  flags(_flags),
 		  specific(virtual_item{parent})
