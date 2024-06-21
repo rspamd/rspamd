@@ -43,6 +43,8 @@ local function pyzor_config(opts)
     message = '${SCANNER}: Pyzor bulk message found: "${VIRUS}"',
     default_score = 1.5,
     action = false,
+    min_threshold = 0, -- zero score if whitelist+report count smaller than this
+    halfscore_threshold = 0, -- half score if whitelist+report count smaller than this
   }
 
   pyzor_conf = lua_util.override_defaults(pyzor_conf, opts)
@@ -149,8 +151,15 @@ local function pyzor_check(task, content, digest, rule)
           rule.default_score: 1
           Weight: 0
         ]]
-        local weight = tonumber(string.format("%.2f",
-            rule.default_score * (reported - whitelisted) / (reported + whitelisted)))
+        local weight = 0
+        local total = reported + whitelisted
+        if total > rule.min_threshold and total > 0 then
+          weight = tonumber(string.format("%.2f",
+              rule.default_score * (reported - whitelisted) / total))
+          if total < rule.halfscore_threshold then
+            weight = tonumber(string.format("%.2f", weight / 2))
+          end
+        end
         local info = string.format("count=%d wl=%d", reported, whitelisted)
         local threat_string = string.format("bl_%d_wl_%d",
             reported, whitelisted)
