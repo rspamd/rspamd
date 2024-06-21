@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -298,6 +298,11 @@ void rspamd_worker_init_controller(struct rspamd_worker *worker,
  */
 void rspamd_controller_store_saved_stats(struct rspamd_main *rspamd_main,
 										 struct rspamd_config *cfg);
+
+/**
+ * Get metrics object for a worker
+ */
+ucl_object_t *rspamd_worker_metrics_object(struct rspamd_config *cfg, struct rspamd_stat *stat, ev_tstamp uptime);
 
 #ifdef WITH_HYPERSCAN
 struct rspamd_control_command;

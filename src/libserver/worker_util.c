@@ -2354,3 +2354,71 @@ rspamd_worker_check_and_adjust_timeout(struct rspamd_config *cfg, double timeout
 	/* TODO: maybe adjust timeout */
 	return timeout;
 }
+
+ucl_object_t *
+rspamd_worker_metrics_object(struct rspamd_config *cfg, struct rspamd_stat *stat, ev_tstamp uptime)
+{
+	rspamd_mempool_stat_t mem_st;
+	memset(&mem_st, 0, sizeof(mem_st));
+	rspamd_mempool_stat(&mem_st);
+
+	ucl_object_t *top = ucl_object_typed_new(UCL_OBJECT);
+
+	ucl_object_insert_key(top, ucl_object_fromstring(RVERSION), "version", 0, false);
+	ucl_object_insert_key(top, ucl_object_fromstring(cfg->checksum), "config_id", 0, false);
+	ucl_object_insert_key(top, ucl_object_fromdouble(uptime), "uptime", 0, false);
+	ucl_object_insert_key(top, ucl_object_fromint(stat->messages_scanned), "scanned", 0, false);
+	ucl_object_insert_key(top, ucl_object_fromint(stat->messages_learned), "learned", 0, false);
+
+	unsigned spam = 0, ham = 0;
+
+	if (stat->messages_scanned > 0) {
+		ucl_object_t *sub = ucl_object_typed_new(UCL_OBJECT);
+		for (int i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
+			ucl_object_insert_key(sub,
+								  ucl_object_fromint(stat->actions_stat[i]),
+								  rspamd_action_to_str(i), 0, false);
+			if (i < METRIC_ACTION_GREYLIST) {
+				spam += stat->actions_stat[i];
+			}
+			else {
+				ham += stat->actions_stat[i];
+			}
+		}
+		ucl_object_insert_key(top, sub, "actions", 0, false);
+	}
+
+	ucl_object_insert_key(top, ucl_object_fromint(spam), "spam_count", 0, false);
+	ucl_object_insert_key(top, ucl_object_fromint(ham), "ham_count", 0, false);
+	ucl_object_insert_key(top,
+						  ucl_object_fromint(stat->connections_count), "connections", 0, false);
+	ucl_object_insert_key(top,
+						  ucl_object_fromint(stat->control_connections_count),
+						  "control_connections", 0, false);
+
+	ucl_object_insert_key(top,
+						  ucl_object_fromint(mem_st.pools_allocated), "pools_allocated", 0,
+						  false);
+	ucl_object_insert_key(top,
+						  ucl_object_fromint(mem_st.pools_freed), "pools_freed", 0, false);
+	ucl_object_insert_key(top,
+						  ucl_object_fromint(mem_st.bytes_allocated), "bytes_allocated", 0,
+						  false);
+	ucl_object_insert_key(top,
+						  ucl_object_fromint(
+							  mem_st.chunks_allocated),
+						  "chunks_allocated", 0, false);
+	ucl_object_insert_key(top,
+						  ucl_object_fromint(mem_st.shared_chunks_allocated),
+						  "shared_chunks_allocated", 0, false);
+	ucl_object_insert_key(top,
+						  ucl_object_fromint(mem_st.chunks_freed), "chunks_freed", 0, false);
+	ucl_object_insert_key(top,
+						  ucl_object_fromint(
+							  mem_st.oversized_chunks),
+						  "chunks_oversized", 0, false);
+	ucl_object_insert_key(top,
+						  ucl_object_fromint(mem_st.fragmented_size), "fragmented", 0, false);
+
+	return top;
+}
