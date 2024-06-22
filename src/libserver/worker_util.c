@@ -2370,6 +2370,12 @@ rspamd_worker_metrics_object(struct rspamd_config *cfg, struct rspamd_stat *stat
 	ucl_object_insert_key(top, ucl_object_fromint(stat->messages_scanned), "scanned", 0, false);
 	ucl_object_insert_key(top, ucl_object_fromint(stat->messages_learned), "learned", 0, false);
 
+	gsize cnt = MAX_AVG_TIME_SLOTS;
+	float sum = rspamd_sum_floats(stat->avg_time.avg_time, &cnt);
+
+	ucl_object_insert_key(top,
+						  ucl_object_fromdouble(cnt > 0 ? (double) sum / cnt : 0.0), "avg_scan_time", 0, false);
+
 	unsigned spam = 0, ham = 0;
 
 	if (stat->messages_scanned > 0) {
@@ -2421,4 +2427,132 @@ rspamd_worker_metrics_object(struct rspamd_config *cfg, struct rspamd_stat *stat
 						  ucl_object_fromint(mem_st.fragmented_size), "fragmented", 0, false);
 
 	return top;
+}
+
+rspamd_fstring_t *
+rspamd_metrics_to_prometheus_string(const ucl_object_t *top)
+{
+	rspamd_fstring_t *output = rspamd_fstring_sized_new(1024);
+
+	rspamd_printf_fstring(&output, "# HELP rspamd_build_info A metric with a constant '1' value "
+								   "labeled by version from which rspamd was built.\n");
+	rspamd_printf_fstring(&output, "# TYPE rspamd_build_info gauge\n");
+	rspamd_printf_fstring(&output, "rspamd_build_info{version=\"%s\"} 1\n",
+						  ucl_object_tostring(ucl_object_lookup(top, "version")));
+	rspamd_printf_fstring(&output, "# HELP rspamd_config A metric with a constant '1' value "
+								   "labeled by id of the current config.\n");
+	rspamd_printf_fstring(&output, "# TYPE rspamd_config gauge\n");
+	rspamd_printf_fstring(&output, "rspamd_config{id=\"%s\"} 1\n",
+						  ucl_object_tostring(ucl_object_lookup(top, "config_id")));
+
+
+	rspamd_metrics_add_integer(&output, top,
+							   "rspamd_scan_time_average",
+							   "gauge",
+							   "Average messages scan time.",
+							   "avg_scan_time");
+	rspamd_metrics_add_integer(&output, top,
+							   "process_start_time_seconds",
+							   "gauge",
+							   "Start time of the process since unix epoch in seconds.",
+							   "start_time");
+	rspamd_metrics_add_integer(&output, top,
+							   "rspamd_read_only",
+							   "gauge",
+							   "Whether the rspamd instance is read-only.",
+							   "read_only");
+	rspamd_metrics_add_integer(&output, top,
+							   "rspamd_scanned_total",
+							   "counter",
+							   "Scanned messages.",
+							   "scanned");
+	rspamd_metrics_add_integer(&output, top,
+							   "rspamd_learned_total",
+							   "counter",
+							   "Learned messages.",
+							   "learned");
+	rspamd_metrics_add_integer(&output, top,
+							   "rspamd_spam_total",
+							   "counter",
+							   "Messages classified as spam.",
+							   "spam_count");
+	rspamd_metrics_add_integer(&output, top,
+							   "rspamd_ham_total",
+							   "counter",
+							   "Messages classified as ham.",
+							   "ham_count");
+	rspamd_metrics_add_integer(&output, top,
+							   "rspamd_connections",
+							   "gauge",
+							   "Active connections.",
+							   "connections");
+	rspamd_metrics_add_integer(&output, top,
+							   "rspamd_control_connections_total",
+							   "gauge",
+							   "Control connections.",
+							   "control_connections");
+	rspamd_metrics_add_integer(&output, top,
+							   "rspamd_pools_allocated",
+							   "gauge",
+							   "Pools allocated.",
+							   "pools_allocated");
+	rspamd_metrics_add_integer(&output, top,
+							   "rspamd_pools_freed",
+							   "gauge",
+							   "Pools freed.",
+							   "pools_freed");
+	rspamd_metrics_add_integer(&output, top,
+							   "rspamd_allocated_bytes",
+							   "gauge",
+							   "Bytes allocated.",
+							   "bytes_allocated");
+	rspamd_metrics_add_integer(&output, top,
+							   "rspamd_chunks_allocated",
+							   "gauge",
+							   "Memory pools: current chunks allocated.",
+							   "chunks_allocated");
+	rspamd_metrics_add_integer(&output, top,
+							   "rspamd_shared_chunks_allocated",
+							   "gauge",
+							   "Memory pools: current shared chunks allocated.",
+							   "shared_chunks_allocated");
+	rspamd_metrics_add_integer(&output, top,
+							   "rspamd_chunks_freed",
+							   "gauge",
+							   "Memory pools: current chunks freed.",
+							   "chunks_freed");
+	rspamd_metrics_add_integer(&output, top,
+							   "rspamd_chunks_oversized",
+							   "gauge",
+							   "Memory pools: current chunks oversized (needs extra allocation/fragmentation).",
+							   "chunks_oversized");
+	rspamd_metrics_add_integer(&output, top,
+							   "rspamd_fragmented",
+							   "gauge",
+							   "Memory pools: fragmented memory waste.",
+							   "fragmented");
+
+	const ucl_object_t *acts_obj = ucl_object_lookup(top, "actions");
+
+	if (acts_obj) {
+		rspamd_printf_fstring(&output, "# HELP rspamd_actions_total Actions labelled by action type.\n");
+		rspamd_printf_fstring(&output, "# TYPE rspamd_actions_total counter\n");
+		for (int i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
+			const char *str_act = rspamd_action_to_str(i);
+			const ucl_object_t *act = ucl_object_lookup(acts_obj, str_act);
+
+			if (act) {
+				rspamd_printf_fstring(&output, "rspamd_actions_total{type=\"%s\"} %L\n",
+									  str_act,
+									  ucl_object_toint(act));
+			}
+			else {
+				rspamd_printf_fstring(&output, "rspamd_actions_total{type=\"%s\"} 0\n",
+									  str_act);
+			}
+		}
+	}
+
+	/* Must be finalized and freed by caller */
+	return output;
 }

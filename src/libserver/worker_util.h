@@ -304,6 +304,27 @@ void rspamd_controller_store_saved_stats(struct rspamd_main *rspamd_main,
  */
 ucl_object_t *rspamd_worker_metrics_object(struct rspamd_config *cfg, struct rspamd_stat *stat, ev_tstamp uptime);
 
+
+static inline void
+rspamd_metrics_add_integer(rspamd_fstring_t **output,
+						   const ucl_object_t *top,
+						   const char *name,
+						   const char *type,
+						   const char *description,
+						   const char *ucl_key)
+{
+	rspamd_printf_fstring(output, "# HELP %s %s\n", name, description);
+	rspamd_printf_fstring(output, "# TYPE %s %s\n", name, type);
+	rspamd_printf_fstring(output, "%s %L\n", name,
+						  ucl_object_toint(ucl_object_lookup(top, ucl_key)));
+}
+/**
+ * Convert metrics to the prometheus format
+ * @param top
+ * @return
+ */
+rspamd_fstring_t *rspamd_metrics_to_prometheus_string(const ucl_object_t *top);
+
 #ifdef WITH_HYPERSCAN
 struct rspamd_control_command;
 
