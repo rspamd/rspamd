@@ -149,8 +149,6 @@ struct rspamd_controller_worker_ctx {
 	/* HTTP server */
 	struct rspamd_http_context *http_ctx;
 	struct rspamd_http_connection_router *http;
-	/* Server's start time */
-	ev_tstamp start_time;
 	/* Main server */
 	struct rspamd_main *srv;
 	/* SSL cert */
@@ -762,7 +760,7 @@ rspamd_controller_handle_auth(struct rspamd_http_connection_entry *conn_ent,
 	data[4] = st.actions_stat[METRIC_ACTION_SOFT_REJECT];
 
 	/* Get uptime */
-	uptime = ev_time() - session->ctx->start_time;
+	uptime = ev_time() - session->ctx->srv->start_time;
 
 	ucl_object_insert_key(obj, ucl_object_fromstring(RVERSION), "version", 0, false);
 	ucl_object_insert_key(obj, ucl_object_fromstring("ok"), "auth", 0, false);
@@ -2695,7 +2693,7 @@ rspamd_controller_handle_stat_common(
 
 	ucl_object_insert_key(top, ucl_object_fromstring(RVERSION), "version", 0, false);
 	ucl_object_insert_key(top, ucl_object_fromstring(session->ctx->cfg->checksum), "config_id", 0, false);
-	uptime = ev_time() - session->ctx->start_time;
+	uptime = ev_time() - session->ctx->srv->start_time;
 	ucl_object_insert_key(top, ucl_object_fromint(uptime), "uptime", 0, false);
 	ucl_object_insert_key(top, ucl_object_frombool(session->is_read_only),
 						  "read_only", 0, false);
@@ -2811,19 +2809,6 @@ rspamd_controller_handle_statreset(
 	return rspamd_controller_handle_stat_common(conn_ent, msg, TRUE);
 }
 
-static inline void
-rspamd_controller_metrics_add_integer(rspamd_fstring_t **output,
-									  const ucl_object_t *top,
-									  const char *name,
-									  const char *type,
-									  const char *description,
-									  const char *ucl_key)
-{
-	rspamd_printf_fstring(output, "# HELP %s %s\n", name, description);
-	rspamd_printf_fstring(output, "# TYPE %s %s\n", name, type);
-	rspamd_printf_fstring(output, "%s %L\n", name,
-						  ucl_object_toint(ucl_object_lookup(top, ucl_key)));
-}
 
 /*
  * Metrics command handler:
@@ -2836,138 +2821,11 @@ rspamd_controller_metrics_fin_task(void *ud)
 {
 	struct rspamd_stat_cbdata *cbdata = ud;
 	struct rspamd_http_connection_entry *conn_ent;
-	ucl_object_t *top;
 	struct rspamd_fuzzy_stat_entry *entry;
 	rspamd_fstring_t *output;
-	int i;
 
 	conn_ent = cbdata->conn_ent;
-	top = cbdata->top;
-
-	output = rspamd_fstring_sized_new(1024);
-	rspamd_printf_fstring(&output, "# HELP rspamd_build_info A metric with a constant '1' value "
-								   "labeled by version from which rspamd was built.\n");
-	rspamd_printf_fstring(&output, "# TYPE rspamd_build_info gauge\n");
-	rspamd_printf_fstring(&output, "rspamd_build_info{version=\"%s\"} 1\n",
-						  ucl_object_tostring(ucl_object_lookup(top, "version")));
-	rspamd_printf_fstring(&output, "# HELP rspamd_config A metric with a constant '1' value "
-								   "labeled by id of the current config.\n");
-	rspamd_printf_fstring(&output, "# TYPE rspamd_config gauge\n");
-	rspamd_printf_fstring(&output, "rspamd_config{id=\"%s\"} 1\n",
-						  ucl_object_tostring(ucl_object_lookup(top, "config_id")));
-
-	gsize cnt = MAX_AVG_TIME_SLOTS;
-	float sum = rspamd_sum_floats(cbdata->ctx->worker->srv->stat->avg_time.avg_time, &cnt);
-	rspamd_printf_fstring(&output, "# HELP rspamd_scan_time_average Average messages scan time.\n");
-	rspamd_printf_fstring(&output, "# TYPE rspamd_scan_time_average gauge\n");
-	rspamd_printf_fstring(&output, "rspamd_scan_time_average %f\n",
-						  cnt > 0 ? (double) sum / cnt : 0.0);
-
-	rspamd_controller_metrics_add_integer(&output, top,
-										  "process_start_time_seconds",
-										  "gauge",
-										  "Start time of the process since unix epoch in seconds.",
-										  "start_time");
-	rspamd_controller_metrics_add_integer(&output, top,
-										  "rspamd_read_only",
-										  "gauge",
-										  "Whether the rspamd instance is read-only.",
-										  "read_only");
-	rspamd_controller_metrics_add_integer(&output, top,
-										  "rspamd_scanned_total",
-										  "counter",
-										  "Scanned messages.",
-										  "scanned");
-	rspamd_controller_metrics_add_integer(&output, top,
-										  "rspamd_learned_total",
-										  "counter",
-										  "Learned messages.",
-										  "learned");
-	rspamd_controller_metrics_add_integer(&output, top,
-										  "rspamd_spam_total",
-										  "counter",
-										  "Messages classified as spam.",
-										  "spam_count");
-	rspamd_controller_metrics_add_integer(&output, top,
-										  "rspamd_ham_total",
-										  "counter",
-										  "Messages classified as ham.",
-										  "ham_count");
-	rspamd_controller_metrics_add_integer(&output, top,
-										  "rspamd_connections",
-										  "gauge",
-										  "Active connections.",
-										  "connections");
-	rspamd_controller_metrics_add_integer(&output, top,
-										  "rspamd_control_connections_total",
-										  "gauge",
-										  "Control connections.",
-										  "control_connections");
-	rspamd_controller_metrics_add_integer(&output, top,
-										  "rspamd_pools_allocated",
-										  "gauge",
-										  "Pools allocated.",
-										  "pools_allocated");
-	rspamd_controller_metrics_add_integer(&output, top,
-										  "rspamd_pools_freed",
-										  "gauge",
-										  "Pools freed.",
-										  "pools_freed");
-	rspamd_controller_metrics_add_integer(&output, top,
-										  "rspamd_allocated_bytes",
-										  "gauge",
-										  "Bytes allocated.",
-										  "bytes_allocated");
-	rspamd_controller_metrics_add_integer(&output, top,
-										  "rspamd_chunks_allocated",
-										  "gauge",
-										  "Memory pools: current chunks allocated.",
-										  "chunks_allocated");
-	rspamd_controller_metrics_add_integer(&output, top,
-										  "rspamd_shared_chunks_allocated",
-										  "gauge",
-										  "Memory pools: current shared chunks allocated.",
-										  "shared_chunks_allocated");
-	rspamd_controller_metrics_add_integer(&output, top,
-										  "rspamd_chunks_freed",
-										  "gauge",
-										  "Memory pools: current chunks freed.",
-										  "chunks_freed");
-	rspamd_controller_metrics_add_integer(&output, top,
-										  "rspamd_chunks_oversized",
-										  "gauge",
-										  "Memory pools: current chunks oversized (needs extra allocation/fragmentation).",
-										  "chunks_oversized");
-	rspamd_controller_metrics_add_integer(&output, top,
-										  "rspamd_fragmented",
-										  "gauge",
-										  "Memory pools: fragmented memory waste.",
-										  "fragmented");
-
-	rspamd_printf_fstring(&output, "# HELP rspamd_learns_total Total learns.\n");
-	rspamd_printf_fstring(&output, "# TYPE rspamd_learns_total counter\n");
-	rspamd_printf_fstring(&output, "rspamd_learns_total %L\n", cbdata->learned);
-
-	const ucl_object_t *acts_obj = ucl_object_lookup(top, "actions");
-
-	if (acts_obj) {
-		rspamd_printf_fstring(&output, "# HELP rspamd_actions_total Actions labelled by action type.\n");
-		rspamd_printf_fstring(&output, "# TYPE rspamd_actions_total counter\n");
-		for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
-			const char *str_act = rspamd_action_to_str(i);
-			const ucl_object_t *act = ucl_object_lookup(acts_obj, str_act);
-
-			if (act) {
-				rspamd_printf_fstring(&output, "rspamd_actions_total{type=\"%s\"} %L\n",
-									  str_act,
-									  ucl_object_toint(act));
-			}
-			else {
-				rspamd_printf_fstring(&output, "rspamd_actions_total{type=\"%s\"} 0\n",
-									  str_act);
-			}
-		}
-	}
+	output = rspamd_metrics_to_prometheus_string(cbdata->top);
 
 	if (cbdata->stat) {
 		const ucl_object_t *cur_elt;
@@ -3081,7 +2939,6 @@ rspamd_controller_metrics_fin_task(void *ud)
 	}
 
 	rspamd_printf_fstring(&output, "# EOF\n");
-
 	rspamd_controller_send_openmetrics(conn_ent, output);
 
 	return TRUE;
@@ -3094,22 +2951,21 @@ rspamd_controller_handle_metrics_common(
 	gboolean do_reset)
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
-	ucl_object_t *top, *sub;
-	int i;
-	int64_t uptime;
-	uint64_t spam = 0, ham = 0;
-	rspamd_mempool_stat_t mem_st;
-	struct rspamd_stat *stat, stat_copy;
+	ucl_object_t *top;
+	ev_tstamp uptime;
+	struct rspamd_stat stat_copy;
 	struct rspamd_controller_worker_ctx *ctx;
 	struct rspamd_task *task;
 	struct rspamd_stat_cbdata *cbdata;
 
-	memset(&mem_st, 0, sizeof(mem_st));
-	rspamd_mempool_stat(&mem_st);
-	memcpy(&stat_copy, session->ctx->worker->srv->stat, sizeof(stat_copy));
-	stat = &stat_copy;
+	uptime = ev_time() - session->ctx->srv->start_time;
 	ctx = session->ctx;
+	memcpy(&stat_copy, session->ctx->worker->srv->stat, sizeof(stat_copy));
 
+	top = rspamd_worker_metrics_object(session->ctx->cfg, &stat_copy, uptime);
+	ucl_object_insert_key(top, ucl_object_fromint(session->ctx->srv->start_time), "start_time", 0, false);
+	ucl_object_insert_key(top, ucl_object_frombool(session->is_read_only),
+						  "read_only", 0, false);
 	task = rspamd_task_new(session->ctx->worker, session->cfg, session->pool,
 						   ctx->lang_det, ctx->event_loop, FALSE);
 	task->resolver = ctx->resolver;
@@ -3117,7 +2973,6 @@ rspamd_controller_handle_metrics_common(
 	cbdata->conn_ent = conn_ent;
 	cbdata->task = task;
 	cbdata->ctx = ctx;
-	top = ucl_object_typed_new(UCL_OBJECT);
 	cbdata->top = top;
 
 	task->s = rspamd_session_create(session->pool,
@@ -3127,74 +2982,19 @@ rspamd_controller_handle_metrics_common(
 									cbdata);
 	task->fin_arg = cbdata;
 	task->http_conn = rspamd_http_connection_ref(conn_ent->conn);
-	;
 	task->sock = conn_ent->conn->fd;
 
-	ucl_object_insert_key(top, ucl_object_fromstring(RVERSION), "version", 0, false);
-	ucl_object_insert_key(top, ucl_object_fromstring(session->ctx->cfg->checksum), "config_id", 0, false);
-	uptime = ev_time() - session->ctx->start_time;
-	ucl_object_insert_key(top, ucl_object_fromint(uptime), "uptime", 0, false);
-	ucl_object_insert_key(top, ucl_object_fromint(session->ctx->start_time), "start_time", 0, false);
-	ucl_object_insert_key(top, ucl_object_frombool(session->is_read_only),
-						  "read_only", 0, false);
-	ucl_object_insert_key(top, ucl_object_fromint(stat->messages_scanned), "scanned", 0, false);
-	ucl_object_insert_key(top, ucl_object_fromint(stat->messages_learned), "learned", 0, false);
+	if (stat_copy.messages_scanned > 0 && do_reset) {
+		for (int i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
 
-	if (stat->messages_scanned > 0) {
-		sub = ucl_object_typed_new(UCL_OBJECT);
-		for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
-			ucl_object_insert_key(sub,
-								  ucl_object_fromint(stat->actions_stat[i]),
-								  rspamd_action_to_str(i), 0, false);
-			if (i < METRIC_ACTION_GREYLIST) {
-				spam += stat->actions_stat[i];
-			}
-			else {
-				ham += stat->actions_stat[i];
-			}
-			if (do_reset) {
 #ifndef HAVE_ATOMIC_BUILTINS
-				session->ctx->worker->srv->stat->actions_stat[i] = 0;
+			session->ctx->worker->srv->stat->actions_stat[i] = 0;
 #else
-				__atomic_store_n(&session->ctx->worker->srv->stat->actions_stat[i],
-								 0, __ATOMIC_RELEASE);
+			__atomic_store_n(&session->ctx->worker->srv->stat->actions_stat[i],
+							 0, __ATOMIC_RELEASE);
 #endif
-			}
 		}
-		ucl_object_insert_key(top, sub, "actions", 0, false);
 	}
-
-	ucl_object_insert_key(top, ucl_object_fromint(spam), "spam_count", 0, false);
-	ucl_object_insert_key(top, ucl_object_fromint(ham), "ham_count", 0, false);
-	ucl_object_insert_key(top,
-						  ucl_object_fromint(stat->connections_count), "connections", 0, false);
-	ucl_object_insert_key(top,
-						  ucl_object_fromint(stat->control_connections_count),
-						  "control_connections", 0, false);
-
-	ucl_object_insert_key(top,
-						  ucl_object_fromint(mem_st.pools_allocated), "pools_allocated", 0,
-						  false);
-	ucl_object_insert_key(top,
-						  ucl_object_fromint(mem_st.pools_freed), "pools_freed", 0, false);
-	ucl_object_insert_key(top,
-						  ucl_object_fromint(mem_st.bytes_allocated), "bytes_allocated", 0,
-						  false);
-	ucl_object_insert_key(top,
-						  ucl_object_fromint(
-							  mem_st.chunks_allocated),
-						  "chunks_allocated", 0, false);
-	ucl_object_insert_key(top,
-						  ucl_object_fromint(mem_st.shared_chunks_allocated),
-						  "shared_chunks_allocated", 0, false);
-	ucl_object_insert_key(top,
-						  ucl_object_fromint(mem_st.chunks_freed), "chunks_freed", 0, false);
-	ucl_object_insert_key(top,
-						  ucl_object_fromint(
-							  mem_st.oversized_chunks),
-						  "chunks_oversized", 0, false);
-	ucl_object_insert_key(top,
-						  ucl_object_fromint(mem_st.fragmented_size), "fragmented", 0, false);
 
 	if (do_reset) {
 		session->ctx->srv->stat->messages_scanned = 0;
@@ -3210,7 +3010,6 @@ rspamd_controller_handle_metrics_common(
 	rspamd_stat_statistics(task, session->ctx->cfg, &cbdata->learned,
 						   &cbdata->stat);
 	session->task = task;
-
 	rspamd_session_pending(task->s);
 
 
@@ -4083,7 +3882,6 @@ start_controller_worker(struct rspamd_worker *worker)
 											"controller",
 											rspamd_controller_accept_socket);
 
-	ctx->start_time = ev_time();
 	ctx->worker = worker;
 	ctx->cfg = worker->srv->cfg;
 	ctx->srv = worker->srv;

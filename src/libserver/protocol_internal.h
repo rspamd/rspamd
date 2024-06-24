@@ -1,11 +1,11 @@
-/*-
- * Copyright 2017 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -55,6 +55,8 @@ extern "C" {
  * Return a confirmation that spamd is alive
  */
 #define MSG_CMD_PING "ping"
+
+#define MSG_CMD_METRICS "metrics"
 /*
  * Process this message as described above and return modified message
  */

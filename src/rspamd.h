@@ -320,6 +320,7 @@ struct rspamd_main {
 	struct roll_history *history; /**< rolling history								*/
 	struct ev_loop *event_loop;
 	ev_signal term_ev, int_ev, hup_ev, usr1_ev; /**< signals 										*/
+	ev_tstamp start_time;
 	struct rspamd_http_context *http_ctx;
 };
 
