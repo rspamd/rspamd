@@ -25,6 +25,7 @@
 #include "unix-std.h"
 #include "protocol_internal.h"
 #include "libserver/mempool_vars_internal.h"
+#include "libserver/worker_util.h"
 #include "contrib/fastutf8/fastutf8.h"
 #include "task.h"
 #include "lua/lua_classnames.h"
@@ -205,6 +206,19 @@ rspamd_protocol_handle_url(struct rspamd_task *task,
 		else if (COMPARE_CMD(p, MSG_CMD_REPORT_IFSPAM, pathlen)) {
 			msg_debug_protocol("got reportifspam -> old check command");
 			task->cmd = CMD_CHECK;
+		}
+		else {
+			goto err;
+		}
+		break;
+	case 'M':
+	case 'm':
+		/* metrics, process */
+		if (COMPARE_CMD(p, MSG_CMD_METRICS, pathlen)) {
+			msg_debug_protocol("got metrics command");
+			task->cmd = CMD_METRICS;
+			task->flags |= RSPAMD_TASK_FLAG_SKIP;
+			task->processed_stages |= RSPAMD_TASK_STAGE_DONE; /* Skip all */
 		}
 		else {
 			goto err;
@@ -2098,11 +2112,12 @@ void rspamd_protocol_write_log_pipe(struct rspamd_task *task)
 	g_array_free(extra, TRUE);
 }
 
-void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout)
+void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout, struct rspamd_main *srv)
 {
 	struct rspamd_http_message *msg;
 	const char *ctype = "application/json";
 	rspamd_fstring_t *reply;
+	ev_tstamp now = ev_time();
 
 	msg = rspamd_http_new_message(HTTP_RESPONSE);
 
@@ -2163,6 +2178,8 @@ void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout)
 		}
 	}
 	else {
+		rspamd_fstring_t *output;
+		struct rspamd_stat stat_copy;
 		msg->status = rspamd_fstring_new_init("OK", 2);
 
 		switch (task->cmd) {
@@ -2179,6 +2196,15 @@ void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout)
 			rspamd_http_message_set_body(msg, "pong" CRLF, 6);
 			ctype = "text/plain";
 			break;
+		case CMD_METRICS:
+			msg_debug_protocol("writing metrics to client");
+
+			memcpy(&stat_copy, srv->stat, sizeof(stat_copy));
+			output = rspamd_metrics_to_prometheus_string(
+				rspamd_worker_metrics_object(srv->cfg, &stat_copy, now - srv->start_time));
+			rspamd_http_message_set_body_from_fstring_steal(msg, output);
+			ctype = "application/openmetrics-text; version=1.0.0; charset=utf-8";
+			break;
 		default:
 			msg_err_protocol("BROKEN");
 			break;
@@ -2186,7 +2212,7 @@ void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout)
 	}
 
 	ev_now_update(task->event_loop);
-	msg->date = ev_time();
+	msg->date = now;
 
 	rspamd_http_connection_reset(task->http_conn);
 	rspamd_http_connection_write_message(task->http_conn, msg, NULL,

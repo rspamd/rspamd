@@ -1644,6 +1644,7 @@ int main(int argc, char **argv, char **env)
 		exit(EXIT_FAILURE);
 	}
 
+	rspamd_main->start_time = ev_time();
 	/* Unblock signals */
 	sigemptyset(&signals.sa_mask);
 	sigprocmask(SIG_SETMASK, &signals.sa_mask, NULL);

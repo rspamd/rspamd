@@ -149,8 +149,6 @@ struct rspamd_controller_worker_ctx {
 	/* HTTP server */
 	struct rspamd_http_context *http_ctx;
 	struct rspamd_http_connection_router *http;
-	/* Server's start time */
-	ev_tstamp start_time;
 	/* Main server */
 	struct rspamd_main *srv;
 	/* SSL cert */
@@ -762,7 +760,7 @@ rspamd_controller_handle_auth(struct rspamd_http_connection_entry *conn_ent,
 	data[4] = st.actions_stat[METRIC_ACTION_SOFT_REJECT];
 
 	/* Get uptime */
-	uptime = ev_time() - session->ctx->start_time;
+	uptime = ev_time() - session->ctx->srv->start_time;
 
 	ucl_object_insert_key(obj, ucl_object_fromstring(RVERSION), "version", 0, false);
 	ucl_object_insert_key(obj, ucl_object_fromstring("ok"), "auth", 0, false);
@@ -2695,7 +2693,7 @@ rspamd_controller_handle_stat_common(
 
 	ucl_object_insert_key(top, ucl_object_fromstring(RVERSION), "version", 0, false);
 	ucl_object_insert_key(top, ucl_object_fromstring(session->ctx->cfg->checksum), "config_id", 0, false);
-	uptime = ev_time() - session->ctx->start_time;
+	uptime = ev_time() - session->ctx->srv->start_time;
 	ucl_object_insert_key(top, ucl_object_fromint(uptime), "uptime", 0, false);
 	ucl_object_insert_key(top, ucl_object_frombool(session->is_read_only),
 						  "read_only", 0, false);
@@ -2960,12 +2958,12 @@ rspamd_controller_handle_metrics_common(
 	struct rspamd_task *task;
 	struct rspamd_stat_cbdata *cbdata;
 
-	uptime = ev_time() - session->ctx->start_time;
+	uptime = ev_time() - session->ctx->srv->start_time;
 	ctx = session->ctx;
 	memcpy(&stat_copy, session->ctx->worker->srv->stat, sizeof(stat_copy));
 
 	top = rspamd_worker_metrics_object(session->ctx->cfg, &stat_copy, uptime);
-	ucl_object_insert_key(top, ucl_object_fromint(session->ctx->start_time), "start_time", 0, false);
+	ucl_object_insert_key(top, ucl_object_fromint(session->ctx->srv->start_time), "start_time", 0, false);
 	ucl_object_insert_key(top, ucl_object_frombool(session->is_read_only),
 						  "read_only", 0, false);
 	task = rspamd_task_new(session->ctx->worker, session->cfg, session->pool,
@@ -3884,7 +3882,6 @@ start_controller_worker(struct rspamd_worker *worker)
 											"controller",
 											rspamd_controller_accept_socket);
 
-	ctx->start_time = ev_time();
 	ctx->worker = worker;
 	ctx->cfg = worker->srv->cfg;
 	ctx->srv = worker->srv;

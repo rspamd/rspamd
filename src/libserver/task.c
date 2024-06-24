@@ -133,7 +133,7 @@ rspamd_task_reply(struct rspamd_task *task)
 	}
 	else {
 		if (!(task->processed_stages & RSPAMD_TASK_STAGE_REPLIED)) {
-			rspamd_protocol_write_reply(task, write_timeout);
+			rspamd_protocol_write_reply(task, write_timeout, task->worker->srv);
 		}
 	}
 }

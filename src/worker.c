@@ -172,7 +172,7 @@ rspamd_worker_body_handler(struct rspamd_http_connection *conn,
 		task->flags |= RSPAMD_TASK_FLAG_SKIP;
 	}
 	else {
-		if (task->cmd == CMD_PING) {
+		if (task->cmd == CMD_PING || task->cmd == CMD_METRICS) {
 			task->flags |= RSPAMD_TASK_FLAG_SKIP;
 		}
 		else {
