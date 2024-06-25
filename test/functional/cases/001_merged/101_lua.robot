@@ -8,6 +8,7 @@ ${MESSAGE}            ${RSPAMD_TESTDIR}/messages/spam_message.eml
 ${RSPAMD_MAP_MAP}     ${RSPAMD_TESTDIR}/configs/maps/map.list
 ${RSPAMD_RADIX_MAP}   ${RSPAMD_TESTDIR}/configs/maps/ip2.list
 ${RSPAMD_REGEXP_MAP}  ${RSPAMD_TESTDIR}/configs/maps/regexp.list
+${URL_ICS}            ${RSPAMD_TESTDIR}/messages/ics.eml
 
 *** Test Cases ***
 Recipient Parsing Sanity
@@ -48,3 +49,7 @@ Rule conditions
 External Maps Simple
   Scan File  ${MESSAGE}  Settings={symbols_enabled = [EXTERNAL_MAP]}
   Expect Symbol With Exact Options  EXTERNAL_MAP  +hello map
+
+Task Inject Url
+  Scan File  ${URL_ICS}  Settings={symbols_enabled = [TEST_INJECT_URL]}
+  Expect Symbol  TEST_INJECT_URL

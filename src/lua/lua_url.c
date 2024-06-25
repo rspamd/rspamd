@@ -855,18 +855,20 @@ lua_url_create(lua_State *L)
 	if (lua_type(L, 1) == LUA_TUSERDATA) {
 		pool = rspamd_lua_check_mempool(L, 1);
 		t = lua_check_text_or_string(L, 2);
+		if (t == NULL) {
+			return luaL_error(L, "invalid arguments: string/text is expected as the second argument");
+		}
 	}
 	else {
 		pool = static_lua_url_pool;
 		t = lua_check_text_or_string(L, 1);
+		if (t == NULL) {
+			return luaL_error(L, "invalid arguments: string/text is expected as the first argument");
+		}
 	}
 
 	if (pool == NULL) {
-		return luaL_error(L, "invalid arguments: mempool is expected as the second argument");
-	}
-
-	if (t == NULL) {
-		return luaL_error(L, "invalid arguments: string/text is expected as the first argument");
+		return luaL_error(L, "invalid arguments: mempool is expected as the first argument");
 	}
 
 	rspamd_url_find_single(pool, t->start, t->len, RSPAMD_URL_FIND_ALL,
