@@ -147,27 +147,26 @@ lua_regexp_import_glob(lua_State *L)
 	LUA_TRACE_POINT;
 	rspamd_regexp_t *re;
 	struct rspamd_lua_regexp *new, **pnew;
-	const char *string, *flags_str = NULL;
+	const char *flags_str = NULL;
 	char *escaped;
-	gsize pat_len;
 	GError *err = NULL;
 
-	string = luaL_checklstring(L, 1, &pat_len);
+	struct rspamd_lua_text *t = lua_check_text(L, 1);
 
-	if (lua_gettop(L) == 2) {
-		flags_str = luaL_checkstring(L, 2);
-	}
-
-	if (string) {
-		escaped = rspamd_str_regexp_escape(string, pat_len, NULL,
+	if (t) {
+		if (lua_gettop(L) == 2) {
+			flags_str = luaL_checkstring(L, 2);
+		}
+		escaped = rspamd_str_regexp_escape(t->start, t->len, NULL,
 										   RSPAMD_REGEXP_ESCAPE_GLOB | RSPAMD_REGEXP_ESCAPE_UTF);
 
 		re = rspamd_regexp_new(escaped, flags_str, &err);
 
 		if (re == NULL) {
 			lua_pushnil(L);
-			msg_info("cannot parse regexp: %s, error: %s",
-					 string,
+			msg_info("cannot parse regexp: %*s, error: %s",
+					 (int) t->len,
+					 t->start,
 					 err == NULL ? "undefined" : err->message);
 			g_error_free(err);
 			g_free(escaped);
