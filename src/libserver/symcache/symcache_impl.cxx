@@ -112,29 +112,39 @@ auto symcache::init() -> bool
 	/* Deal with the delayed dependencies */
 	msg_debug_cache("resolving delayed dependencies: %d in list", (int) delayed_deps->size());
 	for (const auto &delayed_dep: *delayed_deps) {
-		auto virt_item = get_item_by_name(delayed_dep.from, false);
-		auto real_item = get_item_by_name(delayed_dep.from, true);
+		auto virt_source = get_item_by_name(delayed_dep.from, false);
+		auto real_source = get_item_by_name(delayed_dep.from, true);
 
-		if (virt_item == nullptr || real_item == nullptr) {
-			msg_err_cache("cannot register delayed dependency between %s and %s: "
-						  "%s is missing",
-						  delayed_dep.from.data(),
-						  delayed_dep.to.data(), delayed_dep.from.data());
+		auto real_destination = get_item_by_name(delayed_dep.to, true);
+
+		if (virt_source == nullptr || real_source == nullptr || real_destination == nullptr) {
+			if (real_destination != nullptr) {
+				msg_err_cache("cannot register delayed dependency %s -> %s: "
+							  "source %s is missing",
+							  delayed_dep.from.data(),
+							  delayed_dep.to.data(), delayed_dep.from.data());
+			}
+			else {
+				msg_err_cache("cannot register delayed dependency %s -> %s: "
+							  "destionation %s is missing",
+							  delayed_dep.from.data(),
+							  delayed_dep.to.data(), delayed_dep.to.data());
+			}
 		}
 		else {
 
-			if (!disabled_ids.contains(real_item->id)) {
+			if (!disabled_ids.contains(real_source->id)) {
 				msg_debug_cache("delayed between %s(%d:%d) -> %s",
 								delayed_dep.from.data(),
-								real_item->id, virt_item->id,
+								real_source->id, virt_source->id,
 								delayed_dep.to.data());
-				add_dependency(real_item->id, delayed_dep.to,
-							   virt_item != real_item ? virt_item->id : -1);
+				add_dependency(real_source->id, delayed_dep.to, real_destination->id,
+							   virt_source != real_source ? virt_source->id : -1);
 			}
 			else {
 				msg_debug_cache("no delayed between %s(%d:%d) -> %s; %s is disabled",
 								delayed_dep.from.data(),
-								real_item->id, virt_item->id,
+								real_source->id, virt_source->id,
 								delayed_dep.to.data(),
 								delayed_dep.from.data());
 			}
@@ -529,16 +539,27 @@ auto symcache::get_item_by_name_mut(std::string_view name, bool resolve_parent) 
 	return it->second;
 }
 
-auto symcache::add_dependency(int id_from, std::string_view to, int virtual_id_from) -> void
+auto symcache::add_dependency(int id_from, std::string_view to, int id_to, int virtual_id_from) -> void
 {
 	g_assert(id_from >= 0 && id_from < (int) items_by_id.size());
+	g_assert(id_to >= 0 && id_to < (int) items_by_id.size());
 	const auto &source = items_by_id[id_from];
+	const auto &dest = items_by_id[id_to];
 	g_assert(source.get() != nullptr);
+	g_assert(dest.get() != nullptr);
 
-	source->deps.emplace_back(nullptr,
-							  std::string(to),
-							  id_from,
-							  -1);
+	if (!source->deps.contains(id_to)) {
+		msg_debug_cache("add dependency %s(%d) -> %s(%d)",
+						source->symbol.c_str(), source->id, to.data(), dest->id);
+		source->deps.emplace(id_to, cache_dependency{dest.get(),
+													 std::string(to),
+													 -1});
+	}
+	else {
+		msg_debug_cache("duplicate dependency %s -> %s",
+						source->symbol.c_str(), to.data());
+		return;
+	}
 
 
 	if (virtual_id_from >= 0) {
@@ -546,10 +567,18 @@ auto symcache::add_dependency(int id_from, std::string_view to, int virtual_id_f
 		/* We need that for settings id propagation */
 		const auto &vsource = items_by_id[virtual_id_from];
 		g_assert(vsource.get() != nullptr);
-		vsource->deps.emplace_back(nullptr,
-								   std::string(to),
-								   -1,
-								   virtual_id_from);
+
+		if (!vsource->deps.contains(id_to)) {
+			msg_debug_cache("add virtual dependency %s -> %s",
+							vsource->symbol.c_str(), to.data());
+			vsource->deps.emplace(id_to, cache_dependency{dest.get(),
+														  std::string(to),
+														  virtual_id_from});
+		}
+		else {
+			msg_debug_cache("duplicate virtual dependency %s -> %s",
+							vsource->symbol.c_str(), to.data());
+		}
 	}
 }
 
@@ -625,7 +654,7 @@ auto symcache::resort() -> void
 		tsort_mark(it, tsort_mask::TEMP);
 		msg_debug_cache_lambda("visiting node: %s (%d)", it->symbol.c_str(), cur_order);
 
-		for (const auto &dep: it->deps) {
+		for (const auto &[id, dep]: it->deps) {
 			msg_debug_cache_lambda("visiting dep: %s (%d)", dep.item->symbol.c_str(), cur_order + 1);
 			rec(dep.item, cur_order + 1, rec);
 		}
@@ -638,6 +667,7 @@ auto symcache::resort() -> void
 	 */
 	total_hits = 0;
 	auto used_items = ord->d.size();
+	msg_debug_cache("topologically sort %d filters", used_items);
 
 	for (const auto &it: ord->d) {
 		if (it->order == 0) {
@@ -696,7 +726,8 @@ auto symcache::resort() -> void
 	 * We enrich ord with all other symbol types without any sorting,
 	 * as it is done in another place
 	 */
-	constexpr auto append_items_vec = [](const auto &vec, auto &out) {
+	const auto append_items_vec = [&](const auto &vec, auto &out, const char *what) {
+		msg_debug_cache_lambda("append %d items; type = %s", (int) vec.size(), what);
 		for (const auto &it: vec) {
 			if (it) {
 				out.emplace_back(it->getptr());
@@ -704,12 +735,12 @@ auto symcache::resort() -> void
 		}
 	};
 
-	append_items_vec(connfilters, ord->d);
-	append_items_vec(prefilters, ord->d);
-	append_items_vec(postfilters, ord->d);
-	append_items_vec(idempotent, ord->d);
-	append_items_vec(composites, ord->d);
-	append_items_vec(classifiers, ord->d);
+	append_items_vec(connfilters, ord->d, "connection filters");
+	append_items_vec(prefilters, ord->d, "prefilters");
+	append_items_vec(postfilters, ord->d, "postfilters");
+	append_items_vec(idempotent, ord->d, "idempotent filters");
+	append_items_vec(composites, ord->d, "composites");
+	append_items_vec(classifiers, ord->d, "classifiers");
 
 	/* After sorting is done, we can assign all elements in the by_symbol hash */
 	for (const auto [i, it]: rspamd::enumerate(ord->d)) {
@@ -856,8 +887,7 @@ auto symcache::validate(bool strict) -> bool
 
 	for (auto &pair: items_by_symbol) {
 		auto &item = pair.second;
-		auto ghost = item->st->weight == 0;
-		auto skipped = !ghost;
+		auto skipped = item->st->weight != 0;
 
 		if (item->is_scoreable() && g_hash_table_lookup(cfg->symbols, item->symbol.c_str()) == nullptr) {
 			if (!std::isnan(cfg->unknown_weight)) {
@@ -871,29 +901,24 @@ auto symcache::validate(bool strict) -> bool
 
 				msg_info_cache("adding unknown symbol %s with weight: %.2f",
 							   item->symbol.c_str(), cfg->unknown_weight);
-				ghost = false;
 				skipped = false;
 			}
 			else {
+				/* No `unknown weight`, no static score, and no dynamic score */
 				skipped = true;
 			}
 		}
 		else {
+			/* We have a score, so we are not skipped */
 			skipped = false;
 		}
 
-		if (!ghost && skipped) {
+		if (skipped) {
 			if (!(item->flags & SYMBOL_TYPE_SKIPPED)) {
 				item->flags |= SYMBOL_TYPE_SKIPPED;
 				msg_warn_cache("symbol %s has no score registered, skip its check",
 							   item->symbol.c_str());
 			}
-		}
-
-		if (ghost) {
-			msg_debug_cache("symbol %s is registered as ghost symbol, it won't be inserted "
-							"to any metric",
-							item->symbol.c_str());
 		}
 
 		if (item->st->weight < 0 && item->priority == 0) {
@@ -953,7 +978,7 @@ auto symcache::validate(bool strict) -> bool
 			auto item = get_item_by_name_mut((const char *) k, false);
 
 			if (item) {
-				item->enabled = FALSE;
+				item->internal_flags &= ~cache_item::bit_enabled;
 			}
 		}
 	}
@@ -1215,7 +1240,7 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 		auto own_timeout = get_item_timeout(it);
 		auto max_child_timeout = 0.0;
 
-		for (const auto &dep: it->deps) {
+		for (const auto &[id, dep]: it->deps) {
 			auto cld_timeout = self(dep.item, self);
 
 			if (cld_timeout > max_child_timeout) {

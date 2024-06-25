@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,11 +78,11 @@ auto cache_item::process_deps(const symcache &cache) -> void
 	/* Allow logging macros to work */
 	auto log_tag = [&]() { return cache.log_tag(); };
 
-	for (auto &dep: deps) {
+	for (auto &[_id, dep]: deps) {
 		msg_debug_cache("process real dependency %s on %s", symbol.c_str(), dep.sym.c_str());
 		auto *dit = cache.get_item_by_name_mut(dep.sym, true);
 
-		if (dep.vid >= 0) {
+		if (dep.virtual_source_id >= 0) {
 			/* Case of the virtual symbol that depends on another (maybe virtual) symbol */
 			const auto *vdit = cache.get_item_by_name(dep.sym, false);
 
@@ -94,7 +94,7 @@ auto cache_item::process_deps(const symcache &cache) -> void
 			}
 			else {
 				msg_debug_cache("process virtual dependency %s(%d) on %s(%d)", symbol.c_str(),
-								dep.vid, vdit->symbol.c_str(), vdit->id);
+								dep.virtual_source_id, vdit->symbol.c_str(), vdit->id);
 
 				unsigned nids = 0;
 
@@ -148,6 +148,8 @@ auto cache_item::process_deps(const symcache &cache) -> void
 
 					continue;
 				}
+
+				dep.item = dit;
 			}
 			else {
 				if (dit->id == id) {
@@ -161,36 +163,54 @@ auto cache_item::process_deps(const symcache &cache) -> void
 						auto *parent = get_parent_mut(cache);
 
 						if (parent) {
-							dit->rdeps.emplace_back(parent, parent->symbol, parent->id, -1);
+							if (!dit->rdeps.contains(parent->id)) {
+								dit->rdeps.emplace(parent->id, cache_dependency{parent, parent->symbol, -1});
+								msg_debug_cache("added reverse dependency from %d on %d", parent->id,
+												dit->id);
+							}
+							else {
+								msg_debug_cache("reverse dependency from %d on %d already exists",
+												parent->id, dit->id);
+							}
 							dep.item = dit;
-							dep.id = dit->id;
-
-							msg_debug_cache("added reverse dependency from %d on %d", parent->id,
-											dit->id);
+						}
+						else {
+							msg_err_cache("cannot find parent for virtual symbol %s, when resolving dependency %s",
+										  symbol.c_str(), dep.sym.c_str());
 						}
 					}
 					else {
 						dep.item = dit;
-						dep.id = dit->id;
-						dit->rdeps.emplace_back(this, symbol, id, -1);
-						msg_debug_cache("added reverse dependency from %d on %d", id,
-										dit->id);
+						if (!dit->rdeps.contains(id)) {
+							dit->rdeps.emplace(id, cache_dependency{this, symbol, -1});
+							msg_debug_cache("added reverse dependency from %d on %d", id,
+											dit->id);
+						}
+						else {
+							msg_debug_cache("reverse dependency from %d on %d already exists",
+											id, dit->id);
+						}
 					}
 				}
 			}
 		}
-		else if (dep.id >= 0) {
-			msg_err_cache("cannot find dependency on symbol %s for symbol %s",
+		else {
+			msg_err_cache("cannot find dependency named %s for symbol %s",
 						  dep.sym.c_str(), symbol.c_str());
-
-			continue;
 		}
 	}
 
 	// Remove empty deps
-	deps.erase(std::remove_if(std::begin(deps), std::end(deps),
-							  [](const auto &dep) { return !dep.item; }),
-			   std::end(deps));
+	for (auto it = deps.begin(); it != deps.end();) {
+		if (it->second.item == nullptr) {
+			msg_info_cache("remove empty dependency on %s for symbol %s",
+						   it->second.sym.c_str(), symbol.c_str());
+			it = deps.erase(it);
+		}
+		else {
+			++it;
+		}
+	}
 }
 
 auto cache_item::resolve_parent(const symcache &cache) -> bool
@@ -199,12 +219,6 @@ auto cache_item::resolve_parent(const symcache &cache) -> bool
 
 	if (is_virtual()) {
 		auto &virt = std::get<virtual_item>(specific);
-
-		if (virt.get_parent(cache)) {
-			msg_debug_cache("trying to resolve parent twice for %s", symbol.c_str());
-
-			return false;
-		}
 
 		return virt.resolve_parent(cache);
 	}
@@ -320,11 +334,11 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 	}
 
 	/* Static checks */
-	if (!enabled ||
+	if (!(internal_flags & cache_item::bit_enabled) ||
 		(RSPAMD_TASK_IS_EMPTY(task) && !(flags & SYMBOL_TYPE_EMPTY)) ||
 		(flags & SYMBOL_TYPE_MIME_ONLY && !RSPAMD_TASK_IS_MIME(task))) {
 
-		if (!enabled) {
+		if (!(internal_flags & cache_item::bit_enabled)) {
 			msg_debug_cache_task("skipping %s of %s as it is permanently disabled",
 								 what, symbol.c_str());
 

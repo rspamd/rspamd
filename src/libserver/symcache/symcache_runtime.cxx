@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,19 +38,26 @@ auto symcache_runtime::create(struct rspamd_task *task, symcache &cache) -> symc
 {
 	cache.maybe_resort();
 
-	auto &&cur_order = cache.get_cache_order();
+	auto cur_order = cache.get_cache_order();
+	auto allocated_size = sizeof(symcache_runtime) +
+						  sizeof(struct cache_dynamic_item) * cur_order->size();
 	auto *checkpoint = (symcache_runtime *) rspamd_mempool_alloc0(task->task_pool,
-																  sizeof(symcache_runtime) +
-																	  sizeof(struct cache_dynamic_item) * cur_order->size());
-
-	checkpoint->order = cache.get_cache_order();
-
+																  allocated_size);
+	msg_debug_cache_task("create symcache runtime for task: %d bytes, %d items", (int) allocated_size, (int) cur_order->size());
+	checkpoint->order = std::move(cur_order);
+	checkpoint->slow_status = slow_status::none;
 	/* Calculate profile probability */
 	ev_now_update_if_cheap(task->event_loop);
 	ev_tstamp now = ev_now(task->event_loop);
 	checkpoint->profile_start = now;
 	checkpoint->lim = rspamd_task_get_required_score(task, task->result);
 
+	/*
+	 * We enable profiling if the following conditions are met:
+	 * - we have not profiled for a long time
+	 * - message is large
+	 * - random probability
+	 */
 	if ((cache.get_last_profile() == 0.0 || now > cache.get_last_profile() + PROFILE_MAX_TIME) ||
 		(task->msg.len >= PROFILE_MESSAGE_SIZE_THRESHOLD) ||
 		(rspamd_random_double_fast() >= (1 - PROFILE_PROBABILITY))) {
@@ -154,14 +161,20 @@ auto symcache_runtime::process_settings(struct rspamd_task *task, const symcache
 	return false;
 }
 
+auto symcache_runtime::savepoint_dtor(struct rspamd_task *task) -> void
+{
+	msg_debug_cache_task("destroying savepoint");
+	/* Drop shared ownership */
+	order.reset();
+}
+
 auto symcache_runtime::disable_all_symbols(int skip_mask) -> void
 {
 	for (auto [i, item]: rspamd::enumerate(order->d)) {
 		auto *dyn_item = &dynamic_items[i];
 
 		if (!(item->get_flags() & skip_mask)) {
-			dyn_item->finished = true;
-			dyn_item->started = true;
+			dyn_item->status = cache_item_status::finished;
 		}
 	}
 }
@@ -175,8 +188,7 @@ auto symcache_runtime::disable_symbol(struct rspamd_task *task, const symcache &
 		auto *dyn_item = get_dynamic_item(item->id);
 
 		if (dyn_item) {
-			dyn_item->finished = true;
-			dyn_item->started = true;
+			dyn_item->status = cache_item_status::finished;
 			msg_debug_cache_task("disable execution of %s", name.data());
 
 			return true;
@@ -201,8 +213,7 @@ auto symcache_runtime::enable_symbol(struct rspamd_task *task, const symcache &c
 		auto *dyn_item = get_dynamic_item(item->id);
 
 		if (dyn_item) {
-			dyn_item->finished = false;
-			dyn_item->started = false;
+			dyn_item->status = cache_item_status::not_started;
 			msg_debug_cache_task("enable execution of %s", name.data());
 
 			return true;
@@ -227,7 +238,7 @@ auto symcache_runtime::is_symbol_checked(const symcache &cache, std::string_view
 		auto *dyn_item = get_dynamic_item(item->id);
 
 		if (dyn_item) {
-			return dyn_item->started;
+			return dyn_item->status != cache_item_status::not_started;
 		}
 	}
 
@@ -247,7 +258,7 @@ auto symcache_runtime::is_symbol_enabled(struct rspamd_task *task, const symcach
 			auto *dyn_item = get_dynamic_item(item->id);
 
 			if (dyn_item) {
-				if (dyn_item->started) {
+				if (dyn_item->status != cache_item_status::not_started) {
 					/* Already started */
 					return false;
 				}
@@ -331,11 +342,8 @@ auto symcache_runtime::process_pre_postfilters(struct rspamd_task *task,
 
 		auto dyn_item = get_dynamic_item(item->id);
 
-		if (!dyn_item->started && !dyn_item->finished) {
-			if (has_slow) {
-				/* Delay */
-				has_slow = false;
-
+		if (dyn_item->status == cache_item_status::not_started) {
+			if (slow_status == slow_status::enabled) {
 				return false;
 			}
 
@@ -410,7 +418,7 @@ auto symcache_runtime::process_filters(struct rspamd_task *task, symcache &cache
 
 		auto dyn_item = &dynamic_items[idx];
 
-		if (!dyn_item->started) {
+		if (dyn_item->status == cache_item_status::not_started) {
 			all_done = false;
 
 			if (!check_item_deps(task, cache, item.get(),
@@ -424,10 +432,7 @@ auto symcache_runtime::process_filters(struct rspamd_task *task, symcache &cache
 
 			process_symbol(task, cache, item.get(), dyn_item);
 
-			if (has_slow) {
-				/* Delay */
-				has_slow = false;
-
+			if (slow_status == slow_status::enabled) {
 				return false;
 			}
 		}
@@ -453,15 +458,16 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 	}
 
 	g_assert(!item->is_virtual());
-	if (dyn_item->started) {
+	if (dyn_item->status != cache_item_status::not_started) {
 		/*
 		 * This can actually happen when deps span over different layers
 		 */
-		return dyn_item->finished;
+		msg_debug_cache_task("skip already started %s(%d) symbol", item->symbol.c_str(), item->id);
+
+		return dyn_item->status == cache_item_status::finished;
 	}
 
 	/* Check has been started */
-	dyn_item->started = true;
 	auto check = true;
 
 	if (!item->is_allowed(task, true) || !item->check_conditions(task)) {
@@ -469,6 +475,7 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 	}
 
 	if (check) {
+		dyn_item->status = cache_item_status::started;
 		msg_debug_cache_task("execute %s, %d; symbol type = %s", item->symbol.data(),
 							 item->id, item_type_to_str(item->type));
 
@@ -482,24 +489,43 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 		cur_item = dyn_item;
 		items_inflight++;
 		/* Callback now must finalize itself */
-		item->call(task, dyn_item);
-		cur_item = nullptr;
 
-		if (items_inflight == 0) {
+
+		if (item->call(task, dyn_item)) {
+			cur_item = nullptr;
+
+			if (items_inflight == 0) {
+				msg_debug_cache_task("item %s, %d is now finished (no async events)", item->symbol.data(),
+									 item->id);
+				dyn_item->status = cache_item_status::finished;
+				return true;
+			}
+
+			if (dyn_item->async_events == 0 && dyn_item->status != cache_item_status::finished) {
+				msg_err_cache_task("critical error: item %s has no async events pending, "
+								   "but it is not finalised",
+								   item->symbol.data());
+				g_assert_not_reached();
+			}
+			else if (dyn_item->async_events > 0) {
+				msg_debug_cache_task("item %s, %d is now pending with %d async events", item->symbol.data(),
+									 item->id, dyn_item->async_events);
+			}
+
+			return false;
+		}
+		else {
+			/* We were not able to call item, so we assume it is not callable */
+			msg_debug_cache_task("cannot call %s, %d; symbol type = %s", item->symbol.data(),
+								 item->id, item_type_to_str(item->type));
+			dyn_item->status = cache_item_status::finished;
 			return true;
 		}
-
-		if (dyn_item->async_events == 0 && !dyn_item->finished) {
-			msg_err_cache_task("critical error: item %s has no async events pending, "
-							   "but it is not finalised",
-							   item->symbol.data());
-			g_assert_not_reached();
-		}
-
-		return false;
 	}
 	else {
-		dyn_item->finished = true;
+		msg_debug_cache_task("do not check %s, %d", item->symbol.data(),
+							 item->id);
+		dyn_item->status = cache_item_status::finished;
 	}
 
 	return true;
@@ -551,6 +577,9 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 	auto log_func = RSPAMD_LOG_FUNC;
 
 	auto inner_functor = [&](int recursion, cache_item *item, cache_dynamic_item *dyn_item, auto rec_functor) -> bool {
+		msg_debug_cache_task_lambda("recursively (%d) check dependencies for %s(%d)", recursion,
+									item->symbol.c_str(), item->id);
+
 		if (recursion > max_recursion) {
 			msg_err_task_lambda("cyclic dependencies: maximum check level %ud exceed when "
 								"checking dependencies for %s",
@@ -561,18 +590,18 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 
 		auto ret = true;
 
-		for (const auto &dep: item->deps) {
+		for (const auto &[dest_id, dep]: item->deps) {
 			if (!dep.item) {
 				/* Assume invalid deps as done */
 				msg_debug_cache_task_lambda("symbol %d(%s) has invalid dependencies on %d(%s)",
-											item->id, item->symbol.c_str(), dep.id, dep.sym.c_str());
+											item->id, item->symbol.c_str(), dest_id, dep.sym.c_str());
 				continue;
 			}
 
 			auto *dep_dyn_item = get_dynamic_item(dep.item->id);
 
-			if (!dep_dyn_item->finished) {
-				if (!dep_dyn_item->started) {
+			if (dep_dyn_item->status != cache_item_status::finished) {
+				if (dep_dyn_item->status == cache_item_status::not_started) {
 					/* Not started */
 					if (!check_only) {
 						if (!rec_functor(recursion + 1,
@@ -583,7 +612,7 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 							ret = false;
 							msg_debug_cache_task_lambda("delayed dependency %d(%s) for "
 														"symbol %d(%s)",
-														dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
+														dest_id, dep.sym.c_str(), item->id, item->symbol.c_str());
 						}
 						else if (!process_symbol(task, cache, dep.item, dep_dyn_item)) {
 							/* Now started, but has events pending */
@@ -591,33 +620,36 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 							msg_debug_cache_task_lambda("started check of %d(%s) symbol "
 														"as dep for "
 														"%d(%s)",
-														dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
+														dest_id, dep.sym.c_str(), item->id, item->symbol.c_str());
 						}
 						else {
 							msg_debug_cache_task_lambda("dependency %d(%s) for symbol %d(%s) is "
 														"already processed",
-														dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
+														dest_id, dep.sym.c_str(), item->id, item->symbol.c_str());
 						}
 					}
 					else {
 						msg_debug_cache_task_lambda("dependency %d(%s) for symbol %d(%s) "
 													"cannot be started now",
-													dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
+													dest_id, dep.sym.c_str(), item->id, item->symbol.c_str());
 						ret = false;
 					}
 				}
 				else {
 					/* Started but not finished */
 					msg_debug_cache_task_lambda("dependency %d(%s) for symbol %d(%s) is "
-												"still executing",
-												dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
+												"still executing (%d events pending)",
+												dest_id, dep.sym.c_str(),
+												item->id, item->symbol.c_str(),
+												dep_dyn_item->async_events);
+					g_assert(dep_dyn_item->async_events > 0);
 					ret = false;
 				}
 			}
 			else {
 				msg_debug_cache_task_lambda("dependency %d(%s) for symbol %d(%s) is already "
-											"checked",
-											dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
+											"finished",
+											dest_id, dep.sym.c_str(), item->id, item->symbol.c_str());
 			}
 		}
 
@@ -654,7 +686,7 @@ rspamd_symcache_delayed_item_cb(EV_P_ ev_timer *w, int what)
 	if (cbd->event) {
 		cbd->event = nullptr;
 
-		/* Timer will be stopped here */
+		/* Timer will be stopped here; `has_slow` is also reset there */
 		rspamd_session_remove_event(cbd->task->s,
 									rspamd_symcache_delayed_item_fin, cbd);
 
@@ -701,7 +733,7 @@ auto symcache_runtime::finalize_item(struct rspamd_task *task, cache_dynamic_ite
 	}
 
 	msg_debug_cache_task("process finalize for item %s(%d)", item->symbol.c_str(), item->id);
-	dyn_item->finished = true;
+	dyn_item->status = cache_item_status::finished;
 	items_inflight--;
 	cur_item = nullptr;
 
@@ -732,38 +764,18 @@ auto symcache_runtime::finalize_item(struct rspamd_task *task, cache_dynamic_ite
 		}
 		else {
 			/* Just reset as no timer is added */
-			has_slow = FALSE;
+			slow_status = slow_status::none;
 			return false;
 		}
 
 		return true;
 	};
 
-	if (profile) {
+	/* Check if we need to profile symbol (always profile when we have seen this item to be slow */
+	if (profile || item->flags & cache_item::bit_slow) {
 		ev_now_update_if_cheap(task->event_loop);
 		auto diff = ((ev_now(task->event_loop) - profile_start) * 1e3 -
 					 dyn_item->start_msec);
-
-		if (diff > slow_diff_limit) {
-
-			if (!has_slow) {
-				has_slow = true;
-
-				msg_info_task("slow rule: %s(%d): %.2f ms; enable slow timer delay",
-							  item->symbol.c_str(), item->id,
-							  diff);
-
-				if (enable_slow_timer()) {
-					/* Allow network execution */
-					return;
-				}
-			}
-			else {
-				msg_info_task("slow rule: %s(%d): %.2f ms",
-							  item->symbol.c_str(), item->id,
-							  diff);
-			}
-		}
 
 		if (G_UNLIKELY(RSPAMD_TASK_IS_PROFILING(task))) {
 			rspamd_task_profile_set(task, item->symbol.c_str(), diff);
@@ -771,6 +783,62 @@ auto symcache_runtime::finalize_item(struct rspamd_task *task, cache_dynamic_ite
 
 		if (rspamd_worker_is_scanner(task->worker)) {
 			rspamd_set_counter(item->cd, diff);
+		}
+
+		if (diff > slow_diff_limit) {
+
+			item->internal_flags |= cache_item::bit_slow;
+
+			if (item->internal_flags & cache_item::bit_sync) {
+
+				/*
+				 * We also need to adjust start timer for all async rules that
+				 * are started before this rule, as this rule could delay them
+				 * on its own. Hence, we need to make some corrections for all
+				 * rules pending
+				 */
+				bool need_slow = false;
+				for (const auto &[i, other_item]: rspamd::enumerate(order->d)) {
+					auto *other_dyn_item = &dynamic_items[i];
+
+					if (other_dyn_item->status == cache_item_status::pending && other_dyn_item->start_msec <= dyn_item->start_msec) {
+						other_dyn_item->start_msec += diff;
+
+						msg_debug_cache_task("slow sync rule %s(%d); adjust start time for pending rule %s(%d) by %.2fms to %dms",
+											 item->symbol.c_str(), item->id,
+											 other_item->symbol.c_str(),
+											 other_item->id,
+											 diff,
+											 (int) other_dyn_item->start_msec);
+						/* We have something pending, so we need to enable slow timer */
+						need_slow = true;
+					}
+				}
+
+				if (need_slow && slow_status != slow_status::enabled) {
+					slow_status = slow_status::enabled;
+
+					msg_info_task("slow synchronous rule: %s(%d): %.2f ms; enable 100ms idle timer to allow other rules to be finished",
+								  item->symbol.c_str(), item->id,
+								  diff);
+					if (enable_slow_timer()) {
+						return;
+					}
+				}
+				else {
+					msg_info_task("slow synchronous rule: %s(%d): %.2f ms; idle timer has already been activated for this scan",
+								  item->symbol.c_str(), item->id,
+								  diff);
+				}
+			}
+			else {
+				msg_notice_task("slow asynchronous rule: %s(%d): %.2f ms; no idle timer is needed",
+								item->symbol.c_str(), item->id,
+								diff);
+			}
+		}
+		else {
+			item->internal_flags &= ~cache_item::bit_slow;
 		}
 	}
 
@@ -786,10 +854,10 @@ auto symcache_runtime::process_item_rdeps(struct rspamd_task *task, cache_item *
 		return;
 	}
 
-	for (const auto &rdep: item->rdeps) {
+	for (const auto &[id, rdep]: item->rdeps.values()) {
 		if (rdep.item) {
 			auto *dyn_item = get_dynamic_item(rdep.item->id);
-			if (!dyn_item->started) {
+			if (dyn_item->status == cache_item_status::not_started) {
 				msg_debug_cache_task("check item %d(%s) rdep of %s ",
 									 rdep.item->id, rdep.item->symbol.c_str(), item->symbol.c_str());
 

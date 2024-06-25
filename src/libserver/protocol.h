@@ -51,7 +51,7 @@ struct rspamd_protocol_log_message_sum {
 	struct rspamd_protocol_log_symbol_result results[];
 };
 
-struct rspamd_metric;
+struct rspamd_main;
 
 /**
  * Process headers into HTTP message and set appropriate task fields
@@ -126,7 +126,7 @@ ucl_object_t *rspamd_protocol_write_ucl(struct rspamd_task *task,
  * @param task task object
  * @return 0 if we wrote reply and -1 if there was some error
  */
-void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout);
+void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout, struct rspamd_main *srv);
 
 /**
  * Convert rspamd output to legacy protocol reply
