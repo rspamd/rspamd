@@ -17,8 +17,8 @@ limitations under the License.
 local N = "gpt"
 
 if confighelp then
-  rspamd_config:add_example(nil, 'greylist',
-      "Performs adaptive greylisting using Redis",
+  rspamd_config:add_example(nil, 'gpt',
+      "Performs postfiltering using GPT model",
       [[
 gpt {
   # Supported types: openai
