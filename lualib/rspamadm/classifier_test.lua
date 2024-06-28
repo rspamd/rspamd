@@ -40,6 +40,14 @@ parser:option "-c --cv-fraction"
       :argname("<fraction>")
       :convert(tonumber)
       :default('0.7')
+parser:option "--spam-symbol"
+      :description("Use specific spam symbol (instead of BAYES_SPAM)")
+      :argname("<symbol>")
+      :default('BAYES_SPAM')
+parser:option "--ham-symbol"
+      :description("Use specific ham symbol (instead of BAYES_HAM)")
+      :argname("<symbol>")
+      :default('BAYES_HAM')
 
 local opts
 
@@ -86,7 +94,8 @@ local function classify_files(files)
   local fname = os.tmpname()
   list_to_file(files, fname)
 
-  local settings_header = '--header Settings=\"{symbols_enabled=[BAYES_SPAM, BAYES_HAM]}\"'
+  local settings_header = string.format('--header Settings=\"{symbols_enabled=[%s, %s]}\"',
+      opts.spam_symbol, opts.ham_symbol)
   local rspamc_command = string.format("%s %s --connect %s --compact -n %s -t %.3f --files-list=%s",
       opts.rspamc,
       settings_header,
@@ -107,9 +116,9 @@ local function classify_files(files)
     local file = obj.filename
     local symbols = obj.symbols or {}
 
-    if symbols["BAYES_SPAM"] then
+    if symbols[opts.spam_symbol] then
       table.insert(results, { result = "spam", file = file })
-    elseif symbols["BAYES_HAM"] then
+    elseif symbols[opts.ham_symbol] then
       table.insert(results, { result = "ham", file = file })
     end
   end
