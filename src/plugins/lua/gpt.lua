@@ -133,16 +133,18 @@ local function default_condition(task)
   end
 
   if nwords > settings.max_tokens then
-    -- We need to truncate words
+    -- We need to truncate words (sometimes get_words_count returns a different number comparing to `get_words`)
     local words = sel_part:get_words('norm')
-    -- Trim something that does not fit
-    for i = nwords, settings.max_tokens, -1 do
-      rawset(words, i, nil)
+    nwords = #words
+    if nwords > settings.max_tokens then
+      -- Trim something that does not fit
+      for i = nwords, settings.max_tokens, -1 do
+        rawset(words, i, nil)
+      end
+      return true, table.concat(words, ' ')
     end
-    return true, table.concat(words, ' ')
-  else
-    return true, sel_part:get_content_oneline()
   end
+  return true, sel_part:get_content_oneline()
 end
 
 local function default_conversion(task, input)
