@@ -637,9 +637,6 @@ bool rspamd_cryptobox_verify(const unsigned char *sig,
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert(0);
 #else
-		EC_KEY *lk;
-		EC_POINT *ec_pub;
-		BIGNUM *bn_pub;
 		EVP_MD_CTX *sha_ctx;
 		unsigned char h[64];
 
@@ -649,14 +646,6 @@ bool rspamd_cryptobox_verify(const unsigned char *sig,
 		EVP_DigestUpdate(sha_ctx, m, mlen);
 		EVP_DigestFinal(sha_ctx, h, NULL);
 
-		/* Key setup */
-		lk = EC_KEY_new_by_curve_name(CRYPTOBOX_CURVE_NID);
-		g_assert(lk != NULL);
-		bn_pub = BN_bin2bn(pk, rspamd_cryptobox_pk_bytes(mode), NULL);
-		g_assert(bn_pub != NULL);
-		ec_pub = ec_point_bn2point_compat(EC_KEY_get0_group(lk), bn_pub, NULL, NULL);
-		g_assert(ec_pub != NULL);
-		g_assert(EC_KEY_set_public_key(lk, ec_pub) == 1);
 
 #if OPENSSL_VERSION_MAJOR >= 3
 		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(CRYPTOBOX_CURVE_NID, ENGINE_F_ENGINE_NEW);
@@ -672,14 +661,29 @@ bool rspamd_cryptobox_verify(const unsigned char *sig,
 		EVP_PKEY_CTX_free(pctx);
 
 #else
+		EC_KEY *lk;
+		EC_POINT *ec_pub;
+		BIGNUM *bn_pub;
+
+		/* Key setup */
+		lk = EC_KEY_new_by_curve_name(CRYPTOBOX_CURVE_NID);
+		g_assert(lk != NULL);
+		bn_pub = BN_bin2bn(pk, rspamd_cryptobox_pk_bytes(mode), NULL);
+		g_assert(bn_pub != NULL);
+		ec_pub = ec_point_bn2point_compat(EC_KEY_get0_group(lk), bn_pub, NULL, NULL);
+		g_assert(ec_pub != NULL);
+		g_assert(EC_KEY_set_public_key(lk, ec_pub) == 1);
+
 		/* ECDSA */
 		ret = ECDSA_verify(0, h, sizeof(h), sig, siglen, lk) == 1;
-#endif
 
 		EC_KEY_free(lk);
-		EVP_MD_CTX_destroy(sha_ctx);
+
 		BN_free(bn_pub);
 		EC_POINT_free(ec_pub);
+#endif
+
+		EVP_MD_CTX_destroy(sha_ctx);
 #endif
 	}
 
