@@ -138,11 +138,7 @@ local function default_condition(task)
     local words = sel_part:get_words('norm')
     nwords = #words
     if nwords > settings.max_tokens then
-      -- Trim something that does not fit
-      for i = nwords, settings.max_tokens, -1 do
-        rawset(words, i, nil)
-      end
-      return true, table.concat(words, ' ')
+      return true, table.concat(words, ' ', 1, settings.max_tokens)
     end
   end
   return true, sel_part:get_content_oneline()
