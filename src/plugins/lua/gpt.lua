@@ -221,13 +221,18 @@ local function openai_gpt_check(task)
 
     if reply > 0.75 then
       task:insert_result('GPT_SPAM', (reply - 0.75) * 4, tostring(reply))
+      if settings.autolearn then
+        task:set_flag("learn_spam")
+      end
     elseif reply < 0.25 then
       task:insert_result('GPT_HAM', (0.25 - reply) * 4, tostring(reply))
+      if settings.autolearn then
+        task:set_flag("learn_ham")
+      end
     else
       lua_util.debugm(N, task, "uncertain result: %s", reply)
     end
 
-    -- TODO: add autolearn here
   end
 
   local body = {
