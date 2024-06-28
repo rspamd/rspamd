@@ -189,7 +189,7 @@ local function openai_gpt_check(task)
   local ret, content = settings.condition(task)
 
   if not ret then
-    lua_util.info(N, task, "skip checking gpt as the condition is not met: %s", content)
+    rspamd_logger.info(task, "skip checking gpt as the condition is not met: %s", content)
     return
   end
 
