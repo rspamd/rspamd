@@ -496,23 +496,9 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm,
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert(0);
 #else
-		EC_KEY *lk;
-		EC_POINT *ec_pub;
-		BIGNUM *bn_pub, *bn_sec;
 		int len;
 		unsigned char s[32];
 
-		lk = EC_KEY_new_by_curve_name(CRYPTOBOX_CURVE_NID);
-		g_assert(lk != NULL);
-
-		bn_pub = BN_bin2bn(pk, rspamd_cryptobox_pk_bytes(mode), NULL);
-		g_assert(bn_pub != NULL);
-		bn_sec = BN_bin2bn(sk, sizeof(rspamd_sk_t), NULL);
-		g_assert(bn_sec != NULL);
-
-		g_assert(EC_KEY_set_private_key(lk, bn_sec) == 1);
-		ec_pub = ec_point_bn2point_compat(EC_KEY_get0_group(lk), bn_pub, NULL, NULL);
-		g_assert(ec_pub != NULL);
 #if OPENSSL_VERSION_MAJOR >= 3
 		EVP_PKEY *priv_pkey = EVP_PKEY_new_raw_private_key(0, ENGINE_F_ENGINE_NEW, sk, sizeof(rspamd_sk_t));
 		g_assert(priv_pkey != NULL);
@@ -537,17 +523,34 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm,
 		g_assert(len == s_len);
 		EVP_PKEY_CTX_free(pctx);
 #else
+		EC_KEY *lk;
+		EC_POINT *ec_pub;
+		BIGNUM *bn_pub, *bn_sec;
+
+		lk = EC_KEY_new_by_curve_name(CRYPTOBOX_CURVE_NID);
+		g_assert(lk != NULL);
+
+		bn_pub = BN_bin2bn(pk, rspamd_cryptobox_pk_bytes(mode), NULL);
+		g_assert(bn_pub != NULL);
+		bn_sec = BN_bin2bn(sk, sizeof(rspamd_sk_t), NULL);
+		g_assert(bn_sec != NULL);
+
+		g_assert(EC_KEY_set_private_key(lk, bn_sec) == 1);
+		ec_pub = ec_point_bn2point_compat(EC_KEY_get0_group(lk), bn_pub, NULL, NULL);
+		g_assert(ec_pub != NULL);
+
 		len = ECDH_compute_key(s, sizeof(s), ec_pub, lk, NULL);
 		g_assert(len == sizeof(s));
-#endif
-		/* Still do hchacha iteration since we are not using SHA1 KDF */
-		hchacha(s, n0, nm, 20);
 
 		EC_KEY_free(lk);
 
 		EC_POINT_free(ec_pub);
 		BN_free(bn_sec);
 		BN_free(bn_pub);
+#endif
+		/* Still do hchacha iteration since we are not using SHA1 KDF */
+		hchacha(s, n0, nm, 20);
+
 #endif
 	}
 }
