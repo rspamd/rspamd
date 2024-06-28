@@ -198,6 +198,7 @@ local function openai_gpt_check(task)
     body = ucl.to_format(body, 'json-compact', true),
     task = task,
     upstream = upstream,
+    use_gzip = true,
   }
 
   rspamd_http.request(http_params)
