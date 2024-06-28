@@ -55,6 +55,15 @@ local rspamd_http = require "rspamd_http"
 local rspamd_logger = require "rspamd_logger"
 local ucl = require "ucl"
 
+-- Exclude checks if one of those is found
+local default_symbols_to_except = {
+  'BAYES_SPAM', -- We already know that it is a spam, so we can safely skip it, but no same logic for HAM!
+  'WHITELIST_SPF',
+  'WHITELIST_DKIM',
+  'WHITELIST_DMARC',
+  'FUZZY_DENIED',
+}
+
 local settings = {
   type = 'openai',
   api_key = nil,
@@ -67,15 +76,7 @@ local settings = {
   condition = nil,
   autolearn = false,
   url = 'https://api.openai.com/v1/chat/completions',
-}
-
--- Exclude checks if one of those is found
-local symbols_to_except = {
-  'BAYES_SPAM', -- We already know that it is a spam, so we can safely skip it, but no same logic for HAM!
-  'WHITELIST_SPF',
-  'WHITELIST_DKIM',
-  'WHITELIST_DMARC',
-  'FUZZY_DENIED',
+  symbols_to_except = default_symbols_to_except,
 }
 
 local function default_condition(task)
@@ -100,7 +101,7 @@ local function default_condition(task)
     end
   end
   -- We also exclude some symbols
-  for _, s in ipairs(symbols_to_except) do
+  for _, s in ipairs(settings.symbols_to_except) do
     if task:has_symbol(s) then
       return false, 'skip as "' .. s .. '" is found'
     end
