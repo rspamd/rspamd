@@ -15,6 +15,7 @@ limitations under the License.
 ]] --
 
 local N = "gpt"
+local E = {}
 
 if confighelp then
   rspamd_config:add_example(nil, 'gpt',
@@ -244,6 +245,14 @@ local function openai_gpt_check(task)
       {
         role = 'system',
         content = settings.prompt
+      },
+      {
+        role = 'user',
+        content = 'Subject: ' .. task:get_subject() or '',
+      },
+      {
+        role = 'user',
+        content = 'From: ' .. ((task:get_from('mime') or E)[1] or E).name or '',
       },
       {
         role = 'user',
