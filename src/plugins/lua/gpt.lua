@@ -63,6 +63,8 @@ local default_symbols_to_except = {
   'WHITELIST_DKIM',
   'WHITELIST_DMARC',
   'FUZZY_DENIED',
+  'REPLY',
+  'BOUNCE',
 }
 
 local settings = {
