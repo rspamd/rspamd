@@ -1526,12 +1526,26 @@ unsigned int rspamd_cryptobox_signature_bytes(enum rspamd_cryptobox_mode mode)
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert(0);
 #else
+#if OPENSSL_VERSION_MAJOR >= 3
+		if (ssl_keylen == 0) {
+			EVP_PKEY *pkey = EVP_PKEY_new();
+			EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(pkey, ENGINE_F_ENGINE_NEW);
+			EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx, CRYPTOBOX_CURVE_NID);
+			g_assert(pctx != NULL);
+
+			EVP_PKEY_sign(pctx, NULL, (size_t *) ssl_keylen, NULL, 0);
+
+			EVP_PKEY_CTX_free(pctx);
+			EVP_PKEY_free(pkey);
+		}
+#else
 		if (ssl_keylen == 0) {
 			EC_KEY *lk;
 			lk = EC_KEY_new_by_curve_name(CRYPTOBOX_CURVE_NID);
 			ssl_keylen = ECDSA_size(lk);
 			EC_KEY_free(lk);
 		}
+#endif
 #endif
 		return ssl_keylen;
 	}
