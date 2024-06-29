@@ -411,11 +411,30 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert(0);
 #else
+
 		EC_KEY *ec_sec;
 		const BIGNUM *bn_sec;
-		const EC_POINT *ec_pub;
-		gsize len;
 
+		const EC_POINT *ec_pub;
+		EC_GROUP *group;
+		gsize len;
+#if OPENSSL_VERSION_MAJOR >= 3
+		EVP_PKEY *pkey = EVP_PKEY_new();
+		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(pkey, ENGINE_F_ENGINE_NEW);
+		EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx, CRYPTOBOX_CURVE_NID);
+		g_assert(pkey != NULL);
+		g_assert(EVP_PKEY_generate(pctx, &pkey) != 0);
+
+		group = EC_GROUP_new_by_curve_name(CRYPTOBOX_CURVE_NID);
+		EC_GROUP_set_point_conversion_form(group, EVP_PKEY_get_ec_point_conv_form(pkey));
+		g_assert(group != NULL);
+
+		ec_pub = EC_POINT_new(group);
+		g_assert(ec_pub != NULL);
+
+		EVP_PKEY_CTX_free(pctx);
+		EVP_PKEY_free(pkey);
+#else
 		ec_sec = EC_KEY_new_by_curve_name(CRYPTOBOX_CURVE_NID);
 		g_assert(ec_sec != NULL);
 		g_assert(EC_KEY_generate_key(ec_sec) != 0);
@@ -425,9 +444,11 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 		ec_pub = EC_KEY_get0_public_key(ec_sec);
 		g_assert(ec_pub != NULL);
 
+		group = EC_KEY_get0_group(ec_sec);
+#endif
 #if OPENSSL_VERSION_MAJOR >= 3
 		unsigned char *buf = NULL; /* Thanks openssl for this API (no) */
-		len = EC_POINT_point2buf(EC_KEY_get0_group(ec_sec), ec_pub,
+		len = EC_POINT_point2buf(group, ec_pub,
 								 POINT_CONVERSION_UNCOMPRESSED, &buf, NULL);
 		g_assert(len <= (int) rspamd_cryptobox_pk_bytes(mode));
 		memcpy(pk, buf, len);
@@ -440,12 +461,13 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 		g_assert(len <= (int) rspamd_cryptobox_pk_bytes(mode));
 		BN_bn2bin(bn_pub, pk);
 		BN_free(bn_pub);
+		EC_KEY_free(ec_sec);
 #endif
 
 		len = BN_num_bytes(bn_sec);
 		g_assert(len <= (int) sizeof(rspamd_sk_t));
 		BN_bn2bin(bn_sec, sk);
-		EC_KEY_free(ec_sec);
+		EC_GROUP_free(group);
 #endif
 	}
 }
