@@ -392,7 +392,6 @@ void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
 		EC_KEY_free(ec_sec);
 #endif
 
-
 		len = BN_num_bytes(bn_sec);
 		g_assert(len <= (int) sizeof(rspamd_sk_t));
 		BN_bn2bin(bn_sec, sk);
