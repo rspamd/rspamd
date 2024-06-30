@@ -90,7 +90,7 @@ local function train_classifier(files, command)
 end
 
 -- Function to classify files and return results
-local function classify_files(files)
+local function classify_files(files, known_spam_files, known_ham_files)
   local fname = os.tmpname()
   list_to_file(files, fname)
 
@@ -118,7 +118,13 @@ local function classify_files(files)
 
     if symbols[opts.spam_symbol] then
       table.insert(results, { result = "spam", file = file })
+      if known_ham_files[file] then
+        rspamd_logger.message("FP: %s is classified as spam but is known ham", file)
+      end
     elseif symbols[opts.ham_symbol] then
+      if known_spam_files[file] then
+        rspamd_logger.message("FN: %s is classified as ham but is known spam", file)
+      end
       table.insert(results, { result = "ham", file = file })
     end
   end
@@ -216,7 +222,7 @@ local function handler(args)
   print(string.format("Start cross validation, %d messages, %d connections", #cv_files, opts.nconns))
   -- Get classification results
   local t = rspamd_util.get_time()
-  local results = classify_files(cv_files)
+  local results = classify_files(cv_files, known_spam_files, known_ham_files)
   local elapsed = rspamd_util.get_time() - t
 
   -- Evaluate results
