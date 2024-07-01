@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 #include "config.h"
 #include "contrib/expected/expected.hpp"
 #include "libutil/cxx/error.hxx"
-#include <string>
+#include "libutil/cxx/string.hxx"
 #include <sys/stat.h>
 
 namespace rspamd::util {
@@ -33,12 +33,12 @@ public:
 	virtual ~raii_file() noexcept;
 
 	static auto open(const char *fname, int flags) -> tl::expected<raii_file, error>;
-	static auto open(const std::string &fname, int flags) -> tl::expected<raii_file, error>
+	static auto open(const sz::string &fname, int flags) -> tl::expected<raii_file, error>
 	{
 		return open(fname.c_str(), flags);
 	};
 	static auto create(const char *fname, int flags, int perms) -> tl::expected<raii_file, error>;
-	static auto create(const std::string &fname, int flags, int perms) -> tl::expected<raii_file, error>
+	static auto create(const sz::string &fname, int flags, int perms) -> tl::expected<raii_file, error>
 	{
 		return create(fname.c_str(), flags, perms);
 	};

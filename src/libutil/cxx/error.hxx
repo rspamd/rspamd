@@ -19,8 +19,7 @@
 #pragma once
 
 #include "config.h"
-#include <string>
-#include <string_view>
+#include "libutil/cxx/string.hxx"
 #include <cstdint>
 #include <optional>
 
@@ -54,7 +53,7 @@ public:
 	 * @param code
 	 * @param category
 	 */
-	error(std::string &&msg, int code, error_category category = error_category::INFORMAL)
+	error(sz::string &&msg, int code, error_category category = error_category::INFORMAL)
 		: error_code(code), category(category)
 	{
 		static_storage = std::move(msg);
@@ -66,7 +65,7 @@ public:
 	 * @param code
 	 * @param category
 	 */
-	error(const std::string &msg, int code, error_category category = error_category::INFORMAL)
+	error(const sz::string &msg, int code, error_category category = error_category::INFORMAL)
 		: error_code(code), category(category)
 	{
 		static_storage = msg;
@@ -148,12 +147,12 @@ public:
 	}
 
 public:
-	std::string_view error_message;
+	sz::string_view error_message;
 	int error_code;
 	error_category category;
 
 private:
-	std::optional<std::string> static_storage;
+	std::optional<sz::string> static_storage;
 };
 
 }// namespace rspamd::util

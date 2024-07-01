@@ -38,4 +38,5 @@
 | ankerl/svector         | 1.0.2   | MIT                 | NO      |                     |
 | ankerl/unordered_dense | 4.4.0   | MIT                 | NO      |                     |
 | backward-cpp           | 1.6     | MIT                 | NO      |                     |
+| stringzilla            | 3.5.0   | Apache2             | NO      |                     |
 
