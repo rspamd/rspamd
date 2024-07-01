@@ -17,7 +17,7 @@
 #include "lua/lua_common.h"
 #include "symcache_internal.hxx"
 #include "symcache_item.hxx"
-#include "fmt/core.h"
+#include "fmt/base.h"
 #include "libserver/task.h"
 #include "libutil/cxx/util.hxx"
 #include <numeric>

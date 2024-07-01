@@ -19,7 +19,7 @@
 #include "stat_internal.h"
 #include "upstream.h"
 #include "libserver/mempool_vars_internal.h"
-#include "fmt/core.h"
+#include "fmt/base.h"
 
 #include "libutil/cxx/error.hxx"
 
