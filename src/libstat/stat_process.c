@@ -884,7 +884,10 @@ rspamd_stat_learn(struct rspamd_task *task,
 	st_ctx = rspamd_stat_get_ctx();
 	g_assert(st_ctx != NULL);
 
+	msg_debug_bayes("learn stage %d has been called", stage);
+
 	if (st_ctx->classifiers->len == 0) {
+		msg_debug_bayes("no classifiers defined");
 		task->processed_stages |= stage;
 		return ret;
 	}
@@ -894,6 +897,7 @@ rspamd_stat_learn(struct rspamd_task *task,
 		rspamd_stat_preprocess(st_ctx, task, TRUE, spam);
 
 		if (!rspamd_stat_cache_check(st_ctx, task, classifier, spam, err)) {
+			msg_debug_bayes("cache check failed, skip learning");
 			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 	}
