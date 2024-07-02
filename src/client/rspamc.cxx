@@ -1053,21 +1053,21 @@ rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 				std::string colorized_action;
 				switch (act.value()) {
 				case METRIC_ACTION_REJECT:
-					colorized_action = fmt::format(fmt::fg(fmt::color::red), "reject");
+					colorized_action = fmt::format(fmt::fg(fmt::color::red), "{}", "reject");
 					break;
 				case METRIC_ACTION_NOACTION:
-					colorized_action = fmt::format(fmt::fg(fmt::color::green), "no action");
+					colorized_action = fmt::format(fmt::fg(fmt::color::green), "{}", "no action");
 					break;
 				case METRIC_ACTION_ADD_HEADER:
 				case METRIC_ACTION_REWRITE_SUBJECT:
-					colorized_action = fmt::format(fmt::fg(fmt::color::orange), ucl_object_tostring(elt));
+					colorized_action = fmt::format(fmt::fg(fmt::color::orange), "{}", ucl_object_tostring(elt));
 					break;
 				case METRIC_ACTION_GREYLIST:
 				case METRIC_ACTION_SOFT_REJECT:
-					colorized_action = fmt::format(fmt::fg(fmt::color::gray), ucl_object_tostring(elt));
+					colorized_action = fmt::format(fmt::fg(fmt::color::gray), "{}", ucl_object_tostring(elt));
 					break;
 				default:
-					colorized_action = fmt::format(fmt::emphasis::bold, ucl_object_tostring(elt));
+					colorized_action = fmt::format(fmt::emphasis::bold, "{}", ucl_object_tostring(elt));
 					break;
 				}
 

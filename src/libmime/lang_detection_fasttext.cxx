@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 #include "fasttext/fasttext.h"
 #include "libserver/cfg_file.h"
 #include "libserver/logger.h"
-#include "fmt/core.h"
+#include "fmt/base.h"
 #include "stat_api.h"
 #include <exception>
 #include <string_view>
