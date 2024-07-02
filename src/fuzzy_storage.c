@@ -57,13 +57,19 @@ static const char *local_db_name = "local";
 gpointer init_fuzzy(struct rspamd_config *cfg);
 void start_fuzzy(struct rspamd_worker *worker);
 
+#define msg_debug_fuzzy_storage(...) rspamd_conditional_debug_fast(NULL, NULL,                                         \
+																   rspamd_fuzzy_storage_log_id, "fuzzy_storage", NULL, \
+																   RSPAMD_LOG_FUNC,                                    \
+																   __VA_ARGS__)
+INIT_LOG_MODULE(fuzzy_storage);
+
 worker_t fuzzy_worker = {
 	"fuzzy",     /* Name */
 	init_fuzzy,  /* Init function */
 	start_fuzzy, /* Start function */
 	RSPAMD_WORKER_HAS_SOCKET | RSPAMD_WORKER_NO_STRICT_CONFIG,
-	RSPAMD_WORKER_SOCKET_UDP, /* UDP socket */
-	RSPAMD_WORKER_VER         /* Version info */
+	RSPAMD_WORKER_SOCKET_UDP | RSPAMD_WORKER_SOCKET_TCP, /* UDP + TCP socket */
+	RSPAMD_WORKER_VER                                    /* Version info */
 };
 
 struct fuzzy_global_stat {
@@ -153,6 +159,7 @@ struct rspamd_fuzzy_storage_ctx {
 	double expire;
 	double sync_timeout;
 	double delay;
+	double tcp_timeout;
 	struct rspamd_radix_map_helper *update_ips;
 	struct rspamd_hash_map_helper *update_keys;
 	struct rspamd_radix_map_helper *blocked_ips;
@@ -217,24 +224,62 @@ enum fuzzy_cmd_type {
 	CMD_ENCRYPTED_SHINGLE
 };
 
-struct fuzzy_session {
+#define FUZZY_TCP_BUFFER_LENGTH 8192
+
+struct rspamd_fuzzy_tcp_frame {
+	uint16_t size_hdr;                           /* We have to write this as well */
+	struct rspamd_fuzzy_encrypted_reply payload; /* Payload */
+};
+
+struct fuzzy_tcp_reply_queue_elt {
+	struct rspamd_fuzzy_tcp_frame rep;             /* Serialized reply */
+	unsigned int written;                          /* How many bytes have we already written */
+	struct fuzzy_tcp_reply_queue_elt *prev, *next; /* Link */
+};
+
+struct fuzzy_common_session {
+	struct rspamd_fuzzy_storage_ctx *ctx;
+	int fd;
+	struct ev_io io;
+	ev_tstamp timestamp;
 	struct rspamd_worker *worker;
 	rspamd_inet_addr_t *addr;
-	struct rspamd_fuzzy_storage_ctx *ctx;
-
-	struct rspamd_fuzzy_shingle_cmd cmd;       /* Can handle both shingles and non-shingles */
-	struct rspamd_fuzzy_encrypted_reply reply; /* Again: contains everything */
-	struct fuzzy_key_stat *ip_stat;
 
 	enum rspamd_fuzzy_epoch epoch;
 	enum fuzzy_cmd_type cmd_type;
-	int fd;
-	ev_tstamp timestamp;
-	struct ev_io io;
-	ref_entry_t ref;
+	struct rspamd_fuzzy_shingle_cmd cmd;
 	struct fuzzy_key *key;
 	struct rspamd_fuzzy_cmd_extension *extensions;
+	struct fuzzy_key_stat *ip_stat;
 	unsigned char nm[rspamd_cryptobox_MAX_NMBYTES];
+};
+
+struct fuzzy_tcp_session {
+	struct ev_timer tm;
+
+	/*
+	 * We store the state in the current frame
+	 * 0 0 x x x x x x x x x x x x x x x - initial
+	 * 1 0 x x x x x x x x x x x x x x x - read 1 byte of lenght
+	 * 1 1 x x x x x x x x x x x x x x x - read 2 bytes of length
+	 * So the length is always cur_frame & 0x3fff
+	 */
+	uint16_t cur_frame_state;
+	uint16_t bytes_unprocessed;
+
+	/* Common with UDP session */
+	struct fuzzy_common_session common;
+	ref_entry_t ref;
+
+	struct fuzzy_tcp_reply_queue_elt *replies_queue;
+	unsigned char input_buf[FUZZY_TCP_BUFFER_LENGTH];
+};
+
+struct fuzzy_udp_session {
+	/* Common fields with TCP session */
+	struct fuzzy_common_session common;
+	struct rspamd_fuzzy_encrypted_reply reply; /* Again: contains everything */
+	ref_entry_t ref;
 };
 
 struct fuzzy_peer_request {
@@ -250,7 +295,8 @@ struct rspamd_updates_cbdata {
 };
 
 
-static void rspamd_fuzzy_write_reply(struct fuzzy_session *session);
+static void rspamd_fuzzy_udp_write_reply(struct fuzzy_udp_session *session);
+static bool rspamd_fuzzy_tcp_write_reply(struct fuzzy_tcp_session *session, struct fuzzy_tcp_reply_queue_elt *reply);
 static gboolean rspamd_fuzzy_process_updates_queue(struct rspamd_fuzzy_storage_ctx *ctx,
 												   const char *source, gboolean final);
 static gboolean rspamd_fuzzy_check_client(struct rspamd_fuzzy_storage_ctx *ctx,
@@ -260,6 +306,7 @@ static void rspamd_fuzzy_maybe_call_blacklisted(struct rspamd_fuzzy_storage_ctx 
 												const char *reason);
 static struct fuzzy_key *fuzzy_add_keypair_from_ucl(const ucl_object_t *obj,
 													khash_t(rspamd_fuzzy_keys_hash) * target);
+static void rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents);
 
 struct fuzzy_keymap_ucl_buf {
 	rspamd_fstring_t *buf;
@@ -405,18 +452,21 @@ ucl_keymap_dtor_cb(struct map_cb_data *data)
 }
 
 static gboolean
-rspamd_fuzzy_check_ratelimit(struct fuzzy_session *session)
+rspamd_fuzzy_check_ratelimit(struct rspamd_fuzzy_storage_ctx *ctx,
+							 rspamd_inet_addr_t *addr,
+							 struct rspamd_worker *worker,
+							 ev_tstamp timestamp)
 {
 	rspamd_inet_addr_t *masked;
 	struct rspamd_leaky_bucket_elt *elt;
 
-	if (!session->addr) {
+	if (!addr) {
 		return TRUE;
 	}
 
-	if (session->ctx->ratelimit_whitelist != NULL) {
-		if (rspamd_match_radix_map_addr(session->ctx->ratelimit_whitelist,
-										session->addr) != NULL) {
+	if (ctx->ratelimit_whitelist != NULL) {
+		if (rspamd_match_radix_map_addr(ctx->ratelimit_whitelist,
+										addr) != NULL) {
 			return TRUE;
 		}
 	}
@@ -427,20 +477,20 @@ rspamd_fuzzy_check_ratelimit(struct fuzzy_session *session)
 	}
 	*/
 
-	masked = rspamd_inet_address_copy(session->addr, NULL);
+	masked = rspamd_inet_address_copy(addr, NULL);
 
 	if (rspamd_inet_address_get_af(masked) == AF_INET) {
 		rspamd_inet_address_apply_mask(masked,
-									   MIN(session->ctx->leaky_bucket_mask, 32));
+									   MIN(ctx->leaky_bucket_mask, 32));
 	}
 	else {
 		/* Must be at least /64 */
 		rspamd_inet_address_apply_mask(masked,
-									   MIN(MAX(session->ctx->leaky_bucket_mask * 4, 64), 128));
+									   MIN(MAX(ctx->leaky_bucket_mask * 4, 64), 128));
 	}
 
-	elt = rspamd_lru_hash_lookup(session->ctx->ratelimit_buckets, masked,
-								 (time_t) session->timestamp);
+	elt = rspamd_lru_hash_lookup(ctx->ratelimit_buckets, masked,
+								 (time_t) timestamp);
 
 	if (elt) {
 		gboolean ratelimited = FALSE, new_ratelimit = FALSE;
@@ -449,13 +499,13 @@ rspamd_fuzzy_check_ratelimit(struct fuzzy_session *session)
 			/* There is an issue with the previous logic: the TTL is updated each time
 			 * we see that new bucket. Hence, we need to check the `last` and act accordingly
 			 */
-			if (elt->last < session->timestamp && session->timestamp - elt->last >= session->ctx->leaky_bucket_ttl) {
+			if (elt->last < timestamp && timestamp - elt->last >= ctx->leaky_bucket_ttl) {
 				/*
 				 * We reset bucket to it's 90% capacity to allow some requests
 				 * This should cope with the issue when we block an IP network for some burst and never unblock it
 				 */
-				elt->cur = session->ctx->leaky_bucket_burst * 0.9;
-				elt->last = session->timestamp;
+				elt->cur = ctx->leaky_bucket_burst * 0.9;
+				elt->last = timestamp;
 			}
 			else {
 				ratelimited = TRUE;
@@ -463,25 +513,25 @@ rspamd_fuzzy_check_ratelimit(struct fuzzy_session *session)
 		}
 		else {
 			/* Update bucket: leak some elements */
-			if (elt->last < session->timestamp) {
-				elt->cur -= session->ctx->leaky_bucket_rate * (session->timestamp - elt->last);
-				elt->last = session->timestamp;
+			if (elt->last < timestamp) {
+				elt->cur -= ctx->leaky_bucket_rate * (timestamp - elt->last);
+				elt->last = timestamp;
 
 				if (elt->cur < 0) {
 					elt->cur = 0;
 				}
 			}
 			else {
-				elt->last = session->timestamp;
+				elt->last = timestamp;
 			}
 
 			/* Check the bucket */
-			if (elt->cur >= session->ctx->leaky_bucket_burst) {
+			if (elt->cur >= ctx->leaky_bucket_burst) {
 
 				msg_info("ratelimiting %s (%s), %.1f max elts",
-						 rspamd_inet_address_to_string(session->addr),
+						 rspamd_inet_address_to_string(addr),
 						 rspamd_inet_address_to_string(masked),
-						 session->ctx->leaky_bucket_burst);
+						 ctx->leaky_bucket_burst);
 				elt->cur = NAN;
 				new_ratelimit = TRUE;
 				ratelimited = TRUE;
@@ -492,7 +542,7 @@ rspamd_fuzzy_check_ratelimit(struct fuzzy_session *session)
 		}
 
 		if (ratelimited) {
-			rspamd_fuzzy_maybe_call_blacklisted(session->ctx, session->addr, "ratelimit");
+			rspamd_fuzzy_maybe_call_blacklisted(ctx, addr, "ratelimit");
 		}
 
 		if (new_ratelimit) {
@@ -508,10 +558,11 @@ rspamd_fuzzy_check_ratelimit(struct fuzzy_session *session)
 				if (slen <= sizeof(srv_cmd.cmd.fuzzy_blocked.addr)) {
 					memcpy(&srv_cmd.cmd.fuzzy_blocked.addr, sa, slen);
 					msg_debug("propagating blocked address to other workers");
-					rspamd_srv_send_command(session->worker, session->ctx->event_loop, &srv_cmd, -1, NULL, NULL);
+					rspamd_srv_send_command(worker, ctx->event_loop, &srv_cmd, -1, NULL, NULL);
 				}
 				else {
-					msg_err("bad address length: %d, expected to be %d", (int) slen, (int) sizeof(srv_cmd.cmd.fuzzy_blocked.addr));
+					msg_err("bad address length: %d, expected to be %d",
+							(int) slen, (int) sizeof(srv_cmd.cmd.fuzzy_blocked.addr));
 				}
 			}
 		}
@@ -525,13 +576,13 @@ rspamd_fuzzy_check_ratelimit(struct fuzzy_session *session)
 		elt = g_malloc(sizeof(*elt));
 		elt->addr = masked; /* transfer ownership */
 		elt->cur = 1;
-		elt->last = session->timestamp;
+		elt->last = timestamp;
 
-		rspamd_lru_hash_insert(session->ctx->ratelimit_buckets,
+		rspamd_lru_hash_insert(ctx->ratelimit_buckets,
 							   masked,
 							   elt,
-							   session->timestamp,
-							   session->ctx->leaky_bucket_ttl);
+							   timestamp,
+							   ctx->leaky_bucket_ttl);
 	}
 
 	return TRUE;
@@ -581,18 +632,20 @@ rspamd_fuzzy_check_client(struct rspamd_fuzzy_storage_ctx *ctx,
 }
 
 static gboolean
-rspamd_fuzzy_check_write(struct fuzzy_session *session)
+rspamd_fuzzy_check_write(struct rspamd_fuzzy_storage_ctx *ctx,
+						 rspamd_inet_addr_t *addr,
+						 struct fuzzy_key *key)
 {
-	if (session->ctx->read_only) {
+	if (ctx->read_only) {
 		return FALSE;
 	}
 
-	if (session->ctx->update_ips != NULL && session->addr) {
-		if (rspamd_inet_address_get_af(session->addr) == AF_UNIX) {
+	if (ctx->update_ips != NULL && addr) {
+		if (rspamd_inet_address_get_af(addr) == AF_UNIX) {
 			return TRUE;
 		}
-		if (rspamd_match_radix_map_addr(session->ctx->update_ips,
-										session->addr) == NULL) {
+		if (rspamd_match_radix_map_addr(ctx->update_ips,
+										addr) == NULL) {
 			return FALSE;
 		}
 		else {
@@ -600,16 +653,16 @@ rspamd_fuzzy_check_write(struct fuzzy_session *session)
 		}
 	}
 
-	if (session->ctx->update_keys != NULL && session->key->stat && session->key->key) {
+	if (ctx->update_keys != NULL && key && key->stat && key->key) {
 		static char base32_buf[rspamd_cryptobox_HASHBYTES * 2 + 1];
 		unsigned int raw_len;
-		const unsigned char *pk_raw = rspamd_keypair_component(session->key->key,
+		const unsigned char *pk_raw = rspamd_keypair_component(key->key,
 															   RSPAMD_KEYPAIR_COMPONENT_ID, &raw_len);
 		int encoded_len = rspamd_encode_base32_buf(pk_raw, raw_len,
 												   base32_buf, sizeof(base32_buf),
 												   RSPAMD_BASE32_DEFAULT);
 
-		if (rspamd_match_hash_map(session->ctx->update_keys, base32_buf, encoded_len)) {
+		if (rspamd_match_hash_map(ctx->update_keys, base32_buf, encoded_len)) {
 			return TRUE;
 		}
 	}
@@ -826,28 +879,28 @@ rspamd_fuzzy_process_updates_queue(struct rspamd_fuzzy_storage_ctx *ctx,
 }
 
 static void
-rspamd_fuzzy_reply_io(EV_P_ ev_io *w, int revents)
+rspamd_fuzzy_udp_reply_io(EV_P_ ev_io *w, int revents)
 {
-	struct fuzzy_session *session = (struct fuzzy_session *) w->data;
+	struct fuzzy_udp_session *session = (struct fuzzy_udp_session *) w->data;
 
 	ev_io_stop(EV_A_ w);
-	rspamd_fuzzy_write_reply(session);
+	rspamd_fuzzy_udp_write_reply(session);
 	REF_RELEASE(session);
 }
 
 static void
-rspamd_fuzzy_write_reply(struct fuzzy_session *session)
+rspamd_fuzzy_udp_write_reply(struct fuzzy_udp_session *session)
 {
 	gssize r;
 	gsize len;
 	gconstpointer data;
 
-	if (session->cmd_type == CMD_ENCRYPTED_NORMAL ||
-		session->cmd_type == CMD_ENCRYPTED_SHINGLE) {
+	if (session->common.cmd_type == CMD_ENCRYPTED_NORMAL ||
+		session->common.cmd_type == CMD_ENCRYPTED_SHINGLE) {
 		/* Encrypted reply */
 		data = &session->reply;
 
-		if (session->epoch > RSPAMD_FUZZY_EPOCH10) {
+		if (session->common.epoch > RSPAMD_FUZZY_EPOCH10) {
 			len = sizeof(session->reply);
 		}
 		else {
@@ -857,7 +910,7 @@ rspamd_fuzzy_write_reply(struct fuzzy_session *session)
 	else {
 		data = &session->reply.rep;
 
-		if (session->epoch > RSPAMD_FUZZY_EPOCH10) {
+		if (session->common.epoch > RSPAMD_FUZZY_EPOCH10) {
 			len = sizeof(session->reply.rep);
 		}
 		else {
@@ -865,22 +918,64 @@ rspamd_fuzzy_write_reply(struct fuzzy_session *session)
 		}
 	}
 
-	r = rspamd_inet_address_sendto(session->fd, data, len, 0,
-								   session->addr);
+	r = rspamd_inet_address_sendto(session->common.fd, data, len, 0,
+								   session->common.addr);
 
 	if (r == -1) {
 		if (errno == EINTR || errno == EWOULDBLOCK || errno == EAGAIN) {
 			/* Grab reference to avoid early destruction */
 			REF_RETAIN(session);
-			session->io.data = session;
-			ev_io_init(&session->io,
-					   rspamd_fuzzy_reply_io, session->fd, EV_WRITE);
-			ev_io_start(session->ctx->event_loop, &session->io);
+			session->common.io.data = session;
+			ev_io_init(&session->common.io,
+					   rspamd_fuzzy_udp_reply_io, session->common.fd, EV_WRITE);
+			ev_io_start(session->common.ctx->event_loop, &session->common.io);
 		}
 		else {
 			msg_err("error while writing reply: %s", strerror(errno));
 		}
 	}
+}
+
+static bool
+rspamd_fuzzy_tcp_write_reply(struct fuzzy_tcp_session *session, struct fuzzy_tcp_reply_queue_elt *reply)
+{
+	ssize_t r;
+	gconstpointer data = &reply->rep;
+	size_t len = reply->rep.size_hdr + sizeof(reply->rep.size_hdr);
+
+	r = write(session->common.fd, data, len);
+
+	if (r == -1) {
+		if (errno == EINTR || errno == EWOULDBLOCK || errno == EAGAIN) {
+			/* Attach this reply to the list of the replies pending */
+			DL_APPEND(session->replies_queue, reply);
+			/* Grab reference to avoid early destruction */
+			REF_RETAIN(session);
+			ev_io_init(&session->common.io,
+					   rspamd_fuzzy_tcp_io, session->common.fd, EV_WRITE | EV_READ);
+			ev_io_start(session->common.ctx->event_loop, &session->common.io);
+		}
+		else {
+			msg_err("error while writing reply: %s", strerror(errno));
+			return false;
+		}
+	}
+	else if ((size_t) r < len) {
+		reply->written = r;
+		DL_APPEND(session->replies_queue, reply);
+		/* Grab reference to avoid early destruction */
+		REF_RETAIN(session);
+		/* Partial write */
+		ev_io_init(&session->common.io,
+				   rspamd_fuzzy_tcp_io, session->common.fd, EV_WRITE);
+		ev_io_start(session->common.ctx->event_loop, &session->common.io);
+	}
+	else {
+		/* Full write, no need to preserve queue elt */
+		g_free(reply);
+	}
+
+	return true;
 }
 
 static void
@@ -999,13 +1094,45 @@ enum rspamd_fuzzy_reply_flags {
 	RSPAMD_FUZZY_REPLY_DELAY = 0x1u << 2u,
 };
 
-static void
-rspamd_fuzzy_make_reply(struct rspamd_fuzzy_cmd *cmd,
-						struct rspamd_fuzzy_reply *result,
-						struct fuzzy_session *session,
-						int flags)
+static bool
+rspamd_fuzzy_can_reply(struct fuzzy_common_session *session, bool encrypted, int flag, float prob)
 {
-	gsize len;
+	bool default_disabled = false;
+
+	{
+		khiter_t k;
+
+		k = kh_get(fuzzy_key_ids_set, session->ctx->default_forbidden_ids, flag);
+
+		if (k != kh_end(session->ctx->default_forbidden_ids)) {
+			/* Hash is from a forbidden flag by default */
+			default_disabled = true;
+		}
+	}
+
+	if (encrypted) {
+		if (prob > 0 && session->key && session->key->forbidden_ids) {
+			khiter_t k;
+
+			k = kh_get(fuzzy_key_ids_set, session->key->forbidden_ids, flag);
+
+			if (k != kh_end(session->key->forbidden_ids)) {
+				/* Hash is from a forbidden flag for this key */
+				default_disabled = true;
+			}
+		}
+	}
+
+	return !default_disabled;
+}
+
+static void
+rspamd_fuzzy_make_udp_reply(struct rspamd_fuzzy_cmd *cmd,
+							struct rspamd_fuzzy_reply *result,
+							struct fuzzy_udp_session *session,
+							int flags)
+{
+	gsize len = 0;
 
 	if (cmd) {
 		result->v1.tag = cmd->tag;
@@ -1017,43 +1144,35 @@ rspamd_fuzzy_make_reply(struct rspamd_fuzzy_cmd *cmd,
 			session->reply.rep.v1.prob = 0.0f;
 			session->reply.rep.v1.value = 0;
 		}
-
-		bool default_disabled = false;
-
-		{
-			khiter_t k;
-
-			k = kh_get(fuzzy_key_ids_set, session->ctx->default_forbidden_ids, session->reply.rep.v1.flag);
-
-			if (k != kh_end(session->ctx->default_forbidden_ids)) {
-				/* Hash is from a forbidden flag by default */
-				default_disabled = true;
+		else if (!rspamd_fuzzy_can_reply(&session->common, flags & RSPAMD_FUZZY_REPLY_ENCRYPTED,
+										 session->reply.rep.v1.flag, session->reply.rep.v1.prob)) {
+			/* Hash is from a forbidden flag */
+			session->reply.rep.ts = 0;
+			session->reply.rep.v1.prob = 0.0f;
+			session->reply.rep.v1.value = 0;
+			session->reply.rep.v1.flag = 0;
+		}
+		else {
+			/* Update stats before encryption */
+			if (cmd->cmd != FUZZY_STAT && cmd->cmd <= FUZZY_CLIENT_MAX) {
+				rspamd_fuzzy_update_stats(session->common.ctx,
+										  session->common.epoch,
+										  session->reply.rep.v1.prob > 0.5f,
+										  flags & RSPAMD_FUZZY_REPLY_SHINGLE,
+										  flags & RSPAMD_FUZZY_REPLY_DELAY,
+										  session->common.key,
+										  session->common.ip_stat,
+										  cmd->cmd,
+										  &session->reply.rep,
+										  session->common.timestamp);
 			}
 		}
 
 		if (flags & RSPAMD_FUZZY_REPLY_ENCRYPTED) {
-
-			if (session->reply.rep.v1.prob > 0 && session->key && session->key->forbidden_ids) {
-				khiter_t k;
-
-				k = kh_get(fuzzy_key_ids_set, session->key->forbidden_ids, session->reply.rep.v1.flag);
-
-				if (k != kh_end(session->key->forbidden_ids)) {
-					/* Hash is from a forbidden flag for this key */
-					session->reply.rep.ts = 0;
-					session->reply.rep.v1.prob = 0.0f;
-					session->reply.rep.v1.value = 0;
-					session->reply.rep.v1.flag = 0;
-				}
-			}
-			else if (default_disabled) {
-				/* Hash is from a forbidden flag by default */
-				session->reply.rep.ts = 0;
-				session->reply.rep.v1.prob = 0.0f;
-				session->reply.rep.v1.value = 0;
-				session->reply.rep.v1.flag = 0;
-			}
-
+			msg_debug_fuzzy_storage("write encrypted reply: len=%z, prob=%.2f, flag=%d, value=%d",
+									len, session->reply.rep.v1.prob,
+									session->reply.rep.v1.flag,
+									session->reply.rep.v1.value);
 			/* We need also to encrypt reply */
 			ottery_rand_bytes(session->reply.hdr.nonce,
 							  sizeof(session->reply.hdr.nonce));
@@ -1063,62 +1182,112 @@ rspamd_fuzzy_make_reply(struct rspamd_fuzzy_cmd *cmd,
 			 * decryption would fail due to mac verification mistake
 			 */
 
-			if (session->epoch > RSPAMD_FUZZY_EPOCH10) {
+			if (session->common.epoch > RSPAMD_FUZZY_EPOCH10) {
 				len = sizeof(session->reply.rep);
 			}
 			else {
 				len = sizeof(session->reply.rep.v1);
 			}
 
-			/* Update stats before encryption */
-			if (cmd->cmd != FUZZY_STAT && cmd->cmd <= FUZZY_CLIENT_MAX) {
-				rspamd_fuzzy_update_stats(session->ctx,
-										  session->epoch,
-										  session->reply.rep.v1.prob > 0.5f,
-										  flags & RSPAMD_FUZZY_REPLY_SHINGLE,
-										  flags & RSPAMD_FUZZY_REPLY_DELAY,
-										  session->key,
-										  session->ip_stat,
-										  cmd->cmd,
-										  &session->reply.rep,
-										  session->timestamp);
-			}
-
 			rspamd_cryptobox_encrypt_nm_inplace((unsigned char *) &session->reply.rep,
 												len,
 												session->reply.hdr.nonce,
-												session->nm,
+												session->common.nm,
 												session->reply.hdr.mac,
 												RSPAMD_CRYPTOBOX_MODE_25519);
 		}
-		else if (default_disabled) {
-			/* Hash is from a forbidden flag by default, and there is no encryption override */
-			session->reply.rep.ts = 0;
-			session->reply.rep.v1.prob = 0.0f;
-			session->reply.rep.v1.value = 0;
-			session->reply.rep.v1.flag = 0;
-		}
-		if (!(flags & RSPAMD_FUZZY_REPLY_ENCRYPTED)) {
-			if (cmd->cmd != FUZZY_STAT && cmd->cmd <= FUZZY_CLIENT_MAX) {
-				rspamd_fuzzy_update_stats(session->ctx,
-										  session->epoch,
-										  session->reply.rep.v1.prob > 0.5f,
-										  flags & RSPAMD_FUZZY_REPLY_SHINGLE,
-										  flags & RSPAMD_FUZZY_REPLY_DELAY,
-										  session->key,
-										  session->ip_stat,
-										  cmd->cmd,
-										  &session->reply.rep,
-										  session->timestamp);
-			}
+		else {
+			msg_debug_fuzzy_storage("write unencrypted reply: len=%z, prob=%.2f, flag=%d, value=%d, shingles=%d",
+									len, session->reply.rep.v1.prob,
+									session->reply.rep.v1.flag,
+									session->reply.rep.v1.value,
+									(int) cmd->shingles_count);
 		}
 	}
 
-	rspamd_fuzzy_write_reply(session);
+	rspamd_fuzzy_udp_write_reply(session);
+}
+
+static struct fuzzy_tcp_reply_queue_elt *
+rspamd_fuzzy_make_tcp_reply(struct rspamd_fuzzy_cmd *cmd,
+							struct rspamd_fuzzy_reply *result,
+							struct fuzzy_tcp_session *session,
+							int flags)
+{
+	gsize len;
+	struct fuzzy_tcp_reply_queue_elt *queue_elt;
+
+	if (cmd) {
+		queue_elt = g_malloc0(sizeof(*queue_elt));
+
+		struct rspamd_fuzzy_tcp_frame *reply = &queue_elt->rep;
+
+		result->v1.tag = cmd->tag;
+		memcpy(&reply->payload.rep, result, sizeof(*result));
+
+		if (flags & RSPAMD_FUZZY_REPLY_DELAY) {
+			/* Hash is too fresh, need to delay it */
+			reply->payload.rep.ts = 0;
+			reply->payload.rep.v1.prob = 0.0f;
+			reply->payload.rep.v1.value = 0;
+		}
+		else if (!rspamd_fuzzy_can_reply(&session->common, flags & RSPAMD_FUZZY_REPLY_ENCRYPTED,
+										 reply->payload.rep.v1.flag, reply->payload.rep.v1.prob)) {
+			/* Hash is from a forbidden flag */
+			reply->payload.rep.ts = 0;
+			reply->payload.rep.v1.prob = 0.0f;
+			reply->payload.rep.v1.value = 0;
+			reply->payload.rep.v1.flag = 0;
+		}
+		else {
+			/* Update stats before encryption */
+			if (cmd->cmd != FUZZY_STAT && cmd->cmd <= FUZZY_CLIENT_MAX) {
+				rspamd_fuzzy_update_stats(session->common.ctx,
+										  session->common.epoch,
+										  reply->payload.rep.v1.prob > 0.5f,
+										  flags & RSPAMD_FUZZY_REPLY_SHINGLE,
+										  flags & RSPAMD_FUZZY_REPLY_DELAY,
+										  session->common.key,
+										  session->common.ip_stat,
+										  cmd->cmd,
+										  &reply->payload.rep,
+										  session->common.timestamp);
+			}
+		}
+
+		if (flags & RSPAMD_FUZZY_REPLY_ENCRYPTED) {
+			/* We need also to encrypt reply */
+			ottery_rand_bytes(reply->payload.hdr.nonce,
+							  sizeof(reply->payload.hdr.nonce));
+
+			/*
+			 * For old replies we need to encrypt just old part, otherwise
+			 * decryption would fail due to mac verification mistake
+			 */
+
+			len = sizeof(reply->payload);
+			rspamd_cryptobox_encrypt_nm_inplace((unsigned char *) &reply->payload,
+												len,
+												reply->payload.hdr.nonce,
+												session->common.nm,
+												reply->payload.hdr.mac,
+												RSPAMD_CRYPTOBOX_MODE_25519);
+		}
+		else {
+			len = sizeof(reply->payload.rep);
+		}
+
+		reply->size_hdr = len;
+
+		return queue_elt;
+	}
+	else {
+		return NULL;
+	}
 }
 
 static gboolean
-fuzzy_peer_try_send(int fd, struct fuzzy_peer_request *up_req)
+rspamd_fuzzy_peer_try_send(int fd, struct fuzzy_peer_request *up_req)
 {
 	gssize r;
 
@@ -1132,11 +1301,11 @@ fuzzy_peer_try_send(int fd, struct fuzzy_peer_request *up_req)
 }
 
 static void
-fuzzy_peer_send_io(EV_P_ ev_io *w, int revents)
+rspamd_fuzzy_peer_send_io(EV_P_ ev_io *w, int revents)
 {
 	struct fuzzy_peer_request *up_req = (struct fuzzy_peer_request *) w->data;
 
-	if (!fuzzy_peer_try_send(w->fd, up_req)) {
+	if (!rspamd_fuzzy_peer_try_send(w->fd, up_req)) {
 		msg_err("cannot send update request to the peer: %s", strerror(errno));
 	}
 
@@ -1146,14 +1315,14 @@ fuzzy_peer_send_io(EV_P_ ev_io *w, int revents)
 
 static void
 rspamd_fuzzy_extensions_tolua(lua_State *L,
-							  struct fuzzy_session *session)
+							  struct rspamd_fuzzy_cmd_extension *extensions)
 {
 	struct rspamd_fuzzy_cmd_extension *ext;
 	rspamd_inet_addr_t *addr;
 
 	lua_createtable(L, 0, 0);
 
-	LL_FOREACH(session->extensions, ext)
+	LL_FOREACH(extensions, ext)
 	{
 		switch (ext->ext) {
 		case RSPAMD_FUZZY_EXT_SOURCE_DOMAIN:
@@ -1176,35 +1345,33 @@ rspamd_fuzzy_extensions_tolua(lua_State *L,
 	}
 }
 
-static void
-rspamd_fuzzy_check_callback(struct rspamd_fuzzy_reply *result, void *ud)
+static struct rspamd_fuzzy_cmd *
+rspamd_fuzzy_fill_reply(struct rspamd_fuzzy_reply *result, struct fuzzy_common_session *session, int *send_flags)
 {
-	struct fuzzy_session *session = ud;
-	gboolean is_shingle = FALSE, __attribute__((unused)) encrypted = FALSE;
+	bool encrypted = false, is_shingle = false;
 	struct rspamd_fuzzy_cmd *cmd = NULL;
 	const struct rspamd_shingle *shingle = NULL;
 	struct rspamd_shingle sgl_cpy;
-	int send_flags = 0;
 
 	switch (session->cmd_type) {
 	case CMD_ENCRYPTED_NORMAL:
-		encrypted = TRUE;
-		send_flags |= RSPAMD_FUZZY_REPLY_ENCRYPTED;
+		encrypted = true;
+		*send_flags |= RSPAMD_FUZZY_REPLY_ENCRYPTED;
 		/* Fallthrough */
 	case CMD_NORMAL:
 		cmd = &session->cmd.basic;
 		break;
 
 	case CMD_ENCRYPTED_SHINGLE:
-		encrypted = TRUE;
-		send_flags |= RSPAMD_FUZZY_REPLY_ENCRYPTED;
+		encrypted = true;
+		*send_flags |= RSPAMD_FUZZY_REPLY_ENCRYPTED;
 		/* Fallthrough */
 	case CMD_SHINGLE:
 		cmd = &session->cmd.basic;
 		memcpy(&sgl_cpy, &session->cmd.sgl, sizeof(sgl_cpy));
 		shingle = &sgl_cpy;
-		is_shingle = TRUE;
-		send_flags |= RSPAMD_FUZZY_REPLY_SHINGLE;
+		is_shingle = true;
+		*send_flags |= RSPAMD_FUZZY_REPLY_SHINGLE;
 		break;
 	}
 
@@ -1241,7 +1408,7 @@ rspamd_fuzzy_check_callback(struct rspamd_fuzzy_reply *result, void *ud)
 		/* result timestamp */
 		lua_pushinteger(L, result->ts);
 		/* TODO: add additional data maybe (encryption, pubkey, etc) */
-		rspamd_fuzzy_extensions_tolua(L, session);
+		rspamd_fuzzy_extensions_tolua(L, session->extensions);
 
 		if ((ret = lua_pcall(L, 9, LUA_MULTRET, err_idx)) != 0) {
 			msg_err("call to lua_post_handler lua "
@@ -1274,10 +1441,7 @@ rspamd_fuzzy_check_callback(struct rspamd_fuzzy_reply *result, void *ud)
 				}
 
 				lua_settop(L, 0);
-				rspamd_fuzzy_make_reply(cmd, result, session, send_flags);
-				REF_RELEASE(session);
-
-				return;
+				return cmd;
 			}
 		}
 
@@ -1292,7 +1456,7 @@ rspamd_fuzzy_check_callback(struct rspamd_fuzzy_reply *result, void *ud)
 												 session->ctx->delay / 2.0);
 
 		if (hash_age < jittered_age) {
-			send_flags |= RSPAMD_FUZZY_REPLY_DELAY;
+			*send_flags |= RSPAMD_FUZZY_REPLY_DELAY;
 		}
 	}
 
@@ -1334,9 +1498,9 @@ rspamd_fuzzy_check_callback(struct rspamd_fuzzy_reply *result, void *ud)
 					   sizeof(up_req->cmd.cmd.shingle.sgl));
 			}
 
-			if (!fuzzy_peer_try_send(session->ctx->peer_fd, up_req)) {
+			if (!rspamd_fuzzy_peer_try_send(session->ctx->peer_fd, up_req)) {
 				up_req->io_ev.data = up_req;
-				ev_io_init(&up_req->io_ev, fuzzy_peer_send_io,
+				ev_io_init(&up_req->io_ev, rspamd_fuzzy_peer_send_io,
 						   session->ctx->peer_fd, EV_WRITE);
 				ev_io_start(session->ctx->event_loop, &up_req->io_ev);
 			}
@@ -1346,57 +1510,93 @@ rspamd_fuzzy_check_callback(struct rspamd_fuzzy_reply *result, void *ud)
 		}
 	}
 
-	rspamd_fuzzy_make_reply(cmd, result, session, send_flags);
+	return cmd;
+}
 
+static void
+rspamd_fuzzy_udp_check_callback(struct rspamd_fuzzy_reply *result, void *ud)
+{
+	struct fuzzy_udp_session *session = (struct fuzzy_udp_session *) ud;
+	int send_flags = 0;
+
+	struct rspamd_fuzzy_cmd *cmd = rspamd_fuzzy_fill_reply(result, &session->common, &send_flags);
+	rspamd_fuzzy_make_udp_reply(cmd, result, session, send_flags);
 	REF_RELEASE(session);
 }
 
 static void
-rspamd_fuzzy_process_command(struct fuzzy_session *session)
+rspamd_fuzzy_tcp_check_callback(struct rspamd_fuzzy_reply *result, void *ud)
 {
-	gboolean is_shingle = FALSE, __attribute__((unused)) encrypted = FALSE;
-	struct rspamd_fuzzy_cmd *cmd = NULL;
-	struct rspamd_fuzzy_reply result;
-	struct fuzzy_peer_cmd up_cmd;
-	struct fuzzy_peer_request *up_req;
-	struct fuzzy_key_stat *ip_stat = NULL;
-	char hexbuf[rspamd_cryptobox_HASHBYTES * 2 + 1];
-	rspamd_inet_addr_t *naddr;
-	gpointer ptr;
-	gsize up_len = 0;
+	struct fuzzy_tcp_session *session = (struct fuzzy_tcp_session *) ud;
 	int send_flags = 0;
+
+	struct rspamd_fuzzy_cmd *cmd = rspamd_fuzzy_fill_reply(result, &session->common, &send_flags);
+
+	if (cmd) {
+
+		struct fuzzy_tcp_reply_queue_elt *reply = rspamd_fuzzy_make_tcp_reply(cmd, result, session, send_flags);
+
+		if (reply) {
+			if (!rspamd_fuzzy_tcp_write_reply(session, reply)) {
+				/* Enforced deletion */
+				REF_RELEASE(session);
+			}
+		}
+	}
+	else {
+		/* Enforced deletion */
+		REF_RELEASE(session);
+	}
+
+	/* Free our refcount */
+	REF_RELEASE(session);
+}
+
+static struct rspamd_fuzzy_cmd *
+rspamd_fuzzy_prepare_cmd(struct fuzzy_common_session *session,
+						 struct rspamd_fuzzy_reply *result,
+						 int *send_flags,
+						 size_t *up_len,
+						 bool *is_shingle,
+						 bool *final)
+{
+	struct fuzzy_key_stat *ip_stat = NULL;
+	struct rspamd_fuzzy_cmd *cmd = NULL;
+	bool is_encrypted = false;
 
 	cmd = &session->cmd.basic;
 
 	switch (session->cmd_type) {
 	case CMD_NORMAL:
-		up_len = sizeof(session->cmd.basic);
+		*is_shingle = false;
+		*up_len = sizeof(session->cmd.basic);
 		break;
 	case CMD_SHINGLE:
-		up_len = sizeof(session->cmd);
-		is_shingle = TRUE;
-		send_flags |= RSPAMD_FUZZY_REPLY_SHINGLE;
+		*up_len = sizeof(session->cmd);
+		*is_shingle = true;
+		*send_flags |= RSPAMD_FUZZY_REPLY_SHINGLE;
 		break;
 	case CMD_ENCRYPTED_NORMAL:
-		up_len = sizeof(session->cmd.basic);
-		encrypted = TRUE;
-		send_flags |= RSPAMD_FUZZY_REPLY_ENCRYPTED;
+		*up_len = sizeof(session->cmd.basic);
+		is_encrypted = true;
+		*is_shingle = false;
+		*send_flags |= RSPAMD_FUZZY_REPLY_ENCRYPTED;
 		break;
 	case CMD_ENCRYPTED_SHINGLE:
-		up_len = sizeof(session->cmd);
-		encrypted = TRUE;
-		is_shingle = TRUE;
-		send_flags |= RSPAMD_FUZZY_REPLY_SHINGLE | RSPAMD_FUZZY_REPLY_ENCRYPTED;
+		*up_len = sizeof(session->cmd);
+		is_encrypted = true;
+		*is_shingle = true;
+		*send_flags |= RSPAMD_FUZZY_REPLY_SHINGLE | RSPAMD_FUZZY_REPLY_ENCRYPTED;
 		break;
 	default:
 		msg_err("invalid command type: %d", session->cmd_type);
-		return;
+		return NULL;
 	}
 
-	memset(&result, 0, sizeof(result));
-	memcpy(result.digest, cmd->digest, sizeof(result.digest));
-	result.v1.flag = cmd->flag;
-	result.v1.tag = cmd->tag;
+	memset(result, 0, sizeof(*result));
+	memcpy(result->digest, cmd->digest, sizeof(result->digest));
+	result->v1.flag = cmd->flag;
+	result->v1.tag = cmd->tag;
 
 	if (session->ctx->lua_pre_handler_cbref != -1) {
 		/* Start lua pre handler */
@@ -1416,9 +1616,9 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 		/* command value (push as rspamd_text) */
 		(void) lua_new_text(L, cmd->digest, sizeof(cmd->digest), FALSE);
 		/* is shingle */
-		lua_pushboolean(L, is_shingle);
+		lua_pushboolean(L, *is_shingle);
 		/* TODO: add additional data maybe (encryption, pubkey, etc) */
-		rspamd_fuzzy_extensions_tolua(L, session);
+		rspamd_fuzzy_extensions_tolua(L, session->extensions);
 
 		if ((ret = lua_pcall(L, 5, LUA_MULTRET, err_idx)) != 0) {
 			msg_err("call to lua_pre_handler lua "
@@ -1436,19 +1636,18 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 
 			if (ret) {
 				/* Artificial reply */
-				result.v1.value = lua_tointeger(L, err_idx + 2);
+				result->v1.value = lua_tointeger(L, err_idx + 2);
 
 				if (lua_isnumber(L, err_idx + 3)) {
-					result.v1.prob = lua_tonumber(L, err_idx + 3);
+					result->v1.prob = lua_tonumber(L, err_idx + 3);
 				}
 				else {
-					result.v1.prob = 0.0f;
+					result->v1.prob = 0.0f;
 				}
 
 				lua_settop(L, 0);
-				rspamd_fuzzy_make_reply(cmd, &result, session, send_flags);
 
-				return;
+				return cmd;
 			}
 		}
 
@@ -1457,18 +1656,20 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 
 
 	if (G_UNLIKELY(cmd == NULL || up_len == 0)) {
-		result.v1.value = 500;
-		result.v1.prob = 0.0f;
-		rspamd_fuzzy_make_reply(cmd, &result, session, send_flags);
-		return;
+		result->v1.value = 500;
+		result->v1.prob = 0.0f;
+		*final = true;
+
+		return cmd;
 	}
 
-	if (session->ctx->encrypted_only && !encrypted) {
+	if (session->ctx->encrypted_only && !is_encrypted) {
 		/* Do not accept unencrypted commands */
-		result.v1.value = 403;
-		result.v1.prob = 0.0f;
-		rspamd_fuzzy_make_reply(cmd, &result, session, send_flags);
-		return;
+		result->v1.value = 403;
+		result->v1.prob = 0.0f;
+		*final = true;
+
+		return cmd;
 	}
 
 	if (session->key && session->addr) {
@@ -1476,7 +1677,7 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 										 session->addr, -1);
 
 		if (ip_stat == NULL) {
-			naddr = rspamd_inet_address_copy(session->addr, NULL);
+			rspamd_inet_addr_t *naddr = rspamd_inet_address_copy(session->addr, NULL);
 			ip_stat = g_malloc0(sizeof(*ip_stat));
 			REF_INIT_RETAIN(ip_stat, fuzzy_key_stat_dtor);
 			rspamd_lru_hash_insert(session->key->stat->last_ips,
@@ -1487,71 +1688,108 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 		session->ip_stat = ip_stat;
 	}
 
+	/* Unset final flag */
+	*final = false;
+
+	return cmd;
+}
+
+static void
+rspamd_fuzzy_process_udp_session(struct fuzzy_udp_session *session)
+{
+	gboolean __attribute__((unused)) encrypted = FALSE;
+	char hexbuf[rspamd_cryptobox_HASHBYTES * 2 + 1];
+	rspamd_inet_addr_t *naddr;
+	gpointer ptr;
+	int send_flags = 0;
+	bool final = false, is_shingle = false;
+	size_t up_len;
+
+	struct rspamd_fuzzy_cmd *cmd = rspamd_fuzzy_prepare_cmd(&session->common, &session->reply.rep,
+															&send_flags, &up_len, &is_shingle, &final);
+
+
+	if (final) {
+		rspamd_fuzzy_make_udp_reply(cmd, &session->reply.rep, session, send_flags);
+		REF_RELEASE(session);
+		return;
+	}
+
 	if (cmd->cmd == FUZZY_CHECK) {
 		bool can_continue = true;
-
-		if (session->ctx->ratelimit_buckets) {
-			if (session->ctx->ratelimit_log_only) {
-				(void) rspamd_fuzzy_check_ratelimit(session); /* Check but ignore */
+		if (session->common.ctx->ratelimit_buckets) {
+			if (session->common.ctx->ratelimit_log_only) {
+				(void) rspamd_fuzzy_check_ratelimit(session->common.ctx,
+													session->common.addr,
+													session->common.worker,
+													session->common.timestamp); /* Check but ignore */
 			}
 			else {
-				can_continue = rspamd_fuzzy_check_ratelimit(session);
+				can_continue = rspamd_fuzzy_check_ratelimit(session->common.ctx,
+															session->common.addr,
+															session->common.worker,
+															session->common.timestamp);
 			}
 		}
 
 		if (can_continue) {
 			REF_RETAIN(session);
-			rspamd_fuzzy_backend_check(session->ctx->backend, cmd,
-									   rspamd_fuzzy_check_callback, session);
+			rspamd_fuzzy_backend_check(session->common.ctx->backend, cmd,
+									   rspamd_fuzzy_udp_check_callback, session);
 		}
 		else {
-			result.v1.value = 403;
-			result.v1.prob = 0.0f;
-			result.v1.flag = 0;
-			rspamd_fuzzy_make_reply(cmd, &result, session, send_flags);
+			session->reply.rep.v1.value = 403;
+			session->reply.rep.v1.prob = 0.0f;
+			session->reply.rep.v1.flag = 0;
+			rspamd_fuzzy_make_udp_reply(cmd, &session->reply.rep, session, send_flags);
 		}
 	}
 	else if (cmd->cmd == FUZZY_STAT) {
 		/* Store approximation (if needed) */
-		result.v1.prob = session->ctx->stat.fuzzy_hashes;
+		session->reply.rep.v1.prob = session->common.ctx->stat.fuzzy_hashes;
 		/* Store high qword in value and low qword in flag */
-		result.v1.value = (int32_t) ((uint64_t) session->ctx->stat.fuzzy_hashes >> 32);
-		result.v1.flag = (uint32_t) (session->ctx->stat.fuzzy_hashes & G_MAXUINT32);
-		rspamd_fuzzy_make_reply(cmd, &result, session, send_flags);
+		session->reply.rep.v1.value = (int32_t) ((uint64_t) session->common.ctx->stat.fuzzy_hashes >> 32);
+		session->reply.rep.v1.flag = (uint32_t) (session->common.ctx->stat.fuzzy_hashes & G_MAXUINT32);
+		rspamd_fuzzy_make_udp_reply(cmd, &session->reply.rep, session, send_flags);
 	}
 	else if (cmd->cmd == FUZZY_PING) {
-		result.v1.prob = 1.0f;
-		result.v1.value = cmd->value;
-		rspamd_fuzzy_make_reply(cmd, &result, session, send_flags);
+		session->reply.rep.v1.prob = 1.0f;
+		session->reply.rep.v1.value = cmd->value;
+		rspamd_fuzzy_make_udp_reply(cmd, &session->reply.rep, session, send_flags);
 	}
 	else {
-		if (rspamd_fuzzy_check_write(session)) {
+		if (rspamd_fuzzy_check_write(session->common.ctx, session->common.addr, session->common.key)) {
 			/* Check whitelist */
-			if (session->ctx->skip_hashes && cmd->cmd == FUZZY_WRITE) {
+			if (session->common.ctx->skip_hashes && cmd->cmd == FUZZY_WRITE) {
 				rspamd_encode_hex_buf(cmd->digest, sizeof(cmd->digest),
 									  hexbuf, sizeof(hexbuf) - 1);
 				hexbuf[sizeof(hexbuf) - 1] = '\0';
 
-				if (rspamd_match_hash_map(session->ctx->skip_hashes,
+				if (rspamd_match_hash_map(session->common.ctx->skip_hashes,
 										  hexbuf, sizeof(hexbuf) - 1)) {
-					result.v1.value = 401;
-					result.v1.prob = 0.0f;
+					session->reply.rep.v1.value = 401;
+					session->reply.rep.v1.prob = 0.0f;
 
 					goto reply;
 				}
 			}
 
-			if (session->ctx->weak_ids && kh_get(fuzzy_key_ids_set, session->ctx->weak_ids, cmd->flag) != kh_end(session->ctx->weak_ids)) {
+			if (session->common.ctx->weak_ids &&
+				kh_get(fuzzy_key_ids_set, session->common.ctx->weak_ids, cmd->flag) != kh_end(session->common.ctx->weak_ids)) {
 				/* Flag command as weak */
 				cmd->version |= RSPAMD_FUZZY_FLAG_WEAK;
 			}
 
-			if (session->worker->index == 0 || session->ctx->peer_fd == -1) {
+			struct fuzzy_peer_cmd up_cmd;
+			struct fuzzy_peer_request *up_req;
+
+			/* Decide if we can process add request by this worker */
+			if (session->common.worker->index == 0 || session->common.ctx->peer_fd == -1) {
 				/* Just add to the queue */
 				up_cmd.is_shingle = is_shingle;
 				ptr = is_shingle ? (gpointer) &up_cmd.cmd.shingle : (gpointer) &up_cmd.cmd.normal;
 				memcpy(ptr, cmd, up_len);
-				g_array_append_val(session->ctx->updates_pending, up_cmd);
+				g_array_append_val(session->common.ctx->updates_pending, up_cmd);
 			}
 			else {
 				/* We need to send request to the peer */
@@ -1560,56 +1798,57 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 				ptr = is_shingle ? (gpointer) &up_req->cmd.cmd.shingle : (gpointer) &up_req->cmd.cmd.normal;
 				memcpy(ptr, cmd, up_len);
 
-				if (!fuzzy_peer_try_send(session->ctx->peer_fd, up_req)) {
+				if (!rspamd_fuzzy_peer_try_send(session->common.ctx->peer_fd, up_req)) {
 					up_req->io_ev.data = up_req;
-					ev_io_init(&up_req->io_ev, fuzzy_peer_send_io,
-							   session->ctx->peer_fd, EV_WRITE);
-					ev_io_start(session->ctx->event_loop, &up_req->io_ev);
+					ev_io_init(&up_req->io_ev, rspamd_fuzzy_peer_send_io,
+							   session->common.ctx->peer_fd, EV_WRITE);
+					ev_io_start(session->common.ctx->event_loop, &up_req->io_ev);
 				}
 				else {
 					g_free(up_req);
 				}
 			}
 
-			result.v1.value = 0;
-			result.v1.prob = 1.0f;
+			session->reply.rep.v1.value = 0;
+			session->reply.rep.v1.prob = 1.0f;
 		}
 		else {
-			result.v1.value = 403;
-			result.v1.prob = 0.0f;
+			session->reply.rep.v1.value = 403;
+			session->reply.rep.v1.prob = 0.0f;
 		}
 	reply:
-		rspamd_fuzzy_make_reply(cmd, &result, session, send_flags);
+		rspamd_fuzzy_make_udp_reply(cmd, &session->reply.rep, session, send_flags);
 	}
 }
 
 
 static enum rspamd_fuzzy_epoch
-rspamd_fuzzy_command_valid(struct rspamd_fuzzy_cmd *cmd, int r)
+rspamd_fuzzy_command_valid(struct rspamd_fuzzy_cmd *cmd,
+						   unsigned int buflen)
 {
 	enum rspamd_fuzzy_epoch ret = RSPAMD_FUZZY_EPOCH_MAX;
 
 	switch (cmd->version & RSPAMD_FUZZY_VERSION_MASK) {
 	case 4:
 		if (cmd->shingles_count > 0) {
-			if (r >= sizeof(struct rspamd_fuzzy_shingle_cmd)) {
+			if (buflen >= sizeof(struct rspamd_fuzzy_shingle_cmd)) {
 				ret = RSPAMD_FUZZY_EPOCH11;
 			}
 		}
 		else {
-			if (r >= sizeof(*cmd)) {
+			if (buflen >= sizeof(*cmd)) {
 				ret = RSPAMD_FUZZY_EPOCH11;
 			}
 		}
 		break;
 	case 3:
 		if (cmd->shingles_count > 0) {
-			if (r == sizeof(struct rspamd_fuzzy_shingle_cmd)) {
+			if (buflen == sizeof(struct rspamd_fuzzy_shingle_cmd)) {
 				ret = RSPAMD_FUZZY_EPOCH10;
 			}
 		}
 		else {
-			if (r == sizeof(*cmd)) {
+			if (buflen == sizeof(*cmd)) {
 				ret = RSPAMD_FUZZY_EPOCH10;
 			}
 		}
@@ -1622,13 +1861,17 @@ rspamd_fuzzy_command_valid(struct rspamd_fuzzy_cmd *cmd, int r)
 }
 
 static gboolean
-rspamd_fuzzy_decrypt_command(struct fuzzy_session *s, unsigned char *buf, gsize buflen)
+rspamd_fuzzy_decrypt_command(struct rspamd_fuzzy_storage_ctx *ctx, rspamd_inet_addr_t *addr,
+							 unsigned char *buf, gsize buflen,
+							 /* outputs */
+							 struct fuzzy_key **key_out,
+							 unsigned char *nm_out /* rspamd_cryptobox_MAX_NMBYTES */)
 {
 	struct rspamd_fuzzy_encrypted_req_hdr hdr;
 	struct rspamd_cryptobox_pubkey *rk;
 	struct fuzzy_key *key = NULL;
 
-	if (s->ctx->default_key == NULL && s->ctx->dynamic_keys == NULL) {
+	if (ctx->default_key == NULL && ctx->dynamic_keys == NULL) {
 		msg_warn("received encrypted request when encryption is not enabled");
 		return FALSE;
 	}
@@ -1643,22 +1886,22 @@ rspamd_fuzzy_decrypt_command(struct fuzzy_session *s, unsigned char *buf, gsize 
 	buflen -= sizeof(hdr);
 
 	/* Try to find the desired key */
-	khiter_t k = kh_get(rspamd_fuzzy_keys_hash, s->ctx->keys, hdr.key_id);
-	if (k == kh_end(s->ctx->keys)) {
+	khiter_t k = kh_get(rspamd_fuzzy_keys_hash, ctx->keys, hdr.key_id);
+	if (k == kh_end(ctx->keys)) {
 
-		key = s->ctx->default_key;
+		key = ctx->default_key;
 
 		/* Check dynamic keys */
-		if (s->ctx->dynamic_keys) {
-			k = kh_get(rspamd_fuzzy_keys_hash, s->ctx->dynamic_keys, hdr.key_id);
+		if (ctx->dynamic_keys) {
+			k = kh_get(rspamd_fuzzy_keys_hash, ctx->dynamic_keys, hdr.key_id);
 
-			if (k != kh_end(s->ctx->keys)) {
-				key = kh_val(s->ctx->dynamic_keys, k);
+			if (k != kh_end(ctx->keys)) {
+				key = kh_val(ctx->dynamic_keys, k);
 			}
 		}
 	}
 	else {
-		key = kh_val(s->ctx->keys, k);
+		key = kh_val(ctx->keys, k);
 	}
 
 	if (key == NULL) {
@@ -1673,28 +1916,28 @@ rspamd_fuzzy_decrypt_command(struct fuzzy_session *s, unsigned char *buf, gsize 
 
 	if (rk == NULL) {
 		msg_err("bad key; ip=%s",
-				rspamd_inet_address_to_string(s->addr));
+				rspamd_inet_address_to_string(addr));
 		return FALSE;
 	}
 
 	/* Try to get the cached NM */
-	rspamd_keypair_cache_process(s->ctx->keypair_cache, key->key, rk);
+	rspamd_keypair_cache_process(ctx->keypair_cache, key->key, rk);
 
 	/* Now decrypt request */
 	if (!rspamd_cryptobox_decrypt_nm_inplace(buf, buflen, hdr.nonce,
 											 rspamd_pubkey_get_nm(rk, key->key),
 											 hdr.mac, RSPAMD_CRYPTOBOX_MODE_25519)) {
 		msg_err("decryption failed; ip=%s",
-				rspamd_inet_address_to_string(s->addr));
+				rspamd_inet_address_to_string(addr));
 		rspamd_pubkey_unref(rk);
 
 		return FALSE;
 	}
 
-	s->key = key;
+	*key_out = key;
 	REF_RETAIN(key);
 
-	memcpy(s->nm, rspamd_pubkey_get_nm(rk, key->key), sizeof(s->nm));
+	memcpy(nm_out, rspamd_pubkey_get_nm(rk, key->key), rspamd_cryptobox_MAX_NMBYTES);
 	rspamd_pubkey_unref(rk);
 
 	return TRUE;
@@ -1702,7 +1945,7 @@ rspamd_fuzzy_decrypt_command(struct fuzzy_session *s, unsigned char *buf, gsize 
 
 
 static gboolean
-rspamd_fuzzy_extensions_from_wire(struct fuzzy_session *s, unsigned char *buf, gsize buflen)
+rspamd_fuzzy_extensions_from_wire(struct rspamd_fuzzy_cmd_extension **extensions, unsigned char *buf, gsize buflen)
 {
 	struct rspamd_fuzzy_cmd_extension *ext, *prev_ext;
 	unsigned char *storage, *p = buf, *end = buf + buflen;
@@ -1829,20 +2072,30 @@ rspamd_fuzzy_extensions_from_wire(struct fuzzy_session *s, unsigned char *buf, g
 
 		/* Rewind to the begin */
 		ext = (struct rspamd_fuzzy_cmd_extension *) storage;
-		s->extensions = ext;
+		*extensions = ext;
 	}
 
 	return TRUE;
 }
 
 static gboolean
-rspamd_fuzzy_cmd_from_wire(unsigned char *buf, unsigned int buflen, struct fuzzy_session *s)
+rspamd_fuzzy_cmd_from_wire(struct rspamd_fuzzy_storage_ctx *ctx,
+						   rspamd_inet_addr_t *addr,
+						   unsigned char *buf,
+						   unsigned int buflen,
+						   /* outputs */
+						   struct fuzzy_key **key_out,
+						   unsigned char *nm_out, /* rspamd_cryptobox_MAX_NMBYTES */
+						   struct rspamd_fuzzy_shingle_cmd *cmd_out,
+						   enum rspamd_fuzzy_epoch *epoch_out,
+						   enum fuzzy_cmd_type *cmd_type_out,
+						   struct rspamd_fuzzy_cmd_extension **extensions_out)
 {
 	enum rspamd_fuzzy_epoch epoch;
 	gboolean encrypted = FALSE;
 
 	if (buflen < sizeof(struct rspamd_fuzzy_cmd)) {
-		msg_debug("truncated fuzzy command of size %d received", buflen);
+		msg_debug_fuzzy_storage("truncated fuzzy command of size %d received", buflen);
 		return FALSE;
 	}
 
@@ -1857,7 +2110,7 @@ rspamd_fuzzy_cmd_from_wire(unsigned char *buf, unsigned int buflen, struct fuzzy
 
 	if (encrypted) {
 		/* Decrypt first */
-		if (!rspamd_fuzzy_decrypt_command(s, buf, buflen)) {
+		if (!rspamd_fuzzy_decrypt_command(ctx, addr, buf, buflen, key_out, nm_out)) {
 			return FALSE;
 		}
 		else {
@@ -1871,29 +2124,29 @@ rspamd_fuzzy_cmd_from_wire(unsigned char *buf, unsigned int buflen, struct fuzzy
 	}
 
 	/* Fill the normal command */
-	if (buflen < sizeof(s->cmd.basic)) {
+	if (buflen < sizeof(cmd_out->basic)) {
 		msg_debug("truncated normal fuzzy command of size %d received", buflen);
 		return FALSE;
 	}
 
-	memcpy(&s->cmd.basic, buf, sizeof(s->cmd.basic));
-	epoch = rspamd_fuzzy_command_valid(&s->cmd.basic, buflen);
+	memcpy(&cmd_out->basic, buf, sizeof(cmd_out->basic));
+	epoch = rspamd_fuzzy_command_valid(&cmd_out->basic, buflen);
 
 	if (epoch == RSPAMD_FUZZY_EPOCH_MAX) {
 		msg_debug("invalid fuzzy command of size %d received", buflen);
 		return FALSE;
 	}
 
-	s->epoch = epoch;
+	*epoch_out = epoch;
 
 	/* Advance buf */
-	buf += sizeof(s->cmd.basic);
-	buflen -= sizeof(s->cmd.basic);
+	buf += sizeof(cmd_out->basic);
+	buflen -= sizeof(cmd_out->basic);
 
-	if (s->cmd.basic.shingles_count > 0) {
-		if (buflen >= sizeof(s->cmd.sgl)) {
+	if (cmd_out->basic.shingles_count > 0) {
+		if (buflen >= sizeof(cmd_out->sgl)) {
 			/* Copy the shingles part */
-			memcpy(&s->cmd.sgl, buf, sizeof(s->cmd.sgl));
+			memcpy(&cmd_out->sgl, buf, sizeof(cmd_out->sgl));
 		}
 		else {
 			/* Truncated stuff */
@@ -1901,28 +2154,28 @@ rspamd_fuzzy_cmd_from_wire(unsigned char *buf, unsigned int buflen, struct fuzzy
 			return FALSE;
 		}
 
-		buf += sizeof(s->cmd.sgl);
-		buflen -= sizeof(s->cmd.sgl);
+		buf += sizeof(cmd_out->sgl);
+		buflen -= sizeof(cmd_out->sgl);
 
 		if (encrypted) {
-			s->cmd_type = CMD_ENCRYPTED_SHINGLE;
+			*cmd_type_out = CMD_ENCRYPTED_SHINGLE;
 		}
 		else {
-			s->cmd_type = CMD_SHINGLE;
+			*cmd_type_out = CMD_SHINGLE;
 		}
 	}
 	else {
 		if (encrypted) {
-			s->cmd_type = CMD_ENCRYPTED_NORMAL;
+			*cmd_type_out = CMD_ENCRYPTED_NORMAL;
 		}
 		else {
-			s->cmd_type = CMD_NORMAL;
+			*cmd_type_out = CMD_NORMAL;
 		}
 	}
 
 	if (buflen > 0) {
 		/* Process possible extensions */
-		if (!rspamd_fuzzy_extensions_from_wire(s, buf, buflen)) {
+		if (!rspamd_fuzzy_extensions_from_wire(extensions_out, buf, buflen)) {
 			msg_debug("truncated fuzzy shingles command of size %d received", buflen);
 			return FALSE;
 		}
@@ -1931,12 +2184,9 @@ rspamd_fuzzy_cmd_from_wire(unsigned char *buf, unsigned int buflen, struct fuzzy
 	return TRUE;
 }
 
-
 static void
-fuzzy_session_destroy(gpointer d)
+fuzzy_common_session_dtor(struct fuzzy_common_session *session)
 {
-	struct fuzzy_session *session = d;
-
 	rspamd_inet_address_free(session->addr);
 	rspamd_explicit_memzero(session->nm, sizeof(session->nm));
 	session->worker->nconns--;
@@ -1952,7 +2202,14 @@ fuzzy_session_destroy(gpointer d)
 	if (session->key) {
 		REF_RELEASE(session->key);
 	}
+}
 
+static void
+fuzzy_udp_session_dtor(gpointer d)
+{
+	struct fuzzy_udp_session *session = d;
+
+	fuzzy_common_session_dtor(&session->common);
 	g_free(session);
 }
 
@@ -1970,15 +2227,497 @@ union sa_union {
 	struct sockaddr_un su;
 	struct sockaddr_storage ss;
 };
+
+static void
+tcp_session_dtor(struct fuzzy_tcp_session *tcp_session)
+{
+	struct fuzzy_tcp_reply_queue_elt *rep, *tmp;
+
+	fuzzy_common_session_dtor(&tcp_session->common);
+
+	if (tcp_session->common.ctx->event_loop) {
+		ev_timer_stop(tcp_session->common.ctx->event_loop, &tcp_session->tm);
+		ev_io_stop(tcp_session->common.ctx->event_loop, &tcp_session->common.io);
+	}
+
+	DL_FOREACH_SAFE(tcp_session->replies_queue, rep, tmp)
+	{
+		g_free(rep);
+	}
+
+	/* For TCP session we also close a socket as it is owned by a session unlike UDP socket that is shared */
+	close(tcp_session->common.fd);
+	g_free(tcp_session);
+}
+
+static bool
+rspamd_fuzzy_process_tcp_frame(struct fuzzy_tcp_session *tcp_session, unsigned char *buf, size_t buflen)
+{
+	gboolean __attribute__((unused)) encrypted = FALSE;
+	bool is_shingle = false;
+	struct rspamd_fuzzy_reply result;
+	struct fuzzy_peer_cmd up_cmd;
+	struct fuzzy_peer_request *up_req;
+	struct fuzzy_key_stat *ip_stat = NULL;
+	char hexbuf[rspamd_cryptobox_HASHBYTES * 2 + 1];
+	rspamd_inet_addr_t *naddr;
+	gpointer ptr;
+	int send_flags = 0;
+
+	if (!rspamd_fuzzy_cmd_from_wire(tcp_session->common.ctx, tcp_session->common.addr, buf,
+									buflen,
+									&tcp_session->common.key,
+									tcp_session->common.nm,
+									&tcp_session->common.cmd,
+									&tcp_session->common.epoch,
+									&tcp_session->common.cmd_type,
+									&tcp_session->common.extensions)) {
+		/* Discard input */
+		tcp_session->common.ctx->stat.invalid_requests++;
+		msg_debug("invalid fuzzy command of size %z received", buflen);
+
+		if (tcp_session->common.addr) {
+			uint64_t *nerrors = rspamd_lru_hash_lookup(tcp_session->common.ctx->errors_ips,
+													   tcp_session->common.addr, -1);
+
+			if (nerrors == NULL) {
+				nerrors = g_malloc(sizeof(*nerrors));
+				*nerrors = 1;
+				rspamd_lru_hash_insert(tcp_session->common.ctx->errors_ips,
+									   rspamd_inet_address_copy(tcp_session->common.addr, NULL),
+									   nerrors, -1, -1);
+			}
+			else {
+				*nerrors = *nerrors + 1;
+			}
+		}
+
+		return false;
+	}
+
+	bool final = false;
+	size_t up_len = 0;
+	struct rspamd_fuzzy_cmd *cmd = rspamd_fuzzy_prepare_cmd(&tcp_session->common, &result, &send_flags,
+															&up_len, &is_shingle, &final);
+
+	if (G_UNLIKELY(cmd == NULL || final)) {
+		struct fuzzy_tcp_reply_queue_elt *reply = rspamd_fuzzy_make_tcp_reply(cmd, &result, tcp_session, send_flags);
+
+		if (reply) {
+			rspamd_fuzzy_tcp_write_reply(tcp_session, reply);
+		}
+
+		REF_RELEASE(tcp_session);
+
+		return true;
+	}
+
+	if (tcp_session->common.key && tcp_session->common.addr) {
+		ip_stat = rspamd_lru_hash_lookup(tcp_session->common.key->stat->last_ips,
+										 tcp_session->common.addr, -1);
+
+		if (ip_stat == NULL) {
+			naddr = rspamd_inet_address_copy(tcp_session->common.addr, NULL);
+			ip_stat = g_malloc0(sizeof(*ip_stat));
+			REF_INIT_RETAIN(ip_stat, fuzzy_key_stat_dtor);
+			rspamd_lru_hash_insert(tcp_session->common.key->stat->last_ips,
+								   naddr, ip_stat, -1, 0);
+		}
+
+		REF_RETAIN(ip_stat);
+		tcp_session->common.ip_stat = ip_stat;
+	}
+
+	if (cmd->cmd == FUZZY_CHECK) {
+		bool can_continue = true;
+
+		if (tcp_session->common.ctx->ratelimit_buckets) {
+			if (tcp_session->common.ctx->ratelimit_log_only) {
+				(void) rspamd_fuzzy_check_ratelimit(tcp_session->common.ctx, tcp_session->common.addr,
+													tcp_session->common.worker,
+													ev_now(tcp_session->common.ctx->event_loop)); /* Check but ignore */
+			}
+			else {
+				can_continue = rspamd_fuzzy_check_ratelimit(tcp_session->common.ctx, tcp_session->common.addr,
+															tcp_session->common.worker,
+															ev_now(tcp_session->common.ctx->event_loop));
+			}
+		}
+
+		if (can_continue) {
+			REF_RETAIN(tcp_session);
+			/* TODO: use a different callback */
+			rspamd_fuzzy_backend_check(tcp_session->common.ctx->backend, cmd,
+									   rspamd_fuzzy_tcp_check_callback, tcp_session);
+		}
+		else {
+			result.v1.value = 403;
+			result.v1.prob = 0.0f;
+			result.v1.flag = 0;
+
+			struct fuzzy_tcp_reply_queue_elt *reply = rspamd_fuzzy_make_tcp_reply(cmd, &result, tcp_session, send_flags);
+
+			if (reply) {
+				rspamd_fuzzy_tcp_write_reply(tcp_session, reply);
+			}
+
+			REF_RELEASE(tcp_session);
+
+			return false;
+		}
+	}
+	else if (cmd->cmd == FUZZY_STAT) {
+		/* Store approximation (if needed) */
+		result.v1.prob = tcp_session->common.ctx->stat.fuzzy_hashes;
+		/* Store high qword in value and low qword in flag */
+		result.v1.value = (int32_t) ((uint64_t) tcp_session->common.ctx->stat.fuzzy_hashes >> 32);
+		result.v1.flag = (uint32_t) (tcp_session->common.ctx->stat.fuzzy_hashes & G_MAXUINT32);
+
+		struct fuzzy_tcp_reply_queue_elt *reply = rspamd_fuzzy_make_tcp_reply(cmd, &result, tcp_session, send_flags);
+
+		if (reply) {
+			if (!rspamd_fuzzy_tcp_write_reply(tcp_session, reply)) {
+				REF_RELEASE(tcp_session);
+			}
+		}
+		else {
+			REF_RELEASE(tcp_session);
+		}
+	}
+	else if (cmd->cmd == FUZZY_PING) {
+		result.v1.prob = 1.0f;
+		result.v1.value = cmd->value;
+		struct fuzzy_tcp_reply_queue_elt *reply = rspamd_fuzzy_make_tcp_reply(cmd, &result, tcp_session, send_flags);
+
+		if (reply) {
+			if (!rspamd_fuzzy_tcp_write_reply(tcp_session, reply)) {
+				REF_RELEASE(tcp_session);
+			}
+		}
+		else {
+			REF_RELEASE(tcp_session);
+		}
+	}
+	else {
+		struct fuzzy_tcp_reply_queue_elt *reply;
+
+		if (rspamd_fuzzy_check_write(tcp_session->common.ctx, tcp_session->common.addr, tcp_session->common.key)) {
+			/* Check whitelist */
+			if (tcp_session->common.ctx->skip_hashes && cmd->cmd == FUZZY_WRITE) {
+				rspamd_encode_hex_buf(cmd->digest, sizeof(cmd->digest),
+									  hexbuf, sizeof(hexbuf) - 1);
+				hexbuf[sizeof(hexbuf) - 1] = '\0';
+
+				if (rspamd_match_hash_map(tcp_session->common.ctx->skip_hashes,
+										  hexbuf, sizeof(hexbuf) - 1)) {
+					result.v1.value = 401;
+					result.v1.prob = 0.0f;
+
+					goto reply;
+				}
+			}
+
+			if (tcp_session->common.ctx->weak_ids &&
+				kh_get(fuzzy_key_ids_set, tcp_session->common.ctx->weak_ids, cmd->flag) != kh_end(tcp_session->common.ctx->weak_ids)) {
+				/* Flag command as weak */
+				cmd->version |= RSPAMD_FUZZY_FLAG_WEAK;
+			}
+
+			if (tcp_session->common.worker->index == 0 || tcp_session->common.ctx->peer_fd == -1) {
+				/* Just add to the queue */
+				up_cmd.is_shingle = is_shingle;
+				ptr = is_shingle ? (gpointer) &up_cmd.cmd.shingle : (gpointer) &up_cmd.cmd.normal;
+				memcpy(ptr, cmd, up_len);
+				g_array_append_val(tcp_session->common.ctx->updates_pending, up_cmd);
+			}
+			else {
+				/* We need to send request to the peer */
+				up_req = g_malloc0(sizeof(*up_req));
+				up_req->cmd.is_shingle = is_shingle;
+				ptr = is_shingle ? (gpointer) &up_req->cmd.cmd.shingle : (gpointer) &up_req->cmd.cmd.normal;
+				memcpy(ptr, cmd, up_len);
+
+				if (!rspamd_fuzzy_peer_try_send(tcp_session->common.ctx->peer_fd, up_req)) {
+					up_req->io_ev.data = up_req;
+					ev_io_init(&up_req->io_ev, rspamd_fuzzy_peer_send_io,
+							   tcp_session->common.ctx->peer_fd, EV_WRITE);
+					ev_io_start(tcp_session->common.ctx->event_loop, &up_req->io_ev);
+				}
+				else {
+					g_free(up_req);
+				}
+			}
+
+			result.v1.value = 0;
+			result.v1.prob = 1.0f;
+		}
+		else {
+			result.v1.value = 403;
+			result.v1.prob = 0.0f;
+		}
+	reply:
+		reply = rspamd_fuzzy_make_tcp_reply(cmd, &result, tcp_session, send_flags);
+
+		if (reply) {
+			if (!rspamd_fuzzy_tcp_write_reply(tcp_session, reply)) {
+				REF_RELEASE(tcp_session);
+			}
+		}
+		else {
+			REF_RELEASE(tcp_session);
+		}
+	}
+
+	return true;
+}
+
+static bool
+rspamd_fuzzy_tcp_process_input(struct fuzzy_tcp_session *tcp_session, ssize_t bytes_read)
+{
+	if (bytes_read <= 0) {
+		/* Apparent garbage */
+		return false;
+	}
+
+	static const unsigned state_mask = 0xC000;
+
+	size_t buf_avail = tcp_session->bytes_unprocessed + bytes_read;
+	uint8_t *p = (uint8_t *) tcp_session->input_buf;
+
+	while (buf_avail > 0) {
+		/* Run our state machine */
+		unsigned int state = (tcp_session->cur_frame_state & state_mask) >> 14;
+
+		if (state == 0) {
+			/* We have nothing to be read, process the next frame */
+			tcp_session->cur_frame_state = (uint16_t) (*p) | 0x4000u;
+			p++;
+			buf_avail--;
+		}
+		else if (state == 1) {
+			/* We have read one byte of size and need to advance another one */
+			tcp_session->cur_frame_state |= ((uint16_t) (*p << 8u)) | 0x8000u;
+			p++;
+			buf_avail--;
+		}
+		else {
+			size_t bytes_required = tcp_session->cur_frame_state & ~state_mask;
+
+			if (buf_avail >= bytes_required) {
+				/* We can proces the next command */
+				msg_debug_fuzzy_storage("can process next command: %d bytes available, %d bytes required",
+										(int) buf_avail, bytes_required);
+
+				if (!rspamd_fuzzy_process_tcp_frame(tcp_session, p, bytes_required)) {
+					/* Error processing, give up */
+					return false;
+				}
+
+				buf_avail -= bytes_required;
+				p += bytes_required;
+				tcp_session->cur_frame_state = 0;
+			}
+			else {
+				/* Partial read, need more */
+				msg_debug_fuzzy_storage("can not process next command: %d bytes available, %d bytes required (partial read)",
+										(int) buf_avail, bytes_required);
+				tcp_session->bytes_unprocessed = buf_avail;
+				memmove(tcp_session->input_buf, p, buf_avail);
+
+				break;
+			}
+		}
+	}
+
+	return true;
+}
+
+static void
+rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents)
+{
+	struct fuzzy_tcp_session *tcp_session = (struct fuzzy_tcp_session *) w->data;
+
+	msg_debug_fuzzy_storage("got io for %s: %d", rspamd_inet_address_to_string(tcp_session->common.addr), revents);
+
+	if (revents & EV_READ) {
+		ssize_t r;
+
+		r = read(tcp_session->common.fd, tcp_session->input_buf + tcp_session->bytes_unprocessed,
+				 sizeof(tcp_session->input_buf) - tcp_session->bytes_unprocessed);
+
+		if (r == -1) {
+			/* Cannot read anything */
+			msg_debug_fuzzy_storage("failed TCP connection from %s; cannot read: %s",
+									rspamd_inet_address_to_string(tcp_session->common.addr),
+									strerror(errno));
+
+			REF_RELEASE(tcp_session);
+		}
+		else if (r == 0) {
+			/* Got EOF */
+			msg_debug_fuzzy_storage("failed TCP connection from %s; cannot read: EOF",
+									rspamd_inet_address_to_string(tcp_session->common.addr));
+
+			REF_RELEASE(tcp_session);
+		}
+		else {
+			if (!rspamd_fuzzy_tcp_process_input(tcp_session, r)) {
+				REF_RELEASE(tcp_session);
+			}
+			else {
+				if (tcp_session->replies_queue != NULL) {
+					/* No more replies */
+					ev_io_set(w, tcp_session->common.fd, EV_READ);
+				}
+				else {
+					/* Wait for another write readiness */
+					ev_io_set(w, tcp_session->common.fd, EV_WRITE | EV_READ);
+				}
+
+				ev_io_start(loop, w);
+				/* Reset timer */
+				ev_timer_again(loop, &tcp_session->tm);
+			}
+		}
+	}
+	else if (revents & EV_WRITE) {
+		if (tcp_session->replies_queue) {
+			/* Try to write as many replies, as possible */
+			struct fuzzy_tcp_reply_queue_elt *rep, *tmp;
+			int n = 0;
+
+			DL_FOREACH(tcp_session->replies_queue, rep)
+			{
+				n++;
+			}
+
+			/* Allocate iovec (use stack for small number to avoid malloc calls for the trivial cases) */
+			struct iovec *iov = n > 32 ? g_malloc(sizeof(struct iovec) * n) : g_alloca(sizeof(struct iovec) * n);
+			n = 0;
+			DL_FOREACH(tcp_session->replies_queue, rep)
+			{
+				iov[n].iov_base = ((unsigned char *) &rep->rep) + rep->written;
+				iov[n].iov_len = sizeof(rep->rep) - rep->written;
+				n++;
+			}
+
+			/* Try to write everything */
+			ssize_t r = writev(tcp_session->common.fd, iov, n);
+
+			if (n > 32) {
+				g_free(iov);
+			}
+
+			if (r == -1) {
+				/* Cannot write anything */
+				msg_debug_fuzzy_storage("failed TCP connection from %s; cannot write: %s",
+										rspamd_inet_address_to_string(tcp_session->common.addr),
+										strerror(errno));
+
+				REF_RELEASE(tcp_session);
+			}
+			else if (r == 0) {
+				/* Fake EV_WRITE? */
+				ev_io_start(loop, w);
+			}
+			else {
+				/* Now we have to process all replies and check if we need to free them */
+				DL_FOREACH_SAFE(tcp_session->replies_queue, rep, tmp)
+				{
+					if (r >= (ssize_t) (sizeof(rep->rep) - rep->written)) {
+						/* We have written it completely */
+						r -= sizeof(rep->rep) - rep->written;
+						DL_DELETE(tcp_session->replies_queue, rep);
+						g_free(rep);
+					}
+					else {
+						/* Found incomplete buffer */
+						rep->written += r;
+						break;
+					}
+				}
+
+				if (tcp_session->replies_queue != NULL) {
+					/* No more replies */
+					ev_io_set(w, tcp_session->common.fd, EV_READ);
+				}
+				else {
+					/* Wait for another write readiness */
+					ev_io_set(w, tcp_session->common.fd, EV_WRITE | EV_READ);
+				}
+
+				ev_io_start(loop, w);
+				/* Reset timer */
+				ev_timer_again(loop, &tcp_session->tm);
+			}
+		}
+	}
+}
+
+static void
+rspamd_fuzzy_tcp_timeout(EV_P_ ev_timer *w, int revents)
+{
+	struct fuzzy_tcp_session *tcp_session = (struct fuzzy_tcp_session *) w->data;
+
+	msg_debug_fuzzy_storage("timed out TCP connection from %s", rspamd_inet_address_to_string(tcp_session->common.addr));
+
+	REF_RELEASE(tcp_session);
+}
+
+static void
+accept_tcp_fuzzy_socket(EV_P_ ev_io *w, int revents)
+{
+	struct rspamd_worker *worker = (struct rspamd_worker *) w->data;
+	struct rspamd_fuzzy_storage_ctx *ctx;
+	struct fuzzy_tcp_session *tcp_session;
+
+	ctx = (struct rspamd_fuzzy_storage_ctx *) worker->ctx;
+
+	int nfd;
+	rspamd_inet_addr_t *addr = NULL;
+
+	if ((nfd =
+			 rspamd_accept_from_socket(w->fd, &addr,
+									   rspamd_worker_throttle_accept_events, worker->accept_events)) == -1) {
+		msg_err("accept failed: %s", strerror(errno));
+		return;
+	}
+
+	if (!rspamd_fuzzy_check_client(worker->ctx, addr)) {
+		/* Disallow forbidden clients silently (maybe we should even tarpit?) */
+		rspamd_inet_address_free(addr);
+		close(nfd);
+
+		return;
+	}
+
+	tcp_session = g_malloc0(sizeof(*tcp_session));
+	tcp_session->common.addr = addr;
+	tcp_session->common.ctx = ctx;
+	tcp_session->common.fd = nfd;
+	tcp_session->common.worker = worker;
+	tcp_session->common.timestamp = ev_now(ctx->event_loop);
+	REF_INIT_RETAIN(tcp_session, tcp_session_dtor);
+	ev_io_init(&tcp_session->common.io, rspamd_fuzzy_tcp_io, nfd, EV_READ);
+	ev_timer_init(&tcp_session->tm, rspamd_fuzzy_tcp_timeout, ctx->tcp_timeout, ctx->tcp_timeout);
+	tcp_session->tm.data = tcp_session;
+	tcp_session->common.io.data = tcp_session;
+	ev_timer_start(ctx->event_loop, &tcp_session->tm);
+	ev_io_start(ctx->event_loop, &tcp_session->common.io);
+
+	msg_debug_fuzzy_storage("accepted TCP connection from %s", rspamd_inet_address_to_string(addr));
+}
+
+
 /*
  * Accept new connection and construct task
  */
 static void
-accept_fuzzy_socket(EV_P_ ev_io *w, int revents)
+accept_udp_fuzzy_socket(EV_P_ ev_io *w, int revents)
 {
 	struct rspamd_worker *worker = (struct rspamd_worker *) w->data;
 	struct rspamd_fuzzy_storage_ctx *ctx;
-	struct fuzzy_session *session;
+	struct fuzzy_udp_session *session;
 	gssize r, msg_len;
 	uint64_t *nerrors;
 	struct iovec iovs[MSGVEC_LEN];
@@ -2054,12 +2793,12 @@ accept_fuzzy_socket(EV_P_ ev_io *w, int revents)
 				}
 
 				session = g_malloc0(sizeof(*session));
-				REF_INIT_RETAIN(session, fuzzy_session_destroy);
-				session->worker = worker;
-				session->fd = w->fd;
-				session->ctx = ctx;
-				session->timestamp = ev_now(ctx->event_loop);
-				session->addr = client_addr;
+				REF_INIT_RETAIN(session, fuzzy_udp_session_dtor);
+				session->common.worker = worker;
+				session->common.fd = w->fd;
+				session->common.ctx = ctx;
+				session->common.timestamp = ev_now(ctx->event_loop);
+				session->common.addr = client_addr;
 				worker->nconns++;
 
 				/* Each message can have its length in case of recvmmsg */
@@ -2067,25 +2806,31 @@ accept_fuzzy_socket(EV_P_ ev_io *w, int revents)
 				msg_len = msg[i].msg_len;
 #endif
 
-				if (rspamd_fuzzy_cmd_from_wire(iovs[i].iov_base,
-											   msg_len, session)) {
+				if (rspamd_fuzzy_cmd_from_wire(ctx, client_addr, iovs[i].iov_base,
+											   msg_len,
+											   &session->common.key,
+											   session->common.nm,
+											   &session->common.cmd,
+											   &session->common.epoch,
+											   &session->common.cmd_type,
+											   &session->common.extensions)) {
 					/* Check shingles count sanity */
-					rspamd_fuzzy_process_command(session);
+					rspamd_fuzzy_process_udp_session(session);
 				}
 				else {
 					/* Discard input */
-					session->ctx->stat.invalid_requests++;
+					ctx->stat.invalid_requests++;
 					msg_debug("invalid fuzzy command of size %z received", r);
 
-					if (session->addr) {
-						nerrors = rspamd_lru_hash_lookup(session->ctx->errors_ips,
-														 session->addr, -1);
+					if (session->common.addr) {
+						nerrors = rspamd_lru_hash_lookup(session->common.ctx->errors_ips,
+														 session->common.addr, -1);
 
 						if (nerrors == NULL) {
 							nerrors = g_malloc(sizeof(*nerrors));
 							*nerrors = 1;
-							rspamd_lru_hash_insert(session->ctx->errors_ips,
-												   rspamd_inet_address_copy(session->addr, NULL),
+							rspamd_lru_hash_insert(session->common.ctx->errors_ips,
+												   rspamd_inet_address_copy(session->common.addr, NULL),
 												   nerrors, -1, -1);
 						}
 						else {
@@ -2923,6 +3668,7 @@ init_fuzzy(struct rspamd_config *cfg)
 	ctx->leaky_bucket_burst = NAN;
 	ctx->leaky_bucket_rate = NAN;
 	ctx->delay = NAN;
+	ctx->tcp_timeout = 5.0;
 	ctx->default_forbidden_ids = kh_init(fuzzy_key_ids_set);
 	ctx->weak_ids = kh_init(fuzzy_key_ids_set);
 
@@ -2945,6 +3691,16 @@ init_fuzzy(struct rspamd_config *cfg)
 													  expire),
 									  RSPAMD_CL_FLAG_TIME_FLOAT,
 									  "Default expire time for hashes, default: " G_STRINGIFY(DEFAULT_EXPIRE) " seconds");
+
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "tcp_timeout",
+									  rspamd_rcl_parse_struct_time,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_fuzzy_storage_ctx,
+													  tcp_timeout),
+									  RSPAMD_CL_FLAG_TIME_FLOAT,
+									  "Default tcp timeout: " G_STRINGIFY(5.0) " seconds");
 
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
@@ -3207,14 +3963,19 @@ fuzzy_peer_rep(struct rspamd_worker *worker,
 				ac_ev = g_malloc0(sizeof(*ac_ev));
 				ac_ev->accept_ev.data = worker;
 				ac_ev->event_loop = ctx->event_loop;
-				ev_io_init(&ac_ev->accept_ev, accept_fuzzy_socket, ls->fd,
+				ev_io_init(&ac_ev->accept_ev, accept_udp_fuzzy_socket, ls->fd,
 						   EV_READ);
 				ev_io_start(ctx->event_loop, &ac_ev->accept_ev);
 				DL_APPEND(worker->accept_events, ac_ev);
 			}
 			else {
-				/* We allow TCP listeners only for a update worker */
-				g_assert_not_reached();
+				ac_ev = g_malloc0(sizeof(*ac_ev));
+				ac_ev->accept_ev.data = worker;
+				ac_ev->event_loop = ctx->event_loop;
+				ev_io_init(&ac_ev->accept_ev, accept_tcp_fuzzy_socket, ls->fd,
+						   EV_READ);
+				ev_io_start(ctx->event_loop, &ac_ev->accept_ev);
+				DL_APPEND(worker->accept_events, ac_ev);
 			}
 		}
 
