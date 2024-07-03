@@ -340,9 +340,6 @@ void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
 		g_assert(0);
 #else
 
-		EC_KEY *ec_sec;
-		const BIGNUM *bn_sec;
-
 		const EC_POINT *ec_pub;
 		EC_GROUP *group;
 		gsize len;
@@ -360,9 +357,19 @@ void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
 		ec_pub = EC_POINT_new(group);
 		g_assert(ec_pub != NULL);
 
+		unsigned char *buf = NULL;
+		EVP_PKEY_get_raw_private_key(pkey, buf, &len);
+		g_assert(len <= (int) sizeof(rspamd_sk_t));
+		memcpy(sk, buf, len);
+		OPENSSL_free(buf);
+
 		EVP_PKEY_CTX_free(pctx);
 		EVP_PKEY_free(pkey);
 #else
+		const BIGNUM *bn_sec;
+
+		EC_KEY *ec_sec;
+
 		ec_sec = EC_KEY_new_by_curve_name(CRYPTOBOX_CURVE_NID);
 		g_assert(ec_sec != NULL);
 		g_assert(EC_KEY_generate_key(ec_sec) != 0);
@@ -375,7 +382,7 @@ void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
 		group = EC_KEY_get0_group(ec_sec);
 #endif
 #if OPENSSL_VERSION_MAJOR >= 3
-		unsigned char *buf = NULL; /* Thanks openssl for this API (no) */
+		buf = NULL; /* Thanks openssl for this API (no) */
 		len = EC_POINT_point2buf(group, ec_pub,
 								 POINT_CONVERSION_UNCOMPRESSED, &buf, NULL);
 		g_assert(len <= (int) rspamd_cryptobox_pk_bytes(mode));
@@ -390,11 +397,12 @@ void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
 		BN_bn2bin(bn_pub, pk);
 		BN_free(bn_pub);
 		EC_KEY_free(ec_sec);
-#endif
 
 		len = BN_num_bytes(bn_sec);
 		g_assert(len <= (int) sizeof(rspamd_sk_t));
 		BN_bn2bin(bn_sec, sk);
+#endif
+
 		EC_GROUP_free(group);
 #endif
 	}
@@ -411,9 +419,6 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 		g_assert(0);
 #else
 
-		EC_KEY *ec_sec;
-		const BIGNUM *bn_sec;
-
 		const EC_POINT *ec_pub;
 		EC_GROUP *group;
 		gsize len;
@@ -431,9 +436,18 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 		ec_pub = EC_POINT_new(group);
 		g_assert(ec_pub != NULL);
 
+		unsigned char *buf = NULL;
+		EVP_PKEY_get_raw_private_key(pkey, buf, &len);
+		g_assert(len <= (int) sizeof(rspamd_sk_t));
+		memcpy(sk, buf, len);
+		OPENSSL_free(buf);
+
 		EVP_PKEY_CTX_free(pctx);
 		EVP_PKEY_free(pkey);
 #else
+		EC_KEY *ec_sec;
+		const BIGNUM *bn_sec;
+
 		ec_sec = EC_KEY_new_by_curve_name(CRYPTOBOX_CURVE_NID);
 		g_assert(ec_sec != NULL);
 		g_assert(EC_KEY_generate_key(ec_sec) != 0);
@@ -446,7 +460,8 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 		group = EC_KEY_get0_group(ec_sec);
 #endif
 #if OPENSSL_VERSION_MAJOR >= 3
-		unsigned char *buf = NULL; /* Thanks openssl for this API (no) */
+		 /* Thanks openssl for this API (no) */
+		buf = NULL;
 		len = EC_POINT_point2buf(group, ec_pub,
 								 POINT_CONVERSION_UNCOMPRESSED, &buf, NULL);
 		g_assert(len <= (int) rspamd_cryptobox_pk_bytes(mode));
@@ -461,11 +476,11 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 		BN_bn2bin(bn_pub, pk);
 		BN_free(bn_pub);
 		EC_KEY_free(ec_sec);
-#endif
-
 		len = BN_num_bytes(bn_sec);
 		g_assert(len <= (int) sizeof(rspamd_sk_t));
 		BN_bn2bin(bn_sec, sk);
+#endif
+
 		EC_GROUP_free(group);
 #endif
 	}
@@ -630,7 +645,7 @@ void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,
 		g_assert(EVP_DigestSignInit(sha_ctx, &pctx, EVP_sha512(),
 									ENGINE_F_ENGINE_NEW, pkey) == 1);
 
-		g_assert(EVP_DigestSignFinal(sha_ctx, sig, &diglen) == 1);
+		g_assert(EVP_DigestSignFinal(sha_ctx, sig, (size_t *) &diglen) == 1);
 		EVP_PKEY_free(pkey);
 		EVP_PKEY_CTX_free(pctx);
 
@@ -697,7 +712,8 @@ bool rspamd_cryptobox_verify(const unsigned char *sig,
 		g_assert(EVP_DigestSignInit(sha_ctx, &pctx, EVP_sha512(),
 									ENGINE_F_ENGINE_NEW, pkey) == 1);
 
-		g_assert(EVP_DigestSignFinal(sha_ctx, sig, &siglen) == 1);
+		unsigned char non_const_sig = *sig;
+		g_assert(EVP_DigestSignFinal(sha_ctx, &non_const_sig, &siglen) == 1);
 		EVP_PKEY_free(pkey);
 		EVP_PKEY_CTX_free(pctx);
 
@@ -1574,7 +1590,8 @@ unsigned int rspamd_cryptobox_signature_bytes(enum rspamd_cryptobox_mode mode)
 			EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx, CRYPTOBOX_CURVE_NID);
 			g_assert(pctx != NULL);
 
-			EVP_PKEY_sign(pctx, NULL, (size_t *) ssl_keylen, NULL, 0);
+			size_t keylen = ssl_keylen;
+			EVP_PKEY_sign(pctx, NULL, &keylen, NULL, 0);
 
 			EVP_PKEY_CTX_free(pctx);
 			EVP_PKEY_free(pkey);
