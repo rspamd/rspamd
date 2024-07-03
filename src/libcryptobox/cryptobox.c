@@ -579,6 +579,7 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm,
 		g_assert(len == s_len);
 		EVP_PKEY_CTX_free(pctx);
 #else
+
 		EC_KEY *lk;
 		EC_POINT *ec_pub;
 		BIGNUM *bn_pub, *bn_sec;

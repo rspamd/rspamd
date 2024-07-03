@@ -1431,6 +1431,7 @@ rspamd_dkim_make_key(const char *keydata,
 			return NULL;
 		}
 
+#if OPENSSL_VERSION_MAJOR < 3
 		if (type == RSPAMD_DKIM_KEY_RSA) {
 			key->key.key_rsa = EVP_PKEY_get1_RSA(key->key_evp);
 
@@ -1457,6 +1458,7 @@ rspamd_dkim_make_key(const char *keydata,
 				return NULL;
 			}
 		}
+#endif
 	}
 
 	return key;
@@ -1482,6 +1484,7 @@ void rspamd_dkim_key_free(rspamd_dkim_key_t *key)
 		EVP_PKEY_free(key->key_evp);
 	}
 
+#if OPENSSL_VERSION_MAJOR < 3
 	if (key->type == RSPAMD_DKIM_KEY_RSA) {
 		if (key->key.key_rsa) {
 			RSA_free(key->key.key_rsa);
@@ -1492,6 +1495,7 @@ void rspamd_dkim_key_free(rspamd_dkim_key_t *key)
 			EC_KEY_free(key->key.key_ecdsa);
 		}
 	}
+#endif
 	/* Nothing in case of eddsa key */
 	if (key->key_bio) {
 		BIO_free(key->key_bio);
@@ -1507,11 +1511,13 @@ void rspamd_dkim_sign_key_free(rspamd_dkim_sign_key_t *key)
 	if (key->key_evp) {
 		EVP_PKEY_free(key->key_evp);
 	}
+#if OPENSSL_VERSION_MAJOR < 3
 	if (key->type == RSPAMD_DKIM_KEY_RSA) {
 		if (key->key.key_rsa) {
 			RSA_free(key->key.key_rsa);
 		}
 	}
+#endif
 	if (key->key_bio) {
 		BIO_free(key->key_bio);
 	}
@@ -2915,6 +2921,7 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 	}
 
 	switch (key->type) {
+#if OPENSSL_VERSION_MAJOR < 3
 	case RSPAMD_DKIM_KEY_RSA:
 		if (RSA_verify(nid, raw_digest, dlen, ctx->b, ctx->blen,
 					   key->key.key_rsa) != 1) {
@@ -2952,6 +2959,7 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 			res->fail_reason = "headers ecdsa verify failed";
 		}
 		break;
+#endif
 	case RSPAMD_DKIM_KEY_EDDSA:
 		if (!rspamd_cryptobox_verify(ctx->b, ctx->blen, raw_digest, dlen,
 									 key->key.key_eddsa, RSPAMD_CRYPTOBOX_MODE_25519)) {
@@ -3200,6 +3208,7 @@ rspamd_dkim_sign_key_load(const char *key, gsize len,
 				goto end;
 			}
 		}
+#if OPENSSL_VERSION_MAJOR < 3
 		nkey->key.key_rsa = EVP_PKEY_get1_RSA(nkey->key_evp);
 		if (nkey->key.key_rsa == NULL) {
 			g_set_error(err,
@@ -3212,6 +3221,7 @@ rspamd_dkim_sign_key_load(const char *key, gsize len,
 			goto end;
 		}
 		nkey->type = RSPAMD_DKIM_KEY_RSA;
+#endif
 	}
 
 	REF_INIT_RETAIN(nkey, rspamd_dkim_sign_key_free);
@@ -3536,7 +3546,9 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 
 	dlen = EVP_MD_CTX_size(ctx->common.headers_hash);
 	EVP_DigestFinal_ex(ctx->common.headers_hash, raw_digest, NULL);
+
 	if (ctx->key->type == RSPAMD_DKIM_KEY_RSA) {
+#if OPENSSL_VERSION_MAJOR < 3
 		sig_len = RSA_size(ctx->key->key.key_rsa);
 		sig_buf = g_alloca(sig_len);
 
@@ -3548,6 +3560,7 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 
 			return NULL;
 		}
+#endif
 	}
 	else if (ctx->key->type == RSPAMD_DKIM_KEY_EDDSA) {
 		sig_len = rspamd_cryptobox_signature_bytes(RSPAMD_CRYPTOBOX_MODE_25519);
@@ -3601,11 +3614,19 @@ rspamd_dkim_match_keys(rspamd_dkim_key_t *pk,
 			return FALSE;
 		}
 	}
+#if OPENSSL_VERSION_MAJOR >= 3
+	else if (EVP_PKEY_eq(pk->key_evp, sk->key_evp) != 1) {
+		g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYHASHMISMATCH,
+					"pubkey does not match private key");
+		return FALSE;
+	}
+#else
 	else if (EVP_PKEY_cmp(pk->key_evp, sk->key_evp) != 1) {
 		g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYHASHMISMATCH,
 					"pubkey does not match private key");
 		return FALSE;
 	}
+#endif
 
 	return TRUE;
 }
