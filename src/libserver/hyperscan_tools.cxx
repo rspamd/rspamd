@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 #include <filesystem>
 #include "contrib/ankerl/unordered_dense.h"
 #include "contrib/ankerl/svector.h"
-#include "fmt/core.h"
+#include "fmt/base.h"
 #include "libutil/cxx/file_util.hxx"
 #include "libutil/cxx/error.hxx"
 #include "hs.h"

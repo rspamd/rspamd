@@ -884,7 +884,10 @@ rspamd_stat_learn(struct rspamd_task *task,
 	st_ctx = rspamd_stat_get_ctx();
 	g_assert(st_ctx != NULL);
 
+	msg_debug_bayes("learn stage %d has been called", stage);
+
 	if (st_ctx->classifiers->len == 0) {
+		msg_debug_bayes("no classifiers defined");
 		task->processed_stages |= stage;
 		return ret;
 	}
@@ -894,6 +897,7 @@ rspamd_stat_learn(struct rspamd_task *task,
 		rspamd_stat_preprocess(st_ctx, task, TRUE, spam);
 
 		if (!rspamd_stat_cache_check(st_ctx, task, classifier, spam, err)) {
+			msg_debug_bayes("cache check failed, skip learning");
 			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 	}
@@ -974,7 +978,7 @@ rspamd_stat_check_autolearn(struct rspamd_task *task)
 	struct rspamd_stat_ctx *st_ctx;
 	struct rspamd_classifier *cl;
 	const ucl_object_t *obj, *elt1, *elt2;
-	struct rspamd_scan_result *mres = NULL;
+	struct rspamd_scan_result *mres = task->result;
 	struct rspamd_task **ptask;
 	lua_State *L;
 	unsigned int i;
@@ -1005,7 +1009,6 @@ rspamd_stat_check_autolearn(struct rspamd_task *task)
 					 * - We learn spam if action is ACTION_REJECT
 					 * - We learn ham if score is less than zero
 					 */
-					mres = task->result;
 
 					if (mres) {
 						if (mres->score > rspamd_task_get_required_score(task, mres)) {
@@ -1043,8 +1046,6 @@ rspamd_stat_check_autolearn(struct rspamd_task *task)
 						ham_score = spam_score;
 						spam_score = t;
 					}
-
-					mres = task->result;
 
 					if (mres) {
 						if (mres->score >= spam_score) {

@@ -40,6 +40,14 @@ parser:option "-c --cv-fraction"
       :argname("<fraction>")
       :convert(tonumber)
       :default('0.7')
+parser:option "--spam-symbol"
+      :description("Use specific spam symbol (instead of BAYES_SPAM)")
+      :argname("<symbol>")
+      :default('BAYES_SPAM')
+parser:option "--ham-symbol"
+      :description("Use specific ham symbol (instead of BAYES_HAM)")
+      :argname("<symbol>")
+      :default('BAYES_HAM')
 
 local opts
 
@@ -82,11 +90,12 @@ local function train_classifier(files, command)
 end
 
 -- Function to classify files and return results
-local function classify_files(files)
+local function classify_files(files, known_spam_files, known_ham_files)
   local fname = os.tmpname()
   list_to_file(files, fname)
 
-  local settings_header = '--header Settings=\"{symbols_enabled=[BAYES_SPAM, BAYES_HAM]}\"'
+  local settings_header = string.format('--header Settings=\"{symbols_enabled=[%s, %s]}\"',
+      opts.spam_symbol, opts.ham_symbol)
   local rspamc_command = string.format("%s %s --connect %s --compact -n %s -t %.3f --files-list=%s",
       opts.rspamc,
       settings_header,
@@ -107,9 +116,15 @@ local function classify_files(files)
     local file = obj.filename
     local symbols = obj.symbols or {}
 
-    if symbols["BAYES_SPAM"] then
+    if symbols[opts.spam_symbol] then
       table.insert(results, { result = "spam", file = file })
-    elseif symbols["BAYES_HAM"] then
+      if known_ham_files[file] then
+        rspamd_logger.message("FP: %s is classified as spam but is known ham", file)
+      end
+    elseif symbols[opts.ham_symbol] then
+      if known_spam_files[file] then
+        rspamd_logger.message("FN: %s is classified as ham but is known spam", file)
+      end
       table.insert(results, { result = "ham", file = file })
     end
   end
@@ -207,7 +222,7 @@ local function handler(args)
   print(string.format("Start cross validation, %d messages, %d connections", #cv_files, opts.nconns))
   -- Get classification results
   local t = rspamd_util.get_time()
-  local results = classify_files(cv_files)
+  local results = classify_files(cv_files, known_spam_files, known_ham_files)
   local elapsed = rspamd_util.get_time() - t
 
   -- Evaluate results
