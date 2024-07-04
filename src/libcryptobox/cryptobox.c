@@ -460,7 +460,7 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 		group = EC_KEY_get0_group(ec_sec);
 #endif
 #if OPENSSL_VERSION_MAJOR >= 3
-		 /* Thanks openssl for this API (no) */
+		/* Thanks openssl for this API (no) */
 		buf = NULL;
 		len = EC_POINT_point2buf(group, ec_pub,
 								 POINT_CONVERSION_UNCOMPRESSED, &buf, NULL);
@@ -646,7 +646,8 @@ void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,
 		g_assert(EVP_DigestSignInit(sha_ctx, &pctx, EVP_sha512(),
 									ENGINE_F_ENGINE_NEW, pkey) == 1);
 
-		g_assert(EVP_DigestSignFinal(sha_ctx, sig, (size_t *) &diglen) == 1);
+		size_t diglen_size_t = (size_t) diglen;
+		g_assert(EVP_DigestSignFinal(sha_ctx, sig, &diglen_size_t) == 1);
 		EVP_PKEY_free(pkey);
 		EVP_PKEY_CTX_free(pctx);
 
@@ -713,8 +714,7 @@ bool rspamd_cryptobox_verify(const unsigned char *sig,
 		g_assert(EVP_DigestSignInit(sha_ctx, &pctx, EVP_sha512(),
 									ENGINE_F_ENGINE_NEW, pkey) == 1);
 
-		unsigned char non_const_sig = *sig;
-		g_assert(EVP_DigestSignFinal(sha_ctx, &non_const_sig, &siglen) == 1);
+		g_assert(EVP_DigestSignFinal(sha_ctx, (unsigned char*) sig, &siglen) == 1);
 		EVP_PKEY_free(pkey);
 		EVP_PKEY_CTX_free(pctx);
 
