@@ -21,7 +21,7 @@
 #include "unix-std.h"
 #include "libutil/cxx/file_util.hxx"
 #include "libutil/cxx/util.hxx"
-#include "fmt/core.h"
+#include "fmt/base.h"
 #include "contrib/t1ha/t1ha.h"
 
 #ifdef __has_include

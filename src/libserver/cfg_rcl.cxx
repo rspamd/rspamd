@@ -34,7 +34,7 @@
 #include <algorithm>// for std::transform
 #include <memory>
 #include "contrib/ankerl/unordered_dense.h"
-#include "fmt/core.h"
+#include "fmt/base.h"
 #include "libutil/cxx/util.hxx"
 #include "libutil/cxx/file_util.hxx"
 #include "frozen/unordered_set.h"
