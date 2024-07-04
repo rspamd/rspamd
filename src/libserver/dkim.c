@@ -1431,8 +1431,9 @@ rspamd_dkim_make_key(const char *keydata,
 		   return NULL;
 	   }
 
-#if OPENSSL_VERSION_MAJOR < 3
+
 	   if (type == RSPAMD_DKIM_KEY_RSA) {
+#if OPENSSL_VERSION_MAJOR < 3
 		   key->key.key_rsa = EVP_PKEY_get1_RSA(key->key_evp);
 
 		   if (key->key.key_rsa == NULL) {
@@ -1444,8 +1445,10 @@ rspamd_dkim_make_key(const char *keydata,
 
 			   return NULL;
 		   }
+#endif
 	   }
 	   else {
+#if OPENSSL_VERSION_MAJOR < 3
 		   key->key.key_ecdsa = EVP_PKEY_get1_EC_KEY(key->key_evp);
 
 		   if (key->key.key_ecdsa == NULL) {
@@ -1457,8 +1460,9 @@ rspamd_dkim_make_key(const char *keydata,
 
 			   return NULL;
 		   }
-	   }
 #endif
+	   }
+
    }
 
    return key;
@@ -2921,8 +2925,8 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
    }
 
    switch (key->type) {
-#if OPENSSL_VERSION_MAJOR < 3
    case RSPAMD_DKIM_KEY_RSA:
+#if OPENSSL_VERSION_MAJOR < 3
 	   if (RSA_verify(nid, raw_digest, dlen, ctx->b, ctx->blen,
 					  key->key.key_rsa) != 1) {
 		   msg_debug_dkim("headers rsa verify failed");
@@ -2940,8 +2944,10 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 			   RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
 			   ctx->dkim_header);
 	   }
+#endif
 	   break;
    case RSPAMD_DKIM_KEY_ECDSA:
+#if OPENSSL_VERSION_MAJOR < 3
 	   if (ECDSA_verify(nid, raw_digest, dlen, ctx->b, ctx->blen,
 						key->key.key_ecdsa) != 1) {
 		   msg_info_dkim(
@@ -2958,8 +2964,9 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 		   res->rcode = DKIM_REJECT;
 		   res->fail_reason = "headers ecdsa verify failed";
 	   }
-	   break;
 #endif
+	   break;
+
    case RSPAMD_DKIM_KEY_EDDSA:
 	   if (!rspamd_cryptobox_verify(ctx->b, ctx->blen, raw_digest, dlen,
 									key->key.key_eddsa, RSPAMD_CRYPTOBOX_MODE_25519)) {
