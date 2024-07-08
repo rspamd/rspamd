@@ -176,7 +176,7 @@ rspamd_config.R_SUSPICIOUS_IMAGES = {
 
   score = 5.0,
   group = 'html',
-  description = 'Message contains many suspicious messages'
+  description = 'Message has high image to text ratio'
 }
 
 local vis_check_id = rspamd_config:register_symbol {
