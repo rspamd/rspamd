@@ -42,6 +42,8 @@ local settings = {
   -- Do not check ratelimits for these recipients
   whitelisted_rcpts = { 'postmaster', 'mailer-daemon' },
   prefix = 'RL',
+  -- If enabled, we apply dynamic rate limiting based on the verdict
+  dynamic_rate_limit = false,
   ham_factor_rate = 1.01,
   spam_factor_rate = 0.99,
   ham_factor_burst = 1.02,
@@ -361,17 +363,19 @@ local function make_prefix(redis_key, name, bucket)
   local hash = settings.prefix ..
       string.sub(rspamd_hash.create(redis_key):base32(), 1, hash_len)
   -- Fill defaults
+  -- If settings.dynamic_rate_limit is false, then the default dynamic rate limits are 1.0
+  -- We always allow per-bucket overrides of the dyn rate limits
   if not bucket.spam_factor_rate then
-    bucket.spam_factor_rate = settings.spam_factor_rate
+    bucket.spam_factor_rate = settings.dynamic_rate_limit and settings.spam_factor_rate or 1.0
   end
   if not bucket.ham_factor_rate then
-    bucket.ham_factor_rate = settings.ham_factor_rate
+    bucket.ham_factor_rate = settings.dynamic_rate_limit and settings.ham_factor_rate or 1.0
   end
   if not bucket.spam_factor_burst then
-    bucket.spam_factor_burst = settings.spam_factor_burst
+    bucket.spam_factor_burst = settings.dynamic_rate_limit and settings.spam_factor_burst or 1.0
   end
   if not bucket.ham_factor_burst then
-    bucket.ham_factor_burst = settings.ham_factor_burst
+    bucket.ham_factor_burst = settings.dynamic_rate_limit and settings.ham_factor_burst or 1.0
   end
 
   return {
