@@ -527,11 +527,20 @@ local function ratelimit_cb(task)
                   string.format('%s(%s)', lim_name, lim_key))
             end
           end
-          rspamd_logger.infox(task,
-              'ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn); redis key: %s',
-              lim_name, prefix,
-              bucket.burst, bucket.rate,
-              data[2], data[3], data[4], lim_key)
+
+          if bucket.dyn_rate_enabled then
+            rspamd_logger.infox(task,
+                'ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn); redis key: %s',
+                lim_name, prefix,
+                bucket.burst, bucket.rate,
+                data[2], data[3], data[4], lim_key)
+          else
+            rspamd_logger.infox(task,
+                'ratelimit "%s(%s)" exceeded, (%s / %s): %s (dynamic ratelimits disabled); redis key: %s',
+                lim_name, prefix,
+                bucket.burst, bucket.rate,
+                data[2], lim_key)
+          end
 
           if not (bucket.symbol or settings.symbol) and not bucket.skip_soft_reject then
             if not bucket.message then
