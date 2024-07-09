@@ -1809,13 +1809,11 @@ lua_task_load_from_string(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = NULL, **ptask;
-	const char *str_message;
-	gsize message_len;
 	struct rspamd_config *cfg = NULL;
 
-	str_message = luaL_checklstring(L, 1, &message_len);
+	struct rspamd_lua_text *t = lua_check_text_or_string(L, 1);
 
-	if (str_message) {
+	if (t) {
 
 		if (lua_type(L, 2) == LUA_TUSERDATA) {
 			gpointer p;
@@ -1827,9 +1825,9 @@ lua_task_load_from_string(lua_State *L)
 		}
 
 		task = rspamd_task_new(NULL, cfg, NULL, NULL, NULL, FALSE);
-		task->msg.begin = g_malloc(message_len);
-		memcpy((char *) task->msg.begin, str_message, message_len);
-		task->msg.len = message_len;
+		task->msg.begin = g_malloc(t->len);
+		memcpy((char *) task->msg.begin, t->start, t->len);
+		task->msg.len = t->len;
 		rspamd_mempool_add_destructor(task->task_pool, lua_task_free_dtor,
 									  (gpointer) task->msg.begin);
 	}
@@ -2642,7 +2640,7 @@ struct rspamd_url_query_to_inject_cbd {
 
 static gboolean
 inject_url_query_callback(struct rspamd_url *url, gsize start_offset,
-						gsize end_offset, gpointer ud)
+						  gsize end_offset, gpointer ud)
 {
 	struct rspamd_url_query_to_inject_cbd *cbd =
 		(struct rspamd_url_query_to_inject_cbd *) ud;
@@ -2661,7 +2659,7 @@ inject_url_query_callback(struct rspamd_url *url, gsize start_offset,
 
 static void
 inject_url_query(struct rspamd_task *task, struct rspamd_url *url,
-					   GPtrArray *part_urls)
+				 GPtrArray *part_urls)
 {
 	if (url->querylen > 0) {
 		struct rspamd_url_query_to_inject_cbd cbd;
@@ -2692,11 +2690,11 @@ lua_task_inject_url(lua_State *L)
 	if (lua_isuserdata(L, 3)) {
 		/* We also have a mime part there */
 		mpart = *((struct rspamd_mime_part **)
-							   rspamd_lua_check_udata_maybe(L, 3, rspamd_mimepart_classname));
+					  rspamd_lua_check_udata_maybe(L, 3, rspamd_mimepart_classname));
 	}
 	if (task && task->message && url && url->url) {
 		if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false)) {
-			if(mpart && mpart->urls) {
+			if (mpart && mpart->urls) {
 				inject_url_query(task, url->url, mpart->urls);
 			}
 		}

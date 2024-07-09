@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -341,12 +341,13 @@ lua_cryptobox_pubkey_create(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_cryptobox_pubkey *pkey = NULL, **ppkey;
-	const char *buf, *arg;
-	gsize len;
+	const char *arg;
 	int type = RSPAMD_KEYPAIR_SIGN;
 	int alg = RSPAMD_CRYPTOBOX_MODE_25519;
 
-	buf = luaL_checklstring(L, 1, &len);
+	struct rspamd_lua_text *buf;
+
+	buf = lua_check_text_or_string(L, 1);
 	if (buf != NULL) {
 		if (lua_type(L, 2) == LUA_TSTRING) {
 			/* keypair type */
@@ -371,7 +372,7 @@ lua_cryptobox_pubkey_create(lua_State *L)
 			}
 		}
 
-		pkey = rspamd_pubkey_from_base32(buf, len, type, alg);
+		pkey = rspamd_pubkey_from_base32(buf->start, buf->len, type, alg);
 
 		if (pkey == NULL) {
 			msg_err("cannot load pubkey from string");
@@ -803,26 +804,12 @@ lua_cryptobox_signature_create(lua_State *L)
 	LUA_TRACE_POINT;
 	rspamd_fstring_t *sig, **psig;
 	struct rspamd_lua_text *t;
-	const char *data;
-	gsize dlen;
 
-	if (lua_isuserdata(L, 1)) {
-		t = lua_check_text(L, 1);
+	t = lua_check_text_or_string(L, 1);
 
-		if (!t) {
-			return luaL_error(L, "invalid arguments");
-		}
-
-		data = t->start;
-		dlen = t->len;
-	}
-	else {
-		data = luaL_checklstring(L, 1, &dlen);
-	}
-
-	if (data != NULL) {
-		if (dlen == rspamd_cryptobox_signature_bytes(RSPAMD_CRYPTOBOX_MODE_25519)) {
-			sig = rspamd_fstring_new_init(data, dlen);
+	if (t != NULL) {
+		if (t->len == rspamd_cryptobox_signature_bytes(RSPAMD_CRYPTOBOX_MODE_25519)) {
+			sig = rspamd_fstring_new_init(t->start, t->len);
 			psig = lua_newuserdata(L, sizeof(rspamd_fstring_t *));
 			rspamd_lua_setclass(L, rspamd_cryptobox_signature_classname, -1);
 			*psig = sig;

@@ -1,11 +1,11 @@
-/*-
- * Copyright 2020 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -102,8 +102,7 @@ static const struct luaL_reg parserslib_f[] = {
 int lua_parsers_tokenize_text(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const char *in = NULL;
-	gsize len = 0, pos, ex_len, i;
+	gsize pos, ex_len, i;
 	GList *exceptions = NULL, *cur;
 	struct rspamd_lua_text *t;
 	struct rspamd_process_exception *ex;
@@ -111,21 +110,10 @@ int lua_parsers_tokenize_text(lua_State *L)
 	GArray *res;
 	rspamd_stat_token_t *w;
 
-	if (lua_type(L, 1) == LUA_TSTRING) {
-		in = luaL_checklstring(L, 1, &len);
-	}
-	else if (lua_type(L, 1) == LUA_TUSERDATA) {
-		t = lua_check_text(L, 1);
+	t = lua_check_text_or_string(L, 1);
 
-		if (t) {
-			in = t->start;
-			len = t->len;
-		}
-	}
-
-	if (in == NULL) {
-		lua_pushnil(L);
-		return 1;
+	if (t == NULL) {
+		return luaL_error(L, "invalid arguments");
 	}
 
 	if (lua_gettop(L) > 1 && lua_type(L, 2) == LUA_TTABLE) {
@@ -161,11 +149,11 @@ int lua_parsers_tokenize_text(lua_State *L)
 
 	UErrorCode uc_err = U_ZERO_ERROR;
 	utext_openUTF8(&utxt,
-				   in,
-				   len,
+				   t->start,
+				   t->len,
 				   &uc_err);
 
-	res = rspamd_tokenize_text((char *) in, len,
+	res = rspamd_tokenize_text((char *) t->start, t->len,
 							   &utxt,
 							   RSPAMD_TOKENIZE_UTF, NULL,
 							   exceptions,
