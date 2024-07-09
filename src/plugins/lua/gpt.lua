@@ -59,13 +59,13 @@ local fun = require "fun"
 
 -- Exclude checks if one of those is found
 local default_symbols_to_except = {
-  'BAYES_SPAM', -- We already know that it is a spam, so we can safely skip it, but no same logic for HAM!
-  'WHITELIST_SPF',
-  'WHITELIST_DKIM',
-  'WHITELIST_DMARC',
-  'FUZZY_DENIED',
-  'REPLY',
-  'BOUNCE',
+  BAYES_SPAM = 0.9, -- We already know that it is a spam, so we can safely skip it, but no same logic for HAM!
+  WHITELIST_SPF = -1,
+  WHITELIST_DKIM = -1,
+  WHITELIST_DMARC = -1,
+  FUZZY_DENIED = -1,
+  REPLY = -1,
+  BOUNCE = -1,
 }
 
 local settings = {
@@ -105,9 +105,20 @@ local function default_condition(task)
     end
   end
   -- We also exclude some symbols
-  for _, s in ipairs(settings.symbols_to_except) do
+  for s, required_weight in pairs(settings.symbols_to_except) do
     if task:has_symbol(s) then
-      return false, 'skip as "' .. s .. '" is found'
+      if required_weight > 0 then
+        -- Also check score
+        local sym = task:get_symbol(s)
+        -- Must exist as we checked it before with `has_symbol`
+        if math.abs(sym.weight) >= required_weight then
+          return false, 'skip as "' .. s .. '" is found (weight: ' .. sym.weight .. ')'
+        end
+        lua_util.debugm(N, task, 'symbol %s has weight %s, but required %s', s,
+            sym.weight, required_weight)
+      else
+        return false, 'skip as "' .. s .. '" is found'
+      end
     end
   end
 
