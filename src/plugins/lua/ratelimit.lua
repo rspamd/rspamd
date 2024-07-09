@@ -365,17 +365,33 @@ local function make_prefix(redis_key, name, bucket)
   -- Fill defaults
   -- If settings.dynamic_rate_limit is false, then the default dynamic rate limits are 1.0
   -- We always allow per-bucket overrides of the dyn rate limits
+
+  local seen_specific_dyn_rate = false
+
   if not bucket.spam_factor_rate then
     bucket.spam_factor_rate = settings.dynamic_rate_limit and settings.spam_factor_rate or 1.0
+  else
+    seen_specific_dyn_rate = true
   end
   if not bucket.ham_factor_rate then
     bucket.ham_factor_rate = settings.dynamic_rate_limit and settings.ham_factor_rate or 1.0
+  else
+    seen_specific_dyn_rate = true
   end
   if not bucket.spam_factor_burst then
     bucket.spam_factor_burst = settings.dynamic_rate_limit and settings.spam_factor_burst or 1.0
+  else
+    seen_specific_dyn_rate = true
   end
   if not bucket.ham_factor_burst then
     bucket.ham_factor_burst = settings.dynamic_rate_limit and settings.ham_factor_burst or 1.0
+  else
+    seen_specific_dyn_rate = true
+  end
+
+  if seen_specific_dyn_rate then
+    -- Use if afterwards in case we don't use global dyn rates
+    bucket.specific_dyn_rate = true
   end
 
   return {
@@ -555,13 +571,15 @@ local function ratelimit_cb(task)
         bincr = 1
       end
 
+      local dyn_rate_enabled = settings.dynamic_rate_limit or bucket.specific_dyn_rate
+
       lua_util.debugm(N, task, "check limit %s:%s -> %s (%s/%s)",
           value.name, pr, value.hash, bucket.burst, bucket.rate)
       lua_redis.exec_redis_script(bucket_check_id,
           { key = value.hash, task = task, is_write = true },
           gen_check_cb(pr, bucket, value.name, value.hash),
           { value.hash, tostring(now), tostring(rate), tostring(bucket.burst),
-            tostring(settings.expire), tostring(bincr) })
+            tostring(settings.expire), tostring(bincr), tostring(dyn_rate_enabled) })
     end
   end
 end
@@ -661,12 +679,14 @@ local function ratelimit_update_cb(task)
         bincr = 1
       end
 
+      local dyn_rate_enabled = settings.dynamic_rate_limit or bucket.specific_dyn_rate
+
       lua_redis.exec_redis_script(bucket_update_id,
           { key = v.hash, task = task, is_write = true },
           update_bucket_cb,
           { v.hash, tostring(now), tostring(mult_rate), tostring(mult_burst),
             tostring(settings.max_rate_mult), tostring(settings.max_bucket_mult),
-            tostring(settings.expire), tostring(bincr) })
+            tostring(settings.expire), tostring(bincr), tostring(dyn_rate_enabled) })
     end
   end
 end
