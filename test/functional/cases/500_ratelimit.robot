@@ -10,6 +10,7 @@ ${CONFIG}               ${RSPAMD_TESTDIR}/configs/ratelimit.conf
 ${MESSAGE}              ${RSPAMD_TESTDIR}/messages/zip.eml
 ${REDIS_SCOPE}          Suite
 ${RSPAMD_SCOPE}         Suite
+${RSPAMD_URL_TLD}       ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 ${SETTINGS_RATELIMIT}   {symbols_enabled = [RATELIMIT_CHECK, RATELIMIT_UPDATE]}
 
 *** Keywords ***
