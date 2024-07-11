@@ -4716,7 +4716,7 @@ lua_push_symbol_result(lua_State *L,
 		lua_settable(L, -3);
 
 		/* Dynamic weight of the symbol */
-		if (s->sym->score != 0) {
+		if (s->sym != NULL && s->sym->score != 0) {
 			lua_pushstring(L, "weight");
 			lua_pushnumber(L, s->score / s->sym->score);
 		}
