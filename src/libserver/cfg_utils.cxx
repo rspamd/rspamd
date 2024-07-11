@@ -57,7 +57,7 @@
 #ifdef HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
 #endif
-#include <math.h>
+#include <cmath>
 #include "libserver/composites/composites.h"
 
 #include "blas-config.h"
@@ -69,6 +69,7 @@
 #include "cxx/util.hxx"
 #include "frozen/unordered_map.h"
 #include "frozen/string.h"
+#include "contrib/expected/expected.hpp"
 #include "contrib/ankerl/unordered_dense.h"
 
 #define DEFAULT_SCORE 10.0
@@ -135,14 +136,14 @@ struct rspamd_actions_list {
 	void sort()
 	{
 		std::sort(actions.begin(), actions.end(), [](const action_ptr &a1, const action_ptr &a2) -> bool {
-			if (!isnan(a1->threshold) && !isnan(a2->threshold)) {
+			if (!std::isnan(a1->threshold) && !std::isnan(a2->threshold)) {
 				return a1->threshold < a2->threshold;
 			}
 
-			if (isnan(a1->threshold) && isnan(a2->threshold)) {
+			if (std::isnan(a1->threshold) && std::isnan(a2->threshold)) {
 				return false;
 			}
-			else if (isnan(a1->threshold)) {
+			else if (std::isnan(a1->threshold)) {
 				return true;
 			}
 
@@ -826,8 +827,7 @@ gboolean
 rspamd_config_post_load(struct rspamd_config *cfg,
 						enum rspamd_post_load_options opts)
 {
-
-	auto ret = TRUE;
+	auto ret = tl::expected<void, std::string>{};
 
 	rspamd_adjust_clocks_resolution(cfg);
 	rspamd_logger_configure_modules(cfg->debug_modules);
@@ -867,14 +867,15 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 			else {
 				if (opts & RSPAMD_CONFIG_INIT_VALIDATE) {
 					msg_err_config("no url_tld option has been specified");
-					ret = FALSE;
+					ret = tl::make_unexpected(std::string{"no url_tld option has been specified"});
 				}
 			}
 		}
 		else {
 			if (access(cfg->tld_file, R_OK) == -1) {
 				if (opts & RSPAMD_CONFIG_INIT_VALIDATE) {
-					ret = FALSE;
+					ret = tl::make_unexpected(fmt::format("cannot access tld file {}: {}",
+														  cfg->tld_file, strerror(errno)));
 					msg_err_config("cannot access tld file %s: %s", cfg->tld_file,
 								   strerror(errno));
 				}
@@ -905,13 +906,17 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 	if (!rspamd_config_parse_log_format(cfg)) {
 		msg_err_config("cannot parse log format, task logging will not be available");
 		if (opts & RSPAMD_CONFIG_INIT_VALIDATE) {
-			ret = FALSE;
+			ret = tl::make_unexpected(std::string{"cannot parse log format"});
 		}
 	}
 
 	if (opts & RSPAMD_CONFIG_INIT_SYMCACHE) {
 		/* Init config cache */
-		ret = rspamd_symcache_init(cfg->cache) && ret;
+		auto symcache_ret = rspamd_symcache_init(cfg->cache);
+
+		if (!symcache_ret) {
+			ret = tl::make_unexpected(std::string{"symcache init failed"});
+		}
 
 		/* Init re cache */
 		rspamd_re_cache_init(cfg->re_cache, cfg);
@@ -928,9 +933,9 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 
 	if (opts & RSPAMD_CONFIG_INIT_LIBS) {
 		/* Config other libraries */
-		ret = rspamd_config_libs(cfg->libs_ctx, cfg) && ret;
+		auto libs_ret = rspamd_config_libs(cfg->libs_ctx, cfg);
 
-		if (!ret) {
+		if (!libs_ret) {
 			msg_err_config("cannot configure libraries, fatal error");
 			return FALSE;
 		}
@@ -959,7 +964,11 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 							" Rspamd features will be broken");
 		}
 
-		ret = rspamd_symcache_validate(cfg->cache, cfg, FALSE) && ret;
+		auto val_ret = rspamd_symcache_validate(cfg->cache, cfg, FALSE);
+
+		if (!val_ret) {
+			ret = tl::make_unexpected(std::string{"symcache validation failed"});
+		}
 	}
 
 	if (opts & RSPAMD_CONFIG_INIT_POST_LOAD_LUA) {
@@ -970,7 +979,14 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 		rspamd_map_preload(cfg);
 	}
 
-	return ret;
+	if (ret) {
+		return true;
+	}
+	else {
+		msg_err_config("error on post-init stage: %s", ret.error().c_str());
+
+		return false;
+	}
 }
 
 struct rspamd_classifier_config *
@@ -1525,7 +1541,7 @@ rspamd_config_new_symbol(struct rspamd_config *cfg, const char *symbol,
 		rspamd_mempool_alloc0_type(cfg->cfg_pool, struct rspamd_symbol);
 	score_ptr = rspamd_mempool_alloc_type(cfg->cfg_pool, double);
 
-	if (isnan(score)) {
+	if (std::isnan(score)) {
 		/* In fact, it could be defined later */
 		msg_debug_config("score is not defined for symbol %s, set it to zero",
 						 symbol);
@@ -1636,7 +1652,7 @@ rspamd_config_add_symbol(struct rspamd_config *cfg,
 		}
 
 		if (sym_def->priority > priority &&
-			(isnan(score) || !(sym_def->flags & RSPAMD_SYMBOL_FLAG_UNSCORED))) {
+			(std::isnan(score) || !(sym_def->flags & RSPAMD_SYMBOL_FLAG_UNSCORED))) {
 			msg_debug_config("symbol %s has been already registered with "
 							 "priority %ud, do not override (new priority: %ud)",
 							 symbol,
@@ -1657,7 +1673,7 @@ rspamd_config_add_symbol(struct rspamd_config *cfg,
 		}
 		else {
 
-			if (!isnan(score)) {
+			if (!std::isnan(score)) {
 				msg_debug_config("symbol %s has been already registered with "
 								 "priority %ud, override it with new priority: %ud, "
 								 "old score: %.2f, new score: %.2f",
@@ -1997,7 +2013,7 @@ rspamd_config_action_from_ucl(struct rspamd_config *cfg,
 
 	/* TODO: add lua references support */
 
-	if (isnan(threshold) && !(flags & RSPAMD_ACTION_NO_THRESHOLD)) {
+	if (std::isnan(threshold) && !(flags & RSPAMD_ACTION_NO_THRESHOLD)) {
 		msg_err_config("action %s has no threshold being set and it is not"
 					   " a no threshold action",
 					   act->name);
