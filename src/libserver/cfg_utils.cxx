@@ -57,7 +57,7 @@
 #ifdef HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
 #endif
-#include <math.h>
+#include <cmath>
 #include "libserver/composites/composites.h"
 
 #include "blas-config.h"
@@ -69,6 +69,7 @@
 #include "cxx/util.hxx"
 #include "frozen/unordered_map.h"
 #include "frozen/string.h"
+#include "contrib/expected/expected.hpp"
 #include "contrib/ankerl/unordered_dense.h"
 
 #define DEFAULT_SCORE 10.0
@@ -826,8 +827,7 @@ gboolean
 rspamd_config_post_load(struct rspamd_config *cfg,
 						enum rspamd_post_load_options opts)
 {
-
-	auto ret = TRUE;
+	auto ret = tl::expected<void, std::string>{};
 
 	rspamd_adjust_clocks_resolution(cfg);
 	rspamd_logger_configure_modules(cfg->debug_modules);
@@ -867,14 +867,15 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 			else {
 				if (opts & RSPAMD_CONFIG_INIT_VALIDATE) {
 					msg_err_config("no url_tld option has been specified");
-					ret = FALSE;
+					ret = tl::make_unexpected(std::string{"no url_tld option has been specified"});
 				}
 			}
 		}
 		else {
 			if (access(cfg->tld_file, R_OK) == -1) {
 				if (opts & RSPAMD_CONFIG_INIT_VALIDATE) {
-					ret = FALSE;
+					ret = tl::make_unexpected(fmt::format("cannot access tld file {}: {}",
+														  cfg->tld_file, strerror(errno)));
 					msg_err_config("cannot access tld file %s: %s", cfg->tld_file,
 								   strerror(errno));
 				}
@@ -905,13 +906,17 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 	if (!rspamd_config_parse_log_format(cfg)) {
 		msg_err_config("cannot parse log format, task logging will not be available");
 		if (opts & RSPAMD_CONFIG_INIT_VALIDATE) {
-			ret = FALSE;
+			ret = tl::make_unexpected(std::string{"cannot parse log format"});
 		}
 	}
 
 	if (opts & RSPAMD_CONFIG_INIT_SYMCACHE) {
 		/* Init config cache */
-		ret = rspamd_symcache_init(cfg->cache) && ret;
+		auto symcache_ret = rspamd_symcache_init(cfg->cache);
+
+		if (!symcache_ret) {
+			ret = tl::make_unexpected(std::string{"symcache init failed"});
+		}
 
 		/* Init re cache */
 		rspamd_re_cache_init(cfg->re_cache, cfg);
@@ -959,7 +964,11 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 							" Rspamd features will be broken");
 		}
 
-		ret = rspamd_symcache_validate(cfg->cache, cfg, FALSE) && ret;
+		auto val_ret = rspamd_symcache_validate(cfg->cache, cfg, FALSE);
+
+		if (!val_ret) {
+			ret = tl::make_unexpected(std::string{"symcache validation failed"});
+		}
 	}
 
 	if (opts & RSPAMD_CONFIG_INIT_POST_LOAD_LUA) {
@@ -970,7 +979,14 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 		rspamd_map_preload(cfg);
 	}
 
-	return ret;
+	if (ret) {
+		return true;
+	}
+	else {
+		msg_err_config("error on post-init stage: %s", ret.error().c_str());
+
+		return false;
+	}
 }
 
 struct rspamd_classifier_config *
