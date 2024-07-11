@@ -928,9 +928,9 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 
 	if (opts & RSPAMD_CONFIG_INIT_LIBS) {
 		/* Config other libraries */
-		ret = rspamd_config_libs(cfg->libs_ctx, cfg) && ret;
+		auto libs_ret = rspamd_config_libs(cfg->libs_ctx, cfg);
 
-		if (!ret) {
+		if (!libs_ret) {
 			msg_err_config("cannot configure libraries, fatal error");
 			return FALSE;
 		}
