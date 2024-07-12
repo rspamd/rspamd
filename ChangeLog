@@ -1,3 +1,66 @@
+3.9.0: 12 Jul 2024
+  * [CritFix] Protect regexp matcher from regexps with empty patterns
+  * [Feature] Allow adding X-CMAE-Score header
+  * [Feature] Allow custom milter quarantine and tempfail messages
+  * [Feature] Allow to specify minimum weight in GPT plugin
+  * [Feature] Cloudmark: Add scores_symbols setting
+  * [Feature] Further optimization to the hot path
+  * [Feature] Make min_resolve_interval configurable
+  * [Feature] Report slow synchronous rules
+  * [Feature] Rspamc: add `files-list` option
+  * [Feature] Support metrics command in normal/proxy workers
+  * [Feature] Support reply in message pack format
+  * [Feature] Use msgpack in the client
+  * [Feature] Verify sanity of l= tag in DKIM
+  * [Feature] milter_headers: support not removing headers
+  * [Fix] Allow autolearn for the controller worker
+  * [Fix] Allow spaces in DMARC records
+  * [Fix] Allow to set 0 as number of rows to disable roll history
+  * [Fix] Always set the unlearn flag when relearning
+  * [Fix] Apply detection phase if fasttext could not detect language
+  * [Fix] Backport fixes from libucl
+  * [Fix] Backport multiple fixes from libucl
+  * [Fix] Change expiration logic for redis_cache
+  * [Fix] Check nconns when firing the final termination event
+  * [Fix] Do not apply tableshape for known senders
+  * [Fix] Do not crash if symbol is missing in the metric
+  * [Fix] Do not read out-of-boundary when doing base64 encoding
+  * [Fix] Do not save multipatterns to FS in certain cases
+  * [Fix] Fix another corner case that allows candidates to be freed without init
+  * [Fix] Fix documentation nesting
+  * [Fix] Fix dynamic_symbols in the multimap plugin
+  * [Fix] Fix inconsistent nesting in mime parts
+  * [Fix] Fix parsing of maps definitions
+  * [Fix] Fix shared memory proxying when compression is set
+  * [Fix] Fuzzy add/delete handlers are badly broken for compression
+  * [Fix] Honor dynamic thresholds for greylisting module
+  * [Fix] If we have one statfile disabled we need to disable all
+  * [Fix] Increase/decrease hash_key value for tokens depending on is_unlearn
+  * [Fix] Libucl: Fix messagepack autodetection
+  * [Fix] Resgore the collaterally removed line
+  * [Fix] Unset autolearn flag if we learn explicitly
+  * [Fix] Update `nconns` in proxy
+  * [Fix] Update greylisting threshold as it can be easily dynamic
+  * [Fix] Update is_spam in learned_ids when relearning
+  * [Fix] Use explicit timeouts in the metadata exporter
+  * [Fix] metric_exporter: avoid sending `nil` in metric values
+  * [Project] Add GPT plugin
+  * [Project] Add a tool to perform statistical analysis of classifiers
+  * [Project] Finally fix slow timer behaviour
+  * [Project] Implement fuzzy check retransmits backpressure
+  * [Project] Improve stats processing
+  * [Project] Reduce default window size of OSB tokenizer to 2
+  * [Project] Rework grow factor
+  * [Project] Start optimization of userdata hashing
+  * [Project] Use libarchive for troublesome archives
+  * [Rework] Allow metrics endpoint to be enabled for each scanner
+  * [Rework] Allow multiple conditions for dkim signing when using vault/redis
+  * [Rework] Introduce dynamic_rate_limit for ratelimits
+  * [Rework] Serialize control commands
+  * [Rework] Update fmt to version 11
+  * [Rework] Use direct hashing instead of string hashing
+  * [Rules] Added rules for detecting likely malware
+
 3.8.2: 20 Feb 2024
   * [Feature] Add extraction type for `from` maps
   * [Feature] Allow to add templates to redis history prefix
