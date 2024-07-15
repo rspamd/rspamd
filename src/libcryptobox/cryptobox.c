@@ -38,6 +38,7 @@
 #endif
 #ifdef HAVE_OPENSSL
 #include <openssl/opensslv.h>
+#include <openssl/engine.h>
 /* Openssl >= 1.0.1d is required for GCM verification */
 #if OPENSSL_VERSION_NUMBER >= 0x1000104fL
 #define HAVE_USABLE_OPENSSL 1
@@ -344,11 +345,9 @@ void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
 		EC_GROUP *group;
 		gsize len;
 #if OPENSSL_VERSION_MAJOR >= 3
-		EVP_PKEY *pkey = EVP_PKEY_new();
-		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(pkey, ENGINE_F_ENGINE_NEW);
-		EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx, CRYPTOBOX_CURVE_NID);
+		OSSL_LIB_CTX *libctx = OSSL_LIB_CTX_new();
+		EVP_PKEY *pkey = EVP_PKEY_Q_keygen(libctx, NULL, "X25519");
 		g_assert(pkey != NULL);
-		g_assert(EVP_PKEY_generate(pctx, &pkey) != 0);
 
 		group = EC_GROUP_new_by_curve_name(CRYPTOBOX_CURVE_NID);
 		EC_GROUP_set_point_conversion_form(group, EVP_PKEY_get_ec_point_conv_form(pkey));
@@ -359,12 +358,13 @@ void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
 
 		unsigned char *buf = NULL;
 		EVP_PKEY_get_raw_private_key(pkey, buf, &len);
+
 		g_assert(len <= (int) sizeof(rspamd_sk_t));
 		memcpy(sk, buf, len);
 		OPENSSL_free(buf);
 
-		EVP_PKEY_CTX_free(pctx);
 		EVP_PKEY_free(pkey);
+		OSSL_LIB_CTX_free(libctx);
 #else
 		const BIGNUM *bn_sec;
 
@@ -423,11 +423,9 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 		EC_GROUP *group;
 		gsize len;
 #if OPENSSL_VERSION_MAJOR >= 3
-		EVP_PKEY *pkey = EVP_PKEY_new();
-		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(pkey, ENGINE_F_ENGINE_NEW);
-		EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx, CRYPTOBOX_CURVE_NID);
+		OSSL_LIB_CTX *libctx = OSSL_LIB_CTX_new();
+		EVP_PKEY *pkey = EVP_PKEY_Q_keygen(libctx, NULL, "X25519");
 		g_assert(pkey != NULL);
-		g_assert(EVP_PKEY_generate(pctx, &pkey) != 0);
 
 		group = EC_GROUP_new_by_curve_name(CRYPTOBOX_CURVE_NID);
 		EC_GROUP_set_point_conversion_form(group, EVP_PKEY_get_ec_point_conv_form(pkey));
@@ -438,12 +436,13 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 
 		unsigned char *buf = NULL;
 		EVP_PKEY_get_raw_private_key(pkey, buf, &len);
+
 		g_assert(len <= (int) sizeof(rspamd_sk_t));
 		memcpy(sk, buf, len);
 		OPENSSL_free(buf);
 
-		EVP_PKEY_CTX_free(pctx);
 		EVP_PKEY_free(pkey);
+		OSSL_LIB_CTX_free(libctx);
 #else
 		EC_KEY *ec_sec;
 		const BIGNUM *bn_sec;
@@ -556,28 +555,27 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm,
 		unsigned char s[32];
 
 #if OPENSSL_VERSION_MAJOR >= 3
-		EVP_PKEY *priv_pkey = EVP_PKEY_new_raw_private_key(0, ENGINE_F_ENGINE_NEW, sk, sizeof(rspamd_sk_t));
+		EVP_PKEY *priv_pkey = EVP_PKEY_new_raw_private_key(EVP_PKEY_X25519, NULL, sk, sizeof(rspamd_sk_t));
 		g_assert(priv_pkey != NULL);
 
-		g_assert(EVP_PKEY_set1_encoded_public_key(priv_pkey, pk,
-												  rspamd_cryptobox_pk_bytes(mode)) == 1);
+		EVP_PKEY *pub_pkey = EVP_PKEY_new_raw_public_key(EVP_PKEY_X25519, NULL,  pk,rspamd_cryptobox_pk_bytes(mode)) ;
 
-		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(priv_pkey, ENGINE_F_ENGINE_NEW);
+		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(priv_pkey, NULL);
 
 		EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx, CRYPTOBOX_CURVE_NID);
 		g_assert(pctx != NULL);
 
-		EVP_PKEY *peerkey = EVP_PKEY_CTX_get0_peerkey(pctx);
-		g_assert(peerkey != NULL);
 
-		EVP_PKEY_derive_init(pctx);
+		g_assert(EVP_PKEY_derive_init(pctx) == 1);
 
-		EVP_PKEY_derive_set_peer(pctx, peerkey);
+		EVP_PKEY_derive_set_peer(pctx, pub_pkey);
 
 		size_t s_len = sizeof(s);
-		len = EVP_PKEY_derive(pctx, s, &s_len);
-		g_assert(len == s_len);
+		g_assert(EVP_PKEY_derive(pctx, s, &s_len) == 1);
+
 		EVP_PKEY_CTX_free(pctx);
+		EVP_PKEY_free(priv_pkey);
+		EVP_PKEY_free(pub_pkey);
 #else
 
 		EC_KEY *lk;
@@ -636,21 +634,19 @@ void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,
 
 		/* ECDSA */
 #if OPENSSL_VERSION_MAJOR >= 3
-		EVP_PKEY *pkey = EVP_PKEY_new_raw_private_key(0, ENGINE_F_ENGINE_NEW, sk, sizeof(rspamd_sk_t));;
+		OSSL_LIB_CTX *libctx = OSSL_LIB_CTX_new();
+		EVP_PKEY *pkey = EVP_PKEY_new_raw_private_key_ex(libctx, "ED25519", NULL, sk, sizeof(rspamd_sk_t));
 		g_assert(pkey != NULL);
 
-		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(pkey, ENGINE_F_ENGINE_NEW);
-		EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx, CRYPTOBOX_CURVE_NID);
-		g_assert(pctx != NULL);
+		g_assert(EVP_DigestSignInit(sha_ctx, NULL, NULL, NULL, pkey) == 1);
 
-		g_assert(EVP_DigestSignInit(sha_ctx, &pctx, EVP_sha512(),
-									ENGINE_F_ENGINE_NEW, pkey) == 1);
+		size_t diglen_size_t = diglen;
+		sig = OPENSSL_malloc(diglen);
+		g_assert(EVP_DigestSign(sha_ctx, sig, &diglen_size_t, m, mlen) == 1);
+		diglen = diglen_size_t;
 
-		size_t diglen_size_t = (size_t) diglen;
-		g_assert(EVP_DigestSignFinal(sha_ctx, sig, &diglen_size_t) == 1);
 		EVP_PKEY_free(pkey);
-		EVP_PKEY_CTX_free(pctx);
-
+		OSSL_LIB_CTX_free(libctx);
 #else
 		EC_KEY *lk;
 		BIGNUM *bn_sec;
@@ -676,6 +672,59 @@ void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,
 #endif
 	}
 }
+
+#if OPENSSL_VERSION_MAJOR >= 3
+bool rspamd_cryptobox_verify_compat(const unsigned char *sig,
+									gsize siglen,
+									const unsigned char *m,
+									gsize mlen,
+									const rspamd_pk_t pk,
+									const rspamd_sk_t sk,
+									enum rspamd_cryptobox_mode mode) {
+	bool ret = false;
+
+	if (G_LIKELY(mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
+		if (siglen == rspamd_cryptobox_signature_bytes(RSPAMD_CRYPTOBOX_MODE_25519)) {
+			ret = (crypto_sign_verify_detached(sig, m, mlen, sk) == 0);
+		}
+	}
+	else {
+#ifndef HAVE_USABLE_OPENSSL
+		g_assert(0);
+#else
+		EVP_MD_CTX *sha_ctx;
+		unsigned char h[64];
+
+		/* Prehash */
+		sha_ctx = EVP_MD_CTX_create();
+		g_assert(EVP_DigestInit(sha_ctx, EVP_sha512()) == 1);
+		EVP_DigestUpdate(sha_ctx, m, mlen);
+		EVP_DigestFinal(sha_ctx, h, NULL);
+
+
+		OSSL_LIB_CTX *libctx = OSSL_LIB_CTX_new();
+		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, NULL);
+		EVP_PKEY_keygen_init(pctx);
+		EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx, CRYPTOBOX_CURVE_NID);
+		EVP_PKEY *pkey = NULL;
+		EVP_PKEY_keygen(pctx, &pkey);
+		EVP_PKEY_set1_encoded_public_key(pkey, pk, sizeof(rspamd_pk_t));
+		g_error(ERR_error_string(ERR_get_error(), NULL));
+		g_assert(pkey != NULL);
+
+		g_assert(EVP_DigestVerifyInit(sha_ctx, NULL, NULL, NULL, pkey) == 1);
+
+		if (EVP_DigestVerify(sha_ctx, sig, siglen, m, mlen) == 1)
+			ret = true;
+
+		EVP_PKEY_free(pkey);
+		OSSL_LIB_CTX_free(libctx);
+		EVP_MD_CTX_destroy(sha_ctx);
+	}
+#endif
+	return ret;
+}
+#endif
 
 bool rspamd_cryptobox_verify(const unsigned char *sig,
 							 gsize siglen,
@@ -706,18 +755,18 @@ bool rspamd_cryptobox_verify(const unsigned char *sig,
 
 
 #if OPENSSL_VERSION_MAJOR >= 3
-		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(CRYPTOBOX_CURVE_NID, ENGINE_F_ENGINE_NEW);
-		g_assert(pctx != NULL);
+		OSSL_LIB_CTX *libctx = OSSL_LIB_CTX_new();
+		EVP_PKEY *pkey = EVP_PKEY_new_raw_public_key_ex(libctx, "ED25519", NULL, pk, sizeof(rspamd_sk_t));
+		g_assert(pkey != NULL);
 
-		EVP_PKEY *pkey = EVP_PKEY_CTX_get0_pkey(pctx);
+		g_assert(EVP_DigestVerifyInit(sha_ctx, NULL, NULL, NULL, pkey) == 1);
+		//g_error(ERR_error_string(ERR_get_error(), NULL));
 
-		g_assert(EVP_DigestSignInit(sha_ctx, &pctx, EVP_sha512(),
-									ENGINE_F_ENGINE_NEW, pkey) == 1);
+		if(EVP_DigestVerify(sha_ctx, sig, siglen, m, mlen) == 1)
+			ret = true;
 
-		g_assert(EVP_DigestSignFinal(sha_ctx, (unsigned char*) sig, &siglen) == 1);
 		EVP_PKEY_free(pkey);
-		EVP_PKEY_CTX_free(pctx);
-
+		OSSL_LIB_CTX_free(libctx);
 #else
 		EC_KEY *lk;
 		EC_POINT *ec_pub;
@@ -1586,16 +1635,23 @@ unsigned int rspamd_cryptobox_signature_bytes(enum rspamd_cryptobox_mode mode)
 #else
 #if OPENSSL_VERSION_MAJOR >= 3
 		if (ssl_keylen == 0) {
-			EVP_PKEY *pkey = EVP_PKEY_new();
-			EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(pkey, ENGINE_F_ENGINE_NEW);
-			EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx, CRYPTOBOX_CURVE_NID);
-			g_assert(pctx != NULL);
+			OSSL_LIB_CTX *libctx = OSSL_LIB_CTX_new();
+			EVP_MD_CTX *sha_ctx = EVP_MD_CTX_new();
+			EVP_PKEY *pkey = EVP_PKEY_Q_keygen(libctx, NULL, "ED25519");
+			g_assert(pkey != NULL);
 
-			size_t keylen = ssl_keylen;
-			EVP_PKEY_sign(pctx, NULL, &keylen, NULL, 0);
+			g_assert(EVP_DigestSignInit(sha_ctx, NULL, NULL, NULL, pkey) == 1);
 
-			EVP_PKEY_CTX_free(pctx);
+			size_t keylen = 0;
+			unsigned char* sig = NULL;
+			const unsigned char data[] = "data to be signed";
+			size_t datalen = sizeof(data) - 1;
+			g_assert(EVP_DigestSign(sha_ctx, NULL, &keylen, data, datalen) == 1);
+			ssl_keylen = keylen;
+
+			OSSL_LIB_CTX_free(libctx);
 			EVP_PKEY_free(pkey);
+			EVP_MD_CTX_free(sha_ctx);
 		}
 #else
 		if (ssl_keylen == 0) {

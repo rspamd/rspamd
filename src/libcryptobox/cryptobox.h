@@ -206,6 +206,14 @@ void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,
 						   const rspamd_sk_t sk,
 						   enum rspamd_cryptobox_mode mode);
 
+bool rspamd_cryptobox_verify_compat(const unsigned char *sig,
+									gsize siglen,
+									const unsigned char *m,
+									gsize mlen,
+									const rspamd_pk_t pk,
+									const rspamd_sk_t sk,
+									enum rspamd_cryptobox_mode mode);
+
 /**
  * Verifies digital signature for the specified message using the specified
  * pubkey
