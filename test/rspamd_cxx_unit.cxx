@@ -24,6 +24,7 @@
 #include "rspamd_cxx_unit_utils.hxx"
 #include "rspamd_cxx_local_ptr.hxx"
 #include "rspamd_cxx_unit_dkim.hxx"
+#include "rspamd_cxx_unit_cryptobox.hxx"
 
 static gboolean verbose = false;
 static const GOptionEntry entries[] =
