@@ -26,7 +26,7 @@
 
   dcontent       = 33..90 | 94..126 | UTF8_non_ascii;
   Let_dig        = alpha | digit | UTF8_non_ascii;
-  Ldh_str        = ( alpha | digit | "_" | "-" )* Let_dig;
+  Ldh_str        = ( Let_dig | "_" | "-" )* Let_dig;
 
   quoted_pairSMTP  = "\\" 32..126;
   qtextSMTP      = 32..33 | 35..91 | 93..126 | UTF8_non_ascii;
