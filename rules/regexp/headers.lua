@@ -31,6 +31,9 @@ reconf['SUBJECT_NEEDS_ENCODING'] = {
   score = 1.0,
   mime_only = true,
   description = 'Subject needs encoding',
+  condition = function()
+    return not rspamd_config:is_mime_utf()
+  end,
   group = 'headers'
 }
 
@@ -42,6 +45,9 @@ reconf['FROM_NEEDS_ENCODING'] = {
   score = 1.0,
   mime_only = true,
   description = 'From header needs encoding',
+  condition = function()
+    return not rspamd_config:is_mime_utf()
+  end,
   group = 'headers'
 }
 
@@ -53,7 +59,10 @@ reconf['TO_NEEDS_ENCODING'] = {
   score = 1.0,
   mime_only = true,
   description = 'To header needs encoding',
-  group = 'headers'
+  condition = function()
+    return not rspamd_config:is_mime_utf()
+  end,
+  group = 'headers',
 }
 
 -- Detects that there is no space in From header (e.g. Some Name<some@host>)
@@ -713,12 +722,6 @@ reconf['HEADER_DATE_EMPTY_DELIMITER'] = {
 }
 
 -- Definitions of received headers regexp
-reconf['RCVD_ILLEGAL_CHARS'] = {
-  re = 'Received=/[\\x80-\\xff]/X',
-  score = 4.0,
-  description = 'Received header has raw illegal character',
-  group = 'headers'
-}
 
 local MAIL_RU_Return_Path = 'Return-path=/^\\s*<.+\\@mail\\.ru>$/iX'
 local MAIL_RU_X_Envelope_From = 'X-Envelope-From=/^\\s*<.+\\@mail\\.ru>$/iX'
