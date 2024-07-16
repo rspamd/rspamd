@@ -22,7 +22,7 @@
 
 TEST_SUITE("rspamd_cryptobox")
 {
-	/*
+
 	TEST_CASE("rspamd_cryptobox_keypair")
 	{
 		enum rspamd_cryptobox_mode mode = RSPAMD_CRYPTOBOX_MODE_NIST;
@@ -48,7 +48,7 @@ TEST_SUITE("rspamd_cryptobox")
 
 		rspamd_cryptobox_keypair_sig(pk, sk, mode);
 	}
-*/
+
 	TEST_CASE("rspamd_cryptobox_hash")
 	{
 		rspamd_cryptobox_hash_state_t p;
@@ -172,6 +172,8 @@ TEST_SUITE("rspamd_cryptobox")
 
 		ottery_rand_bytes(sk, sizeof(sk));
 		ottery_rand_bytes(pk, sizeof(pk));
+
+		rspamd_cryptobox_keypair(pk, sk, mode);
 
 		rspamd_cryptobox_sign(sig, &siglen, m, mlen, sk, mode);
 		bool check_result = rspamd_cryptobox_verify_compat(sig, reinterpret_cast<gsize>(&siglen), m, mlen, pk, sk, mode);

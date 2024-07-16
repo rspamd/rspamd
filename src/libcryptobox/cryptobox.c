@@ -356,7 +356,8 @@ void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
 		ec_pub = EC_POINT_new(group);
 		g_assert(ec_pub != NULL);
 
-		unsigned char *buf = NULL;
+		unsigned char *buf = OPENSSL_malloc(sizeof(rspamd_sk_t));
+		len = sizeof(buf);
 		EVP_PKEY_get_raw_private_key(pkey, buf, &len);
 
 		g_assert(len <= (int) sizeof(rspamd_sk_t));
@@ -434,7 +435,8 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 		ec_pub = EC_POINT_new(group);
 		g_assert(ec_pub != NULL);
 
-		unsigned char *buf = NULL;
+		unsigned char *buf = OPENSSL_malloc(sizeof(rspamd_sk_t));
+		len = sizeof(buf);
 		EVP_PKEY_get_raw_private_key(pkey, buf, &len);
 
 		g_assert(len <= (int) sizeof(rspamd_sk_t));
