@@ -71,5 +71,5 @@ task_timeout = 8s;
 # Emit soft reject when timeout takes place
 soft_reject_on_timeout = false;
 
-# Use utf8 mode for mime operations
-enable_mime_utf = true;
+# Use utf8 mode for mime operations (use if your MTA announces SMTPUTF8 support)
+enable_mime_utf = false;

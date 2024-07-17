@@ -341,7 +341,7 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 	cfg->heartbeat_interval = 10.0;
 
 	cfg->enable_css_parser = true;
-	cfg->enable_mime_utf = true;
+	cfg->enable_mime_utf = false;
 	cfg->script_modules = g_ptr_array_new();
 
 	REF_INIT_RETAIN(cfg, rspamd_config_free);
