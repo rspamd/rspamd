@@ -89,6 +89,8 @@ lua_load_spf(lua_State *L)
 	lua_setfield(L, -2, "perm_fail");
 	lua_pushinteger(L, RSPAMD_SPF_FLAG_CACHED);
 	lua_setfield(L, -2, "cached");
+	lua_pushinteger(L, RSPAMD_SPF_FLAG_PLUSALL);
+	lua_setfield(L, -2, "plusall");
 
 	lua_setfield(L, -2, "flags");
 

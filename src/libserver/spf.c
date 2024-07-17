@@ -1418,7 +1418,7 @@ parse_spf_all(struct spf_record *rec, struct spf_addr *addr)
 
 	/* Disallow +all */
 	if (addr->mech == SPF_PASS) {
-		addr->flags |= RSPAMD_SPF_FLAG_INVALID;
+		addr->flags |= RSPAMD_SPF_FLAG_INVALID | RSPAMD_SPF_FLAG_PLUSALL;
 		msg_notice_spf("domain %s allows any SPF (+all), ignore SPF record completely",
 					   rec->sender_domain);
 	}

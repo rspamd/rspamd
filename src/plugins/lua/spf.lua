@@ -56,6 +56,7 @@ local symbols = {
   dnsfail = "R_SPF_DNSFAIL",
   permfail = "R_SPF_PERMFAIL",
   na = "R_SPF_NA",
+  plusall = "R_SPF_PLUSALL",
 }
 
 local default_config = {
