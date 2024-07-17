@@ -31,9 +31,6 @@ reconf['SUBJECT_NEEDS_ENCODING'] = {
   score = 1.0,
   mime_only = true,
   description = 'Subject needs encoding',
-  condition = function()
-    return not rspamd_config:is_mime_utf()
-  end,
   group = 'headers'
 }
 
@@ -45,9 +42,6 @@ reconf['FROM_NEEDS_ENCODING'] = {
   score = 1.0,
   mime_only = true,
   description = 'From header needs encoding',
-  condition = function()
-    return not rspamd_config:is_mime_utf()
-  end,
   group = 'headers'
 }
 
@@ -59,11 +53,21 @@ reconf['TO_NEEDS_ENCODING'] = {
   score = 1.0,
   mime_only = true,
   description = 'To header needs encoding',
-  condition = function()
-    return not rspamd_config:is_mime_utf()
-  end,
   group = 'headers',
 }
+
+if rspamd_config:is_mime_utf() then
+  -- Disable some of the rules preserving the underlying logic
+  reconf['FROM_NEEDS_ENCODING'].condition = function()
+    return false
+  end
+  reconf['TO_NEEDS_ENCODING'].condition = function()
+    return false
+  end
+  reconf['SUBJECT_NEEDS_ENCODING'].condition = function()
+    return false
+  end
+end
 
 -- Detects that there is no space in From header (e.g. Some Name<some@host>)
 reconf['R_NO_SPACE_IN_FROM'] = {
