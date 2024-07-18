@@ -119,6 +119,8 @@ local function spf_check_callback(task)
   local function flag_to_symbol(fl)
     if bit.band(fl, rspamd_spf.flags.temp_fail) ~= 0 then
       return local_config.symbols.dnsfail
+    elseif bit.band(fl, rspamd_spf.flags.plusall) ~= 0 then
+      return local_config.symbols.plusall
     elseif bit.band(fl, rspamd_spf.flags.perm_fail) ~= 0 then
       return local_config.symbols.permfail
     elseif bit.band(fl, rspamd_spf.flags.na) ~= 0 then

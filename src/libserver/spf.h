@@ -105,6 +105,7 @@ enum rspamd_spf_resolved_flags {
 	RSPAMD_SPF_RESOLVED_TEMP_FAILED = (1u << 0u),
 	RSPAMD_SPF_RESOLVED_PERM_FAILED = (1u << 1u),
 	RSPAMD_SPF_RESOLVED_NA = (1u << 2u),
+	RSPAMD_SPF_RESOLVED_PLUSALL = (1u << 3u),
 };
 
 struct spf_resolved {
