@@ -155,3 +155,9 @@ SPF UPPERCASE
   ...  IP=8.8.8.8  From=x@fail11.org.org.za
   ...  Settings=${SETTINGS_SPF}
   Expect Symbol  R_SPF_ALLOW
+
+SPF PLUSALL
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@plusall.com
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_PLUSALL
