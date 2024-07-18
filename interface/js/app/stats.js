@@ -35,6 +35,7 @@ define(["jquery", "app/common", "d3pie", "d3"],
             const hours = seconds % 31536000 % 2628000 % 86400 / 3600 >> 0;
             const minutes = seconds % 31536000 % 2628000 % 86400 % 3600 / 60 >> 0;
             /* eslint-enable no-bitwise */
+            // eslint-disable-next-line no-useless-assignment
             let out = null;
             if (years > 0) {
                 if (months > 0) {
