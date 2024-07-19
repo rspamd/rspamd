@@ -130,7 +130,7 @@ define(["jquery", "app/common", "footable"],
                     const [{data}] = json;
                     const items = process_symbols_data(data);
 
-                    /* eslint-disable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
+                    /* eslint-disable consistent-this, no-underscore-dangle */
                     FooTable.groupFilter = FooTable.Filtering.extend({
                         construct: function (instance) {
                             this._super(instance);
@@ -183,7 +183,7 @@ define(["jquery", "app/common", "footable"],
                             }
                         }
                     });
-                    /* eslint-enable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
+                    /* eslint-enable consistent-this, no-underscore-dangle */
 
                     common.tables.symbols = FooTable.init("#symbolsTable", {
                         breakpoints: common.breakpoints,
