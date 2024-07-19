@@ -537,16 +537,43 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm,
 		unsigned char s[32];
 
 #if OPENSSL_VERSION_MAJOR >= 3
-		EVP_PKEY *priv_pkey = EVP_PKEY_new_raw_private_key(EVP_PKEY_X25519, NULL, sk, sizeof(rspamd_sk_t));
-		g_assert(priv_pkey != NULL);
+		EVP_PKEY *sec_pkey = NULL;
+		EVP_PKEY *pub_pkey = NULL;
+		OSSL_LIB_CTX *libctx = OSSL_LIB_CTX_new();
+		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_from_name(libctx, "EC", NULL);
+		EVP_PKEY_CTX *dctx = EVP_PKEY_CTX_new_from_name(libctx, "EC", NULL);
+		OSSL_PARAM_BLD *param_bld;
+		OSSL_PARAM *params = NULL;
+		BIGNUM *bn_sec;
 
-		EVP_PKEY *pub_pkey = EVP_PKEY_new_raw_public_key(EVP_PKEY_X25519, NULL,  pk,rspamd_cryptobox_pk_bytes(mode)) ;
+		param_bld = OSSL_PARAM_BLD_new();
+		g_assert(OSSL_PARAM_BLD_push_utf8_string(param_bld, "group",
+												 EC_curve_nid2nist(CRYPTOBOX_CURVE_NID), 0) == 1);
 
-		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(priv_pkey, NULL);
+		bn_sec = BN_bin2bn(sk, sizeof(rspamd_sk_t), NULL);
+		g_assert(bn_sec != NULL);
 
-		EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx, CRYPTOBOX_CURVE_NID);
-		g_assert(pctx != NULL);
+		g_assert(OSSL_PARAM_BLD_push_BN(param_bld, "priv", bn_sec) == 1);
+		params = OSSL_PARAM_BLD_to_param(param_bld);
 
+		g_assert(EVP_PKEY_fromdata_init(pctx) == 1);
+		g_assert(EVP_PKEY_fromdata(pctx, &sec_pkey, EVP_PKEY_KEYPAIR, params) == 1);
+		EVP_PKEY_CTX_free(pctx);
+		pctx = EVP_PKEY_CTX_new_from_pkey(libctx, sec_pkey, NULL);
+
+		OSSL_PARAM_free(params);
+		OSSL_PARAM_BLD_free(param_bld);
+		param_bld = OSSL_PARAM_BLD_new();
+
+		g_assert(OSSL_PARAM_BLD_push_utf8_string(param_bld, "group",
+												 EC_curve_nid2nist(CRYPTOBOX_CURVE_NID), 0) == 1);
+
+		g_assert(OSSL_PARAM_BLD_push_octet_string(param_bld, "pub", pk, sizeof(rspamd_pk_t)) == 1);
+		params = OSSL_PARAM_BLD_to_param(param_bld);
+		g_assert(params != NULL);
+
+		g_assert(EVP_PKEY_fromdata_init(dctx) == 1);
+		g_assert(EVP_PKEY_fromdata(dctx, &pub_pkey, EVP_PKEY_KEYPAIR, params) == 1);
 
 		g_assert(EVP_PKEY_derive_init(pctx) == 1);
 
@@ -556,8 +583,12 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm,
 		g_assert(EVP_PKEY_derive(pctx, s, &s_len) == 1);
 
 		EVP_PKEY_CTX_free(pctx);
-		EVP_PKEY_free(priv_pkey);
+		OSSL_PARAM_BLD_free(param_bld);
+		OSSL_PARAM_free(params);
+		BN_free(bn_sec);
 		EVP_PKEY_free(pub_pkey);
+		EVP_PKEY_free(sec_pkey);
+		OSSL_LIB_CTX_free(libctx);
 #else
 
 		EC_KEY *lk;
