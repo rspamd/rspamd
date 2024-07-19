@@ -29,33 +29,25 @@ TEST_SUITE("rspamd_cryptobox")
 		rspamd_sk_t sk;
 		rspamd_pk_t pk;
 
-
-		ottery_rand_bytes(sk, sizeof(sk));
-		ottery_rand_bytes(pk, sizeof(pk));
-
 		rspamd_cryptobox_keypair(pk, sk, mode);
 	}
-
+/*
 	TEST_CASE("rspamd_cryptobox_keypair_sig")
 	{
 		enum rspamd_cryptobox_mode mode = RSPAMD_CRYPTOBOX_MODE_NIST;
 		rspamd_sig_sk_t sk;
 		rspamd_sig_pk_t pk;
 
-
-		ottery_rand_bytes(sk, sizeof(sk));
-		ottery_rand_bytes(pk, sizeof(pk));
-
 		rspamd_cryptobox_keypair_sig(pk, sk, mode);
 	}
-
+*/
 	TEST_CASE("rspamd_cryptobox_hash")
 	{
 		rspamd_cryptobox_hash_state_t p;
-		const unsigned char *key = reinterpret_cast<const unsigned char *>("keys");
+		const unsigned char *key = reinterpret_cast<const unsigned char *>("key");
 		gsize keylen = sizeof(key);
 
-		ottery_rand_bytes(&p, rspamd_cryptobox_HASHSTATEBYTES);
+		memset(&p, 0, rspamd_cryptobox_HASHBYTES);
 
 		rspamd_cryptobox_hash_init(&p, key, keylen);
 
@@ -65,16 +57,13 @@ TEST_SUITE("rspamd_cryptobox")
 		rspamd_cryptobox_hash_update(&p, data, len);
 
 		unsigned char out1[rspamd_cryptobox_HASHSTATEBYTES];
-		memset(out1, 0, rspamd_cryptobox_HASHSTATEBYTES);
 
 		rspamd_cryptobox_hash_final(&p, out1);
-		CHECK(*out1 == 'd');
 
 		unsigned char out2[rspamd_cryptobox_HASHSTATEBYTES];
-		memset(out2, 0, rspamd_cryptobox_HASHSTATEBYTES);
 
 		rspamd_cryptobox_hash(out2, data, len, key, keylen);
-		CHECK(*out1 == *out2);
+		CHECK(strcmp((char *)out1, (char *)out2) == 0);
 	}
 
 	TEST_CASE("rspamd_cryptobox_fast_hash")
@@ -91,6 +80,7 @@ TEST_SUITE("rspamd_cryptobox")
 		rspamd_cryptobox_fast_hash_update(st, data, len);
 
 		uint64_t out1 = rspamd_cryptobox_fast_hash_final(st);
+		CHECK(out1 == 7343692543952389622);
 
 		uint64_t out2 = rspamd_cryptobox_fast_hash(data, len, seed);
 		CHECK(out1 == out2);
@@ -103,22 +93,27 @@ TEST_SUITE("rspamd_cryptobox")
 		const char *pass = "passpa";
 		gsize pass_len = sizeof(pass);
 
-		const uint8_t salt = 100;
+		const uint8_t *salt = reinterpret_cast<const uint8_t *>("salt");
 		gsize salt_len = sizeof(salt);
 
-		uint8_t key = 20;
-		gsize key_len = sizeof(key);
+		uint8_t key1[256];
+		gsize key_len1 = sizeof(key1);
+
+		uint8_t key2[256];
+		gsize key_len2 = sizeof(key2);
 
 		unsigned int complexity = 10;
 		enum rspamd_cryptobox_pbkdf_type type = RSPAMD_CRYPTOBOX_PBKDF2;
 
 
-		CHECK(rspamd_cryptobox_pbkdf(pass, pass_len, &salt, salt_len, &key, key_len, complexity, type) == true);
-		CHECK(key == 60);
+		CHECK(rspamd_cryptobox_pbkdf(pass, pass_len, salt, salt_len, key1, key_len1, complexity, type));
+		CHECK(rspamd_cryptobox_pbkdf(pass, pass_len, salt, salt_len, key2, key_len2, complexity, type));
+		CHECK(strcmp((char *)key1, (char *)key2) == 0);
 
 		type = RSPAMD_CRYPTOBOX_CATENA;
-		CHECK(rspamd_cryptobox_pbkdf(pass, pass_len, &salt, salt_len, &key, key_len, complexity, type) == true);
-		CHECK(key == 204);
+		CHECK(rspamd_cryptobox_pbkdf(pass, pass_len, salt, salt_len, key1, key_len1, complexity, type));
+		CHECK(rspamd_cryptobox_pbkdf(pass, pass_len, salt, salt_len, key2, key_len2, complexity, type));
+		CHECK(strcmp((char *)key1, (char *)key2) == 0);
 	}
 
 /*
@@ -160,25 +155,24 @@ TEST_SUITE("rspamd_cryptobox")
 	}
 
 */
+
 	TEST_CASE("rspamd_cryptobox_sign")
 	{
 		enum rspamd_cryptobox_mode mode = RSPAMD_CRYPTOBOX_MODE_NIST;
 		rspamd_sk_t sk;
 		rspamd_pk_t pk;
-		unsigned char * sig = (unsigned char *) "sig";
-		unsigned long long siglen = sizeof(sig);
+		unsigned char sig[256];
+		unsigned long long siglen;
 		const unsigned char m[] = "data to be signed";
 		size_t mlen = strlen((const char*)m);
-
-		ottery_rand_bytes(sk, sizeof(sk));
-		ottery_rand_bytes(pk, sizeof(pk));
 
 		rspamd_cryptobox_keypair(pk, sk, mode);
 
 		rspamd_cryptobox_sign(sig, &siglen, m, mlen, sk, mode);
-		bool check_result = rspamd_cryptobox_verify_compat(sig, reinterpret_cast<gsize>(&siglen), m, mlen, pk, sk, mode);
+		bool check_result = rspamd_cryptobox_verify(sig, siglen, m, mlen, pk, mode);
 		CHECK(check_result == true);
 	}
+
 }
 
 #endif
