@@ -116,11 +116,11 @@ TEST_SUITE("rspamd_cryptobox")
 		CHECK(strcmp((char *)key1, (char *)key2) == 0);
 	}
 
-/*
+
 	TEST_CASE("rspamd_cryptobox_encrypt_inplace")
 	{
-		unsigned char* data = (unsigned char *) "data";
-		gsize len = 5;
+		unsigned char data[256];
+		gsize len = sizeof(data);
 		rspamd_nonce_t nonce;
 		rspamd_pk_t pk;
 		rspamd_sk_t sk;
@@ -128,33 +128,16 @@ TEST_SUITE("rspamd_cryptobox")
 		enum rspamd_cryptobox_mode mode = RSPAMD_CRYPTOBOX_MODE_NIST;
 
 		ottery_rand_bytes(nonce, sizeof(nonce));
-		ottery_rand_bytes(pk, sizeof(pk));
-		ottery_rand_bytes(sk, sizeof(sk));
+
+		rspamd_cryptobox_keypair(pk, sk, mode);
+
 		memset(sig, 0, sizeof(sig));
 
 		rspamd_cryptobox_encrypt_inplace(data, len, nonce, pk, sk, sig, mode);
-		MESSAGE(sig);
+
+		CHECK(rspamd_cryptobox_decrypt_inplace(data, len, nonce, pk, sk, sig, mode));
 	}
 
-	TEST_CASE("rspamd_cryptobox_decrypt_inplace")
-	{
-		unsigned char* data = (unsigned char *) "data";
-		gsize len = 5;
-		rspamd_nonce_t nonce;
-		rspamd_pk_t pk;
-		rspamd_sk_t sk;
-		rspamd_mac_t sig;
-		enum rspamd_cryptobox_mode mode = RSPAMD_CRYPTOBOX_MODE_NIST;
-
-		ottery_rand_bytes(nonce, sizeof(nonce));
-		ottery_rand_bytes(pk, sizeof(pk));
-		ottery_rand_bytes(sk, sizeof(sk));
-		memset(sig, 0, sizeof(sig));
-
-		CHECK(rspamd_cryptobox_decrypt_inplace(data, len, nonce, pk, sk, sig, mode) == true)
-	}
-
-*/
 
 	TEST_CASE("rspamd_cryptobox_sign")
 	{
