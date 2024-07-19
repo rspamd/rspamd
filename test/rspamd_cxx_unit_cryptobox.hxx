@@ -31,7 +31,7 @@ TEST_SUITE("rspamd_cryptobox")
 
 		rspamd_cryptobox_keypair(pk, sk, mode);
 	}
-/*
+
 	TEST_CASE("rspamd_cryptobox_keypair_sig")
 	{
 		enum rspamd_cryptobox_mode mode = RSPAMD_CRYPTOBOX_MODE_NIST;
@@ -40,7 +40,7 @@ TEST_SUITE("rspamd_cryptobox")
 
 		rspamd_cryptobox_keypair_sig(pk, sk, mode);
 	}
-*/
+
 	TEST_CASE("rspamd_cryptobox_hash")
 	{
 		rspamd_cryptobox_hash_state_t p;

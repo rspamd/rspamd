@@ -422,14 +422,13 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 		g_assert(EVP_PKEY_get_bn_param(pkey, "priv", &bn_sec) == 1);
 
 		len = BN_num_bytes(bn_sec);
-		g_assert(len <= (int) sizeof(rspamd_sig_sk_t));
+		g_assert(len <= (int) sizeof(rspamd_sk_t));
 		BN_bn2bin(bn_sec, sk);
 
 		EVP_PKEY_get_octet_string_param(pkey, "pub", pk,
-												 sizeof(rspamd_sig_pk_t), &len);
-		g_error(ERR_error_string(ERR_get_error(), NULL));
+												 sizeof(rspamd_pk_t), &len);
 
-		g_assert(len <= (int) sizeof(rspamd_sig_pk_t));
+		g_assert(len <= (int) sizeof(rspamd_pk_t));
 
 		BN_free(bn_sec);
 		EVP_PKEY_free(pkey);
