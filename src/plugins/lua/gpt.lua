@@ -194,6 +194,18 @@ local function default_conversion(task, input)
 
   if type(reply) == 'table' and reply.probability then
     local spam_score = tonumber(reply.probability)
+
+    if not spam_score then
+      -- Maybe we need GPT to convert GPT reply here?
+      if reply.probability == "high" then
+        spam_score = 0.9
+      elseif reply.probability == "low" then
+        spam_score = 0.1
+      else
+        rspamd_logger.infox("cannot convert to spam probability: %s", reply.probability)
+      end
+    end
+
     if type(reply.usage) == 'table' then
       rspamd_logger.infox(task, 'usage: %s tokens', reply.usage.total_tokens)
     end
@@ -347,8 +359,8 @@ if opts then
   end
 
   if not settings.prompt then
-    settings.prompt = "You will be provided with the email message, " ..
-        "and your task is to classify its probability to be spam, " ..
+    settings.prompt = "You will be provided with the email message, subject, from and url domains, " ..
+        "and your task is to evaluate the probability to be spam as number from 0 to 1, " ..
         "output result as JSON with 'probability' field."
   end
 
