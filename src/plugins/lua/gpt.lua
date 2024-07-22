@@ -106,10 +106,12 @@ local function default_condition(task)
     if task:has_symbol(s) then
       if required_weight > 0 then
         -- Also check score
-        local sym = task:get_symbol(s)
+        local sym = task:get_symbol(s) or E
         -- Must exist as we checked it before with `has_symbol`
-        if math.abs(sym.weight) >= required_weight then
-          return false, 'skip as "' .. s .. '" is found (weight: ' .. sym.weight .. ')'
+        if sym.weight then
+          if math.abs(sym.weight) >= required_weight then
+            return false, 'skip as "' .. s .. '" is found (weight: ' .. sym.weight .. ')'
+          end
         end
         lua_util.debugm(N, task, 'symbol %s has weight %s, but required %s', s,
             sym.weight, required_weight)
