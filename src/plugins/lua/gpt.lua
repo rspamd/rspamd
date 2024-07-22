@@ -27,7 +27,7 @@ gpt {
   # Your key to access the API
   api_key = "xxx";
   # Model name
-  model = "gpt-3.5-turbo";
+  model = "gpt-4o-mini";
   # Maximum tokens to generate
   max_tokens = 1000;
   # Temperature for sampling
@@ -69,7 +69,7 @@ local default_symbols_to_except = {
 local settings = {
   type = 'openai',
   api_key = nil,
-  model = 'gpt-3.5-turbo',
+  model = 'gpt-4o-mini',
   max_tokens = 1000,
   temperature = 0.0,
   timeout = 10,
