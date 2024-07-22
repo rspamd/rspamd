@@ -273,6 +273,7 @@ local function openai_gpt_check(task)
     model = settings.model,
     max_tokens = settings.max_tokens,
     temperature = settings.temperature,
+    response_format = { type = "json_object" },
     messages = {
       {
         role = 'system',
