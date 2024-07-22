@@ -31,9 +31,7 @@ gpt {
   # Maximum tokens to generate
   max_tokens = 1000;
   # Temperature for sampling
-  temperature = 0.7;
-  # Top p for sampling
-  top_p = 0.9;
+  temperature = 0.0;
   # Timeout for requests
   timeout = 10s;
   # Prompt for the model (use default if not set)
@@ -73,8 +71,7 @@ local settings = {
   api_key = nil,
   model = 'gpt-3.5-turbo',
   max_tokens = 1000,
-  temperature = 0.7,
-  top_p = 0.9,
+  temperature = 0.0,
   timeout = 10,
   prompt = nil,
   condition = nil,
@@ -276,7 +273,6 @@ local function openai_gpt_check(task)
     model = settings.model,
     max_tokens = settings.max_tokens,
     temperature = settings.temperature,
-    top_p = settings.top_p,
     messages = {
       {
         role = 'system',
