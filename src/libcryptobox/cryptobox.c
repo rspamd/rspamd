@@ -1,18 +1,18 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+* Copyright 2024 Vsevolod Stakhov
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*    http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
 /* Workaround for memset_s */
 #ifdef __APPLE__
 #define __STDC_WANT_LIB_EXT1__ 1
@@ -38,6 +38,8 @@
 #endif
 #ifdef HAVE_OPENSSL
 #include <openssl/opensslv.h>
+#include <openssl/engine.h>
+#include <openssl/param_build.h>
 /* Openssl >= 1.0.1d is required for GCM verification */
 #if OPENSSL_VERSION_NUMBER >= 0x1000104fL
 #define HAVE_USABLE_OPENSSL 1
@@ -67,7 +69,7 @@ static const unsigned char n0[16] = {0};
 
 #define CRYPTOBOX_ALIGNMENT 16
 #define cryptobox_align_ptr(p, a) \
-	(void *) (((uintptr_t) (p) + ((uintptr_t) a - 1)) & ~((uintptr_t) a - 1))
+   (void *) (((uintptr_t) (p) + ((uintptr_t) a - 1)) & ~((uintptr_t) a - 1))
 
 static void
 rspamd_cryptobox_cpuid(int cpu[4], int info)
@@ -339,11 +341,34 @@ void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert(0);
 #else
-		EC_KEY *ec_sec;
+
+		gsize len;
+#if OPENSSL_VERSION_MAJOR >= 3
+		OSSL_LIB_CTX *libctx = OSSL_LIB_CTX_new();
+		EVP_PKEY *pkey = EVP_PKEY_Q_keygen(libctx, NULL, "EC", EC_curve_nid2nist(CRYPTOBOX_CURVE_NID));
+		g_assert(pkey != NULL);
+
+		BIGNUM *bn_sec = NULL;
+		g_assert(EVP_PKEY_get_bn_param(pkey, "priv", &bn_sec) == 1);
+
+		len = BN_num_bytes(bn_sec);
+		g_assert(len <= (int) sizeof(rspamd_sk_t));
+		BN_bn2bin(bn_sec, sk);
+
+		g_assert(EVP_PKEY_get_octet_string_param(pkey, "pub", pk,
+												 sizeof(rspamd_pk_t), &len) == 1);
+
+		g_assert(len <= (int) sizeof(rspamd_pk_t));
+
+		BN_free(bn_sec);
+		EVP_PKEY_free(pkey);
+		OSSL_LIB_CTX_free(libctx);
+#else
+		const EC_POINT *ec_pub;
+		EC_GROUP *group;
 		const BIGNUM *bn_sec;
 
-		const EC_POINT *ec_pub;
-		gsize len;
+		EC_KEY *ec_sec;
 
 		ec_sec = EC_KEY_new_by_curve_name(CRYPTOBOX_CURVE_NID);
 		g_assert(ec_sec != NULL);
@@ -353,14 +378,8 @@ void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
 		g_assert(bn_sec != NULL);
 		ec_pub = EC_KEY_get0_public_key(ec_sec);
 		g_assert(ec_pub != NULL);
-#if OPENSSL_VERSION_MAJOR >= 3
-		unsigned char *buf = NULL; /* Thanks openssl for this API (no) */
-		len = EC_POINT_point2buf(EC_KEY_get0_group(ec_sec), ec_pub,
-								 POINT_CONVERSION_UNCOMPRESSED, &buf, NULL);
-		g_assert(len <= (int) rspamd_cryptobox_pk_bytes(mode));
-		memcpy(pk, buf, len);
-		OPENSSL_free(buf);
-#else
+
+		group = EC_KEY_get0_group(ec_sec);
 		BIGNUM *bn_pub;
 		bn_pub = EC_POINT_point2bn(EC_KEY_get0_group(ec_sec),
 								   ec_pub, POINT_CONVERSION_UNCOMPRESSED, NULL, NULL);
@@ -368,13 +387,14 @@ void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
 		g_assert(len <= (int) rspamd_cryptobox_pk_bytes(mode));
 		BN_bn2bin(bn_pub, pk);
 		BN_free(bn_pub);
-#endif
+		EC_KEY_free(ec_sec);
 
 		len = BN_num_bytes(bn_sec);
 		g_assert(len <= (int) sizeof(rspamd_sk_t));
 		BN_bn2bin(bn_sec, sk);
 
-		EC_KEY_free(ec_sec);
+		EC_GROUP_free(group);
+#endif
 #endif
 	}
 }
@@ -389,10 +409,33 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert(0);
 #else
+
+		const EC_POINT *ec_pub;
+		EC_GROUP *group;
+		gsize len;
+#if OPENSSL_VERSION_MAJOR >= 3
+		OSSL_LIB_CTX *libctx = OSSL_LIB_CTX_new();
+		EVP_PKEY *pkey = EVP_PKEY_Q_keygen(libctx, NULL, "EC", EC_curve_nid2nist(CRYPTOBOX_CURVE_NID));
+		g_assert(pkey != NULL);
+
+		BIGNUM *bn_sec = NULL;
+		g_assert(EVP_PKEY_get_bn_param(pkey, "priv", &bn_sec) == 1);
+
+		len = BN_num_bytes(bn_sec);
+		g_assert(len <= (int) sizeof(rspamd_sk_t));
+		BN_bn2bin(bn_sec, sk);
+
+		EVP_PKEY_get_octet_string_param(pkey, "pub", pk,
+												 sizeof(rspamd_pk_t), &len);
+
+		g_assert(len <= (int) sizeof(rspamd_pk_t));
+
+		BN_free(bn_sec);
+		EVP_PKEY_free(pkey);
+		OSSL_LIB_CTX_free(libctx);
+#else
 		EC_KEY *ec_sec;
 		const BIGNUM *bn_sec;
-		const EC_POINT *ec_pub;
-		gsize len;
 
 		ec_sec = EC_KEY_new_by_curve_name(CRYPTOBOX_CURVE_NID);
 		g_assert(ec_sec != NULL);
@@ -403,14 +446,8 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 		ec_pub = EC_KEY_get0_public_key(ec_sec);
 		g_assert(ec_pub != NULL);
 
-#if OPENSSL_VERSION_MAJOR >= 3
-		unsigned char *buf = NULL; /* Thanks openssl for this API (no) */
-		len = EC_POINT_point2buf(EC_KEY_get0_group(ec_sec), ec_pub,
-								 POINT_CONVERSION_UNCOMPRESSED, &buf, NULL);
-		g_assert(len <= (int) rspamd_cryptobox_pk_bytes(mode));
-		memcpy(pk, buf, len);
-		OPENSSL_free(buf);
-#else
+		group = EC_KEY_get0_group(ec_sec);
+
 		BIGNUM *bn_pub;
 		bn_pub = EC_POINT_point2bn(EC_KEY_get0_group(ec_sec),
 								   ec_pub, POINT_CONVERSION_UNCOMPRESSED, NULL, NULL);
@@ -418,12 +455,13 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 		g_assert(len <= (int) rspamd_cryptobox_pk_bytes(mode));
 		BN_bn2bin(bn_pub, pk);
 		BN_free(bn_pub);
-#endif
-
+		EC_KEY_free(ec_sec);
 		len = BN_num_bytes(bn_sec);
 		g_assert(len <= (int) sizeof(rspamd_sk_t));
 		BN_bn2bin(bn_sec, sk);
-		EC_KEY_free(ec_sec);
+#endif
+
+		EC_GROUP_free(group);
 #endif
 	}
 }
@@ -494,11 +532,67 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm,
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert(0);
 #else
+		int len;
+		unsigned char s[32];
+
+#if OPENSSL_VERSION_MAJOR >= 3
+		EVP_PKEY *sec_pkey = NULL;
+		EVP_PKEY *pub_pkey = NULL;
+		OSSL_LIB_CTX *libctx = OSSL_LIB_CTX_new();
+		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_from_name(libctx, "EC", NULL);
+		EVP_PKEY_CTX *dctx = EVP_PKEY_CTX_new_from_name(libctx, "EC", NULL);
+		OSSL_PARAM_BLD *param_bld;
+		OSSL_PARAM *params = NULL;
+		BIGNUM *bn_sec;
+
+		param_bld = OSSL_PARAM_BLD_new();
+		g_assert(OSSL_PARAM_BLD_push_utf8_string(param_bld, "group",
+												 EC_curve_nid2nist(CRYPTOBOX_CURVE_NID), 0) == 1);
+
+		bn_sec = BN_bin2bn(sk, sizeof(rspamd_sk_t), NULL);
+		g_assert(bn_sec != NULL);
+
+		g_assert(OSSL_PARAM_BLD_push_BN(param_bld, "priv", bn_sec) == 1);
+		params = OSSL_PARAM_BLD_to_param(param_bld);
+
+		g_assert(EVP_PKEY_fromdata_init(pctx) == 1);
+		g_assert(EVP_PKEY_fromdata(pctx, &sec_pkey, EVP_PKEY_KEYPAIR, params) == 1);
+		EVP_PKEY_CTX_free(pctx);
+		pctx = EVP_PKEY_CTX_new_from_pkey(libctx, sec_pkey, NULL);
+
+		OSSL_PARAM_free(params);
+		OSSL_PARAM_BLD_free(param_bld);
+		param_bld = OSSL_PARAM_BLD_new();
+
+		g_assert(OSSL_PARAM_BLD_push_utf8_string(param_bld, "group",
+												 EC_curve_nid2nist(CRYPTOBOX_CURVE_NID), 0) == 1);
+
+		g_assert(OSSL_PARAM_BLD_push_octet_string(param_bld, "pub", pk, sizeof(rspamd_pk_t)) == 1);
+		params = OSSL_PARAM_BLD_to_param(param_bld);
+		g_assert(params != NULL);
+
+		g_assert(EVP_PKEY_fromdata_init(dctx) == 1);
+		g_assert(EVP_PKEY_fromdata(dctx, &pub_pkey, EVP_PKEY_KEYPAIR, params) == 1);
+
+		g_assert(EVP_PKEY_derive_init(pctx) == 1);
+
+		EVP_PKEY_derive_set_peer(pctx, pub_pkey);
+
+		size_t s_len = sizeof(s);
+		g_assert(EVP_PKEY_derive(pctx, s, &s_len) == 1);
+
+		EVP_PKEY_CTX_free(pctx);
+		OSSL_PARAM_BLD_free(param_bld);
+		OSSL_PARAM_free(params);
+		BN_free(bn_sec);
+		EVP_PKEY_free(pub_pkey);
+		EVP_PKEY_free(sec_pkey);
+		OSSL_LIB_CTX_free(libctx);
+#else
+
 		EC_KEY *lk;
 		EC_POINT *ec_pub;
 		BIGNUM *bn_pub, *bn_sec;
-		int len;
-		unsigned char s[32];
 
 		lk = EC_KEY_new_by_curve_name(CRYPTOBOX_CURVE_NID);
 		g_assert(lk != NULL);
@@ -511,16 +605,19 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm,
 		g_assert(EC_KEY_set_private_key(lk, bn_sec) == 1);
 		ec_pub = ec_point_bn2point_compat(EC_KEY_get0_group(lk), bn_pub, NULL, NULL);
 		g_assert(ec_pub != NULL);
+
 		len = ECDH_compute_key(s, sizeof(s), ec_pub, lk, NULL);
 		g_assert(len == sizeof(s));
 
-		/* Still do hchacha iteration since we are not using SHA1 KDF */
-		hchacha(s, n0, nm, 20);
-
 		EC_KEY_free(lk);
+
 		EC_POINT_free(ec_pub);
 		BN_free(bn_sec);
 		BN_free(bn_pub);
+#endif
+		/* Still do hchacha iteration since we are not using SHA1 KDF */
+		hchacha(s, n0, nm, 20);
+
 #endif
 	}
 }
@@ -537,8 +634,6 @@ void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert(0);
 #else
-		EC_KEY *lk;
-		BIGNUM *bn_sec;
 		EVP_MD_CTX *sha_ctx;
 		unsigned char h[64];
 		unsigned int diglen = rspamd_cryptobox_signature_bytes(mode);
@@ -549,6 +644,46 @@ void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,
 		EVP_DigestUpdate(sha_ctx, m, mlen);
 		EVP_DigestFinal(sha_ctx, h, NULL);
 
+		/* ECDSA */
+#if OPENSSL_VERSION_MAJOR >= 3
+		EVP_PKEY *pkey = NULL;
+		OSSL_LIB_CTX *libctx = OSSL_LIB_CTX_new();
+		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_from_name(libctx, "EC", NULL);
+		OSSL_PARAM_BLD *param_bld;
+		OSSL_PARAM *params = NULL;
+		BIGNUM *bn_sec;
+
+		param_bld = OSSL_PARAM_BLD_new();
+		g_assert(OSSL_PARAM_BLD_push_utf8_string(param_bld, "group",
+												 EC_curve_nid2nist(CRYPTOBOX_CURVE_NID), 0) == 1);
+
+		bn_sec = BN_bin2bn(sk, sizeof(rspamd_sk_t), NULL);
+		g_assert(bn_sec != NULL);
+
+		g_assert(OSSL_PARAM_BLD_push_BN(param_bld, "priv", bn_sec) == 1);
+
+		params = OSSL_PARAM_BLD_to_param(param_bld);
+		g_assert(EVP_PKEY_fromdata_init(pctx) == 1);
+		g_assert(EVP_PKEY_fromdata(pctx, &pkey, EVP_PKEY_KEYPAIR, params) == 1);
+
+		g_assert(pkey != NULL);
+
+		g_assert(EVP_DigestSignInit(sha_ctx, NULL, EVP_sha512(), NULL, pkey) == 1);
+
+		size_t diglen_size_t = diglen;\
+		EVP_DigestSign(sha_ctx, sig, &diglen_size_t, m, mlen);
+		diglen = diglen_size_t;
+
+		EVP_PKEY_CTX_free(pctx);
+		OSSL_PARAM_BLD_free(param_bld);
+		OSSL_PARAM_free(params);
+		BN_free(bn_sec);
+		EVP_PKEY_free(pkey);
+		OSSL_LIB_CTX_free(libctx);
+#else
+		EC_KEY *lk;
+		BIGNUM *bn_sec;
+
 		/* Key setup */
 		lk = EC_KEY_new_by_curve_name(CRYPTOBOX_CURVE_NID);
 		g_assert(lk != NULL);
@@ -556,17 +691,17 @@ void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,
 		g_assert(bn_sec != NULL);
 		g_assert(EC_KEY_set_private_key(lk, bn_sec) == 1);
 
-		/* ECDSA */
 		g_assert(ECDSA_sign(0, h, sizeof(h), sig, &diglen, lk) == 1);
+		EC_KEY_free(lk);
+		BN_free(bn_sec);
+#endif
 		g_assert(diglen <= sizeof(rspamd_signature_t));
 
 		if (siglen_p) {
 			*siglen_p = diglen;
 		}
 
-		EC_KEY_free(lk);
 		EVP_MD_CTX_destroy(sha_ctx);
-		BN_free(bn_sec);
 #endif
 	}
 }
@@ -589,9 +724,6 @@ bool rspamd_cryptobox_verify(const unsigned char *sig,
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert(0);
 #else
-		EC_KEY *lk;
-		EC_POINT *ec_pub;
-		BIGNUM *bn_pub;
 		EVP_MD_CTX *sha_ctx;
 		unsigned char h[64];
 
@@ -600,6 +732,38 @@ bool rspamd_cryptobox_verify(const unsigned char *sig,
 		g_assert(EVP_DigestInit(sha_ctx, EVP_sha512()) == 1);
 		EVP_DigestUpdate(sha_ctx, m, mlen);
 		EVP_DigestFinal(sha_ctx, h, NULL);
+
+
+#if OPENSSL_VERSION_MAJOR >= 3
+		EVP_PKEY *pkey = NULL;
+		OSSL_LIB_CTX *libctx = OSSL_LIB_CTX_new();
+		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_from_name(libctx, "EC", NULL);
+		OSSL_PARAM_BLD *param_bld;
+		OSSL_PARAM *params = NULL;
+
+		param_bld = OSSL_PARAM_BLD_new();
+		g_assert(OSSL_PARAM_BLD_push_utf8_string(param_bld, "group",
+												 EC_curve_nid2nist(CRYPTOBOX_CURVE_NID), 0) == 1);
+
+		g_assert(OSSL_PARAM_BLD_push_octet_string(param_bld, "pub", pk, sizeof(rspamd_pk_t)) == 1);
+
+		params = OSSL_PARAM_BLD_to_param(param_bld);
+		g_assert(EVP_PKEY_fromdata_init(pctx) == 1);
+		g_assert(EVP_PKEY_fromdata(pctx, &pkey, EVP_PKEY_PUBLIC_KEY, params) == 1);
+
+		g_assert(pkey != NULL);
+
+		g_assert(EVP_DigestVerifyInit(sha_ctx, NULL, EVP_sha512(), NULL, pkey) == 1);
+
+		if(EVP_DigestVerify(sha_ctx, sig, siglen, m, mlen) == 1)
+			ret = true;
+
+		EVP_PKEY_free(pkey);
+		OSSL_LIB_CTX_free(libctx);
+#else
+		EC_KEY *lk;
+		EC_POINT *ec_pub;
+		BIGNUM *bn_pub;
 
 		/* Key setup */
 		lk = EC_KEY_new_by_curve_name(CRYPTOBOX_CURVE_NID);
@@ -614,9 +778,12 @@ bool rspamd_cryptobox_verify(const unsigned char *sig,
 		ret = ECDSA_verify(0, h, sizeof(h), sig, siglen, lk) == 1;
 
 		EC_KEY_free(lk);
-		EVP_MD_CTX_destroy(sha_ctx);
+
 		BN_free(bn_pub);
 		EC_POINT_free(ec_pub);
+#endif
+
+		EVP_MD_CTX_destroy(sha_ctx);
 #endif
 	}
 
@@ -1288,9 +1455,9 @@ void rspamd_cryptobox_siphash(unsigned char *out, const unsigned char *in,
 }
 
 /*
- * Password-Based Key Derivation Function 2 (PKCS #5 v2.0).
- * Code based on IEEE Std 802.11-2007, Annex H.4.2.
- */
+* Password-Based Key Derivation Function 2 (PKCS #5 v2.0).
+* Code based on IEEE Std 802.11-2007, Annex H.4.2.
+*/
 static gboolean
 rspamd_cryptobox_pbkdf2(const char *pass, gsize pass_len,
 						const uint8_t *salt, gsize salt_len, uint8_t *key, gsize key_len,
@@ -1327,9 +1494,9 @@ rspamd_cryptobox_pbkdf2(const char *pass, gsize pass_len,
 			uint8_t k[crypto_generichash_blake2b_BYTES_MAX];
 
 			/*
-			 * We use additional blake2 iteration to store large key
-			 * XXX: it is not compatible with the original implementation but safe
-			 */
+			* We use additional blake2 iteration to store large key
+			* XXX: it is not compatible with the original implementation but safe
+			*/
 			crypto_generichash_blake2b(k, sizeof(k), pass, pass_len,
 									   NULL, 0);
 			crypto_generichash_blake2b(d1, sizeof(d1), asalt, salt_len + 4,
@@ -1347,9 +1514,9 @@ rspamd_cryptobox_pbkdf2(const char *pass, gsize pass_len,
 				uint8_t k[crypto_generichash_blake2b_BYTES_MAX];
 
 				/*
-				 * We use additional blake2 iteration to store large key
-				 * XXX: it is not compatible with the original implementation but safe
-				 */
+				* We use additional blake2 iteration to store large key
+				* XXX: it is not compatible with the original implementation but safe
+				*/
 				crypto_generichash_blake2b(k, sizeof(k), pass, pass_len,
 										   NULL, 0);
 				crypto_generichash_blake2b(d2, sizeof(d2), d1, sizeof(d1),
@@ -1459,12 +1626,33 @@ unsigned int rspamd_cryptobox_signature_bytes(enum rspamd_cryptobox_mode mode)
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert(0);
 #else
+#if OPENSSL_VERSION_MAJOR >= 3
+		if (ssl_keylen == 0) {
+			OSSL_LIB_CTX *libctx = OSSL_LIB_CTX_new();
+			EVP_MD_CTX *sha_ctx = EVP_MD_CTX_new();
+			EVP_PKEY *pkey = EVP_PKEY_Q_keygen(libctx, NULL, "EC", "prime256v1");
+			g_assert(pkey != NULL);
+
+			g_assert(EVP_DigestSignInit(sha_ctx, NULL, EVP_sha512(), NULL, pkey) == 1);
+
+			size_t keylen = 0;
+			const unsigned char data[] = "data to be signed";
+			size_t datalen = sizeof(data) - 1;
+			g_assert(EVP_DigestSign(sha_ctx, NULL, &keylen, data, datalen) == 1);
+			ssl_keylen = keylen;
+
+			OSSL_LIB_CTX_free(libctx);
+			EVP_PKEY_free(pkey);
+			EVP_MD_CTX_free(sha_ctx);
+		}
+#else
 		if (ssl_keylen == 0) {
 			EC_KEY *lk;
 			lk = EC_KEY_new_by_curve_name(CRYPTOBOX_CURVE_NID);
 			ssl_keylen = ECDSA_size(lk);
 			EC_KEY_free(lk);
 		}
+#endif
 #endif
 		return ssl_keylen;
 	}
@@ -1489,8 +1677,8 @@ void rspamd_cryptobox_hash_init(rspamd_cryptobox_hash_state_t *p, const unsigned
 }
 
 /**
- * Update hash with data portion
- */
+* Update hash with data portion
+*/
 void rspamd_cryptobox_hash_update(rspamd_cryptobox_hash_state_t *p, const unsigned char *data, gsize len)
 {
 	crypto_generichash_blake2b_state *st = cryptobox_align_ptr(p,
@@ -1499,8 +1687,8 @@ void rspamd_cryptobox_hash_update(rspamd_cryptobox_hash_state_t *p, const unsign
 }
 
 /**
- * Output hash to the buffer of rspamd_cryptobox_HASHBYTES length
- */
+* Output hash to the buffer of rspamd_cryptobox_HASHBYTES length
+*/
 void rspamd_cryptobox_hash_final(rspamd_cryptobox_hash_state_t *p, unsigned char *out)
 {
 	crypto_generichash_blake2b_state *st = cryptobox_align_ptr(p,
@@ -1509,8 +1697,8 @@ void rspamd_cryptobox_hash_final(rspamd_cryptobox_hash_state_t *p, unsigned char
 }
 
 /**
- * One in all function
- */
+* One in all function
+*/
 void rspamd_cryptobox_hash(unsigned char *out,
 						   const unsigned char *data,
 						   gsize len,
@@ -1729,8 +1917,8 @@ rspamd_cryptobox_fast_hash_final(rspamd_cryptobox_fast_hash_state_t *st)
 }
 
 /**
- * One in all function
- */
+* One in all function
+*/
 static inline uint64_t
 rspamd_cryptobox_fast_hash_machdep(const void *data,
 								   gsize len, uint64_t seed)
