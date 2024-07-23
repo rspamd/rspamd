@@ -89,6 +89,8 @@ lua_load_spf(lua_State *L)
 	lua_setfield(L, -2, "perm_fail");
 	lua_pushinteger(L, RSPAMD_SPF_FLAG_CACHED);
 	lua_setfield(L, -2, "cached");
+	lua_pushinteger(L, RSPAMD_SPF_RESOLVED_PLUSALL);
+	lua_setfield(L, -2, "plusall");
 
 	lua_setfield(L, -2, "flags");
 
@@ -366,6 +368,11 @@ spf_check_element(lua_State *L, struct spf_resolved *rec, struct spf_addr *addr,
 			else if (rec->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED) {
 				lua_pushboolean(L, false);
 				lua_pushinteger(L, RSPAMD_SPF_RESOLVED_TEMP_FAILED);
+				lua_pushfstring(L, "%cany", spf_mech_char(addr->mech));
+			}
+			else if (rec->flags & RSPAMD_SPF_RESOLVED_PLUSALL) {
+				lua_pushboolean(L, false);
+				lua_pushinteger(L, RSPAMD_SPF_RESOLVED_PLUSALL);
 				lua_pushfstring(L, "%cany", spf_mech_char(addr->mech));
 			}
 			else {

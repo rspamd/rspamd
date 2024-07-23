@@ -6,14 +6,16 @@ on:
 jobs:
   eslint:
     runs-on: ubuntu-latest
-    container:
-      image: node:18-alpine
     steps:
       - name: Check out source code
         uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: npm install
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install packages
+        run: npm ci
 
       - name: Show installed packages
         run: npm ls

@@ -117,7 +117,7 @@ local function graphite_push(kwargs)
     elseif #split == 2 then
       mvalue = kwargs['stats'][split[1]][split[2]]
     end
-    table.insert(metrics_str, string.format('%s %s %s', mname, mvalue, stamp))
+    table.insert(metrics_str, string.format('%s %s %s', mname, mvalue or 'null', stamp))
   end
 
   metrics_str = table.concat(metrics_str, '\n')

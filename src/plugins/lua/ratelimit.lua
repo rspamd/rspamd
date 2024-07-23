@@ -42,6 +42,8 @@ local settings = {
   -- Do not check ratelimits for these recipients
   whitelisted_rcpts = { 'postmaster', 'mailer-daemon' },
   prefix = 'RL',
+  -- If enabled, we apply dynamic rate limiting based on the verdict
+  dynamic_rate_limit = false,
   ham_factor_rate = 1.01,
   spam_factor_rate = 0.99,
   ham_factor_burst = 1.02,
@@ -361,17 +363,35 @@ local function make_prefix(redis_key, name, bucket)
   local hash = settings.prefix ..
       string.sub(rspamd_hash.create(redis_key):base32(), 1, hash_len)
   -- Fill defaults
+  -- If settings.dynamic_rate_limit is false, then the default dynamic rate limits are 1.0
+  -- We always allow per-bucket overrides of the dyn rate limits
+
+  local seen_specific_dyn_rate = false
+
   if not bucket.spam_factor_rate then
-    bucket.spam_factor_rate = settings.spam_factor_rate
+    bucket.spam_factor_rate = settings.dynamic_rate_limit and settings.spam_factor_rate or 1.0
+  else
+    seen_specific_dyn_rate = true
   end
   if not bucket.ham_factor_rate then
-    bucket.ham_factor_rate = settings.ham_factor_rate
+    bucket.ham_factor_rate = settings.dynamic_rate_limit and settings.ham_factor_rate or 1.0
+  else
+    seen_specific_dyn_rate = true
   end
   if not bucket.spam_factor_burst then
-    bucket.spam_factor_burst = settings.spam_factor_burst
+    bucket.spam_factor_burst = settings.dynamic_rate_limit and settings.spam_factor_burst or 1.0
+  else
+    seen_specific_dyn_rate = true
   end
   if not bucket.ham_factor_burst then
-    bucket.ham_factor_burst = settings.ham_factor_burst
+    bucket.ham_factor_burst = settings.dynamic_rate_limit and settings.ham_factor_burst or 1.0
+  else
+    seen_specific_dyn_rate = true
+  end
+
+  if seen_specific_dyn_rate then
+    -- Use if afterwards in case we don't use global dyn rates
+    bucket.specific_dyn_rate = true
   end
 
   return {
@@ -507,11 +527,20 @@ local function ratelimit_cb(task)
                   string.format('%s(%s)', lim_name, lim_key))
             end
           end
-          rspamd_logger.infox(task,
-              'ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn); redis key: %s',
-              lim_name, prefix,
-              bucket.burst, bucket.rate,
-              data[2], data[3], data[4], lim_key)
+
+          if bucket.dyn_rate_enabled then
+            rspamd_logger.infox(task,
+                'ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn); redis key: %s',
+                lim_name, prefix,
+                bucket.burst, bucket.rate,
+                data[2], data[3], data[4], lim_key)
+          else
+            rspamd_logger.infox(task,
+                'ratelimit "%s(%s)" exceeded, (%s / %s): %s (dynamic ratelimits disabled); redis key: %s',
+                lim_name, prefix,
+                bucket.burst, bucket.rate,
+                data[2], lim_key)
+          end
 
           if not (bucket.symbol or settings.symbol) and not bucket.skip_soft_reject then
             if not bucket.message then
@@ -551,13 +580,15 @@ local function ratelimit_cb(task)
         bincr = 1
       end
 
+      local dyn_rate_enabled = settings.dynamic_rate_limit or bucket.specific_dyn_rate
+
       lua_util.debugm(N, task, "check limit %s:%s -> %s (%s/%s)",
           value.name, pr, value.hash, bucket.burst, bucket.rate)
       lua_redis.exec_redis_script(bucket_check_id,
           { key = value.hash, task = task, is_write = true },
           gen_check_cb(pr, bucket, value.name, value.hash),
           { value.hash, tostring(now), tostring(rate), tostring(bucket.burst),
-            tostring(settings.expire), tostring(bincr) })
+            tostring(settings.expire), tostring(bincr), tostring(dyn_rate_enabled) })
     end
   end
 end
@@ -657,12 +688,14 @@ local function ratelimit_update_cb(task)
         bincr = 1
       end
 
+      local dyn_rate_enabled = settings.dynamic_rate_limit or bucket.specific_dyn_rate
+
       lua_redis.exec_redis_script(bucket_update_id,
           { key = v.hash, task = task, is_write = true },
           update_bucket_cb,
           { v.hash, tostring(now), tostring(mult_rate), tostring(mult_burst),
             tostring(settings.max_rate_mult), tostring(settings.max_bucket_mult),
-            tostring(settings.expire), tostring(bincr) })
+            tostring(settings.expire), tostring(bincr), tostring(dyn_rate_enabled) })
     end
   end
 end

@@ -17,7 +17,6 @@ limitations under the License.
 -- This plugin implements known senders logic for Rspamd
 
 local rspamd_logger = require "rspamd_logger"
-local ts = (require "tableshape").types
 local N = 'known_senders'
 local lua_util = require "lua_util"
 local lua_redis = require "lua_redis"
@@ -65,8 +64,10 @@ local settings = {
   reply_sender_privacy_length = 16,
 }
 
+--[[
+XXX: please fix tableshape one day
 local settings_schema = lua_redis.enrich_schema({
-  domains = lua_maps.map_schema,
+  domains = lua_maps.map_schema:is_optional(),
   enabled = ts.boolean:is_optional(),
   max_senders = (ts.integer + ts.string / tonumber):is_optional(),
   max_ttl = (ts.integer + ts.string / tonumber):is_optional(),
@@ -74,7 +75,16 @@ local settings_schema = lua_redis.enrich_schema({
   redis_key = ts.string:is_optional(),
   symbol = ts.string:is_optional(),
   symbol_unknown = ts.string:is_optional(),
+  max_recipients = ts.integer:is_optional(),
+  sender_prefix = ts.string:is_optional(),
+  sender_key_global = ts.string:is_optional(),
+  sender_key_size = ts.integer:is_optional(),
+  reply_sender_privacy = ts.boolean:is_optional(),
+  reply_sender_privacy_alg = ts.string:is_optional(),
+  reply_sender_privacy_prefix = ts.string:is_optional(),
+  reply_sender_privacy_length = ts.integer:is_optional(),
 })
+]]--
 
 local function make_key(input)
   local hash = rspamd_cryptobox_hash.create_specific('md5')
@@ -250,7 +260,8 @@ local function verify_local_replies_set(task)
 
   local replies_recipients = task:get_recipients('mime')
 
-  local replies_sender_string = lua_util.maybe_obfuscate_string(tostring(replies_sender), settings, settings.sender_prefix)
+  local replies_sender_string = lua_util.maybe_obfuscate_string(tostring(replies_sender), settings,
+      settings.sender_prefix)
   local replies_sender_key = make_key_replies(replies_sender_string:lower(), 8)
 
   local function redis_zscore_script_cb(err, data)
@@ -274,10 +285,10 @@ local function verify_local_replies_set(task)
 
   lua_util.debugm(N, task, 'Making redis request to local replies set')
   lua_redis.exec_redis_script(zscore_script_id,
-          {task = task, is_write = true},
-          redis_zscore_script_cb,
-          { replies_sender_key },
-          replies_recipients_addrs  )
+      { task = task, is_write = true },
+      redis_zscore_script_cb,
+      { replies_sender_key },
+      replies_recipients_addrs)
 end
 
 local function check_known_incoming_mail_callback(task)
@@ -289,14 +300,16 @@ local function check_known_incoming_mail_callback(task)
 
   -- making sender key
   lua_util.debugm(N, task, 'Sender: %s', replies_sender)
-  local replies_sender_string = lua_util.maybe_obfuscate_string(tostring(replies_sender), settings, settings.sender_prefix)
+  local replies_sender_string = lua_util.maybe_obfuscate_string(tostring(replies_sender), settings,
+      settings.sender_prefix)
   local replies_sender_key = make_key_replies(replies_sender_string:lower(), 8)
 
   lua_util.debugm(N, task, 'Sender key: %s', replies_sender_key)
 
   local function redis_zscore_global_cb(err, data)
     if err ~= nil then
-      rspamd_logger.errx(task, 'Couldn\'t find sender %s in global replies set. Ended with error: %s', replies_sender, err)
+      rspamd_logger.errx(task, 'Couldn\'t find sender %s in global replies set. Ended with error: %s', replies_sender,
+          err)
       return
     end
 
@@ -311,34 +324,28 @@ local function check_known_incoming_mail_callback(task)
 
   -- key for global replies set
   local replies_global_key = make_key_replies(settings.sender_key_global,
-          settings.sender_key_size, settings.sender_prefix)
+      settings.sender_key_size, settings.sender_prefix)
   -- using zscore to find sender in global set
   lua_util.debugm(N, task, 'Making redis request to global replies set')
   lua_redis.redis_make_request(task,
-          redis_params, -- connect params
-          replies_sender_key, -- hash key
-          false, -- is write
-          redis_zscore_global_cb, --callback
-          'ZSCORE', -- command
-          { replies_global_key, replies_sender } -- arguments
+      redis_params, -- connect params
+      replies_sender_key, -- hash key
+      false, -- is write
+      redis_zscore_global_cb, --callback
+      'ZSCORE', -- command
+      { replies_global_key, replies_sender } -- arguments
   )
 end
 
 local opts = rspamd_config:get_all_opt('known_senders')
 if opts then
   settings = lua_util.override_defaults(settings, opts)
-  local res, err = settings_schema:transform(settings)
-  if not res then
-    rspamd_logger.errx(rspamd_config, 'cannot parse known_senders options: %1', err)
-  else
-    settings = res
-  end
   redis_params = lua_redis.parse_redis_server(N, opts)
 
   if redis_params then
     local map_conf = settings.domains
     settings.domains = lua_maps.map_add_from_ucl(settings.domains,
-            'set', 'domains to track senders from')
+        'set', 'domains to track senders from')
     if not settings.domains then
       rspamd_logger.errx(rspamd_config, "couldn't add map %s, disable module",
           map_conf)
