@@ -1,18 +1,18 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+* Copyright 2024 Vsevolod Stakhov
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*    http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
 #include "config.h"
 #include "rspamd.h"
 #include "message.h"
@@ -67,25 +67,25 @@ enum rspamd_dkim_param_type {
 #define RSPAMD_DKIM_MAX_ARC_IDX 10
 
 #define msg_err_dkim(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL,       \
+													 "dkim", ctx->pool->tag.uid, \
+													 RSPAMD_LOG_FUNC,            \
+													 __VA_ARGS__)
+#define msg_warn_dkim(...) rspamd_default_log_function(G_LOG_LEVEL_WARNING,        \
 													  "dkim", ctx->pool->tag.uid, \
 													  RSPAMD_LOG_FUNC,            \
 													  __VA_ARGS__)
-#define msg_warn_dkim(...) rspamd_default_log_function(G_LOG_LEVEL_WARNING,        \
-													   "dkim", ctx->pool->tag.uid, \
-													   RSPAMD_LOG_FUNC,            \
-													   __VA_ARGS__)
 #define msg_info_dkim(...) rspamd_default_log_function(G_LOG_LEVEL_INFO,           \
-													   "dkim", ctx->pool->tag.uid, \
-													   RSPAMD_LOG_FUNC,            \
-													   __VA_ARGS__)
+													  "dkim", ctx->pool->tag.uid, \
+													  RSPAMD_LOG_FUNC,            \
+													  __VA_ARGS__)
 #define msg_debug_dkim(...) rspamd_conditional_debug_fast(NULL, NULL,                                     \
-														  rspamd_dkim_log_id, "dkim", ctx->pool->tag.uid, \
-														  RSPAMD_LOG_FUNC,                                \
-														  __VA_ARGS__)
+														 rspamd_dkim_log_id, "dkim", ctx->pool->tag.uid, \
+														 RSPAMD_LOG_FUNC,                                \
+														 __VA_ARGS__)
 #define msg_debug_dkim_taskless(...) rspamd_conditional_debug_fast(NULL, NULL,                     \
-																   rspamd_dkim_log_id, "dkim", "", \
-																   RSPAMD_LOG_FUNC,                \
-																   __VA_ARGS__)
+																  rspamd_dkim_log_id, "dkim", "", \
+																  RSPAMD_LOG_FUNC,                \
+																  __VA_ARGS__)
 
 INIT_LOG_MODULE(dkim)
 
@@ -790,12 +790,12 @@ rspamd_dkim_add_arc_seal_headers(rspamd_mempool_t *pool,
 }
 
 /**
- * Create new dkim context from signature
- * @param sig message's signature
- * @param pool pool to allocate memory from
- * @param err pointer to error object
- * @return new context or NULL
- */
+* Create new dkim context from signature
+* @param sig message's signature
+* @param pool pool to allocate memory from
+* @param err pointer to error object
+* @return new context or NULL
+*/
 rspamd_dkim_context_t *
 rspamd_create_dkim_context(const char *sig,
 						   rspamd_mempool_t *pool,
@@ -1097,9 +1097,9 @@ rspamd_create_dkim_context(const char *sig,
 
 				if (state == DKIM_STATE_ERROR) {
 					/*
-					 * We need to return from here as state machine won't
-					 * do any more steps after p == end
-					 */
+					* We need to return from here as state machine won't
+					* do any more steps after p == end
+					*/
 					if (err) {
 						msg_info_dkim("dkim parse failed: %e", *err);
 					}
@@ -1430,8 +1430,8 @@ rspamd_dkim_make_key(const char *keydata,
 
 			return NULL;
 		}
-
 		if (type == RSPAMD_DKIM_KEY_RSA) {
+#if OPENSSL_VERSION_MAJOR < 3
 			key->key.key_rsa = EVP_PKEY_get1_RSA(key->key_evp);
 
 			if (key->key.key_rsa == NULL) {
@@ -1443,8 +1443,10 @@ rspamd_dkim_make_key(const char *keydata,
 
 				return NULL;
 			}
+#endif
 		}
 		else {
+#if OPENSSL_VERSION_MAJOR < 3
 			key->key.key_ecdsa = EVP_PKEY_get1_EC_KEY(key->key_evp);
 
 			if (key->key.key_ecdsa == NULL) {
@@ -1456,7 +1458,9 @@ rspamd_dkim_make_key(const char *keydata,
 
 				return NULL;
 			}
+#endif
 		}
+
 	}
 
 	return key;
@@ -1473,15 +1477,16 @@ rspamd_dkim_key_id(rspamd_dkim_key_t *key)
 }
 
 /**
- * Free DKIM key
- * @param key
- */
+* Free DKIM key
+* @param key
+*/
 void rspamd_dkim_key_free(rspamd_dkim_key_t *key)
 {
 	if (key->key_evp) {
 		EVP_PKEY_free(key->key_evp);
 	}
 
+#if OPENSSL_VERSION_MAJOR < 3
 	if (key->type == RSPAMD_DKIM_KEY_RSA) {
 		if (key->key.key_rsa) {
 			RSA_free(key->key.key_rsa);
@@ -1492,6 +1497,7 @@ void rspamd_dkim_key_free(rspamd_dkim_key_t *key)
 			EC_KEY_free(key->key.key_ecdsa);
 		}
 	}
+#endif
 	/* Nothing in case of eddsa key */
 	if (key->key_bio) {
 		BIO_free(key->key_bio);
@@ -1507,11 +1513,13 @@ void rspamd_dkim_sign_key_free(rspamd_dkim_sign_key_t *key)
 	if (key->key_evp) {
 		EVP_PKEY_free(key->key_evp);
 	}
+#if OPENSSL_VERSION_MAJOR < 3
 	if (key->type == RSPAMD_DKIM_KEY_RSA) {
 		if (key->key.key_rsa) {
 			RSA_free(key->key.key_rsa);
 		}
 	}
+#endif
 	if (key->key_bio) {
 		BIO_free(key->key_bio);
 	}
@@ -1570,9 +1578,9 @@ rspamd_dkim_parse_key(const char *txt, gsize *keylen, GError **err)
 			break;
 		case read_tag_before_eqsign:
 			/* Input: spaces before eqsign
-			 * Output: either read a next tag (previous had no value), or read value
-			 * p is moved forward
-			 */
+			* Output: either read a next tag (previous had no value), or read value
+			* p is moved forward
+			*/
 			if (*p == '=') {
 				state = read_eqsign;
 			}
@@ -1759,12 +1767,12 @@ rspamd_dkim_dns_cb(struct rdns_reply *reply, gpointer arg)
 }
 
 /**
- * Make DNS request for specified context and obtain and parse key
- * @param ctx dkim context from signature
- * @param resolver dns resolver object
- * @param s async session to make request
- * @return
- */
+* Make DNS request for specified context and obtain and parse key
+* @param ctx dkim context from signature
+* @param resolver dns resolver object
+* @param s async session to make request
+* @return
+*/
 gboolean
 rspamd_get_dkim_key(rspamd_dkim_context_t *ctx,
 					struct rspamd_task *task,
@@ -2187,8 +2195,8 @@ rspamd_dkim_canonize_body(struct rspamd_task *task,
 					;
 
 				/*
-				 * If we have l= tag then we cannot add crlf...
-				 */
+				* If we have l= tag then we cannot add crlf...
+				*/
 				if (need_crlf) {
 					/* l is evil... */
 					if (ctx->len == 0) {
@@ -2461,9 +2469,9 @@ rspamd_dkim_canonize_header(struct rspamd_dkim_common_ctx *ctx,
 	bool use_idx = false, is_sign = ctx->is_sign;
 
 	/*
-	 * TODO:
-	 * Temporary hack to prevent linked list being misused until refactored
-	 */
+	* TODO:
+	* Temporary hack to prevent linked list being misused until refactored
+	*/
 	const unsigned int max_list_iters = 1000;
 
 	if (count < 0) {
@@ -2509,17 +2517,17 @@ rspamd_dkim_canonize_header(struct rspamd_dkim_common_ctx *ctx,
 
 				if (hdr_cnt <= count) {
 					/*
-					 * If DKIM has less headers requested than there are in a
-					 * message, then it's fine, it allows adding extra headers
-					 */
+					* If DKIM has less headers requested than there are in a
+					* message, then it's fine, it allows adding extra headers
+					*/
 					return TRUE;
 				}
 			}
 			else {
 				/*
-				 * This branch is used for ARC headers, and it orders them based on
-				 * i=<number> string and not their real order in the list of headers
-				 */
+				* This branch is used for ARC headers, and it orders them based on
+				* i=<number> string and not their real order in the list of headers
+				*/
 				char idx_buf[16];
 				int id_len, i;
 
@@ -2692,12 +2700,12 @@ rspamd_dkim_type_to_string(enum rspamd_dkim_type t)
 }
 
 /**
- * Check task for dkim context using dkim key
- * @param ctx dkim verify context
- * @param key dkim key (from cache or from dns request)
- * @param task task to check
- * @return
- */
+* Check task for dkim context using dkim key
+* @param ctx dkim verify context
+* @param key dkim key (from cache or from dns request)
+* @param task task to check
+* @return
+*/
 struct rspamd_dkim_check_result *
 rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 				  rspamd_dkim_key_t *key,
@@ -2916,6 +2924,7 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 
 	switch (key->type) {
 	case RSPAMD_DKIM_KEY_RSA:
+#if OPENSSL_VERSION_MAJOR < 3
 		if (RSA_verify(nid, raw_digest, dlen, ctx->b, ctx->blen,
 					   key->key.key_rsa) != 1) {
 			msg_debug_dkim("headers rsa verify failed");
@@ -2933,8 +2942,28 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 				RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
 				ctx->dkim_header);
 		}
+#else
+		if (rspamd_cryptobox_verify_compat(nid, ctx->b, ctx->blen, raw_digest, dlen,
+										   key->key_evp, RSPAMD_CRYPTOBOX_MODE_NIST) != 1) {
+			msg_debug_dkim("headers rsa verify failed");
+			ERR_clear_error();
+			res->rcode = DKIM_REJECT;
+			res->fail_reason = "headers rsa verify failed";
+
+			msg_info_dkim(
+				"%s: headers RSA verification failure; "
+				"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
+				rspamd_dkim_type_to_string(ctx->common.type),
+				(int) (body_end - body_start), ctx->common.body_canonicalised,
+				ctx->common.headers_canonicalised,
+				ctx->domain, ctx->selector,
+				RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
+				ctx->dkim_header);
+		}
+#endif
 		break;
 	case RSPAMD_DKIM_KEY_ECDSA:
+#if OPENSSL_VERSION_MAJOR < 3
 		if (ECDSA_verify(nid, raw_digest, dlen, ctx->b, ctx->blen,
 						 key->key.key_ecdsa) != 1) {
 			msg_info_dkim(
@@ -2951,7 +2980,26 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 			res->rcode = DKIM_REJECT;
 			res->fail_reason = "headers ecdsa verify failed";
 		}
+#else
+		if (rspamd_cryptobox_verify_compat(nid, ctx->b, ctx->blen, raw_digest, dlen,
+										   key->key_evp, RSPAMD_CRYPTOBOX_MODE_NIST) != 1) {
+			msg_info_dkim(
+				"%s: headers ECDSA verification failure; "
+				"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
+				rspamd_dkim_type_to_string(ctx->common.type),
+				(int) (body_end - body_start), ctx->common.body_canonicalised,
+				ctx->common.headers_canonicalised,
+				ctx->domain, ctx->selector,
+				RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
+				ctx->dkim_header);
+			msg_debug_dkim("headers ecdsa verify failed");
+			ERR_clear_error();
+			res->rcode = DKIM_REJECT;
+			res->fail_reason = "headers ecdsa verify failed";
+		}
+#endif
 		break;
+
 	case RSPAMD_DKIM_KEY_EDDSA:
 		if (!rspamd_cryptobox_verify(ctx->b, ctx->blen, raw_digest, dlen,
 									 key->key.key_eddsa, RSPAMD_CRYPTOBOX_MODE_25519)) {
@@ -3200,6 +3248,7 @@ rspamd_dkim_sign_key_load(const char *key, gsize len,
 				goto end;
 			}
 		}
+#if OPENSSL_VERSION_MAJOR < 3
 		nkey->key.key_rsa = EVP_PKEY_get1_RSA(nkey->key_evp);
 		if (nkey->key.key_rsa == NULL) {
 			g_set_error(err,
@@ -3212,6 +3261,7 @@ rspamd_dkim_sign_key_load(const char *key, gsize len,
 			goto end;
 		}
 		nkey->type = RSPAMD_DKIM_KEY_RSA;
+#endif
 	}
 
 	REF_INIT_RETAIN(nkey, rspamd_dkim_sign_key_free);
@@ -3536,7 +3586,9 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 
 	dlen = EVP_MD_CTX_size(ctx->common.headers_hash);
 	EVP_DigestFinal_ex(ctx->common.headers_hash, raw_digest, NULL);
+
 	if (ctx->key->type == RSPAMD_DKIM_KEY_RSA) {
+#if OPENSSL_VERSION_MAJOR < 3
 		sig_len = RSA_size(ctx->key->key.key_rsa);
 		sig_buf = g_alloca(sig_len);
 
@@ -3548,6 +3600,13 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 
 			return NULL;
 		}
+#else
+		sig_len = EVP_PKEY_get_size(ctx->key->key_evp);
+		sig_buf = g_alloca(sig_len);
+		rspamd_cryptobox_sign_compat(NID_sha256, sig_buf, NULL, raw_digest, dlen,
+									 ctx->key->key_evp, RSPAMD_CRYPTOBOX_MODE_NIST);
+		msg_debug("signed RSA");
+#endif
 	}
 	else if (ctx->key->type == RSPAMD_DKIM_KEY_EDDSA) {
 		sig_len = rspamd_cryptobox_signature_bytes(RSPAMD_CRYPTOBOX_MODE_25519);
@@ -3601,11 +3660,19 @@ rspamd_dkim_match_keys(rspamd_dkim_key_t *pk,
 			return FALSE;
 		}
 	}
+#if OPENSSL_VERSION_MAJOR >= 3
+	else if (EVP_PKEY_eq(pk->key_evp, sk->key_evp) != 1) {
+		g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYHASHMISMATCH,
+					"pubkey does not match private key");
+		return FALSE;
+	}
+#else
 	else if (EVP_PKEY_cmp(pk->key_evp, sk->key_evp) != 1) {
 		g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYHASHMISMATCH,
 					"pubkey does not match private key");
 		return FALSE;
 	}
+#endif
 
 	return TRUE;
 }
