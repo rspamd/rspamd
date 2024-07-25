@@ -642,7 +642,6 @@ local function prepare_arc_selector(task, sel)
          return v
         end
       end
-      
       return nil
     end
 
