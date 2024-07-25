@@ -94,11 +94,11 @@ local function default_condition(task)
     local action = result.action
 
     if action == 'reject' and result.npositive > 1 then
-      return true, 'already decided as spam'
+      return false, 'already decided as spam'
     end
 
     if action == 'no action' and score < 0 then
-      return true, 'negative score, already decided as ham'
+      return false, 'negative score, already decided as ham'
     end
   end
   -- We also exclude some symbols
