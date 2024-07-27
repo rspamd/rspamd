@@ -635,11 +635,21 @@ local function prepare_arc_selector(task, sel)
       end
     end
 
+    local function arc_result_from_ar(ar_header)
+      ar_header = ar_header or ""
+      for k, v in string.gmatch(ar_header, "(%w+)=(%w+)") do
+        if k == 'arc' then
+         return v
+        end
+      end
+      return nil
+    end
+
     if settings.reuse_auth_results then
       local ar_header = task:get_header('Authentication-Results')
 
       if ar_header then
-        local arc_match = string.match(ar_header, 'arc=(%w+)')
+        local arc_match = arc_result_from_ar(ar_header)
 
         if arc_match then
           if arc_match == 'none' or arc_match == 'pass' then
