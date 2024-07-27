@@ -209,7 +209,7 @@ void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,
 
 void rspamd_cryptobox_sign_compat(int nid, unsigned char *sig, unsigned long long *siglen_p,
 								 const unsigned char *m, gsize mlen,
-								 struct evp_pkey_st *sec_key,
+								 struct evp_pkey_st *sec_key, int ktype,
 								 enum rspamd_cryptobox_mode mode);
 
 /**
@@ -233,7 +233,7 @@ bool rspamd_cryptobox_verify_compat(int nid,
 								   gsize siglen,
 								   const unsigned char *m,
 								   gsize mlen,
-								   struct evp_pkey_st *pub_key,
+								   struct evp_pkey_st *pub_key, int ktype,
 								   enum rspamd_cryptobox_mode mode);
 
 /**

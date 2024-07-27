@@ -708,7 +708,7 @@ void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,
 
 void rspamd_cryptobox_sign_compat(int nid, unsigned char *sig, unsigned long long *siglen_p,
 								  const unsigned char *m, gsize mlen,
-								  struct evp_pkey_st *sec_key,
+								  struct evp_pkey_st *sec_key, int ktype,
 								  enum rspamd_cryptobox_mode mode)
 {
 	if (G_LIKELY(mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
@@ -750,7 +750,8 @@ void rspamd_cryptobox_sign_compat(int nid, unsigned char *sig, unsigned long lon
 #if OPENSSL_VERSION_MAJOR >= 3
 		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(sec_key, NULL);
 
-		EVP_PKEY_CTX_set_rsa_padding(pctx, RSA_PKCS1_PADDING);
+		if(ktype == 1)
+			EVP_PKEY_CTX_set_rsa_padding(pctx, RSA_PKCS1_PADDING);
 
 		g_assert(EVP_DigestSignInit(sha_ctx, NULL, type, NULL, sec_key) == 1);
 
@@ -789,9 +790,9 @@ void rspamd_cryptobox_sign_compat(int nid, unsigned char *sig, unsigned long lon
 bool rspamd_cryptobox_verify_compat(int nid,
 									const unsigned char *sig,
 									gsize siglen,
-									const unsigned char *m,
-									gsize mlen,
-									struct evp_pkey_st *pub_key,
+									const unsigned char *digest,
+									gsize dlen,
+									struct evp_pkey_st *pub_key, int ktype,
 									enum rspamd_cryptobox_mode mode)
 {
 	bool ret = false;
@@ -801,71 +802,28 @@ bool rspamd_cryptobox_verify_compat(int nid,
 			rspamd_pk_t pk;
 			size_t len_pk = sizeof(rspamd_pk_t);
 			EVP_PKEY_get_raw_public_key(pub_key, pk, &len_pk);
-			ret = (crypto_sign_verify_detached(sig, m, mlen, pk) == 0);
+			ret = (crypto_sign_verify_detached(sig, digest, dlen, pk) == 0);
 		}
 	}
 	else {
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert(0);
 #else
-		EVP_MD_CTX *sha_ctx;
-		unsigned char h[64];
-
-		/* Prehash */
-		sha_ctx = EVP_MD_CTX_create();
-		EVP_MD *type = NULL;
-		switch(nid)
-		{
-		case NID_sha1:
-			type = EVP_sha1();
-			break;
-		case NID_sha256:
-			type = EVP_sha256();
-			break;
-		case NID_sha512:
-			type = EVP_sha512();
-			break;
-		default:
-			type = NULL;
-		}
-		g_assert(EVP_DigestInit(sha_ctx, type) == 1);
-		EVP_DigestUpdate(sha_ctx, m, mlen);
-		EVP_DigestFinal(sha_ctx, h, NULL);
-
-
-#if OPENSSL_VERSION_MAJOR >= 3
 		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(pub_key, NULL);
+		g_assert(pctx != NULL);
+		EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+		EVP_MD *md = EVP_get_digestbynid(nid);
 
-		g_assert(EVP_DigestVerifyInit(sha_ctx, NULL, type, NULL, pub_key) == 1);
+		g_assert(EVP_PKEY_verify_init(pctx) == 1);
 
-		ret = (EVP_DigestVerify(sha_ctx, sig, siglen, m, mlen) == 1);
+		if(ktype == 1) g_assert(EVP_PKEY_CTX_set_rsa_padding(pctx, RSA_PKCS1_PADDING) == 1);
+		g_assert(EVP_PKEY_CTX_set_signature_md(pctx, md) == 1);
 
-		EVP_PKEY_free(pub_key);
+		ret = (EVP_PKEY_verify(pctx, sig, siglen, digest, dlen) == 1);
+
 		EVP_PKEY_CTX_free(pctx);
-#else
-		EC_KEY *lk;
-		EC_POINT *ec_pub;
-		BIGNUM *bn_pub;
-
-		/* Key setup */
-		lk = EC_KEY_new_by_curve_name(CRYPTOBOX_CURVE_NID);
-		g_assert(lk != NULL);
-		bn_pub = BN_bin2bn(pk, rspamd_cryptobox_pk_bytes(mode), NULL);
-		g_assert(bn_pub != NULL);
-		ec_pub = ec_point_bn2point_compat(EC_KEY_get0_group(lk), bn_pub, NULL, NULL);
-		g_assert(ec_pub != NULL);
-		g_assert(EC_KEY_set_public_key(lk, ec_pub) == 1);
-
-		/* ECDSA */
-		ret = ECDSA_verify(0, h, sizeof(h), sig, siglen, lk) == 1;
-
-		EC_KEY_free(lk);
-
-		BN_free(bn_pub);
-		EC_POINT_free(ec_pub);
-#endif
-
-		EVP_MD_CTX_destroy(sha_ctx);
+		EVP_MD_free(md);
+		EVP_MD_CTX_free(mdctx);
 #endif
 	}
 
