@@ -207,11 +207,6 @@ void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,
 						  const rspamd_sk_t sk,
 						  enum rspamd_cryptobox_mode mode);
 
-void rspamd_cryptobox_sign_compat(int nid, unsigned char *sig, unsigned long long *siglen_p,
-								 const unsigned char *m, gsize mlen,
-								 struct evp_pkey_st *sec_key, int ktype,
-								 enum rspamd_cryptobox_mode mode);
-
 /**
 * Verifies digital signature for the specified message using the specified
 * pubkey
@@ -228,11 +223,20 @@ bool rspamd_cryptobox_verify(const unsigned char *sig,
 							const rspamd_pk_t pk,
 							enum rspamd_cryptobox_mode mode);
 
+/**
+ * Verifies digital signature for specified raw digest with specified pubkey
+ * @param nid signing algorithm nid
+ * @param sig signature source
+ * @param digest raw digest
+ * @param pub_key public key for verification
+ * @param ktype type of public key (1 - RSA, 0 - ECDSA)
+ * @return true if signature is valid, false otherwise
+ */
 bool rspamd_cryptobox_verify_compat(int nid,
 								   const unsigned char *sig,
 								   gsize siglen,
-								   const unsigned char *m,
-								   gsize mlen,
+								   const unsigned char *digest,
+								   gsize dlen,
 								   struct evp_pkey_st *pub_key, int ktype,
 								   enum rspamd_cryptobox_mode mode);
 
