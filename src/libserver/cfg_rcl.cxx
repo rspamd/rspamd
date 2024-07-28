@@ -3623,7 +3623,8 @@ rspamd_config_parse_ucl(struct rspamd_config *cfg,
 	auto &cfg_file = cfg_file_maybe.value();
 
 	/* Try to load keyfile if available */
-	rspamd::util::raii_file::open(fmt::format("{}.key", filename), O_RDONLY).map([&](const auto &keyfile) {
+	auto keyfile_name = fmt::format("{}.key", filename);
+	rspamd::util::raii_file::open(keyfile_name, O_RDONLY).map([&](const auto &keyfile) {
 		auto *kp_parser = ucl_parser_new(0);
 		if (ucl_parser_add_fd(kp_parser, keyfile.get_fd())) {
 			auto *kp_obj = ucl_parser_get_object(kp_parser);
@@ -3632,8 +3633,8 @@ rspamd_config_parse_ucl(struct rspamd_config *cfg,
 			decrypt_keypair = rspamd_keypair_from_ucl(kp_obj);
 
 			if (decrypt_keypair == nullptr) {
-				msg_err_config_forced("cannot load keypair from %s.key: invalid keypair",
-									  filename);
+				msg_err_config_forced("cannot load keypair from %s: invalid keypair",
+									  keyfile_name.c_str());
 			}
 			else {
 				/* Add decryption support to UCL */
@@ -3645,8 +3646,8 @@ rspamd_config_parse_ucl(struct rspamd_config *cfg,
 			ucl_object_unref(kp_obj);
 		}
 		else {
-			msg_err_config_forced("cannot load keypair from %s.key: %s",
-								  filename, ucl_parser_get_error(kp_parser));
+			msg_err_config_forced("cannot load keypair from %s: %s",
+								  keyfile_name.c_str(), ucl_parser_get_error(kp_parser));
 		}
 		ucl_parser_free(kp_parser);
 	});
