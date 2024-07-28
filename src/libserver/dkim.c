@@ -156,8 +156,6 @@ struct rspamd_dkim_key_s {
 	gsize decoded_len;
 	char key_id[RSPAMD_DKIM_KEY_ID_LEN];
 	union {
-		//RSA *key_rsa;
-		//EC_KEY *key_ecdsa;
 		unsigned char *key_eddsa;
 	} key;
 	BIO *key_bio;
@@ -1431,37 +1429,6 @@ rspamd_dkim_make_key(const char *keydata,
 
 			return NULL;
 		}
-		if (type == RSPAMD_DKIM_KEY_RSA) {
-#if OPENSSL_VERSION_MAJOR < 3
-			key->key.key_rsa = EVP_PKEY_get1_RSA(key->key_evp);
-
-			if (key->key.key_rsa == NULL) {
-				g_set_error(err,
-							DKIM_ERROR,
-							DKIM_SIGERROR_KEYFAIL,
-							"cannot extract rsa key from evp key");
-				REF_RELEASE(key);
-
-				return NULL;
-			}
-#endif
-		}
-		else {
-#if OPENSSL_VERSION_MAJOR < 3
-			key->key.key_ecdsa = EVP_PKEY_get1_EC_KEY(key->key_evp);
-
-			if (key->key.key_ecdsa == NULL) {
-				g_set_error(err,
-							DKIM_ERROR,
-							DKIM_SIGERROR_KEYFAIL,
-							"cannot extract ecdsa key from evp key");
-				REF_RELEASE(key);
-
-				return NULL;
-			}
-#endif
-		}
-
 	}
 
 	return key;
@@ -1486,21 +1453,6 @@ void rspamd_dkim_key_free(rspamd_dkim_key_t *key)
 	if (key->key_evp) {
 		EVP_PKEY_free(key->key_evp);
 	}
-
-#if OPENSSL_VERSION_MAJOR < 3
-	if (key->type == RSPAMD_DKIM_KEY_RSA) {
-		if (key->key.key_rsa) {
-			RSA_free(key->key.key_rsa);
-		}
-	}
-#endif
-#if OPENSSL_VERSION_MAJOR < 3
-	else if (key->type == RSPAMD_DKIM_KEY_ECDSA) {
-		if (key->key.key_ecdsa) {
-			EC_KEY_free(key->key.key_ecdsa);
-		}
-	}
-#endif
 	/* Nothing in case of eddsa key */
 	if (key->key_bio) {
 		BIO_free(key->key_bio);
@@ -1516,13 +1468,6 @@ void rspamd_dkim_sign_key_free(rspamd_dkim_sign_key_t *key)
 	if (key->key_evp) {
 		EVP_PKEY_free(key->key_evp);
 	}
-#if OPENSSL_VERSION_MAJOR < 3
-	if (key->type == RSPAMD_DKIM_KEY_RSA) {
-		if (key->key.key_rsa) {
-			RSA_free(key->key.key_rsa);
-		}
-	}
-#endif
 	if (key->key_bio) {
 		BIO_free(key->key_bio);
 	}
@@ -2926,34 +2871,6 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 	}
 	switch (key->type) {
 	case RSPAMD_DKIM_KEY_RSA:
-#if OPENSSL_VERSION_MAJOR < 3
-		if (RSA_verify(nid, raw_digest, dlen, ctx->b, ctx->blen,
-					   key->key.key_rsa) != 1) {
-			msg_debug_dkim("headers rsa verify failed");
-			ERR_clear_error();
-			res->rcode = DKIM_REJECT;
-			res->fail_reason = "headers rsa verify failed";
-
-			msg_info_dkim(
-				"%s: headers RSA verification failure; "
-				"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
-				rspamd_dkim_type_to_string(ctx->common.type),
-				(int) (body_end - body_start), ctx->common.body_canonicalised,
-				ctx->common.headers_canonicalised,
-				ctx->domain, ctx->selector,
-				RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
-				ctx->dkim_header);
-		}
-		msg_info_dkim(
-			"%s: headers RSA verification failure; "
-			"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
-			rspamd_dkim_type_to_string(ctx->common.type),
-			(int) (body_end - body_start), ctx->common.body_canonicalised,
-			ctx->common.headers_canonicalised,
-			ctx->domain, ctx->selector,
-			RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
-			ctx->dkim_header);
-#else
 		if (!rspamd_cryptobox_verify_compat(nid, ctx->b, ctx->blen, raw_digest, dlen,
 												key->key_evp, 1, RSPAMD_CRYPTOBOX_MODE_NIST)){
 			msg_debug_dkim("headers rsa verify failed");
@@ -2971,27 +2888,8 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 				RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
 				ctx->dkim_header);
 		}
-#endif
 		break;
 	case RSPAMD_DKIM_KEY_ECDSA:
-#if OPENSSL_VERSION_MAJOR < 3
-		if (ECDSA_verify(nid, raw_digest, dlen, ctx->b, ctx->blen,
-						 key->key.key_ecdsa) != 1) {
-			msg_info_dkim(
-				"%s: headers ECDSA verification failure; "
-				"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
-				rspamd_dkim_type_to_string(ctx->common.type),
-				(int) (body_end - body_start), ctx->common.body_canonicalised,
-				ctx->common.headers_canonicalised,
-				ctx->domain, ctx->selector,
-				RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
-				ctx->dkim_header);
-			msg_debug_dkim("headers ecdsa verify failed");
-			ERR_clear_error();
-			res->rcode = DKIM_REJECT;
-			res->fail_reason = "headers ecdsa verify failed";
-		}
-#else
 		if (rspamd_cryptobox_verify_compat(nid, ctx->b, ctx->blen, raw_digest, dlen,
 										   key->key_evp, 0, RSPAMD_CRYPTOBOX_MODE_NIST) != 1) {
 			msg_info_dkim(
@@ -3008,7 +2906,6 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 			res->rcode = DKIM_REJECT;
 			res->fail_reason = "headers ecdsa verify failed";
 		}
-#endif
 		break;
 
 	case RSPAMD_DKIM_KEY_EDDSA:
@@ -3259,20 +3156,6 @@ rspamd_dkim_sign_key_load(const char *key, gsize len,
 				goto end;
 			}
 		}
-#if OPENSSL_VERSION_MAJOR < 3
-		nkey->key.key_rsa = EVP_PKEY_get1_RSA(nkey->key_evp);
-		if (nkey->key.key_rsa == NULL) {
-			g_set_error(err,
-						DKIM_ERROR,
-						DKIM_SIGERROR_KEYFAIL,
-						"cannot extract rsa key from evp key");
-			rspamd_dkim_sign_key_free(nkey);
-			nkey = NULL;
-
-			goto end;
-		}
-		nkey->type = RSPAMD_DKIM_KEY_RSA;
-#endif
 	}
 
 	REF_INIT_RETAIN(nkey, rspamd_dkim_sign_key_free);
@@ -3329,16 +3212,6 @@ rspamd_create_dkim_sign_context(struct rspamd_task *task,
 
 		return NULL;
 	}
-#if OPENSSL_VERSION_MAJOR < 3
-	if (!priv_key || (!priv_key->key.key_rsa && !priv_key->key.key_eddsa)) {
-		g_set_error(err,
-					DKIM_ERROR,
-					DKIM_SIGERROR_KEYFAIL,
-					"bad key to sign");
-
-		return NULL;
-	}
-#else
 
 	if (!priv_key) {
 		g_set_error(err,
@@ -3348,7 +3221,6 @@ rspamd_create_dkim_sign_context(struct rspamd_task *task,
 
 		return NULL;
 	}
-#endif
 
 	nctx = rspamd_mempool_alloc0(task->task_pool, sizeof(*nctx));
 	nctx->common.pool = task->task_pool;
@@ -3610,22 +3482,8 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 	EVP_DigestFinal_ex(ctx->common.headers_hash, raw_digest, NULL);
 
 	if (ctx->key->type == RSPAMD_DKIM_KEY_RSA) {
-#if OPENSSL_VERSION_MAJOR < 3
-		sig_len = RSA_size(ctx->key->key.key_rsa);
-		sig_buf = g_alloca(sig_len);
-
-		if (RSA_sign(NID_sha256, raw_digest, dlen, sig_buf, &sig_len,
-					 ctx->key->key.key_rsa) != 1) {
-			g_string_free(hdr, TRUE);
-			msg_err_task("rsa sign error: %s",
-						 ERR_error_string(ERR_get_error(), NULL));
-
-			return NULL;
-		}
-#else
 		sig_len = EVP_PKEY_get_size(ctx->key->key_evp);
 		sig_buf = g_alloca(sig_len);
-
 		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(ctx->key->key_evp, NULL);
 		if (EVP_PKEY_sign_init(pctx) <= 0) {
 			g_string_free(hdr, TRUE);
@@ -3656,7 +3514,6 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 
 			return NULL;
 		}
-#endif
 	}
 	else if (ctx->key->type == RSPAMD_DKIM_KEY_EDDSA) {
 		sig_len = rspamd_cryptobox_signature_bytes(RSPAMD_CRYPTOBOX_MODE_25519);
