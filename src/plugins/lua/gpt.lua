@@ -27,13 +27,11 @@ gpt {
   # Your key to access the API
   api_key = "xxx";
   # Model name
-  model = "gpt-3.5-turbo";
+  model = "gpt-4o-mini";
   # Maximum tokens to generate
   max_tokens = 1000;
   # Temperature for sampling
-  temperature = 0.7;
-  # Top p for sampling
-  top_p = 0.9;
+  temperature = 0.0;
   # Timeout for requests
   timeout = 10s;
   # Prompt for the model (use default if not set)
@@ -59,22 +57,21 @@ local fun = require "fun"
 
 -- Exclude checks if one of those is found
 local default_symbols_to_except = {
-  'BAYES_SPAM', -- We already know that it is a spam, so we can safely skip it, but no same logic for HAM!
-  'WHITELIST_SPF',
-  'WHITELIST_DKIM',
-  'WHITELIST_DMARC',
-  'FUZZY_DENIED',
-  'REPLY',
-  'BOUNCE',
+  BAYES_SPAM = 0.9, -- We already know that it is a spam, so we can safely skip it, but no same logic for HAM!
+  WHITELIST_SPF = -1,
+  WHITELIST_DKIM = -1,
+  WHITELIST_DMARC = -1,
+  FUZZY_DENIED = -1,
+  REPLY = -1,
+  BOUNCE = -1,
 }
 
 local settings = {
   type = 'openai',
   api_key = nil,
-  model = 'gpt-3.5-turbo',
+  model = 'gpt-4o-mini',
   max_tokens = 1000,
-  temperature = 0.7,
-  top_p = 0.9,
+  temperature = 0.0,
   timeout = 10,
   prompt = nil,
   condition = nil,
@@ -97,17 +94,30 @@ local function default_condition(task)
     local action = result.action
 
     if action == 'reject' and result.npositive > 1 then
-      return true, 'already decided as spam'
+      return false, 'already decided as spam'
     end
 
     if action == 'no action' and score < 0 then
-      return true, 'negative score, already decided as ham'
+      return false, 'negative score, already decided as ham'
     end
   end
   -- We also exclude some symbols
-  for _, s in ipairs(settings.symbols_to_except) do
+  for s, required_weight in pairs(settings.symbols_to_except) do
     if task:has_symbol(s) then
-      return false, 'skip as "' .. s .. '" is found'
+      if required_weight > 0 then
+        -- Also check score
+        local sym = task:get_symbol(s) or E
+        -- Must exist as we checked it before with `has_symbol`
+        if sym.weight then
+          if math.abs(sym.weight) >= required_weight then
+            return false, 'skip as "' .. s .. '" is found (weight: ' .. sym.weight .. ')'
+          end
+        end
+        lua_util.debugm(N, task, 'symbol %s has weight %s, but required %s', s,
+            sym.weight, required_weight)
+      else
+        return false, 'skip as "' .. s .. '" is found'
+      end
     end
   end
 
@@ -184,6 +194,18 @@ local function default_conversion(task, input)
 
   if type(reply) == 'table' and reply.probability then
     local spam_score = tonumber(reply.probability)
+
+    if not spam_score then
+      -- Maybe we need GPT to convert GPT reply here?
+      if reply.probability == "high" then
+        spam_score = 0.9
+      elseif reply.probability == "low" then
+        spam_score = 0.1
+      else
+        rspamd_logger.infox("cannot convert to spam probability: %s", reply.probability)
+      end
+    end
+
     if type(reply.usage) == 'table' then
       rspamd_logger.infox(task, 'usage: %s tokens', reply.usage.total_tokens)
     end
@@ -265,7 +287,7 @@ local function openai_gpt_check(task)
     model = settings.model,
     max_tokens = settings.max_tokens,
     temperature = settings.temperature,
-    top_p = settings.top_p,
+    response_format = { type = "json_object" },
     messages = {
       {
         role = 'system',
@@ -337,8 +359,8 @@ if opts then
   end
 
   if not settings.prompt then
-    settings.prompt = "You will be provided with the email message, " ..
-        "and your task is to classify its probability to be spam, " ..
+    settings.prompt = "You will be provided with the email message, subject, from and url domains, " ..
+        "and your task is to evaluate the probability to be spam as number from 0 to 1, " ..
         "output result as JSON with 'probability' field."
   end
 

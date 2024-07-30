@@ -1,3 +1,4 @@
+node_modules/
 # Code::TidyAll
 /.tidyall.d/
 .idea

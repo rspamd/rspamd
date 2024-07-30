@@ -249,7 +249,7 @@ define(["jquery", "app/common", "footable"],
             });
             /* eslint-enable no-underscore-dangle */
 
-            /* eslint-disable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
+            /* eslint-disable consistent-this, no-underscore-dangle */
             FooTable.actionFilter = FooTable.Filtering.extend({
                 construct: function (instance) {
                     this._super(instance);
@@ -304,6 +304,7 @@ define(["jquery", "app/common", "footable"],
                     const selected = self.$action.val();
                     if (selected !== self.def) {
                         const not = self.$not.is(":checked");
+                        // eslint-disable-next-line no-useless-assignment
                         let query = null;
 
                         if (selected === "reject") {
@@ -319,7 +320,7 @@ define(["jquery", "app/common", "footable"],
                     self.filter();
                 }
             });
-            /* eslint-enable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
+            /* eslint-enable consistent-this, no-underscore-dangle */
 
             const columns = (table in columnsCustom)
                 ? columnsDefault.map((column) => $.extend({}, column, columnsCustom[table][column.name]))
@@ -600,6 +601,7 @@ define(["jquery", "app/common", "footable"],
                     item.id = item["message-id"];
 
                     if (table === "history") {
+                        // eslint-disable-next-line no-useless-assignment
                         let rcpt = {};
                         if (!item.rcpt_mime.length) {
                             rcpt = format_rcpt(true, false);

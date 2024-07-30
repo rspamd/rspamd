@@ -7,6 +7,7 @@
 -- KEYS[4]: The maximum allowed burst
 -- KEYS[5]: The expiration time for a bucket
 -- KEYS[6]: The number of recipients for the message
+-- KEYS[7]: Enable dynamic ratelimits
 
 -- Redis keys used:
 -- l: Last hit (time in milliseconds)
@@ -29,6 +30,7 @@ local nrcpt = tonumber(KEYS[6])
 local leak_rate = tonumber(KEYS[3])
 local max_burst = tonumber(KEYS[4])
 local prefix = KEYS[1]
+local enable_dynamic = KEYS[7] == 'true'
 local dynr, dynb, leaked = 0, 0, 0
 if not last then
   -- New bucket
@@ -52,9 +54,13 @@ pending = pending + nrcpt -- this message
 if burst + pending > 0 then
   -- If we have any time passed
   if burst > 0 and last < now then
-    dynr = tonumber(redis.call('HGET', prefix, 'dr')) / 10000.0
-    if dynr == 0 then
-      dynr = 0.0001
+    if enable_dynamic then
+      dynr = tonumber(redis.call('HGET', prefix, 'dr')) / 10000.0
+      if dynr == 0 then
+        dynr = 0.0001
+      end
+    else
+      dynr = 1.0
     end
     leak_rate = leak_rate * dynr
     leaked = ((now - last) * leak_rate)
@@ -66,9 +72,13 @@ if burst + pending > 0 then
     redis.call('HSET', prefix, 'l', tostring(now))
   end
 
-  dynb = tonumber(redis.call('HGET', prefix, 'db')) / 10000.0
-  if dynb == 0 then
-    dynb = 0.0001
+  if enable_dynamic then
+    dynb = tonumber(redis.call('HGET', prefix, 'db')) / 10000.0
+    if dynb == 0 then
+      dynb = 0.0001
+    end
+  else
+    dynb = 1.0
   end
 
   burst = burst + pending
