@@ -201,16 +201,29 @@ rspamd_check_group_score(struct rspamd_task *task,
 						 double *group_score,
 						 double w)
 {
-	if (gr != NULL && group_score && gr->max_score > 0.0 && w > 0.0) {
-		if (*group_score >= gr->max_score && w > 0) {
+	double group_limit = NAN;
+
+	if (gr != NULL && group_score) {
+		if ((*group_score + w) >= 0 && !isnan(gr->max_score) && gr->max_score > 0) {
+			group_limit = gr->max_score;
+		}
+		else if ((*group_score + w) < 0 && !isnan(gr->min_score) && gr->min_score < 0) {
+			group_limit = -gr->min_score;
+		}
+	}
+
+	if (gr != NULL && group_limit && !isnan(group_limit)) {
+		if (fabs(*group_score) >= group_limit && signbit(*group_score) == signbit(w)) {
+			/* Cannot add more to the group */
 			msg_info_task("maximum group score %.2f for group %s has been reached,"
 						  " ignoring symbol %s with weight %.2f",
-						  gr->max_score,
+						  group_limit,
 						  gr->name, symbol, w);
 			return NAN;
 		}
-		else if (*group_score + w > gr->max_score) {
-			w = gr->max_score - *group_score;
+		else if (fabs(*group_score + w) > group_limit) {
+			/* Reduce weight */
+			w = signbit(w) ? -group_limit - *group_score : group_limit - *group_score;
 		}
 	}
 

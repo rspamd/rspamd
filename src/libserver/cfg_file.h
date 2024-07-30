@@ -102,6 +102,7 @@ struct rspamd_symbols_group {
 	char *description;
 	GHashTable *symbols;
 	double max_score;
+	double min_score;
 	unsigned int flags;
 };
 

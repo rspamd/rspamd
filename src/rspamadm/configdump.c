@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -444,6 +444,9 @@ rspamadm_configdump(int argc, char **argv, const struct rspamadm_command *cmd)
 				ucl_object_insert_key(gr_ucl,
 									  ucl_object_fromdouble(gr->max_score),
 									  "max_score", strlen("max_score"), false);
+				ucl_object_insert_key(gr_ucl,
+									  ucl_object_fromdouble(gr->min_score),
+									  "min_score", strlen("min_score"), false);
 				ucl_object_insert_key(gr_ucl,
 									  ucl_object_fromstring(gr->description),
 									  "description", strlen("description"), false);
