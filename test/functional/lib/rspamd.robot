@@ -76,9 +76,30 @@ Expect Action
   [Arguments]  ${action}
   Should Be Equal  ${SCAN_RESULT}[action]  ${action}
 
+Expect Added Header
+  [Arguments]  ${header_name}  ${header_value}  ${pos}=-1
+  Dictionary Should Contain Key  ${SCAN_RESULT}  milter
+  ...  msg=milter block was not present in protocol response
+  Dictionary Should Contain Key  ${SCAN_RESULT}[milter]  add_headers
+  ...  msg=add_headers block was not present in protocol response
+  Dictionary Should Contain Key  ${SCAN_RESULT}[milter][add_headers]  ${header_name}
+  ...  msg=${header_name} was not added
+  Should Be Equal  ${SCAN_RESULT}[milter][add_headers][${header_name}][value]  ${header_value}
+  Should Be Equal as Numbers  ${SCAN_RESULT}[milter][add_headers][${header_name}][order]  ${pos}
+
 Expect Email
   [Arguments]  ${email}
   List Should Contain Value  ${SCAN_RESULT}[emails]  ${email}
+
+Expect Removed Header
+  [Arguments]  ${header_name}  ${pos}=0
+  Dictionary Should Contain Key  ${SCAN_RESULT}  milter
+  ...  msg=milter block was not present in protocol response
+  Dictionary Should Contain Key  ${SCAN_RESULT}[milter]  remove_headers
+  ...  msg=remove_headers block was not present in protocol response
+  Dictionary Should Contain Key  ${SCAN_RESULT}[milter][remove_headers]  ${header_name}
+  ...  msg=${header_name} was not removed
+  Should Be Equal as Numbers  ${SCAN_RESULT}[milter][remove_headers][${header_name}]  ${pos}
 
 Expect Required Score
   [Arguments]  ${required_score}
