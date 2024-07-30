@@ -60,6 +60,28 @@ Check Rspamc Match String
     Should Not Contain  ${subject}  ${str}
   END
 
+Do Not Expect Added Header
+  [Arguments]  ${header_name}
+  IF  'milter' not in ${SCAN_RESULT}
+    RETURN
+  END
+  IF  'add_headers' not in ${SCAN_RESULT}[milter]
+    RETURN
+  END
+  Dictionary Should Not Contain Key  ${SCAN_RESULT}[milter][add_headers]  ${header_name}
+  ...  msg=${header_name} was added
+
+Do Not Expect Removed Header
+  [Arguments]  ${header_name}
+  IF  'milter' not in ${SCAN_RESULT}
+    RETURN
+  END
+  IF  'remove_headers' not in ${SCAN_RESULT}[milter]
+    RETURN
+  END
+  Dictionary Should Not Contain Key  ${SCAN_RESULT}[milter][remove_headers]  ${header_name}
+  ...  msg=${header_name} was removed
+
 Do Not Expect Symbol
   [Arguments]  ${symbol}
   Dictionary Should Not Contain Key  ${SCAN_RESULT}[symbols]  ${symbol}
