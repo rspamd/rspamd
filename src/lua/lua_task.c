@@ -1318,6 +1318,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, get_metric_threshold),
 	LUA_INTERFACE_DEF(task, set_metric_score),
 	LUA_INTERFACE_DEF(task, set_metric_subject),
+	{"set_subject", lua_task_set_metric_subject},
 	LUA_INTERFACE_DEF(task, learn),
 	LUA_INTERFACE_DEF(task, set_settings),
 	LUA_INTERFACE_DEF(task, get_settings),
