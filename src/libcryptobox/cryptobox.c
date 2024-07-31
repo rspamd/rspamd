@@ -541,55 +541,37 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm,
 		OSSL_LIB_CTX *libctx = OSSL_LIB_CTX_new();
 		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_from_name(libctx, "EC", NULL);
 		EVP_PKEY_CTX *dctx = EVP_PKEY_CTX_new_from_name(libctx, "EC", NULL);
-		OSSL_PARAM_BLD *param_bld;
-		OSSL_PARAM *params = NULL;
-		BIGNUM *bn_sec;
+		OSSL_PARAM param[3];
 
-		param_bld = OSSL_PARAM_BLD_new();
-		g_assert(OSSL_PARAM_BLD_push_utf8_string(param_bld, "group",
-												 EC_curve_nid2nist(CRYPTOBOX_CURVE_NID), 0) == 1);
-
-		bn_sec = BN_bin2bn(sk, sizeof(rspamd_sk_t), NULL);
-		g_assert(bn_sec != NULL);
-
-		g_assert(OSSL_PARAM_BLD_push_BN(param_bld, "priv", bn_sec) == 1);
-		params = OSSL_PARAM_BLD_to_param(param_bld);
+		param[0] = OSSL_PARAM_construct_utf8_string("group", "prime256v1", 0);
+		param[1] = OSSL_PARAM_construct_BN("priv", (void*)sk, sizeof(rspamd_sk_t));
+		param[2] = OSSL_PARAM_construct_end();
 
 		g_assert(EVP_PKEY_fromdata_init(pctx) == 1);
-		g_assert(EVP_PKEY_fromdata(pctx, &sec_pkey, EVP_PKEY_KEYPAIR, params) == 1);
+		g_assert(EVP_PKEY_fromdata(pctx, &sec_pkey, EVP_PKEY_KEYPAIR, param) == 1);
 		EVP_PKEY_CTX_free(pctx);
 		pctx = EVP_PKEY_CTX_new_from_pkey(libctx, sec_pkey, NULL);
 
-		OSSL_PARAM_free(params);
-		OSSL_PARAM_BLD_free(param_bld);
-		param_bld = OSSL_PARAM_BLD_new();
-
-		g_assert(OSSL_PARAM_BLD_push_utf8_string(param_bld, "group",
-												 EC_curve_nid2nist(CRYPTOBOX_CURVE_NID), 0) == 1);
-
-		g_assert(OSSL_PARAM_BLD_push_octet_string(param_bld, "pub", pk, sizeof(rspamd_pk_t)) == 1);
-		params = OSSL_PARAM_BLD_to_param(param_bld);
-		g_assert(params != NULL);
+		param[0] = OSSL_PARAM_construct_utf8_string("group", "prime256v1", 0);
+		param[1] = OSSL_PARAM_construct_octet_string("pub", (void*)pk, sizeof(rspamd_pk_t));
+		param[2] = OSSL_PARAM_construct_end();
 
 		g_assert(EVP_PKEY_fromdata_init(dctx) == 1);
-		g_assert(EVP_PKEY_fromdata(dctx, &pub_pkey, EVP_PKEY_KEYPAIR, params) == 1);
+		EVP_PKEY_fromdata(dctx, &pub_pkey, EVP_PKEY_PUBLIC_KEY, param);
 
 		g_assert(EVP_PKEY_derive_init(pctx) == 1);
 
-		EVP_PKEY_derive_set_peer(pctx, pub_pkey);
+		g_assert(EVP_PKEY_derive_set_peer(pctx, pub_pkey) == 1);
 
 		size_t s_len = sizeof(s);
 		g_assert(EVP_PKEY_derive(pctx, s, &s_len) == 1);
 
 		EVP_PKEY_CTX_free(pctx);
-		OSSL_PARAM_BLD_free(param_bld);
-		OSSL_PARAM_free(params);
-		BN_free(bn_sec);
 		EVP_PKEY_free(pub_pkey);
 		EVP_PKEY_free(sec_pkey);
 		OSSL_LIB_CTX_free(libctx);
 #else
-
+		//g_error(ERR_error_string(ERR_get_error(), NULL));
 		EC_KEY *lk;
 		EC_POINT *ec_pub;
 		BIGNUM *bn_pub, *bn_sec;
