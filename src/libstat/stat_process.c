@@ -1162,7 +1162,8 @@ rspamd_stat_check_autolearn(struct rspamd_task *task)
 
 			if (ret) {
 				/* Do not autolearn if we have this symbol already */
-				if (rspamd_stat_has_classifier_symbols(task, mres, cl)) {
+				if (rspamd_stat_has_classifier_symbols(task, mres, cl) ||
+					(task->flags & (RSPAMD_TASK_FLAG_ALREADY_LEARNED | RSPAMD_TASK_FLAG_UNLEARN))) {
 					ret = FALSE;
 					task->flags &= ~(RSPAMD_TASK_FLAG_LEARN_HAM |
 									 RSPAMD_TASK_FLAG_LEARN_SPAM);
@@ -1261,4 +1262,34 @@ rspamd_stat_statistics(struct rspamd_task *task,
 	}
 
 	return RSPAMD_STAT_PROCESS_OK;
+}
+
+rspamd_stat_result_t
+rspamd_stat_autolearn(struct rspamd_task *task, unsigned int stage,
+					 GError **err)
+{
+	struct rspamd_stat_ctx *st_ctx;
+	rspamd_stat_result_t ret = RSPAMD_STAT_PROCESS_OK;
+
+	st_ctx = rspamd_stat_get_ctx();
+	g_assert(st_ctx != NULL);
+
+	if (st_ctx->classifiers->len == 0) {
+		task->processed_stages |= stage;
+		return ret;
+	}
+
+	if (stage == RSPAMD_TASK_STAGE_AUTOLEARN_PRE) {
+		rspamd_stat_cache_check(st_ctx, task, task->classifier, task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM, &err);
+	}
+	else if (stage == RSPAMD_TASK_STAGE_AUTOLEARN) {
+		rspamd_stat_check_autolearn(task);
+	}
+	else if (stage == RSPAMD_TASK_STAGE_AUTOLEARN_POST) {
+		/* unused */
+	}
+
+	task->processed_stages |= stage;
+
+	return ret;
 }
