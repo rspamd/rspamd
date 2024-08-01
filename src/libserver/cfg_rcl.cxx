@@ -420,6 +420,18 @@ rspamd_rcl_group_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 		return FALSE;
 	}
 
+	if (!std::isnan(gr->max_score) && gr->max_score < 0) {
+		msg_err_config("group %s has negative max_score which is broken, use min_score if required", gr->name);
+
+		return FALSE;
+	}
+	if (!std::isnan(gr->min_score) && gr->min_score > 0) {
+		msg_err_config("group %s has positive min_score which is broken, use max_score if required", gr->name);
+
+		return FALSE;
+	}
+
+
 	if (const auto *elt = ucl_object_lookup(obj, "one_shot"); elt != nullptr) {
 		if (ucl_object_type(elt) != UCL_BOOLEAN) {
 			g_set_error(err,
@@ -2349,6 +2361,12 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   G_STRUCT_OFFSET(struct rspamd_symbols_group, max_score),
 									   0,
 									   "Maximum score that could be reached by this symbols group");
+		rspamd_rcl_add_default_handler(sub,
+									   "min_score",
+									   rspamd_rcl_parse_struct_double,
+									   G_STRUCT_OFFSET(struct rspamd_symbols_group, min_score),
+									   0,
+									   "Maximum negative score that could be reached by this symbols group");
 	}
 
 	if (!(skip_sections && g_hash_table_lookup(skip_sections, "worker"))) {

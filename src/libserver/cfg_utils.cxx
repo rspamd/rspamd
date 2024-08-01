@@ -1052,6 +1052,8 @@ rspamd_config_new_group(struct rspamd_config *cfg, const char *name)
 	rspamd_mempool_add_destructor(cfg->cfg_pool,
 								  (rspamd_mempool_destruct_t) g_hash_table_unref, gr->symbols);
 	gr->name = rspamd_mempool_strdup(cfg->cfg_pool, name);
+	gr->max_score = NAN;
+	gr->min_score = NAN;
 
 	if (strcmp(gr->name, "ungrouped") == 0) {
 		gr->flags |= RSPAMD_SYMBOL_GROUP_UNGROUPED;
