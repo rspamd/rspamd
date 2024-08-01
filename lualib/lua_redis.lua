@@ -1316,10 +1316,9 @@ local function load_script_taskless(script, cfg, ev_base, is_write)
         else
           opt.upstream:ok()
           logger.infox(cfg,
-              "uploaded redis script %s to %s %s %s, sha: %s",
+              "uploaded redis script %s to %s, sha: %s",
               script_description(script),
               opt.upstream:get_addr():to_string(true),
-              script.filename and "from file" or "with id", script.filename or script.id,
               data)
           script.sha = data -- We assume that sha is the same on all servers
           script.servers_ready[idx] = "done"
@@ -1514,7 +1513,8 @@ local function exec_redis_script(id, params, callback, keys, args)
     do_call(true)
   else
     -- Delayed until scripts are loaded
-    logger.infox(params.task, 'redis script %s is not loaded, trying to load', script_description(script))
+    logger.infox(params.task or rspamd_config, 'redis script %s is not loaded, trying to load',
+        script_description(script))
     if not params.task then
       table.insert(script.waitq, do_call)
     else
