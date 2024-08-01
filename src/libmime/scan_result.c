@@ -223,7 +223,12 @@ rspamd_check_group_score(struct rspamd_task *task,
 		}
 		else if (fabs(*group_score + w) > group_limit) {
 			/* Reduce weight */
-			w = signbit(w) ? -group_limit - *group_score : group_limit - *group_score;
+			double new_w = signbit(w) ? -group_limit - *group_score : group_limit - *group_score;
+			msg_info_task("maximum group score %.2f for group %s has been reached,"
+						  " reduce weight of symbol %s from %.2f to %.2f",
+						  group_limit,
+						  gr->name, symbol, w, new_w);
+			w = new_w;
 		}
 	}
 
@@ -406,15 +411,7 @@ insert_metric_result(struct rspamd_task *task,
 					}
 					else if (gr_score) {
 						*gr_score += cur_diff;
-
-						if (cur_diff < diff) {
-							/* Reduce */
-							msg_debug_metric(
-								"group limit %.2f is reached for %s when inserting symbol %s;"
-								" reduce score %.2f - %.2f",
-								*gr_score, gr->name, symbol, diff, cur_diff);
-							diff = cur_diff;
-						}
+						diff = cur_diff;
 					}
 				}
 			}
@@ -474,15 +471,7 @@ insert_metric_result(struct rspamd_task *task,
 				}
 				else if (gr_score) {
 					*gr_score += cur_score;
-
-					if (cur_score < final_score) {
-						/* Reduce */
-						msg_debug_metric(
-							"group limit %.2f is reached for %s when inserting symbol %s;"
-							" reduce score %.2f - %.2f",
-							*gr_score, gr->name, symbol, final_score, cur_score);
-						final_score = cur_score;
-					}
+					final_score = cur_score;
 				}
 			}
 		}
