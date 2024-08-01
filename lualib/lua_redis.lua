@@ -1219,6 +1219,11 @@ local function is_all_servers_failed(script)
   return true
 end
 
+local function script_description(script)
+  return script.filename and ("from file: " .. script.filename)
+      or ("with id: " .. script.id)
+end
+
 local function load_script_task(script, task, is_write)
   local rspamd_redis = require "rspamd_redis"
   local opts = prepare_redis_call(script)
@@ -1230,7 +1235,8 @@ local function load_script_task(script, task, is_write)
       opt.callback = function(err, data)
         if err then
           if string.match(err, 'ERR') then
-            logger.errx(task, 'cannot upload script to %s: %s; registered from: %s:%s',
+            logger.errx(task, 'cannot upload script %s to %s: %s; registered from: %s:%s',
+                script_description(script),
                 opt.upstream:get_addr():to_string(true),
                 err, script.caller.short_src, script.caller.currentline)
             opt.upstream:fail()
@@ -1238,7 +1244,8 @@ local function load_script_task(script, task, is_write)
             return
           else
             -- Assume temporary error
-            logger.infox(task, 'temporary error uploading script to %s: %s; registered from: %s:%s',
+            logger.infox(task, 'temporary error uploading script %s to %s: %s; registered from: %s:%s',
+                script_description(script),
                 opt.upstream:get_addr():to_string(true),
                 err, script.caller.short_src, script.caller.currentline)
             script.servers_ready[idx] = "tempfail"
@@ -1247,10 +1254,11 @@ local function load_script_task(script, task, is_write)
         else
           opt.upstream:ok()
           logger.infox(task,
-              "uploaded redis script to %s %s %s, sha: %s",
+              "uploaded redis script to %s %s, sha: %s",
               opt.upstream:get_addr():to_string(true),
-              script.filename and "from file" or "with id", script.filename or script.id, data)
+              script_description(script), data)
           script.sha = data -- We assume that sha is the same on all servers
+          script.servers_ready[idx] = "done"
         end
         if is_all_servers_ready(script) then
           script_set_loaded(script)
@@ -1289,7 +1297,8 @@ local function load_script_taskless(script, cfg, ev_base, is_write)
       opt.callback = function(err, data)
         if err then
           if string.match(err, 'ERR') then
-            logger.errx(cfg, 'cannot upload script to %s: %s; registered from: %s:%s',
+            logger.errx(cfg, 'cannot upload script %s to %s: %s; registered from: %s:%s',
+                script_description(script),
                 opt.upstream:get_addr():to_string(true),
                 err, script.caller.short_src, script.caller.currentline)
             opt.upstream:fail()
@@ -1297,7 +1306,8 @@ local function load_script_taskless(script, cfg, ev_base, is_write)
             return
           else
             -- Assume temporary error
-            logger.infox(cfg, 'temporary error uploading script to %s: %s; registered from: %s:%s',
+            logger.infox(cfg, 'temporary error uploading script %s to %s: %s; registered from: %s:%s',
+                script_description(script),
                 opt.upstream:get_addr():to_string(true),
                 err, script.caller.short_src, script.caller.currentline)
             script.servers_ready[idx] = "tempfail"
@@ -1306,11 +1316,13 @@ local function load_script_taskless(script, cfg, ev_base, is_write)
         else
           opt.upstream:ok()
           logger.infox(cfg,
-              "uploaded redis script to %s %s %s, sha: %s",
+              "uploaded redis script %s to %s %s %s, sha: %s",
+              script_description(script),
               opt.upstream:get_addr():to_string(true),
               script.filename and "from file" or "with id", script.filename or script.id,
               data)
           script.sha = data -- We assume that sha is the same on all servers
+          script.servers_ready[idx] = "done"
         end
 
         if is_all_servers_ready(script) then
@@ -1322,7 +1334,8 @@ local function load_script_taskless(script, cfg, ev_base, is_write)
       local ret = rspamd_redis.make_request(opt)
 
       if not ret then
-        logger.errx('cannot execute redis request to load script on %s',
+        logger.errx('cannot execute redis request to load script %s on %s',
+            script_description(script),
             opt.upstream:get_addr())
         script.servers_ready[idx] = "failed"
         opt.upstream:fail()
@@ -1332,7 +1345,7 @@ local function load_script_taskless(script, cfg, ev_base, is_write)
     if is_all_servers_ready(script) then
       script_set_loaded(script)
     elseif is_all_servers_failed(script) then
-      script.fatal_error = "cannot upload script to any server"
+      script.fatal_error = "cannot upload script " .. script_description(script) .. " to any server"
     end
   end
 end
@@ -1448,10 +1461,12 @@ local function exec_redis_script(id, params, callback, keys, args)
         callback(err, data)
       elseif string.match(err, 'NOSCRIPT') then
         -- Schedule restart
+        logger.infox(params.task, 'redis script %s is not loaded (NOSCRIPT returned), scheduling reload',
+            script_description(script))
         script.sha = nil
         if can_reload then
           table.insert(script.waitq, do_call)
-          if script.in_flight == 0 then
+          if not script.servers_ready then
             -- Reload scripts if this has not been initiated yet
             if params.task then
               load_script_task(script, params.task)
@@ -1499,6 +1514,7 @@ local function exec_redis_script(id, params, callback, keys, args)
     do_call(true)
   else
     -- Delayed until scripts are loaded
+    logger.infox(params.task, 'redis script %s is not loaded, trying to load', script_description(script))
     if not params.task then
       table.insert(script.waitq, do_call)
     else
