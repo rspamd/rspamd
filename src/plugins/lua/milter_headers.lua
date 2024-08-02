@@ -84,6 +84,7 @@ local settings = {
       remove = 0,
     },
     ['x-virus'] = {
+      default_value = 'unknown',
       header = 'X-Virus',
       remove = 0,
       status_clean = nil,
@@ -448,8 +449,8 @@ local function milter_headers(task)
       if s then
         if (s.options or E)[1] then
           table.insert(virii, table.concat(s.options, ','))
-        elseif s then
-          table.insert(virii, 'unknown')
+        else
+          table.insert(virii, local_mod.default_value)
         end
       end
     end
