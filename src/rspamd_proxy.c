@@ -1398,7 +1398,8 @@ proxy_backend_mirror_finish_handler(struct rspamd_http_connection *conn,
 		bk_conn->err = "cannot parse ucl";
 	}
 
-	msg_info_session("finished mirror connection to %s", bk_conn->name);
+	msg_info_session("finished mirror connection to %s; HTTP code: %d",
+					 bk_conn->name, msg->code);
 	rspamd_upstream_ok(bk_conn->up);
 
 	proxy_backend_close_connection(bk_conn);
