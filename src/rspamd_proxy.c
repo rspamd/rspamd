@@ -2212,7 +2212,10 @@ proxy_client_finish_handler(struct rspamd_http_connection *conn,
 		proxy_send_master_message(session);
 	}
 	else {
-		msg_info_session("finished master connection");
+		msg_info_session("finished master connection to %s; HTTP code: %d",
+						 rspamd_inet_address_to_string_pretty(
+							 rspamd_upstream_addr_cur(session->master_conn->up)),
+						 msg->code);
 		proxy_backend_close_connection(session->master_conn);
 		REF_RELEASE(session);
 	}
