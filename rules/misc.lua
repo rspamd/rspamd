@@ -862,3 +862,58 @@ rspamd_config.COMPLETELY_EMPTY = {
   group = 'blankspam',
   score = 15
 }
+
+-- Check for the hostname if it was not set
+local rnds_check_id = rspamd_config:register_symbol {
+  name = 'RDNS_CHECK',
+  callback = function(task)
+    if not task:get_hostname() then
+      -- Try to resolve
+      local task_ip = task:get_ip()
+      if task_ip and task_ip:is_valid() then
+        local rspamd_logger = require "rspamd_logger"
+        local function rdns_dns_cb(_, to_resolve, results, err)
+          if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
+            rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, err)
+            task:insert_result('RDNS_DNSFAIL', 1.0)
+          end
+
+          if not results then
+            task:insert_result('RDNS_NONE', 1.0)
+          else
+            rspamd_logger.infox(task, 'source hostname has not been passed to Rspamd from MTA, ' ..
+                'but we could resolve source IP address PTR %s as "%s"',
+                to_resolve, results[1])
+            task:set_hostname(results[1])
+          end
+        end
+        task:get_resolver():resolve_ptr({ task = task,
+                                          name = task_ip:to_string(),
+                                          callback = rdns_dns_cb,
+                                          forced = true
+        })
+      end
+    end
+  end,
+  type = 'prefilter',
+  priority = lua_util.symbols_priorities.top,
+  description = 'Check if hostname has been resolved by MTA',
+}
+
+rspamd_config:register_symbol {
+  type = 'virtual',
+  name = 'RDNS_DNSFAIL',
+  score = 0.0,
+  description = 'DNS failure resolving RDNS',
+  group = 'hfilter',
+  parent = rnds_check_id,
+
+}
+rspamd_config:register_symbol {
+  type = 'virtual',
+  name = 'RDNS_NONE',
+  score = 2.0,
+  description = 'DNS failure resolving RDNS',
+  group = 'hfilter',
+  parent = rnds_check_id,
+}
