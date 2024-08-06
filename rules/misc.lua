@@ -896,7 +896,8 @@ local rnds_check_id = rspamd_config:register_symbol {
     end
   end,
   type = 'prefilter',
-  priority = lua_util.symbols_priorities.top,
+  -- TODO: settings might need to use this symbol if they depend on hostname...
+  priority = lua_util.symbols_priorities.top - 1,
   description = 'Check if hostname has been resolved by MTA',
 }
 
