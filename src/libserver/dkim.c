@@ -3484,7 +3484,7 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 	EVP_DigestFinal_ex(ctx->common.headers_hash, raw_digest, NULL);
 
 	if (ctx->key->type == RSPAMD_DKIM_KEY_RSA) {
-		sig_len = EVP_PKEY_get_size(ctx->key->specific.key_ssl.key_evp);
+		sig_len = EVP_PKEY_size(ctx->key->specific.key_ssl.key_evp);
 		sig_buf = g_alloca(sig_len);
 		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(ctx->key->specific.key_ssl.key_evp, NULL);
 		if (EVP_PKEY_sign_init(pctx) <= 0) {
@@ -3576,7 +3576,7 @@ rspamd_dkim_match_keys(rspamd_dkim_key_t *pk,
 		return FALSE;
 	}
 #else
-	else if (EVP_PKEY_cmp(pk->key_evp, sk->key_evp) != 1) {
+	else if (EVP_PKEY_cmp(pk->specific.key_ssl.key_evp, sk->specific.key_ssl.key_evp) != 1) {
 		g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYHASHMISMATCH,
 					"pubkey does not match private key");
 		return FALSE;
