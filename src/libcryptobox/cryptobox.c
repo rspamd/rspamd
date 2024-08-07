@@ -38,8 +38,6 @@
 #endif
 #ifdef HAVE_OPENSSL
 #include <openssl/opensslv.h>
-#include <openssl/engine.h>
-#include <openssl/param_build.h>
 /* Openssl >= 1.0.1d is required for GCM verification */
 #if OPENSSL_VERSION_NUMBER >= 0x1000104fL
 #define HAVE_USABLE_OPENSSL 1
@@ -52,6 +50,11 @@
 #include <openssl/ecdh.h>
 #include <openssl/ecdsa.h>
 #include <openssl/rand.h>
+#include <openssl/engine.h>
+#if OPENSSL_VERSION_MAJOR >= 3
+#include <openssl/param_build.h>
+#include <openssl/core.h>
+#endif
 #define CRYPTOBOX_CURVE_NID NID_X9_62_prime256v1
 #endif
 
@@ -410,7 +413,7 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 		g_assert(0);
 #else
 
-		gsize len;
+		size_t len;
 #if OPENSSL_VERSION_MAJOR >= 3
 		OSSL_LIB_CTX *libctx = OSSL_LIB_CTX_new();
 		EVP_PKEY *pkey = EVP_PKEY_Q_keygen(libctx, NULL, "EC", EC_curve_nid2nist(CRYPTOBOX_CURVE_NID));
@@ -543,7 +546,7 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm,
 		OSSL_PARAM param[3];
 
 		param[0] = OSSL_PARAM_construct_utf8_string("group", "prime256v1", 0);
-		param[1] = OSSL_PARAM_construct_BN("priv", (void *) sk, sizeof(rspamd_sk_t));
+		param[1] = OSSL_PARAM_construct_BN("priv", (void *) sk, rspamd_cryptobox_sk_bytes(mode));
 		param[2] = OSSL_PARAM_construct_end();
 
 		g_assert(EVP_PKEY_fromdata_init(pctx) == 1);
@@ -552,7 +555,7 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm,
 		pctx = EVP_PKEY_CTX_new_from_pkey(libctx, sec_pkey, NULL);
 
 		param[0] = OSSL_PARAM_construct_utf8_string("group", "prime256v1", 0);
-		param[1] = OSSL_PARAM_construct_octet_string("pub", (void *) pk, sizeof(rspamd_pk_t));
+		param[1] = OSSL_PARAM_construct_octet_string("pub", (void *) pk, rspamd_cryptobox_pk_bytes(mode));
 		param[2] = OSSL_PARAM_construct_end();
 
 		g_assert(EVP_PKEY_fromdata_init(dctx) == 1);
