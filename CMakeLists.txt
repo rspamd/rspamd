@@ -267,6 +267,8 @@ ADD_DEFINITIONS(-DFMT_HEADER_ONLY)
 # Workaround for https://github.com/onqtam/doctest/issues/356
 ADD_DEFINITIONS(-DDOCTEST_CONFIG_USE_STD_HEADERS)
 ADD_DEFINITIONS(-DU_CHARSET_IS_UTF8)
+# Disable zstd deprecation warnings, as they are not relevant for us
+ADD_DEFINITIONS(-DZSTD_DISABLE_DEPRECATE_WARNINGS)
 
 # Check platform specific includes
 CHECK_INCLUDE_FILES(sys/types.h HAVE_SYS_TYPES_H)
