@@ -157,9 +157,11 @@ struct rspamd_dkim_key_s {
 	char key_id[RSPAMD_DKIM_KEY_ID_LEN];
 	union {
 		unsigned char *key_eddsa;
-	} key;
-	BIO *key_bio;
-	EVP_PKEY *key_evp;
+		struct {
+			BIO *key_bio;
+			EVP_PKEY *key_evp;
+		} key_ssl;
+	} specific;
 	time_t mtime;
 	unsigned int ttl;
 	enum rspamd_dkim_key_type type;
@@ -1390,7 +1392,7 @@ rspamd_dkim_make_key(const char *keydata,
 	EVP_MD_CTX_destroy(mdctx);
 
 	if (key->type == RSPAMD_DKIM_KEY_EDDSA) {
-		key->key.key_eddsa = key->keydata;
+		key->specific.key_eddsa = key->keydata;
 
 		if (key->decoded_len != rspamd_cryptobox_pk_sig_bytes(
 									RSPAMD_CRYPTOBOX_MODE_25519)) {
@@ -1406,9 +1408,9 @@ rspamd_dkim_make_key(const char *keydata,
 		}
 	}
 	else {
-		key->key_bio = BIO_new_mem_buf(key->keydata, key->decoded_len);
+		key->specific.key_ssl.key_bio = BIO_new_mem_buf(key->keydata, key->decoded_len);
 
-		if (key->key_bio == NULL) {
+		if (key->specific.key_ssl.key_bio == NULL) {
 			g_set_error(err,
 						DKIM_ERROR,
 						DKIM_SIGERROR_KEYFAIL,
@@ -1418,9 +1420,9 @@ rspamd_dkim_make_key(const char *keydata,
 			return NULL;
 		}
 
-		key->key_evp = d2i_PUBKEY_bio(key->key_bio, NULL);
+		key->specific.key_ssl.key_evp = d2i_PUBKEY_bio(key->specific.key_ssl.key_bio, NULL);
 
-		if (key->key_evp == NULL) {
+		if (key->specific.key_ssl.key_evp == NULL) {
 			g_set_error(err,
 						DKIM_ERROR,
 						DKIM_SIGERROR_KEYFAIL,
@@ -1450,12 +1452,13 @@ rspamd_dkim_key_id(rspamd_dkim_key_t *key)
 */
 void rspamd_dkim_key_free(rspamd_dkim_key_t *key)
 {
-	if (key->key_evp) {
-		EVP_PKEY_free(key->key_evp);
-	}
-	/* Nothing in case of eddsa key */
-	if (key->key_bio) {
-		BIO_free(key->key_bio);
+	if (key->type != RSPAMD_DKIM_KEY_EDDSA) {
+		if (key->specific.key_ssl.key_evp) {
+			EVP_PKEY_free(key->specific.key_ssl.key_evp);
+		}
+		if (key->specific.key_ssl.key_bio) {
+			BIO_free(key->specific.key_ssl.key_bio);
+		}
 	}
 
 	g_free(key->raw_key);
@@ -1465,15 +1468,16 @@ void rspamd_dkim_key_free(rspamd_dkim_key_t *key)
 
 void rspamd_dkim_sign_key_free(rspamd_dkim_sign_key_t *key)
 {
-	if (key->key_evp) {
-		EVP_PKEY_free(key->key_evp);
+	if (key->type != RSPAMD_DKIM_KEY_EDDSA) {
+		if (key->specific.key_ssl.key_evp) {
+			EVP_PKEY_free(key->specific.key_ssl.key_evp);
+		}
+		if (key->specific.key_ssl.key_bio) {
+			BIO_free(key->specific.key_ssl.key_bio);
+		}
 	}
-	if (key->key_bio) {
-		BIO_free(key->key_bio);
-	}
-
-	if (key->type == RSPAMD_DKIM_KEY_EDDSA) {
-		rspamd_explicit_memzero(key->key.key_eddsa, key->keylen);
+	else {
+		rspamd_explicit_memzero(key->specific.key_eddsa, key->keylen);
 		g_free(key->keydata);
 	}
 
@@ -2870,7 +2874,7 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 	switch (key->type) {
 	case RSPAMD_DKIM_KEY_RSA:
 		if (!rspamd_cryptobox_verify_compat(nid, ctx->b, ctx->blen, raw_digest, dlen,
-											key->key_evp, 1, RSPAMD_CRYPTOBOX_MODE_NIST)) {
+											key->specific.key_ssl.key_evp, 1, RSPAMD_CRYPTOBOX_MODE_NIST)) {
 			msg_debug_dkim("headers rsa verify failed");
 			ERR_clear_error();
 			res->rcode = DKIM_REJECT;
@@ -2888,8 +2892,9 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 		}
 		break;
 	case RSPAMD_DKIM_KEY_ECDSA:
+		/* TODO: this is currently badly broken, as it tries to verify RSA instead of ECDSA */
 		if (rspamd_cryptobox_verify_compat(nid, ctx->b, ctx->blen, raw_digest, dlen,
-										   key->key_evp, 0, RSPAMD_CRYPTOBOX_MODE_NIST) != 1) {
+										   key->specific.key_ssl.key_evp, 0, RSPAMD_CRYPTOBOX_MODE_NIST) != 1) {
 			msg_info_dkim(
 				"%s: headers ECDSA verification failure; "
 				"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
@@ -2908,7 +2913,7 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 
 	case RSPAMD_DKIM_KEY_EDDSA:
 		if (!rspamd_cryptobox_verify(ctx->b, ctx->blen, raw_digest, dlen,
-									 key->key.key_eddsa, RSPAMD_CRYPTOBOX_MODE_25519)) {
+									 key->specific.key_eddsa, RSPAMD_CRYPTOBOX_MODE_25519)) {
 			msg_info_dkim(
 				"%s: headers EDDSA verification failure; "
 				"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
@@ -3114,25 +3119,25 @@ rspamd_dkim_sign_key_load(const char *key, gsize len,
 			/* Seeded key, need scalarmult */
 			unsigned char pk[32];
 			nkey->type = RSPAMD_DKIM_KEY_EDDSA;
-			nkey->key.key_eddsa = g_malloc(
+			nkey->specific.key_eddsa = g_malloc(
 				rspamd_cryptobox_sk_sig_bytes(RSPAMD_CRYPTOBOX_MODE_25519));
-			crypto_sign_ed25519_seed_keypair(pk, nkey->key.key_eddsa, key);
+			crypto_sign_ed25519_seed_keypair(pk, nkey->specific.key_eddsa, key);
 			nkey->keylen = rspamd_cryptobox_sk_sig_bytes(RSPAMD_CRYPTOBOX_MODE_25519);
 		}
 		else {
 			/* Full ed25519 key */
 			unsigned klen = rspamd_cryptobox_sk_sig_bytes(RSPAMD_CRYPTOBOX_MODE_25519);
 			nkey->type = RSPAMD_DKIM_KEY_EDDSA;
-			nkey->key.key_eddsa = g_malloc(klen);
-			memcpy(nkey->key.key_eddsa, key, klen);
+			nkey->specific.key_eddsa = g_malloc(klen);
+			memcpy(nkey->specific.key_eddsa, key, klen);
 			nkey->keylen = klen;
 		}
 	}
 	else {
-		nkey->key_bio = BIO_new_mem_buf(key, len);
+		nkey->specific.key_ssl.key_bio = BIO_new_mem_buf(key, len);
 
 		if (type == RSPAMD_DKIM_KEY_RAW) {
-			if (d2i_PrivateKey_bio(nkey->key_bio, &nkey->key_evp) == NULL) {
+			if (d2i_PrivateKey_bio(nkey->specific.key_ssl.key_bio, &nkey->specific.key_ssl.key_evp) == NULL) {
 				g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYFAIL,
 							"cannot parse raw private key: %s",
 							ERR_error_string(ERR_get_error(), NULL));
@@ -3144,7 +3149,7 @@ rspamd_dkim_sign_key_load(const char *key, gsize len,
 			}
 		}
 		else {
-			if (!PEM_read_bio_PrivateKey(nkey->key_bio, &nkey->key_evp, NULL, NULL)) {
+			if (!PEM_read_bio_PrivateKey(nkey->specific.key_ssl.key_bio, &nkey->specific.key_ssl.key_evp, NULL, NULL)) {
 				g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYFAIL,
 							"cannot parse pem private key: %s",
 							ERR_error_string(ERR_get_error(), NULL));
@@ -3480,9 +3485,9 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 	EVP_DigestFinal_ex(ctx->common.headers_hash, raw_digest, NULL);
 
 	if (ctx->key->type == RSPAMD_DKIM_KEY_RSA) {
-		sig_len = EVP_PKEY_get_size(ctx->key->key_evp);
+		sig_len = EVP_PKEY_get_size(ctx->key->specific.key_ssl.key_evp);
 		sig_buf = g_alloca(sig_len);
-		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(ctx->key->key_evp, NULL);
+		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(ctx->key->specific.key_ssl.key_evp, NULL);
 		if (EVP_PKEY_sign_init(pctx) <= 0) {
 			g_string_free(hdr, TRUE);
 			msg_err_task("rsa sign error: %s",
@@ -3518,7 +3523,7 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 		sig_buf = g_alloca(sig_len);
 
 		rspamd_cryptobox_sign(sig_buf, NULL, raw_digest, dlen,
-							  ctx->key->key.key_eddsa, RSPAMD_CRYPTOBOX_MODE_25519);
+							  ctx->key->specific.key_eddsa, RSPAMD_CRYPTOBOX_MODE_25519);
 	}
 	else {
 		g_string_free(hdr, TRUE);
@@ -3559,14 +3564,14 @@ rspamd_dkim_match_keys(rspamd_dkim_key_t *pk,
 	}
 
 	if (pk->type == RSPAMD_DKIM_KEY_EDDSA) {
-		if (memcmp(sk->key.key_eddsa + 32, pk->key.key_eddsa, 32) != 0) {
+		if (memcmp(sk->specific.key_eddsa + 32, pk->specific.key_eddsa, 32) != 0) {
 			g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYHASHMISMATCH,
 						"pubkey does not match private key");
 			return FALSE;
 		}
 	}
 #if OPENSSL_VERSION_MAJOR >= 3
-	else if (EVP_PKEY_eq(pk->key_evp, sk->key_evp) != 1) {
+	else if (EVP_PKEY_eq(pk->specific.key_ssl.key_evp, sk->specific.key_ssl.key_evp) != 1) {
 		g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYHASHMISMATCH,
 					"pubkey does not match private key");
 		return FALSE;
