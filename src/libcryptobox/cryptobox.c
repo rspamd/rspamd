@@ -640,7 +640,7 @@ void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,
 		g_assert(OSSL_PARAM_BLD_push_utf8_string(param_bld, "group",
 												 EC_curve_nid2nist(CRYPTOBOX_CURVE_NID), 0) == 1);
 
-		bn_sec = BN_bin2bn(sk, sizeof(rspamd_sk_t), NULL);
+		bn_sec = BN_bin2bn(sk, rspamd_cryptobox_sk_sig_bytes(RSPAMD_CRYPTOBOX_MODE_NIST), NULL);
 		g_assert(bn_sec != NULL);
 
 		g_assert(OSSL_PARAM_BLD_push_BN(param_bld, "priv", bn_sec) == 1);
@@ -670,7 +670,7 @@ void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,
 		/* Key setup */
 		lk = EC_KEY_new_by_curve_name(CRYPTOBOX_CURVE_NID);
 		g_assert(lk != NULL);
-		bn_sec = BN_bin2bn(sk, sizeof(rspamd_sig_sk_t), NULL);
+		bn_sec = BN_bin2bn(sk, rspamd_cryptobox_sk_sig_bytes(RSPAMD_CRYPTOBOX_MODE_NIST), NULL);
 		g_assert(bn_sec != NULL);
 		g_assert(EC_KEY_set_private_key(lk, bn_sec) == 1);
 
@@ -798,7 +798,8 @@ bool rspamd_cryptobox_verify(const unsigned char *sig,
 		g_assert(OSSL_PARAM_BLD_push_utf8_string(param_bld, "group",
 												 EC_curve_nid2nist(CRYPTOBOX_CURVE_NID), 0) == 1);
 
-		g_assert(OSSL_PARAM_BLD_push_octet_string(param_bld, "pub", pk, sizeof(rspamd_pk_t)) == 1);
+		g_assert(OSSL_PARAM_BLD_push_octet_string(param_bld, "pub", pk,
+												  rspamd_cryptobox_pk_sig_bytes(RSPAMD_CRYPTOBOX_MODE_NIST)) == 1);
 
 		params = OSSL_PARAM_BLD_to_param(param_bld);
 		g_assert(EVP_PKEY_fromdata_init(pctx) == 1);
@@ -824,7 +825,7 @@ bool rspamd_cryptobox_verify(const unsigned char *sig,
 		/* Key setup */
 		lk = EC_KEY_new_by_curve_name(CRYPTOBOX_CURVE_NID);
 		g_assert(lk != NULL);
-		bn_pub = BN_bin2bn(pk, rspamd_cryptobox_pk_sig_bytes(mode), NULL);
+		bn_pub = BN_bin2bn(pk, rspamd_cryptobox_pk_sig_bytes(RSPAMD_CRYPTOBOX_MODE_NIST), NULL);
 		g_assert(bn_pub != NULL);
 		ec_pub = ec_point_bn2point_compat(EC_KEY_get0_group(lk), bn_pub, NULL, NULL);
 		g_assert(ec_pub != NULL);
