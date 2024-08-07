@@ -2143,7 +2143,8 @@ rspamd_dkim_canonize_body(struct rspamd_task *task,
 			if (ctx->body_canon_type == DKIM_CANON_SIMPLE) {
 				/* Simple canonization */
 				while (rspamd_dkim_simple_body_step(ctx, ctx->body_hash,
-													&start, end - start, &remain));
+													&start, end - start, &remain))
+					;
 
 				/*
 				* If we have l= tag then we cannot add crlf...
@@ -2179,7 +2180,8 @@ rspamd_dkim_canonize_body(struct rspamd_task *task,
 				size_t orig_len = remain;
 
 				while (rspamd_dkim_relaxed_body_step(ctx, ctx->body_hash,
-													 &start, end - start, &remain));
+													 &start, end - start, &remain))
+					;
 
 				if (ctx->len > 0 && remain > (double) orig_len * 0.1) {
 					msg_info_task("DKIM l tag does not cover enough of the body: %d (%d actual size)",
@@ -2199,7 +2201,6 @@ rspamd_dkim_canonize_body(struct rspamd_task *task,
 		return TRUE;
 	}
 
-	/* TODO: Implement relaxed algorithm */
 	return FALSE;
 }
 
@@ -2873,8 +2874,8 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 	}
 	switch (key->type) {
 	case RSPAMD_DKIM_KEY_RSA:
-		if (!rspamd_cryptobox_verify_compat(nid, ctx->b, ctx->blen, raw_digest, dlen,
-											key->specific.key_ssl.key_evp, 1, RSPAMD_CRYPTOBOX_MODE_NIST)) {
+		if (!rspamd_cryptobox_verify_evp_rsa(nid, ctx->b, ctx->blen, raw_digest, dlen,
+											 key->specific.key_ssl.key_evp)) {
 			msg_debug_dkim("headers rsa verify failed");
 			ERR_clear_error();
 			res->rcode = DKIM_REJECT;
@@ -2892,9 +2893,8 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 		}
 		break;
 	case RSPAMD_DKIM_KEY_ECDSA:
-		/* TODO: this is currently badly broken, as it tries to verify RSA instead of ECDSA */
-		if (rspamd_cryptobox_verify_compat(nid, ctx->b, ctx->blen, raw_digest, dlen,
-										   key->specific.key_ssl.key_evp, 0, RSPAMD_CRYPTOBOX_MODE_NIST) != 1) {
+		if (rspamd_cryptobox_verify_evp_ecdsa(nid, ctx->b, ctx->blen, raw_digest, dlen,
+											  key->specific.key_ssl.key_evp) != 1) {
 			msg_info_dkim(
 				"%s: headers ECDSA verification failure; "
 				"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",

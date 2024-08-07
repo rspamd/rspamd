@@ -18,7 +18,10 @@
 #define CRYPTOBOX_H_
 
 #include "config.h"
-#include "openssl/evp.h"
+
+#ifdef HAVE_OPENSSL
+#include <openssl/evp.h>
+#endif
 
 #include <sodium.h>
 
@@ -224,22 +227,34 @@ bool rspamd_cryptobox_verify(const unsigned char *sig,
 							 const rspamd_pk_t pk,
 							 enum rspamd_cryptobox_mode mode);
 
+#ifdef HAVE_OPENSSL
 /**
  * Verifies digital signature for specified raw digest with specified pubkey
  * @param nid signing algorithm nid
  * @param sig signature source
  * @param digest raw digest
  * @param pub_key public key for verification
- * @param ktype type of public key (1 - RSA, 0 - ECDSA)
  * @return true if signature is valid, false otherwise
  */
-bool rspamd_cryptobox_verify_compat(int nid,
-									const unsigned char *sig,
-									gsize siglen,
-									const unsigned char *digest,
-									gsize dlen,
-									struct evp_pkey_st *pub_key, int ktype,
-									enum rspamd_cryptobox_mode mode);
+bool rspamd_cryptobox_verify_evp_ed25519(int nid,
+										 const unsigned char *sig,
+										 gsize siglen,
+										 const unsigned char *digest,
+										 gsize dlen,
+										 EVP_PKEY *pub_key);
+bool rspamd_cryptobox_verify_evp_ecdsa(int nid,
+									   const unsigned char *sig,
+									   gsize siglen,
+									   const unsigned char *digest,
+									   gsize dlen,
+									   EVP_PKEY *pub_key);
+bool rspamd_cryptobox_verify_evp_rsa(int nid,
+									 const unsigned char *sig,
+									 gsize siglen,
+									 const unsigned char *digest,
+									 gsize dlen,
+									 EVP_PKEY *pub_key);
+#endif
 
 /**
 * Securely clear the buffer specified

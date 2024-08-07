@@ -38,8 +38,6 @@
 #include "_acism.h"
 #include "unix-std.h"
 
-#define BACK ((SYMBOL) 0)
-#define ROOT ((STATE) 0)
 extern const unsigned char lc_map[256];
 
 int acism_lookup(ac_trie_t const *psp, const char *text, size_t len,
