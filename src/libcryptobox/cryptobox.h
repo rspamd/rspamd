@@ -208,7 +208,7 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm, const rspamd_pk_t pk,
 */
 void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,
 						   const unsigned char *m, gsize mlen,
-						   const rspamd_sk_t sk,
+						   const rspamd_sig_sk_t sk,
 						   enum rspamd_cryptobox_mode mode);
 
 /**
@@ -224,7 +224,7 @@ bool rspamd_cryptobox_verify(const unsigned char *sig,
 							 gsize siglen,
 							 const unsigned char *m,
 							 gsize mlen,
-							 const rspamd_pk_t pk,
+							 const rspamd_sig_pk_t pk,
 							 enum rspamd_cryptobox_mode mode);
 
 #ifdef HAVE_OPENSSL

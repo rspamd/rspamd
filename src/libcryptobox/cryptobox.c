@@ -421,13 +421,13 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 		g_assert(EVP_PKEY_get_bn_param(pkey, "priv", &bn_sec) == 1);
 
 		len = BN_num_bytes(bn_sec);
-		g_assert(len <= (int) sizeof(rspamd_sk_t));
+		g_assert(len <= (int) sizeof(rspamd_sig_sk_t));
 		BN_bn2bin(bn_sec, sk);
 
 		EVP_PKEY_get_octet_string_param(pkey, "pub", pk,
-										sizeof(rspamd_pk_t), &len);
+										sizeof(rspamd_sig_pk_t), &len);
 
-		g_assert(len <= (int) sizeof(rspamd_pk_t));
+		g_assert(len <= (int) sizeof(rspamd_sig_pk_t));
 
 		BN_free(bn_sec);
 		EVP_PKEY_free(pkey);
@@ -450,16 +450,18 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 		group = EC_KEY_get0_group(ec_sec);
 
 		BIGNUM *bn_pub;
-		bn_pub = EC_POINT_point2bn(EC_KEY_get0_group(ec_sec),
-								   ec_pub, POINT_CONVERSION_UNCOMPRESSED, NULL, NULL);
+		bn_pub = EC_POINT_point2bn(group, ec_pub, POINT_CONVERSION_UNCOMPRESSED, NULL, NULL);
 		len = BN_num_bytes(bn_pub);
-		g_assert(len <= (int) rspamd_cryptobox_pk_bytes(mode));
+		g_assert(len <= (int) rspamd_cryptobox_pk_sig_bytes(mode));
 		BN_bn2bin(bn_pub, pk);
 		BN_free(bn_pub);
-		EC_KEY_free(ec_sec);
+
 		len = BN_num_bytes(bn_sec);
-		g_assert(len <= (int) sizeof(rspamd_sk_t));
+		g_assert(len <= (int) sizeof(rspamd_sig_sk_t));
 		BN_bn2bin(bn_sec, sk);
+		BN_free(bn_sec);
+
+		EC_KEY_free(ec_sec);
 #endif
 
 #endif
@@ -606,7 +608,7 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm,
 
 void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,
 						   const unsigned char *m, gsize mlen,
-						   const rspamd_sk_t sk,
+						   const rspamd_sig_sk_t sk,
 						   enum rspamd_cryptobox_mode mode)
 {
 	if (G_LIKELY(mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
@@ -669,7 +671,7 @@ void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,
 		/* Key setup */
 		lk = EC_KEY_new_by_curve_name(CRYPTOBOX_CURVE_NID);
 		g_assert(lk != NULL);
-		bn_sec = BN_bin2bn(sk, sizeof(rspamd_sk_t), NULL);
+		bn_sec = BN_bin2bn(sk, sizeof(rspamd_sig_sk_t), NULL);
 		g_assert(bn_sec != NULL);
 		g_assert(EC_KEY_set_private_key(lk, bn_sec) == 1);
 
@@ -762,7 +764,7 @@ bool rspamd_cryptobox_verify(const unsigned char *sig,
 							 gsize siglen,
 							 const unsigned char *m,
 							 gsize mlen,
-							 const rspamd_pk_t pk,
+							 const rspamd_sig_pk_t pk,
 							 enum rspamd_cryptobox_mode mode)
 {
 	bool ret = false;
@@ -823,7 +825,7 @@ bool rspamd_cryptobox_verify(const unsigned char *sig,
 		/* Key setup */
 		lk = EC_KEY_new_by_curve_name(CRYPTOBOX_CURVE_NID);
 		g_assert(lk != NULL);
-		bn_pub = BN_bin2bn(pk, rspamd_cryptobox_pk_bytes(mode), NULL);
+		bn_pub = BN_bin2bn(pk, rspamd_cryptobox_pk_sig_bytes(mode), NULL);
 		g_assert(bn_pub != NULL);
 		ec_pub = ec_point_bn2point_compat(EC_KEY_get0_group(lk), bn_pub, NULL, NULL);
 		g_assert(ec_pub != NULL);
