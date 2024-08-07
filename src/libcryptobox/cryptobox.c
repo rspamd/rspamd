@@ -549,7 +549,7 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm,
 		param[2] = OSSL_PARAM_construct_end();
 
 		g_assert(EVP_PKEY_fromdata_init(pctx) == 1);
-		g_assert(EVP_PKEY_fromdata(pctx, &sec_pkey, EVP_PKEY_PRIVATE_KEY, param) == 1);
+		g_assert(EVP_PKEY_fromdata(pctx, &sec_pkey, EVP_PKEY_KEYPAIR, param) == 1);
 		EVP_PKEY_CTX_free(pctx);
 		pctx = EVP_PKEY_CTX_new_from_pkey(libctx, sec_pkey, NULL);
 
