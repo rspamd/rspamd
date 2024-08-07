@@ -25,7 +25,6 @@
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
 #include <openssl/engine.h>
-#include <openssl/param_build.h>
 
 /* special DNS tokens */
 #define DKIM_DNSKEYNAME "_domainkey"

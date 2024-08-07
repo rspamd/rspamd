@@ -368,7 +368,7 @@ void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
 		OSSL_LIB_CTX_free(libctx);
 #else
 		const EC_POINT *ec_pub;
-		EC_GROUP *group;
+		const EC_GROUP *group;
 		const BIGNUM *bn_sec;
 
 		EC_KEY *ec_sec;
@@ -395,8 +395,6 @@ void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
 		len = BN_num_bytes(bn_sec);
 		g_assert(len <= (int) sizeof(rspamd_sk_t));
 		BN_bn2bin(bn_sec, sk);
-
-		EC_GROUP_free(group);
 #endif
 #endif
 	}
@@ -438,7 +436,7 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 		EC_KEY *ec_sec;
 		const BIGNUM *bn_sec;
 		const EC_POINT *ec_pub;
-		EC_GROUP *group;
+		const EC_GROUP *group;
 
 		ec_sec = EC_KEY_new_by_curve_name(CRYPTOBOX_CURVE_NID);
 		g_assert(ec_sec != NULL);
@@ -462,7 +460,6 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 		len = BN_num_bytes(bn_sec);
 		g_assert(len <= (int) sizeof(rspamd_sk_t));
 		BN_bn2bin(bn_sec, sk);
-		EC_GROUP_free(group);
 #endif
 
 #endif
