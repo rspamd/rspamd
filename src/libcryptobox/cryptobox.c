@@ -69,7 +69,7 @@ static const unsigned char n0[16] = {0};
 
 #define CRYPTOBOX_ALIGNMENT 16
 #define cryptobox_align_ptr(p, a) \
-   (void *) (((uintptr_t) (p) + ((uintptr_t) a - 1)) & ~((uintptr_t) a - 1))
+	(void *) (((uintptr_t) (p) + ((uintptr_t) a - 1)) & ~((uintptr_t) a - 1))
 
 static void
 rspamd_cryptobox_cpuid(int cpu[4], int info)
@@ -544,7 +544,7 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm,
 		OSSL_PARAM param[3];
 
 		param[0] = OSSL_PARAM_construct_utf8_string("group", "prime256v1", 0);
-		param[1] = OSSL_PARAM_construct_BN("priv", (void*)sk, sizeof(rspamd_sk_t));
+		param[1] = OSSL_PARAM_construct_BN("priv", (void *) sk, sizeof(rspamd_sk_t));
 		param[2] = OSSL_PARAM_construct_end();
 
 		g_assert(EVP_PKEY_fromdata_init(pctx) == 1);
@@ -553,7 +553,7 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm,
 		pctx = EVP_PKEY_CTX_new_from_pkey(libctx, sec_pkey, NULL);
 
 		param[0] = OSSL_PARAM_construct_utf8_string("group", "prime256v1", 0);
-		param[1] = OSSL_PARAM_construct_octet_string("pub", (void*)pk, sizeof(rspamd_pk_t));
+		param[1] = OSSL_PARAM_construct_octet_string("pub", (void *) pk, sizeof(rspamd_pk_t));
 		param[2] = OSSL_PARAM_construct_end();
 
 		g_assert(EVP_PKEY_fromdata_init(dctx) == 1);
@@ -652,7 +652,7 @@ void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,
 
 		g_assert(EVP_DigestSignInit(sha_ctx, NULL, EVP_sha512(), NULL, pkey) == 1);
 
-		size_t diglen_size_t = diglen;\
+		size_t diglen_size_t = diglen;
 		EVP_DigestSign(sha_ctx, sig, &diglen_size_t, m, mlen);
 		diglen = diglen_size_t;
 
@@ -717,7 +717,7 @@ bool rspamd_cryptobox_verify_compat(int nid,
 
 		g_assert(EVP_PKEY_verify_init(pctx) == 1);
 
-		if(ktype == 1) g_assert(EVP_PKEY_CTX_set_rsa_padding(pctx, RSA_PKCS1_PADDING) == 1);
+		if (ktype == 1) g_assert(EVP_PKEY_CTX_set_rsa_padding(pctx, RSA_PKCS1_PADDING) == 1);
 		g_assert(EVP_PKEY_CTX_set_signature_md(pctx, md) == 1);
 
 		ret = (EVP_PKEY_verify(pctx, sig, siglen, digest, dlen) == 1);
@@ -780,7 +780,7 @@ bool rspamd_cryptobox_verify(const unsigned char *sig,
 
 		g_assert(EVP_DigestVerifyInit(sha_ctx, NULL, EVP_sha512(), NULL, pkey) == 1);
 
-		if(EVP_DigestVerify(sha_ctx, sig, siglen, m, mlen) == 1)
+		if (EVP_DigestVerify(sha_ctx, sig, siglen, m, mlen) == 1)
 			ret = true;
 
 		EVP_PKEY_free(pkey);

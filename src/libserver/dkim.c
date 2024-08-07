@@ -68,25 +68,25 @@ enum rspamd_dkim_param_type {
 #define RSPAMD_DKIM_MAX_ARC_IDX 10
 
 #define msg_err_dkim(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL,       \
-													 "dkim", ctx->pool->tag.uid, \
-													 RSPAMD_LOG_FUNC,            \
-													 __VA_ARGS__)
+													  "dkim", ctx->pool->tag.uid, \
+													  RSPAMD_LOG_FUNC,            \
+													  __VA_ARGS__)
 #define msg_warn_dkim(...) rspamd_default_log_function(G_LOG_LEVEL_WARNING,        \
-													  "dkim", ctx->pool->tag.uid, \
-													  RSPAMD_LOG_FUNC,            \
-													  __VA_ARGS__)
+													   "dkim", ctx->pool->tag.uid, \
+													   RSPAMD_LOG_FUNC,            \
+													   __VA_ARGS__)
 #define msg_info_dkim(...) rspamd_default_log_function(G_LOG_LEVEL_INFO,           \
-													  "dkim", ctx->pool->tag.uid, \
-													  RSPAMD_LOG_FUNC,            \
-													  __VA_ARGS__)
+													   "dkim", ctx->pool->tag.uid, \
+													   RSPAMD_LOG_FUNC,            \
+													   __VA_ARGS__)
 #define msg_debug_dkim(...) rspamd_conditional_debug_fast(NULL, NULL,                                     \
-														 rspamd_dkim_log_id, "dkim", ctx->pool->tag.uid, \
-														 RSPAMD_LOG_FUNC,                                \
-														 __VA_ARGS__)
+														  rspamd_dkim_log_id, "dkim", ctx->pool->tag.uid, \
+														  RSPAMD_LOG_FUNC,                                \
+														  __VA_ARGS__)
 #define msg_debug_dkim_taskless(...) rspamd_conditional_debug_fast(NULL, NULL,                     \
-																  rspamd_dkim_log_id, "dkim", "", \
-																  RSPAMD_LOG_FUNC,                \
-																  __VA_ARGS__)
+																   rspamd_dkim_log_id, "dkim", "", \
+																   RSPAMD_LOG_FUNC,                \
+																   __VA_ARGS__)
 
 INIT_LOG_MODULE(dkim)
 
@@ -2139,8 +2139,7 @@ rspamd_dkim_canonize_body(struct rspamd_task *task,
 			if (ctx->body_canon_type == DKIM_CANON_SIMPLE) {
 				/* Simple canonization */
 				while (rspamd_dkim_simple_body_step(ctx, ctx->body_hash,
-													&start, end - start, &remain))
-					;
+													&start, end - start, &remain));
 
 				/*
 				* If we have l= tag then we cannot add crlf...
@@ -2176,8 +2175,7 @@ rspamd_dkim_canonize_body(struct rspamd_task *task,
 				size_t orig_len = remain;
 
 				while (rspamd_dkim_relaxed_body_step(ctx, ctx->body_hash,
-													 &start, end - start, &remain))
-					;
+													 &start, end - start, &remain));
 
 				if (ctx->len > 0 && remain > (double) orig_len * 0.1) {
 					msg_info_task("DKIM l tag does not cover enough of the body: %d (%d actual size)",
@@ -2872,7 +2870,7 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 	switch (key->type) {
 	case RSPAMD_DKIM_KEY_RSA:
 		if (!rspamd_cryptobox_verify_compat(nid, ctx->b, ctx->blen, raw_digest, dlen,
-												key->key_evp, 1, RSPAMD_CRYPTOBOX_MODE_NIST)){
+											key->key_evp, 1, RSPAMD_CRYPTOBOX_MODE_NIST)) {
 			msg_debug_dkim("headers rsa verify failed");
 			ERR_clear_error();
 			res->rcode = DKIM_REJECT;
@@ -3506,7 +3504,7 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 
 			return NULL;
 		}
-		size_t sig_len_size_t  = sig_len;
+		size_t sig_len_size_t = sig_len;
 		if (EVP_PKEY_sign(pctx, sig_buf, &sig_len_size_t, raw_digest, dlen) <= 0) {
 			g_string_free(hdr, TRUE);
 			msg_err_task("rsa sign error: %s",

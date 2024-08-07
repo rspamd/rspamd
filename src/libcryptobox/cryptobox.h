@@ -26,13 +26,13 @@ extern "C" {
 #endif
 
 struct rspamd_cryptobox_segment {
-   unsigned char *data;
-   gsize len;
+	unsigned char *data;
+	gsize len;
 };
 
 #if defined(__GNUC__) &&                                                                                 \
-   ((defined(__clang__) && (__clang_major__ >= 4 || (__clang_major__ >= 3 && __clang_minor__ >= 8))) || \
-	((__GNUC__ == 4) && (__GNUC_MINOR__ >= 8) || (__GNUC__ > 4)))
+	((defined(__clang__) && (__clang_major__ >= 4 || (__clang_major__ >= 3 && __clang_minor__ >= 8))) || \
+	 ((__GNUC__ == 4) && (__GNUC_MINOR__ >= 8) || (__GNUC__ > 4)))
 #define RSPAMD_HAS_TARGET_ATTR 1
 #endif
 
@@ -69,15 +69,15 @@ typedef unsigned char rspamd_sig_pk_t[rspamd_cryptobox_MAX_SIGPKBYTES];
 typedef unsigned char rspamd_sig_sk_t[rspamd_cryptobox_MAX_SIGSKBYTES];
 
 enum rspamd_cryptobox_mode {
-   RSPAMD_CRYPTOBOX_MODE_25519 = 0,
-   RSPAMD_CRYPTOBOX_MODE_NIST
+	RSPAMD_CRYPTOBOX_MODE_25519 = 0,
+	RSPAMD_CRYPTOBOX_MODE_NIST
 };
 
 struct rspamd_cryptobox_library_ctx {
-   char *cpu_extensions;
-   const char *chacha20_impl;
-   const char *base64_impl;
-   unsigned long cpu_config;
+	char *cpu_extensions;
+	const char *chacha20_impl;
+	const char *base64_impl;
+	unsigned long cpu_config;
 };
 
 /**
@@ -92,7 +92,7 @@ void rspamd_cryptobox_deinit(struct rspamd_cryptobox_library_ctx *);
 * @param sk secret key buffer
 */
 void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
-							 enum rspamd_cryptobox_mode mode);
+							  enum rspamd_cryptobox_mode mode);
 
 /**
 * Generate new keypair for signing
@@ -100,7 +100,7 @@ void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
 * @param sk secret key buffer
 */
 void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
-								 enum rspamd_cryptobox_mode mode);
+								  enum rspamd_cryptobox_mode mode);
 
 /**
 * Encrypt data inplace adding signature to sig afterwards
@@ -110,9 +110,9 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 * @param sig output signature
 */
 void rspamd_cryptobox_encrypt_inplace(unsigned char *data, gsize len,
-									 const rspamd_nonce_t nonce,
-									 const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_mac_t sig,
-									 enum rspamd_cryptobox_mode mode);
+									  const rspamd_nonce_t nonce,
+									  const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_mac_t sig,
+									  enum rspamd_cryptobox_mode mode);
 
 /**
 * Encrypt segments of data inplace adding signature to sig afterwards
@@ -123,10 +123,10 @@ void rspamd_cryptobox_encrypt_inplace(unsigned char *data, gsize len,
 * @param sig output signature
 */
 void rspamd_cryptobox_encryptv_inplace(struct rspamd_cryptobox_segment *segments,
-									  gsize cnt,
-									  const rspamd_nonce_t nonce,
-									  const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_mac_t sig,
-									  enum rspamd_cryptobox_mode mode);
+									   gsize cnt,
+									   const rspamd_nonce_t nonce,
+									   const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_mac_t sig,
+									   enum rspamd_cryptobox_mode mode);
 
 
 /**
@@ -139,9 +139,9 @@ void rspamd_cryptobox_encryptv_inplace(struct rspamd_cryptobox_segment *segments
 * @return TRUE if input has been verified successfully
 */
 gboolean rspamd_cryptobox_decrypt_inplace(unsigned char *data, gsize len,
-										 const rspamd_nonce_t nonce,
-										 const rspamd_pk_t pk, const rspamd_sk_t sk, const rspamd_mac_t sig,
-										 enum rspamd_cryptobox_mode mode);
+										  const rspamd_nonce_t nonce,
+										  const rspamd_pk_t pk, const rspamd_sk_t sk, const rspamd_mac_t sig,
+										  enum rspamd_cryptobox_mode mode);
 
 /**
 * Encrypt segments of data inplace adding signature to sig afterwards
@@ -152,9 +152,9 @@ gboolean rspamd_cryptobox_decrypt_inplace(unsigned char *data, gsize len,
 * @param sig output signature
 */
 void rspamd_cryptobox_encrypt_nm_inplace(unsigned char *data, gsize len,
-										const rspamd_nonce_t nonce,
-										const rspamd_nm_t nm, rspamd_mac_t sig,
-										enum rspamd_cryptobox_mode mode);
+										 const rspamd_nonce_t nonce,
+										 const rspamd_nm_t nm, rspamd_mac_t sig,
+										 enum rspamd_cryptobox_mode mode);
 
 /**
 * Encrypt segments of data inplace adding signature to sig afterwards
@@ -165,10 +165,10 @@ void rspamd_cryptobox_encrypt_nm_inplace(unsigned char *data, gsize len,
 * @param sig output signature
 */
 void rspamd_cryptobox_encryptv_nm_inplace(struct rspamd_cryptobox_segment *segments,
-										 gsize cnt,
-										 const rspamd_nonce_t nonce,
-										 const rspamd_nm_t nm, rspamd_mac_t sig,
-										 enum rspamd_cryptobox_mode mode);
+										  gsize cnt,
+										  const rspamd_nonce_t nonce,
+										  const rspamd_nm_t nm, rspamd_mac_t sig,
+										  enum rspamd_cryptobox_mode mode);
 
 
 /**
@@ -181,9 +181,9 @@ void rspamd_cryptobox_encryptv_nm_inplace(struct rspamd_cryptobox_segment *segme
 * @return TRUE if input has been verified successfully
 */
 gboolean rspamd_cryptobox_decrypt_nm_inplace(unsigned char *data, gsize len,
-											const rspamd_nonce_t nonce,
-											const rspamd_nm_t nm, const rspamd_mac_t sig,
-											enum rspamd_cryptobox_mode mode);
+											 const rspamd_nonce_t nonce,
+											 const rspamd_nm_t nm, const rspamd_mac_t sig,
+											 enum rspamd_cryptobox_mode mode);
 
 /**
 * Generate shared secret from local sk and remote pk
@@ -192,7 +192,7 @@ gboolean rspamd_cryptobox_decrypt_nm_inplace(unsigned char *data, gsize len,
 * @param sk local privkey
 */
 void rspamd_cryptobox_nm(rspamd_nm_t nm, const rspamd_pk_t pk,
-						const rspamd_sk_t sk, enum rspamd_cryptobox_mode mode);
+						 const rspamd_sk_t sk, enum rspamd_cryptobox_mode mode);
 
 /**
 * Create digital signature for the specified message and place result in `sig`
@@ -203,9 +203,9 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm, const rspamd_pk_t pk,
 * @param sk secret key
 */
 void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,
-						  const unsigned char *m, gsize mlen,
-						  const rspamd_sk_t sk,
-						  enum rspamd_cryptobox_mode mode);
+						   const unsigned char *m, gsize mlen,
+						   const rspamd_sk_t sk,
+						   enum rspamd_cryptobox_mode mode);
 
 /**
 * Verifies digital signature for the specified message using the specified
@@ -217,11 +217,11 @@ void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,
 * @return true if signature is valid, false otherwise
 */
 bool rspamd_cryptobox_verify(const unsigned char *sig,
-							gsize siglen,
-							const unsigned char *m,
-							gsize mlen,
-							const rspamd_pk_t pk,
-							enum rspamd_cryptobox_mode mode);
+							 gsize siglen,
+							 const unsigned char *m,
+							 gsize mlen,
+							 const rspamd_pk_t pk,
+							 enum rspamd_cryptobox_mode mode);
 
 /**
  * Verifies digital signature for specified raw digest with specified pubkey
@@ -233,12 +233,12 @@ bool rspamd_cryptobox_verify(const unsigned char *sig,
  * @return true if signature is valid, false otherwise
  */
 bool rspamd_cryptobox_verify_compat(int nid,
-								   const unsigned char *sig,
-								   gsize siglen,
-								   const unsigned char *digest,
-								   gsize dlen,
-								   struct evp_pkey_st *pub_key, int ktype,
-								   enum rspamd_cryptobox_mode mode);
+									const unsigned char *sig,
+									gsize siglen,
+									const unsigned char *digest,
+									gsize dlen,
+									struct evp_pkey_st *pub_key, int ktype,
+									enum rspamd_cryptobox_mode mode);
 
 /**
 * Securely clear the buffer specified
@@ -265,12 +265,12 @@ bool rspamd_cryptobox_verify_compat(int nid,
 * @param k key (must be 16 bytes)
 */
 void rspamd_cryptobox_siphash(unsigned char *out, const unsigned char *in,
-							 unsigned long long inlen,
-							 const rspamd_sipkey_t k);
+							  unsigned long long inlen,
+							  const rspamd_sipkey_t k);
 
 enum rspamd_cryptobox_pbkdf_type {
-   RSPAMD_CRYPTOBOX_PBKDF2 = 0,
-   RSPAMD_CRYPTOBOX_CATENA
+	RSPAMD_CRYPTOBOX_PBKDF2 = 0,
+	RSPAMD_CRYPTOBOX_CATENA
 };
 
 
@@ -286,10 +286,10 @@ enum rspamd_cryptobox_pbkdf_type {
 * @return TRUE in case of success and FALSE if failed
 */
 gboolean rspamd_cryptobox_pbkdf(const char *pass, gsize pass_len,
-							   const uint8_t *salt, gsize salt_len,
-							   uint8_t *key, gsize key_len,
-							   unsigned int complexity,
-							   enum rspamd_cryptobox_pbkdf_type type);
+								const uint8_t *salt, gsize salt_len,
+								uint8_t *key, gsize key_len,
+								unsigned int complexity,
+								enum rspamd_cryptobox_pbkdf_type type);
 
 
 /**
@@ -341,13 +341,13 @@ typedef crypto_generichash_blake2b_state rspamd_cryptobox_hash_state_t;
 * non-keyed hash is generated
 */
 void rspamd_cryptobox_hash_init(rspamd_cryptobox_hash_state_t *st,
-							   const unsigned char *key, gsize keylen);
+								const unsigned char *key, gsize keylen);
 
 /**
 * Update hash with data portion
 */
 void rspamd_cryptobox_hash_update(rspamd_cryptobox_hash_state_t *st,
-								 const unsigned char *data, gsize len);
+								  const unsigned char *data, gsize len);
 
 /**
 * Output hash to the buffer of rspamd_cryptobox_HASHBYTES length
@@ -358,25 +358,25 @@ void rspamd_cryptobox_hash_final(rspamd_cryptobox_hash_state_t *st, unsigned cha
 * One in all function
 */
 void rspamd_cryptobox_hash(unsigned char *out,
-						  const unsigned char *data,
-						  gsize len,
-						  const unsigned char *key,
-						  gsize keylen);
+						   const unsigned char *data,
+						   gsize len,
+						   const unsigned char *key,
+						   gsize keylen);
 
 enum rspamd_cryptobox_fast_hash_type {
-   RSPAMD_CRYPTOBOX_XXHASH64 = 0,
-   RSPAMD_CRYPTOBOX_XXHASH32,
-   RSPAMD_CRYPTOBOX_XXHASH3,
-   RSPAMD_CRYPTOBOX_MUMHASH,
-   RSPAMD_CRYPTOBOX_T1HA,
-   RSPAMD_CRYPTOBOX_HASHFAST,
-   RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT
+	RSPAMD_CRYPTOBOX_XXHASH64 = 0,
+	RSPAMD_CRYPTOBOX_XXHASH32,
+	RSPAMD_CRYPTOBOX_XXHASH3,
+	RSPAMD_CRYPTOBOX_MUMHASH,
+	RSPAMD_CRYPTOBOX_T1HA,
+	RSPAMD_CRYPTOBOX_HASHFAST,
+	RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT
 };
 
 /* Non crypto hash IUF interface */
 typedef struct CRYPTO_ALIGN(64) rspamd_cryptobox_fast_hash_state_s {
-   unsigned char opaque[576]; /* Required for xxhash3 */
-   enum rspamd_cryptobox_fast_hash_type type;
+	unsigned char opaque[576]; /* Required for xxhash3 */
+	enum rspamd_cryptobox_fast_hash_type type;
 } rspamd_cryptobox_fast_hash_state_t;
 
 
@@ -393,7 +393,7 @@ void rspamd_cryptobox_fast_hash_free(rspamd_cryptobox_fast_hash_state_t *st);
 * non-keyed hash is generated
 */
 void rspamd_cryptobox_fast_hash_init(rspamd_cryptobox_fast_hash_state_t *st,
-									uint64_t seed);
+									 uint64_t seed);
 
 /**
 * Init cryptobox hash state using key if needed, `st` must point to the buffer
@@ -401,14 +401,14 @@ void rspamd_cryptobox_fast_hash_init(rspamd_cryptobox_fast_hash_state_t *st,
 * non-keyed hash is generated
 */
 void rspamd_cryptobox_fast_hash_init_specific(rspamd_cryptobox_fast_hash_state_t *st,
-											 enum rspamd_cryptobox_fast_hash_type type,
-											 uint64_t seed);
+											  enum rspamd_cryptobox_fast_hash_type type,
+											  uint64_t seed);
 
 /**
 * Update hash with data portion
 */
 void rspamd_cryptobox_fast_hash_update(rspamd_cryptobox_fast_hash_state_t *st,
-									  const void *data, gsize len);
+									   const void *data, gsize len);
 
 /**
 * Output hash to the buffer of rspamd_cryptobox_HASHBYTES length
@@ -419,15 +419,15 @@ uint64_t rspamd_cryptobox_fast_hash_final(rspamd_cryptobox_fast_hash_state_t *st
 * One in all function
 */
 uint64_t rspamd_cryptobox_fast_hash(const void *data,
-								   gsize len, uint64_t seed);
+									gsize len, uint64_t seed);
 
 /**
 * Platform independent version
 */
 uint64_t rspamd_cryptobox_fast_hash_specific(
-   enum rspamd_cryptobox_fast_hash_type type,
-   const void *data,
-   gsize len, uint64_t seed);
+	enum rspamd_cryptobox_fast_hash_type type,
+	const void *data,
+	gsize len, uint64_t seed);
 
 /**
 * Decode base64 using platform optimized code
@@ -438,7 +438,7 @@ uint64_t rspamd_cryptobox_fast_hash_specific(
 * @return
 */
 gboolean rspamd_cryptobox_base64_decode(const char *in, gsize inlen,
-									   unsigned char *out, gsize *outlen);
+										unsigned char *out, gsize *outlen);
 
 /**
 * Returns TRUE if data looks like a valid base64 string
