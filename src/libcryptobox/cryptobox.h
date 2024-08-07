@@ -50,7 +50,7 @@ struct rspamd_cryptobox_segment {
 #define rspamd_cryptobox_HASHKEYBYTES 64
 #define rspamd_cryptobox_HASHSTATEBYTES sizeof(crypto_generichash_blake2b_state) + 64
 #define rspamd_cryptobox_MAX_SIGSKBYTES 64
-#define rspamd_cryptobox_MAX_SIGPKBYTES 32
+#define rspamd_cryptobox_MAX_SIGPKBYTES 65
 #define rspamd_cryptobox_MAX_SIGBYTES 72
 
 #define CPUID_AVX2 0x1
