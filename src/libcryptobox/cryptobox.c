@@ -355,13 +355,14 @@ void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
 		g_assert(EVP_PKEY_get_bn_param(pkey, "priv", &bn_sec) == 1);
 
 		len = BN_num_bytes(bn_sec);
-		g_assert(len <= (int) sizeof(rspamd_sk_t));
+		g_assert(len <= (int) rspamd_cryptobox_sk_bytes(RSPAMD_CRYPTOBOX_MODE_NIST));
 		BN_bn2bin(bn_sec, sk);
 
 		g_assert(EVP_PKEY_get_octet_string_param(pkey, "pub", pk,
-												 sizeof(rspamd_pk_t), &len) == 1);
+												 rspamd_cryptobox_pk_bytes(RSPAMD_CRYPTOBOX_MODE_NIST),
+												 &len) == 1);
 
-		g_assert(len <= (int) sizeof(rspamd_pk_t));
+		g_assert(len <= (int) rspamd_cryptobox_pk_bytes(RSPAMD_CRYPTOBOX_MODE_NIST));
 
 		BN_free(bn_sec);
 		EVP_PKEY_free(pkey);
@@ -393,7 +394,7 @@ void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
 		EC_KEY_free(ec_sec);
 
 		len = BN_num_bytes(bn_sec);
-		g_assert(len <= (int) sizeof(rspamd_sk_t));
+		g_assert(len <= (int) rspamd_cryptobox_sk_bytes(RSPAMD_CRYPTOBOX_MODE_NIST));
 		BN_bn2bin(bn_sec, sk);
 #endif
 #endif
@@ -543,16 +544,16 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm,
 		EVP_PKEY_CTX *dctx = EVP_PKEY_CTX_new_from_name(libctx, "EC", NULL);
 		OSSL_PARAM param[3];
 
-		param[0] = OSSL_PARAM_construct_utf8_string("group", "prime256v1", 0);
+		param[0] = OSSL_PARAM_construct_utf8_string("group", "P-256", 0);
 		param[1] = OSSL_PARAM_construct_BN("priv", (void *) sk, rspamd_cryptobox_sk_bytes(mode));
 		param[2] = OSSL_PARAM_construct_end();
 
 		g_assert(EVP_PKEY_fromdata_init(pctx) == 1);
-		g_assert(EVP_PKEY_fromdata(pctx, &sec_pkey, EVP_PKEY_KEYPAIR, param) == 1);
+		g_assert(EVP_PKEY_fromdata(pctx, &sec_pkey, EVP_PKEY_PRIVATE_KEY, param) == 1);
 		EVP_PKEY_CTX_free(pctx);
 		pctx = EVP_PKEY_CTX_new_from_pkey(libctx, sec_pkey, NULL);
 
-		param[0] = OSSL_PARAM_construct_utf8_string("group", "prime256v1", 0);
+		param[0] = OSSL_PARAM_construct_utf8_string("group", "P-256", 0);
 		param[1] = OSSL_PARAM_construct_octet_string("pub", (void *) pk, rspamd_cryptobox_pk_bytes(mode));
 		param[2] = OSSL_PARAM_construct_end();
 
