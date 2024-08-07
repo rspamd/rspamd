@@ -384,7 +384,7 @@ void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
 
 		group = EC_KEY_get0_group(ec_sec);
 		BIGNUM *bn_pub;
-		bn_pub = EC_POINT_point2bn(EC_KEY_get0_group(ec_sec),
+		bn_pub = EC_POINT_point2bn(group,
 								   ec_pub, POINT_CONVERSION_UNCOMPRESSED, NULL, NULL);
 		len = BN_num_bytes(bn_pub);
 		g_assert(len <= (int) rspamd_cryptobox_pk_bytes(mode));
@@ -459,7 +459,6 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 		len = BN_num_bytes(bn_sec);
 		g_assert(len <= (int) sizeof(rspamd_sig_sk_t));
 		BN_bn2bin(bn_sec, sk);
-		BN_free(bn_sec);
 
 		EC_KEY_free(ec_sec);
 #endif
