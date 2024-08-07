@@ -2299,6 +2299,8 @@ fuzzy_insert_result(struct fuzzy_client_session *session,
 	 * Otherwise `value` means error code
 	 */
 
+	msg_debug_fuzzy_check("got reply with probability %.2f and value %.2f",
+						  (double) rep->v1.prob, (double) rep->v1.value);
 	nval = fuzzy_normalize(rep->v1.value, weight);
 
 	if (io) {

@@ -1465,9 +1465,15 @@ rspamd_milter_macro_http(struct rspamd_milter_session *session,
 		return;
 	}
 
+	/*
+	 * When we get a queue-id we try to pass it to the backend, where possible
+	 * We also need that for logging consistency
+	 */
 	IF_MACRO("{i}")
 	{
 		rspamd_http_message_add_header_len(msg, QUEUE_ID_HEADER,
+										   found->begin, found->len);
+		rspamd_http_message_add_header_len(msg, LOG_TAG_HEADER,
 										   found->begin, found->len);
 	}
 	else
@@ -1475,6 +1481,8 @@ rspamd_milter_macro_http(struct rspamd_milter_session *session,
 		IF_MACRO("i")
 		{
 			rspamd_http_message_add_header_len(msg, QUEUE_ID_HEADER,
+											   found->begin, found->len);
+			rspamd_http_message_add_header_len(msg, LOG_TAG_HEADER,
 											   found->begin, found->len);
 		}
 	}

@@ -3933,6 +3933,8 @@ lua_config_get_groups(lua_State *L)
 				lua_setfield(L, -2, "description");
 				lua_pushnumber(L, gr->max_score);
 				lua_setfield(L, -2, "max_score");
+				lua_pushnumber(L, gr->min_score);
+				lua_setfield(L, -2, "min_score");
 				lua_pushboolean(L, (gr->flags & RSPAMD_SYMBOL_GROUP_PUBLIC) != 0);
 				lua_setfield(L, -2, "is_public");
 				/* TODO: maybe push symbols as well */

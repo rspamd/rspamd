@@ -1398,7 +1398,8 @@ proxy_backend_mirror_finish_handler(struct rspamd_http_connection *conn,
 		bk_conn->err = "cannot parse ucl";
 	}
 
-	msg_info_session("finished mirror connection to %s", bk_conn->name);
+	msg_info_session("finished mirror connection to %s; HTTP code: %d",
+					 bk_conn->name, msg->code);
 	rspamd_upstream_ok(bk_conn->up);
 
 	proxy_backend_close_connection(bk_conn);
@@ -2203,6 +2204,8 @@ proxy_client_finish_handler(struct rspamd_http_connection *conn,
 		rspamd_http_message_remove_header(msg, "Keep-Alive");
 		rspamd_http_message_remove_header(msg, "Connection");
 		rspamd_http_message_remove_header(msg, "Key");
+		rspamd_http_message_add_header_len(msg, LOG_TAG_HEADER, session->pool->tag.uid,
+										   sizeof(session->pool->tag.uid));
 
 		proxy_open_mirror_connections(session);
 		rspamd_http_connection_reset(session->client_conn);
@@ -2210,7 +2213,10 @@ proxy_client_finish_handler(struct rspamd_http_connection *conn,
 		proxy_send_master_message(session);
 	}
 	else {
-		msg_info_session("finished master connection");
+		msg_info_session("finished master connection to %s; HTTP code: %d",
+						 rspamd_inet_address_to_string_pretty(
+							 rspamd_upstream_addr_cur(session->master_conn->up)),
+						 msg->code);
 		proxy_backend_close_connection(session->master_conn);
 		REF_RELEASE(session);
 	}

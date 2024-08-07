@@ -53,3 +53,47 @@ External Maps Simple
 Task Inject Url
   Scan File  ${URL_ICS}  Settings={symbols_enabled = [TEST_INJECT_URL]}
   Expect Symbol  TEST_INJECT_URL
+
+Group Score Positive
+  Scan File  ${MESSAGE}  Settings={symbols_enabled = [GR_POSITIVE1, GR_POSITIVE2, GR_POSITIVE4, GR_POSITIVE8, GR_POSITIVE16]}
+  Expect Symbol With Score  GR_POSITIVE1  1
+  Expect Symbol With Score  GR_POSITIVE2  2
+  Expect Symbol With Score  GR_POSITIVE4  4
+  Expect Symbol With Score  GR_POSITIVE8  3
+  Expect Symbol With Score  GR_POSITIVE16  0
+
+Group Score Negative
+  Scan File  ${MESSAGE}  Settings={symbols_enabled = [GR_NEGATIVE1, GR_NEGATIVE2, GR_NEGATIVE4, GR_NEGATIVE8]}
+  Expect Symbol With Score  GR_NEGATIVE1  -1
+  Expect Symbol With Score  GR_NEGATIVE2  -2
+  Expect Symbol With Score  GR_NEGATIVE4  -4
+  Expect Symbol With Score  GR_NEGATIVE8  -3
+
+Group Score Mix 1
+  Scan File  ${MESSAGE}  Settings={symbols_enabled = [GR_POSITIVE1, GR_POSITIVE2, GR_POSITIVE4, GR_POSITIVE8, GR_NEGATIVE1, GR_NEGATIVE2, GR_NEGATIVE4, GR_NEGATIVE8]}
+  Expect Symbol With Score  GR_POSITIVE1  1
+  Expect Symbol With Score  GR_POSITIVE2  2
+  Expect Symbol With Score  GR_POSITIVE4  4
+  Expect Symbol With Score  GR_POSITIVE8  3
+  Expect Symbol With Score  GR_NEGATIVE1  -1
+  Expect Symbol With Score  GR_NEGATIVE2  -2
+  Expect Symbol With Score  GR_NEGATIVE4  -4
+  Expect Symbol With Score  GR_NEGATIVE8  -8
+
+Group Score Mix 2
+  Scan File  ${MESSAGE}  Settings={symbols_enabled = [GR_POSITIVE1, GR_POSITIVE2, GR_POSITIVE4, GR_POSITIVE8, GR_NEGATIVE16]}
+  Expect Symbol With Score  GR_POSITIVE1  1
+  Expect Symbol With Score  GR_POSITIVE2  2
+  Expect Symbol With Score  GR_POSITIVE4  4
+  Expect Symbol With Score  GR_POSITIVE8  3
+  Expect Symbol With Score  GR_NEGATIVE16  -16
+
+Group Score Mix 3
+  Scan File  ${MESSAGE}  Settings={symbols_enabled = [GR_POSITIVE1, GR_NEGATIVE16]}
+  Expect Symbol With Score  GR_POSITIVE1  1
+  Expect Symbol With Score  GR_NEGATIVE16  -11
+
+Group Score Mix 4
+  Scan File  ${MESSAGE}  Settings={symbols_enabled = [GR_POSITIVE16, GR_NEGATIVE16]}
+  Expect Symbol With Score  GR_POSITIVE16  10
+  Expect Symbol With Score  GR_NEGATIVE16  -16
