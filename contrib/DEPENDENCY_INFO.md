@@ -33,7 +33,7 @@
 | expected               | v1.0    | Public Domain / CC0 | NO      |                     |
 | frozen                 | 1.0.1   | Apache 2            | NO      |                     |
 | fmt                    | 11.0.0  | MIT                 | NO      |                     |
-| doctest                | 2.4.6   | MIT                 | NO      |                     |
+| doctest                | 2.4.11  | MIT                 | NO      |                     |
 | function2              | 4.1.0   | Boost               | NO      |                     |
 | ankerl/svector         | 1.0.2   | MIT                 | NO      |                     |
 | ankerl/unordered_dense | 4.4.0   | MIT                 | NO      |                     |
