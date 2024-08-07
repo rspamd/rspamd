@@ -116,7 +116,28 @@ TEST_SUITE("rspamd_cryptobox")
 	}
 
 
-	TEST_CASE("rspamd_cryptobox_encrypt_inplace")
+	TEST_CASE("rspamd_cryptobox_encrypt_inplace_25519")
+	{
+		unsigned char data[256];
+		gsize len = sizeof(data);
+		rspamd_nonce_t nonce;
+		rspamd_pk_t pk;
+		rspamd_sk_t sk;
+		rspamd_mac_t sig;
+		enum rspamd_cryptobox_mode mode = RSPAMD_CRYPTOBOX_MODE_25519;
+
+		ottery_rand_bytes(nonce, sizeof(nonce));
+
+		rspamd_cryptobox_keypair(pk, sk, mode);
+
+		memset(sig, 0, sizeof(sig));
+
+		rspamd_cryptobox_encrypt_inplace(data, len, nonce, pk, sk, sig, mode);
+
+		CHECK(rspamd_cryptobox_decrypt_inplace(data, len, nonce, pk, sk, sig, mode));
+	}
+
+	TEST_CASE("rspamd_cryptobox_encrypt_inplace_p256")
 	{
 		unsigned char data[256];
 		gsize len = sizeof(data);
@@ -137,21 +158,39 @@ TEST_SUITE("rspamd_cryptobox")
 		CHECK(rspamd_cryptobox_decrypt_inplace(data, len, nonce, pk, sk, sig, mode));
 	}
 
+	TEST_CASE("rspamd_cryptobox_sign_25519")
+	{
+		enum rspamd_cryptobox_mode mode = RSPAMD_CRYPTOBOX_MODE_25519;
+		rspamd_sk_t sk;
+		rspamd_pk_t pk;
+		unsigned char sig[256];
+		unsigned long long siglen;
+		std::string m{"data to be signed"};
 
-	TEST_CASE("rspamd_cryptobox_sign")
+		rspamd_cryptobox_keypair(pk, sk, mode);
+
+		rspamd_cryptobox_sign(sig, &siglen,
+							  reinterpret_cast<const unsigned char *>(m.data()), m.size(), sk, mode);
+		bool check_result = rspamd_cryptobox_verify(sig, siglen,
+													reinterpret_cast<const unsigned char *>(m.data()), m.size(), pk, mode);
+		CHECK(check_result == true);
+	}
+
+	TEST_CASE("rspamd_cryptobox_sign_nist")
 	{
 		enum rspamd_cryptobox_mode mode = RSPAMD_CRYPTOBOX_MODE_NIST;
 		rspamd_sk_t sk;
 		rspamd_pk_t pk;
 		unsigned char sig[256];
 		unsigned long long siglen;
-		const unsigned char m[] = "data to be signed";
-		size_t mlen = strlen((const char *) m);
+		std::string m{"data to be signed"};
 
 		rspamd_cryptobox_keypair(pk, sk, mode);
 
-		rspamd_cryptobox_sign(sig, &siglen, m, mlen, sk, mode);
-		bool check_result = rspamd_cryptobox_verify(sig, siglen, m, mlen, pk, mode);
+		rspamd_cryptobox_sign(sig, &siglen,
+							  reinterpret_cast<const unsigned char *>(m.data()), m.size(), sk, mode);
+		bool check_result = rspamd_cryptobox_verify(sig, siglen,
+													reinterpret_cast<const unsigned char *>(m.data()), m.size(), pk, mode);
 		CHECK(check_result == true);
 	}
 }
