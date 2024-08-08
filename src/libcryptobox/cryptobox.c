@@ -351,20 +351,34 @@ void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
 		EVP_PKEY *pkey = EVP_PKEY_Q_keygen(libctx, NULL, "EC", EC_curve_nid2nist(CRYPTOBOX_CURVE_NID));
 		g_assert(pkey != NULL);
 
-		BIGNUM *bn_sec = NULL;
-		g_assert(EVP_PKEY_get_bn_param(pkey, "priv", &bn_sec) == 1);
+		BIGNUM *bn = NULL;
+		g_assert(EVP_PKEY_get_bn_param(pkey, "priv", &bn) == 1);
 
-		len = BN_num_bytes(bn_sec);
+		len = BN_num_bytes(bn);
 		g_assert(len <= (int) rspamd_cryptobox_sk_bytes(RSPAMD_CRYPTOBOX_MODE_NIST));
-		BN_bn2bin(bn_sec, sk);
+		BN_bn2bin(bn, sk);
 
-		g_assert(EVP_PKEY_get_octet_string_param(pkey, "pub", pk,
-												 rspamd_cryptobox_pk_bytes(RSPAMD_CRYPTOBOX_MODE_NIST),
-												 &len) == 1);
+		/*
+		 * Welcome to the world of the OpenSSL:
+		 *
+		 * Note, in particular, that the choice of point compression format used for encoding the exported value via
+		 * EVP_PKEY_todata() depends on the underlying provider implementation.
+		 * Before OpenSSL 3.0.8, the implementation of providers included with OpenSSL always opted for an encoding in
+		 * compressed format, unconditionally.
+		 * Since OpenSSL 3.0.8, the implementation has been changed to honor the OSSL_PKEY_PARAM_EC_POINT_CONVERSION_FORMAT
+		 * parameter, if set, or to default to uncompressed format.
+		 *
+		 * Of course, we cannot use compressed EC points, so we need to manually reconstruct them from `0x04 || x || y`
+		 */
+		pk[0] = POINT_CONVERSION_UNCOMPRESSED;
+		g_assert(EVP_PKEY_get_bn_param(pkey, "qx", &bn) == 1);
+		g_assert(BN_num_bytes(bn) == 32);
+		BN_bn2bin(bn, pk + 1);
+		g_assert(EVP_PKEY_get_bn_param(pkey, "qy", &bn) == 1);
+		g_assert(BN_num_bytes(bn) == 32);
+		BN_bn2bin(bn, pk + 33);
+		BN_free(bn);
 
-		g_assert(len <= (int) rspamd_cryptobox_pk_bytes(RSPAMD_CRYPTOBOX_MODE_NIST));
-
-		BN_free(bn_sec);
 		EVP_PKEY_free(pkey);
 		OSSL_LIB_CTX_free(libctx);
 #else
@@ -558,7 +572,7 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm,
 		param[2] = OSSL_PARAM_construct_end();
 
 		g_assert(EVP_PKEY_fromdata_init(dctx) == 1);
-		EVP_PKEY_fromdata(dctx, &pub_pkey, EVP_PKEY_PUBLIC_KEY, param);
+		g_assert(EVP_PKEY_fromdata(dctx, &pub_pkey, EVP_PKEY_PUBLIC_KEY, param) == 1);
 
 		g_assert(EVP_PKEY_derive_init(pctx) == 1);
 
