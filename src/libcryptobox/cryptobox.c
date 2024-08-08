@@ -432,19 +432,23 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 		EVP_PKEY *pkey = EVP_PKEY_Q_keygen(libctx, NULL, "EC", EC_curve_nid2nist(CRYPTOBOX_CURVE_NID));
 		g_assert(pkey != NULL);
 
-		BIGNUM *bn_sec = NULL;
-		g_assert(EVP_PKEY_get_bn_param(pkey, "priv", &bn_sec) == 1);
+		BIGNUM *bn = NULL;
+		g_assert(EVP_PKEY_get_bn_param(pkey, "priv", &bn) == 1);
 
-		len = BN_num_bytes(bn_sec);
+		len = BN_num_bytes(bn);
 		g_assert(len <= (int) sizeof(rspamd_sig_sk_t));
-		BN_bn2bin(bn_sec, sk);
+		BN_bn2bin(bn, sk);
 
-		EVP_PKEY_get_octet_string_param(pkey, "pub", pk,
-										sizeof(rspamd_sig_pk_t), &len);
+		/* Use the same logic as above */
+		pk[0] = POINT_CONVERSION_UNCOMPRESSED;
+		g_assert(EVP_PKEY_get_bn_param(pkey, "qx", &bn) == 1);
+		g_assert(BN_num_bytes(bn) == 32);
+		BN_bn2bin(bn, pk + 1);
+		g_assert(EVP_PKEY_get_bn_param(pkey, "qy", &bn) == 1);
+		g_assert(BN_num_bytes(bn) == 32);
+		BN_bn2bin(bn, pk + 33);
+		BN_free(bn);
 
-		g_assert(len <= (int) sizeof(rspamd_sig_pk_t));
-
-		BN_free(bn_sec);
 		EVP_PKEY_free(pkey);
 		OSSL_LIB_CTX_free(libctx);
 #else
