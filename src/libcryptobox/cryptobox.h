@@ -40,18 +40,18 @@ struct rspamd_cryptobox_segment {
 #define RSPAMD_HAS_TARGET_ATTR 1
 #endif
 
-#define rspamd_cryptobox_MAX_NONCEBYTES 24
-#define rspamd_cryptobox_MAX_PKBYTES 65
-#define rspamd_cryptobox_MAX_SKBYTES 32
-#define rspamd_cryptobox_MAX_MACBYTES 16
-#define rspamd_cryptobox_MAX_NMBYTES 32
+#define rspamd_cryptobox_MAX_NONCEBYTES crypto_box_NONCEBYTES
+#define rspamd_cryptobox_MAX_PKBYTES crypto_box_PUBLICKEYBYTES
+#define rspamd_cryptobox_MAX_SKBYTES crypto_box_SECRETKEYBYTES
+#define rspamd_cryptobox_MAX_MACBYTES crypto_box_MACBYTES
+#define rspamd_cryptobox_MAX_NMBYTES crypto_box_BEFORENMBYTES
 #define rspamd_cryptobox_SIPKEYBYTES 16
 #define rspamd_cryptobox_HASHBYTES 64
 #define rspamd_cryptobox_HASHKEYBYTES 64
 #define rspamd_cryptobox_HASHSTATEBYTES sizeof(crypto_generichash_blake2b_state) + 64
-#define rspamd_cryptobox_MAX_SIGSKBYTES 64
-#define rspamd_cryptobox_MAX_SIGPKBYTES 65
-#define rspamd_cryptobox_MAX_SIGBYTES 72
+#define rspamd_cryptobox_MAX_SIGSKBYTES crypto_sign_SECRETKEYBYTES
+#define rspamd_cryptobox_MAX_SIGPKBYTES crypto_sign_PUBLICKEYBYTES
+#define rspamd_cryptobox_MAX_SIGBYTES crypto_sign_BYTES
 
 #define CPUID_AVX2 0x1
 #define CPUID_AVX 0x2
@@ -72,10 +72,6 @@ typedef unsigned char rspamd_signature_t[rspamd_cryptobox_MAX_SIGBYTES];
 typedef unsigned char rspamd_sig_pk_t[rspamd_cryptobox_MAX_SIGPKBYTES];
 typedef unsigned char rspamd_sig_sk_t[rspamd_cryptobox_MAX_SIGSKBYTES];
 
-enum rspamd_cryptobox_mode {
-	RSPAMD_CRYPTOBOX_MODE_25519 = 0,
-	RSPAMD_CRYPTOBOX_MODE_NIST
-};
 
 struct rspamd_cryptobox_library_ctx {
 	char *cpu_extensions;
@@ -95,16 +91,14 @@ void rspamd_cryptobox_deinit(struct rspamd_cryptobox_library_ctx *);
 * @param pk public key buffer
 * @param sk secret key buffer
 */
-void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk,
-							  enum rspamd_cryptobox_mode mode);
+void rspamd_cryptobox_keypair(rspamd_pk_t pk, rspamd_sk_t sk);
 
 /**
 * Generate new keypair for signing
 * @param pk public key buffer
 * @param sk secret key buffer
 */
-void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
-								  enum rspamd_cryptobox_mode mode);
+void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk);
 
 /**
 * Encrypt data inplace adding signature to sig afterwards
@@ -115,8 +109,7 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 */
 void rspamd_cryptobox_encrypt_inplace(unsigned char *data, gsize len,
 									  const rspamd_nonce_t nonce,
-									  const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_mac_t sig,
-									  enum rspamd_cryptobox_mode mode);
+									  const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_mac_t sig);
 
 /**
 * Encrypt segments of data inplace adding signature to sig afterwards
@@ -129,8 +122,7 @@ void rspamd_cryptobox_encrypt_inplace(unsigned char *data, gsize len,
 void rspamd_cryptobox_encryptv_inplace(struct rspamd_cryptobox_segment *segments,
 									   gsize cnt,
 									   const rspamd_nonce_t nonce,
-									   const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_mac_t sig,
-									   enum rspamd_cryptobox_mode mode);
+									   const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_mac_t sig);
 
 
 /**
@@ -144,8 +136,7 @@ void rspamd_cryptobox_encryptv_inplace(struct rspamd_cryptobox_segment *segments
 */
 gboolean rspamd_cryptobox_decrypt_inplace(unsigned char *data, gsize len,
 										  const rspamd_nonce_t nonce,
-										  const rspamd_pk_t pk, const rspamd_sk_t sk, const rspamd_mac_t sig,
-										  enum rspamd_cryptobox_mode mode);
+										  const rspamd_pk_t pk, const rspamd_sk_t sk, const rspamd_mac_t sig);
 
 /**
 * Encrypt segments of data inplace adding signature to sig afterwards
@@ -157,8 +148,7 @@ gboolean rspamd_cryptobox_decrypt_inplace(unsigned char *data, gsize len,
 */
 void rspamd_cryptobox_encrypt_nm_inplace(unsigned char *data, gsize len,
 										 const rspamd_nonce_t nonce,
-										 const rspamd_nm_t nm, rspamd_mac_t sig,
-										 enum rspamd_cryptobox_mode mode);
+										 const rspamd_nm_t nm, rspamd_mac_t sig);
 
 /**
 * Encrypt segments of data inplace adding signature to sig afterwards
@@ -171,8 +161,7 @@ void rspamd_cryptobox_encrypt_nm_inplace(unsigned char *data, gsize len,
 void rspamd_cryptobox_encryptv_nm_inplace(struct rspamd_cryptobox_segment *segments,
 										  gsize cnt,
 										  const rspamd_nonce_t nonce,
-										  const rspamd_nm_t nm, rspamd_mac_t sig,
-										  enum rspamd_cryptobox_mode mode);
+										  const rspamd_nm_t nm, rspamd_mac_t sig);
 
 
 /**
@@ -186,8 +175,7 @@ void rspamd_cryptobox_encryptv_nm_inplace(struct rspamd_cryptobox_segment *segme
 */
 gboolean rspamd_cryptobox_decrypt_nm_inplace(unsigned char *data, gsize len,
 											 const rspamd_nonce_t nonce,
-											 const rspamd_nm_t nm, const rspamd_mac_t sig,
-											 enum rspamd_cryptobox_mode mode);
+											 const rspamd_nm_t nm, const rspamd_mac_t sig);
 
 /**
 * Generate shared secret from local sk and remote pk
@@ -195,8 +183,7 @@ gboolean rspamd_cryptobox_decrypt_nm_inplace(unsigned char *data, gsize len,
 * @param pk remote pubkey
 * @param sk local privkey
 */
-void rspamd_cryptobox_nm(rspamd_nm_t nm, const rspamd_pk_t pk,
-						 const rspamd_sk_t sk, enum rspamd_cryptobox_mode mode);
+void rspamd_cryptobox_nm(rspamd_nm_t nm, const rspamd_pk_t pk, const rspamd_sk_t sk);
 
 /**
 * Create digital signature for the specified message and place result in `sig`
@@ -208,8 +195,7 @@ void rspamd_cryptobox_nm(rspamd_nm_t nm, const rspamd_pk_t pk,
 */
 void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,
 						   const unsigned char *m, gsize mlen,
-						   const rspamd_sig_sk_t sk,
-						   enum rspamd_cryptobox_mode mode);
+						   const rspamd_sig_sk_t sk);
 
 /**
 * Verifies digital signature for the specified message using the specified
@@ -224,8 +210,7 @@ bool rspamd_cryptobox_verify(const unsigned char *sig,
 							 gsize siglen,
 							 const unsigned char *m,
 							 gsize mlen,
-							 const rspamd_sig_pk_t pk,
-							 enum rspamd_cryptobox_mode mode);
+							 const rspamd_sig_pk_t pk);
 
 #ifdef HAVE_OPENSSL
 /**
@@ -307,46 +292,6 @@ gboolean rspamd_cryptobox_pbkdf(const char *pass, gsize pass_len,
 								unsigned int complexity,
 								enum rspamd_cryptobox_pbkdf_type type);
 
-
-/**
-* Real size of rspamd cryptobox public key
-*/
-unsigned int rspamd_cryptobox_pk_bytes(enum rspamd_cryptobox_mode mode);
-
-/**
-* Real size of rspamd cryptobox signing public key
-*/
-unsigned int rspamd_cryptobox_pk_sig_bytes(enum rspamd_cryptobox_mode mode);
-
-/**
-* Real size of crypto nonce
-*/
-unsigned int rspamd_cryptobox_nonce_bytes(enum rspamd_cryptobox_mode mode);
-
-/**
-* Real size of rspamd cryptobox secret key
-*/
-unsigned int rspamd_cryptobox_sk_bytes(enum rspamd_cryptobox_mode mode);
-
-/**
-* Real size of rspamd cryptobox signing secret key
-*/
-unsigned int rspamd_cryptobox_sk_sig_bytes(enum rspamd_cryptobox_mode mode);
-
-/**
-* Real size of rspamd cryptobox shared key
-*/
-unsigned int rspamd_cryptobox_nm_bytes(enum rspamd_cryptobox_mode mode);
-
-/**
-* Real size of rspamd cryptobox MAC signature
-*/
-unsigned int rspamd_cryptobox_mac_bytes(enum rspamd_cryptobox_mode mode);
-
-/**
-* Real size of rspamd cryptobox digital signature
-*/
-unsigned int rspamd_cryptobox_signature_bytes(enum rspamd_cryptobox_mode mode);
 
 /* Hash IUF interface */
 typedef crypto_generichash_blake2b_state rspamd_cryptobox_hash_state_t;
