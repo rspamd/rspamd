@@ -395,7 +395,7 @@ rspamd_proxy_parse_upstream(rspamd_mempool_t *pool,
 	elt = ucl_object_lookup(obj, "key");
 	if (elt != NULL) {
 		up->key = rspamd_pubkey_from_base32(ucl_object_tostring(elt), 0,
-											RSPAMD_KEYPAIR_KEX, RSPAMD_CRYPTOBOX_MODE_25519);
+											RSPAMD_KEYPAIR_KEX);
 
 		if (up->key == NULL) {
 			g_set_error(err, rspamd_proxy_quark(), 100,
@@ -571,7 +571,7 @@ rspamd_proxy_parse_mirror(rspamd_mempool_t *pool,
 	elt = ucl_object_lookup(obj, "key");
 	if (elt != NULL) {
 		up->key = rspamd_pubkey_from_base32(ucl_object_tostring(elt), 0,
-											RSPAMD_KEYPAIR_KEX, RSPAMD_CRYPTOBOX_MODE_25519);
+											RSPAMD_KEYPAIR_KEX);
 
 		if (up->key == NULL) {
 			g_set_error(err, rspamd_proxy_quark(), 100,

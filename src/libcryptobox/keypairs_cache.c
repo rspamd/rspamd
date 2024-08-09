@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -77,7 +77,6 @@ void rspamd_keypair_cache_process(struct rspamd_keypair_cache *c,
 
 	g_assert(lk != NULL);
 	g_assert(rk != NULL);
-	g_assert(rk->alg == lk->alg);
 	g_assert(rk->type == lk->type);
 	g_assert(rk->type == RSPAMD_KEYPAIR_KEX);
 
@@ -106,22 +105,12 @@ void rspamd_keypair_cache_process(struct rspamd_keypair_cache *c,
 			   rspamd_cryptobox_HASHBYTES);
 		memcpy(&new->nm->sk_id, lk->id, sizeof(uint64_t));
 
-		if (rk->alg == RSPAMD_CRYPTOBOX_MODE_25519) {
-			struct rspamd_cryptobox_pubkey_25519 *rk_25519 =
-				RSPAMD_CRYPTOBOX_PUBKEY_25519(rk);
-			struct rspamd_cryptobox_keypair_25519 *sk_25519 =
-				RSPAMD_CRYPTOBOX_KEYPAIR_25519(lk);
+		struct rspamd_cryptobox_pubkey_25519 *rk_25519 =
+			RSPAMD_CRYPTOBOX_PUBKEY_25519(rk);
+		struct rspamd_cryptobox_keypair_25519 *sk_25519 =
+			RSPAMD_CRYPTOBOX_KEYPAIR_25519(lk);
 
-			rspamd_cryptobox_nm(new->nm->nm, rk_25519->pk, sk_25519->sk, rk->alg);
-		}
-		else {
-			struct rspamd_cryptobox_pubkey_nist *rk_nist =
-				RSPAMD_CRYPTOBOX_PUBKEY_NIST(rk);
-			struct rspamd_cryptobox_keypair_nist *sk_nist =
-				RSPAMD_CRYPTOBOX_KEYPAIR_NIST(lk);
-
-			rspamd_cryptobox_nm(new->nm->nm, rk_nist->pk, sk_nist->sk, rk->alg);
-		}
+		rspamd_cryptobox_nm(new->nm->nm, rk_25519->pk, sk_25519->sk);
 
 		rspamd_lru_hash_insert(c->hash, new, new, time(NULL), -1);
 	}

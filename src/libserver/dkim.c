@@ -1393,14 +1393,13 @@ rspamd_dkim_make_key(const char *keydata,
 	if (key->type == RSPAMD_DKIM_KEY_EDDSA) {
 		key->specific.key_eddsa = key->keydata;
 
-		if (key->decoded_len != rspamd_cryptobox_pk_sig_bytes(
-									RSPAMD_CRYPTOBOX_MODE_25519)) {
+		if (key->decoded_len != crypto_sign_publickeybytes()) {
 			g_set_error(err,
 						DKIM_ERROR,
 						DKIM_SIGERROR_KEYFAIL,
-						"DKIM key is has invalid length %d for eddsa; expected %d",
+						"DKIM key is has invalid length %d for eddsa; expected %zd",
 						(int) key->decoded_len,
-						rspamd_cryptobox_pk_sig_bytes(RSPAMD_CRYPTOBOX_MODE_25519));
+						crypto_sign_publickeybytes());
 			REF_RELEASE(key);
 
 			return NULL;
@@ -2912,7 +2911,7 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 
 	case RSPAMD_DKIM_KEY_EDDSA:
 		if (!rspamd_cryptobox_verify(ctx->b, ctx->blen, raw_digest, dlen,
-									 key->specific.key_eddsa, RSPAMD_CRYPTOBOX_MODE_25519)) {
+									 key->specific.key_eddsa)) {
 			msg_info_dkim(
 				"%s: headers EDDSA verification failure; "
 				"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
@@ -3113,19 +3112,18 @@ rspamd_dkim_sign_key_load(const char *key, gsize len,
 	}
 
 	if (type == RSPAMD_DKIM_KEY_RAW && (len == 32 ||
-										len == rspamd_cryptobox_sk_sig_bytes(RSPAMD_CRYPTOBOX_MODE_25519))) {
+										len == crypto_sign_secretkeybytes())) {
 		if (len == 32) {
 			/* Seeded key, need scalarmult */
 			unsigned char pk[32];
 			nkey->type = RSPAMD_DKIM_KEY_EDDSA;
-			nkey->specific.key_eddsa = g_malloc(
-				rspamd_cryptobox_sk_sig_bytes(RSPAMD_CRYPTOBOX_MODE_25519));
+			nkey->specific.key_eddsa = g_malloc(crypto_sign_secretkeybytes());
 			crypto_sign_ed25519_seed_keypair(pk, nkey->specific.key_eddsa, key);
-			nkey->keylen = rspamd_cryptobox_sk_sig_bytes(RSPAMD_CRYPTOBOX_MODE_25519);
+			nkey->keylen = crypto_sign_secretkeybytes();
 		}
 		else {
 			/* Full ed25519 key */
-			unsigned klen = rspamd_cryptobox_sk_sig_bytes(RSPAMD_CRYPTOBOX_MODE_25519);
+			unsigned klen = crypto_sign_secretkeybytes();
 			nkey->type = RSPAMD_DKIM_KEY_EDDSA;
 			nkey->specific.key_eddsa = g_malloc(klen);
 			memcpy(nkey->specific.key_eddsa, key, klen);
@@ -3518,11 +3516,10 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 		}
 	}
 	else if (ctx->key->type == RSPAMD_DKIM_KEY_EDDSA) {
-		sig_len = rspamd_cryptobox_signature_bytes(RSPAMD_CRYPTOBOX_MODE_25519);
+		sig_len = crypto_sign_bytes();
 		sig_buf = g_alloca(sig_len);
 
-		rspamd_cryptobox_sign(sig_buf, NULL, raw_digest, dlen,
-							  ctx->key->specific.key_eddsa, RSPAMD_CRYPTOBOX_MODE_25519);
+		rspamd_cryptobox_sign(sig_buf, NULL, raw_digest, dlen, ctx->key->specific.key_eddsa);
 	}
 	else {
 		g_string_free(hdr, TRUE);

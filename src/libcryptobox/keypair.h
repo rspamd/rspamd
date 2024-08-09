@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -50,8 +50,7 @@ struct rspamd_cryptobox_pubkey;
  * @return fresh keypair generated
  */
 struct rspamd_cryptobox_keypair *rspamd_keypair_new(
-	enum rspamd_cryptobox_keypair_type type,
-	enum rspamd_cryptobox_mode alg);
+	enum rspamd_cryptobox_keypair_type type);
 
 /**
  * Increase refcount for the specific keypair
@@ -84,8 +83,7 @@ struct rspamd_cryptobox_pubkey *rspamd_pubkey_ref(
  */
 struct rspamd_cryptobox_pubkey *rspamd_pubkey_from_base32(const char *b32,
 														  gsize len,
-														  enum rspamd_cryptobox_keypair_type type,
-														  enum rspamd_cryptobox_mode alg);
+														  enum rspamd_cryptobox_keypair_type type);
 
 /**
  * Load pubkey from hex string
@@ -96,8 +94,7 @@ struct rspamd_cryptobox_pubkey *rspamd_pubkey_from_base32(const char *b32,
  */
 struct rspamd_cryptobox_pubkey *rspamd_pubkey_from_hex(const char *hex,
 													   gsize len,
-													   enum rspamd_cryptobox_keypair_type type,
-													   enum rspamd_cryptobox_mode alg);
+													   enum rspamd_cryptobox_keypair_type type);
 
 /**
  * Load pubkey from raw chunk string
@@ -108,8 +105,7 @@ struct rspamd_cryptobox_pubkey *rspamd_pubkey_from_hex(const char *hex,
  */
 struct rspamd_cryptobox_pubkey *rspamd_pubkey_from_bin(const unsigned char *raw,
 													   gsize len,
-													   enum rspamd_cryptobox_keypair_type type,
-													   enum rspamd_cryptobox_mode alg);
+													   enum rspamd_cryptobox_keypair_type type);
 
 
 /**
@@ -127,18 +123,7 @@ enum rspamd_cryptobox_keypair_type rspamd_keypair_type(
 /**
  * Get type of pubkey
  */
-enum rspamd_cryptobox_keypair_type rspamd_pubkey_type(
-	struct rspamd_cryptobox_pubkey *p);
-
-/**
- * Get algorithm of keypair
- */
-enum rspamd_cryptobox_mode rspamd_keypair_alg(struct rspamd_cryptobox_keypair *kp);
-
-/**
- * Get algorithm of pubkey
- */
-enum rspamd_cryptobox_mode rspamd_pubkey_alg(struct rspamd_cryptobox_pubkey *p);
+enum rspamd_cryptobox_keypair_type rspamd_pubkey_type(struct rspamd_cryptobox_pubkey *p);
 
 /**
  * Get cached NM for this specific pubkey

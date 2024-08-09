@@ -543,15 +543,13 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 		k = ucl_object_tostring(value);
 
 		if (k == NULL || (rule->peer_key =
-							  rspamd_pubkey_from_base32(k, 0, RSPAMD_KEYPAIR_KEX,
-														RSPAMD_CRYPTOBOX_MODE_25519)) == NULL) {
+							  rspamd_pubkey_from_base32(k, 0, RSPAMD_KEYPAIR_KEX)) == NULL) {
 			msg_err_config("bad encryption key value: %s",
 						   k);
 			return -1;
 		}
 
-		rule->local_key = rspamd_keypair_new(RSPAMD_KEYPAIR_KEX,
-											 RSPAMD_CRYPTOBOX_MODE_25519);
+		rule->local_key = rspamd_keypair_new(RSPAMD_KEYPAIR_KEX);
 	}
 
 	if ((value = ucl_object_lookup(obj, "learn_condition")) != NULL) {
@@ -1334,8 +1332,7 @@ fuzzy_encrypt_cmd(struct fuzzy_rule *rule,
 								 rule->local_key, rule->peer_key);
 	rspamd_cryptobox_encrypt_nm_inplace(data, datalen,
 										hdr->nonce, rspamd_pubkey_get_nm(rule->peer_key, rule->local_key),
-										hdr->mac,
-										rspamd_pubkey_alg(rule->peer_key));
+										hdr->mac);
 }
 
 static struct fuzzy_cmd_io *
@@ -2209,8 +2206,7 @@ fuzzy_process_reply(unsigned char **pos, int *r, GPtrArray *req,
 												 sizeof(encrep.rep),
 												 encrep.hdr.nonce,
 												 rspamd_pubkey_get_nm(rule->peer_key, rule->local_key),
-												 encrep.hdr.mac,
-												 rspamd_pubkey_alg(rule->peer_key))) {
+												 encrep.hdr.mac)) {
 			msg_info("cannot decrypt reply");
 			return NULL;
 		}
