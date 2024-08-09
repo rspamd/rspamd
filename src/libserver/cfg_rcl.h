@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,7 +53,6 @@ enum rspamd_rcl_flag {
 	RSPAMD_CL_FLAG_STRING_LIST_HASH = 0x1 << 12,
 	RSPAMD_CL_FLAG_MULTIPLE = 0x1 << 13,
 	RSPAMD_CL_FLAG_SIGNKEY = 0x1 << 14,
-	RSPAMD_CL_FLAG_NISTKEY = 0x1 << 15,
 };
 
 struct rspamd_rcl_struct_parser {

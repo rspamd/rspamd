@@ -77,8 +77,7 @@ rspamd_http_context_client_rotate_ev(struct ev_loop *loop, ev_timer *w, int reve
 	ev_timer_again(loop, w);
 
 	kp = ctx->client_kp;
-	ctx->client_kp = rspamd_keypair_new(RSPAMD_KEYPAIR_KEX,
-										RSPAMD_CRYPTOBOX_MODE_25519);
+	ctx->client_kp = rspamd_keypair_new(RSPAMD_KEYPAIR_KEX);
 	rspamd_keypair_unref(kp);
 }
 

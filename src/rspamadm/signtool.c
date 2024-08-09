@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -27,7 +27,6 @@
 #include <sys/wait.h>
 #endif
 
-static gboolean openssl = FALSE;
 static gboolean verify = FALSE;
 static gboolean quiet = FALSE;
 static char *suffix = NULL;
@@ -37,7 +36,6 @@ static char *pubout = NULL;
 static char *keypair_file = NULL;
 static char *editor = NULL;
 static gboolean edit = FALSE;
-enum rspamd_cryptobox_mode mode = RSPAMD_CRYPTOBOX_MODE_25519;
 
 static void rspamadm_signtool(int argc, char **argv,
 							  const struct rspamadm_command *cmd);
@@ -53,8 +51,6 @@ struct rspamadm_command signtool_command = {
 };
 
 static GOptionEntry entries[] = {
-	{"openssl", 'o', 0, G_OPTION_ARG_NONE, &openssl,
-	 "Generate openssl nistp256 keypair not curve25519 one", NULL},
 	{"verify", 'v', 0, G_OPTION_ARG_NONE, &verify,
 	 "Verify signatures and not sign", NULL},
 	{"suffix", 'S', 0, G_OPTION_ARG_STRING, &suffix,
@@ -327,11 +323,8 @@ rspamadm_sign_file(const char *fname, struct rspamd_cryptobox_keypair *kp)
 		exit(EXIT_FAILURE);
 	}
 
-	g_assert(rspamd_cryptobox_MAX_SIGBYTES >=
-			 rspamd_cryptobox_signature_bytes(mode));
-
 	sk = rspamd_keypair_component(kp, RSPAMD_KEYPAIR_COMPONENT_SK, NULL);
-	rspamd_cryptobox_sign(sig, NULL, map, st.st_size, sk, mode);
+	rspamd_cryptobox_sign(sig, NULL, map, st.st_size, sk);
 
 	if (edit) {
 		/* We also need to rename .new file */
@@ -348,7 +341,7 @@ rspamadm_sign_file(const char *fname, struct rspamd_cryptobox_keypair *kp)
 
 	rspamd_snprintf(sigpath, sizeof(sigpath), "%s%s", fname, suffix);
 
-	if (write(fd_sig, sig, rspamd_cryptobox_signature_bytes(mode)) == -1) {
+	if (write(fd_sig, sig, crypto_sign_bytes()) == -1) {
 		rspamd_fprintf(stderr, "cannot write signature to %s: %s\n", sigpath,
 					   strerror(errno));
 		exit(EXIT_FAILURE);
@@ -400,9 +393,6 @@ rspamadm_verify_file(const char *fname, const unsigned char *pk)
 	struct stat st, st_sig;
 	bool ret;
 
-	g_assert(rspamd_cryptobox_MAX_SIGBYTES >=
-			 rspamd_cryptobox_signature_bytes(mode));
-
 	if (suffix == NULL) {
 		suffix = ".sig";
 	}
@@ -439,7 +429,7 @@ rspamadm_verify_file(const char *fname, const unsigned char *pk)
 
 	g_assert(fstat(fd_sig, &st_sig) != -1);
 
-	if (st_sig.st_size != rspamd_cryptobox_signature_bytes(mode)) {
+	if (st_sig.st_size != crypto_sign_bytes()) {
 		close(fd_sig);
 		rspamd_fprintf(stderr, "invalid signature size %s: %ud\n", fname,
 					   (unsigned int) st_sig.st_size);
@@ -458,7 +448,7 @@ rspamadm_verify_file(const char *fname, const unsigned char *pk)
 	}
 
 	ret = rspamd_cryptobox_verify(map_sig, st_sig.st_size,
-								  map, st.st_size, pk, mode);
+								  map, st.st_size, pk);
 	munmap(map, st.st_size);
 	munmap(map_sig, st_sig.st_size);
 
@@ -503,10 +493,6 @@ rspamadm_signtool(int argc, char **argv, const struct rspamadm_command *cmd)
 
 	g_option_context_free(context);
 
-	if (openssl) {
-		mode = RSPAMD_CRYPTOBOX_MODE_NIST;
-	}
-
 	if (verify && (!pubkey && !pubkey_file)) {
 		rspamd_fprintf(stderr, "no pubkey for verification\n");
 		exit(EXIT_FAILURE);
@@ -549,14 +535,13 @@ rspamadm_signtool(int argc, char **argv, const struct rspamadm_command *cmd)
 				flen--;
 			}
 
-			pk = rspamd_pubkey_from_base32(map, flen,
-										   RSPAMD_KEYPAIR_SIGN, mode);
+			pk = rspamd_pubkey_from_base32(map, flen, RSPAMD_KEYPAIR_SIGN);
 
 			if (pk == NULL) {
 				rspamd_fprintf(stderr, "bad size %s: %ud, %ud expected\n",
 							   pubkey_file,
 							   (unsigned int) flen,
-							   rspamd_cryptobox_pk_sig_bytes(mode));
+							   crypto_sign_publickeybytes());
 				exit(EXIT_FAILURE);
 			}
 
@@ -564,13 +549,13 @@ rspamadm_signtool(int argc, char **argv, const struct rspamadm_command *cmd)
 		}
 		else {
 			pk = rspamd_pubkey_from_base32(pubkey, strlen(pubkey),
-										   RSPAMD_KEYPAIR_SIGN, mode);
+										   RSPAMD_KEYPAIR_SIGN);
 
 			if (pk == NULL) {
 				rspamd_fprintf(stderr, "bad size %s: %ud, %ud expected\n",
 							   pubkey_file,
 							   (unsigned int) strlen(pubkey),
-							   rspamd_cryptobox_pk_sig_bytes(mode));
+							   crypto_sign_publickeybytes());
 				exit(EXIT_FAILURE);
 			}
 		}
