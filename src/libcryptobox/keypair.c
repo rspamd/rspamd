@@ -325,16 +325,13 @@ rspamd_pubkey_from_bin(const unsigned char *raw,
 					   gsize len,
 					   enum rspamd_cryptobox_keypair_type type)
 {
-	gsize expected_len;
 	unsigned int pklen;
 	struct rspamd_cryptobox_pubkey *pk;
 	unsigned char *pk_data;
 
 	g_assert(raw != NULL && len > 0);
 
-	(type == RSPAMD_KEYPAIR_KEX) ? crypto_box_PUBLICKEYBYTES : crypto_sign_PUBLICKEYBYTES;
-
-	if (len != expected_len) {
+	if (len != crypto_box_PUBLICKEYBYTES) {
 		return NULL;
 	}
 
