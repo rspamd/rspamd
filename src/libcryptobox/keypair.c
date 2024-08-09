@@ -837,9 +837,9 @@ rspamd_keypair_encrypt(struct rspamd_cryptobox_keypair *kp,
 
 	ottery_rand_bytes(nonce, crypto_box_noncebytes());
 	memcpy(data, in, inlen);
-	memcpy(pubkey, rspamd_keypair_component(kp, RSPAMD_KEYPAIR_COMPONENT_PK, NULL),
+	memcpy(pubkey, rspamd_keypair_component(local, RSPAMD_KEYPAIR_COMPONENT_PK, NULL),
 		   crypto_box_publickeybytes());
-	rspamd_cryptobox_encrypt_inplace(data, inlen, nonce, pubkey,
+	rspamd_cryptobox_encrypt_inplace(data, inlen, nonce, rspamd_keypair_component(kp, RSPAMD_KEYPAIR_COMPONENT_PK, NULL),
 									 rspamd_keypair_component(local, RSPAMD_KEYPAIR_COMPONENT_SK, NULL),
 									 mac);
 	rspamd_keypair_unref(local);
@@ -886,9 +886,9 @@ rspamd_pubkey_encrypt(struct rspamd_cryptobox_pubkey *pk,
 
 	ottery_rand_bytes(nonce, crypto_box_noncebytes());
 	memcpy(data, in, inlen);
-	memcpy(pubkey, rspamd_pubkey_get_pk(pk, NULL),
+	memcpy(pubkey, rspamd_keypair_component(local, RSPAMD_KEYPAIR_COMPONENT_PK, NULL),
 		   crypto_box_publickeybytes());
-	rspamd_cryptobox_encrypt_inplace(data, inlen, nonce, pubkey,
+	rspamd_cryptobox_encrypt_inplace(data, inlen, nonce, rspamd_pubkey_get_pk(pk, NULL),
 									 rspamd_keypair_component(local, RSPAMD_KEYPAIR_COMPONENT_SK, NULL),
 									 mac);
 	rspamd_keypair_unref(local);
