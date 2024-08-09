@@ -367,6 +367,7 @@ struct rspamd_config {
 	gboolean public_groups_only;                             /**< Output merely public groups everywhere				*/
 	enum rspamd_gtube_patterns_policy gtube_patterns_policy; /**< Enable test patterns								*/
 	gboolean enable_css_parser;                              /**< Enable css parsing in HTML							*/
+	gboolean enable_mime_utf;                                /**< Enable utf8 mime parsing							*/
 
 	gsize max_cores_size;        /**< maximum size occupied by rspamd core files			*/
 	gsize max_cores_count;       /**< maximum number of core files						*/

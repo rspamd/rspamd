@@ -7,7 +7,7 @@
   balanced_ccontent := ccontent* ')' @{ fret; };
   comment        =   "(" (FWS? ccontent)* FWS? ")";
   CFWS           =   ((FWS? comment)+ FWS?) | FWS;
-  qcontent = qtextSMTP | quoted_pairSMTP | textUTF8;
+  qcontent = qtextSMTP | quoted_pairSMTP;
   quoted_string = CFWS?
                   (DQUOTE
                     (((FWS? qcontent)* FWS?) >Quoted_Str_Start %Quoted_Str_End)
