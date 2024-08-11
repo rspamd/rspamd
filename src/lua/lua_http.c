@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -907,8 +907,7 @@ lua_http_request(lua_State *L)
 			gsize inlen;
 
 			in = lua_tolstring(L, -1, &inlen);
-			peer_key = rspamd_pubkey_from_base32(in, inlen,
-												 RSPAMD_KEYPAIR_KEX, RSPAMD_CRYPTOBOX_MODE_25519);
+			peer_key = rspamd_pubkey_from_base32(in, inlen, RSPAMD_KEYPAIR_KEX);
 		}
 
 		lua_pop(L, 1);

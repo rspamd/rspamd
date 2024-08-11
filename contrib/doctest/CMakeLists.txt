@@ -19,7 +19,7 @@ endif()
 
 option(DOCTEST_WITH_TESTS               "Build tests/examples" ${MAIN_PROJECT})
 option(DOCTEST_WITH_MAIN_IN_STATIC_LIB  "Build a static lib (cmake target) with a default main entry point" ON)
-option(DOCTEST_NO_INSTALL  "Skip the installation process" OFF)
+option(DOCTEST_NO_INSTALL  "Skip the installation process" ON)
 option(DOCTEST_USE_STD_HEADERS  "Use std headers" OFF)
 
 add_library(${PROJECT_NAME} INTERFACE)

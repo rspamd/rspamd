@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -277,8 +277,7 @@ rspamd_log_open_specific(rspamd_mempool_t *pool,
 
 		if (cfg->log_encryption_key) {
 			logger->pk = rspamd_pubkey_ref(cfg->log_encryption_key);
-			logger->keypair = rspamd_keypair_new(RSPAMD_KEYPAIR_KEX,
-												 RSPAMD_CRYPTOBOX_MODE_25519);
+			logger->keypair = rspamd_keypair_new(RSPAMD_KEYPAIR_KEX);
 			rspamd_pubkey_calculate_nm(logger->pk, logger->keypair);
 		}
 	}
@@ -342,9 +341,9 @@ rspamd_log_encrypt_message(const char *begin, const char *end, gsize *enc_len,
 
 	g_assert(end > begin);
 	/* base64 (pubkey | nonce | message) */
-	inlen = rspamd_cryptobox_nonce_bytes(RSPAMD_CRYPTOBOX_MODE_25519) +
-			rspamd_cryptobox_pk_bytes(RSPAMD_CRYPTOBOX_MODE_25519) +
-			rspamd_cryptobox_mac_bytes(RSPAMD_CRYPTOBOX_MODE_25519) +
+	inlen = crypto_box_noncebytes() +
+			crypto_box_publickeybytes() +
+			crypto_box_macbytes() +
 			(end - begin);
 	out = g_malloc(inlen);
 
@@ -352,16 +351,15 @@ rspamd_log_encrypt_message(const char *begin, const char *end, gsize *enc_len,
 	comp = rspamd_pubkey_get_pk(rspamd_log->pk, &len);
 	memcpy(p, comp, len);
 	p += len;
-	ottery_rand_bytes(p, rspamd_cryptobox_nonce_bytes(RSPAMD_CRYPTOBOX_MODE_25519));
+	ottery_rand_bytes(p, crypto_box_noncebytes());
 	nonce = p;
-	p += rspamd_cryptobox_nonce_bytes(RSPAMD_CRYPTOBOX_MODE_25519);
+	p += crypto_box_noncebytes();
 	mac = p;
-	p += rspamd_cryptobox_mac_bytes(RSPAMD_CRYPTOBOX_MODE_25519);
+	p += crypto_box_macbytes();
 	memcpy(p, begin, end - begin);
 	comp = rspamd_pubkey_get_nm(rspamd_log->pk, rspamd_log->keypair);
 	g_assert(comp != NULL);
-	rspamd_cryptobox_encrypt_nm_inplace(p, end - begin, nonce, comp, mac,
-										RSPAMD_CRYPTOBOX_MODE_25519);
+	rspamd_cryptobox_encrypt_nm_inplace(p, end - begin, nonce, comp, mac);
 	b64 = rspamd_encode_base64(out, inlen, 0, enc_len);
 	g_free(out);
 

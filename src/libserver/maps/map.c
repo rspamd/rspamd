@@ -670,14 +670,14 @@ rspamd_map_check_sig_pk_mem(const unsigned char *sig,
 	GString *b32_key;
 	gboolean ret = TRUE;
 
-	if (siglen != rspamd_cryptobox_signature_bytes(RSPAMD_CRYPTOBOX_MODE_25519)) {
+	if (siglen != crypto_sign_bytes()) {
 		msg_err_map("can't open signature for %s: invalid size: %z", map->name, siglen);
 
 		ret = FALSE;
 	}
 
 	if (ret && !rspamd_cryptobox_verify(sig, siglen, input, inlen,
-										rspamd_pubkey_get_pk(pk, NULL), RSPAMD_CRYPTOBOX_MODE_25519)) {
+										rspamd_pubkey_get_pk(pk, NULL))) {
 		msg_err_map("can't verify signature for %s: incorrect signature", map->name);
 
 		ret = FALSE;
@@ -718,8 +718,7 @@ rspamd_map_check_file_sig(const char *fname,
 			return FALSE;
 		}
 
-		pk = rspamd_pubkey_from_base32(data, len, RSPAMD_KEYPAIR_SIGN,
-									   RSPAMD_CRYPTOBOX_MODE_25519);
+		pk = rspamd_pubkey_from_base32(data, len, RSPAMD_KEYPAIR_SIGN);
 		munmap(data, len);
 
 		if (pk == NULL) {
@@ -2414,8 +2413,7 @@ rspamd_map_check_proto(struct rspamd_config *cfg,
 			end_key = memchr(pos, '+', end - pos);
 
 			if (end_key != NULL) {
-				bk->trusted_pubkey = rspamd_pubkey_from_base32(pos, end_key - pos,
-															   RSPAMD_KEYPAIR_SIGN, RSPAMD_CRYPTOBOX_MODE_25519);
+				bk->trusted_pubkey = rspamd_pubkey_from_base32(pos, end_key - pos, RSPAMD_KEYPAIR_SIGN);
 
 				if (bk->trusted_pubkey == NULL) {
 					msg_err_config("cannot read pubkey from map: %s",
@@ -2426,8 +2424,7 @@ rspamd_map_check_proto(struct rspamd_config *cfg,
 			}
 			else if (end - pos > 64) {
 				/* Try hex encoding */
-				bk->trusted_pubkey = rspamd_pubkey_from_hex(pos, 64,
-															RSPAMD_KEYPAIR_SIGN, RSPAMD_CRYPTOBOX_MODE_25519);
+				bk->trusted_pubkey = rspamd_pubkey_from_hex(pos, 64, RSPAMD_KEYPAIR_SIGN);
 
 				if (bk->trusted_pubkey == NULL) {
 					msg_err_config("cannot read pubkey from map: %s",

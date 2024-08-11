@@ -1088,8 +1088,7 @@ rspamd_fuzzy_make_reply(struct rspamd_fuzzy_cmd *cmd,
 												len,
 												session->reply.hdr.nonce,
 												session->nm,
-												session->reply.hdr.mac,
-												RSPAMD_CRYPTOBOX_MODE_25519);
+												session->reply.hdr.mac);
 		}
 		else if (default_disabled) {
 			/* Hash is from a forbidden flag by default, and there is no encryption override */
@@ -1668,8 +1667,7 @@ rspamd_fuzzy_decrypt_command(struct fuzzy_session *s, unsigned char *buf, gsize 
 	}
 
 	/* Now process the remote pubkey */
-	rk = rspamd_pubkey_from_bin(hdr.pubkey, sizeof(hdr.pubkey),
-								RSPAMD_KEYPAIR_KEX, RSPAMD_CRYPTOBOX_MODE_25519);
+	rk = rspamd_pubkey_from_bin(hdr.pubkey, sizeof(hdr.pubkey), RSPAMD_KEYPAIR_KEX);
 
 	if (rk == NULL) {
 		msg_err("bad key; ip=%s",
@@ -1683,7 +1681,7 @@ rspamd_fuzzy_decrypt_command(struct fuzzy_session *s, unsigned char *buf, gsize 
 	/* Now decrypt request */
 	if (!rspamd_cryptobox_decrypt_nm_inplace(buf, buflen, hdr.nonce,
 											 rspamd_pubkey_get_nm(rk, key->key),
-											 hdr.mac, RSPAMD_CRYPTOBOX_MODE_25519)) {
+											 hdr.mac)) {
 		msg_err("decryption failed; ip=%s",
 				rspamd_inet_address_to_string(s->addr));
 		rspamd_pubkey_unref(rk);
@@ -2771,8 +2769,7 @@ fuzzy_add_keypair_from_ucl(const ucl_object_t *obj, khash_t(rspamd_fuzzy_keys_ha
 		return NULL;
 	}
 
-	if (rspamd_keypair_alg(kp) != RSPAMD_CRYPTOBOX_MODE_25519 ||
-		rspamd_keypair_type(kp) != RSPAMD_KEYPAIR_KEX) {
+	if (rspamd_keypair_type(kp) != RSPAMD_KEYPAIR_KEX) {
 		return FALSE;
 	}
 
@@ -2837,7 +2834,7 @@ fuzzy_add_keypair_from_ucl(const ucl_object_t *obj, khash_t(rspamd_fuzzy_keys_ha
 		}
 	}
 
-	msg_debug("loaded keypair %*bs", rspamd_cryptobox_pk_bytes(RSPAMD_CRYPTOBOX_MODE_25519), pk);
+	msg_debug("loaded keypair %*bs", crypto_box_publickeybytes(), pk);
 
 	return key;
 }
