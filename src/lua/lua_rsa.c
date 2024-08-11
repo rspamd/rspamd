@@ -755,15 +755,16 @@ lua_rsa_sign_memory(lua_State *L)
 
 		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_from_pkey(NULL, pkey, NULL);
 		EVP_PKEY_sign_init(pctx);
-		ret = EVP_PKEY_sign(pctx, signature->str, &signature->len,data, sz);
-
+		size_t slen = signature->allocated;
+		ret = EVP_PKEY_sign(pctx, signature->str, &slen, data, sz);
 		if (ret != 1) {
 			rspamd_fstring_free(signature);
 
-			return luaL_error(L, "cannot sign: %s",
+			return luaL_error(L, "%d %d %d cannot sign: %s", slen, signature->len, EVP_PKEY_get_size(pkey),
 							  ERR_error_string(ERR_get_error(), NULL));
 		}
 		else {
+			signature->len = slen;
 			psig = lua_newuserdata(L, sizeof(rspamd_fstring_t *));
 			rspamd_lua_setclass(L, rspamd_rsa_signature_classname, -1);
 			*psig = signature;
