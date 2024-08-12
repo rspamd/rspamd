@@ -1,0 +1,3 @@
+requires 'Net::IDN::Encode', '2.500';
+requires 'Unicode::Normalize', '1.0';
+
