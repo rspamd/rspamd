@@ -758,10 +758,11 @@ lua_rsa_sign_memory(lua_State *L)
 		size_t slen = signature->allocated;
 
 		ret = EVP_PKEY_sign(pctx, signature->str, &slen, data, sz);
+		EVP_PKEY_CTX_free(pctx);
 		if (ret != 1) {
 			rspamd_fstring_free(signature);
 
-			return luaL_error(L, "%d %d %d cannot sign: %s", slen, signature->len, EVP_PKEY_get_size(pkey),
+			return luaL_error(L, "cannot sign: %s",
 							  ERR_error_string(ERR_get_error(), NULL));
 		}
 		else {
