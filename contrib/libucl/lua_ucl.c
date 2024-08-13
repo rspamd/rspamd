@@ -1146,8 +1146,9 @@ lua_ucl_object_tostring(lua_State *L)
 	enum ucl_emitter format = UCL_EMIT_JSON_COMPACT;
 
 	obj = lua_ucl_object_get(L, 1);
+	int type = ucl_object_type(obj);
 
-	if (obj) {
+	if (type == UCL_ARRAY || type == UCL_OBJECT) {
 		if (lua_gettop(L) > 1) {
 			if (lua_type(L, 2) == LUA_TSTRING) {
 				const char *strtype = lua_tostring(L, 2);
@@ -1158,8 +1159,11 @@ lua_ucl_object_tostring(lua_State *L)
 
 		return lua_ucl_to_string(L, obj, format);
 	}
-	else {
+	else if (type == UCL_NULL) {
 		lua_pushnil(L);
+	}
+	else {
+		ucl_object_lua_push_scalar(L, obj, 0);
 	}
 
 	return 1;
