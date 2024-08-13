@@ -1,3 +1,19 @@
+/*
+ * Copyright 2024 Vsevolod Stakhov
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 /* Copyright (c) 2014, Vsevolod Stakhov
  * All rights reserved.
  *
@@ -69,6 +85,7 @@ func = "huh";
 #define PARSER_META "ucl.parser.meta"
 #define EMITTER_META "ucl.emitter.meta"
 #define NULL_META "ucl.null.meta"
+#define ITER_META "ucl.object.iter"
 #define OBJECT_META "ucl.object.meta"
 #define UCL_OBJECT_TYPE_META "ucl.type.object"
 #define UCL_ARRAY_TYPE_META "ucl.type.array"
@@ -683,12 +700,12 @@ lua_ucl_object_get(lua_State *L, int index)
 }
 
 static void
-lua_ucl_push_opaque(lua_State *L, ucl_object_t *obj)
+lua_ucl_push_opaque(lua_State *L, const ucl_object_t *obj)
 {
 	ucl_object_t **pobj;
 
 	pobj = lua_newuserdata(L, sizeof(*pobj));
-	*pobj = obj;
+	*pobj = ucl_object_ref(obj);
 	luaL_getmetatable(L, OBJECT_META);
 	lua_setmetatable(L, -2);
 }
@@ -970,6 +987,7 @@ lua_ucl_parser_get_object_wrapped(lua_State *L)
 
 	if (obj != NULL) {
 		lua_ucl_push_opaque(L, obj);
+		ucl_object_unref(obj);
 	}
 	else {
 		lua_pushnil(L);
@@ -1212,6 +1230,7 @@ lua_ucl_object_validate(lua_State *L)
 
 				if (ext_refs) {
 					lua_ucl_push_opaque(L, ext_refs);
+					ucl_object_unref(ext_refs);
 				}
 			}
 			else {
@@ -1220,6 +1239,7 @@ lua_ucl_object_validate(lua_State *L)
 
 				if (ext_refs) {
 					lua_ucl_push_opaque(L, ext_refs);
+					ucl_object_unref(ext_refs);
 				}
 			}
 		}
@@ -1230,6 +1250,7 @@ lua_ucl_object_validate(lua_State *L)
 
 			if (ext_refs) {
 				lua_ucl_push_opaque(L, ext_refs);
+				ucl_object_unref(ext_refs);
 			}
 		}
 	}
@@ -1255,6 +1276,227 @@ lua_ucl_object_gc(lua_State *L)
 	ucl_object_unref(obj);
 
 	return 0;
+}
+
+static int
+lua_ucl_iter_gc(lua_State *L)
+{
+	ucl_object_iter_t *pit;
+
+	pit = lua_touserdata(L, 1);
+
+	if (pit && *pit) {
+		ucl_object_iterate_free(*pit);
+	}
+
+	return 0;
+}
+
+static int
+lua_ucl_index(lua_State *L)
+{
+	ucl_object_t *obj;
+
+	obj = lua_ucl_object_get(L, 1);
+
+	if (lua_type(L, 2) == LUA_TSTRING) {
+		/* Index by string */
+
+		if (ucl_object_type(obj) == UCL_OBJECT) {
+			size_t len;
+			const char *key = lua_tolstring(L, 2, &len);
+			const ucl_object_t *elt;
+
+			elt = ucl_object_lookup_len(obj, key, strlen(key));
+
+			if (elt) {
+				lua_ucl_push_opaque(L, elt);
+			}
+			else {
+				lua_pushnil(L);
+			}
+
+			return 1;
+		}
+		else {
+			return luaL_error(L, "cannot index non-object");
+		}
+	}
+	else if (lua_type(L, 2) == LUA_TNUMBER) {
+		/* Index by number */
+		if (ucl_object_type(obj) == UCL_ARRAY) {
+			/* +1 as Lua indexes elements from 1 and ucl indexes them from 0 */
+			lua_Integer idx = lua_tointeger(L, 2) + 1;
+			const ucl_object_t *elt;
+
+			elt = ucl_array_find_index(obj, idx);
+
+			if (elt) {
+				lua_ucl_push_opaque(L, elt);
+			}
+			else {
+				lua_pushnil(L);
+			}
+
+			return 1;
+		}
+		else {
+			return luaL_error(L, "cannot index non-array");
+		}
+	}
+	else {
+		return luaL_error(L, "invalid index type");
+	}
+}
+
+static int
+lua_ucl_newindex(lua_State *L)
+{
+	ucl_object_t *obj;
+	obj = lua_ucl_object_get(L, 1);
+	int key_type = lua_type(L, 2);
+	int value_type = lua_type(L, 3);
+
+	if (ucl_object_type(obj) == UCL_OBJECT && (key_type == LUA_TSTRING)) {
+		lua_Integer keylen;
+		const char *key = lua_tolstring(L, 2, &keylen);
+
+		ucl_object_t *value_obj;
+		if (value_type == LUA_TUSERDATA) {
+			value_obj = ucl_object_ref(lua_ucl_object_get(L, 3));
+		}
+		else {
+			value_obj = ucl_object_lua_import(L, 3);
+		}
+
+		if (ucl_object_lookup_len(obj, key, keylen) != NULL) {
+			if (value_obj != NULL) {
+				ucl_object_replace_key(obj, value_obj, key, keylen, true);
+			}
+			else {
+				return luaL_error(L, "invalid value type");
+			}
+		}
+		else {
+			ucl_object_insert_key(obj, value_obj, key, keylen, true);
+		}
+
+		return 0;
+	}
+	else if (ucl_object_type(obj) == UCL_ARRAY && (key_type == LUA_TNUMBER)) {
+		lua_Integer idx = lua_tointeger(L, 2);
+
+		ucl_object_t *value_obj;
+		if (value_type == LUA_TUSERDATA) {
+			value_obj = ucl_object_ref(lua_ucl_object_get(L, 3));
+		}
+		else {
+			value_obj = ucl_object_lua_import(L, 3);
+		}
+
+		if (value_obj == NULL) {
+			return luaL_error(L, "invalid value type");
+		}
+
+		/* Lua allows sparse arrays and ucl does not
+		 * So we have 3 options:
+		 * 1) Idx is some existing index, so we need to replace it
+		 * 2) Idx is 1, so we prepend it
+		 * 3) Idx is #len, so we append it
+		 * Everything else is an error
+		 */
+		if (idx == 1) {
+			ucl_array_prepend(obj, value_obj);
+		}
+		else if (idx == ucl_array_size(obj) + 1) {
+			ucl_array_append(obj, value_obj);
+		}
+		else if (idx > 1 && idx <= ucl_array_size(obj)) {
+			ucl_array_replace_index(obj, value_obj, idx - 1);
+		}
+		else {
+			ucl_object_unref(value_obj);
+
+			return luaL_error(L, "invalid index for array");
+		}
+
+		return 0;
+	}
+	else {
+		return luaL_error(L, "invalid index type");
+	}
+}
+
+static int
+lua_ucl_type(lua_State *L)
+{
+	ucl_object_t *obj;
+
+	obj = lua_ucl_object_get(L, 1);
+	lua_pushstring(L, ucl_object_type_to_string(ucl_object_type(obj)));
+
+	return 1;
+}
+
+static int
+lua_ucl_object_iter(lua_State *L)
+{
+	ucl_object_iter_t *pit;
+	ucl_object_t *obj;
+	const ucl_object_t *cur;
+
+	obj = lua_ucl_object_get(L, 1);
+	pit = lua_touserdata(L, 2);
+
+	if (pit && *pit) {
+		cur = ucl_object_iterate_safe(obj, *pit);
+
+		if (cur) {
+			lua_pushvalue(L, 2);
+			if (ucl_object_key(cur)) {
+				size_t klen;
+				const char *k = ucl_object_keyl(cur, &klen);
+				lua_pushlstring(L, k, klen);
+			}
+			else {
+				/* TODO: deal with arrays somehow */
+				lua_pushnil(L);
+			}
+			lua_ucl_push_opaque(L, cur);
+
+			return 3;
+		}
+		else {
+			lua_pushnil(L);
+
+			return 1;
+		}
+	}
+
+	return luaL_error(L, "invalid iterator");
+}
+
+static int
+lua_ucl_pairs(lua_State *L)
+{
+	ucl_object_t *obj;
+
+	obj = lua_ucl_object_get(L, 1);
+	int t = ucl_object_type(obj);
+
+	if ((obj) && (t == UCL_ARRAY || t == UCL_OBJECT || obj->next != NULL)) {
+		/* iter_func, ucl_object_t, iter */
+		lua_pushcfunction(L, lua_ucl_object_iter);
+		lua_pushvalue(L, 1);
+		ucl_object_iter_t *pit = lua_newuserdata(L, sizeof(ucl_object_iter_t *));
+		ucl_object_iter_t it = ucl_object_iterate_new(obj);
+		*pit = it;
+
+		return 3;
+	}
+	else {
+		return luaL_error(L, "invalid object type");
+	}
 }
 
 static void
@@ -1300,8 +1542,21 @@ lua_ucl_object_mt(lua_State *L)
 {
 	luaL_newmetatable(L, OBJECT_META);
 
-	lua_pushvalue(L, -1);
+	lua_pushcfunction(L, lua_ucl_index);
 	lua_setfield(L, -2, "__index");
+
+	lua_pushcfunction(L, lua_ucl_newindex);
+	lua_setfield(L, -2, "__newindex");
+
+	lua_pushcfunction(L, lua_ucl_type);
+	lua_setfield(L, -2, "type");
+
+	lua_pushcfunction(L, lua_ucl_pairs);
+	lua_setfield(L, -2, "pairs");
+
+	/* Usable merely with lua 5.2+ */
+	lua_pushcfunction(L, lua_ucl_pairs);
+	lua_setfield(L, -2, "__pairs");
 
 	lua_pushcfunction(L, lua_ucl_object_gc);
 	lua_setfield(L, -2, "__gc");
@@ -1322,6 +1577,15 @@ lua_ucl_object_mt(lua_State *L)
 	lua_setfield(L, -2, "validate");
 
 	lua_pushstring(L, OBJECT_META);
+	lua_setfield(L, -2, "class");
+
+	lua_pop(L, 1);
+
+	luaL_newmetatable(L, ITER_META);
+	lua_pushcfunction(L, lua_ucl_iter_gc);
+	lua_setfield(L, -2, "__gc");
+
+	lua_pushstring(L, ITER_META);
 	lua_setfield(L, -2, "class");
 
 	lua_pop(L, 1);
