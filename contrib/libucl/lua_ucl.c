@@ -1281,12 +1281,12 @@ lua_ucl_object_gc(lua_State *L)
 static int
 lua_ucl_iter_gc(lua_State *L)
 {
-	ucl_object_iter_t *pit;
+	ucl_object_iter_t it;
 
-	pit = lua_touserdata(L, 1);
+	it = *((ucl_object_iter_t *) lua_touserdata(L, 1));
 
-	if (pit && *pit) {
-		ucl_object_iterate_free(*pit);
+	if (it) {
+		ucl_object_iterate_free(it);
 	}
 
 	return 0;
@@ -1441,39 +1441,38 @@ lua_ucl_type(lua_State *L)
 static int
 lua_ucl_object_iter(lua_State *L)
 {
-	ucl_object_iter_t *pit;
-	ucl_object_t *obj;
+	ucl_object_iter_t it;
 	const ucl_object_t *cur;
 
-	obj = lua_ucl_object_get(L, 1);
-	pit = lua_touserdata(L, 2);
+	it = *((ucl_object_iter_t *) lua_touserdata(L, 1));
+	cur = ucl_object_iterate_safe(it, true);
 
-	if (pit && *pit) {
-		cur = ucl_object_iterate_safe(obj, *pit);
-
-		if (cur) {
-			lua_pushvalue(L, 2);
-			if (ucl_object_key(cur)) {
-				size_t klen;
-				const char *k = ucl_object_keyl(cur, &klen);
-				lua_pushlstring(L, k, klen);
-			}
-			else {
-				/* TODO: deal with arrays somehow */
-				lua_pushnil(L);
-			}
-			lua_ucl_push_opaque(L, cur);
-
-			return 3;
+	if (cur) {
+		if (ucl_object_key(cur)) {
+			size_t klen;
+			const char *k = ucl_object_keyl(cur, &klen);
+			lua_pushlstring(L, k, klen);
 		}
 		else {
-			lua_pushnil(L);
-
-			return 1;
+			if (lua_type(L, 2) == LUA_TNUMBER) {
+				lua_Integer idx = lua_tointeger(L, 2);
+				if (idx >= 0) {
+					lua_pushinteger(L, idx + 1);
+				}
+			}
+			else {
+				lua_pushnumber(L, -1);
+			}
 		}
-	}
+		lua_ucl_push_opaque(L, cur);
 
-	return luaL_error(L, "invalid iterator");
+		return 2;
+	}
+	else {
+		lua_pushnil(L);
+
+		return 1;
+	}
 }
 
 static int
@@ -1487,10 +1486,48 @@ lua_ucl_pairs(lua_State *L)
 	if ((obj) && (t == UCL_ARRAY || t == UCL_OBJECT || obj->next != NULL)) {
 		/* iter_func, ucl_object_t, iter */
 		lua_pushcfunction(L, lua_ucl_object_iter);
-		lua_pushvalue(L, 1);
 		ucl_object_iter_t *pit = lua_newuserdata(L, sizeof(ucl_object_iter_t *));
+		luaL_getmetatable(L, ITER_META);
+		lua_setmetatable(L, -2);
 		ucl_object_iter_t it = ucl_object_iterate_new(obj);
 		*pit = it;
+		lua_pushnumber(L, -1);
+
+		return 3;
+	}
+	else {
+		return luaL_error(L, "invalid object type");
+	}
+}
+
+static int
+lua_ucl_len(lua_State *L)
+{
+	ucl_object_t *obj;
+
+	obj = lua_ucl_object_get(L, 1);
+	lua_pushinteger(L, obj->len);
+
+	return 1;
+}
+
+static int
+lua_ucl_ipairs(lua_State *L)
+{
+	ucl_object_t *obj;
+
+	obj = lua_ucl_object_get(L, 1);
+	int t = ucl_object_type(obj);
+
+	if ((obj) && (t == UCL_ARRAY || obj->next != NULL)) {
+		/* iter_func, ucl_object_t, iter */
+		lua_pushcfunction(L, lua_ucl_object_iter);
+		ucl_object_iter_t *pit = lua_newuserdata(L, sizeof(ucl_object_iter_t *));
+		luaL_getmetatable(L, ITER_META);
+		lua_setmetatable(L, -2);
+		ucl_object_iter_t it = ucl_object_iterate_new(obj);
+		*pit = it;
+		lua_pushnumber(L, 0);
 
 		return 3;
 	}
@@ -1542,8 +1579,12 @@ lua_ucl_object_mt(lua_State *L)
 {
 	luaL_newmetatable(L, OBJECT_META);
 
-	lua_pushcfunction(L, lua_ucl_index);
+	lua_pushvalue(L, -1);
 	lua_setfield(L, -2, "__index");
+
+	/* Access UCL elements using `:at` method */
+	lua_pushcfunction(L, lua_ucl_index);
+	lua_setfield(L, -2, "at");
 
 	lua_pushcfunction(L, lua_ucl_newindex);
 	lua_setfield(L, -2, "__newindex");
@@ -1557,6 +1598,20 @@ lua_ucl_object_mt(lua_State *L)
 	/* Usable merely with lua 5.2+ */
 	lua_pushcfunction(L, lua_ucl_pairs);
 	lua_setfield(L, -2, "__pairs");
+
+	lua_pushcfunction(L, lua_ucl_ipairs);
+	lua_setfield(L, -2, "ipairs");
+
+	/* Usable merely with lua 5.2+ */
+	lua_pushcfunction(L, lua_ucl_ipairs);
+	lua_setfield(L, -2, "__ipairs");
+
+	lua_pushcfunction(L, lua_ucl_len);
+	lua_setfield(L, -2, "len");
+
+	/* Usable merely with lua 5.2+ */
+	lua_pushcfunction(L, lua_ucl_len);
+	lua_setfield(L, -2, "__len");
 
 	lua_pushcfunction(L, lua_ucl_object_gc);
 	lua_setfield(L, -2, "__gc");
@@ -1586,7 +1641,7 @@ lua_ucl_object_mt(lua_State *L)
 	lua_setfield(L, -2, "__gc");
 
 	lua_pushstring(L, ITER_META);
-	lua_setfield(L, -2, "class");
+	lua_setfield(L, -2, "__tostring");
 
 	lua_pop(L, 1);
 }
