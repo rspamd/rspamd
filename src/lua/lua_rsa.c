@@ -753,7 +753,9 @@ lua_rsa_sign_memory(lua_State *L)
 	if (pkey != NULL && data != NULL) {
 		signature = rspamd_fstring_sized_new(256);
 
-		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_from_pkey(NULL, pkey, NULL);
+		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(pkey, NULL);
+		EVP_PKEY_CTX_set_rsa_padding(pctx, RSA_PKCS1_PADDING);
+		EVP_PKEY_CTX_set_signature_md(pctx, EVP_sha256());
 		EVP_PKEY_sign_init(pctx);
 		size_t slen = signature->allocated;
 
