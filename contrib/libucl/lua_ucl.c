@@ -699,8 +699,7 @@ lua_ucl_object_get(lua_State *L, int index)
 	return *((ucl_object_t **) luaL_checkudata(L, index, OBJECT_META));
 }
 
-static void
-lua_ucl_push_opaque(lua_State *L, const ucl_object_t *obj)
+void ucl_object_push_lua_unwrapped(lua_State *L, const ucl_object_t *obj)
 {
 	ucl_object_t **pobj;
 
@@ -986,7 +985,7 @@ lua_ucl_parser_get_object_wrapped(lua_State *L)
 	obj = ucl_parser_get_object(parser);
 
 	if (obj != NULL) {
-		lua_ucl_push_opaque(L, obj);
+		ucl_object_push_lua_unwrapped(L, obj);
 		ucl_object_unref(obj);
 	}
 	else {
@@ -1233,7 +1232,7 @@ lua_ucl_object_validate(lua_State *L)
 				lua_pushnil(L);
 
 				if (ext_refs) {
-					lua_ucl_push_opaque(L, ext_refs);
+					ucl_object_push_lua_unwrapped(L, ext_refs);
 					ucl_object_unref(ext_refs);
 				}
 			}
@@ -1242,7 +1241,7 @@ lua_ucl_object_validate(lua_State *L)
 				lua_pushfstring(L, "validation error: %s", err.msg);
 
 				if (ext_refs) {
-					lua_ucl_push_opaque(L, ext_refs);
+					ucl_object_push_lua_unwrapped(L, ext_refs);
 					ucl_object_unref(ext_refs);
 				}
 			}
@@ -1253,7 +1252,7 @@ lua_ucl_object_validate(lua_State *L)
 			lua_pushfstring(L, "cannot find the requested path: %s", path);
 
 			if (ext_refs) {
-				lua_ucl_push_opaque(L, ext_refs);
+				ucl_object_push_lua_unwrapped(L, ext_refs);
 				ucl_object_unref(ext_refs);
 			}
 		}
@@ -1314,7 +1313,7 @@ lua_ucl_index(lua_State *L)
 			elt = ucl_object_lookup_len(obj, key, strlen(key));
 
 			if (elt) {
-				lua_ucl_push_opaque(L, elt);
+				ucl_object_push_lua_unwrapped(L, elt);
 			}
 			else {
 				lua_pushnil(L);
@@ -1336,7 +1335,7 @@ lua_ucl_index(lua_State *L)
 			elt = ucl_array_find_index(obj, idx);
 
 			if (elt) {
-				lua_ucl_push_opaque(L, elt);
+				ucl_object_push_lua_unwrapped(L, elt);
 			}
 			else {
 				lua_pushnil(L);
@@ -1468,7 +1467,7 @@ lua_ucl_object_iter(lua_State *L)
 				lua_pushnumber(L, -1);
 			}
 		}
-		lua_ucl_push_opaque(L, cur);
+		ucl_object_push_lua_unwrapped(L, cur);
 
 		return 2;
 	}
