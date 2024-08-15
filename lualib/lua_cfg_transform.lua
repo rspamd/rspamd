@@ -241,8 +241,8 @@ return function(cfg)
   -- DKIM signing/ARC legacy
   for _, mod in ipairs({ 'dkim_signing', 'arc' }) do
     if cfg:at(mod) then
-      if cfg:at(mod):at('auth_only'):unwrap() ~= nil then
-        if cfg:at(mod):at('sign_authenticated'):unwrap() ~= nil then
+      if cfg:at(mod):at('auth_only') then
+        if cfg:at(mod):at('sign_authenticated') then
           logger.warnx(rspamd_config,
               'both auth_only (%s) and sign_authenticated (%s) for %s are specified, prefer auth_only',
               cfg:at(mod):at('auth_only'):unwrap(), cfg:at(mod):at('sign_authenticated'):unwrap(), mod)
