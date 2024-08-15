@@ -188,7 +188,7 @@ return function(cfg)
 
           local action_score
           local act = actions:at(d)
-          if act:type() == 'number' then
+          if act:type() ~= 'object' then
             action_score = act:unwrap()
           elseif act:type() == 'object' and act:at('score') then
             action_score = act:at('score'):unwrap()
@@ -232,7 +232,7 @@ return function(cfg)
     for i = 1, (#actions_order - 1) do
       local act = actions_order[i]
 
-      if actions:at(act) and actions:at(act):type() == 'number' then
+      if actions:at(act) and actions:at(act):type() ~= 'object' then
         local score = actions:at(act):unwrap()
 
         for j = i + 1, #actions_order do
