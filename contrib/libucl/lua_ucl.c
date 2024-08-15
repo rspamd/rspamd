@@ -96,6 +96,7 @@ static int ucl_object_lua_push_scalar(lua_State *L, const ucl_object_t *obj, int
 static int ucl_object_push_lua_common(lua_State *L, const ucl_object_t *obj, int flags);
 static ucl_object_t *ucl_object_lua_fromtable(lua_State *L, int idx, ucl_string_flags_t flags);
 static ucl_object_t *ucl_object_lua_fromelt(lua_State *L, int idx, ucl_string_flags_t flags);
+static ucl_object_t *lua_ucl_object_get(lua_State *L, int index);
 
 static void *ucl_null;
 
@@ -535,20 +536,27 @@ ucl_object_lua_fromelt(lua_State *L, int idx, ucl_string_flags_t flags)
 			obj = ucl_object_typed_new(UCL_NULL);
 		}
 		else {
-			/* Assume it is a text like object */
-			struct _rspamd_lua_text *t = lua_touserdata(L, idx);
+			ucl_object_t *other_elt = lua_ucl_object_get(L, idx);
 
-			if (t) {
-				if (t->len > 0) {
-					obj = ucl_object_fromstring_common(t->start, t->len, 0);
-				}
-				else {
-					obj = ucl_object_fromstring_common("", 0, 0);
-				}
+			if (other_elt) {
+				return ucl_object_ref(other_elt);
+			}
+			else {
+				/* Assume it is a text like object */
+				struct _rspamd_lua_text *t = lua_touserdata(L, idx);
 
-				/* Binary text */
-				if (t->flags & (1u << 5u)) {
-					obj->flags |= UCL_OBJECT_BINARY;
+				if (t) {
+					if (t->len > 0) {
+						obj = ucl_object_fromstring_common(t->start, t->len, 0);
+					}
+					else {
+						obj = ucl_object_fromstring_common("", 0, 0);
+					}
+
+					/* Binary text */
+					if (t->flags & (1u << 5u)) {
+						obj->flags |= UCL_OBJECT_BINARY;
+					}
 				}
 			}
 		}
@@ -1322,7 +1330,7 @@ lua_ucl_index(lua_State *L)
 			return 1;
 		}
 		else {
-			return luaL_error(L, "cannot index non-object");
+			return luaL_error(L, "cannot index non-object: %s", ucl_object_type_to_string(ucl_object_type(obj)));
 		}
 	}
 	else if (lua_type(L, 2) == LUA_TNUMBER) {
@@ -1344,11 +1352,11 @@ lua_ucl_index(lua_State *L)
 			return 1;
 		}
 		else {
-			return luaL_error(L, "cannot index non-array");
+			return luaL_error(L, "cannot index non-array: %s", ucl_object_type_to_string(ucl_object_type(obj)));
 		}
 	}
 	else {
-		return luaL_error(L, "invalid index type");
+		return luaL_error(L, "invalid index type: %s", lua_typename(L, lua_type(L, 2)));
 	}
 }
 
@@ -1377,7 +1385,7 @@ lua_ucl_newindex(lua_State *L)
 				ucl_object_replace_key(obj, value_obj, key, keylen, true);
 			}
 			else {
-				return luaL_error(L, "invalid value type");
+				return luaL_error(L, "invalid value type: %s", lua_typename(L, value_type));
 			}
 		}
 		else {
@@ -1398,7 +1406,7 @@ lua_ucl_newindex(lua_State *L)
 		}
 
 		if (value_obj == NULL) {
-			return luaL_error(L, "invalid value type");
+			return luaL_error(L, "invalid value type: %s", lua_typename(L, value_type));
 		}
 
 		/* Lua allows sparse arrays and ucl does not
@@ -1420,13 +1428,14 @@ lua_ucl_newindex(lua_State *L)
 		else {
 			ucl_object_unref(value_obj);
 
-			return luaL_error(L, "invalid index for array");
+			return luaL_error(L, "invalid index for array: %d", (int) idx);
 		}
 
 		return 0;
 	}
 	else {
-		return luaL_error(L, "invalid index type");
+		return luaL_error(L, "invalid index type: %s (obj type: %s)", lua_typename(L, key_type),
+						  ucl_object_type_to_string(ucl_object_type(obj)));
 	}
 }
 
