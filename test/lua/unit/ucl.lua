@@ -37,10 +37,10 @@ context("UCL manipulation", function()
     ireply[1] = 1
     ireply[1] = 1
     ireply[1] = 1
-    ireply[#ireply + 1] = 100500
-    local iexpected = { 1, 1, 1, 1, 1, "e1", "e2", 100500 }
+    ireply[ireply:len() + 1] = 100500
+    local iexpected = { 1, "e2", 100500 }
     for k, v in ireply:ipairs() do
-      assert_equal(iexpected[k], v:unwrap())
+      assert_equal(v:unwrap(), iexpected[k])
     end
 
     reply.tbl = ireply

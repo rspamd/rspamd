@@ -99,10 +99,12 @@ local function convert_metric(cfg, metric)
   end
 
   if metric:at('actions') then
-    cfg.actions = lua_util.override_defaults(cfg:at('actions'):unwrap(), metric:at('actions'):unwrap())
+    local existing_actions = cfg:at('actions') and cfg:at('actions'):unwrap() or {}
+    cfg.actions = lua_util.override_defaults(existing_actions, metric:at('actions'):unwrap())
     logger.infox("overriding actions from the legacy metric settings")
   end
   if metric:at('unknown_weight') then
+    logger.infox("overriding unknown weight from the legacy metric settings")
     cfg:at('actions').unknown_weight = metric:at('unknown_weight'):unwrap()
   end
 
@@ -143,9 +145,19 @@ return function(cfg)
   local ret = false
 
   if cfg:at('metric') then
-    for _, v in cfg:at('metric'):pairs() do
-      if v:type() == 'object' then
-        convert_metric(cfg, v)
+    local metric = cfg:at('metric')
+
+    -- There are two things that we can have (old `metric_pairs` logic)
+    -- 1. A metric is a single metric definition like: metric { name = "default", ... }
+    -- 2. A metric is a list of metrics like: metric { "default": ... }
+    if metric:at('actions') or metric:at('name') then
+      convert_metric(cfg, metric)
+    else
+      for _, v in cfg:at('metric'):pairs() do
+        if v:type() == 'object' then
+          logger.infox('converting metric element %s', v)
+          convert_metric(cfg, v)
+        end
       end
     end
     ret = true
@@ -169,8 +181,8 @@ return function(cfg)
                            'reject', 'discard' }
 
     local actions = cfg:at('actions')
-    if actions and (not actions:at('no action') and not actions:at('no_action') and
-        not actions:at('accept')) then
+    if not actions:at('no action') and not actions:at('no_action') and
+        not actions:at('accept') then
       for _, d in ipairs(actions_defs) do
         if actions:at(d) then
 
@@ -263,9 +275,11 @@ return function(cfg)
   -- If neural network is enabled we MUST have `check_all_filters` flag
   if cfg:at('neural') then
 
-    if not cfg:at('options'):at('check_all_filters') then
-      logger.infox(rspamd_config, 'enable `options.check_all_filters` for neural network')
-      cfg:at('options')['check_all_filters'] = true
+    if cfg:at('options') then
+      if not cfg:at('options'):at('check_all_filters') then
+        logger.infox(rspamd_config, 'enable `options.check_all_filters` for neural network')
+        cfg:at('options')['check_all_filters'] = true
+      end
     end
   end
 
