@@ -3489,7 +3489,7 @@ void rspamd_rcl_maybe_apply_lua_transform(struct rspamd_config *cfg)
 	lua_pushvalue(L, -2);
 
 	/* Push the existing config */
-	ucl_object_push_lua(L, cfg->cfg_ucl_obj, true);
+	ucl_object_push_lua_unwrapped(L, cfg->cfg_ucl_obj);
 
 	if (auto ret = lua_pcall(L, 1, 2, err_idx); ret != 0) {
 		msg_err("call to rspamadm lua script failed (%d): %s", ret,
@@ -3499,12 +3499,8 @@ void rspamd_rcl_maybe_apply_lua_transform(struct rspamd_config *cfg)
 		return;
 	}
 
-	if (lua_toboolean(L, -2) && lua_type(L, -1) == LUA_TTABLE) {
-		ucl_object_t *old_cfg = cfg->cfg_ucl_obj;
-
+	if (lua_toboolean(L, -2) && lua_type(L, -1) == LUA_TUSERDATA) {
 		msg_info_config("configuration has been transformed in Lua");
-		cfg->cfg_ucl_obj = ucl_object_lua_import(L, -1);
-		ucl_object_unref(old_cfg);
 	}
 
 	/* error function */
