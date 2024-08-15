@@ -545,27 +545,20 @@ ucl_object_lua_fromelt(lua_State *L, int idx, ucl_string_flags_t flags)
 			obj = ucl_object_typed_new(UCL_NULL);
 		}
 		else {
-			ucl_object_t *other_elt = lua_ucl_object_get(L, idx);
+			/* Assume it is a text like object */
+			struct rspamd_compat_lua_text *t = lua_touserdata(L, idx);
 
-			if (other_elt) {
-				return ucl_object_ref(other_elt);
-			}
-			else {
-				/* Assume it is a text like object */
-				struct rspamd_compat_lua_text *t = lua_touserdata(L, idx);
+			if (t) {
+				if (t->len > 0) {
+					obj = ucl_object_fromstring_common(t->start, t->len, 0);
+				}
+				else {
+					obj = ucl_object_fromstring_common("", 0, 0);
+				}
 
-				if (t) {
-					if (t->len > 0) {
-						obj = ucl_object_fromstring_common(t->start, t->len, 0);
-					}
-					else {
-						obj = ucl_object_fromstring_common("", 0, 0);
-					}
-
-					/* Binary text */
-					if (t->flags & (1u << 5u)) {
-						obj->flags |= UCL_OBJECT_BINARY;
-					}
+				/* Binary text */
+				if (t->flags & (1u << 5u)) {
+					obj->flags |= UCL_OBJECT_BINARY;
 				}
 			}
 		}
@@ -585,7 +578,22 @@ ucl_object_lua_fromelt(lua_State *L, int idx, ucl_string_flags_t flags)
 		}
 		else {
 			if (type == LUA_TTABLE) {
-				obj = ucl_object_lua_fromtable(L, idx, flags);
+				lua_rawgeti(L, idx, 0);
+
+				if (lua_type(L, -1) == LUA_TUSERDATA) {
+					/* It is a cloaked ucl object */
+					obj = lua_ucl_object_get(L, idx);
+
+					if (obj) {
+						obj = ucl_object_ref(obj);
+					}
+				}
+
+				lua_pop(L, 1);
+
+				if (obj == NULL) {
+					obj = ucl_object_lua_fromtable(L, idx, flags);
+				}
 			}
 			else if (type == LUA_TFUNCTION) {
 				fd = malloc(sizeof(*fd));
