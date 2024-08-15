@@ -97,6 +97,15 @@ static int ucl_object_push_lua_common(lua_State *L, const ucl_object_t *obj, int
 static ucl_object_t *ucl_object_lua_fromtable(lua_State *L, int idx, ucl_string_flags_t flags);
 static ucl_object_t *ucl_object_lua_fromelt(lua_State *L, int idx, ucl_string_flags_t flags);
 static ucl_object_t *lua_ucl_object_get(lua_State *L, int index);
+static int lua_ucl_type(lua_State *L);
+static int lua_ucl_pairs(lua_State *L);
+static int lua_ucl_ipairs(lua_State *L);
+static int lua_ucl_len(lua_State *L);
+static int lua_ucl_index(lua_State *L);
+static int lua_ucl_newindex(lua_State *L);
+static int lua_ucl_object_tostring(lua_State *L);
+static int lua_ucl_object_unwrap(lua_State *L);
+static int lua_ucl_object_validate(lua_State *L);
 
 static void *ucl_null;
 
@@ -704,15 +713,54 @@ lua_ucl_parser_get(lua_State *L, int index)
 static ucl_object_t *
 lua_ucl_object_get(lua_State *L, int index)
 {
-	return *((ucl_object_t **) luaL_checkudata(L, index, OBJECT_META));
+	if (lua_istable(L, index)) {
+		ucl_object_t *res = NULL;
+		lua_rawgeti(L, index, 0);
+
+		if (lua_isuserdata(L, -1)) {
+			res = *((ucl_object_t **) lua_touserdata(L, -1));
+		}
+
+		lua_pop(L, 1);
+
+		return res;
+	}
+
+	return NULL;
 }
 
 void ucl_object_push_lua_unwrapped(lua_State *L, const ucl_object_t *obj)
 {
 	ucl_object_t **pobj;
 
+	/* We create a plain lua table with the following elements:
+	 * [0] - ucl object as userdata
+	 * ["method"] - methods
+	 */
+	lua_createtable(L, 1, 9);
 	pobj = lua_newuserdata(L, sizeof(*pobj));
 	*pobj = ucl_object_ref(obj);
+	lua_rawseti(L, -2, 0);
+
+	lua_pushcfunction(L, lua_ucl_index);
+	lua_setfield(L, -2, "at");
+	lua_pushcfunction(L, lua_ucl_type);
+	lua_setfield(L, -2, "type");
+	lua_pushcfunction(L, lua_ucl_pairs);
+	lua_setfield(L, -2, "pairs");
+	lua_pushcfunction(L, lua_ucl_ipairs);
+	lua_setfield(L, -2, "ipairs");
+	lua_pushcfunction(L, lua_ucl_len);
+	lua_setfield(L, -2, "len");
+	lua_pushcfunction(L, lua_ucl_object_tostring);
+	lua_setfield(L, -2, "tostring");
+	lua_pushcfunction(L, lua_ucl_object_unwrap);
+	lua_setfield(L, -2, "unwrap");
+	lua_pushcfunction(L, lua_ucl_object_unwrap);
+	lua_setfield(L, -2, "tolua");
+	lua_pushcfunction(L, lua_ucl_object_validate);
+	lua_setfield(L, -2, "validate");
+
 	luaL_getmetatable(L, OBJECT_META);
 	lua_setmetatable(L, -2);
 }
@@ -1366,15 +1414,14 @@ lua_ucl_newindex(lua_State *L)
 	ucl_object_t *obj;
 	obj = lua_ucl_object_get(L, 1);
 	int key_type = lua_type(L, 2);
-	int value_type = lua_type(L, 3);
 
 	if (ucl_object_type(obj) == UCL_OBJECT && (key_type == LUA_TSTRING)) {
 		lua_Integer keylen;
 		const char *key = lua_tolstring(L, 2, &keylen);
 
-		ucl_object_t *value_obj;
-		if (value_type == LUA_TUSERDATA) {
-			value_obj = ucl_object_ref(lua_ucl_object_get(L, 3));
+		ucl_object_t *value_obj = lua_ucl_object_get(L, 3);
+		if (value_obj) {
+			value_obj = ucl_object_ref(value_obj);
 		}
 		else {
 			value_obj = ucl_object_lua_import(L, 3);
@@ -1401,32 +1448,28 @@ lua_ucl_newindex(lua_State *L)
 	else if (ucl_object_type(obj) == UCL_ARRAY && (key_type == LUA_TNUMBER)) {
 		lua_Integer idx = lua_tointeger(L, 2);
 
-		ucl_object_t *value_obj;
-		if (value_type == LUA_TUSERDATA) {
-			value_obj = ucl_object_ref(lua_ucl_object_get(L, 3));
+		ucl_object_t *value_obj = lua_ucl_object_get(L, 3);
+		if (value_obj) {
+			value_obj = ucl_object_ref(value_obj);
 		}
 		else {
 			value_obj = ucl_object_lua_import(L, 3);
 		}
 
 		if (value_obj == NULL) {
-			return luaL_error(L, "invalid value type: %s", lua_typename(L, value_type));
+			return luaL_error(L, "invalid value type: %s", lua_typename(L, lua_type(L, 3)));
 		}
 
 		/* Lua allows sparse arrays and ucl does not
 		 * So we have 3 options:
 		 * 1) Idx is some existing index, so we need to replace it
-		 * 2) Idx is 1, so we prepend it
 		 * 3) Idx is #len, so we append it
 		 * Everything else is an error
 		 */
-		if (idx == 1) {
-			ucl_array_prepend(obj, value_obj);
-		}
-		else if (idx == ucl_array_size(obj) + 1) {
+		if (idx == ucl_array_size(obj) + 1) {
 			ucl_array_append(obj, value_obj);
 		}
-		else if (idx > 1 && idx <= ucl_array_size(obj)) {
+		else if (idx >= 1 && idx <= ucl_array_size(obj)) {
 			ucl_array_replace_index(obj, value_obj, idx - 1);
 		}
 		else {
@@ -1512,7 +1555,7 @@ lua_ucl_pairs(lua_State *L)
 		return 3;
 	}
 	else {
-		return luaL_error(L, "invalid object type");
+		return luaL_error(L, "invalid object type for pairs: %s", ucl_object_type_to_string(t));
 	}
 }
 
@@ -1548,7 +1591,7 @@ lua_ucl_ipairs(lua_State *L)
 		return 3;
 	}
 	else {
-		return luaL_error(L, "invalid object type");
+		return luaL_error(L, "invalid object type for ipairs: %s", ucl_object_type_to_string(t));
 	}
 }
 
@@ -1595,35 +1638,20 @@ lua_ucl_object_mt(lua_State *L)
 {
 	luaL_newmetatable(L, OBJECT_META);
 
-	lua_pushvalue(L, -1);
-	lua_setfield(L, -2, "__index");
-
-	/* Access UCL elements using `:at` method */
 	lua_pushcfunction(L, lua_ucl_index);
-	lua_setfield(L, -2, "at");
-
+	lua_setfield(L, -2, "__index");
 	lua_pushcfunction(L, lua_ucl_newindex);
 	lua_setfield(L, -2, "__newindex");
-
-	lua_pushcfunction(L, lua_ucl_type);
-	lua_setfield(L, -2, "type");
-
-	lua_pushcfunction(L, lua_ucl_pairs);
-	lua_setfield(L, -2, "pairs");
-
+	/* Usable merely with lua 5.2+ */
+	lua_pushcfunction(L, lua_ucl_ipairs);
+	lua_setfield(L, -2, "__ipairs");
 	/* Usable merely with lua 5.2+ */
 	lua_pushcfunction(L, lua_ucl_pairs);
 	lua_setfield(L, -2, "__pairs");
 
-	lua_pushcfunction(L, lua_ucl_ipairs);
-	lua_setfield(L, -2, "ipairs");
-
-	/* Usable merely with lua 5.2+ */
-	lua_pushcfunction(L, lua_ucl_ipairs);
-	lua_setfield(L, -2, "__ipairs");
-
-	lua_pushcfunction(L, lua_ucl_len);
-	lua_setfield(L, -2, "len");
+	/* Access UCL elements using `:at` method */
+	lua_pushcfunction(L, lua_ucl_index);
+	lua_setfield(L, -2, "at");
 
 	/* Usable merely with lua 5.2+ */
 	lua_pushcfunction(L, lua_ucl_len);
@@ -1631,21 +1659,8 @@ lua_ucl_object_mt(lua_State *L)
 
 	lua_pushcfunction(L, lua_ucl_object_gc);
 	lua_setfield(L, -2, "__gc");
-
 	lua_pushcfunction(L, lua_ucl_object_tostring);
 	lua_setfield(L, -2, "__tostring");
-
-	lua_pushcfunction(L, lua_ucl_object_tostring);
-	lua_setfield(L, -2, "tostring");
-
-	lua_pushcfunction(L, lua_ucl_object_unwrap);
-	lua_setfield(L, -2, "unwrap");
-
-	lua_pushcfunction(L, lua_ucl_object_unwrap);
-	lua_setfield(L, -2, "tolua");
-
-	lua_pushcfunction(L, lua_ucl_object_validate);
-	lua_setfield(L, -2, "validate");
 
 	lua_pushstring(L, OBJECT_META);
 	lua_setfield(L, -2, "class");
