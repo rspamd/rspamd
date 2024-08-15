@@ -100,7 +100,7 @@ static ucl_object_t *lua_ucl_object_get(lua_State *L, int index);
 
 static void *ucl_null;
 
-struct _rspamd_lua_text {
+struct rspamd_compat_lua_text {
 	const char *start;
 	unsigned int len;
 	unsigned int flags;
@@ -543,7 +543,7 @@ ucl_object_lua_fromelt(lua_State *L, int idx, ucl_string_flags_t flags)
 			}
 			else {
 				/* Assume it is a text like object */
-				struct _rspamd_lua_text *t = lua_touserdata(L, idx);
+				struct rspamd_compat_lua_text *t = lua_touserdata(L, idx);
 
 				if (t) {
 					if (t->len > 0) {
@@ -902,7 +902,7 @@ static int
 lua_ucl_parser_parse_text(lua_State *L)
 {
 	struct ucl_parser *parser;
-	struct _rspamd_lua_text *t;
+	struct rspamd_compat_lua_text *t;
 	enum ucl_parse_type type = UCL_PARSE_UCL;
 	int ret = 2;
 
@@ -914,7 +914,7 @@ lua_ucl_parser_parse_text(lua_State *L)
 	else if (lua_type(L, 2) == LUA_TSTRING) {
 		const char *s;
 		gsize len;
-		static struct _rspamd_lua_text st_t;
+		static struct rspamd_compat_lua_text st_t;
 
 		s = lua_tolstring(L, 2, &len);
 		st_t.start = s;
@@ -1385,11 +1385,15 @@ lua_ucl_newindex(lua_State *L)
 				ucl_object_replace_key(obj, value_obj, key, keylen, true);
 			}
 			else {
-				return luaL_error(L, "invalid value type: %s", lua_typename(L, value_type));
+				/* Delete key */
+				ucl_object_delete_keyl(obj, key, keylen);
 			}
 		}
 		else {
-			ucl_object_insert_key(obj, value_obj, key, keylen, true);
+			if (value_obj != NULL) {
+				ucl_object_insert_key(obj, value_obj, key, keylen, true);
+			}
+			/* Do nothing if value_obj is null, like Lua does */
 		}
 
 		return 0;
