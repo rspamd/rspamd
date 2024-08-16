@@ -3,13 +3,17 @@
 context("UCL manipulation", function()
   local ucl = require "ucl"
 
-  test("UCL transparent test", function()
-    local parser = ucl.parser()
-    local res, err = parser:parse_string('{"key":"val"}')
-    assert(res)
+  local parser = ucl.parser()
+  local res, err = parser:parse_string('{"key":"val"}')
+  assert(res)
 
-    local reply = parser:get_object_wrapped()
+  local reply = parser:get_object_wrapped()
+  local expected = {
+    key = 'ohlol',
+    ololo = 'ohlol'
+  }
 
+  test("UCL transparent test: object", function()
     assert_equal(tostring(reply), '{"key":"val"}')
     assert_equal(reply:type(), 'object')
     assert_equal(reply:at('key'):unwrap(), 'val')
@@ -17,14 +21,13 @@ context("UCL manipulation", function()
     reply.ololo = 'ohlol'
     reply.key = 'ohlol'
     assert_equal(reply:at('key'):unwrap(), 'ohlol')
-    local expected = {
-      key = 'ohlol',
-      ololo = 'ohlol'
-    }
+
     for k, v in reply:pairs() do
       assert_equal(expected[k], v:unwrap())
     end
+  end)
 
+  test("UCL transparent test: array", function()
     parser = ucl.parser()
     res, err = parser:parse_string('["e1","e2"]')
     assert(res)
@@ -42,7 +45,9 @@ context("UCL manipulation", function()
     for k, v in ireply:ipairs() do
       assert_equal(v:unwrap(), iexpected[k])
     end
+  end)
 
+  test("UCL transparent test: concat", function()
     reply.tbl = ireply
     expected.tbl = iexpected
     for k, v in reply:pairs() do
@@ -54,7 +59,17 @@ context("UCL manipulation", function()
         assert_equal(expected[k], v:unwrap())
       end
     end
-
-    collectgarbage() -- To ensure we don't crash with asan
   end)
+
+  test("UCL transparent test: implicit conversion array->object", function()
+    -- Assign empty table, so it'll be an array
+    reply.t = {}
+    assert_equal(reply.t:type(), 'array')
+    -- We can convert empty table to object
+    reply.t.test = 'test'
+    assert_equal(reply.t:type(), 'object')
+    assert_equal(reply.t.test:unwrap(), 'test')
+  end)
+
+  collectgarbage() -- To ensure we don't crash with asan
 end)
