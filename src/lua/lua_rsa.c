@@ -705,8 +705,9 @@ lua_rsa_verify_memory(lua_State *L)
 	data = luaL_checklstring(L, 3, &sz);
 
 	if (pkey != NULL && signature != NULL && data != NULL) {
-		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_from_pkey(NULL, pkey, NULL);
-		EVP_PKEY_verify_init(pctx);
+		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(pkey, NULL);
+  g_assert(pctx != NULL);
+  g_assert(EVP_PKEY_verify_init(pctx) == 1);
 
 		ret = EVP_PKEY_verify(pctx, signature->str, signature->len, data, sz);
 
@@ -751,7 +752,7 @@ lua_rsa_sign_memory(lua_State *L)
 	data = luaL_checklstring(L, 2, &sz);
 
 	if (pkey != NULL && data != NULL) {
-		signature = rspamd_fstring_sized_new(256);
+		signature = rspamd_fstring_sized_new(EVP_PKEY_get_size());
 
 		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(pkey, NULL);
 		g_assert(pctx != NULL);
