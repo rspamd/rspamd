@@ -1101,21 +1101,23 @@ void rspamd_task_result_adjust_grow_factor(struct rspamd_task *task,
 		}
 
 		/* Adjust factor by selecting all symbols and checking those with positive scores */
+		float *scores = rspamd_mempool_alloc(task->task_pool, sizeof(float) * kh_size(result->symbols));
+		gsize i = 0;
+
 		kh_foreach(result->symbols, kk, res, {
-			if (res->score > 0) {
-				double mult = grow_factor - 1.0;
-				/* We adjust the factor by the ratio of the score to the max limit */
-				if (max_limit > 0 && !isnan(res->score)) {
-					mult *= res->score / max_limit;
-					final_grow_factor *= 1.0 + mult;
-				}
+			if (res->score > 0 && !isnan(res->score)) {
+				scores[i++] = res->score / max_limit;
 			}
 		});
 
+		float sc_adjustment = rspamd_sum_floats(scores, &i);
+		final_grow_factor = grow_factor * sc_adjustment;
+
+
 		/* At this stage we know that we have some grow factor to apply */
 		if (final_grow_factor > 1.0) {
-			msg_info_task("calculated final grow factor for task: %.3f (%.2f the original one)",
-						  final_grow_factor, grow_factor);
+			msg_info_task("calculated final grow factor for task: %.3f (%.2f the original one; %.2f max limit)",
+						  final_grow_factor, grow_factor, max_limit);
 			kh_foreach(result->symbols, kk, res, {
 				if (res->score > 0) {
 					result->score -= res->score;
