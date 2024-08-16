@@ -399,6 +399,29 @@ return function(cfg)
     end
   end
 
+  -- Deal with dkim settings
+  if not cfg.dkim then
+    cfg.dkim = {}
+  else
+    if cfg.dkim.sign_condition then
+      -- We have an obsoleted sign condition, so we need to either add dkim_signing and move it
+      -- there or just move sign condition there...
+      if not cfg.dkim_signing then
+        logger.warnx('obsoleted DKIM signing method used, converting it to "dkim_signing" module')
+        cfg.dkim_signing = {
+          sign_condition = cfg.dkim.sign_condition
+        }
+      else
+        if not cfg.dkim_signing.sign_condition then
+          logger.warnx('obsoleted DKIM signing method used, move it to "dkim_signing" module')
+          cfg.dkim_signing.sign_condition = cfg.dkim.sign_condition
+        else
+          logger.warnx('obsoleted DKIM signing method used, ignore it as "dkim_signing" also defines condition!')
+        end
+      end
+    end
+  end
+
   -- Try to find some obvious issues with configuration
   for k, v in cfg:pairs() do
     if v:type() == 'object' and v:at(k) and v:at(k):type() == 'object' then
