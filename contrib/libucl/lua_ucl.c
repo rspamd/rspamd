@@ -44,6 +44,7 @@
 #include "ucl.h"
 #include "ucl_internal.h"
 #include "lua_ucl.h"
+#include "kvec.h"
 #include <strings.h>
 
 /***
@@ -1423,67 +1424,141 @@ lua_ucl_newindex(lua_State *L)
 	obj = lua_ucl_object_get(L, 1);
 	int key_type = lua_type(L, 2);
 
-	if (ucl_object_type(obj) == UCL_OBJECT && (key_type == LUA_TSTRING)) {
-		lua_Integer keylen;
-		const char *key = lua_tolstring(L, 2, &keylen);
+	if (ucl_object_type(obj) == UCL_OBJECT) {
+		if (key_type == LUA_TSTRING) {
+			lua_Integer keylen;
+			const char *key = lua_tolstring(L, 2, &keylen);
 
-		ucl_object_t *value_obj = lua_ucl_object_get(L, 3);
-		if (value_obj) {
-			value_obj = ucl_object_ref(value_obj);
-		}
-		else {
-			value_obj = ucl_object_lua_import(L, 3);
-		}
-
-		if (ucl_object_lookup_len(obj, key, keylen) != NULL) {
-			if (value_obj != NULL) {
-				ucl_object_replace_key(obj, value_obj, key, keylen, true);
+			ucl_object_t *value_obj = lua_ucl_object_get(L, 3);
+			if (value_obj) {
+				value_obj = ucl_object_ref(value_obj);
 			}
 			else {
-				/* Delete key */
-				ucl_object_delete_keyl(obj, key, keylen);
+				value_obj = ucl_object_lua_import(L, 3);
+			}
+
+			if (ucl_object_lookup_len(obj, key, keylen) != NULL) {
+				if (value_obj != NULL) {
+					ucl_object_replace_key(obj, value_obj, key, keylen, true);
+				}
+				else {
+					/* Delete key */
+					ucl_object_delete_keyl(obj, key, keylen);
+				}
+			}
+			else {
+				if (value_obj != NULL) {
+					ucl_object_insert_key(obj, value_obj, key, keylen, true);
+				}
+				/* Do nothing if value_obj is null, like Lua does */
+			}
+		}
+		else if (key_type == LUA_TNUMBER) {
+			/*
+			 * We have some object but wanted it to be an array
+			 * In Lua, this is allowed but UCL has distinction between array and object
+			 * Here, we allow one thing: if an object is empty, and we want a numeric index, we convert it to an array
+			 */
+			lua_Integer idx = lua_tointeger(L, 2);
+			if (idx == 1 && obj->len == 0 && obj->value.ov == NULL) {
+				/* UCL preallocate arrays, but it is not a requirement once av is NULL */
+				obj->type = UCL_ARRAY;
+				ucl_object_t *value_obj = lua_ucl_object_get(L, 3);
+				if (value_obj) {
+					value_obj = ucl_object_ref(value_obj);
+				}
+				else {
+					value_obj = ucl_object_lua_import(L, 3);
+				}
+
+				if (value_obj == NULL) {
+					return luaL_error(L, "invalid value type: %s", lua_typename(L, lua_type(L, 3)));
+				}
+				ucl_array_append(obj, value_obj);
+			}
+			else {
+				return luaL_error(L, "invalid index type for an object: %s", lua_typename(L, key_type));
 			}
 		}
 		else {
-			if (value_obj != NULL) {
-				ucl_object_insert_key(obj, value_obj, key, keylen, true);
-			}
-			/* Do nothing if value_obj is null, like Lua does */
+			return luaL_error(L, "invalid index type for an object: %s", lua_typename(L, key_type));
 		}
 
 		return 0;
 	}
-	else if (ucl_object_type(obj) == UCL_ARRAY && (key_type == LUA_TNUMBER)) {
-		lua_Integer idx = lua_tointeger(L, 2);
+	else if (ucl_object_type(obj) == UCL_ARRAY) {
+		if (key_type == LUA_TNUMBER) {
+			lua_Integer idx = lua_tointeger(L, 2);
 
-		ucl_object_t *value_obj = lua_ucl_object_get(L, 3);
-		if (value_obj) {
-			value_obj = ucl_object_ref(value_obj);
+			ucl_object_t *value_obj = lua_ucl_object_get(L, 3);
+			if (value_obj) {
+				value_obj = ucl_object_ref(value_obj);
+			}
+			else {
+				value_obj = ucl_object_lua_import(L, 3);
+			}
+
+			if (value_obj == NULL) {
+				return luaL_error(L, "invalid value type: %s", lua_typename(L, lua_type(L, 3)));
+			}
+
+			/* Lua allows sparse arrays and ucl does not
+			 * So we have 2 options:
+			 * 1) Idx is some existing index, so we need to replace it
+			 * 3) Idx is #len, so we append it
+			 * Everything else is an error
+			 */
+			if (idx == ucl_array_size(obj) + 1) {
+				ucl_array_append(obj, value_obj);
+			}
+			else if (idx >= 1 && idx <= ucl_array_size(obj)) {
+				ucl_array_replace_index(obj, value_obj, idx - 1);
+			}
+			else {
+				ucl_object_unref(value_obj);
+
+				return luaL_error(L, "invalid index for array: %d", (int) idx);
+			}
+		}
+		else if (key_type == LUA_TSTRING) {
+			/*
+			 * We have some array but wanted it to be an object
+			 * In Lua, this is allowed but UCL has distinction between array and object
+			 * Here, we allow one thing: if an array is empty, and we want a string index, we convert it to an object
+			 * The biggest issue is that ucl array is preallocated in general, so we need to free it somehow
+			 */
+			/*
+			 * Dirty hacks are here
+			 */
+			kvec_t(ucl_object_t *) *real_ar = obj->value.av;
+
+			if (real_ar) {
+				kv_destroy(*real_ar);
+			}
+			UCL_FREE(sizeof(*real_ar), real_ar);
+			obj->value.av = NULL;
+			obj->type = UCL_OBJECT;
+
+			lua_Integer keylen;
+			const char *key = lua_tolstring(L, 2, &keylen);
+
+			ucl_object_t *value_obj = lua_ucl_object_get(L, 3);
+			if (value_obj) {
+				value_obj = ucl_object_ref(value_obj);
+			}
+			else {
+				value_obj = ucl_object_lua_import(L, 3);
+			}
+
+			if (value_obj) {
+				ucl_object_insert_key(obj, value_obj, key, keylen, true);
+			}
+			else {
+				return luaL_error(L, "invalid value type: %s", lua_typename(L, lua_type(L, 3)));
+			}
 		}
 		else {
-			value_obj = ucl_object_lua_import(L, 3);
-		}
-
-		if (value_obj == NULL) {
-			return luaL_error(L, "invalid value type: %s", lua_typename(L, lua_type(L, 3)));
-		}
-
-		/* Lua allows sparse arrays and ucl does not
-		 * So we have 3 options:
-		 * 1) Idx is some existing index, so we need to replace it
-		 * 3) Idx is #len, so we append it
-		 * Everything else is an error
-		 */
-		if (idx == ucl_array_size(obj) + 1) {
-			ucl_array_append(obj, value_obj);
-		}
-		else if (idx >= 1 && idx <= ucl_array_size(obj)) {
-			ucl_array_replace_index(obj, value_obj, idx - 1);
-		}
-		else {
-			ucl_object_unref(value_obj);
-
-			return luaL_error(L, "invalid index for array: %d", (int) idx);
+			return luaL_error(L, "invalid index type for an array: %s", lua_typename(L, key_type));
 		}
 
 		return 0;
