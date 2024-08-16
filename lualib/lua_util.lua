@@ -755,9 +755,29 @@ local function override_defaults(def, override)
 
   local res = {}
 
-  for k, v in pairs(override) do
-    if type(v) == 'table' then
-      if def[k] and type(def[k]) == 'table' then
+  -- Allow transparent ucl
+  local pairs_func, def_pairs_func = pairs, pairs
+  local type_func, def_type_func = type, type
+  if type(override[0]) == 'userdata' then
+    pairs_func = function(t)
+      return t:pairs()
+    end
+    type_func = function(t)
+      return t:type()
+    end
+  end
+  if type(def[0]) == 'userdata' then
+    def_pairs_func = function(t)
+      return t:pairs()
+    end
+    def_type_func = function(t)
+      return t:type()
+    end
+  end
+
+  for k, v in pairs_func(override) do
+    if type_func(v) == 'table' then
+      if def[k] and def_type_func(def[k]) == 'table' then
         -- Recursively override elements
         res[k] = override_defaults(def[k], v)
       else
@@ -768,7 +788,7 @@ local function override_defaults(def, override)
     end
   end
 
-  for k, v in pairs(def) do
+  for k, v in def_pairs_func(def) do
     if type(res[k]) == 'nil' then
       res[k] = v
     end
