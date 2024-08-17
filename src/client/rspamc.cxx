@@ -524,16 +524,13 @@ rspamc_password_callback(const char *option_name,
 			else {
 				/* Strip trailing spaces */
 				auto *map = (char *) locked_mmap.value().get_map();
-				auto *end = map + locked_mmap.value().get_size() - 1;
-
-				while (g_ascii_isspace(*end) && end > map) {
-					end--;
-				}
-
-				end++;
-				value_view = std::string_view{map, static_cast<std::size_t>(end - map + 1)};
-				processed_passwd.assign(std::begin(value_view), std::end(value_view));
-				processed_passwd.push_back('\0');
+				value_view = std::string_view{map, locked_mmap->get_size()};
+				auto right = value_view.end() - 1;
+				for (; right > value_view.cbegin() && g_ascii_isspace(*right); --right)
+					;
+				std::string_view str{value_view.begin(), static_cast<size_t>(right - value_view.begin()) + 1};
+				processed_passwd.assign(std::begin(str), std::end(str));
+				processed_passwd.push_back('\0'); /* Null-terminate for C part */
 			}
 		}
 		else {
