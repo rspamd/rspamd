@@ -706,8 +706,8 @@ lua_rsa_verify_memory(lua_State *L)
 
 	if (pkey != NULL && signature != NULL && data != NULL) {
 		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(pkey, NULL);
-  g_assert(pctx != NULL);
-  g_assert(EVP_PKEY_verify_init(pctx) == 1);
+  		g_assert(pctx != NULL);
+		g_assert(EVP_PKEY_verify_init(pctx) == 1);
 
 		ret = EVP_PKEY_verify(pctx, signature->str, signature->len, data, sz);
 
