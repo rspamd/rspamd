@@ -91,22 +91,22 @@ static const struct luaL_reg rsasignlib_m[] = {
 	{"__gc", lua_rsa_signature_gc},
 	{NULL, NULL}};
 
-static RSA *
+static EVP_PKEY *
 lua_check_rsa_pubkey(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_rsa_pubkey_classname);
 
 	luaL_argcheck(L, ud != NULL, 1, "'rsa_pubkey' expected");
-	return ud ? *((RSA **) ud) : NULL;
+	return ud ? *((EVP_PKEY **) ud) : NULL;
 }
 
-static RSA *
+static EVP_PKEY *
 lua_check_rsa_privkey(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_rsa_privkey_classname);
 
 	luaL_argcheck(L, ud != NULL, 1, "'rsa_privkey' expected");
-	return ud ? *((RSA **) ud) : NULL;
+	return ud ? *((EVP_PKEY **) ud) : NULL;
 }
 
 static rspamd_fstring_t *
@@ -121,7 +121,7 @@ lua_check_rsa_sign(lua_State *L, int pos)
 static int
 lua_rsa_pubkey_load(lua_State *L)
 {
-	RSA *rsa = NULL, **prsa;
+	EVP_PKEY *pkey = NULL, **ppkey;
 	const char *filename;
 	FILE *f;
 
@@ -135,15 +135,15 @@ lua_rsa_pubkey_load(lua_State *L)
 			lua_pushnil(L);
 		}
 		else {
-			if (!PEM_read_RSA_PUBKEY(f, &rsa, NULL, NULL)) {
+			if (!PEM_read_PUBKEY(f, &pkey, NULL, NULL)) {
 				msg_err("cannot open pubkey from file: %s, %s", filename,
 						ERR_error_string(ERR_get_error(), NULL));
 				lua_pushnil(L);
 			}
 			else {
-				prsa = lua_newuserdata(L, sizeof(RSA *));
+				ppkey = lua_newuserdata(L, sizeof(EVP_PKEY *));
 				rspamd_lua_setclass(L, rspamd_rsa_pubkey_classname, -1);
-				*prsa = rsa;
+				*ppkey = pkey;
 			}
 			fclose(f);
 		}
@@ -161,15 +161,14 @@ lua_rsa_privkey_save(lua_State *L)
 	const char *type = "pem";
 	FILE *f;
 	int ret;
-
-	RSA *rsa = lua_check_rsa_privkey(L, 1);
+	EVP_PKEY *pkey = lua_check_rsa_privkey(L, 1);
 
 	filename = luaL_checkstring(L, 2);
 	if (lua_gettop(L) > 2) {
 		type = luaL_checkstring(L, 3);
 	}
 
-	if (rsa != NULL && filename != NULL) {
+	if (pkey != NULL && filename != NULL) {
 		if (strcmp(filename, "-") == 0) {
 			f = stdout;
 		}
@@ -189,10 +188,10 @@ lua_rsa_privkey_save(lua_State *L)
 			}
 
 			if (strcmp(type, "der") == 0) {
-				ret = i2d_RSAPrivateKey_fp(f, rsa);
+				ret = i2d_PrivateKey_fp(f, pkey);
 			}
 			else {
-				ret = PEM_write_RSAPrivateKey(f, rsa, NULL, NULL, 0, NULL, NULL);
+				ret = PEM_write_PrivateKey(f, pkey, NULL, NULL, 0, NULL, NULL);
 			}
 
 			if (!ret) {
@@ -223,7 +222,7 @@ lua_rsa_privkey_save(lua_State *L)
 static int
 lua_rsa_pubkey_create(lua_State *L)
 {
-	RSA *rsa = NULL, **prsa;
+	EVP_PKEY *pkey, **ppkey;
 	const char *buf;
 	BIO *bp;
 
@@ -231,15 +230,15 @@ lua_rsa_pubkey_create(lua_State *L)
 	if (buf != NULL) {
 		bp = BIO_new_mem_buf((void *) buf, -1);
 
-		if (!PEM_read_bio_RSA_PUBKEY(bp, &rsa, NULL, NULL)) {
+		if (!PEM_read_bio_PUBKEY(bp, &pkey, NULL, NULL)) {
 			msg_err("cannot parse pubkey: %s",
 					ERR_error_string(ERR_get_error(), NULL));
 			lua_pushnil(L);
 		}
 		else {
-			prsa = lua_newuserdata(L, sizeof(RSA *));
+			ppkey = lua_newuserdata(L, sizeof(EVP_PKEY *));
 			rspamd_lua_setclass(L, rspamd_rsa_pubkey_classname, -1);
-			*prsa = rsa;
+			*ppkey = pkey;
 		}
 		BIO_free(bp);
 	}
@@ -252,10 +251,10 @@ lua_rsa_pubkey_create(lua_State *L)
 static int
 lua_rsa_pubkey_gc(lua_State *L)
 {
-	RSA *rsa = lua_check_rsa_pubkey(L, 1);
+	EVP_PKEY *pkey = lua_check_rsa_pubkey(L, 1);
 
-	if (rsa != NULL) {
-		RSA_free(rsa);
+	if (pkey != NULL) {
+		EVP_PKEY_free(pkey);
 	}
 
 	return 0;
@@ -264,18 +263,18 @@ lua_rsa_pubkey_gc(lua_State *L)
 static int
 lua_rsa_pubkey_tostring(lua_State *L)
 {
-	RSA *rsa = lua_check_rsa_pubkey(L, 1);
+	EVP_PKEY *pkey = lua_check_rsa_pubkey(L, 1);
 
-	if (rsa != NULL) {
+	if (pkey != NULL) {
 		BIO *pubout = BIO_new(BIO_s_mem());
 		const char *pubdata;
 		gsize publen;
-		int rc = i2d_RSA_PUBKEY_bio(pubout, rsa);
+		int rc = i2d_PUBKEY_bio(pubout, pkey);
 
 		if (rc != 1) {
 			BIO_free(pubout);
 
-			return luaL_error(L, "i2d_RSA_PUBKEY_bio failed");
+			return luaL_error(L, "i2d_PUBKEY_bio failed");
 		}
 
 		publen = BIO_get_mem_data(pubout, &pubdata);
@@ -292,7 +291,7 @@ lua_rsa_pubkey_tostring(lua_State *L)
 static int
 lua_rsa_privkey_load_file(lua_State *L)
 {
-	RSA *rsa = NULL, **prsa;
+	EVP_PKEY *pkey = NULL, **ppkey;
 	const char *filename;
 	FILE *f;
 
@@ -306,15 +305,15 @@ lua_rsa_privkey_load_file(lua_State *L)
 			lua_pushnil(L);
 		}
 		else {
-			if (!PEM_read_RSAPrivateKey(f, &rsa, NULL, NULL)) {
+			if (!PEM_read_PrivateKey(f, &pkey, NULL, NULL)) {
 				msg_err("cannot open private key from file: %s, %s", filename,
 						ERR_error_string(ERR_get_error(), NULL));
 				lua_pushnil(L);
 			}
 			else {
-				prsa = lua_newuserdata(L, sizeof(RSA *));
+				ppkey = lua_newuserdata(L, sizeof(EVP_PKEY *));
 				rspamd_lua_setclass(L, rspamd_rsa_privkey_classname, -1);
-				*prsa = rsa;
+				*ppkey = pkey;
 			}
 			fclose(f);
 		}
@@ -328,7 +327,7 @@ lua_rsa_privkey_load_file(lua_State *L)
 static int
 lua_rsa_privkey_load_pem(lua_State *L)
 {
-	RSA *rsa = NULL, **prsa;
+	EVP_PKEY *pkey = NULL, **ppkey;
 	BIO *b;
 	struct rspamd_lua_text *t;
 	const char *data;
@@ -351,15 +350,15 @@ lua_rsa_privkey_load_pem(lua_State *L)
 	if (data != NULL) {
 		b = BIO_new_mem_buf(data, len);
 
-		if (!PEM_read_bio_RSAPrivateKey(b, &rsa, NULL, NULL)) {
+		if (!PEM_read_bio_PrivateKey(b, &pkey, NULL, NULL)) {
 			msg_err("cannot open private key from data, %s",
 					ERR_error_string(ERR_get_error(), NULL));
 			lua_pushnil(L);
 		}
 		else {
-			prsa = lua_newuserdata(L, sizeof(RSA *));
+			ppkey = lua_newuserdata(L, sizeof(EVP_PKEY *));
 			rspamd_lua_setclass(L, rspamd_rsa_privkey_classname, -1);
-			*prsa = rsa;
+			*ppkey = pkey;
 		}
 
 		BIO_free(b);
@@ -374,7 +373,7 @@ lua_rsa_privkey_load_pem(lua_State *L)
 static int
 lua_rsa_privkey_load_raw(lua_State *L)
 {
-	RSA *rsa = NULL, **prsa;
+	EVP_PKEY *pkey = NULL, **ppkey;
 	BIO *b;
 	struct rspamd_lua_text *t;
 	const char *data;
@@ -396,17 +395,17 @@ lua_rsa_privkey_load_raw(lua_State *L)
 
 	if (data != NULL) {
 		b = BIO_new_mem_buf(data, len);
-		rsa = d2i_RSAPrivateKey_bio(b, NULL);
+		pkey = d2i_PrivateKey_bio(b, NULL);
 
-		if (rsa == NULL) {
+		if (pkey == NULL) {
 			msg_err("cannot open private key from data, %s",
 					ERR_error_string(ERR_get_error(), NULL));
 			lua_pushnil(L);
 		}
 		else {
-			prsa = lua_newuserdata(L, sizeof(RSA *));
+			ppkey = lua_newuserdata(L, sizeof(EVP_PKEY *));
 			rspamd_lua_setclass(L, rspamd_rsa_privkey_classname, -1);
-			*prsa = rsa;
+			*ppkey = pkey;
 		}
 
 		BIO_free(b);
@@ -421,9 +420,8 @@ lua_rsa_privkey_load_raw(lua_State *L)
 static int
 lua_rsa_privkey_load_base64(lua_State *L)
 {
-	RSA *rsa = NULL, **prsa;
+	EVP_PKEY *pkey = NULL, **ppkey;
 	BIO *b;
-	EVP_PKEY *evp = NULL;
 	struct rspamd_lua_text *t;
 	const char *data;
 	unsigned char *decoded;
@@ -454,21 +452,18 @@ lua_rsa_privkey_load_base64(lua_State *L)
 
 		b = BIO_new_mem_buf(decoded, dec_len);
 
-		if (d2i_PrivateKey_bio(b, &evp) != NULL) {
-			rsa = EVP_PKEY_get1_RSA(evp);
-
-			if (rsa == NULL) {
+		if (d2i_PrivateKey_bio(b, &pkey) != NULL) {
+			if (pkey == NULL) {
 				msg_err("cannot open RSA private key from data, %s",
 						ERR_error_string(ERR_get_error(), NULL));
 				lua_pushnil(L);
 			}
 			else {
-				prsa = lua_newuserdata(L, sizeof(RSA *));
+				ppkey = lua_newuserdata(L, sizeof(EVP_PKEY *));
 				rspamd_lua_setclass(L, rspamd_rsa_privkey_classname, -1);
-				*prsa = rsa;
+				*ppkey = pkey;
 			}
 
-			EVP_PKEY_free(evp);
 		}
 		else {
 			msg_err("cannot open EVP private key from data, %s",
@@ -489,7 +484,7 @@ lua_rsa_privkey_load_base64(lua_State *L)
 static int
 lua_rsa_privkey_create(lua_State *L)
 {
-	RSA *rsa = NULL, **prsa;
+	EVP_PKEY *pkey = NULL, **ppkey;
 	const char *buf;
 	BIO *bp;
 
@@ -497,15 +492,15 @@ lua_rsa_privkey_create(lua_State *L)
 	if (buf != NULL) {
 		bp = BIO_new_mem_buf((void *) buf, -1);
 
-		if (!PEM_read_bio_RSAPrivateKey(bp, &rsa, NULL, NULL)) {
+		if (!PEM_read_bio_PrivateKey(bp, &pkey, NULL, NULL)) {
 			msg_err("cannot parse private key: %s",
 					ERR_error_string(ERR_get_error(), NULL));
 			lua_pushnil(L);
 		}
 		else {
-			prsa = lua_newuserdata(L, sizeof(RSA *));
+			ppkey = lua_newuserdata(L, sizeof(EVP_PKEY *));
 			rspamd_lua_setclass(L, rspamd_rsa_privkey_classname, -1);
-			*prsa = rsa;
+			*ppkey = pkey;
 		}
 		BIO_free(bp);
 	}
@@ -518,10 +513,10 @@ lua_rsa_privkey_create(lua_State *L)
 static int
 lua_rsa_privkey_gc(lua_State *L)
 {
-	RSA *rsa = lua_check_rsa_privkey(L, 1);
+	EVP_PKEY *pkey = lua_check_rsa_privkey(L, 1);
 
-	if (rsa != NULL) {
-		RSA_free(rsa);
+	if (pkey != NULL) {
+		EVP_PKEY_free(pkey);
 	}
 
 	return 0;
@@ -699,19 +694,22 @@ lua_rsa_signature_base64(lua_State *L)
 static int
 lua_rsa_verify_memory(lua_State *L)
 {
-	RSA *rsa;
+	EVP_PKEY *pkey;
 	rspamd_fstring_t *signature;
 	const char *data;
 	gsize sz;
 	int ret;
 
-	rsa = lua_check_rsa_pubkey(L, 1);
+	pkey = lua_check_rsa_pubkey(L, 1);
 	signature = lua_check_rsa_sign(L, 2);
 	data = luaL_checklstring(L, 3, &sz);
 
-	if (rsa != NULL && signature != NULL && data != NULL) {
-		ret = RSA_verify(NID_sha256, data, sz,
-						 signature->str, signature->len, rsa);
+	if (pkey != NULL && signature != NULL && data != NULL) {
+		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(pkey, NULL);
+  		g_assert(pctx != NULL);
+		g_assert(EVP_PKEY_verify_init(pctx) == 1);
+
+		ret = EVP_PKEY_verify(pctx, signature->str, signature->len, data, sz);
 
 		if (ret == 0) {
 			lua_pushboolean(L, FALSE);
@@ -722,6 +720,7 @@ lua_rsa_verify_memory(lua_State *L)
 		else {
 			lua_pushboolean(L, TRUE);
 		}
+		EVP_PKEY_CTX_free(pctx);
 	}
 	else {
 		lua_pushnil(L);
@@ -743,22 +742,26 @@ lua_rsa_verify_memory(lua_State *L)
 static int
 lua_rsa_sign_memory(lua_State *L)
 {
-	RSA *rsa;
+	EVP_PKEY *pkey;
 	rspamd_fstring_t *signature, **psig;
 	const char *data;
 	gsize sz;
 	int ret;
 
-	rsa = lua_check_rsa_privkey(L, 1);
+	pkey = lua_check_rsa_privkey(L, 1);
 	data = luaL_checklstring(L, 2, &sz);
 
-	if (rsa != NULL && data != NULL) {
-		signature = rspamd_fstring_sized_new(RSA_size(rsa));
+	if (pkey != NULL && data != NULL) {
+		signature = rspamd_fstring_sized_new(EVP_PKEY_get_size(pkey));
 
-		unsigned int siglen = signature->len;
-		ret = RSA_sign(NID_sha256, data, sz,
-					   signature->str, &siglen, rsa);
+		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(pkey, NULL);
+		g_assert(pctx != NULL);
 
+		g_assert(EVP_PKEY_sign_init(pctx) == 1);
+		size_t slen = signature->allocated;
+
+		ret = EVP_PKEY_sign(pctx, signature->str, &slen, data, sz);
+		EVP_PKEY_CTX_free(pctx);
 		if (ret != 1) {
 			rspamd_fstring_free(signature);
 
@@ -766,7 +769,7 @@ lua_rsa_sign_memory(lua_State *L)
 							  ERR_error_string(ERR_get_error(), NULL));
 		}
 		else {
-			signature->len = siglen;
+			signature->len = slen;
 			psig = lua_newuserdata(L, sizeof(rspamd_fstring_t *));
 			rspamd_lua_setclass(L, rspamd_rsa_signature_classname, -1);
 			*psig = signature;
@@ -783,7 +786,7 @@ static int
 lua_rsa_keypair(lua_State *L)
 {
 	BIGNUM *e;
-	RSA *rsa, *pub_rsa, *priv_rsa, **prsa;
+	EVP_PKEY *pkey = NULL, *pub_pkey, *priv_pkey, **ppkey;
 	int bits = lua_gettop(L) > 0 ? lua_tointeger(L, 1) : 1024;
 
 	if (bits > 4096 || bits < 512) {
@@ -791,21 +794,30 @@ lua_rsa_keypair(lua_State *L)
 	}
 
 	e = BN_new();
-	rsa = RSA_new();
+
 	g_assert(BN_set_word(e, RSA_F4) == 1);
-	g_assert(RSA_generate_key_ex(rsa, bits, e, NULL) == 1);
+	EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
+	g_assert(pctx != NULL);
+	g_assert(EVP_PKEY_keygen_init(pctx) == 1);
 
-	priv_rsa = RSAPrivateKey_dup(rsa);
-	prsa = lua_newuserdata(L, sizeof(RSA *));
+	g_assert(EVP_PKEY_CTX_set_rsa_keygen_bits(pctx, bits) == 1);
+	g_assert(EVP_PKEY_CTX_set1_rsa_keygen_pubexp(pctx, e) == 1);
+
+	g_assert(EVP_PKEY_keygen(pctx, &pkey) == 1);
+	g_assert(pkey != NULL);
+
+	priv_pkey = EVP_PKEY_dup(pkey);
+	ppkey = lua_newuserdata(L, sizeof(EVP_PKEY *));
 	rspamd_lua_setclass(L, rspamd_rsa_privkey_classname, -1);
-	*prsa = priv_rsa;
+	*ppkey = priv_pkey;
 
-	pub_rsa = RSAPublicKey_dup(rsa);
-	prsa = lua_newuserdata(L, sizeof(RSA *));
+	pub_pkey = EVP_PKEY_dup(pkey);
+	ppkey = lua_newuserdata(L, sizeof(EVP_PKEY *));
 	rspamd_lua_setclass(L, rspamd_rsa_pubkey_classname, -1);
-	*prsa = pub_rsa;
+	*ppkey = pub_pkey;
 
-	RSA_free(rsa);
+	EVP_PKEY_free(pkey);
+	EVP_PKEY_CTX_free(pctx);
 	BN_free(e);
 
 	return 2;
