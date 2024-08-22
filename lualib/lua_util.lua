@@ -1687,6 +1687,24 @@ local function join_path(...)
 end
 exports.join_path = join_path
 
+---[[[
+-- @function lua_util.url_encode_string(str)
+-- URL encodes a string
+--
+-- @param {string} str string to encode
+-- @return {string} URL encoded string
+--
+---]]]
+local function url_encode_string(str)
+  str = string.gsub(str, "([^%w _%%%-%.~])",
+      function(c)
+        return string.format("%%%02X", string.byte(c))
+      end)
+  str = string.gsub(str, " ", "+")
+  return str
+end
+exports.url_encode_string = url_encode_string
+
 -- Short unit test for sanity
 if path_sep == '/' then
   assert(join_path('/path', 'to', 'file') == '/path/to/file')
