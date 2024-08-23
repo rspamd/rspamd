@@ -345,7 +345,22 @@ Run Rspamd
   Export Scoped Variables  ${RSPAMD_SCOPE}  RSPAMD_PROCESS=${result}
 
   # Confirm worker is reachable
-  Wait Until Keyword Succeeds  15x  1 sec  Ping Rspamd  ${RSPAMD_LOCAL_ADDR}  ${check_port}
+  FOR    ${index}    IN RANGE    75
+    ${ok} =  Rspamd Startup Check  ${check_port}
+    IF  ${ok}  CONTINUE
+    Sleep  0.1s
+  END
+
+Rspamd Startup Check
+  [Arguments]  ${check_port}=${RSPAMD_PORT_NORMAL}
+  ${res} =  Wait For Process  ${RSPAMD_PROCESS}  0.1s
+  ${handle} =  Get Process Object
+  ${res} =  Evaluate  $handle.poll()
+  IF  ${res} != None
+    Fail  Process Is Gone
+  END
+  ${ping} =  Run Keyword And Return Status  Ping Rspamd  ${RSPAMD_LOCAL_ADDR}  ${check_port}
+  [Return]  ${ping}
 
 Rspamadm Setup
   ${RSPAMADM_TMPDIR} =  Make Temporary Directory
