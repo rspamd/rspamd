@@ -1300,12 +1300,17 @@ end
 ---]]]
 exports.encode_header = function(header, pub_key)
   local rspamd_secretbox = require "rspamd_cryptobox_secretbox"
+
   if not pub_key or pub_key == '' then
+    return nil
+  elseif not rspamd_util.is_valid_utf8(pub_key) then
     return nil
   end
   local cryptobox = rspamd_secretbox.create(pub_key)
 
   if not header or header == '' then
+    return header
+  elseif not rspamd_util.is_valid_utf8(header) then
     return header
   end
   local encoded_header = cryptobox:encrypt(header)
