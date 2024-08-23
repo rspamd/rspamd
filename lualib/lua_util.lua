@@ -1696,6 +1696,9 @@ exports.join_path = join_path
 --
 ---]]]
 local function url_encode_string(str)
+  if str == nil then
+    return ''
+  end
   str = string.gsub(str, "([^%w _%%%-%.~])",
       function(c)
         return string.format("%%%02X", string.byte(c))
