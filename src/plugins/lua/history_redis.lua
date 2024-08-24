@@ -22,7 +22,7 @@ redis_history {
   # History key name
   key_prefix = 'rs_history{{HOSTNAME}}{{COMPRESS}}';
   # History expire in seconds
-  expire = 0;
+  expire = 432000;
   # History rows limit
   nrows = 200;
   # Use zstd compression when storing data in redis
