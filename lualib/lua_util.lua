@@ -1292,6 +1292,32 @@ exports.maybe_obfuscate_string = function(subject, settings, prefix)
 end
 
 ---[[[
+-- @function lua_util.encode_header(header, pub_key)
+-- Encodes header with configured public key.
+-- If pub_key is not set then nil is returned. If header is empty then header is returned.
+-- @return encoded header
+---]]]
+exports.encode_header = function(header, pub_key)
+  local rspamd_secretbox = require "rspamd_cryptobox_secretbox"
+
+  if not pub_key or pub_key == '' then
+    return nil
+  elseif not rspamd_util.is_valid_utf8(pub_key) then
+    return nil
+  end
+  local cryptobox = rspamd_secretbox.create(pub_key)
+
+  if not header or header == '' then
+    return header
+  elseif not rspamd_util.is_valid_utf8(header) then
+    return header
+  end
+  local encoded_header = cryptobox:encrypt(header)
+
+  return encoded_header
+end
+
+---[[[
 -- @function lua_util.callback_from_string(str)
 -- Converts a string like `return function(...) end` to lua function and return true and this function
 -- or returns false + error message
