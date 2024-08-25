@@ -54,7 +54,7 @@ struct rspamd_lua_cryptobox_hash {
 	union {
 		rspamd_cryptobox_hash_state_t *h;
 		EVP_MD_CTX *c;
-		HMAC_CTX *hmac_c;
+		EVP_MAC_CTX *hmac_c;
 		rspamd_cryptobox_fast_hash_state_t *fh;
 	} content;
 
@@ -899,7 +899,7 @@ rspamd_lua_hash_update(struct rspamd_lua_cryptobox_hash *h,
 			EVP_DigestUpdate(h->content.c, p, len);
 			break;
 		case LUA_CRYPTOBOX_HASH_HMAC:
-			HMAC_Update(h->content.hmac_c, p, len);
+			EVP_MAC_update(h->content.hmac_c, p, len);
 			break;
 		case LUA_CRYPTOBOX_HASH_XXHASH64:
 		case LUA_CRYPTOBOX_HASH_XXHASH32:
@@ -931,7 +931,7 @@ lua_cryptobox_hash_dtor(struct rspamd_lua_cryptobox_hash *h)
 		HMAC_CTX_cleanup(h->content.hmac_c);
 		g_free(h->content.hmac_c);
 #else
-		HMAC_CTX_free(h->content.hmac_c);
+		EVP_MAC_CTX_free(h->content.hmac_c);
 #endif
 	}
 	else if (h->type == LUA_CRYPTOBOX_HASH_BLAKE2) {
@@ -989,7 +989,8 @@ rspamd_lua_ssl_hmac_create(struct rspamd_lua_cryptobox_hash *h, const EVP_MD *ht
 	(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x30500000)
 	h->content.hmac_c = g_malloc0(sizeof(*h->content.hmac_c));
 #else
-	h->content.hmac_c = HMAC_CTX_new();
+	EVP_MAC *mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
+	h->content.hmac_c = EVP_MAC_CTX_new(mac);
 #endif
 	h->out_len = EVP_MD_size(htype);
 
@@ -997,12 +998,15 @@ rspamd_lua_ssl_hmac_create(struct rspamd_lua_cryptobox_hash *h, const EVP_MD *ht
 	if (insecure) {
 		/* Should never ever be used for crypto/security purposes! */
 #ifdef EVP_MD_CTX_FLAG_NON_FIPS_ALLOW
-		HMAC_CTX_set_flags(h->content.hmac_c, EVP_MD_CTX_FLAG_NON_FIPS_ALLOW);
+		//HMAC_CTX_set_flags(h->content.hmac_c, EVP_MD_CTX_FLAG_NON_FIPS_ALLOW);
 #endif
 	}
 #endif
+	OSSL_PARAM params[2];
+	params[0] = OSSL_PARAM_construct_utf8_string("digest", EVP_MD_get0_name(htype), 0);
+	params[1] = OSSL_PARAM_construct_end();
 
-	HMAC_Init_ex(h->content.hmac_c, key, keylen, htype, NULL);
+	EVP_MAC_init(h->content.hmac_c, key, keylen, params);
 }
 
 static struct rspamd_lua_cryptobox_hash *
@@ -1385,7 +1389,7 @@ lua_cryptobox_hash_reset(lua_State *L)
 			rspamd_cryptobox_hash_init(h->content.h, NULL, 0);
 			break;
 		case LUA_CRYPTOBOX_HASH_SSL:
-			EVP_DigestInit(h->content.c, EVP_MD_CTX_md(h->content.c));
+			EVP_DigestInit(h->content.c, EVP_MD_CTX_get0_md(h->content.c));
 			break;
 		case LUA_CRYPTOBOX_HASH_HMAC:
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || \
@@ -1393,7 +1397,9 @@ lua_cryptobox_hash_reset(lua_State *L)
 			/* Old openssl is awesome... */
 			HMAC_Init_ex(h->content.hmac_c, NULL, 0, h->content.hmac_c->md, NULL);
 #else
-			HMAC_CTX_reset(h->content.hmac_c);
+			EVP_MAC_CTX_free(h->content.hmac_c);
+			EVP_MAC *mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
+			h->content.hmac_c = EVP_MAC_CTX_new(mac);
 #endif
 			break;
 		case LUA_CRYPTOBOX_HASH_XXHASH64:
@@ -1452,7 +1458,10 @@ lua_cryptobox_hash_finish(struct rspamd_lua_cryptobox_hash *h)
 		memcpy(h->out, out, ssl_outlen);
 		break;
 	case LUA_CRYPTOBOX_HASH_HMAC:
-		HMAC_Final(h->content.hmac_c, out, &ssl_outlen);
+		size_t ssl_outlen_size_t = ssl_outlen;
+		EVP_MAC_final(h->content.hmac_c, out, &ssl_outlen_size_t, sizeof(out));
+		ssl_outlen = ssl_outlen_size_t;
+
 		h->out_len = ssl_outlen;
 		g_assert(ssl_outlen <= sizeof(h->out));
 		memcpy(h->out, out, ssl_outlen);
@@ -2469,31 +2478,31 @@ lua_cryptobox_gen_dkim_keypair(lua_State *L)
 		EVP_PKEY *pk;
 
 		e = BN_new();
-		r = RSA_new();
 		pk = EVP_PKEY_new();
 
 		if (BN_set_word(e, RSA_F4) != 1) {
 			BN_free(e);
-			RSA_free(r);
 			EVP_PKEY_free(pk);
 
 			return luaL_error(L, "BN_set_word failed");
 		}
 
-		if (RSA_generate_key_ex(r, nbits, e, NULL) != 1) {
+		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
+		if (EVP_PKEY_keygen_init(pctx) != 1) {
 			BN_free(e);
-			RSA_free(r);
 			EVP_PKEY_free(pk);
+			EVP_PKEY_CTX_free(pctx);
 
-			return luaL_error(L, "RSA_generate_key_ex failed");
+			return luaL_error(L, "EVP_PKEY_keygen_init failed");
 		}
-
-		if (EVP_PKEY_set1_RSA(pk, r) != 1) {
+		EVP_PKEY_CTX_set_rsa_keygen_bits(pctx, nbits);
+		EVP_PKEY_CTX_set1_rsa_keygen_pubexp(pctx, e);
+		if (EVP_PKEY_keygen(pctx, &pk) != 1) {
 			BN_free(e);
-			RSA_free(r);
 			EVP_PKEY_free(pk);
+			EVP_PKEY_CTX_free(pctx);
 
-			return luaL_error(L, "EVP_PKEY_set1_RSA failed");
+			return luaL_error(L, "EVP_PKEY_keygen failed");
 		}
 
 		BIO *mbio;
@@ -2505,12 +2514,11 @@ lua_cryptobox_gen_dkim_keypair(lua_State *L)
 		mbio = BIO_new(BIO_s_mem());
 
 		/* Process private key */
-		rc = i2d_RSAPrivateKey_bio(mbio, r);
+		rc = i2d_PrivateKey_bio(mbio, pk);
 
 		if (rc == 0) {
 			BIO_free(mbio);
 			BN_free(e);
-			RSA_free(r);
 			EVP_PKEY_free(pk);
 
 			return luaL_error(L, "i2d_RSAPrivateKey_bio failed");
@@ -2528,12 +2536,11 @@ lua_cryptobox_gen_dkim_keypair(lua_State *L)
 
 		/* Process public key */
 		BIO_reset(mbio);
-		rc = i2d_RSA_PUBKEY_bio(mbio, r);
+		rc = i2d_PUBKEY_bio(mbio, pk);
 
 		if (rc == 0) {
 			BIO_free(mbio);
 			BN_free(e);
-			RSA_free(r);
 			EVP_PKEY_free(pk);
 
 			return luaL_error(L, "i2d_RSA_PUBKEY_bio failed");
@@ -2550,7 +2557,6 @@ lua_cryptobox_gen_dkim_keypair(lua_State *L)
 		pub_out->flags = RSPAMD_TEXT_FLAG_OWN;
 
 		BN_free(e);
-		RSA_free(r);
 		EVP_PKEY_free(pk);
 		BIO_free(mbio);
 	}
