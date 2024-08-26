@@ -21,8 +21,8 @@ if confighelp then
 redis_history {
   # History key name
   key_prefix = 'rs_history{{HOSTNAME}}{{COMPRESS}}';
-  # History expire in seconds
-  expire = 0;
+  # Expire in seconds for inactive keys, default to 5 days
+  expire = 432000;
   # History rows limit
   nrows = 200;
   # Use zstd compression when storing data in redis
