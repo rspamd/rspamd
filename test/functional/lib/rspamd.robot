@@ -345,19 +345,19 @@ Run Rspamd
   Export Scoped Variables  ${RSPAMD_SCOPE}  RSPAMD_PROCESS=${result}
 
   # Confirm worker is reachable
-  FOR    ${index}    IN RANGE    75
+  FOR    ${index}    IN RANGE    37
     ${ok} =  Rspamd Startup Check  ${check_port}
     IF  ${ok}  CONTINUE
-    Sleep  0.1s
+    Sleep  0.4s
   END
 
 Rspamd Startup Check
   [Arguments]  ${check_port}=${RSPAMD_PORT_NORMAL}
-  ${res} =  Wait For Process  ${RSPAMD_PROCESS}  0.1s
   ${handle} =  Get Process Object
   ${res} =  Evaluate  $handle.poll()
   IF  ${res} != None
-    Fail  Process Is Gone
+    ${stderr} =  Get File  ${RSPAMD_TMPDIR}/rspamd.stderr
+    Fail  Process Is Gone, stderr: ${stderr}
   END
   ${ping} =  Run Keyword And Return Status  Ping Rspamd  ${RSPAMD_LOCAL_ADDR}  ${check_port}
   [Return]  ${ping}
