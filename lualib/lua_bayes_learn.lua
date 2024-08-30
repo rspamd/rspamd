@@ -18,6 +18,7 @@ limitations under the License.
 
 local lua_util = require "lua_util"
 local lua_verdict = require "lua_verdict"
+local logger = require "rspamd_logger"
 local N = "lua_bayes"
 
 local exports = {}
@@ -56,16 +57,16 @@ exports.autolearn = function(task, conf)
     local mime_rcpts = 'undef'
     local mr = task:get_recipients('mime')
     if mr then
+      local r_addrs = {}
       for _, r in ipairs(mr) do
-        if mime_rcpts == 'undef' then
-          mime_rcpts = r.addr
-        else
-          mime_rcpts = mime_rcpts .. ',' .. r.addr
-        end
+        r_addrs[#r_addrs + 1] = r.addr
+      end
+      if #r_addrs > 0 then
+        mime_rcpts = table.concat(r_addrs, ',')
       end
     end
 
-    lua_util.debugm(N, task, 'id: %s, from: <%s>: can autolearn %s: score %s %s %s, mime_rcpts: <%s>',
+    logger.info(task, 'id: %s, from: <%s>: can autolearn %s: score %s %s %s, mime_rcpts: <%s>',
         task:get_header('Message-Id') or '<undef>',
         from and from[1].addr or 'undef',
         verdict,
