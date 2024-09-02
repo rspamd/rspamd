@@ -1340,7 +1340,7 @@ exports.maybe_decrypt_header = function(encoded_header, settings, prefix)
       return encoded_header
     end
     local cryptobox = rspamd_secretbox.create(key)
-    logger.infox(log_level, '%s', type(encoded_header))
+    encoded_header = tostring(encoded_header)
     local header = cryptobox:decrypt(encoded_header)
     return header
   end
