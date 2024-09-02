@@ -1461,7 +1461,7 @@ lua_cryptobox_hash_finish(struct rspamd_lua_cryptobox_hash *h)
 	case LUA_CRYPTOBOX_HASH_HMAC:
 		size_t ssl_outlen_size_t = ssl_outlen;
 		EVP_MAC_final(h->content.hmac_c, out, &ssl_outlen_size_t, sizeof(out));
-		ssl_outlen = ssl_outlen_size_t
+		ssl_outlen = ssl_outlen_size_t;
 
 		h->out_len = ssl_outlen;
 		g_assert(ssl_outlen <= sizeof(h->out));
