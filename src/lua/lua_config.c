@@ -34,7 +34,11 @@
 local function foo(task)
     -- do something
 end
-rspamd_config:register_symbol('SYMBOL', 1.0, foo)
+rspamd_config:register_symbol{
+  name = 'SYMBOL',
+  score = 1.0,
+  callback = foo
+}
 
 -- Get configuration
 local tab = rspamd_config:get_all_opt('module') -- get table for module's options
