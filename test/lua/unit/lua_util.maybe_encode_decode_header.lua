@@ -7,13 +7,12 @@ local settings = {
 }
 
 context("Lua util - maybe encode/decode header", function()
-    local header = 'X-Spamd-Result'
-    local encoded_header = ''
-    local decoded_header = ''
-
     test("Encode/Decode header", function()
-        encoded_header = util.maybe_encode_header(header, settings, settings.prefix)
-        decoded_header = util.maybe_decode_header(encoded_header. settings. settings.prefix)
+        local header = 'X-Spamd-Result'
+
+        local encoded_header = util.maybe_encode_header(header, settings, settings.prefix)
+        local decoded_header = util.maybe_decode_header(encoded_header. settings. settings.prefix)
+
         if header ~= decoded_header then
             assert_true(false, 'Failed to confirm equality of original header and decoded one')
         else
