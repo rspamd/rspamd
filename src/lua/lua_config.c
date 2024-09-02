@@ -1957,210 +1957,348 @@ lua_config_get_symbol_flags(lua_State *L)
 	return 1;
 }
 
+static bool
+lua_config_register_symbol_from_table(lua_State *L, struct rspamd_config *cfg,
+									  const char *name, int tbl_idx, int *id_out)
+{
+	unsigned int type = SYMBOL_TYPE_NORMAL, priority = 0;
+	double weight = 1.0, score = NAN;
+	const char *type_str, *group = NULL, *description = NULL;
+	GArray *allowed_ids = NULL, *forbidden_ids = NULL;
+	int id, nshots, cb_ref;
+	unsigned int flags = 0;
+	gboolean optional = FALSE;
+
+	/*
+	 * Table can have the following attributes:
+	 * "callback" - should be a callback function
+	 * "weight" - optional weight
+	 * "priority" - optional priority
+	 * "type" - optional type (normal, virtual, callback)
+	 * "flags" - optional flags
+	 * -- Metric options
+	 * "score" - optional default score (overridden by metric)
+	 * "group" - optional default group
+	 * "one_shot" - optional one shot mode
+	 * "description" - optional description
+	 */
+	lua_pushvalue(L, tbl_idx); /* Push table on top of the stack */
+
+	if (name == NULL) {
+		/* Try to resolve name */
+		lua_pushstring(L, "name");
+		lua_gettable(L, -2);
+
+		if (lua_type(L, -1) != LUA_TSTRING) {
+			lua_pop(L, 2);
+			luaL_error(L, "name is not specified");
+
+			return false;
+		}
+		else {
+			name = lua_tostring(L, -1);
+		}
+
+		lua_pop(L, 1);
+	}
+
+	lua_pushstring(L, "callback");
+	lua_gettable(L, -2);
+
+	if (lua_type(L, -1) != LUA_TFUNCTION) {
+		cb_ref = -1;
+	}
+	else {
+		cb_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+	}
+	lua_pop(L, 1);
+
+	/* Optional fields */
+	lua_pushstring(L, "weight");
+	lua_gettable(L, -2);
+
+	if (lua_type(L, -1) == LUA_TNUMBER) {
+		weight = lua_tonumber(L, -1);
+	}
+	lua_pop(L, 1);
+
+	lua_pushstring(L, "priority");
+	lua_gettable(L, -2);
+
+	if (lua_type(L, -1) == LUA_TNUMBER) {
+		priority = lua_tointeger(L, -1);
+	}
+	lua_pop(L, 1);
+
+	lua_pushstring(L, "optional");
+	lua_gettable(L, -2);
+
+	if (lua_type(L, -1) == LUA_TBOOLEAN) {
+		optional = lua_toboolean(L, -1);
+	}
+	lua_pop(L, 1);
+
+	lua_pushstring(L, "type");
+	lua_gettable(L, -2);
+
+	if (lua_type(L, -1) == LUA_TSTRING) {
+		type_str = lua_tostring(L, -1);
+		type = lua_parse_symbol_type(type_str);
+	}
+	lua_pop(L, 1);
+
+	/* Deal with flags and ids */
+	lua_pushstring(L, "flags");
+	lua_gettable(L, -2);
+	if (lua_type(L, -1) == LUA_TSTRING) {
+		flags = lua_parse_symbol_flags(lua_tostring(L, -1));
+	}
+	else if (lua_type(L, -1) == LUA_TTABLE) {
+		for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
+			flags |= lua_parse_symbol_flags(lua_tostring(L, -1));
+		}
+	}
+	lua_pop(L, 1); /* Clean flags */
+
+	lua_pushstring(L, "allowed_ids");
+	lua_gettable(L, -2);
+	if (lua_type(L, -1) == LUA_TSTRING) {
+		allowed_ids = rspamd_process_id_list(lua_tostring(L, -1));
+	}
+	else if (lua_type(L, -1) == LUA_TTABLE) {
+		allowed_ids = g_array_sized_new(FALSE, FALSE, sizeof(uint32_t),
+										rspamd_lua_table_size(L, -1));
+		for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
+			uint32_t v = lua_tointeger(L, -1);
+			g_array_append_val(allowed_ids, v);
+		}
+	}
+	lua_pop(L, 1);
+
+	lua_pushstring(L, "forbidden_ids");
+	lua_gettable(L, -2);
+	if (lua_type(L, -1) == LUA_TSTRING) {
+		forbidden_ids = rspamd_process_id_list(lua_tostring(L, -1));
+	}
+	else if (lua_type(L, -1) == LUA_TTABLE) {
+		forbidden_ids = g_array_sized_new(FALSE, FALSE, sizeof(uint32_t),
+										  rspamd_lua_table_size(L, -1));
+		for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
+			uint32_t v = lua_tointeger(L, -1);
+			g_array_append_val(forbidden_ids, v);
+		}
+	}
+	lua_pop(L, 1);
+
+	id = rspamd_register_symbol_fromlua(L,
+										cfg,
+										name,
+										cb_ref,
+										weight,
+										priority,
+										type | flags,
+										-1,
+										allowed_ids, forbidden_ids,
+										optional);
+
+	if (allowed_ids) {
+		g_array_free(allowed_ids, TRUE);
+	}
+
+	if (forbidden_ids) {
+		g_array_free(forbidden_ids, TRUE);
+	}
+
+	if (id != -1) {
+		if (cb_ref != -1) {
+			/* Check for condition */
+			lua_pushstring(L, "condition");
+			lua_gettable(L, -2);
+
+			if (lua_type(L, -1) == LUA_TFUNCTION) {
+				int condref;
+
+				/* Here we pop function from the stack, so no lua_pop is required */
+				condref = luaL_ref(L, LUA_REGISTRYINDEX);
+				g_assert(name != NULL);
+				rspamd_symcache_add_condition_delayed(cfg->cache,
+													  name, L, condref);
+			}
+			else {
+				lua_pop(L, 1);
+			}
+		}
+
+		/* Check for augmentations */
+		lua_pushstring(L, "augmentations");
+		lua_gettable(L, -2);
+
+		if (lua_type(L, -1) == LUA_TTABLE) {
+
+			int aug_tbl_idx = lua_gettop(L);
+			for (lua_pushnil(L); lua_next(L, aug_tbl_idx); lua_pop(L, 1)) {
+				rspamd_symcache_add_symbol_augmentation(cfg->cache, id,
+														lua_tostring(L, -1), NULL);
+			}
+		}
+
+		lua_pop(L, 1);
+	}
+
+	/*
+	 * Now check if a symbol has not been registered in any metric and
+	 * insert default value if applicable
+	 */
+	struct rspamd_symbol *sym = g_hash_table_lookup(cfg->symbols, name);
+	if (sym == NULL || (sym->flags & RSPAMD_SYMBOL_FLAG_UNSCORED)) {
+		nshots = cfg->default_max_shots;
+
+		lua_pushstring(L, "score");
+		lua_gettable(L, -2);
+		if (lua_type(L, -1) == LUA_TNUMBER) {
+			score = lua_tonumber(L, -1);
+
+			if (sym) {
+				/* Reset unscored flag */
+				sym->flags &= ~RSPAMD_SYMBOL_FLAG_UNSCORED;
+			}
+		}
+		lua_pop(L, 1);
+
+		lua_pushstring(L, "group");
+		lua_gettable(L, -2);
+		if (lua_type(L, -1) == LUA_TSTRING) {
+			group = lua_tostring(L, -1);
+		}
+		lua_pop(L, 1);
+
+		if (!isnan(score) || group != NULL) {
+			lua_pushstring(L, "description");
+			lua_gettable(L, -2);
+
+			if (lua_type(L, -1) == LUA_TSTRING) {
+				description = lua_tostring(L, -1);
+			}
+			lua_pop(L, 1);
+
+			lua_pushstring(L, "one_shot");
+			lua_gettable(L, -2);
+
+			if (lua_type(L, -1) == LUA_TBOOLEAN) {
+				if (lua_toboolean(L, -1)) {
+					nshots = 1;
+				}
+			}
+			lua_pop(L, 1);
+
+			lua_pushstring(L, "one_param");
+			lua_gettable(L, -2);
+
+			if (lua_type(L, -1) == LUA_TBOOLEAN) {
+				if (lua_toboolean(L, -1)) {
+					flags |= RSPAMD_SYMBOL_FLAG_ONEPARAM;
+				}
+			}
+			lua_pop(L, 1);
+
+			/*
+					 * Do not override the existing symbols (using zero priority),
+					 * since we are defining default values here
+					 */
+			if (!isnan(score)) {
+				rspamd_config_add_symbol(cfg, name, score,
+										 description, group, flags, 0, nshots);
+			}
+			else if (group) {
+				/* Add with zero score */
+				rspamd_config_add_symbol(cfg, name, NAN,
+										 description, group, flags, 0, nshots);
+			}
+
+			lua_pushstring(L, "groups");
+			lua_gettable(L, -2);
+
+			if (lua_istable(L, -1)) {
+				for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
+					if (lua_isstring(L, -1)) {
+						rspamd_config_add_symbol_group(cfg, name,
+													   lua_tostring(L, -1));
+					}
+					else {
+						lua_pop(L, 2);
+						luaL_error(L, "invalid groups element");
+
+						return false;
+					}
+				}
+			}
+
+			lua_pop(L, 1);
+		}
+	}
+	else {
+		/* Fill in missing fields from lua definition if they are not set */
+		if (sym->description == NULL) {
+			lua_pushstring(L, "description");
+			lua_gettable(L, -2);
+
+			if (lua_type(L, -1) == LUA_TSTRING) {
+				description = lua_tostring(L, -1);
+			}
+			lua_pop(L, 1);
+
+			if (description) {
+				sym->description = rspamd_mempool_strdup(cfg->cfg_pool, description);
+			}
+		}
+
+		/* If ungrouped and there is a group defined in lua, change the primary group
+				 * Otherwise, add to the list of groups for this symbol. */
+		lua_pushstring(L, "group");
+		lua_gettable(L, -2);
+		if (lua_type(L, -1) == LUA_TSTRING) {
+			group = lua_tostring(L, -1);
+		}
+		lua_pop(L, 1);
+		if (group) {
+			if (sym->flags & RSPAMD_SYMBOL_FLAG_UNGROUPED) {
+				/* Unset the "ungrouped" group */
+				sym->gr = NULL;
+			}
+			/* Add the group. If the symbol was ungrouped, this will
+					* clear RSPAMD_SYMBOL_FLAG_UNGROUPED from the flags. */
+			rspamd_config_add_symbol_group(cfg, name, group);
+		}
+	}
+
+	/* Remove table from stack */
+	lua_pop(L, 1);
+
+	*id_out = id;
+
+	return true;
+}
+
 static int
 lua_config_register_symbol(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	const char *name = NULL, *type_str = NULL,
-			   *description = NULL, *group = NULL;
-	double weight = 0, score = NAN, parent_float = NAN;
-	gboolean one_shot = FALSE;
-	int ret = -1, cbref = -1;
-	unsigned int type = 0, flags = 0;
-	int64_t parent = 0, priority = 0, nshots = 0;
-	GArray *allowed_ids = NULL, *forbidden_ids = NULL;
-	GError *err = NULL;
-	int prev_top = lua_gettop(L);
+	int id = -1, tbl_pos = 2;
+	const char *name = NULL;
 
-	if (cfg) {
-		if (!rspamd_lua_parse_table_arguments(L, 2, &err,
-											  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
-											  "name=S;weight=N;callback=F;type=S;priority=I;parent=D;"
-											  "score=D;description=S;group=S;one_shot=B;nshots=I",
-											  &name, &weight, &cbref, &type_str,
-											  &priority, &parent_float,
-											  &score, &description, &group, &one_shot, &nshots)) {
-			msg_err_config("bad arguments: %e", err);
-			g_error_free(err);
-			lua_settop(L, prev_top);
-
-			return luaL_error(L, "invalid arguments");
-		}
-
-		/* Deal with flags and ids */
-		lua_pushstring(L, "flags");
-		lua_gettable(L, 2);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			flags = lua_parse_symbol_flags(lua_tostring(L, -1));
-		}
-		else if (lua_type(L, -1) == LUA_TTABLE) {
-			for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
-				flags |= lua_parse_symbol_flags(lua_tostring(L, -1));
-			}
-		}
-		lua_pop(L, 1); /* Clean flags */
-
-		lua_pushstring(L, "allowed_ids");
-		lua_gettable(L, 2);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			allowed_ids = rspamd_process_id_list(lua_tostring(L, -1));
-		}
-		else if (lua_type(L, -1) == LUA_TTABLE) {
-			allowed_ids = g_array_sized_new(FALSE, FALSE, sizeof(uint32_t),
-											rspamd_lua_table_size(L, -1));
-			for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
-				uint32_t v = lua_tointeger(L, -1);
-				g_array_append_val(allowed_ids, v);
-			}
-		}
-		lua_pop(L, 1);
-
-		lua_pushstring(L, "forbidden_ids");
-		lua_gettable(L, 2);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			forbidden_ids = rspamd_process_id_list(lua_tostring(L, -1));
-		}
-		else if (lua_type(L, -1) == LUA_TTABLE) {
-			forbidden_ids = g_array_sized_new(FALSE, FALSE, sizeof(uint32_t),
-											  rspamd_lua_table_size(L, -1));
-			for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
-				uint32_t v = lua_tointeger(L, -1);
-				g_array_append_val(forbidden_ids, v);
-			}
-		}
-		lua_pop(L, 1);
-
-		if (nshots == 0) {
-			nshots = cfg->default_max_shots;
-		}
-
-		type = lua_parse_symbol_type(type_str);
-
-		if (!name && !(type & SYMBOL_TYPE_CALLBACK)) {
-			lua_settop(L, prev_top);
-			return luaL_error(L, "no symbol name but type is not callback");
-		}
-		else if (!(type & SYMBOL_TYPE_VIRTUAL) && cbref == -1) {
-			lua_settop(L, prev_top);
-			return luaL_error(L, "no callback for symbol %s", name);
-		}
-
-		if (isnan(parent_float)) {
-			parent = -1;
-		}
-		else {
-			parent = parent_float;
-		}
-
-		ret = rspamd_register_symbol_fromlua(L,
-											 cfg,
-											 name,
-											 cbref,
-											 weight == 0 ? 1.0 : weight,
-											 priority,
-											 type | flags,
-											 parent,
-											 allowed_ids, forbidden_ids,
-											 FALSE);
-
-		if (allowed_ids) {
-			g_array_free(allowed_ids, TRUE);
-		}
-
-		if (forbidden_ids) {
-			g_array_free(forbidden_ids, TRUE);
-		}
-
-		if (ret != -1) {
-			if (!isnan(score) || group) {
-				if (one_shot) {
-					nshots = 1;
-				}
-
-				rspamd_config_add_symbol(cfg, name,
-										 score, description, group, flags,
-										 0, nshots);
-
-				lua_pushstring(L, "groups");
-				lua_gettable(L, 2);
-
-				if (lua_istable(L, -1)) {
-					for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
-						if (lua_isstring(L, -1)) {
-							rspamd_config_add_symbol_group(cfg, name,
-														   lua_tostring(L, -1));
-						}
-						else {
-							lua_settop(L, prev_top);
-							return luaL_error(L, "invalid groups element");
-						}
-					}
-				}
-
-				lua_pop(L, 1);
-			}
-
-			lua_pushstring(L, "augmentations");
-			lua_gettable(L, 2);
-
-			if (lua_type(L, -1) == LUA_TTABLE) {
-				int tbl_idx = lua_gettop(L);
-				for (lua_pushnil(L); lua_next(L, tbl_idx); lua_pop(L, 1)) {
-					size_t len;
-					const char *augmentation = lua_tolstring(L, -1, &len), *eqsign_pos;
-
-					/* Find `=` symbol and use it as a separator */
-					eqsign_pos = memchr(augmentation, '=', len);
-					if (eqsign_pos != NULL && eqsign_pos + 1 < augmentation + len) {
-						rspamd_ftok_t tok;
-
-						tok.begin = augmentation;
-						tok.len = eqsign_pos - augmentation;
-						char *augentation_name = rspamd_ftokdup(&tok);
-
-						tok.begin = eqsign_pos + 1;
-						tok.len = (augmentation + len) - tok.begin;
-
-						char *augmentation_value = rspamd_ftokdup(&tok);
-
-						if (!rspamd_symcache_add_symbol_augmentation(cfg->cache, ret,
-																	 augentation_name, augmentation_value)) {
-							lua_settop(L, prev_top);
-							g_free(augmentation_value);
-							g_free(augentation_name);
-
-							return luaL_error(L, "unknown or invalid augmentation %s in symbol %s",
-											  augmentation, name);
-						}
-
-						g_free(augmentation_value);
-						g_free(augentation_name);
-					}
-					else {
-						/* Just a value */
-						if (!rspamd_symcache_add_symbol_augmentation(cfg->cache, ret,
-																	 augmentation, NULL)) {
-							lua_settop(L, prev_top);
-
-							return luaL_error(L, "unknown augmentation %s in symbol %s",
-											  augmentation, name);
-						}
-					}
-				}
-			}
-		}
-	}
-	else {
-		lua_settop(L, prev_top);
-
-		return luaL_error(L, "invalid arguments");
+	if (lua_type(L, 2) == LUA_TSTRING) {
+		name = luaL_checkstring(L, 2);
+		tbl_pos = 3;
 	}
 
-	lua_settop(L, prev_top);
-	lua_pushinteger(L, ret);
+	if (lua_config_register_symbol_from_table(L, cfg, name, tbl_pos, &id)) {
+		lua_pushinteger(L, id);
 
-	return 1;
+		return 1;
+	}
+
+	return 0;
 }
 
 static int
@@ -2647,10 +2785,7 @@ lua_config_newindex(lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
 	const char *name;
-	GArray *allowed_ids = NULL, *forbidden_ids = NULL;
-	int id, nshots;
-	unsigned int flags = 0;
-	gboolean optional = FALSE;
+	int id = -1;
 
 	name = luaL_checkstring(L, 2);
 
@@ -2671,291 +2806,14 @@ lua_config_newindex(lua_State *L)
 										   FALSE);
 		}
 		else if (lua_type(L, 3) == LUA_TTABLE) {
-			unsigned int type = SYMBOL_TYPE_NORMAL, priority = 0;
-			int idx;
-			double weight = 1.0, score = NAN;
-			const char *type_str, *group = NULL, *description = NULL;
-
-			/*
-			 * Table can have the following attributes:
-			 * "callback" - should be a callback function
-			 * "weight" - optional weight
-			 * "priority" - optional priority
-			 * "type" - optional type (normal, virtual, callback)
-			 * "flags" - optional flags
-			 * -- Metric options
-			 * "score" - optional default score (overridden by metric)
-			 * "group" - optional default group
-			 * "one_shot" - optional one shot mode
-			 * "description" - optional description
-			 */
-			lua_pushvalue(L, 3);
-			lua_pushstring(L, "callback");
-			lua_gettable(L, -2);
-
-			if (lua_type(L, -1) != LUA_TFUNCTION) {
-				lua_pop(L, 2);
-				msg_info_config("cannot find callback definition for %s",
-								name);
-				return 0;
+			/* Table symbol */
+			if (lua_config_register_symbol_from_table(L, cfg, name, 3, &id)) {
+				lua_pushinteger(L, id);
+				return 1;
 			}
-			idx = luaL_ref(L, LUA_REGISTRYINDEX);
-
-			/* Optional fields */
-			lua_pushstring(L, "weight");
-			lua_gettable(L, -2);
-
-			if (lua_type(L, -1) == LUA_TNUMBER) {
-				weight = lua_tonumber(L, -1);
-			}
-			lua_pop(L, 1);
-
-			lua_pushstring(L, "priority");
-			lua_gettable(L, -2);
-
-			if (lua_type(L, -1) == LUA_TNUMBER) {
-				priority = lua_tointeger(L, -1);
-			}
-			lua_pop(L, 1);
-
-			lua_pushstring(L, "optional");
-			lua_gettable(L, -2);
-
-			if (lua_type(L, -1) == LUA_TBOOLEAN) {
-				optional = lua_toboolean(L, -1);
-			}
-			lua_pop(L, 1);
-
-			lua_pushstring(L, "type");
-			lua_gettable(L, -2);
-
-			if (lua_type(L, -1) == LUA_TSTRING) {
-				type_str = lua_tostring(L, -1);
-				type = lua_parse_symbol_type(type_str);
-			}
-			lua_pop(L, 1);
-
-			/* Deal with flags and ids */
-			lua_pushstring(L, "flags");
-			lua_gettable(L, -2);
-			if (lua_type(L, -1) == LUA_TSTRING) {
-				flags = lua_parse_symbol_flags(lua_tostring(L, -1));
-			}
-			else if (lua_type(L, -1) == LUA_TTABLE) {
-				for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
-					flags |= lua_parse_symbol_flags(lua_tostring(L, -1));
-				}
-			}
-			lua_pop(L, 1); /* Clean flags */
-
-			lua_pushstring(L, "allowed_ids");
-			lua_gettable(L, -2);
-			if (lua_type(L, -1) == LUA_TSTRING) {
-				allowed_ids = rspamd_process_id_list(lua_tostring(L, -1));
-			}
-			else if (lua_type(L, -1) == LUA_TTABLE) {
-				allowed_ids = g_array_sized_new(FALSE, FALSE, sizeof(uint32_t),
-												rspamd_lua_table_size(L, -1));
-				for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
-					uint32_t v = lua_tointeger(L, -1);
-					g_array_append_val(allowed_ids, v);
-				}
-			}
-			lua_pop(L, 1);
-
-			lua_pushstring(L, "forbidden_ids");
-			lua_gettable(L, -2);
-			if (lua_type(L, -1) == LUA_TSTRING) {
-				forbidden_ids = rspamd_process_id_list(lua_tostring(L, -1));
-			}
-			else if (lua_type(L, -1) == LUA_TTABLE) {
-				forbidden_ids = g_array_sized_new(FALSE, FALSE, sizeof(uint32_t),
-												  rspamd_lua_table_size(L, -1));
-				for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
-					uint32_t v = lua_tointeger(L, -1);
-					g_array_append_val(forbidden_ids, v);
-				}
-			}
-			lua_pop(L, 1);
-
-			id = rspamd_register_symbol_fromlua(L,
-												cfg,
-												name,
-												idx,
-												weight,
-												priority,
-												type | flags,
-												-1,
-												allowed_ids, forbidden_ids,
-												optional);
-
-			if (allowed_ids) {
-				g_array_free(allowed_ids, TRUE);
-			}
-
-			if (forbidden_ids) {
-				g_array_free(forbidden_ids, TRUE);
-			}
-
-			if (id != -1) {
-				/* Check for condition */
-				lua_pushstring(L, "condition");
-				lua_gettable(L, -2);
-
-				if (lua_type(L, -1) == LUA_TFUNCTION) {
-					int condref;
-
-					/* Here we pop function from the stack, so no lua_pop is required */
-					condref = luaL_ref(L, LUA_REGISTRYINDEX);
-					g_assert(name != NULL);
-					rspamd_symcache_add_condition_delayed(cfg->cache,
-														  name, L, condref);
-				}
-				else {
-					lua_pop(L, 1);
-				}
-
-				/* Check for augmentations */
-				lua_pushstring(L, "augmentations");
-				lua_gettable(L, -2);
-
-				if (lua_type(L, -1) == LUA_TTABLE) {
-
-					int tbl_idx = lua_gettop(L);
-					for (lua_pushnil(L); lua_next(L, tbl_idx); lua_pop(L, 1)) {
-						rspamd_symcache_add_symbol_augmentation(cfg->cache, id,
-																lua_tostring(L, -1), NULL);
-					}
-				}
-
-				lua_pop(L, 1);
-			}
-
-			/*
-			 * Now check if a symbol has not been registered in any metric and
-			 * insert default value if applicable
-			 */
-			struct rspamd_symbol *sym = g_hash_table_lookup(cfg->symbols, name);
-			if (sym == NULL || (sym->flags & RSPAMD_SYMBOL_FLAG_UNSCORED)) {
-				nshots = cfg->default_max_shots;
-
-				lua_pushstring(L, "score");
-				lua_gettable(L, -2);
-				if (lua_type(L, -1) == LUA_TNUMBER) {
-					score = lua_tonumber(L, -1);
-
-					if (sym) {
-						/* Reset unscored flag */
-						sym->flags &= ~RSPAMD_SYMBOL_FLAG_UNSCORED;
-					}
-				}
-				lua_pop(L, 1);
-
-				lua_pushstring(L, "group");
-				lua_gettable(L, -2);
-				if (lua_type(L, -1) == LUA_TSTRING) {
-					group = lua_tostring(L, -1);
-				}
-				lua_pop(L, 1);
-
-				if (!isnan(score) || group != NULL) {
-					lua_pushstring(L, "description");
-					lua_gettable(L, -2);
-
-					if (lua_type(L, -1) == LUA_TSTRING) {
-						description = lua_tostring(L, -1);
-					}
-					lua_pop(L, 1);
-
-					lua_pushstring(L, "one_shot");
-					lua_gettable(L, -2);
-
-					if (lua_type(L, -1) == LUA_TBOOLEAN) {
-						if (lua_toboolean(L, -1)) {
-							nshots = 1;
-						}
-					}
-					lua_pop(L, 1);
-
-					lua_pushstring(L, "one_param");
-					lua_gettable(L, -2);
-
-					if (lua_type(L, -1) == LUA_TBOOLEAN) {
-						if (lua_toboolean(L, -1)) {
-							flags |= RSPAMD_SYMBOL_FLAG_ONEPARAM;
-						}
-					}
-					lua_pop(L, 1);
-
-					/*
-					 * Do not override the existing symbols (using zero priority),
-					 * since we are defining default values here
-					 */
-					if (!isnan(score)) {
-						rspamd_config_add_symbol(cfg, name, score,
-												 description, group, flags, 0, nshots);
-					}
-					else if (group) {
-						/* Add with zero score */
-						rspamd_config_add_symbol(cfg, name, NAN,
-												 description, group, flags, 0, nshots);
-					}
-
-					lua_pushstring(L, "groups");
-					lua_gettable(L, -2);
-
-					if (lua_istable(L, -1)) {
-						for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
-							if (lua_isstring(L, -1)) {
-								rspamd_config_add_symbol_group(cfg, name,
-															   lua_tostring(L, -1));
-							}
-							else {
-								return luaL_error(L, "invalid groups element");
-							}
-						}
-					}
-
-					lua_pop(L, 1);
-				}
-			}
-			else {
-				/* Fill in missing fields from lua definition if they are not set */
-				if (sym->description == NULL) {
-					lua_pushstring(L, "description");
-					lua_gettable(L, -2);
-
-					if (lua_type(L, -1) == LUA_TSTRING) {
-						description = lua_tostring(L, -1);
-					}
-					lua_pop(L, 1);
-
-					if (description) {
-						sym->description = rspamd_mempool_strdup(cfg->cfg_pool, description);
-					}
-				}
-
-				/* If ungrouped and there is a group defined in lua, change the primary group
-				 * Otherwise, add to the list of groups for this symbol. */
-				lua_pushstring(L, "group");
-				lua_gettable(L, -2);
-				if (lua_type(L, -1) == LUA_TSTRING) {
-					group = lua_tostring(L, -1);
-				}
-				lua_pop(L, 1);
-				if (group) {
-					if (sym->flags & RSPAMD_SYMBOL_FLAG_UNGROUPED) {
-						/* Unset the "ungrouped" group */
-						sym->gr = NULL;
-					}
-					/* Add the group. If the symbol was ungrouped, this will
-					* clear RSPAMD_SYMBOL_FLAG_UNGROUPED from the flags. */
-					rspamd_config_add_symbol_group(cfg, name, group);
-				}
-			}
-
-			/* Remove table from stack */
-			lua_pop(L, 1);
+		}
+		else {
+			return luaL_error(L, "invalid value for symbol");
 		}
 	}
 	else {
