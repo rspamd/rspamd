@@ -20,10 +20,11 @@ context("Lua util - maybe encrypt/decrypt header", function()
             assert_true(false, 'Failed to decrypt header')
         end
 
-        if header ~= decrypted_header then
-            assert_true(false, 'Failed to confirm equality of original header and decrypted one')
-        else
+        if header == decrypted_header then
             assert_true(true, 'Succeed to confirm equality of original header and decrypted header')
+        else
+            assert_true(false, 'Failed to confirm equality of original header: %s and decrypted header: %s',
+                    header, decrypted_header)
         end
     end)
 
@@ -46,10 +47,10 @@ context("Lua util - maybe encrypt/decrypt header", function()
             assert_true(false, 'Failed to decrypt header')
         end
 
-        if header ~= decrypted_header then
-            assert_true(false, 'Failed to confirm equality of original header and decrypted one')
-        else
+        if header == decrypted_header then
             assert_true(true, 'Succeed to confirm equality of original header and decrypted header')
+        else
+            assert_true(false, 'Failed to confirm equality of original header and decrypted header')
         end
     end)
 end)
