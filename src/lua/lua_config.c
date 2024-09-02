@@ -1969,7 +1969,7 @@ lua_config_register_symbol_from_table(lua_State *L, struct rspamd_config *cfg,
 	double weight = 1.0, score = NAN;
 	const char *type_str, *group = NULL, *description = NULL;
 	GArray *allowed_ids = NULL, *forbidden_ids = NULL;
-	int id, nshots, cb_ref;
+	int id, nshots, cb_ref, parent = -1;
 	unsigned int flags = 0;
 	gboolean optional = FALSE;
 
@@ -2047,9 +2047,33 @@ lua_config_register_symbol_from_table(lua_State *L, struct rspamd_config *cfg,
 
 	if (lua_type(L, -1) == LUA_TSTRING) {
 		type_str = lua_tostring(L, -1);
-		type = lua_parse_symbol_type(type_str);
+	}
+	else {
+		type_str = "normal";
 	}
 	lua_pop(L, 1);
+
+	type = lua_parse_symbol_type(type_str);
+
+	if (!name && !(type & SYMBOL_TYPE_CALLBACK)) {
+		luaL_error(L, "no symbol name but type is not callback");
+
+		return false;
+	}
+	else if (!(type & SYMBOL_TYPE_VIRTUAL) && cb_ref == -1) {
+		luaL_error(L, "no callback for symbol %s", name);
+
+		return false;
+	}
+
+	lua_pushstring(L, "parent");
+	lua_gettable(L, -2);
+
+	if (lua_type(L, -1) == LUA_TNUMBER) {
+		parent = lua_tointeger(L, -1);
+	}
+	lua_pop(L, 1);
+
 
 	/* Deal with flags and ids */
 	lua_pushstring(L, "flags");
@@ -2101,7 +2125,7 @@ lua_config_register_symbol_from_table(lua_State *L, struct rspamd_config *cfg,
 										weight,
 										priority,
 										type | flags,
-										-1,
+										parent,
 										allowed_ids, forbidden_ids,
 										optional);
 
