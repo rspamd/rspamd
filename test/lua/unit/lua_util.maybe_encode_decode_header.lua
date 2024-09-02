@@ -11,6 +11,9 @@ context("Lua util - maybe encode/decode header", function()
         local header = 'X-Spamd-Result'
 
         local encoded_header = util.maybe_encode_header(header, settings, settings.prefix)
+        if encoded_header == header then
+            assert_true(false, 'Failed to encode header')
+        end
         local decoded_header = util.maybe_decode_header(encoded_header. settings. settings.prefix)
 
         if header ~= decoded_header then

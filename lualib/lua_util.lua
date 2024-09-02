@@ -1304,7 +1304,7 @@ exports.maybe_encode_header = function(header, settings, prefix)
   local rspamd_secretbox = require "rspamd_cryptobox_secretbox"
 
   if not header or header == '' then
-    return nil
+    return header
   elseif settings[prefix .. '_encrypt'] then
     local pub_key = settings[prefix .. '_publickey']
     if not pub_key or pub_key == '' then
