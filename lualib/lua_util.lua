@@ -1305,8 +1305,6 @@ exports.maybe_encode_header = function(header, settings, prefix)
 
   if not header or header == '' then
     return nil
-  elseif not rspamd_util.is_valid_utf8(header) then
-    return nil
   elseif settings[prefix .. '_encrypt'] then
     local pub_key = settings[prefix .. '_publickey']
     if not pub_key or pub_key == '' then
