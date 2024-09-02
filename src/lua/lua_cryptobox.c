@@ -1398,7 +1398,7 @@ lua_cryptobox_hash_reset(lua_State *L)
 			/* Old openssl is awesome... */
 			HMAC_Init_ex(h->content.hmac_c, NULL, 0, h->content.hmac_c->md, NULL);
 #else
-			//EVP_MAC_CTX_free(h->content.hmac_c);
+			EVP_MAC_CTX_free(h->content.hmac_c);
 			EVP_MAC *mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
 			h->content.hmac_c = EVP_MAC_CTX_new(mac);
 #endif
@@ -1459,7 +1459,9 @@ lua_cryptobox_hash_finish(struct rspamd_lua_cryptobox_hash *h)
 		memcpy(h->out, out, ssl_outlen);
 		break;
 	case LUA_CRYPTOBOX_HASH_HMAC:
-		EVP_MAC_final(h->content.hmac_c, out, (size_t *) &ssl_outlen, sizeof(out));
+		size_t ssl_outlen_size_t = ssl_outlen;
+		EVP_MAC_final(h->content.hmac_c, out, &ssl_outlen_size_t, sizeof(out));
+		ssl_outlen = ssl_outlen_size_t
 
 		h->out_len = ssl_outlen;
 		g_assert(ssl_outlen <= sizeof(h->out));
