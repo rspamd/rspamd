@@ -999,7 +999,7 @@ rspamd_lua_ssl_hmac_create(struct rspamd_lua_cryptobox_hash *h, const EVP_MD *ht
 		/* Should never ever be used for crypto/security purposes! */
 #ifdef EVP_MD_CTX_FLAG_NON_FIPS_ALLOW
 		//HMAC_CTX_set_flags(h->content.hmac_c, EVP_MD_CTX_FLAG_NON_FIPS_ALLOW);
-		EVP_MD_CTX_set_flags(h->content.c, EVP_MD_CTX_FLAG_NON_FIPS_ALLOW);
+		//EVP_MD_CTX_set_flags(h->content.c, EVP_MD_CTX_FLAG_NON_FIPS_ALLOW);
 #endif
 	}
 #endif
@@ -1459,9 +1459,7 @@ lua_cryptobox_hash_finish(struct rspamd_lua_cryptobox_hash *h)
 		memcpy(h->out, out, ssl_outlen);
 		break;
 	case LUA_CRYPTOBOX_HASH_HMAC:
-		size_t ssl_outlen_size_t = ssl_outlen;
-		EVP_MAC_final(h->content.hmac_c, out, &ssl_outlen_size_t, sizeof(out));
-		ssl_outlen = ssl_outlen_size_t;
+		EVP_MAC_final(h->content.hmac_c, out, &ssl_outlen, sizeof(out));
 
 		h->out_len = ssl_outlen;
 		g_assert(ssl_outlen <= sizeof(h->out));
