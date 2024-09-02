@@ -2283,20 +2283,102 @@ lua_config_register_symbol_from_table(lua_State *L, struct rspamd_config *cfg,
 	return true;
 }
 
+/* Legacy symbol registration */
+static bool
+lua_config_register_symbol_legacy(lua_State *L, struct rspamd_config *cfg, int pos, int *id_out)
+{
+	const char *name = NULL, *type_str = NULL,
+			   *description = NULL, *group = NULL;
+	double weight = 0, score = NAN, parent_float = NAN;
+	gboolean one_shot = FALSE;
+	int ret, cbref = -1;
+	unsigned int type = 0, flags = 0;
+	int64_t parent = 0, priority = 0, nshots = 0;
+
+	GError *err = NULL;
+	if (!rspamd_lua_parse_table_arguments(L, pos, &err,
+										  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
+										  "name=S;weight=N;callback=F;type=S;priority=I;parent=D;"
+										  "score=D;description=S;group=S;one_shot=B;nshots=I",
+										  &name, &weight, &cbref, &type_str,
+										  &priority, &parent_float,
+										  &score, &description, &group, &one_shot, &nshots)) {
+		msg_err_config("bad arguments: %e", err);
+		g_error_free(err);
+
+		return false;
+	}
+
+	type = lua_parse_symbol_type(type_str);
+
+	if (!name && !(type & SYMBOL_TYPE_CALLBACK)) {
+		luaL_error(L, "no symbol name but type is not callback");
+
+		return false;
+	}
+	else if (!(type & SYMBOL_TYPE_VIRTUAL) && cbref == -1) {
+		luaL_error(L, "no callback for symbol %s", name);
+
+		return false;
+	}
+
+	if (isnan(parent_float)) {
+		parent = -1;
+	}
+	else {
+		parent = parent_float;
+	}
+
+	ret = rspamd_register_symbol_fromlua(L,
+										 cfg,
+										 name,
+										 cbref,
+										 weight == 0 ? 1.0 : weight,
+										 priority,
+										 type | flags,
+										 parent,
+										 NULL, NULL,
+										 FALSE);
+
+	if (ret != -1) {
+		if (!isnan(score) || group) {
+			if (one_shot) {
+				nshots = 1;
+			}
+			if (nshots == 0) {
+				nshots = cfg->default_max_shots;
+			}
+
+			rspamd_config_add_symbol(cfg, name, score,
+									 description, group, flags, 0, nshots);
+		}
+
+		*id_out = ret;
+
+		return true;
+	}
+
+	return false;
+}
+
 static int
 lua_config_register_symbol(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	int id = -1, tbl_pos = 2;
-	const char *name = NULL;
+	int id = -1;
 
 	if (lua_type(L, 2) == LUA_TSTRING) {
-		name = luaL_checkstring(L, 2);
-		tbl_pos = 3;
-	}
+		if (lua_config_register_symbol_legacy(L, cfg, 2, &id)) {
+			lua_pushinteger(L, id);
 
-	if (lua_config_register_symbol_from_table(L, cfg, name, tbl_pos, &id)) {
+			return 1;
+		}
+		else {
+			return luaL_error(L, "bad arguments");
+		}
+	}
+	else if (lua_config_register_symbol_from_table(L, cfg, NULL, 2, &id)) {
 		lua_pushinteger(L, id);
 
 		return 1;
