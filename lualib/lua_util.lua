@@ -1316,7 +1316,6 @@ exports.maybe_encrypt_header = function(header, settings, prefix)
     local encoded_header = cryptobox:encrypt(header)
     return encoded_header
   end
-  return header
 end
 
 ---[[[
