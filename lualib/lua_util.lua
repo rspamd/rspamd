@@ -1292,50 +1292,53 @@ exports.maybe_obfuscate_string = function(subject, settings, prefix)
 end
 
 ---[[[
--- @function lua_util.maybe_encode_header(header, settings, prefix)
+-- @function lua_util.maybe_encrypt_header(header, settings, prefix)
 -- Encode header with configured public key if enabled in settings.
 -- If header is not set then nil is returned. If pub_key is empty then header is returned.
 -- Supported settings:
 -- * <prefix>_encrypt = false - no need for encryption of a header
--- * <prefix>_publickey = 'pub_key' - key that is used encode header
+-- * <prefix>_key = 'key' - key that is used encode header
 -- @return encoded header
 ---]]]
-exports.maybe_encode_header = function(header, settings, prefix)
+exports.maybe_encrypt_header = function(header, settings, prefix)
   local rspamd_secretbox = require "rspamd_cryptobox_secretbox"
 
   if not header or header == '' then
+    logger.infox(log_level, 'Header is empty or nil')
     return header
   elseif settings[prefix .. '_encrypt'] then
-    local pub_key = settings[prefix .. '_publickey']
-    if not pub_key or pub_key == '' then
+    local key = settings[prefix .. '_key']
+    if not key or key == '' then
+      logger.infox(log_level, 'Key is empty or nil')
       return header
     end
-    local cryptobox = rspamd_secretbox.create(pub_key)
+    local cryptobox = rspamd_secretbox.create(key)
     local encoded_header = cryptobox:encrypt(header)
     return encoded_header
   end
+  return header
 end
 
 ---[[[
--- @function lua_util.maybe_decode_header(header, settings, prefix)
+-- @function lua_util.maybe_decrypt_header(header, settings, prefix)
 -- Decode enoced with configured public_key header if enabled in settings.
 -- If encoded header is not set then nil is returned. If pub_key is empty then encoded header is returned.
 -- Supported settings:
 -- * <prefix>_encrypt = false - no need for decryption of a header
--- * <prefix>_publickey = 'pub_key' - key that is used decode header
+-- * <prefix>_key = 'key' - key that is used decode header
 -- @return decoded header
 ---]]]
-exports.maybe_decode_header = function(encoded_header, settings, prefix)
+exports.maybe_decrypt_header = function(encoded_header, settings, prefix)
   local rspamd_secretbox = require "rspamd_cryptobox_secretbox"
 
   if not encoded_header or encoded_header == '' then
     return nil
   elseif settings[prefix .. '_encrypt'] then
-    local pub_key = settings[prefix .. '_publickey']
-    if not pub_key or pub_key == '' then
+    local key = settings[prefix .. '_key']
+    if not key or key == '' then
       return encoded_header
     end
-    local cryptobox = rspamd_secretbox.create(pub_key)
+    local cryptobox = rspamd_secretbox.create(key)
     local header = cryptobox:decrypt(encoded_header)
     return header
   end
