@@ -2722,7 +2722,7 @@ lua_cryptobox_secretbox_encrypt(lua_State *L)
 	struct rspamd_lua_text *out;
 
 	if (sbox == NULL) {
-		return luaL_error(L, "invalid arguments");
+		return luaL_error(L, "invalid argument for secretbox state");
 	}
 
 	if (lua_isstring(L, 2)) {
@@ -2732,14 +2732,14 @@ lua_cryptobox_secretbox_encrypt(lua_State *L)
 		struct rspamd_lua_text *t = lua_check_text(L, 2);
 
 		if (!t) {
-			return luaL_error(L, "invalid arguments; userdata is not text");
+			return luaL_error(L, "invalid first argument; userdata is not text");
 		}
 
 		in = t->start;
 		inlen = t->len;
 	}
 	else {
-		return luaL_error(L, "invalid arguments; userdata or string are expected");
+		return luaL_error(L, "invalid first argument; userdata or string are expected");
 	}
 
 	/* Nonce part */
@@ -2751,14 +2751,14 @@ lua_cryptobox_secretbox_encrypt(lua_State *L)
 			struct rspamd_lua_text *t = lua_check_text(L, 3);
 
 			if (!t) {
-				return luaL_error(L, "invalid arguments; userdata is not text");
+				return luaL_error(L, "invalid second argument; userdata is not text");
 			}
 
 			nonce = t->start;
 			nlen = t->len;
 		}
 		else {
-			return luaL_error(L, "invalid arguments; userdata or string are expected");
+			return luaL_error(L, "invalid second argument; userdata or string are expected");
 		}
 
 		if (nlen < 1 || nlen > crypto_secretbox_NONCEBYTES) {
@@ -2796,8 +2796,8 @@ lua_cryptobox_secretbox_encrypt(lua_State *L)
 /***
  * @method rspamd_cryptobox_secretbox:decrypt(input, nonce)
  * Decrypts data using secretbox
- * @param {string/text} nonce nonce used to encrypt
  * @param {string/text} input input to decrypt
+ * @param {string/text} nonce nonce used to encrypt
  * @param {table} params optional parameters - NYI
  * @return {boolean},{rspamd_text} decryption result + decrypted text
  */
@@ -2811,7 +2811,7 @@ lua_cryptobox_secretbox_decrypt(lua_State *L)
 	struct rspamd_lua_text *out;
 
 	if (sbox == NULL) {
-		return luaL_error(L, "invalid arguments");
+		return luaL_error(L, "invalid argument for secretbox state");
 	}
 
 	/* Input argument */
@@ -2822,14 +2822,14 @@ lua_cryptobox_secretbox_decrypt(lua_State *L)
 		struct rspamd_lua_text *t = lua_check_text(L, 2);
 
 		if (!t) {
-			return luaL_error(L, "invalid arguments; userdata is not text");
+			return luaL_error(L, "invalid first argument; userdata is not text");
 		}
 
 		in = t->start;
 		inlen = t->len;
 	}
 	else {
-		return luaL_error(L, "invalid arguments; userdata or string are expected");
+		return luaL_error(L, "invalid first argument; userdata or string are expected");
 	}
 
 	/* Nonce argument */
@@ -2840,14 +2840,14 @@ lua_cryptobox_secretbox_decrypt(lua_State *L)
 		struct rspamd_lua_text *t = lua_check_text(L, 3);
 
 		if (!t) {
-			return luaL_error(L, "invalid arguments; userdata is not text");
+			return luaL_error(L, "invalid second argument; userdata is not text");
 		}
 
 		nonce = t->start;
 		nlen = t->len;
 	}
 	else {
-		return luaL_error(L, "invalid arguments; userdata or string are expected");
+		return luaL_error(L, "invalid second argument; userdata or string are expected");
 	}
 
 
