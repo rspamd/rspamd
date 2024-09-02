@@ -509,6 +509,14 @@ rspamd_stat_classify(struct rspamd_task *task, lua_State *L, unsigned int stage,
 		return ret;
 	}
 
+	if (task->message == NULL) {
+		ret = RSPAMD_STAT_PROCESS_ERROR;
+		msg_err_task("trying to classify empty message");
+
+		task->processed_stages |= stage;
+		return ret;
+	}
+
 	if (stage == RSPAMD_TASK_STAGE_CLASSIFIERS_PRE) {
 		/* Preprocess tokens */
 		rspamd_stat_preprocess(st_ctx, task, FALSE, FALSE);
@@ -888,6 +896,18 @@ rspamd_stat_learn(struct rspamd_task *task,
 
 	if (st_ctx->classifiers->len == 0) {
 		msg_debug_bayes("no classifiers defined");
+		task->processed_stages |= stage;
+		return ret;
+	}
+
+
+	if (task->message == NULL) {
+		ret = RSPAMD_STAT_PROCESS_ERROR;
+		if (err && *err == NULL) {
+			g_set_error(err, rspamd_stat_quark(), 500,
+						"Trying to learn an empty message");
+		}
+
 		task->processed_stages |= stage;
 		return ret;
 	}
