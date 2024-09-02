@@ -1398,7 +1398,7 @@ lua_cryptobox_hash_reset(lua_State *L)
 			/* Old openssl is awesome... */
 			HMAC_Init_ex(h->content.hmac_c, NULL, 0, h->content.hmac_c->md, NULL);
 #else
-			EVP_MAC_CTX_free(h->content.hmac_c);
+			//EVP_MAC_CTX_free(h->content.hmac_c);
 			EVP_MAC *mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
 			h->content.hmac_c = EVP_MAC_CTX_new(mac);
 #endif
