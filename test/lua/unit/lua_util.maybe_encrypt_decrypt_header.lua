@@ -2,7 +2,7 @@ local util = require 'lua_util'
 
 context("Lua util - maybe encrypt/decrypt header", function()
     test("Encrypt/Decrypt header with nonce", function()
-        local header = 'X-Spamd-Result'
+        local header = tostring('X-Spamd-Result')
         local settings = {
             prefix = 'prefix',
             prefix_encrypt = true,
@@ -29,7 +29,7 @@ context("Lua util - maybe encrypt/decrypt header", function()
     end)
 
     test("Encrypt/Decrypt header without nonce", function()
-        local header = 'X-Spamd-Result'
+        local header = tostring('X-Spamd-Result')
         local settings = {
             prefix = 'prefix',
             prefix_encrypt = true,
@@ -50,7 +50,8 @@ context("Lua util - maybe encrypt/decrypt header", function()
         if header == decrypted_header then
             assert_true(true, 'Succeed to confirm equality of original header and decrypted header')
         else
-            assert_true(false, 'Failed to confirm equality of original header and decrypted header')
+            assert_rspamd_table_eq_sorted({actual = { decrypted_header },
+                                           expect = { header }})
         end
     end)
 end)
