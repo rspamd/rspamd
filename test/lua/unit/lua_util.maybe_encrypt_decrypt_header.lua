@@ -14,7 +14,7 @@ context("Lua util - maybe encrypt/decrypt header", function()
         if encoded_header == header then
             assert_true(false, 'Failed to encode header')
         end
-        local decoded_header = util.maybe_decrypt_header(encoded_header, settings. settings.prefix)
+        local decoded_header = util.maybe_decrypt_header(encoded_header, settings, settings.prefix)
 
         if header ~= decoded_header then
             assert_true(false, 'Failed to confirm equality of original header and decoded one')
