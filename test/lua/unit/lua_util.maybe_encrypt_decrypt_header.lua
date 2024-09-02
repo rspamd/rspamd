@@ -20,7 +20,7 @@ context("Lua util - maybe encrypt/decrypt header", function()
             assert_true(false, 'Failed to decrypt header')
         end
 
-        if tostring(header) == decrypted_header then
+        if tostring(header) == tostring(decrypted_header) then
             assert_true(true, 'Succeed to confirm equality of original header and decrypted header')
         else
             assert_rspamd_table_eq_sorted({actual = { decrypted_header },
@@ -47,7 +47,7 @@ context("Lua util - maybe encrypt/decrypt header", function()
             assert_true(false, 'Failed to decrypt header')
         end
 
-        if tostring(header) == decrypted_header then
+        if tostring(header) == tostring(decrypted_header) then
             assert_true(true, 'Succeed to confirm equality of original header and decrypted header')
         else
             assert_rspamd_table_eq_sorted({actual = { decrypted_header },
