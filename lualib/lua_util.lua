@@ -1331,13 +1331,16 @@ exports.maybe_decrypt_header = function(encoded_header, settings, prefix)
   local rspamd_secretbox = require "rspamd_cryptobox_secretbox"
 
   if not encoded_header or encoded_header == '' then
+    logger.infox(log_level, 'Encoded header is empty or nil')
     return nil
   elseif settings[prefix .. '_encrypt'] then
     local key = settings[prefix .. '_key']
     if not key or key == '' then
+      logger.infox(log_level, 'Key is empty or nil')
       return encoded_header
     end
     local cryptobox = rspamd_secretbox.create(key)
+    logger.infox(log_level, '%s', type(encoded_header))
     local header = cryptobox:decrypt(encoded_header)
     return header
   end
