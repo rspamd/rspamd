@@ -986,13 +986,14 @@ rspamd_lua_ssl_hmac_create(struct rspamd_lua_cryptobox_hash *h, const EVP_MD *ht
 {
 	h->type = LUA_CRYPTOBOX_HASH_HMAC;
 
-	OSSL_LIB_CTX *libctx = OSSL_LIB_CTX_new();
+	char* properties = malloc(256);
+	strcpy(properties, "provider=default");
 #if OPENSSL_VERSION_NUMBER > 0x10100000L
 	if (insecure) {
 		/* Should never ever be used for crypto/security purposes! */
 #ifdef EVP_MD_CTX_FLAG_NON_FIPS_ALLOW
 		//HMAC_CTX_set_flags(h->content.hmac_c, EVP_MD_CTX_FLAG_NON_FIPS_ALLOW);
-		OSSL_PROVIDER_load(libctx, "fips");
+		strcpy(properties, "provider=fips");
 #endif
 	}
 #endif
@@ -1001,10 +1002,9 @@ rspamd_lua_ssl_hmac_create(struct rspamd_lua_cryptobox_hash *h, const EVP_MD *ht
 	(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x30500000)
 	h->content.hmac_c = g_malloc0(sizeof(*h->content.hmac_c));
 #else
-	EVP_MAC *mac = EVP_MAC_fetch(libctx, "HMAC", NULL);
+	EVP_MAC *mac = EVP_MAC_fetch(NULL, "HMAC", properties);
 	h->content.hmac_c = EVP_MAC_CTX_new(mac);
 	EVP_MAC_free(mac);
-	OSSL_LIB_CTX_free(libctx);
 #endif
 	h->out_len = EVP_MD_size(htype);
 
