@@ -998,24 +998,27 @@ rspamd_lua_ssl_hmac_create(struct rspamd_lua_cryptobox_hash *h, const EVP_MD *ht
 {
 	h->type = LUA_CRYPTOBOX_HASH_HMAC;
 
-	char properties[] = "provider=default";
-#if OPENSSL_VERSION_NUMBER > 0x10100000L
-	if (insecure) {
-		/* Should never ever be used for crypto/security purposes! */
-#ifdef EVP_MD_CTX_FLAG_NON_FIPS_ALLOW
-#if OPENSSL_VERSION_MAJOR >= 3
-		strcpy(properties, "provider=fips");
-#endif
-#endif
-	}
-#endif
+	EVP_MAC *mac = NULL;
+
 
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || \
 	(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x30500000)
 	h->content.hmac_c = g_malloc0(sizeof(*h->content.hmac_c));
 #else
 #if OPENSSL_VERSION_MAJOR >= 3
-	EVP_MAC *mac = EVP_MAC_fetch(NULL, "HMAC", properties);
+#if OPENSSL_VERSION_NUMBER > 0x10100000L
+	if (insecure) {
+		/* Should never ever be used for crypto/security purposes! */
+#ifdef EVP_MD_CTX_FLAG_NON_FIPS_ALLOW
+#if OPENSSL_VERSION_MAJOR >= 3
+		mac = EVP_MAC_fetch(NULL, "HMAC", "provider=fips");
+#endif
+#else
+		mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
+#endif
+	}
+#endif
+
 	h->content.hmac_c = EVP_MAC_CTX_new(mac);
 	EVP_MAC_free(mac);
 #else
