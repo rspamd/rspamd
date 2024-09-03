@@ -37,6 +37,7 @@
 
 #include <stdalign.h>
 #include <openssl/hmac.h>
+#include <openssl/provider.h>
 
 
 enum lua_cryptobox_hash_type {
@@ -985,24 +986,28 @@ rspamd_lua_ssl_hmac_create(struct rspamd_lua_cryptobox_hash *h, const EVP_MD *ht
 {
 	h->type = LUA_CRYPTOBOX_HASH_HMAC;
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000L || \
-	(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x30500000)
-	h->content.hmac_c = g_malloc0(sizeof(*h->content.hmac_c));
-#else
-	EVP_MAC *mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
-	h->content.hmac_c = EVP_MAC_CTX_new(mac);
-#endif
-	h->out_len = EVP_MD_size(htype);
-
+	OSSL_LIB_CTX *libctx = OSSL_LIB_CTX_new();
 #if OPENSSL_VERSION_NUMBER > 0x10100000L
 	if (insecure) {
 		/* Should never ever be used for crypto/security purposes! */
 #ifdef EVP_MD_CTX_FLAG_NON_FIPS_ALLOW
 		//HMAC_CTX_set_flags(h->content.hmac_c, EVP_MD_CTX_FLAG_NON_FIPS_ALLOW);
-		//EVP_MD_CTX_set_flags(h->content.c, EVP_MD_CTX_FLAG_NON_FIPS_ALLOW);
+		OSSL_PROVIDER_load(libctx, "fips");
 #endif
 	}
 #endif
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || \
+	(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x30500000)
+	h->content.hmac_c = g_malloc0(sizeof(*h->content.hmac_c));
+#else
+	EVP_MAC *mac = EVP_MAC_fetch(libctx, "HMAC", NULL);
+	h->content.hmac_c = EVP_MAC_CTX_new(mac);
+	EVP_MAC_free(mac);
+	OSSL_LIB_CTX_free(libctx);
+#endif
+	h->out_len = EVP_MD_size(htype);
+
 	OSSL_PARAM params[2];
 	params[0] = OSSL_PARAM_construct_utf8_string("digest", EVP_MD_get0_name(htype), 0);
 	params[1] = OSSL_PARAM_construct_end();
@@ -1401,6 +1406,7 @@ lua_cryptobox_hash_reset(lua_State *L)
 			EVP_MAC_CTX_free(h->content.hmac_c);
 			EVP_MAC *mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
 			h->content.hmac_c = EVP_MAC_CTX_new(mac);
+			EVP_MAC_free(mac);
 #endif
 			break;
 		case LUA_CRYPTOBOX_HASH_XXHASH64:
@@ -1445,7 +1451,7 @@ lua_cryptobox_hash_finish(struct rspamd_lua_cryptobox_hash *h)
 {
 	uint64_t ll;
 	unsigned char out[rspamd_cryptobox_HASHBYTES];
-	unsigned int ssl_outlen = sizeof(out);
+	size_t ssl_outlen = sizeof(out);
 
 	switch (h->type) {
 	case LUA_CRYPTOBOX_HASH_BLAKE2:
@@ -1453,15 +1459,13 @@ lua_cryptobox_hash_finish(struct rspamd_lua_cryptobox_hash *h)
 		memcpy(h->out, out, sizeof(out));
 		break;
 	case LUA_CRYPTOBOX_HASH_SSL:
-		EVP_DigestFinal_ex(h->content.c, out, &ssl_outlen);
+		EVP_DigestFinal_ex(h->content.c, out, (unsigned int *) &ssl_outlen);
 		h->out_len = ssl_outlen;
 		g_assert(ssl_outlen <= sizeof(h->out));
 		memcpy(h->out, out, ssl_outlen);
 		break;
 	case LUA_CRYPTOBOX_HASH_HMAC:
-		size_t ssl_outlen_size_t = ssl_outlen;
-		EVP_MAC_final(h->content.hmac_c, out, &ssl_outlen_size_t, sizeof(out));
-		ssl_outlen = ssl_outlen_size_t;
+		EVP_MAC_final(h->content.hmac_c, out, &ssl_outlen, sizeof(out));
 		h->out_len = ssl_outlen;
 		g_assert(ssl_outlen <= sizeof(h->out));
 		memcpy(h->out, out, ssl_outlen);
