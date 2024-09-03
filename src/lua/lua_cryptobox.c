@@ -55,7 +55,11 @@ struct rspamd_lua_cryptobox_hash {
 	union {
 		rspamd_cryptobox_hash_state_t *h;
 		EVP_MD_CTX *c;
+#if OPENSSL_VERSION_MAJOR >= 3
 		EVP_MAC_CTX *hmac_c;
+#else
+		HMAC_CTX *hmac_c;
+#endif
 		rspamd_cryptobox_fast_hash_state_t *fh;
 	} content;
 
@@ -900,7 +904,11 @@ rspamd_lua_hash_update(struct rspamd_lua_cryptobox_hash *h,
 			EVP_DigestUpdate(h->content.c, p, len);
 			break;
 		case LUA_CRYPTOBOX_HASH_HMAC:
+#if OPENSSL_VERSION_MAJOR >= 3
 			EVP_MAC_update(h->content.hmac_c, p, len);
+#else
+			HMAC_Update(h->content.hmac_c, p, len);
+#endif
 			break;
 		case LUA_CRYPTOBOX_HASH_XXHASH64:
 		case LUA_CRYPTOBOX_HASH_XXHASH32:
@@ -932,7 +940,11 @@ lua_cryptobox_hash_dtor(struct rspamd_lua_cryptobox_hash *h)
 		HMAC_CTX_cleanup(h->content.hmac_c);
 		g_free(h->content.hmac_c);
 #else
+#if OPENSSL_VERSION_MAJOR >= 3
 		EVP_MAC_CTX_free(h->content.hmac_c);
+#else
+		HMAC_CTX_free(h->content.hmac_c);
+#endif
 #endif
 	}
 	else if (h->type == LUA_CRYPTOBOX_HASH_BLAKE2) {
@@ -986,13 +998,14 @@ rspamd_lua_ssl_hmac_create(struct rspamd_lua_cryptobox_hash *h, const EVP_MD *ht
 {
 	h->type = LUA_CRYPTOBOX_HASH_HMAC;
 
-	char properties [256] = "provider=default";
+	char properties[] = "provider=default";
 #if OPENSSL_VERSION_NUMBER > 0x10100000L
 	if (insecure) {
 		/* Should never ever be used for crypto/security purposes! */
 #ifdef EVP_MD_CTX_FLAG_NON_FIPS_ALLOW
-		//HMAC_CTX_set_flags(h->content.hmac_c, EVP_MD_CTX_FLAG_NON_FIPS_ALLOW);
+#if OPENSSL_VERSION_MAJOR >= 3
 		strcpy(properties, "provider=fips");
+#endif
 #endif
 	}
 #endif
@@ -1001,17 +1014,36 @@ rspamd_lua_ssl_hmac_create(struct rspamd_lua_cryptobox_hash *h, const EVP_MD *ht
 	(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x30500000)
 	h->content.hmac_c = g_malloc0(sizeof(*h->content.hmac_c));
 #else
+#if OPENSSL_VERSION_MAJOR >= 3
 	EVP_MAC *mac = EVP_MAC_fetch(NULL, "HMAC", properties);
 	h->content.hmac_c = EVP_MAC_CTX_new(mac);
 	EVP_MAC_free(mac);
+#else
+	h->content.hmac_c = HMAC_CTX_new();
 #endif
-	h->out_len = EVP_MD_size(htype);
+#endif
 
+#if OPENSSL_VERSION_NUMBER > 0x10100000L
+	if (insecure) {
+		/* Should never ever be used for crypto/security purposes! */
+#ifdef EVP_MD_CTX_FLAG_NON_FIPS_ALLOW
+#if OPENSSL_VERSION_MAJOR < 3
+		HMAC_CTX_set_flags(h->content.hmac_c, EVP_MD_CTX_FLAG_NON_FIPS_ALLOW);
+#endif
+#endif
+	}
+#endif
+
+	h->out_len = EVP_MD_size(htype);
+#if OPENSSL_VERSION_MAJOR >= 3
 	OSSL_PARAM params[2];
 	params[0] = OSSL_PARAM_construct_utf8_string("digest", EVP_MD_get0_name(htype), 0);
 	params[1] = OSSL_PARAM_construct_end();
 
 	EVP_MAC_init(h->content.hmac_c, key, keylen, params);
+#else
+	HMAC_Init_ex(h->content.hmac_c, key, keylen, htype, NULL);
+#endif
 }
 
 static struct rspamd_lua_cryptobox_hash *
@@ -1402,10 +1434,14 @@ lua_cryptobox_hash_reset(lua_State *L)
 			/* Old openssl is awesome... */
 			HMAC_Init_ex(h->content.hmac_c, NULL, 0, h->content.hmac_c->md, NULL);
 #else
+#if OPENSSL_VERSION_MAJOR >= 3
 			EVP_MAC_CTX_free(h->content.hmac_c);
 			EVP_MAC *mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
 			h->content.hmac_c = EVP_MAC_CTX_new(mac);
 			EVP_MAC_free(mac);
+#else
+			HMAC_CTX_reset(h->content.hmac_c);
+#endif
 #endif
 			break;
 		case LUA_CRYPTOBOX_HASH_XXHASH64:
@@ -1464,7 +1500,11 @@ lua_cryptobox_hash_finish(struct rspamd_lua_cryptobox_hash *h)
 		memcpy(h->out, out, ssl_outlen);
 		break;
 	case LUA_CRYPTOBOX_HASH_HMAC:
+#if OPENSSL_VERSION_MAJOR >= 3
 		EVP_MAC_final(h->content.hmac_c, out, &ssl_outlen, sizeof(out));
+#else
+		HMAC_Final(h->content.hmac_c, out, &ssl_outlen);
+#endif
 		h->out_len = ssl_outlen;
 		g_assert(ssl_outlen <= sizeof(h->out));
 		memcpy(h->out, out, ssl_outlen);
