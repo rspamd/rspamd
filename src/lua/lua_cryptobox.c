@@ -986,8 +986,7 @@ rspamd_lua_ssl_hmac_create(struct rspamd_lua_cryptobox_hash *h, const EVP_MD *ht
 {
 	h->type = LUA_CRYPTOBOX_HASH_HMAC;
 
-	char* properties = malloc(256);
-	strcpy(properties, "provider=default");
+	char properties [256] = "provider=default";
 #if OPENSSL_VERSION_NUMBER > 0x10100000L
 	if (insecure) {
 		/* Should never ever be used for crypto/security purposes! */
