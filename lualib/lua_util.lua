@@ -1305,12 +1305,12 @@ exports.maybe_encrypt_header = function(header, settings, prefix)
   local rspamd_secretbox = require "rspamd_cryptobox_secretbox"
 
   if not header or header == '' then
-    logger.infox(log_level, 'Header is empty or nil')
-    return header
+    logger.errx(rspamd_config, "Header: %s is empty or nil", header)
+    return nil
   elseif settings[prefix .. '_encrypt'] then
     local key = settings[prefix .. '_key']
     if not key or key == '' then
-      logger.infox(log_level, 'Key is empty or nil')
+      logger.errx(rspamd_config, "Key: %s is empty or nil", key)
       return header
     end
     local cryptobox = rspamd_secretbox.create(key)
@@ -1338,32 +1338,34 @@ end
 -- and <prefix>_nonce is an optional
 -- @return decrypted header
 ---]]]
-exports.maybe_decrypt_header = function(encoded_header, settings, prefix, nonce)
+exports.maybe_decrypt_header = function(encrypted_header, settings, prefix, nonce)
   local rspamd_secretbox = require "rspamd_cryptobox_secretbox"
 
-  if not encoded_header or encoded_header == '' then
-    logger.infox(log_level, 'Encoded header is empty or nil')
+  if not encrypted_header or encrypted_header == '' then
+    logger.errx(rspamd_config, "Encoded header: %s is empty or nil")
     return nil
   elseif settings[prefix .. '_encrypt'] then
     local key = settings[prefix .. '_key']
     if not key or key == '' then
-      logger.infox(log_level, 'Key is empty or nil')
-      return encoded_header
+      logger.errx(rspamd_config, "Key: %s is empty or nil")
+      return encrypted_header
     end
     local cryptobox = rspamd_secretbox.create(key)
 
     local result = false
     local header = ''
     if not nonce then
-      result, header = cryptobox:decrypt(encoded_header, settings[prefix .. '_nonce'])
+      result, header = cryptobox:decrypt(encrypted_header, settings[prefix .. '_nonce'])
     else
-      result, header = cryptobox:decrypt(encoded_header, nonce)
+      result, header = cryptobox:decrypt(encrypted_header, nonce)
     end
 
-    if result then
-      return header
+    if not result then
+      logger.errx(rspamd_config, "Decryption is failed with result: %s and decrypted header: %s", result, header)
+      return nil
     end
-    return nil
+
+    return header
   end
 end
 
