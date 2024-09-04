@@ -1361,7 +1361,7 @@ exports.maybe_decrypt_header = function(encrypted_header, settings, prefix, nonc
     end
 
     if not result then
-      logger.errx(rspamd_config, "Decryption is failed with result: %s and decrypted header: %s", result, header)
+      logger.infox(rspamd_config, "Decryption is failed with result: %s and decrypted header: %s", result, header)
       return nil
     end
 
