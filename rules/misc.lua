@@ -863,6 +863,9 @@ rspamd_config.COMPLETELY_EMPTY = {
   score = 15
 }
 
+-- Preserve compatibility
+local rdns_auth_and_local_conf = lua_util.config_check_local_or_authed(rspamd_config, 'once_received',
+    false, false)
 -- Check for the hostname if it was not set
 local rnds_check_id = rspamd_config:register_symbol {
   name = 'RDNS_CHECK',
@@ -899,6 +902,15 @@ local rnds_check_id = rspamd_config:register_symbol {
   -- TODO: settings might need to use this symbol if they depend on hostname...
   priority = lua_util.symbols_priorities.top - 1,
   description = 'Check if hostname has been resolved by MTA',
+  condition = function(task)
+    local task_ip = task:get_ip()
+    if ((not rdns_auth_and_local_conf[1] and task:get_user()) or
+        (not rdns_auth_and_local_conf[2] and task_ip and task_ip:is_local())) then
+      return false
+    end
+
+    return true
+  end
 }
 
 rspamd_config:register_symbol {
