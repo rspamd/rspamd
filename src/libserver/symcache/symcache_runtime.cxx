@@ -333,8 +333,8 @@ auto symcache_runtime::process_pre_postfilters(struct rspamd_task *task,
 		 */
 		if (stage != RSPAMD_TASK_STAGE_IDEMPOTENT &&
 			!(item->flags & SYMBOL_TYPE_IGNORE_PASSTHROUGH)) {
-			if (check_metric_limit(task)) {
-				msg_debug_cache_task_lambda("task has already the result being set, ignore further checks");
+			if (check_process_status(task) == check_status::passthrough) {
+				msg_debug_cache_task_lambda("task has already the passthrough result being set, ignore further checks");
 
 				return true;
 			}
@@ -407,10 +407,17 @@ auto symcache_runtime::process_filters(struct rspamd_task *task, symcache &cache
 			break;
 		}
 
+		auto check_result = check_process_status(task);
+
 		if (!(item->flags & (SYMBOL_TYPE_FINE | SYMBOL_TYPE_IGNORE_PASSTHROUGH))) {
-			if (has_passtrough || check_metric_limit(task)) {
-				msg_debug_cache_task_lambda("task has already the result being set, ignore further checks");
+			if (has_passtrough || check_result == check_status::passthrough) {
+				msg_debug_cache_task_lambda("task has already the passthrough result being set, ignore further checks");
 				has_passtrough = true;
+				/* Skip this item */
+				continue;
+			}
+			else if (check_result == check_status::limit_reached) {
+				msg_debug_cache_task_lambda("task has already the limit reached result being set, ignore further checks");
 				/* Skip this item */
 				continue;
 			}
@@ -531,19 +538,8 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 	return true;
 }
 
-auto symcache_runtime::check_metric_limit(struct rspamd_task *task) -> bool
+auto symcache_runtime::check_process_status(struct rspamd_task *task) -> symcache_runtime::check_status
 {
-	if (task->flags & RSPAMD_TASK_FLAG_PASS_ALL) {
-		return false;
-	}
-
-	/* Check score limit */
-	if (!std::isnan(lim)) {
-		if (task->result->score > lim) {
-			return true;
-		}
-	}
-
 	if (task->result->passthrough_result != nullptr) {
 		/* We also need to check passthrough results */
 		auto *pr = task->result->passthrough_result;
@@ -563,11 +559,22 @@ auto symcache_runtime::check_metric_limit(struct rspamd_task *task) -> bool
 			}
 
 			/* Immediately stop on non least passthrough action */
-			return true;
+			return check_status::passthrough;
 		}
 	}
 
-	return false;
+	if (task->flags & RSPAMD_TASK_FLAG_PASS_ALL) {
+		return check_status::allow;
+	}
+
+	/* Check score limit */
+	if (!std::isnan(lim)) {
+		if (task->result->score > lim) {
+			return check_status::limit_reached;
+		}
+	}
+
+	return check_status::allow;
 }
 
 auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache, cache_item *item,
