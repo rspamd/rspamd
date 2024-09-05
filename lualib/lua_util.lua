@@ -1292,6 +1292,84 @@ exports.maybe_obfuscate_string = function(subject, settings, prefix)
 end
 
 ---[[[
+-- @function lua_util.maybe_encrypt_header(header, settings, prefix)
+-- Encode header with configured public key if enabled in settings.
+-- If header is not set then nil is returned. If pub_key is empty then header is returned.
+-- Supported settings:
+-- * <prefix>_encrypt = false - no need for encryption of a header
+-- * <prefix>_key = 'key' - key that is used encrypt header
+-- * <prefix>_nonce = 'nonce' - nonce to encrypt header(optional)
+-- @return encrypted header
+---]]]
+exports.maybe_encrypt_header = function(header, settings, prefix)
+  local rspamd_secretbox = require "rspamd_cryptobox_secretbox"
+
+  if not header or header == '' then
+    logger.errx(rspamd_config, "Header: %s is empty or nil", header)
+    return nil
+  elseif settings[prefix .. '_encrypt'] then
+    local key = settings[prefix .. '_key']
+    if not key or key == '' then
+      logger.errx(rspamd_config, "Key: %s is empty or nil", key)
+      return header
+    end
+    local cryptobox = rspamd_secretbox.create(key)
+
+    local nonce = settings[prefix .. '_nonce']
+    local encrypted_header = ''
+    if not nonce or nonce == '' then
+      encrypted_header, nonce = cryptobox:encrypt(header)
+    else
+      encrypted_header = cryptobox:encrypt(header, nonce)
+    end
+    return encrypted_header, nonce
+  end
+end
+
+---[[[
+-- @function lua_util.maybe_decrypt_header(header, settings, prefix, nonce)
+-- Decode enoced with configured public_key header if enabled in settings.
+-- If encoded header is not set then nil is returned. If pub_key is empty then encoded header is returned.
+-- Supported settings:
+-- * <prefix>_encrypt = false - no need for decryption of a header
+-- * <prefix>_key = 'key' - key that is used decrypt header
+-- * <prefix>_nonce = 'nonce' - nonce used to encrypt header(optional)
+-- Nonce is an optional argument if <prefix>_nonce is provided, otherwise it is an required argument
+-- and <prefix>_nonce is an optional
+-- @return decrypted header
+---]]]
+exports.maybe_decrypt_header = function(encrypted_header, settings, prefix, nonce)
+  local rspamd_secretbox = require "rspamd_cryptobox_secretbox"
+
+  if not encrypted_header or encrypted_header == '' then
+    logger.errx(rspamd_config, "Encoded header: %s is empty or nil")
+    return nil
+  elseif settings[prefix .. '_encrypt'] then
+    local key = settings[prefix .. '_key']
+    if not key or key == '' then
+      logger.errx(rspamd_config, "Key: %s is empty or nil")
+      return encrypted_header
+    end
+    local cryptobox = rspamd_secretbox.create(key)
+
+    local result = false
+    local header = ''
+    if not nonce then
+      result, header = cryptobox:decrypt(encrypted_header, settings[prefix .. '_nonce'])
+    else
+      result, header = cryptobox:decrypt(encrypted_header, nonce)
+    end
+
+    if not result then
+      logger.infox(rspamd_config, "Decryption is failed with result: %s and decrypted header: %s", result, header)
+      return nil
+    end
+
+    return header
+  end
+end
+
+---[[[
 -- @function lua_util.callback_from_string(str)
 -- Converts a string like `return function(...) end` to lua function and return true and this function
 -- or returns false + error message
