@@ -451,6 +451,9 @@ rspamd_spf_process_reference(struct spf_resolved *target,
 			target->flags |= RSPAMD_SPF_RESOLVED_NA;
 			continue;
 		}
+		if (cur->flags & RSPAMD_SPF_FLAG_PLUSALL) {
+			target->flags |= RSPAMD_SPF_RESOLVED_PLUSALL;
+		}
 		if (cur->flags & RSPAMD_SPF_FLAG_INVALID) {
 			/* Ignore invalid elements */
 			continue;
@@ -1418,7 +1421,7 @@ parse_spf_all(struct spf_record *rec, struct spf_addr *addr)
 
 	/* Disallow +all */
 	if (addr->mech == SPF_PASS) {
-		addr->flags |= RSPAMD_SPF_FLAG_INVALID;
+		addr->flags |= RSPAMD_SPF_FLAG_PLUSALL;
 		msg_notice_spf("domain %s allows any SPF (+all), ignore SPF record completely",
 					   rec->sender_domain);
 	}

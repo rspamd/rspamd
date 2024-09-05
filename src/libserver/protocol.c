@@ -660,9 +660,9 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 		IF_HEADER(USER_HEADER)
 		{
 			/*
-					 * We must ignore User header in case of spamc, as SA has
-					 * different meaning of this header
-					 */
+								 * We must ignore User header in case of spamc, as SA has
+								 * different meaning of this header
+								 */
 			msg_debug_protocol("read user header, value: %T", hv_tok);
 			if (!RSPAMD_TASK_IS_SPAMC(task)) {
 				task->auth_user = rspamd_mempool_ftokdup(task->task_pool,
@@ -706,6 +706,15 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 
 			if (rspamd_ftok_casecmp(hv_tok, &srch) == 0) {
 				task->flags |= RSPAMD_TASK_FLAG_NO_LOG;
+			}
+		}
+		IF_HEADER(LOG_TAG_HEADER)
+		{
+			msg_debug_protocol("read log-tag header, value: %T", hv_tok);
+			/* Ensure that a tag is valid */
+			if (rspamd_fast_utf8_validate(hv_tok->begin, hv_tok->len) == 0) {
+				memcpy(task->task_pool->tag.uid, hv_tok->begin,
+					   MIN(hv_tok->len, sizeof(task->task_pool->tag.uid)));
 			}
 		}
 		break;
@@ -752,9 +761,9 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 	default:
 		msg_debug_protocol("generic header: %T", hn_tok);
 		break;
-			}
+				}
 
-			rspamd_task_add_request_header (task, hn_tok, hv_tok);
+				rspamd_task_add_request_header (task, hn_tok, hv_tok);
 }
 }); /* End of kh_foreach_value */
 

@@ -420,6 +420,18 @@ rspamd_rcl_group_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 		return FALSE;
 	}
 
+	if (!std::isnan(gr->max_score) && gr->max_score < 0) {
+		msg_err_config("group %s has negative max_score which is broken, use min_score if required", gr->name);
+
+		return FALSE;
+	}
+	if (!std::isnan(gr->min_score) && gr->min_score > 0) {
+		msg_err_config("group %s has positive min_score which is broken, use max_score if required", gr->name);
+
+		return FALSE;
+	}
+
+
 	if (const auto *elt = ucl_object_lookup(obj, "one_shot"); elt != nullptr) {
 		if (ucl_object_type(elt) != UCL_BOOLEAN) {
 			g_set_error(err,
@@ -2355,6 +2367,12 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   G_STRUCT_OFFSET(struct rspamd_symbols_group, max_score),
 									   0,
 									   "Maximum score that could be reached by this symbols group");
+		rspamd_rcl_add_default_handler(sub,
+									   "min_score",
+									   rspamd_rcl_parse_struct_double,
+									   G_STRUCT_OFFSET(struct rspamd_symbols_group, min_score),
+									   0,
+									   "Maximum negative score that could be reached by this symbols group");
 	}
 
 	if (!(skip_sections && g_hash_table_lookup(skip_sections, "worker"))) {
@@ -3039,21 +3057,16 @@ rspamd_rcl_parse_struct_pubkey(rspamd_mempool_t *pool,
 	gsize len;
 	const char *str;
 	rspamd_cryptobox_keypair_type keypair_type = RSPAMD_KEYPAIR_KEX;
-	rspamd_cryptobox_mode keypair_mode = RSPAMD_CRYPTOBOX_MODE_25519;
 
 	if (pd->flags & RSPAMD_CL_FLAG_SIGNKEY) {
 		keypair_type = RSPAMD_KEYPAIR_SIGN;
-	}
-	if (pd->flags & RSPAMD_CL_FLAG_NISTKEY) {
-		keypair_mode = RSPAMD_CRYPTOBOX_MODE_NIST;
 	}
 
 	target = (struct rspamd_cryptobox_pubkey **) (((char *) pd->user_struct) +
 												  pd->offset);
 	if (obj->type == UCL_STRING) {
 		str = ucl_object_tolstring(obj, &len);
-		pk = rspamd_pubkey_from_base32(str, len, keypair_type,
-									   keypair_mode);
+		pk = rspamd_pubkey_from_base32(str, len, keypair_type);
 
 		if (pk != nullptr) {
 			*target = pk;
@@ -3482,7 +3495,7 @@ void rspamd_rcl_maybe_apply_lua_transform(struct rspamd_config *cfg)
 	lua_pushvalue(L, -2);
 
 	/* Push the existing config */
-	ucl_object_push_lua(L, cfg->cfg_ucl_obj, true);
+	ucl_object_push_lua_unwrapped(L, cfg->cfg_ucl_obj);
 
 	if (auto ret = lua_pcall(L, 1, 2, err_idx); ret != 0) {
 		msg_err("call to rspamadm lua script failed (%d): %s", ret,
@@ -3492,12 +3505,8 @@ void rspamd_rcl_maybe_apply_lua_transform(struct rspamd_config *cfg)
 		return;
 	}
 
-	if (lua_toboolean(L, -2) && lua_type(L, -1) == LUA_TTABLE) {
-		ucl_object_t *old_cfg = cfg->cfg_ucl_obj;
-
+	if (lua_toboolean(L, -2) && lua_type(L, -1) == LUA_TUSERDATA) {
 		msg_info_config("configuration has been transformed in Lua");
-		cfg->cfg_ucl_obj = ucl_object_lua_import(L, -1);
-		ucl_object_unref(old_cfg);
 	}
 
 	/* error function */
@@ -3629,7 +3638,8 @@ rspamd_config_parse_ucl(struct rspamd_config *cfg,
 	auto &cfg_file = cfg_file_maybe.value();
 
 	/* Try to load keyfile if available */
-	rspamd::util::raii_file::open(fmt::format("{}.key", filename), O_RDONLY).map([&](const auto &keyfile) {
+	auto keyfile_name = fmt::format("{}.key", filename);
+	rspamd::util::raii_file::open(keyfile_name, O_RDONLY).map([&](const auto &keyfile) {
 		auto *kp_parser = ucl_parser_new(0);
 		if (ucl_parser_add_fd(kp_parser, keyfile.get_fd())) {
 			auto *kp_obj = ucl_parser_get_object(kp_parser);
@@ -3638,8 +3648,8 @@ rspamd_config_parse_ucl(struct rspamd_config *cfg,
 			decrypt_keypair = rspamd_keypair_from_ucl(kp_obj);
 
 			if (decrypt_keypair == nullptr) {
-				msg_err_config_forced("cannot load keypair from %s.key: invalid keypair",
-									  filename);
+				msg_err_config_forced("cannot load keypair from %s: invalid keypair",
+									  keyfile_name.c_str());
 			}
 			else {
 				/* Add decryption support to UCL */
@@ -3651,8 +3661,8 @@ rspamd_config_parse_ucl(struct rspamd_config *cfg,
 			ucl_object_unref(kp_obj);
 		}
 		else {
-			msg_err_config_forced("cannot load keypair from %s.key: %s",
-								  filename, ucl_parser_get_error(kp_parser));
+			msg_err_config_forced("cannot load keypair from %s: %s",
+								  keyfile_name.c_str(), ucl_parser_get_error(kp_parser));
 		}
 		ucl_parser_free(kp_parser);
 	});

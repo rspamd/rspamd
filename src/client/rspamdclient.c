@@ -302,12 +302,10 @@ rspamd_client_init(struct rspamd_http_context *http_ctx,
 	conn->timeout = timeout;
 
 	if (key) {
-		conn->key = rspamd_pubkey_from_base32(key, 0, RSPAMD_KEYPAIR_KEX,
-											  RSPAMD_CRYPTOBOX_MODE_25519);
+		conn->key = rspamd_pubkey_from_base32(key, 0, RSPAMD_KEYPAIR_KEX);
 
 		if (conn->key) {
-			conn->keypair = rspamd_keypair_new(RSPAMD_KEYPAIR_KEX,
-											   RSPAMD_CRYPTOBOX_MODE_25519);
+			conn->keypair = rspamd_keypair_new(RSPAMD_KEYPAIR_KEX);
 			rspamd_http_connection_set_key(conn->http_conn, conn->keypair);
 		}
 		else {

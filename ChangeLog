@@ -1,3 +1,13 @@
+3.9.1: 23 Jul 2024
+  * [Conf] Spf: Add R_SPF_PLUSALL symbol with some score
+  * [Feature] Spf: Treat SPF +all in a special way
+  * [Minor] Ensure some safety when checking weights
+  * [Minor] Fix several issues with flag propagation
+  * [Minor] Gpt: Improve prompt and add some conversion heursitics
+  * [Minor] Gpt: Remove top_p reduce temperature to 0
+  * [Minor] Gpt: Set response_format
+  * [Minor] Gpt: Use gpt-4o-mini by default
+
 3.9.0: 12 Jul 2024
   * [CritFix] Protect regexp matcher from regexps with empty patterns
   * [Feature] Allow adding X-CMAE-Score header

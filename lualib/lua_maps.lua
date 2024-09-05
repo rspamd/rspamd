@@ -97,18 +97,6 @@ local external_map_schema = ts.shape {
 local rspamd_http = require "rspamd_http"
 local ucl = require "ucl"
 
-local function url_encode_string(str)
-  str = string.gsub(str, "([^%w _%%%-%.~])",
-      function(c)
-        return string.format("%%%02X", string.byte(c))
-      end)
-  str = string.gsub(str, " ", "+")
-  return str
-end
-
-assert(url_encode_string('上海+中國') == '%E4%B8%8A%E6%B5%B7%2B%E4%B8%AD%E5%9C%8B')
-assert(url_encode_string('? and the Mysterians') == '%3F+and+the+Mysterians')
-
 local function query_external_map(map_config, upstreams, key, callback, task)
   local http_method = (map_config.method == 'body' or map_config.method == 'form') and 'POST' or 'GET'
   local upstream = upstreams:get_upstream_round_robin()
@@ -127,7 +115,7 @@ local function query_external_map(map_config, upstreams, key, callback, task)
         key = key
       }
     elseif map_config.method == 'query' then
-      url = string.format('%s?key=%s', url, url_encode_string(tostring(key)))
+      url = string.format('%s?key=%s', url, lua_util.url_encode_string(tostring(key)))
     end
   elseif type(key) == 'table' then
     if map_config.method == 'body' then
@@ -150,7 +138,7 @@ local function query_external_map(map_config, upstreams, key, callback, task)
         local params_table = {}
         for k, v in pairs(key) do
           if type(v) == 'string' then
-            table.insert(params_table, string.format('%s=%s', url_encode_string(k), url_encode_string(v)))
+            table.insert(params_table, string.format('%s=%s', lua_util.url_encode_string(k), lua_util.url_encode_string(v)))
           end
         end
         url = string.format('%s?%s', url, table.concat(params_table, '&'))

@@ -18,6 +18,7 @@ limitations under the License.
 
 local rspamd_logger = require "rspamd_logger"
 local N = 'known_senders'
+local E = {}
 local lua_util = require "lua_util"
 local lua_redis = require "lua_redis"
 local lua_maps = require "lua_maps"
@@ -258,7 +259,7 @@ local function verify_local_replies_set(task)
     return nil
   end
 
-  local replies_recipients = task:get_recipients('mime')
+  local replies_recipients = task:get_recipients('mime') or E
 
   local replies_sender_string = lua_util.maybe_obfuscate_string(tostring(replies_sender), settings,
       settings.sender_prefix)

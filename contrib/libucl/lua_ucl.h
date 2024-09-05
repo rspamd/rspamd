@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,6 +91,13 @@ UCL_EXTERN ucl_object_t *ucl_object_lua_import_escape(lua_State *L, int idx);
  */
 UCL_EXTERN int ucl_object_push_lua(lua_State *L,
 								   const ucl_object_t *obj, bool allow_array);
+
+/**
+ * Push an object to lua as userdata object (handling one refcount)
+ * @param L
+ * @param obj
+ */
+UCL_EXTERN void ucl_object_push_lua_unwrapped(lua_State *L, const ucl_object_t *obj);
 /**
  * Push an object to lua replacing all ucl.null with `false`
  * @param L lua state

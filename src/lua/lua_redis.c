@@ -104,7 +104,7 @@ struct lua_redis_userdata {
 	char *server;
 	char log_tag[RSPAMD_LOG_ID_LEN + 1];
 	struct lua_redis_request_specific_userdata *specific;
-	double timeout;
+	ev_tstamp timeout;
 	uint16_t port;
 	uint16_t terminated;
 };
@@ -280,15 +280,22 @@ lua_redis_fin(void *arg)
  * @param code
  * @param ud
  */
+#ifdef __GNUC__
+__attribute__((format(printf, 1, 5)))
+#endif
 static void
 lua_redis_push_error(const char *err,
 					 struct lua_redis_ctx *ctx,
 					 struct lua_redis_request_specific_userdata *sp_ud,
-					 gboolean connected)
+					 gboolean connected,
+					 ...)
 {
 	struct lua_redis_userdata *ud = sp_ud->c;
 	struct lua_callback_state cbs;
 	lua_State *L;
+
+	va_list ap;
+	va_start(ap, connected);
 
 	if (!(sp_ud->flags & (LUA_REDIS_SPECIFIC_REPLIED | LUA_REDIS_SPECIFIC_FINISHED))) {
 		if (sp_ud->cbref != -1) {
@@ -302,7 +309,7 @@ lua_redis_push_error(const char *err,
 			lua_rawgeti(cbs.L, LUA_REGISTRYINDEX, sp_ud->cbref);
 
 			/* String of error */
-			lua_pushstring(cbs.L, err);
+			lua_pushvfstring(cbs.L, err, ap);
 			/* Data is nil */
 			lua_pushnil(cbs.L);
 
@@ -331,6 +338,8 @@ lua_redis_push_error(const char *err,
 			lua_redis_fin(sp_ud);
 		}
 	}
+
+	va_end(ap);
 }
 
 static void
@@ -479,7 +488,7 @@ lua_redis_callback(redisAsyncContext *c, gpointer r, gpointer priv)
 					lua_redis_push_data(reply, ctx, sp_ud);
 				}
 				else {
-					lua_redis_push_error(reply->str, ctx, sp_ud, TRUE);
+					lua_redis_push_error("%s", ctx, sp_ud, TRUE, reply->str);
 				}
 			}
 			else {
@@ -488,10 +497,10 @@ lua_redis_callback(redisAsyncContext *c, gpointer r, gpointer priv)
 		}
 		else {
 			if (c->err == REDIS_ERR_IO) {
-				lua_redis_push_error(strerror(errno), ctx, sp_ud, TRUE);
+				lua_redis_push_error("%s", ctx, sp_ud, TRUE, strerror(errno));
 			}
 			else {
-				lua_redis_push_error(c->errstr, ctx, sp_ud, TRUE);
+				lua_redis_push_error("%s", ctx, sp_ud, TRUE, c->errstr);
 			}
 		}
 	}
@@ -750,7 +759,7 @@ lua_redis_timeout(EV_P_ ev_timer *w, int revents)
 	REDIS_RETAIN(ctx);
 	msg_debug_lua_redis("timeout while querying redis server: %p, redis: %p", sp_ud,
 						sp_ud->c->ctx);
-	lua_redis_push_error("timeout while connecting the server", ctx, sp_ud, TRUE);
+	lua_redis_push_error("timeout while connecting the server (%.2f sec)", ctx, sp_ud, TRUE, ud->timeout);
 
 	if (sp_ud->c->ctx) {
 		ac = sp_ud->c->ctx;

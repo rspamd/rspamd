@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -38,19 +38,8 @@ struct rspamd_cryptobox_nm {
 struct rspamd_cryptobox_keypair {
 	unsigned char id[rspamd_cryptobox_HASHBYTES];
 	enum rspamd_cryptobox_keypair_type type;
-	enum rspamd_cryptobox_mode alg;
 	ucl_object_t *extensions;
 	ref_entry_t ref;
-};
-
-/*
- * NIST p256 ecdh keypair
- */
-#define RSPAMD_CRYPTOBOX_KEYPAIR_NIST(x) ((struct rspamd_cryptobox_keypair_nist *) (x))
-struct rspamd_cryptobox_keypair_nist {
-	struct rspamd_cryptobox_keypair parent;
-	unsigned char sk[32];
-	unsigned char pk[65];
 };
 
 /*
@@ -61,16 +50,6 @@ struct rspamd_cryptobox_keypair_25519 {
 	struct rspamd_cryptobox_keypair parent;
 	unsigned char sk[32];
 	unsigned char pk[32];
-};
-
-/*
- * NIST p256 ecdsa keypair
- */
-#define RSPAMD_CRYPTOBOX_KEYPAIR_SIG_NIST(x) ((struct rspamd_cryptobox_keypair_sig_nist *) (x))
-struct rspamd_cryptobox_keypair_sig_nist {
-	struct rspamd_cryptobox_keypair parent;
-	unsigned char sk[32];
-	unsigned char pk[65];
 };
 
 /*
@@ -90,17 +69,7 @@ struct rspamd_cryptobox_pubkey {
 	unsigned char id[rspamd_cryptobox_HASHBYTES];
 	struct rspamd_cryptobox_nm *nm;
 	enum rspamd_cryptobox_keypair_type type;
-	enum rspamd_cryptobox_mode alg;
 	ref_entry_t ref;
-};
-
-/*
- * Public p256 ecdh
- */
-#define RSPAMD_CRYPTOBOX_PUBKEY_NIST(x) ((struct rspamd_cryptobox_pubkey_nist *) (x))
-struct rspamd_cryptobox_pubkey_nist {
-	struct rspamd_cryptobox_pubkey parent;
-	unsigned char pk[65];
 };
 
 /*
@@ -110,15 +79,6 @@ struct rspamd_cryptobox_pubkey_nist {
 struct rspamd_cryptobox_pubkey_25519 {
 	struct rspamd_cryptobox_pubkey parent;
 	unsigned char pk[32];
-};
-
-/*
- * Public p256 ecdsa
- */
-#define RSPAMD_CRYPTOBOX_PUBKEY_SIG_NIST(x) ((struct rspamd_cryptobox_pubkey_sig_nist *) (x))
-struct rspamd_cryptobox_pubkey_sig_nist {
-	struct rspamd_cryptobox_pubkey parent;
-	unsigned char pk[65];
 };
 
 /*

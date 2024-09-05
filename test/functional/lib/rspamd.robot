@@ -60,6 +60,28 @@ Check Rspamc Match String
     Should Not Contain  ${subject}  ${str}
   END
 
+Do Not Expect Added Header
+  [Arguments]  ${header_name}
+  IF  'milter' not in ${SCAN_RESULT}
+    RETURN
+  END
+  IF  'add_headers' not in ${SCAN_RESULT}[milter]
+    RETURN
+  END
+  Dictionary Should Not Contain Key  ${SCAN_RESULT}[milter][add_headers]  ${header_name}
+  ...  msg=${header_name} was added
+
+Do Not Expect Removed Header
+  [Arguments]  ${header_name}
+  IF  'milter' not in ${SCAN_RESULT}
+    RETURN
+  END
+  IF  'remove_headers' not in ${SCAN_RESULT}[milter]
+    RETURN
+  END
+  Dictionary Should Not Contain Key  ${SCAN_RESULT}[milter][remove_headers]  ${header_name}
+  ...  msg=${header_name} was removed
+
 Do Not Expect Symbol
   [Arguments]  ${symbol}
   Dictionary Should Not Contain Key  ${SCAN_RESULT}[symbols]  ${symbol}
@@ -76,9 +98,30 @@ Expect Action
   [Arguments]  ${action}
   Should Be Equal  ${SCAN_RESULT}[action]  ${action}
 
+Expect Added Header
+  [Arguments]  ${header_name}  ${header_value}  ${pos}=-1
+  Dictionary Should Contain Key  ${SCAN_RESULT}  milter
+  ...  msg=milter block was not present in protocol response
+  Dictionary Should Contain Key  ${SCAN_RESULT}[milter]  add_headers
+  ...  msg=add_headers block was not present in protocol response
+  Dictionary Should Contain Key  ${SCAN_RESULT}[milter][add_headers]  ${header_name}
+  ...  msg=${header_name} was not added
+  Should Be Equal  ${SCAN_RESULT}[milter][add_headers][${header_name}][value]  ${header_value}
+  Should Be Equal as Numbers  ${SCAN_RESULT}[milter][add_headers][${header_name}][order]  ${pos}
+
 Expect Email
   [Arguments]  ${email}
   List Should Contain Value  ${SCAN_RESULT}[emails]  ${email}
+
+Expect Removed Header
+  [Arguments]  ${header_name}  ${pos}=0
+  Dictionary Should Contain Key  ${SCAN_RESULT}  milter
+  ...  msg=milter block was not present in protocol response
+  Dictionary Should Contain Key  ${SCAN_RESULT}[milter]  remove_headers
+  ...  msg=remove_headers block was not present in protocol response
+  Dictionary Should Contain Key  ${SCAN_RESULT}[milter][remove_headers]  ${header_name}
+  ...  msg=${header_name} was not removed
+  Should Be Equal as Numbers  ${SCAN_RESULT}[milter][remove_headers][${header_name}]  ${pos}
 
 Expect Required Score
   [Arguments]  ${required_score}
@@ -302,7 +345,22 @@ Run Rspamd
   Export Scoped Variables  ${RSPAMD_SCOPE}  RSPAMD_PROCESS=${result}
 
   # Confirm worker is reachable
-  Wait Until Keyword Succeeds  15x  1 sec  Ping Rspamd  ${RSPAMD_LOCAL_ADDR}  ${check_port}
+  FOR    ${index}    IN RANGE    37
+    ${ok} =  Rspamd Startup Check  ${check_port}
+    IF  ${ok}  CONTINUE
+    Sleep  0.4s
+  END
+
+Rspamd Startup Check
+  [Arguments]  ${check_port}=${RSPAMD_PORT_NORMAL}
+  ${handle} =  Get Process Object
+  ${res} =  Evaluate  $handle.poll()
+  IF  ${res} != None
+    ${stderr} =  Get File  ${RSPAMD_TMPDIR}/rspamd.stderr
+    Fail  Process Is Gone, stderr: ${stderr}
+  END
+  ${ping} =  Run Keyword And Return Status  Ping Rspamd  ${RSPAMD_LOCAL_ADDR}  ${check_port}
+  [Return]  ${ping}
 
 Rspamadm Setup
   ${RSPAMADM_TMPDIR} =  Make Temporary Directory

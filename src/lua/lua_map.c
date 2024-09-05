@@ -1293,8 +1293,7 @@ lua_map_set_sign_key(lua_State *L)
 	pk_str = lua_tolstring(L, 2, &len);
 
 	if (map && pk_str) {
-		pk = rspamd_pubkey_from_base32(pk_str, len, RSPAMD_KEYPAIR_SIGN,
-									   RSPAMD_CRYPTOBOX_MODE_25519);
+		pk = rspamd_pubkey_from_base32(pk_str, len, RSPAMD_KEYPAIR_SIGN);
 
 		if (!pk) {
 			return luaL_error(L, "invalid pubkey string");
