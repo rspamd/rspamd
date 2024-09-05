@@ -37,7 +37,9 @@
 
 #include <stdalign.h>
 #include <openssl/hmac.h>
-
+#if OPENSSL_VERSION_MAJOR >= 3
+#include <openssl/provider.h>
+#endif
 
 enum lua_cryptobox_hash_type {
 	LUA_CRYPTOBOX_HASH_BLAKE2 = 0,
@@ -54,7 +56,11 @@ struct rspamd_lua_cryptobox_hash {
 	union {
 		rspamd_cryptobox_hash_state_t *h;
 		EVP_MD_CTX *c;
+#if OPENSSL_VERSION_MAJOR >= 3
+		EVP_MAC_CTX *hmac_c;
+#else
 		HMAC_CTX *hmac_c;
+#endif
 		rspamd_cryptobox_fast_hash_state_t *fh;
 	} content;
 
@@ -899,7 +905,11 @@ rspamd_lua_hash_update(struct rspamd_lua_cryptobox_hash *h,
 			EVP_DigestUpdate(h->content.c, p, len);
 			break;
 		case LUA_CRYPTOBOX_HASH_HMAC:
+#if OPENSSL_VERSION_MAJOR >= 3
+			EVP_MAC_update(h->content.hmac_c, p, len);
+#else
 			HMAC_Update(h->content.hmac_c, p, len);
+#endif
 			break;
 		case LUA_CRYPTOBOX_HASH_XXHASH64:
 		case LUA_CRYPTOBOX_HASH_XXHASH32:
@@ -931,7 +941,11 @@ lua_cryptobox_hash_dtor(struct rspamd_lua_cryptobox_hash *h)
 		HMAC_CTX_cleanup(h->content.hmac_c);
 		g_free(h->content.hmac_c);
 #else
+#if OPENSSL_VERSION_MAJOR >= 3
+		EVP_MAC_CTX_free(h->content.hmac_c);
+#else
 		HMAC_CTX_free(h->content.hmac_c);
+#endif
 #endif
 	}
 	else if (h->type == LUA_CRYPTOBOX_HASH_BLAKE2) {
@@ -984,25 +998,53 @@ rspamd_lua_ssl_hmac_create(struct rspamd_lua_cryptobox_hash *h, const EVP_MD *ht
 						   bool insecure)
 {
 	h->type = LUA_CRYPTOBOX_HASH_HMAC;
-
-#if OPENSSL_VERSION_NUMBER < 0x10100000L || \
-	(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x30500000)
-	h->content.hmac_c = g_malloc0(sizeof(*h->content.hmac_c));
-#else
-	h->content.hmac_c = HMAC_CTX_new();
-#endif
-	h->out_len = EVP_MD_size(htype);
+	OSSL_PROVIDER *dflt = OSSL_PROVIDER_load(NULL, "default");
 
 #if OPENSSL_VERSION_NUMBER > 0x10100000L
 	if (insecure) {
 		/* Should never ever be used for crypto/security purposes! */
 #ifdef EVP_MD_CTX_FLAG_NON_FIPS_ALLOW
+#if OPENSSL_VERSION_MAJOR >= 3
+		OSSL_PROVIDER *fips = OSSL_PROVIDER_load(NULL, "fips");
+#endif
+	}
+#endif
+#endif
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || \
+	(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x30500000)
+	h->content.hmac_c = g_malloc0(sizeof(*h->content.hmac_c));
+#else
+#if OPENSSL_VERSION_MAJOR >= 3
+	EVP_MAC* mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
+	h->content.hmac_c = EVP_MAC_CTX_new(mac);
+	EVP_MAC_free(mac);
+#else
+	h->content.hmac_c = HMAC_CTX_new();
+#endif
+#endif
+
+#if OPENSSL_VERSION_NUMBER > 0x10100000L
+	if (insecure) {
+		/* Should never ever be used for crypto/security purposes! */
+#ifdef EVP_MD_CTX_FLAG_NON_FIPS_ALLOW
+#if OPENSSL_VERSION_MAJOR < 3
 		HMAC_CTX_set_flags(h->content.hmac_c, EVP_MD_CTX_FLAG_NON_FIPS_ALLOW);
+#endif
 #endif
 	}
 #endif
 
+	h->out_len = EVP_MD_size(htype);
+#if OPENSSL_VERSION_MAJOR >= 3
+	OSSL_PARAM params[2];
+	params[0] = OSSL_PARAM_construct_utf8_string("digest", EVP_MD_get0_name(htype), 0);
+	params[1] = OSSL_PARAM_construct_end();
+
+	EVP_MAC_init(h->content.hmac_c, key, keylen, params);
+#else
 	HMAC_Init_ex(h->content.hmac_c, key, keylen, htype, NULL);
+#endif
 }
 
 static struct rspamd_lua_cryptobox_hash *
@@ -1385,7 +1427,7 @@ lua_cryptobox_hash_reset(lua_State *L)
 			rspamd_cryptobox_hash_init(h->content.h, NULL, 0);
 			break;
 		case LUA_CRYPTOBOX_HASH_SSL:
-			EVP_DigestInit(h->content.c, EVP_MD_CTX_md(h->content.c));
+			EVP_DigestInit(h->content.c, EVP_MD_CTX_get0_md(h->content.c));
 			break;
 		case LUA_CRYPTOBOX_HASH_HMAC:
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || \
@@ -1393,7 +1435,14 @@ lua_cryptobox_hash_reset(lua_State *L)
 			/* Old openssl is awesome... */
 			HMAC_Init_ex(h->content.hmac_c, NULL, 0, h->content.hmac_c->md, NULL);
 #else
+#if OPENSSL_VERSION_MAJOR >= 3
+			EVP_MAC_CTX_free(h->content.hmac_c);
+			EVP_MAC *mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
+			h->content.hmac_c = EVP_MAC_CTX_new(mac);
+			EVP_MAC_free(mac);
+#else
 			HMAC_CTX_reset(h->content.hmac_c);
+#endif
 #endif
 			break;
 		case LUA_CRYPTOBOX_HASH_XXHASH64:
@@ -1452,7 +1501,13 @@ lua_cryptobox_hash_finish(struct rspamd_lua_cryptobox_hash *h)
 		memcpy(h->out, out, ssl_outlen);
 		break;
 	case LUA_CRYPTOBOX_HASH_HMAC:
+#if OPENSSL_VERSION_MAJOR >= 3
+		size_t ssl_outlen_size_t = ssl_outlen;
+		EVP_MAC_final(h->content.hmac_c, out, &ssl_outlen_size_t, sizeof(out));
+		ssl_outlen = ssl_outlen_size_t;
+#else
 		HMAC_Final(h->content.hmac_c, out, &ssl_outlen);
+#endif
 		h->out_len = ssl_outlen;
 		g_assert(ssl_outlen <= sizeof(h->out));
 		memcpy(h->out, out, ssl_outlen);
@@ -2469,31 +2524,31 @@ lua_cryptobox_gen_dkim_keypair(lua_State *L)
 		EVP_PKEY *pk;
 
 		e = BN_new();
-		r = RSA_new();
 		pk = EVP_PKEY_new();
 
 		if (BN_set_word(e, RSA_F4) != 1) {
 			BN_free(e);
-			RSA_free(r);
 			EVP_PKEY_free(pk);
 
 			return luaL_error(L, "BN_set_word failed");
 		}
 
-		if (RSA_generate_key_ex(r, nbits, e, NULL) != 1) {
+		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
+		if (EVP_PKEY_keygen_init(pctx) != 1) {
 			BN_free(e);
-			RSA_free(r);
 			EVP_PKEY_free(pk);
+			EVP_PKEY_CTX_free(pctx);
 
-			return luaL_error(L, "RSA_generate_key_ex failed");
+			return luaL_error(L, "EVP_PKEY_keygen_init failed");
 		}
-
-		if (EVP_PKEY_set1_RSA(pk, r) != 1) {
+		EVP_PKEY_CTX_set_rsa_keygen_bits(pctx, nbits);
+		EVP_PKEY_CTX_set1_rsa_keygen_pubexp(pctx, e);
+		if (EVP_PKEY_keygen(pctx, &pk) != 1) {
 			BN_free(e);
-			RSA_free(r);
 			EVP_PKEY_free(pk);
+			EVP_PKEY_CTX_free(pctx);
 
-			return luaL_error(L, "EVP_PKEY_set1_RSA failed");
+			return luaL_error(L, "EVP_PKEY_keygen failed");
 		}
 
 		BIO *mbio;
@@ -2505,12 +2560,11 @@ lua_cryptobox_gen_dkim_keypair(lua_State *L)
 		mbio = BIO_new(BIO_s_mem());
 
 		/* Process private key */
-		rc = i2d_RSAPrivateKey_bio(mbio, r);
+		rc = i2d_PrivateKey_bio(mbio, pk);
 
 		if (rc == 0) {
 			BIO_free(mbio);
 			BN_free(e);
-			RSA_free(r);
 			EVP_PKEY_free(pk);
 
 			return luaL_error(L, "i2d_RSAPrivateKey_bio failed");
@@ -2528,12 +2582,11 @@ lua_cryptobox_gen_dkim_keypair(lua_State *L)
 
 		/* Process public key */
 		BIO_reset(mbio);
-		rc = i2d_RSA_PUBKEY_bio(mbio, r);
+		rc = i2d_PUBKEY_bio(mbio, pk);
 
 		if (rc == 0) {
 			BIO_free(mbio);
 			BN_free(e);
-			RSA_free(r);
 			EVP_PKEY_free(pk);
 
 			return luaL_error(L, "i2d_RSA_PUBKEY_bio failed");
@@ -2550,7 +2603,6 @@ lua_cryptobox_gen_dkim_keypair(lua_State *L)
 		pub_out->flags = RSPAMD_TEXT_FLAG_OWN;
 
 		BN_free(e);
-		RSA_free(r);
 		EVP_PKEY_free(pk);
 		BIO_free(mbio);
 	}
@@ -2717,7 +2769,7 @@ lua_cryptobox_secretbox_encrypt(lua_State *L)
 	struct rspamd_lua_text *out;
 
 	if (sbox == NULL) {
-		return luaL_error(L, "invalid arguments");
+		return luaL_error(L, "invalid argument for secretbox state");
 	}
 
 	if (lua_isstring(L, 2)) {
@@ -2727,14 +2779,14 @@ lua_cryptobox_secretbox_encrypt(lua_State *L)
 		struct rspamd_lua_text *t = lua_check_text(L, 2);
 
 		if (!t) {
-			return luaL_error(L, "invalid arguments; userdata is not text");
+			return luaL_error(L, "invalid first argument; userdata is not text");
 		}
 
 		in = t->start;
 		inlen = t->len;
 	}
 	else {
-		return luaL_error(L, "invalid arguments; userdata or string are expected");
+		return luaL_error(L, "invalid first argument; userdata or string are expected");
 	}
 
 	/* Nonce part */
@@ -2746,14 +2798,14 @@ lua_cryptobox_secretbox_encrypt(lua_State *L)
 			struct rspamd_lua_text *t = lua_check_text(L, 3);
 
 			if (!t) {
-				return luaL_error(L, "invalid arguments; userdata is not text");
+				return luaL_error(L, "invalid second argument; userdata is not text");
 			}
 
 			nonce = t->start;
 			nlen = t->len;
 		}
 		else {
-			return luaL_error(L, "invalid arguments; userdata or string are expected");
+			return luaL_error(L, "invalid second argument; userdata or string are expected");
 		}
 
 		if (nlen < 1 || nlen > crypto_secretbox_NONCEBYTES) {
@@ -2791,8 +2843,8 @@ lua_cryptobox_secretbox_encrypt(lua_State *L)
 /***
  * @method rspamd_cryptobox_secretbox:decrypt(input, nonce)
  * Decrypts data using secretbox
- * @param {string/text} nonce nonce used to encrypt
  * @param {string/text} input input to decrypt
+ * @param {string/text} nonce nonce used to encrypt
  * @param {table} params optional parameters - NYI
  * @return {boolean},{rspamd_text} decryption result + decrypted text
  */
@@ -2806,7 +2858,7 @@ lua_cryptobox_secretbox_decrypt(lua_State *L)
 	struct rspamd_lua_text *out;
 
 	if (sbox == NULL) {
-		return luaL_error(L, "invalid arguments");
+		return luaL_error(L, "invalid argument for secretbox state");
 	}
 
 	/* Input argument */
@@ -2817,14 +2869,14 @@ lua_cryptobox_secretbox_decrypt(lua_State *L)
 		struct rspamd_lua_text *t = lua_check_text(L, 2);
 
 		if (!t) {
-			return luaL_error(L, "invalid arguments; userdata is not text");
+			return luaL_error(L, "invalid first argument; userdata is not text");
 		}
 
 		in = t->start;
 		inlen = t->len;
 	}
 	else {
-		return luaL_error(L, "invalid arguments; userdata or string are expected");
+		return luaL_error(L, "invalid first argument; userdata or string are expected");
 	}
 
 	/* Nonce argument */
@@ -2835,14 +2887,14 @@ lua_cryptobox_secretbox_decrypt(lua_State *L)
 		struct rspamd_lua_text *t = lua_check_text(L, 3);
 
 		if (!t) {
-			return luaL_error(L, "invalid arguments; userdata is not text");
+			return luaL_error(L, "invalid second argument; userdata is not text");
 		}
 
 		nonce = t->start;
 		nlen = t->len;
 	}
 	else {
-		return luaL_error(L, "invalid arguments; userdata or string are expected");
+		return luaL_error(L, "invalid second argument; userdata or string are expected");
 	}
 
 
