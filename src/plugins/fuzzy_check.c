@@ -51,6 +51,7 @@
 #define DEFAULT_SYMBOL "R_FUZZY_HASH"
 #define RSPAMD_FUZZY_SYMBOL_FORBIDDEN "FUZZY_FORBIDDEN"
 #define RSPAMD_FUZZY_SYMBOL_RATELIMITED "FUZZY_RATELIMITED"
+#define RSPAMD_FUZZY_SYMBOL_ENCRYPTION_REQUIRED "FUZZY_ENCRYPTION_REQUIRED"
 
 #define DEFAULT_IO_TIMEOUT 1.0
 #define DEFAULT_RETRANSMITS 3
@@ -1176,6 +1177,18 @@ int fuzzy_check_module_config(struct rspamd_config *cfg, bool validate)
 								 RSPAMD_FUZZY_SYMBOL_RATELIMITED,
 								 0.0,
 								 "Fuzzy rate limit is reached",
+								 "fuzzy",
+								 0,
+								 1,
+								 1);
+		rspamd_symcache_add_symbol(cfg->cache,
+								   RSPAMD_FUZZY_SYMBOL_ENCRYPTION_REQUIRED, 0, NULL, NULL,
+								   SYMBOL_TYPE_VIRTUAL,
+								   cb_id);
+		rspamd_config_add_symbol(cfg,
+								 RSPAMD_FUZZY_SYMBOL_ENCRYPTION_REQUIRED,
+								 0.0,
+								 "Fuzzy encryption is required by a server",
 								 "fuzzy",
 								 0,
 								 1,
@@ -2514,11 +2527,16 @@ fuzzy_check_try_read(struct fuzzy_client_session *session)
 				}
 			}
 			else if (rep->v1.value == 403) {
+				/* In fact, it should be 429, but we preserve compatibility */
 				rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_RATELIMITED, 1.0,
 										  session->rule->name);
 			}
 			else if (rep->v1.value == 503) {
 				rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_FORBIDDEN, 1.0,
+										  session->rule->name);
+			}
+			else if (rep->v1.value == 415) {
+				rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_ENCRYPTION_REQUIRED, 1.0,
 										  session->rule->name);
 			}
 			else if (rep->v1.value == 401) {
