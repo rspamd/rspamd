@@ -1464,7 +1464,14 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 
 	if (session->ctx->encrypted_only && !encrypted) {
 		/* Do not accept unencrypted commands */
-		result.v1.value = 403;
+		result.v1.value = 415;
+		result.v1.prob = 0.0f;
+		rspamd_fuzzy_make_reply(cmd, &result, session, send_flags);
+		return;
+	}
+
+	if (!rspamd_fuzzy_check_client(session->ctx, session->addr)) {
+		result.v1.value = 503;
 		result.v1.prob = 0.0f;
 		rspamd_fuzzy_make_reply(cmd, &result, session, send_flags);
 		return;
@@ -1487,23 +1494,24 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 	}
 
 	if (cmd->cmd == FUZZY_CHECK) {
-		bool can_continue = true;
+		bool is_rate_allowed = true;
 
 		if (session->ctx->ratelimit_buckets) {
 			if (session->ctx->ratelimit_log_only) {
 				(void) rspamd_fuzzy_check_ratelimit(session); /* Check but ignore */
 			}
 			else {
-				can_continue = rspamd_fuzzy_check_ratelimit(session);
+				is_rate_allowed = rspamd_fuzzy_check_ratelimit(session);
 			}
 		}
 
-		if (can_continue) {
+		if (is_rate_allowed) {
 			REF_RETAIN(session);
 			rspamd_fuzzy_backend_check(session->ctx->backend, cmd,
 									   rspamd_fuzzy_check_callback, session);
 		}
 		else {
+			/* Should be 429 but we keep compatibility */
 			result.v1.value = 403;
 			result.v1.prob = 0.0f;
 			result.v1.flag = 0;
@@ -1574,7 +1582,7 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 			result.v1.prob = 1.0f;
 		}
 		else {
-			result.v1.value = 403;
+			result.v1.value = 503;
 			result.v1.prob = 0.0f;
 		}
 	reply:
@@ -2041,11 +2049,6 @@ accept_fuzzy_socket(EV_P_ ev_io *w, int revents)
 				if (MSG_FIELD(msg[i], msg_namelen) >= sizeof(struct sockaddr)) {
 					client_addr = rspamd_inet_address_from_sa(MSG_FIELD(msg[i], msg_name),
 															  MSG_FIELD(msg[i], msg_namelen));
-					if (!rspamd_fuzzy_check_client(worker->ctx, client_addr)) {
-						/* Disallow forbidden clients silently */
-						rspamd_inet_address_free(client_addr);
-						continue;
-					}
 				}
 				else {
 					client_addr = NULL;
