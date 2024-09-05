@@ -49,7 +49,7 @@
 #include "libutil/libev_helper.h"
 
 #define DEFAULT_SYMBOL "R_FUZZY_HASH"
-#define RSPAMD_FUZZY_SYMBOL_BLOCKED "FUZZY_BLOCKED"
+#define RSPAMD_FUZZY_SYMBOL_FORBIDDEN "FUZZY_FORBIDDEN"
 #define RSPAMD_FUZZY_SYMBOL_RATELIMITED "FUZZY_RATELIMITED"
 
 #define DEFAULT_IO_TIMEOUT 1.0
@@ -1157,11 +1157,11 @@ int fuzzy_check_module_config(struct rspamd_config *cfg, bool validate)
 
 		/* Register meta symbols (blocked, ratelimited, etc) */
 		rspamd_symcache_add_symbol(cfg->cache,
-								   RSPAMD_FUZZY_SYMBOL_BLOCKED, 0, NULL, NULL,
+								   RSPAMD_FUZZY_SYMBOL_FORBIDDEN, 0, NULL, NULL,
 								   SYMBOL_TYPE_VIRTUAL,
 								   cb_id);
 		rspamd_config_add_symbol(cfg,
-								 RSPAMD_FUZZY_SYMBOL_BLOCKED,
+								 RSPAMD_FUZZY_SYMBOL_FORBIDDEN,
 								 0.0,
 								 "Fuzzy access denied",
 								 "fuzzy",
@@ -2518,7 +2518,7 @@ fuzzy_check_try_read(struct fuzzy_client_session *session)
 										  session->rule->name);
 			}
 			else if (rep->v1.value == 503) {
-				rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_BLOCKED, 1.0,
+				rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_FORBIDDEN, 1.0,
 										  session->rule->name);
 			}
 			else if (rep->v1.value == 401) {
