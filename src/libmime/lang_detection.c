@@ -1828,7 +1828,7 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 	unsigned int cand_len;
 	enum rspamd_language_category cat;
 	struct rspamd_lang_detector_res *cand;
-	enum rspamd_language_detected_type r;
+	enum rspamd_language_detected_type r = rs_detect_none;
 	struct rspamd_frequency_sort_cbdata cbd;
 	/* Check if we have sorted candidates based on frequency */
 	gboolean frequency_heuristic_applied = FALSE, ret = FALSE, internal_heuristic_applied = FALSE;
