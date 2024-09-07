@@ -24,11 +24,12 @@ local exports = {}
 local E = {}
 local N = "lua_redis"
 
+local db_schema = (ts.number / tostring + ts.string):is_optional():describe("Database number")
 local common_schema = {
   timeout = (ts.number + ts.string / lutil.parse_time_interval):is_optional():describe("Connection timeout"),
-  db = ts.string:is_optional():describe("Database number"),
-  database = ts.string:is_optional():describe("Database number"),
-  dbname = ts.string:is_optional():describe("Database number"),
+  db = db_schema,
+  database = db_schema,
+  dbname = db_schema,
   prefix = ts.string:is_optional():describe("Key prefix"),
   username = ts.string:is_optional():describe("Username"),
   password = ts.string:is_optional():describe("Password"),
@@ -64,7 +65,8 @@ local server_schema = lutil.table_merge({
 
 local enrich_schema = function(external)
   return ts.one_of {
-    ts.shape(external), -- no specific redis parameters
+    ts.shape(lutil.table_merge(common_schema,
+        external)), -- no specific redis servers (e.g when global settings are used)
     ts.shape(lutil.table_merge(read_schema, external)), -- read_servers specified
     ts.shape(lutil.table_merge(write_schema, external)), -- write_servers specified
     ts.shape(lutil.table_merge(rw_schema, external)), -- both read and write servers defined

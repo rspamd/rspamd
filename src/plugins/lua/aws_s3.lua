@@ -238,7 +238,7 @@ settings = lua_util.override_defaults(settings, opts)
 local res, err = settings_schema:transform(settings)
 
 if not res then
-  rspamd_logger.warnx(rspamd_config, 'plugin is misconfigured: %s', err)
+  rspamd_logger.warnx(rspamd_config, 'plugin %s is misconfigured: %s', N, err)
   lua_util.disable_module(N, "config")
   return
 end
