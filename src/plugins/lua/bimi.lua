@@ -265,7 +265,7 @@ local function check_bimi_vmc(task, domain, record)
         end
         if redis_params.username then
           if redis_params.password then
-            password = string.format( '%s:%s@', redis_params.username, redis_params.password)
+            password = string.format('%s:%s@', redis_params.username, redis_params.password)
           else
             rspamd_logger.warnx(task, "Redis requires a password when username is supplied")
           end
@@ -358,7 +358,7 @@ settings = lua_util.override_defaults(settings, opts)
 local res, err = settings_schema:transform(settings)
 
 if not res then
-  rspamd_logger.warnx(rspamd_config, 'plugin is misconfigured: %s', err)
+  rspamd_logger.warnx(rspamd_config, 'plugin %s is misconfigured: %s', N, err)
   local err_msg = string.format("schema error: %s", res)
   lua_util.config_utils.push_config_error(N, err_msg)
   lua_util.disable_module(N, "failed", err_msg)

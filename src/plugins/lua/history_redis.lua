@@ -281,7 +281,7 @@ if opts then
   local res, err = settings_schema:transform(settings)
 
   if not res then
-    rspamd_logger.warnx(rspamd_config, '%s: plugin is misconfigured: %s', N, err)
+    rspamd_logger.warnx(rspamd_config, 'plugin %s is misconfigured: %s', N, err)
     lua_util.disable_module(N, "config")
     return
   end
