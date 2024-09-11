@@ -138,6 +138,7 @@ struct fuzzy_key {
 	double burst;
 	double rate;
 	ev_tstamp expire;
+	bool expired;
 	ref_entry_t ref;
 };
 
@@ -1596,6 +1597,30 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 			else if (res == ratelimit_existing) {
 				rspamd_fuzzy_maybe_call_blacklisted(session->ctx, session->addr, "ratelimit");
 				is_rate_allowed = session->ctx->ratelimit_log_only ? true : false;
+			}
+		}
+
+		if (session->key && !isnan(session->key->expire)) {
+			/* Check expire */
+			static ev_tstamp today = NAN;
+
+			if (isnan(today)) {
+				today = ev_time();
+			}
+			else if (rspamd_random_uint64_fast() > 0xFFFF000000000000ULL) {
+				today = ev_time();
+			}
+
+			if (today > session->key->expire) {
+				if (!session->key->expired) {
+					msg_info("key %s is expired", session->key->name);
+					session->key->expired = true;
+				}
+
+				result.v1.value = 503;
+				result.v1.prob = 0.0f;
+				rspamd_fuzzy_make_reply(cmd, &result, session, send_flags);
+				return;
 			}
 		}
 
