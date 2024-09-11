@@ -262,7 +262,8 @@ static gboolean rspamd_fuzzy_check_client(struct rspamd_fuzzy_storage_ctx *ctx,
 static void rspamd_fuzzy_maybe_call_blacklisted(struct rspamd_fuzzy_storage_ctx *ctx,
 												rspamd_inet_addr_t *addr,
 												const char *reason);
-static struct fuzzy_key *fuzzy_add_keypair_from_ucl(const ucl_object_t *obj,
+static struct fuzzy_key *fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg,
+													const ucl_object_t *obj,
 													khash_t(rspamd_fuzzy_keys_hash) * target);
 
 struct fuzzy_keymap_ucl_buf {
@@ -370,7 +371,7 @@ ucl_keymap_fin_cb(struct map_cb_data *data, void **target)
 		while ((cur = ucl_object_iterate(top, &it, true)) != NULL) {
 			struct fuzzy_key *nk;
 
-			nk = fuzzy_add_keypair_from_ucl(cur, jb->ctx->dynamic_keys);
+			nk = fuzzy_add_keypair_from_ucl(cfg, cur, jb->ctx->dynamic_keys);
 
 			if (nk == NULL) {
 				msg_warn_config("cannot add dynamic keypair");
@@ -2808,7 +2809,8 @@ fuzzy_parse_ids(rspamd_mempool_t *pool,
 }
 
 static struct fuzzy_key *
-fuzzy_add_keypair_from_ucl(const ucl_object_t *obj, khash_t(rspamd_fuzzy_keys_hash) * target)
+fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
+						   khash_t(rspamd_fuzzy_keys_hash) * target)
 {
 	struct rspamd_cryptobox_keypair *kp = rspamd_keypair_from_ucl(obj);
 
@@ -2867,6 +2869,7 @@ fuzzy_add_keypair_from_ucl(const ucl_object_t *obj, khash_t(rspamd_fuzzy_keys_ha
 	const ucl_object_t *extensions = rspamd_keypair_get_extensions(kp);
 
 	if (extensions) {
+		lua_State *L = RSPAMD_LUA_CFG_STATE(cfg);
 		const ucl_object_t *forbidden_ids = ucl_object_lookup(extensions, "forbidden_ids");
 
 		if (forbidden_ids && ucl_object_type(forbidden_ids) == UCL_ARRAY) {
@@ -2890,7 +2893,42 @@ fuzzy_add_keypair_from_ucl(const ucl_object_t *obj, khash_t(rspamd_fuzzy_keys_ha
 		 */
 		const ucl_object_t *ratelimit = ucl_object_lookup(extensions, "ratelimit");
 
-		if (ratelimit && ucl_object_type(ratelimit) == UCL_STRING) {
+		static int ratelimit_lua_id = -1;
+
+		if (ratelimit_lua_id == -1) {
+			/* Load ratelimit parsing function */
+			if (!rspamd_lua_require_function(L, "plugins/ratelimit", "parse_limit")) {
+				msg_err("cannot load ratelimit parser from ratelimit plugin");
+			}
+			else {
+				ratelimit_lua_id = luaL_ref(L, LUA_REGISTRYINDEX);
+			}
+		}
+
+		if (ratelimit && ratelimit_lua_id != -1) {
+			lua_rawgeti(L, LUA_REGISTRYINDEX, ratelimit_lua_id);
+			lua_pushstring(L, "fuzzy_key_ratelimit");
+			ucl_object_push_lua(L, ratelimit, false);
+
+			if (lua_pcall(L, 2, 1, 0) != 0) {
+				msg_err("cannot call ratelimit parser from ratelimit plugin");
+			}
+			else {
+				if (lua_type(L, -1) == LUA_TTABLE) {
+					/*
+					 * The returned table is in form { rate = xx, burst = yy }
+					 */
+					lua_getfield(L, -1, "rate");
+					key->rate = lua_tonumber(L, -1);
+					lua_pop(L, 1);
+
+					lua_getfield(L, -1, "burst");
+					key->burst = lua_tonumber(L, -1);
+					lua_pop(L, 1);
+				}
+			}
+
+			lua_settop(L, 0);
 		}
 
 		const ucl_object_t *expire = ucl_object_lookup(extensions, "expire");
@@ -2932,7 +2970,7 @@ fuzzy_parse_keypair(rspamd_mempool_t *pool,
 			return ret;
 		}
 
-		key = fuzzy_add_keypair_from_ucl(obj, ctx->keys);
+		key = fuzzy_add_keypair_from_ucl(ctx->cfg, obj, ctx->keys);
 
 		if (key == NULL) {
 			return FALSE;
