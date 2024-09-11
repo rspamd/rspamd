@@ -41,7 +41,7 @@ const struct rspamadm_command *commands[] = {
 	&fuzzyconvert_command,
 	&signtool_command,
 	&lua_command,
-    &decrypt_header_command,
+    	&decrypt_header_command,
 	NULL};
 
 
