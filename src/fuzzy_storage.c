@@ -2898,7 +2898,7 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
 		if (ratelimit_lua_id == -1) {
 			/* Load ratelimit parsing function */
 			if (!rspamd_lua_require_function(L, "plugins/ratelimit", "parse_limit")) {
-				msg_err("cannot load ratelimit parser from ratelimit plugin");
+				msg_err_config("cannot load ratelimit parser from ratelimit plugin");
 			}
 			else {
 				ratelimit_lua_id = luaL_ref(L, LUA_REGISTRYINDEX);
@@ -2911,7 +2911,7 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
 			ucl_object_push_lua(L, ratelimit, false);
 
 			if (lua_pcall(L, 2, 1, 0) != 0) {
-				msg_err("cannot call ratelimit parser from ratelimit plugin");
+				msg_err_config("cannot call ratelimit parser from ratelimit plugin");
 			}
 			else {
 				if (lua_type(L, -1) == LUA_TTABLE) {
@@ -2925,6 +2925,8 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
 					lua_getfield(L, -1, "burst");
 					key->burst = lua_tonumber(L, -1);
 					lua_pop(L, 1);
+
+					key->rl_bucket = g_malloc0(sizeof(*key->rl_bucket));
 				}
 			}
 
@@ -2934,10 +2936,21 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
 		const ucl_object_t *expire = ucl_object_lookup(extensions, "expire");
 		if (expire && ucl_object_type(expire) == UCL_STRING) {
 			struct tm tm;
+
+			/* DD-MM-YYYY */
+			char *end = strptime(ucl_object_tostring(expire), "%d-%m-%Y", &tm);
+
+			if (end != NULL && *end != '\0') {
+				msg_err_config("cannot parse expire date: %s", ucl_object_tostring(expire));
+			}
+			else {
+				key->expire = mktime(&tm);
+			}
 		}
 	}
 
-	msg_debug("loaded keypair %*bs", crypto_box_publickeybytes(), pk);
+	msg_debug("loaded keypair %*bs; expire=%f; rate=%f; burst=%s", crypto_box_publickeybytes(), pk,
+			  key->expire, key->rate, key->burst);
 
 	return key;
 }
