@@ -698,6 +698,11 @@ fuzzy_key_dtor(gpointer p)
 			kh_destroy(fuzzy_key_ids_set, key->forbidden_ids);
 		}
 
+		if (key->rl_bucket) {
+			/* TODO: save bucket stats */
+			g_free(key->rl_bucket);
+		}
+
 		g_free(key);
 	}
 }
@@ -2827,6 +2832,10 @@ fuzzy_add_keypair_from_ucl(const ucl_object_t *obj, khash_t(rspamd_fuzzy_keys_ha
 												 rspamd_inet_address_hash, rspamd_inet_address_equal);
 	key->stat = keystat;
 	key->flags_stat = kh_init(fuzzy_key_flag_stat);
+	key->burst = NAN;
+	key->rate = NAN;
+	key->expire = NAN;
+	key->rl_bucket = NULL;
 	/* Preallocate some space for flags */
 	kh_resize(fuzzy_key_flag_stat, key->flags_stat, 8);
 	const unsigned char *pk = rspamd_keypair_component(kp, RSPAMD_KEYPAIR_COMPONENT_PK,
@@ -2873,6 +2882,20 @@ fuzzy_add_keypair_from_ucl(const ucl_object_t *obj, khash_t(rspamd_fuzzy_keys_ha
 					kh_put(fuzzy_key_ids_set, key->forbidden_ids, id, &r);
 				}
 			}
+		}
+
+		/*
+		 * TODO: parse ratelimit using Lua code from `ratelimit` plugin to
+		 * have unified form of settings
+		 */
+		const ucl_object_t *ratelimit = ucl_object_lookup(extensions, "ratelimit");
+
+		if (ratelimit && ucl_object_type(ratelimit) == UCL_STRING) {
+		}
+
+		const ucl_object_t *expire = ucl_object_lookup(extensions, "expire");
+		if (expire && ucl_object_type(expire) == UCL_STRING) {
+			struct tm tm;
 		}
 	}
 
