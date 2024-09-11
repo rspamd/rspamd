@@ -998,25 +998,13 @@ rspamd_lua_ssl_hmac_create(struct rspamd_lua_cryptobox_hash *h, const EVP_MD *ht
 						   bool insecure)
 {
 	h->type = LUA_CRYPTOBOX_HASH_HMAC;
-	OSSL_PROVIDER *dflt = OSSL_PROVIDER_load(NULL, "default");
-
-#if OPENSSL_VERSION_NUMBER > 0x10100000L
-	if (insecure) {
-		/* Should never ever be used for crypto/security purposes! */
-#ifdef EVP_MD_CTX_FLAG_NON_FIPS_ALLOW
-#if OPENSSL_VERSION_MAJOR >= 3
-		OSSL_PROVIDER *fips = OSSL_PROVIDER_load(NULL, "fips");
-#endif
-	}
-#endif
-#endif
 
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || \
 	(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x30500000)
 	h->content.hmac_c = g_malloc0(sizeof(*h->content.hmac_c));
 #else
 #if OPENSSL_VERSION_MAJOR >= 3
-	EVP_MAC* mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
+	EVP_MAC *mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
 	h->content.hmac_c = EVP_MAC_CTX_new(mac);
 	EVP_MAC_free(mac);
 #else
@@ -1038,7 +1026,7 @@ rspamd_lua_ssl_hmac_create(struct rspamd_lua_cryptobox_hash *h, const EVP_MD *ht
 	h->out_len = EVP_MD_size(htype);
 #if OPENSSL_VERSION_MAJOR >= 3
 	OSSL_PARAM params[2];
-	params[0] = OSSL_PARAM_construct_utf8_string("digest", EVP_MD_get0_name(htype), 0);
+	params[0] = OSSL_PARAM_construct_utf8_string("digest", (char *) EVP_MD_get0_name(htype), 0);
 	params[1] = OSSL_PARAM_construct_end();
 
 	EVP_MAC_init(h->content.hmac_c, key, keylen, params);
@@ -1500,7 +1488,7 @@ lua_cryptobox_hash_finish(struct rspamd_lua_cryptobox_hash *h)
 		g_assert(ssl_outlen <= sizeof(h->out));
 		memcpy(h->out, out, ssl_outlen);
 		break;
-	case LUA_CRYPTOBOX_HASH_HMAC:
+	case LUA_CRYPTOBOX_HASH_HMAC: {
 #if OPENSSL_VERSION_MAJOR >= 3
 		size_t ssl_outlen_size_t = ssl_outlen;
 		EVP_MAC_final(h->content.hmac_c, out, &ssl_outlen_size_t, sizeof(out));
@@ -1512,6 +1500,7 @@ lua_cryptobox_hash_finish(struct rspamd_lua_cryptobox_hash *h)
 		g_assert(ssl_outlen <= sizeof(h->out));
 		memcpy(h->out, out, ssl_outlen);
 		break;
+	}
 	case LUA_CRYPTOBOX_HASH_XXHASH64:
 	case LUA_CRYPTOBOX_HASH_XXHASH32:
 	case LUA_CRYPTOBOX_HASH_XXHASH3:
@@ -2520,7 +2509,6 @@ lua_cryptobox_gen_dkim_keypair(lua_State *L)
 
 	if (strcmp(alg_str, "rsa") == 0) {
 		BIGNUM *e;
-		RSA *r;
 		EVP_PKEY *pk;
 
 		e = BN_new();
