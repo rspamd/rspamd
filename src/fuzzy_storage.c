@@ -128,6 +128,7 @@ KHASH_SET_INIT_INT(fuzzy_key_ids_set);
 KHASH_INIT(fuzzy_key_flag_stat, int, struct fuzzy_key_stat, 1, kh_int_hash_func,
 		   kh_int_hash_equal);
 struct fuzzy_key {
+	char *name;
 	struct rspamd_cryptobox_keypair *key;
 	struct rspamd_cryptobox_pubkey *pk;
 	struct fuzzy_key_stat *stat;
@@ -702,6 +703,10 @@ fuzzy_key_dtor(gpointer p)
 		if (key->rl_bucket) {
 			/* TODO: save bucket stats */
 			g_free(key->rl_bucket);
+		}
+
+		if (key->name) {
+			g_free(key->name);
 		}
 
 		g_free(key);
@@ -1547,6 +1552,50 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 			}
 			else {
 				is_rate_allowed = rspamd_fuzzy_check_ratelimit(session);
+			}
+		}
+
+		if (session->key && session->key->rl_bucket) {
+			/* Check per-key bucket */
+
+			enum rspamd_ratelimit_check_result res = rspamd_fuzzy_check_ratelimit_bucket(session, session->key->rl_bucket,
+																						 ratelimit_policy_normal,
+																						 session->key->burst,
+																						 session->key->rate);
+
+			if (res == ratelimit_new) {
+				msg_info("ratelimiting key %s %.1f max elts",
+						 session->key->name ? session->key->name : "unknown",
+						 session->key->burst);
+
+				struct rspamd_srv_command srv_cmd;
+
+				srv_cmd.type = RSPAMD_SRV_FUZZY_BLOCKED;
+				srv_cmd.cmd.fuzzy_blocked.af = rspamd_inet_address_get_af(session->addr);
+
+				if (srv_cmd.cmd.fuzzy_blocked.af == AF_INET || srv_cmd.cmd.fuzzy_blocked.af == AF_INET6) {
+					socklen_t slen;
+					struct sockaddr *sa = rspamd_inet_address_get_sa(session->addr, &slen);
+
+					if (slen <= sizeof(srv_cmd.cmd.fuzzy_blocked.addr)) {
+						memcpy(&srv_cmd.cmd.fuzzy_blocked.addr, sa, slen);
+						msg_debug("propagating blocked address to other workers");
+						rspamd_srv_send_command(session->worker,
+												session->ctx->event_loop,
+												&srv_cmd, -1, NULL, NULL);
+					}
+					else {
+						msg_err("bad address length: %d, expected to be %d",
+								(int) slen, (int) sizeof(srv_cmd.cmd.fuzzy_blocked.addr));
+					}
+				}
+
+				rspamd_fuzzy_maybe_call_blacklisted(session->ctx, session->addr, "ratelimit");
+				is_rate_allowed = session->ctx->ratelimit_log_only ? true : false;
+			}
+			else if (res == ratelimit_existing) {
+				rspamd_fuzzy_maybe_call_blacklisted(session->ctx, session->addr, "ratelimit");
+				is_rate_allowed = session->ctx->ratelimit_log_only ? true : false;
 			}
 		}
 
@@ -2887,10 +2936,6 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
 			}
 		}
 
-		/*
-		 * TODO: parse ratelimit using Lua code from `ratelimit` plugin to
-		 * have unified form of settings
-		 */
 		const ucl_object_t *ratelimit = ucl_object_lookup(extensions, "ratelimit");
 
 		static int ratelimit_lua_id = -1;
@@ -2946,6 +2991,11 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
 			else {
 				key->expire = mktime(&tm);
 			}
+		}
+
+		const ucl_object_t *name = ucl_object_lookup(extensions, "name");
+		if (name && ucl_object_type(name) == UCL_STRING) {
+			key->name = g_strdup(ucl_object_tostring(name));
 		}
 	}
 
