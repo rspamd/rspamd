@@ -1,5 +1,3 @@
-from operator import truediv
-
 import nacl.utils
 from nacl.secret import SecretBox
 
