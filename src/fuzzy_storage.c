@@ -1604,6 +1604,9 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 			/* Check expire */
 			static ev_tstamp today = NAN;
 
+			/*
+			 * Update `today` sometimes
+			 */
 			if (isnan(today)) {
 				today = ev_time();
 			}
@@ -3024,8 +3027,8 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
 		}
 	}
 
-	msg_debug("loaded keypair %*bs; expire=%f; rate=%f; burst=%s", crypto_box_publickeybytes(), pk,
-			  key->expire, key->rate, key->burst);
+	msg_debug("loaded keypair %*bs; expire=%f; rate=%f; burst=%s; name=%s", crypto_box_publickeybytes(), pk,
+			  key->expire, key->rate, key->burst, key->name);
 
 	return key;
 }
