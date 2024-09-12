@@ -28,7 +28,6 @@ extern struct rspamadm_command statconvert_command;
 extern struct rspamadm_command fuzzyconvert_command;
 extern struct rspamadm_command signtool_command;
 extern struct rspamadm_command lua_command;
-extern struct rspamadm_command decrypt_header_command;
 
 const struct rspamadm_command *commands[] = {
 	&help_command,
