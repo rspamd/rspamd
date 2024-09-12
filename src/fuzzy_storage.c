@@ -3027,7 +3027,7 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
 		}
 	}
 
-	msg_debug("loaded keypair %*bs; expire=%f; rate=%f; burst=%s; name=%s", crypto_box_publickeybytes(), pk,
+	msg_debug("loaded keypair %*bs; expire=%f; rate=%f; burst=%s; name=%s", (int) crypto_box_publickeybytes(), pk,
 			  key->expire, key->rate, key->burst, key->name);
 
 	return key;
