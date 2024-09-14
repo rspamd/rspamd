@@ -76,6 +76,13 @@ exports.autolearn = function(task, conf)
         mime_rcpts)
   end
 
+  if not task:get_queue_id() then
+    -- We should skip messages that come from `rspamc` or webui as they are usually
+    -- not intended for autolearn at all
+    lua_util.debugm(N, task, 'no need to autolearn - queue id is missing')
+    return
+  end
+
   -- We have autolearn config so let's figure out what is requested
   local verdict, score = lua_verdict.get_specific_verdict("bayes", task)
   local learn_spam, learn_ham = false, false
