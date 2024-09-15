@@ -5,9 +5,9 @@ import nacl.utils
 from nacl.secret import SecretBox
 
 
-def encrypt_header(header, key):
+def encrypt_header(header, key, nonce):
     box = SecretBox(key)
-    encrypted_header = box.encrypt(header)
+    encrypted_header = box.encrypt(header, nonce)
     return encrypted_header
 
 def decrypt_header(encrypted_header, key):
@@ -22,6 +22,7 @@ def main():
     encrypt_parser = subparsers.add_parser("encrypt", help="Encrypt a message")
     encrypt_parser.add_argument("--header", type=str, required=True, help="Header to encrypt")
     encrypt_parser.add_argument("--key", type=str, required=True, help="Encryption key")
+    encrypt_parser.add_argument("--nonce", type=str, required=True, help="Encryption nonce")
 
     decrypt_parser = subparsers.add_parser("decrypt", help="Decrypt a message")
     decrypt_parser.add_argument("--encrypted_header", type=str, required=True, help="Encrypted header")
@@ -32,8 +33,9 @@ def main():
     if args.command == "encrypt":
         header = args.header.encode()
         key = args.key.encode()
+        nonce = base64.b64decode(args.nonce)
 
-        encrypted_header = encrypt_header(header, key)
+        encrypted_header = encrypt_header(header, key, nonce)
         print(encrypted_header)
         print(len(encrypted_header))
         print("Encrypted header (base 64):", base64.b64encode(encrypted_header))
