@@ -1322,6 +1322,7 @@ exports.maybe_encrypt_header = function(header, settings, prefix)
     else
       encrypted_header = cryptobox:encrypt(header, nonce)
     end
+    --encrypted_header = nonce .. encrypted_header
     return encrypted_header, nonce
   end
 end
