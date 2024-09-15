@@ -37,8 +37,8 @@ def main():
         print(encrypted_header)
         print(len(encrypted_header))
         print("Encrypted header (base 64):", base64.b64encode(encrypted_header))
-        print("Encrypted header (base 64):", base64.b64encode(encrypted_header.ciphertext))
-        print("Encrypted header (base 64):", base64.b64encode(encrypted_header.nonce))
+        print("Ciphertext (base 64):", base64.b64encode(encrypted_header.ciphertext))
+        print("Nonce (base 64):", base64.b64encode(encrypted_header.nonce))
 
     elif args.command == "decrypt":
         encrypted_header = base64.b64decode(args.encrypted_header)
