@@ -74,8 +74,8 @@ local function encryption_handler(args)
                                                     = util.maybe_encrypt_header(args.text, settings, settings.prefix)
     if encrypted_text ~= nil then
         print(string.format(
-                'The encryption was successful. The encrypted text: %s The nonce: %s The text + nonce %s',
-                rspamd_util.encode_base64(encrypted_text), rspamd_util.encode_base64(nonce),
+                'The encryption was successful. The encrypted text: %s The encrypted text with nonce %s',
+                rspamd_util.encode_base64(encrypted_text),
                 rspamd_util.encode_base64(encrypted_text_with_nonce)
         ))
     else
