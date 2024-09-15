@@ -56,22 +56,28 @@ Verbose mode
   
 SecretBox test encrypt/decrypt
   ${result} =  Rspamadm  secret_box  encrypt  -t  ${TEXT}  -k  ${KEY}  -n  ${NONCE}
+  Should Match Regexp  ${result.stderr}  ^$
   Should Be Equal As Strings  ${result.stdout}  ${NONCE}${ENCRYPTED_TEXT}
   ${result1} =  Rspamadm  secret_box  decrypt  -t  ${ENCRYPTED_TEXT}  -k  ${KEY}  -n  ${NONCE}
+  Should Match Regexp  ${result.stderr}  ^$
   Should Be Equal As Strings  ${result1.stdout}  ${TEXT}
 
 SecretBox test python encrypt/decrypt
   ${result} =  Run Process  python3  ${PYTHON_SCRIPT}  encrypt  --text  ${TEXT}  --key  ${KEY}  --nonce  ${NONCE}
+  Should Match Regexp  ${result.stderr}  ^$
   Should Be Equal As Strings  ${result.stdout}  ${NONCE}${ENCRYPTED_TEXT}
   ${result1} =  Run Process  python  ${PYTHON_SCRIPT}  decrypt  --encrypted_text  ${NONCE}${ENCRYPTED_TEXT}  --key  ${KEY}
+  Should Match Regexp  ${result.stderr}  ^$
   Should Be Equal As Strings  ${result1.stdout}  ${TEXT}
   
 SecretBox test encrypt python decrypt rspamadm
   ${result} =  Run Process  python3  ${PYTHON_SCRIPT}  encrypt  --text  ${TEXT}  --key  ${KEY}  --nonce  ${NONCE}
   ${result1} =  Rspamadm  secret_box  decrypt  -t  ${result.stdout}  -k  ${KEY}
+  Should Match Regexp  ${result.stderr}  ^$
   Should Be Equal As Strings  ${TEXT}  ${result1.stdout}
 
 SecretBox test encrypt rspamadm decrypt python
   ${result} =  Rspamadm  secret_box  encrypt  -t  ${TEXT}  -k  ${KEY}  -n  ${NONCE}
   ${result1} =  Run Process  python3  ${PYTHON_SCRIPT}  decrypt  --encrypted_text  ${result.stdout}  --key  ${KEY}
+  Should Match Regexp  ${result.stderr}  ^$
   Should Be Equal As Strings  ${TEXT}  ${result1.stdout}
