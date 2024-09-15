@@ -41,14 +41,14 @@ def main():
         nonce = base64.b64decode(args.nonce)
 
         encrypted_text = encrypt_text(text, key, nonce)
-        print("Encrypted text (base 64):", base64.b64encode(encrypted_text))
+        print(base64.b64encode(encrypted_text).decode())
 
     elif args.command == "decrypt":
         encrypted_text = base64.b64decode(args.encrypted_text)
         key = args.key.encode()
 
         decrypted_text = decrypt_text(encrypted_text, key)
-        print("Decrypted text:", decrypted_text.decode())
+        print(decrypted_text.decode())
 
 if __name__ == "__main__":
     main()
