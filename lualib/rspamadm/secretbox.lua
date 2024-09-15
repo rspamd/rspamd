@@ -53,10 +53,7 @@ local function decryption_handler(args)
                 rspamd_util.decode_base64(nonce))
     end
     if decrypted_header ~= nil then
-        print(string.format(
-                'The decryption was successful. The decrypted text: %s',
-                decrypted_header
-        ))
+        print(decrypted_header)
     else
         print('The decryption failed. Please check the correctness of the arguments given.')
     end
@@ -73,11 +70,7 @@ local function encryption_handler(args)
     local encrypted_text, _, encrypted_text_with_nonce
                                                     = util.maybe_encrypt_header(args.text, settings, settings.prefix)
     if encrypted_text ~= nil then
-        print(string.format(
-                'The encryption was successful. The encrypted text: %s The encrypted text with nonce %s',
-                rspamd_util.encode_base64(encrypted_text),
-                rspamd_util.encode_base64(encrypted_text_with_nonce)
-        ))
+        print(rspamd_util.encode_base64(encrypted_text_with_nonce))
     else
         print('The encryption failed. Please check the correctness of the arguments given.')
     end
