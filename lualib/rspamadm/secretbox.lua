@@ -70,7 +70,7 @@ local function encryption_handler(args)
         dec_nonce = rspamd_util.decode_base64(args.nonce)
     }
 
-    local encrypted_text, encrypted_text_with_nonce
+    local encrypted_text, _, encrypted_text_with_nonce
                                                     = util.maybe_encrypt_header(args.text, settings, settings.prefix)
     if encrypted_text ~= nil then
         print(string.format(
