@@ -21,6 +21,7 @@ decrypt:option "-k --key"
 decrypt:option "-n --nonce"
       :description("Nonce used to encrypt text(Base 64)")
       :argname("<nonce>")
+      :default('nil')
 
 local encrypt = parser:command 'encrypt'
                       :description 'Encrypt text with given key'
@@ -41,9 +42,16 @@ local function decryption_handler(args)
         dec_encrypt = true,
         dec_key = args.key
     }
-
-    local decrypted_header = util.maybe_decrypt_header(rspamd_util.decode_base64(args.text), settings, settings.prefix,
-            rspamd_util.decode_base64(args.nonce))
+    local decrypted_header = ''
+    if(args.nonce ~= 'nil') then
+         decrypted_header = util.maybe_decrypt_header(rspamd_util.decode_base64(args.text), settings, settings.prefix,
+                rspamd_util.decode_base64(args.nonce))
+    else
+        local nonce = string.sub(args.text, 1, 32)
+        local text = string.sub(args.text, 33)
+        decrypted_header = util.maybe_decrypt_header(rspamd_util.decode_base64(text), settings, settings.prefix,
+                rspamd_util.decode_base64(nonce))
+    end
     if decrypted_header ~= nil then
         print(string.format(
                 'The decryption was successful. The decrypted text: %s',
@@ -62,11 +70,13 @@ local function encryption_handler(args)
         dec_nonce = rspamd_util.decode_base64(args.nonce)
     }
 
-    local encrypted_text, nonce = util.maybe_encrypt_header(args.text, settings, settings.prefix)
+    local encrypted_text, nonce, encrypted_text_with_nonce
+                                                    = util.maybe_encrypt_header(args.text, settings, settings.prefix)
     if encrypted_text ~= nil then
         print(string.format(
-                'The encryption was successful. The encrypted text: %s The nonce: %s',
-                rspamd_util.encode_base64(encrypted_text), rspamd_util.encode_base64(nonce)
+                'The encryption was successful. The encrypted text: %s The nonce: %s The text + nonce %s',
+                rspamd_util.encode_base64(encrypted_text), rspamd_util.encode_base64(nonce),
+                rspamd_util.encode_base64(encrypted_text_with_nonce)
         ))
     else
         print('The encryption failed. Please check the correctness of the arguments given.')
@@ -91,7 +101,7 @@ end
 
 
 return {
-    name = 'secretbox',
+    name = 'secret_box',
     aliases = { 'secretbox', 'secret_box' },
     handler = handler,
     description = parser._description
