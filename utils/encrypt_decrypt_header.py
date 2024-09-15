@@ -7,7 +7,7 @@ from nacl.secret import SecretBox
 
 def encrypt_header(header, key, nonce):
     box = SecretBox(key)
-    encrypted_header = box.encrypt(header, nonce)
+    encrypted_header = box.encrypt(header, nonce=nonce)
     return encrypted_header
 
 def decrypt_header(encrypted_header, key):
