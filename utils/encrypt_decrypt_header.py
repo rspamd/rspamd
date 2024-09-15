@@ -1,17 +1,22 @@
 import argparse
 import base64
 
-import nacl.utils
+import nacl.encoding
 from nacl.secret import SecretBox
+from nacl.hash import blake2b
 
+def create_secret_box(key):
+    key = blake2b(key, encoder=nacl.encoding.RawEncoder)
+    box = SecretBox(key)
+    return box
 
 def encrypt_header(header, key, nonce):
-    box = SecretBox(key)
+    box = create_secret_box(key)
     encrypted_header = box.encrypt(header, nonce=nonce)
     return encrypted_header
 
 def decrypt_header(encrypted_header, key):
-    box = SecretBox(key)
+    box = create_secret_box(key)
     decrypted_header = box.decrypt(encrypted_header)
     return decrypted_header
 
