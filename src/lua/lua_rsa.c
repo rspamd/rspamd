@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -184,7 +184,14 @@ lua_rsa_privkey_save(lua_State *L)
 		else {
 			if (f != stdout) {
 				/* Set secure permissions for the private key file */
-				chmod(filename, S_IRUSR | S_IWUSR);
+				if (fchmod(fileno(f), S_IRUSR | S_IWUSR) == -1) {
+					msg_err("cannot set permissions for private key file: %s, %s",
+							filename,
+							strerror(errno));
+					fclose(f);
+					lua_pushboolean(L, FALSE);
+					return 1;
+				}
 			}
 
 			if (strcmp(type, "der") == 0) {
@@ -463,7 +470,6 @@ lua_rsa_privkey_load_base64(lua_State *L)
 				rspamd_lua_setclass(L, rspamd_rsa_privkey_classname, -1);
 				*ppkey = pkey;
 			}
-
 		}
 		else {
 			msg_err("cannot open EVP private key from data, %s",
@@ -706,7 +712,7 @@ lua_rsa_verify_memory(lua_State *L)
 
 	if (pkey != NULL && signature != NULL && data != NULL) {
 		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(pkey, NULL);
-  		g_assert(pctx != NULL);
+		g_assert(pctx != NULL);
 		g_assert(EVP_PKEY_verify_init(pctx) == 1);
 
 		ret = EVP_PKEY_verify(pctx, signature->str, signature->len, data, sz);
