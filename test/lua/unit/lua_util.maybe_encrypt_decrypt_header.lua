@@ -15,6 +15,7 @@ context("Lua util - maybe encrypt/decrypt header", function()
             assert_true(false, 'Failed to encrypt header')
         end
 
+        settings.prefix_nonce = string.sub(tostring(encrypted_header), 1, 24)
         local text = string.sub(tostring(encrypted_header), 25)
         local decrypted_header = util.maybe_decrypt_header(text, settings, settings.prefix)
         if decrypted_header == encrypted_header or decrypted_header == nil then
