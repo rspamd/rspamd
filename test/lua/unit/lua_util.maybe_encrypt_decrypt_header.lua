@@ -41,10 +41,10 @@ context("Lua util - maybe encrypt/decrypt header", function()
             assert_true(false, 'Failed to encrypt header')
         end
 
-        local nonce = string.sub(encrypted_header, 1, 32)
-        local text = string.sub(encrypted_header, 33)
-        local decrypted_header = util.maybe_decrypt_header(text, settings,
-                settings.prefix, nonce)
+        local nonce = string.sub(tostring(encrypted_header), 1, 24)
+        local text = string.sub(tostring(encrypted_header), 25)
+        local decrypted_header = util.maybe_decrypt_header(text, settings, settings.prefix, nonce)
+
         if decrypted_header == encrypted_header or decrypted_header == nil then
             assert_true(false, 'Failed to decrypt header')
         end
