@@ -12,7 +12,10 @@ def create_secret_box(key):
 
 def encrypt_text(header, key, nonce):
     box = create_secret_box(key)
-    encrypted_header = box.encrypt(header, nonce=nonce)
+    if nonce is not None:
+        encrypted_header = box.encrypt(header, nonce=nonce)
+    else:
+        encrypted_header = box.encrypt(header)
     return encrypted_header
 
 def decrypt_text(encrypted_header, key):
@@ -20,14 +23,35 @@ def decrypt_text(encrypted_header, key):
     decrypted_header = box.decrypt(encrypted_header)
     return decrypted_header
 
+def set_encoding(enc, type_, text):
+    text_ = text
+    if type_ == 'encode':
+        if enc == 'hex':
+            text_ = base64.b16encode(text)
+        elif enc == 'base32':
+            text_ = base64.b32encode(text)
+        elif enc == 'base64':
+            text_ = base64.b64encode(text)
+    elif type_ == 'decode':
+        if enc == 'hex':
+            text_ = base64.b16decode(text)
+        elif enc == 'base32':
+            text_ = base64.b32decode(text)
+        elif enc == 'base64':
+            text_ = base64.b64decode(text)
+    return text_
+
+
 def main():
     parser = argparse.ArgumentParser(description="Encrypt or Decrypt a text.")
+    parser.add_argument("--encoding", type=str, required=True,
+                                help="Encoding of provided data(raw, hex, base32, base64)")
     subparsers = parser.add_subparsers(dest="command", help="encrypt or decrypt")
 
     encrypt_parser = subparsers.add_parser("encrypt", help="Encrypt a text")
     encrypt_parser.add_argument("--text", type=str, required=True, help="Text to encrypt")
     encrypt_parser.add_argument("--key", type=str, required=True, help="Encryption key")
-    encrypt_parser.add_argument("--nonce", type=str, required=True, help="Encryption nonce")
+    encrypt_parser.add_argument("--nonce", type=str, required=False, help="Encryption nonce")
 
     decrypt_parser = subparsers.add_parser("decrypt", help="Decrypt a text")
     decrypt_parser.add_argument("--encrypted_text", type=str, required=True, help="Encrypted text")
@@ -38,13 +62,19 @@ def main():
     if args.command == "encrypt":
         text = args.text.encode()
         key = args.key.encode()
-        nonce = base64.b64decode(args.nonce)
+        if args.nonce is not None:
+            nonce = set_encoding(args.encoding, 'decode', args.nonce)
+        else:
+            nonce = None
 
         encrypted_text = encrypt_text(text, key, nonce)
-        print(base64.b64encode(encrypted_text).decode())
+        if args.encoding != 'raw':
+            print(set_encoding(args.encoding, 'encode', encrypted_text).decode())
+        else:
+            print(set_encoding(args.encoding, 'encode', encrypted_text))
 
     elif args.command == "decrypt":
-        encrypted_text = base64.b64decode(args.encrypted_text)
+        encrypted_text = set_encoding(args.encoding, 'decode', args.encrypted_text)
         key = args.key.encode()
 
         decrypted_text = decrypt_text(encrypted_text, key)
