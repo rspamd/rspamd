@@ -24,22 +24,22 @@ def decrypt_text(encrypted_header, key):
     return decrypted_header
 
 def set_encoding(enc, type_, text):
-    text_ = text
+    output = text
     if type_ == 'encode':
         if enc == 'hex':
-            text_ = base64.b16encode(text)
+            output = base64.b16encode(text)
         elif enc == 'base32':
-            text_ = base64.b32encode(text)
+            output = base64.b32encode(text)
         elif enc == 'base64':
-            text_ = base64.b64encode(text)
+            output = base64.b64encode(text)
     elif type_ == 'decode':
         if enc == 'hex':
-            text_ = base64.b16decode(text)
+            output = base64.b16decode(text)
         elif enc == 'base32':
-            text_ = base64.b32decode(text)
+            output = base64.b32decode(text)
         elif enc == 'base64':
-            text_ = base64.b64decode(text)
-    return text_
+            output = base64.b64decode(text)
+    return output
 
 
 def main():

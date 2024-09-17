@@ -61,26 +61,26 @@ local function set_up_encoding(args, type, text)
         end))
     end
 
-    local text_ = text
+    local output = text
 
     if type == 'encode' then
         if args.hex then
-            text_ = tohex(text)
+            output = tohex(text)
         elseif args.base32 then
-            text_ = rspamd_util.encode_base32(text)
+            output = rspamd_util.encode_base32(text)
         elseif args.base64 then
-            text_ = rspamd_util.encode_base64(text)
+            output = rspamd_util.encode_base64(text)
         end
     elseif type == 'decode' then
         if args.hex then
-            text_ = fromhex(text)
+            output = fromhex(text)
         elseif args.base32 then
-            text_ = rspamd_util.decode_base32(text)
+            output = rspamd_util.decode_base32(text)
         elseif args.base64 then
-            text_ = rspamd_util.decode_base64(text)
+            output = rspamd_util.decode_base64(text)
         end
     end
-    return text_
+    return output
 end
 
 local function decryption_handler(args)
