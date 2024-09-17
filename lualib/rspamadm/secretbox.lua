@@ -48,24 +48,24 @@ encrypt:option "-n --nonce"
        :argname("<nonce>")
        :default(nil)
 
-function string.fromhex(str)
-    return (str:gsub('..', function (cc)
-        return string.char(tonumber(cc, 16))
-    end))
-end
-
-function string.tohex(str)
-    return (str:gsub('.', function (c)
-        return string.format('%02X', string.byte(c))
-    end))
-end
-
 local function set_up_encoding(args, type, text)
+    local function fromhex(str)
+        return (str:gsub('..', function (cc)
+            return string.char(tonumber(cc, 16))
+        end))
+    end
+
+    local function tohex(str)
+        return (str:gsub('.', function (c)
+            return string.format('%02X', string.byte(c))
+        end))
+    end
+
     local text_ = text
 
     if type == 'encode' then
         if args.hex then
-            text_ = text:tohex()
+            text_ = tohex(text)
         elseif args.base32 then
             text_ = rspamd_util.encode_base32(text)
         elseif args.base64 then
@@ -73,7 +73,7 @@ local function set_up_encoding(args, type, text)
         end
     elseif type == 'decode' then
         if args.hex then
-            text_ = text:fromhex()
+            text_ = fromhex(text)
         elseif args.base32 then
             text_ = rspamd_util.decode_base32(text)
         elseif args.base64 then
