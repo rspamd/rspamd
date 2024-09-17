@@ -80,6 +80,7 @@ local function set_up_encoding(args, type, text)
             output = rspamd_util.decode_base64(text)
         end
     end
+
     return output
 end
 
