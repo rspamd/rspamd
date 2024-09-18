@@ -3,8 +3,8 @@ local rspamd_util = require 'rspamd_util'
 local argparse = require 'argparse'
 
 local parser = argparse()
-    :name "rspamadm secretbox"
-    :description "Encrypt/Decrypt given text with given key and nonce"
+    :name "secretbox"
+    :description "Encrypt/decrypt given text with given key and nonce"
     :help_description_margin(32)
     :command_target('command')
     :require_command(true)
