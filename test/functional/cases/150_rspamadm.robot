@@ -63,33 +63,33 @@ SecretBox rspamadm encrypt/decrypt
   Should Be Equal As Strings  ${result1.stdout}  ${TEXT}
 
 SecretBox python encrypt/decrypt
-  ${result} =  Run Process  python3  ${PYTHON_SCRIPT}  --encoding  base64  encrypt  --text  ${TEXT}  --key  ${KEY}  --nonce  ${NONCE}
+  ${result} =  Run Process  python3  ${PYTHON_SCRIPT}  -B  encrypt  -t  ${TEXT}  -k  ${KEY}  -n  ${NONCE}
   Should Match Regexp  ${result.stderr}  ^$
   Should Be Equal As Strings  ${result.stdout}  ${NONCE}${ENCRYPTED_TEXT}
-  ${result1} =  Run Process  python3  ${PYTHON_SCRIPT}  --encoding  base64  decrypt  --encrypted_text  ${NONCE}${ENCRYPTED_TEXT}  --key  ${KEY}
+  ${result1} =  Run Process  python3  ${PYTHON_SCRIPT}  -B  decrypt  -t  ${NONCE}${ENCRYPTED_TEXT}  -k  ${KEY}
   Should Match Regexp  ${result.stderr}  ^$
   Should Be Equal As Strings  ${result1.stdout}  ${TEXT}
   
 SecretBox encrypt python with nonce decrypt rspamadm
-  ${result} =  Run Process  python3  ${PYTHON_SCRIPT}  --encoding  base64  encrypt  --text  ${TEXT}  --key  ${KEY}  --nonce  ${NONCE}
+  ${result} =  Run Process  python3  ${PYTHON_SCRIPT}  -B  encrypt  -t  ${TEXT}  -k  ${KEY}  -n  ${NONCE}
   ${result1} =  Rspamadm  secret_box  -B  decrypt  -t  ${result.stdout}  -k  ${KEY}
   Should Match Regexp  ${result.stderr}  ^$
   Should Be Equal As Strings  ${TEXT}  ${result1.stdout}
 
 SecretBox encrypt python without nonce decrypt rspamadm
-  ${result} =  Run Process  python3  ${PYTHON_SCRIPT}  --encoding  base64  encrypt  --text  ${TEXT}  --key  ${KEY}
+  ${result} =  Run Process  python3  ${PYTHON_SCRIPT}  -B  encrypt  -t  ${TEXT}  -k  ${KEY}
   ${result1} =  Rspamadm  secret_box  -B  decrypt  -t  ${result.stdout}  -k  ${KEY}
   Should Match Regexp  ${result.stderr}  ^$
   Should Be Equal As Strings  ${TEXT}  ${result1.stdout}
 
 SecretBox encrypt rspamadm with nonce decrypt python
   ${result} =  Rspamadm  secret_box  -B  encrypt  -t  ${TEXT}  -k  ${KEY}  -n  ${NONCE}
-  ${result1} =  Run Process  python3  ${PYTHON_SCRIPT}  --encoding  base64  decrypt  --encrypted_text  ${result.stdout}  --key  ${KEY}
+  ${result1} =  Run Process  python3  ${PYTHON_SCRIPT}  -B  decrypt  -t  ${result.stdout}  -k  ${KEY}
   Should Match Regexp  ${result.stderr}  ^$
   Should Be Equal As Strings  ${TEXT}  ${result1.stdout}
 
 SecretBox encrypt rspamadm without nonce decrypt python
   ${result} =  Rspamadm  secret_box  -B  encrypt  -t  ${TEXT}  -k  ${KEY}
-  ${result1} =  Run Process  python3  ${PYTHON_SCRIPT}  --encoding  base64  decrypt  --encrypted_text  ${result.stdout}  --key  ${KEY}
+  ${result1} =  Run Process  python3  ${PYTHON_SCRIPT}  -B  decrypt  -t  ${result.stdout}  -k  ${KEY}
   Should Match Regexp  ${result.stderr}  ^$
   Should Be Equal As Strings  ${TEXT}  ${result1.stdout}
