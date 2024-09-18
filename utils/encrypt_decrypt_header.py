@@ -46,10 +46,14 @@ def set_up_parser_args():
     new_parser = argparse.ArgumentParser(description="Encrypt or Decrypt a text.")
     enc_group = new_parser.add_mutually_exclusive_group()
 
-    enc_group.add_argument("-r", "--raw", help="Raw encoding", action="store_true")
-    enc_group.add_argument("-H", "--hex", help="Hex encoding", action="store_true")
-    enc_group.add_argument("-b", "--base32", help="Base32 encoding", action="store_true")
-    enc_group.add_argument("-B", "--base64", help="Base64 encoding", action="store_true")
+    enc_group.add_argument("-r", "--raw", action="store_true",
+                           help="Encrypted text(and nonce if it is there) will be given in raw")
+    enc_group.add_argument("-H", "--hex", action="store_true",
+                           help="Encrypted text(and nonce if it is there) will be given in hex")
+    enc_group.add_argument("-b", "--base32", action="store_true",
+                           help="Encrypted text(and nonce if it is there) will be given in base32")
+    enc_group.add_argument("-B", "--base64", action="store_true",
+                           help="Encrypted text(and nonce if it is there) will be given in base64")
 
     subparsers = new_parser.add_subparsers(dest="command", help="encrypt or decrypt")
 
