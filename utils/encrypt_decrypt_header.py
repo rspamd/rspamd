@@ -5,6 +5,7 @@ import nacl.encoding
 from nacl.secret import SecretBox
 from nacl.hash import blake2b
 
+
 def create_secret_box(key):
     key = blake2b(key, encoder=nacl.encoding.RawEncoder)
     box = SecretBox(key)
@@ -23,58 +24,66 @@ def decrypt_text(encrypted_header, key):
     decrypted_header = box.decrypt(encrypted_header)
     return decrypted_header
 
-def set_encoding(enc, type_, text):
+def set_encoding(args, type_, text):
     output = text
     if type_ == 'encode':
-        if enc == 'hex':
+        if args.hex:
             output = base64.b16encode(text)
-        elif enc == 'base32':
+        elif args.base32:
             output = base64.b32encode(text)
-        elif enc == 'base64':
+        elif args.base64:
             output = base64.b64encode(text)
     elif type_ == 'decode':
-        if enc == 'hex':
+        if args.hex:
             output = base64.b16decode(text)
-        elif enc == 'base32':
+        elif args.base32:
             output = base64.b32decode(text)
-        elif enc == 'base64':
+        elif args.base64:
             output = base64.b64decode(text)
     return output
 
+def set_up_parser_args():
+    new_parser = argparse.ArgumentParser(description="Encrypt or Decrypt a text.")
+    enc_group = new_parser.add_mutually_exclusive_group()
 
-def main():
-    parser = argparse.ArgumentParser(description="Encrypt or Decrypt a text.")
-    parser.add_argument("--encoding", type=str, required=True,
-                                help="Encoding of provided data(raw, hex, base32, base64)")
-    subparsers = parser.add_subparsers(dest="command", help="encrypt or decrypt")
+    enc_group.add_argument("-r", "--raw", help="Raw encoding", action="store_true")
+    enc_group.add_argument("-H", "--hex", help="Hex encoding", action="store_true")
+    enc_group.add_argument("-b", "--base32", help="Base32 encoding", action="store_true")
+    enc_group.add_argument("-B", "--base64", help="Base64 encoding", action="store_true")
+
+    subparsers = new_parser.add_subparsers(dest="command", help="encrypt or decrypt")
 
     encrypt_parser = subparsers.add_parser("encrypt", help="Encrypt a text")
-    encrypt_parser.add_argument("--text", type=str, required=True, help="Text to encrypt")
-    encrypt_parser.add_argument("--key", type=str, required=True, help="Encryption key")
-    encrypt_parser.add_argument("--nonce", type=str, required=False, help="Encryption nonce")
+    encrypt_parser.add_argument("-t", "--text", type=str, required=True, help="Text to encrypt")
+    encrypt_parser.add_argument("-k", "--key", type=str, required=True, help="Encryption key")
+    encrypt_parser.add_argument("-n", "--nonce", type=str, required=False, help="Encryption nonce")
 
     decrypt_parser = subparsers.add_parser("decrypt", help="Decrypt a text")
-    decrypt_parser.add_argument("--encrypted_text", type=str, required=True, help="Encrypted text")
-    decrypt_parser.add_argument("--key", type=str, required=True, help="Decryption key")
+    decrypt_parser.add_argument("-t", "--encrypted_text", type=str, required=True, help="Encrypted text")
+    decrypt_parser.add_argument("-k", "--key", type=str, required=True, help="Decryption key")
 
-    args = parser.parse_args()
+    args = new_parser.parse_args()
+    return args
+
+def main():
+    args = set_up_parser_args()
 
     if args.command == "encrypt":
         text = args.text.encode()
         key = args.key.encode()
         if args.nonce is not None:
-            nonce = set_encoding(args.encoding, 'decode', args.nonce)
+            nonce = set_encoding(args, 'decode', args.nonce)
         else:
             nonce = None
 
         encrypted_text = encrypt_text(text, key, nonce)
-        if args.encoding != 'raw':
-            print(set_encoding(args.encoding, 'encode', encrypted_text).decode())
+        if args.raw:
+            print(set_encoding(args, 'encode', encrypted_text))
         else:
-            print(set_encoding(args.encoding, 'encode', encrypted_text))
+            print(set_encoding(args, 'encode', encrypted_text).decode())
 
     elif args.command == "decrypt":
-        encrypted_text = set_encoding(args.encoding, 'decode', args.encrypted_text)
+        encrypted_text = set_encoding(args, 'decode', args.encrypted_text)
         key = args.key.encode()
 
         decrypted_text = decrypt_text(encrypted_text, key)
