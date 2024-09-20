@@ -472,6 +472,13 @@ int main(int argc, char **argv) {
 }
 " HAVE_ATOMIC_BUILTINS)
 
+CHECK_C_SOURCE_RUNS("#include <stdio.h>
+int main() {
+  __builtin_cpu_init();
+  printf(\"%d\", __builtin_cpu_supports(\"avx\"));
+  return 0;
+}" HAVE_BUILTIN_CPU_SUPPORTS)
+
 IF (NOT HAVE_ATOMIC_BUILTINS)
     MESSAGE(STATUS "atomic builtins are -NOT- supported")
 ELSE ()
