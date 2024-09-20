@@ -1305,12 +1305,12 @@ exports.maybe_encrypt_header = function(header, settings, prefix)
   local rspamd_secretbox = require "rspamd_cryptobox_secretbox"
 
   if not header or header == '' then
-    logger.errx(rspamd_config, "Header: %s is empty or nil", header)
+    logger.errx(rspamd_config, "Header is empty or nil. Header: %s", header)
     return nil
   elseif settings[prefix .. '_encrypt'] then
     local key = settings[prefix .. '_key']
     if not key or key == '' then
-      logger.errx(rspamd_config, "Key: %s is empty or nil", key)
+      logger.errx(rspamd_config, "Key is empty or nil. Key: %s", key)
       return header
     end
     local cryptobox = rspamd_secretbox.create(key)
@@ -1322,7 +1322,8 @@ exports.maybe_encrypt_header = function(header, settings, prefix)
     else
       encrypted_header = cryptobox:encrypt(header, nonce)
     end
-    return encrypted_header, nonce
+    encrypted_header = nonce .. encrypted_header
+    return encrypted_header
   end
 end
 
@@ -1342,12 +1343,12 @@ exports.maybe_decrypt_header = function(encrypted_header, settings, prefix, nonc
   local rspamd_secretbox = require "rspamd_cryptobox_secretbox"
 
   if not encrypted_header or encrypted_header == '' then
-    logger.errx(rspamd_config, "Encoded header: %s is empty or nil")
+    logger.errx(rspamd_config, "Encrypted header is empty or nil. Encrypted header: %s", encrypted_header)
     return nil
   elseif settings[prefix .. '_encrypt'] then
     local key = settings[prefix .. '_key']
     if not key or key == '' then
-      logger.errx(rspamd_config, "Key: %s is empty or nil")
+      logger.errx(rspamd_config, "Key is empty or nil. Key: %s", key)
       return encrypted_header
     end
     local cryptobox = rspamd_secretbox.create(key)
