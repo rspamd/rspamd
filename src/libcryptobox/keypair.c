@@ -34,7 +34,7 @@ rspamd_keypair_quark(void)
  */
 static void *
 rspamd_cryptobox_keypair_sk(struct rspamd_cryptobox_keypair *kp,
-							unsigned int *len)
+							size_t *len)
 {
 	g_assert(kp != NULL);
 
@@ -50,7 +50,7 @@ rspamd_cryptobox_keypair_sk(struct rspamd_cryptobox_keypair *kp,
 
 static void *
 rspamd_cryptobox_keypair_pk(struct rspamd_cryptobox_keypair *kp,
-							unsigned int *len)
+							size_t *len)
 {
 	g_assert(kp != NULL);
 
@@ -66,7 +66,7 @@ rspamd_cryptobox_keypair_pk(struct rspamd_cryptobox_keypair *kp,
 
 static void *
 rspamd_cryptobox_pubkey_pk(const struct rspamd_cryptobox_pubkey *kp,
-						   unsigned int *len)
+						   size_t *len)
 {
 	g_assert(kp != NULL);
 
@@ -139,7 +139,7 @@ void rspamd_cryptobox_nm_dtor(struct rspamd_cryptobox_nm *nm)
 void rspamd_cryptobox_keypair_dtor(struct rspamd_cryptobox_keypair *kp)
 {
 	void *sk;
-	unsigned int len = 0;
+	size_t len = 0;
 
 	sk = rspamd_cryptobox_keypair_sk(kp, &len);
 	g_assert(sk != NULL && len > 0);
@@ -168,7 +168,7 @@ rspamd_keypair_new(enum rspamd_cryptobox_keypair_type type)
 {
 	struct rspamd_cryptobox_keypair *kp;
 	void *pk, *sk;
-	unsigned int size;
+	size_t size;
 
 	kp = rspamd_cryptobox_keypair_alloc(type);
 	kp->type = type;
@@ -241,7 +241,7 @@ rspamd_pubkey_from_base32(const char *b32,
 {
 	unsigned char *decoded;
 	gsize dlen, expected_len;
-	unsigned int pklen;
+	size_t pklen;
 	struct rspamd_cryptobox_pubkey *pk;
 	unsigned char *pk_data;
 
@@ -283,7 +283,7 @@ rspamd_pubkey_from_hex(const char *hex,
 {
 	unsigned char *decoded;
 	gsize dlen, expected_len;
-	unsigned int pklen;
+	size_t pklen;
 	struct rspamd_cryptobox_pubkey *pk;
 	unsigned char *pk_data;
 
@@ -325,7 +325,7 @@ rspamd_pubkey_from_bin(const unsigned char *raw,
 					   gsize len,
 					   enum rspamd_cryptobox_keypair_type type)
 {
-	unsigned int pklen;
+	size_t pklen;
 	struct rspamd_cryptobox_pubkey *pk;
 	unsigned char *pk_data;
 
@@ -421,7 +421,7 @@ rspamd_pubkey_get_pk(struct rspamd_cryptobox_pubkey *pk,
 					 unsigned int *len)
 {
 	unsigned char *ret = NULL;
-	unsigned int rlen;
+	size_t rlen;
 
 	ret = rspamd_cryptobox_pubkey_pk(pk, &rlen);
 
@@ -434,7 +434,8 @@ rspamd_pubkey_get_pk(struct rspamd_cryptobox_pubkey *pk,
 
 static void
 rspamd_keypair_print_component(unsigned char *data, gsize datalen,
-							   GString *res, unsigned int how, const char *description)
+							   GString *res, unsigned int how, const char *description,
+							   enum rspamd_cryptobox_keypair_encoding encoding)
 {
 	int olen, b32_len;
 
@@ -442,7 +443,7 @@ rspamd_keypair_print_component(unsigned char *data, gsize datalen,
 		rspamd_printf_gstring(res, "%s: ", description);
 	}
 
-	if (how & RSPAMD_KEYPAIR_BASE32) {
+	if (encoding == RSPAMD_KEYPAIR_ENCODING_ZBASE32) {
 		b32_len = (datalen * 8 / 5) + 2;
 		g_string_set_size(res, res->len + b32_len);
 		res->len -= b32_len;
@@ -454,8 +455,11 @@ rspamd_keypair_print_component(unsigned char *data, gsize datalen,
 			res->str[res->len] = '\0';
 		}
 	}
-	else if (how & RSPAMD_KEYPAIR_HEX) {
+	else if (encoding == RSPAMD_KEYPAIR_ENCODING_HEX) {
 		rspamd_printf_gstring(res, "%*xs", (int) datalen, data);
+	}
+	else if (encoding == RSPAMD_KEYPAIR_ENCODING_BASE64) {
+		rspamd_printf_gstring(res, "%*Bs", (int) datalen, data);
 	}
 	else {
 		g_string_append_len(res, data, datalen);
@@ -467,10 +471,12 @@ rspamd_keypair_print_component(unsigned char *data, gsize datalen,
 }
 
 GString *
-rspamd_keypair_print(struct rspamd_cryptobox_keypair *kp, unsigned int how)
+rspamd_keypair_print(struct rspamd_cryptobox_keypair *kp,
+					 enum rspamd_cryptobox_keypair_encoding encoding,
+					 unsigned int how)
 {
 	GString *res;
-	unsigned int len;
+	size_t len;
 	gpointer p;
 
 	g_assert(kp != NULL);
@@ -479,28 +485,30 @@ rspamd_keypair_print(struct rspamd_cryptobox_keypair *kp, unsigned int how)
 
 	if ((how & RSPAMD_KEYPAIR_PUBKEY)) {
 		p = rspamd_cryptobox_keypair_pk(kp, &len);
-		rspamd_keypair_print_component(p, len, res, how, "Public key");
+		rspamd_keypair_print_component(p, len, res, how, "Public key", encoding);
 	}
 	if ((how & RSPAMD_KEYPAIR_PRIVKEY)) {
 		p = rspamd_cryptobox_keypair_sk(kp, &len);
-		rspamd_keypair_print_component(p, len, res, how, "Private key");
+		rspamd_keypair_print_component(p, len, res, how, "Private key", encoding);
 	}
 	if ((how & RSPAMD_KEYPAIR_ID_SHORT)) {
 		rspamd_keypair_print_component(kp->id, RSPAMD_KEYPAIR_SHORT_ID_LEN,
-									   res, how, "Short key ID");
+									   res, how, "Short key ID", encoding);
 	}
 	if ((how & RSPAMD_KEYPAIR_ID)) {
-		rspamd_keypair_print_component(kp->id, sizeof(kp->id), res, how, "Key ID");
+		rspamd_keypair_print_component(kp->id, sizeof(kp->id), res, how, "Key ID", encoding);
 	}
 
 	return res;
 }
 
 GString *
-rspamd_pubkey_print(struct rspamd_cryptobox_pubkey *pk, unsigned int how)
+rspamd_pubkey_print(struct rspamd_cryptobox_pubkey *pk,
+					enum rspamd_cryptobox_keypair_encoding encoding,
+					unsigned int how)
 {
 	GString *res;
-	unsigned int len;
+	size_t len;
 	gpointer p;
 
 	g_assert(pk != NULL);
@@ -509,15 +517,15 @@ rspamd_pubkey_print(struct rspamd_cryptobox_pubkey *pk, unsigned int how)
 
 	if ((how & RSPAMD_KEYPAIR_PUBKEY)) {
 		p = rspamd_cryptobox_pubkey_pk(pk, &len);
-		rspamd_keypair_print_component(p, len, res, how, "Public key");
+		rspamd_keypair_print_component(p, len, res, how, "Public key", encoding);
 	}
 	if ((how & RSPAMD_KEYPAIR_ID_SHORT)) {
 		rspamd_keypair_print_component(pk->id, RSPAMD_KEYPAIR_SHORT_ID_LEN,
-									   res, how, "Short key ID");
+									   res, how, "Short key ID", encoding);
 	}
 	if ((how & RSPAMD_KEYPAIR_ID)) {
 		rspamd_keypair_print_component(pk->id, sizeof(pk->id), res, how,
-									   "Key ID");
+									   "Key ID", encoding);
 	}
 
 	return res;
@@ -527,7 +535,7 @@ const unsigned char *
 rspamd_keypair_component(struct rspamd_cryptobox_keypair *kp,
 						 unsigned int ncomp, unsigned int *len)
 {
-	unsigned int rlen = 0;
+	size_t rlen = 0;
 	const unsigned char *ret = NULL;
 
 	g_assert(kp != NULL);
@@ -558,11 +566,11 @@ rspamd_keypair_from_ucl(const ucl_object_t *obj)
 	const ucl_object_t *privkey, *pubkey, *elt;
 	const char *str;
 	enum rspamd_cryptobox_keypair_type type = RSPAMD_KEYPAIR_KEX;
-	gboolean is_hex = FALSE;
+	enum rspamd_cryptobox_keypair_encoding encoding = RSPAMD_KEYPAIR_ENCODING_DEFAULT;
 	struct rspamd_cryptobox_keypair *kp;
-	unsigned int len;
-	gsize ucl_len;
-	int dec_len;
+	size_t len;
+	size_t ucl_len;
+	size_t dec_len;
 	gpointer target;
 
 	if (ucl_object_type(obj) != UCL_OBJECT) {
@@ -605,7 +613,10 @@ rspamd_keypair_from_ucl(const ucl_object_t *obj)
 		str = ucl_object_tostring(elt);
 
 		if (g_ascii_strcasecmp(str, "hex") == 0) {
-			is_hex = TRUE;
+			encoding = RSPAMD_KEYPAIR_ENCODING_HEX;
+		}
+		else if (g_ascii_strcasecmp(str, "base64") == 0) {
+			encoding = RSPAMD_KEYPAIR_ENCODING_BASE64;
 		}
 		/* TODO: handle errors */
 	}
@@ -618,12 +629,28 @@ rspamd_keypair_from_ucl(const ucl_object_t *obj)
 	target = rspamd_cryptobox_keypair_sk(kp, &len);
 	str = ucl_object_tolstring(privkey, &ucl_len);
 
-	if (is_hex) {
+	switch (encoding) {
+	case RSPAMD_KEYPAIR_ENCODING_HEX:
 		dec_len = rspamd_decode_hex_buf(str, ucl_len, target, len);
-	}
-	else {
+		break;
+	case RSPAMD_KEYPAIR_ENCODING_ZBASE32:
 		dec_len = rspamd_decode_base32_buf(str, ucl_len, target, len, RSPAMD_BASE32_DEFAULT);
+		break;
+	case RSPAMD_KEYPAIR_ENCODING_BASE64:
+		dec_len = rspamd_cryptobox_base64_decode(str, ucl_len, target, &len);
+		break;
+	case RSPAMD_KEYPAIR_ENCODING_BINARY:
+		if (len >= ucl_len) {
+			memcpy(target, str, ucl_len);
+			dec_len = ucl_len;
+		}
+		else {
+			memcpy(target, str, len);
+			dec_len = len;
+		}
+		break;
 	}
+
 
 	if (dec_len != (int) len) {
 		rspamd_keypair_unref(kp);
@@ -634,11 +661,26 @@ rspamd_keypair_from_ucl(const ucl_object_t *obj)
 	target = rspamd_cryptobox_keypair_pk(kp, &len);
 	str = ucl_object_tolstring(pubkey, &ucl_len);
 
-	if (is_hex) {
+	switch (encoding) {
+	case RSPAMD_KEYPAIR_ENCODING_HEX:
 		dec_len = rspamd_decode_hex_buf(str, ucl_len, target, len);
-	}
-	else {
+		break;
+	case RSPAMD_KEYPAIR_ENCODING_ZBASE32:
 		dec_len = rspamd_decode_base32_buf(str, ucl_len, target, len, RSPAMD_BASE32_DEFAULT);
+		break;
+	case RSPAMD_KEYPAIR_ENCODING_BASE64:
+		dec_len = rspamd_cryptobox_base64_decode(str, ucl_len, target, &len);
+		break;
+	case RSPAMD_KEYPAIR_ENCODING_BINARY:
+		if (len >= ucl_len) {
+			memcpy(target, str, ucl_len);
+			dec_len = ucl_len;
+		}
+		else {
+			memcpy(target, str, len);
+			dec_len = len;
+		}
+		break;
 	}
 
 	if (dec_len != (int) len) {
@@ -660,23 +702,14 @@ rspamd_keypair_from_ucl(const ucl_object_t *obj)
 
 ucl_object_t *
 rspamd_keypair_to_ucl(struct rspamd_cryptobox_keypair *kp,
+					  enum rspamd_cryptobox_keypair_encoding encoding,
 					  enum rspamd_keypair_dump_flags flags)
 {
 	ucl_object_t *ucl_out, *elt;
-	int how = 0;
 	GString *keypair_out;
-	const char *encoding;
+	const char *encoding_str = NULL;
 
 	g_assert(kp != NULL);
-
-	if (flags & RSPAMD_KEYPAIR_DUMP_HEX) {
-		how |= RSPAMD_KEYPAIR_HEX;
-		encoding = "hex";
-	}
-	else {
-		how |= RSPAMD_KEYPAIR_BASE32;
-		encoding = "base32";
-	}
 
 	if (flags & RSPAMD_KEYPAIR_DUMP_FLATTENED) {
 		ucl_out = ucl_object_typed_new(UCL_OBJECT);
@@ -688,10 +721,17 @@ rspamd_keypair_to_ucl(struct rspamd_cryptobox_keypair *kp,
 		ucl_object_insert_key(ucl_out, elt, "keypair", 0, false);
 	}
 
+	if (encoding == RSPAMD_KEYPAIR_ENCODING_HEX) {
+		encoding_str = "hex";
+	}
+	else if (encoding == RSPAMD_KEYPAIR_ENCODING_BASE64) {
+		encoding_str = "base64";
+	}
+	/* XXX: maybe support binary here ? */
 
 	/* pubkey part */
-	keypair_out = rspamd_keypair_print(kp,
-									   RSPAMD_KEYPAIR_PUBKEY | how);
+	keypair_out = rspamd_keypair_print(kp, encoding,
+									   RSPAMD_KEYPAIR_PUBKEY | flags);
 	ucl_object_insert_key(elt,
 						  ucl_object_fromlstring(keypair_out->str, keypair_out->len),
 						  "pubkey", 0, false);
@@ -699,8 +739,8 @@ rspamd_keypair_to_ucl(struct rspamd_cryptobox_keypair *kp,
 
 	if (!(flags & RSPAMD_KEYPAIR_DUMP_NO_SECRET)) {
 		/* privkey part */
-		keypair_out = rspamd_keypair_print(kp,
-										   RSPAMD_KEYPAIR_PRIVKEY | how);
+		keypair_out = rspamd_keypair_print(kp, encoding,
+										   RSPAMD_KEYPAIR_PRIVKEY | flags);
 		ucl_object_insert_key(elt,
 							  ucl_object_fromlstring(keypair_out->str, keypair_out->len),
 							  "privkey", 0, false);
@@ -708,15 +748,18 @@ rspamd_keypair_to_ucl(struct rspamd_cryptobox_keypair *kp,
 	}
 
 	keypair_out = rspamd_keypair_print(kp,
-									   RSPAMD_KEYPAIR_ID | how);
+									   encoding,
+									   RSPAMD_KEYPAIR_ID | flags);
 	ucl_object_insert_key(elt,
 						  ucl_object_fromlstring(keypair_out->str, keypair_out->len),
 						  "id", 0, false);
 	g_string_free(keypair_out, TRUE);
 
-	ucl_object_insert_key(elt,
-						  ucl_object_fromstring(encoding),
-						  "encoding", 0, false);
+	if (encoding_str) {
+		ucl_object_insert_key(elt,
+							  ucl_object_fromstring(encoding_str),
+							  "encoding", 0, false);
+	}
 
 	ucl_object_insert_key(elt,
 						  ucl_object_fromstring("curve25519"),

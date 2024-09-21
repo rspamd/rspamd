@@ -181,29 +181,8 @@ const unsigned char *rspamd_pubkey_get_pk(struct rspamd_cryptobox_pubkey *pk,
 #define RSPAMD_KEYPAIR_ID 0x4
 /** Print short key id */
 #define RSPAMD_KEYPAIR_ID_SHORT 0x8
-/** Encode output with base 32 */
-#define RSPAMD_KEYPAIR_BASE32 0x10
 /** Human readable output */
 #define RSPAMD_KEYPAIR_HUMAN 0x20
-#define RSPAMD_KEYPAIR_HEX 0x40
-
-/**
- * Print keypair encoding it if needed
- * @param key key to print
- * @param how flags that specifies printing behaviour
- * @return newly allocated string with keypair
- */
-GString *rspamd_keypair_print(struct rspamd_cryptobox_keypair *kp,
-							  unsigned int how);
-
-/**
- * Print pubkey encoding it if needed
- * @param key key to print
- * @param how flags that specifies printing behaviour
- * @return newly allocated string with keypair
- */
-GString *rspamd_pubkey_print(struct rspamd_cryptobox_pubkey *pk,
-							 unsigned int how);
 
 /** Get keypair pubkey ID */
 #define RSPAMD_KEYPAIR_COMPONENT_ID 0
@@ -232,17 +211,45 @@ struct rspamd_cryptobox_keypair *rspamd_keypair_from_ucl(const ucl_object_t *obj
 
 enum rspamd_keypair_dump_flags {
 	RSPAMD_KEYPAIR_DUMP_DEFAULT = 0,
-	RSPAMD_KEYPAIR_DUMP_HEX = 1u << 0u,
 	RSPAMD_KEYPAIR_DUMP_NO_SECRET = 1u << 1u,
 	RSPAMD_KEYPAIR_DUMP_FLATTENED = 1u << 2u,
 };
 
+enum rspamd_cryptobox_keypair_encoding {
+	RSPAMD_KEYPAIR_ENCODING_ZBASE32 = 0,
+	RSPAMD_KEYPAIR_ENCODING_HEX = 1,
+	RSPAMD_KEYPAIR_ENCODING_BASE64 = 2,
+	RSPAMD_KEYPAIR_ENCODING_BINARY = 3,
+	RSPAMD_KEYPAIR_ENCODING_DEFAULT = RSPAMD_KEYPAIR_ENCODING_ZBASE32,
+};
+
+
+/**
+ * Print pubkey encoding it if needed
+ * @param key key to print
+ * @param how flags that specifies printing behaviour
+ * @return newly allocated string with keypair
+ */
+GString *rspamd_pubkey_print(struct rspamd_cryptobox_pubkey *pk,
+							 enum rspamd_cryptobox_keypair_encoding encoding,
+							 unsigned int how);
+/**
+ * Print keypair encoding it if needed
+ * @param key key to print
+ * @param how flags that specifies printing behaviour
+ * @return newly allocated string with keypair
+ */
+GString *rspamd_keypair_print(struct rspamd_cryptobox_keypair *kp,
+							  enum rspamd_cryptobox_keypair_encoding encoding,
+							  unsigned int how);
 /**
  * Converts keypair to ucl object
  * @param kp
  * @return
  */
+
 ucl_object_t *rspamd_keypair_to_ucl(struct rspamd_cryptobox_keypair *kp,
+									enum rspamd_cryptobox_keypair_encoding encoding,
 									enum rspamd_keypair_dump_flags flags);
 
 

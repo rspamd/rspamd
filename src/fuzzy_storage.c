@@ -2453,7 +2453,8 @@ rspamd_fuzzy_key_stat_iter(const unsigned char *pk_iter, struct fuzzy_key *fuzzy
 		ucl_object_insert_key(elt, flags_ucl, "flags", 0, false);
 
 		ucl_object_insert_key(elt,
-							  rspamd_keypair_to_ucl(fuzzy_key->key, RSPAMD_KEYPAIR_DUMP_NO_SECRET | RSPAMD_KEYPAIR_DUMP_FLATTENED),
+							  rspamd_keypair_to_ucl(fuzzy_key->key, RSPAMD_KEYPAIR_ENCODING_DEFAULT,
+													RSPAMD_KEYPAIR_DUMP_NO_SECRET | RSPAMD_KEYPAIR_DUMP_FLATTENED),
 							  "keypair", 0, false);
 		ucl_object_insert_key(keys_obj, elt, keyname, 0, true);
 	}

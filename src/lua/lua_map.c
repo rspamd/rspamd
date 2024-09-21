@@ -1256,8 +1256,8 @@ lua_map_get_sign_key(lua_State *L)
 			bk = g_ptr_array_index(map->map->backends, i);
 
 			if (bk->trusted_pubkey) {
-				ret = rspamd_pubkey_print(bk->trusted_pubkey,
-										  RSPAMD_KEYPAIR_PUBKEY | RSPAMD_KEYPAIR_BASE32);
+				ret = rspamd_pubkey_print(bk->trusted_pubkey, RSPAMD_KEYPAIR_ENCODING_DEFAULT,
+										  RSPAMD_KEYPAIR_PUBKEY);
 			}
 			else {
 				ret = NULL;

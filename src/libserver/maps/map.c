@@ -685,7 +685,8 @@ rspamd_map_check_sig_pk_mem(const unsigned char *sig,
 
 	if (ret) {
 		b32_key = rspamd_pubkey_print(pk,
-									  RSPAMD_KEYPAIR_BASE32 | RSPAMD_KEYPAIR_PUBKEY);
+									  RSPAMD_KEYPAIR_ENCODING_DEFAULT,
+									  RSPAMD_KEYPAIR_PUBKEY);
 		msg_info_map("verified signature for %s using trusted key %v",
 					 map->name, b32_key);
 		g_string_free(b32_key, TRUE);
@@ -728,7 +729,8 @@ rspamd_map_check_file_sig(const char *fname,
 
 		/* We just check pk against the trusted db of keys */
 		b32_key = rspamd_pubkey_print(pk,
-									  RSPAMD_KEYPAIR_BASE32 | RSPAMD_KEYPAIR_PUBKEY);
+									  RSPAMD_KEYPAIR_ENCODING_DEFAULT,
+									  RSPAMD_KEYPAIR_PUBKEY);
 		g_assert(b32_key != NULL);
 
 		if (g_hash_table_lookup(map->cfg->trusted_keys, b32_key->str) == NULL) {

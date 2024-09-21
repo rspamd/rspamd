@@ -503,7 +503,7 @@ lua_cryptobox_keypair_gc(lua_State *L)
 }
 
 /***
- * @method keypair:totable([hex=false]])
+ * @method keypair:totable([encoding="zbase32"])
  * Converts keypair to table (not very safe due to memory leftovers)
  */
 static int
@@ -512,16 +512,39 @@ lua_cryptobox_keypair_totable(lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_cryptobox_keypair *kp = lua_check_cryptobox_keypair(L, 1);
 	ucl_object_t *obj;
-	gboolean hex = FALSE;
+	enum rspamd_cryptobox_keypair_encoding encoding = RSPAMD_KEYPAIR_ENCODING_DEFAULT;
 	int ret = 1;
 
 	if (kp != NULL) {
 
 		if (lua_isboolean(L, 2)) {
-			hex = lua_toboolean(L, 2);
+			if (lua_toboolean(L, 2)) {
+				encoding = RSPAMD_KEYPAIR_ENCODING_HEX;
+			}
+		}
+		else if (lua_isstring(L, 2)) {
+			const char *enc = lua_tostring(L, 2);
+
+			if (g_ascii_strcasecmp(enc, "hex") == 0) {
+				encoding = RSPAMD_KEYPAIR_ENCODING_HEX;
+			}
+			else if (g_ascii_strcasecmp(enc, "zbase32") == 0 ||
+					 g_ascii_strcasecmp(enc, "default") == 0 ||
+					 g_ascii_strcasecmp(enc, "base32") == 0) {
+				encoding = RSPAMD_KEYPAIR_ENCODING_ZBASE32;
+			}
+			else if (g_ascii_strcasecmp(enc, "base64") == 0) {
+				encoding = RSPAMD_KEYPAIR_ENCODING_BASE64;
+			}
+			else if (g_ascii_strcasecmp(enc, "binary") == 0) {
+				encoding = RSPAMD_KEYPAIR_ENCODING_BINARY;
+			}
+			else {
+				return luaL_error(L, "unknown encoding (known are: hex, zbase32/default, base64, binary: %s", enc);
+			}
 		}
 
-		obj = rspamd_keypair_to_ucl(kp, hex ? RSPAMD_KEYPAIR_DUMP_HEX : RSPAMD_KEYPAIR_DUMP_DEFAULT);
+		obj = rspamd_keypair_to_ucl(kp, encoding, RSPAMD_KEYPAIR_DUMP_DEFAULT);
 
 		ret = ucl_object_push_lua(L, obj, true);
 		ucl_object_unref(obj);
