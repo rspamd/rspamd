@@ -1987,9 +1987,11 @@ int rspamd_http_message_write_header(const char *mime_type, gboolean encrypted,
 			GString *b32_key, *b32_id;
 
 			b32_key = rspamd_keypair_print(priv->local_key,
-										   RSPAMD_KEYPAIR_PUBKEY | RSPAMD_KEYPAIR_BASE32);
+										   RSPAMD_KEYPAIR_ENCODING_DEFAULT,
+										   RSPAMD_KEYPAIR_PUBKEY);
 			b32_id = rspamd_pubkey_print(peer_key,
-										 RSPAMD_KEYPAIR_ID_SHORT | RSPAMD_KEYPAIR_BASE32);
+										 RSPAMD_KEYPAIR_ENCODING_DEFAULT,
+										 RSPAMD_KEYPAIR_ID_SHORT);
 			/* XXX: add some fuzz here */
 			rspamd_printf_fstring(&*buf, "Key: %v=%v\r\n", b32_id, b32_key);
 			g_string_free(b32_key, TRUE);

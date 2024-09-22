@@ -366,7 +366,8 @@ rspamadm_sign_file(const char *fname, struct rspamd_cryptobox_keypair *kp)
 		}
 		else {
 			b32_pk = rspamd_keypair_print(kp,
-										  RSPAMD_KEYPAIR_PUBKEY | RSPAMD_KEYPAIR_BASE32);
+										  RSPAMD_KEYPAIR_ENCODING_DEFAULT,
+										  RSPAMD_KEYPAIR_PUBKEY);
 
 			if (b32_pk) {
 				rspamd_fprintf(pub_fp, "%v", b32_pk);
