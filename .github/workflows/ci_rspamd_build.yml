@@ -1,0 +1,51 @@
+name: rspamd_build
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        required: true
+        type: string
+      name:
+        required: true
+        type: string
+
+jobs:
+  test:
+    runs-on: [ "ubuntu-latest" ]
+    container:
+      image: ${{ inputs.image }}
+      options: --user root
+    steps:
+      - name: Create directories
+        run: |
+          sudo mkdir -p ${GITHUB_WORKSPACE}
+
+      - name: Check out source code
+        uses: actions/checkout@v4
+        with:
+          path: src
+
+      - name: Set variables on ARM64
+        if: runner.arch == 'ARM64'
+        run: echo "HYPERSCAN_ALTROOT=-DHYPERSCAN_ROOT_DIR=/vectorscan" >> "$GITHUB_ENV"
+
+      - name: Run cmake
+        run: |
+          mkdir ${GITHUB_WORKSPACE}/build
+          cd ${GITHUB_WORKSPACE}/build
+          cmake -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/install -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DENABLE_HYPERSCAN=ON ${{ env.HYPERSCAN_ALTROOT }} -GNinja ${GITHUB_WORKSPACE}/src
+
+      - name: Build rspamd
+        run: |
+          cd ${GITHUB_WORKSPACE}/build
+          ncpu=$(getconf _NPROCESSORS_ONLN)
+          ninja -j $ncpu install
+          ninja -j $ncpu rspamd-test
+          ninja -j $ncpu rspamd-test-cxx
+
+      - name: Run unit tests
+        if: "!(inputs.name == 'ubuntu-ci' && runner.arch == 'ARM64')"
+        run: |
+          cd ${GITHUB_WORKSPACE}/build
+          ninja test
