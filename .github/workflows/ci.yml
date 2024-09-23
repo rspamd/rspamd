@@ -23,3 +23,21 @@ jobs:
     with:
       image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-ci
       name: ubuntu-ci
+
+  ubuntu-focal:
+    uses: ./.github/workflows/ci_rspamd.yml
+    with:
+      image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-focal
+      name: ubuntu-focal
+
+  centos-8:
+    uses: ./.github/workflows/ci_rspamd.yml
+    with:
+      image: ghcr.io/rspamd/rspamd-build-docker:centos-8
+      name: centos-8
+
+  centos-9:
+    uses: ./.github/workflows/ci_rspamd.yml
+    with:
+      image: ghcr.io/rspamd/rspamd-build-docker:centos-9
+      name: centos-9
