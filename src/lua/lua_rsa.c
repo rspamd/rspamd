@@ -791,7 +791,6 @@ lua_rsa_sign_memory(lua_State *L)
 static int
 lua_rsa_keypair(lua_State *L)
 {
-	BIGNUM *e;
 	EVP_PKEY *pkey = NULL, *pub_pkey, *priv_pkey, **ppkey;
 	int bits = lua_gettop(L) > 0 ? lua_tointeger(L, 1) : 1024;
 
@@ -799,16 +798,11 @@ lua_rsa_keypair(lua_State *L)
 		return luaL_error(L, "invalid bits count");
 	}
 
-	e = BN_new();
-
-	g_assert(BN_set_word(e, RSA_F4) == 1);
 	EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
 	g_assert(pctx != NULL);
 	g_assert(EVP_PKEY_keygen_init(pctx) == 1);
 
 	g_assert(EVP_PKEY_CTX_set_rsa_keygen_bits(pctx, bits) == 1);
-	g_assert(EVP_PKEY_CTX_set1_rsa_keygen_pubexp(pctx, e) == 1);
-
 	g_assert(EVP_PKEY_keygen(pctx, &pkey) == 1);
 	g_assert(pkey != NULL);
 
@@ -824,7 +818,6 @@ lua_rsa_keypair(lua_State *L)
 
 	EVP_PKEY_free(pkey);
 	EVP_PKEY_CTX_free(pctx);
-	BN_free(e);
 
 	return 2;
 }
