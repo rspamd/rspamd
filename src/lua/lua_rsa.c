@@ -760,7 +760,7 @@ lua_rsa_sign_memory(lua_State *L)
 	data = luaL_checklstring(L, 2, &sz);
 
 	if (pkey != NULL && data != NULL) {
-		signature = rspamd_fstring_sized_new(EVP_PKEY_get_size(pkey));
+		signature = rspamd_fstring_sized_new(EVP_PKEY_size(pkey));
 
 		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(pkey, NULL);
 		g_assert(pctx != NULL);
