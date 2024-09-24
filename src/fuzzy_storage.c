@@ -2351,6 +2351,12 @@ rspamd_fuzzy_stat_to_ucl(struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat)
 		rspamd_fuzzy_key_stat_iter(pk_iter, fuzzy_key, keys_obj, ip_stat);
 	});
 
+	if (ctx->dynamic_keys) {
+		kh_foreach(ctx->dynamic_keys, pk_iter, fuzzy_key, {
+			rspamd_fuzzy_key_stat_iter(pk_iter, fuzzy_key, keys_obj, ip_stat);
+		});
+	}
+
 	ucl_object_insert_key(obj, keys_obj, "keys", 0, false);
 
 	/* Now generic stats */
