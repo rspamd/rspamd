@@ -8,8 +8,8 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.12 FATAL_ERROR)
 
 SET(RSPAMD_VERSION_MAJOR 3)
-SET(RSPAMD_VERSION_MINOR 9)
-SET(RSPAMD_VERSION_PATCH 2)
+SET(RSPAMD_VERSION_MINOR 10)
+SET(RSPAMD_VERSION_PATCH 0)
 
 # Keep two digits all the time
 SET(RSPAMD_VERSION_MAJOR_NUM ${RSPAMD_VERSION_MAJOR}0)
@@ -471,6 +471,13 @@ int main(int argc, char **argv) {
         return -1;
 }
 " HAVE_ATOMIC_BUILTINS)
+
+CHECK_C_SOURCE_RUNS("#include <stdio.h>
+int main() {
+  __builtin_cpu_init();
+  printf(\"%d\", __builtin_cpu_supports(\"avx\"));
+  return 0;
+}" HAVE_BUILTIN_CPU_SUPPORTS)
 
 IF (NOT HAVE_ATOMIC_BUILTINS)
     MESSAGE(STATUS "atomic builtins are -NOT- supported")

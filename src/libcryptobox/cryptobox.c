@@ -86,6 +86,60 @@ rspamd_cryptobox_cpuid(int cpu[4], int info)
 #endif
 }
 
+#ifdef HAVE_BUILTIN_CPU_SUPPORTS
+RSPAMD_CONSTRUCTOR(cryptobox_cpu_init)
+{
+	__builtin_cpu_init();
+}
+static gboolean
+rspamd_cryptobox_test_instr(int instr)
+{
+	gboolean ret = FALSE;
+	switch (instr) {
+#if defined HAVE_SSE2 && defined(__x86_64__)
+	case CPUID_SSE2:
+		ret = __builtin_cpu_supports("sse2");
+		break;
+	case CPUID_RDRAND:
+		/* XXX: no check to test for rdrand, but all avx2 cpus are def. capable of rdrand */
+		ret = __builtin_cpu_supports("avx2");
+		break;
+#endif
+#ifdef HAVE_SSE3
+	case CPUID_SSE3:
+		ret = __builtin_cpu_supports("sse3");
+		break;
+#endif
+#ifdef HAVE_SSSE3
+	case CPUID_SSSE3:
+		ret = __builtin_cpu_supports("ssse3");
+		break;
+#endif
+#ifdef HAVE_SSE41
+	case CPUID_SSE41:
+		ret = __builtin_cpu_supports("sse4.1");
+		break;
+#endif
+#if defined HAVE_SSE42 && defined(__x86_64__)
+	case CPUID_SSE42:
+		ret = __builtin_cpu_supports("sse4.2");
+		break;
+#endif
+#ifdef HAVE_AVX
+	case CPUID_AVX:
+		ret = __builtin_cpu_supports("avx");
+		break;
+#endif
+#ifdef HAVE_AVX2
+	case CPUID_AVX2:
+		ret = __builtin_cpu_supports("avx2");
+		break;
+#endif
+	}
+
+	return ret;
+}
+#else
 static sig_atomic_t ok = 0;
 static jmp_buf j;
 
@@ -171,6 +225,7 @@ rspamd_cryptobox_test_instr(int instr)
 	/* We actually never return here if SIGILL has been caught */
 	return ok == 1;
 }
+#endif /* HAVE_BUILTIN_CPU_SUPPORTS */
 
 struct rspamd_cryptobox_library_ctx *
 rspamd_cryptobox_init(void)

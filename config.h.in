@@ -115,6 +115,7 @@
 #cmakedefine WITH_LUA_REPL       1
 #cmakedefine WITH_FASTTEXT       1
 #cmakedefine BACKWARD_ENABLE     1
+#cmakedefine HAVE_BUILTIN_CPU_SUPPORTS 1
 
 #cmakedefine DISABLE_PTHREAD_MUTEX 1
 
