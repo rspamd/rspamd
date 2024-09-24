@@ -261,6 +261,7 @@ lua_rsa_pubkey_gc(lua_State *L)
 	EVP_PKEY *pkey = lua_check_rsa_pubkey(L, 1);
 
 	if (pkey != NULL) {
+		/* It's actually EVP_PKEY_unref, thanks for that API */
 		EVP_PKEY_free(pkey);
 	}
 
@@ -522,6 +523,7 @@ lua_rsa_privkey_gc(lua_State *L)
 	EVP_PKEY *pkey = lua_check_rsa_privkey(L, 1);
 
 	if (pkey != NULL) {
+		/* It's actually EVP_PKEY_unref, thanks for that API */
 		EVP_PKEY_free(pkey);
 	}
 
@@ -758,7 +760,7 @@ lua_rsa_sign_memory(lua_State *L)
 	data = luaL_checklstring(L, 2, &sz);
 
 	if (pkey != NULL && data != NULL) {
-		signature = rspamd_fstring_sized_new(EVP_PKEY_get_size(pkey));
+		signature = rspamd_fstring_sized_new(EVP_PKEY_size(pkey));
 
 		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(pkey, NULL);
 		g_assert(pctx != NULL);
@@ -791,7 +793,6 @@ lua_rsa_sign_memory(lua_State *L)
 static int
 lua_rsa_keypair(lua_State *L)
 {
-	BIGNUM *e;
 	EVP_PKEY *pkey = NULL, *pub_pkey, *priv_pkey, **ppkey;
 	int bits = lua_gettop(L) > 0 ? lua_tointeger(L, 1) : 1024;
 
@@ -799,32 +800,31 @@ lua_rsa_keypair(lua_State *L)
 		return luaL_error(L, "invalid bits count");
 	}
 
-	e = BN_new();
-
-	g_assert(BN_set_word(e, RSA_F4) == 1);
 	EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
 	g_assert(pctx != NULL);
 	g_assert(EVP_PKEY_keygen_init(pctx) == 1);
 
 	g_assert(EVP_PKEY_CTX_set_rsa_keygen_bits(pctx, bits) == 1);
-	g_assert(EVP_PKEY_CTX_set1_rsa_keygen_pubexp(pctx, e) == 1);
-
 	g_assert(EVP_PKEY_keygen(pctx, &pkey) == 1);
 	g_assert(pkey != NULL);
 
-	priv_pkey = EVP_PKEY_dup(pkey);
+	/* Increase refcount and share */
+	g_assert(EVP_PKEY_up_ref(pkey) == 1);
+	priv_pkey = pkey;
+
 	ppkey = lua_newuserdata(L, sizeof(EVP_PKEY *));
 	rspamd_lua_setclass(L, rspamd_rsa_privkey_classname, -1);
 	*ppkey = priv_pkey;
 
-	pub_pkey = EVP_PKEY_dup(pkey);
+	/* Increase refcount and share */
+	g_assert(EVP_PKEY_up_ref(pkey) == 1);
+	pub_pkey = pkey;
 	ppkey = lua_newuserdata(L, sizeof(EVP_PKEY *));
 	rspamd_lua_setclass(L, rspamd_rsa_pubkey_classname, -1);
 	*ppkey = pub_pkey;
 
 	EVP_PKEY_free(pkey);
 	EVP_PKEY_CTX_free(pctx);
-	BN_free(e);
 
 	return 2;
 }

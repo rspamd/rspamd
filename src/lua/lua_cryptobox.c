@@ -1438,7 +1438,11 @@ lua_cryptobox_hash_reset(lua_State *L)
 			rspamd_cryptobox_hash_init(h->content.h, NULL, 0);
 			break;
 		case LUA_CRYPTOBOX_HASH_SSL:
+#if OPENSSL_VERSION_MAJOR >= 3
 			EVP_DigestInit(h->content.c, EVP_MD_CTX_get0_md(h->content.c));
+#else
+			EVP_DigestInit(h->content.c, EVP_MD_CTX_md(h->content.c));
+#endif
 			break;
 		case LUA_CRYPTOBOX_HASH_HMAC:
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || \
@@ -2531,31 +2535,20 @@ lua_cryptobox_gen_dkim_keypair(lua_State *L)
 	}
 
 	if (strcmp(alg_str, "rsa") == 0) {
-		BIGNUM *e;
 		EVP_PKEY *pk;
 
-		e = BN_new();
 		pk = EVP_PKEY_new();
 
-		if (BN_set_word(e, RSA_F4) != 1) {
-			BN_free(e);
-			EVP_PKEY_free(pk);
-
-			return luaL_error(L, "BN_set_word failed");
-		}
 
 		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
 		if (EVP_PKEY_keygen_init(pctx) != 1) {
-			BN_free(e);
 			EVP_PKEY_free(pk);
 			EVP_PKEY_CTX_free(pctx);
 
 			return luaL_error(L, "EVP_PKEY_keygen_init failed");
 		}
 		EVP_PKEY_CTX_set_rsa_keygen_bits(pctx, nbits);
-		EVP_PKEY_CTX_set1_rsa_keygen_pubexp(pctx, e);
 		if (EVP_PKEY_keygen(pctx, &pk) != 1) {
-			BN_free(e);
 			EVP_PKEY_free(pk);
 			EVP_PKEY_CTX_free(pctx);
 
@@ -2575,7 +2568,6 @@ lua_cryptobox_gen_dkim_keypair(lua_State *L)
 
 		if (rc == 0) {
 			BIO_free(mbio);
-			BN_free(e);
 			EVP_PKEY_free(pk);
 
 			return luaL_error(L, "i2d_RSAPrivateKey_bio failed");
@@ -2597,7 +2589,6 @@ lua_cryptobox_gen_dkim_keypair(lua_State *L)
 
 		if (rc == 0) {
 			BIO_free(mbio);
-			BN_free(e);
 			EVP_PKEY_free(pk);
 
 			return luaL_error(L, "i2d_RSA_PUBKEY_bio failed");
@@ -2613,7 +2604,6 @@ lua_cryptobox_gen_dkim_keypair(lua_State *L)
 		pub_out->len = b64_len;
 		pub_out->flags = RSPAMD_TEXT_FLAG_OWN;
 
-		BN_free(e);
 		EVP_PKEY_free(pk);
 		BIO_free(mbio);
 	}
