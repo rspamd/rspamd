@@ -1438,7 +1438,11 @@ lua_cryptobox_hash_reset(lua_State *L)
 			rspamd_cryptobox_hash_init(h->content.h, NULL, 0);
 			break;
 		case LUA_CRYPTOBOX_HASH_SSL:
+#if OPENSSL_VERSION_MAJOR >= 3
 			EVP_DigestInit(h->content.c, EVP_MD_CTX_get0_md(h->content.c));
+#else
+			EVP_DigestInit(h->content.c, EVP_MD_CTX_md(h->content.c));
+#endif
 			break;
 		case LUA_CRYPTOBOX_HASH_HMAC:
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || \
