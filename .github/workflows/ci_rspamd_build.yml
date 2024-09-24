@@ -34,12 +34,12 @@ jobs:
         run: |
           mkdir ${GITHUB_WORKSPACE}/build
           cd ${GITHUB_WORKSPACE}/build
-          source /opt/rh/gcc-toolset-10/enable || true
+          if [[ -f /opt/rh/gcc-toolset-10/enable ]] ; then source /opt/rh/gcc-toolset-10/enable ; fi 
           cmake -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/install -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON  -DENABLE_LUAJIT=ON -DLUA_ROOT=/luajit-build -DENABLE_HYPERSCAN=ON ${{ env.HYPERSCAN_ALTROOT }} ${GITHUB_WORKSPACE}/src
 
       - name: Build rspamd
         run: |
-          source /opt/rh/gcc-toolset-10/enable || true
+          if [[ -f /opt/rh/gcc-toolset-10/enable ]] ; then source /opt/rh/gcc-toolset-10/enable ; fi 
           cd ${GITHUB_WORKSPACE}/build
           ncpu=$(getconf _NPROCESSORS_ONLN)
           make -j $ncpu install
