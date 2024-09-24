@@ -261,6 +261,7 @@ lua_rsa_pubkey_gc(lua_State *L)
 	EVP_PKEY *pkey = lua_check_rsa_pubkey(L, 1);
 
 	if (pkey != NULL) {
+		/* It's actually EVP_PKEY_unref, thanks for that API */
 		EVP_PKEY_free(pkey);
 	}
 
@@ -522,6 +523,7 @@ lua_rsa_privkey_gc(lua_State *L)
 	EVP_PKEY *pkey = lua_check_rsa_privkey(L, 1);
 
 	if (pkey != NULL) {
+		/* It's actually EVP_PKEY_unref, thanks for that API */
 		EVP_PKEY_free(pkey);
 	}
 
@@ -806,12 +808,17 @@ lua_rsa_keypair(lua_State *L)
 	g_assert(EVP_PKEY_keygen(pctx, &pkey) == 1);
 	g_assert(pkey != NULL);
 
-	priv_pkey = EVP_PKEY_dup(pkey);
+	/* Increase refcount and share */
+	g_assert(EVP_PKEY_up_ref(pkey) == 1);
+	priv_pkey = pkey;
+
 	ppkey = lua_newuserdata(L, sizeof(EVP_PKEY *));
 	rspamd_lua_setclass(L, rspamd_rsa_privkey_classname, -1);
 	*ppkey = priv_pkey;
 
-	pub_pkey = EVP_PKEY_dup(pkey);
+	/* Increase refcount and share */
+	g_assert(EVP_PKEY_up_ref(pkey) == 1);
+	pub_pkey = pkey;
 	ppkey = lua_newuserdata(L, sizeof(EVP_PKEY *));
 	rspamd_lua_setclass(L, rspamd_rsa_pubkey_classname, -1);
 	*ppkey = pub_pkey;
