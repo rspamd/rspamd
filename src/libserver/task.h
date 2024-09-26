@@ -115,9 +115,6 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_FLAG_MESSAGE_REWRITE (1u << 24u)
 #define RSPAMD_TASK_FLAG_MAX_SHIFT (24u)
 
-
-/* Request has a JSON control block */
-#define RSPAMD_TASK_PROTOCOL_FLAG_HAS_CONTROL (1u << 0u)
 /* Request has been done by a local client */
 #define RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT (1u << 1u)
 /* Request has been sent via milter */
