@@ -79,7 +79,6 @@ extern "C" {
 #define DELIVER_TO_HEADER "Deliver-To"
 #define NO_LOG_HEADER "Log"
 #define LOG_TAG_HEADER "Log-Tag"
-#define MLEN_HEADER "Message-Length"
 #define USER_AGENT_HEADER "User-Agent"
 #define MTA_TAG_HEADER "MTA-Tag"
 #define PROFILE_HEADER "Profile"

@@ -323,9 +323,6 @@ gboolean
 rspamd_task_load_message(struct rspamd_task *task,
 						 struct rspamd_http_message *msg, const char *start, gsize len)
 {
-	unsigned int control_len, r;
-	struct ucl_parser *parser;
-	ucl_object_t *control_obj;
 	char filepath[PATH_MAX], *fp;
 	int fd, flen;
 	gulong offset = 0, shmem_size = 0;
@@ -349,8 +346,8 @@ rspamd_task_load_message(struct rspamd_task *task,
 
 	if (tok) {
 		/* Shared memory part */
-		r = rspamd_strlcpy(filepath, tok->begin,
-						   MIN(sizeof(filepath), tok->len + 1));
+		size_t r = rspamd_strlcpy(filepath, tok->begin,
+								  MIN(sizeof(filepath), tok->len + 1));
 
 		rspamd_url_decode(filepath, filepath, r + 1);
 		flen = strlen(filepath);
@@ -448,8 +445,8 @@ rspamd_task_load_message(struct rspamd_task *task,
 		if (tok) {
 			debug_task("want to scan file %T", tok);
 
-			r = rspamd_strlcpy(filepath, tok->begin,
-							   MIN(sizeof(filepath), tok->len + 1));
+			size_t r = rspamd_strlcpy(filepath, tok->begin,
+									  MIN(sizeof(filepath), tok->len + 1));
 
 			rspamd_url_decode(filepath, filepath, r + 1);
 			flen = strlen(filepath);
@@ -624,41 +621,6 @@ rspamd_task_load_message(struct rspamd_task *task,
 
 	if (task->msg.len == 0) {
 		task->flags |= RSPAMD_TASK_FLAG_EMPTY;
-	}
-
-	if (task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_HAS_CONTROL) {
-		rspamd_ftok_t *hv = rspamd_task_get_request_header(task, MLEN_HEADER);
-		gulong message_len = 0;
-
-		if (!hv || !rspamd_strtoul(hv->begin, hv->len, &message_len) ||
-			task->msg.len < message_len) {
-			msg_warn_task("message has invalid message length: %ul and total len: %ul",
-						  message_len, task->msg.len);
-			g_set_error(&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
-						"Invalid length");
-			return FALSE;
-		}
-
-		control_len = task->msg.len - message_len;
-
-		if (control_len > 0) {
-			parser = ucl_parser_new(UCL_PARSER_KEY_LOWERCASE);
-
-			if (!ucl_parser_add_chunk(parser, task->msg.begin, control_len)) {
-				msg_warn_task("processing of control chunk failed: %s",
-							  ucl_parser_get_error(parser));
-				ucl_parser_free(parser);
-			}
-			else {
-				control_obj = ucl_parser_get_object(parser);
-				ucl_parser_free(parser);
-				rspamd_protocol_handle_control(task, control_obj);
-				ucl_object_unref(control_obj);
-			}
-
-			task->msg.begin += control_len;
-			task->msg.len -= control_len;
-		}
 	}
 
 	return TRUE;
