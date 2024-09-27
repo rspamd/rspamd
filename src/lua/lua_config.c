@@ -795,11 +795,11 @@ LUA_FUNCTION_DEF(config, get_cpu_flags);
 LUA_FUNCTION_DEF(config, has_torch);
 
 /***
- * @method rspamd_config:is_mime_utf()
+ * @method rspamd_config:is_mime_utf8()
  * Returns true if Rspamd is configured to use UTF for mime processing
  * @return {boolean} true if mime utf is enabled
  */
-LUA_FUNCTION_DEF(config, is_mime_utf);
+LUA_FUNCTION_DEF(config, is_mime_utf8);
 
 /***
  * @method rspamd_config:experimental_enabled()
@@ -928,7 +928,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF(config, set_peak_cb),
 	LUA_INTERFACE_DEF(config, get_cpu_flags),
 	LUA_INTERFACE_DEF(config, has_torch),
-	LUA_INTERFACE_DEF(config, is_mime_utf),
+	LUA_INTERFACE_DEF(config, is_mime_utf8),
 	LUA_INTERFACE_DEF(config, experimental_enabled),
 	LUA_INTERFACE_DEF(config, load_ucl),
 	LUA_INTERFACE_DEF(config, parse_rcl),
@@ -4237,7 +4237,7 @@ lua_config_has_torch(lua_State *L)
 }
 
 static int
-lua_config_is_mime_utf(lua_State *L)
+lua_config_is_mime_utf8(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);

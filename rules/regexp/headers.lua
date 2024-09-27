@@ -56,7 +56,7 @@ reconf['TO_NEEDS_ENCODING'] = {
   group = 'headers',
 }
 
-if rspamd_config:is_mime_utf() then
+if rspamd_config:is_mime_utf8() then
   -- Disable some of the rules preserving the underlying logic
   reconf['FROM_NEEDS_ENCODING'].condition = function()
     return false
