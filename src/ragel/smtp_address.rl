@@ -24,6 +24,7 @@
 
   # SMTP address spec
   # Obtained from: https://tools.ietf.org/html/rfc5321#section-4.1.2
+  # Additions from rfc6532 (smtputf8): https://tools.ietf.org/html/rfc6532#section-3.2
 
   QcontentSMTP   = qtextSMTP | quoted_pairSMTP %User_has_backslash;
   Quoted_string  = ( DQUOTE QcontentSMTP* >User_start %User_end DQUOTE ) %Quoted_addr;

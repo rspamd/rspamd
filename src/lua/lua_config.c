@@ -795,6 +795,13 @@ LUA_FUNCTION_DEF(config, get_cpu_flags);
 LUA_FUNCTION_DEF(config, has_torch);
 
 /***
+ * @method rspamd_config:is_mime_utf()
+ * Returns true if Rspamd is configured to use UTF for mime processing
+ * @return {boolean} true if mime utf is enabled
+ */
+LUA_FUNCTION_DEF(config, is_mime_utf);
+
+/***
  * @method rspamd_config:experimental_enabled()
  * Returns true if experimental plugins are enabled
  * @return {boolean} true if experimental plugins are enabled
@@ -921,6 +928,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF(config, set_peak_cb),
 	LUA_INTERFACE_DEF(config, get_cpu_flags),
 	LUA_INTERFACE_DEF(config, has_torch),
+	LUA_INTERFACE_DEF(config, is_mime_utf),
 	LUA_INTERFACE_DEF(config, experimental_enabled),
 	LUA_INTERFACE_DEF(config, load_ucl),
 	LUA_INTERFACE_DEF(config, parse_rcl),
@@ -4224,6 +4232,22 @@ lua_config_has_torch(lua_State *L)
 {
 	msg_warn("use of the obsoleted `has_torch` function");
 	lua_pushboolean(L, false);
+
+	return 1;
+}
+
+static int
+lua_config_is_mime_utf(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+
+	if (cfg != NULL) {
+		lua_pushboolean(L, cfg->enable_mime_utf);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
 
 	return 1;
 }
