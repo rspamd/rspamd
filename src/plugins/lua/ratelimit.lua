@@ -41,6 +41,8 @@ local settings = {
   -- Do not check ratelimits for these recipients
   whitelisted_rcpts = { 'postmaster', 'mailer-daemon' },
   prefix = 'RL',
+  cache_prefix = 'RL_cache_prefix',
+  max_cache_size = 30,
   -- If enabled, we apply dynamic rate limiting based on the verdict
   dynamic_rate_limit = false,
   ham_factor_rate = 1.01,
@@ -455,7 +457,8 @@ local function ratelimit_cb(task)
           { key = value.hash, task = task, is_write = true },
           gen_check_cb(pr, bucket, value.name, value.hash),
           { value.hash, tostring(now), tostring(rate), tostring(bucket.burst),
-            tostring(settings.expire), tostring(bincr), tostring(dyn_rate_enabled) })
+            tostring(settings.expire), tostring(bincr), tostring(dyn_rate_enabled),
+            settings.cache_prefix, settings.max_cache_size })
     end
   end
 end
