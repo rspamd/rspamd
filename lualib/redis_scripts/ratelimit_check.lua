@@ -86,7 +86,7 @@ if burst + pending > 0 then
   burst = burst + pending
   if burst > 0 and burst > max_burst * dynb then
     redis.call('ZREMRANGEBYRANK', cache_prefix, 0, -(max_cache_size + 1))
-    redis.call('ZINCRBY', cache_prefix, 1, prefix)
+    redis.call('ZADD', cache_prefix, now, prefix) -- LRU cache is based on timestamps of buckets
 
     return { 1, tostring(burst - pending), tostring(dynr), tostring(dynb), tostring(leaked) }
   end
