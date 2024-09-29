@@ -1929,7 +1929,13 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   rspamd_rcl_parse_struct_boolean,
 									   G_STRUCT_OFFSET(struct rspamd_config, enable_css_parser),
 									   0,
-									   "Enable CSS parser (experimental)");
+									   "Enable CSS parser");
+		rspamd_rcl_add_default_handler(sub,
+									   "enable_mime_utf",
+									   rspamd_rcl_parse_struct_boolean,
+									   G_STRUCT_OFFSET(struct rspamd_config, enable_mime_utf),
+									   0,
+									   "Enable UTF8 mode for mime");
 		rspamd_rcl_add_default_handler(sub,
 									   "enable_experimental",
 									   rspamd_rcl_parse_struct_boolean,

@@ -22,7 +22,7 @@ end
 -- A plugin that provides common header manipulations
 
 local logger = require "rspamd_logger"
-local util = require "rspamd_util"
+local rspamd_util = require "rspamd_util"
 local N = 'milter_headers'
 local lua_util = require "lua_util"
 local lua_maps = require "lua_maps"
@@ -30,7 +30,7 @@ local lua_mime = require "lua_mime"
 local ts = require("tableshape").types
 local E = {}
 
-local HOSTNAME = util.get_hostname()
+local HOSTNAME = rspamd_util.get_hostname()
 
 local settings = {
   remove_upstream_spam_flag = true;
@@ -212,6 +212,13 @@ local function milter_headers(task)
     local hname = settings.routines[name].header
     if not add[hname] then
       add[hname] = {}
+    end
+    if rspamd_config:is_mime_utf8() then
+      if not rspamd_util.is_valid_utf8(value) then
+        value = rspamd_util.mime_header_encode(value)
+      end
+    else
+      value = rspamd_util.mime_header_encode(value)
     end
     table.insert(add[hname], {
       order = (order or settings.default_headers_order or -1),

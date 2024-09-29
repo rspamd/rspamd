@@ -106,6 +106,8 @@ Expect Added Header
   ...  msg=add_headers block was not present in protocol response
   Dictionary Should Contain Key  ${SCAN_RESULT}[milter][add_headers]  ${header_name}
   ...  msg=${header_name} was not added
+  Dictionary Should Contain Key  ${SCAN_RESULT}[milter][add_headers][${header_name}]  value
+  ...  msg=no value field in ${header_name} index: ${SCAN_RESULT}[milter][add_headers][${header_name}]
   Should Be Equal  ${SCAN_RESULT}[milter][add_headers][${header_name}][value]  ${header_value}
   Should Be Equal as Numbers  ${SCAN_RESULT}[milter][add_headers][${header_name}][order]  ${pos}
 

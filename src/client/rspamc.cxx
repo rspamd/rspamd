@@ -31,6 +31,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cmath>
+#include <locale>
 
 #include "frozen/string.h"
 #include "frozen/unordered_map.h"
@@ -2180,6 +2181,7 @@ int main(int argc, char **argv, char **env)
 {
 	auto *kwattrs = g_queue_new();
 
+	std::locale::global(std::locale(""));
 	read_cmd_line(&argc, &argv);
 	tty = isatty(STDOUT_FILENO);
 
