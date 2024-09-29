@@ -443,7 +443,7 @@ local function ratelimit_cb(task)
 
     for pr, value in pairs(prefixes) do
       local bucket = value.bucket
-      local rate = (bucket.rate) / 1000.0 -- Leak rate in messast filled bucketsages/ms
+      local rate = (bucket.rate) / 1000.0 -- Leak rate in messages/ms
       local bincr = nrcpt
       if bucket.skip_recipients then
         bincr = 1
