@@ -41,8 +41,8 @@ local settings = {
   -- Do not check ratelimits for these recipients
   whitelisted_rcpts = { 'postmaster', 'mailer-daemon' },
   prefix = 'RL',
-  cache_prefix = 'RL_cache_prefix',
-  max_cache_size = 30,
+  lfb_cache_prefix = 'RL_cache_prefix', -- Last filled buckets cache prefix
+  lfb_max_cache_size = 30,
   -- If enabled, we apply dynamic rate limiting based on the verdict
   dynamic_rate_limit = false,
   ham_factor_rate = 1.01,
@@ -443,7 +443,7 @@ local function ratelimit_cb(task)
 
     for pr, value in pairs(prefixes) do
       local bucket = value.bucket
-      local rate = (bucket.rate) / 1000.0 -- Leak rate in messages/ms
+      local rate = (bucket.rate) / 1000.0 -- Leak rate in messast filled bucketsages/ms
       local bincr = nrcpt
       if bucket.skip_recipients then
         bincr = 1
@@ -458,7 +458,7 @@ local function ratelimit_cb(task)
           gen_check_cb(pr, bucket, value.name, value.hash),
           { value.hash, tostring(now), tostring(rate), tostring(bucket.burst),
             tostring(settings.expire), tostring(bincr), tostring(dyn_rate_enabled),
-            settings.cache_prefix, settings.max_cache_size })
+            tostring(settings.lfb_cache_prefix), tostring(settings.lfb_max_cache_size) })
     end
   end
 end
