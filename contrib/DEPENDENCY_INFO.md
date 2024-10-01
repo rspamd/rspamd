@@ -4,7 +4,7 @@
 |------------------------|---------|---------------------|---------|---------------------|
 | aho-corasick           | ?       | LGPL-3.0            | YES     | lowercase support   |
 | cdb                    | 1.1.0   | Public Domain / CC0 | NO      |                     |
-| hiredis                | 0.13.3  | BSD-3-Clause        | YES     | many changes        |
+| hiredis                | 1.2.0   | BSD-3-Clause        | NO      |                     |
 | libev                  | 4.33    | BSD-2-Clause        | YES     | many changes        |
 | lc-btrie               | ?       | BSD-3-Clause        | YES     | mempool support     |
 | libottery              | ?       | Public Domain / CC0 | YES     | many changes        |
