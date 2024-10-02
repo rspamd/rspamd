@@ -1,3 +1,66 @@
+3.10.0: 30 Sep 2024
+  * [Conf] Add SenderScore RPBL return codes
+  * [Conf] Add SenderScore Reputationlist RBL
+  * [Conf] Increase scores for strange things in the archives
+  * [CritFix] The max size for signing key is actually 65 bytes for p256
+  * [Feature] Add rspamadm secretbox command
+  * [Feature] Add rspamd_cxx_unit_cryptobox for unit testing
+  * [Feature] Add support for OpenSSL 3.0
+  * [Feature] Add support for OpenSSL 3.0 for DKIM
+  * [Feature] Add tests for rspamd_cryptobox
+  * [Feature] Add tooling to encrypt strings in Lua
+  * [Feature] Allow differen modes for fuzzy rules
+  * [Feature] Allow to set negative group score limit via `min_score`
+  * [Feature] DMARC: Implement reporting.only_domains setting
+  * [Fix] Add workaround for the bug in OpenSSL < 3.0.8
+  * [Fix] Another fix for Redis schema
+  * [Fix] Another safe-guards for learning/classifying an empty message
+  * [Fix] Apply the same workaround for signing keys
+  * [Fix] Check message before trying to dereference pointer
+  * [Fix] Do not install doctest stuff
+  * [Fix] Encode headers that we send to milter add header
+  * [Fix] Fix DCC `rep` handling
+  * [Fix] Fix Redis scripts uploading when Redis is not ready
+  * [Fix] Fix and rework various parts
+  * [Fix] Fix compatibility with OSSL 1.0
+  * [Fix] Fix glib internals by setting locale in `rspamc`
+  * [Fix] GPT: Fix bug in condition check
+  * [Fix] Get rid of EVP_PKEY_CTX_set1_rsa_keygen_pubexp
+  * [Fix] Iterate over dynamic keys in fuzzy storage
+  * [Fix] Make tostring in UCL a bit less brain-damaged
+  * [Fix] More bogus sizes fix
+  * [Fix] Preserve the previous behaviour of RDNS_* checks
+  * [Fix] Rework DMARC to correctly handle spaces in DMARC records Issue: #4906
+  * [Fix] Sign key != encryption key, omg
+  * [Fix] Unify lua symbols registration
+  * [Fix] Use proper keys when doing asymmetric encryption
+  * [Project] Add API method to push unwrapped UCL object
+  * [Project] Add more stuff to transparent UCL
+  * [Project] Add parsing of key limits and expire date
+  * [Project] Add ratelimit parsing for fuzzy keys
+  * [Project] Allow manipulations with opaque UCL objects
+  * [Project] Allow to change log tag from HTTP request
+  * [Project] Implement expiration
+  * [Project] Implement per-key ratelimit
+  * [Project] Move ratelimit parsing stuff to a common library
+  * [Project] Remove NIST (OpenSSL) mode from cryptobox
+  * [Project] Remove NIST mode from everywhere
+  * [Project] Rework ratelimits check
+  * [Project] Some more fixes
+  * [Project] Start support of MIME UTF8
+  * [Project] Try to allow more transparent access of ucl elements
+  * [Rework] Allow more flexible keypair encoding
+  * [Rework] Breaking: Rewrite cfg transform and remove legacy
+  * [Rework] Change fuzzy error symbols
+  * [Rework] Change the logic of skipping symbols
+  * [Rework] Clean up legacy code
+  * [Rework] Implement new replies logic on the server's side
+  * [Rework] Remove control block support
+  * [Rework] Resolve rdns in a separate function
+  * [Rework] Use __builtin_cpu_supports where possible
+  * [Rework] Use a more straight structure for DKIM keys
+  * [Rules] Fix some old rules
+
 3.9.1: 23 Jul 2024
   * [Conf] Spf: Add R_SPF_PLUSALL symbol with some score
   * [Feature] Spf: Treat SPF +all in a special way
