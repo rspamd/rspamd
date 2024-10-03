@@ -198,13 +198,18 @@ local function dcc_check(task, content, digest, rule)
             local opts = {}
             local score = 0.0
             info = info:lower()
-            local rep = info:match('rep=([^=%s]+)')
+            local rep = info:match('rep=(%d+)')
 
             -- Adjust reputation if available
             if rep then
-              rep = tonumber(rep)
-            end
-            if not rep then
+              rep = (tonumber(rep) or 100.0) / 100.0
+
+              if rep > 1.0 then
+                rep = 1.0
+              elseif rep < 0.0 then
+                rep = 0.0
+              end
+            else
               rep = 1.0
             end
 
@@ -213,12 +218,12 @@ local function dcc_check(task, content, digest, rule)
               if num == 'many' then
                 rnum = lim
               else
-                rnum = tonumber(num)
+                rnum = tonumber(num) or lim
               end
 
               if rnum and rnum >= lim then
                 opts[#opts + 1] = string.format('%s=%s', what, num)
-                score = score + rep / 3.0
+                score = score * rep
               end
             end
 

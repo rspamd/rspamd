@@ -1426,7 +1426,7 @@ lua_ucl_newindex(lua_State *L)
 
 	if (ucl_object_type(obj) == UCL_OBJECT) {
 		if (key_type == LUA_TSTRING) {
-			lua_Integer keylen;
+			size_t keylen;
 			const char *key = lua_tolstring(L, 2, &keylen);
 
 			ucl_object_t *value_obj = lua_ucl_object_get(L, 3);
@@ -1539,7 +1539,7 @@ lua_ucl_newindex(lua_State *L)
 			obj->value.av = NULL;
 			obj->type = UCL_OBJECT;
 
-			lua_Integer keylen;
+			size_t keylen;
 			const char *key = lua_tolstring(L, 2, &keylen);
 
 			ucl_object_t *value_obj = lua_ucl_object_get(L, 3);
