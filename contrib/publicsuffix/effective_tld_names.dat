@@ -754,6 +754,7 @@ ac.ci
 net.ci
 go.ci
 asso.ci
+xn--aroport-bya.ci
 aéroport.ci
 int.ci
 presse.ci
@@ -789,8 +790,11 @@ gov.cn
 net.cn
 org.cn
 mil.cn
+xn--55qx5d.cn
 公司.cn
+xn--io0a7i.cn
 网络.cn
+xn--od0alg.cn
 網絡.cn
 // cn geographic names
 ah.cn
@@ -1225,20 +1229,35 @@ gov.hk
 idv.hk
 net.hk
 org.hk
+xn--55qx5d.hk
 公司.hk
+xn--wcvs22d.hk
 教育.hk
+xn--lcvr32d.hk
 敎育.hk
+xn--mxtq1m.hk
 政府.hk
+xn--gmqw5a.hk
 個人.hk
+xn--ciqpn.hk
 个人.hk
+xn--gmq050i.hk
 箇人.hk
+xn--zf0avx.hk
 網络.hk
+xn--io0a7i.hk
 网络.hk
+xn--mk0axi.hk
 组織.hk
+xn--od0alg.hk
 網絡.hk
+xn--od0aq3b.hk
 网絡.hk
+xn--tn0ag.hk
 组织.hk
+xn--uc0atv.hk
 組織.hk
+xn--uc0ay4a.hk
 組织.hk
 
 // hm : https://www.iana.org/domains/root/db/hm.html
@@ -1347,14 +1366,19 @@ muni.il
 net.il
 org.il
 // xn--4dbrk0ce ("Israel", Hebrew) : IL
+xn--4dbrk0ce
 ישראל
 // xn--4dbgdty6c.xn--4dbrk0ce.
+xn--4dbgdty6c.xn--4dbrk0ce
 אקדמיה.ישראל
 // xn--5dbhl8d.xn--4dbrk0ce.
+xn--5dbhl8d.xn--4dbrk0ce
 ישוב.ישראל
 // xn--8dbq2a.xn--4dbrk0ce.
+xn--8dbq2a.xn--4dbrk0ce
 צהל.ישראל
 // xn--hebda8b.xn--4dbrk0ce.
+xn--hebda8b.xn--4dbrk0ce
 ממשל.ישראל
 
 // im : https://www.nic.im/
@@ -1451,8 +1475,10 @@ net.ir
 org.ir
 sch.ir
 // xn--mgba3a4f16a.ir (<iran>.ir, Persian YEH)
+xn--mgba3a4f16a.ir
 ایران.ir
 // xn--mgba3a4fra.ir (<iran>.ir, Arabic YEH)
+xn--mgba3a4fra.ir
 ايران.ir
 
 // is : http://www.isnic.is/domain/rules.php
@@ -1525,8 +1551,10 @@ taa.it
 tos.it
 toscana.it
 trentin-sud-tirol.it
+xn--trentin-sd-tirol-rzb.it
 trentin-süd-tirol.it
 trentin-sudtirol.it
+xn--trentin-sdtirol-7vb.it
 trentin-südtirol.it
 trentin-sued-tirol.it
 trentin-suedtirol.it
@@ -1537,8 +1565,10 @@ trentino-altoadige.it
 trentino-s-tirol.it
 trentino-stirol.it
 trentino-sud-tirol.it
+xn--trentino-sd-tirol-c3b.it
 trentino-süd-tirol.it
 trentino-sudtirol.it
+xn--trentino-sdtirol-szb.it
 trentino-südtirol.it
 trentino-sued-tirol.it
 trentino-suedtirol.it
@@ -1550,14 +1580,18 @@ trentinoaltoadige.it
 trentinos-tirol.it
 trentinostirol.it
 trentinosud-tirol.it
+xn--trentinosd-tirol-rzb.it
 trentinosüd-tirol.it
 trentinosudtirol.it
+xn--trentinosdtirol-7vb.it
 trentinosüdtirol.it
 trentinosued-tirol.it
 trentinosuedtirol.it
 trentinsud-tirol.it
+xn--trentinsd-tirol-6vb.it
 trentinsüd-tirol.it
 trentinsudtirol.it
+xn--trentinsdtirol-nsb.it
 trentinsüdtirol.it
 trentinsued-tirol.it
 trentinsuedtirol.it
@@ -1575,12 +1609,16 @@ valleaosta.it
 valled-aosta.it
 valledaosta.it
 vallee-aoste.it
+xn--valle-aoste-ebb.it
 vallée-aoste.it
 vallee-d-aoste.it
+xn--valle-d-aoste-ehb.it
 vallée-d-aoste.it
 valleeaoste.it
+xn--valleaoste-e7a.it
 valléeaoste.it
 valleedaoste.it
+xn--valledaoste-ebb.it
 valléedaoste.it
 vao.it
 vda.it
@@ -1615,6 +1653,7 @@ av.it
 avellino.it
 ba.it
 balsan-sudtirol.it
+xn--balsan-sdtirol-nsb.it
 balsan-südtirol.it
 balsan-suedtirol.it
 balsan.it
@@ -1634,6 +1673,7 @@ bologna.it
 bolzano-altoadige.it
 bolzano.it
 bozen-sudtirol.it
+xn--bozen-sdtirol-2ob.it
 bozen-südtirol.it
 bozen-suedtirol.it
 bozen.it
@@ -1643,6 +1683,7 @@ brindisi.it
 bs.it
 bt.it
 bulsan-sudtirol.it
+xn--bulsan-sdtirol-nsb.it
 bulsan-südtirol.it
 bulsan-suedtirol.it
 bulsan.it
@@ -1663,8 +1704,10 @@ catanzaro.it
 cb.it
 ce.it
 cesena-forli.it
+xn--cesena-forl-mcb.it
 cesena-forlì.it
 cesenaforli.it
+xn--cesenaforl-i8a.it
 cesenaforlì.it
 ch.it
 chieti.it
@@ -1696,8 +1739,10 @@ florence.it
 fm.it
 foggia.it
 forli-cesena.it
+xn--forl-cesena-fcb.it
 forlì-cesena.it
 forlicesena.it
+xn--forlcesena-c8a.it
 forlìcesena.it
 fr.it
 frosinone.it
@@ -1829,6 +1874,7 @@ sp.it
 sr.it
 ss.it
 suedtirol.it
+xn--sdtirol-n2a.it
 südtirol.it
 sv.it
 ta.it
@@ -1964,52 +2010,99 @@ wakayama.jp
 yamagata.jp
 yamaguchi.jp
 yamanashi.jp
+xn--4pvxs.jp
 栃木.jp
+xn--vgu402c.jp
 愛知.jp
+xn--c3s14m.jp
 愛媛.jp
+xn--f6qx53a.jp
 兵庫.jp
+xn--8pvr4u.jp
 熊本.jp
+xn--uist22h.jp
 茨城.jp
+xn--djrs72d6uy.jp
 北海道.jp
+xn--mkru45i.jp
 千葉.jp
+xn--0trq7p7nn.jp
 和歌山.jp
+xn--8ltr62k.jp
 長崎.jp
+xn--2m4a15e.jp
 長野.jp
+xn--efvn9s.jp
 新潟.jp
+xn--32vp30h.jp
 青森.jp
+xn--4it797k.jp
 静岡.jp
+xn--1lqs71d.jp
 東京.jp
+xn--5rtp49c.jp
 石川.jp
+xn--5js045d.jp
 埼玉.jp
+xn--ehqz56n.jp
 三重.jp
+xn--1lqs03n.jp
 京都.jp
+xn--qqqt11m.jp
 佐賀.jp
+xn--kbrq7o.jp
 大分.jp
+xn--pssu33l.jp
 大阪.jp
+xn--ntsq17g.jp
 奈良.jp
+xn--uisz3g.jp
 宮城.jp
+xn--6btw5a.jp
 宮崎.jp
+xn--1ctwo.jp
 富山.jp
+xn--6orx2r.jp
 山口.jp
+xn--rht61e.jp
 山形.jp
+xn--rht27z.jp
 山梨.jp
+xn--djty4k.jp
 岩手.jp
+xn--nit225k.jp
 岐阜.jp
+xn--rht3d.jp
 岡山.jp
+xn--klty5x.jp
 島根.jp
+xn--kltx9a.jp
 広島.jp
+xn--kltp7d.jp
 徳島.jp
+xn--uuwu58a.jp
 沖縄.jp
+xn--zbx025d.jp
 滋賀.jp
+xn--ntso0iqx3a.jp
 神奈川.jp
+xn--elqq16h.jp
 福井.jp
+xn--4it168d.jp
 福岡.jp
+xn--klt787d.jp
 福島.jp
+xn--rny31h.jp
 秋田.jp
+xn--7t0a264c.jp
 群馬.jp
+xn--5rtq34k.jp
 香川.jp
+xn--k7yn95e.jp
 高知.jp
+xn--tor131o.jp
 鳥取.jp
+xn--d5qv7z876c.jp
 鹿児島.jp
 // jp geographic type names
 // http://jprs.jp/doc/rule/saisoku-1.html
@@ -4291,43 +4384,55 @@ gs.vf.no
 akrehamn.no
 åkrehamn.no
 algard.no
+xn--lgrd-poac.no
 ålgård.no
 arna.no
 brumunddal.no
 bryne.no
 bronnoysund.no
+xn--brnnysund-m8ac.no
 brønnøysund.no
 drobak.no
+xn--drbak-wua.no
 drøbak.no
 egersund.no
 fetsund.no
 floro.no
+xn--flor-jra.no
 florø.no
 fredrikstad.no
 hokksund.no
 honefoss.no
+xn--hnefoss-q1a.no
 hønefoss.no
 jessheim.no
 jorpeland.no
+xn--jrpeland-54a.no
 jørpeland.no
 kirkenes.no
 kopervik.no
 krokstadelva.no
 langevag.no
+xn--langevg-jxa.no
 langevåg.no
 leirvik.no
 mjondalen.no
+xn--mjndalen-64a.no
 mjøndalen.no
 mo-i-rana.no
 mosjoen.no
+xn--mosjen-eya.no
 mosjøen.no
 nesoddtangen.no
 orkanger.no
 osoyro.no
+xn--osyro-wua.no
 osøyro.no
 raholt.no
+xn--rholt-mra.no
 råholt.no
 sandnessjoen.no
+xn--sandnessjen-ogb.no
 sandnessjøen.no
 skedsmokorset.no
 slattum.no
@@ -4335,6 +4440,7 @@ spjelkavik.no
 stathelle.no
 stavern.no
 stjordalshalsen.no
+xn--stjrdalshalsen-sqb.no
 stjørdalshalsen.no
 tananger.no
 tranby.no
@@ -4349,6 +4455,7 @@ alesund.no
 ålesund.no
 alstahaug.no
 alta.no
+xn--lt-liac.no
 áltá.no
 alaheadju.no
 álaheadju.no
@@ -4359,6 +4466,7 @@ amot.no
 åmot.no
 andebu.no
 andoy.no
+xn--andy-ira.no
 andøy.no
 andasuolo.no
 ardal.no
@@ -4372,6 +4480,7 @@ asker.no
 askim.no
 askvoll.no
 askoy.no
+xn--asky-ira.no
 askøy.no
 asnes.no
 åsnes.no
@@ -4380,69 +4489,90 @@ aukra.no
 aure.no
 aurland.no
 aurskog-holand.no
+xn--aurskog-hland-jnb.no
 aurskog-høland.no
 austevoll.no
 austrheim.no
 averoy.no
+xn--avery-yua.no
 averøy.no
 balestrand.no
 ballangen.no
 balat.no
+xn--blt-elab.no
 bálát.no
 balsfjord.no
 bahccavuotna.no
+xn--bhccavuotna-k7a.no
 báhccavuotna.no
 bamble.no
 bardu.no
 beardu.no
 beiarn.no
 bajddar.no
+xn--bjddar-pta.no
 bájddar.no
 baidar.no
+xn--bidr-5nac.no
 báidár.no
 berg.no
 bergen.no
 berlevag.no
+xn--berlevg-jxa.no
 berlevåg.no
 bearalvahki.no
+xn--bearalvhki-y4a.no
 bearalváhki.no
 bindal.no
 birkenes.no
 bjarkoy.no
+xn--bjarky-fya.no
 bjarkøy.no
 bjerkreim.no
 bjugn.no
 bodo.no
+xn--bod-2na.no
 bodø.no
 badaddja.no
+xn--bdddj-mrabd.no
 bådåddjå.no
 budejju.no
 bokn.no
 bremanger.no
 bronnoy.no
+xn--brnny-wuac.no
 brønnøy.no
 bygland.no
 bykle.no
 barum.no
+xn--brum-voa.no
 bærum.no
 bo.telemark.no
+xn--b-5ga.telemark.no
 bø.telemark.no
 bo.nordland.no
+xn--b-5ga.nordland.no
 bø.nordland.no
 bievat.no
+xn--bievt-0qa.no
 bievát.no
 bomlo.no
+xn--bmlo-gra.no
 bømlo.no
 batsfjord.no
+xn--btsfjord-9za.no
 båtsfjord.no
 bahcavuotna.no
+xn--bhcavuotna-s4a.no
 báhcavuotna.no
 dovre.no
 drammen.no
 drangedal.no
 dyroy.no
+xn--dyry-ira.no
 dyrøy.no
 donna.no
+xn--dnna-gra.no
 dønna.no
 eid.no
 eidfjord.no
@@ -4457,6 +4587,7 @@ etne.no
 etnedal.no
 evenes.no
 evenassi.no
+xn--eveni-0qa01ga.no
 evenášši.no
 evje-og-hornnes.no
 farsund.no
@@ -4466,6 +4597,7 @@ fuoisku.no
 fedje.no
 fet.no
 finnoy.no
+xn--finny-yua.no
 finnøy.no
 fitjar.no
 fjaler.no
@@ -4476,6 +4608,7 @@ flekkefjord.no
 flesberg.no
 flora.no
 fla.no
+xn--fl-zia.no
 flå.no
 folldal.no
 forsand.no
@@ -4485,19 +4618,24 @@ frogn.no
 froland.no
 frosta.no
 frana.no
+xn--frna-woa.no
 fræna.no
 froya.no
+xn--frya-hra.no
 frøya.no
 fusa.no
 fyresdal.no
 forde.no
+xn--frde-gra.no
 førde.no
 gamvik.no
 gangaviika.no
+xn--ggaviika-8ya47h.no
 gáŋgaviika.no
 gaular.no
 gausdal.no
 gildeskal.no
+xn--gildeskl-g0a.no
 gildeskål.no
 giske.no
 gjemnes.no
@@ -4505,6 +4643,7 @@ gjerdrum.no
 gjerstad.no
 gjesdal.no
 gjovik.no
+xn--gjvik-wua.no
 gjøvik.no
 gloppen.no
 gol.no
@@ -4515,6 +4654,7 @@ gratangen.no
 grimstad.no
 grong.no
 kraanghke.no
+xn--kranghke-b0a.no
 kråanghke.no
 grue.no
 gulen.no
@@ -4524,17 +4664,21 @@ halsa.no
 hamar.no
 hamaroy.no
 habmer.no
+xn--hbmer-xqa.no
 hábmer.no
 hapmir.no
+xn--hpmir-xqa.no
 hápmir.no
 hammerfest.no
 hammarfeasta.no
+xn--hmmrfeasta-s4ac.no
 hámmárfeasta.no
 haram.no
 hareid.no
 harstad.no
 hasvik.no
 aknoluokta.no
+xn--koluokta-7ya57h.no
 ákŋoluokta.no
 hattfjelldal.no
 aarborte.no
@@ -4543,19 +4687,23 @@ hemne.no
 hemnes.no
 hemsedal.no
 heroy.more-og-romsdal.no
+xn--hery-ira.xn--mre-og-romsdal-qqb.no
 herøy.møre-og-romsdal.no
 heroy.nordland.no
+xn--hery-ira.nordland.no
 herøy.nordland.no
 hitra.no
 hjartdal.no
 hjelmeland.no
 hobol.no
+xn--hobl-ira.no
 hobøl.no
 hof.no
 hol.no
 hole.no
 holmestrand.no
 holtalen.no
+xn--holtlen-hxa.no
 holtålen.no
 hornindal.no
 horten.no
@@ -4564,66 +4712,86 @@ hurum.no
 hvaler.no
 hyllestad.no
 hagebostad.no
+xn--hgebostad-g3a.no
 hægebostad.no
 hoyanger.no
+xn--hyanger-q1a.no
 høyanger.no
 hoylandet.no
+xn--hylandet-54a.no
 høylandet.no
 ha.no
+xn--h-2fa.no
 hå.no
 ibestad.no
 inderoy.no
+xn--indery-fya.no
 inderøy.no
 iveland.no
 jevnaker.no
 jondal.no
 jolster.no
+xn--jlster-bya.no
 jølster.no
 karasjok.no
 karasjohka.no
+xn--krjohka-hwab49j.no
 kárášjohka.no
 karlsoy.no
 galsa.no
+xn--gls-elac.no
 gálsá.no
 karmoy.no
+xn--karmy-yua.no
 karmøy.no
 kautokeino.no
 guovdageaidnu.no
 klepp.no
 klabu.no
+xn--klbu-woa.no
 klæbu.no
 kongsberg.no
 kongsvinger.no
 kragero.no
+xn--krager-gya.no
 kragerø.no
 kristiansand.no
 kristiansund.no
 krodsherad.no
+xn--krdsherad-m8a.no
 krødsherad.no
 kvalsund.no
 rahkkeravju.no
+xn--rhkkervju-01af.no
 ráhkkerávju.no
 kvam.no
 kvinesdal.no
 kvinnherad.no
 kviteseid.no
 kvitsoy.no
+xn--kvitsy-fya.no
 kvitsøy.no
 kvafjord.no
+xn--kvfjord-nxa.no
 kvæfjord.no
 giehtavuoatna.no
 kvanangen.no
+xn--kvnangen-k0a.no
 kvænangen.no
 navuotna.no
+xn--nvuotna-hwa.no
 návuotna.no
 kafjord.no
+xn--kfjord-iua.no
 kåfjord.no
 gaivuotna.no
+xn--givuotna-8ya.no
 gáivuotna.no
 larvik.no
 lavangen.no
 lavagis.no
 loabat.no
+xn--loabt-0qa.no
 loabát.no
 lebesby.no
 davvesiida.no
@@ -4633,6 +4801,7 @@ leka.no
 leksvik.no
 lenvik.no
 leangaviika.no
+xn--leagaviika-52b.no
 leaŋgaviika.no
 lesja.no
 levanger.no
@@ -4642,14 +4811,17 @@ lillehammer.no
 lillesand.no
 lindesnes.no
 lindas.no
+xn--linds-pra.no
 lindås.no
 lom.no
 loppa.no
 lahppi.no
+xn--lhppi-xqa.no
 láhppi.no
 lund.no
 lunner.no
 luroy.no
+xn--lury-ira.no
 lurøy.no
 luster.no
 lyngdal.no
@@ -4657,17 +4829,23 @@ lyngen.no
 ivgu.no
 lardal.no
 lerdal.no
+xn--lrdal-sra.no
 lærdal.no
 lodingen.no
+xn--ldingen-q1a.no
 lødingen.no
 lorenskog.no
+xn--lrenskog-54a.no
 lørenskog.no
 loten.no
+xn--lten-gra.no
 løten.no
 malvik.no
 masoy.no
+xn--msy-ula0h.no
 måsøy.no
 muosat.no
+xn--muost-0qa.no
 muosát.no
 mandal.no
 marker.no
@@ -4677,10 +4855,13 @@ meland.no
 meldal.no
 melhus.no
 meloy.no
+xn--mely-ira.no
 meløy.no
 meraker.no
+xn--merker-kua.no
 meråker.no
 moareke.no
+xn--moreke-jua.no
 moåreke.no
 midsund.no
 midtre-gauldal.no
@@ -4691,14 +4872,17 @@ moskenes.no
 moss.no
 mosvik.no
 malselv.no
+xn--mlselv-iua.no
 målselv.no
 malatvuopmi.no
+xn--mlatvuopmi-s4a.no
 málatvuopmi.no
 namdalseid.no
 aejrie.no
 namsos.no
 namsskogan.no
 naamesjevuemie.no
+xn--nmesjevuemie-tcba.no
 nååmesjevuemie.no
 laakesvuemie.no
 nannestad.no
@@ -4712,6 +4896,7 @@ nesna.no
 nesodden.no
 nesseby.no
 unjarga.no
+xn--unjrga-rta.no
 unjárga.no
 nesset.no
 nissedal.no
@@ -4722,22 +4907,27 @@ nord-odal.no
 norddal.no
 nordkapp.no
 davvenjarga.no
+xn--davvenjrga-y4a.no
 davvenjárga.no
 nordre-land.no
 nordreisa.no
 raisa.no
+xn--risa-5na.no
 ráisa.no
 nore-og-uvdal.no
 notodden.no
 naroy.no
+xn--nry-yla5g.no
 nærøy.no
 notteroy.no
+xn--nttery-byae.no
 nøtterøy.no
 odda.no
 oksnes.no
 øksnes.no
 oppdal.no
 oppegard.no
+xn--oppegrd-ixa.no
 oppegård.no
 orkdal.no
 orland.no
@@ -4750,6 +4940,7 @@ os.hedmark.no
 os.hordaland.no
 osen.no
 osteroy.no
+xn--ostery-fya.no
 osterøy.no
 ostre-toten.no
 østre-toten.no
@@ -4764,9 +4955,11 @@ oystre-slidre.no
 øystre-slidre.no
 porsanger.no
 porsangu.no
+xn--porsgu-sta26f.no
 porsáŋgu.no
 porsgrunn.no
 radoy.no
+xn--rady-ira.no
 radøy.no
 rakkestad.no
 rana.no
@@ -4776,6 +4969,7 @@ rauma.no
 rendalen.no
 rennebu.no
 rennesoy.no
+xn--rennesy-v1a.no
 rennesøy.no
 rindal.no
 ringebu.no
@@ -4783,39 +4977,52 @@ ringerike.no
 ringsaker.no
 rissa.no
 risor.no
+xn--risr-ira.no
 risør.no
 roan.no
 rollag.no
 rygge.no
 ralingen.no
+xn--rlingen-mxa.no
 rælingen.no
 rodoy.no
+xn--rdy-0nab.no
 rødøy.no
 romskog.no
+xn--rmskog-bya.no
 rømskog.no
 roros.no
+xn--rros-gra.no
 røros.no
 rost.no
+xn--rst-0na.no
 røst.no
 royken.no
+xn--ryken-vua.no
 røyken.no
 royrvik.no
+xn--ryrvik-bya.no
 røyrvik.no
 rade.no
+xn--rde-ula.no
 råde.no
 salangen.no
 siellak.no
 saltdal.no
 salat.no
+xn--slt-elab.no
 sálát.no
+xn--slat-5na.no
 sálat.no
 samnanger.no
 sande.more-og-romsdal.no
+sande.xn--mre-og-romsdal-qqb.no
 sande.møre-og-romsdal.no
 sande.vestfold.no
 sandefjord.no
 sandnes.no
 sandoy.no
+xn--sandy-yua.no
 sandøy.no
 sarpsborg.no
 sauda.no
@@ -4833,23 +5040,31 @@ ski.no
 skien.no
 skiptvet.no
 skjervoy.no
+xn--skjervy-v1a.no
 skjervøy.no
 skierva.no
+xn--skierv-uta.no
 skiervá.no
 skjak.no
+xn--skjk-soa.no
 skjåk.no
 skodje.no
 skanland.no
+xn--sknland-fxa.no
 skånland.no
 skanit.no
+xn--sknit-yqa.no
 skánit.no
 smola.no
+xn--smla-hra.no
 smøla.no
 snillfjord.no
 snasa.no
+xn--snsa-roa.no
 snåsa.no
 snoasa.no
 snaase.no
+xn--snase-nra.no
 snåase.no
 sogndal.no
 sokndal.no
@@ -4863,6 +5078,7 @@ stavanger.no
 steigen.no
 steinkjer.no
 stjordal.no
+xn--stjrdal-s1a.no
 stjørdal.no
 stokke.no
 stor-elvdal.no
@@ -4882,26 +5098,37 @@ sveio.no
 svelvik.no
 sykkylven.no
 sogne.no
+xn--sgne-gra.no
 søgne.no
 somna.no
+xn--smna-gra.no
 sømna.no
 sondre-land.no
+xn--sndre-land-0cb.no
 søndre-land.no
 sor-aurdal.no
+xn--sr-aurdal-l8a.no
 sør-aurdal.no
 sor-fron.no
+xn--sr-fron-q1a.no
 sør-fron.no
 sor-odal.no
+xn--sr-odal-q1a.no
 sør-odal.no
 sor-varanger.no
+xn--sr-varanger-ggb.no
 sør-varanger.no
 matta-varjjat.no
+xn--mtta-vrjjat-k7af.no
 mátta-várjjat.no
 sorfold.no
+xn--srfold-bya.no
 sørfold.no
 sorreisa.no
+xn--srreisa-q1a.no
 sørreisa.no
 sorum.no
+xn--srum-gra.no
 sørum.no
 tana.no
 deatnu.no
@@ -4911,13 +5138,16 @@ tinn.no
 tjeldsund.no
 dielddanuorri.no
 tjome.no
+xn--tjme-hra.no
 tjøme.no
 tokke.no
 tolga.no
 torsken.no
 tranoy.no
+xn--trany-yua.no
 tranøy.no
 tromso.no
+xn--troms-zua.no
 tromsø.no
 tromsa.no
 romsa.no
@@ -4925,8 +5155,10 @@ trondheim.no
 troandin.no
 trysil.no
 trana.no
+xn--trna-woa.no
 træna.no
 trogstad.no
+xn--trgstad-r1a.no
 trøgstad.no
 tvedestrand.no
 tydal.no
@@ -4936,29 +5168,36 @@ divtasvuodna.no
 divttasvuotna.no
 tysnes.no
 tysvar.no
+xn--tysvr-vra.no
 tysvær.no
 tonsberg.no
+xn--tnsberg-q1a.no
 tønsberg.no
 ullensaker.no
 ullensvang.no
 ulvik.no
 utsira.no
 vadso.no
+xn--vads-jra.no
 vadsø.no
 cahcesuolo.no
+xn--hcesuolo-7ya35b.no
 čáhcesuolo.no
 vaksdal.no
 valle.no
 vang.no
 vanylven.no
 vardo.no
+xn--vard-jra.no
 vardø.no
 varggat.no
+xn--vrggt-xqad.no
 várggát.no
 vefsn.no
 vaapste.no
 vega.no
 vegarshei.no
+xn--vegrshei-c0a.no
 vegårshei.no
 vennesla.no
 verdal.no
@@ -4968,6 +5207,7 @@ vestnes.no
 vestre-slidre.no
 vestre-toten.no
 vestvagoy.no
+xn--vestvgy-ixa6o.no
 vestvågøy.no
 vevelstad.no
 vik.no
@@ -4976,17 +5216,23 @@ vindafjord.no
 volda.no
 voss.no
 varoy.no
+xn--vry-yla5g.no
 værøy.no
 vagan.no
+xn--vgan-qoa.no
 vågan.no
 voagat.no
 vagsoy.no
+xn--vgsy-qoa0j.no
 vågsøy.no
 vaga.no
+xn--vg-yiab.no
 vågå.no
 valer.ostfold.no
+xn--vler-qoa.xn--stfold-9xa.no
 våler.østfold.no
 valer.hedmark.no
+xn--vler-qoa.hedmark.no
 våler.hedmark.no
 
 // np : http://www.mos.com.np/register.html
@@ -5020,6 +5266,7 @@ iwi.nz
 kiwi.nz
 maori.nz
 mil.nz
+xn--mori-qsa.nz
 māori.nz
 net.nz
 org.nz
@@ -5831,8 +6078,11 @@ idv.tw
 game.tw
 ebiz.tw
 club.tw
+xn--zf0ao64a.tw
 網路.tw
+xn--uc0atv.tw
 組織.tw
+xn--czrw28b.tw
 商業.tw
 
 // tz : http://www.tznic.or.tz/index.php/domains
@@ -6398,275 +6648,362 @@ yt
 
 // xn--mgbaam7a8h ("Emerat", Arabic) : AE
 // http://nic.ae/english/arabicdomain/rules.jsp
+xn--mgbaam7a8h
 امارات
 
 // xn--y9a3aq ("hye", Armenian) : AM
 // ISOC AM (operated by .am Registry)
+xn--y9a3aq
 հայ
 
 // xn--54b7fta0cc ("Bangla", Bangla) : BD
+xn--54b7fta0cc
 বাংলা
 
 // xn--90ae ("bg", Bulgarian) : BG
+xn--90ae
 бг
 
 // xn--mgbcpq6gpa1a ("albahrain", Arabic) : BH
+xn--mgbcpq6gpa1a
 البحرين
 
 // xn--90ais ("bel", Belarusian/Russian Cyrillic) : BY
 // Operated by .by registry
+xn--90ais
 бел
 
 // xn--fiqs8s ("Zhongguo/China", Chinese, Simplified) : CN
 // CNNIC
 // http://cnnic.cn/html/Dir/2005/10/11/3218.htm
+xn--fiqs8s
 中国
 
 // xn--fiqz9s ("Zhongguo/China", Chinese, Traditional) : CN
 // CNNIC
 // http://cnnic.cn/html/Dir/2005/10/11/3218.htm
+xn--fiqz9s
 中國
 
 // xn--lgbbat1ad8j ("Algeria/Al Jazair", Arabic) : DZ
+xn--lgbbat1ad8j
 الجزائر
 
 // xn--wgbh1c ("Egypt/Masr", Arabic) : EG
 // http://www.dotmasr.eg/
+xn--wgbh1c
 مصر
 
 // xn--e1a4c ("eu", Cyrillic) : EU
 // https://eurid.eu
+xn--e1a4c
 ею
 
 // xn--qxa6a ("eu", Greek) : EU
 // https://eurid.eu
+xn--qxa6a
 ευ
 
 // xn--mgbah1a3hjkrd ("Mauritania", Arabic) : MR
+xn--mgbah1a3hjkrd
 موريتانيا
 
 // xn--node ("ge", Georgian Mkhedruli) : GE
+xn--node
 გე
 
 // xn--qxam ("el", Greek) : GR
 // Hellenic Ministry of Infrastructure, Transport, and Networks
+xn--qxam
 ελ
 
 // xn--j6w193g ("Hong Kong", Chinese) : HK
 // https://www.hkirc.hk
 // Submitted by registry <hk.tech@hkirc.hk>
 // https://www.hkirc.hk/content.jsp?id=30#!/34
+xn--j6w193g
 香港
+xn--55qx5d.xn--j6w193g
 公司.香港
+xn--wcvs22d.xn--j6w193g
 教育.香港
+xn--mxtq1m.xn--j6w193g
 政府.香港
+xn--gmqw5a.xn--j6w193g
 個人.香港
+xn--od0alg.xn--j6w193g
 網絡.香港
+xn--uc0atv.xn--j6w193g
 組織.香港
 
 // xn--2scrj9c ("Bharat", Kannada) : IN
 // India
+xn--2scrj9c
 ಭಾರತ
 
 // xn--3hcrj9c ("Bharat", Oriya) : IN
 // India
+xn--3hcrj9c
 ଭାରତ
 
 // xn--45br5cyl ("Bharatam", Assamese) : IN
 // India
+xn--45br5cyl
 ভাৰত
 
 // xn--h2breg3eve ("Bharatam", Sanskrit) : IN
 // India
+xn--h2breg3eve
 भारतम्
 
 // xn--h2brj9c8c ("Bharot", Santali) : IN
 // India
+xn--h2brj9c8c
 भारोत
 
 // xn--mgbgu82a ("Bharat", Sindhi) : IN
 // India
+xn--mgbgu82a
 ڀارت
 
 // xn--rvc1e0am3e ("Bharatam", Malayalam) : IN
 // India
+xn--rvc1e0am3e
 ഭാരതം
 
 // xn--h2brj9c ("Bharat", Devanagari) : IN
 // India
+xn--h2brj9c
 भारत
 
 // xn--mgbbh1a ("Bharat", Kashmiri) : IN
 // India
+xn--mgbbh1a
 بارت
 
 // xn--mgbbh1a71e ("Bharat", Arabic) : IN
 // India
+xn--mgbbh1a71e
 بھارت
 
 // xn--fpcrj9c3d ("Bharat", Telugu) : IN
 // India
+xn--fpcrj9c3d
 భారత్
 
 // xn--gecrj9c ("Bharat", Gujarati) : IN
 // India
+xn--gecrj9c
 ભારત
 
 // xn--s9brj9c ("Bharat", Gurmukhi) : IN
 // India
+xn--s9brj9c
 ਭਾਰਤ
 
 // xn--45brj9c ("Bharat", Bengali) : IN
 // India
+xn--45brj9c
 ভারত
 
 // xn--xkc2dl3a5ee0h ("India", Tamil) : IN
 // India
+xn--xkc2dl3a5ee0h
 இந்தியா
 
 // xn--mgba3a4f16a ("Iran", Persian) : IR
+xn--mgba3a4f16a
 ایران
 
 // xn--mgba3a4fra ("Iran", Arabic) : IR
+xn--mgba3a4fra
 ايران
 
 // xn--mgbtx2b ("Iraq", Arabic) : IQ
 // Communications and Media Commission
+xn--mgbtx2b
 عراق
 
 // xn--mgbayh7gpa ("al-Ordon", Arabic) : JO
 // National Information Technology Center (NITC)
 // Royal Scientific Society, Al-Jubeiha
+xn--mgbayh7gpa
 الاردن
 
 // xn--3e0b707e ("Republic of Korea", Hangul) : KR
+xn--3e0b707e
 한국
 
 // xn--80ao21a ("Kaz", Kazakh) : KZ
+xn--80ao21a
 қаз
 
 // xn--q7ce6a ("Lao", Lao) : LA
+xn--q7ce6a
 ລາວ
 
 // xn--fzc2c9e2c ("Lanka", Sinhalese-Sinhala) : LK
 // https://nic.lk
+xn--fzc2c9e2c
 ලංකා
 
 // xn--xkc2al3hye2a ("Ilangai", Tamil) : LK
 // https://nic.lk
+xn--xkc2al3hye2a
 இலங்கை
 
 // xn--mgbc0a9azcg ("Morocco/al-Maghrib", Arabic) : MA
+xn--mgbc0a9azcg
 المغرب
 
 // xn--d1alf ("mkd", Macedonian) : MK
 // MARnet
+xn--d1alf
 мкд
 
 // xn--l1acc ("mon", Mongolian) : MN
+xn--l1acc
 мон
 
 // xn--mix891f ("Macao", Chinese, Traditional) : MO
 // MONIC / HNET Asia (Registry Operator for .mo)
+xn--mix891f
 澳門
 
 // xn--mix082f ("Macao", Chinese, Simplified) : MO
+xn--mix082f
 澳门
 
 // xn--mgbx4cd0ab ("Malaysia", Malay) : MY
+xn--mgbx4cd0ab
 مليسيا
 
 // xn--mgb9awbf ("Oman", Arabic) : OM
+xn--mgb9awbf
 عمان
 
 // xn--mgbai9azgqp6j ("Pakistan", Urdu/Arabic) : PK
+xn--mgbai9azgqp6j
 پاکستان
 
 // xn--mgbai9a5eva00b ("Pakistan", Urdu/Arabic, variant) : PK
+xn--mgbai9a5eva00b
 پاكستان
 
 // xn--ygbi2ammx ("Falasteen", Arabic) : PS
 // The Palestinian National Internet Naming Authority (PNINA)
 // http://www.pnina.ps
+xn--ygbi2ammx
 فلسطين
 
 // xn--90a3ac ("srb", Cyrillic) : RS
 // https://www.rnids.rs/en/domains/national-domains
+xn--90a3ac
 срб
+xn--o1ac.xn--90a3ac
 пр.срб
+xn--c1avg.xn--90a3ac
 орг.срб
+xn--90azh.xn--90a3ac
 обр.срб
+xn--d1at.xn--90a3ac
 од.срб
+xn--o1ach.xn--90a3ac
 упр.срб
+xn--80au.xn--90a3ac
 ак.срб
 
 // xn--p1ai ("rf", Russian-Cyrillic) : RU
 // https://cctld.ru/files/pdf/docs/en/rules_ru-rf.pdf
 // Submitted by George Georgievsky <gug@cctld.ru>
+xn--p1ai
 рф
 
 // xn--wgbl6a ("Qatar", Arabic) : QA
 // http://www.ict.gov.qa/
+xn--wgbl6a
 قطر
 
 // xn--mgberp4a5d4ar ("AlSaudiah", Arabic) : SA
 // http://www.nic.net.sa/
+xn--mgberp4a5d4ar
 السعودية
 
 // xn--mgberp4a5d4a87g ("AlSaudiah", Arabic, variant)  : SA
+xn--mgberp4a5d4a87g
 السعودیة
 
 // xn--mgbqly7c0a67fbc ("AlSaudiah", Arabic, variant) : SA
+xn--mgbqly7c0a67fbc
 السعودیۃ
 
 // xn--mgbqly7cvafr ("AlSaudiah", Arabic, variant) : SA
+xn--mgbqly7cvafr
 السعوديه
 
 // xn--mgbpl2fh ("sudan", Arabic) : SD
 // Operated by .sd registry
+xn--mgbpl2fh
 سودان
 
 // xn--yfro4i67o Singapore ("Singapore", Chinese) : SG
+xn--yfro4i67o
 新加坡
 
 // xn--clchc0ea0b2g2a9gcd ("Singapore", Tamil) : SG
+xn--clchc0ea0b2g2a9gcd
 சிங்கப்பூர்
 
 // xn--ogbpf8fl ("Syria", Arabic) : SY
+xn--ogbpf8fl
 سورية
 
 // xn--mgbtf8fl ("Syria", Arabic, variant) : SY
+xn--mgbtf8fl
 سوريا
 
 // xn--o3cw4h ("Thai", Thai) : TH
 // http://www.thnic.co.th
+xn--o3cw4h
 ไทย
+xn--12c1fe0br.xn--o3cw4h
 ศึกษา.ไทย
+xn--12co0c3b4eva.xn--o3cw4h
 ธุรกิจ.ไทย
+xn--h3cuzk1di.xn--o3cw4h
 รัฐบาล.ไทย
+xn--o3cyx2a.xn--o3cw4h
 ทหาร.ไทย
+xn--m3ch0j3a.xn--o3cw4h
 เน็ต.ไทย
+xn--12cfi8ixb8l.xn--o3cw4h
 องค์กร.ไทย
 
 // xn--pgbs0dh ("Tunisia", Arabic) : TN
 // http://nic.tn
+xn--pgbs0dh
 تونس
 
 // xn--kpry57d ("Taiwan", Chinese, Traditional) : TW
 // http://www.twnic.net/english/dn/dn_07a.htm
+xn--kpry57d
 台灣
 
 // xn--kprw13d ("Taiwan", Chinese, Simplified) : TW
 // http://www.twnic.net/english/dn/dn_07a.htm
+xn--kprw13d
 台湾
 
 // xn--nnx388a ("Taiwan", Chinese, variant) : TW
+xn--nnx388a
 臺灣
 
 // xn--j1amh ("ukr", Cyrillic) : UA
+xn--j1amh
 укр
 
 // xn--mgb2ddes ("AlYemen", Arabic) : YE
+xn--mgb2ddes
 اليمن
 
 // xxx : http://icmregistry.com
@@ -10763,362 +11100,452 @@ xin
 
 // xn--11b4c3d : VeriSign Sarl
 // https://www.iana.org/domains/root/db/xn--11b4c3d.html
+xn--11b4c3d
 कॉम
 
 // xn--1ck2e1b : Amazon Registry Services, Inc.
 // https://www.iana.org/domains/root/db/xn--1ck2e1b.html
+xn--1ck2e1b
 セール
 
 // xn--1qqw23a : Guangzhou YU Wei Information Technology Co., Ltd.
 // https://www.iana.org/domains/root/db/xn--1qqw23a.html
+xn--1qqw23a
 佛山
 
 // xn--30rr7y : Excellent First Limited
 // https://www.iana.org/domains/root/db/xn--30rr7y.html
+xn--30rr7y
 慈善
 
 // xn--3bst00m : Eagle Horizon Limited
 // https://www.iana.org/domains/root/db/xn--3bst00m.html
+xn--3bst00m
 集团
 
 // xn--3ds443g : TLD REGISTRY LIMITED OY
 // https://www.iana.org/domains/root/db/xn--3ds443g.html
+xn--3ds443g
 在线
 
 // xn--3pxu8k : VeriSign Sarl
 // https://www.iana.org/domains/root/db/xn--3pxu8k.html
+xn--3pxu8k
 点看
 
 // xn--42c2d9a : VeriSign Sarl
 // https://www.iana.org/domains/root/db/xn--42c2d9a.html
+xn--42c2d9a
 คอม
 
 // xn--45q11c : Zodiac Gemini Ltd
 // https://www.iana.org/domains/root/db/xn--45q11c.html
+xn--45q11c
 八卦
 
 // xn--4gbrim : Helium TLDs Ltd
 // https://www.iana.org/domains/root/db/xn--4gbrim.html
+xn--4gbrim
 موقع
 
 // xn--55qw42g : China Organizational Name Administration Center
 // https://www.iana.org/domains/root/db/xn--55qw42g.html
+xn--55qw42g
 公益
 
 // xn--55qx5d : China Internet Network Information Center (CNNIC)
 // https://www.iana.org/domains/root/db/xn--55qx5d.html
+xn--55qx5d
 公司
 
 // xn--5su34j936bgsg : Shangri‐La International Hotel Management Limited
 // https://www.iana.org/domains/root/db/xn--5su34j936bgsg.html
+xn--5su34j936bgsg
 香格里拉
 
 // xn--5tzm5g : Global Website TLD Asia Limited
 // https://www.iana.org/domains/root/db/xn--5tzm5g.html
+xn--5tzm5g
 网站
 
 // xn--6frz82g : Identity Digital Limited
 // https://www.iana.org/domains/root/db/xn--6frz82g.html
+xn--6frz82g
 移动
 
 // xn--6qq986b3xl : Tycoon Treasure Limited
 // https://www.iana.org/domains/root/db/xn--6qq986b3xl.html
+xn--6qq986b3xl
 我爱你
 
 // xn--80adxhks : Foundation for Assistance for Internet Technologies and Infrastructure Development (FAITID)
 // https://www.iana.org/domains/root/db/xn--80adxhks.html
+xn--80adxhks
 москва
 
 // xn--80aqecdr1a : Pontificium Consilium de Comunicationibus Socialibus (PCCS) (Pontifical Council for Social Communication)
 // https://www.iana.org/domains/root/db/xn--80aqecdr1a.html
+xn--80aqecdr1a
 католик
 
 // xn--80asehdb : CORE Association
 // https://www.iana.org/domains/root/db/xn--80asehdb.html
+xn--80asehdb
 онлайн
 
 // xn--80aswg : CORE Association
 // https://www.iana.org/domains/root/db/xn--80aswg.html
+xn--80aswg
 сайт
 
 // xn--8y0a063a : China United Network Communications Corporation Limited
 // https://www.iana.org/domains/root/db/xn--8y0a063a.html
+xn--8y0a063a
 联通
 
 // xn--9dbq2a : VeriSign Sarl
 // https://www.iana.org/domains/root/db/xn--9dbq2a.html
+xn--9dbq2a
 קום
 
 // xn--9et52u : RISE VICTORY LIMITED
 // https://www.iana.org/domains/root/db/xn--9et52u.html
+xn--9et52u
 时尚
 
 // xn--9krt00a : Sina Corporation
 // https://www.iana.org/domains/root/db/xn--9krt00a.html
+xn--9krt00a
 微博
 
 // xn--b4w605ferd : Temasek Holdings (Private) Limited
 // https://www.iana.org/domains/root/db/xn--b4w605ferd.html
+xn--b4w605ferd
 淡马锡
 
 // xn--bck1b9a5dre4c : Amazon Registry Services, Inc.
 // https://www.iana.org/domains/root/db/xn--bck1b9a5dre4c.html
+xn--bck1b9a5dre4c
 ファッション
 
 // xn--c1avg : Public Interest Registry
 // https://www.iana.org/domains/root/db/xn--c1avg.html
+xn--c1avg
 орг
 
 // xn--c2br7g : VeriSign Sarl
 // https://www.iana.org/domains/root/db/xn--c2br7g.html
+xn--c2br7g
 नेट
 
 // xn--cck2b3b : Amazon Registry Services, Inc.
 // https://www.iana.org/domains/root/db/xn--cck2b3b.html
+xn--cck2b3b
 ストア
 
 // xn--cckwcxetd : Amazon Registry Services, Inc.
 // https://www.iana.org/domains/root/db/xn--cckwcxetd.html
+xn--cckwcxetd
 アマゾン
 
 // xn--cg4bki : SAMSUNG SDS CO., LTD
 // https://www.iana.org/domains/root/db/xn--cg4bki.html
+xn--cg4bki
 삼성
 
 // xn--czr694b : Internet DotTrademark Organisation Limited
 // https://www.iana.org/domains/root/db/xn--czr694b.html
+xn--czr694b
 商标
 
 // xn--czrs0t : Binky Moon, LLC
 // https://www.iana.org/domains/root/db/xn--czrs0t.html
+xn--czrs0t
 商店
 
 // xn--czru2d : Zodiac Aquarius Limited
 // https://www.iana.org/domains/root/db/xn--czru2d.html
+xn--czru2d
 商城
 
 // xn--d1acj3b : The Foundation for Network Initiatives “The Smart Internet”
 // https://www.iana.org/domains/root/db/xn--d1acj3b.html
+xn--d1acj3b
 дети
 
 // xn--eckvdtc9d : Amazon Registry Services, Inc.
 // https://www.iana.org/domains/root/db/xn--eckvdtc9d.html
+xn--eckvdtc9d
 ポイント
 
 // xn--efvy88h : Guangzhou YU Wei Information Technology Co., Ltd.
 // https://www.iana.org/domains/root/db/xn--efvy88h.html
+xn--efvy88h
 新闻
 
 // xn--fct429k : Amazon Registry Services, Inc.
 // https://www.iana.org/domains/root/db/xn--fct429k.html
+xn--fct429k
 家電
 
 // xn--fhbei : VeriSign Sarl
 // https://www.iana.org/domains/root/db/xn--fhbei.html
+xn--fhbei
 كوم
 
 // xn--fiq228c5hs : TLD REGISTRY LIMITED OY
 // https://www.iana.org/domains/root/db/xn--fiq228c5hs.html
+xn--fiq228c5hs
 中文网
 
 // xn--fiq64b : CITIC Group Corporation
 // https://www.iana.org/domains/root/db/xn--fiq64b.html
+xn--fiq64b
 中信
 
 // xn--fjq720a : Binky Moon, LLC
 // https://www.iana.org/domains/root/db/xn--fjq720a.html
+xn--fjq720a
 娱乐
 
 // xn--flw351e : Charleston Road Registry Inc.
 // https://www.iana.org/domains/root/db/xn--flw351e.html
+xn--flw351e
 谷歌
 
 // xn--fzys8d69uvgm : PCCW Enterprises Limited
 // https://www.iana.org/domains/root/db/xn--fzys8d69uvgm.html
+xn--fzys8d69uvgm
 電訊盈科
 
 // xn--g2xx48c : Nawang Heli(Xiamen) Network Service Co., LTD.
 // https://www.iana.org/domains/root/db/xn--g2xx48c.html
+xn--g2xx48c
 购物
 
 // xn--gckr3f0f : Amazon Registry Services, Inc.
 // https://www.iana.org/domains/root/db/xn--gckr3f0f.html
+xn--gckr3f0f
 クラウド
 
 // xn--gk3at1e : Amazon Registry Services, Inc.
 // https://www.iana.org/domains/root/db/xn--gk3at1e.html
+xn--gk3at1e
 通販
 
 // xn--hxt814e : Zodiac Taurus Limited
 // https://www.iana.org/domains/root/db/xn--hxt814e.html
+xn--hxt814e
 网店
 
 // xn--i1b6b1a6a2e : Public Interest Registry
 // https://www.iana.org/domains/root/db/xn--i1b6b1a6a2e.html
+xn--i1b6b1a6a2e
 संगठन
 
 // xn--imr513n : Internet DotTrademark Organisation Limited
 // https://www.iana.org/domains/root/db/xn--imr513n.html
+xn--imr513n
 餐厅
 
 // xn--io0a7i : China Internet Network Information Center (CNNIC)
 // https://www.iana.org/domains/root/db/xn--io0a7i.html
+xn--io0a7i
 网络
 
 // xn--j1aef : VeriSign Sarl
 // https://www.iana.org/domains/root/db/xn--j1aef.html
+xn--j1aef
 ком
 
 // xn--jlq480n2rg : Amazon Registry Services, Inc.
 // https://www.iana.org/domains/root/db/xn--jlq480n2rg.html
+xn--jlq480n2rg
 亚马逊
 
 // xn--jvr189m : Amazon Registry Services, Inc.
 // https://www.iana.org/domains/root/db/xn--jvr189m.html
+xn--jvr189m
 食品
 
 // xn--kcrx77d1x4a : Koninklijke Philips N.V.
 // https://www.iana.org/domains/root/db/xn--kcrx77d1x4a.html
+xn--kcrx77d1x4a
 飞利浦
 
 // xn--kput3i : Beijing RITT-Net Technology Development Co., Ltd
 // https://www.iana.org/domains/root/db/xn--kput3i.html
+xn--kput3i
 手机
 
 // xn--mgba3a3ejt : Aramco Services Company
 // https://www.iana.org/domains/root/db/xn--mgba3a3ejt.html
+xn--mgba3a3ejt
 ارامكو
 
 // xn--mgba7c0bbn0a : Competrol (Luxembourg) Sarl
 // https://www.iana.org/domains/root/db/xn--mgba7c0bbn0a.html
+xn--mgba7c0bbn0a
 العليان
 
 // xn--mgbab2bd : CORE Association
 // https://www.iana.org/domains/root/db/xn--mgbab2bd.html
+xn--mgbab2bd
 بازار
 
 // xn--mgbca7dzdo : Abu Dhabi Systems and Information Centre
 // https://www.iana.org/domains/root/db/xn--mgbca7dzdo.html
+xn--mgbca7dzdo
 ابوظبي
 
 // xn--mgbi4ecexp : Pontificium Consilium de Comunicationibus Socialibus (PCCS) (Pontifical Council for Social Communication)
 // https://www.iana.org/domains/root/db/xn--mgbi4ecexp.html
+xn--mgbi4ecexp
 كاثوليك
 
 // xn--mgbt3dhd : Asia Green IT System Bilgisayar San. ve Tic. Ltd. Sti.
 // https://www.iana.org/domains/root/db/xn--mgbt3dhd.html
+xn--mgbt3dhd
 همراه
 
 // xn--mk1bu44c : VeriSign Sarl
 // https://www.iana.org/domains/root/db/xn--mk1bu44c.html
+xn--mk1bu44c
 닷컴
 
 // xn--mxtq1m : Net-Chinese Co., Ltd.
 // https://www.iana.org/domains/root/db/xn--mxtq1m.html
+xn--mxtq1m
 政府
 
 // xn--ngbc5azd : International Domain Registry Pty. Ltd.
 // https://www.iana.org/domains/root/db/xn--ngbc5azd.html
+xn--ngbc5azd
 شبكة
 
 // xn--ngbe9e0a : Kuwait Finance House
 // https://www.iana.org/domains/root/db/xn--ngbe9e0a.html
+xn--ngbe9e0a
 بيتك
 
 // xn--ngbrx : League of Arab States
 // https://www.iana.org/domains/root/db/xn--ngbrx.html
+xn--ngbrx
 عرب
 
 // xn--nqv7f : Public Interest Registry
 // https://www.iana.org/domains/root/db/xn--nqv7f.html
+xn--nqv7f
 机构
 
 // xn--nqv7fs00ema : Public Interest Registry
 // https://www.iana.org/domains/root/db/xn--nqv7fs00ema.html
+xn--nqv7fs00ema
 组织机构
 
 // xn--nyqy26a : Stable Tone Limited
 // https://www.iana.org/domains/root/db/xn--nyqy26a.html
+xn--nyqy26a
 健康
 
 // xn--otu796d : Jiang Yu Liang Cai Technology Company Limited
 // https://www.iana.org/domains/root/db/xn--otu796d.html
+xn--otu796d
 招聘
 
 // xn--p1acf : Rusnames Limited
 // https://www.iana.org/domains/root/db/xn--p1acf.html
+xn--p1acf
 рус
 
 // xn--pssy2u : VeriSign Sarl
 // https://www.iana.org/domains/root/db/xn--pssy2u.html
+xn--pssy2u
 大拿
 
 // xn--q9jyb4c : Charleston Road Registry Inc.
 // https://www.iana.org/domains/root/db/xn--q9jyb4c.html
+xn--q9jyb4c
 みんな
 
 // xn--qcka1pmc : Charleston Road Registry Inc.
 // https://www.iana.org/domains/root/db/xn--qcka1pmc.html
+xn--qcka1pmc
 グーグル
 
 // xn--rhqv96g : Stable Tone Limited
 // https://www.iana.org/domains/root/db/xn--rhqv96g.html
+xn--rhqv96g
 世界
 
 // xn--rovu88b : Amazon Registry Services, Inc.
 // https://www.iana.org/domains/root/db/xn--rovu88b.html
+xn--rovu88b
 書籍
 
 // xn--ses554g : KNET Co., Ltd.
 // https://www.iana.org/domains/root/db/xn--ses554g.html
+xn--ses554g
 网址
 
 // xn--t60b56a : VeriSign Sarl
 // https://www.iana.org/domains/root/db/xn--t60b56a.html
+xn--t60b56a
 닷넷
 
 // xn--tckwe : VeriSign Sarl
 // https://www.iana.org/domains/root/db/xn--tckwe.html
+xn--tckwe
 コム
 
 // xn--tiq49xqyj : Pontificium Consilium de Comunicationibus Socialibus (PCCS) (Pontifical Council for Social Communication)
 // https://www.iana.org/domains/root/db/xn--tiq49xqyj.html
+xn--tiq49xqyj
 天主教
 
 // xn--unup4y : Binky Moon, LLC
 // https://www.iana.org/domains/root/db/xn--unup4y.html
+xn--unup4y
 游戏
 
 // xn--vermgensberater-ctb : Deutsche Vermögensberatung Aktiengesellschaft DVAG
 // https://www.iana.org/domains/root/db/xn--vermgensberater-ctb.html
+xn--vermgensberater-ctb
 vermögensberater
 
 // xn--vermgensberatung-pwb : Deutsche Vermögensberatung Aktiengesellschaft DVAG
 // https://www.iana.org/domains/root/db/xn--vermgensberatung-pwb.html
+xn--vermgensberatung-pwb
 vermögensberatung
 
 // xn--vhquv : Binky Moon, LLC
 // https://www.iana.org/domains/root/db/xn--vhquv.html
+xn--vhquv
 企业
 
 // xn--vuq861b : Beijing Tele-info Technology Co., Ltd.
 // https://www.iana.org/domains/root/db/xn--vuq861b.html
+xn--vuq861b
 信息
 
 // xn--w4r85el8fhu5dnra : Kerry Trading Co. Limited
 // https://www.iana.org/domains/root/db/xn--w4r85el8fhu5dnra.html
+xn--w4r85el8fhu5dnra
 嘉里大酒店
 
 // xn--w4rs40l : Kerry Trading Co. Limited
 // https://www.iana.org/domains/root/db/xn--w4rs40l.html
+xn--w4rs40l
 嘉里
 
 // xn--xhq521b : Guangzhou YU Wei Information Technology Co., Ltd.
 // https://www.iana.org/domains/root/db/xn--xhq521b.html
+xn--xhq521b
 广东
 
 // xn--zfr164b : China Organizational Name Administration Center
 // https://www.iana.org/domains/root/db/xn--zfr164b.html
+xn--zfr164b
 政务
 
 // xyz : XYZ.COM LLC
@@ -13658,7 +14085,9 @@ grayjayleagues.com
 
 // GünstigBestellen : https://günstigbestellen.de
 // Submitted by Furkan Akkoc <info@hendelzon.de>
+xn--gnstigbestellen-zvb.de
 günstigbestellen.de
+xn--gnstigliefern-wob.de
 günstigliefern.de
 
 // Hakaran group: http://hakaran.cz
@@ -13671,6 +14100,7 @@ conf.se
 
 // Häkkinen.fi
 // Submitted by Eero Häkkinen <Eero+psl@Häkkinen.fi>
+xn--hkkinen-5wa.fi
 häkkinen.fi
 
 // Handshake : https://handshake.org
@@ -14929,15 +15359,25 @@ rocky.page
 
 // Rusnames Limited: http://rusnames.ru/
 // Submitted by Sergey Zotov <admin@rusnames.ru>
+xn--90amc.xn--p1acf
 биз.рус
+xn--j1aef.xn--p1acf
 ком.рус
+xn--j1ael8b.xn--p1acf
 крым.рус
+xn--h1ahn.xn--p1acf
 мир.рус
+xn--j1adp.xn--p1acf
 мск.рус
+xn--c1avg.xn--p1acf
 орг.рус
+xn--80aaa0cvac.xn--p1acf
 самара.рус
+xn--h1aliz.xn--p1acf
 сочи.рус
+xn--90a1af.xn--p1acf
 спб.рус
+xn--41a.xn--p1acf
 я.рус
 
 // Russian Academy of Sciences
