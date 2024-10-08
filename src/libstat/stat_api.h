@@ -110,9 +110,11 @@ rspamd_stat_result_t rspamd_stat_classify(struct rspamd_task *task,
 /**
  * Check if a task should be learned and set the appropriate flags for it
  * @param task
- * @return
+ * @param err error returned
+ * @return RSPAMD_STAT_PROCESS_OK
  */
-gboolean rspamd_stat_check_autolearn(struct rspamd_task *task);
+rspamd_stat_result_t rspamd_stat_autolearn(struct rspamd_task *task,
+										   unsigned int stage, GError **err);
 
 /**
  * Learn task as spam or ham, task must be processed prior to this call
