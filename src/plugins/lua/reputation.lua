@@ -37,7 +37,10 @@ local ts = require("tableshape").types
 local redis_params = nil
 local default_expiry = 864000 -- 10 day by default
 local default_prefix = 'RR:' -- Rspamd Reputation
-
+local pos_top_name = 'pos_top' -- Key for top positive scores
+local pos_top_max_size = 10 -- Maximum amount of scores for top positive scores
+local neg_top_name = 'neg_top' -- Key for top negative scores
+local neg_top_max_size = 10  -- Maximum amount of scores for top negative scores
 local tanh = math.tanh or rspamd_util.tanh
 
 -- Get reputation from ham/spam/probable hits
@@ -992,6 +995,19 @@ local function reputation_redis_init(rule, cfg, ev_base, worker)
   local i = 1
   {% for w in windows %}
     redis.call('HSET', KEYS[1], 'v' .. '{= w.name =}', scores[i])
+    local top_size_max = {= neg_top_max =}
+    local top_name = '{= neg_top =}'
+    if scores[i] >= 0 then
+      top_name = '{= pos_top =}'
+      top_size_max = {= pos_top_max =}
+    end
+    local top_size = redis.call('ZCARD', top_name)
+    if top_size > top_size_max then
+      redis.call('ZREMRANGEBYRANK', top_name, 0, -(top_size_max + 1))
+    end
+    redis.call('ZADD', top_name, math.abs(scores[i]), KEYS[1])
+    -- Top of negative scores will be stored as a absolute value of negative score
+    -- and should be restored with 0 - score
     i = i + 1
   {% endfor %}
   redis.call('HSET', KEYS[1], 'l', now)
