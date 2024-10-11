@@ -791,8 +791,6 @@ IF (INSTALL_WEBUI MATCHES "ON")
 ENDIF (INSTALL_WEBUI MATCHES "ON")
 
 
-INSTALL(DIRECTORY "contrib/elastic/" DESTINATION "${SHAREDIR}/elastic" PATTERN ".git" EXCLUDE)
-
 ADD_CUSTOM_TARGET(dist ${CMAKE_SOURCE_DIR}/dist.sh
         "${CMAKE_BINARY_DIR}/rspamd-${RSPAMD_VERSION}.tar.xz" "${TAR}"
         COMMENT "Create source distribution"
