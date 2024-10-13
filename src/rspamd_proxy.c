@@ -38,6 +38,7 @@
 #include "libmime/lang_detection.h"
 
 #include <math.h>
+#include <string.h>
 
 #ifdef HAVE_NETINET_TCP_H
 #include <netinet/tcp.h> /* for TCP_NODELAY */
@@ -2205,7 +2206,7 @@ proxy_client_finish_handler(struct rspamd_http_connection *conn,
 		rspamd_http_message_remove_header(msg, "Connection");
 		rspamd_http_message_remove_header(msg, "Key");
 		rspamd_http_message_add_header_len(msg, LOG_TAG_HEADER, session->pool->tag.uid,
-										   sizeof(session->pool->tag.uid));
+										   strnlen(session->pool->tag.uid, sizeof(session->pool->tag.uid)));
 
 		proxy_open_mirror_connections(session);
 		rspamd_http_connection_reset(session->client_conn);
