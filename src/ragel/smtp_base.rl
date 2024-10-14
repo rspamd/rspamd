@@ -1,5 +1,6 @@
 %%{
   machine smtp_base;
+  alphtype unsigned char;
 
   # Base SMTP definitions
   # Dependencies: none
