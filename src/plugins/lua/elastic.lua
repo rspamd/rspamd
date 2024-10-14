@@ -659,15 +659,7 @@ local function get_general_metadata(task)
   end
 
   local fuzzy_hashes = task:get_mempool():get_variable('fuzzy_hashes', 'fstrings')
-  if fuzzy_hashes and #fuzzy_hashes > 0 then
-    local l = {}
-    for _, h in ipairs(fuzzy_hashes) do
-      table.insert(l, h)
-    end
-    r.fuzzy_hashes = l
-  else
-    r.fuzzy_hashes = empty
-  end
+r.fuzzy_hashes = fuzzy_hashes or empty
 
   r.received_delay = 0
   if user then -- calculate received_delay only for incoming traffic
