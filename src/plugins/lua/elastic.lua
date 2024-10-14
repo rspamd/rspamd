@@ -646,7 +646,7 @@ local function get_general_metadata(task)
           table.insert(lang_t, l)
         end
     end
-    if table.getn(lang_t) > 0 then
+    if #lang_t > 0 then
       r.language = lang_t
     else
       r.language = empty
