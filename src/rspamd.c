@@ -1326,7 +1326,7 @@ version(struct rspamd_main *rspamd_main)
 #ifndef __has_feature
 #define __has_feature(x) 0
 #endif
-#if (defined(__has_feature) && __has_feature(address_sanitizer)) || defined(ADDRESS_SANITIZER)
+#if (defined(__has_feature) && __has_feature(address_sanitizer)) || defined(ADDRESS_SANITIZER) || defined(__SANITIZE_ADDRESS__)
 	rspamd_printf("ASAN enabled: TRUE\n");
 #else
 	rspamd_printf("ASAN enabled: FALSE\n");
