@@ -823,7 +823,10 @@ local function get_index_policy(cfg, ev_base, upstream, host, policy_url, index_
               update_needed = true
             end
           end
-          if update_needed then
+          if not update_needed then
+            rspamd_logger.infox(rspamd_config, 'elastic index policy is up-to-date')
+            states['index_policy']['configured'] = true
+          else
             if detected_distro['name'] == 'elastic' then
               put_index_policy(cfg, ev_base, upstream, host, policy_url, index_policy_json)
             elseif detected_distro['name'] == 'opensearch' then
