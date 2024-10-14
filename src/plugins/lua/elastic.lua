@@ -310,8 +310,9 @@ local function get_received_delay(received_headers)
   local now = math.floor(rspamd_util.get_time())
   local timestamp = 0
   local delay = 0
-  for _, received_header in ipairs(received_headers) do
-    if received_header['timestamp'] and received_header['timestamp'] > 0 then
+  for i, received_header in ipairs(received_headers) do
+    -- skip first received_header as it's own relay
+    if i > 1 and received_header['timestamp'] and received_header['timestamp'] > 0 then
       timestamp = received_header['timestamp']
       break
     end
