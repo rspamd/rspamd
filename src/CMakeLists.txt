@@ -121,27 +121,22 @@ SET(RAGEL_DEPENDS "${CMAKE_SOURCE_DIR}/src/ragel/smtp_address.rl"
 RAGEL_TARGET(ragel_smtp_addr
 	INPUTS ${CMAKE_SOURCE_DIR}/src/ragel/smtp_addr_parser.rl
 	DEPENDS ${RAGEL_DEPENDS}
-	COMPILE_FLAGS -T1
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/smtp_addr_parser.rl.c)
 RAGEL_TARGET(ragel_content_disposition
 	INPUTS ${CMAKE_SOURCE_DIR}/src/ragel/content_disposition_parser.rl
 	DEPENDS ${RAGEL_DEPENDS}
-	COMPILE_FLAGS -G2
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/content_disposition.rl.c)
 RAGEL_TARGET(ragel_rfc2047
 	INPUTS ${CMAKE_SOURCE_DIR}/src/ragel/rfc2047_parser.rl
 	DEPENDS ${RAGEL_DEPENDS}
-	COMPILE_FLAGS -G2
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/rfc2047.rl.c)
 RAGEL_TARGET(ragel_smtp_date
 	INPUTS ${CMAKE_SOURCE_DIR}/src/ragel/smtp_date_parser.rl
 	DEPENDS ${RAGEL_DEPENDS}
-	COMPILE_FLAGS -G2
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/date_parser.rl.c)
 RAGEL_TARGET(ragel_smtp_ip
 	INPUTS ${CMAKE_SOURCE_DIR}/src/ragel/smtp_ip_parser.rl
 	DEPENDS ${RAGEL_DEPENDS}
-	COMPILE_FLAGS -G2
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ip_parser.rl.c)
 # Fucking cmake...
 FOREACH(_GEN ${LIBSERVER_GENERATED})
