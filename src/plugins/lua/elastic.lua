@@ -618,7 +618,7 @@ local function get_general_metadata(task)
   end
 
   local fuzzy_hashes = task:get_mempool():get_variable('fuzzy_hashes', 'fstrings')
-r.fuzzy_hashes = fuzzy_hashes or empty
+  r.fuzzy_hashes = fuzzy_hashes or empty
 
   r.received_delay = 0
   if user then -- calculate received_delay only for incoming traffic
@@ -664,7 +664,6 @@ end
 local function periodic_send_data(cfg, ev_base)
   local now = tostring(rspamd_util.get_time() * 1000)
   local flush_needed = false
-
 
   local nlogs_total = buffer['logs']:length()
   if nlogs_total >= settings['limits']['max_rows'] then
