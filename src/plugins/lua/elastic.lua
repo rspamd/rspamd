@@ -306,6 +306,25 @@ local function handle_error(action,component,limit)
   return true
 end
 
+local function get_received_delay(received_headers)
+  local now = math.floor(rspamd_util.get_time())
+  local timestamp = 0
+  local delay = 0
+  for _, received_header in ipairs(received_headers) do
+    if received_header['timestamp'] and received_header['timestamp'] > 0 then
+      timestamp = received_header['timestamp']
+      break
+    end
+  end
+  if timestamp > 0 then
+    delay = now - timestamp
+    if delay < 0 then
+      delay = 0
+    end
+  end
+  return delay
+end
+
 local function create_bulk_json(es_index, logs_to_send)
   local tbl = {}
   for _, row in pairs(logs_to_send) do
@@ -456,9 +475,9 @@ local function get_general_metadata(task)
   end
   r.user = user or empty
   if user then
-    r.direction = "Inbound"
-  else
     r.direction = "Outbound"
+  else
+    r.direction = "Inbound"
   end
   r.qid = task:get_queue_id() or empty
   r.helo = task:get_helo() or empty
@@ -605,19 +624,7 @@ local function get_general_metadata(task)
   local fuzzy_hashes = task:get_mempool():get_variable('fuzzy_hashes', 'fstrings')
   r.fuzzy_hashes = fuzzy_hashes or empty
 
-  r.received_delay = 0
-  if user then -- calculate received_delay only for incoming traffic
-    local recieved_hop = 2
-    local received_headers = task:get_received_headers()
-    if received_headers[recieved_hop] then
-      if received_headers[recieved_hop]['timestamp'] then
-        r.received_delay = math.floor(rspamd_util.get_time()) - received_headers[recieved_hop]['timestamp']
-        if r.received_delay < 0 then
-          r.received_delay = 0
-        end
-      end
-    end
-  end
+  r.received_delay = get_received_delay(task:get_received_headers())
 
   return r
 end
