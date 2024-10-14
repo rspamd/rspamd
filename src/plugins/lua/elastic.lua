@@ -80,7 +80,7 @@ local settings = {
     }
   },
   limits = {
-    max_rows = 1000, -- max logs in one bulk req to elastic and first reason to flush buffer
+    max_rows = 500, -- max logs in one bulk req to elastic and first reason to flush buffer
     max_interval = 60, -- seconds, if first log in buffer older then interval - flush buffer
     max_size = 5000000, -- max symbols count in buffer, if reached - flush buffer, f.e: 5000000 ~= 10MB/normal-worker
     max_fail = 3,
