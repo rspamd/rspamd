@@ -651,7 +651,7 @@ local function get_general_metadata(task)
     else
       r.language = empty
     end
-    if table.getn(lang_t) == 1 and lang_t[1] == 'en' then
+    if #lang_t == 1 and lang_t[1] == 'en' then
       r.non_en = false
     else
       r.non_en = true
