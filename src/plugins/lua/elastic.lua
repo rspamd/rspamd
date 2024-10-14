@@ -658,9 +658,10 @@ local function periodic_send_data(cfg, ev_base)
     local first_row = buffer['logs']:get(1)
     if first_row then
       local time_diff = now - first_row['@timestamp']
-      if time_diff > settings.limits.max_interval * 1000 then
-        rspamd_logger.infox(rspamd_config, 'flushing buffer by reaching max interval, diff: %s, current time: %s, log timestamp: %s',
-          time_diff, now, first_row['@timestamp'])
+      local time_diff_sec = lua_util.round((time_diff / 1000), 1)
+      if time_diff_sec > settings.limits.max_interval then
+        rspamd_logger.infox(rspamd_config, 'flushing buffer for %s by reaching max interval, oldest log in buffer written %s sec ago',
+          time_diff_sec, first_row['@timestamp'])
         flush_needed = true
       else
         local size = buffer['logs']:size()
