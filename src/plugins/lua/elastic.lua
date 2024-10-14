@@ -409,44 +409,29 @@ local function elastic_send_data(flush_all, task, cfg, ev_base)
   end
 
   if nlogs_to_send > 0 then
+    local http_request = {
+      url = push_url,
+      headers = {
+        ['Host'] = host,
+        ['Content-Type'] = 'application/x-ndjson',
+      },
+      body = bulk_json,
+      method = 'post',
+      callback=http_callback,
+      gzip = settings.use_gzip,
+      keepalive = settings.use_keepalive,
+      no_ssl_verify = settings.no_ssl_verify,
+      user = settings.user,
+      password = settings.password,
+      timeout = settings.timeout,
+    }
     if task then
-      return rspamd_http.request({
-        url = push_url,
-        headers = {
-          ['Host'] = host,
-          ['Content-Type'] = 'application/x-ndjson',
-        },
-        body = bulk_json,
-        task = task,
-        method = 'post',
-        callback=http_callback,
-        gzip = settings.use_gzip,
-        keepalive = settings.use_keepalive,
-        no_ssl_verify = settings.no_ssl_verify,
-        user = settings.user,
-        password = settings.password,
-        timeout = settings.timeout,
-      })
+      http_request['task'] = task
     else
-      return rspamd_http.request({
-        url = push_url,
-        headers = {
-          ['Host'] = host,
-          ['Content-Type'] = 'application/x-ndjson',
-        },
-        body = bulk_json,
-        ev_base = ev_base,
-        config = cfg,
-        method = 'post',
-        callback=http_callback,
-        gzip = settings.use_gzip,
-        keepalive = settings.use_keepalive,
-        no_ssl_verify = settings.no_ssl_verify,
-        user = settings.user,
-        password = settings.password,
-        timeout = settings.timeout,
-      })
+      http_request['ev_base'] = ev_base
+      http_request['config'] = cfg
     end
+    return rspamd_http.request(http_request)
   end
 end
 
