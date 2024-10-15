@@ -116,7 +116,7 @@ local settings = {
       shrink = false,
       shards_count = 1,
       max_gb_per_shard = 0, -- zero - disabled by default, if enabled - shards_count is ignored
-      force_merge = true,
+      force_merge = false,
       segments_count = 1,
     },
     cold = {
@@ -369,7 +369,6 @@ local function elastic_send_data(flush_all, task, cfg, ev_base)
 
   local function http_callback(err, code, body, _)
     local push_done = false
-    local push_errors = false
     if err then
       rspamd_logger.errx(log_object, 'cannot send logs to elastic (%s): %s; failed attempts: %s/%s',
         push_url, err, buffer['errors'], settings['limits']['max_fail'])
@@ -378,23 +377,10 @@ local function elastic_send_data(flush_all, task, cfg, ev_base)
       local res, ucl_err = parser:parse_string(body)
       if not ucl_err and res then
         local obj = parser:get_object()
-        if not obj['errors'] then
-          push_done = true
-          rspamd_logger.debugm(N, log_object, 'successfully sent payload with %s logs', nlogs_to_send)
-        else
-          push_errors = true
-          for _, value in pairs(obj['items']) do
-            if value['index']['status'] >= 400 then
-              if value['index']['error'] then
-                if value['index']['error']['type'] and value['index']['error']['reason'] then
-                  rspamd_logger.errx(log_object,
-                    'cannot send logs to elastic (%s) due to error: %s status, %s type, due to: %s; failed attempts: %s/%s',
-                    push_url, value['index']['status'], value['index']['error']['type'], value['index']['error']['reason'],
-                    buffer['errors'], settings['limits']['max_fail'])
-                end
-              end
-            end
-          end
+        push_done = true
+        rspamd_logger.debugm(N, log_object, 'successfully sent payload with %s logs', nlogs_to_send)
+        if obj['errors'] then
+          rspamd_logger.debugm(N, log_object, 'faced errors while pushing logs to elastic (%s): %s', obj['errors'])
         end
       else
         rspamd_logger.errx(log_object,
@@ -412,6 +398,7 @@ local function elastic_send_data(flush_all, task, cfg, ev_base)
       buffer['errors'] = 0
       upstream:ok()
     else
+      upstream:fail()
       if buffer['errors'] >= settings['limits']['max_fail'] then
         rspamd_logger.errx(log_object, 'failed to send %s log lines, failed attempts: %s/%s, removing failed logs from bugger',
           nlogs_to_send, buffer['errors'], settings['limits']['max_fail'])
@@ -419,11 +406,6 @@ local function elastic_send_data(flush_all, task, cfg, ev_base)
         buffer['errors'] = 0
       else
         buffer['errors'] = buffer['errors'] + 1
-      end
-      if push_errors then
-        upstream:ok() -- we not assume upstream is failed if it return errors in response body
-      else
-        upstream:fail()
       end
     end
   end
