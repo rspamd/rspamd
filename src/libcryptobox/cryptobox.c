@@ -474,7 +474,7 @@ bool rspamd_cryptobox_verify_evp_rsa(int nid,
 		g_set_error(err, g_quark_from_static_string("OpenSSL"),
 					r,
 					"cannot set digest %s for RSA verification (%s returned from OpenSSL), try use `update-crypto-policies --set LEGACY` on RH",
-					EVP_MD_get0_name(md),
+					EVP_MD_name(md),
 					ERR_lib_error_string(ERR_get_error()));
 		EVP_PKEY_CTX_free(pctx);
 		EVP_MD_CTX_free(mdctx);
