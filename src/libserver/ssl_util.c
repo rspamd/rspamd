@@ -1079,7 +1079,14 @@ void rspamd_openssl_maybe_init(void)
 		OPENSSL_init_ssl(0, NULL);
 #endif
 #if defined(RSPAMD_LEGACY_SSL_PROVIDER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-		(void) OSSL_PROVIDER_load(NULL, "legacy");
+		if (OSSL_PROVIDER_load(NULL, "legacy") == NULL) {
+			msg_err("cannot load legacy OpenSSL provider: %s", ERR_lib_error_string(ERR_get_error()));
+			ERR_clear_error();
+		}
+		if (OSSL_PROVIDER_load(NULL, "default") == NULL) {
+			msg_err("cannot load default OpenSSL provider: %s", ERR_lib_error_string(ERR_get_error()));
+			ERR_clear_error();
+		}
 #endif
 
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
