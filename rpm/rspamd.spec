@@ -136,7 +136,7 @@ rm -f %{_builddir}/luajit-build/lib/*.so || true
         -DSYSTEMDDIR=%{_unitdir} \
         -DWANT_SYSTEMD_UNITS=ON \
         -DNO_SHARED=ON \
-        -DDEBIAN_BUILD=1 \
+        -DNO_TARGET_VERSIONS=1 \
 %ifarch x86_64 amd64 arm64 aarch64
         -DENABLE_HYPERSCAN=ON \
 %endif
