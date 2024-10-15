@@ -40,6 +40,7 @@
 #include <openssl/opensslv.h>
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
+#include <openssl/err.h>
 #endif
 
 #include <signal.h>
@@ -456,9 +457,10 @@ bool rspamd_cryptobox_verify_evp_rsa(int nid,
 									 gsize siglen,
 									 const unsigned char *digest,
 									 gsize dlen,
-									 EVP_PKEY *pub_key)
+									 EVP_PKEY *pub_key,
+									 GError **err)
 {
-	bool ret = false;
+	bool ret = false, r;
 
 	EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(pub_key, NULL);
 	g_assert(pctx != NULL);
@@ -467,7 +469,18 @@ bool rspamd_cryptobox_verify_evp_rsa(int nid,
 
 	g_assert(EVP_PKEY_verify_init(pctx) == 1);
 	g_assert(EVP_PKEY_CTX_set_rsa_padding(pctx, RSA_PKCS1_PADDING) == 1);
-	g_assert(EVP_PKEY_CTX_set_signature_md(pctx, md) == 1);
+
+	if ((r = EVP_PKEY_CTX_set_signature_md(pctx, md)) <= 0) {
+		g_set_error(err, g_quark_from_static_string("OpenSSL"),
+					r,
+					"cannot set digest %s for RSA verification (%s returned from OpenSSL), try use `update-crypto-policies --set LEGACY` on RH",
+					EVP_MD_get0_name(md),
+					ERR_lib_error_string(ERR_get_error()));
+		EVP_PKEY_CTX_free(pctx);
+		EVP_MD_CTX_free(mdctx);
+
+		return false;
+	}
 
 	ret = (EVP_PKEY_verify(pctx, sig, siglen, digest, dlen) == 1);
 

@@ -2871,25 +2871,48 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 		nid = NID_sha1;
 	}
 	switch (key->type) {
-	case RSPAMD_DKIM_KEY_RSA:
-		if (!rspamd_cryptobox_verify_evp_rsa(nid, ctx->b, ctx->blen, raw_digest, dlen,
-											 key->specific.key_ssl.key_evp)) {
-			msg_debug_dkim("headers rsa verify failed");
-			ERR_clear_error();
-			res->rcode = DKIM_REJECT;
-			res->fail_reason = "headers rsa verify failed";
+	case RSPAMD_DKIM_KEY_RSA: {
+		GError *err = NULL;
 
-			msg_info_dkim(
-				"%s: headers RSA verification failure; "
-				"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
-				rspamd_dkim_type_to_string(ctx->common.type),
-				(int) (body_end - body_start), ctx->common.body_canonicalised,
-				ctx->common.headers_canonicalised,
-				ctx->domain, ctx->selector,
-				RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
-				ctx->dkim_header);
+		if (!rspamd_cryptobox_verify_evp_rsa(nid, ctx->b, ctx->blen, raw_digest, dlen,
+											 key->specific.key_ssl.key_evp, &err)) {
+
+			if (err == NULL) {
+				msg_debug_dkim("headers rsa verify failed");
+				ERR_clear_error();
+				res->rcode = DKIM_REJECT;
+				res->fail_reason = "headers rsa verify failed";
+
+				msg_info_dkim(
+					"%s: headers RSA verification failure; "
+					"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
+					rspamd_dkim_type_to_string(ctx->common.type),
+					(int) (body_end - body_start), ctx->common.body_canonicalised,
+					ctx->common.headers_canonicalised,
+					ctx->domain, ctx->selector,
+					RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
+					ctx->dkim_header);
+			}
+			else {
+				res->rcode = DKIM_PERM_ERROR;
+				res->fail_reason = "openssl internal error";
+				msg_err_dkim("internal OpenSSL error: %s", err->message);
+				msg_info_dkim(
+					"%s: headers RSA verification failure due to OpenSSL internal error; "
+					"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
+					rspamd_dkim_type_to_string(ctx->common.type),
+					(int) (body_end - body_start), ctx->common.body_canonicalised,
+					ctx->common.headers_canonicalised,
+					ctx->domain, ctx->selector,
+					RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
+					ctx->dkim_header);
+
+				ERR_clear_error();
+				g_error_free(err);
+			}
 		}
 		break;
+	}
 	case RSPAMD_DKIM_KEY_ECDSA:
 		if (rspamd_cryptobox_verify_evp_ecdsa(nid, ctx->b, ctx->blen, raw_digest, dlen,
 											  key->specific.key_ssl.key_evp) != 1) {
