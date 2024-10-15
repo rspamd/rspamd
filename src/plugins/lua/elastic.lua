@@ -380,7 +380,17 @@ local function elastic_send_data(flush_all, task, cfg, ev_base)
         push_done = true
         rspamd_logger.debugm(N, log_object, 'successfully sent payload with %s logs', nlogs_to_send)
         if obj['errors'] then
-          rspamd_logger.debugm(N, log_object, 'faced errors while pushing logs to elastic (%s): %s', obj['errors'])
+          for _, value in pairs(obj['items']) do
+            if value['index'] and value['index']['status'] >= 400 then
+              local status = value['index']['status']
+              local index = safe_get(value, 'index', '_index') or ''
+              local error_type = safe_get(value, 'index', 'error', 'type') or ''
+              local error_reason = safe_get(value, 'index', 'error', 'reason') or ''
+              rspamd_logger.warnx(log_object,
+                'error while pushing logs to elastic, status: %s, index: %s, type: %s, reason: %s',
+                status, index, error_type, error_reason)
+            end
+          end
         end
       else
         rspamd_logger.errx(log_object,
