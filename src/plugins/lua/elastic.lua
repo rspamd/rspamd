@@ -495,7 +495,7 @@ local function get_general_metadata(task)
     local rcpt = task:get_recipients('smtp')
     local l = {}
     for _, a in ipairs(rcpt) do
-      table.insert(l, a['addr'])
+      table.insert(l, a['user'] .. '@' .. a['domain']:lower())
     end
     r.rcpt = l
   else
@@ -507,8 +507,8 @@ local function get_general_metadata(task)
   if task:has_from('smtp') then
     local from = task:get_from({ 'smtp', 'orig' })[1]
     if from then
+      r.from_user = from['user']
       r.from_domain = from['domain']:lower()
-      r.from_user = from['user']:lower()
     end
   end
 
@@ -517,8 +517,8 @@ local function get_general_metadata(task)
   if task:has_from('mime') then
     local mime_from = task:get_from({ 'mime', 'orig' })[1]
     if mime_from then
+      r.mime_from_user = mime_from['user']
       r.mime_from_domain = mime_from['domain']:lower()
-      r.mime_from_user = mime_from['user']:lower()
     end
   end
 
