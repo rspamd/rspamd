@@ -1,3 +1,12 @@
+3.10.1: 16 Oct 2024
+  * [Fix] Avoid null-bytes in Log-Tag header value.
+  * [Fix] Do not abort when OpenSSL is broken, report that to a user
+  * [Fix] Load "default" provider as well as "legacy"
+  * [Fix] Restore propagation of spam/ham learns
+  * [Fix] Use correct type for keylen in lua_ucl_newindex
+  * [Fix] Use unsigned char for ragel machines
+  * [Rework] Update hiredis to 1.2.0
+
 3.10.0: 30 Sep 2024
   * [Conf] Add SenderScore RPBL return codes
   * [Conf] Add SenderScore Reputationlist RBL
