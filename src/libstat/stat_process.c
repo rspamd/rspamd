@@ -1017,6 +1017,9 @@ rspamd_stat_check_autolearn(struct rspamd_task *task)
 		cl = g_ptr_array_index(st_ctx->classifiers, i);
 		ret = FALSE;
 
+		rspamd_mempool_set_variable(task->task_pool, RSPAMD_MEMPOOL_HAM_LEARNS, (void *) &cl->ham_learns, NULL);
+		rspamd_mempool_set_variable(task->task_pool, RSPAMD_MEMPOOL_SPAM_LEARNS, (void *) &cl->spam_learns, NULL);
+
 		if (cl->cfg->opts) {
 			obj = ucl_object_lookup(cl->cfg->opts, "autolearn");
 
