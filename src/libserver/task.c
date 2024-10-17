@@ -519,7 +519,11 @@ rspamd_task_load_message(struct rspamd_task *task,
 	debug_task("got input of length %z", task->msg.len);
 
 	/* Check compression */
-	tok = rspamd_task_get_request_header(task, "compression");
+	tok = rspamd_task_get_request_header(task, COMPRESSION_HEADER);
+
+	if (!tok) {
+		tok = rspamd_task_get_request_header(task, CONTENT_ENCODING_HEADER);
+	}
 
 	if (tok) {
 		/* Need to uncompress */

@@ -21,6 +21,7 @@
 #include "unix-std.h"
 #include "zlib.h"
 #include "utlist.h"
+#include "libserver/protocol_internal.h"
 
 /***
  * @module rspamd_http
@@ -1107,7 +1108,7 @@ lua_http_request(lua_State *L)
 	if (body) {
 		if (gzip) {
 			if (rspamd_fstring_gzip(&body)) {
-				rspamd_http_message_add_header(msg, "Content-Encoding", "gzip");
+				rspamd_http_message_add_header(msg, CONTENT_ENCODING_HEADER, "gzip");
 			}
 		}
 

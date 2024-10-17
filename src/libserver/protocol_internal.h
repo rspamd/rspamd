@@ -93,6 +93,8 @@ extern "C" {
 #define RAW_DATA_HEADER "Raw"
 #define COMPRESSION_HEADER "Compression"
 #define MESSAGE_OFFSET_HEADER "Message-Offset"
+#define CONTENT_ENCODING_HEADER "Content-Encoding"
+#define ACCEPT_ENCODING_HEADER "Accept-Enconding"
 
 #ifdef __cplusplus
 }
