@@ -462,15 +462,21 @@ local function get_general_metadata(task)
   r.symbols = task:get_symbols_all()
   for _, symbol in ipairs(r.symbols) do
     symbol.groups = nil -- we don't need groups array in elastic
-    if type(symbol.options) == "table" then
-      symbol.options = table.concat(symbol.options, "; ")
+    if type(symbol.score) == 'number' then
+      symbol.score = lua_util.round(symbol.score, 3)
+    end
+    if type(symbol.weight) == 'number' then
+      symbol.weight = lua_util.round(symbol.weight, 3)
+    end
+    if type(symbol.options) == 'table' then
+      symbol.options = table.concat(symbol.options, '; ')
     end
   end
   r.user = user or empty
   if user then
-    r.direction = "Outbound"
+    r.direction = 'Outbound'
   else
-    r.direction = "Inbound"
+    r.direction = 'Inbound'
   end
   r.qid = task:get_queue_id() or empty
   r.helo = task:get_helo() or empty
