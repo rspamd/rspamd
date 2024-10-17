@@ -833,12 +833,12 @@ local function get_index_policy(cfg, ev_base, upstream, host, policy_url, index_
             end
           end
         else
-          rspamd_logger.errx(rspamd_config, 'failed to parse our index policy for elastic: %s', ucl_err)
+          rspamd_logger.errx(rspamd_config, 'failed to parse our index policy for elastic: %s', op_ucl_err)
           upstream:fail()
           handle_error('parse our', 'index_policy', settings['limits']['max_fail'])
         end
       else
-        rspamd_logger.errx(rspamd_config, 'failed to parse remote index policy from elastic: %s', ucl_err)
+        rspamd_logger.errx(rspamd_config, 'failed to parse remote index policy from elastic: %s', rp_ucl_err)
         upstream:fail()
         handle_error('parse remote', 'index_policy', settings['limits']['max_fail'])
       end
