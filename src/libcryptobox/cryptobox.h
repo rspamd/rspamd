@@ -238,7 +238,8 @@ bool rspamd_cryptobox_verify_evp_rsa(int nid,
 									 gsize siglen,
 									 const unsigned char *digest,
 									 gsize dlen,
-									 EVP_PKEY *pub_key);
+									 EVP_PKEY *pub_key,
+									 GError **err);
 #endif
 
 /**
