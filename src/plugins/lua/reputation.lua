@@ -1019,8 +1019,8 @@ local function reputation_redis_init(rule, cfg, ev_base, worker)
 
   local set_script = lua_util.jinja_template(redis_adaptive_emea_script_tpl,
       { windows = rule.backend.config.buckets,
-        neg_top_max = neg_top_max_size, neg_top = neg_top_name,
-        pos_top_max = pos_top_max_size, pos_top = pos_top_name })
+        neg_top_max = neg_top_max_size, neg_top = default_prefix .. neg_top_name,
+        pos_top_max = pos_top_max_size, pos_top = default_prefix .. pos_top_name })
   rspamd_logger.debugm(N, rspamd_config, 'added emea update script %s', set_script)
   rule.backend.script_set = lua_redis.add_redis_script(set_script, our_redis_params)
 
