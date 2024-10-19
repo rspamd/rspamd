@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -1054,6 +1054,9 @@ gpointer rspamd_init_ssl_ctx_noverify(void)
 
 	return ssl_ctx_noverify;
 }
+#if defined(RSPAMD_LEGACY_SSL_PROVIDER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+#include <openssl/provider.h>
+#endif
 
 void rspamd_openssl_maybe_init(void)
 {
@@ -1074,6 +1077,16 @@ void rspamd_openssl_maybe_init(void)
 		SSL_library_init();
 #else
 		OPENSSL_init_ssl(0, NULL);
+#endif
+#if defined(RSPAMD_LEGACY_SSL_PROVIDER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+		if (OSSL_PROVIDER_load(NULL, "legacy") == NULL) {
+			msg_err("cannot load legacy OpenSSL provider: %s", ERR_lib_error_string(ERR_get_error()));
+			ERR_clear_error();
+		}
+		if (OSSL_PROVIDER_load(NULL, "default") == NULL) {
+			msg_err("cannot load default OpenSSL provider: %s", ERR_lib_error_string(ERR_get_error()));
+			ERR_clear_error();
+		}
 #endif
 
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)

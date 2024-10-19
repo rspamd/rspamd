@@ -57,6 +57,7 @@
 
 #include "contrib/libev/ev.h"
 #include "libstat/stat_api.h"
+#include "libserver/protocol_internal.h"
 
 struct rspamd_worker *rspamd_current_worker = NULL;
 
@@ -600,7 +601,7 @@ rspamd_controller_maybe_compress(struct rspamd_http_connection_entry *entry,
 {
 	if (entry->support_gzip) {
 		if (rspamd_fstring_gzip(&buf)) {
-			rspamd_http_message_add_header(msg, "Content-Encoding", "gzip");
+			rspamd_http_message_add_header(msg, CONTENT_ENCODING_HEADER, "gzip");
 		}
 	}
 
