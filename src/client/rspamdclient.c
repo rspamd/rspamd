@@ -441,6 +441,7 @@ rspamd_client_command(struct rspamd_client_connection *conn,
 
 	if (compressed) {
 		rspamd_http_message_add_header(req->msg, COMPRESSION_HEADER, "zstd");
+		rspamd_http_message_add_header(req->msg, CONTENT_ENCODING_HEADER, "zstd");
 
 		if (dict_id != 0) {
 			char dict_str[32];
