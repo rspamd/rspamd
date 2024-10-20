@@ -1,3 +1,7 @@
+3.10.2: 20 Oct 2024
+  * [CritFix] Fix ARC-Seal signing
+  * [Fix] add EOF to openmetrics response in proxy and server
+
 3.10.1: 16 Oct 2024
   * [Fix] Avoid null-bytes in Log-Tag header value.
   * [Fix] Do not abort when OpenSSL is broken, report that to a user
