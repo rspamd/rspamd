@@ -495,7 +495,7 @@ local function get_general_metadata(task)
     local rspamd_ip = require "rspamd_ip"
     local origin_ip = rspamd_ip.from_string(origin)
     if origin_ip and origin_ip:is_valid() then
-      r.sender_ip = origin -- use string here
+      r.sender_ip = tostring(origin_ip)
     end
   end
 
