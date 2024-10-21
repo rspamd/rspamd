@@ -518,23 +518,23 @@ local function get_general_metadata(task)
     r.rcpt = empty
   end
 
-  r.from_domain = empty
   r.from_user = empty
+  r.from_domain = empty
   if task:has_from('smtp') then
     local from = task:get_from({ 'smtp', 'orig' })[1]
     if from then
-      r.from_user = from['user']
-      r.from_domain = from['domain']:lower()
+      r.from_user = from['user'] or empty
+      r.from_domain = from['domain']:lower() or empty
     end
   end
 
-  r.mime_from_domain = empty
   r.mime_from_user = empty
+  r.mime_from_domain = empty
   if task:has_from('mime') then
     local mime_from = task:get_from({ 'mime', 'orig' })[1]
     if mime_from then
-      r.mime_from_user = mime_from['user']
-      r.mime_from_domain = mime_from['domain']:lower()
+      r.mime_from_user = mime_from['user'] or empty
+      r.mime_from_domain = mime_from['domain']:lower() or empty
     end
   end
 
@@ -1267,10 +1267,10 @@ local function configure_index_template(cfg, ev_base)
               sender_ip = t_ip,
               message_id = t_text_with_keyword,
               rcpt = t_text_with_keyword,
-              from_domain = t_keyword,
               from_user = t_keyword,
-              mime_from_domain = t_keyword,
+              from_domain = t_keyword,
               mime_from_user = t_keyword,
+              mime_from_domain = t_keyword,
               settings_id = t_keyword,
               asn = asn_obj,
               scan_time = t_float,
