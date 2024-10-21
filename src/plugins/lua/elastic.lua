@@ -491,7 +491,7 @@ local function get_general_metadata(task)
   r.sender_ip = '::'
   local origin = task:get_header('X-Originating-IP')
   if origin then
-    origin = origin:gsub('%[', ''):gsub('%]', '')
+    origin = origin:gsub('^%[', ''):gsub('%]:[0-9]+$', ''):gsub('%]$', '')
     local rspamd_ip = require "rspamd_ip"
     local origin_ip = rspamd_ip.from_string(origin)
     if origin_ip and origin_ip:is_valid() then
