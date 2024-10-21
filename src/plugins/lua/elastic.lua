@@ -94,7 +94,8 @@ local settings = {
     replicas_count = 1,
     refresh_interval = 5, -- seconds
     dynamic_keyword_ignore_above = 256,
-    headers_text_ignore_above = 2048, -- strip headers value and add '...' to the end, set 0 to disable limit
+    headers_count_ignore_above = 5, -- record only N first same named headers, add 'ignored above...' if reached, set 0 to disable limit
+    headers_text_ignore_above = 2048, -- strip specific header value and add '...' to the end, set 0 to disable limit
     symbols_nested = false,
     empty_value = 'unknown', -- empty numbers, ips and ipnets are not customizable they will be always 0, :: and ::/128 respectively
   },
@@ -468,9 +469,6 @@ local function get_general_metadata(task)
     if type(symbol.weight) == 'number' then
       symbol.weight = lua_util.round(symbol.weight, 3)
     end
-    if type(symbol.options) == 'table' then
-      symbol.options = table.concat(symbol.options, '; ')
-    end
   end
   r.user = user or empty
   if user then
@@ -564,10 +562,23 @@ local function get_general_metadata(task)
     if hdr then
       local l = {}
       for _, h in ipairs(hdr) do
-        table.insert(l, h.decoded)
-      end
-      if #l > headers_text_ignore_above and headers_text_ignore_above ~= -3 then
-        l = l:sub(1, headers_text_ignore_above) .. '...'
+        if settings['index_template']['headers_count_ignore_above'] ~= 0 and
+          #l >= settings['index_template']['headers_count_ignore_above']
+        then
+          table.insert(l, 'ignored above...')
+          break
+        end
+        local header
+        if settings['index_template']['headers_text_ignore_above'] ~= 0 and
+          #h.decoded >= headers_text_ignore_above
+        then
+          header = h.decoded:sub(1, headers_text_ignore_above) .. '...'
+        elseif #h.decoded > 0 then
+          header = h.decoded
+        else
+          header = empty
+        end
+        table.insert(l, header)
       end
       return l
     else
