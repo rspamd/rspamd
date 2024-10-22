@@ -505,13 +505,20 @@ local function get_general_metadata(task)
   else
     r.message_id = message_id
   end
+
   if task:has_recipients('smtp') then
     local rcpt = task:get_recipients('smtp')
     local l = {}
     for _, a in ipairs(rcpt) do
-      table.insert(l, a['user'] .. '@' .. a['domain']:lower())
+      if a['user'] and a['user'] ~= '' and a['domain'] and a['domain'] ~= '' then
+        table.insert(l, a['user'] .. '@' .. a['domain']:lower())
+      end
     end
-    r.rcpt = l
+    if #l > 0 then
+      r.rcpt = l
+    else
+      r.rcpt = empty
+    end
   else
     r.rcpt = empty
   end
@@ -520,9 +527,12 @@ local function get_general_metadata(task)
   r.from_domain = empty
   if task:has_from('smtp') then
     local from = task:get_from({ 'smtp', 'orig' })[1]
-    if from then
-      r.from_user = from['user'] or empty
-      r.from_domain = from['domain']:lower() or empty
+    if from and
+      from['user'] and from['user'] ~= '' and
+      from['domain'] and from['domain'] ~= ''
+    then
+      r.from_user = from['user']
+      r.from_domain = from['domain']:lower()
     end
   end
 
@@ -530,9 +540,12 @@ local function get_general_metadata(task)
   r.mime_from_domain = empty
   if task:has_from('mime') then
     local mime_from = task:get_from({ 'mime', 'orig' })[1]
-    if mime_from then
-      r.mime_from_user = mime_from['user'] or empty
-      r.mime_from_domain = mime_from['domain']:lower() or empty
+    if mime_from and
+      mime_from['user'] and mime_from['user'] ~= '' and
+      mime_from['domain'] and mime_from['domain'] ~= ''
+    then
+      r.mime_from_user = mime_from['user']
+      r.mime_from_domain = mime_from['domain']:lower()
     end
   end
 
@@ -559,7 +572,7 @@ local function get_general_metadata(task)
   local function process_header(name)
     local hdr = task:get_header_full(name)
     local headers_text_ignore_above = settings['index_template']['headers_text_ignore_above'] - 3
-    if hdr then
+    if hdr and #hdr > 0 then
       local l = {}
       for _, h in ipairs(hdr) do
         if settings['index_template']['headers_count_ignore_above'] ~= 0 and
