@@ -1,7 +1,7 @@
 local argparse = require 'argparse'
 local lua_util = require 'lua_util'
 local lua_redis = require 'lua_redis'
-local rspamd_task = require 'rspamd_task'
+local rspamd_logger = require 'rspamd_logger'
 
 local parser = argparse()
         :name "reputation"
@@ -52,10 +52,14 @@ local command_handlers = {
 }
 
 local function handler(args)
+    local cmd_opts = parser:parse(args)
     reputation_settings = rspamd_config:get_all_opt('reputation')
+    if not (reputation_settings and type(reputation_settings) == 'table') then
+        rspamd_logger.infox(rspamd_config, 'Module is not configured, disabling it')
+        return
+    end
     redis_params = lua_redis.parse_redis_server('reputation')
 
-    local cmd_opts = parser:parse(args)
 
     local f = command_handlers[cmd_opts.command]
     if not f then
