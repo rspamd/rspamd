@@ -1,6 +1,8 @@
 local argparse = require 'argparse'
 local redis = require 'lua_redis'
 local logger = require 'rspamd_logger'
+local lua_util = require 'lua_util'
+local dmarc_common = require "plugins/dmarc"
 
 local parser = argparse()
         :name "ratelimit"
