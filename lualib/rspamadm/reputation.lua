@@ -55,8 +55,8 @@ local function handler(args)
     local cmd_opts = parser:parse(args)
     reputation_settings = rspamd_config:get_all_opt('reputation')
     if not (reputation_settings and type(reputation_settings) == 'table') then
-        rspamd_logger.infox(rspamd_config, 'Module is not configured, disabling it')
-        return
+        print('Module is not configured, disabling it')
+        os.exit(1)
     end
     redis_params = lua_redis.parse_redis_server('reputation')
 
