@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - master
+      - issue#5151
 
 jobs:
   linters:
