@@ -51,13 +51,12 @@ local command_handlers = {
 
 local function handler(args)
     local cmd_opts = parser:parse(args)
-    local reputation_settings = rspamd_config:get_all_opt('reputation')
-    if not (reputation_settings and type(reputation_settings) == 'table') then
-        rspamd_logger.errx('Module is not configured, disabling it')
+
+    redis_params = lua_redis.parse_redis_server('reputation')
+    if not redis_params then
+        rspamd_logger.errx('Redis is not configured, exiting')
         os.exit(1)
     end
-    redis_params = lua_redis.parse_redis_server('reputation')
-
 
     local f = command_handlers[cmd_opts.command]
     if not f then
