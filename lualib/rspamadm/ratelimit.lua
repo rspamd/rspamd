@@ -140,14 +140,11 @@ local command_handlers = {
 local function handler(args)
     local cmd_opts = parser:parse(args)
 
-    ratelimit_settings = rspamd_config:get_all_opt('ratelimit')
-    if not ratelimit_settings then
-        logger.errx('ratelimit is not enabled, exiting')
+    redis_params = redis.parse_redis_server('ratelimit')
+    if not redis_params then
+        logger.infox(rspamd_config, 'no servers are specified, disabling module')
         os.exit(1)
     end
-
-    ratelimit_settings = lua_util.override_defaults(ratelimit_common.default_settings, ratelimit_settings)
-    redis_params = redis.parse_redis_server('ratelimit', ratelimit_settings)
 
     local f = command_handlers[cmd_opts.command]
     if not f then
