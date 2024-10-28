@@ -1,5 +1,4 @@
 local argparse = require 'argparse'
-local lua_util = require 'lua_util'
 local lua_redis = require 'lua_redis'
 local rspamd_logger = require 'rspamd_logger'
 
@@ -21,7 +20,6 @@ local convert_rbl = parser:command 'convert_rbl'
 local neg_top_name = 'neg_top' -- Key for top negative scores
 local pos_top_name = 'pos_top' -- Key for top positive scores
 local redis_params
-local reputation_settings
 local redis_attrs = {
     config = rspamd_config,
     ev_base = rspamadm_ev_base,
@@ -53,9 +51,9 @@ local command_handlers = {
 
 local function handler(args)
     local cmd_opts = parser:parse(args)
-    reputation_settings = rspamd_config:get_all_opt('reputation')
+    local reputation_settings = rspamd_config:get_all_opt('reputation')
     if not (reputation_settings and type(reputation_settings) == 'table') then
-        print('Module is not configured, disabling it')
+        rspamd_logger.errx('Module is not configured, disabling it')
         os.exit(1)
     end
     redis_params = lua_redis.parse_redis_server('reputation')
