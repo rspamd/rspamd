@@ -1,7 +1,5 @@
 local argparse = require 'argparse'
 local redis = require 'lua_redis'
-local lua_util = require 'lua_util'
-local ratelimit_common = require 'plugins/ratelimit'
 local logger = require 'rspamd_logger'
 
 local parser = argparse()
@@ -55,7 +53,6 @@ unblock_bucket:option "-p --prefix"
 
 
 local redis_params
-local ratelimit_settings = {}
 local redis_attrs = {
     config = rspamd_config,
     ev_base = rspamadm_ev_base,
@@ -142,7 +139,7 @@ local function handler(args)
 
     redis_params = redis.parse_redis_server('ratelimit')
     if not redis_params then
-        logger.infox(rspamd_config, 'no servers are specified, disabling module')
+        logger.errx(rspamd_config, 'no servers are specified, disabling module')
         os.exit(1)
     end
 
