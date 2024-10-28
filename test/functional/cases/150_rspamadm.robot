@@ -93,3 +93,13 @@ SecretBox encrypt rspamadm without nonce decrypt python
   ${result1} =  Run Process  python3  ${PYTHON_SCRIPT}  -B  decrypt  -t  ${result.stdout}  -k  ${KEY}
   Should Match Regexp  ${result.stderr}  ^$
   Should Be Equal As Strings  ${TEXT}  ${result1.stdout}
+
+
+
+
+
+
+Ratelimit track limits
+  ${result} =  Rspamadm  ratelimit  track_limits  -p  RLhoy4mpyur4ckaarfezpouuck
+  Should Match Regexp  ${result.stderr}  ^$
+  Should Be Equal As Strings  Top list of positive scores:  ${result.stdout}
