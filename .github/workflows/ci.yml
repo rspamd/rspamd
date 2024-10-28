@@ -8,6 +8,7 @@ on:
     branches:
       - master
       - issue#5151
+      - dev
 
 jobs:
   linters:
