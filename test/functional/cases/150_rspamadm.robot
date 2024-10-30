@@ -98,3 +98,7 @@ Reputation watch lists
   ${result} =  Rspamadm  reputation  watch_lists
   Should Match Regexp  ${result.stderr}  ^$
   Should Be Equal As Strings  Top list of positive scores:  ${result.stdout}
+
+Dmarc Report
+  ${result} =  Rspamadm  dmarc_report
+  Should Match Regexp  ${result.stderr}  ^$
