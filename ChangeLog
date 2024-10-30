@@ -1,3 +1,17 @@
+3.10.2: 21 Oct 2024
+  * [CritFix] Fix ARC-Seal signing
+  * [Fix] add EOF to openmetrics response in proxy and server
+
+3.10.1: 16 Oct 2024
+  * [Feature] Update effective_tld_names.dat by @wdhdev in #5176
+  * [Fix] Use correct type for keylen in lua_ucl_newindex by @arkamar in #5169
+  * [Fix] Avoid null-bytes in Log-Tag header value by @smarsching in #5179
+  * [Fix] Do not abort when OpenSSL is broken, report that to a user by @vstakhov in #5188
+  * [Fix] Update hiredis library removing all hacks by @vstakhov in #5167
+  * [Fix] Remove proxy from url_redirector.conf as it not the option by @dragoangel in #5164
+  * [Fix] Some build fixes by @vstakhov in #5189
+  * [Fix] Some more fixes by @vstakhov in #5190
+
 3.10.0: 30 Sep 2024
   * [Conf] Add SenderScore RPBL return codes
   * [Conf] Add SenderScore Reputationlist RBL
