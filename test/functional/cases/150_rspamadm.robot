@@ -102,3 +102,4 @@ Reputation watch lists
 Dmarc Report
   ${result} =  Rspamadm  dmarc_report
   Should Match Regexp  ${result.stderr}  ^$
+  Should Be Equal As Strings
