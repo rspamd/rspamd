@@ -1,8 +1,6 @@
 local argparse = require 'argparse'
 local redis = require 'lua_redis'
 local logger = require 'rspamd_logger'
-local lua_util = require 'lua_util'
-local dmarc_common = require "plugins/dmarc"
 
 local parser = argparse()
         :name "ratelimit"
@@ -11,12 +9,9 @@ local parser = argparse()
         :command_target('command')
         :require_command(true)
 
-local track_limits = parser:command 'track_limits'
-                           :description 'Track last limits of ratelimit module'
+local _ = parser:command 'track_limits'
+                :description 'Track last limits of ratelimit module'
 
-track_limits:option "-p --prefix"
-            :description("Prefix used in ratelimit options")
-            :argname("<prefix>")
 
 local upgrade_bucket = parser:command 'upgrade_bucket'
                              :description 'Upgrade certain bucket'
@@ -55,6 +50,7 @@ unblock_bucket:option "-p --prefix"
 
 
 local redis_params
+
 local redis_attrs = {
     config = rspamd_config,
     ev_base = rspamadm_ev_base,
@@ -63,13 +59,15 @@ local redis_attrs = {
     resolver = rspamadm_dns_resolver,
 }
 
-local function track_limits_handler(args)
-    local res, prefix = redis.request(redis_params, redis_attrs, { 'ZRANGE', 'RL_cache_prefix', '-1', '-1' })
+
+local function track_limits_handler(_)
+    local res, prefix = lua_redis.request(redis_params, redis_attrs,
+            { 'ZRANGE', settings.prefix .. settings.lfb_cache_prefix, '-1', '-1' })
     if res ~= 1 then
         print('Redis request parameters are wrong')
     end
     local _, bucket_params = redis.request(redis_params, redis_attrs,
-                        { 'HMGET', tostring(prefix[1]), 'l', 'b', 'r', 'dr', 'db' })
+            { 'HMGET', tostring(prefix[1]), 'l', 'b', 'r', 'dr', 'db' })
     local last = tonumber(bucket_params[1])
     local burst = tonumber(bucket_params[2])
     local rate = tonumber(bucket_params[3])
@@ -139,7 +137,7 @@ local command_handlers = {
 local function handler(args)
     local cmd_opts = parser:parse(args)
 
-    redis_params = redis.parse_redis_server('ratelimit')
+    redis_params = redis.parse_redis_server('redis')
     if not redis_params then
         logger.errx(rspamd_config, 'no servers are specified, disabling module')
         os.exit(1)
