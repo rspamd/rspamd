@@ -17,8 +17,8 @@ local watch_lists = parser:command 'watch_lists'
 local convert_rbl = parser:command 'convert_rbl'
                           :description 'Convert top lists to RBL'
 
-local neg_top_name = 'neg_top' -- Key for top negative scores
-local pos_top_name = 'pos_top' -- Key for top positive scores
+local neg_top_name = 'RR_neg_top' -- Key for top negative scores
+local pos_top_name = 'RR_pos_top' -- Key for top positive scores
 local redis_params
 local redis_attrs = {
     config = rspamd_config,
