@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -41,8 +41,8 @@ struct rspamd_classifier {
 	GArray *statfiles_ids; /* int */
 	struct rspamd_stat_cache *cache;
 	gpointer cachecf;
-	gulong spam_learns;
-	gulong ham_learns;
+	guint64 spam_learns;
+	guint64 ham_learns;
 	int autolearn_cbref;
 	struct rspamd_classifier_config *cfg;
 	struct rspamd_stat_classifier *subrs;
