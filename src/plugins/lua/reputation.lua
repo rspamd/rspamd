@@ -37,9 +37,9 @@ local ts = require("tableshape").types
 local redis_params = nil
 local default_expiry = 864000 -- 10 day by default
 local default_prefix = 'RR:' -- Rspamd Reputation
-local pos_top_name = 'pos_top' -- Key for top positive scores
+local pos_top_name = 'RR_pos_top' -- Key for top positive scores
 local pos_top_max_size = 10 -- Maximum amount of scores for top positive scores
-local neg_top_name = 'neg_top' -- Key for top negative scores
+local neg_top_name = 'RR_neg_top' -- Key for top negative scores
 local neg_top_max_size = 10  -- Maximum amount of scores for top negative scores
 local tanh = math.tanh or rspamd_util.tanh
 
