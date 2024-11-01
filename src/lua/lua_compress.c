@@ -1,11 +1,11 @@
-/*-
- * Copyright 2021 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -504,7 +504,8 @@ lua_zstd_compress_stream(lua_State *L)
 		return lua_zstd_push_error(L, err);
 	}
 
-	lua_new_text(L, onb.dst, onb.pos, TRUE);
+	t = lua_new_text(L, onb.dst, onb.pos, FALSE);
+	t->flags |= RSPAMD_TEXT_FLAG_OWN;
 
 	return 1;
 }
@@ -598,7 +599,8 @@ lua_zstd_decompress_stream(lua_State *L)
 		return lua_zstd_push_error(L, err);
 	}
 
-	lua_new_text(L, onb.dst, onb.pos, TRUE);
+	t = lua_new_text(L, onb.dst, onb.pos, FALSE);
+	t->flags |= RSPAMD_TEXT_FLAG_OWN;
 
 	return 1;
 }

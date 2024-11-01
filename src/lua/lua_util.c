@@ -1025,7 +1025,12 @@ lua_util_encode_base64(lua_State *L)
 		}
 
 		if (out != NULL) {
-			lua_new_text(L, out, outlen, TRUE);
+			/*
+			 * Manually set OWN flag, as `lua_new_text` will allocate another chunk of memory,
+			 * and we will have memory leak of the memory allocated by `rspamd_encode_base64_fold`
+			 */
+			t = lua_new_text(L, out, outlen, FALSE);
+			t->flags = RSPAMD_TEXT_FLAG_OWN;
 		}
 		else {
 			lua_pushnil(L);
@@ -1650,7 +1655,9 @@ lua_util_transliterate(lua_State *L)
 
 	gsize outlen;
 	char *transliterated = rspamd_utf8_transliterate(t->start, t->len, &outlen);
-	lua_new_text(L, transliterated, outlen, TRUE);
+
+	t = lua_new_text(L, transliterated, outlen, FALSE);
+	t->flags = RSPAMD_TEXT_FLAG_OWN;
 
 	return 1;
 }
