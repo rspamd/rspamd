@@ -44,7 +44,8 @@ context("SMTP address check functions", function()
     { '<@domain1,@domain2,@domain3:abc@example.com>',
       { user = 'abc', domain = 'example.com', addr = 'abc@example.com' } },
     -- SMTP UTF8
-    { 'ñ@example.com', { user = 'ñ', domain = 'example.com' } }
+    { 'ñ@example.com', { user = 'ñ', domain = 'example.com' } },
+    { 'ñ@ололо.лол', { user = 'ñ', domain = 'ололо.лол' } }
 
   }
 
