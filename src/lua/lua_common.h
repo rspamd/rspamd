@@ -94,8 +94,7 @@ static inline int lua_absindex(lua_State *L, int i)
 #define LUA_PUBLIC_FUNCTION_DEF(class, name) int lua_##class##_##name(lua_State *L)
 #define LUA_INTERFACE_DEF(class, name) \
 	{                                  \
-		#name, lua_##class##_##name    \
-	}
+		#name, lua_##class##_##name}
 
 extern const luaL_reg null_reg[];
 
@@ -281,7 +280,7 @@ struct rspamd_lua_text *lua_check_text_or_string(lua_State *L, int pos);
  * @return
  */
 struct rspamd_lua_text *lua_new_text(lua_State *L, const char *start,
-									 gsize len, gboolean own);
+									 gsize len, gboolean allocate_memory);
 /**
  * Create new text object from task pool if allocation is needed
  * @param task
