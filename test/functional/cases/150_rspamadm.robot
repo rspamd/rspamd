@@ -40,7 +40,7 @@ Process message callback
   ${result} =  Write to stdin  ${handle}  .load ${RSPAMD_TESTDIR}/lua/rspamadm/test_message_callback.lua\n.message message_callback ${RSPAMD_TESTDIR}/messages/empty_part.eml
   Should Contain  ${result}  n parts = 2
   Should Contain  ${result}  1\n2\n4\n6
-  Wait For Process  ${handle}parse_redis_server
+  Wait For Process  ${handle}
 
 Lua batch mode
   ${result} =  Rspamadm  lua  -b  ${RSPAMD_TESTDIR}/lua/rspamadm/test_batch.lua
