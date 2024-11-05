@@ -75,6 +75,7 @@ local settings = {
     mht = 2,
     mhtml = 2,
     oqy = 2,
+    rdp = 2,
     rqy = 2,
     sfx = 2,
     slk = 2,
