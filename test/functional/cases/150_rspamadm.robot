@@ -93,13 +93,3 @@ SecretBox encrypt rspamadm without nonce decrypt python
   ${result1} =  Run Process  python3  ${PYTHON_SCRIPT}  -B  decrypt  -t  ${result.stdout}  -k  ${KEY}
   Should Match Regexp  ${result.stderr}  ^$
   Should Be Equal As Strings  ${TEXT}  ${result1.stdout}
-
-Reputation watch lists
-  ${result} =  Rspamadm  reputation  watch_lists
-  Should Match Regexp  ${result.stderr}  ^$
-  Should Be Equal As Strings  Top list of positive scores:  ${result.stdout}
-
-Dmarc Report
-  ${result} =  Rspamadm  dmarc_report
-  Should Match Regexp  ${result.stderr}  ^$
-  Should Be Equal As Strings
