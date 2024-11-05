@@ -2092,6 +2092,7 @@ void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout, st
 			memcpy(&stat_copy, srv->stat, sizeof(stat_copy));
 			output = rspamd_metrics_to_prometheus_string(
 				rspamd_worker_metrics_object(srv->cfg, &stat_copy, now - srv->start_time));
+			rspamd_printf_fstring(&output, "# EOF\n");
 			rspamd_http_message_set_body_from_fstring_steal(msg, output);
 			ctype = "application/openmetrics-text; version=1.0.0; charset=utf-8";
 			break;
