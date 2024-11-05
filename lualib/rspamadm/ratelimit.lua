@@ -9,8 +9,13 @@ local parser = argparse()
         :command_target('command')
         :require_command(true)
 
-local _ = parser:command 'track_limits'
-                :description 'Track last limits of ratelimit module'
+local track_limits = parser:command 'track_limits'
+                           :description 'Track last limits of ratelimit module'
+
+track_limits:option "-q --quantity"
+            :description("Number of limits to track")
+            :argname("<quantity>")
+            :default(1)
 
 
 local upgrade_bucket = parser:command 'upgrade_bucket'
@@ -50,32 +55,34 @@ unblock_bucket:option "-p --prefix"
 
 
 local redis_params
-
+local lfb_cache_prefix = 'RL_cache_prefix'
 local redis_attrs = {
-    config = rspamd_config,
-    ev_base = rspamadm_ev_base,
-    session = rspamadm_session,
-    log_obj = rspamd_config,
+    config   = rspamd_config,
+    ev_base  = rspamadm_ev_base,
+    session  = rspamadm_session,
+    log_obj  = rspamd_config,
     resolver = rspamadm_dns_resolver,
 }
 
 
-local function track_limits_handler(_)
-    local res, prefix = lua_redis.request(redis_params, redis_attrs,
-            { 'ZRANGE', settings.prefix .. settings.lfb_cache_prefix, '-1', '-1' })
-    if res ~= 1 then
-        print('Redis request parameters are wrong')
-    end
-    local _, bucket_params = redis.request(redis_params, redis_attrs,
-            { 'HMGET', tostring(prefix[1]), 'l', 'b', 'r', 'dr', 'db' })
-    local last = tonumber(bucket_params[1])
-    local burst = tonumber(bucket_params[2])
-    local rate = tonumber(bucket_params[3])
-    local dynr = tonumber(bucket_params[4]) / 10000.0
-    local dynb = tonumber(bucket_params[5]) / 10000.0
+local function track_limits_handler(args)
+    for _ = 1, args.quantity do
+        local res, prefix = redis.request(redis_params, redis_attrs,
+                { 'ZRANGE', lfb_cache_prefix, '-1', '-1' })
+        if res ~= 1 then
+            print('Redis request parameters are wrong')
+        end
+        local _, bucket_params = redis.request(redis_params, redis_attrs,
+                { 'HMGET', tostring(prefix[1]), 'l', 'b', 'r', 'dr', 'db' })
+        local last = tonumber(bucket_params[1])
+        local burst = tonumber(bucket_params[2])
+        local rate = tonumber(bucket_params[3])
+        local dynr = tonumber(bucket_params[4]) / 10000.0
+        local dynb = tonumber(bucket_params[5]) / 10000.0
 
-    print(string.format('prefix: %s, last: %s, burst: %s, rate: %s, dynamic_rate: %s, dynamic_burst: %s',
-            prefix[1], last, burst, rate, dynr, dynb))
+        print(string.format('prefix: %s, last: %s, burst: %s, rate: %s, dynamic_rate: %s, dynamic_burst: %s',
+                prefix[1], last, burst, rate, dynr, dynb))
+    end
 end
 
 local function upgrade_bucket_handler(args)
@@ -137,7 +144,7 @@ local command_handlers = {
 local function handler(args)
     local cmd_opts = parser:parse(args)
 
-    redis_params = redis.parse_redis_server('redis')
+    redis_params = redis.parse_redis_server('ratelimit')
     if not redis_params then
         logger.errx(rspamd_config, 'no servers are specified, disabling module')
         os.exit(1)
