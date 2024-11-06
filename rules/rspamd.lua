@@ -51,7 +51,7 @@ else
   end
 end
 
-for local_lua in rspamd_util.glob(local_conf .. '/lua.local.d/*.lua') do
+for _, local_lua in ipairs(rspamd_util.glob(local_conf .. '/lua.local.d/*.lua') or {}) do
   dofile(local_lua)
 end
 
