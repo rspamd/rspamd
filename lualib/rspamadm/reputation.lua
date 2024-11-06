@@ -44,6 +44,9 @@ local function watch_lists_handler(args)
 
     local neg_top = lua_redis.request(redis_params, redis_attrs,
             { 'ZRANGE', args['key'] .. neg_top_name, 0, -1, 'WITHSCORES' })
+    for _, score in ipairs(neg_top) do
+        score = 0 - score
+    end
     print("Top list of negative scores: %s", neg_top)
 
 end
