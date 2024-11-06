@@ -21,7 +21,23 @@
 #include "libcryptobox/cryptobox.h"
 #include <string>
 #include <string_view>
-#include <array>
+#include <vector>
+#include <iosfwd>
+
+namespace std// NOLINT(cert-dcl58-cpp)
+{
+template<typename T>
+ostream &operator<<(ostream &stream, const vector<T> &in)
+{
+	stream << "[";
+	for (size_t i = 0; i < in.size(); ++i) {
+		if (i != 0) { stream << ", "; }
+		stream << in[i];
+	}
+	stream << "]";
+	return stream;
+}
+}// namespace std
 
 TEST_SUITE("rspamd_cryptobox")
 {
@@ -190,10 +206,10 @@ TEST_SUITE("rspamd_cryptobox")
 		const char *pk = "k4nz984k36xmcynm1hr9kdbn6jhcxf4ggbrb1quay7f88rpm9kay";
 		gsize outlen;
 		auto *pk_decoded = rspamd_decode_base32(pk, strlen(pk), &outlen, RSPAMD_BASE32_DEFAULT);
-		const unsigned char expected[32] = {95, 76, 225, 188, 0, 26, 146, 94, 70, 249,
-											90, 189, 35, 51, 1, 42, 9, 37, 94, 254, 204, 55, 198, 91, 180, 90,
-											46, 217, 140, 226, 211, 90};
-		const auto expected_arr = std::to_array(expected);
+		unsigned char expected[32] = {95, 76, 225, 188, 0, 26, 146, 94, 70, 249,
+									  90, 189, 35, 51, 1, 42, 9, 37, 94, 254, 204, 55, 198, 91, 180, 90,
+									  46, 217, 140, 226, 211, 90};
+		const auto expected_arr = std::vector(std::begin(expected), std::end(expected));
 
 		CHECK(outlen == 32);
 		unsigned char out[32];
@@ -202,7 +218,7 @@ TEST_SUITE("rspamd_cryptobox")
 		sk[31] &= 127;
 		sk[31] |= 64;
 		CHECK(crypto_scalarmult(out, sk, pk_decoded) != -1);
-		auto out_arr = std::to_array(out);
+		auto out_arr = std::vector(std::begin(out), std::end(out));
 		CHECK(out_arr == expected_arr);
 	}
 
@@ -217,16 +233,16 @@ TEST_SUITE("rspamd_cryptobox")
 		const char *pk = "k4nz984k36xmcynm1hr9kdbn6jhcxf4ggbrb1quay7f88rpm9kay";
 		gsize outlen;
 		auto *pk_decoded = rspamd_decode_base32(pk, strlen(pk), &outlen, RSPAMD_BASE32_DEFAULT);
-		const unsigned char expected[32] = {61, 109, 220, 195, 100, 174, 127, 237, 148,
-											122, 154, 61, 165, 83, 93, 105, 127, 166, 153, 112, 103, 224, 2, 200,
-											136, 243, 73, 51, 8, 163, 150, 7};
-		const auto expected_arr = std::to_array(expected);
+		unsigned char expected[32] = {61, 109, 220, 195, 100, 174, 127, 237, 148,
+									  122, 154, 61, 165, 83, 93, 105, 127, 166, 153, 112, 103, 224, 2, 200,
+									  136, 243, 73, 51, 8, 163, 150, 7};
+		const auto expected_arr = std::vector(std::begin(expected), std::end(expected));
 
 		CHECK(outlen == 32);
 		unsigned char out[32];
 
 		rspamd_cryptobox_nm(out, pk_decoded, sk);
-		auto out_arr = std::to_array(out);
+		auto out_arr = std::vector(std::begin(out), std::end(out));
 		CHECK(out_arr == expected_arr);
 	}
 }
