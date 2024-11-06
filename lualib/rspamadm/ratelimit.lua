@@ -53,6 +53,13 @@ unblock_bucket:option "-p --prefix"
               :description("Prefix of bucket to operate with")
               :argname("<prefix>")
 
+local unblock_buckets = parser:command 'unblock_buckets'
+                              :description("Unblock provided number of buckets(default: 1)")
+unblock_buckets:option "-q --quantity"
+               :description("Number of buckets to ublock")
+               :argname("<quantity>")
+               :default(1)
+
 
 local redis_params
 local lfb_cache_prefix = 'RL_cache_prefix'
@@ -128,17 +135,33 @@ local function upgrade_bucket_handler(args)
 
 end
 
-local function unblock_bucket_handler(args)
-    local res = redis.request(redis_params, redis_attrs, { 'HSET', tostring(args.prefix), 'b', 0 })
+local function unblock_bucket_helper(prefix)
+    local res = redis.request(redis_params, redis_attrs, { 'HSET', tostring(prefix), 'b', 0 })
     if res ~= 1 then
         print('Failed to unblock bucket')
     end
 end
 
+local function unblock_bucket_handler(args)
+    unblock_bucket_helper(args.prefix)
+end
+
+local function unblock_buckets_handler(args)
+    for _ = 1, args.quantity do
+        local res, prefix = redis.request(redis_params, redis_attrs,
+                { 'ZRANGE', lfb_cache_prefix, '-1', '-1' })
+        if res ~= 1 then
+            print('Redis request parameters are wrong')
+        end
+        unblock_bucket_helper(prefix)
+    end
+end
+
 local command_handlers = {
-    track_limits = track_limits_handler,
-    upgrade_bucket = upgrade_bucket_handler,
-    unblock_bucket = unblock_bucket_handler
+    track_limits    = track_limits_handler,
+    upgrade_bucket  = upgrade_bucket_handler,
+    unblock_bucket  = unblock_bucket_handler,
+    unblock_buckets = unblock_buckets_handler
 }
 
 local function handler(args)
