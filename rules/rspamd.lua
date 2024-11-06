@@ -51,6 +51,10 @@ else
   end
 end
 
+for local_lua in rspamd_util.glob(local_conf .. '/lua.local.d/*.lua') do
+  dofile(local_lua)
+end
+
 if rspamd_util.file_exists(local_conf .. '/local.d/rspamd.lua') then
   dofile(local_conf .. '/local.d/rspamd.lua')
 end
