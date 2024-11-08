@@ -352,6 +352,8 @@ local function fill_empty_strings(tbl, empty_value)
       if next(nested_filtered) ~= nil then
       filled_tbl[key] = nested_filtered
       end
+    elseif type(value) == 'boolean' then
+      filled_tbl[key] = value
     elseif value and type(value) == 'string' and is_empty(value) then
       filled_tbl[key] = empty_value
     elseif value then
