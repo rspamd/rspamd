@@ -22,8 +22,12 @@ watch_lists:option "-k --key"
            :argname ("<key>")
 
 
-local _ = parser:command 'convert_rbl'
+local convert_rbl = parser:command 'convert_rbl'
                           :description 'Convert top lists to RBL'
+
+convert_rbl:option "-k --key"
+           :description "Key to top lists to convert to rbl"
+           :argname ("<key>")
 
 local neg_top_name = 'RR_neg_top' -- Key for top negative scores
 local pos_top_name = 'RR_pos_top' -- Key for top positive scores
@@ -37,26 +41,47 @@ local redis_attrs = {
     resolver = rspamadm_dns_resolver,
 }
 
-local function watch_lists_handler(args)
+local function get_lists(args)
     local pos_top = lua_redis.request(redis_params, redis_attrs,
             { 'ZRANGE', args['key'] .. pos_top_name, 0, -1, 'WITHSCORES' })
-    print("Top list of positive scores: %s", pos_top)
 
     local neg_top = lua_redis.request(redis_params, redis_attrs,
             { 'ZRANGE', args['key'] .. neg_top_name, 0, -1, 'WITHSCORES' })
     for _, score in ipairs(neg_top) do
         score = 0 - score
     end
+    return pos_top, neg_top
+end
+
+local function watch_lists_handler(args)
+
+    local pos_top, neg_top = get_lists(args)
+
+    print("Top list of positive scores: %s", pos_top)
+
     print("Top list of negative scores: %s", neg_top)
 
 end
 
-local function convert_rbl_handler(args)
-    local opts = rspamd_config:get_all_opt('rbl')
-    if not (opts and type(opts) == 'table') then
-        rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
-        return
+local function convert_list(top)
+    local result = {}
+
+    for name, _ in ipairs(top) do
+        table.insert(result, name)
     end
+
+    return result
+end
+
+local function convert_rbl_handler(args)
+    local pos_top, neg_top = get_lists(args)
+
+    local conv_pos_top = convert_list(pos_top)
+
+    local conv_neg_top = convert_list(neg_top)
+
+    print(conv_pos_top)
+    print(conv_neg_top)
 end
 
 
@@ -73,8 +98,6 @@ local function handler(args)
         rspamd_logger.errx('Redis is not configured, exiting')
         os.exit(1)
     end
-
-    lua_redis.connect(redis_params, redis_attrs)
 
     local f = command_handlers[cmd_opts.command]
     if not f then
