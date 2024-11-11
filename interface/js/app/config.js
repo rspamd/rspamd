@@ -182,7 +182,7 @@ define(["jquery", "app/common"],
                         document.querySelector("#editor").innerHTML = common.escapeHTML(data[0].data);
                     }
 
-                    let icon = "fa-edit";
+                    let icon = "fa-pen-to-square";
                     if (item.editable === false || common.read_only) {
                         $("#editor").attr(editor[mode].readonly_attr);
                         icon = "fa-eye";

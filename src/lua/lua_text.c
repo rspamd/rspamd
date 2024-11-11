@@ -312,14 +312,14 @@ lua_check_text_or_string(lua_State *L, int pos)
 }
 
 struct rspamd_lua_text *
-lua_new_text(lua_State *L, const char *start, gsize len, gboolean own)
+lua_new_text(lua_State *L, const char *start, gsize len, gboolean allocate_memory)
 {
 	struct rspamd_lua_text *t;
 
 	t = lua_newuserdata(L, sizeof(*t));
 	t->flags = 0;
 
-	if (own) {
+	if (allocate_memory) {
 		char *storage;
 
 		if (len > 0) {

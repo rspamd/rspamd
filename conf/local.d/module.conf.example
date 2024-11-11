@@ -1,0 +1,20 @@
+# Define local parameters that you need to merge with the main configuration from
+# either modules.d (for the modules shipped with Rspamd) or modules.local.d (for
+# the modules that you have written).
+#
+# !!! Ensure NOT to enclose your configuration in the outer block with the module
+
+# DON'T DO THIS:
+# module_name { <--- Don't do this
+#   param = "other_value";
+# }
+
+# Just define your parameters here:
+
+param = "other_value";
+
+# Merge with the default complex param
+complex_param {
+  key = "new_value";
+}
+
