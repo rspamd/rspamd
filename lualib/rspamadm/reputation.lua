@@ -29,6 +29,10 @@ convert_rbl:option "-k --key"
            :description "Key to top lists to convert to rbl"
            :argname ("<key>")
 
+convert_rbl:option "-f --file"
+           :description "Path to the place where .rbldns file should be saved"
+           :argname ("<file>")
+
 local neg_top_name = 'RR_neg_top' -- Key for top negative scores
 local pos_top_name = 'RR_pos_top' -- Key for top positive scores
 local redis_params
@@ -42,6 +46,11 @@ local redis_attrs = {
 }
 
 local function get_lists(args)
+    if args['key'] == nil or args['key'] == "" then
+        rspamd_logger.errx('Incorrect argument for key, exiting')
+        os.exit(1)
+    end
+
     local pos_top = lua_redis.request(redis_params, redis_attrs,
             { 'ZRANGE', args['key'] .. pos_top_name, 0, -1, 'WITHSCORES' })
 
@@ -63,25 +72,37 @@ local function watch_lists_handler(args)
 
 end
 
-local function convert_list(top)
-    local result = {}
-
-    for name, _ in ipairs(top) do
-        table.insert(result, name)
-    end
-
-    return result
-end
-
 local function convert_rbl_handler(args)
     local pos_top, neg_top = get_lists(args)
 
-    local conv_pos_top = convert_list(pos_top)
+    if args['key'] == nil or args['key'] == "" then
+        rspamd_logger.errx('Incorrect argument for key, exiting')
+        os.exit(1)
+    end
 
-    local conv_neg_top = convert_list(neg_top)
+    if args['file'] == nil or args['file'] == "" then
+        rspamd_logger.errx('Incorrect argument for file, exiting')
+        os.exit(1)
+    end
 
-    print(conv_pos_top)
-    print(conv_neg_top)
+    local file = io.open(args['file'], "w")
+
+    if not file then
+        rspamd_logger.errx('Failed to create file, exiting')
+        os.exit(1)
+    end
+
+    for name, _ in ipairs(pos_top) do
+        file:write(name)
+    end
+
+    for name, _ in ipairs(neg_top) do
+        file:write(name)
+    end
+
+    file:close()
+
+    print('Success. Created .rbldns file for top lists.')
 end
 
 
