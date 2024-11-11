@@ -1,0 +1,62 @@
+-- This directory is used to define user specific rules and plugins for Rspamd in Lua
+-- Each *.lua file is executed and added to the Rspamd
+
+-- Example of regexp rule:
+
+local reconf = config['regexp'] -- Create alias for regexp configs
+
+local re1 = 'From=/foo@/H' -- Mind local here
+local re2 = '/blah/P'
+
+reconf['SYMBOL'] = {
+  re = string.format('(%s) && !(%s)', re1, re2), -- use string.format to create expression
+  score = 1.2,
+  description = 'some description',
+
+  condition = function(task)
+    -- run this rule only if some condition is satisfied
+    return true
+  end,
+}
+
+-- Example of a simple lua rule:
+rspamd_config.SYMBOL = {
+  callback = function(task)
+    return true
+  end,
+  score = 1.2,
+  description = 'some description',
+
+  condition = function(task)
+    -- run this rule only if some condition is satisfied
+    return true
+  end,
+}
+
+-- Example of a plugin with configuration:
+local redis_params
+local lua_redis = require "lua_redis"
+
+local function symbol_cb(task)
+  local function redis_set_cb(err)
+    if err ~= nil then
+      rspamd_logger.errx(task, 'redis_set_cb received error: %1', err)
+    end
+  end
+  -- Create hash of message-id and store to redis
+  local key = make_key(task)
+  local ret = lua_redis.redis_make_request(task,
+      redis_params, -- connect params
+      key, -- hash key
+      true, -- is write
+      redis_set_cb, --callback
+      'SETEX', -- command
+      { key, tostring(settings['expire']), "1" } -- arguments
+  )
+end
+
+-- Load redis server for module named 'module'
+redis_params = lua_redis.parse_redis_server('module')
+if redis_params then
+  -- Register symbol
+end

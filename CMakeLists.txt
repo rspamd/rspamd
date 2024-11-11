@@ -50,6 +50,7 @@ OPTION(ENABLE_LUAJIT "Link with libluajit [default: ON]" ON)
 OPTION(ENABLE_URL_INCLUDE "Enable urls in ucl includes (requires libcurl or libfetch) [default: OFF]" OFF)
 OPTION(NO_SHARED "Build internal libs static [default: ON]" ON)
 OPTION(INSTALL_WEBUI "Install web interface [default: ON]" ON)
+OPTION(INSTALL_EXAMPLES "Install examples of the configuration and Lua [default: ON]" ON)
 OPTION(WANT_SYSTEMD_UNITS "Install systemd unit files on Linux [default: OFF]" OFF)
 OPTION(ENABLE_SNOWBALL "Enable snowball stemmer [default: ON]" ON)
 OPTION(ENABLE_CLANG_PLUGIN "Enable clang static analysing plugin [default: OFF]" OFF)
@@ -714,9 +715,14 @@ INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${RULESDIR})")
 LIST(LENGTH CONFFILES CONFLIST_COUNT)
 MATH(EXPR CONFLIST_MAX ${CONFLIST_COUNT}-1)
 
+SET(GLOB_PATTERNS "${CMAKE_SOURCE_DIR}/conf/*.conf;${CMAKE_SOURCE_DIR}/conf/*.inc")
+IF(INSTALL_EXAMPLES MATCHES "ON")
+    LIST(APPEND GLOB_PATTERNS "${CMAKE_SOURCE_DIR}/conf/*.lua.example")
+    LIST(APPEND GLOB_PATTERNS "${CMAKE_SOURCE_DIR}/conf/*.conf.example")
+ENDIF()
+
 FILE(GLOB_RECURSE CONF_FILES RELATIVE "${CMAKE_SOURCE_DIR}/conf" CONFIGURE_DEPENDS
-        "${CMAKE_SOURCE_DIR}/conf/*.conf"
-        "${CMAKE_SOURCE_DIR}/conf/*.inc")
+        ${GLOB_PATTERNS})
 FOREACH (CONF_FILE ${CONF_FILES})
     GET_FILENAME_COMPONENT(_rp ${CONF_FILE} PATH)
     INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${CONFDIR}/${_rp})")
@@ -790,8 +796,6 @@ IF (INSTALL_WEBUI MATCHES "ON")
     INSTALL(DIRECTORY "interface/" DESTINATION ${WWWDIR} PATTERN ".git" EXCLUDE)
 ENDIF (INSTALL_WEBUI MATCHES "ON")
 
-
-INSTALL(DIRECTORY "contrib/elastic/" DESTINATION "${SHAREDIR}/elastic" PATTERN ".git" EXCLUDE)
 
 ADD_CUSTOM_TARGET(dist ${CMAKE_SOURCE_DIR}/dist.sh
         "${CMAKE_BINARY_DIR}/rspamd-${RSPAMD_VERSION}.tar.xz" "${TAR}"

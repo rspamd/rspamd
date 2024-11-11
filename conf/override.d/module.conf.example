@@ -1,0 +1,18 @@
+# Define local parameters that you need to override the main configuration from
+# either modules.d (for the modules shipped with Rspamd) or modules.local.d (for
+# the modules that you have written).
+#
+# !!! Ensure NOT to enclose your configuration in the outer block with the module
+
+# DON'T DO THIS:
+# module_name { <--- Don't do this
+#   complex_param = null;
+# }
+
+# Just define your parameters here:
+
+# Redefine the whole complex param instead of merging like in `local.d`
+# All other keys in `complex_param` will be removed
+complex_param {
+  key = "new_value";
+}

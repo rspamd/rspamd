@@ -31,6 +31,8 @@ local leak_rate = tonumber(KEYS[3])
 local max_burst = tonumber(KEYS[4])
 local prefix = KEYS[1]
 local enable_dynamic = KEYS[7] == 'true'
+local lfb_cache_prefix = KEYS[8]
+local lfb_max_cache_size = tonumber(KEYS[9])
 local dynr, dynb, leaked = 0, 0, 0
 if not last then
   -- New bucket
@@ -83,6 +85,9 @@ if burst + pending > 0 then
 
   burst = burst + pending
   if burst > 0 and burst > max_burst * dynb then
+    redis.call('ZREMRANGEBYRANK', lfb_cache_prefix, 0, -(lfb_max_cache_size + 1)) -- Keeping size of lfb cache
+    redis.call('ZADD', lfb_cache_prefix, now, prefix) -- LRU cache is based on timestamps of buckets
+
     return { 1, tostring(burst - pending), tostring(dynr), tostring(dynb), tostring(leaked) }
   end
   -- Increase pending if we allow ratelimit
