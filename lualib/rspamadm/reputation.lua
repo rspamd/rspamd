@@ -9,39 +9,34 @@ local parser = argparse()
         :command_target('command')
         :require_command(true)
 
-parser:option "-c --config"
-      :description "Path to config file"
-      :argname("<cfg>")
-      :default(rspamd_paths["CONFDIR"] .. "/" .. "rspamd.conf")
-
 local watch_lists = parser:command 'watch_lists'
                           :description 'Watch reputation top lists.'
 
-watch_lists:option "-k --key"
+watch_lists:argument "key"
            :description "Key to watch its top lists"
-           :argname ("<key>")
+           :args(1)
 
 
 local convert_rbl = parser:command 'convert_rbl'
                           :description 'Convert top lists to RBL'
 
-convert_rbl:option "-k --key"
+convert_rbl:argument "key"
            :description "Key to top lists to convert to rbl"
-           :argname ("<key>")
+           :args(1)
 
-convert_rbl:option "-f --file"
+convert_rbl:argument "file"
            :description "Path to the place where .rbldns file should be saved"
-           :argname ("<file>")
+           :args(1)
 
 local neg_top_name = 'RR_neg_top' -- Key for top negative scores
 local pos_top_name = 'RR_pos_top' -- Key for top positive scores
 local redis_params
 
 local redis_attrs = {
-    config = rspamd_config,
-    ev_base = rspamadm_ev_base,
-    session = rspamadm_session,
-    log_obj = rspamd_config,
+    config   = rspamd_config,
+    ev_base  = rspamadm_ev_base,
+    session  = rspamadm_session,
+    log_obj  = rspamd_config,
     resolver = rspamadm_dns_resolver,
 }
 
@@ -59,34 +54,26 @@ local function get_lists(args)
     for _, score in ipairs(neg_top) do
         score = 0 - score
     end
+
     return pos_top, neg_top
 end
 
 local function watch_lists_handler(args)
-
     local pos_top, neg_top = get_lists(args)
 
     print("Top list of positive scores: %s", pos_top)
-
     print("Top list of negative scores: %s", neg_top)
-
 end
 
 local function convert_rbl_handler(args)
-    local pos_top, neg_top = get_lists(args)
-
-    if args['key'] == nil or args['key'] == "" then
-        rspamd_logger.errx('Incorrect argument for key, exiting')
-        os.exit(1)
-    end
-
     if args['file'] == nil or args['file'] == "" then
         rspamd_logger.errx('Incorrect argument for file, exiting')
         os.exit(1)
     end
 
-    local file = io.open(args['file'], "w")
+    local pos_top, neg_top = get_lists(args)
 
+    local file = io.open(args['file'], "w")
     if not file then
         rspamd_logger.errx('Failed to create file, exiting')
         os.exit(1)
@@ -100,9 +87,8 @@ local function convert_rbl_handler(args)
         file:write(name)
     end
 
-    file:close()
-
     print('Success. Created .rbldns file for top lists.')
+    file:close()
 end
 
 
