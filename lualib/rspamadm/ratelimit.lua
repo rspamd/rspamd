@@ -77,15 +77,18 @@ local function track_limits_handler(args)
         local res, prefix = redis.request(redis_params, redis_attrs,
                 { 'ZRANGE', lfb_cache_prefix, '-1', '-1' })
         if res ~= 1 then
-            print('Redis request parameters are wrong')
+            logger.errx('Redis request parameters are wrong')
+            os.exit(1)
         end
+
         local _, bucket_params = redis.request(redis_params, redis_attrs,
                 { 'HMGET', tostring(prefix[1]), 'l', 'b', 'r', 'dr', 'db' })
-        local last = tonumber(bucket_params[1])
+
+        local last  = tonumber(bucket_params[1])
         local burst = tonumber(bucket_params[2])
-        local rate = tonumber(bucket_params[3])
-        local dynr = tonumber(bucket_params[4]) / 10000.0
-        local dynb = tonumber(bucket_params[5]) / 10000.0
+        local rate  = tonumber(bucket_params[3])
+        local dynr  = tonumber(bucket_params[4]) / 10000.0
+        local dynb  = tonumber(bucket_params[5]) / 10000.0
 
         print(string.format('prefix: %s, last: %s, burst: %s, rate: %s, dynamic_rate: %s, dynamic_burst: %s',
                 prefix[1], last, burst, rate, dynr, dynb))
@@ -93,11 +96,16 @@ local function track_limits_handler(args)
 end
 
 local function upgrade_bucket_handler(args)
+    if args.prefix == nil or args.prefix == "" then
+        logger.errx('Prefix is empty or nil')
+    end
+
     if args.burst then
         local res = redis.request(redis_params, redis_attrs,
                 { 'HSET', tostring(args.prefix), 'b', tostring(args.burst) })
         if res ~= 1 then
-            print('Incorrect arguments for redis request for burst')
+            logger.errx('Incorrect arguments for redis request for burst or prefix is incorrect')
+            os.exit(1)
         end
     end
 
@@ -105,7 +113,8 @@ local function upgrade_bucket_handler(args)
         local res = redis.request(redis_params, redis_attrs,
                 { 'HSET', tostring(args.prefix), 'r', tostring(args.rate) })
         if res ~= 1 then
-            print('Incorrect arguments for redis request for rate')
+            logger.errx('Incorrect arguments for redis request for rate or prefix is incorrect')
+            os.exit(1)
         end
     end
 
@@ -113,7 +122,8 @@ local function upgrade_bucket_handler(args)
         local res = redis.request(redis_params, redis_attrs,
                 { 'HSET', tostring(args.prefix), 's', tostring(args.symbol) })
         if res ~= 1 then
-            print('Incorrect arguments for redis request for symbol')
+            logger.errx('Incorrect arguments for redis request for symbol or prefix is incorrect')
+            os.exit(1)
         end
     end
 
@@ -121,7 +131,8 @@ local function upgrade_bucket_handler(args)
         local res = redis.request(redis_params, redis_attrs,
                 { 'HSET', tostring(args.prefix), 'db', tostring(args.dynb) })
         if res ~= 1 then
-            print('Incorrect arguments for redis request for dynamic burst')
+            logger.errx('Incorrect arguments for redis request for dynamic burst or prefix is incorrect')
+            os.exit(1)
         end
     end
 
@@ -129,7 +140,8 @@ local function upgrade_bucket_handler(args)
         local res = redis.request(redis_params, redis_attrs,
                 { 'HSET', tostring(args.prefix), 'dr', tostring(args.dynr) })
         if res ~= 1 then
-            print('Incorrect arguments for redis request for dynamic rate')
+            logger.errx('Incorrect arguments for redis request for dynamic rate or prefix is incorrect')
+            os.exit(1)
         end
     end
 
@@ -138,7 +150,8 @@ end
 local function unblock_bucket_helper(prefix)
     local res = redis.request(redis_params, redis_attrs, { 'HSET', tostring(prefix), 'b', 0 })
     if res ~= 1 then
-        print('Failed to unblock bucket')
+        logger.errx('Failed to unblock bucket')
+        os.exit(1)
     end
 end
 
@@ -151,7 +164,8 @@ local function unblock_buckets_handler(args)
         local res, prefix = redis.request(redis_params, redis_attrs,
                 { 'ZRANGE', lfb_cache_prefix, '-1', '-1' })
         if res ~= 1 then
-            print('Redis request parameters are wrong')
+            logger.errx('Redis request parameters are wrong')
+            os.exit(1)
         end
         unblock_bucket_helper(prefix)
     end
