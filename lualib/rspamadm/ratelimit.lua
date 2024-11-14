@@ -21,9 +21,8 @@ track_limits:option "-q --quantity"
 local upgrade_bucket = parser:command 'upgrade_bucket'
                              :description 'Upgrade certain bucket'
 
-upgrade_bucket:option "-p --prefix"
+upgrade_bucket:argument "prefix"
               :description("Prefix of bucket to operate with")
-              :argname("<prefix>")
               :args(1)
 upgrade_bucket:option "-b --burst"
               :description("Burst to set")
@@ -49,9 +48,9 @@ upgrade_bucket:option "-R --dynamic_rate"
 local unblock_bucket = parser:command 'unblock_bucket'
                              :description 'Unblock certain bucket'
 
-unblock_bucket:option "-p --prefix"
+unblock_bucket:argument "prefix"
               :description("Prefix of bucket to operate with")
-              :argname("<prefix>")
+              :args(1)
 
 local unblock_buckets = parser:command 'unblock_buckets'
                               :description("Unblock provided number of buckets(default: 1)")
