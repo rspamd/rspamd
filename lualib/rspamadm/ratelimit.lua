@@ -9,7 +9,7 @@ local parser = argparse()
         :command_target('command')
         :require_command(true)
 
-local track_limits = parser:command 'track_limits'
+local track_limits = parser:command 'track'
                            :description 'Track last limits of ratelimit module'
 
 track_limits:option "-q --quantity"
@@ -18,12 +18,11 @@ track_limits:option "-q --quantity"
             :default(1)
 
 
-local upgrade_bucket = parser:command 'upgrade_bucket'
-                             :description 'Upgrade certain bucket'
-
+local upgrade_bucket = parser:command 'upgrade'
+                             :description 'Upgrade certain bucket or top limit bucket'
 upgrade_bucket:argument "prefix"
               :description("Prefix of bucket to operate with")
-              :args(1)
+              :args("?")
 upgrade_bucket:option "-b --burst"
               :description("Burst to set")
               :argname("<burst>")
@@ -45,19 +44,17 @@ upgrade_bucket:option "-R --dynamic_rate"
               :argname("<dynr>")
               :args("?")
 
-local unblock_bucket = parser:command 'unblock_bucket'
-                             :description 'Unblock certain bucket'
+local unblock_bucket = parser:command 'unblock'
+                             :description 'Unblock certain bucket or number of buckets(default: 1)'
 
-unblock_bucket:argument "prefix"
-              :description("Prefix of bucket to operate with")
-              :args(1)
-
-local unblock_buckets = parser:command 'unblock_buckets'
-                              :description("Unblock provided number of buckets(default: 1)")
-unblock_buckets:option "-q --quantity"
-               :description("Number of buckets to ublock")
-               :argname("<quantity>")
-               :default(1)
+parser:mutex(
+    unblock_bucket:argument "prefix"
+                  :description("Prefix of bucket to operate with")
+                  :args(1),
+    unblock_bucket:argument "quantity"
+                  :description("Number of buckets to ublock")
+                  :default(1)
+)
 
 
 local redis_params
@@ -72,9 +69,9 @@ local redis_attrs = {
 
 
 local function track_limits_handler(args)
-    for _ = 1, args.quantity do
+    for i = 1, args.quantity do
         local res, prefix = redis.request(redis_params, redis_attrs,
-                { 'ZRANGE', lfb_cache_prefix, '-1', '-1' })
+                { 'ZRANGE', lfb_cache_prefix, -i, -i })
         if res ~= 1 then
             logger.errx('Redis request parameters are wrong')
             os.exit(1)
@@ -95,13 +92,20 @@ local function track_limits_handler(args)
 end
 
 local function upgrade_bucket_handler(args)
-    if args.prefix == nil or args.prefix == "" then
-        logger.errx('Prefix is empty or nil')
+    local prefix = args.prefix
+    if prefix == nil or prefix == "" then
+        local res = nil
+        res, prefix = redis.request(redis_params, redis_attrs,
+                { 'ZRANGE', lfb_cache_prefix, '-1', '-1' })
+        if res ~= 1 then
+            logger.errx('Redis request parameters are wrong')
+            os.exit(1)
+        end
     end
 
     if args.burst then
         local res = redis.request(redis_params, redis_attrs,
-                { 'HSET', tostring(args.prefix), 'b', tostring(args.burst) })
+                { 'HSET', tostring(prefix), 'b', tostring(args.burst) })
         if res ~= 1 then
             logger.errx('Incorrect arguments for redis request for burst or prefix is incorrect')
             os.exit(1)
@@ -110,7 +114,7 @@ local function upgrade_bucket_handler(args)
 
     if args.rate then
         local res = redis.request(redis_params, redis_attrs,
-                { 'HSET', tostring(args.prefix), 'r', tostring(args.rate) })
+                { 'HSET', tostring(prefix), 'r', tostring(args.rate) })
         if res ~= 1 then
             logger.errx('Incorrect arguments for redis request for rate or prefix is incorrect')
             os.exit(1)
@@ -119,7 +123,7 @@ local function upgrade_bucket_handler(args)
 
     if args.symbol then
         local res = redis.request(redis_params, redis_attrs,
-                { 'HSET', tostring(args.prefix), 's', tostring(args.symbol) })
+                { 'HSET', tostring(prefix), 's', tostring(args.symbol) })
         if res ~= 1 then
             logger.errx('Incorrect arguments for redis request for symbol or prefix is incorrect')
             os.exit(1)
@@ -128,7 +132,7 @@ local function upgrade_bucket_handler(args)
 
     if args.dynb then
         local res = redis.request(redis_params, redis_attrs,
-                { 'HSET', tostring(args.prefix), 'db', tostring(args.dynb) })
+                { 'HSET', tostring(prefix), 'db', tostring(args.dynb) })
         if res ~= 1 then
             logger.errx('Incorrect arguments for redis request for dynamic burst or prefix is incorrect')
             os.exit(1)
@@ -137,7 +141,7 @@ local function upgrade_bucket_handler(args)
 
     if args.dynr then
         local res = redis.request(redis_params, redis_attrs,
-                { 'HSET', tostring(args.prefix), 'dr', tostring(args.dynr) })
+                { 'HSET', tostring(prefix), 'dr', tostring(args.dynr) })
         if res ~= 1 then
             logger.errx('Incorrect arguments for redis request for dynamic rate or prefix is incorrect')
             os.exit(1)
@@ -155,13 +159,16 @@ local function unblock_bucket_helper(prefix)
 end
 
 local function unblock_bucket_handler(args)
+    if (args.prefix == nil or args.prefix == "") then
+        unblock_bucket_handler(args)
+    end
     unblock_bucket_helper(args.prefix)
 end
 
 local function unblock_buckets_handler(args)
-    for _ = 1, args.quantity do
+    for i = 1, args.quantity do
         local res, prefix = redis.request(redis_params, redis_attrs,
-                { 'ZRANGE', lfb_cache_prefix, '-1', '-1' })
+                { 'ZRANGE', lfb_cache_prefix, -i, -i })
         if res ~= 1 then
             logger.errx('Redis request parameters are wrong')
             os.exit(1)
@@ -173,8 +180,7 @@ end
 local command_handlers = {
     track_limits    = track_limits_handler,
     upgrade_bucket  = upgrade_bucket_handler,
-    unblock_bucket  = unblock_bucket_handler,
-    unblock_buckets = unblock_buckets_handler
+    unblock_bucket  = unblock_bucket_handler
 }
 
 local function handler(args)
