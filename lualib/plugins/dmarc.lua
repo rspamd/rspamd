@@ -194,14 +194,17 @@ exports.gen_munging_callback = function(munging_opts, settings)
       via_name = string.format('%s via %s', from.name, via_user)
     end
 
-    local hdr_encoded = rspamd_util.fold_header('From',
-        rspamd_util.mime_header_encode(string.format('%s <%s>',
-            via_name, via_addr)), task:get_newlines_type())
-    local orig_from_encoded = rspamd_util.fold_header('X-Original-From',
-        rspamd_util.mime_header_encode(string.format('%s <%s>',
-            from.name or '', from.addr)), task:get_newlines_type())
+    local encoded_via_name = rspamd_util.mime_header_encode(via_name)
+    local via_from_folded = rspamd_util.fold_header('From',
+        string.format('%s <%s>', encoded_via_name, via_addr),
+        task:get_newlines_type())
+    local encoded_orig_name = rspamd_util.mime_header_encode(from.name or '')
+    local orig_from_folded = rspamd_util.fold_header('X-Original-From',
+        string.format('%s <%s>', encoded_orig_name, from.addr),
+        task:get_newlines_type())
     local add_hdrs = {
-      ['From'] = { order = 1, value = hdr_encoded },
+      ['From'] = { order = 1, value = via_from_folded },
+      ['X-Original-From'] = { order = 0, value = orig_from_folded },
     }
     local remove_hdrs = { ['From'] = 0 }
 
@@ -223,13 +226,12 @@ exports.gen_munging_callback = function(munging_opts, settings)
 
     add_hdrs['Reply-To'] = { order = 0, value = nreply }
 
-    add_hdrs['X-Original-From'] = { order = 0, value = orig_from_encoded }
     lua_mime.modify_headers(task, {
       remove = remove_hdrs,
       add = add_hdrs
     })
     lua_util.debugm(N, task, 'munged DMARC header for %s: %s -> %s',
-        from.domain, hdr_encoded, from.addr)
+        from.domain, via_from_folded, from.addr)
     rspamd_logger.infox(task, 'munged DMARC header for %s', from.addr)
     task:insert_result('DMARC_MUNGED', 1.0, from.addr)
   end
