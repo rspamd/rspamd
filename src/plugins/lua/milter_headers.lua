@@ -213,16 +213,17 @@ local function milter_headers(task)
     if not add[hname] then
       add[hname] = {}
     end
+    local folded = lua_util.fold_header(task, hname, value, stop_chars)
     if rspamd_config:is_mime_utf8() then
-      if not rspamd_util.is_valid_utf8(value) then
-        value = rspamd_util.mime_header_encode(value)
+      if not rspamd_util.is_valid_utf8(folded) then
+        folded = rspamd_util.mime_header_encode(folded)
       end
     else
-      value = rspamd_util.mime_header_encode(value)
+      folded = rspamd_util.mime_header_encode(folded)
     end
     table.insert(add[hname], {
       order = (order or settings.default_headers_order or -1),
-      value = lua_util.fold_header(task, hname, value, stop_chars)
+      value = folded
     })
   end
 
