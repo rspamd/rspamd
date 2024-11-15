@@ -51,8 +51,8 @@ local function get_lists(args)
 
     local neg_top = lua_redis.request(redis_params, redis_attrs,
             { 'ZRANGE', args['key'] .. neg_top_name, 0, -1, 'WITHSCORES' })
-    for _, score in ipairs(neg_top) do
-        score = 0 - score
+    for i = 1, #neg_top, 2 do
+        neg_top[i] = 0 - neg_top[i] -- Making absolute scores of the negative top really negative
     end
 
     return pos_top, neg_top
@@ -79,12 +79,12 @@ local function convert_rbl_handler(args)
         os.exit(1)
     end
 
-    for name, _ in ipairs(pos_top) do
-        file:write(name)
+    for i = 1, #pos_top, 2 do
+        file:write(pos_top[i])
     end
 
-    for name, _ in ipairs(neg_top) do
-        file:write(name)
+    for i = 1, #neg_top, 2 do
+        file:write(neg_top[i])
     end
 
     print('Success. Created .rbldns file for top lists.')
