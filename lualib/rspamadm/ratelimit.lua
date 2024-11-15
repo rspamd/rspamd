@@ -158,13 +158,6 @@ local function unblock_bucket_helper(prefix)
     end
 end
 
-local function unblock_bucket_handler(args)
-    if (args.prefix == nil or args.prefix == "") then
-        unblock_bucket_handler(args)
-    end
-    unblock_bucket_helper(args.prefix)
-end
-
 local function unblock_buckets_handler(args)
     for i = 1, args.quantity do
         local res, prefix = redis.request(redis_params, redis_attrs,
@@ -175,6 +168,13 @@ local function unblock_buckets_handler(args)
         end
         unblock_bucket_helper(prefix)
     end
+end
+
+local function unblock_bucket_handler(args)
+    if (args.prefix == nil or args.prefix == "") then
+        unblock_buckets_handler(args)
+    end
+    unblock_bucket_helper(args.prefix)
 end
 
 local command_handlers = {
