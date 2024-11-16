@@ -818,7 +818,7 @@ rspamd_mime_header_decode(rspamd_mempool_t *pool, const char *in,
 char *
 rspamd_mime_header_encode(const char *in, gsize len)
 {
-	static const size_t max_token_size = 76 - (sizeof("=?UTF-8?Q? ?=") - 3);
+	static const size_t max_token_size = 76 - 12; /* 12 is the length of "=?UTF-8?Q??="; */
 	GString *outbuf = g_string_sized_new(len);
 	char *encode_buf = g_alloca(max_token_size + 3);
 	const char *p = in;
@@ -844,7 +844,7 @@ rspamd_mime_header_encode(const char *in, gsize len)
 					encoded_len += 3;
 
 					if (encoded_len > max_token_size) {
-						piece_len = i - 1;
+						piece_len = i;
 						q = p + piece_len;
 						/* No more space */
 						break;
@@ -854,7 +854,7 @@ rspamd_mime_header_encode(const char *in, gsize len)
 					encoded_len++;
 
 					if (encoded_len > max_token_size) {
-						piece_len = i - 1;
+						piece_len = i;
 						q = p + piece_len;
 						/* No more space */
 						break;
@@ -865,7 +865,7 @@ rspamd_mime_header_encode(const char *in, gsize len)
 			if (has_non_ascii) {
 				g_string_append(outbuf, "=?UTF-8?Q?");
 				/* Do encode */
-				encoded_len = rspamd_encode_qp2047_buf(p, piece_len, encode_buf, max_token_size);
+				encoded_len = rspamd_encode_qp2047_buf(p, piece_len, encode_buf, max_token_size + 3);
 				g_string_append_len(outbuf, encode_buf, encoded_len);
 				g_string_append(outbuf, "?=");
 			}

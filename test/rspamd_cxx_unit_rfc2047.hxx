@@ -135,20 +135,12 @@ TEST_SUITE("rfc2047 encode")
 		const char *input = "これはとても長いテキストで、エンコードされたワードが76文字を超える必要があります。";
 		char *output_cstr = rspamd_mime_header_encode(input, strlen(input));
 		std::string output(output_cstr);
-
-		// Expected output with proper splitting into multiple encoded-words
-		// The actual encoding would produce a long string; we need to split it into parts
-		// Each encoded-word should be less than or equal to 76 characters (including the '=?UTF-8?Q?' prefix and '?=' suffix)
-		// For our mock, we'll simulate the splitting
-
-		// For simplicity in this test, we assume that the encoded output, after encoding and wrapping with '=?UTF-8?Q?' and '?=', is split correctly.
-
-		// Construct the expected output manually (in practice, you may want to write a helper to split it)
-		std::string expected_output = "=?UTF-8?Q?"
-									  "=E3=81=93=E3=82=8C=E3=81=AF=E3=81=A8=E3=81=A6=E3=82=82=E9=95=B7=E3=81=84=E3=83=86=E3=82=AD?= "
-									  "=?UTF-8?Q?=E3=82=B9=E3=83=88=E3=81=A7=E3=80=81=E3=82=A8=E3=83=B3=E3=82=B3=E3=83=BC=E3=83=89=E3=81=95?= "
-									  "=?UTF-8?Q?=E3=82=8C=E3=81=9F=E3=83=AF=E3=83=BC=E3=83=89=E3=81=8C76=E6=96=87=E5=AD=97=E3=82=92=E8?= "
-									  "=?UTF-8?Q?=B6=85=E3=81=88=E3=82=8B=E5=BF=85=E8=A6=81=E3=81=8C=E3=81=82=E3=82=8A=E3=81=BE=E3=81=99?=.";
+		std::string expected_output = "=?UTF-8?Q?=E3=81=93=E3=82=8C=E3=81=AF=E3=81=A8=E3=81=A6=E3=82=82=E9=95=B7?="
+									  "=?UTF-8?Q?=E3=81=84=E3=83=86=E3=82=AD=E3=82=B9=E3=83=88=E3=81=A7=E3=80=81?="
+									  "=?UTF-8?Q?=E3=82=A8=E3=83=B3=E3=82=B3=E3=83=BC=E3=83=89=E3=81=95=E3=82=8C?="
+									  "=?UTF-8?Q?=E3=81=9F=E3=83=AF=E3=83=BC=E3=83=89=E3=81=8C76=E6=96=87=E5=AD?="
+									  "=?UTF-8?Q?=97=E3=82=92=E8=B6=85=E3=81=88=E3=82=8B=E5=BF=85=E8=A6=81=E3=81?="
+									  "=?UTF-8?Q?=8C=E3=81=82=E3=82=8A=E3=81=BE=E3=81=99=E3=80=82?=";
 
 		CHECK(output == expected_output);
 		g_free(output_cstr);
@@ -177,10 +169,11 @@ TEST_SUITE("rfc2047 encode")
 
 		// Expected output: ASCII text as-is, non-ASCII text encoded and split accordingly
 		std::string expected_output = "ASCII_Text "
-									  "=?UTF-8?Q?"
-									  "=E3=81=93=E3=82=8C=E3=81=AF=E9=9D=9E=E5=B8=B8=E3=81=AB=E9=95=B7=E3=81=84=E9=9D=9EASCII=E3=83=86?= "
-									  "=?UTF-8?Q?=E3=82=AD=E3=82=B9=E3=83=88=E3=81=A7=E3=80=81=E3=82=A8=E3=83=B3=E3=82=B3=E3=83=BC=E3=83=89?= "
-									  "=?UTF-8?Q?=E3=81=8C=E5=BF=85=E8=A6=81=E3=81=AB=E3=81=AA=E3=82=8A=E3=81=BE=E3=81=99=E3=80=82?=";
+									  "=?UTF-8?Q?=E3=81=93=E3=82=8C=E3=81=AF=E9=9D=9E=E5=B8=B8=E3=81=AB=E9=95=B7?="
+									  "=?UTF-8?Q?=E3=81=84=E9=9D=9EASCII=E3=83=86=E3=82=AD=E3=82=B9=E3=83=88=E3?="
+									  "=?UTF-8?Q?=81=A7=E3=80=81=E3=82=A8=E3=83=B3=E3=82=B3=E3=83=BC=E3=83=89=E3?="
+									  "=?UTF-8?Q?=81=8C=E5=BF=85=E8=A6=81=E3=81=AB=E3=81=AA=E3=82=8A=E3=81=BE=E3?="
+									  "=?UTF-8?Q?=81=99=E3=80=82?=";
 
 		CHECK(output == expected_output);
 		g_free(output_cstr);
@@ -195,15 +188,15 @@ TEST_SUITE("rfc2047 encode")
 		std::string output(output_cstr);
 
 		std::string expected_output =
-			"=?UTF-8?Q?=E9=9D=9E=E5=B8=B6=E3=81=AB=E9=95=B7=E3=81=84=E9=9D=9EASCII=E6?="
-			"=?UTF-8?Q?=96=87=E5=AD=97=E5=88=97=E3=82=92=E4=BD=BF=E7=94=A8=E3=81=97?="
-			"=?UTF-8?Q?=E3=81=A6=E3=82=A8=E3=83=B3=E3=82=B3=E3=83=BC=E3=83=89=E3=83=AF?="
-			"=?UTF-8?Q?=E3=83=BC=E3=83=89=E3=81=AE=E5=88=86=E5=89=B2=E3=82=92=E3=83=86?="
-			"=?UTF-8?Q?=E3=82=B9=E3=83=88=E3=81=97=E3=81=BE=E3=81=99=E3=80=82=E3=83=87?="
-			"=?UTF-8?Q?=E3=83=BC=E3=82=BF=E3=81=8C=E9=95=B7=E3=81=99=E3=81=8E=E3=82=8B?="
-			"=?UTF-8?Q?=E5=A0=B4=E5=90=88=E3=80=81=E6=AD=A3=E3=81=97=E3=81=8F=E5=88=86?="
-			"=?UTF-8?Q?=E5=89=B2=E3=81=95=E3=82=8C=E3=82=8B=E3=81=B9=E3=81=8D=E3=81=A7?="
-			"=?UTF-8?Q?=E3=81=99=E3=80=82?=";// ≤76 chars
+			"=?UTF-8?Q?=E9=9D=9E=E5=B8=B8=E3=81=AB=E9=95=B7=E3=81=84=E9=9D=9EASCII=E6?="
+			"=?UTF-8?Q?=96=87=E5=AD=97=E5=88=97=E3=82=92=E4=BD=BF=E7=94=A8=E3=81=97=E3?="
+			"=?UTF-8?Q?=81=A6=E3=82=A8=E3=83=B3=E3=82=B3=E3=83=BC=E3=83=89=E3=83=AF=E3?="
+			"=?UTF-8?Q?=83=BC=E3=83=89=E3=81=AE=E5=88=86=E5=89=B2=E3=82=92=E3=83=86=E3?="
+			"=?UTF-8?Q?=82=B9=E3=83=88=E3=81=97=E3=81=BE=E3=81=99=E3=80=82=E3=83=87=E3?="
+			"=?UTF-8?Q?=83=BC=E3=82=BF=E3=81=8C=E9=95=B7=E3=81=99=E3=81=8E=E3=82=8B=E5?="
+			"=?UTF-8?Q?=A0=B4=E5=90=88=E3=80=81=E6=AD=A3=E3=81=97=E3=81=8F=E5=88=86=E5?="
+			"=?UTF-8?Q?=89=B2=E3=81=95=E3=82=8C=E3=82=8B=E3=81=B9=E3=81=8D=E3=81=A7=E3?="
+			"=?UTF-8?Q?=81=99=E3=80=82?=";// ≤76 chars
 
 		CHECK(output == expected_output);
 		g_free(output_cstr);
