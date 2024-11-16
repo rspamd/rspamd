@@ -754,7 +754,7 @@ rspamd_mime_header_decode(rspamd_mempool_t *pool, const char *in,
 						state = parse_normal;
 					}
 				} /* qmarks >= 3 */
-			}     /* p == '=' */
+			} /* p == '=' */
 			else {
 				state = got_encoded_start;
 			}
@@ -818,85 +818,63 @@ rspamd_mime_header_decode(rspamd_mempool_t *pool, const char *in,
 char *
 rspamd_mime_header_encode(const char *in, gsize len)
 {
-	const char *p = in, *end = in + len;
-	char *out, encode_buf[80 * sizeof(uint32_t)];
-	GString *res;
-	gboolean need_encoding = FALSE;
+	static const size_t max_token_size = 76;
+	GString *outbuf = g_string_sized_new(len);
+	size_t encode_buf_size = max_token_size;
+	char *encode_buf = g_alloca(encode_buf_size + 3);
+	const char *p = in;
+	const char *end = in + len;
 
-	/* Check if we need to encode */
 	while (p < end) {
-		if ((((unsigned char) *p) & 0x80) != 0) {
-			need_encoding = TRUE;
-			break;
+		if (*p == ' ' || *p == '\r' || *p == '\n' || *p == '(' || *p == ')') {
+			/* Append the separator as is */
+			g_string_append_c(outbuf, *p);
+			p++;
 		}
-		p++;
-	}
+		else {
+			size_t remain = end - p;
+			gsize next_offset = rspamd_memcspn(p, " \r\n()", MIN(max_token_size, remain));
+			const char *q = p + next_offset;
+			size_t piece_len = q - p, encoded_len = 0;
 
-	if (!need_encoding) {
-		out = g_malloc(len + 1);
-		rspamd_strlcpy(out, in, len + 1);
-	}
-	else {
-		/* Need encode */
-		gsize ulen, pos;
-		int r;
-		const char *prev;
-		/* Choose step: =?UTF-8?Q?<qp>?= should be less than 76 chars */
-		unsigned int step = (76 - 12) / 3 + 1;
+			/* Check if the piece contains non-ASCII characters */
+			gboolean has_non_ascii = FALSE;
+			for (size_t i = 0; i < piece_len; i++) {
+				if ((unsigned char) p[i] >= 128) {
+					has_non_ascii = TRUE;
+					encoded_len += 3;
 
-		ulen = g_utf8_strlen(in, len);
-		res = g_string_sized_new(len * 2 + 1);
-		pos = 0;
-		prev = in;
-		/* Adjust chunk size for unicode average length */
-		step *= 1.0 * ulen / (double) len;
-
-		while (pos < ulen) {
-			p = g_utf8_offset_to_pointer(in, pos);
-
-			if (p > prev) {
-				/* Encode and print */
-				r = rspamd_encode_qp2047_buf(prev, p - prev,
-											 encode_buf, sizeof(encode_buf));
-
-				if (r != -1) {
-					if (res->len > 0) {
-						rspamd_printf_gstring(res, " =?UTF-8?Q?%*s?=", r,
-											  encode_buf);
+					if (encoded_len > max_token_size) {
+						piece_len = i - 1;
+						q = p + piece_len;
+						/* No more space */
+						break;
 					}
-					else {
-						rspamd_printf_gstring(res, "=?UTF-8?Q?%*s?=", r,
-											  encode_buf);
-					}
-				}
-			}
-
-			pos += MIN(step, ulen - pos);
-			prev = p;
-		}
-
-		/* Leftover */
-		if (prev < end) {
-			r = rspamd_encode_qp2047_buf(prev, end - prev,
-										 encode_buf, sizeof(encode_buf));
-
-			if (r != -1) {
-				if (res->len > 0) {
-					rspamd_printf_gstring(res, " =?UTF-8?Q?%*s?=", r,
-										  encode_buf);
 				}
 				else {
-					rspamd_printf_gstring(res, "=?UTF-8?Q?%*s?=", r,
-										  encode_buf);
+					encoded_len++;
 				}
 			}
-		}
 
-		out = g_string_free(res, FALSE);
+			if (has_non_ascii) {
+				g_string_append(outbuf, "=?UTF-8?Q?");
+				/* Do encode */
+				gssize encoded_len = rspamd_encode_qp2047_buf(p, piece_len, encode_buf, encode_buf_size);
+				g_string_append_len(outbuf, encode_buf, encoded_len);
+				g_string_append(outbuf, "?=");
+			}
+			else {
+				/* No transformation */
+				g_string_append_len(outbuf, p, piece_len);
+			}
+			p = q;
+		}
 	}
 
-	return out;
+	/* return the allocated string and free the GString struct */
+	return g_string_free(outbuf, FALSE);
 }
+
 
 char *
 rspamd_mime_message_id_generate(const char *fqdn)
