@@ -35,7 +35,7 @@ TEST_SUITE("rfc2047 encode")
 			 "PDF_LONG_TRAILER (0.20)[=?UTF-8?Q?=D0=94=D0=BE=D0=BA=2E=D0=B7=D0=B0?= 10102024.pdf:416662]"},
 			{"Hello World", "Hello World"},
 			{"Hello Мир", "Hello =?UTF-8?Q?=D0=9C=D0=B8=D1=80?="},
-			{"ололо (ололо test)    test", "=?UTF-8?Q?=D0=BE=D0=BB=D0=BE=D0=BB=D0=BE_?=(=?UTF-8?Q?=D0=BE=D0=BB=D0=BE=D0=BB=D0=BE_?=test)    test"},
+			{"ололо (ололо test)    test", "=?UTF-8?Q?=D0=BE=D0=BB=D0=BE=D0=BB=D0=BE?= (=?UTF-8?Q?=D0=BE=D0=BB=D0=BE=D0=BB=D0=BE?= test)    test"},
 			{"Привет    мир Как дела?", "=?UTF-8?Q?=D0=9F=D1=80=D0=B8=D0=B2=D0=B5=D1=82____=D0=BC=D0=B8=D1=80_=D0?="
 										"=?UTF-8?Q?=9A=D0=B0=D0=BA_=D0=B4=D0=B5=D0=BB=D0=B0?=?"},
 			{"", ""},

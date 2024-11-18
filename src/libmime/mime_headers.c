@@ -863,7 +863,7 @@ rspamd_mime_header_encode(const char *in, gsize len, bool is_structured)
 
 					if (need_encoding && (c == '(' || c == ')')) {
 						/* If we need to encode, we must stop on comments characters */
-						piece_len = i + 1;
+						piece_len = i;
 						q = p + piece_len;
 						/* No more space */
 						break;
