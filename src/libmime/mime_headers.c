@@ -854,13 +854,6 @@ rspamd_mime_header_encode(const char *in, gsize len, bool is_structured)
 				else {
 					encoded_len++;
 
-					if (!need_encoding) {
-						unencoded_prefix++;
-					}
-					else {
-						unencoded_suffix++;
-					}
-
 					if (encoded_len > max_token_size) {
 						piece_len = i;
 						q = p + piece_len;
@@ -874,6 +867,13 @@ rspamd_mime_header_encode(const char *in, gsize len, bool is_structured)
 						q = p + piece_len;
 						/* No more space */
 						break;
+					}
+
+					if (!need_encoding) {
+						unencoded_prefix++;
+					}
+					else {
+						unencoded_suffix++;
 					}
 				}
 			}
