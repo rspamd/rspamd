@@ -1046,7 +1046,7 @@ rspamd_protocol_rewrite_subject(struct rspamd_task *task)
 		g_string_append_len(subj_buf, c, p - c);
 	}
 
-	res = rspamd_mime_header_encode(subj_buf->str, subj_buf->len);
+	res = rspamd_mime_header_encode(subj_buf->str, subj_buf->len, false);
 
 	rspamd_mempool_add_destructor(task->task_pool,
 								  (rspamd_mempool_destruct_t) g_free,
