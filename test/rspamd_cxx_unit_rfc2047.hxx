@@ -21,6 +21,7 @@
 #include "doctest/doctest.h"
 
 #include <string>
+#include "libutil/mem_pool.h"
 #include "libmime/mime_headers.h"
 
 TEST_SUITE("rfc2047 encode")
@@ -28,7 +29,7 @@ TEST_SUITE("rfc2047 encode")
 	TEST_CASE("rspamd_mime_header_encode handles ASCII-only input")
 	{
 		const char *input = "Hello World";
-		char *output_cstr = rspamd_mime_header_encode(input, strlen(input));
+		char *output_cstr = rspamd_mime_header_encode(input, strlen(input), false);
 		std::string output(output_cstr);
 		std::string expected_output = "Hello World";
 		CHECK(output == expected_output);
@@ -38,7 +39,7 @@ TEST_SUITE("rfc2047 encode")
 	TEST_CASE("rspamd_mime_header_encode handles input with non-ASCII characters")
 	{
 		const char *input = "Hello Мир";
-		char *output_cstr = rspamd_mime_header_encode(input, strlen(input));
+		char *output_cstr = rspamd_mime_header_encode(input, strlen(input), false);
 		std::string output(output_cstr);
 		std::string expected_output = "Hello =?UTF-8?Q?=D0=9C=D0=B8=D1=80?=";
 		CHECK(output == expected_output);
@@ -48,7 +49,7 @@ TEST_SUITE("rfc2047 encode")
 	TEST_CASE("rspamd_mime_header_encode handles mixed input with separators")
 	{
 		const char *input = "ололо (ололо test)    test";
-		char *output_cstr = rspamd_mime_header_encode(input, strlen(input));
+		char *output_cstr = rspamd_mime_header_encode(input, strlen(input), false);
 		std::string output(output_cstr);
 		std::string expected_output = "=?UTF-8?Q?=D0=BE=D0=BB=D0=BE=D0=BB=D0=BE?= "
 									  "(=?UTF-8?Q?=D0=BE=D0=BB=D0=BE=D0=BB=D0=BE?= test)    test";
@@ -59,7 +60,7 @@ TEST_SUITE("rfc2047 encode")
 	TEST_CASE("rspamd_mime_header_encode handles multiple spaces and separators")
 	{
 		const char *input = "Привет    мир\nКак дела?";
-		char *output_cstr = rspamd_mime_header_encode(input, strlen(input));
+		char *output_cstr = rspamd_mime_header_encode(input, strlen(input), false);
 		std::string output(output_cstr);
 		std::string expected_output = "=?UTF-8?Q?=D0=9F=D1=80=D0=B8=D0=B2=D0=B5=D1=82?=    "
 									  "=?UTF-8?Q?=D0=BC=D0=B8=D1=80?=\n"
@@ -72,7 +73,7 @@ TEST_SUITE("rfc2047 encode")
 	TEST_CASE("rspamd_mime_header_encode handles empty input")
 	{
 		const char *input = "";
-		char *output_cstr = rspamd_mime_header_encode(input, strlen(input));
+		char *output_cstr = rspamd_mime_header_encode(input, strlen(input), false);
 		std::string output(output_cstr ? output_cstr : "");
 		std::string expected_output = "";
 		CHECK(output == expected_output);
@@ -82,7 +83,7 @@ TEST_SUITE("rfc2047 encode")
 	TEST_CASE("rspamd_mime_header_encode handles input with only separators")
 	{
 		const char *input = " \r\n()";
-		char *output_cstr = rspamd_mime_header_encode(input, strlen(input));
+		char *output_cstr = rspamd_mime_header_encode(input, strlen(input), false);
 		std::string output(output_cstr);
 		std::string expected_output = " \r\n()";
 		CHECK(output == expected_output);
@@ -92,7 +93,7 @@ TEST_SUITE("rfc2047 encode")
 	TEST_CASE("rspamd_mime_header_encode handles non-ASCII separators")
 	{
 		const char *input = "こんにちは(世界)";
-		char *output_cstr = rspamd_mime_header_encode(input, strlen(input));
+		char *output_cstr = rspamd_mime_header_encode(input, strlen(input), false);
 		std::string output(output_cstr);
 		std::string expected_output = "=?UTF-8?Q?=E3=81=93=E3=82=93=E3=81=AB=E3=81=A1=E3=81=AF?="
 									  "(=?UTF-8?Q?=E4=B8=96=E7=95=8C?=)";
@@ -103,7 +104,7 @@ TEST_SUITE("rfc2047 encode")
 	TEST_CASE("rspamd_mime_header_encode handles input starting with separator")
 	{
 		const char *input = " (Hello)";
-		char *output_cstr = rspamd_mime_header_encode(input, strlen(input));
+		char *output_cstr = rspamd_mime_header_encode(input, strlen(input), false);
 		std::string output(output_cstr);
 		std::string expected_output = " (Hello)";
 		CHECK(output == expected_output);
@@ -113,7 +114,7 @@ TEST_SUITE("rfc2047 encode")
 	TEST_CASE("rspamd_mime_header_encode handles input ending with separator")
 	{
 		const char *input = "Hello) ";
-		char *output_cstr = rspamd_mime_header_encode(input, strlen(input));
+		char *output_cstr = rspamd_mime_header_encode(input, strlen(input), false);
 		std::string output(output_cstr);
 		std::string expected_output = "Hello) ";
 		CHECK(output == expected_output);
@@ -123,7 +124,7 @@ TEST_SUITE("rfc2047 encode")
 	TEST_CASE("rspamd_mime_header_encode handles consecutive non-ASCII pieces")
 	{
 		const char *input = "你好世界";
-		char *output_cstr = rspamd_mime_header_encode(input, strlen(input));
+		char *output_cstr = rspamd_mime_header_encode(input, strlen(input), false);
 		std::string output(output_cstr);
 		std::string expected_output = "=?UTF-8?Q?=E4=BD=A0=E5=A5=BD=E4=B8=96=E7=95=8C?=";
 		CHECK(output == expected_output);
@@ -133,7 +134,7 @@ TEST_SUITE("rfc2047 encode")
 	{
 		// Input string consisting of repeated non-ASCII characters
 		const char *input = "これはとても長いテキストで、エンコードされたワードが76文字を超える必要があります。";
-		char *output_cstr = rspamd_mime_header_encode(input, strlen(input));
+		char *output_cstr = rspamd_mime_header_encode(input, strlen(input), false);
 		std::string output(output_cstr);
 		std::string expected_output = "=?UTF-8?Q?=E3=81=93=E3=82=8C=E3=81=AF=E3=81=A8=E3=81=A6=E3=82=82=E9=95=B7?="
 									  "=?UTF-8?Q?=E3=81=84=E3=83=86=E3=82=AD=E3=82=B9=E3=83=88=E3=81=A7=E3=80=81?="
@@ -151,7 +152,7 @@ TEST_SUITE("rfc2047 encode")
 		// Input string consisting of repeated ASCII characters
 		std::string input_str(100, 'A');// 100 'A's
 		const char *input = input_str.c_str();
-		char *output_cstr = rspamd_mime_header_encode(input, strlen(input));
+		char *output_cstr = rspamd_mime_header_encode(input, strlen(input), false);
 		std::string output(output_cstr);
 		std::string expected_output = input_str;
 
@@ -164,7 +165,7 @@ TEST_SUITE("rfc2047 encode")
 		// Input string with mix of ASCII and non-ASCII characters forming long pieces
 		const char *input = "ASCII_Text "
 							"これは非常に長い非ASCIIテキストで、エンコードが必要になります。";
-		char *output_cstr = rspamd_mime_header_encode(input, strlen(input));
+		char *output_cstr = rspamd_mime_header_encode(input, strlen(input), false);
 		std::string output(output_cstr);
 
 		// Expected output: ASCII text as-is, non-ASCII text encoded and split accordingly
@@ -184,7 +185,7 @@ TEST_SUITE("rfc2047 encode")
 		const char *input =
 			"非常に長い非ASCII文字列を使用してエンコードワードの分割をテストします。"
 			"データが長すぎる場合、正しく分割されるべきです。";
-		char *output_cstr = rspamd_mime_header_encode(input, strlen(input));
+		char *output_cstr = rspamd_mime_header_encode(input, strlen(input), false);
 		std::string output(output_cstr);
 
 		std::string expected_output =

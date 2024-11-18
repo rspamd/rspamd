@@ -816,7 +816,7 @@ rspamd_mime_header_decode(rspamd_mempool_t *pool, const char *in,
 }
 
 char *
-rspamd_mime_header_encode(const char *in, gsize len)
+rspamd_mime_header_encode(const char *in, gsize len, bool is_structured)
 {
 	static const size_t max_token_size = 76 - 12; /* 12 is the length of "=?UTF-8?Q??="; */
 	GString *outbuf = g_string_sized_new(len);
@@ -831,16 +831,17 @@ rspamd_mime_header_encode(const char *in, gsize len)
 			p++;
 		}
 		else {
-			size_t remain = end - p;
-			gsize next_offset = rspamd_memcspn(p, " \r\n()", MIN(max_token_size, remain));
-			const char *q = p + next_offset;
+			const char *q = end;
 			size_t piece_len = q - p, encoded_len = 0;
 
 			/* Check if the piece contains non-ASCII characters */
-			gboolean has_non_ascii = FALSE;
+			gboolean need_encoding = FALSE;
+			size_t unencoded_prefix = 0, unencoded_suffix = 0;
 			for (size_t i = 0; i < piece_len; i++) {
-				if ((unsigned char) p[i] >= 128) {
-					has_non_ascii = TRUE;
+				unsigned char c = p[i];
+				if (c >= 128 || (is_structured && !g_ascii_isalnum(c))) {
+					need_encoding = TRUE;
+					unencoded_suffix = 0;
 					encoded_len += 3;
 
 					if (encoded_len > max_token_size) {
@@ -853,8 +854,23 @@ rspamd_mime_header_encode(const char *in, gsize len)
 				else {
 					encoded_len++;
 
+					if (!need_encoding) {
+						unencoded_prefix++;
+					}
+					else {
+						unencoded_suffix++;
+					}
+
 					if (encoded_len > max_token_size) {
 						piece_len = i;
+						q = p + piece_len;
+						/* No more space */
+						break;
+					}
+
+					if (need_encoding && (c == '(' || c == ')')) {
+						/* If we need to encode, we must stop on comments characters */
+						piece_len = i + 1;
 						q = p + piece_len;
 						/* No more space */
 						break;
@@ -862,12 +878,17 @@ rspamd_mime_header_encode(const char *in, gsize len)
 				}
 			}
 
-			if (has_non_ascii) {
+			if (need_encoding) {
+				g_string_append_len(outbuf, p, unencoded_prefix);
+				p += unencoded_prefix;
 				g_string_append(outbuf, "=?UTF-8?Q?");
 				/* Do encode */
-				encoded_len = rspamd_encode_qp2047_buf(p, piece_len, encode_buf, max_token_size + 3);
+				encoded_len = rspamd_encode_qp2047_buf(p, piece_len - unencoded_prefix - unencoded_suffix,
+													   encode_buf, max_token_size + 3);
+				p += piece_len - unencoded_prefix - unencoded_suffix;
 				g_string_append_len(outbuf, encode_buf, encoded_len);
 				g_string_append(outbuf, "?=");
+				g_string_append_len(outbuf, p, unencoded_suffix);
 			}
 			else {
 				/* No transformation */
