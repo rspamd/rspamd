@@ -21,6 +21,7 @@
 #include "doctest/doctest.h"
 
 #include <string>
+#include <vector>
 #include "libutil/mem_pool.h"
 #include "libmime/mime_headers.h"
 
@@ -28,12 +29,29 @@ TEST_SUITE("rfc2047 encode")
 {
 	TEST_CASE("rspamd_mime_header_encode handles ASCII-only input")
 	{
-		const char *input = "Hello World";
-		char *output_cstr = rspamd_mime_header_encode(input, strlen(input), false);
-		std::string output(output_cstr);
-		std::string expected_output = "Hello World";
-		CHECK(output == expected_output);
-		g_free(output_cstr);
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "rfc2047", 0);
+		std::vector<std::pair<std::string, std::string>> cases = {
+			{"Hello World", "Hello World"},
+			{"Hello Мир", "Hello =?UTF-8?Q?=D0=9C=D0=B8=D1=80?="}};
+
+		for (const auto &c: cases) {
+			SUBCASE(c.first.c_str())
+			{
+				gboolean invalid_utf = FALSE;
+				const char *input = c.first.c_str();
+				char *output_cstr = rspamd_mime_header_encode(input, strlen(input), false);
+				std::string output(output_cstr);
+				std::string expected_output = c.second;
+				CHECK(output == expected_output);
+				char *decoded_cstr = rspamd_mime_header_decode(pool, output_cstr, strlen(output_cstr), &invalid_utf);
+				std::string decoded(decoded_cstr);
+				CHECK(invalid_utf == FALSE);
+				CHECK(decoded == input);
+				g_free(output_cstr);
+			}
+		}
+
+		rspamd_mempool_delete(pool);
 	}
 
 	TEST_CASE("rspamd_mime_header_encode handles input with non-ASCII characters")
