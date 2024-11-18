@@ -31,10 +31,11 @@ TEST_SUITE("rfc2047 encode")
 	{
 		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "rfc2047", 0);
 		std::vector<std::pair<std::string, std::string>> cases = {
+			{"PDF_LONG_TRAILER (0.20)[Док.за 10102024.pdf:416662]",
+			 "PDF_LONG_TRAILER (0.20)[=?UTF-8?Q?=D0=94=D0=BE=D0=BA=2E=D0=B7=D0=B0?= 10102024.pdf:416662]"},
 			{"Hello World", "Hello World"},
 			{"Hello Мир", "Hello =?UTF-8?Q?=D0=9C=D0=B8=D1=80?="},
-			{"ололо (ололо test)    test", "=?UTF-8?Q?=D0=BE=D0=BB=D0=BE=D0=BB=D0=BE?= "
-										   "(=?UTF-8?Q?=D0=BE=D0=BB=D0=BE=D0=BB=D0=BE?= test)    test"},
+			{"ололо (ололо test)    test", "=?UTF-8?Q?=D0=BE=D0=BB=D0=BE=D0=BB=D0=BE_?=(=?UTF-8?Q?=D0=BE=D0=BB=D0=BE=D0=BB=D0=BE_?=test)    test"},
 			{"Привет    мир Как дела?", "=?UTF-8?Q?=D0=9F=D1=80=D0=B8=D0=B2=D0=B5=D1=82____=D0=BC=D0=B8=D1=80_=D0?="
 										"=?UTF-8?Q?=9A=D0=B0=D0=BA_=D0=B4=D0=B5=D0=BB=D0=B0?=?"},
 			{"", ""},
@@ -69,6 +70,7 @@ TEST_SUITE("rfc2047 encode")
 			 "=?UTF-8?Q?=A0=B4=E5=90=88=E3=80=81=E6=AD=A3=E3=81=97=E3=81=8F=E5=88=86=E5?="
 			 "=?UTF-8?Q?=89=B2=E3=81=95=E3=82=8C=E3=82=8B=E3=81=B9=E3=81=8D=E3=81=A7=E3?="
 			 "=?UTF-8?Q?=81=99=E3=80=82?="},
+
 		};
 
 		for (const auto &c: cases) {
