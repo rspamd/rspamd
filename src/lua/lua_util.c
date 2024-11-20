@@ -644,9 +644,10 @@ LUA_FUNCTION_DEF(util, get_hostname);
 LUA_FUNCTION_DEF(util, parse_content_type);
 
 /***
- *  @function util.mime_header_encode(hdr)
+ *  @function util.mime_header_encode(hdr[, is_structured])
  * Encodes header if needed
  * @param {string} hdr input header
+ * @param {boolean} is_structured if true, then we encode as structured header (e.g. encode all non alpha-numeric characters)
  * @return encoded header
  */
 LUA_FUNCTION_DEF(util, mime_header_encode);
@@ -2406,15 +2407,19 @@ static int
 lua_util_mime_header_encode(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gsize len;
-	const char *hdr = luaL_checklstring(L, 1, &len);
+	struct rspamd_lua_text *hdr = lua_check_text_or_string(L, 1);
 	char *encoded;
+	bool is_structured = false;
 
 	if (!hdr) {
 		return luaL_error(L, "invalid arguments");
 	}
 
-	encoded = rspamd_mime_header_encode(hdr, len);
+	if (lua_isboolean(L, 2)) {
+		is_structured = lua_toboolean(L, 2);
+	}
+
+	encoded = rspamd_mime_header_encode(hdr->start, hdr->len, is_structured);
 	lua_pushstring(L, encoded);
 	g_free(encoded);
 
