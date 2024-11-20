@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -100,9 +100,10 @@ char *rspamd_mime_header_decode(rspamd_mempool_t *pool, const char *in,
  * Encode mime header if needed
  * @param in
  * @param len
+ * @param is_structured if true, then we encode as structured header (e.g. encode all non alpha-numeric characters)
  * @return newly allocated encoded header
  */
-char *rspamd_mime_header_encode(const char *in, gsize len);
+char *rspamd_mime_header_encode(const char *in, gsize len, bool is_structured);
 
 /**
  * Generate new unique message id

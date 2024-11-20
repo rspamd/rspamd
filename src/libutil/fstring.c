@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2024 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -242,10 +242,8 @@ fstrhash_c(uint64_t c, uint64_t hval)
 uint32_t
 rspamd_fstrhash_lc(const rspamd_ftok_t *str, gboolean is_utf)
 {
-	gsize i;
 	uint64_t hval;
-	const char *p, *end = NULL;
-	gunichar uc;
+	const char *p;
 
 	if (str == NULL) {
 		return 0;
@@ -253,21 +251,26 @@ rspamd_fstrhash_lc(const rspamd_ftok_t *str, gboolean is_utf)
 
 	p = str->begin;
 	hval = str->len;
-	end = p + str->len;
 
 	if (is_utf) {
 		if (rspamd_fast_utf8_validate(p, str->len) != 0) {
 			return rspamd_fstrhash_lc(str, FALSE);
 		}
-		while (p < end) {
-			uc = g_unichar_tolower(g_utf8_get_char(p));
-			hval = fstrhash_c(uc, hval);
-			p = g_utf8_next_char(p);
+
+		size_t i = 0, len = str->len;
+		UChar32 uc;
+
+		while (i < len) {
+			U8_NEXT(p, i, len, uc);
+
+			if (uc > 0) {
+				hval = fstrhash_c(u_tolower(uc), hval);
+			}
 		}
 	}
 	else {
 		gsize large_steps = str->len / sizeof(uint64_t);
-		for (i = 0; i < large_steps; i++, p += sizeof(uint64_t)) {
+		for (size_t i = 0; i < large_steps; i++, p += sizeof(uint64_t)) {
 			/* Copy to the uint64 lowercasing each byte */
 			union {
 				char c[sizeof(uint64_t)];
@@ -280,7 +283,7 @@ rspamd_fstrhash_lc(const rspamd_ftok_t *str, gboolean is_utf)
 		}
 
 		gsize remain = str->len % sizeof(uint64_t);
-		for (i = 0; i < remain; i++, p++) {
+		for (size_t i = 0; i < remain; i++, p++) {
 			hval = fstrhash_c(g_ascii_tolower(*p), hval);
 		}
 	}
