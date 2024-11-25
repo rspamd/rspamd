@@ -72,10 +72,16 @@ local function add_data(target, src)
       end
     elseif k == 'ratelimit' then
       if not target.ratelimit then
-        target.ratelimit = {}
+        target.ratelimit = {
+          cur = {
+            last = 0,
+            count = 0
+          }
+        }
       end
       -- Ratelimit is passed as {cur = count, last = time}
-      target.ratelimit.cur = v
+      target.ratelimit.cur.count = v.cur + target.ratelimit.cur.count
+      target.ratelimit.cur.last = math.max(v.last, target.ratelimit.cur.last)
     end
   end
 end
@@ -355,7 +361,7 @@ return function(args, res)
           print(string.format('\tLimit: %s (%.2f per hour leak rate)',
               print_num(key_stat.ratelimit.limit.burst), (key_stat.ratelimit.limit.rate or 0.0) * 3600))
           print(string.format('\tCurrent: %s (%s last)',
-              print_num(key_stat.ratelimit.cur), os.date('%c', key_stat.ratelimit.last)))
+              print_num(key_stat.ratelimit.cur.count), os.date('%c', key_stat.ratelimit.cur.last)))
           print('')
         end
 
