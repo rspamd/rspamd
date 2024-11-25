@@ -760,4 +760,164 @@ exports.message_to_ucl_schema = function()
   }
 end
 
+--[[[
+-- @function lua_mime.remove_attachments(task, settings)
+-- Removes all attachments from a message, keeping only text parts
+-- @param {task} task Rspamd task object
+-- @param {table} settings Table with the following fields:
+--   * keep_images: boolean, whether to keep inline images (default: false)
+--   * min_text_size: number, minimum text part size to keep (default: 0)
+--   * max_text_size: number, maximum text part size to keep (default: inf)
+-- @return {table} modified message state similar to other modification functions:
+-- * out: new content (body only)
+-- * need_rewrite_ct: boolean field that means if we must rewrite content type
+-- * new_ct: new content type (type => string, subtype => string)
+-- * new_cte: new content-transfer encoding (string)
+--]]
+exports.remove_attachments = function(task, settings)
+  local newline_s = newline(task)
+  local state = {
+    newline_s = newline_s
+  }
+  local out = {}
+
+  settings = settings or {}
+  local keep_images = settings.keep_images or false
+  local min_text_size = settings.min_text_size or 0
+  local max_text_size = settings.max_text_size or math.huge
+
+  -- Process message structure
+  local boundaries = {}
+  local cur_boundary
+  local has_attachments = false
+  local parts_to_keep = {}
+  local parts_indexes_to_keep = {}
+
+  -- First pass: identify parts to keep
+  for i, part in ipairs(task:get_parts()) do
+    local keep_part = false
+
+    if part:is_text() then
+      local length = part:get_length()
+      if length >= min_text_size and length <= max_text_size then
+        keep_part = true
+      end
+    elseif keep_images and part:is_image() then
+      local cd = part:get_header('Content-Disposition')
+      if cd and cd:lower():match('inline') then
+        keep_part = true
+      end
+    end
+
+    if keep_part then
+      table.insert(parts_to_keep, part)
+      parts_indexes_to_keep[i] = true
+    else
+      has_attachments = true
+    end
+  end
+
+  -- If no attachments found, return false to indicate that no alterations are required
+  if not has_attachments then
+    return false
+  end
+
+  -- Prepare new message structure
+  local need_multipart = false
+  local text_parts_count = 0
+  for _, part in ipairs(parts_to_keep) do
+    if part:is_text() then
+      text_parts_count = text_parts_count + 1
+    end
+  end
+  need_multipart = text_parts_count > 1 or (keep_images and next(parts_to_keep))
+
+  -- Set content type
+  if need_multipart then
+    state.new_ct = {
+      type = 'multipart',
+      subtype = 'mixed'
+    }
+    cur_boundary = '--XXX'
+    boundaries[1] = cur_boundary
+
+    out[#out + 1] = {
+      string.format('Content-Type: multipart/mixed; boundary="%s"%s',
+          cur_boundary, newline_s),
+      true
+    }
+    out[#out + 1] = { '', true }
+  else
+    -- Single part message
+    for _, part in ipairs(parts_to_keep) do
+      if part:is_text() then
+        state.new_ct = {
+          type = 'text',
+          subtype = part:get_text():is_html() and 'html' or 'plain'
+        }
+        break
+      end
+    end
+  end
+
+  -- Second pass: reconstruct message
+  for i, part in ipairs(task:get_parts()) do
+    if part:is_multipart() then
+      -- Skip multipart containers
+      local boundary = part:get_boundary()
+      if boundary then
+        if cur_boundary and boundary ~= cur_boundary then
+          out[#out + 1] = {
+            string.format('--%s--', boundaries[#boundaries]),
+            true
+          }
+          table.remove(boundaries)
+        end
+      end
+    elseif parts_indexes_to_keep[i] then
+      if need_multipart then
+        out[#out + 1] = {
+          string.format('--%s', cur_boundary),
+          true
+        }
+      end
+
+      -- Add part headers
+      local headers = {}
+      for _, h in ipairs(part:get_header_array()) do
+        table.insert(headers, string.format('%s: %s', h.name, h.value))
+      end
+
+      if #headers > 0 then
+        out[#out + 1] = {
+          table.concat(headers, newline_s),
+          true
+        }
+      end
+
+      -- Add empty line between headers and content
+      out[#out + 1] = { '', true }
+
+      -- Add content
+      out[#out + 1] = {
+        part:get_raw_content(),
+        false
+      }
+    end
+  end
+
+  -- Close remaining boundaries
+  if need_multipart then
+    out[#out + 1] = {
+      string.format('--%s--', cur_boundary),
+      true
+    }
+  end
+
+  state.out = out
+  state.need_rewrite_ct = true
+
+  return state
+end
+
 return exports
