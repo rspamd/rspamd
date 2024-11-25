@@ -352,8 +352,8 @@ return function(args, res)
         if key_stat.ratelimit then
           print('')
           print('\tRatelimit stat:')
-          print(string.format('\tLimit: %s (%s leak rate)',
-              print_num(key_stat.ratelimit.limit.burst), print_num(key_stat.ratelimit.limit.rate)))
+          print(string.format('\tLimit: %s (%.2f per hour leak rate)',
+              print_num(key_stat.ratelimit.limit.burst), (key_stat.ratelimit.limit.rate or 0.0) * 3600))
           print(string.format('\tCurrent: %s (%s last)',
               print_num(key_stat.ratelimit.cur), os.date('%c', key_stat.ratelimit.last)))
           print('')
