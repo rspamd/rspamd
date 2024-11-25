@@ -59,7 +59,23 @@ local function add_data(target, src)
         if type(v.extensions.name) == 'string' then
           target.name = v.extensions.name
         end
+        if type(v.extensions.email) == 'string' then
+          target.email = v.extensions.email
+        end
+        if type(v.extensions.ratelimit) == 'table' then
+          if not target.ratelimit then
+            target.ratelimit = {}
+          end
+          -- Passed as {burst = x, rate = y}
+          target.ratelimit.limit = v.extensions.ratelimit
+        end
       end
+    elseif k == 'ratelimit' then
+      if not target.ratelimit then
+        target.ratelimit = {}
+      end
+      -- Ratelimit is passed as {cur = count, last = time}
+      target.ratelimit.cur = v
     end
   end
 end
@@ -301,7 +317,8 @@ return function(args, res)
       for _, key in ipairs(sorted_keys) do
         local key_stat = key.data
         if key_stat.name then
-          print(string.format('Key id: %s, name: %s', key.key, key_stat.name))
+          print(string.format('Key id: %s, name: %s (email: %s)', key.key, key_stat.name,
+              key_stat.email or 'unknown'))
         else
           print(string.format('Key id: %s', key.key))
         end
@@ -330,6 +347,16 @@ return function(args, res)
             print_stat(v, '\t\t')
             print('')
           end
+        end
+
+        if key_stat.ratelimit then
+          print('')
+          print('\tRatelimit stat:')
+          print(string.format('\tLimit: %s (%s leak rate)',
+              print_num(key_stat.ratelimit.limit.burst), print_num(key_stat.ratelimit.limit.rate)))
+          print(string.format('\tCurrent: %s (%s last)',
+              print_num(key_stat.ratelimit.cur), os.date('%c', key_stat.ratelimit.last)))
+          print('')
         end
 
         print('')
