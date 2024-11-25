@@ -64,7 +64,12 @@ local function add_data(target, src)
         end
         if type(v.extensions.ratelimit) == 'table' then
           if not target.ratelimit then
-            target.ratelimit = {}
+            target.ratelimit = {
+              cur = {
+                last = 0,
+                count = 0
+              },
+            }
           end
           -- Passed as {burst = x, rate = y}
           target.ratelimit.limit = v.extensions.ratelimit
@@ -76,7 +81,7 @@ local function add_data(target, src)
           cur = {
             last = 0,
             count = 0
-          }
+          },
         }
       end
       -- Ratelimit is passed as {cur = count, last = time}
