@@ -160,6 +160,25 @@ modify:option "-H --html-footer"
       :description "Adds footer to text/html parts from a specific file"
       :argname "<file>"
 
+local strip = parser:command "strip"
+                    :description "Strip attachments from a message"
+strip:argument "file"
+     :description "File to process"
+     :argname "<file>"
+     :args "+"
+strip:flag "-i --keep-images"
+     :description "Keep images"
+strip:option "--min-text-size"
+     :description "Minimal text size to keep"
+     :argname "<size>"
+     :convert(tonumber)
+     :default(0)
+strip:option "--max-text-size"
+     :description "Max text size to keep"
+     :argname "<size>"
+     :convert(tonumber)
+     :default(math.huge)
+
 local sign = parser:command "sign"
                    :description "Performs DKIM signing"
 sign:argument "file"
@@ -893,6 +912,62 @@ local function sign_handler(opts)
   end
 end
 
+local function strip_handler(opts)
+  load_config(opts)
+  rspamd_url.init(rspamd_config:get_tld_path())
+
+  for _, fname in ipairs(opts.file) do
+    local task = load_task(opts, fname)
+    local newline_s = newline(task)
+
+    local rewrite = lua_mime.remove_attachments(task, {
+      keep_images = opts.keep_images,
+      min_text_size = opts.min_text_size,
+      max_text_size = opts.max_text_size
+    }) or {}
+    local out = {} -- Start with headers
+
+    local function process_headers_cb(name, hdr)
+      out[#out + 1] = hdr.raw:gsub('\r?\n?$', '')
+    end
+
+    task:headers_foreach(process_headers_cb, { full = true })
+    -- End of headers
+    out[#out + 1] = ''
+
+    if rewrite.out then
+      for _, o in ipairs(rewrite.out) do
+        out[#out + 1] = o
+      end
+    else
+      out[#out + 1] = { task:get_rawbody(), false }
+    end
+
+    for _, o in ipairs(out) do
+      if type(o) == 'string' then
+        io.write(o)
+        io.write(newline_s)
+      elseif type(o) == 'table' then
+        io.flush()
+        if type(o[1]) == 'string' then
+          io.write(o[1])
+        else
+          o[1]:save_in_file(1)
+        end
+
+        if o[2] then
+          io.write(newline_s)
+        end
+      else
+        o:save_in_file(1)
+        io.write(newline_s)
+      end
+    end
+
+    task:destroy() -- No automatic dtor
+  end
+end
+
 -- Strips directories and .extensions (if present) from a filepath
 local function filename_only(filepath)
   local filename = filepath:match(".*%/([^%.]+)")
@@ -995,6 +1070,8 @@ local function handler(args)
     urls_handler(opts)
   elseif command == 'modify' then
     modify_handler(opts)
+  elseif command == 'strip' then
+    strip_handler(opts)
   elseif command == 'sign' then
     sign_handler(opts)
   elseif command == 'dump' then
