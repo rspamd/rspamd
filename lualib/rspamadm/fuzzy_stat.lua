@@ -59,7 +59,34 @@ local function add_data(target, src)
         if type(v.extensions.name) == 'string' then
           target.name = v.extensions.name
         end
+        if type(v.extensions.email) == 'string' then
+          target.email = v.extensions.email
+        end
+        if type(v.extensions.ratelimit) == 'table' then
+          if not target.ratelimit then
+            target.ratelimit = {
+              cur = {
+                last = 0,
+                count = 0
+              },
+            }
+          end
+          -- Passed as {burst = x, rate = y}
+          target.ratelimit.limit = v.extensions.ratelimit
+        end
       end
+    elseif k == 'ratelimit' then
+      if not target.ratelimit then
+        target.ratelimit = {
+          cur = {
+            last = 0,
+            count = 0
+          },
+        }
+      end
+      -- Ratelimit is passed as {cur = count, last = time}
+      target.ratelimit.cur.count = v.cur + target.ratelimit.cur.count
+      target.ratelimit.cur.last = math.max(v.last, target.ratelimit.cur.last)
     end
   end
 end
@@ -301,7 +328,8 @@ return function(args, res)
       for _, key in ipairs(sorted_keys) do
         local key_stat = key.data
         if key_stat.name then
-          print(string.format('Key id: %s, name: %s', key.key, key_stat.name))
+          print(string.format('Key id: %s, name: %s (email: %s)', key.key, key_stat.name,
+              key_stat.email or 'unknown'))
         else
           print(string.format('Key id: %s', key.key))
         end
@@ -330,6 +358,16 @@ return function(args, res)
             print_stat(v, '\t\t')
             print('')
           end
+        end
+
+        if key_stat.ratelimit then
+          print('')
+          print('\tRatelimit stat:')
+          print(string.format('\tLimit: %s (%.2f per hour leak rate)',
+              print_num(key_stat.ratelimit.limit.burst), (key_stat.ratelimit.limit.rate or 0.0) * 3600))
+          print(string.format('\tCurrent: %s (%s last)',
+              print_num(key_stat.ratelimit.cur.count), os.date('%c', key_stat.ratelimit.cur.last)))
+          print('')
         end
 
         print('')
