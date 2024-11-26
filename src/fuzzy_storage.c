@@ -268,6 +268,7 @@ static struct fuzzy_key *fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg,
 													const ucl_object_t *obj,
 													khash_t(rspamd_fuzzy_keys_hash) * target);
 
+static ucl_object_t *rspamd_leaky_bucket_to_ucl(struct rspamd_leaky_bucket_elt *p_elt);
 struct fuzzy_keymap_ucl_buf {
 	rspamd_fstring_t *buf;
 	struct rspamd_fuzzy_storage_ctx *ctx;
@@ -2456,8 +2457,27 @@ rspamd_fuzzy_key_stat_iter(const unsigned char *pk_iter, struct fuzzy_key *fuzzy
 							  rspamd_keypair_to_ucl(fuzzy_key->key, RSPAMD_KEYPAIR_ENCODING_DEFAULT,
 													RSPAMD_KEYPAIR_DUMP_NO_SECRET | RSPAMD_KEYPAIR_DUMP_FLATTENED),
 							  "keypair", 0, false);
+
+		if (fuzzy_key->rl_bucket) {
+			ucl_object_insert_key(elt,
+								  rspamd_leaky_bucket_to_ucl(fuzzy_key->rl_bucket),
+								  "ratelimit", 0, false);
+		}
+
 		ucl_object_insert_key(keys_obj, elt, keyname, 0, true);
 	}
+}
+static ucl_object_t *
+rspamd_leaky_bucket_to_ucl(struct rspamd_leaky_bucket_elt *p_elt)
+{
+	ucl_object_t *res;
+
+	res = ucl_object_typed_new(UCL_OBJECT);
+
+	ucl_object_insert_key(res, ucl_object_fromdouble(p_elt->cur), "cur", 0, false);
+	ucl_object_insert_key(res, ucl_object_fromdouble(p_elt->last), "last", 0, false);
+
+	return res;
 }
 
 static ucl_object_t *
