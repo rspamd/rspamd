@@ -897,4 +897,182 @@ exports.remove_attachments = function(task, settings)
   return state
 end
 
+--[[[
+-- @function lua_mime.anonymize_message(task, settings)
+-- Anonymizes message content by replacing sensitive data
+-- @param {task} task Rspamd task object
+-- @param {table} settings Table with the following fields:
+--   * strip_attachments: boolean, whether to strip all attachments
+--   * custom_header_process: table of header_name => function(orig_header) pairs
+-- @return {table} modified message state similar to other modification functions
+--]]
+exports.anonymize_message = function(task, settings)
+  local newline_s = newline(task)
+  local state = {
+    newline_s = newline_s
+  }
+  local out = {}
+
+  -- Default header processors
+  local function anonymize_email_header(hdr)
+    local addrs = rspamd_util.parse_mail_address(hdr.value, task:get_mempool())
+    if addrs and addrs[1] then
+      local modified = {}
+      for _, addr in ipairs(addrs) do
+        table.insert(modified, string.format('anonymous@%s', addr.domain or 'example.com'))
+      end
+
+      return table.concat(modified, ',')
+    end
+    return 'anonymous@example.com'
+  end
+
+  local function anonymize_received_header(hdr)
+    local processed = string.gsub(hdr.value, '%d+%.%d+%.%d+%.%d+', 'x.x.x.x')
+    processed = string.gsub(processed, '%x+:%x+:%x+:%x+:%x+:%x+:%x+:%x+', 'x:x:x:x:x:x:x:x')
+    return processed
+  end
+
+  local default_header_process = {
+    ['from'] = anonymize_email_header,
+    ['to'] = anonymize_email_header,
+    ['cc'] = anonymize_email_header,
+    ['bcc'] = anonymize_email_header,
+    ['received'] = anonymize_received_header,
+  }
+
+  -- Merge with custom processors
+  local header_processors = settings.custom_header_process or {}
+  for k, v in pairs(default_header_process) do
+    if not header_processors[k] then
+      header_processors[k] = v
+    end
+  end
+
+  -- Process headers
+  local modified_headers = {}
+  for name, processor in pairs(header_processors) do
+    local hdrs = task:get_header_full(name, true)
+    if hdrs then
+      for _, hdr in ipairs(hdrs) do
+        local new_value = processor(hdr)
+        if new_value then
+          table.insert(modified_headers, {
+            name = name,
+            value = new_value
+          })
+        end
+      end
+    end
+  end
+
+  -- Create new text content
+  local text_content = {}
+  local urls = {}
+  local emails = {}
+
+  -- Extract text content, URLs and emails
+  local text_parts = task:get_text_parts()
+  for _, part in ipairs(text_parts) do
+    if part:is_html() then
+      local words = part:get_words('norm')
+      if words then
+        text_content = words
+      end
+      break -- Use only first HTML part
+    end
+  end
+
+  -- If no HTML parts found, use first text part
+  if #text_content == 0 then
+    for _, part in ipairs(text_parts) do
+      if not part:is_html() then
+        local words = part:get_words('norm')
+        if words then
+          text_content = words
+        end
+        break
+      end
+    end
+  end
+
+  -- Process URLs
+  local function process_url(url)
+    local clean_url = url:get_host()
+    local path = url:get_path()
+    if path and path ~= "/" then
+      clean_url = clean_url .. path
+    end
+    return string.format('https://%s', clean_url)
+  end
+
+  for _, url in ipairs(task:get_urls(true)) do
+    table.insert(urls, process_url(url))
+  end
+
+  -- Process emails
+  local function process_email(email)
+    return string.format('nobody@%s', email.domain or 'example.com')
+  end
+
+  for _, email in ipairs(task:get_emails()) do
+    table.insert(emails, process_email(email))
+  end
+
+  -- Construct new message
+  table.insert(text_content, '\nurls: ')
+  table.insert(text_content, table.concat(urls, ', '))
+  table.insert(text_content, '\nemails: ')
+  table.insert(text_content, table.concat(emails, ', '))
+  local new_text = table.concat(text_content, ' ')
+
+  -- Create new message structure
+  local boundaries = {}
+  local cur_boundary = '--XXX'
+  boundaries[1] = cur_boundary
+
+  -- Add headers
+  out[#out + 1] = {
+    string.format('Content-Type: multipart/mixed; boundary="%s"', cur_boundary),
+    true
+  }
+  for _, hdr in ipairs(modified_headers) do
+    out[#out + 1] = {
+      string.format('%s: %s', hdr.name, hdr.value),
+      true
+    }
+  end
+  out[#out + 1] = { '', true }
+
+  -- Add text part
+  out[#out + 1] = {
+    string.format('--%s', cur_boundary),
+    true
+  }
+  out[#out + 1] = {
+    'Content-Type: text/plain; charset=utf-8\nContent-Transfer-Encoding: quoted-printable',
+    true
+  }
+  out[#out + 1] = { '', true }
+  out[#out + 1] = {
+    rspamd_util.encode_qp(new_text, 76, task:get_newlines_type()),
+    false
+  }
+
+  -- Close boundaries
+  out[#out + 1] = {
+    string.format('--%s--', cur_boundary),
+    true
+  }
+
+  state.out = out
+  state.need_rewrite_ct = true
+  state.new_ct = {
+    type = 'multipart',
+    subtype = 'mixed'
+  }
+
+  return state
+end
+
 return exports
