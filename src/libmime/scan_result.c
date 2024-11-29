@@ -21,7 +21,7 @@
 #include "lua/lua_common.h"
 #include "libserver/cfg_file_private.h"
 #include "libmime/scan_result_private.h"
-#include "contrib/fastutf8/fastutf8.h"
+#include "rspamd_simdutf.h"
 #include <math.h>
 #include "contrib/uthash/utlist.h"
 

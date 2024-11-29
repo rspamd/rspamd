@@ -26,7 +26,7 @@
 #include "protocol_internal.h"
 #include "libserver/mempool_vars_internal.h"
 #include "libserver/worker_util.h"
-#include "contrib/fastutf8/fastutf8.h"
+#include "rspamd_simdutf.h"
 #include "task.h"
 #include "lua/lua_classnames.h"
 #include <math.h>
