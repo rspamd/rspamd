@@ -25,7 +25,9 @@ extern "C" {
 #endif
 
 void rspamd_fast_utf8_library_init(unsigned flags);
+const char *rspamd_fast_utf8_library_impl_name(void);
 off_t rspamd_fast_utf8_validate(const unsigned char *data, size_t len);
+off_t rspamd_fast_utf8_validate_ref(const unsigned char *data, size_t len);
 
 #ifdef __cplusplus
 }

@@ -23,19 +23,52 @@
 
 extern "C" {
 
+const simdutf::implementation *impl{nullptr};
+const simdutf::implementation *ref_impl{nullptr};
+
 void rspamd_fast_utf8_library_init(unsigned flags)
 {
-	// This library requires no initialisation
+	impl = simdutf::get_active_implementation();
+	auto all_impls = simdutf::get_available_implementations();
+
+	for (auto &i: all_impls) {
+		if (i->name() == "fallback") {
+			ref_impl = i;
+			break;
+		}
+	}
 }
 
 off_t rspamd_fast_utf8_validate(const unsigned char *data, size_t len)
 {
-	auto res = simdutf::validate_utf8_with_errors((const char *) data, len);
+	auto res = impl->validate_utf8_with_errors((const char *) data, len);
 
 	if (res.error == simdutf::error_code::SUCCESS) {
 		return 0;
 	}
 
 	return res.count + 1;// We need to return offset for the first invalid character
+}
+
+off_t rspamd_fast_utf8_validate_ref(const unsigned char *data, size_t len)
+{
+	auto res = ref_impl->validate_utf8_with_errors((const char *) data, len);
+
+	if (res.error == simdutf::error_code::SUCCESS) {
+		return 0;
+	}
+
+	return res.count + 1;// We need to return offset for the first invalid character
+}
+
+const char *rspamd_fast_utf8_library_impl_name(void)
+{
+	static auto impl_name = std::string{};
+
+	if (impl_name.empty()) {
+		impl_name = impl->name() + "(" + impl->description() + ")";
+	}
+
+	return impl_name.c_str();
 }
 }

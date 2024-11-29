@@ -56,6 +56,7 @@
 
 #ifdef WITH_HYPERSCAN
 #include "libserver/hyperscan_tools.h"
+#include "rspamd_simdutf.h"
 #endif
 
 /* 2 seconds to fork new process in place of dead one */
@@ -1551,6 +1552,7 @@ int main(int argc, char **argv, char **env)
 				  rspamd_main->cfg->libs_ctx->crypto_ctx->chacha20_impl,
 				  rspamd_main->cfg->libs_ctx->crypto_ctx->base64_impl);
 	msg_info_main("libottery prf: %s", ottery_get_impl_name());
+	msg_info_main("simdutf implementation: %s", rspamd_fast_utf8_library_impl_name());
 
 	/* Daemonize */
 	if (!no_fork) {
