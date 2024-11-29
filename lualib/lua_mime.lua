@@ -951,20 +951,25 @@ exports.anonymize_message = function(task, settings)
 
   -- Process headers
   local modified_headers = {}
-  for name, processor in pairs(header_processors) do
-    local hdrs = task:get_header_full(name, true)
-    if hdrs then
-      for _, hdr in ipairs(hdrs) do
-        local new_value = processor(hdr)
-        if new_value then
-          table.insert(modified_headers, {
-            name = name,
-            value = new_value
-          })
-        end
+  local function process_hdr(name, hdr)
+    local processor = header_processors[name:lower()]
+    if processor then
+      local new_value = processor(hdr)
+      if new_value then
+        table.insert(modified_headers, {
+          name = name,
+          value = new_value
+        })
       end
+    else
+      table.insert(modified_headers, {
+        name = name,
+        value = hdr.value,
+      })
     end
   end
+
+  task:headers_foreach(process_hdr, { full = true })
 
   -- Create new text content
   local text_content = {}
@@ -974,12 +979,14 @@ exports.anonymize_message = function(task, settings)
   -- Extract text content, URLs and emails
   local text_parts = task:get_text_parts()
   for _, part in ipairs(text_parts) do
-    if part:is_html() then
-      local words = part:get_words('norm')
-      if words then
-        text_content = words
+    if not part:get_mimepart():is_attachment() then
+      if part:is_html() then
+        local words = part:get_words('norm')
+        if words then
+          text_content = words
+        end
+        break -- Use only first HTML part
       end
-      break -- Use only first HTML part
     end
   end
 
@@ -1027,9 +1034,7 @@ exports.anonymize_message = function(task, settings)
   local new_text = table.concat(text_content, ' ')
 
   -- Create new message structure
-  local boundaries = {}
   local cur_boundary = '--XXX'
-  boundaries[1] = cur_boundary
 
   -- Add headers
   out[#out + 1] = {
