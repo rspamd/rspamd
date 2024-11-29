@@ -1,7 +1,7 @@
 
 option(SIMDUTF_SANITIZE "Sanitize addresses" OFF)
 option(SIMDUTF_SANITIZE_UNDEFINED "Sanitize undefined behavior" OFF)
-option(SIMDUTF_ALWAYS_INCLUDE_FALLBACK "Always include fallback" OFF)
+option(SIMDUTF_ALWAYS_INCLUDE_FALLBACK "Always include fallback" ON)
 
 if (NOT CMAKE_BUILD_TYPE)
   message(STATUS "No build type selected, default to Release")
