@@ -232,7 +232,7 @@ local check_replyto_id = rspamd_config:register_symbol({
         elseif from[1].domain and rt[1].domain then
           if (util.strequal_caseless(from[1].domain, rt[1].domain)) then
             task:insert_result('REPLYTO_DOM_EQ_FROM_DOM', 1.0)
-          else
+          elseif not util.strequal_caseless(util.get_tld(from[1].domain), util.get_tld(rt[1].domain)) then
             task:insert_result('REPLYTO_DOM_NEQ_FROM_DOM', 1.0)
           end
         end
@@ -257,7 +257,7 @@ local check_replyto_id = rspamd_config:register_symbol({
       elseif (to and to[1] and to[1].domain and rt[1].domain) then
         if (util.strequal_caseless(to[1].domain, rt[1].domain)) then
           task:insert_result('REPLYTO_DOM_EQ_TO_DOM', 1.0)
-        else
+        elseif not util.strequal_caseless(util.get_tld(to[1].domain), util.get_tld(rt[1].domain)) then
           task:insert_result('REPLYTO_DOM_NEQ_TO_DOM', 1.0)
         end
       end
