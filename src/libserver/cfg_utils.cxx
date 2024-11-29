@@ -35,7 +35,7 @@
 #include "cryptobox.h"
 #include "ssl_util.h"
 #include "contrib/libottery/ottery.h"
-#include "contrib/fastutf8/fastutf8.h"
+#include "rspamd_simdutf.h"
 
 #ifdef SYS_ZSTD
 #include "zstd.h"
@@ -2658,14 +2658,6 @@ rspamd_init_libs(void)
 
 	/* Configure utf8 library */
 	unsigned int utf8_flags = 0;
-
-	if ((ctx->crypto_ctx->cpu_config & CPUID_SSE41)) {
-		utf8_flags |= RSPAMD_FAST_UTF8_FLAG_SSE41;
-	}
-	if ((ctx->crypto_ctx->cpu_config & CPUID_AVX2)) {
-		utf8_flags |= RSPAMD_FAST_UTF8_FLAG_AVX2;
-	}
-
 	rspamd_fast_utf8_library_init(utf8_flags);
 
 #ifdef HAVE_LOCALE_H

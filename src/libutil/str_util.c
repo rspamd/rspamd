@@ -31,7 +31,7 @@
 #include <immintrin.h>
 #endif
 
-#include "contrib/fastutf8/fastutf8.h"
+#include "rspamd_simdutf.h"
 
 const unsigned char lc_map[256] = {
 	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,

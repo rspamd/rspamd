@@ -2,7 +2,7 @@
 
 context("UTF8 check functions", function()
   local ffi = require("ffi")
-  ffi.cdef[[
+  ffi.cdef [[
     unsigned int rspamd_str_lc_utf8 (char *str, unsigned int size);
     unsigned int rspamd_str_lc (char *str, unsigned int size);
     void rspamd_fast_utf8_library_init (unsigned flags);
@@ -10,19 +10,17 @@ context("UTF8 check functions", function()
     double rspamd_get_ticks(int allow);
     size_t rspamd_fast_utf8_validate (const unsigned char *data, size_t len);
     size_t rspamd_fast_utf8_validate_ref (const unsigned char *data, size_t len);
-    size_t rspamd_fast_utf8_validate_sse41 (const unsigned char *data, size_t len);
-    size_t rspamd_fast_utf8_validate_avx2 (const unsigned char *data, size_t len);
     char * rspamd_str_make_utf_valid (const char *src, size_t slen, size_t *dstlen, void *);
   ]]
 
   local cases = {
-    {"АбЫрвАлг", "абырвалг"},
-    {"АAБBвc", "аaбbвc"},
+    { "АбЫрвАлг", "абырвалг" },
+    { "АAБBвc", "аaбbвc" },
     --{"STRASSE", "straße"}, XXX: NYI
-    {"KEÇİ", "keçi"},
+    { "KEÇİ", "keçi" },
   }
 
-  for i,c in ipairs(cases) do
+  for i, c in ipairs(cases) do
     test("UTF lowercase " .. tostring(i), function()
       local buf = ffi.new("char[?]", #c[1] + 1)
       ffi.copy(buf, c[1])
@@ -33,13 +31,13 @@ context("UTF8 check functions", function()
   end
 
   cases = {
-    {"AbCdEf", "abcdef"},
-    {"A", "a"},
-    {"AaAa", "aaaa"},
-    {"AaAaAaAa", "aaaaaaaa"}
+    { "AbCdEf", "abcdef" },
+    { "A", "a" },
+    { "AaAa", "aaaa" },
+    { "AaAaAaAa", "aaaaaaaa" }
   }
 
-  for i,c in ipairs(cases) do
+  for i, c in ipairs(cases) do
     test("ASCII lowercase " .. tostring(i), function()
       local buf = ffi.new("char[?]", #c[1] + 1)
       ffi.copy(buf, c[1])
@@ -50,24 +48,24 @@ context("UTF8 check functions", function()
   end
 
   cases = {
-    {'тест', 'тест'},
-    {'\200\213\202', '���'},
-    {'тест\200\213\202test', 'тест���test'},
-    {'\200\213\202test', '���test'},
-    {'\200\213\202test\200\213\202', '���test���'},
-    {'тест\200\213\202test\200\213\202', 'тест���test���'},
-    {'тест\200\213\202test\200\213\202тест', 'тест���test���тест'},
+    { 'тест', 'тест' },
+    { '\200\213\202', '���' },
+    { 'тест\200\213\202test', 'тест���test' },
+    { '\200\213\202test', '���test' },
+    { '\200\213\202test\200\213\202', '���test���' },
+    { 'тест\200\213\202test\200\213\202', 'тест���test���' },
+    { 'тест\200\213\202test\200\213\202тест', 'тест���test���тест' },
   }
 
   local NULL = ffi.new 'void*'
-  for i,c in ipairs(cases) do
+  for i, c in ipairs(cases) do
     test("Unicode make valid " .. tostring(i), function()
       local buf = ffi.new("char[?]", #c[1] + 1)
       ffi.copy(buf, c[1])
 
       local s = ffi.string(ffi.C.rspamd_str_make_utf_valid(buf, #c[1], NULL, NULL))
       local function to_hex(s)
-        return (s:gsub('.', function (c)
+        return (s:gsub('.', function(c)
           return string.format('%02X', string.byte(c))
         end))
       end
@@ -86,7 +84,7 @@ context("UTF8 check functions", function()
     "\xf0\x90\x8c\xbc",
     "안녕하세요, 세상"
   }
-  for i,c in ipairs(valid_cases) do
+  for i, c in ipairs(valid_cases) do
     test("Unicode validate success: " .. tostring(i), function()
       local buf = ffi.new("char[?]", #c + 1)
       ffi.copy(buf, c)
@@ -112,7 +110,7 @@ context("UTF8 check functions", function()
     "123456789012345\xc2",
     "\xC2\x7F"
   }
-  for i,c in ipairs(invalid_cases) do
+  for i, c in ipairs(invalid_cases) do
     test("Unicode validate fail: " .. tostring(i), function()
       local buf = ffi.new("char[?]", #c + 1)
       ffi.copy(buf, c)
@@ -147,20 +145,15 @@ context("UTF8 check functions", function()
 
       local tm = 0
 
-      for _=1,speed_iters do
+      for _ = 1, speed_iters do
         if impl == 'ref' then
           local t1 = ffi.C.rspamd_get_ticks(1)
           ffi.C.rspamd_fast_utf8_validate_ref(buf, buflen)
           local t2 = ffi.C.rspamd_get_ticks(1)
           tm = tm + (t2 - t1)
-        elseif impl == 'sse' then
+        elseif impl == 'opt' then
           local t1 = ffi.C.rspamd_get_ticks(1)
-          ffi.C.rspamd_fast_utf8_validate_sse41(buf, buflen)
-          local t2 = ffi.C.rspamd_get_ticks(1)
-          tm = tm + (t2 - t1)
-        else
-          local t1 = ffi.C.rspamd_get_ticks(1)
-          ffi.C.rspamd_fast_utf8_validate_avx2(buf, buflen)
+          ffi.C.rspamd_fast_utf8_validate(buf, buflen)
           local t2 = ffi.C.rspamd_get_ticks(1)
           tm = tm + (t2 - t1)
         end
@@ -173,7 +166,7 @@ context("UTF8 check functions", function()
       return 0
     end
 
-    for _,sz in ipairs({78, 512, 65535}) do
+    for _, sz in ipairs({ 78, 512, 65535 }) do
       test(string.format("Utf8 test %s %d buffer, %s", 'ref', sz, 'valid'), function()
         local res = test_size(sz, true, 'ref')
         assert_equal(res, 0)
@@ -182,25 +175,14 @@ context("UTF8 check functions", function()
         local res = test_size(sz, false, 'ref')
         assert_equal(res, 0)
       end)
-
-      if jit.arch == 'x64' then
-        test(string.format("Utf8 test %s %d buffer, %s", 'sse', sz, 'valid'), function()
-          local res = test_size(sz, true, 'sse')
-          assert_equal(res, 0)
-        end)
-        test(string.format("Utf8 test %s %d buffer, %s", 'sse', sz, 'invalid'), function()
-          local res = test_size(sz, false, 'sse')
-          assert_equal(res, 0)
-        end)
-        test(string.format("Utf8 test %s %d buffer, %s", 'avx2', sz, 'valid'), function()
-          local res = test_size(sz, true, 'avx2')
-          assert_equal(res, 0)
-        end)
-        test(string.format("Utf8 test %s %d buffer, %s", 'avx2', sz, 'invalid'), function()
-          local res = test_size(sz, false, 'avx2')
-          assert_equal(res, 0)
-        end)
-      end
+      test(string.format("Utf8 test %s %d buffer, %s", 'opt', sz, 'valid'), function()
+        local res = test_size(sz, true, 'opt')
+        assert_equal(res, 0)
+      end)
+      test(string.format("Utf8 test %s %d buffer, %s", 'opt', sz, 'invalid'), function()
+        local res = test_size(sz, false, 'opt')
+        assert_equal(res, 0)
+      end)
     end
   end
 

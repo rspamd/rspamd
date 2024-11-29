@@ -32,7 +32,7 @@
 
 #include "unicode/uspoof.h"
 #include "unicode/uscript.h"
-#include "contrib/fastutf8/fastutf8.h"
+#include "rspamd_simdutf.h"
 
 /***
  * @module rspamd_util
