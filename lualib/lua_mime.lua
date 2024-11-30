@@ -898,6 +898,65 @@ exports.remove_attachments = function(task, settings)
 end
 
 --[[[
+-- @function lua_mime.get_displayed_text_part(task)
+-- Returns the most relevant displayed content from an email
+-- @param {task} task Rspamd task object
+-- @return {text_part} a selected part
+--]]
+exports.get_displayed_text_part = function(task)
+  local text_parts = task:get_text_parts()
+  if not text_parts then
+    return nil
+  end
+
+  local html_part
+  local text_part
+  local html_attachment
+
+  -- First pass: categorize parts
+  for _, part in ipairs(text_parts) do
+    local mp = part:get_mimepart()
+    if not mp:is_attachment() then
+      if part:is_html() then
+        html_part = part
+      else
+        text_part = text_part or part
+      end
+    else
+      -- Check for HTML attachments
+      if part:is_html() and mp:get_length() < 102400 then
+        -- 100KB limit, as long ones are likely not something that we should check
+        html_attachment = part
+      end
+    end
+  end
+
+  -- Decision logic
+  if html_part then
+    local word_count = html_part:get_words_count() or 0
+    if word_count >= 10 then
+      -- Arbitrary minimum threshold, e.g. I believe it's minimum sane
+      return html_part
+    end
+  end
+
+  if text_part then
+    local word_count = html_part:get_words_count() or 0
+    if word_count >= 10 then
+      -- Arbitrary minimum threshold, e.g. I believe it's minimum sane
+      return text_part
+    end
+  end
+
+  if html_attachment then
+    return html_attachment
+  end
+
+  -- Only short parts, but still let's try our best
+  return html_part or text_part
+end
+
+--[[[
 -- @function lua_mime.anonymize_message(task, settings)
 -- Anonymizes message content by replacing sensitive data
 -- @param {task} task Rspamd task object
@@ -976,31 +1035,10 @@ exports.anonymize_message = function(task, settings)
   local urls = {}
   local emails = {}
 
-  -- Extract text content, URLs and emails
-  local text_parts = task:get_text_parts()
-  for _, part in ipairs(text_parts) do
-    if not part:get_mimepart():is_attachment() then
-      if part:is_html() then
-        local words = part:get_words('norm')
-        if words then
-          text_content = words
-        end
-        break -- Use only first HTML part
-      end
-    end
-  end
+  local sel_part = exports.get_displayed_text_part(task)
 
-  -- If no HTML parts found, use first text part
-  if #text_content == 0 then
-    for _, part in ipairs(text_parts) do
-      if not part:is_html() then
-        local words = part:get_words('norm')
-        if words then
-          text_content = words
-        end
-        break
-      end
-    end
+  if sel_part then
+    text_content = sel_part:get_words('norm')
   end
 
   -- Process URLs
