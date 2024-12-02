@@ -966,6 +966,9 @@ end
 -- @return {table} modified message state similar to other modification functions
 --]]
 exports.anonymize_message = function(task, settings)
+  local rspamd_re = require "rspamd_regexp"
+  -- We exclude words with digits, currency symbols and so on
+  local exclude_words_re = rspamd_re.create_cached([[/^(?:\d+|\d+\D{1,3}|\p{Sc}.*|(\+?\d{1,3}[\s\-]?)?)$/u]])
   local newline_s = newline(task)
   local state = {
     newline_s = newline_s
@@ -1039,6 +1042,11 @@ exports.anonymize_message = function(task, settings)
 
   if sel_part then
     text_content = sel_part:get_words('norm')
+    for i, w in ipairs(text_content) do
+      if exclude_words_re:match(w) then
+        text_content[i] = string.rep('x', #w)
+      end
+    end
   end
 
   -- Process URLs
@@ -1080,10 +1088,12 @@ exports.anonymize_message = function(task, settings)
     true
   }
   for _, hdr in ipairs(modified_headers) do
-    out[#out + 1] = {
-      string.format('%s: %s', hdr.name, hdr.value),
-      true
-    }
+    if hdr.name ~= 'Content-Type' then
+      out[#out + 1] = {
+        string.format('%s: %s', hdr.name, hdr.value),
+        true
+      }
+    end
   end
   out[#out + 1] = { '', true }
 
@@ -1099,7 +1109,7 @@ exports.anonymize_message = function(task, settings)
   out[#out + 1] = { '', true }
   out[#out + 1] = {
     rspamd_util.encode_qp(new_text, 76, task:get_newlines_type()),
-    false
+    true
   }
 
   -- Close boundaries
