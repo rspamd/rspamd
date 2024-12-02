@@ -491,8 +491,17 @@ int dkim_module_config(struct rspamd_config *cfg, bool validate)
 		dkim_module_ctx->trusted_only = FALSE;
 	}
 
+	/*
+	 * We should use sign headers from dkim_signing module as it is the module that
+	 * is used actually for signing.
+	 * See https://github.com/rspamd/rspamd/issues/5225 for details
+	 */
 	if ((value =
-			 rspamd_config_get_module_opt(cfg, "dkim", "sign_headers")) != NULL) {
+			 rspamd_config_get_module_opt(cfg, "dkim_signing", "sign_headers")) != NULL) {
+		dkim_module_ctx->sign_headers = ucl_object_tostring(value);
+	}
+	else if ((value =
+				  rspamd_config_get_module_opt(cfg, "dkim", "sign_headers")) != NULL) {
 		dkim_module_ctx->sign_headers = ucl_object_tostring(value);
 	}
 
