@@ -1,18 +1,16 @@
-/*
- * Copyright 2024 Vsevolod Stakhov
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright 2024 Vsevolod Stakhov
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #include "config.h"
 #include "dns.h"
@@ -125,14 +123,18 @@ struct rspamd_spf_library_ctx *spf_lib_ctx = NULL;
 
 INIT_LOG_MODULE(spf)
 
+
 struct spf_dns_cb {
 	struct spf_record *rec;
 	struct spf_addr *addr;
 	struct spf_resolved_element *resolved;
-	const char *ptr_host;
-	spf_action_t cur_action;
-	gboolean in_include;
+	const char *initiated_dns_name;
+	spf_action_t initiated_by;
+	unsigned eyeballs_sent;     /* number of DNS subrequests sent */
+	unsigned eyeballs_received; /* number of DNS subrequests received */
+	unsigned eyeballs_errors;   /* number of DNS subrequests errored */
 };
+
 
 #define CHECK_REC(rec)                                                             \
 	do {                                                                           \
@@ -657,8 +659,8 @@ spf_check_ptr_host(struct spf_dns_cb *cb, const char *name)
 	const char *dend, *nend, *dstart, *nstart;
 	struct spf_record *rec = cb->rec;
 
-	if (cb->ptr_host != NULL) {
-		dstart = cb->ptr_host;
+	if (cb->initiated_dns_name != NULL) {
+		dstart = cb->initiated_dns_name;
 	}
 	else {
 		dstart = cb->resolved->cur_domain;
@@ -880,8 +882,17 @@ spf_record_dns_callback(struct rdns_reply *reply, gpointer arg)
 
 	if (reply->code == RDNS_RC_NOERROR && !truncated) {
 
+		msg_debug_spf("in dns callback initiated by %s for %s: resolved",
+					  rspamd_spf_dns_action_to_str(cb->initiated_by),
+					  req_name ? req_name->name : "???");
+
 		LL_FOREACH(reply->entries, elt_data)
 		{
+			if (elt_data->type == RDNS_REQUEST_CNAME) {
+				/* Skip cname aliases - it must be handled by a recursor */
+				continue;
+			}
+
 			/* Adjust ttl if a resolved record has lower ttl than spf record itself */
 			if ((unsigned int) elt_data->ttl < rec->ttl) {
 				msg_debug_spf("reducing ttl from %d to %d after DNS resolving",
@@ -889,12 +900,7 @@ spf_record_dns_callback(struct rdns_reply *reply, gpointer arg)
 				rec->ttl = elt_data->ttl;
 			}
 
-			if (elt_data->type == RDNS_REQUEST_CNAME) {
-				/* Skip cname aliases - it must be handled by a recursor */
-				continue;
-			}
-
-			switch (cb->cur_action) {
+			switch (cb->initiated_by) {
 			case SPF_RESOLVE_MX:
 				if (elt_data->type == RDNS_REQUEST_MX) {
 					/* Now resolve A record for this MX */
@@ -905,6 +911,7 @@ spf_record_dns_callback(struct rdns_reply *reply, gpointer arg)
 																RDNS_REQUEST_A,
 																elt_data->content.mx.name)) {
 						cb->rec->requests_inflight++;
+						cb->eyeballs_sent++;
 					}
 
 					if (!spf_lib_ctx->disable_ipv6) {
@@ -913,6 +920,7 @@ spf_record_dns_callback(struct rdns_reply *reply, gpointer arg)
 																	RDNS_REQUEST_AAAA,
 																	elt_data->content.mx.name)) {
 							cb->rec->requests_inflight++;
+							cb->eyeballs_sent++;
 						}
 					}
 					else {
@@ -920,8 +928,10 @@ spf_record_dns_callback(struct rdns_reply *reply, gpointer arg)
 					}
 				}
 				else {
+					/* If any of the eyeballs requests success we should consider this as resolved */
+					cb->eyeballs_received++;
 					cb->addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
-					cb->addr->flags &= ~RSPAMD_SPF_FLAG_PERMFAIL;
+					cb->addr->flags &= ~(RSPAMD_SPF_FLAG_PERMFAIL | RSPAMD_SPF_FLAG_TEMPFAIL);
 					msg_debug_spf("resolved MX addr");
 					spf_record_process_addr(rec, addr, elt_data);
 				}
@@ -944,6 +954,7 @@ spf_record_dns_callback(struct rdns_reply *reply, gpointer arg)
 																	RDNS_REQUEST_A,
 																	elt_data->content.ptr.name)) {
 							cb->rec->requests_inflight++;
+							cb->eyeballs_sent++;
 						}
 
 						if (!spf_lib_ctx->disable_ipv6) {
@@ -952,6 +963,7 @@ spf_record_dns_callback(struct rdns_reply *reply, gpointer arg)
 																		RDNS_REQUEST_AAAA,
 																		elt_data->content.ptr.name)) {
 								cb->rec->requests_inflight++;
+								cb->eyeballs_sent++;
 							}
 						}
 						else {
@@ -964,6 +976,8 @@ spf_record_dns_callback(struct rdns_reply *reply, gpointer arg)
 					}
 				}
 				else {
+					/* If any of the eyeballs requests success we should consider this as resolved */
+					cb->eyeballs_received++;
 					cb->addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
 					cb->addr->flags &= ~RSPAMD_SPF_FLAG_PERMFAIL;
 					spf_record_process_addr(rec, addr, elt_data);
@@ -1010,9 +1024,9 @@ spf_record_dns_callback(struct rdns_reply *reply, gpointer arg)
 				if (elt_data->type == RDNS_REQUEST_A ||
 					elt_data->type == RDNS_REQUEST_AAAA) {
 					/*
-						 * If specified address resolves, we can accept
-						 * connection from every IP
-						 */
+					 * If specified address resolves, we can accept
+					 * connection from every IP
+					 */
 					addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
 					spf_record_addr_set(addr, TRUE);
 				}
@@ -1021,9 +1035,20 @@ spf_record_dns_callback(struct rdns_reply *reply, gpointer arg)
 		}
 	}
 	else if (reply->code == RDNS_RC_NXDOMAIN || reply->code == RDNS_RC_NOREC) {
-		switch (cb->cur_action) {
+
+		msg_debug_spf("in dns callback initiated by %s for %s: NXDOMAIN/NOREC; "
+					  "eyeballs_status: %d sent/%d received, %d errors",
+					  rspamd_spf_dns_action_to_str(cb->initiated_by),
+					  req_name ? req_name->name : "???",
+					  cb->eyeballs_sent, cb->eyeballs_received, cb->eyeballs_errors);
+
+		switch (cb->initiated_by) {
 		case SPF_RESOLVE_MX:
-			if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
+			cb->eyeballs_received++;
+			cb->eyeballs_errors++;
+
+			if (cb->eyeballs_received == cb->eyeballs_sent && cb->eyeballs_errors == cb->eyeballs_sent) {
+				/* We only set error if all eyeball requests have failed */
 				cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 				msg_info_spf(
 					"spf error for domain %s: cannot find MX"
@@ -1064,7 +1089,10 @@ spf_record_dns_callback(struct rdns_reply *reply, gpointer arg)
 			}
 			break;
 		case SPF_RESOLVE_PTR:
-			if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
+			cb->eyeballs_received++;
+			cb->eyeballs_errors++;
+
+			if (cb->eyeballs_received == cb->eyeballs_sent && cb->eyeballs_errors == cb->eyeballs_sent) {
 				msg_info_spf(
 					"spf error for domain %s: cannot resolve PTR"
 					" record for %s: %s",
@@ -1121,8 +1149,8 @@ spf_record_dns_callback(struct rdns_reply *reply, gpointer arg)
 			"spf error for domain %s: cannot resolve %s DNS record for"
 			" %s: %s",
 			cb->rec->sender_domain,
-			rspamd_spf_dns_action_to_str(cb->cur_action),
-			cb->ptr_host,
+			rspamd_spf_dns_action_to_str(cb->initiated_by),
+			cb->initiated_dns_name,
 			rdns_strerror(reply->code));
 	}
 
@@ -1287,11 +1315,11 @@ parse_spf_a(struct spf_record *rec,
 	}
 
 	rec->dns_requests++;
-	cb = rspamd_mempool_alloc(task->task_pool, sizeof(struct spf_dns_cb));
+	cb = rspamd_mempool_alloc0(task->task_pool, sizeof(struct spf_dns_cb));
 	cb->rec = rec;
-	cb->ptr_host = host;
+	cb->initiated_dns_name = host;
 	cb->addr = addr;
-	cb->cur_action = SPF_RESOLVE_A;
+	cb->initiated_by = SPF_RESOLVE_A;
 	cb->resolved = resolved;
 	msg_debug_spf("resolve a %s", host);
 
@@ -1299,14 +1327,14 @@ parse_spf_a(struct spf_record *rec,
 												spf_record_dns_callback, (void *) cb, RDNS_REQUEST_A, host)) {
 		rec->requests_inflight++;
 
-		cb = rspamd_mempool_alloc(task->task_pool, sizeof(struct spf_dns_cb));
-		cb->rec = rec;
-		cb->ptr_host = host;
-		cb->addr = addr;
-		cb->cur_action = SPF_RESOLVE_AAA;
-		cb->resolved = resolved;
-
 		if (!spf_lib_ctx->disable_ipv6) {
+			cb = rspamd_mempool_alloc0(task->task_pool, sizeof(struct spf_dns_cb));
+			cb->rec = rec;
+			cb->initiated_dns_name = host;
+			cb->addr = addr;
+			cb->initiated_by = SPF_RESOLVE_AAA;
+			cb->resolved = resolved;
+
 			if (rspamd_dns_resolver_request_task_forced(task,
 														spf_record_dns_callback, (void *) cb, RDNS_REQUEST_AAAA, host)) {
 				rec->requests_inflight++;
@@ -1340,12 +1368,12 @@ parse_spf_ptr(struct spf_record *rec,
 	host = parse_spf_domain_mask(rec, addr, resolved, FALSE);
 
 	rec->dns_requests++;
-	cb = rspamd_mempool_alloc(task->task_pool, sizeof(struct spf_dns_cb));
+	cb = rspamd_mempool_alloc0(task->task_pool, sizeof(struct spf_dns_cb));
 	cb->rec = rec;
 	cb->addr = addr;
-	cb->cur_action = SPF_RESOLVE_PTR;
+	cb->initiated_by = SPF_RESOLVE_PTR;
 	cb->resolved = resolved;
-	cb->ptr_host = rspamd_mempool_strdup(task->task_pool, host);
+	cb->initiated_dns_name = rspamd_mempool_strdup(task->task_pool, host);
 	ptr =
 		rdns_generate_ptr_from_str(rspamd_inet_address_to_string(
 			task->from_addr));
@@ -1390,11 +1418,11 @@ parse_spf_mx(struct spf_record *rec,
 	}
 
 	rec->dns_requests++;
-	cb = rspamd_mempool_alloc(task->task_pool, sizeof(struct spf_dns_cb));
+	cb = rspamd_mempool_alloc0(task->task_pool, sizeof(struct spf_dns_cb));
 	cb->rec = rec;
 	cb->addr = addr;
-	cb->cur_action = SPF_RESOLVE_MX;
-	cb->ptr_host = host;
+	cb->initiated_by = SPF_RESOLVE_MX;
+	cb->initiated_dns_name = host;
 	cb->resolved = resolved;
 
 	msg_debug_spf("resolve mx for %s", host);
@@ -1606,13 +1634,13 @@ parse_spf_include(struct spf_record *rec, struct spf_addr *addr)
 
 	rec->dns_requests++;
 
-	cb = rspamd_mempool_alloc(task->task_pool, sizeof(struct spf_dns_cb));
+	cb = rspamd_mempool_alloc0(task->task_pool, sizeof(struct spf_dns_cb));
 	cb->rec = rec;
 	cb->addr = addr;
-	cb->cur_action = SPF_RESOLVE_INCLUDE;
+	cb->initiated_by = SPF_RESOLVE_INCLUDE;
 	addr->m.idx = rec->resolved->len;
 	cb->resolved = rspamd_spf_new_addr_list(rec, domain);
-	cb->ptr_host = domain;
+	cb->initiated_dns_name = domain;
 	/* Set reference */
 	addr->flags |= RSPAMD_SPF_FLAG_REFERENCE;
 	msg_debug_spf("resolve include %s", domain);
@@ -1667,16 +1695,16 @@ parse_spf_redirect(struct spf_record *rec,
 	rec->dns_requests++;
 	resolved->redirected = TRUE;
 
-	cb = rspamd_mempool_alloc(task->task_pool, sizeof(struct spf_dns_cb));
+	cb = rspamd_mempool_alloc0(task->task_pool, sizeof(struct spf_dns_cb));
 	/* Set reference */
 	addr->flags |= RSPAMD_SPF_FLAG_REFERENCE | RSPAMD_SPF_FLAG_REDIRECT;
 	addr->m.idx = rec->resolved->len;
 
 	cb->rec = rec;
 	cb->addr = addr;
-	cb->cur_action = SPF_RESOLVE_REDIRECT;
+	cb->initiated_by = SPF_RESOLVE_REDIRECT;
 	cb->resolved = rspamd_spf_new_addr_list(rec, domain);
-	cb->ptr_host = domain;
+	cb->initiated_dns_name = domain;
 	msg_debug_spf("resolve redirect %s", domain);
 
 	if (rspamd_dns_resolver_request_task_forced(task,
@@ -1718,12 +1746,12 @@ parse_spf_exists(struct spf_record *rec, struct spf_addr *addr)
 	host++;
 	rec->dns_requests++;
 
-	cb = rspamd_mempool_alloc(task->task_pool, sizeof(struct spf_dns_cb));
+	cb = rspamd_mempool_alloc0(task->task_pool, sizeof(struct spf_dns_cb));
 	cb->rec = rec;
 	cb->addr = addr;
-	cb->cur_action = SPF_RESOLVE_EXISTS;
+	cb->initiated_by = SPF_RESOLVE_EXISTS;
 	cb->resolved = resolved;
-	cb->ptr_host = host;
+	cb->initiated_dns_name = host;
 
 	msg_debug_spf("resolve exists %s", host);
 	if (rspamd_dns_resolver_request_task_forced(task,
