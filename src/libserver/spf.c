@@ -137,23 +137,30 @@ struct spf_dns_cb {
 	unsigned eyeballs_errors;   /* number of DNS subrequests errored */
 };
 
+static inline bool
+spf_record_can_dns(const struct spf_record *rec)
+{
+	if (spf_lib_ctx->max_dns_nesting > 0 &&
+		rec->nested > spf_lib_ctx->max_dns_nesting) {
+		msg_warn_spf("spf nesting limit: %d > %d is reached, domain: %s",
+					 rec->nested, spf_lib_ctx->max_dns_nesting,
+					 rec->sender_domain);
+		return false;
+	}
+	if (spf_lib_ctx->max_dns_requests > 0 &&
+		rec->dns_requests > spf_lib_ctx->max_dns_requests) {
+		msg_warn_spf("spf dns requests limit: %d > %d is reached, domain: %s",
+					 rec->dns_requests, spf_lib_ctx->max_dns_requests,
+					 rec->sender_domain);
+		return false;
+	}
 
-#define CHECK_REC(rec)                                                             \
-	do {                                                                           \
-		if (spf_lib_ctx->max_dns_nesting > 0 &&                                    \
-			(rec)->nested > spf_lib_ctx->max_dns_nesting) {                        \
-			msg_warn_spf("spf nesting limit: %d > %d is reached, domain: %s",      \
-						 (rec)->nested, spf_lib_ctx->max_dns_nesting,              \
-						 (rec)->sender_domain);                                    \
-			return FALSE;                                                          \
-		}                                                                          \
-		if (spf_lib_ctx->max_dns_requests > 0 &&                                   \
-			(rec)->dns_requests > spf_lib_ctx->max_dns_requests) {                 \
-			msg_warn_spf("spf dns requests limit: %d > %d is reached, domain: %s", \
-						 (rec)->dns_requests, spf_lib_ctx->max_dns_requests,       \
-						 (rec)->sender_domain);                                    \
-			return FALSE;                                                          \
-		}                                                                          \
+	return true;
+}
+
+#define CHECK_REC(rec)                              \
+	do {                                            \
+		if (!spf_record_can_dns(rec)) return FALSE; \
 	} while (0)
 
 RSPAMD_CONSTRUCTOR(rspamd_spf_lib_ctx_ctor)
@@ -179,7 +186,7 @@ spf_record_cached_unref_dtor(gpointer p)
 {
 	struct spf_resolved *flat = (struct spf_resolved *) p;
 
-	_spf_record_unref(flat, "LRU cache");
+	spf_record_unref_internal(flat, "LRU cache");
 }
 
 void spf_library_config(const ucl_object_t *obj)
@@ -908,25 +915,31 @@ spf_record_dns_callback(struct rdns_reply *reply, gpointer arg)
 					/* Now resolve A record for this MX */
 					msg_debug_spf("resolve %s after resolving of MX",
 								  elt_data->content.mx.name);
-					if (rspamd_dns_resolver_request_task_forced(task,
-																spf_record_dns_callback, (void *) cb,
-																RDNS_REQUEST_A,
-																elt_data->content.mx.name)) {
-						cb->rec->requests_inflight++;
-						cb->eyeballs_sent++;
-					}
-
-					if (!spf_lib_ctx->disable_ipv6) {
+					if (spf_record_can_dns(rec)) {
 						if (rspamd_dns_resolver_request_task_forced(task,
 																	spf_record_dns_callback, (void *) cb,
-																	RDNS_REQUEST_AAAA,
+																	RDNS_REQUEST_A,
 																	elt_data->content.mx.name)) {
 							cb->rec->requests_inflight++;
 							cb->eyeballs_sent++;
 						}
+
+						if (!spf_lib_ctx->disable_ipv6) {
+							if (rspamd_dns_resolver_request_task_forced(task,
+																		spf_record_dns_callback, (void *) cb,
+																		RDNS_REQUEST_AAAA,
+																		elt_data->content.mx.name)) {
+								cb->rec->requests_inflight++;
+								cb->eyeballs_sent++;
+							}
+						}
+						else {
+							msg_debug_spf("skip AAAA request for MX resolution");
+						}
 					}
 					else {
-						msg_debug_spf("skip AAAA request for MX resolution");
+						/* Max DNS requests reached */
+						cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 					}
 				}
 				else {
@@ -951,25 +964,31 @@ spf_record_dns_callback(struct rdns_reply *reply, gpointer arg)
 										   elt_data->content.ptr.name)) {
 						msg_debug_spf("resolve PTR %s after resolving of PTR",
 									  elt_data->content.ptr.name);
-						if (rspamd_dns_resolver_request_task_forced(task,
-																	spf_record_dns_callback, (void *) cb,
-																	RDNS_REQUEST_A,
-																	elt_data->content.ptr.name)) {
-							cb->rec->requests_inflight++;
-							cb->eyeballs_sent++;
-						}
-
-						if (!spf_lib_ctx->disable_ipv6) {
+						if (spf_record_can_dns(rec)) {
 							if (rspamd_dns_resolver_request_task_forced(task,
 																		spf_record_dns_callback, (void *) cb,
-																		RDNS_REQUEST_AAAA,
+																		RDNS_REQUEST_A,
 																		elt_data->content.ptr.name)) {
 								cb->rec->requests_inflight++;
 								cb->eyeballs_sent++;
 							}
+
+							if (!spf_lib_ctx->disable_ipv6) {
+								if (rspamd_dns_resolver_request_task_forced(task,
+																			spf_record_dns_callback, (void *) cb,
+																			RDNS_REQUEST_AAAA,
+																			elt_data->content.ptr.name)) {
+									cb->rec->requests_inflight++;
+									cb->eyeballs_sent++;
+								}
+							}
+							else {
+								msg_debug_spf("skip AAAA request for PTR resolution");
+							}
 						}
 						else {
-							msg_debug_spf("skip AAAA request for PTR resolution");
+							/* Max DNS requests reached */
+							cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 						}
 					}
 					else {
@@ -2719,13 +2738,13 @@ rspamd_spf_resolve(struct rspamd_task *task, spf_cb_t callback,
 }
 
 struct spf_resolved *
-_spf_record_ref(struct spf_resolved *flat, const char *loc)
+spf_record_ref_internal(struct spf_resolved *flat, const char *loc)
 {
 	REF_RETAIN(flat);
 	return flat;
 }
 
-void _spf_record_unref(struct spf_resolved *flat, const char *loc)
+void spf_record_unref_internal(struct spf_resolved *flat, const char *loc)
 {
 	REF_RELEASE(flat);
 }
