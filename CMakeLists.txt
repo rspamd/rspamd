@@ -206,7 +206,7 @@ ELSE (ENABLE_LUAJIT MATCHES "ON")
 ENDIF (ENABLE_LUAJIT MATCHES "ON")
 
 IF (ENABLE_JEMALLOC MATCHES "ON" AND NOT SANITIZE)
-    ProcessPackage(JEMALLOC LIBRARY jemalloc_pic jemalloc INCLUDE jemalloc.h INCLUDE_SUFFIXES include/jemalloc
+    ProcessPackage(JEMALLOC LIBRARY jemalloc_pic jemalloc INCLUDE jemalloc/jemalloc.h
             ROOT ${JEMALLOC_ROOT_DIR})
     SET(WITH_JEMALLOC "1")
 ENDIF ()
