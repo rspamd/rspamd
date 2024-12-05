@@ -65,6 +65,9 @@ Action: $action
 Score: $score
 Symbols: $symbols]],
   timeout = 5.0,
+  gzip = false,
+  keepalive = false,
+  no_ssl_verify = false,
 }
 
 local function get_general_metadata(task, flatten, no_content)
@@ -340,6 +343,9 @@ local pushers = {
       mime_type = rule.mime_type or settings.mime_type,
       headers = hdrs,
       timeout = rule.timeout or settings.timeout,
+      gzip = rule.gzip or settings.gzip,
+      keepalive = rule.keepalive or settings.keepalive,
+      no_ssl_verify = rule.no_ssl_verify or settings.no_ssl_verify,
     })
   end,
   send_mail = function(task, formatted, rule, extra)
