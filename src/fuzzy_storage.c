@@ -1782,7 +1782,7 @@ rspamd_fuzzy_decrypt_command(struct fuzzy_session *s, unsigned char *buf, gsize 
 		if (s->ctx->dynamic_keys) {
 			k = kh_get(rspamd_fuzzy_keys_hash, s->ctx->dynamic_keys, hdr.key_id);
 
-			if (k != kh_end(s->ctx->keys)) {
+			if (k != kh_end(s->ctx->dynamic_keys)) {
 				key = kh_val(s->ctx->dynamic_keys, k);
 			}
 		}
