@@ -941,7 +941,7 @@ exports.get_displayed_text_part = function(task)
   end
 
   if text_part then
-    local word_count = html_part:get_words_count() or 0
+    local word_count = text_part:get_words_count() or 0
     if word_count >= 10 then
       -- Arbitrary minimum threshold, e.g. I believe it's minimum sane
       return text_part
