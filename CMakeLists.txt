@@ -5,7 +5,7 @@
 #
 
 ############################# INITIAL SECTION #############################################
-CMAKE_MINIMUM_REQUIRED(VERSION 3.12 FATAL_ERROR)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.15 FATAL_ERROR)
 
 SET(RSPAMD_VERSION_MAJOR 3)
 SET(RSPAMD_VERSION_MINOR 11)
@@ -206,7 +206,7 @@ ELSE (ENABLE_LUAJIT MATCHES "ON")
 ENDIF (ENABLE_LUAJIT MATCHES "ON")
 
 IF (ENABLE_JEMALLOC MATCHES "ON" AND NOT SANITIZE)
-    ProcessPackage(JEMALLOC LIBRARY jemalloc_pic jemalloc INCLUDE jemalloc.h INCLUDE_SUFFIXES include/jemalloc
+    ProcessPackage(JEMALLOC LIBRARY jemalloc_pic jemalloc INCLUDE jemalloc/jemalloc.h
             ROOT ${JEMALLOC_ROOT_DIR})
     SET(WITH_JEMALLOC "1")
 ENDIF ()
@@ -621,6 +621,8 @@ ADD_SUBDIRECTORY(contrib/http-parser)
 ADD_SUBDIRECTORY(contrib/fpconv)
 ADD_SUBDIRECTORY(contrib/lc-btrie)
 ADD_SUBDIRECTORY(contrib/libottery)
+ADD_SUBDIRECTORY(contrib/simdutf)
+INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/contrib/simdutf/include")
 IF (SYSTEM_ZSTD MATCHES "OFF")
     ADD_SUBDIRECTORY(contrib/zstd)
 ELSE ()
@@ -639,7 +641,6 @@ ADD_SUBDIRECTORY(contrib/lua-lpeg)
 ADD_SUBDIRECTORY(contrib/t1ha)
 ADD_SUBDIRECTORY(contrib/libev)
 ADD_SUBDIRECTORY(contrib/kann)
-ADD_SUBDIRECTORY(contrib/fastutf8)
 ADD_SUBDIRECTORY(contrib/google-ced)
 IF (ENABLE_BACKWARD MATCHES "ON")
     ADD_SUBDIRECTORY(contrib/backward-cpp)

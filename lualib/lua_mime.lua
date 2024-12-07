@@ -760,4 +760,141 @@ exports.message_to_ucl_schema = function()
   }
 end
 
+--[[[
+-- @function lua_mime.remove_attachments(task, settings)
+-- Removes all attachments from a message, keeping only text parts
+-- @param {task} task Rspamd task object
+-- @param {table} settings Table with the following fields:
+--   * keep_images: boolean, whether to keep inline images (default: false)
+--   * min_text_size: number, minimum text part size to keep (default: 0)
+--   * max_text_size: number, maximum text part size to keep (default: inf)
+-- @return {table} modified message state similar to other modification functions:
+-- * out: new content (body only)
+--]]
+exports.remove_attachments = function(task, settings)
+  local newline_s = newline(task)
+  local state = {
+    newline_s = newline_s
+  }
+  local out = {}
+
+  settings = settings or {}
+  local keep_images = settings.keep_images or false
+  local min_text_size = settings.min_text_size or 0
+  local max_text_size = settings.max_text_size or math.huge
+
+  -- Process message structure
+  local boundaries = {}
+  local cur_boundary
+  local has_attachments = false
+  local parts_to_keep = {}
+  local parts_indexes_to_keep = {}
+
+  -- First pass: identify parts to keep
+  for i, part in ipairs(task:get_parts()) do
+    local keep_part = false
+
+    if part:is_text() and not part:is_attachment() then
+      local length = part:get_length()
+      if length >= min_text_size and length <= max_text_size then
+        keep_part = true
+      end
+    elseif keep_images and part:is_image() then
+      local cd = part:get_header('Content-Disposition')
+      if cd and cd:lower():match('inline') then
+        keep_part = true
+      end
+    end
+
+    if keep_part then
+      table.insert(parts_to_keep, part)
+      parts_indexes_to_keep[i] = true
+    else
+      has_attachments = true
+    end
+  end
+
+  -- If no attachments found, return false to indicate that no alterations are required
+  if not has_attachments then
+    return false
+  end
+
+  -- Second pass: reconstruct message
+  for i, part in ipairs(task:get_parts()) do
+    local boundary = part:get_boundary()
+    if part:is_multipart() then
+      if cur_boundary then
+        out[#out + 1] = { string.format('--%s',
+            boundaries[#boundaries]), true }
+      end
+
+      boundaries[#boundaries + 1] = boundary or '--XXX'
+      cur_boundary = boundary
+
+      local rh = part:get_raw_headers()
+      if #rh > 0 then
+        out[#out + 1] = { rh, true }
+      end
+    elseif part:is_message() then
+      if boundary then
+        if cur_boundary and boundary ~= cur_boundary then
+          -- Need to close boundary
+          out[#out + 1] = { string.format('--%s--',
+              boundaries[#boundaries]), true }
+          table.remove(boundaries)
+          cur_boundary = nil
+        end
+        out[#out + 1] = { string.format('--%s',
+            boundary), true }
+      end
+
+      out[#out + 1] = { part:get_raw_headers(), true }
+    else
+      if parts_indexes_to_keep[i] then
+        if boundary then
+          if cur_boundary and boundary ~= cur_boundary then
+            -- Need to close previous boundary
+            out[#out + 1] = { string.format('--%s--',
+                boundaries[#boundaries]), true }
+            table.remove(boundaries)
+            cur_boundary = boundary
+          end
+          out[#out + 1] = { string.format('--%s',
+              boundary), true }
+        end
+        -- Add part headers
+        local headers = part:get_raw_headers()
+
+        if headers then
+          out[#out + 1] = {
+            headers,
+            true
+          }
+        end
+
+        -- Add content
+        out[#out + 1] = {
+          part:get_raw_content(),
+          false
+        }
+      end
+
+    end
+  end
+
+  -- Close remaining boundaries
+  local b = table.remove(boundaries)
+  while b do
+    out[#out + 1] = { string.format('--%s--', b), true }
+    if #boundaries > 0 then
+      out[#out + 1] = { '', true }
+    end
+    b = table.remove(boundaries)
+  end
+
+  state.out = out
+
+  return state
+end
+
 return exports

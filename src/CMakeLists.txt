@@ -201,7 +201,7 @@ IF(SYSTEM_ZSTD MATCHES "OFF")
 ELSE()
 	TARGET_LINK_LIBRARIES(rspamd-server zstd)
 ENDIF()
-TARGET_LINK_LIBRARIES(rspamd-server rspamd-fastutf8)
+TARGET_LINK_LIBRARIES(rspamd-server rspamd-simdutf)
 
 IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
 	ADD_DEPENDENCIES(rspamd-server rspamd-clang)
