@@ -22,7 +22,7 @@
 #include "libserver/task.h"
 #include "mime_encoding.h"
 #include "message.h"
-#include "contrib/fastutf8/fastutf8.h"
+#include "rspamd_simdutf.h"
 #include "contrib/google-ced/ced_c.h"
 #include <unicode/ucnv.h>
 #if U_ICU_VERSION_MAJOR_NUM >= 44

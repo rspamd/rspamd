@@ -46,7 +46,7 @@
 #include <pcre2.h>
 #endif
 
-#include "contrib/fastutf8/fastutf8.h"
+#include "rspamd_simdutf.h"
 
 #ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>

@@ -19,7 +19,7 @@
 #include "ref.h"
 #include "util.h"
 #include "rspamd.h"
-#include "contrib/fastutf8/fastutf8.h"
+#include "rspamd_simdutf.h"
 
 #ifndef WITH_PCRE2
 /* Normal pcre path */

@@ -29,7 +29,7 @@
 | google-ced             | 37529e6 | Apache 2            | YES     | build fixes         |
 | kann                   | ?       | MIT                 | YES     | blas/lapack changes |
 | fpconv                 | ?       | Boost               | YES     | many changes        |
-| fastutf8               | ?       | MIT                 | YES     | many changes        |
+| simdutf                | ef7d39c | Apache 2            | NO      | build system only   |
 | expected               | v1.0    | Public Domain / CC0 | NO      |                     |
 | frozen                 | 1.0.1   | Apache 2            | NO      |                     |
 | fmt                    | 11.0.0  | MIT                 | NO      |                     |

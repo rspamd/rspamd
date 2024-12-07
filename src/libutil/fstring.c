@@ -15,7 +15,7 @@
  */
 #include "fstring.h"
 #include "str_util.h"
-#include "contrib/fastutf8/fastutf8.h"
+#include "rspamd_simdutf.h"
 #include "contrib/mumhash/mum.h"
 
 

@@ -16,7 +16,7 @@
 
 #include "lua_common.h"
 #include "libcryptobox/cryptobox.h"
-#include "contrib/fastutf8/fastutf8.h"
+#include "rspamd_simdutf.h"
 #include "unix-std.h"
 
 /***

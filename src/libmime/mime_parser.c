@@ -25,7 +25,7 @@
 #include "contrib/uthash/utlist.h"
 #include <openssl/cms.h>
 #include <openssl/pkcs7.h>
-#include "contrib/fastutf8/fastutf8.h"
+#include "rspamd_simdutf.h"
 
 struct rspamd_mime_parser_lib_ctx {
 	struct rspamd_multipattern *mp_boundary;
