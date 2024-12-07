@@ -1038,16 +1038,58 @@ rspamd_upstream_dtor(struct upstream *up)
 rspamd_inet_addr_t *
 rspamd_upstream_addr_next(struct upstream *up)
 {
-	unsigned int idx, next_idx;
+	unsigned int idx = up->addrs.cur, next_idx = up->addrs.cur, cur_af,
+				 min_errors, min_errors_idx;
 	struct upstream_addr_elt *e1, *e2;
 
-	do {
-		idx = up->addrs.cur;
-		next_idx = (idx + 1) % up->addrs.addr->len;
-		e1 = g_ptr_array_index(up->addrs.addr, idx);
+	/*
+	 * We apply the following algorithm:
+	 * 1) Get the current element and it's AF
+	 * 2) If the next element has the same AF, then we just move to the next element
+	 * 3) If the next element has different AF, then we should find the next element with the same AF
+	 * 4) If we cannot find such element, then we return the next element (switching AF)
+	 */
+
+	e1 = g_ptr_array_index(up->addrs.addr, up->addrs.cur);
+	cur_af = rspamd_inet_address_get_af(e1->addr);
+	min_errors = e1->errors;
+	min_errors_idx = idx;
+
+	for (;;) {
+		unsigned int new_af;
+		next_idx = (next_idx + 1) % up->addrs.addr->len;
 		e2 = g_ptr_array_index(up->addrs.addr, next_idx);
-		up->addrs.cur = next_idx;
-	} while (e2->errors > e1->errors);
+
+		if (e2->errors < min_errors) {
+			min_errors = e2->errors;
+			min_errors_idx = next_idx;
+		}
+
+		if (next_idx == idx) {
+			/* We did a full circle, so we have to select something else */
+			if (e2->errors == 0) {
+				/* No errors on the current address, so we can use it */
+			}
+			else {
+				/* We have some errors, so we had to select the address with the lowest err count */
+				next_idx = min_errors_idx;
+			}
+
+			/* Always stop on full circle */
+			break;
+		}
+
+		new_af = rspamd_inet_address_get_af(e2->addr);
+
+		if (cur_af == new_af && e2->errors <= e1->errors) {
+			/* Same AF */
+			up->addrs.cur = next_idx;
+			return e2->addr;
+		}
+	}
+
+	e2 = g_ptr_array_index(up->addrs.addr, next_idx);
+	up->addrs.cur = next_idx;
 
 	return e2->addr;
 }
