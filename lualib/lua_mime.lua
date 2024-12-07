@@ -1012,22 +1012,68 @@ exports.anonymize_message = function(task, settings)
   end
 
   -- Process headers
+  local all_include = true
+  local all_exclude = false
+
+  -- Convert strings list to a list of globs where possible
+  local function process_exceptions_list(list)
+    if list and #list > 0 then
+      for i, hdr in ipairs(list) do
+        local gl = rspamd_re.import_glob(hdr, 'i')
+        if gl then
+          list[i] = gl
+        end
+      end
+      return true
+    end
+  end
+
+  local function maybe_match_header(hdr, list)
+    if not list then
+      return false
+    end
+    for _, expr in ipairs(list) do
+      if type(expr) == 'userdata' then
+        if expr:match(hdr) then
+          return true
+        end
+      else
+        if expr:lower() == hdr:lower() then
+          return true
+        end
+      end
+    end
+    return false
+  end
+
+  if process_exceptions_list(settings.include_header) then
+    all_include = false
+    all_exclude = true
+  end
+  if process_exceptions_list(settings.exclude_header) then
+    all_exclude = true
+  end
+
   local modified_headers = {}
   local function process_hdr(name, hdr)
-    local processor = header_processors[name:lower()]
-    if processor then
-      local new_value = processor(hdr)
-      if new_value then
+    local include_hdr = (all_include and not maybe_match_header(name, settings.exclude_header)) or
+        (all_exclude and maybe_match_header(name, settings.include_header))
+    if include_hdr then
+      local processor = header_processors[name:lower()]
+      if processor then
+        local new_value = processor(hdr)
+        if new_value then
+          table.insert(modified_headers, {
+            name = name,
+            value = new_value
+          })
+        end
+      else
         table.insert(modified_headers, {
           name = name,
-          value = new_value
+          value = hdr.value
         })
       end
-    else
-      table.insert(modified_headers, {
-        name = name,
-        value = hdr.value,
-      })
     end
   end
 
