@@ -1100,7 +1100,7 @@ exports.anonymize_message = function(task, settings)
     local clean_url = url:get_host()
     local path = url:get_path()
     if path and path ~= "/" then
-      clean_url = clean_url .. path
+      clean_url = string.format("%s/%s", clean_url, path)
     end
     return string.format('https://%s', clean_url)
   end
