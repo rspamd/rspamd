@@ -1099,11 +1099,17 @@ lua_tcp_handler(int fd, short what, gpointer ud)
 	TCP_RETAIN(cbd);
 
 	msg_debug_tcp("processed TCP event: %d", what);
+	ev_tstamp elapsed;
 
 	struct lua_tcp_handler *rh = g_queue_peek_head(cbd->handlers);
 	event_type = rh->type;
 
-	rspamd_ev_watcher_stop(cbd->event_loop, &cbd->ev);
+	elapsed = rspamd_ev_watcher_stop(cbd->event_loop, &cbd->ev);
+
+	/* Adjust timeout, as we have already spent time */
+	if (elapsed > 0 && elapsed < cbd->ev.timeout) {
+		cbd->ev.timeout -= elapsed;
+	}
 
 	if (what == EV_READ) {
 		if (cbd->ssl_conn) {
