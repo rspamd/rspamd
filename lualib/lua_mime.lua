@@ -967,6 +967,7 @@ end
 --]]
 exports.anonymize_message = function(task, settings)
   local rspamd_re = require "rspamd_regexp"
+  local lua_util = require "lua_util"
   -- We exclude words with digits, currency symbols and so on
   local exclude_words_re = rspamd_re.create_cached([[/^(?:\d+|\d+\D{1,3}|\p{Sc}.*|(\+?\d{1,3}[\s\-]?)?)$/u]])
   local newline_s = newline(task)
@@ -1106,7 +1107,7 @@ exports.anonymize_message = function(task, settings)
   end
 
   for _, url in ipairs(task:get_urls(true)) do
-    table.insert(urls, process_url(url))
+    urls[process_url(url)] = true
   end
 
   -- Process emails
@@ -1115,14 +1116,14 @@ exports.anonymize_message = function(task, settings)
   end
 
   for _, email in ipairs(task:get_emails()) do
-    table.insert(emails, process_email(email))
+    emails[process_email(email)] = true
   end
 
   -- Construct new message
   table.insert(text_content, '\nurls: ')
-  table.insert(text_content, table.concat(urls, ', '))
+  table.insert(text_content, table.concat(lua_util.keys(urls), ', '))
   table.insert(text_content, '\nemails: ')
-  table.insert(text_content, table.concat(emails, ', '))
+  table.insert(text_content, table.concat(lua_util.keys(emails), ', '))
   local new_text = table.concat(text_content, ' ')
 
   -- Create new message structure
