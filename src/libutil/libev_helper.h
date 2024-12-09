@@ -65,9 +65,10 @@ void rspamd_ev_watcher_start(struct ev_loop *loop,
  * Stops watcher and clean it up
  * @param loop
  * @param ev
+ * @return {ev_tstamp} elapsed time
  */
-void rspamd_ev_watcher_stop(struct ev_loop *loop,
-							struct rspamd_io_ev *ev);
+ev_tstamp rspamd_ev_watcher_stop(struct ev_loop *loop,
+								 struct rspamd_io_ev *ev);
 
 /**
  * Convenience function to reschedule watcher with different events
