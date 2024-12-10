@@ -153,6 +153,40 @@ local function default_condition(task)
   return true, sel_part:get_content_oneline()
 end
 
+local function maybe_extract_json(str)
+  -- Find the first opening brace
+  local startPos = str:find("{")
+  if not startPos then
+    return nil
+  end
+
+  local openBraces = 0
+  local endPos = startPos
+  local len = #str
+
+  -- Iterate through the string to find matching braces
+  for i = startPos, len do
+    local char = str:sub(i, i)
+    if char == "{" then
+      openBraces = openBraces + 1
+    elseif char == "}" then
+      openBraces = openBraces - 1
+      -- When we find the matching closing brace
+      if openBraces == 0 then
+        endPos = i
+        break
+      end
+    end
+  end
+
+  -- If we found a complete JSON-like structure
+  if openBraces == 0 then
+    return str:sub(startPos, endPos)
+  end
+
+  return nil
+end
+
 local function default_conversion(task, input)
   local parser = ucl.parser()
   local res, err = parser:parse_string(input)
@@ -177,6 +211,9 @@ local function default_conversion(task, input)
     rspamd_logger.errx(task, 'no content in the first message')
     return
   end
+
+  -- Apply heuristic to extract JSON
+  first_message = maybe_extract_json(first_message) or first_message
 
   parser = ucl.parser()
   res, err = parser:parse_string(first_message)
