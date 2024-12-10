@@ -897,4 +897,282 @@ exports.remove_attachments = function(task, settings)
   return state
 end
 
+--[[[
+-- @function lua_mime.get_displayed_text_part(task)
+-- Returns the most relevant displayed content from an email
+-- @param {task} task Rspamd task object
+-- @return {text_part} a selected part
+--]]
+exports.get_displayed_text_part = function(task)
+  local text_parts = task:get_text_parts()
+  if not text_parts then
+    return nil
+  end
+
+  local html_part
+  local text_part
+  local html_attachment
+
+  -- First pass: categorize parts
+  for _, part in ipairs(text_parts) do
+    local mp = part:get_mimepart()
+    if not mp:is_attachment() then
+      if part:is_html() then
+        html_part = part
+      else
+        text_part = text_part or part
+      end
+    else
+      -- Check for HTML attachments
+      if part:is_html() and mp:get_length() < 102400 then
+        -- 100KB limit, as long ones are likely not something that we should check
+        html_attachment = part
+      end
+    end
+  end
+
+  -- Decision logic
+  if html_part then
+    local word_count = html_part:get_words_count() or 0
+    if word_count >= 10 then
+      -- Arbitrary minimum threshold, e.g. I believe it's minimum sane
+      return html_part
+    end
+  end
+
+  if text_part then
+    local word_count = text_part:get_words_count() or 0
+    if word_count >= 10 then
+      -- Arbitrary minimum threshold, e.g. I believe it's minimum sane
+      return text_part
+    end
+  end
+
+  if html_attachment then
+    return html_attachment
+  end
+
+  -- Only short parts, but still let's try our best
+  return html_part or text_part
+end
+
+--[[[
+-- @function lua_mime.anonymize_message(task, settings)
+-- Anonymizes message content by replacing sensitive data
+-- @param {task} task Rspamd task object
+-- @param {table} settings Table with the following fields:
+--   * strip_attachments: boolean, whether to strip all attachments
+--   * custom_header_process: table of header_name => function(orig_header) pairs
+-- @return {table} modified message state similar to other modification functions
+--]]
+exports.anonymize_message = function(task, settings)
+  local rspamd_re = require "rspamd_regexp"
+  local lua_util = require "lua_util"
+  -- We exclude words with digits, currency symbols and so on
+  local exclude_words_re = rspamd_re.create_cached([=[/^(?:\d+|\d+\D{1,3}|\p{Sc}.*|(\+?\d{1,3}[\s\-]?)?)$/(:?^[[:alpha:]]*\d{4,}.*$)/u]=])
+  local newline_s = newline(task)
+  local state = {
+    newline_s = newline_s
+  }
+  local out = {}
+
+  -- Default header processors
+  local function anonymize_email_header(hdr)
+    local addrs = rspamd_util.parse_mail_address(hdr.value, task:get_mempool())
+    if addrs and addrs[1] then
+      local modified = {}
+      for _, addr in ipairs(addrs) do
+        table.insert(modified, string.format('anonymous@%s', addr.domain or 'example.com'))
+      end
+
+      return table.concat(modified, ',')
+    end
+    return 'anonymous@example.com'
+  end
+
+  local function anonymize_received_header(hdr)
+    local processed = string.gsub(hdr.value, '%d+%.%d+%.%d+%.%d+', 'x.x.x.x')
+    processed = string.gsub(processed, '%x+:%x+:%x+:%x+:%x+:%x+:%x+:%x+', 'x:x:x:x:x:x:x:x')
+    return processed
+  end
+
+  local default_header_process = {
+    ['from'] = anonymize_email_header,
+    ['to'] = anonymize_email_header,
+    ['cc'] = anonymize_email_header,
+    ['bcc'] = anonymize_email_header,
+    ['received'] = anonymize_received_header,
+  }
+
+  -- Merge with custom processors
+  local header_processors = settings.custom_header_process or {}
+  for k, v in pairs(default_header_process) do
+    if not header_processors[k] then
+      header_processors[k] = v
+    end
+  end
+
+  -- Process headers
+  local all_include = true
+  local all_exclude = false
+
+  -- Convert strings list to a list of globs where possible
+  local function process_exceptions_list(list)
+    if list and #list > 0 then
+      for i, hdr in ipairs(list) do
+        local gl = rspamd_re.import_glob(hdr, 'i')
+        if gl then
+          list[i] = gl
+        end
+      end
+      return true
+    end
+  end
+
+  local function maybe_match_header(hdr, list)
+    if not list then
+      return false
+    end
+    for _, expr in ipairs(list) do
+      if type(expr) == 'userdata' then
+        if expr:match(hdr) then
+          return true
+        end
+      else
+        if expr:lower() == hdr:lower() then
+          return true
+        end
+      end
+    end
+    return false
+  end
+
+  if process_exceptions_list(settings.include_header) then
+    all_include = false
+    all_exclude = true
+  end
+  if process_exceptions_list(settings.exclude_header) then
+    all_exclude = true
+  end
+
+  local modified_headers = {}
+  local function process_hdr(name, hdr)
+    local include_hdr = (all_include and not maybe_match_header(name, settings.exclude_header)) or
+        (all_exclude and maybe_match_header(name, settings.include_header))
+    if include_hdr then
+      local processor = header_processors[name:lower()]
+      if processor then
+        local new_value = processor(hdr)
+        if new_value then
+          table.insert(modified_headers, {
+            name = name,
+            value = new_value
+          })
+        end
+      else
+        table.insert(modified_headers, {
+          name = name,
+          value = hdr.value
+        })
+      end
+    end
+  end
+
+  task:headers_foreach(process_hdr, { full = true })
+
+  -- Create new text content
+  local text_content = {}
+  local urls = {}
+  local emails = {}
+
+  local sel_part = exports.get_displayed_text_part(task)
+
+  if sel_part then
+    text_content = sel_part:get_words('norm')
+    for i, w in ipairs(text_content) do
+      if exclude_words_re:match(w) then
+        text_content[i] = string.rep('x', #w)
+      end
+    end
+  end
+
+  -- Process URLs
+  local function process_url(url)
+    local clean_url = url:get_host()
+    local path = url:get_path()
+    if path and path ~= "/" then
+      clean_url = string.format("%s/%s", clean_url, path)
+    end
+    return string.format('https://%s', clean_url)
+  end
+
+  for _, url in ipairs(task:get_urls(true)) do
+    urls[process_url(url)] = true
+  end
+
+  -- Process emails
+  local function process_email(email)
+    return string.format('nobody@%s', email.domain or 'example.com')
+  end
+
+  for _, email in ipairs(task:get_emails()) do
+    emails[process_email(email)] = true
+  end
+
+  -- Construct new message
+  table.insert(text_content, '\nurls:')
+  table.insert(text_content, table.concat(lua_util.keys(urls), ', '))
+  table.insert(text_content, '\nemails:')
+  table.insert(text_content, table.concat(lua_util.keys(emails), ', '))
+  local new_text = table.concat(text_content, ' ')
+
+  -- Create new message structure
+  local cur_boundary = '--XXX'
+
+  -- Add headers
+  out[#out + 1] = {
+    string.format('Content-Type: multipart/mixed; boundary="%s"', cur_boundary),
+    true
+  }
+  for _, hdr in ipairs(modified_headers) do
+    if hdr.name ~= 'Content-Type' then
+      out[#out + 1] = {
+        string.format('%s: %s', hdr.name, hdr.value),
+        true
+      }
+    end
+  end
+  out[#out + 1] = { '', true }
+
+  -- Add text part
+  out[#out + 1] = {
+    string.format('--%s', cur_boundary),
+    true
+  }
+  out[#out + 1] = {
+    'Content-Type: text/plain; charset=utf-8\nContent-Transfer-Encoding: quoted-printable',
+    true
+  }
+  out[#out + 1] = { '', true }
+  out[#out + 1] = {
+    rspamd_util.encode_qp(new_text, 76, task:get_newlines_type()),
+    true
+  }
+
+  -- Close boundaries
+  out[#out + 1] = {
+    string.format('--%s--', cur_boundary),
+    true
+  }
+
+  state.out = out
+  state.need_rewrite_ct = true
+  state.new_ct = {
+    type = 'multipart',
+    subtype = 'mixed'
+  }
+
+  return state
+end
+
 return exports

@@ -179,6 +179,21 @@ strip:option "--max-text-size"
      :convert(tonumber)
      :default(math.huge)
 
+local anonymize = parser:command "anonymize"
+                        :description "Try to remove sensitive information from a message"
+anonymize:argument "file"
+         :description "File to process"
+         :argname "<file>"
+         :args "+"
+anonymize:option "--exclude-header -X"
+         :description "Exclude specific headers from anonymization"
+         :argname "<header>"
+         :count "*"
+anonymize:option "--include-header -I"
+         :description "Include specific headers from anonymization"
+         :argname "<header>"
+         :count "*"
+
 local sign = parser:command "sign"
                    :description "Performs DKIM signing"
 sign:argument "file"
@@ -968,6 +983,41 @@ local function strip_handler(opts)
   end
 end
 
+local function anonymize_handler(opts)
+  load_config(opts)
+  rspamd_url.init(rspamd_config:get_tld_path())
+
+  for _, fname in ipairs(opts.file) do
+    local task = load_task(opts, fname)
+    local newline_s = newline(task)
+
+    local rewrite = lua_mime.anonymize_message(task, opts) or {}
+
+    for _, o in ipairs(rewrite.out) do
+      if type(o) == 'string' then
+        io.write(o)
+        io.write(newline_s)
+      elseif type(o) == 'table' then
+        io.flush()
+        if type(o[1]) == 'string' then
+          io.write(o[1])
+        else
+          o[1]:save_in_file(1)
+        end
+
+        if o[2] then
+          io.write(newline_s)
+        end
+      else
+        o:save_in_file(1)
+        io.write(newline_s)
+      end
+    end
+
+    task:destroy() -- No automatic dtor
+  end
+end
+
 -- Strips directories and .extensions (if present) from a filepath
 local function filename_only(filepath)
   local filename = filepath:match(".*%/([^%.]+)")
@@ -1076,6 +1126,8 @@ local function handler(args)
     sign_handler(opts)
   elseif command == 'dump' then
     dump_handler(opts)
+  elseif command == 'anonymize' then
+    anonymize_handler(opts)
   else
     parser:error('command %s is not implemented', command)
   end
