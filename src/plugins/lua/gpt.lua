@@ -44,6 +44,10 @@ gpt {
   reply_conversion = "xxx";
   # URL for the API
   url = "https://api.openai.com/v1/chat/completions";
+  # Check messages with passthrough result
+  allow_passthrough = false;
+  # Check messages that are apparent ham (no action and negative score)
+  allow_ham = false;
 }
   ]])
   return
@@ -78,6 +82,8 @@ local settings = {
   autolearn = false,
   url = 'https://api.openai.com/v1/chat/completions',
   symbols_to_except = default_symbols_to_except,
+  allow_passthrough = false,
+  allow_ham = false,
 }
 
 local function default_condition(task)
@@ -87,7 +93,7 @@ local function default_condition(task)
   -- 3) Skip already decided as ham
   local result = task:get_metric_result()
   if result then
-    if result.passthrough then
+    if result.passthrough and not settings.allow_passthrough then
       return false, 'passthrough'
     end
     local score = result.score
@@ -97,7 +103,7 @@ local function default_condition(task)
       return false, 'already decided as spam'
     end
 
-    if action == 'no action' and score < 0 then
+    if (action == 'no action' and score < 0) and not settings.allow_ham then
       return false, 'negative score, already decided as ham'
     end
   end
