@@ -265,6 +265,19 @@ table#symbolsTable input[type="number"] {
     background-color: #cddbff;
 }
 
+/* For symbol description display on hover/focus */
+.symbol-default.has-description:not(:focus) strong {
+    text-decoration: underline dotted;
+}
+.symbol-description {
+    display: none;
+    color: #484848;
+}
+.symbol-default:hover .symbol-description,
+.symbol-default:focus .symbol-description {
+    display: unset;
+}
+
 .map-link {
     display: block;
     color: #0088cc;

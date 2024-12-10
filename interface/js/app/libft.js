@@ -573,17 +573,15 @@ define(["jquery", "app/common", "footable"],
 
                     ui.preprocess_item(item);
                     Object.values(item.symbols).forEach((sym) => {
-                        sym.str = '<span class="symbol-default ' + get_symbol_class(sym.name, sym.score) + '"><strong>';
-
-                        if (sym.description) {
-                            sym.str += '<abbr title="' + sym.description + '">' + sym.name + "</abbr>";
-                        } else {
-                            sym.str += sym.name;
-                        }
-                        sym.str += "</strong> (" + sym.score + ")</span>";
+                        sym.str = `
+<span class="symbol-default ${get_symbol_class(sym.name, sym.score)} ${sym.description ? "has-description" : ""}" tabindex="0">
+    <strong>${sym.name}</strong>
+    ${sym.description ? `<span class="symbol-description"> • ${sym.description}</span>` : ""}
+    (${sym.score})
+</span>`;
 
                         if (sym.options) {
-                            sym.str += " [" + sym.options.join(",") + "]";
+                            sym.str += ` [${sym.options.join(",")}]`;
                         }
                     });
                     unsorted_symbols.push(item.symbols);
