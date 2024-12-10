@@ -56,6 +56,7 @@ end
 local lua_util = require "lua_util"
 local rspamd_http = require "rspamd_http"
 local rspamd_logger = require "rspamd_logger"
+local lua_mime = require "lua_mime"
 local ucl = require "ucl"
 local fun = require "fun"
 
@@ -128,19 +129,7 @@ local function default_condition(task)
   end
 
   -- Check if we have text at all
-  local mp = task:get_parts() or {}
-  local sel_part
-  for _, mime_part in ipairs(mp) do
-    if mime_part:is_text() then
-      local part = mime_part:get_text()
-      if part:is_html() then
-        -- We prefer html content
-        sel_part = part
-      elseif not sel_part then
-        sel_part = part
-      end
-    end
-  end
+  local sel_part = lua_mime.get_displayed_text_part(task)
 
   if not sel_part then
     return false, 'no text part found'
