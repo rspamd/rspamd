@@ -69,16 +69,21 @@ void rspamd_ev_watcher_start(struct ev_loop *loop,
 	}
 }
 
-void rspamd_ev_watcher_stop(struct ev_loop *loop,
-							struct rspamd_io_ev *ev)
+ev_tstamp rspamd_ev_watcher_stop(struct ev_loop *loop,
+								 struct rspamd_io_ev *ev)
 {
+	ev_tstamp elapsed = 0;
+
 	if (ev_can_stop(&ev->io)) {
 		ev_io_stop(EV_A, &ev->io);
 	}
 
 	if (ev->timeout > 0) {
+		elapsed = ev->timeout - ev_timer_remaining(EV_A, &ev->tm);
 		ev_timer_stop(EV_A, &ev->tm);
 	}
+
+	return elapsed;
 }
 
 void rspamd_ev_watcher_reschedule(struct ev_loop *loop,
