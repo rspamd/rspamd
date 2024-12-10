@@ -192,6 +192,11 @@ LUA_FUNCTION_DEF(task, remove_result);
  * - `rewrite subject`: rewrite subject to spam subject
  * - `greylist`: greylist message
  * - `accept` or `no action`: whitelist message
+ * - `quarantine`: quarantine the message; depending on the MTA, it can be done via HOLD.
+ *   Note: the message parameter must be `nil` for proper operation.
+ * - `discard`: drop the message from the queue without returning an error to the sender.
+ *
+ * Actions should be defined in the `actions.conf` configuration file.
  *
  * This function also accepts a table from Rspamd 2.6 with the following keys:
  * - action: string required
