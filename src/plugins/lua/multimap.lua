@@ -29,6 +29,7 @@ local rspamd_ip = require "rspamd_ip"
 local lua_util = require "lua_util"
 local lua_selectors = require "lua_selectors"
 local lua_maps = require "lua_maps"
+local lua_mime = require "lua_mime"
 local redis_params
 local fun = require "fun"
 local N = 'multimap'
@@ -453,19 +454,19 @@ local function apply_content_filter(task, filter)
     return { task:get_raw_headers() }
   elseif filter == 'text' then
     local ret = {}
-    for _, p in ipairs(task:get_text_parts()) do
+    for _, p in ipairs(lua_mime.get_distinct_text_parts(task)) do
       table.insert(ret, p:get_content())
     end
     return ret
   elseif filter == 'rawtext' then
     local ret = {}
-    for _, p in ipairs(task:get_text_parts()) do
+    for _, p in ipairs(lua_mime.get_distinct_text_parts(task)) do
       table.insert(ret, p:get_content('raw_parsed'))
     end
     return ret
   elseif filter == 'oneline' then
     local ret = {}
-    for _, p in ipairs(task:get_text_parts()) do
+    for _, p in ipairs(lua_mime.get_distinct_text_parts(task)) do
       table.insert(ret, p:get_content_oneline())
     end
     return ret

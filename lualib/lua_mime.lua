@@ -957,6 +957,49 @@ exports.get_displayed_text_part = function(task)
 end
 
 --[[[
+-- @function lua_mime.get_distinct_text_parts(task)
+-- Returns the list of parts that are visible or have a distinct content
+-- @param {task} task Rspamd task object
+-- @return array of {text_part} a selected part
+--]]
+exports.get_distinct_text_parts = function(task)
+  local text_parts = task:get_text_parts()
+  if not text_parts then
+    return {}
+  end
+
+  local text_part_idx
+
+  local distance = task:get_mempool():get_variable('parts_distance', 'double')
+  if not distance then
+    return text_parts
+  end
+  distance = tonumber(distance)
+
+  if distance > 0.5 then
+    -- Parts are distinct
+    return text_parts
+  end
+
+  -- First pass: categorize parts
+  for i, part in ipairs(text_parts) do
+    local mp = part:get_mimepart()
+    if not mp:is_attachment() then
+      if not part:is_html() then
+        -- Found text part that is similar to html part
+        text_part_idx = i
+      end
+    end
+  end
+
+  if text_part_idx then
+    table.remove(text_parts, text_part_idx)
+  end
+
+  return text_parts
+end
+
+--[[[
 -- @function lua_mime.anonymize_message(task, settings)
 -- Anonymizes message content by replacing sensitive data
 -- @param {task} task Rspamd task object
