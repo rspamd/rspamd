@@ -517,10 +517,10 @@ local function arc_sign_seal(task, params, header)
     local ar_header = task:get_header('Authentication-Results')
 
     if ar_header then
-      rspamd_logger.debugm(N, task, 'reuse authentication results header for ARC')
+      lua_util.debugm(N, task, 'reuse authentication results header for ARC')
       cur_auth_results = ar_header
     else
-      rspamd_logger.debugm(N, task, 'cannot reuse authentication results, header is missing')
+      lua_util.debugm(N, task, 'cannot reuse authentication results, header is missing')
       cur_auth_results = lua_auth_results.gen_auth_results(task, ar_settings) or ''
     end
   else
@@ -639,7 +639,7 @@ local function prepare_arc_selector(task, sel)
       ar_header = ar_header or ""
       for k, v in string.gmatch(ar_header, "(%w+)=(%w+)") do
         if k == 'arc' then
-         return v
+          return v
         end
       end
       return nil

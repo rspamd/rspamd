@@ -105,7 +105,7 @@ if rule then
   end
 
   for sym in pairs(rule.patterns) do
-    rspamd_logger.debugm(N, rspamd_config, 'registering: %1', {
+    lua_util.debugm(N, rspamd_config, 'registering: %1', {
       type = 'virtual',
       name = sym,
       parent = id,
