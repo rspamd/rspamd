@@ -1146,7 +1146,7 @@ local function upload_clickhouse_schema(upstream, ev_base, cfg, initial)
       errored = true
       return
     end
-    rspamd_logger.debugm(N, rspamd_config, 'uploaded clickhouse schema element %s to %s: %s',
+    lua_util.debugm(N, rspamd_config, 'uploaded clickhouse schema element %s to %s: %s',
         v, upstream:get_addr():to_string(true), reply)
   end
 
@@ -1159,7 +1159,7 @@ local function upload_clickhouse_schema(upstream, ev_base, cfg, initial)
       if initial == v[2] then
         return lua_util.template(v[1], { SCHEMA_VERSION = tostring(schema_version) })
       else
-        rspamd_logger.debugm(N, rspamd_config, 'skip clickhouse schema element %s: schema already exists',
+        lua_util.debugm(N, rspamd_config, 'skip clickhouse schema element %s: schema already exists',
             v)
       end
     end

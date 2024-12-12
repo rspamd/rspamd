@@ -182,7 +182,7 @@ local function resolve_cached(task, orig_url, url, key, ntries)
   local function resolve_url()
     if ntries > settings.nested_limit then
       -- We cannot resolve more, stop
-      rspamd_logger.debugm(N, task, 'cannot get more requests to resolve %s, stop on %s after %s attempts',
+      lua_util.debugm(N, task, 'cannot get more requests to resolve %s, stop on %s after %s attempts',
           orig_url, url, ntries)
       cache_url(task, orig_url, url, key, 'nested')
       local str_orig_url = tostring(orig_url)
@@ -223,7 +223,7 @@ local function resolve_cached(task, orig_url, url, key, ntries)
           if loc then
             redir_url = rspamd_url.create(task:get_mempool(), loc)
           end
-          rspamd_logger.debugm(N, task, 'found redirect from %s to %s, err code %s',
+          lua_util.debugm(N, task, 'found redirect from %s to %s, err code %s',
               orig_url, loc, code)
 
           if redir_url then
@@ -239,11 +239,11 @@ local function resolve_cached(task, orig_url, url, key, ntries)
               resolve_cached(task, orig_url, redir_url, key, ntries + 1)
             end
           else
-            rspamd_logger.debugm(N, task, "no location, headers: %s", headers)
+            lua_util.debugm(N, task, "no location, headers: %s", headers)
             cache_url(task, orig_url, url, key)
           end
         else
-          rspamd_logger.debugm(N, task, 'found redirect error from %s to %s, err code: %s',
+          lua_util.debugm(N, task, 'found redirect error from %s to %s, err code: %s',
               orig_url, url, code)
           cache_url(task, orig_url, url, key)
         end
@@ -278,7 +278,7 @@ local function resolve_cached(task, orig_url, url, key, ntries)
       if type(data) == 'string' then
         if data ~= 'processing' then
           -- Got cached result
-          rspamd_logger.debugm(N, task, 'found cached redirect from %s to %s',
+          lua_util.debugm(N, task, 'found cached redirect from %s to %s',
               url, data)
           if data:sub(1, 1) == '^' then
             -- Prefixed url stored

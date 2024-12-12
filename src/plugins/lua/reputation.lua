@@ -955,7 +955,7 @@ local function reputation_redis_init(rule, cfg, ev_base, worker)
 
   local get_script = lua_util.jinja_template(redis_get_script_tpl,
       { windows = rule.backend.config.buckets })
-  rspamd_logger.debugm(N, rspamd_config, 'added extraction script %s', get_script)
+  lua_util.debugm(N, rspamd_config, 'added extraction script %s', get_script)
   rule.backend.script_get = lua_redis.add_redis_script(get_script, our_redis_params)
 
   -- Redis script to update Redis buckets
@@ -1003,7 +1003,7 @@ local function reputation_redis_init(rule, cfg, ev_base, worker)
 
   local set_script = lua_util.jinja_template(redis_adaptive_emea_script_tpl,
       { windows = rule.backend.config.buckets })
-  rspamd_logger.debugm(N, rspamd_config, 'added emea update script %s', set_script)
+  lua_util.debugm(N, rspamd_config, 'added emea update script %s', set_script)
   rule.backend.script_set = lua_redis.add_redis_script(set_script, our_redis_params)
 
   return true

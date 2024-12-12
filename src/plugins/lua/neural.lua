@@ -687,31 +687,31 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
                 return l >= rule.train.max_trains * (1.0 - rule.train.classes_bias)
               end
               if max_len >= rule.train.max_trains and fun.all(len_bias_check_pred, lens) then
-                rspamd_logger.debugm(N, rspamd_config,
+                lua_util.debugm(N, rspamd_config,
                     'can start ANN %s learn as it has %s learn vectors; %s required, after checking %s vectors',
                     ann_key, lens, rule.train.max_trains, what)
                 cont_cb()
               else
-                rspamd_logger.debugm(N, rspamd_config,
+                lua_util.debugm(N, rspamd_config,
                     'cannot learn ANN %s now: there are not enough %s learn vectors (has %s vectors; %s required)',
                     ann_key, what, lens, rule.train.max_trains)
               end
             else
               -- Probabilistic mode, just ensure that at least one vector is okay
               if min_len > 0 and max_len >= rule.train.max_trains then
-                rspamd_logger.debugm(N, rspamd_config,
+                lua_util.debugm(N, rspamd_config,
                     'can start ANN %s learn as it has %s learn vectors; %s required, after checking %s vectors',
                     ann_key, lens, rule.train.max_trains, what)
                 cont_cb()
               else
-                rspamd_logger.debugm(N, rspamd_config,
+                lua_util.debugm(N, rspamd_config,
                     'cannot learn ANN %s now: there are not enough %s learn vectors (has %s vectors; %s required)',
                     ann_key, what, lens, rule.train.max_trains)
               end
             end
 
           else
-            rspamd_logger.debugm(N, rspamd_config,
+            lua_util.debugm(N, rspamd_config,
                 'checked %s vectors in ANN %s: %s vectors; %s required, need to check other class vectors',
                 what, ann_key, ntrains, rule.train.max_trains)
             cont_cb()
