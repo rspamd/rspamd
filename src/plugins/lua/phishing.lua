@@ -71,7 +71,7 @@ end
 local function phishing_cb(task)
   local function check_phishing_map(table)
     local phishing_data = {}
-    for k,v in pairs(table) do
+    for k, v in pairs(table) do
       phishing_data[k] = v
     end
     local url = phishing_data.url
@@ -89,6 +89,8 @@ local function phishing_cb(task)
       local data = nil
 
       if elt then
+        lua_util.debugm(N, task, 'found host element: %s',
+            host)
         local path = url:get_path()
         local query = url:get_query()
 
@@ -156,7 +158,7 @@ local function phishing_cb(task)
 
   local function check_phishing_dns(table)
     local phishing_data = {}
-    for k,v in pairs(table) do
+    for k, v in pairs(table) do
       phishing_data[k] = v
     end
     local url = phishing_data.url
@@ -192,7 +194,7 @@ local function phishing_cb(task)
       end
 
       local to_resolve_hp = compose_dns_query({ host, path })
-      rspamd_logger.debugm(N, task, 'try to resolve {%s, %s} -> %s',
+      lua_util.debugm(N, task, 'try to resolve {%s, %s} -> %s',
           host, path, to_resolve_hp)
       r:resolve_txt({
         task = task,
@@ -207,7 +209,7 @@ local function phishing_cb(task)
         end
 
         local to_resolve_hpq = compose_dns_query({ host, path, query })
-        rspamd_logger.debugm(N, task, 'try to resolve {%s, %s, %s} -> %s',
+        lua_util.debugm(N, task, 'try to resolve {%s, %s, %s} -> %s',
             host, path, query, to_resolve_hpq)
         r:resolve_txt({
           task = task,
@@ -256,9 +258,14 @@ local function phishing_cb(task)
       end
 
       if url:is_phished() then
+        local surl = tostring(url)
         local purl
+        lua_util.debugm(N, task, 'found phished url: %s',
+            surl)
 
         if url:is_redirected() then
+          lua_util.debugm(N, task, 'url %s is also been redirected',
+              surl)
           local rspamd_url = require "rspamd_url"
           -- Examine the real redirect target instead of the url
           local redirected_url = url:get_redirected()
@@ -268,6 +275,7 @@ local function phishing_cb(task)
 
           purl = rspamd_url.create(task:get_mempool(), url:get_visible())
           url = redirected_url
+          surl = string.format("redirected(%s)", tostring(url))
         else
           purl = url:get_phished()
         end
@@ -275,6 +283,10 @@ local function phishing_cb(task)
         if not purl then
           return
         end
+
+        local spurl = tostring(purl)
+        lua_util.debugm(N, task, 'processing pair %s -> %s',
+            surl, spurl)
 
         local tld = url:get_tld()
         local ptld = purl:get_tld()
@@ -308,10 +320,11 @@ local function phishing_cb(task)
         local weight = 1.0
         local spoofed, why = util.is_utf_spoofed(tld, ptld)
         if spoofed then
-          lua_util.debugm(N, task, "confusable: %1 -> %2: %3", tld, ptld, why)
+          lua_util.debugm(N, task, "confusable: %s -> %s: %s", tld, ptld, why)
           weight = 1.0
         else
-          local dist = util.levenshtein_distance(stripped_tld, stripped_ptld, 2)
+          local dist = (stripped_tld == stripped_ptld) and 0
+              or util.levenshtein_distance(stripped_tld, stripped_ptld, 2)
           dist = 2 * dist / (#stripped_tld + #stripped_ptld)
 
           if dist > 0.3 and dist <= 1.0 then
@@ -330,15 +343,18 @@ local function phishing_cb(task)
 
             if a1 ~= a2 then
               weight = 1
-              lua_util.debugm(N, task, "confusable: %1 -> %2: different characters",
-                  tld, ptld, why)
+              lua_util.debugm(N, task, "confusable: %s -> %s: different characters",
+                  tld, ptld)
             else
               -- We have totally different strings in tld, so penalize it somehow
               weight = 0.5
             end
+          elseif dist == 0 then
+            -- Same domains, not phishing!
+            weight = 0.0
           end
 
-          lua_util.debugm(N, task, "distance: %1 -> %2: %3", tld, ptld, dist)
+          lua_util.debugm(N, task, "distance: %s -> %s: %s; weight = %s", tld, ptld, dist, weight)
         end
 
         local function is_url_in_map(map, furl)
@@ -368,15 +384,17 @@ local function phishing_cb(task)
           end
         end
 
-        found_in_map(strict_domains_maps, purl, 1.0)
-        if not found_in_map(anchor_exceptions_maps) then
-          if not found_in_map(phishing_exceptions_maps, purl, 1.0) then
-            if domains then
-              if is_url_in_map(domains, purl) then
+        if weight > 0 then
+          found_in_map(strict_domains_maps, purl, 1.0)
+          if not found_in_map(anchor_exceptions_maps) then
+            if not found_in_map(phishing_exceptions_maps, purl, 1.0) then
+              if domains then
+                if is_url_in_map(domains, purl) then
+                  task:insert_result(symbol, weight, ptld .. '->' .. tld)
+                end
+              else
                 task:insert_result(symbol, weight, ptld .. '->' .. tld)
               end
-            else
-              task:insert_result(symbol, weight, ptld .. '->' .. tld)
             end
           end
         end
