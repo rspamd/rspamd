@@ -2152,6 +2152,17 @@ lua_util_is_utf_spoofed(lua_State *L)
 
 				return 1;
 			}
+
+			/* Disable single script confusables, as it is not what we want to check */
+			uspoof_setChecks(spc,
+							 USPOOF_CONFUSABLE & ~USPOOF_SINGLE_SCRIPT_CONFUSABLE,
+							 &uc_err);
+			if (uc_err != U_ZERO_ERROR) {
+				msg_err("Cannot set proper checks for uspoof: %s", u_errorName(uc_err));
+				lua_pushboolean(L, false);
+				uspoof_close(spc);
+				return 1;
+			}
 		}
 
 		ret = uspoof_areConfusableUTF8(spc, s1, l1, s2, l2, &uc_err);
@@ -2174,7 +2185,7 @@ lua_util_is_utf_spoofed(lua_State *L)
 			if (uc_err != U_ZERO_ERROR) {
 				msg_err("Cannot set proper checks for uspoof: %s", u_errorName(uc_err));
 				lua_pushboolean(L, false);
-				uspoof_close(spc);
+				uspoof_close(spc_sgl);
 				return 1;
 			}
 		}
