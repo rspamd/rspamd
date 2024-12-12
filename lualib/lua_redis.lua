@@ -1651,6 +1651,21 @@ exports.redis_connect_sync = redis_connect_sync
 exports.request = function(redis_params, attrs, req)
   local lua_util = require "lua_util"
 
+  if not attrs then
+    logger.errx('invalid attrs for redis request')
+    return false, nil, nil
+  end
+
+  if not redis_params then
+    logger.errx('invalid redis_params for redis request')
+    return false, nil, nil
+  end
+
+  if not req then
+    logger.errx('invalid req for redis request')
+    return false, nil, nil
+  end
+
   if not attrs or not redis_params or not req then
     logger.errx('invalid arguments for redis request')
     return false, nil, nil
