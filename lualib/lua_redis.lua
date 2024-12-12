@@ -1462,7 +1462,8 @@ local function exec_redis_script(id, params, callback, keys, args)
         callback(err, data)
       elseif string.match(err, 'NOSCRIPT') then
         -- Schedule restart
-        logger.infox(params.task, 'redis script %s is not loaded (NOSCRIPT returned), scheduling reload',
+        logger.infox(params.task or rspamd_config,
+            'redis script %s is not loaded (NOSCRIPT returned), scheduling reload',
             script_description(script))
         script.sha = nil
         if can_reload then
