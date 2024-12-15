@@ -698,7 +698,9 @@ local function gen_rbl_callback(rule)
               requests_table, 'received',
               whitelist)
         else
-          lua_util.debugm(N, task, 'rbl %s; skip check_received for %s: Received IP same as From IP and will be checked only in check_from function', rule.symbol, rh.real_ip)
+          lua_util.debugm(N, task, 'rbl %s; skip check_received for %s:' .. 
+          'Received IP same as From IP and will be checked only in check_from function', 
+          rule.symbol, rh.real_ip)
         end
       end
     end
