@@ -1463,20 +1463,25 @@ local function exec_redis_script(id, params, callback, keys, args)
       if not err then
         callback(err, data)
       elseif string.match(err, 'NOSCRIPT') then
-        -- Schedule restart
-        logger.infox(params.task or rspamd_config,
-            'redis script %s is not loaded (NOSCRIPT returned), scheduling reload',
-            script_description(script))
-        script.sha = nil
+        -- Schedule restart if possible
         if can_reload then
           table.insert(script.waitq, do_call)
           if not script.servers_ready then
+            logger.infox(params.task or rspamd_config,
+                'redis script %s is not loaded (NOSCRIPT returned), scheduling reload',
+                script_description(script))
+            script.sha = nil
+            script.loaded = nil
             -- Reload scripts if this has not been initiated yet
             if params.task then
               load_script_task(script, params.task)
             else
               load_script_taskless(script, rspamd_config, params.ev_base)
             end
+          else
+            logger.infox(params.task or rspamd_config,
+                'redis script %s is not ready (NOSCRIPT returned), waiting it to be loaded',
+                script_description(script))
           end
         else
           callback(err, data)
@@ -1514,24 +1519,24 @@ local function exec_redis_script(id, params, callback, keys, args)
     end
   end
 
-  if script.loaded then
+  if script.loaded and script.sha then
     do_call(true)
   else
-    -- Delayed until scripts are loaded
-    logger.infox(params.task or rspamd_config, 'redis script %s is not loaded, trying to load',
-        script_description(script))
-    if not params.task then
-      table.insert(script.waitq, do_call)
+    table.insert(script.waitq, do_call)
+    if not script.servers_ready then
+      -- Delayed until scripts are loaded
+      logger.infox(params.task or rspamd_config, 'redis script %s is not loaded, trying to load',
+          script_description(script))
+      -- Reload scripts if this has not been initiated yet
+      if params.task then
+        load_script_task(script, params.task)
+      else
+        load_script_taskless(script, rspamd_config, params.ev_base)
+      end
     else
-      -- TODO: fix taskfull requests
-      table.insert(script.waitq, function()
-        if script.loaded then
-          do_call(false)
-        else
-          callback('NOSCRIPT', nil)
-        end
-      end)
-      load_script_task(script, params.task, params.is_write)
+      -- Already loaded, but not yet ready
+      logger.infox(params.task or rspamd_config, 'redis script %s is not ready, waiting it to be loaded',
+          script_description(script))
     end
   end
 
