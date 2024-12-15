@@ -689,12 +689,19 @@ local function gen_rbl_callback(rule)
 
     local received_total = #received
     local check_conditions = gen_check_rcvd_conditions(rule, received_total)
+    local from_ip = task:get_from_ip()
 
     for pos, rh in ipairs(received) do
       if check_conditions(rh, pos) then
-        add_dns_request(task, rh.real_ip, false, true,
-            requests_table, 'received',
-            whitelist)
+        if rh.real_ip ~= from_ip or (rh.real_ip == from_ip and not rule.from) then
+          add_dns_request(task, rh.real_ip, false, true,
+              requests_table, 'received',
+              whitelist)
+        else
+          lua_util.debugm(N, task, 'rbl %s; skip check_received for %s:' .. 
+          'Received IP same as From IP and will be checked only in check_from function', 
+          rule.symbol, rh.real_ip)
+        end
       end
     end
 
