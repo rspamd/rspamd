@@ -1140,6 +1140,8 @@ local function script_set_loaded(script)
     script.loaded = true
   end
 
+  script.servers_ready = nil -- Allow further reload
+
   local wait_table = {}
   for _, s in ipairs(script.waitq) do
     table.insert(wait_table, s)
