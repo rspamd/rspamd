@@ -1,3 +1,55 @@
+3.11.0: 16 Dec 2024
+  * [Conf] Add lua.local.d folder
+  * [Conf] Add more ways to extend Rspamd configuration
+  * [Conf] Allow to install examples conditionally
+  * [Conf] Fix comments in elastic.conf
+  * [Conf] Install examples
+  * [Conf] Use full hostnames for SURBL
+  * [CritFix] Allow to reupload scripts when Redis is restarted
+  * [CritFix] Fix ARC-Seal signing
+  * [CritFix] Properly check dynamic keys in fuzzy storage
+  * [Feature] Add LRU cache for last filled ratelimit buckets
+  * [Feature] Add include/exclude logic for headers
+  * [Feature] Add ratelimit util to manage last filled ratelimit buckets
+  * [Feature] Dump current ratelimits for fuzzy keys
+  * [Feature] GPT: Try harder to find JSON in NN reply
+  * [Feature] Improve address rotation algorithm
+  * [Feature] Show stats in rspamadm
+  * [Feature] Unify displayed part selection
+  * [Fix] Avoid null-bytes in Log-Tag header value.
+  * [Fix] Another story about char sign
+  * [Fix] Check DNS limits when resolving MX/PTR records
+  * [Fix] Dmarc: Properly encode structured headers
+  * [Fix] Do not abort when OpenSSL is broken, report that to a user
+  * [Fix] Fix dealing with happy eyeballs in SPF
+  * [Fix] Fix memory leak in `lua_new_text` invocations
+  * [Fix] Fix usage of the logging function
+  * [Fix] Load "default" provider as well as "legacy"
+  * [Fix] Milter headers: fold before encoding
+  * [Fix] More fixes to rfc2047 encoding
+  * [Fix] More things to fix
+  * [Fix] Phishing: Fix many cases of FP for the same domains
+  * [Fix] Remove USPOOF_SINGLE_SCRIPT_CONFUSABLE from the checks
+  * [Fix] Restore propagation of spam/ham learns
+  * [Fix] Sigh, another fix
+  * [Fix] Some fixes to `rspamadm ratelimit`
+  * [Fix] Some more fixes
+  * [Fix] Use `dkim_signing` for `sign_headers` option
+  * [Fix] Use correct type for keylen in lua_ucl_newindex
+  * [Fix] Use cumulative timeout when dealing with TCP connections
+  * [Fix] Use unsigned char for ragel machines
+  * [Project] Add routine to strip attachments
+  * [Project] Add tool to rspamadm
+  * [Project] Initial stuff to implement messages anonymization
+  * [Project] Keep Changelog updated
+  * [Project] Various fixes and `rspamadm mime strip` command
+  * [Rework] Allow `Content-Encoding` standard header for zstd compression
+  * [Rework] Breaking: Actualize elastic module, support Elastic 8 & OpenSearch 2, add index policy with logs retention and many more
+  * [Rework] Multimap should use only distinct text parts for content matching
+  * [Rework] Replace fastutf with simdutf
+  * [Rework] Rewrite rfc2047 encoding as it was totally broken
+  * [Rework] Update hiredis to 1.2.0
+
 3.10.2: 21 Oct 2024
   * [CritFix] Fix ARC-Seal signing
   * [Fix] add EOF to openmetrics response in proxy and server
