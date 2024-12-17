@@ -56,8 +56,9 @@
 
 #ifdef WITH_HYPERSCAN
 #include "libserver/hyperscan_tools.h"
-#include "rspamd_simdutf.h"
 #endif
+
+#include "rspamd_simdutf.h"
 
 /* 2 seconds to fork new process in place of dead one */
 #define SOFT_FORK_TIME 2
