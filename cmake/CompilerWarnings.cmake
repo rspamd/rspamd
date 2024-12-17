@@ -84,6 +84,12 @@ IF(SUPPORT_WSUGGEST_ATTRIBUTE)
     ADD_COMPILE_OPTIONS("-Wno-suggest-attribute=format")
 ENDIF()
 
+# Make some warnings more severe
+ADD_COMPILE_OPTIONS("-Werror=implicit-function-declaration")
+ADD_COMPILE_OPTIONS("-Werror=implicit-int")
+ADD_COMPILE_OPTIONS("-Werror=return-type")
+ADD_COMPILE_OPTIONS("-Werror=strict-prototypes")
+
 #IF(SUPPORT_WDEPRECATED_DECLARATIONS)
 #    ADD_COMPILE_OPTIONS("-Wno-deprecated-declarations")
 #ENDIF()
