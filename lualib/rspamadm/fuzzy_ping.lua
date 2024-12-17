@@ -167,7 +167,7 @@ local function print_results(results)
     local total = #l + (err_servers[s] or 0)
     print(highlight('Summary for %s: %d packets transmitted, %d packets received, %.1f%% packet loss',
         s, total, #l, (total - #l) * 100.0 / total))
-    local mean, std = std_mean(l)
+    local std, mean = std_mean(l)
     local max, min = maxmin(l)
     print(string.format('round-trip min/avg/max/std-dev = %.2f/%.2f/%.2f/%.2f ms',
         min, mean,
