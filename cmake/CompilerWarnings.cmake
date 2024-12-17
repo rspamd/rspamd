@@ -85,10 +85,10 @@ IF(SUPPORT_WSUGGEST_ATTRIBUTE)
 ENDIF()
 
 # Make some warnings more severe
-ADD_COMPILE_OPTIONS("-Werror=implicit-function-declaration")
-ADD_COMPILE_OPTIONS("-Werror=implicit-int")
 ADD_COMPILE_OPTIONS("-Werror=return-type")
-ADD_COMPILE_OPTIONS("-Werror=strict-prototypes")
+ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:C>:-Werror=implicit-int>")
+ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:C>:-Werror=implicit-function-declaration>")
+ADD_COMPILE_OPTIONS("$<$<COMPILE_LANGUAGE:C>:-Werror=strict-prototypes>")
 
 #IF(SUPPORT_WDEPRECATED_DECLARATIONS)
 #    ADD_COMPILE_OPTIONS("-Wno-deprecated-declarations")
