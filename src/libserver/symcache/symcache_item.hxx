@@ -78,6 +78,8 @@ constexpr static auto item_type_to_str(symcache_item_type t) -> const char *
 	case symcache_item_type::VIRTUAL:
 		return "virtual";
 	}
+
+	RSPAMD_UNREACHABLE;
 }
 
 /**
