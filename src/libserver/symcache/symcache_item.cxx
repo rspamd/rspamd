@@ -408,7 +408,7 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 								 task->settings_elt->id);
 		}
 	}
-	else if (flags & SYMBOL_TYPE_EXPLICIT_ENABLE) {
+	else if ((flags & SYMBOL_TYPE_EXPLICIT_ENABLE) && !task->settings) {
 		msg_debug_cache_task("deny %s of %s as it must be explicitly enabled",
 							 what,
 							 symbol.c_str());
