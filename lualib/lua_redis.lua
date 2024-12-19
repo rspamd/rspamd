@@ -1140,7 +1140,7 @@ local function script_set_loaded(script)
     script.loaded = true
   end
 
-  script.servers_ready = nil -- Allow further reload
+  script.pending_upload = false -- Allow further reload
 
   local wait_table = {}
   for _, s in ipairs(script.waitq) do
@@ -1267,6 +1267,7 @@ local function load_script_task(script, task, is_write)
         if is_all_servers_ready(script) then
           script_set_loaded(script)
         elseif is_all_servers_failed(script) then
+          script.pending_upload = false
           script.fatal_error = "cannot upload script to any server"
         end
       end -- callback
@@ -1284,6 +1285,7 @@ local function load_script_task(script, task, is_write)
     if is_all_servers_ready(script) then
       script_set_loaded(script)
     elseif is_all_servers_failed(script) then
+      script.pending_upload = false
       script.fatal_error = "cannot upload script to any server"
     end
   end
@@ -1331,6 +1333,7 @@ local function load_script_taskless(script, cfg, ev_base, is_write)
         if is_all_servers_ready(script) then
           script_set_loaded(script)
         elseif is_all_servers_failed(script) then
+          script.pending_upload = false
           script.fatal_error = "cannot upload script to any server"
         end
       end
@@ -1348,6 +1351,7 @@ local function load_script_taskless(script, cfg, ev_base, is_write)
     if is_all_servers_ready(script) then
       script_set_loaded(script)
     elseif is_all_servers_failed(script) then
+      script.pending_upload = false
       script.fatal_error = "cannot upload script " .. script_description(script) .. " to any server"
     end
   end
@@ -1466,12 +1470,13 @@ local function exec_redis_script(id, params, callback, keys, args)
         -- Schedule restart if possible
         if can_reload then
           table.insert(script.waitq, do_call)
-          if not script.servers_ready then
+          if not script.pending_upload then
             logger.infox(params.task or rspamd_config,
                 'redis script %s is not loaded (NOSCRIPT returned), scheduling reload',
                 script_description(script))
             script.sha = nil
             script.loaded = nil
+            script.pending_upload = true
             -- Reload scripts if this has not been initiated yet
             if params.task then
               load_script_task(script, params.task)
