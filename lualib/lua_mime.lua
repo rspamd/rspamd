@@ -1151,8 +1151,8 @@ exports.anonymize_message = function(task, settings)
         url = settings.url,
       })
       -- Do not use prompt settings from the module
-      llm_settings.prompt = settings.gpt_prompt or 'Anonymize the following message content by removing or replacing ' ..
-          'any sensitive information while retaining the general structure and meaning, return just the anonymized content:'
+      llm_settings.prompt = settings.gpt_prompt or 'Remove all personal data from the following email ' ..
+          'and return just the anonymized content'
 
       local request_body = {
         model = llm_settings.model,
@@ -1169,6 +1169,10 @@ exports.anonymize_message = function(task, settings)
           }
         }
       }
+
+      if llm_settings.type == 'ollama' then
+        request_body.stream = false
+      end
 
       -- Make the HTTP request to the LLM API
       local http_params = {
@@ -1190,14 +1194,19 @@ exports.anonymize_message = function(task, settings)
       end
 
       local parser = ucl.parser()
-      local res, parse_err = parser:parse_string(data)
+      local res, parse_err = parser:parse_string(data.content)
       if not res then
         logger.errx(task, 'Cannot parse LLM response: %s', parse_err)
         return
       end
 
       local reply = parser:get_object()
-      local anonymized_content = reply.choices and reply.choices[1] and reply.choices[1].message and reply.choices[1].message.content
+      local anonymized_content
+      if llm_settings.type == 'openai' then
+        anonymized_content = reply.choices and reply.choices[1] and reply.choices[1].message and reply.choices[1].message.content
+      elseif llm_settings.type == 'ollama' then
+        anonymized_content = reply.message.content
+      end
       if anonymized_content then
         -- Replace the original content with the anonymized content
         -- sel_part:set_content(anonymized_content) -- Not available, so rebuild message instead
