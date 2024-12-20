@@ -193,6 +193,14 @@ anonymize:option "--include-header -I"
          :description "Include specific headers from anonymization"
          :argname "<header>"
          :count "*"
+anonymize:flag "--gpt"
+         :description "Use LLM model for anonymization (requires GPT plugin to be configured)"
+anonymize:option "--model"
+         :description "Model to use for anonymization"
+         :argname "<model>"
+anonymize:option "--prompt"
+         :description "Prompt to use for anonymization"
+         :argname "<prompt>"
 
 local sign = parser:command "sign"
                    :description "Performs DKIM signing"
@@ -267,21 +275,27 @@ local function load_config(opts)
   end
 end
 
-local function load_task(opts, fname)
+local function load_task(_, fname)
   if not fname then
     fname = '-'
   end
 
-  local res, task = rspamd_task.load_from_file(fname, rspamd_config)
+  local task = rspamd_task:create(rspamd_config, rspamadm_ev_base)
+  task:set_session(rspamadm_session)
+  task:set_resolver(rspamadm_dns_resolver)
+
+  local res = task:load_from_file(fname)
 
   if not res then
     parser:error(string.format('cannot read message from %s: %s', fname,
         task))
+    return nil
   end
 
   if not task:process_message() then
     parser:error(string.format('cannot read message from %s: %s', fname,
         'failed to parse'))
+    return nil
   end
 
   return task

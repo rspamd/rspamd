@@ -1130,92 +1130,221 @@ exports.anonymize_message = function(task, settings)
 
   local sel_part = exports.get_displayed_text_part(task)
 
-  if sel_part then
-    text_content = sel_part:get_words('norm')
-    for i, w in ipairs(text_content) do
-      if exclude_words_re:match(w) then
-        text_content[i] = string.rep('x', #w)
+  if sel_part and settings.gpt then
+    -- LLM version
+    local gpt_settings = rspamd_config:get_all_opt('gpt')
+
+    if not gpt_settings then
+      logger.errx(task, 'no gpt settings found')
+
+      return false
+    end
+
+    -- Prepare the LLM request
+    local function send_to_llm(input_content)
+      local rspamd_http = require 'rspamd_http'
+      -- settings for LLM API
+      local llm_settings = lua_util.override_defaults(gpt_settings, {
+        api_key = settings.api_key,
+        model = settings.model,
+        timeout = settings.timeout,
+        url = settings.url,
+      })
+      -- Do not use prompt settings from the module
+      llm_settings.prompt = settings.gpt_prompt or 'Anonymize the following message content by removing or replacing ' ..
+          'any sensitive information while retaining the general structure and meaning, return just the anonymized content:'
+
+      local request_body = {
+        model = llm_settings.model,
+        max_tokens = llm_settings.max_tokens,
+        temperature = 0,
+        messages = {
+          {
+            role = 'system',
+            content = llm_settings.prompt
+          },
+          {
+            role = 'user',
+            content = input_content
+          }
+        }
+      }
+
+      -- Make the HTTP request to the LLM API
+      local http_params = {
+        url = llm_settings.url,
+        headers = {
+          ['Authorization'] = 'Bearer ' .. llm_settings.api_key,
+          ['Content-Type'] = 'application/json'
+        },
+        body = ucl.to_format(request_body, 'json-compact'),
+        method = 'POST',
+        task = task,
+        timeout = llm_settings.timeout,
+      }
+      local err, data = rspamd_http.request(http_params)
+
+      if err then
+        logger.errx(task, 'LLM request failed: %s', err)
+        return
+      end
+
+      local parser = ucl.parser()
+      local res, parse_err = parser:parse_string(data)
+      if not res then
+        logger.errx(task, 'Cannot parse LLM response: %s', parse_err)
+        return
+      end
+
+      local reply = parser:get_object()
+      local anonymized_content = reply.choices and reply.choices[1] and reply.choices[1].message and reply.choices[1].message.content
+      if anonymized_content then
+        -- Replace the original content with the anonymized content
+        -- sel_part:set_content(anonymized_content) -- Not available, so rebuild message instead
+
+        -- Create new message with anonymized content
+        local cur_boundary = '--XXX'
+
+        -- Add headers
+        out[#out + 1] = {
+          string.format('Content-Type: multipart/mixed; boundary="%s"', cur_boundary),
+          true
+        }
+        for _, hdr in ipairs(modified_headers) do
+          if hdr.name:lower() ~= 'content-type' then
+            out[#out + 1] = {
+              string.format('%s: %s', hdr.name, hdr.value),
+              true
+            }
+          end
+        end
+        out[#out + 1] = { '', true }
+
+        -- Add text part with anonymized content
+        out[#out + 1] = {
+          string.format('--%s', cur_boundary),
+          true
+        }
+        out[#out + 1] = {
+          'Content-Type: text/plain; charset=utf-8\nContent-Transfer-Encoding: quoted-printable',
+          true
+        }
+        out[#out + 1] = { '', true }
+        out[#out + 1] = {
+          rspamd_util.encode_qp(anonymized_content, 76, task:get_newlines_type()),
+          true
+        }
+
+        -- Close boundaries
+        out[#out + 1] = {
+          string.format('--%s--', cur_boundary),
+          true
+        }
+
+        state.out = out
+        state.need_rewrite_ct = true
+        state.new_ct = {
+          type = 'multipart',
+          subtype = 'mixed'
+        }
+
+        return state
+      end
+
+      return false
+    end
+
+    -- Send content to LLM
+    return send_to_llm(sel_part:get_content())
+  else
+
+    if sel_part then
+      text_content = sel_part:get_words('norm')
+      for i, w in ipairs(text_content) do
+        if exclude_words_re:match(w) then
+          text_content[i] = string.rep('x', #w)
+        end
       end
     end
-  end
 
-  -- Process URLs
-  local function process_url(url)
-    local clean_url = url:get_host()
-    local path = url:get_path()
-    if path and path ~= "/" then
-      clean_url = string.format("%s/%s", clean_url, path)
+    -- Process URLs
+    local function process_url(url)
+      local clean_url = url:get_host()
+      local path = url:get_path()
+      if path and path ~= "/" then
+        clean_url = string.format("%s/%s", clean_url, path)
+      end
+      return string.format('https://%s', clean_url)
     end
-    return string.format('https://%s', clean_url)
-  end
 
-  for _, url in ipairs(task:get_urls(true)) do
-    urls[process_url(url)] = true
-  end
-
-  -- Process emails
-  local function process_email(email)
-    return string.format('nobody@%s', email.domain or 'example.com')
-  end
-
-  for _, email in ipairs(task:get_emails()) do
-    emails[process_email(email)] = true
-  end
-
-  -- Construct new message
-  table.insert(text_content, '\nurls:')
-  table.insert(text_content, table.concat(lua_util.keys(urls), ', '))
-  table.insert(text_content, '\nemails:')
-  table.insert(text_content, table.concat(lua_util.keys(emails), ', '))
-  local new_text = table.concat(text_content, ' ')
-
-  -- Create new message structure
-  local cur_boundary = '--XXX'
-
-  -- Add headers
-  out[#out + 1] = {
-    string.format('Content-Type: multipart/mixed; boundary="%s"', cur_boundary),
-    true
-  }
-  for _, hdr in ipairs(modified_headers) do
-    if hdr.name ~= 'Content-Type' then
-      out[#out + 1] = {
-        string.format('%s: %s', hdr.name, hdr.value),
-        true
-      }
+    for _, url in ipairs(task:get_urls(true)) do
+      urls[process_url(url)] = true
     end
+
+    -- Process emails
+    local function process_email(email)
+      return string.format('nobody@%s', email.domain or 'example.com')
+    end
+
+    for _, email in ipairs(task:get_emails()) do
+      emails[process_email(email)] = true
+    end
+
+    -- Construct new message
+    table.insert(text_content, '\nurls:')
+    table.insert(text_content, table.concat(lua_util.keys(urls), ', '))
+    table.insert(text_content, '\nemails:')
+    table.insert(text_content, table.concat(lua_util.keys(emails), ', '))
+    local new_text = table.concat(text_content, ' ')
+
+    -- Create new message structure
+    local cur_boundary = '--XXX'
+
+    -- Add headers
+    out[#out + 1] = {
+      string.format('Content-Type: multipart/mixed; boundary="%s"', cur_boundary),
+      true
+    }
+    for _, hdr in ipairs(modified_headers) do
+      if hdr.name ~= 'Content-Type' then
+        out[#out + 1] = {
+          string.format('%s: %s', hdr.name, hdr.value),
+          true
+        }
+      end
+    end
+    out[#out + 1] = { '', true }
+
+    -- Add text part
+    out[#out + 1] = {
+      string.format('--%s', cur_boundary),
+      true
+    }
+    out[#out + 1] = {
+      'Content-Type: text/plain; charset=utf-8\nContent-Transfer-Encoding: quoted-printable',
+      true
+    }
+    out[#out + 1] = { '', true }
+    out[#out + 1] = {
+      rspamd_util.encode_qp(new_text, 76, task:get_newlines_type()),
+      true
+    }
+
+    -- Close boundaries
+    out[#out + 1] = {
+      string.format('--%s--', cur_boundary),
+      true
+    }
+
+    state.out = out
+    state.need_rewrite_ct = true
+    state.new_ct = {
+      type = 'multipart',
+      subtype = 'mixed'
+    }
+
+    return state
   end
-  out[#out + 1] = { '', true }
-
-  -- Add text part
-  out[#out + 1] = {
-    string.format('--%s', cur_boundary),
-    true
-  }
-  out[#out + 1] = {
-    'Content-Type: text/plain; charset=utf-8\nContent-Transfer-Encoding: quoted-printable',
-    true
-  }
-  out[#out + 1] = { '', true }
-  out[#out + 1] = {
-    rspamd_util.encode_qp(new_text, 76, task:get_newlines_type()),
-    true
-  }
-
-  -- Close boundaries
-  out[#out + 1] = {
-    string.format('--%s--', cur_boundary),
-    true
-  }
-
-  state.out = out
-  state.need_rewrite_ct = true
-  state.new_ct = {
-    type = 'multipart',
-    subtype = 'mixed'
-  }
-
-  return state
 end
 
 return exports
