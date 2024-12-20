@@ -1362,6 +1362,92 @@ lua_cryptobox_hash_create_specific_keyed(lua_State *L)
 	return 1;
 }
 
+static void
+lua_cryptobox_update_pos(lua_State *L, struct rspamd_lua_cryptobox_hash *h, int pos)
+{
+	const char *data;
+	struct rspamd_lua_text *t;
+	gsize len;
+
+	/* Inverse pos if it is relative to the top of the stack */
+	if (pos < 0) {
+		pos = lua_gettop(L) + pos + 1;
+	}
+
+	switch (lua_type(L, pos)) {
+	case LUA_TSTRING:
+		data = lua_tolstring(L, pos, &len);
+		rspamd_lua_hash_update(h, data, len);
+		break;
+
+	case LUA_TNUMBER: {
+		lua_Number n = lua_tonumber(L, pos);
+		if (n == (lua_Number) (lua_Integer) n) {
+			lua_Integer i = lua_tointeger(L, pos);
+			rspamd_lua_hash_update(h, (void *) &i, sizeof(i));
+		}
+		else {
+
+			rspamd_lua_hash_update(h, (void *) &n, sizeof(n));
+		}
+
+		break;
+	}
+
+	case LUA_TBOOLEAN: {
+		char b = lua_toboolean(L, pos);
+		rspamd_lua_hash_update(h, &b, sizeof(b));
+		break;
+	}
+
+	case LUA_TTABLE: {
+
+		/* Hash array part */
+		gsize alen;
+#if LUA_VERSION_NUM >= 502
+		alen = lua_rawlen(L, 2);
+#else
+		alen = lua_objlen(L, pos);
+#endif
+
+		for (gsize i = 1; i <= alen; i++) {
+			lua_rawgeti(L, pos, i);
+			lua_cryptobox_update_pos(L, h, -1); /* Recurse */
+			lua_pop(L, 1);
+		}
+
+		/* Hash key-value pairs */
+		lua_pushnil(L);
+		while (lua_next(L, pos) != 0) {
+			/* Hash key */
+			lua_pushvalue(L, -2);
+			lua_cryptobox_update_pos(L, h, -1);
+			lua_pop(L, 1);
+
+			/* Hash value */
+			lua_cryptobox_update_pos(L, h, -1);
+			lua_pop(L, 1);
+		}
+
+		break;
+	}
+
+	case LUA_TUSERDATA:
+		t = lua_check_text(L, 2);
+		if (t) {
+			rspamd_lua_hash_update(h, t->start, t->len);
+		}
+		break;
+
+	case LUA_TFUNCTION:
+	case LUA_TTHREAD:
+	case LUA_TNIL:
+	default:
+		/* Skip these types */
+		break;
+	}
+}
+
 /***
  * @method cryptobox_hash:update(data)
  * Updates hash with the specified data (hash should not be finalized using `hex` or `bin` methods)
@@ -1372,46 +1458,13 @@ lua_cryptobox_hash_update(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash(L, 1), **ph;
-	const char *data;
-	struct rspamd_lua_text *t;
-	gsize len;
 
-	if (lua_isuserdata(L, 2)) {
-		t = lua_check_text(L, 2);
 
-		if (!t) {
-			return luaL_error(L, "invalid arguments");
-		}
-
-		data = t->start;
-		len = t->len;
-	}
-	else {
-		data = luaL_checklstring(L, 2, &len);
+	if (h == NULL || h->is_finished) {
+		return luaL_error(L, "invalid arguments or hash is already finalized");
 	}
 
-	if (lua_isnumber(L, 3)) {
-		gsize nlen = lua_tonumber(L, 3);
-
-		if (nlen > len) {
-			return luaL_error(L, "invalid length: %d while %d is available",
-							  (int) nlen, (int) len);
-		}
-
-		len = nlen;
-	}
-
-	if (h && data) {
-		if (!h->is_finished) {
-			rspamd_lua_hash_update(h, data, len);
-		}
-		else {
-			return luaL_error(L, "hash is already finalized");
-		}
-	}
-	else {
-		return luaL_error(L, "invalid arguments");
-	}
+	lua_cryptobox_update_pos(L, h, 2);
 
 	ph = lua_newuserdata(L, sizeof(void *));
 	*ph = h;
@@ -1420,7 +1473,6 @@ lua_cryptobox_hash_update(lua_State *L)
 
 	return 1;
 }
-
 /***
  * @method cryptobox_hash:reset()
  * Resets hash to the initial state
