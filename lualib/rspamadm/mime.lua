@@ -280,7 +280,7 @@ local function load_task(_, fname)
     fname = '-'
   end
 
-  local task = rspamd_task:create(rspamd_config, rspamadm_ev_base)
+  local task = rspamd_task.create(rspamd_config, rspamadm_ev_base)
   task:set_session(rspamadm_session)
   task:set_resolver(rspamadm_dns_resolver)
 
