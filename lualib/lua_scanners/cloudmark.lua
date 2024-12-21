@@ -263,7 +263,8 @@ local function parse_cloudmark_reply(task, rule, body)
 
   if obj.analysis then
     -- Report analysis string
-    rspamd_logger.infox(task, 'cloudmark report string: %s', obj.analysis)
+    local qid = task:get_queue_id() or 'unknown'
+    rspamd_logger.infox(task, 'qid: <%s>, cloudmark report string: %s', qid, obj.analysis)
   end
 
   local score = tonumber(obj.score) or 0
