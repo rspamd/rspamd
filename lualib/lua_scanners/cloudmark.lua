@@ -345,7 +345,9 @@ local function cloudmark_check(task, content, digest, rule, maybe_part)
 
     local fip = task:get_from_ip()
     if fip and fip:is_valid() then
-      request['connIp'] = tostring(fip)
+      request['connIp'] = {
+        data = tostring(fip)
+      }
     end
 
     local hostname = task:get_hostname()
