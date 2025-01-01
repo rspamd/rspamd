@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -135,6 +135,7 @@ struct fuzzy_key {
 	khash_t(fuzzy_key_flag_stat) * flags_stat;
 	khash_t(fuzzy_key_ids_set) * forbidden_ids;
 	struct rspamd_leaky_bucket_elt *rl_bucket;
+	ucl_object_t *extensions;
 	double burst;
 	double rate;
 	ev_tstamp expire;
@@ -630,6 +631,9 @@ rspamd_fuzzy_check_write(struct fuzzy_session *session)
 		return FALSE;
 	}
 
+	/*
+	 * Check IP first
+	 */
 	if (session->ctx->update_ips != NULL && session->addr) {
 		if (rspamd_inet_address_get_af(session->addr) == AF_UNIX) {
 			return TRUE;
@@ -643,6 +647,9 @@ rspamd_fuzzy_check_write(struct fuzzy_session *session)
 		}
 	}
 
+	/*
+	 * Check global list of the update keys
+	 */
 	if (session->ctx->update_keys != NULL && session->key->stat && session->key->key) {
 		static char base32_buf[rspamd_cryptobox_HASHBYTES * 2 + 1];
 		unsigned int raw_len;
@@ -653,6 +660,18 @@ rspamd_fuzzy_check_write(struct fuzzy_session *session)
 												   RSPAMD_BASE32_DEFAULT);
 
 		if (rspamd_match_hash_map(session->ctx->update_keys, base32_buf, encoded_len)) {
+			return TRUE;
+		}
+	}
+
+	/*
+	 * Check individual key
+	 */
+	if (session->key && session->key->extensions) {
+		const ucl_object_t *read_only = ucl_object_lookup(session->key->extensions, "read_only");
+
+		if (read_only && ucl_object_type(read_only) == UCL_BOOLEAN && !(ucl_object_toboolean(read_only))) {
+			/* TODO: maybe replace hash lookup with a flag */
 			return TRUE;
 		}
 	}
@@ -709,6 +728,10 @@ fuzzy_key_dtor(gpointer p)
 
 		if (key->name) {
 			g_free(key->name);
+		}
+
+		if (key->extensions) {
+			ucl_object_unref(key->extensions);
 		}
 
 		g_free(key);
@@ -2973,6 +2996,7 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
 	const ucl_object_t *extensions = rspamd_keypair_get_extensions(kp);
 
 	if (extensions) {
+		key->extensions = ucl_object_ref(extensions);
 		lua_State *L = RSPAMD_LUA_CFG_STATE(cfg);
 		const ucl_object_t *forbidden_ids = ucl_object_lookup(extensions, "forbidden_ids");
 
@@ -3677,12 +3701,12 @@ start_fuzzy(struct rspamd_worker *worker)
 		.func = lua_fuzzy_add_pre_handler,
 	};
 	rspamd_lua_add_metamethod(ctx->cfg->lua_state, rspamd_worker_classname, &fuzzy_lua_reg);
-	fuzzy_lua_reg = (luaL_Reg){
+	fuzzy_lua_reg = (luaL_Reg) {
 		.name = "add_fuzzy_post_handler",
 		.func = lua_fuzzy_add_post_handler,
 	};
 	rspamd_lua_add_metamethod(ctx->cfg->lua_state, rspamd_worker_classname, &fuzzy_lua_reg);
-	fuzzy_lua_reg = (luaL_Reg){
+	fuzzy_lua_reg = (luaL_Reg) {
 		.name = "add_fuzzy_blacklist_handler",
 		.func = lua_fuzzy_add_blacklist_handler,
 	};
