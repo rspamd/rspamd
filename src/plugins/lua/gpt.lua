@@ -48,6 +48,8 @@ gpt {
   allow_passthrough = false;
   # Check messages that are apparent ham (no action and negative score)
   allow_ham = false;
+  # default send response_format field { type = "json_object" }
+  include_response_format = true,
 }
   ]])
   return
@@ -393,7 +395,6 @@ local function default_llm_check(task)
     model = settings.model,
     max_tokens = settings.max_tokens,
     temperature = settings.temperature,
-    response_format = { type = "json_object" },
     messages = {
       {
         role = 'system',
@@ -417,6 +418,11 @@ local function default_llm_check(task)
       }
     }
   }
+
+  -- Conditionally add response_format
+  if settings.include_response_format then
+    body.response_format = { type = "json_object" }
+  end
 
   upstream = settings.upstreams:get_upstream_round_robin()
   local http_params = {
@@ -498,7 +504,6 @@ local function ollama_check(task)
     model = settings.model,
     max_tokens = settings.max_tokens,
     temperature = settings.temperature,
-    response_format = { type = "json_object" },
     messages = {
       {
         role = 'system',
@@ -522,6 +527,11 @@ local function ollama_check(task)
       }
     }
   }
+
+  -- Conditionally add response_format
+  if settings.include_response_format then
+    body.response_format = { type = "json_object" }
+  end
 
   upstream = settings.upstreams:get_upstream_round_robin()
   local http_params = {
