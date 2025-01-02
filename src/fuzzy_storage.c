@@ -124,6 +124,11 @@ fuzzy_kp_equal(gconstpointer a, gconstpointer b)
 	return (memcmp(pa, pb, RSPAMD_FUZZY_KEYLEN) == 0);
 }
 
+enum fuzzy_key_op {
+	FUZZY_KEY_READ = 0x1u << 0,
+	FUZZY_KEY_WRITE = 0x1u << 1,
+	FUZZY_KEY_DELETE = 0x1u << 2,
+};
 KHASH_SET_INIT_INT(fuzzy_key_ids_set);
 KHASH_INIT(fuzzy_key_flag_stat, int, struct fuzzy_key_stat, 1, kh_int_hash_func,
 		   kh_int_hash_equal);
@@ -140,6 +145,7 @@ struct fuzzy_key {
 	double rate;
 	ev_tstamp expire;
 	bool expired;
+	int flags; /* enum fuzzy_key_op */
 	ref_entry_t ref;
 };
 
@@ -625,7 +631,7 @@ rspamd_fuzzy_check_client(struct rspamd_fuzzy_storage_ctx *ctx,
 }
 
 static gboolean
-rspamd_fuzzy_check_write(struct fuzzy_session *session)
+rspamd_fuzzy_check_write(struct fuzzy_session *session, uint8_t cmd)
 {
 	if (session->ctx->read_only) {
 		return FALSE;
@@ -664,14 +670,11 @@ rspamd_fuzzy_check_write(struct fuzzy_session *session)
 		}
 	}
 
-	/*
-	 * Check individual key
-	 */
-	if (session->key && session->key->extensions) {
-		const ucl_object_t *read_only = ucl_object_lookup(session->key->extensions, "read_only");
-
-		if (read_only && ucl_object_type(read_only) == UCL_BOOLEAN && !(ucl_object_toboolean(read_only))) {
-			/* TODO: maybe replace hash lookup with a flag */
+	if (session->key) {
+		if (cmd == FUZZY_WRITE && session->key->flags & FUZZY_KEY_WRITE) {
+			return TRUE;
+		}
+		else if (cmd == FUZZY_DEL && session->key->flags & FUZZY_KEY_DELETE) {
 			return TRUE;
 		}
 	}
@@ -1651,6 +1654,14 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 			}
 		}
 
+		/* Key is not allowed to read */
+		if (session->key && !(session->key->flags & FUZZY_KEY_READ)) {
+			result.v1.value = 503;
+			result.v1.prob = 0.0f;
+			rspamd_fuzzy_make_reply(cmd, &result, session, send_flags);
+			return;
+		}
+
 		if (is_rate_allowed) {
 			REF_RETAIN(session);
 			rspamd_fuzzy_backend_check(session->ctx->backend, cmd,
@@ -1678,7 +1689,7 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 		rspamd_fuzzy_make_reply(cmd, &result, session, send_flags);
 	}
 	else {
-		if (rspamd_fuzzy_check_write(session)) {
+		if (rspamd_fuzzy_check_write(session, cmd->cmd)) {
 			/* Check whitelist */
 			if (session->ctx->skip_hashes && cmd->cmd == FUZZY_WRITE) {
 				rspamd_encode_hex_buf(cmd->digest, sizeof(cmd->digest),
@@ -2965,6 +2976,8 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
 	key->rate = NAN;
 	key->expire = NAN;
 	key->rl_bucket = NULL;
+	/* Allow read by default */
+	key->flags = FUZZY_KEY_READ;
 	/* Preallocate some space for flags */
 	kh_resize(fuzzy_key_flag_stat, key->flags_stat, 8);
 	const unsigned char *pk = rspamd_keypair_component(kp, RSPAMD_KEYPAIR_COMPONENT_PK,
@@ -3076,9 +3089,48 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
 		if (name && ucl_object_type(name) == UCL_STRING) {
 			key->name = g_strdup(ucl_object_tostring(name));
 		}
+
+		/* Check permissions */
+		const ucl_object_t *read_only = ucl_object_lookup(extensions, "read_only");
+		if (read_only && ucl_object_type(read_only) == UCL_BOOLEAN) {
+			if (ucl_object_toboolean(read_only)) {
+				key->flags &= ~(FUZZY_KEY_WRITE | FUZZY_KEY_DELETE);
+			}
+			else {
+				key->flags |= (FUZZY_KEY_WRITE | FUZZY_KEY_DELETE);
+			}
+		}
+
+		const ucl_object_t *allowed_ops = ucl_object_lookup(extensions, "allowed_ops");
+		if (allowed_ops && ucl_object_type(allowed_ops) == UCL_ARRAY) {
+			const ucl_object_t *cur;
+			ucl_object_iter_t it = NULL;
+			/* Reset to only allowed */
+			key->flags = 0;
+
+			while ((cur = ucl_object_iterate(allowed_ops, &it, true)) != NULL) {
+				if (ucl_object_type(cur) == UCL_STRING) {
+					const char *op = ucl_object_tostring(cur);
+
+					if (g_ascii_strcasecmp(op, "read") == 0) {
+						key->flags |= FUZZY_KEY_READ;
+					}
+					else if (g_ascii_strcasecmp(op, "write") == 0) {
+						key->flags |= FUZZY_KEY_WRITE;
+					}
+					else if (g_ascii_strcasecmp(op, "delete") == 0) {
+						key->flags |= FUZZY_KEY_DELETE;
+					}
+					else {
+						msg_warn_config("invalid operation: %s", op);
+					}
+				}
+			}
+		}
 	}
 
-	msg_debug("loaded keypair %*bs; expire=%f; rate=%f; burst=%f; name=%s", (int) crypto_box_publickeybytes(), pk,
+	msg_debug("loaded keypair %*bs; expire=%f; rate=%f; burst=%f; name=%s",
+			  (int) crypto_box_publickeybytes(), pk,
 			  key->expire, key->rate, key->burst, key->name);
 
 	return key;
