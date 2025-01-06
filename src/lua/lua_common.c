@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -985,6 +985,7 @@ rspamd_lua_init(bool wipe_mem)
 	luaopen_tensor(L);
 	luaopen_parsers(L);
 	luaopen_compress(L);
+	luaopen_shingle(L);
 #ifndef WITH_LUAJIT
 	rspamd_lua_add_preload(L, "bit", luaopen_bit);
 	lua_settop(L, 0);
