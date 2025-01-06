@@ -18,8 +18,6 @@
 #include "shingles.h"
 #include "fmt/format.h"
 
-#define RSPAMD_SHINGLE_CLASS "rspamd{shingle}"
-
 /***
  * @module rspamd_shingle
  * This module provides methods to work with text shingles
@@ -58,9 +56,9 @@ static const struct luaL_reg shinglelib_m[] = {
 static struct rspamd_shingle *
 lua_check_shingle(lua_State *L, int pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, RSPAMD_SHINGLE_CLASS);
+	void *ud = rspamd_lua_check_udata(L, pos, RSPAMD_LUA_SHINGLE_CLASS);
 	luaL_argcheck(L, ud != nullptr, pos, "'shingle' expected");
-	return static_cast<struct rspamd_shingle *>(ud);
+	return *static_cast<struct rspamd_shingle **>(ud);
 }
 
 static int
@@ -117,6 +115,6 @@ lua_shingle_get_string(lua_State *L)
 
 void luaopen_shingle(lua_State *L)
 {
-	rspamd_lua_new_class(L, RSPAMD_SHINGLE_CLASS, shinglelib_m);
+	rspamd_lua_new_class(L, RSPAMD_LUA_SHINGLE_CLASS, shinglelib_m);
 	lua_pop(L, 1);
 }

@@ -708,6 +708,8 @@ int rspamd_lua_geti(lua_State *L, int index, int i);
 #define RSPAMD_PREFIX_INDEX "PREFIX"
 #define RSPAMD_VERSION_INDEX "VERSION"
 
+#define RSPAMD_LUA_SHINGLE_CLASS "rspamd{shingle}"
+
 #ifdef WITH_LUA_TRACE
 extern ucl_object_t *lua_traces;
 #define LUA_TRACE_POINT                                                            \

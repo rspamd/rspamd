@@ -1288,7 +1288,7 @@ rspamd_fuzzy_check_callback(struct rspamd_fuzzy_reply *result, void *ud)
 	if (session->ctx->lua_post_handler_cbref != -1) {
 		/* Start lua post handler */
 		lua_State *L = session->ctx->cfg->lua_state;
-		int err_idx, ret;
+		int err_idx, ret, nargs = 9;
 
 		lua_pushcfunction(L, &rspamd_lua_traceback);
 		err_idx = lua_gettop(L);
@@ -1319,8 +1319,15 @@ rspamd_fuzzy_check_callback(struct rspamd_fuzzy_reply *result, void *ud)
 		lua_pushinteger(L, result->ts);
 		/* TODO: add additional data maybe (encryption, pubkey, etc) */
 		rspamd_fuzzy_extensions_tolua(L, session);
+		/* We push shingles merely for commands that modify content to avoid extra work */
+		if (is_shingle && cmd->cmd != FUZZY_CHECK) {
+			struct rspamd_shingle **pshingle = lua_newuserdata(L, sizeof(*pshingle));
+			rspamd_lua_setclass(L, RSPAMD_LUA_SHINGLE_CLASS, -1);
+			*pshingle = &session->cmd.sgl;
+			nargs++;
+		}
 
-		if ((ret = lua_pcall(L, 9, LUA_MULTRET, err_idx)) != 0) {
+		if ((ret = lua_pcall(L, nargs, LUA_MULTRET, err_idx)) != 0) {
 			msg_err("call to lua_post_handler lua "
 					"script failed (%d): %s",
 					ret, lua_tostring(L, -1));
@@ -1478,7 +1485,7 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 	if (session->ctx->lua_pre_handler_cbref != -1) {
 		/* Start lua pre handler */
 		lua_State *L = session->ctx->cfg->lua_state;
-		int err_idx, ret;
+		int err_idx, ret, nargs = 5;
 
 		lua_pushcfunction(L, &rspamd_lua_traceback);
 		err_idx = lua_gettop(L);
@@ -1497,7 +1504,15 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 		/* TODO: add additional data maybe (encryption, pubkey, etc) */
 		rspamd_fuzzy_extensions_tolua(L, session);
 
-		if ((ret = lua_pcall(L, 5, LUA_MULTRET, err_idx)) != 0) {
+		/* We push shingles merely for commands that modify content to avoid extra work */
+		if (is_shingle && cmd->cmd != FUZZY_CHECK) {
+			struct rspamd_shingle **pshingle = lua_newuserdata(L, sizeof(*pshingle));
+			rspamd_lua_setclass(L, RSPAMD_LUA_SHINGLE_CLASS, -1);
+			*pshingle = &session->cmd.sgl;
+			nargs++;
+		}
+
+		if ((ret = lua_pcall(L, nargs, LUA_MULTRET, err_idx)) != 0) {
 			msg_err("call to lua_pre_handler lua "
 					"script failed (%d): %s",
 					ret, lua_tostring(L, -1));
