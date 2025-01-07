@@ -1738,11 +1738,10 @@ exports.request = function(redis_params, attrs, req)
     opts.dbname = redis_params.db
   end
 
-  lutil.debugm(N, 'perform generic request to redis server' ..
-      ' (host=%s, timeout=%s): cmd: %s, arguments: %s', addr,
-      opts.timeout, opts.cmd, opts.args)
-
   if opts.callback then
+    lutil.debugm(N, 'perform generic async request to redis server' ..
+        ' (host=%s, timeout=%s): cmd: %s, arguments: %s', addr,
+        opts.timeout, opts.cmd, opts.args)
     local ret, conn = rspamd_redis.make_request(opts)
     if not ret then
       logger.errx(log_obj, 'cannot execute redis request')
@@ -1752,6 +1751,9 @@ exports.request = function(redis_params, attrs, req)
     return ret, conn, addr
   else
     -- Coroutines version
+    lutil.debugm(N, 'perform generic coroutine request to redis server' ..
+        ' (host=%s, timeout=%s): cmd: %s, arguments: %s', addr,
+        opts.timeout, opts.cmd, opts.args)
     local ret, conn = rspamd_redis.connect_sync(opts)
     if not ret then
       logger.errx(log_obj, 'cannot execute redis request')
