@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -465,6 +465,8 @@ auto redis_pool_elt::new_connection() -> redisAsyncContext *
 				 * We cannot reuse connection, so we just recursively call
 				 * this function one more time
 				 */
+				msg_debug_rpool("cannot reuse the existing connection to %s:%d: %p; errno=%d",
+								ip.c_str(), port, conn->ctx, err);
 				return new_connection();
 			}
 			else {
@@ -481,6 +483,9 @@ auto redis_pool_elt::new_connection() -> redisAsyncContext *
 		}
 		else {
 			auto *nctx = redis_async_new();
+			msg_debug_rpool("error in the inactive connection: %s; opened new connection to %s:%d: %p",
+							conn->ctx->errstr, ip.c_str(), port, nctx);
+
 			if (nctx) {
 				active.emplace_front(std::make_unique<redis_pool_connection>(pool, this,
 																			 db.c_str(), username.c_str(), password.c_str(), nctx));
@@ -492,10 +497,14 @@ auto redis_pool_elt::new_connection() -> redisAsyncContext *
 	}
 	else {
 		auto *nctx = redis_async_new();
+
 		if (nctx) {
 			active.emplace_front(std::make_unique<redis_pool_connection>(pool, this,
 																		 db.c_str(), username.c_str(), password.c_str(), nctx));
 			active.front()->elt_pos = active.begin();
+			auto conn = active.front().get();
+			msg_debug_rpool("no inactive connections; opened new connection to %s:%d: %p",
+							ip.c_str(), port, nctx);
 		}
 
 		return nctx;
