@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1026,6 +1026,18 @@ log_time(double now, rspamd_logger_t *rspamd_log, char *timebuf,
 	}
 }
 
+static inline int
+rspamd_log_id_strlen(const char *id)
+{
+	for (int i = 0; i < RSPAMD_LOG_ID_LEN; i++) {
+		if (G_UNLIKELY(id[i] == '\0')) {
+			return i;
+		}
+	}
+
+	return RSPAMD_LOG_ID_LEN;
+}
+
 void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
 						 double ts,
 						 const char *module,
@@ -1235,9 +1247,7 @@ void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
 		m = modulebuf;
 
 		if (id != NULL) {
-			unsigned int slen = strlen(id);
-			slen = MIN(RSPAMD_LOG_ID_LEN, slen);
-			mr = rspamd_snprintf(m, mremain, "<%*.s>; ", slen,
+			mr = rspamd_snprintf(m, mremain, "<%*.s>; ", rspamd_log_id_strlen(id),
 								 id);
 			m += mr;
 			mremain -= mr;
@@ -1289,6 +1299,14 @@ void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
 		if (logger->log_level == G_LOG_LEVEL_DEBUG) {
 			iov_ctx->iov[niov].iov_base = (void *) timebuf;
 			iov_ctx->iov[niov++].iov_len = strlen(timebuf);
+			if (id != NULL) {
+				iov_ctx->iov[niov].iov_base = (void *) "; ";
+				iov_ctx->iov[niov++].iov_len = 2;
+				iov_ctx->iov[niov].iov_base = (void *) id;
+				iov_ctx->iov[niov++].iov_len = rspamd_log_id_strlen(id);
+				iov_ctx->iov[niov].iov_base = (void *) ";";
+				iov_ctx->iov[niov++].iov_len = 1;
+			}
 			iov_ctx->iov[niov].iov_base = (void *) " ";
 			iov_ctx->iov[niov++].iov_len = 1;
 		}
