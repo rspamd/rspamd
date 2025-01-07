@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -421,6 +421,8 @@ void luaopen_tensor(lua_State *L);
 
 void luaopen_parsers(lua_State *L);
 
+void luaopen_shingle(lua_State *L);
+
 void rspamd_lua_dostring(const char *line);
 
 double rspamd_lua_normalize(struct rspamd_config *cfg,
@@ -705,6 +707,8 @@ int rspamd_lua_geti(lua_State *L, int index, int i);
 #define RSPAMD_WWWDIR_INDEX "WWWDIR"
 #define RSPAMD_PREFIX_INDEX "PREFIX"
 #define RSPAMD_VERSION_INDEX "VERSION"
+
+#define RSPAMD_LUA_SHINGLE_CLASS "rspamd{shingle}"
 
 #ifdef WITH_LUA_TRACE
 extern ucl_object_t *lua_traces;
