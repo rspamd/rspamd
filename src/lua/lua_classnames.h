@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,9 +70,10 @@ extern const char *rspamd_url_classname;
 extern const char *rspamd_worker_classname;
 extern const char *rspamd_zstd_compress_classname;
 extern const char *rspamd_zstd_decompress_classname;
+extern const char *rspamd_shingle_classname;
 
 /* Keep it consistent when adding new classes */
-#define RSPAMD_MAX_LUA_CLASSES 48
+#define RSPAMD_MAX_LUA_CLASSES 49
 
 /*
  * Return a static class name for a given name (only for known classes) or NULL

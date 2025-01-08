@@ -15,6 +15,7 @@
  */
 
 #include "lua_common.h"
+#include "lua_classnames.h"
 #include "shingles.h"
 #include "fmt/format.h"
 
@@ -56,9 +57,21 @@ static const struct luaL_reg shinglelib_m[] = {
 static struct rspamd_shingle *
 lua_check_shingle(lua_State *L, int pos)
 {
-	void *ud = rspamd_lua_check_udata(L, pos, RSPAMD_LUA_SHINGLE_CLASS);
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_shingle_classname);
 	luaL_argcheck(L, ud != nullptr, pos, "'shingle' expected");
-	return *static_cast<struct rspamd_shingle **>(ud);
+	return static_cast<struct rspamd_shingle *>(ud);
+}
+
+void lua_newshingle(lua_State *L, const struct rspamd_shingle *sh)
+{
+	auto *nsh = static_cast<struct rspamd_shingle *>(
+		lua_newuserdata(L, sizeof(struct rspamd_shingle)));
+
+	if (sh != nullptr) {
+		memcpy(nsh, sh, sizeof(struct rspamd_shingle));
+	}
+
+	rspamd_lua_setclass(L, rspamd_shingle_classname, -1);
 }
 
 static int
@@ -115,6 +128,6 @@ lua_shingle_get_string(lua_State *L)
 
 void luaopen_shingle(lua_State *L)
 {
-	rspamd_lua_new_class(L, RSPAMD_LUA_SHINGLE_CLASS, shinglelib_m);
+	rspamd_lua_new_class(L, rspamd_shingle_classname, shinglelib_m);
 	lua_pop(L, 1);
 }

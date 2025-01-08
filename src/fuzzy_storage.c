@@ -1321,9 +1321,7 @@ rspamd_fuzzy_check_callback(struct rspamd_fuzzy_reply *result, void *ud)
 		rspamd_fuzzy_extensions_tolua(L, session);
 		/* We push shingles merely for commands that modify content to avoid extra work */
 		if (is_shingle && cmd->cmd != FUZZY_CHECK) {
-			struct rspamd_shingle **pshingle = lua_newuserdata(L, sizeof(*pshingle));
-			rspamd_lua_setclass(L, RSPAMD_LUA_SHINGLE_CLASS, -1);
-			*pshingle = &session->cmd.sgl;
+			lua_newshingle(L, &session->cmd.sgl);
 			nargs++;
 		}
 
@@ -1506,9 +1504,7 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 
 		/* We push shingles merely for commands that modify content to avoid extra work */
 		if (is_shingle && cmd->cmd != FUZZY_CHECK) {
-			struct rspamd_shingle **pshingle = lua_newuserdata(L, sizeof(*pshingle));
-			rspamd_lua_setclass(L, RSPAMD_LUA_SHINGLE_CLASS, -1);
-			*pshingle = &session->cmd.sgl;
+			lua_newshingle(L, &session->cmd.sgl);
 			nargs++;
 		}
 

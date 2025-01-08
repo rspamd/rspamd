@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,6 +67,7 @@ const char *rspamd_url_classname = "rspamd{url}";
 const char *rspamd_worker_classname = "rspamd{worker}";
 const char *rspamd_zstd_compress_classname = "rspamd{zstd_compress}";
 const char *rspamd_zstd_decompress_classname = "rspamd{zstd_decompress}";
+const char *rspamd_shingle_classname = "rspamd{shingle}";
 
 KHASH_INIT(rspamd_lua_static_classes, const char *, const char *, 1, rspamd_str_hash, rspamd_str_equal);
 
@@ -133,6 +134,7 @@ RSPAMD_CONSTRUCTOR(rspamd_lua_init_classnames)
 	CLASS_PUT_STR(worker);
 	CLASS_PUT_STR(zstd_compress);
 	CLASS_PUT_STR(zstd_decompress);
+	CLASS_PUT_STR(shingle);
 
 	/* Check consistency */
 	g_assert(kh_size(lua_static_classes) == RSPAMD_MAX_LUA_CLASSES);

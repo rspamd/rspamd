@@ -456,6 +456,12 @@ struct rspamd_dns_resolver *lua_check_dns_resolver(lua_State *L, int pos);
 
 struct rspamd_lua_url *lua_check_url(lua_State *L, int pos);
 
+/**
+ * Creates a new shingle object from the existing shingle
+ */
+struct rspamd_shingle;
+void lua_newshingle(lua_State *L, const struct rspamd_shingle *sh);
+
 enum rspamd_lua_parse_arguments_flags {
 	RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT = 0,
 	RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING,
@@ -707,8 +713,6 @@ int rspamd_lua_geti(lua_State *L, int index, int i);
 #define RSPAMD_WWWDIR_INDEX "WWWDIR"
 #define RSPAMD_PREFIX_INDEX "PREFIX"
 #define RSPAMD_VERSION_INDEX "VERSION"
-
-#define RSPAMD_LUA_SHINGLE_CLASS "rspamd{shingle}"
 
 #ifdef WITH_LUA_TRACE
 extern ucl_object_t *lua_traces;
