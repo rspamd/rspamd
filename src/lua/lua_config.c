@@ -73,7 +73,7 @@ LUA_FUNCTION_DEF(config, get_ucl);
 /***
  * @method rspamd_config:get_mempool()
  * Returns static configuration memory pool.
- * @return {mempool} [memory pool](mempool.md) object
+ * @return {mempool} [memory pool](rspamd_mempool.md) object
  */
 LUA_FUNCTION_DEF(config, get_mempool);
 /***

@@ -600,7 +600,7 @@ lua_http_push_headers(lua_State *L, struct rspamd_http_message *msg)
  * - `config`
  *
  * @param {string} url specifies URL for a request in the standard URI form (e.g. 'http://example.com/path')
- * @param {function} callback specifies callback function in format  `function (err_message, code, body, headers)` that is called on HTTP request completion. if this parameter is missing, the function performs "pseudo-synchronous" call (see [Synchronous and Asynchronous API overview](/doc/lua/sync_async.html#API-example-http-module)
+ * @param {function} callback specifies callback function in format  `function (err_message, code, body, headers)` that is called on HTTP request completion. if this parameter is missing, the function performs "pseudo-synchronous" call (see [Synchronous and Asynchronous API overview](/doc/developers/sync_async.html#API-example-http-module)
  * @param {task} task if called from symbol handler it is generally a good idea to use the common task objects: event base, DNS resolver and events session
  * @param {table} headers optional headers in form `[name='value', name='value']`
  * @param {string} mime_type MIME type of the HTTP content (for example, `text/html`)
