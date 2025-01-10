@@ -644,7 +644,7 @@ reconf['REPTO_QUOTE_YAHOO'] = {
 }
 
 reconf['FAKE_REPLY'] = {
-  re = [[Subject=/^(atb|aw|bls|odp|res?|rif|sv|ynt)[. ]*:/i{header} & !(header_exists(In-Reply-To) | header_exists(References))]],
+  re = [[Subject=/^(antw|atb|aw|bls|odp|res?|rif|sv|ynt)[. ]*:/i{header} & !(header_exists(In-Reply-To) | header_exists(References))]],
   description = 'Fake reply',
   score = 1.0,
   group = 'headers'
