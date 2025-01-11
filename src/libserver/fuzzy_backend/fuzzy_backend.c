@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,6 +18,7 @@
 #include "fuzzy_backend.h"
 #include "fuzzy_backend_sqlite.h"
 #include "fuzzy_backend_redis.h"
+#include "fuzzy_backend_noop.h"
 #include "cfg_file.h"
 #include "fuzzy_wire.h"
 
@@ -26,6 +27,7 @@
 enum rspamd_fuzzy_backend_type {
 	RSPAMD_FUZZY_BACKEND_SQLITE = 0,
 	RSPAMD_FUZZY_BACKEND_REDIS = 1,
+	RSPAMD_FUZZY_BACKEND_NOOP = 2,
 };
 
 static void *rspamd_fuzzy_backend_init_sqlite(struct rspamd_fuzzy_backend *bk,
@@ -96,6 +98,16 @@ static const struct rspamd_fuzzy_backend_subr fuzzy_subrs[] = {
 		.id = rspamd_fuzzy_backend_id_redis,
 		.periodic = rspamd_fuzzy_backend_expire_redis,
 		.close = rspamd_fuzzy_backend_close_redis,
+	},
+	[RSPAMD_FUZZY_BACKEND_NOOP] = {
+		.init = rspamd_fuzzy_backend_init_noop,
+		.check = rspamd_fuzzy_backend_check_noop,
+		.update = rspamd_fuzzy_backend_update_noop,
+		.count = rspamd_fuzzy_backend_count_noop,
+		.version = rspamd_fuzzy_backend_version_noop,
+		.id = rspamd_fuzzy_backend_id_noop,
+		.periodic = rspamd_fuzzy_backend_expire_noop,
+		.close = rspamd_fuzzy_backend_close_noop,
 	}};
 
 struct rspamd_fuzzy_backend {
@@ -287,6 +299,9 @@ rspamd_fuzzy_backend_create(struct ev_loop *ev_base,
 			}
 			else if (strcmp(ucl_object_tostring(elt), "redis") == 0) {
 				type = RSPAMD_FUZZY_BACKEND_REDIS;
+			}
+			else if (strcmp(ucl_object_tostring(elt), "noop") == 0) {
+				type = RSPAMD_FUZZY_BACKEND_NOOP;
 			}
 			else {
 				g_set_error(err, rspamd_fuzzy_backend_quark(),

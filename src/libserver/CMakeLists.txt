@@ -12,6 +12,7 @@ SET(LIBRSPAMDSERVERSRC
         ${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend/fuzzy_backend.c
         ${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend/fuzzy_backend_sqlite.c
         ${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend/fuzzy_backend_redis.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend/fuzzy_backend_noop.c
         ${CMAKE_CURRENT_SOURCE_DIR}/milter.c
         ${CMAKE_CURRENT_SOURCE_DIR}/monitored.c
         ${CMAKE_CURRENT_SOURCE_DIR}/protocol.c
