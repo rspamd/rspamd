@@ -153,6 +153,11 @@ KHASH_INIT(rspamd_fuzzy_keys_hash,
 		   const unsigned char *, struct fuzzy_key *, 1,
 		   fuzzy_kp_hash, fuzzy_kp_equal);
 
+struct rspamd_lua_fuzzy_script {
+	int cbref;
+	struct rspamd_lua_fuzzy_script *next;
+};
+
 struct rspamd_fuzzy_storage_ctx {
 	uint64_t magic;
 	/* Events base */
@@ -215,9 +220,9 @@ struct rspamd_fuzzy_storage_ctx {
 	struct rspamd_worker *worker;
 	const ucl_object_t *skip_map;
 	struct rspamd_hash_map_helper *skip_hashes;
-	int lua_pre_handler_cbref;
-	int lua_post_handler_cbref;
-	int lua_blacklist_cbref;
+	struct rspamd_lua_fuzzy_script *lua_pre_handlers;
+	struct rspamd_lua_fuzzy_script *lua_post_handlers;
+	struct rspamd_lua_fuzzy_script *lua_blacklist_handlers;
 	khash_t(fuzzy_key_ids_set) * default_forbidden_ids;
 	/* Ids that should not override other ids */
 	khash_t(fuzzy_key_ids_set) * weak_ids;
@@ -592,25 +597,29 @@ rspamd_fuzzy_maybe_call_blacklisted(struct rspamd_fuzzy_storage_ctx *ctx,
 									rspamd_inet_addr_t *addr,
 									const char *reason)
 {
-	if (ctx->lua_blacklist_cbref != -1) {
-		lua_State *L = ctx->cfg->lua_state;
-		int err_idx, ret;
+	if (ctx->lua_blacklist_handlers != NULL) {
+		struct rspamd_lua_fuzzy_script *cur;
+		LL_FOREACH(ctx->lua_blacklist_handlers, cur)
+		{
+			lua_State *L = ctx->cfg->lua_state;
+			int err_idx, ret;
 
-		lua_pushcfunction(L, &rspamd_lua_traceback);
-		err_idx = lua_gettop(L);
-		lua_rawgeti(L, LUA_REGISTRYINDEX, ctx->lua_blacklist_cbref);
-		/* client IP */
-		rspamd_lua_ip_push(L, addr);
-		/* block reason */
-		lua_pushstring(L, reason);
+			lua_pushcfunction(L, &rspamd_lua_traceback);
+			err_idx = lua_gettop(L);
+			lua_rawgeti(L, LUA_REGISTRYINDEX, cur->cbref);
+			/* client IP */
+			rspamd_lua_ip_push(L, addr);
+			/* block reason */
+			lua_pushstring(L, reason);
 
-		if ((ret = lua_pcall(L, 2, 0, err_idx)) != 0) {
-			msg_err("call to lua_blacklist_cbref "
-					"script failed (%d): %s",
-					ret, lua_tostring(L, -1));
+			if ((ret = lua_pcall(L, 2, 0, err_idx)) != 0) {
+				msg_err("call to lua_blacklist_cbref "
+						"script failed (%d): %s",
+						ret, lua_tostring(L, -1));
+			}
+
+			lua_settop(L, 0);
 		}
-
-		lua_settop(L, 0);
 	}
 }
 
@@ -1285,85 +1294,89 @@ rspamd_fuzzy_check_callback(struct rspamd_fuzzy_reply *result, void *ud)
 		break;
 	}
 
-	if (session->ctx->lua_post_handler_cbref != -1) {
-		/* Start lua post handler */
-		lua_State *L = session->ctx->cfg->lua_state;
-		int err_idx, ret, nargs = 9;
+	if (session->ctx->lua_post_handlers != NULL) {
+		struct rspamd_lua_fuzzy_script *cur;
+		LL_FOREACH(session->ctx->lua_post_handlers, cur)
+		{
+			/* Start lua post handler */
+			lua_State *L = session->ctx->cfg->lua_state;
+			int err_idx, ret, nargs = 9;
 
-		lua_pushcfunction(L, &rspamd_lua_traceback);
-		err_idx = lua_gettop(L);
-		/* Preallocate stack (small opt) */
-		lua_checkstack(L, err_idx + 9);
-		/* function */
-		lua_rawgeti(L, LUA_REGISTRYINDEX, session->ctx->lua_post_handler_cbref);
-		/* client IP */
-		if (session->addr) {
-			rspamd_lua_ip_push(L, session->addr);
-		}
-		else {
-			lua_pushnil(L);
-		}
-		/* client command */
-		lua_pushinteger(L, cmd->cmd);
-		/* command value (push as rspamd_text) */
-		(void) lua_new_text(L, result->digest, sizeof(result->digest), FALSE);
-		/* is shingle */
-		lua_pushboolean(L, is_shingle);
-		/* result value */
-		lua_pushinteger(L, result->v1.value);
-		/* result probability */
-		lua_pushnumber(L, result->v1.prob);
-		/* result flag */
-		lua_pushinteger(L, result->v1.flag);
-		/* result timestamp */
-		lua_pushinteger(L, result->ts);
-		/* TODO: add additional data maybe (encryption, pubkey, etc) */
-		rspamd_fuzzy_extensions_tolua(L, session);
-		/* We push shingles merely for commands that modify content to avoid extra work */
-		if (is_shingle && cmd->cmd != FUZZY_CHECK) {
-			lua_newshingle(L, &session->cmd.sgl);
-			nargs++;
-		}
-
-		if ((ret = lua_pcall(L, nargs, LUA_MULTRET, err_idx)) != 0) {
-			msg_err("call to lua_post_handler lua "
-					"script failed (%d): %s",
-					ret, lua_tostring(L, -1));
-		}
-		else {
-			/* Return values order:
-			 * the first reply will be on err_idx + 1
-			 * if it is true, then we need to read the former ones:
-			 * 2-nd will be reply code
-			 * 3-rd will be probability (or 0.0 if missing)
-			 * 4-th value is flag (or default flag if missing)
-			 */
-			ret = lua_toboolean(L, err_idx + 1);
-
-			if (ret) {
-				/* Artificial reply */
-				result->v1.value = lua_tointeger(L, err_idx + 2);
-
-				if (lua_isnumber(L, err_idx + 3)) {
-					result->v1.prob = lua_tonumber(L, err_idx + 3);
-				}
-				else {
-					result->v1.prob = 0.0f;
-				}
-
-				if (lua_isnumber(L, err_idx + 4)) {
-					result->v1.flag = lua_tointeger(L, err_idx + 4);
-				}
-
-				lua_settop(L, 0);
-				rspamd_fuzzy_make_reply(cmd, result, session, send_flags);
-				REF_RELEASE(session);
-
-				return;
+			lua_pushcfunction(L, &rspamd_lua_traceback);
+			err_idx = lua_gettop(L);
+			/* Preallocate stack (small opt) */
+			lua_checkstack(L, err_idx + 9);
+			/* function */
+			lua_rawgeti(L, LUA_REGISTRYINDEX, cur->cbref);
+			/* client IP */
+			if (session->addr) {
+				rspamd_lua_ip_push(L, session->addr);
 			}
-		}
+			else {
+				lua_pushnil(L);
+			}
+			/* client command */
+			lua_pushinteger(L, cmd->cmd);
+			/* command value (push as rspamd_text) */
+			(void) lua_new_text(L, result->digest, sizeof(result->digest), FALSE);
+			/* is shingle */
+			lua_pushboolean(L, is_shingle);
+			/* result value */
+			lua_pushinteger(L, result->v1.value);
+			/* result probability */
+			lua_pushnumber(L, result->v1.prob);
+			/* result flag */
+			lua_pushinteger(L, result->v1.flag);
+			/* result timestamp */
+			lua_pushinteger(L, result->ts);
+			/* TODO: add additional data maybe (encryption, pubkey, etc) */
+			rspamd_fuzzy_extensions_tolua(L, session);
+			/* We push shingles merely for commands that modify content to avoid extra work */
+			if (is_shingle && cmd->cmd != FUZZY_CHECK) {
+				lua_newshingle(L, &session->cmd.sgl);
+				nargs++;
+			}
 
-		lua_settop(L, 0);
+			if ((ret = lua_pcall(L, nargs, LUA_MULTRET, err_idx)) != 0) {
+				msg_err("call to lua_post_handler lua "
+						"script failed (%d): %s",
+						ret, lua_tostring(L, -1));
+			}
+			else {
+				/* Return values order:
+				 * the first reply will be on err_idx + 1
+				 * if it is true, then we need to read the former ones:
+				 * 2-nd will be reply code
+				 * 3-rd will be probability (or 0.0 if missing)
+				 * 4-th value is flag (or default flag if missing)
+				 */
+				ret = lua_toboolean(L, err_idx + 1);
+
+				if (ret) {
+					/* Artificial reply */
+					result->v1.value = lua_tointeger(L, err_idx + 2);
+
+					if (lua_isnumber(L, err_idx + 3)) {
+						result->v1.prob = lua_tonumber(L, err_idx + 3);
+					}
+					else {
+						result->v1.prob = 0.0f;
+					}
+
+					if (lua_isnumber(L, err_idx + 4)) {
+						result->v1.flag = lua_tointeger(L, err_idx + 4);
+					}
+
+					lua_settop(L, 0);
+					rspamd_fuzzy_make_reply(cmd, result, session, send_flags);
+					REF_RELEASE(session);
+
+					return;
+				}
+			}
+
+			lua_settop(L, 0);
+		}
 	}
 
 	if (!isnan(session->ctx->delay) &&
@@ -1480,67 +1493,72 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 	result.v1.flag = cmd->flag;
 	result.v1.tag = cmd->tag;
 
-	if (session->ctx->lua_pre_handler_cbref != -1) {
-		/* Start lua pre handler */
-		lua_State *L = session->ctx->cfg->lua_state;
-		int err_idx, ret, nargs = 5;
+	if (session->ctx->lua_pre_handlers != NULL) {
+		struct rspamd_lua_fuzzy_script *cur;
 
-		lua_pushcfunction(L, &rspamd_lua_traceback);
-		err_idx = lua_gettop(L);
-		/* Preallocate stack (small opt) */
-		lua_checkstack(L, err_idx + 5);
-		/* function */
-		lua_rawgeti(L, LUA_REGISTRYINDEX, session->ctx->lua_pre_handler_cbref);
-		/* client IP */
-		rspamd_lua_ip_push(L, session->addr);
-		/* client command */
-		lua_pushinteger(L, cmd->cmd);
-		/* command value (push as rspamd_text) */
-		(void) lua_new_text(L, cmd->digest, sizeof(cmd->digest), FALSE);
-		/* is shingle */
-		lua_pushboolean(L, is_shingle);
-		/* TODO: add additional data maybe (encryption, pubkey, etc) */
-		rspamd_fuzzy_extensions_tolua(L, session);
+		LL_FOREACH(session->ctx->lua_pre_handlers, cur)
+		{
+			/* Start lua pre handler */
+			lua_State *L = session->ctx->cfg->lua_state;
+			int err_idx, ret, nargs = 5;
 
-		/* We push shingles merely for commands that modify content to avoid extra work */
-		if (is_shingle && cmd->cmd != FUZZY_CHECK) {
-			lua_newshingle(L, &session->cmd.sgl);
-			nargs++;
-		}
+			lua_pushcfunction(L, &rspamd_lua_traceback);
+			err_idx = lua_gettop(L);
+			/* Preallocate stack (small opt) */
+			lua_checkstack(L, err_idx + 5);
+			/* function */
+			lua_rawgeti(L, LUA_REGISTRYINDEX, cur->cbref);
+			/* client IP */
+			rspamd_lua_ip_push(L, session->addr);
+			/* client command */
+			lua_pushinteger(L, cmd->cmd);
+			/* command value (push as rspamd_text) */
+			(void) lua_new_text(L, cmd->digest, sizeof(cmd->digest), FALSE);
+			/* is shingle */
+			lua_pushboolean(L, is_shingle);
+			/* TODO: add additional data maybe (encryption, pubkey, etc) */
+			rspamd_fuzzy_extensions_tolua(L, session);
 
-		if ((ret = lua_pcall(L, nargs, LUA_MULTRET, err_idx)) != 0) {
-			msg_err("call to lua_pre_handler lua "
-					"script failed (%d): %s",
-					ret, lua_tostring(L, -1));
-		}
-		else {
-			/* Return values order:
-			 * the first reply will be on err_idx + 1
-			 * if it is true, then we need to read the former ones:
-			 * 2-nd will be reply code
-			 * 3-rd will be probability (or 0.0 if missing)
-			 */
-			ret = lua_toboolean(L, err_idx + 1);
-
-			if (ret) {
-				/* Artificial reply */
-				result.v1.value = lua_tointeger(L, err_idx + 2);
-
-				if (lua_isnumber(L, err_idx + 3)) {
-					result.v1.prob = lua_tonumber(L, err_idx + 3);
-				}
-				else {
-					result.v1.prob = 0.0f;
-				}
-
-				lua_settop(L, 0);
-				rspamd_fuzzy_make_reply(cmd, &result, session, send_flags);
-
-				return;
+			/* We push shingles merely for commands that modify content to avoid extra work */
+			if (is_shingle && cmd->cmd != FUZZY_CHECK) {
+				lua_newshingle(L, &session->cmd.sgl);
+				nargs++;
 			}
-		}
 
-		lua_settop(L, 0);
+			if ((ret = lua_pcall(L, nargs, LUA_MULTRET, err_idx)) != 0) {
+				msg_err("call to lua_pre_handler lua "
+						"script failed (%d): %s",
+						ret, lua_tostring(L, -1));
+			}
+			else {
+				/* Return values order:
+				 * the first reply will be on err_idx + 1
+				 * if it is true, then we need to read the former ones:
+				 * 2-nd will be reply code
+				 * 3-rd will be probability (or 0.0 if missing)
+				 */
+				ret = lua_toboolean(L, err_idx + 1);
+
+				if (ret) {
+					/* Artificial reply */
+					result.v1.value = lua_tointeger(L, err_idx + 2);
+
+					if (lua_isnumber(L, err_idx + 3)) {
+						result.v1.prob = lua_tonumber(L, err_idx + 3);
+					}
+					else {
+						result.v1.prob = 0.0f;
+					}
+
+					lua_settop(L, 0);
+					rspamd_fuzzy_make_reply(cmd, &result, session, send_flags);
+
+					return;
+				}
+			}
+
+			lua_settop(L, 0);
+		}
 	}
 
 
@@ -2757,14 +2775,12 @@ lua_fuzzy_add_pre_handler(lua_State *L)
 
 	if (wrk && lua_isfunction(L, 2)) {
 		ctx = (struct rspamd_fuzzy_storage_ctx *) wrk->ctx;
+		struct rspamd_lua_fuzzy_script *script;
 
-		if (ctx->lua_pre_handler_cbref != -1) {
-			/* Should not happen */
-			luaL_unref(L, LUA_REGISTRYINDEX, ctx->lua_pre_handler_cbref);
-		}
-
+		script = g_malloc0(sizeof(*script));
 		lua_pushvalue(L, 2);
-		ctx->lua_pre_handler_cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+		script->cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+		LL_APPEND(ctx->lua_pre_handlers, script);
 	}
 	else {
 		return luaL_error(L, "invalid arguments, worker + function are expected");
@@ -2788,14 +2804,12 @@ lua_fuzzy_add_post_handler(lua_State *L)
 
 	if (wrk && lua_isfunction(L, 2)) {
 		ctx = (struct rspamd_fuzzy_storage_ctx *) wrk->ctx;
+		struct rspamd_lua_fuzzy_script *script;
 
-		if (ctx->lua_post_handler_cbref != -1) {
-			/* Should not happen */
-			luaL_unref(L, LUA_REGISTRYINDEX, ctx->lua_post_handler_cbref);
-		}
-
+		script = g_malloc0(sizeof(*script));
 		lua_pushvalue(L, 2);
-		ctx->lua_post_handler_cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+		script->cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+		LL_APPEND(ctx->lua_post_handlers, script);
 	}
 	else {
 		return luaL_error(L, "invalid arguments, worker + function are expected");
@@ -2818,15 +2832,12 @@ lua_fuzzy_add_blacklist_handler(lua_State *L)
 	wrk = *pwrk;
 
 	if (wrk && lua_isfunction(L, 2)) {
-		ctx = (struct rspamd_fuzzy_storage_ctx *) wrk->ctx;
+		struct rspamd_lua_fuzzy_script *script;
 
-		if (ctx->lua_blacklist_cbref != -1) {
-			/* Should not happen */
-			luaL_unref(L, LUA_REGISTRYINDEX, ctx->lua_blacklist_cbref);
-		}
-
+		script = g_malloc0(sizeof(*script));
 		lua_pushvalue(L, 2);
-		ctx->lua_blacklist_cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+		script->cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+		LL_APPEND(ctx->lua_blacklist_handlers, script);
 	}
 	else {
 		return luaL_error(L, "invalid arguments, worker + function are expected");
@@ -3209,9 +3220,6 @@ init_fuzzy(struct rspamd_config *cfg)
 	ctx->magic = rspamd_fuzzy_storage_magic;
 	ctx->sync_timeout = DEFAULT_SYNC_TIMEOUT;
 	ctx->keypair_cache_size = DEFAULT_KEYPAIR_CACHE_SIZE;
-	ctx->lua_pre_handler_cbref = -1;
-	ctx->lua_post_handler_cbref = -1;
-	ctx->lua_blacklist_cbref = -1;
 	ctx->keys = kh_init(rspamd_fuzzy_keys_hash);
 	rspamd_mempool_add_destructor(cfg->cfg_pool,
 								  (rspamd_mempool_destruct_t) fuzzy_hash_table_dtor, ctx->keys);
@@ -3822,16 +3830,22 @@ start_fuzzy(struct rspamd_worker *worker)
 		rspamd_lru_hash_destroy(ctx->ratelimit_buckets);
 	}
 
-	if (ctx->lua_pre_handler_cbref != -1) {
-		luaL_unref(ctx->cfg->lua_state, LUA_REGISTRYINDEX, ctx->lua_pre_handler_cbref);
-	}
+	struct rspamd_lua_fuzzy_script *cur, *tmp;
 
-	if (ctx->lua_post_handler_cbref != -1) {
-		luaL_unref(ctx->cfg->lua_state, LUA_REGISTRYINDEX, ctx->lua_post_handler_cbref);
+	LL_FOREACH_SAFE(ctx->lua_pre_handlers, cur, tmp)
+	{
+		luaL_unref(ctx->cfg->lua_state, LUA_REGISTRYINDEX, cur->cbref);
+		g_free(cur);
 	}
-
-	if (ctx->lua_blacklist_cbref != -1) {
-		luaL_unref(ctx->cfg->lua_state, LUA_REGISTRYINDEX, ctx->lua_blacklist_cbref);
+	LL_FOREACH_SAFE(ctx->lua_post_handlers, cur, tmp)
+	{
+		luaL_unref(ctx->cfg->lua_state, LUA_REGISTRYINDEX, cur->cbref);
+		g_free(cur);
+	}
+	LL_FOREACH_SAFE(ctx->lua_blacklist_handlers, cur, tmp)
+	{
+		luaL_unref(ctx->cfg->lua_state, LUA_REGISTRYINDEX, cur->cbref);
+		g_free(cur);
 	}
 
 	if (ctx->default_forbidden_ids) {
