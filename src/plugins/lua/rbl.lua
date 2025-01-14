@@ -983,7 +983,7 @@ local function gen_rbl_callback(rule)
         if req.resolve_ip then
           -- Deal with both ipv4 and ipv6
           -- Resolve names first
-          if rule.ipv4 and r:resolve_a({
+          if (rule.ipv4 == nil or rule.ipv4) and r:resolve_a({
             task = task,
             name = req.n,
             callback = gen_rbl_ip_dns_callback(req),
@@ -991,7 +991,7 @@ local function gen_rbl_callback(rule)
           }) then
             nresolved = nresolved + 1
           end
-          if rule.ipv6 and r:resolve('aaaa', {
+          if (rule.ipv6 == nil or rule.ipv6) and r:resolve('aaaa', {
             task = task,
             name = req.n,
             callback = gen_rbl_ip_dns_callback(req),
