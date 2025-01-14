@@ -214,7 +214,7 @@ exports.full_extensions_map = {
   { "hxw", "application/octet-stream" },
   { "hxx", "text/plain" },
   { "i", "text/plain" },
-  { "ico", "image/x-icon" },
+  { "ico", {"image/x-icon", "image/vnd.microsoft.icon"} },
   { "ics", { "text/calendar", "application/ics", "application/octet-stream" } },
   { "idl", "text/plain" },
   { "ief", "image/ief" },
