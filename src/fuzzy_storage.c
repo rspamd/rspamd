@@ -1305,7 +1305,7 @@ rspamd_fuzzy_check_callback(struct rspamd_fuzzy_reply *result, void *ud)
 			lua_pushcfunction(L, &rspamd_lua_traceback);
 			err_idx = lua_gettop(L);
 			/* Preallocate stack (small opt) */
-			lua_checkstack(L, err_idx + 9);
+			lua_checkstack(L, err_idx + nargs + 9);
 			/* function */
 			lua_rawgeti(L, LUA_REGISTRYINDEX, cur->cbref);
 			/* client IP */
@@ -1500,12 +1500,12 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 		{
 			/* Start lua pre handler */
 			lua_State *L = session->ctx->cfg->lua_state;
-			int err_idx, ret, nargs = 5;
+			int err_idx, ret, nargs = 7;
 
 			lua_pushcfunction(L, &rspamd_lua_traceback);
 			err_idx = lua_gettop(L);
 			/* Preallocate stack (small opt) */
-			lua_checkstack(L, err_idx + 5);
+			lua_checkstack(L, err_idx + nargs + 1);
 			/* function */
 			lua_rawgeti(L, LUA_REGISTRYINDEX, cur->cbref);
 			/* client IP */
@@ -1524,6 +1524,10 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 				lua_newshingle(L, &session->cmd.sgl);
 				nargs++;
 			}
+
+			/* Flag and value */
+			lua_pushinteger(L, cmd->flag);
+			lua_pushinteger(L, cmd->value);
 
 			if ((ret = lua_pcall(L, nargs, LUA_MULTRET, err_idx)) != 0) {
 				msg_err("call to lua_pre_handler lua "
