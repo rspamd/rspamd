@@ -32,6 +32,7 @@ local check_types = {
   content_urls = {},
   numeric_urls = {},
   emails = {},
+  images = {},
   replyto = {},
   dkim = {},
   rdns = {
