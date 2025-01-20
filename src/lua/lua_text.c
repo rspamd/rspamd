@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,6 +73,12 @@ LUA_FUNCTION_DEF(text, byte);
  */
 LUA_FUNCTION_DEF(text, len);
 /***
+ * @method rspamd_text:len_utf8()
+ * Returns length of a string
+ * @return {number} length of string in **bytes**
+ */
+LUA_FUNCTION_DEF(text, len_utf8);
+/***
  * @method rspamd_text:str()
  * Converts text to string by copying its content
  * @return {string} copy of text as Lua string
@@ -105,6 +111,12 @@ LUA_FUNCTION_DEF(text, span);
  * @return {rspamd_text} new rspamd_text with span (must be careful when using with owned texts...)
  */
 LUA_FUNCTION_DEF(text, sub);
+/***
+ * @method rspamd_text:sub_utf8(start[, len])
+ * Returns a substring for lua_text similar to string.sub from Lua using UTF8 points
+ * @return {rspamd_text} new rspamd_text with span (must be careful when using with owned texts...)
+ */
+LUA_FUNCTION_DEF(text, sub_utf8);
 /***
  * @method rspamd_text:lines([stringify])
  * Returns an iter over all lines as rspamd_text objects or as strings if `stringify` is true
@@ -238,12 +250,14 @@ static const struct luaL_reg textlib_f[] = {
 
 static const struct luaL_reg textlib_m[] = {
 	LUA_INTERFACE_DEF(text, len),
+	LUA_INTERFACE_DEF(text, len_utf8),
 	LUA_INTERFACE_DEF(text, str),
 	LUA_INTERFACE_DEF(text, ptr),
 	LUA_INTERFACE_DEF(text, take_ownership),
 	LUA_INTERFACE_DEF(text, save_in_file),
 	LUA_INTERFACE_DEF(text, span),
 	LUA_INTERFACE_DEF(text, sub),
+	LUA_INTERFACE_DEF(text, sub_utf8),
 	LUA_INTERFACE_DEF(text, lines),
 	LUA_INTERFACE_DEF(text, split),
 	LUA_INTERFACE_DEF(text, at),
@@ -1538,8 +1552,7 @@ lua_text_exclude_chars(lua_State *L)
 			pat++;
 			patlen--;
 		}
-		for (; patlen > 0 && BITOP(byteset, *(unsigned char *) pat, |=); pat++, patlen--)
-			;
+		for (; patlen > 0 && BITOP(byteset, *(unsigned char *) pat, |=); pat++, patlen--);
 
 		p = t->start;
 		end = t->start + t->len;
@@ -1758,6 +1771,91 @@ lua_text_strtoul(lua_State *L)
 	else {
 		return luaL_error(L, "invalid arguments");
 	}
+
+	return 1;
+}
+
+static int
+lua_text_len_utf8(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text(L, 1);
+	if (t != NULL) {
+		const char *s = t->start;
+		int32_t count = 0, i = 0;
+		UChar32 c;
+		while (i < t->len) {
+			U8_NEXT(s, i, t->len, c);
+			if (c < 0) {
+				lua_pushnil(L);
+				return 1;
+			}
+			count++;
+		}
+
+		lua_pushinteger(L, count);
+		return 1;
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+}
+
+static int
+lua_text_sub_utf8(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text(L, 1);
+	if (t == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	UChar32 c;
+
+	int32_t start = luaL_checkinteger(L, 2);
+	int32_t finish = luaL_optinteger(L, 3, -1);
+
+	int32_t len_utf8 = 0;
+	int32_t i = 0;
+	while (i < t->len) {
+		U8_NEXT(t->start, i, t->len, c);
+		if (c < 0) {
+			lua_pushnil(L);
+			return 1;
+		}
+
+		len_utf8++;
+	}
+
+	start = relative_pos_start(start, len_utf8);
+	finish = relative_pos_end(finish, len_utf8);
+
+	if (start > finish) {
+		lua_new_text(L, "", 0, TRUE);
+		return 1;
+	}
+
+	const char *sub_start = t->start;
+	const char *sub_end = t->start;
+	int32_t char_pos = 0, remain, utf8_idx = 0;
+
+	while (char_pos < t->len && utf8_idx < start - 1) {
+		U8_NEXT(t->start, char_pos, t->len, c);
+		sub_start = &t->start[char_pos];
+		utf8_idx++;
+	}
+
+	remain = (t->start + t->len) - sub_start;
+	char_pos = 0;
+
+	while (char_pos < remain && utf8_idx < finish) {
+		U8_NEXT(sub_start, char_pos, remain, c);
+		sub_end = &sub_start[char_pos];
+		utf8_idx++;
+	}
+
+	/* Copy as we have no other options to make it safe */
+	lua_new_text(L, sub_start, sub_end - sub_start, TRUE);
 
 	return 1;
 }
