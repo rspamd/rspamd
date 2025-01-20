@@ -96,3 +96,29 @@ NUMERIC URLS WITH EVERYTHING
   ...  IP=127.0.0.1
   ...  Settings={symbols_enabled = [URIBL_NUMERIC_EVERYTHING]}
   Expect Symbol With Exact Options  URIBL_NUMERIC_EVERYTHING  12.11.10.9:url  4.3.2.1:url  8.7.6.5:url
+
+NONNUMERIC URLS VANILLA
+  Scan File  ${RSPAMD_TESTDIR}/messages/numeric_urls.eml
+  ...  Settings={symbols_enabled = [URIBL_NONNUMERIC_VANILLA]}
+  # Content
+  Do Not Expect Symbol With Option  URIBL_NONNUMERIC_VANILLA  example.com:url
+  # Image
+  Do Not Expect Symbol With Option  URIBL_NONNUMERIC_VANILLA  judo.za.org:url
+  # URL
+  Expect Symbol With Option  URIBL_NONNUMERIC_VANILLA  example.org:url
+  # Numeric
+  Do Not Expect Symbol With Option  URIBL_NONNUMERIC_VANILLA  4.3.2.1:url
+  Do Not Expect Symbol With Option  URIBL_NONNUMERIC_VANILLA  1.2.3.4:url
+
+NONNUMERIC URLS WITH EVERYTHING
+  Scan File  ${RSPAMD_TESTDIR}/messages/numeric_urls.eml
+  ...  Settings={symbols_enabled = [URIBL_NONNUMERIC_EVERYTHING]}
+  # Content
+  Expect Symbol With Option  URIBL_NONNUMERIC_EVERYTHING  example.com:url
+  # Image
+  Expect Symbol With Option  URIBL_NONNUMERIC_EVERYTHING  judo.za.org:url
+  # URL
+  Expect Symbol With Option  URIBL_NONNUMERIC_EVERYTHING  example.org:url
+  # Numeric
+  Do Not Expect Symbol With Option  URIBL_NONNUMERIC_EVERYTHING  4.3.2.1:url
+  Do Not Expect Symbol With Option  URIBL_NONNUMERIC_EVERYTHING  1.2.3.4:url
