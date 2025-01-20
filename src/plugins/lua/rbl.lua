@@ -594,9 +594,9 @@ local function gen_rbl_callback(rule)
       limit = rule.requests_limit,
       ignore_redirected = true,
       ignore_ip = rule.no_ip,
-      need_images = rule.images,
+      need_images = rule.images and true or false,
       need_emails = false,
-      need_content = rule.content_urls or false,
+      need_content = rule.content_urls and true or false,
       esld_limit = esld_lim,
       no_cache = true,
     }
