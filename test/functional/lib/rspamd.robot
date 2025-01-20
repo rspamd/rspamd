@@ -87,6 +87,15 @@ Do Not Expect Symbol
   Dictionary Should Not Contain Key  ${SCAN_RESULT}[symbols]  ${symbol}
   ...  msg=Symbol ${symbol} was not expected to be found in result
 
+Do Not Expect Symbol With Option
+  [Arguments]  ${symbol}  ${option}
+  IF  '${symbol}' not in ${SCAN_RESULT}[symbols]
+    RETURN
+  END
+  ${have_options} =  Convert To List  ${SCAN_RESULT}[symbols][${symbol}][options]
+  Should Not Contain  ${have_options}  ${option}
+  ...  msg="Options for symbol ${symbol} ${SCAN_RESULT}[symbols][${symbol}][options] doesn't contain ${option}"
+
 Do Not Expect Symbols
   [Arguments]  @{symbols}
   FOR  ${symbol}  IN  @{symbols}
