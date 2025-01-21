@@ -449,6 +449,7 @@ local function get_general_metadata(task)
   local empty = settings['index_template']['empty_value']
   local user = task:get_user()
   r.rspamd_server = rspamd_hostname or empty
+  r.digest = task:get_digest() or empty
 
   r.action = task:get_metric_action() or empty
   r.score = task:get_metric_score()[1] or 0
@@ -1278,6 +1279,7 @@ local function configure_index_template(cfg, ev_base)
             type = 'object',
             properties = {
               rspamd_server = t_keyword,
+              digest = t_keyword,
               action = t_keyword,
               score = t_double,
               symbols = symbols_obj,
