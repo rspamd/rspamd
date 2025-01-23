@@ -2,7 +2,7 @@
 local reconf = config['regexp']
 
 reconf['HAS_GUC_PROXY_URI'] = {
-  re = '/\\.googleusercontent\\.com\\/proxy/{url}i',
+  re = '/[\\.\\/]googleusercontent\\.com\\/proxy/{url}i',
   description = 'Has googleusercontent.com proxy URL',
   score = 1.0,
   group = 'url'
@@ -16,7 +16,7 @@ reconf['HAS_GOOGLE_REDIR'] = {
 }
 
 reconf['HAS_GOOGLE_FIREBASE_URL'] = {
-  re = '/\\.firebasestorage\\.googleapis\\.com\\//{url}i',
+  re = '/[\\.\\/]firebasestorage\\.googleapis\\.com\\//{url}i',
   description = 'Contains firebasestorage.googleapis.com URL',
   score = 2.0,
   group = 'url'
