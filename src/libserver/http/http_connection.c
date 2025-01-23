@@ -1972,7 +1972,7 @@ int rspamd_http_message_write_header(const char *mime_type, gboolean encrypted,
 				len = bodylen;
 			}
 
-			if ((msg->method != HTTP_GET) && (msg->method != HTTP_HEAD)) {
+			if (msg->method != HTTP_HEAD) {
 				rspamd_printf_fstring(buf,
 					"Content-Length: %z\r\n",
 					len);
