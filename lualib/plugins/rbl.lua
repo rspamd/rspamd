@@ -166,8 +166,6 @@ local function convert_checks(rule, name)
           end
         end
 
-        rule[check] = check_type
-
         if not check_type.connfilter then
           all_connfilter = false
         end
@@ -177,6 +175,8 @@ local function convert_checks(rule, name)
               name, check)
           return nil
         end
+
+        rule[check] = true
       else
         rspamd_logger.infox(rspamd_config, 'disable check %s in %s: excluded explicitly',
             check, name)
