@@ -167,7 +167,7 @@ static void
 rspamd_worker_terminate_handlers(struct rspamd_worker *w)
 {
 	if (w->nconns == 0 &&
-		(!(w->flags & RSPAMD_WORKER_SCANNER) || w->srv->cfg->on_term_scripts == NULL)) {
+		(!(w->flags & (RSPAMD_WORKER_SCANNER | RSPAMD_WORKER_FUZZY)) || w->srv->cfg->on_term_scripts == NULL)) {
 		/*
 		 * We are here either:
 		 * - No active connections are represented
@@ -190,7 +190,7 @@ rspamd_worker_terminate_handlers(struct rspamd_worker *w)
 			if (w->state != rspamd_worker_wait_final_scripts) {
 				w->state = rspamd_worker_wait_final_scripts;
 
-				if ((w->flags & (RSPAMD_WORKER_SCANNER|RSPAMD_WORKER_FUZZY)) &&
+				if ((w->flags & (RSPAMD_WORKER_SCANNER | RSPAMD_WORKER_FUZZY)) &&
 					rspamd_worker_call_finish_handlers(w)) {
 					msg_info("performing async finishing actions");
 					w->state = rspamd_worker_wait_final_scripts;
