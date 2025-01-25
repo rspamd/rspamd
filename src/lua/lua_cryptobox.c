@@ -1412,12 +1412,19 @@ lua_cryptobox_hash_copy(const struct rspamd_lua_cryptobox_hash *orig)
 	return nhash;
 }
 
+#define MAX_HASH_UPDATE_REC 16
+
 static void
-lua_cryptobox_update_pos(lua_State *L, struct rspamd_lua_cryptobox_hash *h, int pos)
+lua_cryptobox_update_pos(lua_State *L, struct rspamd_lua_cryptobox_hash *h, int pos, int rec)
 {
 	const char *data;
 	struct rspamd_lua_text *t;
 	gsize len;
+
+	if (rec > MAX_HASH_UPDATE_REC) {
+		/* Max recursion is reached, do nothing */
+		return;
+	}
 
 	/* Inverse pos if it is relative to the top of the stack */
 	if (pos < 0) {
@@ -1462,7 +1469,7 @@ lua_cryptobox_update_pos(lua_State *L, struct rspamd_lua_cryptobox_hash *h, int 
 
 		for (gsize i = 1; i <= alen; i++) {
 			lua_rawgeti(L, pos, i);
-			lua_cryptobox_update_pos(L, h, -1); /* Recurse */
+			lua_cryptobox_update_pos(L, h, -1, rec + 1); /* Recurse */
 			lua_pop(L, 1);
 		}
 
@@ -1475,14 +1482,14 @@ lua_cryptobox_update_pos(lua_State *L, struct rspamd_lua_cryptobox_hash *h, int 
 			struct lua_hash_elt he;
 			/* Hash key */
 			lua_pushvalue(L, -2);
-			lua_cryptobox_update_pos(L, key_h, -1);
+			lua_cryptobox_update_pos(L, key_h, -1, rec + 1);
 			lua_pop(L, 1);
 			lua_cryptobox_hash_finish(key_h);
 			memcpy(he.key_hash, key_h->out, sizeof(he.key_hash));
 			REF_RELEASE(key_h);
 
 			/* Hash value */
-			lua_cryptobox_update_pos(L, value_h, -1);
+			lua_cryptobox_update_pos(L, value_h, -1, rec + 1);
 			lua_pop(L, 1);
 			lua_cryptobox_hash_finish(value_h);
 			memcpy(he.value_hash, value_h->out, sizeof(he.value_hash));
@@ -1536,7 +1543,7 @@ lua_cryptobox_hash_update(lua_State *L)
 		return luaL_error(L, "invalid arguments or hash is already finalized");
 	}
 
-	lua_cryptobox_update_pos(L, h, 2);
+	lua_cryptobox_update_pos(L, h, 2, 0);
 
 	ph = lua_newuserdata(L, sizeof(void *));
 	*ph = h;
