@@ -26,7 +26,8 @@ void *rspamd_fuzzy_backend_init_noop(struct rspamd_fuzzy_backend *bk,
 									 struct rspamd_config *cfg,
 									 GError **err)
 {
-	return NULL;
+	/* Return non-NULL to distinguish from error */
+	return (void *) (uintptr_t) (-1);
 }
 
 void rspamd_fuzzy_backend_check_noop(struct rspamd_fuzzy_backend *bk,
@@ -50,7 +51,7 @@ void rspamd_fuzzy_backend_update_noop(struct rspamd_fuzzy_backend *bk,
 									  void *subr_ud)
 {
 	if (cb) {
-		cb(FALSE, 0, 0, 0, 0, ud);
+		cb(TRUE, 0, 0, 0, 0, ud);
 	}
 
 	return;
