@@ -318,6 +318,13 @@ define(["jquery", "app/common", "footable"],
                         self.removeFilter("action");
                     }
                     self.filter();
+                },
+                draw: function () {
+                    // Ensure the dropdown reflects the default value when filters are cleared.
+                    this._super();
+                    const actionFilter = this.find("action");
+                    const isActionFilterApplied = actionFilter instanceof FooTable.Filter;
+                    if (this.$action && !isActionFilterApplied) this.$action.val(this.def);
                 }
             });
             /* eslint-enable consistent-this, no-underscore-dangle */
