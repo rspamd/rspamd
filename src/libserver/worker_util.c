@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -190,7 +190,7 @@ rspamd_worker_terminate_handlers(struct rspamd_worker *w)
 			if (w->state != rspamd_worker_wait_final_scripts) {
 				w->state = rspamd_worker_wait_final_scripts;
 
-				if ((w->flags & RSPAMD_WORKER_SCANNER) &&
+				if ((w->flags & (RSPAMD_WORKER_SCANNER|RSPAMD_WORKER_FUZZY)) &&
 					rspamd_worker_call_finish_handlers(w)) {
 					msg_info("performing async finishing actions");
 					w->state = rspamd_worker_wait_final_scripts;

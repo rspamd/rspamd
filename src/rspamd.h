@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,6 +69,7 @@ enum rspamd_worker_flags {
 	RSPAMD_WORKER_NO_TERMINATE_DELAY = (1 << 7),
 	RSPAMD_WORKER_OLD_CONFIG = (1 << 8),
 	RSPAMD_WORKER_NO_STRICT_CONFIG = (1 << 9),
+	RSPAMD_WORKER_FUZZY = (1 << 10),
 };
 
 struct rspamd_worker_accept_event {
