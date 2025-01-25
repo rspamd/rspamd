@@ -562,6 +562,11 @@ void rspamd_fuzzy_backend_close(struct rspamd_fuzzy_backend *bk)
 	g_free(bk);
 }
 
+bool rspamd_fuzzy_backend_is_noop(struct rspamd_fuzzy_backend *bk)
+{
+	return bk->type == RSPAMD_FUZZY_BACKEND_NOOP;
+}
+
 struct ev_loop *
 rspamd_fuzzy_backend_event_base(struct rspamd_fuzzy_backend *backend)
 {

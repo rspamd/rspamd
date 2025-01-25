@@ -1743,28 +1743,31 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 				cmd->version |= RSPAMD_FUZZY_FLAG_WEAK;
 			}
 
-			if (session->worker->index == 0 || session->ctx->peer_fd == -1) {
-				/* Just add to the queue */
-				up_cmd.is_shingle = is_shingle;
-				ptr = is_shingle ? (gpointer) &up_cmd.cmd.shingle : (gpointer) &up_cmd.cmd.normal;
-				memcpy(ptr, cmd, up_len);
-				g_array_append_val(session->ctx->updates_pending, up_cmd);
-			}
-			else {
-				/* We need to send request to the peer */
-				up_req = g_malloc0(sizeof(*up_req));
-				up_req->cmd.is_shingle = is_shingle;
-				ptr = is_shingle ? (gpointer) &up_req->cmd.cmd.shingle : (gpointer) &up_req->cmd.cmd.normal;
-				memcpy(ptr, cmd, up_len);
-
-				if (!fuzzy_peer_try_send(session->ctx->peer_fd, up_req)) {
-					up_req->io_ev.data = up_req;
-					ev_io_init(&up_req->io_ev, fuzzy_peer_send_io,
-							   session->ctx->peer_fd, EV_WRITE);
-					ev_io_start(session->ctx->event_loop, &up_req->io_ev);
+			/* Noop backends must skip all updates logic as irrelevant */
+			if (!rspamd_fuzzy_backend_is_noop(session->ctx->backend)) {
+				if (session->worker->index == 0 || session->ctx->peer_fd == -1) {
+					/* Just add to the queue */
+					up_cmd.is_shingle = is_shingle;
+					ptr = is_shingle ? (gpointer) &up_cmd.cmd.shingle : (gpointer) &up_cmd.cmd.normal;
+					memcpy(ptr, cmd, up_len);
+					g_array_append_val(session->ctx->updates_pending, up_cmd);
 				}
 				else {
-					g_free(up_req);
+					/* We need to send request to the peer */
+					up_req = g_malloc0(sizeof(*up_req));
+					up_req->cmd.is_shingle = is_shingle;
+					ptr = is_shingle ? (gpointer) &up_req->cmd.cmd.shingle : (gpointer) &up_req->cmd.cmd.normal;
+					memcpy(ptr, cmd, up_len);
+
+					if (!fuzzy_peer_try_send(session->ctx->peer_fd, up_req)) {
+						up_req->io_ev.data = up_req;
+						ev_io_init(&up_req->io_ev, fuzzy_peer_send_io,
+								   session->ctx->peer_fd, EV_WRITE);
+						ev_io_start(session->ctx->event_loop, &up_req->io_ev);
+					}
+					else {
+						g_free(up_req);
+					}
 				}
 			}
 
@@ -2805,6 +2808,7 @@ lua_fuzzy_add_post_handler(lua_State *L)
 	}
 
 	wrk = *pwrk;
+	ctx = (struct rspamd_fuzzy_storage_ctx *) wrk->ctx;
 
 	if (wrk && lua_isfunction(L, 2)) {
 		ctx = (struct rspamd_fuzzy_storage_ctx *) wrk->ctx;
@@ -2834,6 +2838,7 @@ lua_fuzzy_add_blacklist_handler(lua_State *L)
 	}
 
 	wrk = *pwrk;
+	ctx = (struct rspamd_fuzzy_storage_ctx *) wrk->ctx;
 
 	if (wrk && lua_isfunction(L, 2)) {
 		struct rspamd_lua_fuzzy_script *script;
