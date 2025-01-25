@@ -460,7 +460,7 @@ struct rspamd_lua_url *lua_check_url(lua_State *L, int pos);
  * Creates a new shingle object from the existing shingle
  */
 struct rspamd_shingle;
-void lua_newshingle(lua_State *L, const struct rspamd_shingle *sh);
+void lua_newshingle(lua_State *L, const void *sh);
 
 enum rspamd_lua_parse_arguments_flags {
 	RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT = 0,

@@ -62,7 +62,7 @@ lua_check_shingle(lua_State *L, int pos)
 	return static_cast<struct rspamd_shingle *>(ud);
 }
 
-void lua_newshingle(lua_State *L, const struct rspamd_shingle *sh)
+void lua_newshingle(lua_State *L, const void *sh)
 {
 	auto *nsh = static_cast<struct rspamd_shingle *>(
 		lua_newuserdata(L, sizeof(struct rspamd_shingle)));
