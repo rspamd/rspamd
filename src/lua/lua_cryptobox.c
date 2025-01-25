@@ -1393,7 +1393,12 @@ lua_cryptobox_hash_copy(const struct rspamd_lua_cryptobox_hash *orig)
 	(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x30500000)
 		/* XXX: dunno what to do with this ancient crap */
 #else
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
 		nhash->content.hmac_c = EVP_MAC_CTX_dup(orig->content.hmac_c);
+#else
+		nhash->content.hmac_c = HMAC_CTX_new();
+		HMAC_CTX_copy(nhash->content.hmac_c, orig->content.hmac_c);
+#endif
 #endif
 	}
 	else if (orig->type == LUA_CRYPTOBOX_HASH_BLAKE2) {
