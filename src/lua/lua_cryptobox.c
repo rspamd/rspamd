@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -120,6 +120,8 @@ LUA_FUNCTION_DEF(cryptobox_secretbox, create);
 LUA_FUNCTION_DEF(cryptobox_secretbox, encrypt);
 LUA_FUNCTION_DEF(cryptobox_secretbox, decrypt);
 LUA_FUNCTION_DEF(cryptobox_secretbox, gc);
+
+static void lua_cryptobox_hash_finish(struct rspamd_lua_cryptobox_hash *h);
 
 static const struct luaL_reg cryptoboxlib_f[] = {
 	LUA_INTERFACE_DEF(cryptobox, verify_memory),
@@ -1306,6 +1308,19 @@ lua_cryptobox_hash_create_keyed(lua_State *L)
 	return 1;
 }
 
+struct lua_hash_elt {
+	unsigned char key_hash[rspamd_cryptobox_HASHBYTES];
+	unsigned char value_hash[rspamd_cryptobox_HASHBYTES];
+};
+
+int lua_cryptobox_hash_elt_cmp(const void *a, const void *b)
+{
+	const struct lua_hash_elt *ha = (struct lua_hash_elt *) a,
+							  *hb = (struct lua_hash_elt *) b;
+
+	return memcmp(ha->key_hash, hb->key_hash, sizeof(ha->key_hash));
+}
+
 /***
  * @function rspamd_cryptobox_hash.create_specific_keyed(key, type, [string])
  * Creates new hash context with specified key
@@ -1362,6 +1377,41 @@ lua_cryptobox_hash_create_specific_keyed(lua_State *L)
 	return 1;
 }
 
+static struct rspamd_lua_cryptobox_hash *
+lua_cryptobox_hash_copy(const struct rspamd_lua_cryptobox_hash *orig)
+{
+	struct rspamd_lua_cryptobox_hash *nhash = g_malloc(sizeof(struct rspamd_lua_cryptobox_hash));
+
+	memcpy(nhash, orig, sizeof(struct rspamd_lua_cryptobox_hash));
+	REF_INIT_RETAIN(nhash, lua_cryptobox_hash_dtor);
+
+	if (orig->type == LUA_CRYPTOBOX_HASH_SSL) {
+		EVP_MD_CTX_copy(nhash->content.c, orig->content.c);
+	}
+	else if (orig->type == LUA_CRYPTOBOX_HASH_HMAC) {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || \
+	(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x30500000)
+		/* XXX: dunno what to do with this ancient crap */
+#else
+		nhash->content.hmac_c = EVP_MAC_CTX_dup(orig->content.hmac_c);
+#endif
+	}
+	else if (orig->type == LUA_CRYPTOBOX_HASH_BLAKE2) {
+		if (posix_memalign((void **) &nhash->content.h,
+						   RSPAMD_ALIGNOF(rspamd_cryptobox_hash_state_t),
+						   sizeof(*nhash->content.h)) != 0) {
+			g_assert_not_reached();
+		}
+		memcpy(nhash->content.h, orig->content.h, sizeof(*nhash->content.h));
+	}
+	else {
+		nhash->content.fh = rspamd_cryptobox_fast_hash_new();
+		memcpy(nhash->content.fh, orig->content.fh, sizeof(*nhash->content.fh));
+	}
+
+	return nhash;
+}
+
 static void
 lua_cryptobox_update_pos(lua_State *L, struct rspamd_lua_cryptobox_hash *h, int pos)
 {
@@ -1416,18 +1466,40 @@ lua_cryptobox_update_pos(lua_State *L, struct rspamd_lua_cryptobox_hash *h, int 
 			lua_pop(L, 1);
 		}
 
-		/* Hash key-value pairs */
+		/* Hash key-value pairs and store all stuff in the array */
 		lua_pushnil(L);
+		GArray *tbl_digests = g_array_new(false, true, sizeof(struct lua_hash_elt));
 		while (lua_next(L, pos) != 0) {
+			struct rspamd_lua_cryptobox_hash *key_h = lua_cryptobox_hash_copy(h),
+											 *value_h = lua_cryptobox_hash_copy(h);
+			struct lua_hash_elt he;
 			/* Hash key */
 			lua_pushvalue(L, -2);
-			lua_cryptobox_update_pos(L, h, -1);
+			lua_cryptobox_update_pos(L, key_h, -1);
 			lua_pop(L, 1);
+			lua_cryptobox_hash_finish(key_h);
+			memcpy(he.key_hash, key_h->out, sizeof(he.key_hash));
+			REF_RELEASE(key_h);
 
 			/* Hash value */
-			lua_cryptobox_update_pos(L, h, -1);
+			lua_cryptobox_update_pos(L, value_h, -1);
 			lua_pop(L, 1);
+			lua_cryptobox_hash_finish(value_h);
+			memcpy(he.value_hash, value_h->out, sizeof(he.value_hash));
+			REF_RELEASE(value_h);
+
+			g_array_append_val(tbl_digests, he);
 		}
+
+		/* Sort elements */
+		g_array_sort(tbl_digests, lua_cryptobox_hash_elt_cmp);
+		/* Now update the original hash context */
+		for (size_t i = 0; i < tbl_digests->len; i++) {
+			struct lua_hash_elt *he = &g_array_index(tbl_digests, struct lua_hash_elt, i);
+			rspamd_lua_hash_update(h, he->key_hash, sizeof(he->key_hash));
+			rspamd_lua_hash_update(h, he->value_hash, sizeof(he->value_hash));
+		}
+		g_array_free(tbl_digests, true);
 
 		break;
 	}
