@@ -155,7 +155,7 @@ local function create(cfg, obj, module_name)
       end
     end
     local map = lua_maps.map_add_from_ucl(rule.map, rule.type,
-        obj.description or module_name)
+        rule.description or obj.description or module_name)
     if not map then
       rspamd_logger.errx(cfg, 'cannot add map for element %s in module %s',
           name, module_name)

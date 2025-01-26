@@ -1267,6 +1267,7 @@ local function add_multimap_rule(key, newrule)
         {
           rules = newrule.rules,
           expression = newrule.expression,
+          description = newrule.description,
           on_load = newrule.dynamic_symbols and multimap_on_load_gen(newrule) or nil,
         }, N, 'Combined map for ' .. newrule.symbol)
     if not newrule.combined then
