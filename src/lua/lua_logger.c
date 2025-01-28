@@ -42,7 +42,7 @@ local e = {
 -- %<number> means numeric arguments and %s means the next argument
 -- for example %1, %2, %s: %s would mean the third argument
 
-rspamd_logger.info('a=%1, b=%2, c=%3, d=%4, e=%s', a, b, c, d, e)
+rspamd_logger.infox('a=%1, b=%2, c=%3, d=%4, e=%s', a, b, c, d, e)
 -- Output: a=string, b=1.50000, c=1, d={[1] = aa, [2] = 1, [3] = bb} e={[key]=value, [key2]=1.0}
 
 -- Create string using logger API
