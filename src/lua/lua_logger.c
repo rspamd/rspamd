@@ -42,7 +42,7 @@ local e = {
 -- %<number> means numeric arguments and %s means the next argument
 -- for example %1, %2, %s: %s would mean the third argument
 
-rspamd_logger.infox('a=%1, b=%2, c=%3, d=%4, e=%s', a, b, c, d, e)
+rspamd_logger.info('a=%1, b=%2, c=%3, d=%4, e=%s', a, b, c, d, e)
 -- Output: a=string, b=1.50000, c=1, d={[1] = aa, [2] = 1, [3] = bb} e={[key]=value, [key2]=1.0}
 
 -- Create string using logger API
@@ -734,7 +734,7 @@ lua_logger_log_format(lua_State *L, int fmt_pos, gboolean is_string,
 	char *d;
 	const char *s, *c;
 	gsize r, cpylen = 0;
-	unsigned int arg_num = 0, cur_arg;
+	unsigned int arg_num = 0, cur_arg, pos_arg = 1;
 	bool num_arg = false;
 	struct lua_logger_trace tr;
 	enum {
@@ -795,7 +795,7 @@ lua_logger_log_format(lua_State *L, int fmt_pos, gboolean is_string,
 				}
 				else {
 					/* We have non numeric argument, e.g. %s */
-					arg_num = cur_arg++;
+					arg_num = pos_arg;
 					s++;
 				}
 
@@ -812,6 +812,8 @@ lua_logger_log_format(lua_State *L, int fmt_pos, gboolean is_string,
 				remain -= r;
 				d += r;
 				state = copy_char;
+				num_arg = false;
+				pos_arg++;
 				c = s;
 			}
 			break;
