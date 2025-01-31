@@ -50,6 +50,8 @@ gpt {
   allow_ham = false;
   # default send response_format field { type = "json_object" }
   include_response_format = true,
+  # Add header with reason (null to disable)
+  reason_header = "X-GPT-Reason";
 }
   ]])
   return
@@ -83,6 +85,7 @@ local settings = {
   prompt = nil,
   condition = nil,
   autolearn = false,
+  reason_header = nil,
   url = 'https://api.openai.com/v1/chat/completions',
   symbols_to_except = default_symbols_to_except,
   allow_passthrough = false,
@@ -249,7 +252,7 @@ local function default_conversion(task, input)
       rspamd_logger.infox(task, 'usage: %s tokens', reply.usage.total_tokens)
     end
 
-    return spam_score
+    return spam_score, reply.reason
   end
 
   rspamd_logger.errx(task, 'cannot convert spam score: %s', first_message)
@@ -312,7 +315,7 @@ local function ollama_conversion(task, input)
       rspamd_logger.infox(task, 'usage: %s tokens', reply.usage.total_tokens)
     end
 
-    return spam_score
+    return spam_score, reply.reason
   end
 
   rspamd_logger.errx(task, 'cannot convert spam score: %s', first_message)
@@ -328,30 +331,49 @@ local function check_consensus(task, results)
 
   local nspam, nham = 0, 0
   local max_spam_prob, max_ham_prob = 0, 0
+  local reasons = {}
 
   for _, result in ipairs(results) do
     if result.success then
       if result.probability > 0.5 then
         nspam = nspam + 1
         max_spam_prob = math.max(max_spam_prob, result.probability)
-        lua_util.debugm(N, task, "model: %s; spam: %s", result.model, result.probability)
+        lua_util.debugm(N, task, "model: %s; spam: %s; reason: '%s'",
+            result.model, result.probability, result.reason)
       else
         nham = nham + 1
         max_ham_prob = math.min(max_ham_prob, result.probability)
-        lua_util.debugm(N, task, "model: %s; ham: %s", result.model, result.probability)
+        lua_util.debugm(N, task, "model: %s; ham: %s; reason: '%s'",
+            result.model, result.probability, result.reason)
+      end
+
+      if result.reason then
+        table.insert(reasons, result.reason)
       end
     end
   end
+
+  lua_util.shuffle(reasons)
+  local reason = reasons[1] or nil
 
   if nspam > nham and max_spam_prob > 0.75 then
     task:insert_result('GPT_SPAM', (max_spam_prob - 0.75) * 4, tostring(max_spam_prob))
     if settings.autolearn then
       task:set_flag("learn_spam")
     end
+
+    if reason and settings.reason_header then
+      lua_mime.modify_headers(task,
+          { add = { [settings.reason_header] = { value = 'value', order = 1 } } })
+    end
   elseif nham > nspam and max_ham_prob < 0.25 then
     task:insert_result('GPT_HAM', (0.25 - max_ham_prob) * 4, tostring(max_ham_prob))
     if settings.autolearn then
       task:set_flag("learn_ham")
+    end
+    if reason and settings.reason_header then
+      lua_mime.modify_headers(task,
+          { add = { [settings.reason_header] = { value = 'value', order = 1 } } })
     end
   else
     -- No consensus
@@ -413,13 +435,14 @@ local function default_llm_check(task)
         return
       end
 
-      local reply = settings.reply_conversion(task, body)
+      local reply, reason = settings.reply_conversion(task, body)
 
       results[idx].model = model
 
       if reply then
         results[idx].success = true
         results[idx].probability = reply
+        results[idx].reason = reason
       end
 
       check_consensus(task, results)
@@ -530,13 +553,14 @@ local function ollama_check(task)
         return
       end
 
-      local reply = settings.reply_conversion(task, body)
+      local reply, reason = settings.reply_conversion(task, body)
 
       results[idx].model = model
 
       if reply then
         results[idx].success = true
         results[idx].probability = reply
+        results[idx].reason = reason
       end
 
       check_consensus(task, results)
@@ -630,7 +654,8 @@ if opts then
   if not settings.prompt then
     settings.prompt = "You will be provided with the email message, subject, from and url domains, " ..
         "and your task is to evaluate the probability to be spam as number from 0 to 1, " ..
-        "output result as JSON with 'probability' field."
+        "output result as JSON with 'probability' field and " ..
+        "add 'reason' field with 1 sentence description why you have made that decision."
   end
 
   local llm_type = types_map[settings.type]
