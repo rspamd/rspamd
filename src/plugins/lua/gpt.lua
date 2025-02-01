@@ -87,7 +87,7 @@ local settings = {
   autolearn = false,
   reason_header = nil,
   url = 'https://api.openai.com/v1/chat/completions',
-  symbols_to_except = default_symbols_to_except,
+  symbols_to_except = nil,
   allow_passthrough = false,
   allow_ham = false,
 }
@@ -656,6 +656,10 @@ if opts then
         "and your task is to evaluate the probability to be spam as number from 0 to 1, " ..
         "output result as JSON with 'probability' field and " ..
         "add 'reason' field with 1 sentence description why you have made that decision."
+  end
+
+  if not settings.symbols_to_except then
+    settings.symbols_to_except = default_symbols_to_except
   end
 
   local llm_type = types_map[settings.type]
