@@ -3733,13 +3733,11 @@ start_fuzzy(struct rspamd_worker *worker)
 	}
 
 	/* Ratelimits */
-	if (!isnan(ctx->leaky_bucket_rate) && !isnan(ctx->leaky_bucket_burst)) {
-		ctx->ratelimit_buckets = rspamd_lru_hash_new_full(ctx->max_buckets,
-														  NULL, fuzzy_rl_bucket_free,
-														  rspamd_inet_address_hash, rspamd_inet_address_equal);
+	ctx->ratelimit_buckets = rspamd_lru_hash_new_full(ctx->max_buckets,
+													  NULL, fuzzy_rl_bucket_free,
+													  rspamd_inet_address_hash, rspamd_inet_address_equal);
 
-		rspamd_fuzzy_maybe_load_ratelimits(ctx);
-	}
+	rspamd_fuzzy_maybe_load_ratelimits(ctx);
 
 	/* Maps events */
 	ctx->resolver = rspamd_dns_resolver_init(worker->srv->logger,
