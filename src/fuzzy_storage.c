@@ -441,6 +441,11 @@ rspamd_fuzzy_check_ratelimit_bucket(struct fuzzy_session *session, struct rspamd
 {
 	gboolean ratelimited = FALSE, new_ratelimit = FALSE;
 
+	/* Nothing to check */
+	if (isnan(max_burst) || isnan(max_rate)) {
+		return ratelimit_pass;
+	}
+
 	if (isnan(elt->cur)) {
 		/* There is an issue with the previous logic: the TTL is updated each time
 		 * we see that new bucket. Hence, we need to check the `last` and act accordingly
