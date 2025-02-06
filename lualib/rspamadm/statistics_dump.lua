@@ -293,11 +293,11 @@ local function dump_pattern(conn, pattern, opts, out, key)
     -- Do not write the last chunk of out as it will be processed afterwards
     if cursor ~= 0 then
       if opts.cdb then
-        dump_out(out, opts, false)
-        clear_fcn(out)
-      else
         dump_cdb(out, opts, false, key)
         out[key].elts = {}
+      else
+        dump_out(out, opts, false)
+        clear_fcn(out)
       end
     elseif opts.cdb then
       dump_cdb(out, opts, true, key)
