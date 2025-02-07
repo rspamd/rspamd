@@ -158,13 +158,21 @@ exports.add_text_footer = function(task, html_footer, text_footer)
   local cur_boundary
   for _, part in ipairs(task:get_parts()) do
     local boundary = part:get_boundary()
+    local part_ct = part:get_header('Content-Type')
+    if part_ct then
+      part_ct = rspamd_util.parse_content_type(part_ct, task:get_mempool())
+    end
     if part:is_multipart() then
       if cur_boundary then
         out[#out + 1] = string.format('--%s',
-            boundaries[#boundaries])
+            boundaries[#boundaries].boundary)
       end
 
-      boundaries[#boundaries + 1] = boundary or '--XXX'
+      boundaries[#boundaries + 1] = {
+        boundary = boundary or '--XXX',
+        ct_type = part_ct.type or '',
+        ct_subtype = part_ct.subtype or '',
+      }
       cur_boundary = boundary
 
       local rh = part:get_raw_headers()
@@ -176,7 +184,7 @@ exports.add_text_footer = function(task, html_footer, text_footer)
         if cur_boundary and boundary ~= cur_boundary then
           -- Need to close boundary
           out[#out + 1] = string.format('--%s--%s',
-              boundaries[#boundaries], newline_s)
+              boundaries[#boundaries].boundary, newline_s)
           table.remove(boundaries)
           cur_boundary = nil
         end
@@ -218,7 +226,13 @@ exports.add_text_footer = function(task, html_footer, text_footer)
         if cur_boundary and boundary ~= cur_boundary then
           -- Need to close boundary
           out[#out + 1] = string.format('--%s--%s',
-              boundaries[#boundaries], newline_s)
+              boundaries[#boundaries].boundary, newline_s)
+          -- Need to close previous boundary, if ct_subtype is related
+          if #boundaries > 1 and boundaries[#boundaries].ct_type == "multipart" and boundaries[#boundaries].ct_subtype == "related" then
+            out[#out + 1] = string.format('--%s--%s',
+                boundaries[#boundaries -1].boundary, newline_s)
+            table.remove(boundaries)
+          end
           table.remove(boundaries)
           cur_boundary = boundary
         end
@@ -239,7 +253,7 @@ exports.add_text_footer = function(task, html_footer, text_footer)
   -- Close remaining
   local b = table.remove(boundaries)
   while b do
-    out[#out + 1] = string.format('--%s--', b)
+    out[#out + 1] = string.format('--%s--', b.boundary)
     if #boundaries > 0 then
       out[#out + 1] = ''
     end
