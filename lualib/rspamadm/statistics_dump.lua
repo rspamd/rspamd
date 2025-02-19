@@ -42,6 +42,12 @@ parser:option "-c --config"
       :argname("<cfg>")
       :default(rspamd_paths["CONFDIR"] .. "/" .. "rspamd.conf")
 
+parser:option "-b --batch-size"
+    :description "Number of entries to process at once"
+    :argname("<elts>")
+    :convert(tonumber)
+    :default(1000)
+
 -- Extract subcommand
 local dump = parser:command "dump d"
                    :description "Dump bayes statistics"
@@ -54,7 +60,7 @@ dump:mutex(
 dump:flag "-c --compress"
     :description "Compress output"
 dump:option "-b --batch-size"
-    :description "Number of entires to process at once"
+    :description "Number of entries to process at once"
     :argname("<elts>")
     :convert(tonumber)
     :default(1000)
@@ -68,12 +74,12 @@ restore:argument "file"
        :argname "<file>"
        :args "*"
 restore:option "-b --batch-size"
-       :description "Number of entires to process at once"
+       :description "Number of entries to process at once"
        :argname("<elts>")
        :convert(tonumber)
        :default(1000)
 restore:option "-m --mode"
-       :description "Number of entires to process at once"
+       :description "Number of entries to process at once"
        :argname("<append|subtract|replace>")
        :convert {
   ['append'] = 'append',
@@ -287,11 +293,11 @@ local function dump_pattern(conn, pattern, opts, out, key)
     -- Do not write the last chunk of out as it will be processed afterwards
     if cursor ~= 0 then
       if opts.cdb then
-        dump_out(out, opts, false)
-        clear_fcn(out)
-      else
         dump_cdb(out, opts, false, key)
         out[key].elts = {}
+      else
+        dump_out(out, opts, false)
+        clear_fcn(out)
       end
     elseif opts.cdb then
       dump_cdb(out, opts, true, key)
