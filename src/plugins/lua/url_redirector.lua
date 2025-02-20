@@ -348,8 +348,8 @@ local function url_redirector_handler(task)
     task = task,
     limit = settings.max_urls,
     filter = function(url)
-      local host = url:get_host()
-      if settings.redirector_hosts_map:get_key(host) then
+      local tld = url:get_tld()
+      if settings.redirector_hosts_map:get_key(tld) then
         lua_util.debugm(N, task, 'check url %s', tostring(url))
         return true
       end
