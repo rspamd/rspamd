@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2141,8 +2141,7 @@ rspamd_dkim_canonize_body(struct rspamd_task *task,
 			if (ctx->body_canon_type == DKIM_CANON_SIMPLE) {
 				/* Simple canonization */
 				while (rspamd_dkim_simple_body_step(ctx, ctx->body_hash,
-													&start, end - start, &remain))
-					;
+													&start, end - start, &remain));
 
 				/*
 				* If we have l= tag then we cannot add crlf...
@@ -2178,8 +2177,7 @@ rspamd_dkim_canonize_body(struct rspamd_task *task,
 				size_t orig_len = remain;
 
 				while (rspamd_dkim_relaxed_body_step(ctx, ctx->body_hash,
-													 &start, end - start, &remain))
-					;
+													 &start, end - start, &remain));
 
 				if (ctx->len > 0 && remain > (double) orig_len * 0.1) {
 					msg_info_task("DKIM l tag does not cover enough of the body: %d (%d actual size)",
@@ -2874,50 +2872,71 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 	case RSPAMD_DKIM_KEY_RSA: {
 		GError *err = NULL;
 
-		if (!rspamd_cryptobox_verify_evp_rsa(nid, ctx->b, ctx->blen, raw_digest, dlen,
-											 key->specific.key_ssl.key_evp, &err)) {
+		if (ctx->sig_alg == DKIM_SIGN_ECDSASHA256 ||
+			ctx->sig_alg == DKIM_SIGN_EDDSASHA256 ||
+			ctx->sig_alg == DKIM_SIGN_ECDSASHA512) {
+			/* RSA key provided for ECDSA/EDDSA signature */
+			res->rcode = DKIM_PERM_ERROR;
+			res->fail_reason = "rsa key for ecdsa/eddsa signature";
+			msg_info_dkim(
+				"%s: wrong RSA key for ecdsa/eddsa signature; "
+				"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
+				rspamd_dkim_type_to_string(ctx->common.type),
+				(int) (body_end - body_start), ctx->common.body_canonicalised,
+				ctx->common.headers_canonicalised,
+				ctx->domain, ctx->selector,
+				RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
+				ctx->dkim_header);
+		}
+		else {
+			if (!rspamd_cryptobox_verify_evp_rsa(nid, ctx->b, ctx->blen, raw_digest, dlen,
+												 key->specific.key_ssl.key_evp, &err)) {
 
-			if (err == NULL) {
-				msg_debug_dkim("headers rsa verify failed");
-				ERR_clear_error();
-				res->rcode = DKIM_REJECT;
-				res->fail_reason = "headers rsa verify failed";
+				if (err == NULL) {
+					msg_debug_dkim("headers rsa verify failed");
+					ERR_clear_error();
+					res->rcode = DKIM_REJECT;
+					res->fail_reason = "headers rsa verify failed";
 
-				msg_info_dkim(
-					"%s: headers RSA verification failure; "
-					"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
-					rspamd_dkim_type_to_string(ctx->common.type),
-					(int) (body_end - body_start), ctx->common.body_canonicalised,
-					ctx->common.headers_canonicalised,
-					ctx->domain, ctx->selector,
-					RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
-					ctx->dkim_header);
-			}
-			else {
-				res->rcode = DKIM_PERM_ERROR;
-				res->fail_reason = "openssl internal error";
-				msg_err_dkim("internal OpenSSL error: %s", err->message);
-				msg_info_dkim(
-					"%s: headers RSA verification failure due to OpenSSL internal error; "
-					"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
-					rspamd_dkim_type_to_string(ctx->common.type),
-					(int) (body_end - body_start), ctx->common.body_canonicalised,
-					ctx->common.headers_canonicalised,
-					ctx->domain, ctx->selector,
-					RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
-					ctx->dkim_header);
+					msg_info_dkim(
+						"%s: headers RSA verification failure; "
+						"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
+						rspamd_dkim_type_to_string(ctx->common.type),
+						(int) (body_end - body_start), ctx->common.body_canonicalised,
+						ctx->common.headers_canonicalised,
+						ctx->domain, ctx->selector,
+						RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
+						ctx->dkim_header);
+				}
+				else {
+					res->rcode = DKIM_PERM_ERROR;
+					res->fail_reason = "openssl internal error";
+					msg_err_dkim("internal OpenSSL error: %s", err->message);
+					msg_info_dkim(
+						"%s: headers RSA verification failure due to OpenSSL internal error; "
+						"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
+						rspamd_dkim_type_to_string(ctx->common.type),
+						(int) (body_end - body_start), ctx->common.body_canonicalised,
+						ctx->common.headers_canonicalised,
+						ctx->domain, ctx->selector,
+						RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
+						ctx->dkim_header);
 
-				ERR_clear_error();
-				g_error_free(err);
+					ERR_clear_error();
+					g_error_free(err);
+				}
 			}
 		}
 		break;
 	}
 	case RSPAMD_DKIM_KEY_ECDSA:
-		if (rspamd_cryptobox_verify_evp_ecdsa(nid, ctx->b, ctx->blen, raw_digest, dlen,
-											  key->specific.key_ssl.key_evp) != 1) {
+		if (ctx->sig_alg != DKIM_SIGN_ECDSASHA256 &&
+			ctx->sig_alg != DKIM_SIGN_ECDSASHA512) {
+			/* ECDSA key provided for RSA/EDDSA signature */
+			res->rcode = DKIM_PERM_ERROR;
+			res->fail_reason = "ECDSA key for rsa/eddsa signature";
 			msg_info_dkim(
-				"%s: headers ECDSA verification failure; "
+				"%s: ECDSA key for rsa/eddsa signature; "
 				"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
 				rspamd_dkim_type_to_string(ctx->common.type),
 				(int) (body_end - body_start), ctx->common.body_canonicalised,
@@ -2925,18 +2944,34 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 				ctx->domain, ctx->selector,
 				RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
 				ctx->dkim_header);
-			msg_debug_dkim("headers ecdsa verify failed");
-			ERR_clear_error();
-			res->rcode = DKIM_REJECT;
-			res->fail_reason = "headers ecdsa verify failed";
+		}
+		else {
+			if (rspamd_cryptobox_verify_evp_ecdsa(nid, ctx->b, ctx->blen, raw_digest, dlen,
+												  key->specific.key_ssl.key_evp) != 1) {
+				msg_info_dkim(
+					"%s: headers ECDSA verification failure; "
+					"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
+					rspamd_dkim_type_to_string(ctx->common.type),
+					(int) (body_end - body_start), ctx->common.body_canonicalised,
+					ctx->common.headers_canonicalised,
+					ctx->domain, ctx->selector,
+					RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
+					ctx->dkim_header);
+				msg_debug_dkim("headers ecdsa verify failed");
+				ERR_clear_error();
+				res->rcode = DKIM_REJECT;
+				res->fail_reason = "headers ecdsa verify failed";
+			}
 		}
 		break;
 
 	case RSPAMD_DKIM_KEY_EDDSA:
-		if (!rspamd_cryptobox_verify(ctx->b, ctx->blen, raw_digest, dlen,
-									 key->specific.key_eddsa)) {
+		if (ctx->sig_alg != DKIM_SIGN_EDDSASHA256) {
+			/* EDDSA key provided for RSA/ECDSA signature */
+			res->rcode = DKIM_PERM_ERROR;
+			res->fail_reason = "EDDSA key for rsa/ecdsa signature";
 			msg_info_dkim(
-				"%s: headers EDDSA verification failure; "
+				"%s: EDDSA key for rsa/ecdsa signature; "
 				"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
 				rspamd_dkim_type_to_string(ctx->common.type),
 				(int) (body_end - body_start), ctx->common.body_canonicalised,
@@ -2944,13 +2979,26 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 				ctx->domain, ctx->selector,
 				RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
 				ctx->dkim_header);
-			msg_debug_dkim("headers eddsa verify failed");
-			res->rcode = DKIM_REJECT;
-			res->fail_reason = "headers eddsa verify failed";
+		}
+		else {
+			if (!rspamd_cryptobox_verify(ctx->b, ctx->blen, raw_digest, dlen,
+										 key->specific.key_eddsa)) {
+				msg_info_dkim(
+					"%s: headers EDDSA verification failure; "
+					"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
+					rspamd_dkim_type_to_string(ctx->common.type),
+					(int) (body_end - body_start), ctx->common.body_canonicalised,
+					ctx->common.headers_canonicalised,
+					ctx->domain, ctx->selector,
+					RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
+					ctx->dkim_header);
+				msg_debug_dkim("headers eddsa verify failed");
+				res->rcode = DKIM_REJECT;
+				res->fail_reason = "headers eddsa verify failed";
+			}
 		}
 		break;
 	}
-
 
 	if (ctx->common.type == RSPAMD_DKIM_ARC_SEAL && res->rcode == DKIM_CONTINUE) {
 		switch (ctx->cv) {
