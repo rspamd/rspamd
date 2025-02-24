@@ -48,8 +48,6 @@ gpt {
   allow_passthrough = false;
   # Check messages that are apparent ham (no action and negative score)
   allow_ham = false;
-  # default send response_format field { type = "json_object" }
-  include_response_format = true,
   # Add header with reason (null to disable)
   reason_header = "X-GPT-Reason";
 }
@@ -88,6 +86,7 @@ local settings = {
   reason_header = nil,
   url = 'https://api.openai.com/v1/chat/completions',
   symbols_to_except = nil,
+  symbols_to_trigger = nil, -- Exclude/include logic
   allow_passthrough = false,
   allow_ham = false,
 }
@@ -113,22 +112,44 @@ local function default_condition(task)
       return false, 'negative score, already decided as ham'
     end
   end
-  -- We also exclude some symbols
-  for s, required_weight in pairs(settings.symbols_to_except) do
-    if task:has_symbol(s) then
-      if required_weight > 0 then
-        -- Also check score
-        local sym = task:get_symbol(s) or E
-        -- Must exist as we checked it before with `has_symbol`
-        if sym.weight then
-          if math.abs(sym.weight) >= required_weight then
-            return false, 'skip as "' .. s .. '" is found (weight: ' .. sym.weight .. ')'
+
+  if settings.symbols_to_except then
+    for s, required_weight in pairs(settings.symbols_to_except) do
+      if task:has_symbol(s) then
+        if required_weight > 0 then
+          -- Also check score
+          local sym = task:get_symbol(s) or E
+          -- Must exist as we checked it before with `has_symbol`
+          if sym.weight then
+            if math.abs(sym.weight) >= required_weight then
+              return false, 'skip as "' .. s .. '" is found (weight: ' .. sym.weight .. ')'
+            end
           end
+          lua_util.debugm(N, task, 'symbol %s has weight %s, but required %s', s,
+              sym.weight, required_weight)
+        else
+          return false, 'skip as "' .. s .. '" is found'
         end
-        lua_util.debugm(N, task, 'symbol %s has weight %s, but required %s', s,
-            sym.weight, required_weight)
+      end
+    end
+  end
+  if settings.symbols_to_trigger then
+    for s, required_weight in pairs(settings.symbols_to_trigger) do
+      if task:has_symbol(s) then
+        if required_weight > 0 then
+          -- Also check score
+          local sym = task:get_symbol(s) or E
+          -- Must exist as we checked it before with `has_symbol`
+          if sym.weight then
+            if math.abs(sym.weight) < required_weight then
+              return false, 'skip as "' .. s .. '" is found with low weight (weight: ' .. sym.weight .. ')'
+            end
+          end
+          lua_util.debugm(N, task, 'symbol %s has weight %s, but required %s', s,
+              sym.weight, required_weight)
+        end
       else
-        return false, 'skip as "' .. s .. '" is found'
+        return false, 'skip as "' .. s .. '" is not found'
       end
     end
   end
