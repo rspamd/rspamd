@@ -734,7 +734,7 @@ lua_logger_log_format(lua_State *L, int fmt_pos, gboolean is_string,
 	char *d;
 	const char *s, *c;
 	gsize r, cpylen = 0;
-	unsigned int arg_num = 0, cur_arg;
+	unsigned int arg_num = 0, cur_arg, pos_arg = 1;
 	bool num_arg = false;
 	struct lua_logger_trace tr;
 	enum {
@@ -795,7 +795,7 @@ lua_logger_log_format(lua_State *L, int fmt_pos, gboolean is_string,
 				}
 				else {
 					/* We have non numeric argument, e.g. %s */
-					arg_num = cur_arg++;
+					arg_num = pos_arg;
 					s++;
 				}
 
@@ -812,6 +812,8 @@ lua_logger_log_format(lua_State *L, int fmt_pos, gboolean is_string,
 				remain -= r;
 				d += r;
 				state = copy_char;
+				num_arg = false;
+				pos_arg++;
 				c = s;
 			}
 			break;
