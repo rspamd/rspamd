@@ -435,14 +435,17 @@ local function default_ollama_json_conversion(task, input)
   return
 end
 
+local function redis_cache_key(sel_part)
+  return REDIS_PREFIX .. sel_part:get_mimepart():get_digest():sub(1, 16)
+end
+
 local function maybe_save_cache(task, result, sel_part)
   if not sel_part or not redis_params then
     lua_util.debugm(N, task, 'cannot save cache: no part or no redis')
     return -- cannot save
   end
 
-  local digest = sel_part:get_mimepart():get_digest()
-  local cache_key = REDIS_PREFIX .. digest
+  local cache_key = redis_cache_key(sel_part)
   lua_util.debugm(N, task, 'saving cache for %s', cache_key)
   local result_json = ucl.to_format(result, 'json-compact')
   lua_redis.redis_make_request(task, redis_params, cache_key, false, function(err, _)
@@ -551,8 +554,7 @@ local function check_llm_uncached(task, content, sel_part)
 end
 
 local function check_llm_cached(task, content, sel_part)
-  local digest = sel_part:get_mimepart():get_digest()
-  local cache_key = REDIS_PREFIX .. digest
+  local cache_key = redis_cache_key(sel_part)
 
   local ret = lua_redis.redis_make_request(task, redis_params, cache_key, false, function(_, err, data)
     if err then
@@ -560,7 +562,7 @@ local function check_llm_cached(task, content, sel_part)
       check_llm_uncached(task, content, sel_part)
     end
 
-    if data then
+    if type(data) == 'string' then
       local parser = ucl.parser()
       local res, parse_err = parser:parse_string(data)
       if not res then
