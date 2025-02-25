@@ -435,14 +435,26 @@ local function default_ollama_json_conversion(task, input)
   return
 end
 
+-- Make cache specific to all settings to avoid conflicts
+local env_digest = nil
+
 local function redis_cache_key(sel_part)
-  return REDIS_PREFIX .. sel_part:get_mimepart():get_digest():sub(1, 16)
+  if not env_digest then
+    local hasher = require "rspamd_cryptobox_hash"
+    local digest = hasher.create()
+    digest:update(settings.prompt)
+    digest:update(settings.model)
+    digest:update(settings.url)
+    env_digest = digest:hex():sub(1, 4)
+  end
+  return string.format('%s%s_%s', REDIS_PREFIX, env_digest,
+      sel_part:get_mimepart():get_digest():sub(1, 24))
 end
 
 local function maybe_save_cache(task, result, sel_part)
   if not sel_part or not redis_params then
     lua_util.debugm(N, task, 'cannot save cache: no part or no redis')
-    return -- cannot save
+    return -- cannot save intentionally
   end
 
   local cache_key = redis_cache_key(sel_part)
@@ -556,7 +568,7 @@ end
 local function check_llm_cached(task, content, sel_part)
   local cache_key = redis_cache_key(sel_part)
 
-  local ret = lua_redis.redis_make_request(task, redis_params, cache_key, false, function(_, err, data)
+  local ret = lua_redis.redis_make_request(task, redis_params, cache_key, false, function(err, data)
     if err then
       rspamd_logger.errx(task, 'cannot check cache: %s', err)
       check_llm_uncached(task, content, sel_part)
@@ -569,7 +581,7 @@ local function check_llm_cached(task, content, sel_part)
         rspamd_logger.errx(task, 'Cannot parse cached response: %s', parse_err)
         check_llm_uncached(task, content, sel_part)
       else
-        rspamd_logger.infox(task, 'found cached response')
+        rspamd_logger.infox(task, 'found cached response %s', cache_key)
         insert_results(task, parser:get_object())
       end
     else
