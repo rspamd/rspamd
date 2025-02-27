@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,8 +63,8 @@ struct rspamd_mempool_variable {
 };
 
 KHASH_INIT(rspamd_mempool_vars_hash,
-		   uint32_t, struct rspamd_mempool_variable, 1,
-		   kh_int_hash_func, kh_int_hash_equal);
+		   const char *, struct rspamd_mempool_variable, 1,
+		   kh_str_hash_func, kh_str_hash_equal);
 
 struct rspamd_mempool_specific {
 	struct _pool_chain *pools[RSPAMD_MEMPOOL_MAX];
