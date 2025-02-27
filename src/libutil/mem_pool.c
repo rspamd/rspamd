@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -984,8 +984,7 @@ __mutex_spin(rspamd_mempool_mutex_t *mutex)
 	ts.tv_sec = 0;
 	ts.tv_nsec = MUTEX_SLEEP_TIME;
 	/* Spin */
-	while (nanosleep(&ts, &ts) == -1 && errno == EINTR)
-		;
+	while (nanosleep(&ts, &ts) == -1 && errno == EINTR);
 #else
 #error No methods to spin are defined
 #endif
@@ -1157,7 +1156,6 @@ void rspamd_mempool_wunlock_rwlock(rspamd_mempool_rwlock_t *lock)
 }
 #endif
 
-#define RSPAMD_MEMPOOL_VARS_HASH_SEED 0xb32ad7c55eb2e647ULL
 void rspamd_mempool_set_variable(rspamd_mempool_t *pool,
 								 const char *name,
 								 gpointer value,
@@ -1175,12 +1173,10 @@ void rspamd_mempool_set_variable(rspamd_mempool_t *pool,
 		}
 	}
 
-	int hv = rspamd_cryptobox_fast_hash(name, strlen(name),
-										RSPAMD_MEMPOOL_VARS_HASH_SEED);
 	khiter_t it;
 	int r;
 
-	it = kh_put(rspamd_mempool_vars_hash, pool->priv->variables, hv, &r);
+	it = kh_put(rspamd_mempool_vars_hash, pool->priv->variables, name, &r);
 
 	if (it == kh_end(pool->priv->variables)) {
 		g_assert_not_reached();
@@ -1195,6 +1191,10 @@ void rspamd_mempool_set_variable(rspamd_mempool_t *pool,
 			if (pvar->dtor) {
 				pvar->dtor(pvar->data);
 			}
+		}
+		else {
+			/* Store copy of the key to provide persistent storage */
+			kh_key(pool->priv->variables, it) = rspamd_mempool_strdup(pool, name);
 		}
 
 		pvar = &kh_val(pool->priv->variables, it);
@@ -1211,10 +1211,8 @@ rspamd_mempool_get_variable(rspamd_mempool_t *pool, const char *name)
 	}
 
 	khiter_t it;
-	int hv = rspamd_cryptobox_fast_hash(name, strlen(name),
-										RSPAMD_MEMPOOL_VARS_HASH_SEED);
 
-	it = kh_get(rspamd_mempool_vars_hash, pool->priv->variables, hv);
+	it = kh_get(rspamd_mempool_vars_hash, pool->priv->variables, name);
 
 	if (it != kh_end(pool->priv->variables)) {
 		struct rspamd_mempool_variable *pvar;
@@ -1234,10 +1232,7 @@ rspamd_mempool_steal_variable(rspamd_mempool_t *pool, const char *name)
 	}
 
 	khiter_t it;
-	int hv = rspamd_cryptobox_fast_hash(name, strlen(name),
-										RSPAMD_MEMPOOL_VARS_HASH_SEED);
-
-	it = kh_get(rspamd_mempool_vars_hash, pool->priv->variables, hv);
+	it = kh_get(rspamd_mempool_vars_hash, pool->priv->variables, name);
 
 	if (it != kh_end(pool->priv->variables)) {
 		struct rspamd_mempool_variable *pvar;
@@ -1255,10 +1250,8 @@ void rspamd_mempool_remove_variable(rspamd_mempool_t *pool, const char *name)
 {
 	if (pool->priv->variables != NULL) {
 		khiter_t it;
-		int hv = rspamd_cryptobox_fast_hash(name, strlen(name),
-											RSPAMD_MEMPOOL_VARS_HASH_SEED);
 
-		it = kh_get(rspamd_mempool_vars_hash, pool->priv->variables, hv);
+		it = kh_get(rspamd_mempool_vars_hash, pool->priv->variables, name);
 
 		if (it != kh_end(pool->priv->variables)) {
 			struct rspamd_mempool_variable *pvar;
