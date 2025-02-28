@@ -40,6 +40,7 @@ local N = 'rbl'
 
 -- Checks that could be performed by rbl module
 local local_exclusions
+local disabled_rbl_suffixes -- Map of disabled rbl suffixes
 local white_symbols = {}
 local black_symbols = {}
 local monitored_addresses = {}
@@ -220,7 +221,9 @@ matchers.radix = function(_, _, real_ip, map)
 end
 
 matchers.equality = function(codes, to_match)
-  if type(codes) ~= 'table' then return codes == to_match end
+  if type(codes) ~= 'table' then
+    return codes == to_match
+  end
   for _, ip in ipairs(codes) do
     if to_match == ip then
       return true
@@ -470,6 +473,17 @@ local function gen_rbl_callback(rule)
     return true
   end
 
+  local function is_allowed(task, _)
+    if disabled_rbl_suffixes then
+      if disabled_rbl_suffixes:get_key(rule.rbl) then
+        lua_util.debugm(N, task, 'skip rbl check: %s; disabled by suffix', rule.rbl)
+        return false
+      end
+    end
+
+    return true
+  end
+
   local function check_required_symbols(task, _)
     if rule.require_symbols then
       return fun.all(function(sym)
@@ -698,9 +712,9 @@ local function gen_rbl_callback(rule)
               requests_table, 'received',
               whitelist)
         else
-          lua_util.debugm(N, task, 'rbl %s; skip check_received for %s:' .. 
-          'Received IP same as From IP and will be checked only in check_from function', 
-          rule.symbol, rh.real_ip)
+          lua_util.debugm(N, task, 'rbl %s; skip check_received for %s:' ..
+              'Received IP same as From IP and will be checked only in check_from function',
+              rule.symbol, rh.real_ip)
         end
       end
     end
@@ -838,6 +852,7 @@ local function gen_rbl_callback(rule)
 
   -- Create function pipeline depending on rbl settings
   local pipeline = {
+    is_allowed, -- check if rbl is allowed
     is_alive, -- check monitored status
     check_required_symbols -- if we have require_symbols then check those symbols
   }
@@ -1108,9 +1123,10 @@ local function add_rbl(key, rbl, global_opts)
     end
     for label, v in pairs(rbl.returncodes) do
       if type(v) ~= 'table' then
-        v = {v}
+        v = { v }
       end
-      rbl.returncodes_maps[label] = lua_maps.map_add_from_ucl(v, match_type, string.format('%s_%s RBL returncodes', label, rbl.symbol))
+      rbl.returncodes_maps[label] = lua_maps.map_add_from_ucl(v, match_type,
+          string.format('%s_%s RBL returncodes', label, rbl.symbol))
     end
   end
 
@@ -1317,6 +1333,11 @@ if type(opts.attached_maps) == 'table' then
       rspamd_logger.warnx(rspamd_config, "cannot parse attached map: %s", map)
     end
   end
+end
+
+if opts.disabled_rbl_suffixes_map then
+  disabled_rbl_suffixes = lua_maps.map_add_from_ucl(opts.disabled_rbl_suffixes_map, 'set',
+      'Disabled suffixes for RBL')
 end
 
 for key, rbl in pairs(opts.rbls) do
