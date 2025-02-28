@@ -1805,4 +1805,55 @@ exports.symbols_priorities = {
   low = 0,
 }
 
+---[[[
+-- @function lua_util.table_to_multipart_body(tbl, boundary)
+-- Converts a key-value map to the table representing multipart body, with the following values:
+-- `data`: data of the part
+-- `filename`: optional filename
+-- `content-type`: content type of the element (optional)
+-- `content-transfer-encoding`: optional CTE header
+local function table_to_multipart_body(tbl, boundary)
+  local seen_data = false
+  local out = {}
+
+  for k, v in pairs(tbl) do
+    if v.data then
+      seen_data = true
+      table.insert(out, string.format('--%s\r\n', boundary))
+      if v.filename then
+        table.insert(out,
+            string.format('Content-Disposition: form-data; name="%s"; filename="%s"\r\n',
+                k, v.filename))
+      else
+        table.insert(out,
+            string.format('Content-Disposition: form-data; name="%s"\r\n', k))
+      end
+      if v['content-type'] then
+        table.insert(out,
+            string.format('Content-Type: %s\r\n', v['content-type']))
+      else
+        table.insert(out, 'Content-Type: text/plain\r\n')
+      end
+      if v['content-transfer-encoding'] then
+        table.insert(out,
+            string.format('Content-Transfer-Encoding: %s\r\n',
+                v['content-transfer-encoding']))
+      else
+        table.insert(out, 'Content-Transfer-Encoding: binary\r\n')
+      end
+      table.insert(out, '\r\n')
+      table.insert(out, v.data)
+      table.insert(out, '\r\n')
+    end
+  end
+
+  if seen_data then
+    table.insert(out, string.format('--%s--\r\n', boundary))
+  end
+
+  return out
+end
+
+exports.table_to_multipart_body = table_to_multipart_body
+
 return exports
