@@ -97,8 +97,8 @@ local function process_actions(task, obj, is_cached)
       key, -- hash key
       true, -- is write
       redis_set_cb, --callback
-      'SET', -- command
-      { key, ucl.to_format(cache_obj, 'json-compact') } -- arguments
+      'SETEX', -- command
+      { key, settings.cache_ttl, ucl.to_format(cache_obj, 'json-compact') } -- arguments
   )
 
   if not ret then
