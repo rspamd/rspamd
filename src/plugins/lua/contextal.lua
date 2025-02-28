@@ -61,7 +61,7 @@ local function cache_key(task)
 end
 
 local function process_actions(task, obj, is_cached)
-  for _, match in ipairs((obj[1] or E).actions) do
+  for _, match in ipairs((obj[1] or E).actions or E) do
     local act = match.action
     local scenario = match.scenario
     if not (act and scenario) then
@@ -78,11 +78,14 @@ local function process_actions(task, obj, is_cached)
   local cache_obj
   if (obj[1] or E).actions then
     cache_obj = {[1] = {["actions"] = obj[1].actions}}
-  elseif (obj[1] or E).work_id then
-    cache_obj = {[1] = {["work_id"] = obj[1].work_id}}
   else
-    rspamd_logger.err(task, 'bad result: %s', obj)
-    return
+    local work_id = task:get_mempool():get_variable('contextal_work_id', 'string')
+    if work_id then
+      cache_obj = {[1] = {["work_id"] = work_id}}
+    else
+      rspamd_logger.err(task, 'no work id found in mempool')
+      return
+    end
   end
 
   local function redis_set_cb(err)
@@ -119,7 +122,7 @@ local function process_cached(task, txt)
     task:disable_symbol(settings.action_symbol_prefix)
     return process_actions(task, obj, true)
   elseif (obj[1] or E).work_id then
-    task:get_mempool():set_variable('contextal_work_id', obj.work_id)
+    task:get_mempool():set_variable('contextal_work_id', obj[1].work_id)
   else
     rspamd_logger.err(task, 'bad result (cached): %s', obj)
   end
@@ -232,9 +235,7 @@ local function action_cb(task)
       return
     end
     local obj = parser:get_object()
-    if (obj[1] or E).actions then
-      return process_actions(task, obj, false)
-    end
+    return process_actions(task, obj, false)
   end
 
   rspamd_http.request({
