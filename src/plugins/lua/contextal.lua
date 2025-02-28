@@ -33,6 +33,8 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local ucl = require "ucl"
 
+local redis_params
+
 local contextal_actions = {
   'ALERT',
   'ALLOW',
@@ -83,12 +85,18 @@ local function process_actions(task, obj, is_cached)
     return
   end
 
+  local function redis_set_cb(err)
+    if err then
+      rspamd_logger.err(task, 'error setting cache: %s', err)
+    end
+  end
+
   local key = cache_key(task)
   local ret = lua_redis.redis_make_request(task,
       redis_params, -- connect params
       key, -- hash key
       true, -- is write
-      redis_get_cb, --callback
+      redis_set_cb, --callback
       'SET', -- command
       { key, ucl.to_format(cache_obj, 'json-compact') } -- arguments
   )
@@ -129,8 +137,8 @@ local function submit(task)
       return
     end
     local parser = ucl.parser()
-    local _, err = parser:parse_string(body)
-    if err then
+    local _, parse_err = parser:parse_string(body)
+    if parse_err then
       rspamd_logger.err(task, 'cannot parse JSON: %s', err)
       return
     end
@@ -218,8 +226,8 @@ local function action_cb(task)
       return
     end
     local parser = ucl.parser()
-    local _, err = parser:parse_string(body)
-    if err then
+    local _, parse_err = parser:parse_string(body)
+    if parse_err then
       rspamd_logger.err(task, 'cannot parse JSON: %s', err)
       return
     end
@@ -244,9 +252,6 @@ local function set_url_path(base, path)
   local ts = base:sub(#base) == '/' and '' or '/'
   return base .. ts .. path
 end
-
-local opts = rspamd_config:get_all_opt(N)
-if not opts then return end
 
 settings = lua_util.override_defaults(settings, opts)
 
