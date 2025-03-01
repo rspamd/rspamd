@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -755,9 +755,17 @@ static const struct luaL_reg int64lib_m[] = {
 	{NULL, NULL}};
 
 LUA_FUNCTION_DEF(ev_base, loop);
+LUA_FUNCTION_DEF(ev_base, update_time);
+LUA_FUNCTION_DEF(ev_base, timestamp);
+LUA_FUNCTION_DEF(ev_base, pending_events);
+LUA_FUNCTION_DEF(ev_base, add_periodic);
 
 static const struct luaL_reg ev_baselib_m[] = {
 	LUA_INTERFACE_DEF(ev_base, loop),
+	LUA_INTERFACE_DEF(ev_base, update_time),
+	LUA_INTERFACE_DEF(ev_base, timestamp),
+	LUA_INTERFACE_DEF(ev_base, pending_events),
+	LUA_INTERFACE_DEF(ev_base, add_periodic),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
@@ -3610,4 +3618,107 @@ lua_ev_base_loop(lua_State *L)
 	lua_pushinteger(L, ret);
 
 	return 1;
+}
+
+static int
+lua_ev_base_update_time(lua_State *L)
+{
+	struct ev_loop *ev_base;
+
+	ev_base = lua_check_ev_base(L, 1);
+	ev_now_update_if_cheap(ev_base);
+
+	lua_pushnumber(L, ev_time());
+
+	return 1;
+}
+
+static int
+lua_ev_base_timestamp(lua_State *L)
+{
+	struct ev_loop *ev_base;
+
+	ev_base = lua_check_ev_base(L, 1);
+	lua_pushnumber(L, ev_now(ev_base));
+
+	return 1;
+}
+
+static int
+lua_ev_base_pending_events(lua_State *L)
+{
+	struct ev_loop *ev_base;
+
+	ev_base = lua_check_ev_base(L, 1);
+	lua_pushnumber(L, ev_pending_count(ev_base));
+
+	return 1;
+}
+
+struct rspamd_ev_base_cbdata {
+	lua_State *L;
+	int cbref;
+	ev_timer ev;
+};
+
+static void
+lua_ev_base_cb(struct ev_loop *loop, struct ev_timer *t, int events)
+{
+	struct rspamd_ev_base_cbdata *cbdata = (struct rspamd_ev_base_cbdata *) t->data;
+	lua_State *L;
+	bool schedule_more = false;
+
+	L = cbdata->L;
+
+	lua_pushcfunction(L, &rspamd_lua_traceback);
+	int err_idx = lua_gettop(L);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, cbdata->cbref);
+
+	if (lua_pcall(L, 0, 1, err_idx) != 0) {
+		msg_err("call to periodic "
+				"script failed: %s",
+				lua_tostring(L, -1));
+	}
+	else {
+		if (lua_isnumber(L, -1)) {
+			schedule_more = true;
+			ev_timer_set(&cbdata->ev, lua_tonumber(L, -1), 0.0);
+		}
+	}
+
+	if (schedule_more) {
+		ev_timer_again(loop, t);
+	}
+	else {
+		/* Cleanup */
+		ev_timer_stop(loop, t);
+		luaL_unref(L, LUA_REGISTRYINDEX, cbdata->cbref);
+		g_free(cbdata);
+	}
+}
+
+static int
+lua_ev_base_add_periodic(lua_State *L)
+{
+	struct ev_loop *ev_base;
+
+	ev_base = lua_check_ev_base(L, 1);
+	if (!lua_isfunction(L, 3)) {
+		return luaL_error(L, "invalid arguments: callback expected");
+	}
+
+	if (!lua_isnumber(L, 2)) {
+		return luaL_error(L, "invalid arguments: timeout expected");
+	}
+
+	struct rspamd_ev_base_cbdata *cbdata = g_malloc(sizeof(*cbdata));
+	cbdata->L = L;
+	lua_pushvalue(L, 3);
+	cbdata->ev.data = cbdata;
+	cbdata->cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+	ev_timer_init(&cbdata->ev, lua_ev_base_cb, lua_tonumber(L, 2), 0.0);
+	ev_timer_start(ev_base, &cbdata->ev);
+
+	return 0;
 }
