@@ -758,14 +758,14 @@ LUA_FUNCTION_DEF(ev_base, loop);
 LUA_FUNCTION_DEF(ev_base, update_time);
 LUA_FUNCTION_DEF(ev_base, timestamp);
 LUA_FUNCTION_DEF(ev_base, pending_events);
-LUA_FUNCTION_DEF(ev_base, add_periodic);
+LUA_FUNCTION_DEF(ev_base, add_timer);
 
 static const struct luaL_reg ev_baselib_m[] = {
 	LUA_INTERFACE_DEF(ev_base, loop),
 	LUA_INTERFACE_DEF(ev_base, update_time),
 	LUA_INTERFACE_DEF(ev_base, timestamp),
 	LUA_INTERFACE_DEF(ev_base, pending_events),
-	LUA_INTERFACE_DEF(ev_base, add_periodic),
+	LUA_INTERFACE_DEF(ev_base, add_timer),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
@@ -3698,7 +3698,7 @@ lua_ev_base_cb(struct ev_loop *loop, struct ev_timer *t, int events)
 }
 
 static int
-lua_ev_base_add_periodic(lua_State *L)
+lua_ev_base_add_timer(lua_State *L)
 {
 	struct ev_loop *ev_base;
 
