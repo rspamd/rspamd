@@ -1,0 +1,51 @@
+/* Provide a mapping from Font Awesome - see fontawesome.css - to FooTable class names. */
+.fooicon {
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+  display: inline-block;
+  font: var(--fa-font-solid) !important;
+  text-rendering: auto;
+}
+.fooicon-loader::before {
+  content: "\f2f1"; /* fa-sync-alt */
+}
+.fooicon-plus::before {
+  content: "\2b"; /* fa-plus */
+}
+.fooicon-minus::before {
+  content: "\f068"; /* fa-minus */
+}
+.fooicon-search::before {
+  content: "\f002"; /* fa-search */
+}
+.fooicon-remove::before {
+  content: "\f654"; /* fa-cross */
+}
+.fooicon-sort::before {
+  content: "\f0dc"; /* fa-sort */
+}
+.fooicon-sort-asc::before {
+  content: "\f0de"; /* fa-sort-up */
+}
+.fooicon-sort-desc::before {
+  content: "\f0dd"; /* fa-sort-down */
+}
+.fooicon-pencil::before {
+  content: "\f303"; /* fa-pencil */
+}
+.fooicon-trash::before {
+  content: "\f1f8"; /* fa-trash */
+}
+.fooicon-eye-close::before {
+  content: "\f070"; /* fa-eye-slash */
+}
+.fooicon-flash::before {
+  content: "\f0e7"; /* fa-bolt */
+}
+.fooicon-cog::before {
+  content: "\f013"; /* fa-gear */
+}
+.fooicon-stats::before {
+  content: "\e473"; /* fa-chart-simple */
+}
