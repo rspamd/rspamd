@@ -39,6 +39,8 @@ my %decompressor = (
     'zst' => 'zstd -cd',
 );
 
+Getopt::Long::Configure( "no_auto_abbrev", "no_ignore_case" );
+
 GetOptions(
     "reject-score|r=f"      => \$reject_score,
     "junk-score|j=f"        => \$junk_score,
@@ -57,7 +59,7 @@ GetOptions(
     "end=s"                 => \$endTime,
     "num-logs|n=i"          => \$num_logs,
     "exclude-logs|x=i"      => \$exclude_logs,
-    "json|j"                => \$json,
+    "json"                  => \$json,
     "help|?"                => \$help,
     "man"                   => \$man
 ) or pod2usage(2);
