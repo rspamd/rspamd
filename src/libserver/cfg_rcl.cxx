@@ -2210,7 +2210,7 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 
 		rspamd_rcl_add_doc_by_path(cfg,
 								   "options",
-								   "Swtich mode of gtube patterns: disable, reject, all",
+								   "Switch mode of gtube patterns: disable, reject, all",
 								   "gtube_patterns",
 								   UCL_STRING,
 								   nullptr,
@@ -2308,7 +2308,7 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   rspamd_rcl_parse_struct_time,
 									   G_STRUCT_OFFSET(struct rspamd_config, upstream_resolve_min_interval),
 									   RSPAMD_CL_FLAG_TIME_FLOAT,
-									   "Minumum interval to perform resolving (60 seconds by default)");
+									   "Minimum interval to perform resolving (60 seconds by default)");
 	}
 
 	if (!(skip_sections && g_hash_table_lookup(skip_sections, "actions"))) {
