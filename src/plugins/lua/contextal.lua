@@ -153,17 +153,22 @@ local function submit(task)
   })
 end
 
+local function cache_hit(task, err, data)
+  if err then
+    rspamd_logger.err(task, 'error getting cache: %s', err)
+  else
+    process_cached(task, data)
+  end
+end
+
 local function submit_cb(task)
-  if redis_params then
-    redis_cache.cache_get(task, task:get_digest(), cache_context, settings.cache_timeout,
+  if cache_context then
+    redis_cache.cache_get(task,
+        task:get_digest(),
+        cache_context,
+        settings.cache_timeout,
         submit,
-        function(task, err, data)
-          if err then
-            rspamd_logger.err(task, 'error getting cache: %s', err)
-          else
-            process_cached(task, data)
-          end
-        end
+        cache_hit
     )
   else
     submit(task)
