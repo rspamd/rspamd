@@ -51,12 +51,20 @@ local settings = {
   cache_timeout = 5,
   cache_ttl = 3600,
   custom_actions = {},
+  defer_if_no_result = false,
+  defer_message = 'Awaiting deep scan - try again later',
   http_timeout = 2,
   request_ttl = 4,
   submission_symbol = 'CONTEXTAL_SUBMIT',
 }
 
 local static_boundary = rspamd_util.random_hex(32)
+
+local function maybe_defer(task, obj)
+  if settings.defer_if_no_result and not ((obj or E)[1] or E).actions then
+    task:set_pre_result('soft reject', settings.defer_message)
+  end
+end
 
 local function process_actions(task, obj, is_cached)
   for _, match in ipairs((obj[1] or E).actions or E) do
@@ -71,7 +79,10 @@ local function process_actions(task, obj, is_cached)
     end
   end
 
-  if not cache_context or is_cached then return end
+  if not cache_context or is_cached then
+    maybe_defer(task, obj)
+    return
+  end
 
   local cache_obj
   if (obj[1] or E).actions then
@@ -90,6 +101,8 @@ local function process_actions(task, obj, is_cached)
       task:get_digest(),
       cache_obj,
       cache_context)
+
+  maybe_defer(task, obj)
 end
 
 local function process_cached(task, obj)
@@ -108,16 +121,19 @@ local function submit(task)
   local function http_callback(err, code, body, hdrs)
     if err then
       rspamd_logger.err(task, 'http error: %s', err)
+      maybe_defer(task)
       return
     end
     if code ~= 201 then
       rspamd_logger.err(task, 'bad http code: %s', code)
+      maybe_defer(task)
       return
     end
     local parser = ucl.parser()
     local _, parse_err = parser:parse_string(body)
     if parse_err then
       rspamd_logger.err(task, 'cannot parse JSON: %s', err)
+      maybe_defer(task)
       return
     end
     local obj = parser:get_object()
@@ -185,16 +201,19 @@ local function action_cb(task)
   local function http_callback(err, code, body, hdrs)
     if err then
       rspamd_logger.err(task, 'http error: %s', err)
+      maybe_defer(task)
       return
     end
     if code ~= 200 then
       rspamd_logger.err(task, 'bad http code: %s', code)
+      maybe_defer(task)
       return
     end
     local parser = ucl.parser()
     local _, parse_err = parser:parse_string(body)
     if parse_err then
       rspamd_logger.err(task, 'cannot parse JSON: %s', err)
+      maybe_defer(task)
       return
     end
     local obj = parser:get_object()
