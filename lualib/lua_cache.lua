@@ -173,7 +173,7 @@ local function cache_get(task, key, cache_context, timeout, callback_uncached, c
     -- Set up a timer to probe the key
     local function probe_key()
       probe_count = probe_count + 1
-      lua_util.debugm(N, task, "probe #%d/%d for pending key %s",
+      lua_util.debugm(N, task, "probe #%s/%s for pending key %s",
           probe_count, cache_context.opts.cache_probes, full_key)
 
       if probe_count >= cache_context.opts.cache_probes then
@@ -331,7 +331,7 @@ local function cache_del(task, key, cache_context)
           lua_util.debugm(N, task, "failed to delete cache key: %s", err)
         else
           local count = tonumber(result) or 0
-          lua_util.debugm(N, task, "successfully deleted cache key %s (%d keys removed)",
+          lua_util.debugm(N, task, "successfully deleted cache key %s (%s keys removed)",
               full_key, count)
         end
       end,
