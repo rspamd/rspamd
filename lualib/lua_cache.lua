@@ -14,15 +14,67 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
---[[
-Cache API implementation for Rspamd using Redis
-]]--
+--[[[
+-- @module lua_cache
+-- This module provides a Redis-based caching API for Rspamd with support for
+-- concurrent operations across multiple workers. It includes features like
+-- distributed locking via PENDING markers, automatic key hashing,
+-- configurable serialization formats, and TTL management.
+--
+@example
+local redis_cache = require "lua_cache"
+local redis_params = redis_lib.parse_redis_server('reputation')
+
+-- Create cache context
+local cache_context = redis_cache.create_cache_context(redis_params, {
+  cache_prefix = "rspamd_reputation",
+  cache_ttl = 86400, -- 1 day
+  cache_format = "json",
+  cache_hash_len = 16,
+  cache_use_hashing = true
+})
+
+-- Example usage in a task
+local function process_url_reputation(task, url)
+  local cache_key = url:get_tld()
+
+  -- Try to get data from cache first
+  redis_cache.cache_get(task, cache_key, cache_context, 5.0,
+    -- This callback is called on cache miss
+    function(task)
+      -- Perform expensive reputation lookup
+      local reputation = calculate_reputation(task, url)
+
+      -- Store result in cache for future use
+      redis_cache.cache_set(task, cache_key, {
+        score = reputation.score,
+        categories = reputation.categories,
+        timestamp = os.time()
+      }, cache_context)
+
+      -- Use the result
+      apply_reputation_rules(task, url, reputation)
+    end,
+    -- This callback is called when cache data is available
+    function(task, err, data)
+      if err then
+        logger.errx(task, "Cache error for %s: %s", cache_key, err)
+        return
+      end
+
+      -- Use the cached data
+      apply_reputation_rules(task, url, data)
+    end
+  )
+end
+--]]
 
 local logger = require "rspamd_logger"
 local ucl = require "ucl"
 local lua_util = require "lua_util"
 local rspamd_util = require "rspamd_util"
 local lua_redis = require "lua_redis"
+local hasher = require "rspamd_cryptobox_hash"
 
 local N = "lua_cache"
 local exports = {}
@@ -33,7 +85,38 @@ local default_opts = {
   cache_ttl = 3600, -- 1 hour
   cache_probes = 5, -- Number of times to check a pending key
   cache_format = "json", -- Serialization format
+  cache_hash_len = 16, -- Number of hex symbols to use for hashed keys
+  cache_use_hashing = true -- Whether to hash keys by default
 }
+
+-- Create a hash of the key using the configured length
+local function hash_key(key, hash_len)
+  local h = hasher.create(key)
+  local hex = h:hex()
+
+  if hash_len and hash_len > 0 and hash_len < #hex then
+    return string.sub(hex, 1, hash_len)
+  end
+
+  return hex
+end
+
+-- Get the appropriate key based on hashing configuration
+local function get_cache_key(raw_key, cache_context, force_hashing)
+  -- Determine whether to hash based on context settings and force parameter
+  local should_hash = force_hashing
+  if should_hash == nil then
+    should_hash = cache_context.opts.cache_use_hashing
+  end
+
+  if should_hash then
+    lua_util.debugm(N, rspamd_config, "hashing key '%s' with hash length %s",
+        raw_key, cache_context.opts.cache_hash_len)
+    return hash_key(raw_key, cache_context.opts.cache_hash_len)
+  else
+    return raw_key
+  end
+end
 
 -- Create a caching context with the provided options
 local function create_cache_context(redis_params, opts)
@@ -61,6 +144,8 @@ local function create_cache_context(redis_params, opts)
     opts.cache_ttl = nil
     opts.cache_probes = nil
     opts.cache_format = nil
+    opts.cache_hash_len = nil
+    opts.cache_use_hashing = nil
   end
 
   -- Set serialization and deserialization functions
@@ -159,8 +244,8 @@ local function cache_get(task, key, cache_context, timeout, callback_uncached, c
     return false
   end
 
-  local full_key = cache_context.opts.cache_prefix .. ":" .. key
-  lua_util.debugm(N, task, "cache lookup for key: %s", full_key)
+  local full_key = cache_context.opts.cache_prefix .. "_" .. get_cache_key(key, cache_context, false)
+  lua_util.debugm(N, task, "cache lookup for key: %s (%s)", key, full_key)
 
   -- Function to check a pending key
   local function check_pending(pending_info)
@@ -293,9 +378,9 @@ local function cache_set(task, key, data, cache_context)
     return false
   end
 
-  local full_key = cache_context.opts.cache_prefix .. ":" .. key
-  lua_util.debugm(N, task, "caching data for key: %s with TTL: %s",
-      full_key, cache_context.opts.cache_ttl)
+  local full_key = cache_context.opts.cache_prefix .. "_" .. get_cache_key(key, cache_context, false)
+  lua_util.debugm(N, task, "caching data for key: %s (%s) with TTL: %s",
+      full_key, key, cache_context.opts.cache_ttl)
 
   local encoded_data = encode_data(data, cache_context)
 
@@ -321,7 +406,7 @@ local function cache_del(task, key, cache_context)
     return false
   end
 
-  local full_key = cache_context.opts.cache_prefix .. ":" .. key
+  local full_key = cache_context.opts.cache_prefix .. "_" .. get_cache_key(key, cache_context, false)
   lua_util.debugm(N, task, "deleting cache key: %s", full_key)
 
   return lua_redis.redis_make_request(task, cache_context.redis_params, key, true,
@@ -340,9 +425,50 @@ local function cache_del(task, key, cache_context)
 end
 
 -- Export the API functions
+---[[[
+-- @function lua_cache.create_cache_context(redis_params, opts)
+-- Creates a Redis caching context with specified parameters and options
+-- @param {table} redis_params Redis connection parameters (required)
+-- @param {table} opts Optional configuration parameters:
+--   * `cache_prefix`: Key prefix for Redis (default: "rspamd_cache")
+--   * `cache_ttl`: TTL in seconds for cached entries (default: 3600)
+--   * `cache_probes`: Number of times to check pending keys (default: 5)
+--   * `cache_format`: Serialization format - "json" or "messagepack" (default: "json")
+--   * `cache_hash_len`: Number of hex symbols for hashed keys (default: 16)
+--   * `cache_use_hashing`: Whether to hash keys by default (default: true)
+-- @return {table} Cache context or nil + error message on failure
+--]]
 exports.create_cache_context = create_cache_context
+---[[[
+-- @function ç.cache_get(task, key, cache_context, timeout, callback_uncached, callback_data)
+-- Retrieves data from cache, handling pending states and cache misses appropriately
+-- @param {rspamd_task} task Current task (required)
+-- @param {string} key Cache key (required)
+-- @param {table} cache_context Redis cache context from create_cache_context (required)
+-- @param {number} timeout Timeout for pending operations in seconds (required)
+-- @param {function} callback_uncached Function to call on cache miss: callback_uncached(task) (required)
+-- @param {function} callback_data Function to call when data is available: callback_data(task, err, data) (required)
+-- @return {boolean} true if request was initiated successfully, false otherwise
+--]]
 exports.cache_get = cache_get
+---[[[
+-- @function lua_cache.cache_set(task, key, data, cache_context)
+-- Stores data in the cache with the configured TTL
+-- @param {rspamd_task} task Current task (required)
+-- @param {string} key Cache key (required)
+-- @param {table} data Data to store in the cache (required)
+-- @param {table} cache_context Redis cache context from create_cache_context (required)
+-- @return {boolean} true if request was initiated successfully, false otherwise
+--]]
 exports.cache_set = cache_set
+---[[[
+-- @function lua_cache.cache_del(task, key, cache_context)
+-- Deletes data from the cache
+-- @param {rspamd_task} task Current task (required)
+-- @param {string} key Cache key (required)
+-- @param {table} cache_context Redis cache context from create_cache_context (required)
+-- @return {boolean} true if request was initiated successfully, false otherwise
+--]]
 exports.cache_del = cache_del
 
 return exports
