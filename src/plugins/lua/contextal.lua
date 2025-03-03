@@ -28,12 +28,13 @@ end
 
 local lua_redis = require "lua_redis"
 local lua_util = require "lua_util"
+local redis_cache = require "lua_cache"
 local rspamd_http = require "rspamd_http"
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local ucl = require "ucl"
 
-local redis_params
+local cache_context, redis_params
 
 local contextal_actions = {
   'ALERT',
@@ -46,19 +47,16 @@ local contextal_actions = {
 local settings = {
   action_symbol_prefix = 'CONTEXTAL_ACTION',
   base_url = 'http://localhost:8080',
+  cache_prefix = 'CXAL',
+  cache_timeout = 5,
   cache_ttl = 3600,
   custom_actions = {},
   http_timeout = 2,
-  key_prefix = 'CXAL',
   request_ttl = 4,
   submission_symbol = 'CONTEXTAL_SUBMIT',
 }
 
 local static_boundary = rspamd_util.random_hex(32)
-
-local function cache_key(task)
-  return string.format('%s_%s', settings.key_prefix, task:get_digest())
-end
 
 local function process_actions(task, obj, is_cached)
   for _, match in ipairs((obj[1] or E).actions or E) do
@@ -73,7 +71,7 @@ local function process_actions(task, obj, is_cached)
     end
   end
 
-  if not redis_params or is_cached then return end
+  if not cache_context or is_cached then return end
 
   local cache_obj
   if (obj[1] or E).actions then
@@ -88,36 +86,13 @@ local function process_actions(task, obj, is_cached)
     end
   end
 
-  local function redis_set_cb(err)
-    if err then
-      rspamd_logger.err(task, 'error setting cache: %s', err)
-    end
-  end
-
-  local key = cache_key(task)
-  local ret = lua_redis.redis_make_request(task,
-      redis_params, -- connect params
-      key, -- hash key
-      true, -- is write
-      redis_set_cb, --callback
-      'SETEX', -- command
-      { key, settings.cache_ttl, ucl.to_format(cache_obj, 'json-compact') } -- arguments
-  )
-
-  if not ret then
-    rspamd_logger.err(task, 'cannot make redis request to cache result')
-    return
-  end
+  redis_cache.cache_set(task,
+      task:get_digest(),
+      cache_obj,
+      cache_context)
 end
 
-local function process_cached(task, txt)
-  local parser = ucl.parser()
-  local _, err = parser:parse_string(txt)
-  if err then
-    rspamd_logger.err(task, 'cannot parse JSON (cached): %s', err)
-    return
-  end
-  local obj = parser:get_object()
+local function process_cached(task, obj)
   if (obj[1] or E).actions then
     task:disable_symbol(settings.action_symbol_prefix)
     return process_actions(task, obj, true)
@@ -180,35 +155,18 @@ end
 
 local function submit_cb(task)
   if redis_params then
-
-    local function redis_get_cb(err, data)
-      if err then
-        rspamd_logger.err(task, 'error querying redis: %s', err)
-        return
-      end
-      if type(data) == 'userdata' then
-        return submit(task)
-      end
-      process_cached(task, data)
-    end
-
-    local key = cache_key(task)
-    local ret = lua_redis.redis_make_request(task,
-        redis_params, -- connect params
-        key, -- hash key
-        false, -- is write
-        redis_get_cb, --callback
-        'GET', -- command
-        { key } -- arguments
+    redis_cache.cache_get(task, task:get_digest(), cache_context, settings.cache_timeout,
+        submit,
+        function(task, err, data)
+          if err then
+            rspamd_logger.err(task, 'error getting cache: %s', err)
+          else
+            process_cached(task, data)
+          end
+        end
     )
-
-    if not ret then
-      rspamd_logger.err(task, 'cannot make redis request to check results')
-      return
-    end
-
   else
-    return submit(task)
+    submit(task)
   end
 end
 
@@ -278,8 +236,12 @@ end
 
 redis_params = lua_redis.parse_redis_server(N)
 if redis_params then
-  lua_redis.register_prefix(settings.key_prefix .. '_*', N,
-      'Cache for contextal plugin')
+  cache_context = redis_cache.create_cache_context(redis_params, {
+      cache_prefix = settings.cache_prefix,
+      cache_ttl = settings.cache_ttl,
+      cache_format = 'json',
+      cache_use_hashing = false
+  })
 end
 
 rspamd_config:register_symbol({
