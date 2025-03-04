@@ -248,17 +248,13 @@ local function check_string_setting(expected, str)
 end
 
 local function check_ip_setting(expected, ip)
-  if not expected[2] then
-    if lua_maps.rspamd_maybe_check_map(expected[1], ip:to_string()) then
+  if type(expected) == "string" then
+    if lua_maps.rspamd_maybe_check_map(expected, ip:to_string()) then
       return true
     end
   else
-    if expected[2] ~= 0 then
-      local nip = ip:apply_mask(expected[2])
-      if nip and nip:to_string() == expected[1] then
-        return true
-      end
-    elseif ip:to_string() == expected[1] then
+    local nip = ip:apply_mask(expected[2])
+    if nip and nip:to_string() == expected[1] then
       return true
     end
   end
@@ -465,43 +461,48 @@ end
 
 -- Process IP address: converted to a table {ip, mask}
 local function process_ip_condition(ip)
-  local out = {}
-
   if type(ip) == "table" then
+    local out = {}
     for _, v in ipairs(ip) do
+      -- should we check/abort on nil here?
       table.insert(out, process_ip_condition(v))
     end
-  elseif type(ip) == "string" then
-    local slash = string.find(ip, '/')
-
-    if not slash then
-      -- Just a plain IP address
-      local res = rspamd_ip.from_string(ip)
-
-      if res:is_valid() then
-        out[1] = res:to_string()
-        out[2] = 0
-      else
-        -- It can still be a map
-        out[1] = ip
-      end
-    else
-      local res = rspamd_ip.from_string(string.sub(ip, 1, slash - 1))
-      local mask = tonumber(string.sub(ip, slash + 1))
-
-      if res:is_valid() then
-        out[1] = res:to_string()
-        out[2] = mask
-      else
-        rspamd_logger.errx(rspamd_config, "bad IP address: " .. ip)
-        return nil
-      end
-    end
-  else
-    return nil
+    return out
   end
 
-  return out
+  if type(ip) == "string" then
+    if string.sub(ip, 1, 4) == "map:" then
+      -- It is a map, don't apply any extra logic
+      return ip
+    end
+
+    local mask
+    local slash = string.find(ip, '/')
+    if slash then
+      mask = string.sub(ip, slash + 1)
+      ip = string.sub(ip, 1, slash - 1)
+    end
+
+    local res = rspamd_ip.from_string(ip)
+    if res:is_valid() then
+      if mask then
+        local mask_num = tonumber(mask)
+        if mask_num then
+          -- normalize IP
+          res = res:apply_mask(mask_num)
+          if res then
+            return { res:to_string(), mask_num }
+          end 
+        end
+        rspamd_logger.errx(rspamd_config, "bad IP mask: " .. mask)
+        return nil
+      end
+      return ip
+    end
+  end
+
+  rspamd_logger.errx(rspamd_config, "bad IP address: " .. ip)
+  return nil
 end
 
 -- Process email like condition, converted to a table with fields:
