@@ -32,6 +32,7 @@ local redis_cache = require "lua_cache"
 local rspamd_http = require "rspamd_http"
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
+local ts = require("tableshape").types
 local ucl = require "ucl"
 
 local cache_context, redis_params
@@ -42,6 +43,21 @@ local contextal_actions = {
   'BLOCK',
   'QUARANTINE',
   'SPAM',
+}
+
+local config_schema = lua_redis.enrich_schema {
+  action_symbol_prefix = ts.string:is_optional(),
+  base_url = ts.string:is_optional(),
+  cache_prefix = ts.string:is_optional(),
+  cache_timeout = ts.number:is_optional(),
+  cache_ttl = ts.number:is_optional(),
+  custom_actions = ts.array_of(ts.string):is_optional(),
+  defer_if_no_result = ts.boolean:is_optional(),
+  defer_message = ts.string:is_optional(),
+  enabled = ts.boolean:is_optional(),
+  http_timeout = ts.number:is_optional(),
+  request_ttl = ts.number:is_optional(),
+  submission_symbol = ts.string:is_optional(),
 }
 
 local settings = {
@@ -232,11 +248,20 @@ local function action_cb(task)
 end
 
 local function set_url_path(base, path)
-  local ts = base:sub(#base) == '/' and '' or '/'
-  return base .. ts .. path
+  local slash = base:sub(#base) == '/' and '' or '/'
+  return base .. slash .. path
 end
 
 settings = lua_util.override_defaults(settings, opts)
+
+local res, err = config_schema:transform(settings)
+if not res then
+  rspamd_logger.warnx(rspamd_config, 'plugin %s is misconfigured: %s', N, err)
+  local err_msg = string.format("schema error: %s", res)
+  lua_util.config_utils.push_config_error(N, err_msg)
+  lua_util.disable_module(N, "failed", err_msg)
+  return
+end
 
 contextal_actions = lua_util.list_to_hash(contextal_actions)
 for _, k in ipairs(settings.custom_actions) do
