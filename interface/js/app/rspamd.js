@@ -26,7 +26,7 @@
 /* global require, Visibility */
 
 define(["jquery", "app/common", "stickytabs", "visibility",
-    "bootstrap", "fontawesome"],
+    "bootstrap"],
 ($, common) => {
     "use strict";
     const ui = {};
@@ -437,11 +437,11 @@ define(["jquery", "app/common", "stickytabs", "visibility",
     });
 
     $(document).ajaxStart(() => {
-        $("#refresh > svg").addClass("fa-spin");
+        $("#refresh > .fas").addClass("fa-spin");
     });
     $(document).ajaxComplete(() => {
         setTimeout(() => {
-            $("#refresh > svg").removeClass("fa-spin");
+            $("#refresh > .fas").removeClass("fa-spin");
         }, 1000);
     });
 
