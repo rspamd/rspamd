@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1226,6 +1226,13 @@ LUA_FUNCTION_DEF(task, get_all_named_results);
  */
 LUA_FUNCTION_DEF(task, get_dns_req);
 
+/***
+ * @method task:add_timer(timeout, callback)
+ * Creates a delayed execution task for the specific callback at given timeout (in seconds)
+ *
+ */
+LUA_FUNCTION_DEF(task, add_timer);
+
 static const struct luaL_reg tasklib_f[] = {
 	LUA_INTERFACE_DEF(task, create),
 	LUA_INTERFACE_DEF(task, load_from_file),
@@ -1353,6 +1360,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, add_named_result),
 	LUA_INTERFACE_DEF(task, get_all_named_results),
 	LUA_INTERFACE_DEF(task, topointer),
+	LUA_INTERFACE_DEF(task, add_timer),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
@@ -7404,6 +7412,102 @@ lua_archive_get_filename(lua_State *L)
 	}
 
 	return 1;
+}
+
+struct rspamd_task_timer_cbdata {
+	lua_State *L;
+	struct rspamd_task *task;
+	struct rspamd_symcache_dynamic_item *item;
+	struct rspamd_async_event *async_ev;
+	int cbref;
+	ev_timer ev;
+};
+
+static void
+lua_timer_fin(gpointer arg)
+{
+	struct rspamd_task_timer_cbdata *cbdata = (struct rspamd_task_timer_cbdata *) arg;
+
+	ev_timer_stop(cbdata->task->event_loop, &cbdata->ev);
+	luaL_unref(cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref);
+}
+
+static void
+lua_task_timer_cb(struct ev_loop *loop, struct ev_timer *t, int events)
+{
+	struct rspamd_task_timer_cbdata *cbdata = (struct rspamd_task_timer_cbdata *) t->data;
+	lua_State *L;
+	bool schedule_more = false;
+
+	L = cbdata->L;
+
+	lua_pushcfunction(L, &rspamd_lua_traceback);
+	int err_idx = lua_gettop(L);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, cbdata->cbref);
+	rspamd_lua_task_push(L, cbdata->task);
+
+	if (lua_pcall(L, 1, 1, err_idx) != 0) {
+		msg_err("call to periodic "
+				"script failed: %s",
+				lua_tostring(L, -1));
+	}
+	else {
+		if (lua_isnumber(L, -1)) {
+			schedule_more = true;
+			ev_timer_set(&cbdata->ev, lua_tonumber(L, -1), 0.0);
+		}
+	}
+
+	if (schedule_more) {
+		ev_timer_again(loop, t);
+	}
+	else {
+		/* Cleanup */
+		if (cbdata->item) {
+			rspamd_symcache_item_async_dec_check(cbdata->task, cbdata->item, "timer");
+			cbdata->item = NULL;
+		}
+		rspamd_session_remove_event(cbdata->task->s, lua_timer_fin, cbdata);
+	}
+}
+
+static int
+lua_task_add_timer(lua_State *L)
+{
+	struct ev_loop *ev_base;
+	struct rspamd_task *task;
+
+	task = lua_check_task(L, 1);
+	ev_base = task->event_loop;
+	if (!lua_isfunction(L, 3)) {
+		return luaL_error(L, "invalid arguments: callback expected");
+	}
+
+	if (!lua_isnumber(L, 2)) {
+		return luaL_error(L, "invalid arguments: timeout expected");
+	}
+
+	struct rspamd_task_timer_cbdata *cbdata = rspamd_mempool_alloc(task->task_pool, sizeof(*cbdata));
+	cbdata->L = L;
+	lua_pushvalue(L, 3);
+	cbdata->ev.data = cbdata;
+	cbdata->cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+	cbdata->task = task;
+	cbdata->item = rspamd_symcache_get_cur_item(task);
+
+	if (cbdata->item) {
+		cbdata->async_ev = rspamd_session_add_event_full(task->s, lua_timer_fin, cbdata, "timer",
+														 rspamd_symcache_dyn_item_name(cbdata->task, cbdata->item));
+		rspamd_symcache_item_async_inc(task, cbdata->item, "timer");
+	}
+	else {
+		cbdata->async_ev = rspamd_session_add_event(task->s, lua_timer_fin, cbdata, "timer");
+	}
+
+	ev_timer_init(&cbdata->ev, lua_task_timer_cb, lua_tonumber(L, 2), 0.0);
+	ev_timer_start(ev_base, &cbdata->ev);
+
+	return 0;
 }
 
 /* Init part */
