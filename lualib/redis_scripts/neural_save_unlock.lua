@@ -17,6 +17,8 @@ redis.call('DEL', KEYS[1] .. '_ham_set')
 redis.call('HDEL', KEYS[1], 'lock')
 redis.call('HDEL', KEYS[7], 'lock')
 redis.call('EXPIRE', KEYS[1], tonumber(KEYS[5]))
+redis.call('EXPIRE', KEYS[1] .. '_spam_set', tonumber(KEYS[5]))
+redis.call('EXPIRE', KEYS[1] .. '_ham_set', tonumber(KEYS[5]))
 redis.call('HSET', KEYS[1], 'roc_thresholds', KEYS[8])
 if KEYS[9] then
   redis.call('HSET', KEYS[1], 'pca', KEYS[9])
