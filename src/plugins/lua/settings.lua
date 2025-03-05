@@ -460,20 +460,19 @@ local function gen_settings_external_cb(name)
 end
 
 -- Process IP address: converted to a table {ip, mask}
-local function process_ip_condition(ip)
+local function process_ip_condition(ip, out)
   if type(ip) == "table" then
-    local out = {}
     for _, v in ipairs(ip) do
-      -- should we check/abort on nil here?
-      table.insert(out, process_ip_condition(v))
+      process_ip_condition(v, out)
     end
-    return out
+    return
   end
 
   if type(ip) == "string" then
     if string.sub(ip, 1, 4) == "map:" then
       -- It is a map, don't apply any extra logic
-      return ip
+      table.insert(out, ip)
+      return
     end
 
     local mask
@@ -490,19 +489,23 @@ local function process_ip_condition(ip)
         if mask_num then
           -- normalize IP
           res = res:apply_mask(mask_num)
-          if res then
-            return { res:to_string(), mask_num }
-          end 
+          if res:is_valid() then
+            table.insert(out, { res:to_string(), mask_num })
+            return
+          end
         end
-        rspamd_logger.errx(rspamd_config, "bad IP mask: " .. mask)
-        return nil
+
+        rspamd_logger.errx(rspamd_config, "bad IP mask: %s/%s", ip, mask)
+        return
       end
-      return ip
+
+      -- Just a plain IP address
+      table.insert(out, res:to_string())
+      return
     end
   end
 
   rspamd_logger.errx(rspamd_config, "bad IP address: " .. ip)
-  return nil
 end
 
 -- Process email like condition, converted to a table with fields:
@@ -660,22 +663,21 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
 
     local checks = {}
     if elt.ip then
-      local ips_table = process_ip_condition(elt['ip'])
+      local ips_table = {}
+      process_ip_condition(elt.ip, ips_table)
 
-      if ips_table then
-        lua_util.debugm(N, rspamd_config, 'added ip condition to "%s": %s',
-            name, ips_table)
-        checks.ip = {
-          check = gen_check_closure(convert_to_table(elt.ip, ips_table), check_ip_setting),
-          extract = function(task)
-            local ip = task:get_from_ip()
-            if ip and ip:is_valid() then
-              return ip
-            end
-            return nil
-          end,
-        }
-      end
+      lua_util.debugm(N, rspamd_config, 'added ip condition to "%s": %s',
+          name, ips_table)
+      checks.ip = {
+        check = gen_check_closure(ips_table, check_ip_setting),
+        extract = function(task)
+          local ip = task:get_from_ip()
+          if ip and ip:is_valid() then
+            return ip
+          end
+          return nil
+        end,
+      }
     end
     if elt.ip_map then
       local ips_map = lua_maps.map_add_from_ucl(elt.ip_map, 'radix',
@@ -698,23 +700,21 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
     end
 
     if elt.client_ip then
-      local client_ips_table = process_ip_condition(elt.client_ip)
+      local client_ips_table = {}
+      process_ip_condition(elt.client_ip, client_ips_table)
 
-      if client_ips_table then
-        lua_util.debugm(N, rspamd_config, 'added client_ip condition to "%s": %s',
-            name, client_ips_table)
-        checks.client_ip = {
-          check = gen_check_closure(convert_to_table(elt.client_ip, client_ips_table),
-              check_ip_setting),
-          extract = function(task)
-            local ip = task:get_client_ip()
-            if ip:is_valid() then
-              return ip
-            end
-            return nil
-          end,
-        }
-      end
+      lua_util.debugm(N, rspamd_config, 'added client_ip condition to "%s": %s',
+          name, client_ips_table)
+      checks.client_ip = {
+        check = gen_check_closure(client_ips_table, check_ip_setting),
+        extract = function(task)
+          local ip = task:get_client_ip()
+          if ip:is_valid() then
+            return ip
+          end
+          return nil
+        end,
+      }
     end
     if elt.client_ip_map then
       local ips_map = lua_maps.map_add_from_ucl(elt.ip_map, 'radix',
