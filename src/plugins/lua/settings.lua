@@ -617,6 +617,12 @@ end
 
 -- Used to create a checking closure: if value matches expected somehow, return true
 local function gen_check_closure(expected, check_func)
+  if not check_func then
+    check_func = function(a, b)
+      return a == b
+    end
+  end
+
   return function(value)
     if not value then
       return false
@@ -627,13 +633,6 @@ local function gen_check_closure(expected, check_func)
     end
 
     if value then
-
-      if not check_func then
-        check_func = function(a, b)
-          return a == b
-        end
-      end
-
       local ret
       if type(expected) == 'table' then
         ret = fun.any(function(d)
