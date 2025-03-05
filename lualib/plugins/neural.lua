@@ -757,7 +757,7 @@ local function process_rules_settings()
           type = 'set',
         })
     lua_redis.register_prefix(selt.prefix .. '_\\d+_ham_set', N,
-        string.format('NN learning set (spam) for rule "%s"; settings id "%s"',
+        string.format('NN learning set (ham) for rule "%s"; settings id "%s"',
             rule.prefix, selt.name), {
           persistent = true,
           type = 'set',
