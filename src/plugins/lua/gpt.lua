@@ -603,7 +603,7 @@ local function check_llm_cached(task, content, sel_part)
 
   lua_cache.cache_get(task, cache_key, cache_context, settings.timeout * 1.5, function()
     check_llm_uncached(task, content, sel_part)
-  end, function(err, data)
+  end, function(_, err, data)
     if err then
       rspamd_logger.errx(task, 'cannot get cache: %s', err)
       check_llm_uncached(task, content, sel_part)
