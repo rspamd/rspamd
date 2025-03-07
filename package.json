@@ -1,9 +1,12 @@
 {
     "devDependencies": {
-        "@stylistic/eslint-plugin": "^2.8.0",
-        "eslint": "^9.10.0",
-        "postcss-html": "*",
-        "stylelint": ">=16.9.0",
-        "stylelint-config-standard": "*"
+        "@stylistic/eslint-plugin": "^4.2.0",
+        "eslint": "^9.21.0",
+        "postcss-html": "^1.8.0",
+        "stylelint": ">=16.15.0",
+        "stylelint-config-standard": "^37.0.0"
+    },
+    "dependencies": {
+        "npm-check-updates": "^17.1.15"
     }
 }
