@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -295,6 +295,23 @@ rspamd_map_cache_cb(struct ev_loop *loop, ev_timer *w, int revents)
 	}
 }
 
+static inline time_t
+rspamd_http_map_process_next_check(time_t now, time_t expires, time_t map_check_interval)
+{
+	static const time_t interval_mult = 16;
+	/* By default use expires header */
+	time_t next_check = expires;
+
+	if (expires < now) {
+		return now;
+	}
+	else if (expires - now > map_check_interval * interval_mult) {
+		next_check = now + map_check_interval * interval_mult;
+	}
+
+	return next_check;
+}
+
 static int
 http_map_finish(struct rspamd_http_connection *conn,
 				struct rspamd_http_message *msg)
@@ -371,10 +388,9 @@ http_map_finish(struct rspamd_http_connection *conn,
 			hdate = rspamd_http_parse_date(expires_hdr->begin, expires_hdr->len);
 
 			if (hdate != (time_t) -1 && hdate > msg->date) {
-				cached_timeout = map->next_check - msg->date +
-								 map->poll_timeout * 2;
-
-				map->next_check = hdate;
+				map->next_check = rspamd_http_map_process_next_check(msg->date, hdate,
+																	 (time_t) map->poll_timeout);
+				cached_timeout = map->next_check - msg->date;
 			}
 			else {
 				msg_info_map("invalid expires header: %T, ignore it", expires_hdr);
@@ -528,7 +544,8 @@ http_map_finish(struct rspamd_http_connection *conn,
 
 			hdate = rspamd_http_parse_date(expires_hdr->begin, expires_hdr->len);
 			if (hdate != (time_t) -1 && hdate > msg->date) {
-				map->next_check = hdate;
+				map->next_check = rspamd_http_map_process_next_check(msg->date, hdate,
+																	 (time_t) map->poll_timeout);
 			}
 			else {
 				msg_info_map("invalid expires header: %T, ignore it", expires_hdr);
@@ -1663,7 +1680,7 @@ rspamd_map_read_http_cached_file(struct rspamd_map *map,
 	double now = rspamd_get_calendar_ticks();
 
 	if (header.next_check > now) {
-		map->next_check = header.next_check;
+		map->next_check = rspamd_http_map_process_next_check(now, header.next_check, map->poll_timeout);
 	}
 	else {
 		map->next_check = now;
