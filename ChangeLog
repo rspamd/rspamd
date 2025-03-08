@@ -1,3 +1,40 @@
+3.11.1: 08 Mar 2025
+  * [Feature] Add 'noop' redis backend for scripts running
+  * [Feature] Add Redis caching framework
+  * [Feature] Add UTF8 `sub` and `len` variants for rspamd_text
+  * [Feature] Allow adding timers to task (respecting symbols)
+  * [Feature] Allow additional categories to be defined in GPT
+  * [Feature] Allow fine-grained control on keys permissions
+  * [Feature] Allow individual `read_only` flag per key
+  * [Feature] Allow multiple lua scripts for fuzzy storage
+  * [Feature] Allow to add periodic functions in Lua API
+  * [Feature] Allow to disable rbls from map
+  * [Feature] Allow to hash any Lua types
+  * [Feature] Allow to store shingles as opaque Lua data
+  * [Feature] Cache LLM replies
+  * [Feature] GPT: Add ollama support
+  * [Feature] GPT: Support reason adding
+  * [Feature] Improve prompt and use plaintext instead of JSON
+  * [Feature] Lua_task: Allow to load data into the existing task
+  * [Feature] More additions
+  * [Feature] Pass shingles to Lua scripts
+  * [Feature] Preliminary implementation of LLM based anonymizing
+  * [Feature] Support LLM models consensus
+  * [Feature] Try to check maps earlier if their expires is too long
+  * [Feature] Use debug module name from caller in lua_cache
+  * [Fix] Add timer update before timer setting
+  * [Fix] Allow to work with no ratelimits
+  * [Fix] Always create ratelimit buckets
+  * [Fix] Avoid collision hacks in mempool variables hash
+  * [Fix] Expire neural ham and spam sets so they not hangup in redis indefinitely
+  * [Fix] Fix crash on FreeBSD when Rspamd is built without hyperscan
+  * [Fix] Make table digests consistent
+  * [Fix] RBL: fix use of `content_urls` and `images` inside `checks`
+  * [Fix] Verify key type to match DKIM signature type
+  * [Fix] connIP is not correctly added to request
+  * [Fix] properly close multipart/related boundary when adding text footer
+  * [Rework] GPT: Use cache framework
+
 3.11.0: 16 Dec 2024
   * [Conf] Add lua.local.d folder
   * [Conf] Add more ways to extend Rspamd configuration
