@@ -173,53 +173,6 @@ local function cloudmark_config(opts)
   return nil
 end
 
--- Converts a key-value map to the table representing multipart body, with the following values:
--- `data`: data of the part
--- `filename`: optional filename
--- `content-type`: content type of the element (optional)
--- `content-transfer-encoding`: optional CTE header
-local function table_to_multipart_body(tbl, boundary)
-  local seen_data = false
-  local out = {}
-
-  for k, v in pairs(tbl) do
-    if v.data then
-      seen_data = true
-      table.insert(out, string.format('--%s\r\n', boundary))
-      if v.filename then
-        table.insert(out,
-            string.format('Content-Disposition: form-data; name="%s"; filename="%s"\r\n',
-                k, v.filename))
-      else
-        table.insert(out,
-            string.format('Content-Disposition: form-data; name="%s"\r\n', k))
-      end
-      if v['content-type'] then
-        table.insert(out,
-            string.format('Content-Type: %s\r\n', v['content-type']))
-      else
-        table.insert(out, 'Content-Type: text/plain\r\n')
-      end
-      if v['content-transfer-encoding'] then
-        table.insert(out,
-            string.format('Content-Transfer-Encoding: %s\r\n',
-                v['content-transfer-encoding']))
-      else
-        table.insert(out, 'Content-Transfer-Encoding: binary\r\n')
-      end
-      table.insert(out, '\r\n')
-      table.insert(out, v.data)
-      table.insert(out, '\r\n')
-    end
-  end
-
-  if seen_data then
-    table.insert(out, string.format('--%s--\r\n', boundary))
-  end
-
-  return out
-end
-
 local function get_specific_symbol(scores_symbols, score)
   local selected
   local sel_thr = -1
@@ -359,7 +312,7 @@ local function cloudmark_check(task, content, digest, rule, maybe_part)
     local request_data = {
       task = task,
       url = url,
-      body = table_to_multipart_body(request, static_boundary),
+      body = lua_util.table_to_multipart_body(request, static_boundary),
       headers = {
         ['Content-Type'] = string.format('multipart/form-data; boundary="%s"', static_boundary)
       },
