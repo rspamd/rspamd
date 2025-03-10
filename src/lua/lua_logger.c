@@ -733,123 +733,69 @@ lua_logger_log_format(lua_State *L, int fmt_pos, gboolean is_string,
 {
 	char *d;
 	const char *s, *c;
-	gsize r, cpylen = 0;
-	unsigned int arg_num = 0, cur_arg;
-	bool num_arg = false;
+	gsize r;
+	unsigned int arg_num, arg_max, cur_arg;
 	struct lua_logger_trace tr;
-	enum {
-		copy_char = 0,
-		got_percent,
-		parse_arg_num
-	} state = copy_char;
+	int digit;
 
-	d = logbuf;
 	s = lua_tostring(L, fmt_pos);
-	c = s;
-	cur_arg = fmt_pos;
-
 	if (s == NULL) {
 		return FALSE;
 	}
 
-	while (remain > 0 && *s != '\0') {
-		switch (state) {
-		case copy_char:
-			if (*s == '%') {
-				state = got_percent;
-				s++;
-				if (cpylen > 0) {
-					memcpy(d, c, cpylen);
-					d += cpylen;
+	arg_max = (unsigned int) lua_gettop(L) - fmt_pos;
+	d = logbuf;
+	cur_arg = 0;
+
+	while (remain > 0 && *s) {
+		if (*s == '%') {
+			++s;
+			c = s;
+			if (*s == 's') {
+				++s;
+				++cur_arg;
+			} else {
+				arg_num = 0;
+				while ((digit = g_ascii_digit_value(*s)) >= 0) {
+					++s;
+					arg_num = arg_num * 10 + digit;
+					if (arg_num >= 100) {
+						/* Avoid ridiculously large numbers */
+						s = c;
+						break;
+					}
 				}
-				cpylen = 0;
-			}
-			else {
-				s++;
-				cpylen++;
-				remain--;
-			}
-			break;
-		case got_percent:
-			if (g_ascii_isdigit(*s) || *s == 's') {
-				state = parse_arg_num;
-				c = s;
-			}
-			else {
-				*d++ = *s++;
-				c = s;
-				state = copy_char;
-			}
-			break;
-		case parse_arg_num:
-			if (g_ascii_isdigit(*s)) {
-				s++;
-				num_arg = true;
-			}
-			else {
-				if (num_arg) {
-					arg_num = strtoul(c, NULL, 10);
-					arg_num += fmt_pos - 1;
+
+				if (s > c) {
 					/* Update the current argument */
 					cur_arg = arg_num;
 				}
-				else {
-					/* We have non numeric argument, e.g. %s */
-					arg_num = cur_arg++;
-					s++;
-				}
+			}
 
-				if (arg_num < 1 || arg_num > (unsigned int) lua_gettop(L) + 1) {
-					msg_err("wrong argument number: %ud", arg_num);
-
+			if (s > c) {
+				if (cur_arg < 1 || cur_arg > arg_max) {
+					msg_err("wrong argument number: %ud", cur_arg);
 					return FALSE;
 				}
 
 				memset(&tr, 0, sizeof(tr));
-				r = lua_logger_out_type(L, arg_num + 1, d, remain, &tr,
-										is_string ? LUA_ESCAPE_UNPRINTABLE : LUA_ESCAPE_LOG);
+				r = lua_logger_out_type(L, fmt_pos + cur_arg, d, remain, &tr,
+							is_string ? LUA_ESCAPE_UNPRINTABLE : LUA_ESCAPE_LOG);
 				g_assert(r <= remain);
 				remain -= r;
 				d += r;
-				state = copy_char;
-				c = s;
+				continue;
 			}
-			break;
-		}
-	}
 
-	if (state == parse_arg_num) {
-		if (num_arg) {
-			arg_num = strtoul(c, NULL, 10);
-			arg_num += fmt_pos - 1;
-		}
-		else {
-			/* We have non numeric argument, e.g. %s */
-			arg_num = cur_arg;
+			/* Copy % */
+			--s;
 		}
 
-		if (arg_num < 1 || arg_num > (unsigned int) lua_gettop(L) + 1) {
-			msg_err("wrong argument number: %ud", arg_num);
-
-			return FALSE;
-		}
-
-		memset(&tr, 0, sizeof(tr));
-		r = lua_logger_out_type(L, arg_num + 1, d, remain, &tr,
-								is_string ? LUA_ESCAPE_UNPRINTABLE : LUA_ESCAPE_LOG);
-		g_assert(r <= remain);
-		remain -= r;
-		d += r;
-	}
-	else if (state == copy_char) {
-		if (cpylen > 0 && remain > 0) {
-			memcpy(d, c, cpylen);
-			d += cpylen;
-		}
+		*d++ = *s++;
+		--remain;
 	}
 
 	*d = '\0';
-
 
 	return TRUE;
 }
