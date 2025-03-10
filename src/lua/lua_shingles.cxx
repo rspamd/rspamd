@@ -17,7 +17,7 @@
 #include "lua_common.h"
 #include "lua_classnames.h"
 #include "shingles.h"
-#include "fmt/format.h"
+#include "contrib/fmt/include/fmt/format.h"
 
 /***
  * @module rspamd_shingle

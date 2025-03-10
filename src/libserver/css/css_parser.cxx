@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 #include "css_rule.hxx"
 #include "css_util.hxx"
 #include "css.hxx"
-#include "fmt/base.h"
+#include "contrib/fmt/include/fmt/base.h"
 
 #include <vector>
 #include <unicode/utf8.h>

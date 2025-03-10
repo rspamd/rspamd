@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 #include "unix-std.h"
 #include "libutil/cxx/file_util.hxx"
 #include "libutil/cxx/util.hxx"
-#include "fmt/base.h"
+#include "contrib/fmt/include/fmt/base.h"
 #include "contrib/t1ha/t1ha.h"
 
 #ifdef __has_include

@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,7 +65,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
-#include "fmt/base.h"
+#include "contrib/fmt/include/fmt/base.h"
 #include "cxx/util.hxx"
 #include "frozen/unordered_map.h"
 #include "frozen/string.h"

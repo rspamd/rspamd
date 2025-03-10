@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include "file_util.hxx"
-#include <fmt/core.h>
+#include "contrib/fmt/include/fmt/core.h"
 #include "libutil/util.h"
 #include "libutil/unix-std.h"
 
