@@ -104,6 +104,18 @@ define(["jquery", "app/common"],
             $("#content").removeClass("col-lg-12 col-lg-9 col-lg-6")
                 .addClass(contentClass);
         }
+
+        function handleFileUpload(files) {
+            if (!files || files.length === 0)
+		return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                $("#selectorsMsgArea").val(e.target.result);
+            };
+            reader.readAsText(files[0]);
+        }
+
         $("#sidebar-tab-left>a").click(() => {
             toggleSidebar("left");
             return false;
@@ -135,6 +147,30 @@ define(["jquery", "app/common"],
         $("#selectorsSelArea").on("input", () => {
             checkSelectors();
         });
+
+	$("#selectorsFile").on("change", function(event) {
+            handleFileUpload(event.target.files);
+        });
+        $("#selectorsMsgClean").on("click", () => {
+            $("#selectorsMsgArea").val("");
+            $("#selectorsFile").val("");
+        });
+
+	const dragoverClassList = "outline-dashed-primary bg-primary-subtle";
+        $("#selectorsMsgArea")
+            .on("dragenter dragover dragleave drop", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            })
+            .on("dragenter dragover", () => {
+                $("#selectorsMsgArea").addClass(dragoverClassList);
+            })
+            .on("dragleave drop", () => {
+                $("#selectorsMsgArea").removeClass(dragoverClassList);
+            })
+            .on("drop", (e) => {
+                handleFileUpload(e.originalEvent.dataTransfer.files);
+            });
 
         return ui;
     });
