@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 #include "stat_internal.h"
 #include "upstream.h"
 #include "libserver/mempool_vars_internal.h"
-#include "fmt/base.h"
+#include "contrib/fmt/include/fmt/base.h"
 
 #include "libutil/cxx/error.hxx"
 

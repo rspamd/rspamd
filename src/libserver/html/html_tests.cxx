@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 #include "libserver/task.h"
 
 #include <vector>
-#include <fmt/core.h>
+#include "contrib/fmt/include/fmt/core.h"
 
 
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL

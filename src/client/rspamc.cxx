@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,8 +35,8 @@
 
 #include "frozen/string.h"
 #include "frozen/unordered_map.h"
-#include "fmt/format.h"
-#include "fmt/color.h"
+#include "contrib/fmt/include/fmt/format.h"
+#include "contrib/fmt/include/fmt/color.h"
 #include "libutil/cxx/file_util.hxx"
 #include "libutil/cxx/util.hxx"
 

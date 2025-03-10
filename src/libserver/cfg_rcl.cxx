@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@
 #include <algorithm>// for std::transform
 #include <memory>
 #include "contrib/ankerl/unordered_dense.h"
-#include "fmt/base.h"
+#include "contrib/fmt/include/fmt/base.h"
 #include "libutil/cxx/util.hxx"
 #include "libutil/cxx/file_util.hxx"
 #include "frozen/unordered_set.h"

@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 #ifdef BACKWARD_ENABLE
 
 #include "contrib/backward-cpp/backward.hpp"
-#include "fmt/base.h"
+#include "contrib/fmt/include/fmt/base.h"
 #include "logger.h"
 
 namespace rspamd {

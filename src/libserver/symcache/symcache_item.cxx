@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #include "lua/lua_common.h"
 #include "symcache_internal.hxx"
 #include "symcache_item.hxx"
-#include "fmt/base.h"
+#include "contrib/fmt/include/fmt/base.h"
 #include "libserver/task.h"
 #include "libutil/cxx/util.hxx"
 #include <numeric>

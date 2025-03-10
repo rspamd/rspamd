@@ -1,11 +1,11 @@
-/*-
- * Copyright 2021 Vsevolod Stakhov
+/*
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -35,9 +35,9 @@
 #include "html_tag.hxx"
 #include "html_url.hxx"
 
-#include <frozen/unordered_map.h>
-#include <frozen/string.h>
-#include <fmt/core.h>
+#include "contrib/frozen/include/frozen/unordered_map.h"
+#include "contrib/frozen/include/frozen/string.h"
+#include "contrib/fmt/include/fmt/core.h"
 
 #include <unicode/uversion.h>
 
