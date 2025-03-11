@@ -282,106 +282,73 @@ lua_logger_char_safe(int t, unsigned int esc_type)
 static gsize
 lua_logger_out_str(lua_State *L, int pos,
 				   char *outbuf, gsize len,
-				   struct lua_logger_trace *trace,
 				   enum lua_logger_escape_type esc_type)
 {
-	gsize slen, flen;
-	const char *str = lua_tolstring(L, pos, &slen);
 	static const char hexdigests[16] = "0123456789abcdef";
-	gsize r = 0, s;
+	gsize slen;
+	const unsigned char *str = lua_tolstring(L, pos, &slen);
+	unsigned char c;
+	char *out = outbuf;
 
 	if (str) {
-		gboolean normal = TRUE;
-		flen = MIN(slen, len - 1);
-
-		for (r = 0; r < flen; r++) {
-			if (!lua_logger_char_safe(str[r], esc_type)) {
-				normal = FALSE;
-				break;
+		while (slen > 0 && len > 1) {
+			c = *str++;
+			if (lua_logger_char_safe(c, esc_type)) {
+				*out++ = c;
 			}
-		}
-
-		if (normal) {
-			r = rspamd_strlcpy(outbuf, str, flen + 1);
-		}
-		else {
-			/* Need to escape non-printed characters */
-			r = 0;
-			s = 0;
-
-			while (slen > 0 && len > 1) {
-				if (!lua_logger_char_safe(str[s], esc_type)) {
-					if (len >= 3) {
-						outbuf[r++] = '\\';
-						outbuf[r++] = hexdigests[((str[s] >> 4) & 0xF)];
-						outbuf[r++] = hexdigests[((str[s]) & 0xF)];
-
-						len -= 2;
-					}
-					else {
-						outbuf[r++] = '?';
-					}
-				}
-				else {
-					outbuf[r++] = str[s];
-				}
-
-				s++;
-				slen--;
-				len--;
+			else if (len > 3) {
+				/* Need to escape non-printed characters */
+				*out++ = '\\';
+				*out++ = hexdigests[c >> 4];
+				*out++ = hexdigests[c & 0xF];
+				len -= 2;
 			}
-
-			outbuf[r] = '\0';
+			else {
+				*out++ = '?';
+			}
+			--slen;
+			--len;
 		}
+		*out = 0;
 	}
 
-	return r;
+	return out - outbuf;
 }
 
 static gsize
-lua_logger_out_num(lua_State *L, int pos, char *outbuf, gsize len,
-				   struct lua_logger_trace *trace)
+lua_logger_out_num(lua_State *L, int pos, char *outbuf, gsize len)
 {
 	double num = lua_tonumber(L, pos);
-	glong inum;
-	gsize r = 0;
+	glong inum = (glong) num;
 
-	if ((double) (glong) num == num) {
-		inum = num;
-		r = rspamd_snprintf(outbuf, len + 1, "%l", inum);
-	}
-	else {
-		r = rspamd_snprintf(outbuf, len + 1, "%f", num);
+	if ((double) inum == num) {
+		return rspamd_snprintf(outbuf, len, "%l", inum);
 	}
 
-	return r;
+	return rspamd_snprintf(outbuf, len, "%f", num);
 }
 
 static gsize
-lua_logger_out_boolean(lua_State *L, int pos, char *outbuf, gsize len,
-					   struct lua_logger_trace *trace)
+lua_logger_out_boolean(lua_State *L, int pos, char *outbuf, gsize len)
 {
 	gboolean val = lua_toboolean(L, pos);
-	gsize r = 0;
 
-	r = rspamd_strlcpy(outbuf, val ? "true" : "false", len + 1);
-
-	return r;
+	return rspamd_snprintf(outbuf, len, val ? "true" : "false");
 }
 
 static gsize
-lua_logger_out_userdata(lua_State *L, int pos, char *outbuf, gsize len,
-						struct lua_logger_trace *trace)
+lua_logger_out_userdata(lua_State *L, int pos, char *outbuf, gsize len)
 {
-	int r = 0, top;
+	gsize r = 0;
+	int top;
 	const char *str = NULL;
 	gboolean converted_to_str = FALSE;
-
-	top = lua_gettop(L);
 
 	if (!lua_getmetatable(L, pos)) {
 		return 0;
 	}
+
+	top = lua_gettop(L);
 
 	lua_pushstring(L, "__index");
 	lua_gettable(L, -2);
@@ -489,7 +456,7 @@ lua_logger_out_table(lua_State *L, int pos, char *outbuf, gsize len,
 	/* Check if we have seen this pointer */
 	for (i = 0; i < TRACE_POINTS; i++) {
 		if (trace->traces[i] == self) {
-			r = rspamd_snprintf(d, remain + 1, "ref(%p)", self);
+			r = rspamd_snprintf(d, remain, "ref(%p)", self);
 
 			d += r;
 
@@ -498,9 +465,10 @@ lua_logger_out_table(lua_State *L, int pos, char *outbuf, gsize len,
 	}
 
 	trace->traces[trace->cur_level % TRACE_POINTS] = self;
+	++trace->cur_level;
 
 	lua_pushvalue(L, pos);
-	r = rspamd_snprintf(d, remain + 1, "{");
+	r = rspamd_snprintf(d, remain, "{");
 	remain -= r;
 	d += r;
 
@@ -516,16 +484,16 @@ lua_logger_out_table(lua_State *L, int pos, char *outbuf, gsize len,
 		last_seq = i;
 
 		if (!first) {
-			r = rspamd_snprintf(d, remain + 1, ", ");
+			r = rspamd_snprintf(d, remain, ", ");
 			MOVE_BUF(d, remain, r);
 		}
 
-		r = rspamd_snprintf(d, remain + 1, "[%d] = ", i);
+		r = rspamd_snprintf(d, remain, "[%d] = ", i);
 		MOVE_BUF(d, remain, r);
 		tpos = lua_gettop(L);
 
 		if (lua_topointer(L, tpos) == self) {
-			r = rspamd_snprintf(d, remain + 1, "__self");
+			r = rspamd_snprintf(d, remain, "__self");
 		}
 		else {
 			r = lua_logger_out_type(L, tpos, d, remain, trace, esc_type);
@@ -554,20 +522,20 @@ lua_logger_out_table(lua_State *L, int pos, char *outbuf, gsize len,
 		}
 
 		if (!first) {
-			r = rspamd_snprintf(d, remain + 1, ", ");
+			r = rspamd_snprintf(d, remain, ", ");
 			MOVE_BUF(d, remain, r);
 		}
 
 		/* Preserve key */
 		lua_pushvalue(L, -2);
-		r = rspamd_snprintf(d, remain + 1, "[%s] = ",
+		r = rspamd_snprintf(d, remain, "[%s] = ",
 							lua_tostring(L, -1));
 		lua_pop(L, 1); /* Remove key */
 		MOVE_BUF(d, remain, r);
 		tpos = lua_gettop(L);
 
 		if (lua_topointer(L, tpos) == self) {
-			r = rspamd_snprintf(d, remain + 1, "__self");
+			r = rspamd_snprintf(d, remain, "__self");
 		}
 		else {
 			r = lua_logger_out_type(L, tpos, d, remain, trace, esc_type);
@@ -579,8 +547,10 @@ lua_logger_out_table(lua_State *L, int pos, char *outbuf, gsize len,
 
 	lua_settop(L, old_top);
 
-	r = rspamd_snprintf(d, remain + 1, "}");
+	r = rspamd_snprintf(d, remain, "}");
 	d += r;
+
+	--trace->cur_level;
 
 	return (d - outbuf);
 }
@@ -593,49 +563,56 @@ gsize lua_logger_out_type(lua_State *L, int pos,
 						  enum lua_logger_escape_type esc_type)
 {
 	int type;
-	gsize r = 0;
+	gsize r;
 
 	if (len == 0) {
 		return 0;
 	}
 
 	type = lua_type(L, pos);
-	trace->cur_level++;
 
 	switch (type) {
 	case LUA_TNUMBER:
-		r = lua_logger_out_num(L, pos, outbuf, len, trace);
+		r = lua_logger_out_num(L, pos, outbuf, len);
 		break;
 	case LUA_TBOOLEAN:
-		r = lua_logger_out_boolean(L, pos, outbuf, len, trace);
+		r = lua_logger_out_boolean(L, pos, outbuf, len);
 		break;
 	case LUA_TTABLE:
 		r = lua_logger_out_table(L, pos, outbuf, len, trace, esc_type);
 		break;
 	case LUA_TUSERDATA:
-		r = lua_logger_out_userdata(L, pos, outbuf, len, trace);
+		r = lua_logger_out_userdata(L, pos, outbuf, len);
 		break;
 	case LUA_TFUNCTION:
-		r = rspamd_snprintf(outbuf, len + 1, "function");
+		r = rspamd_snprintf(outbuf, len, "function");
 		break;
 	case LUA_TLIGHTUSERDATA:
-		r = rspamd_snprintf(outbuf, len + 1, "0x%p", lua_topointer(L, pos));
+		r = rspamd_snprintf(outbuf, len, "0x%p", lua_topointer(L, pos));
 		break;
 	case LUA_TNIL:
-		r = rspamd_snprintf(outbuf, len + 1, "nil");
+		r = rspamd_snprintf(outbuf, len, "nil");
 		break;
 	case LUA_TNONE:
-		r = rspamd_snprintf(outbuf, len + 1, "no value");
+		r = rspamd_snprintf(outbuf, len, "no value");
 		break;
 	default:
 		/* Try to push everything as string using tostring magic */
-		r = lua_logger_out_str(L, pos, outbuf, len, trace, esc_type);
+		r = lua_logger_out_str(L, pos, outbuf, len, esc_type);
 		break;
 	}
 
-	trace->cur_level--;
-
 	return r;
+}
+
+gsize lua_logger_out(lua_State *L, int pos,
+						  char *outbuf, gsize len,
+						  enum lua_logger_escape_type esc_type)
+{
+	struct lua_logger_trace tr;
+	memset(&tr, 0, sizeof(tr));
+
+	return lua_logger_out_type(L, pos, outbuf, len, &tr, esc_type);
 }
 
 static const char *
@@ -735,8 +712,9 @@ lua_logger_log_format(lua_State *L, int fmt_pos, gboolean is_string,
 	const char *s, *c;
 	gsize r;
 	unsigned int arg_num, arg_max, cur_arg;
-	struct lua_logger_trace tr;
 	int digit;
+
+	g_assert(remain > 0);
 
 	s = lua_tostring(L, fmt_pos);
 	if (s == NULL) {
@@ -747,7 +725,7 @@ lua_logger_log_format(lua_State *L, int fmt_pos, gboolean is_string,
 	d = logbuf;
 	cur_arg = 0;
 
-	while (remain > 0 && *s) {
+	while (remain > 1 && *s) {
 		if (*s == '%') {
 			++s;
 			c = s;
@@ -778,8 +756,7 @@ lua_logger_log_format(lua_State *L, int fmt_pos, gboolean is_string,
 					return FALSE;
 				}
 
-				memset(&tr, 0, sizeof(tr));
-				r = lua_logger_out_type(L, fmt_pos + cur_arg, d, remain, &tr,
+				r = lua_logger_out(L, fmt_pos + cur_arg, d, remain,
 							is_string ? LUA_ESCAPE_UNPRINTABLE : LUA_ESCAPE_LOG);
 				g_assert(r <= remain);
 				remain -= r;
@@ -795,7 +772,7 @@ lua_logger_log_format(lua_State *L, int fmt_pos, gboolean is_string,
 		--remain;
 	}
 
-	*d = '\0';
+	*d = 0;
 
 	return TRUE;
 }
@@ -812,12 +789,7 @@ lua_logger_do_log(lua_State *L,
 	int ret;
 	GError *err = NULL;
 
-	if (lua_type(L, start_pos) == LUA_TSTRING) {
-		fmt_pos = start_pos;
-	}
-	else if (lua_type(L, start_pos) == LUA_TUSERDATA) {
-		fmt_pos = start_pos + 1;
-
+	if (lua_type(L, start_pos) == LUA_TUSERDATA) {
 		uid = lua_logger_get_id(L, start_pos, &err);
 
 		if (uid == NULL) {
@@ -830,15 +802,16 @@ lua_logger_do_log(lua_State *L,
 
 			return ret;
 		}
+
+		++fmt_pos;
 	}
-	else {
+	else if (lua_type(L, start_pos) != LUA_TSTRING) {
 		/* Bad argument type */
 		return luaL_error(L, "bad format string type: %s",
 						  lua_typename(L, lua_type(L, start_pos)));
 	}
 
-	ret = lua_logger_log_format(L, fmt_pos, is_string,
-								logbuf, sizeof(logbuf) - 1);
+	ret = lua_logger_log_format(L, fmt_pos, is_string, logbuf, sizeof(logbuf));
 
 	if (ret) {
 		if (is_string) {
@@ -917,11 +890,11 @@ lua_logger_logx(lua_State *L)
 
 	if (uid && modname) {
 		if (lua_type(L, 4) == LUA_TSTRING) {
-			ret = lua_logger_log_format(L, 4, FALSE, logbuf, sizeof(logbuf) - 1);
+			ret = lua_logger_log_format(L, 4, FALSE, logbuf, sizeof(logbuf));
 		}
 		else if (lua_type(L, 4) == LUA_TNUMBER) {
 			stack_pos = lua_tonumber(L, 4);
-			ret = lua_logger_log_format(L, 5, FALSE, logbuf, sizeof(logbuf) - 1);
+			ret = lua_logger_log_format(L, 5, FALSE, logbuf, sizeof(logbuf));
 		}
 		else {
 			return luaL_error(L, "invalid argument on pos 4");
@@ -959,11 +932,11 @@ lua_logger_debugm(lua_State *L)
 
 	if (uid && module) {
 		if (lua_type(L, 3) == LUA_TSTRING) {
-			ret = lua_logger_log_format(L, 3, FALSE, logbuf, sizeof(logbuf) - 1);
+			ret = lua_logger_log_format(L, 3, FALSE, logbuf, sizeof(logbuf));
 		}
 		else if (lua_type(L, 3) == LUA_TNUMBER) {
 			stack_pos = lua_tonumber(L, 3);
-			ret = lua_logger_log_format(L, 4, FALSE, logbuf, sizeof(logbuf) - 1);
+			ret = lua_logger_log_format(L, 4, FALSE, logbuf, sizeof(logbuf));
 		}
 		else {
 			return luaL_error(L, "invalid argument on pos 3");
