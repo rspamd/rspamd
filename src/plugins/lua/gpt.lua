@@ -807,6 +807,10 @@ local function ollama_check(task, content, sel_part)
       body.response_format = { type = "json_object" }
     end
 
+    results[i] = {
+      success = false,
+      checked = false
+    }
     body.model = model
 
     upstream = settings.upstreams:get_upstream_round_robin()
