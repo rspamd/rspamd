@@ -958,14 +958,14 @@ if opts then
           "FROM and url domains. Evaluate spam probability (0-1). " ..
           "Output ONLY 3 lines:\n" ..
           "1. Numeric score (0.00-1.00)\n" ..
-          "2. One-sentence reason citing strongest red flag\n" ..
+          "2. One-sentence reason citing whether it is spam, the strongest red flag, or why it is ham\n" ..
           "3. Primary concern category if found from the list: " .. table.concat(lua_util.keys(categories_map), ', ')
     else
       settings.prompt = "Analyze this email strictly as a spam detector given the email message, subject, " ..
           "FROM and url domains. Evaluate spam probability (0-1). " ..
           "Output ONLY 2 lines:\n" ..
           "1. Numeric score (0.00-1.00)\n" ..
-          "2. One-sentence reason citing strongest red flag\n"
+          "2. One-sentence reason citing whether it is spam, the strongest red flag, or why it is ham\n"
     end
   end
 end
