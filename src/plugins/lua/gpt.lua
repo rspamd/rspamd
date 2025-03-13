@@ -504,10 +504,6 @@ local function insert_results(task, result, sel_part)
       process_categories(task, result.categories)
     end
   else
-    if result.reason and settings.reason_header then
-      lua_mime.modify_headers(task,
-          { add = { [settings.reason_header] = { value = 'value', order = 1 } } })
-    end
     task:insert_result('GPT_HAM', (0.5 - result.probability) * 2, tostring(result.probability))
     if settings.autolearn then
       task:set_flag("learn_ham")
@@ -516,6 +512,10 @@ local function insert_results(task, result, sel_part)
       process_categories(task, result.categories)
     end
   end
+  if result.reason and settings.reason_header then
+      lua_mime.modify_headers(task,
+          { add = { [settings.reason_header] = { value = tostring(result.reason), order = 1 } } })
+    end
 
   if cache_context then
     lua_cache.cache_set(task, redis_cache_key(sel_part), result, cache_context)
