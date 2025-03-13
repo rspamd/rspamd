@@ -54,6 +54,23 @@ enum fetch_proto {
 	MAP_PROTO_STATIC
 };
 
+static const char *
+rspamd_map_fetch_protocol_name(enum fetch_proto proto)
+{
+	switch (proto) {
+	case MAP_PROTO_FILE:
+		return "file";
+	case MAP_PROTO_HTTP:
+		return "http";
+	case MAP_PROTO_HTTPS:
+		return "https";
+	case MAP_PROTO_STATIC:
+		return "static";
+	default:
+		return "unknown";
+	}
+}
+
 /**
  * Data specific to file maps
  */

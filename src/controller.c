@@ -979,12 +979,6 @@ rspamd_controller_handle_maps(struct rspamd_http_connection_entry *conn_ent,
 
 			if (bk->protocol == MAP_PROTO_FILE) {
 				editable = rspamd_controller_can_edit_map(bk);
-
-				if (!editable && access(bk->uri, R_OK) == -1) {
-					/* Skip unreadable and non-existing maps */
-					continue;
-				}
-
 				obj = ucl_object_typed_new(UCL_OBJECT);
 				ucl_object_insert_key(obj, ucl_object_fromint(bk->id),
 									  "map", 0, false);
@@ -994,8 +988,34 @@ rspamd_controller_handle_maps(struct rspamd_http_connection_entry *conn_ent,
 				}
 				ucl_object_insert_key(obj, ucl_object_fromstring(bk->uri),
 									  "uri", 0, false);
+				ucl_object_insert_key(obj, ucl_object_fromstring("file"),
+									  "type", 0, false);
 				ucl_object_insert_key(obj, ucl_object_frombool(editable),
 									  "editable", 0, false);
+				ucl_object_insert_key(obj, ucl_object_frombool(map->shared->loaded),
+									  "loaded", 0, false);
+				ucl_object_insert_key(obj, ucl_object_frombool(map->shared->cached),
+									  "cached", 0, false);
+				ucl_array_append(top, obj);
+			}
+			else {
+				obj = ucl_object_typed_new(UCL_OBJECT);
+				ucl_object_insert_key(obj, ucl_object_fromint(bk->id),
+									  "map", 0, false);
+				if (map->description) {
+					ucl_object_insert_key(obj, ucl_object_fromstring(map->description),
+										  "description", 0, false);
+				}
+				ucl_object_insert_key(obj, ucl_object_fromstring(bk->uri),
+									  "uri", 0, false);
+				ucl_object_insert_key(obj, ucl_object_fromstring(rspamd_map_fetch_protocol_name(bk->protocol)),
+									  "type", 0, false);
+				ucl_object_insert_key(obj, ucl_object_frombool(false),
+									  "editable", 0, false);
+				ucl_object_insert_key(obj, ucl_object_frombool(map->shared->loaded),
+									  "loaded", 0, false);
+				ucl_object_insert_key(obj, ucl_object_frombool(map->shared->cached),
+									  "cached", 0, false);
 				ucl_array_append(top, obj);
 			}
 		}
@@ -1020,7 +1040,7 @@ rspamd_controller_handle_get_map(struct rspamd_http_connection_entry *conn_ent,
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	GList *cur;
-	struct rspamd_map *map;
+	struct rspamd_map *map = NULL;
 	struct rspamd_map_backend *bk = NULL;
 	const rspamd_ftok_t *idstr;
 	struct stat st;
@@ -1066,6 +1086,12 @@ rspamd_controller_handle_get_map(struct rspamd_http_connection_entry *conn_ent,
 	if (!found || bk == NULL) {
 		msg_info_session("map not found");
 		rspamd_controller_send_error(conn_ent, 404, "Map not found");
+		return 0;
+	}
+
+	if (bk->protocol != MAP_PROTO_FILE) {
+		msg_info_session("map %s is not file-based", bk->uri);
+		rspamd_controller_send_error(conn_ent, 400, "Map is not file-based");
 		return 0;
 	}
 
