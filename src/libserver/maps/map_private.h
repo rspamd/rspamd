@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,7 +76,7 @@ struct rspamd_http_map_cached_cbdata {
 	time_t last_checked;
 };
 
-struct rspamd_map_cachepoint {
+struct rspamd_http_map_cache {
 	int available;
 	gsize len;
 	time_t last_modified;
@@ -88,7 +88,7 @@ struct rspamd_map_cachepoint {
  */
 struct http_map_data {
 	/* Shared cache data */
-	struct rspamd_map_cachepoint *cache;
+	struct rspamd_http_map_cache *cache;
 	/* Non-shared for cache owner, used to cleanup cache */
 	struct rspamd_http_map_cached_cbdata *cur_cache_cbd;
 	char *userinfo;
@@ -133,6 +133,15 @@ struct rspamd_map_backend {
 
 struct map_periodic_cbdata;
 
+/*
+ * Shared between workers
+ */
+struct rspamd_map_shared_data {
+	int locked;
+	int loaded;
+	int cached;
+};
+
 struct rspamd_map {
 	struct rspamd_dns_resolver *r;
 	struct rspamd_config *cfg;
@@ -168,7 +177,7 @@ struct rspamd_map {
 	bool no_file_read; /* Do not read files */
 	bool seen;         /* This map has already been watched or pre-loaded */
 	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
-	int *locked;
+	struct rspamd_map_shared_data *shared;
 	char tag[MEMPOOL_UID_LEN];
 };
 

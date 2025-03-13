@@ -339,6 +339,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 			cbd->periodic->cur_backend = 0;
 			/* Reset cache, old cached data will be cleaned on timeout */
 			g_atomic_int_set(&data->cache->available, 0);
+			g_atomic_int_set(&map->shared->loaded, 0);
 			data->cur_cache_cbd = NULL;
 
 			rspamd_map_process_periodic(cbd->periodic);
@@ -424,6 +425,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 		 * We know that a map is in the locked state
 		 */
 		g_atomic_int_set(&data->cache->available, 1);
+		g_atomic_int_set(&map->shared->loaded, 1);
 		/* Store cached data */
 		rspamd_strlcpy(data->cache->shmem_name, cbd->shmem_data->shm_name,
 					   sizeof(data->cache->shmem_name));
@@ -919,6 +921,8 @@ read_map_file(struct rspamd_map *map, struct file_map_data *data,
 		map->read_callback(NULL, 0, &periodic->cbdata, TRUE);
 	}
 
+	g_atomic_int_set(&map->shared->loaded, 1);
+
 	return TRUE;
 }
 
@@ -1003,6 +1007,7 @@ read_map_static(struct rspamd_map *map, struct static_map_data *data,
 	}
 
 	data->processed = TRUE;
+	g_atomic_int_set(&map->shared->loaded, 1);
 
 	return TRUE;
 }
@@ -1028,7 +1033,7 @@ rspamd_map_periodic_dtor(struct map_periodic_cbdata *periodic)
 	}
 
 	if (periodic->locked) {
-		g_atomic_int_set(periodic->map->locked, 0);
+		g_atomic_int_set(&periodic->map->shared->locked, 0);
 		msg_debug_map("unlocked map %s", periodic->map->name);
 
 		if (periodic->map->wrk->state == rspamd_worker_state_running) {
@@ -1437,6 +1442,9 @@ rspamd_map_read_cached(struct rspamd_map *map, struct rspamd_map_backend *bk,
 		msg_info_map("%s: read map data cached %z bytes", bk->uri, len);
 		map->read_callback(in, len, &periodic->cbdata, TRUE);
 	}
+
+	g_atomic_int_set(&map->shared->loaded, 1);
+	g_atomic_int_set(&map->shared->cached, 1);
 
 	munmap(in, mmap_len);
 
@@ -2028,7 +2036,7 @@ rspamd_map_process_periodic(struct map_periodic_cbdata *cbd)
 	map->scheduled_check = NULL;
 
 	if (!map->file_only && !cbd->locked) {
-		if (!g_atomic_int_compare_and_exchange(cbd->map->locked,
+		if (!g_atomic_int_compare_and_exchange(&cbd->map->shared->locked,
 											   0, 1)) {
 			msg_debug_map(
 				"don't try to reread map %s as it is locked by other process, "
@@ -2050,7 +2058,7 @@ rspamd_map_process_periodic(struct map_periodic_cbdata *cbd)
 		rspamd_map_schedule_periodic(cbd->map, RSPAMD_MAP_SCHEDULE_ERROR);
 
 		if (cbd->locked) {
-			g_atomic_int_set(cbd->map->locked, 0);
+			g_atomic_int_set(&cbd->map->shared->locked, 0);
 			cbd->locked = FALSE;
 		}
 
@@ -2888,8 +2896,8 @@ rspamd_map_add(struct rspamd_config *cfg,
 	map->user_data = user_data;
 	map->cfg = cfg;
 	map->id = rspamd_random_uint64_fast();
-	map->locked =
-		rspamd_mempool_alloc0_shared(cfg->cfg_pool, sizeof(int));
+	map->shared =
+		rspamd_mempool_alloc0_shared(cfg->cfg_pool, sizeof(struct rspamd_map_shared_data));
 	map->backends = g_ptr_array_sized_new(1);
 	map->wrk = worker;
 	rspamd_mempool_add_destructor(cfg->cfg_pool, rspamd_ptr_array_free_hard,
@@ -2988,8 +2996,8 @@ rspamd_map_add_from_ucl(struct rspamd_config *cfg,
 	map->user_data = user_data;
 	map->cfg = cfg;
 	map->id = rspamd_random_uint64_fast();
-	map->locked =
-		rspamd_mempool_alloc0_shared(cfg->cfg_pool, sizeof(int));
+	map->shared =
+		rspamd_mempool_alloc0_shared(cfg->cfg_pool, sizeof(struct rspamd_map_shared_data));
 	map->backends = g_ptr_array_new();
 	map->wrk = worker;
 	map->no_file_read = (flags & RSPAMD_MAP_FILE_NO_READ);
