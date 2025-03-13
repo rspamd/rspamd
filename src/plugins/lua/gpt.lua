@@ -494,14 +494,14 @@ local function insert_results(task, result, sel_part)
     rspamd_logger.errx(task, 'no probability in result')
     return
   end
-    
+
   local resultText
   if result.reason then
     resultText = tostring(result.probability * 100) .. '% - ' .. result.reason
   else
     resultText = tostring(result.probability * 100)
   end
-    
+
   if result.probability > 0.5 then
     task:insert_result('GPT_SPAM', (result.probability - 0.5) * 2, resultText)
     if settings.autolearn then
