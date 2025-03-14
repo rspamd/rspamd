@@ -496,7 +496,7 @@ local function insert_results(task, result, sel_part)
   end
 
   if result.probability > 0.5 then
-    task:insert_result('GPT_SPAM', (result.probability - 0.5) * 2, tostring(result.probability * 100))
+    task:insert_result('GPT_SPAM', (result.probability - 0.5) * 2, tostring(result.probability))
     if settings.autolearn then
       task:set_flag("learn_spam")
     end
@@ -505,7 +505,7 @@ local function insert_results(task, result, sel_part)
       process_categories(task, result.categories)
     end
   else
-    task:insert_result('GPT_HAM', (0.5 - result.probability) * 2, tostring(result.probability * 100))
+    task:insert_result('GPT_HAM', (0.5 - result.probability) * 2, tostring(result.probability))
     if settings.autolearn then
       task:set_flag("learn_ham")
     end
