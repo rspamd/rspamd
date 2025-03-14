@@ -174,6 +174,10 @@ static const struct luaL_reg loggerlib_f[] = {
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
+gsize lua_logger_out_type(lua_State *L, int pos, char *outbuf,
+						  gsize len, struct lua_logger_trace *trace,
+						  enum lua_logger_escape_type esc_type);
+
 static void
 lua_common_log_line(GLogLevelFlags level,
 					lua_State *L,
@@ -203,23 +207,19 @@ lua_common_log_line(GLogLevelFlags level,
 							d.currentline);
 		}
 
-		rspamd_common_log_function(NULL,
-								   level,
-								   module,
-								   uid,
-								   func_buf,
-								   "%s",
-								   msg);
+		p = func_buf;
 	}
 	else {
-		rspamd_common_log_function(NULL,
-								   level,
-								   module,
-								   uid,
-								   G_STRFUNC,
-								   "%s",
-								   msg);
+		p = G_STRFUNC;
 	}
+
+	rspamd_common_log_function(NULL,
+						   level,
+						   module,
+						   uid,
+						   p,
+						   "%s",
+						   msg);
 }
 
 /*** Logger interface ***/
@@ -309,8 +309,8 @@ lua_logger_out_str(lua_State *L, int pos,
 			--slen;
 			--len;
 		}
-		*out = 0;
 	}
+	*out = 0;
 
 	return out - outbuf;
 }
@@ -344,11 +344,14 @@ lua_logger_out_userdata(lua_State *L, int pos, char *outbuf, gsize len)
 	const char *str = NULL;
 	gboolean converted_to_str = FALSE;
 
+	top = lua_gettop(L);
+	if (pos < 0) {
+		pos += top + 1; /* Convert to absolute */
+	}
+
 	if (!lua_getmetatable(L, pos)) {
 		return 0;
 	}
-
-	top = lua_gettop(L);
 
 	lua_pushstring(L, "__index");
 	lua_gettable(L, -2);
@@ -363,26 +366,17 @@ lua_logger_out_userdata(lua_State *L, int pos, char *outbuf, gsize len)
 			if (lua_isfunction(L, -1)) {
 				lua_pushvalue(L, pos);
 
-				if (lua_pcall(L, 1, 1, 0) != 0) {
-					lua_settop(L, top);
-
-					return 0;
+				if (lua_pcall(L, 1, 1, 0) == 0) {
+					str = lua_tostring(L, -1);
+					if (str) {
+						r = rspamd_snprintf(outbuf, len, "%s", str);
+					}
 				}
-
-				str = lua_tostring(L, -1);
-
-				if (str) {
-					r = rspamd_snprintf(outbuf, len, "%s", str);
-				}
-
-				lua_settop(L, top);
-
-				return r;
 			}
 		}
 		lua_settop(L, top);
 
-		return 0;
+		return r;
 	}
 
 	lua_pushstring(L, "__tostring");
@@ -427,12 +421,12 @@ lua_logger_out_userdata(lua_State *L, int pos, char *outbuf, gsize len)
 	return r;
 }
 
-#define MOVE_BUF(d, remain, r)  \
+#define MOVE_BUF(d, remain, r)      \
 	(d) += (r);                 \
 	(remain) -= (r);            \
-	if ((remain) == 0) {        \
-		lua_settop(L, old_top); \
-		break;                  \
+	if ((remain) <= 1) {        \
+		lua_settop(L, top); \
+		goto table_oob;     \
 	}
 
 static gsize
@@ -440,116 +434,101 @@ lua_logger_out_table(lua_State *L, int pos, char *outbuf, gsize len,
 					 struct lua_logger_trace *trace,
 					 enum lua_logger_escape_type esc_type)
 {
-	char *d = outbuf;
+	char *d = outbuf, *str;
 	gsize remain = len, r;
 	gboolean first = TRUE;
 	gconstpointer self = NULL;
-	int i, tpos, last_seq = -1, old_top;
+	int i, last_seq = 0, top;
+	double num;
+	glong inum;
 
-	if (!lua_istable(L, pos) || remain == 0) {
-		return 0;
-	}
+	/* Type and length checks are done in logger_out_type() */
 
-	old_top = lua_gettop(L);
 	self = lua_topointer(L, pos);
 
 	/* Check if we have seen this pointer */
 	for (i = 0; i < TRACE_POINTS; i++) {
 		if (trace->traces[i] == self) {
-			r = rspamd_snprintf(d, remain, "ref(%p)", self);
-
-			d += r;
-
-			return (d - outbuf);
+			if ((trace->cur_level + TRACE_POINTS - 1) % TRACE_POINTS == i) {
+				return rspamd_snprintf(d, remain, "__self");
+			}
+			return rspamd_snprintf(d, remain, "ref(%p)", self);
 		}
 	}
 
 	trace->traces[trace->cur_level % TRACE_POINTS] = self;
 	++trace->cur_level;
 
-	lua_pushvalue(L, pos);
+	top = lua_gettop(L);
+	if (pos < 0) {
+		pos += top + 1; /* Convert to absolute */
+	}
+
 	r = rspamd_snprintf(d, remain, "{");
-	remain -= r;
-	d += r;
+	MOVE_BUF(d, remain, r);
 
 	/* Get numeric keys (ipairs) */
 	for (i = 1;; i++) {
-		lua_rawgeti(L, -1, i);
+		lua_rawgeti(L, pos, i);
 
 		if (lua_isnil(L, -1)) {
 			lua_pop(L, 1);
+			last_seq = i;
 			break;
 		}
 
-		last_seq = i;
-
-		if (!first) {
-			r = rspamd_snprintf(d, remain, ", ");
-			MOVE_BUF(d, remain, r);
+		if (first) {
+			first = FALSE;
+			str =  "[%d] = ";
+		} else {
+			str =  ", [%d] = ";
 		}
-
-		r = rspamd_snprintf(d, remain, "[%d] = ", i);
-		MOVE_BUF(d, remain, r);
-		tpos = lua_gettop(L);
-
-		if (lua_topointer(L, tpos) == self) {
-			r = rspamd_snprintf(d, remain, "__self");
-		}
-		else {
-			r = lua_logger_out_type(L, tpos, d, remain, trace, esc_type);
-		}
+		r = rspamd_snprintf(d, remain, str, i);
 		MOVE_BUF(d, remain, r);
 
-		first = FALSE;
+		r = lua_logger_out_type(L, -1, d, remain, trace, esc_type);
+		MOVE_BUF(d, remain, r);
+
 		lua_pop(L, 1);
 	}
 
 	/* Get string keys (pairs) */
-	for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
+	for (lua_pushnil(L); lua_next(L, pos); lua_pop(L, 1)) {
 		/* 'key' is at index -2 and 'value' is at index -1 */
-		if (lua_type(L, -2) == LUA_TNUMBER) {
-			if (last_seq > 0) {
-				lua_pushvalue(L, -2);
-
-				if (lua_tonumber(L, -1) <= last_seq + 1) {
-					lua_pop(L, 1);
-					/* Already seen */
-					continue;
-				}
-
-				lua_pop(L, 1);
-			}
-		}
-
-		if (!first) {
-			r = rspamd_snprintf(d, remain, ", ");
-			MOVE_BUF(d, remain, r);
-		}
 
 		/* Preserve key */
 		lua_pushvalue(L, -2);
-		r = rspamd_snprintf(d, remain, "[%s] = ",
-							lua_tostring(L, -1));
+		if (last_seq > 0) {
+			if (lua_type(L, -1) == LUA_TNUMBER) {
+				num = lua_tonumber(L, -1); /* no conversion here */
+				inum = (glong) num;
+				if ((double) inum == num && inum > 0 && inum < last_seq) {
+					/* Already seen */
+					lua_pop(L, 1);
+					continue;
+				}
+			}
+		}
+
+		if (first) {
+			first = FALSE;
+			str = "[%s] = ";
+		} else {
+			str = ", [%s] = ";
+		}
+		r = rspamd_snprintf(d, remain, str, lua_tostring(L, -1));
+		MOVE_BUF(d, remain, r);
+		
 		lua_pop(L, 1); /* Remove key */
-		MOVE_BUF(d, remain, r);
-		tpos = lua_gettop(L);
 
-		if (lua_topointer(L, tpos) == self) {
-			r = rspamd_snprintf(d, remain, "__self");
-		}
-		else {
-			r = lua_logger_out_type(L, tpos, d, remain, trace, esc_type);
-		}
+		r = lua_logger_out_type(L, -1, d, remain, trace, esc_type);
 		MOVE_BUF(d, remain, r);
-
-		first = FALSE;
 	}
-
-	lua_settop(L, old_top);
 
 	r = rspamd_snprintf(d, remain, "}");
 	d += r;
 
+table_oob:
 	--trace->cur_level;
 
 	return (d - outbuf);
@@ -562,47 +541,33 @@ gsize lua_logger_out_type(lua_State *L, int pos,
 						  struct lua_logger_trace *trace,
 						  enum lua_logger_escape_type esc_type)
 {
-	int type;
-	gsize r;
-
 	if (len == 0) {
 		return 0;
 	}
 
-	type = lua_type(L, pos);
+	int type = lua_type(L, pos);
 
 	switch (type) {
 	case LUA_TNUMBER:
-		r = lua_logger_out_num(L, pos, outbuf, len);
-		break;
+		return lua_logger_out_num(L, pos, outbuf, len);
 	case LUA_TBOOLEAN:
-		r = lua_logger_out_boolean(L, pos, outbuf, len);
-		break;
+		return lua_logger_out_boolean(L, pos, outbuf, len);
 	case LUA_TTABLE:
-		r = lua_logger_out_table(L, pos, outbuf, len, trace, esc_type);
-		break;
+		return lua_logger_out_table(L, pos, outbuf, len, trace, esc_type);
 	case LUA_TUSERDATA:
-		r = lua_logger_out_userdata(L, pos, outbuf, len);
-		break;
+		return lua_logger_out_userdata(L, pos, outbuf, len);
 	case LUA_TFUNCTION:
-		r = rspamd_snprintf(outbuf, len, "function");
-		break;
+		return rspamd_snprintf(outbuf, len, "function");
 	case LUA_TLIGHTUSERDATA:
-		r = rspamd_snprintf(outbuf, len, "0x%p", lua_topointer(L, pos));
-		break;
+		return rspamd_snprintf(outbuf, len, "0x%p", lua_topointer(L, pos));
 	case LUA_TNIL:
-		r = rspamd_snprintf(outbuf, len, "nil");
-		break;
+		return rspamd_snprintf(outbuf, len, "nil");
 	case LUA_TNONE:
-		r = rspamd_snprintf(outbuf, len, "no value");
-		break;
-	default:
-		/* Try to push everything as string using tostring magic */
-		r = lua_logger_out_str(L, pos, outbuf, len, esc_type);
-		break;
+		return rspamd_snprintf(outbuf, len, "no value");
 	}
 
-	return r;
+	/* Try to push everything as string using tostring magic */
+	return lua_logger_out_str(L, pos, outbuf, len, esc_type);
 }
 
 gsize lua_logger_out(lua_State *L, int pos,
@@ -713,8 +678,6 @@ lua_logger_log_format(lua_State *L, int fmt_pos, gboolean is_string,
 	gsize r;
 	unsigned int arg_num, arg_max, cur_arg;
 	int digit;
-
-	g_assert(remain > 0);
 
 	s = lua_tostring(L, fmt_pos);
 	if (s == NULL) {
