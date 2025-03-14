@@ -116,7 +116,6 @@ define(["jquery", "app/common"],
                 success: function (json) {
                     const [{data}] = json;
                     $listmaps.empty();
-                    $("#modalBody").empty();
                     const $tbody = $("<tbody>");
 
                     $.each(data, (i, item) => {
@@ -126,8 +125,7 @@ define(["jquery", "app/common"],
                         }
                         const $tr = $("<tr>").append($td);
 
-                        const $span = $('<span class="map-link" data-bs-toggle="modal" data-bs-target="#modalDialog">' +
-                            item.uri + "</span>").data("item", item);
+                        const $span = $('<span class="map-link">' + item.uri + "</span>").data("item", item);
                         $span.wrap("<td>").parent().appendTo($tr);
                         $("<td>" + item.description + "</td>").appendTo($tr);
                         $tr.appendTo($tbody);
@@ -157,7 +155,7 @@ define(["jquery", "app/common"],
         let mode = "advanced";
 
         // Modal form for maps
-        $(document).on("click", "[data-bs-toggle=\"modal\"]", function () {
+        $(document).on("click", ".map-link", function () {
             const item = $(this).data("item");
             common.query("getmap", {
                 headers: {
@@ -167,6 +165,7 @@ define(["jquery", "app/common"],
                     // Highlighting a large amount of text is unresponsive
                     mode = (new Blob([data[0].data]).size > 5120) ? "basic" : $("input[name=editorMode]:checked").val();
 
+                    $("#modalBody").empty();
                     $("<" + editor[mode].elt + ' id="editor" class="' + editor[mode].class + '" data-id="' + item.map +
                         '"></' + editor[mode].elt + ">").appendTo("#modalBody");
 
@@ -198,10 +197,9 @@ define(["jquery", "app/common"],
                 errorMessage: "Cannot receive maps data",
                 server: common.getServer()
             });
-            return false;
         });
         $("#modalDialog").on("hidden.bs.modal", () => {
-            if (editor[mode].codejar) {
+            if (editor[mode].codejar && jar && typeof jar.destroy === "function") {
                 jar.destroy();
                 $(".codejar-wrap").remove();
             } else {
