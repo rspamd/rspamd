@@ -284,8 +284,7 @@ define(["jquery", "nprogress"],
                     $(textArea).val(reader.result).trigger("input");
                     this.enableButton(button, textArea, validator);
 
-                    if (callback)
-			callback(reader.result);
+                    if (callback) callback(reader.result);
                 };
                 reader.onerror = () => alertMessage("alert-error", "Error reading file.");
                 reader.readAsText(this.files[this.filesIdx]);
