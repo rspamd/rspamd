@@ -39,7 +39,7 @@ local anchor_exceptions_maps = {}
 local strict_domains_maps = {}
 local phishing_feed_exclusion_map = nil
 local generic_service_map = nil
-local openphish_map = 'https://www.openphish.com/feed.txt'
+local openphish_map = 'https://raw.githubusercontent.com/openphish/public_feed/refs/heads/main/feed.txt'
 local phishtank_suffix = 'phishtank.rspamd.com'
 -- Not enabled by default as their feed is quite large
 local openphish_premium = false
