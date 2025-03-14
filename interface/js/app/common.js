@@ -274,7 +274,7 @@ define(["jquery", "nprogress"],
 
             readFile(callback, textArea, button, validator) {
                 if (!this.files || this.files.length === 0) {
-                    common.alertMessage("alert-error", "No files selected.");
+                    alertMessage("alert-error", "No files selected.");
                     return;
                 }
 
@@ -287,7 +287,7 @@ define(["jquery", "nprogress"],
                     if (callback)
 			callback(reader.result);
                 };
-                reader.onerror = () => common.alertMessage("alert-error", "Error reading file.");
+                reader.onerror = () => alertMessage("alert-error", "Error reading file.");
                 reader.readAsText(this.files[this.filesIdx]);
             },
 
@@ -298,10 +298,11 @@ define(["jquery", "nprogress"],
                 this.filesIdx = 0;
 
                 if (!this.files.length) {
-                    common.alertMessage("alert-warning", "No file was provided.");
+                    alertMessage("alert-warning", "No file was provided.");
                     return;
                 }
                 $(fileInput)[0].files = this.files;
+                // eslint-disable-next-line no-alert
                 if (this.files.length === 1 || confirm(`Are you sure you want to process ${this.files.length} files?`)) {
                     this.readFile(null, textArea, button, validator);
                 }
@@ -320,7 +321,9 @@ define(["jquery", "nprogress"],
                         e.preventDefault();
                         this.handleFileInput(e.originalEvent.dataTransfer, textArea, button, fileInput, validator);
                     });
-                $(fileInput).on("change", (e) => this.handleFileInput(e.target, textArea, button, validator));
+                $(fileInput).on("change", (e) => {
+                    this.handleFileInput(e.target, textArea, button, fileInput, validator);
+                });
                 $(textArea).on("input", () => this.enableButton(button, textArea, validator));
             }
         };

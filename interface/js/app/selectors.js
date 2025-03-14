@@ -135,16 +135,12 @@ define(["jquery", "app/common"],
         $("#selectorsSelArea").on("input", () => {
             checkSelectors();
         });
-
-	$("#selectorsFile").on("change", function(event) {
-            handleFileUpload(event.target.files);
-        });
         $("#selectorsMsgClean").on("click", () => {
             $("#selectorsMsgArea").val("");
             $("#selectorsFile").val("");
         });
 
-	common.fileUtils.setupFileHandling("#selectorsMsgArea", "#selectorsFile", "#selectorsChkMsgBtn", "#selectorsSelArea");
+        common.fileUtils.setupFileHandling("#selectorsMsgArea", "#selectorsFile", "#selectorsChkMsgBtn", "#selectorsSelArea");
 
         return ui;
     });

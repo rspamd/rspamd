@@ -29,7 +29,7 @@ define(["jquery", "app/common", "app/libft"],
         "use strict";
         const ui = {};
         let filesIdx = null;
-	 let files = null;
+        let files = null;
         let scanTextHeaders = {};
 
         function cleanTextUpload(source) {
@@ -80,6 +80,14 @@ define(["jquery", "app/common", "app/libft"],
                 .prop("disabled", (disable || $.trim($("textarea").val()).length === 0));
         }
 
+        function updateFileInput(i) {
+            const dt = new DataTransfer();
+            if (arguments.length > 0 && files && files[i]) {
+                dt.items.add(files[i]);
+            }
+            $("#formFile").prop("files", dt.files);
+        }
+
         function scanText(data) {
             enable_disable_scan_btn(true);
             common.query("checkv2", {
@@ -107,13 +115,15 @@ define(["jquery", "app/common", "app/libft"],
                                 libft.initHistoryTable(data, items, "scan", libft.columns_v2("scan"), true,
                                     () => {
                                         if (files && filesIdx < files.length - 1) {
-                                            readFile((result) => {
+                                            common.fileUtils.files = files;
+                                            common.fileUtils.filesIdx = ++filesIdx;
+                                            common.fileUtils.readFile((result) => {
                                                 if (filesIdx === files.length - 1) {
                                                     $("#scanMsgSource").val(result);
-                                                    setFileInputFiles(filesIdx);
+                                                    updateFileInput(filesIdx);
                                                 }
                                                 scanText(result);
-                                            }, ++filesIdx);
+                                            }, "#scanMsgSource", "#scanCheckMsgBtn", "none");
                                         } else {
                                             enable_disable_scan_btn();
                                             $("#cleanScanHistory, #scan .ft-columns-dropdown .btn-dropdown-apply")
@@ -145,6 +155,7 @@ define(["jquery", "app/common", "app/libft"],
                 server: common.getServer()
             });
         }
+
 
         function getFuzzyHashes(data) {
             function fillHashTable(rules) {
@@ -185,7 +196,8 @@ define(["jquery", "app/common", "app/libft"],
         $("#cleanScanHistory").off("click");
         $("#cleanScanHistory").on("click", (e) => {
             e.preventDefault();
-            if (!confirm("Are you sure you want to clean scan history?")) { // eslint-disable-line no-alert
+            // eslint-disable-next-line no-alert
+            if (!confirm("Are you sure you want to clean scan history?")) {
                 return;
             }
             libft.destroyTable("scan");
@@ -198,7 +210,7 @@ define(["jquery", "app/common", "app/libft"],
             enable_disable_scan_btn();
             if (files) {
                 files = null;
-                setFileInputFiles();
+                updateFileInput();
             }
         });
 
@@ -247,7 +259,7 @@ define(["jquery", "app/common", "app/libft"],
             return false;
         });
 
-	common.fileUtils.setupFileHandling("#scanMsgSource", "#formFile", "#scanCheckMsgBtn", "none");
+        common.fileUtils.setupFileHandling("#scanMsgSource", "#formFile", "#scanCheckMsgBtn", "none");
 
         return ui;
     });
