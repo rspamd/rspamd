@@ -174,7 +174,8 @@ static const struct luaL_reg loggerlib_f[] = {
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
-gsize lua_logger_out_type(lua_State *L, int pos, char *outbuf,
+static gsize
+lua_logger_out_type(lua_State *L, int pos, char *outbuf,
 						  gsize len, struct lua_logger_trace *trace,
 						  enum lua_logger_escape_type esc_type);
 
@@ -210,7 +211,7 @@ lua_common_log_line(GLogLevelFlags level,
 		p = func_buf;
 	}
 	else {
-		p = G_STRFUNC;
+		p = (char *) G_STRFUNC;
 	}
 
 	rspamd_common_log_function(NULL,
@@ -277,6 +278,70 @@ lua_logger_char_safe(int t, unsigned int esc_type)
 	}
 
 	return true;
+}
+
+/* Could return negative value in case of wrong argument number */
+static glong
+lua_logger_log_format_str(lua_State *L, int offset, char *logbuf, gsize remain,
+					const char *fmt,
+					enum lua_logger_escape_type esc_type)
+{
+	const char *c;
+	gsize r;
+	int digit;
+
+	char *d = logbuf;
+	unsigned int arg_num, cur_arg = 0, arg_max = lua_gettop(L) - offset;
+
+	while (remain > 1 && *fmt) {
+		if (*fmt == '%') {
+			++fmt;
+			c = fmt;
+			if (*fmt == 's') {
+				++fmt;
+				++cur_arg;
+			} else {
+				arg_num = 0;
+				while ((digit = g_ascii_digit_value(*fmt)) >= 0) {
+					++fmt;
+					arg_num = arg_num * 10 + digit;
+					if (arg_num >= 100) {
+						/* Avoid ridiculously large numbers */
+						fmt = c;
+						break;
+					}
+				}
+
+				if (fmt > c) {
+					/* Update the current argument */
+					cur_arg = arg_num;
+				}
+			}
+
+			if (fmt > c) {
+				if (cur_arg < 1 || cur_arg > arg_max) {
+					*d = 0;
+					return -((glong) cur_arg + 1); /* wrong argument number */
+				}
+
+				r = lua_logger_out(L, offset + cur_arg, d, remain, esc_type);
+				g_assert(r < remain);
+				remain -= r;
+				d += r;
+				continue;
+			}
+
+			/* Copy % */
+			--fmt;
+		}
+
+		*d++ = *fmt++;
+		--remain;
+	}
+
+	*d = 0;
+
+	return d - logbuf;
 }
 
 static gsize
@@ -435,7 +500,8 @@ lua_logger_out_table(lua_State *L, int pos, char *outbuf, gsize len,
 					 enum lua_logger_escape_type esc_type)
 {
 	char *d = outbuf, *str;
-	gsize remain = len, r;
+	gsize remain = len;
+	glong r;
 	gboolean first = TRUE;
 	gconstpointer self = NULL;
 	int i, last_seq = 0, top;
@@ -512,17 +578,19 @@ lua_logger_out_table(lua_State *L, int pos, char *outbuf, gsize len,
 
 		if (first) {
 			first = FALSE;
-			str = "[%s] = ";
+			str = "[%2] = %1";
 		} else {
-			str = ", [%s] = ";
+			str = ", [%2] = %1";
 		}
-		r = rspamd_snprintf(d, remain, str, lua_tostring(L, -1));
+		r = lua_logger_log_format_str(L, top + 1, d, remain, str, esc_type);
+		if (r < 0) {
+			/* should not happen */
+			goto table_oob; 
+		}
 		MOVE_BUF(d, remain, r);
-		
-		lua_pop(L, 1); /* Remove key */
 
-		r = lua_logger_out_type(L, -1, d, remain, trace, esc_type);
-		MOVE_BUF(d, remain, r);
+		/* Remove key */
+		lua_pop(L, 1);
 	}
 
 	r = rspamd_snprintf(d, remain, "}");
@@ -536,7 +604,8 @@ table_oob:
 
 #undef MOVE_BUF
 
-gsize lua_logger_out_type(lua_State *L, int pos,
+static gsize
+lua_logger_out_type(lua_State *L, int pos,
 						  char *outbuf, gsize len,
 						  struct lua_logger_trace *trace,
 						  enum lua_logger_escape_type esc_type)
@@ -673,70 +742,16 @@ static gboolean
 lua_logger_log_format(lua_State *L, int fmt_pos, gboolean is_string,
 					  char *logbuf, gsize remain)
 {
-	char *d;
-	const char *s, *c;
-	gsize r;
-	unsigned int arg_num, arg_max, cur_arg;
-	int digit;
-
-	s = lua_tostring(L, fmt_pos);
-	if (s == NULL) {
+	const char *fmt = lua_tostring(L, fmt_pos);
+	if (fmt == NULL) {
 		return FALSE;
 	}
 
-	arg_max = (unsigned int) lua_gettop(L) - fmt_pos;
-	d = logbuf;
-	cur_arg = 0;
-
-	while (remain > 1 && *s) {
-		if (*s == '%') {
-			++s;
-			c = s;
-			if (*s == 's') {
-				++s;
-				++cur_arg;
-			} else {
-				arg_num = 0;
-				while ((digit = g_ascii_digit_value(*s)) >= 0) {
-					++s;
-					arg_num = arg_num * 10 + digit;
-					if (arg_num >= 100) {
-						/* Avoid ridiculously large numbers */
-						s = c;
-						break;
-					}
-				}
-
-				if (s > c) {
-					/* Update the current argument */
-					cur_arg = arg_num;
-				}
-			}
-
-			if (s > c) {
-				if (cur_arg < 1 || cur_arg > arg_max) {
-					msg_err("wrong argument number: %ud", cur_arg);
-					return FALSE;
-				}
-
-				r = lua_logger_out(L, fmt_pos + cur_arg, d, remain,
-							is_string ? LUA_ESCAPE_UNPRINTABLE : LUA_ESCAPE_LOG);
-				g_assert(r <= remain);
-				remain -= r;
-				d += r;
-				continue;
-			}
-
-			/* Copy % */
-			--s;
-		}
-
-		*d++ = *s++;
-		--remain;
+	glong ret = lua_logger_log_format_str(L, fmt_pos, logbuf, remain, fmt, is_string ? LUA_ESCAPE_UNPRINTABLE : LUA_ESCAPE_LOG);
+	if (ret < 0) {
+		msg_err("wrong argument number: %ud", -((int) ret + 1));
+		return FALSE;
 	}
-
-	*d = 0;
-
 	return TRUE;
 }
 
@@ -748,11 +763,11 @@ lua_logger_do_log(lua_State *L,
 {
 	char logbuf[RSPAMD_LOGBUF_SIZE - 128];
 	const char *uid = NULL;
-	int fmt_pos = start_pos;
 	int ret;
-	GError *err = NULL;
 
 	if (lua_type(L, start_pos) == LUA_TUSERDATA) {
+		GError *err = NULL;
+
 		uid = lua_logger_get_id(L, start_pos, &err);
 
 		if (uid == NULL) {
@@ -766,15 +781,16 @@ lua_logger_do_log(lua_State *L,
 			return ret;
 		}
 
-		++fmt_pos;
+		++start_pos;
 	}
-	else if (lua_type(L, start_pos) != LUA_TSTRING) {
+
+	if (lua_type(L, start_pos) != LUA_TSTRING) {
 		/* Bad argument type */
 		return luaL_error(L, "bad format string type: %s",
 						  lua_typename(L, lua_type(L, start_pos)));
 	}
 
-	ret = lua_logger_log_format(L, fmt_pos, is_string, logbuf, sizeof(logbuf));
+	ret = lua_logger_log_format(L, start_pos, is_string, logbuf, sizeof(logbuf));
 
 	if (ret) {
 		if (is_string) {
@@ -785,12 +801,9 @@ lua_logger_do_log(lua_State *L,
 			lua_common_log_line(level, L, logbuf, uid, "lua", 1);
 		}
 	}
-	else {
-		if (is_string) {
-			lua_pushnil(L);
-
-			return 1;
-		}
+	else if (is_string) {
+		lua_pushnil(L);
+		return 1;
 	}
 
 	return 0;
