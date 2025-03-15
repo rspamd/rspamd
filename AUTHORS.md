@@ -1,10 +1,10 @@
 # Project Authors and Contributors
 
-Rspamd was created by [Vsevolod Stakhov](https://github.com/vstakov).
+Rspamd was created by [Vsevolod Stakhov](https://github.com/vstakhov).
 
 ## Authors
 
-* [Vsevolod Stakhov](https://github.com/vstakov)
+* [Vsevolod Stakhov](https://github.com/vstakhov)
 
 ## Developers
 
