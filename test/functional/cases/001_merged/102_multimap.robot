@@ -418,6 +418,16 @@ MAP - EXTERNAL MISS
   ...   Settings={symbols_enabled = [EXTERNAL_MULTIMAP]}
   Do Not Expect Symbol  EXTERNAL_MULTIMAP
 
+MAP - EXTERNAL CDB
+  Scan File  ${MESSAGE}  IP=127.0.0.1  Hostname=example.com
+  ...   Settings={symbols_enabled = [EXTERNAL_MULTIMAP_CDB]}
+  Expect Symbol  EXTERNAL_MULTIMAP_CDB
+
+MAP - EXTERNAL CDB MISS
+  Scan File  ${MESSAGE}  IP=127.0.0.1  Hostname=example.com.bg
+  ...   Settings={symbols_enabled = [EXTERNAL_MULTIMAP_CDB]}
+  Do Not Expect Symbol  EXTERNAL_MULTIMAP_CDB
+
 MAP - DYNAMIC SYMBOLS - SYM1
   Scan File  ${MESSAGE}  IP=127.0.0.1  Hostname=foo
   ...   Settings={symbols_enabled = [DYN_TEST1,DYN_TEST2,DYN_MULTIMAP]}

@@ -90,7 +90,7 @@ local external_map_schema = ts.shape {
   external = ts.equivalent(true), -- must be true
   backend = ts.string:is_optional(), -- where to get data, required for HTTP
   cdb = ts.string:is_optional(), -- path to CDB file, required for CDB
-  method = ts.one_of { "body", "header", "query" }, -- how to pass input
+  method = ts.one_of { "body", "header", "query" }:is_optional(), -- how to pass input
   encode = ts.one_of { "json", "messagepack" }:is_optional(), -- how to encode input (if relevant)
   timeout = (ts.number + ts.string / lua_util.parse_time_interval):is_optional(),
 }
