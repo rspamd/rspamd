@@ -89,18 +89,24 @@ local function poll_ready(args)
   local interval = tonumber(args.interval)
   local url = args.url
   
-  -- Add /ready endpoint if not specified
+  -- Fix: Properly remove trailing slash without relying on lua_util
   if not url:match("/ready$") then
-    url = lua_util.remove_trailing_slash(url) .. "/ready"
+    url = url:gsub("/$", "") .. "/ready"
   end
   
   local start_time = os.time()
   local attempts = 0
   local exit_code = 1
   
-  while os.time() - start_time < total_timeout do
-    attempts = attempts + 1
+  local function retry()
+    if os.time() - start_time >= total_timeout then
+      if not args.quiet then
+        io.stderr:write("Timeout reached. Rspamd is not ready.\n")
+      end
+      os.exit(exit_code)
+    end
     
+    attempts = attempts + 1
     if not args.quiet then
       io.stdout:write(string.format("Attempt %d: Checking if Rspamd is ready...\n", attempts))
     end
@@ -124,7 +130,7 @@ local function poll_ready(args)
         io.stdout:write("Rspamd is ready and operational!\n")
       end
       exit_code = 0
-      break
+      os.exit(exit_code)
     else
       local status_code = response and response.code or "unknown"
       if args.verbose then
@@ -132,21 +138,11 @@ local function poll_ready(args)
       end
     end
     
-    if os.time() - start_time + interval >= total_timeout then
-      if not args.quiet then
-        io.stderr:write("Timeout reached. Rspamd is not ready.\n")
-      end
-      break
-    end
-    
-    if not args.quiet and args.verbose then
-      io.stdout:write(string.format("Waiting %d seconds before next attempt...\n", interval))
-    end
-    
-    lua_util.sleep(interval)
+    -- Fix: Using ev_base:add_timer for non-blocking retries
+    rspamadm_ev_base:add_timer(interval * 1000, retry)
   end
   
-  os.exit(exit_code)
+  retry()  -- Start the first attempt
 end
 
 local function handler(args)

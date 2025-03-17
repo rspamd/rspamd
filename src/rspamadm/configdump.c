@@ -38,10 +38,6 @@ extern worker_t *workers[];
 
 static void rspamadm_configdump(int argc, char **argv, const struct rspamadm_command *);
 static const char *rspamadm_configdump_help(gboolean full_help, const struct rspamadm_command *);
-/*Add local_only option to GOptionEntry entries array */
-static gboolean local_only = FALSE;
-
-
 
 struct rspamadm_command configdump_command = {
 	.name = "configdump",
@@ -70,8 +66,6 @@ static GOptionEntry entries[] = {
 	 "Show full symbol details only", NULL},
 	{"skip-template", 'T', 0, G_OPTION_ARG_NONE, &skip_template,
 	 "Do not apply Jinja templates", NULL},
-	 {"local-only", 'l', 0, G_OPTION_ARG_NONE, &local_only,
-	"Show only local configuration elements (priority > 0)",NULL},
 	{NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL}};
 
 static const char *
@@ -88,7 +82,6 @@ rspamadm_configdump_help(gboolean full_help, const struct rspamadm_command *cmd)
 				   "-c: config file to test\n"
 				   "-m: show state of modules only\n"
 				   "-h: show help for dumped options\n"
-				   "-L: show only local configuration (priority > 0)\n"
 				   "--help: shows available options and commands";
 	}
 	else {
@@ -96,93 +89,6 @@ rspamadm_configdump_help(gboolean full_help, const struct rspamadm_command *cmd)
 	}
 
 	return help_str;
-}
-
-// Function to filter local-only configuration elements
-
-static ucl_object_t *
-rspamadm_filter_local_config(const ucl_object_t *obj)
-{
-	ucl_object_t *result = NULL;
-	const ucl_object_t *cur;
-	ucl_object_iter_t it = NULL;
-	gboolean has_local = FALSE;
-
-	if (obj == NULL) {
-		return NULL;
-	}
-
-	switch (ucl_object_type(obj)) {
-	case UCL_OBJECT:
-		result = ucl_object_typed_new(UCL_OBJECT);
-
-		while ((cur = ucl_object_iterate(obj, &it, true))) {
-			if (cur->priority > 0) {
-				// This is a local configuration element
-				ucl_object_insert_key(result, ucl_object_ref(cur), cur->key, cur->keylen, true);
-				has_local = TRUE;
-			}
-			else {
-				// Check whether children is local
-				ucl_object_t *filtered_child = NULL;
-
-				if (ucl_object_type(cur) == UCL_OBJECT || ucl_object_type(cur) == UCL_ARRAY) {
-					filtered_child = rspamadm_filter_local_config(cur);
-					if (filtered_child != NULL) {
-						ucl_object_insert_key(result, filtered_child, cur->key, cur->keylen, true);
-						has_local = TRUE;
-					}
-				}
-			}
-		}
-
-		if (!has_local) {
-			ucl_object_unref(result);
-			return NULL;
-		}
-		break;
-
-	case UCL_ARRAY: {
-		gboolean has_local_in_array = FALSE;
-		result = ucl_object_typed_new(UCL_ARRAY);
-
-		it = NULL;
-		while ((cur = ucl_object_iterate(obj, &it, true))) {
-			if (cur->priority > 0) {
-				// local element
-				ucl_array_append(result, ucl_object_ref(cur));
-				has_local_in_array = TRUE;
-			}
-			else {
-				// Check whether childrens are local
-				ucl_object_t *filtered_child = NULL;
-
-				if (ucl_object_type(cur) == UCL_OBJECT || ucl_object_type(cur) == UCL_ARRAY) {
-					filtered_child = rspamadm_filter_local_config(cur);
-					if (filtered_child != NULL) {
-						ucl_array_append(result, filtered_child);
-						has_local_in_array = TRUE;
-					}
-				}
-			}
-		}
-
-		if (!has_local_in_array) {
-			ucl_object_unref(result);
-			return NULL;
-		}
-		break;
-	}
-
-	default:
-		if (obj->priority > 0) {
-			// Handle primitive types (string, number, boolean, etc.)
-			result = ucl_object_ref((ucl_object_t *)obj);
-		}
-		break;
-	}
-
-	return result;
 }
 
 static void
@@ -617,56 +523,6 @@ rspamadm_configdump(int argc, char **argv, const struct rspamadm_command *cmd)
 		}
 
 		/* Output configuration */
-		if (local_only) {
-			/* Filter the configuration to include only local elements */
-			ucl_object_t *local_config = rspamadm_filter_local_config(cfg->cfg_ucl_obj);
-			
-			if (local_config == NULL) {
-				rspamd_printf("No local configuration found\n");
-				exit(EXIT_SUCCESS);
-			}
-
-			if (argc == 1) {
-				/* Output the entire filtered configuration */
-				rspamadm_dump_section_obj(cfg, local_config, cfg->doc_strings);
-				ucl_object_unref(local_config);
-			}
-
-			else {
-				/* Output specific sections from the filtered configuration */
-				for (i = 1; i < argc; i++) {
-					obj = ucl_object_lookup_path(local_config, argv[i]);
-					doc_obj = ucl_object_lookup_path(cfg->doc_strings, argv[i]);
-					if (!obj) {
-						rspamd_printf("Local configuration for section %s NOT FOUND\n", argv[i]);
-					}
-
-					else {
-						LL_FOREACH(obj, cur)
-						{
-							if (!json && !compact) {
-								rspamd_printf("*** Section %s (local only) ***\n", argv[i]);
-							}
-							rspamadm_dump_section_obj(cfg, cur, doc_obj);
-                            
-							if (!json && !compact) {
-								rspamd_printf("\n*** End of section %s (local only) ***\n", argv[i]);
-							}
-							else {
-								rspamd_printf("\n");
-							}
-						}
-					}
-				}
-				ucl_object_unref(local_config);
-			}
-		}
-
-		else {
-		
-		// Original behavior for non-local-only configuration elements
-
-
 		if (argc == 1) {
 			rspamadm_dump_section_obj(cfg, cfg->cfg_ucl_obj, cfg->doc_strings);
 		}
@@ -696,7 +552,6 @@ rspamadm_configdump(int argc, char **argv, const struct rspamadm_command *cmd)
 				}
 			}
 		}
-	}
 	}
 
 	exit(ret ? EXIT_SUCCESS : EXIT_FAILURE);
