@@ -290,7 +290,7 @@ table#symbolsTable input[type="number"] {
 }
 
 /* Font Awesome icons size */
-.svg-inline--fa { /* stylelint-disable-line selector-class-pattern */
+.fas { /* stylelint-disable-line selector-class-pattern */
     font-size: 16px;
 }
 /* Increase refresh button spinner speed */
