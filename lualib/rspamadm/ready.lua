@@ -17,10 +17,6 @@ limitations under the License.
 local argparse = require "argparse"
 local rspamd_http = require "rspamd_http"
 local rspamd_logger = require "rspamd_logger"
-local rspamd_upstream_list = require "rspamd_upstream_list"
-local lua_util = require "lua_util"
-
-local E = {}
 
 -- Define command line options
 local parser = argparse()
@@ -55,13 +51,6 @@ parser:flag '-v --verbose'
       :description 'Output more information'
       :argname('verbose')
 
-local http_params = {
-  config = rspamd_config,
-  ev_base = rspamadm_ev_base,
-  session = rspamadm_session,
-  resolver = rspamadm_dns_resolver,
-}
-
 local function load_config(config_file)
   local _r, err = rspamd_config:load_ucl(config_file)
 
@@ -88,16 +77,13 @@ local function poll_ready(args)
   local total_timeout = tonumber(args.timeout)
   local interval = tonumber(args.interval)
   local url = args.url
-  
   -- Fix: Properly remove trailing slash without relying on lua_util
   if not url:match("/ready$") then
     url = url:gsub("/$", "") .. "/ready"
   end
-  
   local start_time = os.time()
   local attempts = 0
   local exit_code = 1
-  
   local function retry()
     if os.time() - start_time >= total_timeout then
       if not args.quiet then
@@ -105,12 +91,10 @@ local function poll_ready(args)
       end
       os.exit(exit_code)
     end
-    
     attempts = attempts + 1
     if not args.quiet then
       io.stdout:write(string.format("Attempt %d: Checking if Rspamd is ready...\n", attempts))
     end
-    
     local err, response = rspamd_http.request({
       url = url,
       config = rspamd_config,
@@ -120,7 +104,6 @@ local function poll_ready(args)
       log_obj = rspamd_config,
       no_ssl_verify = args.no_ssl_verify,
     })
-    
     if err then
       if args.verbose then
         io.stderr:write(string.format("Error checking Rspamd status: %s\n", err))
@@ -137,22 +120,17 @@ local function poll_ready(args)
         io.stderr:write(string.format("Rspamd not ready (status code: %s)\n", status_code))
       end
     end
-    
     -- Fix: Using ev_base:add_timer for non-blocking retries
     rspamadm_ev_base:add_timer(interval * 1000, retry)
   end
-  
   retry()  -- Start the first attempt
 end
 
 local function handler(args)
   local cmd_opts = parser:parse(args)
-  
   load_config(cmd_opts.config_file)
-  
   poll_ready(cmd_opts)
 end
-
 return {
   handler = handler,
   description = parser._description,
