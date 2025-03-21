@@ -232,7 +232,6 @@ rspamadm_exec_input(lua_State *L, const char *input)
 	int i, cbref;
 	int top = 0;
 	char outbuf[8192];
-	struct lua_logger_trace tr;
 
 	struct thread_entry *thread = lua_thread_pool_get_for_config(rspamd_main->cfg);
 	L = thread->lua_state;
@@ -272,8 +271,7 @@ rspamadm_exec_input(lua_State *L, const char *input)
 				rspamd_printf("local function: %d\n", cbref);
 			}
 			else {
-				memset(&tr, 0, sizeof(tr));
-				lua_logger_out_type(L, i, outbuf, sizeof(outbuf) - 1, &tr,
+				lua_logger_out(L, i, outbuf, sizeof(outbuf),
 									LUA_ESCAPE_UNPRINTABLE);
 				rspamd_printf("%s\n", outbuf);
 			}
@@ -393,7 +391,6 @@ rspamadm_lua_message_handler(lua_State *L, int argc, char **argv)
 	gpointer map;
 	gsize len;
 	char outbuf[8192];
-	struct lua_logger_trace tr;
 
 	if (argv[1] == NULL) {
 		rspamd_printf("no callback is specified\n");
@@ -455,8 +452,7 @@ rspamadm_lua_message_handler(lua_State *L, int argc, char **argv)
 				rspamd_printf("lua callback for %s returned:\n", argv[i]);
 
 				for (j = old_top + 1; j <= lua_gettop(L); j++) {
-					memset(&tr, 0, sizeof(tr));
-					lua_logger_out_type(L, j, outbuf, sizeof(outbuf), &tr,
+					lua_logger_out(L, j, outbuf, sizeof(outbuf),
 										LUA_ESCAPE_UNPRINTABLE);
 					rspamd_printf("%s\n", outbuf);
 				}

@@ -538,8 +538,7 @@ enum lua_logger_escape_type {
 * @param len
 * @return
 */
-gsize lua_logger_out_type(lua_State *L, int pos, char *outbuf,
-						  gsize len, struct lua_logger_trace *trace,
+gsize lua_logger_out(lua_State *L, int pos, char *outbuf, gsize len,
 						  enum lua_logger_escape_type esc_type);
 
 /**
