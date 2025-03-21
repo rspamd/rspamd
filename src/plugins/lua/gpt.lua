@@ -494,6 +494,7 @@ local function insert_results(task, result, sel_part)
     rspamd_logger.errx(task, 'no probability in result')
     return
   end
+
   if result.probability > 0.5 then
     task:insert_result('GPT_SPAM', (result.probability - 0.5) * 2, tostring(result.probability))
     if settings.autolearn then
@@ -504,10 +505,6 @@ local function insert_results(task, result, sel_part)
       process_categories(task, result.categories)
     end
   else
-    if result.reason and settings.reason_header then
-      lua_mime.modify_headers(task,
-          { add = { [settings.reason_header] = { value = 'value', order = 1 } } })
-    end
     task:insert_result('GPT_HAM', (0.5 - result.probability) * 2, tostring(result.probability))
     if settings.autolearn then
       task:set_flag("learn_ham")
@@ -516,6 +513,10 @@ local function insert_results(task, result, sel_part)
       process_categories(task, result.categories)
     end
   end
+  if result.reason and settings.reason_header then
+      lua_mime.modify_headers(task,
+          { add = { [settings.reason_header] = { value = tostring(result.reason), order = 1 } } })
+    end
 
   if cache_context then
     lua_cache.cache_set(task, redis_cache_key(sel_part), result, cache_context)
@@ -958,14 +959,14 @@ if opts then
           "FROM and url domains. Evaluate spam probability (0-1). " ..
           "Output ONLY 3 lines:\n" ..
           "1. Numeric score (0.00-1.00)\n" ..
-          "2. One-sentence reason citing strongest red flag\n" ..
+          "2. One-sentence reason citing whether it is spam, the strongest red flag, or why it is ham\n" ..
           "3. Primary concern category if found from the list: " .. table.concat(lua_util.keys(categories_map), ', ')
     else
       settings.prompt = "Analyze this email strictly as a spam detector given the email message, subject, " ..
           "FROM and url domains. Evaluate spam probability (0-1). " ..
           "Output ONLY 2 lines:\n" ..
           "1. Numeric score (0.00-1.00)\n" ..
-          "2. One-sentence reason citing strongest red flag\n"
+          "2. One-sentence reason citing whether it is spam, the strongest red flag, or why it is ham\n"
     end
   end
 end
