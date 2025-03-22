@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -979,12 +979,6 @@ rspamd_controller_handle_maps(struct rspamd_http_connection_entry *conn_ent,
 
 			if (bk->protocol == MAP_PROTO_FILE) {
 				editable = rspamd_controller_can_edit_map(bk);
-
-				if (!editable && access(bk->uri, R_OK) == -1) {
-					/* Skip unreadable and non-existing maps */
-					continue;
-				}
-
 				obj = ucl_object_typed_new(UCL_OBJECT);
 				ucl_object_insert_key(obj, ucl_object_fromint(bk->id),
 									  "map", 0, false);
@@ -994,8 +988,34 @@ rspamd_controller_handle_maps(struct rspamd_http_connection_entry *conn_ent,
 				}
 				ucl_object_insert_key(obj, ucl_object_fromstring(bk->uri),
 									  "uri", 0, false);
+				ucl_object_insert_key(obj, ucl_object_fromstring("file"),
+									  "type", 0, false);
 				ucl_object_insert_key(obj, ucl_object_frombool(editable),
 									  "editable", 0, false);
+				ucl_object_insert_key(obj, ucl_object_frombool(map->shared->loaded),
+									  "loaded", 0, false);
+				ucl_object_insert_key(obj, ucl_object_frombool(map->shared->cached),
+									  "cached", 0, false);
+				ucl_array_append(top, obj);
+			}
+			else {
+				obj = ucl_object_typed_new(UCL_OBJECT);
+				ucl_object_insert_key(obj, ucl_object_fromint(bk->id),
+									  "map", 0, false);
+				if (map->description) {
+					ucl_object_insert_key(obj, ucl_object_fromstring(map->description),
+										  "description", 0, false);
+				}
+				ucl_object_insert_key(obj, ucl_object_fromstring(bk->uri),
+									  "uri", 0, false);
+				ucl_object_insert_key(obj, ucl_object_fromstring(rspamd_map_fetch_protocol_name(bk->protocol)),
+									  "type", 0, false);
+				ucl_object_insert_key(obj, ucl_object_frombool(false),
+									  "editable", 0, false);
+				ucl_object_insert_key(obj, ucl_object_frombool(map->shared->loaded),
+									  "loaded", 0, false);
+				ucl_object_insert_key(obj, ucl_object_frombool(map->shared->cached),
+									  "cached", 0, false);
 				ucl_array_append(top, obj);
 			}
 		}
@@ -1008,6 +1028,21 @@ rspamd_controller_handle_maps(struct rspamd_http_connection_entry *conn_ent,
 	return 0;
 }
 
+gboolean
+rspamd_controller_map_traverse_callback(gconstpointer key, gconstpointer value, gsize _hits, gpointer ud)
+{
+	rspamd_fstring_t **target = (rspamd_fstring_t **) ud;
+
+	*target = rspamd_fstring_append(*target, key, strlen(key));
+
+	if (value) {
+		*target = rspamd_fstring_append(*target, " ", 1);
+		*target = rspamd_fstring_append(*target, value, strlen(value));
+	}
+	*target = rspamd_fstring_append(*target, "\n", 1);
+
+	return TRUE;
+}
 /*
  * Get map command handler:
  * request: /getmap
@@ -1020,7 +1055,7 @@ rspamd_controller_handle_get_map(struct rspamd_http_connection_entry *conn_ent,
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	GList *cur;
-	struct rspamd_map *map;
+	struct rspamd_map *map = NULL;
 	struct rspamd_map_backend *bk = NULL;
 	const rspamd_ftok_t *idstr;
 	struct stat st;
@@ -1054,7 +1089,7 @@ rspamd_controller_handle_get_map(struct rspamd_http_connection_entry *conn_ent,
 
 		PTR_ARRAY_FOREACH(map->backends, i, bk)
 		{
-			if (bk->id == id && bk->protocol == MAP_PROTO_FILE) {
+			if (bk->id == id) {
 				found = TRUE;
 				break;
 			}
@@ -1069,32 +1104,53 @@ rspamd_controller_handle_get_map(struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	if (stat(bk->uri, &st) == -1 || (fd = open(bk->uri, O_RDONLY)) == -1) {
-		reply = rspamd_http_new_message(HTTP_RESPONSE);
-		reply->date = time(NULL);
-		reply->code = 200;
-	}
-	else {
-
-		reply = rspamd_http_new_message(HTTP_RESPONSE);
-		reply->date = time(NULL);
-		reply->code = 200;
-
-		if (st.st_size > 0) {
-			if (!rspamd_http_message_set_body_from_fd(reply, fd)) {
-				close(fd);
-				rspamd_http_message_unref(reply);
-				msg_err_session("cannot read map %s: %s", bk->uri, strerror(errno));
-				rspamd_controller_send_error(conn_ent, 500, "Map read error");
-				return 0;
-			}
+	if (bk->protocol == MAP_PROTO_FILE) {
+		if (stat(bk->uri, &st) == -1 || (fd = open(bk->uri, O_RDONLY)) == -1) {
+			reply = rspamd_http_new_message(HTTP_RESPONSE);
+			reply->date = time(NULL);
+			reply->code = 200;
 		}
 		else {
-			rspamd_fstring_t *empty_body = rspamd_fstring_new_init("", 0);
-			rspamd_http_message_set_body_from_fstring_steal(reply, empty_body);
-		}
 
-		close(fd);
+			reply = rspamd_http_new_message(HTTP_RESPONSE);
+			reply->date = time(NULL);
+			reply->code = 200;
+
+			if (st.st_size > 0) {
+				if (!rspamd_http_message_set_body_from_fd(reply, fd)) {
+					close(fd);
+					rspamd_http_message_unref(reply);
+					msg_err_session("cannot read map %s: %s", bk->uri, strerror(errno));
+					rspamd_controller_send_error(conn_ent, 500, "Map read error");
+					return 0;
+				}
+			}
+			else {
+				rspamd_fstring_t *empty_body = rspamd_fstring_new_init("", 0);
+				rspamd_http_message_set_body_from_fstring_steal(reply, empty_body);
+			}
+
+			close(fd);
+		}
+	}
+	else if (bk->protocol == MAP_PROTO_STATIC) {
+		/* We can just traverse map and form reply */
+		reply = rspamd_http_new_message(HTTP_RESPONSE);
+		reply->code = 200;
+		rspamd_fstring_t *map_body = rspamd_fstring_new();
+		rspamd_map_traverse(bk->map, rspamd_controller_map_traverse_callback, &map_body, FALSE);
+		rspamd_http_message_set_body_from_fstring_steal(reply, map_body);
+	}
+	else if (map->shared->loaded) {
+		reply = rspamd_http_new_message(HTTP_RESPONSE);
+		reply->code = 200;
+		rspamd_fstring_t *map_body = rspamd_fstring_new();
+		rspamd_map_traverse(bk->map, rspamd_controller_map_traverse_callback, &map_body, FALSE);
+		rspamd_http_message_set_body_from_fstring_steal(reply, map_body);
+	}
+	else {
+		reply = rspamd_http_new_message(HTTP_RESPONSE);
+		reply->code = 404;
 	}
 
 	rspamd_http_connection_reset(conn_ent->conn);
