@@ -1028,6 +1028,21 @@ rspamd_controller_handle_maps(struct rspamd_http_connection_entry *conn_ent,
 	return 0;
 }
 
+gboolean
+rspamd_controller_map_traverse_callback(gconstpointer key, gconstpointer value, gsize _hits, gpointer ud)
+{
+	rspamd_fstring_t **target = (rspamd_fstring_t **) ud;
+
+	*target = rspamd_fstring_append(*target, key, strlen(key));
+
+	if (value) {
+		*target = rspamd_fstring_append(*target, " ", 1);
+		*target = rspamd_fstring_append(*target, value, strlen(value));
+	}
+	*target = rspamd_fstring_append(*target, "\n", 1);
+
+	return TRUE;
+}
 /*
  * Get map command handler:
  * request: /getmap
@@ -1074,7 +1089,7 @@ rspamd_controller_handle_get_map(struct rspamd_http_connection_entry *conn_ent,
 
 		PTR_ARRAY_FOREACH(map->backends, i, bk)
 		{
-			if (bk->id == id && bk->protocol == MAP_PROTO_FILE) {
+			if (bk->id == id) {
 				found = TRUE;
 				break;
 			}
@@ -1089,38 +1104,53 @@ rspamd_controller_handle_get_map(struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	if (bk->protocol != MAP_PROTO_FILE) {
-		msg_info_session("map %s is not file-based", bk->uri);
-		rspamd_controller_send_error(conn_ent, 400, "Map is not file-based");
-		return 0;
-	}
-
-	if (stat(bk->uri, &st) == -1 || (fd = open(bk->uri, O_RDONLY)) == -1) {
-		reply = rspamd_http_new_message(HTTP_RESPONSE);
-		reply->date = time(NULL);
-		reply->code = 200;
-	}
-	else {
-
-		reply = rspamd_http_new_message(HTTP_RESPONSE);
-		reply->date = time(NULL);
-		reply->code = 200;
-
-		if (st.st_size > 0) {
-			if (!rspamd_http_message_set_body_from_fd(reply, fd)) {
-				close(fd);
-				rspamd_http_message_unref(reply);
-				msg_err_session("cannot read map %s: %s", bk->uri, strerror(errno));
-				rspamd_controller_send_error(conn_ent, 500, "Map read error");
-				return 0;
-			}
+	if (bk->protocol == MAP_PROTO_FILE) {
+		if (stat(bk->uri, &st) == -1 || (fd = open(bk->uri, O_RDONLY)) == -1) {
+			reply = rspamd_http_new_message(HTTP_RESPONSE);
+			reply->date = time(NULL);
+			reply->code = 200;
 		}
 		else {
-			rspamd_fstring_t *empty_body = rspamd_fstring_new_init("", 0);
-			rspamd_http_message_set_body_from_fstring_steal(reply, empty_body);
-		}
 
-		close(fd);
+			reply = rspamd_http_new_message(HTTP_RESPONSE);
+			reply->date = time(NULL);
+			reply->code = 200;
+
+			if (st.st_size > 0) {
+				if (!rspamd_http_message_set_body_from_fd(reply, fd)) {
+					close(fd);
+					rspamd_http_message_unref(reply);
+					msg_err_session("cannot read map %s: %s", bk->uri, strerror(errno));
+					rspamd_controller_send_error(conn_ent, 500, "Map read error");
+					return 0;
+				}
+			}
+			else {
+				rspamd_fstring_t *empty_body = rspamd_fstring_new_init("", 0);
+				rspamd_http_message_set_body_from_fstring_steal(reply, empty_body);
+			}
+
+			close(fd);
+		}
+	}
+	else if (bk->protocol == MAP_PROTO_STATIC) {
+		/* We can just traverse map and form reply */
+		reply = rspamd_http_new_message(HTTP_RESPONSE);
+		reply->code = 200;
+		rspamd_fstring_t *map_body = rspamd_fstring_new();
+		rspamd_map_traverse(bk->map, rspamd_controller_map_traverse_callback, &map_body, FALSE);
+		rspamd_http_message_set_body_from_fstring_steal(reply, map_body);
+	}
+	else if (map->shared->loaded) {
+		reply = rspamd_http_new_message(HTTP_RESPONSE);
+		reply->code = 200;
+		rspamd_fstring_t *map_body = rspamd_fstring_new();
+		rspamd_map_traverse(bk->map, rspamd_controller_map_traverse_callback, &map_body, FALSE);
+		rspamd_http_message_set_body_from_fstring_steal(reply, map_body);
+	}
+	else {
+		reply = rspamd_http_new_message(HTTP_RESPONSE);
+		reply->code = 404;
 	}
 
 	rspamd_http_connection_reset(conn_ent->conn);
