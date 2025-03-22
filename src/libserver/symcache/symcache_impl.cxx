@@ -126,7 +126,7 @@ auto symcache::init() -> bool
 			}
 			else {
 				msg_err_cache("cannot register delayed dependency %s -> %s: "
-							  "destionation %s is missing",
+							  "destination %s is missing",
 							  delayed_dep.from.data(),
 							  delayed_dep.to.data(), delayed_dep.to.data());
 			}
