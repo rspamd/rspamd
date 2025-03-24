@@ -2843,6 +2843,13 @@ rspamd_map_calculate_hash(struct rspamd_map *map)
 		rspamd_cryptobox_fast_hash_init(&hst, 0);
 		rspamd_cryptobox_fast_hash_update(&hst, bk->uri, strlen(bk->uri));
 		rspamd_cryptobox_fast_hash_update(&hst, map->tag, sizeof(map->tag));
+
+		if (bk->protocol == MAP_PROTO_STATIC) {
+			/* Static maps content is pre-defined */
+			rspamd_cryptobox_fast_hash_update(&hst, bk->data.sd->data,
+											  bk->data.sd->len);
+		}
+
 		/* We use only 52 bits to be compatible with other numbers representation */
 		bk->id = rspamd_cryptobox_fast_hash_final(&hst) & ~(0xFFFULL << 52);
 	}
