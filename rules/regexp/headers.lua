@@ -69,6 +69,14 @@ if rspamd_config:is_mime_utf8() then
   end
 end
 
+reconf['R_HTTP_URL_IN_FROM'] = {
+  re = [[From=/\shttps?:\/\/\S/iH]],
+  score = 5.0,
+  mime_only = true,
+  description = 'HTTP URL in From header',
+  group = 'headers'
+}
+
 -- Detects that there is no space in From header (e.g. Some Name<some@host>)
 reconf['R_NO_SPACE_IN_FROM'] = {
   re = 'From=/\\S<[-\\w\\.]+\\@[-\\w\\.]+>/X',
