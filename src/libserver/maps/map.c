@@ -2789,10 +2789,6 @@ rspamd_map_parse_backend(struct rspamd_config *cfg, const char *map_line)
 		bk->data.sd = sdata;
 	}
 
-	bk->id = rspamd_cryptobox_fast_hash_specific(RSPAMD_CRYPTOBOX_T1HA,
-												 bk->uri, strlen(bk->uri),
-												 0xdeadbabe);
-
 	return bk;
 
 err:
@@ -2823,6 +2819,13 @@ rspamd_map_calculate_hash(struct rspamd_map *map)
 
 	rspamd_cryptobox_hash_init(&st, NULL, 0);
 
+	if (map->name) {
+		rspamd_cryptobox_hash_update(&st, map->name, strlen(map->name));
+	}
+	if (map->description) {
+		rspamd_cryptobox_hash_update(&st, map->description, strlen(map->description));
+	}
+
 	for (i = 0; i < map->backends->len; i++) {
 		bk = g_ptr_array_index(map->backends, i);
 		rspamd_cryptobox_hash_update(&st, bk->uri, strlen(bk->uri));
@@ -2831,6 +2834,19 @@ rspamd_map_calculate_hash(struct rspamd_map *map)
 	rspamd_cryptobox_hash_final(&st, cksum);
 	cksum_encoded = rspamd_encode_base32(cksum, sizeof(cksum), RSPAMD_BASE32_DEFAULT);
 	rspamd_strlcpy(map->tag, cksum_encoded, sizeof(map->tag));
+
+	for (i = 0; i < map->backends->len; i++) {
+		bk = g_ptr_array_index(map->backends, i);
+
+		/* Also update each backend */
+		rspamd_cryptobox_fast_hash_state_t hst;
+		rspamd_cryptobox_fast_hash_init(&hst, 0);
+		rspamd_cryptobox_fast_hash_update(&hst, bk->uri, strlen(bk->uri));
+		rspamd_cryptobox_fast_hash_update(&hst, map->tag, sizeof(map->tag));
+		/* We use only 52 bits to be compatible with other numbers representation */
+		bk->id = rspamd_cryptobox_fast_hash_final(&hst) & ~(0xFFFULL << 52);
+	}
+
 	g_free(cksum_encoded);
 }
 

@@ -141,7 +141,7 @@ struct rspamd_map_backend {
 	gboolean is_fallback;
 	struct rspamd_map *map;
 	struct ev_loop *event_loop;
-	uint32_t id;
+	uint64_t id;
 	struct rspamd_cryptobox_pubkey *trusted_pubkey;
 	union rspamd_map_backend_data data;
 	char *uri;
