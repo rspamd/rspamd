@@ -36,7 +36,7 @@ parser:flag '-v --verbose'
 
 local function log_and_print(level, verbose,fmt,...)
     rspamd_logger[level](fmt, ...)
-    if verbose and level ~="errx" then
+    if verbose and (level ~="errx" or level~="warnx")  then
         print(string.format(fmt, ...))
     end
 end
@@ -75,6 +75,8 @@ local function try_again(url, ssl_verify, verbose)
 end
 
 local function check_ready_interval(interval, timeout, url, ssl_verify,verbose)
+
+    try_again(url, ssl_verify,verbose)
     local start_time = os.time()
 
     rspamd_config:add_periodic(rspamadm_ev_base, interval, function(cfg, ev_base)
