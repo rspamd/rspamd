@@ -70,7 +70,7 @@ if rspamd_config:is_mime_utf8() then
 end
 
 reconf['R_HTTP_URL_IN_FROM'] = {
-  re = [[From=/(^|\s)https?:\/\/\S/iH]],
+  re = [[From=/(^|"|\s)https?:\/\/\S/iH]],
   score = 5.0,
   mime_only = true,
   description = 'HTTP URL in From header',
