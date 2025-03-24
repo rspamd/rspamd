@@ -426,6 +426,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 		 */
 		g_atomic_int_set(&data->cache->available, 1);
 		g_atomic_int_set(&map->shared->loaded, 1);
+		g_atomic_int_set(&map->shared->cached, 0);
 		/* Store cached data */
 		rspamd_strlcpy(data->cache->shmem_name, cbd->shmem_data->shm_name,
 					   sizeof(data->cache->shmem_name));
@@ -1735,6 +1736,8 @@ rspamd_map_read_http_cached_file(struct rspamd_map *map,
 	struct tm tm;
 	char ncheck_buf[32], lm_buf[32];
 
+	g_atomic_int_set(&map->shared->loaded, 1);
+	g_atomic_int_set(&map->shared->cached, 1);
 	rspamd_localtime(map->next_check, &tm);
 	strftime(ncheck_buf, sizeof(ncheck_buf) - 1, "%Y-%m-%d %H:%M:%S", &tm);
 	rspamd_localtime(htdata->last_modified, &tm);
