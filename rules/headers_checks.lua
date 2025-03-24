@@ -552,6 +552,23 @@ rspamd_config.HEADER_FORGED_MDN = {
   description = 'Read confirmation address is different to return path'
 }
 
+rspamd_config.HEADER_FROM_CONTAINS_URL = {
+  callback = function(task)
+    local from = task:get_from('mime')
+    if from and from[1] and from[1].name then
+      local display_name = from[1].name
+      if display_name:match(' https?://') then
+        return true
+      end
+    end
+    return false
+  end,
+
+  score = 5.0,
+  group = 'headers',
+  description = 'Name in From header contains URL'
+}
+
 local headers_unique = {
   ['Content-Type'] = 1.0,
   ['Content-Transfer-Encoding'] = 1.0,
