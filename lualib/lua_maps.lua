@@ -138,7 +138,8 @@ local function query_external_map(map_config, upstreams, key, callback, task)
         local params_table = {}
         for k, v in pairs(key) do
           if type(v) == 'string' then
-            table.insert(params_table, string.format('%s=%s', lua_util.url_encode_string(k), lua_util.url_encode_string(v)))
+            table.insert(params_table,
+                string.format('%s=%s', lua_util.url_encode_string(k), lua_util.url_encode_string(v)))
           end
         end
         url = string.format('%s?%s', url, table.concat(params_table, '&'))
@@ -305,7 +306,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
 
         if string.find(opt[1], '^%d') then
           -- List of numeric stuff (hope it's ipnets definitions)
-          local map = rspamd_config:radix_from_ucl(opt)
+          local map = rspamd_config:radix_from_ucl(opt, description)
 
           if map then
             ret.__data = map

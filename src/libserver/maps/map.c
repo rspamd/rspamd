@@ -3116,7 +3116,7 @@ rspamd_map_add_from_ucl(struct rspamd_config *cfg,
 		goto err;
 	}
 
-	gboolean all_local = TRUE;
+	gboolean all_local = TRUE, all_loaded = TRUE;
 
 	PTR_ARRAY_FOREACH(map->backends, i, bk)
 	{
@@ -3135,9 +3135,8 @@ rspamd_map_add_from_ucl(struct rspamd_config *cfg,
 				map_data = g_string_sized_new(32);
 
 				if (rspamd_map_add_static_string(cfg, elt, map_data)) {
-					bk->data.sd->data = map_data->str;
 					bk->data.sd->len = map_data->len;
-					g_string_free(map_data, FALSE);
+					bk->data.sd->data = (unsigned char *) g_string_free(map_data, FALSE);
 				}
 				else {
 					g_string_free(map_data, TRUE);
@@ -3160,19 +3159,27 @@ rspamd_map_add_from_ucl(struct rspamd_config *cfg,
 				}
 
 				ucl_object_iterate_free(it);
-				bk->data.sd->data = map_data->str;
 				bk->data.sd->len = map_data->len;
-				g_string_free(map_data, FALSE);
+				bk->data.sd->data = (unsigned char *) g_string_free(map_data, FALSE);
 			}
 		}
 		else if (bk->protocol != MAP_PROTO_FILE) {
 			all_local = FALSE;
+			all_loaded = FALSE; /* Will be loaded later */
+		}
+		else {
+			all_loaded = FALSE; /* Will be loaded later (even for files) */
 		}
 	}
 
 	if (all_local) {
 		map->poll_timeout = (map->poll_timeout *
 							 cfg->map_file_watch_multiplier);
+	}
+
+	if (all_loaded) {
+		/* Static map */
+		g_atomic_int_set(&map->shared->loaded, 1);
 	}
 
 	rspamd_map_calculate_hash(map);
