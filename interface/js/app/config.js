@@ -130,6 +130,7 @@ define(["jquery", "app/common"],
                         });
 
                         const $tr = $("<tr>").append($td).append($("<td>" + item.type + "</td>"));
+                        if (!item.loaded) $tr.addClass("table-light opacity-50");
 
                         const $span = $('<span class="map-link">' + item.uri + "</span>").data("item", item);
                         $span.wrap("<td>").parent().appendTo($tr);
