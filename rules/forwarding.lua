@@ -141,10 +141,8 @@ rspamd_config.FWD_CPANEL = {
     end
     if envfrom[1].user:lower():find('^srs[01]=') then
       local rewrite_hdr = task:get_header('From-Rewrite')
-      if rewrite_hdr then
-        return rewrite_hdr:find('forwarded message')
-      else
-        return false
+      if rewrite_hdr and rewrite_hdr:find('forwarded message') then
+        return true
       end
     end
     return false
