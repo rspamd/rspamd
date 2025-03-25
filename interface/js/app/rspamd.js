@@ -52,7 +52,7 @@ define(["jquery", "app/common", "stickytabs", "visibility",
     function cleanCredentials() {
         sessionStorage.clear();
         $("#statWidgets").empty();
-        $("#listMaps").empty();
+        $("#listMaps").children("tbody").empty();
         $("#modalBody").empty();
     }
 
