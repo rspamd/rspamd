@@ -107,6 +107,53 @@ rspamd_config.FWD_SRS = {
   group = "forwarding"
 }
 
+rspamd_config.FWD_SIEVE = {
+  callback = function(task)
+    if not (task:has_from(1) and task:has_recipients(1)) then
+      return false
+    end
+    local envfrom = task:get_from(1)
+    local envrcpts = task:get_recipients(1)
+    -- Forwarding is only to a single recipient
+    if #envrcpts > 1 then
+      return false
+    end
+    if envfrom[1].user:lower():find('^srs[01]=') then
+      return task:has_header('X-Sieve-Redirected-From')
+    end
+    return false
+  end,
+  score = 0.0,
+  description = "Message was forwarded using Sieve",
+  group = "forwarding"
+}
+
+rspamd_config.FWD_CPANEL = {
+  callback = function(task)
+    if not (task:has_from(1) and task:has_recipients(1)) then
+      return false
+    end
+    local envfrom = task:get_from(1)
+    local envrcpts = task:get_recipients(1)
+    -- Forwarding is only to a single recipient
+    if #envrcpts > 1 then
+      return false
+    end
+    if envfrom[1].user:lower():find('^srs[01]=') then
+      local rewrite_hdr = task:get_header('From-Rewrite')
+      if rewrite_hdr then
+        return rewrite_hdr:find('forwarded message')
+      else
+        return false
+      end
+    end
+    return false
+  end,
+  score = 0.0,
+  description = "Message was forwarded using cPanel",
+  group = "forwarding"
+}
+
 rspamd_config.FORWARDED = {
   callback = function(task)
     local function normalize_addr(addr)
