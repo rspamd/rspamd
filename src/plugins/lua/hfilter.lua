@@ -199,9 +199,10 @@ local function check_regexp(str, regexp_text)
   return re:match(str)
 end
 
-local function add_static_map(data)
+local function add_static_map(data, description)
   return rspamd_config:add_map {
     type = 'regexp_multi',
+    description = description,
     url = {
       upstreams = 'static',
       data = data,
@@ -568,16 +569,16 @@ local function append_t(t, a)
   end
 end
 if config['helo_enabled'] then
-  checks_hello_bareip_map = add_static_map(checks_hello_bareip)
-  checks_hello_badip_map = add_static_map(checks_hello_badip)
-  checks_hellohost_map = add_static_map(checks_hellohost)
-  checks_hello_map = add_static_map(checks_hello)
+  checks_hello_bareip_map = add_static_map(checks_hello_bareip, 'Hfilter: HELO bare ip')
+  checks_hello_badip_map = add_static_map(checks_hello_badip, 'Hfilter: HELO bad ip')
+  checks_hellohost_map = add_static_map(checks_hellohost, 'Hfilter: HELO host')
+  checks_hello_map = add_static_map(checks_hello, 'Hfilter: HELO')
   append_t(symbols_enabled, symbols_helo)
   timeout = math.max(timeout, rspamd_config:get_dns_timeout() * 3)
 end
 if config['hostname_enabled'] then
   if not checks_hellohost_map then
-    checks_hellohost_map = add_static_map(checks_hellohost)
+    checks_hellohost_map = add_static_map(checks_hellohost, 'Hfilter: HOSTNAME')
   end
   append_t(symbols_enabled, symbols_hostname)
   timeout = math.max(timeout, rspamd_config:get_dns_timeout())

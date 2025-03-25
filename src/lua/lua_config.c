@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,7 +118,7 @@ local function foo(task)
 end
  */
 /***
-* @method rspamd_config:radix_from_ucl(obj)
+* @method rspamd_config:radix_from_ucl(obj, description)
 * Creates new embedded map of IP/mask addresses from object.
 * @param {ucl} obj object
 * @return {map} radix tree object

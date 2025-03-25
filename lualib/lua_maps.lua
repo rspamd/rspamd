@@ -354,7 +354,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
 
         if string.find(opt[1], '^%d') then
           -- List of numeric stuff (hope it's ipnets definitions)
-          local map = rspamd_config:radix_from_ucl(opt)
+          local map = rspamd_config:radix_from_ucl(opt, description)
 
           if map then
             ret.__data = map

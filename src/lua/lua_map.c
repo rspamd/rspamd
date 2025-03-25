@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -318,6 +318,11 @@ int lua_config_radix_from_ucl(lua_State *L)
 							  "data", 0, false);
 		ucl_object_insert_key(fake_obj, ucl_object_fromstring("static"),
 							  "url", 0, false);
+
+		if (lua_type(L, 3) == LUA_TSTRING) {
+			ucl_object_insert_key(fake_obj, ucl_object_fromstring(lua_tostring(L, 3)),
+								  "description", 0, false);
+		}
 
 		if ((m = rspamd_map_add_from_ucl(cfg, fake_obj, "static radix map",
 										 rspamd_radix_read,

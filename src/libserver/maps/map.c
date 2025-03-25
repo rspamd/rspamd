@@ -339,6 +339,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 			cbd->periodic->cur_backend = 0;
 			/* Reset cache, old cached data will be cleaned on timeout */
 			g_atomic_int_set(&data->cache->available, 0);
+			g_atomic_int_set(&map->shared->loaded, 0);
 			data->cur_cache_cbd = NULL;
 
 			rspamd_map_process_periodic(cbd->periodic);
@@ -424,6 +425,8 @@ http_map_finish(struct rspamd_http_connection *conn,
 		 * We know that a map is in the locked state
 		 */
 		g_atomic_int_set(&data->cache->available, 1);
+		g_atomic_int_set(&map->shared->loaded, 1);
+		g_atomic_int_set(&map->shared->cached, 0);
 		/* Store cached data */
 		rspamd_strlcpy(data->cache->shmem_name, cbd->shmem_data->shm_name,
 					   sizeof(data->cache->shmem_name));
@@ -919,6 +922,8 @@ read_map_file(struct rspamd_map *map, struct file_map_data *data,
 		map->read_callback(NULL, 0, &periodic->cbdata, TRUE);
 	}
 
+	g_atomic_int_set(&map->shared->loaded, 1);
+
 	return TRUE;
 }
 
@@ -1003,6 +1008,7 @@ read_map_static(struct rspamd_map *map, struct static_map_data *data,
 	}
 
 	data->processed = TRUE;
+	g_atomic_int_set(&map->shared->loaded, 1);
 
 	return TRUE;
 }
@@ -1028,7 +1034,7 @@ rspamd_map_periodic_dtor(struct map_periodic_cbdata *periodic)
 	}
 
 	if (periodic->locked) {
-		g_atomic_int_set(periodic->map->locked, 0);
+		g_atomic_int_set(&periodic->map->shared->locked, 0);
 		msg_debug_map("unlocked map %s", periodic->map->name);
 
 		if (periodic->map->wrk->state == rspamd_worker_state_running) {
@@ -1438,6 +1444,9 @@ rspamd_map_read_cached(struct rspamd_map *map, struct rspamd_map_backend *bk,
 		map->read_callback(in, len, &periodic->cbdata, TRUE);
 	}
 
+	g_atomic_int_set(&map->shared->loaded, 1);
+	g_atomic_int_set(&map->shared->cached, 1);
+
 	munmap(in, mmap_len);
 
 	return TRUE;
@@ -1727,6 +1736,8 @@ rspamd_map_read_http_cached_file(struct rspamd_map *map,
 	struct tm tm;
 	char ncheck_buf[32], lm_buf[32];
 
+	g_atomic_int_set(&map->shared->loaded, 1);
+	g_atomic_int_set(&map->shared->cached, 1);
 	rspamd_localtime(map->next_check, &tm);
 	strftime(ncheck_buf, sizeof(ncheck_buf) - 1, "%Y-%m-%d %H:%M:%S", &tm);
 	rspamd_localtime(htdata->last_modified, &tm);
@@ -2028,7 +2039,7 @@ rspamd_map_process_periodic(struct map_periodic_cbdata *cbd)
 	map->scheduled_check = NULL;
 
 	if (!map->file_only && !cbd->locked) {
-		if (!g_atomic_int_compare_and_exchange(cbd->map->locked,
+		if (!g_atomic_int_compare_and_exchange(&cbd->map->shared->locked,
 											   0, 1)) {
 			msg_debug_map(
 				"don't try to reread map %s as it is locked by other process, "
@@ -2050,7 +2061,7 @@ rspamd_map_process_periodic(struct map_periodic_cbdata *cbd)
 		rspamd_map_schedule_periodic(cbd->map, RSPAMD_MAP_SCHEDULE_ERROR);
 
 		if (cbd->locked) {
-			g_atomic_int_set(cbd->map->locked, 0);
+			g_atomic_int_set(&cbd->map->shared->locked, 0);
 			cbd->locked = FALSE;
 		}
 
@@ -2781,10 +2792,6 @@ rspamd_map_parse_backend(struct rspamd_config *cfg, const char *map_line)
 		bk->data.sd = sdata;
 	}
 
-	bk->id = rspamd_cryptobox_fast_hash_specific(RSPAMD_CRYPTOBOX_T1HA,
-												 bk->uri, strlen(bk->uri),
-												 0xdeadbabe);
-
 	return bk;
 
 err:
@@ -2815,6 +2822,13 @@ rspamd_map_calculate_hash(struct rspamd_map *map)
 
 	rspamd_cryptobox_hash_init(&st, NULL, 0);
 
+	if (map->name) {
+		rspamd_cryptobox_hash_update(&st, map->name, strlen(map->name));
+	}
+	if (map->description) {
+		rspamd_cryptobox_hash_update(&st, map->description, strlen(map->description));
+	}
+
 	for (i = 0; i < map->backends->len; i++) {
 		bk = g_ptr_array_index(map->backends, i);
 		rspamd_cryptobox_hash_update(&st, bk->uri, strlen(bk->uri));
@@ -2823,6 +2837,26 @@ rspamd_map_calculate_hash(struct rspamd_map *map)
 	rspamd_cryptobox_hash_final(&st, cksum);
 	cksum_encoded = rspamd_encode_base32(cksum, sizeof(cksum), RSPAMD_BASE32_DEFAULT);
 	rspamd_strlcpy(map->tag, cksum_encoded, sizeof(map->tag));
+
+	for (i = 0; i < map->backends->len; i++) {
+		bk = g_ptr_array_index(map->backends, i);
+
+		/* Also update each backend */
+		rspamd_cryptobox_fast_hash_state_t hst;
+		rspamd_cryptobox_fast_hash_init(&hst, 0);
+		rspamd_cryptobox_fast_hash_update(&hst, bk->uri, strlen(bk->uri));
+		rspamd_cryptobox_fast_hash_update(&hst, map->tag, sizeof(map->tag));
+
+		if (bk->protocol == MAP_PROTO_STATIC) {
+			/* Static maps content is pre-defined */
+			rspamd_cryptobox_fast_hash_update(&hst, bk->data.sd->data,
+											  bk->data.sd->len);
+		}
+
+		/* We use only 52 bits to be compatible with other numbers representation */
+		bk->id = rspamd_cryptobox_fast_hash_final(&hst) & ~(0xFFFULL << 52);
+	}
+
 	g_free(cksum_encoded);
 }
 
@@ -2888,8 +2922,8 @@ rspamd_map_add(struct rspamd_config *cfg,
 	map->user_data = user_data;
 	map->cfg = cfg;
 	map->id = rspamd_random_uint64_fast();
-	map->locked =
-		rspamd_mempool_alloc0_shared(cfg->cfg_pool, sizeof(int));
+	map->shared =
+		rspamd_mempool_alloc0_shared(cfg->cfg_pool, sizeof(struct rspamd_map_shared_data));
 	map->backends = g_ptr_array_sized_new(1);
 	map->wrk = worker;
 	rspamd_mempool_add_destructor(cfg->cfg_pool, rspamd_ptr_array_free_hard,
@@ -2988,8 +3022,8 @@ rspamd_map_add_from_ucl(struct rspamd_config *cfg,
 	map->user_data = user_data;
 	map->cfg = cfg;
 	map->id = rspamd_random_uint64_fast();
-	map->locked =
-		rspamd_mempool_alloc0_shared(cfg->cfg_pool, sizeof(int));
+	map->shared =
+		rspamd_mempool_alloc0_shared(cfg->cfg_pool, sizeof(struct rspamd_map_shared_data));
 	map->backends = g_ptr_array_new();
 	map->wrk = worker;
 	map->no_file_read = (flags & RSPAMD_MAP_FILE_NO_READ);
@@ -3108,7 +3142,7 @@ rspamd_map_add_from_ucl(struct rspamd_config *cfg,
 		goto err;
 	}
 
-	gboolean all_local = TRUE;
+	gboolean all_local = TRUE, all_loaded = TRUE;
 
 	PTR_ARRAY_FOREACH(map->backends, i, bk)
 	{
@@ -3127,9 +3161,8 @@ rspamd_map_add_from_ucl(struct rspamd_config *cfg,
 				map_data = g_string_sized_new(32);
 
 				if (rspamd_map_add_static_string(cfg, elt, map_data)) {
-					bk->data.sd->data = map_data->str;
 					bk->data.sd->len = map_data->len;
-					g_string_free(map_data, FALSE);
+					bk->data.sd->data = (unsigned char *) g_string_free(map_data, FALSE);
 				}
 				else {
 					g_string_free(map_data, TRUE);
@@ -3152,19 +3185,27 @@ rspamd_map_add_from_ucl(struct rspamd_config *cfg,
 				}
 
 				ucl_object_iterate_free(it);
-				bk->data.sd->data = map_data->str;
 				bk->data.sd->len = map_data->len;
-				g_string_free(map_data, FALSE);
+				bk->data.sd->data = (unsigned char *) g_string_free(map_data, FALSE);
 			}
 		}
 		else if (bk->protocol != MAP_PROTO_FILE) {
 			all_local = FALSE;
+			all_loaded = FALSE; /* Will be loaded later */
+		}
+		else {
+			all_loaded = FALSE; /* Will be loaded later (even for files) */
 		}
 	}
 
 	if (all_local) {
 		map->poll_timeout = (map->poll_timeout *
 							 cfg->map_file_watch_multiplier);
+	}
+
+	if (all_loaded) {
+		/* Static map */
+		g_atomic_int_set(&map->shared->loaded, 1);
 	}
 
 	rspamd_map_calculate_hash(map);
