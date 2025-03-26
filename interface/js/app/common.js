@@ -290,10 +290,10 @@ define(["jquery", "nprogress"],
                 reader.readAsText(this.files[this.filesIdx]);
             },
 
-            handleFileInput(event, textArea, button, fileInput, validator) {
+            handleFileInput(fileSrc, textArea, button, fileInput, validator) {
                 ({
                     files: this.files
-                } = event);
+                } = fileSrc);
                 this.filesIdx = 0;
 
                 if (!this.files.length) {
