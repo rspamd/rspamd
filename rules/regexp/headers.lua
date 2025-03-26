@@ -73,7 +73,7 @@ reconf['R_HTTP_URL_IN_FROM'] = {
   re = [[From=/(^|"|'|\s)[hH][tT][tT][pP][sS]?(:|=3A)\/\/\S/H]],
   score = 5.0,
   mime_only = true,
-  description = 'HTTP URL in From header',
+  description = 'HTTP URL preceded by the start of a line, quote, or whitespace, with normal or URL-encoded colons in From header',
   group = 'headers'
 }
 
