@@ -115,22 +115,28 @@ define(["jquery", "app/common"],
             common.query("maps", {
                 success: function (json) {
                     const [{data}] = json;
-                    $listmaps.empty();
-                    const $tbody = $("<tbody>");
+                    const $tbody = $listmaps.children("tbody").empty();
 
                     $.each(data, (i, item) => {
-                        let $td = '<td><span class="badge text-bg-secondary">Read</span></td>';
-                        if (!(item.editable === false || common.read_only)) {
-                            $td = $($td).append('&nbsp;<span class="badge text-bg-success">Write</span>');
-                        }
-                        const $tr = $("<tr>").append($td);
+                        const $td = $("<td>");
+
+                        const badges = [
+                            {text: "Not loaded", cls: "text-bg-warning", cond: !item.loaded},
+                            {text: "Cached", cls: "text-bg-info", cond: item.cached},
+                            {text: "Writable", cls: "text-bg-success", cond: !(item.editable === false || common.read_only)}
+                        ];
+                        badges.forEach((b) => {
+                            if (b.cond) $td.append($(`<span class="badge me-1 ${b.cls}">${b.text}</span>`));
+                        });
+
+                        const $tr = $("<tr>").append($td).append($("<td>" + item.type + "</td>"));
+                        if (!item.loaded) $tr.addClass("table-light opacity-50");
 
                         const $span = $('<span class="map-link">' + item.uri + "</span>").data("item", item);
                         $span.wrap("<td>").parent().appendTo($tr);
                         $("<td>" + item.description + "</td>").appendTo($tr);
                         $tr.appendTo($tbody);
                     });
-                    $tbody.appendTo($listmaps);
                     $listmaps.closest(".card").show();
                 },
                 server: common.getServer()
