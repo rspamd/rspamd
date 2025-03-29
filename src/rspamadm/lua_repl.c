@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -701,8 +701,8 @@ rspamadm_lua_run_repl(lua_State *L, bool is_batch)
 					g_string_append(tb, " \n");
 				}
 			}
-		}
 #endif
+		}
 	}
 }
 
