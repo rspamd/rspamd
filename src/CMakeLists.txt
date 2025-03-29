@@ -213,7 +213,7 @@ target_link_libraries(rspamd-server
 if (SYSTEM_XXHASH)
     target_link_libraries(rspamd-server PUBLIC xxhash)
 else ()
-    target_link_libraries(rspamd-server PRIVATE rspamd-xxhash)
+    target_link_libraries(rspamd-server PUBLIC rspamd-xxhash)
 endif ()
 
 # Handle zstd dependency

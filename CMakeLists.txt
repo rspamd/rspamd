@@ -104,6 +104,9 @@ include(Sanitizer)
 include(ArchDep)
 include(Paths)
 
+include(OSDep)
+ConfigurePlatformSpecifics()
+
 if (ENABLE_PCRE2)
     set(WITH_PCRE2 1)
     # For utf8 API
