@@ -339,6 +339,12 @@ add_custom_target(dist ${CMAKE_SOURCE_DIR}/dist.sh
         COMMENT "Create source distribution"
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+# Tests
+# Include CTest for testing support
+include(CTest)
+enable_testing()
+add_subdirectory(test)
+
 add_custom_target(check DEPENDS rspamd-test-cxx rspamd-test)
 add_custom_target(run-test DEPENDS check
         COMMAND test/rspamd-test-cxx

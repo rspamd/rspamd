@@ -100,10 +100,6 @@ function(AddDependencySubdirectories)
     # Main source code
     add_subdirectory(src)
 
-    # Enable testing
-    enable_testing()
-    add_subdirectory(test)
-
     # Utilities
     add_subdirectory(utils)
 
