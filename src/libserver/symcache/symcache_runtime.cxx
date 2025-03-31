@@ -279,11 +279,10 @@ auto symcache_runtime::is_symbol_enabled(struct rspamd_task *task, const symcach
 
 auto symcache_runtime::get_dynamic_item(int id) const -> cache_dynamic_item *
 {
-
 	/* Not found in the cache, do a hash lookup */
 	auto our_id_maybe = rspamd::find_map(order->by_cache_id, id);
 
-	if (our_id_maybe) {
+	if (our_id_maybe && our_id_maybe.value() < dynamic_items.size()) {
 		return &dynamic_items[our_id_maybe.value()];
 	}
 
@@ -342,7 +341,7 @@ auto symcache_runtime::process_pre_postfilters(struct rspamd_task *task,
 
 		auto dyn_item = get_dynamic_item(item->id);
 
-		if (dyn_item->status == cache_item_status::not_started) {
+		if (dyn_item && dyn_item->status == cache_item_status::not_started) {
 			if (slow_status == slow_status::enabled) {
 				return false;
 			}
