@@ -122,6 +122,29 @@ local function data_key(task)
 
   local h = hash.create()
   h:update(body, len)
+  local subject = task:get_subject() or ''
+  h:update(subject)
+
+  -- Take recipients into account
+  local rcpt = task:get_recipients('smtp')
+  if rcpt then
+    table.sort(rcpt, function(r1, r2)
+      return r1['addr'] < r2['addr']
+    end)
+
+    fun.each(function(r)
+      h:update(r['addr'])
+    end, rcpt)
+  end
+
+  -- Use from as well, but mime one
+  local from = task:get_from('mime')
+
+  local addr = '<>'
+  if from and from[1] then
+    addr = from[1]['addr']
+  end
+  h:update(addr)
 
   local b32 = settings['key_prefix'] .. 'b' .. h:base32():sub(1, 20)
   task:get_mempool():set_variable("grey_bodyhash", b32)
