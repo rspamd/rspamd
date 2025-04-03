@@ -135,6 +135,12 @@ define(["jquery", "app/common"],
         $("#selectorsSelArea").on("input", () => {
             checkSelectors();
         });
+        $("#selectorsMsgClean").on("click", () => {
+            $("#selectorsMsgArea").val("");
+            $("#selectorsFile").val("");
+        });
+
+        common.fileUtils.setupFileHandling("#selectorsMsgArea", "#selectorsFile", "#selectorsChkMsgBtn", "#selectorsSelArea");
 
         return ui;
     });
