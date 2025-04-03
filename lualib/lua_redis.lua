@@ -26,7 +26,7 @@ local N = "lua_redis"
 
 local db_schema = (ts.number / tostring + ts.string):is_optional():describe("Database number")
 local common_schema = {
-  timeout = (ts.number + ts.string / lutil.parse_time_interval):is_optional():describe("Connection timeout"),
+  timeout = (ts.number + ts.string / lutil.parse_time_interval):is_optional():describe("Connection timeout (seconds)"),
   db = db_schema,
   database = db_schema,
   dbname = db_schema,
@@ -40,6 +40,7 @@ local common_schema = {
   sentinel_master_maxerrors = (ts.number + ts.string / tonumber):is_optional():describe("Sentinel master max errors"),
   sentinel_username = ts.string:is_optional():describe("Sentinel username"),
   sentinel_password = ts.string:is_optional():describe("Sentinel password"),
+  redis_version = (ts.number + ts.string / tonumber):is_optional():describe("Redis server version (6 or 7)"),
 }
 
 local read_schema = lutil.table_merge({
@@ -355,6 +356,10 @@ local function process_redis_opts(options, redis_params)
 
   if options['prefix'] and not redis_params['prefix'] then
     redis_params['prefix'] = options['prefix']
+  end
+
+  if options['redis_version'] and not redis_params['redis_version'] then
+    redis_params['redis_version'] = tonumber(options['redis_version'])
   end
 
   if type(options['expand_keys']) == 'boolean' then
@@ -1510,15 +1515,20 @@ local function exec_redis_script(id, params, callback, keys, args)
       end
     end
 
+    local redis_command = 'EVALSHA'
+    if not params.is_write and script.redis_params.redis_version and
+        script.redis_params.redis_version >= 7 then
+      redis_command = 'EVALSHA_RO'
+    end
     if params.task then
       if not rspamd_redis_make_request(params.task, script.redis_params,
-          params.key, params.is_write, redis_cb, 'EVALSHA', redis_args) then
+          params.key, params.is_write, redis_cb, redis_command, redis_args) then
         callback('Cannot make redis request', nil)
       end
     else
       if not redis_make_request_taskless(params.ev_base, rspamd_config,
           script.redis_params,
-          params.key, params.is_write, redis_cb, 'EVALSHA', redis_args) then
+          params.key, params.is_write, redis_cb, redis_command, redis_args) then
         callback('Cannot make redis request', nil)
       end
     end
