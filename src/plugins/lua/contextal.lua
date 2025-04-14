@@ -75,7 +75,7 @@ local settings = {
 }
 
 local static_boundary = rspamd_util.random_hex(32)
-local use_request_ttl = true
+local wait_request_ttl = true
 
 local function maybe_defer(task, obj)
   if settings.defer_if_no_result and not ((obj or E)[1] or E).actions then
@@ -84,6 +84,7 @@ local function maybe_defer(task, obj)
 end
 
 local function process_actions(task, obj, is_cached)
+  lua_util.debugm(N, task, 'got result: %s (%s)', obj, is_cached and 'cached' or 'fresh')
   for _, match in ipairs((obj[1] or E).actions or E) do
     local act = match.action
     local scenario = match.scenario
@@ -124,9 +125,11 @@ end
 
 local function process_cached(task, obj)
   if (obj[1] or E).actions then
+    lua_util.debugm(N, task, 'using cached actions: %s', obj[1].actions)
     task:disable_symbol(settings.action_symbol_prefix)
     return process_actions(task, obj, true)
   elseif (obj[1] or E).work_id then
+    lua_util.debugm(N, task, 'using old work ID: %s', obj[1].work_id)
     task:get_mempool():set_variable('contextal_work_id', obj[1].work_id)
   else
     rspamd_logger.err(task, 'bad result (cached): %s', obj)
@@ -139,6 +142,7 @@ local function action_cb(task)
     rspamd_logger.err(task, 'no work id found in mempool')
     return
   end
+  lua_util.debugm(N, task, 'polling for result for work id: %s', work_id)
 
   local function http_callback(err, code, body, hdrs)
     if err then
@@ -200,7 +204,9 @@ local function submit(task)
     end
     task:insert_result(settings.submission_symbol, 1.0,
         string.format('work_id=%s', work_id or 'nil'))
-    task:add_timer(settings.request_ttl, action_cb)
+    if wait_request_ttl then
+      task:add_timer(settings.request_ttl, action_cb)
+    end
   end
 
   local req = {
@@ -303,14 +309,14 @@ local submission_id = rspamd_config:register_symbol({
 
 local top_options = rspamd_config:get_all_opt('options')
 if settings.request_ttl and settings.request_ttl >= (top_options.task_timeout * 0.8) then
-  rspamd_logger.warn(rspamd_config, [[request ttl is >= 80% of task timeout, won't wait on processing]])
-  use_request_ttl = false
+  rspamd_logger.info(rspamd_config, [[request ttl is >= 80% of task timeout, won't wait on processing]])
+  wait_request_ttl = false
 elseif not settings.request_ttl then
-  use_request_ttl = false
+  wait_request_ttl = false
 end
 
 local parent_id
-if use_request_ttl then
+if wait_request_ttl then
   parent_id = submission_id
 else
   parent_id = rspamd_config:register_symbol({

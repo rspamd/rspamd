@@ -1,75 +1,100 @@
+# Sanitizer configuration
 # Ported from Clickhouse: https://github.com/ClickHouse/ClickHouse/blob/master/cmake/sanitize.cmake
 
-set (SAN_FLAGS "${SAN_FLAGS} -g -fno-omit-frame-pointer -DSANITIZER")
-# O1 is normally set by clang, and -Og by gcc
-if (COMPILER_GCC)
-    if (ENABLE_FULL_DEBUG MATCHES "ON")
-        set (SAN_FLAGS "${SAN_FLAGS} -O0")
-    else()
-        set (SAN_FLAGS "${SAN_FLAGS} -Og")
-    endif()
-else ()
-    if (ENABLE_FULL_DEBUG MATCHES "ON")
-        set (SAN_FLAGS "${SAN_FLAGS} -O0")
-    else()
-        set (SAN_FLAGS "${SAN_FLAGS} -O1")
-    endif()
-endif ()
-if (SANITIZE)
-    if (ENABLE_JEMALLOC MATCHES "ON")
-        message (STATUS "Jemalloc support is useless in case of build with sanitizers")
-        set (ENABLE_JEMALLOC "OFF")
+# Define a function to configure sanitizers
+function(configure_sanitizers)
+    # Skip configuration if no sanitizer is specified
+    if (NOT SANITIZE)
+        return()
     endif ()
 
-    string(REPLACE "," ";" SANITIZE_LIST ${SANITIZE})
-    foreach(SANITIZE ${SANITIZE_LIST})
-        if (SANITIZE STREQUAL "address")
-            set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize-address-use-after-scope")
-            set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fsanitize-address-use-after-scope")
-            set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address -fsanitize-address-use-after-scope")
-            if (COMPILER_GCC)
-                set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -static-libasan")
-                set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libasan")
-                set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libasan")
-            endif ()
+    # Base sanitizer flags
+    add_compile_options(-g -fno-omit-frame-pointer)
+    add_compile_definitions(SANITIZER)
 
-        elseif (SANITIZE STREQUAL "leak")
-            set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=leak")
-            set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=leak")
-            set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=leak")
-
-        elseif (SANITIZE STREQUAL "memory")
-            set (MSAN_FLAGS "-fsanitize=memory -fsanitize-memory-track-origins -fno-optimize-sibling-calls")
-
-            set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${MSAN_FLAGS}")
-            set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${MSAN_FLAGS}")
-            set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=memory")
-
-            if (COMPILER_GCC)
-                set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -static-libmsan")
-                set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libmsan")
-                set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libmsan")
-            endif ()
-
-        elseif (SANITIZE STREQUAL "undefined")
-            set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined -fno-sanitize-recover=all")
-            set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=undefined -fno-sanitize-recover=all")
-            set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=undefined")
-
-            if (COMPILER_GCC)
-                set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -static-libubsan")
-                set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libubsan")
-                set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libubsan")
-            endif ()
+    # Set optimization level based on compiler and debug settings
+    if (CMAKE_C_COMPILER_ID MATCHES "GNU")
+        if (ENABLE_FULL_DEBUG)
+            add_compile_options(-O0)
         else ()
-            message (FATAL_ERROR "Unknown sanitizer type: ${SANITIZE}")
+            add_compile_options(-Og)
         endif ()
+    else ()
+        if (ENABLE_FULL_DEBUG)
+            add_compile_options(-O0)
+        else ()
+            add_compile_options(-O1)
+        endif ()
+    endif ()
+
+    # Jemalloc conflicts with sanitizers
+    if (ENABLE_JEMALLOC)
+        message(STATUS "Disabling jemalloc as it's incompatible with sanitizers")
+        set(ENABLE_JEMALLOC OFF PARENT_SCOPE)
+    endif ()
+
+    # Process the specified sanitizers
+    string(REPLACE "," ";" SANITIZE_LIST "${SANITIZE}")
+
+    foreach (SANITIZER_TYPE IN LISTS SANITIZE_LIST)
+        if (SANITIZER_TYPE STREQUAL "address")
+            # Address Sanitizer (ASan)
+            add_compile_options(-fsanitize=address -fsanitize-address-use-after-scope)
+            add_link_options(-fsanitize=address -fsanitize-address-use-after-scope)
+
+            if (CMAKE_C_COMPILER_ID MATCHES "GNU")
+                add_compile_options(-static-libasan)
+                add_link_options(-static-libasan)
+            endif ()
+
+        elseif (SANITIZER_TYPE STREQUAL "leak")
+            # Leak Sanitizer (LSan)
+            add_compile_options(-fsanitize=leak)
+            add_link_options(-fsanitize=leak)
+
+        elseif (SANITIZER_TYPE STREQUAL "memory")
+            # Memory Sanitizer (MSan)
+            add_compile_options(
+                    -fsanitize=memory
+                    -fsanitize-memory-track-origins
+                    -fno-optimize-sibling-calls
+            )
+            add_link_options(-fsanitize=memory)
+
+            if (CMAKE_C_COMPILER_ID MATCHES "GNU")
+                add_compile_options(-static-libmsan)
+                add_link_options(-static-libmsan)
+            endif ()
+
+        elseif (SANITIZER_TYPE STREQUAL "undefined")
+            # Undefined Behavior Sanitizer (UBSan)
+            add_compile_options(-fsanitize=undefined -fno-sanitize-recover=all)
+            add_link_options(-fsanitize=undefined)
+
+            if (CMAKE_C_COMPILER_ID MATCHES "GNU")
+                add_compile_options(-static-libubsan)
+                add_link_options(-static-libubsan)
+            endif ()
+
+        else ()
+            message(FATAL_ERROR "Unknown sanitizer type: ${SANITIZER_TYPE}")
+        endif ()
+
+        message(STATUS "Configured sanitizer: ${SANITIZER_TYPE}")
     endforeach ()
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SAN_FLAGS}")
-    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${SAN_FLAGS}")
-    message (STATUS "Add sanitizer: ${SANITIZE}")
-    # Disable sanitizing on make stage e.g. for snowball compiler
-    set (ENV{ASAN_OPTIONS} "detect_leaks=0")
-    message (STATUS "Sanitizer CFLAGS: ${CMAKE_C_FLAGS} ${CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UC}}")
-    message (STATUS "Sanitizer CXXFLAGS: ${CMAKE_CXX_FLAGS} ${CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UC}}")
-endif()
+
+    # Set environment variable to disable leak detection during the build phase
+    set(ENV{ASAN_OPTIONS} "detect_leaks=0")
+
+    # Log the final configuration
+    get_directory_property(COMPILE_OPTIONS COMPILE_OPTIONS)
+    get_directory_property(LINK_OPTIONS LINK_OPTIONS)
+    message(STATUS "Sanitizer compile options: ${COMPILE_OPTIONS}")
+    message(STATUS "Sanitizer link options: ${LINK_OPTIONS}")
+
+    # Propagate the modified variable to parent scope
+    set(ENABLE_JEMALLOC ${ENABLE_JEMALLOC} PARENT_SCOPE)
+endfunction()
+
+# Execute the configuration
+configure_sanitizers()
