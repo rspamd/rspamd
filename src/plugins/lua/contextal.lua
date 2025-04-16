@@ -79,7 +79,7 @@ local wait_request_ttl = true
 
 local function maybe_defer(task, obj)
   if settings.defer_if_no_result and not ((obj or E)[1] or E).actions then
-    task:set_pre_result('soft reject', settings.defer_message)
+    task:set_pre_result('soft reject', settings.defer_message, N)
   end
 end
 
