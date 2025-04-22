@@ -147,7 +147,7 @@ local function parse_arc_header(hdr, target, is_aar)
 
   -- sort by i= attribute
   table.sort(target, function(a, b)
-    return (a.i or 0) < (b.i or 0)
+    return (tonumber(a.i) or 0) < (tonumber(b.i) or 0)
   end)
 end
 
