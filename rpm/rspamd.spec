@@ -221,4 +221,4 @@ systemctl --no-reload preset rspamd.service >/dev/null 2>&1 || :
 %config(noreplace) %{_sysconfdir}/logrotate.d/rspamd
 
 %attr(-, _rspamd, _rspamd) %dir %{_localstatedir}/lib/rspamd
-%dir %{_localstatedir}/log/rspamd
+%attr(-, _rspamd, _rspamd) %dir %{_localstatedir}/log/rspamd
