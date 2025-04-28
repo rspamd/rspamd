@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1715,26 +1715,30 @@ fuzzy_cmd_write_extensions(struct rspamd_task *task,
 		struct rspamd_email_address *addr = g_ptr_array_index(MESSAGE_FIELD(task,
 																			from_mime),
 															  0);
-		unsigned int to_write = MIN(MAX_FUZZY_DOMAIN, addr->domain_len) + 2;
 
-		if (to_write > 0 && to_write <= available) {
-			*dest++ = RSPAMD_FUZZY_EXT_SOURCE_DOMAIN;
-			*dest++ = to_write - 2;
+		if (addr->domain_len > 0) {
+			/* Filter invalid domains */
+			unsigned int to_write = MIN(MAX_FUZZY_DOMAIN, addr->domain_len) + 2;
 
-			if (addr->domain_len < MAX_FUZZY_DOMAIN) {
-				memcpy(dest, addr->domain, addr->domain_len);
-				dest += addr->domain_len;
+			if (to_write > 0 && to_write <= available) {
+				*dest++ = RSPAMD_FUZZY_EXT_SOURCE_DOMAIN;
+				*dest++ = to_write - 2;
+
+				if (addr->domain_len < MAX_FUZZY_DOMAIN) {
+					memcpy(dest, addr->domain, addr->domain_len);
+					dest += addr->domain_len;
+				}
+				else {
+					/* Trim from left */
+					memcpy(dest,
+						   addr->domain + (addr->domain_len - MAX_FUZZY_DOMAIN),
+						   MAX_FUZZY_DOMAIN);
+					dest += MAX_FUZZY_DOMAIN;
+				}
+
+				available -= to_write;
+				written += to_write;
 			}
-			else {
-				/* Trim from left */
-				memcpy(dest,
-					   addr->domain + (addr->domain_len - MAX_FUZZY_DOMAIN),
-					   MAX_FUZZY_DOMAIN);
-				dest += MAX_FUZZY_DOMAIN;
-			}
-
-			available -= to_write;
-			written += to_write;
 		}
 	}
 
