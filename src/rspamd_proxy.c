@@ -1600,8 +1600,8 @@ proxy_backend_master_error_handler(struct rspamd_http_connection *conn, GError *
 	session->retries++;
 	msg_info_session("abnormally closing connection from backend: %s, error: %e,"
 					 " retries left: %d",
-					 rspamd_inet_address_to_string_pretty(
-						 rspamd_upstream_addr_cur(session->master_conn->up)),
+					 session->master_conn->up ? rspamd_inet_address_to_string_pretty(
+						 rspamd_upstream_addr_cur(session->master_conn->up)) : "self-scan",
 					 err,
 					 session->ctx->max_retries - session->retries);
 	rspamd_upstream_fail(bk_conn->up, FALSE, err ? err->message : "unknown");
@@ -2216,8 +2216,8 @@ proxy_client_finish_handler(struct rspamd_http_connection *conn,
 	}
 	else {
 		msg_info_session("finished master connection to %s; HTTP code: %d",
-						 rspamd_inet_address_to_string_pretty(
-							 rspamd_upstream_addr_cur(session->master_conn->up)),
+						 session->master_conn->up ? rspamd_inet_address_to_string_pretty(
+							 rspamd_upstream_addr_cur(session->master_conn->up)) : "self-scan",
 						 msg->code);
 		proxy_backend_close_connection(session->master_conn);
 		REF_RELEASE(session);
