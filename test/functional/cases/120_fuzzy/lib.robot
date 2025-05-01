@@ -16,6 +16,7 @@ ${RSPAMD_FUZZY_ENCRYPTED_ONLY}  false
 ${RSPAMD_FUZZY_ENCRYPTION_KEY}  null
 ${RSPAMD_FUZZY_INCLUDE}         ${RSPAMD_TESTDIR}/configs/empty.conf
 ${RSPAMD_FUZZY_KEY}             null
+${RSPAMD_FUZZY_SERVER_MODE}     servers
 ${RSPAMD_FUZZY_SHINGLES_KEY}    null
 ${RSPAMD_SCOPE}                 Suite
 ${SETTINGS_FUZZY_CHECK}         ${EMPTY}
@@ -109,6 +110,7 @@ Fuzzy Setup Encrypted
   Set Suite Variable  ${RSPAMD_FUZZY_ENCRYPTION_KEY}  ${RSPAMD_KEY_PUB1}
   Set Suite Variable  ${RSPAMD_FUZZY_CLIENT_ENCRYPTION_KEY}  ${RSPAMD_KEY_PUB1}
   Set Suite Variable  ${RSPAMD_FUZZY_INCLUDE}  ${RSPAMD_TESTDIR}/configs/fuzzy-encryption-key.conf
+  Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  servers
   Rspamd Redis Setup
 
 Fuzzy Setup Encrypted Dyn1
@@ -142,6 +144,7 @@ Fuzzy Setup Encrypted Keyed
 Fuzzy Setup Plain
   [Arguments]  ${algorithm}
   Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  ${algorithm}
+  Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  servers
   Rspamd Redis Setup
 
 Fuzzy Setup Keyed
@@ -149,6 +152,7 @@ Fuzzy Setup Keyed
   Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  ${algorithm}
   Set Suite Variable  ${RSPAMD_FUZZY_KEY}  mYN888sydwLTfE32g2hN
   Set Suite Variable  ${RSPAMD_FUZZY_SHINGLES_KEY}  hXUCgul9yYY3Zlk1QIT2
+  Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  servers
   Rspamd Redis Setup
 
 Fuzzy Setup Plain Fasthash
@@ -218,3 +222,18 @@ Fuzzy Multimessage Overwrite Test
   FOR  ${i}  IN  @{MESSAGES}
     Fuzzy Overwrite Test  ${i}
   END
+
+Fuzzy Setup Split Servers
+  Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  siphash
+  Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  split
+  Rspamd Redis Setup
+
+Fuzzy Setup Read Only
+  Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  siphash
+  Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  read_only
+  Rspamd Redis Setup
+
+Fuzzy Setup Write Only
+  Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  siphash
+  Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  write_only
+  Rspamd Redis Setup
