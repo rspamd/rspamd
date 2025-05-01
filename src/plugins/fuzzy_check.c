@@ -1314,7 +1314,7 @@ int fuzzy_check_module_config(struct rspamd_config *cfg, bool validate)
 		LL_FOREACH(value, cur)
 		{
 
-			if (ucl_object_lookup(cur, "servers")) {
+			if (ucl_object_lookup_any(cur, "servers", "read_servers", "write_servers", NULL) != NULL) {
 				/* Unnamed rule */
 				fuzzy_parse_rule(cfg, cur, NULL, cb_id);
 				nrules++;
@@ -3606,6 +3606,9 @@ register_fuzzy_controller_call(struct rspamd_http_connection_entry *entry,
 			rspamd_upstream_fail(selected, TRUE, strerror(errno));
 		}
 		else {
+			msg_info_task("fuzzy storage %s (%s rule) is used for write",
+						  rspamd_inet_address_to_string_pretty(addr),
+						  rule->name);
 			s =
 				rspamd_mempool_alloc0(session->pool,
 									  sizeof(struct fuzzy_learn_session));
@@ -3688,6 +3691,7 @@ fuzzy_modify_handler(struct rspamd_http_connection_entry *conn_ent,
 	PTR_ARRAY_FOREACH(fuzzy_module_ctx->fuzzy_rules, i, rule)
 	{
 		if (rule->mode == fuzzy_rule_read_only) {
+			msg_debug_task("skip rule %s as it is read-only", rule->name);
 			continue;
 		}
 
@@ -3797,6 +3801,8 @@ fuzzy_modify_handler(struct rspamd_http_connection_entry *conn_ent,
 		else {
 			commands = fuzzy_generate_commands(task, rule, cmd, flag, value,
 											   flags);
+			msg_debug_task("fuzzy command %d for rule %s, flag %d, value %d",
+						   cmd, rule->name, flag, value);
 			if (commands != NULL) {
 				res = register_fuzzy_controller_call(conn_ent,
 													 rule,
