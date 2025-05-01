@@ -1632,8 +1632,8 @@ proxy_backend_master_error_handler(struct rspamd_http_connection *conn, GError *
 		else {
 			msg_info_session("retry connection to: %s"
 							 " retries left: %d",
-							 rspamd_inet_address_to_string(
-								 rspamd_upstream_addr_cur(session->master_conn->up)),
+							 session->master_conn->up ? rspamd_inet_address_to_string(
+								 rspamd_upstream_addr_cur(session->master_conn->up)) : "self-scan",
 							 session->ctx->max_retries - session->retries);
 		}
 	}
