@@ -198,20 +198,22 @@ end
 
 local function symbol_transform(cfg, k, v)
   local groups = cfg:at('group')
-  -- first try to find any group where there is a definition of this symbol
-  for gr_n, gr in groups:pairs() do
-    local symbols = gr:at('symbols')
-    if symbols and symbols:at(k) then
-      -- We override group symbol with ungrouped symbol
-      logger.infox("overriding group symbol %s in the group %s", k, gr_n)
-      symbols[k] = lua_util.override_defaults(symbols:at(k):unwrap(), v:unwrap())
-      return
+  if groups then
+    -- first try to find any group where there is a definition of this symbol
+    for gr_n, gr in groups:pairs() do
+      local symbols = gr:at('symbols')
+      if symbols and symbols:at(k) then
+        -- We override group symbol with ungrouped symbol
+        logger.infox("overriding group symbol %s in the group %s", k, gr_n)
+        symbols[k] = lua_util.override_defaults(symbols:at(k):unwrap(), v:unwrap())
+        return
+      end
     end
   end
   -- Now check what Rspamd knows about this symbol
   local sym = rspamd_config:get_symbol(k)
 
-  if not sym or not sym.group then
+  if groups and (not sym or not sym.group) then
     -- Otherwise we just use group 'ungrouped'
     if not groups:at('ungrouped') then
       groups.ungrouped = {
