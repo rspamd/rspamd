@@ -27,21 +27,21 @@ Reply to 1 sender 2 recipients first is set second is not
   ...  IP=8.8.8.8  User=user@emailbl.com
   ...  Settings=${SETTINGS_REPLIES}
   Scan File  ${RSPAMD_TESTDIR}/messages/replyto_1_2.eml
-  ...  IP=8.8.8.8  User=user@emailbl.com
+  ...  IP=8.8.8.8  User=user@emailbl.com  Rcpt=user@example.com
   ...  Settings=${SETTINGS_REPLIES}
-  Do Not Expect Symbol  ${SYMBOL}
+  Expect Symbol  ${SYMBOL}
 
 Reply to 1 sender 2 recipients 1 rcpt is same
   Scan File  ${RSPAMD_TESTDIR}/messages/replyto_1_2_s.eml
-  ...  IP=8.8.8.8  User=user@emailbl.com
+  ...  IP=8.8.8.8  User=user@emailbl.com  Rcpt=user@example.com
   ...  Settings=${SETTINGS_REPLIES}
-  Do Not Expect Symbol  ${SYMBOL}
+  Expect Symbol  ${SYMBOL}
 
 Reply to another sender 2 recipients
   Scan File  ${RSPAMD_TESTDIR}/messages/set_replyto_2_2.eml
   ...  IP=8.8.8.8  User=another@emailbl.com
   ...  Settings=${SETTINGS_REPLIES}
   Scan File  ${RSPAMD_TESTDIR}/messages/replyto_2_2.eml
-  ...  IP=8.8.8.8  User=another@emailbl.com
+  ...  IP=8.8.8.8  User=another@emailbl.com  Rcpt=user@example.com
   ...  Settings=${SETTINGS_REPLIES}
-  Do Not Expect Symbol  ${SYMBOL}
+  Expect Symbol  ${SYMBOL}
