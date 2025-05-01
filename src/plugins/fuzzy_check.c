@@ -78,7 +78,6 @@ enum fuzzy_rule_mode {
 };
 
 struct fuzzy_rule {
-	struct upstream_list *servers;      /* For backward compatibility */
 	struct upstream_list *read_servers;  /* Servers for read operations */
 	struct upstream_list *write_servers; /* Servers for write operations */
 	const char *symbol;
@@ -545,21 +544,20 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 	}
 
 	if ((value = ucl_object_lookup(obj, "servers")) != NULL) {
-		rule->servers = rspamd_upstreams_create(cfg->ups_ctx);
-		/* pass max_error and revive_time configuration in upstream for fuzzy storage
-		 * it allows to configure error_rate threshold and upstream dead timer
-		 */
-		rspamd_upstreams_set_limits(rule->servers,
+		rule->read_servers = rspamd_upstreams_create(cfg->ups_ctx);
+		rspamd_upstreams_set_limits(rule->read_servers,
 									(double) fuzzy_module_ctx->revive_time, NAN, NAN, NAN,
 									(unsigned int) fuzzy_module_ctx->max_errors, 0);
 
 		rspamd_mempool_add_destructor(cfg->cfg_pool,
 									  (rspamd_mempool_destruct_t) rspamd_upstreams_destroy,
-									  rule->servers);
-		if (!rspamd_upstreams_from_ucl(rule->servers, value, DEFAULT_PORT, NULL)) {
+									  rule->read_servers);
+		if (!rspamd_upstreams_from_ucl(rule->read_servers, value, DEFAULT_PORT, NULL)) {
 			msg_err_config("cannot read servers definition");
 			return -1;
 		}
+
+		rule->write_servers = rule->read_servers;
 	}
 	else {
 		/* Check for read_servers and write_servers */
@@ -572,8 +570,8 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 										(unsigned int) fuzzy_module_ctx->max_errors, 0);
 
 			rspamd_mempool_add_destructor(cfg->cfg_pool,
-										(rspamd_mempool_destruct_t) rspamd_upstreams_destroy,
-										rule->read_servers);
+										  (rspamd_mempool_destruct_t) rspamd_upstreams_destroy,
+										  rule->read_servers);
 			if (!rspamd_upstreams_from_ucl(rule->read_servers, value, DEFAULT_PORT, NULL)) {
 				msg_err_config("cannot read read_servers definition");
 				return -1;
@@ -588,8 +586,8 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 										(unsigned int) fuzzy_module_ctx->max_errors, 0);
 
 			rspamd_mempool_add_destructor(cfg->cfg_pool,
-										(rspamd_mempool_destruct_t) rspamd_upstreams_destroy,
-										rule->write_servers);
+										  (rspamd_mempool_destruct_t) rspamd_upstreams_destroy,
+										  rule->write_servers);
 			if (!rspamd_upstreams_from_ucl(rule->write_servers, value, DEFAULT_PORT, NULL)) {
 				msg_err_config("cannot read write_servers definition");
 				return -1;
@@ -598,30 +596,16 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 		}
 
 		/* If we have both read and write servers, we don't need the common servers list */
-		if (has_read && has_write) {
-			rule->servers = NULL;
-		}
-		else if (has_read) {
+		if (has_read && !has_write) {
 			/* Use read_servers for all operations */
-			rule->servers = rule->read_servers;
 			rule->write_servers = rule->read_servers;
 		}
-		else if (has_write) {
+		else if (has_write && !has_read) {
 			/* Use write_servers for all operations */
-			rule->servers = rule->write_servers;
 			rule->read_servers = rule->write_servers;
 		}
 	}
 
-	/* Ensure all server lists are properly set */
-	if (rule->servers != NULL) {
-		if (rule->read_servers == NULL) {
-			rule->read_servers = rule->servers;
-		}
-		if (rule->write_servers == NULL) {
-			rule->write_servers = rule->servers;
-		}
-	}
 	if ((value = ucl_object_lookup(obj, "fuzzy_map")) != NULL) {
 		it = NULL;
 		while ((cur = ucl_object_iterate(value, &it, true)) != NULL) {
@@ -699,7 +683,7 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 						  strlen(shingles_key_str), NULL, 0);
 	rule->shingles_key->len = 16;
 
-	if (rspamd_upstreams_count(rule->servers) == 0) {
+	if (rspamd_upstreams_count(rule->read_servers) == 0) {
 		msg_err_config("no servers defined for fuzzy rule with name: %s",
 					   rule->name);
 		return -1;
@@ -4586,7 +4570,6 @@ fuzzy_lua_list_storages(lua_State *L)
 			lua_createtable(L, rspamd_upstreams_count(rule->read_servers), 0);
 			rspamd_upstreams_foreach(rule->read_servers, lua_upstream_str_inserter, L);
 			lua_setfield(L, -2, "read_servers");
-			
 			lua_createtable(L, rspamd_upstreams_count(rule->write_servers), 0);
 			rspamd_upstreams_foreach(rule->write_servers, lua_upstream_str_inserter, L);
 			lua_setfield(L, -2, "write_servers");
@@ -4877,7 +4860,7 @@ fuzzy_lua_ping_storage(lua_State *L)
 									  rspamd_ptr_array_free_hard, addrs);
 	}
 	else {
-		struct upstream *selected = rspamd_upstream_get(rule_found->servers,
+		struct upstream *selected = rspamd_upstream_get(rule_found->read_servers,
 														RSPAMD_UPSTREAM_ROUND_ROBIN, NULL, 0);
 		addr = rspamd_upstream_addr_next(selected);
 	}
