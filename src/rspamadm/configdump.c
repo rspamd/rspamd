@@ -31,6 +31,7 @@ static gboolean symbol_groups_only = FALSE;
 static gboolean symbol_full_details = FALSE;
 static gboolean skip_template = FALSE;
 static char *config = NULL;
+static gboolean non_default = FALSE;
 extern struct rspamd_main *rspamd_main;
 /* Defined in modules.c */
 extern module_t *modules[];
@@ -66,6 +67,7 @@ static GOptionEntry entries[] = {
 	 "Show full symbol details only", NULL},
 	{"skip-template", 'T', 0, G_OPTION_ARG_NONE, &skip_template,
 	 "Do not apply Jinja templates", NULL},
+	{"non-default", 'n', 0, G_OPTION_ARG_NONE, &non_default, "Show only non-default configuration", NULL},
 	{NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL}};
 
 static const char *
@@ -75,13 +77,14 @@ rspamadm_configdump_help(gboolean full_help, const struct rspamadm_command *cmd)
 
 	if (full_help) {
 		help_str = "Perform configuration file dump\n\n"
-				   "Usage: rspamadm configdump [-c <config_name> [-j --compact -m] [<path1> [<path2> ...]]]\n"
+				   "Usage: rspamadm configdump [-c <config_name> [-j --compact -m -n] [<path1> [<path2> ...]]]\n"
 				   "Where options are:\n\n"
 				   "-j: output plain json\n"
 				   "--compact: output compacted json\n"
 				   "-c: config file to test\n"
 				   "-m: show state of modules only\n"
 				   "-h: show help for dumped options\n"
+				   "-n: show only non-default configuration\n"
 				   "--help: shows available options and commands";
 	}
 	else {
@@ -94,6 +97,54 @@ rspamadm_configdump_help(gboolean full_help, const struct rspamadm_command *cmd)
 static void
 config_logger(rspamd_mempool_t *pool, gpointer ud)
 {
+}
+
+static ucl_object_t *
+filter_non_default(const ucl_object_t *obj)
+{
+	ucl_object_t *result = NULL;
+	ucl_object_iter_t it = NULL;
+	const ucl_object_t *cur;
+
+	if (obj == NULL) {
+		return NULL;
+	}
+
+	if (ucl_object_get_priority(obj) > 0) {
+		result = ucl_object_typed_new(ucl_object_type(obj));
+		switch (ucl_object_type(obj)) {
+		case UCL_OBJECT:
+		case UCL_ARRAY:
+			while ((cur = ucl_object_iterate(obj, &it, true))) {
+				ucl_object_t *filtered = filter_non_default(cur);
+				if (filtered) {
+					ucl_object_insert_key(result, filtered, ucl_object_key(cur), cur->keylen, true);
+				}
+			}
+			break;
+		default:
+			ucl_object_insert_key(result, ucl_object_ref(obj), ucl_object_key(obj), obj->keylen, true);
+			break;
+		}
+		return result;
+	}
+
+	if (ucl_object_type(obj) == UCL_OBJECT || ucl_object_type(obj) == UCL_ARRAY) {
+		result = ucl_object_typed_new(ucl_object_type(obj));
+		while ((cur = ucl_object_iterate(obj, &it, true))) {
+			ucl_object_t *filtered = filter_non_default(cur);
+			if (filtered) {
+				ucl_object_insert_key(result, filtered, ucl_object_key(cur), cur->keylen, true);
+			}
+		}
+		if (ucl_object_iterate_reset(result, &it) == NULL) {
+			ucl_object_unref(result);
+			return NULL;
+		}
+		return result;
+	}
+
+	return NULL;
 }
 
 static void
@@ -524,29 +575,51 @@ rspamadm_configdump(int argc, char **argv, const struct rspamadm_command *cmd)
 
 		/* Output configuration */
 		if (argc == 1) {
-			rspamadm_dump_section_obj(cfg, cfg->cfg_ucl_obj, cfg->doc_strings);
+			const ucl_object_t *output_obj = cfg->cfg_ucl_obj;
+			if (non_default) {
+				output_obj = filter_non_default(cfg->cfg_ucl_obj);
+				if (!output_obj) {
+					rspamd_printf("No non-default configuration found\n");
+					exit(EXIT_SUCCESS);
+				}
+			}
+			rspamadm_dump_section_obj(cfg, output_obj, cfg->doc_strings);
+			if (non_default) {
+				ucl_object_unref((ucl_object_t *)output_obj);
+			}
 		}
 		else {
 			for (i = 1; i < argc; i++) {
 				obj = ucl_object_lookup_path(cfg->cfg_ucl_obj, argv[i]);
 				doc_obj = ucl_object_lookup_path(cfg->doc_strings, argv[i]);
-
+		
 				if (!obj) {
 					rspamd_printf("Section %s NOT FOUND\n", argv[i]);
 				}
 				else {
 					LL_FOREACH(obj, cur)
 					{
+						const ucl_object_t *output_obj = cur;
+						if (non_default) {
+							output_obj = filter_non_default(cur);
+							if (!output_obj) {
+								rspamd_printf("No non-default configuration found for section %s\n", argv[i]);
+								continue;
+							}
+						}
 						if (!json && !compact) {
 							rspamd_printf("*** Section %s ***\n", argv[i]);
 						}
-						rspamadm_dump_section_obj(cfg, cur, doc_obj);
-
+						rspamadm_dump_section_obj(cfg, output_obj, doc_obj);
+		
 						if (!json && !compact) {
 							rspamd_printf("\n*** End of section %s ***\n", argv[i]);
 						}
 						else {
 							rspamd_printf("\n");
+						}
+						if (non_default) {
+							ucl_object_unref((ucl_object_t *)output_obj);
 						}
 					}
 				}
