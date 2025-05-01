@@ -2,6 +2,10 @@
 Suite Setup     Fuzzy Setup Split Servers
 Suite Teardown  Rspamd Redis Teardown
 Resource        lib.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
+
+*** Variables ***
+${CONFIG}       ${RSPAMD_TESTDIR}/configs/fuzzy-split-servers.conf
 
 *** Test Cases ***
 Fuzzy Add

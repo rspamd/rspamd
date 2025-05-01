@@ -145,6 +145,7 @@ Fuzzy Setup Plain
   [Arguments]  ${algorithm}
   Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  ${algorithm}
   Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  servers
+  Set Suite Variable  ${SETTINGS_FUZZY_CHECK}  servers = "${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_FUZZY}";
   Rspamd Redis Setup
 
 Fuzzy Setup Keyed
@@ -226,14 +227,17 @@ Fuzzy Multimessage Overwrite Test
 Fuzzy Setup Split Servers
   Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  siphash
   Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  split
+  Set Suite Variable  ${SETTINGS_FUZZY_CHECK}  read_servers = "${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_FUZZY}"; write_servers = "${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_FUZZY}";
   Rspamd Redis Setup
 
 Fuzzy Setup Read Only
   Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  siphash
   Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  read_only
+  Set Suite Variable  ${SETTINGS_FUZZY_CHECK}  read_only = true;
   Rspamd Redis Setup
 
 Fuzzy Setup Write Only
   Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  siphash
   Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  write_only
+  Set Suite Variable  ${SETTINGS_FUZZY_CHECK}  mode = "write_only";
   Rspamd Redis Setup
