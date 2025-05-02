@@ -67,7 +67,7 @@ static GOptionEntry entries[] = {
 	 "Show full symbol details only", NULL},
 	{"skip-template", 'T', 0, G_OPTION_ARG_NONE, &skip_template,
 	 "Do not apply Jinja templates", NULL},
-	{"non-default", 'n', 0, G_OPTION_ARG_NONE, &non_default, "Show only non-default configuration", NULL},
+	{"non-default", 0, 0, G_OPTION_ARG_NONE, &non_default, "Show only non-default configuration", NULL},
 	{NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL}};
 
 static const char *
@@ -77,14 +77,14 @@ rspamadm_configdump_help(gboolean full_help, const struct rspamadm_command *cmd)
 
 	if (full_help) {
 		help_str = "Perform configuration file dump\n\n"
-				   "Usage: rspamadm configdump [-c <config_name> [-j --compact -m -n] [<path1> [<path2> ...]]]\n"
+				   "Usage: rspamadm configdump [-c <config_name> [-j --compact -m] [<path1> [<path2> ...]]]\n"
 				   "Where options are:\n\n"
 				   "-j: output plain json\n"
 				   "--compact: output compacted json\n"
 				   "-c: config file to test\n"
 				   "-m: show state of modules only\n"
 				   "-h: show help for dumped options\n"
-				   "-n: show only non-default configuration\n"
+				   "--non-default: show only non-default configuration\n"
 				   "--help: shows available options and commands";
 	}
 	else {
