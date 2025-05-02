@@ -42,8 +42,10 @@ define(["jquery", "app/common", "app/libft"],
                 url = "learnspam";
             } else if (source === "ham") {
                 url = "learnham";
-            } else if (source === "fuzzy") {
+            } else if (source === "fuzzyadd") {
                 url = "fuzzyadd";
+            } else if (source === "fuzzydel") {
+                url = "fuzzydel";
             } else if (source === "scan") {
                 url = "checkv2";
             }
@@ -245,10 +247,14 @@ define(["jquery", "app/common", "app/libft"],
                     getFuzzyHashes(data);
                 } else {
                     let headers = {};
-                    if (source === "fuzzy") {
+                    if (source === "fuzzyadd") {
                         headers = {
                             flag: $("#fuzzyFlagText").val(),
                             weight: $("#fuzzyWeightText").val()
+                        };
+                    } else if (source === "fuzzydel") {
+                        headers = {
+                            flag: $("#fuzzyFlagText").val(),
                         };
                     }
                     uploadText(data, source, headers);
