@@ -200,7 +200,9 @@ local function dkim_reputation_filter(task, rule)
           end
         end
 
-        if sel_tld and requests[sel_tld] then
+        if rule.selector.config.exclusion_map and sel_tld and rule.selector.config.exclusion_map:get_key(sel_tld) then
+          lua_util.debugm(N, task, 'DKIM domain %s is excluded from reputation scoring', sel_tld)
+        elseif sel_tld and requests[sel_tld] then
           if requests[sel_tld] == 'a' then
             rep_accepted = rep_accepted + generic_reputation_calc(v, rule, 1.0, task)
           end
@@ -243,9 +245,13 @@ local function dkim_reputation_idempotent(task, rule)
 
   if sc then
     for dom, res in pairs(requests) do
-      -- tld + "." + check_result, e.g. example.com.+ - reputation for valid sigs
-      local query = string.format('%s.%s', dom, res)
-      rule.backend.set_token(task, rule, nil, query, sc)
+      if rule.selector.config.exclusion_map and rule.selector.config.exclusion_map:get_key(dom) then
+        lua_util.debugm(N, task, 'DKIM domain %s is excluded from reputation update', dom)
+      else
+        -- tld + "." + check_result, e.g. example.com.+ - reputation for valid sigs
+        local query = string.format('%s.%s', dom, res)
+        rule.backend.set_token(task, rule, nil, query, sc)
+      end
     end
   end
 end
@@ -277,6 +283,7 @@ local dkim_selector = {
     outbound = true,
     inbound = true,
     max_accept_adjustment = 2.0, -- How to adjust accepted DKIM score
+    exclusion_map = nil 
   },
   dependencies = { "DKIM_TRACE" },
   filter = dkim_reputation_filter, -- used to get scores
@@ -356,10 +363,14 @@ local function url_reputation_filter(task, rule)
         for i, res in pairs(results) do
           local req = requests[i]
           if req then
-            local url_score = generic_reputation_calc(res, rule,
-                req[2] / mhits, task)
-            lua_util.debugm(N, task, "score for url %s is %s, score=%s", req[1], url_score, score)
-            score = score + url_score
+            if rule.selector.config.exclusion_map and rule.selector.config.exclusion_map:get_key(req[1]) then
+              lua_util.debugm(N, task, 'URL domain %s is excluded from reputation scoring', req[1])
+            else
+              local url_score = generic_reputation_calc(res, rule,
+                  req[2] / mhits, task)
+              lua_util.debugm(N, task, "score for url %s is %s, score=%s", req[1], url_score, score)
+              score = score + url_score
+            end
           end
         end
 
@@ -386,7 +397,11 @@ local function url_reputation_idempotent(task, rule)
 
   if sc then
     for _, tld in ipairs(requests) do
-      rule.backend.set_token(task, rule, nil, tld[1], sc)
+      if rule.selector.config.exclusion_map and rule.selector.config.exclusion_map:get_key(tld[1]) then
+        lua_util.debugm(N, task, 'URL domain %s is excluded from reputation update', tld[1])
+      else
+        rule.backend.set_token(task, rule, nil, tld[1], sc)
+      end
     end
   end
 end
@@ -401,6 +416,7 @@ local url_selector = {
     check_from = true,
     outbound = true,
     inbound = true,
+    exclusion_map = nil 
   },
   filter = url_reputation_filter, -- used to get scores
   idempotent = url_reputation_idempotent -- used to set scores
@@ -437,6 +453,11 @@ local function ip_reputation_filter(task, rule)
     ip = ip:apply_mask(cfg.ipv4_mask)
   elseif cfg.ipv6_mask then
     ip = ip:apply_mask(cfg.ipv6_mask)
+  end
+
+  if cfg.exclusion_map and cfg.exclusion_map:get_key(ip) then
+    lua_util.debugm(N, task, 'IP %s is excluded from reputation scoring', tostring(ip))
+    return
   end
 
   local pool = task:get_mempool()
@@ -554,6 +575,11 @@ local function ip_reputation_idempotent(task, rule)
     ip = ip:apply_mask(cfg.ipv6_mask)
   end
 
+  if cfg.exclusion_map and cfg.exclusion_map:get_key(ip) then
+    lua_util.debugm(N, task, 'IP %s is excluded from reputation update', tostring(ip))
+    return
+  end
+
   local pool = task:get_mempool()
   local asn = pool:get_variable("asn")
   local country = pool:get_variable("country")
@@ -600,6 +626,7 @@ local ip_selector = {
     inbound = true,
     ipv4_mask = 32, -- Mask bits for ipv4
     ipv6_mask = 64, -- Mask bits for ipv6
+    exclusion_map = nil 
   },
   --dependencies = {"ASN"}, -- ASN is a prefilter now...
   init = ip_reputation_init,
@@ -620,6 +647,11 @@ local function spf_reputation_filter(task, rule)
 
   local cr = require "rspamd_cryptobox_hash"
   local hkey = cr.create(spf_record):base32():sub(1, 32)
+
+  if rule.selector.config.exclusion_map and rule.selector.config.exclusion_map:get_key(hkey) then
+    lua_util.debugm(N, task, 'SPF record %s is excluded from reputation scoring', hkey)
+    return
+  end
 
   lua_util.debugm(N, task, 'check spf record %s -> %s', spf_record, hkey)
 
@@ -649,6 +681,11 @@ local function spf_reputation_idempotent(task, rule)
   local cr = require "rspamd_cryptobox_hash"
   local hkey = cr.create(spf_record):base32():sub(1, 32)
 
+  if rule.selector.config.exclusion_map and rule.selector.config.exclusion_map:get_key(hkey) then
+    lua_util.debugm(N, task, 'SPF record %s is excluded from reputation update', hkey)
+    return
+  end
+
   lua_util.debugm(N, task, 'set spf record %s -> %s = %s',
       spf_record, hkey, sc)
   rule.backend.set_token(task, rule, nil, hkey, sc)
@@ -663,6 +700,7 @@ local spf_selector = {
     max_score = nil,
     outbound = true,
     inbound = true,
+    exclusion_map = nil
   },
   dependencies = { "R_SPF_ALLOW" },
   filter = spf_reputation_filter, -- used to get scores
@@ -697,6 +735,13 @@ local function generic_reputation_init(rule)
         'Whitelisted selectors')
   end
 
+  if cfg.exclusion_map then
+    cfg.exclusion_map = lua_maps.map_add('reputation',
+        'generic_exclusion',
+        'set',
+        'Excluded selectors')
+  end
+
   return true
 end
 
@@ -706,6 +751,10 @@ local function generic_reputation_filter(task, rule)
 
   local function tokens_cb(err, token, values)
     if values then
+      if cfg.exclusion_map and cfg.exclusion_map:get_key(token) then
+        lua_util.debugm(N, task, 'Generic selector token %s is excluded from reputation scoring', token)
+        return
+      end
       local score = generic_reputation_calc(values, rule, 1.0, task)
 
       if math.abs(score) > 1e-3 then
@@ -742,14 +791,22 @@ local function generic_reputation_idempotent(task, rule)
   if sc then
     if type(selector_res) == 'table' then
       fun.each(function(e)
-        lua_util.debugm(N, task, 'set generic selector (%s) %s = %s',
-            rule['symbol'], e, sc)
-        rule.backend.set_token(task, rule, nil, e, sc)
+        if cfg.exclusion_map and cfg.exclusion_map:get_key(e) then
+          lua_util.debugm(N, task, 'Generic selector token %s is excluded from reputation update', e)
+        else
+          lua_util.debugm(N, task, 'set generic selector (%s) %s = %s',
+              rule['symbol'], e, sc)
+          rule.backend.set_token(task, rule, nil, e, sc)
+        end
       end, selector_res)
     else
-      lua_util.debugm(N, task, 'set generic selector (%s) %s = %s',
-          rule['symbol'], selector_res, sc)
-      rule.backend.set_token(task, rule, nil, selector_res, sc)
+      if cfg.exclusion_map and cfg.exclusion_map:get_key(selector_res) then
+        lua_util.debugm(N, task, 'Generic selector token %s is excluded from reputation update', selector_res)
+      else
+        lua_util.debugm(N, task, 'set generic selector (%s) %s = %s',
+            rule['symbol'], selector_res, sc)
+        rule.backend.set_token(task, rule, nil, selector_res, sc)
+      end
     end
   end
 end
@@ -764,6 +821,7 @@ local generic_selector = {
     selector = ts.string,
     delimiter = ts.string,
     whitelist = ts.one_of(lua_maps.map_schema, lua_maps_exprs.schema):is_optional(),
+    exclusion_map = ts.one_of(lua_maps.map_schema, lua_maps_exprs.schema):is_optional()
   },
   config = {
     lower_bound = 10, -- minimum number of messages to be scored
@@ -773,7 +831,8 @@ local generic_selector = {
     inbound = true,
     selector = nil,
     delimiter = ':',
-    whitelist = nil
+    whitelist = nil,
+    exclusion_map = nil 
   },
   init = generic_reputation_init,
   filter = generic_reputation_filter, -- used to get scores
@@ -1265,6 +1324,24 @@ local function parse_rule(name, tbl)
           rule.config.whitelist)
       return false
     end
+  end
+
+  -- Parse exclusion_map for reputation exclusion lists
+  if rule.config.exclusion_map then
+    local map_type = 'set' -- Default to set for string-based selectors (dkim, url, spf, generic)
+    if sel_type == 'ip' or sel_type == 'sender' then
+      map_type = 'radix' -- Use radix for IP-based selectors
+    end
+    local map = lua_maps.map_add_from_ucl(rule.config.exclusion_map,
+        map_type,
+        sel_type .. ' reputation exclusion map')
+    if not map then
+      rspamd_logger.errx(rspamd_config, "cannot parse exclusion map config for %s: (%s)",
+          sel_type,
+          rule.config.exclusion_map)
+      return false
+    end
+    rule.config.exclusion_map = map
   end
 
   local symbol = rule.selector.config.symbol or name
