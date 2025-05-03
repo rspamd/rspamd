@@ -31,7 +31,8 @@ static gboolean symbol_groups_only = FALSE;
 static gboolean symbol_full_details = FALSE;
 static gboolean skip_template = FALSE;
 static char *config = NULL;
-static gboolean non_default = FALSE;
+static gboolean local_conf_only = FALSE;
+static gboolean override_conf_only = FALSE;
 extern struct rspamd_main *rspamd_main;
 /* Defined in modules.c */
 extern module_t *modules[];
@@ -67,7 +68,8 @@ static GOptionEntry entries[] = {
 	 "Show full symbol details only", NULL},
 	{"skip-template", 'T', 0, G_OPTION_ARG_NONE, &skip_template,
 	 "Do not apply Jinja templates", NULL},
-	{"non-default", 0, 0, G_OPTION_ARG_NONE, &non_default, "Show only non-default configuration", NULL},
+	{"local", 0, 0, G_OPTION_ARG_NONE, &local_conf_only, "Show only local and override configuration", NULL},
+	{"override", 0, 0, G_OPTION_ARG_NONE, &override_conf_only, "Show only override configuration", NULL},
 	{NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL}};
 
 static const char *
@@ -84,7 +86,8 @@ rspamadm_configdump_help(gboolean full_help, const struct rspamadm_command *cmd)
 				   "-c: config file to test\n"
 				   "-m: show state of modules only\n"
 				   "-h: show help for dumped options\n"
-				   "--non-default: show only non-default configuration\n"
+				   "--local: show only local (and override) configuration\n"
+				   "--override: show only override configuration\n"
 				   "--help: shows available options and commands";
 	}
 	else {
@@ -100,7 +103,7 @@ config_logger(rspamd_mempool_t *pool, gpointer ud)
 }
 
 static ucl_object_t *
-filter_non_default(const ucl_object_t *obj)
+filter_non_default(const ucl_object_t *obj, bool override_only)
 {
 	ucl_object_t *result = NULL;
 	ucl_object_iter_t it = NULL;
@@ -110,13 +113,15 @@ filter_non_default(const ucl_object_t *obj)
 		return NULL;
 	}
 
-	if (ucl_object_get_priority(obj) > 0) {
+	int min_prio = override_only ? 1 : 0;
+
+	if (ucl_object_get_priority(obj) > min_prio) {
 		result = ucl_object_typed_new(ucl_object_type(obj));
 		switch (ucl_object_type(obj)) {
 		case UCL_OBJECT:
 		case UCL_ARRAY:
 			while ((cur = ucl_object_iterate(obj, &it, true))) {
-				ucl_object_t *filtered = filter_non_default(cur);
+				ucl_object_t *filtered = filter_non_default(cur, override_conf_only);
 				if (filtered) {
 					ucl_object_insert_key(result, filtered, ucl_object_key(cur), cur->keylen, true);
 				}
@@ -134,7 +139,7 @@ filter_non_default(const ucl_object_t *obj)
 
 		result = ucl_object_typed_new(ucl_object_type(obj));
 		while ((cur = ucl_object_iterate(obj, &it, true))) {
-			ucl_object_t *filtered = filter_non_default(cur);
+			ucl_object_t *filtered = filter_non_default(cur, override_only);
 			if (filtered) {
 				has_non_default = true;
 				ucl_object_insert_key(result, filtered, ucl_object_key(cur), cur->keylen, true);
@@ -582,15 +587,17 @@ rspamadm_configdump(int argc, char **argv, const struct rspamadm_command *cmd)
 		/* Output configuration */
 		if (argc == 1) {
 			const ucl_object_t *output_obj = cfg->cfg_ucl_obj;
-			if (non_default) {
-				output_obj = filter_non_default(cfg->cfg_ucl_obj);
+			if (local_conf_only || override_conf_only) {
+				output_obj = filter_non_default(cfg->cfg_ucl_obj, override_conf_only);
 				if (!output_obj) {
 					rspamd_printf("No non-default configuration found\n");
 					exit(EXIT_SUCCESS);
 				}
 			}
+
 			rspamadm_dump_section_obj(cfg, output_obj, cfg->doc_strings);
-			if (non_default) {
+
+			if (local_conf_only || override_conf_only) {
 				ucl_object_unref((ucl_object_t *) output_obj);
 			}
 		}
@@ -606,8 +613,8 @@ rspamadm_configdump(int argc, char **argv, const struct rspamadm_command *cmd)
 					LL_FOREACH(obj, cur)
 					{
 						const ucl_object_t *output_obj = cur;
-						if (non_default) {
-							output_obj = filter_non_default(cur);
+						if (local_conf_only || override_conf_only) {
+							output_obj = filter_non_default(cur, override_conf_only);
 							if (!output_obj) {
 								rspamd_printf("No non-default configuration found for section %s\n", argv[i]);
 								continue;
@@ -624,7 +631,8 @@ rspamadm_configdump(int argc, char **argv, const struct rspamadm_command *cmd)
 						else {
 							rspamd_printf("\n");
 						}
-						if (non_default) {
+
+						if (local_conf_only || override_conf_only) {
 							ucl_object_unref((ucl_object_t *) output_obj);
 						}
 					}
