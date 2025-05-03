@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -137,10 +137,7 @@ filter_non_default(const ucl_object_t *obj)
 				ucl_object_insert_key(result, filtered, ucl_object_key(cur), cur->keylen, true);
 			}
 		}
-		if (ucl_object_iterate_reset(result, &it) == NULL) {
-			ucl_object_unref(result);
-			return NULL;
-		}
+
 		return result;
 	}
 
@@ -585,14 +582,14 @@ rspamadm_configdump(int argc, char **argv, const struct rspamadm_command *cmd)
 			}
 			rspamadm_dump_section_obj(cfg, output_obj, cfg->doc_strings);
 			if (non_default) {
-				ucl_object_unref((ucl_object_t *)output_obj);
+				ucl_object_unref((ucl_object_t *) output_obj);
 			}
 		}
 		else {
 			for (i = 1; i < argc; i++) {
 				obj = ucl_object_lookup_path(cfg->cfg_ucl_obj, argv[i]);
 				doc_obj = ucl_object_lookup_path(cfg->doc_strings, argv[i]);
-		
+
 				if (!obj) {
 					rspamd_printf("Section %s NOT FOUND\n", argv[i]);
 				}
@@ -611,7 +608,7 @@ rspamadm_configdump(int argc, char **argv, const struct rspamadm_command *cmd)
 							rspamd_printf("*** Section %s ***\n", argv[i]);
 						}
 						rspamadm_dump_section_obj(cfg, output_obj, doc_obj);
-		
+
 						if (!json && !compact) {
 							rspamd_printf("\n*** End of section %s ***\n", argv[i]);
 						}
@@ -619,7 +616,7 @@ rspamadm_configdump(int argc, char **argv, const struct rspamadm_command *cmd)
 							rspamd_printf("\n");
 						}
 						if (non_default) {
-							ucl_object_unref((ucl_object_t *)output_obj);
+							ucl_object_unref((ucl_object_t *) output_obj);
 						}
 					}
 				}
