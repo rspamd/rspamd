@@ -130,12 +130,21 @@ filter_non_default(const ucl_object_t *obj)
 	}
 
 	if (ucl_object_type(obj) == UCL_OBJECT || ucl_object_type(obj) == UCL_ARRAY) {
+		bool has_non_default = false;
+
 		result = ucl_object_typed_new(ucl_object_type(obj));
 		while ((cur = ucl_object_iterate(obj, &it, true))) {
 			ucl_object_t *filtered = filter_non_default(cur);
 			if (filtered) {
+				has_non_default = true;
 				ucl_object_insert_key(result, filtered, ucl_object_key(cur), cur->keylen, true);
 			}
+		}
+
+		/* Avoid empty objects */
+		if (!has_non_default) {
+			ucl_object_unref(result);
+			result = NULL;
 		}
 
 		return result;
