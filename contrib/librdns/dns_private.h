@@ -41,7 +41,7 @@ static const int default_tcp_io_cnt = 1;
 #define DNS_COMPRESSION_BITS 0xC0
 
 #define DNS_D_MAXLABEL  63      /* + 1 '\0' */
-#define DNS_D_MAXNAME   255     /* + 1 '\0' */
+#define DNS_D_MAXNAME   253     /* + 1 '\0' */
 
 #define RESOLV_CONF "/etc/resolv.conf"
 
