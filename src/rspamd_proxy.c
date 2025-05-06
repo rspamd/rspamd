@@ -96,6 +96,7 @@ struct rspamd_http_upstream {
 	gboolean local;
 	gboolean self_scan;
 	gboolean compress;
+	gboolean ssl;
 	ucl_object_t *extra_headers;
 };
 
@@ -110,6 +111,7 @@ struct rspamd_http_mirror {
 	int parser_to_ref;
 	gboolean local;
 	gboolean compress;
+	gboolean ssl;
 	ucl_object_t *extra_headers;
 };
 
@@ -420,6 +422,16 @@ rspamd_proxy_parse_upstream(rspamd_mempool_t *pool,
 	elt = ucl_object_lookup_any(obj, "compress", "compression", NULL);
 	if (elt && ucl_object_toboolean(elt)) {
 		up->compress = TRUE;
+	}
+
+	elt = ucl_object_lookup(obj, "ssl");
+	if (elt && ucl_object_toboolean(elt)) {
+		up->ssl = TRUE;
+	}
+
+	elt = ucl_object_lookup(obj, "ssl");
+	if (elt && ucl_object_toboolean(elt)) {
+		up->ssl = TRUE;
 	}
 
 	elt = ucl_object_lookup(obj, "hosts");
@@ -1518,12 +1530,18 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 			}
 		}
 
+		unsigned int http_opts = RSPAMD_HTTP_CLIENT_SIMPLE;
+
+		if (m->ssl) {
+			http_opts |= RSPAMD_HTTP_CLIENT_SSL;
+		}
+
 		bk_conn->backend_conn = rspamd_http_connection_new_client_socket(
 			session->ctx->http_ctx,
 			NULL,
 			proxy_backend_mirror_error_handler,
 			proxy_backend_mirror_finish_handler,
-			RSPAMD_HTTP_CLIENT_SIMPLE,
+			http_opts,
 			bk_conn->backend_sock);
 
 		if (m->key) {
@@ -2102,12 +2120,18 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 		}
 		rspamd_http_message_add_header(msg, "Connection", "close");
 
+		unsigned int http_opts = RSPAMD_HTTP_CLIENT_SIMPLE;
+
+		if (backend->ssl) {
+			http_opts |= RSPAMD_HTTP_CLIENT_SSL;
+		}
+
 		session->master_conn->backend_conn = rspamd_http_connection_new_client_socket(
 			session->ctx->http_ctx,
 			NULL,
 			proxy_backend_master_error_handler,
 			proxy_backend_master_finish_handler,
-			RSPAMD_HTTP_CLIENT_SIMPLE,
+			http_opts,
 			session->master_conn->backend_sock);
 		session->master_conn->flags &= ~RSPAMD_BACKEND_CLOSED;
 		session->master_conn->parser_from_ref = backend->parser_from_ref;
