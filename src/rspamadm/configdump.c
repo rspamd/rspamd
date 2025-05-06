@@ -116,10 +116,11 @@ filter_non_default(const ucl_object_t *obj, bool override_only)
 	int min_prio = override_only ? 1 : 0;
 
 	if (ucl_object_get_priority(obj) > min_prio) {
-		result = ucl_object_typed_new(ucl_object_type(obj));
+
 		switch (ucl_object_type(obj)) {
 		case UCL_OBJECT:
-		case UCL_ARRAY:
+			result = ucl_object_typed_new(ucl_object_type(obj));
+
 			while ((cur = ucl_object_iterate(obj, &it, true))) {
 				ucl_object_t *filtered = filter_non_default(cur, override_conf_only);
 				if (filtered) {
@@ -127,10 +128,20 @@ filter_non_default(const ucl_object_t *obj, bool override_only)
 				}
 			}
 			break;
+		case UCL_ARRAY:
+			result = ucl_object_typed_new(ucl_object_type(obj));
+
+			while ((cur = ucl_object_iterate(obj, &it, true))) {
+				ucl_object_t *filtered = filter_non_default(cur, override_conf_only);
+				if (filtered) {
+					ucl_array_append(result, filtered);
+				}
+			}
 		default:
-			ucl_object_insert_key(result, ucl_object_ref(obj), ucl_object_key(obj), obj->keylen, true);
+			result = ucl_object_ref(obj);
 			break;
 		}
+
 		return result;
 	}
 
@@ -142,7 +153,17 @@ filter_non_default(const ucl_object_t *obj, bool override_only)
 			ucl_object_t *filtered = filter_non_default(cur, override_only);
 			if (filtered) {
 				has_non_default = true;
-				ucl_object_insert_key(result, filtered, ucl_object_key(cur), cur->keylen, true);
+
+				if (ucl_object_type(obj) == UCL_OBJECT) {
+					ucl_object_insert_key(result, filtered,
+										  ucl_object_key(cur), cur->keylen, true);
+				}
+				else if (ucl_object_type(obj) == UCL_ARRAY) {
+					ucl_array_append(result, filtered);
+				}
+				else {
+					g_assert_not_reached();
+				}
 			}
 		}
 
@@ -154,6 +175,7 @@ filter_non_default(const ucl_object_t *obj, bool override_only)
 
 		return result;
 	}
+
 
 	return NULL;
 }
