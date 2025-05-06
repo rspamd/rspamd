@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,6 +96,7 @@ struct rspamd_http_upstream {
 	gboolean local;
 	gboolean self_scan;
 	gboolean compress;
+	ucl_object_t *extra_headers;
 };
 
 struct rspamd_http_mirror {
@@ -109,6 +110,7 @@ struct rspamd_http_mirror {
 	int parser_to_ref;
 	gboolean local;
 	gboolean compress;
+	ucl_object_t *extra_headers;
 };
 
 static const uint64_t rspamd_rspamd_proxy_magic = 0xcdeb4fd1fc351980ULL;
@@ -467,6 +469,22 @@ rspamd_proxy_parse_upstream(rspamd_mempool_t *pool,
 	elt = ucl_object_lookup_any(obj, "settings", "settings_id", NULL);
 	if (elt && ucl_object_type(elt) == UCL_STRING) {
 		up->settings_id = rspamd_mempool_strdup(pool, ucl_object_tostring(elt));
+	}
+
+	elt = ucl_object_lookup(obj, "extra_headers");
+	if (elt && ucl_object_type(elt) == UCL_OBJECT) {
+		up->extra_headers = ucl_object_ref(elt);
+		rspamd_mempool_add_destructor(pool,
+									  (rspamd_mempool_destruct_t) ucl_object_unref,
+									  up->extra_headers);
+	}
+
+	elt = ucl_object_lookup(obj, "extra_headers");
+	if (elt && ucl_object_type(elt) == UCL_OBJECT) {
+		up->extra_headers = ucl_object_ref(elt);
+		rspamd_mempool_add_destructor(pool,
+									  (rspamd_mempool_destruct_t) ucl_object_unref,
+									  up->extra_headers);
 	}
 
 	/*
@@ -1483,6 +1501,23 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 			rspamd_http_message_add_header(msg, "Settings-ID", m->settings_id);
 		}
 
+		/* Add extra headers if specified */
+		if (m->extra_headers != NULL) {
+			ucl_object_iter_t it = NULL;
+			const ucl_object_t *cur;
+			const char *key, *value;
+
+			while ((cur = ucl_object_iterate(m->extra_headers, &it, true)) != NULL) {
+				key = ucl_object_key(cur);
+				value = ucl_object_tostring(cur);
+
+				if (key != NULL && value != NULL) {
+					rspamd_http_message_remove_header(msg, key);
+					rspamd_http_message_add_header(msg, key, value);
+				}
+			}
+		}
+
 		bk_conn->backend_conn = rspamd_http_connection_new_client_socket(
 			session->ctx->http_ctx,
 			NULL,
@@ -1601,7 +1636,8 @@ proxy_backend_master_error_handler(struct rspamd_http_connection *conn, GError *
 	msg_info_session("abnormally closing connection from backend: %s, error: %e,"
 					 " retries left: %d",
 					 session->master_conn->up ? rspamd_inet_address_to_string_pretty(
-						 rspamd_upstream_addr_cur(session->master_conn->up)) : "self-scan",
+													rspamd_upstream_addr_cur(session->master_conn->up))
+											  : "self-scan",
 					 err,
 					 session->ctx->max_retries - session->retries);
 	rspamd_upstream_fail(bk_conn->up, FALSE, err ? err->message : "unknown");
@@ -1633,7 +1669,8 @@ proxy_backend_master_error_handler(struct rspamd_http_connection *conn, GError *
 			msg_info_session("retry connection to: %s"
 							 " retries left: %d",
 							 session->master_conn->up ? rspamd_inet_address_to_string(
-								 rspamd_upstream_addr_cur(session->master_conn->up)) : "self-scan",
+															rspamd_upstream_addr_cur(session->master_conn->up))
+													  : "self-scan",
 							 session->ctx->max_retries - session->retries);
 		}
 	}
@@ -2086,6 +2123,23 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 										   backend->settings_id);
 		}
 
+		/* Add extra headers if specified */
+		if (backend->extra_headers != NULL) {
+			ucl_object_iter_t it = NULL;
+			const ucl_object_t *cur;
+			const char *key, *value;
+
+			while ((cur = ucl_object_iterate(backend->extra_headers, &it, true)) != NULL) {
+				key = ucl_object_key(cur);
+				value = ucl_object_tostring(cur);
+
+				if (key != NULL && value != NULL) {
+					rspamd_http_message_remove_header(msg, key);
+					rspamd_http_message_add_header(msg, key, value);
+				}
+			}
+		}
+
 		if (backend->local ||
 			rspamd_inet_address_is_local(
 				rspamd_upstream_addr_cur(
@@ -2217,7 +2271,8 @@ proxy_client_finish_handler(struct rspamd_http_connection *conn,
 	else {
 		msg_info_session("finished master connection to %s; HTTP code: %d",
 						 session->master_conn->up ? rspamd_inet_address_to_string_pretty(
-							 rspamd_upstream_addr_cur(session->master_conn->up)) : "self-scan",
+														rspamd_upstream_addr_cur(session->master_conn->up))
+												  : "self-scan",
 						 msg->code);
 		proxy_backend_close_connection(session->master_conn);
 		REF_RELEASE(session);
