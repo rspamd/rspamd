@@ -497,19 +497,19 @@ public:
 	}
 
 	/* Comparison */
-	auto operator==(const basic_mime_string &other)
+	auto operator==(const basic_mime_string &other) const
 	{
 		return other.storage == storage;
 	}
-	auto operator==(const storage_type &other)
+	auto operator==(const storage_type &other) const
 	{
 		return other == storage;
 	}
-	auto operator==(const view_type &other)
+	auto operator==(const view_type &other) const
 	{
 		return other == storage;
 	}
-	auto operator==(const CharT *other)
+	auto operator==(const CharT *other) const
 	{
 		if (other == NULL) {
 			return false;
