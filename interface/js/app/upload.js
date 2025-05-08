@@ -36,7 +36,9 @@ define(["jquery", "app/common", "app/libft"],
             $("#" + source + "TextSource").val("");
         }
 
-        function uploadText(data, source, headers) {
+        function uploadText(data, source, headers, method = "POST") {
+            const deferred = new $.Deferred();
+
             let url = null;
             if (source === "spam") {
                 url = "learnspam";
@@ -46,6 +48,8 @@ define(["jquery", "app/common", "app/libft"],
                 url = "fuzzyadd";
             } else if (source === "fuzzydel") {
                 url = "fuzzydel";
+            } else if (source === "fuzzydelhash") {
+                url = "fuzzydelhash";
             } else if (source === "scan") {
                 url = "checkv2";
             }
@@ -64,7 +68,7 @@ define(["jquery", "app/common", "app/libft"],
                 params: {
                     processData: false,
                 },
-                method: "POST",
+                method: method,
                 headers: headers,
                 success: function (json, jqXHR) {
                     cleanTextUpload(source);
@@ -72,13 +76,17 @@ define(["jquery", "app/common", "app/libft"],
                     if (jqXHR.status !== 200) {
                         common.alertMessage("alert-info", jqXHR.statusText);
                     }
+                    deferred.resolve();
                 },
+                complete: () => deferred.resolve(),
                 server: server()
             });
+
+            return deferred.promise();
         }
 
         function enable_disable_scan_btn(disable) {
-            $("#scan button:not(#cleanScanHistory, #scanOptionsToggle, .ft-columns-btn)")
+            $("#scan button:not(#cleanScanHistory, #deleteHashesBtn, #scanOptionsToggle, .ft-columns-btn)")
                 .prop("disabled", (disable || $.trim($("textarea").val()).length === 0));
         }
 
@@ -264,6 +272,57 @@ define(["jquery", "app/common", "app/libft"],
             }
             return false;
         });
+
+
+        function setDelhashButtonsDisabled(disabled = true) {
+            ["#deleteHashesBtn", "#clearHashesBtn"].forEach((s) => $(s).prop("disabled", disabled));
+        }
+
+        /**
+         * Parse a textarea (or any input) value into an array of non-empty tokens.
+         * Splits on commas, semicolons or any whitespace (space, tab, newline).
+         *
+         * @param {string} selector - jQuery selector for the input element.
+         * @returns {string[]} - Trimmed, non-empty tokens.
+         */
+        function parseHashes(selector) {
+            return $(selector).val()
+                .split(/[,\s;]+/)
+                .map((t) => t.trim())
+                .filter((t) => t.length > 0);
+        }
+
+        $("#fuzzyDelList").on("input", () => {
+            const hasTokens = parseHashes("#fuzzyDelList").length > 0;
+            setDelhashButtonsDisabled(!hasTokens);
+        });
+
+        $("#deleteHashesBtn").on("click", () => {
+            $("#fuzzyDelList").prop("disabled", true);
+            setDelhashButtonsDisabled();
+            $("#deleteHashesBtn").find(".btn-label").text("Deleting…");
+
+            const hashes = parseHashes("#fuzzyDelList");
+            const promises = hashes.map((h) => {
+                const headers = {
+                    flag: $("#fuzzyFlagText").val(),
+                    Hash: h
+                };
+                return uploadText(null, "fuzzydelhash", headers, "GET");
+            });
+
+            $.when.apply($, promises).always(() => {
+                $("#fuzzyDelList").prop("disabled", false);
+                setDelhashButtonsDisabled(false);
+                $("#deleteHashesBtn").find(".btn-label").text("Delete hashes");
+            });
+        });
+
+        $("#clearHashesBtn").on("click", () => {
+            $("#fuzzyDelList").val("").focus();
+            setDelhashButtonsDisabled();
+        });
+
 
         function fileInputHandler(obj) {
             ({files} = obj);
