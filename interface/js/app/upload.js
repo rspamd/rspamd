@@ -32,23 +32,8 @@ define(["jquery", "app/common", "app/libft"],
         let filesIdx = null;
         let scanTextHeaders = {};
 
-        function uploadText(data, source, headers, method = "POST") {
+        function uploadText(data, url, headers, method = "POST") {
             const deferred = new $.Deferred();
-
-            let url = null;
-            if (source === "spam") {
-                url = "learnspam";
-            } else if (source === "ham") {
-                url = "learnham";
-            } else if (source === "fuzzyadd") {
-                url = "fuzzyadd";
-            } else if (source === "fuzzydel") {
-                url = "fuzzydel";
-            } else if (source === "fuzzydelhash") {
-                url = "fuzzydelhash";
-            } else if (source === "scan") {
-                url = "checkv2";
-            }
 
             function server() {
                 if (common.getSelector("selSrv") === "All SERVERS" &&
@@ -243,7 +228,7 @@ define(["jquery", "app/common", "app/libft"],
             const source = $(this).data("upload");
             const data = $("#scanMsgSource").val();
             if ($.trim(data).length > 0) {
-                if (source === "scan") {
+                if (source === "checkv2") {
                     getScanTextHeaders();
                     scanText(data);
                 } else if (source === "compute-fuzzy") {
