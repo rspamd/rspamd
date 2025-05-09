@@ -448,7 +448,7 @@
 					</div>
 					<div class="card-footer d-md-flex justify-content-between py-1">
 						<div class="input-group d-inline-flex w-auto my-1">
-							<button type="submit" class="btn btn-primary d-flex align-items-center" data-upload="scan"><i class="fas fa-search me-2"></i>Scan message</button>
+							<button type="submit" class="btn btn-primary d-flex align-items-center" data-upload="checkv2"><i class="fas fa-search me-2"></i>Scan message</button>
 							<button class="btn btn-secondary d-flex align-items-center" id="scanOptionsToggle" data-bs-toggle="collapse" data-bs-target="#scanOptions"><i class="fas fa-bars me-2"></i>Options</button>
 						</div>
 						<div class="input-group d-inline-flex w-auto my-1">
@@ -474,33 +474,51 @@
 						</div>
 					</div>
 					<div class="card-body">
-						<div class="row">
-							<div class="col-lg-6">
+						<div class="row g-3">
+							<div class="col-lg-auto d-flex">
 								<div class="card bg-light shadow card-body card p-2">
 									<p>Learn Bayesian classifier:</p>
 									<form>
 										<div class="btn-group">
-											<button class="btn btn-success d-flex align-items-center" type="button" data-upload="ham" disabled><i class="fas fa-thumbs-up me-2"></i>Upload HAM</button>
-											<button class="btn btn-danger d-flex align-items-center" type="button" data-upload="spam" disabled><i class="fas fa-thumbs-down me-2"></i>Upload SPAM</button>
+											<button class="btn btn-success d-flex align-items-center" type="button" data-upload="learnham" disabled><i class="fas fa-thumbs-up me-2"></i>Upload HAM</button>
+											<button class="btn btn-danger d-flex align-items-center" type="button" data-upload="learnspam" disabled><i class="fas fa-thumbs-down me-2"></i>Upload SPAM</button>
 										</div>
 									</form>
 								</div>
 							</div>
-							<div class="col-lg-6">
-								<div class="card bg-light shadow card-body card p-2">
+							<div class="col-lg d-flex">
+								<div class="card bg-light shadow card-body p-2">
 									<p>Fuzzy hash storage management:</p>
-									<form class="d-flex">
-										<div class="d-flex align-items-center">
-											<label for="fuzzyFlagText">Flag:</label>
-											<input name="fuzzyFlagText" id="fuzzyFlagText" class="form-control ms-1" type="number" value="1"/>
+									<div class="row g-2 align-items-center">
+										<div class="col-auto d-flex align-items-center me-1">
+											<label for="fuzzyFlagText" class="me-1">Flag:</label>
+											<input id="fuzzyFlagText" class="form-control" type="number" value="1"/>
 										</div>
-										<div class="d-flex align-items-center ms-2">
-											<label for="fuzzyWeightText">Weight:</label>
-											<input name="fuzzyWeightText" id="fuzzyWeightText" class="form-control ms-1" type="number" value="1"/>
+										<div class="col-auto d-flex align-items-center me-2">
+											<label for="fuzzyWeightText" class="me-1">Weight:</label>
+											<input id="fuzzyWeightText" class="form-control" type="number" value="1"/>
 										</div>
-										<button class="btn btn-warning ms-2 d-flex align-items-center" data-upload="fuzzyadd" disabled><i class="fas fa-circle-plus me-2"></i>Add hash</button>
-										<button class="btn btn-danger ms-2 d-flex align-items-center" data-upload="fuzzydel" disabled><i class="fas fa-trash-can me-2"></i>Delete hash</button>
-									</form>
+										<div class="col-auto">
+											<button class="btn btn-warning me-1" data-upload="fuzzyadd" disabled><i class="fas fa-circle-plus me-2"></i>Add to storage</button>
+											<button class="btn btn-danger" data-upload="fuzzydel" disabled><i class="fas fa-trash-can me-2"></i>Delete from storage</button>
+										</div>
+									</div>
+									<div class="row mt-3">
+										<div class="col">
+											<label for="fuzzyDelList" class="form-label">Hashes to delete</label>
+											<textarea class="form-control" id="fuzzyDelList" rows="3" placeholder="Enter one hash per line, or separate with commas, semicolons, or spaces."></textarea>
+										</div>
+									</div>
+									<div class="row mt-2">
+										<div class="col d-flex justify-content-end">
+											<button class="btn btn-danger me-2" id="deleteHashesBtn" disabled>
+												<i class="fas fa-trash-can me-2"></i><span class="btn-label">Delete hashes</span>
+											</button>
+											<button class="btn btn-secondary" id="clearHashesBtn" disabled>
+												<i class="fas fa-eraser me-2"></i>Clear
+											</button>
+										</div>
+									</div>
 								</div>
 							</div>
 						</div>
@@ -511,7 +529,7 @@
 					<div class="card-header text-secondary py-2 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-hashtag"></i></span>
 						<span class="h6 fw-bolder my-auto">Fuzzy hashes</span>
-						<button type="button" class="card-close-btn btn-close float-end" aria-label="Close"></button>
+						<button type="button" class="card-close-btn btn-close ms-auto" aria-label="Close"></button>
 					</div>
 						<div class="card-body p-0 table-responsive">
 							<table class="table status-table table-sm table-bordered text-nowrap mb-0" id="hashTable">
