@@ -79,8 +79,8 @@ local function configure_redis_scripts(_, _)
       end
       ]]
   local set_script_zadd_global = lua_util.jinja_template(redis_script_zadd_global,
-          { max_global_size = settings.max_global_size })
-  global_replies_set_script =  lua_redis.add_redis_script(set_script_zadd_global, redis_params)
+      { max_global_size = settings.max_global_size })
+  global_replies_set_script = lua_redis.add_redis_script(set_script_zadd_global, redis_params)
 
   local redis_script_zadd_local = [[
       redis.call('ZREMRANGEBYRANK', KEYS[1], 0, -({= max_local_size =} + 1)) -- keeping size of local replies set
@@ -102,7 +102,7 @@ local function configure_redis_scripts(_, _)
       end
     ]]
   local set_script_zadd_local = lua_util.jinja_template(redis_script_zadd_local,
-          { expire_time = settings.expire, max_local_size = settings.max_local_size })
+      { expire_time = settings.expire, max_local_size = settings.max_local_size })
   local_replies_set_script = lua_redis.add_redis_script(set_script_zadd_local, redis_params)
 end
 
@@ -110,7 +110,7 @@ local function replies_check(task)
   local in_reply_to
 
   local function check_recipient(stored_rcpt)
-    local rcpts = task:get_recipients('mime')
+    local rcpts = task:get_recipients('smtp')
     lua_util.debugm(N, task, 'recipients: %s', rcpts)
     if rcpts then
       local filter_predicate = function(input_rcpt)
@@ -119,7 +119,7 @@ local function replies_check(task)
         return real_rcpt_h == stored_rcpt
       end
 
-      if fun.any(filter_predicate, fun.map(function(rcpt)
+      if fun.all(filter_predicate, fun.map(function(rcpt)
         return rcpt.addr or ''
       end, rcpts)) then
         lua_util.debugm(N, task, 'reply to %s validated', in_reply_to)
@@ -155,9 +155,9 @@ local function replies_check(task)
     end
 
     lua_redis.exec_redis_script(global_replies_set_script,
-            { task = task, is_write = true },
-            zadd_global_set_cb,
-            { global_key }, params)
+        { task = task, is_write = true },
+        zadd_global_set_cb,
+        { global_key }, params)
   end
 
   local function add_to_replies_set(recipients)
@@ -173,7 +173,7 @@ local function replies_check(task)
 
     local params = recipients
     lua_util.debugm(N, task,
-    'Adding recipients %s to sender %s local replies set', recipients, sender_key)
+        'Adding recipients %s to sender %s local replies set', recipients, sender_key)
 
     local function zadd_cb(err, _)
       if err ~= nil then
@@ -189,9 +189,9 @@ local function replies_check(task)
 
     table.insert(params, 1, task_time_str)
     lua_redis.exec_redis_script(local_replies_set_script,
-            { task = task, is_write = true },
-            zadd_cb,
-            { sender_key }, params)
+        { task = task, is_write = true },
+        zadd_cb,
+        { sender_key }, params)
   end
 
   local function redis_get_cb(err, data, addr)
@@ -387,7 +387,7 @@ if opts then
       end
 
       lua_redis.register_prefix(settings.sender_prefix, N,
-              'Prefix to identify replies sets')
+          'Prefix to identify replies sets')
 
       local id = rspamd_config:register_symbol({
         name = 'REPLIES_CHECK',
