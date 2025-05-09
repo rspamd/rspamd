@@ -32,10 +32,6 @@ define(["jquery", "app/common", "app/libft"],
         let filesIdx = null;
         let scanTextHeaders = {};
 
-        function cleanTextUpload(source) {
-            $("#" + source + "TextSource").val("");
-        }
-
         function uploadText(data, source, headers, method = "POST") {
             const deferred = new $.Deferred();
 
@@ -71,7 +67,6 @@ define(["jquery", "app/common", "app/libft"],
                 method: method,
                 headers: headers,
                 success: function (json, jqXHR) {
-                    cleanTextUpload(source);
                     common.alertMessage("alert-success", "Data successfully uploaded");
                     if (jqXHR.status !== 200) {
                         common.alertMessage("alert-info", jqXHR.statusText);
