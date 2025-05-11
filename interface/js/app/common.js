@@ -261,5 +261,71 @@ define(["jquery", "nprogress"],
             ).appendTo(ftFilter.$dropdown);
         };
 
+        ui.fileUtils = {
+            files: null,
+            filesIdx: 0,
+
+            enableButton(button, textArea, validator) {
+                const hasText = $.trim($(textArea).val()).length > 0;
+                const needsValidation = validator !== "none";
+
+                $(button).prop("disabled", !hasText || (needsValidation && !$(validator).hasClass("is-valid")));
+            },
+
+            readFile(callback, textArea, button, validator) {
+                if (!this.files || this.files.length === 0) {
+                    alertMessage("alert-error", "No files selected.");
+                    return;
+                }
+
+                const reader = new FileReader();
+
+                reader.onload = () => {
+                    $(textArea).val(reader.result).trigger("input");
+                    this.enableButton(button, textArea, validator);
+
+                    if (callback) callback(reader.result);
+                };
+                reader.onerror = () => alertMessage("alert-error", "Error reading file.");
+                reader.readAsText(this.files[this.filesIdx]);
+            },
+
+            handleFileInput(fileSrc, textArea, button, fileInput, validator) {
+                ({
+                    files: this.files
+                } = fileSrc);
+                this.filesIdx = 0;
+
+                if (!this.files.length) {
+                    alertMessage("alert-warning", "No file was provided.");
+                    return;
+                }
+                $(fileInput)[0].files = this.files;
+                // eslint-disable-next-line no-alert
+                if (this.files.length === 1 || confirm(`Are you sure you want to process ${this.files.length} files?`)) {
+                    this.readFile(null, textArea, button, validator);
+                }
+            },
+
+            setupFileHandling(textArea, fileInput, button, validator) {
+                const highlightClass = "outline-dashed-primary bg-primary-subtle";
+
+                $(textArea)
+                    .on("dragenter dragover", (e) => {
+                        e.preventDefault();
+                        $(textArea).addClass(highlightClass);
+                    })
+                    .on("dragleave drop", () => $(textArea).removeClass(highlightClass))
+                    .on("drop", (e) => {
+                        e.preventDefault();
+                        this.handleFileInput(e.originalEvent.dataTransfer, textArea, button, fileInput, validator);
+                    });
+                $(fileInput).on("change", (e) => {
+                    this.handleFileInput(e.target, textArea, button, fileInput, validator);
+                });
+                $(textArea).on("input", () => this.enableButton(button, textArea, validator));
+            }
+        };
+
         return ui;
     });
