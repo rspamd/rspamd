@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,8 @@ static gboolean symbol_groups_only = FALSE;
 static gboolean symbol_full_details = FALSE;
 static gboolean skip_template = FALSE;
 static char *config = NULL;
+static gboolean local_conf_only = FALSE;
+static gboolean override_conf_only = FALSE;
 extern struct rspamd_main *rspamd_main;
 /* Defined in modules.c */
 extern module_t *modules[];
@@ -66,6 +68,8 @@ static GOptionEntry entries[] = {
 	 "Show full symbol details only", NULL},
 	{"skip-template", 'T', 0, G_OPTION_ARG_NONE, &skip_template,
 	 "Do not apply Jinja templates", NULL},
+	{"local", 0, 0, G_OPTION_ARG_NONE, &local_conf_only, "Show only local and override configuration", NULL},
+	{"override", 0, 0, G_OPTION_ARG_NONE, &override_conf_only, "Show only override configuration", NULL},
 	{NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL}};
 
 static const char *
@@ -82,6 +86,8 @@ rspamadm_configdump_help(gboolean full_help, const struct rspamadm_command *cmd)
 				   "-c: config file to test\n"
 				   "-m: show state of modules only\n"
 				   "-h: show help for dumped options\n"
+				   "--local: show only local (and override) configuration\n"
+				   "--override: show only override configuration\n"
 				   "--help: shows available options and commands";
 	}
 	else {
@@ -94,6 +100,84 @@ rspamadm_configdump_help(gboolean full_help, const struct rspamadm_command *cmd)
 static void
 config_logger(rspamd_mempool_t *pool, gpointer ud)
 {
+}
+
+static ucl_object_t *
+filter_non_default(const ucl_object_t *obj, bool override_only)
+{
+	ucl_object_t *result = NULL;
+	ucl_object_iter_t it = NULL;
+	const ucl_object_t *cur;
+
+	if (obj == NULL) {
+		return NULL;
+	}
+
+	int min_prio = override_only ? 1 : 0;
+
+	if (ucl_object_get_priority(obj) > min_prio) {
+
+		switch (ucl_object_type(obj)) {
+		case UCL_OBJECT:
+			result = ucl_object_typed_new(ucl_object_type(obj));
+
+			while ((cur = ucl_object_iterate(obj, &it, true))) {
+				ucl_object_t *filtered = filter_non_default(cur, override_conf_only);
+				if (filtered) {
+					ucl_object_insert_key(result, filtered, ucl_object_key(cur), cur->keylen, true);
+				}
+			}
+			break;
+		case UCL_ARRAY:
+			result = ucl_object_typed_new(ucl_object_type(obj));
+
+			while ((cur = ucl_object_iterate(obj, &it, true))) {
+				ucl_object_t *filtered = filter_non_default(cur, override_conf_only);
+				if (filtered) {
+					ucl_array_append(result, filtered);
+				}
+			}
+		default:
+			result = ucl_object_ref(obj);
+			break;
+		}
+
+		return result;
+	}
+
+	if (ucl_object_type(obj) == UCL_OBJECT || ucl_object_type(obj) == UCL_ARRAY) {
+		bool has_non_default = false;
+
+		result = ucl_object_typed_new(ucl_object_type(obj));
+		while ((cur = ucl_object_iterate(obj, &it, true))) {
+			ucl_object_t *filtered = filter_non_default(cur, override_only);
+			if (filtered) {
+				has_non_default = true;
+
+				if (ucl_object_type(obj) == UCL_OBJECT) {
+					ucl_object_insert_key(result, filtered,
+										  ucl_object_key(cur), cur->keylen, true);
+				}
+				else if (ucl_object_type(obj) == UCL_ARRAY) {
+					ucl_array_append(result, filtered);
+				}
+				else {
+					g_assert_not_reached();
+				}
+			}
+		}
+
+		/* Avoid empty objects */
+		if (!has_non_default) {
+			ucl_object_unref(result);
+			result = NULL;
+		}
+
+		return result;
+	}
+
+
+	return NULL;
 }
 
 static void
@@ -524,7 +608,20 @@ rspamadm_configdump(int argc, char **argv, const struct rspamadm_command *cmd)
 
 		/* Output configuration */
 		if (argc == 1) {
-			rspamadm_dump_section_obj(cfg, cfg->cfg_ucl_obj, cfg->doc_strings);
+			const ucl_object_t *output_obj = cfg->cfg_ucl_obj;
+			if (local_conf_only || override_conf_only) {
+				output_obj = filter_non_default(cfg->cfg_ucl_obj, override_conf_only);
+				if (!output_obj) {
+					rspamd_printf("No non-default configuration found\n");
+					exit(EXIT_SUCCESS);
+				}
+			}
+
+			rspamadm_dump_section_obj(cfg, output_obj, cfg->doc_strings);
+
+			if (local_conf_only || override_conf_only) {
+				ucl_object_unref((ucl_object_t *) output_obj);
+			}
 		}
 		else {
 			for (i = 1; i < argc; i++) {
@@ -537,16 +634,28 @@ rspamadm_configdump(int argc, char **argv, const struct rspamadm_command *cmd)
 				else {
 					LL_FOREACH(obj, cur)
 					{
+						const ucl_object_t *output_obj = cur;
+						if (local_conf_only || override_conf_only) {
+							output_obj = filter_non_default(cur, override_conf_only);
+							if (!output_obj) {
+								rspamd_printf("No non-default configuration found for section %s\n", argv[i]);
+								continue;
+							}
+						}
 						if (!json && !compact) {
 							rspamd_printf("*** Section %s ***\n", argv[i]);
 						}
-						rspamadm_dump_section_obj(cfg, cur, doc_obj);
+						rspamadm_dump_section_obj(cfg, output_obj, doc_obj);
 
 						if (!json && !compact) {
 							rspamd_printf("\n*** End of section %s ***\n", argv[i]);
 						}
 						else {
 							rspamd_printf("\n");
+						}
+
+						if (local_conf_only || override_conf_only) {
+							ucl_object_unref((ucl_object_t *) output_obj);
 						}
 					}
 				}
