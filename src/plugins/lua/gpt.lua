@@ -22,7 +22,7 @@ if confighelp then
   rspamd_config:add_example(nil, 'gpt',
       "Performs postfiltering using GPT model",
       [[
-gpt {
+  gpt {
   # Supported types: openai, ollama
   type = "openai";
   # Your key to access the API
@@ -53,7 +53,7 @@ gpt {
   reason_header = "X-GPT-Reason";
   # Use JSON format for response
   json = false;
-}
+  }
   ]])
   return
 end
@@ -359,8 +359,17 @@ local function default_openai_plain_conversion(task, input)
     return spam_score, reason, categories
   end
 
-  rspamd_logger.errx(task, 'cannot parse plain gpt reply: %s (all: %s)', lines[1])
+  rspamd_logger.errx(task, 'cannot parse plain gpt reply: %s (all: %s)', lines[1], first_message)
   return
+end
+
+-- Helper function to remove <think>...</think> and trim leading newlines
+local function clean_gpt_response(text)
+  -- Remove <think>...</think> including multiline
+  text = text:gsub("<think>.-</think>", "")
+  -- Trim leading whitespace and newlines
+  text = text:gsub("^%s*\n*", "")
+  return text
 end
 
 local function default_ollama_plain_conversion(task, input)
@@ -387,6 +396,10 @@ local function default_ollama_plain_conversion(task, input)
     rspamd_logger.errx(task, 'no content in the first message')
     return
   end
+
+  -- Clean message
+  first_message = clean_gpt_response(first_message)
+
   local lines = lua_util.str_split(first_message, '\n')
   local first_line = clean_reply_line(lines[1])
   local spam_score = tonumber(first_line)
@@ -397,7 +410,7 @@ local function default_ollama_plain_conversion(task, input)
     return spam_score, reason, categories
   end
 
-  rspamd_logger.errx(task, 'cannot parse plain gpt reply: %s', lines[1])
+  rspamd_logger.errx(task, 'cannot parse plain gpt reply: %s (all: %s)', lines[1], first_message)
   return
 end
 
@@ -514,9 +527,9 @@ local function insert_results(task, result, sel_part)
     end
   end
   if result.reason and settings.reason_header then
-      lua_mime.modify_headers(task,
-          { add = { [settings.reason_header] = { value = tostring(result.reason), order = 1 } } })
-    end
+    lua_mime.modify_headers(task,
+        { add = { [settings.reason_header] = { value = tostring(result.reason), order = 1 } } })
+  end
 
   if cache_context then
     lua_cache.cache_set(task, redis_cache_key(sel_part), result, cache_context)
