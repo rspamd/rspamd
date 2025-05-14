@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ radix_find_compressed(radix_compressed_t *tree, const uint8_t *key, gsize keylen
 
 uintptr_t
 radix_insert_compressed(radix_compressed_t *tree,
-						uint8_t *key, gsize keylen,
+						const uint8_t *key, gsize keylen,
 						gsize masklen,
 						uintptr_t value)
 {
@@ -126,6 +126,39 @@ radix_insert_compressed(radix_compressed_t *tree,
 	}
 
 	return old;
+}
+
+uintptr_t
+radix_insert_compressed_addr(radix_compressed_t *tree,
+							 const rspamd_inet_addr_t *addr,
+							 uintptr_t value)
+{
+	const unsigned char *key;
+	unsigned int klen = 0;
+	unsigned char buf[16];
+
+	if (addr == NULL) {
+		return RADIX_NO_VALUE;
+	}
+
+	key = rspamd_inet_address_get_hash_key(addr, &klen);
+
+	if (key && klen) {
+		if (klen == 4) {
+			/* Map to ipv6 */
+			memset(buf, 0, 10);
+			buf[10] = 0xffu;
+			buf[11] = 0xffu;
+			memcpy(buf + 12, key, klen);
+
+			key = buf;
+			klen = sizeof(buf);
+		}
+
+		return radix_insert_compressed(tree, key, klen, 0, value);
+	}
+
+	return RADIX_NO_VALUE;
 }
 
 

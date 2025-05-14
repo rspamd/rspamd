@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 #include "mem_pool.h"
 #include "util.h"
 
-#define RADIX_NO_VALUE (uintptr_t) - 1
+#define RADIX_NO_VALUE (uintptr_t) -1
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,9 +39,21 @@ typedef struct radix_tree_compressed radix_compressed_t;
  */
 uintptr_t
 radix_insert_compressed(radix_compressed_t *tree,
-						uint8_t *key, gsize keylen,
+						const uint8_t *key, gsize keylen,
 						gsize masklen,
 						uintptr_t value);
+
+/**
+ * Insert new address to the radix trie (works for IPv4 or IPv6 addresses)
+ * @param tree radix trie
+ * @param addr address to insert
+ * @param value opaque value pointer
+ * @return previous value of the key or `RADIX_NO_VALUE`
+ */
+uintptr_t
+radix_insert_compressed_addr(radix_compressed_t *tree,
+							 const rspamd_inet_addr_t *addr,
+							 uintptr_t value);
 
 /**
  * Find a key in a radix trie
