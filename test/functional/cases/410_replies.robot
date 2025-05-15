@@ -41,8 +41,7 @@ Reply to 1 sender 2 recipients but SMTP recipient matches
 Reply to 1 sender 2 recipients 1 rcpt is same
   Scan File  ${RSPAMD_TESTDIR}/messages/replyto_1_2_s.eml
   ...  IP=8.8.8.8
-  ...  Rcpt=xxxx@emailbl.com
-  ...  Rcpt=llll@emailbl.com
+  ...  Rcpt=xxxx@emailbl.com,llll@emailbl.com
   ...  Settings=${SETTINGS_REPLIES}
   Expect Symbol  ${SYMBOL}
 
