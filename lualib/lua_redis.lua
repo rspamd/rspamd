@@ -1129,9 +1129,9 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key,
 end
 
 --[[[
--- @function lua_redis.redis_make_request_taskless(ev_base, redis_params, key, is_write, callback, command, args)
+-- @function lua_redis.redis_make_request_taskless(ev_base, cfg, redis_params, key, is_write, callback, command, args)
 -- Sends a request to Redis in context where `task` is not available for some specific use-cases
--- Identical to redis_make_request() except in that first parameter is an `event base` object
+-- Identical to redis_make_request() except in that first parameter is an `event base` object and the second one is the 'config' object
 --]]
 
 exports.rspamd_redis_make_request_taskless = redis_make_request_taskless
