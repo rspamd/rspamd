@@ -42,7 +42,7 @@ requires input.
 :	Specify host and port
 	
 -P *password*, \--password=*password*
-:	Specify control password
+:	Specify control password. Can be an absolute or relative path, in which case the password will be read from that file.
 	
 -c *name*, \--classifier=*name*
 :	Classifier to learn spam or ham (bayes is used by default)
