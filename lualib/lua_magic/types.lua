@@ -284,11 +284,6 @@ local types = {
     ct = 'image/heic',
     av_check = false,
   },
-  heif = {
-    type = 'image',
-    ct = 'image/heif',
-    av_check = false,
-  },
   dwg = {
     type = 'image',
     ct = 'image/vnd.dwg',
