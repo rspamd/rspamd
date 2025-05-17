@@ -1207,15 +1207,13 @@ local function prepare_redis_call(script)
   return options
 end
 
-local function is_all_servers_ready(script)
+local function is_any_server_ready(script)
   for _, s in ipairs(script.servers_ready) do
-    if s == "unsent" or s == "tempfail" then
-      return false
+    if s == "done" then
+      return true
     end
   end
-
-  -- We assume that permanent errors are not recoverable, so we will just skip those servers
-  return true
+  return false
 end
 
 local function is_all_servers_failed(script)
@@ -1269,7 +1267,7 @@ local function load_script_task(script, task, is_write)
           script.sha = data -- We assume that sha is the same on all servers
           script.servers_ready[idx] = "done"
         end
-        if is_all_servers_ready(script) then
+        if is_any_server_ready(script) then
           script_set_loaded(script)
         elseif is_all_servers_failed(script) then
           script.pending_upload = false
@@ -1287,7 +1285,7 @@ local function load_script_task(script, task, is_write)
       end
     end
 
-    if is_all_servers_ready(script) then
+    if is_any_server_ready(script) then
       script_set_loaded(script)
     elseif is_all_servers_failed(script) then
       script.pending_upload = false
@@ -1314,7 +1312,6 @@ local function load_script_taskless(script, cfg, ev_base, is_write)
                 err, script.caller.short_src, script.caller.currentline)
             opt.upstream:fail()
             script.servers_ready[idx] = "failed"
-            return
           else
             -- Assume temporary error
             logger.infox(cfg, 'temporary error uploading script %s to %s: %s; registered from: %s:%s',
@@ -1322,7 +1319,6 @@ local function load_script_taskless(script, cfg, ev_base, is_write)
                 opt.upstream:get_addr():to_string(true),
                 err, script.caller.short_src, script.caller.currentline)
             script.servers_ready[idx] = "tempfail"
-            return
           end
         else
           opt.upstream:ok()
@@ -1335,7 +1331,7 @@ local function load_script_taskless(script, cfg, ev_base, is_write)
           script.servers_ready[idx] = "done"
         end
 
-        if is_all_servers_ready(script) then
+        if is_any_server_ready(script) then
           script_set_loaded(script)
         elseif is_all_servers_failed(script) then
           script.pending_upload = false
@@ -1353,7 +1349,7 @@ local function load_script_taskless(script, cfg, ev_base, is_write)
       end
     end
 
-    if is_all_servers_ready(script) then
+    if is_any_server_ready(script) then
       script_set_loaded(script)
     elseif is_all_servers_failed(script) then
       script.pending_upload = false
@@ -1482,6 +1478,10 @@ local function exec_redis_script(id, params, callback, keys, args)
             script.sha = nil
             script.loaded = nil
             script.pending_upload = true
+	    -- We must initialize all servers as we don't know here which one failed
+	    for i, _ in ipairs(script.servers_ready) do
+	      script.servers_ready[i] = "unsent"
+	    end
             -- Reload scripts if this has not been initiated yet
             if params.task then
               load_script_task(script, params.task)
