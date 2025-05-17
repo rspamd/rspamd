@@ -466,6 +466,23 @@ local patterns = {
       },
     }
   },
+  heic = {
+    matches = {
+      {
+        -- HEIC/HEIF file format signature
+        -- Starts with ftyp followed by specific brand identifiers
+        string = "^....ftyphe[im][cs]",
+        position = 12,
+        weight = 60,
+      },
+      {
+        -- Alternative signature for HEIC/HEIF
+        string = [[^....ftypmif1]],
+        position = 12,
+        weight = 60,
+      },
+    }
+  },
 }
 
 return patterns

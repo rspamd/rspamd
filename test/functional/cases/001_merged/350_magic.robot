@@ -65,3 +65,4 @@ Magic detections bundle 1
   ...  MAGIC_SYM_ICS_55
   ...  MAGIC_SYM_VCF_56
   ...  MAGIC_SYM_CSV_57
+  ...  MAGIC_SYM_HEIC_58
