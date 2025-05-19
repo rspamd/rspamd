@@ -308,21 +308,19 @@ define(["jquery", "nprogress"],
             },
 
             setupFileHandling(textArea, fileInput, button, validator) {
-                const highlightClass = "outline-dashed-primary bg-primary-subtle";
+                const dragoverClassList = "outline-dashed-primary bg-primary-subtle";
 
                 $(textArea)
-                    .on("dragenter dragover", (e) => {
+                    .on("dragenter dragover dragleave drop", (e) => {
                         e.preventDefault();
-                        $(textArea).addClass(highlightClass);
+                        e.stopPropagation();
                     })
-                    .on("dragleave drop", () => $(textArea).removeClass(highlightClass))
+                    .on("dragenter dragover", () => $(textArea).addClass(dragoverClassList))
+                    .on("dragleave drop", () => $(textArea).removeClass(dragoverClassList))
                     .on("drop", (e) => {
-                        e.preventDefault();
                         this.handleFileInput(e.originalEvent.dataTransfer, textArea, button, fileInput, validator);
                     });
-                $(fileInput).on("change", (e) => {
-                    this.handleFileInput(e.target, textArea, button, fileInput, validator);
-                });
+                $(fileInput).on("change", (e) => this.handleFileInput(e.target, textArea, button, fileInput, validator));
                 $(textArea).on("input", () => this.enableButton(button, textArea, validator));
             }
         };
