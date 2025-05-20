@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,22 +29,123 @@
  * This module hides all complexity: DNS resolving, sessions management, zero-copy
  * text transfers and so on under the hood.
  * @example
+-- Basic GET request with callback
 local rspamd_http = require "rspamd_http"
 
 local function symbol_callback(task)
 	local function http_callback(err_message, code, body, headers)
 		task:insert_result('SYMBOL', 1) -- task is available via closure
+
+		if err_message then
+			-- Handle error
+			return
+		end
+
+		-- Process response
+		if code == 200 then
+			-- Process body and headers
+			for name, value in pairs(headers) do
+				-- Headers are lowercase
+			end
+		end
 	end
 
- 	rspamd_http.request({
- 		task=task,
- 		url='http://example.com/data',
- 		body=task:get_content(),
- 		callback=http_callback,
+	rspamd_http.request({
+		task=task,
+		url='http://example.com/data',
+		body=task:get_content(),
+		callback=http_callback,
 		headers={Header='Value', OtherHeader='Value', DuplicatedHeader={'Multiple', 'Values'}},
- 		mime_type='text/plain',
- 		})
- end
+		mime_type='text/plain',
+	})
+end
+
+-- POST request with JSON body
+local function post_json_example(task)
+	local ucl = require "ucl"
+	local data = {
+		id = task:get_queue_id(),
+		sender = task:get_from()[1].addr
+	}
+
+	local json_data = ucl.to_json(data)
+
+	rspamd_http.request({
+		task = task,
+		url = "http://example.com/api/submit",
+		method = "POST",
+		body = json_data,
+		headers = {['Content-Type'] = 'application/json'},
+		callback = function(err, code, body, headers)
+			if not err and code == 200 then
+				-- Success
+			end
+		end
+	})
+end
+
+-- Synchronous HTTP request (using coroutines)
+local function sync_http_example(task)
+	-- No callback makes this a synchronous call
+	local err, response = rspamd_http.request({
+		task = task,
+		url = "http://example.com/api/data",
+		method = "GET",
+		timeout = 10.0
+	})
+
+	if not err then
+		-- Response is a table with code, content, and headers
+		if response.code == 200 then
+			-- Process response.content
+			return true
+		end
+	end
+	return false
+end
+
+-- Using authentication
+local function auth_example(task)
+	rspamd_http.request({
+		task = task,
+		url = "https://example.com/api/protected",
+		method = "GET",
+		user = "username",
+		password = "secret",
+		callback = function(err, code, body, headers)
+			-- Process authenticated response
+		end
+	})
+end
+
+-- Using HTTPS with SSL options
+local function https_example(task)
+	rspamd_http.request({
+		task = task,
+		url = "https://example.com/api/secure",
+		method = "GET",
+		no_ssl_verify = false, -- Verify SSL (default)
+		callback = function(err, code, body, headers)
+			-- Process secure response
+		end
+	})
+end
+
+-- Using keep-alive and gzip
+local function advanced_example(task)
+	rspamd_http.request({
+		task = task,
+		url = "http://example.com/api/data",
+		method = "POST",
+		body = task:get_content(),
+		gzip = true, -- Compress request body
+		keepalive = true, -- Use keep-alive connection
+		max_size = 1024 * 1024, -- Limit response to 1MB
+		callback = function(err, code, body, headers)
+			-- Process response
+		end
+	})
+end
  */
 
 #define MAX_HEADERS_SIZE 8192
