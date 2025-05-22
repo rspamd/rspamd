@@ -1333,6 +1333,9 @@ local function add_multimap_rule(key, newrule)
       end
     elseif newrule['type'] == 'dnsbl' then
       ret = true
+    else
+      rspamd_logger.errx(rspamd_config, 'cannot add rule %s: invalid type %s',
+          key, newrule['type'])
     end
   end
 
