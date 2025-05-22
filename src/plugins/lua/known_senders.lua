@@ -259,7 +259,7 @@ local function verify_local_replies_set(task)
     return nil
   end
 
-  local replies_recipients = task:get_recipients('mime') or E
+  local replies_recipients = task:get_recipients('smtp') or E
 
   local replies_sender_string = lua_util.maybe_obfuscate_string(tostring(replies_sender), settings,
       settings.sender_prefix)
