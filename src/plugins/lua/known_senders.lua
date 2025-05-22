@@ -106,21 +106,26 @@ local function configure_scripts(_, _, _)
   -- script checks if given recipients are in the local replies set of the sender
   local redis_zscore_script = [[
     local replies_recipients_addrs = ARGV
-    if replies_recipients_addrs then
+    if replies_recipients_addrs and #replies_recipients_addrs > 0 then
+      local found = false
       for _, rcpt in ipairs(replies_recipients_addrs) do
         local score = redis.call('ZSCORE', KEYS[1], rcpt)
-        -- check if score is nil (for some reason redis script does not see if score is a nil value)
-        if type(score) == 'boolean' then
-          score = nil
-          -- 0 is stand for failure code
-          return 0
+        if score then
+          -- If we found at least one recipient, consider it a match
+          found = true
+          break
         end
       end
-      -- first number in return statement is stands for the success/failure code
-      -- where success code is 1 and failure code is 0
-      return 1
+
+      if found then
+        -- Success code is 1
+        return 1
+      else
+        -- Failure code is 0
+        return 0
+      end
     else
-    -- 0 is a failure code
+      -- No recipients to check, failure code is 0
       return 0
     end
   ]]
@@ -259,7 +264,13 @@ local function verify_local_replies_set(task)
     return nil
   end
 
-  local replies_recipients = task:get_recipients('mime') or E
+  local replies_recipients = task:get_recipients('smtp') or E
+
+  -- If no recipients, don't proceed
+  if #replies_recipients == 0 then
+    lua_util.debugm(N, task, 'No recipients to verify')
+    return nil
+  end
 
   local replies_sender_string = lua_util.maybe_obfuscate_string(tostring(replies_sender), settings,
       settings.sender_prefix)
@@ -268,13 +279,16 @@ local function verify_local_replies_set(task)
   local function redis_zscore_script_cb(err, data)
     if err ~= nil then
       rspamd_logger.errx(task, 'Could not verify %s local replies set %s', replies_sender_key, err)
-    end
-    if data ~= 1 then
-      lua_util.debugm(N, task, 'Recipients were not verified')
       return
     end
-    lua_util.debugm(N, task, 'Recipients were verified')
-    task:insert_result(settings.symbol_check_mail_local, 1.0, replies_sender_key)
+
+    -- We need to ensure we're properly checking the result
+    if data == 1 then
+      lua_util.debugm(N, task, 'Recipients were verified')
+      task:insert_result(settings.symbol_check_mail_local, 1.0, replies_sender_key)
+    else
+      lua_util.debugm(N, task, 'Recipients were not verified, data=%s', data)
+    end
   end
 
   local replies_recipients_addrs = {}
@@ -284,12 +298,24 @@ local function verify_local_replies_set(task)
     table.insert(replies_recipients_addrs, replies_recipients[i].addr)
   end
 
-  lua_util.debugm(N, task, 'Making redis request to local replies set')
-  lua_redis.exec_redis_script(zscore_script_id,
+  -- Only proceed if we have recipients to check
+  if #replies_recipients_addrs == 0 then
+    lua_util.debugm(N, task, 'No recipient addresses to verify')
+    return nil
+  end
+
+  lua_util.debugm(N, task, 'Making redis request to local replies set with key %s and recipients %s',
+      replies_sender_key, table.concat(replies_recipients_addrs, ", "))
+
+  local ret = lua_redis.exec_redis_script(zscore_script_id,
       { task = task, is_write = true },
       redis_zscore_script_cb,
       { replies_sender_key },
       replies_recipients_addrs)
+
+  if not ret then
+    rspamd_logger.errx(task, "redis script request wasn't scheduled")
+  end
 end
 
 local function check_known_incoming_mail_callback(task)
