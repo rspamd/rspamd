@@ -262,53 +262,42 @@ define(["jquery", "nprogress"],
         };
 
         ui.fileUtils = {
-            files: null,
-            filesIdx: 0,
-
-            enableButton(button, textArea, validator) {
-                const hasText = $.trim($(textArea).val()).length > 0;
-                const needsValidation = validator !== "none";
-
-                $(button).prop("disabled", !hasText || (needsValidation && !$(validator).hasClass("is-valid")));
-            },
-
-            readFile(callback, textArea, button, validator) {
-                if (!this.files || this.files.length === 0) {
-                    alertMessage("alert-error", "No files selected.");
-                    return;
-                }
-
+            readFile(files, callback, index = 0) {
+                const file = files[index];
                 const reader = new FileReader();
-
-                reader.onload = () => {
-                    $(textArea).val(reader.result).trigger("input");
-                    this.enableButton(button, textArea, validator);
-
-                    if (callback) callback(reader.result);
-                };
-                reader.onerror = () => alertMessage("alert-error", "Error reading file.");
-                reader.readAsText(this.files[this.filesIdx]);
+                reader.onerror = () => alertMessage("alert-error", `Error reading file: ${file.name}`);
+                reader.onloadend = () => callback(reader.result);
+                reader.readAsText(file);
             },
 
-            handleFileInput(fileSrc, textArea, button, fileInput, validator) {
-                ({
-                    files: this.files
-                } = fileSrc);
-                this.filesIdx = 0;
-
-                if (!this.files.length) {
-                    alertMessage("alert-warning", "No file was provided.");
-                    return;
-                }
-                $(fileInput)[0].files = this.files;
-                // eslint-disable-next-line no-alert
-                if (this.files.length === 1 || confirm(`Are you sure you want to process ${this.files.length} files?`)) {
-                    this.readFile(null, textArea, button, validator);
-                }
+            setFileInputFiles(fileInput, files, i) {
+                const dt = new DataTransfer();
+                if (arguments.length > 2) dt.items.add(files[i]);
+                $(fileInput).prop("files", dt.files);
             },
 
-            setupFileHandling(textArea, fileInput, button, validator) {
+            setupFileHandling(textArea, fileInput, fileSet, enable_btn_cb, multiple_files_cb) {
                 const dragoverClassList = "outline-dashed-primary bg-primary-subtle";
+                const {readFile, setFileInputFiles} = ui.fileUtils;
+
+                function handleFileInput(fileSource) {
+                    fileSet.files = fileSource.files;
+                    fileSet.index = 0;
+                    const {files} = fileSet;
+
+                    if (files.length === 1) {
+                        setFileInputFiles(fileInput, files, 0);
+                        enable_btn_cb();
+                        readFile(files, (result) => {
+                            $(textArea).val(result);
+                            enable_btn_cb();
+                        });
+                    } else if (multiple_files_cb) {
+                        multiple_files_cb(files);
+                    } else {
+                        alertMessage("alert-warning", "Multiple files processing is not supported.");
+                    }
+                }
 
                 $(textArea)
                     .on("dragenter dragover dragleave drop", (e) => {
@@ -317,11 +306,16 @@ define(["jquery", "nprogress"],
                     })
                     .on("dragenter dragover", () => $(textArea).addClass(dragoverClassList))
                     .on("dragleave drop", () => $(textArea).removeClass(dragoverClassList))
-                    .on("drop", (e) => {
-                        this.handleFileInput(e.originalEvent.dataTransfer, textArea, button, fileInput, validator);
+                    .on("drop", (e) => handleFileInput(e.originalEvent.dataTransfer))
+                    .on("input", () => {
+                        enable_btn_cb();
+                        if (fileSet.files) {
+                            fileSet.files = null;
+                            setFileInputFiles(fileInput, fileSet.files);
+                        }
                     });
-                $(fileInput).on("change", (e) => this.handleFileInput(e.target, textArea, button, fileInput, validator));
-                $(textArea).on("input", () => this.enableButton(button, textArea, validator));
+
+                $(fileInput).on("change", (e) => handleFileInput(e.target));
             }
         };
 

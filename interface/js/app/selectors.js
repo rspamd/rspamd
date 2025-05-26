@@ -2,6 +2,7 @@ define(["jquery", "app/common"],
     ($, common) => {
         "use strict";
         const ui = {};
+        const fileSet = {files: null, index: null};
 
         function enable_disable_check_btn() {
             $("#selectorsChkMsgBtn").prop("disabled", (
@@ -129,9 +130,6 @@ define(["jquery", "app/common"],
             return false;
         });
 
-        $("#selectorsMsgArea").on("input", () => {
-            enable_disable_check_btn();
-        });
         $("#selectorsSelArea").on("input", () => {
             checkSelectors();
         });
@@ -140,7 +138,7 @@ define(["jquery", "app/common"],
             $("#selectorsFile").val("");
         });
 
-        common.fileUtils.setupFileHandling("#selectorsMsgArea", "#selectorsFile", "#selectorsChkMsgBtn", "#selectorsSelArea");
+        common.fileUtils.setupFileHandling("#selectorsMsgArea", "#selectorsFile", fileSet, enable_disable_check_btn);
 
         return ui;
     });
