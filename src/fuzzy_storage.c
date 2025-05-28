@@ -1305,7 +1305,7 @@ rspamd_fuzzy_check_callback(struct rspamd_fuzzy_reply *result, void *ud)
 		{
 			/* Start lua post handler */
 			lua_State *L = session->ctx->cfg->lua_state;
-			int err_idx, ret, nargs = 9;
+			int err_idx, ret, nargs = 10;
 
 			lua_pushcfunction(L, &rspamd_lua_traceback);
 			err_idx = lua_gettop(L);
@@ -1339,7 +1339,8 @@ rspamd_fuzzy_check_callback(struct rspamd_fuzzy_reply *result, void *ud)
 			/* We push shingles merely for commands that modify content to avoid extra work */
 			if (is_shingle && cmd->cmd != FUZZY_CHECK) {
 				lua_newshingle(L, &session->cmd.sgl);
-				nargs++;
+			} else {
+				lua_pushnil(L);
 			}
 
 			if ((ret = lua_pcall(L, nargs, LUA_MULTRET, err_idx)) != 0) {
@@ -1505,7 +1506,7 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 		{
 			/* Start lua pre handler */
 			lua_State *L = session->ctx->cfg->lua_state;
-			int err_idx, ret, nargs = 7;
+			int err_idx, ret, nargs = 8;
 
 			lua_pushcfunction(L, &rspamd_lua_traceback);
 			err_idx = lua_gettop(L);
@@ -1527,7 +1528,8 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 			/* We push shingles merely for commands that modify content to avoid extra work */
 			if (is_shingle && cmd->cmd != FUZZY_CHECK) {
 				lua_newshingle(L, &session->cmd.sgl);
-				nargs++;
+			} else {
+				lua_pushnil(L);
 			}
 
 			/* Flag and value */
