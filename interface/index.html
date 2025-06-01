@@ -580,6 +580,10 @@
 					<div class="card-header text-secondary py-2 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-envelope"></i></span>
 						<span class="h6 fw-bolder my-auto">Test Rspamd selectors</span>
+						<div class="d-flex input-group-sm align-items-center ms-auto">
+							<label for="formFile" class="col-auto col-form-label-sm me-1">Choose a file:</label>
+							<input class="form-control form-control-sm btn btn-secondary" id="selectorsFile" type="file">
+						</div>
 					</div>
 					<div class="card-body p-0">
 						<div class="row h-100 m-0" id="row-main">
@@ -608,7 +612,7 @@
 													<div class="col">
 														<div class="form-group">
 															<label class="form-label" for="selectorsMsgArea">Message source:</label>
-															<textarea class="form-control" id="selectorsMsgArea" rows="9" placeholder="Paste raw message source"></textarea>
+															<textarea class="form-control" id="selectorsMsgArea" rows="9" placeholder='Paste raw message source, drag and drop files here or use "Browse..." button.'></textarea>
 														</div>
 														<button class="btn btn-secondary d-flex align-items-center float-end" id="selectorsMsgClean"><i class="fas fa-trash-alt me-2"></i>Clean form</button>
 													</div>

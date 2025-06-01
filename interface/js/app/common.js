@@ -261,5 +261,63 @@ define(["jquery", "nprogress"],
             ).appendTo(ftFilter.$dropdown);
         };
 
+        ui.fileUtils = {
+            readFile(files, callback, index = 0) {
+                const file = files[index];
+                const reader = new FileReader();
+                reader.onerror = () => alertMessage("alert-error", `Error reading file: ${file.name}`);
+                reader.onloadend = () => callback(reader.result);
+                reader.readAsText(file);
+            },
+
+            setFileInputFiles(fileInput, files, i) {
+                const dt = new DataTransfer();
+                if (arguments.length > 2) dt.items.add(files[i]);
+                $(fileInput).prop("files", dt.files);
+            },
+
+            setupFileHandling(textArea, fileInput, fileSet, enable_btn_cb, multiple_files_cb) {
+                const dragoverClassList = "outline-dashed-primary bg-primary-subtle";
+                const {readFile, setFileInputFiles} = ui.fileUtils;
+
+                function handleFileInput(fileSource) {
+                    fileSet.files = fileSource.files;
+                    fileSet.index = 0;
+                    const {files} = fileSet;
+
+                    if (files.length === 1) {
+                        setFileInputFiles(fileInput, files, 0);
+                        enable_btn_cb();
+                        readFile(files, (result) => {
+                            $(textArea).val(result);
+                            enable_btn_cb();
+                        });
+                    } else if (multiple_files_cb) {
+                        multiple_files_cb(files);
+                    } else {
+                        alertMessage("alert-warning", "Multiple files processing is not supported.");
+                    }
+                }
+
+                $(textArea)
+                    .on("dragenter dragover dragleave drop", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    })
+                    .on("dragenter dragover", () => $(textArea).addClass(dragoverClassList))
+                    .on("dragleave drop", () => $(textArea).removeClass(dragoverClassList))
+                    .on("drop", (e) => handleFileInput(e.originalEvent.dataTransfer))
+                    .on("input", () => {
+                        enable_btn_cb();
+                        if (fileSet.files) {
+                            fileSet.files = null;
+                            setFileInputFiles(fileInput, fileSet.files);
+                        }
+                    });
+
+                $(fileInput).on("change", (e) => handleFileInput(e.target));
+            }
+        };
+
         return ui;
     });

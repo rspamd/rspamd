@@ -28,8 +28,7 @@ define(["jquery", "app/common", "app/libft"],
     ($, common, libft) => {
         "use strict";
         const ui = {};
-        let files = null;
-        let filesIdx = null;
+        const fileSet = {files: null, index: null};
         let scanTextHeaders = {};
 
         function uploadText(data, url, headers, method = "POST") {
@@ -67,19 +66,7 @@ define(["jquery", "app/common", "app/libft"],
 
         function enable_disable_scan_btn(disable) {
             $("#scan button:not(#cleanScanHistory, #deleteHashesBtn, #scanOptionsToggle, .ft-columns-btn)")
-                .prop("disabled", (disable || $.trim($("textarea").val()).length === 0));
-        }
-
-        function setFileInputFiles(i) {
-            const dt = new DataTransfer();
-            if (arguments.length) dt.items.add(files[i]);
-            $("#formFile").prop("files", dt.files);
-        }
-
-        function readFile(callback, i) {
-            const reader = new FileReader();
-            reader.readAsText(files[(arguments.length === 1) ? 0 : i]);
-            reader.onload = () => callback(reader.result);
+                .prop("disabled", (disable || $.trim($("#scanMsgSource").val()).length === 0));
         }
 
         function scanText(data) {
@@ -100,7 +87,7 @@ define(["jquery", "app/common", "app/libft"],
                         const {items} = o;
                         common.symbols.scan.push(o.symbols[0]);
 
-                        if (files) items[0].file = files[filesIdx].name;
+                        if (fileSet.files) items[0].file = fileSet.files[fileSet.index].name;
 
                         if (Object.prototype.hasOwnProperty.call(common.tables, "scan")) {
                             common.tables.scan.rows.load(items, true);
@@ -108,14 +95,16 @@ define(["jquery", "app/common", "app/libft"],
                             require(["footable"], () => {
                                 libft.initHistoryTable(data, items, "scan", libft.columns_v2("scan"), true,
                                     () => {
-                                        if (files && filesIdx < files.length - 1) {
-                                            readFile((result) => {
-                                                if (filesIdx === files.length - 1) {
+                                        const {files} = fileSet;
+                                        if (files && fileSet.index < files.length - 1) {
+                                            common.fileUtils.readFile(files, (result) => {
+                                                const {index} = fileSet;
+                                                if (index === files.length - 1) {
                                                     $("#scanMsgSource").val(result);
-                                                    setFileInputFiles(filesIdx);
+                                                    common.fileUtils.setFileInputFiles("#formFile", files, index);
                                                 }
                                                 scanText(result);
-                                            }, ++filesIdx);
+                                            }, ++fileSet.index);
                                         } else {
                                             enable_disable_scan_btn();
                                             $("#cleanScanHistory, #scan .ft-columns-dropdown .btn-dropdown-apply")
@@ -196,13 +185,6 @@ define(["jquery", "app/common", "app/libft"],
         });
 
         enable_disable_scan_btn();
-        $("textarea").on("input", () => {
-            enable_disable_scan_btn();
-            if (files) {
-                files = null;
-                setFileInputFiles();
-            }
-        });
 
         $("#scanClean").on("click", () => {
             enable_disable_scan_btn(true);
@@ -304,39 +286,15 @@ define(["jquery", "app/common", "app/libft"],
         });
 
 
-        function fileInputHandler(obj) {
-            ({files} = obj);
-            filesIdx = 0;
-
-            if (files.length === 1) {
-                setFileInputFiles(0);
-                enable_disable_scan_btn();
-                readFile((result) => {
-                    $("#scanMsgSource").val(result);
-                    enable_disable_scan_btn();
-                });
+        function multiple_files_cb(files) {
             // eslint-disable-next-line no-alert
-            } else if (files.length < 10 || confirm("Are you sure you want to scan " + files.length + " files?")) {
+            if (files.length < 10 || confirm("Are you sure you want to scan " + files.length + " files?")) {
                 getScanTextHeaders();
-                readFile((result) => scanText(result));
+                common.fileUtils.readFile(files, (result) => scanText(result));
             }
         }
 
-        const dragoverClassList = "outline-dashed-primary bg-primary-subtle";
-        $("#scanMsgSource")
-            .on("dragenter dragover dragleave drop", (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-            })
-            .on("dragenter dragover", () => {
-                $("#scanMsgSource").addClass(dragoverClassList);
-            })
-            .on("dragleave drop", () => {
-                $("#scanMsgSource").removeClass(dragoverClassList);
-            })
-            .on("drop", (e) => fileInputHandler(e.originalEvent.dataTransfer));
-
-        $("#formFile").on("change", (e) => fileInputHandler(e.target));
+        common.fileUtils.setupFileHandling("#scanMsgSource", "#formFile", fileSet, enable_disable_scan_btn, multiple_files_cb);
 
         return ui;
     });
