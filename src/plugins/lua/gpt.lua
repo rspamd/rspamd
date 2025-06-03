@@ -355,6 +355,10 @@ local function default_openai_plain_conversion(task, input)
   local reason = clean_reply_line(lines[2])
   local categories = lua_util.str_split(clean_reply_line(lines[3]), ',')
 
+  if type(reply.usage) == 'table' then
+    rspamd_logger.infox(task, 'usage: %s tokens', reply.usage.total_tokens)
+  end
+
   if spam_score then
     return spam_score, reason, categories
   end
