@@ -1166,7 +1166,7 @@ local backends = {
           name = '1m',
           mult = 1.0,
         }
-      }, -- What buckets should be used, default 1h and 1month
+      }, -- What buckets should be used, default 1month
     },
     init = reputation_redis_init,
     get_token = reputation_redis_get_token,
