@@ -3148,6 +3148,10 @@ ucl_object_frombool (bool bv)
 bool
 ucl_array_append (ucl_object_t *top, ucl_object_t *elt)
 {
+	if (top->type != UCL_ARRAY) {
+		return false;
+	}
+
 	UCL_ARRAY_GET (vec, top);
 
 	if (elt == NULL || top == NULL) {
@@ -3177,6 +3181,10 @@ e0:
 bool
 ucl_array_prepend (ucl_object_t *top, ucl_object_t *elt)
 {
+	if (top->type != UCL_ARRAY) {
+		return false;
+	}
+
 	UCL_ARRAY_GET (vec, top);
 
 	if (elt == NULL || top == NULL) {
@@ -3242,6 +3250,10 @@ e0:
 ucl_object_t *
 ucl_array_delete (ucl_object_t *top, ucl_object_t *elt)
 {
+	if (top->type != UCL_ARRAY) {
+		return NULL;
+	}
+
 	UCL_ARRAY_GET (vec, top);
 	ucl_object_t *ret = NULL;
 	unsigned i;
@@ -3290,6 +3302,10 @@ ucl_array_tail (const ucl_object_t *top)
 ucl_object_t *
 ucl_array_pop_last (ucl_object_t *top)
 {
+	if (top->type != UCL_ARRAY) {
+		return NULL;
+	}
+
 	UCL_ARRAY_GET (vec, top);
 	ucl_object_t **obj, *ret = NULL;
 
@@ -3306,6 +3322,10 @@ ucl_array_pop_last (ucl_object_t *top)
 ucl_object_t *
 ucl_array_pop_first (ucl_object_t *top)
 {
+	if (top->type != UCL_ARRAY) {
+		return NULL;
+	}
+
 	UCL_ARRAY_GET (vec, top);
 	ucl_object_t **obj, *ret = NULL;
 
@@ -3338,6 +3358,10 @@ ucl_array_size (const ucl_object_t *top)
 const ucl_object_t *
 ucl_array_find_index (const ucl_object_t *top, unsigned int index)
 {
+	if (top->type != UCL_ARRAY) {
+		return NULL;
+	}
+
 	UCL_ARRAY_GET (vec, top);
 
 	if (vec != NULL && vec->n > 0 && index < vec->n) {
@@ -3350,6 +3374,10 @@ ucl_array_find_index (const ucl_object_t *top, unsigned int index)
 unsigned int
 ucl_array_index_of (ucl_object_t *top, ucl_object_t *elt)
 {
+	if (top->type != UCL_ARRAY) {
+		return (unsigned int)(-1);
+	}
+
 	UCL_ARRAY_GET (vec, top);
 	unsigned i;
 
@@ -3370,6 +3398,10 @@ ucl_object_t *
 ucl_array_replace_index (ucl_object_t *top, ucl_object_t *elt,
 	unsigned int index)
 {
+	if (top->type != UCL_ARRAY) {
+		return NULL;
+	}
+
 	UCL_ARRAY_GET (vec, top);
 	ucl_object_t *ret = NULL;
 
