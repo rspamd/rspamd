@@ -2138,7 +2138,7 @@ rspamd_controller_load_saved_stats(struct rspamd_main *rspamd_main,
 		return;
 	}
 
-	parser = ucl_parser_new(0);
+	parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 
 	if (!ucl_parser_add_file(parser, cfg->stats_file)) {
 		msg_err_config("cannot parse controller stats from %s: %s",

@@ -342,7 +342,7 @@ ucl_keymap_fin_cb(struct map_cb_data *data, void **target)
 		return;
 	}
 
-	parser = ucl_parser_new(UCL_PARSER_NO_FILEVARS);
+	parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 
 	if (!ucl_parser_add_chunk(parser, jb->buf->str, jb->buf->len)) {
 		msg_err_config("cannot load ucl data: parse error %s",
@@ -1339,7 +1339,8 @@ rspamd_fuzzy_check_callback(struct rspamd_fuzzy_reply *result, void *ud)
 			/* We push shingles merely for commands that modify content to avoid extra work */
 			if (is_shingle && cmd->cmd != FUZZY_CHECK) {
 				lua_newshingle(L, &session->cmd.sgl);
-			} else {
+			}
+			else {
 				lua_pushnil(L);
 			}
 
@@ -1528,7 +1529,8 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 			/* We push shingles merely for commands that modify content to avoid extra work */
 			if (is_shingle && cmd->cmd != FUZZY_CHECK) {
 				lua_newshingle(L, &session->cmd.sgl);
-			} else {
+			}
+			else {
 				lua_pushnil(L);
 			}
 
@@ -2663,7 +2665,7 @@ rspamd_fuzzy_maybe_load_ratelimits(struct rspamd_fuzzy_storage_ctx *ctx)
 					RSPAMD_DBDIR);
 
 	if (access(path, R_OK) != -1) {
-		struct ucl_parser *parser = ucl_parser_new(UCL_PARSER_NO_IMPLICIT_ARRAYS | UCL_PARSER_DISABLE_MACRO);
+		struct ucl_parser *parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 		if (ucl_parser_add_file(parser, path)) {
 			ucl_object_t *obj = ucl_parser_get_object(parser);
 			int loaded = 0;

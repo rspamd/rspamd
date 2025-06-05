@@ -3640,7 +3640,7 @@ rspamd_config_parse_ucl(struct rspamd_config *cfg,
 	/* Try to load keyfile if available */
 	auto keyfile_name = fmt::format("{}.key", filename);
 	rspamd::util::raii_file::open(keyfile_name, O_RDONLY).map([&](const auto &keyfile) {
-		auto *kp_parser = ucl_parser_new(0);
+		auto *kp_parser = ucl_parser_new(UCL_PARSER_DEFAULT);
 		if (ucl_parser_add_fd(kp_parser, keyfile.get_fd())) {
 			auto *kp_obj = ucl_parser_get_object(kp_parser);
 

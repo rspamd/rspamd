@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -112,7 +112,7 @@ rspamd_control_finish_handler(struct rspamd_http_connection *conn,
 	struct rspamadm_control_cbdata *cbdata = conn->ud;
 
 	body = rspamd_http_message_get_body(msg, &body_len);
-	parser = ucl_parser_new(0);
+	parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 
 	if (!body || !ucl_parser_add_chunk(parser, body, body_len)) {
 		rspamd_fprintf(stderr, "cannot parse server's reply: %s\n",

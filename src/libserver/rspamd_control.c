@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -214,7 +214,7 @@ rspamd_control_write_reply(struct rspamd_control_session *session)
 		case RSPAMD_CONTROL_FUZZY_STAT:
 			if (elt->attached_fd != -1) {
 				/* We have some data to parse */
-				parser = ucl_parser_new(0);
+				parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 				ucl_object_insert_key(cur,
 									  ucl_object_fromint(
 										  elt->reply.reply.fuzzy_stat.status),

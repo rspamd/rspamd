@@ -404,7 +404,7 @@ lua_cryptobox_keypair_load(lua_State *L)
 	if (lua_type(L, 1) == LUA_TSTRING) {
 		buf = luaL_checklstring(L, 1, &len);
 		if (buf != NULL) {
-			parser = ucl_parser_new(0);
+			parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 
 			if (!ucl_parser_add_chunk(parser, buf, len)) {
 				msg_err("cannot open keypair from data: %s",

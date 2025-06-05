@@ -1363,7 +1363,7 @@ rspamd_ucl_fin_cb(struct map_cb_data *data, void **target)
 	}
 
 	/* New data available */
-	auto *parser = ucl_parser_new(0);
+	auto *parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 	if (!ucl_parser_add_chunk(parser, (unsigned char *) cbdata->buf.data(),
 							  cbdata->buf.size())) {
 		msg_err_config("cannot parse map %s: %s",

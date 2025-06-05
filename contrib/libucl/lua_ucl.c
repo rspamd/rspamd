@@ -700,7 +700,7 @@ lua_ucl_parser_init(lua_State *L)
 	 * files. Macros in the parser are very dangerous and should be used
 	 * for trusted data only.
 	 */
-	int flags = UCL_PARSER_NO_FILEVARS|UCL_PARSER_DISABLE_MACRO;
+	int flags = UCL_PARSER_SAFE_FLAGS;
 
 	if (lua_gettop(L) >= 1) {
 		flags = lua_tonumber(L, 1);
@@ -1097,7 +1097,7 @@ lua_ucl_parser_validate(lua_State *L)
 			}
 		}
 		else if (lua_type(L, 2) == LUA_TSTRING) {
-			schema_parser = ucl_parser_new(0);
+			schema_parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 			schema_file = luaL_checkstring(L, 2);
 
 			if (!ucl_parser_add_file(schema_parser, schema_file)) {

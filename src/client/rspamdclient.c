@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -231,7 +231,7 @@ rspamd_client_finish_handler(struct rspamd_http_connection *conn,
 			}
 		}
 
-		parser = ucl_parser_new(0);
+		parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 		if (!ucl_parser_add_chunk_full(parser, start, len,
 									   ucl_parser_get_default_priority(parser),
 									   UCL_DUPLICATE_APPEND, UCL_PARSE_AUTO)) {
