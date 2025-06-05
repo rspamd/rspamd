@@ -2311,7 +2311,7 @@ rspamd_controller_handle_saveactions(
 		return 0;
 	}
 
-	parser = ucl_parser_new(0);
+	parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 	if (!ucl_parser_add_chunk(parser, msg->body_buf.begin, msg->body_buf.len)) {
 		if ((error = ucl_parser_get_error(parser)) != NULL) {
 			msg_err_session("cannot parse input: %s", error);
@@ -2434,7 +2434,7 @@ rspamd_controller_handle_savesymbols(
 		return 0;
 	}
 
-	parser = ucl_parser_new(0);
+	parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 	if (!ucl_parser_add_chunk(parser, msg->body_buf.begin, msg->body_buf.len)) {
 		if ((error = ucl_parser_get_error(parser)) != NULL) {
 			msg_err_session("cannot parse input: %s", error);

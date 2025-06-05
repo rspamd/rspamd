@@ -274,7 +274,7 @@ auto symcache::load_items() -> bool
 		return false;
 	}
 
-	auto *parser = ucl_parser_new(0);
+	auto *parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 	const auto *p = (const std::uint8_t *) (hdr + 1);
 
 	if (!ucl_parser_add_chunk(parser, p, cached_map->get_size() - sizeof(*hdr))) {

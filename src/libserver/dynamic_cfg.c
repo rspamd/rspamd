@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -195,7 +195,7 @@ json_config_fin_cb(struct map_cb_data *data, void **target)
 		return;
 	}
 
-	parser = ucl_parser_new(0);
+	parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 
 	if (!ucl_parser_add_chunk(parser, jb->buf->str, jb->buf->len)) {
 		msg_err("cannot load json data: parse error %s",

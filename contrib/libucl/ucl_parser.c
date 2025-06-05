@@ -1246,10 +1246,12 @@ ucl_parser_process_object_element (struct ucl_parser *parser, ucl_object_t *nobj
 	container = parser->stack->obj->value.ov;
 
 	DL_FOREACH (parser->stack->obj, cur) {
-		tobj = __DECONST (ucl_object_t *, ucl_hash_search_obj (cur->value.ov, nobj));
+		if (cur->type == UCL_OBJECT) {
+			tobj = __DECONST (ucl_object_t *, ucl_hash_search_obj (cur->value.ov, nobj));
 
-		if (tobj != NULL) {
-			break;
+			if (tobj != NULL) {
+				break;
+			}
 		}
 	}
 
@@ -3165,7 +3167,7 @@ ucl_parser_add_string (struct ucl_parser *parser, const char *data,
 bool
 ucl_set_include_path (struct ucl_parser *parser, ucl_object_t *paths)
 {
-	if (parser == NULL || paths == NULL) {
+	if (parser == NULL || paths == NULL || paths->type != UCL_ARRAY) {
 		return false;
 	}
 

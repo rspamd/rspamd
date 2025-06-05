@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -363,7 +363,7 @@ rspamd_language_detector_read_file(struct rspamd_config *cfg,
 	double mean = 0, std = 0, delta = 0, delta2 = 0, m2 = 0;
 	enum rspamd_language_category cat = RSPAMD_LANGUAGE_MAX;
 
-	parser = ucl_parser_new(UCL_PARSER_NO_FILEVARS);
+	parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 	if (!ucl_parser_add_file(parser, path)) {
 		msg_warn_config("cannot parse file %s: %s", path,
 						ucl_parser_get_error(parser));
@@ -825,7 +825,7 @@ rspamd_language_detector_init(struct rspamd_config *cfg)
 
 	languages_pattern = g_string_sized_new(PATH_MAX);
 	rspamd_printf_gstring(languages_pattern, "%s/stop_words", languages_path);
-	parser = ucl_parser_new(UCL_PARSER_DEFAULT);
+	parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 
 	if (ucl_parser_add_file(parser, languages_pattern->str)) {
 		stop_words = ucl_parser_get_object(parser);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -573,7 +573,7 @@ rspamadm_signtool(int argc, char **argv, const struct rspamadm_command *cmd)
 	else {
 		g_assert(keypair_file != NULL);
 
-		parser = ucl_parser_new(0);
+		parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 
 		if (!ucl_parser_add_file(parser, keypair_file) ||
 			(top = ucl_parser_get_object(parser)) == NULL) {

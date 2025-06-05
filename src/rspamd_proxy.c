@@ -1012,7 +1012,7 @@ proxy_backend_parse_results(struct rspamd_proxy_session *session,
 		RSPAMD_FTOK_ASSIGN(&json_ct, "application/json");
 
 		if (ct && rspamd_ftok_casecmp(ct, &json_ct) == 0) {
-			parser = ucl_parser_new(0);
+			parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 
 			if (!ucl_parser_add_chunk(parser, in, inlen)) {
 				char *encoded;
