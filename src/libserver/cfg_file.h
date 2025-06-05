@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -395,6 +395,8 @@ struct rspamd_config {
 	unsigned int log_error_elts;                        /**< number of elements in error logbuf					*/
 	unsigned int log_error_elt_maxlen;                  /**< maximum size of error log element					*/
 	unsigned int log_task_max_elts;                     /**< maximum number of elements in task logging			*/
+	unsigned int log_max_tag_len;                       /**< maximum length of log tag							*/
+	char *log_tag_strip_policy_str;                     /**< log tag strip policy string						*/
 	struct rspamd_worker_log_pipe *log_pipes;
 
 	gboolean compat_messages; /**< use old messages in the protocol (array) 			*/

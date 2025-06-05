@@ -299,6 +299,14 @@ rspamd_rcl_logging_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 		cfg->log_flags |= RSPAMD_LOG_FLAG_USEC;
 	}
 
+	/* Set default values for new log tag options */
+	if (cfg->log_max_tag_len == 0) {
+		cfg->log_max_tag_len = RSPAMD_LOG_ID_LEN; /* Default to new max size */
+	}
+	if (cfg->log_tag_strip_policy_str == NULL) {
+		cfg->log_tag_strip_policy_str = rspamd_mempool_strdup(cfg->cfg_pool, "right");
+	}
+
 	return rspamd_rcl_section_parse_defaults(cfg, *section, cfg->cfg_pool, obj,
 											 (void *) cfg, err);
 }
@@ -1700,6 +1708,18 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   G_STRUCT_OFFSET(struct rspamd_config, log_task_max_elts),
 									   RSPAMD_CL_FLAG_UINT,
 									   "Maximum number of elements in task log entry (7 by default)");
+		rspamd_rcl_add_default_handler(sub,
+									   "max_tag_len",
+									   rspamd_rcl_parse_struct_integer,
+									   G_STRUCT_OFFSET(struct rspamd_config, log_max_tag_len),
+									   RSPAMD_CL_FLAG_UINT,
+									   "Maximum length of log tag cannot exceed 32 (" G_STRINGIFY(RSPAMD_LOG_ID_LEN) ") by default)");
+		rspamd_rcl_add_default_handler(sub,
+									   "tag_strip_policy",
+									   rspamd_rcl_parse_struct_string,
+									   G_STRUCT_OFFSET(struct rspamd_config, log_tag_strip_policy_str),
+									   0,
+									   "Log tag strip policy when tag exceeds max length: 'right', 'left', 'middle' (right by default)");
 
 		/* Documentation only options, handled in log_handler to map flags */
 		rspamd_rcl_add_doc_by_path(cfg,

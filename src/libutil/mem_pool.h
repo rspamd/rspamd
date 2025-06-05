@@ -71,7 +71,7 @@ struct f_str_s;
 #endif
 
 #define MEMPOOL_TAG_LEN 16
-#define MEMPOOL_UID_LEN 16
+#define MEMPOOL_UID_LEN 32
 /* All pointers are aligned as this variable */
 #define MIN_MEM_ALIGNMENT G_MEM_ALIGN
 

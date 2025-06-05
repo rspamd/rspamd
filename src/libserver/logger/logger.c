@@ -22,7 +22,6 @@
 #include "unix-std.h"
 #include "logger_private.h"
 
-
 static rspamd_logger_t *default_logger = NULL;
 static rspamd_logger_t *emergency_logger = NULL;
 static struct rspamd_log_modules *log_modules = NULL;
@@ -30,6 +29,61 @@ static struct rspamd_log_modules *log_modules = NULL;
 static const char lf_chr = '\n';
 
 unsigned int rspamd_task_log_id = (unsigned int) -1;
+
+/**
+ * Strip log tag according to the configured policy
+ * @param original_tag original log tag
+ * @param original_len length of original tag
+ * @param dest destination buffer
+ * @param max_len maximum length allowed
+ * @param policy stripping policy
+ * @return actual length of stripped tag
+ */
+static gsize
+rspamd_log_strip_tag(const char *original_tag, gsize original_len,
+					 char *dest, gsize max_len,
+					 enum rspamd_log_tag_strip_policy policy)
+{
+	if (original_len <= max_len) {
+		/* No stripping needed */
+		memcpy(dest, original_tag, original_len);
+		return original_len;
+	}
+
+	switch (policy) {
+	case RSPAMD_LOG_TAG_STRIP_RIGHT:
+		/* Cut right part (current behavior) */
+		memcpy(dest, original_tag, max_len);
+		return max_len;
+
+	case RSPAMD_LOG_TAG_STRIP_LEFT:
+		/* Cut left part (take last elements) */
+		memcpy(dest, original_tag + (original_len - max_len), max_len);
+		return max_len;
+
+	case RSPAMD_LOG_TAG_STRIP_MIDDLE:
+		/* Half from start and half from end */
+		if (max_len >= 2) {
+			gsize first_half = max_len / 2;
+			gsize second_half = max_len - first_half;
+
+			memcpy(dest, original_tag, first_half);
+			memcpy(dest + first_half,
+				   original_tag + (original_len - second_half),
+				   second_half);
+		}
+		else if (max_len == 1) {
+			/* Just take first character */
+			dest[0] = original_tag[0];
+		}
+		return max_len;
+
+	default:
+		/* Fallback to right stripping */
+		memcpy(dest, original_tag, max_len);
+		return max_len;
+	}
+}
 RSPAMD_CONSTRUCTOR(rspamd_task_log_init)
 {
 	rspamd_task_log_id = rspamd_logger_add_debug_module("task");
@@ -160,6 +214,10 @@ rspamd_log_open_emergency(rspamd_mempool_t *pool, int flags)
 	logger->process_type = "main";
 	logger->pid = getpid();
 
+	/* Initialize log tag configuration with defaults */
+	logger->max_log_tag_len = RSPAMD_LOG_ID_LEN; /* Keep backward compatibility default */
+	logger->log_tag_strip_policy = RSPAMD_LOG_TAG_STRIP_RIGHT;
+
 	const struct rspamd_logger_funcs *funcs = &console_log_funcs;
 	memcpy(&logger->ops, funcs, sizeof(*funcs));
 
@@ -257,6 +315,28 @@ rspamd_log_open_specific(rspamd_mempool_t *pool,
 	logger->pid = getpid();
 	logger->process_type = ptype;
 	logger->enabled = TRUE;
+
+	/* Initialize log tag configuration with defaults */
+	if (cfg && cfg->log_max_tag_len > 0) {
+		logger->max_log_tag_len = MIN(MEMPOOL_UID_LEN, cfg->log_max_tag_len);
+	}
+	else {
+		logger->max_log_tag_len = RSPAMD_LOG_ID_LEN; /* Keep backward compatibility default */
+	}
+
+	logger->log_tag_strip_policy = RSPAMD_LOG_TAG_STRIP_RIGHT;
+
+	if (cfg && cfg->log_tag_strip_policy_str) {
+		if (g_ascii_strcasecmp(cfg->log_tag_strip_policy_str, "left") == 0) {
+			logger->log_tag_strip_policy = RSPAMD_LOG_TAG_STRIP_LEFT;
+		}
+		else if (g_ascii_strcasecmp(cfg->log_tag_strip_policy_str, "middle") == 0) {
+			logger->log_tag_strip_policy = RSPAMD_LOG_TAG_STRIP_MIDDLE;
+		}
+		else {
+			logger->log_tag_strip_policy = RSPAMD_LOG_TAG_STRIP_RIGHT; /* Default */
+		}
+	}
 
 	/* Set up conditional logging */
 	if (cfg) {
@@ -1026,16 +1106,34 @@ log_time(double now, rspamd_logger_t *rspamd_log, char *timebuf,
 	}
 }
 
+/**
+ * Process log ID with stripping policy and return the effective length
+ * @param logger logger instance with configuration
+ * @param id original log ID
+ * @param processed_id buffer to store processed ID (should be at least max_log_tag_len + 1)
+ * @return effective length of processed ID
+ */
 static inline int
-rspamd_log_id_strlen(const char *id)
+rspamd_log_process_id(rspamd_logger_t *logger, const char *id, char *processed_id)
 {
-	for (int i = 0; i < RSPAMD_LOG_ID_LEN; i++) {
-		if (G_UNLIKELY(id[i] == '\0')) {
-			return i;
-		}
+	if (id == NULL) {
+		return 0;
 	}
 
-	return RSPAMD_LOG_ID_LEN;
+	gsize original_len = strlen(id);
+	gsize max_len = MIN(MEMPOOL_UID_LEN, logger->max_log_tag_len);
+
+	if (original_len <= max_len) {
+		/* No processing needed */
+		memcpy(processed_id, id, original_len);
+		return original_len;
+	}
+
+	/* Apply stripping policy */
+	gsize processed_len = rspamd_log_strip_tag(id, original_len, processed_id, max_len,
+											   logger->log_tag_strip_policy);
+
+	return processed_len;
 }
 
 void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
@@ -1071,8 +1169,17 @@ void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
 
 	if (G_UNLIKELY(log_json)) {
 		/* Perform JSON logging */
-		unsigned int slen = id ? strlen(id) : strlen("(NULL)");
-		slen = MIN(RSPAMD_LOG_ID_LEN, slen);
+		char processed_id[MEMPOOL_UID_LEN];
+		int processed_len = 0;
+
+		if (id) {
+			processed_len = rspamd_log_process_id(logger, id, processed_id);
+		}
+		else {
+			strcpy(processed_id, "(NULL)");
+			processed_len = strlen(processed_id);
+		}
+
 		r = rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "{\"ts\": %f, "
 													"\"pid\": %P, "
 													"\"severity\": \"%s\", "
@@ -1085,7 +1192,7 @@ void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
 							logger->pid,
 							rspamd_get_log_severity_string(level_flags),
 							logger->process_type,
-							slen, id,
+							processed_len, processed_id,
 							module,
 							function);
 		iov_ctx->iov[0].iov_base = tmpbuf;
@@ -1241,14 +1348,17 @@ void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
 
 		glong mremain, mr;
 		char *m;
+		char processed_id[MEMPOOL_UID_LEN];
+		int processed_len = 0;
 
 		modulebuf[0] = '\0';
 		mremain = sizeof(modulebuf);
 		m = modulebuf;
 
 		if (id != NULL) {
-			mr = rspamd_snprintf(m, mremain, "<%*.s>; ", rspamd_log_id_strlen(id),
-								 id);
+			processed_len = rspamd_log_process_id(logger, id, processed_id);
+			mr = rspamd_snprintf(m, mremain, "<%*.s>; ", processed_len,
+								 processed_id);
 			m += mr;
 			mremain -= mr;
 		}
@@ -1300,10 +1410,13 @@ void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
 			iov_ctx->iov[niov].iov_base = (void *) timebuf;
 			iov_ctx->iov[niov++].iov_len = strlen(timebuf);
 			if (id != NULL) {
+				char processed_id[MEMPOOL_UID_LEN];
+				int processed_len = rspamd_log_process_id(logger, id, processed_id);
+
 				iov_ctx->iov[niov].iov_base = (void *) "; ";
 				iov_ctx->iov[niov++].iov_len = 2;
-				iov_ctx->iov[niov].iov_base = (void *) id;
-				iov_ctx->iov[niov++].iov_len = rspamd_log_id_strlen(id);
+				iov_ctx->iov[niov].iov_base = (void *) processed_id;
+				iov_ctx->iov[niov++].iov_len = processed_len;
 				iov_ctx->iov[niov].iov_base = (void *) ";";
 				iov_ctx->iov[niov++].iov_len = 1;
 			}
