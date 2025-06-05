@@ -120,6 +120,15 @@ Expect Added Header
   Should Be Equal  ${SCAN_RESULT}[milter][add_headers][${header_name}][value]  ${header_value}
   Should Be Equal as Numbers  ${SCAN_RESULT}[milter][add_headers][${header_name}][order]  ${pos}
 
+Expect Header Is Present
+  [Arguments]  ${header_name}
+  Dictionary Should Contain Key  ${SCAN_RESULT}  milter
+  ...  msg=milter block was not present in protocol response
+  Dictionary Should Contain Key  ${SCAN_RESULT}[milter]  add_headers
+  ...  msg=add_headers block was not present in protocol response
+  Dictionary Should Contain Key  ${SCAN_RESULT}[milter][add_headers]  ${header_name}
+  ...  msg=${header_name} was not added
+
 Expect Email
   [Arguments]  ${email}
   List Should Contain Value  ${SCAN_RESULT}[emails]  ${email}

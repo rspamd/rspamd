@@ -138,7 +138,7 @@ local function milter_headers(task)
 
   local function skip_wanted(hdr)
     if settings_override then
-      return true
+      return false
     end
     -- Normal checks
     local function match_extended_headers_rcpt()
