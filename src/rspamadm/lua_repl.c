@@ -24,9 +24,8 @@
 #include "lua/lua_thread_pool.h"
 #include "message.h"
 #include "unix-std.h"
-#ifdef WITH_LUA_REPL
+
 #include "replxx.h"
-#endif
 #include "worker_util.h"
 #ifdef WITH_LUAJIT
 #include <luajit.h>
@@ -43,10 +42,7 @@ static int batch = -1;
 extern struct rspamd_async_session *rspamadm_session;
 
 static const char *default_history_file = ".rspamd_repl.hist";
-
-#ifdef WITH_LUA_REPL
 static Replxx *rx_instance = NULL;
-#endif
 
 #ifdef WITH_LUAJIT
 #define MAIN_PROMPT LUAJIT_VERSION "> "
@@ -272,7 +268,7 @@ rspamadm_exec_input(lua_State *L, const char *input)
 			}
 			else {
 				lua_logger_out(L, i, outbuf, sizeof(outbuf),
-									LUA_ESCAPE_UNPRINTABLE);
+							   LUA_ESCAPE_UNPRINTABLE);
 				rspamd_printf("%s\n", outbuf);
 			}
 		}
@@ -453,7 +449,7 @@ rspamadm_lua_message_handler(lua_State *L, int argc, char **argv)
 
 				for (j = old_top + 1; j <= lua_gettop(L); j++) {
 					lua_logger_out(L, j, outbuf, sizeof(outbuf),
-										LUA_ESCAPE_UNPRINTABLE);
+								   LUA_ESCAPE_UNPRINTABLE);
 					rspamd_printf("%s\n", outbuf);
 				}
 			}
@@ -499,7 +495,6 @@ rspamadm_lua_try_dot_command(lua_State *L, const char *input)
 	return FALSE;
 }
 
-#ifdef WITH_LUA_REPL
 static int lex_ref_idx = -1;
 
 static void
@@ -595,20 +590,14 @@ lua_syntax_highlighter(const char *str, ReplxxColor *colours, int size, void *ud
 
 	lua_settop(L, 0);
 }
-#endif
 
 static void
 rspamadm_lua_run_repl(lua_State *L, bool is_batch)
 {
 	char *input = NULL;
-#ifdef WITH_LUA_REPL
 	gboolean is_multiline = FALSE;
 	GString *tb = NULL;
 	gsize i;
-#else
-	/* Always set is_batch */
-	is_batch = TRUE;
-#endif
 
 	for (;;) {
 		if (is_batch) {
@@ -640,7 +629,6 @@ rspamadm_lua_run_repl(lua_State *L, bool is_batch)
 			lua_settop(L, 0);
 		}
 		else {
-#ifdef WITH_LUA_REPL
 			replxx_set_highlighter_callback(rx_instance, lua_syntax_highlighter,
 											L);
 
@@ -701,7 +689,6 @@ rspamadm_lua_run_repl(lua_State *L, bool is_batch)
 					g_string_append(tb, " \n");
 				}
 			}
-#endif
 		}
 	}
 }
@@ -1005,16 +992,12 @@ rspamadm_lua(int argc, char **argv, const struct rspamadm_command *cmd)
 	}
 
 	if (!batch) {
-#ifdef WITH_LUA_REPL
 		rx_instance = replxx_init();
 		replxx_set_max_history_size(rx_instance, max_history);
 		replxx_history_load(rx_instance, histfile);
-#endif
 		rspamadm_lua_run_repl(L, false);
-#ifdef WITH_LUA_REPL
 		replxx_history_save(rx_instance, histfile);
 		replxx_end(rx_instance);
-#endif
 	}
 	else {
 		rspamadm_lua_run_repl(L, true);

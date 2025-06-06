@@ -76,7 +76,6 @@ function(AddDependencySubdirectories)
 
     # Lua REPL support
     add_subdirectory(contrib/replxx)
-    set(WITH_LUA_REPL 1 PARENT_SCOPE)
     list(APPEND RSPAMD_REQUIRED_LIBRARIES rspamd-replxx)
 
     # Update the required libraries list based on dependencies
@@ -106,5 +105,4 @@ function(AddDependencySubdirectories)
     # Propagate variables to parent scope
     set(RSPAMD_REQUIRED_LIBRARIES ${RSPAMD_REQUIRED_LIBRARIES} PARENT_SCOPE)
     set(WITH_SNOWBALL ${WITH_SNOWBALL} PARENT_SCOPE)
-    set(WITH_LUA_REPL ${WITH_LUA_REPL} PARENT_SCOPE)
 endfunction()
