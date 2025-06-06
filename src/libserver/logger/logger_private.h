@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,12 @@
 #define REPEATS_MIN 3
 #define REPEATS_MAX 300
 #define LOGBUF_LEN 8192
+
+enum rspamd_log_tag_strip_policy {
+	RSPAMD_LOG_TAG_STRIP_RIGHT = 0, /* Cut right part (current behavior) */
+	RSPAMD_LOG_TAG_STRIP_LEFT,      /* Cut left part (take last elements) */
+	RSPAMD_LOG_TAG_STRIP_MIDDLE,    /* Half from start and half from end */
+};
 
 struct rspamd_log_module {
 	char *mname;
@@ -72,6 +78,10 @@ struct rspamd_logger_s {
 	gboolean enabled;
 	gboolean is_debug;
 	gboolean no_lock;
+
+	/* Log tag configuration */
+	unsigned int max_log_tag_len;
+	enum rspamd_log_tag_strip_policy log_tag_strip_policy;
 
 	pid_t pid;
 	const char *process_type;

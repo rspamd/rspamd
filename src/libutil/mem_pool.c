@@ -403,9 +403,10 @@ rspamd_mempool_new_(gsize size, const char *tag, int flags, const char *loc)
 
 	/* Generate new uid */
 	uint64_t uid = rspamd_random_uint64_fast();
-	rspamd_encode_hex_buf((unsigned char *) &uid, sizeof(uid),
-						  new_pool->tag.uid, sizeof(new_pool->tag.uid) - 1);
-	new_pool->tag.uid[sizeof(new_pool->tag.uid) - 1] = '\0';
+	G_STATIC_ASSERT(sizeof(new_pool->tag.uid) >= sizeof(uid) * 2 + 1);
+	int enc_len = rspamd_encode_hex_buf((unsigned char *) &uid, sizeof(uid),
+										new_pool->tag.uid, sizeof(new_pool->tag.uid) - 1);
+	new_pool->tag.uid[enc_len] = '\0';
 
 	mem_pool_stat->pools_allocated++;
 
