@@ -104,5 +104,4 @@ function(AddDependencySubdirectories)
 
     # Propagate variables to parent scope
     set(RSPAMD_REQUIRED_LIBRARIES ${RSPAMD_REQUIRED_LIBRARIES} PARENT_SCOPE)
-    set(WITH_SNOWBALL ${WITH_SNOWBALL} PARENT_SCOPE)
 endfunction()
