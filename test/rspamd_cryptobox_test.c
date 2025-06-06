@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -153,7 +153,6 @@ create_constrained_split(struct rspamd_cryptobox_segment *seg, int mseg,
 
 void rspamd_cryptobox_test_func(void)
 {
-	void *map;
 	unsigned char *begin, *end;
 	rspamd_nm_t key;
 	rspamd_nonce_t nonce;
@@ -161,9 +160,8 @@ void rspamd_cryptobox_test_func(void)
 	struct rspamd_cryptobox_segment *seg;
 	double t1, t2;
 	int i, cnt, ms;
-	gboolean checked_openssl = FALSE;
 
-	map = create_mapping(mapping_size, &begin, &end);
+	create_mapping(mapping_size, &begin, &end);
 
 	ottery_rand_bytes(key, sizeof(key));
 	ottery_rand_bytes(nonce, sizeof(nonce));

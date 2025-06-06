@@ -1,4 +1,20 @@
 /*
+ * Copyright 2025 Vsevolod Stakhov
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/*
  * libev event processing core, watcher management
  *
  * Copyright (c) 2007-2019 Marc Alexander Lehmann <libev@schmorp.de>
@@ -2148,7 +2164,10 @@ typedef struct
   #include "ev_wrap.h"
 
   static struct ev_loop default_loop_struct;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wextern-initializer"
   EV_API_DECL struct ev_loop *ev_default_loop_ptr = 0; /* needs to be initialised to make it a definition despite extern */
+#pragma clang diagnostic pop
 
 #else
 
