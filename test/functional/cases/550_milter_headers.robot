@@ -37,3 +37,14 @@ CHECK HEADERS WITHOUT TEST SYMBOL
   # Check X-Spam-Level header
   Do Not Expect Added Header  X-Spam-Level
   Expect Removed Header  X-Spam-Level
+
+CHECK HEADERS WITH OVERRIDE SETTINGS
+  # id_milter_headers_override setting enables only authentication-results and x-spam-level routines
+  Scan File  ${MESSAGE}  Settings-Id=id_milter_headers_override
+  # Test the milter_headers override behavior
+  # Check that Authentication-Results and X-Spam-Level headers are present (exact values are not important)
+  Expect Header Is Present  Authentication-Results
+  Expect Header Is Present  X-Spam-Level
+  # Verify other headers are not added since only authentication-results and x-spam-level routines run
+  Do Not Expect Added Header  X-Virus
+  Do Not Expect Added Header  My-Spamd-Bar
