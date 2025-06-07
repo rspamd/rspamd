@@ -295,6 +295,23 @@ rspamd_map_cache_cb(struct ev_loop *loop, ev_timer *w, int revents)
 	}
 }
 
+/*
+ * Unlocks the current backend if locked before switching to another backend
+ */
+static void
+rspamd_map_unlock_current_backend(struct map_periodic_cbdata *cbd)
+{
+	struct rspamd_map_backend *bk;
+	struct rspamd_map *map = cbd->map;
+
+	if (cbd->locked && cbd->cur_backend < cbd->map->backends->len) {
+		bk = g_ptr_array_index(cbd->map->backends, cbd->cur_backend);
+		g_atomic_int_set(&bk->shared->locked, 0);
+		cbd->locked = FALSE;
+		msg_debug_map("unlocked current backend %s before switching", bk->uri);
+	}
+}
+
 static inline time_t
 rspamd_http_map_process_next_check(time_t now, time_t expires, time_t map_check_interval)
 {
@@ -335,6 +352,8 @@ http_map_finish(struct rspamd_http_connection *conn,
 		if (cbd->check) {
 			msg_info_map("need to reread map from %s", cbd->bk->uri);
 			cbd->periodic->need_modify = TRUE;
+			/* Unlock current backend before resetting */
+			rspamd_map_unlock_current_backend(cbd->periodic);
 			/* Reset the whole chain */
 			cbd->periodic->cur_backend = 0;
 			/* Reset cache, old cached data will be cleaned on timeout */
@@ -526,6 +545,8 @@ http_map_finish(struct rspamd_http_connection *conn,
 
 		MAP_RELEASE(cbd->shmem_data, "shmem_data");
 
+		/* Unlock current backend before switching to next */
+		rspamd_map_unlock_current_backend(cbd->periodic);
 		cbd->periodic->cur_backend++;
 		munmap(in, dlen);
 		rspamd_map_process_periodic(cbd->periodic);
@@ -583,6 +604,8 @@ http_map_finish(struct rspamd_http_connection *conn,
 		}
 
 		rspamd_map_update_http_cached_file(map, bk, cbd->data);
+		/* Unlock current backend before switching to next */
+		rspamd_map_unlock_current_backend(cbd->periodic);
 		cbd->periodic->cur_backend++;
 		rspamd_map_process_periodic(cbd->periodic);
 	}
@@ -2044,7 +2067,17 @@ rspamd_map_process_periodic(struct map_periodic_cbdata *cbd)
 
 	/* For each backend we need to check for modifications */
 	if (cbd->cur_backend >= cbd->map->backends->len) {
-		/* Last backend */
+		/* Last backend - unlock current backend if needed */
+		if (cbd->locked) {
+			/* Unlock the last processed backend */
+			struct rspamd_map_backend *last_bk;
+			if (cbd->cur_backend > 0 && cbd->cur_backend - 1 < cbd->map->backends->len) {
+				last_bk = g_ptr_array_index(cbd->map->backends, cbd->cur_backend - 1);
+				g_atomic_int_set(&last_bk->shared->locked, 0);
+				cbd->locked = FALSE;
+				msg_debug_map("unlocked last backend %s", last_bk->uri);
+			}
+		}
 		msg_debug_map("finished map: %d of %d", cbd->cur_backend,
 					  cbd->map->backends->len);
 		MAP_RELEASE(cbd, "periodic");
@@ -2067,7 +2100,7 @@ rspamd_map_process_periodic(struct map_periodic_cbdata *cbd)
 			return;
 		}
 		else {
-			msg_debug_map("locked map %s", map->name);
+			msg_debug_map("locked map %s (backend: %s)", map->name, bk->uri);
 			cbd->locked = TRUE;
 		}
 	}
