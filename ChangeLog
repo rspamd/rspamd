@@ -1,3 +1,47 @@
+3.12.0: 09 Jun 2025
+  * [CritFix] In lua-ucl disable macros and file variables by default
+  * [Feature] Add keep-alive support
+  * [Feature] Add some convenience methods
+  * [Feature] Add support for separate read and write servers in fuzzy check
+  * [Feature] Allow CDB files as external maps
+  * [Feature] Allow to specify Redis version
+  * [Feature] Allow to specify extra headers in Rspamd proxy
+  * [Feature] Allow to specify log tag in proxy
+  * [Feature] Allow to specify max log tag length for all log messages
+  * [Feature] Allow to use HTTPS when connection to backends in proxy
+  * [Feature] Output content for all maps
+  * [Feature] Plugin to integrate with Contextal platform
+  * [Feature] Show all maps status
+  * [Fix] Add fail check for cfg transform for some corner cases
+  * [Fix] Add header with reason everytime (not only for ham) and use correct value for header
+  * [Fix] Add null check for master_conn->up in proxy backend error handler
+  * [Fix] Allow 'Hash' in Access-Control-Allow-Headers
+  * [Fix] Arc: Use tonumber when comparing
+  * [Fix] As we have replxx library, always use it
+  * [Fix] Backport some issues from libucl
+  * [Fix] Filter invalid domains in fuzzy extra data
+  * [Fix] Fix maps ids
+  * [Fix] Fix race condition in maps loading by unlocking backend on switch
+  * [Fix] Fix static maps description passing
+  * [Fix] Fix variable propagation (no functional change)
+  * [Fix] Fix various issues
+  * [Fix] Greylist: Improve body hash calculations
+  * [Fix] Known senders: More recipients test logic
+  * [Fix] Known senders: Use the same logic as in the replies module
+  * [Fix] Prevent crashes when accessing upstream address in self-scan mode
+  * [Fix] Really fix local objects filtering, sigh...
+  * [Fix] Update default URL for openphish
+  * [Fix] Use bundled libfmt everywhere
+  * [Fix] Use safe parsers everywhere except configuration
+  * [Fix] correct logic error in milter_headers.lua: skip_wanted()
+  * [Fix] initialize ollama result table
+  * [Fix] libmime: declare comparators const for doctest 2.4.12 compatibility
+  * [Project] Modernize cmake
+  * [Project] Rework OSDep
+  * [Rework] Replies: consider all recipients and use smtp ones
+  * [Rework] Store shared maps data separately
+  * [Rework] Use locks/loaded per backend for all maps
+
 3.11.1: 08 Mar 2025
   * [Feature] Add 'noop' redis backend for scripts running
   * [Feature] Add Redis caching framework
