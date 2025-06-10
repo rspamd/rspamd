@@ -1434,7 +1434,6 @@ local function post_process()
     local f = function(task)
       if not r['re'] then
         rspamd_logger.errx(task, 're is missing for rule %s', k)
-        rspamd_logger.errx(task, 're is missing for rule %s', k)
         return 0
       end
 
@@ -1461,7 +1460,6 @@ local function post_process()
   fun.each(function(k, r)
     local f = function(task)
       if not r['re'] then
-        rspamd_logger.errx(task, 're is missing for rule %s', k)
         rspamd_logger.errx(task, 're is missing for rule %s', k)
         return 0
       end
