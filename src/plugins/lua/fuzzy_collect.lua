@@ -34,7 +34,7 @@ local settings = {
 local function send_data_mirror(m, cfg, ev_base, body)
   local function store_callback(err, _, _, _)
     if err then
-      rspamd_logger.errx(cfg, 'cannot save data on %(%s): %s', m.server, m.name, err)
+      rspamd_logger.errx(cfg, 'cannot save data on %s(%s): %s', m.server, m.name, err)
     else
       rspamd_logger.infox(cfg, 'saved data on %s(%s)', m.server, m.name)
     end

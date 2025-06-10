@@ -301,7 +301,7 @@ local function default_openai_json_conversion(task, input)
       elseif reply.probability == "low" then
         spam_score = 0.1
       else
-        rspamd_logger.infox("cannot convert to spam probability: %s", reply.probability)
+        rspamd_logger.infox(task, "cannot convert to spam probability: %s", reply.probability)
       end
     end
 
@@ -466,7 +466,7 @@ local function default_ollama_json_conversion(task, input)
       elseif reply.probability == "low" then
         spam_score = 0.1
       else
-        rspamd_logger.infox("cannot convert to spam probability: %s", reply.probability)
+        rspamd_logger.infox(task, "cannot convert to spam probability: %s", reply.probability)
       end
     end
 
