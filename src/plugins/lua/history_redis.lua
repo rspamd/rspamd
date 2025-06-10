@@ -138,8 +138,7 @@ end
 local function history_save(task)
   local function redis_llen_cb(err, _)
     if err then
-      rspamd_logger.errx(task, 'got error %s when writing history row: %s',
-          err)
+      rspamd_logger.errx(task, 'got error %s when writing history row', err)
     end
   end
 
