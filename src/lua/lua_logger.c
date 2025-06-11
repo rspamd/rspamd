@@ -280,6 +280,7 @@ lua_logger_char_safe(int t, unsigned int esc_type)
 	return true;
 }
 
+#define LUA_MAX_ARGS 32
 /* Gracefully handles argument mismatches by substituting missing args and noting extra args */
 static glong
 lua_logger_log_format_str(lua_State *L, int offset, char *logbuf, gsize remain,
@@ -289,11 +290,12 @@ lua_logger_log_format_str(lua_State *L, int offset, char *logbuf, gsize remain,
 	const char *c;
 	gsize r;
 	int digit;
-
 	char *d = logbuf;
 	unsigned int arg_num, cur_arg = 0, arg_max = lua_gettop(L) - offset;
-	unsigned int max_arg_used = 0;
+	gboolean args_used[LUA_MAX_ARGS];
+	unsigned int used_args_count = 0;
 
+	memset(args_used, 0, sizeof(args_used));
 	while (remain > 1 && *fmt) {
 		if (*fmt == '%') {
 			++fmt;
@@ -307,7 +309,7 @@ lua_logger_log_format_str(lua_State *L, int offset, char *logbuf, gsize remain,
 				while ((digit = g_ascii_digit_value(*fmt)) >= 0) {
 					++fmt;
 					arg_num = arg_num * 10 + digit;
-					if (arg_num >= 100) {
+					if (arg_num >= LUA_MAX_ARGS) {
 						/* Avoid ridiculously large numbers */
 						fmt = c;
 						break;
@@ -321,20 +323,17 @@ lua_logger_log_format_str(lua_State *L, int offset, char *logbuf, gsize remain,
 			}
 
 			if (fmt > c) {
-				if (cur_arg < 1) {
-					/* Invalid argument number format */
-					r = rspamd_snprintf(d, remain, "<INVALID ARG NUMBER>");
-				}
-				else if (cur_arg > arg_max) {
+				if (cur_arg < 1 || cur_arg > arg_max) {
 					/* Missing argument - substitute placeholder */
 					r = rspamd_snprintf(d, remain, "<MISSING ARGUMENT>");
 				}
 				else {
 					/* Valid argument - output it */
 					r = lua_logger_out(L, offset + cur_arg, d, remain, esc_type);
-					/* Track maximum argument used */
-					if (cur_arg > max_arg_used) {
-						max_arg_used = cur_arg;
+					/* Track which arguments are used */
+					if (cur_arg <= LUA_MAX_ARGS && !args_used[cur_arg - 1]) {
+						args_used[cur_arg - 1] = TRUE;
+						used_args_count++;
 					}
 				}
 
@@ -353,8 +352,8 @@ lua_logger_log_format_str(lua_State *L, int offset, char *logbuf, gsize remain,
 	}
 
 	/* Check for extra arguments and append warning if any */
-	if (max_arg_used < arg_max && remain > 1) {
-		unsigned int extra_args = arg_max - max_arg_used;
+	if (used_args_count > 0 && used_args_count < arg_max && remain > 1) {
+		unsigned int extra_args = arg_max - used_args_count;
 		r = rspamd_snprintf(d, remain, " <EXTRA %d ARGUMENTS>", (int) extra_args);
 		remain -= r;
 		d += r;
@@ -364,6 +363,8 @@ lua_logger_log_format_str(lua_State *L, int offset, char *logbuf, gsize remain,
 
 	return d - logbuf;
 }
+
+#undef LUA_MAX_ARGS
 
 static gsize
 lua_logger_out_str(lua_State *L, int pos,
