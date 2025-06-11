@@ -138,7 +138,7 @@ end
 local function history_save(task)
   local function redis_llen_cb(err, _)
     if err then
-      rspamd_logger.errx(task, 'got error %s when writing history row: %s',
+      rspamd_logger.errx(task, 'got error %s when writing history row',
           err)
     end
   end
@@ -188,7 +188,7 @@ local function handle_history_request(task, conn, from, to, reset)
   if reset then
     local function redis_ltrim_cb(err, _)
       if err then
-        rspamd_logger.errx(task, 'got error %s when resetting history: %s',
+        rspamd_logger.errx(task, 'got error %s when resetting history',
             err)
         conn:send_error(504, '{"error": "' .. err .. '"}')
       else
@@ -258,7 +258,7 @@ local function handle_history_request(task, conn, from, to, reset)
             (rspamd_util:get_ticks() - t1) * 1000.0)
         collectgarbage()
       else
-        rspamd_logger.errx(task, 'got error %s when getting history: %s',
+        rspamd_logger.errx(task, 'got error %s when getting history',
             err)
         conn:send_error(504, '{"error": "' .. err .. '"}')
       end

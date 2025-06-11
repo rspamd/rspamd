@@ -1275,7 +1275,7 @@ local function gen_redis_callback(handler, id)
                   ucl_err)
             else
               local obj = parser:get_object()
-              rspamd_logger.infox(task, "<%1> apply settings according to redis rule %2",
+              rspamd_logger.infox(task, "<%s> apply settings according to redis rule %s",
                   task:get_message_id(), id)
               apply_settings(task, obj, nil, 'redis')
               break
@@ -1283,7 +1283,7 @@ local function gen_redis_callback(handler, id)
           end
         end
       elseif err then
-        rspamd_logger.errx(task, 'Redis error: %1', err)
+        rspamd_logger.errx(task, 'Redis error: %s', err)
       end
     end
 
@@ -1371,7 +1371,7 @@ if set_section and set_section[1] and type(set_section[1]) == "string" then
     opaque_data = true
   }
   if not rspamd_config:add_map(map_attrs) then
-    rspamd_logger.errx(rspamd_config, 'cannot load settings from %1', set_section)
+    rspamd_logger.errx(rspamd_config, 'cannot load settings from %s', set_section)
   end
 elseif set_section and type(set_section) == "table" then
   settings_map_pool = rspamd_mempool.create()

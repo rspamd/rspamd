@@ -221,7 +221,7 @@ local function handle_header_def(hline, cur_rule)
       })
       cur_rule['function'] = function(task)
         if not re then
-          rspamd_logger.errx(task, 're is missing for rule %1', h)
+          rspamd_logger.errx(task, 're is missing for rule %s', h)
           return 0
         end
 
@@ -272,7 +272,7 @@ local function handle_header_def(hline, cur_rule)
         elseif func == 'case' then
           cur_param['strong'] = true
         else
-          rspamd_logger.warnx(rspamd_config, 'Function %1 is not supported in %2',
+          rspamd_logger.warnx(rspamd_config, 'Function %s is not supported in %s',
               func, cur_rule['symbol'])
         end
       end, fun.tail(args))
@@ -314,7 +314,7 @@ end
 local function freemail_search(input)
   local res = 0
   local function trie_callback(number, pos)
-    lua_util.debugm(N, rspamd_config, 'Matched pattern %1 at pos %2', freemail_domains[number], pos)
+    lua_util.debugm(N, rspamd_config, 'Matched pattern %s at pos %s', freemail_domains[number], pos)
     res = res + 1
   end
 
@@ -369,7 +369,7 @@ local function gen_eval_rule(arg)
                 end
                 return 0
               else
-                rspamd_logger.infox(rspamd_config, 'cannot create regexp %1', re)
+                rspamd_logger.infox(rspamd_config, 'cannot create regexp %s', re)
                 return 0
               end
             end
@@ -461,7 +461,7 @@ local function gen_eval_rule(arg)
               end
             end
           else
-            rspamd_logger.infox(task, 'unimplemented mime check %1', arg)
+            rspamd_logger.infox(task, 'unimplemented mime check %s', arg)
           end
         end
 
@@ -576,7 +576,7 @@ local function maybe_parse_sa_function(line)
   local elts = split(line, '[^:]+')
   arg = elts[2]
 
-  lua_util.debugm(N, rspamd_config, 'trying to parse SA function %1 with args %2',
+  lua_util.debugm(N, rspamd_config, 'trying to parse SA function %s with args %s',
       elts[1], elts[2])
   local substitutions = {
     { '^exists:',
@@ -612,7 +612,7 @@ local function maybe_parse_sa_function(line)
         end
 
         if not func then
-          rspamd_logger.errx(task, 'cannot find appropriate eval rule for function %1',
+          rspamd_logger.errx(task, 'cannot find appropriate eval rule for function %s',
               arg)
         else
           return func(task)
@@ -685,7 +685,7 @@ local function process_sa_conf(f)
     end
     -- We have previous rule valid
     if not cur_rule['symbol'] then
-      rspamd_logger.errx(rspamd_config, 'bad rule definition: %1', cur_rule)
+      rspamd_logger.errx(rspamd_config, 'bad rule definition: %s', cur_rule)
     end
     rules[cur_rule['symbol']] = cur_rule
     cur_rule = {}
@@ -695,15 +695,15 @@ local function process_sa_conf(f)
   local function parse_score(words)
     if #words == 3 then
       -- score rule <x>
-      lua_util.debugm(N, rspamd_config, 'found score for %1: %2', words[2], words[3])
+      lua_util.debugm(N, rspamd_config, 'found score for %s: %s', words[2], words[3])
       return tonumber(words[3])
     elseif #words == 6 then
       -- score rule <x1> <x2> <x3> <x4>
       -- we assume here that bayes and network are enabled and select <x4>
-      lua_util.debugm(N, rspamd_config, 'found score for %1: %2', words[2], words[6])
+      lua_util.debugm(N, rspamd_config, 'found score for %s: %s', words[2], words[6])
       return tonumber(words[6])
     else
-      rspamd_logger.errx(rspamd_config, 'invalid score for %1', words[2])
+      rspamd_logger.errx(rspamd_config, 'invalid score for %s', words[2])
     end
 
     return 0
@@ -812,7 +812,7 @@ local function process_sa_conf(f)
           cur_rule['re'] = rspamd_regexp.create(cur_rule['re_expr'])
 
           if not cur_rule['re'] then
-            rspamd_logger.warnx(rspamd_config, "Cannot parse regexp '%1' for %2",
+            rspamd_logger.warnx(rspamd_config, "Cannot parse regexp '%s' for %s",
                 cur_rule['re_expr'], cur_rule['symbol'])
           else
             cur_rule['re']:set_max_hits(1)
@@ -829,8 +829,8 @@ local function process_sa_conf(f)
             cur_rule['mime'] = false
           end
 
-          if cur_rule['re'] and cur_rule['symbol'] and
-              (cur_rule['header'] or cur_rule['function']) then
+          if cur_rule['re'] and cur_rule['symbol']
+              and (cur_rule['header'] or cur_rule['function']) then
             valid_rule = true
             cur_rule['re']:set_max_hits(1)
             if cur_rule['header'] and cur_rule['ordinary'] then
@@ -894,7 +894,7 @@ local function process_sa_conf(f)
             cur_rule['function'] = func
             valid_rule = true
           else
-            rspamd_logger.infox(rspamd_config, 'unknown function %1', args)
+            rspamd_logger.infox(rspamd_config, 'unknown function %s', args)
           end
         end
       elseif words[1] == "body" then
@@ -931,7 +931,7 @@ local function process_sa_conf(f)
             cur_rule['function'] = func
             valid_rule = true
           else
-            rspamd_logger.infox(rspamd_config, 'unknown function %1', args)
+            rspamd_logger.infox(rspamd_config, 'unknown function %s', args)
           end
         end
       elseif words[1] == "rawbody" then
@@ -968,7 +968,7 @@ local function process_sa_conf(f)
             cur_rule['function'] = func
             valid_rule = true
           else
-            rspamd_logger.infox(rspamd_config, 'unknown function %1', args)
+            rspamd_logger.infox(rspamd_config, 'unknown function %s', args)
           end
         end
       elseif words[1] == "full" then
@@ -1006,7 +1006,7 @@ local function process_sa_conf(f)
             cur_rule['function'] = func
             valid_rule = true
           else
-            rspamd_logger.infox(rspamd_config, 'unknown function %1', args)
+            rspamd_logger.infox(rspamd_config, 'unknown function %s', args)
           end
         end
       elseif words[1] == "uri" then
@@ -1265,11 +1265,11 @@ local function post_process()
       if res then
         local nre = rspamd_regexp.create(nexpr)
         if not nre then
-          rspamd_logger.errx(rspamd_config, 'cannot apply replacement for rule %1', r)
+          rspamd_logger.errx(rspamd_config, 'cannot apply replacement for rule %s', r)
           --rule['re'] = nil
         else
           local old_max_hits = rule['re']:get_max_hits()
-          lua_util.debugm(N, rspamd_config, 'replace %1 -> %2', r, nexpr)
+          lua_util.debugm(N, rspamd_config, 'replace %s -> %s', r, nexpr)
           rspamd_config:replace_regexp({
             old_re = rule['re'],
             new_re = nre,
@@ -1306,8 +1306,7 @@ local function post_process()
         end
 
         if not r['re'] then
-          rspamd_logger.errx(task, 're is missing for rule %1 (%2 header)', k,
-              h['header'])
+          rspamd_logger.errx(task, 're is missing for rule %s', h)
           return 0
         end
 
@@ -1434,7 +1433,7 @@ local function post_process()
   fun.each(function(k, r)
     local f = function(task)
       if not r['re'] then
-        rspamd_logger.errx(task, 're is missing for rule %1', k)
+        rspamd_logger.errx(task, 're is missing for rule %s', k)
         return 0
       end
 
@@ -1461,7 +1460,7 @@ local function post_process()
   fun.each(function(k, r)
     local f = function(task)
       if not r['re'] then
-        rspamd_logger.errx(task, 're is missing for rule %1', k)
+        rspamd_logger.errx(task, 're is missing for rule %s', k)
         return 0
       end
 
@@ -1486,7 +1485,7 @@ local function post_process()
   fun.each(function(k, r)
     local f = function(task)
       if not r['re'] then
-        rspamd_logger.errx(task, 're is missing for rule %1', k)
+        rspamd_logger.errx(task, 're is missing for rule %s', k)
         return 0
       end
 
@@ -1629,8 +1628,8 @@ local function post_process()
             rspamd_config:register_dependency(k, rspamd_symbol)
             external_deps[k][rspamd_symbol] = true
             lua_util.debugm(N, rspamd_config,
-                'atom %1 is a direct foreign dependency, ' ..
-                    'register dependency for %2 on %3',
+                'atom %s is a direct foreign dependency, ' ..
+                    'register dependency for %s on %s',
                 a, k, rspamd_symbol)
           end
         end
@@ -1659,8 +1658,8 @@ local function post_process()
                 rspamd_config:register_dependency(k, dep)
                 external_deps[k][dep] = true
                 lua_util.debugm(N, rspamd_config,
-                    'atom %1 is an indirect foreign dependency, ' ..
-                        'register dependency for %2 on %3',
+                    'atom %s is an indirect foreign dependency, ' ..
+                        'register dependency for %s on %s',
                     a, k, dep)
                 nchanges = nchanges + 1
               end
@@ -1694,10 +1693,10 @@ local function post_process()
   -- Logging output
   if freemail_domains then
     freemail_trie = rspamd_trie.create(freemail_domains)
-    rspamd_logger.infox(rspamd_config, 'loaded %1 freemail domains definitions',
+    rspamd_logger.infox(rspamd_config, 'loaded %s freemail domains definitions',
         #freemail_domains)
   end
-  rspamd_logger.infox(rspamd_config, 'loaded %1 blacklist/whitelist elements',
+  rspamd_logger.infox(rspamd_config, 'loaded %s blacklist/whitelist elements',
       sa_lists['elts'])
 end
 
@@ -1739,7 +1738,7 @@ if type(section) == "table" then
                 process_sa_conf(f)
                 has_rules = true
               else
-                rspamd_logger.errx(rspamd_config, "cannot open %1", matched)
+                rspamd_logger.errx(rspamd_config, "cannot open %s", matched)
               end
             end
           end
@@ -1758,7 +1757,7 @@ if type(section) == "table" then
               process_sa_conf(f)
               has_rules = true
             else
-              rspamd_logger.errx(rspamd_config, "cannot open %1", matched)
+              rspamd_logger.errx(rspamd_config, "cannot open %s", matched)
             end
           end
         end

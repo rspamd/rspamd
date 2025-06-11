@@ -107,10 +107,10 @@ local function process_trie_file(symbol, cf)
   local file = io.open(cf['file'])
 
   if not file then
-    rspamd_logger.errx(rspamd_config, 'Cannot open trie file %1', cf['file'])
+    rspamd_logger.errx(rspamd_config, 'Cannot open trie file %s', cf['file'])
   else
     if cf['binary'] then
-      rspamd_logger.errx(rspamd_config, 'binary trie patterns are not implemented yet: %1',
+      rspamd_logger.errx(rspamd_config, 'binary trie patterns are not implemented yet: %s',
           cf['file'])
     else
       for line in file:lines() do
@@ -123,7 +123,7 @@ end
 
 local function process_trie_conf(symbol, cf)
   if type(cf) ~= 'table' then
-    rspamd_logger.errx(rspamd_config, 'invalid value for symbol %1: "%2", expected table',
+    rspamd_logger.errx(rspamd_config, 'invalid value for symbol %s: "%s", expected table',
         symbol, cf)
     return
   end
@@ -145,17 +145,17 @@ if opts then
 
   if #raw_patterns > 0 then
     raw_trie = rspamd_trie.create(raw_patterns)
-    rspamd_logger.infox(rspamd_config, 'registered raw search trie from %1 patterns', #raw_patterns)
+    rspamd_logger.infox(rspamd_config, 'registered raw search trie from %s patterns', #raw_patterns)
   end
 
   if #mime_patterns > 0 then
     mime_trie = rspamd_trie.create(mime_patterns)
-    rspamd_logger.infox(rspamd_config, 'registered mime search trie from %1 patterns', #mime_patterns)
+    rspamd_logger.infox(rspamd_config, 'registered mime search trie from %s patterns', #mime_patterns)
   end
 
   if #body_patterns > 0 then
     body_trie = rspamd_trie.create(body_patterns)
-    rspamd_logger.infox(rspamd_config, 'registered body search trie from %1 patterns', #body_patterns)
+    rspamd_logger.infox(rspamd_config, 'registered body search trie from %s patterns', #body_patterns)
   end
 
   local id = -1

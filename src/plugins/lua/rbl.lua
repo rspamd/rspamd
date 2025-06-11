@@ -1077,7 +1077,7 @@ local function add_rbl(key, rbl, global_opts)
             rbl.selector_flatten)
 
         if not sel then
-          rspamd_logger.errx('invalid selector for rbl rule %s: %s', key, selector)
+          rspamd_logger.errx(rspamd_config, 'invalid selector for rbl rule %s: %s', key, selector)
           return false
         end
 

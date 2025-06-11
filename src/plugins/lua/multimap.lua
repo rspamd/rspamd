@@ -1282,7 +1282,7 @@ local function add_multimap_rule(key, newrule)
       if newrule.map_obj then
         ret = true
       else
-        rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
+        rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %s',
             newrule['map'])
       end
     elseif newrule['type'] == 'received' then
@@ -1303,7 +1303,7 @@ local function add_multimap_rule(key, newrule)
         if newrule.map_obj then
           ret = true
         else
-          rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
+          rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %s',
               newrule['map'])
         end
       else
@@ -1312,7 +1312,7 @@ local function add_multimap_rule(key, newrule)
         if newrule.map_obj then
           ret = true
         else
-          rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
+          rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %s',
               newrule['map'])
         end
       end
@@ -1328,7 +1328,7 @@ local function add_multimap_rule(key, newrule)
       if newrule.map_obj then
         ret = true
       else
-        rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
+        rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %s',
             newrule['map'])
       end
     elseif newrule['type'] == 'dnsbl' then

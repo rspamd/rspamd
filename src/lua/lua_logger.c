@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -176,8 +176,8 @@ static const struct luaL_reg loggerlib_f[] = {
 
 static gsize
 lua_logger_out_type(lua_State *L, int pos, char *outbuf,
-						  gsize len, struct lua_logger_trace *trace,
-						  enum lua_logger_escape_type esc_type);
+					gsize len, struct lua_logger_trace *trace,
+					enum lua_logger_escape_type esc_type);
 
 static void
 lua_common_log_line(GLogLevelFlags level,
@@ -215,12 +215,12 @@ lua_common_log_line(GLogLevelFlags level,
 	}
 
 	rspamd_common_log_function(NULL,
-						   level,
-						   module,
-						   uid,
-						   p,
-						   "%s",
-						   msg);
+							   level,
+							   module,
+							   uid,
+							   p,
+							   "%s",
+							   msg);
 }
 
 /*** Logger interface ***/
@@ -280,19 +280,22 @@ lua_logger_char_safe(int t, unsigned int esc_type)
 	return true;
 }
 
-/* Could return negative value in case of wrong argument number */
+#define LUA_MAX_ARGS 32
+/* Gracefully handles argument mismatches by substituting missing args and noting extra args */
 static glong
 lua_logger_log_format_str(lua_State *L, int offset, char *logbuf, gsize remain,
-					const char *fmt,
-					enum lua_logger_escape_type esc_type)
+						  const char *fmt,
+						  enum lua_logger_escape_type esc_type)
 {
 	const char *c;
 	gsize r;
 	int digit;
-
 	char *d = logbuf;
 	unsigned int arg_num, cur_arg = 0, arg_max = lua_gettop(L) - offset;
+	gboolean args_used[LUA_MAX_ARGS];
+	unsigned int used_args_count = 0;
 
+	memset(args_used, 0, sizeof(args_used));
 	while (remain > 1 && *fmt) {
 		if (*fmt == '%') {
 			++fmt;
@@ -300,12 +303,13 @@ lua_logger_log_format_str(lua_State *L, int offset, char *logbuf, gsize remain,
 			if (*fmt == 's') {
 				++fmt;
 				++cur_arg;
-			} else {
+			}
+			else {
 				arg_num = 0;
 				while ((digit = g_ascii_digit_value(*fmt)) >= 0) {
 					++fmt;
 					arg_num = arg_num * 10 + digit;
-					if (arg_num >= 100) {
+					if (arg_num >= LUA_MAX_ARGS) {
 						/* Avoid ridiculously large numbers */
 						fmt = c;
 						break;
@@ -320,11 +324,19 @@ lua_logger_log_format_str(lua_State *L, int offset, char *logbuf, gsize remain,
 
 			if (fmt > c) {
 				if (cur_arg < 1 || cur_arg > arg_max) {
-					*d = 0;
-					return -((glong) cur_arg + 1); /* wrong argument number */
+					/* Missing argument - substitute placeholder */
+					r = rspamd_snprintf(d, remain, "<MISSING ARGUMENT>");
+				}
+				else {
+					/* Valid argument - output it */
+					r = lua_logger_out(L, offset + cur_arg, d, remain, esc_type);
+					/* Track which arguments are used */
+					if (cur_arg <= LUA_MAX_ARGS && !args_used[cur_arg - 1]) {
+						args_used[cur_arg - 1] = TRUE;
+						used_args_count++;
+					}
 				}
 
-				r = lua_logger_out(L, offset + cur_arg, d, remain, esc_type);
 				g_assert(r < remain);
 				remain -= r;
 				d += r;
@@ -339,10 +351,20 @@ lua_logger_log_format_str(lua_State *L, int offset, char *logbuf, gsize remain,
 		--remain;
 	}
 
+	/* Check for extra arguments and append warning if any */
+	if (used_args_count > 0 && used_args_count < arg_max && remain > 1) {
+		unsigned int extra_args = arg_max - used_args_count;
+		r = rspamd_snprintf(d, remain, " <EXTRA %d ARGUMENTS>", (int) extra_args);
+		remain -= r;
+		d += r;
+	}
+
 	*d = 0;
 
 	return d - logbuf;
 }
+
+#undef LUA_MAX_ARGS
 
 static gsize
 lua_logger_out_str(lua_State *L, int pos,
@@ -486,12 +508,12 @@ lua_logger_out_userdata(lua_State *L, int pos, char *outbuf, gsize len)
 	return r;
 }
 
-#define MOVE_BUF(d, remain, r)      \
-	(d) += (r);                 \
-	(remain) -= (r);            \
-	if ((remain) <= 1) {        \
-		lua_settop(L, top); \
-		goto table_oob;     \
+#define MOVE_BUF(d, remain, r) \
+	(d) += (r);                \
+	(remain) -= (r);           \
+	if ((remain) <= 1) {       \
+		lua_settop(L, top);    \
+		goto table_oob;        \
 	}
 
 static gsize
@@ -545,9 +567,10 @@ lua_logger_out_table(lua_State *L, int pos, char *outbuf, gsize len,
 
 		if (first) {
 			first = FALSE;
-			str =  "[%d] = ";
-		} else {
-			str =  ", [%d] = ";
+			str = "[%d] = ";
+		}
+		else {
+			str = ", [%d] = ";
 		}
 		r = rspamd_snprintf(d, remain, str, i);
 		MOVE_BUF(d, remain, r);
@@ -579,14 +602,12 @@ lua_logger_out_table(lua_State *L, int pos, char *outbuf, gsize len,
 		if (first) {
 			first = FALSE;
 			str = "[%2] = %1";
-		} else {
+		}
+		else {
 			str = ", [%2] = %1";
 		}
 		r = lua_logger_log_format_str(L, top + 1, d, remain, str, esc_type);
-		if (r < 0) {
-			/* should not happen */
-			goto table_oob; 
-		}
+		/* lua_logger_log_format_str now handles errors gracefully */
 		MOVE_BUF(d, remain, r);
 
 		/* Remove key */
@@ -606,9 +627,9 @@ table_oob:
 
 static gsize
 lua_logger_out_type(lua_State *L, int pos,
-						  char *outbuf, gsize len,
-						  struct lua_logger_trace *trace,
-						  enum lua_logger_escape_type esc_type)
+					char *outbuf, gsize len,
+					struct lua_logger_trace *trace,
+					enum lua_logger_escape_type esc_type)
 {
 	if (len == 0) {
 		return 0;
@@ -640,8 +661,8 @@ lua_logger_out_type(lua_State *L, int pos,
 }
 
 gsize lua_logger_out(lua_State *L, int pos,
-						  char *outbuf, gsize len,
-						  enum lua_logger_escape_type esc_type)
+					 char *outbuf, gsize len,
+					 enum lua_logger_escape_type esc_type)
 {
 	struct lua_logger_trace tr;
 	memset(&tr, 0, sizeof(tr));
@@ -747,11 +768,8 @@ lua_logger_log_format(lua_State *L, int fmt_pos, gboolean is_string,
 		return FALSE;
 	}
 
-	glong ret = lua_logger_log_format_str(L, fmt_pos, logbuf, remain, fmt, is_string ? LUA_ESCAPE_UNPRINTABLE : LUA_ESCAPE_LOG);
-	if (ret < 0) {
-		msg_err("wrong argument number: %ud", -((int) ret + 1));
-		return FALSE;
-	}
+	/* lua_logger_log_format_str now handles argument mismatches gracefully */
+	lua_logger_log_format_str(L, fmt_pos, logbuf, remain, fmt, is_string ? LUA_ESCAPE_UNPRINTABLE : LUA_ESCAPE_LOG);
 	return TRUE;
 }
 

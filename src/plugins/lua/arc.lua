@@ -695,11 +695,11 @@ local function do_sign(task, sign_params)
           sign_params.pubkey = results[1]
           sign_params.strict_pubkey_check = not settings.allow_pubkey_mismatch
         elseif not settings.allow_pubkey_mismatch then
-          rspamd_logger.errx('public key for domain %s/%s is not found: %s, skip signing',
+          rspamd_logger.errx(task, 'public key for domain %s/%s is not found: %s, skip signing',
               sign_params.domain, sign_params.selector, err)
           return
         else
-          rspamd_logger.infox('public key for domain %s/%s is not found: %s',
+          rspamd_logger.infox(task, 'public key for domain %s/%s is not found: %s',
               sign_params.domain, sign_params.selector, err)
         end
 
