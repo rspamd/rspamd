@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -538,6 +538,9 @@ void rspamd_http_message_add_header_len(struct rspamd_http_message *msg,
 
 		if (g_ascii_strcasecmp(name, "host") == 0) {
 			msg->flags |= RSPAMD_HTTP_FLAG_HAS_HOST_HEADER;
+		}
+		else if (g_ascii_strcasecmp(name, "connection") == 0) {
+			msg->flags |= RSPAMD_HTTP_FLAG_HAS_CONNECTION_HEADER;
 		}
 
 		hdr->combined = rspamd_fstring_sized_new(nlen + vlen + 4);
