@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@
 #include "contrib/uthash/utlist.h"
 #include "contrib/t1ha/t1ha.h"
 #include "received.h"
+#include "libstat/tokenizers/custom_tokenizer.h"
 
 #define GTUBE_SYMBOL "GTUBE"
 
