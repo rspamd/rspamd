@@ -24,9 +24,21 @@ local ucl = require "ucl"
 
 local N = "bayes"
 
-local function gen_classify_functor(redis_params, classify_script_id)
-  return function(task, expanded_key, id, is_spam, stat_tokens, callback)
+local function resolve_category(is_spam, category)
+  -- If category is provided, use it; otherwise map is_spam to "spam"/"ham"
+  if category then
+    return category
+  elseif is_spam ~= nil then
+    return is_spam and "spam" or "ham"
+  else
+    return "ham" -- fallback, should not really happen
+  end
+end
 
+local function gen_classify_functor(redis_params, classify_script_id)
+  return function(task, expanded_key, id, is_spam, category, stat_tokens, callback)
+
+    local resolved_category = resolve_category(is_spam, category)
     local function classify_redis_cb(err, data)
       lua_util.debugm(N, task, 'classify redis cb: %s, %s', err, data)
       if err then
@@ -38,12 +50,13 @@ local function gen_classify_functor(redis_params, classify_script_id)
 
     lua_redis.exec_redis_script(classify_script_id,
         { task = task, is_write = false, key = expanded_key },
-        classify_redis_cb, { expanded_key, stat_tokens })
+        classify_redis_cb, { expanded_key, resolved_category, stat_tokens })
   end
 end
 
 local function gen_learn_functor(redis_params, learn_script_id)
-  return function(task, expanded_key, id, is_spam, symbol, is_unlearn, stat_tokens, callback, maybe_text_tokens)
+  return function(task, expanded_key, id, is_spam, category, symbol, is_unlearn, stat_tokens, callback, maybe_text_tokens)
+    local resolved_category = resolve_category(is_spam, category)
     local function learn_redis_cb(err, data)
       lua_util.debugm(N, task, 'learn redis cb: %s, %s', err, data)
       if err then
@@ -57,13 +70,12 @@ local function gen_learn_functor(redis_params, learn_script_id)
       lua_redis.exec_redis_script(learn_script_id,
           { task = task, is_write = true, key = expanded_key },
           learn_redis_cb,
-          { expanded_key, tostring(is_spam), symbol, tostring(is_unlearn), stat_tokens, maybe_text_tokens })
+          { expanded_key, resolved_category, symbol, tostring(is_unlearn), stat_tokens, maybe_text_tokens })
     else
       lua_redis.exec_redis_script(learn_script_id,
           { task = task, is_write = true, key = expanded_key },
-          learn_redis_cb, { expanded_key, tostring(is_spam), symbol, tostring(is_unlearn), stat_tokens })
+          learn_redis_cb, { expanded_key, resolved_category, symbol, tostring(is_unlearn), stat_tokens })
     end
-
   end
 end
 
@@ -112,7 +124,7 @@ end
 --- @param classifier_ucl ucl of the classifier config
 --- @param statfile_ucl ucl of the statfile config
 --- @return a pair of (classify_functor, learn_functor) or `nil` in case of error
-exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol, is_spam, ev_base, stat_periodic_cb)
+exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol, is_spam, category, ev_base, stat_periodic_cb)
 
   local redis_params = load_redis_params(classifier_ucl, statfile_ucl)
 
@@ -137,10 +149,8 @@ exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol,
 
   if ev_base then
     rspamd_config:add_periodic(ev_base, 0.0, function(cfg, _)
-
       local function stat_redis_cb(err, data)
         lua_util.debugm(N, cfg, 'stat redis cb: %s, %s', err, data)
-
         if err then
           logger.warn(cfg, 'cannot get bayes statistics for %s: %s', symbol, err)
         else
@@ -148,7 +158,6 @@ exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol,
           current_data.users = current_data.users + data[2]
           current_data.revision = current_data.revision + data[3]
           if new_cursor == 0 then
-            -- Done iteration
             final_data = lua_util.shallowcopy(current_data)
             current_data = {
               users = 0,
@@ -157,22 +166,23 @@ exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol,
             lua_util.debugm(N, cfg, 'final data: %s', final_data)
             stat_periodic_cb(cfg, final_data)
           end
-
           cursor = new_cursor
         end
       end
 
+      local resolved_category = resolve_category(is_spam, category)
       lua_redis.exec_redis_script(stat_script_id,
           { ev_base = ev_base, cfg = cfg, is_write = false },
           stat_redis_cb, { tostring(cursor),
                            symbol,
-                           is_spam and "learns_spam" or "learns_ham",
+                           resolved_category,
                            tostring(max_users) })
       return statfile_ucl.monitor_timeout or classifier_ucl.monitor_timeout or 30.0
     end)
   end
 
-  return gen_classify_functor(redis_params, classify_script_id), gen_learn_functor(redis_params, learn_script_id)
+  return gen_classify_functor(redis_params, classify_script_id),
+         gen_learn_functor(redis_params, learn_script_id)
 end
 
 local function gen_cache_check_functor(redis_params, check_script_id, conf)
