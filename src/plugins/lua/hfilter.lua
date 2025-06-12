@@ -131,7 +131,7 @@ local checks_hellohost = [[
 /modem[.-][0-9]/i 5
 /[0-9][.-]?dhcp/i 5
 /wifi[.-][0-9]/i 5
-/\.vps\.ovh\.(us|net)$/i 1
+/[.-]vps[.-]/i 1
 ]]
 local checks_hellohost_map
 
