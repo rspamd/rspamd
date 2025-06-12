@@ -15,6 +15,7 @@
  */
 
 #include "config.h"
+#include "tokenizers.h"
 #define RSPAMD_TOKENIZER_INTERNAL
 #include "custom_tokenizer.h"
 #include "libutil/util.h"

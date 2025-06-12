@@ -48,6 +48,7 @@ struct worker_s;
 struct rspamd_external_libs_ctx;
 struct rspamd_cryptobox_pubkey;
 struct rspamd_dns_resolver;
+struct rspamd_tokenizer_manager;
 
 /**
  * Logging type

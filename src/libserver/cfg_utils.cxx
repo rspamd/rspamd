@@ -74,6 +74,7 @@
 
 #include "libserver/task.h"
 #include "libserver/url.h"
+#define RSPAMD_TOKENIZER_INTERNAL// We need to use internal tokenizer API
 #include "libstat/tokenizers/custom_tokenizer.h"
 
 #define DEFAULT_SCORE 10.0

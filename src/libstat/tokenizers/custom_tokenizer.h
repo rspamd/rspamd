@@ -18,7 +18,6 @@
 #define RSPAMD_CUSTOM_TOKENIZER_H
 
 #include "config.h"
-#include "tokenizers.h"
 #include "ucl.h"
 
 #ifdef __cplusplus
