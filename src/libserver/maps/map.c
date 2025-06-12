@@ -304,10 +304,10 @@ rspamd_map_unlock_current_backend(struct map_periodic_cbdata *cbd)
 	struct rspamd_map_backend *bk;
 	struct rspamd_map *map = cbd->map;
 
-	if (cbd->locked && cbd->cur_backend < cbd->map->backends->len) {
+	if (cbd->owned_lock && cbd->cur_backend < cbd->map->backends->len) {
 		bk = g_ptr_array_index(cbd->map->backends, cbd->cur_backend);
 		g_atomic_int_set(&bk->shared->locked, 0);
-		cbd->locked = FALSE;
+		cbd->owned_lock = FALSE;
 		msg_debug_map("unlocked current backend %s before switching", bk->uri);
 	}
 }
@@ -1057,7 +1057,7 @@ rspamd_map_periodic_dtor(struct map_periodic_cbdata *periodic)
 		/* Not modified */
 	}
 
-	if (periodic->locked) {
+	if (periodic->owned_lock) {
 		if (periodic->cur_backend < map->backends->len) {
 			bk = (struct rspamd_map_backend *) g_ptr_array_index(map->backends, periodic->cur_backend);
 			g_atomic_int_set(&bk->shared->locked, 0);
@@ -1808,6 +1808,7 @@ rspamd_map_common_http_callback(struct rspamd_map *map,
 							 (int) data->cache->last_modified);
 				periodic->need_modify = TRUE;
 				/* Reset the whole chain */
+				g_atomic_int_set(&bk->shared->locked, 0);
 				periodic->cur_backend = 0;
 				rspamd_map_process_periodic(periodic);
 			}
@@ -1818,6 +1819,7 @@ rspamd_map_common_http_callback(struct rspamd_map *map,
 				}
 				else {
 					/* Switch to the next backend */
+					g_atomic_int_set(&bk->shared->locked, 0);
 					periodic->cur_backend++;
 					rspamd_map_process_periodic(periodic);
 				}
@@ -2068,15 +2070,13 @@ rspamd_map_process_periodic(struct map_periodic_cbdata *cbd)
 	/* For each backend we need to check for modifications */
 	if (cbd->cur_backend >= cbd->map->backends->len) {
 		/* Last backend - unlock current backend if needed */
-		if (cbd->locked) {
-			/* Unlock the last processed backend */
-			struct rspamd_map_backend *last_bk;
-			if (cbd->cur_backend > 0 && cbd->cur_backend - 1 < cbd->map->backends->len) {
-				last_bk = g_ptr_array_index(cbd->map->backends, cbd->cur_backend - 1);
-				g_atomic_int_set(&last_bk->shared->locked, 0);
-				cbd->locked = FALSE;
-				msg_debug_map("unlocked last backend %s", last_bk->uri);
+		if (cbd->owned_lock) {
+			/* Unlock all backends */
+			for (unsigned int i = 0; i < cbd->map->backends->len; i++) {
+				bk = g_ptr_array_index(cbd->map->backends, i);
+				g_atomic_int_set(&bk->shared->locked, 0);
 			}
+			cbd->owned_lock = FALSE;
 		}
 		msg_debug_map("finished map: %d of %d", cbd->cur_backend,
 					  cbd->map->backends->len);
@@ -2087,7 +2087,7 @@ rspamd_map_process_periodic(struct map_periodic_cbdata *cbd)
 
 	bk = g_ptr_array_index(map->backends, cbd->cur_backend);
 
-	if (!map->file_only && !cbd->locked) {
+	if (!map->file_only && !cbd->owned_lock) {
 		if (!g_atomic_int_compare_and_exchange(&bk->shared->locked,
 											   0, 1)) {
 			msg_debug_map(
@@ -2101,7 +2101,7 @@ rspamd_map_process_periodic(struct map_periodic_cbdata *cbd)
 		}
 		else {
 			msg_debug_map("locked map %s (backend: %s)", map->name, bk->uri);
-			cbd->locked = TRUE;
+			cbd->owned_lock = TRUE;
 		}
 	}
 
@@ -2109,9 +2109,12 @@ rspamd_map_process_periodic(struct map_periodic_cbdata *cbd)
 		/* We should not check other backends if some backend has failed*/
 		rspamd_map_schedule_periodic(cbd->map, RSPAMD_MAP_SCHEDULE_ERROR);
 
-		if (cbd->locked) {
-			g_atomic_int_set(&bk->shared->locked, 0);
-			cbd->locked = FALSE;
+		if (cbd->owned_lock) {
+			for (unsigned int i = 0; i < cbd->map->backends->len; i++) {
+				bk = g_ptr_array_index(cbd->map->backends, i);
+				g_atomic_int_set(&bk->shared->locked, 0);
+			}
+			cbd->owned_lock = FALSE;
 		}
 
 		/* Also set error flag for the map consumer */

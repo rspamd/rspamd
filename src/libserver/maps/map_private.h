@@ -209,7 +209,7 @@ struct map_periodic_cbdata {
 	ev_timer ev;
 	gboolean need_modify;
 	gboolean errored;
-	gboolean locked;
+	gboolean owned_lock;
 	unsigned int cur_backend;
 	ref_entry_t ref;
 };
