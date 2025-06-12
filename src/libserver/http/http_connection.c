@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1670,7 +1670,22 @@ int rspamd_http_message_write_header(const char *mime_type, gboolean encrypted,
 {
 	char datebuf[64];
 	int meth_len = 0;
-	const char *conn_type = "close";
+	const char *server_conn_header, *client_conn_header;
+
+	/* Set up connection header strings based on flags and connection type */
+	if (msg->flags & RSPAMD_HTTP_FLAG_HAS_CONNECTION_HEADER) {
+		server_conn_header = "";
+		client_conn_header = "";
+	}
+	else {
+		server_conn_header = "Connection: close\r\n";
+		if (conn->opts & RSPAMD_HTTP_CLIENT_KEEP_ALIVE) {
+			client_conn_header = "Connection: keep-alive\r\n";
+		}
+		else {
+			client_conn_header = "Connection: close\r\n";
+		}
+	}
 
 	if (conn->type == RSPAMD_HTTP_SERVER) {
 		/* Format reply */
@@ -1712,12 +1727,14 @@ int rspamd_http_message_write_header(const char *mime_type, gboolean encrypted,
 					meth_len =
 						rspamd_snprintf(repbuf, replen,
 										"HTTP/1.1 %d %T\r\n"
-										"Connection: close\r\n"
+										"%s"
 										"Server: %s\r\n"
 										"Date: %s\r\n"
 										"Content-Length: %z\r\n"
 										"Content-Type: %s", /* NO \r\n at the end ! */
-										msg->code, &status, priv->ctx->config.server_hdr,
+										msg->code, &status,
+										server_conn_header,
+										priv->ctx->config.server_hdr,
 										datebuf,
 										bodylen, mime_type);
 				}
@@ -1725,11 +1742,13 @@ int rspamd_http_message_write_header(const char *mime_type, gboolean encrypted,
 					meth_len =
 						rspamd_snprintf(repbuf, replen,
 										"HTTP/1.1 %d %T\r\n"
-										"Connection: close\r\n"
+										"%s"
 										"Server: %s\r\n"
 										"Date: %s\r\n"
 										"Content-Length: %z", /* NO \r\n at the end ! */
-										msg->code, &status, priv->ctx->config.server_hdr,
+										msg->code, &status,
+										server_conn_header,
+										priv->ctx->config.server_hdr,
 										datebuf,
 										bodylen);
 				}
@@ -1737,11 +1756,12 @@ int rspamd_http_message_write_header(const char *mime_type, gboolean encrypted,
 				/* External reply */
 				rspamd_printf_fstring(buf,
 									  "HTTP/1.1 200 OK\r\n"
-									  "Connection: close\r\n"
+									  "%s"
 									  "Server: %s\r\n"
 									  "Date: %s\r\n"
 									  "Content-Length: %z\r\n"
 									  "Content-Type: application/octet-stream\r\n",
+									  server_conn_header,
 									  priv->ctx->config.server_hdr,
 									  datebuf, enclen);
 			}
@@ -1750,12 +1770,14 @@ int rspamd_http_message_write_header(const char *mime_type, gboolean encrypted,
 					meth_len =
 						rspamd_printf_fstring(buf,
 											  "HTTP/1.1 %d %T\r\n"
-											  "Connection: close\r\n"
+											  "%s"
 											  "Server: %s\r\n"
 											  "Date: %s\r\n"
 											  "Content-Length: %z\r\n"
 											  "Content-Type: %s\r\n",
-											  msg->code, &status, priv->ctx->config.server_hdr,
+											  msg->code, &status,
+											  server_conn_header,
+											  priv->ctx->config.server_hdr,
 											  datebuf,
 											  bodylen, mime_type);
 				}
@@ -1763,11 +1785,13 @@ int rspamd_http_message_write_header(const char *mime_type, gboolean encrypted,
 					meth_len =
 						rspamd_printf_fstring(buf,
 											  "HTTP/1.1 %d %T\r\n"
-											  "Connection: close\r\n"
+											  "%s"
 											  "Server: %s\r\n"
 											  "Date: %s\r\n"
 											  "Content-Length: %z\r\n",
-											  msg->code, &status, priv->ctx->config.server_hdr,
+											  msg->code, &status,
+											  server_conn_header,
+											  priv->ctx->config.server_hdr,
 											  datebuf,
 											  bodylen);
 				}
@@ -1804,10 +1828,6 @@ int rspamd_http_message_write_header(const char *mime_type, gboolean encrypted,
 	else {
 
 		/* Client request */
-		if (conn->opts & RSPAMD_HTTP_CLIENT_KEEP_ALIVE) {
-			conn_type = "keep-alive";
-		}
-
 		/* Format request */
 		enclen += RSPAMD_FSTRING_LEN(msg->url) +
 				  strlen(http_method_str(msg->method)) + 1;
@@ -1819,21 +1839,21 @@ int rspamd_http_message_write_header(const char *mime_type, gboolean encrypted,
 									  "%s %s HTTP/1.0\r\n"
 									  "Content-Length: %z\r\n"
 									  "Content-Type: application/octet-stream\r\n"
-									  "Connection: %s\r\n",
+									  "%s",
 									  "POST",
 									  "/post",
 									  enclen,
-									  conn_type);
+									  client_conn_header);
 			}
 			else {
 				rspamd_printf_fstring(buf,
 									  "%s %V HTTP/1.0\r\n"
 									  "Content-Length: %z\r\n"
-									  "Connection: %s\r\n",
+									  "%s",
 									  http_method_str(msg->method),
 									  msg->url,
 									  bodylen,
-									  conn_type);
+									  client_conn_header);
 
 				if (bodylen > 0) {
 					if (mime_type == NULL) {
@@ -1857,26 +1877,26 @@ int rspamd_http_message_write_header(const char *mime_type, gboolean encrypted,
 				if (rspamd_http_message_is_standard_port(msg)) {
 					rspamd_printf_fstring(buf,
 										  "%s %s HTTP/1.1\r\n"
-										  "Connection: %s\r\n"
+										  "%s"
 										  "Host: %s\r\n"
 										  "Content-Length: %z\r\n"
 										  "Content-Type: application/octet-stream\r\n",
 										  "POST",
 										  "/post",
-										  conn_type,
+										  client_conn_header,
 										  host,
 										  enclen);
 				}
 				else {
 					rspamd_printf_fstring(buf,
 										  "%s %s HTTP/1.1\r\n"
-										  "Connection: %s\r\n"
+										  "%s"
 										  "Host: %s:%d\r\n"
 										  "Content-Length: %z\r\n"
 										  "Content-Type: application/octet-stream\r\n",
 										  "POST",
 										  "/post",
-										  conn_type,
+										  client_conn_header,
 										  host,
 										  msg->port,
 										  enclen);
@@ -1888,21 +1908,21 @@ int rspamd_http_message_write_header(const char *mime_type, gboolean encrypted,
 					if ((msg->flags & RSPAMD_HTTP_FLAG_HAS_HOST_HEADER)) {
 						rspamd_printf_fstring(buf,
 											  "%s %s://%s:%d/%V HTTP/1.1\r\n"
-											  "Connection: %s\r\n"
+											  "%s"
 											  "Content-Length: %z\r\n",
 											  http_method_str(msg->method),
 											  (conn->opts & RSPAMD_HTTP_CLIENT_SSL) ? "https" : "http",
 											  host,
 											  msg->port,
 											  msg->url,
-											  conn_type,
+											  client_conn_header,
 											  bodylen);
 					}
 					else {
 						if (rspamd_http_message_is_standard_port(msg)) {
 							rspamd_printf_fstring(buf,
 												  "%s %s://%s:%d/%V HTTP/1.1\r\n"
-												  "Connection: %s\r\n"
+												  "%s"
 												  "Host: %s\r\n"
 												  "Content-Length: %z\r\n",
 												  http_method_str(msg->method),
@@ -1910,14 +1930,14 @@ int rspamd_http_message_write_header(const char *mime_type, gboolean encrypted,
 												  host,
 												  msg->port,
 												  msg->url,
-												  conn_type,
+												  client_conn_header,
 												  host,
 												  bodylen);
 						}
 						else {
 							rspamd_printf_fstring(buf,
 												  "%s %s://%s:%d/%V HTTP/1.1\r\n"
-												  "Connection: %s\r\n"
+												  "%s"
 												  "Host: %s:%d\r\n"
 												  "Content-Length: %z\r\n",
 												  http_method_str(msg->method),
@@ -1925,7 +1945,7 @@ int rspamd_http_message_write_header(const char *mime_type, gboolean encrypted,
 												  host,
 												  msg->port,
 												  msg->url,
-												  conn_type,
+												  client_conn_header,
 												  host,
 												  msg->port,
 												  bodylen);
@@ -1937,35 +1957,35 @@ int rspamd_http_message_write_header(const char *mime_type, gboolean encrypted,
 					if ((msg->flags & RSPAMD_HTTP_FLAG_HAS_HOST_HEADER)) {
 						rspamd_printf_fstring(buf,
 											  "%s %V HTTP/1.1\r\n"
-											  "Connection: %s\r\n"
+											  "%s"
 											  "Content-Length: %z\r\n",
 											  http_method_str(msg->method),
 											  msg->url,
-											  conn_type,
+											  client_conn_header,
 											  bodylen);
 					}
 					else {
 						if (rspamd_http_message_is_standard_port(msg)) {
 							rspamd_printf_fstring(buf,
 												  "%s %V HTTP/1.1\r\n"
-												  "Connection: %s\r\n"
+												  "%s"
 												  "Host: %s\r\n"
 												  "Content-Length: %z\r\n",
 												  http_method_str(msg->method),
 												  msg->url,
-												  conn_type,
+												  client_conn_header,
 												  host,
 												  bodylen);
 						}
 						else {
 							rspamd_printf_fstring(buf,
 												  "%s %V HTTP/1.1\r\n"
-												  "Connection: %s\r\n"
+												  "%s"
 												  "Host: %s:%d\r\n"
 												  "Content-Length: %z\r\n",
 												  http_method_str(msg->method),
 												  msg->url,
-												  conn_type,
+												  client_conn_header,
 												  host,
 												  msg->port,
 												  bodylen);
