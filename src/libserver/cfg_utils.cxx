@@ -72,6 +72,10 @@
 #include "contrib/expected/expected.hpp"
 #include "contrib/ankerl/unordered_dense.h"
 
+#include "libserver/task.h"
+#include "libserver/url.h"
+#include "libstat/tokenizers/custom_tokenizer.h"
+
 #define DEFAULT_SCORE 10.0
 
 #define DEFAULT_RLIMIT_NOFILE 2048
@@ -939,6 +943,37 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 		if (!libs_ret) {
 			msg_err_config("cannot configure libraries, fatal error");
 			return FALSE;
+		}
+
+		/* Load custom tokenizers */
+		const ucl_object_t *custom_tokenizers = ucl_object_lookup_path(cfg->cfg_ucl_obj,
+																	   "options.custom_tokenizers");
+		if (custom_tokenizers != NULL) {
+			msg_info_config("loading custom tokenizers");
+			cfg->tokenizer_manager = rspamd_tokenizer_manager_new(cfg->cfg_pool);
+
+			ucl_object_iter_t it = ucl_object_iterate_new(custom_tokenizers);
+			const ucl_object_t *tok_obj;
+			const char *tok_name;
+
+			while ((tok_obj = ucl_object_iterate_safe(it, true)) != NULL) {
+				tok_name = ucl_object_key(tok_obj);
+				GError *err = NULL;
+
+				if (!rspamd_tokenizer_manager_load_tokenizer(cfg->tokenizer_manager,
+															 tok_name, tok_obj, &err)) {
+					msg_err_config("failed to load custom tokenizer '%s': %s",
+								   tok_name, err ? err->message : "unknown error");
+					if (err) {
+						g_error_free(err);
+					}
+
+					if (opts & RSPAMD_CONFIG_INIT_VALIDATE) {
+						ret = tl::make_unexpected(fmt::format("failed to load custom tokenizer '{}'", tok_name));
+					}
+				}
+			}
+			ucl_object_iterate_free(it);
 		}
 	}
 
