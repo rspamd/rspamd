@@ -23,40 +23,13 @@ local N = "lua_bayes"
 
 local exports = {}
 
-exports.can_learn = function(task, is_spam, is_unlearn, category)
+exports.can_learn = function(task, is_spam, is_unlearn)
   local learn_type = task:get_request_header('Learn-Type')
 
   if not (learn_type and tostring(learn_type) == 'bulk') then
     local prob = task:get_mempool():get_variable('bayes_prob', 'double')
 
-    if category then
-      -- Default thresholds, can be overridden by config
-      local thresholds = {
-        spam = { value = 0.95, direction = 'gte' },
-        ham  = { value = 0.05, direction = 'lte' },
-        -- Add more built-in categories if needed
-      }
-      -- Allow per-task or per-config thresholds
-      local th = thresholds[category]
-      if task.extra_learn_categories and task.extra_learn_categories[category] then
-        th = task.extra_learn_categories[category]
-      end
-
-      if prob and th then
-        local in_class = false
-        if th.direction == 'gte' then
-          in_class = prob >= th.value
-        elseif th.direction == 'lte' then
-          in_class = prob <= th.value
-        end
-
-        if in_class then
-          return false, string.format(
-              'already in class %s; probability %.2f%%',
-              category, math.abs((prob - 0.5) * 200.0))
-        end
-      end
-    elseif prob then
+    if prob then
       local in_class = false
       local cl
       if is_spam then
@@ -79,7 +52,7 @@ exports.can_learn = function(task, is_spam, is_unlearn, category)
 end
 
 exports.autolearn = function(task, conf)
-  local function log_can_autolearn(verdict, score, threshold, category)
+  local function log_can_autolearn(verdict, score, threshold)
     local from = task:get_from('smtp')
     local mime_rcpts = 'undef'
     local mr = task:get_recipients('mime')
@@ -96,7 +69,7 @@ exports.autolearn = function(task, conf)
     logger.info(task, 'id: %s, from: <%s>: can autolearn %s: score %s %s %s, mime_rcpts: <%s>',
         task:get_header('Message-Id') or '<undef>',
         from and from[1].addr or 'undef',
-        category or verdict,
+        verdict,
         string.format("%.2f", score),
         verdict == 'ham' and '<=' or verdict == 'spam' and '>=' or '/',
         threshold,
@@ -104,11 +77,15 @@ exports.autolearn = function(task, conf)
   end
 
   if not task:get_queue_id() then
+    -- We should skip messages that come from `rspamc` or webui as they are usually
+    -- not intended for autolearn at all
     lua_util.debugm(N, task, 'no need to autolearn - queue id is missing')
     return
   end
 
+  -- We have autolearn config so let's figure out what is requested
   local verdict, score = lua_verdict.get_specific_verdict("bayes", task)
+  local learn_spam, learn_ham = false, false
 
   if verdict == 'passthrough' then
     -- No need to autolearn
@@ -116,27 +93,6 @@ exports.autolearn = function(task, conf)
         verdict)
     return
   end
-
-  -- Category-aware logic
-  if conf.categories then
-    for cat, cat_conf in pairs(conf.categories) do
-      if verdict == cat and cat_conf.threshold then
-        local match = false
-        if (cat_conf.direction == 'gte' and score >= cat_conf.threshold) or
-           (cat_conf.direction == 'lte' and score <= cat_conf.threshold) then
-          match = true
-        end
-        if match then
-          log_can_autolearn(verdict, score, cat_conf.threshold, cat)
-          -- Save config for can_learn to read later
-          task.extra_learn_categories = conf.categories
-          return cat
-        end
-      end
-    end
-  end
-
-  local learn_spam, learn_ham = false, false
 
   if conf.spam_threshold and conf.ham_threshold then
     if verdict == 'spam' then
@@ -164,6 +120,7 @@ exports.autolearn = function(task, conf)
   end
 
   if conf.check_balance then
+    -- Check balance of learns
     local spam_learns = task:get_mempool():get_variable('spam_learns', 'int64') or 0
     local ham_learns = task:get_mempool():get_variable('ham_learns', 'int64') or 0
 
