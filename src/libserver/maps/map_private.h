@@ -134,20 +134,12 @@ union rspamd_map_backend_data {
 
 
 struct rspamd_map;
-/*
- * Shared between workers
- */
-struct rspamd_map_shared_backend_data {
-	int locked;
-	int loaded;
-	int cached;
-};
+
 struct rspamd_map_backend {
 	enum fetch_proto protocol;
 	gboolean is_signed;
 	gboolean is_compressed;
 	gboolean is_fallback;
-	struct rspamd_map_shared_backend_data *shared;
 	struct rspamd_map *map;
 	struct ev_loop *event_loop;
 	uint64_t id;
@@ -158,6 +150,15 @@ struct rspamd_map_backend {
 };
 
 struct map_periodic_cbdata;
+
+/*
+ * Shared between workers
+ */
+struct rspamd_map_shared_data {
+	int locked;
+	int loaded;
+	int cached;
+};
 
 struct rspamd_map {
 	struct rspamd_dns_resolver *r;
@@ -193,6 +194,8 @@ struct rspamd_map {
 	bool static_only;  /* No need to check */
 	bool no_file_read; /* Do not read files */
 	bool seen;         /* This map has already been watched or pre-loaded */
+	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
+	struct rspamd_map_shared_data *shared;
 	char tag[MEMPOOL_UID_LEN];
 };
 
