@@ -25,7 +25,6 @@ end
 -- This optimisation will save a lot of space for sparse tokens, and in Bayes that assumption is normally held
 
 if learned_ham > 0 and learned_spam > 0 then
-  local input_tokens = cmsgpack.unpack(KEYS[2])
   for i, token in ipairs(input_tokens) do
     local token_data = redis.call('HMGET', token, 'H', 'S')
 
