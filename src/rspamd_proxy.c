@@ -1686,6 +1686,7 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 							rspamd_http_message_remove_header(msg, "Host");
 							rspamd_http_message_add_header(msg, "Host", up_name);
 						}
+						rspamd_http_message_remove_header(msg, "Connection");
 						rspamd_http_message_add_header(msg, "Connection", "keep-alive");
 
 						if (msg->url->len == 0) {
@@ -1824,6 +1825,7 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 			rspamd_http_message_remove_header(msg, "Host");
 			rspamd_http_message_add_header(msg, "Host", up_name);
 		}
+		rspamd_http_message_remove_header(msg, "Connection");
 		rspamd_http_message_add_header(msg, "Connection",
 									   m->keepalive ? "keep-alive" : "close");
 
@@ -2672,9 +2674,6 @@ proxy_client_finish_handler(struct rspamd_http_connection *conn,
 		rspamd_http_message_remove_header(msg, "Keep-Alive");
 		rspamd_http_message_remove_header(msg, "Connection");
 		rspamd_http_message_remove_header(msg, "Key");
-
-		/* Add log tag header based on worker's default configuration */
-		rspamd_proxy_add_log_tag_header(msg, session, session->ctx->log_tag_type);
 
 		proxy_open_mirror_connections(session);
 		rspamd_http_connection_reset(session->client_conn);
