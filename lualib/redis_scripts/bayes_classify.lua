@@ -2,13 +2,23 @@
 -- This script accepts the following parameters:
 -- key1 - prefix for bayes tokens (e.g. for per-user classification)
 -- key2 - set of tokens encoded in messagepack array of strings
+-- key3 - category string
 
 local prefix = KEYS[1]
+local input_tokens = cmsgpack.unpack(KEYS[2])
+local category = KEYS[3]
+
 local output_spam = {}
 local output_ham = {}
+local output_cat = {}
 
 local learned_ham = tonumber(redis.call('HGET', prefix, 'learns_ham')) or 0
 local learned_spam = tonumber(redis.call('HGET', prefix, 'learns_spam')) or 0
+local learned_cat = 0
+
+if category then
+  learned_cat = tonumber(redis.call('HGET', prefix, 'learns_' .. category)) or 0
+end
 
 -- Output is a set of pairs (token_index, token_count), tokens that are not
 -- found are not filled.
@@ -34,4 +44,14 @@ if learned_ham > 0 and learned_spam > 0 then
   end
 end
 
-return { learned_ham, learned_spam, output_ham, output_spam }
+if category and learned_cat > 0 then
+  for i, token in ipairs(input_tokens) do
+    local cat_count = redis.call('HGET', token, category)
+    if cat_count then
+      table.insert(output_cat, { i, tonumber(cat_count) })
+    end
+  end
+end
+
+-- category data is appended if requested
+return { learned_ham, learned_spam, output_ham, output_spam, learned_cat, output_cat }
