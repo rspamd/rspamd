@@ -992,9 +992,9 @@ rspamd_controller_handle_maps(struct rspamd_http_connection_entry *conn_ent,
 									  "type", 0, false);
 				ucl_object_insert_key(obj, ucl_object_frombool(editable),
 									  "editable", 0, false);
-				ucl_object_insert_key(obj, ucl_object_frombool(bk->shared->loaded),
+				ucl_object_insert_key(obj, ucl_object_frombool(map->shared->loaded),
 									  "loaded", 0, false);
-				ucl_object_insert_key(obj, ucl_object_frombool(bk->shared->cached),
+				ucl_object_insert_key(obj, ucl_object_frombool(map->shared->cached),
 									  "cached", 0, false);
 				ucl_array_append(top, obj);
 			}
@@ -1012,9 +1012,9 @@ rspamd_controller_handle_maps(struct rspamd_http_connection_entry *conn_ent,
 									  "type", 0, false);
 				ucl_object_insert_key(obj, ucl_object_frombool(false),
 									  "editable", 0, false);
-				ucl_object_insert_key(obj, ucl_object_frombool(bk->shared->loaded),
+				ucl_object_insert_key(obj, ucl_object_frombool(map->shared->loaded),
 									  "loaded", 0, false);
-				ucl_object_insert_key(obj, ucl_object_frombool(bk->shared->cached),
+				ucl_object_insert_key(obj, ucl_object_frombool(map->shared->cached),
 									  "cached", 0, false);
 				ucl_array_append(top, obj);
 			}
@@ -1141,7 +1141,7 @@ rspamd_controller_handle_get_map(struct rspamd_http_connection_entry *conn_ent,
 		rspamd_map_traverse(bk->map, rspamd_controller_map_traverse_callback, &map_body, FALSE);
 		rspamd_http_message_set_body_from_fstring_steal(reply, map_body);
 	}
-	else if (bk->shared->loaded) {
+	else if (map->shared->loaded) {
 		reply = rspamd_http_new_message(HTTP_RESPONSE);
 		reply->code = 200;
 		rspamd_fstring_t *map_body = rspamd_fstring_new();
