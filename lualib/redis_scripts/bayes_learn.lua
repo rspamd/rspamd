@@ -6,6 +6,7 @@
 -- key4 - boolean is_unlearn
 -- key5 - set of tokens encoded in messagepack array of strings
 -- key6 - set of text tokens (if any) encoded in messagepack array of strings (size must be twice of `KEYS[5]`)
+-- key7 - (optional) category 
 
 local prefix = KEYS[1]
 local is_spam = KEYS[2] == 'true' and true or false
@@ -17,6 +18,7 @@ local text_tokens
 if KEYS[6] then
   text_tokens = cmsgpack.unpack(KEYS[6])
 end
+local category = KEYS[7]
 
 local hash_key = is_spam and 'S' or 'H'
 local learned_key = is_spam and 'learns_spam' or 'learns_ham'
@@ -40,5 +42,14 @@ for i, token in ipairs(input_tokens) do
 
       redis.call('ZINCRBY', prefix .. '_z', is_unlearn and -1 or 1, token)
     end
+  end
+end
+
+-- Learn/unlearn for category, if provided
+if category then
+  local learned_cat_key = 'learns_' .. category
+  redis.call('HINCRBY', prefix, learned_cat_key, is_unlearn and -1 or 1)
+  for i, token in ipairs(input_tokens) do
+    redis.call('HINCRBY', token, category, is_unlearn and -1 or 1)
   end
 end
