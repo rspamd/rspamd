@@ -663,7 +663,7 @@ local check_from_id = rspamd_config:register_symbol {
     if (from and from[1]) then
       if not (from[1]["flags"]["valid"]) then
         task:insert_result('FROM_INVALID', 1.0)
-      else (from[1].addr == nil or from[1].addr == '') then
+      elseif (from[1].addr == nil or from[1].addr == '') then
         task:insert_result('FROM_NO_ADDR', 1.0)
       end
       if (from[1].name == nil or from[1].name == '') then
