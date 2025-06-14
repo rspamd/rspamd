@@ -155,7 +155,6 @@ struct map_periodic_cbdata;
  * Shared between workers
  */
 struct rspamd_map_shared_data {
-	int locked;
 	int loaded;
 	int cached;
 };
@@ -212,7 +211,6 @@ struct map_periodic_cbdata {
 	ev_timer ev;
 	gboolean need_modify;
 	gboolean errored;
-	gboolean owned_lock;
 	unsigned int cur_backend;
 	ref_entry_t ref;
 };
