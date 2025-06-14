@@ -360,6 +360,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 			cbd->data->last_modified = msg->date;
 		}
 
+
 		/* Unsigned version - just open file */
 		cbd->shmem_data = rspamd_http_message_shmem_ref(msg);
 		cbd->data_len = msg->body_buf.len;
@@ -423,12 +424,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 
 		MAP_RETAIN(cbd->shmem_data, "shmem_data");
 		cbd->data->gen++;
-		/*
-		 * We know that a map is in the locked state
-		 */
-		g_atomic_int_set(&data->cache->available, 1);
-		g_atomic_int_set(&map->shared->loaded, 1);
-		g_atomic_int_set(&map->shared->cached, 0);
+
 		/* Store cached data */
 		rspamd_strlcpy(data->cache->shmem_name, cbd->shmem_data->shm_name,
 					   sizeof(data->cache->shmem_name));
@@ -530,6 +526,12 @@ http_map_finish(struct rspamd_http_connection *conn,
 
 		cbd->periodic->cur_backend++;
 		munmap(in, dlen);
+
+		/* Announce for other processes */
+		g_atomic_int_set(&data->cache->available, 1);
+		g_atomic_int_set(&map->shared->loaded, 1);
+		g_atomic_int_set(&map->shared->cached, 0);
+
 		rspamd_map_process_periodic(cbd->periodic);
 	}
 	else if (msg->code == 304 && cbd->check) {
@@ -1483,7 +1485,7 @@ rspamd_map_save_http_cached_file(struct rspamd_map *map,
 								 const unsigned char *data,
 								 gsize len)
 {
-	char path[PATH_MAX];
+	char path[PATH_MAX], temp_path[PATH_MAX];
 	unsigned char digest[rspamd_cryptobox_HASHBYTES];
 	struct rspamd_config *cfg = map->cfg;
 	int fd;
@@ -1496,8 +1498,10 @@ rspamd_map_save_http_cached_file(struct rspamd_map *map,
 	rspamd_cryptobox_hash(digest, bk->uri, strlen(bk->uri), NULL, 0);
 	rspamd_snprintf(path, sizeof(path), "%s%c%*xs.map", cfg->maps_cache_dir,
 					G_DIR_SEPARATOR, 20, digest);
+	rspamd_snprintf(temp_path, sizeof(temp_path), "%s.tmp.%d.%d", path,
+					(int) getpid(), (int) rspamd_get_calendar_ticks());
 
-	fd = rspamd_file_xopen(path, O_WRONLY | O_TRUNC | O_CREAT,
+	fd = rspamd_file_xopen(temp_path, O_WRONLY | O_TRUNC | O_CREAT,
 						   00600, FALSE);
 
 	if (fd == -1) {
@@ -1505,8 +1509,9 @@ rspamd_map_save_http_cached_file(struct rspamd_map *map,
 	}
 
 	if (!rspamd_file_lock(fd, FALSE)) {
-		msg_err_map("cannot lock file %s: %s", path, strerror(errno));
+		msg_err_map("cannot lock file %s: %s", temp_path, strerror(errno));
 		close(fd);
+		unlink(temp_path);
 
 		return FALSE;
 	}
@@ -1525,9 +1530,10 @@ rspamd_map_save_http_cached_file(struct rspamd_map *map,
 	}
 
 	if (write(fd, &header, sizeof(header)) != sizeof(header)) {
-		msg_err_map("cannot write file %s (header stage): %s", path, strerror(errno));
+		msg_err_map("cannot write file %s (header stage): %s", temp_path, strerror(errno));
 		rspamd_file_unlock(fd, FALSE);
 		close(fd);
+		unlink(temp_path);
 
 		return FALSE;
 	}
@@ -1535,9 +1541,10 @@ rspamd_map_save_http_cached_file(struct rspamd_map *map,
 	if (header.etag_len > 0) {
 		if (write(fd, RSPAMD_FSTRING_DATA(htdata->etag), header.etag_len) !=
 			header.etag_len) {
-			msg_err_map("cannot write file %s (etag stage): %s", path, strerror(errno));
+			msg_err_map("cannot write file %s (etag stage): %s", temp_path, strerror(errno));
 			rspamd_file_unlock(fd, FALSE);
 			close(fd);
+			unlink(temp_path);
 
 			return FALSE;
 		}
@@ -1545,15 +1552,23 @@ rspamd_map_save_http_cached_file(struct rspamd_map *map,
 
 	/* Now write the rest */
 	if (write(fd, data, len) != len) {
-		msg_err_map("cannot write file %s (data stage): %s", path, strerror(errno));
+		msg_err_map("cannot write file %s (data stage): %s", temp_path, strerror(errno));
 		rspamd_file_unlock(fd, FALSE);
 		close(fd);
+		unlink(temp_path);
 
 		return FALSE;
 	}
 
 	rspamd_file_unlock(fd, FALSE);
 	close(fd);
+
+	/* Atomically move temp file to final location */
+	if (rename(temp_path, path) != 0) {
+		msg_err_map("cannot rename %s to %s: %s", temp_path, path, strerror(errno));
+		unlink(temp_path);
+		return FALSE;
+	}
 
 	msg_info_map("saved data from %s in %s, %uz bytes", bk->uri, path, len + sizeof(header) + header.etag_len);
 
