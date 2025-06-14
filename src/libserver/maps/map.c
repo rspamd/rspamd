@@ -84,7 +84,8 @@ RSPAMD_CONSTRUCTOR(rspamd_map_log_init)
 }
 
 /**
- * Write HTTP request
+ * Write HTTP request with proper cache validation headers
+ * Uses ETags (If-None-Match) and Last-Modified (If-Modified-Since) for conditional requests
  */
 static void
 write_http_request(struct http_callback_data *cbd)
@@ -296,18 +297,78 @@ rspamd_map_cache_cb(struct ev_loop *loop, ev_timer *w, int revents)
 	}
 }
 
+/**
+ * Calculate next check time with proper priority for different cache validation mechanisms
+ * Priority: ETags > Last-Modified > Cache expiration headers
+ * @param now current time
+ * @param expires time from cache expiration header
+ * @param map_check_interval base polling interval
+ * @param has_etag whether we have ETag for conditional requests
+ * @param has_last_modified whether we have Last-Modified for conditional requests
+ * @return next check time
+ */
 static inline time_t
-rspamd_http_map_process_next_check(time_t now, time_t expires, time_t map_check_interval)
+rspamd_http_map_process_next_check(struct rspamd_map *map,
+								   struct rspamd_map_backend *bk,
+								   time_t now,
+								   time_t expires,
+								   time_t map_check_interval,
+								   gboolean has_etag,
+								   gboolean has_last_modified)
 {
-	static const time_t interval_mult = 16;
-	/* By default use expires header */
-	time_t next_check = expires;
+	static const time_t interval_mult = 4; /* Reduced from 16 to be more responsive */
+	time_t next_check;
+	time_t effective_interval = map_check_interval;
 
-	if (expires < now) {
-		return now;
+	/*
+	 * Priority order for cache validation:
+	 * 1. ETags (most reliable)
+	 * 2. Last-Modified dates
+	 * 3. Cache expiration headers (least reliable)
+	 */
+
+	if (has_etag || has_last_modified) {
+		/*
+		 * If we have ETags or Last-Modified, we can use conditional requests
+		 * to avoid unnecessary downloads. However, we still need to be respectful
+		 * to servers and not DoS them with overly aggressive polling.
+		 */
+		if (map_check_interval < min_respectful_interval) {
+			/*
+			 * User configured very aggressive polling, but server provides cache validation.
+			 * Enforce minimum respectful interval to avoid DoS'ing the server.
+			 */
+			effective_interval = min_respectful_interval * interval_mult;
+			msg_info_map("map polling interval %d too aggressive with server cache support for %s, "
+						 "using %d seconds minimum",
+						 (int) map_check_interval, bk->uri, (int) effective_interval);
+		}
+
+		if (expires > now && (expires - now) <= effective_interval * interval_mult) {
+			/* Use expires header if it's reasonable (within interval_mult x poll interval) */
+			next_check = expires;
+		}
+		else {
+			/* Use effective interval, don't extend too much */
+			next_check = now + effective_interval;
+		}
 	}
-	else if (expires - now > map_check_interval * interval_mult) {
-		next_check = now + map_check_interval * interval_mult;
+	else if (expires > now) {
+		/*
+		 * No ETags or Last-Modified available, rely on cache expiration.
+		 * But still cap the interval to avoid too long delays.
+		 * No need for respectful interval protection here since no conditional requests.
+		 */
+		if (expires - now > map_check_interval * interval_mult) {
+			next_check = now + map_check_interval * interval_mult;
+		}
+		else {
+			next_check = expires;
+		}
+	}
+	else {
+		/* No valid cache information, check immediately */
+		next_check = now;
 	}
 
 	return next_check;
@@ -381,10 +442,11 @@ http_map_finish(struct rspamd_http_connection *conn,
 			goto err;
 		}
 
-		/* Check for expires */
+		/* Check for expires + etag */
 		double cached_timeout = map->poll_timeout * 2;
 
 		expires_hdr = rspamd_http_message_find_header(msg, "Expires");
+		etag_hdr = rspamd_http_message_find_header(msg, "ETag");
 
 		if (expires_hdr) {
 			time_t hdate;
@@ -392,8 +454,10 @@ http_map_finish(struct rspamd_http_connection *conn,
 			hdate = rspamd_http_parse_date(expires_hdr->begin, expires_hdr->len);
 
 			if (hdate != (time_t) -1 && hdate > msg->date) {
-				map->next_check = rspamd_http_map_process_next_check(msg->date, hdate,
-																	 (time_t) map->poll_timeout);
+				map->next_check = rspamd_http_map_process_next_check(map, bk, msg->date, hdate,
+																	 (time_t) map->poll_timeout,
+																	 etag_hdr != NULL,
+																	 msg->last_modified != 0);
 				cached_timeout = map->next_check - msg->date;
 			}
 			else {
@@ -401,9 +465,16 @@ http_map_finish(struct rspamd_http_connection *conn,
 				map->next_check = 0;
 			}
 		}
-
-		/* Check for etag */
-		etag_hdr = rspamd_http_message_find_header(msg, "ETag");
+		else if (etag_hdr != NULL || msg->last_modified != 0) {
+			/* No expires header, but we have ETag or Last-Modified - use respectful interval */
+			time_t effective_interval = rspamd_map_get_respectful_interval(map->poll_timeout);
+			if (effective_interval != map->poll_timeout) {
+				msg_info_map("map polling interval %d too aggressive with server cache support, "
+							 "using %d seconds minimum",
+							 (int) map->poll_timeout, (int) effective_interval);
+			}
+			map->next_check = msg->date + effective_interval;
+		}
 
 		if (etag_hdr) {
 			if (cbd->data->etag) {
@@ -551,13 +622,25 @@ http_map_finish(struct rspamd_http_connection *conn,
 
 			hdate = rspamd_http_parse_date(expires_hdr->begin, expires_hdr->len);
 			if (hdate != (time_t) -1 && hdate > msg->date) {
-				map->next_check = rspamd_http_map_process_next_check(msg->date, hdate,
-																	 (time_t) map->poll_timeout);
+				map->next_check = rspamd_http_map_process_next_check(map, bk, msg->date, hdate,
+																	 (time_t) map->poll_timeout,
+																	 cbd->data->etag != NULL,
+																	 msg->last_modified != 0);
 			}
 			else {
 				msg_info_map("invalid expires header: %T, ignore it", expires_hdr);
 				map->next_check = 0;
 			}
+		}
+		else if (cbd->data->etag != NULL || msg->last_modified != 0) {
+			/* No expires header, but we have ETag or Last-Modified - use respectful interval */
+			time_t effective_interval = rspamd_map_get_respectful_interval(map->poll_timeout);
+			if (effective_interval != map->poll_timeout) {
+				msg_info_map("map polling interval %d too aggressive with server cache support, "
+							 "using %d seconds minimum",
+							 (int) map->poll_timeout, (int) effective_interval);
+			}
+			map->next_check = msg->date + effective_interval;
 		}
 
 		etag_hdr = rspamd_http_message_find_header(msg, "ETag");
@@ -1703,7 +1786,11 @@ rspamd_map_read_http_cached_file(struct rspamd_map *map,
 	double now = rspamd_get_calendar_ticks();
 
 	if (header.next_check > now) {
-		map->next_check = rspamd_http_map_process_next_check(now, header.next_check, map->poll_timeout);
+		/* We assume that we have this data inside the cached file */
+		map->next_check = rspamd_http_map_process_next_check(map, bk, now, header.next_check,
+															 map->poll_timeout,
+															 header.etag_len > 0,
+															 true);
 	}
 	else {
 		map->next_check = now;
