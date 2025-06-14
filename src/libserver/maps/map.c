@@ -317,6 +317,7 @@ rspamd_http_map_process_next_check(struct rspamd_map *map,
 								   gboolean has_last_modified)
 {
 	static const time_t interval_mult = 4; /* Reduced from 16 to be more responsive */
+	static const time_t min_respectful_interval = 5;
 	time_t next_check;
 	time_t effective_interval = map_check_interval;
 
@@ -372,6 +373,23 @@ rspamd_http_map_process_next_check(struct rspamd_map *map,
 	}
 
 	return next_check;
+}
+
+/**
+ * Calculate respectful polling interval to avoid DoS'ing servers with cache validation
+ * @param map_check_interval user configured interval
+ * @return effective interval that respects server resources
+ */
+static inline time_t
+rspamd_map_get_respectful_interval(time_t map_check_interval)
+{
+	static const time_t min_respectful_interval = 5; /* Minimum 5 seconds to be respectful */
+	static const time_t interval_mult = 4;           /* Multiplier for respectful minimum */
+
+	if (map_check_interval < min_respectful_interval) {
+		return min_respectful_interval * interval_mult;
+	}
+	return map_check_interval;
 }
 
 static int
