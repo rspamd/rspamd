@@ -663,6 +663,8 @@ local check_from_id = rspamd_config:register_symbol {
     if (from and from[1]) then
       if not (from[1]["flags"]["valid"]) then
         task:insert_result('FROM_INVALID', 1.0)
+      else (from[1].addr == nil or from[1].addr == '') then
+        task:insert_result('FROM_NO_ADDR', 1.0)
       end
       if (from[1].name == nil or from[1].name == '') then
         task:insert_result('FROM_NO_DN', 1.0)
@@ -727,6 +729,14 @@ rspamd_config:register_symbol {
   parent = check_from_id,
   type = 'virtual',
   description = 'From header does not have a valid format',
+}
+rspamd_config:register_symbol {
+  name = 'FROM_NO_ADDR',
+  score = 2.0,
+  group = 'headers',
+  parent = check_from_id,
+  type = 'virtual',
+  description = 'From header does not have an email address',
 }
 rspamd_config:register_symbol {
   name = 'FROM_NO_DN',
