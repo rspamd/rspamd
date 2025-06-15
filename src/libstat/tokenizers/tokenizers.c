@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@
 #include "contrib/mumhash/mum.h"
 #include "libmime/lang_detection.h"
 #include "libstemmer.h"
+#define RSPAMD_TOKENIZER_INTERNAL
+#include "custom_tokenizer.h"
 
 #include <unicode/utf8.h>
 #include <unicode/uchar.h>
@@ -300,6 +302,9 @@ rspamd_tokenize_text(const char *text, gsize len,
 	static const gsize long_text_limit = 1 * 1024 * 1024;
 	static const ev_tstamp max_exec_time = 0.2; /* 200 ms */
 	ev_tstamp start;
+	struct rspamd_custom_tokenizer *custom_tok = NULL;
+	double custom_confidence = 0.0;
+	const char *detected_lang = NULL;
 
 	if (text == NULL) {
 		return cur_words;
@@ -332,6 +337,54 @@ rspamd_tokenize_text(const char *text, gsize len,
 	}
 	else {
 		res = cur_words;
+	}
+
+	/* Try custom tokenizers first if we're in UTF mode */
+	if (cfg && cfg->tokenizer_manager && how == RSPAMD_TOKENIZE_UTF && utxt != NULL) {
+		custom_tok = rspamd_tokenizer_manager_detect(
+			cfg->tokenizer_manager,
+			text, len,
+			&custom_confidence,
+			NULL, /* no input language hint */
+			&detected_lang);
+
+		if (custom_tok && custom_confidence >= custom_tok->min_confidence) {
+			/* Use custom tokenizer with exception handling */
+			GArray *custom_res = rspamd_custom_tokenizer_tokenize_with_exceptions(
+				custom_tok, text, len, exceptions, pool);
+
+			if (custom_res) {
+				msg_debug_pool("using custom tokenizer %s (confidence: %.2f) for text tokenization",
+							   custom_tok->name, custom_confidence);
+
+				/* Calculate hash if needed */
+				if (hash && custom_res->len > 0) {
+					unsigned int i;
+					for (i = 0; i < custom_res->len; i++) {
+						rspamd_stat_token_t *t = &g_array_index(custom_res, rspamd_stat_token_t, i);
+						if (t->original.len >= sizeof(uint64_t)) {
+							uint64_t tmp;
+							memcpy(&tmp, t->original.begin, sizeof(tmp));
+							hv = mum_hash_step(hv, tmp);
+						}
+					}
+					*hash = mum_hash_finish(hv);
+				}
+
+				/* If we had existing words, append to them */
+				if (cur_words && custom_res != cur_words) {
+					g_array_append_vals(cur_words, custom_res->data, custom_res->len);
+					g_array_free(custom_res, TRUE);
+					return cur_words;
+				}
+
+				return custom_res;
+			}
+			else {
+				msg_warn_pool("custom tokenizer %s failed to tokenize text, falling back to default",
+							  custom_tok->name);
+			}
+		}
 	}
 
 	if (G_UNLIKELY(how == RSPAMD_TOKENIZE_RAW || utxt == NULL)) {
