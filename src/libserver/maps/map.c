@@ -430,6 +430,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 			return 0;
 		}
 
+		/* This code is executed when we are actually reading a map */
 		cbd->data->last_checked = msg->date;
 
 		if (msg->last_modified) {
@@ -634,6 +635,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 		}
 
 		expires_hdr = rspamd_http_message_find_header(msg, "Expires");
+		bool has_expires = (expires_hdr != NULL);
 
 		if (expires_hdr) {
 			time_t hdate;
@@ -648,6 +650,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 			else {
 				msg_info_map("invalid expires header: %T, ignore it", expires_hdr);
 				map->next_check = 0;
+				has_expires = false;
 			}
 		}
 		else if (cbd->data->etag != NULL || msg->last_modified != 0) {
@@ -672,18 +675,19 @@ http_map_finish(struct rspamd_http_connection *conn,
 			}
 		}
 
-		if (map->next_check) {
+		if (has_expires) {
 			rspamd_http_date_format(next_check_date, sizeof(next_check_date),
 									map->next_check);
 			msg_info_map("data is not modified for server %s (%s), next check at %s "
 						 "(http cache based: %T)",
 						 cbd->data->host,
 						 bk->uri,
-						 next_check_date, expires_hdr);
+						 next_check_date,
+						 expires_hdr);
 		}
 		else {
 			rspamd_http_date_format(next_check_date, sizeof(next_check_date),
-									rspamd_get_calendar_ticks() + map->poll_timeout);
+									map->next_check);
 			msg_info_map("data is not modified for server %s (%s), next check at %s "
 						 "(timer based)",
 						 cbd->data->host,
