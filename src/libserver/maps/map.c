@@ -620,7 +620,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 		/* Announce for other processes */
 		g_atomic_int_set(&data->cache->available, 1);
 		g_atomic_int_set(&map->shared->loaded, 1);
-		g_atomic_int_set(&map->shared->cached, 0);
+		g_atomic_int_set(&map->shared->cached, 1);
 
 		rspamd_map_process_periodic(cbd->periodic);
 	}
@@ -1549,9 +1549,6 @@ rspamd_map_read_cached(struct rspamd_map *map, struct rspamd_map_backend *bk,
 		msg_info_map("%s: read map data cached %z bytes", bk->uri, len);
 		map->read_callback(in, len, &periodic->cbdata, TRUE);
 	}
-
-	g_atomic_int_set(&map->shared->loaded, 1);
-	g_atomic_int_set(&map->shared->cached, 1);
 
 	munmap(in, mmap_len);
 
