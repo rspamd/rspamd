@@ -33,7 +33,7 @@ if learned_ham > 0 and learned_spam > 0 then
       hmget_args = {'H', 'S'}
     end
 
-    local token_data = redis.call('HMGET', token, table.unpack(hmget_args))
+    local token_data = redis.call('HMGET', token, unpack(hmget_args))
 
     if token_data then
       local ham_count = token_data[1]
