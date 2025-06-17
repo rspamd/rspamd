@@ -26,7 +26,14 @@ end
 
 if learned_ham > 0 and learned_spam > 0 then
   for i, token in ipairs(input_tokens) do
-    local token_data = redis.call('HMGET', token, 'H', 'S')
+    local hmget_args
+    if category then
+      hmget_args = {'H', 'S', category}
+    else
+      hmget_args = {'H', 'S'}
+    end
+
+    local token_data = redis.call('HMGET', token, table.unpack(hmget_args))
 
     if token_data then
       local ham_count = token_data[1]
@@ -39,15 +46,13 @@ if learned_ham > 0 and learned_spam > 0 then
       if spam_count then
         table.insert(output_spam, { i, tonumber(spam_count) })
       end
-    end
-  end
-end
 
-if category and learned_cat > 0 then
-  for i, token in ipairs(input_tokens) do
-    local cat_count = redis.call('HGET', token, category)
-    if cat_count then
-      table.insert(output_cat, { i, tonumber(cat_count) })
+      if category and learned_cat > 0 then
+        local cat_count = token_data[3]
+        if cat_count then
+          table.insert(output_cat, { i, tonumber(cat_count) })
+        end
+      end
     end
   end
 end
