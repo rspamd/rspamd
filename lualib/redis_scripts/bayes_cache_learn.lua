@@ -3,15 +3,22 @@
 -- key1 - cache id
 -- key2 - is spam (1 or 0)
 -- key3 - configuration table in message pack
+-- key4 - (optional) category
 
 local cache_id = KEYS[1]
 local is_spam = KEYS[2]
 local conf = cmsgpack.unpack(KEYS[3])
+local category = KEYS[4]
 cache_id = string.sub(cache_id, 1, conf.cache_elt_len)
+
+local prefix_base = conf.cache_prefix
+if category then
+  prefix_base = prefix_base .. "_" .. category
+end
 
 -- Try each prefix that is in Redis (as some other instance might have set it)
 for i = 0, conf.cache_max_keys do
-  local prefix = conf.cache_prefix .. string.rep("X", i)
+  local prefix = prefix_base .. string.rep("X", i)
   local have = redis.call('HGET', prefix, cache_id)
 
   if have then
@@ -25,7 +32,7 @@ local added = false
 local lim = conf.cache_max_elt
 for i = 0, conf.cache_max_keys do
   if not added then
-    local prefix = conf.cache_prefix .. string.rep("X", i)
+    local prefix = prefix_base .. string.rep("X", i)
     local count = redis.call('HLEN', prefix)
 
     if count < lim then
@@ -40,7 +47,7 @@ if not added then
   -- Need to expire some keys
   local expired = false
   for i = 0, conf.cache_max_keys do
-    local prefix = conf.cache_prefix .. string.rep("X", i)
+    local prefix = prefix_base .. string.rep("X", i)
     local exists = redis.call('EXISTS', prefix)
 
     if exists then
@@ -52,7 +59,7 @@ if not added then
         expired = true
       elseif i > 0 then
         -- Move key to a shorter prefix, so we will rotate them eventually from lower to upper
-        local new_prefix = conf.cache_prefix .. string.rep("X", i - 1)
+        local new_prefix = prefix_base .. string.rep("X", i - 1)
         redis.call('RENAME', prefix, new_prefix)
       end
     end
