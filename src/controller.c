@@ -68,6 +68,7 @@
 #define PATH_NEIGHBOURS "/neighbours"
 #define PATH_PLUGINS "/plugins"
 #define PATH_PING "/ping"
+#define PATH_BAYES_CLASSIFIERS "/bayes/classifiers"
 
 #define msg_err_session(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL,                               \
 														 session->pool->tag.tagname, session->pool->tag.uid, \
@@ -992,9 +993,9 @@ rspamd_controller_handle_maps(struct rspamd_http_connection_entry *conn_ent,
 									  "type", 0, false);
 				ucl_object_insert_key(obj, ucl_object_frombool(editable),
 									  "editable", 0, false);
-				ucl_object_insert_key(obj, ucl_object_frombool(bk->shared->loaded),
+				ucl_object_insert_key(obj, ucl_object_frombool(map->shared->loaded),
 									  "loaded", 0, false);
-				ucl_object_insert_key(obj, ucl_object_frombool(bk->shared->cached),
+				ucl_object_insert_key(obj, ucl_object_frombool(map->shared->cached),
 									  "cached", 0, false);
 				ucl_array_append(top, obj);
 			}
@@ -1012,9 +1013,9 @@ rspamd_controller_handle_maps(struct rspamd_http_connection_entry *conn_ent,
 									  "type", 0, false);
 				ucl_object_insert_key(obj, ucl_object_frombool(false),
 									  "editable", 0, false);
-				ucl_object_insert_key(obj, ucl_object_frombool(bk->shared->loaded),
+				ucl_object_insert_key(obj, ucl_object_frombool(map->shared->loaded),
 									  "loaded", 0, false);
-				ucl_object_insert_key(obj, ucl_object_frombool(bk->shared->cached),
+				ucl_object_insert_key(obj, ucl_object_frombool(map->shared->cached),
 									  "cached", 0, false);
 				ucl_array_append(top, obj);
 			}
@@ -1141,7 +1142,7 @@ rspamd_controller_handle_get_map(struct rspamd_http_connection_entry *conn_ent,
 		rspamd_map_traverse(bk->map, rspamd_controller_map_traverse_callback, &map_body, FALSE);
 		rspamd_http_message_set_body_from_fstring_steal(reply, map_body);
 	}
-	else if (bk->shared->loaded) {
+	else if (map->shared->loaded) {
 		reply = rspamd_http_new_message(HTTP_RESPONSE);
 		reply->code = 200;
 		rspamd_fstring_t *map_body = rspamd_fstring_new();
@@ -3446,6 +3447,40 @@ rspamd_controller_handle_lua_plugin(struct rspamd_http_connection_entry *conn_en
 	return 0;
 }
 
+/*
+ * Bayes classifier list command handler:
+ * request: /bayes/classifiers
+ * headers: Password
+ * reply: JSON array of Bayes classifier names
+ *   Note: list is in reverse of declaration order (GList prepend).
+ */
+static int
+rspamd_controller_handle_bayes_classifiers(struct rspamd_http_connection_entry *conn_ent,
+											struct rspamd_http_message *msg)
+{
+	struct rspamd_controller_session *session = conn_ent->ud;
+	struct rspamd_controller_worker_ctx *ctx = session->ctx;
+	ucl_object_t *arr;
+	struct rspamd_classifier_config *clc;
+	GList *cur;
+
+	if (!rspamd_controller_check_password(conn_ent, session, msg, FALSE)) {
+		return 0;
+	}
+
+	arr = ucl_object_typed_new(UCL_ARRAY);
+	cur = g_list_last(ctx->cfg->classifiers);
+	while (cur) {
+		clc = cur->data;
+		ucl_array_append(arr, ucl_object_fromstring(clc->name));
+		cur = g_list_previous(cur);
+	}
+
+	rspamd_controller_send_ucl(conn_ent, arr);
+	ucl_object_unref(arr);
+	return 0;
+}
+
 
 static void
 rspamd_controller_error_handler(struct rspamd_http_connection_entry *conn_ent,
@@ -4055,6 +4090,9 @@ start_controller_worker(struct rspamd_worker *worker)
 	rspamd_http_router_add_path(ctx->http,
 								PATH_PING,
 								rspamd_controller_handle_ping);
+	rspamd_http_router_add_path(ctx->http,
+								PATH_BAYES_CLASSIFIERS,
+								rspamd_controller_handle_bayes_classifiers);
 	rspamd_controller_register_plugins_paths(ctx);
 
 #if 0

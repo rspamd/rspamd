@@ -128,6 +128,7 @@ local settings = {
     inf = 4,
     its = 4,
     jnlp = 4,
+    ['library-ms'] = 4,
     lnk = 4,
     ksh = 4,
     mad = 4,
@@ -179,6 +180,7 @@ local settings = {
     reg = 4,
     scf = 4,
     scr = 4,
+    ['search-ms'] = 4,
     shs = 4,
     theme = 4,
     url = 4,
@@ -406,9 +408,9 @@ local function check_mime_type(task)
         local score2 = check_tables(ext2)
         -- Check if detected extension match real extension
         if detected_ext and detected_ext == ext then
-            check_extension(score1, nil)
+          check_extension(score1, nil)
         else
-            check_extension(score1, score2)
+          check_extension(score1, score2)
         end
         -- Check for archive cloaking like .zip.gz
         if settings['archive_extensions'][ext2]

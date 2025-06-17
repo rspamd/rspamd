@@ -84,7 +84,8 @@ RSPAMD_CONSTRUCTOR(rspamd_map_log_init)
 }
 
 /**
- * Write HTTP request
+ * Write HTTP request with proper cache validation headers
+ * Uses ETags (If-None-Match) and Last-Modified (If-Modified-Since) for conditional requests
  */
 static void
 write_http_request(struct http_callback_data *cbd)
@@ -109,7 +110,8 @@ write_http_request(struct http_callback_data *cbd)
 		}
 		if (cbd->data->etag) {
 			rspamd_http_message_add_header_len(msg, "If-None-Match",
-											   cbd->data->etag->str, cbd->data->etag->len);
+											   cbd->data->etag->str,
+											   cbd->data->etag->len);
 		}
 	}
 
@@ -295,38 +297,99 @@ rspamd_map_cache_cb(struct ev_loop *loop, ev_timer *w, int revents)
 	}
 }
 
-/*
- * Unlocks the current backend if locked before switching to another backend
+/**
+ * Calculate next check time with proper priority for different cache validation mechanisms
+ * Priority: ETags > Last-Modified > Cache expiration headers
+ * @param now current time
+ * @param expires time from cache expiration header
+ * @param map_check_interval base polling interval
+ * @param has_etag whether we have ETag for conditional requests
+ * @param has_last_modified whether we have Last-Modified for conditional requests
+ * @return next check time
  */
-static void
-rspamd_map_unlock_current_backend(struct map_periodic_cbdata *cbd)
-{
-	struct rspamd_map_backend *bk;
-	struct rspamd_map *map = cbd->map;
-
-	if (cbd->locked && cbd->cur_backend < cbd->map->backends->len) {
-		bk = g_ptr_array_index(cbd->map->backends, cbd->cur_backend);
-		g_atomic_int_set(&bk->shared->locked, 0);
-		cbd->locked = FALSE;
-		msg_debug_map("unlocked current backend %s before switching", bk->uri);
-	}
-}
-
 static inline time_t
-rspamd_http_map_process_next_check(time_t now, time_t expires, time_t map_check_interval)
+rspamd_http_map_process_next_check(struct rspamd_map *map,
+								   struct rspamd_map_backend *bk,
+								   time_t now,
+								   time_t expires,
+								   time_t map_check_interval,
+								   gboolean has_etag,
+								   gboolean has_last_modified)
 {
-	static const time_t interval_mult = 16;
-	/* By default use expires header */
-	time_t next_check = expires;
+	static const time_t interval_mult = 4; /* Reduced from 16 to be more responsive */
+	static const time_t min_respectful_interval = 5;
+	time_t next_check;
+	time_t effective_interval = map_check_interval;
 
-	if (expires < now) {
-		return now;
+	/*
+	 * Priority order for cache validation:
+	 * 1. ETags (most reliable)
+	 * 2. Last-Modified dates
+	 * 3. Cache expiration headers (least reliable)
+	 */
+
+	if (has_etag || has_last_modified) {
+		/*
+		 * If we have ETags or Last-Modified, we can use conditional requests
+		 * to avoid unnecessary downloads. However, we still need to be respectful
+		 * to servers and not DoS them with overly aggressive polling.
+		 */
+		if (map_check_interval < min_respectful_interval) {
+			/*
+			 * User configured very aggressive polling, but server provides cache validation.
+			 * Enforce minimum respectful interval to avoid DoS'ing the server.
+			 */
+			effective_interval = min_respectful_interval * interval_mult;
+			msg_info_map("map polling interval %d too aggressive with server cache support for %s, "
+						 "using %d seconds minimum",
+						 (int) map_check_interval, bk->uri, (int) effective_interval);
+		}
+
+		if (expires > now && (expires - now) <= effective_interval * interval_mult) {
+			/* Use expires header if it's reasonable (within interval_mult x poll interval) */
+			next_check = expires;
+		}
+		else {
+			/* Use effective interval, don't extend too much */
+			next_check = now + effective_interval;
+		}
 	}
-	else if (expires - now > map_check_interval * interval_mult) {
-		next_check = now + map_check_interval * interval_mult;
+	else if (expires > now) {
+		/*
+		 * No ETags or Last-Modified available, rely on cache expiration.
+		 * But still cap the interval to avoid too long delays.
+		 * No need for respectful interval protection here since no conditional requests.
+		 */
+		if (expires - now > map_check_interval * interval_mult) {
+			next_check = now + map_check_interval * interval_mult;
+		}
+		else {
+			next_check = expires;
+		}
+	}
+	else {
+		/* No valid cache information, check immediately */
+		next_check = now;
 	}
 
 	return next_check;
+}
+
+/**
+ * Calculate respectful polling interval to avoid DoS'ing servers with cache validation
+ * @param map_check_interval user configured interval
+ * @return effective interval that respects server resources
+ */
+static inline time_t
+rspamd_map_get_respectful_interval(time_t map_check_interval)
+{
+	static const time_t min_respectful_interval = 5; /* Minimum 5 seconds to be respectful */
+	static const time_t interval_mult = 4;           /* Multiplier for respectful minimum */
+
+	if (map_check_interval < min_respectful_interval) {
+		return min_respectful_interval * interval_mult;
+	}
+	return map_check_interval;
 }
 
 static int
@@ -350,15 +413,15 @@ http_map_finish(struct rspamd_http_connection *conn,
 	if (msg->code == 200) {
 
 		if (cbd->check) {
-			msg_info_map("need to reread map from %s", cbd->bk->uri);
+			msg_info_map("need to reread map from %s (reply code 200); "
+						 "date timestamp: %z, last modified: %z",
+						 cbd->bk->uri, (size_t) msg->date, (size_t) msg->last_modified);
 			cbd->periodic->need_modify = TRUE;
-			/* Unlock current backend before resetting */
-			rspamd_map_unlock_current_backend(cbd->periodic);
 			/* Reset the whole chain */
 			cbd->periodic->cur_backend = 0;
 			/* Reset cache, old cached data will be cleaned on timeout */
 			g_atomic_int_set(&data->cache->available, 0);
-			g_atomic_int_set(&bk->shared->loaded, 0);
+			g_atomic_int_set(&map->shared->loaded, 0);
 			data->cur_cache_cbd = NULL;
 
 			rspamd_map_process_periodic(cbd->periodic);
@@ -367,6 +430,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 			return 0;
 		}
 
+		/* This code is executed when we are actually reading a map */
 		cbd->data->last_checked = msg->date;
 
 		if (msg->last_modified) {
@@ -397,10 +461,11 @@ http_map_finish(struct rspamd_http_connection *conn,
 			goto err;
 		}
 
-		/* Check for expires */
+		/* Check for expires + etag */
 		double cached_timeout = map->poll_timeout * 2;
 
 		expires_hdr = rspamd_http_message_find_header(msg, "Expires");
+		etag_hdr = rspamd_http_message_find_header(msg, "ETag");
 
 		if (expires_hdr) {
 			time_t hdate;
@@ -408,8 +473,10 @@ http_map_finish(struct rspamd_http_connection *conn,
 			hdate = rspamd_http_parse_date(expires_hdr->begin, expires_hdr->len);
 
 			if (hdate != (time_t) -1 && hdate > msg->date) {
-				map->next_check = rspamd_http_map_process_next_check(msg->date, hdate,
-																	 (time_t) map->poll_timeout);
+				map->next_check = rspamd_http_map_process_next_check(map, bk, msg->date, hdate,
+																	 (time_t) map->poll_timeout,
+																	 etag_hdr != NULL,
+																	 msg->last_modified != 0);
 				cached_timeout = map->next_check - msg->date;
 			}
 			else {
@@ -417,9 +484,16 @@ http_map_finish(struct rspamd_http_connection *conn,
 				map->next_check = 0;
 			}
 		}
-
-		/* Check for etag */
-		etag_hdr = rspamd_http_message_find_header(msg, "ETag");
+		else if (etag_hdr != NULL || msg->last_modified != 0) {
+			/* No expires header, but we have ETag or Last-Modified - use respectful interval */
+			time_t effective_interval = rspamd_map_get_respectful_interval(map->poll_timeout);
+			if (effective_interval != map->poll_timeout) {
+				msg_info_map("map polling interval %d too aggressive with server cache support, "
+							 "using %d seconds minimum",
+							 (int) map->poll_timeout, (int) effective_interval);
+			}
+			map->next_check = msg->date + effective_interval;
+		}
 
 		if (etag_hdr) {
 			if (cbd->data->etag) {
@@ -440,12 +514,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 
 		MAP_RETAIN(cbd->shmem_data, "shmem_data");
 		cbd->data->gen++;
-		/*
-		 * We know that a map is in the locked state
-		 */
-		g_atomic_int_set(&data->cache->available, 1);
-		g_atomic_int_set(&bk->shared->loaded, 1);
-		g_atomic_int_set(&bk->shared->cached, 0);
+
 		/* Store cached data */
 		rspamd_strlcpy(data->cache->shmem_name, cbd->shmem_data->shm_name,
 					   sizeof(data->cache->shmem_name));
@@ -545,10 +614,14 @@ http_map_finish(struct rspamd_http_connection *conn,
 
 		MAP_RELEASE(cbd->shmem_data, "shmem_data");
 
-		/* Unlock current backend before switching to next */
-		rspamd_map_unlock_current_backend(cbd->periodic);
 		cbd->periodic->cur_backend++;
 		munmap(in, dlen);
+
+		/* Announce for other processes */
+		g_atomic_int_set(&data->cache->available, 1);
+		g_atomic_int_set(&map->shared->loaded, 1);
+		g_atomic_int_set(&map->shared->cached, 1);
+
 		rspamd_map_process_periodic(cbd->periodic);
 	}
 	else if (msg->code == 304 && cbd->check) {
@@ -562,19 +635,33 @@ http_map_finish(struct rspamd_http_connection *conn,
 		}
 
 		expires_hdr = rspamd_http_message_find_header(msg, "Expires");
+		bool has_expires = (expires_hdr != NULL);
 
 		if (expires_hdr) {
 			time_t hdate;
 
 			hdate = rspamd_http_parse_date(expires_hdr->begin, expires_hdr->len);
 			if (hdate != (time_t) -1 && hdate > msg->date) {
-				map->next_check = rspamd_http_map_process_next_check(msg->date, hdate,
-																	 (time_t) map->poll_timeout);
+				map->next_check = rspamd_http_map_process_next_check(map, bk, msg->date, hdate,
+																	 (time_t) map->poll_timeout,
+																	 cbd->data->etag != NULL,
+																	 msg->last_modified != 0);
 			}
 			else {
 				msg_info_map("invalid expires header: %T, ignore it", expires_hdr);
 				map->next_check = 0;
+				has_expires = false;
 			}
+		}
+		else if (cbd->data->etag != NULL || msg->last_modified != 0) {
+			/* No expires header, but we have ETag or Last-Modified - use respectful interval */
+			time_t effective_interval = rspamd_map_get_respectful_interval(map->poll_timeout);
+			if (effective_interval != map->poll_timeout) {
+				msg_info_map("map polling interval %d too aggressive with server cache support, "
+							 "using %d seconds minimum",
+							 (int) map->poll_timeout, (int) effective_interval);
+			}
+			map->next_check = msg->date + effective_interval;
 		}
 
 		etag_hdr = rspamd_http_message_find_header(msg, "ETag");
@@ -588,24 +675,27 @@ http_map_finish(struct rspamd_http_connection *conn,
 			}
 		}
 
-		if (map->next_check) {
+		if (has_expires) {
 			rspamd_http_date_format(next_check_date, sizeof(next_check_date),
 									map->next_check);
-			msg_info_map("data is not modified for server %s, next check at %s "
+			msg_info_map("data is not modified for server %s (%s), next check at %s "
 						 "(http cache based: %T)",
-						 cbd->data->host, next_check_date, expires_hdr);
+						 cbd->data->host,
+						 bk->uri,
+						 next_check_date,
+						 expires_hdr);
 		}
 		else {
 			rspamd_http_date_format(next_check_date, sizeof(next_check_date),
-									rspamd_get_calendar_ticks() + map->poll_timeout);
-			msg_info_map("data is not modified for server %s, next check at %s "
+									map->next_check);
+			msg_info_map("data is not modified for server %s (%s), next check at %s "
 						 "(timer based)",
-						 cbd->data->host, next_check_date);
+						 cbd->data->host,
+						 bk->uri,
+						 next_check_date);
 		}
 
 		rspamd_map_update_http_cached_file(map, bk, cbd->data);
-		/* Unlock current backend before switching to next */
-		rspamd_map_unlock_current_backend(cbd->periodic);
 		cbd->periodic->cur_backend++;
 		rspamd_map_process_periodic(cbd->periodic);
 	}
@@ -945,7 +1035,7 @@ read_map_file(struct rspamd_map *map, struct file_map_data *data,
 		map->read_callback(NULL, 0, &periodic->cbdata, TRUE);
 	}
 
-	g_atomic_int_set(&bk->shared->loaded, 1);
+	g_atomic_int_set(&map->shared->loaded, 1);
 
 	return TRUE;
 }
@@ -1031,7 +1121,7 @@ read_map_static(struct rspamd_map *map, struct static_map_data *data,
 	}
 
 	data->processed = TRUE;
-	g_atomic_int_set(&bk->shared->loaded, 1);
+	g_atomic_int_set(&map->shared->loaded, 1);
 
 	return TRUE;
 }
@@ -1039,10 +1129,7 @@ read_map_static(struct rspamd_map *map, struct static_map_data *data,
 static void
 rspamd_map_periodic_dtor(struct map_periodic_cbdata *periodic)
 {
-	struct rspamd_map *map;
-	struct rspamd_map_backend *bk;
-
-	map = periodic->map;
+	struct rspamd_map *map = periodic->map;
 	msg_debug_map("periodic dtor %p; need_modify=%d", periodic, periodic->need_modify);
 
 	if (periodic->need_modify || periodic->cbdata.errored) {
@@ -1057,21 +1144,13 @@ rspamd_map_periodic_dtor(struct map_periodic_cbdata *periodic)
 		/* Not modified */
 	}
 
-	if (periodic->locked) {
-		if (periodic->cur_backend < map->backends->len) {
-			bk = (struct rspamd_map_backend *) g_ptr_array_index(map->backends, periodic->cur_backend);
-			g_atomic_int_set(&bk->shared->locked, 0);
-			msg_debug_map("unlocked map %s", map->name);
-		}
-
-		if (periodic->map->wrk->state == rspamd_worker_state_running) {
-			rspamd_map_schedule_periodic(periodic->map,
-										 RSPAMD_SYMBOL_RESULT_NORMAL);
-		}
-		else {
-			msg_debug_map("stop scheduling periodics for %s; terminating state",
-						  periodic->map->name);
-		}
+	if (periodic->map->wrk->state == rspamd_worker_state_running) {
+		rspamd_map_schedule_periodic(periodic->map,
+									 RSPAMD_MAP_SCHEDULE_NORMAL);
+	}
+	else {
+		msg_debug_map("stop scheduling periodics for %s; terminating state",
+					  periodic->map->name);
 	}
 
 	g_free(periodic);
@@ -1471,9 +1550,6 @@ rspamd_map_read_cached(struct rspamd_map *map, struct rspamd_map_backend *bk,
 		map->read_callback(in, len, &periodic->cbdata, TRUE);
 	}
 
-	g_atomic_int_set(&bk->shared->loaded, 1);
-	g_atomic_int_set(&bk->shared->cached, 1);
-
 	munmap(in, mmap_len);
 
 	return TRUE;
@@ -1511,7 +1587,7 @@ rspamd_map_save_http_cached_file(struct rspamd_map *map,
 								 const unsigned char *data,
 								 gsize len)
 {
-	char path[PATH_MAX];
+	char path[PATH_MAX], temp_path[PATH_MAX];
 	unsigned char digest[rspamd_cryptobox_HASHBYTES];
 	struct rspamd_config *cfg = map->cfg;
 	int fd;
@@ -1524,8 +1600,10 @@ rspamd_map_save_http_cached_file(struct rspamd_map *map,
 	rspamd_cryptobox_hash(digest, bk->uri, strlen(bk->uri), NULL, 0);
 	rspamd_snprintf(path, sizeof(path), "%s%c%*xs.map", cfg->maps_cache_dir,
 					G_DIR_SEPARATOR, 20, digest);
+	rspamd_snprintf(temp_path, sizeof(temp_path), "%s.tmp.%d.%d", path,
+					(int) getpid(), (int) rspamd_get_calendar_ticks());
 
-	fd = rspamd_file_xopen(path, O_WRONLY | O_TRUNC | O_CREAT,
+	fd = rspamd_file_xopen(temp_path, O_WRONLY | O_TRUNC | O_CREAT,
 						   00600, FALSE);
 
 	if (fd == -1) {
@@ -1533,8 +1611,9 @@ rspamd_map_save_http_cached_file(struct rspamd_map *map,
 	}
 
 	if (!rspamd_file_lock(fd, FALSE)) {
-		msg_err_map("cannot lock file %s: %s", path, strerror(errno));
+		msg_err_map("cannot lock file %s: %s", temp_path, strerror(errno));
 		close(fd);
+		unlink(temp_path);
 
 		return FALSE;
 	}
@@ -1553,9 +1632,10 @@ rspamd_map_save_http_cached_file(struct rspamd_map *map,
 	}
 
 	if (write(fd, &header, sizeof(header)) != sizeof(header)) {
-		msg_err_map("cannot write file %s (header stage): %s", path, strerror(errno));
+		msg_err_map("cannot write file %s (header stage): %s", temp_path, strerror(errno));
 		rspamd_file_unlock(fd, FALSE);
 		close(fd);
+		unlink(temp_path);
 
 		return FALSE;
 	}
@@ -1563,9 +1643,10 @@ rspamd_map_save_http_cached_file(struct rspamd_map *map,
 	if (header.etag_len > 0) {
 		if (write(fd, RSPAMD_FSTRING_DATA(htdata->etag), header.etag_len) !=
 			header.etag_len) {
-			msg_err_map("cannot write file %s (etag stage): %s", path, strerror(errno));
+			msg_err_map("cannot write file %s (etag stage): %s", temp_path, strerror(errno));
 			rspamd_file_unlock(fd, FALSE);
 			close(fd);
+			unlink(temp_path);
 
 			return FALSE;
 		}
@@ -1573,15 +1654,23 @@ rspamd_map_save_http_cached_file(struct rspamd_map *map,
 
 	/* Now write the rest */
 	if (write(fd, data, len) != len) {
-		msg_err_map("cannot write file %s (data stage): %s", path, strerror(errno));
+		msg_err_map("cannot write file %s (data stage): %s", temp_path, strerror(errno));
 		rspamd_file_unlock(fd, FALSE);
 		close(fd);
+		unlink(temp_path);
 
 		return FALSE;
 	}
 
 	rspamd_file_unlock(fd, FALSE);
 	close(fd);
+
+	/* Atomically move temp file to final location */
+	if (rename(temp_path, path) != 0) {
+		msg_err_map("cannot rename %s to %s: %s", temp_path, path, strerror(errno));
+		unlink(temp_path);
+		return FALSE;
+	}
 
 	msg_info_map("saved data from %s in %s, %uz bytes", bk->uri, path, len + sizeof(header) + header.etag_len);
 
@@ -1716,7 +1805,11 @@ rspamd_map_read_http_cached_file(struct rspamd_map *map,
 	double now = rspamd_get_calendar_ticks();
 
 	if (header.next_check > now) {
-		map->next_check = rspamd_http_map_process_next_check(now, header.next_check, map->poll_timeout);
+		/* We assume that we have this data inside the cached file */
+		map->next_check = rspamd_http_map_process_next_check(map, bk, now, header.next_check,
+															 map->poll_timeout,
+															 header.etag_len > 0,
+															 true);
 	}
 	else {
 		map->next_check = now;
@@ -1763,8 +1856,8 @@ rspamd_map_read_http_cached_file(struct rspamd_map *map,
 	struct tm tm;
 	char ncheck_buf[32], lm_buf[32];
 
-	g_atomic_int_set(&bk->shared->loaded, 1);
-	g_atomic_int_set(&bk->shared->cached, 1);
+	g_atomic_int_set(&map->shared->loaded, 1);
+	g_atomic_int_set(&map->shared->cached, 1);
 	rspamd_localtime(map->next_check, &tm);
 	strftime(ncheck_buf, sizeof(ncheck_buf) - 1, "%Y-%m-%d %H:%M:%S", &tm);
 	rspamd_localtime(htdata->last_modified, &tm);
@@ -1807,7 +1900,6 @@ rspamd_map_common_http_callback(struct rspamd_map *map,
 							 (int) data->last_modified,
 							 (int) data->cache->last_modified);
 				periodic->need_modify = TRUE;
-				/* Reset the whole chain */
 				periodic->cur_backend = 0;
 				rspamd_map_process_periodic(periodic);
 			}
@@ -2067,17 +2159,7 @@ rspamd_map_process_periodic(struct map_periodic_cbdata *cbd)
 
 	/* For each backend we need to check for modifications */
 	if (cbd->cur_backend >= cbd->map->backends->len) {
-		/* Last backend - unlock current backend if needed */
-		if (cbd->locked) {
-			/* Unlock the last processed backend */
-			struct rspamd_map_backend *last_bk;
-			if (cbd->cur_backend > 0 && cbd->cur_backend - 1 < cbd->map->backends->len) {
-				last_bk = g_ptr_array_index(cbd->map->backends, cbd->cur_backend - 1);
-				g_atomic_int_set(&last_bk->shared->locked, 0);
-				cbd->locked = FALSE;
-				msg_debug_map("unlocked last backend %s", last_bk->uri);
-			}
-		}
+		/* Last backend */
 		msg_debug_map("finished map: %d of %d", cbd->cur_backend,
 					  cbd->map->backends->len);
 		MAP_RELEASE(cbd, "periodic");
@@ -2087,32 +2169,9 @@ rspamd_map_process_periodic(struct map_periodic_cbdata *cbd)
 
 	bk = g_ptr_array_index(map->backends, cbd->cur_backend);
 
-	if (!map->file_only && !cbd->locked) {
-		if (!g_atomic_int_compare_and_exchange(&bk->shared->locked,
-											   0, 1)) {
-			msg_debug_map(
-				"don't try to reread map %s as it is locked by other process, "
-				"will reread it later",
-				cbd->map->name);
-			rspamd_map_schedule_periodic(map, RSPAMD_MAP_SCHEDULE_LOCKED);
-			MAP_RELEASE(cbd, "periodic");
-
-			return;
-		}
-		else {
-			msg_debug_map("locked map %s (backend: %s)", map->name, bk->uri);
-			cbd->locked = TRUE;
-		}
-	}
-
 	if (cbd->errored) {
 		/* We should not check other backends if some backend has failed*/
 		rspamd_map_schedule_periodic(cbd->map, RSPAMD_MAP_SCHEDULE_ERROR);
-
-		if (cbd->locked) {
-			g_atomic_int_set(&bk->shared->locked, 0);
-			cbd->locked = FALSE;
-		}
 
 		/* Also set error flag for the map consumer */
 		cbd->cbdata.errored = true;
@@ -2829,9 +2888,6 @@ rspamd_map_parse_backend(struct rspamd_config *cfg, const char *map_line)
 		bk->data.sd = sdata;
 	}
 
-	bk->shared = rspamd_mempool_alloc0_shared(cfg->cfg_pool,
-											  sizeof(struct rspamd_map_shared_backend_data));
-
 	return bk;
 
 err:
@@ -2962,6 +3018,8 @@ rspamd_map_add(struct rspamd_config *cfg,
 	map->user_data = user_data;
 	map->cfg = cfg;
 	map->id = rspamd_random_uint64_fast();
+	map->shared =
+		rspamd_mempool_alloc0_shared(cfg->cfg_pool, sizeof(struct rspamd_map_shared_data));
 	map->backends = g_ptr_array_sized_new(1);
 	map->wrk = worker;
 	rspamd_mempool_add_destructor(cfg->cfg_pool, rspamd_ptr_array_free_hard,
@@ -3060,6 +3118,8 @@ rspamd_map_add_from_ucl(struct rspamd_config *cfg,
 	map->user_data = user_data;
 	map->cfg = cfg;
 	map->id = rspamd_random_uint64_fast();
+	map->shared =
+		rspamd_mempool_alloc0_shared(cfg->cfg_pool, sizeof(struct rspamd_map_shared_data));
 	map->backends = g_ptr_array_new();
 	map->wrk = worker;
 	map->no_file_read = (flags & RSPAMD_MAP_FILE_NO_READ);
@@ -3241,7 +3301,7 @@ rspamd_map_add_from_ucl(struct rspamd_config *cfg,
 
 	if (all_loaded) {
 		/* Static map */
-		g_atomic_int_set(&bk->shared->loaded, 1);
+		g_atomic_int_set(&map->shared->loaded, 1);
 	}
 
 	rspamd_map_calculate_hash(map);
