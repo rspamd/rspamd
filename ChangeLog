@@ -1,3 +1,15 @@
+3.12.1: 17 Jun 2025
+  * [Feature] Add /bayes/classifiers HTTP endpoint
+  * [Feature] Further improvements in scheduling next checks
+  * [Fix] Another fix for maps concurrent load
+  * [Fix] Do not add log tag header in milter logic
+  * [Fix] Do not explicitly add Connection header if it's there
+  * [Fix] Fix proxy headers duplication
+  * [Fix] Fix several issues with the lua_logger
+  * [Fix] Make logger more graceful when dealing with format arguments
+  * [Fix] Try to avoid incomplete writes
+  * [Rework] Eliminate maps locking
+
 3.12.0: 09 Jun 2025
   * [CritFix] In lua-ucl disable macros and file variables by default
   * [Feature] Add keep-alive support

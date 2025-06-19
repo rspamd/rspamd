@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -80,9 +80,13 @@ struct rspamd_storage_shmem {
  */
 #define RSPAMD_HTTP_FLAG_HAS_HOST_HEADER (1 << 7)
 /**
+ * Connection header has been set for a message
+ */
+#define RSPAMD_HTTP_FLAG_HAS_CONNECTION_HEADER (1 << 8)
+/**
  * Message is intended for SSL connection
  */
-#define RSPAMD_HTTP_FLAG_WANT_SSL (1 << 8)
+#define RSPAMD_HTTP_FLAG_WANT_SSL (1 << 9)
 /**
  * Options for HTTP connection
  */
