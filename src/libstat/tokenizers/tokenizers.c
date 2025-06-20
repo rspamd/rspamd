@@ -980,6 +980,16 @@ void rspamd_stem_words(rspamd_words_t *words, rspamd_mempool_t *pool,
 	for (i = 0; i < kv_size(*words); i++) {
 		tok = &kv_A(*words, i);
 
+		/* Skip stemming if token has already been stemmed by custom tokenizer */
+		if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_STEMMED) {
+			/* Already stemmed, just check for stop words */
+			if (tok->stemmed.len > 0 && lang_detector != NULL &&
+				rspamd_language_detector_is_stop_word(lang_detector, tok->stemmed.begin, tok->stemmed.len)) {
+				tok->flags |= RSPAMD_STAT_TOKEN_FLAG_STOP_WORD;
+			}
+			continue;
+		}
+
 		if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_UTF) {
 			if (stem) {
 				const char *stemmed = NULL;
