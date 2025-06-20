@@ -17,9 +17,18 @@
 #ifndef RSPAMD_CUSTOM_TOKENIZER_H
 #define RSPAMD_CUSTOM_TOKENIZER_H
 
+/* Check if we're being included by internal Rspamd code or external plugins */
+#ifdef RSPAMD_TOKENIZER_INTERNAL
+/* Internal Rspamd usage - use the full headers */
 #include "config.h"
 #include "ucl.h"
 #include "libserver/word.h"
+#else
+/* External plugin usage - use standalone types */
+#include "rspamd_tokenizer_types.h"
+/* Forward declaration for UCL object - plugins should include ucl.h if needed */
+typedef struct ucl_object_s ucl_object_t;
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,8 +37,7 @@ extern "C" {
 #define RSPAMD_CUSTOM_TOKENIZER_API_VERSION 1
 
 /**
- * Tokenization result - kvec of rspamd_word_t
- * Uses kvec to avoid exposing GLIB structures to external API
+ * Tokenization result - compatible with both internal and external usage
  */
 typedef rspamd_words_t rspamd_tokenizer_result_t;
 

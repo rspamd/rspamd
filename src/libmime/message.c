@@ -40,6 +40,7 @@
 #include "contrib/uthash/utlist.h"
 #include "contrib/t1ha/t1ha.h"
 #include "received.h"
+#define RSPAMD_TOKENIZER_INTERNAL
 #include "libstat/tokenizers/custom_tokenizer.h"
 
 #define GTUBE_SYMBOL "GTUBE"
