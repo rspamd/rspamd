@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,12 +108,12 @@ rspamd_stat_tokenize_parts_metadata(struct rspamd_stat_ctx *st_ctx,
 										 "M",
 										 task->tokens);
 	}
-	goto meta_words_done;
 
+	return;
 meta_words_error:
-	/* On error, just continue without the problematic tokens */
-meta_words_done:
-	/* kvec memory will be freed with task pool */
+
+	msg_err("cannot process meta words for task"
+			"memory allocation error, skipping the remaining");
 }
 
 /*
