@@ -936,7 +936,7 @@ end:
 }
 
 static void
-rspamd_language_detector_random_select(GArray *ucs_tokens, unsigned int nwords,
+rspamd_language_detector_random_select(rspamd_words_t *ucs_tokens, unsigned int nwords,
 									   goffset *offsets_out,
 									   uint64_t *seed)
 {
@@ -946,7 +946,7 @@ rspamd_language_detector_random_select(GArray *ucs_tokens, unsigned int nwords,
 
 	g_assert(nwords != 0);
 	g_assert(offsets_out != NULL);
-	g_assert(ucs_tokens->len >= nwords);
+	g_assert(kv_size(*ucs_tokens) >= nwords);
 	/*
 	 * We split input array into `nwords` parts. For each part we randomly select
 	 * an element from this particular split. Here is an example:
@@ -963,22 +963,22 @@ rspamd_language_detector_random_select(GArray *ucs_tokens, unsigned int nwords,
 	 * their splits. It is not uniform distribution but it seems to be better
 	 * to include words from different text parts
 	 */
-	step_len = ucs_tokens->len / nwords;
-	remainder = ucs_tokens->len % nwords;
+	step_len = kv_size(*ucs_tokens) / nwords;
+	remainder = kv_size(*ucs_tokens) % nwords;
 
 	out_idx = 0;
 	coin = rspamd_random_uint64_fast_seed(seed);
 	sel = coin % (step_len + remainder);
 	offsets_out[out_idx] = sel;
 
-	for (i = step_len + remainder; i < ucs_tokens->len;
+	for (i = step_len + remainder; i < kv_size(*ucs_tokens);
 		 i += step_len, out_idx++) {
 		unsigned int ntries = 0;
 		coin = rspamd_random_uint64_fast_seed(seed);
 		sel = (coin % step_len) + i;
 
 		for (;;) {
-			tok = &g_array_index(ucs_tokens, rspamd_stat_token_t, sel);
+			tok = &kv_A(*ucs_tokens, sel);
 			/* Filter bad tokens */
 
 			if (tok->unicode.len >= 2 &&
@@ -995,8 +995,8 @@ rspamd_language_detector_random_select(GArray *ucs_tokens, unsigned int nwords,
 				if (ntries < step_len) {
 					sel = (coin % step_len) + i;
 				}
-				else if (ntries < ucs_tokens->len) {
-					sel = coin % ucs_tokens->len;
+				else if (ntries < kv_size(*ucs_tokens)) {
+					sel = coin % kv_size(*ucs_tokens);
 				}
 				else {
 					offsets_out[out_idx] = sel;
@@ -1223,12 +1223,12 @@ static void
 rspamd_language_detector_detect_type(struct rspamd_task *task,
 									 unsigned int nwords,
 									 struct rspamd_lang_detector *d,
-									 GArray *words,
+									 rspamd_words_t *words,
 									 enum rspamd_language_category cat,
 									 khash_t(rspamd_candidates_hash) * candidates,
 									 struct rspamd_mime_text_part *part)
 {
-	unsigned int nparts = MIN(words->len, nwords);
+	unsigned int nparts = MIN(kv_size(*words), nwords);
 	goffset *selected_words;
 	rspamd_stat_token_t *tok;
 	unsigned int i;
@@ -1241,8 +1241,7 @@ rspamd_language_detector_detect_type(struct rspamd_task *task,
 	msg_debug_lang_det("randomly selected %d words", nparts);
 
 	for (i = 0; i < nparts; i++) {
-		tok = &g_array_index(words, rspamd_stat_token_t,
-							 selected_words[i]);
+		tok = &kv_A(*words, selected_words[i]);
 
 		if (tok->unicode.len >= 3) {
 			rspamd_language_detector_detect_word(task, d, tok, candidates,
@@ -1282,7 +1281,7 @@ static enum rspamd_language_detected_type
 rspamd_language_detector_try_ngramm(struct rspamd_task *task,
 									unsigned int nwords,
 									struct rspamd_lang_detector *d,
-									GArray *ucs_tokens,
+									rspamd_words_t *ucs_tokens,
 									enum rspamd_language_category cat,
 									khash_t(rspamd_candidates_hash) * candidates,
 									struct rspamd_mime_text_part *part)
@@ -1863,7 +1862,7 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 		if (rspamd_lang_detection_fasttext_is_enabled(d->fasttext_detector)) {
 			rspamd_fasttext_predict_result_t fasttext_predict_result =
 				rspamd_lang_detection_fasttext_detect(d->fasttext_detector, task,
-													  part->utf_words, 4);
+													  &part->utf_words, 4);
 
 			ndetected = rspamd_lang_detection_fasttext_get_nlangs(fasttext_predict_result);
 
@@ -1930,11 +1929,11 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 			if (!ret) {
 				/* Apply trigramms detection */
 				candidates = kh_init(rspamd_candidates_hash);
-				if (part->utf_words->len < default_short_text_limit) {
+				if (kv_size(part->utf_words) < default_short_text_limit) {
 					r = rs_detect_none;
 					msg_debug_lang_det("text is too short for trigrams detection: "
 									   "%d words; at least %d words required",
-									   (int) part->utf_words->len,
+									   (int) kv_size(part->utf_words),
 									   (int) default_short_text_limit);
 					switch (cat) {
 					case RSPAMD_LANGUAGE_CYRILLIC:
@@ -1960,7 +1959,7 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 					r = rspamd_language_detector_try_ngramm(task,
 															default_words,
 															d,
-															part->utf_words,
+															&part->utf_words,
 															cat,
 															candidates,
 															part);

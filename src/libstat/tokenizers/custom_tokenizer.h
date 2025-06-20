@@ -19,6 +19,7 @@
 
 #include "config.h"
 #include "ucl.h"
+#include "libserver/word.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,13 +28,10 @@ extern "C" {
 #define RSPAMD_CUSTOM_TOKENIZER_API_VERSION 1
 
 /**
- * Tokenization result - array of word positions as (start, length) pairs
- * The array is terminated by a pair with both values set to 0
+ * Tokenization result - kvec of rspamd_word_t
+ * Uses kvec to avoid exposing GLIB structures to external API
  */
-struct rspamd_tokenizer_result {
-	unsigned int *positions; /* Array of (start, length) pairs */
-	size_t count;            /* Number of words (not array size!) */
-};
+typedef rspamd_words_t rspamd_tokenizer_result_t;
 
 /**
  * Custom tokenizer API that must be implemented by language-specific tokenizer plugins
@@ -71,25 +69,25 @@ typedef struct rspamd_custom_tokenizer_api {
 	 * Main tokenization function
 	 * @param text UTF-8 text to tokenize
 	 * @param len Length of the text in bytes
-	 * @param result Output structure to fill with word positions
+	 * @param result Output kvec to fill with rspamd_word_t elements
 	 * @return 0 on success, non-zero on failure
 	 *
-	 * The tokenizer should allocate result->positions using its own allocator
+	 * The tokenizer should allocate result->a using its own allocator
 	 * Rspamd will call cleanup_result() to free it after processing
 	 */
 	int (*tokenize)(const char *text, size_t len,
-					struct rspamd_tokenizer_result *result);
+					rspamd_tokenizer_result_t *result);
 
 	/**
 	 * Cleanup the result from tokenize()
-	 * @param result Result structure returned by tokenize()
+	 * @param result Result kvec returned by tokenize()
 	 *
-	 * This function should free result->positions using the same allocator
-	 * that was used in tokenize() and reset the structure fields.
+	 * This function should free result->a using the same allocator
+	 * that was used in tokenize() and reset the kvec fields.
 	 * This ensures proper memory management across DLL boundaries.
 	 * Note: This does NOT free the result structure itself, only its contents.
 	 */
-	void (*cleanup_result)(struct rspamd_tokenizer_result *result);
+	void (*cleanup_result)(rspamd_tokenizer_result_t *result);
 
 	/**
 	 * Optional: Get language hint for better language detection
@@ -155,7 +153,7 @@ struct rspamd_custom_tokenizer *rspamd_tokenizer_manager_detect(
 	const char **detected_lang_hint);
 
 /* Helper function to tokenize with exceptions handling */
-GArray *rspamd_custom_tokenizer_tokenize_with_exceptions(
+rspamd_tokenizer_result_t *rspamd_custom_tokenizer_tokenize_with_exceptions(
 	struct rspamd_custom_tokenizer *tokenizer,
 	const char *text,
 	gsize len,

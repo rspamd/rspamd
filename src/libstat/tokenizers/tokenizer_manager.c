@@ -327,7 +327,7 @@ rspamd_tokenizer_manager_detect(struct rspamd_tokenizer_manager *mgr,
 }
 
 /* Helper function to tokenize with a custom tokenizer handling exceptions */
-GArray *
+rspamd_tokenizer_result_t *
 rspamd_custom_tokenizer_tokenize_with_exceptions(
 	struct rspamd_custom_tokenizer *tokenizer,
 	const char *text,
@@ -335,36 +335,28 @@ rspamd_custom_tokenizer_tokenize_with_exceptions(
 	GList *exceptions,
 	rspamd_mempool_t *pool)
 {
-	GArray *words;
-	struct rspamd_tokenizer_result result;
+	rspamd_tokenizer_result_t *words;
+	rspamd_tokenizer_result_t result;
 	struct rspamd_process_exception *ex;
 	GList *cur_ex = exceptions;
 	gsize pos = 0;
 	unsigned int i;
 	int ret;
 
-	words = g_array_sized_new(FALSE, FALSE, sizeof(rspamd_stat_token_t), 128);
+	/* Allocate result kvec in pool */
+	words = rspamd_mempool_alloc(pool, sizeof(*words));
+	kv_init(*words);
 
 	/* If no exceptions, tokenize the whole text */
 	if (!exceptions) {
-		result.positions = NULL;
-		result.count = 0;
+		kv_init(result);
 
 		ret = tokenizer->api->tokenize(text, len, &result);
-		if (ret == 0 && result.positions) {
-			/* Convert positions to tokens */
-			for (i = 0; i < result.count; i++) {
-				rspamd_stat_token_t tok;
-				unsigned int start = result.positions[i * 2];
-				unsigned int length = result.positions[i * 2 + 1];
-
-				if (start + length <= len) {
-					memset(&tok, 0, sizeof(tok));
-					tok.original.begin = text + start;
-					tok.original.len = length;
-					tok.flags = RSPAMD_STAT_TOKEN_FLAG_TEXT | RSPAMD_STAT_TOKEN_FLAG_UTF;
-					g_array_append_val(words, tok);
-				}
+		if (ret == 0 && result.a) {
+			/* Copy tokens from result to output */
+			for (i = 0; i < kv_size(result); i++) {
+				rspamd_word_t tok = kv_A(result, i);
+				kv_push(rspamd_word_t, *words, tok);
 			}
 
 			/* Use tokenizer's cleanup function */
@@ -383,23 +375,22 @@ rspamd_custom_tokenizer_tokenize_with_exceptions(
 		/* Tokenize text before exception */
 		if (ex->pos > pos) {
 			gsize segment_len = ex->pos - pos;
-			result.positions = NULL;
-			result.count = 0;
+			kv_init(result);
 
 			ret = tokenizer->api->tokenize(text + pos, segment_len, &result);
-			if (ret == 0 && result.positions) {
-				/* Convert positions to tokens, adjusting for segment offset */
-				for (i = 0; i < result.count; i++) {
-					rspamd_stat_token_t tok;
-					unsigned int start = result.positions[i * 2] + pos;
-					unsigned int length = result.positions[i * 2 + 1];
+			if (ret == 0 && result.a) {
+				/* Copy tokens from result, adjusting positions for segment offset */
+				for (i = 0; i < kv_size(result); i++) {
+					rspamd_word_t tok = kv_A(result, i);
 
-					if (start + length <= ex->pos) {
-						memset(&tok, 0, sizeof(tok));
-						tok.original.begin = text + start;
-						tok.original.len = length;
-						tok.flags = RSPAMD_STAT_TOKEN_FLAG_TEXT | RSPAMD_STAT_TOKEN_FLAG_UTF;
-						g_array_append_val(words, tok);
+					/* Adjust pointers to point to the original text */
+					gsize offset_in_segment = tok.original.begin - (text + pos);
+					if (offset_in_segment < segment_len) {
+						tok.original.begin = text + pos + offset_in_segment;
+						/* Ensure we don't go past the exception boundary */
+						if (tok.original.begin + tok.original.len <= text + ex->pos) {
+							kv_push(rspamd_word_t, *words, tok);
+						}
 					}
 				}
 
@@ -411,7 +402,7 @@ rspamd_custom_tokenizer_tokenize_with_exceptions(
 		}
 
 		/* Add exception as a special token */
-		rspamd_stat_token_t ex_tok;
+		rspamd_word_t ex_tok;
 		memset(&ex_tok, 0, sizeof(ex_tok));
 
 		if (ex->type == RSPAMD_EXCEPTION_URL) {
@@ -423,7 +414,7 @@ rspamd_custom_tokenizer_tokenize_with_exceptions(
 			ex_tok.original.len = ex->len;
 		}
 		ex_tok.flags = RSPAMD_STAT_TOKEN_FLAG_EXCEPTION;
-		g_array_append_val(words, ex_tok);
+		kv_push(rspamd_word_t, *words, ex_tok);
 
 		/* Move past exception */
 		pos = ex->pos + ex->len;
@@ -432,23 +423,19 @@ rspamd_custom_tokenizer_tokenize_with_exceptions(
 
 	/* Process remaining text after last exception */
 	if (pos < len) {
-		result.positions = NULL;
-		result.count = 0;
+		kv_init(result);
 
 		ret = tokenizer->api->tokenize(text + pos, len - pos, &result);
-		if (ret == 0 && result.positions) {
-			/* Convert positions to tokens, adjusting for segment offset */
-			for (i = 0; i < result.count; i++) {
-				rspamd_stat_token_t tok;
-				unsigned int start = result.positions[i * 2] + pos;
-				unsigned int length = result.positions[i * 2 + 1];
+		if (ret == 0 && result.a) {
+			/* Copy tokens from result, adjusting positions for segment offset */
+			for (i = 0; i < kv_size(result); i++) {
+				rspamd_word_t tok = kv_A(result, i);
 
-				if (start + length <= len) {
-					memset(&tok, 0, sizeof(tok));
-					tok.original.begin = text + start;
-					tok.original.len = length;
-					tok.flags = RSPAMD_STAT_TOKEN_FLAG_TEXT | RSPAMD_STAT_TOKEN_FLAG_UTF;
-					g_array_append_val(words, tok);
+				/* Adjust pointers to point to the original text */
+				gsize offset_in_segment = tok.original.begin - (text + pos);
+				if (offset_in_segment < (len - pos)) {
+					tok.original.begin = text + pos + offset_in_segment;
+					kv_push(rspamd_word_t, *words, tok);
 				}
 			}
 

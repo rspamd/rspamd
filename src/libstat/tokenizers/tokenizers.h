@@ -22,6 +22,7 @@
 #include "fstring.h"
 #include "rspamd.h"
 #include "stat_api.h"
+#include "libserver/word.h"
 
 #include <unicode/utext.h>
 
@@ -43,7 +44,7 @@ struct rspamd_stat_tokenizer {
 
 	int (*tokenize_func)(struct rspamd_stat_ctx *ctx,
 						 struct rspamd_task *task,
-						 GArray *words,
+						 rspamd_words_t *words,
 						 gboolean is_utf,
 						 const char *prefix,
 						 GPtrArray *result);
@@ -59,20 +60,20 @@ enum rspamd_tokenize_type {
 int token_node_compare_func(gconstpointer a, gconstpointer b);
 
 
-/* Tokenize text into array of words (rspamd_stat_token_t type) */
-GArray *rspamd_tokenize_text(const char *text, gsize len,
-							 const UText *utxt,
-							 enum rspamd_tokenize_type how,
-							 struct rspamd_config *cfg,
-							 GList *exceptions,
-							 uint64_t *hash,
-							 GArray *cur_words,
-							 rspamd_mempool_t *pool);
+/* Tokenize text into kvec of words (rspamd_word_t type) */
+rspamd_words_t *rspamd_tokenize_text(const char *text, gsize len,
+									 const UText *utxt,
+									 enum rspamd_tokenize_type how,
+									 struct rspamd_config *cfg,
+									 GList *exceptions,
+									 uint64_t *hash,
+									 rspamd_words_t *output_kvec,
+									 rspamd_mempool_t *pool);
 
 /* OSB tokenize function */
 int rspamd_tokenizer_osb(struct rspamd_stat_ctx *ctx,
 						 struct rspamd_task *task,
-						 GArray *words,
+						 rspamd_words_t *words,
 						 gboolean is_utf,
 						 const char *prefix,
 						 GPtrArray *result);
@@ -83,11 +84,11 @@ gpointer rspamd_tokenizer_osb_get_config(rspamd_mempool_t *pool,
 
 struct rspamd_lang_detector;
 
-void rspamd_normalize_single_word(rspamd_stat_token_t *tok, rspamd_mempool_t *pool);
+void rspamd_normalize_single_word(rspamd_word_t *tok, rspamd_mempool_t *pool);
 
-void rspamd_normalize_words(GArray *words, rspamd_mempool_t *pool);
-
-void rspamd_stem_words(GArray *words, rspamd_mempool_t *pool,
+/* Word processing functions */
+void rspamd_normalize_words(rspamd_words_t *words, rspamd_mempool_t *pool);
+void rspamd_stem_words(rspamd_words_t *words, rspamd_mempool_t *pool,
 					   const char *language,
 					   struct rspamd_lang_detector *lang_detector);
 

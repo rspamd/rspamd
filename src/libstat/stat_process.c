@@ -36,12 +36,13 @@ static void
 rspamd_stat_tokenize_parts_metadata(struct rspamd_stat_ctx *st_ctx,
 									struct rspamd_task *task)
 {
-	GArray *ar;
-	rspamd_stat_token_t elt;
+	rspamd_words_t *words;
+	rspamd_word_t elt;
 	unsigned int i;
 	lua_State *L = task->cfg->lua_state;
 
-	ar = g_array_sized_new(FALSE, FALSE, sizeof(elt), 16);
+	words = rspamd_mempool_alloc(task->task_pool, sizeof(*words));
+	kv_init(*words);
 	memset(&elt, 0, sizeof(elt));
 	elt.flags = RSPAMD_STAT_TOKEN_FLAG_META;
 
@@ -87,7 +88,7 @@ rspamd_stat_tokenize_parts_metadata(struct rspamd_stat_ctx *st_ctx,
 						elt.normalized.begin = elt.original.begin;
 						elt.normalized.len = elt.original.len;
 
-						g_array_append_val(ar, elt);
+						kv_push_safe(rspamd_word_t, *words, elt, meta_words_error);
 					}
 
 					lua_pop(L, 1);
@@ -99,17 +100,20 @@ rspamd_stat_tokenize_parts_metadata(struct rspamd_stat_ctx *st_ctx,
 	}
 
 
-	if (ar->len > 0) {
+	if (kv_size(*words) > 0) {
 		st_ctx->tokenizer->tokenize_func(st_ctx,
 										 task,
-										 ar,
+										 words,
 										 TRUE,
 										 "M",
 										 task->tokens);
 	}
+	goto meta_words_done;
 
-	rspamd_mempool_add_destructor(task->task_pool,
-								  rspamd_array_free_hard, ar);
+meta_words_error:
+	/* On error, just continue without the problematic tokens */
+meta_words_done:
+	/* kvec memory will be freed with task pool */
 }
 
 /*
@@ -134,8 +138,8 @@ void rspamd_stat_process_tokenize(struct rspamd_stat_ctx *st_ctx,
 
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, part)
 	{
-		if (!IS_TEXT_PART_EMPTY(part) && part->utf_words != NULL) {
-			reserved_len += part->utf_words->len;
+		if (!IS_TEXT_PART_EMPTY(part) && part->utf_words.a) {
+			reserved_len += kv_size(part->utf_words);
 		}
 		/* XXX: normal window size */
 		reserved_len += 5;
@@ -149,9 +153,9 @@ void rspamd_stat_process_tokenize(struct rspamd_stat_ctx *st_ctx,
 
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, part)
 	{
-		if (!IS_TEXT_PART_EMPTY(part) && part->utf_words != NULL) {
+		if (!IS_TEXT_PART_EMPTY(part) && part->utf_words.a) {
 			st_ctx->tokenizer->tokenize_func(st_ctx, task,
-											 part->utf_words, IS_TEXT_PART_UTF(part),
+											 &part->utf_words, IS_TEXT_PART_UTF(part),
 											 NULL, task->tokens);
 		}
 
@@ -163,10 +167,10 @@ void rspamd_stat_process_tokenize(struct rspamd_stat_ctx *st_ctx,
 		}
 	}
 
-	if (task->meta_words != NULL) {
+	if (task->meta_words.a) {
 		st_ctx->tokenizer->tokenize_func(st_ctx,
 										 task,
-										 task->meta_words,
+										 &task->meta_words,
 										 TRUE,
 										 "SUBJECT",
 										 task->tokens);

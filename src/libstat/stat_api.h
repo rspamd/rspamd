@@ -20,6 +20,7 @@
 #include "task.h"
 #include "lua/lua_common.h"
 #include "contrib/libev/ev.h"
+#include "libserver/word.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,36 +31,14 @@ extern "C" {
  * High level statistics API
  */
 
-#define RSPAMD_STAT_TOKEN_FLAG_TEXT (1u << 0)
-#define RSPAMD_STAT_TOKEN_FLAG_META (1u << 1)
-#define RSPAMD_STAT_TOKEN_FLAG_LUA_META (1u << 2)
-#define RSPAMD_STAT_TOKEN_FLAG_EXCEPTION (1u << 3)
-#define RSPAMD_STAT_TOKEN_FLAG_HEADER (1u << 4)
-#define RSPAMD_STAT_TOKEN_FLAG_UNIGRAM (1u << 5)
-#define RSPAMD_STAT_TOKEN_FLAG_UTF (1u << 6)
-#define RSPAMD_STAT_TOKEN_FLAG_NORMALISED (1u << 7)
-#define RSPAMD_STAT_TOKEN_FLAG_STEMMED (1u << 8)
-#define RSPAMD_STAT_TOKEN_FLAG_BROKEN_UNICODE (1u << 9)
-#define RSPAMD_STAT_TOKEN_FLAG_STOP_WORD (1u << 10)
-#define RSPAMD_STAT_TOKEN_FLAG_SKIPPED (1u << 11)
-#define RSPAMD_STAT_TOKEN_FLAG_INVISIBLE_SPACES (1u << 12)
-#define RSPAMD_STAT_TOKEN_FLAG_EMOJI (1u << 13)
-
-typedef struct rspamd_stat_token_s {
-	rspamd_ftok_t original;        /* utf8 raw */
-	rspamd_ftok_unicode_t unicode; /* array of unicode characters, normalized, lowercased */
-	rspamd_ftok_t normalized;      /* normalized and lowercased utf8 */
-	rspamd_ftok_t stemmed;         /* stemmed utf8 */
-	unsigned int flags;
-} rspamd_stat_token_t;
 
 #define RSPAMD_TOKEN_VALUE_TYPE float
 typedef struct token_node_s {
 	uint64_t data;
 	unsigned int window_idx;
 	unsigned int flags;
-	rspamd_stat_token_t *t1;
-	rspamd_stat_token_t *t2;
+	rspamd_word_t *t1;
+	rspamd_word_t *t2;
 	RSPAMD_TOKEN_VALUE_TYPE values[0];
 } rspamd_token_t;
 
