@@ -336,12 +336,12 @@ rspamd_tokenize_text(const char *text, gsize len,
 	}
 
 	if (!output_kvec) {
-		/* Should not happen in normal usage */
-		return NULL;
+		res = pool ? rspamd_mempool_alloc0(pool, sizeof(*res)) : g_malloc0(sizeof(*res));
+		;
 	}
-
-	res = output_kvec;
-	kv_init(*res);
+	else {
+		res = output_kvec;
+	}
 
 	/* Try custom tokenizers first if we're in UTF mode */
 	if (cfg && cfg->tokenizer_manager && how == RSPAMD_TOKENIZE_UTF && utxt != NULL) {

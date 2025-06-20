@@ -182,6 +182,8 @@ int lua_parsers_tokenize_text(lua_State *L)
 			lua_pushlstring(L, w->original.begin, w->original.len);
 			lua_rawseti(L, -2, i + 1);
 		}
+		kv_destroy(*res);
+		g_free(res);
 	}
 
 	cur = exceptions;
