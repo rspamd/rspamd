@@ -16,6 +16,7 @@
 #include "libserver/url.h"
 #include "libutil/ref.h"
 #include "libutil/str_util.h"
+#include "libserver/word.h"
 
 #include <unicode/uchar.h>
 #include <unicode/utext.h>
@@ -139,7 +140,7 @@ struct rspamd_mime_text_part {
 	GByteArray *utf_raw_content;      /* utf raw content */
 	GByteArray *utf_stripped_content; /* utf content with no newlines */
 	GArray *normalized_hashes;        /* Array of uint64_t */
-	GArray *utf_words;                /* Array of rspamd_stat_token_t */
+	rspamd_words_t utf_words;         /* kvec of rspamd_word_t */
 	UText utf_stripped_text;          /* Used by libicu to represent the utf8 content */
 
 	GPtrArray *newlines; /**< positions of newlines in text, relative to content*/

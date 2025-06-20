@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -196,8 +196,8 @@ void rspamd_task_free(struct rspamd_task *task)
 			rspamd_email_address_free(task->from_envelope_orig);
 		}
 
-		if (task->meta_words) {
-			g_array_free(task->meta_words, TRUE);
+		if (task->meta_words.a) {
+			kv_destroy(task->meta_words);
 		}
 
 		ucl_object_unref(task->messages);

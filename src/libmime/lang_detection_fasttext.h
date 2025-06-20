@@ -17,6 +17,7 @@
 #define RSPAMD_LANG_DETECTION_FASTTEXT_H
 
 #include "config.h"
+#include "libserver/word.h"
 
 G_BEGIN_DECLS
 struct rspamd_config;
@@ -53,7 +54,7 @@ typedef void *rspamd_fasttext_predict_result_t;
  * @return TRUE if language is detected
  */
 rspamd_fasttext_predict_result_t rspamd_lang_detection_fasttext_detect(void *ud,
-																	   struct rspamd_task *task, GArray *utf_words, int k);
+																	   struct rspamd_task *task, rspamd_words_t *utf_words, int k);
 
 /**
  * Get number of languages detected

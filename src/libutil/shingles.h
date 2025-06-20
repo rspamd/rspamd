@@ -18,6 +18,7 @@
 
 #include "config.h"
 #include "mem_pool.h"
+#include "libserver/word.h"
 
 #define RSPAMD_SHINGLE_SIZE 32
 
@@ -48,14 +49,14 @@ typedef uint64_t (*rspamd_shingles_filter)(uint64_t *input, gsize count,
 /**
  * Generate shingles from the input of fixed size strings using lemmatizer
  * if needed
- * @param input array of `rspamd_fstring_t`
+ * @param input kvec of `rspamd_word_t`
  * @param key secret key used to generate shingles
  * @param pool pool to allocate shingles array
  * @param filter hashes filtering function
  * @param filterd opaque data for filtering function
  * @return shingles array
  */
-struct rspamd_shingle *rspamd_shingles_from_text(GArray *input,
+struct rspamd_shingle *rspamd_shingles_from_text(rspamd_words_t *input,
 												 const unsigned char key[16],
 												 rspamd_mempool_t *pool,
 												 rspamd_shingles_filter filter,

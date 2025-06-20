@@ -17,6 +17,7 @@
 #include "rspamd.h"
 #include "shingles.h"
 #include "ottery.h"
+#include "libserver/word.h"
 #include <math.h>
 
 static const char *
@@ -52,63 +53,76 @@ generate_random_string(char *begin, size_t len)
 	}
 }
 
-static GArray *
+static rspamd_words_t *
 generate_fuzzy_words(gsize cnt, gsize max_len)
 {
-	GArray *res;
+	rspamd_words_t *res;
 	gsize i, wlen;
-	rspamd_ftok_t w;
+	rspamd_word_t word;
 	char *t;
 
-	res = g_array_sized_new(FALSE, FALSE, sizeof(rspamd_ftok_t), cnt);
+	res = g_malloc(sizeof(*res));
+	kv_init(*res);
 
 	for (i = 0; i < cnt; i++) {
 		wlen = ottery_rand_range(max_len) + 1;
 		/* wlen = max_len; */
 
-		w.len = wlen;
 		t = g_malloc(wlen);
 		generate_random_string(t, wlen);
-		w.begin = t;
-		g_array_append_val(res, w);
+
+		memset(&word, 0, sizeof(word));
+		word.stemmed.begin = t;
+		word.stemmed.len = wlen;
+		word.original.begin = t;
+		word.original.len = wlen;
+		word.flags = 0; /* No flags set, so it won't be skipped */
+
+		kv_push(rspamd_word_t, *res, word);
 	}
 
 	return res;
 }
 
 static void
-permute_vector(GArray *in, double prob)
+permute_vector(rspamd_words_t *in, double prob)
 {
 	gsize i, total = 0;
-	rspamd_ftok_t *w;
+	rspamd_word_t *w;
 
-	for (i = 0; i < in->len; i++) {
+	for (i = 0; i < kv_size(*in); i++) {
 		if (ottery_rand_unsigned() <= G_MAXUINT * prob) {
-			w = &g_array_index(in, rspamd_ftok_t, i);
-			generate_random_string((char *) w->begin, w->len);
+			w = &kv_A(*in, i);
+			generate_random_string((char *) w->stemmed.begin, w->stemmed.len);
+			/* Also update original since they point to same memory */
+			w->original.begin = w->stemmed.begin;
+			w->original.len = w->stemmed.len;
 			total++;
 		}
 	}
-	msg_debug("generated %z permutations of %ud words", total, in->len);
+	msg_debug("generated %z permutations of %ud words", total, (unsigned int) kv_size(*in));
 }
 
 static void
-free_fuzzy_words(GArray *ar)
+free_fuzzy_words(rspamd_words_t *ar)
 {
 	gsize i;
-	rspamd_ftok_t *w;
+	rspamd_word_t *w;
 
-	for (i = 0; i < ar->len; i++) {
-		w = &g_array_index(ar, rspamd_ftok_t, i);
-		g_free((gpointer) w->begin);
+	for (i = 0; i < kv_size(*ar); i++) {
+		w = &kv_A(*ar, i);
+		g_free((gpointer) w->stemmed.begin);
 	}
+
+	kv_destroy(*ar);
+	g_free(ar);
 }
 
 static void
 test_case(gsize cnt, gsize max_len, double perm_factor,
 		  enum rspamd_shingle_alg alg)
 {
-	GArray *input;
+	rspamd_words_t *input;
 	struct rspamd_shingle *sgl, *sgl_permuted;
 	double res;
 	unsigned char key[16];
@@ -281,50 +295,58 @@ void rspamd_shingles_test_func(void)
 	enum rspamd_shingle_alg alg = RSPAMD_SHINGLES_OLD;
 	struct rspamd_shingle *sgl;
 	unsigned char key[16];
-	GArray *input;
-	rspamd_ftok_t tok;
+	rspamd_words_t input;
+	rspamd_word_t word;
 	int i;
 
 	memset(key, 0, sizeof(key));
-	input = g_array_sized_new(FALSE, FALSE, sizeof(rspamd_ftok_t), 5);
+	kv_init(input);
 
 	for (i = 0; i < 5; i++) {
 		char *b = g_alloca(8);
 		memset(b, 0, 8);
 		memcpy(b + 1, "test", 4);
 		b[0] = 'a' + i;
-		tok.begin = b;
-		tok.len = 5 + ((i + 1) % 4);
-		g_array_append_val(input, tok);
+
+		memset(&word, 0, sizeof(word));
+		word.stemmed.begin = b;
+		word.stemmed.len = 5 + ((i + 1) % 4);
+		word.original.begin = b;
+		word.original.len = word.stemmed.len;
+		word.flags = 0; /* No flags set, so it won't be skipped */
+
+		kv_push(rspamd_word_t, input, word);
 	}
 
-	sgl = rspamd_shingles_from_text(input, key, NULL,
+	sgl = rspamd_shingles_from_text(&input, key, NULL,
 									rspamd_shingles_default_filter, NULL, RSPAMD_SHINGLES_OLD);
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i++) {
 		g_assert(sgl->hashes[i] == expected_old[i]);
 	}
 	g_free(sgl);
 
-	sgl = rspamd_shingles_from_text(input, key, NULL,
+	sgl = rspamd_shingles_from_text(&input, key, NULL,
 									rspamd_shingles_default_filter, NULL, RSPAMD_SHINGLES_XXHASH);
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i++) {
 		g_assert(sgl->hashes[i] == expected_xxhash[i]);
 	}
 	g_free(sgl);
 
-	sgl = rspamd_shingles_from_text(input, key, NULL,
+	sgl = rspamd_shingles_from_text(&input, key, NULL,
 									rspamd_shingles_default_filter, NULL, RSPAMD_SHINGLES_MUMHASH);
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i++) {
 		g_assert(sgl->hashes[i] == expected_mumhash[i]);
 	}
 	g_free(sgl);
 
-	sgl = rspamd_shingles_from_text(input, key, NULL,
+	sgl = rspamd_shingles_from_text(&input, key, NULL,
 									rspamd_shingles_default_filter, NULL, RSPAMD_SHINGLES_FAST);
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i++) {
 		g_assert(sgl->hashes[i] == expected_fasthash[i]);
 	}
 	g_free(sgl);
+
+	kv_destroy(input);
 
 	for (alg = RSPAMD_SHINGLES_OLD; alg <= RSPAMD_SHINGLES_FAST; alg++) {
 		test_case(200, 10, 0.1, alg);

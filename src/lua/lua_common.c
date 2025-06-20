@@ -2401,7 +2401,7 @@ rspamd_lua_try_load_redis(lua_State *L, const ucl_object_t *obj,
 	return FALSE;
 }
 
-void rspamd_lua_push_full_word(lua_State *L, rspamd_stat_token_t *w)
+void rspamd_lua_push_full_word(lua_State *L, rspamd_word_t *w)
 {
 	int fl_cnt;
 
@@ -2488,6 +2488,54 @@ int rspamd_lua_push_words(lua_State *L, GArray *words,
 
 	for (i = 0, cnt = 1; i < words->len; i++) {
 		w = &g_array_index(words, rspamd_stat_token_t, i);
+
+		switch (how) {
+		case RSPAMD_LUA_WORDS_STEM:
+			if (w->stemmed.len > 0) {
+				lua_pushlstring(L, w->stemmed.begin, w->stemmed.len);
+				lua_rawseti(L, -2, cnt++);
+			}
+			break;
+		case RSPAMD_LUA_WORDS_NORM:
+			if (w->normalized.len > 0) {
+				lua_pushlstring(L, w->normalized.begin, w->normalized.len);
+				lua_rawseti(L, -2, cnt++);
+			}
+			break;
+		case RSPAMD_LUA_WORDS_RAW:
+			if (w->original.len > 0) {
+				lua_pushlstring(L, w->original.begin, w->original.len);
+				lua_rawseti(L, -2, cnt++);
+			}
+			break;
+		case RSPAMD_LUA_WORDS_FULL:
+			rspamd_lua_push_full_word(L, w);
+			/* Push to the resulting vector */
+			lua_rawseti(L, -2, cnt++);
+			break;
+		default:
+			break;
+		}
+	}
+
+	return 1;
+}
+
+int rspamd_lua_push_words_kvec(lua_State *L, rspamd_words_t *words,
+							   enum rspamd_lua_words_type how)
+{
+	rspamd_word_t *w;
+	unsigned int i, cnt;
+
+	if (!words || !words->a) {
+		lua_createtable(L, 0, 0);
+		return 1;
+	}
+
+	lua_createtable(L, kv_size(*words), 0);
+
+	for (i = 0, cnt = 1; i < kv_size(*words); i++) {
+		w = &kv_A(*words, i);
 
 		switch (how) {
 		case RSPAMD_LUA_WORDS_STEM:

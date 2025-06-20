@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1696,7 +1696,7 @@ rspamd_can_alias_latin(int ch)
 
 static double
 rspamd_chartable_process_word_utf(struct rspamd_task *task,
-								  rspamd_stat_token_t *w,
+								  rspamd_word_t *w,
 								  gboolean is_url,
 								  unsigned int *ncap,
 								  struct chartable_ctx *chartable_module_ctx,
@@ -1842,7 +1842,7 @@ rspamd_chartable_process_word_utf(struct rspamd_task *task,
 
 static double
 rspamd_chartable_process_word_ascii(struct rspamd_task *task,
-									rspamd_stat_token_t *w,
+									rspamd_word_t *w,
 									gboolean is_url,
 									struct chartable_ctx *chartable_module_ctx)
 {
@@ -1931,17 +1931,17 @@ rspamd_chartable_process_part(struct rspamd_task *task,
 							  struct chartable_ctx *chartable_module_ctx,
 							  gboolean ignore_diacritics)
 {
-	rspamd_stat_token_t *w;
+	rspamd_word_t *w;
 	unsigned int i, ncap = 0;
 	double cur_score = 0.0;
 
-	if (part == nullptr || part->utf_words == nullptr ||
-		part->utf_words->len == 0 || part->nwords == 0) {
+	if (part == nullptr || part->utf_words.a == nullptr ||
+		kv_size(part->utf_words) == 0 || part->nwords == 0) {
 		return FALSE;
 	}
 
-	for (i = 0; i < part->utf_words->len; i++) {
-		w = &g_array_index(part->utf_words, rspamd_stat_token_t, i);
+	for (i = 0; i < kv_size(part->utf_words); i++) {
+		w = &kv_A(part->utf_words, i);
 
 		if ((w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT)) {
 
@@ -2015,13 +2015,13 @@ chartable_symbol_callback(struct rspamd_task *task,
 		ignore_diacritics = TRUE;
 	}
 
-	if (task->meta_words != nullptr && task->meta_words->len > 0) {
-		rspamd_stat_token_t *w;
+	if (task->meta_words.a && kv_size(task->meta_words) > 0) {
+		rspamd_word_t *w;
 		double cur_score = 0;
-		gsize arlen = task->meta_words->len;
+		gsize arlen = kv_size(task->meta_words);
 
 		for (i = 0; i < arlen; i++) {
-			w = &g_array_index(task->meta_words, rspamd_stat_token_t, i);
+			w = &kv_A(task->meta_words, i);
 			cur_score += rspamd_chartable_process_word_utf(task, w, FALSE,
 														   nullptr, chartable_module_ctx, ignore_diacritics);
 		}

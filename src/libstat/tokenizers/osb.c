@@ -21,6 +21,7 @@
 #include "tokenizers.h"
 #include "stat_internal.h"
 #include "libmime/lang_detection.h"
+#include "libserver/word.h"
 
 /* Size for features pipe */
 #define DEFAULT_FEATURE_WINDOW_SIZE 2
@@ -268,7 +269,7 @@ struct token_pipe_entry {
 
 int rspamd_tokenizer_osb(struct rspamd_stat_ctx *ctx,
 						 struct rspamd_task *task,
-						 GArray *words,
+						 rspamd_words_t *words,
 						 gboolean is_utf,
 						 const char *prefix,
 						 GPtrArray *result)
@@ -282,7 +283,7 @@ int rspamd_tokenizer_osb(struct rspamd_stat_ctx *ctx,
 	gsize token_size;
 	unsigned int processed = 0, i, w, window_size, token_flags = 0;
 
-	if (words == NULL) {
+	if (words == NULL || !words->a) {
 		return FALSE;
 	}
 
@@ -306,8 +307,8 @@ int rspamd_tokenizer_osb(struct rspamd_stat_ctx *ctx,
 				 sizeof(RSPAMD_TOKEN_VALUE_TYPE) * ctx->statfiles->len;
 	g_assert(token_size > 0);
 
-	for (w = 0; w < words->len; w++) {
-		token = &g_array_index(words, rspamd_stat_token_t, w);
+	for (w = 0; w < kv_size(*words); w++) {
+		token = &kv_A(*words, w);
 		token_flags = token->flags;
 		const char *begin;
 		gsize len;

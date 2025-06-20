@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,8 @@
 #include "contrib/uthash/utlist.h"
 #include "contrib/t1ha/t1ha.h"
 #include "received.h"
+#define RSPAMD_TOKENIZER_INTERNAL
+#include "libstat/tokenizers/custom_tokenizer.h"
 
 #define GTUBE_SYMBOL "GTUBE"
 
@@ -71,14 +73,14 @@ rspamd_mime_part_extract_words(struct rspamd_task *task,
 	rspamd_stat_token_t *w;
 	unsigned int i, total_len = 0, short_len = 0;
 
-	if (part->utf_words) {
-		rspamd_stem_words(part->utf_words, task->task_pool, part->language,
+	if (part->utf_words.a) {
+		rspamd_stem_words(&part->utf_words, task->task_pool, part->language,
 						  task->lang_det);
 
-		for (i = 0; i < part->utf_words->len; i++) {
+		for (i = 0; i < kv_size(part->utf_words); i++) {
 			uint64_t h;
 
-			w = &g_array_index(part->utf_words, rspamd_stat_token_t, i);
+			w = &kv_A(part->utf_words, i);
 
 			if (w->stemmed.len > 0) {
 				/*
@@ -108,7 +110,7 @@ rspamd_mime_part_extract_words(struct rspamd_task *task,
 			}
 		}
 
-		if (part->utf_words->len) {
+		if (kv_size(part->utf_words)) {
 			double *avg_len_p, *short_len_p;
 
 			avg_len_p = rspamd_mempool_get_variable(task->task_pool,
@@ -185,21 +187,24 @@ rspamd_mime_part_create_words(struct rspamd_task *task,
 		tok_type = RSPAMD_TOKENIZE_RAW;
 	}
 
-	part->utf_words = rspamd_tokenize_text(
+	/* Initialize kvec for words */
+	kv_init(part->utf_words);
+
+	rspamd_tokenize_text(
 		part->utf_stripped_content->data,
 		part->utf_stripped_content->len,
 		&part->utf_stripped_text,
 		tok_type, task->cfg,
 		part->exceptions,
 		NULL,
-		NULL,
+		&part->utf_words,
 		task->task_pool);
 
 
-	if (part->utf_words) {
+	if (part->utf_words.a) {
 		part->normalized_hashes = g_array_sized_new(FALSE, FALSE,
-													sizeof(uint64_t), part->utf_words->len);
-		rspamd_normalize_words(part->utf_words, task->task_pool);
+													sizeof(uint64_t), kv_size(part->utf_words));
+		rspamd_normalize_words(&part->utf_words, task->task_pool);
 	}
 }
 
@@ -209,7 +214,7 @@ rspamd_mime_part_detect_language(struct rspamd_task *task,
 {
 	struct rspamd_lang_detector_res *lang;
 
-	if (!IS_TEXT_PART_EMPTY(part) && part->utf_words && part->utf_words->len > 0 &&
+	if (!IS_TEXT_PART_EMPTY(part) && part->utf_words.a && kv_size(part->utf_words) > 0 &&
 		task->lang_det) {
 		if (rspamd_language_detector_detect(task, task->lang_det, part)) {
 			lang = g_ptr_array_index(part->languages, 0);
@@ -1106,8 +1111,8 @@ rspamd_message_dtor(struct rspamd_message *msg)
 
 	PTR_ARRAY_FOREACH(msg->text_parts, i, tp)
 	{
-		if (tp->utf_words) {
-			g_array_free(tp->utf_words, TRUE);
+		if (tp->utf_words.a) {
+			kv_destroy(tp->utf_words);
 		}
 		if (tp->normalized_hashes) {
 			g_array_free(tp->normalized_hashes, TRUE);
@@ -1583,7 +1588,7 @@ void rspamd_message_process(struct rspamd_task *task)
 
 		rspamd_mime_part_extract_words(task, text_part);
 
-		if (text_part->utf_words) {
+		if (text_part->utf_words.a) {
 			total_words += text_part->nwords;
 		}
 	}

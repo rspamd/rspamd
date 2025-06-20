@@ -539,7 +539,7 @@ enum lua_logger_escape_type {
 * @return
 */
 gsize lua_logger_out(lua_State *L, int pos, char *outbuf, gsize len,
-						  enum lua_logger_escape_type esc_type);
+					 enum lua_logger_escape_type esc_type);
 
 /**
 * Safely checks userdata to match specified class
@@ -632,7 +632,7 @@ struct rspamd_stat_token_s;
 * @param L
 * @param word
 */
-void rspamd_lua_push_full_word(lua_State *L, struct rspamd_stat_token_s *word);
+void rspamd_lua_push_full_word(lua_State *L, rspamd_word_t *word);
 
 enum rspamd_lua_words_type {
 	RSPAMD_LUA_WORDS_STEM = 0,
@@ -650,6 +650,9 @@ enum rspamd_lua_words_type {
 */
 int rspamd_lua_push_words(lua_State *L, GArray *words,
 						  enum rspamd_lua_words_type how);
+
+int rspamd_lua_push_words_kvec(lua_State *L, rspamd_words_t *words,
+							   enum rspamd_lua_words_type how);
 
 /**
 * Returns newly allocated name for caller module name
