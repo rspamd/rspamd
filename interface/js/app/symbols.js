@@ -135,6 +135,7 @@ define(["jquery", "app/common", "footable"],
                         construct: function (instance) {
                             this._super(instance);
                             [,this.groups] = items;
+                            this.groups.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
                             this.def = "Any group";
                             this.$group = null;
                         },
