@@ -100,8 +100,11 @@ rspamd_tokenizer_manager_new(rspamd_mempool_t *pool)
 								  (rspamd_mempool_destruct_t) g_hash_table_unref,
 								  mgr->tokenizers);
 	rspamd_mempool_add_destructor(pool,
-								  (rspamd_mempool_destruct_t) g_array_free,
+								  (rspamd_mempool_destruct_t) rspamd_array_free_hard,
 								  mgr->detection_order);
+
+	msg_info_tokenizer("created custom tokenizer manager with default confidence threshold %.3f",
+					   mgr->default_threshold);
 
 	return mgr;
 }
@@ -131,6 +134,8 @@ rspamd_tokenizer_manager_load_tokenizer(struct rspamd_tokenizer_manager *mgr,
 	g_assert(name != NULL);
 	g_assert(config != NULL);
 
+	msg_info_tokenizer("starting to load custom tokenizer '%s'", name);
+
 	/* Check if enabled */
 	elt = ucl_object_lookup(config, "enabled");
 	if (elt && ucl_object_type(elt) == UCL_BOOLEAN) {
@@ -138,7 +143,7 @@ rspamd_tokenizer_manager_load_tokenizer(struct rspamd_tokenizer_manager *mgr,
 	}
 
 	if (!enabled) {
-		msg_info_tokenizer("custom tokenizer %s is disabled", name);
+		msg_info_tokenizer("custom tokenizer '%s' is disabled", name);
 		return TRUE;
 	}
 
@@ -150,14 +155,17 @@ rspamd_tokenizer_manager_load_tokenizer(struct rspamd_tokenizer_manager *mgr,
 		return FALSE;
 	}
 	path = ucl_object_tostring(elt);
+	msg_info_tokenizer("custom tokenizer '%s' will be loaded from path: %s", name, path);
 
 	/* Get priority */
 	elt = ucl_object_lookup(config, "priority");
 	if (elt) {
 		priority = ucl_object_todouble(elt);
 	}
+	msg_info_tokenizer("custom tokenizer '%s' priority set to %.1f", name, priority);
 
 	/* Load the shared library */
+	msg_info_tokenizer("loading shared library for custom tokenizer '%s'", name);
 	handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
 	if (!handle) {
 		g_set_error(err, g_quark_from_static_string("tokenizer"),
@@ -165,8 +173,10 @@ rspamd_tokenizer_manager_load_tokenizer(struct rspamd_tokenizer_manager *mgr,
 					name, path, dlerror());
 		return FALSE;
 	}
+	msg_info_tokenizer("successfully loaded shared library for custom tokenizer '%s'", name);
 
 	/* Get the API entry point */
+	msg_info_tokenizer("looking up API entry point for custom tokenizer '%s'", name);
 	get_api = (rspamd_tokenizer_get_api_func) dlsym(handle, "rspamd_tokenizer_get_api");
 	if (!get_api) {
 		dlclose(handle);
@@ -177,6 +187,7 @@ rspamd_tokenizer_manager_load_tokenizer(struct rspamd_tokenizer_manager *mgr,
 	}
 
 	/* Get the API */
+	msg_info_tokenizer("calling API entry point for custom tokenizer '%s'", name);
 	api = get_api();
 	if (!api) {
 		dlclose(handle);
@@ -184,8 +195,11 @@ rspamd_tokenizer_manager_load_tokenizer(struct rspamd_tokenizer_manager *mgr,
 					EINVAL, "tokenizer %s returned NULL API", name);
 		return FALSE;
 	}
+	msg_info_tokenizer("successfully obtained API from custom tokenizer '%s'", name);
 
 	/* Check API version */
+	msg_info_tokenizer("checking API version for custom tokenizer '%s' (got %u, expected %u)",
+					   name, api->api_version, RSPAMD_CUSTOM_TOKENIZER_API_VERSION);
 	if (api->api_version != RSPAMD_CUSTOM_TOKENIZER_API_VERSION) {
 		dlclose(handle);
 		g_set_error(err, g_quark_from_static_string("tokenizer"),
@@ -212,13 +226,18 @@ rspamd_tokenizer_manager_load_tokenizer(struct rspamd_tokenizer_manager *mgr,
 	/* Get minimum confidence */
 	if (api->get_min_confidence) {
 		tok->min_confidence = api->get_min_confidence();
+		msg_info_tokenizer("custom tokenizer '%s' provides minimum confidence threshold: %.3f",
+						   name, tok->min_confidence);
 	}
 	else {
 		tok->min_confidence = mgr->default_threshold;
+		msg_info_tokenizer("custom tokenizer '%s' using default confidence threshold: %.3f",
+						   name, tok->min_confidence);
 	}
 
 	/* Initialize the tokenizer */
 	if (api->init) {
+		msg_info_tokenizer("initializing custom tokenizer '%s'", name);
 		error_buf[0] = '\0';
 		if (api->init(tok->config, error_buf, sizeof(error_buf)) != 0) {
 			g_set_error(err, g_quark_from_static_string("tokenizer"),
@@ -227,6 +246,10 @@ rspamd_tokenizer_manager_load_tokenizer(struct rspamd_tokenizer_manager *mgr,
 			rspamd_custom_tokenizer_dtor(tok);
 			return FALSE;
 		}
+		msg_info_tokenizer("successfully initialized custom tokenizer '%s'", name);
+	}
+	else {
+		msg_info_tokenizer("custom tokenizer '%s' does not require initialization", name);
 	}
 
 	/* Add to manager */
@@ -235,8 +258,10 @@ rspamd_tokenizer_manager_load_tokenizer(struct rspamd_tokenizer_manager *mgr,
 
 	/* Re-sort by priority */
 	g_array_sort(mgr->detection_order, rspamd_custom_tokenizer_priority_cmp);
+	msg_info_tokenizer("custom tokenizer '%s' registered and sorted by priority (total tokenizers: %u)",
+					   name, mgr->detection_order->len);
 
-	msg_info_tokenizer("loaded custom tokenizer %s (priority %.0f) from %s",
+	msg_info_tokenizer("successfully loaded custom tokenizer '%s' (priority %.1f) from %s",
 					   name, priority, path);
 
 	return TRUE;
@@ -256,6 +281,8 @@ rspamd_tokenizer_manager_detect(struct rspamd_tokenizer_manager *mgr,
 	g_assert(mgr != NULL);
 	g_assert(text != NULL);
 
+	msg_debug_tokenizer("starting tokenizer detection for text of length %zu", len);
+
 	if (confidence) {
 		*confidence = 0.0;
 	}
@@ -266,6 +293,7 @@ rspamd_tokenizer_manager_detect(struct rspamd_tokenizer_manager *mgr,
 
 	/* If we have a language hint, try to find a tokenizer for that language first */
 	if (lang_hint) {
+		msg_info_tokenizer("trying to find tokenizer for language hint: %s", lang_hint);
 		for (i = 0; i < mgr->detection_order->len; i++) {
 			tok = g_array_index(mgr->detection_order, struct rspamd_custom_tokenizer *, i);
 
@@ -276,11 +304,16 @@ rspamd_tokenizer_manager_detect(struct rspamd_tokenizer_manager *mgr,
 			/* Check if this tokenizer handles the hinted language */
 			const char *tok_lang = tok->api->get_language_hint();
 			if (tok_lang && g_ascii_strcasecmp(tok_lang, lang_hint) == 0) {
+				msg_info_tokenizer("found tokenizer '%s' for language hint '%s'", tok->name, lang_hint);
 				/* Found a tokenizer for this language, check if it actually detects it */
 				if (tok->api->detect_language) {
 					conf = tok->api->detect_language(text, len);
+					msg_info_tokenizer("tokenizer '%s' confidence for hinted language: %.3f (threshold: %.3f)",
+									   tok->name, conf, tok->min_confidence);
 					if (conf >= tok->min_confidence) {
 						/* Use this tokenizer */
+						msg_info_tokenizer("using tokenizer '%s' for language hint '%s' with confidence %.3f",
+										   tok->name, lang_hint, conf);
 						if (confidence) {
 							*confidence = conf;
 						}
@@ -292,35 +325,52 @@ rspamd_tokenizer_manager_detect(struct rspamd_tokenizer_manager *mgr,
 				}
 			}
 		}
+		msg_info_tokenizer("no suitable tokenizer found for language hint '%s', falling back to general detection", lang_hint);
 	}
 
 	/* Try each tokenizer in priority order */
+	msg_info_tokenizer("trying %u tokenizers for general detection", mgr->detection_order->len);
 	for (i = 0; i < mgr->detection_order->len; i++) {
 		tok = g_array_index(mgr->detection_order, struct rspamd_custom_tokenizer *, i);
 
 		if (!tok->enabled || !tok->api->detect_language) {
+			msg_debug_tokenizer("skipping tokenizer '%s' (enabled: %s, has detect_language: %s)",
+								tok->name, tok->enabled ? "yes" : "no",
+								tok->api->detect_language ? "yes" : "no");
 			continue;
 		}
 
 		conf = tok->api->detect_language(text, len);
+		msg_info_tokenizer("tokenizer '%s' detection confidence: %.3f (threshold: %.3f, current best: %.3f)",
+						   tok->name, conf, tok->min_confidence, best_conf);
 
 		if (conf > best_conf && conf >= tok->min_confidence) {
 			best_conf = conf;
 			best_tok = tok;
+			msg_info_tokenizer("tokenizer '%s' is new best with confidence %.3f", tok->name, best_conf);
 
 			/* Early exit if very confident */
 			if (conf >= 0.95) {
+				msg_info_tokenizer("very high confidence (%.3f >= 0.95), using tokenizer '%s' immediately",
+								   conf, tok->name);
 				break;
 			}
 		}
 	}
 
-	if (confidence && best_tok) {
-		*confidence = best_conf;
-	}
+	if (best_tok) {
+		msg_info_tokenizer("selected tokenizer '%s' with confidence %.3f", best_tok->name, best_conf);
+		if (confidence) {
+			*confidence = best_conf;
+		}
 
-	if (detected_lang_hint && best_tok && best_tok->api->get_language_hint) {
-		*detected_lang_hint = best_tok->api->get_language_hint();
+		if (detected_lang_hint && best_tok->api->get_language_hint) {
+			*detected_lang_hint = best_tok->api->get_language_hint();
+			msg_info_tokenizer("detected language hint: %s", *detected_lang_hint);
+		}
+	}
+	else {
+		msg_info_tokenizer("no suitable tokenizer found during detection");
 	}
 
 	return best_tok;
