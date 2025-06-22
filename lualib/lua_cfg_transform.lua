@@ -376,7 +376,7 @@ return function(cfg)
           local next_act = actions_order[j]
           if actions:at(next_act) and actions:at(next_act):type() == 'number' then
             local next_score = actions:at(next_act):unwrap()
-            if next_score <= score then
+            if type(score) == 'number' and type(next_score) == 'number' and next_score <= score then
               logger.errx(rspamd_config, 'invalid actions thresholds order: action %s (%s) must have lower ' ..
                   'score than action %s (%s)', act, score, next_act, next_score)
               ret = false
