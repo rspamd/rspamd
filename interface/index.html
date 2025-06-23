@@ -479,9 +479,12 @@
 								<div class="card bg-light shadow card-body card p-2">
 									<p>Learn Bayesian classifier:</p>
 									<form>
-										<div class="btn-group">
-											<button class="btn btn-success d-flex align-items-center" type="button" data-upload="learnham" disabled><i class="fas fa-thumbs-up me-2"></i>Upload HAM</button>
-											<button class="btn btn-danger d-flex align-items-center" type="button" data-upload="learnspam" disabled><i class="fas fa-thumbs-down me-2"></i>Upload SPAM</button>
+										<div class="d-flex flex-wrap flex-lg-column align-items-start align-items-lg-stretch gap-2">
+											<select id="classifier" class="form-select w-auto"></select>
+											<div class="btn-group">
+												<button class="btn btn-success d-flex align-items-center" type="button" data-upload="learnham" disabled><i class="fas fa-thumbs-up me-2"></i>Upload HAM</button>
+												<button class="btn btn-danger d-flex align-items-center" type="button" data-upload="learnspam" disabled><i class="fas fa-thumbs-down me-2"></i>Upload SPAM</button>
+											</div>
 										</div>
 									</form>
 								</div>
