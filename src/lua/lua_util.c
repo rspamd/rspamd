@@ -27,6 +27,14 @@
 #include "replxx.h"
 #include <math.h>
 #include <glob.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+#include <sys/sysctl.h>
+#endif
+#ifdef __APPLE__
+#include <mach/mach.h>
+#endif
 
 #include "unicode/uspoof.h"
 #include "unicode/uscript.h"
@@ -627,6 +635,27 @@ LUA_FUNCTION_DEF(util, caseless_hash_fast);
 LUA_FUNCTION_DEF(util, get_hostname);
 
 /***
+ *  @function util.get_uptime()
+ * Returns system uptime in seconds
+ * @return {number} uptime in seconds
+ */
+LUA_FUNCTION_DEF(util, get_uptime);
+
+/***
+ *  @function util.get_pid()
+ * Returns current process PID
+ * @return {number} process ID
+ */
+LUA_FUNCTION_DEF(util, get_pid);
+
+/***
+ *  @function util.get_memory_usage()
+ * Returns memory usage information for current process
+ * @return {table} memory usage info with 'rss' and 'vsize' fields in bytes
+ */
+LUA_FUNCTION_DEF(util, get_memory_usage);
+
+/***
  *  @function util.parse_content_type(ct_string, mempool)
  * Parses content-type string to a table:
  * - `type`
@@ -728,6 +757,9 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF(util, umask),
 	LUA_INTERFACE_DEF(util, isatty),
 	LUA_INTERFACE_DEF(util, get_hostname),
+	LUA_INTERFACE_DEF(util, get_uptime),
+	LUA_INTERFACE_DEF(util, get_pid),
+	LUA_INTERFACE_DEF(util, get_memory_usage),
 	LUA_INTERFACE_DEF(util, parse_content_type),
 	LUA_INTERFACE_DEF(util, mime_header_encode),
 	LUA_INTERFACE_DEF(util, pack),
@@ -2409,6 +2441,107 @@ lua_util_get_hostname(lua_State *L)
 	gethostname(hostbuf, hostlen - 1);
 
 	lua_pushstring(L, hostbuf);
+
+	return 1;
+}
+
+static int
+lua_util_get_uptime(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	double uptime = 0.0;
+
+#ifdef __linux__
+	FILE *f = fopen("/proc/uptime", "r");
+	if (f) {
+		if (fscanf(f, "%lf", &uptime) != 1) {
+			uptime = 0.0;
+		}
+		fclose(f);
+	}
+#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+	struct timeval boottime;
+	size_t len = sizeof(boottime);
+	int mib[2] = {CTL_KERN, KERN_BOOTTIME};
+
+	if (sysctl(mib, 2, &boottime, &len, NULL, 0) == 0) {
+		struct timeval now;
+		gettimeofday(&now, NULL);
+		uptime = (now.tv_sec - boottime.tv_sec) +
+				 (now.tv_usec - boottime.tv_usec) / 1000000.0;
+	}
+#endif
+
+	lua_pushnumber(L, uptime);
+	return 1;
+}
+
+static int
+lua_util_get_pid(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	lua_pushinteger(L, getpid());
+	return 1;
+}
+
+static int
+lua_util_get_memory_usage(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	lua_createtable(L, 0, 2);
+
+#ifdef __linux__
+	FILE *f = fopen("/proc/self/status", "r");
+	if (f) {
+		char line[256];
+		long rss = 0, vsize = 0;
+
+		while (fgets(line, sizeof(line), f)) {
+			if (sscanf(line, "VmRSS: %ld kB", &rss) == 1) {
+				rss *= 1024; /* Convert to bytes */
+			}
+			else if (sscanf(line, "VmSize: %ld kB", &vsize) == 1) {
+				vsize *= 1024; /* Convert to bytes */
+			}
+		}
+		fclose(f);
+
+		lua_pushstring(L, "rss");
+		lua_pushinteger(L, rss);
+		lua_settable(L, -3);
+
+		lua_pushstring(L, "vsize");
+		lua_pushinteger(L, vsize);
+		lua_settable(L, -3);
+	}
+#elif defined(__APPLE__)
+	struct task_basic_info info;
+	mach_msg_type_number_t count = TASK_BASIC_INFO_COUNT;
+
+	if (task_info(mach_task_self(), TASK_BASIC_INFO, (task_info_t) &info, &count) == KERN_SUCCESS) {
+		lua_pushstring(L, "rss");
+		lua_pushinteger(L, info.resident_size);
+		lua_settable(L, -3);
+
+		lua_pushstring(L, "vsize");
+		lua_pushinteger(L, info.virtual_size);
+		lua_settable(L, -3);
+	}
+#elif defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+	struct kinfo_proc kp;
+	size_t len = sizeof(kp);
+	int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()};
+
+	if (sysctl(mib, 4, &kp, &len, NULL, 0) == 0) {
+		lua_pushstring(L, "rss");
+		lua_pushinteger(L, kp.ki_rssize * getpagesize());
+		lua_settable(L, -3);
+
+		lua_pushstring(L, "vsize");
+		lua_pushinteger(L, kp.ki_size);
+		lua_settable(L, -3);
+	}
+#endif
 
 	return 1;
 }
