@@ -1431,10 +1431,10 @@ fuzzy_io_fin(void *ud)
 	close(session->fd);
 }
 
-static GArray *
+static rspamd_words_t *
 fuzzy_preprocess_words(struct rspamd_mime_text_part *part, rspamd_mempool_t *pool)
 {
-	return part->utf_words;
+	return &part->utf_words;
 }
 
 static void
@@ -1861,7 +1861,7 @@ fuzzy_cmd_from_text_part(struct rspamd_task *task,
 	unsigned int i;
 	rspamd_cryptobox_hash_state_t st;
 	rspamd_stat_token_t *word;
-	GArray *words;
+	rspamd_words_t *words;
 	struct fuzzy_cmd_io *io;
 	unsigned int additional_length;
 	unsigned char *additional_data;
@@ -1970,10 +1970,10 @@ fuzzy_cmd_from_text_part(struct rspamd_task *task,
 			rspamd_cryptobox_hash_init(&st, rule->hash_key->str, rule->hash_key->len);
 			words = fuzzy_preprocess_words(part, task->task_pool);
 
-			for (i = 0; i < words->len; i++) {
-				word = &g_array_index(words, rspamd_stat_token_t, i);
+			for (i = 0; i < kv_size(*words); i++) {
+				word = &kv_A(*words, i);
 
-				if (!((word->flags & RSPAMD_STAT_TOKEN_FLAG_SKIPPED) || word->stemmed.len == 0)) {
+				if (!((word->flags & RSPAMD_WORD_FLAG_SKIPPED) || word->stemmed.len == 0)) {
 					rspamd_cryptobox_hash_update(&st, word->stemmed.begin,
 												 word->stemmed.len);
 				}
@@ -2684,7 +2684,7 @@ fuzzy_insert_metric_results(struct rspamd_task *task, struct fuzzy_rule *rule,
 	if (task->message) {
 		PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, tp)
 		{
-			if (!IS_TEXT_PART_EMPTY(tp) && tp->utf_words != NULL && tp->utf_words->len > 0) {
+			if (!IS_TEXT_PART_EMPTY(tp) && kv_size(tp->utf_words) > 0) {
 				seen_text_part = TRUE;
 
 				if (tp->utf_stripped_text.magic == UTEXT_MAGIC) {

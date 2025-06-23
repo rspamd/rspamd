@@ -24,6 +24,7 @@
 #include "dns.h"
 #include "re_cache.h"
 #include "khash.h"
+#include "libserver/word.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -187,7 +188,7 @@ struct rspamd_task {
 	struct rspamd_scan_result *result;                  /**< Metric result									*/
 	khash_t(rspamd_task_lua_cache) lua_cache;           /**< cache of lua objects							*/
 	GPtrArray *tokens;                                  /**< statistics tokens */
-	GArray *meta_words;                                 /**< rspamd_stat_token_t produced from meta headers
+	rspamd_words_t meta_words;                          /**< rspamd_word_t produced from meta headers
 														(e.g. Subject) */
 
 	GPtrArray *rcpt_envelope; /**< array of rspamd_email_address					*/

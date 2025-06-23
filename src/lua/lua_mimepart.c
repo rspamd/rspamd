@@ -901,7 +901,7 @@ lua_textpart_get_words_count(lua_State *L)
 		return 1;
 	}
 
-	if (IS_TEXT_PART_EMPTY(part) || part->utf_words == NULL) {
+	if (IS_TEXT_PART_EMPTY(part) || !part->utf_words.a) {
 		lua_pushinteger(L, 0);
 	}
 	else {
@@ -943,7 +943,7 @@ lua_textpart_get_words(lua_State *L)
 		return luaL_error(L, "invalid arguments");
 	}
 
-	if (IS_TEXT_PART_EMPTY(part) || part->utf_words == NULL) {
+	if (IS_TEXT_PART_EMPTY(part) || !part->utf_words.a) {
 		lua_createtable(L, 0, 0);
 	}
 	else {
@@ -957,7 +957,7 @@ lua_textpart_get_words(lua_State *L)
 			}
 		}
 
-		return rspamd_lua_push_words(L, part->utf_words, how);
+		return rspamd_lua_push_words_kvec(L, &part->utf_words, how);
 	}
 
 	return 1;
@@ -976,7 +976,7 @@ lua_textpart_filter_words(lua_State *L)
 		return luaL_error(L, "invalid arguments");
 	}
 
-	if (IS_TEXT_PART_EMPTY(part) || part->utf_words == NULL) {
+	if (IS_TEXT_PART_EMPTY(part) || !part->utf_words.a) {
 		lua_createtable(L, 0, 0);
 	}
 	else {
@@ -998,9 +998,8 @@ lua_textpart_filter_words(lua_State *L)
 
 		lua_createtable(L, 8, 0);
 
-		for (i = 0, cnt = 1; i < part->utf_words->len; i++) {
-			rspamd_stat_token_t *w = &g_array_index(part->utf_words,
-													rspamd_stat_token_t, i);
+		for (i = 0, cnt = 1; i < kv_size(part->utf_words); i++) {
+			rspamd_word_t *w = &kv_A(part->utf_words, i);
 
 			switch (how) {
 			case RSPAMD_LUA_WORDS_STEM:
@@ -1194,13 +1193,13 @@ struct lua_shingle_filter_cbdata {
 	rspamd_mempool_t *pool;
 };
 
-#define STORE_TOKEN(i, t)                                                     \
-	do {                                                                      \
-		if ((i) < part->utf_words->len) {                                     \
-			word = &g_array_index(part->utf_words, rspamd_stat_token_t, (i)); \
-			sd->t.begin = word->stemmed.begin;                                \
-			sd->t.len = word->stemmed.len;                                    \
-		}                                                                     \
+#define STORE_TOKEN(i, t)                       \
+	do {                                        \
+		if ((i) < kv_size(part->utf_words)) {   \
+			word = &kv_A(part->utf_words, (i)); \
+			sd->t.begin = word->stemmed.begin;  \
+			sd->t.len = word->stemmed.len;      \
+		}                                       \
 	} while (0)
 
 static uint64_t
@@ -1210,7 +1209,7 @@ lua_shingles_filter(uint64_t *input, gsize count,
 	uint64_t minimal = G_MAXUINT64;
 	gsize i, min_idx = 0;
 	struct lua_shingle_data *sd;
-	rspamd_stat_token_t *word;
+	rspamd_word_t *word;
 	struct lua_shingle_filter_cbdata *cbd = (struct lua_shingle_filter_cbdata *) ud;
 	struct rspamd_mime_text_part *part;
 
@@ -1248,7 +1247,7 @@ lua_textpart_get_fuzzy_hashes(lua_State *L)
 	unsigned int i;
 	struct lua_shingle_data *sd;
 	rspamd_cryptobox_hash_state_t st;
-	rspamd_stat_token_t *word;
+	rspamd_word_t *word;
 	struct lua_shingle_filter_cbdata cbd;
 
 
@@ -1256,7 +1255,7 @@ lua_textpart_get_fuzzy_hashes(lua_State *L)
 		return luaL_error(L, "invalid arguments");
 	}
 
-	if (IS_TEXT_PART_EMPTY(part) || part->utf_words == NULL) {
+	if (IS_TEXT_PART_EMPTY(part) || !part->utf_words.a) {
 		lua_pushnil(L);
 		lua_pushnil(L);
 	}
@@ -1269,8 +1268,8 @@ lua_textpart_get_fuzzy_hashes(lua_State *L)
 		/* Calculate direct hash */
 		rspamd_cryptobox_hash_init(&st, key, rspamd_cryptobox_HASHKEYBYTES);
 
-		for (i = 0; i < part->utf_words->len; i++) {
-			word = &g_array_index(part->utf_words, rspamd_stat_token_t, i);
+		for (i = 0; i < kv_size(part->utf_words); i++) {
+			word = &kv_A(part->utf_words, i);
 			rspamd_cryptobox_hash_update(&st,
 										 word->stemmed.begin, word->stemmed.len);
 		}
@@ -1283,7 +1282,7 @@ lua_textpart_get_fuzzy_hashes(lua_State *L)
 
 		cbd.pool = pool;
 		cbd.part = part;
-		sgl = rspamd_shingles_from_text(part->utf_words, key,
+		sgl = rspamd_shingles_from_text(&part->utf_words, key,
 										pool, lua_shingles_filter, &cbd, RSPAMD_SHINGLES_MUMHASH);
 
 		if (sgl == NULL) {

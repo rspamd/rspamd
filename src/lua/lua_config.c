@@ -24,6 +24,10 @@
 #include "utlist.h"
 #include <math.h>
 
+/* Forward declarations for custom tokenizer functions */
+gboolean rspamd_config_load_custom_tokenizers(struct rspamd_config *cfg, GError **err);
+void rspamd_config_unload_custom_tokenizers(struct rspamd_config *cfg);
+
 /***
  * This module is used to configure rspamd and is normally available as global
  * variable named `rspamd_config`. Unlike other modules, it is not necessary to
@@ -862,6 +866,19 @@ LUA_FUNCTION_DEF(config, get_dns_max_requests);
  */
 LUA_FUNCTION_DEF(config, get_dns_timeout);
 
+/***
+ * @method rspamd_config:load_custom_tokenizers()
+ * Loads custom tokenizers from configuration
+ * @return {boolean} true if successful
+ */
+LUA_FUNCTION_DEF(config, load_custom_tokenizers);
+
+/***
+ * @method rspamd_config:unload_custom_tokenizers()
+ * Unloads custom tokenizers and frees memory
+ */
+LUA_FUNCTION_DEF(config, unload_custom_tokenizers);
+
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF(config, get_module_opt),
 	LUA_INTERFACE_DEF(config, get_mempool),
@@ -937,6 +954,8 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF(config, get_tld_path),
 	LUA_INTERFACE_DEF(config, get_dns_max_requests),
 	LUA_INTERFACE_DEF(config, get_dns_timeout),
+	LUA_INTERFACE_DEF(config, load_custom_tokenizers),
+	LUA_INTERFACE_DEF(config, unload_custom_tokenizers),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
 	{NULL, NULL}};
@@ -4485,11 +4504,14 @@ lua_config_init_subsystem(lua_State *L)
 		nparts = g_strv_length(parts);
 
 		for (i = 0; i < nparts; i++) {
-			if (strcmp(parts[i], "filters") == 0) {
+			const char *str = parts[i];
+
+			/* TODO: total shit, rework some day */
+			if (strcmp(str, "filters") == 0) {
 				rspamd_lua_post_load_config(cfg);
 				rspamd_init_filters(cfg, false, false);
 			}
-			else if (strcmp(parts[i], "langdet") == 0) {
+			else if (strcmp(str, "langdet") == 0) {
 				if (!cfg->lang_det) {
 					cfg->lang_det = rspamd_language_detector_init(cfg);
 					rspamd_mempool_add_destructor(cfg->cfg_pool,
@@ -4497,10 +4519,10 @@ lua_config_init_subsystem(lua_State *L)
 												  cfg->lang_det);
 				}
 			}
-			else if (strcmp(parts[i], "stat") == 0) {
+			else if (strcmp(str, "stat") == 0) {
 				rspamd_stat_init(cfg, NULL);
 			}
-			else if (strcmp(parts[i], "dns") == 0) {
+			else if (strcmp(str, "dns") == 0) {
 				struct ev_loop *ev_base = lua_check_ev_base(L, 3);
 
 				if (ev_base) {
@@ -4514,11 +4536,25 @@ lua_config_init_subsystem(lua_State *L)
 					return luaL_error(L, "no event base specified");
 				}
 			}
-			else if (strcmp(parts[i], "symcache") == 0) {
+			else if (strcmp(str, "symcache") == 0) {
 				rspamd_symcache_init(cfg->cache);
 			}
+			else if (strcmp(str, "tokenizers") == 0 || strcmp(str, "custom_tokenizers") == 0) {
+				GError *err = NULL;
+				if (!rspamd_config_load_custom_tokenizers(cfg, &err)) {
+					g_strfreev(parts);
+					if (err) {
+						int ret = luaL_error(L, "failed to load custom tokenizers: %s", err->message);
+						g_error_free(err);
+						return ret;
+					}
+					else {
+						return luaL_error(L, "failed to load custom tokenizers");
+					}
+				}
+			}
 			else {
-				int ret = luaL_error(L, "invalid param: %s", parts[i]);
+				int ret = luaL_error(L, "invalid param: %s", str);
 				g_strfreev(parts);
 
 				return ret;
@@ -4771,4 +4807,44 @@ void lua_call_finish_script(struct rspamd_config_cfg_lua_script *sc,
 	*ptask = task;
 
 	lua_thread_call(thread, 1);
+}
+
+static int
+lua_config_load_custom_tokenizers(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+
+	if (cfg != NULL) {
+		GError *err = NULL;
+		gboolean ret = rspamd_config_load_custom_tokenizers(cfg, &err);
+
+		if (!ret && err) {
+			lua_pushboolean(L, FALSE);
+			lua_pushstring(L, err->message);
+			g_error_free(err);
+			return 2;
+		}
+
+		lua_pushboolean(L, ret);
+		return 1;
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+}
+
+static int
+lua_config_unload_custom_tokenizers(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+
+	if (cfg != NULL) {
+		rspamd_config_unload_custom_tokenizers(cfg);
+		return 0;
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
 }

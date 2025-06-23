@@ -72,6 +72,11 @@
 #include "contrib/expected/expected.hpp"
 #include "contrib/ankerl/unordered_dense.h"
 
+#include "libserver/task.h"
+#include "libserver/url.h"
+#define RSPAMD_TOKENIZER_INTERNAL// We need to use internal tokenizer API
+#include "libstat/tokenizers/custom_tokenizer.h"
+
 #define DEFAULT_SCORE 10.0
 
 #define DEFAULT_RLIMIT_NOFILE 2048
@@ -821,6 +826,65 @@ rspamd_adjust_clocks_resolution(struct rspamd_config *cfg)
 #endif
 }
 
+extern "C" {
+
+gboolean
+rspamd_config_load_custom_tokenizers(struct rspamd_config *cfg, GError **err)
+{
+	/* Load custom tokenizers */
+	const ucl_object_t *custom_tokenizers = ucl_object_lookup_path(cfg->cfg_ucl_obj,
+																   "options.custom_tokenizers");
+	if (custom_tokenizers != NULL) {
+		msg_info_config("loading custom tokenizers");
+
+		if (!cfg->tokenizer_manager) {
+			cfg->tokenizer_manager = rspamd_tokenizer_manager_new(cfg->cfg_pool);
+		}
+
+		ucl_object_iter_t it = ucl_object_iterate_new(custom_tokenizers);
+		const ucl_object_t *tok_obj;
+		const char *tok_name;
+
+		while ((tok_obj = ucl_object_iterate_safe(it, true)) != NULL) {
+			tok_name = ucl_object_key(tok_obj);
+			GError *local_err = NULL;
+
+			if (!rspamd_tokenizer_manager_load_tokenizer(cfg->tokenizer_manager,
+														 tok_name, tok_obj, &local_err)) {
+				msg_err_config("failed to load custom tokenizer '%s': %s",
+							   tok_name, local_err ? local_err->message : "unknown error");
+
+				if (err && !*err) {
+					*err = g_error_copy(local_err);
+				}
+
+				if (local_err) {
+					g_error_free(local_err);
+				}
+
+				ucl_object_iterate_free(it);
+				return FALSE;
+			}
+		}
+		ucl_object_iterate_free(it);
+
+		msg_info_config("loaded custom tokenizers successfully");
+	}
+
+	return TRUE;
+}
+
+void rspamd_config_unload_custom_tokenizers(struct rspamd_config *cfg)
+{
+	if (cfg->tokenizer_manager) {
+		msg_info_config("unloading custom tokenizers");
+		rspamd_tokenizer_manager_destroy(cfg->tokenizer_manager);
+		cfg->tokenizer_manager = NULL;
+	}
+}
+
+}// extern "C"
+
 /*
  * Perform post load actions
  */
@@ -939,6 +1003,20 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 		if (!libs_ret) {
 			msg_err_config("cannot configure libraries, fatal error");
 			return FALSE;
+		}
+
+		/* Load custom tokenizers using the new function */
+		GError *tokenizer_err = NULL;
+		if (!rspamd_config_load_custom_tokenizers(cfg, &tokenizer_err)) {
+			msg_err_config("failed to load custom tokenizers: %s",
+						   tokenizer_err ? tokenizer_err->message : "unknown error");
+			if (tokenizer_err) {
+				g_error_free(tokenizer_err);
+			}
+
+			if (opts & RSPAMD_CONFIG_INIT_VALIDATE) {
+				ret = tl::make_unexpected(std::string{"failed to load custom tokenizers"});
+			}
 		}
 	}
 

@@ -998,20 +998,21 @@ rspamd_re_cache_process_selector(struct rspamd_task *task,
 	return result;
 }
 
+
 static inline unsigned int
-rspamd_process_words_vector(GArray *words,
-							const unsigned char **scvec,
-							unsigned int *lenvec,
-							struct rspamd_re_class *re_class,
-							unsigned int cnt,
-							gboolean *raw)
+rspamd_process_words_vector_kvec(rspamd_words_t *words,
+								 const unsigned char **scvec,
+								 unsigned int *lenvec,
+								 struct rspamd_re_class *re_class,
+								 unsigned int cnt,
+								 gboolean *raw)
 {
 	unsigned int j;
-	rspamd_stat_token_t *tok;
+	rspamd_word_t *tok;
 
-	if (words) {
-		for (j = 0; j < words->len; j++) {
-			tok = &g_array_index(words, rspamd_stat_token_t, j);
+	if (words && words->a) {
+		for (j = 0; j < kv_size(*words); j++) {
+			tok = &kv_A(*words, j);
 
 			if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT) {
 				if (!(tok->flags & RSPAMD_STAT_TOKEN_FLAG_UTF)) {
@@ -1432,13 +1433,13 @@ rspamd_re_cache_exec_re(struct rspamd_task *task,
 
 			PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, text_part)
 			{
-				if (text_part->utf_words) {
-					cnt += text_part->utf_words->len;
+				if (text_part->utf_words.a) {
+					cnt += kv_size(text_part->utf_words);
 				}
 			}
 
-			if (task->meta_words && task->meta_words->len > 0) {
-				cnt += task->meta_words->len;
+			if (task->meta_words.a && kv_size(task->meta_words) > 0) {
+				cnt += kv_size(task->meta_words);
 			}
 
 			if (cnt > 0) {
@@ -1449,15 +1450,15 @@ rspamd_re_cache_exec_re(struct rspamd_task *task,
 
 				PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, text_part)
 				{
-					if (text_part->utf_words) {
-						cnt = rspamd_process_words_vector(text_part->utf_words,
-														  scvec, lenvec, re_class, cnt, &raw);
+					if (text_part->utf_words.a) {
+						cnt = rspamd_process_words_vector_kvec(&text_part->utf_words,
+															   scvec, lenvec, re_class, cnt, &raw);
 					}
 				}
 
-				if (task->meta_words) {
-					cnt = rspamd_process_words_vector(task->meta_words,
-													  scvec, lenvec, re_class, cnt, &raw);
+				if (task->meta_words.a) {
+					cnt = rspamd_process_words_vector_kvec(&task->meta_words,
+														   scvec, lenvec, re_class, cnt, &raw);
 				}
 
 				ret = rspamd_re_cache_process_regexp_data(rt, re,
