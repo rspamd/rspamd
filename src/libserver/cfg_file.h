@@ -48,6 +48,7 @@ struct worker_s;
 struct rspamd_external_libs_ctx;
 struct rspamd_cryptobox_pubkey;
 struct rspamd_dns_resolver;
+struct rspamd_tokenizer_manager;
 
 /**
  * Logging type
@@ -497,9 +498,10 @@ struct rspamd_config {
 	char *zstd_output_dictionary; /**< path to zstd output dictionary						*/
 	ucl_object_t *neighbours;     /**< other servers in the cluster						*/
 
-	struct rspamd_config_settings_elt *setting_ids; /**< preprocessed settings ids							*/
-	struct rspamd_lang_detector *lang_det;          /**< language detector									*/
-	struct rspamd_worker *cur_worker;               /**< set dynamically by each worker							*/
+	struct rspamd_config_settings_elt *setting_ids;     /**< preprocessed settings ids							*/
+	struct rspamd_lang_detector *lang_det;              /**< language detector									*/
+	struct rspamd_tokenizer_manager *tokenizer_manager; /**< custom tokenizer manager						*/
+	struct rspamd_worker *cur_worker;                   /**< set dynamically by each worker							*/
 
 	ref_entry_t ref; /**< reference counter									*/
 };

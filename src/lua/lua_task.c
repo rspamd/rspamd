@@ -6943,7 +6943,7 @@ lua_task_get_meta_words(lua_State *L)
 		return luaL_error(L, "invalid arguments");
 	}
 
-	if (task->meta_words == NULL) {
+	if (!task->meta_words.a) {
 		lua_createtable(L, 0, 0);
 	}
 	else {
@@ -6967,7 +6967,7 @@ lua_task_get_meta_words(lua_State *L)
 			}
 		}
 
-		return rspamd_lua_push_words(L, task->meta_words, how);
+		return rspamd_lua_push_words_kvec(L, &task->meta_words, how);
 	}
 
 	return 1;
@@ -6989,6 +6989,76 @@ lua_lookup_words_array(lua_State *L,
 
 	for (i = 0; i < words->len; i++) {
 		tok = &g_array_index(words, rspamd_stat_token_t, i);
+
+		matched = FALSE;
+
+		if (tok->normalized.len == 0) {
+			continue;
+		}
+
+		key = tok->normalized.begin;
+		keylen = tok->normalized.len;
+
+		switch (map->type) {
+		case RSPAMD_LUA_MAP_SET:
+		case RSPAMD_LUA_MAP_HASH:
+			/* We know that tok->normalized is zero terminated in fact */
+			if (rspamd_match_hash_map(map->data.hash, key, keylen)) {
+				matched = TRUE;
+			}
+			break;
+		case RSPAMD_LUA_MAP_REGEXP:
+		case RSPAMD_LUA_MAP_REGEXP_MULTIPLE:
+			if (rspamd_match_regexp_map_single(map->data.re_map, key,
+											   keylen)) {
+				matched = TRUE;
+			}
+			break;
+		default:
+			g_assert_not_reached();
+			break;
+		}
+
+		if (matched) {
+			nmatched++;
+
+			lua_pushcfunction(L, &rspamd_lua_traceback);
+			err_idx = lua_gettop(L);
+			lua_pushvalue(L, cbpos); /* Function */
+			rspamd_lua_push_full_word(L, tok);
+
+			if (lua_pcall(L, 1, 0, err_idx) != 0) {
+				msg_err_task("cannot call callback function for lookup words: %s",
+							 lua_tostring(L, -1));
+			}
+
+			lua_settop(L, err_idx - 1);
+		}
+	}
+
+	return nmatched;
+}
+
+static unsigned int
+lua_lookup_words_kvec(lua_State *L,
+					  int cbpos,
+					  struct rspamd_task *task,
+					  struct rspamd_lua_map *map,
+					  rspamd_words_t *words)
+{
+	rspamd_word_t *tok;
+	unsigned int i, nmatched = 0;
+	int err_idx;
+	gboolean matched;
+	const char *key;
+	gsize keylen;
+
+	if (!words || !words->a) {
+		return 0;
+	}
+
+	for (i = 0; i < kv_size(*words); i++) {
+		tok = &kv_A(*words, i);
 
 		matched = FALSE;
 
@@ -7062,13 +7132,13 @@ lua_task_lookup_words(lua_State *L)
 
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, tp)
 	{
-		if (tp->utf_words) {
-			matches += lua_lookup_words_array(L, 3, task, map, tp->utf_words);
+		if (tp->utf_words.a) {
+			matches += lua_lookup_words_kvec(L, 3, task, map, &tp->utf_words);
 		}
 	}
 
-	if (task->meta_words) {
-		matches += lua_lookup_words_array(L, 3, task, map, task->meta_words);
+	if (task->meta_words.a) {
+		matches += lua_lookup_words_kvec(L, 3, task, map, &task->meta_words);
 	}
 
 	lua_pushinteger(L, matches);

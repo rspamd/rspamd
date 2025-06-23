@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 local argparse = require "argparse"
 local ansicolors = require "ansicolors"
@@ -35,94 +35,94 @@ local parser = argparse()
     :require_command(true)
 
 parser:option "-c --config"
-      :description "Path to config file"
-      :argname("<cfg>")
-      :default(rspamd_paths["CONFDIR"] .. "/" .. "rspamd.conf")
+    :description "Path to config file"
+    :argname("<cfg>")
+    :default(rspamd_paths["CONFDIR"] .. "/" .. "rspamd.conf")
 parser:mutex(
-    parser:flag "-j --json"
-          :description "JSON output",
-    parser:flag "-U --ucl"
-          :description "UCL output",
-    parser:flag "-M --messagepack"
-          :description "MessagePack output"
+  parser:flag "-j --json"
+  :description "JSON output",
+  parser:flag "-U --ucl"
+  :description "UCL output",
+  parser:flag "-M --messagepack"
+  :description "MessagePack output"
 )
 parser:flag "-C --compact"
-      :description "Use compact format"
+    :description "Use compact format"
 parser:flag "--no-file"
-      :description "Do not print filename"
+    :description "Do not print filename"
 
 -- Extract subcommand
 local extract = parser:command "extract ex e"
-                      :description "Extracts data from MIME messages"
+    :description "Extracts data from MIME messages"
 extract:argument "file"
-       :description "File to process"
-       :argname "<file>"
-       :args "+"
+    :description "File to process"
+    :argname "<file>"
+    :args "+"
 
 extract:flag "-t --text"
-       :description "Extracts plain text data from a message"
+    :description "Extracts plain text data from a message"
 extract:flag "-H --html"
-       :description "Extracts htm data from a message"
+    :description "Extracts htm data from a message"
 extract:option "-o --output"
-       :description "Output format ('raw', 'content', 'oneline', 'decoded', 'decoded_utf')"
-       :argname("<type>")
-       :convert {
-  raw = "raw",
-  content = "content",
-  oneline = "content_oneline",
-  decoded = "raw_parsed",
-  decoded_utf = "raw_utf"
-}
-       :default "content"
+    :description "Output format ('raw', 'content', 'oneline', 'decoded', 'decoded_utf')"
+    :argname("<type>")
+    :convert {
+      raw = "raw",
+      content = "content",
+      oneline = "content_oneline",
+      decoded = "raw_parsed",
+      decoded_utf = "raw_utf"
+    }
+    :default "content"
 extract:flag "-w --words"
-       :description "Extracts words"
+    :description "Extracts words"
 extract:flag "-p --part"
-       :description "Show part info"
+    :description "Show part info"
 extract:flag "-s --structure"
-       :description "Show structure info (e.g. HTML tags)"
+    :description "Show structure info (e.g. HTML tags)"
 extract:flag "-i --invisible"
-       :description "Show invisible content for HTML parts"
+    :description "Show invisible content for HTML parts"
 extract:option "-F --words-format"
-       :description "Words format ('stem', 'norm', 'raw', 'full')"
-       :argname("<type>")
-       :convert {
-  stem = "stem",
-  norm = "norm",
-  raw = "raw",
-  full = "full",
-}
-       :default "stem"
+    :description "Words format ('stem', 'norm', 'raw', 'full')"
+    :argname("<type>")
+    :convert {
+      stem = "stem",
+      norm = "norm",
+      raw = "raw",
+      full = "full",
+    }
+    :default "stem"
 
 local stat = parser:command "stat st s"
-                   :description "Extracts statistical data from MIME messages"
+    :description "Extracts statistical data from MIME messages"
 stat:argument "file"
     :description "File to process"
     :argname "<file>"
     :args "+"
 stat:mutex(
-    stat:flag "-m --meta"
-        :description "Lua metatokens",
-    stat:flag "-b --bayes"
-        :description "Bayes tokens",
-    stat:flag "-F --fuzzy"
-        :description "Fuzzy hashes"
+  stat:flag "-m --meta"
+  :description "Lua metatokens",
+  stat:flag "-b --bayes"
+  :description "Bayes tokens",
+  stat:flag "-F --fuzzy"
+  :description "Fuzzy hashes"
 )
 stat:flag "-s --shingles"
     :description "Show shingles for fuzzy hashes"
 
 local urls = parser:command "urls url u"
-                   :description "Extracts URLs from MIME messages"
+    :description "Extracts URLs from MIME messages"
 urls:argument "file"
     :description "File to process"
     :argname "<file>"
     :args "+"
 urls:mutex(
-    urls:flag "-t --tld"
-        :description "Get TLDs only",
-    urls:flag "-H --host"
-        :description "Get hosts only",
-    urls:flag "-f --full"
-        :description "Show piecewise urls as processed by Rspamd"
+  urls:flag "-t --tld"
+  :description "Get TLDs only",
+  urls:flag "-H --host"
+  :description "Get hosts only",
+  urls:flag "-f --full"
+  :description "Show piecewise urls as processed by Rspamd"
 )
 
 urls:flag "-u --unique"
@@ -135,75 +135,75 @@ urls:flag "-r --reverse"
     :description "Reverse sort order"
 
 local modify = parser:command "modify mod m"
-                     :description "Modifies MIME message"
+    :description "Modifies MIME message"
 modify:argument "file"
-      :description "File to process"
-      :argname "<file>"
-      :args "+"
+    :description "File to process"
+    :argname "<file>"
+    :args "+"
 
 modify:option "-a --add-header"
-      :description "Adds specific header"
-      :argname "<header=value>"
-      :count "*"
+    :description "Adds specific header"
+    :argname "<header=value>"
+    :count "*"
 modify:option "-r --remove-header"
-      :description "Removes specific header (all occurrences)"
-      :argname "<header>"
-      :count "*"
+    :description "Removes specific header (all occurrences)"
+    :argname "<header>"
+    :count "*"
 modify:option "-R --rewrite-header"
-      :description "Rewrites specific header, uses Lua string.format pattern"
-      :argname "<header=pattern>"
-      :count "*"
+    :description "Rewrites specific header, uses Lua string.format pattern"
+    :argname "<header=pattern>"
+    :count "*"
 modify:option "-t --text-footer"
-      :description "Adds footer to text/plain parts from a specific file"
-      :argname "<file>"
+    :description "Adds footer to text/plain parts from a specific file"
+    :argname "<file>"
 modify:option "-H --html-footer"
-      :description "Adds footer to text/html parts from a specific file"
-      :argname "<file>"
+    :description "Adds footer to text/html parts from a specific file"
+    :argname "<file>"
 
 local strip = parser:command "strip"
-                    :description "Strip attachments from a message"
+    :description "Strip attachments from a message"
 strip:argument "file"
-     :description "File to process"
-     :argname "<file>"
-     :args "+"
+    :description "File to process"
+    :argname "<file>"
+    :args "+"
 strip:flag "-i --keep-images"
-     :description "Keep images"
+    :description "Keep images"
 strip:option "--min-text-size"
-     :description "Minimal text size to keep"
-     :argname "<size>"
-     :convert(tonumber)
-     :default(0)
+    :description "Minimal text size to keep"
+    :argname "<size>"
+    :convert(tonumber)
+    :default(0)
 strip:option "--max-text-size"
-     :description "Max text size to keep"
-     :argname "<size>"
-     :convert(tonumber)
-     :default(math.huge)
+    :description "Max text size to keep"
+    :argname "<size>"
+    :convert(tonumber)
+    :default(math.huge)
 
 local anonymize = parser:command "anonymize"
-                        :description "Try to remove sensitive information from a message"
+    :description "Try to remove sensitive information from a message"
 anonymize:argument "file"
-         :description "File to process"
-         :argname "<file>"
-         :args "+"
+    :description "File to process"
+    :argname "<file>"
+    :args "+"
 anonymize:option "--exclude-header -X"
-         :description "Exclude specific headers from anonymization"
-         :argname "<header>"
-         :count "*"
+    :description "Exclude specific headers from anonymization"
+    :argname "<header>"
+    :count "*"
 anonymize:option "--include-header -I"
-         :description "Include specific headers from anonymization"
-         :argname "<header>"
-         :count "*"
+    :description "Include specific headers from anonymization"
+    :argname "<header>"
+    :count "*"
 anonymize:flag "--gpt"
-         :description "Use LLM model for anonymization (requires GPT plugin to be configured)"
+    :description "Use LLM model for anonymization (requires GPT plugin to be configured)"
 anonymize:option "--model"
-         :description "Model to use for anonymization"
-         :argname "<model>"
+    :description "Model to use for anonymization"
+    :argname "<model>"
 anonymize:option "--prompt"
-         :description "Prompt to use for anonymization"
-         :argname "<prompt>"
+    :description "Prompt to use for anonymization"
+    :argname "<prompt>"
 
 local sign = parser:command "sign"
-                   :description "Performs DKIM signing"
+    :description "Performs DKIM signing"
 sign:argument "file"
     :description "File to process"
     :argname "<file>"
@@ -225,33 +225,33 @@ sign:option "-t --type"
     :description "ARC or DKIM signing"
     :argname("<arc|dkim>")
     :convert {
-  ['arc'] = 'arc',
-  ['dkim'] = 'dkim',
-}
+      ['arc'] = 'arc',
+      ['dkim'] = 'dkim',
+    }
     :default 'dkim'
 sign:option "-o --output"
     :description "Output format"
     :argname("<message|signature>")
     :convert {
-  ['message'] = 'message',
-  ['signature'] = 'signature',
-}
+      ['message'] = 'message',
+      ['signature'] = 'signature',
+    }
     :default 'message'
 
 local dump = parser:command "dump"
-                   :description "Dumps a raw message in different formats"
+    :description "Dumps a raw message in different formats"
 dump:argument "file"
     :description "File to process"
     :argname "<file>"
     :args "+"
 -- Duplicate format for convenience
 dump:mutex(
-    parser:flag "-j --json"
-          :description "JSON output",
-    parser:flag "-U --ucl"
-          :description "UCL output",
-    parser:flag "-M --messagepack"
-          :description "MessagePack output"
+  parser:flag "-j --json"
+  :description "JSON output",
+  parser:flag "-U --ucl"
+  :description "UCL output",
+  parser:flag "-M --messagepack"
+  :description "MessagePack output"
 )
 dump:flag "-s --split"
     :description "Split the output file contents such that no content is embedded"
@@ -260,7 +260,7 @@ dump:option "-o --outdir"
     :description "Output directory"
     :argname("<directory>")
 
-local function load_config(opts)
+local function load_config(opts, load_tokenizers)
   local _r, err = rspamd_config:load_ucl(opts['config'])
 
   if not _r then
@@ -272,6 +272,23 @@ local function load_config(opts)
   if not _r then
     rspamd_logger.errx('cannot process %s: %s', opts['config'], err)
     os.exit(1)
+  end
+
+  -- Load custom tokenizers if requested
+  if load_tokenizers then
+    local success, tokenizer_err = rspamd_config:load_custom_tokenizers()
+    if not success then
+      rspamd_logger.errx('cannot load custom tokenizers: %s', tokenizer_err or 'unknown error')
+      -- Don't exit here as custom tokenizers are optional
+      rspamd_logger.warnx('proceeding without custom tokenizers')
+    end
+  end
+end
+
+-- Helper function to ensure proper cleanup of tokenizers
+local function cleanup_tokenizers()
+  if rspamd_config then
+    rspamd_config:unload_custom_tokenizers()
   end
 end
 
@@ -288,13 +305,13 @@ local function load_task(_, fname)
 
   if not res then
     parser:error(string.format('cannot read message from %s: %s', fname,
-        task))
+      task))
     return nil
   end
 
   if not task:process_message() then
     parser:error(string.format('cannot read message from %s: %s', fname,
-        'failed to parse'))
+      'failed to parse'))
     return nil
   end
 
@@ -335,7 +352,6 @@ local function print_elts(elts, opts, func)
     io.write(ucl.to_format(elts, output_fmt(opts)))
   else
     fun.each(function(fname, elt)
-
       if not opts.json and not opts.ucl then
         if func then
           elt = fun.map(func, elt)
@@ -357,7 +373,7 @@ local function extract_handler(opts)
 
   if opts.words then
     -- Enable stemming and urls detection
-    load_config(opts)
+    load_config(opts, true) -- Load with custom tokenizers
     rspamd_url.init(rspamd_config:get_tld_path())
     rspamd_config:init_subsystem('langdet')
   end
@@ -372,39 +388,38 @@ local function extract_handler(opts)
 
       if not opts.json and not opts.ucl then
         table.insert(out,
-            rspamd_logger.slog('Part: %s: %s, language: %s, size: %s (%s raw), words: %s',
-                part:get_mimepart():get_digest():sub(1, 8),
-                t,
-                part:get_language(),
-                part:get_length(), part:get_raw_length(),
-                part:get_words_count()))
+          rspamd_logger.slog('Part: %s: %s, language: %s, size: %s (%s raw), words: %s',
+            part:get_mimepart():get_digest():sub(1, 8),
+            t,
+            part:get_language(),
+            part:get_length(), part:get_raw_length(),
+            part:get_words_count()))
         table.insert(out,
-            rspamd_logger.slog('Stats: %s',
-                fun.foldl(function(acc, k, v)
-                  if acc ~= '' then
-                    return string.format('%s, %s:%s', acc, k, v)
-                  else
-                    return string.format('%s:%s', k, v)
-                  end
-                end, '', part:get_stats())))
+          rspamd_logger.slog('Stats: %s',
+            fun.foldl(function(acc, k, v)
+              if acc ~= '' then
+                return string.format('%s, %s:%s', acc, k, v)
+              else
+                return string.format('%s:%s', k, v)
+              end
+            end, '', part:get_stats())))
       end
     end
   end
 
   local function maybe_print_mime_part_info(part, out)
     if opts.part then
-
       if not opts.json and not opts.ucl then
         local mtype, msubtype = part:get_type()
         local det_mtype, det_msubtype = part:get_detected_type()
         table.insert(out,
-            rspamd_logger.slog('Mime Part: %s: %s/%s (%s/%s detected), filename: %s (%s detected ext), size: %s',
-                part:get_digest():sub(1, 8),
-                mtype, msubtype,
-                det_mtype, det_msubtype,
-                part:get_filename(),
-                part:get_detected_ext(),
-                part:get_length()))
+          rspamd_logger.slog('Mime Part: %s: %s/%s (%s/%s detected), filename: %s (%s detected ext), size: %s',
+            part:get_digest():sub(1, 8),
+            mtype, msubtype,
+            det_mtype, det_msubtype,
+            part:get_filename(),
+            part:get_detected_ext(),
+            part:get_length()))
       end
     end
   end
@@ -416,17 +431,17 @@ local function extract_handler(opts)
       return table.concat(words, ' ')
     else
       return table.concat(
-          fun.totable(
-              fun.map(function(w)
-                -- [1] - stemmed word
-                -- [2] - normalised word
-                -- [3] - raw word
-                -- [4] - flags (table of strings)
-                return string.format('%s|%s|%s(%s)',
-                    w[3], w[2], w[1], table.concat(w[4], ','))
-              end, words)
-          ),
-          ' '
+        fun.totable(
+          fun.map(function(w)
+            -- [1] - stemmed word
+            -- [2] - normalised word
+            -- [3] - raw word
+            -- [4] - flags (table of strings)
+            return string.format('%s|%s|%s(%s)',
+              w[3], w[2], w[1], table.concat(w[4], ','))
+          end, words)
+        ),
+        ' '
       )
     end
   end
@@ -443,7 +458,7 @@ local function extract_handler(opts)
     if opts.words then
       local how_words = opts['words_format'] or 'stem'
       table.insert(out_elts[fname], 'meta_words: ' ..
-          print_words(task:get_meta_words(how_words), how_words == 'full'))
+        print_words(task:get_meta_words(how_words), how_words == 'full'))
     end
 
     if opts.text or opts.html then
@@ -466,7 +481,7 @@ local function extract_handler(opts)
           if opts.words then
             local how_words = opts['words_format'] or 'stem'
             table.insert(out_elts[fname], print_words(part:get_words(how_words),
-                how_words == 'full'))
+              how_words == 'full'))
           else
             table.insert(out_elts[fname], tostring(part:get_content(how)))
           end
@@ -480,7 +495,7 @@ local function extract_handler(opts)
           if opts.words then
             local how_words = opts['words_format'] or 'stem'
             table.insert(out_elts[fname], print_words(part:get_words(how_words),
-                how_words == 'full'))
+              how_words == 'full'))
           else
             if opts.structure then
               local hc = part:get_html()
@@ -489,11 +504,11 @@ local function extract_handler(opts)
                 local fun = require "fun"
                 if type(elt) == 'table' then
                   return table.concat(fun.totable(
-                      fun.map(
-                          function(t)
-                            return rspamd_logger.slog("%s", t)
-                          end,
-                          elt)), '\n')
+                    fun.map(
+                      function(t)
+                        return rspamd_logger.slog("%s", t)
+                      end,
+                      elt)), '\n')
                 else
                   return rspamd_logger.slog("%s", elt)
                 end
@@ -524,7 +539,7 @@ local function extract_handler(opts)
             if opts.invisible then
               local hc = part:get_html()
               table.insert(out_elts[fname], string.format('invisible content: %s',
-                  tostring(hc:get_invisible())))
+                tostring(hc:get_invisible())))
             end
           end
         end
@@ -544,13 +559,18 @@ local function extract_handler(opts)
   for _, task in ipairs(tasks) do
     task:destroy()
   end
+
+  -- Cleanup custom tokenizers if they were loaded
+  if opts.words then
+    cleanup_tokenizers()
+  end
 end
 
 local function stat_handler(opts)
   local fun = require "fun"
   local out_elts = {}
 
-  load_config(opts)
+  load_config(opts, true)                      -- Load with custom tokenizers for stat generation
   rspamd_url.init(rspamd_config:get_tld_path())
   rspamd_config:init_subsystem('langdet,stat') -- Needed to gen stat tokens
 
@@ -571,10 +591,10 @@ local function stat_handler(opts)
       out_elts[fname] = bt
       process_func = function(e)
         return string.format('%s (%d): "%s"+"%s", [%s]', e.data, e.win, e.t1 or "",
-            e.t2 or "", table.concat(fun.totable(
-                fun.map(function(k)
-                  return k
-                end, e.flags)), ","))
+          e.t2 or "", table.concat(fun.totable(
+            fun.map(function(k)
+              return k
+            end, e.flags)), ","))
       end
     elseif opts.fuzzy then
       local parts = task:get_parts() or {}
@@ -601,16 +621,16 @@ local function stat_handler(opts)
               digest = digest,
               shingles = shingles,
               type = string.format('%s/%s',
-                  ({ part:get_type() })[1],
-                  ({ part:get_type() })[2])
+                ({ part:get_type() })[1],
+                ({ part:get_type() })[2])
             })
           else
             table.insert(out_elts[fname], {
               digest = part:get_digest(),
               file = part:get_filename(),
               type = string.format('%s/%s',
-                  ({ part:get_type() })[1],
-                  ({ part:get_type() })[2])
+                ({ part:get_type() })[1],
+                ({ part:get_type() })[2])
             })
           end
         end
@@ -621,10 +641,13 @@ local function stat_handler(opts)
   end
 
   print_elts(out_elts, opts, process_func)
+
+  -- Cleanup custom tokenizers
+  cleanup_tokenizers()
 end
 
 local function urls_handler(opts)
-  load_config(opts)
+  load_config(opts, false) -- URLs don't need custom tokenizers
   rspamd_url.init(rspamd_config:get_tld_path())
   local out_elts = {}
 
@@ -764,7 +787,7 @@ local function newline(task)
 end
 
 local function modify_handler(opts)
-  load_config(opts)
+  load_config(opts, false) -- Modification doesn't need custom tokenizers
   rspamd_url.init(rspamd_config:get_tld_path())
 
   local function read_file(file)
@@ -804,10 +827,10 @@ local function modify_handler(opts)
         if hname == name then
           local new_value = string.format(hpattern, hdr.decoded)
           new_value = string.format('%s:%s%s',
-              name, hdr.separator,
-              rspamd_util.fold_header(name,
-                  rspamd_util.mime_header_encode(new_value),
-                  task:get_newlines_type()))
+            name, hdr.separator,
+            rspamd_util.fold_header(name,
+              rspamd_util.mime_header_encode(new_value),
+              task:get_newlines_type()))
           out[#out + 1] = new_value
           return
         end
@@ -816,12 +839,12 @@ local function modify_handler(opts)
       if rewrite.need_rewrite_ct then
         if name:lower() == 'content-type' then
           local nct = string.format('%s: %s/%s; charset=utf-8',
-              'Content-Type', rewrite.new_ct.type, rewrite.new_ct.subtype)
+            'Content-Type', rewrite.new_ct.type, rewrite.new_ct.subtype)
           out[#out + 1] = nct
           return
         elseif name:lower() == 'content-transfer-encoding' then
           out[#out + 1] = string.format('%s: %s',
-              'Content-Transfer-Encoding', rewrite.new_cte or 'quoted-printable')
+            'Content-Transfer-Encoding', rewrite.new_cte or 'quoted-printable')
           seen_cte = true
           return
         end
@@ -837,13 +860,13 @@ local function modify_handler(opts)
 
       if hname and hvalue then
         out[#out + 1] = string.format('%s: %s', hname,
-            rspamd_util.fold_header(hname, hvalue, task:get_newlines_type()))
+          rspamd_util.fold_header(hname, hvalue, task:get_newlines_type()))
       end
     end
 
     if not seen_cte and rewrite.need_rewrite_ct then
       out[#out + 1] = string.format('%s: %s',
-          'Content-Transfer-Encoding', rewrite.new_cte or 'quoted-printable')
+        'Content-Transfer-Encoding', rewrite.new_cte or 'quoted-printable')
     end
 
     -- End of headers
@@ -883,7 +906,7 @@ local function modify_handler(opts)
 end
 
 local function sign_handler(opts)
-  load_config(opts)
+  load_config(opts, false) -- Signing doesn't need custom tokenizers
   rspamd_url.init(rspamd_config:get_tld_path())
 
   local lua_dkim = require("lua_ffi").dkim
@@ -927,11 +950,11 @@ local function sign_handler(opts)
       io.flush()
     else
       local dkim_hdr = string.format('%s: %s%s',
-          'DKIM-Signature',
-          rspamd_util.fold_header('DKIM-Signature',
-              rspamd_util.mime_header_encode(sig),
-              task:get_newlines_type()),
-          newline(task))
+        'DKIM-Signature',
+        rspamd_util.fold_header('DKIM-Signature',
+          rspamd_util.mime_header_encode(sig),
+          task:get_newlines_type()),
+        newline(task))
       io.write(dkim_hdr)
       io.flush()
       task:get_content():save_in_file(1)
@@ -942,7 +965,7 @@ local function sign_handler(opts)
 end
 
 local function strip_handler(opts)
-  load_config(opts)
+  load_config(opts, false) -- Stripping doesn't need custom tokenizers
   rspamd_url.init(rspamd_config:get_tld_path())
 
   for _, fname in ipairs(opts.file) do
@@ -998,7 +1021,7 @@ local function strip_handler(opts)
 end
 
 local function anonymize_handler(opts)
-  load_config(opts)
+  load_config(opts, false) -- Anonymization doesn't need custom tokenizers
   rspamd_url.init(rspamd_config:get_tld_path())
 
   for _, fname in ipairs(opts.file) do
@@ -1103,7 +1126,7 @@ local function get_dump_content(task, opts, fname)
 end
 
 local function dump_handler(opts)
-  load_config(opts)
+  load_config(opts, false) -- Dumping doesn't need custom tokenizers
   rspamd_url.init(rspamd_config:get_tld_path())
 
   for _, fname in ipairs(opts.file) do

@@ -217,7 +217,10 @@ define(["jquery", "app/common", "app/libft"],
                     getFuzzyHashes(data);
                 } else {
                     let headers = {};
-                    if (source === "fuzzyadd") {
+                    if (source === "learnham" || source === "learnspam") {
+                        const classifier = $("#classifier").val();
+                        if (classifier) headers = {classifier: classifier};
+                    } else if (source === "fuzzyadd") {
                         headers = {
                             flag: $("#fuzzyFlagText").val(),
                             weight: $("#fuzzyWeightText").val()
@@ -295,6 +298,19 @@ define(["jquery", "app/common", "app/libft"],
         }
 
         common.fileUtils.setupFileHandling("#scanMsgSource", "#formFile", fileSet, enable_disable_scan_btn, multiple_files_cb);
+
+        ui.getClassifiers = function () {
+            if (!common.read_only) {
+                const sel = $("#classifier").empty().append($("<option>", {value: "", text: "All classifiers"}));
+                common.query("/bayes/classifiers", {
+                    success: function (data) {
+                        data[0].data.forEach((c) => sel.append($("<option>", {value: c, text: c})));
+                    },
+                    server: common.getServer()
+                });
+            }
+        };
+        ui.getClassifiers();
 
         return ui;
     });

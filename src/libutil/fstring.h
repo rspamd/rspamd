@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -30,8 +30,8 @@ extern "C" {
  */
 
 typedef struct f_str_s {
-	gsize len;
-	gsize allocated;
+	size_t len;
+	size_t allocated;
 	char str[];
 } rspamd_fstring_t;
 
@@ -40,12 +40,12 @@ typedef struct f_str_s {
 #define RSPAMD_FSTRING_LIT(lit) rspamd_fstring_new_init((lit), sizeof(lit) - 1)
 
 typedef struct f_str_tok {
-	gsize len;
+	size_t len;
 	const char *begin;
 } rspamd_ftok_t;
 
 typedef struct f_str_unicode_tok {
-	gsize len; /* in UChar32 */
+	size_t len; /* in UChar32 */
 	const UChar32 *begin;
 } rspamd_ftok_unicode_t;
 

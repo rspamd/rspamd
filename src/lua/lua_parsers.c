@@ -1,11 +1,11 @@
-/*-
- * Copyright 2020 Vsevolod Stakhov
+/*
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -108,8 +108,8 @@ int lua_parsers_tokenize_text(lua_State *L)
 	struct rspamd_lua_text *t;
 	struct rspamd_process_exception *ex;
 	UText utxt = UTEXT_INITIALIZER;
-	GArray *res;
-	rspamd_stat_token_t *w;
+	rspamd_words_t *res;
+	rspamd_word_t *w;
 
 	if (lua_type(L, 1) == LUA_TSTRING) {
 		in = luaL_checklstring(L, 1, &len);
@@ -175,13 +175,15 @@ int lua_parsers_tokenize_text(lua_State *L)
 		lua_pushnil(L);
 	}
 	else {
-		lua_createtable(L, res->len, 0);
+		lua_createtable(L, kv_size(*res), 0);
 
-		for (i = 0; i < res->len; i++) {
-			w = &g_array_index(res, rspamd_stat_token_t, i);
+		for (i = 0; i < kv_size(*res); i++) {
+			w = &kv_A(*res, i);
 			lua_pushlstring(L, w->original.begin, w->original.len);
 			lua_rawseti(L, -2, i + 1);
 		}
+		kv_destroy(*res);
+		g_free(res);
 	}
 
 	cur = exceptions;

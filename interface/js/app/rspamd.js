@@ -236,6 +236,8 @@ define(["jquery", "app/common", "stickytabs", "visibility",
             complete: function () {
                 ajaxSetup(localStorage.getItem("ajax_timeout"));
 
+                if (require.defined("app/upload")) require(["app/upload"], (module) => module.getClassifiers());
+
                 if (common.read_only) {
                     $(".ro-disable").attr("disabled", true);
                     $(".ro-hide").hide();
