@@ -312,5 +312,99 @@ define(["jquery", "app/common", "app/libft"],
         };
         ui.getClassifiers();
 
+
+        const fuzzyWidgets = [
+            {
+                picker: "#fuzzy-flag-picker",
+                input: "#fuzzy-flag",
+                container: ($picker) => $picker.parent()
+            },
+            {
+                picker: "#fuzzyFlagText-picker",
+                input: "#fuzzyFlagText",
+                container: ($picker) => $picker.closest("div.card")
+            }
+        ];
+
+        function toggleWidgets(showPicker, showInput) {
+            fuzzyWidgets.forEach(({picker, input}) => {
+                $(picker)[showPicker ? "show" : "hide"]();
+                $(input)[showInput ? "show" : "hide"]();
+            });
+        }
+
+        function setWidgetsDisabled(disable) {
+            fuzzyWidgets.forEach(({picker, container}) => {
+                container($(picker))[disable ? "addClass" : "removeClass"]("disabled");
+            });
+        }
+
+        let lastFuzzyStoragesReq = {config_id: null, server: null};
+
+        ui.getFuzzyStorages = function () {
+            const server = common.getServer();
+
+            const servers = JSON.parse(sessionStorage.getItem("Credentials") || "{}");
+            const config_id = servers[server]?.data?.config_id;
+
+            if ((config_id && config_id === lastFuzzyStoragesReq.config_id) ||
+                (!config_id && server === lastFuzzyStoragesReq.server)) {
+                return;
+            }
+            lastFuzzyStoragesReq = {config_id: config_id, server: server};
+
+            fuzzyWidgets.forEach(({picker, container}) => container($(picker)).removeAttr("title"));
+
+            common.query("plugins/fuzzy/storages", {
+                success: function (data) {
+                    const storages = data[0].data.storages || {};
+                    const hasWritableStorages = Object.keys(storages).some((name) => !storages[name].read_only);
+
+                    toggleWidgets(true, false);
+                    setWidgetsDisabled(!hasWritableStorages);
+
+                    fuzzyWidgets.forEach(({picker, input}) => {
+                        const $sel = $(picker);
+
+                        $sel.empty();
+
+                        if (hasWritableStorages) {
+                            Object.entries(storages).forEach(([name, info]) => {
+                                if (!info.read_only) {
+                                    Object.entries(info.flags).forEach(([symbol, val]) => {
+                                        $sel.append($("<option>", {value: val, text: `${name}:${symbol} (${val})`}));
+                                    });
+                                }
+                            });
+                            $(input).val($sel.val());
+                            $sel.off("change").on("change", () => $(input).val($sel.val()));
+                        } else {
+                            $sel.append($("<option>", {value: "", text: "No writable storages"}));
+                        }
+                    });
+                },
+                error: function (_result, _jqXHR, _textStatus, errorThrown) {
+                    if (errorThrown === "fuzzy_check is not enabled") {
+                        toggleWidgets(true, false);
+                        setWidgetsDisabled(true);
+
+                        fuzzyWidgets.forEach(({picker, container}) => {
+                            const $picker = $(picker);
+                            $picker
+                                .empty()
+                                .append($("<option>", {value: "", text: "fuzzy_check disabled"}))
+                                .show();
+                            container($picker)
+                                .attr("title", "fuzzy_check module is not enabled in server configuration.");
+                        });
+                    } else {
+                        toggleWidgets(false, true);
+                        setWidgetsDisabled(false);
+                    }
+                },
+                server: server
+            });
+        };
+
         return ui;
     });

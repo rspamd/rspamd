@@ -95,6 +95,15 @@ fieldset[disabled] .btn {
     pointer-events: auto;
     cursor: not-allowed;
 }
+.card.disabled,
+.input-group.disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+.card.disabled *,
+.input-group.disabled * {
+    pointer-events: none;
+}
 .w-1 {
     width: 1%;
 }

@@ -453,7 +453,8 @@
 						</div>
 						<div class="input-group d-inline-flex w-auto my-1">
 							<label for="fuzzy-flag" class="input-group-text">Flag</label>
-							<input id="fuzzy-flag" class="form-control" value="1" min="1" type="number">
+							<select id="fuzzy-flag-picker" class="form-select"></select>
+							<input id="fuzzy-flag" class="form-control flex-grow-0" value="1" min="1" type="number">
 							<button class="btn btn-warning d-flex align-items-center" data-upload="compute-fuzzy"><i class="fas fa-hashtag me-2"></i>Compute fuzzy hashes</button>
 						</div>
 						<div class="float-end my-1">
@@ -495,6 +496,7 @@
 									<div class="row g-2 align-items-center">
 										<div class="col-auto d-flex align-items-center me-1">
 											<label for="fuzzyFlagText" class="me-1">Flag:</label>
+											<select id="fuzzyFlagText-picker" class="form-select"></select>
 											<input id="fuzzyFlagText" class="form-control" type="number" value="1"/>
 										</div>
 										<div class="col-auto d-flex align-items-center me-2">
