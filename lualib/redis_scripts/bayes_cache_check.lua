@@ -2,7 +2,7 @@
 -- This script accepts the following parameters:
 -- key1 - cache id
 -- key2 - configuration table in message pack
--- key3 - (optional) category
+-- key3 - (optional) category table in message pack
 
 local cache_id = KEYS[1]
 local conf = cmsgpack.unpack(KEYS[2])
