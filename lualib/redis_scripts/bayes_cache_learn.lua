@@ -3,17 +3,25 @@
 -- key1 - cache id
 -- key2 - is spam (1 or 0)
 -- key3 - configuration table in message pack
--- key4 - (optional) category
+-- key4 - (optional) category table in message pack
 
 local cache_id = KEYS[1]
 local is_spam = KEYS[2]
 local conf = cmsgpack.unpack(KEYS[3])
-local category = KEYS[4]
+local category = nil
+if KEYS[4] then
+  category = cmsgpack.unpack(KEYS[4])
+end
 cache_id = string.sub(cache_id, 1, conf.cache_elt_len)
 
 local prefix_base = conf.cache_prefix
 if category then
-  prefix_base = prefix_base .. "_" .. category
+  local cat_parts = {}
+  for k, v in pairs(category) do
+    table.insert(cat_parts, tostring(k) .. '=' .. tostring(v))
+  end
+  table.sort(cat_parts)
+  prefix_base = prefix_base .. "_cat_" .. table.concat(cat_parts, "_")
 end
 
 -- Try each prefix that is in Redis (as some other instance might have set it)
