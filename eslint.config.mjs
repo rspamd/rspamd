@@ -13,6 +13,9 @@ export default [
                 ...globals.browser,
                 define: false,
             },
+            parserOptions: {
+                ecmaVersion: 2020,
+            },
             sourceType: "script",
         },
         plugins: {
