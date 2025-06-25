@@ -20,8 +20,8 @@ local E = {}
 
 if confighelp then
   rspamd_config:add_example(nil, 'gpt',
-      "Performs postfiltering using GPT model",
-      [[
+    "Performs postfiltering using GPT model",
+    [[
   gpt {
   # Supported types: openai, ollama
   type = "openai";
@@ -162,7 +162,7 @@ local function default_condition(task)
             end
           end
           lua_util.debugm(N, task, 'symbol %s has weight %s, but required %s', s,
-              sym.weight, required_weight)
+            sym.weight, required_weight)
         else
           return false, 'skip as "' .. s .. '" is found'
         end
@@ -182,7 +182,7 @@ local function default_condition(task)
             end
           end
           lua_util.debugm(N, task, 'symbol %s has weight %s, but required %s', s,
-              sym.weight, required_weight)
+            sym.weight, required_weight)
         end
       else
         return false, 'skip as "' .. s .. '" is not found'
@@ -494,7 +494,7 @@ local function redis_cache_key(sel_part)
     env_digest = digest:hex():sub(1, 4)
   end
   return string.format('%s_%s', env_digest,
-      sel_part:get_mimepart():get_digest():sub(1, 24))
+    sel_part:get_mimepart():get_digest():sub(1, 24))
 end
 
 local function process_categories(task, categories)
@@ -532,7 +532,7 @@ local function insert_results(task, result, sel_part)
   end
   if result.reason and settings.reason_header then
     lua_mime.modify_headers(task,
-        { add = { [settings.reason_header] = { value = tostring(result.reason), order = 1 } } })
+      { add = { [settings.reason_header] = { value = tostring(result.reason), order = 1 } } })
   end
 
   if cache_context then
@@ -557,12 +557,12 @@ local function check_consensus_and_insert_results(task, results, sel_part)
         nspam = nspam + 1
         max_spam_prob = math.max(max_spam_prob, result.probability)
         lua_util.debugm(N, task, "model: %s; spam: %s; reason: '%s'",
-            result.model, result.probability, result.reason)
+          result.model, result.probability, result.reason)
       else
         nham = nham + 1
         max_ham_prob = math.min(max_ham_prob, result.probability)
         lua_util.debugm(N, task, "model: %s; ham: %s; reason: '%s'",
-            result.model, result.probability, result.reason)
+          result.model, result.probability, result.reason)
       end
 
       if result.reason then
@@ -576,23 +576,22 @@ local function check_consensus_and_insert_results(task, results, sel_part)
 
   if nspam > nham and max_spam_prob > 0.75 then
     insert_results(task, {
-      probability = max_spam_prob,
-      reason = reason.reason,
-      categories = reason.categories,
-    },
-        sel_part)
+        probability = max_spam_prob,
+        reason = reason.reason,
+        categories = reason.categories,
+      },
+      sel_part)
   elseif nham > nspam and max_ham_prob < 0.25 then
     insert_results(task, {
-      probability = max_ham_prob,
-      reason = reason.reason,
-      categories = reason.categories,
-    },
-        sel_part)
+        probability = max_ham_prob,
+        reason = reason.reason,
+        categories = reason.categories,
+      },
+      sel_part)
   else
     -- No consensus
     lua_util.debugm(N, task, "no consensus")
   end
-
 end
 
 local function get_meta_llm_content(task)
@@ -691,7 +690,7 @@ local function openai_check(task, content, sel_part)
       },
       {
         role = 'user',
-        content = 'Subject: ' .. task:get_subject() or '',
+        content = 'Subject: ' .. (task:get_subject() or ''),
       },
       {
         role = 'user',
@@ -743,7 +742,6 @@ local function openai_check(task, content, sel_part)
     if not rspamd_http.request(http_params) then
       results[idx].checked = true
     end
-
   end
 end
 
