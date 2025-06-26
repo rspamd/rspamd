@@ -2,38 +2,38 @@
 -- This script accepts the following parameters:
 -- key1 - prefix for bayes tokens (e.g. for per-user classification)
 -- key2 - set of tokens encoded in messagepack array of strings
--- key3 - category string
+-- key3 - (optional) category table in message pack
 
 local prefix = KEYS[1]
 local input_tokens = cmsgpack.unpack(KEYS[2])
-local category = KEYS[3]
+local category = nil
+if KEYS[3] then
+  category = cmsgpack.unpack(KEYS[3])
+end
+
+if category then
+  local cat_parts = {}
+  for k, v in pairs(category) do
+    table.insert(cat_parts, tostring(k) .. '=' .. tostring(v))
+  end
+  table.sort(cat_parts)
+  prefix = prefix .. "_cat_" .. table.concat(cat_parts, "_")
+end
 
 local output_spam = {}
 local output_ham = {}
-local output_cat = {}
 
 local learned_ham = tonumber(redis.call('HGET', prefix, 'learns_ham')) or 0
 local learned_spam = tonumber(redis.call('HGET', prefix, 'learns_spam')) or 0
-local learned_cat = 0
-
-if category then
-  learned_cat = tonumber(redis.call('HGET', prefix, 'learns_' .. category)) or 0
-end
 
 -- Output is a set of pairs (token_index, token_count), tokens that are not
 -- found are not filled.
 -- This optimisation will save a lot of space for sparse tokens, and in Bayes that assumption is normally held
 
 if learned_ham > 0 and learned_spam > 0 then
+  local input_tokens = cmsgpack.unpack(KEYS[2])
   for i, token in ipairs(input_tokens) do
-    local hmget_args
-    if category then
-      hmget_args = {'H', 'S', category}
-    else
-      hmget_args = {'H', 'S'}
-    end
-
-    local token_data = redis.call('HMGET', token, unpack(hmget_args))
+    local token_data = redis.call('HMGET', token, 'H', 'S')
 
     if token_data then
       local ham_count = token_data[1]
@@ -46,16 +46,9 @@ if learned_ham > 0 and learned_spam > 0 then
       if spam_count then
         table.insert(output_spam, { i, tonumber(spam_count) })
       end
-
-      if category and learned_cat > 0 then
-        local cat_count = token_data[3]
-        if cat_count then
-          table.insert(output_cat, { i, tonumber(cat_count) })
-        end
-      end
     end
   end
 end
 
 -- category data is appended if requested
-return { learned_ham, learned_spam, output_ham, output_spam, learned_cat, output_cat }
+return { learned_ham, learned_spam, output_ham, output_spam }
