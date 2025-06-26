@@ -5,7 +5,6 @@
 -- key3 - (optional) category table in message pack
 
 local prefix = KEYS[1]
-local input_tokens = cmsgpack.unpack(KEYS[2])
 local category = nil
 if KEYS[3] then
   category = cmsgpack.unpack(KEYS[3])
