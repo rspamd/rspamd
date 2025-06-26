@@ -245,7 +245,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
         local in_client_ip_str = in_client_ip:to_string()
         local req_hlen = 2
         if in_client_ip:get_version() == 6 then
-          in_client_ip_str = "[" .. in_client_ip_str .. "]"
+          in_client_ip_str = "ip6-" .. string.gsub(in_client_ip_str, ":", "-")
         end
         if maybe_part then
           table.insert(req_headers,
