@@ -91,6 +91,7 @@ struct rspamd_re_class {
 	gsize type_len;
 	GHashTable *re;
 	rspamd_cryptobox_hash_state_t *st;
+	struct rspamd_re_cache *cache; /* Back-reference to owning cache */
 
 	char hash[rspamd_cryptobox_HASHBYTES + 1];
 
@@ -126,6 +127,11 @@ struct rspamd_re_cache {
 	unsigned int max_re_data;
 	char hash[rspamd_cryptobox_HASHBYTES + 1];
 	lua_State *L;
+
+	/* Intrusive linked list for scoped caches */
+	struct rspamd_re_cache *next, *prev;
+	char *scope;
+
 #ifdef WITH_HYPERSCAN
 	enum rspamd_hyperscan_status hyperscan_loaded;
 	gboolean disable_hyperscan;
@@ -149,6 +155,9 @@ struct rspamd_re_runtime {
 	struct rspamd_re_cache *cache;
 	struct rspamd_re_cache_stat stat;
 	gboolean has_hs;
+
+	/* Linked list for multiple scoped runtimes */
+	struct rspamd_re_runtime *next, *prev;
 };
 
 static GQuark
@@ -172,6 +181,62 @@ rspamd_re_cache_class_id(enum rspamd_re_type type,
 	}
 
 	return rspamd_cryptobox_fast_hash_final(&st);
+}
+
+static struct rspamd_re_cache *
+rspamd_re_cache_find_by_scope(struct rspamd_re_cache *cache_head, const char *scope)
+{
+	struct rspamd_re_cache *cur;
+
+	if (!cache_head) {
+		return NULL;
+	}
+
+	DL_FOREACH(cache_head, cur)
+	{
+		if (scope == NULL && cur->scope == NULL) {
+			/* Looking for default scope */
+			return cur;
+		}
+		else if (scope != NULL && cur->scope != NULL && strcmp(cur->scope, scope) == 0) {
+			return cur;
+		}
+	}
+
+	return NULL;
+}
+
+static struct rspamd_re_cache *
+rspamd_re_cache_add_to_scope_list(struct rspamd_re_cache **cache_head, const char *scope)
+{
+	struct rspamd_re_cache *new_cache, *existing;
+
+	if (!cache_head) {
+		return NULL;
+	}
+
+	/* Check if scope already exists */
+	existing = rspamd_re_cache_find_by_scope(*cache_head, scope);
+	if (existing) {
+		return existing;
+	}
+
+	/* Create new cache for this scope */
+	new_cache = rspamd_re_cache_new();
+	if (new_cache->scope) {
+		g_free(new_cache->scope);
+	}
+	new_cache->scope = g_strdup(scope);
+
+	/* Add to linked list */
+	if (*cache_head) {
+		DL_APPEND(*cache_head, new_cache);
+	}
+	else {
+		*cache_head = new_cache;
+	}
+
+	return new_cache;
 }
 
 static void
@@ -230,6 +295,11 @@ rspamd_re_cache_destroy(struct rspamd_re_cache *cache)
 
 	g_hash_table_unref(cache->re_classes);
 	g_ptr_array_free(cache->re, TRUE);
+
+	if (cache->scope) {
+		g_free(cache->scope);
+	}
+
 	g_free(cache);
 }
 
@@ -252,6 +322,8 @@ rspamd_re_cache_new(void)
 	cache->nre = 0;
 	cache->re = g_ptr_array_new_full(256, rspamd_re_cache_elt_dtor);
 	cache->selectors = kh_init(lua_selectors_hash);
+	cache->next = cache->prev = NULL;
+	cache->scope = NULL; /* Default scope */
 #ifdef WITH_HYPERSCAN
 	cache->hyperscan_loaded = RSPAMD_HYPERSCAN_UNKNOWN;
 #endif
@@ -295,6 +367,7 @@ rspamd_re_cache_add(struct rspamd_re_cache *cache,
 		re_class->id = class_id;
 		re_class->type_len = datalen;
 		re_class->type = type;
+		re_class->cache = cache; /* Set back-reference */
 		re_class->re = g_hash_table_new_full(rspamd_regexp_hash,
 											 rspamd_regexp_equal, NULL, (GDestroyNotify) rspamd_regexp_unref);
 
@@ -328,6 +401,26 @@ rspamd_re_cache_add(struct rspamd_re_cache *cache,
 	}
 
 	return nre;
+}
+
+rspamd_regexp_t *
+rspamd_re_cache_add_scoped(struct rspamd_re_cache **cache_head, const char *scope,
+						   rspamd_regexp_t *re, enum rspamd_re_type type,
+						   gconstpointer type_data, gsize datalen,
+						   int lua_cbref)
+{
+	struct rspamd_re_cache *cache;
+
+	g_assert(cache_head != NULL);
+	g_assert(re != NULL);
+
+	/* NULL scope is allowed for default scope */
+	cache = rspamd_re_cache_add_to_scope_list(cache_head, scope);
+	if (!cache) {
+		return NULL;
+	}
+
+	return rspamd_re_cache_add(cache, re, type, type_data, datalen, lua_cbref);
 }
 
 void rspamd_re_cache_replace(struct rspamd_re_cache *cache,
@@ -368,6 +461,23 @@ void rspamd_re_cache_replace(struct rspamd_re_cache *cache,
 		rspamd_regexp_unref(elt->re);
 		elt->re = rspamd_regexp_ref(with);
 		/* XXX: do not touch match type here */
+	}
+}
+
+void rspamd_re_cache_replace_scoped(struct rspamd_re_cache **cache_head, const char *scope,
+									rspamd_regexp_t *what,
+									rspamd_regexp_t *with)
+{
+	struct rspamd_re_cache *cache;
+
+	g_assert(cache_head != NULL);
+	g_assert(what != NULL);
+	g_assert(with != NULL);
+
+	/* NULL scope is allowed for default scope */
+	cache = rspamd_re_cache_find_by_scope(*cache_head, scope);
+	if (cache) {
+		rspamd_re_cache_replace(cache, what, with);
 	}
 }
 
@@ -515,8 +625,21 @@ void rspamd_re_cache_init(struct rspamd_re_cache *cache, struct rspamd_config *c
 #endif
 }
 
-struct rspamd_re_runtime *
-rspamd_re_cache_runtime_new(struct rspamd_re_cache *cache)
+void rspamd_re_cache_init_scoped(struct rspamd_re_cache *cache_head,
+								 struct rspamd_config *cfg)
+{
+	struct rspamd_re_cache *cur;
+
+	g_assert(cache_head != NULL);
+
+	DL_FOREACH(cache_head, cur)
+	{
+		rspamd_re_cache_init(cur, cfg);
+	}
+}
+
+static struct rspamd_re_runtime *
+rspamd_re_cache_runtime_new_single(struct rspamd_re_cache *cache)
 {
 	struct rspamd_re_runtime *rt;
 	g_assert(cache != NULL);
@@ -532,6 +655,58 @@ rspamd_re_cache_runtime_new(struct rspamd_re_cache *cache)
 #endif
 
 	return rt;
+}
+
+struct rspamd_re_runtime *
+rspamd_re_cache_runtime_new(struct rspamd_re_cache *cache)
+{
+	struct rspamd_re_runtime *rt_head = NULL, *rt;
+	struct rspamd_re_cache *cur;
+
+	g_assert(cache != NULL);
+
+	/*
+	 * Create runtime for all scopes in the chain.
+	 * This ensures task has runtimes for all available scopes.
+	 */
+	DL_FOREACH(cache, cur)
+	{
+		rt = rspamd_re_cache_runtime_new_single(cur);
+		if (rt) {
+			if (rt_head) {
+				DL_APPEND(rt_head, rt);
+			}
+			else {
+				rt_head = rt;
+			}
+		}
+	}
+
+	return rt_head;
+}
+
+struct rspamd_re_runtime *
+rspamd_re_cache_runtime_new_all_scopes(struct rspamd_re_cache *cache_head)
+{
+	/* This is now the same as the main function since it always creates for all scopes */
+	return rspamd_re_cache_runtime_new(cache_head);
+}
+
+struct rspamd_re_runtime *
+rspamd_re_cache_runtime_new_scoped(struct rspamd_re_cache *cache_head, const char *scope)
+{
+	struct rspamd_re_cache *cache;
+
+	if (!cache_head) {
+		return NULL;
+	}
+
+	cache = rspamd_re_cache_find_by_scope(cache_head, scope);
+	if (!cache) {
+		return NULL;
+	}
+
+	return rspamd_re_cache_runtime_new_single(cache);
 }
 
 const struct rspamd_re_cache_stat *
@@ -1503,20 +1678,20 @@ rspamd_re_cache_exec_re(struct rspamd_task *task,
 	return rt->results[re_id];
 }
 
-int rspamd_re_cache_process(struct rspamd_task *task,
-							rspamd_regexp_t *re,
-							enum rspamd_re_type type,
-							gconstpointer type_data,
-							gsize datalen,
-							gboolean is_strong)
+static int
+rspamd_re_cache_process_single(struct rspamd_task *task,
+							   struct rspamd_re_runtime *rt,
+							   rspamd_regexp_t *re,
+							   enum rspamd_re_type type,
+							   gconstpointer type_data,
+							   gsize datalen,
+							   gboolean is_strong)
 {
 	uint64_t re_id;
 	struct rspamd_re_class *re_class;
 	struct rspamd_re_cache *cache;
-	struct rspamd_re_runtime *rt;
 
 	g_assert(task != NULL);
-	rt = task->re_rt;
 	g_assert(rt != NULL);
 	g_assert(re != NULL);
 
@@ -1551,6 +1726,53 @@ int rspamd_re_cache_process(struct rspamd_task *task,
 	return 0;
 }
 
+int rspamd_re_cache_process(struct rspamd_task *task,
+							rspamd_regexp_t *re,
+							enum rspamd_re_type type,
+							gconstpointer type_data,
+							gsize datalen,
+							gboolean is_strong)
+{
+	struct rspamd_re_runtime *rt_list, *rt;
+	struct rspamd_re_class *re_class;
+	struct rspamd_re_cache *target_cache;
+	int result = 0;
+
+	g_assert(task != NULL);
+	g_assert(re != NULL);
+
+	rt_list = task->re_rt;
+	if (!rt_list) {
+		return 0;
+	}
+
+	/*
+	 * Since each regexp belongs to a class which belongs to a cache,
+	 * we can find the correct cache and corresponding runtime
+	 */
+	re_class = rspamd_regexp_get_class(re);
+	if (!re_class) {
+		return 0;
+	}
+
+	target_cache = re_class->cache;
+	if (!target_cache) {
+		return 0;
+	}
+
+	/* Find the runtime that matches the cache */
+	DL_FOREACH(rt_list, rt)
+	{
+		if (rt->cache == target_cache) {
+			result = rspamd_re_cache_process_single(task, rt, re, type,
+													type_data, datalen, is_strong);
+			break;
+		}
+	}
+
+	return result;
+}
+
 int rspamd_re_cache_process_ffi(void *ptask,
 								void *pre,
 								int type,
@@ -1571,30 +1793,51 @@ int rspamd_re_cache_process_ffi(void *ptask,
 
 void rspamd_re_cache_runtime_destroy(struct rspamd_re_runtime *rt)
 {
+	struct rspamd_re_runtime *cur, *tmp;
+
 	g_assert(rt != NULL);
 
-	if (rt->sel_cache) {
-		struct rspamd_re_selector_result sr;
+	/* Handle linked list of runtimes */
+	DL_FOREACH_SAFE(rt, cur, tmp)
+	{
+		if (cur->sel_cache) {
+			struct rspamd_re_selector_result sr;
 
-		kh_foreach_value(rt->sel_cache, sr, {
-			for (unsigned int i = 0; i < sr.cnt; i++) {
-				g_free((gpointer) sr.scvec[i]);
-			}
+			kh_foreach_value(cur->sel_cache, sr, {
+				for (unsigned int i = 0; i < sr.cnt; i++) {
+					g_free((gpointer) sr.scvec[i]);
+				}
 
-			g_free(sr.scvec);
-			g_free(sr.lenvec);
-		});
-		kh_destroy(selectors_results_hash, rt->sel_cache);
+				g_free(sr.scvec);
+				g_free(sr.lenvec);
+			});
+			kh_destroy(selectors_results_hash, cur->sel_cache);
+		}
+
+		REF_RELEASE(cur->cache);
+		g_free(cur);
 	}
-
-	REF_RELEASE(rt->cache);
-	g_free(rt);
 }
 
 void rspamd_re_cache_unref(struct rspamd_re_cache *cache)
 {
 	if (cache) {
 		REF_RELEASE(cache);
+	}
+}
+
+void rspamd_re_cache_unref_scoped(struct rspamd_re_cache *cache_head)
+{
+	struct rspamd_re_cache *cur, *tmp;
+
+	if (!cache_head) {
+		return;
+	}
+
+	DL_FOREACH_SAFE(cache_head, cur, tmp)
+	{
+		DL_DELETE(cache_head, cur);
+		rspamd_re_cache_unref(cur);
 	}
 }
 
@@ -1616,6 +1859,23 @@ unsigned int rspamd_re_cache_set_limit(struct rspamd_re_cache *cache, unsigned i
 
 	old = cache->max_re_data;
 	cache->max_re_data = limit;
+
+	return old;
+}
+
+unsigned int rspamd_re_cache_set_limit_scoped(struct rspamd_re_cache *cache_head, const char *scope, unsigned int limit)
+{
+	struct rspamd_re_cache *cache;
+	unsigned int old = 0;
+
+	if (!cache_head || !scope) {
+		return old;
+	}
+
+	cache = rspamd_re_cache_find_by_scope(cache_head, scope);
+	if (cache) {
+		old = rspamd_re_cache_set_limit(cache, limit);
+	}
 
 	return old;
 }
@@ -2257,6 +2517,55 @@ int rspamd_re_cache_compile_hyperscan(struct rspamd_re_cache *cache,
 #endif
 }
 
+int rspamd_re_cache_compile_hyperscan_scoped(struct rspamd_re_cache *cache_head,
+											 const char *cache_dir,
+											 double max_time,
+											 gboolean silent,
+											 struct ev_loop *event_loop,
+											 void (*cb)(unsigned int ncompiled, GError *err, void *cbd),
+											 void *cbd)
+{
+#ifndef WITH_HYPERSCAN
+	return -1;
+#else
+	struct rspamd_re_cache *cur;
+	int result = 0, total_compiled = 0;
+	GError *first_error = NULL;
+
+	if (!cache_head) {
+		return -1;
+	}
+
+	/*
+	 * For now, compile each cache sequentially
+	 * TODO: Could be made async if needed
+	 */
+	DL_FOREACH(cache_head, cur)
+	{
+		result = rspamd_re_cache_compile_hyperscan(cur, cache_dir, max_time, silent,
+												   event_loop, NULL, NULL);
+		if (result >= 0) {
+			total_compiled += result;
+		}
+		else if (!first_error) {
+			first_error = g_error_new(rspamd_re_cache_quark(), result,
+									  "Failed to compile hyperscan for scope '%s'",
+									  cur->scope ? cur->scope : "unknown");
+		}
+	}
+
+	if (cb) {
+		cb(total_compiled, first_error, cbd);
+	}
+
+	if (first_error) {
+		g_error_free(first_error);
+	}
+
+	return total_compiled;
+#endif
+}
+
 gboolean
 rspamd_re_cache_is_valid_hyperscan_file(struct rspamd_re_cache *cache,
 										const char *path, gboolean silent, gboolean try_load, GError **err)
@@ -2691,6 +3000,48 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 #endif
 }
 
+enum rspamd_hyperscan_status rspamd_re_cache_load_hyperscan_scoped(
+	struct rspamd_re_cache *cache_head,
+	const char *cache_dir, bool try_load)
+{
+#ifndef WITH_HYPERSCAN
+	return RSPAMD_HYPERSCAN_UNSUPPORTED;
+#else
+	struct rspamd_re_cache *cur;
+	enum rspamd_hyperscan_status result, overall_status = RSPAMD_HYPERSCAN_UNKNOWN;
+	gboolean has_loaded = FALSE, all_loaded = TRUE;
+
+	if (!cache_head) {
+		return RSPAMD_HYPERSCAN_LOAD_ERROR;
+	}
+
+	DL_FOREACH(cache_head, cur)
+	{
+		result = rspamd_re_cache_load_hyperscan(cur, cache_dir, try_load);
+
+		if (result == RSPAMD_HYPERSCAN_LOADED_FULL ||
+			result == RSPAMD_HYPERSCAN_LOADED_PARTIAL) {
+			has_loaded = TRUE;
+			if (result == RSPAMD_HYPERSCAN_LOADED_PARTIAL) {
+				all_loaded = FALSE;
+			}
+		}
+		else {
+			all_loaded = FALSE;
+		}
+	}
+
+	if (has_loaded) {
+		overall_status = all_loaded ? RSPAMD_HYPERSCAN_LOADED_FULL : RSPAMD_HYPERSCAN_LOADED_PARTIAL;
+	}
+	else {
+		overall_status = RSPAMD_HYPERSCAN_LOAD_ERROR;
+	}
+
+	return overall_status;
+#endif
+}
+
 void rspamd_re_cache_add_selector(struct rspamd_re_cache *cache,
 								  const char *sname,
 								  int ref)
@@ -2716,4 +3067,109 @@ void rspamd_re_cache_add_selector(struct rspamd_re_cache *cache,
 
 		kh_value(cache->selectors, k) = ref;
 	}
+}
+
+void rspamd_re_cache_add_selector_scoped(struct rspamd_re_cache **cache_head, const char *scope,
+										 const char *sname, int ref)
+{
+	struct rspamd_re_cache *cache;
+
+	g_assert(cache_head != NULL);
+	g_assert(sname != NULL);
+
+	/* NULL scope is allowed for default scope */
+	cache = rspamd_re_cache_add_to_scope_list(cache_head, scope);
+	if (cache) {
+		rspamd_re_cache_add_selector(cache, sname, ref);
+	}
+}
+
+struct rspamd_re_cache *rspamd_re_cache_find_scope(struct rspamd_re_cache *cache_head, const char *scope)
+{
+	return rspamd_re_cache_find_by_scope(cache_head, scope);
+}
+
+gboolean rspamd_re_cache_remove_scope(struct rspamd_re_cache **cache_head, const char *scope)
+{
+	struct rspamd_re_cache *target;
+
+	if (!cache_head || !*cache_head) {
+		return FALSE;
+	}
+
+	/* Prevent removal of default scope (NULL) to keep head stable */
+	if (!scope) {
+		return FALSE;
+	}
+
+	target = rspamd_re_cache_find_by_scope(*cache_head, scope);
+	if (!target) {
+		return FALSE;
+	}
+
+	/* Remove from linked list */
+	DL_DELETE(*cache_head, target);
+
+	/* If this was the head and there are no more elements, update head */
+	if (target == *cache_head && !*cache_head) {
+		*cache_head = NULL;
+	}
+
+	/* Unref the cache */
+	rspamd_re_cache_unref(target);
+
+	return TRUE;
+}
+
+unsigned int rspamd_re_cache_count_scopes(struct rspamd_re_cache *cache_head)
+{
+	struct rspamd_re_cache *cur;
+	unsigned int count = 0;
+
+	if (!cache_head) {
+		return 0;
+	}
+
+	DL_COUNT(cache_head, cur, count);
+	return count;
+}
+
+char **rspamd_re_cache_get_scope_names(struct rspamd_re_cache *cache_head, unsigned int *count_out)
+{
+	struct rspamd_re_cache *cur;
+	char **names = NULL;
+	unsigned int i = 0, count = 0;
+
+	if (!cache_head || !count_out) {
+		if (count_out) {
+			*count_out = 0;
+		}
+		return NULL;
+	}
+
+	/* First count scopes */
+	DL_COUNT(cache_head, cur, count);
+
+	if (count == 0) {
+		*count_out = 0;
+		return NULL;
+	}
+
+	/* Allocate array */
+	names = g_malloc(sizeof(char *) * count);
+
+	/* Fill array */
+	DL_FOREACH(cache_head, cur)
+	{
+		if (cur->scope) {
+			names[i] = g_strdup(cur->scope);
+		}
+		else {
+			names[i] = g_strdup("default");
+		}
+		i++;
+	}
+
+	*count_out = count;
+	return names;
 }

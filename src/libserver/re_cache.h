@@ -77,6 +77,22 @@ rspamd_re_cache_add(struct rspamd_re_cache *cache, rspamd_regexp_t *re,
 					int lua_cbref);
 
 /**
+ * Add the existing regexp to the cache with specified scope
+ * @param cache_head head of cache list
+ * @param scope scope name
+ * @param re regexp object
+ * @param type type of object
+ * @param type_data associated data with the type (e.g. header name)
+ * @param datalen associated data length
+ * @param lua_cbref optional lua callback reference for matching purposes
+ */
+rspamd_regexp_t *
+rspamd_re_cache_add_scoped(struct rspamd_re_cache **cache_head, const char *scope,
+						   rspamd_regexp_t *re, enum rspamd_re_type type,
+						   gconstpointer type_data, gsize datalen,
+						   int lua_cbref);
+
+/**
  * Replace regexp in the cache with another regexp
  * @param cache cache object
  * @param what re to replace
@@ -87,10 +103,27 @@ void rspamd_re_cache_replace(struct rspamd_re_cache *cache,
 							 rspamd_regexp_t *with);
 
 /**
+ * Replace regexp in the scoped cache with another regexp
+ * @param cache_head head of cache list
+ * @param scope scope name
+ * @param what re to replace
+ * @param with regexp object to replace the origin
+ */
+void rspamd_re_cache_replace_scoped(struct rspamd_re_cache **cache_head, const char *scope,
+									rspamd_regexp_t *what,
+									rspamd_regexp_t *with);
+
+/**
  * Initialize and optimize re cache structure
  */
 void rspamd_re_cache_init(struct rspamd_re_cache *cache,
 						  struct rspamd_config *cfg);
+
+/**
+ * Initialize and optimize re cache structures for all scopes
+ */
+void rspamd_re_cache_init_scoped(struct rspamd_re_cache *cache_head,
+								 struct rspamd_config *cfg);
 
 enum rspamd_hyperscan_status {
 	RSPAMD_HYPERSCAN_UNKNOWN = 0,
@@ -108,9 +141,20 @@ enum rspamd_hyperscan_status {
 enum rspamd_hyperscan_status rspamd_re_cache_is_hs_loaded(struct rspamd_re_cache *cache);
 
 /**
- * Get runtime data for a cache
+ * Get runtime data for a cache - automatically creates runtimes for all scopes in the chain
+ * This is the main function used for task runtime creation
  */
 struct rspamd_re_runtime *rspamd_re_cache_runtime_new(struct rspamd_re_cache *cache);
+
+/**
+ * Get runtime data for all scoped caches (same as rspamd_re_cache_runtime_new)
+ */
+struct rspamd_re_runtime *rspamd_re_cache_runtime_new_all_scopes(struct rspamd_re_cache *cache_head);
+
+/**
+ * Get runtime data for a specific scoped cache only
+ */
+struct rspamd_re_runtime *rspamd_re_cache_runtime_new_scoped(struct rspamd_re_cache *cache_head, const char *scope);
 
 /**
  * Get runtime statistics
@@ -152,6 +196,11 @@ void rspamd_re_cache_runtime_destroy(struct rspamd_re_runtime *rt);
 void rspamd_re_cache_unref(struct rspamd_re_cache *cache);
 
 /**
+ * Unref re cache list (all scopes)
+ */
+void rspamd_re_cache_unref_scoped(struct rspamd_re_cache *cache_head);
+
+/**
  * Retain reference to re cache
  */
 struct rspamd_re_cache *rspamd_re_cache_ref(struct rspamd_re_cache *cache);
@@ -160,6 +209,11 @@ struct rspamd_re_cache *rspamd_re_cache_ref(struct rspamd_re_cache *cache);
  * Set limit for all regular expressions in the cache, returns previous limit
  */
 unsigned int rspamd_re_cache_set_limit(struct rspamd_re_cache *cache, unsigned int limit);
+
+/**
+ * Set limit for all regular expressions in the scoped cache, returns previous limit
+ */
+unsigned int rspamd_re_cache_set_limit_scoped(struct rspamd_re_cache *cache_head, const char *scope, unsigned int limit);
 
 /**
  * Convert re type to a human readable string (constant one)
@@ -184,6 +238,17 @@ int rspamd_re_cache_compile_hyperscan(struct rspamd_re_cache *cache,
 									  void *cbd);
 
 /**
+ * Compile expressions to the hyperscan tree and store in the `cache_dir` for all scopes
+ */
+int rspamd_re_cache_compile_hyperscan_scoped(struct rspamd_re_cache *cache_head,
+											 const char *cache_dir,
+											 double max_time,
+											 gboolean silent,
+											 struct ev_loop *event_loop,
+											 void (*cb)(unsigned int ncompiled, GError *err, void *cbd),
+											 void *cbd);
+
+/**
  * Returns TRUE if the specified file is valid hyperscan cache
  */
 gboolean rspamd_re_cache_is_valid_hyperscan_file(struct rspamd_re_cache *cache,
@@ -200,10 +265,46 @@ enum rspamd_hyperscan_status rspamd_re_cache_load_hyperscan(
 	const char *cache_dir, bool try_load);
 
 /**
+ * Loads all hyperscan regexps precompiled for all scopes
+ */
+enum rspamd_hyperscan_status rspamd_re_cache_load_hyperscan_scoped(
+	struct rspamd_re_cache *cache_head,
+	const char *cache_dir, bool try_load);
+
+/**
  * Registers lua selector in the cache
  */
 void rspamd_re_cache_add_selector(struct rspamd_re_cache *cache,
 								  const char *sname, int ref);
+
+/**
+ * Registers lua selector in the scoped cache
+ */
+void rspamd_re_cache_add_selector_scoped(struct rspamd_re_cache **cache_head, const char *scope,
+										 const char *sname, int ref);
+
+/**
+ * Find a cache by scope name
+ */
+struct rspamd_re_cache *rspamd_re_cache_find_scope(struct rspamd_re_cache *cache_head, const char *scope);
+
+/**
+ * Remove a cache scope from the list
+ */
+gboolean rspamd_re_cache_remove_scope(struct rspamd_re_cache **cache_head, const char *scope);
+
+/**
+ * Count the number of scopes in the cache list
+ */
+unsigned int rspamd_re_cache_count_scopes(struct rspamd_re_cache *cache_head);
+
+/**
+ * Get array of scope names from the cache list
+ * @param cache_head head of cache list
+ * @param count_out pointer to store the number of scopes
+ * @return array of scope names (must be freed with g_strfreev), or NULL if no scopes
+ */
+char **rspamd_re_cache_get_scope_names(struct rspamd_re_cache *cache_head, unsigned int *count_out);
 
 #ifdef __cplusplus
 }
