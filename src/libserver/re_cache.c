@@ -131,6 +131,7 @@ struct rspamd_re_cache {
 	/* Intrusive linked list for scoped caches */
 	struct rspamd_re_cache *next, *prev;
 	char *scope;
+	unsigned int flags; /* Cache flags (loaded state, etc.) */
 
 #ifdef WITH_HYPERSCAN
 	enum rspamd_hyperscan_status hyperscan_loaded;
@@ -227,6 +228,7 @@ rspamd_re_cache_add_to_scope_list(struct rspamd_re_cache **cache_head, const cha
 		g_free(new_cache->scope);
 	}
 	new_cache->scope = g_strdup(scope);
+	new_cache->flags = 0; /* New scopes start as unloaded */
 
 	/* Add to linked list */
 	if (*cache_head) {
@@ -323,7 +325,8 @@ rspamd_re_cache_new(void)
 	cache->re = g_ptr_array_new_full(256, rspamd_re_cache_elt_dtor);
 	cache->selectors = kh_init(lua_selectors_hash);
 	cache->next = cache->prev = NULL;
-	cache->scope = NULL; /* Default scope */
+	cache->scope = NULL;                        /* Default scope */
+	cache->flags = RSPAMD_RE_CACHE_FLAG_LOADED; /* Default scope is always loaded */
 #ifdef WITH_HYPERSCAN
 	cache->hyperscan_loaded = RSPAMD_HYPERSCAN_UNKNOWN;
 #endif
@@ -634,7 +637,10 @@ void rspamd_re_cache_init_scoped(struct rspamd_re_cache *cache_head,
 
 	DL_FOREACH(cache_head, cur)
 	{
-		rspamd_re_cache_init(cur, cfg);
+		/* Only initialize loaded scopes */
+		if (cur->flags & RSPAMD_RE_CACHE_FLAG_LOADED) {
+			rspamd_re_cache_init(cur, cfg);
+		}
 	}
 }
 
@@ -666,11 +672,16 @@ rspamd_re_cache_runtime_new(struct rspamd_re_cache *cache)
 	g_assert(cache != NULL);
 
 	/*
-	 * Create runtime for all scopes in the chain.
-	 * This ensures task has runtimes for all available scopes.
+	 * Create runtime for all loaded scopes in the chain.
+	 * This ensures task has runtimes for all available loaded scopes.
 	 */
 	DL_FOREACH(cache, cur)
 	{
+		/* Skip unloaded scopes */
+		if (!(cur->flags & RSPAMD_RE_CACHE_FLAG_LOADED)) {
+			continue;
+		}
+
 		rt = rspamd_re_cache_runtime_new_single(cur);
 		if (rt) {
 			if (rt_head) {
@@ -3132,6 +3143,56 @@ unsigned int rspamd_re_cache_count_scopes(struct rspamd_re_cache *cache_head)
 
 	DL_COUNT(cache_head, cur, count);
 	return count;
+}
+
+void rspamd_re_cache_set_flags(struct rspamd_re_cache *cache_head, const char *scope, unsigned int flags)
+{
+	struct rspamd_re_cache *target;
+
+	if (!cache_head) {
+		return;
+	}
+
+	target = rspamd_re_cache_find_by_scope(cache_head, scope);
+	if (target) {
+		target->flags |= flags;
+	}
+}
+
+void rspamd_re_cache_clear_flags(struct rspamd_re_cache *cache_head, const char *scope, unsigned int flags)
+{
+	struct rspamd_re_cache *target;
+
+	if (!cache_head) {
+		return;
+	}
+
+	target = rspamd_re_cache_find_by_scope(cache_head, scope);
+	if (target) {
+		target->flags &= ~flags;
+	}
+}
+
+unsigned int rspamd_re_cache_get_flags(struct rspamd_re_cache *cache_head, const char *scope)
+{
+	struct rspamd_re_cache *target;
+
+	if (!cache_head) {
+		return 0;
+	}
+
+	target = rspamd_re_cache_find_by_scope(cache_head, scope);
+	if (target) {
+		return target->flags;
+	}
+
+	return 0;
+}
+
+gboolean rspamd_re_cache_is_loaded(struct rspamd_re_cache *cache_head, const char *scope)
+{
+	unsigned int flags = rspamd_re_cache_get_flags(cache_head, scope);
+	return (flags & RSPAMD_RE_CACHE_FLAG_LOADED) != 0;
 }
 
 char **rspamd_re_cache_get_scope_names(struct rspamd_re_cache *cache_head, unsigned int *count_out)

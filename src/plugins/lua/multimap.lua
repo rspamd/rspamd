@@ -202,6 +202,10 @@ local function process_sa_line(rule, line, map)
   end
 
   local rule_name = rule.symbol
+  local scope_name = rule.scope_name or rule_name
+
+  -- All regexps for this SA-style rule are registered in a dedicated scope
+  -- This allows clean removal and replacement when the map is reloaded
 
   if words[1] == 'header' then
     -- header SYMBOL Header =~ /regexp/flags
@@ -215,8 +219,8 @@ local function process_sa_line(rule, line, map)
 
       local re = parse_sa_regexp(atom_name, re_expr)
       if re then
-        -- Register regexp with cache
-        rspamd_config:register_regexp({
+        -- Register regexp with cache in specific scope
+        rspamd_config:register_regexp_scoped(scope_name, {
           re = re,
           type = 'header',
           header = header_name,
@@ -233,8 +237,8 @@ local function process_sa_line(rule, line, map)
           negate = negate
         })
 
-        lua_util.debugm(N, rspamd_config, 'added SA header atom: %s for header %s',
-          atom_name, header_name)
+        lua_util.debugm(N, rspamd_config, 'added SA header atom: %s for header %s (scope: %s)',
+          atom_name, header_name, scope_name)
       end
     end
   elseif words[1] == 'body' then
@@ -245,7 +249,7 @@ local function process_sa_line(rule, line, map)
 
       local re = parse_sa_regexp(atom_name, re_expr)
       if re then
-        rspamd_config:register_regexp({
+        rspamd_config:register_regexp_scoped(scope_name, {
           re = re,
           type = 'sabody',
           pcre_only = false,
@@ -256,7 +260,7 @@ local function process_sa_line(rule, line, map)
 
         sa_atoms[atom_name] = create_sa_atom_function(atom_name, re, 'body', {})
 
-        lua_util.debugm(N, rspamd_config, 'added SA body atom: %s', atom_name)
+        lua_util.debugm(N, rspamd_config, 'added SA body atom: %s (scope: %s)', atom_name, scope_name)
       end
     end
   elseif words[1] == 'rawbody' then
@@ -267,7 +271,7 @@ local function process_sa_line(rule, line, map)
 
       local re = parse_sa_regexp(atom_name, re_expr)
       if re then
-        rspamd_config:register_regexp({
+        rspamd_config:register_regexp_scoped(scope_name, {
           re = re,
           type = 'sarawbody',
           pcre_only = false,
@@ -278,7 +282,7 @@ local function process_sa_line(rule, line, map)
 
         sa_atoms[atom_name] = create_sa_atom_function(atom_name, re, 'rawbody', {})
 
-        lua_util.debugm(N, rspamd_config, 'added SA rawbody atom: %s', atom_name)
+        lua_util.debugm(N, rspamd_config, 'added SA rawbody atom: %s (scope: %s)', atom_name, scope_name)
       end
     end
   elseif words[1] == 'uri' then
@@ -289,7 +293,7 @@ local function process_sa_line(rule, line, map)
 
       local re = parse_sa_regexp(atom_name, re_expr)
       if re then
-        rspamd_config:register_regexp({
+        rspamd_config:register_regexp_scoped(scope_name, {
           re = re,
           type = 'url',
           pcre_only = false,
@@ -300,7 +304,7 @@ local function process_sa_line(rule, line, map)
 
         sa_atoms[atom_name] = create_sa_atom_function(atom_name, re, 'uri', {})
 
-        lua_util.debugm(N, rspamd_config, 'added SA uri atom: %s', atom_name)
+        lua_util.debugm(N, rspamd_config, 'added SA uri atom: %s (scope: %s)', atom_name, scope_name)
       end
     end
   elseif words[1] == 'full' then
@@ -311,7 +315,7 @@ local function process_sa_line(rule, line, map)
 
       local re = parse_sa_regexp(atom_name, re_expr)
       if re then
-        rspamd_config:register_regexp({
+        rspamd_config:register_regexp_scoped(scope_name, {
           re = re,
           type = 'body',
           pcre_only = false,
@@ -322,7 +326,7 @@ local function process_sa_line(rule, line, map)
 
         sa_atoms[atom_name] = create_sa_atom_function(atom_name, re, 'full', {})
 
-        lua_util.debugm(N, rspamd_config, 'added SA full atom: %s', atom_name)
+        lua_util.debugm(N, rspamd_config, 'added SA full atom: %s (scope: %s)', atom_name, scope_name)
       end
     end
   elseif words[1] == 'meta' then
@@ -1701,21 +1705,59 @@ local function add_multimap_rule(key, newrule)
       return nil
     end
 
+    -- Set scope name for this regexp_rules map
+    local scope_name = newrule.symbol
+    newrule.scope_name = scope_name
+
+    -- Remove existing scope if it exists to ensure clean state
+    if rspamd_config:find_regexp_scope(scope_name) then
+      lua_util.debugm(N, rspamd_config, 'removing existing regexp scope: %s', scope_name)
+      rspamd_config:remove_regexp_scope(scope_name)
+    end
+
+    -- Mark the scope as unloaded during map processing
+    -- The scope will be created automatically when first regexp is added
+    local first_line_processed = false
+
     -- Create callback map with by_line processing
     newrule.map_obj = rspamd_config:add_map({
       type = "callback",
       url = map_ucl.url or map_ucl.urls or map_ucl,
       description = newrule.description or 'SA-style multimap: ' .. newrule.symbol,
       callback = function(line, map)
+        -- Mark scope as unloaded on first line
+        if not first_line_processed then
+          first_line_processed = true
+          -- The scope will be created by process_sa_line when first regexp is added
+          -- We mark it as unloaded immediately after creation
+          rspamd_config:set_regexp_scope_loaded(scope_name, false)
+          lua_util.debugm(N, rspamd_config, 'marked regexp scope %s as unloaded during processing', scope_name)
+        end
         process_sa_line(newrule, line, map)
       end,
       by_line = true,      -- Process line by line
       opaque_data = false, -- Use plain strings
     })
 
+    -- Add on_load callback to mark scope as loaded when map processing is complete
+    if newrule.map_obj then
+      newrule.map_obj:on_load(function()
+        -- Mark scope as loaded when map processing is complete
+        -- Check if scope exists (it might not if map was empty)
+        if rspamd_config:find_regexp_scope(scope_name) then
+          rspamd_config:set_regexp_scope_loaded(scope_name, true)
+          lua_util.debugm(N, rspamd_config, 'marked regexp scope %s as loaded after map processing', scope_name)
+        else
+          lua_util.debugm(N, rspamd_config, 'regexp scope %s not created (empty map)', scope_name)
+        end
+      end)
+    end
+
     if newrule.map_obj then
       -- Mark this rule as using SA functionality
       newrule.uses_sa = true
+      lua_util.debugm(N, rspamd_config, 'created regexp_rules map %s with scope: %s',
+        newrule.symbol, scope_name)
       ret = true
     else
       rspamd_logger.warnx(rspamd_config, 'Cannot add SA-style rule: map doesn\'t exists: %s',

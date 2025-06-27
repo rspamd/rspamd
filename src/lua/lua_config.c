@@ -19,6 +19,7 @@
 #include "src/libserver/composites/composites.h"
 #include "libserver/cfg_file_private.h"
 #include "libmime/lang_detection.h"
+#include "libserver/re_cache.h"
 #include "lua/lua_map.h"
 #include "lua/lua_thread_pool.h"
 #include "utlist.h"
@@ -635,6 +636,46 @@ LUA_FUNCTION_DEF(config, count_regexp_scopes);
 LUA_FUNCTION_DEF(config, list_regexp_scopes);
 
 /***
+ * @method rspamd_config:set_regexp_scope_flags(scope, flags)
+ * Sets flags for a regexp scope
+ * @param {string} scope scope name (can be nil for default scope)
+ * @param {number} flags flags to set
+ */
+LUA_FUNCTION_DEF(config, set_regexp_scope_flags);
+
+/***
+ * @method rspamd_config:clear_regexp_scope_flags(scope, flags)
+ * Clears flags for a regexp scope
+ * @param {string} scope scope name (can be nil for default scope)
+ * @param {number} flags flags to clear
+ */
+LUA_FUNCTION_DEF(config, clear_regexp_scope_flags);
+
+/***
+ * @method rspamd_config:get_regexp_scope_flags(scope)
+ * Gets flags for a regexp scope
+ * @param {string} scope scope name (can be nil for default scope)
+ * @return {number} current flags value
+ */
+LUA_FUNCTION_DEF(config, get_regexp_scope_flags);
+
+/***
+ * @method rspamd_config:is_regexp_scope_loaded(scope)
+ * Checks if a regexp scope is loaded and ready for use
+ * @param {string} scope scope name (can be nil for default scope)
+ * @return {boolean} true if scope is loaded
+ */
+LUA_FUNCTION_DEF(config, is_regexp_scope_loaded);
+
+/***
+ * @method rspamd_config:set_regexp_scope_loaded(scope, loaded)
+ * Sets the loaded state of a regexp scope
+ * @param {string} scope scope name (can be nil for default scope)
+ * @param {boolean} loaded whether scope should be marked as loaded (defaults to true)
+ */
+LUA_FUNCTION_DEF(config, set_regexp_scope_loaded);
+
+/***
  * @method rspamd_config:register_worker_script(worker_type, script)
  * Registers the following script for workers of a specified type. The exact type
  * of script function depends on worker type
@@ -1000,6 +1041,11 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF(config, remove_regexp_scope),
 	LUA_INTERFACE_DEF(config, count_regexp_scopes),
 	LUA_INTERFACE_DEF(config, list_regexp_scopes),
+	LUA_INTERFACE_DEF(config, set_regexp_scope_flags),
+	LUA_INTERFACE_DEF(config, clear_regexp_scope_flags),
+	LUA_INTERFACE_DEF(config, get_regexp_scope_flags),
+	LUA_INTERFACE_DEF(config, is_regexp_scope_loaded),
+	LUA_INTERFACE_DEF(config, set_regexp_scope_loaded),
 	LUA_INTERFACE_DEF(config, register_worker_script),
 	LUA_INTERFACE_DEF(config, register_re_selector),
 	LUA_INTERFACE_DEF(config, add_on_load),
@@ -4866,6 +4912,10 @@ void luaopen_config(lua_State *L)
 	rspamd_lua_new_class(L, rspamd_monitored_classname, monitoredlib_m);
 
 	lua_pop(L, 1);
+
+	/* Export constants */
+	lua_pushinteger(L, RSPAMD_RE_CACHE_FLAG_LOADED);
+	lua_setglobal(L, "RSPAMD_RE_CACHE_FLAG_LOADED");
 }
 
 void lua_call_finish_script(struct rspamd_config_cfg_lua_script *sc,
@@ -5240,4 +5290,124 @@ lua_config_list_regexp_scopes(lua_State *L)
 	}
 
 	return 1;
+}
+
+static int
+lua_config_set_regexp_scope_flags(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+	const char *scope = NULL;
+	unsigned int flags = 0;
+
+	if (cfg) {
+		if (lua_type(L, 2) == LUA_TSTRING) {
+			scope = lua_tostring(L, 2);
+		}
+		flags = lua_tointeger(L, 3);
+
+		rspamd_re_cache_set_flags(cfg->re_cache, scope, flags);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 0;
+}
+
+static int
+lua_config_clear_regexp_scope_flags(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+	const char *scope = NULL;
+	unsigned int flags = 0;
+
+	if (cfg) {
+		if (lua_type(L, 2) == LUA_TSTRING) {
+			scope = lua_tostring(L, 2);
+		}
+		flags = lua_tointeger(L, 3);
+
+		rspamd_re_cache_clear_flags(cfg->re_cache, scope, flags);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 0;
+}
+
+static int
+lua_config_get_regexp_scope_flags(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+	const char *scope = NULL;
+
+	if (cfg) {
+		if (lua_type(L, 2) == LUA_TSTRING) {
+			scope = lua_tostring(L, 2);
+		}
+
+		unsigned int flags = rspamd_re_cache_get_flags(cfg->re_cache, scope);
+		lua_pushinteger(L, flags);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_config_is_regexp_scope_loaded(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+	const char *scope = NULL;
+
+	if (cfg) {
+		if (lua_type(L, 2) == LUA_TSTRING) {
+			scope = lua_tostring(L, 2);
+		}
+
+		gboolean loaded = rspamd_re_cache_is_loaded(cfg->re_cache, scope);
+		lua_pushboolean(L, loaded);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_config_set_regexp_scope_loaded(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+	const char *scope = NULL;
+	gboolean loaded = TRUE;
+
+	if (cfg) {
+		if (lua_type(L, 2) == LUA_TSTRING) {
+			scope = lua_tostring(L, 2);
+		}
+		if (lua_type(L, 3) == LUA_TBOOLEAN) {
+			loaded = lua_toboolean(L, 3);
+		}
+
+		if (loaded) {
+			rspamd_re_cache_set_flags(cfg->re_cache, scope, RSPAMD_RE_CACHE_FLAG_LOADED);
+		}
+		else {
+			rspamd_re_cache_clear_flags(cfg->re_cache, scope, RSPAMD_RE_CACHE_FLAG_LOADED);
+		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 0;
 }

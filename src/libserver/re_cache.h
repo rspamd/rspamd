@@ -28,6 +28,9 @@ struct rspamd_re_runtime;
 struct rspamd_task;
 struct rspamd_config;
 
+/* Re cache flags */
+#define RSPAMD_RE_CACHE_FLAG_LOADED (1U << 0) /* Scope is fully loaded and ready for use */
+
 enum rspamd_re_type {
 	RSPAMD_RE_HEADER,
 	RSPAMD_RE_RAWHEADER,
@@ -305,6 +308,38 @@ unsigned int rspamd_re_cache_count_scopes(struct rspamd_re_cache *cache_head);
  * @return array of scope names (must be freed with g_strfreev), or NULL if no scopes
  */
 char **rspamd_re_cache_get_scope_names(struct rspamd_re_cache *cache_head, unsigned int *count_out);
+
+/**
+ * Set flags for a specific scope
+ * @param cache_head head of cache list
+ * @param scope scope name (NULL for default scope)
+ * @param flags flags to set
+ */
+void rspamd_re_cache_set_flags(struct rspamd_re_cache *cache_head, const char *scope, unsigned int flags);
+
+/**
+ * Clear flags for a specific scope
+ * @param cache_head head of cache list
+ * @param scope scope name (NULL for default scope)
+ * @param flags flags to clear
+ */
+void rspamd_re_cache_clear_flags(struct rspamd_re_cache *cache_head, const char *scope, unsigned int flags);
+
+/**
+ * Get flags for a specific scope
+ * @param cache_head head of cache list
+ * @param scope scope name (NULL for default scope)
+ * @return flags value
+ */
+unsigned int rspamd_re_cache_get_flags(struct rspamd_re_cache *cache_head, const char *scope);
+
+/**
+ * Check if a scope is loaded
+ * @param cache_head head of cache list
+ * @param scope scope name (NULL for default scope)
+ * @return TRUE if scope is loaded and ready for use
+ */
+gboolean rspamd_re_cache_is_loaded(struct rspamd_re_cache *cache_head, const char *scope);
 
 #ifdef __cplusplus
 }
