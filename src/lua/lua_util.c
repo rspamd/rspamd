@@ -31,6 +31,9 @@
 #include <sys/time.h>
 #if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
 #include <sys/sysctl.h>
+#ifdef __FreeBSD__
+#include <sys/user.h>
+#endif
 #endif
 #ifdef __APPLE__
 #include <mach/mach.h>
