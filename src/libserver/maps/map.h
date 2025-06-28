@@ -161,6 +161,12 @@ void rspamd_map_traverse(struct rspamd_map *map, rspamd_map_traverse_cb cb,
 void rspamd_map_set_on_load_function(struct rspamd_map *map, rspamd_map_on_load_function cb,
 									 gpointer cbdata, GDestroyNotify dtor);
 
+/**
+ * Trigger hyperscan compilation for regexp scopes that may have been updated
+ * @param map map that was updated
+ */
+void rspamd_map_trigger_hyperscan_compilation(struct rspamd_map *map);
+
 #ifdef __cplusplus
 }
 #endif
