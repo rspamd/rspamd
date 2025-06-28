@@ -7,7 +7,7 @@
 -- key5 - (optional) category table in message pack
 
 local cursor = tonumber(KEYS[1])
-
+local symbol = KEYS[2]
 local category = nil
 
 if KEYS[5] then
