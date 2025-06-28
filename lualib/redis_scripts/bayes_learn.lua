@@ -6,6 +6,7 @@
 -- key4 - boolean is_unlearn
 -- key5 - set of tokens encoded in messagepack array of strings
 -- key6 - set of text tokens (if any) encoded in messagepack array of strings (size must be twice of `KEYS[5]`)
+-- key7 - (optional) category table in message pack
 
 local prefix = KEYS[1]
 local is_spam = KEYS[2] == 'true' and true or false
@@ -13,9 +14,22 @@ local symbol = KEYS[3]
 local is_unlearn = KEYS[4] == 'true' and true or false
 local input_tokens = cmsgpack.unpack(KEYS[5])
 local text_tokens
+local category = nil
 
 if KEYS[6] then
   text_tokens = cmsgpack.unpack(KEYS[6])
+end
+if KEYS[7] then
+  category = cmsgpack.unpack(KEYS[7])
+end
+
+if category then
+  local cat_parts = {}
+  for k, v in pairs(category) do
+    table.insert(cat_parts, tostring(k) .. '=' .. tostring(v))
+  end
+  table.sort(cat_parts)
+  prefix = prefix .. "_cat_" .. table.concat(cat_parts, "_")
 end
 
 local hash_key = is_spam and 'S' or 'H'
