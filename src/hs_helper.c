@@ -243,13 +243,122 @@ rspamd_hs_helper_cleanup_dir(struct hs_helper_ctx *ctx, gboolean forced)
 	return ret;
 }
 
-/* Bad hack, but who cares */
-static gboolean hack_global_forced;
+
+struct rspamd_hs_helper_compile_cbdata {
+	struct rspamd_worker *worker;
+	struct hs_helper_ctx *ctx;
+	unsigned int total_compiled;
+	unsigned int scopes_remaining;
+	gboolean forced;
+};
+
+static void
+rspamd_rs_delayed_scoped_cb(EV_P_ ev_timer *w, int revents)
+{
+	struct rspamd_hs_helper_compile_cbdata *cbd = (struct rspamd_hs_helper_compile_cbdata *) w->data;
+	struct rspamd_worker *worker = cbd->worker;
+	struct hs_helper_ctx *ctx = cbd->ctx;
+	static struct rspamd_srv_command srv_cmd;
+
+	memset(&srv_cmd, 0, sizeof(srv_cmd));
+	srv_cmd.type = RSPAMD_SRV_HYPERSCAN_LOADED;
+	rspamd_strlcpy(srv_cmd.cmd.hs_loaded.cache_dir, ctx->hs_dir,
+				   sizeof(srv_cmd.cmd.hs_loaded.cache_dir));
+	srv_cmd.cmd.hs_loaded.forced = cbd->forced;
+	srv_cmd.cmd.hs_loaded.scope[0] = '\0'; /* NULL scope means all scopes */
+
+	rspamd_srv_send_command(worker,
+							ctx->event_loop, &srv_cmd, -1, NULL, NULL);
+	ev_timer_stop(EV_A_ w);
+	g_free(w);
+	g_free(cbd);
+
+	ev_timer_again(EV_A_ & ctx->recompile_timer);
+}
+
+static void
+rspamd_rs_compile_scoped_cb(const char *scope, unsigned int ncompiled, GError *err, void *cbd)
+{
+	struct rspamd_hs_helper_compile_cbdata *compile_cbd =
+		(struct rspamd_hs_helper_compile_cbdata *) cbd;
+	struct rspamd_worker *worker = compile_cbd->worker;
+	struct hs_helper_ctx *ctx = compile_cbd->ctx;
+	static struct rspamd_srv_command srv_cmd;
+
+	if (err != NULL) {
+		/* Failed to compile: log and continue */
+		msg_err("cannot compile Hyperscan database for scope %s: %e",
+				scope ? scope : "default", err);
+	}
+	else {
+		if (ncompiled > 0) {
+			compile_cbd->total_compiled += ncompiled;
+
+			/* Send notification for this specific scope */
+			memset(&srv_cmd, 0, sizeof(srv_cmd));
+			srv_cmd.type = RSPAMD_SRV_HYPERSCAN_LOADED;
+			rspamd_strlcpy(srv_cmd.cmd.hs_loaded.cache_dir, ctx->hs_dir,
+						   sizeof(srv_cmd.cmd.hs_loaded.cache_dir));
+			srv_cmd.cmd.hs_loaded.forced = compile_cbd->forced;
+			if (scope) {
+				rspamd_strlcpy(srv_cmd.cmd.hs_loaded.scope, scope,
+							   sizeof(srv_cmd.cmd.hs_loaded.scope));
+			}
+			else {
+				srv_cmd.cmd.hs_loaded.scope[0] = '\0';
+			}
+
+			rspamd_srv_send_command(worker,
+									ctx->event_loop, &srv_cmd, -1, NULL, NULL);
+
+			msg_info("compiled %d regular expressions for scope %s",
+					 ncompiled, scope ? scope : "default");
+		}
+	}
+
+	compile_cbd->scopes_remaining--;
+
+	/* Check if all scopes are done */
+	if (compile_cbd->scopes_remaining == 0) {
+		ev_timer *tm;
+		ev_tstamp when = 0.0;
+
+		/*
+		 * Do not send notification unless all other workers are started
+		 * XXX: now we just sleep for 1 seconds to ensure that
+		 */
+		if (!ctx->loaded) {
+			when = 1.0; /* Postpone */
+			ctx->loaded = TRUE;
+			msg_info("compiled %d total regular expressions to the hyperscan tree, "
+					 "postpone final notification for %.0f seconds to avoid races",
+					 compile_cbd->total_compiled,
+					 when);
+		}
+		else {
+			msg_info("compiled %d total regular expressions to the hyperscan tree, "
+					 "send final notification",
+					 compile_cbd->total_compiled);
+		}
+
+		tm = g_malloc0(sizeof(*tm));
+		tm->data = (void *) compile_cbd;
+		ev_timer_init(tm, rspamd_rs_delayed_scoped_cb, when, 0);
+		ev_timer_start(ctx->event_loop, tm);
+	}
+}
+
+struct rspamd_hs_helper_single_compile_cbdata {
+	struct rspamd_worker *worker;
+	gboolean forced;
+};
 
 static void
 rspamd_rs_delayed_cb(EV_P_ ev_timer *w, int revents)
 {
-	struct rspamd_worker *worker = (struct rspamd_worker *) w->data;
+	struct rspamd_hs_helper_single_compile_cbdata *cbd =
+		(struct rspamd_hs_helper_single_compile_cbdata *) w->data;
+	struct rspamd_worker *worker = cbd->worker;
 	static struct rspamd_srv_command srv_cmd;
 	struct hs_helper_ctx *ctx;
 
@@ -258,13 +367,14 @@ rspamd_rs_delayed_cb(EV_P_ ev_timer *w, int revents)
 	srv_cmd.type = RSPAMD_SRV_HYPERSCAN_LOADED;
 	rspamd_strlcpy(srv_cmd.cmd.hs_loaded.cache_dir, ctx->hs_dir,
 				   sizeof(srv_cmd.cmd.hs_loaded.cache_dir));
-	srv_cmd.cmd.hs_loaded.forced = hack_global_forced;
-	hack_global_forced = FALSE;
+	srv_cmd.cmd.hs_loaded.forced = cbd->forced;
+	srv_cmd.cmd.hs_loaded.scope[0] = '\0'; /* NULL scope means all scopes */
 
 	rspamd_srv_send_command(worker,
 							ctx->event_loop, &srv_cmd, -1, NULL, NULL);
 	ev_timer_stop(EV_A_ w);
 	g_free(w);
+	g_free(cbd);
 
 	ev_timer_again(EV_A_ & ctx->recompile_timer);
 }
@@ -272,23 +382,21 @@ rspamd_rs_delayed_cb(EV_P_ ev_timer *w, int revents)
 static void
 rspamd_rs_compile_cb(unsigned int ncompiled, GError *err, void *cbd)
 {
-	struct rspamd_worker *worker = (struct rspamd_worker *) cbd;
+	struct rspamd_hs_helper_single_compile_cbdata *compile_cbd =
+		(struct rspamd_hs_helper_single_compile_cbdata *) cbd;
+	struct rspamd_worker *worker = compile_cbd->worker;
 	ev_timer *tm;
 	ev_tstamp when = 0.0;
 	struct hs_helper_ctx *ctx;
+	struct rspamd_hs_helper_single_compile_cbdata *timer_cbd;
 
 	ctx = (struct hs_helper_ctx *) worker->ctx;
 
 	if (err != NULL) {
 		/* Failed to compile: log and go out */
 		msg_err("cannot compile Hyperscan database: %e", err);
-
+		g_free(compile_cbd);
 		return;
-	}
-
-	if (ncompiled > 0) {
-		/* Enforce update for other workers */
-		hack_global_forced = TRUE;
 	}
 
 	/*
@@ -309,10 +417,16 @@ rspamd_rs_compile_cb(unsigned int ncompiled, GError *err, void *cbd)
 				 ncompiled);
 	}
 
+	timer_cbd = g_malloc0(sizeof(*timer_cbd));
+	timer_cbd->worker = worker;
+	timer_cbd->forced = (ncompiled > 0) ? TRUE : compile_cbd->forced;
+
 	tm = g_malloc0(sizeof(*tm));
-	tm->data = (void *) worker;
+	tm->data = (void *) timer_cbd;
 	ev_timer_init(tm, rspamd_rs_delayed_cb, when, 0);
 	ev_timer_start(ctx->event_loop, tm);
+
+	g_free(compile_cbd);
 }
 
 static gboolean
@@ -331,13 +445,80 @@ rspamd_rs_compile(struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 		msg_warn("cannot cleanup cache dir '%s'", ctx->hs_dir);
 	}
 
-	hack_global_forced = forced; /* killmeplease */
-	rspamd_re_cache_compile_hyperscan(ctx->cfg->re_cache,
-									  ctx->hs_dir, ctx->max_time, !forced,
-									  ctx->event_loop,
-									  rspamd_rs_compile_cb,
-									  (void *) worker);
+	/* Check if we have any scopes */
+	unsigned int scope_count = rspamd_re_cache_count_scopes(ctx->cfg->re_cache);
+	if (scope_count == 0) {
+		/* No additional scopes, just default scope - use standard compilation */
+		struct rspamd_hs_helper_single_compile_cbdata *single_cbd =
+			g_malloc0(sizeof(*single_cbd));
+		single_cbd->worker = worker;
+		single_cbd->forced = forced;
 
+		rspamd_re_cache_compile_hyperscan(ctx->cfg->re_cache,
+										  ctx->hs_dir, ctx->max_time, !forced,
+										  ctx->event_loop,
+										  rspamd_rs_compile_cb,
+										  (void *) single_cbd);
+		return TRUE;
+	}
+
+	/* Get all scope names */
+	unsigned int names_count;
+	char **scope_names = rspamd_re_cache_get_scope_names(ctx->cfg->re_cache, &names_count);
+
+	if (!scope_names || names_count == 0) {
+		/* Failed to get scope names, use standard compilation for default scope */
+		struct rspamd_hs_helper_single_compile_cbdata *single_cbd =
+			g_malloc0(sizeof(*single_cbd));
+		single_cbd->worker = worker;
+		single_cbd->forced = forced;
+
+		rspamd_re_cache_compile_hyperscan(ctx->cfg->re_cache,
+										  ctx->hs_dir, ctx->max_time, !forced,
+										  ctx->event_loop,
+										  rspamd_rs_compile_cb,
+										  (void *) single_cbd);
+		return TRUE;
+	}
+
+	/* Prepare compilation callback data */
+	struct rspamd_hs_helper_compile_cbdata *compile_cbd =
+		g_malloc0(sizeof(*compile_cbd));
+	compile_cbd->worker = worker;
+	compile_cbd->ctx = ctx;
+	compile_cbd->total_compiled = 0;
+	compile_cbd->scopes_remaining = names_count;
+	compile_cbd->forced = forced;
+
+	/* Compile each scope */
+	for (unsigned int i = 0; i < names_count; i++) {
+		const char *scope = strcmp(scope_names[i], "default") == 0 ? NULL : scope_names[i];
+		struct rspamd_re_cache *scope_cache = rspamd_re_cache_find_scope(ctx->cfg->re_cache, scope);
+
+		if (scope_cache && rspamd_re_cache_is_loaded(ctx->cfg->re_cache, scope)) {
+			rspamd_re_cache_compile_hyperscan_scoped_single(scope_cache, scope,
+															ctx->hs_dir, ctx->max_time, !forced,
+															ctx->event_loop,
+															rspamd_rs_compile_scoped_cb,
+															compile_cbd);
+		}
+		else {
+			/* Scope not loaded, skip it */
+			compile_cbd->scopes_remaining--;
+			msg_debug("skipping unloaded scope: %s", scope ? scope : "default");
+
+			/* Check if we're done */
+			if (compile_cbd->scopes_remaining == 0) {
+				/* No scopes to compile, send final notification immediately */
+				ev_timer *tm = g_malloc0(sizeof(*tm));
+				tm->data = (void *) compile_cbd;
+				ev_timer_init(tm, rspamd_rs_delayed_scoped_cb, 0.0, 0);
+				ev_timer_start(ctx->event_loop, tm);
+			}
+		}
+	}
+
+	g_strfreev(scope_names);
 	return TRUE;
 }
 

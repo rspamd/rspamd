@@ -74,6 +74,7 @@ struct rspamd_control_command {
 		struct {
 			gboolean forced;
 			char cache_dir[CONTROL_PATHLEN];
+			char scope[64]; /* Scope name, NULL means all scopes */
 		} hs_loaded;
 		struct {
 			char tag[32];
@@ -164,6 +165,7 @@ struct rspamd_srv_command {
 		struct {
 			gboolean forced;
 			char cache_dir[CONTROL_PATHLEN];
+			char scope[64]; /* Scope name, NULL means all scopes */
 		} hs_loaded;
 		struct {
 			char tag[32];

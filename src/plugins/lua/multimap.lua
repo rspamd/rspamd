@@ -1747,6 +1747,10 @@ local function add_multimap_rule(key, newrule)
         if rspamd_config:find_regexp_scope(scope_name) then
           rspamd_config:set_regexp_scope_loaded(scope_name, true)
           lua_util.debugm(N, rspamd_config, 'marked regexp scope %s as loaded after map processing', scope_name)
+
+          -- Trigger hyperscan compilation for this updated scope
+          newrule.map_obj:trigger_hyperscan_compilation()
+          lua_util.debugm(N, rspamd_config, 'triggered hyperscan compilation for scope %s after map loading', scope_name)
         else
           lua_util.debugm(N, rspamd_config, 'regexp scope %s not created (empty map)', scope_name)
         end

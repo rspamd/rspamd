@@ -275,6 +275,18 @@ enum rspamd_hyperscan_status rspamd_re_cache_load_hyperscan_scoped(
 	const char *cache_dir, bool try_load);
 
 /**
+ * Compile expressions to the hyperscan tree for a single scope with locking
+ */
+int rspamd_re_cache_compile_hyperscan_scoped_single(struct rspamd_re_cache *cache,
+													const char *scope,
+													const char *cache_dir,
+													double max_time,
+													gboolean silent,
+													struct ev_loop *event_loop,
+													void (*cb)(const char *scope, unsigned int ncompiled, GError *err, void *cbd),
+													void *cbd);
+
+/**
  * Registers lua selector in the cache
  */
 void rspamd_re_cache_add_selector(struct rspamd_re_cache *cache,

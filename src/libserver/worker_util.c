@@ -1908,14 +1908,27 @@ rspamd_worker_hyperscan_ready(struct rspamd_main *rspamd_main,
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_HYPERSCAN_LOADED;
 
-	if (rspamd_re_cache_is_hs_loaded(cache) != RSPAMD_HYPERSCAN_LOADED_FULL ||
-		cmd->cmd.hs_loaded.forced) {
+	/* Check if this is a scoped notification */
+	if (cmd->cmd.hs_loaded.scope[0] != '\0') {
+		/* Scoped hyperscan loading */
+		const char *scope = cmd->cmd.hs_loaded.scope;
 
-		msg_info("loading hyperscan expressions after receiving compilation "
-				 "notice: %s",
-				 (rspamd_re_cache_is_hs_loaded(cache) != RSPAMD_HYPERSCAN_LOADED_FULL) ? "new db" : "forced update");
-		rep.reply.hs_loaded.status = rspamd_re_cache_load_hyperscan(
-			worker->srv->cfg->re_cache, cmd->cmd.hs_loaded.cache_dir, false);
+		msg_info("loading hyperscan expressions for scope '%s' after receiving compilation notice", scope);
+
+		rep.reply.hs_loaded.status = rspamd_re_cache_load_hyperscan_scoped(
+			cache, cmd->cmd.hs_loaded.cache_dir, false);
+	}
+	else {
+		/* Legacy/full cache loading */
+		if (rspamd_re_cache_is_hs_loaded(cache) != RSPAMD_HYPERSCAN_LOADED_FULL ||
+			cmd->cmd.hs_loaded.forced) {
+
+			msg_info("loading hyperscan expressions after receiving compilation "
+					 "notice: %s",
+					 (rspamd_re_cache_is_hs_loaded(cache) != RSPAMD_HYPERSCAN_LOADED_FULL) ? "new db" : "forced update");
+			rep.reply.hs_loaded.status = rspamd_re_cache_load_hyperscan(
+				worker->srv->cfg->re_cache, cmd->cmd.hs_loaded.cache_dir, false);
+		}
 	}
 
 	if (write(fd, &rep, sizeof(rep)) != sizeof(rep)) {

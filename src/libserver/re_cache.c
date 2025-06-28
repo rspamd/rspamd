@@ -3234,3 +3234,161 @@ char **rspamd_re_cache_get_scope_names(struct rspamd_re_cache *cache_head, unsig
 	*count_out = count;
 	return names;
 }
+
+static gboolean
+rspamd_re_cache_create_scope_lock(const char *cache_dir, const char *scope, int *lock_fd)
+{
+	char lock_path[PATH_MAX];
+	pid_t myself = getpid();
+
+	if (!scope) {
+		scope = "default";
+	}
+
+	rspamd_snprintf(lock_path, sizeof(lock_path), "%s%c%s.scope.lock",
+					cache_dir, G_DIR_SEPARATOR, scope);
+
+	*lock_fd = open(lock_path, O_WRONLY | O_CREAT | O_EXCL, 00600);
+
+	if (*lock_fd == -1) {
+		if (errno == EEXIST || errno == EBUSY) {
+			/* Check if the lock is stale */
+			int read_fd = open(lock_path, O_RDONLY);
+			if (read_fd != -1) {
+				pid_t lock_pid;
+				gssize r = read(read_fd, &lock_pid, sizeof(lock_pid));
+				close(read_fd);
+
+				if (r == sizeof(lock_pid)) {
+					/* Check if the process is still alive */
+					if (lock_pid != myself && (kill(lock_pid, 0) == -1 && errno == ESRCH)) {
+						/* Stale lock, remove it */
+						if (unlink(lock_path) == 0) {
+							/* Try to create lock again */
+							*lock_fd = open(lock_path, O_WRONLY | O_CREAT | O_EXCL, 00600);
+							if (*lock_fd != -1) {
+								goto write_pid;
+							}
+						}
+					}
+				}
+				else {
+					/* Invalid lock file, remove it */
+					if (unlink(lock_path) == 0) {
+						*lock_fd = open(lock_path, O_WRONLY | O_CREAT | O_EXCL, 00600);
+						if (*lock_fd != -1) {
+							goto write_pid;
+						}
+					}
+				}
+			}
+		}
+		return FALSE;
+	}
+
+write_pid:
+	/* Write our PID to the lock file */
+	if (write(*lock_fd, &myself, sizeof(myself)) != sizeof(myself)) {
+		close(*lock_fd);
+		unlink(lock_path);
+		return FALSE;
+	}
+
+	/* Lock the file */
+	if (!rspamd_file_lock(*lock_fd, FALSE)) {
+		close(*lock_fd);
+		unlink(lock_path);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+static void
+rspamd_re_cache_remove_scope_lock(const char *cache_dir, const char *scope, int lock_fd)
+{
+	char lock_path[PATH_MAX];
+
+	if (!scope) {
+		scope = "default";
+	}
+
+	rspamd_snprintf(lock_path, sizeof(lock_path), "%s%c%s.scope.lock",
+					cache_dir, G_DIR_SEPARATOR, scope);
+
+	if (lock_fd != -1) {
+		rspamd_file_unlock(lock_fd, FALSE);
+		close(lock_fd);
+	}
+	unlink(lock_path);
+}
+
+#ifdef WITH_HYPERSCAN
+struct rspamd_re_cache_hs_compile_scoped_cbdata {
+	struct rspamd_re_cache *cache;
+	const char *cache_dir;
+	const char *scope;
+	double max_time;
+	gboolean silent;
+	int lock_fd;
+	void (*cb)(const char *scope, unsigned int ncompiled, GError *err, void *cbd);
+	void *cbd;
+};
+
+static void
+rspamd_re_cache_compile_scoped_cb(unsigned int ncompiled, GError *err, void *cbd)
+{
+	struct rspamd_re_cache_hs_compile_scoped_cbdata *scoped_cbd =
+		(struct rspamd_re_cache_hs_compile_scoped_cbdata *) cbd;
+
+	/* Remove lock */
+	rspamd_re_cache_remove_scope_lock(scoped_cbd->cache_dir, scoped_cbd->scope,
+									  scoped_cbd->lock_fd);
+
+	/* Call original callback */
+	if (scoped_cbd->cb) {
+		scoped_cbd->cb(scoped_cbd->scope, ncompiled, err, scoped_cbd->cbd);
+	}
+
+	g_free(scoped_cbd);
+}
+
+int rspamd_re_cache_compile_hyperscan_scoped_single(struct rspamd_re_cache *cache,
+													const char *scope,
+													const char *cache_dir,
+													double max_time,
+													gboolean silent,
+													struct ev_loop *event_loop,
+													void (*cb)(const char *scope, unsigned int ncompiled, GError *err, void *cbd),
+													void *cbd)
+{
+	struct rspamd_re_cache_hs_compile_scoped_cbdata *scoped_cbd;
+	int lock_fd = -1;
+
+	g_assert(cache != NULL);
+	g_assert(cache_dir != NULL);
+
+	/* Try to acquire lock for this scope */
+	if (!rspamd_re_cache_create_scope_lock(cache_dir, scope, &lock_fd)) {
+		/* Another process is compiling this scope */
+		if (cb) {
+			cb(scope, 0, NULL, cbd);
+		}
+		return 0;
+	}
+
+	/* Create callback data */
+	scoped_cbd = g_malloc0(sizeof(*scoped_cbd));
+	scoped_cbd->cache = cache;
+	scoped_cbd->cache_dir = cache_dir;
+	scoped_cbd->scope = scope;
+	scoped_cbd->max_time = max_time;
+	scoped_cbd->silent = silent;
+	scoped_cbd->lock_fd = lock_fd;
+	scoped_cbd->cb = cb;
+	scoped_cbd->cbd = cbd;
+
+	return rspamd_re_cache_compile_hyperscan(cache, cache_dir, max_time, silent,
+											 event_loop, rspamd_re_cache_compile_scoped_cb, scoped_cbd);
+}
+#endif

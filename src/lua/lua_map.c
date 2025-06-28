@@ -170,6 +170,13 @@ LUA_FUNCTION_DEF(map, get_data_digest);
  */
 LUA_FUNCTION_DEF(map, get_nelts);
 
+/***
+ * @method map:trigger_hyperscan_compilation()
+ * Trigger hyperscan compilation for regexp scopes that may have been updated by this map
+ * This should be called after map loading is complete for maps that update regexp scopes
+ */
+LUA_FUNCTION_DEF(map, trigger_hyperscan_compilation);
+
 static const struct luaL_reg maplib_m[] = {
 	LUA_INTERFACE_DEF(map, get_key),
 	LUA_INTERFACE_DEF(map, is_signed),
@@ -183,6 +190,7 @@ static const struct luaL_reg maplib_m[] = {
 	LUA_INTERFACE_DEF(map, on_load),
 	LUA_INTERFACE_DEF(map, get_data_digest),
 	LUA_INTERFACE_DEF(map, get_nelts),
+	LUA_INTERFACE_DEF(map, trigger_hyperscan_compilation),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
@@ -1522,6 +1530,21 @@ lua_map_on_load(lua_State *L)
 	else {
 		return luaL_error(L, "invalid callback");
 	}
+
+	return 0;
+}
+
+static int
+lua_map_trigger_hyperscan_compilation(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_map *map = lua_check_map(L, 1);
+
+	if (map == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	rspamd_map_trigger_hyperscan_compilation(map->map);
 
 	return 0;
 }
