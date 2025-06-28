@@ -7,8 +7,6 @@
 -- key5 - (optional) category table in message pack
 
 local cursor = tonumber(KEYS[1])
-local learn_key = KEYS[3]
-local category = KEYS[5]
 
 local category = nil
 
