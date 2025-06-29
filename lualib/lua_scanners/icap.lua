@@ -239,13 +239,16 @@ local function icap_check(task, content, digest, rule, maybe_part)
         end
       end
 
-      local function get_req_headers()
-
+      local function get_req_headers()                
         local in_client_ip = task:get_from_ip()
+        local in_client_ip_str = in_client_ip:to_string()
         local req_hlen = 2
+        if in_client_ip:get_version() == 6 then
+            in_client_ip_str = "ip6-" .. string.gsub(in_client_ip_str, ":", "-")
+        end
         if maybe_part then
           table.insert(req_headers,
-              string.format('GET http://%s/%s HTTP/1.0\r\n', in_client_ip, lua_util.url_encode_string(maybe_part:get_filename())))
+              string.format('GET http://%s/%s HTTP/1.0\r\n', in_client_ip_str, lua_util.url_encode_string(maybe_part:get_filename())))
           if rule.use_specific_content_type then
             table.insert(http_headers, string.format('Content-Type: %s/%s\r\n', maybe_part:get_detected_type()))
             --else
