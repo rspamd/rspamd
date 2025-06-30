@@ -29,6 +29,10 @@ define(["jquery", "app/common", "app/libft"],
         "use strict";
         const ui = {};
         const fileSet = {files: null, index: null};
+        const lastReqContext = {
+            classifiers: {config_id: null, server: null},
+            storages: {config_id: null, server: null}
+        };
         let scanTextHeaders = {};
 
         function uploadText(data, url, headers, method = "POST") {
@@ -299,18 +303,45 @@ define(["jquery", "app/common", "app/libft"],
 
         common.fileUtils.setupFileHandling("#scanMsgSource", "#formFile", fileSet, enable_disable_scan_btn, multiple_files_cb);
 
+
+        /**
+         * Returns `true` if we should skip the request as configuration is not changed,
+         * otherwise bumps the request context cache and returns `false`.
+         *
+         * @param {string} server
+         *   Name of the currently selected Rspamd neighbour.
+         * @param {"classifiers"|"storages"} key
+         *   Which endpoint’s cache to check.
+         * @returns {boolean}
+         */
+        function shouldSkipRequest(server, key) {
+            const servers = JSON.parse(sessionStorage.getItem("Credentials") || "{}");
+            const config_id = servers[server]?.data?.config_id;
+            const last = lastReqContext[key];
+
+            if ((config_id && config_id === last.config_id) ||
+                (!config_id && server === last.server)) {
+                return true;
+            }
+
+            lastReqContext[key] = {config_id, server};
+            return false;
+        }
+
         ui.getClassifiers = function () {
+            const server = common.getServer();
+            if (shouldSkipRequest(server, "classifiers")) return;
+
             if (!common.read_only) {
                 const sel = $("#classifier").empty().append($("<option>", {value: "", text: "All classifiers"}));
-                common.query("/bayes/classifiers", {
+                common.query("bayes/classifiers", {
                     success: function (data) {
                         data[0].data.forEach((c) => sel.append($("<option>", {value: c, text: c})));
                     },
-                    server: common.getServer()
+                    server: server
                 });
             }
         };
-        ui.getClassifiers();
 
 
         const fuzzyWidgets = [
@@ -339,19 +370,9 @@ define(["jquery", "app/common", "app/libft"],
             });
         }
 
-        let lastFuzzyStoragesReq = {config_id: null, server: null};
-
         ui.getFuzzyStorages = function () {
             const server = common.getServer();
-
-            const servers = JSON.parse(sessionStorage.getItem("Credentials") || "{}");
-            const config_id = servers[server]?.data?.config_id;
-
-            if ((config_id && config_id === lastFuzzyStoragesReq.config_id) ||
-                (!config_id && server === lastFuzzyStoragesReq.server)) {
-                return;
-            }
-            lastFuzzyStoragesReq = {config_id: config_id, server: server};
+            if (shouldSkipRequest(server, "storages")) return;
 
             fuzzyWidgets.forEach(({picker, container}) => container($(picker)).removeAttr("title"));
 
