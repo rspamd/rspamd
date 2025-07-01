@@ -724,6 +724,9 @@ rspamd_control_default_cmd_handler(int fd,
 	case RSPAMD_CONTROL_CHILD_CHANGE:
 	case RSPAMD_CONTROL_FUZZY_BLOCKED:
 		break;
+	case RSPAMD_CONTROL_WORKERS_SPAWNED:
+		rep.reply.workers_spawned.status = 0;
+		break;
 	case RSPAMD_CONTROL_RERESOLVE:
 		if (cd->worker->srv->cfg) {
 			REF_RETAIN(cd->worker->srv->cfg);
@@ -1065,30 +1068,58 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 			case RSPAMD_SRV_HYPERSCAN_LOADED:
 #ifdef WITH_HYPERSCAN
 				/* Load RE cache to provide it for new forks */
-				if (rspamd_re_cache_is_hs_loaded(rspamd_main->cfg->re_cache) != RSPAMD_HYPERSCAN_LOADED_FULL ||
-					cmd.cmd.hs_loaded.forced) {
-					rspamd_re_cache_load_hyperscan(
+				if (cmd.cmd.hs_loaded.scope[0] != '\0') {
+					/* Scoped loading */
+					const char *scope = cmd.cmd.hs_loaded.scope;
+					msg_info_main("received scoped hyperscan cache loaded from %s for scope: %s",
+								  cmd.cmd.hs_loaded.cache_dir, scope);
+
+					/* Load specific scope */
+					rspamd_re_cache_load_hyperscan_scoped(
 						rspamd_main->cfg->re_cache,
 						cmd.cmd.hs_loaded.cache_dir,
 						false);
+
+					/* Broadcast scoped command to all workers */
+					memset(&wcmd, 0, sizeof(wcmd));
+					wcmd.type = RSPAMD_CONTROL_HYPERSCAN_LOADED;
+					rspamd_strlcpy(wcmd.cmd.hs_loaded.cache_dir,
+								   cmd.cmd.hs_loaded.cache_dir,
+								   sizeof(wcmd.cmd.hs_loaded.cache_dir));
+					rspamd_strlcpy(wcmd.cmd.hs_loaded.scope,
+								   cmd.cmd.hs_loaded.scope,
+								   sizeof(wcmd.cmd.hs_loaded.scope));
+					wcmd.cmd.hs_loaded.forced = cmd.cmd.hs_loaded.forced;
+					rspamd_control_broadcast_cmd(rspamd_main, &wcmd, rfd,
+												 rspamd_control_ignore_io_handler, NULL, worker->pid);
 				}
+				else {
+					/* Legacy full cache loading */
+					if (rspamd_re_cache_is_hs_loaded(rspamd_main->cfg->re_cache) != RSPAMD_HYPERSCAN_LOADED_FULL ||
+						cmd.cmd.hs_loaded.forced) {
+						rspamd_re_cache_load_hyperscan(
+							rspamd_main->cfg->re_cache,
+							cmd.cmd.hs_loaded.cache_dir,
+							false);
+					}
 
-				/* After getting this notice, we can clean up old hyperscan files */
+					/* After getting this notice, we can clean up old hyperscan files */
+					rspamd_hyperscan_notice_loaded();
 
-				rspamd_hyperscan_notice_loaded();
+					msg_info_main("received hyperscan cache loaded from %s",
+								  cmd.cmd.hs_loaded.cache_dir);
 
-				msg_info_main("received hyperscan cache loaded from %s",
-							  cmd.cmd.hs_loaded.cache_dir);
-
-				/* Broadcast command to all workers */
-				memset(&wcmd, 0, sizeof(wcmd));
-				wcmd.type = RSPAMD_CONTROL_HYPERSCAN_LOADED;
-				rspamd_strlcpy(wcmd.cmd.hs_loaded.cache_dir,
-							   cmd.cmd.hs_loaded.cache_dir,
-							   sizeof(wcmd.cmd.hs_loaded.cache_dir));
-				wcmd.cmd.hs_loaded.forced = cmd.cmd.hs_loaded.forced;
-				rspamd_control_broadcast_cmd(rspamd_main, &wcmd, rfd,
-											 rspamd_control_ignore_io_handler, NULL, worker->pid);
+					/* Broadcast command to all workers */
+					memset(&wcmd, 0, sizeof(wcmd));
+					wcmd.type = RSPAMD_CONTROL_HYPERSCAN_LOADED;
+					rspamd_strlcpy(wcmd.cmd.hs_loaded.cache_dir,
+								   cmd.cmd.hs_loaded.cache_dir,
+								   sizeof(wcmd.cmd.hs_loaded.cache_dir));
+					wcmd.cmd.hs_loaded.forced = cmd.cmd.hs_loaded.forced;
+					wcmd.cmd.hs_loaded.scope[0] = '\0'; /* Empty scope for legacy */
+					rspamd_control_broadcast_cmd(rspamd_main, &wcmd, rfd,
+												 rspamd_control_ignore_io_handler, NULL, worker->pid);
+				}
 #endif
 				break;
 			case RSPAMD_SRV_MONITORED_CHANGE:
@@ -1136,6 +1167,10 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 				memcpy(&wcmd.cmd.fuzzy_blocked, &cmd.cmd.fuzzy_blocked, sizeof(wcmd.cmd.fuzzy_blocked));
 				rspamd_control_broadcast_cmd(rspamd_main, &wcmd, rfd,
 											 rspamd_control_ignore_io_handler, NULL, worker->pid);
+				break;
+			case RSPAMD_SRV_WORKERS_SPAWNED:
+				/* No need to broadcast, this is just a notification from main to specific workers */
+				rdata->rep.reply.workers_spawned.status = 0;
 				break;
 			default:
 				msg_err_main("unknown command type: %d", cmd.type);
@@ -1390,6 +1425,9 @@ rspamd_control_command_from_string(const char *str)
 	else if (g_ascii_strcasecmp(str, "child_change") == 0) {
 		ret = RSPAMD_CONTROL_CHILD_CHANGE;
 	}
+	else if (g_ascii_strcasecmp(str, "workers_spawned") == 0) {
+		ret = RSPAMD_CONTROL_WORKERS_SPAWNED;
+	}
 
 	return ret;
 }
@@ -1430,6 +1468,9 @@ rspamd_control_command_to_string(enum rspamd_control_type cmd)
 	case RSPAMD_CONTROL_CHILD_CHANGE:
 		reply = "child_change";
 		break;
+	case RSPAMD_CONTROL_WORKERS_SPAWNED:
+		reply = "workers_spawned";
+		break;
 	default:
 		break;
 	}
@@ -1468,6 +1509,9 @@ const char *rspamd_srv_command_to_string(enum rspamd_srv_type cmd)
 		break;
 	case RSPAMD_SRV_FUZZY_BLOCKED:
 		reply = "fuzzy_blocked";
+		break;
+	case RSPAMD_SRV_WORKERS_SPAWNED:
+		reply = "workers_spawned";
 		break;
 	}
 

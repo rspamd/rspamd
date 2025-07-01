@@ -56,6 +56,20 @@ rspamd_config:register_symbol{
   description = "A sample symbol",
   callback = sample_symbol_cb,
 }
+
+-- Callback map that processes lines one by one
+local function process_line_cb(key, value, map)
+    -- This callback is called for each key-value pair in the map
+    rspamd_logger.infox('Got key %s with value %s', key, value)
+end
+
+local callback_map = rspamd_config:add_map{
+  type = "callback",
+  urls = ['file:///path/to/file'],
+  description = 'line by line map',
+  callback = process_line_cb,
+  by_line = true,  -- Process map line by line instead of loading all data
+}
  */
 
 /***
@@ -156,6 +170,13 @@ LUA_FUNCTION_DEF(map, get_data_digest);
  */
 LUA_FUNCTION_DEF(map, get_nelts);
 
+/***
+ * @method map:trigger_hyperscan_compilation()
+ * Trigger hyperscan compilation for regexp scopes that may have been updated by this map
+ * This should be called after map loading is complete for maps that update regexp scopes
+ */
+LUA_FUNCTION_DEF(map, trigger_hyperscan_compilation);
+
 static const struct luaL_reg maplib_m[] = {
 	LUA_INTERFACE_DEF(map, get_key),
 	LUA_INTERFACE_DEF(map, is_signed),
@@ -169,6 +190,7 @@ static const struct luaL_reg maplib_m[] = {
 	LUA_INTERFACE_DEF(map, on_load),
 	LUA_INTERFACE_DEF(map, get_data_digest),
 	LUA_INTERFACE_DEF(map, get_nelts),
+	LUA_INTERFACE_DEF(map, trigger_hyperscan_compilation),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
@@ -176,6 +198,7 @@ struct lua_map_callback_data {
 	lua_State *L;
 	int ref;
 	gboolean opaque;
+	gboolean by_line;
 	rspamd_fstring_t *data;
 	struct rspamd_lua_map *lua_map;
 };
@@ -433,6 +456,102 @@ int lua_config_add_kv_map(lua_State *L)
 }
 
 
+static void
+lua_map_line_insert(gpointer st, gconstpointer key, gconstpointer value)
+{
+	struct lua_map_callback_data *cbdata = st;
+	struct rspamd_lua_map **pmap;
+	struct rspamd_map *map = cbdata->lua_map->map;
+
+	if (cbdata->ref == -1) {
+		msg_err_map("map has no callback set");
+		return;
+	}
+
+	lua_pushcfunction(cbdata->L, &rspamd_lua_traceback);
+	int err_idx = lua_gettop(cbdata->L);
+
+	lua_rawgeti(cbdata->L, LUA_REGISTRYINDEX, cbdata->ref);
+
+	/* Push key */
+	if (!cbdata->opaque) {
+		lua_pushstring(cbdata->L, key);
+		lua_pushstring(cbdata->L, value);
+	}
+	else {
+		/* Key */
+		lua_new_text(cbdata->L, key, strlen(key), 0);
+
+		/* Value */
+		lua_new_text(cbdata->L, value, strlen(value), 0);
+	}
+
+	/* Push map object */
+	pmap = lua_newuserdata(cbdata->L, sizeof(void *));
+	*pmap = cbdata->lua_map;
+	rspamd_lua_setclass(cbdata->L, rspamd_map_classname, -1);
+
+	int ret = lua_pcall(cbdata->L, 3, 0, err_idx);
+
+	if (ret != 0) {
+		msg_info_map("call to line callback failed (%d): %s", ret,
+					 lua_tostring(cbdata->L, -1));
+	}
+
+	lua_settop(cbdata->L, err_idx - 1);
+}
+
+static char *
+lua_map_line_read(char *chunk, int len,
+				  struct map_cb_data *data,
+				  gboolean final)
+{
+	struct lua_map_callback_data *cbdata, *old;
+
+	if (data->cur_data == NULL) {
+		old = (struct lua_map_callback_data *) data->prev_data;
+		cbdata = old;
+		cbdata->L = old->L;
+		cbdata->ref = old->ref;
+		cbdata->lua_map = old->lua_map;
+		cbdata->by_line = old->by_line;
+		cbdata->opaque = old->opaque;
+		data->cur_data = cbdata;
+		data->prev_data = NULL;
+	}
+	else {
+		cbdata = (struct lua_map_callback_data *) data->cur_data;
+	}
+
+	return rspamd_parse_kv_list(chunk, len, data, lua_map_line_insert, "", final);
+}
+
+static void
+lua_map_line_fin(struct map_cb_data *data, void **target)
+{
+	struct lua_map_callback_data *cbdata;
+
+	if (data->errored) {
+		if (data->cur_data) {
+			cbdata = (struct lua_map_callback_data *) data->cur_data;
+			if (cbdata->ref != -1) {
+				luaL_unref(cbdata->L, LUA_REGISTRYINDEX, cbdata->ref);
+			}
+
+			data->cur_data = NULL;
+		}
+	}
+	else {
+		if (target) {
+			*target = data->cur_data;
+		}
+
+		if (data->prev_data) {
+			data->prev_data = NULL;
+		}
+	}
+}
+
 static char *
 lua_map_read(char *chunk, int len,
 			 struct map_cb_data *data,
@@ -446,6 +565,8 @@ lua_map_read(char *chunk, int len,
 		cbdata->L = old->L;
 		cbdata->ref = old->ref;
 		cbdata->lua_map = old->lua_map;
+		cbdata->by_line = old->by_line;
+		cbdata->opaque = old->opaque;
 		data->cur_data = cbdata;
 		data->prev_data = NULL;
 	}
@@ -509,13 +630,7 @@ lua_map_fin(struct map_cb_data *data, void **target)
 				lua_pushlstring(cbdata->L, cbdata->data->str, cbdata->data->len);
 			}
 			else {
-				struct rspamd_lua_text *t;
-
-				t = lua_newuserdata(cbdata->L, sizeof(*t));
-				rspamd_lua_setclass(cbdata->L, rspamd_text_classname, -1);
-				t->flags = 0;
-				t->len = cbdata->data->len;
-				t->start = cbdata->data->str;
+				lua_new_text(cbdata->L, cbdata->data->str, cbdata->data->len, 0);
 			}
 
 			pmap = lua_newuserdata(cbdata->L, sizeof(void *));
@@ -573,14 +688,15 @@ int lua_config_add_map(lua_State *L)
 	struct rspamd_lua_map *map, **pmap;
 	struct rspamd_map *m;
 	gboolean opaque_data = FALSE;
+	gboolean by_line = FALSE;
 	int cbidx = -1, ret;
 	GError *err = NULL;
 
 	if (cfg) {
 		if (!rspamd_lua_parse_table_arguments(L, 2, &err,
 											  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
-											  "*url=O;description=S;callback=F;type=S;opaque_data=B",
-											  &map_obj, &description, &cbidx, &type, &opaque_data)) {
+											  "*url=O;description=S;callback=F;type=S;opaque_data=B;by_line=B",
+											  &map_obj, &description, &cbidx, &type, &opaque_data, &by_line)) {
 			ret = luaL_error(L, "invalid table arguments: %s", err->message);
 			g_error_free(err);
 			if (map_obj) {
@@ -610,10 +726,11 @@ int lua_config_add_map(lua_State *L)
 			cbdata->lua_map = map;
 			cbdata->ref = cbidx;
 			cbdata->opaque = opaque_data;
+			cbdata->by_line = by_line;
 
 			if ((m = rspamd_map_add_from_ucl(cfg, map_obj, description,
-											 lua_map_read,
-											 lua_map_fin,
+											 by_line ? lua_map_line_read : lua_map_read,
+											 by_line ? lua_map_line_fin : lua_map_fin,
 											 lua_map_dtor,
 											 (void **) &map->data.cbdata,
 											 NULL, RSPAMD_MAP_DEFAULT)) == NULL) {
@@ -1413,6 +1530,21 @@ lua_map_on_load(lua_State *L)
 	else {
 		return luaL_error(L, "invalid callback");
 	}
+
+	return 0;
+}
+
+static int
+lua_map_trigger_hyperscan_compilation(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_map *map = lua_check_map(L, 1);
+
+	if (map == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	rspamd_map_trigger_hyperscan_compilation(map->map);
 
 	return 0;
 }
