@@ -724,6 +724,9 @@ rspamd_control_default_cmd_handler(int fd,
 	case RSPAMD_CONTROL_CHILD_CHANGE:
 	case RSPAMD_CONTROL_FUZZY_BLOCKED:
 		break;
+	case RSPAMD_CONTROL_WORKERS_SPAWNED:
+		rep.reply.workers_spawned.status = 0;
+		break;
 	case RSPAMD_CONTROL_RERESOLVE:
 		if (cd->worker->srv->cfg) {
 			REF_RETAIN(cd->worker->srv->cfg);
@@ -1165,6 +1168,10 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 				rspamd_control_broadcast_cmd(rspamd_main, &wcmd, rfd,
 											 rspamd_control_ignore_io_handler, NULL, worker->pid);
 				break;
+			case RSPAMD_SRV_WORKERS_SPAWNED:
+				/* No need to broadcast, this is just a notification from main to specific workers */
+				rdata->rep.reply.workers_spawned.status = 0;
+				break;
 			default:
 				msg_err_main("unknown command type: %d", cmd.type);
 				break;
@@ -1418,6 +1425,9 @@ rspamd_control_command_from_string(const char *str)
 	else if (g_ascii_strcasecmp(str, "child_change") == 0) {
 		ret = RSPAMD_CONTROL_CHILD_CHANGE;
 	}
+	else if (g_ascii_strcasecmp(str, "workers_spawned") == 0) {
+		ret = RSPAMD_CONTROL_WORKERS_SPAWNED;
+	}
 
 	return ret;
 }
@@ -1458,6 +1468,9 @@ rspamd_control_command_to_string(enum rspamd_control_type cmd)
 	case RSPAMD_CONTROL_CHILD_CHANGE:
 		reply = "child_change";
 		break;
+	case RSPAMD_CONTROL_WORKERS_SPAWNED:
+		reply = "workers_spawned";
+		break;
 	default:
 		break;
 	}
@@ -1496,6 +1509,9 @@ const char *rspamd_srv_command_to_string(enum rspamd_srv_type cmd)
 		break;
 	case RSPAMD_SRV_FUZZY_BLOCKED:
 		reply = "fuzzy_blocked";
+		break;
+	case RSPAMD_SRV_WORKERS_SPAWNED:
+		reply = "workers_spawned";
 		break;
 	}
 
