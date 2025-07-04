@@ -14,22 +14,15 @@ local symbol = KEYS[3]
 local is_unlearn = KEYS[4] == 'true' and true or false
 local input_tokens = cmsgpack.unpack(KEYS[5])
 local text_tokens
-local category = nil
+local category = KEYS[7] and cmsgpack.unpack(KEYS[7]) or nil
 
 if KEYS[6] then
   text_tokens = cmsgpack.unpack(KEYS[6])
 end
-if KEYS[7] then
-  category = cmsgpack.unpack(KEYS[7])
-end
 
 if category then
-  local cat_parts = {}
-  for k, v in pairs(category) do
-    table.insert(cat_parts, tostring(k) .. '=' .. tostring(v))
-  end
-  table.sort(cat_parts)
-  prefix = prefix .. "_cat_" .. table.concat(cat_parts, "_")
+  prefix = 'cat_' .. category.id .. '_' .. prefix
+  symbol = 'cat_' .. category.id .. '_' .. symbol
 end
 
 local hash_key = is_spam and 'S' or 'H'
