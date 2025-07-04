@@ -2,8 +2,14 @@
 -- This script accepts the following parameters:
 -- key1 - prefix for bayes tokens (e.g. for per-user classification)
 -- key2 - set of tokens encoded in messagepack array of strings
+-- key3 - (optional) category table in message pack
 
 local prefix = KEYS[1]
+local category = KEYS[3] and cmsgpack.unpack(KEYS[3]) or nil
+if category then
+  prefix = 'cat_' .. category.id .. '_' .. prefix
+end
+
 local output_spam = {}
 local output_ham = {}
 
