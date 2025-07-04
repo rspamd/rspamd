@@ -219,7 +219,7 @@ local function gen_cache_learn_functor(redis_params, learn_script_id, conf)
     local function learn_redis_cb(err, data)
       lua_util.debugm(N, task, 'learn_cache redis cb: %s, %s', err, data)
     end
-    
+
     local args = {cache_id, is_spam and "1" or "0", packed_conf}
     if category then
       local packed_category = ucl.to_format(category, 'msgpack')
