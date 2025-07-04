@@ -32,14 +32,19 @@ local function gen_classify_functor(redis_params, classify_script_id)
       if err then
         callback(task, false, err)
       else
-        -- if category: data[5]: learned_cat, data[6]: output_cat
-        callback(task, true, data[1], data[2], data[3], data[4], data[5], data[6])
+        callback(task, true, data[1], data[2], data[3], data[4])
       end
+    end
+
+    local args = {expanded_key, stat_tokens}
+    if category then
+      local packed_category = ucl.to_format(category, 'msgpack')
+      table.insert(args, packed_category)
     end
 
     lua_redis.exec_redis_script(classify_script_id,
         { task = task, is_write = false, key = expanded_key },
-        classify_redis_cb, { expanded_key, stat_tokens, category })
+        classify_redis_cb, args)
   end
 end
 
@@ -54,16 +59,18 @@ local function gen_learn_functor(redis_params, learn_script_id)
       end
     end
 
+    local args = {expanded_key, tostring(is_spam), symbol, tostring(is_unlearn), stat_tokens}
     if maybe_text_tokens then
-      lua_redis.exec_redis_script(learn_script_id,
-          { task = task, is_write = true, key = expanded_key },
-          learn_redis_cb,
-          { expanded_key, tostring(is_spam), symbol, tostring(is_unlearn), stat_tokens, maybe_text_tokens, category })
-    else
-      lua_redis.exec_redis_script(learn_script_id,
-          { task = task, is_write = true, key = expanded_key },
-          learn_redis_cb, { expanded_key, tostring(is_spam), symbol, tostring(is_unlearn), stat_tokens, nil, category })
+      table.insert(args, maybe_text_tokens)
     end
+    if category then
+      local packed_category = ucl.to_format(category, 'msgpack')
+      table.insert(args, packed_category)
+    end
+
+    lua_redis.exec_redis_script(learn_script_id,
+      { task = task, is_write = true, key = expanded_key },
+      learn_redis_cb, args)
 
   end
 end
@@ -113,7 +120,6 @@ end
 --- @param classifier_ucl ucl of the classifier config
 --- @param statfile_ucl ucl of the statfile config
 --- @return a pair of (classify_functor, learn_functor) or `nil` in case of error
---- New: Both functors now accept an additional 'category' argument at the end
 exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol, is_spam, ev_base, stat_periodic_cb)
 
   local redis_params = load_redis_params(classifier_ucl, statfile_ucl)
@@ -138,7 +144,7 @@ exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol,
   local cursor = 0
 
   if ev_base then
-    rspamd_config:add_periodic(ev_base, 0.0, function(cfg, _, category)
+    rspamd_config:add_periodic(ev_base, 0.0, function(cfg, _)
 
       local function stat_redis_cb(err, data)
         lua_util.debugm(N, cfg, 'stat redis cb: %s, %s', err, data)
@@ -164,14 +170,12 @@ exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol,
         end
       end
 
-      -- category as last argument, can be nil for spam/ham
       lua_redis.exec_redis_script(stat_script_id,
           { ev_base = ev_base, cfg = cfg, is_write = false },
           stat_redis_cb, { tostring(cursor),
                            symbol,
                            is_spam and "learns_spam" or "learns_ham",
-                           tostring(max_users),
-                          category })
+                           tostring(max_users) })
       return statfile_ucl.monitor_timeout or classifier_ucl.monitor_timeout or 30.0
     end)
   end
@@ -196,12 +200,13 @@ local function gen_cache_check_functor(redis_params, check_script_id, conf)
       end
     end
 
-    lua_util.debugm(N, task, 'checking cache: %s', cache_id)
-    local args = { cache_id, packed_conf }
+    local args = {cache_id, packed_conf}
     if category then
       local packed_category = ucl.to_format(category, 'msgpack')
       table.insert(args, packed_category)
     end
+
+    lua_util.debugm(N, task, 'checking cache: %s', cache_id)
     lua_redis.exec_redis_script(check_script_id,
         { task = task, is_write = false, key = cache_id },
         classify_redis_cb, args)
@@ -211,17 +216,17 @@ end
 local function gen_cache_learn_functor(redis_params, learn_script_id, conf)
   local packed_conf = ucl.to_format(conf, 'msgpack')
   return function(task, cache_id, is_spam, category)
-    -- category is optional table, can be nil
     local function learn_redis_cb(err, data)
       lua_util.debugm(N, task, 'learn_cache redis cb: %s, %s', err, data)
     end
-
-    lua_util.debugm(N, task, 'try to learn cache: %s', cache_id)
-    local args = { cache_id, is_spam and "1" or "0", packed_conf }
+    
+    local args = {cache_id, is_spam and "1" or "0", packed_conf}
     if category then
       local packed_category = ucl.to_format(category, 'msgpack')
       table.insert(args, packed_category)
     end
+
+    lua_util.debugm(N, task, 'try to learn cache: %s', cache_id)
     lua_redis.exec_redis_script(learn_script_id,
         { task = task, is_write = true, key = cache_id },
         learn_redis_cb,
