@@ -5,18 +5,9 @@
 -- key3 - (optional) category table in message pack
 
 local prefix = KEYS[1]
-local category = nil
-if KEYS[3] then
-  category = cmsgpack.unpack(KEYS[3])
-end
-
+local category = KEYS[3] and cmsgpack.unpack(KEYS[3]) or nil
 if category then
-  local cat_parts = {}
-  for k, v in pairs(category) do
-    table.insert(cat_parts, tostring(k) .. '=' .. tostring(v))
-  end
-  table.sort(cat_parts)
-  prefix = prefix .. "_cat_" .. table.concat(cat_parts, "_")
+  prefix = 'cat_' .. category.id .. '_' .. prefix
 end
 
 local output_spam = {}
@@ -49,5 +40,4 @@ if learned_ham > 0 and learned_spam > 0 then
   end
 end
 
--- category data is appended if requested
 return { learned_ham, learned_spam, output_ham, output_spam }
