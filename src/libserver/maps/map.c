@@ -3376,35 +3376,28 @@ void rspamd_map_trigger_hyperscan_compilation(struct rspamd_map *map)
 		return;
 	}
 
-	/* Get scope names and compile those that are loaded */
-	char **scope_names = rspamd_re_cache_get_scope_names(map->cfg->re_cache),
-		 **cur_scope;
+	/* Iterate through scopes and compile those that are loaded */
+	struct rspamd_re_cache *scope;
 
-	if (scope_names) {
-		for (cur_scope = scope_names; *cur_scope; cur_scope++) {
-			const char *scope = strcmp(*cur_scope, "default") == 0 ? NULL : *cur_scope;
+	for (scope = rspamd_re_cache_scope_first(map->cfg->re_cache);
+		 scope != NULL;
+		 scope = rspamd_re_cache_scope_next(scope)) {
+		const char *scope_name = rspamd_re_cache_scope_name(scope);
+		const char *scope_for_check = (strcmp(scope_name, "default") == 0) ? NULL : scope_name;
 
-			/* Only compile loaded scopes */
-			if (rspamd_re_cache_is_loaded(map->cfg->re_cache, scope)) {
-				struct rspamd_re_cache *scope_cache = rspamd_re_cache_find_scope(map->cfg->re_cache, scope);
+		/* Only compile loaded scopes */
+		if (rspamd_re_cache_is_loaded(map->cfg->re_cache, scope_for_check)) {
+			msg_info_map("triggering hyperscan compilation for scope: %s after map update",
+						 scope_name);
 
-				if (scope_cache) {
-					msg_info_map("triggering hyperscan compilation for scope: %s after map update",
-								 scope ? scope : "default");
-
-					/* Use default settings for compilation */
-					rspamd_re_cache_compile_hyperscan_scoped_single(scope_cache, scope,
-																	map->cfg->hs_cache_dir ? map->cfg->hs_cache_dir : RSPAMD_DBDIR "/",
-																	1.0,   /* max_time */
-																	FALSE, /* silent */
-																	worker->ctx ? ((struct rspamd_abstract_worker_ctx *) worker->ctx)->event_loop : NULL,
-																	NULL,  /* callback */
-																	NULL); /* cbdata */
-				}
-			}
+			/* Use default settings for compilation */
+			rspamd_re_cache_compile_hyperscan_scoped_single(scope, scope_for_check,
+															map->cfg->hs_cache_dir ? map->cfg->hs_cache_dir : RSPAMD_DBDIR "/",
+															1.0,   /* max_time */
+															FALSE, /* silent */
+															worker->ctx ? ((struct rspamd_abstract_worker_ctx *) worker->ctx)->event_loop : NULL,
+															NULL,  /* callback */
+															NULL); /* cbdata */
 		}
-
-		/* Clean up scope names */
-		g_strfreev(scope_names);
 	}
 }

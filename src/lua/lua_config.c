@@ -5268,21 +5268,18 @@ lua_config_list_regexp_scopes(lua_State *L)
 	struct rspamd_config *cfg = lua_check_config(L, 1);
 
 	if (cfg) {
-		char **scope_names, **cur_scope;
-		unsigned int i;
-
-		scope_names = rspamd_re_cache_get_scope_names(cfg->re_cache);
+		struct rspamd_re_cache *scope;
+		unsigned int i = 0;
 
 		lua_newtable(L);
 
-		if (scope_names) {
-			for (cur_scope = scope_names, i = 0; *cur_scope != NULL; cur_scope++, i++) {
-				lua_pushinteger(L, i + 1);
-				lua_pushstring(L, scope_names[i]);
-				lua_settable(L, -3);
-			}
-
-			g_strfreev(scope_names);
+		for (scope = rspamd_re_cache_scope_first(cfg->re_cache);
+			 scope != NULL;
+			 scope = rspamd_re_cache_scope_next(scope)) {
+			lua_pushinteger(L, i + 1);
+			lua_pushstring(L, rspamd_re_cache_scope_name(scope));
+			lua_settable(L, -3);
+			i++;
 		}
 	}
 	else {

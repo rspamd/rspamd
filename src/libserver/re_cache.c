@@ -3204,6 +3204,53 @@ unsigned int rspamd_re_cache_count_scopes(struct rspamd_re_cache *cache_head)
 	return count;
 }
 
+struct rspamd_re_cache *rspamd_re_cache_scope_first(struct rspamd_re_cache *cache_head)
+{
+	return cache_head;
+}
+
+struct rspamd_re_cache *rspamd_re_cache_scope_next(struct rspamd_re_cache *current)
+{
+	return current ? current->next : NULL;
+}
+
+const char *rspamd_re_cache_scope_name(struct rspamd_re_cache *scope)
+{
+	if (!scope) {
+		return "unknown";
+	}
+
+	return scope->scope ? scope->scope : "default";
+}
+
+void rspamd_re_cache_scope_set_flags(struct rspamd_re_cache *scope, unsigned int flags)
+{
+	if (scope) {
+		scope->flags |= flags;
+	}
+}
+
+void rspamd_re_cache_scope_clear_flags(struct rspamd_re_cache *scope, unsigned int flags)
+{
+	if (scope) {
+		scope->flags &= ~flags;
+	}
+}
+
+unsigned int rspamd_re_cache_scope_get_flags(struct rspamd_re_cache *scope)
+{
+	return scope ? scope->flags : 0;
+}
+
+gboolean rspamd_re_cache_scope_is_loaded(struct rspamd_re_cache *scope)
+{
+	if (!scope) {
+		return FALSE;
+	}
+
+	return (scope->flags & RSPAMD_RE_CACHE_FLAG_LOADED) != 0;
+}
+
 void rspamd_re_cache_set_flags(struct rspamd_re_cache *cache_head, const char *scope, unsigned int flags)
 {
 	struct rspamd_re_cache *target;
@@ -3254,43 +3301,6 @@ gboolean rspamd_re_cache_is_loaded(struct rspamd_re_cache *cache_head, const cha
 	return (flags & RSPAMD_RE_CACHE_FLAG_LOADED) != 0;
 }
 
-char **rspamd_re_cache_get_scope_names(struct rspamd_re_cache *cache_head)
-{
-	struct rspamd_re_cache *cur;
-	char **names = NULL;
-	unsigned int i = 0, count = 0;
-
-	if (!cache_head) {
-		return NULL;
-	}
-
-	/* First count scopes */
-	DL_COUNT(cache_head, cur, count);
-
-	if (count == 0) {
-		return NULL;
-	}
-
-	/* Allocate array with extra slot for NULL terminator */
-	names = g_malloc(sizeof(char *) * (count + 1));
-
-	/* Fill array */
-	DL_FOREACH(cache_head, cur)
-	{
-		if (cur->scope) {
-			names[i] = g_strdup(cur->scope);
-		}
-		else {
-			names[i] = g_strdup("default");
-		}
-		i++;
-	}
-
-	/* NULL terminate the array for g_strfreev compatibility */
-	names[count] = NULL;
-
-	return names;
-}
 
 static gboolean
 rspamd_re_cache_create_scope_lock(const char *cache_dir, const char *scope, int *lock_fd)

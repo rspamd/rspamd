@@ -309,11 +309,6 @@ struct rspamd_re_cache *rspamd_re_cache_find_scope(struct rspamd_re_cache *cache
 gboolean rspamd_re_cache_remove_scope(struct rspamd_re_cache **cache_head, const char *scope);
 
 /**
- * Count the number of scopes in the cache list
- */
-unsigned int rspamd_re_cache_count_scopes(struct rspamd_re_cache *cache_head);
-
-/**
  * Get array of scope names from the cache list
  * @param cache_head head of cache list
  * @return NULL-terminated array of scope names (must be freed with g_strfreev), or NULL if no scopes
@@ -321,7 +316,61 @@ unsigned int rspamd_re_cache_count_scopes(struct rspamd_re_cache *cache_head);
 char **rspamd_re_cache_get_scope_names(struct rspamd_re_cache *cache_head);
 
 /**
- * Set flags for a specific scope
+ * Count the number of scopes in the cache list
+ */
+unsigned int rspamd_re_cache_count_scopes(struct rspamd_re_cache *cache_head);
+
+/**
+ * Get the first scope in the cache list for iteration
+ * @param cache_head head of cache list
+ * @return first scope, or NULL if no scopes
+ */
+struct rspamd_re_cache *rspamd_re_cache_scope_first(struct rspamd_re_cache *cache_head);
+
+/**
+ * Get the next scope in iteration
+ * @param current current scope
+ * @return next scope, or NULL if at end
+ */
+struct rspamd_re_cache *rspamd_re_cache_scope_next(struct rspamd_re_cache *current);
+
+/**
+ * Get the scope name (for display/logging purposes)
+ * @param scope the scope
+ * @return scope name ("default" for NULL scope name), never returns NULL
+ */
+const char *rspamd_re_cache_scope_name(struct rspamd_re_cache *scope);
+
+/**
+ * Set flags on a scope (efficient version that works directly on scope object)
+ * @param scope the scope object (from iterator)
+ * @param flags flags to set
+ */
+void rspamd_re_cache_scope_set_flags(struct rspamd_re_cache *scope, unsigned int flags);
+
+/**
+ * Clear flags on a scope (efficient version that works directly on scope object)
+ * @param scope the scope object (from iterator)
+ * @param flags flags to clear
+ */
+void rspamd_re_cache_scope_clear_flags(struct rspamd_re_cache *scope, unsigned int flags);
+
+/**
+ * Get flags from a scope (efficient version that works directly on scope object)
+ * @param scope the scope object (from iterator)
+ * @return flags value
+ */
+unsigned int rspamd_re_cache_scope_get_flags(struct rspamd_re_cache *scope);
+
+/**
+ * Check if a scope is loaded (efficient version that works directly on scope object)
+ * @param scope the scope object (from iterator)
+ * @return TRUE if scope is loaded
+ */
+gboolean rspamd_re_cache_scope_is_loaded(struct rspamd_re_cache *scope);
+
+/**
+ * Set flags for a specific scope (legacy function - less efficient, searches by name)
  * @param cache_head head of cache list
  * @param scope scope name (NULL for default scope)
  * @param flags flags to set
@@ -329,7 +378,7 @@ char **rspamd_re_cache_get_scope_names(struct rspamd_re_cache *cache_head);
 void rspamd_re_cache_set_flags(struct rspamd_re_cache *cache_head, const char *scope, unsigned int flags);
 
 /**
- * Clear flags for a specific scope
+ * Clear flags for a specific scope (legacy function - less efficient, searches by name)
  * @param cache_head head of cache list
  * @param scope scope name (NULL for default scope)
  * @param flags flags to clear
@@ -337,7 +386,7 @@ void rspamd_re_cache_set_flags(struct rspamd_re_cache *cache_head, const char *s
 void rspamd_re_cache_clear_flags(struct rspamd_re_cache *cache_head, const char *scope, unsigned int flags);
 
 /**
- * Get flags for a specific scope
+ * Get flags for a specific scope (legacy function - less efficient, searches by name)
  * @param cache_head head of cache list
  * @param scope scope name (NULL for default scope)
  * @return flags value
@@ -345,7 +394,7 @@ void rspamd_re_cache_clear_flags(struct rspamd_re_cache *cache_head, const char 
 unsigned int rspamd_re_cache_get_flags(struct rspamd_re_cache *cache_head, const char *scope);
 
 /**
- * Check if a scope is loaded
+ * Check if a scope is loaded (legacy function - less efficient, searches by name)
  * @param cache_head head of cache list
  * @param scope scope name (NULL for default scope)
  * @return TRUE if scope is loaded and ready for use
