@@ -55,6 +55,7 @@ struct hs_helper_ctx {
 	/* END OF COMMON PART */
 	char *hs_dir;
 	gboolean loaded;
+	gboolean workers_ready;
 	double max_time;
 	double recompile_time;
 	ev_timer recompile_timer;
@@ -72,6 +73,8 @@ init_hs_helper(struct rspamd_config *cfg)
 	ctx->magic = rspamd_hs_helper_magic;
 	ctx->cfg = cfg;
 	ctx->hs_dir = NULL;
+	ctx->loaded = FALSE;
+	ctx->workers_ready = FALSE;
 	ctx->max_time = default_max_time;
 	ctx->recompile_time = default_recompile_time;
 
@@ -413,6 +416,9 @@ static gboolean
 rspamd_rs_compile(struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 				  gboolean forced)
 {
+	msg_info("starting hyperscan compilation (forced: %s, workers_ready: %s)",
+			 forced ? "yes" : "no", ctx->workers_ready ? "yes" : "no");
+
 #if !defined(__aarch64__) && !defined(__powerpc64__)
 	if (!(ctx->cfg->libs_ctx->crypto_ctx->cpu_config & CPUID_SSSE3)) {
 		msg_warn("CPU doesn't have SSSE3 instructions set "
@@ -433,7 +439,7 @@ rspamd_rs_compile(struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 			g_malloc0(sizeof(*single_cbd));
 		single_cbd->worker = worker;
 		single_cbd->forced = forced;
-		single_cbd->workers_ready = ctx->loaded;
+		single_cbd->workers_ready = ctx->workers_ready;
 
 		rspamd_re_cache_compile_hyperscan(ctx->cfg->re_cache,
 										  ctx->hs_dir, ctx->max_time, !forced,
@@ -453,7 +459,7 @@ rspamd_rs_compile(struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 			g_malloc0(sizeof(*single_cbd));
 		single_cbd->worker = worker;
 		single_cbd->forced = forced;
-		single_cbd->workers_ready = ctx->loaded;
+		single_cbd->workers_ready = ctx->workers_ready;
 
 		rspamd_re_cache_compile_hyperscan(ctx->cfg->re_cache,
 										  ctx->hs_dir, ctx->max_time, !forced,
@@ -471,7 +477,7 @@ rspamd_rs_compile(struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 	compile_cbd->total_compiled = 0;
 	compile_cbd->scopes_remaining = names_count;
 	compile_cbd->forced = forced;
-	compile_cbd->workers_ready = ctx->loaded;
+	compile_cbd->workers_ready = ctx->workers_ready;
 
 	/* Compile each scope */
 	for (unsigned int i = 0; i < names_count; i++) {
@@ -546,9 +552,12 @@ rspamd_hs_helper_workers_spawned(struct rspamd_main *rspamd_main,
 	struct rspamd_control_reply rep;
 	struct hs_helper_ctx *ctx = ud;
 
-	msg_info("received workers_spawned notification (%d workers); hyperscan ready: %s",
+	msg_info("received workers_spawned notification (%d workers); hyperscan compilation finished: %s",
 			 cmd->cmd.workers_spawned.workers_count,
 			 ctx->loaded ? "yes" : "no");
+
+	/* Mark that workers are ready */
+	ctx->workers_ready = TRUE;
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_WORKERS_SPAWNED;
@@ -577,6 +586,13 @@ rspamd_hs_helper_workers_spawned(struct rspamd_main *rspamd_main,
 		msg_info("sent delayed hyperscan loaded notification after workers spawned");
 		ctx->loaded = FALSE; /* Reset to avoid duplicate notifications */
 	}
+	else {
+		/* Start initial compilation now that workers are ready */
+		msg_info("starting initial hyperscan compilation after workers spawned");
+		if (!rspamd_rs_compile(ctx, worker, FALSE)) {
+			msg_warn("initial hyperscan compilation failed or not needed");
+		}
+	}
 
 	if (attached_fd != -1) {
 		close(attached_fd);
@@ -595,6 +611,9 @@ rspamd_hs_helper_timer(EV_P_ ev_timer *w, int revents)
 	ctx = worker->ctx;
 	tim = rspamd_time_jitter(ctx->recompile_time, 0);
 	w->repeat = tim;
+
+	msg_info("periodic recompilation timer triggered (workers_ready: %s)",
+			 ctx->workers_ready ? "yes" : "no");
 	rspamd_rs_compile(ctx, worker, FALSE);
 }
 
@@ -614,6 +633,9 @@ start_hs_helper(struct rspamd_worker *worker)
 		ctx->hs_dir = RSPAMD_DBDIR "/";
 	}
 
+	msg_info("hs_helper starting: cache_dir=%s, recompile_time=%.1f, workers_ready=%s",
+			 ctx->hs_dir, ctx->recompile_time, ctx->workers_ready ? "yes" : "no");
+
 	ctx->event_loop = rspamd_prepare_worker(worker,
 											"hs_helper",
 											NULL);
@@ -625,9 +647,11 @@ start_hs_helper(struct rspamd_worker *worker)
 
 	ctx->recompile_timer.data = worker;
 	tim = rspamd_time_jitter(ctx->recompile_time, 0);
+	msg_info("setting up recompile timer for %.1f seconds", tim);
 	ev_timer_init(&ctx->recompile_timer, rspamd_hs_helper_timer, tim, 0.0);
 	ev_timer_start(ctx->event_loop, &ctx->recompile_timer);
 
+	msg_info("hs_helper starting event loop");
 	ev_loop(ctx->event_loop, 0);
 	rspamd_worker_block_signals();
 
