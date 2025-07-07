@@ -5268,15 +5268,15 @@ lua_config_list_regexp_scopes(lua_State *L)
 	struct rspamd_config *cfg = lua_check_config(L, 1);
 
 	if (cfg) {
-		char **scope_names;
-		unsigned int count, i;
+		char **scope_names, **cur_scope;
+		unsigned int i;
 
-		scope_names = rspamd_re_cache_get_scope_names(cfg->re_cache, &count);
+		scope_names = rspamd_re_cache_get_scope_names(cfg->re_cache);
 
 		lua_newtable(L);
 
 		if (scope_names) {
-			for (i = 0; i < count; i++) {
+			for (cur_scope = scope_names, i = 0; *cur_scope != NULL; cur_scope++, i++) {
 				lua_pushinteger(L, i + 1);
 				lua_pushstring(L, scope_names[i]);
 				lua_settable(L, -3);

@@ -450,10 +450,9 @@ rspamd_rs_compile(struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 	}
 
 	/* Get all scope names */
-	unsigned int names_count;
-	char **scope_names = rspamd_re_cache_get_scope_names(ctx->cfg->re_cache, &names_count);
+	char **scope_names = rspamd_re_cache_get_scope_names(ctx->cfg->re_cache);
 
-	if (!scope_names || names_count == 0) {
+	if (!scope_names) {
 		/* Failed to get scope names, use standard compilation for default scope */
 		struct rspamd_hs_helper_single_compile_cbdata *single_cbd =
 			g_malloc0(sizeof(*single_cbd));
@@ -475,13 +474,13 @@ rspamd_rs_compile(struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 	compile_cbd->worker = worker;
 	compile_cbd->ctx = ctx;
 	compile_cbd->total_compiled = 0;
-	compile_cbd->scopes_remaining = names_count;
+	compile_cbd->scopes_remaining = g_strv_length(scope_names);
 	compile_cbd->forced = forced;
 	compile_cbd->workers_ready = ctx->workers_ready;
 
 	/* Compile each scope */
-	for (unsigned int i = 0; i < names_count; i++) {
-		const char *scope = strcmp(scope_names[i], "default") == 0 ? NULL : scope_names[i];
+	for (const char **cur_scope = scope_names; *cur_scope; cur_scope++) {
+		const char *scope = strcmp(*cur_scope, "default") == 0 ? NULL : *cur_scope;
 		struct rspamd_re_cache *scope_cache = rspamd_re_cache_find_scope(ctx->cfg->re_cache, scope);
 
 		if (scope_cache && rspamd_re_cache_is_loaded(ctx->cfg->re_cache, scope)) {

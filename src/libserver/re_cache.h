@@ -316,10 +316,9 @@ unsigned int rspamd_re_cache_count_scopes(struct rspamd_re_cache *cache_head);
 /**
  * Get array of scope names from the cache list
  * @param cache_head head of cache list
- * @param count_out pointer to store the number of scopes
- * @return array of scope names (must be freed with g_strfreev), or NULL if no scopes
+ * @return NULL-terminated array of scope names (must be freed with g_strfreev), or NULL if no scopes
  */
-char **rspamd_re_cache_get_scope_names(struct rspamd_re_cache *cache_head, unsigned int *count_out);
+char **rspamd_re_cache_get_scope_names(struct rspamd_re_cache *cache_head);
 
 /**
  * Set flags for a specific scope

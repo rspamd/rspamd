@@ -3377,12 +3377,12 @@ void rspamd_map_trigger_hyperscan_compilation(struct rspamd_map *map)
 	}
 
 	/* Get scope names and compile those that are loaded */
-	unsigned int names_count;
-	char **scope_names = rspamd_re_cache_get_scope_names(map->cfg->re_cache, &names_count);
+	char **scope_names = rspamd_re_cache_get_scope_names(map->cfg->re_cache),
+		 **cur_scope;
 
-	if (scope_names && names_count > 0) {
-		for (unsigned int i = 0; i < names_count; i++) {
-			const char *scope = strcmp(scope_names[i], "default") == 0 ? NULL : scope_names[i];
+	if (scope_names) {
+		for (cur_scope = scope_names; *cur_scope; cur_scope++) {
+			const char *scope = strcmp(*cur_scope, "default") == 0 ? NULL : *cur_scope;
 
 			/* Only compile loaded scopes */
 			if (rspamd_re_cache_is_loaded(map->cfg->re_cache, scope)) {
