@@ -253,6 +253,15 @@ local function maybe_extract_json(str)
   return nil
 end
 
+-- Helper function to remove <think>...</think> and trim leading newlines
+local function clean_gpt_response(text)
+  -- Remove <think>...</think> including multiline
+  text = text:gsub("<think>.-</think>", "")
+  -- Trim leading whitespace and newlines
+  text = text:gsub("^%s*\n*", "")
+  return text
+end
+
 local function default_openai_json_conversion(task, input)
   local parser = ucl.parser()
   local res, err = parser:parse_string(input)
@@ -349,6 +358,10 @@ local function default_openai_plain_conversion(task, input)
     rspamd_logger.errx(task, 'no content in the first message')
     return
   end
+
+  -- Clean message
+  first_message = clean_gpt_response(first_message)
+
   local lines = lua_util.str_split(first_message, '\n')
   local first_line = clean_reply_line(lines[1])
   local spam_score = tonumber(first_line)
@@ -365,15 +378,6 @@ local function default_openai_plain_conversion(task, input)
 
   rspamd_logger.errx(task, 'cannot parse plain gpt reply: %s (all: %s)', lines[1], first_message)
   return
-end
-
--- Helper function to remove <think>...</think> and trim leading newlines
-local function clean_gpt_response(text)
-  -- Remove <think>...</think> including multiline
-  text = text:gsub("<think>.-</think>", "")
-  -- Trim leading whitespace and newlines
-  text = text:gsub("^%s*\n*", "")
-  return text
 end
 
 local function default_ollama_plain_conversion(task, input)
