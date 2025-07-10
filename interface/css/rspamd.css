@@ -441,10 +441,10 @@ table#symbolsTable input[type="number"] {
 }
 
 .scorebar-spam {
-    background-color: rgba(240 0 0 / 0.1) !important;
+    background-color: rgb(240 0 0 / 0.1) !important;
 }
 .scorebar-ham {
-    background: rgba(100 230 80 / 0.1) !important;
+    background: rgb(100 230 80 / 0.1) !important;
 }
 
 .danger .icon {
@@ -602,10 +602,10 @@ table#symbolsTable input[type="number"] {
     bottom: unset;
 }
 .codejar-linenumbers {
-    background: rgba(255 255 255 / 0.07) !important;
+    background: rgb(255 255 255 / 0.07) !important;
 }
 .codejar-linenumber {
-    color: rgba(120 120 120 / 1) !important;
+    color: rgb(120 120 120 / 1) !important;
     text-align: right;
 }
 .editor {

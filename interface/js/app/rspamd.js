@@ -176,7 +176,10 @@ define(["jquery", "app/common", "stickytabs", "visibility",
                 require(["app/symbols"], (module) => module.getSymbols());
                 break;
             case "#scan_nav":
-                require(["app/upload"], (module) => module.getFuzzyStorages());
+                require(["app/upload"], (module) => {
+                    module.getClassifiers();
+                    module.getFuzzyStorages();
+                });
                 break;
             case "#selectors_nav":
                 require(["app/selectors"], (module) => module.displayUI());
