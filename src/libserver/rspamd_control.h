@@ -37,6 +37,7 @@ enum rspamd_control_type {
 	RSPAMD_CONTROL_MONITORED_CHANGE,
 	RSPAMD_CONTROL_CHILD_CHANGE,
 	RSPAMD_CONTROL_FUZZY_BLOCKED,
+	RSPAMD_CONTROL_WORKERS_SPAWNED,
 	RSPAMD_CONTROL_MAX
 };
 
@@ -49,7 +50,8 @@ enum rspamd_srv_type {
 	RSPAMD_SRV_HEARTBEAT,
 	RSPAMD_SRV_HEALTH,
 	RSPAMD_SRV_NOTICE_HYPERSCAN_CACHE,
-	RSPAMD_SRV_FUZZY_BLOCKED, /* Used to notify main process about a blocked ip */
+	RSPAMD_SRV_FUZZY_BLOCKED,   /* Used to notify main process about a blocked ip */
+	RSPAMD_SRV_WORKERS_SPAWNED, /* Used to notify workers that all workers have been spawned */
 };
 
 enum rspamd_log_pipe_type {
@@ -74,6 +76,7 @@ struct rspamd_control_command {
 		struct {
 			gboolean forced;
 			char cache_dir[CONTROL_PATHLEN];
+			char scope[64]; /* Scope name, NULL means all scopes */
 		} hs_loaded;
 		struct {
 			char tag[32];
@@ -106,6 +109,9 @@ struct rspamd_control_command {
 			} addr;
 			sa_family_t af;
 		} fuzzy_blocked;
+		struct {
+			unsigned int workers_count;
+		} workers_spawned;
 	} cmd;
 };
 
@@ -147,6 +153,9 @@ struct rspamd_control_reply {
 		struct {
 			unsigned int status;
 		} fuzzy_blocked;
+		struct {
+			unsigned int status;
+		} workers_spawned;
 	} reply;
 };
 
@@ -164,6 +173,7 @@ struct rspamd_srv_command {
 		struct {
 			gboolean forced;
 			char cache_dir[CONTROL_PATHLEN];
+			char scope[64]; /* Scope name, NULL means all scopes */
 		} hs_loaded;
 		struct {
 			char tag[32];
@@ -201,6 +211,10 @@ struct rspamd_srv_command {
 			} addr;
 			sa_family_t af;
 		} fuzzy_blocked;
+		/* Sent when all workers have been spawned */
+		struct {
+			unsigned int workers_count;
+		} workers_spawned;
 	} cmd;
 };
 
@@ -238,6 +252,9 @@ struct rspamd_srv_reply {
 		struct {
 			int unused;
 		} fuzzy_blocked;
+		struct {
+			int status;
+		} workers_spawned;
 	} reply;
 };
 

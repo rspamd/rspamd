@@ -26,6 +26,8 @@
 #include "contrib/libev/ev.h"
 #include "contrib/uthash/utlist.h"
 
+#include <worker_util.h>
+
 #ifdef SYS_ZSTD
 #include "zstd.h"
 #else
@@ -1858,6 +1860,7 @@ rspamd_map_read_http_cached_file(struct rspamd_map *map,
 
 	g_atomic_int_set(&map->shared->loaded, 1);
 	g_atomic_int_set(&map->shared->cached, 1);
+
 	rspamd_localtime(map->next_check, &tm);
 	strftime(ncheck_buf, sizeof(ncheck_buf) - 1, "%Y-%m-%d %H:%M:%S", &tm);
 	rspamd_localtime(htdata->last_modified, &tm);
@@ -3348,5 +3351,53 @@ void rspamd_map_set_on_load_function(struct rspamd_map *map, rspamd_map_on_load_
 		map->on_load_function = cb;
 		map->on_load_ud = cbdata;
 		map->on_load_ud_dtor = dtor;
+	}
+}
+
+void rspamd_map_trigger_hyperscan_compilation(struct rspamd_map *map)
+{
+	/* Only trigger compilation in controller worker */
+	if (!map->cfg || !map->cfg->cur_worker) {
+		return;
+	}
+
+	struct rspamd_worker *worker = map->wrk;
+	if (!rspamd_worker_is_primary_controller(worker)) {
+		return;
+	}
+
+	/* Check if we have any scopes that need compilation */
+	if (!map->cfg->re_cache) {
+		return;
+	}
+
+	unsigned int scope_count = rspamd_re_cache_count_scopes(map->cfg->re_cache);
+	if (scope_count == 0) {
+		return;
+	}
+
+	/* Iterate through scopes and compile those that are loaded */
+	struct rspamd_re_cache *scope;
+
+	for (scope = rspamd_re_cache_scope_first(map->cfg->re_cache);
+		 scope != NULL;
+		 scope = rspamd_re_cache_scope_next(scope)) {
+		const char *scope_name = rspamd_re_cache_scope_name(scope);
+		const char *scope_for_check = (strcmp(scope_name, "default") == 0) ? NULL : scope_name;
+
+		/* Only compile loaded scopes */
+		if (rspamd_re_cache_is_loaded(map->cfg->re_cache, scope_for_check)) {
+			msg_info_map("triggering hyperscan compilation for scope: %s after map update",
+						 scope_name);
+
+			/* Use default settings for compilation */
+			rspamd_re_cache_compile_hyperscan_scoped_single(scope, scope_for_check,
+															map->cfg->hs_cache_dir ? map->cfg->hs_cache_dir : RSPAMD_DBDIR "/",
+															1.0,   /* max_time */
+															FALSE, /* silent */
+															worker->ctx ? ((struct rspamd_abstract_worker_ctx *) worker->ctx)->event_loop : NULL,
+															NULL,  /* callback */
+															NULL); /* cbdata */
+		}
 	}
 }
