@@ -2215,21 +2215,27 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 		if (re_class->type_len > 0) {
 			if (!cbdata->silent) {
 				msg_info_re_cache(
-					"skip already valid class %s(%*s) to cache %6s, %d regexps",
+					"skip already valid class %s(%*s) to cache %6s, %d regexps%s%s%s",
 					rspamd_re_cache_type_to_string(re_class->type),
 					(int) re_class->type_len - 1,
 					re_class->type_data,
 					re_class->hash,
-					n);
+					n,
+					cache->scope ? " for scope '" : "",
+					cache->scope ? cache->scope : "",
+					cache->scope ? "'" : "");
 			}
 		}
 		else {
 			if (!cbdata->silent) {
 				msg_info_re_cache(
-					"skip already valid class %s to cache %6s, %d regexps",
+					"skip already valid class %s to cache %6s, %d regexps%s%s%s",
 					rspamd_re_cache_type_to_string(re_class->type),
 					re_class->hash,
-					n);
+					n,
+					cache->scope ? " for scope '" : "",
+					cache->scope ? cache->scope : "",
+					cache->scope ? "'" : "");
 			}
 		}
 
@@ -2438,21 +2444,27 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 
 		if (re_class->type_len > 0) {
 			msg_info_re_cache(
-				"compiled class %s(%*s) to cache %6s, %d/%d regexps",
+				"compiled class %s(%*s) to cache %6s, %d/%d regexps%s%s%s",
 				rspamd_re_cache_type_to_string(re_class->type),
 				(int) re_class->type_len - 1,
 				re_class->type_data,
 				re_class->hash,
 				n,
-				(int) g_hash_table_size(re_class->re));
+				(int) g_hash_table_size(re_class->re),
+				cache->scope ? " for scope '" : "",
+				cache->scope ? cache->scope : "",
+				cache->scope ? "'" : "");
 		}
 		else {
 			msg_info_re_cache(
-				"compiled class %s to cache %6s, %d/%d regexps",
+				"compiled class %s to cache %6s, %d/%d regexps%s%s%s",
 				rspamd_re_cache_type_to_string(re_class->type),
 				re_class->hash,
 				n,
-				(int) g_hash_table_size(re_class->re));
+				(int) g_hash_table_size(re_class->re),
+				cache->scope ? " for scope '" : "",
+				cache->scope ? cache->scope : "",
+				cache->scope ? "'" : "");
 		}
 
 		cbdata->total += n;
@@ -3059,16 +3071,27 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 
 	if (has_valid) {
 		if (all_valid) {
-			msg_info_re_cache("full hyperscan database of %d regexps has been loaded", total);
+			msg_info_re_cache("full hyperscan database of %d regexps has been loaded%s%s%s",
+							  total,
+							  cache->scope ? " for scope '" : "",
+							  cache->scope ? cache->scope : "",
+							  cache->scope ? "'" : "");
 			cache->hyperscan_loaded = RSPAMD_HYPERSCAN_LOADED_FULL;
 		}
 		else {
-			msg_info_re_cache("partial hyperscan database of %d regexps has been loaded", total);
+			msg_info_re_cache("partial hyperscan database of %d regexps has been loaded%s%s%s",
+							  total,
+							  cache->scope ? " for scope '" : "",
+							  cache->scope ? cache->scope : "",
+							  cache->scope ? "'" : "");
 			cache->hyperscan_loaded = RSPAMD_HYPERSCAN_LOADED_PARTIAL;
 		}
 	}
 	else {
-		msg_info_re_cache("hyperscan database has NOT been loaded; no valid expressions");
+		msg_info_re_cache("hyperscan database has NOT been loaded; no valid expressions%s%s%s",
+						  cache->scope ? " for scope '" : "",
+						  cache->scope ? cache->scope : "",
+						  cache->scope ? "'" : "");
 		cache->hyperscan_loaded = RSPAMD_HYPERSCAN_LOAD_ERROR;
 	}
 

@@ -5397,6 +5397,13 @@ lua_config_set_regexp_scope_loaded(lua_State *L)
 
 		if (loaded) {
 			rspamd_re_cache_set_flags(cfg->re_cache, scope, RSPAMD_RE_CACHE_FLAG_LOADED);
+
+			/* When marking a scope as loaded, we also need to initialize it
+			 * to compute the hash for each re_class */
+			struct rspamd_re_cache *target_cache = rspamd_re_cache_find_scope(cfg->re_cache, scope);
+			if (target_cache) {
+				rspamd_re_cache_init(target_cache, cfg);
+			}
 		}
 		else {
 			rspamd_re_cache_clear_flags(cfg->re_cache, scope, RSPAMD_RE_CACHE_FLAG_LOADED);
