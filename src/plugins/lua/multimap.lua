@@ -62,8 +62,8 @@ local function parse_multimap_value(parse_rule, p_ret)
           (digit ^ 1)
 
       -- Matches: 55.97, -90.8, .9
-      number.decimal = (number.integer * -- Integer
-          (number.fractional ^ -1)) + -- Fractional
+      number.decimal = (number.integer *     -- Integer
+            (number.fractional ^ -1)) +      -- Fractional
           (lpeg.S("+-") * number.fractional) -- Completely fractional number
 
       local sym_start = lpeg.R("az", "AZ") + lpeg.S("_")
@@ -98,7 +98,7 @@ local function parse_multimap_value(parse_rule, p_ret)
     else
       if p_ret ~= '' then
         rspamd_logger.infox(rspamd_config, '%s: cannot parse string "%s"',
-            parse_rule.symbol, p_ret)
+          parse_rule.symbol, p_ret)
       end
 
       return true, nil, 1.0, {}
@@ -153,44 +153,53 @@ local function words_to_sa_re(words, start)
   return table.concat(fun.totable(fun.drop_n(start, words)), " ")
 end
 
-local function create_sa_atom_function(atom_name, re, rule_type, rule_data)
-  return function(task, result_name)
+-- Helper function to create SA rule callbacks
+local function create_sa_atom_function(name, re, match_type, opts)
+  return function(task)
+    -- Debug logging to trace atom execution
+    lua_util.debugm(N, task, 'Executing SA atom %s (type: %s)',
+      name, match_type)
+
     if not re then
-      rspamd_logger.errx(task, 're is missing for atom %s', atom_name)
+      rspamd_logger.errx(task, 're is missing for atom %s', name)
       return 0
     end
 
     local function process_re_match(re_obj, tsk, re_type, header, strong)
+      local res = 0
       if type(jit) == 'table' then
-        return tsk:process_regexp(re_obj, re_type, header, strong)
+        res = tsk:process_regexp(re_obj, re_type, header, strong)
       else
-        return tsk:process_regexp(re_obj, re_type, header, strong)
+        res = tsk:process_regexp(re_obj, re_type, header, strong)
       end
+      lua_util.debugm(N, tsk, 'regexp match for atom %s (type: %s): %s', name, re_type, res)
+      return res
     end
 
     local ret = 0
 
-    if rule_type == 'header' then
-      ret = process_re_match(re, task, 'header', rule_data.header, rule_data.strong or false)
-    elseif rule_type == 'body' then
+    if match_type == 'header' then
+      ret = process_re_match(re, task, 'header', opts.header, opts.strong or false)
+    elseif match_type == 'body' then
       ret = process_re_match(re, task, 'sabody')
-    elseif rule_type == 'rawbody' then
+    elseif match_type == 'rawbody' then
       ret = process_re_match(re, task, 'sarawbody')
-    elseif rule_type == 'full' then
+    elseif match_type == 'full' then
       ret = process_re_match(re, task, 'body')
-    elseif rule_type == 'uri' then
+    elseif match_type == 'uri' then
       ret = process_re_match(re, task, 'url')
     else
       -- Default to body
       ret = process_re_match(re, task, 'sabody')
     end
 
-    -- Handle negation for header rules
-    if rule_data.negate then
-      ret = (ret == 0) and 1 or 0
+    if opts and opts.negate then
+      -- Negate the result for !~ operators
+      ret = (ret > 0) and 0 or 1
+      lua_util.debugm(N, task, 'SA atom %s negated result: %s', name, ret)
     end
 
-    lua_util.debugm(N, task, 'SA atom %s result: %s', atom_name, ret)
+    lua_util.debugm(N, task, 'SA atom %s result: %s', name, ret)
     return ret
   end
 end
@@ -202,8 +211,12 @@ local function process_sa_line(rule, line)
     return
   end
 
+  -- Add debug logging
+  lua_util.debugm(N, rspamd_config, 'Processing SA line for rule %s: %s', rule.symbol, line)
+
   local words = split_sa_line(line)
   if not words or #words == 0 then
+    lua_util.debugm(N, rspamd_config, 'Skipping empty or invalid line: %s', line)
     return
   end
 
@@ -251,7 +264,7 @@ local function process_sa_line(rule, line)
         }
 
         lua_util.debugm(N, rspamd_config, 'added SA header atom: %s for header %s (scope: %s)',
-            atom_name, header_name, scope_name)
+          atom_name, header_name, scope_name)
       end
     end
   elseif words[1] == 'body' then
@@ -428,24 +441,39 @@ end
 -- Forward declaration for mutual recursion
 local create_sa_meta_callback
 
-local function gen_sa_process_atom_cb(result_name, task, rule_name)
+local function gen_sa_process_atom_cb(task, rule_name)
   return function(atom)
+    lua_util.debugm(N, task, 'Processing SA atom %s for rule %s', atom, rule_name)
+
     -- Check symbol state first
     local state_info = regexp_rules_symbol_states[atom]
     if state_info then
-      if state_info.state == 'orphaned' then
-        lua_util.debugm(N, task, 'regexp_rules atom %s is orphaned, returning 0', atom)
-        return 0
-      elseif state_info.state == 'loading' then
-        lua_util.debugm(N, task, 'regexp_rules atom %s is still loading, returning 0', atom)
-        return 0
+      if state_info.state == 'orphaned' or state_info.state == 'loading' then
+        -- Double-check by looking at scope loaded state
+        local scope_loaded = false
+        for _, rule in ipairs(rules) do
+          if rule.symbol == state_info.rule_name and rule.scope_name then
+            scope_loaded = rspamd_config:is_regexp_scope_loaded(rule.scope_name)
+            break
+          end
+        end
+
+        if scope_loaded and (state_info.type == 'atom' and sa_atoms[atom]) then
+          -- Update state to available if scope is loaded and atom exists
+          state_info.state = 'available'
+          lua_util.debugm(N, task, 'regexp_rules atom %s was %s, but scope is loaded - marking as available',
+            atom, state_info.state)
+        else
+          lua_util.debugm(N, task, 'regexp_rules atom %s is %s, returning 0', atom, state_info.state)
+          return 0
+        end
       end
     end
 
     local atom_cb = sa_atoms[atom]
 
     if atom_cb then
-      local res = atom_cb(task, result_name)
+      local res = atom_cb(task)
 
       if not res then
         lua_util.debugm(N, task, 'SA atom: %s, NULL result', atom)
@@ -458,13 +486,13 @@ local function gen_sa_process_atom_cb(result_name, task, rule_name)
       local meta_rule = sa_meta_rules[atom]
       if meta_rule then
         local meta_cb = create_sa_meta_callback(meta_rule)
-        local res = meta_cb(task, result_name)
+        local res = meta_cb(task)
         lua_util.debugm(N, task, 'SA meta atom: %s, result: %s', atom, res)
         return res or 0
       end
 
       -- External atom - check if task has this symbol
-      if task:has_symbol(atom, result_name) then
+      if task:has_symbol(atom) then
         lua_util.debugm(N, task, 'external SA atom: %s, result: 1', atom)
         return 1
       end
@@ -475,16 +503,33 @@ local function gen_sa_process_atom_cb(result_name, task, rule_name)
 end
 
 create_sa_meta_callback = function(meta_rule)
-  return function(task, result_name)
+  return function(task)
+    lua_util.debugm(N, task, 'SA meta callback invoked for symbol %s (expression: %s)',
+      meta_rule.symbol, meta_rule.expression)
+
     -- Check symbol state before execution
     local state_info = regexp_rules_symbol_states[meta_rule.symbol]
     if state_info then
-      if state_info.state == 'orphaned' then
-        lua_util.debugm(N, task, 'regexp_rules meta %s is orphaned, skipping execution', meta_rule.symbol)
-        return 0
-      elseif state_info.state == 'loading' then
-        lua_util.debugm(N, task, 'regexp_rules meta %s is still loading, skipping execution', meta_rule.symbol)
-        return 0
+      if state_info.state == 'orphaned' or state_info.state == 'loading' then
+        -- Double-check by looking at scope loaded state
+        local scope_loaded = false
+        for _, rule in ipairs(rules) do
+          if rule.symbol == state_info.rule_name and rule.scope_name then
+            scope_loaded = rspamd_config:is_regexp_scope_loaded(rule.scope_name)
+            break
+          end
+        end
+
+        if scope_loaded and sa_meta_rules[meta_rule.symbol] then
+          -- Update state to available if scope is loaded and meta rule exists
+          state_info.state = 'available'
+          lua_util.debugm(N, task, 'regexp_rules meta %s was %s, but scope is loaded - marking as available',
+            meta_rule.symbol, state_info.state)
+        else
+          lua_util.debugm(N, task, 'regexp_rules meta %s is %s, skipping execution',
+            meta_rule.symbol, state_info.state)
+          return 0
+        end
       end
     end
 
@@ -501,23 +546,26 @@ create_sa_meta_callback = function(meta_rule)
 
     local already_processed = cached[meta_rule.symbol]
 
-    if not (already_processed and already_processed[result_name or 'default']) then
+    if not (already_processed and already_processed['default']) then
       local expression = rspamd_expression.create(meta_rule.expression,
-          parse_sa_atom,
-          rspamd_config:get_mempool())
+        parse_sa_atom,
+        rspamd_config:get_mempool())
       if not expression then
         rspamd_logger.errx(rspamd_config, 'Cannot parse SA meta expression: %s', meta_rule.expression)
         return
       end
 
       local function exec_symbol(cur_res)
-        local res, trace = expression:process_traced(gen_sa_process_atom_cb(cur_res, task, meta_rule.rule_name))
-        lua_util.debugm(N, task, 'SA meta result for %s: %s', meta_rule.symbol, res)
+        lua_util.debugm(N, task, 'Evaluating SA meta expression for %s in result %s', meta_rule.symbol, cur_res)
+        local res, trace = expression:process_traced(gen_sa_process_atom_cb(task, meta_rule.rule_name))
+        lua_util.debugm(N, task, 'SA meta result for %s: %s (trace: %s)', meta_rule.symbol, res,
+          table.concat(trace or {}, ', '))
 
         if res > 0 then
           local score = sa_scores[meta_rule.symbol] or 1.0
+          lua_util.debugm(N, task, 'Inserting positive result for SA meta %s with score %s', meta_rule.symbol, score)
           task:insert_result_named(cur_res, meta_rule.symbol, score,
-              fun.totable(fun.filter(exclude_sym_filter, trace)))
+            fun.totable(fun.filter(exclude_sym_filter, trace)))
         end
 
         if not cached[meta_rule.symbol] then
@@ -528,41 +576,42 @@ create_sa_meta_callback = function(meta_rule)
         return res
       end
 
-      if not result_name then
-        -- Invoke for all named results
-        local named_results = task:get_all_named_results()
-        for _, cur_res in ipairs(named_results) do
-          exec_symbol(cur_res)
-        end
-      else
-        -- Invoked from another meta
-        return exec_symbol(result_name)
+      -- Invoke for all named results
+      local named_results = task:get_all_named_results()
+      for _, cur_res in ipairs(named_results) do
+        exec_symbol(cur_res)
       end
     else
       -- We have cached the result
-      local res = already_processed[result_name or 'default'] or 0
+      local res = already_processed['default'] or 0
       lua_util.debugm(N, task, 'cached SA meta result for %s: %s', meta_rule.symbol, res)
-
-      if result_name then
-        return res
-      end
     end
   end
 end
 
 -- Initialize SA meta rules after all atoms are processed
 local function finalize_sa_rules()
+  lua_util.debugm(N, rspamd_config, 'Finalizing SA rules - processing %s meta rules',
+    fun.length(sa_meta_rules))
+
   for meta_name, meta_rule in pairs(sa_meta_rules) do
     local score = sa_scores[meta_name] or 1.0
     local description = sa_descriptions[meta_name] or ('multimap symbol ' .. meta_name)
 
-    rspamd_config:register_symbol({
+    lua_util.debugm(N, rspamd_config, 'Registering SA meta rule %s (score: %s, expression: %s)',
+      meta_name, score, meta_rule.expression)
+
+    local id = rspamd_config:register_symbol({
       name = meta_name,
       weight = score,
       callback = create_sa_meta_callback(meta_rule),
       type = 'normal',
       flags = 'one_shot',
+      augmentations = {},
     })
+
+    lua_util.debugm(N, rspamd_config, 'Successfully registered SA meta symbol %s with id %s (callback attached)',
+      meta_name, id)
 
     rspamd_config:set_metric_symbol({
       name = meta_name,
@@ -586,20 +635,23 @@ local function finalize_sa_rules()
     end
 
     lua_util.debugm(N, rspamd_config, 'registered SA meta symbol: %s (score: %s)',
-        meta_name, score)
+      meta_name, score)
   end
 
-  -- Mark orphaned symbols - symbols that were previously available but no longer in current rules
+  -- Mark orphaned symbols - only check meta symbols (not atoms) since atoms are just expression parts
   for symbol, state_info in pairs(regexp_rules_symbol_states) do
-    if state_info.state == 'available' and not sa_meta_rules[symbol] then
+    if state_info.type == 'meta' and state_info.state == 'available' and not sa_meta_rules[symbol] then
       state_info.state = 'orphaned'
       state_info.orphaned_at = os.time()
       lua_util.debugm(N, rspamd_config, 'marked regexp_rules symbol %s as orphaned', symbol)
     end
   end
+
+  lua_util.debugm(N, rspamd_config, 'SA rules finalization complete: registered %s meta rules with callbacks',
+    fun.length(sa_meta_rules))
 end
 
--- Helper function to get regexp_rules symbol state statistics
+-- Helper function to get regexp_rules symbol state statistics (only meta symbols, not atoms)
 local function get_regexp_rules_symbol_stats()
   local stats = {
     available = 0,
@@ -609,11 +661,45 @@ local function get_regexp_rules_symbol_stats()
   }
 
   for _, state_info in pairs(regexp_rules_symbol_states) do
-    stats[state_info.state] = (stats[state_info.state] or 0) + 1
-    stats.total = stats.total + 1
+    if state_info.type == 'meta' then
+      stats[state_info.state] = (stats[state_info.state] or 0) + 1
+      stats.total = stats.total + 1
+    end
   end
 
   return stats
+end
+
+-- Helper function to synchronize symbol states with loaded scopes
+local function sync_regexp_rules_symbol_states()
+  lua_util.debugm(N, rspamd_config, 'Synchronizing regexp_rules symbol states with loaded scopes')
+
+  -- Check each rule to see if its scope is loaded
+  for _, rule in ipairs(rules) do
+    if rule.type == 'regexp_rules' and rule.scope_name then
+      local scope_loaded = rspamd_config:is_regexp_scope_loaded(rule.scope_name)
+
+      if scope_loaded then
+        -- Mark all meta symbols for this rule as available (atoms are just expression parts)
+        local updated_count = 0
+        for _, state_info in pairs(regexp_rules_symbol_states) do
+          if state_info.type == 'meta' and state_info.rule_name == rule.symbol and state_info.state ~= 'available' then
+            state_info.state = 'available'
+            updated_count = updated_count + 1
+          end
+        end
+
+        lua_util.debugm(N, rspamd_config, 'Scope %s is loaded, marked %s symbols as available',
+          rule.scope_name, updated_count)
+      else
+        lua_util.debugm(N, rspamd_config, 'Scope %s is not loaded', rule.scope_name)
+      end
+    end
+  end
+
+  local stats = get_regexp_rules_symbol_stats()
+  lua_util.debugm(N, rspamd_config, 'Symbol state stats after sync: available=%s, loading=%s, orphaned=%s, total=%s',
+    stats.available, stats.loading, stats.orphaned, stats.total)
 end
 
 -- Optional cleanup function to remove old orphaned symbols (can be called periodically)
@@ -623,10 +709,10 @@ local function cleanup_orphaned_regexp_rules_symbols(max_age_seconds)
   local removed = 0
 
   for symbol, state_info in pairs(regexp_rules_symbol_states) do
-    if state_info.state == 'orphaned' and state_info.orphaned_at then
+    if state_info.type == 'meta' and state_info.state == 'orphaned' and state_info.orphaned_at then
       if (current_time - state_info.orphaned_at) > max_age_seconds then
         regexp_rules_symbol_states[symbol] = nil
-        sa_atoms[symbol] = nil
+        -- Only meta rules should be cleaned up from sa_meta_rules
         sa_meta_rules[symbol] = nil
         removed = removed + 1
         lua_util.debugm(N, rspamd_config, 'cleaned up orphaned regexp_rules symbol: %s', symbol)
@@ -635,7 +721,7 @@ local function cleanup_orphaned_regexp_rules_symbols(max_age_seconds)
   end
 
   if removed > 0 then
-    lua_util.debugm(N, rspamd_config, 'cleaned up %d orphaned regexp_rules symbols', removed)
+    lua_util.debugm(N, rspamd_config, 'cleaned up %s orphaned regexp_rules symbols', removed)
   end
 
   return removed
@@ -1060,19 +1146,19 @@ local function multimap_query_redis(key, task, value, callback)
 
   local function redis_map_cb(err, data)
     lua_util.debugm(N, task, 'got reply from Redis when trying to get key %s: err=%s, data=%s',
-        key, err, data)
+      key, err, data)
     if not err and type(data) ~= 'userdata' then
       callback(data)
     end
   end
 
   return rspamd_redis_make_request(task,
-      redis_params, -- connect params
-      key, -- hash key
-      false, -- is write
-      redis_map_cb, --callback
-      cmd, -- command
-      srch          -- arguments
+    redis_params, -- connect params
+    key,          -- hash key
+    false,        -- is write
+    redis_map_cb, --callback
+    cmd,          -- command
+    srch          -- arguments
   )
 end
 
@@ -1084,9 +1170,9 @@ local function multimap_callback(task, rule)
 
     local function get_key_callback(ret, err_or_data, err_code)
       lua_util.debugm(N, task, 'got return "%s" (err code = %s) for multimap %s',
-          err_or_data,
-          err_code,
-          rule.symbol)
+        err_or_data,
+        err_code,
+        rule.symbol)
 
       if ret then
         if type(err_or_data) == 'table' then
@@ -1098,12 +1184,12 @@ local function multimap_callback(task, rule)
         end
       elseif err_code ~= 404 then
         rspamd_logger.infox(task, "map %s: get key returned error %s: %s",
-            rule.symbol, err_code, err_or_data)
+          rule.symbol, err_code, err_or_data)
       end
     end
 
     lua_util.debugm(N, task, 'check value %s for multimap %s', value,
-        rule.symbol)
+      rule.symbol)
 
     local ret = false
 
@@ -1142,8 +1228,8 @@ local function multimap_callback(task, rule)
       if rule.symbols_set then
         if not rule.symbols_set[symbol] then
           rspamd_logger.infox(task, 'symbol %s is not registered for map %s, ' ..
-              'replace it with just %s',
-              symbol, rule.symbol, rule.symbol)
+            'replace it with just %s',
+            symbol, rule.symbol, rule.symbol)
           symbol = rule.symbol
         end
       elseif rule.disable_multisymbol then
@@ -1213,7 +1299,7 @@ local function multimap_callback(task, rule)
       if fn then
         local filtered_value = fn(task, r.filter, value, r)
         lua_util.debugm(N, task, 'apply filter %s for rule %s: %s -> %s',
-            r.filter, r.symbol, value, filtered_value)
+          r.filter, r.symbol, value, filtered_value)
         value = filtered_value
       end
     end
@@ -1360,12 +1446,12 @@ local function multimap_callback(task, rule)
 
     if not res or res == 0 then
       lua_util.debugm(N, task, 'condition is false for %s',
-          rule.symbol)
+        rule.symbol)
       return
     else
       lua_util.debugm(N, task, 'condition is true for %s: %s',
-          rule.symbol,
-          trace)
+        rule.symbol,
+        trace)
     end
   end
 
@@ -1382,18 +1468,18 @@ local function multimap_callback(task, rule)
         local to_resolve = ip_to_rbl(ip, rule['map'])
         local function dns_cb(_, _, results, err)
           lua_util.debugm(N, rspamd_config,
-              'resolve() finished: results=%1, err=%2, to_resolve=%3',
-              results, err, to_resolve)
+            'resolve() finished: results=%1, err=%2, to_resolve=%3',
+            results, err, to_resolve)
 
           if err and
               (err ~= 'requested record is not found' and
-                  err ~= 'no records with this name') then
+                err ~= 'no records with this name') then
             rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, results)
           elseif results then
             task:insert_result(rule['symbol'], 1, rule['map'])
             if rule.action then
               task:set_pre_result(rule['action'],
-                  'Matched map: ' .. rule['symbol'], N)
+                'Matched map: ' .. rule['symbol'], N)
             end
           end
         end
@@ -1559,7 +1645,7 @@ local function multimap_callback(task, rule)
           if ext then
             local fake_fname = string.format('detected.%s', ext)
             lua_util.debugm(N, task, 'detected filename %s',
-                fake_fname)
+              fake_fname)
             match_filename(rule, fake_fname)
           end
         end
@@ -1632,14 +1718,15 @@ local function multimap_callback(task, rule)
       if ret and ret ~= 0 then
         for n, t in pairs(trace) do
           insert_results(t.value, string.format("%s=%s",
-              n, t.matched))
+            n, t.matched))
         end
       end
     end,
     regexp_rules = function()
-      -- Regexp rules are processed during map loading and create their own symbols
-      -- This callback is just a placeholder since the real processing happens via SA atoms
-      lua_util.debugm(N, task, 'Regexp rules processed via atoms for %s', rule.symbol)
+      -- For regexp_rules, the meta rules are registered as separate symbols
+      -- This is just a placeholder callback
+      lua_util.debugm(N, task, 'Regexp rules callback for %s - meta rules are registered as separate symbols',
+        rule.symbol)
     end,
   }
 
@@ -1668,7 +1755,7 @@ local function multimap_on_load_gen(rule)
 
       if r and symbol and not known_symbols[symbol] then
         lua_util.debugm(N, rspamd_config, "%s: adding new symbol %s (score = %s), triggered by %s",
-            rule.symbol, symbol, score, key)
+          rule.symbol, symbol, score, key)
         rspamd_config:register_symbol {
           name = symbol,
           parent = rule.callback_id,
@@ -1694,22 +1781,22 @@ local function add_multimap_rule(key, newrule)
     if rule['regexp'] then
       if rule['multi'] then
         rule.map_obj = lua_maps.map_add_from_ucl(rule.map, 'regexp_multi',
-            rule.description)
+          rule.description)
       else
         rule.map_obj = lua_maps.map_add_from_ucl(rule.map, 'regexp',
-            rule.description)
+          rule.description)
       end
     elseif rule['glob'] then
       if rule['multi'] then
         rule.map_obj = lua_maps.map_add_from_ucl(rule.map, 'glob_multi',
-            rule.description)
+          rule.description)
       else
         rule.map_obj = lua_maps.map_add_from_ucl(rule.map, 'glob',
-            rule.description)
+          rule.description)
       end
     else
       rule.map_obj = lua_maps.map_add_from_ucl(rule.map, 'hash',
-          rule.description)
+        rule.description)
     end
   end
 
@@ -1750,7 +1837,7 @@ local function add_multimap_rule(key, newrule)
   end
   if not newrule['description'] then
     newrule['description'] = string.format('multimap, type %s: %s', newrule['type'],
-        newrule['symbol'])
+      newrule['symbol'])
   end
   if newrule['type'] == 'mempool' and not newrule['variable'] then
     rspamd_logger.errx(rspamd_config, 'mempool map requires variable')
@@ -1762,11 +1849,11 @@ local function add_multimap_rule(key, newrule)
       return nil
     else
       local selector = lua_selectors.create_selector_closure(
-          rspamd_config, newrule['selector'], newrule['delimiter'] or "")
+        rspamd_config, newrule['selector'], newrule['delimiter'] or "")
 
       if not selector then
         rspamd_logger.errx(rspamd_config, 'selector map has invalid selector: "%s", symbol: %s',
-            newrule['selector'], newrule['symbol'])
+          newrule['selector'], newrule['symbol'])
         return nil
       end
 
@@ -1777,7 +1864,7 @@ local function add_multimap_rule(key, newrule)
       string.find(newrule['map'], '^redis://.*$') then
     if not redis_params then
       rspamd_logger.infox(rspamd_config, 'no redis servers are specified, ' ..
-          'cannot add redis map %s: %s', newrule['symbol'], newrule['map'])
+        'cannot add redis map %s: %s', newrule['symbol'], newrule['map'])
       return nil
     end
 
@@ -1790,17 +1877,17 @@ local function add_multimap_rule(key, newrule)
       string.find(newrule['map'], '^redis%+selector://.*$') then
     if not redis_params then
       rspamd_logger.infox(rspamd_config, 'no redis servers are specified, ' ..
-          'cannot add redis map %s: %s', newrule['symbol'], newrule['map'])
+        'cannot add redis map %s: %s', newrule['symbol'], newrule['map'])
       return nil
     end
 
     local selector_str = string.match(newrule['map'], '^redis%+selector://(.*)$')
     local selector = lua_selectors.create_selector_closure(
-        rspamd_config, selector_str, newrule['delimiter'] or "")
+      rspamd_config, selector_str, newrule['delimiter'] or "")
 
     if not selector then
       rspamd_logger.errx(rspamd_config, 'redis selector map has invalid selector: "%s", symbol: %s',
-          selector_str, newrule['symbol'])
+        selector_str, newrule['symbol'])
       return nil
     end
 
@@ -1809,12 +1896,12 @@ local function add_multimap_rule(key, newrule)
   elseif newrule.type == 'combined' then
     local lua_maps_expressions = require "lua_maps_expressions"
     newrule.combined = lua_maps_expressions.create(rspamd_config,
-        {
-          rules = newrule.rules,
-          expression = newrule.expression,
-          description = newrule.description,
-          on_load = newrule.dynamic_symbols and multimap_on_load_gen(newrule) or nil,
-        }, N, 'Combined map for ' .. newrule.symbol)
+      {
+        rules = newrule.rules,
+        expression = newrule.expression,
+        description = newrule.description,
+        on_load = newrule.dynamic_symbols and multimap_on_load_gen(newrule) or nil,
+      }, N, 'Combined map for ' .. newrule.symbol)
     if not newrule.combined then
       rspamd_logger.errx(rspamd_config, 'cannot add combined map for %s', newrule.symbol)
     else
@@ -1869,7 +1956,7 @@ local function add_multimap_rule(key, newrule)
             if state_info.rule_name == newrule.symbol then
               state_info.state = 'loading'
               lua_util.debugm(N, rspamd_config, 'marked regexp_rules symbol %s as loading for scope %s reload',
-                  symbol, scope_name)
+                symbol, scope_name)
             end
           end
 
@@ -1885,7 +1972,7 @@ local function add_multimap_rule(key, newrule)
             sa_atoms[symbol] = nil
             sa_meta_rules[symbol] = nil
             lua_util.debugm(N, rspamd_config, 'cleared regexp_rules symbol %s for scope %s reload',
-                symbol, scope_name)
+              symbol, scope_name)
           end
 
           -- The scope will be created by process_sa_line when first regexp is added
@@ -1895,7 +1982,7 @@ local function add_multimap_rule(key, newrule)
         end
         process_sa_line(newrule, line)
       end,
-      by_line = true, -- Process line by line
+      by_line = true,      -- Process line by line
       opaque_data = false, -- Use plain strings
     })
 
@@ -1904,13 +1991,12 @@ local function add_multimap_rule(key, newrule)
       newrule.map_obj:on_load(function()
         lua_util.debugm(N, rspamd_config, 'regexp_rules map %s loaded successfully', newrule.symbol)
 
-        -- Mark all atoms for this scope as available (if they're still loading)
+        -- Mark all meta symbols for this scope as available (atoms are just expression parts)
         for symbol, state_info in pairs(regexp_rules_symbol_states) do
-          if state_info.rule_name == newrule.symbol then
+          if state_info.type == 'meta' and state_info.rule_name == newrule.symbol then
             if state_info.state == 'loading' then
-              -- Check if this symbol still exists in the rules
-              if (state_info.type == 'atom' and sa_atoms[symbol]) or
-                  (state_info.type == 'meta' and sa_meta_rules[symbol]) then
+              -- Check if this meta symbol still exists in the rules
+              if sa_meta_rules[symbol] then
                 state_info.state = 'available'
                 lua_util.debugm(N, rspamd_config, 'marked regexp_rules symbol %s as available after map load', symbol)
               else
@@ -1932,10 +2018,16 @@ local function add_multimap_rule(key, newrule)
           -- Trigger hyperscan compilation for this updated scope
           newrule.map_obj:trigger_hyperscan_compilation()
           lua_util.debugm(N, rspamd_config, 'triggered hyperscan compilation for scope %s after map loading',
-              scope_name)
+            scope_name)
         else
           lua_util.debugm(N, rspamd_config, 'regexp scope %s not created (empty map)', scope_name)
         end
+
+        -- Synchronize symbol states after map load to ensure all processes see correct states
+        sync_regexp_rules_symbol_states()
+
+        -- Finalize SA rules immediately after map load
+        finalize_sa_rules()
       end)
     end
 
@@ -1943,21 +2035,21 @@ local function add_multimap_rule(key, newrule)
       -- Mark this rule as using SA functionality
       newrule.uses_sa = true
       lua_util.debugm(N, rspamd_config, 'created regexp_rules map %s with scope: %s',
-          newrule.symbol, scope_name)
+        newrule.symbol, scope_name)
       ret = true
     else
       rspamd_logger.warnx(rspamd_config, 'Cannot add SA-style rule: map doesn\'t exists: %s',
-          newrule['map'])
+        newrule['map'])
     end
   else
     if newrule['type'] == 'ip' then
       newrule.map_obj = lua_maps.map_add_from_ucl(newrule.map, 'radix',
-          newrule.description)
+        newrule.description)
       if newrule.map_obj then
         ret = true
       else
         rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %s',
-            newrule['map'])
+          newrule['map'])
       end
     elseif newrule['type'] == 'received' then
       if type(newrule['flags']) == 'table' and newrule['flags'][1] then
@@ -1973,12 +2065,12 @@ local function add_multimap_rule(key, newrule)
       local filter = newrule['filter'] or 'real_ip'
       if filter == 'real_ip' or filter == 'from_ip' then
         newrule.map_obj = lua_maps.map_add_from_ucl(newrule.map, 'radix',
-            newrule.description)
+          newrule.description)
         if newrule.map_obj then
           ret = true
         else
           rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %s',
-              newrule['map'])
+            newrule['map'])
         end
       else
         multimap_load_kv_map(newrule)
@@ -1987,13 +2079,13 @@ local function add_multimap_rule(key, newrule)
           ret = true
         else
           rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %s',
-              newrule['map'])
+            newrule['map'])
         end
       end
     elseif known_generic_types[newrule.type] then
       if newrule.filter == 'ip_addr' then
         newrule.map_obj = lua_maps.map_add_from_ucl(newrule.map, 'radix',
-            newrule.description)
+          newrule.description)
       elseif not newrule.combined then
         multimap_load_kv_map(newrule)
       end
@@ -2002,13 +2094,13 @@ local function add_multimap_rule(key, newrule)
         ret = true
       else
         rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %s',
-            newrule['map'])
+          newrule['map'])
       end
     elseif newrule['type'] == 'dnsbl' then
       ret = true
     else
       rspamd_logger.errx(rspamd_config, 'cannot add rule %s: invalid type %s',
-          key, newrule['type'])
+        key, newrule['type'])
     end
   end
 
@@ -2045,13 +2137,13 @@ local function add_multimap_rule(key, newrule)
       end
 
       local expression = rspamd_expression.create(newrule['require_symbols'],
-          { parse_atom, process_atom }, rspamd_config:get_mempool())
+        { parse_atom, process_atom }, rspamd_config:get_mempool())
       if expression then
         newrule['expression'] = expression
 
         fun.each(function(v)
           lua_util.debugm(N, rspamd_config, 'add dependency %s -> %s',
-              newrule['symbol'], v)
+            newrule['symbol'], v)
           rspamd_config:register_dependency(newrule['symbol'], v)
         end, atoms)
       end
@@ -2066,6 +2158,29 @@ end
 local opts = rspamd_config:get_all_opt(N)
 if opts and type(opts) == 'table' then
   redis_params = rspamd_parse_redis_server(N)
+
+  -- Initialize regexp_rules symbol states from existing sa_atoms and sa_meta_rules
+  -- This helps with module reload scenarios
+  for atom_name, _ in pairs(sa_atoms) do
+    if not regexp_rules_symbol_states[atom_name] then
+      regexp_rules_symbol_states[atom_name] = {
+        state = 'available',
+        rule_name = 'unknown',
+        type = 'atom'
+      }
+    end
+  end
+
+  for meta_name, meta_rule in pairs(sa_meta_rules) do
+    if not regexp_rules_symbol_states[meta_name] then
+      regexp_rules_symbol_states[meta_name] = {
+        state = 'available',
+        rule_name = meta_rule.rule_name or 'unknown',
+        type = 'meta'
+      }
+    end
+  end
+
   for k, m in pairs(opts) do
     if type(m) == 'table' and m['type'] then
       local rule = add_multimap_rule(k, m)
@@ -2073,7 +2188,7 @@ if opts and type(opts) == 'table' then
         rspamd_logger.errx(rspamd_config, 'cannot add rule: "' .. k .. '"')
       else
         rspamd_logger.infox(rspamd_config, 'added multimap rule: %s (%s)',
-            k, rule.type)
+          k, rule.type)
         table.insert(rules, rule)
       end
     end
@@ -2149,9 +2264,12 @@ if opts and type(opts) == 'table' then
     end
 
     if has_sa_rules then
-      -- Add a callback to finalize SA rules when maps are loaded
+      -- Add a callback to synchronize symbol states in worker processes
       rspamd_config:add_on_load(function(cfg, ev_base, worker)
-        finalize_sa_rules()
+        -- Synchronize symbol states with loaded scopes in worker processes
+        if worker then
+          sync_regexp_rules_symbol_states()
+        end
       end)
 
       -- Export utility functions for debugging/monitoring
