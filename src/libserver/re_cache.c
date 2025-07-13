@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -324,7 +324,8 @@ rspamd_re_cache_new(void)
 	cache->nre = 0;
 	cache->re = g_ptr_array_new_full(256, rspamd_re_cache_elt_dtor);
 	cache->selectors = kh_init(lua_selectors_hash);
-	cache->next = cache->prev = NULL;
+	cache->next = NULL;
+	cache->prev = cache;
 	cache->scope = NULL;                        /* Default scope */
 	cache->flags = RSPAMD_RE_CACHE_FLAG_LOADED; /* Default scope is always loaded */
 #ifdef WITH_HYPERSCAN
@@ -659,6 +660,9 @@ rspamd_re_cache_runtime_new_single(struct rspamd_re_cache *cache)
 #ifdef WITH_HYPERSCAN
 	rt->has_hs = cache->hyperscan_loaded;
 #endif
+	/* Initialize the doubly-linked list pointers */
+	rt->next = NULL;
+	rt->prev = NULL;
 
 	return rt;
 }
@@ -689,6 +693,9 @@ rspamd_re_cache_runtime_new(struct rspamd_re_cache *cache)
 			}
 			else {
 				rt_head = rt;
+				/* For doubly-linked list, first element's prev should point to itself */
+				rt_head->prev = rt_head;
+				rt_head->next = NULL;
 			}
 		}
 	}
@@ -2657,7 +2664,7 @@ rspamd_re_cache_is_valid_hyperscan_file(struct rspamd_re_cache *cache,
 
 	len = strlen(path);
 
-	if (len < sizeof(rspamd_cryptobox_HASHBYTES + 3)) {
+	if (len < (rspamd_cryptobox_HASHBYTES + 3)) {
 		if (!silent) {
 			msg_err_re_cache("cannot open hyperscan cache file %s: too short filename",
 							 path);
