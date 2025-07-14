@@ -278,7 +278,7 @@ rspamd_config:register_dependency(id, 'OTHER_SYM')
 -- Alternative form
 -- Symbol MY_RULE needs result from SPF_CHECK
 rspamd_config:register_dependency('MY_RULE', 'SPF_CHECK')
- */
+   */
 LUA_FUNCTION_DEF(config, register_dependency);
 
 /***
@@ -474,6 +474,13 @@ LUA_FUNCTION_DEF(config, get_group_symbols);
  * @return {list|table} list of all groups
  */
 LUA_FUNCTION_DEF(config, get_groups);
+
+/***
+ * @method rspamd_config:promote_symbols_cache_resort()
+ * Promote symbols cache resort after dynamic symbol registration
+ * @return {boolean} true if successful
+ */
+LUA_FUNCTION_DEF(config, promote_symbols_cache_resort);
 
 /***
  * @method rspamd_config:register_settings_id(name, symbols_enabled, symbols_disabled)
@@ -1013,6 +1020,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF(config, register_callback_symbol),
 	LUA_INTERFACE_DEF(config, register_callback_symbol_priority),
 	LUA_INTERFACE_DEF(config, register_dependency),
+	LUA_INTERFACE_DEF(config, promote_symbols_cache_resort),
 	LUA_INTERFACE_DEF(config, register_settings_id),
 	LUA_INTERFACE_DEF(config, get_symbol_flags),
 	LUA_INTERFACE_DEF(config, set_metric_symbol),
@@ -4408,6 +4416,23 @@ lua_config_experimental_enabled(lua_State *L)
 	}
 	else {
 		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_config_promote_symbols_cache_resort(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+
+	if (cfg != NULL && cfg->cache != NULL) {
+		rspamd_symcache_promote_resort(cfg->cache);
+		lua_pushboolean(L, true);
+	}
+	else {
+		return luaL_error(L, "invalid arguments or cache not initialized");
 	}
 
 	return 1;
