@@ -571,6 +571,13 @@ void rspamd_symcache_timeout_result_free(struct rspamd_symcache_timeout_result *
  * @param task
  */
 void rspamd_symcache_runtime_destroy(struct rspamd_task *task);
+
+/**
+ * Promote symbols cache resort (typically after dynamic symbol registration)
+ * @param cache
+ */
+void rspamd_symcache_promote_resort(struct rspamd_symcache *cache);
+
 #ifdef __cplusplus
 }
 #endif

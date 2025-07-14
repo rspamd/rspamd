@@ -19,6 +19,7 @@
 #include "src/libserver/composites/composites.h"
 #include "libserver/cfg_file_private.h"
 #include "libmime/lang_detection.h"
+#include "libserver/re_cache.h"
 #include "lua/lua_map.h"
 #include "lua/lua_thread_pool.h"
 #include "utlist.h"
@@ -277,7 +278,7 @@ rspamd_config:register_dependency(id, 'OTHER_SYM')
 -- Alternative form
 -- Symbol MY_RULE needs result from SPF_CHECK
 rspamd_config:register_dependency('MY_RULE', 'SPF_CHECK')
- */
+   */
 LUA_FUNCTION_DEF(config, register_dependency);
 
 /***
@@ -475,6 +476,13 @@ LUA_FUNCTION_DEF(config, get_group_symbols);
 LUA_FUNCTION_DEF(config, get_groups);
 
 /***
+ * @method rspamd_config:promote_symbols_cache_resort()
+ * Promote symbols cache resort after dynamic symbol registration
+ * @return {boolean} true if successful
+ */
+LUA_FUNCTION_DEF(config, promote_symbols_cache_resort);
+
+/***
  * @method rspamd_config:register_settings_id(name, symbols_enabled, symbols_disabled)
  * Register new static settings id in config
  * @param {string} name id name (not numeric!)
@@ -560,6 +568,119 @@ LUA_FUNCTION_DEF(config, register_regexp);
  * - `new_re`* : old regular expression object (must not be in the cache)
  */
 LUA_FUNCTION_DEF(config, replace_regexp);
+
+/***
+ * @method rspamd_config:register_regexp_scoped(scope, params)
+ * Registers new re for further cached usage in a specific scope
+ * Params is the table with the following fields (mandatory fields are marked with `*`):
+ * - `re`* : regular expression object
+ * - `type`*: type of regular expression:
+ *   + `mime`: mime regexp
+ *   + `rawmime`: raw mime regexp
+ *   + `header`: header regexp
+ *   + `rawheader`: raw header expression
+ *   + `body`: raw body regexp
+ *   + `url`: url regexp
+ * - `header`: for header and rawheader regexp means the name of header
+ * - `pcre_only`: flag regexp as pcre only regexp
+ * @param {string} scope scope name for the regexp
+ * @param {table} params regexp parameters
+ */
+LUA_FUNCTION_DEF(config, register_regexp_scoped);
+
+/***
+ * @method rspamd_config:replace_regexp_scoped(scope, params)
+ * Replaces regexp with a new one in a specific scope
+ * Params is the table with the following fields (mandatory fields are marked with `*`):
+ * - `old_re`* : old regular expression object (must be in the cache)
+ * - `new_re`* : old regular expression object (must not be in the cache)
+ * - `pcre_only`: flag regexp as pcre only regexp
+ * @param {string} scope scope name for the regexp
+ * @param {table} params regexp parameters
+ */
+LUA_FUNCTION_DEF(config, replace_regexp_scoped);
+
+/***
+ * @method rspamd_config:register_re_selector_scoped(scope, name, selector_str, [delimiter, [flatten]])
+ * Registers selector with the specific name in a specific scope to use in regular expressions
+ * @param {string} scope scope name for the selector
+ * @param {string} name name of the selector
+ * @param {string} selector_str selector definition
+ * @param {string} delimiter delimiter to use when joining strings if flatten is false
+ * @param {bool} flatten if true then selector will return a table of captures instead of a single string
+ * @return true if selector has been registered
+ */
+LUA_FUNCTION_DEF(config, register_re_selector_scoped);
+
+/***
+ * @method rspamd_config:find_regexp_scope(scope)
+ * Checks if a regexp scope exists
+ * @param {string} scope scope name to check (can be nil for default scope)
+ * @return {boolean} true if scope exists
+ */
+LUA_FUNCTION_DEF(config, find_regexp_scope);
+
+/***
+ * @method rspamd_config:remove_regexp_scope(scope)
+ * Removes a regexp scope from the cache
+ * @param {string} scope scope name to remove
+ * @return {boolean} true if scope was removed successfully
+ */
+LUA_FUNCTION_DEF(config, remove_regexp_scope);
+
+/***
+ * @method rspamd_config:count_regexp_scopes()
+ * Returns the number of regexp scopes
+ * @return {number} number of scopes
+ */
+LUA_FUNCTION_DEF(config, count_regexp_scopes);
+
+/***
+ * @method rspamd_config:list_regexp_scopes()
+ * Returns a list of all regexp scope names
+ * @return {table} array of scope names (default scope is named "default")
+ */
+LUA_FUNCTION_DEF(config, list_regexp_scopes);
+
+/***
+ * @method rspamd_config:set_regexp_scope_flags(scope, flags)
+ * Sets flags for a regexp scope
+ * @param {string} scope scope name (can be nil for default scope)
+ * @param {number} flags flags to set
+ */
+LUA_FUNCTION_DEF(config, set_regexp_scope_flags);
+
+/***
+ * @method rspamd_config:clear_regexp_scope_flags(scope, flags)
+ * Clears flags for a regexp scope
+ * @param {string} scope scope name (can be nil for default scope)
+ * @param {number} flags flags to clear
+ */
+LUA_FUNCTION_DEF(config, clear_regexp_scope_flags);
+
+/***
+ * @method rspamd_config:get_regexp_scope_flags(scope)
+ * Gets flags for a regexp scope
+ * @param {string} scope scope name (can be nil for default scope)
+ * @return {number} current flags value
+ */
+LUA_FUNCTION_DEF(config, get_regexp_scope_flags);
+
+/***
+ * @method rspamd_config:is_regexp_scope_loaded(scope)
+ * Checks if a regexp scope is loaded and ready for use
+ * @param {string} scope scope name (can be nil for default scope)
+ * @return {boolean} true if scope is loaded
+ */
+LUA_FUNCTION_DEF(config, is_regexp_scope_loaded);
+
+/***
+ * @method rspamd_config:set_regexp_scope_loaded(scope, loaded)
+ * Sets the loaded state of a regexp scope
+ * @param {string} scope scope name (can be nil for default scope)
+ * @param {boolean} loaded whether scope should be marked as loaded (defaults to true)
+ */
+LUA_FUNCTION_DEF(config, set_regexp_scope_loaded);
 
 /***
  * @method rspamd_config:register_worker_script(worker_type, script)
@@ -899,6 +1020,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF(config, register_callback_symbol),
 	LUA_INTERFACE_DEF(config, register_callback_symbol_priority),
 	LUA_INTERFACE_DEF(config, register_dependency),
+	LUA_INTERFACE_DEF(config, promote_symbols_cache_resort),
 	LUA_INTERFACE_DEF(config, register_settings_id),
 	LUA_INTERFACE_DEF(config, get_symbol_flags),
 	LUA_INTERFACE_DEF(config, set_metric_symbol),
@@ -920,6 +1042,18 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF(config, disable_symbol),
 	LUA_INTERFACE_DEF(config, register_regexp),
 	LUA_INTERFACE_DEF(config, replace_regexp),
+	LUA_INTERFACE_DEF(config, register_regexp_scoped),
+	LUA_INTERFACE_DEF(config, replace_regexp_scoped),
+	LUA_INTERFACE_DEF(config, register_re_selector_scoped),
+	LUA_INTERFACE_DEF(config, find_regexp_scope),
+	LUA_INTERFACE_DEF(config, remove_regexp_scope),
+	LUA_INTERFACE_DEF(config, count_regexp_scopes),
+	LUA_INTERFACE_DEF(config, list_regexp_scopes),
+	LUA_INTERFACE_DEF(config, set_regexp_scope_flags),
+	LUA_INTERFACE_DEF(config, clear_regexp_scope_flags),
+	LUA_INTERFACE_DEF(config, get_regexp_scope_flags),
+	LUA_INTERFACE_DEF(config, is_regexp_scope_loaded),
+	LUA_INTERFACE_DEF(config, set_regexp_scope_loaded),
 	LUA_INTERFACE_DEF(config, register_worker_script),
 	LUA_INTERFACE_DEF(config, register_re_selector),
 	LUA_INTERFACE_DEF(config, add_on_load),
@@ -4287,6 +4421,23 @@ lua_config_experimental_enabled(lua_State *L)
 	return 1;
 }
 
+static int
+lua_config_promote_symbols_cache_resort(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+
+	if (cfg != NULL && cfg->cache != NULL) {
+		rspamd_symcache_promote_resort(cfg->cache);
+		lua_pushboolean(L, true);
+	}
+	else {
+		return luaL_error(L, "invalid arguments or cache not initialized");
+	}
+
+	return 1;
+}
+
 struct rspamd_lua_include_trace_cbdata {
 	lua_State *L;
 	int cbref;
@@ -4786,6 +4937,10 @@ void luaopen_config(lua_State *L)
 	rspamd_lua_new_class(L, rspamd_monitored_classname, monitoredlib_m);
 
 	lua_pop(L, 1);
+
+	/* Export constants */
+	lua_pushinteger(L, RSPAMD_RE_CACHE_FLAG_LOADED);
+	lua_setglobal(L, "RSPAMD_RE_CACHE_FLAG_LOADED");
 }
 
 void lua_call_finish_script(struct rspamd_config_cfg_lua_script *sc,
@@ -4847,4 +5002,441 @@ lua_config_unload_custom_tokenizers(lua_State *L)
 	else {
 		return luaL_error(L, "invalid arguments");
 	}
+}
+
+static int
+lua_config_register_regexp_scoped(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+	const char *scope = luaL_checkstring(L, 2);
+	struct rspamd_lua_regexp *re = NULL;
+	rspamd_regexp_t *cache_re;
+	const char *type_str = NULL, *header_str = NULL;
+	gsize header_len = 0;
+	GError *err = NULL;
+	enum rspamd_re_type type = RSPAMD_RE_BODY;
+	gboolean pcre_only = FALSE;
+
+	/*
+	 * - `scope`*: scope name for the regexp
+	 * - `re`* : regular expression object
+ 	 * - `type`*: type of regular expression:
+	 *   + `mime`: mime regexp
+	 *   + `rawmime`: raw mime regexp
+	 *   + `header`: header regexp
+	 *   + `rawheader`: raw header expression
+	 *   + `body`: raw body regexp
+	 *   + `url`: url regexp
+	 * - `header`: for header and rawheader regexp means the name of header
+	 * - `pcre_only`: allow merely pcre for this regexp
+	 */
+	if (cfg != NULL && scope != NULL) {
+		if (!rspamd_lua_parse_table_arguments(L, 3, &err,
+											  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
+											  "*re=U{regexp};*type=S;header=S;pcre_only=B",
+											  &re, &type_str, &header_str, &pcre_only)) {
+			msg_err_config("cannot get parameters list: %e", err);
+
+			if (err) {
+				g_error_free(err);
+			}
+		}
+		else {
+			type = rspamd_re_cache_type_from_string(type_str);
+
+			if ((type == RSPAMD_RE_HEADER ||
+				 type == RSPAMD_RE_RAWHEADER ||
+				 type == RSPAMD_RE_MIMEHEADER) &&
+				header_str == NULL) {
+				msg_err_config(
+					"header argument is mandatory for header/rawheader regexps");
+			}
+			else {
+				if (pcre_only) {
+					rspamd_regexp_set_flags(re->re,
+											rspamd_regexp_get_flags(re->re) | RSPAMD_REGEXP_FLAG_PCRE_ONLY);
+				}
+
+				if (header_str != NULL) {
+					/* Include the last \0 */
+					header_len = strlen(header_str) + 1;
+				}
+
+				cache_re = rspamd_re_cache_add_scoped(&cfg->re_cache, scope, re->re, type,
+													  (gpointer) header_str, header_len, -1);
+
+				/*
+				 * XXX: here are dragons!
+				 * Actually, lua regexp contains internal rspamd_regexp_t
+				 * and it owns it.
+				 * However, after this operation we have some OTHER regexp,
+				 * which we really would like to use.
+				 * So we do the following:
+				 * 1) Remove old re and unref it
+				 * 2) Replace the internal re with cached one
+				 * 3) Increase its refcount to share ownership between cache and
+				 *   lua object
+				 */
+				if (cache_re != re->re) {
+					rspamd_regexp_unref(re->re);
+					re->re = rspamd_regexp_ref(cache_re);
+
+					if (pcre_only) {
+						rspamd_regexp_set_flags(re->re,
+												rspamd_regexp_get_flags(re->re) | RSPAMD_REGEXP_FLAG_PCRE_ONLY);
+					}
+				}
+			}
+		}
+	}
+
+	return 0;
+}
+
+static int
+lua_config_replace_regexp_scoped(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+	const char *scope = luaL_checkstring(L, 2);
+	struct rspamd_lua_regexp *old_re = NULL, *new_re = NULL;
+	gboolean pcre_only = FALSE;
+	GError *err = NULL;
+
+	if (cfg != NULL && scope != NULL) {
+		if (!rspamd_lua_parse_table_arguments(L, 3, &err,
+											  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
+											  "*old_re=U{regexp};*new_re=U{regexp};pcre_only=B",
+											  &old_re, &new_re, &pcre_only)) {
+			int ret = luaL_error(L, "cannot get parameters list: %s",
+								 err ? err->message : "invalid arguments");
+
+			if (err) {
+				g_error_free(err);
+			}
+
+			return ret;
+		}
+		else {
+
+			if (pcre_only) {
+				rspamd_regexp_set_flags(new_re->re,
+										rspamd_regexp_get_flags(new_re->re) | RSPAMD_REGEXP_FLAG_PCRE_ONLY);
+			}
+
+			rspamd_re_cache_replace_scoped(&cfg->re_cache, scope, old_re->re, new_re->re);
+		}
+	}
+
+	return 0;
+}
+
+static int
+lua_config_register_re_selector_scoped(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+	const char *scope = luaL_checkstring(L, 2);
+	const char *name = luaL_checkstring(L, 3);
+	const char *selector_str = luaL_checkstring(L, 4);
+	const char *delimiter = "";
+	bool flatten = false;
+	int top = lua_gettop(L);
+	bool res = false;
+
+	if (cfg && scope && name && selector_str) {
+		if (lua_gettop(L) >= 5) {
+			delimiter = luaL_checkstring(L, 5);
+
+			if (lua_isboolean(L, 6)) {
+				flatten = lua_toboolean(L, 6);
+			}
+		}
+
+		if (luaL_dostring(L, "return require \"lua_selectors\"") != 0) {
+			msg_warn_config("cannot require lua_selectors: %s",
+							lua_tostring(L, -1));
+		}
+		else {
+			if (lua_type(L, -1) != LUA_TTABLE) {
+				msg_warn_config("lua selectors must return "
+								"table and not %s",
+								lua_typename(L, lua_type(L, -1)));
+			}
+			else {
+				lua_pushstring(L, "create_selector_closure");
+				lua_gettable(L, -2);
+
+				if (lua_type(L, -1) != LUA_TFUNCTION) {
+					msg_warn_config("create_selector_closure must return "
+									"function and not %s",
+									lua_typename(L, lua_type(L, -1)));
+				}
+				else {
+					int err_idx, ret;
+					struct rspamd_config **pcfg;
+
+					lua_pushcfunction(L, &rspamd_lua_traceback);
+					err_idx = lua_gettop(L);
+
+					/* Push function */
+					lua_pushvalue(L, -2);
+
+					pcfg = lua_newuserdata(L, sizeof(*pcfg));
+					rspamd_lua_setclass(L, rspamd_config_classname, -1);
+					*pcfg = cfg;
+					lua_pushstring(L, selector_str);
+					lua_pushstring(L, delimiter);
+					lua_pushboolean(L, flatten);
+
+					if ((ret = lua_pcall(L, 4, 1, err_idx)) != 0) {
+						msg_err_config("call to create_selector_closure lua "
+									   "script failed (%d): %s",
+									   ret,
+									   lua_tostring(L, -1));
+					}
+					else {
+						if (lua_type(L, -1) != LUA_TFUNCTION) {
+							msg_warn_config("create_selector_closure "
+											"invocation must return "
+											"function and not %s",
+											lua_typename(L, lua_type(L, -1)));
+						}
+						else {
+							ret = luaL_ref(L, LUA_REGISTRYINDEX);
+							rspamd_re_cache_add_selector_scoped(&cfg->re_cache, scope,
+																name, ret);
+							res = true;
+						}
+					}
+				}
+			}
+		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	lua_settop(L, top);
+	lua_pushboolean(L, res);
+
+	if (res) {
+		msg_info_config("registered regexp selector %s for scope %s", name, scope);
+	}
+
+	return 1;
+}
+
+static int
+lua_config_find_regexp_scope(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+	const char *scope = NULL;
+
+	if (cfg) {
+		if (lua_type(L, 2) == LUA_TSTRING) {
+			scope = lua_tostring(L, 2);
+		}
+		/* scope can be NULL for default scope */
+
+		struct rspamd_re_cache *found_cache = rspamd_re_cache_find_scope(cfg->re_cache, scope);
+		lua_pushboolean(L, found_cache != NULL);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_config_remove_regexp_scope(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+	const char *scope = luaL_checkstring(L, 2);
+
+	if (cfg && scope) {
+		gboolean result = rspamd_re_cache_remove_scope(&cfg->re_cache, scope);
+		lua_pushboolean(L, result);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_config_count_regexp_scopes(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+
+	if (cfg) {
+		unsigned int count = rspamd_re_cache_count_scopes(cfg->re_cache);
+		lua_pushinteger(L, count);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_config_list_regexp_scopes(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+
+	if (cfg) {
+		struct rspamd_re_cache *scope;
+		unsigned int i = 0;
+
+		lua_newtable(L);
+
+		for (scope = rspamd_re_cache_scope_first(cfg->re_cache);
+			 scope != NULL;
+			 scope = rspamd_re_cache_scope_next(scope)) {
+			lua_pushinteger(L, i + 1);
+			lua_pushstring(L, rspamd_re_cache_scope_name(scope));
+			lua_settable(L, -3);
+			i++;
+		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_config_set_regexp_scope_flags(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+	const char *scope = NULL;
+	unsigned int flags = 0;
+
+	if (cfg) {
+		if (lua_type(L, 2) == LUA_TSTRING) {
+			scope = lua_tostring(L, 2);
+		}
+		flags = lua_tointeger(L, 3);
+
+		rspamd_re_cache_set_flags(cfg->re_cache, scope, flags);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 0;
+}
+
+static int
+lua_config_clear_regexp_scope_flags(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+	const char *scope = NULL;
+	unsigned int flags = 0;
+
+	if (cfg) {
+		if (lua_type(L, 2) == LUA_TSTRING) {
+			scope = lua_tostring(L, 2);
+		}
+		flags = lua_tointeger(L, 3);
+
+		rspamd_re_cache_clear_flags(cfg->re_cache, scope, flags);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 0;
+}
+
+static int
+lua_config_get_regexp_scope_flags(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+	const char *scope = NULL;
+
+	if (cfg) {
+		if (lua_type(L, 2) == LUA_TSTRING) {
+			scope = lua_tostring(L, 2);
+		}
+
+		unsigned int flags = rspamd_re_cache_get_flags(cfg->re_cache, scope);
+		lua_pushinteger(L, flags);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_config_is_regexp_scope_loaded(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+	const char *scope = NULL;
+
+	if (cfg) {
+		if (lua_type(L, 2) == LUA_TSTRING) {
+			scope = lua_tostring(L, 2);
+		}
+
+		gboolean loaded = rspamd_re_cache_is_loaded(cfg->re_cache, scope);
+		lua_pushboolean(L, loaded);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_config_set_regexp_scope_loaded(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+	const char *scope = NULL;
+	gboolean loaded = TRUE;
+
+	if (cfg) {
+		if (lua_type(L, 2) == LUA_TSTRING) {
+			scope = lua_tostring(L, 2);
+		}
+		if (lua_type(L, 3) == LUA_TBOOLEAN) {
+			loaded = lua_toboolean(L, 3);
+		}
+
+		if (loaded) {
+			rspamd_re_cache_set_flags(cfg->re_cache, scope, RSPAMD_RE_CACHE_FLAG_LOADED);
+
+			/* When marking a scope as loaded, we also need to initialize it
+			 * to compute the hash for each re_class */
+			struct rspamd_re_cache *target_cache = rspamd_re_cache_find_scope(cfg->re_cache, scope);
+			if (target_cache) {
+				rspamd_re_cache_init(target_cache, cfg);
+			}
+		}
+		else {
+			rspamd_re_cache_clear_flags(cfg->re_cache, scope, RSPAMD_RE_CACHE_FLAG_LOADED);
+		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 0;
 }
