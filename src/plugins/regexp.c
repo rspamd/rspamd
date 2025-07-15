@@ -15,6 +15,10 @@
  */
 /***MODULE:regexp
  * rspamd module that implements different regexp rules
+ *
+ * For object-based configuration, you can specify:
+ * - `expression_flags`: array of strings or single string with expression flags
+ *   - `"noopt"`: disable expression optimizations (useful for some SpamAssassin rules)
  */
 
 
@@ -267,6 +271,7 @@ int regexp_module_config(struct rspamd_config *cfg, bool validate)
 													 sizeof(struct regexp_module_item));
 					cur_item->symbol = ucl_object_key(value);
 					cur_item->magic = rspamd_regexp_cb_magic;
+					cur_item->expression_flags = 0; /* Will be overwritten with parsed flags */
 					ud.cfg = cfg;
 					ud.conf_obj = value;
 
