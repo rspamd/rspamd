@@ -712,8 +712,7 @@ lua_html_tag_get_attribute(lua_State *L)
 	const char *attr_name = luaL_checklstring(L, 2, &slen);
 
 	if (ltag && attr_name) {
-		auto maybe_attr = ltag->tag->find_component(
-			rspamd::html::html_component_from_string({attr_name, slen}));
+		auto maybe_attr = ltag->tag->find_component_by_name({attr_name, slen});
 
 		if (maybe_attr) {
 			lua_pushlstring(L, maybe_attr->data(), maybe_attr->size());
