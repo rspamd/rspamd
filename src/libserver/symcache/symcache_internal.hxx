@@ -644,6 +644,14 @@ public:
 	 * @return
 	 */
 	auto get_max_timeout(std::vector<std::pair<double, const cache_item *>> &elts) const -> double;
+
+	/**
+	 * Promote cache resort on next use (after dynamic symbol registration)
+	 */
+	auto promote_resort() -> void
+	{
+		cur_order_gen++;
+	}
 };
 
 

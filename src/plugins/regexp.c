@@ -15,6 +15,10 @@
  */
 /***MODULE:regexp
  * rspamd module that implements different regexp rules
+ *
+ * For object-based configuration, you can specify:
+ * - `expression_flags`: array of strings or single string with expression flags
+ *   - `"noopt"`: disable expression optimizations (useful for some SpamAssassin rules)
  */
 
 
@@ -32,6 +36,7 @@ struct regexp_module_item {
 	struct rspamd_expression *expr;
 	const char *symbol;
 	struct ucl_lua_funcdata *lua_function;
+	int expression_flags;
 };
 
 struct regexp_ctx {
@@ -68,12 +73,53 @@ regexp_get_context(struct rspamd_config *cfg)
 }
 
 /* Process regexp expression */
+static int
+parse_expression_flags(const ucl_object_t *flags_obj)
+{
+	int flags = 0;
+	const ucl_object_t *cur;
+	ucl_object_iter_t it = NULL;
+	const char *flag_name;
+
+	if (!flags_obj) {
+		return 0;
+	}
+
+	if (ucl_object_type(flags_obj) == UCL_ARRAY) {
+		/* Array of flag names */
+		while ((cur = ucl_object_iterate(flags_obj, &it, true)) != NULL) {
+			if (ucl_object_type(cur) == UCL_STRING) {
+				flag_name = ucl_object_tostring(cur);
+				if (strcmp(flag_name, "noopt") == 0) {
+					flags |= RSPAMD_EXPRESSION_FLAG_NOOPT;
+				}
+				else {
+					msg_warn("unknown expression flag: %s", flag_name);
+				}
+			}
+		}
+	}
+	else if (ucl_object_type(flags_obj) == UCL_STRING) {
+		/* Single flag name */
+		flag_name = ucl_object_tostring(flags_obj);
+		if (strcmp(flag_name, "noopt") == 0) {
+			flags |= RSPAMD_EXPRESSION_FLAG_NOOPT;
+		}
+		else {
+			msg_warn("unknown expression flag: %s", flag_name);
+		}
+	}
+
+	return flags;
+}
+
 static gboolean
 read_regexp_expression(rspamd_mempool_t *pool,
 					   struct regexp_module_item *chain,
 					   const char *symbol,
 					   const char *line,
-					   struct rspamd_mime_expr_ud *ud)
+					   struct rspamd_mime_expr_ud *ud,
+					   int expression_flags)
 {
 	struct rspamd_expression *e = NULL;
 	GError *err = NULL;
@@ -90,6 +136,7 @@ read_regexp_expression(rspamd_mempool_t *pool,
 
 	g_assert(e != NULL);
 	chain->expr = e;
+	chain->expression_flags = expression_flags;
 
 	return TRUE;
 }
@@ -165,13 +212,14 @@ int regexp_module_config(struct rspamd_config *cfg, bool validate)
 											 sizeof(struct regexp_module_item));
 			cur_item->symbol = ucl_object_key(value);
 			cur_item->magic = rspamd_regexp_cb_magic;
+			cur_item->expression_flags = 0;
 
 			ud.conf_obj = NULL;
 			ud.cfg = cfg;
 
 			if (!read_regexp_expression(cfg->cfg_pool,
 										cur_item, ucl_object_key(value),
-										ucl_obj_tostring(value), &ud)) {
+										ucl_obj_tostring(value), &ud, 0)) {
 				if (validate) {
 					return FALSE;
 				}
@@ -193,6 +241,7 @@ int regexp_module_config(struct rspamd_config *cfg, bool validate)
 			cur_item->magic = rspamd_regexp_cb_magic;
 			cur_item->symbol = ucl_object_key(value);
 			cur_item->lua_function = ucl_object_toclosure(value);
+			cur_item->expression_flags = 0;
 
 			rspamd_symcache_add_symbol(cfg->cache,
 									   cur_item->symbol,
@@ -222,12 +271,17 @@ int regexp_module_config(struct rspamd_config *cfg, bool validate)
 													 sizeof(struct regexp_module_item));
 					cur_item->symbol = ucl_object_key(value);
 					cur_item->magic = rspamd_regexp_cb_magic;
+					cur_item->expression_flags = 0; /* Will be overwritten with parsed flags */
 					ud.cfg = cfg;
 					ud.conf_obj = value;
 
+					/* Look for expression_flags */
+					const ucl_object_t *flags_obj = ucl_object_lookup(value, "expression_flags");
+					int expr_flags = parse_expression_flags(flags_obj);
+
 					if (!read_regexp_expression(cfg->cfg_pool,
 												cur_item, ucl_object_key(value),
-												ucl_obj_tostring(elt), &ud)) {
+												ucl_obj_tostring(elt), &ud, expr_flags)) {
 						if (validate) {
 							return FALSE;
 						}
@@ -253,6 +307,7 @@ int regexp_module_config(struct rspamd_config *cfg, bool validate)
 				cur_item->magic = rspamd_regexp_cb_magic;
 				cur_item->symbol = ucl_object_key(value);
 				cur_item->lua_function = ucl_object_toclosure(value);
+				cur_item->expression_flags = 0;
 			}
 
 			if (cur_item && (is_lua || valid_expression)) {
@@ -548,7 +603,7 @@ process_regexp_item(struct rspamd_task *task,
 	else {
 		/* Process expression */
 		if (item->expr) {
-			res = rspamd_process_expression(item->expr, 0, task);
+			res = rspamd_process_expression(item->expr, item->expression_flags, task);
 		}
 		else {
 			msg_warn_task("FIXME: %s symbol is broken with new expressions",

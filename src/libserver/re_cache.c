@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,6 +91,7 @@ struct rspamd_re_class {
 	gsize type_len;
 	GHashTable *re;
 	rspamd_cryptobox_hash_state_t *st;
+	struct rspamd_re_cache *cache; /* Back-reference to owning cache */
 
 	char hash[rspamd_cryptobox_HASHBYTES + 1];
 
@@ -126,6 +127,12 @@ struct rspamd_re_cache {
 	unsigned int max_re_data;
 	char hash[rspamd_cryptobox_HASHBYTES + 1];
 	lua_State *L;
+
+	/* Intrusive linked list for scoped caches */
+	struct rspamd_re_cache *next, *prev;
+	char *scope;
+	unsigned int flags; /* Cache flags (loaded state, etc.) */
+
 #ifdef WITH_HYPERSCAN
 	enum rspamd_hyperscan_status hyperscan_loaded;
 	gboolean disable_hyperscan;
@@ -149,6 +156,9 @@ struct rspamd_re_runtime {
 	struct rspamd_re_cache *cache;
 	struct rspamd_re_cache_stat stat;
 	gboolean has_hs;
+
+	/* Linked list for multiple scoped runtimes */
+	struct rspamd_re_runtime *next, *prev;
 };
 
 static GQuark
@@ -172,6 +182,63 @@ rspamd_re_cache_class_id(enum rspamd_re_type type,
 	}
 
 	return rspamd_cryptobox_fast_hash_final(&st);
+}
+
+static struct rspamd_re_cache *
+rspamd_re_cache_find_by_scope(struct rspamd_re_cache *cache_head, const char *scope)
+{
+	struct rspamd_re_cache *cur;
+
+	if (!cache_head) {
+		return NULL;
+	}
+
+	DL_FOREACH(cache_head, cur)
+	{
+		if (scope == NULL && cur->scope == NULL) {
+			/* Looking for default scope */
+			return cur;
+		}
+		else if (scope != NULL && cur->scope != NULL && strcmp(cur->scope, scope) == 0) {
+			return cur;
+		}
+	}
+
+	return NULL;
+}
+
+static struct rspamd_re_cache *
+rspamd_re_cache_add_to_scope_list(struct rspamd_re_cache **cache_head, const char *scope)
+{
+	struct rspamd_re_cache *new_cache, *existing;
+
+	if (!cache_head) {
+		return NULL;
+	}
+
+	/* Check if scope already exists */
+	existing = rspamd_re_cache_find_by_scope(*cache_head, scope);
+	if (existing) {
+		return existing;
+	}
+
+	/* Create new cache for this scope */
+	new_cache = rspamd_re_cache_new();
+	if (new_cache->scope) {
+		g_free(new_cache->scope);
+	}
+	new_cache->scope = g_strdup(scope);
+	new_cache->flags = 0; /* New scopes start as unloaded */
+
+	/* Add to linked list */
+	if (*cache_head) {
+		DL_APPEND(*cache_head, new_cache);
+	}
+	else {
+		*cache_head = new_cache;
+	}
+
+	return new_cache;
 }
 
 static void
@@ -230,6 +297,11 @@ rspamd_re_cache_destroy(struct rspamd_re_cache *cache)
 
 	g_hash_table_unref(cache->re_classes);
 	g_ptr_array_free(cache->re, TRUE);
+
+	if (cache->scope) {
+		g_free(cache->scope);
+	}
+
 	g_free(cache);
 }
 
@@ -252,6 +324,10 @@ rspamd_re_cache_new(void)
 	cache->nre = 0;
 	cache->re = g_ptr_array_new_full(256, rspamd_re_cache_elt_dtor);
 	cache->selectors = kh_init(lua_selectors_hash);
+	cache->next = NULL;
+	cache->prev = cache;
+	cache->scope = NULL;                        /* Default scope */
+	cache->flags = RSPAMD_RE_CACHE_FLAG_LOADED; /* Default scope is always loaded */
 #ifdef WITH_HYPERSCAN
 	cache->hyperscan_loaded = RSPAMD_HYPERSCAN_UNKNOWN;
 #endif
@@ -295,6 +371,7 @@ rspamd_re_cache_add(struct rspamd_re_cache *cache,
 		re_class->id = class_id;
 		re_class->type_len = datalen;
 		re_class->type = type;
+		re_class->cache = cache; /* Set back-reference */
 		re_class->re = g_hash_table_new_full(rspamd_regexp_hash,
 											 rspamd_regexp_equal, NULL, (GDestroyNotify) rspamd_regexp_unref);
 
@@ -328,6 +405,26 @@ rspamd_re_cache_add(struct rspamd_re_cache *cache,
 	}
 
 	return nre;
+}
+
+rspamd_regexp_t *
+rspamd_re_cache_add_scoped(struct rspamd_re_cache **cache_head, const char *scope,
+						   rspamd_regexp_t *re, enum rspamd_re_type type,
+						   gconstpointer type_data, gsize datalen,
+						   int lua_cbref)
+{
+	struct rspamd_re_cache *cache;
+
+	g_assert(cache_head != NULL);
+	g_assert(re != NULL);
+
+	/* NULL scope is allowed for default scope */
+	cache = rspamd_re_cache_add_to_scope_list(cache_head, scope);
+	if (!cache) {
+		return NULL;
+	}
+
+	return rspamd_re_cache_add(cache, re, type, type_data, datalen, lua_cbref);
 }
 
 void rspamd_re_cache_replace(struct rspamd_re_cache *cache,
@@ -368,6 +465,23 @@ void rspamd_re_cache_replace(struct rspamd_re_cache *cache,
 		rspamd_regexp_unref(elt->re);
 		elt->re = rspamd_regexp_ref(with);
 		/* XXX: do not touch match type here */
+	}
+}
+
+void rspamd_re_cache_replace_scoped(struct rspamd_re_cache **cache_head, const char *scope,
+									rspamd_regexp_t *what,
+									rspamd_regexp_t *with)
+{
+	struct rspamd_re_cache *cache;
+
+	g_assert(cache_head != NULL);
+	g_assert(what != NULL);
+	g_assert(with != NULL);
+
+	/* NULL scope is allowed for default scope */
+	cache = rspamd_re_cache_find_by_scope(*cache_head, scope);
+	if (cache) {
+		rspamd_re_cache_replace(cache, what, with);
 	}
 }
 
@@ -515,8 +629,24 @@ void rspamd_re_cache_init(struct rspamd_re_cache *cache, struct rspamd_config *c
 #endif
 }
 
-struct rspamd_re_runtime *
-rspamd_re_cache_runtime_new(struct rspamd_re_cache *cache)
+void rspamd_re_cache_init_scoped(struct rspamd_re_cache *cache_head,
+								 struct rspamd_config *cfg)
+{
+	struct rspamd_re_cache *cur;
+
+	g_assert(cache_head != NULL);
+
+	DL_FOREACH(cache_head, cur)
+	{
+		/* Only initialize loaded scopes */
+		if (cur->flags & RSPAMD_RE_CACHE_FLAG_LOADED) {
+			rspamd_re_cache_init(cur, cfg);
+		}
+	}
+}
+
+static struct rspamd_re_runtime *
+rspamd_re_cache_runtime_new_single(struct rspamd_re_cache *cache)
 {
 	struct rspamd_re_runtime *rt;
 	g_assert(cache != NULL);
@@ -530,8 +660,71 @@ rspamd_re_cache_runtime_new(struct rspamd_re_cache *cache)
 #ifdef WITH_HYPERSCAN
 	rt->has_hs = cache->hyperscan_loaded;
 #endif
+	/* Initialize the doubly-linked list pointers */
+	rt->next = NULL;
+	rt->prev = NULL;
 
 	return rt;
+}
+
+struct rspamd_re_runtime *
+rspamd_re_cache_runtime_new(struct rspamd_re_cache *cache)
+{
+	struct rspamd_re_runtime *rt_head = NULL, *rt;
+	struct rspamd_re_cache *cur;
+
+	g_assert(cache != NULL);
+
+	/*
+	 * Create runtime for all loaded scopes in the chain.
+	 * This ensures task has runtimes for all available loaded scopes.
+	 */
+	DL_FOREACH(cache, cur)
+	{
+		/* Skip unloaded scopes */
+		if (!(cur->flags & RSPAMD_RE_CACHE_FLAG_LOADED)) {
+			continue;
+		}
+
+		rt = rspamd_re_cache_runtime_new_single(cur);
+		if (rt) {
+			if (rt_head) {
+				DL_APPEND(rt_head, rt);
+			}
+			else {
+				rt_head = rt;
+				/* For doubly-linked list, first element's prev should point to itself */
+				rt_head->prev = rt_head;
+				rt_head->next = NULL;
+			}
+		}
+	}
+
+	return rt_head;
+}
+
+struct rspamd_re_runtime *
+rspamd_re_cache_runtime_new_all_scopes(struct rspamd_re_cache *cache_head)
+{
+	/* This is now the same as the main function since it always creates for all scopes */
+	return rspamd_re_cache_runtime_new(cache_head);
+}
+
+struct rspamd_re_runtime *
+rspamd_re_cache_runtime_new_scoped(struct rspamd_re_cache *cache_head, const char *scope)
+{
+	struct rspamd_re_cache *cache;
+
+	if (!cache_head) {
+		return NULL;
+	}
+
+	cache = rspamd_re_cache_find_by_scope(cache_head, scope);
+	if (!cache) {
+		return NULL;
+	}
+
+	return rspamd_re_cache_runtime_new_single(cache);
 }
 
 const struct rspamd_re_cache_stat *
@@ -1503,20 +1696,20 @@ rspamd_re_cache_exec_re(struct rspamd_task *task,
 	return rt->results[re_id];
 }
 
-int rspamd_re_cache_process(struct rspamd_task *task,
-							rspamd_regexp_t *re,
-							enum rspamd_re_type type,
-							gconstpointer type_data,
-							gsize datalen,
-							gboolean is_strong)
+static int
+rspamd_re_cache_process_single(struct rspamd_task *task,
+							   struct rspamd_re_runtime *rt,
+							   rspamd_regexp_t *re,
+							   enum rspamd_re_type type,
+							   gconstpointer type_data,
+							   gsize datalen,
+							   gboolean is_strong)
 {
 	uint64_t re_id;
 	struct rspamd_re_class *re_class;
 	struct rspamd_re_cache *cache;
-	struct rspamd_re_runtime *rt;
 
 	g_assert(task != NULL);
-	rt = task->re_rt;
 	g_assert(rt != NULL);
 	g_assert(re != NULL);
 
@@ -1551,6 +1744,53 @@ int rspamd_re_cache_process(struct rspamd_task *task,
 	return 0;
 }
 
+int rspamd_re_cache_process(struct rspamd_task *task,
+							rspamd_regexp_t *re,
+							enum rspamd_re_type type,
+							gconstpointer type_data,
+							gsize datalen,
+							gboolean is_strong)
+{
+	struct rspamd_re_runtime *rt_list, *rt;
+	struct rspamd_re_class *re_class;
+	struct rspamd_re_cache *target_cache;
+	int result = 0;
+
+	g_assert(task != NULL);
+	g_assert(re != NULL);
+
+	rt_list = task->re_rt;
+	if (!rt_list) {
+		return 0;
+	}
+
+	/*
+	 * Since each regexp belongs to a class which belongs to a cache,
+	 * we can find the correct cache and corresponding runtime
+	 */
+	re_class = rspamd_regexp_get_class(re);
+	if (!re_class) {
+		return 0;
+	}
+
+	target_cache = re_class->cache;
+	if (!target_cache) {
+		return 0;
+	}
+
+	/* Find the runtime that matches the cache */
+	DL_FOREACH(rt_list, rt)
+	{
+		if (rt->cache == target_cache) {
+			result = rspamd_re_cache_process_single(task, rt, re, type,
+													type_data, datalen, is_strong);
+			break;
+		}
+	}
+
+	return result;
+}
+
 int rspamd_re_cache_process_ffi(void *ptask,
 								void *pre,
 								int type,
@@ -1571,30 +1811,51 @@ int rspamd_re_cache_process_ffi(void *ptask,
 
 void rspamd_re_cache_runtime_destroy(struct rspamd_re_runtime *rt)
 {
+	struct rspamd_re_runtime *cur, *tmp;
+
 	g_assert(rt != NULL);
 
-	if (rt->sel_cache) {
-		struct rspamd_re_selector_result sr;
+	/* Handle linked list of runtimes */
+	DL_FOREACH_SAFE(rt, cur, tmp)
+	{
+		if (cur->sel_cache) {
+			struct rspamd_re_selector_result sr;
 
-		kh_foreach_value(rt->sel_cache, sr, {
-			for (unsigned int i = 0; i < sr.cnt; i++) {
-				g_free((gpointer) sr.scvec[i]);
-			}
+			kh_foreach_value(cur->sel_cache, sr, {
+				for (unsigned int i = 0; i < sr.cnt; i++) {
+					g_free((gpointer) sr.scvec[i]);
+				}
 
-			g_free(sr.scvec);
-			g_free(sr.lenvec);
-		});
-		kh_destroy(selectors_results_hash, rt->sel_cache);
+				g_free(sr.scvec);
+				g_free(sr.lenvec);
+			});
+			kh_destroy(selectors_results_hash, cur->sel_cache);
+		}
+
+		REF_RELEASE(cur->cache);
+		g_free(cur);
 	}
-
-	REF_RELEASE(rt->cache);
-	g_free(rt);
 }
 
 void rspamd_re_cache_unref(struct rspamd_re_cache *cache)
 {
 	if (cache) {
 		REF_RELEASE(cache);
+	}
+}
+
+void rspamd_re_cache_unref_scoped(struct rspamd_re_cache *cache_head)
+{
+	struct rspamd_re_cache *cur, *tmp;
+
+	if (!cache_head) {
+		return;
+	}
+
+	DL_FOREACH_SAFE(cache_head, cur, tmp)
+	{
+		DL_DELETE(cache_head, cur);
+		rspamd_re_cache_unref(cur);
 	}
 }
 
@@ -1616,6 +1877,23 @@ unsigned int rspamd_re_cache_set_limit(struct rspamd_re_cache *cache, unsigned i
 
 	old = cache->max_re_data;
 	cache->max_re_data = limit;
+
+	return old;
+}
+
+unsigned int rspamd_re_cache_set_limit_scoped(struct rspamd_re_cache *cache_head, const char *scope, unsigned int limit)
+{
+	struct rspamd_re_cache *cache;
+	unsigned int old = 0;
+
+	if (!cache_head || !scope) {
+		return old;
+	}
+
+	cache = rspamd_re_cache_find_by_scope(cache_head, scope);
+	if (cache) {
+		old = rspamd_re_cache_set_limit(cache, limit);
+	}
 
 	return old;
 }
@@ -1937,21 +2215,27 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 		if (re_class->type_len > 0) {
 			if (!cbdata->silent) {
 				msg_info_re_cache(
-					"skip already valid class %s(%*s) to cache %6s, %d regexps",
+					"skip already valid class %s(%*s) to cache %6s, %d regexps%s%s%s",
 					rspamd_re_cache_type_to_string(re_class->type),
 					(int) re_class->type_len - 1,
 					re_class->type_data,
 					re_class->hash,
-					n);
+					n,
+					cache->scope ? " for scope '" : "",
+					cache->scope ? cache->scope : "",
+					cache->scope ? "'" : "");
 			}
 		}
 		else {
 			if (!cbdata->silent) {
 				msg_info_re_cache(
-					"skip already valid class %s to cache %6s, %d regexps",
+					"skip already valid class %s to cache %6s, %d regexps%s%s%s",
 					rspamd_re_cache_type_to_string(re_class->type),
 					re_class->hash,
-					n);
+					n,
+					cache->scope ? " for scope '" : "",
+					cache->scope ? cache->scope : "",
+					cache->scope ? "'" : "");
 			}
 		}
 
@@ -2160,21 +2444,27 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 
 		if (re_class->type_len > 0) {
 			msg_info_re_cache(
-				"compiled class %s(%*s) to cache %6s, %d/%d regexps",
+				"compiled class %s(%*s) to cache %6s, %d/%d regexps%s%s%s",
 				rspamd_re_cache_type_to_string(re_class->type),
 				(int) re_class->type_len - 1,
 				re_class->type_data,
 				re_class->hash,
 				n,
-				(int) g_hash_table_size(re_class->re));
+				(int) g_hash_table_size(re_class->re),
+				cache->scope ? " for scope '" : "",
+				cache->scope ? cache->scope : "",
+				cache->scope ? "'" : "");
 		}
 		else {
 			msg_info_re_cache(
-				"compiled class %s to cache %6s, %d/%d regexps",
+				"compiled class %s to cache %6s, %d/%d regexps%s%s%s",
 				rspamd_re_cache_type_to_string(re_class->type),
 				re_class->hash,
 				n,
-				(int) g_hash_table_size(re_class->re));
+				(int) g_hash_table_size(re_class->re),
+				cache->scope ? " for scope '" : "",
+				cache->scope ? cache->scope : "",
+				cache->scope ? "'" : "");
 		}
 
 		cbdata->total += n;
@@ -2257,6 +2547,108 @@ int rspamd_re_cache_compile_hyperscan(struct rspamd_re_cache *cache,
 #endif
 }
 
+#ifdef WITH_HYPERSCAN
+struct rspamd_re_cache_scoped_compile_data {
+	unsigned int total_scopes;
+	unsigned int completed_scopes;
+	unsigned int total_compiled;
+	GError *first_error;
+	void (*final_cb)(unsigned int ncompiled, GError *err, void *cbd);
+	void *final_cbd;
+};
+
+static void
+rspamd_re_cache_compile_scoped_coordination_cb(unsigned int ncompiled, GError *err, void *cbd)
+{
+	struct rspamd_re_cache_scoped_compile_data *coord_data =
+		(struct rspamd_re_cache_scoped_compile_data *) cbd;
+
+	coord_data->completed_scopes++;
+	coord_data->total_compiled += ncompiled;
+
+	/* Store the first error we encounter */
+	if (err && !coord_data->first_error) {
+		coord_data->first_error = g_error_copy(err);
+	}
+
+	/* Check if all scopes have completed */
+	if (coord_data->completed_scopes >= coord_data->total_scopes) {
+		/* All scopes completed, call the final callback */
+		if (coord_data->final_cb) {
+			coord_data->final_cb(coord_data->total_compiled, coord_data->first_error, coord_data->final_cbd);
+		}
+
+		/* Cleanup */
+		if (coord_data->first_error) {
+			g_error_free(coord_data->first_error);
+		}
+		g_free(coord_data);
+	}
+}
+#endif
+
+int rspamd_re_cache_compile_hyperscan_scoped(struct rspamd_re_cache *cache_head,
+											 const char *cache_dir,
+											 double max_time,
+											 gboolean silent,
+											 struct ev_loop *event_loop,
+											 void (*cb)(unsigned int ncompiled, GError *err, void *cbd),
+											 void *cbd)
+{
+#ifndef WITH_HYPERSCAN
+	return -1;
+#else
+	struct rspamd_re_cache *cur;
+	struct rspamd_re_cache_scoped_compile_data *coord_data;
+	unsigned int scope_count = 0;
+	int result;
+
+	if (!cache_head) {
+		return -1;
+	}
+
+	/* Count the number of scopes to compile */
+	DL_COUNT(cache_head, cur, scope_count);
+
+	if (scope_count == 0) {
+		/* No scopes to compile, call callback immediately */
+		if (cb) {
+			cb(0, NULL, cbd);
+		}
+		return 0;
+	}
+
+	/* Create coordination data to track completion of all scopes */
+	coord_data = g_malloc0(sizeof(*coord_data));
+	coord_data->total_scopes = scope_count;
+	coord_data->completed_scopes = 0;
+	coord_data->total_compiled = 0;
+	coord_data->first_error = NULL;
+	coord_data->final_cb = cb;
+	coord_data->final_cbd = cbd;
+
+	/*
+	 * Start async compilation for each scope. Each scope will use timers
+	 * and call our coordination callback when completed.
+	 */
+	DL_FOREACH(cache_head, cur)
+	{
+		result = rspamd_re_cache_compile_hyperscan(cur, cache_dir, max_time, silent,
+												   event_loop, rspamd_re_cache_compile_scoped_coordination_cb, coord_data);
+		if (result < 0) {
+			/* If we failed to start compilation for this scope, treat it as completed with error */
+			GError *start_error = g_error_new(rspamd_re_cache_quark(), result,
+											  "Failed to start hyperscan compilation for scope '%s'",
+											  cur->scope ? cur->scope : "unknown");
+			rspamd_re_cache_compile_scoped_coordination_cb(0, start_error, coord_data);
+			g_error_free(start_error);
+		}
+	}
+
+	return 0; /* Always return 0 for async operation */
+#endif
+}
+
 gboolean
 rspamd_re_cache_is_valid_hyperscan_file(struct rspamd_re_cache *cache,
 										const char *path, gboolean silent, gboolean try_load, GError **err)
@@ -2273,6 +2665,7 @@ rspamd_re_cache_is_valid_hyperscan_file(struct rspamd_re_cache *cache,
 	GHashTableIter it;
 	gpointer k, v;
 	struct rspamd_re_class *re_class;
+	struct rspamd_re_cache *cur;
 	gsize len;
 	const char *hash_pos;
 	hs_platform_info_t test_plt;
@@ -2283,7 +2676,7 @@ rspamd_re_cache_is_valid_hyperscan_file(struct rspamd_re_cache *cache,
 
 	len = strlen(path);
 
-	if (len < sizeof(rspamd_cryptobox_HASHBYTES + 3)) {
+	if (len < (rspamd_cryptobox_HASHBYTES + 3)) {
 		if (!silent) {
 			msg_err_re_cache("cannot open hyperscan cache file %s: too short filename",
 							 path);
@@ -2305,174 +2698,179 @@ rspamd_re_cache_is_valid_hyperscan_file(struct rspamd_re_cache *cache,
 	}
 
 	hash_pos = path + len - 3 - (sizeof(re_class->hash) - 1);
-	g_hash_table_iter_init(&it, cache->re_classes);
 
-	while (g_hash_table_iter_next(&it, &k, &v)) {
-		re_class = v;
+	/* Iterate through all scopes in the cache chain */
+	DL_FOREACH(cache, cur)
+	{
+		g_hash_table_iter_init(&it, cur->re_classes);
 
-		if (memcmp(hash_pos, re_class->hash, sizeof(re_class->hash) - 1) == 0) {
-			/* Open file and check magic */
-			gssize r;
+		while (g_hash_table_iter_next(&it, &k, &v)) {
+			re_class = v;
 
-			fd = open(path, O_RDONLY);
+			if (memcmp(hash_pos, re_class->hash, sizeof(re_class->hash) - 1) == 0) {
+				/* Open file and check magic */
+				gssize r;
 
-			if (fd == -1) {
-				if (errno != ENOENT || !silent) {
-					msg_err_re_cache("cannot open hyperscan cache file %s: %s",
-									 path, strerror(errno));
-				}
-				g_set_error(err, rspamd_re_cache_quark(), 0,
-							"%s",
-							strerror(errno));
-				return FALSE;
-			}
+				fd = open(path, O_RDONLY);
 
-			if ((r = read(fd, magicbuf, sizeof(magicbuf))) != sizeof(magicbuf)) {
-				if (r == -1) {
-					msg_err_re_cache("cannot read magic from hyperscan "
-									 "cache file %s: %s",
-									 path, strerror(errno));
+				if (fd == -1) {
+					if (errno != ENOENT || !silent) {
+						msg_err_re_cache("cannot open hyperscan cache file %s: %s",
+										 path, strerror(errno));
+					}
 					g_set_error(err, rspamd_re_cache_quark(), 0,
-								"cannot read magic: %s",
+								"%s",
 								strerror(errno));
-				}
-				else {
-					msg_err_re_cache("truncated read magic from hyperscan "
-									 "cache file %s: %z, %z wanted",
-									 path, r, (gsize) sizeof(magicbuf));
-					g_set_error(err, rspamd_re_cache_quark(), 0,
-								"truncated read magic %zd, %zd wanted",
-								r, (gsize) sizeof(magicbuf));
-				}
-
-				close(fd);
-				return FALSE;
-			}
-
-			mb = rspamd_hs_magic;
-
-			if (memcmp(magicbuf, mb, sizeof(magicbuf)) != 0) {
-				msg_err_re_cache("cannot open hyperscan cache file %s: "
-								 "bad magic ('%*xs', '%*xs' expected)",
-								 path, (int) RSPAMD_HS_MAGIC_LEN, magicbuf,
-								 (int) RSPAMD_HS_MAGIC_LEN, mb);
-
-				close(fd);
-				g_set_error(err, rspamd_re_cache_quark(), 0, "invalid magic");
-				return FALSE;
-			}
-
-			if ((r = read(fd, &test_plt, sizeof(test_plt))) != sizeof(test_plt)) {
-				if (r == -1) {
-					msg_err_re_cache("cannot read platform data from hyperscan "
-									 "cache file %s: %s",
-									 path, strerror(errno));
-				}
-				else {
-					msg_err_re_cache("truncated read platform data from hyperscan "
-									 "cache file %s: %z, %z wanted",
-									 path, r, (gsize) sizeof(magicbuf));
-				}
-
-				g_set_error(err, rspamd_re_cache_quark(), 0,
-							"cannot read platform data: %s", strerror(errno));
-
-				close(fd);
-				return FALSE;
-			}
-
-			if (test_plt.cpu_features != cache->plt.cpu_features) {
-				msg_err_re_cache("cannot open hyperscan cache file %s: "
-								 "compiled for a different platform",
-								 path);
-				g_set_error(err, rspamd_re_cache_quark(), 0,
-							"compiled for a different platform");
-
-				close(fd);
-				return FALSE;
-			}
-
-			close(fd);
-
-			if (try_load) {
-				map = rspamd_file_xmap(path, PROT_READ, &len, TRUE);
-
-				if (map == NULL) {
-					msg_err_re_cache("cannot mmap hyperscan cache file %s: "
-									 "%s",
-									 path, strerror(errno));
-					g_set_error(err, rspamd_re_cache_quark(), 0,
-								"mmap error: %s", strerror(errno));
 					return FALSE;
 				}
 
-				p = map + RSPAMD_HS_MAGIC_LEN + sizeof(test_plt);
-				end = map + len;
-				memcpy(&n, p, sizeof(n));
-				p += sizeof(int);
+				if ((r = read(fd, magicbuf, sizeof(magicbuf))) != sizeof(magicbuf)) {
+					if (r == -1) {
+						msg_err_re_cache("cannot read magic from hyperscan "
+										 "cache file %s: %s",
+										 path, strerror(errno));
+						g_set_error(err, rspamd_re_cache_quark(), 0,
+									"cannot read magic: %s",
+									strerror(errno));
+					}
+					else {
+						msg_err_re_cache("truncated read magic from hyperscan "
+										 "cache file %s: %z, %z wanted",
+										 path, r, (gsize) sizeof(magicbuf));
+						g_set_error(err, rspamd_re_cache_quark(), 0,
+									"truncated read magic %zd, %zd wanted",
+									r, (gsize) sizeof(magicbuf));
+					}
 
-				if (n <= 0 || 2 * n * sizeof(int) +         /* IDs + flags */
-									  sizeof(uint64_t) +    /* crc */
-									  RSPAMD_HS_MAGIC_LEN + /* header */
-									  sizeof(cache->plt) >
-								  len) {
-					/* Some wrong amount of regexps */
-					msg_err_re_cache("bad number of expressions in %s: %d",
-									 path, n);
+					close(fd);
+					return FALSE;
+				}
+
+				mb = rspamd_hs_magic;
+
+				if (memcmp(magicbuf, mb, sizeof(magicbuf)) != 0) {
+					msg_err_re_cache("cannot open hyperscan cache file %s: "
+									 "bad magic ('%*xs', '%*xs' expected)",
+									 path, (int) RSPAMD_HS_MAGIC_LEN, magicbuf,
+									 (int) RSPAMD_HS_MAGIC_LEN, mb);
+
+					close(fd);
+					g_set_error(err, rspamd_re_cache_quark(), 0, "invalid magic");
+					return FALSE;
+				}
+
+				if ((r = read(fd, &test_plt, sizeof(test_plt))) != sizeof(test_plt)) {
+					if (r == -1) {
+						msg_err_re_cache("cannot read platform data from hyperscan "
+										 "cache file %s: %s",
+										 path, strerror(errno));
+					}
+					else {
+						msg_err_re_cache("truncated read platform data from hyperscan "
+										 "cache file %s: %z, %z wanted",
+										 path, r, (gsize) sizeof(magicbuf));
+					}
+
 					g_set_error(err, rspamd_re_cache_quark(), 0,
-								"bad number of expressions: %d", n);
+								"cannot read platform data: %s", strerror(errno));
+
+					close(fd);
+					return FALSE;
+				}
+
+				if (test_plt.cpu_features != cur->plt.cpu_features) {
+					msg_err_re_cache("cannot open hyperscan cache file %s: "
+									 "compiled for a different platform",
+									 path);
+					g_set_error(err, rspamd_re_cache_quark(), 0,
+								"compiled for a different platform");
+
+					close(fd);
+					return FALSE;
+				}
+
+				close(fd);
+
+				if (try_load) {
+					map = rspamd_file_xmap(path, PROT_READ, &len, TRUE);
+
+					if (map == NULL) {
+						msg_err_re_cache("cannot mmap hyperscan cache file %s: "
+										 "%s",
+										 path, strerror(errno));
+						g_set_error(err, rspamd_re_cache_quark(), 0,
+									"mmap error: %s", strerror(errno));
+						return FALSE;
+					}
+
+					p = map + RSPAMD_HS_MAGIC_LEN + sizeof(test_plt);
+					end = map + len;
+					memcpy(&n, p, sizeof(n));
+					p += sizeof(int);
+
+					if (n <= 0 || 2 * n * sizeof(int) +         /* IDs + flags */
+										  sizeof(uint64_t) +    /* crc */
+										  RSPAMD_HS_MAGIC_LEN + /* header */
+										  sizeof(cur->plt) >
+									  len) {
+						/* Some wrong amount of regexps */
+						msg_err_re_cache("bad number of expressions in %s: %d",
+										 path, n);
+						g_set_error(err, rspamd_re_cache_quark(), 0,
+									"bad number of expressions: %d", n);
+						munmap(map, len);
+						return FALSE;
+					}
+
+					/*
+					 * Magic - 8 bytes
+					 * Platform - sizeof (platform)
+					 * n - number of regexps
+					 * n * <regexp ids>
+					 * n * <regexp flags>
+					 * crc - 8 bytes checksum
+					 * <hyperscan blob>
+					 */
+
+					memcpy(&crc, p + n * 2 * sizeof(int), sizeof(crc));
+					rspamd_cryptobox_fast_hash_init(&crc_st, 0xdeadbabe);
+					/* IDs */
+					rspamd_cryptobox_fast_hash_update(&crc_st, p, n * sizeof(int));
+					/* Flags */
+					rspamd_cryptobox_fast_hash_update(&crc_st, p + n * sizeof(int),
+													  n * sizeof(int));
+					/* HS database */
+					p += n * sizeof(int) * 2 + sizeof(uint64_t);
+					rspamd_cryptobox_fast_hash_update(&crc_st, p, end - p);
+					valid_crc = rspamd_cryptobox_fast_hash_final(&crc_st);
+
+					if (crc != valid_crc) {
+						msg_warn_re_cache("outdated or invalid hs database in %s: "
+										  "crc read %xL, crc expected %xL",
+										  path, crc, valid_crc);
+						g_set_error(err, rspamd_re_cache_quark(), 0,
+									"outdated or invalid hs database, crc check failure");
+						munmap(map, len);
+
+						return FALSE;
+					}
+
+					if ((ret = hs_deserialize_database(p, end - p, &test_db)) != HS_SUCCESS) {
+						msg_err_re_cache("bad hs database in %s: %d", path, ret);
+						g_set_error(err, rspamd_re_cache_quark(), 0,
+									"deserialize error: %d", ret);
+						munmap(map, len);
+
+						return FALSE;
+					}
+
+					hs_free_database(test_db);
 					munmap(map, len);
-					return FALSE;
 				}
+				/* XXX: add crc check */
 
-				/*
-				 * Magic - 8 bytes
-				 * Platform - sizeof (platform)
-				 * n - number of regexps
-				 * n * <regexp ids>
-				 * n * <regexp flags>
-				 * crc - 8 bytes checksum
-				 * <hyperscan blob>
-				 */
-
-				memcpy(&crc, p + n * 2 * sizeof(int), sizeof(crc));
-				rspamd_cryptobox_fast_hash_init(&crc_st, 0xdeadbabe);
-				/* IDs */
-				rspamd_cryptobox_fast_hash_update(&crc_st, p, n * sizeof(int));
-				/* Flags */
-				rspamd_cryptobox_fast_hash_update(&crc_st, p + n * sizeof(int),
-												  n * sizeof(int));
-				/* HS database */
-				p += n * sizeof(int) * 2 + sizeof(uint64_t);
-				rspamd_cryptobox_fast_hash_update(&crc_st, p, end - p);
-				valid_crc = rspamd_cryptobox_fast_hash_final(&crc_st);
-
-				if (crc != valid_crc) {
-					msg_warn_re_cache("outdated or invalid hs database in %s: "
-									  "crc read %xL, crc expected %xL",
-									  path, crc, valid_crc);
-					g_set_error(err, rspamd_re_cache_quark(), 0,
-								"outdated or invalid hs database, crc check failure");
-					munmap(map, len);
-
-					return FALSE;
-				}
-
-				if ((ret = hs_deserialize_database(p, end - p, &test_db)) != HS_SUCCESS) {
-					msg_err_re_cache("bad hs database in %s: %d", path, ret);
-					g_set_error(err, rspamd_re_cache_quark(), 0,
-								"deserialize error: %d", ret);
-					munmap(map, len);
-
-					return FALSE;
-				}
-
-				hs_free_database(test_db);
-				munmap(map, len);
+				return TRUE;
 			}
-			/* XXX: add crc check */
-
-			return TRUE;
 		}
 	}
 
@@ -2673,21 +3071,74 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 
 	if (has_valid) {
 		if (all_valid) {
-			msg_info_re_cache("full hyperscan database of %d regexps has been loaded", total);
+			msg_info_re_cache("full hyperscan database of %d regexps has been loaded%s%s%s",
+							  total,
+							  cache->scope ? " for scope '" : "",
+							  cache->scope ? cache->scope : "",
+							  cache->scope ? "'" : "");
 			cache->hyperscan_loaded = RSPAMD_HYPERSCAN_LOADED_FULL;
 		}
 		else {
-			msg_info_re_cache("partial hyperscan database of %d regexps has been loaded", total);
+			msg_info_re_cache("partial hyperscan database of %d regexps has been loaded%s%s%s",
+							  total,
+							  cache->scope ? " for scope '" : "",
+							  cache->scope ? cache->scope : "",
+							  cache->scope ? "'" : "");
 			cache->hyperscan_loaded = RSPAMD_HYPERSCAN_LOADED_PARTIAL;
 		}
 	}
 	else {
-		msg_info_re_cache("hyperscan database has NOT been loaded; no valid expressions");
+		msg_info_re_cache("hyperscan database has NOT been loaded; no valid expressions%s%s%s",
+						  cache->scope ? " for scope '" : "",
+						  cache->scope ? cache->scope : "",
+						  cache->scope ? "'" : "");
 		cache->hyperscan_loaded = RSPAMD_HYPERSCAN_LOAD_ERROR;
 	}
 
 
 	return cache->hyperscan_loaded;
+#endif
+}
+
+enum rspamd_hyperscan_status rspamd_re_cache_load_hyperscan_scoped(
+	struct rspamd_re_cache *cache_head,
+	const char *cache_dir, bool try_load)
+{
+#ifndef WITH_HYPERSCAN
+	return RSPAMD_HYPERSCAN_UNSUPPORTED;
+#else
+	struct rspamd_re_cache *cur;
+	enum rspamd_hyperscan_status result, overall_status = RSPAMD_HYPERSCAN_UNKNOWN;
+	gboolean has_loaded = FALSE, all_loaded = TRUE;
+
+	if (!cache_head) {
+		return RSPAMD_HYPERSCAN_LOAD_ERROR;
+	}
+
+	DL_FOREACH(cache_head, cur)
+	{
+		result = rspamd_re_cache_load_hyperscan(cur, cache_dir, try_load);
+
+		if (result == RSPAMD_HYPERSCAN_LOADED_FULL ||
+			result == RSPAMD_HYPERSCAN_LOADED_PARTIAL) {
+			has_loaded = TRUE;
+			if (result == RSPAMD_HYPERSCAN_LOADED_PARTIAL) {
+				all_loaded = FALSE;
+			}
+		}
+		else {
+			all_loaded = FALSE;
+		}
+	}
+
+	if (has_loaded) {
+		overall_status = all_loaded ? RSPAMD_HYPERSCAN_LOADED_FULL : RSPAMD_HYPERSCAN_LOADED_PARTIAL;
+	}
+	else {
+		overall_status = RSPAMD_HYPERSCAN_LOAD_ERROR;
+	}
+
+	return overall_status;
 #endif
 }
 
@@ -2717,3 +3168,324 @@ void rspamd_re_cache_add_selector(struct rspamd_re_cache *cache,
 		kh_value(cache->selectors, k) = ref;
 	}
 }
+
+void rspamd_re_cache_add_selector_scoped(struct rspamd_re_cache **cache_head, const char *scope,
+										 const char *sname, int ref)
+{
+	struct rspamd_re_cache *cache;
+
+	g_assert(cache_head != NULL);
+	g_assert(sname != NULL);
+
+	/* NULL scope is allowed for default scope */
+	cache = rspamd_re_cache_add_to_scope_list(cache_head, scope);
+	if (cache) {
+		rspamd_re_cache_add_selector(cache, sname, ref);
+	}
+}
+
+struct rspamd_re_cache *rspamd_re_cache_find_scope(struct rspamd_re_cache *cache_head, const char *scope)
+{
+	return rspamd_re_cache_find_by_scope(cache_head, scope);
+}
+
+gboolean rspamd_re_cache_remove_scope(struct rspamd_re_cache **cache_head, const char *scope)
+{
+	struct rspamd_re_cache *target;
+
+	if (!cache_head || !*cache_head) {
+		return FALSE;
+	}
+
+	/* Prevent removal of default scope (NULL) to keep head stable */
+	if (!scope) {
+		return FALSE;
+	}
+
+	target = rspamd_re_cache_find_by_scope(*cache_head, scope);
+	if (!target) {
+		return FALSE;
+	}
+
+	/* Remove from linked list */
+	DL_DELETE(*cache_head, target);
+
+	/* If this was the head and there are no more elements, update head */
+	if (target == *cache_head && !*cache_head) {
+		*cache_head = NULL;
+	}
+
+	/* Unref the cache */
+	rspamd_re_cache_unref(target);
+
+	return TRUE;
+}
+
+unsigned int rspamd_re_cache_count_scopes(struct rspamd_re_cache *cache_head)
+{
+	struct rspamd_re_cache *cur;
+	unsigned int count = 0;
+
+	if (!cache_head) {
+		return 0;
+	}
+
+	DL_COUNT(cache_head, cur, count);
+	return count;
+}
+
+struct rspamd_re_cache *rspamd_re_cache_scope_first(struct rspamd_re_cache *cache_head)
+{
+	return cache_head;
+}
+
+struct rspamd_re_cache *rspamd_re_cache_scope_next(struct rspamd_re_cache *current)
+{
+	return current ? current->next : NULL;
+}
+
+const char *rspamd_re_cache_scope_name(struct rspamd_re_cache *scope)
+{
+	if (!scope) {
+		return "unknown";
+	}
+
+	return scope->scope ? scope->scope : "default";
+}
+
+void rspamd_re_cache_scope_set_flags(struct rspamd_re_cache *scope, unsigned int flags)
+{
+	if (scope) {
+		scope->flags |= flags;
+	}
+}
+
+void rspamd_re_cache_scope_clear_flags(struct rspamd_re_cache *scope, unsigned int flags)
+{
+	if (scope) {
+		scope->flags &= ~flags;
+	}
+}
+
+unsigned int rspamd_re_cache_scope_get_flags(struct rspamd_re_cache *scope)
+{
+	return scope ? scope->flags : 0;
+}
+
+gboolean rspamd_re_cache_scope_is_loaded(struct rspamd_re_cache *scope)
+{
+	if (!scope) {
+		return FALSE;
+	}
+
+	return (scope->flags & RSPAMD_RE_CACHE_FLAG_LOADED) != 0;
+}
+
+void rspamd_re_cache_set_flags(struct rspamd_re_cache *cache_head, const char *scope, unsigned int flags)
+{
+	struct rspamd_re_cache *target;
+
+	if (!cache_head) {
+		return;
+	}
+
+	target = rspamd_re_cache_find_by_scope(cache_head, scope);
+	if (target) {
+		target->flags |= flags;
+	}
+}
+
+void rspamd_re_cache_clear_flags(struct rspamd_re_cache *cache_head, const char *scope, unsigned int flags)
+{
+	struct rspamd_re_cache *target;
+
+	if (!cache_head) {
+		return;
+	}
+
+	target = rspamd_re_cache_find_by_scope(cache_head, scope);
+	if (target) {
+		target->flags &= ~flags;
+	}
+}
+
+unsigned int rspamd_re_cache_get_flags(struct rspamd_re_cache *cache_head, const char *scope)
+{
+	struct rspamd_re_cache *target;
+
+	if (!cache_head) {
+		return 0;
+	}
+
+	target = rspamd_re_cache_find_by_scope(cache_head, scope);
+	if (target) {
+		return target->flags;
+	}
+
+	return 0;
+}
+
+gboolean rspamd_re_cache_is_loaded(struct rspamd_re_cache *cache_head, const char *scope)
+{
+	unsigned int flags = rspamd_re_cache_get_flags(cache_head, scope);
+	return (flags & RSPAMD_RE_CACHE_FLAG_LOADED) != 0;
+}
+
+
+static gboolean
+rspamd_re_cache_create_scope_lock(const char *cache_dir, const char *scope, int *lock_fd)
+{
+	char lock_path[PATH_MAX];
+	pid_t myself = getpid();
+
+	if (!scope) {
+		scope = "default";
+	}
+
+	rspamd_snprintf(lock_path, sizeof(lock_path), "%s%c%s.scope.lock",
+					cache_dir, G_DIR_SEPARATOR, scope);
+
+	*lock_fd = open(lock_path, O_WRONLY | O_CREAT | O_EXCL, 00600);
+
+	if (*lock_fd == -1) {
+		if (errno == EEXIST || errno == EBUSY) {
+			/* Check if the lock is stale */
+			int read_fd = open(lock_path, O_RDONLY);
+			if (read_fd != -1) {
+				pid_t lock_pid;
+				gssize r = read(read_fd, &lock_pid, sizeof(lock_pid));
+				close(read_fd);
+
+				if (r == sizeof(lock_pid)) {
+					/* Check if the process is still alive */
+					if (lock_pid != myself && (kill(lock_pid, 0) == -1 && errno == ESRCH)) {
+						/* Stale lock, remove it */
+						if (unlink(lock_path) == 0) {
+							/* Try to create lock again */
+							*lock_fd = open(lock_path, O_WRONLY | O_CREAT | O_EXCL, 00600);
+							if (*lock_fd != -1) {
+								goto write_pid;
+							}
+						}
+					}
+				}
+				else {
+					/* Invalid lock file, remove it */
+					if (unlink(lock_path) == 0) {
+						*lock_fd = open(lock_path, O_WRONLY | O_CREAT | O_EXCL, 00600);
+						if (*lock_fd != -1) {
+							goto write_pid;
+						}
+					}
+				}
+			}
+		}
+		return FALSE;
+	}
+
+write_pid:
+	/* Write our PID to the lock file */
+	if (write(*lock_fd, &myself, sizeof(myself)) != sizeof(myself)) {
+		close(*lock_fd);
+		unlink(lock_path);
+		return FALSE;
+	}
+
+	/* Lock the file */
+	if (!rspamd_file_lock(*lock_fd, FALSE)) {
+		close(*lock_fd);
+		unlink(lock_path);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+static void
+rspamd_re_cache_remove_scope_lock(const char *cache_dir, const char *scope, int lock_fd)
+{
+	char lock_path[PATH_MAX];
+
+	if (!scope) {
+		scope = "default";
+	}
+
+	rspamd_snprintf(lock_path, sizeof(lock_path), "%s%c%s.scope.lock",
+					cache_dir, G_DIR_SEPARATOR, scope);
+
+	if (lock_fd != -1) {
+		rspamd_file_unlock(lock_fd, FALSE);
+		close(lock_fd);
+	}
+	unlink(lock_path);
+}
+
+#ifdef WITH_HYPERSCAN
+struct rspamd_re_cache_hs_compile_scoped_cbdata {
+	struct rspamd_re_cache *cache;
+	const char *cache_dir;
+	const char *scope;
+	double max_time;
+	gboolean silent;
+	int lock_fd;
+	void (*cb)(const char *scope, unsigned int ncompiled, GError *err, void *cbd);
+	void *cbd;
+};
+
+static void
+rspamd_re_cache_compile_scoped_cb(unsigned int ncompiled, GError *err, void *cbd)
+{
+	struct rspamd_re_cache_hs_compile_scoped_cbdata *scoped_cbd =
+		(struct rspamd_re_cache_hs_compile_scoped_cbdata *) cbd;
+
+	/* Remove lock */
+	rspamd_re_cache_remove_scope_lock(scoped_cbd->cache_dir, scoped_cbd->scope,
+									  scoped_cbd->lock_fd);
+
+	/* Call original callback */
+	if (scoped_cbd->cb) {
+		scoped_cbd->cb(scoped_cbd->scope, ncompiled, err, scoped_cbd->cbd);
+	}
+
+	g_free(scoped_cbd);
+}
+
+int rspamd_re_cache_compile_hyperscan_scoped_single(struct rspamd_re_cache *cache,
+													const char *scope,
+													const char *cache_dir,
+													double max_time,
+													gboolean silent,
+													struct ev_loop *event_loop,
+													void (*cb)(const char *scope, unsigned int ncompiled, GError *err, void *cbd),
+													void *cbd)
+{
+	struct rspamd_re_cache_hs_compile_scoped_cbdata *scoped_cbd;
+	int lock_fd = -1;
+
+	g_assert(cache != NULL);
+	g_assert(cache_dir != NULL);
+
+	/* Try to acquire lock for this scope */
+	if (!rspamd_re_cache_create_scope_lock(cache_dir, scope, &lock_fd)) {
+		/* Another process is compiling this scope */
+		if (cb) {
+			cb(scope, 0, NULL, cbd);
+		}
+		return 0;
+	}
+
+	/* Create callback data */
+	scoped_cbd = g_malloc0(sizeof(*scoped_cbd));
+	scoped_cbd->cache = cache;
+	scoped_cbd->cache_dir = cache_dir;
+	scoped_cbd->scope = scope;
+	scoped_cbd->max_time = max_time;
+	scoped_cbd->silent = silent;
+	scoped_cbd->lock_fd = lock_fd;
+	scoped_cbd->cb = cb;
+	scoped_cbd->cbd = cbd;
+
+	return rspamd_re_cache_compile_hyperscan(cache, cache_dir, max_time, silent,
+											 event_loop, rspamd_re_cache_compile_scoped_cb, scoped_cbd);
+}
+#endif

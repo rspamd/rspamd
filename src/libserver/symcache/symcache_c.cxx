@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -719,4 +719,11 @@ void rspamd_symcache_runtime_destroy(struct rspamd_task *task)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 	cache_runtime->savepoint_dtor(task);
+}
+
+void rspamd_symcache_promote_resort(struct rspamd_symcache *cache)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	real_cache->promote_resort();
 }

@@ -1,0 +1,43 @@
+# SpamAssassin-style rules for advance fee fraud detection (simplified for testing)
+
+# Individual atom rules (these detect specific patterns)
+header __FRAUD_VQE Subject =~ /^(?:Re:|\[.{1,10}\])?\s*(?:very )?urgent\s+(?:(?:and|&)\s+)?(?:confidential|assistance|business|attention|reply|response|help)\b/i
+
+body __FRAUD_DBI /(?:\bdollars?\b|\busd(?:ollars)?(?:[0-9]|\b)|\bus\$|\$[0-9,.]{6,}|\$[0-9].{0,8}[mb]illion|\$[0-9.,]{2,10} ?m|\beuros?\b|u[.]?s[.]? [0-9.]+ m)/i
+body __FRAUD_KJV /(?:claim|concerning) (?:the|this) money/i
+body __FRAUD_NEB /(?:government|bank) of nigeria/i
+body __FRAUD_XJR /(?:who was a|as a|an? honest|you being a|to any) foreigner/i
+body __FRAUD_JBU /\bforeign account\b/i
+body __FRAUD_XVW /\bhonest cooperation\b/i
+body __FRAUD_LTX /\bmilli?on (?:.{1,25} thousand\s*)?(?:(?:united states|u\.?s\.?) dollars|(?i:U\.?S\.?D?))\b/i
+body __FRAUD_PVN /as the beneficiary/i
+body __FRAUD_MQO /foreign (?:business partner|customer)/i
+body __FRAUD_TCC /foreign (?:offshore )?(?:bank|account)/i
+body __FRAUD_GBW /god gives .{1,10}second chance/i
+body __FRAUD_NRG /i am contacting you/i
+body __FRAUD_YPO /the total sum/i
+body __FRAUD_UOQ /vital documents/i
+body __FRAUD_BEP /\b(?:bank of nigeria|central bank of|trust bank|apex bank|amalgamated bank)\b/i
+body __FRAUD_DPR /\b(?:(?:respond|reply) (?:urgently|immediately)|(?:urgent|immediate|earliest) (?:reply|response))\b/i
+body __FRAUD_QXX /\b(?:my name is|i am) (?:mrs?|engr|barrister|dr|prince(?:ss)?)[. ]/i
+body __FRAUD_PTS /\b(?:ass?ass?inat(?:ed|ion)|murder(?:e?d)?|kill(?:ed|ing)\b[^.]{0,99}\b(?:war veterans|rebels?))\b/i
+body __FRAUD_TDP /\b(?:business partner(?:s|ship)?|silent partner(?:s|ship)?)\b/i
+body __FRAUD_AON /\b(?:confidential|private|alternate|alternative) (?:(?:e-? *)?mail)\b/i
+body __FRAUD_YWW /\bfurnish you with\b/i
+body __FRAUD_ULK /\baffidavits?\b/i
+body __FRAUD_IOU /\b(?:no risks?|risk-? *free|free of risks?|100% safe)\b/i
+body __FRAUD_IRT /\b(?:compliments? of the|dear friend|dear sir|yours faithfully|season'?s greetings)\b/i
+body __FRAUD_ETX /\byour\b[^.]{0,99}\b(?:contact (?:details|information)|private (?:e?[- ]?mail|telephone|tel|phone|fax))\b/i
+body __FRAUD_WDR /\bprivate lawyer\b/i
+
+# Meta rules that combine multiple atoms
+meta ADVANCE_FEE_2 (__FRAUD_KJV + __FRAUD_NEB + __FRAUD_XJR + __FRAUD_JBU + __FRAUD_XVW + __FRAUD_LTX + __FRAUD_PVN + __FRAUD_MQO + __FRAUD_TCC + __FRAUD_GBW + __FRAUD_NRG + __FRAUD_YPO + __FRAUD_UOQ + __FRAUD_DBI + __FRAUD_BEP + __FRAUD_DPR + __FRAUD_QXX + __FRAUD_PTS + __FRAUD_TDP + __FRAUD_AON + __FRAUD_YWW + __FRAUD_ULK + __FRAUD_IOU + __FRAUD_IRT + __FRAUD_ETX + __FRAUD_WDR > 2)
+
+meta ADVANCE_FEE_3 (__FRAUD_KJV + __FRAUD_NEB + __FRAUD_XJR + __FRAUD_JBU + __FRAUD_XVW + __FRAUD_LTX + __FRAUD_PVN + __FRAUD_MQO + __FRAUD_TCC + __FRAUD_GBW + __FRAUD_NRG + __FRAUD_YPO + __FRAUD_UOQ + __FRAUD_DBI + __FRAUD_BEP + __FRAUD_DPR + __FRAUD_QXX + __FRAUD_PTS + __FRAUD_TDP + __FRAUD_AON + __FRAUD_YWW + __FRAUD_ULK + __FRAUD_IOU + __FRAUD_IRT + __FRAUD_ETX + __FRAUD_WDR > 3)
+
+# Descriptions for the rules
+describe ADVANCE_FEE_2 Appears to be advance fee fraud (Nigerian 419) - moderate confidence
+describe ADVANCE_FEE_3 Appears to be advance fee fraud (Nigerian 419) - high confidence
+
+score ADVANCE_FEE_2 4.0
+score ADVANCE_FEE_3 5.0

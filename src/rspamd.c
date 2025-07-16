@@ -1155,6 +1155,18 @@ rspamd_hup_handler(struct ev_loop *loop, ev_signal *w, int revents)
 			msg_info_main("spawn workers with a new config");
 			spawn_workers(rspamd_main, rspamd_main->event_loop);
 			msg_info_main("workers spawning has been finished");
+
+			/* Notify all workers that spawning is complete */
+			{
+				struct rspamd_control_command wcmd;
+				memset(&wcmd, 0, sizeof(wcmd));
+				wcmd.type = RSPAMD_CONTROL_WORKERS_SPAWNED;
+				wcmd.cmd.workers_spawned.workers_count = g_hash_table_size(rspamd_main->workers);
+				rspamd_control_broadcast_srv_cmd(rspamd_main, &wcmd, 0);
+				msg_info_main("notified workers that spawning is complete after reload (%d workers)",
+							  wcmd.cmd.workers_spawned.workers_count);
+			}
+
 			/* Kill marked */
 			msg_info_main("kill old workers");
 			g_hash_table_foreach(rspamd_main->workers, kill_old_workers, NULL);
@@ -1686,6 +1698,17 @@ int main(int argc, char **argv, char **env)
 	rspamd_mempool_lock_mutex(rspamd_main->start_mtx);
 	spawn_workers(rspamd_main, event_loop);
 	rspamd_mempool_unlock_mutex(rspamd_main->start_mtx);
+
+	/* Notify all workers that spawning is complete */
+	{
+		struct rspamd_control_command wcmd;
+		memset(&wcmd, 0, sizeof(wcmd));
+		wcmd.type = RSPAMD_CONTROL_WORKERS_SPAWNED;
+		wcmd.cmd.workers_spawned.workers_count = g_hash_table_size(rspamd_main->workers);
+		rspamd_control_broadcast_srv_cmd(rspamd_main, &wcmd, 0);
+		msg_info_main("notified workers that spawning is complete (%d workers)",
+					  wcmd.cmd.workers_spawned.workers_count);
+	}
 
 	rspamd_main->http_ctx = rspamd_http_context_create(rspamd_main->cfg,
 													   event_loop, rspamd_main->cfg->ups_ctx);
