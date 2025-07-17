@@ -1121,6 +1121,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 
 	case parse_start_dquote:
 		if (*in == '"') {
+			store_component_value();
 			state = spaces_after_param;
 		}
 		else {
@@ -1131,6 +1132,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 
 	case parse_start_squote:
 		if (*in == '\'') {
+			store_component_value();
 			state = spaces_after_param;
 		}
 		else {
