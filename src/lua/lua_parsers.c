@@ -46,6 +46,14 @@
  */
 
 /***
+ * @function parsers.parse_html_content(input, mempool)
+ * Parses HTML and returns the HTML content object for structure analysis
+ * @param {string|text} in input HTML
+ * @param {rspamd_mempool} mempool memory pool for HTML content management
+ * @return {html_content} HTML content object with tag structure
+ */
+LUA_FUNCTION_DEF(parsers, parse_html_content);
+/***
  * @function parsers.parse_mail_address(str, [pool])
  * Parses email address and returns a table of tables in the following format:
  *
@@ -93,6 +101,7 @@
 static const struct luaL_reg parserslib_f[] = {
 	LUA_INTERFACE_DEF(parsers, tokenize_text),
 	LUA_INTERFACE_DEF(parsers, parse_html),
+	LUA_INTERFACE_DEF(parsers, parse_html_content),
 	LUA_INTERFACE_DEF(parsers, parse_mail_address),
 	LUA_INTERFACE_DEF(parsers, parse_content_type),
 	LUA_INTERFACE_DEF(parsers, parse_smtp_date),
@@ -234,6 +243,62 @@ int lua_parsers_parse_html(lua_State *L)
 
 		g_byte_array_free(in, TRUE);
 		rspamd_mempool_delete(pool);
+	}
+	else {
+		lua_pushnil(L);
+	}
+
+	return 1;
+}
+
+static int lua_parsers_parse_html_content(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t;
+	const char *start = NULL;
+	gsize len;
+	GByteArray *in;
+	rspamd_mempool_t *pool;
+	void *hc;
+	void **phc;
+
+	if (lua_type(L, 1) == LUA_TUSERDATA) {
+		t = lua_check_text(L, 1);
+
+		if (t != NULL) {
+			start = t->start;
+			len = t->len;
+		}
+	}
+	else if (lua_type(L, 1) == LUA_TSTRING) {
+		start = luaL_checklstring(L, 1, &len);
+	}
+
+	if (lua_type(L, 2) != LUA_TUSERDATA) {
+		return luaL_error(L, "invalid arguments: mempool expected as second argument");
+	}
+
+	pool = rspamd_lua_check_mempool(L, 2);
+	if (!pool) {
+		return luaL_error(L, "invalid mempool argument");
+	}
+
+	if (start != NULL) {
+		in = g_byte_array_sized_new(len);
+		g_byte_array_append(in, start, len);
+
+		hc = rspamd_html_process_part(pool, in);
+
+		if (hc) {
+			phc = lua_newuserdata(L, sizeof(void *));
+			*phc = hc;
+			rspamd_lua_setclass(L, rspamd_html_classname, -1);
+		}
+		else {
+			lua_pushnil(L);
+		}
+
+		g_byte_array_free(in, TRUE);
 	}
 	else {
 		lua_pushnil(L);
