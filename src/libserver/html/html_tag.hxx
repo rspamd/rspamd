@@ -268,7 +268,7 @@ struct html_component_width : html_component_base {
 	{
 		return raw_value;
 	}
-	constexpr std::optional<std::uint32_t> get_numeric_value() const
+	std::optional<std::uint32_t> get_numeric_value() const
 	{
 		return numeric_value;
 	}
@@ -291,7 +291,7 @@ struct html_component_height : html_component_base {
 	{
 		return raw_value;
 	}
-	constexpr std::optional<std::uint32_t> get_numeric_value() const
+	std::optional<std::uint32_t> get_numeric_value() const
 	{
 		return numeric_value;
 	}
@@ -314,7 +314,7 @@ struct html_component_size : html_component_base {
 	{
 		return raw_value;
 	}
-	constexpr std::optional<std::uint32_t> get_numeric_value() const
+	std::optional<std::uint32_t> get_numeric_value() const
 	{
 		return numeric_value;
 	}
@@ -386,7 +386,7 @@ struct html_component_font_size : html_component_base {
 	{
 		return raw_value;
 	}
-	constexpr std::optional<std::uint32_t> get_numeric_value() const
+	std::optional<std::uint32_t> get_numeric_value() const
 	{
 		return numeric_value;
 	}
@@ -1299,7 +1299,7 @@ struct html_tag {
 
 	// Template method to find component by type
 	template<typename T>
-	constexpr auto find_component() const -> std::optional<const T *>
+	auto find_component() const -> std::optional<const T *>
 	{
 		for (const auto &comp: components) {
 			if (std::holds_alternative<T>(comp)) {
@@ -1310,7 +1310,7 @@ struct html_tag {
 	}
 
 	// Helper methods for common component access
-	constexpr auto find_href() const -> std::optional<std::string_view>
+	auto find_href() const -> std::optional<std::string_view>
 	{
 		if (auto comp = find_component<html_component_href>()) {
 			return comp.value()->value;
@@ -1318,7 +1318,7 @@ struct html_tag {
 		return std::nullopt;
 	}
 
-	constexpr auto find_class() const -> std::optional<std::string_view>
+	auto find_class() const -> std::optional<std::string_view>
 	{
 		if (auto comp = find_component<html_component_class>()) {
 			return comp.value()->value;
@@ -1326,7 +1326,7 @@ struct html_tag {
 		return std::nullopt;
 	}
 
-	constexpr auto find_id() const -> std::optional<std::string_view>
+	auto find_id() const -> std::optional<std::string_view>
 	{
 		if (auto comp = find_component<html_component_id>()) {
 			return comp.value()->value;
@@ -1334,7 +1334,7 @@ struct html_tag {
 		return std::nullopt;
 	}
 
-	constexpr auto find_width() const -> std::optional<std::uint32_t>
+	auto find_width() const -> std::optional<std::uint32_t>
 	{
 		if (auto comp = find_component<html_component_width>()) {
 			return comp.value()->get_numeric_value();
@@ -1342,7 +1342,7 @@ struct html_tag {
 		return std::nullopt;
 	}
 
-	constexpr auto find_height() const -> std::optional<std::uint32_t>
+	auto find_height() const -> std::optional<std::uint32_t>
 	{
 		if (auto comp = find_component<html_component_height>()) {
 			return comp.value()->get_numeric_value();
@@ -1350,7 +1350,7 @@ struct html_tag {
 		return std::nullopt;
 	}
 
-	constexpr auto find_style() const -> std::optional<std::string_view>
+	auto find_style() const -> std::optional<std::string_view>
 	{
 		if (auto comp = find_component<html_component_style>()) {
 			return comp.value()->value;
@@ -1358,7 +1358,7 @@ struct html_tag {
 		return std::nullopt;
 	}
 
-	constexpr auto find_alt() const -> std::optional<std::string_view>
+	auto find_alt() const -> std::optional<std::string_view>
 	{
 		if (auto comp = find_component<html_component_alt>()) {
 			return comp.value()->value;
@@ -1366,7 +1366,7 @@ struct html_tag {
 		return std::nullopt;
 	}
 
-	constexpr auto find_rel() const -> std::optional<std::string_view>
+	auto find_rel() const -> std::optional<std::string_view>
 	{
 		if (auto comp = find_component<html_component_rel>()) {
 			return comp.value()->value;
@@ -1374,12 +1374,12 @@ struct html_tag {
 		return std::nullopt;
 	}
 
-	constexpr auto is_hidden() const -> bool
+	auto is_hidden() const -> bool
 	{
 		return find_component<html_component_hidden>().has_value();
 	}
 
-	constexpr auto find_unknown_component(std::string_view attr_name) const -> std::optional<std::string_view>
+	auto find_unknown_component(std::string_view attr_name) const -> std::optional<std::string_view>
 	{
 		for (const auto &comp: components) {
 			if (std::holds_alternative<html_component_unknown>(comp)) {
@@ -1392,7 +1392,7 @@ struct html_tag {
 		return std::nullopt;
 	}
 
-	constexpr auto get_unknown_components() const -> std::vector<std::pair<std::string_view, std::string_view>>
+	auto get_unknown_components() const -> std::vector<std::pair<std::string_view, std::string_view>>
 	{
 		std::vector<std::pair<std::string_view, std::string_view>> unknown_attrs;
 		for (const auto &comp: components) {
@@ -1416,6 +1416,9 @@ struct html_tag {
 	// Find any component by attribute name
 	auto find_component_by_name(std::string_view attr_name) const -> std::optional<std::string_view>;
 
+	// Get all attributes as name-value pairs
+	auto get_all_attributes() const -> std::vector<std::pair<std::string_view, std::string_view>>;
+
 	auto clear(void) -> void
 	{
 		id = Tag_UNKNOWN;
@@ -1428,7 +1431,7 @@ struct html_tag {
 		closing.clear();
 	}
 
-	constexpr auto get_content_length() const -> std::size_t
+	auto get_content_length() const -> std::size_t
 	{
 		if (flags & (FL_IGNORE | CM_HEAD)) {
 			return 0;

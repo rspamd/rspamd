@@ -845,6 +845,28 @@ auto html_tag::find_component_by_name(std::string_view attr_name) const -> std::
 	return find_unknown_component(attr_name);
 }
 
+auto html_tag::get_all_attributes() const -> std::vector<std::pair<std::string_view, std::string_view>>
+{
+	std::vector<std::pair<std::string_view, std::string_view>> result;
+
+	// First, get all known attributes using the component_extractors map
+	for (const auto &[attr_name, extractor_func]: component_extractors) {
+		if (auto value = extractor_func(this)) {
+			// Convert frozen::string to std::string_view for the key
+			std::string_view name_view{attr_name.data(), attr_name.size()};
+			result.emplace_back(name_view, value.value());
+		}
+	}
+
+	// Then add all unknown attributes
+	auto unknown_attrs = get_unknown_components();
+	for (const auto &[name, value]: unknown_attrs) {
+		result.emplace_back(name, value);
+	}
+
+	return result;
+}
+
 enum tag_parser_state {
 	parse_start = 0,
 	parse_name,
