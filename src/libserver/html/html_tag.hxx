@@ -36,7 +36,7 @@ namespace rspamd::html {
 struct html_content; /* Forward declaration */
 
 // Internal enum for mapping (not exposed in public API)
-enum class html_component_type : std::uint8_t {
+enum class html_component_enum_type : std::uint8_t {
 	RSPAMD_HTML_COMPONENT_NAME = 0,
 	RSPAMD_HTML_COMPONENT_HREF,
 	RSPAMD_HTML_COMPONENT_COLOR,
@@ -50,6 +50,72 @@ enum class html_component_type : std::uint8_t {
 	RSPAMD_HTML_COMPONENT_ALT,
 	RSPAMD_HTML_COMPONENT_ID,
 	RSPAMD_HTML_COMPONENT_HIDDEN,
+	// Typography
+	RSPAMD_HTML_COMPONENT_FONT_FAMILY,
+	RSPAMD_HTML_COMPONENT_FONT_SIZE,
+	RSPAMD_HTML_COMPONENT_FONT_WEIGHT,
+	RSPAMD_HTML_COMPONENT_FONT_STYLE,
+	RSPAMD_HTML_COMPONENT_TEXT_ALIGN,
+	RSPAMD_HTML_COMPONENT_TEXT_DECORATION,
+	RSPAMD_HTML_COMPONENT_LINE_HEIGHT,
+	// Layout & positioning
+	RSPAMD_HTML_COMPONENT_MARGIN,
+	RSPAMD_HTML_COMPONENT_MARGIN_TOP,
+	RSPAMD_HTML_COMPONENT_MARGIN_BOTTOM,
+	RSPAMD_HTML_COMPONENT_MARGIN_LEFT,
+	RSPAMD_HTML_COMPONENT_MARGIN_RIGHT,
+	RSPAMD_HTML_COMPONENT_PADDING,
+	RSPAMD_HTML_COMPONENT_PADDING_TOP,
+	RSPAMD_HTML_COMPONENT_PADDING_BOTTOM,
+	RSPAMD_HTML_COMPONENT_PADDING_LEFT,
+	RSPAMD_HTML_COMPONENT_PADDING_RIGHT,
+	RSPAMD_HTML_COMPONENT_BORDER,
+	RSPAMD_HTML_COMPONENT_BORDER_COLOR,
+	RSPAMD_HTML_COMPONENT_BORDER_WIDTH,
+	RSPAMD_HTML_COMPONENT_BORDER_STYLE,
+	// Display & visibility
+	RSPAMD_HTML_COMPONENT_DISPLAY,
+	RSPAMD_HTML_COMPONENT_VISIBILITY,
+	RSPAMD_HTML_COMPONENT_OPACITY,
+	// Dimensions
+	RSPAMD_HTML_COMPONENT_MIN_WIDTH,
+	RSPAMD_HTML_COMPONENT_MAX_WIDTH,
+	RSPAMD_HTML_COMPONENT_MIN_HEIGHT,
+	RSPAMD_HTML_COMPONENT_MAX_HEIGHT,
+	// Table attributes
+	RSPAMD_HTML_COMPONENT_CELLPADDING,
+	RSPAMD_HTML_COMPONENT_CELLSPACING,
+	RSPAMD_HTML_COMPONENT_VALIGN,
+	RSPAMD_HTML_COMPONENT_ALIGN,
+	// Form attributes
+	RSPAMD_HTML_COMPONENT_TYPE,
+	RSPAMD_HTML_COMPONENT_VALUE,
+	RSPAMD_HTML_COMPONENT_PLACEHOLDER,
+	RSPAMD_HTML_COMPONENT_DISABLED,
+	RSPAMD_HTML_COMPONENT_READONLY,
+	RSPAMD_HTML_COMPONENT_CHECKED,
+	RSPAMD_HTML_COMPONENT_SELECTED,
+	// Link & media
+	RSPAMD_HTML_COMPONENT_TARGET,
+	RSPAMD_HTML_COMPONENT_TITLE,
+	RSPAMD_HTML_COMPONENT_SRC,
+	// Meta & document
+	RSPAMD_HTML_COMPONENT_CHARSET,
+	RSPAMD_HTML_COMPONENT_CONTENT,
+	RSPAMD_HTML_COMPONENT_HTTP_EQUIV,
+	// Accessibility
+	RSPAMD_HTML_COMPONENT_ROLE,
+	RSPAMD_HTML_COMPONENT_TABINDEX,
+	// Background
+	RSPAMD_HTML_COMPONENT_BACKGROUND,
+	RSPAMD_HTML_COMPONENT_BACKGROUND_IMAGE,
+	RSPAMD_HTML_COMPONENT_BACKGROUND_COLOR,
+	RSPAMD_HTML_COMPONENT_BACKGROUND_REPEAT,
+	RSPAMD_HTML_COMPONENT_BACKGROUND_POSITION,
+	// Email-specific tracking
+	RSPAMD_HTML_COMPONENT_DATA_TRACK,
+	RSPAMD_HTML_COMPONENT_DATA_ID,
+	RSPAMD_HTML_COMPONENT_DATA_URL,
 };
 
 // Forward declarations for component types
@@ -71,17 +137,17 @@ struct html_component_unknown;
 // Base interface for all components
 struct html_component_base {
 	virtual ~html_component_base() = default;
-	virtual std::string_view get_string_value() const = 0;
+	virtual constexpr std::string_view get_string_value() const = 0;
 };
 
 // String-based components
 struct html_component_name : html_component_base {
 	std::string_view value;
-	explicit html_component_name(std::string_view v)
+	explicit constexpr html_component_name(std::string_view v)
 		: value(v)
 	{
 	}
-	std::string_view get_string_value() const override
+	constexpr std::string_view get_string_value() const override
 	{
 		return value;
 	}
@@ -89,11 +155,11 @@ struct html_component_name : html_component_base {
 
 struct html_component_href : html_component_base {
 	std::string_view value;
-	explicit html_component_href(std::string_view v)
+	explicit constexpr html_component_href(std::string_view v)
 		: value(v)
 	{
 	}
-	std::string_view get_string_value() const override
+	constexpr std::string_view get_string_value() const override
 	{
 		return value;
 	}
@@ -101,11 +167,11 @@ struct html_component_href : html_component_base {
 
 struct html_component_style : html_component_base {
 	std::string_view value;
-	explicit html_component_style(std::string_view v)
+	explicit constexpr html_component_style(std::string_view v)
 		: value(v)
 	{
 	}
-	std::string_view get_string_value() const override
+	constexpr std::string_view get_string_value() const override
 	{
 		return value;
 	}
@@ -113,11 +179,11 @@ struct html_component_style : html_component_base {
 
 struct html_component_class : html_component_base {
 	std::string_view value;
-	explicit html_component_class(std::string_view v)
+	explicit constexpr html_component_class(std::string_view v)
 		: value(v)
 	{
 	}
-	std::string_view get_string_value() const override
+	constexpr std::string_view get_string_value() const override
 	{
 		return value;
 	}
@@ -125,11 +191,11 @@ struct html_component_class : html_component_base {
 
 struct html_component_rel : html_component_base {
 	std::string_view value;
-	explicit html_component_rel(std::string_view v)
+	explicit constexpr html_component_rel(std::string_view v)
 		: value(v)
 	{
 	}
-	std::string_view get_string_value() const override
+	constexpr std::string_view get_string_value() const override
 	{
 		return value;
 	}
@@ -137,11 +203,11 @@ struct html_component_rel : html_component_base {
 
 struct html_component_alt : html_component_base {
 	std::string_view value;
-	explicit html_component_alt(std::string_view v)
+	explicit constexpr html_component_alt(std::string_view v)
 		: value(v)
 	{
 	}
-	std::string_view get_string_value() const override
+	constexpr std::string_view get_string_value() const override
 	{
 		return value;
 	}
@@ -149,11 +215,11 @@ struct html_component_alt : html_component_base {
 
 struct html_component_id : html_component_base {
 	std::string_view value;
-	explicit html_component_id(std::string_view v)
+	explicit constexpr html_component_id(std::string_view v)
 		: value(v)
 	{
 	}
-	std::string_view get_string_value() const override
+	constexpr std::string_view get_string_value() const override
 	{
 		return value;
 	}
@@ -162,11 +228,11 @@ struct html_component_id : html_component_base {
 // Color components (could be extended to parse actual colors)
 struct html_component_color : html_component_base {
 	std::string_view value;
-	explicit html_component_color(std::string_view v)
+	explicit constexpr html_component_color(std::string_view v)
 		: value(v)
 	{
 	}
-	std::string_view get_string_value() const override
+	constexpr std::string_view get_string_value() const override
 	{
 		return value;
 	}
@@ -174,11 +240,11 @@ struct html_component_color : html_component_base {
 
 struct html_component_bgcolor : html_component_base {
 	std::string_view value;
-	explicit html_component_bgcolor(std::string_view v)
+	explicit constexpr html_component_bgcolor(std::string_view v)
 		: value(v)
 	{
 	}
-	std::string_view get_string_value() const override
+	constexpr std::string_view get_string_value() const override
 	{
 		return value;
 	}
@@ -198,11 +264,11 @@ struct html_component_width : html_component_base {
 		}
 	}
 
-	std::string_view get_string_value() const override
+	constexpr std::string_view get_string_value() const override
 	{
 		return raw_value;
 	}
-	std::optional<std::uint32_t> get_numeric_value() const
+	constexpr std::optional<std::uint32_t> get_numeric_value() const
 	{
 		return numeric_value;
 	}
@@ -221,11 +287,11 @@ struct html_component_height : html_component_base {
 		}
 	}
 
-	std::string_view get_string_value() const override
+	constexpr std::string_view get_string_value() const override
 	{
 		return raw_value;
 	}
-	std::optional<std::uint32_t> get_numeric_value() const
+	constexpr std::optional<std::uint32_t> get_numeric_value() const
 	{
 		return numeric_value;
 	}
@@ -244,11 +310,11 @@ struct html_component_size : html_component_base {
 		}
 	}
 
-	std::string_view get_string_value() const override
+	constexpr std::string_view get_string_value() const override
 	{
 		return raw_value;
 	}
-	std::optional<std::uint32_t> get_numeric_value() const
+	constexpr std::optional<std::uint32_t> get_numeric_value() const
 	{
 		return numeric_value;
 	}
@@ -257,15 +323,15 @@ struct html_component_size : html_component_base {
 // Boolean/flag component
 struct html_component_hidden : html_component_base {
 	bool present;
-	explicit html_component_hidden()
+	explicit constexpr html_component_hidden()
 		: present(true)
 	{
 	}
-	std::string_view get_string_value() const override
+	constexpr std::string_view get_string_value() const override
 	{
 		return present ? "true" : "false";
 	}
-	bool is_present() const
+	constexpr bool is_present() const
 	{
 		return present;
 	}
@@ -276,17 +342,827 @@ struct html_component_unknown : html_component_base {
 	std::string_view name;
 	std::string_view value;
 
-	html_component_unknown(std::string_view n, std::string_view v)
+	constexpr html_component_unknown(std::string_view n, std::string_view v)
 		: name(n), value(v)
+	{
+	}
+	constexpr std::string_view get_string_value() const override
+	{
+		return value;
+	}
+	constexpr std::string_view get_name() const
+	{
+		return name;
+	}
+};
+
+// Typography components
+struct html_component_font_family : html_component_base {
+	std::string_view value;
+	explicit constexpr html_component_font_family(std::string_view v)
+		: value(v)
+	{
+	}
+	constexpr std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_font_size : html_component_base {
+	std::string_view raw_value;
+	std::optional<std::uint32_t> numeric_value;
+
+	explicit html_component_font_size(std::string_view v)
+		: raw_value(v)
+	{
+		unsigned long val;
+		if (rspamd_strtoul(v.data(), v.size(), &val)) {
+			numeric_value = static_cast<std::uint32_t>(val);
+		}
+	}
+
+	constexpr std::string_view get_string_value() const override
+	{
+		return raw_value;
+	}
+	constexpr std::optional<std::uint32_t> get_numeric_value() const
+	{
+		return numeric_value;
+	}
+};
+
+struct html_component_font_weight : html_component_base {
+	std::string_view value;
+	explicit constexpr html_component_font_weight(std::string_view v)
+		: value(v)
+	{
+	}
+	constexpr std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_font_style : html_component_base {
+	std::string_view value;
+	explicit constexpr html_component_font_style(std::string_view v)
+		: value(v)
+	{
+	}
+	constexpr std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_text_align : html_component_base {
+	std::string_view value;
+	explicit constexpr html_component_text_align(std::string_view v)
+		: value(v)
+	{
+	}
+	constexpr std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_text_decoration : html_component_base {
+	std::string_view value;
+	explicit constexpr html_component_text_decoration(std::string_view v)
+		: value(v)
+	{
+	}
+	constexpr std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_line_height : html_component_base {
+	std::string_view raw_value;
+	std::optional<std::uint32_t> numeric_value;
+
+	explicit html_component_line_height(std::string_view v)
+		: raw_value(v)
+	{
+		unsigned long val;
+		if (rspamd_strtoul(v.data(), v.size(), &val)) {
+			numeric_value = static_cast<std::uint32_t>(val);
+		}
+	}
+
+	std::string_view get_string_value() const override
+	{
+		return raw_value;
+	}
+	std::optional<std::uint32_t> get_numeric_value() const
+	{
+		return numeric_value;
+	}
+};
+
+// Layout components (most are string-based for flexibility)
+struct html_component_margin : html_component_base {
+	std::string_view value;
+	explicit constexpr html_component_margin(std::string_view v)
+		: value(v)
+	{
+	}
+	constexpr std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_margin_top : html_component_base {
+	std::string_view value;
+	explicit constexpr html_component_margin_top(std::string_view v)
+		: value(v)
+	{
+	}
+	constexpr std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_margin_bottom : html_component_base {
+	std::string_view value;
+	explicit constexpr html_component_margin_bottom(std::string_view v)
+		: value(v)
+	{
+	}
+	constexpr std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_margin_left : html_component_base {
+	std::string_view value;
+	explicit constexpr html_component_margin_left(std::string_view v)
+		: value(v)
+	{
+	}
+	constexpr std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_margin_right : html_component_base {
+	std::string_view value;
+	explicit constexpr html_component_margin_right(std::string_view v)
+		: value(v)
+	{
+	}
+	constexpr std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_padding : html_component_base {
+	std::string_view value;
+	explicit constexpr html_component_padding(std::string_view v)
+		: value(v)
+	{
+	}
+	constexpr std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_padding_top : html_component_base {
+	std::string_view value;
+	explicit constexpr html_component_padding_top(std::string_view v)
+		: value(v)
+	{
+	}
+	constexpr std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_padding_bottom : html_component_base {
+	std::string_view value;
+	explicit constexpr html_component_padding_bottom(std::string_view v)
+		: value(v)
+	{
+	}
+	constexpr std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_padding_left : html_component_base {
+	std::string_view value;
+	explicit constexpr html_component_padding_left(std::string_view v)
+		: value(v)
+	{
+	}
+	constexpr std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_padding_right : html_component_base {
+	std::string_view value;
+	explicit constexpr html_component_padding_right(std::string_view v)
+		: value(v)
+	{
+	}
+	constexpr std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_border : html_component_base {
+	std::string_view value;
+	explicit html_component_border(std::string_view v)
+		: value(v)
 	{
 	}
 	std::string_view get_string_value() const override
 	{
 		return value;
 	}
-	std::string_view get_name() const
+};
+
+struct html_component_border_color : html_component_base {
+	std::string_view value;
+	explicit html_component_border_color(std::string_view v)
+		: value(v)
 	{
-		return name;
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_border_width : html_component_base {
+	std::string_view raw_value;
+	std::optional<std::uint32_t> numeric_value;
+
+	explicit html_component_border_width(std::string_view v)
+		: raw_value(v)
+	{
+		unsigned long val;
+		if (rspamd_strtoul(v.data(), v.size(), &val)) {
+			numeric_value = static_cast<std::uint32_t>(val);
+		}
+	}
+
+	std::string_view get_string_value() const override
+	{
+		return raw_value;
+	}
+	std::optional<std::uint32_t> get_numeric_value() const
+	{
+		return numeric_value;
+	}
+};
+
+struct html_component_border_style : html_component_base {
+	std::string_view value;
+	explicit html_component_border_style(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+// Display components
+struct html_component_display : html_component_base {
+	std::string_view value;
+	explicit html_component_display(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_visibility : html_component_base {
+	std::string_view value;
+	explicit html_component_visibility(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_opacity : html_component_base {
+	std::string_view raw_value;
+	std::optional<float> numeric_value;
+
+	explicit html_component_opacity(std::string_view v)
+		: raw_value(v)
+	{
+		char *endptr;
+		auto val = std::strtof(v.data(), &endptr);
+		if (endptr != v.data() && val >= 0.0f && val <= 1.0f) {
+			numeric_value = val;
+		}
+	}
+
+	std::string_view get_string_value() const override
+	{
+		return raw_value;
+	}
+	std::optional<float> get_numeric_value() const
+	{
+		return numeric_value;
+	}
+};
+
+// Additional dimension components
+struct html_component_min_width : html_component_base {
+	std::string_view raw_value;
+	std::optional<std::uint32_t> numeric_value;
+
+	explicit html_component_min_width(std::string_view v)
+		: raw_value(v)
+	{
+		unsigned long val;
+		if (rspamd_strtoul(v.data(), v.size(), &val)) {
+			numeric_value = static_cast<std::uint32_t>(val);
+		}
+	}
+
+	std::string_view get_string_value() const override
+	{
+		return raw_value;
+	}
+	std::optional<std::uint32_t> get_numeric_value() const
+	{
+		return numeric_value;
+	}
+};
+
+struct html_component_max_width : html_component_base {
+	std::string_view raw_value;
+	std::optional<std::uint32_t> numeric_value;
+
+	explicit html_component_max_width(std::string_view v)
+		: raw_value(v)
+	{
+		unsigned long val;
+		if (rspamd_strtoul(v.data(), v.size(), &val)) {
+			numeric_value = static_cast<std::uint32_t>(val);
+		}
+	}
+
+	std::string_view get_string_value() const override
+	{
+		return raw_value;
+	}
+	std::optional<std::uint32_t> get_numeric_value() const
+	{
+		return numeric_value;
+	}
+};
+
+struct html_component_min_height : html_component_base {
+	std::string_view raw_value;
+	std::optional<std::uint32_t> numeric_value;
+
+	explicit html_component_min_height(std::string_view v)
+		: raw_value(v)
+	{
+		unsigned long val;
+		if (rspamd_strtoul(v.data(), v.size(), &val)) {
+			numeric_value = static_cast<std::uint32_t>(val);
+		}
+	}
+
+	std::string_view get_string_value() const override
+	{
+		return raw_value;
+	}
+	std::optional<std::uint32_t> get_numeric_value() const
+	{
+		return numeric_value;
+	}
+};
+
+struct html_component_max_height : html_component_base {
+	std::string_view raw_value;
+	std::optional<std::uint32_t> numeric_value;
+
+	explicit html_component_max_height(std::string_view v)
+		: raw_value(v)
+	{
+		unsigned long val;
+		if (rspamd_strtoul(v.data(), v.size(), &val)) {
+			numeric_value = static_cast<std::uint32_t>(val);
+		}
+	}
+
+	std::string_view get_string_value() const override
+	{
+		return raw_value;
+	}
+	std::optional<std::uint32_t> get_numeric_value() const
+	{
+		return numeric_value;
+	}
+};
+
+// Table components
+struct html_component_cellpadding : html_component_base {
+	std::string_view raw_value;
+	std::optional<std::uint32_t> numeric_value;
+
+	explicit html_component_cellpadding(std::string_view v)
+		: raw_value(v)
+	{
+		unsigned long val;
+		if (rspamd_strtoul(v.data(), v.size(), &val)) {
+			numeric_value = static_cast<std::uint32_t>(val);
+		}
+	}
+
+	std::string_view get_string_value() const override
+	{
+		return raw_value;
+	}
+	std::optional<std::uint32_t> get_numeric_value() const
+	{
+		return numeric_value;
+	}
+};
+
+struct html_component_cellspacing : html_component_base {
+	std::string_view raw_value;
+	std::optional<std::uint32_t> numeric_value;
+
+	explicit html_component_cellspacing(std::string_view v)
+		: raw_value(v)
+	{
+		unsigned long val;
+		if (rspamd_strtoul(v.data(), v.size(), &val)) {
+			numeric_value = static_cast<std::uint32_t>(val);
+		}
+	}
+
+	std::string_view get_string_value() const override
+	{
+		return raw_value;
+	}
+	std::optional<std::uint32_t> get_numeric_value() const
+	{
+		return numeric_value;
+	}
+};
+
+struct html_component_valign : html_component_base {
+	std::string_view value;
+	explicit html_component_valign(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_align : html_component_base {
+	std::string_view value;
+	explicit html_component_align(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+// Form components
+struct html_component_type : html_component_base {
+	std::string_view value;
+	explicit html_component_type(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_value : html_component_base {
+	std::string_view value;
+	explicit html_component_value(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_placeholder : html_component_base {
+	std::string_view value;
+	explicit html_component_placeholder(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+// Boolean form components
+struct html_component_disabled : html_component_base {
+	bool present;
+	explicit constexpr html_component_disabled()
+		: present(true)
+	{
+	}
+	constexpr std::string_view get_string_value() const override
+	{
+		return present ? "true" : "false";
+	}
+	constexpr bool is_present() const
+	{
+		return present;
+	}
+};
+
+struct html_component_readonly : html_component_base {
+	bool present;
+	explicit constexpr html_component_readonly()
+		: present(true)
+	{
+	}
+	constexpr std::string_view get_string_value() const override
+	{
+		return present ? "true" : "false";
+	}
+	constexpr bool is_present() const
+	{
+		return present;
+	}
+};
+
+struct html_component_checked : html_component_base {
+	bool present;
+	explicit constexpr html_component_checked()
+		: present(true)
+	{
+	}
+	constexpr std::string_view get_string_value() const override
+	{
+		return present ? "true" : "false";
+	}
+	constexpr bool is_present() const
+	{
+		return present;
+	}
+};
+
+struct html_component_selected : html_component_base {
+	bool present;
+	explicit constexpr html_component_selected()
+		: present(true)
+	{
+	}
+	constexpr std::string_view get_string_value() const override
+	{
+		return present ? "true" : "false";
+	}
+	constexpr bool is_present() const
+	{
+		return present;
+	}
+};
+
+// Link & media components
+struct html_component_target : html_component_base {
+	std::string_view value;
+	explicit html_component_target(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_title : html_component_base {
+	std::string_view value;
+	explicit html_component_title(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_src : html_component_base {
+	std::string_view value;
+	explicit html_component_src(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+// Meta components
+struct html_component_charset : html_component_base {
+	std::string_view value;
+	explicit html_component_charset(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_content : html_component_base {
+	std::string_view value;
+	explicit html_component_content(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_http_equiv : html_component_base {
+	std::string_view value;
+	explicit html_component_http_equiv(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+// Accessibility components
+struct html_component_role : html_component_base {
+	std::string_view value;
+	explicit html_component_role(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_tabindex : html_component_base {
+	std::string_view raw_value;
+	std::optional<std::int32_t> numeric_value;
+
+	explicit html_component_tabindex(std::string_view v)
+		: raw_value(v)
+	{
+		long val;
+		if (rspamd_strtol(v.data(), v.size(), &val)) {
+			numeric_value = static_cast<std::int32_t>(val);
+		}
+	}
+
+	std::string_view get_string_value() const override
+	{
+		return raw_value;
+	}
+	std::optional<std::int32_t> get_numeric_value() const
+	{
+		return numeric_value;
+	}
+};
+
+// Background components
+struct html_component_background : html_component_base {
+	std::string_view value;
+	explicit html_component_background(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_background_image : html_component_base {
+	std::string_view value;
+	explicit html_component_background_image(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_background_color : html_component_base {
+	std::string_view value;
+	explicit html_component_background_color(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_background_repeat : html_component_base {
+	std::string_view value;
+	explicit html_component_background_repeat(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_background_position : html_component_base {
+	std::string_view value;
+	explicit html_component_background_position(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+// Email tracking components
+struct html_component_data_track : html_component_base {
+	std::string_view value;
+	explicit html_component_data_track(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_data_id : html_component_base {
+	std::string_view value;
+	explicit html_component_data_id(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
+struct html_component_data_url : html_component_base {
+	std::string_view value;
+	explicit html_component_data_url(std::string_view v)
+		: value(v)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
 	}
 };
 
@@ -305,6 +1181,73 @@ using html_tag_component = std::variant<
 	html_component_alt,
 	html_component_id,
 	html_component_hidden,
+	// Typography
+	html_component_font_family,
+	html_component_font_size,
+	html_component_font_weight,
+	html_component_font_style,
+	html_component_text_align,
+	html_component_text_decoration,
+	html_component_line_height,
+	// Layout
+	html_component_margin,
+	html_component_margin_top,
+	html_component_margin_bottom,
+	html_component_margin_left,
+	html_component_margin_right,
+	html_component_padding,
+	html_component_padding_top,
+	html_component_padding_bottom,
+	html_component_padding_left,
+	html_component_padding_right,
+	html_component_border,
+	html_component_border_color,
+	html_component_border_width,
+	html_component_border_style,
+	// Display
+	html_component_display,
+	html_component_visibility,
+	html_component_opacity,
+	// Dimensions
+	html_component_min_width,
+	html_component_max_width,
+	html_component_min_height,
+	html_component_max_height,
+	// Table
+	html_component_cellpadding,
+	html_component_cellspacing,
+	html_component_valign,
+	html_component_align,
+	// Form
+	html_component_type,
+	html_component_value,
+	html_component_placeholder,
+	html_component_disabled,
+	html_component_readonly,
+	html_component_checked,
+	html_component_selected,
+	// Link & media
+	html_component_target,
+	html_component_title,
+	html_component_src,
+	// Meta
+	html_component_charset,
+	html_component_content,
+	html_component_http_equiv,
+	// Accessibility
+	html_component_role,
+	html_component_tabindex,
+	// Background
+	html_component_background,
+	html_component_background_image,
+	html_component_background_color,
+	html_component_background_repeat,
+	html_component_background_position,
+	// Email tracking
+	html_component_data_track,
+	html_component_data_id,
+	html_component_data_url,
+	// Unknown
 	html_component_unknown>;
 
 /**
@@ -356,7 +1299,7 @@ struct html_tag {
 
 	// Template method to find component by type
 	template<typename T>
-	auto find_component() const -> std::optional<const T *>
+	constexpr auto find_component() const -> std::optional<const T *>
 	{
 		for (const auto &comp: components) {
 			if (std::holds_alternative<T>(comp)) {
@@ -367,7 +1310,7 @@ struct html_tag {
 	}
 
 	// Helper methods for common component access
-	auto find_href() const -> std::optional<std::string_view>
+	constexpr auto find_href() const -> std::optional<std::string_view>
 	{
 		if (auto comp = find_component<html_component_href>()) {
 			return comp.value()->value;
@@ -375,7 +1318,7 @@ struct html_tag {
 		return std::nullopt;
 	}
 
-	auto find_class() const -> std::optional<std::string_view>
+	constexpr auto find_class() const -> std::optional<std::string_view>
 	{
 		if (auto comp = find_component<html_component_class>()) {
 			return comp.value()->value;
@@ -383,7 +1326,7 @@ struct html_tag {
 		return std::nullopt;
 	}
 
-	auto find_id() const -> std::optional<std::string_view>
+	constexpr auto find_id() const -> std::optional<std::string_view>
 	{
 		if (auto comp = find_component<html_component_id>()) {
 			return comp.value()->value;
@@ -391,7 +1334,7 @@ struct html_tag {
 		return std::nullopt;
 	}
 
-	auto find_width() const -> std::optional<std::uint32_t>
+	constexpr auto find_width() const -> std::optional<std::uint32_t>
 	{
 		if (auto comp = find_component<html_component_width>()) {
 			return comp.value()->get_numeric_value();
@@ -399,7 +1342,7 @@ struct html_tag {
 		return std::nullopt;
 	}
 
-	auto find_height() const -> std::optional<std::uint32_t>
+	constexpr auto find_height() const -> std::optional<std::uint32_t>
 	{
 		if (auto comp = find_component<html_component_height>()) {
 			return comp.value()->get_numeric_value();
@@ -407,7 +1350,7 @@ struct html_tag {
 		return std::nullopt;
 	}
 
-	auto find_style() const -> std::optional<std::string_view>
+	constexpr auto find_style() const -> std::optional<std::string_view>
 	{
 		if (auto comp = find_component<html_component_style>()) {
 			return comp.value()->value;
@@ -415,7 +1358,7 @@ struct html_tag {
 		return std::nullopt;
 	}
 
-	auto find_alt() const -> std::optional<std::string_view>
+	constexpr auto find_alt() const -> std::optional<std::string_view>
 	{
 		if (auto comp = find_component<html_component_alt>()) {
 			return comp.value()->value;
@@ -423,7 +1366,7 @@ struct html_tag {
 		return std::nullopt;
 	}
 
-	auto find_rel() const -> std::optional<std::string_view>
+	constexpr auto find_rel() const -> std::optional<std::string_view>
 	{
 		if (auto comp = find_component<html_component_rel>()) {
 			return comp.value()->value;
@@ -431,12 +1374,12 @@ struct html_tag {
 		return std::nullopt;
 	}
 
-	auto is_hidden() const -> bool
+	constexpr auto is_hidden() const -> bool
 	{
 		return find_component<html_component_hidden>().has_value();
 	}
 
-	auto find_unknown_component(std::string_view attr_name) const -> std::optional<std::string_view>
+	constexpr auto find_unknown_component(std::string_view attr_name) const -> std::optional<std::string_view>
 	{
 		for (const auto &comp: components) {
 			if (std::holds_alternative<html_component_unknown>(comp)) {
@@ -449,7 +1392,7 @@ struct html_tag {
 		return std::nullopt;
 	}
 
-	auto get_unknown_components() const -> std::vector<std::pair<std::string_view, std::string_view>>
+	constexpr auto get_unknown_components() const -> std::vector<std::pair<std::string_view, std::string_view>>
 	{
 		std::vector<std::pair<std::string_view, std::string_view>> unknown_attrs;
 		for (const auto &comp: components) {
@@ -470,57 +1413,8 @@ struct html_tag {
 		}
 	}
 
-	// Find any component by attribute name (for Lua bindings and generic access)
-	auto find_component_by_name(std::string_view attr_name) const -> std::optional<std::string_view>
-	{
-		// Check known component types first using their helper methods
-		if (attr_name == "href") return find_href();
-		if (attr_name == "class") return find_class();
-		if (attr_name == "id") return find_id();
-		if (attr_name == "style") return find_style();
-		if (attr_name == "alt") return find_alt();
-		if (attr_name == "rel") return find_rel();
-		if (attr_name == "hidden") return is_hidden() ? std::optional<std::string_view>{"true"} : std::nullopt;
-
-		// Handle numeric components that need string conversion
-		if (attr_name == "width") {
-			if (auto comp = find_component<html_component_width>()) {
-				return comp.value()->get_string_value();
-			}
-		}
-		if (attr_name == "height") {
-			if (auto comp = find_component<html_component_height>()) {
-				return comp.value()->get_string_value();
-			}
-		}
-		if (attr_name == "size") {
-			if (auto comp = find_component<html_component_size>()) {
-				return comp.value()->get_string_value();
-			}
-		}
-
-		// Handle color components
-		if (attr_name == "color") {
-			if (auto comp = find_component<html_component_color>()) {
-				return comp.value()->value;
-			}
-		}
-		if (attr_name == "bgcolor") {
-			if (auto comp = find_component<html_component_bgcolor>()) {
-				return comp.value()->value;
-			}
-		}
-
-		// Handle name component
-		if (attr_name == "name") {
-			if (auto comp = find_component<html_component_name>()) {
-				return comp.value()->value;
-			}
-		}
-
-		// Finally check unknown components
-		return find_unknown_component(attr_name);
-	}
+	// Find any component by attribute name
+	auto find_component_by_name(std::string_view attr_name) const -> std::optional<std::string_view>;
 
 	auto clear(void) -> void
 	{
