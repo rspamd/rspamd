@@ -1,11 +1,11 @@
-/*-
- * Copyright 2021 Vsevolod Stakhov
+/*
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -107,7 +107,6 @@ auto css_style_sheet::add_selector_rule(std::unique_ptr<css_selector> &&selector
 
 auto css_style_sheet::check_tag_block(const rspamd::html::html_tag *tag) -> rspamd::html::html_block *
 {
-	std::optional<std::string_view> id_comp, class_comp;
 	rspamd::html::html_block *res = nullptr;
 
 	if (!tag) {
@@ -115,14 +114,8 @@ auto css_style_sheet::check_tag_block(const rspamd::html::html_tag *tag) -> rspa
 	}
 
 	/* First, find id in a tag and a class */
-	for (const auto &param: tag->components) {
-		if (param.type == html::html_component_type::RSPAMD_HTML_COMPONENT_ID) {
-			id_comp = param.value;
-		}
-		else if (param.type == html::html_component_type::RSPAMD_HTML_COMPONENT_CLASS) {
-			class_comp = param.value;
-		}
-	}
+	auto id_comp = tag->find_id();
+	auto class_comp = tag->find_class();
 
 	/* ID part */
 	if (id_comp && !pimpl->id_selectors.empty()) {

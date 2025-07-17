@@ -179,6 +179,44 @@ LUA_FUNCTION_DEF(html_tag, get_style);
  */
 LUA_FUNCTION_DEF(html_tag, get_attribute);
 
+/***
+ * @method html_tag:get_all_attributes()
+ * Returns table of all attributes for the element
+ * @return {table} table with attribute names as keys and values as strings
+ */
+LUA_FUNCTION_DEF(html_tag, get_all_attributes);
+
+/***
+ * @method html_tag:get_unknown_attributes()
+ * Returns table of unknown/unrecognized attributes for the element
+ * @return {table} table with unknown attribute names as keys and values as strings
+ */
+LUA_FUNCTION_DEF(html_tag, get_unknown_attributes);
+
+/***
+ * @method html_tag:get_children()
+ * Returns array of child tags for the element
+ * @return {table} array of child html_tag objects
+ */
+LUA_FUNCTION_DEF(html_tag, get_children);
+
+/***
+ * @method html_tag:has_attribute(name)
+ * Checks if element has the specified attribute
+ * @param {string} name attribute name to check
+ * @return {boolean} true if attribute exists
+ */
+LUA_FUNCTION_DEF(html_tag, has_attribute);
+
+/***
+ * @method html_tag:get_numeric_attribute(name)
+ * Returns numeric value of attribute (if supported and parseable)
+ * Works for attributes like width, height, font-size, etc.
+ * @param {string} name attribute name
+ * @return {number|nil} numeric value or nil if not numeric/parseable
+ */
+LUA_FUNCTION_DEF(html_tag, get_numeric_attribute);
+
 static const struct luaL_reg taglib_m[] = {
 	LUA_INTERFACE_DEF(html_tag, get_type),
 	LUA_INTERFACE_DEF(html_tag, get_extra),
@@ -188,6 +226,11 @@ static const struct luaL_reg taglib_m[] = {
 	LUA_INTERFACE_DEF(html_tag, get_content_length),
 	LUA_INTERFACE_DEF(html_tag, get_style),
 	LUA_INTERFACE_DEF(html_tag, get_attribute),
+	LUA_INTERFACE_DEF(html_tag, get_all_attributes),
+	LUA_INTERFACE_DEF(html_tag, get_unknown_attributes),
+	LUA_INTERFACE_DEF(html_tag, get_children),
+	LUA_INTERFACE_DEF(html_tag, has_attribute),
+	LUA_INTERFACE_DEF(html_tag, get_numeric_attribute),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
@@ -704,6 +747,29 @@ lua_html_tag_get_style(lua_State *L)
 }
 
 static int
+lua_html_tag_get_all_attributes(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct lua_html_tag *ltag = lua_check_html_tag(L, 1);
+
+	if (ltag) {
+		auto all_attrs = ltag->tag->get_all_attributes();
+		lua_createtable(L, 0, all_attrs.size());
+
+		for (const auto &[name, value]: all_attrs) {
+			lua_pushlstring(L, name.data(), name.size());
+			lua_pushlstring(L, value.data(), value.size());
+			lua_settable(L, -3);
+		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
 lua_html_tag_get_attribute(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -712,8 +778,7 @@ lua_html_tag_get_attribute(lua_State *L)
 	const char *attr_name = luaL_checklstring(L, 2, &slen);
 
 	if (ltag && attr_name) {
-		auto maybe_attr = ltag->tag->find_component(
-			rspamd::html::html_component_from_string({attr_name, slen}));
+		auto maybe_attr = ltag->tag->find_component_by_name({attr_name, slen});
 
 		if (maybe_attr) {
 			lua_pushlstring(L, maybe_attr->data(), maybe_attr->size());
@@ -721,6 +786,206 @@ lua_html_tag_get_attribute(lua_State *L)
 		else {
 			lua_pushnil(L);
 		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_html_tag_get_unknown_attributes(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct lua_html_tag *ltag = lua_check_html_tag(L, 1);
+
+	if (ltag) {
+		auto unknown_attrs = ltag->tag->get_unknown_components();
+		lua_createtable(L, 0, unknown_attrs.size());
+
+		for (const auto &[name, value]: unknown_attrs) {
+			lua_pushlstring(L, name.data(), name.size());
+			lua_pushlstring(L, value.data(), value.size());
+			lua_settable(L, -3);
+		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_html_tag_get_children(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct lua_html_tag *ltag = lua_check_html_tag(L, 1);
+
+	if (ltag) {
+		lua_createtable(L, ltag->tag->children.size(), 0);
+
+		for (int i = 0; i < ltag->tag->children.size(); i++) {
+			auto *child_tag = static_cast<lua_html_tag *>(lua_newuserdata(L, sizeof(lua_html_tag)));
+			child_tag->tag = ltag->tag->children[i];
+			child_tag->html = ltag->html;
+			rspamd_lua_setclass(L, rspamd_html_tag_classname, -1);
+			lua_rawseti(L, -2, i + 1);
+		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_html_tag_has_attribute(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct lua_html_tag *ltag = lua_check_html_tag(L, 1);
+	gsize slen;
+	const char *attr_name = luaL_checklstring(L, 2, &slen);
+
+	if (ltag && attr_name) {
+		auto maybe_attr = ltag->tag->find_component_by_name({attr_name, slen});
+		lua_pushboolean(L, maybe_attr.has_value());
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_html_tag_get_numeric_attribute(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct lua_html_tag *ltag = lua_check_html_tag(L, 1);
+	gsize slen;
+	const char *attr_name = luaL_checklstring(L, 2, &slen);
+
+	if (ltag && attr_name) {
+		std::string_view name_view{attr_name, slen};
+
+		// Check for numeric components
+		if (name_view == "width") {
+			if (auto comp = ltag->tag->find_component<rspamd::html::html_component_width>()) {
+				if (auto numeric_val = comp.value()->get_numeric_value()) {
+					lua_pushinteger(L, numeric_val.value());
+					return 1;
+				}
+			}
+		}
+		else if (name_view == "height") {
+			if (auto comp = ltag->tag->find_component<rspamd::html::html_component_height>()) {
+				if (auto numeric_val = comp.value()->get_numeric_value()) {
+					lua_pushinteger(L, numeric_val.value());
+					return 1;
+				}
+			}
+		}
+		else if (name_view == "size") {
+			if (auto comp = ltag->tag->find_component<rspamd::html::html_component_size>()) {
+				if (auto numeric_val = comp.value()->get_numeric_value()) {
+					lua_pushinteger(L, numeric_val.value());
+					return 1;
+				}
+			}
+		}
+		else if (name_view == "font-size") {
+			if (auto comp = ltag->tag->find_component<rspamd::html::html_component_font_size>()) {
+				if (auto numeric_val = comp.value()->get_numeric_value()) {
+					lua_pushinteger(L, numeric_val.value());
+					return 1;
+				}
+			}
+		}
+		else if (name_view == "line-height") {
+			if (auto comp = ltag->tag->find_component<rspamd::html::html_component_line_height>()) {
+				if (auto numeric_val = comp.value()->get_numeric_value()) {
+					lua_pushinteger(L, numeric_val.value());
+					return 1;
+				}
+			}
+		}
+		else if (name_view == "border-width") {
+			if (auto comp = ltag->tag->find_component<rspamd::html::html_component_border_width>()) {
+				if (auto numeric_val = comp.value()->get_numeric_value()) {
+					lua_pushinteger(L, numeric_val.value());
+					return 1;
+				}
+			}
+		}
+		else if (name_view == "opacity") {
+			if (auto comp = ltag->tag->find_component<rspamd::html::html_component_opacity>()) {
+				if (auto numeric_val = comp.value()->get_numeric_value()) {
+					lua_pushnumber(L, numeric_val.value());
+					return 1;
+				}
+			}
+		}
+		else if (name_view == "min-width") {
+			if (auto comp = ltag->tag->find_component<rspamd::html::html_component_min_width>()) {
+				if (auto numeric_val = comp.value()->get_numeric_value()) {
+					lua_pushinteger(L, numeric_val.value());
+					return 1;
+				}
+			}
+		}
+		else if (name_view == "max-width") {
+			if (auto comp = ltag->tag->find_component<rspamd::html::html_component_max_width>()) {
+				if (auto numeric_val = comp.value()->get_numeric_value()) {
+					lua_pushinteger(L, numeric_val.value());
+					return 1;
+				}
+			}
+		}
+		else if (name_view == "min-height") {
+			if (auto comp = ltag->tag->find_component<rspamd::html::html_component_min_height>()) {
+				if (auto numeric_val = comp.value()->get_numeric_value()) {
+					lua_pushinteger(L, numeric_val.value());
+					return 1;
+				}
+			}
+		}
+		else if (name_view == "max-height") {
+			if (auto comp = ltag->tag->find_component<rspamd::html::html_component_max_height>()) {
+				if (auto numeric_val = comp.value()->get_numeric_value()) {
+					lua_pushinteger(L, numeric_val.value());
+					return 1;
+				}
+			}
+		}
+		else if (name_view == "cellpadding") {
+			if (auto comp = ltag->tag->find_component<rspamd::html::html_component_cellpadding>()) {
+				if (auto numeric_val = comp.value()->get_numeric_value()) {
+					lua_pushinteger(L, numeric_val.value());
+					return 1;
+				}
+			}
+		}
+		else if (name_view == "cellspacing") {
+			if (auto comp = ltag->tag->find_component<rspamd::html::html_component_cellspacing>()) {
+				if (auto numeric_val = comp.value()->get_numeric_value()) {
+					lua_pushinteger(L, numeric_val.value());
+					return 1;
+				}
+			}
+		}
+		else if (name_view == "tabindex") {
+			if (auto comp = ltag->tag->find_component<rspamd::html::html_component_tabindex>()) {
+				if (auto numeric_val = comp.value()->get_numeric_value()) {
+					lua_pushinteger(L, numeric_val.value());
+					return 1;
+				}
+			}
+		}
+
+		lua_pushnil(L);
 	}
 	else {
 		return luaL_error(L, "invalid arguments");
