@@ -104,9 +104,9 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_FLAG_LEARN_SPAM (1u << 12u)
 #define RSPAMD_TASK_FLAG_LEARN_HAM (1u << 13u)
 #define RSPAMD_TASK_FLAG_LEARN_AUTO (1u << 14u)
+#define RSPAMD_TASK_FLAG_LEARN_CLASS (1u << 25u)
 #define RSPAMD_TASK_FLAG_BROKEN_HEADERS (1u << 15u)
-#define RSPAMD_TASK_FLAG_HAS_SPAM_TOKENS (1u << 16u)
-#define RSPAMD_TASK_FLAG_HAS_HAM_TOKENS (1u << 17u)
+/* Removed RSPAMD_TASK_FLAG_HAS_SPAM_TOKENS and RSPAMD_TASK_FLAG_HAS_HAM_TOKENS - not needed in multi-class */
 #define RSPAMD_TASK_FLAG_EMPTY (1u << 18u)
 #define RSPAMD_TASK_FLAG_PROFILE (1u << 19u)
 #define RSPAMD_TASK_FLAG_GREYLISTED (1u << 20u)
@@ -114,7 +114,7 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_FLAG_SSL (1u << 22u)
 #define RSPAMD_TASK_FLAG_BAD_UNICODE (1u << 23u)
 #define RSPAMD_TASK_FLAG_MESSAGE_REWRITE (1u << 24u)
-#define RSPAMD_TASK_FLAG_MAX_SHIFT (24u)
+#define RSPAMD_TASK_FLAG_MAX_SHIFT (25u)
 
 /* Request has been done by a local client */
 #define RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT (1u << 1u)

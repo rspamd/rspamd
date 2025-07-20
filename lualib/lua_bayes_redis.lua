@@ -25,25 +25,56 @@ local ucl = require "ucl"
 local N = "bayes"
 
 local function gen_classify_functor(redis_params, classify_script_id)
-  return function(task, expanded_key, id, is_spam, stat_tokens, callback)
-
+  return function(task, expanded_key, id, class_labels, stat_tokens, callback)
     local function classify_redis_cb(err, data)
       lua_util.debugm(N, task, 'classify redis cb: %s, %s', err, data)
       if err then
         callback(task, false, err)
       else
-        callback(task, true, data[1], data[2], data[3], data[4])
+        -- Handle both binary and multi-class results
+        if type(data[1]) == "table" then
+          -- Multi-class format: [learned_counts_table, outputs_table]
+          -- Convert to binary format for backward compatibility if needed
+          local learned_counts = data[1]
+          local outputs = data[2]
+
+          -- For now, return ham/spam data if available for backward compatibility
+          local learned_ham = learned_counts["H"] or learned_counts["ham"] or 0
+          local learned_spam = learned_counts["S"] or learned_counts["spam"] or 0
+          local output_ham = outputs["H"] or outputs["ham"] or {}
+          local output_spam = outputs["S"] or outputs["spam"] or {}
+
+          callback(task, true, learned_ham, learned_spam, output_ham, output_spam)
+        else
+          -- Binary format: [learned_ham, learned_spam, output_ham, output_spam]
+          callback(task, true, data[1], data[2], data[3], data[4])
+        end
+      end
+    end
+
+    -- Determine class labels to send to Redis script
+    local script_class_labels
+    if type(class_labels) == "table" then
+      script_class_labels = class_labels
+    else
+      -- Single class label or boolean compatibility
+      if class_labels == true or class_labels == "true" then
+        script_class_labels = "S"          -- spam
+      elseif class_labels == false or class_labels == "false" then
+        script_class_labels = "H"          -- ham
+      else
+        script_class_labels = class_labels -- string class label
       end
     end
 
     lua_redis.exec_redis_script(classify_script_id,
-        { task = task, is_write = false, key = expanded_key },
-        classify_redis_cb, { expanded_key, stat_tokens })
+      { task = task, is_write = false, key = expanded_key },
+      classify_redis_cb, { expanded_key, script_class_labels, stat_tokens })
   end
 end
 
 local function gen_learn_functor(redis_params, learn_script_id)
-  return function(task, expanded_key, id, is_spam, symbol, is_unlearn, stat_tokens, callback, maybe_text_tokens)
+  return function(task, expanded_key, id, class_label, symbol, is_unlearn, stat_tokens, callback, maybe_text_tokens)
     local function learn_redis_cb(err, data)
       lua_util.debugm(N, task, 'learn redis cb: %s, %s', err, data)
       if err then
@@ -53,17 +84,24 @@ local function gen_learn_functor(redis_params, learn_script_id)
       end
     end
 
-    if maybe_text_tokens then
-      lua_redis.exec_redis_script(learn_script_id,
-          { task = task, is_write = true, key = expanded_key },
-          learn_redis_cb,
-          { expanded_key, tostring(is_spam), symbol, tostring(is_unlearn), stat_tokens, maybe_text_tokens })
-    else
-      lua_redis.exec_redis_script(learn_script_id,
-          { task = task, is_write = true, key = expanded_key },
-          learn_redis_cb, { expanded_key, tostring(is_spam), symbol, tostring(is_unlearn), stat_tokens })
+    -- Convert class_label for backward compatibility
+    local script_class_label = class_label
+    if class_label == true or class_label == "true" then
+      script_class_label = "S" -- spam
+    elseif class_label == false or class_label == "false" then
+      script_class_label = "H" -- ham
     end
 
+    if maybe_text_tokens then
+      lua_redis.exec_redis_script(learn_script_id,
+        { task = task, is_write = true, key = expanded_key },
+        learn_redis_cb,
+        { expanded_key, script_class_label, symbol, tostring(is_unlearn), stat_tokens, maybe_text_tokens })
+    else
+      lua_redis.exec_redis_script(learn_script_id,
+        { task = task, is_write = true, key = expanded_key },
+        learn_redis_cb, { expanded_key, script_class_label, symbol, tostring(is_unlearn), stat_tokens })
+    end
   end
 end
 
@@ -112,8 +150,7 @@ end
 --- @param classifier_ucl ucl of the classifier config
 --- @param statfile_ucl ucl of the statfile config
 --- @return a pair of (classify_functor, learn_functor) or `nil` in case of error
-exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol, is_spam, ev_base, stat_periodic_cb)
-
+exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol, class_label, ev_base, stat_periodic_cb)
   local redis_params = load_redis_params(classifier_ucl, statfile_ucl)
 
   if not redis_params then
@@ -137,7 +174,6 @@ exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol,
 
   if ev_base then
     rspamd_config:add_periodic(ev_base, 0.0, function(cfg, _)
-
       local function stat_redis_cb(err, data)
         lua_util.debugm(N, cfg, 'stat redis cb: %s, %s', err, data)
 
@@ -162,12 +198,23 @@ exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol,
         end
       end
 
+      -- Convert class_label to learn key
+      local learn_key
+      if class_label == true or class_label == "true" or class_label == "S" then
+        learn_key = "learns_spam"
+      elseif class_label == false or class_label == "false" or class_label == "H" then
+        learn_key = "learns_ham"
+      else
+        -- For other class labels, use learns_<class_label>
+        learn_key = "learns_" .. string.lower(tostring(class_label))
+      end
+
       lua_redis.exec_redis_script(stat_script_id,
-          { ev_base = ev_base, cfg = cfg, is_write = false },
-          stat_redis_cb, { tostring(cursor),
-                           symbol,
-                           is_spam and "learns_spam" or "learns_ham",
-                           tostring(max_users) })
+        { ev_base = ev_base, cfg = cfg, is_write = false },
+        stat_redis_cb, { tostring(cursor),
+          symbol,
+          learn_key,
+          tostring(max_users) })
       return statfile_ucl.monitor_timeout or classifier_ucl.monitor_timeout or 30.0
     end)
   end
@@ -178,7 +225,6 @@ end
 local function gen_cache_check_functor(redis_params, check_script_id, conf)
   local packed_conf = ucl.to_format(conf, 'msgpack')
   return function(task, cache_id, callback)
-
     local function classify_redis_cb(err, data)
       lua_util.debugm(N, task, 'check cache redis cb: %s, %s (%s)', err, data, type(data))
       if err then
@@ -194,24 +240,33 @@ local function gen_cache_check_functor(redis_params, check_script_id, conf)
 
     lua_util.debugm(N, task, 'checking cache: %s', cache_id)
     lua_redis.exec_redis_script(check_script_id,
-        { task = task, is_write = false, key = cache_id },
-        classify_redis_cb, { cache_id, packed_conf })
+      { task = task, is_write = false, key = cache_id },
+      classify_redis_cb, { cache_id, packed_conf })
   end
 end
 
 local function gen_cache_learn_functor(redis_params, learn_script_id, conf)
   local packed_conf = ucl.to_format(conf, 'msgpack')
-  return function(task, cache_id, is_spam)
+  return function(task, cache_id, class_name)
     local function learn_redis_cb(err, data)
       lua_util.debugm(N, task, 'learn_cache redis cb: %s, %s', err, data)
     end
 
-    lua_util.debugm(N, task, 'try to learn cache: %s', cache_id)
-    lua_redis.exec_redis_script(learn_script_id,
-        { task = task, is_write = true, key = cache_id },
-        learn_redis_cb,
-        { cache_id, is_spam and "1" or "0", packed_conf })
+    -- Handle backward compatibility for boolean values
+    local cache_class_name = class_name
+    if type(class_name) == "boolean" then
+      cache_class_name = class_name and "spam" or "ham"
+    elseif class_name == true or class_name == "true" then
+      cache_class_name = "spam"
+    elseif class_name == false or class_name == "false" then
+      cache_class_name = "ham"
+    end
 
+    lua_util.debugm(N, task, 'try to learn cache: %s as %s', cache_id, cache_class_name)
+    lua_redis.exec_redis_script(learn_script_id,
+      { task = task, is_write = true, key = cache_id },
+      learn_redis_cb,
+      { cache_id, cache_class_name, packed_conf })
   end
 end
 
@@ -225,8 +280,8 @@ exports.lua_bayes_init_cache = function(classifier_ucl, statfile_ucl)
   local default_conf = {
     cache_prefix = "learned_ids",
     cache_max_elt = 10000, -- Maximum number of elements in the cache key
-    cache_max_keys = 5, -- Maximum number of keys in the cache
-    cache_elt_len = 32, -- Length of the element in the cache (will trim id to that value)
+    cache_max_keys = 5,    -- Maximum number of keys in the cache
+    cache_elt_len = 32,    -- Length of the element in the cache (will trim id to that value)
   }
 
   local conf = lua_util.override_defaults(default_conf, classifier_ucl)
@@ -241,7 +296,7 @@ exports.lua_bayes_init_cache = function(classifier_ucl, statfile_ucl)
   local learn_script_id = lua_redis.load_redis_script_from_file("bayes_cache_learn.lua", redis_params)
 
   return gen_cache_check_functor(redis_params, check_script_id, conf), gen_cache_learn_functor(redis_params,
-      learn_script_id, conf)
+    learn_script_id, conf)
 end
 
 return exports

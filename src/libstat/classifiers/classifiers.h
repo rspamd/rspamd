@@ -54,6 +54,13 @@ struct rspamd_stat_classifier {
 								gboolean unlearn,
 								GError **err);
 
+	gboolean (*learn_class_func)(struct rspamd_classifier *ctx,
+								 GPtrArray *input,
+								 struct rspamd_task *task,
+								 const char *class_name,
+								 gboolean unlearn,
+								 GError **err);
+
 	void (*fin_func)(struct rspamd_classifier *cl);
 };
 
@@ -72,6 +79,13 @@ gboolean bayes_learn_spam(struct rspamd_classifier *ctx,
 						  gboolean is_spam,
 						  gboolean unlearn,
 						  GError **err);
+
+gboolean bayes_learn_class(struct rspamd_classifier *ctx,
+						   GPtrArray *tokens,
+						   struct rspamd_task *task,
+						   const char *class_name,
+						   gboolean unlearn,
+						   GError **err);
 
 void bayes_fin(struct rspamd_classifier *);
 

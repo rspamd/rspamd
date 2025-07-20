@@ -121,9 +121,9 @@ public:
 	}
 
 	static auto maybe_recover_from_mempool(struct rspamd_task *task, const char *redis_object_expanded,
-										   bool is_spam) -> std::optional<redis_stat_runtime<T> *>
+										   const char *class_label) -> std::optional<redis_stat_runtime<T> *>
 	{
-		auto var_name = fmt::format("{}_{}", redis_object_expanded, is_spam ? "S" : "H");
+		auto var_name = fmt::format("{}_{}", redis_object_expanded, class_label);
 		auto *res = rspamd_mempool_get_variable(task->task_pool, var_name.c_str());
 
 		if (res) {
@@ -158,9 +158,9 @@ public:
 		return true;
 	}
 
-	auto save_in_mempool(bool is_spam) const
+	auto save_in_mempool(const char *class_label) const
 	{
-		auto var_name = fmt::format("{}_{}", redis_object_expanded, is_spam ? "S" : "H");
+		auto var_name = fmt::format("{}_{}", redis_object_expanded, class_label);
 		/* We do not set destructor for the variable, as it should be already added on creation */
 		rspamd_mempool_set_variable(task->task_pool, var_name.c_str(), (gpointer) this, nullptr);
 		msg_debug_bayes("saved runtime in mempool at %s", var_name.c_str());
@@ -175,6 +175,26 @@ static GQuark
 rspamd_redis_stat_quark(void)
 {
 	return g_quark_from_static_string(M);
+}
+
+/*
+ * Get the class label for a statfile (for multi-class support)
+ */
+static const char *
+get_class_label(struct rspamd_statfile_config *stcf)
+{
+	/* Try to get the label from the classifier config first */
+	if (stcf->clcf && stcf->clcf->class_labels && stcf->class_name) {
+		const char *label = rspamd_config_get_class_label(stcf->clcf, stcf->class_name);
+		if (label) {
+			return label;
+		}
+		/* If no label mapping found, use class name directly */
+		return stcf->class_name;
+	}
+
+	/* Fallback to legacy binary classification */
+	return stcf->is_spam ? "S" : "H";
 }
 
 /*
@@ -541,7 +561,7 @@ rspamd_redis_init(struct rspamd_stat_ctx *ctx,
 	ucl_object_push_lua(L, st->classifier->cfg->opts, false);
 	ucl_object_push_lua(L, st->stcf->opts, false);
 	lua_pushstring(L, backend->stcf->symbol);
-	lua_pushboolean(L, backend->stcf->is_spam);
+	lua_pushstring(L, get_class_label(backend->stcf)); /* Pass class label instead of boolean */
 
 	/* Push event loop if there is one available (e.g. we are not in rspamadm mode) */
 	if (ctx->event_loop) {
@@ -607,10 +627,12 @@ rspamd_redis_runtime(struct rspamd_task *task,
 		return nullptr;
 	}
 
+	const char *class_label = get_class_label(stcf);
+
 	/* Look for the cached results */
 	if (!learn) {
 		auto maybe_existing = redis_stat_runtime<float>::maybe_recover_from_mempool(task,
-																					object_expanded, stcf->is_spam);
+																					object_expanded, class_label);
 
 		if (maybe_existing) {
 			auto *rt = maybe_existing.value();
@@ -624,24 +646,45 @@ rspamd_redis_runtime(struct rspamd_task *task,
 	/* No cached result (or learn), create new one */
 	auto *rt = new redis_stat_runtime<float>(ctx, task, object_expanded);
 
-	if (!learn) {
+	if (!learn && stcf->clcf && stcf->clcf->class_names && stcf->clcf->class_names->len > 2) {
 		/*
-		 * For check, we also need to create the opposite class runtime to avoid
-		 * double call for Redis scripts.
-		 * This runtime will be filled later.
+		 * For multi-class classification, we need to create runtimes for ALL classes
+		 * to avoid multiple Redis calls. The actual Redis call will fetch data for all classes.
 		 */
+		GList *cur = stcf->clcf->statfiles;
+		while (cur) {
+			auto *other_stcf = (struct rspamd_statfile_config *) cur->data;
+			if (other_stcf != stcf) {
+				const char *other_label = get_class_label(other_stcf);
+
+				auto maybe_other_rt = redis_stat_runtime<float>::maybe_recover_from_mempool(task,
+																							object_expanded, other_label);
+				if (!maybe_other_rt) {
+					auto *other_rt = new redis_stat_runtime<float>(ctx, task, object_expanded);
+					other_rt->save_in_mempool(other_label);
+					other_rt->need_redis_call = false;
+				}
+			}
+			cur = g_list_next(cur);
+		}
+	}
+	else if (!learn) {
+		/*
+		 * For binary classification, create the opposite class runtime to avoid
+		 * double call for Redis scripts (backward compatibility).
+		 */
+		const char *opposite_label = stcf->is_spam ? "H" : "S";
 		auto maybe_opposite_rt = redis_stat_runtime<float>::maybe_recover_from_mempool(task,
-																					   object_expanded,
-																					   !stcf->is_spam);
+																					   object_expanded, opposite_label);
 
 		if (!maybe_opposite_rt) {
 			auto *opposite_rt = new redis_stat_runtime<float>(ctx, task, object_expanded);
-			opposite_rt->save_in_mempool(!stcf->is_spam);
+			opposite_rt->save_in_mempool(opposite_label);
 			opposite_rt->need_redis_call = false;
 		}
 	}
 
-	rt->save_in_mempool(stcf->is_spam);
+	rt->save_in_mempool(class_label);
 
 	return rt;
 }
@@ -823,16 +866,10 @@ rspamd_redis_classified(lua_State *L)
 	bool result = lua_toboolean(L, 2);
 
 	if (result) {
-		/* Indexes:
-		 * 3 - learned_ham (int)
-		 * 4 - learned_spam (int)
-		 * 5 - ham_tokens (pair<int, int>)
-		 * 6 - spam_tokens (pair<int, int>)
+		/* Check if this is binary format [learned_ham, learned_spam, ham_tokens, spam_tokens]
+		 * or multi-class format [learned_counts_table, outputs_table]
 		 */
 
-		/*
-		 * We need to fill our runtime AND the opposite runtime
-		 */
 		auto filler_func = [](redis_stat_runtime<float> *rt, lua_State *L, unsigned learned, int tokens_pos) {
 			rt->learned = learned;
 			redis_stat_runtime<float>::result_type *res;
@@ -854,32 +891,96 @@ rspamd_redis_classified(lua_State *L)
 			rt->set_results(res);
 		};
 
-		auto opposite_rt_maybe = redis_stat_runtime<float>::maybe_recover_from_mempool(task,
-																					   rt->redis_object_expanded,
-																					   !rt->stcf->is_spam);
+		/* Check if result[3] is a number (binary) or table (multi-class) */
+		lua_rawgeti(L, 3, 1); /* Get first element of result array */
+		bool is_binary_format = lua_isnumber(L, -1);
+		lua_pop(L, 1);
 
-		if (!opposite_rt_maybe) {
-			msg_err_task("internal error: cannot find opposite runtime for cookie %s", cookie);
+		if (is_binary_format) {
+			/* Binary format: [learned_ham, learned_spam, ham_tokens, spam_tokens] */
 
-			return 0;
-		}
+			/* Find the opposite runtime for binary classification compatibility */
+			const char *opposite_label;
+			if (rt->stcf->class_name) {
+				/* Multi-class: find a different class (simplified for now) */
+				opposite_label = strcmp(get_class_label(rt->stcf), "S") == 0 ? "H" : "S";
+			}
+			else {
+				/* Binary: use opposite spam/ham */
+				opposite_label = rt->stcf->is_spam ? "H" : "S";
+			}
+			auto opposite_rt_maybe = redis_stat_runtime<float>::maybe_recover_from_mempool(task,
+																						   rt->redis_object_expanded,
+																						   opposite_label);
 
-		if (rt->stcf->is_spam) {
-			filler_func(rt, L, lua_tointeger(L, 4), 6);
-			filler_func(opposite_rt_maybe.value(), L, lua_tointeger(L, 3), 5);
+			if (!opposite_rt_maybe) {
+				msg_err_task("internal error: cannot find opposite runtime for cookie %s", cookie);
+				return 0;
+			}
+
+			if (rt->stcf->is_spam) {
+				filler_func(rt, L, lua_tointeger(L, 4), 6);
+				filler_func(opposite_rt_maybe.value(), L, lua_tointeger(L, 3), 5);
+			}
+			else {
+				filler_func(rt, L, lua_tointeger(L, 3), 5);
+				filler_func(opposite_rt_maybe.value(), L, lua_tointeger(L, 4), 6);
+			}
+
+			/* Process all tokens */
+			g_assert(rt->tokens != nullptr);
+			rt->process_tokens(rt->tokens);
+			opposite_rt_maybe.value()->process_tokens(rt->tokens);
 		}
 		else {
-			filler_func(rt, L, lua_tointeger(L, 3), 5);
-			filler_func(opposite_rt_maybe.value(), L, lua_tointeger(L, 4), 6);
+			/* Multi-class format: [learned_counts_table, outputs_table] */
+
+			/* Get learned counts table (index 3) and outputs table (index 4) */
+			lua_rawgeti(L, 3, 1); /* learned_counts */
+			lua_rawgeti(L, 3, 2); /* outputs */
+
+			/* Iterate through all class labels to fill all runtimes */
+			if (rt->stcf->clcf && rt->stcf->clcf->class_labels) {
+				GHashTableIter iter;
+				gpointer key, value;
+				g_hash_table_iter_init(&iter, rt->stcf->clcf->class_labels);
+
+				while (g_hash_table_iter_next(&iter, &key, &value)) {
+					const char *class_label = (const char *) value;
+
+					/* Find runtime for this class */
+					auto class_rt_maybe = redis_stat_runtime<float>::maybe_recover_from_mempool(task,
+																								rt->redis_object_expanded,
+																								class_label);
+
+					if (class_rt_maybe) {
+						auto *class_rt = class_rt_maybe.value();
+
+						/* Get learned count for this class */
+						lua_pushstring(L, class_label);
+						lua_gettable(L, -3); /* learned_counts[class_label] */
+						unsigned learned = lua_tointeger(L, -1);
+						lua_pop(L, 1);
+
+						/* Get outputs for this class */
+						lua_pushstring(L, class_label);
+						lua_gettable(L, -2); /* outputs[class_label] */
+						int outputs_pos = lua_gettop(L);
+
+						filler_func(class_rt, L, learned, outputs_pos);
+						lua_pop(L, 1);
+					}
+				}
+			}
+
+			lua_pop(L, 2); /* Pop learned_counts and outputs tables */
+
+			/* Process tokens for all runtimes */
+			g_assert(rt->tokens != nullptr);
+			rt->process_tokens(rt->tokens);
 		}
 
-		/* Mark task as being processed */
-		task->flags |= RSPAMD_TASK_FLAG_HAS_SPAM_TOKENS | RSPAMD_TASK_FLAG_HAS_HAM_TOKENS;
-
-		/* Process all tokens */
-		g_assert(rt->tokens != nullptr);
-		rt->process_tokens(rt->tokens);
-		opposite_rt_maybe.value()->process_tokens(rt->tokens);
+		/* Tokens processed - no need to set flags in multi-class approach */
 	}
 	else {
 		/* Error message is on index 3 */
@@ -929,7 +1030,25 @@ rspamd_redis_process_tokens(struct rspamd_task *task,
 	rspamd_lua_task_push(L, task);
 	lua_pushstring(L, rt->redis_object_expanded);
 	lua_pushinteger(L, id);
-	lua_pushboolean(L, rt->stcf->is_spam);
+
+	/* Send all class labels for multi-class support */
+	if (rt->stcf->clcf && rt->stcf->clcf->class_labels && g_hash_table_size(rt->stcf->clcf->class_labels) > 0) {
+		/* Multi-class: send array of all class labels */
+		lua_newtable(L);
+		GHashTableIter iter;
+		gpointer key, value;
+		int idx = 1;
+		g_hash_table_iter_init(&iter, rt->stcf->clcf->class_labels);
+		while (g_hash_table_iter_next(&iter, &key, &value)) {
+			lua_pushstring(L, (const char *) value); /* Use the label, not class name */
+			lua_rawseti(L, -2, idx++);
+		}
+	}
+	else {
+		/* Binary compatibility: send current class label as single string */
+		lua_pushstring(L, get_class_label(rt->stcf));
+	}
+
 	lua_new_text(L, tokens_buf, tokens_len, false);
 
 	/* Store rt in random cookie */
@@ -1028,7 +1147,7 @@ rspamd_redis_learn_tokens(struct rspamd_task *task,
 	rspamd_lua_task_push(L, task);
 	lua_pushstring(L, rt->redis_object_expanded);
 	lua_pushinteger(L, id);
-	lua_pushboolean(L, rt->stcf->is_spam);
+	lua_pushstring(L, get_class_label(rt->stcf)); /* Pass class label instead of boolean */
 	lua_pushstring(L, rt->stcf->symbol);
 
 	/* Detect unlearn */

@@ -1197,35 +1197,82 @@ rspamd_rcl_statfile_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 		st->opts = (ucl_object_t *) obj;
 		st->clcf = ccf;
 
-		const auto *val = ucl_object_lookup(obj, "spam");
-		if (val == nullptr) {
+		/* Handle migration from old 'spam' field to new 'class' field */
+		const auto *class_val = ucl_object_lookup(obj, "class");
+		const auto *spam_val = ucl_object_lookup(obj, "spam");
+
+		if (class_val != nullptr && spam_val != nullptr) {
+			msg_warn_config("statfile %s has both 'class' and 'spam' fields, using 'class' field",
+							st->symbol);
+		}
+
+		if (class_val == nullptr && spam_val == nullptr) {
+			/* Neither field present, try to guess by symbol name */
 			msg_info_config(
-				"statfile %s has no explicit 'spam' setting, trying to guess by symbol",
+				"statfile %s has no explicit 'class' or 'spam' setting, trying to guess by symbol",
 				st->symbol);
 			if (rspamd_substring_search_caseless(st->symbol,
 												 strlen(st->symbol), "spam", 4) != -1) {
 				st->is_spam = TRUE;
+				st->class_name = rspamd_mempool_strdup(pool, "spam");
 			}
 			else if (rspamd_substring_search_caseless(st->symbol,
 													  strlen(st->symbol), "ham", 3) != -1) {
 				st->is_spam = FALSE;
+				st->class_name = rspamd_mempool_strdup(pool, "ham");
 			}
 			else {
 				g_set_error(err,
 							CFG_RCL_ERROR,
 							EINVAL,
-							"cannot guess spam setting from %s",
+							"cannot guess class setting from %s, please specify 'class' field",
 							st->symbol);
 				return FALSE;
 			}
-			msg_info_config("guessed that statfile with symbol %s is %s",
-							st->symbol,
-							st->is_spam ? "spam" : "ham");
+			msg_info_config("guessed that statfile with symbol %s has class '%s'",
+							st->symbol, st->class_name);
 		}
+		else if (class_val == nullptr && spam_val != nullptr) {
+			/* Only spam field present - migrate to class */
+			msg_warn_config("statfile %s uses deprecated 'spam' field, please use 'class' instead",
+							st->symbol);
+			if (st->is_spam) {
+				st->class_name = rspamd_mempool_strdup(pool, "spam");
+			}
+			else {
+				st->class_name = rspamd_mempool_strdup(pool, "ham");
+			}
+		}
+		/* If class field is present, it was already parsed by the default parser */
 		return TRUE;
 	}
 
 	return FALSE;
+}
+
+static gboolean
+rspamd_rcl_class_labels_handler(rspamd_mempool_t *pool,
+								const ucl_object_t *obj,
+								const char *key,
+								gpointer ud,
+								struct rspamd_rcl_section *section,
+								GError **err)
+{
+	auto *ccf = static_cast<rspamd_classifier_config *>(ud);
+
+	if (obj->type != UCL_OBJECT) {
+		g_set_error(err, CFG_RCL_ERROR, EINVAL,
+					"class_labels must be an object");
+		return FALSE;
+	}
+
+	if (!rspamd_config_parse_class_labels((ucl_object_t *) obj, &ccf->class_labels)) {
+		g_set_error(err, CFG_RCL_ERROR, EINVAL,
+					"invalid class_labels configuration");
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 static gboolean
@@ -1375,6 +1422,21 @@ rspamd_rcl_classifier_handler(rspamd_mempool_t *pool,
 	}
 
 	ccf->opts = (ucl_object_t *) obj;
+
+	/* Validate multi-class configuration */
+	GError *validation_err = nullptr;
+	if (!rspamd_config_validate_class_config(ccf, &validation_err)) {
+		if (validation_err) {
+			g_propagate_error(err, validation_err);
+		}
+		else {
+			g_set_error(err, CFG_RCL_ERROR, EINVAL,
+						"multi-class configuration validation failed for classifier '%s'",
+						ccf->name ? ccf->name : "unknown");
+		}
+		return FALSE;
+	}
+
 	cfg->classifiers = g_list_prepend(cfg->classifiers, ccf);
 
 	return TRUE;
@@ -2505,6 +2567,18 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   "Name of classifier");
 
 		/*
+		 * Multi-class configuration
+		 */
+		rspamd_rcl_add_section_doc(&top, sub,
+								   "class_labels", nullptr,
+								   rspamd_rcl_class_labels_handler,
+								   UCL_OBJECT,
+								   FALSE,
+								   TRUE,
+								   sub->doc_ref,
+								   "Class to backend label mapping for multi-class classification");
+
+		/*
 		 * Statfile defaults
 		 */
 		auto *ssub = rspamd_rcl_add_section_doc(&top, sub,
@@ -2522,11 +2596,17 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   0,
 									   "Statfile unique label");
 		rspamd_rcl_add_default_handler(ssub,
+									   "class",
+									   rspamd_rcl_parse_struct_string,
+									   G_STRUCT_OFFSET(struct rspamd_statfile_config, class_name),
+									   0,
+									   "Class name for multi-class classification");
+		rspamd_rcl_add_default_handler(ssub,
 									   "spam",
 									   rspamd_rcl_parse_struct_boolean,
 									   G_STRUCT_OFFSET(struct rspamd_statfile_config, is_spam),
 									   0,
-									   "Sets if this statfile contains spam samples");
+									   "DEPRECATED: Sets if this statfile contains spam samples (use 'class' instead)");
 	}
 
 	if (!(skip_sections && g_hash_table_lookup(skip_sections, "composite"))) {

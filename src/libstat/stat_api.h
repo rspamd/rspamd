@@ -108,6 +108,23 @@ rspamd_stat_result_t rspamd_stat_learn(struct rspamd_task *task,
 									   GError **err);
 
 /**
+ * Learn task as a specific class, task must be processed prior to this call
+ * @param task task to learn
+ * @param class_name name of the class to learn (e.g., "spam", "ham", "transactional")
+ * @param L lua state
+ * @param classifier NULL to learn all classifiers, name to learn a specific one
+ * @param stage learning stage
+ * @param err error returned
+ * @return TRUE if task has been learned
+ */
+rspamd_stat_result_t rspamd_stat_learn_class(struct rspamd_task *task,
+											 const char *class_name,
+											 lua_State *L,
+											 const char *classifier,
+											 unsigned int stage,
+											 GError **err);
+
+/**
  * Get the overall statistics for all statfile backends
  * @param cfg configuration
  * @param total_learns the total number of learns is stored here
@@ -119,6 +136,43 @@ rspamd_stat_result_t rspamd_stat_statistics(struct rspamd_task *task,
 											ucl_object_t **res);
 
 void rspamd_stat_unload(void);
+
+/**
+ * Multi-class classification result structure
+ */
+typedef struct {
+	char **class_names;        /**< Array of class names */
+	double *probabilities;     /**< Array of probabilities for each class */
+	unsigned int num_classes;  /**< Number of classes */
+	const char *winning_class; /**< Name of the winning class (reference, not owned) */
+	double confidence;         /**< Confidence of the winning class */
+} rspamd_multiclass_result_t;
+
+/**
+ * Set multi-class classification result for a task
+ */
+void rspamd_task_set_multiclass_result(struct rspamd_task *task,
+									   rspamd_multiclass_result_t *result);
+
+/**
+ * Get multi-class classification result from a task
+ */
+rspamd_multiclass_result_t *rspamd_task_get_multiclass_result(struct rspamd_task *task);
+
+/**
+ * Free multi-class result structure
+ */
+void rspamd_multiclass_result_free(rspamd_multiclass_result_t *result);
+
+/**
+ * Set autolearn class for a task
+ */
+void rspamd_task_set_autolearn_class(struct rspamd_task *task, const char *class_name);
+
+/**
+ * Get autolearn class from a task
+ */
+const char *rspamd_task_get_autolearn_class(struct rspamd_task *task);
 
 #ifdef __cplusplus
 }
