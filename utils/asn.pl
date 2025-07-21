@@ -17,7 +17,7 @@ use URI;
 
 my %config = (
   asn_sources => [
-    'ftp://ftp.arin.net/pub/stats/arin/delegated-arin-extended-latest',
+    'https://ftp.arin.net/pub/stats/arin/delegated-arin-extended-latest',
     'ftp://ftp.ripe.net/ripe/stats/delegated-ripencc-latest',
     'http://ftp.afrinic.net/pub/stats/afrinic/delegated-afrinic-latest',
     'ftp://ftp.apnic.net/pub/stats/apnic/delegated-apnic-latest',
