@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -422,7 +422,7 @@ bayes_classify_multiclass(struct rspamd_classifier *ctx,
 		for (i = 0; i < cl.num_classes; i++) {
 			if (cl.class_learns[i] < ctx->cfg->min_learns) {
 				msg_info_task("not classified as %s. The class needs more "
-							  "training samples. Currently: %ul; minimum %ud required",
+							  "training samples. Currently: %uL; minimum %ud required",
 							  cl.class_names[i], cl.class_learns[i], ctx->cfg->min_learns);
 				return TRUE;
 			}
@@ -602,7 +602,7 @@ bayes_classify(struct rspamd_classifier *ctx,
 		}
 
 		if (has_class_names) {
-			msg_debug_bayes("using multiclass classification with %u classes",
+			msg_debug_bayes("using multiclass classification with %ud classes",
 							(unsigned int) ctx->cfg->class_names->len);
 			return bayes_classify_multiclass(ctx, tokens, task);
 		}
@@ -617,14 +617,14 @@ bayes_classify(struct rspamd_classifier *ctx,
 	if (ctx->cfg->min_learns > 0) {
 		if (ctx->ham_learns < ctx->cfg->min_learns) {
 			msg_info_task("not classified as ham. The ham class needs more "
-						  "training samples. Currently: %ul; minimum %ud required",
+						  "training samples. Currently: %uL; minimum %ud required",
 						  ctx->ham_learns, ctx->cfg->min_learns);
 
 			return TRUE;
 		}
 		if (ctx->spam_learns < ctx->cfg->min_learns) {
 			msg_info_task("not classified as spam. The spam class needs more "
-						  "training samples. Currently: %ul; minimum %ud required",
+						  "training samples. Currently: %uL; minimum %ud required",
 						  ctx->spam_learns, ctx->cfg->min_learns);
 
 			return TRUE;
@@ -705,7 +705,7 @@ bayes_classify(struct rspamd_classifier *ctx,
 		final_prob = (s + 1.0 - h) / 2.;
 		msg_debug_bayes(
 			"got ham probability %.2f -> %.2f and spam probability %.2f -> %.2f,"
-			" %L tokens processed of %ud total tokens;"
+			" %uL tokens processed of %ud total tokens;"
 			" %uL text tokens found of %ud text tokens)",
 			cl.ham_prob,
 			h,

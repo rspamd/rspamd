@@ -866,9 +866,20 @@ rspamd_redis_classified(lua_State *L)
 	bool result = lua_toboolean(L, 2);
 
 	if (result) {
-		/* Check if this is binary format [learned_ham, learned_spam, ham_tokens, spam_tokens]
-		 * or multi-class format [learned_counts_table, outputs_table]
+		/* Check we have enough arguments and the result data is a table */
+		if (lua_gettop(L) < 3 || !lua_istable(L, 3)) {
+			msg_err_task("internal error: expected table result from Redis script, got %s",
+						 lua_typename(L, lua_type(L, 3)));
+			rt->err = rspamd::util::error("invalid Redis script result format", 500);
+			return 0;
+		}
+
+		/* Check the array length to determine format:
+		 * - Length 4: binary format [learned_ham, learned_spam, ham_tokens, spam_tokens]
+		 * - Length 2: multi-class format [learned_counts_table, outputs_table]
 		 */
+		size_t result_len = rspamd_lua_table_size(L, 3);
+		msg_debug_bayes("Redis result array length: %uz", result_len);
 
 		auto filler_func = [](redis_stat_runtime<float> *rt, lua_State *L, unsigned learned, int tokens_pos) {
 			rt->learned = learned;
@@ -891,10 +902,7 @@ rspamd_redis_classified(lua_State *L)
 			rt->set_results(res);
 		};
 
-		/* Check if result[3] is a number (binary) or table (multi-class) */
-		lua_rawgeti(L, 3, 1); /* Get first element of result array */
-		bool is_binary_format = lua_isnumber(L, -1);
-		lua_pop(L, 1);
+		bool is_binary_format = (result_len == 4);
 
 		if (is_binary_format) {
 			/* Binary format: [learned_ham, learned_spam, ham_tokens, spam_tokens] */
@@ -935,7 +943,7 @@ rspamd_redis_classified(lua_State *L)
 		else {
 			/* Multi-class format: [learned_counts_table, outputs_table] */
 
-			/* Get learned counts table (index 3) and outputs table (index 4) */
+			/* Get learned counts table (index 1) and outputs table (index 2) */
 			lua_rawgeti(L, 3, 1); /* learned_counts */
 			lua_rawgeti(L, 3, 2); /* outputs */
 
@@ -984,10 +992,18 @@ rspamd_redis_classified(lua_State *L)
 	}
 	else {
 		/* Error message is on index 3 */
-		const auto *err_msg = lua_tostring(L, 3);
-		rt->err = rspamd::util::error(err_msg, 500);
-		msg_err_task("cannot classify task: %s",
-					 err_msg);
+		const char *err_msg = nullptr;
+		if (lua_gettop(L) >= 3 && lua_isstring(L, 3)) {
+			err_msg = lua_tostring(L, 3);
+		}
+		if (err_msg) {
+			rt->err = rspamd::util::error(err_msg, 500);
+			msg_err_task("cannot classify task: %s", err_msg);
+		}
+		else {
+			rt->err = rspamd::util::error("unknown Redis script error", 500);
+			msg_err_task("cannot classify task: unknown Redis script error");
+		}
 	}
 
 	return 0;
@@ -1102,9 +1118,18 @@ rspamd_redis_learned(lua_State *L)
 	}
 	else {
 		/* Error message is on index 3 */
-		const auto *err_msg = lua_tostring(L, 3);
-		rt->err = rspamd::util::error(err_msg, 500);
-		msg_err_task("cannot learn task: %s", err_msg);
+		const char *err_msg = nullptr;
+		if (lua_gettop(L) >= 3 && lua_isstring(L, 3)) {
+			err_msg = lua_tostring(L, 3);
+		}
+		if (err_msg) {
+			rt->err = rspamd::util::error(err_msg, 500);
+			msg_err_task("cannot learn task: %s", err_msg);
+		}
+		else {
+			rt->err = rspamd::util::error("unknown Redis script error", 500);
+			msg_err_task("cannot learn task: unknown Redis script error");
+		}
 	}
 
 	return 0;

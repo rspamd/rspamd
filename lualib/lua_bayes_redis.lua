@@ -31,24 +31,9 @@ local function gen_classify_functor(redis_params, classify_script_id)
       if err then
         callback(task, false, err)
       else
-        -- Handle both binary and multi-class results
-        if type(data[1]) == "table" then
-          -- Multi-class format: [learned_counts_table, outputs_table]
-          -- Convert to binary format for backward compatibility if needed
-          local learned_counts = data[1]
-          local outputs = data[2]
-
-          -- For now, return ham/spam data if available for backward compatibility
-          local learned_ham = learned_counts["H"] or learned_counts["ham"] or 0
-          local learned_spam = learned_counts["S"] or learned_counts["spam"] or 0
-          local output_ham = outputs["H"] or outputs["ham"] or {}
-          local output_spam = outputs["S"] or outputs["spam"] or {}
-
-          callback(task, true, learned_ham, learned_spam, output_ham, output_spam)
-        else
-          -- Binary format: [learned_ham, learned_spam, output_ham, output_spam]
-          callback(task, true, data[1], data[2], data[3], data[4])
-        end
+        -- Pass the raw data table to the C++ callback for processing
+        -- The C++ callback will handle both binary and multi-class formats
+        callback(task, true, data)
       end
     end
 
