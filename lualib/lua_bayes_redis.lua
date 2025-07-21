@@ -40,7 +40,8 @@ local function gen_classify_functor(redis_params, classify_script_id)
     -- Determine class labels to send to Redis script
     local script_class_labels
     if type(class_labels) == "table" then
-      script_class_labels = class_labels
+      -- Use simple comma-separated string instead of messagepack
+      script_class_labels = "TABLE:" .. table.concat(class_labels, ",")
     else
       -- Single class label or boolean compatibility
       if class_labels == true or class_labels == "true" then

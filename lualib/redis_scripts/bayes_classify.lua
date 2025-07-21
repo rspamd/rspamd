@@ -10,14 +10,20 @@ local input_tokens = cmsgpack.unpack(KEYS[3])
 
 -- Determine if this is multi-class (table) or binary (string)
 local class_labels = {}
-if type(class_labels_arg) == "table" then
-  class_labels = class_labels_arg
+
+-- Check if this is a table serialized as "TABLE:label1,label2,..."
+if string.match(class_labels_arg, "^TABLE:") then
+  local labels_str = string.sub(class_labels_arg, 7) -- Remove "TABLE:" prefix
+  -- Split by comma
+  for label in string.gmatch(labels_str, "([^,]+)") do
+    table.insert(class_labels, label)
+  end
 else
   -- Binary compatibility: handle old boolean or single string format
   if class_labels_arg == "true" then
-    class_labels = { "S" }            -- spam
+    class_labels = { "S" }              -- spam
   elseif class_labels_arg == "false" then
-    class_labels = { "H" }            -- ham
+    class_labels = { "H" }              -- ham
   else
     class_labels = { class_labels_arg } -- single class label
   end

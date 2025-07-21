@@ -8,11 +8,20 @@ local cache_id = KEYS[1]
 local class_name = KEYS[2]
 local conf = cmsgpack.unpack(KEYS[3])
 
--- Handle backward compatibility for binary values
-if class_name == "1" then
-  class_name = "spam"
-elseif class_name == "0" then
-  class_name = "ham"
+-- Convert class names to numeric cache values for consistency
+local cache_value
+if class_name == "1" or class_name == "spam" or class_name == "S" then
+  cache_value = "1" -- spam
+elseif class_name == "0" or class_name == "ham" or class_name == "H" then
+  cache_value = "0" -- ham
+else
+  -- For other classes, use a simple hash to get a consistent numeric value
+  -- This ensures cache check can return a number while preserving class info
+  local hash = 0
+  for i = 1, #class_name do
+    hash = hash + string.byte(class_name, i)
+  end
+  cache_value = tostring(2 + (hash % 1000)) -- Start from 2, avoid 0/1
 end
 cache_id = string.sub(cache_id, 1, conf.cache_elt_len)
 
@@ -22,8 +31,8 @@ for i = 0, conf.cache_max_keys do
   local have = redis.call('HGET', prefix, cache_id)
 
   if have then
-    -- Already in cache, but class_name changes when relearning
-    redis.call('HSET', prefix, cache_id, class_name)
+    -- Already in cache, but cache_value changes when relearning
+    redis.call('HSET', prefix, cache_id, cache_value)
     return false
   end
 end
@@ -37,7 +46,7 @@ for i = 0, conf.cache_max_keys do
 
     if count < lim then
       -- We can add it to this prefix
-      redis.call('HSET', prefix, cache_id, class_name)
+      redis.call('HSET', prefix, cache_id, cache_value)
       added = true
     end
   end
@@ -53,7 +62,7 @@ if not added then
     if exists then
       if not expired then
         redis.call('DEL', prefix)
-        redis.call('HSET', prefix, cache_id, class_name)
+        redis.call('HSET', prefix, cache_id, cache_value)
 
         -- Do not expire anything else
         expired = true

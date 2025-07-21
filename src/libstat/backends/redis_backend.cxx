@@ -926,14 +926,28 @@ rspamd_redis_classified(lua_State *L)
 				return 0;
 			}
 
-			if (rt->stcf->is_spam) {
-				filler_func(rt, L, lua_tointeger(L, 4), 6);
-				filler_func(opposite_rt_maybe.value(), L, lua_tointeger(L, 3), 5);
+			/* Extract values from the result table at position 3 */
+			lua_rawgeti(L, 3, 1); /* learned_ham -> position 4 */
+			lua_rawgeti(L, 3, 2); /* learned_spam -> position 5 */
+			lua_rawgeti(L, 3, 3); /* ham_tokens -> position 6 */
+			lua_rawgeti(L, 3, 4); /* spam_tokens -> position 7 */
+
+			unsigned learned_ham = lua_tointeger(L, 4);
+			unsigned learned_spam = lua_tointeger(L, 5);
+
+			if (rt->stcf->is_spam || (rt->stcf->class_name && strcmp(get_class_label(rt->stcf), "S") == 0)) {
+				/* Current runtime is spam, use spam data */
+				filler_func(rt, L, learned_spam, 7);                       /* spam_tokens at position 7 */
+				filler_func(opposite_rt_maybe.value(), L, learned_ham, 6); /* ham_tokens at position 6 */
 			}
 			else {
-				filler_func(rt, L, lua_tointeger(L, 3), 5);
-				filler_func(opposite_rt_maybe.value(), L, lua_tointeger(L, 4), 6);
+				/* Current runtime is ham, use ham data */
+				filler_func(rt, L, learned_ham, 6);                         /* ham_tokens at position 6 */
+				filler_func(opposite_rt_maybe.value(), L, learned_spam, 7); /* spam_tokens at position 7 */
 			}
+
+			/* Clean up the stack - pop the 4 extracted values */
+			lua_pop(L, 4);
 
 			/* Process all tokens */
 			g_assert(rt->tokens != nullptr);
@@ -1048,9 +1062,10 @@ rspamd_redis_process_tokens(struct rspamd_task *task,
 	lua_pushinteger(L, id);
 
 	/* Send all class labels for multi-class support */
-	if (rt->stcf->clcf && rt->stcf->clcf->class_labels && g_hash_table_size(rt->stcf->clcf->class_labels) > 0) {
+	if (rt->stcf->clcf && rt->stcf->clcf->class_labels &&
+		g_hash_table_size(rt->stcf->clcf->class_labels) > 0) {
 		/* Multi-class: send array of all class labels */
-		lua_newtable(L);
+		lua_createtable(L, g_hash_table_size(rt->stcf->clcf->class_labels), 0);
 		GHashTableIter iter;
 		gpointer key, value;
 		int idx = 1;
@@ -1061,8 +1076,12 @@ rspamd_redis_process_tokens(struct rspamd_task *task,
 		}
 	}
 	else {
-		/* Binary compatibility: send current class label as single string */
-		lua_pushstring(L, get_class_label(rt->stcf));
+		/* Binary classification: send both spam and ham labels for optimization */
+		lua_createtable(L, 2, 0);
+		lua_pushstring(L, "H"); /* ham */
+		lua_rawseti(L, -2, 1);
+		lua_pushstring(L, "S"); /* spam */
+		lua_rawseti(L, -2, 2);
 	}
 
 	lua_new_text(L, tokens_buf, tokens_len, false);
@@ -1114,7 +1133,16 @@ rspamd_redis_learned(lua_State *L)
 	bool result = lua_toboolean(L, 2);
 
 	if (result) {
-		/* TODO: write it */
+		/* Learning successful - no complex data to process like in classification */
+		msg_debug_bayes("learned tokens successfully in Redis for symbol %s, class %s",
+						rt->stcf->symbol, get_class_label(rt->stcf));
+
+		/* Clear any previous error state */
+		rt->err = std::nullopt;
+
+		/* Learning operations don't return data structures to process,
+		 * they just update Redis state. Success means the Redis script
+		 * completed without errors. */
 	}
 	else {
 		/* Error message is on index 3 */
