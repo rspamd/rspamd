@@ -30,6 +30,12 @@ define(["jquery", "app/common", "app/libft", "footable"],
         const ui = {};
         let prevVersion = null;
 
+        // History range: offset and count
+        const histFromDef = 0;
+        const historyCountDef = 1000;
+        let histFrom = histFromDef;
+        let histCount = parseInt(localStorage.getItem("historyCount"), 10) || historyCountDef;
+
         function process_history_legacy(data) {
             const items = [];
 
@@ -152,7 +158,8 @@ define(["jquery", "app/common", "app/libft", "footable"],
 
         ui.getHistory = function () {
             $("#refresh, #updateHistory").attr("disabled", true);
-            common.query("history", {
+            const histTo = histFrom - 1 + histCount;
+            common.query(`history?from=${histFrom}&to=${histTo}`, {
                 success: function (req_data) {
                     function differentVersions(neighbours_data) {
                         const dv = neighbours_data.some((e) => e.version !== neighbours_data[0].version);
@@ -192,8 +199,10 @@ define(["jquery", "app/common", "app/libft", "footable"],
                             // Is there a way to get an event when the table is destroyed?
                             setTimeout(() => {
                                 libft.initHistoryTable(data, items, "history", get_history_columns(data), false,
-                                    () => $("#refresh, #updateHistory, #history .ft-columns-dropdown .btn-dropdown-apply")
-                                        .removeAttr("disabled"));
+                                    () => {
+                                        $("#history .ft-columns-dropdown .btn-dropdown-apply").removeAttr("disabled");
+                                        ui.updateHistoryControlsState();
+                                    });
                             }, 200);
                         }
                         prevVersion = version;
@@ -201,7 +210,7 @@ define(["jquery", "app/common", "app/libft", "footable"],
                         libft.destroyTable("history");
                     }
                 },
-                error: () => $("#refresh, #updateHistory").removeAttr("disabled"),
+                error: () => ui.updateHistoryControlsState(),
                 errorMessage: "Cannot receive history",
             });
         };
@@ -282,6 +291,46 @@ define(["jquery", "app/common", "app/libft", "footable"],
             });
         };
 
+        ui.updateHistoryControlsState = function () {
+            const from = parseInt($("#history-from").val(), 10);
+            const count = parseInt($("#history-count").val(), 10);
+            const valid = !(isNaN(from) || from < 0 || isNaN(count) || count < 1);
+
+            if (valid) {
+                $("#refresh, #updateHistory").removeAttr("disabled").removeClass("disabled");
+            } else {
+                $("#refresh, #updateHistory").attr("disabled", true).addClass("disabled");
+            }
+        };
+
+        function validateAndClampInput(el) {
+            const min = el.id === "history-from" ? 0 : 1;
+            let v = parseInt(el.value, 10);
+            if (isNaN(v) || v < min) {
+                v = min;
+                $(el).addClass("is-invalid");
+            } else {
+                $(el).removeClass("is-invalid");
+            }
+            return v;
+        }
+
+        $("#history-from").val(histFrom);
+        $("#history-count").val(histCount);
+        $("#history-from, #history-count").on("input", (e) => {
+            validateAndClampInput(e.currentTarget);
+            ui.updateHistoryControlsState();
+        });
+        $("#history-from, #history-count").on("blur", (e) => {
+            const el = e.currentTarget;
+            const v = validateAndClampInput(el);
+            $(el).val(v).removeClass("is-invalid");
+            ui.updateHistoryControlsState();
+        });
+        $("#history-from,#history-count").on("change", () => {
+            histFrom = parseInt($("#history-from").val(), 10) || histFromDef;
+            histCount = parseInt($("#history-count").val(), 10) || historyCountDef;
+        });
 
         libft.set_page_size("history", $("#history_page_size").val());
         libft.bindHistoryTableEventHandlers("history", 8);
