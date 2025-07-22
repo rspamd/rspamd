@@ -942,15 +942,14 @@ rspamd_learn_task_spam(struct rspamd_task *task,
 					   const char *classifier,
 					   GError **err)
 {
+	/* Use unified class-based approach internally */
+	const char *class_name = is_spam ? "spam" : "ham";
+
 	/* Disable learn auto flag to avoid bad learn codes */
 	task->flags &= ~RSPAMD_TASK_FLAG_LEARN_AUTO;
 
-	if (is_spam) {
-		task->flags |= RSPAMD_TASK_FLAG_LEARN_SPAM;
-	}
-	else {
-		task->flags |= RSPAMD_TASK_FLAG_LEARN_HAM;
-	}
+	/* Use the unified class-based learning approach */
+	rspamd_task_set_autolearn_class(task, class_name);
 
 	task->classifier = classifier;
 

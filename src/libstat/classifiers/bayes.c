@@ -302,15 +302,16 @@ bayes_classify_token_multiclass(struct rspamd_classifier *ctx,
 		val = tok->values[id];
 
 		if (val > 0) {
-			/* Find which class this statfile belongs to */
-			for (j = 0; j < cl->num_classes; j++) {
-				if (st->stcf->class_name &&
-					strcmp(st->stcf->class_name, cl->class_names[j]) == 0) {
-					class_counts[j] += val;
-					total_count += val;
-					cl->total_hits += val;
-					break;
-				}
+			/* Direct O(1) class index lookup instead of O(N) string comparison */
+			if (st->stcf->class_name && st->stcf->class_index < cl->num_classes) {
+				unsigned int class_idx = st->stcf->class_index;
+				class_counts[class_idx] += val;
+				total_count += val;
+				cl->total_hits += val;
+			}
+			else {
+				msg_debug_bayes("invalid class_index %ud >= %ud for statfile %s",
+								st->stcf->class_index, cl->num_classes, st->stcf->symbol);
 			}
 		}
 	}
@@ -348,7 +349,7 @@ bayes_classify_token_multiclass(struct rspamd_classifier *ctx,
 
 		if (tok->t1 && tok->t2) {
 			msg_debug_bayes("token(%s) %uL <%*s:%*s>: weight: %.3f, total_count: %ud, "
-							"processed for %u classes",
+							"processed for %ud classes",
 							token_type, tok->data,
 							(int) tok->t1->stemmed.len, tok->t1->stemmed.begin,
 							(int) tok->t2->stemmed.len, tok->t2->stemmed.begin,
@@ -385,13 +386,27 @@ bayes_classify_multiclass(struct rspamd_classifier *ctx,
 	cl.cfg = ctx->cfg;
 
 	/* Get class information from classifier config */
-	if (!ctx->cfg->class_names || ctx->cfg->class_names->len < 2) {
-		msg_debug_bayes("insufficient classes for multiclass classification");
+	if (!ctx->cfg->class_names) {
+		msg_debug_bayes("no class_names array in classifier config");
+		return TRUE; /* Fall back to binary mode */
+	}
+	if (ctx->cfg->class_names->len < 2) {
+		msg_debug_bayes("insufficient classes: %ud < 2", (unsigned int) ctx->cfg->class_names->len);
+		return TRUE; /* Fall back to binary mode */
+	}
+	if (!ctx->cfg->class_names->pdata) {
+		msg_debug_bayes("class_names->pdata is NULL");
 		return TRUE; /* Fall back to binary mode */
 	}
 
 	cl.num_classes = ctx->cfg->class_names->len;
 	cl.class_names = (char **) ctx->cfg->class_names->pdata;
+
+	/* Debug: verify class names are accessible */
+	msg_debug_bayes("multiclass setup: ctx->cfg->class_names=%p, len=%ud, pdata=%p",
+					ctx->cfg->class_names, (unsigned int) ctx->cfg->class_names->len, ctx->cfg->class_names->pdata);
+	msg_debug_bayes("multiclass setup: cl.num_classes=%ud, cl.class_names=%p",
+					cl.num_classes, cl.class_names);
 	cl.class_log_probs = g_alloca(cl.num_classes * sizeof(double));
 	cl.class_learns = g_alloca(cl.num_classes * sizeof(uint64_t));
 
@@ -459,6 +474,22 @@ bayes_classify_multiclass(struct rspamd_classifier *ctx,
 	}
 
 	if (cl.processed_tokens == 0) {
+		/* Debug: check why no tokens were processed */
+		msg_debug_bayes("examining token values for debugging:");
+		for (i = 0; i < MIN(tokens->len, 10); i++) { /* Check first 10 tokens */
+			tok = g_ptr_array_index(tokens, i);
+			for (j = 0; j < ctx->statfiles_ids->len; j++) {
+				id = g_array_index(ctx->statfiles_ids, int, j);
+				if (tok->values[id] > 0) {
+					struct rspamd_statfile *st = g_ptr_array_index(ctx->ctx->statfiles, id);
+					msg_debug_bayes("token %ud: values[%d] = %.2f (class=%s, symbol=%s)",
+									i, id, tok->values[id],
+									st->stcf->class_name ? st->stcf->class_name : "unknown",
+									st->stcf->symbol);
+				}
+			}
+		}
+
 		msg_info_bayes("no tokens found in bayes database "
 					   "(%ud total tokens, %ud text tokens), ignore stats",
 					   tokens->len, text_tokens);

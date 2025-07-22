@@ -22,6 +22,7 @@
 #include "contrib/fmt/include/fmt/base.h"
 
 #include "libutil/cxx/error.hxx"
+#include <map>
 
 #include <string>
 #include <cstdint>
@@ -147,11 +148,17 @@ public:
 		rspamd_token_t *tok;
 
 		if (!results) {
+			msg_debug_bayes("process_tokens: no results available for statfile id=%d", id);
 			return false;
 		}
 
+		msg_debug_bayes("processing tokens for statfile id=%d, results size=%uz, class=%s",
+						id, results->size(), stcf->class_name ? stcf->class_name : "unknown");
+
 		for (auto [idx, val]: *results) {
 			tok = (rspamd_token_t *) g_ptr_array_index(tokens, idx - 1);
+			msg_debug_bayes("setting tok->values[%d] = %.2f for token idx %d (class=%s)",
+							id, val, idx, stcf->class_name ? stcf->class_name : "unknown");
 			tok->values[id] = val;
 		}
 
@@ -646,45 +653,61 @@ rspamd_redis_runtime(struct rspamd_task *task,
 	/* No cached result (or learn), create new one */
 	auto *rt = new redis_stat_runtime<float>(ctx, task, object_expanded);
 
-	if (!learn && stcf->clcf && stcf->clcf->class_names && stcf->clcf->class_names->len > 2) {
-		/*
-		 * For multi-class classification, we need to create runtimes for ALL classes
-		 * to avoid multiple Redis calls. The actual Redis call will fetch data for all classes.
-		 */
+	/* Find the statfile ID for the main runtime */
+	int main_id = _id; /* Use the passed _id parameter */
+	rt->id = main_id;
+	rt->stcf = stcf;
+
+	/* For classification, create runtimes for all other statfiles to avoid multiple Redis calls */
+	if (!learn && stcf->clcf && stcf->clcf->statfiles) {
 		GList *cur = stcf->clcf->statfiles;
+
 		while (cur) {
 			auto *other_stcf = (struct rspamd_statfile_config *) cur->data;
-			if (other_stcf != stcf) {
-				const char *other_label = get_class_label(other_stcf);
+			const char *other_label = get_class_label(other_stcf);
 
-				auto maybe_other_rt = redis_stat_runtime<float>::maybe_recover_from_mempool(task,
-																							object_expanded, other_label);
-				if (!maybe_other_rt) {
-					auto *other_rt = new redis_stat_runtime<float>(ctx, task, object_expanded);
-					other_rt->save_in_mempool(other_label);
-					other_rt->need_redis_call = false;
+			/* Find the statfile ID by searching through all statfiles */
+			struct rspamd_stat_ctx *st_ctx = rspamd_stat_get_ctx();
+			int other_id = -1;
+			for (unsigned int i = 0; i < st_ctx->statfiles->len; i++) {
+				struct rspamd_statfile *st = (struct rspamd_statfile *) g_ptr_array_index(st_ctx->statfiles, i);
+				if (st->stcf == other_stcf) {
+					other_id = st->id;
+					msg_debug_bayes("found statfile mapping: %s (class=%s) → id=%d",
+									st->stcf->symbol, other_label, other_id);
+					break;
 				}
 			}
+
+			if (other_id == -1) {
+				msg_debug_bayes("statfile not found for class %s, skipping", other_label);
+				/* Skip if statfile not found */
+				cur = g_list_next(cur);
+				continue;
+			}
+
+			if (other_stcf == stcf) {
+				/* This is the main statfile, use the main runtime */
+				rt->save_in_mempool(other_label);
+				msg_debug_bayes("main runtime: statfile %s (class=%s) → id=%d",
+								stcf->symbol, other_label, rt->id);
+			}
+			else {
+				/* Create additional runtime for other statfile */
+				auto *other_rt = new redis_stat_runtime<float>(ctx, task, object_expanded);
+				other_rt->id = other_id;
+				other_rt->stcf = other_stcf;
+				other_rt->save_in_mempool(other_label);
+				msg_debug_bayes("additional runtime: statfile %s (class=%s) → id=%d",
+								other_stcf->symbol, other_label, other_id);
+			}
+
 			cur = g_list_next(cur);
 		}
 	}
-	else if (!learn) {
-		/*
-		 * For binary classification, create the opposite class runtime to avoid
-		 * double call for Redis scripts (backward compatibility).
-		 */
-		const char *opposite_label = stcf->is_spam ? "H" : "S";
-		auto maybe_opposite_rt = redis_stat_runtime<float>::maybe_recover_from_mempool(task,
-																					   object_expanded, opposite_label);
-
-		if (!maybe_opposite_rt) {
-			auto *opposite_rt = new redis_stat_runtime<float>(ctx, task, object_expanded);
-			opposite_rt->save_in_mempool(opposite_label);
-			opposite_rt->need_redis_call = false;
-		}
+	else {
+		rt->save_in_mempool(class_label);
 	}
-
-	rt->save_in_mempool(class_label);
 
 	return rt;
 }
@@ -859,7 +882,6 @@ rspamd_redis_classified(lua_State *L)
 
 	if (rt == nullptr) {
 		msg_err_task("internal error: cannot find runtime for cookie %s", cookie);
-
 		return 0;
 	}
 
@@ -874,135 +896,131 @@ rspamd_redis_classified(lua_State *L)
 			return 0;
 		}
 
-		/* Check the array length to determine format:
-		 * - Length 4: binary format [learned_ham, learned_spam, ham_tokens, spam_tokens]
-		 * - Length 2: multi-class format [learned_counts_table, outputs_table]
-		 */
+		/* Redis returns [learned_counts_array, token_results_array]
+		 * Both ordered the same way as statfiles in classifier */
 		size_t result_len = rspamd_lua_table_size(L, 3);
 		msg_debug_bayes("Redis result array length: %uz", result_len);
 
-		auto filler_func = [](redis_stat_runtime<float> *rt, lua_State *L, unsigned learned, int tokens_pos) {
-			rt->learned = learned;
-			redis_stat_runtime<float>::result_type *res;
-
-			res = new redis_stat_runtime<float>::result_type();
-
-			for (lua_pushnil(L); lua_next(L, tokens_pos); lua_pop(L, 1)) {
-				lua_rawgeti(L, -1, 1);
-				auto idx = lua_tointeger(L, -1);
-				lua_pop(L, 1);
-
-				lua_rawgeti(L, -1, 2);
-				auto value = lua_tonumber(L, -1);
-				lua_pop(L, 1);
-
-				res->emplace_back(idx, value);
-			}
-
-			rt->set_results(res);
-		};
-
-		bool is_binary_format = (result_len == 4);
-
-		if (is_binary_format) {
-			/* Binary format: [learned_ham, learned_spam, ham_tokens, spam_tokens] */
-
-			/* Find the opposite runtime for binary classification compatibility */
-			const char *opposite_label;
-			if (rt->stcf->class_name) {
-				/* Multi-class: find a different class (simplified for now) */
-				opposite_label = strcmp(get_class_label(rt->stcf), "S") == 0 ? "H" : "S";
-			}
-			else {
-				/* Binary: use opposite spam/ham */
-				opposite_label = rt->stcf->is_spam ? "H" : "S";
-			}
-			auto opposite_rt_maybe = redis_stat_runtime<float>::maybe_recover_from_mempool(task,
-																						   rt->redis_object_expanded,
-																						   opposite_label);
-
-			if (!opposite_rt_maybe) {
-				msg_err_task("internal error: cannot find opposite runtime for cookie %s", cookie);
-				return 0;
-			}
-
-			/* Extract values from the result table at position 3 */
-			lua_rawgeti(L, 3, 1); /* learned_ham -> position 4 */
-			lua_rawgeti(L, 3, 2); /* learned_spam -> position 5 */
-			lua_rawgeti(L, 3, 3); /* ham_tokens -> position 6 */
-			lua_rawgeti(L, 3, 4); /* spam_tokens -> position 7 */
-
-			unsigned learned_ham = lua_tointeger(L, 4);
-			unsigned learned_spam = lua_tointeger(L, 5);
-
-			if (rt->stcf->is_spam || (rt->stcf->class_name && strcmp(get_class_label(rt->stcf), "S") == 0)) {
-				/* Current runtime is spam, use spam data */
-				filler_func(rt, L, learned_spam, 7);                       /* spam_tokens at position 7 */
-				filler_func(opposite_rt_maybe.value(), L, learned_ham, 6); /* ham_tokens at position 6 */
-			}
-			else {
-				/* Current runtime is ham, use ham data */
-				filler_func(rt, L, learned_ham, 6);                         /* ham_tokens at position 6 */
-				filler_func(opposite_rt_maybe.value(), L, learned_spam, 7); /* spam_tokens at position 7 */
-			}
-
-			/* Clean up the stack - pop the 4 extracted values */
-			lua_pop(L, 4);
-
-			/* Process all tokens */
-			g_assert(rt->tokens != nullptr);
-			rt->process_tokens(rt->tokens);
-			opposite_rt_maybe.value()->process_tokens(rt->tokens);
+		if (result_len != 2) {
+			msg_err_task("internal error: expected 2-element result from Redis script, got %uz", result_len);
+			rt->err = rspamd::util::error("invalid Redis script result format", 500);
+			return 0;
 		}
-		else {
-			/* Multi-class format: [learned_counts_table, outputs_table] */
 
-			/* Get learned counts table (index 1) and outputs table (index 2) */
-			lua_rawgeti(L, 3, 1); /* learned_counts */
-			lua_rawgeti(L, 3, 2); /* outputs */
+		/* Get learned_counts_array and token_results_array */
+		lua_rawgeti(L, 3, 1); /* learned_counts -> position 4 */
+		lua_rawgeti(L, 3, 2); /* token_results -> position 5 */
 
-			/* Iterate through all class labels to fill all runtimes */
-			if (rt->stcf->clcf && rt->stcf->clcf->class_labels) {
-				GHashTableIter iter;
-				gpointer key, value;
-				g_hash_table_iter_init(&iter, rt->stcf->clcf->class_labels);
+		/* Process results for all statfiles in order using class_index (O(N) instead of O(N²)) */
+		if (rt->stcf->clcf && rt->stcf->clcf->statfiles) {
+			GList *cur = rt->stcf->clcf->statfiles;
+			int redis_idx = 1; /* Redis result array index (1-based) */
 
-				while (g_hash_table_iter_next(&iter, &key, &value)) {
-					const char *class_label = (const char *) value;
+			while (cur) {
+				auto *stcf = (struct rspamd_statfile_config *) cur->data;
 
-					/* Find runtime for this class */
-					auto class_rt_maybe = redis_stat_runtime<float>::maybe_recover_from_mempool(task,
-																								rt->redis_object_expanded,
-																								class_label);
+				/* Direct statfile lookup using global statfiles array */
+				struct rspamd_stat_ctx *st_ctx = rspamd_stat_get_ctx();
+				struct rspamd_statfile *st = nullptr;
 
-					if (class_rt_maybe) {
-						auto *class_rt = class_rt_maybe.value();
-
-						/* Get learned count for this class */
-						lua_pushstring(L, class_label);
-						lua_gettable(L, -3); /* learned_counts[class_label] */
-						unsigned learned = lua_tointeger(L, -1);
-						lua_pop(L, 1);
-
-						/* Get outputs for this class */
-						lua_pushstring(L, class_label);
-						lua_gettable(L, -2); /* outputs[class_label] */
-						int outputs_pos = lua_gettop(L);
-
-						filler_func(class_rt, L, learned, outputs_pos);
-						lua_pop(L, 1);
+				/* Find statfile by config pointer (still O(N) but unavoidable) */
+				for (unsigned int i = 0; i < st_ctx->statfiles->len; i++) {
+					struct rspamd_statfile *candidate = (struct rspamd_statfile *) g_ptr_array_index(st_ctx->statfiles, i);
+					if (candidate->stcf == stcf) {
+						st = candidate;
+						break;
 					}
 				}
+
+				if (!st) {
+					msg_debug_bayes("statfile not found for config %s, skipping", stcf->symbol);
+					cur = g_list_next(cur);
+					redis_idx++;
+					continue;
+				}
+
+				/* Get or create runtime for this statfile */
+				auto *statfile_rt = rt; /* Use current runtime for first statfile */
+				if (stcf != rt->stcf) {
+					const char *class_label = get_class_label(stcf);
+					auto maybe_rt = redis_stat_runtime<float>::maybe_recover_from_mempool(task,
+																						  rt->redis_object_expanded,
+																						  class_label);
+					if (maybe_rt) {
+						statfile_rt = maybe_rt.value();
+					}
+					else {
+						msg_debug_bayes("runtime not found for class %s, skipping", class_label);
+						cur = g_list_next(cur);
+						redis_idx++;
+						continue;
+					}
+				}
+
+				/* Ensure correct statfile ID assignment */
+				statfile_rt->id = st->id;
+
+				/* Process token results for this statfile (Redis array index redis_idx) */
+				lua_rawgeti(L, 5, redis_idx); /* Get token_results[redis_idx] */
+				if (lua_istable(L, -1)) {
+					/* Parse token results into statfile runtime */
+					auto *res = new std::vector<std::pair<int, float>>();
+
+					lua_pushnil(L); /* First key for iteration */
+					while (lua_next(L, -2) != 0) {
+						if (lua_istable(L, -1) && lua_objlen(L, -1) == 2) {
+							lua_rawgeti(L, -1, 1); /* token_index */
+							lua_rawgeti(L, -2, 2); /* token_count */
+
+							if (lua_isnumber(L, -2) && lua_isnumber(L, -1)) {
+								int token_idx = lua_tointeger(L, -2);
+								float token_count = lua_tonumber(L, -1);
+								res->emplace_back(token_idx, token_count);
+							}
+
+							lua_pop(L, 2); /* Pop token_index and token_count */
+						}
+						lua_pop(L, 1); /* Pop value, keep key for next iteration */
+					}
+
+					statfile_rt->set_results(res);
+				}
+				lua_pop(L, 1); /* Pop token_results[redis_idx] */
+
+				cur = g_list_next(cur);
+				redis_idx++;
 			}
-
-			lua_pop(L, 2); /* Pop learned_counts and outputs tables */
-
-			/* Process tokens for all runtimes */
-			g_assert(rt->tokens != nullptr);
-			rt->process_tokens(rt->tokens);
 		}
 
-		/* Tokens processed - no need to set flags in multi-class approach */
+		/* Clean up stack */
+		lua_pop(L, 2); /* Pop learned_counts and token_results */
+
+		/* Process tokens for all runtimes */
+		g_assert(rt->tokens != nullptr);
+
+		/* Process tokens for all statfiles */
+		if (rt->stcf->clcf && rt->stcf->clcf->statfiles) {
+			GList *cur = rt->stcf->clcf->statfiles;
+
+			while (cur) {
+				auto *stcf = (struct rspamd_statfile_config *) cur->data;
+				const char *class_label = get_class_label(stcf);
+
+				auto maybe_rt = redis_stat_runtime<float>::maybe_recover_from_mempool(task,
+																					  rt->redis_object_expanded,
+																					  class_label);
+				if (maybe_rt) {
+					auto *statfile_rt = maybe_rt.value();
+					statfile_rt->process_tokens(rt->tokens);
+				}
+
+				cur = g_list_next(cur);
+			}
+		}
+		else {
+			/* Fallback: just process the main runtime */
+			rt->process_tokens(rt->tokens);
+		}
 	}
 	else {
 		/* Error message is on index 3 */

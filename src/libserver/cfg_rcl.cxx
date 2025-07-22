@@ -1439,6 +1439,34 @@ rspamd_rcl_classifier_handler(rspamd_mempool_t *pool,
 
 	cfg->classifiers = g_list_prepend(cfg->classifiers, ccf);
 
+	/* Populate class_names array from statfiles */
+	if (ccf->statfiles) {
+		GList *cur = ccf->statfiles;
+		ccf->class_names = g_ptr_array_new();
+
+		while (cur) {
+			struct rspamd_statfile_config *stcf = (struct rspamd_statfile_config *) cur->data;
+			if (stcf->class_name) {
+				/* Check if class already exists */
+				bool found = false;
+				for (unsigned int i = 0; i < ccf->class_names->len; i++) {
+					if (strcmp((char *) g_ptr_array_index(ccf->class_names, i), stcf->class_name) == 0) {
+						stcf->class_index = i; /* Store the index for O(1) lookup */
+						found = true;
+						break;
+					}
+				}
+
+				if (!found) {
+					/* Add new class */
+					stcf->class_index = ccf->class_names->len;
+					g_ptr_array_add(ccf->class_names, g_strdup(stcf->class_name));
+				}
+			}
+			cur = g_list_next(cur);
+		}
+	}
+
 	return TRUE;
 }
 

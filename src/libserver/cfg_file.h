@@ -140,6 +140,7 @@ struct rspamd_statfile_config {
 	char *label;                           /**< label of this statfile								*/
 	ucl_object_t *opts;                    /**< other options										*/
 	char *class_name;                      /**< class name for multi-class classification			*/
+	unsigned int class_index;              /**< class index for O(1) lookup during classification	*/
 	gboolean is_spam;                      /**< DEPRECATED: spam flag - use class_name instead		*/
 	struct rspamd_classifier_config *clcf; /**< parent pointer of classifier configuration			*/
 	gpointer data;                         /**< opaque data 										*/
