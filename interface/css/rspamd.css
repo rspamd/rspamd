@@ -420,8 +420,10 @@ table#symbolsTable input[type="number"] {
     display: none;
 }
 
+#history-from,
+#history-count,
 #history_page_size {
-    width: 6em !important;
+    width: 6em;
     text-align: center;
 }
 

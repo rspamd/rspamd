@@ -124,6 +124,16 @@
 								</div>
 							</div>
 						</div>
+
+						<div class="card mt-1">
+							<div class="card-body">
+								<h6 class="card-title fw-bolder">History rows per load</h6>
+								<div class="input-group input-group-sm was-validated">
+									<input type="number" id="settings-history-count" class="form-control" min="1" step="1" placeholder="1000">
+									<button id="settings-history-count-restore" class="btn btn-secondary">Restore default</button>
+								</div>
+							</div>
+						</div>
 					</div>
 				</div>
 			</form>
@@ -681,9 +691,13 @@
 								<option value="score">Score value</option>
 								<option value="name">Name</option>
 							</select>
-							<label for="history_page_size" class="ms-2">Rows per page:</label>
+							<label for="history-from" class="ms-3" title="Start from this row number">Offset:</label>
+							<input type="number" id="history-from" class="form-control ms-1" value="0" min="0" step="1" title="Start from this row number">
+							<label for="history-count" class="ms-2" title="Number of rows to load">Count:</label>
+							<input type="number" id="history-count" class="form-control ms-1" value="1000" min="1" step="1" title="Number of rows to load">
+							<label for="history_page_size" class="ms-2">Rows/page:</label>
 							<input id="history_page_size" class="form-control ms-1" value="25" min="1" type="number">
-							<button class="btn btn-outline-secondary btn-sm ms-2 d-flex align-items-center dropdown-toggle ft-columns-btn" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" disabled>
+							<button class="btn btn-outline-secondary btn-sm ms-3 d-flex align-items-center dropdown-toggle ft-columns-btn" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" disabled>
 								<i class="fas fa-columns me-1"></i>Columns
 							</button>
 							<div class="dropdown-menu ft-columns-dropdown p-2"></div>
