@@ -620,17 +620,26 @@ bayes_classify(struct rspamd_classifier *ctx,
 	g_assert(tokens != NULL);
 
 	/* Check if this is a multi-class classifier */
+	msg_debug_bayes("classification check: class_names=%p, len=%uz",
+					ctx->cfg->class_names,
+					ctx->cfg->class_names ? ctx->cfg->class_names->len : 0);
+
 	if (ctx->cfg->class_names && ctx->cfg->class_names->len >= 2) {
 		/* Verify that at least one statfile has class_name set (indicating new multi-class config) */
 		gboolean has_class_names = FALSE;
 		for (i = 0; i < ctx->statfiles_ids->len; i++) {
 			int id = g_array_index(ctx->statfiles_ids, int, i);
 			struct rspamd_statfile *st = g_ptr_array_index(ctx->ctx->statfiles, id);
+			msg_debug_bayes("checking statfile %s: class_name=%s, is_spam_converted=%s",
+							st->stcf->symbol,
+							st->stcf->class_name ? st->stcf->class_name : "NULL",
+							st->stcf->is_spam_converted ? "true" : "false");
 			if (st->stcf->class_name) {
 				has_class_names = TRUE;
-				break;
 			}
 		}
+
+		msg_debug_bayes("has_class_names=%s", has_class_names ? "true" : "false");
 
 		if (has_class_names) {
 			msg_debug_bayes("using multiclass classification with %ud classes",

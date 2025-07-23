@@ -3181,18 +3181,41 @@ rspamd_config_validate_class_config(struct rspamd_classifier_config *ccf, GError
 				 class_count);
 	}
 
-	/* Initialize classifier class tracking */
-	if (ccf->class_names) {
-		g_ptr_array_unref(ccf->class_names);
-	}
-	ccf->class_names = g_ptr_array_new_with_free_func(g_free);
+	/* Initialize classifier class tracking - only for explicit multiclass configurations */
+	gboolean has_explicit_classes = FALSE;
 
-	/* Populate class names array */
-	GHashTableIter iter;
-	gpointer key, value;
-	g_hash_table_iter_init(&iter, seen_classes);
-	while (g_hash_table_iter_next(&iter, &key, &value)) {
-		g_ptr_array_add(ccf->class_names, g_strdup((const char *) key));
+	/* Check if any statfile uses explicit class declaration (not converted from is_spam) */
+	cur = ccf->statfiles;
+	while (cur) {
+		stcf = (struct rspamd_statfile_config *) cur->data;
+		if (stcf->class_name && !stcf->is_spam_converted) {
+			has_explicit_classes = TRUE;
+			break;
+		}
+		cur = g_list_next(cur);
+	}
+
+	/* Only populate class_names for explicit multiclass configurations */
+	if (has_explicit_classes) {
+		if (ccf->class_names) {
+			g_ptr_array_unref(ccf->class_names);
+		}
+		ccf->class_names = g_ptr_array_new_with_free_func(g_free);
+
+		/* Populate class names array */
+		GHashTableIter iter;
+		gpointer key, value;
+		g_hash_table_iter_init(&iter, seen_classes);
+		while (g_hash_table_iter_next(&iter, &key, &value)) {
+			g_ptr_array_add(ccf->class_names, g_strdup((const char *) key));
+		}
+	}
+	else {
+		/* Binary configuration - ensure class_names is NULL */
+		if (ccf->class_names) {
+			g_ptr_array_unref(ccf->class_names);
+			ccf->class_names = nullptr;
+		}
 	}
 
 	g_hash_table_destroy(seen_classes);

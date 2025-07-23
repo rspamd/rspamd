@@ -35,7 +35,7 @@ end
 
 -- Get token data for all classes (ordered)
 local token_results = {}
-for i, label in ipairs(class_labels) do
+for i, _ in ipairs(class_labels) do
   token_results[i] = {}
 end
 
@@ -54,7 +54,7 @@ if has_learns then
     local token_data = redis.call('HMGET', token, unpack(class_labels))
 
     if token_data then
-      for j, label in ipairs(class_labels) do
+      for j, _ in ipairs(class_labels) do
         local count = token_data[j]
         if count and tonumber(count) > 0 then
           table.insert(token_results[j], { i, tonumber(count) })

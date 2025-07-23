@@ -1215,11 +1215,13 @@ rspamd_rcl_statfile_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 												 strlen(st->symbol), "spam", 4) != -1) {
 				st->is_spam = TRUE;
 				st->class_name = rspamd_mempool_strdup(pool, "spam");
+				st->is_spam_converted = TRUE;
 			}
 			else if (rspamd_substring_search_caseless(st->symbol,
 													  strlen(st->symbol), "ham", 3) != -1) {
 				st->is_spam = FALSE;
 				st->class_name = rspamd_mempool_strdup(pool, "ham");
+				st->is_spam_converted = TRUE;
 			}
 			else {
 				g_set_error(err,
@@ -1242,6 +1244,7 @@ rspamd_rcl_statfile_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 			else {
 				st->class_name = rspamd_mempool_strdup(pool, "ham");
 			}
+			st->is_spam_converted = TRUE;
 		}
 		/* If class field is present, it was already parsed by the default parser */
 		return TRUE;
@@ -1439,31 +1442,60 @@ rspamd_rcl_classifier_handler(rspamd_mempool_t *pool,
 
 	cfg->classifiers = g_list_prepend(cfg->classifiers, ccf);
 
-	/* Populate class_names array from statfiles */
+	/* Populate class_names array from statfiles - only for explicit multiclass configs */
 	if (ccf->statfiles) {
 		GList *cur = ccf->statfiles;
-		ccf->class_names = g_ptr_array_new();
+		gboolean has_explicit_classes = FALSE;
 
+		/* Check if any statfile uses explicit class declaration (not converted from is_spam) */
+		cur = ccf->statfiles;
 		while (cur) {
 			struct rspamd_statfile_config *stcf = (struct rspamd_statfile_config *) cur->data;
-			if (stcf->class_name) {
-				/* Check if class already exists */
-				bool found = false;
-				for (unsigned int i = 0; i < ccf->class_names->len; i++) {
-					if (strcmp((char *) g_ptr_array_index(ccf->class_names, i), stcf->class_name) == 0) {
-						stcf->class_index = i; /* Store the index for O(1) lookup */
-						found = true;
-						break;
-					}
-				}
-
-				if (!found) {
-					/* Add new class */
-					stcf->class_index = ccf->class_names->len;
-					g_ptr_array_add(ccf->class_names, g_strdup(stcf->class_name));
-				}
+			msg_debug("checking statfile %s: class_name=%s, is_spam_converted=%s",
+					  stcf->symbol, stcf->class_name ? stcf->class_name : "NULL",
+					  stcf->is_spam_converted ? "true" : "false");
+			if (stcf->class_name && !stcf->is_spam_converted) {
+				has_explicit_classes = TRUE;
+				break;
 			}
 			cur = g_list_next(cur);
+		}
+
+		msg_debug("has_explicit_classes = %s", has_explicit_classes ? "true" : "false");
+
+		/* Only populate class_names for explicit multiclass configurations */
+		if (has_explicit_classes) {
+			msg_debug("populating class_names for multiclass configuration");
+		}
+		else {
+			msg_debug("skipping class_names population for binary configuration");
+		}
+
+		if (has_explicit_classes) {
+			ccf->class_names = g_ptr_array_new();
+
+			cur = ccf->statfiles;
+			while (cur) {
+				struct rspamd_statfile_config *stcf = (struct rspamd_statfile_config *) cur->data;
+				if (stcf->class_name) {
+					/* Check if class already exists */
+					bool found = false;
+					for (unsigned int i = 0; i < ccf->class_names->len; i++) {
+						if (strcmp((char *) g_ptr_array_index(ccf->class_names, i), stcf->class_name) == 0) {
+							stcf->class_index = i; /* Store the index for O(1) lookup */
+							found = true;
+							break;
+						}
+					}
+
+					if (!found) {
+						/* Add new class */
+						stcf->class_index = ccf->class_names->len;
+						g_ptr_array_add(ccf->class_names, g_strdup(stcf->class_name));
+					}
+				}
+				cur = g_list_next(cur);
+			}
 		}
 	}
 
