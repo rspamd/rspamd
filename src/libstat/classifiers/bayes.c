@@ -229,36 +229,7 @@ bayes_classify_token(struct rspamd_classifier *ctx,
 			token_type = "meta";
 		}
 
-		if (tok->t1 && tok->t2) {
-			msg_debug_bayes("token(%s) %uL <%*s:%*s>: weight: %f, cf: %f, "
-							"total_count: %ud, "
-							"spam_count: %ud, ham_count: %ud,"
-							"spam_prob: %.3f, ham_prob: %.3f, "
-							"bayes_spam_prob: %.3f, bayes_ham_prob: %.3f, "
-							"current spam probability: %.3f, current ham probability: %.3f",
-							token_type,
-							tok->data,
-							(int) tok->t1->stemmed.len, tok->t1->stemmed.begin,
-							(int) tok->t2->stemmed.len, tok->t2->stemmed.begin,
-							fw, w, total_count, spam_count, ham_count,
-							spam_prob, ham_prob,
-							bayes_spam_prob, bayes_ham_prob,
-							cl->spam_prob, cl->ham_prob);
-		}
-		else {
-			msg_debug_bayes("token(%s) %uL <?:?>: weight: %f, cf: %f, "
-							"total_count: %ud, "
-							"spam_count: %ud, ham_count: %ud,"
-							"spam_prob: %.3f, ham_prob: %.3f, "
-							"bayes_spam_prob: %.3f, bayes_ham_prob: %.3f, "
-							"current spam probability: %.3f, current ham probability: %.3f",
-							token_type,
-							tok->data,
-							fw, w, total_count, spam_count, ham_count,
-							spam_prob, ham_prob,
-							bayes_spam_prob, bayes_ham_prob,
-							cl->spam_prob, cl->ham_prob);
-		}
+		/* Per-token debug logging removed to reduce verbosity */
 	}
 }
 
@@ -347,14 +318,7 @@ bayes_classify_token_multiclass(struct rspamd_classifier *ctx,
 			cl->text_tokens++;
 		}
 
-		if (tok->t1 && tok->t2) {
-			msg_debug_bayes("token(%s) %uL <%*s:%*s>: weight: %.3f, total_count: %ud, "
-							"processed for %ud classes",
-							token_type, tok->data,
-							(int) tok->t1->stemmed.len, tok->t1->stemmed.begin,
-							(int) tok->t2->stemmed.len, tok->t2->stemmed.begin,
-							fw, total_count, cl->num_classes);
-		}
+		/* Per-token debug logging removed to reduce verbosity */
 	}
 }
 

@@ -152,13 +152,13 @@ public:
 			return false;
 		}
 
-		msg_debug_bayes("processing tokens for statfile id=%d, results size=%uz, class=%s",
-						id, results->size(), stcf->class_name ? stcf->class_name : "unknown");
+		if (results->size() > 0) {
+			msg_debug_bayes("processing %uz tokens for statfile id=%d, class=%s",
+							results->size(), id, stcf->class_name ? stcf->class_name : "unknown");
+		}
 
 		for (auto [idx, val]: *results) {
 			tok = (rspamd_token_t *) g_ptr_array_index(tokens, idx - 1);
-			msg_debug_bayes("setting tok->values[%d] = %.2f for token idx %d (class=%s)",
-							id, val, idx, stcf->class_name ? stcf->class_name : "unknown");
 			tok->values[id] = val;
 		}
 
