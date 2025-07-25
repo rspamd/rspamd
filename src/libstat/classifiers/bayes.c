@@ -467,6 +467,7 @@ bayes_classify_multiclass(struct rspamd_classifier *ctx,
 
 	/* Find maximum for numerical stability */
 	for (i = 0; i < cl.num_classes; i++) {
+		msg_debug_bayes("class %s, log_prob: %.2f", cl.class_names[i], cl.class_log_probs[i]);
 		if (cl.class_log_probs[i] > max_log_prob) {
 			max_log_prob = cl.class_log_probs[i];
 			winning_class_idx = i;

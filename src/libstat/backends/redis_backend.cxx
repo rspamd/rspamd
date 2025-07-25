@@ -699,6 +699,7 @@ rspamd_redis_runtime(struct rspamd_task *task,
 				auto *other_rt = new redis_stat_runtime<float>(ctx, task, object_expanded);
 				other_rt->id = other_id;
 				other_rt->stcf = other_stcf;
+				other_rt->need_redis_call = false;
 				other_rt->save_in_mempool(other_label);
 				msg_debug_bayes("additional runtime: statfile %s (class=%s) → id=%d",
 								other_stcf->symbol, other_label, other_id);
