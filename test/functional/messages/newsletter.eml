@@ -1,0 +1,16 @@
+From: newsletter@example.com
+To: user@example.org
+Subject: Monthly Newsletter - Special Offers Inside
+Date: Thu, 21 Jul 2023 10:00:00 +0000
+Message-ID: <newsletter-123@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain
+
+Dear Subscriber,
+
+This is our monthly newsletter with special offers and updates.
+
+Best regards,
+Newsletter Team
+
+Unsubscribe: https://example.com/unsubscribe?id=123
