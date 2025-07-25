@@ -56,6 +56,7 @@ local settings = {
     exe = 1,
     iso = 4,
     jar = 2,
+    svg = 0.5,
     txz = 2,
     zpaq = 2,
     -- In contrast to HTML MIME parts, dedicated HTML attachments are considered harmful
@@ -210,6 +211,7 @@ local settings = {
     lnk = 4,
     pdf = 0.1,
     pptx = 0.1,
+    svg = 0.1,
     vbs = 4,
     wsf = 4,
     xlsx = 0.1,
