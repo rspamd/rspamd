@@ -893,9 +893,26 @@ rspamd_stat_backends_learn(struct rspamd_stat_ctx *st_ctx,
 			backend_found = TRUE;
 
 			if (!(task->flags & RSPAMD_TASK_FLAG_UNLEARN)) {
-				if (!!spam != !!st->stcf->is_spam) {
-					/* If we are not unlearning, then do not touch another class */
-					continue;
+				/* For multiclass learning, check if this statfile has any tokens to learn */
+				if (task->flags & RSPAMD_TASK_FLAG_LEARN_CLASS) {
+					/* Multiclass learning: only process statfiles that have tokens set up by the classifier */
+					gboolean has_tokens = FALSE;
+					for (unsigned int k = 0; k < task->tokens->len && !has_tokens; k++) {
+						rspamd_token_t *tok = (rspamd_token_t *) g_ptr_array_index(task->tokens, k);
+						if (tok->values[id] != 0) {
+							has_tokens = TRUE;
+						}
+					}
+					if (!has_tokens) {
+						continue;
+					}
+				}
+				else {
+					/* Binary learning: use traditional spam/ham check */
+					if (!!spam != !!st->stcf->is_spam) {
+						/* If we are not unlearning, then do not touch another class */
+						continue;
+					}
 				}
 			}
 

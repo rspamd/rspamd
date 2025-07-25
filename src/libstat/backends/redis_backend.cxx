@@ -167,10 +167,12 @@ public:
 
 	auto save_in_mempool(const char *class_label) const
 	{
-		auto var_name = fmt::format("{}_{}", redis_object_expanded, class_label);
+		auto var_name =
+			rspamd_mempool_strdup(task->task_pool,
+								  fmt::format("{}_{}", redis_object_expanded, class_label).c_str());
 		/* We do not set destructor for the variable, as it should be already added on creation */
-		rspamd_mempool_set_variable(task->task_pool, var_name.c_str(), (gpointer) this, nullptr);
-		msg_debug_bayes("saved runtime in mempool at %s", var_name.c_str());
+		rspamd_mempool_set_variable(task->task_pool, var_name, (gpointer) this, nullptr);
+		msg_debug_bayes("saved runtime in mempool at %s", var_name);
 	}
 };
 
@@ -911,6 +913,39 @@ rspamd_redis_classified(lua_State *L)
 		lua_rawgeti(L, 3, 1); /* learned_counts -> position 4 */
 		lua_rawgeti(L, 3, 2); /* token_results -> position 5 */
 
+		/* First, process learned_counts for all statfiles */
+		if (lua_istable(L, 4) && rt->stcf->clcf && rt->stcf->clcf->statfiles) {
+			GList *cur = rt->stcf->clcf->statfiles;
+			int redis_idx = 1; /* Lua array index starts at 1 */
+
+			while (cur) {
+				auto *stcf = (struct rspamd_statfile_config *) cur->data;
+				const char *class_label = get_class_label(stcf);
+
+				/* Get the runtime for this statfile */
+				auto maybe_rt = redis_stat_runtime<float>::maybe_recover_from_mempool(rt->task,
+																					  rt->redis_object_expanded,
+																					  class_label);
+				if (maybe_rt) {
+					auto *statfile_rt = maybe_rt.value();
+
+					/* Extract learned count for this statfile */
+					lua_rawgeti(L, 4, redis_idx); /* learned_counts[redis_idx] */
+					if (lua_isnumber(L, -1)) {
+						statfile_rt->learned = lua_tointeger(L, -1);
+						msg_debug_bayes("set learned count for class %s (label %s): %L",
+										stcf->class_name ? stcf->class_name : "unknown",
+										class_label,
+										statfile_rt->learned);
+					}
+					lua_pop(L, 1); /* Pop learned_counts[redis_idx] */
+				}
+
+				cur = g_list_next(cur);
+				redis_idx++;
+			}
+		}
+
 		/* Process results for all statfiles in order using class_index (O(N) instead of O(N²)) */
 		if (rt->stcf->clcf && rt->stcf->clcf->statfiles) {
 			GList *cur = rt->stcf->clcf->statfiles;
@@ -1245,6 +1280,8 @@ rspamd_redis_learn_tokens(struct rspamd_task *task,
 		nargs = 9;
 		lua_new_text(L, text_tokens_buf, text_tokens_len, false);
 	}
+
+	msg_debug_bayes("called lua learn script for %s (cookie=%s)", rt->stcf->symbol, cookie);
 
 	if (lua_pcall(L, nargs, 0, err_idx) != 0) {
 		msg_err_task("call to script failed: %s", lua_tostring(L, -1));

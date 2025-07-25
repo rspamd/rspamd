@@ -3044,21 +3044,23 @@ rspamd_ip_is_local_cfg(struct rspamd_config *cfg,
 }
 
 gboolean
-rspamd_config_parse_class_labels(ucl_object_t *obj, GHashTable **class_labels)
+rspamd_config_parse_class_labels(const ucl_object_t *obj, GHashTable **class_labels)
 {
 	const ucl_object_t *cur;
 	ucl_object_iter_t it = nullptr;
-	const char *class_name, *label;
 
 	if (!obj || ucl_object_type(obj) != UCL_OBJECT) {
 		return FALSE;
 	}
 
-	*class_labels = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+	if (*class_labels == nullptr) {
+		*class_labels = g_hash_table_new_full(g_str_hash, g_str_equal,
+											  g_free, g_free);
+	}
 
 	while ((cur = ucl_object_iterate(obj, &it, true)) != nullptr) {
-		class_name = ucl_object_key(cur);
-		label = ucl_object_tostring(cur);
+		const char *class_name = ucl_object_key(cur);
+		const char *label = ucl_object_tostring(cur);
 
 		if (class_name && label) {
 			/* Validate class name: alphanumeric + underscore, max 32 chars */
@@ -3079,20 +3081,15 @@ rspamd_config_parse_class_labels(ucl_object_t *obj, GHashTable **class_labels)
 			}
 
 			/* Validate label uniqueness */
-			GHashTableIter label_iter;
-			gpointer key, value;
-			g_hash_table_iter_init(&label_iter, *class_labels);
-			while (g_hash_table_iter_next(&label_iter, &key, &value)) {
-				if (strcmp((const char *) value, label) == 0) {
-					msg_err("backend label '%s' is used by multiple classes", label);
-					g_hash_table_destroy(*class_labels);
-					*class_labels = nullptr;
-					return FALSE;
-				}
+			if (g_hash_table_lookup(*class_labels, label)) {
+				msg_err("backend label '%s' is used by multiple classes", label);
+				g_hash_table_destroy(*class_labels);
+				*class_labels = nullptr;
+				return FALSE;
 			}
-
-			g_hash_table_insert(*class_labels, g_strdup(class_name), g_strdup(label));
 		}
+
+		g_hash_table_insert(*class_labels, g_strdup(class_name), g_strdup(label));
 	}
 
 	return g_hash_table_size(*class_labels) > 0;
@@ -3171,13 +3168,13 @@ rspamd_config_validate_class_config(struct rspamd_classifier_config *ccf, GError
 	/* Validate class count */
 	if (class_count < 2) {
 		g_set_error(err, g_quark_from_static_string("config"), 1,
-					"classifier must have at least 2 classes, found %u", class_count);
+					"classifier must have at least 2 classes, found %ud", class_count);
 		g_hash_table_destroy(seen_classes);
 		return FALSE;
 	}
 
 	if (class_count > 20) {
-		msg_warn("classifier has %u classes, performance may be degraded above 20 classes",
+		msg_warn("classifier has %ud classes, performance may be degraded above 20 classes",
 				 class_count);
 	}
 

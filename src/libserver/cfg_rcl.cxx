@@ -1246,7 +1246,24 @@ rspamd_rcl_statfile_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 			}
 			st->is_spam_converted = TRUE;
 		}
-		/* If class field is present, it was already parsed by the default parser */
+		else if (class_val != nullptr && spam_val == nullptr) {
+			/* Only class field present - set is_spam for backward compatibility */
+			if (st->class_name != nullptr) {
+				if (strcmp(st->class_name, "spam") == 0) {
+					st->is_spam = TRUE;
+				}
+				else if (strcmp(st->class_name, "ham") == 0) {
+					st->is_spam = FALSE;
+				}
+				else {
+					/* For non-binary classes, default to not spam */
+					st->is_spam = FALSE;
+				}
+				msg_debug_config("statfile %s with class '%s' set is_spam=%s for compatibility",
+								 st->symbol, st->class_name, st->is_spam ? "true" : "false");
+			}
+		}
+		/* If both fields are present, class takes precedence and was already parsed by the default parser */
 		return TRUE;
 	}
 
@@ -1269,7 +1286,7 @@ rspamd_rcl_class_labels_handler(rspamd_mempool_t *pool,
 		return FALSE;
 	}
 
-	if (!rspamd_config_parse_class_labels((ucl_object_t *) obj, &ccf->class_labels)) {
+	if (!rspamd_config_parse_class_labels(obj, &ccf->class_labels)) {
 		g_set_error(err, CFG_RCL_ERROR, EINVAL,
 					"invalid class_labels configuration");
 		return FALSE;
@@ -1349,6 +1366,22 @@ rspamd_rcl_classifier_handler(rspamd_mempool_t *pool,
 								tkcf->opts = val;
 							}
 						}
+					}
+				}
+				else if (g_ascii_strcasecmp(st_key, "class_labels") == 0) {
+					/* Parse class_labels configuration directly */
+					if (ucl_object_type(val) != UCL_OBJECT) {
+						g_set_error(err, CFG_RCL_ERROR, EINVAL,
+									"class_labels must be an object");
+						ucl_object_iterate_free(it);
+						return FALSE;
+					}
+
+					if (!rspamd_config_parse_class_labels(val, &ccf->class_labels)) {
+						g_set_error(err, CFG_RCL_ERROR, EINVAL,
+									"invalid class_labels configuration");
+						ucl_object_iterate_free(it);
+						return FALSE;
 					}
 				}
 			}
@@ -2579,7 +2612,7 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 											   FALSE,
 											   TRUE,
 											   cfg->doc_strings,
-											   "CLassifier options");
+											   "Classifier options");
 		/* Default classifier is 'bayes' for now */
 		sub->default_key = "bayes";
 

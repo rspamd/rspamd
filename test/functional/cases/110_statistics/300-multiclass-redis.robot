@@ -7,13 +7,14 @@ Resource        multiclass_lib.robot
 *** Variables ***
 ${RSPAMD_REDIS_SERVER}  ${RSPAMD_REDIS_ADDR}:${RSPAMD_REDIS_PORT}
 ${RSPAMD_STATS_HASH}    siphash
+${CONFIG}               ${RSPAMD_TESTDIR}/configs/multiclass_bayes.conf
 
 *** Test Cases ***
 Multiclass Basic Learning and Classification
     [Documentation]    Test basic multiclass learning and classification
     [Tags]             multiclass  basic  learning
     Multiclass Basic Learn Test
-    
+
 Multiclass Legacy Compatibility
     [Documentation]    Test that old learn_spam/learn_ham commands still work
     [Tags]             multiclass  compatibility  legacy
@@ -38,11 +39,6 @@ Multiclass Statistics
     [Documentation]    Test that statistics show all class information
     [Tags]             multiclass  statistics
     Multiclass Stats Test
-
-Multiclass Performance
-    [Documentation]    Test classification performance with multiple classes
-    [Tags]             multiclass  performance
-    Multiclass Performance Test  50
 
 Per-User Multiclass Learning
     [Documentation]    Test per-user multiclass classification

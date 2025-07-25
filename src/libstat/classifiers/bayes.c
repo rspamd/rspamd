@@ -136,7 +136,6 @@ bayes_classify_token(struct rspamd_classifier *ctx,
 	unsigned int spam_count = 0, ham_count = 0, total_count = 0;
 	struct rspamd_statfile *st;
 	struct rspamd_task *task;
-	const char *token_type = "txt";
 	double spam_prob, spam_freq, ham_freq, bayes_spam_prob, bayes_ham_prob,
 		ham_prob, fw, w, val;
 
@@ -225,11 +224,6 @@ bayes_classify_token(struct rspamd_classifier *ctx,
 		if (!(tok->flags & RSPAMD_STAT_TOKEN_FLAG_META)) {
 			cl->text_tokens++;
 		}
-		else {
-			token_type = "meta";
-		}
-
-		/* Per-token debug logging removed to reduce verbosity */
 	}
 }
 
@@ -245,10 +239,9 @@ bayes_classify_token_multiclass(struct rspamd_classifier *ctx,
 	int id;
 	struct rspamd_statfile *st;
 	struct rspamd_task *task;
-	const char *token_type = "txt";
 	double val, fw, w;
-	unsigned int *class_counts;
-	unsigned int total_count = 0;
+	guint64 *class_counts;
+	guint64 total_count = 0;
 
 	task = cl->task;
 
@@ -258,12 +251,11 @@ bayes_classify_token_multiclass(struct rspamd_classifier *ctx,
 		if (val <= cl->meta_skip_prob) {
 			return;
 		}
-		token_type = "meta";
 	}
 
 	/* Allocate array for class counts */
-	class_counts = g_alloca(cl->num_classes * sizeof(unsigned int));
-	memset(class_counts, 0, cl->num_classes * sizeof(unsigned int));
+	class_counts = g_alloca(cl->num_classes * sizeof(guint64));
+	memset(class_counts, 0, cl->num_classes * sizeof(guint64));
 
 	/* Collect counts for each class */
 	for (i = 0; i < ctx->statfiles_ids->len; i++) {

@@ -1,7 +1,5 @@
 *** Settings ***
-Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
-Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
-Variables       ${RSPAMD_TESTDIR}/lib/vars.py
+Resource        lib.robot
 
 *** Variables ***
 ${CONFIG}                      ${RSPAMD_TESTDIR}/configs/multiclass_bayes.conf
@@ -44,26 +42,26 @@ Multiclass Basic Learn Test
     IF  "${user}"
         Set To Dictionary  ${kwargs}  Deliver-To=${user}
     END
-    
+
     # Learn all classes
     Learn Multiclass  ${user}  spam  ${MESSAGE_SPAM}
     Learn Multiclass  ${user}  ham  ${MESSAGE_HAM}
     Learn Multiclass  ${user}  newsletter  ${MESSAGE_NEWSLETTER}
     Learn Multiclass  ${user}  transactional  ${MESSAGE_TRANSACTIONAL}
-    
+
     # Test classification
     Scan File  ${MESSAGE_SPAM}  &{kwargs}
     Expect Symbol  BAYES_SPAM
-    
+
     Scan File  ${MESSAGE_HAM}  &{kwargs}
     Expect Symbol  BAYES_HAM
-    
+
     Scan File  ${MESSAGE_NEWSLETTER}  &{kwargs}
     Expect Symbol  BAYES_NEWSLETTER
-    
+
     Scan File  ${MESSAGE_TRANSACTIONAL}  &{kwargs}
     Expect Symbol  BAYES_TRANSACTIONAL
-    
+
     Set Suite Variable  ${RSPAMD_STATS_LEARNTEST}  1
 
 Multiclass Legacy Compatibility Test
@@ -72,15 +70,15 @@ Multiclass Legacy Compatibility Test
     IF  "${user}"
         Set To Dictionary  ${kwargs}  Deliver-To=${user}
     END
-    
+
     # Test legacy learn_spam and learn_ham commands still work
     Learn Multiclass Legacy  ${user}  spam  ${MESSAGE_SPAM}
     Learn Multiclass Legacy  ${user}  ham  ${MESSAGE_HAM}
-    
+
     # Should still classify correctly
     Scan File  ${MESSAGE_SPAM}  &{kwargs}
     Expect Symbol  BAYES_SPAM
-    
+
     Scan File  ${MESSAGE_HAM}  &{kwargs}
     Expect Symbol  BAYES_HAM
 
@@ -89,15 +87,15 @@ Multiclass Relearn Test
     IF  ${RSPAMD_STATS_LEARNTEST} == 0
         Fail  "Learn test was not run"
     END
-    
+
     Set Test Variable  ${kwargs}  &{EMPTY}
     IF  "${user}"
         Set To Dictionary  ${kwargs}  Deliver-To=${user}
     END
-    
+
     # Relearn spam message as ham
     Learn Multiclass  ${user}  ham  ${MESSAGE_SPAM}
-    
+
     # Should now classify as ham or at least not spam
     Scan File  ${MESSAGE_SPAM}  &{kwargs}
     ${pass} =  Run Keyword And Return Status  Expect Symbol  BAYES_HAM
@@ -112,10 +110,10 @@ Multiclass Cross-Learn Test
     IF  "${user}"
         Set To Dictionary  ${kwargs}  Deliver-To=${user}
     END
-    
+
     # Learn newsletter message as transactional
     Learn Multiclass  ${user}  transactional  ${MESSAGE_NEWSLETTER}
-    
+
     # Should classify as transactional, not newsletter
     Scan File  ${MESSAGE_NEWSLETTER}  &{kwargs}
     Expect Symbol  BAYES_TRANSACTIONAL
@@ -127,15 +125,15 @@ Multiclass Unlearn Test
     IF  "${user}"
         Set To Dictionary  ${kwargs}  Deliver-To=${user}
     END
-    
+
     # First learn spam
     Learn Multiclass  ${user}  spam  ${MESSAGE_SPAM}
     Scan File  ${MESSAGE_SPAM}  &{kwargs}
     Expect Symbol  BAYES_SPAM
-    
+
     # Then unlearn spam (learn as ham)
     Learn Multiclass  ${user}  ham  ${MESSAGE_SPAM}
-    
+
     # Should no longer classify as spam
     Scan File  ${MESSAGE_SPAM}  &{kwargs}
     Do Not Expect Symbol  BAYES_SPAM
@@ -151,7 +149,7 @@ Multiclass Stats Test
     # Check that rspamc stat shows learning counts for all classes
     ${result} =  Run Rspamc  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  stat
     Check Rspamc  ${result}
-    
+
     # Should show statistics for all classes
     Should Contain  ${result.stdout}  spam
     Should Contain  ${result.stdout}  ham
@@ -161,11 +159,11 @@ Multiclass Stats Test
 Multiclass Configuration Migration Test
     # Test that old binary config can be automatically migrated
     Set Test Variable  ${binary_config}  ${RSPAMD_TESTDIR}/configs/stats.conf
-    
+
     # Start with binary config
     ${result} =  Run Rspamc  --config  ${binary_config}  stat
     Check Rspamc  ${result}
-    
+
     # Should show deprecation warning but work
     Should Contain  ${result.stderr}  deprecated  ignore_case=True
 
@@ -173,17 +171,17 @@ Multiclass Performance Test
     [Arguments]  ${num_messages}=100
     # Test classification performance with multiple classes
     ${start_time} =  Get Time  epoch
-    
+
     FOR  ${i}  IN RANGE  ${num_messages}
         Scan File  ${MESSAGE_SPAM}
         Scan File  ${MESSAGE_HAM}
         Scan File  ${MESSAGE_NEWSLETTER}
         Scan File  ${MESSAGE_TRANSACTIONAL}
     END
-    
+
     ${end_time} =  Get Time  epoch
     ${duration} =  Evaluate  ${end_time} - ${start_time}
-    
+
     # Should complete in reasonable time (adjust threshold as needed)
     Should Be True  ${duration} < 30  msg=Performance test took ${duration}s, expected < 30s
 
@@ -191,6 +189,6 @@ Multiclass Memory Test
     # Test that memory usage is reasonable for multiclass classification
     ${result} =  Run Rspamc  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  stat
     Check Rspamc  ${result}
-    
+
     # Extract memory usage if available in stats
     # This is a placeholder - actual implementation would parse memory stats

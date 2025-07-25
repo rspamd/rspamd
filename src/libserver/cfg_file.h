@@ -629,7 +629,7 @@ gboolean rspamd_config_check_statfiles(struct rspamd_classifier_config *cf);
 /**
  * Multi-class configuration helpers
  */
-gboolean rspamd_config_parse_class_labels(ucl_object_t *obj,
+gboolean rspamd_config_parse_class_labels(const ucl_object_t *obj,
 										  GHashTable **class_labels);
 
 gboolean rspamd_config_migrate_binary_config(struct rspamd_statfile_config *stcf);

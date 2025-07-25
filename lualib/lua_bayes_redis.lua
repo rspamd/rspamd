@@ -54,15 +54,15 @@ local function gen_classify_functor(redis_params, classify_script_id)
     end
 
     lua_redis.exec_redis_script(classify_script_id,
-      { task = task, is_write = false, key = expanded_key },
-      classify_redis_cb, { expanded_key, script_class_labels, stat_tokens })
+        { task = task, is_write = false, key = expanded_key },
+        classify_redis_cb, { expanded_key, script_class_labels, stat_tokens })
   end
 end
 
 local function gen_learn_functor(redis_params, learn_script_id)
   return function(task, expanded_key, id, class_label, symbol, is_unlearn, stat_tokens, callback, maybe_text_tokens)
     local function learn_redis_cb(err, data)
-      lua_util.debugm(N, task, 'learn redis cb: %s, %s', err, data)
+      lua_util.debugm(N, task, 'learn redis cb: %s, %s for class %s', err, data, class_label)
       if err then
         callback(task, false, err)
       else
@@ -80,13 +80,13 @@ local function gen_learn_functor(redis_params, learn_script_id)
 
     if maybe_text_tokens then
       lua_redis.exec_redis_script(learn_script_id,
-        { task = task, is_write = true, key = expanded_key },
-        learn_redis_cb,
-        { expanded_key, script_class_label, symbol, tostring(is_unlearn), stat_tokens, maybe_text_tokens })
+          { task = task, is_write = true, key = expanded_key },
+          learn_redis_cb,
+          { expanded_key, script_class_label, symbol, tostring(is_unlearn), stat_tokens, maybe_text_tokens })
     else
       lua_redis.exec_redis_script(learn_script_id,
-        { task = task, is_write = true, key = expanded_key },
-        learn_redis_cb, { expanded_key, script_class_label, symbol, tostring(is_unlearn), stat_tokens })
+          { task = task, is_write = true, key = expanded_key },
+          learn_redis_cb, { expanded_key, script_class_label, symbol, tostring(is_unlearn), stat_tokens })
     end
   end
 end
@@ -196,11 +196,11 @@ exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol,
       end
 
       lua_redis.exec_redis_script(stat_script_id,
-        { ev_base = ev_base, cfg = cfg, is_write = false },
-        stat_redis_cb, { tostring(cursor),
-          symbol,
-          learn_key,
-          tostring(max_users) })
+          { ev_base = ev_base, cfg = cfg, is_write = false },
+          stat_redis_cb, { tostring(cursor),
+                           symbol,
+                           learn_key,
+                           tostring(max_users) })
       return statfile_ucl.monitor_timeout or classifier_ucl.monitor_timeout or 30.0
     end)
   end
@@ -226,8 +226,8 @@ local function gen_cache_check_functor(redis_params, check_script_id, conf)
 
     lua_util.debugm(N, task, 'checking cache: %s', cache_id)
     lua_redis.exec_redis_script(check_script_id,
-      { task = task, is_write = false, key = cache_id },
-      classify_redis_cb, { cache_id, packed_conf })
+        { task = task, is_write = false, key = cache_id },
+        classify_redis_cb, { cache_id, packed_conf })
   end
 end
 
@@ -250,9 +250,9 @@ local function gen_cache_learn_functor(redis_params, learn_script_id, conf)
 
     lua_util.debugm(N, task, 'try to learn cache: %s as %s', cache_id, cache_class_name)
     lua_redis.exec_redis_script(learn_script_id,
-      { task = task, is_write = true, key = cache_id },
-      learn_redis_cb,
-      { cache_id, cache_class_name, packed_conf })
+        { task = task, is_write = true, key = cache_id },
+        learn_redis_cb,
+        { cache_id, cache_class_name, packed_conf })
   end
 end
 
@@ -266,8 +266,8 @@ exports.lua_bayes_init_cache = function(classifier_ucl, statfile_ucl)
   local default_conf = {
     cache_prefix = "learned_ids",
     cache_max_elt = 10000, -- Maximum number of elements in the cache key
-    cache_max_keys = 5,    -- Maximum number of keys in the cache
-    cache_elt_len = 32,    -- Length of the element in the cache (will trim id to that value)
+    cache_max_keys = 5, -- Maximum number of keys in the cache
+    cache_elt_len = 32, -- Length of the element in the cache (will trim id to that value)
   }
 
   local conf = lua_util.override_defaults(default_conf, classifier_ucl)
@@ -282,7 +282,7 @@ exports.lua_bayes_init_cache = function(classifier_ucl, statfile_ucl)
   local learn_script_id = lua_redis.load_redis_script_from_file("bayes_cache_learn.lua", redis_params)
 
   return gen_cache_check_functor(redis_params, check_script_id, conf), gen_cache_learn_functor(redis_params,
-    learn_script_id, conf)
+      learn_script_id, conf)
 end
 
 return exports
