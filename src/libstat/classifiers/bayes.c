@@ -53,10 +53,26 @@ static double
 inv_chi_square(struct rspamd_task *task, double value, int freedom_deg)
 {
 	double prob, sum, m;
+	double log_prob, log_m;
 	int i;
 
 	errno = 0;
 	m = -value;
+
+	/* Handle extreme negative values that would cause exp() underflow */
+	if (value < -700) {
+		/* Very strong confidence, return 0 */
+		msg_debug_bayes("extreme negative value: %f, returning 0", value);
+		return 0.0;
+	}
+
+	/* Handle extreme positive values that would cause overflow */
+	if (value > 700) {
+		/* No confidence, return 1 */
+		msg_debug_bayes("extreme positive value: %f, returning 1", value);
+		return 1.0;
+	}
+
 	prob = exp(value);
 
 	if (errno == ERANGE) {
@@ -75,6 +91,8 @@ inv_chi_square(struct rspamd_task *task, double value, int freedom_deg)
 	}
 
 	sum = prob;
+	log_prob = value;     /* log of current prob term */
+	log_m = log(fabs(m)); /* log of |m| for numerical stability */
 
 	msg_debug_bayes("m: %f, probability: %g", m, prob);
 
@@ -83,11 +101,33 @@ inv_chi_square(struct rspamd_task *task, double value, int freedom_deg)
 	 * prob is e ^ x (small value since x is normally less than zero
 	 * So we integrate over degrees of freedom and produce the total result
 	 * from 1.0 (no confidence) to 0.0 (full confidence)
+	 * Use logarithmic arithmetic to prevent overflow
 	 */
 	for (i = 1; i < freedom_deg; i++) {
-		prob *= m / (double) i;
+		/* Calculate next term using logarithms to prevent overflow */
+		log_prob += log_m - log((double) i);
+
+		/* Check if the log probability is too negative (term becomes negligible) */
+		if (log_prob < -700) {
+			msg_debug_bayes("term %d became negligible, stopping series", i);
+			break;
+		}
+
+		/* Check if the log probability is too positive (would cause overflow) */
+		if (log_prob > 700) {
+			msg_debug_bayes("series diverging at term %d, returning 1.0", i);
+			return 1.0;
+		}
+
+		prob = exp(log_prob);
 		sum += prob;
-		msg_debug_bayes("i=%d, probability: %g, sum: %g", i, prob, sum);
+		msg_debug_bayes("i=%d, log_prob: %g, probability: %g, sum: %g", i, log_prob, prob, sum);
+
+		/* Early termination if sum is getting too large */
+		if (sum > 1e10) {
+			msg_debug_bayes("sum too large (%g), returning 1.0", sum);
+			return 1.0;
+		}
 	}
 
 	return MIN(1.0, sum);
