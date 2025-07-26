@@ -3042,3 +3042,189 @@ rspamd_ip_is_local_cfg(struct rspamd_config *cfg,
 
 	return FALSE;
 }
+
+gboolean
+rspamd_config_parse_class_labels(const ucl_object_t *obj, GHashTable **class_labels)
+{
+	const ucl_object_t *cur;
+	ucl_object_iter_t it = nullptr;
+
+	if (!obj || ucl_object_type(obj) != UCL_OBJECT) {
+		return FALSE;
+	}
+
+	if (*class_labels == nullptr) {
+		*class_labels = g_hash_table_new_full(g_str_hash, g_str_equal,
+											  g_free, g_free);
+	}
+
+	while ((cur = ucl_object_iterate(obj, &it, true)) != nullptr) {
+		const char *class_name = ucl_object_key(cur);
+		const char *label = ucl_object_tostring(cur);
+
+		if (class_name && label) {
+			/* Validate class name: alphanumeric + underscore, max 32 chars */
+			if (strlen(class_name) > 32) {
+				msg_err("class name '%s' is too long (max 32 characters)", class_name);
+				g_hash_table_destroy(*class_labels);
+				*class_labels = nullptr;
+				return FALSE;
+			}
+
+			for (const char *p = class_name; *p; p++) {
+				if (!g_ascii_isalnum(*p) && *p != '_') {
+					msg_err("class name '%s' contains invalid character '%c'", class_name, *p);
+					g_hash_table_destroy(*class_labels);
+					*class_labels = nullptr;
+					return FALSE;
+				}
+			}
+
+			/* Validate label uniqueness */
+			if (g_hash_table_lookup(*class_labels, label)) {
+				msg_err("backend label '%s' is used by multiple classes", label);
+				g_hash_table_destroy(*class_labels);
+				*class_labels = nullptr;
+				return FALSE;
+			}
+		}
+
+		g_hash_table_insert(*class_labels, g_strdup(class_name), g_strdup(label));
+	}
+
+	return g_hash_table_size(*class_labels) > 0;
+}
+
+gboolean
+rspamd_config_migrate_binary_config(struct rspamd_statfile_config *stcf)
+{
+	if (stcf->class_name != nullptr) {
+		/* Already migrated or using new format */
+		return TRUE;
+	}
+
+	if (stcf->is_spam) {
+		stcf->class_name = g_strdup("spam");
+		msg_info("migrated statfile '%s' from is_spam=true to class='spam'",
+				 stcf->symbol ? stcf->symbol : "unknown");
+	}
+	else {
+		stcf->class_name = g_strdup("ham");
+		msg_info("migrated statfile '%s' from is_spam=false to class='ham'",
+				 stcf->symbol ? stcf->symbol : "unknown");
+	}
+
+	return TRUE;
+}
+
+gboolean
+rspamd_config_validate_class_config(struct rspamd_classifier_config *ccf, GError **err)
+{
+	GList *cur;
+	GHashTable *seen_classes = nullptr;
+	struct rspamd_statfile_config *stcf;
+	unsigned int class_count = 0;
+
+	if (!ccf || !ccf->statfiles) {
+		g_set_error(err, g_quark_from_static_string("config"), 1,
+					"classifier has no statfiles defined");
+		return FALSE;
+	}
+
+	seen_classes = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, nullptr);
+
+	/* Iterate through statfiles and collect classes */
+	cur = ccf->statfiles;
+	while (cur) {
+		stcf = (struct rspamd_statfile_config *) cur->data;
+
+		/* Migrate binary config if needed */
+		if (!rspamd_config_migrate_binary_config(stcf)) {
+			g_set_error(err, g_quark_from_static_string("config"), 1,
+						"failed to migrate binary config for statfile '%s'",
+						stcf->symbol ? stcf->symbol : "unknown");
+			g_hash_table_destroy(seen_classes);
+			return FALSE;
+		}
+
+		/* Check class name */
+		if (!stcf->class_name || strlen(stcf->class_name) == 0) {
+			g_set_error(err, g_quark_from_static_string("config"), 1,
+						"statfile '%s' has no class defined",
+						stcf->symbol ? stcf->symbol : "unknown");
+			g_hash_table_destroy(seen_classes);
+			return FALSE;
+		}
+
+		/* Track unique classes */
+		if (!g_hash_table_contains(seen_classes, stcf->class_name)) {
+			g_hash_table_insert(seen_classes, g_strdup(stcf->class_name), GINT_TO_POINTER(1));
+			class_count++;
+		}
+
+		cur = g_list_next(cur);
+	}
+
+	/* Validate class count */
+	if (class_count < 2) {
+		g_set_error(err, g_quark_from_static_string("config"), 1,
+					"classifier must have at least 2 classes, found %ud", class_count);
+		g_hash_table_destroy(seen_classes);
+		return FALSE;
+	}
+
+	if (class_count > 20) {
+		msg_warn("classifier has %ud classes, performance may be degraded above 20 classes",
+				 class_count);
+	}
+
+	/* Initialize classifier class tracking - only for explicit multiclass configurations */
+	gboolean has_explicit_classes = FALSE;
+
+	/* Check if any statfile uses explicit class declaration (not converted from is_spam) */
+	cur = ccf->statfiles;
+	while (cur) {
+		stcf = (struct rspamd_statfile_config *) cur->data;
+		if (stcf->class_name && !stcf->is_spam_converted) {
+			has_explicit_classes = TRUE;
+			break;
+		}
+		cur = g_list_next(cur);
+	}
+
+	/* Only populate class_names for explicit multiclass configurations */
+	if (has_explicit_classes) {
+		if (ccf->class_names) {
+			g_ptr_array_unref(ccf->class_names);
+		}
+		ccf->class_names = g_ptr_array_new_with_free_func(g_free);
+
+		/* Populate class names array */
+		GHashTableIter iter;
+		gpointer key, value;
+		g_hash_table_iter_init(&iter, seen_classes);
+		while (g_hash_table_iter_next(&iter, &key, &value)) {
+			g_ptr_array_add(ccf->class_names, g_strdup((const char *) key));
+		}
+	}
+	else {
+		/* Binary configuration - ensure class_names is NULL */
+		if (ccf->class_names) {
+			g_ptr_array_unref(ccf->class_names);
+			ccf->class_names = nullptr;
+		}
+	}
+
+	g_hash_table_destroy(seen_classes);
+	return TRUE;
+}
+
+const char *
+rspamd_config_get_class_label(struct rspamd_classifier_config *ccf, const char *class_name)
+{
+	if (!ccf || !ccf->class_labels || !class_name) {
+		return nullptr;
+	}
+
+	return (const char *) g_hash_table_lookup(ccf->class_labels, class_name);
+}

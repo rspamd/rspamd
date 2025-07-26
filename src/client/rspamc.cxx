@@ -59,6 +59,7 @@ static const char *user = nullptr;
 static const char *helo = nullptr;
 static const char *hostname = nullptr;
 static const char *classifier = nullptr;
+static const char *learn_class_name = nullptr;
 static const char *local_addr = nullptr;
 static const char *execute = nullptr;
 static const char *sort = nullptr;
@@ -198,6 +199,7 @@ enum rspamc_command_type {
 	RSPAMC_COMMAND_SYMBOLS,
 	RSPAMC_COMMAND_LEARN_SPAM,
 	RSPAMC_COMMAND_LEARN_HAM,
+	RSPAMC_COMMAND_LEARN_CLASS,
 	RSPAMC_COMMAND_FUZZY_ADD,
 	RSPAMC_COMMAND_FUZZY_DEL,
 	RSPAMC_COMMAND_FUZZY_DELHASH,
@@ -245,6 +247,15 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 		.name = "learn_ham",
 		.path = "learnham",
 		.description = "learn message as ham",
+		.is_controller = TRUE,
+		.is_privileged = TRUE,
+		.need_input = TRUE,
+		.command_output_func = nullptr},
+	rspamc_command{
+		.cmd = RSPAMC_COMMAND_LEARN_CLASS,
+		.name = "learn_class",
+		.path = "learnclass",
+		.description = "learn message as class",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
 		.need_input = TRUE,
@@ -527,8 +538,7 @@ rspamc_password_callback(const char *option_name,
 				auto *map = (char *) locked_mmap.value().get_map();
 				value_view = std::string_view{map, locked_mmap->get_size()};
 				auto right = value_view.end() - 1;
-				for (; right > value_view.cbegin() && g_ascii_isspace(*right); --right)
-					;
+				for (; right > value_view.cbegin() && g_ascii_isspace(*right); --right);
 				std::string_view str{value_view.begin(), static_cast<size_t>(right - value_view.begin()) + 1};
 				processed_passwd.assign(std::begin(str), std::end(str));
 				processed_passwd.push_back('\0'); /* Null-terminate for C part */
@@ -649,6 +659,7 @@ check_rspamc_command(const char *cmd) -> std::optional<rspamc_command>
 		{"report", RSPAMC_COMMAND_SYMBOLS},
 		{"learn_spam", RSPAMC_COMMAND_LEARN_SPAM},
 		{"learn_ham", RSPAMC_COMMAND_LEARN_HAM},
+		{"learn_class", RSPAMC_COMMAND_LEARN_CLASS},
 		{"fuzzy_add", RSPAMC_COMMAND_FUZZY_ADD},
 		{"fuzzy_del", RSPAMC_COMMAND_FUZZY_DEL},
 		{"fuzzy_delhash", RSPAMC_COMMAND_FUZZY_DELHASH},
@@ -659,10 +670,33 @@ check_rspamc_command(const char *cmd) -> std::optional<rspamc_command>
 	});
 
 	std::string cmd_lc = rspamd_string_tolower(cmd);
+
+	// Handle learn_class:classname syntax
+	if (cmd_lc.find("learn_class:") == 0) {
+		auto colon_pos = cmd_lc.find(':');
+		if (colon_pos != std::string::npos && colon_pos + 1 < cmd_lc.length()) {
+			auto class_name = cmd_lc.substr(colon_pos + 1);
+			// Store class name globally for later use
+			learn_class_name = g_strdup(class_name.c_str());
+			// Return the learn_class command
+			auto elt_it = std::find_if(rspamc_commands.begin(), rspamc_commands.end(), [&](const auto &item) {
+				return item.cmd == RSPAMC_COMMAND_LEARN_CLASS;
+			});
+			if (elt_it != std::end(rspamc_commands)) {
+				return *elt_it;
+			}
+		}
+		return std::nullopt;
+	}
+
 	auto ct = rspamd::find_map(str_map, std::string_view{cmd_lc});
 
+	if (!ct.has_value()) {
+		return std::nullopt;
+	}
+
 	auto elt_it = std::find_if(rspamc_commands.begin(), rspamc_commands.end(), [&](const auto &item) {
-		return item.cmd == ct;
+		return item.cmd == ct.value();
 	});
 
 	if (elt_it != std::end(rspamc_commands)) {
@@ -797,6 +831,10 @@ add_options(GQueue *opts)
 
 	if (classifier) {
 		add_client_header(opts, "Classifier", classifier);
+	}
+
+	if (learn_class_name) {
+		add_client_header(opts, "Class", learn_class_name);
 	}
 
 	if (weight != 0) {
@@ -1918,7 +1956,7 @@ rspamc_client_cb(struct rspamd_client_connection *conn,
 
 					if (raw_body) {
 						/* We can also output the resulting json */
-						rspamc_print(out, "{}\n", std::string_view{raw_body, (std::size_t)(rawlen - bodylen)});
+						rspamc_print(out, "{}\n", std::string_view{raw_body, (std::size_t) (rawlen - bodylen)});
 					}
 				}
 			}
@@ -1950,7 +1988,7 @@ rspamc_process_input(struct ev_loop *ev_base, const struct rspamc_command &cmd,
 		p = strrchr(connect_str, ']');
 
 		if (p != nullptr) {
-			hostbuf.assign(connect_str + 1, (std::size_t)(p - connect_str - 1));
+			hostbuf.assign(connect_str + 1, (std::size_t) (p - connect_str - 1));
 			p++;
 		}
 		else {
@@ -1965,7 +2003,7 @@ rspamc_process_input(struct ev_loop *ev_base, const struct rspamc_command &cmd,
 
 	if (hostbuf.empty()) {
 		if (p != nullptr) {
-			hostbuf.assign(connect_str, (std::size_t)(p - connect_str));
+			hostbuf.assign(connect_str, (std::size_t) (p - connect_str));
 		}
 		else {
 			hostbuf.assign(connect_str);
