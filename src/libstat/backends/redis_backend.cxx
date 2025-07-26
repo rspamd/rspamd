@@ -914,117 +914,121 @@ rspamd_redis_classified(lua_State *L)
 		lua_rawgeti(L, 3, 1); /* learned_counts -> position 4 */
 		lua_rawgeti(L, 3, 2); /* token_results -> position 5 */
 
-		/* First, process learned_counts for all statfiles */
-		if (lua_istable(L, 4) && rt->stcf->clcf && rt->stcf->clcf->statfiles) {
-			GList *cur = rt->stcf->clcf->statfiles;
-			int redis_idx = 1; /* Lua array index starts at 1 */
+		/* First, process learned_counts using class_names order */
+		if (lua_istable(L, 4) && rt->stcf->clcf && rt->stcf->clcf->class_names &&
+			rt->stcf->clcf->class_names->len > 0) {
+			/* Process each class in the same order as sent to Redis */
+			for (unsigned int class_idx = 0; class_idx < rt->stcf->clcf->class_names->len; class_idx++) {
+				const char *class_name = (const char *) g_ptr_array_index(rt->stcf->clcf->class_names, class_idx);
 
-			while (cur) {
-				auto *stcf = (struct rspamd_statfile_config *) cur->data;
-				const char *class_label = get_class_label(stcf);
+				/* Find statfile with this class name */
+				GList *cur = rt->stcf->clcf->statfiles;
+				while (cur) {
+					auto *stcf = (struct rspamd_statfile_config *) cur->data;
+					if (stcf->class_name && strcmp(stcf->class_name, class_name) == 0) {
+						const char *class_label = get_class_label(stcf);
 
-				/* Get the runtime for this statfile */
-				auto maybe_rt = redis_stat_runtime<float>::maybe_recover_from_mempool(rt->task,
-																					  rt->redis_object_expanded,
-																					  class_label);
-				if (maybe_rt) {
-					auto *statfile_rt = maybe_rt.value();
+						/* Get the runtime for this statfile */
+						auto maybe_rt = redis_stat_runtime<float>::maybe_recover_from_mempool(rt->task,
+																							  rt->redis_object_expanded,
+																							  class_label);
+						if (maybe_rt) {
+							auto *statfile_rt = maybe_rt.value();
 
-					/* Extract learned count for this statfile */
-					lua_rawgeti(L, 4, redis_idx); /* learned_counts[redis_idx] */
-					if (lua_isnumber(L, -1)) {
-						statfile_rt->learned = lua_tointeger(L, -1);
-						msg_debug_bayes("set learned count for class %s (label %s): %L",
-										stcf->class_name ? stcf->class_name : "unknown",
-										class_label,
-										statfile_rt->learned);
+							/* Extract learned count using class index (1-based for Lua) */
+							lua_rawgeti(L, 4, class_idx + 1);
+							if (lua_isnumber(L, -1)) {
+								statfile_rt->learned = lua_tointeger(L, -1);
+								msg_debug_bayes("set learned count for class %s (label %s): %L",
+												class_name, class_label, statfile_rt->learned);
+							}
+							lua_pop(L, 1); /* Pop learned_counts[class_idx + 1] */
+						}
+						break; /* Found the statfile for this class */
 					}
-					lua_pop(L, 1); /* Pop learned_counts[redis_idx] */
+					cur = g_list_next(cur);
 				}
-
-				cur = g_list_next(cur);
-				redis_idx++;
 			}
 		}
 
-		/* Process results for all statfiles in order using class_index (O(N) instead of O(N²)) */
-		if (rt->stcf->clcf && rt->stcf->clcf->statfiles) {
-			GList *cur = rt->stcf->clcf->statfiles;
-			int redis_idx = 1; /* Redis result array index (1-based) */
+		/* Process token results using class_names order */
+		if (lua_istable(L, 5) && rt->stcf->clcf && rt->stcf->clcf->class_names &&
+			rt->stcf->clcf->class_names->len > 0) {
+			/* Process each class in the same order as sent to Redis */
+			for (unsigned int class_idx = 0; class_idx < rt->stcf->clcf->class_names->len; class_idx++) {
+				const char *class_name = (const char *) g_ptr_array_index(rt->stcf->clcf->class_names, class_idx);
 
-			while (cur) {
-				auto *stcf = (struct rspamd_statfile_config *) cur->data;
+				/* Find statfile with this class name */
+				GList *cur = rt->stcf->clcf->statfiles;
+				while (cur) {
+					auto *stcf = (struct rspamd_statfile_config *) cur->data;
+					if (stcf->class_name && strcmp(stcf->class_name, class_name) == 0) {
+						const char *class_label = get_class_label(stcf);
 
-				/* Direct statfile lookup using global statfiles array */
-				struct rspamd_stat_ctx *st_ctx = rspamd_stat_get_ctx();
-				struct rspamd_statfile *st = nullptr;
+						/* Find the statfile ID */
+						struct rspamd_stat_ctx *st_ctx = rspamd_stat_get_ctx();
+						struct rspamd_statfile *st = nullptr;
+						for (unsigned int i = 0; i < st_ctx->statfiles->len; i++) {
+							struct rspamd_statfile *candidate = (struct rspamd_statfile *) g_ptr_array_index(st_ctx->statfiles, i);
+							if (candidate->stcf == stcf) {
+								st = candidate;
+								break;
+							}
+						}
 
-				/* Find statfile by config pointer (still O(N) but unavoidable) */
-				for (unsigned int i = 0; i < st_ctx->statfiles->len; i++) {
-					struct rspamd_statfile *candidate = (struct rspamd_statfile *) g_ptr_array_index(st_ctx->statfiles, i);
-					if (candidate->stcf == stcf) {
-						st = candidate;
-						break;
-					}
-				}
+						if (!st) {
+							msg_debug_bayes("statfile not found for class %s, skipping", class_name);
+							break;
+						}
 
-				if (!st) {
-					msg_debug_bayes("statfile not found for config %s, skipping", stcf->symbol);
-					cur = g_list_next(cur);
-					redis_idx++;
-					continue;
-				}
+						/* Get or create runtime for this statfile */
+						auto *statfile_rt = rt; /* Use current runtime if it matches */
+						if (stcf != rt->stcf) {
+							auto maybe_rt = redis_stat_runtime<float>::maybe_recover_from_mempool(task,
+																								  rt->redis_object_expanded,
+																								  class_label);
+							if (maybe_rt) {
+								statfile_rt = maybe_rt.value();
+							}
+							else {
+								msg_debug_bayes("runtime not found for class %s, skipping", class_label);
+								break;
+							}
+						}
 
-				/* Get or create runtime for this statfile */
-				auto *statfile_rt = rt; /* Use current runtime for first statfile */
-				if (stcf != rt->stcf) {
-					const char *class_label = get_class_label(stcf);
-					auto maybe_rt = redis_stat_runtime<float>::maybe_recover_from_mempool(task,
-																						  rt->redis_object_expanded,
-																						  class_label);
-					if (maybe_rt) {
-						statfile_rt = maybe_rt.value();
-					}
-					else {
-						msg_debug_bayes("runtime not found for class %s, skipping", class_label);
-						cur = g_list_next(cur);
-						redis_idx++;
-						continue;
-					}
-				}
+						/* Ensure correct statfile ID assignment */
+						statfile_rt->id = st->id;
 
-				/* Ensure correct statfile ID assignment */
-				statfile_rt->id = st->id;
+						/* Process token results using class index (1-based for Lua) */
+						lua_rawgeti(L, 5, class_idx + 1); /* Get token_results[class_idx + 1] */
+						if (lua_istable(L, -1)) {
+							/* Parse token results into statfile runtime */
+							auto *res = new std::vector<std::pair<int, float>>();
 
-				/* Process token results for this statfile (Redis array index redis_idx) */
-				lua_rawgeti(L, 5, redis_idx); /* Get token_results[redis_idx] */
-				if (lua_istable(L, -1)) {
-					/* Parse token results into statfile runtime */
-					auto *res = new std::vector<std::pair<int, float>>();
+							lua_pushnil(L); /* First key for iteration */
+							while (lua_next(L, -2) != 0) {
+								if (lua_istable(L, -1) && lua_objlen(L, -1) == 2) {
+									lua_rawgeti(L, -1, 1); /* token_index */
+									lua_rawgeti(L, -2, 2); /* token_count */
 
-					lua_pushnil(L); /* First key for iteration */
-					while (lua_next(L, -2) != 0) {
-						if (lua_istable(L, -1) && lua_objlen(L, -1) == 2) {
-							lua_rawgeti(L, -1, 1); /* token_index */
-							lua_rawgeti(L, -2, 2); /* token_count */
+									if (lua_isnumber(L, -2) && lua_isnumber(L, -1)) {
+										int token_idx = lua_tointeger(L, -2);
+										float token_count = lua_tonumber(L, -1);
+										res->emplace_back(token_idx, token_count);
+									}
 
-							if (lua_isnumber(L, -2) && lua_isnumber(L, -1)) {
-								int token_idx = lua_tointeger(L, -2);
-								float token_count = lua_tonumber(L, -1);
-								res->emplace_back(token_idx, token_count);
+									lua_pop(L, 2); /* Pop token_index and token_count */
+								}
+								lua_pop(L, 1); /* Pop value, keep key for next iteration */
 							}
 
-							lua_pop(L, 2); /* Pop token_index and token_count */
+							statfile_rt->set_results(res);
 						}
-						lua_pop(L, 1); /* Pop value, keep key for next iteration */
+						lua_pop(L, 1); /* Pop token_results[class_idx + 1] */
+						break;         /* Found the statfile for this class */
 					}
-
-					statfile_rt->set_results(res);
+					cur = g_list_next(cur);
 				}
-				lua_pop(L, 1); /* Pop token_results[redis_idx] */
-
-				cur = g_list_next(cur);
-				redis_idx++;
 			}
 		}
 
@@ -1116,17 +1120,29 @@ rspamd_redis_process_tokens(struct rspamd_task *task,
 	lua_pushinteger(L, id);
 
 	/* Send all class labels for multi-class support */
-	if (rt->stcf->clcf && rt->stcf->clcf->class_labels &&
-		g_hash_table_size(rt->stcf->clcf->class_labels) > 0) {
-		/* Multi-class: send array of all class labels */
-		lua_createtable(L, g_hash_table_size(rt->stcf->clcf->class_labels), 0);
-		GHashTableIter iter;
-		gpointer key, value;
-		int idx = 1;
-		g_hash_table_iter_init(&iter, rt->stcf->clcf->class_labels);
-		while (g_hash_table_iter_next(&iter, &key, &value)) {
-			lua_pushstring(L, (const char *) value); /* Use the label, not class name */
-			lua_rawseti(L, -2, idx++);
+	if (rt->stcf->clcf && rt->stcf->clcf->class_names &&
+		rt->stcf->clcf->class_names->len > 0) {
+		/* Multi-class: send array of class labels in deterministic order */
+		lua_createtable(L, rt->stcf->clcf->class_names->len, 0);
+		for (unsigned int i = 0; i < rt->stcf->clcf->class_names->len; i++) {
+			const char *class_name = (const char *) g_ptr_array_index(rt->stcf->clcf->class_names, i);
+			const char *class_label = nullptr;
+
+			/* Find the class label for this class name from any statfile with this class */
+			GList *cur = rt->stcf->clcf->statfiles;
+			while (cur) {
+				auto *stcf = (struct rspamd_statfile_config *) cur->data;
+				if (stcf->class_name && strcmp(stcf->class_name, class_name) == 0) {
+					class_label = get_class_label(stcf);
+					break;
+				}
+				cur = g_list_next(cur);
+			}
+
+			if (class_label) {
+				lua_pushstring(L, class_label);
+				lua_rawseti(L, -2, i + 1); /* Lua arrays are 1-indexed */
+			}
 		}
 	}
 	else {
