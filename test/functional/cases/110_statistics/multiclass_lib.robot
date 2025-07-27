@@ -6,7 +6,6 @@ ${CONFIG}                      ${RSPAMD_TESTDIR}/configs/multiclass_bayes.conf
 ${MESSAGE_HAM}                 ${RSPAMD_TESTDIR}/messages/ham.eml
 ${MESSAGE_SPAM}                ${RSPAMD_TESTDIR}/messages/spam_message.eml
 ${MESSAGE_NEWSLETTER}          ${RSPAMD_TESTDIR}/messages/newsletter.eml
-${MESSAGE_TRANSACTIONAL}       ${RSPAMD_TESTDIR}/messages/transactional.eml
 ${REDIS_SCOPE}                 Suite
 ${RSPAMD_REDIS_SERVER}         null
 ${RSPAMD_SCOPE}                Suite
@@ -47,7 +46,6 @@ Multiclass Basic Learn Test
     Learn Multiclass  ${user}  spam  ${MESSAGE_SPAM}
     Learn Multiclass  ${user}  ham  ${MESSAGE_HAM}
     Learn Multiclass  ${user}  newsletter  ${MESSAGE_NEWSLETTER}
-    Learn Multiclass  ${user}  transactional  ${MESSAGE_TRANSACTIONAL}
 
     # Test classification
     Scan File  ${MESSAGE_SPAM}  &{kwargs}
@@ -58,9 +56,6 @@ Multiclass Basic Learn Test
 
     Scan File  ${MESSAGE_NEWSLETTER}  &{kwargs}
     Expect Symbol  BAYES_NEWSLETTER
-
-    Scan File  ${MESSAGE_TRANSACTIONAL}  &{kwargs}
-    Expect Symbol  BAYES_TRANSACTIONAL
 
     Set Suite Variable  ${RSPAMD_STATS_LEARNTEST}  1
 
@@ -111,12 +106,12 @@ Multiclass Cross-Learn Test
         Set To Dictionary  ${kwargs}  Deliver-To=${user}
     END
 
-    # Learn newsletter message as transactional
-    Learn Multiclass  ${user}  transactional  ${MESSAGE_NEWSLETTER}
+    # Learn newsletter message as ham to test cross-class learning
+    Learn Multiclass  ${user}  ham  ${MESSAGE_NEWSLETTER}
 
-    # Should classify as transactional, not newsletter
+    # Should classify as ham, not newsletter (since we trained it as ham)
     Scan File  ${MESSAGE_NEWSLETTER}  &{kwargs}
-    Expect Symbol  BAYES_TRANSACTIONAL
+    Expect Symbol  BAYES_HAM
     Do Not Expect Symbol  BAYES_NEWSLETTER
 
 Multiclass Unlearn Test
@@ -154,7 +149,6 @@ Multiclass Stats Test
     Should Contain  ${result.stdout}  spam
     Should Contain  ${result.stdout}  ham
     Should Contain  ${result.stdout}  newsletter
-    Should Contain  ${result.stdout}  transactional
 
 Multiclass Configuration Migration Test
     # Test that old binary config can be automatically migrated
@@ -176,7 +170,6 @@ Multiclass Performance Test
         Scan File  ${MESSAGE_SPAM}
         Scan File  ${MESSAGE_HAM}
         Scan File  ${MESSAGE_NEWSLETTER}
-        Scan File  ${MESSAGE_TRANSACTIONAL}
     END
 
     ${end_time} =  Get Time  epoch

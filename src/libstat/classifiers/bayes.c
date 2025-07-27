@@ -336,6 +336,9 @@ bayes_classify_token_multiclass(struct rspamd_classifier *ctx,
 			double class_freq = (double) class_counts[j] / MAX(1.0, (double) cl->class_learns[j]);
 			double class_prob = PROB_COMBINE(class_freq, total_count, w, 1.0 / cl->num_classes);
 
+			/* Ensure probability is properly bounded [0, 1] */
+			class_prob = MAX(0.0, MIN(1.0, class_prob));
+
 			/* Skip probabilities too close to uniform (1/num_classes) */
 			double uniform_prior = 1.0 / cl->num_classes;
 			if (fabs(class_prob - uniform_prior) < ctx->cfg->min_prob_strength) {
@@ -535,7 +538,23 @@ bayes_classify_multiclass(struct rspamd_classifier *ctx,
 
 	/* Calculate confidence using Fisher method for the winning class */
 	if (max_log_prob > -300) {
-		confidence = 1.0 - inv_chi_square(task, max_log_prob, cl.processed_tokens);
+		if (max_log_prob > 0) {
+			/* Positive log prob means very strong evidence - high confidence */
+			confidence = 0.95; /* High confidence for positive log probabilities */
+			msg_debug_bayes("positive log_prob (%g), setting high confidence", max_log_prob);
+		}
+		else {
+			/* Negative log prob - use Fisher method as intended */
+			double fisher_result = inv_chi_square(task, max_log_prob, cl.processed_tokens);
+			confidence = 1.0 - fisher_result;
+
+			/* Handle case where Fisher method indicates extreme confidence */
+			if (fisher_result >= 1.0 && max_log_prob > -50) {
+				/* Large magnitude negative log prob means strong evidence */
+				confidence = 0.90;
+				msg_debug_bayes("extreme negative log_prob (%g), setting high confidence", max_log_prob);
+			}
+		}
 	}
 	else {
 		confidence = normalized_probs[winning_class_idx];
