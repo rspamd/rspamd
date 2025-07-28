@@ -91,6 +91,8 @@ static gboolean skip_attachments = FALSE;
 static const char *pubkey = nullptr;
 static const char *user_agent = "rspamc";
 static const char *files_list = nullptr;
+static const char *queue_id = nullptr;
+static std::string settings;
 
 std::vector<GPid> children;
 static GPatternSpec **exclude_compiled = nullptr;
@@ -99,6 +101,11 @@ static struct rspamd_http_context *http_ctx;
 static int retcode = EXIT_SUCCESS;
 
 static gboolean rspamc_password_callback(const char *option_name,
+										 const char *value,
+										 gpointer data,
+										 GError **error);
+
+static gboolean rspamc_settings_callback(const char *option_name,
 										 const char *value,
 										 gpointer data,
 										 GError **error);
@@ -183,6 +190,10 @@ static GOptionEntry entries[] =
 		 "Use specific User-Agent instead of \"rspamc\"", nullptr},
 		{"files-list", '\0', 0, G_OPTION_ARG_FILENAME, &files_list,
 		 "Read one or more newline separated filenames to scan from file", nullptr},
+		{"queue-id", '\0', 0, G_OPTION_ARG_STRING, &queue_id,
+		 "Set Queue-ID header for the request", nullptr},
+		{"settings", '\0', 0, G_OPTION_ARG_CALLBACK, (void *) &rspamc_settings_callback,
+		 "Set Settings header as JSON/UCL for the request", nullptr},
 		{nullptr, 0, 0, G_OPTION_ARG_NONE, nullptr, nullptr, nullptr}};
 
 static void rspamc_symbols_output(FILE *out, ucl_object_t *obj);
@@ -567,6 +578,46 @@ rspamc_password_callback(const char *option_name,
 	return TRUE;
 }
 
+static gboolean
+rspamc_settings_callback(const char *option_name,
+						 const char *value,
+						 gpointer data,
+						 GError **error)
+{
+	if (value == nullptr) {
+		g_set_error(error, G_OPTION_ERROR, G_OPTION_ERROR_BAD_VALUE,
+					"Settings parameter cannot be empty");
+		return FALSE;
+	}
+
+	// Parse the settings string using UCL to validate it
+	struct ucl_parser *parser = ucl_parser_new(UCL_PARSER_KEY_LOWERCASE);
+	if (!ucl_parser_add_string(parser, value, strlen(value))) {
+		auto *ucl_error = ucl_parser_get_error(parser);
+		g_set_error(error, G_OPTION_ERROR, G_OPTION_ERROR_BAD_VALUE,
+					"Invalid JSON/UCL in settings: %s", ucl_error);
+		ucl_parser_free(parser);
+		return FALSE;
+	}
+
+	// Get the parsed object and validate it
+	auto *obj = ucl_parser_get_object(parser);
+	if (obj == nullptr) {
+		g_set_error(error, G_OPTION_ERROR, G_OPTION_ERROR_BAD_VALUE,
+					"Failed to parse settings as JSON/UCL");
+		ucl_parser_free(parser);
+		return FALSE;
+	}
+
+	// Store the validated settings string
+	settings = value;
+
+	ucl_object_unref(obj);
+	ucl_parser_free(parser);
+
+	return TRUE;
+}
+
 /*
  * Parse command line
  */
@@ -888,6 +939,14 @@ add_options(GQueue *opts)
 		}
 
 		hdr++;
+	}
+
+	if (queue_id != nullptr) {
+		add_client_header(opts, "Queue-Id", queue_id);
+	}
+
+	if (!settings.empty()) {
+		add_client_header(opts, "Settings", settings.c_str());
 	}
 
 	if (!flagbuf.empty()) {
