@@ -1,4 +1,5 @@
 *** Settings ***
+Library         OperatingSystem
 Resource        lib.robot
 
 *** Variables ***
@@ -17,20 +18,24 @@ ${RSPAMD_STATS_PER_USER}       ${EMPTY}
 *** Keywords ***
 Learn Multiclass
     [Arguments]  ${user}  ${class}  ${message}
+    # Extract filename from message path for queue-id
+    ${path}  ${filename} =  Split Path  ${message}
     IF  "${user}"
-        ${result} =  Run Rspamc  -d  ${user}  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  learn_class:${class}  ${message}
+        ${result} =  Run Rspamc  -d  ${user}  --queue-id  ${filename}  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  learn_class:${class}  ${message}
     ELSE
-        ${result} =  Run Rspamc  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  learn_class:${class}  ${message}
+        ${result} =  Run Rspamc  --queue-id  ${filename}  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  learn_class:${class}  ${message}
     END
     Check Rspamc  ${result}
 
 Learn Multiclass Legacy
     [Arguments]  ${user}  ${class}  ${message}
     # Test backward compatibility with old learn_spam/learn_ham commands
+    # Extract filename from message path for queue-id
+    ${path}  ${filename} =  Split Path  ${message}
     IF  "${user}"
-        ${result} =  Run Rspamc  -d  ${user}  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  learn_${class}  ${message}
+        ${result} =  Run Rspamc  -d  ${user}  --queue-id  ${filename}  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  learn_${class}  ${message}
     ELSE
-        ${result} =  Run Rspamc  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  learn_${class}  ${message}
+        ${result} =  Run Rspamc  --queue-id  ${filename}  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  learn_${class}  ${message}
     END
     Check Rspamc  ${result}
 

@@ -548,8 +548,13 @@ bayes_classify_multiclass(struct rspamd_classifier *ctx,
 			double fisher_result = inv_chi_square(task, max_log_prob, cl.processed_tokens);
 			confidence = 1.0 - fisher_result;
 
+			msg_debug_bayes("fisher_result: %g, max_log_prob: %g, condition check: fisher_result > 0.999 = %s, max_log_prob > -50 = %s",
+							fisher_result, max_log_prob,
+							fisher_result > 0.999 ? "true" : "false",
+							max_log_prob > -50 ? "true" : "false");
+
 			/* Handle case where Fisher method indicates extreme confidence */
-			if (fisher_result >= 1.0 && max_log_prob > -50) {
+			if (fisher_result > 0.999 && max_log_prob > -100) {
 				/* Large magnitude negative log prob means strong evidence */
 				confidence = 0.90;
 				msg_debug_bayes("extreme negative log_prob (%g), setting high confidence", max_log_prob);

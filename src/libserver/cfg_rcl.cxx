@@ -2631,7 +2631,7 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 		rspamd_rcl_add_default_handler(sub,
 									   "min_prob_strength",
 									   rspamd_rcl_parse_struct_double,
-									   G_STRUCT_OFFSET(struct rspamd_classifier_config, min_token_hits),
+									   G_STRUCT_OFFSET(struct rspamd_classifier_config, min_prob_strength),
 									   0,
 									   "Use only tokens with probability in [0.5 - MPS, 0.5 + MPS]");
 		rspamd_rcl_add_default_handler(sub,
