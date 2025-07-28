@@ -333,6 +333,11 @@ bayes_classify_token_multiclass(struct rspamd_classifier *ctx,
 
 		/* Apply multinomial model for each class */
 		for (j = 0; j < cl->num_classes; j++) {
+			/* Skip classes with insufficient learns */
+			if (ctx->cfg->min_learns > 0 && cl->class_learns[j] < ctx->cfg->min_learns) {
+				continue;
+			}
+
 			double class_freq = (double) class_counts[j] / MAX(1.0, (double) cl->class_learns[j]);
 			double class_prob = PROB_COMBINE(class_freq, total_count, w, 1.0 / cl->num_classes);
 
@@ -431,16 +436,26 @@ bayes_classify_multiclass(struct rspamd_classifier *ctx,
 		}
 	}
 
-	/* Check minimum learns requirement */
+	/* Check minimum learns requirement - count viable classes */
+	unsigned int viable_classes = 0;
 	if (ctx->cfg->min_learns > 0) {
 		for (i = 0; i < cl.num_classes; i++) {
-			if (cl.class_learns[i] < ctx->cfg->min_learns) {
-				msg_info_task("not classified as %s. The class needs more "
-							  "training samples. Currently: %uL; minimum %ud required",
+			if (cl.class_learns[i] >= ctx->cfg->min_learns) {
+				viable_classes++;
+			}
+			else {
+				msg_info_task("class %s excluded from classification: %uL learns < %ud minimum",
 							  cl.class_names[i], cl.class_learns[i], ctx->cfg->min_learns);
-				return TRUE;
 			}
 		}
+
+		if (viable_classes == 0) {
+			msg_info_task("no classes have sufficient training samples for classification");
+			return TRUE;
+		}
+
+		msg_info_bayes("multiclass classification: %ud/%ud classes have sufficient learns",
+					   viable_classes, cl.num_classes);
 	}
 
 	/* Count text tokens */
@@ -580,6 +595,10 @@ bayes_classify_multiclass(struct rspamd_classifier *ctx,
 
 	rspamd_task_set_multiclass_result(task, result);
 
+	msg_info_bayes("MULTICLASS_RESULT: winning_class='%s', confidence=%.3f, normalized_prob=%.3f, tokens=%uL",
+				   cl.class_names[winning_class_idx], confidence,
+				   normalized_probs[winning_class_idx], cl.processed_tokens);
+
 	/* Insert symbol for winning class if confidence is significant */
 	if (confidence > 0.05) {
 		char sumbuf[32];
@@ -594,6 +613,8 @@ bayes_classify_multiclass(struct rspamd_classifier *ctx,
 
 			if (st->stcf->class_name &&
 				strcmp(st->stcf->class_name, cl.class_names[winning_class_idx]) == 0) {
+				msg_info_bayes("SYMBOL_INSERT: symbol='%s', final_prob=%.3f, confidence_display='%s'",
+							   st->stcf->symbol, final_prob, sumbuf);
 				rspamd_task_insert_result(task, st->stcf->symbol, final_prob, sumbuf);
 				break;
 			}
@@ -604,6 +625,9 @@ bayes_classify_multiclass(struct rspamd_classifier *ctx,
 						cl.class_names[winning_class_idx],
 						normalized_probs[winning_class_idx],
 						confidence, cl.processed_tokens);
+	}
+	else {
+		msg_info_bayes("SYMBOL_SKIPPED: confidence=%.3f <= 0.05, no symbol inserted", confidence);
 	}
 
 	return TRUE;
@@ -962,6 +986,9 @@ bayes_learn_class(struct rspamd_classifier *ctx,
 	g_assert(ctx != NULL);
 	g_assert(tokens != NULL);
 	g_assert(class_name != NULL);
+
+	msg_info_bayes("LEARN_CLASS: class='%s', unlearn=%s, tokens=%ud",
+				   class_name, unlearn ? "true" : "false", tokens->len);
 
 	incrementing = ctx->cfg->flags & RSPAMD_FLAG_CLASSIFIER_INCREMENTING_BACKEND;
 
