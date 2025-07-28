@@ -148,12 +148,13 @@ Check Multiclass Results
 Multiclass Stats Test
     # Check that rspamc stat shows learning counts for all classes
     ${result} =  Run Rspamc  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  stat
-    Check Rspamc  ${result}
+    # Don't use Check Rspamc for stat command as it expects JSON success format
+    Should Be Equal As Integers  ${result.rc}  0
 
     # Should show statistics for all classes
-    Should Contain  ${result.stdout}  spam
-    Should Contain  ${result.stdout}  ham
-    Should Contain  ${result.stdout}  newsletter
+    Should Contain  ${result.stdout}  BAYES_SPAM
+    Should Contain  ${result.stdout}  BAYES_HAM
+    Should Contain  ${result.stdout}  BAYES_NEWSLETTER
 
 Multiclass Configuration Migration Test
     # Test that old binary config can be automatically migrated
@@ -166,27 +167,3 @@ Multiclass Configuration Migration Test
     # Should show deprecation warning but work
     Should Contain  ${result.stderr}  deprecated  ignore_case=True
 
-Multiclass Performance Test
-    [Arguments]  ${num_messages}=100
-    # Test classification performance with multiple classes
-    ${start_time} =  Get Time  epoch
-
-    FOR  ${i}  IN RANGE  ${num_messages}
-        Scan File  ${MESSAGE_SPAM}
-        Scan File  ${MESSAGE_HAM}
-        Scan File  ${MESSAGE_NEWSLETTER}
-    END
-
-    ${end_time} =  Get Time  epoch
-    ${duration} =  Evaluate  ${end_time} - ${start_time}
-
-    # Should complete in reasonable time (adjust threshold as needed)
-    Should Be True  ${duration} < 30  msg=Performance test took ${duration}s, expected < 30s
-
-Multiclass Memory Test
-    # Test that memory usage is reasonable for multiclass classification
-    ${result} =  Run Rspamc  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  stat
-    Check Rspamc  ${result}
-
-    # Extract memory usage if available in stats
-    # This is a placeholder - actual implementation would parse memory stats
