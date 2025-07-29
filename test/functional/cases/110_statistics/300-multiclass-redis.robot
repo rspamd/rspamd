@@ -2,6 +2,7 @@
 Documentation   Multiclass Bayes Classification Tests with Redis Backend
 Suite Setup     Rspamd Redis Setup
 Suite Teardown  Rspamd Redis Teardown
+Test Setup      Set Test Hash Documentation
 Resource        multiclass_lib.robot
 
 *** Variables ***

@@ -21,9 +21,9 @@ Learn Multiclass
     # Extract filename from message path for queue-id
     ${path}  ${filename} =  Split Path  ${message}
     IF  "${user}"
-        ${result} =  Run Rspamc  -d  ${user}  --queue-id  ${filename}  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  learn_class:${class}  ${message}
+        ${result} =  Run Rspamc  -d  ${user}  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  learn_class:${class}  ${message}
     ELSE
-        ${result} =  Run Rspamc  --queue-id  ${filename}  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  learn_class:${class}  ${message}
+        ${result} =  Run Rspamc  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  learn_class:${class}  ${message}
     END
     Check Rspamc  ${result}
 
@@ -33,9 +33,9 @@ Learn Multiclass Legacy
     # Extract filename from message path for queue-id
     ${path}  ${filename} =  Split Path  ${message}
     IF  "${user}"
-        ${result} =  Run Rspamc  -d  ${user}  --queue-id  ${filename}  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  learn_${class}  ${message}
+        ${result} =  Run Rspamc  -d  ${user}  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  learn_${class}  ${message}
     ELSE
-        ${result} =  Run Rspamc  --queue-id  ${filename}  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  learn_${class}  ${message}
+        ${result} =  Run Rspamc  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  learn_${class}  ${message}
     END
     Check Rspamc  ${result}
 
