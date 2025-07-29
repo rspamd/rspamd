@@ -92,6 +92,7 @@ static const char *pubkey = nullptr;
 static const char *user_agent = "rspamc";
 static const char *files_list = nullptr;
 static const char *queue_id = nullptr;
+static const char *log_tag = nullptr;
 static std::string settings;
 
 std::vector<GPid> children;
@@ -192,6 +193,8 @@ static GOptionEntry entries[] =
 		 "Read one or more newline separated filenames to scan from file", nullptr},
 		{"queue-id", '\0', 0, G_OPTION_ARG_STRING, &queue_id,
 		 "Set Queue-ID header for the request", nullptr},
+		{"log-tag", '\0', 0, G_OPTION_ARG_STRING, &log_tag,
+		 "Set Log-Tag header for the request", nullptr},
 		{"settings", '\0', 0, G_OPTION_ARG_CALLBACK, (void *) &rspamc_settings_callback,
 		 "Set Settings header as JSON/UCL for the request", nullptr},
 		{nullptr, 0, 0, G_OPTION_ARG_NONE, nullptr, nullptr, nullptr}};
@@ -943,6 +946,10 @@ add_options(GQueue *opts)
 
 	if (queue_id != nullptr) {
 		add_client_header(opts, "Queue-Id", queue_id);
+	}
+
+	if (log_tag != nullptr) {
+		add_client_header(opts, "Log-Tag", log_tag);
 	}
 
 	if (!settings.empty()) {
