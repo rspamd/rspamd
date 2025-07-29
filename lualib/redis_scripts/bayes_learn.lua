@@ -36,11 +36,29 @@ elseif class_label == 'H' then
 end
 
 redis.call('SADD', symbol .. '_keys', prefix)
-redis.call('HSET', prefix, 'version', '2')                         -- new schema
-redis.call('HINCRBY', prefix, learned_key, is_unlearn and -1 or 1) -- increase or decrease learned count
+redis.call('HSET', prefix, 'version', '2') -- new schema
+
+-- Update learned count, but prevent it from going negative
+if is_unlearn then
+  local current_count = tonumber(redis.call('HGET', prefix, learned_key)) or 0
+  if current_count > 0 then
+    redis.call('HINCRBY', prefix, learned_key, -1)
+  end
+else
+  redis.call('HINCRBY', prefix, learned_key, 1)
+end
 
 for i, token in ipairs(input_tokens) do
-  redis.call('HINCRBY', token, hash_key, is_unlearn and -1 or 1)
+  -- Update token count, but prevent it from going negative
+  if is_unlearn then
+    local current_token_count = tonumber(redis.call('HGET', token, hash_key)) or 0
+    if current_token_count > 0 then
+      redis.call('HINCRBY', token, hash_key, -1)
+    end
+  else
+    redis.call('HINCRBY', token, hash_key, 1)
+  end
+
   if text_tokens then
     local tok1 = text_tokens[i * 2 - 1]
     local tok2 = text_tokens[i * 2]
@@ -52,7 +70,14 @@ for i, token in ipairs(input_tokens) do
         redis.call('HSET', token, 'tokens', tok1)
       end
 
-      redis.call('ZINCRBY', prefix .. '_z', is_unlearn and -1 or 1, token)
+      if is_unlearn then
+        local current_z_score = tonumber(redis.call('ZSCORE', prefix .. '_z', token)) or 0
+        if current_z_score > 0 then
+          redis.call('ZINCRBY', prefix .. '_z', -1, token)
+        end
+      else
+        redis.call('ZINCRBY', prefix .. '_z', 1, token)
+      end
     end
   end
 end

@@ -264,6 +264,11 @@ gsize rspamd_redis_expand_object(const char *pattern,
 		if (rcpt) {
 			rspamd_mempool_set_variable(task->task_pool, "stat_user",
 										(gpointer) rcpt, nullptr);
+			msg_debug_bayes("redis expansion: found recipient '%s'", rcpt);
+		}
+		else {
+			msg_debug_bayes("redis expansion: no recipient found (deliver_to=%s)",
+							task->deliver_to ? task->deliver_to : "null");
 		}
 	}
 
@@ -477,6 +482,7 @@ rspamd_redis_parse_classifier_opts(struct redis_stat_ctx *backend,
 	users_enabled = ucl_object_lookup_any(classifier_obj, "per_user",
 										  "users_enabled", nullptr);
 
+	msg_debug_bayes_cfg("per-user lookup: users_enabled=%p", users_enabled);
 	if (users_enabled != nullptr) {
 		if (ucl_object_type(users_enabled) == UCL_BOOLEAN) {
 			backend->enable_users = ucl_object_toboolean(users_enabled);
@@ -514,9 +520,16 @@ rspamd_redis_parse_classifier_opts(struct redis_stat_ctx *backend,
 		/* Default non-users statistics */
 		if (backend->enable_users || backend->cbref_user != -1) {
 			backend->redis_object = REDIS_DEFAULT_USERS_OBJECT;
+			msg_debug_bayes_cfg("using per-user Redis pattern: %s (enable_users=%s, cbref_user=%d)",
+								backend->redis_object, backend->enable_users ? "true" : "false",
+								backend->cbref_user);
 		}
 		else {
 			backend->redis_object = REDIS_DEFAULT_OBJECT;
+			msg_debug_bayes_cfg("using default Redis pattern: %s (enable_users=%s, cbref_user=%d)",
+								backend->redis_object,
+								backend->enable_users ? "true" : "false",
+								backend->cbref_user);
 		}
 	}
 	else {
@@ -634,6 +647,13 @@ rspamd_redis_runtime(struct rspamd_task *task,
 					 learn ? "learning" : "classifying",
 					 stcf->symbol);
 		return nullptr;
+	}
+	else {
+		msg_debug_bayes("redis object expanded: pattern='%s' -> expanded='%s' (learn=%s, symbol=%s)",
+						ctx->redis_object ? ctx->redis_object : "default",
+						object_expanded,
+						learn ? "true" : "false",
+						stcf->symbol);
 	}
 
 	const char *class_label = get_class_label(stcf);

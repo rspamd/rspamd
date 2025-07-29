@@ -523,9 +523,15 @@ bayes_classify_multiclass(struct rspamd_classifier *ctx,
 	/* Normalize probabilities using softmax */
 	normalized_probs = g_alloca(cl.num_classes * sizeof(double));
 
-	/* Find maximum for numerical stability */
+	/* Find maximum for numerical stability - only consider classes with sufficient training */
 	for (i = 0; i < cl.num_classes; i++) {
 		msg_debug_bayes("class %s, log_prob: %.2f", cl.class_names[i], cl.class_log_probs[i]);
+		/* Only consider classes that have sufficient training data */
+		if (ctx->cfg->min_learns > 0 && cl.class_learns[i] < ctx->cfg->min_learns) {
+			msg_debug_bayes("skipping class %s in winner selection: %uL learns < %ud minimum",
+							cl.class_names[i], cl.class_learns[i], ctx->cfg->min_learns);
+			continue;
+		}
 		if (cl.class_log_probs[i] > max_log_prob) {
 			max_log_prob = cl.class_log_probs[i];
 			winning_class_idx = i;

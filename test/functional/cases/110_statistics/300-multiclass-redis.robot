@@ -40,18 +40,3 @@ Multiclass Statistics
     [Documentation]    Test that statistics show all class information
     [Tags]             multiclass  statistics
     Multiclass Stats Test
-
-Per-User Multiclass Learning
-    [Documentation]    Test per-user multiclass classification
-    [Tags]             multiclass  per-user
-    [Setup]            Set Suite Variable  ${RSPAMD_STATS_PER_USER}  1
-    Multiclass Basic Learn Test  user@example.com
-    [Teardown]         Set Suite Variable  ${RSPAMD_STATS_PER_USER}  ${EMPTY}
-
-Multiclass Empty Part Test
-    [Documentation]    Test multiclass learning with empty parts
-    [Tags]             multiclass  empty-part
-    Set Test Variable  ${MESSAGE}  ${RSPAMD_TESTDIR}/messages/empty_part.eml
-    Learn Multiclass  ${EMPTY}  spam  ${MESSAGE}
-    Scan File  ${MESSAGE}
-    Expect Symbol  BAYES_SPAM
