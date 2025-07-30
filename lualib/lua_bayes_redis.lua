@@ -233,26 +233,16 @@ end
 
 local function gen_cache_learn_functor(redis_params, learn_script_id, conf)
   local packed_conf = ucl.to_format(conf, 'msgpack')
-  return function(task, cache_id, class_name)
+  return function(task, cache_id, class_name, class_id)
     local function learn_redis_cb(err, data)
       lua_util.debugm(N, task, 'learn_cache redis cb: %s, %s', err, data)
     end
 
-    -- Handle backward compatibility for boolean values
-    local cache_class_name = class_name
-    if type(class_name) == "boolean" then
-      cache_class_name = class_name and "spam" or "ham"
-    elseif class_name == true or class_name == "true" then
-      cache_class_name = "spam"
-    elseif class_name == false or class_name == "false" then
-      cache_class_name = "ham"
-    end
-
-    lua_util.debugm(N, task, 'try to learn cache: %s as %s', cache_id, cache_class_name)
+    lua_util.debugm(N, task, 'try to learn cache: %s as %s (id=%s)', cache_id, class_name, class_id)
     lua_redis.exec_redis_script(learn_script_id,
         { task = task, is_write = true, key = cache_id },
         learn_redis_cb,
-        { cache_id, cache_class_name, packed_conf })
+        { cache_id, tostring(class_id), packed_conf })
   end
 end
 

@@ -1,28 +1,15 @@
 -- Lua script to perform cache checking for bayes classification (multi-class)
 -- This script accepts the following parameters:
 -- key1 - cache id
--- key2 - class name (e.g. "spam", "ham", "transactional")
+-- key2 - class_id (numeric hash of class name, computed by C side)
 -- key3 - configuration table in message pack
 
 local cache_id = KEYS[1]
-local class_name = KEYS[2]
+local class_id = KEYS[2]
 local conf = cmsgpack.unpack(KEYS[3])
 
--- Convert class names to numeric cache values for consistency
-local cache_value
-if class_name == "1" or class_name == "spam" or class_name == "S" then
-  cache_value = "1" -- spam
-elseif class_name == "0" or class_name == "ham" or class_name == "H" then
-  cache_value = "0" -- ham
-else
-  -- For other classes, use a simple hash to get a consistent numeric value
-  -- This ensures cache check can return a number while preserving class info
-  local hash = 0
-  for i = 1, #class_name do
-    hash = hash + string.byte(class_name, i)
-  end
-  cache_value = tostring(2 + (hash % 1000)) -- Start from 2, avoid 0/1
-end
+-- Use class_id directly as cache value
+local cache_value = tostring(class_id)
 cache_id = string.sub(cache_id, 1, conf.cache_elt_len)
 
 -- Try each prefix that is in Redis (as some other instance might have set it)
