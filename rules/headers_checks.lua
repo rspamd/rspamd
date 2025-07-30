@@ -1186,6 +1186,16 @@ rspamd_config.INVALID_RCPT_8BIT = {
   group = 'headers'
 }
 
+if rspamd_config:is_mime_utf8() then
+  -- Disable some of the rules preserving the underlying logic
+  rspamd_config.INVALID_FROM_8BIT.condition = function()
+    return false
+  end
+  rspamd_config.INVALID_RCPT_8BIT.condition = function()
+    return false
+  end
+end
+
 rspamd_config.XM_CASE = {
   callback = function(task)
     return task:has_header('X-mailer', true)
