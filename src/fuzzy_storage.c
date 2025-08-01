@@ -1386,6 +1386,20 @@ rspamd_fuzzy_check_callback(struct rspamd_fuzzy_reply *result, void *ud)
 		}
 	}
 
+	/* Check if the returned hash from fuzzy matching should be skipped */
+	if (session->ctx->skip_hashes && result->v1.value > 0) {
+		char hexbuf[sizeof(result->digest) * 2 + 1];
+		rspamd_encode_hex_buf(result->digest, sizeof(result->digest),
+							  hexbuf, sizeof(hexbuf) - 1);
+		hexbuf[sizeof(hexbuf) - 1] = '\0';
+
+		if (rspamd_match_hash_map(session->ctx->skip_hashes,
+								  hexbuf, sizeof(hexbuf) - 1)) {
+			result->v1.value = 401;
+			result->v1.prob = 0.0f;
+		}
+	}
+
 	if (!isnan(session->ctx->delay) &&
 		rspamd_match_radix_map_addr(session->ctx->delay_whitelist,
 									session->addr) == NULL) {
