@@ -85,8 +85,7 @@ typedef struct {
 
 #define RSPAMD_STATFILE_VERSION \
 	{                           \
-		'1', '2'                \
-	}
+		'1', '2'}
 #define BACKUP_SUFFIX ".old"
 
 static void rspamd_mmaped_file_set_block_common(rspamd_mempool_t *pool,
@@ -958,12 +957,7 @@ rspamd_mmaped_file_process_tokens(struct rspamd_task *task, GPtrArray *tokens,
 		tok->values[id] = rspamd_mmaped_file_get_block(mf, h1, h2);
 	}
 
-	if (mf->cf->is_spam) {
-		task->flags |= RSPAMD_TASK_FLAG_HAS_SPAM_TOKENS;
-	}
-	else {
-		task->flags |= RSPAMD_TASK_FLAG_HAS_HAM_TOKENS;
-	}
+	/* No longer need to set flags - multi-class handles missing data naturally */
 
 	return TRUE;
 }

@@ -419,10 +419,23 @@ Run Nginx
   ${nginx_log} =  Get File  ${RSPAMD_TMPDIR}/nginx.log
   Log  ${nginx_log}
 
+Set Test Hash Documentation
+  ${log_tag} =  Evaluate  __import__('hashlib').md5('${TEST NAME}'.encode()).hexdigest()[:8]
+  Log    TEST CONTEXT: [${log_tag}] ${TEST NAME}    console=True
+
 Run Rspamc
   [Arguments]  @{args}
-  ${result} =  Run Process  ${RSPAMC}  -t  60  --header  Queue-ID\=${TEST NAME}
-  ...  @{args}  env:LD_LIBRARY_PATH=${RSPAMD_TESTDIR}/../../contrib/aho-corasick
+  ${log_tag} =  Evaluate  __import__('hashlib').md5('${TEST NAME}'.encode()).hexdigest()[:8]
+  # Check if --queue-id is already provided in the arguments
+  ${args_str} =  Evaluate  ' '.join(@{args})
+  ${has_queue_id} =  Evaluate  '--queue-id' in '${args_str}'
+  IF  ${has_queue_id}
+    ${result} =  Run Process  ${RSPAMC}  -t  60  --log-tag  ${log_tag}
+    ...  @{args}  env:LD_LIBRARY_PATH=${RSPAMD_TESTDIR}/../../contrib/aho-corasick
+  ELSE
+    ${result} =  Run Process  ${RSPAMC}  -t  60  --queue-id  ${TEST NAME}  --log-tag  ${log_tag}
+    ...  @{args}  env:LD_LIBRARY_PATH=${RSPAMD_TESTDIR}/../../contrib/aho-corasick
+  END
   Log  ${result.stdout}
   [Return]  ${result}
 

@@ -393,7 +393,6 @@ rspamd_cdb_process_tokens(struct rspamd_task *task,
 						  gpointer runtime)
 {
 	auto *cdbp = CDB_FROM_RAW(runtime);
-	bool seen_values = false;
 
 	for (auto i = 0u; i < tokens->len; i++) {
 		rspamd_token_t *tok;
@@ -403,21 +402,13 @@ rspamd_cdb_process_tokens(struct rspamd_task *task,
 
 		if (res) {
 			tok->values[id] = res.value();
-			seen_values = true;
 		}
 		else {
 			tok->values[id] = 0;
 		}
 	}
 
-	if (seen_values) {
-		if (cdbp->is_spam()) {
-			task->flags |= RSPAMD_TASK_FLAG_HAS_SPAM_TOKENS;
-		}
-		else {
-			task->flags |= RSPAMD_TASK_FLAG_HAS_HAM_TOKENS;
-		}
-	}
+	/* No longer need to set flags - multi-class handles missing data naturally */
 
 	return true;
 }
