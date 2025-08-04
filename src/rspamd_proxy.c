@@ -1335,6 +1335,7 @@ proxy_request_compress(struct rspamd_http_message *msg)
 		ZSTD_freeCCtx(zctx);
 		rspamd_http_message_set_body_from_fstring_steal(msg, body);
 		rspamd_http_message_add_header(msg, COMPRESSION_HEADER, "zstd");
+		rspamd_http_message_add_header(msg, CONTENT_ENCODING_HEADER, "zstd");
 	}
 }
 
@@ -2144,6 +2145,12 @@ proxy_backend_master_finish_handler(struct rspamd_http_connection *conn,
 			passed_ct = rspamd_mempool_ftokdup(session->pool, orig_ct);
 			/* Remove original */
 			rspamd_http_message_remove_header(msg, "Content-Type");
+		}
+
+		/* Check if client supports compression and compress response if needed */
+		const rspamd_ftok_t *accept_encoding = rspamd_http_message_find_header(session->client_message, "Accept-Encoding");
+		if (accept_encoding && rspamd_substring_search_caseless(accept_encoding->begin, accept_encoding->len, "zstd", 4) != -1) {
+			proxy_request_compress(msg);
 		}
 
 		rspamd_http_connection_write_message(session->client_conn,
