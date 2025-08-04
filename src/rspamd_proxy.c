@@ -1395,6 +1395,7 @@ proxy_request_decompress(struct rspamd_http_message *msg)
 		ZSTD_freeDStream(zstream);
 		rspamd_http_message_set_body_from_fstring_steal(msg, body);
 		rspamd_http_message_remove_header(msg, COMPRESSION_HEADER);
+		rspamd_http_message_remove_header(msg, CONTENT_ENCODING_HEADER);
 	}
 }
 
