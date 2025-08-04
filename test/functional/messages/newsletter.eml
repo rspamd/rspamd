@@ -1,0 +1,50 @@
+From: "Marketing Team" <newsletter@example.com>
+To: user@example.org
+Subject: 🎉 Monthly Newsletter - Exclusive Deals & Product Updates!
+Date: Thu, 21 Jul 2023 10:00:00 +0000
+Message-ID: <newsletter-123@example.com>
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+List-Unsubscribe: <https://example.com/unsubscribe?id=123>
+Precedence: bulk
+X-Mailer: MailChimp/Pro 12.345
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Monthly Newsletter</title>
+</head>
+<body>
+    <h1>🎉 Exclusive Monthly Offers!</h1>
+    
+    <p>Dear Valued Subscriber,</p>
+    
+    <p>This month we're excited to bring you our <strong>BIGGEST SALE</strong> of the year!</p>
+    
+    <h2>🔥 Hot Deals This Month:</h2>
+    <ul>
+        <li>50% OFF all premium products</li>
+        <li>FREE shipping on orders over $50</li>
+        <li>Buy 2 Get 1 FREE on selected items</li>
+    </ul>
+    
+    <p><a href="https://example.com/shop?utm_source=newsletter&utm_campaign=monthly">SHOP NOW</a></p>
+    
+    <h2>📱 New Product Launch</h2>
+    <p>Check out our revolutionary new gadget that everyone is talking about!</p>
+    
+    <h2>🎁 Refer a Friend</h2>
+    <p>Share this newsletter and both you and your friend get $10 credit!</p>
+    
+    <hr>
+    
+    <p><small>
+    You're receiving this because you subscribed to our newsletter.<br>
+    <a href="https://example.com/unsubscribe?id=123">Unsubscribe here</a> | 
+    <a href="https://example.com/preferences">Update preferences</a><br>
+    Marketing Team, Example Corp<br>
+    123 Business St, City, State 12345
+    </small></p>
+</body>
+</html>

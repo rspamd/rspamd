@@ -139,7 +139,10 @@ struct rspamd_statfile_config {
 	char *symbol;                          /**< symbol of statfile									*/
 	char *label;                           /**< label of this statfile								*/
 	ucl_object_t *opts;                    /**< other options										*/
-	gboolean is_spam;                      /**< spam flag											*/
+	char *class_name;                      /**< class name for multi-class classification			*/
+	unsigned int class_index;              /**< class index for O(1) lookup during classification	*/
+	gboolean is_spam;                      /**< DEPRECATED: spam flag - use class_name instead		*/
+	gboolean is_spam_converted;            /**< TRUE if class_name was converted from is_spam flag	*/
 	struct rspamd_classifier_config *clcf; /**< parent pointer of classifier configuration			*/
 	gpointer data;                         /**< opaque data 										*/
 };
@@ -182,6 +185,8 @@ struct rspamd_classifier_config {
 	double min_prob_strength;                  /**< use only tokens with probability in [0.5 - MPS, 0.5 + MPS] */
 	unsigned int min_learns;                   /**< minimum number of learns for each statfile			*/
 	unsigned int flags;
+	GHashTable *class_labels; /**< class_name -> backend_symbol mapping for multi-class */
+	GPtrArray *class_names;   /**< ordered list of class names						*/
 };
 
 struct rspamd_worker_bind_conf {
@@ -621,12 +626,25 @@ void rspamd_config_insert_classify_symbols(struct rspamd_config *cfg);
  */
 gboolean rspamd_config_check_statfiles(struct rspamd_classifier_config *cf);
 
-/*
- * Find classifier config by name
+/**
+ * Multi-class configuration helpers
+ */
+gboolean rspamd_config_parse_class_labels(const ucl_object_t *obj,
+										  GHashTable **class_labels);
+
+gboolean rspamd_config_migrate_binary_config(struct rspamd_statfile_config *stcf);
+
+gboolean rspamd_config_validate_class_config(struct rspamd_classifier_config *ccf,
+											 GError **err);
+
+const char *rspamd_config_get_class_label(struct rspamd_classifier_config *ccf,
+										  const char *class_name);
+
+/**
+ * Find classifier by name
  */
 struct rspamd_classifier_config *rspamd_config_find_classifier(
-	struct rspamd_config *cfg,
-	const char *name);
+	struct rspamd_config *cfg, const char *name);
 
 void rspamd_ucl_add_conf_macros(struct ucl_parser *parser,
 								struct rspamd_config *cfg);
