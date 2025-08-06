@@ -2694,8 +2694,28 @@ proxy_client_finish_handler(struct rspamd_http_connection *conn,
 		session->shmem_ref = rspamd_http_message_shmem_ref(session->client_message);
 
 		/* Check if client supports compression */
+		const rspamd_ftok_t *compression_hdr = rspamd_http_message_find_header(session->client_message, COMPRESSION_HEADER);
 		const rspamd_ftok_t *accept_encoding = rspamd_http_message_find_header(session->client_message, "Accept-Encoding");
-		if (accept_encoding && rspamd_substring_search_caseless(accept_encoding->begin, accept_encoding->len, "zstd", 4) != -1) {
+		gboolean client_supports_compression = FALSE;
+
+		/* Rule 1: If request had Compression: zstd header, client supports compression */
+		if (compression_hdr) {
+			rspamd_ftok_t zstd_tok;
+			zstd_tok.begin = "zstd";
+			zstd_tok.len = 4;
+
+			if (rspamd_ftok_casecmp(compression_hdr, &zstd_tok) == 0) {
+				client_supports_compression = TRUE;
+			}
+		}
+
+		/* Rule 2: If client has Accept-Encoding: zstd header, client supports compression */
+		if (!client_supports_compression && accept_encoding &&
+			rspamd_substring_search_caseless(accept_encoding->begin, accept_encoding->len, "zstd", 4) != -1) {
+			client_supports_compression = TRUE;
+		}
+
+		if (client_supports_compression) {
 			session->flags |= RSPAMD_PROXY_SESSION_FLAG_CLIENT_SUPPORTS_COMPRESSION;
 		}
 		else {
