@@ -211,6 +211,11 @@ enum rspamd_proxy_legacy_support {
 	LEGACY_SUPPORT_SPAMC
 };
 
+enum rspamd_proxy_session_flags {
+	RSPAMD_PROXY_SESSION_FLAG_USE_KEEPALIVE = 1 << 0,
+	RSPAMD_PROXY_SESSION_FLAG_CLIENT_SUPPORTS_COMPRESSION = 1 << 1,
+};
+
 struct rspamd_proxy_session {
 	struct rspamd_worker *worker;
 	rspamd_mempool_t *pool;
@@ -230,7 +235,7 @@ struct rspamd_proxy_session {
 	enum rspamd_proxy_legacy_support legacy_support;
 	int retries;
 	ref_entry_t ref;
-	gboolean use_keepalive; /* Whether to use keepalive for this session */
+	enum rspamd_proxy_session_flags flags;
 };
 
 static gboolean proxy_send_master_message(struct rspamd_proxy_session *session);
@@ -1071,7 +1076,7 @@ proxy_backend_close_connection(struct rspamd_proxy_backend_connection *conn)
 			rspamd_http_connection_reset(conn->backend_conn);
 			rspamd_http_connection_unref(conn->backend_conn);
 
-			if (!(conn->s && conn->s->use_keepalive)) {
+			if (!(conn->s && (conn->s->flags & RSPAMD_PROXY_SESSION_FLAG_USE_KEEPALIVE))) {
 				/* Only close socket if we're not using keepalive */
 				close(conn->backend_sock);
 			}
@@ -1335,6 +1340,7 @@ proxy_request_compress(struct rspamd_http_message *msg)
 		ZSTD_freeCCtx(zctx);
 		rspamd_http_message_set_body_from_fstring_steal(msg, body);
 		rspamd_http_message_add_header(msg, COMPRESSION_HEADER, "zstd");
+		rspamd_http_message_add_header(msg, CONTENT_ENCODING_HEADER, "zstd");
 	}
 }
 
@@ -1395,6 +1401,7 @@ proxy_request_decompress(struct rspamd_http_message *msg)
 		ZSTD_freeDStream(zstream);
 		rspamd_http_message_set_body_from_fstring_steal(msg, body);
 		rspamd_http_message_remove_header(msg, COMPRESSION_HEADER);
+		rspamd_http_message_remove_header(msg, CONTENT_ENCODING_HEADER);
 	}
 }
 
@@ -1416,6 +1423,7 @@ proxy_session_refresh(struct rspamd_proxy_session *session)
 	nsession->client_sock = session->client_sock;
 	session->client_sock = -1;
 	nsession->mirror_conns = g_ptr_array_sized_new(nsession->ctx->mirrors->len);
+	nsession->flags = session->flags;
 
 	REF_INIT_RETAIN(nsession, proxy_session_dtor);
 
@@ -1583,7 +1591,7 @@ proxy_backend_mirror_finish_handler(struct rspamd_http_connection *conn,
 		}
 	}
 
-	if (is_keepalive && session->use_keepalive &&
+	if (is_keepalive && (session->flags & RSPAMD_PROXY_SESSION_FLAG_USE_KEEPALIVE) &&
 		bk_conn->up && session->ctx->http_ctx) {
 		/* Store connection in keepalive pool */
 		const char *up_name = rspamd_upstream_name(bk_conn->up);
@@ -2091,7 +2099,7 @@ proxy_backend_master_finish_handler(struct rspamd_http_connection *conn,
 	rspamd_upstream_ok(bk_conn->up);
 
 	/* Handle keepalive for master connection */
-	if (is_keepalive && session->use_keepalive &&
+	if (is_keepalive && (session->flags & RSPAMD_PROXY_SESSION_FLAG_USE_KEEPALIVE) &&
 		bk_conn->up && session->ctx->http_ctx) {
 		/* Store connection in keepalive pool */
 		const char *up_name = rspamd_upstream_name(bk_conn->up);
@@ -2121,7 +2129,7 @@ proxy_backend_master_finish_handler(struct rspamd_http_connection *conn,
 		}
 
 		/* Push to keepalive if needed */
-		if (is_keepalive && session->use_keepalive &&
+		if (is_keepalive && (session->flags & RSPAMD_PROXY_SESSION_FLAG_USE_KEEPALIVE) &&
 			bk_conn->up && session->ctx->http_ctx) {
 			const char *up_name = rspamd_upstream_name(bk_conn->up);
 			if (up_name) {
@@ -2145,12 +2153,22 @@ proxy_backend_master_finish_handler(struct rspamd_http_connection *conn,
 			rspamd_http_message_remove_header(msg, "Content-Type");
 		}
 
+		/* Clear any compression headers from backend response */
+		rspamd_http_message_remove_header(msg, COMPRESSION_HEADER);
+		rspamd_http_message_remove_header(msg, CONTENT_ENCODING_HEADER);
+
+		/* Compress response only if client supports compression and it's not a milter session */
+		if (!session->client_milter_conn &&
+			(session->flags & RSPAMD_PROXY_SESSION_FLAG_CLIENT_SUPPORTS_COMPRESSION)) {
+			proxy_request_compress(msg);
+		}
+
 		rspamd_http_connection_write_message(session->client_conn,
 											 msg, NULL, passed_ct, session,
 											 bk_conn->timeout);
 
 		/* Push to keepalive if needed */
-		if (is_keepalive && session->use_keepalive &&
+		if (is_keepalive && (session->flags & RSPAMD_PROXY_SESSION_FLAG_USE_KEEPALIVE) &&
 			bk_conn->up && session->ctx->http_ctx) {
 			const char *up_name = rspamd_upstream_name(bk_conn->up);
 			if (up_name) {
@@ -2421,7 +2439,12 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 	rspamd_http_message_remove_header(session->client_message, "Connection");
 
 	/* Set keepalive flag based on backend configuration */
-	session->use_keepalive = backend ? backend->keepalive : FALSE;
+	if (backend && backend->keepalive) {
+		session->flags |= RSPAMD_PROXY_SESSION_FLAG_USE_KEEPALIVE;
+	}
+	else {
+		session->flags &= ~RSPAMD_PROXY_SESSION_FLAG_USE_KEEPALIVE;
+	}
 
 	if (backend == NULL) {
 		/* No backend */
@@ -2669,6 +2692,35 @@ proxy_client_finish_handler(struct rspamd_http_connection *conn,
 		session->client_message = rspamd_http_connection_steal_msg(
 			session->client_conn);
 		session->shmem_ref = rspamd_http_message_shmem_ref(session->client_message);
+
+		/* Check if client supports compression */
+		const rspamd_ftok_t *compression_hdr = rspamd_http_message_find_header(session->client_message, COMPRESSION_HEADER);
+		const rspamd_ftok_t *accept_encoding = rspamd_http_message_find_header(session->client_message, "Accept-Encoding");
+		gboolean client_supports_compression = FALSE;
+
+		/* Rule 1: If request had Compression: zstd header, client supports compression */
+		if (compression_hdr) {
+			rspamd_ftok_t zstd_tok;
+			zstd_tok.begin = "zstd";
+			zstd_tok.len = 4;
+
+			if (rspamd_ftok_casecmp(compression_hdr, &zstd_tok) == 0) {
+				client_supports_compression = TRUE;
+			}
+		}
+
+		/* Rule 2: If client has Accept-Encoding: zstd header, client supports compression */
+		if (!client_supports_compression && accept_encoding &&
+			rspamd_substring_search_caseless(accept_encoding->begin, accept_encoding->len, "zstd", 4) != -1) {
+			client_supports_compression = TRUE;
+		}
+
+		if (client_supports_compression) {
+			session->flags |= RSPAMD_PROXY_SESSION_FLAG_CLIENT_SUPPORTS_COMPRESSION;
+		}
+		else {
+			session->flags &= ~RSPAMD_PROXY_SESSION_FLAG_CLIENT_SUPPORTS_COMPRESSION;
+		}
 		rspamd_http_message_remove_header(msg, "Content-Length");
 		rspamd_http_message_remove_header(msg, "Transfer-Encoding");
 		rspamd_http_message_remove_header(msg, "Keep-Alive");
@@ -2730,6 +2782,8 @@ proxy_milter_finish_handler(int fd,
 		session->master_conn->s = session;
 		session->master_conn->name = "master";
 		session->client_message = msg;
+
+		/* Milter protocol doesn't support compression, so no need to set compression flag */
 
 		proxy_open_mirror_connections(session);
 		proxy_send_master_message(session);

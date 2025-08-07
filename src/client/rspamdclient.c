@@ -192,7 +192,8 @@ rspamd_client_finish_handler(struct rspamd_http_connection *conn,
 					if (zout.pos == zout.size) {
 						/* We need to extend output buffer */
 						zout.size = zout.size * 2;
-						zout.dst = g_realloc(zout.dst, zout.size);
+						out = g_realloc(zout.dst, zout.size);
+						zout.dst = out;
 					}
 				}
 

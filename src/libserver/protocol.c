@@ -1668,8 +1668,21 @@ void rspamd_protocol_http_reply(struct rspamd_http_message *msg,
 		}
 	}
 
-	if ((task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_COMPRESSED) &&
-		rspamd_libs_reset_compression(task->cfg->libs_ctx)) {
+	/* Check if we should compress the response */
+	gboolean should_compress = FALSE;
+
+	/* Rule 1: If request had compression, preserve it (existing behavior) */
+	if (task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_COMPRESSED) {
+		should_compress = TRUE;
+	}
+
+	/* Rule 2: If client supports zstd compression, honor it (takes precedence) */
+	const rspamd_ftok_t *accept_encoding = rspamd_task_get_request_header(task, "Accept-Encoding");
+	if (accept_encoding && rspamd_substring_search_caseless(accept_encoding->begin, accept_encoding->len, "zstd", 4) != -1) {
+		should_compress = TRUE;
+	}
+
+	if (should_compress && rspamd_libs_reset_compression(task->cfg->libs_ctx)) {
 		/* We can compress output */
 		ZSTD_inBuffer zin;
 		ZSTD_outBuffer zout;
