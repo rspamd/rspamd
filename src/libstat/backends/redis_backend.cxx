@@ -1275,12 +1275,27 @@ rspamd_redis_process_tokens(struct rspamd_task *task,
 		}
 	}
 	else {
-		/* Binary classification: send both spam and ham labels for optimization */
-		lua_createtable(L, 2, 0);
-		lua_pushstring(L, "H"); /* ham */
-		lua_rawseti(L, -2, 1);
-		lua_pushstring(L, "S"); /* spam */
-		lua_rawseti(L, -2, 2);
+		/* Binary classification: send labels in statfiles order to match parsing order */
+		if (rt->stcf->clcf && rt->stcf->clcf->statfiles) {
+			lua_createtable(L, 0, 0);
+			GList *cur = rt->stcf->clcf->statfiles;
+			int lbl_idx = 1;
+
+			while (cur) {
+				auto *sf = (struct rspamd_statfile_config *) cur->data;
+				lua_pushstring(L, get_class_label(sf));
+				lua_rawseti(L, -2, lbl_idx++);
+				cur = g_list_next(cur);
+			}
+		}
+		else {
+			/* Fallback to the legacy order if statfiles are not available */
+			lua_createtable(L, 2, 0);
+			lua_pushstring(L, "H"); /* ham */
+			lua_rawseti(L, -2, 1);
+			lua_pushstring(L, "S"); /* spam */
+			lua_rawseti(L, -2, 2);
+		}
 	}
 
 	lua_new_text(L, tokens_buf, tokens_len, false);
