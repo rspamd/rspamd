@@ -22,6 +22,7 @@
 #include "unix-std.h"
 #include "mempool_vars_internal.h"
 
+#include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
 #include <openssl/engine.h>
