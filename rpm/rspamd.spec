@@ -145,7 +145,7 @@ rm -f %{_builddir}/luajit-build/lib/*.so || true
         -DHYPERSCAN_ROOT_DIR=/vectorscan \
 %endif
 %ifarch x86_64 amd64
-%if 0%{?el7}
+%if 0%{?el7} || 0%{?el10}
         -DHYPERSCAN_ROOT_DIR=/vectorscan \
 %endif
 %endif
