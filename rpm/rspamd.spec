@@ -28,6 +28,9 @@ BuildRequires:    gcc-toolset-10-gcc-c++
 BuildRequires:    gcc-toolset-12-gcc-c++
 %endif
 %endif
+%if 0%{?el10}
+BuildRequires:    clang
+%endif
 BuildRequires:    file-devel
 BuildRequires:    glib2-devel
 BuildRequires:    lapack-devel
@@ -121,6 +124,11 @@ rm -f %{_builddir}/luajit-build/lib/*.so || true
 %if 0%{?el8}
         -DLINKER_NAME=ld.bfd \
 %endif
+%if 0%{?el10}
+        -DCMAKE_C_COMPILER=clang \
+        -DCMAKE_CXX_COMPILER=clang++ \
+        -DLINKER_NAME=lld \
+%endif
         -DCMAKE_INSTALL_PREFIX=%{_prefix} \
         -DCONFDIR=%{_sysconfdir}/rspamd \
         -DMANDIR=%{_mandir} \
@@ -145,7 +153,7 @@ rm -f %{_builddir}/luajit-build/lib/*.so || true
         -DHYPERSCAN_ROOT_DIR=/vectorscan \
 %endif
 %ifarch x86_64 amd64
-%if 0%{?el7}
+%if 0%{?el7} || 0%{?el10}
         -DHYPERSCAN_ROOT_DIR=/vectorscan \
 %endif
 %endif
