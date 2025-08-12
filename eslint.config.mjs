@@ -84,4 +84,11 @@ export default [
             "sort-keys": "error",
         },
     },
+    {
+        // Playwright E2E tests
+        files: ["test/playwright/tests/*.mjs"],
+        rules: {
+            "no-await-in-loop": "off", // Playwright operations in loops are often sequential and not independent
+        },
+    },
 ];
