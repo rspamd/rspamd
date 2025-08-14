@@ -717,7 +717,6 @@ local function openai_check(task, content, sel_part)
   end
     
   local body_base = {
-    model = settings.model,
     messages = {
       {
         role = 'system',
