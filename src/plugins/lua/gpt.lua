@@ -107,7 +107,7 @@ local categories_map = {}
 local settings = {
   type = 'openai',
   api_key = nil,
-  model = 'gpt-4o-mini',
+  model = 'gpt-5-mini',
   max_tokens = 1000,
   temperature = 0.0,
   timeout = 10,
@@ -683,9 +683,27 @@ local function openai_check(task, content, sel_part)
 
   local from_content, url_content = get_meta_llm_content(task)
 
+  -- Decide which token length field to use for the given model
+  local function get_max_tokens_field(model)
+    if not model then
+      return 'max_tokens' -- default
+    end
+
+    -- Newer models that require max_completion_tokens
+    if model:match('^gpt%-5') or
+       model:match('^o%d') or
+       model:match('^o%d%-mini') or
+       model:match('^gpt%-4%.1') or
+       model:match('reasoning') then
+      return 'max_completion_tokens'
+    end
+
+    -- Default for older/legacy models
+    return 'max_tokens'
+  end
+
   local body = {
     model = settings.model,
-    max_tokens = settings.max_tokens,
     temperature = settings.temperature,
     messages = {
       {
@@ -711,6 +729,10 @@ local function openai_check(task, content, sel_part)
     }
   }
 
+  -- Set the correct token limit field
+  local token_field = get_max_tokens_field(settings.model)
+  body[token_field] = settings.max_tokens
+    
   -- Conditionally add response_format
   if settings.include_response_format then
     body.response_format = { type = "json_object" }
