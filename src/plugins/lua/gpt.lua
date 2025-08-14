@@ -683,6 +683,20 @@ local function openai_check(task, content, sel_part)
 
   local from_content, url_content = get_meta_llm_content(task)
 
+  -- Deep copy to avoid table reuse between iterations
+  local function table_deep_copy(orig)
+    local copy
+    if type(orig) == 'table' then
+      copy = {}
+      for k, v in pairs(orig) do
+        copy[k] = table_deep_copy(v)
+      end
+    else
+      copy = orig
+    end
+    return copy
+  end
+
   -- Decide which token length field to use for the given model
   local function get_max_tokens_field(model)
     if not model then
@@ -751,7 +765,9 @@ local function openai_check(task, content, sel_part)
       success = false,
       checked = false
     }
-    local body = body_base
+    -- Fresh body for each model
+    local body = table_deep_copy(body_base)
+    
     -- Set the correct token limit field
     local token_field = get_max_tokens_field(model)
     body[token_field] = settings.max_tokens
