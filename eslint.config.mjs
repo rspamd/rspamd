@@ -89,6 +89,7 @@ export default [
         files: ["test/playwright/tests/*.mjs"],
         rules: {
             "no-await-in-loop": "off", // Playwright operations in loops are often sequential and not independent
+            "sort-keys": ["error", "asc", {minKeys: 4}]
         },
     },
 ];
