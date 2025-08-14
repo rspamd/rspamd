@@ -729,7 +729,7 @@ local function openai_check(task, content, sel_part)
     end
     return true
   end
-    
+
   local body_base = {
     messages = {
       {
@@ -754,7 +754,7 @@ local function openai_check(task, content, sel_part)
       }
     }
   }
-  
+
   if type(settings.model) == 'string' then
     settings.model = { settings.model }
   end
@@ -767,7 +767,7 @@ local function openai_check(task, content, sel_part)
     }
     -- Fresh body for each model
     local body = table_deep_copy(body_base)
-    
+
     -- Set the correct token limit field
     local token_field = get_max_tokens_field(model)
     body[token_field] = settings.max_tokens
