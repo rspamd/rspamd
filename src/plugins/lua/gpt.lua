@@ -716,7 +716,7 @@ local function openai_check(task, content, sel_part)
     return true
   end
     
-  local body = {
+  local body_base = {
     model = settings.model,
     messages = {
       {
@@ -741,21 +741,7 @@ local function openai_check(task, content, sel_part)
       }
     }
   }
-
-  -- Set the correct token limit field
-  local token_field = get_max_tokens_field(settings.model)
-  body[token_field] = settings.max_tokens
-
-  -- Set the temperature field if model supports it
-  if supports_temperature(settings.model) then
-    body.temperature = settings.temperature
-  end
-
-  -- Conditionally add response_format
-  if settings.include_response_format then
-    body.response_format = { type = "json_object" }
-  end
-
+  
   if type(settings.model) == 'string' then
     settings.model = { settings.model }
   end
@@ -766,6 +752,21 @@ local function openai_check(task, content, sel_part)
       success = false,
       checked = false
     }
+    local body = body_base
+    -- Set the correct token limit field
+    local token_field = get_max_tokens_field(model)
+    body[token_field] = settings.max_tokens
+
+    -- Set the temperature field if model supports it
+    if supports_temperature(model) then
+      body.temperature = settings.temperature
+    end 
+
+    -- Conditionally add response_format
+    if settings.include_response_format then
+      body.response_format = { type = "json_object" }
+    end
+
     body.model = model
     local http_params = {
       url = settings.url,
