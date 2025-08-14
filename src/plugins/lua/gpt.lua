@@ -702,9 +702,22 @@ local function openai_check(task, content, sel_part)
     return 'max_tokens'
   end
 
+  -- Only send temperature if model supports it
+  local function supports_temperature(model)
+    if not model then return true end
+    -- Disallow for reasoning models and GPT-5 family
+    if model:match('^gpt%-5') or
+       model:match('^o%d') or
+       model:match('^o%d%-mini') or
+       model:match('^gpt%-4%.1') or
+       model:match('reasoning') then
+      return false
+    end
+    return true
+  end
+    
   local body = {
     model = settings.model,
-    temperature = settings.temperature,
     messages = {
       {
         role = 'system',
@@ -732,7 +745,12 @@ local function openai_check(task, content, sel_part)
   -- Set the correct token limit field
   local token_field = get_max_tokens_field(settings.model)
   body[token_field] = settings.max_tokens
-    
+
+  -- Set the temperature field if model supports it
+  if supports_temperature(settings.model) then
+    body.temperature = settings.temperature
+  end
+
   -- Conditionally add response_format
   if settings.include_response_format then
     body.response_format = { type = "json_object" }
