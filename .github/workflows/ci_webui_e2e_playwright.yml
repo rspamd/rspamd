@@ -1,0 +1,156 @@
+name: WebUI E2E (Playwright)
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        required: true
+        type: string
+      name:
+        required: true
+        type: string
+
+concurrency:
+  group: webui-e2e-playwright-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    container:
+      image: ${{ inputs.image }}
+      options: --user root
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - version: 1.45.3
+            label: legacy
+          - version: latest
+            label: latest
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v4
+        with:
+          path: src
+
+      - name: Define install prefix
+        run: echo "PREFIX=${GITHUB_WORKSPACE}/install" >> "$GITHUB_ENV"
+
+      - name: Download rspamd binary from build job
+        uses: actions/download-artifact@v4
+        with:
+          name: rspamd-binary-ubuntu-ci
+          path: ${{ env.PREFIX }}
+
+      - name: Prepare rspamd configuration
+        run: |
+          mkdir -p ${PREFIX}/etc/rspamd/local.d
+          cp -r src/conf/* ${PREFIX}/etc/rspamd/
+          echo 'static_dir = "${PREFIX}/share/rspamd/www";' > ${PREFIX}/etc/rspamd/local.d/worker-controller.inc
+          echo 'password = "$2$8y16z4benwtsemhhcsdtxc6zem1muuhj$pufmrdhm41s53eccisds6rxych3khq493jhqra8r1i3jto93dt7b";' >> ${PREFIX}/etc/rspamd/local.d/worker-controller.inc
+          echo 'enable_password = "$2$hkmgaqejragy47tfe18k7r8zf4wwfegt$jdrfna838b9f4mqu73q858t3zjpse1kw8mw7e6yeftabq1of1sry";' >> ${PREFIX}/etc/rspamd/local.d/worker-controller.inc
+          echo 'secure_ip = "0";' >> ${PREFIX}/etc/rspamd/local.d/worker-controller.inc
+          cat > ${PREFIX}/etc/rspamd/local.d/logging.inc << 'EOF'
+          type = "console";
+          level = "error";
+          EOF
+          # Disable multimap module to prevent hyperscan cache issues at runtime
+          echo 'enabled = false;' > ${PREFIX}/etc/rspamd/local.d/multimap.conf
+          # Disable redis dependent modules for WebUI tests
+          echo 'redis { enabled = false; }' > ${PREFIX}/etc/rspamd/local.d/modules.conf
+          chmod +x ${PREFIX}/bin/rspamd
+          mkdir -p /var/run/rspamd /var/lib/rspamd
+          chown $USER:$USER /var/run/rspamd /var/lib/rspamd
+
+      - name: Start rspamd and wait for WebUI
+        run: |
+          ${PREFIX}/bin/rspamd -c ${PREFIX}/etc/rspamd/rspamd.conf --insecure &
+          # Initial delay before polling (in seconds)
+          initial_delay=5
+          sleep "$initial_delay"
+          # Wait up to 60 seconds for WebUI to respond
+          max_retries=30
+          for i in $(seq 1 "$max_retries"); do
+            http_code=$(wget -qO- --server-response http://localhost:11334/ping 2>&1 | awk '/^[[:space:]]*HTTP/ {print $2}' | tail -n1 || true)
+            if [ "$http_code" = "200" ]; then
+              elapsed=$(( initial_delay + (i - 1) * 2 ))
+              echo "Rspamd WebUI is up (HTTP 200) after $elapsed seconds"
+              break
+            elif [ -n "$http_code" ] && [ "$http_code" != "000" ]; then
+              echo "Unexpected HTTP code $http_code from /ping; failing"
+              exit 1
+            fi
+            echo "Waiting for rspamd... ($i/$max_retries)"
+            sleep 2
+          done
+
+          if [ "$i" -eq "$max_retries" ] && [ "$http_code" != "200" ]; then
+            total_wait=$(( initial_delay + max_retries * 2 ))
+            echo "ERROR: rspamd WebUI did not become available after $total_wait seconds"
+            exit 1
+          fi
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: .cache/ms-playwright-${{ matrix.label }}
+          key: browsers-${{ matrix.label }}-${{ runner.os }}
+
+      - id: run-playwright
+        name: Run Playwright tests (${{ matrix.label }})
+        env:
+          HOME: /root
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.cache/ms-playwright-${{ matrix.label }}
+        run: |
+          set -e
+          mkdir -p test-${{ matrix.label }}
+          cp -r src/test/playwright test-${{ matrix.label }}/
+          cd test-${{ matrix.label }}/playwright
+
+          npm init -y --silent
+          echo "::group::Installing Playwright ${{ matrix.label }}"
+          npm install --no-save --silent @playwright/test@${{ matrix.version }}
+          npx playwright --version
+          npx playwright install --with-deps
+          echo "::endgroup::"
+
+          echo "::group::Running tests (${{ matrix.label }})"
+          # Run tests; store Playwright artifacts (traces/videos) separately from HTML report
+          ARTIFACTS_DIR="$GITHUB_WORKSPACE/playwright-artifacts-${{ matrix.label }}"
+          HTML_OUT="$GITHUB_WORKSPACE/playwright-report-${{ matrix.label }}"
+          set +e
+          npx playwright test --output="$ARTIFACTS_DIR"
+          PW_STATUS=$?
+          set -e
+          REPORT_DIR="$PWD/playwright-report"
+          if [ -d "$REPORT_DIR" ]; then
+            mv "$REPORT_DIR" "$HTML_OUT"
+          fi
+          echo "report_path=$HTML_OUT" >> "$GITHUB_OUTPUT"
+          echo "::endgroup::"
+          exit $PW_STATUS
+
+      - name: Upload Playwright reports (${{ matrix.label }})
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.label }}
+          path: ${{ github.workspace }}/playwright-report-${{ matrix.label }}
+          if-no-files-found: ignore
+
+      - name: Upload Playwright artifacts on failure (${{ matrix.label }})
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts-${{ matrix.label }}
+          path: ${{ github.workspace }}/playwright-artifacts-${{ matrix.label }}
+          if-no-files-found: ignore
