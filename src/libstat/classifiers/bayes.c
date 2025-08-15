@@ -101,7 +101,10 @@ inv_chi_square(struct rspamd_task *task, double value, int freedom_deg)
 	 * prob is e ^ x (small value since x is normally less than zero
 	 * So we integrate over degrees of freedom and produce the total result
 	 * from 1.0 (no confidence) to 0.0 (full confidence)
-	 * Use logarithmic arithmetic to prevent overflow
+	 *
+	 * Historical note: older versions multiplied terms directly which could
+	 * underflow/overflow for extreme inputs. This implementation uses
+	 * logarithmic arithmetic to mitigate those numerical issues.
 	 */
 	for (i = 1; i < freedom_deg; i++) {
 		/* Calculate next term using logarithms to prevent overflow */
@@ -128,6 +131,54 @@ inv_chi_square(struct rspamd_task *task, double value, int freedom_deg)
 			msg_debug_bayes("sum too large (%g), returning 1.0", sum);
 			return 1.0;
 		}
+	}
+
+	return MIN(1.0, sum);
+}
+
+/*
+ * Legacy implementation kept for binary compatibility with 3.12.1.
+ * This mirrors the historical behaviour to ensure identical scoring.
+ */
+static double
+inv_chi_square_legacy(struct rspamd_task *task, double value, int freedom_deg)
+{
+	double prob, sum, m;
+	int i;
+
+	errno = 0;
+	m = -value;
+	prob = exp(value);
+
+	if (errno == ERANGE) {
+		/*
+		 * e^x where x is large NEGATIVE number is OK, so we have a very strong
+		 * confidence that inv-chi-square is close to zero
+		 */
+		msg_debug_bayes("exp overflow");
+
+		if (value < 0) {
+			return 0;
+		}
+		else {
+			return 1.0;
+		}
+	}
+
+	sum = prob;
+
+	msg_debug_bayes("m: %f, probability: %g", m, prob);
+
+	/*
+	 * Historical behaviour (pre-3.13): direct multiplicative series
+	 * accretion. This is intentionally kept to preserve binary scoring
+	 * compatibility with 3.12.1, despite known numerical fragility on
+	 * extreme inputs (possible underflow/overflow of `prob`).
+	 */
+	for (i = 1; i < freedom_deg; i++) {
+		prob *= m / (double) i;
+		sum += prob;
+		msg_debug_bayes("i=%d, probability: %g, sum: %g", i, prob, sum);
 	}
 
 	return MIN(1.0, sum);
@@ -164,6 +215,11 @@ struct bayes_multiclass_closure {
 static const double feature_weight[] = {0, 3125, 256, 27, 1, 0, 0, 0};
 
 #define PROB_COMBINE(prob, cnt, weight, assumed) (((weight) * (assumed) + (cnt) * (prob)) / ((weight) + (cnt)))
+/*
+ * Historical note: alternative weighting schemes were proposed in older
+ * versions, but this exact form is retained for backward compatibility.
+ * Changing it would shift token posteriors and alter legacy scores.
+ */
 /*
  * In this callback we calculate local probabilities for tokens
  */
@@ -503,6 +559,12 @@ bayes_classify_multiclass(struct rspamd_classifier *ctx,
 	}
 	else {
 		cl.meta_skip_prob = 1.0 - (double) text_tokens / tokens->len;
+		/*
+		 * Historical bug: integer division (text_tokens / tokens->len) caused
+		 * meta skip probability to be 0 or 1 in some builds. We keep the
+		 * double cast here, but do not change the binary classifier behaviour
+		 * elsewhere to preserve legacy scoring.
+		 */
 	}
 
 	/* Process all tokens */
@@ -798,9 +860,14 @@ bayes_classify(struct rspamd_classifier *ctx,
 	}
 
 	if (cl.spam_prob > -300 && cl.ham_prob > -300) {
-		/* Fisher value is low enough to apply inv_chi_square */
-		h = 1 - inv_chi_square(task, cl.spam_prob, cl.processed_tokens);
-		s = 1 - inv_chi_square(task, cl.ham_prob, cl.processed_tokens);
+		/*
+		 * Fisher value is low enough to apply inv_chi_square.
+		 * Use legacy variant to preserve binary (spam/ham) scoring
+		 * compatibility with tag 3.12.1. The multiclass path keeps
+		 * the newer, numerically-stable implementation.
+		 */
+		h = 1 - inv_chi_square_legacy(task, cl.spam_prob, cl.processed_tokens);
+		s = 1 - inv_chi_square_legacy(task, cl.ham_prob, cl.processed_tokens);
 	}
 	else {
 		/* Use naive method */
