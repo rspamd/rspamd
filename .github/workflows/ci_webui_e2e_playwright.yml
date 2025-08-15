@@ -58,8 +58,6 @@ jobs:
           type = "console";
           level = "error";
           EOF
-          # Disable multimap module to prevent hyperscan cache issues at runtime
-          echo 'enabled = false;' > ${PREFIX}/etc/rspamd/local.d/multimap.conf
           # Disable redis dependent modules for WebUI tests
           echo 'redis { enabled = false; }' > ${PREFIX}/etc/rspamd/local.d/modules.conf
           chmod +x ${PREFIX}/bin/rspamd
