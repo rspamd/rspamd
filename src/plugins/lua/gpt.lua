@@ -28,11 +28,20 @@ if confighelp then
   # Your key to access the API
   api_key = "xxx";
   # Model name
-  model = "gpt-4o-mini";
-  # Maximum tokens to generate
-  max_tokens = 1000;
-  # Temperature for sampling
-  temperature = 0.0;
+  model = "gpt-5-mini"; # or parallel model requests [ "gpt-5-mini", "gpt-4o-mini" ];
+	# Per-model parameters
+	model_parameters = {
+		"gpt-5-mini" = {
+			max_completion_tokens = 1000,
+		},
+		"gpt-5-nano" = {
+			max_completion_tokens = 1000,
+		},
+		"gpt-4o-mini" = {
+			max_tokens = 1000,
+			temperature = 0.0,
+		}
+	};
   # Timeout for requests
   timeout = 10s;
   # Prompt for the model (use default if not set)
@@ -107,9 +116,19 @@ local categories_map = {}
 local settings = {
   type = 'openai',
   api_key = nil,
-  model = 'gpt-5-mini',
-  max_tokens = 1000,
-  temperature = 0.0,
+	model = 'gpt-5-mini',
+	model_parameters = {
+    ["gpt-5-mini"] = {
+      max_completion_tokens = 1000,
+    },
+    ["gpt-5-nano"] = {
+      max_completion_tokens = 1000,
+    },
+    ["gpt-4o-mini"] = {
+      max_tokens = 1000,
+      temperature = 0.0,
+    }
+  },
   timeout = 10,
   prompt = nil,
   condition = nil,
@@ -683,39 +702,6 @@ local function openai_check(task, content, sel_part)
 
   local from_content, url_content = get_meta_llm_content(task)
 
-    -- Decide which token length field to use for the given model
-  local function get_max_tokens_field(model)
-    if not model then
-      return 'max_tokens' -- default
-    end
-
-    -- Newer models that require max_completion_tokens
-    if model:match('^gpt%-5') or
-       model:match('^o%d') or
-       model:match('^o%d%-mini') or
-       model:match('^gpt%-4%.1') or
-       model:match('reasoning') then
-      return 'max_completion_tokens'
-    end
-
-    -- Default for older/legacy models
-    return 'max_tokens'
-  end
-
-  -- Only send temperature if model supports it
-  local function supports_temperature(model)
-    if not model then return true end
-    -- Disallow for reasoning models and GPT-5 family
-    if model:match('^gpt%-5') or
-       model:match('^o%d') or
-       model:match('^o%d%-mini') or
-       model:match('^gpt%-4%.1') or
-       model:match('reasoning') then
-      return false
-    end
-    return true
-  end
-
   local body_base = {
     messages = {
       {
@@ -754,14 +740,13 @@ local function openai_check(task, content, sel_part)
     -- Fresh body for each model
     local body = lua_util.deepcopy(body_base)
 
-    -- Set the correct token limit field
-    local token_field = get_max_tokens_field(model)
-    body[token_field] = settings.max_tokens
-
-    -- Set the temperature field if model supports it
-    if supports_temperature(model) then
-      body.temperature = settings.temperature
-    end 
+		-- Merge model-specific parameters into body
+		local params = settings.model_parameters[model]
+		if params then
+			for k, v in pairs(params) do
+				body[k] = v
+			end
+		end
 
     -- Conditionally add response_format
     if settings.include_response_format then
@@ -769,6 +754,7 @@ local function openai_check(task, content, sel_part)
     end
 
     body.model = model
+
     local http_params = {
       url = settings.url,
       mime_type = 'application/json',
