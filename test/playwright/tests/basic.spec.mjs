@@ -7,6 +7,18 @@ test.describe("WebUI basic", () => {
         await login(page, readOnlyPassword);
     });
 
+    test("Browser version info", async ({page, browserName}, testInfo) => {
+        const browserVersion = await page.context().browser().version();
+
+        testInfo.annotations.push({
+            type: "Browser info",
+            description: `Browser version: ${browserName} ${browserVersion}`,
+        });
+
+        // eslint-disable-next-line no-console
+        console.log(`Browser (${browserName}) version: ${browserVersion}`);
+    });
+
     test("Smoke: loads WebUI and shows main elements", async ({page}) => {
         await expect(page).toHaveTitle(/Rspamd Web Interface/i);
         // Wait for preloader to be hidden by JS when loading is complete
