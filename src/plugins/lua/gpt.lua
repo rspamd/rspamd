@@ -28,11 +28,20 @@ if confighelp then
   # Your key to access the API
   api_key = "xxx";
   # Model name
-  model = "gpt-4o-mini";
-  # Maximum tokens to generate
-  max_tokens = 1000;
-  # Temperature for sampling
-  temperature = 0.0;
+  model = "gpt-5-mini"; # or parallel model requests [ "gpt-5-mini", "gpt-4o-mini" ];
+	# Per-model parameters
+	model_parameters = {
+		"gpt-5-mini" = {
+			max_completion_tokens = 1000,
+		},
+		"gpt-5-nano" = {
+			max_completion_tokens = 1000,
+		},
+		"gpt-4o-mini" = {
+			max_tokens = 1000,
+			temperature = 0.0,
+		}
+	};
   # Timeout for requests
   timeout = 10s;
   # Prompt for the model (use default if not set)
@@ -107,9 +116,19 @@ local categories_map = {}
 local settings = {
   type = 'openai',
   api_key = nil,
-  model = 'gpt-4o-mini',
-  max_tokens = 1000,
-  temperature = 0.0,
+	model = 'gpt-5-mini', -- or parallel model requests: [ 'gpt-5-mini', 'gpt-4o-mini' ],
+	model_parameters = {
+    ["gpt-5-mini"] = {
+      max_completion_tokens = 1000,
+    },
+    ["gpt-5-nano"] = {
+      max_completion_tokens = 1000,
+    },
+    ["gpt-4o-mini"] = {
+      max_tokens = 1000,
+      temperature = 0.0,
+    }
+  },
   timeout = 10,
   prompt = nil,
   condition = nil,
@@ -354,7 +373,7 @@ local function default_openai_plain_conversion(task, input)
 
   local first_message = reply.choices[1].message.content
 
-  if not first_message then
+  if not first_message or first_message == "" then
     rspamd_logger.errx(task, 'no content in the first message')
     return
   end
@@ -683,10 +702,8 @@ local function openai_check(task, content, sel_part)
 
   local from_content, url_content = get_meta_llm_content(task)
 
-  local body = {
-    model = settings.model,
-    max_tokens = settings.max_tokens,
-    temperature = settings.temperature,
+
+  local body_base = {
     messages = {
       {
         role = 'system',
@@ -711,11 +728,6 @@ local function openai_check(task, content, sel_part)
     }
   }
 
-  -- Conditionally add response_format
-  if settings.include_response_format then
-    body.response_format = { type = "json_object" }
-  end
-
   if type(settings.model) == 'string' then
     settings.model = { settings.model }
   end
@@ -726,7 +738,24 @@ local function openai_check(task, content, sel_part)
       success = false,
       checked = false
     }
+    -- Fresh body for each model
+    local body = lua_util.deepcopy(body_base)
+
+		-- Merge model-specific parameters into body
+		local params = settings.model_parameters[model]
+		if params then
+			for k, v in pairs(params) do
+				body[k] = v
+			end
+		end
+
+    -- Conditionally add response_format
+    if settings.include_response_format then
+      body.response_format = { type = "json_object" }
+    end
+
     body.model = model
+
     local http_params = {
       url = settings.url,
       mime_type = 'application/json',
@@ -931,7 +960,6 @@ if opts then
   if not settings.api_key and llm_type.require_passkey then
     rspamd_logger.warnx(rspamd_config, 'no api_key is specified for LLM type %s, disabling module', settings.type)
     lua_util.disable_module(N, "config")
-
     return
   end
 
@@ -950,12 +978,14 @@ if opts then
     type = 'virtual',
     parent = id,
     score = 3.0,
+    group = 'GPT',
   })
   rspamd_config:register_symbol({
     name = 'GPT_HAM',
     type = 'virtual',
     parent = id,
     score = -2.0,
+    group = 'GPT',
   })
 
   if settings.extra_symbols then
@@ -964,7 +994,8 @@ if opts then
         name = sym,
         type = 'virtual',
         parent = id,
-        score = data.score,
+        score = data.score or 0,
+        group = data.group or 'GPT',
         description = data.description,
       })
       data.name = sym
