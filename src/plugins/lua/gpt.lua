@@ -116,7 +116,7 @@ local categories_map = {}
 local settings = {
   type = 'openai',
   api_key = nil,
-	model = 'gpt-5-mini',
+	model = 'gpt-5-mini', -- or parallel model requests: [ 'gpt-5-mini', 'gpt-4o-mini' ],
 	model_parameters = {
     ["gpt-5-mini"] = {
       max_completion_tokens = 1000,
@@ -373,7 +373,7 @@ local function default_openai_plain_conversion(task, input)
 
   local first_message = reply.choices[1].message.content
 
-  if not first_message then
+  if not first_message or first_message == "" then
     rspamd_logger.errx(task, 'no content in the first message')
     return
   end
@@ -702,6 +702,7 @@ local function openai_check(task, content, sel_part)
 
   local from_content, url_content = get_meta_llm_content(task)
 
+
   local body_base = {
     messages = {
       {
@@ -959,7 +960,6 @@ if opts then
   if not settings.api_key and llm_type.require_passkey then
     rspamd_logger.warnx(rspamd_config, 'no api_key is specified for LLM type %s, disabling module', settings.type)
     lua_util.disable_module(N, "config")
-
     return
   end
 
@@ -978,12 +978,14 @@ if opts then
     type = 'virtual',
     parent = id,
     score = 3.0,
+    group = 'GPT',
   })
   rspamd_config:register_symbol({
     name = 'GPT_HAM',
     type = 'virtual',
     parent = id,
     score = -2.0,
+    group = 'GPT',
   })
 
   if settings.extra_symbols then
@@ -992,7 +994,8 @@ if opts then
         name = sym,
         type = 'virtual',
         parent = id,
-        score = data.score,
+        score = data.score or 0,
+        group = data.group or 'GPT',
         description = data.description,
       })
       data.name = sym
