@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 local fun = require "fun"
 local lua_redis = require "lua_redis"
@@ -28,7 +28,7 @@ local ucl = require "ucl"
 local N = 'neural'
 
 -- Used in prefix to avoid wrong ANN to be loaded
-local plugin_ver = '2'
+local plugin_ver = '3'
 
 -- Module vars
 local default_options = {
@@ -43,26 +43,33 @@ local default_options = {
     learn_threads = 1,
     learn_mode = 'balanced', -- Possible values: balanced, proportional
     learning_rate = 0.01,
-    classes_bias = 0.0, -- balanced mode: what difference is allowed between classes (1:1 proportion means 0 bias)
-    spam_skip_prob = 0.0, -- proportional mode: spam skip probability (0-1)
-    ham_skip_prob = 0.0, -- proportional mode: ham skip probability
+    classes_bias = 0.0,      -- balanced mode: what difference is allowed between classes (1:1 proportion means 0 bias)
+    spam_skip_prob = 0.0,    -- proportional mode: spam skip probability (0-1)
+    ham_skip_prob = 0.0,     -- proportional mode: ham skip probability
     store_pool_only = false, -- store tokens in cache only (disables autotrain);
     -- neural_vec_mpack stores vector of training data in messagepack neural_profile_digest stores profile digest
   },
   watch_interval = 60.0,
   lock_expire = 600,
   learning_spawned = false,
-  ann_expire = 60 * 60 * 24 * 2, -- 2 days
-  hidden_layer_mult = 1.5, -- number of neurons in the hidden layer
-  roc_enabled = false, -- Use ROC to find the best possible thresholds for ham and spam. If spam_score_threshold or ham_score_threshold is defined, it takes precedence over ROC thresholds.
+  ann_expire = 60 * 60 * 24 * 2,    -- 2 days
+  hidden_layer_mult = 1.5,          -- number of neurons in the hidden layer
+  roc_enabled = false,              -- Use ROC to find the best possible thresholds for ham and spam. If spam_score_threshold or ham_score_threshold is defined, it takes precedence over ROC thresholds.
   roc_misclassification_cost = 0.5, -- Cost of misclassifying a spam message (must be 0..1).
-  spam_score_threshold = nil, -- neural score threshold for spam (must be 0..1 or nil to disable)
-  ham_score_threshold = nil, -- neural score threshold for ham (must be 0..1 or nil to disable)
-  flat_threshold_curve = false, -- use binary classification 0/1 when threshold is reached
+  spam_score_threshold = nil,       -- neural score threshold for spam (must be 0..1 or nil to disable)
+  ham_score_threshold = nil,        -- neural score threshold for ham (must be 0..1 or nil to disable)
+  flat_threshold_curve = false,     -- use binary classification 0/1 when threshold is reached
   symbol_spam = 'NEURAL_SPAM',
   symbol_ham = 'NEURAL_HAM',
-  max_inputs = nil, -- when PCA is used
-  blacklisted_symbols = {}, -- list of symbols skipped in neural processing
+  max_inputs = nil,              -- when PCA is used
+  blacklisted_symbols = {},      -- list of symbols skipped in neural processing
+  -- Phase 0 additions (scaffolding for feature providers)
+  providers = nil,               -- list of provider configs; if nil, fallback to symbols-only provider
+  fusion = {
+    normalization = 'none',      -- none|unit|zscore (zscore requires stats)
+    per_provider_pca = false,    -- if true, apply PCA per provider before fusion (not active yet)
+  },
+  disable_symbols_input = false, -- when true, do not use symbols provider unless explicitly listed
 }
 
 -- Rule structure:
@@ -87,7 +94,7 @@ local default_options = {
 
 local settings = {
   rules = {},
-  prefix = 'rn', -- Neural network default prefix
+  prefix = 'rn',    -- Neural network default prefix
   max_profiles = 3, -- Maximum number of NN profiles stored
 }
 
@@ -103,15 +110,41 @@ local redis_lua_script_save_unlock = "neural_save_unlock.lua"
 
 local redis_script_id = {}
 
+-- Provider registry (Phase 0 scaffolding)
+local registered_providers = {}
+
+--- Registers a feature provider implementation
+-- @param name string
+-- @param provider table with function collect(task, ctx) -> vector(table of numbers), meta(table)
+local function register_provider(name, provider)
+  registered_providers[name] = provider
+end
+
+local function get_provider(name)
+  return registered_providers[name]
+end
+
+-- Forward declaration
+local result_to_vector
+
+-- Built-in symbols provider (compatibility path)
+register_provider('symbols', {
+  collect = function(task, ctx)
+    -- ctx.profile is expected for symbols provider
+    local vec = result_to_vector(task, ctx.profile)
+    return vec, { name = 'symbols', type = 'symbols', dim = #vec, weight = ctx.weight or 1.0 }
+  end
+})
+
 local function load_scripts()
   redis_script_id.vectors_len = lua_redis.load_redis_script_from_file(redis_lua_script_vectors_len,
-      redis_params)
+    redis_params)
   redis_script_id.maybe_invalidate = lua_redis.load_redis_script_from_file(redis_lua_script_maybe_invalidate,
-      redis_params)
+    redis_params)
   redis_script_id.maybe_lock = lua_redis.load_redis_script_from_file(redis_lua_script_maybe_lock,
-      redis_params)
+    redis_params)
   redis_script_id.save_unlock = lua_redis.load_redis_script_from_file(redis_lua_script_save_unlock,
-      redis_params)
+    redis_params)
 end
 
 local function create_ann(n, nlayers, rule)
@@ -154,16 +187,99 @@ local function learn_pca(inputs, max_inputs)
   return w
 end
 
+-- Build providers metadata for storage alongside ANN
+local function build_providers_meta(metas)
+  if not metas or #metas == 0 then return nil end
+  local out = {}
+  for i, m in ipairs(metas) do
+    out[i] = {
+      name = m.name,
+      type = m.type,
+      dim = m.dim,
+      weight = m.weight,
+      model = m.model,
+      provider = m.provider,
+    }
+  end
+  return out
+end
+
+-- Normalization helpers
+local function l2_normalize_vector(vec)
+  local sumsq = 0.0
+  for i = 1, #vec do
+    local v = vec[i]
+    sumsq = sumsq + v * v
+  end
+  if sumsq > 0 then
+    local inv = 1.0 / math.sqrt(sumsq)
+    for i = 1, #vec do
+      vec[i] = vec[i] * inv
+    end
+  end
+  return vec
+end
+
+local function compute_zscore_stats(inputs)
+  local n = #inputs
+  if n == 0 then return nil end
+  local d = #inputs[1]
+  local mean = {}
+  local m2 = {}
+  for j = 1, d do
+    mean[j] = 0.0
+    m2[j] = 0.0
+  end
+  for i = 1, n do
+    local x = inputs[i]
+    for j = 1, d do
+      local delta = x[j] - mean[j]
+      mean[j] = mean[j] + delta / i
+      m2[j] = m2[j] + delta * (x[j] - mean[j])
+    end
+  end
+  local std = {}
+  for j = 1, d do
+    std[j] = math.sqrt((n > 1 and (m2[j] / (n - 1))) or 0.0)
+    if std[j] == 0 or std[j] ~= std[j] then
+      std[j] = 1.0 -- avoid division by zero and NaN
+    end
+  end
+  return { mode = 'zscore', mean = mean, std = std }
+end
+
+local function apply_normalization(vec, norm_stats_or_mode)
+  if not norm_stats_or_mode then return vec end
+  if type(norm_stats_or_mode) == 'string' then
+    if norm_stats_or_mode == 'unit' then
+      return l2_normalize_vector(vec)
+    else
+      return vec
+    end
+  else
+    if norm_stats_or_mode.mode == 'unit' then
+      return l2_normalize_vector(vec)
+    elseif norm_stats_or_mode.mode == 'zscore' and norm_stats_or_mode.mean and norm_stats_or_mode.std then
+      local mean = norm_stats_or_mode.mean
+      local std = norm_stats_or_mode.std
+      for i = 1, math.min(#vec, #mean) do
+        vec[i] = (vec[i] - (mean[i] or 0.0)) / (std[i] or 1.0)
+      end
+      return vec
+    else
+      return vec
+    end
+  end
+end
+
 -- This function computes optimal threshold using ROC for the given set of inputs.
 -- Returns a threshold that minimizes:
 --        alpha * (false_positive_rate)  +  beta * (false_negative_rate)
 --        Where alpha is cost of false positive result
 --              beta is cost of false negative result
 local function get_roc_thresholds(ann, inputs, outputs, alpha, beta)
-
   -- Sorts list x and list y based on the values in list x.
   local sort_relative = function(x, y)
-
     local r = {}
 
     assert(#x == #y)
@@ -219,7 +335,6 @@ local function get_roc_thresholds(ann, inputs, outputs, alpha, beta)
   spam_count_ahead[n_samples + 1] = 0
 
   for i = n_samples, 1, -1 do
-
     if outputs[i][1] == 0 then
       n_ham = n_ham + 1
       ham_count_ahead[i] = 1
@@ -283,34 +398,34 @@ end
 -- `set.learning_spawned` is set to `true`
 local function register_lock_extender(rule, set, ev_base, ann_key)
   rspamd_config:add_periodic(ev_base, 30.0,
-      function()
-        local function redis_lock_extend_cb(err, _)
-          if err then
-            rspamd_logger.errx(rspamd_config, 'cannot lock ANN %s from redis: %s',
-                ann_key, err)
-          else
-            rspamd_logger.infox(rspamd_config, 'extend lock for ANN %s for 30 seconds',
-                ann_key)
-          end
-        end
-
-        if set.learning_spawned then
-          lua_redis.redis_make_request_taskless(ev_base,
-              rspamd_config,
-              rule.redis,
-              nil,
-              true, -- is write
-              redis_lock_extend_cb, --callback
-              'HINCRBY', -- command
-              { ann_key, 'lock', '30' }
-          )
+    function()
+      local function redis_lock_extend_cb(err, _)
+        if err then
+          rspamd_logger.errx(rspamd_config, 'cannot lock ANN %s from redis: %s',
+            ann_key, err)
         else
-          lua_util.debugm(N, rspamd_config, "stop lock extension as learning_spawned is false")
-          return false -- do not plan any more updates
+          rspamd_logger.infox(rspamd_config, 'extend lock for ANN %s for 30 seconds',
+            ann_key)
         end
-
-        return true
       end
+
+      if set.learning_spawned then
+        lua_redis.redis_make_request_taskless(ev_base,
+          rspamd_config,
+          rule.redis,
+          nil,
+          true,                 -- is write
+          redis_lock_extend_cb, --callback
+          'HINCRBY',            -- command
+          { ann_key, 'lock', '30' }
+        )
+      else
+        lua_util.debugm(N, rspamd_config, "stop lock extension as learning_spawned is false")
+        return false -- do not plan any more updates
+      end
+
+      return true
+    end
   )
 end
 
@@ -332,10 +447,10 @@ local function can_push_train_vector(rule, task, learn_type, nspam, nham)
           local skip_rate = 1.0 - nham / (nspam + 1)
           if coin < skip_rate - train_opts.classes_bias then
             rspamd_logger.infox(task,
-                'skip %s sample to keep spam/ham balance; probability %s; %s spam and %s ham vectors stored',
-                learn_type,
-                skip_rate - train_opts.classes_bias,
-                nspam, nham)
+              'skip %s sample to keep spam/ham balance; probability %s; %s spam and %s ham vectors stored',
+              learn_type,
+              skip_rate - train_opts.classes_bias,
+              nspam, nham)
             return false
           end
         end
@@ -343,8 +458,8 @@ local function can_push_train_vector(rule, task, learn_type, nspam, nham)
       else
         -- Enough learns
         rspamd_logger.infox(task, 'skip %s sample to keep spam/ham balance; too many spam samples: %s',
-            learn_type,
-            nspam)
+          learn_type,
+          nspam)
       end
     else
       if nham <= train_opts.max_trains then
@@ -353,17 +468,17 @@ local function can_push_train_vector(rule, task, learn_type, nspam, nham)
           local skip_rate = 1.0 - nspam / (nham + 1)
           if coin < skip_rate - train_opts.classes_bias then
             rspamd_logger.infox(task,
-                'skip %s sample to keep spam/ham balance; probability %s; %s spam and %s ham vectors stored',
-                learn_type,
-                skip_rate - train_opts.classes_bias,
-                nspam, nham)
+              'skip %s sample to keep spam/ham balance; probability %s; %s spam and %s ham vectors stored',
+              learn_type,
+              skip_rate - train_opts.classes_bias,
+              nspam, nham)
             return false
           end
         end
         return true
       else
         rspamd_logger.infox(task, 'skip %s sample to keep spam/ham balance; too many ham samples: %s', learn_type,
-            nham)
+          nham)
       end
     end
   else
@@ -374,7 +489,7 @@ local function can_push_train_vector(rule, task, learn_type, nspam, nham)
         if train_opts.spam_skip_prob then
           if coin <= train_opts.spam_skip_prob then
             rspamd_logger.infox(task, 'skip %s sample probabilistically; probability %s (%s skip chance)', learn_type,
-                coin, train_opts.spam_skip_prob)
+              coin, train_opts.spam_skip_prob)
             return false
           end
 
@@ -382,14 +497,14 @@ local function can_push_train_vector(rule, task, learn_type, nspam, nham)
         end
       else
         rspamd_logger.infox(task, 'skip %s sample; too many spam samples: %s (%s limit)', learn_type,
-            nspam, train_opts.max_trains)
+          nspam, train_opts.max_trains)
       end
     else
       if nham <= train_opts.max_trains then
         if train_opts.ham_skip_prob then
           if coin <= train_opts.ham_skip_prob then
             rspamd_logger.infox(task, 'skip %s sample probabilistically; probability %s (%s skip chance)', learn_type,
-                coin, train_opts.ham_skip_prob)
+              coin, train_opts.ham_skip_prob)
             return false
           end
 
@@ -397,7 +512,7 @@ local function can_push_train_vector(rule, task, learn_type, nspam, nham)
         end
       else
         rspamd_logger.infox(task, 'skip %s sample; too many ham samples: %s (%s limit)', learn_type,
-            nham, train_opts.max_trains)
+          nham, train_opts.max_trains)
       end
     end
   end
@@ -410,10 +525,10 @@ local function gen_unlock_cb(rule, set, ann_key)
   return function(err)
     if err then
       rspamd_logger.errx(rspamd_config, 'cannot unlock ANN %s:%s at %s from redis: %s',
-          rule.prefix, set.name, ann_key, err)
+        rule.prefix, set.name, ann_key, err)
     else
       lua_util.debugm(N, rspamd_config, 'unlocked ANN %s:%s at %s',
-          rule.prefix, set.name, ann_key)
+        rule.prefix, set.name, ann_key)
     end
   end
 end
@@ -421,7 +536,7 @@ end
 -- Used to generate new ANN key for specific profile
 local function new_ann_key(rule, set, version)
   local ann_key = string.format('%s_%s_%s_%s_%s', settings.prefix,
-      rule.prefix, set.name, set.digest:sub(1, 8), tostring(version))
+    rule.prefix, set.name, set.digest:sub(1, 8), tostring(version))
 
   return ann_key
 end
@@ -430,7 +545,97 @@ local function redis_ann_prefix(rule, settings_name)
   -- We also need to count metatokens:
   local n = meta_functions.version
   return string.format('%s%d_%s_%d_%s',
-      settings.prefix, plugin_ver, rule.prefix, n, settings_name)
+    settings.prefix, plugin_ver, rule.prefix, n, settings_name)
+end
+
+-- Compute a stable digest for providers configuration
+local function providers_config_digest(providers_cfg)
+  if not providers_cfg then return nil end
+  -- Normalize minimal subset of fields to keep digest stable across equivalent configs
+  local norm = {}
+  for i, p in ipairs(providers_cfg) do
+    norm[i] = {
+      type = p.type,
+      name = p.name,
+      weight = p.weight or 1.0,
+      dim = p.dim,
+    }
+  end
+  return lua_util.table_digest(norm)
+end
+
+-- If no providers configured, fallback to symbols provider unless disabled
+-- phase: 'infer' | 'train'
+local function collect_features(task, rule, profile_or_set, phase)
+  local vectors = {}
+  local metas = {}
+
+  local providers_cfg = rule.providers
+  if not providers_cfg or #providers_cfg == 0 then
+    if not rule.disable_symbols_input then
+      local prov = get_provider('symbols')
+      if prov then
+        local vec, meta = prov.collect(task, { profile = profile_or_set, weight = 1.0 })
+        if vec then
+          vectors[#vectors + 1] = vec
+          metas[#metas + 1] = meta
+        end
+      end
+    end
+  else
+    for _, pcfg in ipairs(providers_cfg) do
+      local prov = get_provider(pcfg.type or pcfg.name)
+      if prov then
+        local ok, vec, meta = pcall(function()
+          return prov.collect(task, {
+            profile = profile_or_set,
+            rule = rule,
+            config = pcfg,
+            weight = pcfg.weight or 1.0,
+            phase = phase,
+          })
+        end)
+        if ok and vec then
+          if meta then
+            meta.weight = pcfg.weight or meta.weight or 1.0
+          end
+          vectors[#vectors + 1] = vec
+          metas[#metas + 1] = meta or
+              { name = pcfg.name or pcfg.type, type = pcfg.type, dim = #vec, weight = pcfg.weight or 1.0 }
+        else
+          rspamd_logger.debugm(N, rspamd_config, 'provider %s failed to collect features', pcfg.type or pcfg.name)
+        end
+      else
+        rspamd_logger.debugm(N, rspamd_config, 'provider %s is not registered', pcfg.type or pcfg.name)
+      end
+    end
+  end
+
+  -- Simple fusion by concatenation; optional per-provider weight scaling
+  local fused = {}
+  for i, v in ipairs(vectors) do
+    local w = (metas[i] and metas[i].weight) or 1.0
+    -- Apply normalization if requested
+    local norm_mode = (rule.fusion and rule.fusion.normalization) or 'none'
+    if norm_mode ~= 'none' then
+      v = apply_normalization(v, norm_mode)
+    end
+    for _, x in ipairs(v) do
+      fused[#fused + 1] = x * w
+    end
+  end
+
+  local meta = {
+    providers = build_providers_meta(metas) or metas,
+    total_dim = #fused,
+    digest = providers_config_digest(providers_cfg),
+  }
+
+  if #fused == 0 then
+    return nil, meta
+  end
+
+  return fused, meta
 end
 
 -- This function receives training vectors, checks them, spawn learning and saves ANN in Redis
@@ -488,71 +693,85 @@ local function spawn_train(params)
             -- We have nan :( try to log lot's of stuff to dig into a problem
             seen_nan = true
             rspamd_logger.errx(rspamd_config, 'ANN %s:%s: train error: observed nan in error cost!; value cost = %s',
-                params.rule.prefix, params.set.name,
-                value_cost)
+              params.rule.prefix, params.set.name,
+              value_cost)
             for i, e in ipairs(inputs) do
               lua_util.debugm(N, rspamd_config, 'train vector %s -> %s',
-                  debug_vec(e), outputs[i][1])
+                debug_vec(e), outputs[i][1])
             end
           end
 
           rspamd_logger.infox(rspamd_config,
-              "ANN %s:%s: learned from %s redis key in %s iterations, error: %s, value cost: %s",
-              params.rule.prefix, params.set.name,
-              params.ann_key,
-              iter,
-              train_cost,
-              value_cost)
+            "ANN %s:%s: learned from %s redis key in %s iterations, error: %s, value cost: %s",
+            params.rule.prefix, params.set.name,
+            params.ann_key,
+            iter,
+            train_cost,
+            value_cost)
         end
       end
 
       lua_util.debugm(N, rspamd_config, "subprocess to learn ANN %s:%s has been started",
-          params.rule.prefix, params.set.name)
+        params.rule.prefix, params.set.name)
 
       local pca
       if params.rule.max_inputs then
         -- Train PCA in the main process, presumably it is not that long
         lua_util.debugm(N, rspamd_config, "start PCA train for ANN %s:%s",
-            params.rule.prefix, params.set.name)
+          params.rule.prefix, params.set.name)
         pca = learn_pca(inputs, params.rule.max_inputs)
       end
 
+      -- Compute normalization stats if requested
+      local norm_stats
+      if params.rule.fusion and params.rule.fusion.normalization == 'zscore' then
+        norm_stats = compute_zscore_stats(inputs)
+      elseif params.rule.fusion and params.rule.fusion.normalization == 'unit' then
+        norm_stats = { mode = 'unit' }
+      end
+
+      if norm_stats then
+        for i = 1, #inputs do
+          inputs[i] = apply_normalization(inputs[i], norm_stats)
+        end
+      end
+
       lua_util.debugm(N, rspamd_config, "start neural train for ANN %s:%s",
-          params.rule.prefix, params.set.name)
+        params.rule.prefix, params.set.name)
       local ret, err = pcall(train_ann.train1, train_ann,
-          inputs, outputs, {
-            lr = params.rule.train.learning_rate,
-            max_epoch = params.rule.train.max_iterations,
-            cb = train_cb,
-            pca = pca
-          })
+        inputs, outputs, {
+          lr = params.rule.train.learning_rate,
+          max_epoch = params.rule.train.max_iterations,
+          cb = train_cb,
+          pca = pca
+        })
 
       if not ret then
         rspamd_logger.errx(rspamd_config, "cannot train ann %s:%s: %s",
-            params.rule.prefix, params.set.name, err)
+          params.rule.prefix, params.set.name, err)
 
         return nil
       else
         lua_util.debugm(N, rspamd_config, "finished neural train for ANN %s:%s",
-            params.rule.prefix, params.set.name)
+          params.rule.prefix, params.set.name)
       end
 
       local roc_thresholds = {}
       if params.rule.roc_enabled then
         local spam_threshold = get_roc_thresholds(train_ann,
-            inputs,
-            outputs,
-            1 - params.rule.roc_misclassification_cost,
-            params.rule.roc_misclassification_cost)
+          inputs,
+          outputs,
+          1 - params.rule.roc_misclassification_cost,
+          params.rule.roc_misclassification_cost)
         local ham_threshold = get_roc_thresholds(train_ann,
-            inputs,
-            outputs,
-            params.rule.roc_misclassification_cost,
-            1 - params.rule.roc_misclassification_cost)
+          inputs,
+          outputs,
+          params.rule.roc_misclassification_cost,
+          1 - params.rule.roc_misclassification_cost)
         roc_thresholds = { spam_threshold, ham_threshold }
 
         rspamd_logger.messagex("ROC thresholds: (spam_threshold: %s, ham_threshold: %s)",
-            roc_thresholds[1], roc_thresholds[2])
+          roc_thresholds[1], roc_thresholds[2])
       end
 
       if not seen_nan then
@@ -565,11 +784,12 @@ local function spawn_train(params)
           ann_data = tostring(train_ann:save()),
           pca_data = pca_data,
           roc_thresholds = roc_thresholds,
+          norm_stats = norm_stats,
         }
 
         local final_data = ucl.to_format(out, 'msgpack')
         lua_util.debugm(N, rspamd_config, "subprocess for ANN %s:%s returned %s bytes",
-            params.rule.prefix, params.set.name, #final_data)
+          params.rule.prefix, params.set.name, #final_data)
         return final_data
       else
         return nil
@@ -581,19 +801,19 @@ local function spawn_train(params)
     local function redis_save_cb(err)
       if err then
         rspamd_logger.errx(rspamd_config, 'cannot save ANN %s:%s to redis key %s: %s',
-            params.rule.prefix, params.set.name, params.ann_key, err)
+          params.rule.prefix, params.set.name, params.ann_key, err)
         lua_redis.redis_make_request_taskless(params.ev_base,
-            rspamd_config,
-            params.rule.redis,
-            nil,
-            false, -- is write
-            gen_unlock_cb(params.rule, params.set, params.ann_key), --callback
-            'HDEL', -- command
-            { params.ann_key, 'lock' }
+          rspamd_config,
+          params.rule.redis,
+          nil,
+          false,                                                  -- is write
+          gen_unlock_cb(params.rule, params.set, params.ann_key), --callback
+          'HDEL',                                                 -- command
+          { params.ann_key, 'lock' }
         )
       else
         rspamd_logger.infox(rspamd_config, 'saved ANN %s:%s to redis: %s',
-            params.rule.prefix, params.set.name, params.set.ann.redis_key)
+          params.rule.prefix, params.set.name, params.set.ann.redis_key)
       end
     end
 
@@ -601,15 +821,15 @@ local function spawn_train(params)
       params.set.learning_spawned = false
       if err then
         rspamd_logger.errx(rspamd_config, 'cannot train ANN %s:%s : %s',
-            params.rule.prefix, params.set.name, err)
+          params.rule.prefix, params.set.name, err)
         lua_redis.redis_make_request_taskless(params.ev_base,
-            rspamd_config,
-            params.rule.redis,
-            nil,
-            true, -- is write
-            gen_unlock_cb(params.rule, params.set, params.ann_key), --callback
-            'HDEL', -- command
-            { params.ann_key, 'lock' }
+          rspamd_config,
+          params.rule.redis,
+          nil,
+          true,                                                   -- is write
+          gen_unlock_cb(params.rule, params.set, params.ann_key), --callback
+          'HDEL',                                                 -- command
+          { params.ann_key, 'lock' }
         )
       else
         local parser = ucl.parser()
@@ -619,6 +839,7 @@ local function spawn_train(params)
         local ann_data = rspamd_util.zstd_compress(parsed.ann_data)
         local pca_data = parsed.pca_data
         local roc_thresholds = parsed.roc_thresholds
+        local norm_stats = parsed.norm_stats
 
         fill_set_ann(params.set, params.ann_key)
         if pca_data then
@@ -643,32 +864,40 @@ local function spawn_train(params)
           symbols = params.set.symbols,
           digest = params.set.digest,
           redis_key = params.set.ann.redis_key,
-          version = version
+          version = version,
+          providers_digest = providers_config_digest(params.rule.providers),
         }
 
         local profile_serialized = ucl.to_format(profile, 'json-compact', true)
         local roc_thresholds_serialized = ucl.to_format(roc_thresholds, 'json-compact', true)
+        local providers_meta_serialized
+        if params.rule.providers then
+          providers_meta_serialized = ucl.to_format(
+            build_providers_meta(params.set.ann.providers or params.rule.providers), 'json-compact', true)
+        end
 
         rspamd_logger.infox(rspamd_config,
-            'trained ANN %s:%s, %s bytes (%s compressed); %s rows in pca (%sb compressed); redis key: %s (old key %s)',
-            params.rule.prefix, params.set.name,
-            #data, #ann_data,
-            #(params.set.ann.pca or {}), #(pca_data or {}),
-            params.set.ann.redis_key, params.ann_key)
+          'trained ANN %s:%s, %s bytes (%s compressed); %s rows in pca (%sb compressed); redis key: %s (old key %s)',
+          params.rule.prefix, params.set.name,
+          #data, #ann_data,
+          #(params.set.ann.pca or {}), #(pca_data or {}),
+          params.set.ann.redis_key, params.ann_key)
 
         lua_redis.exec_redis_script(redis_script_id.save_unlock,
-            { ev_base = params.ev_base, is_write = true },
-            redis_save_cb,
-            { profile.redis_key,
-              redis_ann_prefix(params.rule, params.set.name),
-              ann_data,
-              profile_serialized,
-              tostring(params.rule.ann_expire),
-              tostring(os.time()),
-              params.ann_key, -- old key to unlock...
-              roc_thresholds_serialized,
-              pca_data,
-            })
+          { ev_base = params.ev_base, is_write = true },
+          redis_save_cb,
+          { profile.redis_key,
+            redis_ann_prefix(params.rule, params.set.name),
+            ann_data,
+            profile_serialized,
+            tostring(params.rule.ann_expire),
+            tostring(os.time()),
+            params.ann_key, -- old key to unlock...
+            roc_thresholds_serialized,
+            pca_data,
+            providers_meta_serialized,
+            ucl.to_format(norm_stats, 'json-compact', true),
+          })
       end
     end
 
@@ -685,7 +914,6 @@ local function spawn_train(params)
     params.set.learning_spawned = true
     register_lock_extender(params.rule, params.set, params.ev_base, params.ann_key)
     return
-
   end
 end
 
@@ -698,14 +926,14 @@ local function process_rules_settings()
       -- Use static user defined profile
       -- Ensure that we have an array...
       lua_util.debugm(N, rspamd_config, "use static profile for %s (%s): %s",
-          rule.prefix, selt.name, profile)
+        rule.prefix, selt.name, profile)
       if not profile[1] then
         profile = lua_util.keys(profile)
       end
       selt.symbols = profile
     else
       lua_util.debugm(N, rspamd_config, "use dynamic cfg based profile for %s (%s)",
-          rule.prefix, selt.name)
+        rule.prefix, selt.name)
     end
 
     local function filter_symbols_predicate(sname)
@@ -734,34 +962,34 @@ local function process_rules_settings()
     selt.prefix = redis_ann_prefix(rule, selt.name)
 
     rspamd_logger.messagex(rspamd_config,
-        'use NN prefix for rule %s; settings id "%s"; symbols digest: "%s"',
-        selt.prefix, selt.name, selt.digest)
+      'use NN prefix for rule %s; settings id "%s"; symbols digest: "%s"',
+      selt.prefix, selt.name, selt.digest)
 
     lua_redis.register_prefix(selt.prefix, N,
-        string.format('NN prefix for rule "%s"; settings id "%s"',
-            selt.prefix, selt.name), {
-          persistent = true,
-          type = 'zlist',
-        })
+      string.format('NN prefix for rule "%s"; settings id "%s"',
+        selt.prefix, selt.name), {
+        persistent = true,
+        type = 'zlist',
+      })
     -- Versions
     lua_redis.register_prefix(selt.prefix .. '_\\d+', N,
-        string.format('NN storage for rule "%s"; settings id "%s"',
-            selt.prefix, selt.name), {
-          persistent = true,
-          type = 'hash',
-        })
+      string.format('NN storage for rule "%s"; settings id "%s"',
+        selt.prefix, selt.name), {
+        persistent = true,
+        type = 'hash',
+      })
     lua_redis.register_prefix(selt.prefix .. '_\\d+_spam_set', N,
-        string.format('NN learning set (spam) for rule "%s"; settings id "%s"',
-            selt.prefix, selt.name), {
-          persistent = true,
-          type = 'set',
-        })
+      string.format('NN learning set (spam) for rule "%s"; settings id "%s"',
+        selt.prefix, selt.name), {
+        persistent = true,
+        type = 'set',
+      })
     lua_redis.register_prefix(selt.prefix .. '_\\d+_ham_set', N,
-        string.format('NN learning set (ham) for rule "%s"; settings id "%s"',
-            rule.prefix, selt.name), {
-          persistent = true,
-          type = 'set',
-        })
+      string.format('NN learning set (ham) for rule "%s"; settings id "%s"',
+        rule.prefix, selt.name), {
+        persistent = true,
+        type = 'set',
+      })
   end
 
   for k, rule in pairs(settings.rules) do
@@ -813,8 +1041,8 @@ local function process_rules_settings()
           if nelt and lua_util.distance_sorted(ex.symbols, nelt.symbols) == 0 then
             -- Equal symbols, add reference
             lua_util.debugm(N, rspamd_config,
-                'added reference from settings id %s to %s; same symbols',
-                nelt.name, ex.name)
+              'added reference from settings id %s to %s; same symbols',
+              nelt.name, ex.name)
             rule.settings[settings_id] = id
             nelt = nil
           end
@@ -824,7 +1052,7 @@ local function process_rules_settings()
       if nelt then
         rule.settings[settings_id] = nelt
         lua_util.debugm(N, rspamd_config, 'added new settings id %s(%s) to %s',
-            nelt.name, settings_id, rule.prefix)
+          nelt.name, settings_id, rule.prefix)
       end
     end
   end
@@ -847,7 +1075,7 @@ local function get_rule_settings(task, rule)
   return set
 end
 
-local function result_to_vector(task, profile)
+result_to_vector = function(task, profile)
   if not profile.zeros then
     -- Fill zeros vector
     local zeros = {}
@@ -874,13 +1102,18 @@ end
 
 return {
   can_push_train_vector = can_push_train_vector,
+  collect_features = collect_features,
   create_ann = create_ann,
   default_options = default_options,
+  build_providers_meta = build_providers_meta,
+  apply_normalization = apply_normalization,
   gen_unlock_cb = gen_unlock_cb,
   get_rule_settings = get_rule_settings,
   load_scripts = load_scripts,
   module_config = module_config,
   new_ann_key = new_ann_key,
+  providers_config_digest = providers_config_digest,
+  register_provider = register_provider,
   plugin_ver = plugin_ver,
   process_rules_settings = process_rules_settings,
   redis_ann_prefix = redis_ann_prefix,
