@@ -7,33 +7,15 @@ Supports minimal OpenAI- and Ollama-compatible embedding endpoints.
 local rspamd_http = require "rspamd_http"
 local rspamd_logger = require "rspamd_logger"
 local ucl = require "ucl"
-local lua_mime = require "lua_mime"
 local neural_common = require "plugins/neural"
 local lua_cache = require "lua_cache"
+local llm_common = require "llm_common"
 
 local N = "neural.llm"
 
-local function select_text(task, cfg)
-  local part = lua_mime.get_displayed_text_part(task)
-  if part then
-    local tp = part:get_text()
-    if tp then
-      -- Prefer UTF text content
-      local content = tp:get_content('raw_utf') or tp:get_content('raw')
-      if content and #content > 0 then
-        return content
-      end
-    end
-    -- Fallback to raw content
-    local rc = part:get_raw_content()
-    if type(rc) == 'userdata' then
-      rc = tostring(rc)
-    end
-    return rc
-  end
-
-  -- Fallback to subject if no text part
-  return task:get_subject() or ''
+local function select_text(task)
+  local content = llm_common.build_llm_input(task)
+  return content
 end
 
 local function compose_llm_settings(pcfg)
@@ -90,7 +72,7 @@ neural_common.register_provider('llm', {
       return nil
     end
 
-    local content = select_text(task, pcfg)
+    local content = select_text(task)
     if not content or #content == 0 then
       rspamd_logger.debugm(N, task, 'llm provider has no content to embed; skip')
       return nil
@@ -209,7 +191,7 @@ neural_common.register_provider('llm', {
     if not llm.model then
       return cont(nil)
     end
-    local content = select_text(task, pcfg)
+    local content = select_text(task)
     if not content or #content == 0 then
       return cont(nil)
     end
