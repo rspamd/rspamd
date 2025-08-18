@@ -111,81 +111,82 @@ local function ann_scores_filter(task)
     end
 
     if ann then
-      local vec
-      if rule.providers and #rule.providers > 0 then
-        local fused, meta = neural_common.collect_features(task, rule, profile)
-        vec = fused
-        if profile.providers_digest and meta.digest and profile.providers_digest ~= meta.digest then
+      local function after_features(vec, meta)
+        if profile.providers_digest and meta and meta.digest and profile.providers_digest ~= meta.digest then
           lua_util.debugm(N, task, 'providers digest mismatch for %s:%s, skip ANN apply',
             rule.prefix, set.name)
           vec = nil
         end
-      else
-        vec = neural_common.result_to_vector(task, profile)
-      end
 
-      local score
-      if not vec then
-        goto continue_rule
-      end
-      if set.ann.norm_stats then
-        vec = neural_common.apply_normalization(vec, set.ann.norm_stats)
-      end
-      local out = ann:apply1(vec, set.ann.pca)
-      score = out[1]
-
-      local symscore = string.format('%.3f', score)
-      task:cache_set(rule.prefix .. '_neural_score', score)
-      lua_util.debugm(N, task, '%s:%s:%s ann score: %s',
-        rule.prefix, set.name, set.ann.version, symscore)
-
-      if score > 0 then
-        local result = score
-
-        -- If spam_score_threshold is defined, override all other thresholds.
-        local spam_threshold = 0
-        if rule.spam_score_threshold then
-          spam_threshold = rule.spam_score_threshold
-        elseif rule.roc_enabled and not set.ann.roc_thresholds then
-          spam_threshold = set.ann.roc_thresholds[1]
+        local score
+        if not vec then
+          return
         end
+        if set.ann.norm_stats then
+          vec = neural_common.apply_normalization(vec, set.ann.norm_stats)
+        end
+        local out = ann:apply1(vec, set.ann.pca)
+        score = out[1]
 
-        if result >= spam_threshold then
-          if rule.flat_threshold_curve then
-            task:insert_result(rule.symbol_spam, 1.0, symscore)
+        local symscore = string.format('%.3f', score)
+        task:cache_set(rule.prefix .. '_neural_score', score)
+        lua_util.debugm(N, task, '%s:%s:%s ann score: %s',
+          rule.prefix, set.name, set.ann.version, symscore)
+
+        if score > 0 then
+          local result = score
+
+          -- If spam_score_threshold is defined, override all other thresholds.
+          local spam_threshold = 0
+          if rule.spam_score_threshold then
+            spam_threshold = rule.spam_score_threshold
+          elseif rule.roc_enabled and not set.ann.roc_thresholds then
+            spam_threshold = set.ann.roc_thresholds[1]
+          end
+
+          if result >= spam_threshold then
+            if rule.flat_threshold_curve then
+              task:insert_result(rule.symbol_spam, 1.0, symscore)
+            else
+              task:insert_result(rule.symbol_spam, result, symscore)
+            end
           else
-            task:insert_result(rule.symbol_spam, result, symscore)
+            lua_util.debugm(N, task, '%s:%s:%s ann score: %s < %s (spam threshold)',
+              rule.prefix, set.name, set.ann.version, symscore,
+              spam_threshold)
           end
         else
-          lua_util.debugm(N, task, '%s:%s:%s ann score: %s < %s (spam threshold)',
-            rule.prefix, set.name, set.ann.version, symscore,
-            spam_threshold)
-        end
-      else
-        local result = -(score)
+          local result = -(score)
 
-        -- If ham_score_threshold is defined, override all other thresholds.
-        local ham_threshold = 0
-        if rule.ham_score_threshold then
-          ham_threshold = rule.ham_score_threshold
-        elseif rule.roc_enabled and not set.ann.roc_thresholds then
-          ham_threshold = set.ann.roc_thresholds[2]
-        end
-
-        if result >= ham_threshold then
-          if rule.flat_threshold_curve then
-            task:insert_result(rule.symbol_ham, 1.0, symscore)
-          else
-            task:insert_result(rule.symbol_ham, result, symscore)
+          -- If ham_score_threshold is defined, override all other thresholds.
+          local ham_threshold = 0
+          if rule.ham_score_threshold then
+            ham_threshold = rule.ham_score_threshold
+          elseif rule.roc_enabled and not set.ann.roc_thresholds then
+            ham_threshold = set.ann.roc_thresholds[2]
           end
-        else
-          lua_util.debugm(N, task, '%s:%s:%s ann score: %s < %s (ham threshold)',
-            rule.prefix, set.name, set.ann.version, result,
-            ham_threshold)
+
+          if result >= ham_threshold then
+            if rule.flat_threshold_curve then
+              task:insert_result(rule.symbol_ham, 1.0, symscore)
+            else
+              task:insert_result(rule.symbol_ham, result, symscore)
+            end
+          else
+            lua_util.debugm(N, task, '%s:%s:%s ann score: %s < %s (ham threshold)',
+              rule.prefix, set.name, set.ann.version, result,
+              ham_threshold)
+          end
         end
+      end
+
+      if rule.providers and #rule.providers > 0 then
+        neural_common.collect_features_async(task, rule, profile, 'infer', after_features)
+      else
+        local vec = neural_common.result_to_vector(task, profile)
+        after_features(vec)
       end
     end
-    ::continue_rule::
   end
 end
 
@@ -242,19 +243,19 @@ local function ann_push_task_result(rule, task, verdict, score, set)
       learn_ham = false
       learn_spam = false
 
-      -- Explicitly store tokens in cache
-      local vec
-      if rule.providers and #rule.providers > 0 then
-        local fused = neural_common.collect_features(task, rule, set, 'train')
-        if type(fused) == 'table' then
-          vec = fused
+      -- Explicitly store tokens in cache (use async collector if providers configured)
+      local function after_collect(vec)
+        if not vec then
+          vec = neural_common.result_to_vector(task, set)
         end
+        task:cache_set(rule.prefix .. '_neural_vec_mpack', ucl.to_format(vec, 'msgpack'))
+        task:cache_set(rule.prefix .. '_neural_profile_digest', set.digest)
       end
-      if not vec then
-        vec = neural_common.result_to_vector(task, set)
+      if rule.providers and #rule.providers > 0 then
+        neural_common.collect_features_async(task, rule, set, 'train', after_collect)
+      else
+        after_collect(nil)
       end
-      task:cache_set(rule.prefix .. '_neural_vec_mpack', ucl.to_format(vec, 'msgpack'))
-      task:cache_set(rule.prefix .. '_neural_profile_digest', set.digest)
       skip_reason = 'store_pool_only has been set'
     end
   end
@@ -274,12 +275,10 @@ local function ann_push_task_result(rule, task, verdict, score, set)
         if neural_common.can_push_train_vector(rule, task, learn_type, nspam, nham) then
           local vec
           if rule.providers and #rule.providers > 0 then
-            local fused = neural_common.collect_features(task, rule, set)
-            if type(fused) == 'table' then
-              vec = fused
-            end
-          end
-          if not vec then
+            -- Note: this training path remains sync for now; vectors are pushed when computed
+            -- fall back to legacy vector; async training push will be added later
+            vec = neural_common.result_to_vector(task, set)
+          else
             vec = neural_common.result_to_vector(task, set)
           end
 

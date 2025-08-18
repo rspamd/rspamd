@@ -202,5 +202,96 @@ neural_common.register_provider('llm', {
     }
 
     return embedding, meta
+  end,
+  collect_async = function(task, ctx, cont)
+    local pcfg = ctx.config or {}
+    local llm = compose_llm_settings(pcfg)
+    if not llm.model then
+      return cont(nil)
+    end
+    local content = select_text(task, pcfg)
+    if not content or #content == 0 then
+      return cont(nil)
+    end
+    local body
+    if llm.type == 'openai' then
+      body = { model = llm.model, input = content }
+    elseif llm.type == 'ollama' then
+      body = { model = llm.model, prompt = content }
+    else
+      return cont(nil)
+    end
+    local cache_ctx = lua_cache.create_cache_context(neural_common.redis_params, {
+      cache_prefix = llm.cache_prefix,
+      cache_ttl = llm.cache_ttl,
+      cache_format = 'messagepack',
+      cache_hash_len = llm.cache_hash_len,
+      cache_use_hashing = llm.cache_use_hashing,
+    }, N)
+    local hasher = require 'rspamd_cryptobox_hash'
+    local key = string.format('%s:%s:%s', llm.type, llm.model or 'model', hasher.create(content):hex())
+
+    local function finish_with_embedding(embedding)
+      if not embedding then return cont(nil) end
+      for i = 1, #embedding do
+        embedding[i] = tonumber(embedding[i]) or 0.0
+      end
+      cont(embedding, {
+        name = pcfg.name or 'llm',
+        type = 'llm',
+        dim = #embedding,
+        weight = pcfg.weight or 1.0,
+        model = llm.model,
+        provider = llm.type,
+      })
+    end
+
+    local function request_and_cache()
+      local headers = { ['Content-Type'] = 'application/json' }
+      if llm.type == 'openai' and llm.api_key then
+        headers['Authorization'] = 'Bearer ' .. llm.api_key
+      end
+      local http_params = {
+        url = llm.url,
+        mime_type = 'application/json',
+        timeout = llm.timeout,
+        log_obj = task,
+        headers = headers,
+        body = ucl.to_format(body, 'json-compact', true),
+        task = task,
+        method = 'POST',
+        use_gzip = true,
+        callback = function(err, _, data)
+          if err then return cont(nil) end
+          local parser = ucl.parser()
+          local ok = parser:parse_text(data)
+          if not ok then return cont(nil) end
+          local parsed = parser:get_object()
+          local embedding = extract_embedding(llm.type, parsed)
+          if embedding and cache_ctx then
+            lua_cache.cache_set(task, key, { e = embedding }, cache_ctx)
+          end
+          finish_with_embedding(embedding)
+        end,
+      }
+      rspamd_http.request(http_params)
+    end
+
+    if cache_ctx then
+      lua_cache.cache_get(task, key, cache_ctx, llm.timeout or 2.0,
+        function(_)
+          request_and_cache()
+        end,
+        function(_, err, data)
+          if data and data.e then
+            finish_with_embedding(data.e)
+          else
+            request_and_cache()
+          end
+        end
+      )
+    else
+      request_and_cache()
+    end
   end
 })

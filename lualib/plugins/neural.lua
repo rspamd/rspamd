@@ -130,10 +130,13 @@ local result_to_vector
 -- Built-in symbols provider (compatibility path)
 register_provider('symbols', {
   collect = function(task, ctx)
-    -- ctx.profile is expected for symbols provider
     local vec = result_to_vector(task, ctx.profile)
     return vec, { name = 'symbols', type = 'symbols', dim = #vec, weight = ctx.weight or 1.0 }
-  end
+  end,
+  collect_async = function(task, ctx, cont)
+    local vec = result_to_vector(task, ctx.profile)
+    cont(vec, { name = 'symbols', type = 'symbols', dim = #vec, weight = ctx.weight or 1.0 })
+  end,
 })
 
 local function load_scripts()
@@ -566,76 +569,123 @@ end
 
 -- If no providers configured, fallback to symbols provider unless disabled
 -- phase: 'infer' | 'train'
-local function collect_features(task, rule, profile_or_set, phase)
-  local vectors = {}
-  local metas = {}
+-- Removed synchronous collect_features; use collect_features_async instead
 
+-- Async version: runs providers in parallel and calls cb(fused, meta) when done
+local function collect_features_async(task, rule, profile_or_set, phase, cb)
   local providers_cfg = rule.providers
   if not providers_cfg or #providers_cfg == 0 then
-    if not rule.disable_symbols_input then
-      local prov = get_provider('symbols')
-      if prov then
-        local vec, meta = prov.collect(task, { profile = profile_or_set, weight = 1.0 })
+    if rule.disable_symbols_input then
+      cb(nil, { providers = {}, total_dim = 0, digest = providers_config_digest(providers_cfg) })
+      return
+    end
+    local prov = get_provider('symbols')
+    if prov and prov.collect_async then
+      prov.collect_async(task, { profile = profile_or_set, weight = 1.0, phase = phase }, function(vec, meta)
+        local metas = {}
         if vec then
-          vectors[#vectors + 1] = vec
-          metas[#metas + 1] = meta
+          metas[1] = meta
         end
-      end
-    end
-  else
-    for _, pcfg in ipairs(providers_cfg) do
-      local prov = get_provider(pcfg.type or pcfg.name)
-      if prov then
-        local ok, vec, meta = pcall(function()
-          return prov.collect(task, {
-            profile = profile_or_set,
-            rule = rule,
-            config = pcfg,
-            weight = pcfg.weight or 1.0,
-            phase = phase,
-          })
-        end)
-        if ok and vec then
-          if meta then
-            meta.weight = pcfg.weight or meta.weight or 1.0
+        local fused = {}
+        if vec then
+          local w = (meta and meta.weight) or 1.0
+          local norm_mode = (rule.fusion and rule.fusion.normalization) or 'none'
+          if norm_mode ~= 'none' then
+            vec = apply_normalization(vec, norm_mode)
           end
-          vectors[#vectors + 1] = vec
-          metas[#metas + 1] = meta or
-              { name = pcfg.name or pcfg.type, type = pcfg.type, dim = #vec, weight = pcfg.weight or 1.0 }
-        else
-          rspamd_logger.debugm(N, rspamd_config, 'provider %s failed to collect features', pcfg.type or pcfg.name)
+          for _, x in ipairs(vec) do
+            fused[#fused + 1] = x * w
+          end
         end
-      else
-        rspamd_logger.debugm(N, rspamd_config, 'provider %s is not registered', pcfg.type or pcfg.name)
-      end
+        cb(#fused > 0 and fused or nil, {
+          providers = build_providers_meta(metas) or metas,
+          total_dim = #fused,
+          digest = providers_config_digest(providers_cfg),
+        })
+      end)
+      return
     end
-  end
-
-  -- Simple fusion by concatenation; optional per-provider weight scaling
-  local fused = {}
-  for i, v in ipairs(vectors) do
-    local w = (metas[i] and metas[i].weight) or 1.0
-    -- Apply normalization if requested
+    -- Fallback: direct symbols compute
+    local vec = result_to_vector(task, profile_or_set)
+    local meta = { name = 'symbols', type = 'symbols', dim = #vec, weight = 1.0 }
+    local fused = {}
+    local w = 1.0
     local norm_mode = (rule.fusion and rule.fusion.normalization) or 'none'
     if norm_mode ~= 'none' then
-      v = apply_normalization(v, norm_mode)
+      vec = apply_normalization(vec, norm_mode)
     end
-    for _, x in ipairs(v) do
+    for _, x in ipairs(vec) do
       fused[#fused + 1] = x * w
     end
+    cb(fused,
+      {
+        providers = build_providers_meta({ meta }) or { meta },
+        total_dim = #fused,
+        digest = providers_config_digest(
+          providers_cfg)
+      })
+    return
   end
 
-  local meta = {
-    providers = build_providers_meta(metas) or metas,
-    total_dim = #fused,
-    digest = providers_config_digest(providers_cfg),
-  }
+  local vectors = {}
+  local metas = {}
+  local remaining = 0
 
-  if #fused == 0 then
-    return nil, meta
+  local function maybe_finish()
+    remaining = remaining - 1
+    if remaining == 0 then
+      -- Fuse
+      local fused = {}
+      for i, v in ipairs(vectors) do
+        if v then
+          local w = (metas[i] and metas[i].weight) or 1.0
+          local norm_mode = (rule.fusion and rule.fusion.normalization) or 'none'
+          if norm_mode ~= 'none' then
+            v = apply_normalization(v, norm_mode)
+          end
+          for _, x in ipairs(v) do
+            fused[#fused + 1] = x * w
+          end
+        end
+      end
+      local meta = {
+        providers = build_providers_meta(metas) or metas,
+        total_dim = #fused,
+        digest = providers_config_digest(providers_cfg),
+      }
+      if #fused == 0 then
+        cb(nil, meta)
+      else
+        cb(fused, meta)
+      end
+    end
   end
 
-  return fused, meta
+  local function start_provider(i, pcfg)
+    local prov = get_provider(pcfg.type or pcfg.name)
+    if not prov or not prov.collect_async then
+      maybe_finish()
+      return
+    end
+    prov.collect_async(task, {
+      profile = profile_or_set,
+      rule = rule,
+      config = pcfg,
+      weight = pcfg.weight or 1.0,
+      phase = phase,
+    }, function(vec, meta)
+      if vec then
+        metas[i] = meta or { name = pcfg.name or pcfg.type, type = pcfg.type, dim = #vec, weight = pcfg.weight or 1.0 }
+        vectors[i] = vec
+      end
+      maybe_finish()
+    end)
+  end
+
+  remaining = #providers_cfg
+  for i, pcfg in ipairs(providers_cfg) do
+    start_provider(i, pcfg)
+  end
 end
 
 -- This function receives training vectors, checks them, spawn learning and saves ANN in Redis
@@ -1102,7 +1152,7 @@ end
 
 return {
   can_push_train_vector = can_push_train_vector,
-  collect_features = collect_features,
+  collect_features_async = collect_features_async,
   create_ann = create_ann,
   default_options = default_options,
   build_providers_meta = build_providers_meta,
