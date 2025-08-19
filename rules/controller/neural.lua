@@ -12,11 +12,12 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 local neural_common = require "plugins/neural"
 local ts = require("tableshape").types
 local ucl = require "ucl"
+local lua_util = require "lua_util"
 
 local E = {}
 
@@ -61,10 +62,67 @@ local function handle_learn(task, conn)
   conn:send_string('{"success" : true}')
 end
 
+local function handle_status(task, conn, req_params)
+  local out = {
+    rules = {},
+  }
+  for name, rule in pairs(neural_common.settings.rules) do
+    local r = {
+      providers = rule.providers,
+      fusion = rule.fusion,
+      max_inputs = rule.max_inputs,
+      settings = {},
+    }
+    for sid, set in pairs(rule.settings or {}) do
+      if type(set) == 'table' then
+        local s = {
+          name = set.name,
+          symbols_digest = set.digest,
+        }
+        if set.ann then
+          s.ann = {
+            version = set.ann.version,
+            redis_key = set.ann.redis_key,
+            providers_digest = set.ann.providers_digest,
+            has_pca = set.ann.pca ~= nil,
+          }
+        end
+        r.settings[sid] = s
+      end
+    end
+    out.rules[name] = r
+  end
+  conn:send_ucl({ success = true, data = out })
+end
+
+local function handle_train(task, conn, req_params)
+  local rule_name = req_params.rule or 'default'
+  local rule = neural_common.settings.rules[rule_name]
+  if not rule then
+    conn:send_error(400, 'unknown rule')
+    return
+  end
+  -- Trigger check_anns to evaluate training conditions
+  rspamd_config:add_periodic(task:get_ev_base(), 0.0, function()
+    return 0.0
+  end)
+  conn:send_ucl({ success = true, message = 'training scheduled check' })
+end
+
 return {
   learn = {
     handler = handle_learn,
     enable = true,
     need_task = true,
+  },
+  status = {
+    handler = handle_status,
+    enable = false,
+    need_task = false,
+  },
+  train = {
+    handler = handle_train,
+    enable = true,
+    need_task = false,
   },
 }
