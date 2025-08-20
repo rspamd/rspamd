@@ -54,7 +54,9 @@ BuildRequires:    gcc-toolset-12-libasan-devel
 %if 0%{?el8} || 0%{?fedora} > 10
 BuildRequires:    hyperscan-devel
 %endif
+%if !0%{?el10}
 BuildRequires:    jemalloc-devel
+%endif
 %endif
 
 %if 0%{getenv:LUAJIT}
@@ -65,7 +67,9 @@ BuildRequires:    lua-devel
 BuildRequires:    openblas-devel
 BuildRequires:    openssl-devel
 BuildRequires:    pcre2-devel
+%if !0%{?el10}
 BuildRequires:    ragel
+%endif
 BuildRequires:    sqlite-devel
 BuildRequires:    systemd
 BuildRequires:    binutils-devel
@@ -158,7 +162,9 @@ rm -f %{_builddir}/luajit-build/lib/*.so || true
 %endif
 %endif
 %ifarch x86_64 amd64
+%if !0%{?el10}
         -DENABLE_JEMALLOC=ON \
+%endif
 %endif
 %if 0%{getenv:LUAJIT}
         -DENABLE_LUAJIT=ON \
