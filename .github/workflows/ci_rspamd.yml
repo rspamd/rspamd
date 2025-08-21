@@ -9,6 +9,9 @@ on:
       name:
         required: true
         type: string
+      runner:
+        type: string
+        default: 'ubuntu-24.04'
 
 env:
   CTEST_OUTPUT_ON_FAILURE: 1
@@ -16,7 +19,7 @@ env:
 
 jobs:
   test:
-    runs-on: [ "ubuntu-latest" ]
+    runs-on: "${{ inputs.runner }}"
     container:
       image: ${{ inputs.image }}
       options: --user root
@@ -94,7 +97,7 @@ jobs:
           retention-days: 1
 
       - name: Upload built rspamd
-        if: inputs.name == 'ubuntu-ci'
+        if: inputs.name == 'ubuntu-ci-amd64'
         uses: actions/upload-artifact@v4
         with:
           name: rspamd-binary-${{ inputs.name }}

@@ -43,7 +43,7 @@ jobs:
       - name: Download rspamd binary from build job
         uses: actions/download-artifact@v4
         with:
-          name: rspamd-binary-ubuntu-ci
+          name: rspamd-binary-${{ inputs.name }}
           path: ${{ env.PREFIX }}
 
       - name: Prepare rspamd configuration
