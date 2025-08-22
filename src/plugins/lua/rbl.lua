@@ -857,7 +857,9 @@ local function gen_rbl_callback(rule)
     check_required_symbols -- if we have require_symbols then check those symbols
   }
   local description = {
+    'allowed',
     'alive',
+    'required_symbols',
   }
 
   if rule.exclude_users then
