@@ -34,7 +34,6 @@ americanexpress.ch
 americanexpress.com
 anadolubank.nl
 ancestry.com
-anpdm.com
 anz.com
 anz.co.nz
 aol.com
@@ -229,6 +228,7 @@ closebrothers.co.uk
 clubsc.ch
 cnet.com
 cnn.com
+co.kg
 colpatria.com
 colpatria.com.co
 comcast.net
@@ -295,7 +295,6 @@ discovery.co.za
 dnbnord.lt
 domain.com
 doubleclick.com
-dovecot.org
 dresdner-bank.de
 dsbbank.sr
 dsbl.org
@@ -316,7 +315,6 @@ egroups.com
 e-gulfbank.com
 emode.com
 esunbank.com.tw
-exacttarget.com
 example.com
 example.net
 example.org
@@ -352,7 +350,6 @@ generali.es
 genevoise.ch
 gentoo.org
 geocities.com
-github.com
 gkb.ch
 gmail.com
 gmx.net
@@ -420,7 +417,6 @@ isbank.de
 isbank.ge
 isbank.iq
 isbankkosova.com
-isc.org
 itau.com.br
 ivillage.com
 joingevalia.com
@@ -449,8 +445,6 @@ lcl.com
 lcl.fr
 li.ru
 list.ru
-lists.isc.org
-lists.roundcube.net
 liveinternet.ru
 livejournal.com
 lloydsbank.com
@@ -704,7 +698,6 @@ subscribe.ru
 sun.com
 suncorpbank.com.au
 suntrust.com
-svn.apache.org
 swedbank.com
 swedbank.ee
 swedbank.lt
@@ -715,7 +708,6 @@ swisscaution.ch
 swissquote.ch
 sydbank.dk
 sympatico.ca
-taggedmail.com
 tails.nl
 tangerine.ca
 tcb-bank.com.tw
@@ -735,7 +727,6 @@ top4top.ru
 tsbbank.co.nz
 tsb.co.nz
 tsb.co.uk
-tumblr.com
 tux.org
 twitter.com
 ubibanca.com
@@ -769,8 +760,6 @@ visa.com.br
 visaeurope.ch
 visaeurope.com
 viseca.ch
-vistaprint.com
-vistaprint.dk
 volksbank.de
 volkswagenbank.de
 vpbank.com
@@ -825,6 +814,18 @@ zdnet.com
 zenithbank.com
 zkb.ch
 zugerkb.ch
+vistaprint.dk
+vistaprint.com
+anpdm.com
+dovecot.org
+exacttarget.com
+github.com
+isc.org
 # list-manage1.com # grey
 # list-manage2.com # grey
 # list-manage.com # grey
+lists.isc.org
+lists.roundcube.net
+svn.apache.org
+taggedmail.com
+tumblr.com

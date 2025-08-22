@@ -1,5 +1,6 @@
 # Domains with valid SPF and DKIM
 
+1cfresh.com
 4chan.org
 6pm.com
 about.com
@@ -52,7 +53,6 @@ change.org
 chase.com
 cisco.com
 citi.com
-constantcontact.com
 costco.com
 craigslist.org
 custhelp.com
@@ -63,6 +63,7 @@ discovercard.com
 disqus.com
 dropbox.com
 drweb.com
+e-boks.dk
 ebay.ca
 ebay.com
 ebay.com.au
@@ -128,6 +129,7 @@ mercadolivre.com.br
 messenger.com
 microsoft.com
 microsoftonline.com
+minmyndighetspost.se
 moikrug.ru
 mts.ru
 neobux.com
@@ -139,6 +141,7 @@ nikkeibp.co.jp
 nyaa.se
 nytimes.com
 odnoklassniki.ru
+ofd.yandex.ru
 ok.ru
 olx.ua
 overstock.com
@@ -160,7 +163,6 @@ pch.com
 pinterest.com
 porn.com
 priceline.com
-qq.com
 quora.com
 rakuten.co.jp
 reddit.com
@@ -168,6 +170,9 @@ researchgate.net
 salesforce.com
 sciencedirect.com
 shopify.com
+skanetrafiken.se
+skat.dk
+skatteverket.se
 slack.com
 slideshare.net
 so-net.ne.jp
@@ -188,6 +193,7 @@ taringa.net
 taxi.yandex.ru
 tele2.ru
 thekitchn.com
+tochka.com
 tokopedia.com
 trello.com
 tribunnews.com
@@ -228,5 +234,6 @@ zappos.com
 zendesk.com
 zippyshare.com
 zomato.com
+zoom.us
 zulily.com
 zwift.com
