@@ -936,8 +936,8 @@ local function gen_rbl_callback(rule)
     for i, f in ipairs(pipeline) do
       if not f(task, dns_req, whitelist) then
         lua_util.debugm(N, task,
-            "skip rbl check: %s; pipeline condition %s returned false",
-            rule.symbol, i)
+            "skip rbl check: %s; pipeline condition %s (%s) returned false",
+            rule.symbol, i, description[i])
         return
       end
     end
