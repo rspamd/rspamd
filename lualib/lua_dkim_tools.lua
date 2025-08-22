@@ -678,7 +678,7 @@ exports.sign_using_vault = function(N, task, settings, selector, sign_func, err_
             nvalid = nvalid + 1
             sign_func(task, dkim_sign_data)
           end, fun.filter(is_selector_valid, elts))
-          for _, e in errs do
+          for _, e in ipairs(errs) do
             lua_util.debugm(N, task, 'error found during processing Vault selectors: %s:%s',
               e[1], e[2])
           end
