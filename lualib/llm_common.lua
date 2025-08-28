@@ -7,6 +7,7 @@ local lua_mime = require "lua_mime"
 local fun = require "fun"
 
 local M = {}
+local N = 'llm_common'
 
 local function get_meta_llm_content(task)
   local url_content = "Url domains: no urls found"
@@ -34,11 +35,13 @@ function M.build_llm_input(task, opts)
 
   local sel_part = lua_mime.get_displayed_text_part(task)
   if not sel_part then
+    lua_util.debugm(N, task, 'no displayed text part found')
     return nil, nil
   end
 
   local nwords = sel_part:get_words_count() or 0
   if nwords < 5 then
+    lua_util.debugm(N, task, 'too few words in part: %s', nwords)
     return nil, sel_part
   end
 
@@ -51,6 +54,7 @@ function M.build_llm_input(task, opts)
     else
       text = table.concat(words, ' ')
     end
+    lua_util.debugm(N, task, 'truncated text to %s tokens (had %s words)', max_tokens, nwords)
   else
     -- Keep rspamd_text (userdata) intact; consumers (http/ucl) can use it directly
     text = sel_part:get_content_oneline() or ''

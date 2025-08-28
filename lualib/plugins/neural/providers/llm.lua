@@ -20,7 +20,8 @@ end
 
 local function compose_llm_settings(pcfg)
   local gpt_settings = rspamd_config:get_all_opt('gpt') or {}
-  local llm_type = pcfg.type or gpt_settings.type or 'openai'
+  -- Provider identity is pcfg.type=='llm'; backend type is specified via one of these keys
+  local llm_type = pcfg.llm_type or pcfg.api or pcfg.backend or gpt_settings.type or 'openai'
   local model = pcfg.model or gpt_settings.model
   local timeout = pcfg.timeout or gpt_settings.timeout or 2.0
   local url = pcfg.url
@@ -42,8 +43,8 @@ local function compose_llm_settings(pcfg)
     api_key = api_key,
     cache_ttl = pcfg.cache_ttl or 86400,
     cache_prefix = pcfg.cache_prefix or 'neural_llm',
-    cache_hash_len = pcfg.cache_hash_len or 16,
-    cache_use_hashing = pcfg.cache_use_hashing ~= false,
+    cache_hash_len = pcfg.cache_hash_len or 32,
+    cache_use_hashing = (pcfg.cache_use_hashing ~= false),
   }
 end
 
@@ -63,19 +64,21 @@ local function extract_embedding(llm_type, parsed)
 end
 
 neural_common.register_provider('llm', {
-  collect = function(task, ctx)
+  collect_async = function(task, ctx, cont)
     local pcfg = ctx.config or {}
     local llm = compose_llm_settings(pcfg)
 
     if not llm.model then
       rspamd_logger.debugm(N, task, 'llm provider missing model; skip')
-      return nil
+      cont(nil)
+      return
     end
 
     local input_tbl = select_text(task)
     if not input_tbl then
       rspamd_logger.debugm(N, task, 'llm provider has no content to embed; skip')
-      return nil
+      cont(nil)
+      return
     end
 
     -- Build request input string (text then optional subject), keeping rspamd_text intact
@@ -84,6 +87,9 @@ neural_common.register_provider('llm', {
       input_string = input_string .. "\nSubject: " .. input_tbl.subject
     end
 
+    rspamd_logger.debugm(N, task, 'llm embedding request: model=%s url=%s len=%s', tostring(llm.model), tostring(llm.url),
+      tostring(#tostring(input_string)))
+
     local body
     if llm.type == 'openai' then
       body = { model = llm.model, input = input_string }
@@ -91,10 +97,11 @@ neural_common.register_provider('llm', {
       body = { model = llm.model, prompt = input_string }
     else
       rspamd_logger.debugm(N, task, 'unsupported llm type: %s', llm.type)
-      return nil
+      cont(nil)
+      return
     end
 
-    -- Redis cache: hash the final input string only (IUF is trivial here)
+    -- Redis cache: hash the final input string only
     local cache_ctx = lua_cache.create_cache_context(neural_common.redis_params, {
       cache_prefix = llm.cache_prefix,
       cache_ttl = llm.cache_ttl,
@@ -103,8 +110,49 @@ neural_common.register_provider('llm', {
       cache_use_hashing = llm.cache_use_hashing,
     }, N)
 
-    local hasher = require 'rspamd_cryptobox_hash'
-    local key = string.format('%s:%s:%s', llm.type, llm.model or 'model', hasher.create(input_string):hex())
+    -- Use raw key and allow cache module to hash/shorten it per context
+    local key = string.format('%s:%s:%s', llm.type, llm.model or 'model', input_string)
+
+    local function finish_with_vec(vec)
+      if type(vec) == 'table' and #vec > 0 then
+        local meta = { name = pcfg.name or 'llm', type = 'llm', dim = #vec, weight = ctx.weight or 1.0 }
+        rspamd_logger.debugm(N, task, 'llm embedding result: dim=%s', #vec)
+        cont(vec, meta)
+      else
+        rspamd_logger.debugm(N, task, 'llm embedding result: empty')
+        cont(nil)
+      end
+    end
+
+    local function http_cb(err, code, resp, _)
+      if err then
+        rspamd_logger.debugm(N, task, 'llm http error: %s', err)
+        cont(nil)
+        return
+      end
+      if code ~= 200 or not resp then
+        rspamd_logger.debugm(N, task, 'llm bad http code: %s', code)
+        cont(nil)
+        return
+      end
+
+      local parser = ucl.parser()
+      local ok, perr = parser:parse_string(resp)
+      if not ok then
+        rspamd_logger.debugm(N, task, 'llm cannot parse reply: %s', perr)
+        cont(nil)
+        return
+      end
+      local parsed = parser:get_object()
+      local emb = extract_embedding(llm.type, parsed)
+      if type(emb) == 'table' then
+        lua_cache.cache_set(task, key, emb, cache_ctx)
+        finish_with_vec(emb)
+      else
+        rspamd_logger.debugm(N, task, 'llm embedding parse: no embedding field')
+        cont(nil)
+      end
+    end
 
     local function do_request_and_cache()
       local headers = { ['Content-Type'] = 'application/json' }
@@ -122,41 +170,25 @@ neural_common.register_provider('llm', {
         task = task,
         method = 'POST',
         use_gzip = true,
+        keepalive = true,
+        callback = http_cb,
       }
 
-      local function http_cb(err, code, resp, _)
-        if err then
-          rspamd_logger.debugm(N, task, 'llm http error: %s', err)
-          return
-        end
-        if code ~= 200 or not resp then
-          rspamd_logger.debugm(N, task, 'llm bad http code: %s', code)
-          return
-        end
-
-        local parser = ucl.parser()
-        local ok, perr = parser:parse_string(resp)
-        if not ok then
-          rspamd_logger.debugm(N, task, 'llm cannot parse reply: %s', perr)
-          return
-        end
-        local parsed = parser:get_object()
-        local emb = extract_embedding(llm.type, parsed)
-        if type(emb) == 'table' then
-          cache_ctx:set_cached(key, emb)
-          neural_common.append_provider_vector(ctx, { provider = 'llm', vector = emb })
-        end
-      end
-
-      rspamd_http.request(http_params, http_cb)
+      rspamd_http.request(http_params)
     end
 
-    local cached = cache_ctx:get_cached(key)
-    if type(cached) == 'table' then
-      neural_common.append_provider_vector(ctx, { provider = 'llm', vector = cached })
-      return
-    end
-
-    do_request_and_cache()
+    -- Use async cache API
+    lua_cache.cache_get(task, key, cache_ctx, llm.timeout or 2.0,
+      function()
+        -- Uncached path
+        do_request_and_cache()
+      end,
+      function(_, err, data)
+        if data and type(data) == 'table' then
+          finish_with_vec(data)
+        else
+          do_request_and_cache()
+        end
+      end)
   end,
 })

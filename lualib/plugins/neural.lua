@@ -682,9 +682,28 @@ local function collect_features_async(task, rule, profile_or_set, phase, cb)
     end)
   end
 
-  remaining = #providers_cfg
+  -- Include metatokens as an extra provider when configured
+  local include_meta = rule.fusion and rule.fusion.include_meta
+  local meta_weight = (rule.fusion and rule.fusion.meta_weight) or 1.0
+
+  remaining = #providers_cfg + (include_meta and 1 or 0)
   for i, pcfg in ipairs(providers_cfg) do
     start_provider(i, pcfg)
+  end
+
+  if include_meta then
+    local prov = get_provider('symbols')
+    if prov and prov.collect_async then
+      prov.collect_async(task, { profile = profile_or_set, weight = meta_weight, phase = phase }, function(vec, meta)
+        if vec then
+          metas[#metas + 1] = { name = 'symbols', type = 'symbols', dim = #vec, weight = meta_weight }
+          vectors[#vectors + 1] = vec
+        end
+        maybe_finish()
+      end)
+    else
+      maybe_finish()
+    end
   end
 end
 

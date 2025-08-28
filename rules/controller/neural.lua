@@ -167,6 +167,15 @@ end
 --  - Rule: rule name (optional, default 'default')
 local function handle_learn_message(task, conn)
   lua_util.debugm(N, task, 'controller.neural: learn_message called')
+
+  -- Ensure the message is parsed so LLM providers can access text parts
+  local ok_parse = task:process_message()
+  if not ok_parse then
+    lua_util.debugm(N, task, 'controller.neural: cannot process message MIME, abort')
+    conn:send_error(400, 'cannot parse message for learning')
+    return
+  end
+
   local cls = task:get_request_header('ANN-Train') or task:get_request_header('Class')
   if not cls then
     conn:send_error(400, 'missing class header (ANN-Train or Class)')
@@ -203,7 +212,34 @@ local function handle_learn_message(task, conn)
   end
 
   local set = neural_common.get_rule_settings(task, rule)
-  if not set or not set.ann or not set.ann.redis_key then
+  if not set then
+    lua_util.debugm(N, task, 'controller.neural: no settings resolved for rule=%s; falling back to first available set',
+      rule_name)
+    for sid, s in pairs(rule.settings or {}) do
+      if type(s) == 'table' then
+        set = s
+        set.name = set.name or sid
+        break
+      end
+    end
+  end
+
+  -- Derive redis base key even if ANN not yet initialized
+  local redis_base
+  if set and set.ann and set.ann.redis_key then
+    redis_base = set.ann.redis_key
+  elseif set then
+    local ok, prefix = pcall(neural_common.redis_ann_prefix, rule, set.name)
+    if ok and prefix then
+      redis_base = prefix
+      lua_util.debugm(N, task, 'controller.neural: derived redis base key for rule=%s set=%s -> %s', rule_name, set.name,
+        redis_base)
+    end
+  end
+
+  if not set or not redis_base then
+    lua_util.debugm(N, task, 'controller.neural: invalid set or redis key for learning; set=%s ann=%s',
+      tostring(set ~= nil), set and tostring(set.ann ~= nil) or 'nil')
     conn:send_error(400, 'invalid rule settings for learning')
     return
   end
@@ -211,7 +247,14 @@ local function handle_learn_message(task, conn)
   local function after_collect(vec)
     lua_util.debugm(N, task, 'controller.neural: learn_message after_collect, vector=%s', type(vec))
     if not vec then
-      vec = neural_common.result_to_vector(task, set)
+      if rule.providers and #rule.providers > 0 then
+        lua_util.debugm(N, task,
+          'controller.neural: no vector from providers; skip training to keep dimensions consistent')
+        conn:send_error(400, 'no vector collected from providers')
+        return
+      else
+        vec = neural_common.result_to_vector(task, set)
+      end
     end
 
     if type(vec) ~= 'table' then
@@ -219,8 +262,22 @@ local function handle_learn_message(task, conn)
       return
     end
 
+    -- Preview vector for debugging
+    local function preview_vector(v)
+      local n = #v
+      local limit = math.min(n, 8)
+      local parts = {}
+      for i = 1, limit do
+        parts[#parts + 1] = string.format('%.4f', tonumber(v[i]) or 0)
+      end
+      return n, table.concat(parts, ',')
+    end
+
+    local vlen, vhead = preview_vector(vec)
+    lua_util.debugm(N, task, 'controller.neural: vector size=%s head=[%s]', vlen, vhead)
+
     local compressed = rspamd_util.zstd_compress(table.concat(vec, ';'))
-    local target_key = string.format('%s_%s_set', set.ann.redis_key, learn_type)
+    local target_key = string.format('%s_%s_set', redis_base, learn_type)
 
     local function learn_vec_cb(redis_err)
       if redis_err then
