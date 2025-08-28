@@ -475,6 +475,15 @@ Run Dummy Https
   Wait Until Created  /tmp/dummy_https.pid  timeout=2 second
   Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_HTTPS_PROC=${result}
 
+Run Dummy Llm
+  ${result} =  Start Process  python3  ${RSPAMD_TESTDIR}/util/dummy_llm.py  18080
+  Wait Until Created  /tmp/dummy_llm.pid  timeout=2 second
+  Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_LLM_PROC=${result}
+
+Dummy Llm Teardown
+  Terminate Process  ${DUMMY_LLM_PROC}
+  Wait For Process  ${DUMMY_LLM_PROC}
+
 Dummy Http Teardown
   Terminate Process  ${DUMMY_HTTP_PROC}
   Wait For Process  ${DUMMY_HTTP_PROC}

@@ -461,8 +461,14 @@ rspamd_client_command(struct rspamd_client_connection *conn,
 	 */
 	rspamd_http_message_add_header(req->msg, "Accept", "application/msgpack");
 
-	req->msg->url = rspamd_fstring_append(req->msg->url, "/", 1);
-	req->msg->url = rspamd_fstring_append(req->msg->url, command, strlen(command));
+	/* Append path ensuring a single leading slash */
+	if (command != NULL && command[0] == '/') {
+		req->msg->url = rspamd_fstring_append(req->msg->url, command, strlen(command));
+	}
+	else {
+		req->msg->url = rspamd_fstring_append(req->msg->url, "/", 1);
+		req->msg->url = rspamd_fstring_append(req->msg->url, command ? command : "", command ? strlen(command) : 0);
+	}
 
 	conn->req = req;
 	conn->start_time = rspamd_get_ticks(FALSE);

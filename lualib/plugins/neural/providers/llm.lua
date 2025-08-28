@@ -14,8 +14,8 @@ local llm_common = require "llm_common"
 local N = "neural.llm"
 
 local function select_text(task)
-  local content = llm_common.build_llm_input(task)
-  return content
+  local input_tbl = llm_common.build_llm_input(task)
+  return input_tbl
 end
 
 local function compose_llm_settings(pcfg)
@@ -72,23 +72,29 @@ neural_common.register_provider('llm', {
       return nil
     end
 
-    local content = select_text(task)
-    if not content or #content == 0 then
+    local input_tbl = select_text(task)
+    if not input_tbl then
       rspamd_logger.debugm(N, task, 'llm provider has no content to embed; skip')
       return nil
     end
 
+    -- Build request input string (text then optional subject), keeping rspamd_text intact
+    local input_string = input_tbl.text or ''
+    if input_tbl.subject and input_tbl.subject ~= '' then
+      input_string = input_string .. "\nSubject: " .. input_tbl.subject
+    end
+
     local body
     if llm.type == 'openai' then
-      body = { model = llm.model, input = content }
+      body = { model = llm.model, input = input_string }
     elseif llm.type == 'ollama' then
-      body = { model = llm.model, prompt = content }
+      body = { model = llm.model, prompt = input_string }
     else
       rspamd_logger.debugm(N, task, 'unsupported llm type: %s', llm.type)
       return nil
     end
 
-    -- Redis cache: use content hash + model + provider as key
+    -- Redis cache: hash the final input string only (IUF is trivial here)
     local cache_ctx = lua_cache.create_cache_context(neural_common.redis_params, {
       cache_prefix = llm.cache_prefix,
       cache_ttl = llm.cache_ttl,
@@ -97,9 +103,8 @@ neural_common.register_provider('llm', {
       cache_use_hashing = llm.cache_use_hashing,
     }, N)
 
-    -- Use a stable key based on content digest
     local hasher = require 'rspamd_cryptobox_hash'
-    local key = string.format('%s:%s:%s', llm.type, llm.model or 'model', hasher.create(content):hex())
+    local key = string.format('%s:%s:%s', llm.type, llm.model or 'model', hasher.create(input_string):hex())
 
     local function do_request_and_cache()
       local headers = { ['Content-Type'] = 'application/json' }
@@ -119,161 +124,39 @@ neural_common.register_provider('llm', {
         use_gzip = true,
       }
 
-      local err, data = rspamd_http.request(http_params)
-      if err then
-        rspamd_logger.debugm(N, task, 'llm request failed: %s', err)
-        return nil
-      end
-
-      local parser = ucl.parser()
-      local ok, perr = parser:parse_string(data.content)
-      if not ok then
-        rspamd_logger.debugm(N, task, 'cannot parse llm response: %s', perr)
-        return nil
-      end
-
-      local parsed = parser:get_object()
-      local embedding = extract_embedding(llm.type, parsed)
-      if not embedding or #embedding == 0 then
-        rspamd_logger.debugm(N, task, 'no embedding in llm response')
-        return nil
-      end
-
-      for i = 1, #embedding do
-        embedding[i] = tonumber(embedding[i]) or 0.0
-      end
-
-      lua_cache.cache_set(task, key, { e = embedding }, cache_ctx)
-      return embedding
-    end
-
-    -- Try cache first
-    local cached_result
-    local done = false
-    lua_cache.cache_get(task, key, cache_ctx, llm.timeout or 2.0,
-      function(_)
-        -- Uncached: perform request synchronously and store
-        cached_result = do_request_and_cache()
-        done = true
-      end,
-      function(_, err, data)
-        if data and data.e then
-          cached_result = data.e
+      local function http_cb(err, code, resp, _)
+        if err then
+          rspamd_logger.debugm(N, task, 'llm http error: %s', err)
+          return
         end
-        done = true
+        if code ~= 200 or not resp then
+          rspamd_logger.debugm(N, task, 'llm bad http code: %s', code)
+          return
+        end
+
+        local parser = ucl.parser()
+        local ok, perr = parser:parse_string(resp)
+        if not ok then
+          rspamd_logger.debugm(N, task, 'llm cannot parse reply: %s', perr)
+          return
+        end
+        local parsed = parser:get_object()
+        local emb = extract_embedding(llm.type, parsed)
+        if type(emb) == 'table' then
+          cache_ctx:set_cached(key, emb)
+          neural_common.append_provider_vector(ctx, { provider = 'llm', vector = emb })
+        end
       end
-    )
 
-    if not done then
-      -- Fallback: ensure we still do the request now (cache API is async-ready, but we need sync path)
-      cached_result = do_request_and_cache()
+      rspamd_http.request(http_params, http_cb)
     end
 
-    local embedding = cached_result
-    if not embedding then
-      return nil
+    local cached = cache_ctx:get_cached(key)
+    if type(cached) == 'table' then
+      neural_common.append_provider_vector(ctx, { provider = 'llm', vector = cached })
+      return
     end
 
-    local meta = {
-      name = pcfg.name or 'llm',
-      type = 'llm',
-      dim = #embedding,
-      weight = pcfg.weight or 1.0,
-      model = llm.model,
-      provider = llm.type,
-    }
-
-    return embedding, meta
+    do_request_and_cache()
   end,
-  collect_async = function(task, ctx, cont)
-    local pcfg = ctx.config or {}
-    local llm = compose_llm_settings(pcfg)
-    if not llm.model then
-      return cont(nil)
-    end
-    local content = select_text(task)
-    if not content or #content == 0 then
-      return cont(nil)
-    end
-    local body
-    if llm.type == 'openai' then
-      body = { model = llm.model, input = content }
-    elseif llm.type == 'ollama' then
-      body = { model = llm.model, prompt = content }
-    else
-      return cont(nil)
-    end
-    local cache_ctx = lua_cache.create_cache_context(neural_common.redis_params, {
-      cache_prefix = llm.cache_prefix,
-      cache_ttl = llm.cache_ttl,
-      cache_format = 'messagepack',
-      cache_hash_len = llm.cache_hash_len,
-      cache_use_hashing = llm.cache_use_hashing,
-    }, N)
-    local hasher = require 'rspamd_cryptobox_hash'
-    local key = string.format('%s:%s:%s', llm.type, llm.model or 'model', hasher.create(content):hex())
-
-    local function finish_with_embedding(embedding)
-      if not embedding then return cont(nil) end
-      for i = 1, #embedding do
-        embedding[i] = tonumber(embedding[i]) or 0.0
-      end
-      cont(embedding, {
-        name = pcfg.name or 'llm',
-        type = 'llm',
-        dim = #embedding,
-        weight = pcfg.weight or 1.0,
-        model = llm.model,
-        provider = llm.type,
-      })
-    end
-
-    local function request_and_cache()
-      local headers = { ['Content-Type'] = 'application/json' }
-      if llm.type == 'openai' and llm.api_key then
-        headers['Authorization'] = 'Bearer ' .. llm.api_key
-      end
-      local http_params = {
-        url = llm.url,
-        mime_type = 'application/json',
-        timeout = llm.timeout,
-        log_obj = task,
-        headers = headers,
-        body = ucl.to_format(body, 'json-compact', true),
-        task = task,
-        method = 'POST',
-        use_gzip = true,
-        callback = function(err, _, data)
-          if err then return cont(nil) end
-          local parser = ucl.parser()
-          local ok = parser:parse_text(data)
-          if not ok then return cont(nil) end
-          local parsed = parser:get_object()
-          local embedding = extract_embedding(llm.type, parsed)
-          if embedding and cache_ctx then
-            lua_cache.cache_set(task, key, { e = embedding }, cache_ctx)
-          end
-          finish_with_embedding(embedding)
-        end,
-      }
-      rspamd_http.request(http_params)
-    end
-
-    if cache_ctx then
-      lua_cache.cache_get(task, key, cache_ctx, llm.timeout or 2.0,
-        function(_)
-          request_and_cache()
-        end,
-        function(_, err, data)
-          if data and data.e then
-            finish_with_embedding(data.e)
-          else
-            request_and_cache()
-          end
-        end
-      )
-    else
-      request_and_cache()
-    end
-  end
 })
