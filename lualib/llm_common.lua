@@ -25,7 +25,8 @@ local function get_meta_llm_content(task)
   return url_content, from_content
 end
 
--- Build a single text payload suitable for LLM embeddings
+-- Build structured payload suitable for LLM embeddings and chat
+-- Returns: table { subject = <string>, from = <string>, url_domains = <string>, text = <rspamd_text|string> }, part
 function M.build_llm_input(task, opts)
   opts = opts or {}
   local subject = task:get_subject() or ''
@@ -42,26 +43,25 @@ function M.build_llm_input(task, opts)
   end
 
   local max_tokens = tonumber(opts.max_tokens) or 1024
-  local text_line
+  local text
   if nwords > max_tokens then
     local words = sel_part:get_words('norm') or {}
     if #words > max_tokens then
-      text_line = table.concat(words, ' ', 1, max_tokens)
+      text = table.concat(words, ' ', 1, max_tokens)
     else
-      text_line = table.concat(words, ' ')
+      text = table.concat(words, ' ')
     end
   else
-    text_line = sel_part:get_content_oneline() or ''
+    -- Keep rspamd_text (userdata) intact; consumers (http/ucl) can use it directly
+    text = sel_part:get_content_oneline() or ''
   end
 
-  local content = table.concat({
-    'Subject: ' .. subject,
-    from_content,
-    url_content,
-    text_line,
-  }, '\n')
-
-  return content, sel_part
+  return {
+    subject = subject,
+    from = from_content,
+    url_domains = url_content,
+    text = text,
+  }, sel_part
 end
 
 -- Backwards-compat alias

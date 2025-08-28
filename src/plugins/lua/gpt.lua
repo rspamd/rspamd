@@ -211,18 +211,18 @@ local function default_condition(task)
   end
 
   -- Unified LLM input building (subject/from/urls/body one-line)
-  local content, sel_part = llm_common.build_llm_input(task, { max_tokens = settings.max_tokens })
+  local input_tbl, sel_part = llm_common.build_llm_input(task, { max_tokens = settings.max_tokens })
   if not sel_part then
     return false, 'no text part found'
   end
-  if not content or #content == 0 then
+  if not input_tbl then
     local nwords = sel_part:get_words_count() or 0
     if nwords < 5 then
       return false, 'less than 5 words'
     end
     return false, 'no content to send'
   end
-  return true, content, sel_part
+  return true, input_tbl, sel_part
 end
 
 local function maybe_extract_json(str)
@@ -638,12 +638,11 @@ local function openai_check(task, content, sel_part)
   lua_util.debugm(N, task, "sending content to gpt: %s", content)
 
   local upstream
-
   local results = {}
 
-  local function gen_reply_closure(model, idx)
+  local function gen_reply_closure(model, i)
     return function(err, code, body)
-      results[idx].checked = true
+      results[i].checked = true
       if err then
         rspamd_logger.errx(task, '%s: request failed: %s', model, err)
         upstream:fail()
@@ -658,34 +657,46 @@ local function openai_check(task, content, sel_part)
         return
       end
 
-      local reply, reason, categories = settings.reply_conversion(task, body)
+      local reply, reason = settings.reply_conversion(task, body)
 
-      results[idx].model = model
+      results[i].model = model
 
       if reply then
-        results[idx].success = true
-        results[idx].probability = reply
-        results[idx].reason = reason
-
-        if categories then
-          results[idx].categories = categories
-        end
+        results[i].success = true
+        results[i].probability = reply
+        results[i].reason = reason
       end
 
       check_consensus_and_insert_results(task, results, sel_part)
     end
   end
 
+  -- Build messages exactly as in the original code if structured table provided
+  local user_messages
+  if type(content) == 'table' then
+    local subject_line = 'Subject: ' .. (content.subject or '')
+    user_messages = {
+      { role = 'user', content = subject_line },
+      { role = 'user', content = content.from or '' },
+      { role = 'user', content = content.url_domains or '' },
+      { role = 'user', content = content.text or '' },
+    }
+  else
+    user_messages = {
+      { role = 'user', content = content }
+    }
+  end
+
   local body_base = {
+    stream = false,
+    max_tokens = settings.max_tokens,
+    temperature = settings.temperature,
     messages = {
       {
         role = 'system',
         content = settings.prompt
       },
-      {
-        role = 'user',
-        content = content
-      }
+      lua_util.unpack(user_messages)
     }
   }
 
@@ -776,6 +787,21 @@ local function ollama_check(task, content, sel_part)
     end
   end
 
+  local user_messages
+  if type(content) == 'table' then
+    local subject_line = 'Subject: ' .. (content.subject or '')
+    user_messages = {
+      { role = 'user', content = subject_line },
+      { role = 'user', content = content.from or '' },
+      { role = 'user', content = content.url_domains or '' },
+      { role = 'user', content = content.text or '' },
+    }
+  else
+    user_messages = {
+      { role = 'user', content = content }
+    }
+  end
+
   if type(settings.model) == 'string' then
     settings.model = { settings.model }
   end
@@ -790,10 +816,7 @@ local function ollama_check(task, content, sel_part)
         role = 'system',
         content = settings.prompt
       },
-      {
-        role = 'user',
-        content = content
-      }
+      table.unpack(user_messages)
     }
   }
 
