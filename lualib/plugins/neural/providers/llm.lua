@@ -74,6 +74,16 @@ neural_common.register_provider('llm', {
       return
     end
 
+    -- Do not run embeddings on infer if ANN is not loaded for this set/profile
+    if ctx.phase == 'infer' then
+      local set_or_profile = ctx.profile or ctx.set
+      if not set_or_profile or not set_or_profile.ann then
+        rspamd_logger.debugm(N, task, 'skip llm on infer: ANN not loaded for current settings')
+        cont(nil)
+        return
+      end
+    end
+
     local input_tbl = select_text(task)
     if not input_tbl then
       rspamd_logger.debugm(N, task, 'llm provider has no content to embed; skip')

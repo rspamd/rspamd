@@ -195,21 +195,36 @@ local function handle_learn_message(task, conn)
     return
   end
 
-  -- If no providers or symbols provider configured, require full scan path
+  -- Check if this configuration requires full scan
+  -- Only symbols collection requires full scan; metatokens can be computed directly
   local has_providers = type(rule.providers) == 'table' and #rule.providers > 0
-  if not has_providers then
-    lua_util.debugm(N, task, 'controller.neural: learn_message refused: no providers (assume symbols) for rule=%s',
+
+  if not has_providers and not rule.disable_symbols_input then
+    -- No providers means full symbols will be used (not just metatokens)
+    lua_util.debugm(N, task,
+      'controller.neural: learn_message refused: no providers configured, symbols collection requires full scan for rule=%s',
       rule_name)
-    conn:send_error(400, 'rule requires full /checkv2 scan (no providers configured)')
+    conn:send_error(400, 'rule requires full /checkv2 scan (no providers configured, full symbols collection required)')
     return
   end
-  for _, p in ipairs(rule.providers) do
-    if p.type == 'symbols' then
-      lua_util.debugm(N, task, 'controller.neural: learn_message refused due to symbols provider for rule=%s', rule_name)
-      conn:send_error(400, 'rule requires full /checkv2 scan (symbols provider present)')
-      return
+
+  -- Check if any provider requires full scan (only symbols provider does)
+  if has_providers then
+    for _, p in ipairs(rule.providers) do
+      if p.type == 'symbols' then
+        lua_util.debugm(N, task,
+          'controller.neural: learn_message refused due to symbols provider requiring full scan for rule=%s',
+          rule_name)
+        conn:send_error(400, 'rule requires full /checkv2 scan (symbols provider present)')
+        return
+      end
     end
   end
+
+  -- At this point:
+  -- - We have providers that don't require full scan (e.g., LLM)
+  -- - Metatokens can be computed directly from the message
+  -- - Controller training is allowed
 
   local set = neural_common.get_rule_settings(task, rule)
   if not set then
@@ -222,6 +237,11 @@ local function handle_learn_message(task, conn)
         break
       end
     end
+  end
+
+  if set then
+    lua_util.debugm(N, task, 'controller.neural: set found for rule=%s, symbols=%s, name=%s',
+      rule_name, set.symbols and #set.symbols or "nil", set.name)
   end
 
   -- Derive redis base key even if ANN not yet initialized
@@ -244,17 +264,55 @@ local function handle_learn_message(task, conn)
     return
   end
 
+  -- Ensure profile exists for this set
+  if not set.ann then
+    local version = 0
+    local ann_key = neural_common.new_ann_key(rule, set, version)
+
+    local profile = {
+      symbols = set.symbols,
+      redis_key = ann_key,
+      version = version,
+      digest = set.digest,
+      distance = 0,
+      providers_digest = neural_common.providers_config_digest(rule.providers),
+    }
+
+    local ucl = require "ucl"
+    local profile_serialized = ucl.to_format(profile, 'json-compact', true)
+
+    lua_util.debugm(N, task, 'controller.neural: creating new profile for %s:%s at %s',
+      rule.prefix, set.name, ann_key)
+
+    -- Store the profile in Redis sorted set
+    lua_redis.redis_make_request(task,
+      rule.redis,
+      nil,
+      true, -- is write
+      function(err, _)
+        if err then
+          rspamd_logger.errx(task, 'cannot store ANN profile for %s:%s at %s : %s',
+            rule.prefix, set.name, profile.redis_key, err)
+        else
+          lua_util.debugm(N, task, 'created new ANN profile for %s:%s, data stored at prefix %s',
+            rule.prefix, set.name, profile.redis_key)
+        end
+      end,
+      'ZADD', -- command
+      { set.prefix, tostring(rspamd_util.get_time()), profile_serialized }
+    )
+
+    -- Update redis_base to use the new ann_key
+    redis_base = ann_key
+  end
+
   local function after_collect(vec)
     lua_util.debugm(N, task, 'controller.neural: learn_message after_collect, vector=%s', type(vec))
     if not vec then
-      if rule.providers and #rule.providers > 0 then
-        lua_util.debugm(N, task,
-          'controller.neural: no vector from providers; skip training to keep dimensions consistent')
-        conn:send_error(400, 'no vector collected from providers')
-        return
-      else
-        vec = neural_common.result_to_vector(task, set)
-      end
+      lua_util.debugm(N, task,
+        'controller.neural: no vector collected; skip training')
+      conn:send_error(400, 'no vector collected')
+      return
     end
 
     if type(vec) ~= 'table' then

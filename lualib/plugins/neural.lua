@@ -139,6 +139,28 @@ register_provider('symbols', {
   end,
 })
 
+-- Metatokens-only provider for contexts where symbols are not available
+register_provider('metatokens', {
+  collect = function(task, ctx)
+    local mt = meta_functions.rspamd_gen_metatokens(task)
+    -- Convert to table of numbers
+    local vec = {}
+    for i = 1, #mt do
+      vec[i] = tonumber(mt[i]) or 0.0
+    end
+    return vec, { name = 'metatokens', type = 'metatokens', dim = #vec, weight = ctx.weight or 1.0 }
+  end,
+  collect_async = function(task, ctx, cont)
+    local mt = meta_functions.rspamd_gen_metatokens(task)
+    -- Convert to table of numbers
+    local vec = {}
+    for i = 1, #mt do
+      vec[i] = tonumber(mt[i]) or 0.0
+    end
+    cont(vec, { name = 'metatokens', type = 'metatokens', dim = #vec, weight = ctx.weight or 1.0 })
+  end,
+})
+
 local function load_scripts()
   redis_script_id.vectors_len = lua_redis.load_redis_script_from_file(redis_lua_script_vectors_len,
     redis_params)
@@ -546,6 +568,7 @@ end
 
 local function redis_ann_prefix(rule, settings_name)
   -- We also need to count metatokens:
+  -- Note: meta_functions.version represents the metatoken format version
   local n = meta_functions.version
   return string.format('%s%d_%s_%d_%s',
     settings.prefix, plugin_ver, rule.prefix, n, settings_name)
@@ -669,6 +692,7 @@ local function collect_features_async(task, rule, profile_or_set, phase, cb)
     end
     prov.collect_async(task, {
       profile = profile_or_set,
+      set = profile_or_set,
       rule = rule,
       config = pcfg,
       weight = pcfg.weight or 1.0,
@@ -682,25 +706,49 @@ local function collect_features_async(task, rule, profile_or_set, phase, cb)
     end)
   end
 
-  -- Include metatokens as an extra provider when configured
-  local include_meta = rule.fusion and rule.fusion.include_meta
+  -- Include symbols provider (which includes both symbols AND metatokens) as an extra provider
+  -- The name 'include_meta' is historical but it actually includes the full symbols provider
+  -- For backward compatibility, include symbols by default unless explicitly disabled
+  local include_meta = false
+  if not providers_cfg or #providers_cfg == 0 then
+    -- No providers, always use symbols (which includes metatokens)
+    include_meta = true
+  elseif rule.fusion then
+    -- Explicit fusion config takes precedence
+    include_meta = rule.fusion.include_meta
+    if include_meta == nil then
+      -- Default to true for backward compatibility when fusion is configured but include_meta not specified
+      include_meta = true
+    end
+  else
+    -- Providers configured but no fusion settings - default to including symbols+metatokens
+    include_meta = true
+  end
+
   local meta_weight = (rule.fusion and rule.fusion.meta_weight) or 1.0
 
   remaining = #providers_cfg + (include_meta and 1 or 0)
+
+  -- Start all configured providers
   for i, pcfg in ipairs(providers_cfg) do
     start_provider(i, pcfg)
   end
 
   if include_meta then
-    local prov = get_provider('symbols')
+    -- Always use metatokens provider for consistency
+    -- This ensures same dimensions whether called from controller or full scan
+    local prov = get_provider('metatokens')
+
     if prov and prov.collect_async then
-      prov.collect_async(task, { profile = profile_or_set, weight = meta_weight, phase = phase }, function(vec, meta)
-        if vec then
-          metas[#metas + 1] = { name = 'symbols', type = 'symbols', dim = #vec, weight = meta_weight }
-          vectors[#vectors + 1] = vec
-        end
-        maybe_finish()
-      end)
+      local meta_index = #providers_cfg + 1 -- Metatokens always come after providers
+      prov.collect_async(task, { profile = profile_or_set, set = profile_or_set, weight = meta_weight, phase = phase },
+        function(vec, meta)
+          if vec then
+            metas[meta_index] = meta
+            vectors[meta_index] = vec
+          end
+          maybe_finish()
+        end)
     else
       maybe_finish()
     end
@@ -711,8 +759,24 @@ end
 local function spawn_train(params)
   -- Check training data sanity
   -- Now we need to join inputs and create the appropriate test vectors
-  local n = #params.set.symbols +
-      meta_functions.rspamd_count_metatokens()
+  local n
+
+  -- When using providers, derive dimension from actual vectors
+  if params.rule.providers and #params.rule.providers > 0 and
+      (#params.spam_vec > 0 or #params.ham_vec > 0) then
+    -- Use dimension from stored vectors
+    if #params.spam_vec > 0 then
+      n = #params.spam_vec[1]
+    else
+      n = #params.ham_vec[1]
+    end
+    lua_util.debugm(N, rspamd_config, 'spawn_train: using vector dimension %s from stored vectors', n)
+  else
+    -- Traditional symbol-based dimension
+    n = #params.set.symbols + meta_functions.rspamd_count_metatokens()
+    lua_util.debugm(N, rspamd_config, 'spawn_train: using symbol dimension %s symbols + %s metatokens = %s',
+      #params.set.symbols, meta_functions.rspamd_count_metatokens(), n)
+  end
 
   -- Now we can train ann
   local train_ann = create_ann(params.rule.max_inputs or n, 3, params.rule)
@@ -1148,7 +1212,7 @@ result_to_vector = function(task, profile)
   if not profile.zeros then
     -- Fill zeros vector
     local zeros = {}
-    for i = 1, meta_functions.count_metatokens() do
+    for i = 1, meta_functions.rspamd_count_metatokens() do
       zeros[i] = 0.0
     end
     for _, _ in ipairs(profile.symbols) do

@@ -212,6 +212,61 @@ static void rspamc_counters_output(FILE *out, ucl_object_t *obj);
 
 static void rspamc_stat_output(FILE *out, ucl_object_t *obj);
 
+static void
+rspamc_neural_learn_output(FILE *out, ucl_object_t *obj)
+{
+	bool is_success = true;
+	const char *filename = nullptr;
+	double scan_time = -1.0;
+	const char *redis_key = nullptr;
+	std::uintmax_t stored_bytes = 0;
+	bool have_stored = false;
+
+	if (obj != nullptr) {
+		const auto *ok = ucl_object_lookup(obj, "success");
+		if (ok) {
+			is_success = ucl_object_toboolean(ok);
+		}
+		const auto *fn = ucl_object_lookup(obj, "filename");
+		if (fn) {
+			filename = ucl_object_tostring(fn);
+		}
+		const auto *st = ucl_object_lookup(obj, "scan_time");
+		if (st) {
+			scan_time = ucl_object_todouble(st);
+		}
+		const auto *rb = ucl_object_lookup(obj, "stored");
+		if (rb) {
+			stored_bytes = (std::uintmax_t) ucl_object_toint(rb);
+			have_stored = true;
+		}
+		const auto *rk = ucl_object_lookup(obj, "key");
+		if (rk) {
+			redis_key = ucl_object_tostring(rk);
+		}
+	}
+
+	// First line: success
+	fprintf(out, "success = %s;\n", is_success ? "true" : "false");
+
+	// Then other fields in k = v; format
+	if (filename) {
+		fprintf(out, "filename = \"%s\";\n", filename);
+	}
+	if (scan_time >= 0) {
+		fprintf(out, "scan_time = %.6f;\n", scan_time);
+	}
+	if (!neural_train.empty()) {
+		fprintf(out, "class = \"%s\";\n", neural_train.c_str());
+	}
+	if (have_stored) {
+		fprintf(out, "stored = %ju bytes;\n", stored_bytes);
+	}
+	if (redis_key) {
+		fprintf(out, "key = \"%s\";\n", redis_key);
+	}
+}
+
 enum rspamc_command_type {
 	RSPAMC_COMMAND_UNKNOWN = 0,
 	RSPAMC_COMMAND_CHECK,
@@ -288,7 +343,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 		.is_controller = FALSE,
 		.is_privileged = FALSE,
 		.need_input = TRUE,
-		.command_output_func = rspamc_symbols_output},
+		.command_output_func = rspamc_neural_learn_output},
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_FUZZY_ADD,
 		.name = "fuzzy_add",
