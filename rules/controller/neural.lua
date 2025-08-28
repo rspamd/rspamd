@@ -149,7 +149,7 @@ local function handle_config(task, conn, req_params)
       end
     end
 
-    for sid, set in pairs(rule.settings or {}) do
+    for _, set in pairs(rule.settings or {}) do
       if type(set) == 'table' then
         r.settings[#r.settings + 1] = set.name
       end
@@ -278,7 +278,6 @@ local function handle_learn_message(task, conn)
       providers_digest = neural_common.providers_config_digest(rule.providers),
     }
 
-    local ucl = require "ucl"
     local profile_serialized = ucl.to_format(profile, 'json-compact', true)
 
     lua_util.debugm(N, task, 'controller.neural: creating new profile for %s:%s at %s',
