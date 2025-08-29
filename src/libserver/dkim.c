@@ -1767,9 +1767,14 @@ rspamd_dkim_relaxed_body_step(struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *ck
 	len = size;
 	octets_remain = *remain;
 
+	msg_debug_dkim("relaxed_body_step: input size=%d, remain=%z, body_canonicalised=%d",
+				   size, *remain, ctx->body_canonicalised);
+
 	while (len > 0 && octets_remain > 0) {
 		chunk_start = p;
 		got_sp = false;
+		msg_debug_dkim("relaxed body: starting new line/chunk processing at pos %d",
+					   (int) (p - *start));
 
 		/* Find the next position that needs special handling */
 		while (len > 0 && octets_remain > 0) {
@@ -1780,83 +1785,129 @@ rspamd_dkim_relaxed_body_step(struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *ck
 					/* Remove trailing space if needed */
 					if (got_sp) {
 						chunk_len--;
+						msg_debug_dkim("relaxed body: removing trailing space before line ending");
 					}
 					if (chunk_len > 0) {
-						EVP_DigestUpdate(ck, chunk_start, chunk_len);
-						ctx->body_canonicalised += chunk_len;
-						octets_remain -= chunk_len;
-						msg_debug_dkim("relaxed body update chunk before line ending: len=%z",
-									   chunk_len);
+						if (octets_remain >= chunk_len) {
+							EVP_DigestUpdate(ck, chunk_start, chunk_len);
+							ctx->body_canonicalised += chunk_len;
+							octets_remain -= chunk_len;
+							msg_debug_dkim("relaxed body update chunk before line ending: len=%z",
+										   chunk_len);
+						}
+						else if (octets_remain > 0) {
+							/* Partial chunk due to l= limit */
+							EVP_DigestUpdate(ck, chunk_start, octets_remain);
+							ctx->body_canonicalised += octets_remain;
+							msg_debug_dkim("relaxed body update partial chunk due to l= limit: len=%z of %z",
+										   octets_remain, chunk_len);
+							octets_remain = 0;
+						}
 					}
 					else {
-						msg_debug_dkim("relaxed body skipping empty line");
+						msg_debug_dkim("relaxed body skipping empty line (line had only spaces)");
 					}
+				}
+				else {
+					msg_debug_dkim("relaxed body: empty line (no content before line ending)");
 				}
 
 				/* Add canonical CRLF */
-				EVP_DigestUpdate(ck, crlf, 2);
-				ctx->body_canonicalised += 2;
+				if (octets_remain >= 2) {
+					EVP_DigestUpdate(ck, crlf, 2);
+					ctx->body_canonicalised += 2;
+					octets_remain -= 2;
+					msg_debug_dkim("relaxed body output CRLF");
+				}
+				else if (octets_remain == 1) {
+					/* Only space for CR */
+					EVP_DigestUpdate(ck, crlf, 1);
+					ctx->body_canonicalised += 1;
+					octets_remain = 0;
+					msg_debug_dkim("relaxed body output partial CRLF due to l= limit");
+				}
+				else {
+					msg_debug_dkim("relaxed body skip CRLF due to l= limit");
+				}
 
 				/* Skip the line ending in input */
 				if (len > 1 && *p == '\r' && p[1] == '\n') {
 					p += 2;
 					len -= 2;
-					octets_remain -= 2;
 				}
 				else {
 					p++;
 					len--;
-					/* We're normalizing to CRLF, so count 2 octets */
-					if (octets_remain >= 2) {
-						octets_remain -= 2;
-					}
-					else {
-						octets_remain = 0;
-						break;
-					}
+				}
+
+				if (octets_remain == 0) {
+					break;
 				}
 
 				msg_debug_dkim("relaxed update signature with line ending "
 							   "(%z remain)",
 							   octets_remain);
+				msg_debug_dkim("relaxed body: line complete, total output for this line was %s + CRLF",
+							   got_sp ? "SPACE" : (p > chunk_start ? "TEXT" : "NOTHING"));
 
 				/* Start new chunk after line ending */
 				chunk_start = p;
 				got_sp = false;
+
+				if (octets_remain == 0) {
+					msg_debug_dkim("relaxed body: stopping due to l= limit reached");
+					break;
+				}
 				continue;
 			}
 			else if (g_ascii_isspace(*p)) {
-				if (!got_sp) {
-					/* First space - process chunk before it */
-					if (p > chunk_start) {
-						size_t chunk_len = p - chunk_start;
+				/* Process any chunk before the spaces */
+				if (!got_sp && p > chunk_start) {
+					size_t chunk_len = p - chunk_start;
+					if (octets_remain >= chunk_len) {
 						EVP_DigestUpdate(ck, chunk_start, chunk_len);
 						ctx->body_canonicalised += chunk_len;
 						octets_remain -= chunk_len;
 						msg_debug_dkim("relaxed body update chunk before spaces: len=%z", chunk_len);
 					}
-
-					/* Output single space */
-					EVP_DigestUpdate(ck, sp, 1);
-					ctx->body_canonicalised += 1;
-					octets_remain--;
-					got_sp = true;
-					msg_debug_dkim("relaxed body collapsed spaces to single space");
+					else if (octets_remain > 0) {
+						/* Partial chunk due to l= limit */
+						EVP_DigestUpdate(ck, chunk_start, octets_remain);
+						ctx->body_canonicalised += octets_remain;
+						msg_debug_dkim("relaxed body update partial chunk before spaces due to l= limit: len=%z of %z",
+									   octets_remain, chunk_len);
+						octets_remain = 0;
+						break;
+					}
 				}
 
-				/* Skip this space */
-				p++;
-				len--;
-
-				/* Skip any additional spaces */
-				int skipped_spaces = 0;
+				/* Skip all spaces and look ahead */
+				const char *space_start = p;
+				int space_count = 0;
 				while (len > 0 && g_ascii_isspace(*p) && *p != '\r' && *p != '\n') {
 					p++;
 					len--;
-					skipped_spaces++;
+					space_count++;
 				}
-				if (skipped_spaces > 0) {
-					msg_debug_dkim("relaxed body skipped %d additional spaces", skipped_spaces);
+
+				msg_debug_dkim("relaxed body: found %d space(s) starting at 0x%xd",
+							   space_count, (unsigned char) *space_start);
+
+				/* Check what comes after spaces */
+				if (len > 0 && *p != '\r' && *p != '\n') {
+					/* There's non-space content after spaces, output single space */
+					if (!got_sp && octets_remain > 0) {
+						EVP_DigestUpdate(ck, sp, 1);
+						ctx->body_canonicalised += 1;
+						octets_remain--;
+						got_sp = true;
+						msg_debug_dkim("relaxed body: content after spaces, output single space");
+					}
+				}
+				else {
+					/* Line ends after spaces - spaces are trailing, ignore them */
+					msg_debug_dkim("relaxed body: line ends after spaces, ignoring trailing spaces");
+					got_sp = false; /* Reset flag since we're not outputting a space */
 				}
 
 				/* Start new chunk after spaces */
@@ -1868,20 +1919,30 @@ rspamd_dkim_relaxed_body_step(struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *ck
 				got_sp = false;
 				p++;
 				len--;
-				octets_remain--;
 			}
 		}
 
 		/* Process any remaining chunk */
-		if (p > chunk_start && octets_remain >= 0) {
+		if (p > chunk_start && octets_remain > 0) {
 			size_t chunk_len = p - chunk_start;
 			if (got_sp && chunk_len > 0) {
 				chunk_len--;
 			}
 			if (chunk_len > 0) {
-				EVP_DigestUpdate(ck, chunk_start, chunk_len);
-				ctx->body_canonicalised += chunk_len;
-				msg_debug_dkim("relaxed body update final chunk: len=%z", chunk_len);
+				if (octets_remain >= chunk_len) {
+					EVP_DigestUpdate(ck, chunk_start, chunk_len);
+					ctx->body_canonicalised += chunk_len;
+					octets_remain -= chunk_len;
+					msg_debug_dkim("relaxed body update final chunk: len=%z", chunk_len);
+				}
+				else {
+					/* Partial chunk due to l= limit */
+					EVP_DigestUpdate(ck, chunk_start, octets_remain);
+					ctx->body_canonicalised += octets_remain;
+					msg_debug_dkim("relaxed body update partial final chunk due to l= limit: len=%z of %z",
+								   octets_remain, chunk_len);
+					octets_remain = 0;
+				}
 			}
 		}
 	}
@@ -1889,6 +1950,8 @@ rspamd_dkim_relaxed_body_step(struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *ck
 	*start = p;
 	*remain = octets_remain;
 
+	msg_debug_dkim("relaxed_body_step finished: processed %d input bytes, %z remain, total body_canonicalised=%d",
+				   size - len, octets_remain, ctx->body_canonicalised);
 	return (len > 0 && octets_remain > 0);
 }
 
