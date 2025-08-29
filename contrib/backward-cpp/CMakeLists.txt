@@ -46,7 +46,7 @@ endif()
 
 # set CXX standard
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 20)
 if (${COMPILER_IS_NVCC})
   # GNU CXX extensions are not supported by nvcc
   set(CMAKE_CXX_EXTENSIONS OFF)
