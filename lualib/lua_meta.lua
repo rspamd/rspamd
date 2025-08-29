@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 local exports = {}
 
@@ -87,7 +87,7 @@ local function meta_images_function(task)
     nlarge = 1.0 * nlarge / ntotal
     nsmall = 1.0 * nsmall / ntotal
   end
-  return { ntotal, njpg, npng, nlarge, nsmall }
+  return { ntotal, npng, njpg, nlarge, nsmall } -- Fixed order to match names
 end
 
 local function meta_nparts_function(task)
@@ -164,29 +164,28 @@ local function meta_received_function(task)
   local fun = require "fun"
 
   if rh and #rh > 0 then
-
     local ntotal = 0.0
     local init_time = 0
 
     fun.each(function(rc)
-      ntotal = ntotal + 1.0
+        ntotal = ntotal + 1.0
 
-      if not rc.by_hostname then
-        invalid_factor = invalid_factor + 1.0
-      end
-      if init_time == 0 and rc.timestamp then
-        init_time = rc.timestamp
-      elseif rc.timestamp then
-        time_factor = time_factor + math.abs(init_time - rc.timestamp)
-        init_time = rc.timestamp
-      end
-      if rc.flags and (rc.flags['ssl'] or rc.flags['authenticated']) then
-        secure_factor = secure_factor + 1.0
-      end
-    end,
-        fun.filter(function(rc)
-          return not rc.flags or not rc.flags['artificial']
-        end, rh))
+        if not rc.by_hostname then
+          invalid_factor = invalid_factor + 1.0
+        end
+        if init_time == 0 and rc.timestamp then
+          init_time = rc.timestamp
+        elseif rc.timestamp then
+          time_factor = time_factor + math.abs(init_time - rc.timestamp)
+          init_time = rc.timestamp
+        end
+        if rc.flags and (rc.flags['ssl'] or rc.flags['authenticated']) then
+          secure_factor = secure_factor + 1.0
+        end
+      end,
+      fun.filter(function(rc)
+        return not rc.flags or not rc.flags['artificial']
+      end, rh))
 
     if ntotal > 0 then
       invalid_factor = invalid_factor / ntotal
@@ -263,8 +262,8 @@ local function meta_words_function(task)
   end
 
   local ret = {
-    short_words,
-    ret_len,
+    ret_len,     -- avg_words_len (moved to match the names array)
+    short_words, -- nshort_words
   }
 
   local divisor = 1.0
@@ -460,10 +459,10 @@ local function rspamd_gen_metatokens(task, names)
         local ct = mt.cb(task)
         for i, tok in ipairs(ct) do
           lua_util.debugm(N, task, "metatoken: %s = %s",
-              mt.names[i], tok)
+            mt.names[i], tok)
           if tok ~= tok or tok == math.huge then
             logger.errx(task, 'metatoken %s returned %s; replace it with 0 for sanity',
-                mt.names[i], tok)
+              mt.names[i], tok)
             tok = 0.0
           end
           table.insert(metatokens, tok)
@@ -472,14 +471,13 @@ local function rspamd_gen_metatokens(task, names)
 
       task:cache_set('metatokens', metatokens)
     end
-
   else
     for _, n in ipairs(names) do
       if metatokens_by_name[n] then
         local tok = metatokens_by_name[n](task)
         if tok ~= tok or tok == math.huge then
           logger.errx(task, 'metatoken %s returned %s; replace it with 0 for sanity',
-              n, tok)
+            n, tok)
           tok = 0.0
         end
         table.insert(metatokens, tok)
@@ -503,7 +501,7 @@ local function rspamd_gen_metatokens_table(task)
     for i, tok in ipairs(ct) do
       if tok ~= tok or tok == math.huge then
         logger.errx(task, 'metatoken %s returned %s; replace it with 0 for sanity',
-            mt.names[i], tok)
+          mt.names[i], tok)
         tok = 0.0
       end
 

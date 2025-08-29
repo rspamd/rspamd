@@ -71,9 +71,10 @@ local lua_util = require "lua_util"
 local rspamd_http = require "rspamd_http"
 local rspamd_logger = require "rspamd_logger"
 local lua_mime = require "lua_mime"
+local llm_common = require "llm_common"
 local lua_redis = require "lua_redis"
 local ucl = require "ucl"
-local fun = require "fun"
+-- local fun = require "fun" -- no longer needed after llm_common usage
 local lua_cache = require "lua_cache"
 
 -- Exclude checks if one of those is found
@@ -116,8 +117,8 @@ local categories_map = {}
 local settings = {
   type = 'openai',
   api_key = nil,
-	model = 'gpt-5-mini', -- or parallel model requests: [ 'gpt-5-mini', 'gpt-4o-mini' ],
-	model_parameters = {
+  model = 'gpt-5-mini', -- or parallel model requests: [ 'gpt-5-mini', 'gpt-4o-mini' ],
+  model_parameters = {
     ["gpt-5-mini"] = {
       max_completion_tokens = 1000,
     },
@@ -209,29 +210,19 @@ local function default_condition(task)
     end
   end
 
-  -- Check if we have text at all
-  local sel_part = lua_mime.get_displayed_text_part(task)
-
+  -- Unified LLM input building (subject/from/urls/body one-line)
+  local input_tbl, sel_part = llm_common.build_llm_input(task, { max_tokens = settings.max_tokens })
   if not sel_part then
     return false, 'no text part found'
   end
-
-  -- Check limits and size sanity
-  local nwords = sel_part:get_words_count()
-
-  if nwords < 5 then
-    return false, 'less than 5 words'
-  end
-
-  if nwords > settings.max_tokens then
-    -- We need to truncate words (sometimes get_words_count returns a different number comparing to `get_words`)
-    local words = sel_part:get_words('norm')
-    nwords = #words
-    if nwords > settings.max_tokens then
-      return true, table.concat(words, ' ', 1, settings.max_tokens), sel_part
+  if not input_tbl then
+    local nwords = sel_part:get_words_count() or 0
+    if nwords < 5 then
+      return false, 'less than 5 words'
     end
+    return false, 'no content to send'
   end
-  return true, sel_part:get_content_oneline(), sel_part
+  return true, input_tbl, sel_part
 end
 
 local function maybe_extract_json(str)
@@ -617,22 +608,7 @@ local function check_consensus_and_insert_results(task, results, sel_part)
   end
 end
 
-local function get_meta_llm_content(task)
-  local url_content = "Url domains: no urls found"
-  if task:has_urls() then
-    local urls = lua_util.extract_specific_urls { task = task, limit = 5, esld_limit = 1 }
-    url_content = "Url domains: " .. table.concat(fun.totable(fun.map(function(u)
-      return u:get_tld() or ''
-    end, urls or {})), ', ')
-  end
-
-  local from_or_empty = ((task:get_from('mime') or E)[1] or E)
-  local from_content = string.format('From: %s <%s>', from_or_empty.name, from_or_empty.addr)
-  lua_util.debugm(N, task, "gpt urls: %s", url_content)
-  lua_util.debugm(N, task, "gpt from: %s", from_content)
-
-  return url_content, from_content
-end
+-- get_meta_llm_content moved to llm_common
 
 local function check_llm_uncached(task, content, sel_part)
   return settings.specific_check(task, content, sel_part)
@@ -662,12 +638,11 @@ local function openai_check(task, content, sel_part)
   lua_util.debugm(N, task, "sending content to gpt: %s", content)
 
   local upstream
-
   local results = {}
 
-  local function gen_reply_closure(model, idx)
+  local function gen_reply_closure(model, i)
     return function(err, code, body)
-      results[idx].checked = true
+      results[i].checked = true
       if err then
         rspamd_logger.errx(task, '%s: request failed: %s', model, err)
         upstream:fail()
@@ -682,49 +657,46 @@ local function openai_check(task, content, sel_part)
         return
       end
 
-      local reply, reason, categories = settings.reply_conversion(task, body)
+      local reply, reason = settings.reply_conversion(task, body)
 
-      results[idx].model = model
+      results[i].model = model
 
       if reply then
-        results[idx].success = true
-        results[idx].probability = reply
-        results[idx].reason = reason
-
-        if categories then
-          results[idx].categories = categories
-        end
+        results[i].success = true
+        results[i].probability = reply
+        results[i].reason = reason
       end
 
       check_consensus_and_insert_results(task, results, sel_part)
     end
   end
 
-  local from_content, url_content = get_meta_llm_content(task)
-
+  -- Build messages exactly as in the original code if structured table provided
+  local user_messages
+  if type(content) == 'table' then
+    local subject_line = 'Subject: ' .. (content.subject or '')
+    user_messages = {
+      { role = 'user', content = subject_line },
+      { role = 'user', content = content.from or '' },
+      { role = 'user', content = content.url_domains or '' },
+      { role = 'user', content = content.text or '' },
+    }
+  else
+    user_messages = {
+      { role = 'user', content = content }
+    }
+  end
 
   local body_base = {
+    stream = false,
+    max_tokens = settings.max_tokens,
+    temperature = settings.temperature,
     messages = {
       {
         role = 'system',
         content = settings.prompt
       },
-      {
-        role = 'user',
-        content = 'Subject: ' .. (task:get_subject() or ''),
-      },
-      {
-        role = 'user',
-        content = from_content,
-      },
-      {
-        role = 'user',
-        content = url_content,
-      },
-      {
-        role = 'user',
-        content = content
-      }
+      lua_util.unpack(user_messages)
     }
   }
 
@@ -741,13 +713,13 @@ local function openai_check(task, content, sel_part)
     -- Fresh body for each model
     local body = lua_util.deepcopy(body_base)
 
-		-- Merge model-specific parameters into body
-		local params = settings.model_parameters[model]
-		if params then
-			for k, v in pairs(params) do
-				body[k] = v
-			end
-		end
+    -- Merge model-specific parameters into body
+    local params = settings.model_parameters[model]
+    if params then
+      for k, v in pairs(params) do
+        body[k] = v
+      end
+    end
 
     -- Conditionally add response_format
     if settings.include_response_format then
@@ -815,7 +787,20 @@ local function ollama_check(task, content, sel_part)
     end
   end
 
-  local from_content, url_content = get_meta_llm_content(task)
+  local user_messages
+  if type(content) == 'table' then
+    local subject_line = 'Subject: ' .. (content.subject or '')
+    user_messages = {
+      { role = 'user', content = subject_line },
+      { role = 'user', content = content.from or '' },
+      { role = 'user', content = content.url_domains or '' },
+      { role = 'user', content = content.text or '' },
+    }
+  else
+    user_messages = {
+      { role = 'user', content = content }
+    }
+  end
 
   if type(settings.model) == 'string' then
     settings.model = { settings.model }
@@ -831,22 +816,7 @@ local function ollama_check(task, content, sel_part)
         role = 'system',
         content = settings.prompt
       },
-      {
-        role = 'user',
-        content = 'Subject: ' .. task:get_subject() or '',
-      },
-      {
-        role = 'user',
-        content = from_content,
-      },
-      {
-        role = 'user',
-        content = url_content,
-      },
-      {
-        role = 'user',
-        content = content
-      }
+      table.unpack(user_messages)
     }
   }
 
