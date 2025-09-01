@@ -32,6 +32,7 @@
 #include <cstdio>
 #include <cmath>
 #include <locale>
+#include <unordered_map>
 
 #include "frozen/string.h"
 #include "frozen/unordered_map.h"
@@ -59,7 +60,7 @@ static const char *user = nullptr;
 static const char *helo = nullptr;
 static const char *hostname = nullptr;
 static const char *classifier = nullptr;
-static const char *learn_class_name = nullptr;
+static std::string learn_class_name;
 static const char *local_addr = nullptr;
 static const char *execute = nullptr;
 static const char *sort = nullptr;
@@ -94,6 +95,10 @@ static const char *files_list = nullptr;
 static const char *queue_id = nullptr;
 static const char *log_tag = nullptr;
 static std::string settings;
+static std::string neural_train;
+static std::string neural_rule;
+static bool neural_cfg_loaded = false;
+static std::unordered_map<std::string, bool> neural_rule_requires_scan;
 
 std::vector<GPid> children;
 static GPatternSpec **exclude_compiled = nullptr;
@@ -207,6 +212,61 @@ static void rspamc_counters_output(FILE *out, ucl_object_t *obj);
 
 static void rspamc_stat_output(FILE *out, ucl_object_t *obj);
 
+static void
+rspamc_neural_learn_output(FILE *out, ucl_object_t *obj)
+{
+	bool is_success = true;
+	const char *filename = nullptr;
+	double scan_time = -1.0;
+	const char *redis_key = nullptr;
+	std::uintmax_t stored_bytes = 0;
+	bool have_stored = false;
+
+	if (obj != nullptr) {
+		const auto *ok = ucl_object_lookup(obj, "success");
+		if (ok) {
+			is_success = ucl_object_toboolean(ok);
+		}
+		const auto *fn = ucl_object_lookup(obj, "filename");
+		if (fn) {
+			filename = ucl_object_tostring(fn);
+		}
+		const auto *st = ucl_object_lookup(obj, "scan_time");
+		if (st) {
+			scan_time = ucl_object_todouble(st);
+		}
+		const auto *rb = ucl_object_lookup(obj, "stored");
+		if (rb) {
+			stored_bytes = (std::uintmax_t) ucl_object_toint(rb);
+			have_stored = true;
+		}
+		const auto *rk = ucl_object_lookup(obj, "key");
+		if (rk) {
+			redis_key = ucl_object_tostring(rk);
+		}
+	}
+
+	// First line: success
+	fprintf(out, "success = %s;\n", is_success ? "true" : "false");
+
+	// Then other fields in k = v; format
+	if (filename) {
+		fprintf(out, "filename = \"%s\";\n", filename);
+	}
+	if (scan_time >= 0) {
+		fprintf(out, "scan_time = %.6f;\n", scan_time);
+	}
+	if (!neural_train.empty()) {
+		fprintf(out, "class = \"%s\";\n", neural_train.c_str());
+	}
+	if (have_stored) {
+		fprintf(out, "stored = %ju bytes;\n", stored_bytes);
+	}
+	if (redis_key) {
+		fprintf(out, "key = \"%s\";\n", redis_key);
+	}
+}
+
 enum rspamc_command_type {
 	RSPAMC_COMMAND_UNKNOWN = 0,
 	RSPAMC_COMMAND_CHECK,
@@ -214,6 +274,7 @@ enum rspamc_command_type {
 	RSPAMC_COMMAND_LEARN_SPAM,
 	RSPAMC_COMMAND_LEARN_HAM,
 	RSPAMC_COMMAND_LEARN_CLASS,
+	RSPAMC_COMMAND_NEURAL_LEARN,
 	RSPAMC_COMMAND_FUZZY_ADD,
 	RSPAMC_COMMAND_FUZZY_DEL,
 	RSPAMC_COMMAND_FUZZY_DELHASH,
@@ -241,7 +302,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_SYMBOLS,
 		.name = "symbols",
-		.path = "checkv2",
+		.path = "/checkv2",
 		.description = "scan message and show symbols (default command)",
 		.is_controller = FALSE,
 		.is_privileged = FALSE,
@@ -250,7 +311,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_LEARN_SPAM,
 		.name = "learn_spam",
-		.path = "learnspam",
+		.path = "/learnspam",
 		.description = "learn message as spam",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
@@ -259,7 +320,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_LEARN_HAM,
 		.name = "learn_ham",
-		.path = "learnham",
+		.path = "/learnham",
 		.description = "learn message as ham",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
@@ -268,16 +329,25 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_LEARN_CLASS,
 		.name = "learn_class",
-		.path = "learnclass",
+		.path = "/learnclass",
 		.description = "learn message as class",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
 		.need_input = TRUE,
 		.command_output_func = nullptr},
 	rspamc_command{
+		.cmd = RSPAMC_COMMAND_NEURAL_LEARN,
+		.name = "neural_learn",
+		.path = "/checkv2",
+		.description = "learn neural with a class (use neural_learn:<class>)",
+		.is_controller = FALSE,
+		.is_privileged = FALSE,
+		.need_input = TRUE,
+		.command_output_func = rspamc_neural_learn_output},
+	rspamc_command{
 		.cmd = RSPAMC_COMMAND_FUZZY_ADD,
 		.name = "fuzzy_add",
-		.path = "fuzzyadd",
+		.path = "/fuzzyadd",
 		.description =
 			"add hashes from a message to the fuzzy storage (check -f and -w options for this command)",
 		.is_controller = TRUE,
@@ -287,7 +357,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_FUZZY_DEL,
 		.name = "fuzzy_del",
-		.path = "fuzzydel",
+		.path = "/fuzzydel",
 		.description =
 			"delete hashes from a message from the fuzzy storage (check -f option for this command)",
 		.is_controller = TRUE,
@@ -297,7 +367,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_FUZZY_DELHASH,
 		.name = "fuzzy_delhash",
-		.path = "fuzzydelhash",
+		.path = "/fuzzydelhash",
 		.description =
 			"delete a hash from fuzzy storage (check -f option for this command)",
 		.is_controller = TRUE,
@@ -307,7 +377,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_STAT,
 		.name = "stat",
-		.path = "stat",
+		.path = "/stat",
 		.description = "show rspamd statistics",
 		.is_controller = TRUE,
 		.is_privileged = FALSE,
@@ -317,7 +387,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_STAT_RESET,
 		.name = "stat_reset",
-		.path = "statreset",
+		.path = "/statreset",
 		.description = "show and reset rspamd statistics (useful for graphs)",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
@@ -326,7 +396,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_COUNTERS,
 		.name = "counters",
-		.path = "counters",
+		.path = "/counters",
 		.description = "display rspamd symbols statistics",
 		.is_controller = TRUE,
 		.is_privileged = FALSE,
@@ -335,7 +405,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_UPTIME,
 		.name = "uptime",
-		.path = "auth",
+		.path = "/auth",
 		.description = "show rspamd uptime",
 		.is_controller = TRUE,
 		.is_privileged = FALSE,
@@ -344,7 +414,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_ADD_SYMBOL,
 		.name = "add_symbol",
-		.path = "addsymbol",
+		.path = "/addsymbol",
 		.description = "add or modify symbol settings in rspamd",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
@@ -353,7 +423,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_ADD_ACTION,
 		.name = "add_action",
-		.path = "addaction",
+		.path = "/addaction",
 		.description = "add or modify action settings",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
@@ -714,6 +784,7 @@ check_rspamc_command(const char *cmd) -> std::optional<rspamc_command>
 		{"learn_spam", RSPAMC_COMMAND_LEARN_SPAM},
 		{"learn_ham", RSPAMC_COMMAND_LEARN_HAM},
 		{"learn_class", RSPAMC_COMMAND_LEARN_CLASS},
+		{"neural_learn", RSPAMC_COMMAND_NEURAL_LEARN},
 		{"fuzzy_add", RSPAMC_COMMAND_FUZZY_ADD},
 		{"fuzzy_del", RSPAMC_COMMAND_FUZZY_DEL},
 		{"fuzzy_delhash", RSPAMC_COMMAND_FUZZY_DELHASH},
@@ -725,22 +796,34 @@ check_rspamc_command(const char *cmd) -> std::optional<rspamc_command>
 
 	std::string cmd_lc = rspamd_string_tolower(cmd);
 
-	// Handle learn_class:classname syntax
-	if (cmd_lc.find("learn_class:") == 0) {
+	/* Handle colon-suffixed commands in a unified way */
+	{
 		auto colon_pos = cmd_lc.find(':');
-		if (colon_pos != std::string::npos && colon_pos + 1 < cmd_lc.length()) {
-			auto class_name = cmd_lc.substr(colon_pos + 1);
-			// Store class name globally for later use
-			learn_class_name = g_strdup(class_name.c_str());
-			// Return the learn_class command
-			auto elt_it = std::find_if(rspamc_commands.begin(), rspamc_commands.end(), [&](const auto &item) {
-				return item.cmd == RSPAMC_COMMAND_LEARN_CLASS;
-			});
-			if (elt_it != std::end(rspamc_commands)) {
-				return *elt_it;
+		if (colon_pos != std::string::npos) {
+			auto base = cmd_lc.substr(0, colon_pos);
+			auto arg = cmd_lc.substr(colon_pos + 1);
+
+			if (!arg.empty()) {
+				auto find_cmd = [](enum rspamc_command_type t) -> std::optional<rspamc_command> {
+					const auto it = std::find_if(rspamc_commands.begin(), rspamc_commands.end(), [&t](const auto &item) {
+						return item.cmd == t;
+					});
+					if (it != std::end(rspamc_commands)) {
+						return *it;
+					}
+					return std::nullopt;
+				};
+
+				if (base == "learn_class") {
+					learn_class_name = arg;
+					return find_cmd(RSPAMC_COMMAND_LEARN_CLASS);
+				}
+				else if (base == "neural_learn") {
+					neural_train = arg; /* allow any class name, plugin validates */
+					return find_cmd(RSPAMC_COMMAND_NEURAL_LEARN);
+				}
 			}
 		}
-		return std::nullopt;
 	}
 
 	auto ct = rspamd::find_map(str_map, std::string_view{cmd_lc});
@@ -887,8 +970,12 @@ add_options(GQueue *opts)
 		add_client_header(opts, "Classifier", classifier);
 	}
 
-	if (learn_class_name) {
-		add_client_header(opts, "Class", learn_class_name);
+	if (!learn_class_name.empty()) {
+		add_client_header(opts, "Class", learn_class_name.c_str());
+	}
+
+	if (!neural_train.empty()) {
+		add_client_header(opts, "ANN-Train", neural_train.c_str());
 	}
 
 	if (weight != 0) {
@@ -939,6 +1026,15 @@ add_options(GQueue *opts)
 			add_client_header(opts,
 							  hdr_view.substr(0, std::distance(std::begin(hdr_view), delim_pos)),
 							  hdr_view.substr(std::distance(std::begin(hdr_view), delim_pos) + 1));
+			/* Capture Rule header for neural selection */
+			if (neural_rule.empty()) {
+				std::string name_copy{hdr_view.substr(0, std::distance(std::begin(hdr_view), delim_pos))};
+				std::transform(name_copy.begin(), name_copy.end(), name_copy.begin(), [](unsigned char c) { return std::tolower(c); });
+				if (name_copy == "rule") {
+					auto value_view = hdr_view.substr(std::distance(std::begin(hdr_view), delim_pos) + 1);
+					neural_rule.assign(value_view.begin(), value_view.end());
+				}
+			}
 		}
 
 		hdr++;
@@ -2049,6 +2145,7 @@ rspamc_process_input(struct ev_loop *ev_base, const struct rspamc_command &cmd,
 	uint16_t port;
 	GError *err = nullptr;
 	std::string hostbuf;
+	std::string path_override;
 
 	if (connect_str[0] == '[') {
 		p = strrchr(connect_str, ']');
@@ -2096,6 +2193,22 @@ rspamc_process_input(struct ev_loop *ev_base, const struct rspamc_command &cmd,
 		}
 	}
 
+	/* Dynamic path/port override for neural_learn based on fetched config */
+	if (cmd.cmd == RSPAMC_COMMAND_NEURAL_LEARN && neural_cfg_loaded) {
+		const auto &rule = !neural_rule.empty() ? neural_rule : std::string{"default"};
+		auto it = neural_rule_requires_scan.find(rule);
+		bool requires_scan = true;
+		if (it != neural_rule_requires_scan.end()) {
+			requires_scan = it->second;
+		}
+		if (!requires_scan) {
+			path_override = "/plugins/neural/learn_message";
+			if (p == nullptr) {
+				port = DEFAULT_CONTROL_PORT;
+			}
+		}
+	}
+
 	conn = rspamd_client_init(http_ctx, ev_base, hostbuf.c_str(), port, timeout, pubkey);
 
 	if (conn != nullptr) {
@@ -2104,12 +2217,14 @@ rspamc_process_input(struct ev_loop *ev_base, const struct rspamc_command &cmd,
 		cbdata->filename = name;
 
 		if (cmd.need_input) {
-			rspamd_client_command(conn, cmd.path, attrs, in, rspamc_client_cb,
+			const char *path = path_override.empty() ? cmd.path : path_override.c_str();
+			rspamd_client_command(conn, path, attrs, in, rspamc_client_cb,
 								  cbdata, compressed, dictionary, cbdata->filename.c_str(), &err);
 		}
 		else {
+			const char *path = path_override.empty() ? cmd.path : path_override.c_str();
 			rspamd_client_command(conn,
-								  cmd.path,
+								  path,
 								  attrs,
 								  nullptr,
 								  rspamc_client_cb,
@@ -2281,6 +2396,102 @@ rspamc_kwattr_free(gpointer p)
 	g_free(h);
 }
 
+/* Fetch /controller/neural/config once per run and populate neural_cfg_loaded
+ * and neural_rule_requires_scan map. */
+static void rspamc_neural_config_cb(struct rspamd_client_connection *conn,
+									struct rspamd_http_message *msg,
+									const char *name, ucl_object_t *result, GString *input,
+									gpointer ud, double start_time, double send_time,
+									const char *body, gsize bodylen,
+									GError *err)
+{
+	/* Populate map: data.rules[rule].requires_scan */
+	if (result != nullptr) {
+		const auto *data = ucl_object_lookup(result, "data");
+		if (data && ucl_object_type(data) == UCL_OBJECT) {
+			const auto *rules = ucl_object_lookup(data, "rules");
+			if (rules && ucl_object_type(rules) == UCL_OBJECT) {
+				ucl_object_iter_t it = nullptr;
+				const ucl_object_t *cur;
+				while ((cur = ucl_object_iterate(rules, &it, true)) != nullptr) {
+					std::string rule_name = ucl_object_key(cur) ? ucl_object_key(cur) : "";
+					auto requires_scan = true;
+					const auto *rq = ucl_object_lookup(cur, "requires_scan");
+					if (rq) {
+						requires_scan = ucl_object_toboolean(rq);
+					}
+					neural_rule_requires_scan[rule_name] = requires_scan;
+				}
+				neural_cfg_loaded = true;
+			}
+		}
+		ucl_object_unref(result);
+	}
+	else if (err) {
+		/* Do not fail the whole run if config not available */
+		neural_cfg_loaded = false;
+	}
+
+	rspamd_client_destroy(conn);
+}
+
+static void
+rspamc_fetch_neural_config(struct ev_loop *ev_base, GQueue *attrs)
+{
+	/* Build connection to controller port */
+	const char *p;
+	uint16_t port;
+	std::string hostbuf;
+	GError *err = nullptr;
+
+	if (connect_str[0] == '[') {
+		p = strrchr(connect_str, ']');
+		if (p != nullptr) {
+			hostbuf.assign(connect_str + 1, (std::size_t) (p - connect_str - 1));
+			p++;
+		}
+		else {
+			p = connect_str;
+		}
+	}
+	else {
+		p = connect_str;
+	}
+
+	p = strrchr(p, ':');
+	if (hostbuf.empty()) {
+		if (p != nullptr) {
+			hostbuf.assign(connect_str, (std::size_t) (p - connect_str));
+		}
+		else {
+			hostbuf.assign(connect_str);
+		}
+	}
+
+	if (p != nullptr) {
+		port = strtoul(p + 1, nullptr, 10);
+	}
+	else {
+		/* Default to controller port if not specified */
+		port = DEFAULT_CONTROL_PORT;
+	}
+
+	auto *conn = rspamd_client_init(http_ctx, ev_base, hostbuf.c_str(), port, timeout, pubkey);
+	if (conn != nullptr) {
+		/* Minimal headers; reuse attrs so users can pass Password, etc. */
+		rspamd_client_command(conn,
+							  "/plugins/neural/config",
+							  attrs,
+							  nullptr,
+							  rspamc_neural_config_cb,
+							  nullptr,
+							  compressed,
+							  dictionary,
+							  "neural_config",
+							  &err);
+	}
+}
+
 int main(int argc, char **argv, char **env)
 {
 	auto *kwattrs = g_queue_new();
@@ -2397,6 +2608,13 @@ int main(int argc, char **argv, char **env)
 
 	add_options(kwattrs);
 	auto cmd = maybe_cmd.value();
+
+	/* Preload neural config once if we are going to use neural_learn */
+	if (cmd.cmd == RSPAMC_COMMAND_NEURAL_LEARN && !neural_cfg_loaded) {
+		rspamc_fetch_neural_config(event_loop, kwattrs);
+		/* Drive loop once to complete config request */
+		ev_loop(event_loop, 0);
+	}
 
 	if (start_argc == argc && files_list == nullptr) {
 		/* Do command without input or with stdin */
