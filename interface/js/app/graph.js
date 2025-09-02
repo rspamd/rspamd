@@ -112,10 +112,10 @@ define(["jquery", "app/common", "d3evolution", "d3pie", "d3", "footable"],
                     return {
                         label: graph_options.legend.entries[i].label,
                         value: value,
-                        min: Number(yExtents[0].toFixed(6)),
-                        avg: Number(avg.toFixed(6)),
-                        max: Number(yExtents[1].toFixed(6)),
-                        last: Number(curr[curr.length - 1].y.toFixed(6)),
+                        min: Number((yExtents[0] ?? 0).toFixed(6)),
+                        avg: Number((avg ?? 0).toFixed(6)),
+                        max: Number((yExtents[1] ?? 0).toFixed(6)),
+                        last: Number((curr[curr.length - 1]?.y ?? 0).toFixed(6)),
                         color: graph_options.legend.entries[i].color,
                     };
                 }, []);
