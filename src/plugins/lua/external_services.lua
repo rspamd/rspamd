@@ -27,7 +27,7 @@ local N = "external_services"
 
 if confighelp then
   rspamd_config:add_example(nil, 'external_services',
-      "Check messages using external services (e.g. OEM AS engines, DCC, Pyzor etc)",
+      "Check messages using external services (e.g. OEM AS engines, Pyzor etc)",
       [[
   external_services {
     # multiple scanners could be checked, for each we create a configuration block with an arbitrary name
@@ -86,22 +86,6 @@ if confighelp then
         pptm = "pptm";
         potm = "potm";
         ppsm = "ppsm";
-      }
-      # `whitelist` points to a map of IP addresses. Mail from these addresses is not scanned.
-      whitelist = "/etc/rspamd/antivirus.wl";
-    }
-    dcc {
-      # If set force this action if any virus is found (default unset: no action is forced)
-      # action = "reject";
-      # If set, then rejection message is set to this value (mention single quotes)
-      # If `max_size` is set, messages > n bytes in size are not scanned
-      max_size = 20000000;
-      #servers = "127.0.0.1:10045;
-      # if `patterns` is specified virus name will be matched against provided regexes and the related
-      # symbol will be yielded if a match is found. If no match is found, default symbol is yielded.
-      patterns {
-        # symbol_name = "pattern";
-        JUST_EICAR = "^Eicar-Test-Signature$";
       }
       # `whitelist` points to a map of IP addresses. Mail from these addresses is not scanned.
       whitelist = "/etc/rspamd/antivirus.wl";

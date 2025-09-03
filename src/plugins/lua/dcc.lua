@@ -19,7 +19,7 @@ limitations under the License.
 
 local N = 'dcc'
 local symbol_bulk = "DCC_BULK"
-local symbol = "DCC_REJECT"
+local symbol_fail = "DCC_FAIL"
 local opts = rspamd_config:get_all_opt(N)
 local lua_util = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
@@ -80,17 +80,12 @@ if rule then
   rspamd_config:register_symbol {
     type = 'virtual',
     parent = id,
-    name = opts.symbol
-  }
-  rspamd_config:register_symbol {
-    type = 'virtual',
-    parent = id,
     name = opts.symbol_bulk
   }
   rspamd_config:register_symbol {
     type = 'virtual',
     parent = id,
-    name = 'DCC_FAIL'
+    name = opts.symbol_fail
   }
   rspamd_config:set_metric_symbol({
     group = N,
@@ -101,17 +96,10 @@ if rule then
   })
   rspamd_config:set_metric_symbol({
     group = N,
-    score = 2.0,
-    description = 'Rejected by DCC',
-    one_shot = true,
-    name = opts.symbol,
-  })
-  rspamd_config:set_metric_symbol({
-    group = N,
     score = 0.0,
     description = 'DCC failure',
     one_shot = true,
-    name = 'DCC_FAIL',
+    name = opts.symbol_fail,
   })
 else
   lua_util.disable_module(N, "config")

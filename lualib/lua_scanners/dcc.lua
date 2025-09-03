@@ -41,10 +41,8 @@ local function dcc_config(opts)
     message = '${SCANNER}: bulk message found: "${VIRUS}"',
     detection_category = "hash",
     default_score = 1,
-    action = false,
     client = '0.0.0.0',
     symbol_fail = 'DCC_FAIL',
-    symbol = 'DCC_REJECT',
     symbol_bulk = 'DCC_BULK',
     body_max = 999999,
     fuz1_max = 999999,
@@ -127,7 +125,7 @@ local function dcc_check(task, content, digest, rule)
     -- Build the DCC query
     -- https://www.dcc-servers.net/dcc/dcc-tree/dccifd.html#Protocol
     local request_data = {
-      "header\n",
+      "header grey-off no-reject\n",
       client .. "\n",
       helo .. "\n",
       envfrom .. "\n",
@@ -160,9 +158,6 @@ local function dcc_check(task, content, digest, rule)
             shutdown = true,
             data = request_data,
             callback = dcc_callback,
-            body_max = 999999,
-            fuz1_max = 999999,
-            fuz2_max = 999999,
           })
         else
           rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits ' ..
@@ -180,79 +175,82 @@ local function dcc_check(task, content, digest, rule)
         local _, _, result, disposition, header = tostring(data):find("(.-)\n(.-)\n(.-)$")
         lua_util.debugm(rule.name, task, 'DCC result=%1 disposition=%2 header="%3"',
             result, disposition, header)
+        -- rspamd_logger.warnx(task, '%s: result: %s, header: %s', rule.log_prefix, result, header);
 
         if header then
           -- Unfold header
           header = header:gsub('\r?\n%s*', ' ')
           local _, _, info = header:find("; (.-)$")
           if (result == 'R') then
-            -- Reject
-            common.yield_result(task, rule, info, rule.default_score)
-            common.save_cache(task, digest, rule, info, rule.default_score)
+            -- Reject, should not happen so do nothing
+            if rule.log_clean then
+              rspamd_logger.infox(task, '%s: clean, returned result R - info: %s', rule.log_prefix, info)
+            else
+              lua_util.debugm(rule.name, task, '%s: returned result R - info: %s', rule.log_prefix, info)
+            end
           elseif (result == 'T') then
             -- Temporary failure
             rspamd_logger.warnx(task, 'DCC returned a temporary failure result: %s', result)
             dcc_requery()
           elseif result == 'A' then
-
+            -- Accept decision, get results
             local opts = {}
             local score = 0.0
-            info = info:lower()
-            local rep = info:match('rep=(%d+)')
+            if info then
+              info = info:lower()
+              local rep = info:match('rep=(%d+)')
 
-            -- Adjust reputation if available
-            if rep then
-              rep = (tonumber(rep) or 100.0) / 100.0
+              -- Adjust reputation if available
+              if rep then
+                rep = (tonumber(rep) or 100.0) / 100.0
 
-              if rep > 1.0 then
-                rep = 1.0
-              elseif rep < 0.0 then
-                rep = 0.0
-              end
-            else
-              rep = 1.0
-            end
-
-            local function check_threshold(what, num, lim)
-              local rnum
-              if num == 'many' then
-                rnum = lim
+                if rep > 1.0 then
+                  rep = 1.0
+                elseif rep < 0.0 then
+                  rep = 0.0
+                end
               else
-                rnum = tonumber(num) or lim
+                rep = 1.0
               end
 
-              if rnum and rnum >= lim then
-                opts[#opts + 1] = string.format('%s=%s', what, num)
-                score = score + (rep / 3.0)
+              local function check_threshold(what, num, lim)
+                local rnum
+                if num == 'many' then
+                  rnum = lim
+                else
+                  rnum = tonumber(num) or lim
+                end
+
+                if rnum and rnum >= lim then
+                  opts[#opts + 1] = string.format('%s=%s', what, num)
+                  score = score + (rule.default_score * rep / 3.0)
+                end
               end
-            end
 
-            info = info:lower()
-            local body = info:match('body=([^=%s]+)')
+              local body = info:match('body=([^=%s]+)')
 
-            if body then
-              check_threshold('body', body, rule.body_max)
-            end
+              if body then
+                check_threshold('body', body, rule.body_max)
+              end
 
-            local fuz1 = info:match('fuz1=([^=%s]+)')
+              local fuz1 = info:match('fuz1=([^=%s]+)')
 
-            if fuz1 then
-              check_threshold('fuz1', fuz1, rule.fuz1_max)
-            end
+              if fuz1 then
+                check_threshold('fuz1', fuz1, rule.fuz1_max)
+              end
 
-            local fuz2 = info:match('fuz2=([^=%s]+)')
+              local fuz2 = info:match('fuz2=([^=%s]+)')
 
-            if fuz2 then
-              check_threshold('fuz2', fuz2, rule.fuz2_max)
+              if fuz2 then
+                check_threshold('fuz2', fuz2, rule.fuz2_max)
+              end
             end
 
             if #opts > 0 and score > 0 then
               task:insert_result(rule.symbol_bulk,
                   score,
                   opts)
-              common.save_cache(task, digest, rule, opts, score)
             else
-              common.save_cache(task, digest, rule, 'OK')
               if rule.log_clean then
                 rspamd_logger.infox(task, '%s: clean, returned result A - info: %s',
                     rule.log_prefix, info)
@@ -262,16 +260,14 @@ local function dcc_check(task, content, digest, rule)
               end
             end
           elseif result == 'G' then
-            -- do nothing
-            common.save_cache(task, digest, rule, 'OK')
+            -- Greylist, should not happen so do nothing
             if rule.log_clean then
               rspamd_logger.infox(task, '%s: clean, returned result G - info: %s', rule.log_prefix, info)
             else
               lua_util.debugm(rule.name, task, '%s: returned result G - info: %s', rule.log_prefix, info)
             end
           elseif result == 'S' then
-            -- do nothing
-            common.save_cache(task, digest, rule, 'OK')
+            -- Accept only for some recipients, should not happen so do nothing
             if rule.log_clean then
               rspamd_logger.infox(task, '%s: clean, returned result S - info: %s', rule.log_prefix, info)
             else
@@ -295,18 +291,10 @@ local function dcc_check(task, content, digest, rule)
       upstream = upstream,
       data = request_data,
       callback = dcc_callback,
-      body_max = 999999,
-      fuz1_max = 999999,
-      fuz2_max = 999999,
     })
   end
 
-  if common.condition_check_and_continue(task, content, rule, digest, dcc_check_uncached) then
-    return
-  else
-    dcc_check_uncached()
-  end
-
+  dcc_check_uncached()
 end
 
 return {
