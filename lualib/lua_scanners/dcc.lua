@@ -175,25 +175,17 @@ local function dcc_check(task, content, digest, rule)
         local _, _, result, disposition, header = tostring(data):find("(.-)\n(.-)\n(.-)$")
         lua_util.debugm(rule.name, task, 'DCC result=%1 disposition=%2 header="%3"',
             result, disposition, header)
-        -- rspamd_logger.warnx(task, '%s: result: %s, header: %s', rule.log_prefix, result, header);
 
         if header then
           -- Unfold header
           header = header:gsub('\r?\n%s*', ' ')
           local _, _, info = header:find("; (.-)$")
-          if (result == 'R') then
-            -- Reject, should not happen so do nothing
-            if rule.log_clean then
-              rspamd_logger.infox(task, '%s: clean, returned result R - info: %s', rule.log_prefix, info)
-            else
-              lua_util.debugm(rule.name, task, '%s: returned result R - info: %s', rule.log_prefix, info)
-            end
-          elseif (result == 'T') then
+          if (result == 'T') then
             -- Temporary failure
             rspamd_logger.warnx(task, 'DCC returned a temporary failure result: %s', result)
             dcc_requery()
           elseif result == 'A' then
-            -- Accept decision, get results
+            -- Accept decision, only expected decision since query is with grey-off no-reject
             local opts = {}
             local score = 0.0
             if info then
@@ -259,23 +251,9 @@ local function dcc_check(task, content, digest, rule)
                     rule.log_prefix, info)
               end
             end
-          elseif result == 'G' then
-            -- Greylist, should not happen so do nothing
-            if rule.log_clean then
-              rspamd_logger.infox(task, '%s: clean, returned result G - info: %s', rule.log_prefix, info)
-            else
-              lua_util.debugm(rule.name, task, '%s: returned result G - info: %s', rule.log_prefix, info)
-            end
-          elseif result == 'S' then
-            -- Accept only for some recipients, should not happen so do nothing
-            if rule.log_clean then
-              rspamd_logger.infox(task, '%s: clean, returned result S - info: %s', rule.log_prefix, info)
-            else
-              lua_util.debugm(rule.name, task, '%s: returned result S - info: %s', rule.log_prefix, info)
-            end
           else
-            -- Unknown result
-            rspamd_logger.warnx(task, '%s: result error: %1', rule.log_prefix, result);
+            -- Unexpected result
+            rspamd_logger.warnx(task, '%1: Unexpected result. result: %2, info: %3', rule.log_prefix, result, info);
             common.yield_result(task, rule, 'error: ' .. result, 0.0, 'fail')
           end
         end
