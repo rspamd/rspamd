@@ -223,7 +223,7 @@ local function dcc_check(task, content, digest, rule)
 
               if rnum and rnum >= lim then
                 opts[#opts + 1] = string.format('%s=%s', what, num)
-                score = score * rep
+                score = score + (rep / 3.0)
               end
             end
 
