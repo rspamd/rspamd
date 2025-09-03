@@ -908,7 +908,7 @@ rspamd_dns_resolver_init(rspamd_logger_t *logger,
 			/* Parse resolv.conf */
 			dns_resolver->ups = rspamd_upstreams_create(cfg->ups_ctx);
 			rspamd_upstreams_set_flags(dns_resolver->ups,
-									   RSPAMD_UPSTREAM_FLAG_NORESOLVE);
+									   RSPAMD_UPSTREAM_FLAG_DNS);
 			rspamd_upstreams_set_rotation(dns_resolver->ups,
 										  RSPAMD_UPSTREAM_MASTER_SLAVE);
 
@@ -931,7 +931,7 @@ rspamd_dns_resolver_init(rspamd_logger_t *logger,
 		else {
 			dns_resolver->ups = rspamd_upstreams_create(cfg->ups_ctx);
 			rspamd_upstreams_set_flags(dns_resolver->ups,
-									   RSPAMD_UPSTREAM_FLAG_NORESOLVE);
+									   RSPAMD_UPSTREAM_FLAG_DNS);
 
 			if (!rspamd_upstreams_from_ucl(dns_resolver->ups, cfg->nameservers,
 										   53, dns_resolver)) {

@@ -27,6 +27,7 @@
 #include "contrib/mumhash/mum.h"
 
 #include <math.h>
+#include <netdb.h>
 
 
 struct upstream_inet_addr_entry {
@@ -226,7 +227,8 @@ void rspamd_upstreams_library_config(struct rspamd_config *cfg,
 		while (cur) {
 			upstream = cur->data;
 			if (!ev_can_stop(&upstream->ev) && upstream->ls &&
-				!(upstream->flags & RSPAMD_UPSTREAM_FLAG_NORESOLVE)) {
+				!((upstream->flags & RSPAMD_UPSTREAM_FLAG_NORESOLVE) ||
+				  (upstream->flags & RSPAMD_UPSTREAM_FLAG_DNS))) {
 				double when;
 
 				if (upstream->flags & RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE) {
@@ -341,7 +343,8 @@ rspamd_upstream_set_active(struct upstream_list *ls, struct upstream *upstream)
 	upstream->active_idx = ls->alive->len - 1;
 
 	if (upstream->ctx && upstream->ctx->configured &&
-		!(upstream->flags & RSPAMD_UPSTREAM_FLAG_NORESOLVE)) {
+		!((upstream->flags & RSPAMD_UPSTREAM_FLAG_NORESOLVE) ||
+		  (upstream->flags & RSPAMD_UPSTREAM_FLAG_DNS))) {
 
 		if (ev_can_stop(&upstream->ev)) {
 			ev_timer_stop(upstream->ctx->event_loop, &upstream->ev);
@@ -653,6 +656,83 @@ static void
 rspamd_upstream_resolve_addrs(const struct upstream_list *ls,
 							  struct upstream *upstream)
 {
+
+	if ((upstream->flags & RSPAMD_UPSTREAM_FLAG_DNS)) {
+		/* For DNS upstreams: resolve synchronously using getaddrinfo if name */
+		if (upstream->name[0] != '/') {
+			char dns_name[253 + 1]; /* host part */
+			const char *semicolon_pos = strchr(upstream->name, ':');
+
+			if (semicolon_pos != NULL && semicolon_pos > upstream->name) {
+				if (sizeof(dns_name) > (size_t) (semicolon_pos - upstream->name)) {
+					rspamd_strlcpy(dns_name, upstream->name,
+								   semicolon_pos - upstream->name + 1);
+				}
+				else {
+					msg_err_upstream("internal error: upstream name is larger than max DNS name: %s",
+									 upstream->name);
+					rspamd_strlcpy(dns_name, upstream->name, sizeof(dns_name));
+				}
+			}
+			else {
+				rspamd_strlcpy(dns_name, upstream->name, sizeof(dns_name));
+			}
+
+			/* Skip if already IP */
+			rspamd_inet_addr_t *tmp_ip = NULL;
+			if (rspamd_parse_inet_address(&tmp_ip, dns_name, strlen(dns_name),
+										  RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
+				if (tmp_ip) {
+					rspamd_inet_address_free(tmp_ip);
+				}
+				return;
+			}
+
+			unsigned int port = 0;
+			if (upstream->addrs.addr && upstream->addrs.addr->len > 0) {
+				struct upstream_addr_elt *addr_elt = g_ptr_array_index(upstream->addrs.addr, 0);
+				port = rspamd_inet_address_get_port(addr_elt->addr);
+			}
+
+			struct addrinfo hints, *res = NULL, *cur;
+			memset(&hints, 0, sizeof(hints));
+			hints.ai_socktype = SOCK_STREAM;
+			hints.ai_family = AF_UNSPEC;
+			hints.ai_flags = AI_NUMERICSERV;
+
+			char portbuf[8];
+			if (port == 0) {
+				rspamd_strlcpy(portbuf, "53", sizeof(portbuf));
+			}
+			else {
+				rspamd_snprintf(portbuf, sizeof(portbuf), "%ud", port);
+			}
+
+			int gr = getaddrinfo(dns_name, portbuf, &hints, &res);
+			if (gr == 0 && res != NULL) {
+				RSPAMD_UPSTREAM_LOCK(upstream);
+				struct upstream_inet_addr_entry *up_ent;
+				for (cur = res; cur != NULL; cur = cur->ai_next) {
+					rspamd_inet_addr_t *na = rspamd_inet_address_from_sa(cur->ai_addr, cur->ai_addrlen);
+					if (na == NULL) {
+						continue;
+					}
+					rspamd_inet_address_set_port(na, port);
+					up_ent = g_malloc0(sizeof(*up_ent));
+					up_ent->addr = na;
+					up_ent->priority = 0;
+					LL_PREPEND(upstream->new_addrs, up_ent);
+				}
+				RSPAMD_UPSTREAM_UNLOCK(upstream);
+
+				freeaddrinfo(res);
+
+				rspamd_upstream_update_addrs(upstream);
+			}
+		}
+
+		return;
+	}
 
 	if (upstream->ctx->res != NULL &&
 		upstream->ctx->configured &&
@@ -1207,7 +1287,56 @@ rspamd_upstreams_add_upstream(struct upstream_list *ups, const char *str,
 			}
 		}
 		else {
-			g_ptr_array_free(addrs, TRUE);
+			/* Not numeric: resolve synchronously and add all IPs */
+			struct addrinfo hints, *res = NULL, *cur;
+			char hostbuf[256];
+			const char *colon = strchr(str, ':');
+			char portbuf[8];
+			unsigned int portnum = def_port;
+
+			if (colon != NULL && colon > str) {
+				size_t hlen = MIN((size_t) (colon - str), sizeof(hostbuf) - 1);
+				rspamd_strlcpy(hostbuf, str, hlen + 1);
+				if (colon[1] != '\0') {
+					portnum = strtoul(colon + 1, NULL, 10);
+				}
+			}
+			else {
+				rspamd_strlcpy(hostbuf, str, sizeof(hostbuf));
+			}
+
+			rspamd_snprintf(portbuf, sizeof(portbuf), "%ud", portnum);
+			memset(&hints, 0, sizeof(hints));
+			hints.ai_socktype = SOCK_STREAM;
+			hints.ai_family = AF_UNSPEC;
+			hints.ai_flags = AI_NUMERICSERV;
+
+			if (getaddrinfo(hostbuf, portbuf, &hints, &res) == 0 && res != NULL) {
+				for (cur = res; cur != NULL; cur = cur->ai_next) {
+					rspamd_inet_addr_t *na = rspamd_inet_address_from_sa(cur->ai_addr, cur->ai_addrlen);
+					if (na == NULL) {
+						continue;
+					}
+					rspamd_inet_address_set_port(na, portnum);
+					g_ptr_array_add(addrs, na);
+				}
+				freeaddrinfo(res);
+				if (ups->ctx) {
+					rspamd_mempool_add_destructor(ups->ctx->pool,
+												  (rspamd_mempool_destruct_t) rspamd_ptr_array_free_hard,
+												  addrs);
+				}
+				if (ups->ctx) {
+					upstream->name = rspamd_mempool_strdup(ups->ctx->pool, str);
+				}
+				else {
+					upstream->name = g_strdup(str);
+				}
+				ret = RSPAMD_PARSE_ADDR_RESOLVED;
+			}
+			else {
+				g_ptr_array_free(addrs, TRUE);
+			}
 		}
 
 		break;
