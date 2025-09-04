@@ -188,9 +188,11 @@ local function dcc_check(task, content, digest, rule)
             -- Accept decision, only expected decision since query is with grey-off no-reject
             local opts = {}
             local score = 0.0
+            local rep_orig = nil
             if info then
               info = info:lower()
               local rep = info:match('rep=(%d+)')
+              rep_orig = rep
 
               -- Adjust reputation if available
               if rep then
@@ -239,6 +241,9 @@ local function dcc_check(task, content, digest, rule)
             end
 
             if #opts > 0 and score > 0 then
+              if rep_orig then
+                opts[#opts + 1] = string.format('%s=%s', "rep", rep_orig .. "%")
+              end
               task:insert_result(rule.symbol_bulk,
                   score,
                   opts)
