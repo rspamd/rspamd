@@ -1743,10 +1743,9 @@ rspamd_upstream_get_common(struct upstream_list *ups,
 
 	RSPAMD_UPSTREAM_LOCK(ups);
 	if (ups->alive->len == 0) {
-		/* We have no upstreams alive */
-		msg_warn("there are no alive upstreams left for %s, revive all of them",
-				 ups->ups_line);
-		g_ptr_array_foreach(ups->ups, rspamd_upstream_restore_cb, ups);
+		/* No alive upstreams; do not force-revive to avoid tight retry loops */
+		RSPAMD_UPSTREAM_UNLOCK(ups);
+		return NULL;
 	}
 	RSPAMD_UPSTREAM_UNLOCK(ups);
 
