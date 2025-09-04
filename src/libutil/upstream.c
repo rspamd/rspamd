@@ -660,7 +660,13 @@ rspamd_upstream_resolve_addrs(const struct upstream_list *ls,
 	if ((upstream->flags & RSPAMD_UPSTREAM_FLAG_DNS)) {
 		/* For DNS upstreams: resolve synchronously using getaddrinfo if name */
 		if (upstream->name[0] != '/') {
-			char dns_name[253 + 1]; /* host part */
+			/* If marked NORESOLVE at init (numeric address), keep old behaviour */
+			if (upstream->flags & RSPAMD_UPSTREAM_FLAG_NORESOLVE) {
+				return;
+			}
+
+			/* Extract host part without port */
+			char dns_name[253 + 1];
 			const char *semicolon_pos = strchr(upstream->name, ':');
 
 			if (semicolon_pos != NULL && semicolon_pos > upstream->name) {
@@ -678,16 +684,7 @@ rspamd_upstream_resolve_addrs(const struct upstream_list *ls,
 				rspamd_strlcpy(dns_name, upstream->name, sizeof(dns_name));
 			}
 
-			/* Skip if already IP */
-			rspamd_inet_addr_t *tmp_ip = NULL;
-			if (rspamd_parse_inet_address(&tmp_ip, dns_name, strlen(dns_name),
-										  RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
-				if (tmp_ip) {
-					rspamd_inet_address_free(tmp_ip);
-				}
-				return;
-			}
-
+			/* Use saved port from current address */
 			unsigned int port = 0;
 			if (upstream->addrs.addr && upstream->addrs.addr->len > 0) {
 				struct upstream_addr_elt *addr_elt = g_ptr_array_index(upstream->addrs.addr, 0);
@@ -702,6 +699,7 @@ rspamd_upstream_resolve_addrs(const struct upstream_list *ls,
 
 			char portbuf[8];
 			if (port == 0) {
+				/* Fallback to default 53 if unknown */
 				rspamd_strlcpy(portbuf, "53", sizeof(portbuf));
 			}
 			else {
