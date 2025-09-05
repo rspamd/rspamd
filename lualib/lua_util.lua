@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 --[[[
 -- @module lua_util
@@ -96,7 +96,7 @@ local function rspamd_str_split(s, sep)
       if type(sep) == 'string' then
         _sep = lpeg.S(sep) -- Assume set
       else
-        _sep = sep -- Assume lpeg object
+        _sep = sep         -- Assume lpeg object
       end
       local elem = lpeg.C((1 - _sep) ^ 0)
       local p = lpeg.Ct(elem * (_sep * elem) ^ 0)
@@ -567,14 +567,14 @@ local function parse_time_interval(str)
   parser.fractional = (lpeg.P(".")) *
       (digit ^ 1)
   parser.number = (parser.integer *
-      (parser.fractional ^ -1)) +
+        (parser.fractional ^ -1)) +
       (lpeg.S("+-") * parser.fractional)
   parser.time = lpeg.Cf(lpeg.Cc(1) *
-      (parser.number / tonumber) *
-      ((lpeg.S("smhdwy") / parse_time_suffix) ^ -1),
-      function(acc, val)
-        return acc * val
-      end)
+    (parser.number / tonumber) *
+    ((lpeg.S("smhdwy") / parse_time_suffix) ^ -1),
+    function(acc, val)
+      return acc * val
+    end)
 
   local t = lpeg.match(parser.time, str)
 
@@ -615,14 +615,14 @@ local function dehumanize_number(str)
   parser.fractional = (lpeg.P(".")) *
       (digit ^ 1)
   parser.number = (parser.integer *
-      (parser.fractional ^ -1)) +
+        (parser.fractional ^ -1)) +
       (lpeg.S("+-") * parser.fractional)
   parser.humanized_number = lpeg.Cf(lpeg.Cc(1) *
-      (parser.number / tonumber) *
-      (((lpeg.S("kmg") * (lpeg.P("b") ^ -1)) / parse_suffix) ^ -1),
-      function(acc, val)
-        return acc * val
-      end)
+    (parser.number / tonumber) *
+    (((lpeg.S("kmg") * (lpeg.P("b") ^ -1)) / parse_suffix) ^ -1),
+    function(acc, val)
+      return acc * val
+    end)
 
   local t = lpeg.match(parser.humanized_number, str)
 
@@ -728,7 +728,6 @@ exports.table_merge = table_merge
 -- Performs header folding
 --]]
 exports.fold_header = function(task, name, value, stop_chars)
-
   local how
 
   if task:has_flag("milter") then
@@ -738,6 +737,41 @@ exports.fold_header = function(task, name, value, stop_chars)
   end
 
   return rspamd_util.fold_header(name, value, how, stop_chars)
+end
+
+--[[[
+-- @function lua_util.fold_header_with_encoding(task, name, value[, opts])
+-- Folds header value using name and optionally encodes the result.
+-- Encoding policy defaults to 'auto':
+-- - If MIME UTF-8 is enabled, encode only when the folded value is not valid UTF-8
+-- - Otherwise, always encode
+-- `opts` table fields:
+--   * stop_chars: optional string with extra fold-on characters
+--   * encode: true|false|'auto' (default: 'auto')
+--   * structured: boolean, pass as `is_structured` to mime_header_encode (default: false)
+-- @return {string} folded (and possibly encoded) header value
+--]]
+exports.fold_header_with_encoding = function(task, name, value, opts)
+  opts = opts or {}
+  local stop_chars = opts.stop_chars
+  local encode = opts.encode
+  local structured = opts.structured or false
+
+  local folded = exports.fold_header(task, name, value, stop_chars)
+
+  if encode == nil or encode == 'auto' then
+    if rspamd_config:is_mime_utf8() then
+      if not rspamd_util.is_valid_utf8(folded) then
+        folded = rspamd_util.mime_header_encode(folded, structured)
+      end
+    else
+      folded = rspamd_util.mime_header_encode(folded, structured)
+    end
+  elseif encode == true then
+    folded = rspamd_util.mime_header_encode(folded, structured)
+  end
+
+  return folded
 end
 
 --[[[
@@ -822,9 +856,9 @@ exports.filter_specific_urls = function(urls, params)
       cache_key = params.prefix
     else
       cache_key = string.format('sp_urls_%d%s%s%s', params.limit,
-          tostring(params.need_emails or false),
-          tostring(params.need_images or false),
-          tostring(params.need_content or false))
+        tostring(params.need_emails or false),
+        tostring(params.need_images or false),
+        tostring(params.need_content or false))
     end
     local cached = params.task:cache_get(cache_key)
 
@@ -969,7 +1003,6 @@ exports.filter_specific_urls = function(urls, params)
         -- Prefer less urls to more urls per esld
         return #e1 < #e2
       end
-
     end)
 
     return tbl
@@ -991,7 +1024,6 @@ exports.filter_specific_urls = function(urls, params)
           item_found = true
         end
       end
-
     until limit <= 0 or not item_found
 
     res = exports.values(res)
@@ -1080,7 +1112,7 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
     emails = params.need_emails,
     images = params.need_images,
     content = params.need_content,
-    flags = params.flags, -- maybe nil
+    flags = params.flags,           -- maybe nil
     flags_mode = params.flags_mode, -- maybe nil
   }
 
@@ -1095,9 +1127,9 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
         cache_key_suffix = table.concat(params.flags) .. (params.flags_mode or '')
       else
         cache_key_suffix = string.format('%s%s%s',
-            tostring(params.need_emails or false),
-            tostring(params.need_images or false),
-            tostring(params.need_content or false))
+          tostring(params.need_emails or false),
+          tostring(params.need_images or false),
+          tostring(params.need_content or false))
       end
       cache_key = string.format('sp_urls_%d%s', params.limit, cache_key_suffix)
     end
@@ -1188,7 +1220,7 @@ exports.init_debug_logging = function(config)
           if debug_modules[mod] then
             debug_modules[alias] = true
             logger.infox(config, 'enable debug for Lua module %s (%s aliased)',
-                alias, mod)
+              alias, mod)
           end
         end
       end
@@ -1234,7 +1266,7 @@ exports.add_debug_alias = function(mod, alias)
   if debug_modules[mod] then
     debug_modules[alias] = true
     logger.infox(rspamd_config, 'enable debug for Lua module %s (%s aliased)',
-        alias, mod)
+      alias, mod)
   end
 end
 ---[[[
@@ -1621,7 +1653,7 @@ exports.is_skip_local_or_authed = function(task, conf, ip)
     conf = { false, false }
   end
   if ((not conf[2] and task:get_user()) or
-      (not conf[1] and type(ip) == 'userdata' and ip:is_local())) then
+        (not conf[1] and type(ip) == 'userdata' and ip:is_local())) then
     return true
   end
 
@@ -1779,9 +1811,9 @@ local function url_encode_string(str)
     return ''
   end
   str = string.gsub(str, "([^%w _%%%-%.~])",
-      function(c)
-        return string.format("%%%02X", string.byte(c))
-      end)
+    function(c)
+      return string.format("%%%02X", string.byte(c))
+    end)
   str = string.gsub(str, " ", "+")
   return str
 end
@@ -1799,8 +1831,8 @@ end
 
 -- Defines symbols priorities for common usage in prefilters/postfilters
 exports.symbols_priorities = {
-  top = 10, -- Symbols must be executed first (or last), such as settings
-  high = 9, -- Example: asn
+  top = 10,   -- Symbols must be executed first (or last), such as settings
+  high = 9,   -- Example: asn
   medium = 5, -- Everything should use this as default
   low = 0,
 }
@@ -1822,22 +1854,22 @@ local function table_to_multipart_body(tbl, boundary)
       table.insert(out, string.format('--%s\r\n', boundary))
       if v.filename then
         table.insert(out,
-            string.format('Content-Disposition: form-data; name="%s"; filename="%s"\r\n',
-                k, v.filename))
+          string.format('Content-Disposition: form-data; name="%s"; filename="%s"\r\n',
+            k, v.filename))
       else
         table.insert(out,
-            string.format('Content-Disposition: form-data; name="%s"\r\n', k))
+          string.format('Content-Disposition: form-data; name="%s"\r\n', k))
       end
       if v['content-type'] then
         table.insert(out,
-            string.format('Content-Type: %s\r\n', v['content-type']))
+          string.format('Content-Type: %s\r\n', v['content-type']))
       else
         table.insert(out, 'Content-Type: text/plain\r\n')
       end
       if v['content-transfer-encoding'] then
         table.insert(out,
-            string.format('Content-Transfer-Encoding: %s\r\n',
-                v['content-transfer-encoding']))
+          string.format('Content-Transfer-Encoding: %s\r\n',
+            v['content-transfer-encoding']))
       else
         table.insert(out, 'Content-Transfer-Encoding: binary\r\n')
       end
