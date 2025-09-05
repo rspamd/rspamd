@@ -13,7 +13,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 -- Dmarc policy filter
 
@@ -180,10 +180,10 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
   end
 
   lua_util.debugm(N, task,
-      "validated dmarc policy for %s: %s; dkim_ok=%s, dkim_tempfail=%s, spf_ok=%s, spf_tempfail=%s",
-      policy.domain, policy.dmarc_policy,
-      dkim_ok, dkim_tmpfail,
-      spf_ok, spf_tmpfail)
+    "validated dmarc policy for %s: %s; dkim_ok=%s, dkim_tempfail=%s, spf_ok=%s, spf_tempfail=%s",
+    policy.domain, policy.dmarc_policy,
+    dkim_ok, dkim_tmpfail,
+    spf_ok, spf_tmpfail)
 
   local disposition = 'none'
   local sampled_out = false
@@ -191,14 +191,13 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
   local function handle_dmarc_failure(what, reason_str)
     if not policy.pct or policy.pct == 100 then
       task:insert_result(settings.symbols[what], 1.0,
-          policy.domain .. ' : ' .. reason_str, policy.dmarc_policy)
+        policy.domain .. ' : ' .. reason_str, policy.dmarc_policy)
       disposition = what
     else
       local coin = math.random(100)
       if (coin > policy.pct) then
         if (not settings.no_sampling_domains or
-            not settings.no_sampling_domains:get_key(policy.domain)) then
-
+              not settings.no_sampling_domains:get_key(policy.domain)) then
           if what == 'reject' then
             disposition = 'quarantine'
           else
@@ -206,19 +205,19 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
           end
 
           task:insert_result(settings.symbols[disposition], 1.0,
-              policy.domain .. ' : ' .. reason_str, policy.dmarc_policy, "sampled_out")
+            policy.domain .. ' : ' .. reason_str, policy.dmarc_policy, "sampled_out")
           sampled_out = true
           lua_util.debugm(N, task,
-              'changed dmarc policy from %s to %s, sampled out: %s < %s',
-              what, disposition, coin, policy.pct)
+            'changed dmarc policy from %s to %s, sampled out: %s < %s',
+            what, disposition, coin, policy.pct)
         else
           task:insert_result(settings.symbols[what], 1.0,
-              policy.domain .. ' : ' .. reason_str, policy.dmarc_policy, "local_policy")
+            policy.domain .. ' : ' .. reason_str, policy.dmarc_policy, "local_policy")
           disposition = what
         end
       else
         task:insert_result(settings.symbols[what], 1.0,
-            policy.domain .. ' : ' .. reason_str, policy.dmarc_policy)
+          policy.domain .. ' : ' .. reason_str, policy.dmarc_policy)
         disposition = what
       end
     end
@@ -232,9 +231,9 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
     DMARC evaluation can only yield a "pass" result after one of the
     underlying authentication mechanisms passes for an aligned
     identifier.
-    ]]--
+    ]] --
     task:insert_result(settings.symbols['allow'], 1.0, policy.domain,
-        policy.dmarc_policy)
+      policy.dmarc_policy)
   else
     --[[
     https://tools.ietf.org/html/rfc7489#section-6.6.2
@@ -243,10 +242,10 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
     temporary error, the Receiver evaluating the message is unable to
     conclude that the DMARC mechanism had a permanent failure; they
     therefore cannot apply the advertised DMARC policy.
-    ]]--
+    ]] --
     if spf_tmpfail or dkim_tmpfail then
       task:insert_result(settings.symbols['dnsfail'], 1.0, policy.domain ..
-          ' : ' .. 'SPF/DKIM temp error', policy.dmarc_policy)
+        ' : ' .. 'SPF/DKIM temp error', policy.dmarc_policy)
     else
       -- We can now check the failed policy and maybe send report data elt
       local reason_str = table.concat(reason, ', ')
@@ -257,8 +256,8 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
         handle_dmarc_failure('reject', reason_str)
       else
         task:insert_result(settings.symbols['softfail'], 1.0,
-            policy.domain .. ' : ' .. reason_str,
-            policy.dmarc_policy)
+          policy.domain .. ' : ' .. reason_str,
+          policy.dmarc_policy)
       end
     end
   end
@@ -266,7 +265,7 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
   if policy.rua and redis_params and settings.reporting.enabled then
     if settings.reporting.only_domains then
       if not (settings.reporting.only_domains:get_key(policy.domain) or
-          settings.reporting.only_domains:get_key(rspamd_util.get_tld(policy.domain))) then
+            settings.reporting.only_domains:get_key(rspamd_util.get_tld(policy.domain))) then
         rspamd_logger.info(task, 'DMARC reporting suppressed for sender domain %s', policy.domain)
         return
       end
@@ -289,10 +288,10 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
     local function dmarc_report_cb(err)
       if not err then
         rspamd_logger.infox(task, 'dmarc report saved for %s (rua = %s)',
-            hdrfromdom, policy.rua)
+          hdrfromdom, policy.rua)
       else
         rspamd_logger.errx(task, 'dmarc report is not saved for %s: %s',
-            hdrfromdom, err)
+          hdrfromdom, err)
       end
     end
 
@@ -317,12 +316,12 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
 
     -- Prepare and send redis report element
     local period = os.date('%Y%m%d',
-        task:get_date({ format = 'connect', gmt = false }))
+      task:get_date({ format = 'connect', gmt = false }))
 
     -- Dmarc domain key must include dmarc domain, rua and period
     local dmarc_domain_key = table.concat(
-        { settings.reporting.redis_keys.report_prefix, policy.domain, policy.rua, period },
-        settings.reporting.redis_keys.join_char)
+      { settings.reporting.redis_keys.report_prefix, policy.domain, policy.rua, period },
+      settings.reporting.redis_keys.join_char)
     local report_data = dmarc_common.dmarc_report(task, settings, {
       spf_ok = spf_ok and 'pass' or 'fail',
       dkim_ok = dkim_ok and 'pass' or 'fail',
@@ -335,15 +334,15 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
     })
 
     local idx_key = table.concat({ settings.reporting.redis_keys.index_prefix, period },
-        settings.reporting.redis_keys.join_char)
+      settings.reporting.redis_keys.join_char)
 
     if report_data then
       lua_redis.exec_redis_script(take_report_id,
-          { task = task, is_write = true },
-          dmarc_report_cb,
-          { idx_key, dmarc_domain_key,
-            tostring(settings.reporting.max_entries), tostring(settings.reporting.keys_expire) },
-          { hdrfromdom, report_data })
+        { task = task, is_write = true },
+        dmarc_report_cb,
+        { idx_key, dmarc_domain_key,
+          tostring(settings.reporting.max_entries), tostring(settings.reporting.keys_expire) },
+        { hdrfromdom, report_data })
     end
   end
 end
@@ -388,7 +387,7 @@ local function dmarc_callback(task)
 
   local function process_dmarc_policy(policy, final)
     lua_util.debugm(N, task, "validate DMARC policy (final=%s): %s",
-        true, policy)
+      true, policy)
     if policy.err and policy.symbol then
       -- In case of fatal errors or final check for tld, we give up and
       -- insert result
@@ -421,7 +420,7 @@ local function dmarc_callback(task)
 
         if err then
           if (err ~= 'requested record is not found' and
-              err ~= 'no records with this name') then
+                err ~= 'no records with this name') then
             policy_target.err = lookup_domain .. ' : ' .. err
             policy_target.symbol = settings.symbols['dnsfail']
           else
@@ -506,7 +505,7 @@ local opts = rspamd_config:get_all_opt('dmarc')
 settings = lua_util.override_defaults(settings, opts)
 
 settings.auth_and_local_conf = lua_util.config_check_local_or_authed(rspamd_config, N,
-    false, false)
+  false, false)
 
 -- Legacy...
 if settings.reporting and not settings.reporting.exclude_domains and settings.no_reporting_domains then
@@ -648,11 +647,11 @@ if settings.munging then
 
   local munging_defaults = {
     reply_goes_to_list = false,
-    mitigate_allow_only = true, -- perform munging based on DMARC_POLICY_ALLOW only
+    mitigate_allow_only = true,   -- perform munging based on DMARC_POLICY_ALLOW only
     mitigate_strict_only = false, -- perform mugning merely for reject/quarantine policies
-    munge_from = true, -- replace from with something like <orig name> via <rcpt user>
-    list_map = nil, -- map of maillist domains
-    munge_map_condition = nil, -- maps expression to enable munging
+    munge_from = true,            -- replace from with something like <orig name> via <rcpt user>
+    list_map = nil,               -- map of maillist domains
+    munge_map_condition = nil,    -- maps expression to enable munging
   }
 
   local munging_opts = lua_util.override_defaults(munging_defaults, settings.munging)
@@ -664,7 +663,7 @@ if settings.munging then
   end
 
   munging_opts.list_map = lua_maps.map_add_from_ucl(munging_opts.list_map,
-      'set', 'DMARC munging map of the recipients addresses to munge')
+    'set', 'DMARC munging map of the recipients addresses to munge')
 
   if not munging_opts.list_map then
     rspamd_logger.errx(rspamd_config, 'cannot enable DMARC munging with invalid list_map (invalid map)')
@@ -674,7 +673,7 @@ if settings.munging then
 
   if munging_opts.munge_map_condition then
     munging_opts.munge_map_condition = lua_maps_expressions.create(rspamd_config,
-        munging_opts.munge_map_condition, N)
+      munging_opts.munge_map_condition, N)
   end
 
   rspamd_config:register_symbol({
