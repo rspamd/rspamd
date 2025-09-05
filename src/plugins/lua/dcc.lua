@@ -19,6 +19,7 @@ limitations under the License.
 
 local N = 'dcc'
 local symbol_bulk = "DCC_BULK"
+local symbol = "DCC_REJECT"
 local symbol_fail = "DCC_FAIL"
 local opts = rspamd_config:get_all_opt(N)
 local lua_util = require "lua_util"
@@ -65,6 +66,9 @@ end
 if not opts.symbol_bulk then
   opts.symbol_bulk = symbol_bulk
 end
+if not opts.symbol_fail then
+  opts.symbol_fail = symbol_fail
+end
 if not opts.symbol then
   opts.symbol = symbol
 end
@@ -77,6 +81,11 @@ if rule then
     callback = check_dcc,
     type = 'callback',
   })
+  rspamd_config:register_symbol {
+    type = 'virtual',
+    parent = id,
+    name = opts.symbol
+  }
   rspamd_config:register_symbol {
     type = 'virtual',
     parent = id,
@@ -93,6 +102,13 @@ if rule then
     description = 'Detected as bulk mail by DCC',
     one_shot = true,
     name = opts.symbol_bulk,
+  })
+  rspamd_config:set_metric_symbol({
+    group = N,
+    score = 2.0,
+    description = 'Rejected by DCC',
+    one_shot = true,
+    name = opts.symbol,
   })
   rspamd_config:set_metric_symbol({
     group = N,

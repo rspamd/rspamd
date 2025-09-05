@@ -43,6 +43,7 @@ local function dcc_config(opts)
     default_score = 1,
     client = '0.0.0.0',
     symbol_fail = 'DCC_FAIL',
+    symbol = 'DCC_REJECT',
     symbol_bulk = 'DCC_BULK',
     body_max = 999999,
     fuz1_max = 999999,
@@ -84,200 +85,199 @@ local function dcc_config(opts)
 end
 
 local function dcc_check(task, content, digest, rule)
-  local function dcc_check_uncached ()
-    local upstream = rule.upstreams:get_upstream_round_robin()
-    local addr = upstream:get_addr()
-    local retransmits = rule.retransmits
-    local client = rule.client
+  local upstream = rule.upstreams:get_upstream_round_robin()
+  local addr = upstream:get_addr()
+  local retransmits = rule.retransmits
+  local client = rule.client
 
-    local client_ip = task:get_from_ip()
-    if client_ip and client_ip:is_valid() then
-      client = client_ip:to_string()
-    end
-    local client_host = task:get_hostname()
-    if client_host then
-      client = client .. "\r" .. client_host
-    end
-
-    -- HELO
-    local helo = task:get_helo() or ''
-
-    -- Envelope From
-    local ef = task:get_from()
-    local envfrom = 'test@example.com'
-    if ef and ef[1] then
-      envfrom = ef[1]['addr']
-    end
-
-    -- Envelope To
-    local envrcpt = 'test@example.com'
-    local rcpts = task:get_recipients();
-    if rcpts then
-      local dcc_recipients = table.concat(fun.totable(fun.map(function(rcpt)
-        return rcpt['addr']
-      end,
-          rcpts)), '\n')
-      if dcc_recipients then
-        envrcpt = dcc_recipients
-      end
-    end
-
-    -- Build the DCC query
-    -- https://www.dcc-servers.net/dcc/dcc-tree/dccifd.html#Protocol
-    local request_data = {
-      "header grey-off no-reject\n",
-      client .. "\n",
-      helo .. "\n",
-      envfrom .. "\n",
-      envrcpt .. "\n",
-      "\n",
-      content
-    }
-
-    local function dcc_callback(err, data, conn)
-
-      local function dcc_requery()
-        -- retry with another upstream until retransmits exceeds
-        if retransmits > 0 then
-
-          retransmits = retransmits - 1
-
-          -- Select a different upstream!
-          upstream = rule.upstreams:get_upstream_round_robin()
-          addr = upstream:get_addr()
-
-          lua_util.debugm(rule.name, task, '%s: error: %s; retry IP: %s; retries left: %s',
-              rule.log_prefix, err, addr, retransmits)
-
-          tcp.request({
-            task = task,
-            host = addr:to_string(),
-            port = addr:get_port(),
-            timeout = rule.timeout or 2.0,
-            upstream = upstream,
-            shutdown = true,
-            data = request_data,
-            callback = dcc_callback,
-          })
-        else
-          rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits ' ..
-              'exceed', rule.log_prefix)
-          common.yield_result(task, rule, 'failed to scan and retransmits exceed', 0.0, 'fail')
-        end
-      end
-
-      if err then
-
-        dcc_requery()
-
-      else
-        -- Parse the response
-        local _, _, result, disposition, header = tostring(data):find("(.-)\n(.-)\n(.-)$")
-        lua_util.debugm(rule.name, task, 'DCC result=%1 disposition=%2 header="%3"',
-            result, disposition, header)
-
-        if header then
-          -- Unfold header
-          header = header:gsub('\r?\n%s*', ' ')
-          local _, _, info = header:find("; (.-)$")
-          if (result == 'T') then
-            -- Temporary failure
-            rspamd_logger.warnx(task, 'DCC returned a temporary failure result: %s', result)
-            dcc_requery()
-          elseif result == 'A' then
-            -- Accept decision, only expected decision since query is with grey-off no-reject
-            local opts = {}
-            local score = 0.0
-            local rep_orig = nil
-            if info then
-              info = info:lower()
-              local rep = info:match('rep=(%d+)')
-              rep_orig = rep
-
-              -- Adjust reputation if available
-              if rep then
-                rep = (tonumber(rep) or 100.0) / 100.0
-
-                if rep > 1.0 then
-                  rep = 1.0
-                elseif rep < 0.0 then
-                  rep = 0.0
-                end
-              else
-                rep = 1.0
-              end
-
-              local function check_threshold(what, num, lim)
-                local rnum
-                if num == 'many' then
-                  rnum = lim
-                else
-                  rnum = tonumber(num) or lim
-                end
-
-                if rnum and rnum >= lim then
-                  opts[#opts + 1] = string.format('%s=%s', what, num)
-                  score = score + (rule.default_score * rep / 3.0)
-                end
-              end
-
-              local body = info:match('body=([^=%s]+)')
-
-              if body then
-                check_threshold('body', body, rule.body_max)
-              end
-
-              local fuz1 = info:match('fuz1=([^=%s]+)')
-
-              if fuz1 then
-                check_threshold('fuz1', fuz1, rule.fuz1_max)
-              end
-
-              local fuz2 = info:match('fuz2=([^=%s]+)')
-
-              if fuz2 then
-                check_threshold('fuz2', fuz2, rule.fuz2_max)
-              end
-            end
-
-            if #opts > 0 and score > 0 then
-              if rep_orig then
-                opts[#opts + 1] = string.format('%s=%s', "rep", rep_orig .. "%")
-              end
-              task:insert_result(rule.symbol_bulk,
-                  score,
-                  opts)
-            else
-              if rule.log_clean then
-                rspamd_logger.infox(task, '%s: clean, returned result A - info: %s',
-                    rule.log_prefix, info)
-              else
-                lua_util.debugm(rule.name, task, '%s: returned result A - info: %s',
-                    rule.log_prefix, info)
-              end
-            end
-          else
-            -- Unexpected result
-            rspamd_logger.warnx(task, '%1: Unexpected result. result: %2, info: %3', rule.log_prefix, result, info);
-            common.yield_result(task, rule, 'error: ' .. result, 0.0, 'fail')
-          end
-        end
-      end
-    end
-
-    tcp.request({
-      task = task,
-      host = addr:to_string(),
-      port = addr:get_port(),
-      timeout = rule.timeout or 2.0,
-      shutdown = true,
-      upstream = upstream,
-      data = request_data,
-      callback = dcc_callback,
-    })
+  local client_ip = task:get_from_ip()
+  if client_ip and client_ip:is_valid() then
+    client = client_ip:to_string()
+  end
+  local client_host = task:get_hostname()
+  if client_host then
+    client = client .. "\r" .. client_host
   end
 
-  dcc_check_uncached()
+  -- HELO
+  local helo = task:get_helo() or ''
+
+  -- Envelope From
+  local ef = task:get_from()
+  local envfrom = 'test@example.com'
+  if ef and ef[1] then
+    envfrom = ef[1]['addr']
+  end
+
+  -- Envelope To
+  local envrcpt = 'test@example.com'
+  local rcpts = task:get_recipients();
+  if rcpts then
+    local dcc_recipients = table.concat(fun.totable(fun.map(function(rcpt)
+      return rcpt['addr']
+    end,
+        rcpts)), '\n')
+    if dcc_recipients then
+      envrcpt = dcc_recipients
+    end
+  end
+
+  -- Build the DCC query
+  -- https://www.dcc-servers.net/dcc/dcc-tree/dccifd.html#Protocol
+  local request_data = {
+    "header grey-off\n",
+    client .. "\n",
+    helo .. "\n",
+    envfrom .. "\n",
+    envrcpt .. "\n",
+    "\n",
+    content
+  }
+
+  local function dcc_callback(err, data, conn)
+
+    local function dcc_requery()
+      -- retry with another upstream until retransmits exceeds
+      if retransmits > 0 then
+
+        retransmits = retransmits - 1
+
+        -- Select a different upstream!
+        upstream = rule.upstreams:get_upstream_round_robin()
+        addr = upstream:get_addr()
+
+        lua_util.debugm(rule.name, task, '%s: error: %s; retry IP: %s; retries left: %s',
+            rule.log_prefix, err, addr, retransmits)
+
+        tcp.request({
+          task = task,
+          host = addr:to_string(),
+          port = addr:get_port(),
+          timeout = rule.timeout or 2.0,
+          upstream = upstream,
+          shutdown = true,
+          data = request_data,
+          callback = dcc_callback,
+        })
+      else
+        rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits ' ..
+            'exceed', rule.log_prefix)
+        common.yield_result(task, rule, 'failed to scan and retransmits exceed', 0.0, 'fail')
+      end
+    end
+
+    if err then
+
+      dcc_requery()
+
+    else
+      -- Parse the response
+      local _, _, result, disposition, header = tostring(data):find("(.-)\n(.-)\n(.-)$")
+      lua_util.debugm(rule.name, task, 'DCC result=%1 disposition=%2 header="%3"',
+          result, disposition, header)
+
+      if header then
+        -- Unfold header
+        header = header:gsub('\r?\n%s*', ' ')
+        local _, _, info = header:find("; (.-)$")
+        if (result == 'R') then
+          -- Reject
+          common.yield_result(task, rule, info, rule.default_score)
+        elseif (result == 'T') then
+          -- Temporary failure
+          rspamd_logger.warnx(task, 'DCC returned a temporary failure result: %s', result)
+          dcc_requery()
+        elseif result == 'A' or result == 'S' then
+          -- Accept for all or some recipients, return a dynamic score
+          local opts = {}
+          local score = 0.0
+          local rep_orig = nil
+          if info then
+            info = info:lower()
+            local rep = info:match('rep=(%d+)')
+            rep_orig = rep
+
+            -- Adjust reputation if available
+            if rep then
+              rep = (tonumber(rep) or 100.0) / 100.0
+
+              if rep > 1.0 then
+                rep = 1.0
+              elseif rep < 0.0 then
+                rep = 0.0
+              end
+            else
+              rep = 1.0
+            end
+
+            local function check_threshold(what, num, lim)
+              local rnum
+              if num == 'many' then
+                rnum = lim
+              else
+                rnum = tonumber(num) or lim
+              end
+
+              if rnum and rnum >= lim then
+                opts[#opts + 1] = string.format('%s=%s', what, num)
+                score = score + (rule.default_score * rep / 3.0)
+              end
+            end
+
+            local body = info:match('body=([^=%s]+)')
+
+            if body then
+              check_threshold('body', body, rule.body_max)
+            end
+
+            local fuz1 = info:match('fuz1=([^=%s]+)')
+
+            if fuz1 then
+              check_threshold('fuz1', fuz1, rule.fuz1_max)
+            end
+
+            local fuz2 = info:match('fuz2=([^=%s]+)')
+
+            if fuz2 then
+              check_threshold('fuz2', fuz2, rule.fuz2_max)
+            end
+          end
+
+          if #opts > 0 and score > 0 then
+            if rep_orig then
+              opts[#opts + 1] = string.format('%s=%s', "rep", rep_orig .. "%")
+            end
+            task:insert_result(rule.symbol_bulk,
+                score,
+                opts)
+          else
+            if rule.log_clean then
+              rspamd_logger.infox(task, '%s: clean, returned result A - info: %s',
+                  rule.log_prefix, info)
+            else
+              lua_util.debugm(rule.name, task, '%s: returned result A - info: %s',
+                  rule.log_prefix, info)
+            end
+          end
+        else
+          -- Unexpected result
+          rspamd_logger.warnx(task, '%1: Unexpected result. Result: %2, info: %3', rule.log_prefix, result, info);
+          common.yield_result(task, rule, 'error: ' .. result, 0.0, 'fail')
+        end
+      end
+    end
+  end
+
+  tcp.request({
+    task = task,
+    host = addr:to_string(),
+    port = addr:get_port(),
+    timeout = rule.timeout or 2.0,
+    shutdown = true,
+    upstream = upstream,
+    data = request_data,
+    callback = dcc_callback,
+  })
 end
 
 return {
