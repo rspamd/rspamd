@@ -13,7 +13,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 -- Common dmarc stuff
 local rspamd_logger = require "rspamd_logger"
@@ -80,7 +80,7 @@ exports.dmarc_report = function(task, settings, data)
   local ip = task:get_from_ip()
   if not ip or not ip:is_valid() then
     rspamd_logger.infox(task, 'cannot store dmarc report for %s: no valid source IP',
-        data.domain)
+      data.domain)
     return nil
   end
 
@@ -88,7 +88,7 @@ exports.dmarc_report = function(task, settings, data)
 
   if rspamd_lua_utils.is_rspamc_or_controller(task) and not settings.reporting.report_local_controller then
     rspamd_logger.infox(task, 'cannot store dmarc report for %s from IP %s: has come from controller/rspamc',
-        data.domain, ip)
+      data.domain, ip)
     return
   end
 
@@ -106,13 +106,12 @@ exports.dmarc_report = function(task, settings, data)
 end
 
 exports.gen_munging_callback = function(munging_opts, settings)
-  local rspamd_util = require "rspamd_util"
   local lua_mime = require "lua_mime"
   return function(task)
     if munging_opts.mitigate_allow_only then
       if not task:has_symbol(settings.symbols.allow) then
         lua_util.debugm(N, task, 'skip munging, no %s symbol',
-            settings.symbols.allow)
+          settings.symbols.allow)
         -- Excepted
         return
       end
@@ -124,7 +123,7 @@ exports.gen_munging_callback = function(munging_opts, settings)
 
       if not has_dmarc then
         lua_util.debugm(N, task, 'skip munging, no %s symbol',
-            settings.symbols.allow)
+          settings.symbols.allow)
         -- Excepted
         return
       end
@@ -143,7 +142,7 @@ exports.gen_munging_callback = function(munging_opts, settings)
 
       if not seen_strict then
         lua_util.debugm(N, task, 'skip munging, no strict policy found in %s',
-            settings.symbols.allow)
+          settings.symbols.allow)
         -- Excepted
         return
       end
@@ -152,7 +151,7 @@ exports.gen_munging_callback = function(munging_opts, settings)
       local accepted, trace = munging_opts.munge_map_condition:process(task)
       if not accepted then
         lua_util.debugm(N, task, 'skip munging, maps condition not satisfied: (%s)',
-            trace)
+          trace)
         -- Excepted
         return
       end
@@ -194,14 +193,10 @@ exports.gen_munging_callback = function(munging_opts, settings)
       via_name = string.format('%s via %s', from.name, via_user)
     end
 
-    local encoded_via_name = rspamd_util.mime_header_encode(via_name)
-    local via_from_folded = rspamd_util.fold_header('From',
-        string.format('%s <%s>', encoded_via_name, via_addr),
-        task:get_newlines_type())
-    local encoded_orig_name = rspamd_util.mime_header_encode(from.name or '')
-    local orig_from_folded = rspamd_util.fold_header('X-Original-From',
-        string.format('%s <%s>', encoded_orig_name, from.addr),
-        task:get_newlines_type())
+    local via_from_folded = lua_util.fold_header_with_encoding(task, 'From',
+      string.format('%s <%s>', via_name, via_addr), { structured = true })
+    local orig_from_folded = lua_util.fold_header_with_encoding(task, 'X-Original-From',
+      string.format('%s <%s>', from.name or '', from.addr), { structured = true })
     local add_hdrs = {
       ['From'] = { order = 1, value = via_from_folded },
       ['X-Original-From'] = { order = 0, value = orig_from_folded },
@@ -231,7 +226,7 @@ exports.gen_munging_callback = function(munging_opts, settings)
       add = add_hdrs
     })
     lua_util.debugm(N, task, 'munged DMARC header for %s: %s -> %s',
-        from.domain, via_from_folded, from.addr)
+      from.domain, via_from_folded, from.addr)
     rspamd_logger.infox(task, 'munged DMARC header for %s', from.addr)
     task:insert_result('DMARC_MUNGED', 1.0, from.addr)
   end
@@ -287,7 +282,7 @@ local function dmarc_check_record(log_obj, record, is_tld)
 
   local elts = dmarc_grammar:match(record)
   lua_util.debugm(N, log_obj, "got DMARC record: %s, tld_flag=%s, processed=%s",
-      record, is_tld, elts)
+    record, is_tld, elts)
 
   if elts then
     elts = dmarc_key_value_case(elts)

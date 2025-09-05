@@ -545,8 +545,10 @@ local function insert_results(task, result, sel_part)
     end
   end
   if result.reason and settings.reason_header then
+    local v = lua_util.fold_header_with_encoding(task, settings.reason_header,
+      tostring(result.reason), { encode = 'auto' })
     lua_mime.modify_headers(task,
-      { add = { [settings.reason_header] = { value = tostring(result.reason), order = 1 } } })
+      { add = { [settings.reason_header] = { value = v, order = 1 } } })
   end
 
   if cache_context then

@@ -588,14 +588,16 @@ local function arc_sign_seal(task, params, header)
     end
   end
 
-  header = lua_util.fold_header(task,
+  header = lua_util.fold_header_with_encoding(task,
     'ARC-Message-Signature',
-    header)
+    header,
+    { structured = true, encode = false })
 
   cur_auth_results = string.format('i=%d; %s', cur_idx, cur_auth_results)
-  cur_auth_results = lua_util.fold_header(task,
+  cur_auth_results = lua_util.fold_header_with_encoding(task,
     'ARC-Authentication-Results',
-    cur_auth_results, ';')
+    cur_auth_results,
+    { stop_chars = ';', structured = true, encode = false })
 
   local s = dkim_canonicalize('ARC-Authentication-Results',
     cur_auth_results)
@@ -631,8 +633,9 @@ local function arc_sign_seal(task, params, header)
       ['ARC-Message-Signature'] = { order = 1, value = header },
       ['ARC-Seal'] = {
         order = 1,
-        value = lua_util.fold_header(task,
-          'ARC-Seal', cur_arc_seal)
+        value = lua_util.fold_header_with_encoding(task,
+          'ARC-Seal', cur_arc_seal,
+          { structured = true, encode = false })
       }
     },
     -- RFC requires a strict order for these headers to be inserted
