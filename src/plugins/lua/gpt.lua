@@ -29,19 +29,19 @@ if confighelp then
   api_key = "xxx";
   # Model name
   model = "gpt-5-mini"; # or parallel model requests [ "gpt-5-mini", "gpt-4o-mini" ];
-	# Per-model parameters
-	model_parameters = {
-		"gpt-5-mini" = {
-			max_completion_tokens = 1000,
-		},
-		"gpt-5-nano" = {
-			max_completion_tokens = 1000,
-		},
-		"gpt-4o-mini" = {
-			max_tokens = 1000,
-			temperature = 0.0,
-		}
-	};
+  # Per-model parameters
+  model_parameters = {
+	"gpt-5-mini" = {
+		max_completion_tokens = 1000,
+	},
+	"gpt-5-nano" = {
+		max_completion_tokens = 1000,
+	},
+	"gpt-4o-mini" = {
+		max_tokens = 1000,
+		temperature = 0.0,
+	}
+  };
   # Timeout for requests
   timeout = 10s;
   # Prompt for the model (use default if not set)
@@ -980,7 +980,7 @@ if opts then
           "Output ONLY 3 lines:\n" ..
           "1. Numeric score (0.00-1.00)\n" ..
           "2. One-sentence reason citing whether it is spam, the strongest red flag, or why it is ham\n" ..
-          "3. Primary concern category if found from the list: " .. table.concat(lua_util.keys(categories_map), ', ')
+          "3. Empty line or mention ONLY the primary concern category if found from the list: " .. table.concat(lua_util.keys(categories_map), ', ')
     else
       settings.prompt = "Analyze this email strictly as a spam detector given the email message, subject, " ..
           "FROM and url domains. Evaluate spam probability (0-1). " ..
