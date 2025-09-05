@@ -75,6 +75,8 @@ local lua_redis = require "lua_redis"
 local ucl = require "ucl"
 local fun = require "fun"
 local lua_cache = require "lua_cache"
+local rspamd_util = require "rspamd_util"
+
 
 -- Exclude checks if one of those is found
 local default_symbols_to_except = {
@@ -554,8 +556,32 @@ local function insert_results(task, result, sel_part)
     end
   end
   if result.reason and settings.reason_header then
-    lua_mime.modify_headers(task,
-      { add = { [settings.reason_header] = { value = tostring(result.reason), order = 1 } } })
+		lua_util.debugm(N, task, result.reason)
+
+		local reason = tostring(result.reason)
+
+		-- Encode if necessary
+		if rspamd_config:is_mime_utf8() then
+			if not rspamd_util.is_valid_utf8(reason) then
+				reason = rspamd_util.mime_header_encode(reason)
+			end
+		else
+			reason = rspamd_util.mime_header_encode(reason)
+		end
+
+		-- Now fold safely
+		local hdr = lua_util.fold_header(task, "X-GPT-Reason", reason)
+
+		lua_mime.modify_headers(task, {
+			add = {
+				["X-GPT-Reason"] = {
+					value = hdr,
+					order = 1
+				}
+			}
+		})
+
+		lua_util.debugm(N, task, reason)
   end
 
   if cache_context then
@@ -1007,14 +1033,14 @@ if opts then
     if settings.extra_symbols then
       settings.prompt = "Analyze this email strictly as a spam detector given the email message, subject, " ..
           "FROM and url domains. Evaluate spam probability (0-1). " ..
-          "Output ONLY 3 lines containing ONLY ASCII characters, with NO special characters or formatting:\n" ..
+          "Output ONLY 3 lines containing:\n" ..
           "1. Numeric score (0.00-1.00)\n" ..
           "2. One-sentence reason citing whether it is spam, the strongest red flag, or why it is ham\n" ..
-          "3. Primary concern category if found from the list: " .. table.concat(lua_util.keys(categories_map), ', ')
+          "3. Empty line or mention ONLY the primary concern category if found from the list: " .. table.concat(lua_util.keys(categories_map), ', ')
     else
       settings.prompt = "Analyze this email strictly as a spam detector given the email message, subject, " ..
           "FROM and url domains. Evaluate spam probability (0-1). " ..
-          "Output ONLY 2 lines containing ONLY ASCII characters, with NO special characters or formatting:\n" ..
+          "Output ONLY 2 lines containing:\n" ..
           "1. Numeric score (0.00-1.00)\n" ..
           "2. One-sentence reason citing whether it is spam, the strongest red flag, or why it is ham\n"
     end
