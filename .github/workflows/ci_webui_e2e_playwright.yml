@@ -50,22 +50,26 @@ jobs:
         run: |
           mkdir -p ${PREFIX}/etc/rspamd/local.d
           cp -r src/conf/* ${PREFIX}/etc/rspamd/
-          echo 'static_dir = "${PREFIX}/share/rspamd/www";' > ${PREFIX}/etc/rspamd/local.d/worker-controller.inc
-          echo 'password = "$2$8y16z4benwtsemhhcsdtxc6zem1muuhj$pufmrdhm41s53eccisds6rxych3khq493jhqra8r1i3jto93dt7b";' >> ${PREFIX}/etc/rspamd/local.d/worker-controller.inc
-          echo 'enable_password = "$2$hkmgaqejragy47tfe18k7r8zf4wwfegt$jdrfna838b9f4mqu73q858t3zjpse1kw8mw7e6yeftabq1of1sry";' >> ${PREFIX}/etc/rspamd/local.d/worker-controller.inc
-          echo 'secure_ip = "0";' >> ${PREFIX}/etc/rspamd/local.d/worker-controller.inc
+          cat > ${PREFIX}/etc/rspamd/local.d/worker-controller.inc << 'EOF'
+          static_dir = "${PREFIX}/share/rspamd/www";
+          password = "$2$8y16z4benwtsemhhcsdtxc6zem1muuhj$pufmrdhm41s53eccisds6rxych3khq493jhqra8r1i3jto93dt7b";
+          enable_password = "$2$hkmgaqejragy47tfe18k7r8zf4wwfegt$jdrfna838b9f4mqu73q858t3zjpse1kw8mw7e6yeftabq1of1sry";
+          secure_ip = "0";
+          EOF
           cat > ${PREFIX}/etc/rspamd/local.d/logging.inc << 'EOF'
           type = "console";
           level = "error";
           EOF
-          # Disable redis dependent modules for WebUI tests
-          echo 'redis { enabled = false; }' > ${PREFIX}/etc/rspamd/local.d/modules.conf
+          cat > ${PREFIX}/etc/rspamd/local.d/history_redis.conf << 'EOF'
+          servers = "127.0.0.1";
+          EOF
           chmod +x ${PREFIX}/bin/rspamd
           mkdir -p /var/run/rspamd /var/lib/rspamd
           chown $USER:$USER /var/run/rspamd /var/lib/rspamd
 
       - name: Start rspamd and wait for WebUI
         run: |
+          redis-server --daemonize yes
           ${PREFIX}/bin/rspamd -c ${PREFIX}/etc/rspamd/rspamd.conf --insecure &
           # Initial delay before polling (in seconds)
           initial_delay=5
