@@ -791,6 +791,33 @@ rspamd_message_process_html_text_part(struct rspamd_task *task,
 		text_part->mime_part->urls,
 		task->cfg ? task->cfg->enable_css_parser : true,
 		cur_url_order);
+
+	/* Wire aggregated HTML features */
+	text_part->html_features = (struct rspamd_html_features *) rspamd_html_get_features(text_part->html);
+	/* Expose a few mempool variables for Lua meta to start experimenting */
+	if (text_part->html_features) {
+		const struct rspamd_html_features *hf = text_part->html_features;
+		rspamd_mempool_set_variable(task->task_pool, "html_links_total",
+									(void *) &hf->links.total_links, NULL);
+		rspamd_mempool_set_variable(task->task_pool, "html_links_http",
+									(void *) &hf->links.http_links, NULL);
+		rspamd_mempool_set_variable(task->task_pool, "html_links_query",
+									(void *) &hf->links.query_links, NULL);
+		rspamd_mempool_set_variable(task->task_pool, "html_links_same_etld1",
+									(void *) &hf->links.same_etld1_links, NULL);
+		rspamd_mempool_set_variable(task->task_pool, "html_links_domains_total",
+									(void *) &hf->links.domains_total, NULL);
+		rspamd_mempool_set_variable(task->task_pool, "html_links_max_per_domain",
+									(void *) &hf->links.max_links_single_domain, NULL);
+		rspamd_mempool_set_variable(task->task_pool, "html_images_total",
+									(void *) &hf->images_total, NULL);
+		rspamd_mempool_set_variable(task->task_pool, "html_forms_total",
+									(void *) &hf->forms_count, NULL);
+		rspamd_mempool_set_variable(task->task_pool, "html_forms_post_unaffiliated",
+									(void *) &hf->forms_post_unaffiliated, NULL);
+		rspamd_mempool_set_variable(task->task_pool, "html_forms_post_affiliated",
+									(void *) &hf->forms_post_affiliated, NULL);
+	}
 	rspamd_html_get_parsed_content(text_part->html, &text_part->utf_content);
 
 	if (text_part->utf_content.len == 0) {

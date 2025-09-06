@@ -278,6 +278,58 @@ local function meta_words_function(task)
   return ret
 end
 
+local function meta_html_features_function(task)
+  local mp = task:get_mempool()
+  local lt = mp:get_variable("html_links_total", "int") or 0
+  local http = mp:get_variable("html_links_http", "int") or 0
+  local ql = mp:get_variable("html_links_query", "int") or 0
+  local same = mp:get_variable("html_links_same_etld1", "int") or 0
+  local dom_total = mp:get_variable("html_links_domains_total", "int") or 0
+  local max_per_dom = mp:get_variable("html_links_max_per_domain", "int") or 0
+
+  local ft = mp:get_variable("html_forms_total", "int") or 0
+  local fua = mp:get_variable("html_forms_post_unaffiliated", "int") or 0
+  local fa = mp:get_variable("html_forms_post_affiliated", "int") or 0
+
+  local nhtml_links = 0
+  local http_ratio = 0
+  local query_ratio = 0
+  local same_etld1_ratio = 0
+  local domains_per_link_ratio = 0
+  local max_links_per_domain_ratio = 0
+
+  if lt > 0 then
+    nhtml_links = 1.0 / lt
+    http_ratio = http / lt
+    query_ratio = ql / lt
+    same_etld1_ratio = same / lt
+    domains_per_link_ratio = dom_total / lt
+    max_links_per_domain_ratio = max_per_dom / lt
+  end
+
+  local nhtml_forms = 0
+  local forms_unaff_ratio = 0
+  local forms_aff_ratio = 0
+
+  if ft > 0 then
+    nhtml_forms = 1.0 / ft
+    forms_unaff_ratio = fua / ft
+    forms_aff_ratio = fa / ft
+  end
+
+  return {
+    nhtml_links,
+    http_ratio,
+    query_ratio,
+    same_etld1_ratio,
+    domains_per_link_ratio,
+    max_links_per_domain_ratio,
+    nhtml_forms,
+    forms_unaff_ratio,
+    forms_aff_ratio,
+  }
+end
+
 local metafunctions = {
   {
     cb = meta_size_function,
@@ -404,6 +456,32 @@ local metafunctions = {
     - rate of numbers
 ]]
   },
+  {
+    cb = meta_html_features_function,
+    ninputs = 9,
+    names = {
+      'nhtml_links',
+      'nhtml_http_links_ratio',
+      'nhtml_query_links_ratio',
+      'nhtml_same_etld1_links_ratio',
+      'nhtml_domains_per_link_ratio',
+      'nhtml_max_links_per_domain_ratio',
+      'nhtml_forms',
+      'nhtml_forms_unaffiliated_ratio',
+      'nhtml_forms_affiliated_ratio',
+    },
+    description = [[HTML link/form aggregated features:
+    - reciprocal of total links
+    - ratio of http(s) links
+    - ratio of links with query
+    - ratio of links with same eTLD+1 as first-party
+    - domains per link ratio
+    - max links per single domain ratio
+    - reciprocal of total forms
+    - ratio of forms posting to unaffiliated domains
+    - ratio of forms posting to affiliated domains
+]]
+  },
 }
 
 local meta_schema = ts.shape {
@@ -527,7 +605,7 @@ end
 
 exports.rspamd_count_metatokens = rspamd_count_metatokens
 exports.count_metatokens = rspamd_count_metatokens
-exports.version = 1 -- MUST be increased on each change of metatokens
+exports.version = 2 -- MUST be increased on each change of metatokens
 
 exports.add_metafunction = function(tbl)
   local ret, err = meta_schema(tbl)
