@@ -2127,7 +2127,7 @@ auto html_process_input(struct rspamd_task *task,
 								while (p2 > host && *(p2 - 1) != '.') {
 									p2--;
 								}
-								std::string etld1_action{p2, host + u->hostlen - p2};
+								std::string etld1_action{p2, static_cast<std::size_t>(host + u->hostlen - p2)};
 								if (!hc->first_party_etld1.empty() && !g_ascii_strcasecmp(etld1_action.c_str(), hc->first_party_etld1.c_str())) {
 									hc->features.forms_post_affiliated++;
 								}
@@ -2279,7 +2279,7 @@ auto html_process_input(struct rspamd_task *task,
 							while (p2 > h && *(p2 - 1) != '.') {
 								p2--;
 							}
-							std::string etld1_link{p2, h + host.size() - p2};
+							std::string etld1_link{p2, static_cast<std::size_t>(h + host.size() - p2)};
 							if (!g_ascii_strcasecmp(etld1_link.c_str(), hc->first_party_etld1.c_str())) {
 								hc->features.links.same_etld1_links++;
 							}
