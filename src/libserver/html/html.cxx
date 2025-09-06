@@ -2046,22 +2046,25 @@ auto html_process_input(struct rspamd_task *task,
 	auto *hc = new html_content;
 	rspamd_mempool_add_destructor(task->task_pool, html_content::html_content_dtor, hc);
 
-	/* Derive first-party eTLD+1 from From: if present */
-	if (MESSAGE_FIELD(task, from_mime) && MESSAGE_FIELD(task, from_mime)->len > 0) {
-		struct rspamd_email_address *addr = (struct rspamd_email_address *) g_ptr_array_index(MESSAGE_FIELD(task, from_mime), 0);
-		if (addr && addr->domain && addr->domain_len > 0) {
-			rspamd_ftok_t tld;
-			if (rspamd_url_find_tld(addr->domain, addr->domain_len, &tld)) {
-				/* eTLD+1: take the last label before tld and the tld */
-				const char *dom = addr->domain;
-				const char *dom_end = addr->domain + addr->domain_len;
-				const char *tld_begin = tld.begin;
-				/* Find start of the registrable part */
-				const char *p = tld_begin;
-				while (p > dom && *(p - 1) != '.') {
-					p--;
+	/* Derive first-party eTLD+1 from From: if present (task->message can be NULL) */
+	{
+		auto *from_mime = MESSAGE_FIELD_CHECK(task, from_mime);
+		if (from_mime && from_mime->len > 0) {
+			struct rspamd_email_address *addr = (struct rspamd_email_address *) g_ptr_array_index(from_mime, 0);
+			if (addr && addr->domain && addr->domain_len > 0) {
+				rspamd_ftok_t tld;
+				if (rspamd_url_find_tld(addr->domain, addr->domain_len, &tld)) {
+					/* eTLD+1: take the last label before tld and the tld */
+					const char *dom = addr->domain;
+					const char *dom_end = addr->domain + addr->domain_len;
+					const char *tld_begin = tld.begin;
+					/* Find start of the registrable part */
+					const char *p = tld_begin;
+					while (p > dom && *(p - 1) != '.') {
+						p--;
+					}
+					hc->first_party_etld1.assign(p, dom_end - p);
 				}
-				hc->first_party_etld1.assign(p, dom_end - p);
 			}
 		}
 	}
