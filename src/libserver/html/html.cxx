@@ -2273,6 +2273,26 @@ auto html_process_input(struct rspamd_task *task,
 					if (cnt > hc->features.links.max_links_single_domain) {
 						hc->features.links.max_links_single_domain = cnt;
 					}
+					/* Heuristic button weight */
+					float w = 0.0f;
+					if (url->ext && url->ext->linked_url && url->ext->linked_url != url) {
+						w += 0.5f; /* display mismatch bonus */
+					}
+					w += 0.2f * (url->order == 0 ? 1.0f : 1.0f / (float) url->order);
+					if (cur_tag->block && cur_tag->block->is_visible()) {
+						if (cur_tag->block->has_display()) {
+							w += 0.1f;
+						}
+						if (cur_tag->block->width > 0 && cur_tag->block->height > 0) {
+							w += std::min(0.2f, (cur_tag->block->width * cur_tag->block->height) / 100000.0f);
+						}
+						if (cur_tag->block->font_size >= 14) {
+							w += 0.1f;
+						}
+					}
+					if (w > 0) {
+						hc->url_button_weights[url] += w;
+					}
 					/* same eTLD+1 as first-party? */
 					if (!hc->first_party_etld1.empty()) {
 						rspamd_ftok_t tld2;
@@ -3163,6 +3183,18 @@ rspamd_html_tag_by_id(int id)
 	}
 
 	return nullptr;
+}
+
+float rspamd_html_url_button_weight(void *html_content, struct rspamd_url *u)
+{
+	if (html_content == NULL || u == NULL) return 0.0f;
+	auto *hc = rspamd::html::html_content::from_ptr(html_content);
+	auto it = hc->url_button_weights.find(u);
+	if (it != hc->url_button_weights.end()) {
+		return it->second;
+	}
+
+	return 0.0f;
 }
 
 const struct rspamd_html_features *

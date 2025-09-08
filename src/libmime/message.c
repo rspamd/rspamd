@@ -898,6 +898,10 @@ rspamd_message_process_html_text_part(struct rspamd_task *task,
 					lua_pushstring(L, "part_order");
 					lua_pushinteger(L, (lua_Integer) u->part_order);
 					lua_settable(L, -3);
+					/* cta weight from C heuristics */
+					lua_pushstring(L, "weight");
+					lua_pushnumber(L, (lua_Number) rspamd_html_url_button_weight(text_part->html, u));
+					lua_settable(L, -3);
 					/* etld1 computed in Lua if needed */
 					lua_rawseti(L, -2, ++nadded);
 				}
@@ -925,6 +929,23 @@ rspamd_message_process_html_text_part(struct rspamd_task *task,
 					rspamd_mempool_set_variable(task->task_pool, "html_cta_weight", &w, NULL);
 				}
 				lua_pop(L, 1);
+				/* If no weight set by Lua, derive from C heuristic */
+				if (!rspamd_mempool_get_variable(task->task_pool, "html_cta_weight") &&
+					text_part->html && text_part->mime_part && text_part->mime_part->urls) {
+					double best_w = 0.0;
+					unsigned int ui;
+					for (ui = 0; ui < text_part->mime_part->urls->len; ui++) {
+						struct rspamd_url *u = g_ptr_array_index(text_part->mime_part->urls, ui);
+						if (!u) continue;
+						if (!(u->protocol == PROTOCOL_HTTP || u->protocol == PROTOCOL_HTTPS)) continue;
+						if (u->flags & RSPAMD_URL_FLAG_INVISIBLE) continue;
+						float cw = rspamd_html_url_button_weight(text_part->html, u);
+						if (cw > best_w) best_w = cw;
+					}
+					if (best_w > 0.0) {
+						rspamd_mempool_set_variable(task->task_pool, "html_cta_weight", &best_w, NULL);
+					}
+				}
 				lua_pushstring(L, "affiliated_ratio");
 				lua_gettable(L, -2);
 				if (lua_isnumber(L, -1)) {

@@ -56,6 +56,8 @@ struct html_content {
 	struct rspamd_html_features features;
 	/* Helper: per-domain link counts */
 	ankerl::unordered_dense::map<std::string, unsigned int> link_domain_counts;
+	/* Heuristic weights for button-like links */
+	ankerl::unordered_dense::map<struct rspamd_url *, float> url_button_weights;
 	/* First-party eTLD+1 derived from message (e.g. From:) */
 	std::string first_party_etld1;
 

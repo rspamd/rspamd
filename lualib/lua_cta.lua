@@ -143,9 +143,11 @@ M.process_html_links = function(task, part, ctx)
     trackerish_ratio = (#cands > 0) and (trackerish / #cands) or 0,
   }
 
-  -- Simple CTA guess: first candidate with display_mismatch or earliest order
+  -- Simple CTA guess: prefer higher C-side weight, then display_mismatch, then earliest order
   if #cands > 0 then
     table.sort(cands, function(a, b)
+      local aw, bw = tonumber(a.weight) or 0, tonumber(b.weight) or 0
+      if aw ~= bw then return aw > bw end
       if a.display_mismatch ~= b.display_mismatch then return a.display_mismatch end
       if a.order ~= b.order then return a.order < b.order end
       return a.part_order < b.part_order
