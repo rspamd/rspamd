@@ -818,6 +818,134 @@ rspamd_message_process_html_text_part(struct rspamd_task *task,
 		rspamd_mempool_set_variable(task->task_pool, "html_forms_post_affiliated",
 									(void *) &hf->forms_post_affiliated, NULL);
 	}
+
+	/* Optionally call CTA/affiliation Lua hook with capped candidates */
+	if (task->cfg && task->cfg->lua_state) {
+		lua_State *L = task->cfg->lua_state;
+		int old_top = lua_gettop(L);
+		if (rspamd_lua_require_function(L, "lua_cta", "process_html_links")) {
+			/* Build ctx table with summary and limited candidates */
+			lua_pushcfunction(L, &rspamd_lua_traceback);
+			int err_idx = lua_gettop(L);
+			lua_pushvalue(L, -2); /* function */
+
+			/* Arg1: task */
+			struct rspamd_task **ptask = lua_newuserdata(L, sizeof(struct rspamd_task *));
+			rspamd_lua_setclass(L, rspamd_task_classname, -1);
+			*ptask = task;
+			/* Arg2: text part */
+			struct rspamd_mime_text_part **ptxt = lua_newuserdata(L, sizeof(struct rspamd_mime_text_part *));
+			rspamd_lua_setclass(L, rspamd_textpart_classname, -1);
+			*ptxt = text_part;
+			/* Arg3: ctx table */
+			lua_createtable(L, 0, 4);
+			/* first_party_etld1 if any */
+			if (text_part->html && text_part->html_features) {
+				/* Expose as string if derived */
+				/* Not directly accessible; skip for now, Lua can derive from From: */
+			}
+			/* Summary counters */
+			lua_pushstring(L, "links_total");
+			lua_pushinteger(L, (lua_Integer) text_part->html_features->links.total_links);
+			lua_settable(L, -3);
+			lua_pushstring(L, "domains_total");
+			lua_pushinteger(L, (lua_Integer) text_part->html_features->links.domains_total);
+			lua_settable(L, -3);
+			lua_pushstring(L, "max_links_single_domain");
+			lua_pushinteger(L, (lua_Integer) text_part->html_features->links.max_links_single_domain);
+			lua_settable(L, -3);
+			/* candidates array */
+			lua_pushstring(L, "candidates");
+			int max_candidates = 24; /* TODO: make configurable */
+			lua_createtable(L, max_candidates, 0);
+			int nadded = 0;
+			if (text_part->mime_part && text_part->mime_part->urls && text_part->mime_part->urls->len > 0) {
+				unsigned int i;
+				for (i = 0; i < text_part->mime_part->urls->len && nadded < (unsigned) max_candidates; i++) {
+					struct rspamd_url *u = g_ptr_array_index(text_part->mime_part->urls, i);
+					if (!u) continue;
+					/* filter: only http/https, visible */
+					if (!(u->protocol == PROTOCOL_HTTP || u->protocol == PROTOCOL_HTTPS)) continue;
+					if (u->flags & RSPAMD_URL_FLAG_INVISIBLE) continue;
+					/* Build small table */
+					lua_createtable(L, 0, 8);
+					/* host */
+					lua_pushstring(L, "host");
+					if (u->hostlen > 0) lua_pushlstring(L, rspamd_url_host_unsafe(u), u->hostlen);
+					else
+						lua_pushnil(L);
+					lua_settable(L, -3);
+					/* flags */
+					lua_pushstring(L, "idn");
+					lua_pushboolean(L, !!(u->flags & RSPAMD_URL_FLAG_IDN));
+					lua_settable(L, -3);
+					lua_pushstring(L, "numeric");
+					lua_pushboolean(L, !!(u->flags & RSPAMD_URL_FLAG_NUMERIC));
+					lua_settable(L, -3);
+					lua_pushstring(L, "has_port");
+					lua_pushboolean(L, !!(u->flags & RSPAMD_URL_FLAG_HAS_PORT));
+					lua_settable(L, -3);
+					lua_pushstring(L, "has_query");
+					lua_pushboolean(L, !!(u->flags & RSPAMD_URL_FLAG_QUERY));
+					lua_settable(L, -3);
+					lua_pushstring(L, "display_mismatch");
+					lua_pushboolean(L, (u->ext && u->ext->linked_url && u->ext->linked_url != u));
+					lua_settable(L, -3);
+					/* order */
+					lua_pushstring(L, "order");
+					lua_pushinteger(L, (lua_Integer) u->order);
+					lua_settable(L, -3);
+					lua_pushstring(L, "part_order");
+					lua_pushinteger(L, (lua_Integer) u->part_order);
+					lua_settable(L, -3);
+					/* etld1 computed in Lua if needed */
+					lua_rawseti(L, -2, ++nadded);
+				}
+			}
+			lua_settable(L, -3); /* ctx.candidates = [...] */
+
+			if (lua_pcall(L, 3, 1, err_idx) != 0) {
+				msg_debug_task("lua_cta.process_html_links error: %s", lua_tostring(L, -1));
+			}
+			else if (lua_istable(L, -1)) {
+				/* read result and expose mempool variables */
+				lua_pushstring(L, "cta_affiliated");
+				lua_gettable(L, -2);
+				if (lua_isboolean(L, -1)) {
+					static int val;
+					val = !!lua_toboolean(L, -1);
+					rspamd_mempool_set_variable(task->task_pool, "html_cta_affiliated", &val, NULL);
+				}
+				lua_pop(L, 1);
+				lua_pushstring(L, "cta_weight");
+				lua_gettable(L, -2);
+				if (lua_isnumber(L, -1)) {
+					static double w;
+					w = lua_tonumber(L, -1);
+					rspamd_mempool_set_variable(task->task_pool, "html_cta_weight", &w, NULL);
+				}
+				lua_pop(L, 1);
+				lua_pushstring(L, "affiliated_ratio");
+				lua_gettable(L, -2);
+				if (lua_isnumber(L, -1)) {
+					static double r;
+					r = lua_tonumber(L, -1);
+					rspamd_mempool_set_variable(task->task_pool, "html_affiliated_links_ratio", &r, NULL);
+				}
+				lua_pop(L, 1);
+				lua_pushstring(L, "trackerish_ratio");
+				lua_gettable(L, -2);
+				if (lua_isnumber(L, -1)) {
+					static double tr;
+					tr = lua_tonumber(L, -1);
+					rspamd_mempool_set_variable(task->task_pool, "html_trackerish_ratio", &tr, NULL);
+				}
+				lua_pop(L, 1);
+			}
+
+			lua_settop(L, old_top);
+		}
+	}
 	rspamd_html_get_parsed_content(text_part->html, &text_part->utf_content);
 
 	if (text_part->utf_content.len == 0) {

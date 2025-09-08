@@ -330,6 +330,21 @@ local function meta_html_features_function(task)
   }
 end
 
+local function meta_cta_function(task)
+  local mp = task:get_mempool()
+  local cta_aff = mp:get_variable("html_cta_affiliated", "double") or 0
+  local cta_w = mp:get_variable("html_cta_weight", "double") or 0
+  local aff_ratio = mp:get_variable("html_affiliated_links_ratio", "double") or 0
+  local tr_ratio = mp:get_variable("html_trackerish_ratio", "double") or 0
+
+  return {
+    cta_aff,
+    cta_w,
+    aff_ratio,
+    tr_ratio,
+  }
+end
+
 local metafunctions = {
   {
     cb = meta_size_function,
@@ -482,6 +497,22 @@ local metafunctions = {
     - ratio of forms posting to affiliated domains
 ]]
   },
+  {
+    cb = meta_cta_function,
+    ninputs = 4,
+    names = {
+      'html_cta_affiliated',
+      'html_cta_weight',
+      'html_affiliated_links_ratio',
+      'html_trackerish_ratio',
+    },
+    description = [[CTA and affiliation metrics from lua_cta:
+    - CTA affiliated flag
+    - CTA weight heuristic
+    - affiliated links ratio among candidates
+    - trackerish domains ratio among candidates
+]]
+  },
 }
 
 local meta_schema = ts.shape {
@@ -605,7 +636,7 @@ end
 
 exports.rspamd_count_metatokens = rspamd_count_metatokens
 exports.count_metatokens = rspamd_count_metatokens
-exports.version = 2 -- MUST be increased on each change of metatokens
+exports.version = 3 -- MUST be increased on each change of metatokens
 
 exports.add_metafunction = function(tbl)
   local ret, err = meta_schema(tbl)
