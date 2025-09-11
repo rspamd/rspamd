@@ -124,8 +124,10 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
 
         test("Throughput `Total messages` counter increased", async ({}, testInfo) => {
             testInfo.setTimeout(140000);
+            // With empty RRD the first PDP is lost, so only +1 is visible
             // Depending on row boundaries, throughput may show +2 or even +3
             const targetValues = [
+                scannedBefore.throughput + 1,
                 scannedBefore.throughput + 2,
                 scannedBefore.throughput + 3,
             ];
