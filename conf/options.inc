@@ -73,3 +73,17 @@ soft_reject_on_timeout = false;
 
 # Use utf8 mode for mime operations (use if your MTA announces SMTPUTF8 support)
 enable_mime_utf = false;
+
+maps
+{
+#staged timeouts
+	connect_timeout = 1s;
+	ssl_timeout = 2s;
+	write_timeout = 4s;
+	read_timeout = 4s;
+
+#keepalive tuning
+	connection_ttl = 300s;
+	idle_timeout = 65s;
+	max_reuse = 256;
+}
