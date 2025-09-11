@@ -1151,7 +1151,7 @@ rspamd_http_connection_new_common(struct rspamd_http_context *ctx,
 	priv->ssl_timeout = ctx->config.ssl_timeout;
 	priv->write_timeout = ctx->config.write_timeout;
 	priv->read_timeout = ctx->config.read_timeout;
-	priv->created_ts = rspamd_get_ticks(FALSE);
+	priv->created_ts = (ctx->event_loop ? ev_now(ctx->event_loop) : rspamd_get_ticks(FALSE));
 	priv->last_used_ts = 0;
 	priv->reuse_count = 0;
 	priv->ka_ttl_override = 0;
@@ -2751,7 +2751,7 @@ gboolean rspamd_http_connection_keepalive_is_valid(struct rspamd_http_connection
 	double ttl = (priv->ka_ttl_override > 0 ? priv->ka_ttl_override : default_ttl);
 	unsigned int max_reuse = (priv->ka_max_reuse_override > 0 ? priv->ka_max_reuse_override : default_max_reuse);
 
-	if (ttl > 0 && rspamd_get_ticks(FALSE) - priv->created_ts > ttl) {
+	if (ttl > 0 && now_ts - priv->created_ts > ttl) {
 		return FALSE;
 	}
 	if (max_reuse > 0 && priv->reuse_count >= max_reuse) {
