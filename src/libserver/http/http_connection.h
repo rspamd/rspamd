@@ -187,6 +187,34 @@ struct rspamd_http_connection *rspamd_http_connection_new_client(
 	rspamd_inet_addr_t *addr);
 
 /**
+ * Set per-request staged timeouts. Pass 0 to keep defaults.
+ */
+void rspamd_http_connection_set_timeouts(struct rspamd_http_connection *conn,
+										 ev_tstamp connect_timeout,
+										 ev_tstamp ssl_timeout,
+										 ev_tstamp write_timeout,
+										 ev_tstamp read_timeout);
+
+/**
+ * Set per-request keepalive tuning. Pass 0 to keep defaults/disable limit.
+ */
+void rspamd_http_connection_set_keepalive_tuning(struct rspamd_http_connection *conn,
+												 double connection_ttl,
+												 double idle_timeout,
+												 unsigned int max_reuse);
+
+/* Helpers used by keepalive context */
+void rspamd_http_connection_keepalive_note_put(struct rspamd_http_connection *conn,
+											   double now_ts);
+void rspamd_http_connection_keepalive_note_reuse(struct rspamd_http_connection *conn);
+gboolean rspamd_http_connection_keepalive_is_valid(struct rspamd_http_connection *conn,
+												   double now_ts,
+												   double default_ttl,
+												   unsigned int default_max_reuse);
+double rspamd_http_connection_keepalive_idle_timeout(struct rspamd_http_connection *conn,
+													 double default_idle);
+
+/**
  * Creates an ordinary client connection using ready file descriptor (ignores proxy)
  * @param ctx
  * @param body_handler
