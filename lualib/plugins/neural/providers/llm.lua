@@ -45,6 +45,11 @@ local function compose_llm_settings(pcfg)
     cache_prefix = pcfg.cache_prefix or 'neural_llm',
     cache_hash_len = pcfg.cache_hash_len or 32,
     cache_use_hashing = (pcfg.cache_use_hashing ~= false),
+    -- Optional staged timeouts (inherit from global gpt if present)
+    connect_timeout = pcfg.connect_timeout or gpt_settings.connect_timeout,
+    ssl_timeout = pcfg.ssl_timeout or gpt_settings.ssl_timeout,
+    write_timeout = pcfg.write_timeout or gpt_settings.write_timeout,
+    read_timeout = pcfg.read_timeout or gpt_settings.read_timeout,
   }
 end
 
@@ -182,6 +187,11 @@ neural_common.register_provider('llm', {
         use_gzip = true,
         keepalive = true,
         callback = http_cb,
+        -- staged timeouts
+        connect_timeout = llm.connect_timeout,
+        ssl_timeout = llm.ssl_timeout,
+        write_timeout = llm.write_timeout,
+        read_timeout = llm.read_timeout,
       }
 
       rspamd_http.request(http_params)

@@ -13,7 +13,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 --[[[
 -- @module lua_clickhouse
@@ -75,7 +75,6 @@ end
 
 -- Converts a row into TSV, taking extra care about arrays
 local function row_to_tsv(row)
-
   for i, elt in ipairs(row) do
     local t = type(elt)
     if t == 'table' then
@@ -185,8 +184,8 @@ local function mk_http_select_cb(upstream, params, ok_cb, fail_cb, row_cb)
         fail_cb(params, err_message, data)
       else
         rspamd_logger.errx(params.log_obj,
-            "request failed on clickhouse server %s: %s",
-            ip_addr, err_message)
+          "request failed on clickhouse server %s: %s",
+          ip_addr, err_message)
       end
       upstream:fail()
     else
@@ -198,8 +197,8 @@ local function mk_http_select_cb(upstream, params, ok_cb, fail_cb, row_cb)
           ok_cb(params, rows)
         else
           lua_util.debugm(N, params.log_obj,
-              "http_select_cb ok: %s, %s, %s, %s", err_message, code,
-              data:gsub('[\n%s]+', ' '), _)
+            "http_select_cb ok: %s, %s, %s, %s", err_message, code,
+            data:gsub('[\n%s]+', ' '), _)
         end
       else
         if fail_cb then
@@ -207,8 +206,8 @@ local function mk_http_select_cb(upstream, params, ok_cb, fail_cb, row_cb)
         else
           local ip_addr = upstream:get_addr():to_string(true)
           rspamd_logger.errx(params.log_obj,
-              "request failed on clickhouse server %s: %s",
-              ip_addr, 'failed to parse reply')
+            "request failed on clickhouse server %s: %s",
+            ip_addr, 'failed to parse reply')
         end
       end
     end
@@ -230,8 +229,8 @@ local function mk_http_insert_cb(upstream, params, ok_cb, fail_cb)
         fail_cb(params, err_message, data)
       else
         rspamd_logger.errx(params.log_obj,
-            "request failed on clickhouse server %s: %s",
-            ip_addr, err_message)
+          "request failed on clickhouse server %s: %s",
+          ip_addr, err_message)
       end
       upstream:fail()
     else
@@ -245,11 +244,10 @@ local function mk_http_insert_cb(upstream, params, ok_cb, fail_cb)
         else
           ok_cb(params, parsed)
         end
-
       else
         lua_util.debugm(N, params.log_obj,
-            "http_insert_cb ok: %s, %s, %s, %s", err_message, code,
-            data:gsub('[\n%s]+', ' '), _)
+          "http_insert_cb ok: %s, %s, %s, %s", err_message, code,
+          data:gsub('[\n%s]+', ' '), _)
       end
     end
   end
@@ -294,6 +292,11 @@ exports.select = function(upstream, settings, params, query, ok_cb, fail_cb, row
   http_params.body = query
   http_params.log_obj = params.task or params.config
   http_params.opaque_body = true
+  -- staged timeouts
+  http_params.connect_timeout = settings.connect_timeout
+  http_params.ssl_timeout = settings.ssl_timeout
+  http_params.write_timeout = settings.write_timeout
+  http_params.read_timeout = settings.read_timeout
 
   lua_util.debugm(N, http_params.log_obj, "clickhouse select request: %s", http_params.body)
 
@@ -305,7 +308,7 @@ exports.select = function(upstream, settings, params, query, ok_cb, fail_cb, row
     local ip_addr = upstream:get_addr():to_string(true)
     local database = settings.database or 'default'
     http_params.url = string.format('%s%s/?database=%s&default_format=JSONEachRow',
-        connect_prefix, ip_addr, escape_spaces(database))
+      connect_prefix, ip_addr, escape_spaces(database))
   end
 
   return rspamd_http.request(http_params)
@@ -349,6 +352,11 @@ exports.select_sync = function(upstream, settings, params, query, row_cb)
   http_params.body = query
   http_params.log_obj = params.task or params.config
   http_params.opaque_body = true
+  -- staged timeouts
+  http_params.connect_timeout = settings.connect_timeout
+  http_params.ssl_timeout = settings.ssl_timeout
+  http_params.write_timeout = settings.write_timeout
+  http_params.read_timeout = settings.read_timeout
 
   lua_util.debugm(N, http_params.log_obj, "clickhouse select request: %s", http_params.body)
 
@@ -360,7 +368,7 @@ exports.select_sync = function(upstream, settings, params, query, row_cb)
     local ip_addr = upstream:get_addr():to_string(true)
     local database = settings.database or 'default'
     http_params.url = string.format('%s%s/?database=%s&default_format=JSONEachRow',
-        connect_prefix, ip_addr, escape_spaces(database))
+      connect_prefix, ip_addr, escape_spaces(database))
   end
 
   local err, response = rspamd_http.request(http_params)
@@ -414,6 +422,11 @@ exports.insert = function(upstream, settings, params, query, rows,
   http_params.method = 'POST'
   http_params.body = { rspamd_text.fromtable(rows, '\n'), '\n' }
   http_params.log_obj = params.task or params.config
+  -- staged timeouts
+  http_params.connect_timeout = settings.connect_timeout
+  http_params.ssl_timeout = settings.ssl_timeout
+  http_params.write_timeout = settings.write_timeout
+  http_params.read_timeout = settings.read_timeout
 
   if not http_params.url then
     local connect_prefix = "http://"
@@ -423,10 +436,10 @@ exports.insert = function(upstream, settings, params, query, rows,
     local ip_addr = upstream:get_addr():to_string(true)
     local database = settings.database or 'default'
     http_params.url = string.format('%s%s/?database=%s&query=%s%%20FORMAT%%20TabSeparated',
-        connect_prefix,
-        ip_addr,
-        escape_spaces(database),
-        escape_spaces(query))
+      connect_prefix,
+      ip_addr,
+      escape_spaces(database),
+      escape_spaces(query))
   end
 
   return rspamd_http.request(http_params)
@@ -468,6 +481,11 @@ exports.generic = function(upstream, settings, params, query,
   http_params.password = settings.password
   http_params.log_obj = params.task or params.config
   http_params.body = query
+  -- staged timeouts
+  http_params.connect_timeout = settings.connect_timeout
+  http_params.ssl_timeout = settings.ssl_timeout
+  http_params.write_timeout = settings.write_timeout
+  http_params.read_timeout = settings.read_timeout
 
   if not http_params.url then
     local connect_prefix = "http://"
@@ -477,7 +495,7 @@ exports.generic = function(upstream, settings, params, query,
     local ip_addr = upstream:get_addr():to_string(true)
     local database = settings.database or 'default'
     http_params.url = string.format('%s%s/?database=%s&default_format=JSONEachRow',
-        connect_prefix, ip_addr, escape_spaces(database))
+      connect_prefix, ip_addr, escape_spaces(database))
   end
 
   return rspamd_http.request(http_params)
@@ -515,6 +533,11 @@ exports.generic_sync = function(upstream, settings, params, query)
   http_params.password = settings.password
   http_params.log_obj = params.task or params.config
   http_params.body = query
+  -- staged timeouts
+  http_params.connect_timeout = settings.connect_timeout
+  http_params.ssl_timeout = settings.ssl_timeout
+  http_params.write_timeout = settings.write_timeout
+  http_params.read_timeout = settings.read_timeout
 
   if not http_params.url then
     local connect_prefix = "http://"
@@ -524,7 +547,7 @@ exports.generic_sync = function(upstream, settings, params, query)
     local ip_addr = upstream:get_addr():to_string(true)
     local database = settings.database or 'default'
     http_params.url = string.format('%s%s/?database=%s&default_format=JSON',
-        connect_prefix, ip_addr, escape_spaces(database))
+      connect_prefix, ip_addr, escape_spaces(database))
   end
 
   local err, response = rspamd_http.request(http_params)

@@ -131,6 +131,11 @@ local settings = {
     }
   },
   timeout = 10,
+  -- Optional staged timeouts
+  connect_timeout = nil,
+  ssl_timeout = nil,
+  write_timeout = nil,
+  read_timeout = nil,
   prompt = nil,
   condition = nil,
   autolearn = false,
@@ -744,6 +749,11 @@ local function openai_check(task, content, sel_part)
       task = task,
       upstream = upstream,
       use_gzip = true,
+      -- staged timeouts
+      connect_timeout = settings.connect_timeout,
+      ssl_timeout = settings.ssl_timeout,
+      write_timeout = settings.write_timeout,
+      read_timeout = settings.read_timeout,
     }
 
     if not rspamd_http.request(http_params) then
@@ -846,6 +856,11 @@ local function ollama_check(task, content, sel_part)
       task = task,
       upstream = upstream,
       use_gzip = true,
+      -- staged timeouts
+      connect_timeout = settings.connect_timeout,
+      ssl_timeout = settings.ssl_timeout,
+      write_timeout = settings.write_timeout,
+      read_timeout = settings.read_timeout,
     }
 
     rspamd_http.request(http_params)

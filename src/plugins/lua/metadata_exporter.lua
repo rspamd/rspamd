@@ -13,7 +13,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 if confighelp then
   return
@@ -164,8 +164,8 @@ local function get_general_metadata(task, flatten, no_content)
   scan_real = math.floor(scan_real * 1000)
   if scan_real < 0 then
     rspamd_logger.messagex(task,
-        'clock skew detected for message: %s ms real sca time (reset to 0)',
-        scan_real)
+      'clock skew detected for message: %s ms real sca time (reset to 0)',
+      scan_real)
     scan_real = 0
   end
 
@@ -286,18 +286,18 @@ local pushers = {
     local function redis_pub_cb(err)
       if err then
         rspamd_logger.errx(task, 'got error %s when publishing on server %s',
-            err, upstream:get_addr())
+          err, upstream:get_addr())
         return maybe_defer(task, rule)
       end
       return true
     end
     ret, _, upstream = lua_redis.redis_make_request(task,
-        redis_params, -- connect params
-        nil, -- hash key
-        true, -- is write
-        redis_pub_cb, --callback
-        'PUBLISH', -- command
-        { rule.channel, formatted } -- arguments
+      redis_params,                 -- connect params
+      nil,                          -- hash key
+      true,                         -- is write
+      redis_pub_cb,                 --callback
+      'PUBLISH',                    -- command
+      { rule.channel, formatted }   -- arguments
     )
     if not ret then
       rspamd_logger.errx(task, 'error connecting to redis')
@@ -346,6 +346,11 @@ local pushers = {
       gzip = rule.gzip or settings.gzip,
       keepalive = rule.keepalive or settings.keepalive,
       no_ssl_verify = rule.no_ssl_verify or settings.no_ssl_verify,
+      -- staged timeouts
+      connect_timeout = rule.connect_timeout or settings.connect_timeout,
+      ssl_timeout = rule.ssl_timeout or settings.ssl_timeout,
+      write_timeout = rule.write_timeout or settings.write_timeout,
+      read_timeout = rule.read_timeout or settings.read_timeout,
     })
   end,
   send_mail = function(task, formatted, rule, extra)
