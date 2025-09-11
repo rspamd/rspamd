@@ -43,6 +43,50 @@ local M = {}
 
 local lua_util = require "lua_util"
 local lua_maps = require "lua_maps"
+local rspamd_util = require "rspamd_util"
+
+-- Reasonable defaults (can be overridden in rspamd.conf: link_affiliation { ... })
+local DEFAULT_STOPWORDS = {
+  -- Common TLD tokens and ccTLDs
+  "com", "net", "org", "info", "biz", "co", "io", "me", "us", "uk", "ru", "de", "fr", "au", "ca", "cn", "jp", "kr", "in",
+  "eu",
+  "es", "it", "nl", "pl", "se", "no", "fi", "dk", "cz", "sk", "pt", "tr", "gr", "hu", "ro", "bg", "ua", "by", "lt", "lv",
+  "ee",
+  "br", "mx", "ch", "be", "at", "dk", "cz", "sk", "pt", "ar", "cl", "pe", "tw", "th", "ph", "vn", "id", "hk", "sg", "nz",
+  "za",
+  "il", "ie", "is", "lu", "si", "hr", "rs", "gl", "ly",
+  -- Generic / infrastructural
+  "www", "web", "site", "app", "apps", "cloud", "cdn", "edge", "fastly", "akamai", "akamaihd", "edgesuite", "cloudfront",
+  -- Tracking/redirect/marketing tokens
+  "mail", "email", "news", "newsletter", "click", "link", "links", "go", "redir", "redirect", "rdir", "safe", "safelinks",
+  "trk", "track", "tracking", "ref", "mkt", "mktg", "campaign", "promo", "offer", "offers",
+  -- ESPs and bulk mailers (tokens found in their eTLD+1)
+  "mailchimp", "mandrill", "sendgrid", "sparkpost", "sparkpostmail", "amazonses", "ses", "postmark", "postmarkapp",
+  "mailgun",
+  "sendinblue", "constantcontact", "list", "manage", "rs6", "aweber", "hubspot", "campaignmonitor", "cmail", "klaviyo",
+  "sailthru",
+  "drip", "convertkit", "getresponse", "mautic", "braze", "acoustic", "responsys", "eloqua", "iterable", "sendy",
+  "emarsys", "mailjet",
+  "mailerlite", "mailerq", "mailrelay", "mailup", "omnisend", "clickdimensions", "dotdigital", "pepipost"
+}
+
+local DEFAULT_WHITELIST = {
+  -- Intentionally empty by default. Users can add trusted eTLD+1 domains here
+}
+
+local DEFAULT_BLACKLIST = {
+  -- Popular shorteners / redirection eTLD+1
+  "t.co", "bit.ly", "goo.gl", "tinyurl.com", "lnkd.in", "buff.ly", "ow.ly", "rebrand.ly", "bitly.com", "is.gd", "v.gd",
+  "t.ly",
+  "cutt.ly", "shorturl.at", "reurl.cc", "rb.gy", "s.id", "trib.al",
+  -- Common ESP/tracker link domains (treat as non-affiliated by default)
+  "list-manage.com", "mandrillapp.com", "sendgrid.net", "sparkpostmail.com", "amazonses.com", "postmarkapp.com",
+  "mailgun.org",
+  "sendinblue.com", "constantcontact.com", "campaignmonitor.com", "cmail1.com", "cmail2.com", "aweber.com", "hubspot.com",
+  "exacttarget.com", "clickdimensions.com", "eloqua.com", "responsys.net", "emarsys.net", "mailjet.com", "klaviyo.com",
+  "dripemail2.com",
+  "getresponse.com", "benchmarkemail.com", "omnisend.com", "mailerlite.com", "dotdigital.com"
+}
 
 local settings = {
   min_similarity = 0.5,
@@ -57,14 +101,26 @@ local function load_settings()
   local opts = (cfg and cfg:get_all_opt('link_affiliation')) or {}
   settings = lua_util.override_defaults(settings, opts)
   -- Convert map definitions to maps if needed
-  if settings.stopwords and (type(settings.stopwords) ~= 'table' or not settings.stopwords.get_key) then
-    settings.stopwords = lua_maps.map_add_from_ucl(settings.stopwords, 'set', 'link affiliation stopwords')
+  if settings.stopwords then
+    if type(settings.stopwords) ~= 'table' or not settings.stopwords.get_key then
+      settings.stopwords = lua_maps.map_add_from_ucl(settings.stopwords, 'set', 'link affiliation stopwords')
+    end
+  else
+    settings.stopwords = lua_maps.map_add_from_ucl(DEFAULT_STOPWORDS, 'set', 'link affiliation stopwords (default)')
   end
-  if settings.whitelist and (type(settings.whitelist) ~= 'table' or not settings.whitelist.get_key) then
-    settings.whitelist = lua_maps.map_add_from_ucl(settings.whitelist, 'set', 'link affiliation whitelist')
+  if settings.whitelist then
+    if type(settings.whitelist) ~= 'table' or not settings.whitelist.get_key then
+      settings.whitelist = lua_maps.map_add_from_ucl(settings.whitelist, 'set', 'link affiliation whitelist')
+    end
+  else
+    settings.whitelist = lua_maps.map_add_from_ucl(DEFAULT_WHITELIST, 'set', 'link affiliation whitelist (default)')
   end
-  if settings.blacklist and (type(settings.blacklist) ~= 'table' or not settings.blacklist.get_key) then
-    settings.blacklist = lua_maps.map_add_from_ucl(settings.blacklist, 'set', 'link affiliation blacklist')
+  if settings.blacklist then
+    if type(settings.blacklist) ~= 'table' or not settings.blacklist.get_key then
+      settings.blacklist = lua_maps.map_add_from_ucl(settings.blacklist, 'set', 'link affiliation blacklist')
+    end
+  else
+    settings.blacklist = lua_maps.map_add_from_ucl(DEFAULT_BLACKLIST, 'set', 'link affiliation blacklist (default)')
   end
 end
 
@@ -115,13 +171,7 @@ M.process_html_links = function(task, part, ctx)
   local fp_tokens = etld1_tokens(first_party)
 
   for _, c in ipairs(cands) do
-    local etld1 = c.etld1 or c.host or ''
-    -- approximate etld1 from host when not provided (split last two labels)
-    do
-      local h = tostring(etld1)
-      local p1, p2 = string.match(h, "([^.]+)%.([^.]+)$")
-      if p1 and p2 then etld1 = p1 .. "." .. p2 end
-    end
+    local etld1 = c.etld1 or rspamd_util.get_tld(c.host or '') or (c.host or '')
 
     local toks = etld1_tokens(etld1)
     local sim = jaccard(fp_tokens, toks)
@@ -153,12 +203,7 @@ M.process_html_links = function(task, part, ctx)
       return a.part_order < b.part_order
     end)
     local cta = cands[1]
-    local etld1 = cta.etld1 or cta.host or ''
-    do
-      local h = tostring(etld1)
-      local p1, p2 = string.match(h, "([^.]+)%.([^.]+)$")
-      if p1 and p2 then etld1 = p1 .. "." .. p2 end
-    end
+    local etld1 = cta.etld1 or rspamd_util.get_tld(cta.host or '') or (cta.host or '')
     local toks = etld1_tokens(etld1)
     local sim = jaccard(fp_tokens, toks)
     res.cta_affiliated = (sim >= settings.min_similarity)

@@ -191,7 +191,9 @@ LUA_FUNCTION_DEF(util, humanize_number);
 
 /***
  * @function util.get_tld(host)
- * Returns effective second level domain part (eSLD) for the specified host
+ * Returns effective second level domain (eSLD) for the specified host.
+ * This function uses the Public Suffix List (PSL) to determine boundaries
+ * and compute the eSLD, not the top-level domain.
  *
  * @param {string} host hostname
  * @return {string} eSLD part of the hostname or the full hostname if eSLD was not found
