@@ -78,6 +78,18 @@ struct rspamd_html_features {
 	unsigned int tags_count;
 	unsigned int max_dom_depth;
 
+	/* Visibility/text stats */
+	unsigned int text_visible;       /* bytes of visible decoded text */
+	unsigned int text_hidden;        /* bytes of hidden/offscreen decoded text */
+	unsigned int text_transparent;   /* bytes of text rendered transparent */
+	unsigned int blocks_hidden;      /* segments appended to hidden text */
+	unsigned int blocks_transparent; /* segments that were masked as transparent */
+	unsigned int offscreen_blocks;   /* blocks with offscreen style tricks */
+
+	/* Meta/obfuscation */
+	unsigned int meta_refresh;      /* count of <meta http-equiv=refresh> */
+	unsigned int meta_refresh_urls; /* count of URLs extracted from meta refresh */
+
 	/* Parser/quality flags mirror (bitset, reserved) */
 	unsigned int flags;
 };

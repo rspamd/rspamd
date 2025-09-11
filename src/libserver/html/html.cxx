@@ -1677,6 +1677,48 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 	if (maybe_bgcolor) {
 		tag->block->set_bgcolor(maybe_bgcolor->to_color().value());
 	}
+
+	/* Offscreen heuristic: negative text-indent or large negative left/top */
+	if (auto style = tag->find_style()) {
+		auto sv = *style;
+		/* text-indent */
+		auto p_ti = rspamd_substring_search_caseless(sv.data(), sv.size(), "text-indent", sizeof("text-indent") - 1);
+		if (p_ti != -1) {
+			/* look ahead for '-' before a digit */
+			for (std::size_t i = p_ti; i < sv.size(); i++) {
+				char c = sv[i];
+				if (c == '-') {
+					/* consider offscreen */
+					hc->features.offscreen_blocks++;
+					break;
+				}
+				if (g_ascii_isdigit(c)) break;
+			}
+		}
+		/* left/top negative absolute */
+		auto p_left = rspamd_substring_search_caseless(sv.data(), sv.size(), "left", sizeof("left") - 1);
+		if (p_left != -1) {
+			for (std::size_t i = p_left; i < sv.size(); i++) {
+				char c = sv[i];
+				if (c == '-') {
+					hc->features.offscreen_blocks++;
+					break;
+				}
+				if (g_ascii_isdigit(c)) break;
+			}
+		}
+		auto p_top = rspamd_substring_search_caseless(sv.data(), sv.size(), "top", sizeof("top") - 1);
+		if (p_top != -1) {
+			for (std::size_t i = p_top; i < sv.size(); i++) {
+				char c = sv[i];
+				if (c == '-') {
+					hc->features.offscreen_blocks++;
+					break;
+				}
+				if (g_ascii_isdigit(c)) break;
+			}
+		}
+	}
 }
 
 static inline auto
@@ -1740,6 +1782,21 @@ html_append_parsed(struct html_content *hc,
 				return !g_ascii_isspace(c);
 			},
 			' ');
+		/* Accumulate transparent text bytes */
+		hc->features.text_transparent += (unsigned int) nlen;
+		hc->features.blocks_transparent++;
+	}
+	else {
+		/* Visible or hidden text accounted outside; keep helper here for visible path */
+		if (&dest == &hc->parsed) {
+			/* Visible text */
+			hc->features.text_visible += (unsigned int) nlen;
+		}
+		else if (&dest == &hc->invisible) {
+			/* Hidden text */
+			hc->features.text_hidden += (unsigned int) nlen;
+			hc->features.blocks_hidden++;
+		}
 	}
 
 	return nlen;
@@ -2143,6 +2200,37 @@ auto html_process_input(struct rspamd_task *task,
 				}
 			}
 			break;
+		case Tag_META: {
+			/* Detect meta refresh */
+			auto http_equiv = cur_tag->find_component<html_component_http_equiv>();
+			if (http_equiv) {
+				auto hv = http_equiv.value()->value;
+				if (hv.size() >= sizeof("refresh") - 1 &&
+					g_ascii_strncasecmp(hv.data(), "refresh", hv.size()) == 0) {
+					hc->features.meta_refresh++;
+					/* Try to extract URL from content */
+					if (auto content = cur_tag->find_component<html_component_content>()) {
+						auto cv = content.value()->value;
+						/* naive parse: look for 'url=' and capture token */
+						auto p = rspamd_substring_search_caseless(cv.data(), cv.size(), "url=", sizeof("url=") - 1);
+						if (p != -1) {
+							std::string_view urlv{cv.data() + p + (sizeof("url=") - 1), cv.size() - (p + (sizeof("url=") - 1))};
+							/* Trim quotes/spaces and trailing separators */
+							while (!urlv.empty() && (g_ascii_isspace(urlv.front()) || urlv.front() == '\'' || urlv.front() == '"')) urlv.remove_prefix(1);
+							while (!urlv.empty() && (urlv.back() == ';' || urlv.back() == '\'' || urlv.back() == '"' || g_ascii_isspace(urlv.back()))) urlv.remove_suffix(1);
+							if (!urlv.empty()) {
+								/* validate and count; do not add to urls set */
+								auto maybe_url = html_process_url(pool, urlv);
+								if (maybe_url) {
+									hc->features.meta_refresh_urls++;
+								}
+							}
+						}
+					}
+				}
+			}
+			break;
+		}
 		case Tag_INPUT: {
 			if (auto type_comp = cur_tag->find_component<html_component_type>()) {
 				auto tv = type_comp.value()->get_string_value();
@@ -3029,6 +3117,22 @@ auto html_process_input(struct rspamd_task *task,
 
 	/* Mirror parser flags into features */
 	hc->features.flags = (unsigned int) hc->flags;
+
+	/* Clamp visibility counters to input length */
+	{
+		unsigned int total_decoded = hc->features.text_visible + hc->features.text_hidden;
+		if (total_decoded > (unsigned int) (end - start)) {
+			/* Best-effort clamp */
+			unsigned int excess = total_decoded - (unsigned int) (end - start);
+			if (hc->features.text_hidden >= excess) {
+				hc->features.text_hidden -= excess;
+			}
+			else {
+				hc->features.text_visible -= (excess - hc->features.text_hidden);
+				hc->features.text_hidden = 0;
+			}
+		}
+	}
 
 	return hc;
 }

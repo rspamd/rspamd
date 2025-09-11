@@ -19,6 +19,7 @@ local exports = {}
 local N = "metatokens"
 local ts = require("tableshape").types
 local logger = require "rspamd_logger"
+local lua_mime = require "lua_mime"
 
 -- Metafunctions
 local function meta_size_function(task)
@@ -279,17 +280,28 @@ local function meta_words_function(task)
 end
 
 local function meta_html_features_function(task)
-  local mp = task:get_mempool()
-  local lt = mp:get_variable("html_links_total", "int") or 0
-  local http = mp:get_variable("html_links_http", "int") or 0
-  local ql = mp:get_variable("html_links_query", "int") or 0
-  local same = mp:get_variable("html_links_same_etld1", "int") or 0
-  local dom_total = mp:get_variable("html_links_domains_total", "int") or 0
-  local max_per_dom = mp:get_variable("html_links_max_per_domain", "int") or 0
+  local lt, http, ql, same, dom_total, max_per_dom = 0, 0, 0, 0, 0, 0
+  local ft, fua, fa = 0, 0, 0
 
-  local ft = mp:get_variable("html_forms_total", "int") or 0
-  local fua = mp:get_variable("html_forms_post_unaffiliated", "int") or 0
-  local fa = mp:get_variable("html_forms_post_affiliated", "int") or 0
+  local sel_part = lua_mime.get_displayed_text_part(task)
+  if sel_part and sel_part:is_html() then
+    local html = sel_part:get_html()
+    if html and html.get_features then
+      local f = html:get_features()
+      if f and f.links then
+        lt = f.links.total_links or 0
+        http = f.links.http_links or 0
+        ql = f.links.query_links or 0
+        same = f.links.same_etld1_links or 0
+        dom_total = f.links.domains_total or 0
+        max_per_dom = f.links.max_links_single_domain or 0
+      end
+      ft = f.forms_count or 0
+      fua = f.forms_post_unaffiliated or 0
+      fa = f.forms_post_affiliated or 0
+    end
+  end
+
 
   local nhtml_links = 0
   local http_ratio = 0
@@ -342,6 +354,44 @@ local function meta_cta_function(task)
     cta_w,
     aff_ratio,
     tr_ratio,
+  }
+end
+
+local function meta_html_visibility_function(task)
+  local sel_part = lua_mime.get_displayed_text_part(task)
+  local hidden_ratio, transparent_ratio = 0, 0
+  local blkh, blkt, off, mref, mrefu = 0, 0, 0, 0, 0
+
+  if sel_part and sel_part:is_html() then
+    local html = sel_part:get_html()
+    if html and html.get_features then
+      local f = html:get_features() or {}
+      local vis = f.text_visible or 0
+      local hid = f.text_hidden or 0
+      local transp = f.text_transparent or 0
+      local total = vis + hid
+      if total > 0 then
+        hidden_ratio = hid / total
+        transparent_ratio = transp / total
+      end
+      blkh = f.blocks_hidden or 0
+      blkt = f.blocks_transparent or 0
+      off = f.offscreen_blocks or 0
+      mref = f.meta_refresh or 0
+      mrefu = f.meta_refresh_urls or 0
+    end
+  end
+
+  -- no mempool fallback; individual mempool exports were removed
+
+  return {
+    hidden_ratio,
+    transparent_ratio,
+    blkh,
+    blkt,
+    off,
+    mref,
+    mrefu,
   }
 end
 
@@ -511,6 +561,28 @@ local metafunctions = {
     - CTA weight heuristic
     - affiliated links ratio among candidates
     - trackerish domains ratio among candidates
+]]
+  },
+  {
+    cb = meta_html_visibility_function,
+    ninputs = 7,
+    names = {
+      'html_hidden_text_ratio',
+      'html_transparent_text_ratio',
+      'html_hidden_blocks',
+      'html_transparent_blocks',
+      'html_offscreen_blocks',
+      'html_meta_refresh',
+      'html_meta_refresh_urls',
+    },
+    description = [[HTML hidden/offscreen/obfuscation features and meta refresh counters:
+    - ratio of hidden text to total text
+    - ratio of transparent text to total text
+    - number of hidden text blocks appended
+    - number of transparent blocks
+    - number of offscreen-styled blocks
+    - number of meta refresh tags
+    - number of meta refresh URLs extracted
 ]]
   },
 }
