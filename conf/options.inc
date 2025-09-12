@@ -1,19 +1,3 @@
-/*
- * Copyright 2025 Vsevolod Stakhov
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 # Basic rspamd configuration
 # Please don't modify this file as your changes might be overwritten with
 # the next update.
@@ -90,15 +74,14 @@ soft_reject_on_timeout = false;
 # Use utf8 mode for mime operations (use if your MTA announces SMTPUTF8 support)
 enable_mime_utf = false;
 
-maps
-{
-#staged timeouts
+maps {
+	#staged timeouts
 	connect_timeout = 1s;
 	ssl_timeout = 1s;
 	write_timeout = 1s;
 	read_timeout = 4s;
 
-#keepalive tuning
+	#keepalive tuning
 	connection_ttl = 300s;
 	idle_timeout = 65s;
 	max_reuse = 256;
