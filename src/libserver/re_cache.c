@@ -2013,6 +2013,13 @@ rspamd_re_cache_type_from_string(const char *str)
 			ret = RSPAMD_RE_MAX;
 			break;
 		}
+
+		/* Fallback string checks for types not covered by the hash switch */
+		if (ret == RSPAMD_RE_MAX) {
+			if (g_ascii_strcasecmp(str, "selector") == 0) {
+				ret = RSPAMD_RE_SELECTOR;
+			}
+		}
 	}
 	else {
 		ret = RSPAMD_RE_MAX;

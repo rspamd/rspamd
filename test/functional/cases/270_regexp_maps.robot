@@ -1,6 +1,6 @@
 *** Settings ***
-Test Setup      Rspamd Setup
-Test Teardown   Rspamd Teardown
+Suite Setup     Rspamd Setup
+Suite Teardown  Rspamd Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
@@ -8,8 +8,10 @@ Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 *** Variables ***
 ${CONFIG}          ${RSPAMD_TESTDIR}/configs/regexp_maps.conf
 ${MESSAGE1}        ${RSPAMD_TESTDIR}/messages/advance_fee_fraud.eml
-${MESSAGE2}        ${RSPAMD_TESTDIR}/messages/spam_message.eml
-${RSPAMD_SCOPE}    Test
+${MESSAGE2}        ${RSPAMD_TESTDIR}/messages/sa_header_body_raw.eml
+${FULLMSG}         ${RSPAMD_TESTDIR}/messages/sa_full_boundary.eml
+${URL1}            ${RSPAMD_TESTDIR}/messages/url1.eml
+${RSPAMD_SCOPE}    Suite
 ${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
@@ -46,3 +48,58 @@ Atom Rules Availability
     # We test by ensuring the meta rules work correctly
     Expect Symbol  ADVANCE_FEE_2
     Expect Symbol  ADVANCE_FEE_3
+
+SA-Like: Header Atom
+    [Documentation]    Header regexp atom works (SA_HDR_SUBJ)
+    Scan File  ${MESSAGE2}
+    Expect Symbol  SA_HDR_SUBJ
+
+SA-Like: Body Atom
+    [Documentation]    Body regexp atom works (SA_BODY_SIMPLE)
+    Scan File  ${MESSAGE2}
+    Expect Symbol  SA_BODY_SIMPLE
+
+SA-Like: Rawbody Atom
+    [Documentation]    Rawbody regexp atom works (SA_RAW_SIMPLE)
+    Scan File  ${MESSAGE2}
+    Expect Symbol  SA_RAW_SIMPLE
+
+SA-Like: URI Atom
+    [Documentation]    URI regexp atom works (SA_URI_SHORT)
+    Scan File  ${URL1}
+    Expect Symbol  SA_URI_SHORT
+
+SA-Like: Full Atom
+    [Documentation]    Full message regexp atom works (SA_FULL_BOUNDARY)
+    Scan File  ${FULLMSG}
+    Expect Symbol  SA_FULL_BOUNDARY
+
+SA-Like: Selector From Domain
+    [Documentation]    Selector-based atom (from:domain) works (SA_SEL_FROM_DOM)
+    Scan File  ${MESSAGE2}
+    Expect Symbol  SA_SEL_FROM_DOM
+
+SA-Like: Selector URL TLD
+    [Documentation]    Selector-based atom (specific_urls:tld) works (SA_SEL_URL_TLD)
+    Scan File  ${URL1}
+    Expect Symbol  SA_SEL_URL_TLD
+
+SA-Like: Selector Negation
+    [Documentation]    Selector negation works (SA_SEL_NOT_CORP)
+    Scan File  ${MESSAGE2}
+    Expect Symbol  SA_SEL_NOT_CORP
+
+SA-Like: Meta AND
+    [Documentation]    Meta rule with AND over header+body+selector
+    Scan File  ${MESSAGE2}
+    Expect Symbol  SA_META_AND
+
+SA-Like: Meta OR
+    [Documentation]    Meta rule with OR over uri+selector
+    Scan File  ${URL1}
+    Expect Symbol  SA_META_OR
+
+SA-Like: Meta Complex
+    [Documentation]    Complex meta combining negation and rawbody
+    Scan File  ${MESSAGE2}
+    Expect Symbol  SA_META_COMPLEX

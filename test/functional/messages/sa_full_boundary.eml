@@ -1,0 +1,19 @@
+From: someone@example.com
+To: test@example.com
+Subject: something else
+Date: Fri, 01 Jan 2021 00:00:00 +0000
+Message-ID: <sa2@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="bnd123"
+
+--bnd123
+Content-Type: text/plain; charset=UTF-8
+
+Plain part
+
+--bnd123
+Content-Type: text/html; charset=UTF-8
+
+<html><body>HTML part</body></html>
+
+--bnd123--

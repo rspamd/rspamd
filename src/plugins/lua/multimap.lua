@@ -39,6 +39,12 @@ local sa_atoms = {}
 local sa_scores = {}
 local sa_meta_rules = {}
 local sa_descriptions = {}
+-- Cache meta callbacks to avoid recreating closures per message
+local sa_meta_callbacks = {}
+-- Keep atom definitions to optionally register them as standalone symbols
+local sa_atom_defs = {}
+-- Track atoms that we have promoted to real symbols (scored/with description)
+local scored_atom_symbols = {}
 
 -- Symbol state tracking for graceful map reloads
 -- States: 'available', 'loading', 'orphaned'
@@ -201,6 +207,9 @@ local function create_sa_atom_function(name, re, match_type, opts)
       ret = process_re_match(re, task, 'sabody')
     end
 
+    -- Normalize return to a number before any further logic
+    ret = tonumber(ret) or 0
+
     if opts and opts.negate then
       -- Negate the result for !~ operators
       ret = (ret > 0) and 0 or 1
@@ -264,6 +273,13 @@ local function process_sa_line(rule, line)
           negate = negate
         })
 
+        -- Save atom definition for potential symbol registration
+        sa_atom_defs[atom_name] = {
+          re = re,
+          match_type = 'header',
+          opts = { header = header_name, strong = false, negate = negate },
+        }
+
         -- Track atom state
         regexp_rules_symbol_states[atom_name] = {
           state = 'loading',
@@ -294,6 +310,12 @@ local function process_sa_line(rule, line)
 
         sa_atoms[atom_name] = create_sa_atom_function(atom_name, re, 'body', {})
 
+        sa_atom_defs[atom_name] = {
+          re = re,
+          match_type = 'body',
+          opts = {},
+        }
+
         -- Track atom state
         regexp_rules_symbol_states[atom_name] = {
           state = 'loading',
@@ -322,6 +344,12 @@ local function process_sa_line(rule, line)
         re:set_max_hits(1)
 
         sa_atoms[atom_name] = create_sa_atom_function(atom_name, re, 'rawbody', {})
+
+        sa_atom_defs[atom_name] = {
+          re = re,
+          match_type = 'rawbody',
+          opts = {},
+        }
 
         -- Track atom state
         regexp_rules_symbol_states[atom_name] = {
@@ -352,6 +380,12 @@ local function process_sa_line(rule, line)
 
         sa_atoms[atom_name] = create_sa_atom_function(atom_name, re, 'uri', {})
 
+        sa_atom_defs[atom_name] = {
+          re = re,
+          match_type = 'uri',
+          opts = {},
+        }
+
         -- Track atom state
         regexp_rules_symbol_states[atom_name] = {
           state = 'loading',
@@ -380,6 +414,12 @@ local function process_sa_line(rule, line)
         re:set_max_hits(1)
 
         sa_atoms[atom_name] = create_sa_atom_function(atom_name, re, 'full', {})
+
+        sa_atom_defs[atom_name] = {
+          re = re,
+          match_type = 'full',
+          opts = {},
+        }
 
         -- Track atom state
         regexp_rules_symbol_states[atom_name] = {
@@ -443,6 +483,12 @@ local function process_sa_line(rule, line)
           negate = negate,
         })
 
+        sa_atom_defs[atom_name] = {
+          re = re,
+          match_type = 'selector',
+          opts = { selector = atom_name, negate = negate },
+        }
+
         -- Track atom state consistent with scoped regexps
         regexp_rules_symbol_states[atom_name] = {
           state = 'loading',
@@ -484,6 +530,28 @@ local function process_sa_line(rule, line)
       if score_value then
         sa_scores[score_symbol] = score_value
         lua_util.debugm(N, rspamd_config, 'added SA score: %s = %s', score_symbol, score_value)
+
+        -- If this score applies to an atom (not meta) and the atom exists,
+        -- promote it to a standalone symbol so it can appear in results and be checked via task:has_symbol
+        if sa_atom_defs[score_symbol] and not scored_atom_symbols[score_symbol] then
+          local adef = sa_atom_defs[score_symbol]
+          local id = rspamd_config:register_symbol({
+            name = score_symbol,
+            weight = score_value,
+            callback = create_sa_atom_function(score_symbol, adef.re, adef.match_type, adef.opts or {}),
+            type = 'normal',
+            flags = 'one_shot',
+            augmentations = {},
+          })
+          rspamd_config:set_metric_symbol({
+            name = score_symbol,
+            score = score_value,
+            description = sa_descriptions[score_symbol] or ('SA atom ' .. score_symbol),
+            group = N,
+          })
+          scored_atom_symbols[score_symbol] = id or true
+          lua_util.debugm(N, rspamd_config, 'promoted SA atom %s to symbol with score %s', score_symbol, score_value)
+        end
       end
     end
   elseif words[1] == 'describe' then
@@ -543,27 +611,37 @@ local function gen_sa_process_atom_cb(task, rule_name)
       end
     end
 
-    local atom_cb = sa_atoms[atom]
-
-    if atom_cb then
-      local res = atom_cb(task)
-
-      -- Return result without logging each atom
-      return res
-    else
-      -- Check if this is a SA meta rule
-      local meta_rule = sa_meta_rules[atom]
-      if meta_rule then
-        local meta_cb = create_sa_meta_callback(meta_rule)
-        local res = meta_cb(task)
-        return res or 0
-      end
-
-      -- External atom - check if task has this symbol
-      if task:has_symbol(atom) then
-        return 1
-      end
+    -- Meta must depend on symbols; atom is considered present if it is a registered symbol hit
+    if task:has_symbol(atom) then
+      return 1
     end
+
+    -- Also allow meta to reference another meta by name via cached callback
+    local meta_cb = sa_meta_callbacks[atom]
+    if meta_cb then
+      local res = meta_cb(task)
+      return res or 0
+    end
+
+    -- Finally, evaluate atom via cached atom callback if present (and cache per-task)
+    local atom_cb = sa_atoms[atom]
+    if atom_cb then
+      local atoms_cache = task:cache_get('sa_multimap_atoms_evaluated')
+      if not atoms_cache then
+        atoms_cache = {}
+        task:cache_set('sa_multimap_atoms_evaluated', atoms_cache)
+      end
+
+      local cached_res = atoms_cache[atom]
+      if cached_res ~= nil then
+        return cached_res
+      end
+
+      local res = atom_cb(task) or 0
+      atoms_cache[atom] = res
+      return res
+    end
+
     return 0
   end
 end
@@ -611,12 +689,16 @@ create_sa_meta_callback = function(meta_rule)
     local already_processed = cached[meta_rule.symbol]
 
     if not (already_processed and already_processed['default']) then
-      local expression = rspamd_expression.create(meta_rule.expression,
-        parse_sa_atom,
-        rspamd_config:get_mempool())
+      local expression = meta_rule.compiled_expression
       if not expression then
-        rspamd_logger.errx(rspamd_config, 'Cannot parse SA meta expression: %s', meta_rule.expression)
-        return
+        expression = rspamd_expression.create(meta_rule.expression,
+          parse_sa_atom,
+          rspamd_config:get_mempool())
+        if not expression then
+          rspamd_logger.errx(rspamd_config, 'Cannot parse SA meta expression: %s', meta_rule.expression)
+          return
+        end
+        meta_rule.compiled_expression = expression
       end
 
       local function exec_symbol(cur_res)
@@ -659,16 +741,31 @@ local function finalize_sa_rules()
     fun.length(sa_meta_rules))
 
   for meta_name, meta_rule in pairs(sa_meta_rules) do
+    -- Precompile expression at load time
+    if not meta_rule.compiled_expression then
+      local compiled = rspamd_expression.create(meta_rule.expression,
+        parse_sa_atom,
+        rspamd_config:get_mempool())
+      if not compiled then
+        rspamd_logger.errx(rspamd_config, 'Cannot parse SA meta expression during finalize: %s', meta_rule.expression)
+        goto continue_meta
+      end
+      meta_rule.compiled_expression = compiled
+    end
+
     local score = sa_scores[meta_name] or 1.0
     local description = sa_descriptions[meta_name] or ('multimap symbol ' .. meta_name)
 
     lua_util.debugm(N, rspamd_config, 'Registering SA meta rule %s (score: %s, expression: %s)',
       meta_name, score, meta_rule.expression)
 
+    local meta_cb = create_sa_meta_callback(meta_rule)
+    sa_meta_callbacks[meta_name] = meta_cb
+
     local id = rspamd_config:register_symbol({
       name = meta_name,
       weight = score,
-      callback = create_sa_meta_callback(meta_rule),
+      callback = meta_cb,
       type = 'normal',
       flags = 'one_shot',
       augmentations = {},
@@ -700,6 +797,7 @@ local function finalize_sa_rules()
 
     lua_util.debugm(N, rspamd_config, 'registered SA meta symbol: %s (score: %s)',
       meta_name, score)
+    ::continue_meta::
   end
 
   -- Mark orphaned symbols - only check meta symbols (not atoms) since atoms are just expression parts
