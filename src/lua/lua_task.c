@@ -6293,29 +6293,33 @@ lua_task_process_regexp(lua_State *L)
 	struct rspamd_task *task = lua_check_task(L, 1);
 	struct rspamd_lua_regexp *re = NULL;
 	gboolean strong = FALSE;
-	const char *type_str = NULL, *header_str = NULL;
-	gsize header_len = 0;
+	const char *type_str = NULL, *header_str = NULL, *selector_str = NULL;
+	gsize header_len = 0, selector_len = 0;
 	GError *err = NULL;
 	int ret = 0;
 	enum rspamd_re_type type = RSPAMD_RE_BODY;
 
 	/*
 	 * - `re`* : regular expression object
- 	 * - `type`*: type of regular expression:
+	 * - `type`*: type of regular expression:
 	 *   + `mime`: mime regexp
 	 *   + `rawmime`: raw mime regexp
 	 *   + `header`: header regexp
 	 *   + `rawheader`: raw header expression
 	 *   + `body`: raw body regexp
 	 *   + `url`: url regexp
-	 * - `header`: for header and rawheader regexp means the name of header
+	 *   + `selector`: selector regexp
+	 * - `header`: for header/rawheader/mimeheader regexp means the name of header
+	 * - `selector`: for selector regexp means the selector name (registered in scope)
 	 * - `strong`: case sensitive match for headers
 	 */
 	if (task != NULL) {
 		if (!rspamd_lua_parse_table_arguments(L, 2, &err,
 											  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
-											  "*re=U{regexp};*type=S;header=V;strong=B",
-											  &re, &type_str, &header_len, &header_str,
+											  "*re=U{regexp};*type=S;header=V;selector=V;strong=B",
+											  &re, &type_str,
+											  &header_len, &header_str,
+											  &selector_len, &selector_str,
 											  &strong)) {
 			msg_err_task("cannot get parameters list: %e", err);
 
@@ -6328,13 +6332,30 @@ lua_task_process_regexp(lua_State *L)
 		else {
 			type = rspamd_re_cache_type_from_string(type_str);
 
-			if ((type == RSPAMD_RE_HEADER || type == RSPAMD_RE_RAWHEADER) && header_str == NULL) {
+			if ((type == RSPAMD_RE_HEADER || type == RSPAMD_RE_RAWHEADER || type == RSPAMD_RE_MIMEHEADER) && header_str == NULL) {
 				msg_err_task(
 					"header argument is mandatory for header/rawheader regexps");
 			}
 			else {
+				const char *type_data = NULL;
+				gsize type_len = 0;
+
+				if (type == RSPAMD_RE_HEADER || type == RSPAMD_RE_RAWHEADER || type == RSPAMD_RE_MIMEHEADER) {
+					type_data = header_str;
+					type_len = header_len;
+				}
+				else if (type == RSPAMD_RE_SELECTOR) {
+					if (selector_str == NULL) {
+						msg_err_task("selector argument is mandatory for selector regexps");
+					}
+					else {
+						type_data = selector_str;
+						type_len = selector_len;
+					}
+				}
+
 				ret = rspamd_re_cache_process(task, re->re, type,
-											  (gpointer) header_str, header_len, strong);
+											  (gpointer) type_data, type_len, strong);
 			}
 		}
 	}
