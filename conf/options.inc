@@ -1,3 +1,19 @@
+/*
+ * Copyright 2025 Vsevolod Stakhov
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 # Basic rspamd configuration
 # Please don't modify this file as your changes might be overwritten with
 # the next update.
@@ -31,9 +47,9 @@ max_urls = 10240;
 max_recipients = 1024;
 
 dns {
-    timeout = 1s;
-    sockets = 16;
-    retransmits = 5;
+	timeout = 1s;
+	sockets = 16;
+	retransmits = 5;
 }
 tempdir = "/tmp";
 url_tld = "${SHAREDIR}/effective_tld_names.dat";
@@ -78,8 +94,8 @@ maps
 {
 #staged timeouts
 	connect_timeout = 1s;
-	ssl_timeout = 2s;
-	write_timeout = 4s;
+	ssl_timeout = 1s;
+	write_timeout = 1s;
 	read_timeout = 4s;
 
 #keepalive tuning
