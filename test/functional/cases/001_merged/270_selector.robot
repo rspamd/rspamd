@@ -5,9 +5,11 @@ Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
 ${MESSAGE}         ${RSPAMD_TESTDIR}/messages/subject1.eml
+${MSG_SPAM}        ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${MSG_URL1}        ${RSPAMD_TESTDIR}/messages/url1.eml
 
 *** Test Cases ***
-Newlines 
+Newlines
   Scan File  ${MESSAGE}  User=test@user.com  Pass=all
   ...  Settings={symbols_enabled = [CONFIG_SELECTOR_RE_RCPT_SUBJECT, LUA_SELECTOR_RE]}
   Expect Symbol  CONFIG_SELECTOR_RE_RCPT_SUBJECT

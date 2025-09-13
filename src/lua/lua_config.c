@@ -581,7 +581,9 @@ LUA_FUNCTION_DEF(config, replace_regexp);
  *   + `rawheader`: raw header expression
  *   + `body`: raw body regexp
  *   + `url`: url regexp
+ *   + `selector`: selector regexp
  * - `header`: for header and rawheader regexp means the name of header
+ * - `selector`: for selector regexp means selector name (registered in scope)
  * - `pcre_only`: flag regexp as pcre only regexp
  * @param {string} scope scope name for the regexp
  * @param {table} params regexp parameters
@@ -5012,8 +5014,7 @@ lua_config_register_regexp_scoped(lua_State *L)
 	const char *scope = luaL_checkstring(L, 2);
 	struct rspamd_lua_regexp *re = NULL;
 	rspamd_regexp_t *cache_re;
-	const char *type_str = NULL, *header_str = NULL;
-	gsize header_len = 0;
+	const char *type_str = NULL, *header_str = NULL, *selector_str = NULL;
 	GError *err = NULL;
 	enum rspamd_re_type type = RSPAMD_RE_BODY;
 	gboolean pcre_only = FALSE;
@@ -5021,21 +5022,23 @@ lua_config_register_regexp_scoped(lua_State *L)
 	/*
 	 * - `scope`*: scope name for the regexp
 	 * - `re`* : regular expression object
- 	 * - `type`*: type of regular expression:
+	 * - `type`*: type of regular expression:
 	 *   + `mime`: mime regexp
 	 *   + `rawmime`: raw mime regexp
 	 *   + `header`: header regexp
 	 *   + `rawheader`: raw header expression
 	 *   + `body`: raw body regexp
 	 *   + `url`: url regexp
+	 *   + `selector`: selector regexp
 	 * - `header`: for header and rawheader regexp means the name of header
+	 * - `selector`: for selector regexp means selector name (registered in scope)
 	 * - `pcre_only`: allow merely pcre for this regexp
 	 */
 	if (cfg != NULL && scope != NULL) {
 		if (!rspamd_lua_parse_table_arguments(L, 3, &err,
 											  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
-											  "*re=U{regexp};*type=S;header=S;pcre_only=B",
-											  &re, &type_str, &header_str, &pcre_only)) {
+											  "*re=U{regexp};*type=S;header=S;selector=S;pcre_only=B",
+											  &re, &type_str, &header_str, &selector_str, &pcre_only)) {
 			msg_err_config("cannot get parameters list: %e", err);
 
 			if (err) {
@@ -5058,13 +5061,22 @@ lua_config_register_regexp_scoped(lua_State *L)
 											rspamd_regexp_get_flags(re->re) | RSPAMD_REGEXP_FLAG_PCRE_ONLY);
 				}
 
-				if (header_str != NULL) {
+				const char *type_data = NULL;
+				gsize type_len = 0;
+
+				if (header_str != NULL &&
+					(type == RSPAMD_RE_HEADER || type == RSPAMD_RE_RAWHEADER || type == RSPAMD_RE_MIMEHEADER)) {
 					/* Include the last \0 */
-					header_len = strlen(header_str) + 1;
+					type_len = strlen(header_str) + 1;
+					type_data = header_str;
+				}
+				else if (selector_str != NULL && type == RSPAMD_RE_SELECTOR) {
+					type_len = strlen(selector_str) + 1;
+					type_data = selector_str;
 				}
 
 				cache_re = rspamd_re_cache_add_scoped(&cfg->re_cache, scope, re->re, type,
-													  (gpointer) header_str, header_len, -1);
+													  (gpointer) type_data, type_len, -1);
 
 				/*
 				 * XXX: here are dragons!

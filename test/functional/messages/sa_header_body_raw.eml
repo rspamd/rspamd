@@ -1,0 +1,11 @@
+From: user@example.com
+To: test@example.com
+Subject: test subject
+Date: Fri, 01 Jan 2021 00:00:00 +0000
+Message-ID: <sa1@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+hello world
+This message body also contains a RAW TOKEN marker for rawbody matching.

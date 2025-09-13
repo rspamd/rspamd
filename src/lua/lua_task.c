@@ -6293,49 +6293,83 @@ lua_task_process_regexp(lua_State *L)
 	struct rspamd_task *task = lua_check_task(L, 1);
 	struct rspamd_lua_regexp *re = NULL;
 	gboolean strong = FALSE;
-	const char *type_str = NULL, *header_str = NULL;
-	gsize header_len = 0;
+	const char *type_str = NULL, *header_str = NULL, *selector_str = NULL;
 	GError *err = NULL;
 	int ret = 0;
 	enum rspamd_re_type type = RSPAMD_RE_BODY;
 
 	/*
-	 * - `re`* : regular expression object
- 	 * - `type`*: type of regular expression:
-	 *   + `mime`: mime regexp
-	 *   + `rawmime`: raw mime regexp
-	 *   + `header`: header regexp
-	 *   + `rawheader`: raw header expression
-	 *   + `body`: raw body regexp
-	 *   + `url`: url regexp
-	 * - `header`: for header and rawheader regexp means the name of header
-	 * - `strong`: case sensitive match for headers
+	 * Two calling conventions are supported:
+	 * 1) Table form: task:process_regexp({ re=..., type=..., header=?, selector=?, strong=? })
+	 * 2) Positional: task:process_regexp(re, type, header_or_selector, strong)
 	 */
 	if (task != NULL) {
-		if (!rspamd_lua_parse_table_arguments(L, 2, &err,
-											  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
-											  "*re=U{regexp};*type=S;header=V;strong=B",
-											  &re, &type_str, &header_len, &header_str,
-											  &strong)) {
-			msg_err_task("cannot get parameters list: %e", err);
+		if (lua_type(L, 2) == LUA_TTABLE) {
+			/* Table-based API */
+			size_t header_len = 0, selector_len = 0;
+			if (!rspamd_lua_parse_table_arguments(L, 2, &err,
+												  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
+												  "*re=U{regexp};*type=S;header=V;selector=V;strong=B",
+												  &re, &type_str,
+												  &header_len, &header_str,
+												  &selector_len, &selector_str,
+												  &strong)) {
+				msg_err_task("cannot get parameters list: %e", err);
 
-			if (err) {
-				g_error_free(err);
-			}
+				if (err) {
+					g_error_free(err);
+				}
 
-			return luaL_error(L, "invalid arguments");
-		}
-		else {
-			type = rspamd_re_cache_type_from_string(type_str);
-
-			if ((type == RSPAMD_RE_HEADER || type == RSPAMD_RE_RAWHEADER) && header_str == NULL) {
-				msg_err_task(
-					"header argument is mandatory for header/rawheader regexps");
+				return luaL_error(L, "invalid arguments");
 			}
 			else {
-				ret = rspamd_re_cache_process(task, re->re, type,
-											  (gpointer) header_str, header_len, strong);
+				type = rspamd_re_cache_type_from_string(type_str);
+
+				if ((type == RSPAMD_RE_HEADER || type == RSPAMD_RE_RAWHEADER || type == RSPAMD_RE_MIMEHEADER) && header_str == NULL) {
+					msg_err_task(
+						"header argument is mandatory for header/rawheader regexps");
+				}
+				else {
+					const char *type_data = NULL;
+					size_t type_len = 0;
+
+					if (type == RSPAMD_RE_HEADER || type == RSPAMD_RE_RAWHEADER || type == RSPAMD_RE_MIMEHEADER) {
+						type_data = header_str;
+						type_len = header_str ? (strlen(header_str) + 1) : 0;
+					}
+					else if (type == RSPAMD_RE_SELECTOR) {
+						type_data = selector_str;
+						type_len = selector_str ? (strlen(selector_str) + 1) : 0;
+					}
+
+					ret = rspamd_re_cache_process(task, re->re, type,
+												  (gpointer) type_data, type_len, strong);
+				}
 			}
+		}
+		else {
+			/* Positional API: (re, type, header_or_selector, strong) */
+			re = lua_check_regexp(L, 2);
+			type_str = luaL_checkstring(L, 3);
+			type = rspamd_re_cache_type_from_string(type_str);
+			const char *type_data = NULL;
+			size_t type_len = 0;
+
+			if (lua_type(L, 4) == LUA_TSTRING) {
+				type_data = lua_tostring(L, 4);
+				type_len = strlen(type_data) + 1;
+			}
+			if (lua_type(L, 5) == LUA_TBOOLEAN) {
+				strong = lua_toboolean(L, 5);
+			}
+
+			/* For header/rawheader/mimeheader, arg4 is header; for selector, arg4 is selector name */
+			if ((type == RSPAMD_RE_HEADER || type == RSPAMD_RE_RAWHEADER || type == RSPAMD_RE_MIMEHEADER) && type_data == NULL) {
+				msg_err_task("header argument is mandatory for header/rawheader regexps");
+			}
+
+			ret = rspamd_re_cache_process(task, re->re, type,
+										  (gpointer) type_data, type_len, strong);
 		}
 	}
 	else {
