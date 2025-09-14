@@ -675,15 +675,73 @@ lua_logger_get_id(lua_State *L, int pos, GError **err)
 {
 	const char *uid = NULL, *clsname;
 
+	int top = lua_gettop(L);
+
 	if (lua_getmetatable(L, pos) != 0) {
+		/* mt is on top */
 		uid = "";
-		lua_pushstring(L, "__index");
-		lua_gettable(L, -2);
+		clsname = NULL;
 
-		lua_pushstring(L, "class");
-		lua_gettable(L, -2);
+		/* Fast path: use numeric class id stored at mt[1] */
+		lua_rawgeti(L, -1, 1);
+		if (lua_type(L, -1) == LUA_TNUMBER) {
+			glong cid = (glong) lua_tonumber(L, -1);
+			lua_pop(L, 1);
+			/* Map numeric ids to class names via pointer equality */
+			if (cid == GPOINTER_TO_INT(rspamd_task_classname)) {
+				clsname = rspamd_task_classname;
+			}
+			else if (cid == GPOINTER_TO_INT(rspamd_mempool_classname)) {
+				clsname = rspamd_mempool_classname;
+			}
+			else if (cid == GPOINTER_TO_INT(rspamd_ev_base_classname)) {
+				clsname = rspamd_ev_base_classname;
+			}
+			else if (cid == GPOINTER_TO_INT(rspamd_worker_classname)) {
+				clsname = rspamd_worker_classname;
+			}
+			else if (cid == GPOINTER_TO_INT(rspamd_config_classname)) {
+				clsname = rspamd_config_classname;
+			}
+			else if (cid == GPOINTER_TO_INT(rspamd_resolver_classname)) {
+				clsname = rspamd_resolver_classname;
+			}
+			else if (cid == GPOINTER_TO_INT(rspamd_session_classname)) {
+				clsname = rspamd_session_classname;
+			}
+			else if (cid == GPOINTER_TO_INT(rspamd_map_classname)) {
+				clsname = rspamd_map_classname;
+			}
+		}
+		else {
+			lua_pop(L, 1);
+		}
 
-		clsname = lua_tostring(L, -1);
+		/* Slow path: read textual 'class' if needed */
+		if (clsname == NULL) {
+			lua_pushstring(L, "class");
+			lua_gettable(L, -2);
+			if (lua_type(L, -1) == LUA_TSTRING) {
+				clsname = lua_tostring(L, -1);
+			}
+			lua_pop(L, 1);
+		}
+
+		if (clsname == NULL) {
+			/* Fallback to legacy behavior if needed (when __index is a table) */
+			lua_pushstring(L, "__index");
+			lua_gettable(L, -2);
+			if (lua_type(L, -1) == LUA_TTABLE) {
+				lua_pushstring(L, "class");
+				lua_gettable(L, -2);
+				if (lua_type(L, -1) == LUA_TSTRING) {
+					clsname = lua_tostring(L, -1);
+				}
+				lua_pop(L, 1);
+			}
+			/* Pop __index value */
+			lua_pop(L, 1);
+		}
 
 		if (strcmp(clsname, rspamd_task_classname) == 0) {
 			struct rspamd_task *task = lua_check_task(L, pos);
@@ -748,8 +806,8 @@ lua_logger_get_id(lua_State *L, int pos, GError **err)
 		}
 
 
-		/* Metatable, __index, classname */
-		lua_pop(L, 3);
+		/* Restore stack to state before getmetatable */
+		lua_settop(L, top);
 	}
 	else {
 		g_set_error(err, g_quark_from_static_string("lua_logger"),
@@ -782,11 +840,13 @@ lua_logger_do_log(lua_State *L,
 	char logbuf[RSPAMD_LOGBUF_SIZE - 128];
 	const char *uid = NULL;
 	int ret;
+	int fmt_pos = start_pos;
 
-	if (lua_type(L, start_pos) == LUA_TUSERDATA) {
+	/* Optional id argument */
+	if (lua_type(L, fmt_pos) == LUA_TUSERDATA) {
 		GError *err = NULL;
 
-		uid = lua_logger_get_id(L, start_pos, &err);
+		uid = lua_logger_get_id(L, fmt_pos, &err);
 
 		if (uid == NULL) {
 			ret = luaL_error(L, "bad userdata for logging: %s",
@@ -799,16 +859,34 @@ lua_logger_do_log(lua_State *L,
 			return ret;
 		}
 
-		++start_pos;
+		++fmt_pos;
 	}
 
-	if (lua_type(L, start_pos) != LUA_TSTRING) {
-		/* Bad argument type */
-		return luaL_error(L, "bad format string type: %s",
-						  lua_typename(L, lua_type(L, start_pos)));
+	/* Allow calling warnx(fmt, ...) directly without id */
+	if (lua_type(L, fmt_pos) != LUA_TSTRING) {
+		/* Try start_pos first */
+		fmt_pos = start_pos;
 	}
 
-	ret = lua_logger_log_format(L, start_pos, is_string, logbuf, sizeof(logbuf));
+	if (lua_type(L, fmt_pos) != LUA_TSTRING) {
+		/* Scan forward to find the first string arg (robust to accidental extra args) */
+		int top = lua_gettop(L);
+		int i;
+		for (i = fmt_pos + 1; i <= top; i++) {
+			if (lua_type(L, i) == LUA_TSTRING) {
+				fmt_pos = i;
+				break;
+			}
+		}
+
+		if (lua_type(L, fmt_pos) != LUA_TSTRING) {
+			/* Bad argument type */
+			return luaL_error(L, "bad format string type: %s",
+							  lua_typename(L, lua_type(L, fmt_pos)));
+		}
+	}
+
+	ret = lua_logger_log_format(L, fmt_pos, is_string, logbuf, sizeof(logbuf));
 
 	if (ret) {
 		if (is_string) {
