@@ -69,13 +69,27 @@ struct rspamd_http_connection_private {
 	struct http_parser parser;
 	struct http_parser_settings parser_cb;
 	struct rspamd_io_ev ev;
-	ev_tstamp timeout;
+	ev_tstamp timeout; /* legacy/global timeout (fallback) */
+	/* Staged timeouts (seconds); 0 means use ctx/defaults */
+	ev_tstamp connect_timeout;
+	ev_tstamp ssl_timeout;
+	ev_tstamp write_timeout;
+	ev_tstamp read_timeout;
 	struct rspamd_http_message *msg;
 	struct iovec *out;
 	unsigned int outlen;
 	enum rspamd_http_priv_flags flags;
 	gsize wr_pos;
 	gsize wr_total;
+	/* Keepalive tuning and telemetry */
+	double created_ts;                  /* when connection object was created */
+	double last_used_ts;                /* last time returned to pool */
+	unsigned int reuse_count;           /* number of reuses from keepalive */
+	double ka_ttl_override;             /* per-request TTL */
+	double ka_idle_override;            /* per-request idle timeout */
+	unsigned int ka_max_reuse_override; /* per-request max reuse */
+	/* Internal state */
+	bool first_write_done;
 };
 
 static const rspamd_ftok_t key_header = {
@@ -731,11 +745,11 @@ rspamd_http_simple_client_helper(struct rspamd_http_connection *conn)
 
 	if (conn->opts & RSPAMD_HTTP_CLIENT_SHARED) {
 		rspamd_http_connection_read_message_shared(conn, conn->ud,
-												   conn->priv->timeout);
+												   (priv->read_timeout > 0 ? priv->read_timeout : conn->priv->timeout));
 	}
 	else {
 		rspamd_http_connection_read_message(conn, conn->ud,
-											conn->priv->timeout);
+											(priv->read_timeout > 0 ? priv->read_timeout : conn->priv->timeout));
 	}
 
 	if (priv->msg) {
@@ -853,6 +867,8 @@ call_finish_handler:
 	}
 	else {
 		/* Plan read message */
+		/* Switch to read stage timeout */
+		priv->first_write_done = true;
 		rspamd_http_simple_client_helper(conn);
 	}
 }
@@ -1130,6 +1146,18 @@ rspamd_http_connection_new_common(struct rspamd_http_context *ctx,
 	priv = g_malloc0(sizeof(struct rspamd_http_connection_private));
 	conn->priv = priv;
 	priv->ctx = ctx;
+	/* Initialize staged timeouts and keepalive telemetry */
+	priv->connect_timeout = ctx->config.connect_timeout;
+	priv->ssl_timeout = ctx->config.ssl_timeout;
+	priv->write_timeout = ctx->config.write_timeout;
+	priv->read_timeout = ctx->config.read_timeout;
+	priv->created_ts = (ctx->event_loop ? ev_now(ctx->event_loop) : rspamd_get_ticks(FALSE));
+	priv->last_used_ts = 0;
+	priv->reuse_count = 0;
+	priv->ka_ttl_override = 0;
+	priv->ka_idle_override = 0;
+	priv->ka_max_reuse_override = 0;
+	priv->first_write_done = false;
 	priv->flags = priv_flags;
 
 	if (type == RSPAMD_HTTP_SERVER) {
@@ -1513,7 +1541,8 @@ rspamd_http_connection_read_message_common(struct rspamd_http_connection *conn,
 		priv->flags |= RSPAMD_HTTP_CONN_FLAG_ENCRYPTED;
 	}
 
-	priv->timeout = timeout;
+	/* Use read-stage timeout override if set; else fallback */
+	priv->timeout = (priv->read_timeout > 0 ? priv->read_timeout : timeout);
 	priv->header = NULL;
 	priv->buf = g_malloc0(sizeof(*priv->buf));
 	REF_INIT_RETAIN(priv->buf, rspamd_http_privbuf_dtor);
@@ -2045,7 +2074,8 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 
 	conn->ud = ud;
 	priv->msg = msg;
-	priv->timeout = timeout;
+	/* Use write-stage timeout override if set */
+	priv->timeout = (priv->write_timeout > 0 ? priv->write_timeout : timeout);
 
 	priv->header = NULL;
 	priv->buf = g_malloc0(sizeof(*priv->buf));
@@ -2387,8 +2417,10 @@ if (conn->opts & RSPAMD_HTTP_CLIENT_SSL) {
 												  conn->log_tag);
 			g_assert(priv->ssl != NULL);
 
+			/* Use ssl_timeout for handshake if provided */
+			ev_tstamp ssl_to = (priv->ssl_timeout > 0 ? priv->ssl_timeout : (priv->connect_timeout > 0 ? priv->connect_timeout : priv->timeout));
 			if (!rspamd_ssl_connect_fd(priv->ssl, conn->fd, host, &priv->ev,
-									   priv->timeout, rspamd_http_event_handler,
+									   ssl_to, rspamd_http_event_handler,
 									   rspamd_http_ssl_err_handler, conn)) {
 
 				err = g_error_new(HTTP_ERROR, 400,
@@ -2415,7 +2447,9 @@ if (conn->opts & RSPAMD_HTTP_CLIENT_SSL) {
 else {
 	rspamd_ev_watcher_init(&priv->ev, conn->fd, EV_WRITE,
 						   rspamd_http_event_handler, conn);
-	rspamd_ev_watcher_start(priv->ctx->event_loop, &priv->ev, priv->timeout);
+	/* Use connect_timeout on initial EV_WRITE stage if provided */
+	ev_tstamp start_to = (priv->connect_timeout > 0 ? priv->connect_timeout : priv->timeout);
+	rspamd_ev_watcher_start(priv->ctx->event_loop, &priv->ev, start_to);
 }
 
 return TRUE;
@@ -2653,4 +2687,82 @@ void rspamd_http_connection_disable_encryption(struct rspamd_http_connection *co
 		priv->peer_key = NULL;
 		priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_ENCRYPTED;
 	}
+}
+
+void rspamd_http_connection_set_timeouts(struct rspamd_http_connection *conn,
+										 ev_tstamp connect_timeout,
+										 ev_tstamp ssl_timeout,
+										 ev_tstamp write_timeout,
+										 ev_tstamp read_timeout)
+{
+	struct rspamd_http_connection_private *priv = conn->priv;
+
+	if (connect_timeout > 0) {
+		priv->connect_timeout = connect_timeout;
+	}
+	if (ssl_timeout > 0) {
+		priv->ssl_timeout = ssl_timeout;
+	}
+	if (write_timeout > 0) {
+		priv->write_timeout = write_timeout;
+	}
+	if (read_timeout > 0) {
+		priv->read_timeout = read_timeout;
+	}
+}
+
+void rspamd_http_connection_set_keepalive_tuning(struct rspamd_http_connection *conn,
+												 double connection_ttl,
+												 double idle_timeout,
+												 unsigned int max_reuse)
+{
+	struct rspamd_http_connection_private *priv = conn->priv;
+
+	if (connection_ttl > 0) {
+		priv->ka_ttl_override = connection_ttl;
+	}
+	if (idle_timeout > 0) {
+		priv->ka_idle_override = idle_timeout;
+	}
+	if (max_reuse > 0) {
+		priv->ka_max_reuse_override = max_reuse;
+	}
+}
+
+void rspamd_http_connection_keepalive_note_put(struct rspamd_http_connection *conn,
+											   double now_ts)
+{
+	struct rspamd_http_connection_private *priv = conn->priv;
+	priv->last_used_ts = now_ts;
+}
+
+void rspamd_http_connection_keepalive_note_reuse(struct rspamd_http_connection *conn)
+{
+	struct rspamd_http_connection_private *priv = conn->priv;
+	priv->reuse_count++;
+}
+
+gboolean rspamd_http_connection_keepalive_is_valid(struct rspamd_http_connection *conn,
+												   double now_ts,
+												   double default_ttl,
+												   unsigned int default_max_reuse)
+{
+	struct rspamd_http_connection_private *priv = conn->priv;
+	double ttl = (priv->ka_ttl_override > 0 ? priv->ka_ttl_override : default_ttl);
+	unsigned int max_reuse = (priv->ka_max_reuse_override > 0 ? priv->ka_max_reuse_override : default_max_reuse);
+
+	if (ttl > 0 && now_ts - priv->created_ts > ttl) {
+		return FALSE;
+	}
+	if (max_reuse > 0 && priv->reuse_count >= max_reuse) {
+		return FALSE;
+	}
+	return TRUE;
+}
+
+double rspamd_http_connection_keepalive_idle_timeout(struct rspamd_http_connection *conn,
+													 double default_idle)
+{
+	struct rspamd_http_connection_private *priv = conn->priv;
+	return (priv->ka_idle_override > 0 ? priv->ka_idle_override : default_idle);
 }

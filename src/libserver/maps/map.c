@@ -1425,6 +1425,21 @@ rspamd_map_dns_callback(struct rdns_reply *reply, void *arg)
 													  cbd->addr);
 
 		if (cbd->conn != NULL) {
+			/* Apply optional staged timeouts and keepalive tuning */
+			if (cbd->data->connect_timeout > 0 || cbd->data->ssl_timeout > 0 ||
+				cbd->data->write_timeout > 0 || cbd->data->read_timeout > 0) {
+				rspamd_http_connection_set_timeouts(cbd->conn,
+													cbd->data->connect_timeout,
+													cbd->data->ssl_timeout,
+													cbd->data->write_timeout,
+													cbd->data->read_timeout);
+			}
+			if (cbd->data->connection_ttl > 0 || cbd->data->idle_timeout > 0 || cbd->data->max_reuse > 0) {
+				rspamd_http_connection_set_keepalive_tuning(cbd->conn,
+															cbd->data->connection_ttl,
+															cbd->data->idle_timeout,
+															cbd->data->max_reuse);
+			}
 			write_http_request(cbd);
 		}
 		else {
@@ -1982,7 +1997,21 @@ check:
 			addr);
 
 		if (cbd->conn != NULL) {
-			cbd->stage = http_map_http_conn;
+			/* Apply optional staged timeouts and keepalive tuning */
+			if (cbd->data->connect_timeout > 0 || cbd->data->ssl_timeout > 0 ||
+				cbd->data->write_timeout > 0 || cbd->data->read_timeout > 0) {
+				rspamd_http_connection_set_timeouts(cbd->conn,
+													cbd->data->connect_timeout,
+													cbd->data->ssl_timeout,
+													cbd->data->write_timeout,
+													cbd->data->read_timeout);
+			}
+			if (cbd->data->connection_ttl > 0 || cbd->data->idle_timeout > 0 || cbd->data->max_reuse > 0) {
+				rspamd_http_connection_set_keepalive_tuning(cbd->conn,
+															cbd->data->connection_ttl,
+															cbd->data->idle_timeout,
+															cbd->data->max_reuse);
+			}
 			write_http_request(cbd);
 			cbd->addr = addr;
 			MAP_RELEASE(cbd, "http_callback_data");
@@ -2878,6 +2907,39 @@ rspamd_map_parse_backend(struct rspamd_config *cfg, const char *map_line)
 						}
 					}
 				}
+			}
+		}
+
+		/* Parse optional HTTP timeouts and keepalive tuning from global options -> maps.* block */
+		{
+			const ucl_object_t *maps_obj = ucl_object_lookup(cfg->cfg_ucl_obj, "maps");
+			const ucl_object_t *opt = NULL;
+			if (maps_obj && ucl_object_type(maps_obj) == UCL_OBJECT) {
+				/* Per-URL overrides: allow stanza keyed by exact URL */
+				const ucl_object_t *url_obj = ucl_object_lookup(maps_obj, bk->uri);
+				const ucl_object_t *src = url_obj ? url_obj : maps_obj;
+				opt = ucl_object_lookup_any(src,
+											"connect_timeout", "connect-timeout", NULL);
+				if (opt) hdata->connect_timeout = ucl_object_todouble(opt);
+				opt = ucl_object_lookup_any(src,
+											"ssl_timeout", "ssl-timeout", NULL);
+				if (opt) hdata->ssl_timeout = ucl_object_todouble(opt);
+				opt = ucl_object_lookup_any(src,
+											"write_timeout", "write-timeout", NULL);
+				if (opt) hdata->write_timeout = ucl_object_todouble(opt);
+				opt = ucl_object_lookup_any(src,
+											"read_timeout", "read-timeout", NULL);
+				if (opt) hdata->read_timeout = ucl_object_todouble(opt);
+				/* Keepalive tuning */
+				opt = ucl_object_lookup_any(src,
+											"connection_ttl", "connection-ttl", "keepalive_ttl", NULL);
+				if (opt) hdata->connection_ttl = ucl_object_todouble(opt);
+				opt = ucl_object_lookup_any(src,
+											"idle_timeout", "idle-timeout", "keepalive_idle", NULL);
+				if (opt) hdata->idle_timeout = ucl_object_todouble(opt);
+				opt = ucl_object_lookup_any(src,
+											"max_reuse", "max-reuse", "keepalive_max_reuse", NULL);
+				if (opt) hdata->max_reuse = (unsigned int) ucl_object_toint(opt);
 			}
 		}
 

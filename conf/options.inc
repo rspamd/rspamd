@@ -31,9 +31,9 @@ max_urls = 10240;
 max_recipients = 1024;
 
 dns {
-    timeout = 1s;
-    sockets = 16;
-    retransmits = 5;
+	timeout = 1s;
+	sockets = 16;
+	retransmits = 5;
 }
 tempdir = "/tmp";
 url_tld = "${SHAREDIR}/effective_tld_names.dat";
@@ -73,3 +73,16 @@ soft_reject_on_timeout = false;
 
 # Use utf8 mode for mime operations (use if your MTA announces SMTPUTF8 support)
 enable_mime_utf = false;
+
+maps {
+	#staged timeouts
+	connect_timeout = 1s;
+	ssl_timeout = 1s;
+	write_timeout = 1s;
+	read_timeout = 4s;
+
+	#keepalive tuning
+	connection_ttl = 300s;
+	idle_timeout = 65s;
+	max_reuse = 256;
+}

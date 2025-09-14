@@ -118,6 +118,15 @@ struct http_map_data {
 	gboolean request_sent;
 	uint64_t gen;
 	uint16_t port;
+	/* Optional per-map HTTP staged timeouts */
+	ev_tstamp connect_timeout;
+	ev_tstamp ssl_timeout;
+	ev_tstamp write_timeout;
+	ev_tstamp read_timeout;
+	/* Optional keepalive tuning */
+	double connection_ttl;
+	double idle_timeout;
+	unsigned int max_reuse;
 };
 
 struct static_map_data {

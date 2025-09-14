@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 local E = {}
 local N = 'contextal'
@@ -58,6 +58,11 @@ local config_schema = lua_redis.enrich_schema {
   http_timeout = ts.number:is_optional(),
   request_ttl = ts.number:is_optional(),
   submission_symbol = ts.string:is_optional(),
+  -- staged timeouts
+  connect_timeout = ts.number:is_optional(),
+  ssl_timeout = ts.number:is_optional(),
+  write_timeout = ts.number:is_optional(),
+  read_timeout = ts.number:is_optional(),
 }
 
 local settings = {
@@ -104,11 +109,11 @@ local function process_actions(task, obj, is_cached)
 
   local cache_obj
   if (obj[1] or E).actions then
-    cache_obj = {[1] = {["actions"] = obj[1].actions}}
+    cache_obj = { [1] = { ["actions"] = obj[1].actions } }
   else
     local work_id = task:get_mempool():get_variable('contextal_work_id', 'string')
     if work_id then
-      cache_obj = {[1] = {["work_id"] = work_id}}
+      cache_obj = { [1] = { ["work_id"] = work_id } }
     else
       rspamd_logger.err(task, 'no work id found in mempool')
       return
@@ -116,9 +121,9 @@ local function process_actions(task, obj, is_cached)
   end
 
   redis_cache.cache_set(task,
-      task:get_digest(),
-      cache_obj,
-      cache_context)
+    task:get_digest(),
+    cache_obj,
+    cache_context)
 
   maybe_defer(task, obj)
 end
@@ -167,18 +172,22 @@ local function action_cb(task)
   end
 
   rspamd_http.request({
-      task = task,
-      url = settings.actions_url .. work_id,
-      callback = http_callback,
-      timeout = settings.http_timeout,
-      gzip = settings.gzip,
-      keepalive = settings.keepalive,
-      no_ssl_verify = settings.no_ssl_verify,
+    task = task,
+    url = settings.actions_url .. work_id,
+    callback = http_callback,
+    timeout = settings.http_timeout,
+    gzip = settings.gzip,
+    keepalive = settings.keepalive,
+    no_ssl_verify = settings.no_ssl_verify,
+    -- staged timeouts
+    connect_timeout = settings.connect_timeout,
+    ssl_timeout = settings.ssl_timeout,
+    write_timeout = settings.write_timeout,
+    read_timeout = settings.read_timeout,
   })
 end
 
 local function submit(task)
-
   local function http_callback(err, code, body, hdrs)
     if err then
       rspamd_logger.err(task, 'http error: %s', err)
@@ -203,33 +212,38 @@ local function submit(task)
       task:get_mempool():set_variable('contextal_work_id', work_id)
     end
     task:insert_result(settings.submission_symbol, 1.0,
-        string.format('work_id=%s', work_id or 'nil'))
+      string.format('work_id=%s', work_id or 'nil'))
     if wait_request_ttl then
       task:add_timer(settings.request_ttl, action_cb)
     end
   end
 
   local req = {
-    object_data = {['data'] = task:get_content()},
+    object_data = { ['data'] = task:get_content() },
   }
   if settings.request_ttl then
-    req.ttl = {['data'] = tostring(settings.request_ttl)}
+    req.ttl = { ['data'] = tostring(settings.request_ttl) }
   end
   if settings.max_recursion then
-    req.maxrec = {['data'] = tostring(settings.max_recursion)}
+    req.maxrec = { ['data'] = tostring(settings.max_recursion) }
   end
   rspamd_http.request({
-      task = task,
-      url = settings.submit_url,
-      body = lua_util.table_to_multipart_body(req, static_boundary),
-      callback = http_callback,
-      headers = {
-        ['Content-Type'] = string.format('multipart/form-data; boundary="%s"', static_boundary)
-      },
-      timeout = settings.http_timeout,
-      gzip = settings.gzip,
-      keepalive = settings.keepalive,
-      no_ssl_verify = settings.no_ssl_verify,
+    task = task,
+    url = settings.submit_url,
+    body = lua_util.table_to_multipart_body(req, static_boundary),
+    callback = http_callback,
+    headers = {
+      ['Content-Type'] = string.format('multipart/form-data; boundary="%s"', static_boundary)
+    },
+    timeout = settings.http_timeout,
+    gzip = settings.gzip,
+    keepalive = settings.keepalive,
+    no_ssl_verify = settings.no_ssl_verify,
+    -- staged timeouts
+    connect_timeout = settings.connect_timeout,
+    ssl_timeout = settings.ssl_timeout,
+    write_timeout = settings.write_timeout,
+    read_timeout = settings.read_timeout,
   })
 end
 
@@ -244,11 +258,11 @@ end
 local function submit_cb(task)
   if cache_context then
     redis_cache.cache_get(task,
-        task:get_digest(),
-        cache_context,
-        settings.cache_timeout,
-        submit,
-        cache_hit
+      task:get_digest(),
+      cache_context,
+      settings.cache_timeout,
+      submit,
+      cache_hit
     )
   else
     submit(task)
@@ -293,10 +307,10 @@ end
 redis_params = lua_redis.parse_redis_server(N)
 if redis_params then
   cache_context = redis_cache.create_cache_context(redis_params, {
-      cache_prefix = settings.cache_prefix,
-      cache_ttl = settings.cache_ttl,
-      cache_format = 'json',
-      cache_use_hashing = false
+    cache_prefix = settings.cache_prefix,
+    cache_ttl = settings.cache_ttl,
+    cache_format = 'json',
+    cache_use_hashing = false
   })
 end
 

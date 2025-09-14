@@ -42,6 +42,11 @@ local settings_schema = lua_redis.enrich_schema({
   redis_min_expiry = ts.number + ts.string / lua_util.parse_time_interval,
   redis_prefix = ts.string,
   enabled = ts.boolean:is_optional(),
+  -- New optional staged timeouts for HTTP helper
+  helper_connect_timeout = (ts.number + ts.string / lua_util.parse_time_interval):is_optional(),
+  helper_ssl_timeout = (ts.number + ts.string / lua_util.parse_time_interval):is_optional(),
+  helper_write_timeout = (ts.number + ts.string / lua_util.parse_time_interval):is_optional(),
+  helper_read_timeout = (ts.number + ts.string / lua_util.parse_time_interval):is_optional(),
 })
 
 local function check_dmarc_policy(task)
@@ -189,11 +194,11 @@ local function make_helper_request(task, domain, record, redis_server)
         end
 
         ret, _, upstream = lua_redis.redis_make_request(task,
-          redis_params,   -- connect params
-          redis_key,      -- hash key
-          true,           -- is write
-          redis_set_cb,   --callback
-          'PSETEX',       -- command
+          redis_params, -- connect params
+          redis_key,    -- hash key
+          true,         -- is write
+          redis_set_cb, --callback
+          'PSETEX',     -- command
           { redis_key, tostring(settings.redis_min_expiry * 1000.0),
             ucl.to_format(d, "json-compact") })
 
@@ -235,6 +240,11 @@ local function make_helper_request(task, domain, record, redis_server)
     url = helper_url,
     callback = http_helper_callback,
     keepalive = true,
+    -- staged timeouts if configured
+    connect_timeout = settings.helper_connect_timeout,
+    ssl_timeout = settings.helper_ssl_timeout,
+    write_timeout = settings.helper_write_timeout,
+    read_timeout = settings.helper_read_timeout,
   })
 end
 
@@ -282,11 +292,11 @@ local function check_bimi_vmc(task, domain, record)
 
   -- We first check Redis and then try to use helper
   ret, _, upstream = lua_redis.redis_make_request(task,
-    redis_params,      -- connect params
-    redis_key,         -- hash key
-    false,             -- is write
-    redis_cached_cb,   --callback
-    'GET',             -- command
+    redis_params,    -- connect params
+    redis_key,       -- hash key
+    false,           -- is write
+    redis_cached_cb, --callback
+    'GET',           -- command
     { redis_key })
 
   if not ret then
