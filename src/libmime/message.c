@@ -1187,6 +1187,10 @@ rspamd_message_parse(struct rspamd_task *task)
 	GError *err = NULL;
 	uint64_t n[2], seed;
 
+	if (task->cfg) {
+		rspamd_mime_parser_init_shared(task->cfg);
+	}
+
 	if (RSPAMD_TASK_IS_EMPTY(task)) {
 		/* Don't do anything with empty task */
 		task->flags |= RSPAMD_TASK_FLAG_SKIP_PROCESS;
