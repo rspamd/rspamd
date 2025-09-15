@@ -600,27 +600,47 @@ static bool
 process_image(struct rspamd_task *task, struct rspamd_mime_part *part)
 {
 	struct rspamd_image *img;
+	const char *ext = part->detected_ext;
 
-	img = rspamd_maybe_process_image(task->task_pool, &part->parsed_data);
-
-	if (img != NULL) {
-		msg_debug_images("detected %s image of size %ud x %ud",
-						 rspamd_image_type_str(img->type),
-						 img->width, img->height);
-
-		if (part->cd) {
-			img->filename = &part->cd->filename;
+	if (ext != NULL && part->parsed_data.len > 0) {
+		/* Prefer Lua Magic decision; do not re-detect by magic */
+		if (g_ascii_strcasecmp(ext, "png") == 0) {
+			img = process_png_image(task->task_pool, &part->parsed_data);
 		}
-
-		img->parent = part;
-
-		part->part_type = RSPAMD_MIME_PART_IMAGE;
-		part->specific.img = img;
-
-		return true;
+		else if (g_ascii_strcasecmp(ext, "jpg") == 0 || g_ascii_strcasecmp(ext, "jpeg") == 0) {
+			img = process_jpg_image(task->task_pool, &part->parsed_data);
+		}
+		else if (g_ascii_strcasecmp(ext, "gif") == 0) {
+			img = process_gif_image(task->task_pool, &part->parsed_data);
+		}
+		else if (g_ascii_strcasecmp(ext, "bmp") == 0) {
+			img = process_bmp_image(task->task_pool, &part->parsed_data);
+		}
+		else {
+			/* Unsupported image subtype for structural parsing; skip without re-magic */
+			return false;
+		}
+	}
+	else {
+		/* Fallback for legacy/unknown cases */
+		img = rspamd_maybe_process_image(task->task_pool, &part->parsed_data);
 	}
 
-	return false;
+	if (img == NULL) {
+		return false;
+	}
+
+	img->parent = part;
+	if (part->cd) {
+		img->filename = &part->cd->filename;
+	}
+
+	part->specific.img = img;
+	part->part_type = RSPAMD_MIME_PART_IMAGE;
+	if (part->cd == NULL) {
+		part->cd = rspamd_mempool_alloc0(task->task_pool, sizeof(*part->cd));
+	}
+	return true;
 }
 
 const char *

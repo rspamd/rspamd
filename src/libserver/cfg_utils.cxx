@@ -21,6 +21,7 @@
 #include "cfg_file.h"
 #include "rspamd.h"
 #include "cfg_file_private.h"
+#include "libmime/mime_parser.h"
 
 #include "maps/map.h"
 #include "maps/map_helpers.h"
@@ -381,6 +382,12 @@ void rspamd_config_free(struct rspamd_config *cfg)
 	DL_FOREACH_SAFE(cfg->config_unload_scripts, sc, sctmp)
 	{
 		luaL_unref(RSPAMD_LUA_CFG_STATE(cfg), LUA_REGISTRYINDEX, sc->cbref);
+	}
+
+	/* Free mime parser shared config if created */
+	if (cfg->mime_parser_cfg) {
+		rspamd_mime_parser_free_shared(cfg->mime_parser_cfg);
+		cfg->mime_parser_cfg = nullptr;
 	}
 
 	DL_FOREACH_SAFE(cfg->setting_ids, set, stmp)

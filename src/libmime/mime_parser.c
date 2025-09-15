@@ -63,16 +63,43 @@ rspamd_mime_parser_init_shared(struct rspamd_config *cfg)
 			if (rspamd_lua_require_function(cfg->mime_parser_cfg->L, "lua_magic", "detect_mime_part")) {
 				cfg->mime_parser_cfg->lua_magic_detect_cbref = luaL_ref(cfg->mime_parser_cfg->L, LUA_REGISTRYINDEX);
 			}
+			else {
+				msg_err("fatal error: cannot load lua_magic.detect_mime_part (see previous errors)");
+				lua_settop(cfg->mime_parser_cfg->L, old_top);
+				g_abort();
+			}
 			lua_settop(cfg->mime_parser_cfg->L, old_top);
+		}
+		else if (!cfg->mime_parser_cfg->L) {
+			msg_err("fatal error: lua state is not initialised for mime parser");
+			g_abort();
 		}
 	}
 
 	return cfg->mime_parser_cfg;
 }
 
-void rspamd_mime_parser_free_shared(struct rspamd_mime_parser_config *unused)
+void rspamd_mime_parser_free_shared(struct rspamd_mime_parser_config *cfg)
 {
-	/* noop: lifetime tied to process */
+	if (cfg == NULL) {
+		return;
+	}
+
+	/* Unref Lua callback if registered */
+	if (cfg->L && cfg->lua_magic_detect_cbref != -1) {
+		int old_top = lua_gettop(cfg->L);
+		luaL_unref(cfg->L, LUA_REGISTRYINDEX, cfg->lua_magic_detect_cbref);
+		cfg->lua_magic_detect_cbref = -1;
+		lua_settop(cfg->L, old_top);
+	}
+
+	/* Destroy multipattern */
+	if (cfg->mp_boundary) {
+		rspamd_multipattern_destroy(cfg->mp_boundary);
+		cfg->mp_boundary = NULL;
+	}
+
+	g_free(cfg);
 }
 
 int rspamd_mime_parser_get_lua_magic_cbref(const struct rspamd_mime_parser_config *cfg)
@@ -918,6 +945,7 @@ rspamd_mime_maybe_detect_type(struct rspamd_task *task,
 
 	if (L && task->cfg->mime_parser_cfg &&
 		rspamd_mime_parser_get_lua_magic_cbref(task->cfg->mime_parser_cfg) != -1) {
+		msg_debug_mime("will call lua_magic.detect_mime_part for part #%ud", npart->part_number);
 		old_top = lua_gettop(L);
 		lua_pushcfunction(L, &rspamd_lua_traceback);
 		err_idx = lua_gettop(L);
@@ -1006,6 +1034,14 @@ rspamd_mime_maybe_detect_type(struct rspamd_task *task,
 		}
 
 		lua_settop(L, old_top);
+	}
+	else {
+		int cbref = -1;
+		if (task->cfg && task->cfg->mime_parser_cfg) {
+			cbref = rspamd_mime_parser_get_lua_magic_cbref(task->cfg->mime_parser_cfg);
+		}
+		msg_debug_mime("skip lua_magic for part #%ud: L=%p, cbref=%d",
+					   npart->part_number, (void *) L, cbref);
 	}
 
 	/* Fallback: if nothing detected but declared CT is text, set detected_type to text */

@@ -22,16 +22,16 @@ struct rspamd_config;
 
 struct rspamd_mime_parser_config;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Initialize shared mime parser config (stores Lua refs, precompiled data) */
 struct rspamd_mime_parser_config *rspamd_mime_parser_init_shared(struct rspamd_config *cfg);
 void rspamd_mime_parser_free_shared(struct rspamd_mime_parser_config *cfg);
 
 /* Accessors */
 int rspamd_mime_parser_get_lua_magic_cbref(const struct rspamd_mime_parser_config *cfg);
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 struct rspamd_task;
 struct rspamd_mime_part;

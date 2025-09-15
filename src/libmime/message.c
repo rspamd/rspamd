@@ -1447,6 +1447,73 @@ void rspamd_message_process(struct rspamd_task *task)
 
 	rspamd_archives_process(task);
 
+	/* Second pass: fill detected_* for parts not decided during parsing */
+	if (L && task->cfg->mime_parser_cfg &&
+		rspamd_mime_parser_get_lua_magic_cbref(task->cfg->mime_parser_cfg) != -1) {
+		unsigned int j;
+		struct rspamd_mime_part *pp;
+		PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, parts), j, pp)
+		{
+			if (pp->parsed_data.len > 0 &&
+				(/* no detection yet */ (pp->detected_type == NULL && pp->detected_ext == NULL) ||
+				 /* refine generic archives */
+				 (pp->detected_ext && (g_ascii_strcasecmp(pp->detected_ext, "zip") == 0 ||
+									   g_ascii_strcasecmp(pp->detected_ext, "rar") == 0 ||
+									   g_ascii_strcasecmp(pp->detected_ext, "7z") == 0 ||
+									   g_ascii_strcasecmp(pp->detected_ext, "gz") == 0)))) {
+				struct rspamd_mime_part **pmime;
+				struct rspamd_task **ptask;
+				lua_pushcfunction(L, &rspamd_lua_traceback);
+				int err_idx2 = lua_gettop(L);
+				lua_rawgeti(L, LUA_REGISTRYINDEX, rspamd_mime_parser_get_lua_magic_cbref(task->cfg->mime_parser_cfg));
+				pmime = lua_newuserdata(L, sizeof(struct rspamd_mime_part *));
+				rspamd_lua_setclass(L, rspamd_mimepart_classname, -1);
+				*pmime = pp;
+				ptask = lua_newuserdata(L, sizeof(struct rspamd_task *));
+				rspamd_lua_setclass(L, rspamd_task_classname, -1);
+				*ptask = task;
+
+				if (lua_pcall(L, 2, 2, err_idx2) == 0) {
+					if (lua_istable(L, -1)) {
+						const char *mb;
+						if (lua_isstring(L, -2)) {
+							pp->detected_ext = rspamd_mempool_strdup(task->task_pool, lua_tostring(L, -2));
+						}
+						lua_pushstring(L, "ct");
+						lua_gettable(L, -2);
+						if (lua_isstring(L, -1)) {
+							mb = lua_tostring(L, -1);
+							if (mb) {
+								rspamd_ftok_t srch;
+								srch.begin = mb;
+								srch.len = strlen(mb);
+								pp->detected_ct = rspamd_content_type_parse(srch.begin, srch.len, task->task_pool);
+							}
+						}
+						lua_pop(L, 1);
+						lua_pushstring(L, "type");
+						lua_gettable(L, -2);
+						if (lua_isstring(L, -1)) {
+							pp->detected_type = rspamd_mempool_strdup(task->task_pool, lua_tostring(L, -1));
+						}
+						lua_pop(L, 1);
+						lua_pushstring(L, "no_text");
+						lua_gettable(L, -2);
+						if (lua_isboolean(L, -1) && lua_toboolean(L, -1)) {
+							pp->flags |= RSPAMD_MIME_PART_NO_TEXT_EXTRACTION;
+						}
+						lua_pop(L, 1);
+					}
+				}
+				else {
+					msg_err_task("second-pass detect type: %s", lua_tostring(L, -1));
+				}
+				/* restore stack */
+				lua_settop(L, 0);
+			}
+		}
+	}
+
 	if (L) {
 		old_top = lua_gettop(L);
 	}

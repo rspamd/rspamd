@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 --[[[
 -- @module lua_magic/patterns
@@ -255,6 +255,47 @@ local patterns = {
       },
     }
   },
+  zip = {
+    matches = {
+      {
+        hex = [[504b0304]], -- PK\x03\x04
+        relative_position = 0,
+        weight = 60,
+      },
+    }
+  },
+  rar = {
+    matches = {
+      {
+        hex = [[526172211a0700]], -- RAR4
+        relative_position = 0,
+        weight = 60,
+      },
+      {
+        hex = [[526172211a070100]], -- RAR5
+        relative_position = 0,
+        weight = 60,
+      },
+    }
+  },
+  ['7z'] = {
+    matches = {
+      {
+        hex = [[377abcaf271c]], -- 7z signature
+        relative_position = 0,
+        weight = 60,
+      },
+    }
+  },
+  gz = {
+    matches = {
+      {
+        string = [[^\x{1f}\x{8b}\x{08}]], -- gzip with deflate method
+        position = 3,
+        weight = 60,
+      },
+    }
+  },
   xar = {
     matches = {
       {
@@ -389,6 +430,32 @@ local patterns = {
         hex = [[4d4d]], -- BE tiff
         relative_position = 0,
         weight = 60,
+      },
+    }
+  },
+  webp = {
+    matches = {
+      {
+        -- RIFF....WEBP
+        string = [[^RIFF....WEBP]],
+        position = 12,
+        weight = 60,
+      },
+    }
+  },
+  svg = {
+    matches = {
+      {
+        -- Case-insensitive <svg ...> in the first chunk
+        string = [[(?i)<svg\b]],
+        position = { '>=', 0 },
+        weight = 40,
+      },
+      {
+        -- XML prolog hints
+        string = [[<\?xml\b]],
+        position = { '>=', 0 },
+        weight = 20,
       },
     }
   },
