@@ -23,17 +23,69 @@
 #include "multipattern.h"
 #include "contrib/libottery/ottery.h"
 #include "contrib/uthash/utlist.h"
+#include "lua/lua_common.h"
+#include "lua/lua_classnames.h"
 #include <openssl/cms.h>
 #include <openssl/pkcs7.h>
 #include "rspamd_simdutf.h"
 
-struct rspamd_mime_parser_lib_ctx {
+struct rspamd_mime_parser_config {
 	struct rspamd_multipattern *mp_boundary;
 	unsigned char hkey[rspamd_cryptobox_SIPKEYBYTES]; /* Key for hashing */
 	unsigned int key_usages;
+	int lua_magic_detect_cbref;
+	lua_State *L;
 };
 
-struct rspamd_mime_parser_lib_ctx *lib_ctx = NULL;
+static struct rspamd_mime_parser_config *mime_parser_cfg = NULL;
+
+struct rspamd_mime_parser_config *
+rspamd_mime_parser_init_shared(struct rspamd_config *cfg)
+{
+	if (mime_parser_cfg == NULL) {
+		mime_parser_cfg = g_malloc0(sizeof(*mime_parser_cfg));
+		mime_parser_cfg->mp_boundary = rspamd_multipattern_create(RSPAMD_MULTIPATTERN_DEFAULT);
+		g_assert(mime_parser_cfg->mp_boundary != NULL);
+		rspamd_multipattern_add_pattern(mime_parser_cfg->mp_boundary, "\r--", 0);
+		rspamd_multipattern_add_pattern(mime_parser_cfg->mp_boundary, "\n--", 0);
+
+		GError *err = NULL;
+		if (!rspamd_multipattern_compile(mime_parser_cfg->mp_boundary, RSPAMD_MULTIPATTERN_COMPILE_NO_FS, &err)) {
+			msg_err("fatal error: cannot compile multipattern for mime parser boundaries: %e", err);
+			g_error_free(err);
+			g_abort();
+		}
+		ottery_rand_bytes(mime_parser_cfg->hkey, sizeof(mime_parser_cfg->hkey));
+		mime_parser_cfg->key_usages = 0;
+		mime_parser_cfg->lua_magic_detect_cbref = -1;
+	}
+
+	mime_parser_cfg->L = (lua_State *) cfg->lua_state;
+
+	if (mime_parser_cfg->L && mime_parser_cfg->lua_magic_detect_cbref == -1) {
+		int old_top = lua_gettop(mime_parser_cfg->L);
+		if (rspamd_lua_require_function(mime_parser_cfg->L, "lua_magic", "detect_mime_part")) {
+			mime_parser_cfg->lua_magic_detect_cbref = luaL_ref(mime_parser_cfg->L, LUA_REGISTRYINDEX);
+		}
+		lua_settop(mime_parser_cfg->L, old_top);
+	}
+
+	cfg->mime_parser_cfg = mime_parser_cfg;
+	return mime_parser_cfg;
+}
+
+void rspamd_mime_parser_free_shared(struct rspamd_mime_parser_config *unused)
+{
+	/* noop: lifetime tied to process */
+}
+
+int rspamd_mime_parser_get_lua_magic_cbref(const struct rspamd_mime_parser_config *cfg)
+{
+	if (cfg) {
+		return cfg->lua_magic_detect_cbref;
+	}
+	return -1;
+}
 
 static const unsigned int max_nested = 64;
 static const unsigned int max_key_usages = 10000;
@@ -56,7 +108,7 @@ struct rspamd_mime_boundary {
 	int flags;
 };
 
-struct rspamd_mime_parser_ctx {
+struct rspamd_mime_parser_runtime {
 	GPtrArray *stack;   /* Stack of parts */
 	GArray *boundaries; /* Boundaries found in the whole message */
 	const char *start;
@@ -69,23 +121,23 @@ struct rspamd_mime_parser_ctx {
 static enum rspamd_mime_parse_error
 rspamd_mime_parse_multipart_part(struct rspamd_task *task,
 								 struct rspamd_mime_part *part,
-								 struct rspamd_mime_parser_ctx *st,
+								 struct rspamd_mime_parser_runtime *st,
 								 GError **err);
 static enum rspamd_mime_parse_error
 rspamd_mime_parse_message(struct rspamd_task *task,
 						  struct rspamd_mime_part *part,
-						  struct rspamd_mime_parser_ctx *st,
+						  struct rspamd_mime_parser_runtime *st,
 						  GError **err);
 static enum rspamd_mime_parse_error
 rspamd_mime_parse_normal_part(struct rspamd_task *task,
 							  struct rspamd_mime_part *part,
-							  struct rspamd_mime_parser_ctx *st,
+							  struct rspamd_mime_parser_runtime *st,
 							  struct rspamd_content_type *ct,
 							  GError **err);
 
 static enum rspamd_mime_parse_error
 rspamd_mime_process_multipart_node(struct rspamd_task *task,
-								   struct rspamd_mime_parser_ctx *st,
+								   struct rspamd_mime_parser_runtime *st,
 								   struct rspamd_mime_part *multipart,
 								   const char *start, const char *end,
 								   gboolean is_finished,
@@ -162,19 +214,22 @@ rspamd_cte_from_string(const char *str)
 static void
 rspamd_mime_parser_init_lib(void)
 {
-	lib_ctx = g_malloc0(sizeof(*lib_ctx));
-	lib_ctx->mp_boundary = rspamd_multipattern_create(RSPAMD_MULTIPATTERN_DEFAULT);
-	g_assert(lib_ctx->mp_boundary != NULL);
-	rspamd_multipattern_add_pattern(lib_ctx->mp_boundary, "\r--", 0);
-	rspamd_multipattern_add_pattern(lib_ctx->mp_boundary, "\n--", 0);
+	mime_parser_cfg = g_malloc0(sizeof(*mime_parser_cfg));
+	mime_parser_cfg->mp_boundary = rspamd_multipattern_create(RSPAMD_MULTIPATTERN_DEFAULT);
+	g_assert(mime_parser_cfg->mp_boundary != NULL);
+	rspamd_multipattern_add_pattern(mime_parser_cfg->mp_boundary, "\r--", 0);
+	rspamd_multipattern_add_pattern(mime_parser_cfg->mp_boundary, "\n--", 0);
 
 	GError *err = NULL;
-	if (!rspamd_multipattern_compile(lib_ctx->mp_boundary, RSPAMD_MULTIPATTERN_COMPILE_NO_FS, &err)) {
+	if (!rspamd_multipattern_compile(mime_parser_cfg->mp_boundary, RSPAMD_MULTIPATTERN_COMPILE_NO_FS, &err)) {
 		msg_err("fatal error: cannot compile multipattern for mime parser boundaries: %e", err);
 		g_error_free(err);
 		g_abort();
 	}
-	ottery_rand_bytes(lib_ctx->hkey, sizeof(lib_ctx->hkey));
+	ottery_rand_bytes(mime_parser_cfg->hkey, sizeof(mime_parser_cfg->hkey));
+	mime_parser_cfg->key_usages = 0;
+	mime_parser_cfg->L = NULL;
+	mime_parser_cfg->lua_magic_detect_cbref = -1;
 }
 
 static enum rspamd_cte
@@ -398,7 +453,8 @@ rspamd_mime_part_get_cte(struct rspamd_task *task,
 	enum rspamd_cte cte = RSPAMD_CTE_UNKNOWN;
 	gboolean parent_propagated = FALSE;
 
-	hdr = rspamd_message_get_header_from_hash(hdrs, "Content-Transfer-Encoding", FALSE);
+	hdr = rspamd_message_get_header_from_hash(hdrs,
+											  "Content-Transfer-Encoding", FALSE);
 
 	if (hdr == NULL) {
 		if (part->parent_part && part->parent_part->cte != RSPAMD_CTE_UNKNOWN &&
@@ -648,7 +704,7 @@ void rspamd_mime_parser_calc_digest(struct rspamd_mime_part *part)
 static enum rspamd_mime_parse_error
 rspamd_mime_parse_normal_part(struct rspamd_task *task,
 							  struct rspamd_mime_part *part,
-							  struct rspamd_mime_parser_ctx *st,
+							  struct rspamd_mime_parser_runtime *st,
 							  struct rspamd_content_type *ct,
 							  GError **err)
 {
@@ -845,10 +901,11 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 	return RSPAMD_MIME_PARSE_OK;
 }
 
+
 struct rspamd_mime_multipart_cbdata {
 	struct rspamd_task *task;
 	struct rspamd_mime_part *multipart;
-	struct rspamd_mime_parser_ctx *st;
+	struct rspamd_mime_parser_runtime *st;
 	const char *part_start;
 	rspamd_ftok_t *cur_boundary;
 	uint64_t bhash;
@@ -857,7 +914,7 @@ struct rspamd_mime_multipart_cbdata {
 
 static enum rspamd_mime_parse_error
 rspamd_mime_process_multipart_node(struct rspamd_task *task,
-								   struct rspamd_mime_parser_ctx *st,
+								   struct rspamd_mime_parser_runtime *st,
 								   struct rspamd_mime_part *multipart,
 								   const char *start, const char *end,
 								   gboolean is_finished,
@@ -996,7 +1053,123 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 		}
 	}
 	else {
+		/* First, decode the part normally */
 		ret = rspamd_mime_parse_normal_part(task, npart, st, sel, err);
+
+		if (ret == RSPAMD_MIME_PARSE_OK) {
+			/* Ask lua_magic if this is a message (e.g. .eml) */
+			lua_State *L = NULL;
+			int old_top = -1, err_idx;
+			gboolean promote_to_message = FALSE;
+
+			if (task->cfg) {
+				L = task->cfg->lua_state;
+			}
+
+			if (L) {
+				old_top = lua_gettop(L);
+				lua_pushcfunction(L, &rspamd_lua_traceback);
+				err_idx = lua_gettop(L);
+
+				if (task->cfg->mime_parser_cfg && task->cfg->mime_parser_cfg->lua_magic_detect_cbref != -1) {
+					lua_rawgeti(L, LUA_REGISTRYINDEX, task->cfg->mime_parser_cfg->lua_magic_detect_cbref);
+					struct rspamd_mime_part **pmime;
+					struct rspamd_task **ptask;
+
+					pmime = lua_newuserdata(L, sizeof(struct rspamd_mime_part *));
+					rspamd_lua_setclass(L, rspamd_mimepart_classname, -1);
+					*pmime = npart;
+					ptask = lua_newuserdata(L, sizeof(struct rspamd_task *));
+					rspamd_lua_setclass(L, rspamd_task_classname, -1);
+					*ptask = task;
+
+					if (lua_pcall(L, 2, 2, err_idx) != 0) {
+						msg_err_task("cannot detect type (lua_magic): %s", lua_tostring(L, -1));
+					}
+					else {
+						/* Stack: [traceback][ext][table] */
+						if (lua_istable(L, -1)) {
+							/* Fill detected_ext */
+							if (lua_isstring(L, -2)) {
+								npart->detected_ext = rspamd_mempool_strdup(task->task_pool,
+																			lua_tostring(L, -2));
+							}
+
+							/* detected_ct */
+							lua_pushstring(L, "ct");
+							lua_gettable(L, -2);
+
+							if (lua_isstring(L, -1)) {
+								const char *mb = lua_tostring(L, -1);
+
+								if (mb) {
+									rspamd_ftok_t srch;
+
+									srch.begin = mb;
+									srch.len = strlen(mb);
+									npart->detected_ct = rspamd_content_type_parse(srch.begin,
+																				   srch.len,
+																				   task->task_pool);
+								}
+							}
+
+							lua_pop(L, 1);
+
+							/* detected_type and promotion */
+							lua_pushstring(L, "type");
+							lua_gettable(L, -2);
+
+							if (lua_isstring(L, -1)) {
+								const char *t = lua_tostring(L, -1);
+								if (t) {
+									npart->detected_type = rspamd_mempool_strdup(task->task_pool, t);
+									if (strcmp(t, "message") == 0) {
+										promote_to_message = TRUE;
+									}
+								}
+							}
+
+							lua_pop(L, 1);
+
+							/* no_text flag */
+							lua_pushstring(L, "no_text");
+							lua_gettable(L, -2);
+
+							if (lua_isboolean(L, -1)) {
+								if (!!lua_toboolean(L, -1)) {
+									npart->flags |= RSPAMD_MIME_PART_NO_TEXT_EXTRACTION;
+								}
+							}
+
+							lua_pop(L, 1);
+
+							/* ext fallback for promotion */
+							if (!promote_to_message && lua_isstring(L, -2)) {
+								const char *ext = lua_tostring(L, -2);
+								if (ext && g_ascii_strcasecmp(ext, "eml") == 0) {
+									promote_to_message = TRUE;
+								}
+							}
+						}
+					}
+
+					/* Clean stack */
+					lua_settop(L, old_top);
+				}
+				else {
+					/* Pop traceback */
+					lua_settop(L, old_top);
+				}
+			}
+
+			if (promote_to_message) {
+				msg_debug_mime("treat part as embedded message (lua_magic)");
+				st->nesting++;
+				g_ptr_array_add(st->stack, npart);
+				npart->part_type = RSPAMD_MIME_PART_MESSAGE;
+				ret = rspamd_mime_parse_message(task, npart, st, err);
+			}
+		}
 	}
 
 	return ret;
@@ -1005,7 +1178,7 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 static enum rspamd_mime_parse_error
 rspamd_mime_parse_multipart_cb(struct rspamd_task *task,
 							   struct rspamd_mime_part *multipart,
-							   struct rspamd_mime_parser_ctx *st,
+							   struct rspamd_mime_parser_runtime *st,
 							   struct rspamd_mime_multipart_cbdata *cb,
 							   struct rspamd_mime_boundary *b)
 {
@@ -1048,7 +1221,7 @@ rspamd_mime_parse_multipart_cb(struct rspamd_task *task,
 static enum rspamd_mime_parse_error
 rspamd_multipart_boundaries_filter(struct rspamd_task *task,
 								   struct rspamd_mime_part *multipart,
-								   struct rspamd_mime_parser_ctx *st,
+								   struct rspamd_mime_parser_runtime *st,
 								   struct rspamd_mime_multipart_cbdata *cb)
 {
 	struct rspamd_mime_boundary *cur;
@@ -1162,7 +1335,7 @@ rspamd_multipart_boundaries_filter(struct rspamd_task *task,
 static enum rspamd_mime_parse_error
 rspamd_mime_parse_multipart_part(struct rspamd_task *task,
 								 struct rspamd_mime_part *part,
-								 struct rspamd_mime_parser_ctx *st,
+								 struct rspamd_mime_parser_runtime *st,
 								 GError **err)
 {
 	struct rspamd_mime_multipart_cbdata cbdata;
@@ -1192,7 +1365,7 @@ rspamd_mime_parse_multipart_part(struct rspamd_task *task,
 		cbdata.cur_boundary = &part->ct->boundary;
 		rspamd_cryptobox_siphash((unsigned char *) &cbdata.bhash,
 								 cbdata.cur_boundary->begin, cbdata.cur_boundary->len,
-								 lib_ctx->hkey);
+								 mime_parser_cfg->hkey);
 		msg_debug_mime("hash: %T -> %L", cbdata.cur_boundary, cbdata.bhash);
 	}
 	else {
@@ -1223,7 +1396,7 @@ rspamd_mime_preprocess_cb(struct rspamd_multipattern *mp,
 	gsize blen;
 	gboolean closing = FALSE;
 	struct rspamd_mime_boundary b;
-	struct rspamd_mime_parser_ctx *st = context;
+	struct rspamd_mime_parser_runtime *st = context;
 	struct rspamd_task *task;
 
 	task = st->task;
@@ -1307,7 +1480,7 @@ rspamd_mime_preprocess_cb(struct rspamd_multipattern *mp,
 			}
 
 			rspamd_cryptobox_siphash((unsigned char *) &b.hash, lc_copy, blen,
-									 lib_ctx->hkey);
+									 mime_parser_cfg->hkey);
 			msg_debug_mime("normal hash: %*s -> %L, %d boffset, %d data offset",
 						   (int) blen, lc_copy, b.hash, (int) b.boundary, (int) b.start);
 
@@ -1315,7 +1488,7 @@ rspamd_mime_preprocess_cb(struct rspamd_multipattern *mp,
 				b.flags = RSPAMD_MIME_BOUNDARY_FLAG_CLOSED;
 				rspamd_cryptobox_siphash((unsigned char *) &b.closed_hash, lc_copy,
 										 blen + 2,
-										 lib_ctx->hkey);
+										 mime_parser_cfg->hkey);
 				msg_debug_mime("closing hash: %*s -> %L, %d boffset, %d data offset",
 							   (int) blen + 2, lc_copy,
 							   b.closed_hash,
@@ -1406,17 +1579,17 @@ end:
 static void
 rspamd_mime_preprocess_message(struct rspamd_task *task,
 							   struct rspamd_mime_part *top,
-							   struct rspamd_mime_parser_ctx *st)
+							   struct rspamd_mime_parser_runtime *st)
 {
 
 	if (top->raw_data.begin >= st->pos) {
-		rspamd_multipattern_lookup(lib_ctx->mp_boundary,
+		rspamd_multipattern_lookup(mime_parser_cfg->mp_boundary,
 								   top->raw_data.begin - 1,
 								   top->raw_data.len + 1,
 								   rspamd_mime_preprocess_cb, st, NULL);
 	}
 	else {
-		rspamd_multipattern_lookup(lib_ctx->mp_boundary,
+		rspamd_multipattern_lookup(mime_parser_cfg->mp_boundary,
 								   st->pos,
 								   st->end - st->pos,
 								   rspamd_mime_preprocess_cb, st, NULL);
@@ -1424,7 +1597,7 @@ rspamd_mime_preprocess_message(struct rspamd_task *task,
 }
 
 static void
-rspamd_mime_parse_stack_free(struct rspamd_mime_parser_ctx *st)
+rspamd_mime_parse_stack_free(struct rspamd_mime_parser_runtime *st)
 {
 	if (st) {
 		g_ptr_array_free(st->stack, TRUE);
@@ -1436,7 +1609,7 @@ rspamd_mime_parse_stack_free(struct rspamd_mime_parser_ctx *st)
 static enum rspamd_mime_parse_error
 rspamd_mime_parse_message(struct rspamd_task *task,
 						  struct rspamd_mime_part *part,
-						  struct rspamd_mime_parser_ctx *st,
+						  struct rspamd_mime_parser_runtime *st,
 						  GError **err)
 {
 	struct rspamd_content_type *ct, *sel = NULL;
@@ -1448,7 +1621,7 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 	unsigned int i;
 	enum rspamd_mime_parse_error ret = RSPAMD_MIME_PARSE_OK;
 	GString str;
-	struct rspamd_mime_parser_ctx *nst = st;
+	struct rspamd_mime_parser_runtime *nst = st;
 
 	if (st->nesting > max_nested) {
 		g_set_error(err, RSPAMD_MIME_QUARK, E2BIG, "Nesting level is too high: %d",
@@ -1732,17 +1905,17 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 enum rspamd_mime_parse_error
 rspamd_mime_parse_task(struct rspamd_task *task, GError **err)
 {
-	struct rspamd_mime_parser_ctx *st;
+	struct rspamd_mime_parser_runtime *st;
 	enum rspamd_mime_parse_error ret = RSPAMD_MIME_PARSE_OK;
 
-	if (lib_ctx == NULL) {
-		rspamd_mime_parser_init_lib();
+	if (mime_parser_cfg == NULL) {
+		rspamd_mime_parser_init_shared(task->cfg);
 	}
 
-	if (++lib_ctx->key_usages > max_key_usages) {
+	if (++mime_parser_cfg->key_usages > max_key_usages) {
 		/* Regenerate siphash key */
-		ottery_rand_bytes(lib_ctx->hkey, sizeof(lib_ctx->hkey));
-		lib_ctx->key_usages = 0;
+		ottery_rand_bytes(mime_parser_cfg->hkey, sizeof(mime_parser_cfg->hkey));
+		mime_parser_cfg->key_usages = 0;
 	}
 
 	st = g_malloc0(sizeof(*st));

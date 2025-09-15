@@ -49,6 +49,7 @@ struct rspamd_external_libs_ctx;
 struct rspamd_cryptobox_pubkey;
 struct rspamd_dns_resolver;
 struct rspamd_tokenizer_manager;
+struct rspamd_mime_parser_config;
 
 /**
  * Logging type
@@ -490,7 +491,8 @@ struct rspamd_config {
 	struct rspamd_monitored_ctx *monitored_ctx; /**< context for monitored resources					*/
 	void *redis_pool;                           /**< redis connection pool								*/
 
-	struct rspamd_re_cache *re_cache; /**< static regexp cache								*/
+	struct rspamd_re_cache *re_cache;                  /**< static regexp cache								*/
+	struct rspamd_mime_parser_config *mime_parser_cfg; /**< mime parser shared config */
 
 	GHashTable *trusted_keys; /**< list of trusted public keys						*/
 
