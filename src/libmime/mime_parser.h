@@ -17,6 +17,7 @@
 #define SRC_LIBMIME_MIME_PARSER_H_
 
 #include "config.h"
+#include "libserver/logger.h"
 
 struct rspamd_config;
 
@@ -48,6 +49,12 @@ enum rspamd_mime_parse_error rspamd_mime_parse_task(struct rspamd_task *task,
 
 void rspamd_mime_parser_calc_digest(struct rspamd_mime_part *part);
 
+/* Public logging support for mime module */
+EXTERN_LOG_MODULE_DEF(mime);
+#define msg_debug_mime(...) rspamd_conditional_debug_fast(NULL, task->from_addr,                                \
+														  rspamd_mime_log_id, "mime", task->task_pool->tag.uid, \
+														  RSPAMD_LOG_FUNC,                                      \
+														  __VA_ARGS__)
 
 #ifdef __cplusplus
 }

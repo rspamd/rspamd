@@ -118,7 +118,7 @@ static const unsigned int max_key_usages = 10000;
 														  RSPAMD_LOG_FUNC,                                      \
 														  __VA_ARGS__)
 
-INIT_LOG_MODULE(mime)
+INIT_LOG_MODULE_PUBLIC(mime)
 
 #define RSPAMD_MIME_BOUNDARY_FLAG_CLOSED (1 << 0)
 #define RSPAMD_BOUNDARY_IS_CLOSED(b) ((b)->flags & RSPAMD_MIME_BOUNDARY_FLAG_CLOSED)

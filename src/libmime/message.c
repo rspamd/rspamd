@@ -1454,13 +1454,22 @@ void rspamd_message_process(struct rspamd_task *task)
 		struct rspamd_mime_part *pp;
 		PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, parts), j, pp)
 		{
-			if (pp->parsed_data.len > 0 &&
-				(/* no detection yet */ (pp->detected_type == NULL && pp->detected_ext == NULL) ||
-				 /* refine generic archives */
-				 (pp->detected_ext && (g_ascii_strcasecmp(pp->detected_ext, "zip") == 0 ||
-									   g_ascii_strcasecmp(pp->detected_ext, "rar") == 0 ||
-									   g_ascii_strcasecmp(pp->detected_ext, "7z") == 0 ||
-									   g_ascii_strcasecmp(pp->detected_ext, "gz") == 0)))) {
+			gboolean needs_refine = FALSE;
+			if (pp->parsed_data.len > 0) {
+				if (pp->detected_type == NULL && pp->detected_ext == NULL) {
+					needs_refine = TRUE;
+				}
+				else if (pp->part_type == RSPAMD_MIME_PART_ARCHIVE) {
+					needs_refine = TRUE;
+				}
+			}
+
+			if (needs_refine) {
+				msg_debug_mime("second-pass lua_magic for part #%ud: reason=%s; ext=%s type=%s",
+							   pp->part_number,
+							   (pp->detected_type == NULL && pp->detected_ext == NULL) ? "undetected" : "archive",
+							   pp->detected_ext ? pp->detected_ext : "(nil)",
+							   pp->detected_type ? pp->detected_type : "(nil)");
 				struct rspamd_mime_part **pmime;
 				struct rspamd_task **ptask;
 				lua_pushcfunction(L, &rspamd_lua_traceback);
@@ -1476,6 +1485,8 @@ void rspamd_message_process(struct rspamd_task *task)
 				if (lua_pcall(L, 2, 2, err_idx2) == 0) {
 					if (lua_istable(L, -1)) {
 						const char *mb;
+						const char *old_ext = pp->detected_ext;
+						const char *old_type = pp->detected_type;
 						if (lua_isstring(L, -2)) {
 							pp->detected_ext = rspamd_mempool_strdup(task->task_pool, lua_tostring(L, -2));
 						}
@@ -1503,6 +1514,10 @@ void rspamd_message_process(struct rspamd_task *task)
 							pp->flags |= RSPAMD_MIME_PART_NO_TEXT_EXTRACTION;
 						}
 						lua_pop(L, 1);
+						msg_debug_mime("second-pass result for part #%ud: ext %s->%s, type %s->%s",
+									   pp->part_number,
+									   old_ext ? old_ext : "(nil)", pp->detected_ext ? pp->detected_ext : "(nil)",
+									   old_type ? old_type : "(nil)", pp->detected_type ? pp->detected_type : "(nil)");
 					}
 				}
 				else {
