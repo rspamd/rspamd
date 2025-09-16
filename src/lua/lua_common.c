@@ -105,6 +105,7 @@ void rspamd_lua_new_class(lua_State *L,
 	lua_createtable(L, 0, 3 + nmethods);
 
 	if (!seen_index) {
+		/* Default __index = metatable only for plain classes without custom __index */
 		lua_pushstring(L, "__index");
 		lua_pushvalue(L, -2); /* pushes the metatable */
 		lua_settable(L, -3);  /* metatable.__index = metatable */
