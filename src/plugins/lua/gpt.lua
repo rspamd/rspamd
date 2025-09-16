@@ -732,7 +732,7 @@ local function openai_check(task, content, sel_part)
     end
 
     body.model = model
-    
+
     upstream = settings.upstreams:get_upstream_round_robin()
     local http_params = {
       url = settings.url,
@@ -837,7 +837,7 @@ local function ollama_check(task, content, sel_part)
     }
     -- Fresh body for each model
     local body = lua_util.deepcopy(body_base)
-    
+
     -- Merge model-specific parameters into body
     local params = settings.model_parameters[model]
     if params then
@@ -850,7 +850,7 @@ local function ollama_check(task, content, sel_part)
     if settings.include_response_format then
       body.response_format = { type = "json_object" }
     end
-   
+
     body.model = model
 
     upstream = settings.upstreams:get_upstream_round_robin()
@@ -1003,7 +1003,8 @@ if opts then
           "Output ONLY 3 lines:\n" ..
           "1. Numeric score (0.00-1.00)\n" ..
           "2. One-sentence reason citing whether it is spam, the strongest red flag, or why it is ham\n" ..
-          "3. Empty line or mention ONLY the primary concern category if found from the list: " .. table.concat(lua_util.keys(categories_map), ', ')
+          "3. Empty line or mention ONLY the primary concern category if found from the list: " .. 
+            table.concat(lua_util.keys(categories_map), ', ')
     else
       settings.prompt = "Analyze this email strictly as a spam detector given the email message, subject, " ..
           "FROM and url domains. Evaluate spam probability (0-1). " ..
