@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 local fun = require 'fun'
 local lua_util = require "lua_util"
@@ -202,7 +202,7 @@ the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`,
     end,
     ['description'] = 'Extracts substring; the first argument is start, the second is the last (like in Lua)',
     ['args_schema'] = { (ts.number + ts.string / tonumber):is_optional(),
-                        (ts.number + ts.string / tonumber):is_optional() }
+      (ts.number + ts.string / tonumber):is_optional() }
   },
   -- Prepends a string or a strings list
   ['prepend'] = {
@@ -460,7 +460,7 @@ Empty string comes the first argument or 'true', non-empty string comes nil]],
     ['description'] = 'Applies mask to IP address.' ..
         ' The first argument is the mask for IPv4 addresses, the second is the mask for IPv6 addresses.',
     ['args_schema'] = { (ts.number + ts.string / tonumber),
-                        (ts.number + ts.string / tonumber):is_optional() }
+      (ts.number + ts.string / tonumber):is_optional() }
   },
   -- Returns the string(s) with all non ascii chars replaced
   ['to_ascii'] = {
@@ -472,9 +472,9 @@ Empty string comes the first argument or 'true', non-empty string comes nil]],
     ['process'] = function(inp, _, args)
       if type(inp) == 'table' then
         return fun.map(
-            function(s)
-              return string.gsub(tostring(s), '[\128-\255]', args[1] or '?')
-            end, inp), 'string_list'
+          function(s)
+            return string.gsub(tostring(s), '[\128-\255]', args[1] or '?')
+          end, inp), 'string_list'
       else
         return string.gsub(tostring(inp), '[\128-\255]', '?'), 'string'
       end
@@ -492,7 +492,7 @@ Empty string comes the first argument or 'true', non-empty string comes nil]],
     ['process'] = function(inp, _, _)
       return rspamd_util.get_tld(inp), 'string'
     end,
-    ['description'] = 'Extracts tld from a hostname represented as a string',
+    ['description'] = 'Returns effective second-level domain (eSLD) using the Public Suffix List',
     ['args_schema'] = {}
   },
   -- Converts list of strings to numbers and returns a packed string

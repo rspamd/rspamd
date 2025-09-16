@@ -110,6 +110,12 @@ LUA_FUNCTION_DEF(html, foreach_tag);
  * @return
  */
 LUA_FUNCTION_DEF(html, get_invisible);
+/***
+ * @method html:get_features()
+ * Returns aggregated HTML features as a Lua table
+ * @return {table} features table
+ */
+LUA_FUNCTION_DEF(html, get_features);
 
 static const struct luaL_reg htmllib_m[] = {
 	LUA_INTERFACE_DEF(html, has_tag),
@@ -117,6 +123,7 @@ static const struct luaL_reg htmllib_m[] = {
 	LUA_INTERFACE_DEF(html, get_images),
 	LUA_INTERFACE_DEF(html, foreach_tag),
 	LUA_INTERFACE_DEF(html, get_invisible),
+	LUA_INTERFACE_DEF(html, get_features),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
@@ -546,6 +553,132 @@ lua_html_get_invisible(lua_State *L)
 	else {
 		lua_newtable(L);
 	}
+
+	return 1;
+}
+
+static int
+lua_html_get_features(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	auto *hc = lua_check_html(L, 1);
+
+	if (hc == NULL) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	const struct rspamd_html_features *hf = &hc->features;
+
+	/* Top-level table */
+	lua_createtable(L, 0, 16);
+
+	/* version */
+	lua_pushstring(L, "version");
+	lua_pushinteger(L, hf->version);
+	lua_settable(L, -3);
+
+	/* links subtable */
+	lua_pushstring(L, "links");
+	lua_createtable(L, 0, 20);
+
+#define PUSH_FIELD(name)                \
+	lua_pushstring(L, #name);           \
+	lua_pushinteger(L, hf->links.name); \
+	lua_settable(L, -3)
+
+	PUSH_FIELD(total_links);
+	PUSH_FIELD(affiliated_links);
+	PUSH_FIELD(unaffiliated_links);
+	PUSH_FIELD(confusable_like_from_links);
+	PUSH_FIELD(punycode_links);
+	PUSH_FIELD(ip_links);
+	PUSH_FIELD(port_links);
+	PUSH_FIELD(long_query_links);
+	PUSH_FIELD(trackerish_links);
+	PUSH_FIELD(display_mismatch_links);
+	PUSH_FIELD(js_scheme_links);
+	PUSH_FIELD(data_scheme_links);
+	PUSH_FIELD(mailto_links);
+	PUSH_FIELD(http_links);
+	PUSH_FIELD(query_links);
+	PUSH_FIELD(same_etld1_links);
+	PUSH_FIELD(domains_total);
+	PUSH_FIELD(max_links_single_domain);
+
+#undef PUSH_FIELD
+
+	/* set links */
+	lua_settable(L, -3);
+
+	/* forms */
+	lua_pushstring(L, "forms_count");
+	lua_pushinteger(L, hf->forms_count);
+	lua_settable(L, -3);
+	lua_pushstring(L, "forms_post_unaffiliated");
+	lua_pushinteger(L, hf->forms_post_unaffiliated);
+	lua_settable(L, -3);
+	lua_pushstring(L, "forms_post_affiliated");
+	lua_pushinteger(L, hf->forms_post_affiliated);
+	lua_settable(L, -3);
+	lua_pushstring(L, "has_password_input");
+	lua_pushinteger(L, hf->has_password_input);
+	lua_settable(L, -3);
+
+	/* images */
+	lua_pushstring(L, "images_total");
+	lua_pushinteger(L, hf->images_total);
+	lua_settable(L, -3);
+	lua_pushstring(L, "images_external");
+	lua_pushinteger(L, hf->images_external);
+	lua_settable(L, -3);
+	lua_pushstring(L, "images_data");
+	lua_pushinteger(L, hf->images_data);
+	lua_settable(L, -3);
+	lua_pushstring(L, "images_tiny_external");
+	lua_pushinteger(L, hf->images_tiny_external);
+	lua_settable(L, -3);
+
+	/* dom */
+	lua_pushstring(L, "tags_count");
+	lua_pushinteger(L, hf->tags_count);
+	lua_settable(L, -3);
+	lua_pushstring(L, "max_dom_depth");
+	lua_pushinteger(L, hf->max_dom_depth);
+	lua_settable(L, -3);
+
+	/* visibility/text */
+	lua_pushstring(L, "text_visible");
+	lua_pushinteger(L, hf->text_visible);
+	lua_settable(L, -3);
+	lua_pushstring(L, "text_hidden");
+	lua_pushinteger(L, hf->text_hidden);
+	lua_settable(L, -3);
+	lua_pushstring(L, "text_transparent");
+	lua_pushinteger(L, hf->text_transparent);
+	lua_settable(L, -3);
+	lua_pushstring(L, "blocks_hidden");
+	lua_pushinteger(L, hf->blocks_hidden);
+	lua_settable(L, -3);
+	lua_pushstring(L, "blocks_transparent");
+	lua_pushinteger(L, hf->blocks_transparent);
+	lua_settable(L, -3);
+	lua_pushstring(L, "offscreen_blocks");
+	lua_pushinteger(L, hf->offscreen_blocks);
+	lua_settable(L, -3);
+
+	/* meta/obfuscation */
+	lua_pushstring(L, "meta_refresh");
+	lua_pushinteger(L, hf->meta_refresh);
+	lua_settable(L, -3);
+	lua_pushstring(L, "meta_refresh_urls");
+	lua_pushinteger(L, hf->meta_refresh_urls);
+	lua_settable(L, -3);
+
+	/* flags */
+	lua_pushstring(L, "flags");
+	lua_pushinteger(L, hf->flags);
+	lua_settable(L, -3);
 
 	return 1;
 }

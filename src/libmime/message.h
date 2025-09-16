@@ -29,6 +29,7 @@ struct rspamd_task;
 struct controller_session;
 struct rspamd_image;
 struct rspamd_archive;
+struct rspamd_html_features;
 
 enum rspamd_mime_part_flags {
 	RSPAMD_MIME_PART_ATTACHEMENT = (1u << 1u),
@@ -145,6 +146,8 @@ struct rspamd_mime_text_part {
 
 	GPtrArray *newlines; /**< positions of newlines in text, relative to content*/
 	void *html;
+	/* Optional HTML features collected during parsing */
+	struct rspamd_html_features *html_features;
 	GList *exceptions; /**< list of offsets of urls						*/
 	struct rspamd_mime_part *mime_part;
 

@@ -663,7 +663,9 @@ lua_url_set_redirected(lua_State *L)
 
 /***
  * @method url:get_tld()
- * Get effective second level domain part (eSLD) of the url host
+ * Get effective second level domain (eSLD) of the URL host.
+ * This method uses the Public Suffix List (PSL) to determine boundaries
+ * and compute the eSLD, not the top-level domain.
  * @return {string} effective second level domain part (eSLD) of the url host
  */
 static int

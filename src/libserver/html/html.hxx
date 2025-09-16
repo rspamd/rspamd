@@ -22,10 +22,12 @@
 #include "libserver/url.h"
 #include "libserver/html/html_tag.hxx"
 #include "libserver/html/html.h"
+#include "libserver/html/html_features.h"
 #include "libserver/html/html_tags.h"
 
 
 #include <vector>
+#include "contrib/ankerl/unordered_dense.h"
 #include <memory>
 #include <string>
 #include "function2/function2.hpp"
@@ -50,12 +52,23 @@ struct html_content {
 	std::string invisible;
 	std::shared_ptr<css::css_style_sheet> css_style;
 
+	/* Aggregated HTML features */
+	struct rspamd_html_features features;
+	/* Helper: per-domain link counts */
+	ankerl::unordered_dense::map<std::string, unsigned int> link_domain_counts;
+	/* Heuristic weights for button-like links */
+	ankerl::unordered_dense::map<struct rspamd_url *, float> url_button_weights;
+	/* First-party eTLD+1 derived from message (e.g. From:) */
+	std::string first_party_etld1;
+
 	/* Preallocate and reserve all internal structures */
 	html_content()
 	{
 		tags_seen.resize(Tag_MAX, false);
 		all_tags.reserve(128);
 		parsed.reserve(256);
+		memset(&features, 0, sizeof(features));
+		features.version = 1u;
 	}
 
 	static void html_content_dtor(void *ptr)

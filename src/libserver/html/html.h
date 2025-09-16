@@ -20,6 +20,7 @@
 #include "config.h"
 #include "libutil/mem_pool.h"
 #include "libserver/url.h"
+#include "libserver/html/html_features.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -128,6 +129,16 @@ bool rspamd_html_get_parsed_content(void *html_content, rspamd_ftok_t *dest);
  * @return
  */
 gsize rspamd_html_get_tags_count(void *html_content);
+
+/**
+ * Returns heuristic button weight for a given URL within this HTML content
+ */
+float rspamd_html_url_button_weight(void *html_content, struct rspamd_url *u);
+
+/**
+ * Returns an immutable pointer to aggregated html features
+ */
+const struct rspamd_html_features *rspamd_html_get_features(void *html_content);
 
 
 #ifdef __cplusplus

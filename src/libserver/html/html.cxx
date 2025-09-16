@@ -1605,6 +1605,19 @@ html_process_img_tag(rspamd_mempool_t *pool,
 
 	hc->images.push_back(img);
 
+	/* Update image-related features */
+	hc->features.images_total++;
+	if (img->flags & RSPAMD_HTML_FLAG_IMAGE_DATA) {
+		hc->features.images_data++;
+	}
+	if (img->flags & RSPAMD_HTML_FLAG_IMAGE_EXTERNAL) {
+		hc->features.images_external++;
+		/* tiny external pixel tracking */
+		if (img->width > 0 && img->height > 0 && (img->width * img->height) <= 4u) {
+			hc->features.images_tiny_external++;
+		}
+	}
+
 	if (std::holds_alternative<std::monostate>(tag->extra)) {
 		tag->extra = img;
 	}
@@ -1663,6 +1676,48 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 
 	if (maybe_bgcolor) {
 		tag->block->set_bgcolor(maybe_bgcolor->to_color().value());
+	}
+
+	/* Offscreen heuristic: negative text-indent or large negative left/top */
+	if (auto style = tag->find_style()) {
+		auto sv = *style;
+		/* text-indent */
+		auto p_ti = rspamd_substring_search_caseless(sv.data(), sv.size(), "text-indent", sizeof("text-indent") - 1);
+		if (p_ti != -1) {
+			/* look ahead for '-' before a digit */
+			for (std::size_t i = p_ti; i < sv.size(); i++) {
+				char c = sv[i];
+				if (c == '-') {
+					/* consider offscreen */
+					hc->features.offscreen_blocks++;
+					break;
+				}
+				if (g_ascii_isdigit(c)) break;
+			}
+		}
+		/* left/top negative absolute */
+		auto p_left = rspamd_substring_search_caseless(sv.data(), sv.size(), "left", sizeof("left") - 1);
+		if (p_left != -1) {
+			for (std::size_t i = p_left; i < sv.size(); i++) {
+				char c = sv[i];
+				if (c == '-') {
+					hc->features.offscreen_blocks++;
+					break;
+				}
+				if (g_ascii_isdigit(c)) break;
+			}
+		}
+		auto p_top = rspamd_substring_search_caseless(sv.data(), sv.size(), "top", sizeof("top") - 1);
+		if (p_top != -1) {
+			for (std::size_t i = p_top; i < sv.size(); i++) {
+				char c = sv[i];
+				if (c == '-') {
+					hc->features.offscreen_blocks++;
+					break;
+				}
+				if (g_ascii_isdigit(c)) break;
+			}
+		}
 	}
 }
 
@@ -1727,6 +1782,21 @@ html_append_parsed(struct html_content *hc,
 				return !g_ascii_isspace(c);
 			},
 			' ');
+		/* Accumulate transparent text bytes */
+		hc->features.text_transparent += (unsigned int) nlen;
+		hc->features.blocks_transparent++;
+	}
+	else {
+		/* Visible or hidden text accounted outside; keep helper here for visible path */
+		if (&dest == &hc->parsed) {
+			/* Visible text */
+			hc->features.text_visible += (unsigned int) nlen;
+		}
+		else if (&dest == &hc->invisible) {
+			/* Hidden text */
+			hc->features.text_hidden += (unsigned int) nlen;
+			hc->features.blocks_hidden++;
+		}
 	}
 
 	return nlen;
@@ -1928,6 +1998,16 @@ html_append_tag_content(rspamd_mempool_t *pool,
 											{hc->parsed.data() + initial_parsed_offset, std::size_t(written_len)},
 											tag, exceptions,
 											url_set, initial_parsed_offset);
+			/* Count display URL mismatches when URL is present */
+			if (std::holds_alternative<rspamd_url *>(tag->extra)) {
+				auto *u = std::get<rspamd_url *>(tag->extra);
+				if (u && (u->flags & RSPAMD_URL_FLAG_DISPLAY_URL) && (u->flags & RSPAMD_URL_FLAG_HTML_DISPLAYED)) {
+					/* html_process_displayed_href_tag sets linked_url when display URL differs */
+					if (u->ext && u->ext->linked_url && u->ext->linked_url != u) {
+						hc->features.links.display_mismatch_links++;
+					}
+				}
+			}
 		}
 		else if (tag->id == Tag_IMG) {
 			/* Process ALT if presented */
@@ -2023,6 +2103,29 @@ auto html_process_input(struct rspamd_task *task,
 	auto *hc = new html_content;
 	rspamd_mempool_add_destructor(task->task_pool, html_content::html_content_dtor, hc);
 
+	/* Derive first-party eTLD+1 from From: if present (task->message can be NULL) */
+	{
+		auto *from_mime = MESSAGE_FIELD_CHECK(task, from_mime);
+		if (from_mime && from_mime->len > 0) {
+			struct rspamd_email_address *addr = (struct rspamd_email_address *) g_ptr_array_index(from_mime, 0);
+			if (addr && addr->domain && addr->domain_len > 0) {
+				rspamd_ftok_t tld;
+				if (rspamd_url_find_tld(addr->domain, addr->domain_len, &tld)) {
+					/* eTLD+1: take the last label before tld and the tld */
+					const char *dom = addr->domain;
+					const char *dom_end = addr->domain + addr->domain_len;
+					const char *tld_begin = tld.begin;
+					/* Find start of the registrable part */
+					const char *p = tld_begin;
+					while (p > dom && *(p - 1) != '.') {
+						p--;
+					}
+					hc->first_party_etld1.assign(p, dom_end - p);
+				}
+			}
+		}
+	}
+
 	if (task->cfg && in->len > task->cfg->max_html_len) {
 		msg_notice_task("html input is too big: %z, limit is %z",
 						in->len,
@@ -2063,6 +2166,83 @@ auto html_process_input(struct rspamd_task *task,
 				}
 			}
 			hc->tags_seen[cur_tag->id] = true;
+		}
+
+		/* Simple feature collection on opening */
+		switch (cur_tag->id) {
+		case Tag_FORM:
+			hc->features.forms_count++;
+			/* If action present and absolute, compare eTLD+1 with first-party */
+			if (auto href = cur_tag->find_href()) {
+				if (html_is_absolute_url(*href)) {
+					auto maybe_url = html_process_url(pool, *href);
+					if (maybe_url) {
+						struct rspamd_url *u = maybe_url.value();
+						if (u->hostlen > 0) {
+							/* Find eTLD+1 of action host */
+							rspamd_ftok_t tld2;
+							if (rspamd_url_find_tld(rspamd_url_host_unsafe(u), u->hostlen, &tld2)) {
+								const char *host = rspamd_url_host_unsafe(u);
+								const char *p2 = tld2.begin;
+								while (p2 > host && *(p2 - 1) != '.') {
+									p2--;
+								}
+								std::string etld1_action{p2, static_cast<std::size_t>(host + u->hostlen - p2)};
+								if (!hc->first_party_etld1.empty() && !g_ascii_strcasecmp(etld1_action.c_str(), hc->first_party_etld1.c_str())) {
+									hc->features.forms_post_affiliated++;
+								}
+								else {
+									hc->features.forms_post_unaffiliated++;
+								}
+							}
+						}
+					}
+				}
+			}
+			break;
+		case Tag_META: {
+			/* Detect meta refresh */
+			auto http_equiv = cur_tag->find_component<html_component_http_equiv>();
+			if (http_equiv) {
+				auto hv = http_equiv.value()->value;
+				if (hv.size() >= sizeof("refresh") - 1 &&
+					g_ascii_strncasecmp(hv.data(), "refresh", hv.size()) == 0) {
+					hc->features.meta_refresh++;
+					/* Try to extract URL from content */
+					if (auto content = cur_tag->find_component<html_component_content>()) {
+						auto cv = content.value()->value;
+						/* naive parse: look for 'url=' and capture token */
+						auto p = rspamd_substring_search_caseless(cv.data(), cv.size(), "url=", sizeof("url=") - 1);
+						if (p != -1) {
+							std::string_view urlv{cv.data() + p + (sizeof("url=") - 1), cv.size() - (p + (sizeof("url=") - 1))};
+							/* Trim quotes/spaces and trailing separators */
+							while (!urlv.empty() && (g_ascii_isspace(urlv.front()) || urlv.front() == '\'' || urlv.front() == '"')) urlv.remove_prefix(1);
+							while (!urlv.empty() && (urlv.back() == ';' || urlv.back() == '\'' || urlv.back() == '"' || g_ascii_isspace(urlv.back()))) urlv.remove_suffix(1);
+							if (!urlv.empty()) {
+								/* validate and count; do not add to urls set */
+								auto maybe_url = html_process_url(pool, urlv);
+								if (maybe_url) {
+									hc->features.meta_refresh_urls++;
+								}
+							}
+						}
+					}
+				}
+			}
+			break;
+		}
+		case Tag_INPUT: {
+			if (auto type_comp = cur_tag->find_component<html_component_type>()) {
+				auto tv = type_comp.value()->get_string_value();
+				if (tv.size() == sizeof("password") - 1 &&
+					g_ascii_strncasecmp(tv.data(), "password", tv.size()) == 0) {
+					hc->features.has_password_input = 1u;
+				}
+			}
+			break;
+		}
+		default:
+			break;
 		}
 
 		/* Shift to the first unclosed tag */
@@ -2137,6 +2317,91 @@ auto html_process_input(struct rspamd_task *task,
 					g_ptr_array_add(part_urls, url);
 				}
 
+				/* Minimal link features collection */
+				hc->features.links.total_links++;
+				if (url->flags & RSPAMD_URL_FLAG_IDN) {
+					hc->features.links.punycode_links++;
+				}
+				if (url->flags & RSPAMD_URL_FLAG_NUMERIC) {
+					hc->features.links.ip_links++;
+				}
+				if (url->flags & RSPAMD_URL_FLAG_HAS_PORT) {
+					hc->features.links.port_links++;
+				}
+				if (url->flags & RSPAMD_URL_FLAG_QUERY) {
+					/* Heuristic: long query length */
+					if (url->querylen > 64) {
+						hc->features.links.long_query_links++;
+					}
+				}
+				/* Scheme type */
+				if (url->protocol == PROTOCOL_MAILTO) {
+					hc->features.links.mailto_links++;
+				}
+				else if (url->protocol == PROTOCOL_HTTP || url->protocol == PROTOCOL_HTTPS) {
+					hc->features.links.http_links++;
+				}
+				/* data/javascript schemes can be detected by flags set during parsing */
+				if (url->protocol == PROTOCOL_UNKNOWN) {
+					/* We don't have explicit scheme enum for data/js; check raw prefix quickly */
+					if (url->raw && url->rawlen >= 5) {
+						if (g_ascii_strncasecmp(url->raw, "data:", 5) == 0) {
+							hc->features.links.data_scheme_links++;
+						}
+						else if (url->rawlen >= 11 && g_ascii_strncasecmp(url->raw, "javascript:", 11) == 0) {
+							hc->features.links.js_scheme_links++;
+						}
+					}
+				}
+				/* Domain counting + affiliation */
+				if (url->hostlen > 0) {
+					std::string host{rspamd_url_host_unsafe(url), url->hostlen};
+					auto &cnt = hc->link_domain_counts[host];
+					cnt++;
+					if (cnt > hc->features.links.max_links_single_domain) {
+						hc->features.links.max_links_single_domain = cnt;
+					}
+					/* Heuristic button weight */
+					float w = 0.0f;
+					if (url->ext && url->ext->linked_url && url->ext->linked_url != url) {
+						w += 0.5f; /* display mismatch bonus */
+					}
+					w += 0.2f * (url->order == 0 ? 1.0f : 1.0f / (float) url->order);
+					if (cur_tag->block && cur_tag->block->is_visible()) {
+						if (cur_tag->block->has_display()) {
+							w += 0.1f;
+						}
+						if (cur_tag->block->width > 0 && cur_tag->block->height > 0) {
+							w += std::min(0.2f, (cur_tag->block->width * cur_tag->block->height) / 100000.0f);
+						}
+						if (cur_tag->block->font_size >= 14) {
+							w += 0.1f;
+						}
+					}
+					if (w > 0) {
+						hc->url_button_weights[url] += w;
+					}
+					/* same eTLD+1 as first-party? */
+					if (!hc->first_party_etld1.empty()) {
+						rspamd_ftok_t tld2;
+						if (rspamd_url_find_tld(host.c_str(), host.size(), &tld2)) {
+							const char *h = host.c_str();
+							const char *p2 = tld2.begin;
+							while (p2 > h && *(p2 - 1) != '.') {
+								p2--;
+							}
+							std::string etld1_link{p2, static_cast<std::size_t>(h + host.size() - p2)};
+							if (!g_ascii_strcasecmp(etld1_link.c_str(), hc->first_party_etld1.c_str())) {
+								hc->features.links.same_etld1_links++;
+							}
+						}
+					}
+				}
+				/* Query presence */
+				if (url->querylen > 0) {
+					hc->features.links.query_links++;
+				}
+
 				href_offset = hc->parsed.size();
 			}
 		}
@@ -2170,6 +2435,18 @@ auto html_process_input(struct rspamd_task *task,
 		else if (cur_tag->id == Tag_LINK) {
 			html_process_link_tag(pool, cur_tag, hc, url_set,
 								  part_urls);
+		}
+
+		/* Track DOM tag count and max depth */
+		hc->features.tags_count++;
+		{
+			unsigned int depth = 0;
+			for (auto *pdepth = cur_tag->parent; pdepth != nullptr; pdepth = pdepth->parent) {
+				depth++;
+			}
+			if (depth > hc->features.max_dom_depth) {
+				hc->features.max_dom_depth = depth;
+			}
 		}
 
 		if (!(cur_tag->flags & CM_EMPTY)) {
@@ -2833,6 +3110,30 @@ auto html_process_input(struct rspamd_task *task,
 		}
 	}
 
+	/* Finalize derived link domain counters */
+	if (!hc->link_domain_counts.empty()) {
+		hc->features.links.domains_total = (unsigned int) hc->link_domain_counts.size();
+	}
+
+	/* Mirror parser flags into features */
+	hc->features.flags = (unsigned int) hc->flags;
+
+	/* Clamp visibility counters to input length */
+	{
+		unsigned int total_decoded = hc->features.text_visible + hc->features.text_hidden;
+		if (total_decoded > (unsigned int) (end - start)) {
+			/* Best-effort clamp */
+			unsigned int excess = total_decoded - (unsigned int) (end - start);
+			if (hc->features.text_hidden >= excess) {
+				hc->features.text_hidden -= excess;
+			}
+			else {
+				hc->features.text_visible -= (excess - hc->features.text_hidden);
+				hc->features.text_hidden = 0;
+			}
+		}
+	}
+
 	return hc;
 }
 
@@ -2986,6 +3287,29 @@ rspamd_html_tag_by_id(int id)
 	}
 
 	return nullptr;
+}
+
+float rspamd_html_url_button_weight(void *html_content, struct rspamd_url *u)
+{
+	if (html_content == NULL || u == NULL) return 0.0f;
+	auto *hc = rspamd::html::html_content::from_ptr(html_content);
+	auto it = hc->url_button_weights.find(u);
+	if (it != hc->url_button_weights.end()) {
+		return it->second;
+	}
+
+	return 0.0f;
+}
+
+const struct rspamd_html_features *
+rspamd_html_get_features(void *html_content)
+{
+	if (html_content == NULL) {
+		return NULL;
+	}
+
+	auto *hc = rspamd::html::html_content::from_ptr(html_content);
+	return &hc->features;
 }
 
 const char *
