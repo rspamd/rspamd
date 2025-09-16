@@ -1937,6 +1937,9 @@ lua_task_create(lua_State *L)
 		}
 	}
 
+	if (cfg == NULL) {
+		return luaL_error(L, "rspamd_task.create requires cfg");
+	}
 	task = rspamd_task_new(NULL, cfg, NULL, NULL, ev_base, FALSE);
 	task->flags |= RSPAMD_TASK_FLAG_EMPTY;
 

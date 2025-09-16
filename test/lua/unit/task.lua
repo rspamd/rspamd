@@ -14,7 +14,7 @@ Content-Type: text/plain
 
 Test.
 ]]
-    local res,task = rspamd_task.load_from_string(msg)
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
     assert_true(res, "failed to load message")
     task:process_message()
     task:destroy()
@@ -48,21 +48,24 @@ Thank you,
 ]]
   test("Process mime nesting: simple", function()
     local msg = hdrs .. body
-    local res,task = rspamd_task.load_from_string(msg)
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
     assert_true(res, "failed to load message")
     task:process_message()
-    assert_rspamd_table_eq_sorted({actual = fun.totable(fun.map(function(u)
-      return u:get_host()
-    end, task:get_urls())), expect = {
-      'evil.com', 'example.com'
-    }})
+    assert_rspamd_table_eq_sorted({
+      actual = fun.totable(fun.map(function(u)
+        return u:get_host()
+      end, task:get_urls())),
+      expect = {
+        'evil.com', 'example.com'
+      }
+    })
     task:destroy()
   end)
   test("Process mime nesting: multipart", function()
-    local msg = table.concat{
+    local msg = table.concat {
       hdrs, mpart, '\n', '--XXX\n', body, '\n--XXX--\n'
     }
-    local res,task = rspamd_task.load_from_string(msg)
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
     assert_true(res, "failed to load message")
     task:process_message()
     assert_rspamd_table_eq_sorted({
@@ -72,14 +75,15 @@ Thank you,
 
       expect = {
         'evil.com', 'example.com'
-      }})
+      }
+    })
     task:destroy()
   end)
   test("Process mime nesting: multipart, broken", function()
-    local msg = table.concat{
+    local msg = table.concat {
       hdrs, mpart, '\n', '--XXX\n', 'garbadge\n', '\n--XXX--\n', '--XXX\n', body
     }
-    local res,task = rspamd_task.load_from_string(msg)
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
     assert_true(res, "failed to load message")
     task:process_message()
     assert_rspamd_table_eq_sorted({
@@ -89,15 +93,16 @@ Thank you,
 
       expect = {
         'evil.com', 'example.com'
-      }})
+      }
+    })
 
     task:destroy()
   end)
   test("Process mime nesting: message", function()
-    local msg = table.concat{
+    local msg = table.concat {
       hdrs, 'Content-Type: message/rfc822\n', '\n', hdrs, body
     }
-    local res,task = rspamd_task.load_from_string(msg)
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
     assert_true(res, "failed to load message")
     task:process_message()
     assert_rspamd_table_eq_sorted({
@@ -107,19 +112,20 @@ Thank you,
 
       expect = {
         'evil.com', 'example.com'
-      }})
+      }
+    })
 
     task:destroy()
   end)
   test("Process mime nesting: message in multipart", function()
-    local msg = table.concat{
+    local msg = table.concat {
       hdrs, mpart, '\n',
       '--XXX\n',
-      'Content-Type: message/rfc822\n', '\n', hdrs, body ,
+      'Content-Type: message/rfc822\n', '\n', hdrs, body,
       '\n--XXX--\n',
     }
 
-    local res,task = rspamd_task.load_from_string(msg)
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
     assert_true(res, "failed to load message")
     task:process_message()
     assert_rspamd_table_eq_sorted({
@@ -129,23 +135,24 @@ Thank you,
 
       expect = {
         'evil.com', 'example.com'
-      }})
+      }
+    })
 
     task:destroy()
   end)
   test("Process mime nesting: multipart message in multipart", function()
-    local msg = table.concat{
+    local msg = table.concat {
       hdrs, mpart, '\n',
       '--XXX\n',
-      'Content-Type: message/rfc822\n', '\n', hdrs,  mpart, '\n',
+      'Content-Type: message/rfc822\n', '\n', hdrs, mpart, '\n',
 
       '--XXX\n',
-      body ,
+      body,
       '\n--XXX--\n',
 
       '\n--XXX--\n',
     }
-    local res,task = rspamd_task.load_from_string(msg)
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
     assert_true(res, "failed to load message")
     task:process_message()
     assert_rspamd_table_eq_sorted({
@@ -155,7 +162,8 @@ Thank you,
 
       expect = {
         'evil.com', 'example.com'
-      }})
+      }
+    })
 
     task:destroy()
   end)
