@@ -1236,8 +1236,8 @@ rspamd_rcl_statfile_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 		else if (class_val == nullptr && spam_val != nullptr) {
 			/* Only spam field present - migrate to class */
-			msg_warn_config("statfile %s uses deprecated 'spam' field, please use 'class' instead",
-							st->symbol);
+			msg_debug_config("statfile %s uses deprecated 'spam' field, please use 'class' instead",
+							 st->symbol);
 			if (st->is_spam) {
 				st->class_name = rspamd_mempool_strdup(pool, "spam");
 			}
