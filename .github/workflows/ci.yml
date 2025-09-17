@@ -25,11 +25,12 @@ jobs:
       name: ubuntu-ci-amd64
 
   ubuntu_arm64:
+    if: ${{ !vars.NO_ARM }}
     uses: ./.github/workflows/ci_rspamd.yml
     with:
       image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-ci
       name: ubuntu-ci-arm64
-      runner: ubuntu-24.04-arm
+      runner: ${{ vars.ARM_RUNNER || 'ubuntu-24.04-arm' }}
 
   ubuntu-focal:
     uses: ./.github/workflows/ci_rspamd_build.yml
