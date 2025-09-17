@@ -1,3 +1,78 @@
+3.13.0: 17 Sep 2025
+  * [Conf] Add defaults
+  * [Conf] Fix JB IDE damage
+  * [Feature] Add a signal from main to workers for workers ready state
+  * [Feature] Add lua_util.fold_header_with_encoding
+  * [Feature] Add some convenience options to rspamc
+  * [Feature] Add some more OS utility functions
+  * [Feature] Add symbols proxy for piecewise changes
+  * [Feature] Allow lua callback maps to be filled line by line
+  * [Feature] Allow selectors in regexp maps expressions
+  * [Feature] Allow to pass expression flags in the regexp plugin
+  * [Feature] Detect part types in mime parser
+  * [Feature] Resolve DNS nameservers names using getaddrinfo
+  * [Fix] Bayes: Try to be bug-to-bug compatible
+  * [Fix] Check skip_hashes for the returned hashes
+  * [Fix] Fix DL lists initialisations
+  * [Fix] Fix double free in the client...
+  * [Fix] Fix end-to-end proxy compression
+  * [Fix] Fix l= calculations again
+  * [Fix] Fix lua state setting ambiguity
+  * [Fix] Fix order of descriptor closing
+  * [Fix] Fix probabilities overflow
+  * [Fix] Fix rules setup
+  * [Fix] Fix statfiles ordering
+  * [Fix] Fix various corner cases and tests
+  * [Fix] Fix whitelist options in the arc module
+  * [Fix] GPT: Fix occasional damage
+  * [Fix] GPT: fix processing of messages with no subject
+  * [Fix] Prevent WebUI crash with empty RRD
+  * [Fix] Store html attributes that are empty
+  * [Fix] Try to fix learned order
+  * [Fix] Use C++20 standard consistently to resolve ODR violations
+  * [Fix] Use a more straightforward approach for learn cache
+  * [Fix] fix error check in lua_dkim_tools.lua
+  * [Project] Add CTA analytics engine
+  * [Project] Add ability to create custom tokenizers for languages
+  * [Project] Add controller learn endpoints
+  * [Project] Add support of granular timeouts to plugins and maps
+  * [Project] Add tests and fix stuff
+  * [Project] Add tests for LLM provider, fix various issues with metatokens
+  * [Project] Apply changes to bayes_expiry plugin
+  * [Project] Create an isolated API for external tokenizers
+  * [Project] Extract more features from HTML messages
+  * [Project] Fix Lua API and some constexpr compatibility
+  * [Project] Fix binary classification and lua scripts
+  * [Project] Fix more calculation issues
+  * [Project] Fix other classification and learning issues
+  * [Project] Fix scoped compilation again
+  * [Project] Fix symbols finalisation
+  * [Project] Fix unlearn stuff
+  * [Project] Fix various issues
+  * [Project] Fix various other issues
+  * [Project] Further updates
+  * [Project] Implement backoff for upstreams revival
+  * [Project] Implement more flexible http timeouts
+  * [Project] Implement scoped compilation
+  * [Project] Implement scoped regexp cache system
+  * [Project] Multi-class classification project baseline
+  * [Project] Rework rspamc to allow training of different neural types
+  * [Project] Rework system of html tags to allow more tag types
+  * [Project] Rework tokenizers initialisation
+  * [Project] Some rework of the CTA defaults
+  * [Project] Start implementation of the rules maps
+  * [Project] Start to implement better revive strategy for upstreams
+  * [Project] Store regexp rules state to avoid incomplete/orphaned rules
+  * [Project] Support more common html attributes
+  * [Project] Take button weight into consideration
+  * [Project] Use re_cache scopes for maps
+  * [Rework] Fix logger format string mismatch
+  * [Rework] MIME detection via Lua Magic; enforce cfg in Lua task API
+  * [Rework] Return back N-ary optimizations for arithmetic-alike expressions
+  * [Rework] Use GLib agnostic type for words
+  * [Rework]Refactor MIME detection via Lua Magic; enforce cfg in Lua task API
+  * [Rules] Make bitcoin expression to use explicit flags
+
 3.12.1: 17 Jun 2025
   * [Feature] Add /bayes/classifiers HTTP endpoint
   * [Feature] Further improvements in scheduling next checks
