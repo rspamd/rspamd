@@ -35,6 +35,7 @@ SET(LUASRC			  ${CMAKE_CURRENT_SOURCE_DIR}/lua_common.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_tensor.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_parsers.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_compress.c
+					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_archive.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_classnames.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_shingles.cxx)
 
