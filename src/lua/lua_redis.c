@@ -19,6 +19,7 @@
 
 #include "contrib/hiredis/hiredis.h"
 #include "contrib/hiredis/async.h"
+#include "redis_pool.h"
 
 #define REDIS_DEFAULT_TIMEOUT 1.0
 
@@ -887,12 +888,15 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 	struct rspamd_task *task = NULL;
 	const char *host = NULL;
 	const char *username = NULL, *password = NULL, *dbname = NULL, *log_tag = NULL;
+    struct rspamd_redis_tls_opts tls_opts;
 	int cbref = -1;
 	struct rspamd_config *cfg = NULL;
 	struct rspamd_async_session *session = NULL;
 	struct ev_loop *ev_base = NULL;
 	gboolean ret = FALSE;
 	unsigned int flags = 0;
+
+	memset(&tls_opts, 0, sizeof(tls_opts));
 
 	if (lua_istable(L, 1)) {
 		/* Table version */
@@ -1009,6 +1013,56 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 		}
 		lua_pop(L, 1);
 
+		/* TLS options (optional) */
+		lua_pushstring(L, "ssl");
+		lua_gettable(L, -2);
+		if (!!lua_toboolean(L, -1)) {
+			tls_opts.use_tls = 1;
+		}
+		lua_pop(L, 1);
+
+		lua_pushstring(L, "no_ssl_verify");
+		lua_gettable(L, -2);
+		if (!!lua_toboolean(L, -1)) {
+			tls_opts.no_ssl_verify = 1;
+		}
+		lua_pop(L, 1);
+
+		lua_pushstring(L, "ssl_ca");
+		lua_gettable(L, -2);
+		if (lua_type(L, -1) == LUA_TSTRING) {
+			tls_opts.ca_file = lua_tostring(L, -1);
+		}
+		lua_pop(L, 1);
+
+		lua_pushstring(L, "ssl_ca_dir");
+		lua_gettable(L, -2);
+		if (lua_type(L, -1) == LUA_TSTRING) {
+			tls_opts.ca_dir = lua_tostring(L, -1);
+		}
+		lua_pop(L, 1);
+
+		lua_pushstring(L, "ssl_cert");
+		lua_gettable(L, -2);
+		if (lua_type(L, -1) == LUA_TSTRING) {
+			tls_opts.cert_file = lua_tostring(L, -1);
+		}
+		lua_pop(L, 1);
+
+		lua_pushstring(L, "ssl_key");
+		lua_gettable(L, -2);
+		if (lua_type(L, -1) == LUA_TSTRING) {
+			tls_opts.key_file = lua_tostring(L, -1);
+		}
+		lua_pop(L, 1);
+
+		lua_pushstring(L, "sni");
+		lua_gettable(L, -2);
+		if (lua_type(L, -1) == LUA_TSTRING) {
+			tls_opts.sni = lua_tostring(L, -1);
+		}
+		lua_pop(L, 1);
+
 		lua_pushstring(L, "no_pool");
 		lua_gettable(L, -2);
 		if (!!lua_toboolean(L, -1)) {
@@ -1070,10 +1124,11 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 
 	if (ret) {
 		ud->terminated = 0;
-		ud->ctx = rspamd_redis_pool_connect(ud->pool,
+		ud->ctx = rspamd_redis_pool_connect_ext(ud->pool,
 											dbname, username, password,
 											rspamd_inet_address_to_string(addr->addr),
-											rspamd_inet_address_get_port(addr->addr));
+											rspamd_inet_address_get_port(addr->addr),
+											&tls_opts);
 
 		if (ip) {
 			rspamd_inet_address_free(ip);

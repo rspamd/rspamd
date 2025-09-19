@@ -33,6 +33,14 @@ local common_schema = {
   prefix = ts.string:is_optional():describe("Key prefix"),
   username = ts.string:is_optional():describe("Username"),
   password = ts.string:is_optional():describe("Password"),
+  -- TLS options
+  ssl = ts.boolean:is_optional():describe("Enable TLS to Redis"),
+  no_ssl_verify = ts.boolean:is_optional():describe("Disable TLS certificate verification"),
+  ssl_ca = ts.string:is_optional():describe("CA certificate file"),
+  ssl_ca_dir = ts.string:is_optional():describe("CA certificates directory"),
+  ssl_cert = ts.string:is_optional():describe("Client certificate file (PEM)"),
+  ssl_key = ts.string:is_optional():describe("Client private key file (PEM)"),
+  sni = ts.string:is_optional():describe("SNI server name override"),
   expand_keys = ts.boolean:is_optional():describe("Expand keys"),
   sentinels = (ts.string + ts.array_of(ts.string)):is_optional():describe("Sentinel servers"),
   sentinel_watch_time = (ts.number + ts.string / lutil.parse_time_interval):is_optional():describe("Sentinel watch time"),
@@ -382,6 +390,29 @@ local function process_redis_opts(options, redis_params)
   end
   if options['password'] and not redis_params['password'] then
     redis_params['password'] = options['password']
+  end
+
+  -- TLS passthrough
+  if options['ssl'] ~= nil and redis_params['ssl'] == nil then
+    redis_params['ssl'] = options['ssl'] and true or false
+  end
+  if options['no_ssl_verify'] ~= nil and redis_params['no_ssl_verify'] == nil then
+    redis_params['no_ssl_verify'] = options['no_ssl_verify'] and true or false
+  end
+  if options['ssl_ca'] and not redis_params['ssl_ca'] then
+    redis_params['ssl_ca'] = options['ssl_ca']
+  end
+  if options['ssl_ca_dir'] and not redis_params['ssl_ca_dir'] then
+    redis_params['ssl_ca_dir'] = options['ssl_ca_dir']
+  end
+  if options['ssl_cert'] and not redis_params['ssl_cert'] then
+    redis_params['ssl_cert'] = options['ssl_cert']
+  end
+  if options['ssl_key'] and not redis_params['ssl_key'] then
+    redis_params['ssl_key'] = options['ssl_key']
+  end
+  if options['sni'] and not redis_params['sni'] then
+    redis_params['sni'] = options['sni']
   end
 
   if not redis_params.sentinels and options.sentinels then
@@ -1022,6 +1053,15 @@ local function rspamd_redis_make_request(task, redis_params, key, is_write,
     options['dbname'] = redis_params['db']
   end
 
+  -- TLS options
+  if redis_params.ssl ~= nil then options.ssl = redis_params.ssl end
+  if redis_params.no_ssl_verify ~= nil then options.no_ssl_verify = redis_params.no_ssl_verify end
+  if redis_params.ssl_ca then options.ssl_ca = redis_params.ssl_ca end
+  if redis_params.ssl_ca_dir then options.ssl_ca_dir = redis_params.ssl_ca_dir end
+  if redis_params.ssl_cert then options.ssl_cert = redis_params.ssl_cert end
+  if redis_params.ssl_key then options.ssl_key = redis_params.ssl_key end
+  if redis_params.sni then options.sni = redis_params.sni end
+
   lutil.debugm(N, task, 'perform request to redis server' ..
       ' (host=%s, timeout=%s): cmd: %s', ip_addr,
       options.timeout, options.cmd)
@@ -1115,6 +1155,15 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key,
   if redis_params['db'] then
     options['dbname'] = redis_params['db']
   end
+
+  -- TLS options
+  if redis_params.ssl ~= nil then options.ssl = redis_params.ssl end
+  if redis_params.no_ssl_verify ~= nil then options.no_ssl_verify = redis_params.no_ssl_verify end
+  if redis_params.ssl_ca then options.ssl_ca = redis_params.ssl_ca end
+  if redis_params.ssl_ca_dir then options.ssl_ca_dir = redis_params.ssl_ca_dir end
+  if redis_params.ssl_cert then options.ssl_cert = redis_params.ssl_cert end
+  if redis_params.ssl_key then options.ssl_key = redis_params.ssl_key end
+  if redis_params.sni then options.sni = redis_params.sni end
 
   lutil.debugm(N, cfg, 'perform taskless request to redis server' ..
       ' (host=%s, timeout=%s): cmd: %s', options.host:tostring(true),
@@ -1748,6 +1797,15 @@ exports.request = function(redis_params, attrs, req)
     opts.dbname = redis_params.db
   end
 
+  -- TLS options
+  if redis_params.ssl ~= nil then opts.ssl = redis_params.ssl end
+  if redis_params.no_ssl_verify ~= nil then opts.no_ssl_verify = redis_params.no_ssl_verify end
+  if redis_params.ssl_ca then opts.ssl_ca = redis_params.ssl_ca end
+  if redis_params.ssl_ca_dir then opts.ssl_ca_dir = redis_params.ssl_ca_dir end
+  if redis_params.ssl_cert then opts.ssl_cert = redis_params.ssl_cert end
+  if redis_params.ssl_key then opts.ssl_key = redis_params.ssl_key end
+  if redis_params.sni then opts.sni = redis_params.sni end
+
   if opts.callback then
     lutil.debugm(N, 'perform generic async request to redis server' ..
         ' (host=%s, timeout=%s): cmd: %s, arguments: %s', addr,
@@ -1852,6 +1910,15 @@ exports.connect = function(redis_params, attrs)
   if redis_params.db then
     opts.dbname = redis_params.db
   end
+
+  -- TLS options
+  if redis_params.ssl ~= nil then opts.ssl = redis_params.ssl end
+  if redis_params.no_ssl_verify ~= nil then opts.no_ssl_verify = redis_params.no_ssl_verify end
+  if redis_params.ssl_ca then opts.ssl_ca = redis_params.ssl_ca end
+  if redis_params.ssl_ca_dir then opts.ssl_ca_dir = redis_params.ssl_ca_dir end
+  if redis_params.ssl_cert then opts.ssl_cert = redis_params.ssl_cert end
+  if redis_params.ssl_key then opts.ssl_key = redis_params.ssl_key end
+  if redis_params.sni then opts.sni = redis_params.sni end
 
   if opts.callback then
     local ret, conn = rspamd_redis.connect(opts)
