@@ -15,6 +15,9 @@
  */
 #include "config.h"
 #include "lua/lua_common.h"
+#if LUA_VERSION_NUM >= 502
+#  define lua_objlen lua_rawlen
+#endif
 #include "rspamd.h"
 #include "stat_internal.h"
 #include "upstream.h"
