@@ -392,6 +392,22 @@ local function process_redis_opts(options, redis_params)
     redis_params['sentinel_masters_pattern'] = options['sentinel_masters_pattern']
   end
 
+  if options['sentinel_watch_time'] and not redis_params['sentinel_watch_time'] then
+    redis_params['sentinel_watch_time'] = options['sentinel_watch_time']
+  end
+
+  if options['sentinel_username'] and not redis_params['sentinel_username'] then
+    redis_params['sentinel_username'] = options['sentinel_username']
+  end
+
+  if options['sentinel_password'] and not redis_params['sentinel_password'] then
+    redis_params['sentinel_password'] = options['sentinel_password']
+  end
+
+  if options['sentinel_master_maxerrors'] and not redis_params['sentinel_master_maxerrors'] then
+    redis_params['sentinel_master_maxerrors'] = options['sentinel_master_maxerrors']
+  end
+
 end
 
 local function enrich_defaults(rspamd_config, module, redis_params)
