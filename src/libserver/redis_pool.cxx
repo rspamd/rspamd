@@ -123,8 +123,8 @@ public:
 							const char *_sni = nullptr)
 		: pool(_pool), ip(_ip), port(_port),
 		  key(redis_pool_elt::make_key(_db, _username, _password, _ip, _port,
-											_use_tls, _no_ssl_verify,
-											_ca_file, _ca_dir, _cert_file, _key_file, _sni))
+									   _use_tls, _no_ssl_verify,
+									   _ca_file, _ca_dir, _cert_file, _key_file, _sni))
 	{
 		is_unix = ip[0] == '.' || ip[0] == '/';
 
@@ -278,7 +278,7 @@ private:
 
 class redis_pool final {
 	static constexpr const double default_timeout = 10.0;
-static constexpr const unsigned default_max_conns = 100;
+	static constexpr const unsigned default_max_conns = 100;
 
 	/* We want to have references integrity */
 	ankerl::unordered_dense::map<redisAsyncContext *,
@@ -314,11 +314,11 @@ public:
 						const char *password, const char *ip, int port) -> redisAsyncContext *;
 
 	auto new_connection_ext(const char *db, const char *username,
-							 const char *password, const char *ip, int port,
-							 bool use_tls, bool no_ssl_verify,
-							 const char *ca_file, const char *ca_dir,
-							 const char *cert_file, const char *key_file,
-							 const char *sni) -> redisAsyncContext *;
+							const char *password, const char *ip, int port,
+							bool use_tls, bool no_ssl_verify,
+							const char *ca_file, const char *ca_dir,
+							const char *cert_file, const char *key_file,
+							const char *sni) -> redisAsyncContext *;
 
 	auto release_connection(redisAsyncContext *ctx,
 							enum rspamd_redis_pool_release_type how) -> void;
@@ -565,17 +565,17 @@ auto redis_pool_elt::new_connection() -> redisAsyncContext *
 							conn->ctx->errstr, ip.c_str(), port, nctx);
 
 			if (nctx) {
-					/* If TLS is configured for this element, initiate it now */
-					if (use_tls && !is_unix) {
-						if (!initiate_tls(nctx)) {
-							redisAsyncFree(nctx);
-							nctx = nullptr;
-						}
+				/* If TLS is configured for this element, initiate it now */
+				if (use_tls && !is_unix) {
+					if (!initiate_tls(nctx)) {
+						redisAsyncFree(nctx);
+						nctx = nullptr;
 					}
+				}
 
 				if (nctx) {
 					active.emplace_front(std::make_unique<redis_pool_connection>(pool, this,
-																		 db.c_str(), username.c_str(), password.c_str(), nctx));
+																				 db.c_str(), username.c_str(), password.c_str(), nctx));
 					active.front()->elt_pos = active.begin();
 				}
 			}
@@ -587,17 +587,17 @@ auto redis_pool_elt::new_connection() -> redisAsyncContext *
 		auto *nctx = redis_async_new();
 
 		if (nctx) {
-				/* If TLS is configured for this element, initiate it now */
-				if (use_tls && !is_unix) {
-					if (!initiate_tls(nctx)) {
-						redisAsyncFree(nctx);
-						nctx = nullptr;
-					}
+			/* If TLS is configured for this element, initiate it now */
+			if (use_tls && !is_unix) {
+				if (!initiate_tls(nctx)) {
+					redisAsyncFree(nctx);
+					nctx = nullptr;
 				}
+			}
 
 			if (nctx) {
 				active.emplace_front(std::make_unique<redis_pool_connection>(pool, this,
-																	 db.c_str(), username.c_str(), password.c_str(), nctx));
+																			 db.c_str(), username.c_str(), password.c_str(), nctx));
 				active.front()->elt_pos = active.begin();
 				auto conn = active.front().get();
 				msg_debug_rpool("no inactive connections; opened new connection to %s:%d: %p",
@@ -637,17 +637,17 @@ auto redis_pool::new_connection(const char *db, const char *username,
 }
 
 auto redis_pool::new_connection_ext(const char *db, const char *username,
-									 const char *password, const char *ip, int port,
-									 bool use_tls, bool no_ssl_verify,
-									 const char *ca_file, const char *ca_dir,
-									 const char *cert_file, const char *key_file,
-									 const char *sni) -> redisAsyncContext *
+									const char *password, const char *ip, int port,
+									bool use_tls, bool no_ssl_verify,
+									const char *ca_file, const char *ca_dir,
+									const char *cert_file, const char *key_file,
+									const char *sni) -> redisAsyncContext *
 {
 
 	if (!wanna_die) {
 		auto key = redis_pool_elt::make_key(db, username, password, ip, port,
-											 use_tls, no_ssl_verify, ca_file, ca_dir,
-											 cert_file, key_file, sni);
+											use_tls, no_ssl_verify, ca_file, ca_dir,
+											cert_file, key_file, sni);
 		auto found_elt = elts_by_key.find(key);
 
 		if (found_elt != elts_by_key.end()) {
@@ -742,8 +742,8 @@ void rspamd_redis_pool_config(void *p,
 
 struct redisAsyncContext *
 rspamd_redis_pool_connect(void *p,
-                      const char *db, const char *username,
-                      const char *password, const char *ip, int port)
+						  const char *db, const char *username,
+						  const char *password, const char *ip, int port)
 {
 	g_assert(p != NULL);
 	auto *pool = reinterpret_cast<class rspamd::redis_pool *>(p);
@@ -761,12 +761,12 @@ rspamd_redis_pool_connect_ext(void *p,
 	g_assert(p != NULL);
 	auto *pool = reinterpret_cast<class rspamd::redis_pool *>(p);
 
-		if (tls && tls->use_tls) {
-			return pool->new_connection_ext(db, username, password, ip, port,
-												true, tls->no_ssl_verify,
-											tls->ca_file, tls->ca_dir,
-											tls->cert_file, tls->key_file,
-											tls->sni);
+	if (tls && tls->use_tls) {
+		return pool->new_connection_ext(db, username, password, ip, port,
+										true, tls->no_ssl_verify,
+										tls->ca_file, tls->ca_dir,
+										tls->cert_file, tls->key_file,
+										tls->sni);
 	}
 	else {
 		return pool->new_connection(db, username, password, ip, port);
