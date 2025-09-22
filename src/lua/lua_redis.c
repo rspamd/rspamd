@@ -889,6 +889,9 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 	const char *host = NULL;
 	const char *username = NULL, *password = NULL, *dbname = NULL, *log_tag = NULL;
     struct rspamd_redis_tls_opts tls_opts;
+    /* Duplicated TLS strings to ensure lifetime beyond Lua stack */
+    char *dup_ca_file = NULL, *dup_ca_dir = NULL, *dup_cert_file = NULL,
+         *dup_key_file = NULL, *dup_sni = NULL;
 	int cbref = -1;
 	struct rspamd_config *cfg = NULL;
 	struct rspamd_async_session *session = NULL;
@@ -896,7 +899,7 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 	gboolean ret = FALSE;
 	unsigned int flags = 0;
 
-	memset(&tls_opts, 0, sizeof(tls_opts));
+    memset(&tls_opts, 0, sizeof(tls_opts));
 
 	if (lua_istable(L, 1)) {
 		/* Table version */
@@ -1013,55 +1016,61 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 		}
 		lua_pop(L, 1);
 
-		/* TLS options (optional) */
-		lua_pushstring(L, "ssl");
-		lua_gettable(L, -2);
-		if (!!lua_toboolean(L, -1)) {
-			tls_opts.use_tls = 1;
-		}
-		lua_pop(L, 1);
+            /* TLS options (optional) */
+            lua_pushstring(L, "ssl");
+            lua_gettable(L, -2);
+            if (!!lua_toboolean(L, -1)) {
+                tls_opts.use_tls = true;
+            }
+            lua_pop(L, 1);
 
-		lua_pushstring(L, "no_ssl_verify");
-		lua_gettable(L, -2);
-		if (!!lua_toboolean(L, -1)) {
-			tls_opts.no_ssl_verify = 1;
-		}
-		lua_pop(L, 1);
+            lua_pushstring(L, "no_ssl_verify");
+            lua_gettable(L, -2);
+            if (!!lua_toboolean(L, -1)) {
+                tls_opts.no_ssl_verify = true;
+            }
+            lua_pop(L, 1);
 
-		lua_pushstring(L, "ssl_ca");
-		lua_gettable(L, -2);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			tls_opts.ca_file = lua_tostring(L, -1);
-		}
-		lua_pop(L, 1);
+            /* Duplicate string options to avoid ephemeral Lua string pointers */
+            lua_pushstring(L, "ssl_ca");
+            lua_gettable(L, -2);
+            if (lua_type(L, -1) == LUA_TSTRING) {
+                dup_ca_file = g_strdup(lua_tostring(L, -1));
+                tls_opts.ca_file = dup_ca_file;
+            }
+            lua_pop(L, 1);
 
-		lua_pushstring(L, "ssl_ca_dir");
-		lua_gettable(L, -2);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			tls_opts.ca_dir = lua_tostring(L, -1);
-		}
-		lua_pop(L, 1);
+            lua_pushstring(L, "ssl_ca_dir");
+            lua_gettable(L, -2);
+            if (lua_type(L, -1) == LUA_TSTRING) {
+                dup_ca_dir = g_strdup(lua_tostring(L, -1));
+                tls_opts.ca_dir = dup_ca_dir;
+            }
+            lua_pop(L, 1);
 
-		lua_pushstring(L, "ssl_cert");
-		lua_gettable(L, -2);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			tls_opts.cert_file = lua_tostring(L, -1);
-		}
-		lua_pop(L, 1);
+            lua_pushstring(L, "ssl_cert");
+            lua_gettable(L, -2);
+            if (lua_type(L, -1) == LUA_TSTRING) {
+                dup_cert_file = g_strdup(lua_tostring(L, -1));
+                tls_opts.cert_file = dup_cert_file;
+            }
+            lua_pop(L, 1);
 
-		lua_pushstring(L, "ssl_key");
-		lua_gettable(L, -2);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			tls_opts.key_file = lua_tostring(L, -1);
-		}
-		lua_pop(L, 1);
+            lua_pushstring(L, "ssl_key");
+            lua_gettable(L, -2);
+            if (lua_type(L, -1) == LUA_TSTRING) {
+                dup_key_file = g_strdup(lua_tostring(L, -1));
+                tls_opts.key_file = dup_key_file;
+            }
+            lua_pop(L, 1);
 
-		lua_pushstring(L, "sni");
-		lua_gettable(L, -2);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			tls_opts.sni = lua_tostring(L, -1);
-		}
-		lua_pop(L, 1);
+            lua_pushstring(L, "sni");
+            lua_gettable(L, -2);
+            if (lua_type(L, -1) == LUA_TSTRING) {
+                dup_sni = g_strdup(lua_tostring(L, -1));
+                tls_opts.sni = dup_sni;
+            }
+            lua_pop(L, 1);
 
 		lua_pushstring(L, "no_pool");
 		lua_gettable(L, -2);
@@ -1124,15 +1133,22 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 
 	if (ret) {
 		ud->terminated = 0;
-		ud->ctx = rspamd_redis_pool_connect_ext(ud->pool,
-											dbname, username, password,
-											rspamd_inet_address_to_string(addr->addr),
-											rspamd_inet_address_get_port(addr->addr),
-											&tls_opts);
+            ud->ctx = rspamd_redis_pool_connect_ext(ud->pool,
+                                                dbname, username, password,
+                                                rspamd_inet_address_to_string(addr->addr),
+                                                rspamd_inet_address_get_port(addr->addr),
+                                                &tls_opts);
 
-		if (ip) {
-			rspamd_inet_address_free(ip);
-		}
+            /* Free temporary TLS strings after they have been consumed */
+            g_free(dup_ca_file);
+            g_free(dup_ca_dir);
+            g_free(dup_cert_file);
+            g_free(dup_key_file);
+            g_free(dup_sni);
+
+  			if (ip) {
+  				rspamd_inet_address_free(ip);
+  			}
 
 		if (ud->ctx == NULL || ud->ctx->err) {
 			if (ud->ctx) {
@@ -1155,14 +1171,21 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 		msg_debug_lua_redis("opened redis connection host=%s; lua_ctx=%p; redis_ctx=%p; ud=%p",
 							host, ctx, ud->ctx, ud);
 
-		return ctx;
-	}
+			return ctx;
+		}
 
-	if (ip) {
-		rspamd_inet_address_free(ip);
-	}
+		if (ip) {
+			rspamd_inet_address_free(ip);
+		}
 
-	return NULL;
+    /* Free any duplicated TLS strings on error path */
+    g_free(dup_ca_file);
+    g_free(dup_ca_dir);
+    g_free(dup_cert_file);
+    g_free(dup_key_file);
+    g_free(dup_sni);
+
+		return NULL;
 }
 
 /***

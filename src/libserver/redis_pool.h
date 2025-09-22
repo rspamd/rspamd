@@ -25,8 +25,8 @@ struct rspamd_config;
 struct redisAsyncContext;
 struct ev_loop;
 struct rspamd_redis_tls_opts {
-    int use_tls;            /* 0/1 */
-    int no_ssl_verify;      /* 0/1 */
+    bool use_tls;           /* enable TLS */
+    bool no_ssl_verify;     /* disable peer verify */
     const char *ca_file;    /* optional */
     const char *ca_dir;     /* optional */
     const char *cert_file;  /* optional */

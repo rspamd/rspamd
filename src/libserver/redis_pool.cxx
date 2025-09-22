@@ -233,6 +233,26 @@ public:
 	}
 
 private:
+	auto initiate_tls(redisAsyncContext *ctx) const -> bool
+	{
+		redisSSLContextError ssl_err = REDIS_SSL_CTX_NONE;
+		redisSSLOptions opts{};
+		opts.cacert_filename = ca_file.empty() ? nullptr : ca_file.c_str();
+		opts.capath = ca_dir.empty() ? nullptr : ca_dir.c_str();
+		opts.cert_filename = cert_file.empty() ? nullptr : cert_file.c_str();
+		opts.private_key_filename = key_file.empty() ? nullptr : key_file.c_str();
+		opts.server_name = sni.empty() ? nullptr : sni.c_str();
+		opts.verify_mode = no_ssl_verify ? REDIS_SSL_VERIFY_NONE : REDIS_SSL_VERIFY_PEER;
+		auto *ssl_ctx = redisCreateSSLContextWithOptions(&opts, &ssl_err);
+		if (!ssl_ctx || redisInitiateSSLWithContext(&ctx->c, ssl_ctx) != REDIS_OK) {
+			msg_err("cannot start TLS for redis %s:%d: %s", ip.c_str(), port, ctx->errstr);
+			if (ssl_ctx) redisFreeSSLContext(ssl_ctx);
+			return false;
+		}
+		redisFreeSSLContext(ssl_ctx);
+		return true;
+	}
+
 	auto redis_async_new() -> redisAsyncContext *
 	{
 		struct redisAsyncContext *ctx;
@@ -498,20 +518,7 @@ redis_pool_connection::redis_pool_connection(redis_pool *_pool,
 	}
 }
 
-static bool ensure_ssl_inited()
-{
-    static bool inited = false;
-    if (!inited) {
-        if (redisInitOpenSSL() == REDIS_OK) {
-            inited = true;
-        }
-        else {
-            /* still try, hiredis might work if already inited elsewhere */
-            inited = true;
-        }
-    }
-    return inited;
-}
+/* OpenSSL is initialised by core before Redis pool is used */
 
 auto redis_pool_elt::new_connection() -> redisAsyncContext *
 {
@@ -558,30 +565,13 @@ auto redis_pool_elt::new_connection() -> redisAsyncContext *
 							conn->ctx->errstr, ip.c_str(), port, nctx);
 
 			if (nctx) {
-				/* If TLS is configured for this element, initiate it now */
-				if (use_tls && !is_unix) {
-					if (ensure_ssl_inited()) {
-						redisSSLContextError ssl_err = REDIS_SSL_CTX_NONE;
-						redisSSLOptions opts{};
-						opts.cacert_filename = ca_file.empty() ? nullptr : ca_file.c_str();
-						opts.capath = ca_dir.empty() ? nullptr : ca_dir.c_str();
-						opts.cert_filename = cert_file.empty() ? nullptr : cert_file.c_str();
-						opts.private_key_filename = key_file.empty() ? nullptr : key_file.c_str();
-						opts.server_name = sni.empty() ? nullptr : sni.c_str();
-						opts.verify_mode = no_ssl_verify ? REDIS_SSL_VERIFY_NONE : REDIS_SSL_VERIFY_PEER;
-
-						auto *ssl_ctx = redisCreateSSLContextWithOptions(&opts, &ssl_err);
-						if (!ssl_ctx || redisInitiateSSLWithContext(&nctx->c, ssl_ctx) != REDIS_OK) {
-							msg_err("cannot start TLS for redis %s:%d: %s", ip.c_str(), port, nctx->errstr);
-							if (ssl_ctx) redisFreeSSLContext(ssl_ctx);
+					/* If TLS is configured for this element, initiate it now */
+					if (use_tls && !is_unix) {
+						if (!initiate_tls(nctx)) {
 							redisAsyncFree(nctx);
 							nctx = nullptr;
 						}
-						else {
-							redisFreeSSLContext(ssl_ctx);
-						}
 					}
-				}
 
 				if (nctx) {
 					active.emplace_front(std::make_unique<redis_pool_connection>(pool, this,
@@ -597,30 +587,13 @@ auto redis_pool_elt::new_connection() -> redisAsyncContext *
 		auto *nctx = redis_async_new();
 
 		if (nctx) {
-			/* If TLS is configured for this element, initiate it now */
-			if (use_tls && !is_unix) {
-				if (ensure_ssl_inited()) {
-					redisSSLContextError ssl_err = REDIS_SSL_CTX_NONE;
-					redisSSLOptions opts{};
-					opts.cacert_filename = ca_file.empty() ? nullptr : ca_file.c_str();
-					opts.capath = ca_dir.empty() ? nullptr : ca_dir.c_str();
-					opts.cert_filename = cert_file.empty() ? nullptr : cert_file.c_str();
-					opts.private_key_filename = key_file.empty() ? nullptr : key_file.c_str();
-					opts.server_name = sni.empty() ? nullptr : sni.c_str();
-					opts.verify_mode = no_ssl_verify ? REDIS_SSL_VERIFY_NONE : REDIS_SSL_VERIFY_PEER;
-
-					auto *ssl_ctx = redisCreateSSLContextWithOptions(&opts, &ssl_err);
-					if (!ssl_ctx || redisInitiateSSLWithContext(&nctx->c, ssl_ctx) != REDIS_OK) {
-						msg_err("cannot start TLS for redis %s:%d: %s", ip.c_str(), port, nctx->errstr);
-						if (ssl_ctx) redisFreeSSLContext(ssl_ctx);
+				/* If TLS is configured for this element, initiate it now */
+				if (use_tls && !is_unix) {
+					if (!initiate_tls(nctx)) {
 						redisAsyncFree(nctx);
 						nctx = nullptr;
 					}
-					else {
-						redisFreeSSLContext(ssl_ctx);
-					}
 				}
-			}
 
 			if (nctx) {
 				active.emplace_front(std::make_unique<redis_pool_connection>(pool, this,
@@ -788,9 +761,9 @@ rspamd_redis_pool_connect_ext(void *p,
 	g_assert(p != NULL);
 	auto *pool = reinterpret_cast<class rspamd::redis_pool *>(p);
 
-	if (tls && tls->use_tls) {
-		return pool->new_connection_ext(db, username, password, ip, port,
-											true, tls->no_ssl_verify != 0,
+		if (tls && tls->use_tls) {
+			return pool->new_connection_ext(db, username, password, ip, port,
+												true, tls->no_ssl_verify,
 											tls->ca_file, tls->ca_dir,
 											tls->cert_file, tls->key_file,
 											tls->sni);
