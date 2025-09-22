@@ -55,6 +55,37 @@ struct rspamd_archive {
 	GPtrArray *files; /* Array of struct rspamd_archive_file */
 };
 
+/* Writer API */
+struct rspamd_zip_file_spec {
+	const char *name;          /* UTF-8 relative path */
+	const unsigned char *data; /* file content */
+	gsize len;                 /* content length */
+	/* Optional attrs */
+	time_t mtime; /* 0 means now */
+	guint32 mode; /* UNIX perm bits; 0 means 0644 */
+};
+
+/**
+ * Create a ZIP archive in-memory from provided files (DEFLATE compression)
+ * If password is non-NULL, the ZIP is created normally and then encrypted as a whole
+ * using AES-256-CBC with PBKDF2-HMAC-SHA256 and a random salt/IV. The result format is:
+ *  [ 'RZAE0001' (8 bytes) | salt (16 bytes) | iv (16 bytes) | ciphertext ]
+ * Returns newly allocated GByteArray on success, NULL on error and sets err
+ */
+GByteArray *rspamd_archives_zip_write(const struct rspamd_zip_file_spec *files,
+									  gsize nfiles,
+									  const char *password,
+									  GError **err);
+
+/**
+ * AES-256-CBC encrypts arbitrary data buffer using PBKDF2-HMAC-SHA256 derived key.
+ * Output format: [ 'RZAE0001' | salt(16) | iv(16) | ciphertext ]
+ */
+GByteArray *rspamd_archives_encrypt_aes256_cbc(const unsigned char *in,
+											   gsize inlen,
+											   const char *password,
+											   GError **err);
+
 /**
  * Process archives from a worker task
  */
