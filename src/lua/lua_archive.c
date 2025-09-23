@@ -216,7 +216,15 @@ lua_archive_zip_encrypt(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	luaL_checktype(L, 1, LUA_TTABLE);
-	const char *password = luaL_checkstring(L, 2);
+	const char *password = NULL;
+	if (lua_gettop(L) >= 2 && !lua_isnil(L, 2)) {
+		if (lua_type(L, 2) == LUA_TSTRING) {
+			password = lua_tostring(L, 2);
+		}
+		else {
+			return luaL_error(L, "invalid password (string expected)");
+		}
+	}
 	GArray *specs = g_array_sized_new(FALSE, FALSE, sizeof(struct rspamd_zip_file_spec), 8);
 	GError *err = NULL;
 
@@ -601,10 +609,11 @@ lua_archive_pack(lua_State *L)
 }
 
 /***
- * @function archive.unpack(data[, format])
+ * @function archive.unpack(data[, format][, password])
  * Unpacks an archive from a Lua string (or rspamd_text) using libarchive.
  * @param {string|text} data archive contents
  * @param {string} format optional format name to restrict autodetection (e.g. "zip")
+ * @param {string} password optional password for encrypted archives (e.g. ZIP AES)
  * @return {table} array of files: { name = string, content = text } (non-regular entries are skipped)
  */
 static int
@@ -613,6 +622,7 @@ lua_archive_unpack(lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t = NULL;
 	const char *format = NULL;
+	const char *password = NULL;
 	struct archive *a = NULL;
 
 	t = lua_check_text_or_string(L, 1);
@@ -623,6 +633,9 @@ lua_archive_unpack(lua_State *L)
 
 	if (lua_type(L, 2) == LUA_TSTRING) {
 		format = lua_tostring(L, 2);
+	}
+	if (lua_type(L, 3) == LUA_TSTRING) {
+		password = lua_tostring(L, 3);
 	}
 
 	a = archive_read_new();
@@ -637,6 +650,17 @@ lua_archive_unpack(lua_State *L)
 	}
 	else {
 		archive_read_support_format_all(a);
+	}
+
+	if (password && *password) {
+		/* supply passphrase for encrypted archives (e.g. zip AES) */
+		int pr = archive_read_add_passphrase(a, password);
+		if (pr != ARCHIVE_OK) {
+			const char *aerr = archive_error_string(a);
+			lua_pushfstring(L, "cannot set passphrase: %s", aerr ? aerr : "unknown error");
+			archive_read_free(a);
+			return lua_error(L);
+		}
 	}
 
 	int r = archive_read_open_memory(a, t->start, t->len);

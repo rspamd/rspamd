@@ -53,12 +53,25 @@ context("Lua archive bindings", function()
     local blob = archive.zip_encrypt(files, pwd)
     assert_equal(type(blob), "userdata")
     -- libarchive can read AE-2, so unpack should succeed and yield the same files
-    local out = archive.unpack(blob, "zip")
+    local out = archive.unpack(blob, "zip", pwd)
     assert_equal(#out, 2)
     local names = {}
     for _, f in ipairs(out) do names[f.name] = f.content end
     assert_rspamd_eq({ actual = names["dir/x.txt"], expect = rspamd_text.fromstring("secret") })
     assert_rspamd_eq({ actual = names["y.bin"], expect = rspamd_text.fromstring("\001\002\003") })
+  end)
+
+  test("zip_encrypt with wrong password fails to unpack", function()
+    local files = {
+      { name = "secret.txt", content = "topsecret" },
+    }
+    local pwd = "goodpass"
+    local blob = archive.zip_encrypt(files, pwd)
+    assert_equal(type(blob), "userdata")
+    local ok, err = pcall(function()
+      archive.unpack(blob, "zip", "badpass")
+    end)
+    assert_equal(ok, false)
   end)
 
   test("tar/untar helpers roundtrip (no compression)", function()
