@@ -16,6 +16,7 @@
 
 #include "lua_common.h"
 #include "unix-std.h"
+#include "libmime/archives.h"
 
 #include <archive.h>
 #include <archive_entry.h>
@@ -61,6 +62,7 @@ LUA_FUNCTION_DEF(archive, supported_formats);
  * @return {text} archive bytes
  */
 LUA_FUNCTION_DEF(archive, zip);
+LUA_FUNCTION_DEF(archive, zip_encrypt);
 /***
  * @function archive.unzip(data)
  * Extract files from a ZIP archive.
@@ -94,6 +96,7 @@ static const struct luaL_reg arch_mod_f[] = {
 	LUA_INTERFACE_DEF(archive, unpack),
 	LUA_INTERFACE_DEF(archive, supported_formats),
 	LUA_INTERFACE_DEF(archive, zip),
+	LUA_INTERFACE_DEF(archive, zip_encrypt),
 	LUA_INTERFACE_DEF(archive, unzip),
 	LUA_INTERFACE_DEF(archive, tar),
 	LUA_INTERFACE_DEF(archive, untar),
@@ -197,6 +200,119 @@ lua_archive_zip(lua_State *L)
 	lua_pushstring(L, "zip");
 	lua_insert(L, 1);
 	return lua_archive_pack(L);
+}
+
+/**
+ * zip_encrypt(files, password) -> text
+ */
+static int
+lua_archive_zip_encrypt(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	luaL_checktype(L, 1, LUA_TTABLE);
+	const char *password = luaL_checkstring(L, 2);
+	GArray *specs = g_array_sized_new(FALSE, FALSE, sizeof(struct rspamd_zip_file_spec), 8);
+	GError *err = NULL;
+
+	/* Iterate files array */
+	lua_pushnil(L);
+
+	while (lua_next(L, 1)) {
+		if (!lua_istable(L, -1)) {
+			g_array_free(specs, TRUE);
+			return luaL_error(L, "invalid file entry (expected table)");
+		}
+
+		int item_idx = lua_gettop(L);
+		const char *name = NULL;
+		const char *sdata = NULL;
+		size_t slen = 0;
+		time_t mtime = (time_t) 0;
+		guint32 mode = 0644;
+
+		lua_getfield(L, item_idx, "name");
+		name = lua_tostring(L, -1);
+		if (name == NULL || *name == '\0') {
+			lua_pop(L, 2);
+			g_array_free(specs, TRUE);
+			return luaL_error(L, "invalid file entry (missing name)");
+		}
+		char *dupname = g_strdup(name);
+		lua_pop(L, 1);
+
+		lua_getfield(L, item_idx, "content");
+		struct rspamd_lua_text *t = NULL;
+		if ((t = lua_check_text_or_string(L, -1)) != NULL) {
+			sdata = (const char *) t->start;
+			slen = t->len;
+		}
+		else if (lua_isstring(L, -1)) {
+			sdata = lua_tolstring(L, -1, &slen);
+		}
+		else {
+			lua_pop(L, 2);
+			g_free(dupname);
+			g_array_free(specs, TRUE);
+			return luaL_error(L, "invalid file entry (missing content)");
+		}
+		unsigned char *dupdata = NULL;
+		if (slen > 0) {
+			dupdata = g_malloc(slen);
+			memcpy(dupdata, sdata, slen);
+		}
+		lua_pop(L, 1);
+
+		lua_getfield(L, item_idx, "mode");
+		if (lua_isnumber(L, -1)) {
+			mode = (guint32) lua_tointeger(L, -1);
+		}
+		lua_pop(L, 1);
+		lua_getfield(L, item_idx, "perms");
+		if (lua_isnumber(L, -1)) {
+			mode = (guint32) lua_tointeger(L, -1);
+		}
+		lua_pop(L, 1);
+
+		lua_getfield(L, item_idx, "mtime");
+		if (lua_isnumber(L, -1)) {
+			mtime = (time_t) lua_tointeger(L, -1);
+		}
+		lua_pop(L, 1);
+
+		struct rspamd_zip_file_spec s;
+		s.name = dupname;
+		s.data = dupdata;
+		s.len = (gsize) slen;
+		s.mtime = mtime;
+		s.mode = mode;
+		g_array_append_val(specs, s);
+
+		lua_pop(L, 1);
+	}
+
+	GByteArray *ba = rspamd_archives_zip_write((const struct rspamd_zip_file_spec *) specs->data,
+											   specs->len,
+											   password,
+											   &err);
+
+	for (guint i = 0; i < specs->len; i++) {
+		struct rspamd_zip_file_spec *s = &g_array_index(specs, struct rspamd_zip_file_spec, i);
+		if (s->name) g_free((gpointer) s->name);
+		if (s->data) g_free((gpointer) s->data);
+	}
+	g_array_free(specs, TRUE);
+
+	if (ba == NULL) {
+		const char *emsg = (err && err->message) ? err->message : "zip encryption failed";
+		if (err) g_error_free(err);
+		return luaL_error(L, "%s", emsg);
+	}
+
+	size_t outlen = ba->len;
+	guint8 *outdata = g_byte_array_free(ba, FALSE);
+	struct rspamd_lua_text *txt = lua_new_text(L, (const char *) outdata, outlen, FALSE);
+	txt->flags |= RSPAMD_TEXT_FLAG_OWN;
+	return 1;
 }
 
 static int

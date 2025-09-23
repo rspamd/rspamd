@@ -507,7 +507,6 @@ rspamd_archives_zip_write(const struct rspamd_zip_file_spec *files,
 			guint16 *p16 = (guint16 *) (zip->data + lfh_off + 30 + (guint32) strlen(f->name) + 9);
 			*p16 = GUINT16_TO_LE(actual_method);
 #else
-			g_byte_array_free(cdata, TRUE);
 			g_byte_array_free(cd, TRUE);
 			g_byte_array_free(zip, TRUE);
 			g_set_error(err, q, ENOTSUP, "AES-CTR encryption requires OpenSSL");
@@ -605,97 +604,7 @@ rspamd_archives_zip_write(const struct rspamd_zip_file_spec *files,
 	return zip;
 }
 
-GByteArray *
-rspamd_archives_encrypt_aes256_cbc(const unsigned char *in,
-								   gsize inlen,
-								   const char *password,
-								   GError **err)
-{
-#ifndef HAVE_OPENSSL
-	(void) in;
-	(void) inlen;
-	(void) password;
-	GQuark q = rspamd_archives_err_quark();
-	g_set_error(err, q, ENOTSUP, "OpenSSL is not available");
-	return NULL;
-#else
-	GQuark q = rspamd_archives_err_quark();
-	unsigned char salt[16];
-	unsigned char iv[16];
-	unsigned char key[32];
-	const int kdf_iters = 100000;
-	GByteArray *out = NULL;
-	EVP_CIPHER_CTX *ctx = NULL;
-
-	if (password == NULL || *password == '\0') {
-		g_set_error(err, q, EINVAL, "empty password");
-		return NULL;
-	}
-
-	if (RAND_bytes(salt, sizeof(salt)) != 1 || RAND_bytes(iv, sizeof(iv)) != 1) {
-		g_set_error(err, q, EIO, "cannot generate random salt/iv: %s", ERR_error_string(ERR_get_error(), NULL));
-		return NULL;
-	}
-
-	if (PKCS5_PBKDF2_HMAC(password, (int) strlen(password), salt, (int) sizeof(salt),
-						  kdf_iters, EVP_sha256(), (int) sizeof(key), key) != 1) {
-		g_set_error(err, q, EIO, "PBKDF2 failed: %s", ERR_error_string(ERR_get_error(), NULL));
-		return NULL;
-	}
-
-	ctx = EVP_CIPHER_CTX_new();
-	if (ctx == NULL) {
-		g_set_error(err, q, ENOMEM, "cannot alloc cipher ctx");
-		rspamd_explicit_memzero(key, sizeof(key));
-		return NULL;
-	}
-
-	if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv) != 1) {
-		g_set_error(err, q, EIO, "cipher init failed: %s", ERR_error_string(ERR_get_error(), NULL));
-		EVP_CIPHER_CTX_free(ctx);
-		rspamd_explicit_memzero(key, sizeof(key));
-		return NULL;
-	}
-
-	/* Prepare output: magic + salt + iv + ciphertext; write directly into GByteArray */
-	const char magic[8] = {'R', 'Z', 'A', 'E', '0', '0', '0', '1'};
-	out = g_byte_array_sized_new(8 + sizeof(salt) + sizeof(iv) + inlen + 32);
-	g_byte_array_append(out, (const guint8 *) magic, sizeof(magic));
-	g_byte_array_append(out, salt, sizeof(salt));
-	g_byte_array_append(out, iv, sizeof(iv));
-
-	gsize before = out->len;
-	g_byte_array_set_size(out, out->len + inlen + EVP_CIPHER_block_size(EVP_aes_256_cbc()));
-	unsigned char *cptr = out->data + before;
-	int outlen = 0;
-
-	if (EVP_EncryptUpdate(ctx, cptr, &outlen, in, (int) inlen) != 1) {
-		g_set_error(err, q, EIO, "encrypt update failed: %s", ERR_error_string(ERR_get_error(), NULL));
-		EVP_CIPHER_CTX_free(ctx);
-		rspamd_explicit_memzero(key, sizeof(key));
-		g_byte_array_set_size(out, before);
-		g_byte_array_free(out, TRUE);
-		return NULL;
-	}
-
-	int fin = 0;
-	if (EVP_EncryptFinal_ex(ctx, cptr + outlen, &fin) != 1) {
-		g_set_error(err, q, EIO, "encrypt final failed: %s", ERR_error_string(ERR_get_error(), NULL));
-		EVP_CIPHER_CTX_free(ctx);
-		rspamd_explicit_memzero(key, sizeof(key));
-		g_byte_array_set_size(out, before);
-		g_byte_array_free(out, TRUE);
-		return NULL;
-	}
-
-	g_byte_array_set_size(out, before + outlen + fin);
-	EVP_CIPHER_CTX_free(ctx);
-	rspamd_explicit_memzero(key, sizeof(key));
-
-	msg_info("zip: AES-256-CBC envelope created (PBKDF2-SHA256 iters=%d)", kdf_iters);
-	return out;
-#endif
-}
+/* removed obsolete whole-archive AES-256-CBC function */
 
 static bool
 rspamd_archive_file_try_utf(struct rspamd_task *task,

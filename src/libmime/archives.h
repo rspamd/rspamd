@@ -66,25 +66,18 @@ struct rspamd_zip_file_spec {
 };
 
 /**
- * Create a ZIP archive in-memory from provided files (DEFLATE compression)
- * If password is non-NULL, the ZIP is created normally and then encrypted as a whole
- * using AES-256-CBC with PBKDF2-HMAC-SHA256 and a random salt/IV. The result format is:
- *  [ 'RZAE0001' (8 bytes) | salt (16 bytes) | iv (16 bytes) | ciphertext ]
- * Returns newly allocated GByteArray on success, NULL on error and sets err
+ * Create an in-memory ZIP archive from provided files.
+ * - Uses DEFLATE (method 8) or STORE (method 0) per entry, depending on gain.
+ * - If 'password' is non-NULL, each entry is encrypted using WinZip AES (AE-2):
+ *   method 99 + 0x9901 extra, PBKDF2-HMAC-SHA1(1000), AES-CTR, 10-byte HMAC-SHA1 tag.
+ *   Interoperable with 7-Zip/WinZip/libarchive.
+ * - UTF-8 filenames (GPBF bit 11) are used.
+ * Returns newly allocated GByteArray on success, NULL on error and sets 'err'.
  */
 GByteArray *rspamd_archives_zip_write(const struct rspamd_zip_file_spec *files,
 									  gsize nfiles,
 									  const char *password,
 									  GError **err);
-
-/**
- * AES-256-CBC encrypts arbitrary data buffer using PBKDF2-HMAC-SHA256 derived key.
- * Output format: [ 'RZAE0001' | salt(16) | iv(16) | ciphertext ]
- */
-GByteArray *rspamd_archives_encrypt_aes256_cbc(const unsigned char *in,
-											   gsize inlen,
-											   const char *password,
-											   GError **err);
 
 /**
  * Process archives from a worker task
