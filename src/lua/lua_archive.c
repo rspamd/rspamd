@@ -202,8 +202,14 @@ lua_archive_zip(lua_State *L)
 	return lua_archive_pack(L);
 }
 
-/**
- * zip_encrypt(files, password) -> text
+/***
+ * @function archive.zip_encrypt(files[, password])
+ * Create a ZIP archive in-memory using Rspamd ZIP writer.
+ * If password is provided and non-empty, entries are encrypted via WinZip AES (AE-2).
+ * - AES-256-CTR with HMAC-SHA1 (10-byte tag), interoperable with 7-Zip/WinZip/libarchive
+ * @param {table} files array: { name = string, content = string|rspamd_text, [mode|perms] = int, [mtime] = int }
+ * @param {string} password optional password string
+ * @return {text} archive bytes
  */
 static int
 lua_archive_zip_encrypt(lua_State *L)
@@ -529,9 +535,11 @@ lua_archive_pack(lua_State *L)
 	wctx.buf = g_byte_array_new();
 
 	if (archive_write_open(a, &wctx, lua_archive_write_open, lua_archive_write_cb, lua_archive_write_close) != ARCHIVE_OK) {
+		const char *aerr = archive_error_string(a);
+		lua_pushfstring(L, "cannot open archive writer: %s", aerr ? aerr : "unknown error");
 		g_byte_array_free(wctx.buf, TRUE);
 		archive_write_free(a);
-		return luaL_error(L, "cannot open archive writer: %s", archive_error_string(a));
+		return lua_error(L);
 	}
 
 	/* Iterate files table */
@@ -556,21 +564,23 @@ lua_archive_pack(lua_State *L)
 
 		int r = archive_write_header(a, ae);
 		if (r != ARCHIVE_OK) {
-			const char *err = archive_error_string(a);
+			const char *aerr = archive_error_string(a);
+			lua_pushfstring(L, "cannot write header: %s", aerr ? aerr : "unknown error");
 			archive_entry_free(ae);
 			archive_write_free(a);
 			g_byte_array_free(wctx.buf, TRUE);
-			return luaL_error(L, "cannot write header: %s", err ? err : "unknown error");
+			return lua_error(L);
 		}
 
 		if (dlen > 0) {
 			la_ssize_t wr = archive_write_data(a, data, dlen);
 			if (wr < 0 || (size_t) wr != dlen) {
-				const char *err = archive_error_string(a);
+				const char *aerr = archive_error_string(a);
+				lua_pushfstring(L, "cannot write data: %s", aerr ? aerr : "unknown error");
 				archive_entry_free(ae);
 				archive_write_free(a);
 				g_byte_array_free(wctx.buf, TRUE);
-				return luaL_error(L, "cannot write data: %s", err ? err : "unknown error");
+				return lua_error(L);
 			}
 		}
 
@@ -631,9 +641,10 @@ lua_archive_unpack(lua_State *L)
 
 	int r = archive_read_open_memory(a, t->start, t->len);
 	if (r != ARCHIVE_OK) {
-		const char *err = archive_error_string(a);
+		const char *aerr = archive_error_string(a);
+		lua_pushfstring(L, "cannot open archive: %s", aerr ? aerr : "unknown error");
 		archive_read_free(a);
-		return luaL_error(L, "cannot open archive: %s", err ? err : "unknown error");
+		return lua_error(L);
 	}
 
 	lua_newtable(L);
@@ -659,10 +670,11 @@ lua_archive_unpack(lua_State *L)
 					break;
 				}
 				else if (rr < 0) {
-					const char *err = archive_error_string(a);
+					const char *aerr = archive_error_string(a);
+					lua_pushfstring(L, "cannot read data: %s", aerr ? aerr : "unknown error");
 					g_byte_array_free(ba, TRUE);
 					archive_read_free(a);
-					return luaL_error(L, "cannot read data: %s", err ? err : "unknown error");
+					return lua_error(L);
 				}
 				g_byte_array_append(ba, (const guint8 *) buf, (guint) rr);
 			}

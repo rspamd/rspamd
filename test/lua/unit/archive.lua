@@ -32,6 +32,35 @@ context("Lua archive bindings", function()
     assert_rspamd_eq({ actual = out[1].content, expect = rnd })
   end)
 
+  test("zip_encrypt without password == plain zip", function()
+    local files = {
+      { name = "a.txt", content = "Hello" },
+    }
+    local blob = archive.zip_encrypt(files) -- no password
+    assert_equal(type(blob), "userdata")
+    local out = archive.unzip(blob)
+    assert_equal(#out, 1)
+    assert_equal(out[1].name, "a.txt")
+    assert_rspamd_eq({ actual = out[1].content, expect = rspamd_text.fromstring("Hello") })
+  end)
+
+  test("zip_encrypt with password (AE-2) roundtrip via libarchive", function()
+    local files = {
+      { name = "dir/x.txt", content = "secret" },
+      { name = "y.bin",     content = rspamd_text.fromstring("\001\002\003") },
+    }
+    local pwd = "testpass123"
+    local blob = archive.zip_encrypt(files, pwd)
+    assert_equal(type(blob), "userdata")
+    -- libarchive can read AE-2, so unpack should succeed and yield the same files
+    local out = archive.unpack(blob, "zip")
+    assert_equal(#out, 2)
+    local names = {}
+    for _, f in ipairs(out) do names[f.name] = f.content end
+    assert_rspamd_eq({ actual = names["dir/x.txt"], expect = rspamd_text.fromstring("secret") })
+    assert_rspamd_eq({ actual = names["y.bin"], expect = rspamd_text.fromstring("\001\002\003") })
+  end)
+
   test("tar/untar helpers roundtrip (no compression)", function()
     local files = {
       { name = "x.txt", content = "X" },
