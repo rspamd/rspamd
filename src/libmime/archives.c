@@ -27,12 +27,7 @@
 #include <archive.h>
 #include <archive_entry.h>
 #include <zlib.h>
-#ifdef HAVE_OPENSSL
-#include <openssl/evp.h>
-#include <openssl/rand.h>
-#include <openssl/err.h>
-#include <openssl/hmac.h>
-#endif
+#include "ottery.h"
 
 #define msg_debug_archive(...) rspamd_conditional_debug_fast(NULL, NULL,                                                 \
 															 rspamd_archive_log_id, "archive", task->task_pool->tag.uid, \
@@ -289,24 +284,81 @@ rspamd_zip_write_central_header(GByteArray *cd,
 	g_byte_array_append(cd, (const guint8 *) name, strlen(name));
 }
 
-#define ZIP_AES_EXTRA_ID 0x9901
+/* --- ZipCrypto (PKWARE traditional) helpers --- */
+static const guint32 rspamd_zip_crc32_tab[256] = {
+	0x00000000U, 0x77073096U, 0xEE0E612CU, 0x990951BAU, 0x076DC419U, 0x706AF48FU, 0xE963A535U, 0x9E6495A3U,
+	0x0EDB8832U, 0x79DCB8A4U, 0xE0D5E91EU, 0x97D2D988U, 0x09B64C2BU, 0x7EB17CBDU, 0xE7B82D07U, 0x90BF1D91U,
+	0x1DB71064U, 0x6AB020F2U, 0xF3B97148U, 0x84BE41DEU, 0x1ADAD47DU, 0x6DDDE4EBU, 0xF4D4B551U, 0x83D385C7U,
+	0x136C9856U, 0x646BA8C0U, 0xFD62F97AU, 0x8A65C9ECU, 0x14015C4FU, 0x63066CD9U, 0xFA0F3D63U, 0x8D080DF5U,
+	0x3B6E20C8U, 0x4C69105EU, 0xD56041E4U, 0xA2677172U, 0x3C03E4D1U, 0x4B04D447U, 0xD20D85FDU, 0xA50AB56BU,
+	0x35B5A8FAU, 0x42B2986CU, 0xDBBBC9D6U, 0xACBCF940U, 0x32D86CE3U, 0x45DF5C75U, 0xDCD60DCFU, 0xABD13D59U,
+	0x26D930ACU, 0x51DE003AU, 0xC8D75180U, 0xBFD06116U, 0x21B4F4B5U, 0x56B3C423U, 0xCFBA9599U, 0xB8BDA50FU,
+	0x2802B89EU, 0x5F058808U, 0xC60CD9B2U, 0xB10BE924U, 0x2F6F7C87U, 0x58684C11U, 0xC1611DABU, 0xB6662D3DU,
+	0x76DC4190U, 0x01DB7106U, 0x98D220BCU, 0xEFD5102AU, 0x71B18589U, 0x06B6B51FU, 0x9FBFE4A5U, 0xE8B8D433U,
+	0x7807C9A2U, 0x0F00F934U, 0x9609A88EU, 0xE10E9818U, 0x7F6A0DBBU, 0x086D3D2DU, 0x91646C97U, 0xE6635C01U,
+	0x6B6B51F4U, 0x1C6C6162U, 0x856530D8U, 0xF262004EU, 0x6C0695EDU, 0x1B01A57BU, 0x8208F4C1U, 0xF50FC457U,
+	0x65B0D9C6U, 0x12B7E950U, 0x8BBEB8EAU, 0xFCB9887CU, 0x62DD1DDFU, 0x15DA2D49U, 0x8CD37CF3U, 0xFBD44C65U,
+	0x4DB26158U, 0x3AB551CEU, 0xA3BC0074U, 0xD4BB30E2U, 0x4ADFA541U, 0x3DD895D7U, 0xA4D1C46DU, 0xD3D6F4FBU,
+	0x4369E96AU, 0x346ED9FCU, 0xAD678846U, 0xDA60B8D0U, 0x44042D73U, 0x33031DE5U, 0xAA0A4C5FU, 0xDD0D7CC9U,
+	0x5005713CU, 0x270241AAU, 0xBE0B1010U, 0xC90C2086U, 0x5768B525U, 0x206F85B3U, 0xB966D409U, 0xCE61E49FU,
+	0x5EDEF90EU, 0x29D9C998U, 0xB0D09822U, 0xC7D7A8B4U, 0x59B33D17U, 0x2EB40D81U, 0xB7BD5C3BU, 0xC0BA6CADU,
+	0xEDB88320U, 0x9ABFB3B6U, 0x03B6E20CU, 0x74B1D29AU, 0xEAD54739U, 0x9DD277AFU, 0x04DB2615U, 0x73DC1683U,
+	0xE3630B12U, 0x94643B84U, 0x0D6D6A3EU, 0x7A6A5AA8U, 0xE40ECF0BU, 0x9309FF9DU, 0x0A00AE27U, 0x7D079EB1U,
+	0xF00F9344U, 0x8708A3D2U, 0x1E01F268U, 0x6906C2FEU, 0xF762575DU, 0x806567CBU, 0x196C3671U, 0x6E6B06E7U,
+	0xFED41B76U, 0x89D32BE0U, 0x10DA7A5AU, 0x67DD4ACCU, 0xF9B9DF6FU, 0x8EBEEFF9U, 0x17B7BE43U, 0x60B08ED5U,
+	0xD6D6A3E8U, 0xA1D1937EU, 0x38D8C2C4U, 0x4FDFF252U, 0xD1BB67F1U, 0xA6BC5767U, 0x3FB506DDU, 0x48B2364BU,
+	0xD80D2BDAU, 0xAF0A1B4CU, 0x36034AF6U, 0x41047A60U, 0xDF60EFC3U, 0xA867DF55U, 0x316E8EEFU, 0x4669BE79U,
+	0xCB61B38CU, 0xBC66831AU, 0x256FD2A0U, 0x5268E236U, 0xCC0C7795U, 0xBB0B4703U, 0x220216B9U, 0x5505262FU,
+	0xC5BA3BBEU, 0xB2BD0B28U, 0x2BB45A92U, 0x5CB36A04U, 0xC2D7FFA7U, 0xB5D0CF31U, 0x2CD99E8BU, 0x5BDEAE1DU,
+	0x9B64C2B0U, 0xEC63F226U, 0x756AA39CU, 0x026D930AU, 0x9C0906A9U, 0xEB0E363FU, 0x72076785U, 0x05005713U,
+	0x95BF4A82U, 0xE2B87A14U, 0x7BB12BAEU, 0x0CB61B38U, 0x92D28E9BU, 0xE5D5BE0DU, 0x7CDCEFB7U, 0x0BDBDF21U,
+	0x86D3D2D4U, 0xF1D4E242U, 0x68DDB3F8U, 0x1FDA836EU, 0x81BE16CDU, 0xF6B9265BU, 0x6FB077E1U, 0x18B74777U,
+	0x88085AE6U, 0xFF0F6A70U, 0x66063BCAU, 0x11010B5CU, 0x8F659EFFU, 0xF862AE69U, 0x616BFFD3U, 0x166CCF45U,
+	0xA00AE278U, 0xD70DD2EEU, 0x4E048354U, 0x3903B3C2U, 0xA7672661U, 0xD06016F7U, 0x4969474DU, 0x3E6E77DBU,
+	0xAED16A4AU, 0xD9D65ADCU, 0x40DF0B66U, 0x37D83BF0U, 0xA9BCAE53U, 0xDEBB9EC5U, 0x47B2CF7FU, 0x30B5FFE9U,
+	0xBDBDF21CU, 0xCABAC28AU, 0x53B39330U, 0x24B4A3A6U, 0xBAD03605U, 0xCDD70693U, 0x54DE5729U, 0x23D967BFU,
+	0xB3667A2EU, 0xC4614AB8U, 0x5D681B02U, 0x2A6F2B94U, 0xB40BBE37U, 0xC30C8EA1U, 0x5A05DF1BU, 0x2D02EF8DU};
 
-static void
-rspamd_zip_write_extra_aes(GByteArray *ba, guint16 vendor_version, guint8 strength, guint16 actual_method)
+static inline guint32
+rspamd_zip_crc32_update(guint32 crc, guint8 c)
 {
-	/* Extra field header id and size */
-	rspamd_ba_append_u16le(ba, ZIP_AES_EXTRA_ID);
-	/* data size = 7 */
-	rspamd_ba_append_u16le(ba, 7);
-	/* Vendor version */
-	rspamd_ba_append_u16le(ba, vendor_version);
-	/* Vendor ID 'AE' */
-	const guint8 vid[2] = {'A', 'E'};
-	g_byte_array_append(ba, vid, sizeof(vid));
-	/* Strength */
-	g_byte_array_append(ba, &strength, 1);
-	/* Actual compression method */
-	rspamd_ba_append_u16le(ba, actual_method);
+	return rspamd_zip_crc32_tab[(crc ^ c) & 0xff] ^ (crc >> 8);
+}
+static inline void
+rspamd_zipcrypto_init_keys(guint32 keys[3])
+{
+	keys[0] = 0x12345678UL;
+	keys[1] = 0x23456789UL;
+	keys[2] = 0x34567890UL;
+}
+
+static inline void
+rspamd_zipcrypto_update_keys(guint32 keys[3], guint8 c)
+{
+	keys[0] = rspamd_zip_crc32_update(keys[0], c);
+	keys[1] = (keys[1] + (keys[0] & 0xff));
+	keys[1] = keys[1] * 134775813UL + 1;
+	guint8 t = (keys[1] >> 24) & 0xff;
+	keys[2] = rspamd_zip_crc32_update(keys[2], t);
+}
+
+static inline guint8
+rspamd_zipcrypto_crypt_byte(const guint32 keys[3])
+{
+	guint16 t = (guint16) ((keys[2] & 0xffff) | 2);
+	return (guint8) (((t * (t ^ 1)) >> 8) & 0xff);
+}
+
+static inline void
+rspamd_zipcrypto_init_with_password(guint32 keys[3], const char *password)
+{
+	rspamd_zipcrypto_init_keys(keys);
+	if (password != NULL) {
+		const unsigned char *p = (const unsigned char *) password;
+		while (*p) {
+			rspamd_zipcrypto_update_keys(keys, *p++);
+		}
+	}
 }
 
 GByteArray *
@@ -340,178 +392,147 @@ rspamd_archives_zip_write(const struct rspamd_zip_file_spec *files,
 		guint16 method = 8;            /* deflate */
 		guint16 gp_flags = (1u << 11); /* UTF-8 */
 		guint16 ver_needed = 20;       /* default */
-		const gboolean use_aes = (password != NULL && *password != '\0');
+		const gboolean use_zipcrypto = (password != NULL && *password != '\0');
 
 		/* actual method will be decided after deflate; default is deflate */
 
 		guint16 extra_len = 0;
-		guint16 actual_method = method;
 		guint32 csize_for_header = 0;
-		const guint8 aes_strength = 0x03;      /* AES-256 */
-		const guint16 aes_vendor_ver = 0x0002; /* AE-2 */
-		guint8 salt_len = 0;
-		if (use_aes) {
-			/* Per APPNOTE: method=99 (0x63), AES extra 0x9901 in both headers */
-			ver_needed = MAX(ver_needed, (guint16) 51);
-			gp_flags |= 1u; /* encrypted */
-			method = 99;
-			extra_len = 2 /*id*/ + 2 /*size*/ + 7 /*payload*/;
-			/* salt length by strength */
-			salt_len = (aes_strength == 0x01 ? 8 : (aes_strength == 0x02 ? 12 : 16));
-			/* compressed size will be computed after deflate/encrypt */
-			/* CRC-32 not used with AES: set to 0 */
-			crc = 0;
+		gboolean use_descriptor = FALSE;
+		if (use_zipcrypto) {
+			/* Traditional PKWARE ZipCrypto */
+			gp_flags |= 1u;        /* encrypted */
+			gp_flags |= (1u << 3); /* data descriptor present */
+			use_descriptor = TRUE;
+			/* method remains 8 or 0 depending on compression effectiveness */
+			/* no extra field */
 		}
 
 		guint32 lfh_off = zip->len;
-		rspamd_zip_write_local_header(zip, f->name, ver_needed, gp_flags, method, f->mtime, crc,
-									  csize_for_header,
-									  (guint32) f->len, extra_len);
-		if (use_aes) {
-			/* Write AES extra for local header */
-			rspamd_zip_write_extra_aes(zip, aes_vendor_ver, aes_strength, actual_method);
+		rspamd_zip_write_local_header(zip, f->name, ver_needed, gp_flags, method, f->mtime,
+									  use_descriptor ? 0 : crc,
+									  use_descriptor ? 0 : csize_for_header,
+									  use_descriptor ? 0 : (guint32) f->len,
+									  extra_len);
+		msg_debug_archive_taskless("lfh: off=%d ver_needed=%d gp_flags=%d method=%d name_len=%d extra_len=%d",
+								   (int) lfh_off, (int) ver_needed, (int) gp_flags, (int) method,
+								   (int) strlen(f->name), (int) extra_len);
+		if (use_zipcrypto) {
+			/* Prepare ZipCrypto keys */
+			guint32 keys[3];
+			rspamd_zipcrypto_init_with_password(keys, password);
 
-#ifdef HAVE_OPENSSL
-			/* Derive keys and encrypt: PBKDF2-HMAC-SHA1 per AE-2 */
-			unsigned char salt[16];
-			if (RAND_bytes(salt, salt_len) != 1) {
-				g_byte_array_free(cd, TRUE);
-				g_byte_array_free(zip, TRUE);
-				g_set_error(err, q, EIO, "cannot generate AES salt");
-				return NULL;
+			/* Build 12-byte encryption header */
+			guint8 hdr[12];
+			ottery_rand_bytes(hdr, sizeof(hdr));
+			/* set verification bytes */
+			if (use_descriptor) {
+				/* when bit 3 is set, use MS-DOS time field */
+				guint16 dos_t = rspamd_zip_time_dos(f->mtime);
+				hdr[10] = (guint8) (dos_t & 0xff);
+				hdr[11] = (guint8) ((dos_t >> 8) & 0xff);
 			}
-
-			/* key sizes by strength */
-			int klen = (aes_strength == 0x01 ? 16 : (aes_strength == 0x02 ? 24 : 32));
-			int dklen = klen * 2 + 2;
-			unsigned char *dk = g_malloc(dklen);
-			if (PKCS5_PBKDF2_HMAC(password, (int) strlen(password), salt, salt_len, 1000, EVP_sha1(), dklen, dk) != 1) {
-				g_free(dk);
-				g_byte_array_free(cd, TRUE);
-				g_byte_array_free(zip, TRUE);
-				g_set_error(err, q, EIO, "PBKDF2(HMAC-SHA1) failed");
-				return NULL;
+			else {
+				/* high 2 bytes of CRC32 of plaintext */
+				hdr[10] = (guint8) ((crc >> 16) & 0xff);
+				hdr[11] = (guint8) ((crc >> 24) & 0xff);
 			}
-			unsigned char *ekey = dk;          /* klen */
-			unsigned char *akey = dk + klen;   /* klen */
-			unsigned char *pv = dk + klen * 2; /* 2 bytes */
-
-			/* Append salt and password verification value */
-			g_byte_array_append(zip, salt, salt_len);
-			g_byte_array_append(zip, pv, 2);
-
-			/* AES-CTR encrypt */
-			EVP_CIPHER_CTX *cctx = EVP_CIPHER_CTX_new();
-			const EVP_CIPHER *cipher = (klen == 16 ? EVP_aes_128_ctr() : (klen == 24 ? EVP_aes_192_ctr() : EVP_aes_256_ctr()));
-			unsigned char iv[16];
-			memset(iv, 0, sizeof(iv)); /* WinZip AES uses counter mode starting at 0 */
-			if (EVP_EncryptInit_ex(cctx, cipher, NULL, ekey, iv) != 1) {
-				EVP_CIPHER_CTX_free(cctx);
-				rspamd_explicit_memzero(dk, dklen);
-				g_free(dk);
-				g_byte_array_free(cd, TRUE);
-				g_byte_array_free(zip, TRUE);
-				g_set_error(err, q, EIO, "AES-CTR init failed");
-				return NULL;
+			/* Encrypt header in place */
+			for (guint i = 0; i < sizeof(hdr); i++) {
+				guint8 k = rspamd_zipcrypto_crypt_byte(keys);
+				guint8 c = hdr[i] ^ k;
+				hdr[i] = c;
+				/* update keys with header plaintext byte */
+				rspamd_zipcrypto_update_keys(keys, (guint8) (c ^ k));
 			}
+			g_byte_array_append(zip, hdr, sizeof(hdr));
 
-			/* Deflate directly into zip and encrypt in-place */
+			/* Now compress directly into zip buffer (in place) or store */
+			gsize produced = 0;
+			gboolean used_deflate = TRUE;
+			guint32 data_off = zip->len; /* start of (plaintext) data before encryption */
+
+			/* Try to reserve space by deflateBound and compress into zip */
 			z_stream zst;
 			memset(&zst, 0, sizeof(zst));
-			if (deflateInit2(&zst, Z_DEFAULT_COMPRESSION, Z_DEFLATED, -MAX_WBITS, MAX_MEM_LEVEL - 1, Z_DEFAULT_STRATEGY) != Z_OK) {
-				EVP_CIPHER_CTX_free(cctx);
-				rspamd_explicit_memzero(dk, dklen);
-				g_free(dk);
-				g_byte_array_free(cd, TRUE);
-				g_byte_array_free(zip, TRUE);
-				g_set_error(err, q, EIO, "deflateInit2 failed");
-				return NULL;
-			}
-			uLong bound = deflateBound(&zst, (uLong) f->len);
-			deflateEnd(&zst);
-			/* Append salt+pv already written; now reserve deflate bound */
-			gsize plain_off = zip->len;
-			g_byte_array_set_size(zip, zip->len + bound);
-			unsigned char *plain_ptr = zip->data + plain_off;
-			memset(&zst, 0, sizeof(zst));
-			if (deflateInit2(&zst, Z_DEFAULT_COMPRESSION, Z_DEFLATED, -MAX_WBITS, MAX_MEM_LEVEL - 1, Z_DEFAULT_STRATEGY) != Z_OK) {
-				EVP_CIPHER_CTX_free(cctx);
-				rspamd_explicit_memzero(dk, dklen);
-				g_free(dk);
-				g_byte_array_free(cd, TRUE);
-				g_byte_array_free(zip, TRUE);
-				g_set_error(err, q, EIO, "deflateInit2 failed");
-				return NULL;
-			}
-			zst.next_in = (unsigned char *) f->data;
-			zst.avail_in = f->len;
-			zst.next_out = plain_ptr;
-			zst.avail_out = bound;
-			int rc = deflate(&zst, Z_FINISH);
-			if (rc != Z_STREAM_END && rc != Z_OK && rc != Z_BUF_ERROR) {
+			if (deflateInit2(&zst, Z_DEFAULT_COMPRESSION, Z_DEFLATED, -MAX_WBITS, MAX_MEM_LEVEL - 1, Z_DEFAULT_STRATEGY) == Z_OK) {
+				uLong bound = deflateBound(&zst, (uLong) f->len);
 				deflateEnd(&zst);
-				EVP_CIPHER_CTX_free(cctx);
-				rspamd_explicit_memzero(dk, dklen);
-				g_free(dk);
-				g_byte_array_free(cd, TRUE);
-				g_byte_array_free(zip, TRUE);
-				g_set_error(err, q, EIO, "deflate failed");
-				return NULL;
+
+				/* Reserve space */
+				g_byte_array_set_size(zip, data_off + bound);
+
+				memset(&zst, 0, sizeof(zst));
+				if (deflateInit2(&zst, Z_DEFAULT_COMPRESSION, Z_DEFLATED, -MAX_WBITS, MAX_MEM_LEVEL - 1, Z_DEFAULT_STRATEGY) != Z_OK) {
+					/* fallback to store */
+					used_deflate = FALSE;
+				}
+				else {
+					zst.next_in = (unsigned char *) f->data;
+					zst.avail_in = f->len;
+					zst.next_out = zip->data + data_off;
+					zst.avail_out = bound;
+					int rc = deflate(&zst, Z_FINISH);
+					if (rc != Z_STREAM_END && rc != Z_OK && rc != Z_BUF_ERROR) {
+						used_deflate = FALSE;
+						deflateEnd(&zst);
+					}
+					else {
+						produced = bound - zst.avail_out;
+						deflateEnd(&zst);
+						if (produced >= f->len) {
+							used_deflate = FALSE;
+						}
+					}
+				}
 			}
-			gsize produced = bound - zst.avail_out;
-			deflateEnd(&zst);
-			if (produced >= f->len) {
-				/* fallback to store */
-				g_byte_array_set_size(zip, plain_off);
-				g_byte_array_set_size(zip, zip->len + f->len);
-				memcpy(zip->data + plain_off, f->data, f->len);
+			else {
+				used_deflate = FALSE;
+			}
+
+			if (!used_deflate) {
+				/* Store: reset to data_off and copy original data */
+				g_byte_array_set_size(zip, data_off);
+				g_byte_array_set_size(zip, data_off + f->len);
+				memcpy(zip->data + data_off, f->data, f->len);
 				produced = f->len;
-				actual_method = 0;
+				/* patch method in local header (offset +8) */
+				guint16 *pm = (guint16 *) (zip->data + lfh_off + 8);
+				method = 0;
+				*pm = GUINT16_TO_LE(method);
 			}
 
-			/* Encrypt in place */
-			gsize enc_before = plain_off;
-			unsigned char *enc_ptr = zip->data + enc_before;
-			int outl = 0, finl = 0;
-			if (EVP_EncryptUpdate(cctx, enc_ptr, &outl, enc_ptr, (int) produced) != 1 ||
-				EVP_EncryptFinal_ex(cctx, enc_ptr + outl, &finl) != 1) {
-				EVP_CIPHER_CTX_free(cctx);
-				rspamd_explicit_memzero(dk, dklen);
-				g_free(dk);
-				g_byte_array_free(cd, TRUE);
-				g_byte_array_free(zip, TRUE);
-				g_set_error(err, q, EIO, "AES-CTR encrypt failed");
-				return NULL;
+			/* Encrypt in place over zip->data[data_off .. data_off+produced) */
+			for (gsize i = 0; i < produced; i++) {
+				guint8 k = rspamd_zipcrypto_crypt_byte(keys);
+				guint8 pt = zip->data[data_off + i];
+				zip->data[data_off + i] = pt ^ k;
+				rspamd_zipcrypto_update_keys(keys, pt);
 			}
-			EVP_CIPHER_CTX_free(cctx);
-			/* shrink to ciphertext size */
-			g_byte_array_set_size(zip, enc_before + outl + finl);
+			/* Shrink to actual size (if deflated) */
+			g_byte_array_set_size(zip, data_off + produced);
 
-			/* HMAC-SHA1 over ciphertext */
-			unsigned char mac[EVP_MAX_MD_SIZE];
-			unsigned int maclen = 0;
-			HMAC(EVP_sha1(), akey, klen, zip->data + enc_before, (int) (zip->len - enc_before), mac, &maclen);
-			/* append first 10 bytes */
-			g_byte_array_append(zip, mac, 10);
+			/* compressed size includes 12-byte header + encrypted data */
+			csize_for_header = (guint32) (12 + produced);
+			if (!use_descriptor) {
+				/* patch CRC (offset +14) and compressed size (offset +18) */
+				guint32 *p32 = (guint32 *) (zip->data + lfh_off + 14);
+				*p32 = GUINT32_TO_LE(crc);
+				p32 = (guint32 *) (zip->data + lfh_off + 18);
+				*p32 = GUINT32_TO_LE(csize_for_header);
+				/* uncompressed size already set in LFH */
+			}
+			else {
+				/* append data descriptor with signature */
+				rspamd_ba_append_u32le(zip, 0x08074b50);
+				rspamd_ba_append_u32le(zip, crc);
+				rspamd_ba_append_u32le(zip, csize_for_header);
+				rspamd_ba_append_u32le(zip, (guint32) f->len);
+			}
 
-			/* cleanup */
-			rspamd_explicit_memzero(dk, dklen);
-			g_free(dk);
-
-			/* Patch local header: compressed size and actual method in AES extra */
-			csize_for_header = (guint32) (salt_len + 2 + (outl + finl) + 10);
-			/* compressed size at offset lfh_off + 18 */
-			guint32 *p32 = (guint32 *) (zip->data + lfh_off + 18);
-			*p32 = GUINT32_TO_LE(csize_for_header);
-			/* patch actual method in AES extra (last 2 bytes of AES extra payload) */
-			guint16 *p16 = (guint16 *) (zip->data + lfh_off + 30 + (guint32) strlen(f->name) + 9);
-			*p16 = GUINT16_TO_LE(actual_method);
-#else
-			g_byte_array_free(cd, TRUE);
-			g_byte_array_free(zip, TRUE);
-			g_set_error(err, q, ENOTSUP, "AES-CTR encryption requires OpenSSL");
-			return NULL;
-#endif
+			msg_debug_archive_taskless("zip-zipcrypto: added entry '%s' (usize=%L, csize=%L, method=%s)",
+									   f->name, (int64_t) f->len, (int64_t) csize_for_header,
+									   used_deflate ? "deflate+zipcrypto" : "store+zipcrypto");
 		}
 		else {
 			/* Not encrypted: deflate directly into zip, fallback to store */
@@ -553,6 +574,8 @@ rspamd_archives_zip_write(const struct rspamd_zip_file_spec *files,
 				/* patch method in local header (offset +8) */
 				guint16 *pm = (guint16 *) (zip->data + lfh_off + 8);
 				*pm = GUINT16_TO_LE(method);
+				msg_debug_archive_taskless("zip: fallback to store (no encryption) - deflated=%L, original=%L",
+										   (int64_t) (bound - zst.avail_out), (int64_t) f->len);
 			}
 			else {
 				g_byte_array_set_size(zip, off + produced);
@@ -565,18 +588,24 @@ rspamd_archives_zip_write(const struct rspamd_zip_file_spec *files,
 			*p32 = GUINT32_TO_LE(csize_for_header);
 		}
 
+		guint32 cd_off = cd->len;
 		rspamd_zip_write_central_header(cd, f->name, ver_needed, gp_flags, method, f->mtime, crc,
 										csize_for_header,
 										(guint32) f->len,
 										lfh_off, f->mode, extra_len);
-		if (use_aes) {
-			rspamd_zip_write_extra_aes(cd, aes_vendor_ver, aes_strength, actual_method);
-		}
+		msg_debug_archive_taskless("cd_entry: off=%d lfh_off=%d name=%s csize=%d usize=%d",
+								   (int) cd_off, (int) lfh_off, f->name, (int) csize_for_header, (int) f->len);
+		msg_debug_archive_taskless("cd: ver_needed=%d gp_flags=%d method=%d csize=%L usize=%L",
+								   (int) ver_needed, (int) gp_flags, (int) method,
+								   (int64_t) csize_for_header, (int64_t) f->len);
 
 		guint64 logged_csize = (guint64) csize_for_header;
+		const char *method_str;
+		method_str = (use_zipcrypto ? (method == 0 ? "store+zipcrypto" : "deflate+zipcrypto")
+									: (method == 0 ? "store" : "deflate"));
 		msg_debug_archive_taskless("zip: added entry '%s' (usize=%L, csize=%L, method=%s)",
 								   f->name, (int64_t) f->len, (int64_t) logged_csize,
-								   method == 0 ? "store" : "deflate");
+								   method_str);
 	}
 
 	/* Central directory start */
@@ -600,7 +629,23 @@ rspamd_archives_zip_write(const struct rspamd_zip_file_spec *files,
 	/* zip comment length */
 	rspamd_ba_append_u16le(zip, 0);
 
-	msg_debug_archive_taskless("zip: created archive (%L bytes)", (int64_t) zip->len);
+	msg_debug_archive_taskless("zip: created archive (%L bytes, cd_start=%d, cd_size=%d)",
+							   (int64_t) zip->len, (int) cd_start, (int) cd_size);
+
+	/* Debug: check archive structure */
+	if (zip->len >= 4) {
+		guint32 sig = GUINT32_FROM_LE(*(guint32 *) zip->data);
+		msg_debug_archive_taskless("zip: first 4 bytes = %xd (should be 4034b50 for PK\\003\\004)", sig);
+	}
+
+	/* Additional validation */
+	if (cd_start + cd_size + 22 != zip->len) {
+		msg_debug_archive_taskless("zip: WARNING - archive size mismatch: cd_start(%d) + cd_size(%d) + eocd(22) = %d, but zip->len = %d",
+								   (int) cd_start, (int) cd_size, (int) (cd_start + cd_size + 22), (int) zip->len);
+	}
+
+	/* no debug dump */
+
 	return zip;
 }
 
@@ -1611,7 +1656,7 @@ rspamd_7zip_read_pack_info(struct rspamd_task *task,
 	while (p != NULL && p < end) {
 		t = *p;
 		SZ_SKIP_BYTES(1);
-		msg_debug_archive("7zip: read pack info %xc", t);
+		msg_debug_archive("7zip: read pack info %xd", t);
 
 		switch (t) {
 		case kSize:
@@ -1630,7 +1675,7 @@ rspamd_7zip_read_pack_info(struct rspamd_task *task,
 			break;
 		default:
 			p = NULL;
-			msg_debug_archive("bad 7zip type: %xc; %s", t, G_STRLOC);
+			msg_debug_archive("bad 7zip type: %xd; %s", t, G_STRLOC);
 			goto end;
 			break;
 		}
@@ -1776,7 +1821,7 @@ rspamd_7zip_read_coders_info(struct rspamd_task *task,
 
 		t = *p;
 		SZ_SKIP_BYTES(1);
-		msg_debug_archive("7zip: read coders info %xc", t);
+		msg_debug_archive("7zip: read coders info %xd", t);
 
 		switch (t) {
 		case kFolder:
@@ -1845,7 +1890,7 @@ rspamd_7zip_read_coders_info(struct rspamd_task *task,
 			break;
 		default:
 			p = NULL;
-			msg_debug_archive("bad 7zip type: %xc; %s", t, G_STRLOC);
+			msg_debug_archive("bad 7zip type: %xd; %s", t, G_STRLOC);
 			goto end;
 			break;
 		}
@@ -1907,7 +1952,7 @@ rspamd_7zip_read_substreams_info(struct rspamd_task *task,
 		t = *p;
 		SZ_SKIP_BYTES(1);
 
-		msg_debug_archive("7zip: read substream info %xc", t);
+		msg_debug_archive("7zip: read substream info %xd", t);
 
 		switch (t) {
 		case kNumUnPackStream:
@@ -1944,7 +1989,7 @@ rspamd_7zip_read_substreams_info(struct rspamd_task *task,
 			break;
 		default:
 			p = NULL;
-			msg_debug_archive("bad 7zip type: %xc; %s", t, G_STRLOC);
+			msg_debug_archive("bad 7zip type: %xd; %s", t, G_STRLOC);
 			goto end;
 			break;
 		}
@@ -1965,7 +2010,7 @@ rspamd_7zip_read_main_streams_info(struct rspamd_task *task,
 	while (p != NULL && p < end) {
 		t = *p;
 		SZ_SKIP_BYTES(1);
-		msg_debug_archive("7zip: read main streams info %xc", t);
+		msg_debug_archive("7zip: read main streams info %xd", t);
 
 		/*
 		 *
@@ -2001,7 +2046,7 @@ rspamd_7zip_read_main_streams_info(struct rspamd_task *task,
 			break;
 		default:
 			p = NULL;
-			msg_debug_archive("bad 7zip type: %xc; %s", t, G_STRLOC);
+			msg_debug_archive("bad 7zip type: %xd; %s", t, G_STRLOC);
 			goto end;
 			break;
 		}
@@ -2105,7 +2150,7 @@ rspamd_7zip_read_files_info(struct rspamd_task *task,
 		t = *p;
 		SZ_SKIP_BYTES(1);
 
-		msg_debug_archive("7zip: read file data type %xc", t);
+		msg_debug_archive("7zip: read file data type %xd", t);
 
 		if (t == kEnd) {
 			goto end;
@@ -2186,7 +2231,7 @@ rspamd_7zip_read_files_info(struct rspamd_task *task,
 			break;
 		default:
 			p = NULL;
-			msg_debug_archive("bad 7zip type: %xc; %s", t, G_STRLOC);
+			msg_debug_archive("bad 7zip type: %xd; %s", t, G_STRLOC);
 			goto end;
 			break;
 		}
@@ -2206,7 +2251,7 @@ rspamd_7zip_read_next_section(struct rspamd_task *task,
 
 	SZ_SKIP_BYTES(1);
 
-	msg_debug_archive("7zip: read section %xc", t);
+	msg_debug_archive("7zip: read section %xd", t);
 
 	switch (t) {
 	case kHeader:
@@ -2272,7 +2317,7 @@ rspamd_7zip_read_next_section(struct rspamd_task *task,
 		break;
 	default:
 		p = NULL;
-		msg_debug_archive("bad 7zip type: %xc; %s", t, G_STRLOC);
+		msg_debug_archive("bad 7zip type: %xd; %s", t, G_STRLOC);
 		break;
 	}
 

@@ -205,8 +205,8 @@ lua_archive_zip(lua_State *L)
 /***
  * @function archive.zip_encrypt(files[, password])
  * Create a ZIP archive in-memory using Rspamd ZIP writer.
- * If password is provided and non-empty, entries are encrypted via WinZip AES (AE-2).
- * - AES-256-CTR with HMAC-SHA1 (10-byte tag), interoperable with 7-Zip/WinZip/libarchive
+ * If password is provided and non-empty, entries are encrypted with traditional ZipCrypto (PKWARE).
+ * - Widely compatible (Info-ZIP/unzip/7-Zip/WinZip), but not cryptographically strong
  * @param {table} files array: { name = string, content = string|rspamd_text, [mode|perms] = int, [mtime] = int }
  * @param {string} password optional password string
  * @return {text} archive bytes
@@ -613,7 +613,7 @@ lua_archive_pack(lua_State *L)
  * Unpacks an archive from a Lua string (or rspamd_text) using libarchive.
  * @param {string|text} data archive contents
  * @param {string} format optional format name to restrict autodetection (e.g. "zip")
- * @param {string} password optional password for encrypted archives (e.g. ZIP AES)
+ * @param {string} password optional password for encrypted archives (e.g. ZIP ZipCrypto)
  * @return {table} array of files: { name = string, content = text } (non-regular entries are skipped)
  */
 static int
@@ -669,6 +669,11 @@ lua_archive_unpack(lua_State *L)
 		lua_pushfstring(L, "cannot open archive: %s", aerr ? aerr : "unknown error");
 		archive_read_free(a);
 		return lua_error(L);
+	}
+
+	/* Debug: check if archive has encrypted entries */
+	if (archive_read_has_encrypted_entries(a) > 0) {
+		/* encrypted entries detected */
 	}
 
 	lua_newtable(L);

@@ -44,7 +44,7 @@ context("Lua archive bindings", function()
     assert_rspamd_eq({ actual = out[1].content, expect = rspamd_text.fromstring("Hello") })
   end)
 
-  test("zip_encrypt with password (AE-2) roundtrip via libarchive", function()
+  test("zip_encrypt with password (ZipCrypto) roundtrip via libarchive", function()
     local files = {
       { name = "dir/x.txt", content = "secret" },
       { name = "y.bin",     content = rspamd_text.fromstring("\001\002\003") },
@@ -52,7 +52,7 @@ context("Lua archive bindings", function()
     local pwd = "testpass123"
     local blob = archive.zip_encrypt(files, pwd)
     assert_equal(type(blob), "userdata")
-    -- libarchive can read AE-2, so unpack should succeed and yield the same files
+    -- libarchive can read ZipCrypto, so unpack should succeed and yield the same files
     local out = archive.unpack(blob, "zip", pwd)
     assert_equal(#out, 2)
     local names = {}
