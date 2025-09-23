@@ -55,29 +55,7 @@ struct rspamd_archive {
 	GPtrArray *files; /* Array of struct rspamd_archive_file */
 };
 
-/* Writer API */
-struct rspamd_zip_file_spec {
-	const char *name;          /* UTF-8 relative path */
-	const unsigned char *data; /* file content */
-	gsize len;                 /* content length */
-	/* Optional attrs */
-	time_t mtime; /* 0 means now */
-	guint32 mode; /* UNIX perm bits; 0 means 0644 */
-};
-
-/**
- * Create an in-memory ZIP archive from provided files.
- * - Uses DEFLATE (method 8) or STORE (method 0) per entry, depending on gain.
- * - If 'password' is non-NULL, each entry is encrypted using WinZip AES (AE-2):
- *   method 99 + 0x9901 extra, PBKDF2-HMAC-SHA1(1000), AES-CTR, 10-byte HMAC-SHA1 tag.
- *   Interoperable with 7-Zip/WinZip/libarchive.
- * - UTF-8 filenames (GPBF bit 11) are used.
- * Returns newly allocated GByteArray on success, NULL on error and sets 'err'.
- */
-GByteArray *rspamd_archives_zip_write(const struct rspamd_zip_file_spec *files,
-									  gsize nfiles,
-									  const char *password,
-									  GError **err);
+/* Writer API removed: use libarchive for writing ZIP archives */
 
 /**
  * Process archives from a worker task

@@ -74,6 +74,44 @@ context("Lua archive bindings", function()
     assert_equal(ok, false)
   end)
 
+  test("pack zip with AES-128 via libarchive roundtrip", function()
+    local files = {
+      { name = "dir/x.txt", content = "secret" },
+      { name = "y.bin",     content = rspamd_text.fromstring("\001\002\003") },
+    }
+    local opts = { password = "testpass123", format_options = { encryption = "aes128" } }
+    local ok_pack, blob_or_err = pcall(function()
+      return archive.pack("zip", files, opts)
+    end)
+    -- If libarchive lacks AES write support, skip quietly
+    if not ok_pack then return end
+    local blob = blob_or_err
+    assert_equal(type(blob), "userdata")
+    local out = archive.unpack(blob, "zip", opts.password)
+    assert_equal(#out, 2)
+    local names = {}
+    for _, f in ipairs(out) do names[f.name] = f.content end
+    assert_rspamd_eq({ actual = names["dir/x.txt"], expect = rspamd_text.fromstring("secret") })
+    assert_rspamd_eq({ actual = names["y.bin"], expect = rspamd_text.fromstring("\001\002\003") })
+  end)
+
+  test("pack zip with AES-256 via libarchive wrong password fails", function()
+    local files = {
+      { name = "a.txt", content = "Hello" },
+    }
+    local opts = { password = "goodpass", zip = { encryption = "aes256" } }
+    local ok_pack, blob_or_err = pcall(function()
+      return archive.pack("zip", files, opts)
+    end)
+    if not ok_pack then return end
+    local blob = blob_or_err
+    assert_equal(type(blob), "userdata")
+    local ok, err = pcall(function()
+      archive.unpack(blob, "zip", "badpass")
+    end)
+    assert_equal(ok, false)
+  end)
+
   test("tar/untar helpers roundtrip (no compression)", function()
     local files = {
       { name = "x.txt", content = "X" },

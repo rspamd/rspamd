@@ -16,7 +16,6 @@
 
 #include "lua_common.h"
 #include "unix-std.h"
-#include "libmime/archives.h"
 
 #include <archive.h>
 #include <archive_entry.h>
@@ -29,15 +28,41 @@
 /***
  * @function archive.pack(format, files[, options])
  * Packs a list of files into an in-memory archive using libarchive.
- * @param {string} format archive format name (e.g. "zip", "tar", "7zip", ...)
+ *
+ * @param {string} format archive format name (typical: "zip", "tar", "7zip")
  * @param {table} files array of tables: { name = string, content = string|rspamd_text, [mode|perms] = int, [mtime] = int }
- * @param {table} options optional table; `filters` can be string or array of strings (e.g. "gzip", "xz", "zstd")
+ * @param {table} options optional table configuring filters and format behavior
+ *  - filters: string or array of strings; compression filters to apply (e.g. "gzip", "xz", "zstd", "bzip2")
+ *  - password: string passphrase for encrypted formats (ZIP only here)
+ *  - format_options: table of format-specific options (alternatively, a nested table named after the format, e.g. options.zip = {...})
+ *
+ * ZIP-specific options (via options.format_options or options.zip):
+ *  - encryption: "traditional" (aka "zipcrypt"), "aes128", or "aes256"
+ *  - compression: "store" | "deflate"
+ *  - compression-level: integer 0..9 (0 implies "store")
+ *  - zip64: boolean (true to force Zip64; use with care)
+ *  - hdrcharset: character set name for filenames
+ *  - experimental, fakecrc32: booleans (testing only; not recommended for production)
+ *
+ * Notes:
+ *  - If options.password is set and encryption is omitted, you can specify it explicitly as shown below.
+ *  - For a complete list of libarchive ZIP options, consult libarchive documentation.
+ *
  * @return {text} archive bytes
- * @example
+ *
+ * @example -- Plain ZIP
  * local blob = archive.pack("zip", {
- *   { name = "test.txt", content = "Hello" },
- *   { name = "dir/readme.md", content = "# Readme" },
- * }, { filters = "zstd" })
+ *   { name = "a.txt", content = "Hello" },
+ * })
+ *
+ * @example -- ZIP with ZipCrypto (traditional)
+ * local blob = archive.pack("zip", files, { password = "secret", zip = { encryption = "traditional" } })
+ *
+ * @example -- ZIP with AES-128
+ * local blob = archive.pack("zip", files, { password = "secret", format_options = { encryption = "aes128" } })
+ *
+ * @example -- TAR.GZ
+ * local blob = archive.pack("tar", files, { filters = "gzip" })
  */
 
 LUA_FUNCTION_DEF(archive, pack);
@@ -189,6 +214,96 @@ lua_archive_set_format(lua_State *L, struct archive *a, const char *fmt)
 	lua_pushfstring(L, "unsupported format: %s", fmt ? fmt : "(nil)");
 	return FALSE;
 }
+
+static gboolean
+lua_archive_set_format_options_table(lua_State *L, struct archive *a, const char *fmt, int idx)
+{
+	gboolean ok = TRUE;
+
+	if (!lua_istable(L, idx)) {
+		return ok;
+	}
+
+	lua_pushnil(L);
+
+	while (lua_next(L, idx)) {
+		const char *key = lua_tostring(L, -2);
+		const char *valstr = NULL;
+		char nb[64];
+
+		if (key) {
+			int t = lua_type(L, -1);
+			if (t == LUA_TSTRING) {
+				valstr = lua_tostring(L, -1);
+			}
+			else if (t == LUA_TNUMBER) {
+				rspamd_snprintf(nb, sizeof(nb), "%l", (long) lua_tointeger(L, -1));
+				valstr = nb;
+			}
+			else if (t == LUA_TBOOLEAN) {
+				valstr = lua_toboolean(L, -1) ? "1" : "0";
+			}
+
+			if (valstr) {
+				int r = archive_write_set_format_option(a, fmt, key, valstr);
+				if (r != ARCHIVE_OK && r != ARCHIVE_WARN) {
+					ok = FALSE;
+					lua_pop(L, 1); /* value */
+					break;
+				}
+			}
+		}
+
+		lua_pop(L, 1); /* value */
+	}
+
+	return ok;
+}
+
+static gboolean
+lua_archive_add_format_options(lua_State *L, struct archive *a, const char *fmt, int opts_idx)
+{
+	gboolean ok = TRUE;
+
+	if (opts_idx <= 0 || !lua_istable(L, opts_idx)) {
+		return ok;
+	}
+
+	/* Optional password */
+	lua_getfield(L, opts_idx, "password");
+	if (lua_isstring(L, -1)) {
+		const char *pw = lua_tostring(L, -1);
+		if (pw && *pw) {
+			int r = archive_write_set_passphrase(a, pw);
+			if (r != ARCHIVE_OK && r != ARCHIVE_WARN) {
+				ok = FALSE;
+			}
+		}
+	}
+	lua_pop(L, 1);
+
+	/* Generic format_options table */
+	lua_getfield(L, opts_idx, "format_options");
+	if (!lua_isnil(L, -1)) {
+		if (!lua_archive_set_format_options_table(L, a, fmt, lua_gettop(L))) {
+			ok = FALSE;
+		}
+	}
+	lua_pop(L, 1);
+
+	/* Also support nested table named after format (e.g. options.zip) */
+	if (fmt) {
+		lua_getfield(L, opts_idx, fmt);
+		if (!lua_isnil(L, -1)) {
+			if (!lua_archive_set_format_options_table(L, a, fmt, lua_gettop(L))) {
+				ok = FALSE;
+			}
+		}
+		lua_pop(L, 1);
+	}
+
+	return ok;
+}
 static int
 lua_archive_zip(lua_State *L)
 {
@@ -204,9 +319,10 @@ lua_archive_zip(lua_State *L)
 
 /***
  * @function archive.zip_encrypt(files[, password])
- * Create a ZIP archive in-memory using Rspamd ZIP writer.
- * If password is provided and non-empty, entries are encrypted with traditional ZipCrypto (PKWARE).
- * - Widely compatible (Info-ZIP/unzip/7-Zip/WinZip), but not cryptographically strong
+ * Convenience helper for creating ZIP archives.
+ * - If password is provided and non-empty, uses libarchive with ZIP traditional encryption (ZipCrypto).
+ * - If password is nil/empty, produces a plain (unencrypted) ZIP.
+ * - For AES encryption, prefer archive.pack("zip", files, { password = "...", zip = { encryption = "aes128"|"aes256" } }).
  * @param {table} files array: { name = string, content = string|rspamd_text, [mode|perms] = int, [mtime] = int }
  * @param {string} password optional password string
  * @return {text} archive bytes
@@ -215,7 +331,8 @@ static int
 lua_archive_zip_encrypt(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	luaL_checktype(L, 1, LUA_TTABLE);
+	/* Re-route to libarchive packer with traditional encryption */
+	luaL_checktype(L, 1, LUA_TTABLE); /* files */
 	const char *password = NULL;
 	if (lua_gettop(L) >= 2 && !lua_isnil(L, 2)) {
 		if (lua_type(L, 2) == LUA_TSTRING) {
@@ -225,108 +342,30 @@ lua_archive_zip_encrypt(lua_State *L)
 			return luaL_error(L, "invalid password (string expected)");
 		}
 	}
-	GArray *specs = g_array_sized_new(FALSE, FALSE, sizeof(struct rspamd_zip_file_spec), 8);
-	GError *err = NULL;
 
-	/* Iterate files array */
-	lua_pushnil(L);
-
-	while (lua_next(L, 1)) {
-		if (!lua_istable(L, -1)) {
-			g_array_free(specs, TRUE);
-			return luaL_error(L, "invalid file entry (expected table)");
-		}
-
-		int item_idx = lua_gettop(L);
-		const char *name = NULL;
-		const char *sdata = NULL;
-		size_t slen = 0;
-		time_t mtime = (time_t) 0;
-		guint32 mode = 0644;
-
-		lua_getfield(L, item_idx, "name");
-		name = lua_tostring(L, -1);
-		if (name == NULL || *name == '\0') {
-			lua_pop(L, 2);
-			g_array_free(specs, TRUE);
-			return luaL_error(L, "invalid file entry (missing name)");
-		}
-		char *dupname = g_strdup(name);
-		lua_pop(L, 1);
-
-		lua_getfield(L, item_idx, "content");
-		struct rspamd_lua_text *t = NULL;
-		if ((t = lua_check_text_or_string(L, -1)) != NULL) {
-			sdata = (const char *) t->start;
-			slen = t->len;
-		}
-		else if (lua_isstring(L, -1)) {
-			sdata = lua_tolstring(L, -1, &slen);
-		}
-		else {
-			lua_pop(L, 2);
-			g_free(dupname);
-			g_array_free(specs, TRUE);
-			return luaL_error(L, "invalid file entry (missing content)");
-		}
-		unsigned char *dupdata = NULL;
-		if (slen > 0) {
-			dupdata = g_malloc(slen);
-			memcpy(dupdata, sdata, slen);
-		}
-		lua_pop(L, 1);
-
-		lua_getfield(L, item_idx, "mode");
-		if (lua_isnumber(L, -1)) {
-			mode = (guint32) lua_tointeger(L, -1);
-		}
-		lua_pop(L, 1);
-		lua_getfield(L, item_idx, "perms");
-		if (lua_isnumber(L, -1)) {
-			mode = (guint32) lua_tointeger(L, -1);
-		}
-		lua_pop(L, 1);
-
-		lua_getfield(L, item_idx, "mtime");
-		if (lua_isnumber(L, -1)) {
-			mtime = (time_t) lua_tointeger(L, -1);
-		}
-		lua_pop(L, 1);
-
-		struct rspamd_zip_file_spec s;
-		s.name = dupname;
-		s.data = dupdata;
-		s.len = (gsize) slen;
-		s.mtime = mtime;
-		s.mode = mode;
-		g_array_append_val(specs, s);
-
-		lua_pop(L, 1);
+	/* Build args: ["zip", files, options] */
+	lua_settop(L, 1); /* keep only files */
+	if (password && *password) {
+		lua_newtable(L); /* options */
+		lua_pushstring(L, "password");
+		lua_pushstring(L, password);
+		lua_settable(L, -3);
+		/* options.zip = { encryption = "traditional" } */
+		lua_pushstring(L, "zip");
+		lua_newtable(L);
+		lua_pushstring(L, "encryption");
+		lua_pushstring(L, "traditional");
+		lua_settable(L, -3);
+		lua_settable(L, -3); /* options.zip = {...} */
+	}
+	else {
+		lua_pushnil(L); /* no options => plain ZIP */
 	}
 
-	GByteArray *ba = rspamd_archives_zip_write((const struct rspamd_zip_file_spec *) specs->data,
-											   specs->len,
-											   password,
-											   &err);
+	lua_pushstring(L, "zip");
+	lua_insert(L, 1); /* fmt at 1, files at 2, options/nil at 3 */
 
-	for (guint i = 0; i < specs->len; i++) {
-		struct rspamd_zip_file_spec *s = &g_array_index(specs, struct rspamd_zip_file_spec, i);
-		if (s->name) g_free((gpointer) s->name);
-		if (s->data) g_free((gpointer) s->data);
-	}
-	g_array_free(specs, TRUE);
-
-	if (ba == NULL) {
-		const char *emsg = (err && err->message) ? err->message : "zip encryption failed";
-		if (err) g_error_free(err);
-		return luaL_error(L, "%s", emsg);
-	}
-
-	size_t outlen = ba->len;
-	guint8 *outdata = g_byte_array_free(ba, FALSE);
-	struct rspamd_lua_text *txt = lua_new_text(L, (const char *) outdata, outlen, FALSE);
-	txt->flags |= RSPAMD_TEXT_FLAG_OWN;
-	return 1;
+	return lua_archive_pack(L);
 }
 
 static int
@@ -534,10 +573,18 @@ lua_archive_pack(lua_State *L)
 		return luaL_error(L, "%s", lua_tostring(L, -1));
 	}
 
-	/* Options (filters, etc.) at index 3 */
+	/* Options (filters, format options, password) at index 3 */
 	if (!lua_archive_add_filters(L, a, 3)) {
+		lua_pushstring(L, "cannot set compression filter(s)");
 		archive_write_free(a);
-		return luaL_error(L, "cannot set compression filter(s)");
+		return lua_error(L);
+	}
+
+	if (!lua_archive_add_format_options(L, a, fmt, 3)) {
+		const char *aerr = archive_error_string(a);
+		lua_pushfstring(L, "cannot set format options: %s", aerr ? aerr : "unknown error");
+		archive_write_free(a);
+		return lua_error(L);
 	}
 
 	wctx.buf = g_byte_array_new();
@@ -613,7 +660,7 @@ lua_archive_pack(lua_State *L)
  * Unpacks an archive from a Lua string (or rspamd_text) using libarchive.
  * @param {string|text} data archive contents
  * @param {string} format optional format name to restrict autodetection (e.g. "zip")
- * @param {string} password optional password for encrypted archives (e.g. ZIP ZipCrypto)
+ * @param {string} password optional passphrase for encrypted archives (ZIP: ZipCrypto/AES)
  * @return {table} array of files: { name = string, content = text } (non-regular entries are skipped)
  */
 static int
