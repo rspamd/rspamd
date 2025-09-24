@@ -26,13 +26,30 @@
 
 #include <archive.h>
 #include <archive_entry.h>
+#include <zlib.h>
+#include "ottery.h"
 
 #define msg_debug_archive(...) rspamd_conditional_debug_fast(NULL, NULL,                                                 \
 															 rspamd_archive_log_id, "archive", task->task_pool->tag.uid, \
 															 G_STRFUNC,                                                  \
 															 __VA_ARGS__)
+#define msg_debug_archive_taskless(...) rspamd_conditional_debug_fast(NULL, NULL,                             \
+																	  rspamd_archive_log_id, "archive", NULL, \
+																	  G_STRFUNC,                              \
+																	  __VA_ARGS__)
 
 INIT_LOG_MODULE(archive)
+
+static GQuark
+rspamd_archives_err_quark(void)
+{
+	static GQuark q = 0;
+	if (G_UNLIKELY(q == 0)) {
+		q = g_quark_from_static_string("archives");
+	}
+
+	return q;
+}
 
 static void
 rspamd_archive_dtor(gpointer p)
@@ -53,6 +70,7 @@ rspamd_archive_dtor(gpointer p)
 
 	g_ptr_array_free(arch->files, TRUE);
 }
+
 
 static bool
 rspamd_archive_file_try_utf(struct rspamd_task *task,
@@ -1059,7 +1077,7 @@ rspamd_7zip_read_pack_info(struct rspamd_task *task,
 	while (p != NULL && p < end) {
 		t = *p;
 		SZ_SKIP_BYTES(1);
-		msg_debug_archive("7zip: read pack info %xc", t);
+		msg_debug_archive("7zip: read pack info %xd", t);
 
 		switch (t) {
 		case kSize:
@@ -1078,7 +1096,7 @@ rspamd_7zip_read_pack_info(struct rspamd_task *task,
 			break;
 		default:
 			p = NULL;
-			msg_debug_archive("bad 7zip type: %xc; %s", t, G_STRLOC);
+			msg_debug_archive("bad 7zip type: %xd; %s", t, G_STRLOC);
 			goto end;
 			break;
 		}
@@ -1224,7 +1242,7 @@ rspamd_7zip_read_coders_info(struct rspamd_task *task,
 
 		t = *p;
 		SZ_SKIP_BYTES(1);
-		msg_debug_archive("7zip: read coders info %xc", t);
+		msg_debug_archive("7zip: read coders info %xd", t);
 
 		switch (t) {
 		case kFolder:
@@ -1293,7 +1311,7 @@ rspamd_7zip_read_coders_info(struct rspamd_task *task,
 			break;
 		default:
 			p = NULL;
-			msg_debug_archive("bad 7zip type: %xc; %s", t, G_STRLOC);
+			msg_debug_archive("bad 7zip type: %xd; %s", t, G_STRLOC);
 			goto end;
 			break;
 		}
@@ -1355,7 +1373,7 @@ rspamd_7zip_read_substreams_info(struct rspamd_task *task,
 		t = *p;
 		SZ_SKIP_BYTES(1);
 
-		msg_debug_archive("7zip: read substream info %xc", t);
+		msg_debug_archive("7zip: read substream info %xd", t);
 
 		switch (t) {
 		case kNumUnPackStream:
@@ -1392,7 +1410,7 @@ rspamd_7zip_read_substreams_info(struct rspamd_task *task,
 			break;
 		default:
 			p = NULL;
-			msg_debug_archive("bad 7zip type: %xc; %s", t, G_STRLOC);
+			msg_debug_archive("bad 7zip type: %xd; %s", t, G_STRLOC);
 			goto end;
 			break;
 		}
@@ -1413,7 +1431,7 @@ rspamd_7zip_read_main_streams_info(struct rspamd_task *task,
 	while (p != NULL && p < end) {
 		t = *p;
 		SZ_SKIP_BYTES(1);
-		msg_debug_archive("7zip: read main streams info %xc", t);
+		msg_debug_archive("7zip: read main streams info %xd", t);
 
 		/*
 		 *
@@ -1449,7 +1467,7 @@ rspamd_7zip_read_main_streams_info(struct rspamd_task *task,
 			break;
 		default:
 			p = NULL;
-			msg_debug_archive("bad 7zip type: %xc; %s", t, G_STRLOC);
+			msg_debug_archive("bad 7zip type: %xd; %s", t, G_STRLOC);
 			goto end;
 			break;
 		}
@@ -1553,7 +1571,7 @@ rspamd_7zip_read_files_info(struct rspamd_task *task,
 		t = *p;
 		SZ_SKIP_BYTES(1);
 
-		msg_debug_archive("7zip: read file data type %xc", t);
+		msg_debug_archive("7zip: read file data type %xd", t);
 
 		if (t == kEnd) {
 			goto end;
@@ -1634,7 +1652,7 @@ rspamd_7zip_read_files_info(struct rspamd_task *task,
 			break;
 		default:
 			p = NULL;
-			msg_debug_archive("bad 7zip type: %xc; %s", t, G_STRLOC);
+			msg_debug_archive("bad 7zip type: %xd; %s", t, G_STRLOC);
 			goto end;
 			break;
 		}
@@ -1654,7 +1672,7 @@ rspamd_7zip_read_next_section(struct rspamd_task *task,
 
 	SZ_SKIP_BYTES(1);
 
-	msg_debug_archive("7zip: read section %xc", t);
+	msg_debug_archive("7zip: read section %xd", t);
 
 	switch (t) {
 	case kHeader:
@@ -1720,7 +1738,7 @@ rspamd_7zip_read_next_section(struct rspamd_task *task,
 		break;
 	default:
 		p = NULL;
-		msg_debug_archive("bad 7zip type: %xc; %s", t, G_STRLOC);
+		msg_debug_archive("bad 7zip type: %xd; %s", t, G_STRLOC);
 		break;
 	}
 
