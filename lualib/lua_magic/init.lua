@@ -306,6 +306,10 @@ exports.detect = function(part, log_obj)
 
   if type(input) == 'userdata' then
     local inplen = #input
+    if inplen == 0 then
+      -- Empty input: nothing to match
+      return nil
+    end
 
     -- Check tail matches
     if inplen > min_tail_offset then
@@ -315,9 +319,11 @@ exports.detect = function(part, log_obj)
     end
 
     -- Try short match
-    local head = input:span(1, math.min(max_short_offset, inplen))
-    match_chunk(head, input, inplen, 0,
-      compiled_short_patterns, short_patterns, log_obj, res, part)
+    if max_short_offset > 0 then
+      local head = input:span(1, math.min(max_short_offset, inplen))
+      match_chunk(head, input, inplen, 0,
+        compiled_short_patterns, short_patterns, log_obj, res, part)
+    end
 
     -- Check if we have enough data or go to long patterns
     local extensions, confidence = process_detected(res)
