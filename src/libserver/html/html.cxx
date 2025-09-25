@@ -2214,15 +2214,21 @@ auto html_process_input(struct rspamd_task *task,
 						/* naive parse: look for 'url=' and capture token */
 						auto p = rspamd_substring_search_caseless(cv.data(), cv.size(), "url=", sizeof("url=") - 1);
 						if (p != -1) {
-							std::string_view urlv{cv.data() + p + (sizeof("url=") - 1), cv.size() - (p + (sizeof("url=") - 1))};
-							/* Trim quotes/spaces and trailing separators */
-							while (!urlv.empty() && (g_ascii_isspace(urlv.front()) || urlv.front() == '\'' || urlv.front() == '"')) urlv.remove_prefix(1);
-							while (!urlv.empty() && (urlv.back() == ';' || urlv.back() == '\'' || urlv.back() == '"' || g_ascii_isspace(urlv.back()))) urlv.remove_suffix(1);
-							if (!urlv.empty()) {
-								/* validate and count; do not add to urls set */
-								auto maybe_url = html_process_url(pool, urlv);
-								if (maybe_url) {
-									hc->features.meta_refresh_urls++;
+							constexpr auto url_key_len = sizeof("url=") - 1;
+							/* compute offset as size_type to avoid narrowing on 32-bit */
+							auto url_off = static_cast<std::string_view::size_type>(p) + url_key_len;
+							if (url_off <= cv.size()) {
+								std::string_view urlv{cv.data() + url_off, cv.size() - url_off};
+								/* Trim quotes/spaces and trailing separators */
+								while (!urlv.empty() && (g_ascii_isspace(urlv.front()) || urlv.front() == '\'' || urlv.front() == '"')) urlv.remove_prefix(1);
+								while (!urlv.empty() && (urlv.back() == ';' || urlv.back() == '\'' || urlv.back() == '"' || g_ascii_isspace(urlv.back()))) urlv.remove_suffix(1);
+
+								if (!urlv.empty()) {
+									/* validate and count; do not add to urls set */
+									auto maybe_url = html_process_url(pool, urlv);
+									if (maybe_url) {
+										hc->features.meta_refresh_urls++;
+									}
 								}
 							}
 						}
