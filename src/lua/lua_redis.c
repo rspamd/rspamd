@@ -889,10 +889,10 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 	const char *host = NULL;
 	const char *username = NULL, *password = NULL, *dbname = NULL, *log_tag = NULL;
 	struct rspamd_redis_tls_opts tls_opts;
-	/* Duplicated TLS strings to ensure lifetime beyond Lua stack */
-	char *dup_ca_file = NULL, *dup_ca_dir = NULL, *dup_cert_file = NULL,
-		 *dup_key_file = NULL, *dup_sni = NULL;
 	int cbref = -1;
+	/* Track postponed TLS values on Lua stack and table index */
+	int tls_items = 0;
+	int tls_tbl_idx = 0;
 	struct rspamd_config *cfg = NULL;
 	struct rspamd_async_session *session = NULL;
 	struct ev_loop *ev_base = NULL;
@@ -1016,70 +1016,64 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 		}
 		lua_pop(L, 1);
 
-		/* TLS options (optional) */
+		/* TLS options (optional). Postpone pops to keep values alive */
+		tls_tbl_idx = lua_gettop(L);
+
 		lua_pushstring(L, "ssl");
-		lua_gettable(L, -2);
+		lua_gettable(L, tls_tbl_idx);
 		if (!!lua_toboolean(L, -1)) {
 			tls_opts.use_tls = true;
 		}
-		lua_pop(L, 1);
+		tls_items++;
 
 		lua_pushstring(L, "no_ssl_verify");
-		lua_gettable(L, -2);
+		lua_gettable(L, tls_tbl_idx);
 		if (!!lua_toboolean(L, -1)) {
 			tls_opts.no_ssl_verify = true;
 		}
-		lua_pop(L, 1);
+		tls_items++;
 
-		/* Duplicate string options to avoid ephemeral Lua string pointers */
 		lua_pushstring(L, "ssl_ca");
-		lua_gettable(L, -2);
+		lua_gettable(L, tls_tbl_idx);
 		if (lua_type(L, -1) == LUA_TSTRING) {
-			dup_ca_file = g_strdup(lua_tostring(L, -1));
-			tls_opts.ca_file = dup_ca_file;
+			tls_opts.ca_file = lua_tostring(L, -1);
 		}
-		lua_pop(L, 1);
+		tls_items++;
 
 		lua_pushstring(L, "ssl_ca_dir");
-		lua_gettable(L, -2);
+		lua_gettable(L, tls_tbl_idx);
 		if (lua_type(L, -1) == LUA_TSTRING) {
-			dup_ca_dir = g_strdup(lua_tostring(L, -1));
-			tls_opts.ca_dir = dup_ca_dir;
+			tls_opts.ca_dir = lua_tostring(L, -1);
 		}
-		lua_pop(L, 1);
+		tls_items++;
 
 		lua_pushstring(L, "ssl_cert");
-		lua_gettable(L, -2);
+		lua_gettable(L, tls_tbl_idx);
 		if (lua_type(L, -1) == LUA_TSTRING) {
-			dup_cert_file = g_strdup(lua_tostring(L, -1));
-			tls_opts.cert_file = dup_cert_file;
+			tls_opts.cert_file = lua_tostring(L, -1);
 		}
-		lua_pop(L, 1);
+		tls_items++;
 
 		lua_pushstring(L, "ssl_key");
-		lua_gettable(L, -2);
+		lua_gettable(L, tls_tbl_idx);
 		if (lua_type(L, -1) == LUA_TSTRING) {
-			dup_key_file = g_strdup(lua_tostring(L, -1));
-			tls_opts.key_file = dup_key_file;
+			tls_opts.key_file = lua_tostring(L, -1);
 		}
-		lua_pop(L, 1);
+		tls_items++;
 
 		lua_pushstring(L, "sni");
-		lua_gettable(L, -2);
+		lua_gettable(L, tls_tbl_idx);
 		if (lua_type(L, -1) == LUA_TSTRING) {
-			dup_sni = g_strdup(lua_tostring(L, -1));
-			tls_opts.sni = dup_sni;
+			tls_opts.sni = lua_tostring(L, -1);
 		}
-		lua_pop(L, 1);
+		tls_items++;
 
 		lua_pushstring(L, "no_pool");
-		lua_gettable(L, -2);
+		lua_gettable(L, tls_tbl_idx);
 		if (!!lua_toboolean(L, -1)) {
 			flags |= LUA_REDIS_NO_POOL;
 		}
-		lua_pop(L, 1);
-
-		lua_pop(L, 1); /* table */
+		tls_items++;
 
 		if (session && rspamd_session_blocked(session)) {
 			msg_err_task_check("Session is being destroying");
@@ -1139,12 +1133,15 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 												rspamd_inet_address_get_port(addr->addr),
 												&tls_opts);
 
-		/* Free temporary TLS strings after they have been consumed */
-		g_free(dup_ca_file);
-		g_free(dup_ca_dir);
-		g_free(dup_cert_file);
-		g_free(dup_key_file);
-		g_free(dup_sni);
+		/* Pop postponed TLS values and the table itself */
+		if (tls_items > 0) {
+			lua_pop(L, tls_items);
+			tls_items = 0;
+		}
+		if (tls_tbl_idx != 0) {
+			lua_pop(L, 1);
+			tls_tbl_idx = 0;
+		}
 
 		if (ip) {
 			rspamd_inet_address_free(ip);
@@ -1177,13 +1174,6 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 	if (ip) {
 		rspamd_inet_address_free(ip);
 	}
-
-	/* Free any duplicated TLS strings on error path */
-	g_free(dup_ca_file);
-	g_free(dup_ca_dir);
-	g_free(dup_cert_file);
-	g_free(dup_key_file);
-	g_free(dup_sni);
 
 	return NULL;
 }
