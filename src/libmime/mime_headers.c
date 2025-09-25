@@ -823,20 +823,62 @@ rspamd_mime_header_encode(const char *in, gsize len, bool is_structured)
 	char *encode_buf = g_alloca(max_token_size + 3);
 	const char *p = in;
 	const char *end = in + len;
+	/* Accumulate pending whitespace between segments to embed into next encoded-word */
+	size_t pending_spaces = 0, pending_tabs = 0;
 
 	while (p < end) {
-		if (*p == ' ' || *p == '\r' || *p == '\n' || *p == '(' || *p == ')') {
-			/* Append the separator as is */
+		/* Collect linear white space to possibly include into next encoded-word */
+		if (*p == ' ') {
+			pending_spaces++;
+			p++;
+			continue;
+		}
+		else if (*p == '\t') {
+			pending_tabs++;
+			p++;
+			continue;
+		}
+		else if (*p == '\r' || *p == '\n') {
+			/* Flush pending WS before hard newlines */
+			while (pending_spaces--) {
+				g_string_append_c(outbuf, ' ');
+			}
+			pending_spaces = 0;
+			while (pending_tabs--) {
+				g_string_append_c(outbuf, '\t');
+			}
+			pending_tabs = 0;
 			g_string_append_c(outbuf, *p);
 			p++;
+			continue;
+		}
+		else if (*p == '(' || *p == ')') {
+			/* Flush pending WS around CFWS delimiters */
+			while (pending_spaces--) {
+				g_string_append_c(outbuf, ' ');
+			}
+			pending_spaces = 0;
+			while (pending_tabs--) {
+				g_string_append_c(outbuf, '\t');
+			}
+			pending_tabs = 0;
+			g_string_append_c(outbuf, *p);
+			p++;
+			continue;
 		}
 		else {
+			/* Decide whether we start an encoded span right away */
+			unsigned char first_c = (unsigned char) *p;
+			gboolean starts_encoding = (first_c >= 128) || (is_structured && !g_ascii_isalnum(first_c));
+
 			const char *piece_end = end;
 			size_t piece_len = piece_end - p;
 			gboolean need_encoding = FALSE;
 			size_t unencoded_prefix = 0;
 			size_t encoded_len_count = 0;
 			size_t enc_span = 0;
+			gboolean include_pending_ws = starts_encoding && (pending_spaces > 0 || pending_tabs > 0);
+			size_t pending_ws_budget = include_pending_ws ? (pending_spaces + pending_tabs * 3) : 0;
 
 			/* Determine how much of this piece needs encoding and fits the budget */
 			for (size_t i = 0; i < piece_len; i++) {
@@ -848,14 +890,14 @@ rspamd_mime_header_encode(const char *in, gsize len, bool is_structured)
 						/* Start encoded region with this char */
 						size_t add = (g_ascii_isalnum(c) || c == ' ') ? 1 : 3;
 
-						if (add > max_token_size) {
+						if (add + pending_ws_budget > max_token_size) {
 							/* Nothing fits, stop here to emit prefix only */
 							piece_len = i;
 							piece_end = p + piece_len;
 							break;
 						}
 
-						encoded_len_count = add;
+						encoded_len_count = pending_ws_budget + add;
 						enc_span = 1;
 					}
 					else {
@@ -864,11 +906,39 @@ rspamd_mime_header_encode(const char *in, gsize len, bool is_structured)
 					}
 				}
 				else {
-					/* Inside encoded part, stop on parentheses to keep them outside */
+					/* Also stop on parentheses to keep CFWS outside */
 					if (c == '(' || c == ')') {
 						piece_len = i;
 						piece_end = p + piece_len;
 						break;
+					}
+
+					/* Break on whitespace to keep spaces outside encoded-words */
+					if (c == ' ' || c == '\t') {
+						piece_len = i;
+						piece_end = p + piece_len;
+						break;
+					}
+
+					/* For non-structured, include ASCII punctuation only if bridging to non-ASCII ahead */
+					if (!is_structured && c < 128 && !g_ascii_isalnum(c)) {
+						gboolean bridge_to_non_ascii = FALSE;
+						for (size_t j = i + 1; j < piece_len; j++) {
+							unsigned char nc = p[j];
+							if (nc >= 128) {
+								bridge_to_non_ascii = TRUE;
+								break;
+							}
+							if (g_ascii_isspace(nc) || nc == '(' || nc == ')') {
+								break;
+							}
+						}
+
+						if (!bridge_to_non_ascii) {
+							piece_len = i;
+							piece_end = p + piece_len;
+							break;
+						}
 					}
 
 					size_t add = (g_ascii_isalnum(c) || c == ' ') ? 1 : 3;
@@ -886,15 +956,38 @@ rspamd_mime_header_encode(const char *in, gsize len, bool is_structured)
 			}
 
 			if (need_encoding && enc_span > 0) {
-				/* Emit prefix */
+				/* Emit prefix; if we are not starting encoding, flush pending WS literally */
+				if (!include_pending_ws && (pending_spaces > 0 || pending_tabs > 0)) {
+					while (pending_spaces--) {
+						g_string_append_c(outbuf, ' ');
+					}
+					pending_spaces = 0;
+					while (pending_tabs--) {
+						g_string_append_c(outbuf, '\t');
+					}
+					pending_tabs = 0;
+				}
 				g_string_append_len(outbuf, p, unencoded_prefix);
 				p += unencoded_prefix;
 
 				/* Encode encoded span safely within budget */
 				g_string_append(outbuf, "=?UTF-8?Q?");
 
+				/* Prepend pending whitespace inside encoded-word if any */
+				if (include_pending_ws) {
+					for (size_t i = 0; i < pending_spaces; i++) {
+						g_string_append_c(outbuf, '_');
+					}
+					for (size_t i = 0; i < pending_tabs; i++) {
+						g_string_append_len(outbuf, "=09", 3);
+					}
+					pending_spaces = 0;
+					pending_tabs = 0;
+				}
+
+				size_t out_budget = max_token_size - (include_pending_ws ? pending_ws_budget : 0);
 				gssize enc_written = rspamd_encode_qp2047_buf(p, enc_span,
-															  encode_buf, max_token_size);
+															  encode_buf, out_budget);
 
 				if (G_UNLIKELY(enc_written < 0)) {
 					/* Extremely conservative fallback: shrink until it fits */
@@ -915,6 +1008,17 @@ rspamd_mime_header_encode(const char *in, gsize len, bool is_structured)
 			}
 			else {
 				/* No encoding needed or nothing to encode */
+				/* Flush pending whitespace literally before ASCII chunk */
+				if (pending_spaces > 0 || pending_tabs > 0) {
+					while (pending_spaces--) {
+						g_string_append_c(outbuf, ' ');
+					}
+					pending_spaces = 0;
+					while (pending_tabs--) {
+						g_string_append_c(outbuf, '\t');
+					}
+					pending_tabs = 0;
+				}
 				g_string_append_len(outbuf, p, piece_len);
 				p += piece_len;
 			}
