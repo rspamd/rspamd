@@ -831,70 +831,93 @@ rspamd_mime_header_encode(const char *in, gsize len, bool is_structured)
 			p++;
 		}
 		else {
-			const char *q = end;
-			size_t piece_len = q - p, encoded_len = 0;
-
-			/* Check if the piece contains non-ASCII characters */
+			const char *piece_end = end;
+			size_t piece_len = piece_end - p;
 			gboolean need_encoding = FALSE;
-			size_t unencoded_prefix = 0, unencoded_suffix = 0;
+			size_t unencoded_prefix = 0;
+			size_t encoded_len_count = 0;
+			size_t enc_span = 0;
+
+			/* Determine how much of this piece needs encoding and fits the budget */
 			for (size_t i = 0; i < piece_len; i++) {
 				unsigned char c = p[i];
-				if (c >= 128 || (is_structured && !g_ascii_isalnum(c))) {
-					need_encoding = TRUE;
-					unencoded_suffix = 0;
-					encoded_len += 3;
 
-					if (encoded_len > max_token_size) {
-						piece_len = i;
-						q = p + piece_len;
-						/* No more space */
-						break;
+				if (!need_encoding) {
+					if (c >= 128 || (is_structured && !g_ascii_isalnum(c))) {
+						need_encoding = TRUE;
+						/* Start encoded region with this char */
+						size_t add = (g_ascii_isalnum(c) || c == ' ') ? 1 : 3;
+
+						if (add > max_token_size) {
+							/* Nothing fits, stop here to emit prefix only */
+							piece_len = i;
+							piece_end = p + piece_len;
+							break;
+						}
+
+						encoded_len_count = add;
+						enc_span = 1;
+					}
+					else {
+						/* Still in unencoded prefix */
+						unencoded_prefix++;
 					}
 				}
 				else {
-					encoded_len++;
-
-					if (encoded_len > max_token_size) {
+					/* Inside encoded part, stop on parentheses to keep them outside */
+					if (c == '(' || c == ')') {
 						piece_len = i;
-						q = p + piece_len;
-						/* No more space */
+						piece_end = p + piece_len;
 						break;
 					}
 
-					if (need_encoding && (c == '(' || c == ')')) {
-						/* If we need to encode, we must stop on comments characters */
+					size_t add = (g_ascii_isalnum(c) || c == ' ') ? 1 : 3;
+
+					if (encoded_len_count + add > max_token_size) {
+						/* Budget exceeded; stop encoded span before this char */
 						piece_len = i;
-						q = p + piece_len;
-						/* No more space */
+						piece_end = p + piece_len;
 						break;
 					}
 
-					if (!need_encoding) {
-						unencoded_prefix++;
-					}
-					else {
-						unencoded_suffix++;
-					}
+					encoded_len_count += add;
+					enc_span++;
 				}
 			}
 
-			if (need_encoding) {
+			if (need_encoding && enc_span > 0) {
+				/* Emit prefix */
 				g_string_append_len(outbuf, p, unencoded_prefix);
 				p += unencoded_prefix;
+
+				/* Encode encoded span safely within budget */
 				g_string_append(outbuf, "=?UTF-8?Q?");
-				/* Do encode */
-				encoded_len = rspamd_encode_qp2047_buf(p, piece_len - unencoded_prefix - unencoded_suffix,
-													   encode_buf, max_token_size + 3);
-				p += piece_len - unencoded_prefix - unencoded_suffix;
-				g_string_append_len(outbuf, encode_buf, encoded_len);
-				g_string_append(outbuf, "?=");
-				g_string_append_len(outbuf, p, unencoded_suffix);
+
+				gssize enc_written = rspamd_encode_qp2047_buf(p, enc_span,
+															  encode_buf, max_token_size);
+
+				if (G_UNLIKELY(enc_written < 0)) {
+					/* Extremely conservative fallback: shrink until it fits */
+					while (enc_span > 0 && enc_written < 0) {
+						enc_span--;
+						enc_written = rspamd_encode_qp2047_buf(p, enc_span,
+															   encode_buf, max_token_size);
+					}
+				}
+
+				if (enc_span > 0 && enc_written >= 0) {
+					g_string_append_len(outbuf, encode_buf, (size_t) enc_written);
+					g_string_append(outbuf, "?=");
+					p += enc_span;
+				}
+
+				/* Do not append any suffix here; remaining bytes will be handled next loop */
 			}
 			else {
-				/* No transformation */
+				/* No encoding needed or nothing to encode */
 				g_string_append_len(outbuf, p, piece_len);
+				p += piece_len;
 			}
-			p = q;
 		}
 	}
 
