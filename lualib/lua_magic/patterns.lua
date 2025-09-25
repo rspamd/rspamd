@@ -448,14 +448,24 @@ local patterns = {
       {
         -- Case-insensitive <svg ...> in the first chunk
         string = [[(?i)<svg\b]],
-        position = { '>=', 0 },
+        position = { '<=', 4096 },
         weight = 40,
       },
       {
-        -- XML prolog hints
-        string = [[<\?xml\b]],
+        -- Case-insensitive <!DOCTYPE svg ...> within the first 4KiB
+        string = [[(?i)<!doctype\s+svg]],
+        position = { '<=', 4096 },
+        weight = 40,
+      },
+    }
+  },
+  xml = {
+    matches = {
+      {
+        -- XML prolog
+        string = [[<\?xml\b.+\?>]],
         position = { '>=', 0 },
-        weight = 20,
+        weight = 30,
       },
     }
   },
