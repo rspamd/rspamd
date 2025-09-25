@@ -807,7 +807,9 @@ rspamd_mime_header_decode(rspamd_mempool_t *pool, const char *in,
 
 	g_byte_array_free(token, TRUE);
 	g_byte_array_free(decoded, TRUE);
+	/* Replace control chars and ensure valid UTF-8 */
 	rspamd_mime_header_sanity_check(out);
+	rspamd_mime_charset_utf_enforce(out->str, out->len);
 	rspamd_mempool_notify_alloc(pool, out->len);
 	ret = g_string_free(out, FALSE);
 	rspamd_mempool_add_destructor(pool, g_free, ret);
