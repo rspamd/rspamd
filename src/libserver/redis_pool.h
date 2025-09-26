@@ -24,6 +24,15 @@ extern "C" {
 struct rspamd_config;
 struct redisAsyncContext;
 struct ev_loop;
+struct rspamd_redis_tls_opts {
+	bool use_tls;          /* enable TLS */
+	bool no_ssl_verify;    /* disable peer verify */
+	const char *ca_file;   /* optional */
+	const char *ca_dir;    /* optional */
+	const char *cert_file; /* optional */
+	const char *key_file;  /* optional */
+	const char *sni;       /* optional */
+};
 
 /**
  * Creates new redis pool
@@ -55,6 +64,15 @@ struct redisAsyncContext *rspamd_redis_pool_connect(
 	void *pool,
 	const char *db, const char *username, const char *password,
 	const char *ip, int port);
+
+/**
+ * Create or reuse a specific redis connection with optional TLS
+ */
+struct redisAsyncContext *rspamd_redis_pool_connect_ext(
+	void *pool,
+	const char *db, const char *username, const char *password,
+	const char *ip, int port,
+	const struct rspamd_redis_tls_opts *tls);
 
 enum rspamd_redis_pool_release_type {
 	RSPAMD_REDIS_RELEASE_DEFAULT = 0,
