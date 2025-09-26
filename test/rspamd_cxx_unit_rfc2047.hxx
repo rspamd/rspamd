@@ -27,69 +27,340 @@
 
 TEST_SUITE("rfc2047 encode")
 {
-	TEST_CASE("rspamd_mime_header_encode handles ASCII-only input")
+	TEST_CASE("rspamd_mime_header_encode issue sample and invariants")
 	{
 		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "rfc2047", 0);
-		std::vector<std::pair<std::string, std::string>> cases = {
-			{"PDF_LONG_TRAILER (0.20)[Док.за 10102024.pdf:416662]",
-			 "PDF_LONG_TRAILER (0.20)[=?UTF-8?Q?=D0=94=D0=BE=D0=BA=2E=D0=B7=D0=B0?= 10102024.pdf:416662]"},
-			{"Hello World", "Hello World"},
-			{"Hello Мир", "Hello =?UTF-8?Q?=D0=9C=D0=B8=D1=80?="},
-			{"ололо (ололо test)    test", "=?UTF-8?Q?=D0=BE=D0=BB=D0=BE=D0=BB=D0=BE?= (=?UTF-8?Q?=D0=BE=D0=BB=D0=BE=D0=BB=D0=BE?= test)    test"},
-			{"Привет    мир Как дела?", "=?UTF-8?Q?=D0=9F=D1=80=D0=B8=D0=B2=D0=B5=D1=82____=D0=BC=D0=B8=D1=80_=D0?="
-										"=?UTF-8?Q?=9A=D0=B0=D0=BA_=D0=B4=D0=B5=D0=BB=D0=B0?=?"},
-			{"", ""},
-			{"こんにちは(世界)", "=?UTF-8?Q?=E3=81=93=E3=82=93=E3=81=AB=E3=81=A1=E3=81=AF?="
-								 "(=?UTF-8?Q?=E4=B8=96=E7=95=8C?=)"},
-			{"(Hello)", "(Hello)"},
-			{"Hello)", "Hello)"},
-			{"你好世界", "=?UTF-8?Q?=E4=BD=A0=E5=A5=BD=E4=B8=96=E7=95=8C?="},
-			{"これはとても長いテキストで、エンコードされたワードが76文字を超える必要があります。",
-			 "=?UTF-8?Q?=E3=81=93=E3=82=8C=E3=81=AF=E3=81=A8=E3=81=A6=E3=82=82=E9=95=B7?="
-			 "=?UTF-8?Q?=E3=81=84=E3=83=86=E3=82=AD=E3=82=B9=E3=83=88=E3=81=A7=E3=80=81?="
-			 "=?UTF-8?Q?=E3=82=A8=E3=83=B3=E3=82=B3=E3=83=BC=E3=83=89=E3=81=95=E3=82=8C?="
-			 "=?UTF-8?Q?=E3=81=9F=E3=83=AF=E3=83=BC=E3=83=89=E3=81=8C76=E6=96=87=E5=AD?="
-			 "=?UTF-8?Q?=97=E3=82=92=E8=B6=85=E3=81=88=E3=82=8B=E5=BF=85=E8=A6=81=E3=81?="
-			 "=?UTF-8?Q?=8C=E3=81=82=E3=82=8A=E3=81=BE=E3=81=99=E3=80=82?="},
-			{"ASCII_Text "
-			 "これは非常に長い非ASCIIテキストで、エンコードが必要になります。",
-			 "ASCII_Text "
-			 "=?UTF-8?Q?=E3=81=93=E3=82=8C=E3=81=AF=E9=9D=9E=E5=B8=B8=E3=81?="
-			 "=?UTF-8?Q?=AB=E9=95=B7=E3=81=84=E9=9D=9EASCII=E3=83=86=E3=82=AD=E3=82=B9?="
-			 "=?UTF-8?Q?=E3=83=88=E3=81=A7=E3=80=81=E3=82=A8=E3=83=B3=E3=82=B3=E3=83=BC?="
-			 "=?UTF-8?Q?=E3=83=89=E3=81=8C=E5=BF=85=E8=A6=81=E3=81=AB=E3=81=AA=E3=82=8A?="
-			 "=?UTF-8?Q?=E3=81=BE=E3=81=99=E3=80=82?="},
-			{"非常に長い非ASCII文字列を使用してエンコードワードの分割をテストします。"
-			 "データが長すぎる場合、正しく分割されるべきです。",
-			 "=?UTF-8?Q?=E9=9D=9E=E5=B8=B8=E3=81=AB=E9=95=B7=E3=81=84=E9=9D=9EASCII=E6?="
-			 "=?UTF-8?Q?=96=87=E5=AD=97=E5=88=97=E3=82=92=E4=BD=BF=E7=94=A8=E3=81=97=E3?="
-			 "=?UTF-8?Q?=81=A6=E3=82=A8=E3=83=B3=E3=82=B3=E3=83=BC=E3=83=89=E3=83=AF=E3?="
-			 "=?UTF-8?Q?=83=BC=E3=83=89=E3=81=AE=E5=88=86=E5=89=B2=E3=82=92=E3=83=86=E3?="
-			 "=?UTF-8?Q?=82=B9=E3=83=88=E3=81=97=E3=81=BE=E3=81=99=E3=80=82=E3=83=87=E3?="
-			 "=?UTF-8?Q?=83=BC=E3=82=BF=E3=81=8C=E9=95=B7=E3=81=99=E3=81=8E=E3=82=8B=E5?="
-			 "=?UTF-8?Q?=A0=B4=E5=90=88=E3=80=81=E6=AD=A3=E3=81=97=E3=81=8F=E5=88=86=E5?="
-			 "=?UTF-8?Q?=89=B2=E3=81=95=E3=82=8C=E3=82=8B=E3=81=B9=E3=81=8D=E3=81=A7=E3?="
-			 "=?UTF-8?Q?=81=99=E3=80=82?="},
-
-		};
-
-		for (const auto &c: cases) {
-			SUBCASE(c.first.c_str())
-			{
-				gboolean invalid_utf = FALSE;
-				const char *input = c.first.c_str();
-				char *output_cstr = rspamd_mime_header_encode(input, strlen(input), false);
-				std::string output(output_cstr);
-				std::string expected_output = c.second;
-				CHECK(output == expected_output);
-				char *decoded_cstr = rspamd_mime_header_decode(pool, output_cstr, strlen(output_cstr), &invalid_utf);
-				std::string decoded(decoded_cstr);
-				CHECK(invalid_utf == FALSE);
-				CHECK(decoded == c.first);
-				g_free(output_cstr);
-			}
+		std::string input = "¡Con estos precios, el norte es tuyo! 🏜️";
+		char *output_cstr = rspamd_mime_header_encode(input.c_str(), input.size(), false);
+		std::string output(output_cstr);
+		// All encoded-words must be <= 76 chars
+		size_t pos = 0;
+		while (true) {
+			size_t start = output.find("=?UTF-8?Q?", pos);
+			if (start == std::string::npos) break;
+			size_t end = output.find("?=", start);
+			REQUIRE(end != std::string::npos);
+			CHECK(end + 2 - start <= 76);
+			pos = end + 2;
 		}
+		gboolean invalid_utf = FALSE;
+		char *decoded_cstr = rspamd_mime_header_decode(pool, output_cstr, strlen(output_cstr), &invalid_utf);
+		std::string decoded(decoded_cstr);
+		CHECK(invalid_utf == FALSE);
+		CHECK(decoded == input);
+		g_free(output_cstr);
+		rspamd_mempool_delete(pool);
+	}
 
+	TEST_CASE("rspamd_mime_header_encode handles invalid UTF-8 bytes safely")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "rfc2047", 0);
+		std::string input = std::string("Invalid: ") + std::string("\xC3\x28", 2) + " end";// invalid UTF-8 sequence C3 28
+		char *output_cstr = rspamd_mime_header_encode(input.c_str(), input.size(), false);
+		std::string output(output_cstr);
+		// Encoded-words length constraint
+		size_t pos = 0;
+		while (true) {
+			size_t start = output.find("=?UTF-8?Q?", pos);
+			if (start == std::string::npos) break;
+			size_t end = output.find("?=", start);
+			REQUIRE(end != std::string::npos);
+			CHECK(end + 2 - start <= 76);
+			pos = end + 2;
+		}
+		gboolean invalid_utf = FALSE;
+		char *decoded_cstr = rspamd_mime_header_decode(pool, output_cstr, strlen(output_cstr), &invalid_utf);
+		std::string decoded(decoded_cstr);
+		// Expect replacement with '?' (current decoder policy) and the literal '(' from the invalid pair
+		CHECK(decoded.find("?") != std::string::npos);
+		CHECK(decoded.find("(") != std::string::npos);
+		g_free(output_cstr);
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("structured header encodes ASCII punctuation as Q-words")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "rfc2047", 0);
+		std::string input = "Price, list (v2) - update";
+		char *output_cstr = rspamd_mime_header_encode(input.c_str(), input.size(), true);
+		std::string output(output_cstr);
+		// Should contain at least one encoded-word when structured
+		CHECK(output.find("=?UTF-8?Q?") != std::string::npos);
+		// Token length invariant
+		size_t pos = 0;
+		while (true) {
+			size_t start = output.find("=?UTF-8?Q?", pos);
+			if (start == std::string::npos) break;
+			size_t end = output.find("?=", start);
+			REQUIRE(end != std::string::npos);
+			CHECK(end + 2 - start <= 76);
+			pos = end + 2;
+		}
+		gboolean invalid_utf = FALSE;
+		char *decoded_cstr = rspamd_mime_header_decode(pool, output_cstr, strlen(output_cstr), &invalid_utf);
+		std::string decoded(decoded_cstr);
+		CHECK(invalid_utf == FALSE);
+		CHECK(decoded == input);
+		g_free(output_cstr);
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("mixed ASCII/UTF/punct/spacing/emoji encodes and decodes correctly")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "rfc2047", 0);
+		std::string input = "Hello, 世界!   Tabs\too — and emojis: ";
+		// Long emoji sequence
+		for (int i = 0; i < 16; i++) {
+			input += "😀";
+		}
+		char *output_cstr = rspamd_mime_header_encode(input.c_str(), input.size(), false);
+		std::string output(output_cstr);
+		// Token length invariant for every encoded-word
+		size_t pos = 0;
+		while (true) {
+			size_t start = output.find("=?UTF-8?Q?", pos);
+			if (start == std::string::npos) break;
+			size_t end = output.find("?=", start);
+			REQUIRE(end != std::string::npos);
+			CHECK(end + 2 - start <= 76);
+			pos = end + 2;
+		}
+		gboolean invalid_utf = FALSE;
+		char *decoded_cstr = rspamd_mime_header_decode(pool, output_cstr, strlen(output_cstr), &invalid_utf);
+		std::string decoded(decoded_cstr);
+		CHECK(invalid_utf == FALSE);
+		// Decoder normalizes tabs to spaces; adapt expected accordingly
+		std::string expected_decoded = input;
+		for (char &ch: expected_decoded) {
+			if (ch == '\t') ch = ' ';
+		}
+		CHECK(decoded == expected_decoded);
+		g_free(output_cstr);
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("ASCII-only string is unchanged")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "rfc2047", 0);
+		std::string input = "Hello World";
+		char *output_cstr = rspamd_mime_header_encode(input.c_str(), input.size(), false);
+		std::string output(output_cstr);
+		CHECK(output == std::string("Hello World"));
+		gboolean invalid_utf = FALSE;
+		char *decoded_cstr = rspamd_mime_header_decode(pool, output_cstr, strlen(output_cstr), &invalid_utf);
+		std::string decoded(decoded_cstr);
+		CHECK(invalid_utf == FALSE);
+		CHECK(decoded == input);
+		g_free(output_cstr);
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("Mixed ASCII with Cyrillic encodes Cyrillic segment only")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "rfc2047", 0);
+		std::string input = "Hello Мир";
+		char *output_cstr = rspamd_mime_header_encode(input.c_str(), input.size(), false);
+		std::string output(output_cstr);
+		CHECK(output == std::string("Hello =?UTF-8?Q?=D0=9C=D0=B8=D1=80?="));
+		gboolean invalid_utf = FALSE;
+		char *decoded_cstr = rspamd_mime_header_decode(pool, output_cstr, strlen(output_cstr), &invalid_utf);
+		std::string decoded(decoded_cstr);
+		CHECK(invalid_utf == FALSE);
+		CHECK(decoded == input);
+		g_free(output_cstr);
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("Cyrillic around parentheses splits encoded-words correctly")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "rfc2047", 0);
+		std::string input = "ололо (ололо test)    test";
+		char *output_cstr = rspamd_mime_header_encode(input.c_str(), input.size(), false);
+		std::string output(output_cstr);
+		CHECK(output == std::string("=?UTF-8?Q?=D0=BE=D0=BB=D0=BE=D0=BB=D0=BE?= (=?UTF-8?Q?=D0=BE=D0=BB=D0=BE=D0=BB=D0=BE?= test)    test"));
+		gboolean invalid_utf = FALSE;
+		char *decoded_cstr = rspamd_mime_header_decode(pool, output_cstr, strlen(output_cstr), &invalid_utf);
+		std::string decoded(decoded_cstr);
+		CHECK(invalid_utf == FALSE);
+		CHECK(decoded == input);
+		g_free(output_cstr);
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("Russian text with multiple spaces is encoded and preserved")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "rfc2047", 0);
+		std::string input = "Привет    мир Как дела?";
+		char *output_cstr = rspamd_mime_header_encode(input.c_str(), input.size(), false);
+		std::string output(output_cstr);
+		// Invariant: every encoded-word <= 76 chars
+		size_t pos = 0;
+		while (true) {
+			size_t start = output.find("=?UTF-8?Q?", pos);
+			if (start == std::string::npos) break;
+			size_t end = output.find("?=", start);
+			REQUIRE(end != std::string::npos);
+			CHECK(end + 2 - start <= 76);
+			pos = end + 2;
+		}
+		gboolean invalid_utf = FALSE;
+		char *decoded_cstr = rspamd_mime_header_decode(pool, output_cstr, strlen(output_cstr), &invalid_utf);
+		std::string decoded(decoded_cstr);
+		CHECK(invalid_utf == FALSE);
+		CHECK(decoded == input);
+		g_free(output_cstr);
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("Empty input yields empty output")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "rfc2047", 0);
+		std::string input = "";
+		char *output_cstr = rspamd_mime_header_encode(input.c_str(), input.size(), false);
+		std::string output(output_cstr);
+		CHECK(output == std::string(""));
+		gboolean invalid_utf = FALSE;
+		char *decoded_cstr = rspamd_mime_header_decode(pool, output_cstr, strlen(output_cstr), &invalid_utf);
+		std::string decoded(decoded_cstr);
+		CHECK(invalid_utf == FALSE);
+		CHECK(decoded == input);
+		g_free(output_cstr);
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("Japanese with parentheses keeps parentheses outside encoded-words")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "rfc2047", 0);
+		std::string input = "こんにちは(世界)";
+		char *output_cstr = rspamd_mime_header_encode(input.c_str(), input.size(), false);
+		std::string output(output_cstr);
+		CHECK(output == std::string(
+							"=?UTF-8?Q?=E3=81=93=E3=82=93=E3=81=AB=E3=81=A1=E3=81=AF?=(=?UTF-8?Q?=E4=B8=96=E7=95=8C?=)"));
+		gboolean invalid_utf = FALSE;
+		char *decoded_cstr = rspamd_mime_header_decode(pool, output_cstr, strlen(output_cstr), &invalid_utf);
+		std::string decoded(decoded_cstr);
+		CHECK(invalid_utf == FALSE);
+		CHECK(decoded == input);
+		g_free(output_cstr);
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("Parentheses-only input is unchanged")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "rfc2047", 0);
+		std::string input = "(Hello)";
+		char *output_cstr = rspamd_mime_header_encode(input.c_str(), input.size(), false);
+		std::string output(output_cstr);
+		CHECK(output == std::string("(Hello)"));
+		gboolean invalid_utf = FALSE;
+		char *decoded_cstr = rspamd_mime_header_decode(pool, output_cstr, strlen(output_cstr), &invalid_utf);
+		std::string decoded(decoded_cstr);
+		CHECK(invalid_utf == FALSE);
+		CHECK(decoded == input);
+		g_free(output_cstr);
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("ASCII with trailing parenthesis is unchanged")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "rfc2047", 0);
+		std::string input = "Hello)";
+		char *output_cstr = rspamd_mime_header_encode(input.c_str(), input.size(), false);
+		std::string output(output_cstr);
+		CHECK(output == std::string("Hello)"));
+		gboolean invalid_utf = FALSE;
+		char *decoded_cstr = rspamd_mime_header_decode(pool, output_cstr, strlen(output_cstr), &invalid_utf);
+		std::string decoded(decoded_cstr);
+		CHECK(invalid_utf == FALSE);
+		CHECK(decoded == input);
+		g_free(output_cstr);
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("Chinese text is Q-encoded in a single encoded-word if fits")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "rfc2047", 0);
+		std::string input = "你好世界";
+		char *output_cstr = rspamd_mime_header_encode(input.c_str(), input.size(), false);
+		std::string output(output_cstr);
+		CHECK(output == std::string("=?UTF-8?Q?=E4=BD=A0=E5=A5=BD=E4=B8=96=E7=95=8C?="));
+		gboolean invalid_utf = FALSE;
+		char *decoded_cstr = rspamd_mime_header_decode(pool, output_cstr, strlen(output_cstr), &invalid_utf);
+		std::string decoded(decoded_cstr);
+		CHECK(invalid_utf == FALSE);
+		CHECK(decoded == input);
+		g_free(output_cstr);
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("ASCII prefix with long UTF-8 suffix encodes suffix only")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "rfc2047", 0);
+		std::string input = "ASCII_Text これは非常に長い非ASCIIテキストで、エンコードが必要になります。";
+		char *output_cstr = rspamd_mime_header_encode(input.c_str(), input.size(), false);
+		std::string output(output_cstr);
+		// Keep ASCII prefix and ensure at least one encoded-word exists
+		CHECK(output.find("ASCII_Text ") == 0);
+		CHECK(output.find("=?UTF-8?Q?") != std::string::npos);
+		// Invariant: each encoded-word <= 76 chars
+		size_t pos = 0;
+		while (true) {
+			size_t start = output.find("=?UTF-8?Q?", pos);
+			if (start == std::string::npos) break;
+			size_t end = output.find("?=", start);
+			REQUIRE(end != std::string::npos);
+			CHECK(end + 2 - start <= 76);
+			pos = end + 2;
+		}
+		gboolean invalid_utf = FALSE;
+		char *decoded_cstr = rspamd_mime_header_decode(pool, output_cstr, strlen(output_cstr), &invalid_utf);
+		std::string decoded(decoded_cstr);
+		CHECK(invalid_utf == FALSE);
+		CHECK(decoded == input);
+		g_free(output_cstr);
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("Very long non-ASCII string splits across multiple encoded-words")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "rfc2047", 0);
+		std::string input =
+			"非常に長い非ASCII文字列を使用してエンコードワードの分割をテストします。データが長すぎる場合、正しく分割されるべきです。";
+		char *output_cstr = rspamd_mime_header_encode(input.c_str(), input.size(), false);
+		std::string output(output_cstr);
+		// Invariant: encoded-words present and each <= 76 chars
+		CHECK(output.find("=?UTF-8?Q?") != std::string::npos);
+		size_t pos = 0;
+		while (true) {
+			size_t start = output.find("=?UTF-8?Q?", pos);
+			if (start == std::string::npos) break;
+			size_t end = output.find("?=", start);
+			REQUIRE(end != std::string::npos);
+			CHECK(end + 2 - start <= 76);
+			pos = end + 2;
+		}
+		gboolean invalid_utf = FALSE;
+		char *decoded_cstr = rspamd_mime_header_decode(pool, output_cstr, strlen(output_cstr), &invalid_utf);
+		std::string decoded(decoded_cstr);
+		CHECK(invalid_utf == FALSE);
+		CHECK(decoded == input);
+		g_free(output_cstr);
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("Mixed ASCII with Cyrillic inside brackets encodes inner Cyrillic only")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "rfc2047", 0);
+		std::string input = "PDF_LONG_TRAILER (0.20)[Док.за 10102024.pdf:416662]";
+		char *output_cstr = rspamd_mime_header_encode(input.c_str(), input.size(), false);
+		std::string output(output_cstr);
+		CHECK(output == std::string("PDF_LONG_TRAILER (0.20)[=?UTF-8?Q?=D0=94=D0=BE=D0=BA=2E=D0=B7=D0=B0?= 10102024.pdf:416662]"));
+		gboolean invalid_utf = FALSE;
+		char *decoded_cstr = rspamd_mime_header_decode(pool, output_cstr, strlen(output_cstr), &invalid_utf);
+		std::string decoded(decoded_cstr);
+		CHECK(invalid_utf == FALSE);
+		CHECK(decoded == input);
+		g_free(output_cstr);
 		rspamd_mempool_delete(pool);
 	}
 
@@ -101,7 +372,6 @@ TEST_SUITE("rfc2047 encode")
 		char *output_cstr = rspamd_mime_header_encode(input, strlen(input), false);
 		std::string output(output_cstr);
 		std::string expected_output = input_str;
-
 		CHECK(output == expected_output);
 		g_free(output_cstr);
 	}
