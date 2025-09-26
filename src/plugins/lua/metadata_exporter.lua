@@ -328,7 +328,13 @@ local pushers = {
         if type(v) == 'table' then
           hdrs[pfx .. k] = ucl.to_format(v, 'json-compact')
         else
-          hdrs[pfx .. k] = rspamd_util.mime_header_encode(tostring(v) or '')
+			 if k == 'subject' then
+			   local original_subject = tostring(v)
+				local b64_subject = tostring(rspamd_util.encode_base64(original_subject, 0))
+				hdrs[pfx .. k] = '=?UTF-8?B?' .. b64_subject .. '?='
+			 else
+			   hdrs[pfx .. k] = rspamd_util.mime_header_encode(tostring(v) or '')
+			 end
         end
       end
     end
