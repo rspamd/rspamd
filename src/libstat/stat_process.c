@@ -646,6 +646,25 @@ rspamd_stat_cache_check(struct rspamd_stat_ctx *st_ctx,
 			}
 
 			learn_res = cl->cache->check(task, cache_spam, rt);
+
+			/* Honor flags set by cache check callback (e.g. Redis) */
+			if (task->flags & RSPAMD_TASK_FLAG_ALREADY_LEARNED) {
+				const char *already_class = rspamd_task_get_autolearn_class(task);
+				if (!already_class) {
+					already_class = cache_spam ? "spam" : "ham";
+				}
+
+				g_set_error(err, rspamd_stat_quark(), 404, "<%s> has been already "
+														   "learned as %s, ignore it",
+							MESSAGE_FIELD(task, message_id),
+							already_class);
+
+				return FALSE;
+			}
+			else if (task->flags & RSPAMD_TASK_FLAG_UNLEARN) {
+				/* Will be handled on learn stage */
+				break;
+			}
 		}
 
 		if (learn_res == RSPAMD_LEARN_IGNORE) {
@@ -1212,6 +1231,8 @@ rspamd_stat_learn_class(struct rspamd_task *task,
 	}
 
 	if (stage == RSPAMD_TASK_STAGE_LEARN_PRE) {
+		/* Ensure cache comparison uses the exact class we are about to learn */
+		rspamd_task_set_autolearn_class(task, class_name);
 		/* Process classifiers - determine spam boolean for compatibility */
 		gboolean spam = (strcmp(class_name, "spam") == 0 || strcmp(class_name, "S") == 0);
 		rspamd_stat_preprocess(st_ctx, task, TRUE, spam);
@@ -1297,6 +1318,8 @@ rspamd_stat_learn(struct rspamd_task *task,
 	}
 
 	if (stage == RSPAMD_TASK_STAGE_LEARN_PRE) {
+		/* Ensure cache comparison uses the exact class we are about to learn */
+		rspamd_task_set_autolearn_class(task, spam ? "spam" : "ham");
 		/* Process classifiers */
 		rspamd_stat_preprocess(st_ctx, task, TRUE, spam);
 
