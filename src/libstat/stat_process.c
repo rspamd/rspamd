@@ -1283,7 +1283,7 @@ rspamd_stat_learn_class(struct rspamd_task *task,
 		rspamd_stat_preprocess(st_ctx, task, TRUE, spam);
 
 		if (!rspamd_stat_cache_check(st_ctx, task, classifier, spam, err)) {
-			msg_debug_bayes("cache check failed, skip learning");
+			msg_debug_bayes("pre-learn checks failed, skip learning");
 			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 	}
@@ -1369,7 +1369,7 @@ rspamd_stat_learn(struct rspamd_task *task,
 		rspamd_stat_preprocess(st_ctx, task, TRUE, spam);
 
 		if (!rspamd_stat_cache_check(st_ctx, task, classifier, spam, err)) {
-			msg_debug_bayes("cache check failed, skip learning");
+			msg_debug_bayes("pre-learn checks failed, skip learning");
 			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 	}
