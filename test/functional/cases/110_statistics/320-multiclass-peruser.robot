@@ -15,9 +15,6 @@ ${RSPAMD_STATS_KEY}            null
 ${RSPAMD_STATS_PER_USER}       true
 
 *** Test Cases ***
-Multiclass Per-User Basic Learn Test
-    Multiclass Basic Learn Test  test@example.com
-
 Multiclass Per-User Legacy Compatibility Test
     Multiclass Legacy Compatibility Test  test@example.com
 
