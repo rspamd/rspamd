@@ -16,11 +16,6 @@ Multiclass Basic Learning and Classification
     [Tags]             multiclass  basic  learning
     Multiclass Basic Learn Test
 
-Multiclass Legacy Compatibility
-    [Documentation]    Test that old learn_spam/learn_ham commands still work
-    [Tags]             multiclass  compatibility  legacy
-    Multiclass Legacy Compatibility Test
-
 Multiclass Relearn
     [Documentation]    Test reclassifying messages to different classes
     [Tags]             multiclass  relearn

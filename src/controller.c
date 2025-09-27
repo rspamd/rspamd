@@ -2147,6 +2147,8 @@ rspamd_controller_handle_learn_common(
 						   session->ctx->lang_det, ctx->event_loop, FALSE);
 
 	task->resolver = ctx->resolver;
+	/* Manual learn: ensure errors are propagated (not auto-learn semantics) */
+	task->flags &= ~RSPAMD_TASK_FLAG_LEARN_AUTO;
 	task->s = rspamd_session_create(session->pool,
 									rspamd_controller_learn_fin_task,
 									NULL,
@@ -2260,6 +2262,8 @@ rspamd_controller_handle_learnclass(
 						   session->ctx->lang_det, ctx->event_loop, FALSE);
 
 	task->resolver = ctx->resolver;
+	/* Manual learn: ensure errors are propagated (not auto-learn semantics) */
+	task->flags &= ~RSPAMD_TASK_FLAG_LEARN_AUTO;
 	task->s = rspamd_session_create(session->pool,
 									rspamd_controller_learn_fin_task,
 									NULL,
