@@ -613,6 +613,8 @@ rspamd_stat_cache_check(struct rspamd_stat_ctx *st_ctx,
 	struct rspamd_classifier *cl, *sel = NULL;
 	gpointer rt;
 	unsigned int i;
+	gboolean any_considered = FALSE;
+	gboolean any_available = FALSE;
 
 	/* Check whether we have learned that file */
 	for (i = 0; i < st_ctx->classifiers->len; i++) {
@@ -625,6 +627,29 @@ rspamd_stat_cache_check(struct rspamd_stat_ctx *st_ctx,
 		}
 
 		sel = cl;
+		any_considered = TRUE;
+
+		/* If classifier was skipped by learn conditions in preprocess, skip cache */
+		gboolean cl_skipped = TRUE;
+		if (task->stat_runtimes != NULL) {
+			for (int j = 0; j < cl->statfiles_ids->len; j++) {
+				int id = g_array_index(cl->statfiles_ids, int, j);
+				if (g_ptr_array_index(task->stat_runtimes, id) != NULL) {
+					cl_skipped = FALSE;
+					break;
+				}
+			}
+		}
+		else {
+			/* No runtimes prepared means not skipped */
+			cl_skipped = FALSE;
+		}
+
+		if (cl_skipped) {
+			continue;
+		}
+
+		any_available = TRUE;
 
 		if (sel->cache && sel->cachecf) {
 			rt = cl->cache->runtime(task, sel->cachecf, FALSE);
@@ -683,6 +708,15 @@ rspamd_stat_cache_check(struct rspamd_stat_ctx *st_ctx,
 		}
 	}
 
+	/* If we considered classifiers but all were skipped by conditions, stop early */
+	if (any_considered && !any_available) {
+		g_set_error(err, rspamd_stat_quark(), 204, "all learn conditions "
+												   "denied learning %s in %s",
+					spam ? "spam" : "ham",
+					classifier ? classifier : "default classifier");
+		return FALSE;
+	}
+
 	if (sel == NULL) {
 		if (classifier) {
 			g_set_error(err, rspamd_stat_quark(), 404, "cannot find classifier "
@@ -710,13 +744,14 @@ rspamd_stat_classifiers_learn(struct rspamd_stat_ctx *st_ctx,
 	unsigned int i;
 	gboolean learned = FALSE, too_small = FALSE, too_large = FALSE;
 
-	if ((task->flags & RSPAMD_TASK_FLAG_ALREADY_LEARNED) && err != NULL &&
-		*err == NULL) {
+	if (task->flags & RSPAMD_TASK_FLAG_ALREADY_LEARNED) {
 		/* Do not learn twice */
-		g_set_error(err, rspamd_stat_quark(), 208, "<%s> has been already "
-												   "learned as %s, ignore it",
-					MESSAGE_FIELD(task, message_id),
-					spam ? "spam" : "ham");
+		if (err && *err == NULL) {
+			g_set_error(err, rspamd_stat_quark(), 208, "<%s> has been already "
+													   "learned as %s, ignore it",
+						MESSAGE_FIELD(task, message_id),
+						spam ? "spam" : "ham");
+		}
 
 		return FALSE;
 	}
@@ -952,6 +987,9 @@ rspamd_stat_backends_learn(struct rspamd_stat_ctx *st_ctx,
 				}
 
 				res = TRUE;
+				/* Mark that at least one backend has actually learned */
+				rspamd_mempool_set_variable(task->task_pool, "stat_learn_performed",
+											GINT_TO_POINTER(1), NULL);
 			}
 		}
 	}
@@ -1041,27 +1079,33 @@ rspamd_stat_backends_post_learn(struct rspamd_stat_ctx *st_ctx,
 		if (cl->cache) {
 			cache_run = cl->cache->runtime(task, cl->cachecf, TRUE);
 
-			/* For multi-class learning, determine spam boolean from class name if available */
-			gboolean cache_spam = spam; /* Default to original spam parameter */
-			const char *autolearn_class = rspamd_task_get_autolearn_class(task);
-			if (autolearn_class) {
-				if (strcmp(autolearn_class, "spam") == 0 || strcmp(autolearn_class, "S") == 0) {
-					cache_spam = TRUE;
+			/* Update cache only if some backend actually learned */
+			if (rspamd_mempool_get_variable(task->task_pool, "stat_learn_performed")) {
+				/* For multi-class learning, determine spam boolean from class name if available */
+				gboolean cache_spam = spam; /* Default to original spam parameter */
+				const char *autolearn_class = rspamd_task_get_autolearn_class(task);
+				if (autolearn_class) {
+					if (strcmp(autolearn_class, "spam") == 0 || strcmp(autolearn_class, "S") == 0) {
+						cache_spam = TRUE;
+					}
+					else if (strcmp(autolearn_class, "ham") == 0 || strcmp(autolearn_class, "H") == 0) {
+						cache_spam = FALSE;
+					}
+					else {
+						/* For other classes, use a heuristic or default to spam for cache purposes */
+						cache_spam = TRUE; /* Non-ham classes are treated as spam for cache */
+					}
 				}
-				else if (strcmp(autolearn_class, "ham") == 0 || strcmp(autolearn_class, "H") == 0) {
-					cache_spam = FALSE;
-				}
-				else {
-					/* For other classes, use a heuristic or default to spam for cache purposes */
-					cache_spam = TRUE; /* Non-ham classes are treated as spam for cache */
-				}
-			}
 
-			cl->cache->learn(task, cache_spam, cache_run);
+				cl->cache->learn(task, cache_spam, cache_run);
+			}
 		}
 	}
 
-	g_atomic_int_add(&task->worker->srv->stat->messages_learned, 1);
+	/* Increment learned counter only if any backend actually learned */
+	if (rspamd_mempool_get_variable(task->task_pool, "stat_learn_performed")) {
+		g_atomic_int_add(&task->worker->srv->stat->messages_learned, 1);
+	}
 
 	return res;
 }
@@ -1077,13 +1121,14 @@ rspamd_stat_classifiers_learn_class(struct rspamd_stat_ctx *st_ctx,
 	unsigned int i;
 	gboolean learned = FALSE, too_small = FALSE, too_large = FALSE;
 
-	if ((task->flags & RSPAMD_TASK_FLAG_ALREADY_LEARNED) && err != NULL &&
-		*err == NULL) {
+	if (task->flags & RSPAMD_TASK_FLAG_ALREADY_LEARNED) {
 		/* Do not learn twice */
-		g_set_error(err, rspamd_stat_quark(), 208, "<%s> has been already "
-												   "learned as %s, ignore it",
-					MESSAGE_FIELD(task, message_id),
-					class_name);
+		if (err && *err == NULL) {
+			g_set_error(err, rspamd_stat_quark(), 208, "<%s> has been already "
+													   "learned as %s, ignore it",
+						MESSAGE_FIELD(task, message_id),
+						class_name);
+		}
 
 		return FALSE;
 	}
