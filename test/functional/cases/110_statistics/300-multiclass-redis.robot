@@ -11,10 +11,10 @@ ${RSPAMD_STATS_HASH}    siphash
 ${CONFIG}               ${RSPAMD_TESTDIR}/configs/multiclass_bayes.conf
 
 *** Test Cases ***
-Multiclass Legacy Compatibility
-    [Documentation]    Test that old learn_spam/learn_ham commands still work
-    [Tags]             multiclass  compatibility  legacy
-    Multiclass Legacy Compatibility Test
+Multiclass Basic Learning and Classification
+    [Documentation]    Test basic multiclass learning and classification
+    [Tags]             multiclass  basic  learning
+    Multiclass Basic Learn Test
 
 Multiclass Relearn
     [Documentation]    Test reclassifying messages to different classes
