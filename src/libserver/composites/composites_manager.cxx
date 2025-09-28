@@ -1,11 +1,11 @@
-/*-
- * Copyright 2021 Vsevolod Stakhov
+/*
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -29,7 +29,8 @@
 namespace rspamd::composites {
 
 static auto
-composite_policy_from_str(const std::string_view &inp) -> enum rspamd_composite_policy {
+composite_policy_from_str(const std::string_view &inp) -> enum rspamd_composite_policy
+{
 	const static ankerl::unordered_dense::map<std::string_view,
 											  enum rspamd_composite_policy>
 		names{
@@ -43,10 +44,11 @@ composite_policy_from_str(const std::string_view &inp) -> enum rspamd_composite_
 		};
 
 	auto found = names.find(inp);
-	if (found != names.end()){
-		return found->second;}
+	if (found != names.end()) {
+		return found->second;
+	}
 
-return rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_UNKNOWN;
+	return rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_UNKNOWN;
 }// namespace rspamd::composites
 
 auto composites_manager::add_composite(std::string_view composite_name, const ucl_object_t *obj, bool silent_duplicate) -> rspamd_composite *
@@ -237,7 +239,9 @@ struct map_cbdata {
 					/* I wish it was supported properly */
 					//auto conv_res = std::from_chars(value->data(), value->size(), num);
 					char numbuf[128], *endptr = nullptr;
-					rspamd_strlcpy(numbuf, score.data(), MIN(score.size(), sizeof(numbuf)));
+					size_t n = std::min(score.size(), sizeof(numbuf) - 1);
+					memcpy(numbuf, score.data(), n);
+					numbuf[n] = '\0';
 					auto num = g_ascii_strtod(numbuf, &endptr);
 
 					if (fabs(num) >= G_MAXFLOAT || std::isnan(num)) {
@@ -270,7 +274,7 @@ struct map_cbdata {
 		delete cbd;
 	}
 };
-}
+}// namespace rspamd::composites
 
 
 void *

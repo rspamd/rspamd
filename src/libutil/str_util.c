@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -367,8 +367,7 @@ gsize rspamd_strlcpy_fast(char *dst, const char *src, gsize siz)
 	if (n-- != 0) {
 		if (((uintptr_t) s & MEM_ALIGN) == ((uintptr_t) d & MEM_ALIGN)) {
 			/* Init copy byte by byte */
-			for (; ((uintptr_t) s & MEM_ALIGN) && n && (*d = *s); n--, s++, d++)
-				;
+			for (; ((uintptr_t) s & MEM_ALIGN) && n && (*d = *s); n--, s++, d++);
 			if (n && *s) {
 				wd = (void *) d;
 				ws = (const void *) s;
@@ -386,8 +385,7 @@ gsize rspamd_strlcpy_fast(char *dst, const char *src, gsize siz)
 		}
 
 		/* Copy the rest */
-		for (; n && (*d = *s); n--, s++, d++)
-			;
+		for (; n && (*d = *s); n--, s++, d++);
 
 		*d = 0;
 	}
@@ -459,6 +457,11 @@ rspamd_strtol(const char *s, gsize len, glong *value)
 	const glong cutoff = G_MAXLONG / 10, cutlim = G_MAXLONG % 10;
 	gboolean neg;
 
+	/* Avoid absurd length */
+	if (len == 0 || len > sizeof("-18446744073709551615")) {
+		return FALSE;
+	}
+
 	/* Case negative values */
 	if (*p == '-') {
 		neg = TRUE;
@@ -527,6 +530,9 @@ rspamd_strtoul(const char *s, gsize len, gulong *value)
 	gulong v = 0;
 	const gulong cutoff = G_MAXULONG / 10, cutlim = G_MAXULONG % 10;
 
+	if (len == 0 || len > sizeof("-18446744073709551615")) {
+		return FALSE;
+	}
 	/* Some preparations for range errors */
 	CONV_STR_LIM_DECIMAL(G_MAXULONG);
 
@@ -2936,17 +2942,14 @@ gsize rspamd_memcspn(const char *s, const char *e, gsize len)
 	const char *p = s, *end = s + len;
 
 	if (!e[1]) {
-		for (; p < end && *p != *e; p++)
-			;
+		for (; p < end && *p != *e; p++);
 		return p - s;
 	}
 
 	memset(byteset, 0, sizeof byteset);
 
-	for (; *e && BITOP(byteset, *(unsigned char *) e, |=); e++)
-		;
-	for (; p < end && !BITOP(byteset, *(unsigned char *) p, &); p++)
-		;
+	for (; *e && BITOP(byteset, *(unsigned char *) e, |=); e++);
+	for (; p < end && !BITOP(byteset, *(unsigned char *) p, &); p++);
 
 	return p - s;
 }
@@ -2957,17 +2960,14 @@ gsize rspamd_memspn(const char *s, const char *e, gsize len)
 	const char *p = s, *end = s + len;
 
 	if (!e[1]) {
-		for (; p < end && *p == *e; p++)
-			;
+		for (; p < end && *p == *e; p++);
 		return p - s;
 	}
 
 	memset(byteset, 0, sizeof byteset);
 
-	for (; *e && BITOP(byteset, *(unsigned char *) e, |=); e++)
-		;
-	for (; p < end && BITOP(byteset, *(unsigned char *) p, &); p++)
-		;
+	for (; *e && BITOP(byteset, *(unsigned char *) e, |=); e++);
+	for (; p < end && BITOP(byteset, *(unsigned char *) p, &); p++);
 
 	return p - s;
 }

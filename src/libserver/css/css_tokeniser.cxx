@@ -1,11 +1,11 @@
-/*-
- * Copyright 2021 Vsevolod Stakhov
+/*
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -360,7 +360,9 @@ css_tokeniser::consume_number() -> struct css_parser_token {
 		/* I wish it was supported properly */
 		//auto conv_res = std::from_chars(&input[offset], &input[i], num);
 		char numbuf[128], *endptr = nullptr;
-		rspamd_strlcpy(numbuf, &input[offset], MIN(i - offset + 1, sizeof(numbuf)));
+		size_t n = std::min(i - offset, sizeof(numbuf) - 1);
+		memcpy(numbuf, &input[offset], n);
+		numbuf[n] = '\0';
 		auto num = g_ascii_strtod(numbuf, &endptr);
 		offset = i;
 
