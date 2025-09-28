@@ -675,10 +675,13 @@ struct html_component_opacity : html_component_base {
 	explicit html_component_opacity(std::string_view v)
 		: raw_value(v)
 	{
-		char *endptr;
-		auto val = std::strtof(v.data(), &endptr);
-		if (endptr != v.data() && val >= 0.0f && val <= 1.0f) {
-			numeric_value = val;
+		char numbuf[128], *endptr = nullptr;
+		numbuf[0] = '\0';
+		rspamd_strlcpy(numbuf, v.data(), MIN(v.size(), sizeof(numbuf)));
+		auto num = g_ascii_strtod(numbuf, &endptr);
+
+		if (!std::isnan(num)) {
+			numeric_value = num;
 		}
 	}
 
