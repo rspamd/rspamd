@@ -469,7 +469,9 @@ auto cache_item::add_augmentation(const symcache &cache, std::string_view augmen
 				/* I wish it was supported properly */
 				//auto conv_res = std::from_chars(value->data(), value->size(), num);
 				char numbuf[128], *endptr = nullptr;
-				rspamd_strlcpy(numbuf, value->data(), MIN(value->size(), sizeof(numbuf)));
+				size_t n = std::min(value->size(), sizeof(numbuf) - 1);
+				memcpy(numbuf, value->data(), n);
+				numbuf[n] = '\0';
 				auto num = g_ascii_strtod(numbuf, &endptr);
 
 				if (fabs(num) >= G_MAXFLOAT || std::isnan(num)) {
