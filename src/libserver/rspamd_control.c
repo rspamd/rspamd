@@ -373,18 +373,19 @@ void rspamd_pending_control_free(gpointer p)
 static inline void
 rspamd_control_fill_msghdr(struct rspamd_control_command *cmd,
 						   int attached_fd, struct msghdr *msg,
-						   struct iovec *iov)
+						   struct iovec *iov,
+						   void *control_buf,
+						   size_t control_len)
 {
 	struct cmsghdr *cmsg;
-	unsigned char fdspace[CMSG_SPACE(sizeof(int))];
 
 	memset(msg, 0, sizeof(*msg));
 
 	/* Attach fd to the message */
 	if (attached_fd != -1) {
-		memset(fdspace, 0, sizeof(fdspace));
-		msg->msg_control = fdspace;
-		msg->msg_controllen = sizeof(fdspace);
+		memset(control_buf, 0, control_len);
+		msg->msg_control = control_buf;
+		msg->msg_controllen = control_len;
 		cmsg = CMSG_FIRSTHDR(msg);
 		cmsg->cmsg_level = SOL_SOCKET;
 		cmsg->cmsg_type = SCM_RIGHTS;
@@ -428,7 +429,9 @@ rspamd_control_stop_pending(struct rspamd_control_reply_elt *elt)
 				struct iovec iov;
 
 				rspamd_main = cur->worker->srv;
-				rspamd_control_fill_msghdr(&cur->cmd, cur->attached_fd, &msg, &iov);
+				/* Provide a control buffer with correct lifetime for sendmsg */
+				unsigned char fdspace[CMSG_SPACE(sizeof(int))];
+				rspamd_control_fill_msghdr(&cur->cmd, cur->attached_fd, &msg, &iov, fdspace, sizeof(fdspace));
 				ssize_t r = sendmsg(cur->worker->control_pipe[0], &msg, 0);
 
 				if (r == sizeof(cur->cmd)) {
@@ -516,8 +519,9 @@ rspamd_control_broadcast_cmd(struct rspamd_main *rspamd_main,
 			/* We can send command */
 			struct msghdr msg;
 			struct iovec iov;
+			unsigned char fdspace[CMSG_SPACE(sizeof(int))];
 
-			rspamd_control_fill_msghdr(cmd, attached_fd, &msg, &iov);
+			rspamd_control_fill_msghdr(cmd, attached_fd, &msg, &iov, fdspace, sizeof(fdspace));
 			r = sendmsg(wrk->control_pipe[0], &msg, 0);
 
 			if (r == sizeof(*cmd)) {
@@ -768,7 +772,7 @@ rspamd_control_default_worker_handler(EV_P_ ev_io *w, int revents)
 	static struct rspamd_control_command cmd;
 	static struct msghdr msg;
 	static struct iovec iov;
-	static unsigned char fdspace[CMSG_SPACE(sizeof(int))];
+	unsigned char fdspace[CMSG_SPACE(sizeof(int))];
 	int rfd = -1;
 	gssize r;
 
@@ -987,7 +991,7 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 	struct msghdr msg;
 	struct cmsghdr *cmsg;
 	static struct iovec iov;
-	static unsigned char fdspace[CMSG_SPACE(sizeof(int))];
+	unsigned char fdspace[CMSG_SPACE(sizeof(int))];
 	int *spair, rfd = -1;
 	char *nid;
 	struct rspamd_control_command wcmd;
