@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,29 +51,29 @@ KHASH_INIT(rspamd_map_hash, rspamd_ftok_t,
 		   struct rspamd_map_helper_value *, true,
 		   rspamd_map_ftok_hash, rspamd_map_ftok_equal);
 
-struct rspamd_radix_map_helper {
+struct RSPAMD_ALIGNED(64) rspamd_radix_map_helper {
+	rspamd_cryptobox_fast_hash_state_t hst;
 	rspamd_mempool_t *pool;
 	khash_t(rspamd_map_hash) * htb;
 	radix_compressed_t *trie;
 	struct rspamd_map *map;
-	rspamd_cryptobox_fast_hash_state_t hst;
 };
 
-struct rspamd_hash_map_helper {
+struct RSPAMD_ALIGNED(64) rspamd_hash_map_helper {
+	rspamd_cryptobox_fast_hash_state_t hst;
 	rspamd_mempool_t *pool;
 	khash_t(rspamd_map_hash) * htb;
 	struct rspamd_map *map;
-	rspamd_cryptobox_fast_hash_state_t hst;
 };
 
-struct rspamd_cdb_map_helper {
+struct RSPAMD_ALIGNED(64) rspamd_cdb_map_helper {
+	rspamd_cryptobox_fast_hash_state_t hst;
 	GQueue cdbs;
 	struct rspamd_map *map;
-	rspamd_cryptobox_fast_hash_state_t hst;
 	gsize total_size;
 };
 
-struct rspamd_regexp_map_helper {
+struct RSPAMD_ALIGNED(64) rspamd_regexp_map_helper {
 	rspamd_cryptobox_hash_state_t hst;
 	unsigned char re_digest[rspamd_cryptobox_HASHBYTES];
 	rspamd_mempool_t *pool;
@@ -1673,7 +1673,14 @@ rspamd_map_helper_new_cdb(struct rspamd_map *map)
 {
 	struct rspamd_cdb_map_helper *n;
 
-	n = g_malloc0(sizeof(*n));
+	/* Ensure alignment for vectorized hash state inside */
+	int ret = posix_memalign((void **) &n,
+							 RSPAMD_ALIGNOF(struct rspamd_cdb_map_helper),
+							 sizeof(*n));
+	if (ret != 0 || n == NULL) {
+		abort();
+	}
+	memset(n, 0, sizeof(*n));
 	n->cdbs = (GQueue) G_QUEUE_INIT;
 	n->map = map;
 
@@ -1703,7 +1710,7 @@ void rspamd_map_helper_destroy_cdb(struct rspamd_cdb_map_helper *c)
 
 	g_queue_clear(&c->cdbs);
 
-	g_free(c);
+	free(c);
 }
 
 char *
