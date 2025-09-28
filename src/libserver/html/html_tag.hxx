@@ -24,6 +24,7 @@
 #include <vector>
 #include <optional>
 #include <cstdint>
+#include <cmath>
 
 #include "html_tags.h"
 #include "libutil/str_util.h"
