@@ -24,6 +24,7 @@
 #include <vector>
 #include <optional>
 #include <cstdint>
+#include <cmath>
 
 #include "html_tags.h"
 #include "libutil/str_util.h"
@@ -676,8 +677,9 @@ struct html_component_opacity : html_component_base {
 		: raw_value(v)
 	{
 		char numbuf[128], *endptr = nullptr;
-		numbuf[0] = '\0';
-		rspamd_strlcpy(numbuf, v.data(), MIN(v.size(), sizeof(numbuf)));
+		size_t n = std::min(v.size(), sizeof(numbuf) - 1);
+		memcpy(numbuf, v.data(), n);
+		numbuf[n] = '\0';
 		auto num = g_ascii_strtod(numbuf, &endptr);
 
 		if (!std::isnan(num)) {
