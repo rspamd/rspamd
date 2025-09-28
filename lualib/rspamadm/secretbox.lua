@@ -210,7 +210,8 @@ local function decryption_handler(args)
   end
 
   if plaintext ~= nil then
-    write_output(args, tostring(plaintext))
+    -- Plaintext must be printed as-is to preserve legacy semantics
+    print(tostring(plaintext))
   else
     print('The decryption failed. Please check the correctness of the arguments given.')
   end
