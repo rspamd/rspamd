@@ -148,6 +148,10 @@ struct rspamd_map_backend {
 	enum fetch_proto protocol;
 	gboolean is_signed;
 	gboolean is_compressed;
+	/* Symmetric encryption (Secretbox) */
+	gboolean is_encrypted;
+	gboolean has_secretbox_key;
+	unsigned char secretbox_key[32]; /* crypto_secretbox_KEYBYTES */
 	gboolean is_fallback;
 	struct rspamd_map *map;
 	struct ev_loop *event_loop;

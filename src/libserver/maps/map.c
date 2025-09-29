@@ -25,6 +25,10 @@
 #include "rspamd.h"
 #include "contrib/libev/ev.h"
 #include "contrib/uthash/utlist.h"
+#include "libutil/str_util.h"
+#include "libcryptobox/cryptobox.h"
+
+#include <sodium.h>
 
 #include <worker_util.h>
 
@@ -394,6 +398,163 @@ rspamd_map_get_respectful_interval(time_t map_check_interval)
 	return map_check_interval;
 }
 
+static gboolean
+rspamd_map_secretbox_decrypt_buf(struct rspamd_map_backend *bk,
+								 const unsigned char *in,
+								 gsize inlen,
+								 unsigned char **out,
+								 gsize *outlen)
+{
+	/* Logging-aware helper */
+	struct rspamd_map *map = bk ? bk->map : NULL;
+
+	if (!bk->has_secretbox_key) {
+		msg_err_map("%s: secretbox key is not configured", bk->uri);
+		return FALSE;
+	}
+
+	if (inlen < crypto_secretbox_NONCEBYTES + crypto_secretbox_MACBYTES) {
+		msg_err_map("%s: too short buffer for secretbox: %z bytes (need >= %d)",
+					bk->uri, inlen, (int) (crypto_secretbox_NONCEBYTES + crypto_secretbox_MACBYTES));
+		return FALSE;
+	}
+
+	const unsigned char *nonce = in;
+	const unsigned char *ct = in + crypto_secretbox_NONCEBYTES;
+	gsize clen = inlen - crypto_secretbox_NONCEBYTES;
+
+	if (clen < crypto_secretbox_MACBYTES) {
+		msg_err_map("%s: invalid ciphertext length for secretbox: %z (< MAC %d)",
+					bk->uri, clen, (int) crypto_secretbox_MACBYTES);
+		return FALSE;
+	}
+
+	gsize ptlen = clen - crypto_secretbox_MACBYTES;
+	unsigned char *pt = g_malloc(ptlen);
+
+	msg_debug_map("%s: attempting secretbox decrypt; nonce_len=%d ct_len=%z pt_len=%z",
+				  bk->uri, (int) crypto_secretbox_NONCEBYTES, clen, ptlen);
+
+	if (crypto_secretbox_open_easy(pt, ct, clen, nonce, bk->secretbox_key) != 0) {
+		msg_err_map("%s: secretbox authentication failed (nonce_len=%d, ct_len=%z)",
+					bk->uri, (int) crypto_secretbox_NONCEBYTES, clen);
+		g_free(pt);
+		return FALSE;
+	}
+
+	*out = pt;
+	*outlen = ptlen;
+	return TRUE;
+}
+
+static gboolean
+rspamd_map_decode_secretbox_key(const char *in, gsize inlen, unsigned char out[32])
+{
+	/* Be compatible with lua_secretbox: derive a 32-byte key via crypto_generichash
+	 * from the provided secret (which can be hex/base64/raw). */
+	if (in == NULL || inlen == 0) {
+		return FALSE;
+	}
+
+	unsigned char *raw = NULL;
+	gsize rawlen = 0;
+	bool allocated = false;
+
+	/* Detect hex (only hex chars, even length) */
+	bool maybe_hex = (inlen % 2 == 0);
+	for (gsize i = 0; i < inlen && maybe_hex; i++) {
+		char c = in[i];
+		if (!g_ascii_isxdigit((int) c)) {
+			maybe_hex = false;
+		}
+	}
+
+	if (maybe_hex) {
+		gsize tmp_len = inlen / 2 + 1;
+		raw = g_malloc(tmp_len);
+		gssize dec = rspamd_decode_hex_buf(in, inlen, raw, tmp_len);
+		if (dec > 0) {
+			rawlen = (gsize) dec;
+			allocated = true;
+		}
+		else {
+			g_free(raw);
+			raw = NULL;
+		}
+	}
+
+	if (raw == NULL && rspamd_cryptobox_base64_is_valid(in, inlen)) {
+		/* Try base64 */
+		/* Worst-case allocate */
+		gsize tmp_len = (inlen / 4 + 1) * 3 + 8;
+		raw = g_malloc(tmp_len);
+		if (rspamd_cryptobox_base64_decode(in, inlen, raw, &rawlen)) {
+			allocated = true;
+		}
+		else {
+			g_free(raw);
+			raw = NULL;
+			rawlen = 0;
+		}
+	}
+
+	if (raw == NULL) {
+		/* Treat as raw string */
+		raw = (unsigned char *) in;
+		rawlen = inlen;
+	}
+
+	/* Derive 32-byte key */
+	crypto_generichash(out, crypto_secretbox_KEYBYTES, raw, rawlen, NULL, 0);
+
+	if (allocated) {
+		rspamd_explicit_memzero(raw, rawlen);
+		g_free(raw);
+	}
+
+	return TRUE;
+}
+
+static inline gboolean
+rspamd_map_payload_is_zstd(const unsigned char *p, gsize len)
+{
+	/* Zstandard frame magic number: 0x28B52FFD at start of frame */
+	if (len >= 4) {
+		const unsigned char zstd_magic[4] = {0x28u, 0xB5u, 0x2Fu, 0xFDu};
+		if (memcmp(p, zstd_magic, 4) == 0) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
+static void
+rspamd_map_try_load_secretbox_key(struct rspamd_config *cfg,
+								  struct rspamd_map_backend *bk)
+{
+	const ucl_object_t *maps_obj = ucl_object_lookup(cfg->cfg_ucl_obj, "maps");
+	if (maps_obj == NULL || ucl_object_type(maps_obj) != UCL_OBJECT) {
+		const ucl_object_t *opts_obj = ucl_object_lookup(cfg->cfg_ucl_obj, "options");
+		if (opts_obj && ucl_object_type(opts_obj) == UCL_OBJECT) {
+			maps_obj = ucl_object_lookup(opts_obj, "maps");
+		}
+	}
+
+	if (maps_obj && ucl_object_type(maps_obj) == UCL_OBJECT) {
+		const ucl_object_t *src = ucl_object_lookup(maps_obj, bk->uri);
+		if (!src) src = maps_obj;
+		const ucl_object_t *kobj = ucl_object_lookup_any(src, "secretbox_key", "secretbox-key", "enc_key", NULL);
+		if (kobj && ucl_object_type(kobj) == UCL_STRING) {
+			gsize klen = 0;
+			const char *k = ucl_object_tolstring(kobj, &klen);
+			if (rspamd_map_decode_secretbox_key(k, klen, bk->secretbox_key)) {
+				bk->has_secretbox_key = TRUE;
+				msg_info_config("loaded secretbox key late for %s", bk->uri);
+			}
+		}
+	}
+}
 static int
 http_map_finish(struct rspamd_http_connection *conn,
 				struct rspamd_http_message *msg)
@@ -517,7 +678,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 		MAP_RETAIN(cbd->shmem_data, "shmem_data");
 		cbd->data->gen++;
 
-		/* Store cached data */
+		/* Store cached data: raw HTTP body in SHM */
 		rspamd_strlcpy(data->cache->shmem_name, cbd->shmem_data->shm_name,
 					   sizeof(data->cache->shmem_name));
 		data->cache->len = cbd->data_len;
@@ -549,27 +710,46 @@ http_map_finish(struct rspamd_http_connection *conn,
 		}
 
 
-		if (cbd->bk->is_compressed) {
+		/* Prepare payload: decrypt (if needed) then optionally decompress */
+		unsigned char *payload = NULL;
+		gsize payload_len = 0;
+		unsigned char *final_out = NULL;
+
+		if (cbd->bk->is_encrypted) {
+			if (!rspamd_map_secretbox_decrypt_buf(cbd->bk, in, dlen, &payload, &payload_len)) {
+				msg_err_map("%s(%s): cannot decrypt data", cbd->bk->uri,
+							rspamd_inet_address_to_string_pretty(cbd->addr));
+				MAP_RELEASE(cbd->shmem_data, "shmem_data");
+				goto err;
+			}
+		}
+		else {
+			/* Use mapped buffer directly */
+			payload = (unsigned char *) in;
+			payload_len = dlen;
+		}
+
+		/* If compressed flag is set OR payload looks like zstd, decompress */
+		if (cbd->bk->is_compressed || rspamd_map_payload_is_zstd(payload, payload_len)) {
 			ZSTD_DStream *zstream;
 			ZSTD_inBuffer zin;
 			ZSTD_outBuffer zout;
-			unsigned char *out;
 			gsize outlen, r;
 
 			zstream = ZSTD_createDStream();
 			ZSTD_initDStream(zstream);
 
 			zin.pos = 0;
-			zin.src = in;
-			zin.size = dlen;
+			zin.src = payload;
+			zin.size = payload_len;
 
 			if ((outlen = ZSTD_getDecompressedSize(zin.src, zin.size)) == 0) {
 				outlen = ZSTD_DStreamOutSize();
 			}
 
-			out = g_malloc(outlen);
+			final_out = g_malloc(outlen);
 
-			zout.dst = out;
+			zout.dst = final_out;
 			zout.pos = 0;
 			zout.size = outlen;
 
@@ -582,7 +762,11 @@ http_map_finish(struct rspamd_http_connection *conn,
 								rspamd_inet_address_to_string_pretty(cbd->addr),
 								ZSTD_getErrorName(r));
 					ZSTD_freeDStream(zstream);
-					g_free(out);
+					g_free(final_out);
+					if (cbd->bk->is_encrypted && payload && payload != (unsigned char *) in) {
+						rspamd_explicit_memzero(payload, payload_len);
+						g_free(payload);
+					}
 					MAP_RELEASE(cbd->shmem_data, "shmem_data");
 					goto err;
 				}
@@ -590,8 +774,8 @@ http_map_finish(struct rspamd_http_connection *conn,
 				if (zout.pos == zout.size) {
 					/* We need to extend output buffer */
 					zout.size = zout.size * 2 + 1.0;
-					out = g_realloc(zout.dst, zout.size);
-					zout.dst = out;
+					final_out = g_realloc(zout.dst, zout.size);
+					zout.dst = final_out;
 				}
 			}
 
@@ -600,23 +784,27 @@ http_map_finish(struct rspamd_http_connection *conn,
 						 "%z uncompressed, next check at %s",
 						 cbd->bk->uri,
 						 rspamd_inet_address_to_string_pretty(cbd->addr),
-						 dlen, zout.pos, next_check_date);
-			map->read_callback(out, zout.pos, &cbd->periodic->cbdata, TRUE);
-			rspamd_map_save_http_cached_file(map, bk, cbd->data, out, zout.pos);
-			g_free(out);
+						 payload_len, zout.pos, next_check_date);
+			map->read_callback(final_out, zout.pos, &cbd->periodic->cbdata, TRUE);
+			rspamd_map_save_http_cached_file(map, bk, cbd->data, final_out, zout.pos);
+			g_free(final_out);
 		}
 		else {
 			msg_info_map("%s(%s): read map data %z bytes, next check at %s",
 						 cbd->bk->uri,
 						 rspamd_inet_address_to_string_pretty(cbd->addr),
-						 dlen, next_check_date);
-			rspamd_map_save_http_cached_file(map, bk, cbd->data, in, cbd->data_len);
-			map->read_callback(in, cbd->data_len, &cbd->periodic->cbdata, TRUE);
+						 payload_len, next_check_date);
+			rspamd_map_save_http_cached_file(map, bk, cbd->data, payload, payload_len);
+			map->read_callback(payload, payload_len, &cbd->periodic->cbdata, TRUE);
 		}
 
 		MAP_RELEASE(cbd->shmem_data, "shmem_data");
 
 		cbd->periodic->cur_backend++;
+		if (cbd->bk->is_encrypted && payload && payload != (unsigned char *) in) {
+			rspamd_explicit_memzero(payload, payload_len);
+			g_free(payload);
+		}
 		munmap(in, dlen);
 
 		/* Announce for other processes */
@@ -961,7 +1149,7 @@ read_map_file(struct rspamd_map *map, struct file_map_data *data,
 							   &periodic->cbdata, TRUE);
 		}
 		else {
-			if (bk->is_compressed) {
+			if (bk->is_compressed || bk->is_encrypted) {
 				bytes = rspamd_file_xmap(data->filename, PROT_READ, &len, TRUE);
 
 				if (bytes == NULL) {
@@ -969,59 +1157,104 @@ read_map_file(struct rspamd_map *map, struct file_map_data *data,
 					return FALSE;
 				}
 
-				ZSTD_DStream *zstream;
-				ZSTD_inBuffer zin;
-				ZSTD_outBuffer zout;
-				unsigned char *out;
-				gsize outlen, r;
+				unsigned char *payload = (unsigned char *) bytes;
+				gsize payload_len = len;
 
-				zstream = ZSTD_createDStream();
-				ZSTD_initDStream(zstream);
+				unsigned char *dec = NULL;
+				gsize declen = 0;
 
-				zin.pos = 0;
-				zin.src = bytes;
-				zin.size = len;
-
-				if ((outlen = ZSTD_getDecompressedSize(zin.src, zin.size)) == 0) {
-					outlen = ZSTD_DStreamOutSize();
-				}
-
-				out = g_malloc(outlen);
-
-				zout.dst = out;
-				zout.pos = 0;
-				zout.size = outlen;
-
-				while (zin.pos < zin.size) {
-					r = ZSTD_decompressStream(zstream, &zout, &zin);
-
-					if (ZSTD_isError(r)) {
-						msg_err_map("%s: cannot decompress data: %s",
-									data->filename,
-									ZSTD_getErrorName(r));
-						ZSTD_freeDStream(zstream);
-						g_free(out);
+				if (bk->is_encrypted) {
+					if (!rspamd_map_secretbox_decrypt_buf(bk, payload, payload_len, &dec, &declen)) {
+						msg_err_map("%s: cannot decrypt data: secretbox auth failed",
+									data->filename);
 						munmap(bytes, len);
 						return FALSE;
 					}
-
-					if (zout.pos == zout.size) {
-						/* We need to extend output buffer */
-						zout.size = zout.size * 2 + 1;
-						out = g_realloc(zout.dst, zout.size);
-						zout.dst = out;
-					}
+					payload = dec;
+					payload_len = declen;
 				}
 
-				ZSTD_freeDStream(zstream);
-				msg_info_map("%s: read map data, %z bytes compressed, "
-							 "%z uncompressed)",
-							 data->filename,
-							 len, zout.pos);
-				map->read_callback(out, zout.pos, &periodic->cbdata, TRUE);
-				g_free(out);
+				/* If compressed flag is set OR payload looks like zstd, decompress */
+				if (bk->is_compressed || rspamd_map_payload_is_zstd((const unsigned char *) payload, payload_len)) {
+					ZSTD_DStream *zstream;
+					ZSTD_inBuffer zin;
+					ZSTD_outBuffer zout;
+					unsigned char *out;
+					gsize outlen, r;
 
-				munmap(bytes, len);
+					zstream = ZSTD_createDStream();
+					ZSTD_initDStream(zstream);
+
+					zin.pos = 0;
+					zin.src = payload;
+					zin.size = payload_len;
+
+					if ((outlen = ZSTD_getDecompressedSize(zin.src, zin.size)) == 0) {
+						outlen = ZSTD_DStreamOutSize();
+					}
+
+					out = g_malloc(outlen);
+
+					zout.dst = out;
+					zout.pos = 0;
+					zout.size = outlen;
+
+					while (zin.pos < zin.size) {
+						r = ZSTD_decompressStream(zstream, &zout, &zin);
+
+						if (ZSTD_isError(r)) {
+							msg_err_map("%s: cannot decompress data: %s",
+										data->filename,
+										ZSTD_getErrorName(r));
+							ZSTD_freeDStream(zstream);
+							g_free(out);
+							if (dec) {
+								rspamd_explicit_memzero(dec, declen);
+								g_free(dec);
+							}
+							munmap(bytes, len);
+							return FALSE;
+						}
+
+						if (zout.pos == zout.size) {
+							/* We need to extend output buffer */
+							zout.size = zout.size * 2 + 1;
+							out = g_realloc(zout.dst, zout.size);
+							zout.dst = out;
+						}
+					}
+
+					ZSTD_freeDStream(zstream);
+					msg_info_map("%s: read map data, %z bytes compressed, "
+								 "%z uncompressed)",
+								 data->filename,
+								 payload_len, zout.pos);
+					map->read_callback(out, zout.pos, &periodic->cbdata, TRUE);
+					g_free(out);
+
+					if (dec) {
+						rspamd_explicit_memzero(dec, declen);
+						g_free(dec);
+					}
+					munmap(bytes, len);
+				}
+				else if (bk->is_encrypted) {
+					/* Already decrypted, pass through */
+					msg_info_map("%s: read map data, %z bytes (decrypted)",
+								 data->filename, payload_len);
+					map->read_callback(payload, payload_len, &periodic->cbdata, TRUE);
+					rspamd_explicit_memzero(payload, payload_len);
+					g_free(payload);
+					munmap(bytes, len);
+				}
+				else {
+					/* Should not happen here as we only mmap for compressed or encrypted */
+					munmap(bytes, len);
+					if (!read_map_file_chunks(map, &periodic->cbdata, data->filename,
+											  len, 0)) {
+						return FALSE;
+					}
+				}
 			}
 			else {
 				/* Perform buffered read: fail-safe */
@@ -1509,67 +1742,104 @@ rspamd_map_read_cached(struct rspamd_map *map, struct rspamd_map_backend *bk,
 	 */
 	len = data->cache->len;
 
-	if (bk->is_compressed) {
-		ZSTD_DStream *zstream;
-		ZSTD_inBuffer zin;
-		ZSTD_outBuffer zout;
-		unsigned char *out;
-		gsize outlen, r;
+	if (bk->is_encrypted || bk->is_compressed) {
+		unsigned char *payload = (unsigned char *) in;
+		gsize payload_len = len;
+		unsigned char *dec = NULL;
+		gsize declen = 0;
 
-		zstream = ZSTD_createDStream();
-		ZSTD_initDStream(zstream);
-
-		zin.pos = 0;
-		zin.src = in;
-		zin.size = len;
-
-		if ((outlen = ZSTD_getDecompressedSize(zin.src, zin.size)) == 0) {
-			outlen = ZSTD_DStreamOutSize();
-		}
-
-		out = g_malloc(outlen);
-
-		zout.dst = out;
-		zout.pos = 0;
-		zout.size = outlen;
-
-		while (zin.pos < zin.size) {
-			r = ZSTD_decompressStream(zstream, &zout, &zin);
-
-			if (ZSTD_isError(r)) {
-				msg_err_map("%s: cannot decompress data: %s",
-							bk->uri,
-							ZSTD_getErrorName(r));
-				ZSTD_freeDStream(zstream);
-				g_free(out);
+		if (bk->is_encrypted) {
+			if (!rspamd_map_secretbox_decrypt_buf(bk, payload, payload_len, &dec, &declen)) {
 				munmap(in, mmap_len);
 				return FALSE;
 			}
+			payload = dec;
+			payload_len = declen;
+		}
 
-			if (zout.pos == zout.size) {
-				/* We need to extend output buffer */
-				zout.size = zout.size * 2 + 1;
-				out = g_realloc(zout.dst, zout.size);
-				zout.dst = out;
+		/* If compressed flag is set OR payload looks like zstd, decompress */
+		if (bk->is_compressed || rspamd_map_payload_is_zstd(payload, payload_len)) {
+			ZSTD_DStream *zstream;
+			ZSTD_inBuffer zin;
+			ZSTD_outBuffer zout;
+			unsigned char *out;
+			gsize outlen, r;
+
+			zstream = ZSTD_createDStream();
+			ZSTD_initDStream(zstream);
+
+			zin.pos = 0;
+			zin.src = payload;
+			zin.size = payload_len;
+
+			if ((outlen = ZSTD_getDecompressedSize(zin.src, zin.size)) == 0) {
+				outlen = ZSTD_DStreamOutSize();
+			}
+
+			out = g_malloc(outlen);
+
+			zout.dst = out;
+			zout.pos = 0;
+			zout.size = outlen;
+
+			while (zin.pos < zin.size) {
+				r = ZSTD_decompressStream(zstream, &zout, &zin);
+
+				if (ZSTD_isError(r)) {
+					msg_err_map("%s: cannot decompress data: %s",
+								bk->uri,
+								ZSTD_getErrorName(r));
+					ZSTD_freeDStream(zstream);
+					g_free(out);
+					if (dec) {
+						rspamd_explicit_memzero(dec, declen);
+						g_free(dec);
+					}
+					munmap(in, mmap_len);
+					return FALSE;
+				}
+
+				if (zout.pos == zout.size) {
+					/* We need to extend output buffer */
+					zout.size = zout.size * 2 + 1;
+					out = g_realloc(zout.dst, zout.size);
+					zout.dst = out;
+				}
+			}
+
+			ZSTD_freeDStream(zstream);
+			msg_info_map("%s: read map data cached %z bytes compressed, "
+						 "%z uncompressed",
+						 bk->uri,
+						 payload_len, zout.pos);
+			map->read_callback(out, zout.pos, &periodic->cbdata, TRUE);
+			g_free(out);
+			if (dec) {
+				rspamd_explicit_memzero(dec, declen);
+				g_free(dec);
+			}
+		}
+		else {
+			msg_info_map("%s: read map data cached %z bytes%s", bk->uri, payload_len,
+						 bk->is_encrypted ? " (decrypted)" : "");
+			map->read_callback(payload, payload_len, &periodic->cbdata, TRUE);
+			if (dec) {
+				rspamd_explicit_memzero(dec, declen);
+				g_free(dec);
 			}
 		}
 
-		ZSTD_freeDStream(zstream);
-		msg_info_map("%s: read map data cached %z bytes compressed, "
-					 "%z uncompressed",
-					 bk->uri,
-					 len, zout.pos);
-		map->read_callback(out, zout.pos, &periodic->cbdata, TRUE);
-		g_free(out);
+		munmap(in, mmap_len);
+
+		return TRUE;
 	}
 	else {
+		/* Neither encrypted nor compressed: pass cached bytes as-is */
 		msg_info_map("%s: read map data cached %z bytes", bk->uri, len);
 		map->read_callback(in, len, &periodic->cbdata, TRUE);
+		munmap(in, mmap_len);
+		return TRUE;
 	}
-
-	munmap(in, mmap_len);
-
-	return TRUE;
 }
 
 static gboolean
@@ -1864,10 +2134,83 @@ rspamd_map_read_http_cached_file(struct rspamd_map *map,
 	close(fd);
 
 	/* Now read file data */
-	/* Perform buffered read: fail-safe */
-	if (!read_map_file_chunks(map, cbdata, path,
-							  st.st_size - header.data_off, header.data_off)) {
-		return FALSE;
+	/* Perform buffered read: fail-safe, but for encrypted files, we must read whole buffer */
+	if (bk->is_encrypted) {
+		gsize flen;
+		unsigned char *fbytes = rspamd_file_xmap(path, PROT_READ, &flen, TRUE);
+		if (!fbytes) {
+			return FALSE;
+		}
+		const unsigned char *enc = fbytes + header.data_off;
+		gsize enclen = flen - header.data_off;
+		unsigned char *dec = NULL;
+		gsize declen = 0;
+
+		if (!rspamd_map_secretbox_decrypt_buf(bk, enc, enclen, &dec, &declen)) {
+			munmap(fbytes, flen);
+			return FALSE;
+		}
+		/* If compressed, decompress after decryption */
+		if (bk->is_compressed) {
+			ZSTD_DStream *zstream;
+			ZSTD_inBuffer zin;
+			ZSTD_outBuffer zout;
+			unsigned char *out;
+			gsize outlen, r;
+
+			zstream = ZSTD_createDStream();
+			ZSTD_initDStream(zstream);
+
+			zin.pos = 0;
+			zin.src = dec;
+			zin.size = declen;
+
+			if ((outlen = ZSTD_getDecompressedSize(zin.src, zin.size)) == 0) {
+				outlen = ZSTD_DStreamOutSize();
+			}
+
+			out = g_malloc(outlen);
+
+			zout.dst = out;
+			zout.pos = 0;
+			zout.size = outlen;
+
+			while (zin.pos < zin.size) {
+				r = ZSTD_decompressStream(zstream, &zout, &zin);
+
+				if (ZSTD_isError(r)) {
+					ZSTD_freeDStream(zstream);
+					g_free(out);
+					rspamd_explicit_memzero(dec, declen);
+					g_free(dec);
+					munmap(fbytes, flen);
+					return FALSE;
+				}
+
+				if (zout.pos == zout.size) {
+					/* We need to extend output buffer */
+					zout.size = zout.size * 2 + 1;
+					out = g_realloc(zout.dst, zout.size);
+					zout.dst = out;
+				}
+			}
+
+			ZSTD_freeDStream(zstream);
+			map->read_callback(out, zout.pos, cbdata, TRUE);
+			g_free(out);
+		}
+		else {
+			map->read_callback(dec, declen, cbdata, TRUE);
+		}
+		rspamd_explicit_memzero(dec, declen);
+		g_free(dec);
+		munmap(fbytes, flen);
+	}
+	else {
+		if (!read_map_file_chunks(map, cbdata, path,
+								  st.st_size - header.data_off, header.data_off)) {
+			return FALSE;
+		}
 	}
 
 	struct tm tm;
@@ -2751,7 +3094,7 @@ rspamd_map_parse_backend(struct rspamd_config *cfg, const char *map_line)
 	struct http_map_data *hdata = NULL;
 	struct static_map_data *sdata = NULL;
 	struct http_parser_url up;
-	const char *end, *p;
+	const char *end;
 	rspamd_ftok_t tok;
 
 	bk = g_malloc0(sizeof(*bk));
@@ -2768,13 +3111,21 @@ rspamd_map_parse_backend(struct rspamd_config *cfg, const char *map_line)
 	}
 
 	end = map_line + strlen(map_line);
-	if (end - map_line > 5) {
-		p = end - 5;
-		if (g_ascii_strcasecmp(p, ".zstd") == 0) {
+	if (end - map_line > 4) {
+		/* Support combinations: .enc, .zst, .zstd, .zst.enc, .zstd.enc */
+		const char *fname = map_line;
+		gsize flen = end - map_line;
+
+		/* Check .enc suffix */
+		if (flen >= 4 && g_ascii_strcasecmp(fname + flen - 4, ".enc") == 0) {
+			bk->is_encrypted = TRUE;
+			flen -= 4;
+		}
+
+		if (flen >= 5 && g_ascii_strcasecmp(fname + flen - 5, ".zstd") == 0) {
 			bk->is_compressed = TRUE;
 		}
-		p = end - 4;
-		if (g_ascii_strcasecmp(p, ".zst") == 0) {
+		else if (flen >= 4 && g_ascii_strcasecmp(fname + flen - 4, ".zst") == 0) {
 			bk->is_compressed = TRUE;
 		}
 	}
@@ -2951,6 +3302,48 @@ rspamd_map_parse_backend(struct rspamd_config *cfg, const char *map_line)
 	else if (bk->protocol == MAP_PROTO_STATIC) {
 		sdata = g_malloc0(sizeof(*sdata));
 		bk->data.sd = sdata;
+	}
+
+	/* Load optional secretbox key from maps { <bk->uri> { secretbox_key = "..." } }
+	 * or maps { secretbox_key = ... } either at the root or under options { maps { ... } }
+	 */
+	if (bk->is_encrypted) {
+		const ucl_object_t *maps_obj = ucl_object_lookup(cfg->cfg_ucl_obj, "maps");
+		if (maps_obj == NULL || ucl_object_type(maps_obj) != UCL_OBJECT) {
+			const ucl_object_t *opts_obj = ucl_object_lookup(cfg->cfg_ucl_obj, "options");
+			if (opts_obj && ucl_object_type(opts_obj) == UCL_OBJECT) {
+				maps_obj = ucl_object_lookup(opts_obj, "maps");
+			}
+		}
+		const ucl_object_t *src = NULL;
+		if (maps_obj && ucl_object_type(maps_obj) == UCL_OBJECT) {
+			/* Per-backend */
+			src = ucl_object_lookup(maps_obj, bk->uri);
+			if (!src) src = maps_obj;
+			const ucl_object_t *kobj = ucl_object_lookup_any(src, "secretbox_key", "secretbox-key", "enc_key", NULL);
+			if (kobj && ucl_object_type(kobj) == UCL_STRING) {
+				gsize klen = 0;
+				const char *k = ucl_object_tolstring(kobj, &klen);
+				if (rspamd_map_decode_secretbox_key(k, klen, bk->secretbox_key)) {
+					bk->has_secretbox_key = TRUE;
+					msg_info_config("loaded secretbox key for %s", bk->uri);
+				}
+				else {
+					msg_info_config("cannot decode secretbox key for %s", bk->uri);
+				}
+			}
+			else {
+				msg_debug_config("no secretbox_key found in maps block for %s", bk->uri);
+			}
+		}
+		else {
+			msg_debug_config("maps block not found at root nor under options; no secretbox_key (uri=%s)", bk->uri);
+		}
+	}
+
+	/* Fallback: if encrypted but key not loaded (e.g. maps block parsed later), try again */
+	if (bk->is_encrypted && !bk->has_secretbox_key) {
+		rspamd_map_try_load_secretbox_key(cfg, bk);
 	}
 
 	return bk;
