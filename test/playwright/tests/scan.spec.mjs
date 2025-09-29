@@ -34,7 +34,17 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
     }
 
     async function expectAlertSuccess(expectedText) {
-        const alert = page.locator(".alert-success, .alert-modal.alert-success");
+        // Wait for a new alert to appear by counting existing alerts first
+        const initialAlertCount = await page.locator(".alert-success, .alert-modal.alert-success").count();
+
+        // Wait for a new alert to appear
+        await expect(async () => {
+            const currentCount = await page.locator(".alert-success, .alert-modal.alert-success").count();
+            return currentCount > initialAlertCount;
+        }).toPass({timeout: 5000});
+
+        // Get the most recently appeared alert (last one)
+        const alert = page.locator(".alert-success, .alert-modal.alert-success").last();
         await expect(alert).toBeVisible();
         const text = await alert.textContent();
         expect(text).toContain(expectedText);
