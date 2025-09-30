@@ -1,3 +1,24 @@
+3.13.1: 30 Sep 2025
+  * [Feature] Archive module: Full support for encrypted ZIP archives with ZipCrypto and AES encryption
+  * [Feature] Archive module: Both reading and writing of AES-encrypted ZIP archives is supported
+  * [Feature] Archive module: Updated Lua bindings for libarchive
+  * [Feature] Encrypted maps: Support for encrypted maps to enable new distribution scenarios
+  * [Feature] Redis TLS: Configurable TLS connections in Redis backend
+  * [Feature] Map helpers alignment: Enforce 64-byte alignment to prevent unaligned memory access
+  * [Feature] Enhanced CLI for secretbox with additional security test coverage
+  * [Fix] MIME encoding: Major overhauls and multiple fixes for MIME encoding logic
+  * [Fix] MIME encoding: Improved handling and decoding of UTF-8 in MIME headers
+  * [Fix] Learning system: Numerous fixes to learn checks and autolearn flag handling
+  * [Fix] Learning system: Prevention of duplicate message learning
+  * [Fix] Learning system: Extended multiclass learning test coverage
+  * [Fix] Critical: Fixed bug when converting zero-length strings to numbers
+  * [Fix] Critical: Fixed XML prolog detection in lua_magic module
+  * [Fix] Build: Fixed build issues on 32-bit platforms
+  * [Fix] Compatibility: Improved compatibility with Lua versions above 5.1
+  * [Fix] Empty input: Addressed issues with empty input handling in lua_magic
+  * [Fix] Testing: Improved stability of automated testing with multiple test fixes
+  * [Fix] Minor compatibility improvements (buffer allocation, missing cmath include)
+
 3.13.0: 17 Sep 2025
   * [Conf] Add defaults
   * [Conf] Fix JB IDE damage
