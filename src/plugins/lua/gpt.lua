@@ -62,6 +62,26 @@ if confighelp then
   reason_header = "X-GPT-Reason";
   # Use JSON format for response
   json = false;
+
+  # Optional user/domain context in Redis
+  context = {
+    enabled = true; # fetch and inject user/domain conversation context
+    # scope level for identity: user | domain | esld
+    level = "user";
+    # redis key structure: <key_prefix>:<identity>:<key_suffix>
+    key_prefix = "user";
+    key_suffix = "mail_context";
+    # sliding window and TTLs
+    max_messages = 40; # keep up to N compact message summaries
+    min_messages = 5; # warm-up: inject context only after N messages collected
+    message_ttl = 14d; # forget messages older than this when recomputing
+    ttl = 30d; # Redis key TTL
+    top_senders = 5; # track top senders
+    summary_max_chars = 512; # compress body to this size for storage
+    flagged_phrases = ["reset your password", "click here to verify"]; # optional list
+    last_labels_count = 10; # keep last N labels
+    as_system = true; # place context snippet as additional system message
+  };
   }
   ]])
   return
@@ -76,6 +96,10 @@ local lua_redis = require "lua_redis"
 local ucl = require "ucl"
 -- local fun = require "fun" -- no longer needed after llm_common usage
 local lua_cache = require "lua_cache"
+local llm_context = require "llm_context"
+local lua_maps_expressions = require "lua_maps_expressions"
+local lua_maps = require "lua_maps"
+local lua_selectors = require "lua_selectors"
 
 -- Exclude checks if one of those is found
 local default_symbols_to_except = {
@@ -148,9 +172,90 @@ local settings = {
   json = false,
   extra_symbols = nil,
   cache_prefix = REDIS_PREFIX,
+  -- user/domain context options (nested table forwarded to llm_context)
+  context = {
+    enabled = false,
+    level = 'user', -- 'user' | 'domain' | 'esld'
+    key_prefix = 'user',
+    key_suffix = 'mail_context',
+    max_messages = 40,
+    min_messages = 5,      -- warm-up threshold: minimum messages before injecting context into prompt
+    message_ttl = 1209600, -- 14d
+    ttl = 2592000,         -- 30d
+    top_senders = 5,
+    summary_max_chars = 512,
+    flagged_phrases = { 'reset your password', 'click here to verify' },
+    last_labels_count = 10,
+    as_system = true, -- inject context snippet as system message; false => user message
+    -- Optional gating using selectors and maps to enable/disable context dynamically
+    -- One can use either a simple enable_map or a full maps expression
+    -- Example enable_map:
+    -- enable_map = { selector = "esld_principal_recipient_domain", map = "/etc/rspamd/context-enabled-domains.map", type = "set" }
+    enable_map = nil,
+    -- Example enable_expression:
+    -- enable_expression = {
+    --   rules = {
+    --     dom = { selector = "esld_principal_recipient_domain", map = "/etc/rspamd/context-enabled-domains.map" },
+    --     user = { selector = "user", map = "/etc/rspamd/context-enabled-users.map" },
+    --   },
+    --   expression = "dom | user"
+    -- }
+    enable_expression = nil,
+    -- Optional negative gating
+    disable_expression = nil,
+  },
 }
 local redis_params
 local cache_context
+local compiled_context_gating = {
+  enable_expr = nil,
+  disable_expr = nil,
+  enable_map = nil, -- { selector_fn, map }
+}
+
+local function is_context_enabled_for_task(task)
+  local ctx = settings.context
+  if not ctx then return false end
+
+  local enabled = ctx.enabled or false
+
+  -- Positive gating via expression
+  if compiled_context_gating.enable_expr then
+    local res = compiled_context_gating.enable_expr:process(task)
+    if res then
+      enabled = true
+    end
+  end
+
+  -- Positive gating via simple map
+  if compiled_context_gating.enable_map then
+    local vals = compiled_context_gating.enable_map.selector_fn(task)
+    local matched = false
+    if type(vals) == 'table' then
+      for _, v in ipairs(vals) do
+        if compiled_context_gating.enable_map.map:get_key(v) then
+          matched = true
+          break
+        end
+      end
+    elseif vals then
+      matched = compiled_context_gating.enable_map.map:get_key(vals) and true or false
+    end
+    if matched then
+      enabled = true
+    end
+  end
+
+  -- Negative gating
+  if enabled and compiled_context_gating.disable_expr then
+    local res = compiled_context_gating.disable_expr:process(task)
+    if res then
+      enabled = false
+    end
+  end
+
+  return enabled
+end
 
 local function default_condition(task)
   -- Check result
@@ -561,6 +666,11 @@ local function insert_results(task, result, sel_part)
   if cache_context then
     lua_cache.cache_set(task, redis_cache_key(sel_part), result, cache_context)
   end
+
+  -- Update long-term user/domain context after classification
+  if redis_params and settings.context then
+    llm_context.update_after_classification(task, redis_params, settings.context, result, sel_part)
+  end
 end
 
 local function check_consensus_and_insert_results(task, results, sel_part)
@@ -595,20 +705,22 @@ local function check_consensus_and_insert_results(task, results, sel_part)
   end
 
   lua_util.shuffle(reasons)
-  local reason = reasons[1] or nil
+  local reason_obj = reasons[1]
+  local reason_text = reason_obj and reason_obj.reason or nil
+  local reason_categories = reason_obj and reason_obj.categories or nil
 
   if nspam > nham and max_spam_prob > 0.75 then
     insert_results(task, {
         probability = max_spam_prob,
-        reason = reason.reason,
-        categories = reason.categories,
+        reason = reason_text,
+        categories = reason_categories,
       },
       sel_part)
   elseif nham > nspam and max_ham_prob < 0.25 then
     insert_results(task, {
         probability = max_ham_prob,
-        reason = reason.reason,
-        categories = reason.categories,
+        reason = reason_text,
+        categories = reason_categories,
       },
       sel_part)
   else
@@ -619,15 +731,15 @@ end
 
 -- get_meta_llm_content moved to llm_common
 
-local function check_llm_uncached(task, content, sel_part)
-  return settings.specific_check(task, content, sel_part)
+local function check_llm_uncached(task, content, sel_part, context_snippet)
+  return settings.specific_check(task, content, sel_part, context_snippet)
 end
 
-local function check_llm_cached(task, content, sel_part)
+local function check_llm_cached(task, content, sel_part, context_snippet)
   local cache_key = redis_cache_key(sel_part)
 
   lua_cache.cache_get(task, cache_key, cache_context, settings.timeout * 1.5, function()
-    check_llm_uncached(task, content, sel_part)
+    check_llm_uncached(task, content, sel_part, context_snippet)
   end, function(_, err, data)
     if err then
       rspamd_logger.errx(task, 'cannot get cache: %s', err)
@@ -638,12 +750,12 @@ local function check_llm_cached(task, content, sel_part)
       rspamd_logger.infox(task, 'found cached response %s', cache_key)
       insert_results(task, data, sel_part)
     else
-      check_llm_uncached(task, content, sel_part)
+      check_llm_uncached(task, content, sel_part, context_snippet)
     end
   end)
 end
 
-local function openai_check(task, content, sel_part)
+local function openai_check(task, content, sel_part, context_snippet)
   lua_util.debugm(N, task, "sending content to gpt: %s", content)
 
   local upstream
@@ -684,7 +796,7 @@ local function openai_check(task, content, sel_part)
     end
   end
 
-  -- Build messages exactly as in the original code if structured table provided
+  -- Build messages with optional user/domain context
   local user_messages
   if type(content) == 'table' then
     local subject_line = 'Subject: ' .. (content.subject or '')
@@ -700,22 +812,25 @@ local function openai_check(task, content, sel_part)
     }
   end
 
-  local body_base = {
-    stream = false,
-    messages = {
-      {
-        role = 'system',
-        content = settings.prompt
-      },
-      lua_util.unpack(user_messages)
-    }
+  local sys_messages = {
+    { role = 'system', content = settings.prompt }
   }
-
-  if type(settings.model) == 'string' then
-    settings.model = { settings.model }
+  if context_snippet and settings.context and settings.context.as_system ~= false then
+    table.insert(sys_messages, { role = 'system', content = context_snippet })
+  elseif context_snippet and settings.context and settings.context.as_system == false then
+    table.insert(user_messages, 1, { role = 'user', content = context_snippet })
   end
 
-  for idx, model in ipairs(settings.model) do
+  local body_base = {
+    stream = false,
+    messages = {}
+  }
+  for _, m in ipairs(sys_messages) do table.insert(body_base.messages, m) end
+  for _, m in ipairs(user_messages) do table.insert(body_base.messages, m) end
+
+  local models_list = type(settings.model) == 'string' and { settings.model } or settings.model
+
+  for idx, model in ipairs(models_list) do
     results[idx] = {
       success = false,
       checked = false
@@ -766,7 +881,7 @@ local function openai_check(task, content, sel_part)
   end
 end
 
-local function ollama_check(task, content, sel_part)
+local function ollama_check(task, content, sel_part, context_snippet)
   lua_util.debugm(N, task, "sending content to gpt: %s", content)
 
   local upstream
@@ -821,26 +936,25 @@ local function ollama_check(task, content, sel_part)
     }
   end
 
-  if type(settings.model) == 'string' then
-    settings.model = { settings.model }
+  local models_list = type(settings.model) == 'string' and { settings.model } or settings.model
+
+  local sys_messages = {
+    { role = 'system', content = settings.prompt }
+  }
+  if context_snippet and settings.context and settings.context.as_system ~= false then
+    table.insert(sys_messages, { role = 'system', content = context_snippet })
+  elseif context_snippet and settings.context and settings.context.as_system == false then
+    table.insert(user_messages, 1, { role = 'user', content = context_snippet })
   end
 
   local body_base = {
     stream = false,
-    model = settings.model,
-    -- should not in body_base
-    -- max_tokens = settings.max_tokens,
-    -- temperature = settings.temperature,
-    messages = {
-      {
-        role = 'system',
-        content = settings.prompt
-      },
-      table.unpack(user_messages)
-    }
+    messages = {}
   }
+  for _, m in ipairs(sys_messages) do table.insert(body_base.messages, m) end
+  for _, m in ipairs(user_messages) do table.insert(body_base.messages, m) end
 
-  for idx, model in ipairs(settings.model) do
+  for idx, model in ipairs(models_list) do
     results[idx] = {
       success = false,
       checked = false
@@ -891,6 +1005,31 @@ end
 local function gpt_check(task)
   local ret, content, sel_part = settings.condition(task)
 
+  -- Always update context if enabled, even when condition is not met
+  local context_enabled = redis_params and settings.context and is_context_enabled_for_task(task)
+  if context_enabled and not ret then
+    -- Condition not met (e.g. BAYES_SPAM, passthrough, etc.)
+    -- Update context without LLM call; infer result from task metrics
+    if not sel_part then
+      -- Try to get text part for context update
+      sel_part = lua_mime.get_displayed_text_part(task)
+    end
+    if sel_part then
+      local result = task:get_metric_result()
+      local inferred_result = nil
+      if result then
+        if result.action == 'reject' or (result.score and result.score > 10) then
+          inferred_result = { probability = 0.9, reason = 'rejected by filters', categories = {} }
+        elseif result.action == 'no action' and result.score and result.score < 0 then
+          inferred_result = { probability = 0.1, reason = 'ham by filters', categories = {} }
+        end
+      end
+      llm_context.update_after_classification(task, redis_params, settings.context, inferred_result, sel_part)
+    end
+    rspamd_logger.info(task, "skip checking gpt as the condition is not met: %s; context updated", content)
+    return
+  end
+
   if not ret then
     rspamd_logger.info(task, "skip checking gpt as the condition is not met: %s", content)
     return
@@ -901,11 +1040,21 @@ local function gpt_check(task)
     return
   end
 
-  if sel_part then
-    -- Check digest
-    check_llm_cached(task, content, sel_part)
+  local function proceed(context_snippet)
+    if sel_part then
+      -- Check digest
+      check_llm_cached(task, content, sel_part, context_snippet)
+    else
+      check_llm_uncached(task, content, nil, context_snippet)
+    end
+  end
+
+  if context_enabled then
+    llm_context.fetch(task, redis_params, settings.context, function(_, _, snippet)
+      proceed(snippet)
+    end)
   else
-    check_llm_uncached(task, content)
+    proceed(nil)
   end
 end
 
@@ -1018,14 +1167,48 @@ if opts then
           "Output ONLY 3 lines:\n" ..
           "1. Numeric score (0.00-1.00)\n" ..
           "2. One-sentence reason citing whether it is spam, the strongest red flag, or why it is ham\n" ..
-          "3. Empty line or mention ONLY the primary concern category if found from the list: " .. 
-            table.concat(lua_util.keys(categories_map), ', ')
+          "3. Empty line or mention ONLY the primary concern category if found from the list: " ..
+          table.concat(lua_util.keys(categories_map), ', ')
     else
       settings.prompt = "Analyze this email strictly as a spam detector given the email message, subject, " ..
           "FROM and url domains. Evaluate spam probability (0-1). " ..
           "Output ONLY 2 lines:\n" ..
           "1. Numeric score (0.00-1.00)\n" ..
           "2. One-sentence reason citing whether it is spam, the strongest red flag, or why it is ham\n"
+    end
+  end
+
+  -- Compile optional context gating
+  if settings.context then
+    local ctx = settings.context
+    if ctx.enable_expression then
+      local expr = lua_maps_expressions.create(rspamd_config, ctx.enable_expression, N .. "/context-enable")
+      if expr then
+        compiled_context_gating.enable_expr = expr
+      else
+        rspamd_logger.warnx(rspamd_config, 'failed to compile context enable_expression')
+      end
+    end
+    if ctx.disable_expression then
+      local expr = lua_maps_expressions.create(rspamd_config, ctx.disable_expression, N .. "/context-disable")
+      if expr then
+        compiled_context_gating.disable_expr = expr
+      else
+        rspamd_logger.warnx(rspamd_config, 'failed to compile context disable_expression')
+      end
+    end
+    if ctx.enable_map and type(ctx.enable_map) == 'table' and ctx.enable_map.selector and ctx.enable_map.map then
+      local sel = lua_selectors.create_selector_closure(rspamd_config, ctx.enable_map.selector)
+      local map = lua_maps.map_add_from_ucl(ctx.enable_map.map, ctx.enable_map.type or 'set',
+        'GPT context enable map')
+      if sel and map then
+        compiled_context_gating.enable_map = {
+          selector_fn = sel,
+          map = map,
+        }
+      else
+        rspamd_logger.warnx(rspamd_config, 'failed to compile context enable_map: selector or map invalid')
+      end
     end
   end
 end
