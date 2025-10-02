@@ -336,11 +336,27 @@ local function join_list(arr)
   return table.concat(arr, ', ')
 end
 
-local function format_context_prompt(ctx)
+local function format_context_prompt(ctx, task)
   local bullets = to_bullets_recent(ctx.recent_messages or {}, 5)
   local top_senders = join_list(ctx.top_senders or {})
   local flagged = join_list(ctx.flagged_phrases or {})
   local spam_types = join_list(ctx.last_spam_labels or {})
+
+  -- Check if current sender is known
+  local sender_frequency = 'new'
+  if task then
+    local from = ((task:get_from('smtp') or EMPTY)[1] or EMPTY)['addr']
+    if from and ctx.sender_counts and ctx.sender_counts[from] then
+      local count = ctx.sender_counts[from]
+      if count >= 10 then
+        sender_frequency = 'frequent'
+      elseif count >= 3 then
+        sender_frequency = 'known'
+      else
+        sender_frequency = 'occasional'
+      end
+    end
+  end
 
   local parts = {}
   table.insert(parts, 'User recent correspondence summary:')
@@ -356,6 +372,7 @@ local function format_context_prompt(ctx)
   if spam_types ~= '' then
     table.insert(parts, string.format('Last detected spam types: %s', spam_types))
   end
+  table.insert(parts, string.format('Current sender: %s', sender_frequency))
 
   return table.concat(parts, '\n')
 end
@@ -409,7 +426,7 @@ function M.fetch(task, redis_params, opts, callback, debug_module)
 
     lua_util.debugm(N, task, 'context warm-up OK: %s messages, generating snippet',
       tostring(msg_count))
-    local prompt_snippet = format_context_prompt(ctx)
+    local prompt_snippet = format_context_prompt(ctx, task)
     callback(nil, ctx, prompt_snippet)
   end
 

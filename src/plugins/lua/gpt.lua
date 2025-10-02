@@ -1239,19 +1239,43 @@ if opts then
 
   if not settings.prompt then
     if settings.extra_symbols then
-      settings.prompt = "Analyze this email strictly as a spam detector given the email message, subject, " ..
-          "FROM and url domains. Evaluate spam probability (0-1). " ..
+      settings.prompt = "Analyze this email as a spam detector. Evaluate spam probability (0-1).\n\n" ..
+          "LEGITIMATE patterns to recognize:\n" ..
+          "- Verification emails with time-limited codes are NORMAL and legitimate\n" ..
+          "- Transactional emails (receipts, confirmations, password resets) from services\n" ..
+          "- 'Verify email' or 'confirmation code' is NOT automatically phishing\n" ..
+          "- Emails from frequent/known senders (see context) are more trustworthy\n\n" ..
+          "Flag as SPAM/PHISHING only with MULTIPLE red flags:\n" ..
+          "- Urgent threats or fear tactics (account closure, legal action)\n" ..
+          "- Domain impersonation or suspicious lookalikes\n" ..
+          "- Requests for passwords, SSN, credit card numbers\n" ..
+          "- Mismatched URLs pointing to different domains than sender\n" ..
+          "- Poor grammar/spelling in supposedly professional emails\n\n" ..
+          "IMPORTANT: If sender is 'frequent' or 'known', reduce phishing probability " ..
+          "unless there are strong contradictory signals.\n\n" ..
           "Output ONLY 3 lines:\n" ..
           "1. Numeric score (0.00-1.00)\n" ..
-          "2. One-sentence reason citing whether it is spam, the strongest red flag, or why it is ham\n" ..
-          "3. Empty line or mention ONLY the primary concern category if found from the list: " ..
+          "2. One-sentence reason citing the strongest indicator\n" ..
+          "3. Primary category if applicable: " ..
           table.concat(lua_util.keys(categories_map), ', ')
     else
-      settings.prompt = "Analyze this email strictly as a spam detector given the email message, subject, " ..
-          "FROM and url domains. Evaluate spam probability (0-1). " ..
+      settings.prompt = "Analyze this email as a spam detector. Evaluate spam probability (0-1).\n\n" ..
+          "LEGITIMATE patterns to recognize:\n" ..
+          "- Verification emails with time-limited codes are NORMAL and legitimate\n" ..
+          "- Transactional emails (receipts, confirmations, password resets) from services\n" ..
+          "- 'Verify email' or 'confirmation code' is NOT automatically phishing\n" ..
+          "- Emails from frequent/known senders (see context) are more trustworthy\n\n" ..
+          "Flag as SPAM/PHISHING only with MULTIPLE red flags:\n" ..
+          "- Urgent threats or fear tactics (account closure, legal action)\n" ..
+          "- Domain impersonation or suspicious lookalikes\n" ..
+          "- Requests for passwords, SSN, credit card numbers\n" ..
+          "- Mismatched URLs pointing to different domains than sender\n" ..
+          "- Poor grammar/spelling in supposedly professional emails\n\n" ..
+          "IMPORTANT: If sender is 'frequent' or 'known', reduce phishing probability " ..
+          "unless there are strong contradictory signals.\n\n" ..
           "Output ONLY 2 lines:\n" ..
           "1. Numeric score (0.00-1.00)\n" ..
-          "2. One-sentence reason citing whether it is spam, the strongest red flag, or why it is ham\n"
+          "2. One-sentence reason citing the strongest indicator"
     end
   end
 
