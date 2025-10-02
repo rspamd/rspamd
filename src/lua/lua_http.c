@@ -377,6 +377,9 @@ lua_http_finish_handler(struct rspamd_http_connection *conn,
 
 	L = lcbd.L;
 
+	lua_pushcfunction(L, &rspamd_lua_traceback);
+	int err_idx = lua_gettop(L);
+
 	lua_rawgeti(L, LUA_REGISTRYINDEX, cbd->cbref);
 	/* Error */
 	lua_pushnil(L);
@@ -420,10 +423,12 @@ lua_http_finish_handler(struct rspamd_http_connection *conn,
 		rspamd_symcache_set_cur_item(cbd->task, cbd->item);
 	}
 
-	if (lua_pcall(L, 4, 0, 0) != 0) {
+	if (lua_pcall(L, 4, 0, err_idx) != 0) {
 		msg_info("callback call failed: %s", lua_tostring(L, -1));
 		lua_pop(L, 1);
 	}
+
+	lua_pop(L, 1); /* Remove traceback function */
 
 	REF_RELEASE(cbd);
 

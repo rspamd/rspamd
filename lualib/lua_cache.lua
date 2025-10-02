@@ -381,8 +381,10 @@ local function cache_set(task, key, data, cache_context)
   end
 
   local full_key = cache_context.opts.cache_prefix .. "_" .. get_cache_key(key, cache_context, nil)
-  lua_util.debugm(cache_context.N, task, "caching data for key: %s with TTL: %s",
-    full_key, cache_context.opts.cache_ttl)
+  local ttl = cache_context.opts.cache_ttl
+  local expire_at = os.time() + ttl
+  lua_util.debugm(cache_context.N, task, "caching data for key: %s with TTL: %s (expiring at: %s)",
+    full_key, ttl, os.date('%Y-%m-%d %H:%M:%S', expire_at))
 
   local encoded_data = encode_data(data, cache_context)
 
@@ -394,10 +396,11 @@ local function cache_set(task, key, data, cache_context)
         logger.errx(task, "redis error setting cached data for %s: %s", full_key, err)
         lua_util.debugm(cache_context.N, task, "failed to cache data: %s", err)
       else
-        lua_util.debugm(cache_context.N, task, "successfully cached data for key %s", full_key)
+        lua_util.debugm(cache_context.N, task, "successfully cached data for key %s, expiring at %s",
+          full_key, os.date('%Y-%m-%d %H:%M:%S', expire_at))
       end
     end,
-    'SETEX', { full_key, tostring(cache_context.opts.cache_ttl), encoded_data }
+    'SETEX', { full_key, tostring(ttl), encoded_data }
   )
 end
 

@@ -1,0 +1,151 @@
+---
+description: "Rspamd: commit message format, tagging, and release procedures"
+globs: ["**"]
+alwaysApply: true
+---
+
+# Commit Message Format
+
+All commits in the Rspamd project follow a structured format with tags that indicate the type of change:
+
+## Commit Tags
+
+Use one of the following tags at the beginning of commit messages:
+
+- `[Feature]` - New features and capabilities
+- `[Fix]` - Bug fixes and corrections
+- `[CritFix]` - Critical bug fixes that need immediate attention
+- `[Minor]` - Minor changes, tweaks, or version updates
+- `[Project]` - Project-wide changes, refactoring, or infrastructure updates
+- `[Rework]` - Major reworking of existing functionality
+- `[Conf]` - Configuration changes or updates
+- `[Test]` - Test additions or modifications
+- `[Rules]` - Changes to spam detection rules
+
+## Commit Message Examples
+
+**Version updates:**
+```
+[Minor] Update version of rspamd to X.Y.Z
+```
+
+**Single-line changes:**
+```
+[Fix] Fix memory leak in dkim module
+[Feature] Add support for encrypted maps
+[Minor] Add missing cmath include
+```
+
+**Multi-line changes (for releases or complex changes):**
+```
+Release X.Y.Z
+
+* [Feature] First feature description
+* [Feature] Second feature description
+* [Fix] First fix description
+* [Fix] Second fix description
+```
+
+## GPG Signing Requirements
+
+**All commits and tags MUST be signed with GPG:**
+
+- Use `git commit -S` to sign commits
+- Use `git tag -s <tagname>` to sign tags
+- Verify signatures with `git log --show-signature` or `git tag -v <tagname>`
+
+## Release Process
+
+### 1. Update ChangeLog
+
+Add release notes to `ChangeLog` following the existing format:
+
+```
+X.Y.Z: DD MMM YYYY
+  * [Feature] Feature description
+  * [Fix] Fix description
+  * [Project] Project-level changes
+```
+
+Format rules:
+- Date format: `DD MMM YYYY` (e.g., `30 Sep 2025`)
+- Each entry starts with `  * [Tag]` (two spaces, asterisk, space, tag)
+- Group entries by tag type
+- Keep descriptions concise but informative
+
+### 2. Create Release Commit
+
+Create a commit with the full release notes:
+
+```bash
+git add ChangeLog
+git commit --no-verify -S -m "Release X.Y.Z
+
+* [Feature] Feature 1
+* [Feature] Feature 2
+* [Fix] Fix 1
+* [Fix] Fix 2
+..."
+```
+
+### 3. Create Release Tag
+
+Create an annotated, signed tag:
+
+```bash
+git tag -s X.Y.Z -m "Rspamd X.Y.Z
+
+Brief release summary highlighting main features and fixes.
+
+Main features:
+* Feature 1
+* Feature 2
+
+Critical fixes:
+* Fix 1
+* Fix 2
+
+Additional context or notes about the release."
+```
+
+### 4. Update Version for Next Development Cycle
+
+After creating a release tag, update the version in `CMakeLists.txt`:
+
+```bash
+# Edit CMakeLists.txt: increment RSPAMD_VERSION_PATCH
+git add CMakeLists.txt
+git commit --no-verify -S -m "[Minor] Update version of rspamd to X.Y.Z"
+```
+
+## Version Numbers
+
+Version numbers are defined in `CMakeLists.txt`:
+
+```cmake
+set(RSPAMD_VERSION_MAJOR X)
+set(RSPAMD_VERSION_MINOR Y)
+set(RSPAMD_VERSION_PATCH Z)
+```
+
+- **MAJOR**: Incompatible API changes or major breaking changes
+- **MINOR**: New features in a backward-compatible manner
+- **PATCH**: Backward-compatible bug fixes
+
+## Pre-commit Hooks
+
+- If pre-commit hooks fail on unrelated issues, use `--no-verify` flag
+- Only use `--no-verify` when necessary and ensure code quality manually
+- Pre-commit hooks check:
+  - Trailing whitespace
+  - Line endings
+  - ClangFormat
+  - LuaCheck
+
+## General Guidelines
+
+- Write clear, descriptive commit messages
+- One logical change per commit
+- Reference issue numbers when applicable
+- Keep commit history clean and meaningful
+- Always sign commits and tags with GPG
