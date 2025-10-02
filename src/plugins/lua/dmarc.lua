@@ -284,6 +284,13 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
         return
       end
     end
+    if policy.rua:match("^mailto:") and settings.reporting.exclude_rua_addresses then
+      local rua = policy.rua:gsub("^mailto:", "")
+      if settings.reporting.exclude_rua_addresses:get_key(rua) then
+        rspamd_logger.info(task, 'DMARC reporting suppressed for rua recipient %s', rua)
+        return
+      end
+    end
 
     local function dmarc_report_cb(err)
       if not err then
@@ -532,6 +539,11 @@ if type(settings.reporting) == 'table' then
       optional = true,
       type = 'map',
       description = 'Recipients not to store DMARC reports for'
+    },
+    exclude_rua_addresses = {
+      optional = true,
+      type = 'map',
+      description = 'RUA recipients not to store DMARC reports for'
     },
     only_domains = {
       optional = true,
