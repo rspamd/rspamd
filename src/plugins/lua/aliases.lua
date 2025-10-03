@@ -297,16 +297,20 @@ local function set_addr(addr, new_user, new_domain)
     addr.domain = new_domain
   end
 
-  if addr.domain then
+  -- Only update if we have both user and domain
+  if addr.user and addr.domain and addr.domain ~= '' then
     addr.addr = string.format('%s@%s', addr.user, addr.domain)
-  else
-    addr.addr = string.format('%s@', addr.user)
-  end
 
-  if addr.name and #addr.name > 0 then
-    addr.raw = string.format('"%s" <%s>', addr.name, addr.addr)
+    if addr.name and #addr.name > 0 then
+      addr.raw = string.format('"%s" <%s>', addr.name, addr.addr)
+    else
+      addr.raw = string.format('<%s>', addr.addr)
+    end
   else
-    addr.raw = string.format('<%s>', addr.addr)
+    -- Invalid address - don't modify
+    lua_util.debugm(N, rspamd_config,
+        'set_addr: invalid address user=%s domain=%s, not modifying',
+        addr.user or 'nil', addr.domain or 'nil')
   end
 end
 
