@@ -88,7 +88,7 @@ local function check_quantity_received (task)
       for _, h in ipairs(bad_hosts) do
         if string.find(hn, h) then
           task:insert_result(symbol_strict, 1, h)
-          break
+          return
         end
       end
     end
