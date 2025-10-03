@@ -22,6 +22,8 @@ Use one of the following tags at the beginning of commit messages:
 - `[Test]` - Test additions or modifications
 - `[Rules]` - Changes to spam detection rules
 
+Prefer `[Minor]` if a fix or a change is minor (e.g. whitespaces change or a missing nil check).
+
 ## Commit Message Examples
 
 **Version updates:**
