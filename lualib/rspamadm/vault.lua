@@ -49,6 +49,11 @@ parser:option "-o --output"
   yaml = "yaml",
 }
       :default "ucl"
+parser:option "-k --kv-version"
+      :description "Vault KV store version (1 or 2)"
+      :argname("<version>")
+      :convert(tonumber)
+      :default "1"
 
 parser:command "list ls l"
       :description "List elements in the vault"
@@ -123,11 +128,47 @@ local function highlight(str, color)
 end
 
 local function vault_url(opts, path)
+  local vault_path = opts.path
+  
+  -- For KV v2, we need to add 'data' to the path for read/write operations
+  if opts.kv_version == 2 then
+    -- Split the path to inject 'data' after the mount point
+    -- e.g., 'secret/dkim' becomes 'secret/data/dkim'
+    local mount_point = vault_path:match('^([^/]+)')
+    local subpath = vault_path:match('^[^/]+/?(.*)')
+    if subpath and subpath ~= '' then
+      vault_path = mount_point .. '/data/' .. subpath
+    else
+      vault_path = mount_point .. '/data'
+    end
+  end
+  
   if path then
-    return string.format('%s/v1/%s/%s', opts.addr, opts.path, path)
+    return string.format('%s/v1/%s/%s', opts.addr, vault_path, path)
   end
 
-  return string.format('%s/v1/%s', opts.addr, opts.path)
+  return string.format('%s/v1/%s', opts.addr, vault_path)
+end
+
+local function vault_url_metadata(opts, path)
+  -- For KV v2 metadata operations (like list)
+  local vault_path = opts.path
+  
+  if opts.kv_version == 2 then
+    local mount_point = vault_path:match('^([^/]+)')
+    local subpath = vault_path:match('^[^/]+/?(.*)')
+    if subpath and subpath ~= '' then
+      vault_path = mount_point .. '/metadata/' .. subpath
+    else
+      vault_path = mount_point .. '/metadata'
+    end
+  end
+  
+  if path then
+    return string.format('%s/v1/%s/%s', opts.addr, vault_path, path)
+  end
+
+  return string.format('%s/v1/%s', opts.addr, vault_path)
 end
 
 local function is_http_error(err, data)
@@ -198,7 +239,10 @@ local function show_handler(opts, domain)
     os.exit(1)
   else
     maybe_print_vault_data(opts, data.content, function(obj)
-      return obj.data.selectors
+      -- For KV v2, data is nested under obj.data.data
+      -- For KV v1, data is under obj.data
+      local vault_data = opts.kv_version == 2 and obj.data.data or obj.data
+      return vault_data.selectors
     end)
   end
 end
@@ -227,7 +271,8 @@ local function delete_handler(opts, domain)
 end
 
 local function list_handler(opts)
-  local uri = vault_url(opts)
+  -- For KV v2, list operations use the metadata endpoint
+  local uri = opts.kv_version == 2 and vault_url_metadata(opts) or vault_url(opts)
   local err, data = rspamd_http.request {
     config = rspamd_config,
     ev_base = rspamadm_ev_base,
@@ -259,7 +304,7 @@ local function create_and_push_key(opts, domain, existing)
   local uri = vault_url(opts, domain)
   local sk, pk = genkey(opts)
 
-  local res = {
+  local payload = {
     selectors = {
       [1] = {
         selector = opts.selector,
@@ -274,12 +319,15 @@ local function create_and_push_key(opts, domain, existing)
   }
 
   for _, sel in ipairs(existing) do
-    res.selectors[#res.selectors + 1] = sel
+    payload.selectors[#payload.selectors + 1] = sel
   end
 
   if opts.expire then
-    res.selectors[1].valid_end = os.time() + opts.expire * 3600 * 24
+    payload.selectors[1].valid_end = os.time() + opts.expire * 3600 * 24
   end
+
+  -- For KV v2, wrap the payload in a 'data' object
+  local res = opts.kv_version == 2 and { data = payload } or payload
 
   local err, data = rspamd_http.request {
     config = rspamd_config,
@@ -344,7 +392,10 @@ local function newkey_handler(opts, domain)
       os.exit(1)
     end
 
-    local elts = rep.data.selectors
+    -- For KV v2, data is nested under rep.data.data
+    -- For KV v1, data is under rep.data
+    local vault_data = opts.kv_version == 2 and rep.data.data or rep.data
+    local elts = vault_data and vault_data.selectors or nil
 
     if not elts then
       create_and_push_key(opts, domain, {})
@@ -365,7 +416,7 @@ end
 
 local function roll_handler(opts, domain)
   local uri = vault_url(opts, domain)
-  local res = {
+  local payload = {
     selectors = {}
   }
 
@@ -392,7 +443,10 @@ local function roll_handler(opts, domain)
       os.exit(1)
     end
 
-    local elts = rep.data.selectors
+    -- For KV v2, data is nested under rep.data.data
+    -- For KV v1, data is under rep.data
+    local vault_data = opts.kv_version == 2 and rep.data.data or rep.data
+    local elts = vault_data and vault_data.selectors or nil
 
     if not elts then
       printf("No keys to roll for domain %s", domain)
@@ -479,13 +533,16 @@ local function roll_handler(opts, domain)
           nelt.valid_end = os.time() + opts.expire * 3600 * 24
         end
 
-        table.insert(res.selectors, nelt)
+        table.insert(payload.selectors, nelt)
       end
       for _, k in ipairs(keys) do
-        table.insert(res.selectors, k)
+        table.insert(payload.selectors, k)
       end
     end
   end
+
+  -- For KV v2, wrap the payload in a 'data' object
+  local res = opts.kv_version == 2 and { data = payload } or payload
 
   -- We can now store res in the vault
   err, data = rspamd_http.request {
@@ -509,7 +566,7 @@ local function roll_handler(opts, domain)
     maybe_print_vault_data(opts, data.content)
     os.exit(1)
   else
-    for _, key in ipairs(res.selectors) do
+    for _, key in ipairs(payload.selectors) do
       if not key.valid_end or key.valid_end > os.time() + opts.ttl * 3600 * 24 then
         maybe_printf(opts, 'rolled key for: %s, new selector: %s', domain, key.selector)
         maybe_printf(opts, 'please place the corresponding public key as following:')
