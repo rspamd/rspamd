@@ -325,12 +325,23 @@ rspamd_http_map_process_next_check(struct rspamd_map *map,
 	static const time_t max_expires_interval = 8 * 3600;   /* 8 hours maximum */
 	static const time_t min_no_expires_interval = 10 * 60; /* 10 minutes minimum when no expires */
 	static const time_t liberal_mult = 10;                 /* Multiplier for liberal interval */
+	static const time_t max_valid_time = 365 * 24 * 3600;  /* 1 year max for overflow protection */
 	time_t next_check;
 
 	/*
 	 * Goal: Respect server-provided expiration while preventing abuse
 	 * Server controls refresh rate via Expires header, client cannot override aggressively
 	 */
+
+	/* Sanity check: detect overflow or absurdly invalid expires values */
+	if (expires > now) {
+		/* Check if expires would be more than max_valid_time in future without overflow */
+		if (expires > (time_t) (now + max_valid_time) || (expires - now) > max_valid_time) {
+			msg_warn_map("expires header is absurdly far in future (overflow?) for %s, ignoring",
+						 bk->uri);
+			expires = 0; /* Treat as no expires header */
+		}
+	}
 
 	if (expires > now) {
 		/* Server provided an Expires header */
@@ -636,7 +647,11 @@ http_map_finish(struct rspamd_http_connection *conn,
 			}
 			else {
 				msg_info_map("invalid expires header: %T, ignore it", expires_hdr);
-				map->next_check = 0;
+				/* Treat invalid expires as no expires header */
+				map->next_check = rspamd_http_map_process_next_check(map, bk, msg->date, 0,
+																	 (time_t) map->poll_timeout,
+																	 etag_hdr != NULL,
+																	 msg->last_modified != 0);
 			}
 		}
 		else if (etag_hdr != NULL || msg->last_modified != 0) {
@@ -828,7 +843,11 @@ http_map_finish(struct rspamd_http_connection *conn,
 			}
 			else {
 				msg_info_map("invalid expires header: %T, ignore it", expires_hdr);
-				map->next_check = 0;
+				/* Treat invalid expires as no expires header */
+				map->next_check = rspamd_http_map_process_next_check(map, bk, msg->date, 0,
+																	 (time_t) map->poll_timeout,
+																	 cbd->data->etag != NULL,
+																	 msg->last_modified != 0);
 				has_expires = false;
 			}
 		}
