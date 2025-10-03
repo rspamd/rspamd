@@ -1,0 +1,9 @@
+# Local domains list
+# One domain per line
+
+example.com
+mail.example.com
+internal.example.com
+
+# Comments are allowed
+# test.example.com (disabled)

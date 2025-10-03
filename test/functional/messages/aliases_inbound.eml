@@ -1,0 +1,8 @@
+From: external@foreign.com
+To: support@example.com
+Subject: Test inbound mail
+Message-ID: <test-inbound@example.com>
+Date: Mon, 01 Jan 2025 10:00:00 +0000
+
+This is a test message for inbound mail classification.
+Sender is external, recipient is local and should be resolved through alias.
