@@ -45,7 +45,7 @@ if confighelp then
       max_size = 20000000;
       # symbol to add (add it to metric if you want non-zero weight)
       symbol = "CLAM_VIRUS";
-      # type of scanner: "clamav", "fprot", "sophos" or "savapi"
+      # type of scanner: "clamav", "fprot", "sophos", "savapi", "metadefender", or "virustotal"
       type = "clamav";
       # For "savapi" you must also specify the following variable
       product_id = 12345;
