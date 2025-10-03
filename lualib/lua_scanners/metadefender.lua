@@ -134,13 +134,13 @@ local function metadefender_check(task, content, digest, rule, maybe_part)
 
           if res then
             local obj = parser:get_object()
-            
+
             -- MetaDefender API response structure:
             -- scan_results.scan_all_result_a: 'Clean', 'Infected', 'Suspicious'
             -- scan_results.scan_all_result_i: numeric result (0=clean)
             -- scan_results.total_detected_avs: number of engines detecting malware
             -- scan_results.total_avs: total number of engines
-            
+
             if not obj.scan_results then
               rspamd_logger.errx(task, 'invalid JSON reply: no scan_results field, body: %s', body)
               task:insert_result(rule.symbol_fail, 1.0, 'Bad JSON reply: no scan_results')
@@ -150,7 +150,7 @@ local function metadefender_check(task, content, digest, rule, maybe_part)
             local scan_results = obj.scan_results
             local detected = scan_results.total_detected_avs or 0
             local total = scan_results.total_avs or 0
-            
+
             if detected == 0 then
               cached = 'OK'
               if rule['log_clean'] then
@@ -176,7 +176,7 @@ local function metadefender_check(task, content, digest, rule, maybe_part)
                 if dyn_score < 0 or dyn_score > 1 then
                   dyn_score = 1.0
                 end
-                
+
                 local sopt = string.format("%s:%s/%s",
                     hash, detected, total)
                 common.yield_result(task, rule, sopt, dyn_score, nil, maybe_part)
