@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 --[[[
 -- @module metadefender
@@ -29,7 +29,6 @@ local common = require "lua_scanners/common"
 local N = 'metadefender'
 
 local function metadefender_config(opts)
-
   local default_conf = {
     name = N,
     url = 'https://api.metadefender.com/v4/hash',
@@ -44,10 +43,36 @@ local function metadefender_config(opts)
     scan_mime_parts = true,
     scan_text_mime = false,
     scan_image_mime = false,
-    apikey = nil, -- Required to set by user
+    apikey = nil,         -- Required to set by user
     -- Specific for metadefender
-    minimum_engines = 3, -- Minimum required to get scored
-    full_score_engines = 7, -- After this number we set max score
+    minimum_engines = 3,  -- Minimum required to get scored
+    -- Threshold-based categorization
+    low_category = 5,     -- Low threat: minimum_engines to low_category-1
+    medium_category = 10, -- Medium threat: low_category to medium_category-1
+    -- High threat: medium_category and above
+    -- Symbol categories
+    symbols = {
+      clean = {
+        symbol = 'METADEFENDER_CLEAN',
+        score = -0.5,
+        description = 'MetaDefender decided attachment to be clean'
+      },
+      low = {
+        symbol = 'METADEFENDER_LOW',
+        score = 2.0,
+        description = 'MetaDefender found low number of threats'
+      },
+      medium = {
+        symbol = 'METADEFENDER_MEDIUM',
+        score = 5.0,
+        description = 'MetaDefender found medium number of threats'
+      },
+      high = {
+        symbol = 'METADEFENDER_HIGH',
+        score = 8.0,
+        description = 'MetaDefender found high number of threats'
+      },
+    },
   }
 
   default_conf = lua_util.override_defaults(default_conf, opts)
@@ -102,17 +127,16 @@ local function metadefender_check(task, content, digest, rule, maybe_part)
         task:insert_result(rule.symbol_fail, 1.0, 'HTTP error: ' .. http_err)
       else
         local cached
-        local dyn_score
         -- Parse the response
         if code ~= 200 then
           if code == 404 then
             cached = 'OK'
             if rule['log_clean'] then
               rspamd_logger.infox(task, '%s: hash %s clean (not found)',
-                  rule.log_prefix, hash)
+                rule.log_prefix, hash)
             else
               lua_util.debugm(rule.name, task, '%s: hash %s clean (not found)',
-                  rule.log_prefix, hash)
+                rule.log_prefix, hash)
             end
           elseif code == 429 then
             -- Request rate limit exceeded
@@ -130,7 +154,7 @@ local function metadefender_check(task, content, digest, rule, maybe_part)
           local res, json_err = parser:parse_string(body)
 
           lua_util.debugm(rule.name, task, '%s: got reply data: "%s"',
-              rule.log_prefix, body)
+            rule.log_prefix, body)
 
           if res then
             local obj = parser:get_object()
@@ -152,48 +176,64 @@ local function metadefender_check(task, content, digest, rule, maybe_part)
             local total = scan_results.total_avs or 0
 
             if detected == 0 then
-              cached = 'OK'
               if rule['log_clean'] then
                 rspamd_logger.infox(task, '%s: hash %s clean',
-                    rule.log_prefix, hash)
+                  rule.log_prefix, hash)
               else
                 lua_util.debugm(rule.name, task, '%s: hash %s clean',
-                    rule.log_prefix, hash)
+                  rule.log_prefix, hash)
+              end
+              -- Insert CLEAN symbol
+              if rule.symbols and rule.symbols.clean then
+                local clean_sym = rule.symbols.clean.symbol or 'METADEFENDER_CLEAN'
+                local sopt = string.format("%s:0/%s", hash, total)
+                task:insert_result(clean_sym, 1.0, sopt)
+                -- Save with symbol name for proper cache retrieval
+                cached = string.format("%s\v%s", clean_sym, sopt)
+              else
+                cached = 'OK'
               end
             else
               if detected < rule.minimum_engines then
                 lua_util.debugm(rule.name, task, '%s: hash %s has not enough hits: %s where %s is min',
-                    rule.log_prefix, hash, detected, rule.minimum_engines)
+                  rule.log_prefix, hash, detected, rule.minimum_engines)
                 cached = 'OK'
               else
-                if detected >= rule.full_score_engines then
-                  dyn_score = 1.0
+                -- Determine category based on detection count
+                local category
+                local category_sym
+                local sopt = string.format("%s:%s/%s", hash, detected, total)
+
+                if detected >= rule.medium_category then
+                  category = 'high'
+                  category_sym = rule.symbols.high.symbol or 'METADEFENDER_HIGH'
+                elseif detected >= rule.low_category then
+                  category = 'medium'
+                  category_sym = rule.symbols.medium.symbol or 'METADEFENDER_MEDIUM'
                 else
-                  local norm_detected = detected - rule.minimum_engines
-                  dyn_score = norm_detected / (rule.full_score_engines - rule.minimum_engines)
+                  category = 'low'
+                  category_sym = rule.symbols.low.symbol or 'METADEFENDER_LOW'
                 end
 
-                if dyn_score < 0 or dyn_score > 1 then
-                  dyn_score = 1.0
-                end
+                rspamd_logger.infox(task, '%s: result - %s: "%s" - category: %s',
+                  rule.log_prefix, rule.detection_category .. 'found', sopt, category)
 
-                local sopt = string.format("%s:%s/%s",
-                    hash, detected, total)
-                common.yield_result(task, rule, sopt, dyn_score, nil, maybe_part)
-                cached = sopt
+                task:insert_result(category_sym, 1.0, sopt)
+                -- Save with symbol name for proper cache retrieval
+                cached = string.format("%s\v%s", category_sym, sopt)
               end
             end
           else
             -- not res
             rspamd_logger.errx(task, 'invalid JSON reply: %s, body: %s, headers: %s',
-                json_err, body, headers)
+              json_err, body, headers)
             task:insert_result(rule.symbol_fail, 1.0, 'Bad JSON reply: ' .. json_err)
             return
           end
         end
 
         if cached then
-          common.save_cache(task, digest, rule, cached, dyn_score, maybe_part)
+          common.save_cache(task, digest, rule, cached, 1.0, maybe_part)
         end
       end
     end
@@ -203,13 +243,11 @@ local function metadefender_check(task, content, digest, rule, maybe_part)
   end
 
   if common.condition_check_and_continue(task, content, rule, digest,
-      metadefender_check_uncached) then
+        metadefender_check_uncached) then
     return
   else
-
     metadefender_check_uncached()
   end
-
 end
 
 return {
