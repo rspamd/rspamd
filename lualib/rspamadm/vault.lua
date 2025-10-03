@@ -39,6 +39,11 @@ parser:option "-t --token"
 parser:option "-p --path"
       :description "Path to work with in the vault"
       :default "dkim"
+parser:option "--kv-version"
+      :description "Vault KV store version (1 or 2)"
+      :argname("<version>")
+      :convert(tonumber)
+      :default "2"
 parser:option "-o --output"
       :description "Output format ('ucl', 'json', 'json-compact', 'yaml')"
       :argname("<type>")
@@ -123,10 +128,22 @@ local function highlight(str, color)
 end
 
 local function vault_url(opts, path)
+  local kv_path = opts.path
+  
+  -- For KV v2, we need to add 'data' to the path
+  if opts.kv_version == 2 then
+    kv_path = opts.path .. '/data'
+  end
+  
   if path then
-    return string.format('%s/v1/%s/%s', opts.addr, opts.path, path)
+    return string.format('%s/v1/%s/%s', opts.addr, kv_path, path)
   end
 
+  -- For list operations with KV v2, use metadata endpoint
+  if opts.kv_version == 2 then
+    return string.format('%s/v1/%s/metadata', opts.addr, opts.path)
+  end
+  
   return string.format('%s/v1/%s', opts.addr, opts.path)
 end
 
@@ -198,7 +215,12 @@ local function show_handler(opts, domain)
     os.exit(1)
   else
     maybe_print_vault_data(opts, data.content, function(obj)
-      return obj.data.selectors
+      -- For KV v2, data is nested under obj.data.data
+      if opts.kv_version == 2 then
+        return obj.data and obj.data.data and obj.data.data.selectors
+      else
+        return obj.data.selectors
+      end
     end)
   end
 end
@@ -245,7 +267,12 @@ local function list_handler(opts)
     os.exit(1)
   else
     maybe_print_vault_data(opts, data.content, function(obj)
-      return obj.data.keys
+      -- For KV v2, data is nested under obj.data.data
+      if opts.kv_version == 2 then
+        return obj.data and obj.data.data and obj.data.data.keys
+      else
+        return obj.data.keys
+      end
     end)
   end
 end
@@ -281,6 +308,12 @@ local function create_and_push_key(opts, domain, existing)
     res.selectors[1].valid_end = os.time() + opts.expire * 3600 * 24
   end
 
+  -- For KV v2, wrap data in a 'data' field
+  local body_data = res
+  if opts.kv_version == 2 then
+    body_data = { data = res }
+  end
+  
   local err, data = rspamd_http.request {
     config = rspamd_config,
     ev_base = rspamadm_ev_base,
@@ -293,7 +326,7 @@ local function create_and_push_key(opts, domain, existing)
       ['X-Vault-Token'] = opts.token
     },
     body = {
-      ucl.to_format(res, 'json-compact')
+      ucl.to_format(body_data, 'json-compact')
     },
   }
 
@@ -344,7 +377,13 @@ local function newkey_handler(opts, domain)
       os.exit(1)
     end
 
-    local elts = rep.data.selectors
+    -- For KV v2, data is nested under rep.data.data
+    local vault_data = rep.data
+    if opts.kv_version == 2 and rep.data.data then
+      vault_data = rep.data.data
+    end
+    
+    local elts = vault_data.selectors
 
     if not elts then
       create_and_push_key(opts, domain, {})
@@ -392,7 +431,13 @@ local function roll_handler(opts, domain)
       os.exit(1)
     end
 
-    local elts = rep.data.selectors
+    -- For KV v2, data is nested under rep.data.data
+    local vault_data = rep.data
+    if opts.kv_version == 2 and rep.data.data then
+      vault_data = rep.data.data
+    end
+    
+    local elts = vault_data.selectors
 
     if not elts then
       printf("No keys to roll for domain %s", domain)
@@ -488,6 +533,12 @@ local function roll_handler(opts, domain)
   end
 
   -- We can now store res in the vault
+  -- For KV v2, wrap data in a 'data' field
+  local body_data = res
+  if opts.kv_version == 2 then
+    body_data = { data = res }
+  end
+  
   err, data = rspamd_http.request {
     config = rspamd_config,
     ev_base = rspamadm_ev_base,
@@ -500,7 +551,7 @@ local function roll_handler(opts, domain)
       ['X-Vault-Token'] = opts.token
     },
     body = {
-      ucl.to_format(res, 'json-compact')
+      ucl.to_format(body_data, 'json-compact')
     },
   }
 

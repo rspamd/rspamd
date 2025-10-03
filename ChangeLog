@@ -6,6 +6,7 @@
   * [Feature] Redis TLS: Configurable TLS connections in Redis backend
   * [Feature] Map helpers alignment: Enforce 64-byte alignment to prevent unaligned memory access
   * [Feature] Enhanced CLI for secretbox with additional security test coverage
+  * [Feature] Vault KV v2: Add support for Vault KV secrets engine version 2 with backward compatibility for v1
   * [Fix] MIME encoding: Major overhauls and multiple fixes for MIME encoding logic
   * [Fix] MIME encoding: Improved handling and decoding of UTF-8 in MIME headers
   * [Fix] Learning system: Numerous fixes to learn checks and autolearn flag handling
