@@ -242,7 +242,10 @@ local function show_handler(opts, domain)
       -- For KV v2, data is nested under obj.data.data
       -- For KV v1, data is under obj.data
       local vault_data = opts.kv_version == 2 and obj.data.data or obj.data
-      return vault_data.selectors
+      if vault_data then
+        return vault_data.selectors
+      end
+      return nil
     end)
   end
 end
