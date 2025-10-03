@@ -1,0 +1,76 @@
+# Example MetaDefender configuration
+# Copy relevant sections to local.d/antivirus.conf and customize
+
+metadefender {
+  # Required: Your MetaDefender API key from https://metadefender.opswat.com/
+  apikey = "YOUR_API_KEY_HERE";
+
+  # Main symbol name (for compatibility, usually not used directly)
+  symbol = "METADEFENDER";
+
+  # Scanner type - must be "metadefender"
+  type = "metadefender";
+
+  # Scan MIME parts separately instead of full message (recommended: true)
+  scan_mime_parts = true;
+
+  # Don't scan text or image MIME parts (saves API quota)
+  scan_text_mime = false;
+  scan_image_mime = false;
+
+  # Maximum file size to scan (20MB default)
+  max_size = 20000000;
+
+  # Log when files are clean (default: false to reduce noise)
+  log_clean = false;
+
+  # Minimum AV engines that must detect malware before flagging (default: 3)
+  # Lower value = more sensitive, may have more false positives
+  minimum_engines = 3;
+
+  # Threshold for low category (default: 5)
+  # Detections from minimum_engines to low_category-1 = LOW
+  low_category = 5;
+
+  # Threshold for medium category (default: 10)
+  # Detections from low_category to medium_category-1 = MEDIUM
+  # Detections >= medium_category = HIGH
+  medium_category = 10;
+
+  # HTTP request timeout in seconds
+  timeout = 5.0;
+
+  # Redis cache expiration (2 hours = 7200 seconds)
+  # Longer cache reduces API calls but may miss new detections
+  cache_expire = 7200;
+
+  # Symbol categories with scores (can be customized)
+  symbols = {
+    clean = {
+      symbol = "METADEFENDER_CLEAN";
+      score = -0.5;
+      description = "MetaDefender decided attachment to be clean";
+    };
+    low = {
+      symbol = "METADEFENDER_LOW";
+      score = 2.0;
+      description = "MetaDefender found low number of threats (3-4 engines)";
+    };
+    medium = {
+      symbol = "METADEFENDER_MEDIUM";
+      score = 5.0;
+      description = "MetaDefender found medium number of threats (5-9 engines)";
+    };
+    high = {
+      symbol = "METADEFENDER_HIGH";
+      score = 8.0;
+      description = "MetaDefender found high number of threats (10+ engines)";
+    };
+  }
+
+  # Optional: Force an action when malware is detected
+  # action = "reject";
+
+  # Optional: Custom message template
+  # message = '${SCANNER}: virus found: "${VIRUS}"';
+}

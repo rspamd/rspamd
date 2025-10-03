@@ -1,5 +1,5 @@
 --[[
-Copyright (c) 2022, Vsevolod Stakhov <vsevolod@rspamd.com>
+Copyright (c) 2025, Vsevolod Stakhov <vsevolod@rspamd.com>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,9 +15,9 @@ limitations under the License.
 ]] --
 
 --[[[
--- @module virustotal
--- This module contains Virustotal integration support
--- https://www.virustotal.com/
+-- @module metadefender
+-- This module contains MetaDefender Cloud integration support for hash lookups
+-- https://metadefender.opswat.com/
 --]]
 
 local lua_util = require "lua_util"
@@ -26,12 +26,12 @@ local rspamd_cryptobox_hash = require "rspamd_cryptobox_hash"
 local rspamd_logger = require "rspamd_logger"
 local common = require "lua_scanners/common"
 
-local N = 'virustotal'
+local N = 'metadefender'
 
-local function virustotal_config(opts)
+local function metadefender_config(opts)
   local default_conf = {
     name = N,
-    url = 'https://www.virustotal.com/vtapi/v2/file',
+    url = 'https://api.metadefender.com/v4/hash',
     timeout = 5.0,
     log_clean = false,
     retransmits = 1,
@@ -44,7 +44,7 @@ local function virustotal_config(opts)
     scan_text_mime = false,
     scan_image_mime = false,
     apikey = nil,         -- Required to set by user
-    -- Specific for virustotal
+    -- Specific for metadefender
     minimum_engines = 3,  -- Minimum required to get scored
     -- Threshold-based categorization
     low_category = 5,     -- Low threat: minimum_engines to low_category-1
@@ -53,24 +53,24 @@ local function virustotal_config(opts)
     -- Symbol categories
     symbols = {
       clean = {
-        symbol = 'VIRUSTOTAL_CLEAN',
+        symbol = 'METADEFENDER_CLEAN',
         score = -0.5,
-        description = 'VirusTotal decided attachment to be clean'
+        description = 'MetaDefender decided attachment to be clean'
       },
       low = {
-        symbol = 'VIRUSTOTAL_LOW',
+        symbol = 'METADEFENDER_LOW',
         score = 2.0,
-        description = 'VirusTotal found low number of threats'
+        description = 'MetaDefender found low number of threats'
       },
       medium = {
-        symbol = 'VIRUSTOTAL_MEDIUM',
+        symbol = 'METADEFENDER_MEDIUM',
         score = 5.0,
-        description = 'VirusTotal found medium number of threats'
+        description = 'MetaDefender found medium number of threats'
       },
       high = {
-        symbol = 'VIRUSTOTAL_HIGH',
+        symbol = 'METADEFENDER_HIGH',
         score = 8.0,
-        description = 'VirusTotal found high number of threats'
+        description = 'MetaDefender found high number of threats'
       },
     },
   }
@@ -90,7 +90,7 @@ local function virustotal_config(opts)
   end
 
   if not default_conf.apikey then
-    rspamd_logger.errx(rspamd_config, 'no apikey defined for virustotal, disable checks')
+    rspamd_logger.errx(rspamd_config, 'no apikey defined for metadefender, disable checks')
 
     return nil
   end
@@ -99,14 +99,14 @@ local function virustotal_config(opts)
   return default_conf
 end
 
-local function virustotal_check(task, content, digest, rule, maybe_part)
-  local function virustotal_check_uncached()
+local function metadefender_check(task, content, digest, rule, maybe_part)
+  local function metadefender_check_uncached()
     local function make_url(hash)
-      return string.format('%s/report?apikey=%s&resource=%s',
-        rule.url, rule.apikey, hash)
+      return string.format('%s/%s', rule.url, hash)
     end
 
-    local hash = rspamd_cryptobox_hash.create_specific('md5')
+    -- MetaDefender uses SHA256 hash
+    local hash = rspamd_cryptobox_hash.create_specific('sha256')
     hash:update(content)
     hash = hash:hex()
 
@@ -116,11 +116,15 @@ local function virustotal_check(task, content, digest, rule, maybe_part)
       task = task,
       url = url,
       timeout = rule.timeout,
+      headers = {
+        ['apikey'] = rule.apikey,
+      }
     }
 
-    local function vt_http_callback(http_err, code, body, headers)
+    local function md_http_callback(http_err, code, body, headers)
       if http_err then
         rspamd_logger.errx(task, 'HTTP error: %s, body: %s, headers: %s', http_err, body, headers)
+        task:insert_result(rule.symbol_fail, 1.0, 'HTTP error: ' .. http_err)
       else
         local cached
         -- Parse the response
@@ -134,9 +138,9 @@ local function virustotal_check(task, content, digest, rule, maybe_part)
               lua_util.debugm(rule.name, task, '%s: hash %s clean (not found)',
                 rule.log_prefix, hash)
             end
-          elseif code == 204 then
+          elseif code == 429 then
             -- Request rate limit exceeded
-            rspamd_logger.infox(task, 'virustotal request rate limit exceeded')
+            rspamd_logger.infox(task, 'metadefender request rate limit exceeded')
             task:insert_result(rule.symbol_fail, 1.0, 'rate limit exceeded')
             return
           else
@@ -154,76 +158,61 @@ local function virustotal_check(task, content, digest, rule, maybe_part)
 
           if res then
             local obj = parser:get_object()
-            if not obj.positives or type(obj.positives) ~= 'number' then
-              if obj.response_code then
-                if obj.response_code == 0 then
-                  if rule['log_clean'] then
-                    rspamd_logger.infox(task, '%s: hash %s clean (not found)',
-                      rule.log_prefix, hash)
-                  else
-                    lua_util.debugm(rule.name, task, '%s: hash %s clean (not found)',
-                      rule.log_prefix, hash)
-                  end
-                  -- Insert CLEAN symbol
-                  if rule.symbols and rule.symbols.clean then
-                    local clean_sym = rule.symbols.clean.symbol or 'VIRUSTOTAL_CLEAN'
-                    local sopt = string.format("%s:0", hash)
-                    task:insert_result(clean_sym, 1.0, sopt)
-                    -- Save with symbol name for proper cache retrieval
-                    cached = string.format("%s\v%s", clean_sym, sopt)
-                  else
-                    cached = 'OK'
-                  end
-                else
-                  rspamd_logger.errx(task, 'invalid JSON reply: %s, body: %s, headers: %s',
-                    'bad response code: ' .. tostring(obj.response_code), body, headers)
-                  task:insert_result(rule.symbol_fail, 1.0, 'Bad JSON reply: no `positives` element')
-                  return
-                end
+
+            -- MetaDefender API response structure:
+            -- scan_results.scan_all_result_a: 'Clean', 'Infected', 'Suspicious'
+            -- scan_results.scan_all_result_i: numeric result (0=clean)
+            -- scan_results.total_detected_avs: number of engines detecting malware
+            -- scan_results.total_avs: total number of engines
+
+            if not obj.scan_results then
+              rspamd_logger.errx(task, 'invalid JSON reply: no scan_results field, body: %s', body)
+              task:insert_result(rule.symbol_fail, 1.0, 'Bad JSON reply: no scan_results')
+              return
+            end
+
+            local scan_results = obj.scan_results
+            local detected = scan_results.total_detected_avs or 0
+            local total = scan_results.total_avs or 0
+
+            if detected == 0 then
+              if rule['log_clean'] then
+                rspamd_logger.infox(task, '%s: hash %s clean',
+                  rule.log_prefix, hash)
               else
-                rspamd_logger.errx(task, 'invalid JSON reply: %s, body: %s, headers: %s',
-                  'no response_code', body, headers)
-                task:insert_result(rule.symbol_fail, 1.0, 'Bad JSON reply: no `positives` element')
-                return
+                lua_util.debugm(rule.name, task, '%s: hash %s clean',
+                  rule.log_prefix, hash)
+              end
+              -- Insert CLEAN symbol
+              if rule.symbols and rule.symbols.clean then
+                local clean_sym = rule.symbols.clean.symbol or 'METADEFENDER_CLEAN'
+                local sopt = string.format("%s:0/%s", hash, total)
+                task:insert_result(clean_sym, 1.0, sopt)
+                -- Save with symbol name for proper cache retrieval
+                cached = string.format("%s\v%s", clean_sym, sopt)
+              else
+                cached = 'OK'
               end
             else
-              if obj.positives == 0 then
-                if rule['log_clean'] then
-                  rspamd_logger.infox(task, '%s: hash %s clean',
-                    rule.log_prefix, hash)
-                else
-                  lua_util.debugm(rule.name, task, '%s: hash %s clean',
-                    rule.log_prefix, hash)
-                end
-                -- Insert CLEAN symbol
-                if rule.symbols and rule.symbols.clean then
-                  local clean_sym = rule.symbols.clean.symbol or 'VIRUSTOTAL_CLEAN'
-                  local sopt = string.format("%s:0/%s", hash, obj.total or 0)
-                  task:insert_result(clean_sym, 1.0, sopt)
-                  -- Save with symbol name for proper cache retrieval
-                  cached = string.format("%s\v%s", clean_sym, sopt)
-                else
-                  cached = 'OK'
-                end
-              elseif obj.positives < rule.minimum_engines then
+              if detected < rule.minimum_engines then
                 lua_util.debugm(rule.name, task, '%s: hash %s has not enough hits: %s where %s is min',
-                  rule.log_prefix, hash, obj.positives, rule.minimum_engines)
+                  rule.log_prefix, hash, detected, rule.minimum_engines)
                 cached = 'OK'
               else
                 -- Determine category based on detection count
                 local category
                 local category_sym
-                local sopt = string.format("%s:%s/%s", hash, obj.positives, obj.total)
+                local sopt = string.format("%s:%s/%s", hash, detected, total)
 
-                if obj.positives >= rule.medium_category then
+                if detected >= rule.medium_category then
                   category = 'high'
-                  category_sym = rule.symbols.high.symbol or 'VIRUSTOTAL_HIGH'
-                elseif obj.positives >= rule.low_category then
+                  category_sym = rule.symbols.high.symbol or 'METADEFENDER_HIGH'
+                elseif detected >= rule.low_category then
                   category = 'medium'
-                  category_sym = rule.symbols.medium.symbol or 'VIRUSTOTAL_MEDIUM'
+                  category_sym = rule.symbols.medium.symbol or 'METADEFENDER_MEDIUM'
                 else
                   category = 'low'
-                  category_sym = rule.symbols.low.symbol or 'VIRUSTOTAL_LOW'
+                  category_sym = rule.symbols.low.symbol or 'METADEFENDER_LOW'
                 end
 
                 rspamd_logger.infox(task, '%s: result - %s: "%s" - category: %s',
@@ -249,22 +238,22 @@ local function virustotal_check(task, content, digest, rule, maybe_part)
       end
     end
 
-    request_data.callback = vt_http_callback
+    request_data.callback = md_http_callback
     http.request(request_data)
   end
 
   if common.condition_check_and_continue(task, content, rule, digest,
-        virustotal_check_uncached) then
+        metadefender_check_uncached) then
     return
   else
-    virustotal_check_uncached()
+    metadefender_check_uncached()
   end
 end
 
 return {
   type = 'antivirus',
-  description = 'Virustotal integration',
-  configure = virustotal_config,
-  check = virustotal_check,
+  description = 'MetaDefender Cloud integration',
+  configure = metadefender_config,
+  check = metadefender_check,
   name = N
 }

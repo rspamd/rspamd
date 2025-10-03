@@ -27,8 +27,8 @@ local N = "antivirus"
 
 if confighelp then
   rspamd_config:add_example(nil, 'antivirus',
-      "Check messages for viruses",
-      [[
+    "Check messages for viruses",
+    [[
   antivirus {
     # multiple scanners could be checked, for each we create a configuration block with an arbitrary name
     clamav {
@@ -75,7 +75,7 @@ end
 
 -- Encode as base32 in the source to avoid crappy stuff
 local eicar_pattern = rspamd_util.decode_base32(
-    [[akp6woykfbonrepmwbzyfpbmibpone3mj3pgwbffzj9e1nfjdkorisckwkohrnfe1nt41y3jwk1cirjki4w4nkieuni4ndfjcktnn1yjmb1wn]]
+  [[akp6woykfbonrepmwbzyfpbmibpone3mj3pgwbffzj9e1nfjdkorisckwkohrnfe1nt41y3jwk1cirjki4w4nkieuni4ndfjcktnn1yjmb1wn]]
 )
 
 local function add_antivirus_rule(sym, opts)
@@ -91,7 +91,7 @@ local function add_antivirus_rule(sym, opts)
 
   if not cfg then
     rspamd_logger.errx(rspamd_config, 'unknown antivirus type: %s',
-        opts.type)
+      opts.type)
     return nil
   end
 
@@ -109,7 +109,7 @@ local function add_antivirus_rule(sym, opts)
   if opts.attachments_only ~= nil then
     opts.scan_mime_parts = opts.attachments_only
     rspamd_logger.warnx(rspamd_config, '%s [%s]: Using attachments_only is deprecated. ' ..
-        'Please use scan_mime_parts = %s instead', opts.symbol, opts.type, opts.attachments_only)
+      'Please use scan_mime_parts = %s instead', opts.symbol, opts.type, opts.attachments_only)
   end
   -- WORKAROUND for deprecated attachments_only
 
@@ -123,9 +123,12 @@ local function add_antivirus_rule(sym, opts)
   rule.symbol_encrypted = opts.symbol_encrypted
   rule.redis_params = redis_params
 
+  -- Store rule for symbol registration later
+  rule.symbol_main = opts.symbol
+
   if not rule then
     rspamd_logger.errx(rspamd_config, 'cannot configure %s for %s',
-        opts.type, opts.symbol)
+      opts.type, opts.symbol)
     return nil
   end
 
@@ -133,10 +136,10 @@ local function add_antivirus_rule(sym, opts)
   rule.patterns_fail = common.create_regex_table(opts.patterns_fail or {})
 
   lua_redis.register_prefix(rule.prefix .. '_*', N,
-      string.format('Antivirus cache for rule "%s"',
-          rule.type), {
-        type = 'string',
-      })
+    string.format('Antivirus cache for rule "%s"',
+      rule.type), {
+      type = 'string',
+    })
 
   -- if any mime_part filter defined, do not scan all attachments
   if opts.mime_parts_filter_regex ~= nil
@@ -157,9 +160,9 @@ local function add_antivirus_rule(sym, opts)
     rule.whitelist = rspamd_config:add_hash_map(opts.whitelist)
   end
 
-  return function(task)
+  -- Return both callback and rule for symbol registration
+  local cb = function(task)
     if rule.scan_mime_parts then
-
       fun.each(function(p)
         local content = p:get_content()
         local clen = #content
@@ -173,18 +176,19 @@ local function add_antivirus_rule(sym, opts)
 
             if clen == #opts.eicar_fake_pattern and content == opts.eicar_fake_pattern then
               rspamd_logger.infox(task, 'found eicar fake replacement part in the part (filename="%s")',
-                  p:get_filename())
+                p:get_filename())
               content = eicar_pattern
             end
           end
           cfg.check(task, content, p:get_digest(), rule, p)
         end
       end, common.check_parts_match(task, rule))
-
     else
       cfg.check(task, task:get_content(), task:get_digest(), rule)
     end
   end
+
+  return cb, rule
 end
 
 -- Registration
@@ -200,15 +204,15 @@ if opts and type(opts) == 'table' then
       if not m.name then
         m.name = k
       end
-      local cb = add_antivirus_rule(k, m)
+      local cb, rule = add_antivirus_rule(k, m)
 
       if not cb then
         rspamd_logger.errx(rspamd_config, 'cannot add rule: "' .. k .. '"')
         lua_util.config_utils.push_config_error(N, 'cannot add AV rule: "' .. k .. '"')
       else
-        rspamd_logger.infox(rspamd_config, 'added antivirus engine %s -> %s', k, m.symbol)
+        rspamd_logger.infox(rspamd_config, 'added antivirus engine %s -> %s', k, rule.symbol or m.symbol)
         local t = {
-          name = m.symbol,
+          name = rule.symbol or m.symbol,
           callback = cb,
           score = 0.0,
           group = N
@@ -233,27 +237,27 @@ if opts and type(opts) == 'table' then
 
         rspamd_config:register_symbol({
           type = 'virtual',
-          name = m['symbol_fail'],
+          name = rule.symbol_fail or m['symbol_fail'],
           parent = id,
           score = 0.0,
           group = N
         })
         rspamd_config:register_symbol({
           type = 'virtual',
-          name = m['symbol_encrypted'],
+          name = rule.symbol_encrypted or m['symbol_encrypted'],
           parent = id,
           score = 0.0,
           group = N
         })
         rspamd_config:register_symbol({
           type = 'virtual',
-          name = m['symbol_macro'],
+          name = rule.symbol_macro or m['symbol_macro'],
           parent = id,
           score = 0.0,
           group = N
         })
         has_valid = true
-        if type(m['patterns']) == 'table' then
+        if type(rule.patterns) == 'table' and type(m['patterns']) == 'table' then
           if m['patterns'][1] then
             for _, p in ipairs(m['patterns']) do
               if type(p) == 'table' then
@@ -320,6 +324,48 @@ if opts and type(opts) == 'table' then
               })
             end
           end
+        end
+        if rule.symbols then
+          rspamd_logger.infox(rspamd_config, 'registering category symbols for %s', rule.name)
+          local function reg_symbols(tbl)
+            for _, sym in pairs(tbl) do
+              if type(sym) == 'string' then
+                rspamd_logger.infox(rspamd_config, 'registering symbol: %s (string)', sym)
+                rspamd_config:register_symbol({
+                  type = 'virtual',
+                  name = sym,
+                  parent = id,
+                  group = N
+                })
+              elseif type(sym) == 'table' then
+                if sym.symbol then
+                  rspamd_logger.infox(rspamd_config, 'registering symbol: %s with score %s',
+                    sym.symbol, sym.score or 'default')
+                  rspamd_config:register_symbol({
+                    type = 'virtual',
+                    name = sym.symbol,
+                    parent = id,
+                    group = N
+                  })
+
+                  if sym.score then
+                    rspamd_config:set_metric_symbol({
+                      name = sym.symbol,
+                      score = sym.score,
+                      description = sym.description,
+                      group = sym.group or N,
+                    })
+                  end
+                else
+                  reg_symbols(sym)
+                end
+              end
+            end
+          end
+
+          reg_symbols(rule.symbols)
+        else
+          rspamd_logger.infox(rspamd_config, 'no category symbols defined for %s', rule.name)
         end
         if m['score'] then
           -- Register metric symbol
