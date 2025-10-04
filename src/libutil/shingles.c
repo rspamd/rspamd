@@ -64,7 +64,7 @@ rspamd_shingles_keys_new(void)
 	return k;
 }
 
-static unsigned char **
+unsigned char **
 rspamd_shingles_get_keys_cached(const unsigned char key[SHINGLES_KEY_SIZE])
 {
 	static GHashTable *ht = NULL;

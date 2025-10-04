@@ -149,6 +149,11 @@ double rspamd_html_shingles_compare(const struct rspamd_html_shingle *a,
 uint64_t rspamd_shingles_default_filter(uint64_t *input, gsize count,
 										int shno, const unsigned char *key, gpointer ud);
 
+/**
+ * Get cached shingle keys (internal helper, exposed for HTML shingles)
+ */
+unsigned char **rspamd_shingles_get_keys_cached(const unsigned char key[16]);
+
 #ifdef __cplusplus
 }
 #endif
