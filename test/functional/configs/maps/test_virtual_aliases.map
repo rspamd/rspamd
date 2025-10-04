@@ -1,0 +1,14 @@
+# Virtual aliases (Postfix virtual format)
+# Format: source target
+
+# Simple virtual alias
+contact@example.com support@example.com
+
+# Domain alias
+info@test.example.com info@example.com
+
+# Virtual to real mapping
+virtual@example.com real-user@internal.example.com
+
+# Catchall example
+@catchall.example.com catchall-box@example.com

@@ -12,26 +12,28 @@ All commits in the Rspamd project follow a structured format with tags that indi
 
 Use one of the following tags at the beginning of commit messages:
 
-- `[Feature]` - New features and capabilities
-- `[Fix]` - Bug fixes and corrections
-- `[CritFix]` - Critical bug fixes that need immediate attention
-- `[Minor]` - Minor changes, tweaks, or version updates
-- `[Project]` - Project-wide changes, refactoring, or infrastructure updates
-- `[Rework]` - Major reworking of existing functionality
-- `[Conf]` - Configuration changes or updates
-- `[Test]` - Test additions or modifications
-- `[Rules]` - Changes to spam detection rules
+-   `[Feature]` - New features and capabilities
+-   `[Fix]` - Bug fixes and corrections
+-   `[CritFix]` - Critical bug fixes that need immediate attention
+-   `[Minor]` - Minor changes, tweaks, or version updates
+-   `[Project]` - Project-wide changes, refactoring, or infrastructure updates
+-   `[Rework]` - Major reworking of existing functionality
+-   `[Conf]` - Configuration changes or updates
+-   `[Test]` - Test additions or modifications
+-   `[Rules]` - Changes to spam detection rules
 
 Prefer `[Minor]` if a fix or a change is minor (e.g. whitespaces change or a missing nil check).
 
 ## Commit Message Examples
 
 **Version updates:**
+
 ```
 [Minor] Update version of rspamd to X.Y.Z
 ```
 
 **Single-line changes:**
+
 ```
 [Fix] Fix memory leak in dkim module
 [Feature] Add support for encrypted maps
@@ -39,6 +41,7 @@ Prefer `[Minor]` if a fix or a change is minor (e.g. whitespaces change or a mis
 ```
 
 **Multi-line changes (for releases or complex changes):**
+
 ```
 Release X.Y.Z
 
@@ -52,9 +55,9 @@ Release X.Y.Z
 
 **All commits and tags MUST be signed with GPG:**
 
-- Use `git commit -S` to sign commits
-- Use `git tag -s <tagname>` to sign tags
-- Verify signatures with `git log --show-signature` or `git tag -v <tagname>`
+-   Use `git commit -S` to sign commits
+-   Use `git tag -s <tagname>` to sign tags
+-   Verify signatures with `git log --show-signature` or `git tag -v <tagname>`
 
 ## Release Process
 
@@ -70,10 +73,11 @@ X.Y.Z: DD MMM YYYY
 ```
 
 Format rules:
-- Date format: `DD MMM YYYY` (e.g., `30 Sep 2025`)
-- Each entry starts with `  * [Tag]` (two spaces, asterisk, space, tag)
-- Group entries by tag type
-- Keep descriptions concise but informative
+
+-   Date format: `DD MMM YYYY` (e.g., `30 Sep 2025`)
+-   Each entry starts with `  * [Tag]` (two spaces, asterisk, space, tag)
+-   Group entries by tag type
+-   Keep descriptions concise but informative
 
 ### 2. Create Release Commit
 
@@ -130,19 +134,19 @@ set(RSPAMD_VERSION_MINOR Y)
 set(RSPAMD_VERSION_PATCH Z)
 ```
 
-- **MAJOR**: Incompatible API changes or major breaking changes
-- **MINOR**: New features in a backward-compatible manner
-- **PATCH**: Backward-compatible bug fixes
+-   **MAJOR**: Incompatible API changes or major breaking changes
+-   **MINOR**: New features in a backward-compatible manner
+-   **PATCH**: Backward-compatible bug fixes
 
 ## Pre-commit Hooks
 
-- If pre-commit hooks fail on unrelated issues, use `--no-verify` flag
-- Only use `--no-verify` when necessary and ensure code quality manually
-- Pre-commit hooks check:
-  - Trailing whitespace
-  - Line endings
-  - ClangFormat
-  - LuaCheck
+-   If pre-commit hooks fail on unrelated issues, use `--no-verify` flag
+-   Only use `--no-verify` when necessary and ensure code quality manually
+-   Pre-commit hooks check:
+    -   Trailing whitespace
+    -   Line endings
+    -   ClangFormat
+    -   LuaCheck
 
 ## General Guidelines
 
