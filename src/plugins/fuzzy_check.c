@@ -37,6 +37,7 @@
 #include "libmime/images.h"
 #include "libserver/worker_util.h"
 #include "libserver/mempool_vars_internal.h"
+#include "libserver/html/html_features.h"
 #include "fuzzy_wire.h"
 #include "utlist.h"
 #include "ottery.h"
@@ -99,7 +100,7 @@ struct fuzzy_rule {
 	gboolean skip_unknown;
 	gboolean no_share;
 	gboolean no_subject;
-	gboolean html_shingles; /* Enable HTML fuzzy hashing */
+	gboolean html_shingles;     /* Enable HTML fuzzy hashing */
 	unsigned int min_html_tags; /* Minimum tags for HTML hash */
 	int learn_condition_cb;
 	uint32_t retransmits;
