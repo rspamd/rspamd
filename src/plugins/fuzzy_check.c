@@ -94,10 +94,13 @@ struct fuzzy_rule {
 	struct rspamd_cryptobox_pubkey *peer_key;
 	double max_score;
 	double weight_threshold;
+	double html_weight; /* Weight multiplier for HTML hashes (default 1.0) */
 	enum fuzzy_rule_mode mode;
 	gboolean skip_unknown;
 	gboolean no_share;
 	gboolean no_subject;
+	gboolean html_shingles; /* Enable HTML fuzzy hashing */
+	unsigned int min_html_tags; /* Minimum tags for HTML hash */
 	int learn_condition_cb;
 	uint32_t retransmits;
 	struct rspamd_hash_map_helper *skip_map;
@@ -127,7 +130,8 @@ enum fuzzy_result_type {
 	FUZZY_RESULT_TXT,
 	FUZZY_RESULT_IMG,
 	FUZZY_RESULT_CONTENT,
-	FUZZY_RESULT_BIN
+	FUZZY_RESULT_BIN,
+	FUZZY_RESULT_HTML
 };
 
 struct fuzzy_client_result {
@@ -174,10 +178,12 @@ struct fuzzy_learn_session {
 #define FUZZY_CMD_FLAG_SENT (1 << 1)
 #define FUZZY_CMD_FLAG_IMAGE (1 << 2)
 #define FUZZY_CMD_FLAG_CONTENT (1 << 3)
+#define FUZZY_CMD_FLAG_HTML (1 << 4)
 
 #define FUZZY_CHECK_FLAG_NOIMAGES (1 << 0)
 #define FUZZY_CHECK_FLAG_NOATTACHMENTS (1 << 1)
 #define FUZZY_CHECK_FLAG_NOTEXT (1 << 2)
+#define FUZZY_CHECK_FLAG_NOHTML (1 << 3)
 
 struct fuzzy_cmd_io {
 	uint32_t tag;
@@ -340,6 +346,9 @@ fuzzy_rule_new(const char *default_symbol, rspamd_mempool_t *pool)
 								  rule->mappings);
 	rule->mode = fuzzy_rule_read_write;
 	rule->weight_threshold = NAN;
+	rule->html_weight = 1.0;
+	rule->html_shingles = FALSE;
+	rule->min_html_tags = 10;
 
 	return rule;
 }
@@ -718,6 +727,18 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 
 	if ((value = ucl_object_lookup(obj, "weight_threshold")) != NULL) {
 		rule->weight_threshold = ucl_object_todouble(value);
+	}
+
+	if ((value = ucl_object_lookup(obj, "html_shingles")) != NULL) {
+		rule->html_shingles = ucl_object_toboolean(value);
+	}
+
+	if ((value = ucl_object_lookup(obj, "min_html_tags")) != NULL) {
+		rule->min_html_tags = ucl_object_toint(value);
+	}
+
+	if ((value = ucl_object_lookup(obj, "html_weight")) != NULL) {
+		rule->html_weight = ucl_object_todouble(value);
 	}
 
 	/*
@@ -2074,6 +2095,139 @@ fuzzy_cmd_from_text_part(struct rspamd_task *task,
 	return io;
 }
 
+/*
+ * Create fuzzy command from HTML structure (if part is HTML)
+ */
+static struct fuzzy_cmd_io *
+fuzzy_cmd_from_html_part(struct rspamd_task *task,
+						 struct fuzzy_rule *rule,
+						 int c,
+						 int flag,
+						 uint32_t weight,
+						 struct rspamd_mime_text_part *part,
+						 struct rspamd_mime_part *mp)
+{
+	struct rspamd_fuzzy_shingle_cmd *shcmd = NULL;
+	struct rspamd_fuzzy_encrypted_shingle_cmd *encshcmd = NULL;
+	struct rspamd_cached_shingles *cached = NULL;
+	struct rspamd_html_shingle *html_sh = NULL;
+	struct fuzzy_cmd_io *io;
+	unsigned int additional_length;
+	unsigned char *additional_data;
+
+	/* Check if HTML shingles are enabled for this rule */
+	if (!rule->html_shingles) {
+		return NULL;
+	}
+
+	/* Check if this is an HTML part */
+	if (!IS_TEXT_PART_HTML(part) || part->html == NULL) {
+		return NULL;
+	}
+
+	/* Check minimum tags threshold */
+	if (part->html_features && part->html_features->tags_count < rule->min_html_tags) {
+		msg_debug_fuzzy_check("HTML part has %d tags, less than minimum %d",
+							  part->html_features->tags_count, rule->min_html_tags);
+		return NULL;
+	}
+
+	cached = fuzzy_cmd_get_cached(rule, task, mp);
+
+	if (cached) {
+		/* Copy from cache */
+		additional_length = cached->additional_length;
+		additional_data = cached->additional_data;
+
+		if (cached->sh) {
+			encshcmd = rspamd_mempool_alloc0(task->task_pool,
+											 sizeof(*encshcmd) + additional_length);
+			shcmd = &encshcmd->cmd;
+			memcpy(&shcmd->sgl, cached->sh, sizeof(struct rspamd_shingle));
+			memcpy(shcmd->basic.digest, cached->digest, sizeof(cached->digest));
+			memcpy(((unsigned char *) encshcmd) + sizeof(*encshcmd), additional_data,
+				   additional_length);
+			shcmd->basic.shingles_count = RSPAMD_SHINGLE_SIZE;
+		}
+		else {
+			return NULL;
+		}
+	}
+	else {
+		/* Generate HTML shingles */
+		additional_length = fuzzy_cmd_extension_length(task, rule);
+		cached = rspamd_mempool_alloc0(task->task_pool, sizeof(*cached) + additional_length);
+		cached->additional_length = additional_length;
+		cached->additional_data = ((unsigned char *) cached) + sizeof(*cached);
+
+		if (additional_length > 0) {
+			fuzzy_cmd_write_extensions(task, rule, cached->additional_data, additional_length);
+		}
+
+		encshcmd = rspamd_mempool_alloc0(task->task_pool,
+										 sizeof(*encshcmd) + additional_length);
+		shcmd = &encshcmd->cmd;
+
+		msg_debug_fuzzy_check("generating HTML shingles for part with %d tags",
+							  part->html_features ? part->html_features->tags_count : 0);
+
+		html_sh = rspamd_shingles_from_html(part->html,
+											rule->shingles_key->str, task->task_pool,
+											rspamd_shingles_default_filter, NULL,
+											rule->alg);
+
+		if (html_sh != NULL) {
+			/* Use structure shingles for fuzzy matching */
+			memcpy(&shcmd->sgl, &html_sh->structure_shingles, sizeof(struct rspamd_shingle));
+			/* Use direct hash as digest for exact matching */
+			memcpy(shcmd->basic.digest, html_sh->direct_hash, sizeof(shcmd->basic.digest));
+			shcmd->basic.shingles_count = RSPAMD_SHINGLE_SIZE;
+
+			/* Cache results */
+			cached->sh = &html_sh->structure_shingles;
+			memcpy(cached->digest, html_sh->direct_hash, sizeof(cached->digest));
+			additional_data = ((unsigned char *) encshcmd) + sizeof(*encshcmd);
+			memcpy(additional_data, cached->additional_data, additional_length);
+		}
+		else {
+			/* No HTML shingles generated */
+			return NULL;
+		}
+
+		fuzzy_cmd_set_cached(rule, task, mp, cached);
+	}
+
+	io = rspamd_mempool_alloc(task->task_pool, sizeof(*io));
+	io->part = mp;
+
+	shcmd->basic.tag = ottery_rand_uint32();
+	shcmd->basic.cmd = c;
+	shcmd->basic.version = RSPAMD_FUZZY_PLUGIN_VERSION;
+
+	if (c != FUZZY_CHECK) {
+		shcmd->basic.flag = flag;
+		shcmd->basic.value = weight;
+	}
+
+	io->tag = shcmd->basic.tag;
+	io->flags = FUZZY_CMD_FLAG_HTML;
+	memcpy(&io->cmd, &shcmd->basic, sizeof(io->cmd));
+
+	if (rule->peer_key) {
+		/* Encrypt data */
+		fuzzy_encrypt_cmd(rule, &encshcmd->hdr, (unsigned char *) shcmd,
+						  sizeof(*shcmd) + additional_length);
+		io->io.iov_base = encshcmd;
+		io->io.iov_len = sizeof(*encshcmd) + additional_length;
+	}
+	else {
+		io->io.iov_base = shcmd;
+		io->io.iov_len = sizeof(*shcmd) + additional_length;
+	}
+
+	return io;
+}
+
 #if 0
 static struct fuzzy_cmd_io *
 fuzzy_cmd_from_image_part (struct fuzzy_rule *rule,
@@ -2442,6 +2596,15 @@ fuzzy_insert_result(struct fuzzy_client_session *session,
 
 			type = "img";
 			res->type = FUZZY_RESULT_IMG;
+		}
+		else if ((io->flags & FUZZY_CMD_FLAG_HTML)) {
+			/* HTML structural hash */
+			nval *= sqrtf(rep->v1.prob);
+			/* Apply HTML weight multiplier from rule config */
+			nval *= session->rule->html_weight;
+
+			type = "html";
+			res->type = FUZZY_RESULT_HTML;
 		}
 		else {
 			/* Calc real probability */
@@ -3095,6 +3258,9 @@ fuzzy_controller_io_callback(int fd, short what, void *arg)
 					if ((io->flags & FUZZY_CMD_FLAG_IMAGE)) {
 						ftype = "img";
 					}
+					else if ((io->flags & FUZZY_CMD_FLAG_HTML)) {
+						ftype = "html";
+					}
 					else if (io->flags & FUZZY_CMD_FLAG_CONTENT) {
 						ftype = "content";
 					}
@@ -3340,6 +3506,19 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 												  !fuzzy_check,
 												  part,
 												  mime_part);
+
+					/* Try HTML fuzzy hash if enabled and text hash generation succeeded/failed */
+					if (rule->html_shingles && !(flags & FUZZY_CHECK_FLAG_NOHTML)) {
+						struct fuzzy_cmd_io *html_io;
+
+						html_io = fuzzy_cmd_from_html_part(task, rule, c, flag, value,
+														   part, mime_part);
+
+						if (html_io) {
+							/* Add HTML hash as separate command */
+							g_ptr_array_add(res, html_io);
+						}
+					}
 				}
 				else if (mime_part->part_type == RSPAMD_MIME_PART_IMAGE &&
 						 !(flags & FUZZY_CHECK_FLAG_NOIMAGES)) {
