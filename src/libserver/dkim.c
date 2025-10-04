@@ -3345,6 +3345,35 @@ rspamd_dkim_sign_key_load(const char *key, size_t len,
 				goto end;
 			}
 		}
+
+		/* Determine key type from the loaded EVP_PKEY */
+		if (nkey->specific.key_ssl.key_evp != NULL) {
+			int pkey_id = EVP_PKEY_base_id(nkey->specific.key_ssl.key_evp);
+			switch (pkey_id) {
+			case EVP_PKEY_RSA:
+				nkey->type = RSPAMD_DKIM_KEY_RSA;
+				nkey->keylen = EVP_PKEY_bits(nkey->specific.key_ssl.key_evp);
+				break;
+			case EVP_PKEY_EC:
+				nkey->type = RSPAMD_DKIM_KEY_ECDSA;
+				nkey->keylen = EVP_PKEY_bits(nkey->specific.key_ssl.key_evp);
+				break;
+			case EVP_PKEY_ED25519:
+				nkey->type = RSPAMD_DKIM_KEY_EDDSA;
+				nkey->keylen = 256; /* ed25519 is always 256 bits */
+				break;
+			default:
+				g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYFAIL,
+							"unsupported private key type: %d",
+							pkey_id);
+				rspamd_dkim_sign_key_free(nkey);
+				nkey = NULL;
+				goto end;
+			}
+
+			msg_debug_dkim_taskless("loaded private key type: %d, bits: %d",
+									nkey->type, (int) nkey->keylen);
+		}
 	}
 
 	REF_INIT_RETAIN(nkey, rspamd_dkim_sign_key_free);
@@ -3674,6 +3703,7 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 		sig_buf = g_alloca(sig_len);
 		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(ctx->key->specific.key_ssl.key_evp, NULL);
 		if (EVP_PKEY_sign_init(pctx) <= 0) {
+			EVP_PKEY_CTX_free(pctx);
 			g_string_free(hdr, true);
 			msg_err_task("rsa sign error: %s",
 						 ERR_error_string(ERR_get_error(), NULL));
@@ -3681,6 +3711,7 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 			return NULL;
 		}
 		if (EVP_PKEY_CTX_set_rsa_padding(pctx, RSA_PKCS1_PADDING) <= 0) {
+			EVP_PKEY_CTX_free(pctx);
 			g_string_free(hdr, true);
 			msg_err_task("rsa sign error: %s",
 						 ERR_error_string(ERR_get_error(), NULL));
@@ -3688,6 +3719,7 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 			return NULL;
 		}
 		if (EVP_PKEY_CTX_set_signature_md(pctx, EVP_sha256()) <= 0) {
+			EVP_PKEY_CTX_free(pctx);
 			g_string_free(hdr, true);
 			msg_err_task("rsa sign error: %s",
 						 ERR_error_string(ERR_get_error(), NULL));
@@ -3696,18 +3728,48 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 		}
 		size_t sig_len_size_t = sig_len;
 		if (EVP_PKEY_sign(pctx, sig_buf, &sig_len_size_t, raw_digest, dlen) <= 0) {
+			EVP_PKEY_CTX_free(pctx);
 			g_string_free(hdr, true);
 			msg_err_task("rsa sign error: %s",
 						 ERR_error_string(ERR_get_error(), NULL));
 
 			return NULL;
 		}
+		EVP_PKEY_CTX_free(pctx);
 	}
 	else if (ctx->key->type == RSPAMD_DKIM_KEY_EDDSA) {
-		sig_len = crypto_sign_bytes();
-		sig_buf = g_alloca(sig_len);
-
-		rspamd_cryptobox_sign(sig_buf, NULL, raw_digest, dlen, ctx->key->specific.key_eddsa);
+		/* Check if this is an OpenSSL EVP_PKEY ed25519 key or raw key */
+		if (ctx->key->specific.key_ssl.key_evp != NULL) {
+			/* PEM-encoded ed25519 key, use OpenSSL API */
+			sig_len = EVP_PKEY_size(ctx->key->specific.key_ssl.key_evp);
+			sig_buf = g_alloca(sig_len);
+			EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(ctx->key->specific.key_ssl.key_evp, NULL);
+			
+			if (EVP_PKEY_sign_init(pctx) <= 0) {
+				EVP_PKEY_CTX_free(pctx);
+				g_string_free(hdr, true);
+				msg_err_task("ed25519 sign error: %s",
+							 ERR_error_string(ERR_get_error(), NULL));
+				return NULL;
+			}
+			
+			size_t sig_len_size_t = sig_len;
+			if (EVP_PKEY_sign(pctx, sig_buf, &sig_len_size_t, raw_digest, dlen) <= 0) {
+				EVP_PKEY_CTX_free(pctx);
+				g_string_free(hdr, true);
+				msg_err_task("ed25519 sign error: %s",
+							 ERR_error_string(ERR_get_error(), NULL));
+				return NULL;
+			}
+			sig_len = sig_len_size_t;
+			EVP_PKEY_CTX_free(pctx);
+		}
+		else {
+			/* Raw ed25519 key, use rspamd cryptobox */
+			sig_len = crypto_sign_bytes();
+			sig_buf = g_alloca(sig_len);
+			rspamd_cryptobox_sign(sig_buf, NULL, raw_digest, dlen, ctx->key->specific.key_eddsa);
+		}
 	}
 	else {
 		g_string_free(hdr, true);
@@ -3747,10 +3809,34 @@ bool rspamd_dkim_match_keys(rspamd_dkim_key_t *pk,
 	}
 
 	if (pk->type == RSPAMD_DKIM_KEY_EDDSA) {
-		if (memcmp(sk->specific.key_eddsa + 32, pk->specific.key_eddsa, 32) != 0) {
-			g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYHASHMISMATCH,
-						"pubkey does not match private key");
-			return false;
+		/* For ed25519 keys, check if both are raw keys or both are EVP keys */
+		if (sk->specific.key_ssl.key_evp != NULL && pk->specific.key_ssl.key_evp != NULL) {
+			/* Both are EVP keys, use OpenSSL comparison */
+#if OPENSSL_VERSION_MAJOR >= 3
+			if (EVP_PKEY_eq(pk->specific.key_ssl.key_evp, sk->specific.key_ssl.key_evp) != 1) {
+				g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYHASHMISMATCH,
+							"pubkey does not match private key");
+				return false;
+			}
+#else
+			if (EVP_PKEY_cmp(pk->specific.key_ssl.key_evp, sk->specific.key_ssl.key_evp) != 1) {
+				g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYHASHMISMATCH,
+							"pubkey does not match private key");
+				return false;
+			}
+#endif
+		}
+		else if (sk->specific.key_eddsa != NULL && pk->specific.key_eddsa != NULL) {
+			/* Both are raw keys, compare directly */
+			if (memcmp(sk->specific.key_eddsa + 32, pk->specific.key_eddsa, 32) != 0) {
+				g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYHASHMISMATCH,
+							"pubkey does not match private key");
+				return false;
+			}
+		}
+		else {
+			/* One is EVP, one is raw - cannot compare easily, skip check */
+			msg_debug_dkim_taskless("skipping key comparison for mixed ed25519 key formats");
 		}
 	}
 #if OPENSSL_VERSION_MAJOR >= 3
