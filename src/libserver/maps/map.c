@@ -350,9 +350,16 @@ rspamd_http_map_process_next_check(struct rspamd_map *map,
 		if (expires_interval > max_expires_interval) {
 			/*
 			 * Absurdly high expiration (> 8 hours)
-			 * Use min(map_check_interval * 10, 8 hours)
+			 * Use min(map_check_interval * 10, 8 hours) with overflow protection
 			 */
-			time_t liberal_interval = map_check_interval * liberal_mult;
+			time_t liberal_interval;
+			if (map_check_interval > max_expires_interval / liberal_mult) {
+				liberal_interval = max_expires_interval;
+			}
+			else {
+				liberal_interval = map_check_interval * liberal_mult;
+			}
+
 			if (liberal_interval > max_expires_interval) {
 				next_check = now + max_expires_interval;
 				msg_info_map("expires header too high (%d hours) for %s, capping to 8 hours",
@@ -385,16 +392,51 @@ rspamd_http_map_process_next_check(struct rspamd_map *map,
 	else {
 		/*
 		 * No expires header (or expired)
-		 * Enforce minimum interval to prevent aggressive polling
+		 * Differentiate based on cache validation capabilities
 		 */
-		if (map_check_interval < min_no_expires_interval) {
-			next_check = now + min_no_expires_interval;
-			msg_info_map("no expires header and low map_check_interval (%d sec) for %s, "
-						 "enforcing 10 minute minimum",
-						 (int) map_check_interval, bk->uri);
+		if (has_etag || has_last_modified) {
+			/*
+			 * We have cache validation (ETag or Last-Modified)
+			 * Conditional requests are cheap (304 responses), use respectful 4x multiplier
+			 */
+			static const time_t respectful_mult = 4;
+			time_t respectful_interval;
+
+			/* Overflow protection for multiplication */
+			if (map_check_interval > max_expires_interval / respectful_mult) {
+				respectful_interval = max_expires_interval;
+			}
+			else {
+				respectful_interval = map_check_interval * respectful_mult;
+			}
+
+			if (respectful_interval < min_no_expires_interval) {
+				next_check = now + min_no_expires_interval;
+				msg_info_map("no expires but has cache validation for %s, "
+							 "using 10 minute minimum",
+							 bk->uri);
+			}
+			else {
+				next_check = now + respectful_interval;
+				msg_debug_map("no expires but has cache validation for %s, "
+							  "using %dx interval (%d sec)",
+							  bk->uri, (int) respectful_mult, (int) respectful_interval);
+			}
 		}
 		else {
-			next_check = now + map_check_interval;
+			/*
+			 * No cache validation available
+			 * Must re-download entire map, enforce strict minimum
+			 */
+			if (map_check_interval < min_no_expires_interval) {
+				next_check = now + min_no_expires_interval;
+				msg_info_map("no cache validation and low map_check_interval (%d sec) for %s, "
+							 "enforcing 10 minute minimum",
+							 (int) map_check_interval, bk->uri);
+			}
+			else {
+				next_check = now + map_check_interval;
+			}
 		}
 	}
 
