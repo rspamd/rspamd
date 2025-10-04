@@ -1479,8 +1479,10 @@ void rspamd_dkim_sign_key_free(rspamd_dkim_sign_key_t *key)
 		}
 	}
 	else {
-		rspamd_explicit_memzero(key->specific.key_eddsa, key->keylen);
-		g_free(key->keydata);
+		if (key->specific.key_eddsa) {
+			rspamd_explicit_memzero(key->specific.key_eddsa, key->keylen);
+			g_free(key->specific.key_eddsa);
+		}
 	}
 
 	g_free(key);
@@ -3345,6 +3347,67 @@ rspamd_dkim_sign_key_load(const char *key, size_t len,
 				goto end;
 			}
 		}
+
+		/* Detect the key type from the loaded EVP_PKEY */
+		int key_type = EVP_PKEY_base_id(nkey->specific.key_ssl.key_evp);
+		switch (key_type) {
+		case EVP_PKEY_RSA:
+			nkey->type = RSPAMD_DKIM_KEY_RSA;
+			nkey->keylen = EVP_PKEY_size(nkey->specific.key_ssl.key_evp);
+			break;
+		case EVP_PKEY_EC:
+			nkey->type = RSPAMD_DKIM_KEY_ECDSA;
+			nkey->keylen = EVP_PKEY_size(nkey->specific.key_ssl.key_evp);
+			break;
+		case EVP_PKEY_ED25519:
+			/* For Ed25519, extract the raw key and store it in the eddsa field */
+			nkey->type = RSPAMD_DKIM_KEY_EDDSA;
+			nkey->keylen = crypto_sign_secretkeybytes();
+			nkey->specific.key_eddsa = g_malloc(nkey->keylen);
+
+			/* Extract raw private key from EVP_PKEY */
+			size_t extracted_len = nkey->keylen;
+			if (EVP_PKEY_get_raw_private_key(nkey->specific.key_ssl.key_evp,
+											 nkey->specific.key_eddsa, &extracted_len) != 1) {
+				g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYFAIL,
+							"cannot extract ed25519 raw key: %s",
+							ERR_error_string(ERR_get_error(), NULL));
+				EVP_PKEY_free(nkey->specific.key_ssl.key_evp);
+				rspamd_dkim_sign_key_free(nkey);
+				nkey = NULL;
+				goto end;
+			}
+
+			/* ED25519 raw private key is 32 bytes (the seed), but we need the full 64-byte key */
+			if (extracted_len == 32) {
+				/* OpenSSL gives us the 32-byte seed, we need to derive the full key */
+				unsigned char pk[32];
+				unsigned char *full_key = g_malloc(crypto_sign_secretkeybytes());
+				crypto_sign_ed25519_seed_keypair(pk, full_key, nkey->specific.key_eddsa);
+				rspamd_explicit_memzero(nkey->specific.key_eddsa, extracted_len);
+				g_free(nkey->specific.key_eddsa);
+				nkey->specific.key_eddsa = full_key;
+			}
+
+			/* Clean up the EVP_PKEY and BIO as we have the raw key now */
+			EVP_PKEY_free(nkey->specific.key_ssl.key_evp);
+			BIO_free(nkey->specific.key_ssl.key_bio);
+			/* Zero out the pointers to avoid double-free in cleanup */
+			nkey->specific.key_ssl.key_evp = NULL;
+			nkey->specific.key_ssl.key_bio = NULL;
+			break;
+		default:
+			g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYFAIL,
+						"unsupported key type: %s",
+						OBJ_nid2sn(key_type));
+			rspamd_dkim_sign_key_free(nkey);
+			nkey = NULL;
+			goto end;
+		}
+
+		msg_debug_dkim_taskless("loaded %s private key from %s",
+								nkey->type == RSPAMD_DKIM_KEY_RSA ? "RSA" : (nkey->type == RSPAMD_DKIM_KEY_ECDSA ? "ECDSA" : "Ed25519"),
+								type == RSPAMD_DKIM_KEY_PEM ? "PEM" : "DER");
 	}
 
 	REF_INIT_RETAIN(nkey, rspamd_dkim_sign_key_free);
