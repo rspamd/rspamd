@@ -2116,13 +2116,17 @@ fuzzy_cmd_from_html_part(struct rspamd_task *task,
 	unsigned int additional_length;
 	unsigned char *additional_data;
 
+	msg_debug_fuzzy_check("fuzzy_cmd_from_html_part called for rule %s", rule->name);
+
 	/* Check if HTML shingles are enabled for this rule */
 	if (!rule->html_shingles) {
+		msg_debug_fuzzy_check("HTML shingles disabled for rule %s", rule->name);
 		return NULL;
 	}
 
 	/* Check if this is an HTML part */
 	if (!IS_TEXT_PART_HTML(part) || part->html == NULL) {
+		msg_debug_fuzzy_check("Part is not HTML or html is NULL");
 		return NULL;
 	}
 
@@ -2132,6 +2136,9 @@ fuzzy_cmd_from_html_part(struct rspamd_task *task,
 							  part->html_features->tags_count, rule->min_html_tags);
 		return NULL;
 	}
+
+	msg_debug_fuzzy_check("Proceeding to generate HTML fuzzy hash, tags_count=%d",
+						  part->html_features ? part->html_features->tags_count : 0);
 
 	cached = fuzzy_cmd_get_cached(rule, task, mp);
 
@@ -3512,13 +3519,22 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 					if (rule->html_shingles && !(flags & FUZZY_CHECK_FLAG_NOHTML)) {
 						struct fuzzy_cmd_io *html_io;
 
+						msg_debug_fuzzy_check("Attempting HTML fuzzy hash for rule %s", rule->name);
 						html_io = fuzzy_cmd_from_html_part(task, rule, c, flag, value,
 														   part, mime_part);
 
 						if (html_io) {
 							/* Add HTML hash as separate command */
+							msg_debug_fuzzy_check("HTML fuzzy hash generated and added to commands");
 							g_ptr_array_add(res, html_io);
 						}
+						else {
+							msg_debug_fuzzy_check("HTML fuzzy hash generation returned NULL");
+						}
+					}
+					else {
+						msg_debug_fuzzy_check("HTML fuzzy skipped: html_shingles=%d, NOHTML flag=%d",
+											  rule->html_shingles, !!(flags & FUZZY_CHECK_FLAG_NOHTML));
 					}
 				}
 				else if (mime_part->part_type == RSPAMD_MIME_PART_IMAGE &&

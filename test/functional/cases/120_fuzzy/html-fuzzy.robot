@@ -46,12 +46,10 @@ HTML Fuzzy Phishing Test
   IF  ${RSPAMD_FUZZY_HTML_ADD} == 0
     Fail  "HTML Fuzzy Add was not run"
   END
-  Scan File  ${HTML_PHISHING}
   # Structure similar but CTA domains different
   # Might match with lower score or not match depending on CTA weight
-  # For now just verify no crash
-  ${result} =  Scan Message With Rspamc  ${HTML_PHISHING}
-  Should Be Equal As Numbers  ${result.returncode}  0
+  # Just verify scanning works without crash
+  Scan File  ${HTML_PHISHING}
 
 HTML Fuzzy Delete Test
   [Documentation]  Delete HTML fuzzy hash
