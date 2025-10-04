@@ -3391,21 +3391,26 @@ rspamd_dkim_sign_key_load(const char *key, size_t len,
 			nkey->keylen = EVP_PKEY_size(nkey->specific.key_ssl.key_evp);
 			break;
 #ifdef HAVE_ED25519
-		case EVP_PKEY_ED25519:
-			/* For Ed25519, extract the raw key and store it in the eddsa field */
-			nkey->type = RSPAMD_DKIM_KEY_EDDSA;
-			nkey->keylen = crypto_sign_secretkeybytes();
-			nkey->specific.key_eddsa = g_malloc(nkey->keylen);
+		case EVP_PKEY_ED25519: {
+			/* For Ed25519, extract the raw key and store it in the eddsa field.
+			 * Important: specific is a union, so we must save key_ssl pointers
+			 * before overwriting them with key_eddsa. */
+			EVP_PKEY *evp_temp = nkey->specific.key_ssl.key_evp;
+			BIO *bio_temp = nkey->specific.key_ssl.key_bio;
+			unsigned char *raw_key = NULL;
+			size_t raw_key_len = crypto_sign_secretkeybytes();
 
-			/* Extract raw private key from EVP_PKEY */
-			size_t extracted_len = nkey->keylen;
-			if (EVP_PKEY_get_raw_private_key(nkey->specific.key_ssl.key_evp,
-											 nkey->specific.key_eddsa, &extracted_len) != 1) {
+			/* Extract raw private key from EVP_PKEY into temporary buffer */
+			raw_key = g_malloc(raw_key_len);
+			size_t extracted_len = raw_key_len;
+			if (EVP_PKEY_get_raw_private_key(evp_temp, raw_key, &extracted_len) != 1) {
 				g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYFAIL,
 							"cannot extract ed25519 raw key: %s",
 							ERR_error_string(ERR_get_error(), NULL));
-				EVP_PKEY_free(nkey->specific.key_ssl.key_evp);
-				rspamd_dkim_sign_key_free(nkey);
+				g_free(raw_key);
+				EVP_PKEY_free(evp_temp);
+				BIO_free(bio_temp);
+				g_free(nkey);
 				nkey = NULL;
 				goto end;
 			}
@@ -3415,19 +3420,23 @@ rspamd_dkim_sign_key_load(const char *key, size_t len,
 				/* OpenSSL gives us the 32-byte seed, we need to derive the full key */
 				unsigned char pk[32];
 				unsigned char *full_key = g_malloc(crypto_sign_secretkeybytes());
-				crypto_sign_ed25519_seed_keypair(pk, full_key, nkey->specific.key_eddsa);
-				rspamd_explicit_memzero(nkey->specific.key_eddsa, extracted_len);
-				g_free(nkey->specific.key_eddsa);
-				nkey->specific.key_eddsa = full_key;
+				crypto_sign_ed25519_seed_keypair(pk, full_key, raw_key);
+				rspamd_explicit_memzero(raw_key, extracted_len);
+				g_free(raw_key);
+				raw_key = full_key;
+				raw_key_len = crypto_sign_secretkeybytes();
 			}
 
-			/* Clean up the EVP_PKEY and BIO as we have the raw key now */
-			EVP_PKEY_free(nkey->specific.key_ssl.key_evp);
-			BIO_free(nkey->specific.key_ssl.key_bio);
-			/* Note: we don't zero out the pointers because 'specific' is a union,
-			 * and zeroing key_ssl would overwrite key_eddsa. The cleanup function
-			 * checks the key type and won't touch key_ssl for EDDSA keys. */
+			/* Clean up the EVP_PKEY and BIO before overwriting the union */
+			EVP_PKEY_free(evp_temp);
+			BIO_free(bio_temp);
+
+			/* Now it's safe to assign to the union */
+			nkey->type = RSPAMD_DKIM_KEY_EDDSA;
+			nkey->keylen = raw_key_len;
+			nkey->specific.key_eddsa = raw_key;
 			break;
+		}
 #endif /* HAVE_ED25519 */
 		default: {
 			const char *key_type_str = OBJ_nid2sn(key_type);
