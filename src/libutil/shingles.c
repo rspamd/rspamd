@@ -64,7 +64,7 @@ rspamd_shingles_keys_new(void)
 	return k;
 }
 
-static unsigned char **
+unsigned char **
 rspamd_shingles_get_keys_cached(const unsigned char key[SHINGLES_KEY_SIZE])
 {
 	static GHashTable *ht = NULL;
@@ -415,3 +415,5 @@ double rspamd_shingles_compare(const struct rspamd_shingle *a,
 
 	return (double) common / (double) RSPAMD_SHINGLE_SIZE;
 }
+
+/* HTML shingles implementation is in shingles_html.cxx */

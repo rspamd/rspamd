@@ -222,6 +222,14 @@ LUA_FUNCTION_DEF(textpart, get_fuzzy_hashes);
  */
 LUA_FUNCTION_DEF(textpart, get_mimepart);
 
+/***
+ * @method text_part:get_html_fuzzy_hashes(mempool)
+ * Generate fuzzy hashes for HTML structure (if part is HTML)
+ * @param {rspamd_mempool} mempool memory pool to use
+ * @return {digest, shingles} hex digest and shingles table with metadata
+ */
+LUA_FUNCTION_DEF(textpart, get_html_fuzzy_hashes);
+
 static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF(textpart, is_utf),
 	LUA_INTERFACE_DEF(textpart, has_8bit_raw),
@@ -245,6 +253,7 @@ static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF(textpart, get_mimepart),
 	LUA_INTERFACE_DEF(textpart, get_stats),
 	LUA_INTERFACE_DEF(textpart, get_fuzzy_hashes),
+	LUA_INTERFACE_DEF(textpart, get_html_fuzzy_hashes),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
@@ -1313,6 +1322,100 @@ lua_textpart_get_fuzzy_hashes(lua_State *L)
 			}
 		}
 	}
+
+	return 2;
+}
+
+/***
+ * @method text_part:get_html_fuzzy_hashes(mempool)
+ * Generate fuzzy hashes for HTML content (if text part is HTML).
+ * Returns digest and shingles table similar to get_fuzzy_hashes, but
+ * for HTML structure instead of text content.
+ *
+ * HTML shingles include:
+ * - Structure shingles (DOM tag sequence with domains)
+ * - CTA domains hash (critical for phishing detection)
+ * - All domains hash
+ * - Statistical features hash
+ *
+ * @param {rspamd_mempool} mempool memory pool to use
+ * @return {digest, shingles} digest is hex string, shingles is array of hashes + metadata
+ */
+static int
+lua_textpart_get_html_fuzzy_hashes(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_text_part *part = lua_check_textpart(L);
+	rspamd_mempool_t *pool = rspamd_lua_check_mempool(L, 2);
+	unsigned char key[rspamd_cryptobox_HASHBYTES];
+	struct rspamd_html_shingle *html_sgl = NULL;
+	unsigned int i;
+
+	if (part == NULL || pool == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	/* Check if this is an HTML part with parsed HTML */
+	if (!IS_TEXT_PART_HTML(part) || part->html == NULL) {
+		lua_pushnil(L);
+		lua_pushnil(L);
+		return 2;
+	}
+
+	/* Generate key */
+	rspamd_cryptobox_hash(key, "rspamd", strlen("rspamd"), NULL, 0);
+
+	/* Generate HTML shingles */
+	html_sgl = rspamd_shingles_from_html(part->html, key, pool,
+										 rspamd_shingles_default_filter,
+										 NULL, RSPAMD_SHINGLES_MUMHASH);
+
+	if (html_sgl == NULL) {
+		lua_pushnil(L);
+		lua_pushnil(L);
+		return 2;
+	}
+
+	/* Return direct hash (like text parts - hash of all tokens for exact matching) */
+	unsigned char hexdigest[rspamd_cryptobox_HASHBYTES * 2 + 1];
+	rspamd_encode_hex_buf(html_sgl->direct_hash, rspamd_cryptobox_HASHBYTES,
+						  hexdigest, sizeof(hexdigest));
+	lua_pushlstring(L, (const char *) hexdigest, sizeof(hexdigest) - 1);
+
+	/* Create shingles table */
+	lua_createtable(L, RSPAMD_SHINGLE_SIZE, 6);
+
+	/* Add structure shingles */
+	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i++) {
+		lua_pushinteger(L, i + 1);
+		lua_pushinteger(L, html_sgl->structure_shingles.hashes[i]);
+		lua_settable(L, -3);
+	}
+
+	/* Add metadata */
+	lua_pushstring(L, "cta_domains_hash");
+	lua_pushinteger(L, html_sgl->cta_domains_hash);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "all_domains_hash");
+	lua_pushinteger(L, html_sgl->all_domains_hash);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "features_hash");
+	lua_pushinteger(L, html_sgl->features_hash);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "tags_count");
+	lua_pushinteger(L, html_sgl->tags_count);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "links_count");
+	lua_pushinteger(L, html_sgl->links_count);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "dom_depth");
+	lua_pushinteger(L, html_sgl->dom_depth);
+	lua_settable(L, -3);
 
 	return 2;
 }
