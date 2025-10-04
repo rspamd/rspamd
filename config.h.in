@@ -19,6 +19,7 @@
 #cmakedefine HAVE_CTYPE_H        1
 #cmakedefine HAVE_DIRENT_H       1
 #cmakedefine HAVE_DIRFD          1
+#cmakedefine HAVE_ED25519        1
 #cmakedefine HAVE_ENDIAN_H       1
 #cmakedefine HAVE_FALLOCATE      1
 #cmakedefine HAVE_FCNTL_H        1
