@@ -19,6 +19,7 @@
 #include "config.h"
 #include "mem_pool.h"
 #include "libserver/word.h"
+#include "cryptobox.h"
 
 #define RSPAMD_SHINGLE_SIZE 32
 
