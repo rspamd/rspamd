@@ -2191,11 +2191,16 @@ rspamd_dkim_skip_empty_lines(struct rspamd_task *task, struct rspamd_dkim_common
 		case test_spaces:
 			t = p - skip;
 
-			while (t >= start + 2 && (*t == ' ' || *t == '\t')) {
+			while (t >= start && (*t == ' ' || *t == '\t')) {
 				t--;
 			}
 
-			if (*t == '\r') {
+			if (t < start) {
+				/* The entire line (or body) is only spaces - treat as empty */
+				p = start - 1;
+				goto end;
+			}
+			else if (*t == '\r') {
 				p = t;
 				state = got_cr;
 			}
