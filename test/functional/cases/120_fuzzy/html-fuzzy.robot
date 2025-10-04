@@ -12,8 +12,8 @@ ${HTML_PHISHING}           ${RSPAMD_TESTDIR}/messages/html_phishing.eml
 HTML Fuzzy Setup Mumhash
   Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  mumhash
   Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  servers
-  # Use standard test flags and add HTML-specific settings
-  Set Suite Variable  ${SETTINGS_FUZZY_CHECK}  servers = "${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_FUZZY}"; html_shingles = true; min_html_tags = 5; html_weight = 1.0;
+  # Include HTML-specific settings via FUZZY_INCLUDE
+  Set Suite Variable  ${RSPAMD_FUZZY_INCLUDE}  ${RSPAMD_TESTDIR}/configs/fuzzy-html.conf
   Rspamd Redis Setup
 
 HTML Fuzzy Add Test
