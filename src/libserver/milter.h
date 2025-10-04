@@ -71,6 +71,8 @@ struct rspamd_milter_session {
 	rspamd_fstring_t *helo;
 	rspamd_fstring_t *hostname;
 	rspamd_fstring_t *message;
+	GHashTable *mail_esmtp_args; /* ESMTP arguments from MAIL FROM command */
+	GPtrArray *rcpt_esmtp_args;  /* Array of GHashTable, one per recipient with ESMTP arguments */
 	void *priv;
 	ref_entry_t ref;
 };
