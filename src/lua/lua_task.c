@@ -626,6 +626,48 @@ LUA_FUNCTION_DEF(task, get_from);
  * @return {boolean} success or not
  */
 LUA_FUNCTION_DEF(task, set_from);
+
+/***
+ * @method task:get_mail_esmtp_args()
+ * Returns a table of ESMTP arguments from MAIL FROM command (milter only).
+ * Each argument is a key-value pair where the key is the argument name and
+ * the value is the argument value (or empty string if no value).
+ * @return {table} ESMTP arguments or nil if not available
+ * @example
+ * local esmtp_args = task:get_mail_esmtp_args()
+ * if esmtp_args then
+ *   -- Check for DSN arguments
+ *   local ret = esmtp_args['RET']
+ *   local envid = esmtp_args['ENVID']
+ * end
+ */
+LUA_FUNCTION_DEF(task, get_mail_esmtp_args);
+
+/***
+ * @method task:get_rcpt_esmtp_args([idx])
+ * Returns a table of ESMTP arguments from RCPT TO command (milter only).
+ * If idx is specified, returns arguments for the recipient at that index (0-based).
+ * If idx is not specified, returns an array of tables, one per recipient.
+ * Each argument is a key-value pair where the key is the argument name and
+ * the value is the argument value (or empty string if no value).
+ * @param {integer} idx optional index of the recipient (0-based)
+ * @return {table|array of tables} ESMTP arguments or nil if not available
+ * @example
+ * -- Get args for all recipients
+ * local rcpt_args = task:get_rcpt_esmtp_args()
+ * if rcpt_args then
+ *   for i, args in ipairs(rcpt_args) do
+ *     if args and args['NOTIFY'] then
+ *       -- Process NOTIFY argument
+ *     end
+ *   end
+ * end
+ *
+ * -- Get args for first recipient only
+ * local first_rcpt_args = task:get_rcpt_esmtp_args(0)
+ */
+LUA_FUNCTION_DEF(task, get_rcpt_esmtp_args);
+
 /***
  * @method task:get_user()
  * Returns authenticated user name for this task if specified by an MTA.
@@ -1295,6 +1337,8 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, has_from),
 	LUA_INTERFACE_DEF(task, get_from),
 	LUA_INTERFACE_DEF(task, set_from),
+	LUA_INTERFACE_DEF(task, get_mail_esmtp_args),
+	LUA_INTERFACE_DEF(task, get_rcpt_esmtp_args),
 	LUA_INTERFACE_DEF(task, get_user),
 	LUA_INTERFACE_DEF(task, set_user),
 	{"get_addr", lua_task_get_from_ip},
@@ -4279,6 +4323,273 @@ lua_task_get_reply_sender(lua_State *L)
 		else if (task->from_envelope) {
 			lua_pushlstring(L, task->from_envelope->addr,
 							task->from_envelope->addr_len);
+		}
+		else {
+			lua_pushnil(L);
+		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_task_get_mail_esmtp_args(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+	struct rspamd_mime_header *hdr;
+
+	if (task) {
+		/* Check if this is a milter task */
+		if (!(task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_MILTER)) {
+			lua_pushnil(L);
+			return 1;
+		}
+
+		/* Get ESMTP args from HTTP headers */
+		hdr = rspamd_message_get_header_array(task, "X-Rspamd-Mail-Esmtp-Args", FALSE);
+
+		if (hdr) {
+			lua_createtable(L, 0, 0);
+
+			while (hdr) {
+				const char *p, *eq;
+				gsize len;
+
+				if (hdr->decoded) {
+					p = hdr->decoded;
+					len = strlen(p);
+				}
+				else {
+					p = hdr->value;
+					len = hdr->value_len;
+				}
+
+				/* Parse KEY=VALUE format */
+				eq = memchr(p, '=', len);
+
+				if (eq) {
+					/* KEY=VALUE */
+					lua_pushlstring(L, p, eq - p);
+					lua_pushlstring(L, eq + 1, len - (eq - p) - 1);
+				}
+				else {
+					/* KEY only */
+					lua_pushlstring(L, p, len);
+					lua_pushstring(L, "");
+				}
+
+				lua_settable(L, -3);
+				hdr = hdr->next;
+			}
+		}
+		else {
+			lua_pushnil(L);
+		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_task_get_rcpt_esmtp_args(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+	struct rspamd_mime_header *hdr;
+	int idx = -1;
+	gboolean all_rcpts = TRUE;
+	GHashTable *rcpt_args_by_idx = NULL;
+
+	if (task) {
+		/* Check if this is a milter task */
+		if (!(task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_MILTER)) {
+			lua_pushnil(L);
+			return 1;
+		}
+
+		/* Check if idx was specified */
+		if (lua_gettop(L) >= 2 && lua_type(L, 2) == LUA_TNUMBER) {
+			idx = lua_tointeger(L, 2);
+			all_rcpts = FALSE;
+		}
+
+		/* Get ESMTP args from HTTP headers */
+		hdr = rspamd_message_get_header_array(task, "X-Rspamd-Rcpt-Esmtp-Args", FALSE);
+
+		if (hdr) {
+			if (all_rcpts) {
+				/* Build hash table mapping recipient index to args table */
+				rcpt_args_by_idx = g_hash_table_new_full(g_direct_hash, g_direct_equal,
+														  NULL, NULL);
+
+				/* First pass: collect all args by recipient index */
+				while (hdr) {
+					const char *p, *colon, *eq;
+					gsize len;
+					int rcpt_idx;
+					lua_State *tmp_L;
+
+					if (hdr->decoded) {
+						p = hdr->decoded;
+						len = strlen(p);
+					}
+					else {
+						p = hdr->value;
+						len = hdr->value_len;
+					}
+
+					/* Parse IDX:KEY=VALUE format */
+					colon = memchr(p, ':', len);
+
+					if (colon) {
+						char *endptr;
+						rcpt_idx = strtol(p, &endptr, 10);
+
+						if (endptr == colon) {
+							/* Valid index found */
+							p = colon + 1;
+							len -= (colon - p) + 1;
+
+							/* Store this arg for this recipient */
+							if (!g_hash_table_contains(rcpt_args_by_idx, GINT_TO_POINTER(rcpt_idx))) {
+								/* Create new table for this recipient */
+								lua_newtable(L);
+								g_hash_table_insert(rcpt_args_by_idx,
+													GINT_TO_POINTER(rcpt_idx),
+													GINT_TO_POINTER(lua_gettop(L)));
+							}
+
+							/* Get the table for this recipient */
+							int table_idx = GPOINTER_TO_INT(g_hash_table_lookup(rcpt_args_by_idx,
+																				 GINT_TO_POINTER(rcpt_idx)));
+							lua_pushvalue(L, table_idx);
+
+							/* Parse KEY=VALUE */
+							eq = memchr(p, '=', len);
+
+							if (eq) {
+								lua_pushlstring(L, p, eq - p);
+								lua_pushlstring(L, eq + 1, len - (eq - p) - 1);
+							}
+							else {
+								lua_pushlstring(L, p, len);
+								lua_pushstring(L, "");
+							}
+
+							lua_settable(L, -3);
+							lua_pop(L, 1); /* Pop the table */
+						}
+					}
+
+					hdr = hdr->next;
+				}
+
+				/* Now create the result array */
+				if (g_hash_table_size(rcpt_args_by_idx) > 0) {
+					GHashTableIter iter;
+					gpointer key, value;
+					int max_idx = 0;
+
+					/* Find max index */
+					g_hash_table_iter_init(&iter, rcpt_args_by_idx);
+					while (g_hash_table_iter_next(&iter, &key, &value)) {
+						int i = GPOINTER_TO_INT(key);
+						if (i > max_idx) {
+							max_idx = i;
+						}
+					}
+
+					/* Create result array */
+					lua_createtable(L, max_idx + 1, 0);
+
+					/* Fill array with tables or nils */
+					for (int i = 0; i <= max_idx; i++) {
+						if (g_hash_table_contains(rcpt_args_by_idx, GINT_TO_POINTER(i))) {
+							int table_idx = GPOINTER_TO_INT(g_hash_table_lookup(rcpt_args_by_idx,
+																				 GINT_TO_POINTER(i)));
+							lua_pushvalue(L, table_idx);
+						}
+						else {
+							lua_pushnil(L);
+						}
+						lua_rawseti(L, -2, i + 1); /* Lua arrays are 1-based */
+					}
+
+					/* Clean up temporary tables */
+					g_hash_table_iter_init(&iter, rcpt_args_by_idx);
+					while (g_hash_table_iter_next(&iter, &key, &value)) {
+						int table_idx = GPOINTER_TO_INT(value);
+						lua_remove(L, table_idx);
+					}
+				}
+				else {
+					lua_pushnil(L);
+				}
+
+				g_hash_table_destroy(rcpt_args_by_idx);
+			}
+			else {
+				/* Return args for specific recipient */
+				lua_newtable(L);
+				gboolean found = FALSE;
+
+				while (hdr) {
+					const char *p, *colon, *eq;
+					gsize len;
+					int rcpt_idx;
+
+					if (hdr->decoded) {
+						p = hdr->decoded;
+						len = strlen(p);
+					}
+					else {
+						p = hdr->value;
+						len = hdr->value_len;
+					}
+
+					/* Parse IDX:KEY=VALUE format */
+					colon = memchr(p, ':', len);
+
+					if (colon) {
+						char *endptr;
+						rcpt_idx = strtol(p, &endptr, 10);
+
+						if (endptr == colon && rcpt_idx == idx) {
+							found = TRUE;
+							p = colon + 1;
+							len -= (colon - p) + 1;
+
+							/* Parse KEY=VALUE */
+							eq = memchr(p, '=', len);
+
+							if (eq) {
+								lua_pushlstring(L, p, eq - p);
+								lua_pushlstring(L, eq + 1, len - (eq - p) - 1);
+							}
+							else {
+								lua_pushlstring(L, p, len);
+								lua_pushstring(L, "");
+							}
+
+							lua_settable(L, -3);
+						}
+					}
+
+					hdr = hdr->next;
+				}
+
+				if (!found) {
+					lua_pop(L, 1);
+					lua_pushnil(L);
+				}
+			}
 		}
 		else {
 			lua_pushnil(L);
