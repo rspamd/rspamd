@@ -25,38 +25,24 @@ Detects phishing based on fuzzy hash mismatches:
 This indicates possible template reuse for phishing.
 ]]
 
-local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
 
 local N = 'fuzzy_html_phishing'
 
 local function check_fuzzy_mismatch(task)
   local fuzzy_results = task:get_mempool():get_variable('fuzzy_result')
-  
+
   if not fuzzy_results then
     return false
   end
-  
-  -- Collect results by type
-  local text_matches = {}
-  local html_matches = {}
-  
-  for _, hash_result in ipairs(fuzzy_results) do
-    local symbol = tostring(hash_result)
-    -- Parse fuzzy result format: "flag:hash:prob:type"
-    -- This is simplified - actual parsing depends on result format
-    
-    -- For now, check mempool variables set by fuzzy_insert_result
-    -- We need to enhance fuzzy_check to expose result types
-  end
-  
+
   -- Get fuzzy check symbols from task results
   local fuzzy_symbols = task:get_symbols_all()
   local has_text_fuzzy = false
   local has_html_fuzzy = false
   local text_score = 0
   local html_score = 0
-  
+
   for _, sym in ipairs(fuzzy_symbols) do
     if sym.name:match('FUZZY.*TEXT') or sym.name == 'R_FUZZY_HASH' then
       has_text_fuzzy = true
@@ -67,7 +53,7 @@ local function check_fuzzy_mismatch(task)
       html_score = math.max(html_score, sym.score or 0)
     end
   end
-  
+
   -- Scenario 1: Text matches legitimate but no HTML match
   -- This could indicate phishing with copied text but fake HTML/CTA
   if has_text_fuzzy and not has_html_fuzzy and text_score > 5.0 then
@@ -78,7 +64,7 @@ local function check_fuzzy_mismatch(task)
       text_score)
     return true
   end
-  
+
   -- Scenario 2: HTML matches but text doesn't (less suspicious)
   -- This is common for newsletters/notifications with varying content
   if has_html_fuzzy and not has_text_fuzzy and html_score > 8.0 then
@@ -88,7 +74,7 @@ local function check_fuzzy_mismatch(task)
       html_score)
     -- Could add negative score or just log
   end
-  
+
   return false
 end
 
@@ -102,7 +88,7 @@ rspamd_config:register_symbol{
 }
 
 -- Register callback
-local id = rspamd_config:register_symbol{
+rspamd_config:register_symbol{
   name = 'FUZZY_HTML_PHISHING_CHECK',
   type = 'callback',
   callback = check_fuzzy_mismatch,

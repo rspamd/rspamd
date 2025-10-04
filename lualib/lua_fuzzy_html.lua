@@ -9,7 +9,6 @@ but CTA (Call-To-Action) domains are different.
 ]]
 
 local exports = {}
-local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
 
 --[[
@@ -23,7 +22,7 @@ Returns: phishing_score, explanation
 exports.check_html_text_mismatch = function(task, fuzzy_results)
   local html_matches = {}
   local text_matches = {}
-  
+
   -- Separate HTML and text fuzzy matches
   for _, res in ipairs(fuzzy_results or {}) do
     if res.type == 'html' then
@@ -32,7 +31,7 @@ exports.check_html_text_mismatch = function(task, fuzzy_results)
       table.insert(text_matches, res)
     end
   end
-  
+
   -- Phishing scenario: high text match but low/no HTML match
   if #text_matches > 0 and #html_matches == 0 then
     local max_text_score = 0
@@ -41,7 +40,7 @@ exports.check_html_text_mismatch = function(task, fuzzy_results)
         max_text_score = res.score
       end
     end
-    
+
     -- High text match but no HTML match = suspicious
     if max_text_score > 0.7 then
       return max_text_score * 0.5, string.format(
@@ -49,7 +48,7 @@ exports.check_html_text_mismatch = function(task, fuzzy_results)
         max_text_score)
     end
   end
-  
+
   -- Inverse scenario: HTML match but no text match
   -- (Could be template with varying content - less suspicious)
   if #html_matches > 0 and #text_matches == 0 then
@@ -59,13 +58,13 @@ exports.check_html_text_mismatch = function(task, fuzzy_results)
         max_html_score = res.score
       end
     end
-    
+
     -- This is expected for newsletters/notifications
     lua_util.debugm('fuzzy_html', task,
       'HTML match (%.2f) without text match - likely template variation',
       max_html_score)
   end
-  
+
   return 0, nil
 end
 
@@ -81,7 +80,7 @@ exports.check_brand_hijack = function(task, html_fuzzy_result, text_fuzzy_result
   if not html_fuzzy_result then
     return 0, nil
   end
-  
+
   -- High HTML match = known template
   if html_fuzzy_result.score > 0.8 then
     -- Check if text is suspicious
@@ -91,7 +90,7 @@ exports.check_brand_hijack = function(task, html_fuzzy_result, text_fuzzy_result
           html_fuzzy_result.score)
     end
   end
-  
+
   return 0, nil
 end
 
