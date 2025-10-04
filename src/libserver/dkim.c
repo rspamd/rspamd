@@ -2175,25 +2175,31 @@ rspamd_dkim_skip_empty_lines(struct rspamd_task *task, struct rspamd_dkim_common
 				goto end;
 			}
 			break;
-		case test_spaces:
-			t = p - skip;
+	case test_spaces:
+		t = p - skip;
 
-			while (t >= start + 2 && (*t == ' ' || *t == '\t')) {
-				t--;
-			}
+		while (t >= start && (*t == ' ' || *t == '\t')) {
+			t--;
+		}
 
-			if (*t == '\r') {
-				p = t;
-				state = got_cr;
-			}
-			else if (*t == '\n') {
-				p = t;
-				state = got_lf;
-			}
-			else {
-				goto end;
-			}
-			break;
+		if (t < start) {
+			/* All content from start to current position is spaces/tabs */
+			/* This means the body is effectively empty after canonicalization */
+			p = start - 1;
+			goto end;
+		}
+		else if (*t == '\r') {
+			p = t;
+			state = got_cr;
+		}
+		else if (*t == '\n') {
+			p = t;
+			state = got_lf;
+		}
+		else {
+			goto end;
+		}
+		break;
 		}
 	}
 
