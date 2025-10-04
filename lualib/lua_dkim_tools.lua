@@ -617,8 +617,22 @@ exports.sign_using_vault = function(N, task, settings, selector, sign_func, err_
   local http = require "rspamd_http"
   local ucl = require "ucl"
 
+  local vault_path = settings.vault_path or 'dkim'
+  local vault_kv_version = settings.vault_kv_version or 1
+
+  -- For KV v2, we need to add 'data' to the path for read operations
+  if vault_kv_version == 2 then
+    local mount_point = vault_path:match('^([^/]+)')
+    local subpath = vault_path:match('^[^/]+/?(.*)')
+    if subpath and subpath ~= '' then
+      vault_path = mount_point .. '/data/' .. subpath
+    else
+      vault_path = mount_point .. '/data'
+    end
+  end
+
   local full_url = string.format('%s/v1/%s/%s',
-    settings.vault_url, settings.vault_path or 'dkim', selector.domain)
+    settings.vault_url, vault_path, selector.domain)
   local upstream_list = lua_util.http_upstreams_by_url(rspamd_config:get_mempool(), settings.vault_url)
 
   local function vault_callback(err, code, body, _)
@@ -638,7 +652,10 @@ exports.sign_using_vault = function(N, task, settings, selector, sign_func, err_
           err_func(task, string.format('vault reply for %s (data=%s) is invalid, no data',
             full_url, body))
         else
-          local elts = obj.data.selectors or {}
+          -- For KV v2, data is nested under obj.data.data
+          -- For KV v1, data is under obj.data
+          local vault_data = vault_kv_version == 2 and obj.data.data or obj.data
+          local elts = vault_data and vault_data.selectors or {}
           local errs = {}
           local nvalid = 0
 

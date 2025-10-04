@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 
 local rspamd_logger = require "rspamd_logger"
@@ -31,67 +31,72 @@ local parser = argparse()
     :require_command(true)
 
 parser:flag "-s --silent"
-      :description "Do not output extra information"
+    :description "Do not output extra information"
 parser:option "-a --addr"
-      :description "Vault address (if not defined in VAULT_ADDR env)"
+    :description "Vault address (if not defined in VAULT_ADDR env)"
 parser:option "-t --token"
-      :description "Vault token (not recommended, better define VAULT_TOKEN env)"
+    :description "Vault token (not recommended, better define VAULT_TOKEN env)"
 parser:option "-p --path"
-      :description "Path to work with in the vault"
-      :default "dkim"
+    :description "Path to work with in the vault"
+    :default "dkim"
 parser:option "-o --output"
-      :description "Output format ('ucl', 'json', 'json-compact', 'yaml')"
-      :argname("<type>")
-      :convert {
-  ucl = "ucl",
-  json = "json",
-  ['json-compact'] = "json-compact",
-  yaml = "yaml",
-}
-      :default "ucl"
+    :description "Output format ('ucl', 'json', 'json-compact', 'yaml')"
+    :argname("<type>")
+    :convert {
+      ucl = "ucl",
+      json = "json",
+      ['json-compact'] = "json-compact",
+      yaml = "yaml",
+    }
+    :default "ucl"
+parser:option "-k --kv-version"
+    :description "Vault KV store version (1 or 2)"
+    :argname("<version>")
+    :convert(tonumber)
+    :default "1"
 
 parser:command "list ls l"
-      :description "List elements in the vault"
+    :description "List elements in the vault"
 
 local show = parser:command "show get"
-                   :description "Extract element from the vault"
+    :description "Extract element from the vault"
 show:argument "domain"
     :description "Domain to create key for"
     :args "+"
 
 local delete = parser:command "delete del rm remove"
-                     :description "Delete element from the vault"
+    :description "Delete element from the vault"
 delete:argument "domain"
-      :description "Domain to create delete key(s) for"
-      :args "+"
+    :description "Domain to create delete key(s) for"
+    :args "+"
 
 local newkey = parser:command "newkey new create"
-                     :description "Add new key to the vault"
+    :description "Add new key to the vault"
 newkey:argument "domain"
-      :description "Domain to create key for"
-      :args "+"
+    :description "Domain to create key for"
+    :args "+"
 newkey:option "-s --selector"
-      :description "Selector to use"
-      :count "?"
+    :description "Selector to use"
+    :count "?"
 newkey:option "-A --algorithm"
-      :argname("<type>")
-      :convert {
-  rsa = "rsa",
-  ed25519 = "ed25519",
-  eddsa = "ed25519",
-}
-      :default "rsa"
+    :argname("<type>")
+    :convert {
+      rsa = "rsa",
+      ed25519 = "ed25519",
+      eddsa = "ed25519",
+    }
+    :default "rsa"
 newkey:option "-b --bits"
-      :argname("<nbits>")
-      :convert(tonumber)
-      :default "1024"
+    :argname("<nbits>")
+    :convert(tonumber)
+    :default "1024"
 newkey:option "-x --expire"
-      :argname("<days>")
-      :convert(tonumber)
+    :argname("<days>")
+    :convert(tonumber)
 newkey:flag "-r --rewrite"
 
 local roll = parser:command "roll rollover"
-                   :description "Perform keys rollover"
+    :description "Perform keys rollover"
 roll:argument "domain"
     :description "Domain to roll key(s) for"
     :args "+"
@@ -123,11 +128,47 @@ local function highlight(str, color)
 end
 
 local function vault_url(opts, path)
-  if path then
-    return string.format('%s/v1/%s/%s', opts.addr, opts.path, path)
+  local vault_path = opts.path
+
+  -- For KV v2, we need to add 'data' to the path for read/write operations
+  if opts.kv_version == 2 then
+    -- Split the path to inject 'data' after the mount point
+    -- e.g., 'secret/dkim' becomes 'secret/data/dkim'
+    local mount_point = vault_path:match('^([^/]+)')
+    local subpath = vault_path:match('^[^/]+/?(.*)')
+    if subpath and subpath ~= '' then
+      vault_path = mount_point .. '/data/' .. subpath
+    else
+      vault_path = mount_point .. '/data'
+    end
   end
 
-  return string.format('%s/v1/%s', opts.addr, opts.path)
+  if path then
+    return string.format('%s/v1/%s/%s', opts.addr, vault_path, path)
+  end
+
+  return string.format('%s/v1/%s', opts.addr, vault_path)
+end
+
+local function vault_url_metadata(opts, path)
+  -- For KV v2 metadata operations (like list)
+  local vault_path = opts.path
+
+  if opts.kv_version == 2 then
+    local mount_point = vault_path:match('^([^/]+)')
+    local subpath = vault_path:match('^[^/]+/?(.*)')
+    if subpath and subpath ~= '' then
+      vault_path = mount_point .. '/metadata/' .. subpath
+    else
+      vault_path = mount_point .. '/metadata'
+    end
+  end
+
+  if path then
+    return string.format('%s/v1/%s/%s', opts.addr, vault_path, path)
+  end
+
+  return string.format('%s/v1/%s', opts.addr, vault_path)
 end
 
 local function is_http_error(err, data)
@@ -176,7 +217,7 @@ local function print_dkim_txt_record(b64, selector, alg)
   end
 
   printf("%s._domainkey IN TXT ( %s )", selector,
-      table.concat(labels, "\n\t"))
+    table.concat(labels, "\n\t"))
 end
 
 local function show_handler(opts, domain)
@@ -198,7 +239,13 @@ local function show_handler(opts, domain)
     os.exit(1)
   else
     maybe_print_vault_data(opts, data.content, function(obj)
-      return obj.data.selectors
+      -- For KV v2, data is nested under obj.data.data
+      -- For KV v1, data is under obj.data
+      local vault_data = opts.kv_version == 2 and obj.data.data or obj.data
+      if vault_data then
+        return vault_data.selectors
+      end
+      return nil
     end)
   end
 end
@@ -227,7 +274,8 @@ local function delete_handler(opts, domain)
 end
 
 local function list_handler(opts)
-  local uri = vault_url(opts)
+  -- For KV v2, list operations use the metadata endpoint
+  local uri = opts.kv_version == 2 and vault_url_metadata(opts) or vault_url(opts)
   local err, data = rspamd_http.request {
     config = rspamd_config,
     ev_base = rspamadm_ev_base,
@@ -259,7 +307,7 @@ local function create_and_push_key(opts, domain, existing)
   local uri = vault_url(opts, domain)
   local sk, pk = genkey(opts)
 
-  local res = {
+  local payload = {
     selectors = {
       [1] = {
         selector = opts.selector,
@@ -274,12 +322,15 @@ local function create_and_push_key(opts, domain, existing)
   }
 
   for _, sel in ipairs(existing) do
-    res.selectors[#res.selectors + 1] = sel
+    payload.selectors[#payload.selectors + 1] = sel
   end
 
   if opts.expire then
-    res.selectors[1].valid_end = os.time() + opts.expire * 3600 * 24
+    payload.selectors[1].valid_end = os.time() + opts.expire * 3600 * 24
   end
+
+  -- For KV v2, wrap the payload in a 'data' object
+  local res = opts.kv_version == 2 and { data = payload } or payload
 
   local err, data = rspamd_http.request {
     config = rspamd_config,
@@ -318,7 +369,7 @@ local function newkey_handler(opts, domain)
 
   if not opts.selector then
     opts.selector = string.format('%s-%s', opts.algorithm,
-        os.date("!%Y%m%d"))
+      os.date("!%Y%m%d"))
   end
 
   local err, data = rspamd_http.request {
@@ -344,7 +395,10 @@ local function newkey_handler(opts, domain)
       os.exit(1)
     end
 
-    local elts = rep.data.selectors
+    -- For KV v2, data is nested under rep.data.data
+    -- For KV v1, data is under rep.data
+    local vault_data = opts.kv_version == 2 and rep.data.data or rep.data
+    local elts = vault_data and vault_data.selectors or nil
 
     if not elts then
       create_and_push_key(opts, domain, {})
@@ -354,7 +408,7 @@ local function newkey_handler(opts, domain)
     for _, sel in ipairs(elts) do
       if sel.alg == opts.algorithm then
         printf('key with the specific algorithm %s is already presented at %s selector for %s domain',
-            opts.algorithm, sel.selector, domain)
+          opts.algorithm, sel.selector, domain)
         os.exit(1)
       else
         create_and_push_key(opts, domain, elts)
@@ -365,7 +419,7 @@ end
 
 local function roll_handler(opts, domain)
   local uri = vault_url(opts, domain)
-  local res = {
+  local payload = {
     selectors = {}
   }
 
@@ -392,7 +446,10 @@ local function roll_handler(opts, domain)
       os.exit(1)
     end
 
-    local elts = rep.data.selectors
+    -- For KV v2, data is nested under rep.data.data
+    -- For KV v1, data is under rep.data
+    local vault_data = opts.kv_version == 2 and rep.data.data or rep.data
+    local elts = vault_data and vault_data.selectors or nil
 
     if not elts then
       printf("No keys to roll for domain %s", domain)
@@ -419,7 +476,7 @@ local function roll_handler(opts, domain)
           insert_key(sel, false)
         else
           maybe_printf(opts, 'removed expired key for %s (selector %s, expire "%s"',
-              domain, sel.selector, os.date('%c', sel.valid_end))
+            domain, sel.selector, os.date('%c', sel.valid_end))
         end
       else
         insert_key(sel, true)
@@ -440,16 +497,16 @@ local function roll_handler(opts, domain)
       end)
       -- Exclude the key with the highest expiration date and examine the rest
       if not (#keys == 1 or fun.all(function(k)
-        return k.valid_end and k.valid_end < os.time()
-      end, fun.tail(keys))) then
+            return k.valid_end and k.valid_end < os.time()
+          end, fun.tail(keys))) then
         printf('bad keys list for %s and %s algorithm', domain, alg)
         fun.each(function(k)
           if not k.valid_end then
             printf('selector %s, algorithm %s has a key with no expire',
-                k.selector, k.alg)
+              k.selector, k.alg)
           elseif k.valid_end >= os.time() then
             printf('selector %s, algorithm %s has a key that not yet expired: %s',
-                k.selector, k.alg, os.date('%c', k.valid_end))
+              k.selector, k.alg, os.date('%c', k.valid_end))
           end
         end, fun.tail(keys))
         os.exit(1)
@@ -460,7 +517,7 @@ local function roll_handler(opts, domain)
         -- Insert keys for each algorithm in pairs <old_key(s)>, <new_key>
         local sk, pk = genkey({ algorithm = alg, bits = keys[1].bits })
         local selector = string.format('%s-%s', alg,
-            os.date("!%Y%m%d"))
+          os.date("!%Y%m%d"))
 
         if selector == keys[1].selector then
           selector = selector .. '-1'
@@ -479,13 +536,16 @@ local function roll_handler(opts, domain)
           nelt.valid_end = os.time() + opts.expire * 3600 * 24
         end
 
-        table.insert(res.selectors, nelt)
+        table.insert(payload.selectors, nelt)
       end
       for _, k in ipairs(keys) do
-        table.insert(res.selectors, k)
+        table.insert(payload.selectors, k)
       end
     end
   end
+
+  -- For KV v2, wrap the payload in a 'data' object
+  local res = opts.kv_version == 2 and { data = payload } or payload
 
   -- We can now store res in the vault
   err, data = rspamd_http.request {
@@ -509,7 +569,7 @@ local function roll_handler(opts, domain)
     maybe_print_vault_data(opts, data.content)
     os.exit(1)
   else
-    for _, key in ipairs(res.selectors) do
+    for _, key in ipairs(payload.selectors) do
       if not key.valid_end or key.valid_end > os.time() + opts.ttl * 3600 * 24 then
         maybe_printf(opts, 'rolled key for: %s, new selector: %s', domain, key.selector)
         maybe_printf(opts, 'please place the corresponding public key as following:')
@@ -519,12 +579,11 @@ local function roll_handler(opts, domain)
         else
           print_dkim_txt_record(key.pubkey, key.selector, key.alg)
         end
-
       end
     end
 
     maybe_printf(opts, 'your old keys will be valid until %s',
-        os.date('%c', os.time() + opts.ttl * 3600 * 24))
+      os.date('%c', os.time() + opts.ttl * 3600 * 24))
   end
 end
 
@@ -539,7 +598,7 @@ local function handler(args)
     opts.token = os.getenv('VAULT_TOKEN')
   else
     maybe_printf(opts, 'defining token via command line is insecure, define it via environment variable %s',
-        highlight('VAULT_TOKEN', 'red'))
+      highlight('VAULT_TOKEN', 'red'))
   end
 
   if not opts.token or not opts.addr then

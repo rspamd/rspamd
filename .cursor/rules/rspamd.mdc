@@ -1,0 +1,23 @@
+---
+description: "Rspamd: code style, code checks, and special project requirements"
+globs: ["src/**", "lualib/**", "rules/**"]
+alwaysApply: true
+---
+
+# C and C++
+- For all C and C++ code changes, run `clang-format` using the `.clang-format` file located in the project root.
+- Always follow the formatting specified in this file, and ensure formatting is applied before every commit.
+- Do NOT use C++ standard library hash maps (`std::unordered_map`, `std::hash`). Always use containers from `contrib/ankerl/unordered_dense` for maps/sets and related hashes.
+
+# Lua (src/plugins/lua/, lualib/, rules/)
+- Run `luacheck src/plugins/lua/ lualib/ rules/` before every commit.
+- Make sure you change to the project root directory before running luacheck.
+- Resolve all luacheck warnings except those explicitly permitted by project exceptions.
+- rspamd_logger uses `%s` in the format strings for all arguments placeholders
+
+# Logging and Debug
+- All debug logging functions use a custom `printf` format string implementation. Before touching or adding logging code, read the comments in `src/libutil/printf.h` and follow the style and requirements described there.
+
+# General principles
+- Do not introduce changes that conflict with these rules or established project practices.
+- If unsure, consult Rspamd maintainers or refer to in-code comments.

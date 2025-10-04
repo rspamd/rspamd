@@ -22,6 +22,8 @@ Use one of the following tags at the beginning of commit messages:
 -   `[Test]` - Test additions or modifications
 -   `[Rules]` - Changes to spam detection rules
 
+Prefer `[Minor]` if a fix or a change is minor (e.g. whitespaces change or a missing nil check).
+
 ## Commit Message Examples
 
 **Version updates:**
@@ -148,9 +150,8 @@ set(RSPAMD_VERSION_PATCH Z)
 
 ## General Guidelines
 
--   Write clear, descriptive commit messages
--   One logical change per commit
--   Reference issue numbers when applicable
--   Keep commit history clean and meaningful
--   Always sign commits and tags with GPG
--   Do NOT amend commits to avoid force push (create new commits instead)
+- Write clear, descriptive commit messages
+- One logical change per commit
+- Reference issue numbers when applicable
+- Keep commit history clean and meaningful
+- Always sign commits and tags with GPG
