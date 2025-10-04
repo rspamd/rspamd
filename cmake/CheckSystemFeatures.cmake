@@ -58,6 +58,7 @@ function(CheckSystemFeatures)
 
     check_symbol_exists(SSL_set_tlsext_host_name "openssl/ssl.h" HAVE_SSL_TLSEXT_HOSTNAME)
     check_symbol_exists(FIPS_mode "openssl/crypto.h" HAVE_FIPS_MODE)
+    check_symbol_exists(EVP_PKEY_ED25519 "openssl/evp.h" HAVE_ED25519)
 
     # Directory and file path operations
     check_symbol_exists(dirfd "sys/types.h;unistd.h;dirent.h" HAVE_DIRFD)

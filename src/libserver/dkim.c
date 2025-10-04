@@ -320,8 +320,16 @@ rspamd_dkim_parse_signalg(rspamd_dkim_context_t *ctx,
 	}
 	else if (len == 14) {
 		if (memcmp(param, "ed25519-sha256", len) == 0) {
+#ifdef HAVE_ED25519
 			ctx->sig_alg = DKIM_SIGN_EDDSASHA256;
 			return true;
+#else
+			g_set_error(err,
+						DKIM_ERROR,
+						DKIM_SIGERROR_BADSIG,
+						"ed25519 signatures are not supported (OpenSSL 1.1.1+ required)");
+			return false;
+#endif
 		}
 	}
 
@@ -1285,8 +1293,11 @@ rspamd_create_dkim_context(const char *sig,
 		md_alg = EVP_sha1();
 	}
 	else if (ctx->sig_alg == DKIM_SIGN_RSASHA256 ||
-			 ctx->sig_alg == DKIM_SIGN_ECDSASHA256 ||
-			 ctx->sig_alg == DKIM_SIGN_EDDSASHA256) {
+			 ctx->sig_alg == DKIM_SIGN_ECDSASHA256
+#ifdef HAVE_ED25519
+			 || ctx->sig_alg == DKIM_SIGN_EDDSASHA256
+#endif
+	) {
 		md_alg = EVP_sha256();
 	}
 	else if (ctx->sig_alg == DKIM_SIGN_RSASHA512 ||
@@ -2976,8 +2987,11 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 		nid = NID_sha1;
 	}
 	else if (ctx->sig_alg == DKIM_SIGN_RSASHA256 ||
-			 ctx->sig_alg == DKIM_SIGN_ECDSASHA256 ||
-			 ctx->sig_alg == DKIM_SIGN_EDDSASHA256) {
+			 ctx->sig_alg == DKIM_SIGN_ECDSASHA256
+#ifdef HAVE_ED25519
+			 || ctx->sig_alg == DKIM_SIGN_EDDSASHA256
+#endif
+	) {
 		nid = NID_sha256;
 	}
 	else if (ctx->sig_alg == DKIM_SIGN_RSASHA512 ||
@@ -2993,7 +3007,9 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 		GError *err = NULL;
 
 		if (ctx->sig_alg == DKIM_SIGN_ECDSASHA256 ||
+#ifdef HAVE_ED25519
 			ctx->sig_alg == DKIM_SIGN_EDDSASHA256 ||
+#endif
 			ctx->sig_alg == DKIM_SIGN_ECDSASHA512) {
 			/* RSA key provided for ECDSA/EDDSA signature */
 			res->rcode = DKIM_PERM_ERROR;
@@ -3086,6 +3102,7 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 		break;
 
 	case RSPAMD_DKIM_KEY_EDDSA:
+#ifdef HAVE_ED25519
 		if (ctx->sig_alg != DKIM_SIGN_EDDSASHA256) {
 			/* EDDSA key provided for RSA/ECDSA signature */
 			res->rcode = DKIM_PERM_ERROR;
@@ -3117,6 +3134,20 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 				res->fail_reason = "headers eddsa verify failed";
 			}
 		}
+#else
+		/* ED25519 not supported in this OpenSSL version */
+		res->rcode = DKIM_PERM_ERROR;
+		res->fail_reason = "ed25519 signatures are not supported (OpenSSL 1.1.1+ required)";
+		msg_info_dkim(
+			"%s: ed25519 signatures not supported (OpenSSL 1.1.1+ required); "
+			"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
+			rspamd_dkim_type_to_string(ctx->common.type),
+			(int) (body_end - body_start), ctx->common.body_canonicalised,
+			ctx->common.headers_canonicalised,
+			ctx->domain, ctx->selector,
+			RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
+			ctx->dkim_header);
+#endif
 		break;
 	}
 
@@ -3359,6 +3390,7 @@ rspamd_dkim_sign_key_load(const char *key, size_t len,
 			nkey->type = RSPAMD_DKIM_KEY_ECDSA;
 			nkey->keylen = EVP_PKEY_size(nkey->specific.key_ssl.key_evp);
 			break;
+#ifdef HAVE_ED25519
 		case EVP_PKEY_ED25519:
 			/* For Ed25519, extract the raw key and store it in the eddsa field */
 			nkey->type = RSPAMD_DKIM_KEY_EDDSA;
@@ -3392,17 +3424,30 @@ rspamd_dkim_sign_key_load(const char *key, size_t len,
 			/* Clean up the EVP_PKEY and BIO as we have the raw key now */
 			EVP_PKEY_free(nkey->specific.key_ssl.key_evp);
 			BIO_free(nkey->specific.key_ssl.key_bio);
-			/* Zero out the pointers to avoid double-free in cleanup */
-			nkey->specific.key_ssl.key_evp = NULL;
-			nkey->specific.key_ssl.key_bio = NULL;
+			/* Note: we don't zero out the pointers because 'specific' is a union,
+			 * and zeroing key_ssl would overwrite key_eddsa. The cleanup function
+			 * checks the key type and won't touch key_ssl for EDDSA keys. */
 			break;
-		default:
-			g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYFAIL,
-						"unsupported key type: %s",
-						OBJ_nid2sn(key_type));
+#endif /* HAVE_ED25519 */
+		default: {
+			const char *key_type_str = OBJ_nid2sn(key_type);
+#ifndef HAVE_ED25519
+			/* Check if this is an ED25519 key without support */
+			if (key_type_str && strcmp(key_type_str, "ED25519") == 0) {
+				g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYFAIL,
+							"ed25519 keys are not supported (OpenSSL 1.1.1+ required)");
+			}
+			else
+#endif
+			{
+				g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYFAIL,
+							"unsupported key type: %s",
+							key_type_str ? key_type_str : "unknown");
+			}
 			rspamd_dkim_sign_key_free(nkey);
 			nkey = NULL;
 			goto end;
+		}
 		}
 
 		msg_debug_dkim_taskless("loaded %s private key from %s",
@@ -3766,12 +3811,14 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 			return NULL;
 		}
 	}
+#ifdef HAVE_ED25519
 	else if (ctx->key->type == RSPAMD_DKIM_KEY_EDDSA) {
 		sig_len = crypto_sign_bytes();
 		sig_buf = g_alloca(sig_len);
 
 		rspamd_cryptobox_sign(sig_buf, NULL, raw_digest, dlen, ctx->key->specific.key_eddsa);
 	}
+#endif
 	else {
 		g_string_free(hdr, true);
 		msg_err_task("unsupported key type for signing");
@@ -3809,6 +3856,7 @@ bool rspamd_dkim_match_keys(rspamd_dkim_key_t *pk,
 		return false;
 	}
 
+#ifdef HAVE_ED25519
 	if (pk->type == RSPAMD_DKIM_KEY_EDDSA) {
 		if (memcmp(sk->specific.key_eddsa + 32, pk->specific.key_eddsa, 32) != 0) {
 			g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYHASHMISMATCH,
@@ -3816,19 +3864,20 @@ bool rspamd_dkim_match_keys(rspamd_dkim_key_t *pk,
 			return false;
 		}
 	}
-#if OPENSSL_VERSION_MAJOR >= 3
-	else if (EVP_PKEY_eq(pk->specific.key_ssl.key_evp, sk->specific.key_ssl.key_evp) != 1) {
-		g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYHASHMISMATCH,
-					"pubkey does not match private key");
-		return false;
-	}
-#else
-	else if (EVP_PKEY_cmp(pk->specific.key_ssl.key_evp, sk->specific.key_ssl.key_evp) != 1) {
-		g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYHASHMISMATCH,
-					"pubkey does not match private key");
-		return false;
-	}
+	else
 #endif
+	{
+#if OPENSSL_VERSION_MAJOR >= 3
+		if (EVP_PKEY_eq(pk->specific.key_ssl.key_evp, sk->specific.key_ssl.key_evp) != 1)
+#else
+		if (EVP_PKEY_cmp(pk->specific.key_ssl.key_evp, sk->specific.key_ssl.key_evp) != 1)
+#endif
+		{
+			g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYHASHMISMATCH,
+						"pubkey does not match private key");
+			return false;
+		}
+	}
 
 	return true;
 }
