@@ -11,6 +11,7 @@ SET(LIBRSPAMDUTILSRC
 				${CMAKE_CURRENT_SOURCE_DIR}/regexp.c
 				${CMAKE_CURRENT_SOURCE_DIR}/rrd.c
 				${CMAKE_CURRENT_SOURCE_DIR}/shingles.c
+				${CMAKE_CURRENT_SOURCE_DIR}/shingles_html.cxx
 				${CMAKE_CURRENT_SOURCE_DIR}/sqlite_utils.c
 				${CMAKE_CURRENT_SOURCE_DIR}/str_util.c
 				${CMAKE_CURRENT_SOURCE_DIR}/upstream.c
