@@ -323,6 +323,57 @@ rspamd_milter_plan_io(struct rspamd_milter_session *session,
 		(var) = ntohs(var);                 \
 	} while (0)
 
+static void
+rspamd_milter_parse_esmtp_params(struct rspamd_email_address *addr,
+								  const unsigned char *pos,
+								  const unsigned char *end,
+								  rspamd_mempool_t *pool)
+{
+	const unsigned char *zero, *eq;
+	char *key, *value;
+
+	if (!addr || pos >= end) {
+		return;
+	}
+
+	/* Parse ESMTP parameters: key=value pairs separated by null bytes */
+	while (pos < end) {
+		zero = memchr(pos, '\0', end - pos);
+
+		if (!zero || zero == pos) {
+			break;
+		}
+
+		/* Look for '=' to split key and value */
+		eq = memchr(pos, '=', zero - pos);
+
+		if (eq && eq > pos) {
+			/* We have a key=value pair */
+			if (!addr->esmtp_params) {
+				addr->esmtp_params = g_hash_table_new_full(g_str_hash, g_str_equal,
+															g_free, g_free);
+			}
+
+			key = g_strndup((const char *) pos, eq - pos);
+			value = g_strndup((const char *) (eq + 1), zero - eq - 1);
+
+			g_hash_table_insert(addr->esmtp_params, key, value);
+		}
+		else {
+			/* Just a key without value */
+			if (!addr->esmtp_params) {
+				addr->esmtp_params = g_hash_table_new_full(g_str_hash, g_str_equal,
+															g_free, g_free);
+			}
+
+			key = g_strndup((const char *) pos, zero - pos);
+			g_hash_table_insert(addr->esmtp_params, key, g_strdup(""));
+		}
+
+		pos = zero + 1;
+	}
+}
+
 static gboolean
 rspamd_milter_process_command(struct rspamd_milter_session *session,
 							  struct rspamd_milter_private *priv)
@@ -656,9 +707,13 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 
 				if (addr) {
 					session->from = addr;
+
+					/* Parse ESMTP arguments if present */
+					if (zero + 1 < end) {
+						rspamd_milter_parse_esmtp_params(addr, zero + 1, end, priv->pool);
+					}
 				}
 
-				/* TODO: parse esmtp arguments */
 				break;
 			}
 			else {
@@ -765,6 +820,11 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 					}
 
 					g_ptr_array_add(session->rcpts, addr);
+
+					/* Parse ESMTP arguments if present */
+					if (zero + 1 < end) {
+						rspamd_milter_parse_esmtp_params(addr, zero + 1, end, priv->pool);
+					}
 				}
 
 				pos = zero + 1;

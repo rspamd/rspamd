@@ -62,6 +62,7 @@ rspamd_email_address_from_smtp(const char *str, unsigned int len)
 	if (addr.flags & RSPAMD_EMAIL_ADDR_VALID) {
 		ret = g_malloc(sizeof(*ret));
 		memcpy(ret, &addr, sizeof(addr));
+		ret->esmtp_params = NULL;
 
 		if ((ret->flags & RSPAMD_EMAIL_ADDR_QUOTED) && ret->addr[0] == '"') {
 			if (ret->flags & RSPAMD_EMAIL_ADDR_HAS_BACKSLASH) {
@@ -93,6 +94,10 @@ void rspamd_email_address_free(struct rspamd_email_address *addr)
 
 		if (addr->flags & RSPAMD_EMAIL_ADDR_USER_ALLOCATED) {
 			g_free((void *) addr->user);
+		}
+
+		if (addr->esmtp_params) {
+			g_hash_table_unref(addr->esmtp_params);
 		}
 
 		g_free(addr);

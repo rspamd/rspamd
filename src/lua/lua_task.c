@@ -537,6 +537,7 @@ LUA_FUNCTION_DEF(task, has_recipients);
  * - `addr` - address part of the address
  * - `user` - user part (if present) of the address, e.g. `blah`
  * - `domain` - domain part (if present), e.g. `foo.com`
+ * - `esmtp_params` - table of ESMTP parameters (key=value pairs) received from the milter protocol (e.g. `NOTIFY`, `ORCPT`)
  * @param {integer|string} type if specified has the following meaning: `0` or `any` means try SMTP recipients and fallback to MIME if failed, `1` or `smtp` means checking merely SMTP recipients and `2` or `mime` means MIME recipients only
  * @return {list of addresses} list of recipients or `nil`
  */
@@ -606,6 +607,7 @@ LUA_FUNCTION_DEF(task, has_from);
  *   - [empty] - empty address
  *   - [backslash] - user part contains backslash
  *   - [8bit] - contains 8bit characters
+ * - `esmtp_params` - table of ESMTP parameters (key=value pairs) received from the milter protocol (e.g. `NOTIFY`, `ORCPT`, `RET`, `ENVID`, `XOORG`)
  * @param {integer|string} type if specified has the following meaning: `0` or `any` means try SMTP sender and fallback to MIME if failed, `1` or `smtp` means checking merely SMTP sender and `2` or `mime` means MIME `From:` only
  * @return {address} sender or `nil`
  */
@@ -3634,6 +3636,24 @@ lua_push_email_address(lua_State *L, struct rspamd_email_address *addr)
 		EMAIL_CHECK_FLAG(RSPAMD_EMAIL_ADDR_HAS_8BIT, "8bit");
 
 		lua_settable(L, -3);
+
+		/* Add ESMTP parameters if present */
+		if (addr->esmtp_params && g_hash_table_size(addr->esmtp_params) > 0) {
+			GHashTableIter iter;
+			gpointer key, value;
+
+			lua_pushstring(L, "esmtp_params");
+			lua_createtable(L, 0, g_hash_table_size(addr->esmtp_params));
+
+			g_hash_table_iter_init(&iter, addr->esmtp_params);
+			while (g_hash_table_iter_next(&iter, &key, &value)) {
+				lua_pushstring(L, (const char *) key);
+				lua_pushstring(L, (const char *) value);
+				lua_settable(L, -3);
+			}
+
+			lua_settable(L, -3);
+		}
 	}
 }
 

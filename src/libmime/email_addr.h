@@ -56,6 +56,8 @@ struct rspamd_email_address {
 	unsigned int domain_len;
 	unsigned int user_len;
 	unsigned int flags;
+
+	GHashTable *esmtp_params; /* ESMTP parameters (key=value pairs), can be NULL */
 };
 
 struct rspamd_task;
