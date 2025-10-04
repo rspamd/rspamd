@@ -89,21 +89,30 @@ normalize_class(const char *cls, gsize len, rspamd_mempool_t *pool)
 		return nullptr;
 	}
 
+	/* For multiple classes (space-separated), take only first class */
+	gsize first_class_len = len;
+	for (gsize i = 0; i < len; i++) {
+		if (g_ascii_isspace(cls[i])) {
+			first_class_len = i;
+			break;
+		}
+	}
+
 	/* Skip if mostly digits */
 	unsigned int digit_count = 0;
-	for (gsize i = 0; i < len; i++) {
+	for (gsize i = 0; i < first_class_len; i++) {
 		if (g_ascii_isdigit(cls[i])) {
 			digit_count++;
 		}
 	}
-	if (digit_count > len / 2) {
+	if (digit_count > first_class_len / 2) {
 		return nullptr;
 	}
 
-	auto *result = static_cast<char *>(rspamd_mempool_alloc(pool, len + 1));
+	auto *result = static_cast<char *>(rspamd_mempool_alloc(pool, first_class_len + 1));
 	gsize out_len = 0;
 
-	for (gsize i = 0; i < len && out_len < 32; i++) {
+	for (gsize i = 0; i < first_class_len && out_len < 32; i++) {
 		char c = cls[i];
 		if (g_ascii_isalnum(c) || c == '-' || c == '_') {
 			result[out_len++] = g_ascii_tolower(c);
@@ -399,7 +408,12 @@ rspamd_shingles_from_html(void *html_content,
 
 	auto *hc_ptr = html_content::from_ptr(html_content);
 
-	if (!hc_ptr || hc_ptr->all_tags.empty()) {
+	if (!hc_ptr) {
+		return nullptr;
+	}
+
+	if (hc_ptr->all_tags.empty()) {
+		/* Empty HTML - no tags */
 		return nullptr;
 	}
 
@@ -409,7 +423,7 @@ rspamd_shingles_from_html(void *html_content,
 	html_extract_structural_tokens(hc_ptr, pool, tokens, cta_domains, all_domains);
 
 	if (tokens.empty()) {
-		/* Empty HTML structure */
+		/* Empty HTML structure after filtering */
 		return nullptr;
 	}
 
