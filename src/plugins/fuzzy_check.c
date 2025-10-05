@@ -1559,7 +1559,7 @@ fuzzy_cmd_stat(struct fuzzy_rule *rule,
 	struct rspamd_fuzzy_encrypted_cmd *enccmd = NULL;
 	struct fuzzy_cmd_io *io;
 
-	if (rule->peer_key) {
+	if (rule->peer_key || rule->read_peer_key) {
 		enccmd = rspamd_mempool_alloc0(pool, sizeof(*enccmd));
 		cmd = &enccmd->cmd;
 	}
@@ -1610,7 +1610,7 @@ fuzzy_cmd_ping(struct fuzzy_rule *rule,
 	struct rspamd_fuzzy_encrypted_cmd *enccmd = NULL;
 	struct fuzzy_cmd_io *io;
 
-	if (rule->peer_key) {
+	if (rule->peer_key || rule->read_peer_key) {
 		enccmd = rspamd_mempool_alloc0(pool, sizeof(*enccmd));
 		cmd = &enccmd->cmd;
 	}
@@ -1659,7 +1659,7 @@ fuzzy_cmd_hash(struct fuzzy_rule *rule,
 	struct rspamd_fuzzy_encrypted_cmd *enccmd = NULL;
 	struct fuzzy_cmd_io *io;
 
-	if (rule->peer_key) {
+	if (rule->peer_key || rule->read_peer_key || rule->write_peer_key) {
 		enccmd = rspamd_mempool_alloc0(pool, sizeof(*enccmd));
 		cmd = &enccmd->cmd;
 	}
@@ -2146,7 +2146,7 @@ fuzzy_cmd_from_text_part(struct rspamd_task *task,
 	io->flags = 0;
 
 
-	if (rule->peer_key) {
+	if (rule->peer_key || rule->read_peer_key || rule->write_peer_key) {
 		/* Select keys based on operation type */
 		struct rspamd_cryptobox_keypair *local_key;
 		struct rspamd_cryptobox_pubkey *peer_key;
@@ -2307,7 +2307,7 @@ fuzzy_cmd_from_data_part(struct fuzzy_rule *rule,
 
 	additional_length = fuzzy_cmd_extension_length(task, rule);
 
-	if (rule->peer_key) {
+	if (rule->peer_key || rule->read_peer_key || rule->write_peer_key) {
 		enccmd = rspamd_mempool_alloc0(task->task_pool,
 									   sizeof(*enccmd) + additional_length);
 		cmd = &enccmd->cmd;
@@ -2340,7 +2340,7 @@ fuzzy_cmd_from_data_part(struct fuzzy_rule *rule,
 								   additional_length);
 	}
 
-	if (rule->peer_key) {
+	if (rule->peer_key || rule->read_peer_key || rule->write_peer_key) {
 		/* Select keys based on operation type */
 		struct rspamd_cryptobox_keypair *local_key;
 		struct rspamd_cryptobox_pubkey *peer_key;
@@ -2449,7 +2449,7 @@ fuzzy_process_reply(unsigned char **pos, int *r, GPtrArray *req,
 	struct rspamd_fuzzy_encrypted_reply encrep;
 	gboolean found = FALSE;
 
-	if (rule->peer_key) {
+	if (rule->peer_key || rule->read_peer_key || rule->write_peer_key) {
 		required_size = sizeof(encrep);
 	}
 	else {
@@ -2460,19 +2460,47 @@ fuzzy_process_reply(unsigned char **pos, int *r, GPtrArray *req,
 		return NULL;
 	}
 
-	if (rule->peer_key) {
+	if (rule->peer_key || rule->read_peer_key || rule->write_peer_key) {
 		memcpy(&encrep, p, sizeof(encrep));
 		*pos += required_size;
 		*r -= required_size;
 
+		/* Find matching command to determine operation type */
+		struct rspamd_cryptobox_keypair *local_key = NULL;
+		struct rspamd_cryptobox_pubkey *peer_key = NULL;
+
+		for (i = 0; i < req->len; i++) {
+			io = g_ptr_array_index(req, i);
+			if (io->tag == encrep.rep.v1.tag) {
+				/* Determine which keys to use based on command type */
+				if (io->cmd.cmd == FUZZY_DEL || io->cmd.cmd == FUZZY_WRITE) {
+					/* Write operation */
+					local_key = rule->write_local_key ? rule->write_local_key : rule->local_key;
+					peer_key = rule->write_peer_key ? rule->write_peer_key : rule->peer_key;
+				}
+				else {
+					/* Read operation (CHECK, STAT, PING, etc.) */
+					local_key = rule->read_local_key ? rule->read_local_key : rule->local_key;
+					peer_key = rule->read_peer_key ? rule->read_peer_key : rule->peer_key;
+				}
+				break;
+			}
+		}
+
+		if (!local_key || !peer_key) {
+			/* Fallback to common keys if command not found or keys not set */
+			local_key = rule->local_key;
+			peer_key = rule->peer_key;
+		}
+
 		/* Try to decrypt reply */
 		rspamd_keypair_cache_process(rule->ctx->keypairs_cache,
-									 rule->local_key, rule->peer_key);
+									 local_key, peer_key);
 
 		if (!rspamd_cryptobox_decrypt_nm_inplace((unsigned char *) &encrep.rep,
 												 sizeof(encrep.rep),
 												 encrep.hdr.nonce,
-												 rspamd_pubkey_get_nm(rule->peer_key, rule->local_key),
+												 rspamd_pubkey_get_nm(peer_key, local_key),
 												 encrep.hdr.mac)) {
 			msg_info("cannot decrypt reply");
 			return NULL;
