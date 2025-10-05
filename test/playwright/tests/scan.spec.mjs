@@ -157,4 +157,48 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
             }
         });
     });
+
+    test.describe("Regression: classifier list after RO → disconnect → enable", () => {
+        test("Classifier dropdown is populated after reconnect", async ({browser}, testInfo) => {
+            const {readOnlyPassword, enablePassword} = testInfo.project.use.rspamdPasswords;
+
+            // Use isolated context to avoid pre-populated state from other tests
+            const context = await browser.newContext();
+            const page2 = await context.newPage();
+
+            async function gotoTabLocal(name) {
+                await page2.locator(`#${name}_nav`).click();
+            }
+
+            // Login as read-only
+            await login(page2, readOnlyPassword);
+            await page2.waitForSelector("#navBar:not(.d-none)");
+
+            // Go to Scan in RO
+            await gotoTabLocal("scan");
+            await expect(page2.locator("#scan")).toBeVisible();
+
+            // Disconnect and login as enable (writable)
+            await page2.locator("#disconnect").click();
+            // Avoid shared login() helper which calls page.goto('/') to stay on the same tab.
+            await page2.locator("#connectPassword").fill(enablePassword);
+            // Expect classifiers request after successful enable login
+            const p = page2.waitForResponse(
+                (r) => r.url().includes("/bayes/classifiers") && r.status() === 200,
+                {timeout: 5000}
+            );
+            await page2.locator("#connectButton").click();
+            await page2.waitForSelector("#navBar:not(.d-none)");
+            await p;
+
+            // Expect classifiers to be populated
+            const classifier = page2.locator("#classifier");
+            await expect(classifier).toBeVisible();
+            const optionCount = await classifier.locator("option").count();
+            expect(optionCount).toBeGreaterThan(1);
+
+            await page2.close();
+            await context.close();
+        });
+    });
 });
