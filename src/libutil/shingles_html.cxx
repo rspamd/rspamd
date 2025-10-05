@@ -427,7 +427,7 @@ rspamd_shingles_from_html(void *html_content,
 		return nullptr;
 	}
 
-	/* Allocate result */
+	/* Allocate result after all early exit checks to avoid leaks */
 	struct rspamd_html_shingle *res;
 	if (pool) {
 		res = static_cast<rspamd_html_shingle *>(rspamd_mempool_alloc0(pool, sizeof(*res)));
@@ -451,9 +451,8 @@ rspamd_shingles_from_html(void *html_content,
 
 	if (struct_sgl) {
 		std::memcpy(&res->structure_shingles, struct_sgl, sizeof(struct rspamd_shingle));
-		if (pool == nullptr) {
-			delete struct_sgl;
-		}
+		/* Always delete struct_sgl after copying, regardless of pool */
+		delete struct_sgl;
 	}
 	else {
 		std::memset(&res->structure_shingles, 0, sizeof(struct rspamd_shingle));
