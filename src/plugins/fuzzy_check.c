@@ -2537,6 +2537,7 @@ fuzzy_process_reply(unsigned char **pos, int *r, GPtrArray *req,
 				/* Successfully decrypted */
 				memcpy(&encrep, &encrep_copy, sizeof(encrep));
 				decrypted = TRUE;
+				break;
 			}
 		}
 
