@@ -287,6 +287,11 @@ hash_html_features(html_content *hc, const unsigned char key[16])
 	unsigned char digest[rspamd_cryptobox_HASHBYTES];
 	uint64_t result;
 
+	if (!hc) {
+		/* Return zero hash for NULL input */
+		return 0;
+	}
+
 	rspamd_cryptobox_hash_init(&st, key, 16);
 
 	/* Bucket numeric features for stability */
@@ -295,6 +300,7 @@ hash_html_features(html_content *hc, const unsigned char key[16])
 	static const int depth_buckets[] = {5, 10, 15, 20, 30};
 	static const int images_buckets[] = {1, 5, 10, 20, 50};
 
+	/* Access features with safe defaults (0 if uninitialized) */
 	uint8_t tags_bucket = bucket_value(hc->features.tags_count, tags_buckets, G_N_ELEMENTS(tags_buckets));
 	uint8_t links_bucket = bucket_value(hc->features.links.total_links, links_buckets, G_N_ELEMENTS(links_buckets));
 	uint8_t depth_bucket = bucket_value(hc->features.max_dom_depth, depth_buckets, G_N_ELEMENTS(depth_buckets));
