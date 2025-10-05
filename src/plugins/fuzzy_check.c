@@ -2476,20 +2476,35 @@ fuzzy_process_reply(unsigned char **pos, int *r, GPtrArray *req,
 			peer_keys[nkeys] = rule->read_peer_key;
 			nkeys++;
 		}
-		/* Then try write keys */
-		if (rule->write_peer_key && rule->write_local_key &&
-			(rule->write_peer_key != rule->read_peer_key)) {
-			local_keys[nkeys] = rule->write_local_key;
-			peer_keys[nkeys] = rule->write_peer_key;
-			nkeys++;
+		/* Then try write keys if not already added */
+		if (rule->write_peer_key && rule->write_local_key) {
+			gboolean already_added = FALSE;
+			for (int j = 0; j < nkeys; j++) {
+				if (peer_keys[j] == rule->write_peer_key) {
+					already_added = TRUE;
+					break;
+				}
+			}
+			if (!already_added) {
+				local_keys[nkeys] = rule->write_local_key;
+				peer_keys[nkeys] = rule->write_peer_key;
+				nkeys++;
+			}
 		}
-		/* Finally try common keys if they differ from specific ones */
-		if (rule->peer_key && rule->local_key &&
-			(rule->peer_key != rule->read_peer_key) &&
-			(rule->peer_key != rule->write_peer_key)) {
-			local_keys[nkeys] = rule->local_key;
-			peer_keys[nkeys] = rule->peer_key;
-			nkeys++;
+		/* Finally try common keys if not already added */
+		if (rule->peer_key && rule->local_key) {
+			gboolean already_added = FALSE;
+			for (int j = 0; j < nkeys; j++) {
+				if (peer_keys[j] == rule->peer_key) {
+					already_added = TRUE;
+					break;
+				}
+			}
+			if (!already_added) {
+				local_keys[nkeys] = rule->local_key;
+				peer_keys[nkeys] = rule->peer_key;
+				nkeys++;
+			}
 		}
 
 		/* Try decryption with each key pair */
