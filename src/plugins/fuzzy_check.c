@@ -93,6 +93,11 @@ struct fuzzy_rule {
 	double io_timeout;
 	struct rspamd_cryptobox_keypair *local_key;
 	struct rspamd_cryptobox_pubkey *peer_key;
+	/* Separate encryption keys for read and write operations */
+	struct rspamd_cryptobox_keypair *read_local_key;
+	struct rspamd_cryptobox_pubkey *read_peer_key;
+	struct rspamd_cryptobox_keypair *write_local_key;
+	struct rspamd_cryptobox_pubkey *write_peer_key;
 	double max_score;
 	double weight_threshold;
 	double html_weight; /* Weight multiplier for HTML hashes (default 1.0) */
@@ -369,6 +374,22 @@ fuzzy_free_rule(gpointer r)
 	if (rule->peer_key) {
 		rspamd_pubkey_unref(rule->peer_key);
 	}
+
+	if (rule->read_local_key) {
+		rspamd_keypair_unref(rule->read_local_key);
+	}
+
+	if (rule->read_peer_key) {
+		rspamd_pubkey_unref(rule->read_peer_key);
+	}
+
+	if (rule->write_local_key) {
+		rspamd_keypair_unref(rule->write_local_key);
+	}
+
+	if (rule->write_peer_key) {
+		rspamd_pubkey_unref(rule->write_peer_key);
+	}
 }
 
 static int
@@ -635,6 +656,59 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 		}
 
 		rule->local_key = rspamd_keypair_new(RSPAMD_KEYPAIR_KEX);
+	}
+
+	/* Check for separate read and write encryption keys */
+	if ((value = ucl_object_lookup(obj, "read_encryption_key")) != NULL) {
+		k = ucl_object_tostring(value);
+
+		if (k == NULL || (rule->read_peer_key =
+							  rspamd_pubkey_from_base32(k, 0, RSPAMD_KEYPAIR_KEX)) == NULL) {
+			msg_err_config("bad read_encryption_key value: %s",
+						   k);
+			return -1;
+		}
+
+		rule->read_local_key = rspamd_keypair_new(RSPAMD_KEYPAIR_KEX);
+		msg_info_config("using separate read encryption key for rule %s", name);
+	}
+	else if (rule->peer_key) {
+		/* Use common encryption key for read operations */
+		rule->read_peer_key = rspamd_pubkey_ref(rule->peer_key);
+		rule->read_local_key = rspamd_keypair_ref(rule->local_key);
+	}
+
+	if ((value = ucl_object_lookup(obj, "write_encryption_key")) != NULL) {
+		k = ucl_object_tostring(value);
+
+		if (k == NULL || (rule->write_peer_key =
+							  rspamd_pubkey_from_base32(k, 0, RSPAMD_KEYPAIR_KEX)) == NULL) {
+			msg_err_config("bad write_encryption_key value: %s",
+						   k);
+			return -1;
+		}
+
+		rule->write_local_key = rspamd_keypair_new(RSPAMD_KEYPAIR_KEX);
+		msg_info_config("using separate write encryption key for rule %s", name);
+	}
+	else if (rule->peer_key) {
+		/* Use common encryption key for write operations */
+		rule->write_peer_key = rspamd_pubkey_ref(rule->peer_key);
+		rule->write_local_key = rspamd_keypair_ref(rule->local_key);
+	}
+
+	/* Fallback: if only one specific key is set, use it for both operations */
+	if (!rule->read_peer_key && rule->write_peer_key) {
+		/* No read key, but write key exists - use write key for read */
+		rule->read_peer_key = rspamd_pubkey_ref(rule->write_peer_key);
+		rule->read_local_key = rspamd_keypair_ref(rule->write_local_key);
+		msg_info_config("using write encryption key for read operations in rule %s", name);
+	}
+	if (!rule->write_peer_key && rule->read_peer_key) {
+		/* No write key, but read key exists - use read key for write */
+		rule->write_peer_key = rspamd_pubkey_ref(rule->read_peer_key);
+		rule->write_local_key = rspamd_keypair_ref(rule->read_local_key);
+		msg_info_config("using read encryption key for write operations in rule %s", name);
 	}
 
 	if ((value = ucl_object_lookup(obj, "learn_condition")) != NULL) {
@@ -1014,6 +1088,24 @@ int fuzzy_check_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 							   "fuzzy_check.rule",
 							   "Base32 value for the protocol encryption public key",
 							   "encryption_key",
+							   UCL_STRING,
+							   NULL,
+							   0,
+							   NULL,
+							   0);
+	rspamd_rcl_add_doc_by_path(cfg,
+							   "fuzzy_check.rule",
+							   "Base32 value for the protocol encryption public key for read operations",
+							   "read_encryption_key",
+							   UCL_STRING,
+							   NULL,
+							   0,
+							   NULL,
+							   0);
+	rspamd_rcl_add_doc_by_path(cfg,
+							   "fuzzy_check.rule",
+							   "Base32 value for the protocol encryption public key for write operations",
+							   "write_encryption_key",
 							   UCL_STRING,
 							   NULL,
 							   0,
@@ -1459,10 +1551,36 @@ fuzzy_preprocess_words(struct rspamd_mime_text_part *part, rspamd_mempool_t *poo
 	return &part->utf_words;
 }
 
+static inline gboolean
+fuzzy_rule_has_encryption(struct fuzzy_rule *rule)
+{
+	return (rule->peer_key || rule->read_peer_key || rule->write_peer_key);
+}
+
+static inline void
+fuzzy_select_encryption_keys(struct fuzzy_rule *rule,
+							 int cmd,
+							 struct rspamd_cryptobox_keypair **local_key,
+							 struct rspamd_cryptobox_pubkey **peer_key)
+{
+	if (cmd == FUZZY_DEL || cmd == FUZZY_WRITE) {
+		/* Write operation */
+		*local_key = rule->write_local_key ? rule->write_local_key : rule->local_key;
+		*peer_key = rule->write_peer_key ? rule->write_peer_key : rule->peer_key;
+	}
+	else {
+		/* Read operation (CHECK, STAT, PING, etc.) */
+		*local_key = rule->read_local_key ? rule->read_local_key : rule->local_key;
+		*peer_key = rule->read_peer_key ? rule->read_peer_key : rule->peer_key;
+	}
+}
+
 static void
 fuzzy_encrypt_cmd(struct fuzzy_rule *rule,
 				  struct rspamd_fuzzy_encrypted_req_hdr *hdr,
-				  unsigned char *data, gsize datalen)
+				  unsigned char *data, gsize datalen,
+				  struct rspamd_cryptobox_keypair *local_key,
+				  struct rspamd_cryptobox_pubkey *peer_key)
 {
 	const unsigned char *pk;
 	unsigned int pklen;
@@ -1470,21 +1588,23 @@ fuzzy_encrypt_cmd(struct fuzzy_rule *rule,
 	g_assert(hdr != NULL);
 	g_assert(data != NULL);
 	g_assert(rule != NULL);
+	g_assert(local_key != NULL);
+	g_assert(peer_key != NULL);
 
 	/* Encrypt data */
 	memcpy(hdr->magic,
 		   fuzzy_encrypted_magic,
 		   sizeof(hdr->magic));
 	ottery_rand_bytes(hdr->nonce, sizeof(hdr->nonce));
-	pk = rspamd_keypair_component(rule->local_key,
+	pk = rspamd_keypair_component(local_key,
 								  RSPAMD_KEYPAIR_COMPONENT_PK, &pklen);
 	memcpy(hdr->pubkey, pk, MIN(pklen, sizeof(hdr->pubkey)));
-	pk = rspamd_pubkey_get_pk(rule->peer_key, &pklen);
+	pk = rspamd_pubkey_get_pk(peer_key, &pklen);
 	memcpy(hdr->key_id, pk, MIN(sizeof(hdr->key_id), pklen));
 	rspamd_keypair_cache_process(rule->ctx->keypairs_cache,
-								 rule->local_key, rule->peer_key);
+								 local_key, peer_key);
 	rspamd_cryptobox_encrypt_nm_inplace(data, datalen,
-										hdr->nonce, rspamd_pubkey_get_nm(rule->peer_key, rule->local_key),
+										hdr->nonce, rspamd_pubkey_get_nm(peer_key, local_key),
 										hdr->mac);
 }
 
@@ -1499,7 +1619,7 @@ fuzzy_cmd_stat(struct fuzzy_rule *rule,
 	struct rspamd_fuzzy_encrypted_cmd *enccmd = NULL;
 	struct fuzzy_cmd_io *io;
 
-	if (rule->peer_key) {
+	if (fuzzy_rule_has_encryption(rule)) {
 		enccmd = rspamd_mempool_alloc0(pool, sizeof(*enccmd));
 		cmd = &enccmd->cmd;
 	}
@@ -1517,8 +1637,13 @@ fuzzy_cmd_stat(struct fuzzy_rule *rule,
 	io->tag = cmd->tag;
 	memcpy(&io->cmd, cmd, sizeof(io->cmd));
 
-	if (rule->peer_key && enccmd) {
-		fuzzy_encrypt_cmd(rule, &enccmd->hdr, (unsigned char *) cmd, sizeof(*cmd));
+	if (fuzzy_rule_has_encryption(rule) && enccmd) {
+		struct rspamd_cryptobox_keypair *local_key;
+		struct rspamd_cryptobox_pubkey *peer_key;
+
+		fuzzy_select_encryption_keys(rule, c, &local_key, &peer_key);
+		fuzzy_encrypt_cmd(rule, &enccmd->hdr, (unsigned char *) cmd, sizeof(*cmd),
+						  local_key, peer_key);
 		io->io.iov_base = enccmd;
 		io->io.iov_len = sizeof(*enccmd);
 	}
@@ -1548,7 +1673,7 @@ fuzzy_cmd_ping(struct fuzzy_rule *rule,
 	struct rspamd_fuzzy_encrypted_cmd *enccmd = NULL;
 	struct fuzzy_cmd_io *io;
 
-	if (rule->peer_key) {
+	if (fuzzy_rule_has_encryption(rule)) {
 		enccmd = rspamd_mempool_alloc0(pool, sizeof(*enccmd));
 		cmd = &enccmd->cmd;
 	}
@@ -1570,8 +1695,13 @@ fuzzy_cmd_ping(struct fuzzy_rule *rule,
 	io->tag = cmd->tag;
 	memcpy(&io->cmd, cmd, sizeof(io->cmd));
 
-	if (rule->peer_key && enccmd) {
-		fuzzy_encrypt_cmd(rule, &enccmd->hdr, (unsigned char *) cmd, sizeof(*cmd));
+	if (fuzzy_rule_has_encryption(rule) && enccmd) {
+		struct rspamd_cryptobox_keypair *local_key;
+		struct rspamd_cryptobox_pubkey *peer_key;
+
+		fuzzy_select_encryption_keys(rule, cmd->cmd, &local_key, &peer_key);
+		fuzzy_encrypt_cmd(rule, &enccmd->hdr, (unsigned char *) cmd, sizeof(*cmd),
+						  local_key, peer_key);
 		io->io.iov_base = enccmd;
 		io->io.iov_len = sizeof(*enccmd);
 	}
@@ -1595,7 +1725,7 @@ fuzzy_cmd_hash(struct fuzzy_rule *rule,
 	struct rspamd_fuzzy_encrypted_cmd *enccmd = NULL;
 	struct fuzzy_cmd_io *io;
 
-	if (rule->peer_key) {
+	if (fuzzy_rule_has_encryption(rule)) {
 		enccmd = rspamd_mempool_alloc0(pool, sizeof(*enccmd));
 		cmd = &enccmd->cmd;
 	}
@@ -1627,8 +1757,13 @@ fuzzy_cmd_hash(struct fuzzy_rule *rule,
 
 	memcpy(&io->cmd, cmd, sizeof(io->cmd));
 
-	if (rule->peer_key && enccmd) {
-		fuzzy_encrypt_cmd(rule, &enccmd->hdr, (unsigned char *) cmd, sizeof(*cmd));
+	if (fuzzy_rule_has_encryption(rule) && enccmd) {
+		struct rspamd_cryptobox_keypair *local_key;
+		struct rspamd_cryptobox_pubkey *peer_key;
+
+		fuzzy_select_encryption_keys(rule, c, &local_key, &peer_key);
+		fuzzy_encrypt_cmd(rule, &enccmd->hdr, (unsigned char *) cmd, sizeof(*cmd),
+						  local_key, peer_key);
 		io->io.iov_base = enccmd;
 		io->io.iov_len = sizeof(*enccmd);
 	}
@@ -2066,17 +2201,22 @@ fuzzy_cmd_from_text_part(struct rspamd_task *task,
 	io->flags = 0;
 
 
-	if (rule->peer_key) {
+	if (fuzzy_rule_has_encryption(rule)) {
+		struct rspamd_cryptobox_keypair *local_key;
+		struct rspamd_cryptobox_pubkey *peer_key;
+
+		fuzzy_select_encryption_keys(rule, c, &local_key, &peer_key);
+
 		/* Encrypt data */
 		if (!short_text) {
 			fuzzy_encrypt_cmd(rule, &encshcmd->hdr, (unsigned char *) shcmd,
-							  sizeof(*shcmd) + additional_length);
+							  sizeof(*shcmd) + additional_length, local_key, peer_key);
 			io->io.iov_base = encshcmd;
 			io->io.iov_len = sizeof(*encshcmd) + additional_length;
 		}
 		else {
 			fuzzy_encrypt_cmd(rule, &enccmd->hdr, (unsigned char *) cmd,
-							  sizeof(*cmd) + additional_length);
+							  sizeof(*cmd) + additional_length, local_key, peer_key);
 			io->io.iov_base = enccmd;
 			io->io.iov_len = sizeof(*enccmd) + additional_length;
 		}
@@ -2374,7 +2514,7 @@ fuzzy_cmd_from_data_part(struct fuzzy_rule *rule,
 
 	additional_length = fuzzy_cmd_extension_length(task, rule);
 
-	if (rule->peer_key) {
+	if (fuzzy_rule_has_encryption(rule)) {
 		enccmd = rspamd_mempool_alloc0(task->task_pool,
 									   sizeof(*enccmd) + additional_length);
 		cmd = &enccmd->cmd;
@@ -2407,10 +2547,15 @@ fuzzy_cmd_from_data_part(struct fuzzy_rule *rule,
 								   additional_length);
 	}
 
-	if (rule->peer_key) {
+	if (fuzzy_rule_has_encryption(rule)) {
+		struct rspamd_cryptobox_keypair *local_key;
+		struct rspamd_cryptobox_pubkey *peer_key;
+
+		fuzzy_select_encryption_keys(rule, c, &local_key, &peer_key);
+
 		g_assert(enccmd != NULL);
 		fuzzy_encrypt_cmd(rule, &enccmd->hdr, (unsigned char *) cmd,
-						  sizeof(*cmd) + additional_length);
+						  sizeof(*cmd) + additional_length, local_key, peer_key);
 		io->io.iov_base = enccmd;
 		io->io.iov_len = sizeof(*enccmd) + additional_length;
 	}
@@ -2501,7 +2646,7 @@ fuzzy_process_reply(unsigned char **pos, int *r, GPtrArray *req,
 	struct rspamd_fuzzy_encrypted_reply encrep;
 	gboolean found = FALSE;
 
-	if (rule->peer_key) {
+	if (fuzzy_rule_has_encryption(rule)) {
 		required_size = sizeof(encrep);
 	}
 	else {
@@ -2512,21 +2657,76 @@ fuzzy_process_reply(unsigned char **pos, int *r, GPtrArray *req,
 		return NULL;
 	}
 
-	if (rule->peer_key) {
+	if (fuzzy_rule_has_encryption(rule)) {
 		memcpy(&encrep, p, sizeof(encrep));
 		*pos += required_size;
 		*r -= required_size;
 
-		/* Try to decrypt reply */
-		rspamd_keypair_cache_process(rule->ctx->keypairs_cache,
-									 rule->local_key, rule->peer_key);
+		/* Try to decrypt with available keys, starting with read keys (more common) */
+		struct rspamd_cryptobox_keypair *local_keys[3];
+		struct rspamd_cryptobox_pubkey *peer_keys[3];
+		int nkeys = 0;
+		gboolean decrypted = FALSE;
 
-		if (!rspamd_cryptobox_decrypt_nm_inplace((unsigned char *) &encrep.rep,
-												 sizeof(encrep.rep),
-												 encrep.hdr.nonce,
-												 rspamd_pubkey_get_nm(rule->peer_key, rule->local_key),
-												 encrep.hdr.mac)) {
-			msg_info("cannot decrypt reply");
+		/* Try read keys first (most common for CHECK operations) */
+		if (rule->read_peer_key && rule->read_local_key) {
+			local_keys[nkeys] = rule->read_local_key;
+			peer_keys[nkeys] = rule->read_peer_key;
+			nkeys++;
+		}
+		/* Then try write keys if not already added */
+		if (rule->write_peer_key && rule->write_local_key) {
+			gboolean already_added = FALSE;
+			for (int j = 0; j < nkeys; j++) {
+				if (peer_keys[j] == rule->write_peer_key) {
+					already_added = TRUE;
+					break;
+				}
+			}
+			if (!already_added) {
+				local_keys[nkeys] = rule->write_local_key;
+				peer_keys[nkeys] = rule->write_peer_key;
+				nkeys++;
+			}
+		}
+		/* Finally try common keys if not already added */
+		if (rule->peer_key && rule->local_key) {
+			gboolean already_added = FALSE;
+			for (int j = 0; j < nkeys; j++) {
+				if (peer_keys[j] == rule->peer_key) {
+					already_added = TRUE;
+					break;
+				}
+			}
+			if (!already_added) {
+				local_keys[nkeys] = rule->local_key;
+				peer_keys[nkeys] = rule->peer_key;
+				nkeys++;
+			}
+		}
+
+		/* Try decryption with each key pair */
+		for (i = 0; i < nkeys && !decrypted; i++) {
+			struct rspamd_fuzzy_encrypted_reply encrep_copy;
+			memcpy(&encrep_copy, &encrep, sizeof(encrep_copy));
+
+			rspamd_keypair_cache_process(rule->ctx->keypairs_cache,
+										 local_keys[i], peer_keys[i]);
+
+			if (rspamd_cryptobox_decrypt_nm_inplace((unsigned char *) &encrep_copy.rep,
+													sizeof(encrep_copy.rep),
+													encrep_copy.hdr.nonce,
+													rspamd_pubkey_get_nm(peer_keys[i], local_keys[i]),
+													encrep_copy.hdr.mac)) {
+				/* Successfully decrypted */
+				memcpy(&encrep, &encrep_copy, sizeof(encrep));
+				decrypted = TRUE;
+				break;
+			}
+		}
+
+		if (!decrypted) {
+			msg_info("cannot decrypt reply with any available keys");
 			return NULL;
 		}
 
