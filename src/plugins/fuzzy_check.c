@@ -2267,9 +2267,9 @@ fuzzy_cmd_from_html_part(struct rspamd_task *task,
 	}
 
 	/* Check minimum tags threshold */
-	if (part->html_features && part->html_features->tags_count < rule->min_html_tags) {
+	if (part->html->features.tags_count < rule->min_html_tags) {
 		msg_debug_fuzzy_check("HTML part has %d tags, less than minimum %d",
-							  part->html_features->tags_count, rule->min_html_tags);
+							  part->html->features.tags_count, rule->min_html_tags);
 		return NULL;
 	}
 
@@ -2278,17 +2278,15 @@ fuzzy_cmd_from_html_part(struct rspamd_task *task,
 	 * - Require at least 2 links (single-link emails too generic)
 	 * - Require at least some DOM depth (flat structure too common)
 	 */
-	if (part->html_features) {
-		if (part->html_features->links.total_links < 2) {
-			msg_debug_fuzzy_check("HTML part has only %d links, too few for reliable matching",
-								  part->html_features->links.total_links);
-			return NULL;
-		}
-		if (part->html_features->max_dom_depth < 3) {
-			msg_debug_fuzzy_check("HTML part has depth %d, too shallow for reliable matching",
-								  part->html_features->max_dom_depth);
-			return NULL;
-		}
+	if (part->html->features.links.total_links < 2) {
+		msg_debug_fuzzy_check("HTML part has only %d links, too few for reliable matching",
+							  part->html->features.links.total_links);
+		return NULL;
+	}
+	if (part->html->features.max_dom_depth < 3) {
+		msg_debug_fuzzy_check("HTML part has depth %d, too shallow for reliable matching",
+							  part->html->features.max_dom_depth);
+		return NULL;
 	}
 
 	/*
