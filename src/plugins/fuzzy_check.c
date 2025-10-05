@@ -2134,6 +2134,24 @@ fuzzy_cmd_from_html_part(struct rspamd_task *task,
 	}
 
 	/*
+	 * Additional safety checks for short HTML to prevent false positives:
+	 * - Require at least 2 links (single-link emails too generic)
+	 * - Require at least some DOM depth (flat structure too common)
+	 */
+	if (part->html_features) {
+		if (part->html_features->links.total_links < 2) {
+			msg_debug_fuzzy_check("HTML part has only %d links, too few for reliable matching",
+								  part->html_features->links.total_links);
+			return NULL;
+		}
+		if (part->html_features->max_dom_depth < 3) {
+			msg_debug_fuzzy_check("HTML part has depth %d, too shallow for reliable matching",
+								  part->html_features->max_dom_depth);
+			return NULL;
+		}
+	}
+
+	/*
 	 * HTML fuzzy uses separate cache key to avoid conflicts with text fuzzy.
 	 * Text parts can have both text hash (short text, no shingles) and HTML hash.
 	 */
