@@ -687,6 +687,20 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 		rule->write_local_key = rspamd_keypair_ref(rule->local_key);
 	}
 
+	/* Fallback: if only one specific key is set, use it for both operations */
+	if (!rule->read_peer_key && rule->write_peer_key) {
+		/* No read key, but write key exists - use write key for read */
+		rule->read_peer_key = rspamd_pubkey_ref(rule->write_peer_key);
+		rule->read_local_key = rspamd_keypair_ref(rule->write_local_key);
+		msg_info_config("using write encryption key for read operations in rule %s", name);
+	}
+	if (!rule->write_peer_key && rule->read_peer_key) {
+		/* No write key, but read key exists - use read key for write */
+		rule->write_peer_key = rspamd_pubkey_ref(rule->read_peer_key);
+		rule->write_local_key = rspamd_keypair_ref(rule->read_local_key);
+		msg_info_config("using read encryption key for write operations in rule %s", name);
+	}
+
 	if ((value = ucl_object_lookup(obj, "learn_condition")) != NULL) {
 		lua_script = ucl_object_tostring(value);
 
