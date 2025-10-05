@@ -2465,44 +2465,55 @@ fuzzy_process_reply(unsigned char **pos, int *r, GPtrArray *req,
 		*pos += required_size;
 		*r -= required_size;
 
-		/* Find matching command to determine operation type */
-		struct rspamd_cryptobox_keypair *local_key = NULL;
-		struct rspamd_cryptobox_pubkey *peer_key = NULL;
+		/* Try to decrypt with available keys, starting with read keys (more common) */
+		struct rspamd_cryptobox_keypair *local_keys[3];
+		struct rspamd_cryptobox_pubkey *peer_keys[3];
+		int nkeys = 0;
+		gboolean decrypted = FALSE;
 
-		for (i = 0; i < req->len; i++) {
-			io = g_ptr_array_index(req, i);
-			if (io->tag == encrep.rep.v1.tag) {
-				/* Determine which keys to use based on command type */
-				if (io->cmd.cmd == FUZZY_DEL || io->cmd.cmd == FUZZY_WRITE) {
-					/* Write operation */
-					local_key = rule->write_local_key ? rule->write_local_key : rule->local_key;
-					peer_key = rule->write_peer_key ? rule->write_peer_key : rule->peer_key;
-				}
-				else {
-					/* Read operation (CHECK, STAT, PING, etc.) */
-					local_key = rule->read_local_key ? rule->read_local_key : rule->local_key;
-					peer_key = rule->read_peer_key ? rule->read_peer_key : rule->peer_key;
-				}
-				break;
+		/* Try read keys first (most common for CHECK operations) */
+		if (rule->read_peer_key && rule->read_local_key) {
+			local_keys[nkeys] = rule->read_local_key;
+			peer_keys[nkeys] = rule->read_peer_key;
+			nkeys++;
+		}
+		/* Then try write keys */
+		if (rule->write_peer_key && rule->write_local_key &&
+			(rule->write_peer_key != rule->read_peer_key)) {
+			local_keys[nkeys] = rule->write_local_key;
+			peer_keys[nkeys] = rule->write_peer_key;
+			nkeys++;
+		}
+		/* Finally try common keys if they differ from specific ones */
+		if (rule->peer_key && rule->local_key &&
+			(rule->peer_key != rule->read_peer_key) &&
+			(rule->peer_key != rule->write_peer_key)) {
+			local_keys[nkeys] = rule->local_key;
+			peer_keys[nkeys] = rule->peer_key;
+			nkeys++;
+		}
+
+		/* Try decryption with each key pair */
+		for (i = 0; i < nkeys && !decrypted; i++) {
+			struct rspamd_fuzzy_encrypted_reply encrep_copy;
+			memcpy(&encrep_copy, &encrep, sizeof(encrep_copy));
+
+			rspamd_keypair_cache_process(rule->ctx->keypairs_cache,
+										 local_keys[i], peer_keys[i]);
+
+			if (rspamd_cryptobox_decrypt_nm_inplace((unsigned char *) &encrep_copy.rep,
+													sizeof(encrep_copy.rep),
+													encrep_copy.hdr.nonce,
+													rspamd_pubkey_get_nm(peer_keys[i], local_keys[i]),
+													encrep_copy.hdr.mac)) {
+				/* Successfully decrypted */
+				memcpy(&encrep, &encrep_copy, sizeof(encrep));
+				decrypted = TRUE;
 			}
 		}
 
-		if (!local_key || !peer_key) {
-			/* Fallback to common keys if command not found or keys not set */
-			local_key = rule->local_key;
-			peer_key = rule->peer_key;
-		}
-
-		/* Try to decrypt reply */
-		rspamd_keypair_cache_process(rule->ctx->keypairs_cache,
-									 local_key, peer_key);
-
-		if (!rspamd_cryptobox_decrypt_nm_inplace((unsigned char *) &encrep.rep,
-												 sizeof(encrep.rep),
-												 encrep.hdr.nonce,
-												 rspamd_pubkey_get_nm(peer_key, local_key),
-												 encrep.hdr.mac)) {
-			msg_info("cannot decrypt reply");
+		if (!decrypted) {
+			msg_info("cannot decrypt reply with any available keys");
 			return NULL;
 		}
 
