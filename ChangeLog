@@ -1,3 +1,24 @@
+3.13.2: 5 Oct 2025
+  * [Feature] Fuzzy check: Add separate encryption keys for read and write operations
+  * [Feature] DKIM: Add ED25519 support for DKIM signing and verification with OpenSSL version checks
+  * [Feature] Vault: Add HashiCorp Vault KV version 2 support for DKIM key management
+  * [Feature] MetaDefender: Add MetaDefender Cloud Lua module for SHA256 hash lookups
+  * [Feature] LLM: Add user/domain context support for LLM-based classification with Redis-based conversation context
+  * [Feature] DMARC: Add RUA address exclusion configuration option
+  * [Fix] DKIM: Fix relaxed bodyhash calculation for lines with only spaces to comply with RFC 6376
+  * [Fix] DKIM: Fix ED25519 key loading to prevent memory corruption in union handling
+  * [Fix] HTTP maps: Enforce server-controlled refresh intervals and prevent aggressive polling
+  * [Fix] HTTP maps: Prevent time_t overflow in expires header processing
+  * [Fix] Once received plugin: Fix duplicate symbol addition by changing break to return
+  * [Fix] Redis: Propagate unused Sentinel options properly
+  * [Fix] Fuzzy check: Fix reply decryption when using separate read/write keys
+  * [Fix] Fuzzy check: Add fallback when only one specific encryption key is set
+  * [Fix] Fuzzy check: Fix duplicate key filtering in reply decryption
+  * [Fix] Fuzzy ping: Allow read/write servers configuration
+  * [Minor] Fuzzy check: Refactor encryption key selection into helper functions
+  * [Minor] Fuzzy check: Stop early when found a correct key
+  * [Minor] Add cursor rules for development
+
 3.13.1: 30 Sep 2025
   * [Feature] Archive module: Full support for encrypted ZIP archives with ZipCrypto and AES encryption
   * [Feature] Archive module: Both reading and writing of AES-encrypted ZIP archives is supported
