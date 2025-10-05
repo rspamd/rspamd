@@ -2383,10 +2383,15 @@ fuzzy_cmd_from_html_part(struct rspamd_task *task,
 	io->flags = FUZZY_CMD_FLAG_HTML;
 	memcpy(&io->cmd, &shcmd->basic, sizeof(io->cmd));
 
-	if (rule->peer_key) {
+	if (fuzzy_rule_has_encryption(rule)) {
+		struct rspamd_cryptobox_keypair *local_key;
+		struct rspamd_cryptobox_pubkey *peer_key;
+
+		fuzzy_select_encryption_keys(rule, c, &local_key, &peer_key);
+
 		/* Encrypt data */
 		fuzzy_encrypt_cmd(rule, &encshcmd->hdr, (unsigned char *) shcmd,
-						  sizeof(*shcmd) + additional_length);
+						  sizeof(*shcmd) + additional_length, local_key, peer_key);
 		io->io.iov_base = encshcmd;
 		io->io.iov_len = sizeof(*encshcmd) + additional_length;
 	}
