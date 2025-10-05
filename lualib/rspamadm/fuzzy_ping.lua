@@ -87,7 +87,17 @@ local function print_storages(rules)
   for n, rule in pairs(rules) do
     print(highlight('Rule: %s', n))
     print(string.format("\tRead only: %s", rule.read_only))
-    print(string.format("\tServers: %s", table.concat(lua_util.values(rule.servers), ',')))
+    -- Handle both unified servers and separate read/write servers
+    if rule.servers then
+      print(string.format("\tServers: %s", table.concat(lua_util.values(rule.servers), ',')))
+    else
+      if rule.read_servers then
+        print(string.format("\tRead servers: %s", table.concat(lua_util.values(rule.read_servers), ',')))
+      end
+      if rule.write_servers then
+        print(string.format("\tWrite servers: %s", table.concat(lua_util.values(rule.write_servers), ',')))
+      end
+    end
     print("\tFlags:")
 
     for fl, id in pairs(rule.flags or E) do
