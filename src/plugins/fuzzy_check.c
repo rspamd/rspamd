@@ -2364,7 +2364,13 @@ fuzzy_cmd_from_html_part(struct rspamd_task *task,
 			return NULL;
 		}
 
-		fuzzy_cmd_set_cached(rule, task, mp, cached);
+		/* Save to HTML-specific cache (not standard text cache) */
+		if (!html_cached_ptr) {
+			html_cached_ptr = rspamd_mempool_alloc0(task->task_pool, sizeof(*html_cached_ptr) *
+																		 (MESSAGE_FIELD(task, parts)->len + 1));
+			rspamd_mempool_set_variable(task->task_pool, html_cache_key, html_cached_ptr, NULL);
+		}
+		html_cached_ptr[mp->part_number] = cached;
 	}
 
 	io = rspamd_mempool_alloc(task->task_pool, sizeof(*io));
