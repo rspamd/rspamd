@@ -50,6 +50,8 @@ struct rspamd_email_address;
 struct ev_loop;
 struct rspamd_http_message;
 struct rspamd_config;
+/* Forward declaration to avoid heavy includes */
+struct rspamd_task;
 
 struct rspamd_milter_context {
 	const char *spam_header;
@@ -160,6 +162,16 @@ struct rspamd_milter_session *rspamd_milter_session_ref(
  */
 struct rspamd_http_message *rspamd_milter_to_http(
 	struct rspamd_milter_session *session);
+
+/**
+ * Convert milter session to HTTP message and store ESMTP args in task
+ * @param session milter session
+ * @param task task to store ESMTP arguments in
+ * @return HTTP message
+ */
+struct rspamd_http_message *rspamd_milter_to_http_with_task(
+	struct rspamd_milter_session *session,
+	struct rspamd_task *task);
 
 /**
  * Sends task results to the

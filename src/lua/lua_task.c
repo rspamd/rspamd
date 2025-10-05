@@ -4343,51 +4343,73 @@ lua_task_get_mail_esmtp_args(lua_State *L)
 	struct rspamd_mime_header *hdr;
 
 	if (task) {
-		/* Check if this is a milter task */
-		if (!(task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_MILTER)) {
-			lua_pushnil(L);
-			return 1;
-		}
+		/* First try to get ESMTP args from task */
+		GHashTable *mail_args = rspamd_task_get_mail_esmtp_args(task);
 
-		/* Get ESMTP args from HTTP headers */
-		hdr = rspamd_message_get_header_array(task, "X-Rspamd-Mail-Esmtp-Args", FALSE);
+		if (mail_args) {
+			GHashTableIter iter;
+			gpointer key, value;
 
-		if (hdr) {
 			lua_createtable(L, 0, 0);
 
-			while (hdr) {
-				const char *p, *eq;
-				gsize len;
+			g_hash_table_iter_init(&iter, mail_args);
+			while (g_hash_table_iter_next(&iter, &key, &value)) {
+				rspamd_ftok_t *k = (rspamd_ftok_t *) key;
+				rspamd_ftok_t *v = (rspamd_ftok_t *) value;
 
-				if (hdr->decoded) {
-					p = hdr->decoded;
-					len = strlen(p);
-				}
-				else {
-					p = hdr->value;
-					len = hdr->value_len;
-				}
-
-				/* Parse KEY=VALUE format */
-				eq = memchr(p, '=', len);
-
-				if (eq) {
-					/* KEY=VALUE */
-					lua_pushlstring(L, p, eq - p);
-					lua_pushlstring(L, eq + 1, len - (eq - p) - 1);
-				}
-				else {
-					/* KEY only */
-					lua_pushlstring(L, p, len);
-					lua_pushstring(L, "");
-				}
-
+				lua_pushlstring(L, k->begin, k->len);
+				lua_pushlstring(L, v->begin, v->len);
 				lua_settable(L, -3);
-				hdr = hdr->next;
 			}
 		}
 		else {
-			lua_pushnil(L);
+			/* Fallback to HTTP headers for backward compatibility */
+			/* Check if this is a milter task */
+			if (!(task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_MILTER)) {
+				lua_pushnil(L);
+				return 1;
+			}
+
+			/* Get ESMTP args from HTTP headers */
+			hdr = rspamd_message_get_header_array(task, "X-Rspamd-Mail-Esmtp-Args", FALSE);
+
+			if (hdr) {
+				lua_createtable(L, 0, 0);
+
+				while (hdr) {
+					const char *p, *eq;
+					gsize len;
+
+					if (hdr->decoded) {
+						p = hdr->decoded;
+						len = strlen(p);
+					}
+					else {
+						p = hdr->value;
+						len = strlen(p);
+					}
+
+					/* Parse KEY=VALUE format */
+					eq = memchr(p, '=', len);
+
+					if (eq) {
+						/* KEY=VALUE */
+						lua_pushlstring(L, p, eq - p);
+						lua_pushlstring(L, eq + 1, len - (eq - p) - 1);
+					}
+					else {
+						/* KEY only */
+						lua_pushlstring(L, p, len);
+						lua_pushstring(L, "");
+					}
+
+					lua_settable(L, -3);
+					hdr = hdr->next;
+				}
+			}
+			else {
+				lua_pushnil(L);
+			}
 		}
 	}
 	else {
@@ -4408,191 +4430,246 @@ lua_task_get_rcpt_esmtp_args(lua_State *L)
 	GHashTable *rcpt_args_by_idx = NULL;
 
 	if (task) {
-		/* Check if this is a milter task */
-		if (!(task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_MILTER)) {
-			lua_pushnil(L);
-			return 1;
-		}
-
 		/* Check if idx was specified */
 		if (lua_gettop(L) >= 2 && lua_type(L, 2) == LUA_TNUMBER) {
 			idx = lua_tointeger(L, 2);
 			all_rcpts = FALSE;
 		}
 
-		/* Get ESMTP args from HTTP headers */
-		hdr = rspamd_message_get_header_array(task, "X-Rspamd-Rcpt-Esmtp-Args", FALSE);
+		/* First try to get ESMTP args from task */
+		GPtrArray *rcpt_args = rspamd_task_get_rcpt_esmtp_args(task);
 
-		if (hdr) {
+		if (rcpt_args) {
 			if (all_rcpts) {
-				/* Build hash table mapping recipient index to args table */
-				rcpt_args_by_idx = g_hash_table_new_full(g_direct_hash, g_direct_equal,
-														  NULL, NULL);
+				/* Return all recipients' args */
+				lua_createtable(L, 0, 0);
 
-				/* First pass: collect all args by recipient index */
-				while (hdr) {
-					const char *p, *colon, *eq;
-					gsize len;
-					int rcpt_idx;
-					lua_State *tmp_L;
+				for (unsigned int i = 0; i < rcpt_args->len; i++) {
+					GHashTable *args = g_ptr_array_index(rcpt_args, i);
+					if (args) {
+						GHashTableIter iter;
+						gpointer key, value;
 
-					if (hdr->decoded) {
-						p = hdr->decoded;
-						len = strlen(p);
+						lua_createtable(L, 0, 0);
+
+						g_hash_table_iter_init(&iter, args);
+						while (g_hash_table_iter_next(&iter, &key, &value)) {
+							rspamd_ftok_t *k = (rspamd_ftok_t *) key;
+							rspamd_ftok_t *v = (rspamd_ftok_t *) value;
+
+							lua_pushlstring(L, k->begin, k->len);
+							lua_pushlstring(L, v->begin, v->len);
+							lua_settable(L, -3);
+						}
+
+						lua_rawseti(L, -2, i + 1);
+					}
+				}
+			}
+			else {
+				/* Return specific recipient's args */
+				if (idx >= 0 && idx < (int) rcpt_args->len) {
+					GHashTable *args = g_ptr_array_index(rcpt_args, idx);
+					if (args) {
+						GHashTableIter iter;
+						gpointer key, value;
+
+						lua_createtable(L, 0, 0);
+
+						g_hash_table_iter_init(&iter, args);
+						while (g_hash_table_iter_next(&iter, &key, &value)) {
+							rspamd_ftok_t *k = (rspamd_ftok_t *) key;
+							rspamd_ftok_t *v = (rspamd_ftok_t *) value;
+
+							lua_pushlstring(L, k->begin, k->len);
+							lua_pushlstring(L, v->begin, v->len);
+							lua_settable(L, -3);
+						}
 					}
 					else {
-						p = hdr->value;
-						len = hdr->value_len;
-					}
-
-					/* Parse IDX:KEY=VALUE format */
-					colon = memchr(p, ':', len);
-
-					if (colon) {
-						char *endptr;
-						rcpt_idx = strtol(p, &endptr, 10);
-
-						if (endptr == colon) {
-							/* Valid index found */
-							p = colon + 1;
-							len -= (colon - p) + 1;
-
-							/* Store this arg for this recipient */
-							if (!g_hash_table_contains(rcpt_args_by_idx, GINT_TO_POINTER(rcpt_idx))) {
-								/* Create new table for this recipient */
-								lua_newtable(L);
-								g_hash_table_insert(rcpt_args_by_idx,
-													GINT_TO_POINTER(rcpt_idx),
-													GINT_TO_POINTER(lua_gettop(L)));
-							}
-
-							/* Get the table for this recipient */
-							int table_idx = GPOINTER_TO_INT(g_hash_table_lookup(rcpt_args_by_idx,
-																				 GINT_TO_POINTER(rcpt_idx)));
-							lua_pushvalue(L, table_idx);
-
-							/* Parse KEY=VALUE */
-							eq = memchr(p, '=', len);
-
-							if (eq) {
-								lua_pushlstring(L, p, eq - p);
-								lua_pushlstring(L, eq + 1, len - (eq - p) - 1);
-							}
-							else {
-								lua_pushlstring(L, p, len);
-								lua_pushstring(L, "");
-							}
-
-							lua_settable(L, -3);
-							lua_pop(L, 1); /* Pop the table */
-						}
-					}
-
-					hdr = hdr->next;
-				}
-
-				/* Now create the result array */
-				if (g_hash_table_size(rcpt_args_by_idx) > 0) {
-					GHashTableIter iter;
-					gpointer key, value;
-					int max_idx = 0;
-
-					/* Find max index */
-					g_hash_table_iter_init(&iter, rcpt_args_by_idx);
-					while (g_hash_table_iter_next(&iter, &key, &value)) {
-						int i = GPOINTER_TO_INT(key);
-						if (i > max_idx) {
-							max_idx = i;
-						}
-					}
-
-					/* Create result array */
-					lua_createtable(L, max_idx + 1, 0);
-
-					/* Fill array with tables or nils */
-					for (int i = 0; i <= max_idx; i++) {
-						if (g_hash_table_contains(rcpt_args_by_idx, GINT_TO_POINTER(i))) {
-							int table_idx = GPOINTER_TO_INT(g_hash_table_lookup(rcpt_args_by_idx,
-																				 GINT_TO_POINTER(i)));
-							lua_pushvalue(L, table_idx);
-						}
-						else {
-							lua_pushnil(L);
-						}
-						lua_rawseti(L, -2, i + 1); /* Lua arrays are 1-based */
-					}
-
-					/* Clean up temporary tables */
-					g_hash_table_iter_init(&iter, rcpt_args_by_idx);
-					while (g_hash_table_iter_next(&iter, &key, &value)) {
-						int table_idx = GPOINTER_TO_INT(value);
-						lua_remove(L, table_idx);
+						lua_pushnil(L);
 					}
 				}
 				else {
 					lua_pushnil(L);
 				}
-
-				g_hash_table_destroy(rcpt_args_by_idx);
-			}
-			else {
-				/* Return args for specific recipient */
-				lua_newtable(L);
-				gboolean found = FALSE;
-
-				while (hdr) {
-					const char *p, *colon, *eq;
-					gsize len;
-					int rcpt_idx;
-
-					if (hdr->decoded) {
-						p = hdr->decoded;
-						len = strlen(p);
-					}
-					else {
-						p = hdr->value;
-						len = hdr->value_len;
-					}
-
-					/* Parse IDX:KEY=VALUE format */
-					colon = memchr(p, ':', len);
-
-					if (colon) {
-						char *endptr;
-						rcpt_idx = strtol(p, &endptr, 10);
-
-						if (endptr == colon && rcpt_idx == idx) {
-							found = TRUE;
-							p = colon + 1;
-							len -= (colon - p) + 1;
-
-							/* Parse KEY=VALUE */
-							eq = memchr(p, '=', len);
-
-							if (eq) {
-								lua_pushlstring(L, p, eq - p);
-								lua_pushlstring(L, eq + 1, len - (eq - p) - 1);
-							}
-							else {
-								lua_pushlstring(L, p, len);
-								lua_pushstring(L, "");
-							}
-
-							lua_settable(L, -3);
-						}
-					}
-
-					hdr = hdr->next;
-				}
-
-				if (!found) {
-					lua_pop(L, 1);
-					lua_pushnil(L);
-				}
 			}
 		}
 		else {
-			lua_pushnil(L);
+			/* Fallback to HTTP headers for backward compatibility */
+
+			/* Get ESMTP args from HTTP headers */
+			hdr = rspamd_message_get_header_array(task, "X-Rspamd-Rcpt-Esmtp-Args", FALSE);
+			if (hdr) {
+				if (all_rcpts) {
+					/* Build hash table mapping recipient index to args table */
+					rcpt_args_by_idx = g_hash_table_new_full(g_direct_hash, g_direct_equal,
+															 NULL, NULL);
+
+					/* First pass: collect all args by recipient index */
+					while (hdr) {
+						const char *p, *colon, *eq;
+						gsize len;
+						int rcpt_idx;
+
+						if (hdr->decoded) {
+							p = hdr->decoded;
+							len = strlen(p);
+						}
+						else {
+							p = hdr->value;
+							len = strlen(p);
+						}
+
+						/* Parse IDX:KEY=VALUE format */
+						colon = memchr(p, ':', len);
+
+						if (colon) {
+							char *endptr;
+							rcpt_idx = strtol(p, &endptr, 10);
+
+							if (endptr == colon) {
+								/* Valid index found */
+								p = colon + 1;
+								len -= (colon - p) + 1;
+
+								/* Store this arg for this recipient */
+								if (!g_hash_table_contains(rcpt_args_by_idx, GINT_TO_POINTER(rcpt_idx))) {
+									/* Create new table for this recipient */
+									lua_newtable(L);
+									g_hash_table_insert(rcpt_args_by_idx,
+														GINT_TO_POINTER(rcpt_idx),
+														GINT_TO_POINTER(lua_gettop(L)));
+								}
+
+								/* Get the table for this recipient */
+								int table_idx = GPOINTER_TO_INT(g_hash_table_lookup(rcpt_args_by_idx,
+																					GINT_TO_POINTER(rcpt_idx)));
+								lua_pushvalue(L, table_idx);
+
+								/* Parse KEY=VALUE */
+								eq = memchr(p, '=', len);
+
+								if (eq) {
+									lua_pushlstring(L, p, eq - p);
+									lua_pushlstring(L, eq + 1, len - (eq - p) - 1);
+								}
+								else {
+									lua_pushlstring(L, p, len);
+									lua_pushstring(L, "");
+								}
+
+								lua_settable(L, -3);
+								lua_pop(L, 1); /* Pop the table */
+							}
+						}
+
+						hdr = hdr->next;
+					}
+
+					/* Now create the result array */
+					if (g_hash_table_size(rcpt_args_by_idx) > 0) {
+						GHashTableIter iter;
+						gpointer key, value;
+						int max_idx = 0;
+
+						/* Find max index */
+						g_hash_table_iter_init(&iter, rcpt_args_by_idx);
+						while (g_hash_table_iter_next(&iter, &key, &value)) {
+							int i = GPOINTER_TO_INT(key);
+							if (i > max_idx) {
+								max_idx = i;
+							}
+						}
+
+						/* Create result array */
+						lua_createtable(L, max_idx + 1, 0);
+
+						/* Fill array with tables or nils */
+						for (int i = 0; i <= max_idx; i++) {
+							if (g_hash_table_contains(rcpt_args_by_idx, GINT_TO_POINTER(i))) {
+								int table_idx = GPOINTER_TO_INT(g_hash_table_lookup(rcpt_args_by_idx,
+																					GINT_TO_POINTER(i)));
+								lua_pushvalue(L, table_idx);
+							}
+							else {
+								lua_pushnil(L);
+							}
+							lua_rawseti(L, -2, i + 1); /* Lua arrays are 1-based */
+						}
+
+						/* Clean up temporary tables */
+						g_hash_table_iter_init(&iter, rcpt_args_by_idx);
+						while (g_hash_table_iter_next(&iter, &key, &value)) {
+							int table_idx = GPOINTER_TO_INT(value);
+							lua_remove(L, table_idx);
+						}
+					}
+					else {
+						lua_pushnil(L);
+					}
+
+					g_hash_table_destroy(rcpt_args_by_idx);
+				}
+				else {
+					/* Return args for specific recipient */
+					lua_newtable(L);
+					gboolean found = FALSE;
+
+					while (hdr) {
+						const char *p, *colon, *eq;
+						gsize len;
+						int rcpt_idx;
+
+						if (hdr->decoded) {
+							p = hdr->decoded;
+							len = strlen(p);
+						}
+						else {
+							p = hdr->value;
+							len = strlen(p);
+						}
+
+						/* Parse IDX:KEY=VALUE format */
+						colon = memchr(p, ':', len);
+
+						if (colon) {
+							char *endptr;
+							rcpt_idx = strtol(p, &endptr, 10);
+
+							if (endptr == colon && rcpt_idx == idx) {
+								found = TRUE;
+								p = colon + 1;
+								len -= (colon - p) + 1;
+
+								/* Parse KEY=VALUE */
+								eq = memchr(p, '=', len);
+
+								if (eq) {
+									lua_pushlstring(L, p, eq - p);
+									lua_pushlstring(L, eq + 1, len - (eq - p) - 1);
+								}
+								else {
+									lua_pushlstring(L, p, len);
+									lua_pushstring(L, "");
+								}
+
+								lua_settable(L, -3);
+							}
+						}
+
+						hdr = hdr->next;
+					}
+
+					if (!found) {
+						lua_pop(L, 1);
+						lua_pushnil(L);
+					}
+				}
+			}
+			else {
+				lua_pushnil(L);
+			}
 		}
 	}
 	else {

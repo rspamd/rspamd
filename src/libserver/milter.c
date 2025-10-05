@@ -1856,6 +1856,28 @@ rspamd_milter_to_http(struct rspamd_milter_session *session)
 	return msg;
 }
 
+struct rspamd_http_message *
+rspamd_milter_to_http_with_task(struct rspamd_milter_session *session,
+								struct rspamd_task *task)
+{
+	struct rspamd_http_message *msg;
+
+	/* First create the HTTP message using the existing function */
+	msg = rspamd_milter_to_http(session);
+
+	/* Then store ESMTP arguments in the task */
+	if (task && session) {
+		if (session->mail_esmtp_args) {
+			rspamd_task_set_mail_esmtp_args(task, session->mail_esmtp_args);
+		}
+		if (session->rcpt_esmtp_args) {
+			rspamd_task_set_rcpt_esmtp_args(task, session->rcpt_esmtp_args);
+		}
+	}
+
+	return msg;
+}
+
 void *
 rspamd_milter_update_userdata(struct rspamd_milter_session *session,
 							  void *ud)
