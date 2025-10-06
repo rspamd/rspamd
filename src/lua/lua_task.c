@@ -4600,10 +4600,36 @@ lua_task_get_rcpt_esmtp_args(lua_State *L)
 						}
 
 						/* Clean up temporary tables */
-						g_hash_table_iter_init(&iter, rcpt_args_by_idx);
-						while (g_hash_table_iter_next(&iter, &key, &value)) {
-							int table_idx = GPOINTER_TO_INT(value);
-							lua_remove(L, table_idx);
+						{
+							/* Collect indices first */
+							GHashTableIter iter2;
+							gpointer key2, value2;
+							GArray *to_remove = g_array_new(FALSE, FALSE, sizeof(int));
+
+							g_hash_table_iter_init(&iter2, rcpt_args_by_idx);
+							while (g_hash_table_iter_next(&iter2, &key2, &value2)) {
+								int table_idx = GPOINTER_TO_INT(value2);
+								g_array_append_val(to_remove, table_idx);
+							}
+
+							/* Remove in descending order to avoid index shifts */
+							while (to_remove->len > 0) {
+								guint max_pos = 0;
+								int max_idx = g_array_index(to_remove, int, 0);
+
+								for (guint j = 1; j < to_remove->len; j++) {
+									int v = g_array_index(to_remove, int, j);
+									if (v > max_idx) {
+										max_idx = v;
+										max_pos = j;
+									}
+								}
+
+								lua_remove(L, max_idx);
+								g_array_remove_index_fast(to_remove, max_pos);
+							}
+
+							g_array_free(to_remove, TRUE);
 						}
 					}
 					else {
