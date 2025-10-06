@@ -444,15 +444,73 @@ local function setup_dkim_signing(cfg, changes)
   res_tbl.sign_authenticated = sign_authenticated
 end
 
-local function setup_postfix(cfg, changes)
+local function get_postconf_param(param)
+  -- Get Postfix configuration parameter using postconf utility
+  local handle = io.popen('postconf -h ' .. param .. ' 2>/dev/null')
+  if not handle then
+    return nil
+  end
+
+  local result = handle:read('*l')
+  handle:close()
+
+  if result and #result > 0 then
+    -- Trim whitespace
+    result = result:gsub('^%s*(.-)%s*$', '%1')
+    return result
+  end
+
+  return nil
+end
+
+local function check_postconf_available()
+  -- Check if postconf is available
+  local handle = io.popen('command -v postconf 2>/dev/null')
+  if not handle then
+    return false
+  end
+
+  local result = handle:read('*l')
+  handle:close()
+
+  return result and #result > 0
+end
+
+local function setup_postfix(_cfg, changes)
   printf('Setup %s integration:', highlight('Postfix'))
   printf()
 
-  -- Detect Postfix paths
-  local postfix_main_cf = '/etc/postfix/main.cf'
-  local postfix_master_cf = '/etc/postfix/master.cf'
-  local system_aliases = '/etc/aliases'
-  local virtual_aliases = '/etc/postfix/virtual'
+  -- Check if postconf is available
+  if not check_postconf_available() then
+    printf('Warning: %s utility not found. Postfix may not be installed.', highlight('postconf'))
+    if not ask_yes_no('Continue anyway?', false) then
+      return
+    end
+  end
+
+  -- Get Postfix paths using postconf
+  local config_directory = get_postconf_param('config_directory') or '/etc/postfix'
+  local postfix_main_cf = config_directory .. '/main.cf'
+  local postfix_master_cf = config_directory .. '/master.cf'
+  local system_aliases = get_postconf_param('alias_maps') or '/etc/aliases'
+  local virtual_aliases = get_postconf_param('virtual_alias_maps') or '/etc/postfix/virtual'
+
+  -- Parse alias_maps which may contain "hash:/path" or similar
+  if system_aliases:match('^%w+:') then
+    system_aliases = system_aliases:gsub('^%w+:', '')
+  end
+  -- Handle comma-separated list - take first entry
+  if system_aliases:match(',') then
+    system_aliases = system_aliases:match('^([^,]+)')
+  end
+
+  -- Parse virtual_alias_maps similarly
+  if virtual_aliases:match('^%w+:') then
+    virtual_aliases = virtual_aliases:gsub('^%w+:', '')
+  end
+  if virtual_aliases:match(',') then
+    virtual_aliases = virtual_aliases:match('^([^,]+)')
+  end
 
   if not rspamd_util.file_exists(postfix_main_cf) then
     printf('%s not found. Are you sure Postfix is installed?', highlight(postfix_main_cf))
@@ -463,26 +521,16 @@ local function setup_postfix(cfg, changes)
     printf('Found Postfix configuration: %s', highlight(postfix_main_cf))
   end
 
-  -- Parse mydestination for local domains
+  -- Get mydestination for local domains using postconf
   local local_domains = {}
-  if rspamd_util.file_exists(postfix_main_cf) then
-    local f = io.open(postfix_main_cf, 'r')
-    if f then
-      for line in f:lines() do
-        -- Match mydestination = domain1, domain2, ...
-        local mydest = line:match('^%s*mydestination%s*=%s*(.+)')
-        if mydest then
-          -- Remove comments and split by comma/space
-          mydest = mydest:gsub('#.*$', '')
-          for domain in mydest:gmatch('[^%s,]+') do
-            -- Skip special values like $myhostname, $mydomain
-            if not domain:match('^%$') and domain ~= 'localhost' and domain ~= 'localhost.localdomain' then
-              table.insert(local_domains, domain)
-            end
-          end
-        end
+  local mydest = get_postconf_param('mydestination')
+  if mydest then
+    -- Split by comma/space
+    for domain in mydest:gmatch('[^%s,]+') do
+      -- Skip special values like $myhostname, $mydomain, localhost
+      if not domain:match('^%$') and domain ~= 'localhost' and domain ~= 'localhost.localdomain' then
+        table.insert(local_domains, domain)
       end
-      f:close()
     end
   end
 
@@ -538,16 +586,13 @@ local function setup_postfix(cfg, changes)
   printf()
   printf('Checking %s configuration...', highlight('milter'))
 
+  -- Check milter configuration using postconf
   local has_milter = false
-  if rspamd_util.file_exists(postfix_master_cf) then
-    local f = io.open(postfix_master_cf, 'r')
-    if f then
-      local content = f:read('*all')
-      f:close()
-      if content:match('rspamd') or content:match('milter') then
-        has_milter = true
-      end
-    end
+  local smtpd_milters = get_postconf_param('smtpd_milters')
+  local non_smtpd_milters = get_postconf_param('non_smtpd_milters')
+
+  if (smtpd_milters and smtpd_milters ~= '') or (non_smtpd_milters and non_smtpd_milters ~= '') then
+    has_milter = true
   end
 
   if has_milter then
