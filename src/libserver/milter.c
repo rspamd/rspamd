@@ -868,32 +868,32 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 					g_ptr_array_add(session->rcpts, addr);
 
 					/* Parse ESMTP arguments for this recipient only */
-					if (zero + 1 < end) {
-						const unsigned char *args_start = zero + 1;
-						const unsigned char *args_end_ptr = args_start;
-						const unsigned char *next_zero;
+					const unsigned char *args_start = zero + 1;
+					const unsigned char *scan = args_start;
 
-						/* Find terminating empty argument (\0) or end of command */
-						while (args_end_ptr < end) {
-							next_zero = memchr(args_end_ptr, '\0', end - args_end_ptr);
+					if (args_start < end) {
+						/* Walk over NUL-terminated tokens until a double-NUL or end-of-buffer */
+						while (scan < end) {
+							const unsigned char *z = memchr(scan, '\0', end - scan);
 
-							if (next_zero == NULL) {
-								/* No more zeros, stop at end */
-								args_end_ptr = end;
+							if (z == NULL) {
+								/* Malformed (no further NUL), treat rest as arguments */
+								scan = end;
 								break;
 							}
 
-							if (next_zero == args_end_ptr) {
-								/* Empty argument marks end of ESMTP args list */
+							/* Advance past this token */
+							scan = z + 1;
+
+							/* Double-NUL terminates the list; consume the terminator */
+							if (scan < end && *scan == '\0') {
+								scan++;
 								break;
 							}
-
-							/* Advance past this non-empty argument */
-							args_end_ptr = next_zero + 1;
 						}
 
-						if (args_start < args_end_ptr) {
-							esmtp_args = rspamd_milter_parse_esmtp_args(args_start, args_end_ptr, priv->pool);
+						if (args_start < scan) {
+							esmtp_args = rspamd_milter_parse_esmtp_args(args_start, scan, priv->pool);
 						}
 
 						if (!session->rcpt_esmtp_args) {
@@ -918,8 +918,8 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 							g_ptr_array_add(session->rcpt_esmtp_args, NULL);
 						}
 
-						/* Advance to the next recipient: skip trailing empty arg if present */
-						pos = (args_end_ptr < end && *args_end_ptr == '\0') ? (args_end_ptr + 1) : args_end_ptr;
+						/* Advance cursor to after the args (or end) and stop processing */
+						pos = scan;
 					}
 					else {
 						/* No ESMTP args, add NULL placeholder */
@@ -929,6 +929,9 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 						g_ptr_array_add(session->rcpt_esmtp_args, NULL);
 						pos = zero + 1;
 					}
+
+					/* Only one recipient per RCPT command is expected */
+					break;
 				}
 				else {
 					/* Address parsing failed, move past address NUL and continue */
