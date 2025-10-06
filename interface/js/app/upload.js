@@ -330,10 +330,15 @@ define(["jquery", "app/common", "app/libft"],
 
         ui.getClassifiers = function () {
             const server = common.getServer();
-            if (shouldSkipRequest(server, "classifiers")) return;
 
             if (!common.read_only) {
+                const hadOptions = $("#classifier").children().length > 0; // remember pre-state
+
                 const sel = $("#classifier").empty().append($("<option>", {value: "", text: "All classifiers"}));
+
+                // Skip request only if we already had options populated for this config/server
+                if (shouldSkipRequest(server, "classifiers") && hadOptions) return;
+
                 common.query("bayes/classifiers", {
                     success: function (data) {
                         data[0].data.forEach((c) => sel.append($("<option>", {value: c, text: c})));
