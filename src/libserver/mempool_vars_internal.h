@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,6 @@
 #define RSPAMD_MEMPOOL_PRINCIPAL_RECIPIENT "principal_recipient"
 #define RSPAMD_MEMPOOL_PROFILE "profile"
 #define RSPAMD_MEMPOOL_MILTER_REPLY "milter_reply"
-#define RSPAMD_MEMPOOL_MILTER_SESSION "milter_session"
 #define RSPAMD_MEMPOOL_DKIM_SIGNATURE "dkim-signature"
 #define RSPAMD_MEMPOOL_DMARC_CHECKS "dmarc_checks"
 #define RSPAMD_MEMPOOL_DKIM_BH_CACHE "dkim_bh_cache"
