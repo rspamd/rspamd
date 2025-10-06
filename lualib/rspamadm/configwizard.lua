@@ -444,6 +444,170 @@ local function setup_dkim_signing(cfg, changes)
   res_tbl.sign_authenticated = sign_authenticated
 end
 
+local function setup_postfix(cfg, changes)
+  printf('Setup %s integration:', highlight('Postfix'))
+  printf()
+
+  -- Detect Postfix paths
+  local postfix_main_cf = '/etc/postfix/main.cf'
+  local postfix_master_cf = '/etc/postfix/master.cf'
+  local system_aliases = '/etc/aliases'
+  local virtual_aliases = '/etc/postfix/virtual'
+
+  if not rspamd_util.file_exists(postfix_main_cf) then
+    printf('%s not found. Are you sure Postfix is installed?', highlight(postfix_main_cf))
+    if not ask_yes_no('Continue anyway?', false) then
+      return
+    end
+  else
+    printf('Found Postfix configuration: %s', highlight(postfix_main_cf))
+  end
+
+  -- Parse mydestination for local domains
+  local local_domains = {}
+  if rspamd_util.file_exists(postfix_main_cf) then
+    local f = io.open(postfix_main_cf, 'r')
+    if f then
+      for line in f:lines() do
+        -- Match mydestination = domain1, domain2, ...
+        local mydest = line:match('^%s*mydestination%s*=%s*(.+)')
+        if mydest then
+          -- Remove comments and split by comma/space
+          mydest = mydest:gsub('#.*$', '')
+          for domain in mydest:gmatch('[^%s,]+') do
+            -- Skip special values like $myhostname, $mydomain
+            if not domain:match('^%$') and domain ~= 'localhost' and domain ~= 'localhost.localdomain' then
+              table.insert(local_domains, domain)
+            end
+          end
+        end
+      end
+      f:close()
+    end
+  end
+
+  if #local_domains > 0 then
+    printf('Found local domains from mydestination:')
+    for _, domain in ipairs(local_domains) do
+      printf('  - %s', highlight(domain))
+    end
+    printf()
+  end
+
+  -- Ask about enabling aliases module
+  if ask_yes_no('Do you want to enable the ' .. highlight('aliases') .. ' module for Postfix integration?', true) then
+    changes.l['aliases.conf'] = {
+      enabled = true,
+    }
+
+    -- Configure system aliases
+    if rspamd_util.file_exists(system_aliases) then
+      if ask_yes_no('Use system aliases from ' .. highlight(system_aliases) .. '?', true) then
+        changes.l['aliases.conf'].system_aliases = system_aliases
+      end
+    end
+
+    -- Configure virtual aliases
+    if rspamd_util.file_exists(virtual_aliases) then
+      if ask_yes_no('Use virtual aliases from ' .. highlight(virtual_aliases) .. '?', true) then
+        changes.l['aliases.conf'].virtual_aliases = virtual_aliases
+      end
+    end
+
+    -- Configure local domains
+    if #local_domains > 0 then
+      if ask_yes_no('Use local domains from mydestination?', true) then
+        changes.l['aliases.conf'].local_domains = local_domains
+      end
+    else
+      printf('No local domains found in mydestination.')
+      if ask_yes_no('Do you want to manually specify local domains?', true) then
+        local domains_input = readline_default('Enter local domains separated by comma: ', '')
+        if #domains_input > 0 then
+          local domains = {}
+          for domain in domains_input:gmatch('[^,]+') do
+            table.insert(domains, lua_util.rspamd_str_trim(domain))
+          end
+          changes.l['aliases.conf'].local_domains = domains
+        end
+      end
+    end
+  end
+
+  -- Milter integration
+  printf()
+  printf('Checking %s configuration...', highlight('milter'))
+
+  local has_milter = false
+  if rspamd_util.file_exists(postfix_master_cf) then
+    local f = io.open(postfix_master_cf, 'r')
+    if f then
+      local content = f:read('*all')
+      f:close()
+      if content:match('rspamd') or content:match('milter') then
+        has_milter = true
+      end
+    end
+  end
+
+  if has_milter then
+    printf('Milter configuration detected in %s', highlight(postfix_master_cf))
+  else
+    printf('No milter configuration found.')
+    if ask_yes_no('Do you want to see instructions for milter setup?', true) then
+      printf()
+      printf('To integrate Rspamd with Postfix via milter, add the following to %s:', highlight(postfix_main_cf))
+      printf()
+      printf(ansicolors.cyan .. [[
+# Rspamd milter
+smtpd_milters = inet:localhost:11332
+non_smtpd_milters = inet:localhost:11332
+milter_protocol = 6
+milter_mail_macros = i {mail_addr} {client_addr} {client_name} {auth_authen}
+milter_default_action = accept]] .. ansicolors.reset)
+      printf()
+      printf('Then restart Postfix: %s', highlight('systemctl restart postfix'))
+      printf()
+    end
+  end
+
+  -- Additional features
+  printf()
+  if ask_yes_no('Do you want to configure ' .. highlight('rate limiting') .. ' for outbound mail?', false) then
+    if not changes.l['ratelimit.conf'] then
+      changes.l['ratelimit.conf'] = {}
+    end
+    changes.l['ratelimit.conf'].enabled = true
+
+    -- Suggest reasonable defaults for Postfix
+    local bucket_size = readline_default('Messages per bucket [default: 100]: ', '100')
+    local leak_rate = readline_default('Leak rate (messages per second) [default: 0.01]: ', '0.01')
+
+    changes.l['ratelimit.conf'].rates = {
+      -- Per authenticated user
+      user = {
+        bucket = tonumber(bucket_size),
+        leak = tonumber(leak_rate),
+      }
+    }
+
+    printf('Rate limiting configured. Authenticated users will be limited to %s messages with leak rate %s msg/s',
+        highlight(bucket_size), highlight(leak_rate))
+  end
+
+  if ask_yes_no('Do you want to configure ' .. highlight('ARC signing') .. '?', false) then
+    if not changes.l['arc.conf'] then
+      changes.l['arc.conf'] = {}
+    end
+    changes.l['arc.conf'].enabled = true
+
+    printf('ARC signing enabled. Make sure to configure DKIM keys for ARC to work properly.')
+  end
+
+  printf()
+  printf('Postfix setup complete!')
+end
+
 local function check_redis_classifier(cls, changes)
   local symbol_spam, symbol_ham
   -- Load symbols from statfiles
@@ -723,6 +887,7 @@ return {
     local all_checks = {
       'controller',
       'redis',
+      'postfix',
       'dkim',
       'statistic',
     }
@@ -808,6 +973,10 @@ return {
         end
       else
         redis_params = cfg.redis
+      end
+
+      if has_check('postfix') then
+        setup_postfix(cfg, changes)
       end
 
       if has_check('dkim') then
