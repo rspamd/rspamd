@@ -863,15 +863,14 @@ local function classify_message(task, opts)
   local rcpts_smtp = task:get_recipients('smtp')
   if rcpts_smtp then
     local any_local = false
-    local all_local = true
+    local rcpt_count = 0
 
     for _, rcpt in ipairs(rcpts_smtp) do
+      rcpt_count = rcpt_count + 1
       -- Check if recipient is local
       local rcpt_is_local = is_local_address(rcpt)
       if rcpt_is_local then
         any_local = true
-      else
-        all_local = false
       end
 
       -- Resolve recipient
@@ -896,7 +895,7 @@ local function classify_message(task, opts)
       })
     end
 
-    classification.to_local = any_local or all_local
+    classification.to_local = (rcpt_count > 0) and any_local
   end
 
   -- Determine direction
