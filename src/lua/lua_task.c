@@ -4340,7 +4340,6 @@ lua_task_get_mail_esmtp_args(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task(L, 1);
-	struct rspamd_mime_header *hdr;
 
 	if (task) {
 		/* First try to get ESMTP args from task */
@@ -4380,7 +4379,6 @@ lua_task_get_rcpt_esmtp_args(lua_State *L)
 	struct rspamd_task *task = lua_check_task(L, 1);
 	int idx = -1;
 	gboolean all_rcpts = TRUE;
-	GHashTable *rcpt_args_by_idx = NULL;
 
 	if (task) {
 		/* Check if idx was specified */
