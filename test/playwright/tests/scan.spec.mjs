@@ -197,6 +197,32 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
             const optionCount = await classifier.locator("option").count();
             expect(optionCount).toBeGreaterThan(1);
 
+            // Verify that a subsequent getClassifiers call under the same config is skipped
+            let reqCount = 0;
+            function reqListener(r) {
+                if (r.url().includes("/bayes/classifiers")) {
+                    reqCount += 1;
+                }
+            }
+            page2.on("request", reqListener);
+
+            await page2.evaluate(() => new Promise((resolve) => {
+                // AMD require is available in the UI
+                // eslint-disable-next-line no-undef
+                require(["app/upload"], (u) => {
+                    u.getClassifiers();
+                    resolve();
+                });
+            }));
+
+            await page2.waitForTimeout(250);
+            page2.off("request", reqListener);
+            expect(reqCount).toBe(0);
+
+            // Options must remain populated (not reset to just default)
+            const finalCount = await classifier.locator("option").count();
+            expect(finalCount).toBeGreaterThan(1);
+
             await page2.close();
             await context.close();
         });
