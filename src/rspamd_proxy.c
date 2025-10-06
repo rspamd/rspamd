@@ -1409,6 +1409,53 @@ proxy_request_decompress(struct rspamd_http_message *msg)
 	}
 }
 
+static void
+proxy_rcpt_esmtp_args_free(gpointer data)
+{
+	GPtrArray *arr = (GPtrArray *) data;
+	unsigned int i;
+
+	if (arr == NULL) {
+		return;
+	}
+
+	for (i = 0; i < arr->len; i++) {
+		GHashTable *ht = g_ptr_array_index(arr, i);
+
+		if (ht) {
+			g_hash_table_unref(ht);
+		}
+	}
+
+	g_ptr_array_free(arr, TRUE);
+}
+
+static GPtrArray *
+proxy_rcpt_esmtp_args_dup(GPtrArray *src)
+{
+	GPtrArray *dst;
+	unsigned int i;
+
+	if (src == NULL) {
+		return NULL;
+	}
+
+	dst = g_ptr_array_sized_new(src->len);
+
+	for (i = 0; i < src->len; i++) {
+		GHashTable *cur = g_ptr_array_index(src, i);
+		GHashTable *ref_ht = NULL;
+
+		if (cur) {
+			ref_ht = g_hash_table_ref(cur);
+		}
+
+		g_ptr_array_add(dst, ref_ht);
+	}
+
+	return dst;
+}
+
 static struct rspamd_proxy_session *
 proxy_session_refresh(struct rspamd_proxy_session *session)
 {
@@ -1429,9 +1476,24 @@ proxy_session_refresh(struct rspamd_proxy_session *session)
 	nsession->mirror_conns = g_ptr_array_sized_new(nsession->ctx->mirrors->len);
 	nsession->flags = session->flags;
 
-	/* Copy ESMTP arguments */
-	nsession->mail_esmtp_args = session->mail_esmtp_args;
-	nsession->rcpt_esmtp_args = session->rcpt_esmtp_args;
+	/* Deep copy ESMTP arguments to avoid use-after-free */
+	if (session->mail_esmtp_args) {
+		nsession->mail_esmtp_args = g_hash_table_ref(session->mail_esmtp_args);
+		if (nsession->mail_esmtp_args) {
+			rspamd_mempool_add_destructor(nsession->pool,
+										  (rspamd_mempool_destruct_t) g_hash_table_unref,
+										  nsession->mail_esmtp_args);
+		}
+	}
+
+	if (session->rcpt_esmtp_args) {
+		nsession->rcpt_esmtp_args = proxy_rcpt_esmtp_args_dup(session->rcpt_esmtp_args);
+		if (nsession->rcpt_esmtp_args) {
+			rspamd_mempool_add_destructor(nsession->pool,
+										  (rspamd_mempool_destruct_t) proxy_rcpt_esmtp_args_free,
+										  nsession->rcpt_esmtp_args);
+		}
+	}
 
 	REF_INIT_RETAIN(nsession, proxy_session_dtor);
 
