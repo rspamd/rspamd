@@ -4530,8 +4530,9 @@ lua_task_get_rcpt_esmtp_args(lua_State *L)
 
 							if (endptr == colon) {
 								/* Valid index found */
+								const char *old_p = p;
 								p = colon + 1;
-								len -= (colon - p) + 1;
+								len -= (p - old_p);
 
 								/* Store this arg for this recipient */
 								if (!g_hash_table_contains(rcpt_args_by_idx, GINT_TO_POINTER(rcpt_idx))) {
@@ -4639,8 +4640,9 @@ lua_task_get_rcpt_esmtp_args(lua_State *L)
 
 							if (endptr == colon && rcpt_idx == idx) {
 								found = TRUE;
+								const char *old_p = p;
 								p = colon + 1;
-								len -= (colon - p) + 1;
+								len -= (p - old_p);
 
 								/* Parse KEY=VALUE */
 								eq = memchr(p, '=', len);
