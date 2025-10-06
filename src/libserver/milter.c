@@ -850,11 +850,15 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 			zero = memchr(pos, '\0', end - pos);
 
 			if (zero && zero > pos) {
-				cpy = rspamd_mempool_alloc(priv->pool, end - pos);
-				memcpy(cpy, pos, end - pos);
+				gsize addr_len = (gsize) (zero - pos);
 
-				msg_debug_milter("got rcpt: %*s", (int) (zero - pos), cpy);
-				addr = rspamd_email_address_from_smtp(cpy, zero - pos);
+				/* Allocate exact length for address plus NUL terminator */
+				cpy = rspamd_mempool_alloc(priv->pool, addr_len + 1);
+				memcpy(cpy, pos, addr_len);
+				cpy[addr_len] = '\0';
+
+				msg_debug_milter("got rcpt: %*s", (int) addr_len, cpy);
+				addr = rspamd_email_address_from_smtp(cpy, addr_len);
 
 				if (addr) {
 					if (!session->rcpts) {
@@ -863,17 +867,42 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 
 					g_ptr_array_add(session->rcpts, addr);
 
-					/* Parse ESMTP arguments for this recipient */
+					/* Parse ESMTP arguments for this recipient only */
 					if (zero + 1 < end) {
-						esmtp_args = rspamd_milter_parse_esmtp_args(zero + 1, end, priv->pool);
+						const unsigned char *args_start = zero + 1;
+						const unsigned char *args_end_ptr = args_start;
+						const unsigned char *next_zero;
+
+						/* Find terminating empty argument (\0) or end of command */
+						while (args_end_ptr < end) {
+							next_zero = memchr(args_end_ptr, '\0', end - args_end_ptr);
+
+							if (next_zero == NULL) {
+								/* No more zeros, stop at end */
+								args_end_ptr = end;
+								break;
+							}
+
+							if (next_zero == args_end_ptr) {
+								/* Empty argument marks end of ESMTP args list */
+								break;
+							}
+
+							/* Advance past this non-empty argument */
+							args_end_ptr = next_zero + 1;
+						}
+
+						if (args_start < args_end_ptr) {
+							esmtp_args = rspamd_milter_parse_esmtp_args(args_start, args_end_ptr, priv->pool);
+						}
+
+						if (!session->rcpt_esmtp_args) {
+							session->rcpt_esmtp_args = g_ptr_array_sized_new(1);
+						}
 
 						if (esmtp_args) {
 							GHashTableIter iter;
 							gpointer key, value;
-
-							if (!session->rcpt_esmtp_args) {
-								session->rcpt_esmtp_args = g_ptr_array_sized_new(1);
-							}
 
 							g_ptr_array_add(session->rcpt_esmtp_args, esmtp_args);
 
@@ -886,11 +915,11 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 						}
 						else {
 							/* Add NULL placeholder to keep indices aligned with rcpts array */
-							if (!session->rcpt_esmtp_args) {
-								session->rcpt_esmtp_args = g_ptr_array_sized_new(1);
-							}
 							g_ptr_array_add(session->rcpt_esmtp_args, NULL);
 						}
+
+						/* Advance to the next recipient: skip trailing empty arg if present */
+						pos = (args_end_ptr < end && *args_end_ptr == '\0') ? (args_end_ptr + 1) : args_end_ptr;
 					}
 					else {
 						/* No ESMTP args, add NULL placeholder */
@@ -898,19 +927,24 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 							session->rcpt_esmtp_args = g_ptr_array_sized_new(1);
 						}
 						g_ptr_array_add(session->rcpt_esmtp_args, NULL);
+						pos = zero + 1;
 					}
 				}
-
-				pos = zero + 1;
+				else {
+					/* Address parsing failed, move past address NUL and continue */
+					pos = zero + 1;
+				}
 			}
 			else {
-				cpy = rspamd_mempool_alloc(priv->pool, end - pos);
-				memcpy(cpy, pos, end - pos);
+				gsize weird_len = (gsize) (end - pos);
+				cpy = rspamd_mempool_alloc(priv->pool, weird_len + 1);
+				memcpy(cpy, pos, weird_len);
+				cpy[weird_len] = '\0';
 
-				msg_debug_milter("got weird rcpt: %*s", (int) (end - pos),
-								 pos);
+				msg_debug_milter("got weird rcpt: %*s", (int) weird_len,
+								 cpy);
 				/* That actually should not happen */
-				addr = rspamd_email_address_from_smtp(cpy, end - pos);
+				addr = rspamd_email_address_from_smtp(cpy, weird_len);
 
 				if (addr) {
 					if (!session->rcpts) {
