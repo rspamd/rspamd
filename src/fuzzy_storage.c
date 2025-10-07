@@ -2322,7 +2322,11 @@ fuzzy_session_destroy(gpointer d)
 
 	rspamd_inet_address_free(session->addr);
 	rspamd_explicit_memzero(session->nm, sizeof(session->nm));
-	session->worker->nconns--;
+
+	/* Only decrement nconns if this is not a TCP command session */
+	if (session->tcp_session == NULL) {
+		session->worker->nconns--;
+	}
 
 	if (session->ip_stat) {
 		REF_RELEASE(session->ip_stat);
@@ -2702,7 +2706,7 @@ rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents)
 				if (cmd_session->ip_stat) {
 					REF_RETAIN(cmd_session->ip_stat);
 				}
-				session->common.worker->nconns++;
+				/* Don't increment nconns here - TCP session already counted the connection */
 
 				/* Set TCP session pointer so replies go to TCP queue */
 				cmd_session->tcp_session = session;
@@ -2715,9 +2719,12 @@ rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents)
 					session->common.cmd_type = cmd_session->cmd_type;
 					memcpy(&session->common.cmd, &cmd_session->cmd, sizeof(session->common.cmd));
 
-					/* Note: key and extensions ownership transferred to cmd_session */
+					/* Transfer ownership of key and extensions to TCP session */
+					/* Clear cmd_session pointers to avoid double-free */
 					session->common.key = cmd_session->key;
 					session->common.extensions = cmd_session->extensions;
+					cmd_session->key = NULL;
+					cmd_session->extensions = NULL;
 					memcpy(session->common.nm, cmd_session->nm, sizeof(session->common.nm));
 
 					/* Process command - replies will go to TCP queue via tcp_session pointer */

@@ -602,8 +602,6 @@ fuzzy_tcp_connect_async(struct fuzzy_rule *rule,
 		return NULL;
 	}
 
-	rspamd_inet_address_set_port(addr, rspamd_upstream_port(upstream));
-
 	/* Create non-blocking TCP socket */
 	fd = rspamd_inet_address_connect(addr, SOCK_STREAM, TRUE);
 	if (fd == -1) {
@@ -1080,8 +1078,8 @@ fuzzy_tcp_send_command(struct fuzzy_tcp_connection *conn,
 		buf->data = g_malloc(io->io.iov_len);
 		memcpy(buf->data, io->io.iov_base, io->io.iov_len);
 
-		/* Set frame size in network byte order (big endian) */
-		buf->size_hdr = GUINT16_TO_BE((uint16_t) io->io.iov_len);
+		/* Set frame size in little endian byte order */
+		buf->size_hdr = GUINT16_TO_LE((uint16_t) io->io.iov_len);
 		buf->total_len = sizeof(buf->size_hdr) + io->io.iov_len;
 		buf->bytes_written = 0;
 
@@ -1351,7 +1349,8 @@ fuzzy_tcp_read_handler(struct fuzzy_tcp_connection *conn)
 			if (processed_offset < conn->bytes_unprocessed) {
 				uint16_t first_byte = conn->cur_frame_state & 0xFF;
 				uint16_t second_byte = conn->read_buf[processed_offset];
-				conn->cur_frame_state = 0xC000 | ((first_byte << 8) | second_byte);
+				/* Reconstruct in little-endian byte order */
+				conn->cur_frame_state = 0xC000 | (first_byte | (second_byte << 8));
 				processed_offset++;
 			}
 			else {
@@ -1543,71 +1542,58 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 	if ((value = ucl_object_lookup(obj, "no_subject")) != NULL) {
 		rule->no_subject = ucl_obj_toboolean(value);
 	}
-
 	/* TCP configuration */
 	if ((value = ucl_object_lookup(obj, "tcp")) != NULL) {
-		const char *tcp_mode = NULL;
-
-		msg_debug_config("rule %s: found 'tcp' option, type=%d",
-						 name ? name : "default", ucl_object_type(value));
+		const ucl_object_t *tcp_obj;
 
 		if (ucl_object_type(value) == UCL_BOOLEAN) {
-			if (ucl_object_toboolean(value)) {
-				rule->tcp_enabled = TRUE;
-				rule->tcp_auto = FALSE;
-			}
+			/* Simple boolean: enable/disable TCP */
+			rule->tcp_enabled = ucl_object_toboolean(value);
+			rule->tcp_auto = FALSE;
 		}
-		else if (ucl_object_type(value) == UCL_STRING) {
-			tcp_mode = ucl_object_tostring(value);
+		else if (ucl_object_type(value) == UCL_OBJECT) {
+			/* Object with detailed TCP configuration */
 
-			if (g_ascii_strcasecmp(tcp_mode, "yes") == 0 ||
-				g_ascii_strcasecmp(tcp_mode, "true") == 0) {
-				rule->tcp_enabled = TRUE;
-				rule->tcp_auto = FALSE;
+			if ((tcp_obj = ucl_object_lookup(value, "enabled")) != NULL) {
+				rule->tcp_enabled = ucl_object_toboolean(tcp_obj);
 			}
-			else if (g_ascii_strcasecmp(tcp_mode, "auto") == 0) {
-				rule->tcp_auto = TRUE;
-				rule->tcp_enabled = FALSE;
+
+			if ((tcp_obj = ucl_object_lookup(value, "auto")) != NULL) {
+				rule->tcp_auto = ucl_object_toboolean(tcp_obj);
 			}
-			else if (g_ascii_strcasecmp(tcp_mode, "no") == 0 ||
-					 g_ascii_strcasecmp(tcp_mode, "false") == 0) {
-				rule->tcp_enabled = FALSE;
-				rule->tcp_auto = FALSE;
+
+			if ((tcp_obj = ucl_object_lookup(value, "threshold")) != NULL) {
+				rule->tcp_threshold = ucl_object_todouble(tcp_obj);
 			}
 			else {
-				msg_warn_config("unknown tcp mode: %s, TCP disabled", tcp_mode);
+				rule->tcp_threshold = 1.0; /* Default: >1 req/sec */
+			}
+
+			if ((tcp_obj = ucl_object_lookup(value, "window")) != NULL) {
+				rule->tcp_window = ucl_object_todouble(tcp_obj);
+			}
+			else {
+				rule->tcp_window = 1.0; /* Default: 1 second window */
+			}
+
+			if ((tcp_obj = ucl_object_lookup(value, "timeout")) != NULL) {
+				rule->tcp_timeout = ucl_object_todouble(tcp_obj);
+			}
+			else {
+				rule->tcp_timeout = 5.0; /* Default: 5 seconds */
 			}
 		}
 	}
 	else {
-		msg_debug_config("rule %s: 'tcp' option not found in configuration",
-						 name ? name : "default");
+		/* Default values if no TCP configuration */
+		rule->tcp_enabled = FALSE;
+		rule->tcp_auto = FALSE;
+		rule->tcp_threshold = 1.0;
+		rule->tcp_window = 1.0;
+		rule->tcp_timeout = 5.0;
 	}
 
-	if ((value = ucl_object_lookup(obj, "tcp_threshold")) != NULL) {
-		msg_debug_config("rule %s: found tcp_threshold=%.2f",
-						 name ? name : "default", ucl_obj_todouble(value));
-		rule->tcp_threshold = ucl_obj_todouble(value);
-	}
-	else {
-		rule->tcp_threshold = 1.0; /* Default: 1 req/sec */
-	}
 
-	if ((value = ucl_object_lookup(obj, "tcp_window")) != NULL) {
-		rule->tcp_window = ucl_obj_todouble(value);
-	}
-	else {
-		rule->tcp_window = 1.0; /* Default: 1 second window */
-	}
-
-	if ((value = ucl_object_lookup(obj, "tcp_timeout")) != NULL) {
-		rule->tcp_timeout = ucl_obj_todouble(value);
-	}
-	else {
-		rule->tcp_timeout = 5.0; /* Default: 5 seconds */
-	}
-
-	/* Log TCP configuration */
 	if (rule->tcp_enabled) {
 		msg_info_config("rule %s: TCP explicitly enabled (timeout=%.1fs)",
 						rule->name ? rule->name : "default", rule->tcp_timeout);
@@ -1891,57 +1877,6 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 
 	if ((value = ucl_object_lookup(obj, "weight_threshold")) != NULL) {
 		rule->weight_threshold = ucl_object_todouble(value);
-	}
-
-	/* TCP configuration */
-	if ((value = ucl_object_lookup(obj, "tcp")) != NULL) {
-		const ucl_object_t *tcp_obj;
-
-		if (ucl_object_type(value) == UCL_BOOLEAN) {
-			/* Simple boolean: enable/disable TCP */
-			rule->tcp_enabled = ucl_object_toboolean(value);
-			rule->tcp_auto = FALSE;
-		}
-		else if (ucl_object_type(value) == UCL_OBJECT) {
-			/* Object with detailed TCP configuration */
-
-			if ((tcp_obj = ucl_object_lookup(value, "enabled")) != NULL) {
-				rule->tcp_enabled = ucl_object_toboolean(tcp_obj);
-			}
-
-			if ((tcp_obj = ucl_object_lookup(value, "auto")) != NULL) {
-				rule->tcp_auto = ucl_object_toboolean(tcp_obj);
-			}
-
-			if ((tcp_obj = ucl_object_lookup(value, "threshold")) != NULL) {
-				rule->tcp_threshold = ucl_object_todouble(tcp_obj);
-			}
-			else {
-				rule->tcp_threshold = 1.0; /* Default: >1 req/sec */
-			}
-
-			if ((tcp_obj = ucl_object_lookup(value, "window")) != NULL) {
-				rule->tcp_window = ucl_object_todouble(tcp_obj);
-			}
-			else {
-				rule->tcp_window = 1.0; /* Default: 1 second window */
-			}
-
-			if ((tcp_obj = ucl_object_lookup(value, "timeout")) != NULL) {
-				rule->tcp_timeout = ucl_object_todouble(tcp_obj);
-			}
-			else {
-				rule->tcp_timeout = 5.0; /* Default: 5 seconds */
-			}
-		}
-	}
-	else {
-		/* Default values if no TCP configuration */
-		rule->tcp_enabled = FALSE;
-		rule->tcp_auto = FALSE;
-		rule->tcp_threshold = 1.0;
-		rule->tcp_window = 1.0;
-		rule->tcp_timeout = 5.0;
 	}
 
 	/* Initialize rate tracker */
@@ -5057,7 +4992,6 @@ register_fuzzy_client_call(struct rspamd_task *task,
 			msg_info_task("fuzzy_check: sending %d commands via UDP to %s",
 						  (int) commands->len, rspamd_upstream_name(selected));
 			addr = rspamd_upstream_addr_cur(selected);
-			rspamd_inet_address_set_port(addr, rspamd_upstream_port(selected));
 
 			if ((sock = rspamd_inet_address_connect(addr, SOCK_DGRAM, TRUE)) == -1) {
 				msg_warn_task("cannot connect to %s(%s), %d, %s",
