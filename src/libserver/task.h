@@ -220,6 +220,10 @@ struct rspamd_task {
 	const char *classifier;                /**< Classifier to learn (if needed)				*/
 	struct rspamd_lang_detector *lang_det; /**< Languages detector								*/
 	struct rspamd_message *message;
+
+	/* ESMTP arguments from milter protocol */
+	GHashTable *mail_esmtp_args; /**< ESMTP arguments from MAIL FROM command */
+	GPtrArray *rcpt_esmtp_args;  /**< Array of GHashTable, one per recipient with ESMTP arguments */
 };
 
 /**
@@ -286,6 +290,34 @@ const char *rspamd_task_get_principal_recipient(struct rspamd_task *task);
  * @return TRUE if an address has been parsed and added
  */
 gboolean rspamd_task_add_recipient(struct rspamd_task *task, const char *rcpt);
+
+/**
+ * Set ESMTP arguments for MAIL FROM command
+ * @param task task object
+ * @param args hash table with ESMTP arguments
+ */
+void rspamd_task_set_mail_esmtp_args(struct rspamd_task *task, GHashTable *args);
+
+/**
+ * Set ESMTP arguments for RCPT TO commands
+ * @param task task object
+ * @param args array of hash tables with ESMTP arguments (one per recipient)
+ */
+void rspamd_task_set_rcpt_esmtp_args(struct rspamd_task *task, GPtrArray *args);
+
+/**
+ * Get ESMTP arguments for MAIL FROM command
+ * @param task task object
+ * @return hash table with ESMTP arguments or NULL
+ */
+GHashTable *rspamd_task_get_mail_esmtp_args(struct rspamd_task *task);
+
+/**
+ * Get ESMTP arguments for RCPT TO commands
+ * @param task task object
+ * @return array of hash tables with ESMTP arguments or NULL
+ */
+GPtrArray *rspamd_task_get_rcpt_esmtp_args(struct rspamd_task *task);
 
 /**
  * Learn specified statfile with message in a task

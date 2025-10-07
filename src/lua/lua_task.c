@@ -626,6 +626,48 @@ LUA_FUNCTION_DEF(task, get_from);
  * @return {boolean} success or not
  */
 LUA_FUNCTION_DEF(task, set_from);
+
+/***
+ * @method task:get_mail_esmtp_args()
+ * Returns a table of ESMTP arguments from MAIL FROM command (milter only).
+ * Each argument is a key-value pair where the key is the argument name and
+ * the value is the argument value (or empty string if no value).
+ * @return {table} ESMTP arguments or nil if not available
+ * @example
+ * local esmtp_args = task:get_mail_esmtp_args()
+ * if esmtp_args then
+ *   -- Check for DSN arguments
+ *   local ret = esmtp_args['RET']
+ *   local envid = esmtp_args['ENVID']
+ * end
+ */
+LUA_FUNCTION_DEF(task, get_mail_esmtp_args);
+
+/***
+ * @method task:get_rcpt_esmtp_args([idx])
+ * Returns a table of ESMTP arguments from RCPT TO command (milter only).
+ * If idx is specified, returns arguments for the recipient at that index (0-based).
+ * If idx is not specified, returns an array of tables, one per recipient.
+ * Each argument is a key-value pair where the key is the argument name and
+ * the value is the argument value (or empty string if no value).
+ * @param {integer} idx optional index of the recipient (0-based)
+ * @return {table|array of tables} ESMTP arguments or nil if not available
+ * @example
+ * -- Get args for all recipients
+ * local rcpt_args = task:get_rcpt_esmtp_args()
+ * if rcpt_args then
+ *   for i, args in ipairs(rcpt_args) do
+ *     if args and args['NOTIFY'] then
+ *       -- Process NOTIFY argument
+ *     end
+ *   end
+ * end
+ *
+ * -- Get args for first recipient only
+ * local first_rcpt_args = task:get_rcpt_esmtp_args(0)
+ */
+LUA_FUNCTION_DEF(task, get_rcpt_esmtp_args);
+
 /***
  * @method task:get_user()
  * Returns authenticated user name for this task if specified by an MTA.
@@ -1295,6 +1337,8 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, has_from),
 	LUA_INTERFACE_DEF(task, get_from),
 	LUA_INTERFACE_DEF(task, set_from),
+	LUA_INTERFACE_DEF(task, get_mail_esmtp_args),
+	LUA_INTERFACE_DEF(task, get_rcpt_esmtp_args),
 	LUA_INTERFACE_DEF(task, get_user),
 	LUA_INTERFACE_DEF(task, set_user),
 	{"get_addr", lua_task_get_from_ip},
@@ -4279,6 +4323,128 @@ lua_task_get_reply_sender(lua_State *L)
 		else if (task->from_envelope) {
 			lua_pushlstring(L, task->from_envelope->addr,
 							task->from_envelope->addr_len);
+		}
+		else {
+			lua_pushnil(L);
+		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_task_get_mail_esmtp_args(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+
+	if (task) {
+		/* First try to get ESMTP args from task */
+		GHashTable *mail_args = rspamd_task_get_mail_esmtp_args(task);
+
+		if (mail_args) {
+			GHashTableIter iter;
+			gpointer key, value;
+
+			lua_createtable(L, 0, 0);
+
+			g_hash_table_iter_init(&iter, mail_args);
+			while (g_hash_table_iter_next(&iter, &key, &value)) {
+				rspamd_ftok_t *k = (rspamd_ftok_t *) key;
+				rspamd_ftok_t *v = (rspamd_ftok_t *) value;
+
+				lua_pushlstring(L, k->begin, k->len);
+				lua_pushlstring(L, v->begin, v->len);
+				lua_settable(L, -3);
+			}
+		}
+		else {
+			lua_pushnil(L);
+		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_task_get_rcpt_esmtp_args(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+	int idx = -1;
+	gboolean all_rcpts = TRUE;
+
+	if (task) {
+		/* Check if idx was specified */
+		if (lua_gettop(L) >= 2 && lua_type(L, 2) == LUA_TNUMBER) {
+			idx = lua_tointeger(L, 2);
+			all_rcpts = FALSE;
+		}
+
+		/* First try to get ESMTP args from task */
+		GPtrArray *rcpt_args = rspamd_task_get_rcpt_esmtp_args(task);
+
+		if (rcpt_args) {
+			if (all_rcpts) {
+				/* Return all recipients' args */
+				lua_createtable(L, 0, 0);
+
+				for (unsigned int i = 0; i < rcpt_args->len; i++) {
+					GHashTable *args = g_ptr_array_index(rcpt_args, i);
+					if (args) {
+						GHashTableIter iter;
+						gpointer key, value;
+
+						lua_createtable(L, 0, 0);
+
+						g_hash_table_iter_init(&iter, args);
+						while (g_hash_table_iter_next(&iter, &key, &value)) {
+							rspamd_ftok_t *k = (rspamd_ftok_t *) key;
+							rspamd_ftok_t *v = (rspamd_ftok_t *) value;
+
+							lua_pushlstring(L, k->begin, k->len);
+							lua_pushlstring(L, v->begin, v->len);
+							lua_settable(L, -3);
+						}
+
+						lua_rawseti(L, -2, i + 1);
+					}
+				}
+			}
+			else {
+				/* Return specific recipient's args */
+				if (idx >= 0 && idx < (int) rcpt_args->len) {
+					GHashTable *args = g_ptr_array_index(rcpt_args, idx);
+					if (args) {
+						GHashTableIter iter;
+						gpointer key, value;
+
+						lua_createtable(L, 0, 0);
+
+						g_hash_table_iter_init(&iter, args);
+						while (g_hash_table_iter_next(&iter, &key, &value)) {
+							rspamd_ftok_t *k = (rspamd_ftok_t *) key;
+							rspamd_ftok_t *v = (rspamd_ftok_t *) value;
+
+							lua_pushlstring(L, k->begin, k->len);
+							lua_pushlstring(L, v->begin, v->len);
+							lua_settable(L, -3);
+						}
+					}
+					else {
+						lua_pushnil(L);
+					}
+				}
+				else {
+					lua_pushnil(L);
+				}
+			}
 		}
 		else {
 			lua_pushnil(L);
