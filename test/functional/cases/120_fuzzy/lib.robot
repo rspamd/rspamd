@@ -241,3 +241,55 @@ Fuzzy Setup Write Only
   Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  write_only
   Set Suite Variable  ${SETTINGS_FUZZY_CHECK}  mode = "write_only";
   Rspamd Redis Setup
+
+Fuzzy Setup TCP
+  [Arguments]  ${algorithm}
+  Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  ${algorithm}
+  Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  servers
+  Set Suite Variable  ${SETTINGS_FUZZY_CHECK}  servers = "${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_FUZZY}"; tcp = "auto"; tcp_threshold = 5;
+  Rspamd Redis Setup
+
+Fuzzy Setup TCP Siphash
+  Fuzzy Setup TCP  siphash
+
+Fuzzy Setup TCP Encrypted
+  [Arguments]  ${algorithm}
+  Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  ${algorithm}
+  Set Suite Variable  ${RSPAMD_FUZZY_ENCRYPTED_ONLY}  true
+  Set Suite Variable  ${RSPAMD_FUZZY_ENCRYPTION_KEY}  ${RSPAMD_KEY_PUB1}
+  Set Suite Variable  ${RSPAMD_FUZZY_CLIENT_ENCRYPTION_KEY}  ${RSPAMD_KEY_PUB1}
+  Set Suite Variable  ${RSPAMD_FUZZY_INCLUDE}  ${RSPAMD_TESTDIR}/configs/fuzzy-encryption-key.conf
+  Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  servers
+  Set Suite Variable  ${SETTINGS_FUZZY_WORKER}  tcp = true;
+  Set Suite Variable  ${SETTINGS_FUZZY_CHECK}  tcp = "auto"; tcp_threshold = 5;
+  Rspamd Redis Setup
+
+Fuzzy Setup TCP Encrypted Siphash
+  Fuzzy Setup TCP Encrypted  siphash
+
+Fuzzy Setup TCP Explicit
+  [Arguments]  ${algorithm}
+  Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  ${algorithm}
+  Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  servers
+  Set Suite Variable  ${SETTINGS_FUZZY_WORKER}  tcp = true;
+  Set Suite Variable  ${SETTINGS_FUZZY_CHECK}  servers = "${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_FUZZY}"; tcp = "yes";
+  Rspamd Redis Setup
+
+Fuzzy Setup TCP Explicit Siphash
+  Fuzzy Setup TCP Explicit  siphash
+
+Fuzzy TCP High Rate Test
+  # Send multiple messages to exceed rate threshold and trigger TCP
+  FOR  ${i}  IN RANGE  10
+    FOR  ${message}  IN  @{MESSAGES}
+      ${result} =  Run Rspamc  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  -w  10  -f
+      ...  ${RSPAMD_FLAG1_NUMBER}  fuzzy_add  ${message}
+      Check Rspamc  ${result}
+    END
+  END
+  Sync Fuzzy Storage
+  # Verify that fuzzy check still works
+  FOR  ${message}  IN  @{MESSAGES}
+    Scan File  ${message}
+    Expect Symbol  ${FLAG1_SYMBOL}
+  END

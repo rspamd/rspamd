@@ -4691,12 +4691,25 @@ register_fuzzy_client_call(struct rspamd_task *task,
 		/* Try TCP if enabled/auto and rate threshold exceeded */
 		struct fuzzy_tcp_connection *tcp_conn = NULL;
 		if (fuzzy_should_try_tcp(rule, now)) {
+			/* Calculate current rate for logging */
+			double time_diff = now - rule->rate_tracker.window_start;
+			double current_rate = (time_diff > 0) ? (rule->rate_tracker.requests_count / time_diff) : 0;
+
+			msg_info_task("fuzzy_check: trying TCP for rule %s to %s (rate=%.2f req/s, threshold=%.2f)",
+						  rule->name, rspamd_upstream_name(selected),
+						  current_rate, rule->tcp_threshold);
 			/* This is read server (CHECK operation) */
 			tcp_conn = fuzzy_tcp_get_or_create_connection(rule, selected, task, FALSE);
+		}
+		else {
+			msg_info_task("fuzzy_check: using UDP for rule %s to %s (TCP disabled or rate below threshold)",
+						  rule->name, rspamd_upstream_name(selected));
 		}
 
 		/* Use TCP if available and connected */
 		if (tcp_conn && tcp_conn->connected) {
+			msg_info_task("fuzzy_check: sending %d commands via TCP to %s",
+						  (int) commands->len, rspamd_upstream_name(selected));
 			/* Create session for TCP */
 			session = rspamd_mempool_alloc0(task->task_pool,
 											sizeof(struct fuzzy_client_session));
@@ -4728,9 +4741,15 @@ register_fuzzy_client_call(struct rspamd_task *task,
 				/* Fall through to UDP */
 			}
 		}
+		else if (tcp_conn && !tcp_conn->connected) {
+			msg_info_task("fuzzy_check: TCP connection not ready for rule %s to %s, using UDP",
+						  rule->name, rspamd_upstream_name(selected));
+		}
 
 		/* Use UDP as fallback or when TCP not available */
 		if (selected) {
+			msg_info_task("fuzzy_check: sending %d commands via UDP to %s",
+						  (int) commands->len, rspamd_upstream_name(selected));
 			addr = rspamd_upstream_addr_cur(selected);
 			rspamd_inet_address_set_port(addr, rspamd_upstream_port(selected));
 
