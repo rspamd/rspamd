@@ -127,16 +127,16 @@ rspamd_mime_part_extract_words(struct rspamd_task *task,
 				*avg_len_p += total_len;
 			}
 
-			short_len_p = rspamd_mempool_get_variable(task->task_pool,
-													  RSPAMD_MEMPOOL_SHORT_WORDS_CNT);
+		short_len_p = rspamd_mempool_get_variable(task->task_pool,
+												  RSPAMD_MEMPOOL_SHORT_WORDS_CNT);
 
-			if (short_len_p == NULL) {
-				short_len_p = rspamd_mempool_alloc(task->task_pool,
-												   sizeof(double));
-				*short_len_p = short_len;
-				rspamd_mempool_set_variable(task->task_pool,
-											RSPAMD_MEMPOOL_SHORT_WORDS_CNT, avg_len_p, NULL);
-			}
+		if (short_len_p == NULL) {
+			short_len_p = rspamd_mempool_alloc(task->task_pool,
+											   sizeof(double));
+			*short_len_p = short_len;
+			rspamd_mempool_set_variable(task->task_pool,
+										RSPAMD_MEMPOOL_SHORT_WORDS_CNT, short_len_p, NULL);
+		}
 			else {
 				*short_len_p += short_len;
 			}
@@ -892,17 +892,17 @@ rspamd_message_process_html_text_part(struct rspamd_task *task,
 				lua_pushstring(L, "cta_affiliated");
 				lua_gettable(L, -2);
 				if (lua_isboolean(L, -1)) {
-					static int val;
-					val = !!lua_toboolean(L, -1);
-					rspamd_mempool_set_variable(task->task_pool, "html_cta_affiliated", &val, NULL);
+					double *val = rspamd_mempool_alloc(task->task_pool, sizeof(double));
+					*val = lua_toboolean(L, -1) ? 1.0 : 0.0;
+					rspamd_mempool_set_variable(task->task_pool, "html_cta_affiliated", val, NULL);
 				}
 				lua_pop(L, 1);
 				lua_pushstring(L, "cta_weight");
 				lua_gettable(L, -2);
 				if (lua_isnumber(L, -1)) {
-					static double w;
-					w = lua_tonumber(L, -1);
-					rspamd_mempool_set_variable(task->task_pool, "html_cta_weight", &w, NULL);
+					double *w = rspamd_mempool_alloc(task->task_pool, sizeof(double));
+					*w = lua_tonumber(L, -1);
+					rspamd_mempool_set_variable(task->task_pool, "html_cta_weight", w, NULL);
 				}
 				lua_pop(L, 1);
 				/* If no weight set by Lua, derive from C heuristic */
@@ -919,23 +919,25 @@ rspamd_message_process_html_text_part(struct rspamd_task *task,
 						if (cw > best_w) best_w = cw;
 					}
 					if (best_w > 0.0) {
-						rspamd_mempool_set_variable(task->task_pool, "html_cta_weight", &best_w, NULL);
+						double *best_w_p = rspamd_mempool_alloc(task->task_pool, sizeof(double));
+						*best_w_p = best_w;
+						rspamd_mempool_set_variable(task->task_pool, "html_cta_weight", best_w_p, NULL);
 					}
 				}
 				lua_pushstring(L, "affiliated_ratio");
 				lua_gettable(L, -2);
 				if (lua_isnumber(L, -1)) {
-					static double r;
-					r = lua_tonumber(L, -1);
-					rspamd_mempool_set_variable(task->task_pool, "html_affiliated_links_ratio", &r, NULL);
+					double *r = rspamd_mempool_alloc(task->task_pool, sizeof(double));
+					*r = lua_tonumber(L, -1);
+					rspamd_mempool_set_variable(task->task_pool, "html_affiliated_links_ratio", r, NULL);
 				}
 				lua_pop(L, 1);
 				lua_pushstring(L, "trackerish_ratio");
 				lua_gettable(L, -2);
 				if (lua_isnumber(L, -1)) {
-					static double tr;
-					tr = lua_tonumber(L, -1);
-					rspamd_mempool_set_variable(task->task_pool, "html_trackerish_ratio", &tr, NULL);
+					double *tr = rspamd_mempool_alloc(task->task_pool, sizeof(double));
+					*tr = lua_tonumber(L, -1);
+					rspamd_mempool_set_variable(task->task_pool, "html_trackerish_ratio", tr, NULL);
 				}
 				lua_pop(L, 1);
 			}
