@@ -717,6 +717,7 @@ fuzzy_tcp_connection_cleanup(struct fuzzy_tcp_connection *conn)
 	gpointer key, value;
 	struct fuzzy_tcp_pending_command *pending;
 	GPtrArray *to_remove;
+	GHashTable *sessions_to_check;
 	unsigned int i;
 	struct rspamd_task *task = NULL;
 
@@ -724,14 +725,25 @@ fuzzy_tcp_connection_cleanup(struct fuzzy_tcp_connection *conn)
 		return;
 	}
 
-	/* Collect tags to remove (can't modify hash table during iteration) */
+	/* Collect commands to remove and sessions to check */
 	to_remove = g_ptr_array_new();
+	sessions_to_check = g_hash_table_new(g_direct_hash, g_direct_equal);
 
 	g_hash_table_iter_init(&iter, conn->rule->pending_requests);
 	while (g_hash_table_iter_next(&iter, &key, &value)) {
 		pending = (struct fuzzy_tcp_pending_command *) value;
 
 		if (pending->connection == conn) {
+			/* Mark command as replied (failed) */
+			if (!(pending->io->flags & FUZZY_CMD_FLAG_REPLIED)) {
+				pending->io->flags |= FUZZY_CMD_FLAG_REPLIED;
+			}
+
+			/* Collect session for completion check */
+			if (pending->session) {
+				g_hash_table_add(sessions_to_check, pending->session);
+			}
+
 			g_ptr_array_add(to_remove, key);
 
 			/* Get task for logging */
@@ -741,7 +753,7 @@ fuzzy_tcp_connection_cleanup(struct fuzzy_tcp_connection *conn)
 		}
 	}
 
-	/* Remove pending commands */
+	/* Remove pending commands from hash table */
 	for (i = 0; i < to_remove->len; i++) {
 		g_hash_table_remove(conn->rule->pending_requests,
 							g_ptr_array_index(to_remove, i));
@@ -752,7 +764,16 @@ fuzzy_tcp_connection_cleanup(struct fuzzy_tcp_connection *conn)
 					  (int) to_remove->len, rspamd_upstream_name(conn->server));
 	}
 
+	/* Check session completion for all affected sessions */
+	GHashTableIter session_iter;
+	struct fuzzy_client_session *session;
+	g_hash_table_iter_init(&session_iter, sessions_to_check);
+	while (g_hash_table_iter_next(&session_iter, (gpointer *) &session, NULL)) {
+		fuzzy_check_session_is_completed(session);
+	}
+
 	g_ptr_array_free(to_remove, TRUE);
+	g_hash_table_unref(sessions_to_check);
 }
 
 /**
@@ -766,6 +787,7 @@ fuzzy_tcp_check_pending_timeouts(struct fuzzy_rule *rule, ev_tstamp now)
 	gpointer key, value;
 	struct fuzzy_tcp_pending_command *pending;
 	GPtrArray *to_remove;
+	GHashTable *sessions_to_check;
 	unsigned int i;
 	ev_tstamp timeout;
 
@@ -775,6 +797,7 @@ fuzzy_tcp_check_pending_timeouts(struct fuzzy_rule *rule, ev_tstamp now)
 
 	timeout = rule->io_timeout;
 	to_remove = g_ptr_array_new();
+	sessions_to_check = g_hash_table_new(g_direct_hash, g_direct_equal);
 
 	g_hash_table_iter_init(&iter, rule->pending_requests);
 	while (g_hash_table_iter_next(&iter, &key, &value)) {
@@ -782,11 +805,21 @@ fuzzy_tcp_check_pending_timeouts(struct fuzzy_rule *rule, ev_tstamp now)
 
 		/* Check if request timed out */
 		if ((now - pending->send_time) > timeout) {
+			/* Mark command as replied (timed out) */
+			if (!(pending->io->flags & FUZZY_CMD_FLAG_REPLIED)) {
+				pending->io->flags |= FUZZY_CMD_FLAG_REPLIED;
+			}
+
+			/* Collect session for completion check */
+			if (pending->session) {
+				g_hash_table_add(sessions_to_check, pending->session);
+			}
+
 			g_ptr_array_add(to_remove, key);
 
 			if (pending->task) {
 				struct rspamd_task *task = pending->task;
-				msg_info_task("fuzzy_tcp: request timeout after %.2fs for tag %u to %s",
+				msg_info_task("fuzzy_tcp: request timeout after %.2fs for tag %ud to %s",
 							  now - pending->send_time,
 							  pending->io->tag,
 							  rspamd_upstream_name(pending->connection->server));
@@ -800,7 +833,16 @@ fuzzy_tcp_check_pending_timeouts(struct fuzzy_rule *rule, ev_tstamp now)
 							g_ptr_array_index(to_remove, i));
 	}
 
+	/* Check session completion for all affected sessions */
+	GHashTableIter session_iter;
+	struct fuzzy_client_session *session;
+	g_hash_table_iter_init(&session_iter, sessions_to_check);
+	while (g_hash_table_iter_next(&session_iter, (gpointer *) &session, NULL)) {
+		fuzzy_check_session_is_completed(session);
+	}
+
 	g_ptr_array_free(to_remove, TRUE);
+	g_hash_table_unref(sessions_to_check);
 }
 
 /**
@@ -905,17 +947,19 @@ fuzzy_tcp_write_handler(struct fuzzy_tcp_connection *conn)
 
 	while ((buf = g_queue_peek_head(conn->write_queue)) != NULL) {
 		/* Write remaining data */
-		gsize remaining = buf->total_len - buf->bytes_written;
+		gsize remaining;
 		unsigned char *write_ptr;
 
 		/* Determine what to write: size_hdr or data */
 		if (buf->bytes_written < sizeof(buf->size_hdr)) {
 			/* Still writing size header */
 			write_ptr = (unsigned char *) &buf->size_hdr + buf->bytes_written;
+			remaining = sizeof(buf->size_hdr) - buf->bytes_written;
 		}
 		else {
 			/* Writing data */
 			write_ptr = buf->data + (buf->bytes_written - sizeof(buf->size_hdr));
+			remaining = buf->total_len - buf->bytes_written;
 		}
 
 		r = write(conn->fd, write_ptr, remaining);
@@ -1010,7 +1054,7 @@ fuzzy_tcp_send_command(struct fuzzy_tcp_connection *conn,
 		/* Mark as sent */
 		io->flags |= FUZZY_CMD_FLAG_SENT;
 
-		msg_debug_fuzzy_check("fuzzy_tcp: queued command with tag %u to %s",
+		msg_debug_fuzzy_check("fuzzy_tcp: queued command with tag %ud to %s",
 							  io->tag, rspamd_upstream_name(conn->server));
 	}
 
@@ -1081,7 +1125,7 @@ fuzzy_tcp_process_reply(struct fuzzy_tcp_connection *conn,
 	pending = g_hash_table_lookup(rule->pending_requests, GINT_TO_POINTER(tag));
 
 	if (!pending) {
-		msg_debug("fuzzy_tcp: unexpected tag %u from %s",
+		msg_debug("fuzzy_tcp: unexpected tag %ud from %s",
 				  tag, rspamd_upstream_name(conn->server));
 		return;
 	}
@@ -1155,7 +1199,7 @@ fuzzy_tcp_process_reply(struct fuzzy_tcp_connection *conn,
 		pending->io->flags |= FUZZY_CMD_FLAG_REPLIED;
 	}
 
-	msg_debug_fuzzy_check("fuzzy_tcp: processed reply with tag %u from %s (prob=%.2f)",
+	msg_debug_fuzzy_check("fuzzy_tcp: processed reply with tag %ud from %s (prob=%.2f)",
 						  tag, rspamd_upstream_name(conn->server), (double) rep->v1.prob);
 
 	/* Remove from pending requests */
@@ -1309,6 +1353,8 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 	rule->alg = RSPAMD_SHINGLES_OLD;
 	rule->skip_map = NULL;
 
+	msg_debug_config("parsing fuzzy rule '%s'", name ? name : "default");
+
 	if ((value = ucl_object_lookup(obj, "skip_hashes")) != NULL) {
 		rspamd_map_add_from_ucl(cfg, value,
 								"Fuzzy hashes whitelist",
@@ -1417,6 +1463,84 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 
 	if ((value = ucl_object_lookup(obj, "no_subject")) != NULL) {
 		rule->no_subject = ucl_obj_toboolean(value);
+	}
+
+	/* TCP configuration */
+	if ((value = ucl_object_lookup(obj, "tcp")) != NULL) {
+		const char *tcp_mode = NULL;
+
+		msg_debug_config("rule %s: found 'tcp' option, type=%d",
+						 name ? name : "default", ucl_object_type(value));
+
+		if (ucl_object_type(value) == UCL_BOOLEAN) {
+			if (ucl_object_toboolean(value)) {
+				rule->tcp_enabled = TRUE;
+				rule->tcp_auto = FALSE;
+			}
+		}
+		else if (ucl_object_type(value) == UCL_STRING) {
+			tcp_mode = ucl_object_tostring(value);
+
+			if (g_ascii_strcasecmp(tcp_mode, "yes") == 0 ||
+				g_ascii_strcasecmp(tcp_mode, "true") == 0) {
+				rule->tcp_enabled = TRUE;
+				rule->tcp_auto = FALSE;
+			}
+			else if (g_ascii_strcasecmp(tcp_mode, "auto") == 0) {
+				rule->tcp_auto = TRUE;
+				rule->tcp_enabled = FALSE;
+			}
+			else if (g_ascii_strcasecmp(tcp_mode, "no") == 0 ||
+					 g_ascii_strcasecmp(tcp_mode, "false") == 0) {
+				rule->tcp_enabled = FALSE;
+				rule->tcp_auto = FALSE;
+			}
+			else {
+				msg_warn_config("unknown tcp mode: %s, TCP disabled", tcp_mode);
+			}
+		}
+	}
+	else {
+		msg_debug_config("rule %s: 'tcp' option not found in configuration",
+						 name ? name : "default");
+	}
+
+	if ((value = ucl_object_lookup(obj, "tcp_threshold")) != NULL) {
+		msg_debug_config("rule %s: found tcp_threshold=%.2f",
+						 name ? name : "default", ucl_obj_todouble(value));
+		rule->tcp_threshold = ucl_obj_todouble(value);
+	}
+	else {
+		rule->tcp_threshold = 1.0; /* Default: 1 req/sec */
+	}
+
+	if ((value = ucl_object_lookup(obj, "tcp_window")) != NULL) {
+		rule->tcp_window = ucl_obj_todouble(value);
+	}
+	else {
+		rule->tcp_window = 1.0; /* Default: 1 second window */
+	}
+
+	if ((value = ucl_object_lookup(obj, "tcp_timeout")) != NULL) {
+		rule->tcp_timeout = ucl_obj_todouble(value);
+	}
+	else {
+		rule->tcp_timeout = 5.0; /* Default: 5 seconds */
+	}
+
+	/* Log TCP configuration */
+	if (rule->tcp_enabled) {
+		msg_info_config("rule %s: TCP explicitly enabled (timeout=%.1fs)",
+						rule->name ? rule->name : "default", rule->tcp_timeout);
+	}
+	else if (rule->tcp_auto) {
+		msg_info_config("rule %s: TCP auto-switch enabled (threshold=%.2f req/s, window=%.1fs)",
+						rule->name ? rule->name : "default",
+						rule->tcp_threshold, rule->tcp_window);
+	}
+	else {
+		msg_info_config("rule %s: TCP disabled (using UDP only)",
+						rule->name ? rule->name : "default");
 	}
 
 	if ((value = ucl_object_lookup(obj, "algorithm")) != NULL) {
@@ -2488,6 +2612,11 @@ fuzzy_tcp_session_cleanup(struct fuzzy_client_session *session)
 		pending = (struct fuzzy_tcp_pending_command *) value;
 
 		if (pending->session == session) {
+			/* Mark command as replied (session finished) */
+			if (!(pending->io->flags & FUZZY_CMD_FLAG_REPLIED)) {
+				pending->io->flags |= FUZZY_CMD_FLAG_REPLIED;
+			}
+
 			g_ptr_array_add(to_remove, key);
 		}
 	}
