@@ -52,6 +52,16 @@ Fuzzy Add Test
   Expect Symbol  ${FLAG1_SYMBOL}
   Set Suite Variable  ${RSPAMD_FUZZY_ADD_${message}}  1
 
+Fuzzy Add Test Write Only
+  [Arguments]  ${message}
+  Set Suite Variable  ${RSPAMD_FUZZY_ADD_${message}}  0
+  ${result} =  Run Rspamc  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  -w  10  -f
+  ...  ${RSPAMD_FLAG1_NUMBER}  fuzzy_add  ${message}
+  Check Rspamc  ${result}
+  Sync Fuzzy Storage
+  # Do not scan - in write-only mode CHECK is not performed
+  Set Suite Variable  ${RSPAMD_FUZZY_ADD_${message}}  1
+
 Fuzzy Delete Test
   [Arguments]  ${message}
   IF  ${RSPAMD_FUZZY_ADD_${message}} == 0
@@ -87,6 +97,15 @@ Fuzzy Encrypted Test
 
 Fuzzy Miss Test
   [Arguments]  ${message}
+  Scan File  ${message}
+  Do Not Expect Symbol  ${FLAG1_SYMBOL}
+
+Fuzzy Write Only No Check Test
+  [Arguments]  ${message}
+  IF  ${RSPAMD_FUZZY_ADD_${message}} != 1
+    Fail  "Fuzzy Add was not run"
+  END
+  # In write-only mode, CHECK is not sent, so symbol should not appear
   Scan File  ${message}
   Do Not Expect Symbol  ${FLAG1_SYMBOL}
 
@@ -199,6 +218,11 @@ Fuzzy Multimessage Add Test
     Fuzzy Add Test  ${i}
   END
 
+Fuzzy Multimessage Add Test Write Only
+  FOR  ${i}  IN  @{MESSAGES}
+    Fuzzy Add Test Write Only  ${i}
+  END
+
 Fuzzy Multimessage Fuzzy Test
   FOR  ${i}  IN  @{MESSAGES}
     Fuzzy Fuzzy Test  ${i}
@@ -222,6 +246,11 @@ Fuzzy Multimessage Delete Test
 Fuzzy Multimessage Overwrite Test
   FOR  ${i}  IN  @{MESSAGES}
     Fuzzy Overwrite Test  ${i}
+  END
+
+Fuzzy Multimessage Write Only No Check Test
+  FOR  ${i}  IN  @{MESSAGES}
+    Fuzzy Write Only No Check Test  ${i}
   END
 
 Fuzzy Setup Split Servers
