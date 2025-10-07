@@ -320,6 +320,9 @@ struct fuzzy_session {
 	struct fuzzy_key *key;
 	struct rspamd_fuzzy_cmd_extension *extensions;
 	unsigned char nm[rspamd_cryptobox_MAX_NMBYTES];
+
+	/* If this is a TCP session, this pointer will be set */
+	struct fuzzy_tcp_session *tcp_session;
 };
 
 struct fuzzy_peer_request {
@@ -597,11 +600,10 @@ rspamd_fuzzy_check_ratelimit(struct rspamd_fuzzy_storage_ctx *ctx,
 		}
 	}
 
-	/*
-	if (rspamd_inet_address_is_local (addr, TRUE)) {
+	/* Skip ratelimit for local addresses */
+	if (rspamd_inet_address_is_local(addr)) {
 		return TRUE;
 	}
-	*/
 
 	masked = rspamd_inet_address_copy(addr, NULL);
 
@@ -1012,11 +1014,83 @@ rspamd_fuzzy_reply_io(EV_P_ ev_io *w, int revents)
 }
 
 static void
+rspamd_fuzzy_tcp_enqueue_reply(struct fuzzy_session *session)
+{
+	struct fuzzy_tcp_session *tcp_session = session->tcp_session;
+	struct fuzzy_tcp_reply_queue_elt *reply_elt;
+	gsize len;
+	gconstpointer data;
+
+	if (tcp_session == NULL) {
+		msg_err("internal error: tcp_session is NULL in rspamd_fuzzy_tcp_enqueue_reply");
+		return;
+	}
+
+	/* Determine reply data and length */
+	if (session->cmd_type == CMD_ENCRYPTED_NORMAL ||
+		session->cmd_type == CMD_ENCRYPTED_SHINGLE) {
+		/* Encrypted reply */
+		data = &session->reply;
+
+		if (session->epoch > RSPAMD_FUZZY_EPOCH10) {
+			len = sizeof(session->reply);
+		}
+		else {
+			len = sizeof(session->reply.hdr) + sizeof(session->reply.rep.v1);
+		}
+	}
+	else {
+		data = &session->reply.rep;
+
+		if (session->epoch > RSPAMD_FUZZY_EPOCH10) {
+			len = sizeof(session->reply.rep);
+		}
+		else {
+			len = sizeof(session->reply.rep.v1);
+		}
+	}
+
+	/* Create reply queue element */
+	reply_elt = g_malloc0(sizeof(*reply_elt));
+	reply_elt->rep.size_hdr = htons((uint16_t) len);
+	memcpy(&reply_elt->rep.payload, data, len);
+	reply_elt->written = 0;
+
+	/* Add to queue */
+	DL_APPEND(tcp_session->replies_queue, reply_elt);
+
+	msg_debug_fuzzy_storage("enqueued TCP reply to %s, %z bytes",
+							rspamd_inet_address_to_string(session->addr),
+							len);
+
+	/* Enable write event if not already enabled */
+	if (ev_is_active(&tcp_session->common.io)) {
+		int events = tcp_session->common.io.events;
+		if (!(events & EV_WRITE)) {
+			ev_io_stop(tcp_session->common.ctx->event_loop, &tcp_session->common.io);
+			ev_io_set(&tcp_session->common.io, tcp_session->common.fd, EV_READ | EV_WRITE);
+			ev_io_start(tcp_session->common.ctx->event_loop, &tcp_session->common.io);
+		}
+	}
+	else {
+		/* Watcher is not active, start it with both read and write */
+		ev_io_set(&tcp_session->common.io, tcp_session->common.fd, EV_READ | EV_WRITE);
+		ev_io_start(tcp_session->common.ctx->event_loop, &tcp_session->common.io);
+	}
+}
+
+static void
 rspamd_fuzzy_write_reply(struct fuzzy_session *session)
 {
 	gssize r;
 	gsize len;
 	gconstpointer data;
+
+	/* Check if this is a TCP session */
+	if (session->tcp_session != NULL) {
+		rspamd_fuzzy_tcp_enqueue_reply(session);
+		return;
+	}
 
 	if (session->cmd_type == CMD_ENCRYPTED_NORMAL ||
 		session->cmd_type == CMD_ENCRYPTED_SHINGLE) {
@@ -2607,38 +2681,58 @@ rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents)
 
 			/* Check if we have complete frame */
 			if (session->bytes_unprocessed - processed_offset >= frame_len) {
-				/* Process this frame using legacy session temporarily */
-				struct fuzzy_session legacy_session;
+				/* Create heap-allocated session for async processing */
+				struct fuzzy_session *cmd_session = g_malloc0(sizeof(*cmd_session));
+				REF_INIT_RETAIN(cmd_session, fuzzy_session_destroy);
 
-				memset(&legacy_session, 0, sizeof(legacy_session));
-				legacy_session.worker = session->common.worker;
-				legacy_session.addr = session->common.addr;
-				legacy_session.ctx = session->common.ctx;
-				legacy_session.fd = session->common.fd;
-				legacy_session.timestamp = session->common.timestamp;
-				legacy_session.key = session->common.key;
-				legacy_session.ip_stat = session->common.ip_stat;
-				memcpy(legacy_session.nm, session->common.nm, sizeof(legacy_session.nm));
+				/* Copy data from TCP session to command session */
+				cmd_session->worker = session->common.worker;
+				cmd_session->addr = rspamd_inet_address_copy(session->common.addr, NULL);
+				cmd_session->ctx = session->common.ctx;
+				cmd_session->fd = session->common.fd;
+				cmd_session->timestamp = session->common.timestamp;
+				cmd_session->key = session->common.key;
+				cmd_session->ip_stat = session->common.ip_stat;
+				memcpy(cmd_session->nm, session->common.nm, sizeof(cmd_session->nm));
+
+				/* Retain references to shared objects */
+				if (cmd_session->key) {
+					REF_RETAIN(cmd_session->key);
+				}
+				if (cmd_session->ip_stat) {
+					REF_RETAIN(cmd_session->ip_stat);
+				}
+				session->common.worker->nconns++;
+
+				/* Set TCP session pointer so replies go to TCP queue */
+				cmd_session->tcp_session = session;
+				REF_RETAIN(session); /* TCP session must live until command is processed */
 
 				if (rspamd_fuzzy_cmd_from_wire(session->input_buf + processed_offset,
-											   frame_len, &legacy_session)) {
-					/* Copy parsed data back */
-					session->common.epoch = legacy_session.epoch;
-					session->common.cmd_type = legacy_session.cmd_type;
-					memcpy(&session->common.cmd, &legacy_session.cmd, sizeof(session->common.cmd));
-					session->common.key = legacy_session.key;
-					session->common.extensions = legacy_session.extensions;
-					memcpy(session->common.nm, legacy_session.nm, sizeof(session->common.nm));
+											   frame_len, cmd_session)) {
+					/* Copy parsed data back to TCP session for tracking */
+					session->common.epoch = cmd_session->epoch;
+					session->common.cmd_type = cmd_session->cmd_type;
+					memcpy(&session->common.cmd, &cmd_session->cmd, sizeof(session->common.cmd));
 
-					/* Process command - this will need to be adapted for TCP */
-					rspamd_fuzzy_process_command(&legacy_session);
+					/* Note: key and extensions ownership transferred to cmd_session */
+					session->common.key = cmd_session->key;
+					session->common.extensions = cmd_session->extensions;
+					memcpy(session->common.nm, cmd_session->nm, sizeof(session->common.nm));
+
+					/* Process command - replies will go to TCP queue via tcp_session pointer */
+					rspamd_fuzzy_process_command(cmd_session);
 				}
 				else {
 					session->common.ctx->stat.invalid_requests++;
 					msg_debug_fuzzy_storage("invalid TCP fuzzy command of size %d received from %s",
 											(int) frame_len,
 											rspamd_inet_address_to_string(session->common.addr));
+					REF_RELEASE(session); /* Release TCP session reference */
 				}
+
+				/* Release our reference - session will be freed when all callbacks complete */
+				REF_RELEASE(cmd_session);
 
 				processed_offset += frame_len;
 				session->cur_frame_state = 0x0000; /* Reset for next frame */
