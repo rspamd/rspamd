@@ -325,18 +325,17 @@ hash_html_features(html_content *hc, const unsigned char key[16])
 }
 
 /* Helper: generate shingles from string tokens (like text shingles but for tokens) */
-static struct rspamd_shingle *
-generate_shingles_from_string_tokens(const std::vector<std::string> &tokens,
+static void
+generate_shingles_from_string_tokens(struct rspamd_shingle *out,
+									 const std::vector<std::string> &tokens,
 									 const unsigned char key[16],
 									 rspamd_shingles_filter filter,
 									 gpointer filterd,
 									 enum rspamd_shingle_alg alg)
 {
-	if (tokens.empty()) {
-		return nullptr;
+	if (tokens.empty() || !out) {
+		return;
 	}
-
-	auto res = new rspamd_shingle;
 	gsize ilen = tokens.size();
 	gsize hlen = ilen > SHINGLES_WINDOW ? (ilen - SHINGLES_WINDOW + 1) : 1;
 
@@ -393,10 +392,8 @@ generate_shingles_from_string_tokens(const std::vector<std::string> &tokens,
 
 	/* Apply filter to get final shingles */
 	for (unsigned int i = 0; i < RSPAMD_SHINGLE_SIZE; i++) {
-		res->hashes[i] = filter(hashes[i].data(), hlen, i, key, filterd);
+		out->hashes[i] = filter(hashes[i].data(), hlen, i, key, filterd);
 	}
-
-	return res;
 }
 
 /* Main function: generate HTML shingles */
@@ -433,14 +430,14 @@ rspamd_shingles_from_html(void *html_content,
 		return nullptr;
 	}
 
-	/* Allocate result after all early exit checks to avoid leaks */
-	struct rspamd_html_shingle *res;
-	if (pool) {
-		res = static_cast<rspamd_html_shingle *>(rspamd_mempool_alloc0(pool, sizeof(*res)));
+	/* Pool is required for consistent memory management - avoid mixing new/delete with mempool */
+	if (!pool) {
+		return nullptr;
 	}
-	else {
-		res = new rspamd_html_shingle{};
-	}
+
+	/* Allocate result after all early exit checks (zeroed) */
+	struct rspamd_html_shingle *res = static_cast<rspamd_html_shingle *>(
+		rspamd_mempool_alloc0(pool, sizeof(*res)));
 
 	/* 2. Generate direct hash of ALL tokens (for exact matching, like text parts) */
 	rspamd_cryptobox_hash_state_t st;
@@ -452,17 +449,8 @@ rspamd_shingles_from_html(void *html_content,
 
 	rspamd_cryptobox_hash_final(&st, res->direct_hash);
 
-	/* 3. Generate structure shingles from tokens (for fuzzy matching) */
-	auto *struct_sgl = generate_shingles_from_string_tokens(tokens, key, filter, filterd, alg);
-
-	if (struct_sgl) {
-		std::memcpy(&res->structure_shingles, struct_sgl, sizeof(struct rspamd_shingle));
-		/* Always delete struct_sgl after copying, regardless of pool */
-		delete struct_sgl;
-	}
-	else {
-		std::memset(&res->structure_shingles, 0, sizeof(struct rspamd_shingle));
-	}
+	/* 3. Generate structure shingles from tokens (for fuzzy matching) - fill in-place */
+	generate_shingles_from_string_tokens(&res->structure_shingles, tokens, key, filter, filterd, alg);
 
 	/* 4. Generate CTA domains hash (critical for phishing detection) */
 	res->cta_domains_hash = hash_domain_list(cta_domains, key);

@@ -106,11 +106,11 @@ struct rspamd_shingle *rspamd_shingles_from_image(unsigned char *dct,
  *
  * @param html_content parsed HTML structure (void* to html_content from html.hxx)
  * @param key secret key (16 bytes) for shingle generation
- * @param pool memory pool for allocation
+ * @param pool memory pool for allocation (required, cannot be NULL)
  * @param filter shingles filter function (typically rspamd_shingles_default_filter)
  * @param filterd opaque data for filter
  * @param alg hashing algorithm (RSPAMD_SHINGLES_MUMHASH recommended)
- * @return HTML shingle structure or NULL on error
+ * @return HTML shingle structure or NULL on error/invalid input
  */
 struct rspamd_html_shingle *rspamd_shingles_from_html(void *html_content,
 													  const unsigned char key[16],
