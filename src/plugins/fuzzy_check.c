@@ -209,7 +209,7 @@ struct fuzzy_tcp_pending_command {
  * TCP write queue element - contains framed command ready to send
  */
 struct fuzzy_tcp_write_buf {
-	uint16_t size_hdr;   /* Frame size in network byte order */
+	uint16_t size_hdr;   /* Frame size in little-endian byte order */
 	unsigned char *data; /* Command data (encrypted) */
 	gsize total_len;     /* Total length: sizeof(size_hdr) + data_len */
 	gsize bytes_written; /* How many bytes already written */

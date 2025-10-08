@@ -1052,7 +1052,7 @@ rspamd_fuzzy_tcp_enqueue_reply(struct fuzzy_session *session)
 
 	/* Create reply queue element */
 	reply_elt = g_malloc0(sizeof(*reply_elt));
-	reply_elt->rep.size_hdr = htons((uint16_t) len);
+	reply_elt->rep.size_hdr = GUINT16_TO_LE((uint16_t) len);
 	memcpy(&reply_elt->rep.payload, data, len);
 	reply_elt->written = 0;
 
@@ -2572,7 +2572,7 @@ rspamd_fuzzy_tcp_write_reply(struct fuzzy_tcp_session *session,
 							 struct fuzzy_tcp_reply_queue_elt *reply)
 {
 	gssize r;
-	gsize total_len = sizeof(reply->rep.size_hdr) + ntohs(reply->rep.size_hdr);
+	gsize total_len = sizeof(reply->rep.size_hdr) + GUINT16_FROM_LE(reply->rep.size_hdr);
 	gsize remaining = total_len - reply->written;
 	unsigned char *data = ((unsigned char *) &reply->rep) + reply->written;
 
@@ -2664,7 +2664,8 @@ rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents)
 				if (processed_offset < session->bytes_unprocessed) {
 					uint16_t first_byte = session->cur_frame_state & 0xFF;
 					uint16_t second_byte = session->input_buf[processed_offset];
-					session->cur_frame_state = 0xC000 | ((first_byte << 8) | second_byte);
+					/* Reconstruct in little-endian byte order */
+					session->cur_frame_state = 0xC000 | (first_byte | (second_byte << 8));
 					processed_offset++;
 				}
 				else {
