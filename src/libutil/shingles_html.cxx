@@ -213,15 +213,22 @@ hash_domain_list(std::vector<std::string_view> &domains, const unsigned char key
 
 	rspamd_cryptobox_hash_init(&st, key, 16);
 
-	/* Hash each unique domain */
+	/* Hash each unique non-empty domain */
 	std::string_view prev;
+	bool has_content = false;
 	for (const auto &dom: domains) {
-		/* Skip duplicates */
-		if (!prev.empty() && dom == prev) {
+		/* Skip empty domains and duplicates */
+		if (dom.empty() || (!prev.empty() && dom == prev)) {
 			continue;
 		}
 		rspamd_cryptobox_hash_update(&st, reinterpret_cast<const unsigned char *>(dom.data()), dom.size());
 		prev = dom;
+		has_content = true;
+	}
+
+	/* If no valid domains were hashed, return 0 */
+	if (!has_content) {
+		return 0;
 	}
 
 	rspamd_cryptobox_hash_final(&st, digest);
@@ -243,7 +250,15 @@ hash_top_domains(std::vector<std::string_view> &domains, unsigned int top_n, con
 	freq_map.reserve(domains.size());
 
 	for (const auto &dom: domains) {
-		freq_map[dom]++;
+		/* Skip empty domains to avoid polluting frequency map */
+		if (!dom.empty()) {
+			freq_map[dom]++;
+		}
+	}
+
+	/* If all domains were empty, return 0 */
+	if (freq_map.empty()) {
+		return 0;
 	}
 
 	/* Extract domains and sort by frequency */
@@ -292,6 +307,12 @@ hash_html_features(html_content *hc, const unsigned char key[16])
 		return 0;
 	}
 
+	/* Validate that features have been populated (check version and at least one meaningful field) */
+	if (hc->features.version == 0 || (hc->features.tags_count == 0 && hc->all_tags.empty())) {
+		/* Features not properly initialized or HTML is empty */
+		return 0;
+	}
+
 	rspamd_cryptobox_hash_init(&st, key, 16);
 
 	/* Bucket numeric features for stability */
@@ -300,7 +321,7 @@ hash_html_features(html_content *hc, const unsigned char key[16])
 	static const int depth_buckets[] = {5, 10, 15, 20, 30};
 	static const int images_buckets[] = {1, 5, 10, 20, 50};
 
-	/* Access features with safe defaults (0 if uninitialized) */
+	/* Access features - values are guaranteed initialized by html_content constructor */
 	uint8_t tags_bucket = bucket_value(hc->features.tags_count, tags_buckets, G_N_ELEMENTS(tags_buckets));
 	uint8_t links_bucket = bucket_value(hc->features.links.total_links, links_buckets, G_N_ELEMENTS(links_buckets));
 	uint8_t depth_bucket = bucket_value(hc->features.max_dom_depth, depth_buckets, G_N_ELEMENTS(depth_buckets));
