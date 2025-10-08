@@ -690,8 +690,10 @@ local function resolve_address_recursive(addr, opts)
   --- Recursive resolve helper
   -- @param current_addr current address to resolve
   -- @param depth current recursion depth
+  -- @param path current resolution path (for loop detection)
   -- @return array of canonical addresses
-  local function resolve_recursive(current_addr, depth)
+  local function resolve_recursive(current_addr, depth, path)
+    path = path or {}
     -- Check depth limit
     if depth > max_depth then
       lua_util.debugm(N, module_state.config,
@@ -699,14 +701,21 @@ local function resolve_address_recursive(addr, opts)
       return { current_addr }
     end
 
-    -- Check for loops
-    if visited[current_addr] then
+    -- Check for loops (only in current path, not all visited)
+    if path[current_addr] then
       lua_util.debugm(N, module_state.config,
         'alias loop detected for %s at %s', email_str, current_addr)
       return { current_addr }
     end
 
+    -- Track in visited for metadata
     visited[current_addr] = true
+    -- Create new path with current address
+    local new_path = {}
+    for k, v in pairs(path) do
+      new_path[k] = v
+    end
+    new_path[current_addr] = true
 
     -- Try to resolve one step
     local result, rule_type = resolve_one_step(current_addr)
@@ -739,7 +748,7 @@ local function resolve_address_recursive(addr, opts)
       if track_chain and chain then
         table.insert(chain, targets[1])
       end
-      return resolve_recursive(targets[1], depth + 1)
+      return resolve_recursive(targets[1], depth + 1, new_path)
     end
 
     -- Expand multiple targets
@@ -749,8 +758,9 @@ local function resolve_address_recursive(addr, opts)
         table.insert(chain, target)
       end
 
-      -- Recursively resolve each target
-      local resolved = resolve_recursive(target, depth + 1)
+      -- Recursively resolve each target with current path
+      -- Each branch gets the same path, allowing convergence while detecting loops
+      local resolved = resolve_recursive(target, depth + 1, new_path)
       for _, resolved_addr in ipairs(resolved) do
         table.insert(canonical_addrs, resolved_addr)
       end
