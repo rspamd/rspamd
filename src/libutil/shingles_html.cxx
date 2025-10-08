@@ -198,14 +198,16 @@ html_extract_structural_tokens(html_content *hc,
 
 /* Helper: hash a sorted list of domains */
 static uint64_t
-hash_domain_list(std::vector<std::string_view> &domains, const unsigned char key[16])
+hash_domain_list(std::vector<std::string_view> &domains, const unsigned char key[16], bool preserve_order = false)
 {
 	if (domains.empty()) {
 		return 0;
 	}
 
-	/* Sort domains for consistent hashing */
-	std::sort(domains.begin(), domains.end());
+	/* Sort domains for consistent hashing (unless order should be preserved, e.g., for frequency-sorted domains) */
+	if (!preserve_order) {
+		std::sort(domains.begin(), domains.end());
+	}
 
 	rspamd_cryptobox_hash_state_t st;
 	unsigned char digest[rspamd_cryptobox_HASHBYTES];
@@ -217,7 +219,7 @@ hash_domain_list(std::vector<std::string_view> &domains, const unsigned char key
 	std::string_view prev;
 	bool has_content = false;
 	for (const auto &dom: domains) {
-		/* Skip empty domains and duplicates */
+		/* Skip empty domains and duplicates (note: only detects consecutive duplicates if preserve_order=true) */
 		if (dom.empty() || (!prev.empty() && dom == prev)) {
 			continue;
 		}
@@ -290,8 +292,8 @@ hash_top_domains(std::vector<std::string_view> &domains, unsigned int top_n, con
 		top_domain_names.push_back(dom);
 	}
 
-	/* Hash the top domains */
-	return hash_domain_list(top_domain_names, key);
+	/* Hash the top domains, preserving frequency-based order */
+	return hash_domain_list(top_domain_names, key, true);
 }
 
 /* Helper: hash HTML features (bucketed) */
