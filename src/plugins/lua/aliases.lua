@@ -297,8 +297,8 @@ local function set_addr(addr, new_user, new_domain)
     addr.domain = new_domain
   end
 
-  -- Only update if we have both user and domain
-  if addr.user and addr.domain and addr.domain ~= '' then
+  -- Only update if we have both user and domain as non-empty strings
+  if addr.user and addr.user ~= '' and addr.domain and addr.domain ~= '' then
     addr.addr = string.format('%s@%s', addr.user, addr.domain)
 
     if addr.name and #addr.name > 0 then
