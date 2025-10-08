@@ -1,0 +1,8 @@
+From: sender@external.com
+To: postmaster@example.com
+Subject: Test simple alias
+Message-ID: <test-simple-alias@example.com>
+Date: Mon, 01 Jan 2025 10:00:00 +0000
+
+This is a test message for simple alias resolution.
+Postmaster should resolve to root.
