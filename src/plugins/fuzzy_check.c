@@ -643,6 +643,18 @@ fuzzy_tcp_connect_async(struct fuzzy_rule *rule,
 		return NULL;
 	}
 
+	/* Set TCP_NODELAY to disable Nagle's algorithm - reduces latency for request-response traffic */
+#ifdef TCP_NODELAY
+	{
+		int nodelay = 1;
+		if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay)) == -1) {
+			msg_warn_task("fuzzy_tcp: cannot set TCP_NODELAY for %s: %s",
+						  rspamd_inet_address_to_string_pretty(addr),
+						  strerror(errno));
+		}
+	}
+#endif
+
 	/* Create connection structure */
 	conn = fuzzy_tcp_connection_new(rule, task->event_loop);
 	conn->fd = fd;
