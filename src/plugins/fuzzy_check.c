@@ -571,6 +571,21 @@ fuzzy_tcp_connection_unref(gpointer conn_ptr)
 }
 
 /**
+ * Refresh TCP connection timeout after successful I/O activity
+ * This prevents active connections from timing out during data transfer
+ */
+static void
+fuzzy_tcp_refresh_timeout(struct fuzzy_tcp_connection *conn)
+{
+	if (conn->rule->tcp_timeout > 0 && ev_is_active(&conn->ev.tm)) {
+		/* Stop and restart timer to extend timeout */
+		ev_timer_stop(conn->event_loop, &conn->ev.tm);
+		ev_timer_set(&conn->ev.tm, conn->rule->tcp_timeout, 0.0);
+		ev_timer_start(conn->event_loop, &conn->ev.tm);
+	}
+}
+
+/**
  * Create new TCP connection structure
  */
 static struct fuzzy_tcp_connection *
@@ -1062,6 +1077,9 @@ fuzzy_tcp_write_handler(struct fuzzy_tcp_connection *conn)
 
 		buf->bytes_written += r;
 
+		/* Refresh timeout after successful write - keeps connection alive during active data transfer */
+		fuzzy_tcp_refresh_timeout(conn);
+
 		if (buf->bytes_written >= buf->total_len) {
 			/* Buffer fully sent, remove from queue and free */
 			g_queue_pop_head(conn->write_queue);
@@ -1366,6 +1384,9 @@ fuzzy_tcp_read_handler(struct fuzzy_tcp_connection *conn)
 	}
 
 	conn->bytes_unprocessed += r;
+
+	/* Refresh timeout after successful read - keeps connection alive during active data transfer */
+	fuzzy_tcp_refresh_timeout(conn);
 
 	/* Process frames using state machine */
 	unsigned int processed_offset = 0;
