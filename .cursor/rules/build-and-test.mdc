@@ -1,0 +1,60 @@
+---
+description: "Rspamd: build system, testing, and development workflow"
+globs: ["**"]
+alwaysApply: true
+---
+
+# Build System
+
+## Build Directory
+- Build directory: `~/rspamd.build` (separate from source tree)
+- Use out-of-source builds with CMake + Ninja
+- **NEVER** build in source directory
+
+## Build and Install
+
+To build and install Rspamd:
+```bash
+cd ~/rspamd.build
+ninja -j8 install
+```
+
+## Testing
+
+### Unit Tests
+
+**C/C++ Unit Tests:**
+```bash
+test/rspamd-test-cxx
+```
+
+**Lua Unit Tests:**
+```bash
+test/rspamd-test -p /rspamd/lua
+```
+
+### Functional Tests
+- Located in `test/functional/`
+- Run **manually only** (not automated in development workflow)
+- Not part of pre-commit checks
+
+## Pre-commit Workflow
+
+Before committing changes:
+
+1. **Make changes** in source directory
+2. **Build**: `cd ~/rspamd.build && ninja -j8 install`
+3. **Run unit tests**:
+   - C/C++ tests: `test/rspamd-test-cxx`
+   - Lua tests: `test/rspamd-test -p /rspamd/lua`
+4. **Code quality checks**:
+   - Lua changes: `luacheck src/plugins/lua/ lualib/ rules/`
+   - C/C++ changes: Check `clang-format` compliance
+5. **Commit**: `git commit -S -m "[Tag] Description"`
+
+## Important Notes
+
+- **Do NOT use `luac`** for syntax checking - use the project's test suite instead
+- Always run tests after building before committing
+- Ensure all tests pass before creating pull requests
+- Functional tests are optional during development but required for releases

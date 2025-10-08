@@ -1,0 +1,28 @@
+# Unix-style aliases for testing
+# Format: alias: target1, target2, ...
+
+# Simple alias
+postmaster: root
+
+# Alias to email
+abuse: admin@example.com
+
+# Multiple targets
+support: user1@example.com, user2@example.com
+
+# Alias to local user
+webmaster: admin
+
+# Chained alias (sales -> team-sales)
+sales: team-sales
+
+# Terminal alias
+team-sales: sales-inbox@example.com
+
+# Alias with comments
+info: info-dept@example.com  # Information department
+
+# Line continuation test
+all-staff: user1@example.com, \
+           user2@example.com, \
+           user3@example.com
