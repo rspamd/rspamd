@@ -491,6 +491,24 @@ end
 
 exports.parse_local_domains = parse_local_domains
 
+--- Get value from backend or table
+-- @param source backend object or table
+-- @param key lookup key
+-- @return value or nil
+local function get_from_source(source, key)
+  if not source then
+    return nil
+  end
+
+  -- If it's a backend object with :get() method
+  if type(source) == 'table' and source.get then
+    return source:get(key)
+  end
+
+  -- Otherwise treat as plain table
+  return source[key]
+end
+
 --- Check if a domain is local
 -- @param domain domain name to check
 -- @return true if domain is local, false otherwise
@@ -500,13 +518,13 @@ local function is_local_domain(domain)
   end
 
   domain = domain:lower()
-  local result = module_state.local_domains[domain] == true
+  local result = get_from_source(module_state.local_domains, domain)
 
   lua_util.debugm(N, module_state.config,
       'is_local_domain: domain=%s result=%s',
       domain, result)
 
-  return result
+  return result ~= nil and result ~= false
 end
 exports.is_local_domain = is_local_domain
 
@@ -594,24 +612,6 @@ local function apply_service_rules(email_addr)
   end
 end
 exports.apply_service_rules = apply_service_rules
-
---- Get value from backend or table
--- @param source backend object or table
--- @param key lookup key
--- @return value or nil
-local function get_from_source(source, key)
-  if not source then
-    return nil
-  end
-
-  -- If it's a backend object with :get() method
-  if type(source) == 'table' and source.get then
-    return source:get(key)
-  end
-
-  -- Otherwise treat as plain table
-  return source[key]
-end
 
 --- Resolve one step of aliasing
 -- @param email_str normalized email string
