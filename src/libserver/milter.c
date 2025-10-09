@@ -2068,22 +2068,42 @@ rspamd_milter_process_milter_block(struct rspamd_milter_session *session,
 	GString *hname, *hvalue;
 
 	if (obj && ucl_object_type(obj) == UCL_OBJECT) {
-		elt = ucl_object_lookup(obj, "remove_headers");
-		/*
-		 * remove_headers:  {"name": 1, ... }
-		 * where number is the header's position starting from '1'
-		 */
-		if (elt && ucl_object_type(elt) == UCL_OBJECT) {
-			it = NULL;
+	elt = ucl_object_lookup(obj, "remove_headers");
+	/*
+	 * remove_headers:  {"name": 1, ... }
+	 * -or-
+	 * remove_headers:  {"name": [1, 2, ...], ... }
+	 * where number is the header's position starting from '1'
+	 */
+	if (elt && ucl_object_type(elt) == UCL_OBJECT) {
+		it = NULL;
 
-			while ((cur = ucl_object_iterate(elt, &it, true)) != NULL) {
-				if (ucl_object_type(cur) == UCL_INT) {
-					rspamd_milter_remove_header_safe(session,
-													 ucl_object_key(cur),
-													 ucl_object_toint(cur));
+		while ((cur = ucl_object_iterate(elt, &it, true)) != NULL) {
+			if (ucl_object_type(cur) == UCL_INT) {
+				rspamd_milter_remove_header_safe(session,
+												 ucl_object_key(cur),
+												 ucl_object_toint(cur));
+			}
+			else if (ucl_object_type(cur) == UCL_ARRAY) {
+				/* Multiple positions for the same header name */
+				ucl_object_iter_t *array_it;
+				const ucl_object_t *array_elt;
+
+				array_it = ucl_object_iterate_new(cur);
+
+				while ((array_elt = ucl_object_iterate_safe(array_it,
+															true)) != NULL) {
+					if (ucl_object_type(array_elt) == UCL_INT) {
+						rspamd_milter_remove_header_safe(session,
+														 ucl_object_key(cur),
+														 ucl_object_toint(array_elt));
+					}
 				}
+
+				ucl_object_iterate_free(array_it);
 			}
 		}
+	}
 
 		elt = ucl_object_lookup(obj, "add_headers");
 		/*
