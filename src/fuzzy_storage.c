@@ -2327,6 +2327,10 @@ fuzzy_session_destroy(gpointer d)
 	if (session->tcp_session == NULL) {
 		session->worker->nconns--;
 	}
+	else {
+		/* Release the reference to the TCP session */
+		REF_RELEASE(session->tcp_session);
+	}
 
 	if (session->ip_stat) {
 		REF_RELEASE(session->ip_stat);
