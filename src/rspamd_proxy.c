@@ -248,8 +248,16 @@ static void
 proxy_add_client_ip_header(struct rspamd_http_message *msg,
 						   struct rspamd_proxy_session *session)
 {
+	const rspamd_ftok_t *existing_ip_hdr = NULL;
+
+	/* Check if the client message already has an IP header (from another proxy in the chain) */
+	if (session->client_message) {
+		existing_ip_hdr = rspamd_http_message_find_header(session->client_message, IP_ADDR_HEADER);
+	}
+
 	/* Add/overwrite IP header with the actual client IP */
 	rspamd_http_message_remove_header(msg, IP_ADDR_HEADER);
+
 	if (session->client_milter_conn && session->client_milter_conn->addr) {
 		/* For milter connections, use the address from the CONNECT command */
 		if (rspamd_inet_address_get_af(session->client_milter_conn->addr) != AF_UNIX) {
@@ -261,8 +269,13 @@ proxy_add_client_ip_header(struct rspamd_http_message *msg,
 										   rspamd_inet_address_to_string(session->client_milter_conn->addr));
 		}
 	}
+	else if (existing_ip_hdr) {
+		/* Preserve IP header from upstream proxy in the chain */
+		rspamd_http_message_add_header_len(msg, IP_ADDR_HEADER,
+										   existing_ip_hdr->begin, existing_ip_hdr->len);
+	}
 	else if (session->client_addr) {
-		/* For HTTP connections, use the client address */
+		/* For direct HTTP connections, use the client address */
 		if (rspamd_inet_address_get_af(session->client_addr) != AF_UNIX) {
 			rspamd_http_message_add_header(msg, IP_ADDR_HEADER,
 										   rspamd_inet_address_to_string_pretty(session->client_addr));
