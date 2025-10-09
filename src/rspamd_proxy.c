@@ -244,6 +244,36 @@ struct rspamd_proxy_session {
 
 static gboolean proxy_send_master_message(struct rspamd_proxy_session *session);
 
+static void
+proxy_add_client_ip_header(struct rspamd_http_message *msg,
+						   struct rspamd_proxy_session *session)
+{
+	/* Add/overwrite IP header with the actual client IP */
+	rspamd_http_message_remove_header(msg, IP_ADDR_HEADER);
+	if (session->client_milter_conn && session->client_milter_conn->addr) {
+		/* For milter connections, use the address from the CONNECT command */
+		if (rspamd_inet_address_get_af(session->client_milter_conn->addr) != AF_UNIX) {
+			rspamd_http_message_add_header(msg, IP_ADDR_HEADER,
+										   rspamd_inet_address_to_string_pretty(session->client_milter_conn->addr));
+		}
+		else {
+			rspamd_http_message_add_header(msg, IP_ADDR_HEADER,
+										   rspamd_inet_address_to_string(session->client_milter_conn->addr));
+		}
+	}
+	else if (session->client_addr) {
+		/* For HTTP connections, use the client address */
+		if (rspamd_inet_address_get_af(session->client_addr) != AF_UNIX) {
+			rspamd_http_message_add_header(msg, IP_ADDR_HEADER,
+										   rspamd_inet_address_to_string_pretty(session->client_addr));
+		}
+		else {
+			rspamd_http_message_add_header(msg, IP_ADDR_HEADER,
+										   rspamd_inet_address_to_string(session->client_addr));
+		}
+	}
+}
+
 static GQuark
 rspamd_proxy_quark(void)
 {
@@ -1796,6 +1826,9 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 						/* Add log tag header based on mirror's configuration */
 						rspamd_proxy_add_log_tag_header(msg, session, m->log_tag_type);
 
+						/* Add/overwrite IP header with the actual client IP */
+						proxy_add_client_ip_header(msg, session);
+
 						/* Set handlers for the connection */
 						conn->error_handler = proxy_backend_mirror_error_handler;
 						conn->finish_handler = proxy_backend_mirror_finish_handler;
@@ -1935,6 +1968,9 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 
 		/* Add log tag header based on mirror's configuration */
 		rspamd_proxy_add_log_tag_header(msg, session, m->log_tag_type);
+
+		/* Add/overwrite IP header with the actual client IP */
+		proxy_add_client_ip_header(msg, session);
 
 		unsigned int http_opts = RSPAMD_HTTP_CLIENT_SIMPLE;
 
@@ -2654,6 +2690,9 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 
 		/* Add log tag header based on backend's configuration */
 		rspamd_proxy_add_log_tag_header(msg, session, backend->log_tag_type);
+
+		/* Add/overwrite IP header with the actual client IP */
+		proxy_add_client_ip_header(msg, session);
 
 		if (backend->local ||
 			rspamd_inet_address_is_local(
