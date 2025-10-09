@@ -2740,7 +2740,7 @@ rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents)
 					msg_debug_fuzzy_storage("invalid TCP fuzzy command of size %d received from %s",
 											(int) frame_len,
 											rspamd_inet_address_to_string(session->common.addr));
-					REF_RELEASE(session); /* Release TCP session reference */
+					/* Note: Don't release session here - cmd_session holds a reference and will release it */
 				}
 
 				/* Release our reference - session will be freed when all callbacks complete */
