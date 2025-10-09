@@ -752,6 +752,84 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 				msg_debug_protocol("read TLS cipher header, value: %T", hv_tok);
 			}
 			break;
+		case 'x':
+		case 'X':
+			IF_HEADER("X-Rspamd-Mail-Esmtp-Args")
+			{
+				/* Parse MAIL ESMTP arguments from HTTP header */
+				if (!task->mail_esmtp_args) {
+					task->mail_esmtp_args = g_hash_table_new_full(
+						rspamd_ftok_icase_hash,
+						rspamd_ftok_icase_equal,
+						rspamd_fstring_mapped_ftok_free,
+						rspamd_fstring_mapped_ftok_free);
+				}
+
+				/* Parse KEY=VALUE format */
+				const char *p = hv_tok->begin;
+				const char *end = hv_tok->begin + hv_tok->len;
+				const char *eq = memchr(p, '=', hv_tok->len);
+
+				if (eq && eq > p) {
+					rspamd_fstring_t *key = rspamd_fstring_new_init(p, eq - p);
+					rspamd_fstring_t *value = rspamd_fstring_new_init(eq + 1, end - eq - 1);
+					rspamd_ftok_t *key_tok = rspamd_ftok_map(key);
+					rspamd_ftok_t *value_tok = rspamd_ftok_map(value);
+
+					g_hash_table_replace(task->mail_esmtp_args, key_tok, value_tok);
+					msg_debug_protocol("parsed mail ESMTP arg: %T=%T", key_tok, value_tok);
+				}
+			}
+			IF_HEADER("X-Rspamd-Rcpt-Esmtp-Args")
+			{
+				/* Parse RCPT ESMTP arguments from HTTP header */
+				if (!task->rcpt_esmtp_args) {
+					task->rcpt_esmtp_args = g_ptr_array_new();
+				}
+
+				/* Parse IDX:KEY=VALUE format */
+				const char *p = hv_tok->begin;
+				const char *end = hv_tok->begin + hv_tok->len;
+				const char *colon = memchr(p, ':', hv_tok->len);
+
+				if (colon && colon > p) {
+					char *endptr;
+					int rcpt_idx = strtol(p, &endptr, 10);
+
+					if (endptr == colon) {
+						/* Ensure we have enough entries in the array */
+						while (task->rcpt_esmtp_args->len <= rcpt_idx) {
+							g_ptr_array_add(task->rcpt_esmtp_args, NULL);
+						}
+
+						/* Get or create hash table for this recipient */
+						GHashTable *rcpt_args = g_ptr_array_index(task->rcpt_esmtp_args, rcpt_idx);
+						if (!rcpt_args) {
+							rcpt_args = g_hash_table_new_full(
+								rspamd_ftok_icase_hash,
+								rspamd_ftok_icase_equal,
+								rspamd_fstring_mapped_ftok_free,
+								rspamd_fstring_mapped_ftok_free);
+							g_ptr_array_index(task->rcpt_esmtp_args, rcpt_idx) = rcpt_args;
+						}
+
+						/* Parse KEY=VALUE */
+						p = colon + 1;
+						const char *eq = memchr(p, '=', end - p);
+
+						if (eq && eq > p) {
+							rspamd_fstring_t *key = rspamd_fstring_new_init(p, eq - p);
+							rspamd_fstring_t *value = rspamd_fstring_new_init(eq + 1, end - eq - 1);
+							rspamd_ftok_t *key_tok = rspamd_ftok_map(key);
+							rspamd_ftok_t *value_tok = rspamd_ftok_map(value);
+
+							g_hash_table_replace(rcpt_args, key_tok, value_tok);
+							msg_debug_protocol("parsed rcpt ESMTP arg for idx %d: %T=%T", rcpt_idx, key_tok, value_tok);
+						}
+					}
+				}
+			}
+			break;
 		default:
 			msg_debug_protocol("generic header: %T", hn_tok);
 			break;

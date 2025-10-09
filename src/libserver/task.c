@@ -119,6 +119,10 @@ rspamd_task_new(struct rspamd_worker *worker,
 	new_task->messages = ucl_object_typed_new(UCL_OBJECT);
 	kh_static_init(rspamd_task_lua_cache, &new_task->lua_cache);
 
+	/* Initialize ESMTP arguments fields */
+	new_task->mail_esmtp_args = NULL;
+	new_task->rcpt_esmtp_args = NULL;
+
 	return new_task;
 }
 
@@ -1964,4 +1968,40 @@ void rspamd_worker_guard_handler(EV_P_ ev_io *w, int revents)
 			return;
 		}
 	}
+}
+
+/*
+ * ESMTP arguments management functions
+ */
+
+void rspamd_task_set_mail_esmtp_args(struct rspamd_task *task, GHashTable *args)
+{
+	if (task && args) {
+		task->mail_esmtp_args = args;
+	}
+}
+
+void rspamd_task_set_rcpt_esmtp_args(struct rspamd_task *task, GPtrArray *args)
+{
+	if (task && args) {
+		task->rcpt_esmtp_args = args;
+	}
+}
+
+GHashTable *
+rspamd_task_get_mail_esmtp_args(struct rspamd_task *task)
+{
+	if (task) {
+		return task->mail_esmtp_args;
+	}
+	return NULL;
+}
+
+GPtrArray *
+rspamd_task_get_rcpt_esmtp_args(struct rspamd_task *task)
+{
+	if (task) {
+		return task->rcpt_esmtp_args;
+	}
+	return NULL;
 }
