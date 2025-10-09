@@ -153,7 +153,8 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
                     timeout: 125000,
                 }).toBeTruthy();
             } catch (e) {
-                throw new Error(`Throughput counter should be one of [${targetValues.join(", ")}], got ${lastValue}`);
+                const msg = `Throughput counter should be one of [${targetValues.join(", ")}], got ${lastValue}`;
+                throw new Error(msg, {cause: e});
             }
         });
     });
