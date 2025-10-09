@@ -490,349 +490,349 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 			hv_tok->len = h->value.len;
 
 			switch (*hn_tok->begin) {
-	case 'd':
-	case 'D':
-		IF_HEADER(DELIVER_TO_HEADER)
-		{
-			task->deliver_to = rspamd_protocol_escape_braces(task, hv_tok);
-			msg_debug_protocol("read deliver-to header, value: %s",
-							   task->deliver_to);
-		}
-		else
-		{
-			msg_debug_protocol("wrong header: %T", hn_tok);
-		}
-		break;
-	case 'h':
-	case 'H':
-		IF_HEADER(HELO_HEADER)
-		{
-			task->helo = rspamd_mempool_ftokdup(task->task_pool, hv_tok);
-			msg_debug_protocol("read helo header, value: %s", task->helo);
-		}
-		IF_HEADER(HOSTNAME_HEADER)
-		{
-			task->hostname = rspamd_mempool_ftokdup(task->task_pool,
-													hv_tok);
-			msg_debug_protocol("read hostname header, value: %s", task->hostname);
-		}
-		break;
-	case 'f':
-	case 'F':
-		IF_HEADER(FROM_HEADER)
-		{
-			if (hv_tok->len == 0) {
-				/* Replace '' with '<>' to fix parsing issue */
-				RSPAMD_FTOK_ASSIGN(hv_tok, "<>");
+		case 'd':
+		case 'D':
+			IF_HEADER(DELIVER_TO_HEADER)
+			{
+				task->deliver_to = rspamd_protocol_escape_braces(task, hv_tok);
+				msg_debug_protocol("read deliver-to header, value: %s",
+								   task->deliver_to);
 			}
-			task->from_envelope = rspamd_email_address_from_smtp(
-				hv_tok->begin,
-				hv_tok->len);
-			msg_debug_protocol("read from header, value: %T", hv_tok);
-
-			if (!task->from_envelope) {
-				msg_err_protocol("bad from header: '%T'", hv_tok);
-				task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
+			else
+			{
+				msg_debug_protocol("wrong header: %T", hn_tok);
 			}
-		}
-		IF_HEADER(FILENAME_HEADER)
-		{
-			task->msg.fpath = rspamd_mempool_ftokdup(task->task_pool,
-													 hv_tok);
-			msg_debug_protocol("read filename header, value: %s", task->msg.fpath);
-		}
-		IF_HEADER(FLAGS_HEADER)
-		{
-			msg_debug_protocol("read flags header, value: %T", hv_tok);
-			rspamd_protocol_process_flags(task, hv_tok);
-		}
-		break;
-	case 'q':
-	case 'Q':
-		IF_HEADER(QUEUE_ID_HEADER)
-		{
-			task->queue_id = rspamd_mempool_ftokdup(task->task_pool,
-													hv_tok);
-			msg_debug_protocol("read queue_id header, value: %s", task->queue_id);
-		}
-		else
-		{
-			msg_debug_protocol("wrong header: %T", hn_tok);
-		}
-		break;
-	case 'r':
-	case 'R':
-		IF_HEADER(RCPT_HEADER)
-		{
-			rspamd_protocol_process_recipients(task, hv_tok);
-			msg_debug_protocol("read rcpt header, value: %T", hv_tok);
-		}
-		IF_HEADER(RAW_DATA_HEADER)
-		{
-			srch.begin = "yes";
-			srch.len = 3;
-
-			msg_debug_protocol("read raw data header, value: %T", hv_tok);
-
-			if (rspamd_ftok_casecmp(hv_tok, &srch) == 0) {
-				task->flags &= ~RSPAMD_TASK_FLAG_MIME;
-				msg_debug_protocol("disable mime parsing");
+			break;
+		case 'h':
+		case 'H':
+			IF_HEADER(HELO_HEADER)
+			{
+				task->helo = rspamd_mempool_ftokdup(task->task_pool, hv_tok);
+				msg_debug_protocol("read helo header, value: %s", task->helo);
 			}
-		}
-		break;
-	case 'i':
-	case 'I':
-		IF_HEADER(IP_ADDR_HEADER)
-		{
-			if (!rspamd_parse_inet_address(&task->from_addr,
-										   hv_tok->begin, hv_tok->len,
-										   RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
-				msg_err_protocol("bad ip header: '%T'", hv_tok);
+			IF_HEADER(HOSTNAME_HEADER)
+			{
+				task->hostname = rspamd_mempool_ftokdup(task->task_pool,
+														hv_tok);
+				msg_debug_protocol("read hostname header, value: %s", task->hostname);
 			}
-			else {
-				msg_debug_protocol("read IP header, value: %T", hv_tok);
-				has_ip = TRUE;
-			}
-		}
-		else
-		{
-			msg_debug_protocol("wrong header: %T", hn_tok);
-		}
-		break;
-	case 'p':
-	case 'P':
-		IF_HEADER(PASS_HEADER)
-		{
-			srch.begin = "all";
-			srch.len = 3;
-
-			msg_debug_protocol("read pass header, value: %T", hv_tok);
-
-			if (rspamd_ftok_casecmp(hv_tok, &srch) == 0) {
-				task->flags |= RSPAMD_TASK_FLAG_PASS_ALL;
-				msg_debug_protocol("pass all filters");
-			}
-		}
-		IF_HEADER(PROFILE_HEADER)
-		{
-			msg_debug_protocol("read profile header, value: %T", hv_tok);
-			task->flags |= RSPAMD_TASK_FLAG_PROFILE;
-		}
-		break;
-	case 's':
-	case 'S':
-		IF_HEADER(SETTINGS_ID_HEADER)
-		{
-			msg_debug_protocol("read settings-id header, value: %T", hv_tok);
-			task->settings_elt = rspamd_config_find_settings_name_ref(
-				task->cfg, hv_tok->begin, hv_tok->len);
-
-			if (task->settings_elt == NULL) {
-				GString *known_ids = g_string_new(NULL);
-				struct rspamd_config_settings_elt *cur;
-
-				DL_FOREACH(task->cfg->setting_ids, cur)
-				{
-					rspamd_printf_gstring(known_ids, "%s(%ud);",
-										  cur->name, cur->id);
+			break;
+		case 'f':
+		case 'F':
+			IF_HEADER(FROM_HEADER)
+			{
+				if (hv_tok->len == 0) {
+					/* Replace '' with '<>' to fix parsing issue */
+					RSPAMD_FTOK_ASSIGN(hv_tok, "<>");
 				}
+				task->from_envelope = rspamd_email_address_from_smtp(
+					hv_tok->begin,
+					hv_tok->len);
+				msg_debug_protocol("read from header, value: %T", hv_tok);
 
-				msg_warn_protocol("unknown settings id: %T(%d); known_ids: %v",
-								  hv_tok,
-								  rspamd_config_name_to_id(hv_tok->begin, hv_tok->len),
-								  known_ids);
+				if (!task->from_envelope) {
+					msg_err_protocol("bad from header: '%T'", hv_tok);
+					task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
+				}
+			}
+			IF_HEADER(FILENAME_HEADER)
+			{
+				task->msg.fpath = rspamd_mempool_ftokdup(task->task_pool,
+														 hv_tok);
+				msg_debug_protocol("read filename header, value: %s", task->msg.fpath);
+			}
+			IF_HEADER(FLAGS_HEADER)
+			{
+				msg_debug_protocol("read flags header, value: %T", hv_tok);
+				rspamd_protocol_process_flags(task, hv_tok);
+			}
+			break;
+		case 'q':
+		case 'Q':
+			IF_HEADER(QUEUE_ID_HEADER)
+			{
+				task->queue_id = rspamd_mempool_ftokdup(task->task_pool,
+														hv_tok);
+				msg_debug_protocol("read queue_id header, value: %s", task->queue_id);
+			}
+			else
+			{
+				msg_debug_protocol("wrong header: %T", hn_tok);
+			}
+			break;
+		case 'r':
+		case 'R':
+			IF_HEADER(RCPT_HEADER)
+			{
+				rspamd_protocol_process_recipients(task, hv_tok);
+				msg_debug_protocol("read rcpt header, value: %T", hv_tok);
+			}
+			IF_HEADER(RAW_DATA_HEADER)
+			{
+				srch.begin = "yes";
+				srch.len = 3;
 
-				g_string_free(known_ids, TRUE);
+				msg_debug_protocol("read raw data header, value: %T", hv_tok);
+
+				if (rspamd_ftok_casecmp(hv_tok, &srch) == 0) {
+					task->flags &= ~RSPAMD_TASK_FLAG_MIME;
+					msg_debug_protocol("disable mime parsing");
+				}
 			}
-			else {
-				msg_debug_protocol("applied settings id %T -> %ud", hv_tok,
-								   task->settings_elt->id);
+			break;
+		case 'i':
+		case 'I':
+			IF_HEADER(IP_ADDR_HEADER)
+			{
+				if (!rspamd_parse_inet_address(&task->from_addr,
+											   hv_tok->begin, hv_tok->len,
+											   RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
+					msg_err_protocol("bad ip header: '%T'", hv_tok);
+				}
+				else {
+					msg_debug_protocol("read IP header, value: %T", hv_tok);
+					has_ip = TRUE;
+				}
 			}
-		}
-		IF_HEADER(SETTINGS_HEADER)
-		{
-			msg_debug_protocol("read settings header, value: %T", hv_tok);
-			seen_settings_header = TRUE;
-		}
-		break;
-	case 'u':
-	case 'U':
-		IF_HEADER(USER_HEADER)
-		{
-			/*
+			else
+			{
+				msg_debug_protocol("wrong header: %T", hn_tok);
+			}
+			break;
+		case 'p':
+		case 'P':
+			IF_HEADER(PASS_HEADER)
+			{
+				srch.begin = "all";
+				srch.len = 3;
+
+				msg_debug_protocol("read pass header, value: %T", hv_tok);
+
+				if (rspamd_ftok_casecmp(hv_tok, &srch) == 0) {
+					task->flags |= RSPAMD_TASK_FLAG_PASS_ALL;
+					msg_debug_protocol("pass all filters");
+				}
+			}
+			IF_HEADER(PROFILE_HEADER)
+			{
+				msg_debug_protocol("read profile header, value: %T", hv_tok);
+				task->flags |= RSPAMD_TASK_FLAG_PROFILE;
+			}
+			break;
+		case 's':
+		case 'S':
+			IF_HEADER(SETTINGS_ID_HEADER)
+			{
+				msg_debug_protocol("read settings-id header, value: %T", hv_tok);
+				task->settings_elt = rspamd_config_find_settings_name_ref(
+					task->cfg, hv_tok->begin, hv_tok->len);
+
+				if (task->settings_elt == NULL) {
+					GString *known_ids = g_string_new(NULL);
+					struct rspamd_config_settings_elt *cur;
+
+					DL_FOREACH(task->cfg->setting_ids, cur)
+					{
+						rspamd_printf_gstring(known_ids, "%s(%ud);",
+											  cur->name, cur->id);
+					}
+
+					msg_warn_protocol("unknown settings id: %T(%d); known_ids: %v",
+									  hv_tok,
+									  rspamd_config_name_to_id(hv_tok->begin, hv_tok->len),
+									  known_ids);
+
+					g_string_free(known_ids, TRUE);
+				}
+				else {
+					msg_debug_protocol("applied settings id %T -> %ud", hv_tok,
+									   task->settings_elt->id);
+				}
+			}
+			IF_HEADER(SETTINGS_HEADER)
+			{
+				msg_debug_protocol("read settings header, value: %T", hv_tok);
+				seen_settings_header = TRUE;
+			}
+			break;
+		case 'u':
+		case 'U':
+			IF_HEADER(USER_HEADER)
+			{
+				/*
 								 * We must ignore User header in case of spamc, as SA has
 								 * different meaning of this header
 								 */
-			msg_debug_protocol("read user header, value: %T", hv_tok);
-			if (!RSPAMD_TASK_IS_SPAMC(task)) {
-				task->auth_user = rspamd_mempool_ftokdup(task->task_pool,
-														 hv_tok);
+				msg_debug_protocol("read user header, value: %T", hv_tok);
+				if (!RSPAMD_TASK_IS_SPAMC(task)) {
+					task->auth_user = rspamd_mempool_ftokdup(task->task_pool,
+															 hv_tok);
+				}
+				else {
+					msg_info_protocol("ignore user header: legacy SA protocol");
+				}
 			}
-			else {
-				msg_info_protocol("ignore user header: legacy SA protocol");
+			IF_HEADER(URLS_HEADER)
+			{
+				msg_debug_protocol("read urls header, value: %T", hv_tok);
+
+				srch.begin = "extended";
+				srch.len = 8;
+
+				if (rspamd_ftok_casecmp(hv_tok, &srch) == 0) {
+					task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_EXT_URLS;
+					msg_debug_protocol("extended urls information");
+				}
+
+				/* TODO: add more formats there */
 			}
-		}
-		IF_HEADER(URLS_HEADER)
-		{
-			msg_debug_protocol("read urls header, value: %T", hv_tok);
+			IF_HEADER(USER_AGENT_HEADER)
+			{
+				msg_debug_protocol("read user-agent header, value: %T", hv_tok);
 
-			srch.begin = "extended";
-			srch.len = 8;
-
-			if (rspamd_ftok_casecmp(hv_tok, &srch) == 0) {
-				task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_EXT_URLS;
-				msg_debug_protocol("extended urls information");
+				if (hv_tok->len == 6 &&
+					rspamd_lc_cmp(hv_tok->begin, "rspamc", 6) == 0) {
+					task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT;
+				}
 			}
+			break;
+		case 'l':
+		case 'L':
+			IF_HEADER(NO_LOG_HEADER)
+			{
+				msg_debug_protocol("read log header, value: %T", hv_tok);
+				srch.begin = "no";
+				srch.len = 2;
 
-			/* TODO: add more formats there */
-		}
-		IF_HEADER(USER_AGENT_HEADER)
-		{
-			msg_debug_protocol("read user-agent header, value: %T", hv_tok);
-
-			if (hv_tok->len == 6 &&
-				rspamd_lc_cmp(hv_tok->begin, "rspamc", 6) == 0) {
-				task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT;
+				if (rspamd_ftok_casecmp(hv_tok, &srch) == 0) {
+					task->flags |= RSPAMD_TASK_FLAG_NO_LOG;
+				}
 			}
-		}
-		break;
-	case 'l':
-	case 'L':
-		IF_HEADER(NO_LOG_HEADER)
-		{
-			msg_debug_protocol("read log header, value: %T", hv_tok);
-			srch.begin = "no";
-			srch.len = 2;
-
-			if (rspamd_ftok_casecmp(hv_tok, &srch) == 0) {
-				task->flags |= RSPAMD_TASK_FLAG_NO_LOG;
+			IF_HEADER(LOG_TAG_HEADER)
+			{
+				msg_debug_protocol("read log-tag header, value: %T", hv_tok);
+				/* Ensure that a tag is valid */
+				if (rspamd_fast_utf8_validate(hv_tok->begin, hv_tok->len) == 0) {
+					memcpy(task->task_pool->tag.uid, hv_tok->begin,
+						   MIN(hv_tok->len, sizeof(task->task_pool->tag.uid)));
+				}
 			}
-		}
-		IF_HEADER(LOG_TAG_HEADER)
-		{
-			msg_debug_protocol("read log-tag header, value: %T", hv_tok);
-			/* Ensure that a tag is valid */
-			if (rspamd_fast_utf8_validate(hv_tok->begin, hv_tok->len) == 0) {
-				memcpy(task->task_pool->tag.uid, hv_tok->begin,
-					   MIN(hv_tok->len, sizeof(task->task_pool->tag.uid)));
+			break;
+		case 'm':
+		case 'M':
+			IF_HEADER(MTA_TAG_HEADER)
+			{
+				char *mta_tag;
+				mta_tag = rspamd_mempool_ftokdup(task->task_pool, hv_tok);
+				rspamd_mempool_set_variable(task->task_pool,
+											RSPAMD_MEMPOOL_MTA_TAG,
+											mta_tag, NULL);
+				msg_debug_protocol("read MTA-Tag header, value: %s", mta_tag);
 			}
-		}
-		break;
-	case 'm':
-	case 'M':
-		IF_HEADER(MTA_TAG_HEADER)
-		{
-			char *mta_tag;
-			mta_tag = rspamd_mempool_ftokdup(task->task_pool, hv_tok);
-			rspamd_mempool_set_variable(task->task_pool,
-										RSPAMD_MEMPOOL_MTA_TAG,
-										mta_tag, NULL);
-			msg_debug_protocol("read MTA-Tag header, value: %s", mta_tag);
-		}
-		IF_HEADER(MTA_NAME_HEADER)
-		{
-			char *mta_name;
-			mta_name = rspamd_mempool_ftokdup(task->task_pool, hv_tok);
-			rspamd_mempool_set_variable(task->task_pool,
-										RSPAMD_MEMPOOL_MTA_NAME,
-										mta_name, NULL);
-			msg_debug_protocol("read MTA-Name header, value: %s", mta_name);
-		}
-		IF_HEADER(MILTER_HEADER)
-		{
-			task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_MILTER;
-			msg_debug_protocol("read Milter header, value: %T", hv_tok);
-		}
-		break;
-	case 't':
-	case 'T':
-		IF_HEADER(TLS_CIPHER_HEADER)
-		{
-			task->flags |= RSPAMD_TASK_FLAG_SSL;
-			msg_debug_protocol("read TLS cipher header, value: %T", hv_tok);
-		}
-		break;
-	case 'x':
-	case 'X':
-		IF_HEADER("X-Rspamd-Mail-Esmtp-Args")
-		{
-			/* Parse MAIL ESMTP arguments from HTTP header */
-			if (!task->mail_esmtp_args) {
-				task->mail_esmtp_args = g_hash_table_new_full(
-					rspamd_ftok_icase_hash,
-					rspamd_ftok_icase_equal,
-					rspamd_fstring_mapped_ftok_free,
-					rspamd_fstring_mapped_ftok_free);
+			IF_HEADER(MTA_NAME_HEADER)
+			{
+				char *mta_name;
+				mta_name = rspamd_mempool_ftokdup(task->task_pool, hv_tok);
+				rspamd_mempool_set_variable(task->task_pool,
+											RSPAMD_MEMPOOL_MTA_NAME,
+											mta_name, NULL);
+				msg_debug_protocol("read MTA-Name header, value: %s", mta_name);
 			}
-
-			/* Parse KEY=VALUE format */
-			const char *p = hv_tok->begin;
-			const char *end = hv_tok->begin + hv_tok->len;
-			const char *eq = memchr(p, '=', hv_tok->len);
-
-			if (eq && eq > p) {
-				rspamd_fstring_t *key = rspamd_fstring_new_init(p, eq - p);
-				rspamd_fstring_t *value = rspamd_fstring_new_init(eq + 1, end - eq - 1);
-				rspamd_ftok_t *key_tok = rspamd_ftok_map(key);
-				rspamd_ftok_t *value_tok = rspamd_ftok_map(value);
-
-				g_hash_table_replace(task->mail_esmtp_args, key_tok, value_tok);
-				msg_debug_protocol("parsed mail ESMTP arg: %T=%T", key_tok, value_tok);
+			IF_HEADER(MILTER_HEADER)
+			{
+				task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_MILTER;
+				msg_debug_protocol("read Milter header, value: %T", hv_tok);
 			}
-		}
-		IF_HEADER("X-Rspamd-Rcpt-Esmtp-Args")
-		{
-			/* Parse RCPT ESMTP arguments from HTTP header */
-			if (!task->rcpt_esmtp_args) {
-				task->rcpt_esmtp_args = g_ptr_array_new();
+			break;
+		case 't':
+		case 'T':
+			IF_HEADER(TLS_CIPHER_HEADER)
+			{
+				task->flags |= RSPAMD_TASK_FLAG_SSL;
+				msg_debug_protocol("read TLS cipher header, value: %T", hv_tok);
 			}
+			break;
+		case 'x':
+		case 'X':
+			IF_HEADER("X-Rspamd-Mail-Esmtp-Args")
+			{
+				/* Parse MAIL ESMTP arguments from HTTP header */
+				if (!task->mail_esmtp_args) {
+					task->mail_esmtp_args = g_hash_table_new_full(
+						rspamd_ftok_icase_hash,
+						rspamd_ftok_icase_equal,
+						rspamd_fstring_mapped_ftok_free,
+						rspamd_fstring_mapped_ftok_free);
+				}
 
-			/* Parse IDX:KEY=VALUE format */
-			const char *p = hv_tok->begin;
-			const char *end = hv_tok->begin + hv_tok->len;
-			const char *colon = memchr(p, ':', hv_tok->len);
+				/* Parse KEY=VALUE format */
+				const char *p = hv_tok->begin;
+				const char *end = hv_tok->begin + hv_tok->len;
+				const char *eq = memchr(p, '=', hv_tok->len);
 
-			if (colon && colon > p) {
-				char *endptr;
-				int rcpt_idx = strtol(p, &endptr, 10);
+				if (eq && eq > p) {
+					rspamd_fstring_t *key = rspamd_fstring_new_init(p, eq - p);
+					rspamd_fstring_t *value = rspamd_fstring_new_init(eq + 1, end - eq - 1);
+					rspamd_ftok_t *key_tok = rspamd_ftok_map(key);
+					rspamd_ftok_t *value_tok = rspamd_ftok_map(value);
 
-				if (endptr == colon) {
-					/* Ensure we have enough entries in the array */
-					while (task->rcpt_esmtp_args->len <= rcpt_idx) {
-						g_ptr_array_add(task->rcpt_esmtp_args, NULL);
-					}
+					g_hash_table_replace(task->mail_esmtp_args, key_tok, value_tok);
+					msg_debug_protocol("parsed mail ESMTP arg: %T=%T", key_tok, value_tok);
+				}
+			}
+			IF_HEADER("X-Rspamd-Rcpt-Esmtp-Args")
+			{
+				/* Parse RCPT ESMTP arguments from HTTP header */
+				if (!task->rcpt_esmtp_args) {
+					task->rcpt_esmtp_args = g_ptr_array_new();
+				}
 
-					/* Get or create hash table for this recipient */
-					GHashTable *rcpt_args = g_ptr_array_index(task->rcpt_esmtp_args, rcpt_idx);
-					if (!rcpt_args) {
-						rcpt_args = g_hash_table_new_full(
-							rspamd_ftok_icase_hash,
-							rspamd_ftok_icase_equal,
-							rspamd_fstring_mapped_ftok_free,
-							rspamd_fstring_mapped_ftok_free);
-						g_ptr_array_index(task->rcpt_esmtp_args, rcpt_idx) = rcpt_args;
-					}
+				/* Parse IDX:KEY=VALUE format */
+				const char *p = hv_tok->begin;
+				const char *end = hv_tok->begin + hv_tok->len;
+				const char *colon = memchr(p, ':', hv_tok->len);
 
-					/* Parse KEY=VALUE */
-					p = colon + 1;
-					const char *eq = memchr(p, '=', end - p);
+				if (colon && colon > p) {
+					char *endptr;
+					int rcpt_idx = strtol(p, &endptr, 10);
 
-					if (eq && eq > p) {
-						rspamd_fstring_t *key = rspamd_fstring_new_init(p, eq - p);
-						rspamd_fstring_t *value = rspamd_fstring_new_init(eq + 1, end - eq - 1);
-						rspamd_ftok_t *key_tok = rspamd_ftok_map(key);
-						rspamd_ftok_t *value_tok = rspamd_ftok_map(value);
+					if (endptr == colon) {
+						/* Ensure we have enough entries in the array */
+						while (task->rcpt_esmtp_args->len <= rcpt_idx) {
+							g_ptr_array_add(task->rcpt_esmtp_args, NULL);
+						}
 
-						g_hash_table_replace(rcpt_args, key_tok, value_tok);
-						msg_debug_protocol("parsed rcpt ESMTP arg for idx %d: %T=%T", rcpt_idx, key_tok, value_tok);
+						/* Get or create hash table for this recipient */
+						GHashTable *rcpt_args = g_ptr_array_index(task->rcpt_esmtp_args, rcpt_idx);
+						if (!rcpt_args) {
+							rcpt_args = g_hash_table_new_full(
+								rspamd_ftok_icase_hash,
+								rspamd_ftok_icase_equal,
+								rspamd_fstring_mapped_ftok_free,
+								rspamd_fstring_mapped_ftok_free);
+							g_ptr_array_index(task->rcpt_esmtp_args, rcpt_idx) = rcpt_args;
+						}
+
+						/* Parse KEY=VALUE */
+						p = colon + 1;
+						const char *eq = memchr(p, '=', end - p);
+
+						if (eq && eq > p) {
+							rspamd_fstring_t *key = rspamd_fstring_new_init(p, eq - p);
+							rspamd_fstring_t *value = rspamd_fstring_new_init(eq + 1, end - eq - 1);
+							rspamd_ftok_t *key_tok = rspamd_ftok_map(key);
+							rspamd_ftok_t *value_tok = rspamd_ftok_map(value);
+
+							g_hash_table_replace(rcpt_args, key_tok, value_tok);
+							msg_debug_protocol("parsed rcpt ESMTP arg for idx %d: %T=%T", rcpt_idx, key_tok, value_tok);
+						}
 					}
 				}
 			}
-		}
-		break;
-	default:
-		msg_debug_protocol("generic header: %T", hn_tok);
-		break;
+			break;
+		default:
+			msg_debug_protocol("generic header: %T", hn_tok);
+			break;
 				}
 
 				rspamd_task_add_request_header (task, hn_tok, hv_tok);

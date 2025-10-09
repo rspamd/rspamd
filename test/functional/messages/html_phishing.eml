@@ -1,6 +1,6 @@
 From: notification@example.com
 To: user@test.com
-Subject: Your weekly newsletter  
+Subject: Your weekly newsletter
 Content-Type: text/html; charset=utf-8
 
 <!DOCTYPE html>

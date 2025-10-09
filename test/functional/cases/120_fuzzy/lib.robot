@@ -19,8 +19,8 @@ ${RSPAMD_FUZZY_KEY}             null
 ${RSPAMD_FUZZY_SERVER_MODE}     servers
 ${RSPAMD_FUZZY_SHINGLES_KEY}    null
 ${RSPAMD_SCOPE}                 Suite
-${SETTINGS_FUZZY_CHECK}         ${EMPTY}
-${SETTINGS_FUZZY_WORKER}        ${EMPTY}
+${RSPAMD_SETTINGS_FUZZY_CHECK}         ${EMPTY}
+${RSPAMD_SETTINGS_FUZZY_WORKER}        ${EMPTY}
 @{MESSAGES_SKIP}                ${RSPAMD_TESTDIR}/messages/priority.eml
 @{MESSAGES}                     ${RSPAMD_TESTDIR}/messages/spam_message.eml  ${RSPAMD_TESTDIR}/messages/zip.eml
 @{RANDOM_MESSAGES}              ${RSPAMD_TESTDIR}/messages/bad_message.eml  ${RSPAMD_TESTDIR}/messages/zip-doublebad.eml
@@ -50,6 +50,16 @@ Fuzzy Add Test
   Sync Fuzzy Storage
   Scan File  ${message}
   Expect Symbol  ${FLAG1_SYMBOL}
+  Set Suite Variable  ${RSPAMD_FUZZY_ADD_${message}}  1
+
+Fuzzy Add Test Write Only
+  [Arguments]  ${message}
+  Set Suite Variable  ${RSPAMD_FUZZY_ADD_${message}}  0
+  ${result} =  Run Rspamc  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  -w  10  -f
+  ...  ${RSPAMD_FLAG1_NUMBER}  fuzzy_add  ${message}
+  Check Rspamc  ${result}
+  Sync Fuzzy Storage
+  # Do not scan - in write-only mode CHECK is not performed
   Set Suite Variable  ${RSPAMD_FUZZY_ADD_${message}}  1
 
 Fuzzy Delete Test
@@ -87,6 +97,15 @@ Fuzzy Encrypted Test
 
 Fuzzy Miss Test
   [Arguments]  ${message}
+  Scan File  ${message}
+  Do Not Expect Symbol  ${FLAG1_SYMBOL}
+
+Fuzzy Write Only No Check Test
+  [Arguments]  ${message}
+  IF  ${RSPAMD_FUZZY_ADD_${message}} != 1
+    Fail  "Fuzzy Add was not run"
+  END
+  # In write-only mode, CHECK is not sent, so symbol should not appear
   Scan File  ${message}
   Do Not Expect Symbol  ${FLAG1_SYMBOL}
 
@@ -145,7 +164,7 @@ Fuzzy Setup Plain
   [Arguments]  ${algorithm}
   Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  ${algorithm}
   Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  servers
-  Set Suite Variable  ${SETTINGS_FUZZY_CHECK}  servers = "${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_FUZZY}";
+  Set Suite Variable  ${RSPAMD_SETTINGS_FUZZY_CHECK}  servers = "${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_FUZZY}";
   Rspamd Redis Setup
 
 Fuzzy Setup Keyed
@@ -199,6 +218,11 @@ Fuzzy Multimessage Add Test
     Fuzzy Add Test  ${i}
   END
 
+Fuzzy Multimessage Add Test Write Only
+  FOR  ${i}  IN  @{MESSAGES}
+    Fuzzy Add Test Write Only  ${i}
+  END
+
 Fuzzy Multimessage Fuzzy Test
   FOR  ${i}  IN  @{MESSAGES}
     Fuzzy Fuzzy Test  ${i}
@@ -224,20 +248,77 @@ Fuzzy Multimessage Overwrite Test
     Fuzzy Overwrite Test  ${i}
   END
 
+Fuzzy Multimessage Write Only No Check Test
+  FOR  ${i}  IN  @{MESSAGES}
+    Fuzzy Write Only No Check Test  ${i}
+  END
+
 Fuzzy Setup Split Servers
   Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  siphash
   Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  split
-  Set Suite Variable  ${SETTINGS_FUZZY_CHECK}  read_servers = "${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_FUZZY}"; write_servers = "${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_FUZZY}";
+  Set Suite Variable  ${RSPAMD_SETTINGS_FUZZY_CHECK}  read_servers = "${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_FUZZY}"; write_servers = "${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_FUZZY}";
   Rspamd Redis Setup
 
 Fuzzy Setup Read Only
   Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  siphash
   Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  read_only
-  Set Suite Variable  ${SETTINGS_FUZZY_CHECK}  read_only = true;
+  Set Suite Variable  ${RSPAMD_SETTINGS_FUZZY_CHECK}  read_only = true;
   Rspamd Redis Setup
 
 Fuzzy Setup Write Only
   Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  siphash
   Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  write_only
-  Set Suite Variable  ${SETTINGS_FUZZY_CHECK}  mode = "write_only";
+  Set Suite Variable  ${RSPAMD_SETTINGS_FUZZY_CHECK}  mode = "write_only";
   Rspamd Redis Setup
+
+Fuzzy Setup TCP
+  [Arguments]  ${algorithm}
+  Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  ${algorithm}
+  Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  servers
+  Set Suite Variable  ${RSPAMD_SETTINGS_FUZZY_CHECK}  tcp = "auto"; tcp_threshold = 5;
+  Rspamd Redis Setup
+
+Fuzzy Setup TCP Siphash
+  Fuzzy Setup TCP  siphash
+
+Fuzzy Setup TCP Encrypted
+  [Arguments]  ${algorithm}
+  Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  ${algorithm}
+  Set Suite Variable  ${RSPAMD_FUZZY_ENCRYPTED_ONLY}  true
+  Set Suite Variable  ${RSPAMD_FUZZY_ENCRYPTION_KEY}  ${RSPAMD_KEY_PUB1}
+  Set Suite Variable  ${RSPAMD_FUZZY_CLIENT_ENCRYPTION_KEY}  ${RSPAMD_KEY_PUB1}
+  Set Suite Variable  ${RSPAMD_FUZZY_INCLUDE}  ${RSPAMD_TESTDIR}/configs/fuzzy-encryption-key.conf
+  Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  servers
+  Set Suite Variable  ${RSPAMD_SETTINGS_FUZZY_WORKER}  tcp = true;
+  Set Suite Variable  ${RSPAMD_SETTINGS_FUZZY_CHECK}  tcp = "auto"; tcp_threshold = 5;
+  Rspamd Redis Setup
+
+Fuzzy Setup TCP Encrypted Siphash
+  Fuzzy Setup TCP Encrypted  siphash
+
+Fuzzy Setup TCP Explicit
+  [Arguments]  ${algorithm}
+  Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  ${algorithm}
+  Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  servers
+  Set Suite Variable  ${RSPAMD_SETTINGS_FUZZY_WORKER}  tcp = true;
+  Set Suite Variable  ${RSPAMD_SETTINGS_FUZZY_CHECK}  tcp = "yes";
+  Rspamd Redis Setup
+
+Fuzzy Setup TCP Explicit Siphash
+  Fuzzy Setup TCP Explicit  siphash
+
+Fuzzy TCP High Rate Test
+  # Send multiple messages to exceed rate threshold and trigger TCP
+  FOR  ${i}  IN RANGE  10
+    FOR  ${message}  IN  @{MESSAGES}
+      ${result} =  Run Rspamc  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  -w  10  -f
+      ...  ${RSPAMD_FLAG1_NUMBER}  fuzzy_add  ${message}
+      Check Rspamc  ${result}
+    END
+  END
+  Sync Fuzzy Storage
+  # Verify that fuzzy check still works
+  FOR  ${message}  IN  @{MESSAGES}
+    Scan File  ${message}
+    Expect Symbol  ${FLAG1_SYMBOL}
+  END
