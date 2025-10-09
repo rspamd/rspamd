@@ -2765,8 +2765,8 @@ fuzzy_io_fin(void *ud)
 	if (session->fd == -1) {
 		/* TCP session - cleanup pending requests and stop timer */
 		fuzzy_tcp_session_cleanup(session);
-		/* Stop pure timer (no IO) - safe to call even if not active */
-		ev_timer_stop(session->event_loop, &session->timer_ev.tm);
+		/* Stop timer using rspamd's wrapper */
+		rspamd_ev_watcher_stop(session->event_loop, &session->timer_ev);
 	}
 
 	if (session->commands) {
@@ -4500,14 +4500,6 @@ fuzzy_check_timer_callback(int fd, short what, void *arg)
 	}
 }
 
-/* libev wrapper for TCP timer - calls rspamd_io_ev style callback */
-static void
-fuzzy_tcp_timer_libev_cb(EV_P_ struct ev_timer *w, int revents)
-{
-	struct rspamd_io_ev *ev = (struct rspamd_io_ev *) w->data;
-	ev->cb(-1, EV_TIMER, ev->ud);
-}
-
 /* TCP timeout callback - session-level timeout, does NOT mark connection as failed */
 static void
 fuzzy_tcp_timer_callback(int fd, short what, void *arg)
@@ -4560,8 +4552,8 @@ fuzzy_tcp_timer_callback(int fd, short what, void *arg)
 	/* Clean up pending requests for THIS session only */
 	fuzzy_tcp_session_cleanup(session);
 
-	/* Stop pure timer (no IO) - safe to call even if not active */
-	ev_timer_stop(session->event_loop, &session->timer_ev.tm);
+	/* Stop timer using rspamd's wrapper */
+	rspamd_ev_watcher_stop(session->event_loop, &session->timer_ev);
 
 	/* Decrement async counter for TCP session */
 	if (session->item) {
@@ -5264,15 +5256,14 @@ register_fuzzy_client_call(struct rspamd_task *task,
 					rspamd_symcache_item_async_inc(task, session->item, M);
 				}
 
-				/* Start timer for TCP request timeout */
-				/* Use pure timer (no IO), so use libev API directly */
-				session->timer_ev.cb = fuzzy_tcp_timer_callback;
-				session->timer_ev.ud = session;
-				session->timer_ev.timeout = rule->io_timeout;
-				session->timer_ev.tm.data = &session->timer_ev;
-				ev_timer_init(&session->timer_ev.tm, fuzzy_tcp_timer_libev_cb,
-							  rule->io_timeout, 0.0);
-				ev_timer_start(session->event_loop, &session->timer_ev.tm);
+				/* Start timer for TCP request timeout using rspamd's event wrapper */
+				rspamd_ev_watcher_init(&session->timer_ev,
+									   -1,
+									   EV_TIMER,
+									   fuzzy_tcp_timer_callback,
+									   session);
+				rspamd_ev_watcher_start(session->event_loop, &session->timer_ev,
+										rule->io_timeout);
 
 				return; /* TCP send successful */
 			}
