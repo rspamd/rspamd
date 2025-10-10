@@ -2470,6 +2470,10 @@ rspamd_proxy_self_scan(struct rspamd_proxy_session *session)
 			rspamd_task_set_rcpt_esmtp_args(task, session->rcpt_esmtp_args);
 		}
 	}
+	else {
+		/* Always request body block for rewriting support */
+		task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_BODY_BLOCK;
+	}
 
 	task->sock = -1;
 

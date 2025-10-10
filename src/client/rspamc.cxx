@@ -94,6 +94,7 @@ static const char *user_agent = "rspamc";
 static const char *files_list = nullptr;
 static const char *queue_id = nullptr;
 static const char *log_tag = nullptr;
+static const char *output_body = nullptr;
 static std::string settings;
 static std::string neural_train;
 static std::string neural_rule;
@@ -200,6 +201,8 @@ static GOptionEntry entries[] =
 		 "Set Queue-ID header for the request", nullptr},
 		{"log-tag", '\0', 0, G_OPTION_ARG_STRING, &log_tag,
 		 "Set Log-Tag header for the request", nullptr},
+		{"output-body", '\0', 0, G_OPTION_ARG_FILENAME, &output_body,
+		 "Save rewritten message body to file", nullptr},
 		{"settings", '\0', 0, G_OPTION_ARG_CALLBACK, (void *) &rspamc_settings_callback,
 		 "Set Settings header as JSON/UCL for the request", nullptr},
 		{nullptr, 0, 0, G_OPTION_ARG_NONE, nullptr, nullptr, nullptr}};
@@ -2102,8 +2105,29 @@ rspamc_client_cb(struct rspamd_client_connection *conn,
 				}
 
 				if (body) {
-					rspamc_print(out, "\nNew body:\n{}\n",
-								 std::string_view{body, bodylen});
+					if (output_body) {
+						/* Save body to file */
+						FILE *body_file = fopen(output_body, "wb");
+						if (body_file) {
+							if (fwrite(body, 1, bodylen, body_file) != bodylen) {
+								rspamc_print(stderr, "Failed to write body to file {}: {}\n",
+											 output_body, strerror(errno));
+							}
+							else {
+								rspamc_print(out, "\nNew body saved to: {}\n", output_body);
+							}
+							fclose(body_file);
+						}
+						else {
+							rspamc_print(stderr, "Failed to open output file {}: {}\n",
+										 output_body, strerror(errno));
+						}
+					}
+					else {
+						/* Print to stdout */
+						rspamc_print(out, "\nNew body:\n{}\n",
+									 std::string_view{body, bodylen});
+					}
 				}
 
 				ucl_object_unref(result);
