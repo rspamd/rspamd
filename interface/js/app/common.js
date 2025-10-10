@@ -284,6 +284,50 @@ define(["jquery", "nprogress"],
             return String(string).replace(htmlEscaper, (match) => htmlEscapes[match]);
         };
 
+        /**
+         * Hide one or more elements using Bootstrap's d-none class
+         * @param {string|jQuery} selector - CSS selector or jQuery object
+         * @param {boolean} anim - Whether to use animation (slideUp)
+         */
+        ui.hide = function (selector, anim = false) {
+            const $el = (typeof selector === "string") ? $(selector) : selector;
+            if (anim) {
+                $el.slideUp(400, function () {
+                    $(this).addClass("d-none");
+                });
+            } else {
+                $el.addClass("d-none");
+            }
+        };
+
+        /**
+         * Show one or more elements using Bootstrap's d-none class
+         * @param {string|jQuery} selector - CSS selector or jQuery object
+         * @param {boolean} anim - Whether to use animation (slideDown)
+         */
+        ui.show = function (selector, anim = false) {
+            const $el = (typeof selector === "string") ? $(selector) : selector;
+            if (anim) {
+                $el.removeClass("d-none").hide().slideDown(400);
+            } else {
+                $el.removeClass("d-none");
+            }
+        };
+
+        /**
+         * Toggle visibility of one or more elements using Bootstrap's d-none class
+         * @param {string|jQuery} selector - CSS selector or jQuery object
+         * @param {boolean} anim - Whether to use animation
+         */
+        ui.toggle = function (selector, anim = false) {
+            const $el = (typeof selector === "string") ? $(selector) : selector;
+            if ($el.hasClass("d-none")) {
+                ui.show($el, anim);
+            } else {
+                ui.hide($el, anim);
+            }
+        };
+
         ui.appendButtonsToFtFilterDropdown = (ftFilter) => {
             function button(text, classes, check) {
                 return $("<button/>", {

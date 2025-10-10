@@ -48,8 +48,8 @@
 
 				<li role="presentation" class="nav-item"><a id="configuration_nav" aria-controls="configuration" role="tab" href="#configuration" data-bs-toggle="tab" class="nav-link">Configuration</a></li>
 				<li role="presentation" class="nav-item"><a id="symbols_nav" aria-controls="symbols" role="tab" href="#symbols" data-bs-toggle="tab" class="nav-link">Symbols</a></li>
-				<li role="presentation" class="nav-item"><a id="scan_nav" aria-controls="scan" role="tab" href="#scan" data-bs-toggle="tab" class="nav-link">Scan<span class="ro-hide" style="display: none;">/Learn</span></a></li>
-				<li role="presentation" class="nav-item"><a id="selectors_nav" aria-controls="selectors" role="tab" href="#selectors" data-bs-toggle="tab" class="nav-link ro-hide" style="display: none;">Test selectors</a></li>
+				<li role="presentation" class="nav-item"><a id="scan_nav" aria-controls="scan" role="tab" href="#scan" data-bs-toggle="tab" class="nav-link">Scan<span class="ro-hide d-none">/Learn</span></a></li>
+				<li role="presentation" class="nav-item"><a id="selectors_nav" aria-controls="selectors" role="tab" href="#selectors" data-bs-toggle="tab" class="nav-link ro-hide d-none">Test selectors</a></li>
 				<li role="presentation" class="nav-item"><a id="history_nav" aria-controls="history" role="tab" href="#history" data-bs-toggle="tab" class="nav-link">History</a></li>
 			</ul>
 		</div>
@@ -168,7 +168,7 @@
 		<div class="tab-content">
 			<div class="tab-pane" id="status">
 				<div class="row">
-					<div id="statWidgets" class="col-lg-12 stat-boxes fw-bold text-secondary" style="display: none;">
+					<div id="statWidgets" class="col-lg-12 stat-boxes fw-bold text-secondary d-none">
 					</div>
 				</div>
 				<div class="row">
@@ -472,7 +472,7 @@
 						</div>
 					</div>
 				</div>
-				<div class="card ro-hide" style="display: none;">
+				<div class="card ro-hide d-none">
 					<div class="card-header text-secondary py-1 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-graduation-cap"></i></span>
 						<span class="h6 fw-bolder my-auto">Learn Rspamd</span>
@@ -540,7 +540,7 @@
 					</div>
 				</div>
 
-				<div id="hash-card" class="card bg-light shadow my-3" style="display: none;">
+				<div id="hash-card" class="card bg-light shadow my-3 d-none">
 					<div class="card-header text-secondary py-2 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-hashtag"></i></span>
 						<span class="h6 fw-bolder my-auto">Fuzzy hashes</span>
@@ -683,7 +683,7 @@
 						<span class="h6 fw-bolder my-auto ms-0">History</span>
 						<a href="https://rspamd.com/doc/modules/history_redis.html" target="_blank" rel="noopener noreferrer"
 							title="If you'd like to use the modern version of History, please enable History redis module."
-							 id="legacy-history-badge" class="my-2 ms-2 badge text-bg-info" style="display: none;">Legacy version</a>
+							 id="legacy-history-badge" class="my-2 ms-2 badge text-bg-info d-none">Legacy version</a>
 						<div class="d-flex input-group-sm align-items-center text-nowrap ms-auto me-1">
 							<label for="selSymOrder_history">Symbols order:</label>
 							<select id="selSymOrder_history" class="form-select ms-1">
@@ -774,7 +774,7 @@
 					    Browser detects passwords by form.elements[n].type == "password" and then detects
 						the username field by searching backwards through form elements for the text field
 						immediately before the password fields. -->
-					<input value="Rspamd controller password" style="display: none;"/>
+					<input value="Rspamd controller password" class="d-none"/>
 					<div class="input-group">
 						<input class="form-control"
 							   type="password"

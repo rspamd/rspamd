@@ -63,7 +63,8 @@ define(["jquery", "app/common", "d3pie", "d3"],
             }
 
             const stat_w = [];
-            $("#statWidgets").empty().hide();
+            $("#statWidgets").empty();
+            common.hide("#statWidgets");
             $.each(data, (i, item) => {
                 const widgetsOrder = ["scanned", "no action", "greylist", "add header", "rewrite subject", "reject", "learned"];
 
@@ -102,7 +103,7 @@ define(["jquery", "app/common", "d3pie", "d3"],
                 .wrapAll('<div class="card stat-box text-center shadow-sm float-end">' +
                   '<div class="widget overflow-hidden p-2 text-capitalize"></div></div>');
             $("#statWidgets").find("div.float-end").appendTo("#statWidgets");
-            $("#statWidgets").show();
+            common.show("#statWidgets");
 
             $("#clusterTable tbody").empty();
             $("#selSrv").empty();

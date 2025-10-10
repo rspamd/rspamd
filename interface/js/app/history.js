@@ -41,7 +41,7 @@ define(["jquery", "app/common", "app/libft", "footable"],
 
             function compare(e1, e2) { return e1.name.localeCompare(e2.name); }
 
-            $("#selSymOrder_history, label[for='selSymOrder_history']").hide();
+            common.hide("#selSymOrder_history, label[for='selSymOrder_history']");
 
             $.each(data, (i, item) => {
                 item.time = libft.unix_time_format(item.unix_time);
@@ -181,11 +181,11 @@ define(["jquery", "app/common", "app/libft", "footable"],
                             data.rows = [].concat.apply([], neighbours_data
                                 .map((e) => e.rows));
                             data.version = version;
-                            $("#legacy-history-badge").hide();
+                            common.hide("#legacy-history-badge");
                         } else {
                             // Legacy version
                             data = [].concat.apply([], neighbours_data);
-                            $("#legacy-history-badge").show();
+                            common.show("#legacy-history-badge");
                         }
                         const o = process_history_data(data);
                         const {items} = o;

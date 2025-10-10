@@ -539,7 +539,7 @@ define(["jquery", "app/common", "footable"],
             const unsorted_symbols = [];
             const compare_function = get_compare_function(table);
 
-            $("#selSymOrder_" + table + ", label[for='selSymOrder_" + table + "']").show();
+            common.show("#selSymOrder_" + table + ", label[for='selSymOrder_" + table + "]");
 
             $.each(data.rows,
                 (i, item) => {
