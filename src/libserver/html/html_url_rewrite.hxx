@@ -22,6 +22,7 @@
 #include <string_view>
 #include <vector>
 #include <cstddef>
+#include <optional>
 
 struct rspamd_task;
 
