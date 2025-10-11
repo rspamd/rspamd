@@ -348,6 +348,9 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 
 	cfg->enable_css_parser = true;
 	cfg->enable_mime_utf = false;
+	cfg->enable_url_rewrite = false;
+	cfg->url_rewrite_lua_func = nullptr;
+	cfg->url_rewrite_fold_limit = 76;
 	cfg->script_modules = g_ptr_array_new();
 
 	REF_INIT_RETAIN(cfg, rspamd_config_free);
