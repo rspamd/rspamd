@@ -32,6 +32,7 @@
 
 #include <math.h>
 #include "libmime/received.h"
+#include "libserver/html/html_url_rewrite_c.h"
 
 /***
  * @module rspamd_task
@@ -1275,6 +1276,15 @@ LUA_FUNCTION_DEF(task, get_dns_req);
  */
 LUA_FUNCTION_DEF(task, add_timer);
 
+/***
+ * @method task:rewrite_html_urls(func_name)
+ * Rewrites URLs in HTML parts using the specified Lua callback function.
+ * The callback receives (task, url) and should return the replacement URL or nil.
+ * @param {string} func_name name of Lua function to call for each URL
+ * @return {table|nil} table of rewritten HTML parts indexed by part number, or nil on error
+ */
+LUA_FUNCTION_DEF(task, rewrite_html_urls);
+
 static const struct luaL_reg tasklib_f[] = {
 	LUA_INTERFACE_DEF(task, create),
 	LUA_INTERFACE_DEF(task, load_from_file),
@@ -1405,6 +1415,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, get_all_named_results),
 	LUA_INTERFACE_DEF(task, topointer),
 	LUA_INTERFACE_DEF(task, add_timer),
+	LUA_INTERFACE_DEF(task, rewrite_html_urls),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
@@ -7781,6 +7792,75 @@ lua_task_add_timer(lua_State *L)
 	ev_timer_start(ev_base, &cbdata->ev);
 
 	return 0;
+}
+
+static int
+lua_task_rewrite_html_urls(lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task(L, 1);
+	const char *func_name = luaL_checkstring(L, 2);
+
+	if (!func_name) {
+		return luaL_error(L, "invalid arguments: function name expected");
+	}
+
+	if (!task || !MESSAGE_FIELD_CHECK(task, text_parts)) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	/* Create result table */
+	lua_newtable(L);
+	int results = 0;
+	unsigned int i;
+	void *part;
+
+	/* Iterate through text parts */
+	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, part)
+	{
+		struct rspamd_mime_text_part *text_part = (struct rspamd_mime_text_part *) part;
+
+		/* Only process HTML parts */
+		if (!IS_TEXT_PART_HTML(text_part) || !text_part->html) {
+			continue;
+		}
+
+		char *output_html = NULL;
+		gsize output_len = 0;
+
+		/* Process URL rewriting using C wrapper */
+		int ret = rspamd_html_url_rewrite(
+			task,
+			text_part->html,
+			func_name,
+			text_part->mime_part->part_number,
+			(const char *) text_part->parsed.begin,
+			text_part->parsed.len,
+			&output_html,
+			&output_len);
+
+		if (ret == 0 && output_html) {
+			/* Store result in table: table[part_number] = rewritten_html */
+			lua_pushinteger(L, text_part->mime_part->part_number);
+
+			/* Create rspamd_text userdata for the rewritten content */
+			struct rspamd_lua_text *t = (struct rspamd_lua_text *) lua_newuserdata(L, sizeof(struct rspamd_lua_text));
+			rspamd_lua_setclass(L, rspamd_text_classname, -1);
+			t->flags = 0;
+			t->start = output_html;
+			t->len = output_len;
+
+			lua_settable(L, -3);
+			results++;
+		}
+	}
+
+	if (results == 0) {
+		lua_pop(L, 1);
+		lua_pushnil(L);
+	}
+
+	return 1;
 }
 
 /* Init part */
