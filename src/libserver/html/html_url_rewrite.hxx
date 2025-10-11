@@ -25,6 +25,7 @@
 #include <optional>
 
 struct rspamd_task;
+struct lua_State;
 
 namespace rspamd::html {
 
@@ -94,15 +95,17 @@ auto apply_patches(std::string_view original, const std::vector<rewrite_patch> &
  * Process HTML URL rewriting for a task
  * Enumerates candidates, calls Lua callback, applies patches, and returns rewritten HTML
  * @param task Rspamd task
+ * @param L Lua state
  * @param hc HTML content
- * @param func_name Lua function name for URL rewriting
+ * @param func_ref Lua function reference from luaL_ref
  * @param part_id MIME part ID
  * @param original_html Original HTML content (decoded)
  * @return Rewritten HTML or nullopt if no changes
  */
 auto process_html_url_rewrite(struct rspamd_task *task,
+							  ::lua_State *L,
 							  const html_content *hc,
-							  const char *func_name,
+							  int func_ref,
 							  int part_id,
 							  std::string_view original_html)
 	-> std::optional<std::string>;

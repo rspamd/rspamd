@@ -22,15 +22,16 @@
 extern "C" {
 
 int rspamd_html_url_rewrite(struct rspamd_task *task,
+							struct lua_State *L,
 							void *html_content,
-							const char *func_name,
+							int func_ref,
 							int part_id,
 							const char *original_html,
 							gsize html_len,
 							char **output_html,
 							gsize *output_len)
 {
-	if (!task || !html_content || !func_name || !original_html) {
+	if (!task || !L || !html_content || !original_html) {
 		return -1;
 	}
 
@@ -38,7 +39,7 @@ int rspamd_html_url_rewrite(struct rspamd_task *task,
 	std::string_view original{original_html, html_len};
 
 	auto result = rspamd::html::process_html_url_rewrite(
-		task, hc, func_name, part_id, original);
+		task, L, hc, func_ref, part_id, original);
 
 	if (!result) {
 		return -1;

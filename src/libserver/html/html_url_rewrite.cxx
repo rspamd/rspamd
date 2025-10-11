@@ -36,19 +36,15 @@ namespace rspamd::html {
 /**
  * Call Lua url_rewriter function to get replacement URL
  * @param task Rspamd task
- * @param func_name Lua function name (e.g., "url_rewriter")
+ * @param L Lua state
+ * @param func_ref Lua function reference from luaL_ref
  * @param url Original URL string
  * @return Replacement URL or empty optional if no replacement
  */
-static auto call_lua_url_rewriter(struct rspamd_task *task, const char *func_name, const std::string &url)
+static auto call_lua_url_rewriter(struct rspamd_task *task, ::lua_State *L, int func_ref, const std::string &url)
 	-> std::optional<std::string>
 {
-	if (!func_name || !task || !task->cfg) {
-		return std::nullopt;
-	}
-
-	auto *L = RSPAMD_LUA_CFG_STATE(task->cfg);
-	if (!L) {
+	if (!L || func_ref == LUA_NOREF || func_ref == LUA_REFNIL || !task) {
 		return std::nullopt;
 	}
 
@@ -56,9 +52,11 @@ static auto call_lua_url_rewriter(struct rspamd_task *task, const char *func_nam
 	lua_pushcfunction(L, &rspamd_lua_traceback);
 	auto err_idx = lua_gettop(L);
 
-	// Get the function
-	if (!rspamd_lua_require_function(L, func_name, nullptr)) {
-		msg_debug_html_rewrite("cannot require function %s", func_name);
+	// Get the function from registry
+	lua_rawgeti(L, LUA_REGISTRYINDEX, func_ref);
+
+	if (!lua_isfunction(L, -1)) {
+		msg_debug_html_rewrite("func_ref is not a function");
 		lua_settop(L, err_idx - 1);
 		return std::nullopt;
 	}
@@ -73,7 +71,7 @@ static auto call_lua_url_rewriter(struct rspamd_task *task, const char *func_nam
 
 	// Call function with 2 args, 1 result
 	if (lua_pcall(L, 2, 1, err_idx) != 0) {
-		msg_warn_task("call to %s failed: %s", func_name, lua_tostring(L, -1));
+		msg_warn_task("call to url rewriter failed: %s", lua_tostring(L, -1));
 		lua_settop(L, err_idx - 1);
 		return std::nullopt;
 	}
@@ -89,7 +87,7 @@ static auto call_lua_url_rewriter(struct rspamd_task *task, const char *func_nam
 		}
 	}
 	else if (!lua_isnil(L, -1)) {
-		msg_warn_task("%s returned non-string value", func_name);
+		msg_warn_task("url rewriter returned non-string value");
 	}
 
 	lua_settop(L, err_idx - 1);
@@ -206,13 +204,14 @@ auto apply_patches(std::string_view original, const std::vector<rewrite_patch> &
 }
 
 auto process_html_url_rewrite(struct rspamd_task *task,
+							  ::lua_State *L,
 							  const html_content *hc,
-							  const char *func_name,
+							  int func_ref,
 							  int part_id,
 							  std::string_view original_html)
 	-> std::optional<std::string>
 {
-	if (!task || !hc || !func_name) {
+	if (!task || !hc || !L || func_ref == LUA_NOREF || func_ref == LUA_REFNIL) {
 		return std::nullopt;
 	}
 
@@ -231,7 +230,7 @@ auto process_html_url_rewrite(struct rspamd_task *task,
 
 	for (const auto &candidate: candidates) {
 		// Call Lua callback
-		auto replacement = call_lua_url_rewriter(task, func_name, candidate.absolute_url);
+		auto replacement = call_lua_url_rewriter(task, L, func_ref, candidate.absolute_url);
 		if (!replacement) {
 			continue;// Skip if Lua returned nil
 		}

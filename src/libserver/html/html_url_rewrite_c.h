@@ -25,11 +25,14 @@ extern "C" {
 
 struct rspamd_task;
 
+struct lua_State;
+
 /**
  * C wrapper for HTML URL rewriting
  * @param task Rspamd task
+ * @param L Lua state
  * @param html_content HTML content pointer (void* cast of html_content*)
- * @param func_name Lua function name for rewriting
+ * @param func_ref Lua function reference (from luaL_ref)
  * @param part_id MIME part ID
  * @param original_html Original HTML content
  * @param html_len Length of original HTML
@@ -38,8 +41,9 @@ struct rspamd_task;
  * @return 0 on success, -1 on error/no rewrite
  */
 int rspamd_html_url_rewrite(struct rspamd_task *task,
+							struct lua_State *L,
 							void *html_content,
-							const char *func_name,
+							int func_ref,
 							int part_id,
 							const char *original_html,
 							gsize html_len,

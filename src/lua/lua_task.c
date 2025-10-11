@@ -1277,10 +1277,10 @@ LUA_FUNCTION_DEF(task, get_dns_req);
 LUA_FUNCTION_DEF(task, add_timer);
 
 /***
- * @method task:rewrite_html_urls(func_name)
+ * @method task:rewrite_html_urls(callback)
  * Rewrites URLs in HTML parts using the specified Lua callback function.
  * The callback receives (task, url) and should return the replacement URL or nil.
- * @param {string} func_name name of Lua function to call for each URL
+ * @param {function} callback Lua function to call for each URL
  * @return {table|nil} table of rewritten HTML parts indexed by part number, or nil on error
  */
 LUA_FUNCTION_DEF(task, rewrite_html_urls);
@@ -7798,16 +7798,19 @@ static int
 lua_task_rewrite_html_urls(lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task(L, 1);
-	const char *func_name = luaL_checkstring(L, 2);
 
-	if (!func_name) {
-		return luaL_error(L, "invalid arguments: function name expected");
+	if (!lua_isfunction(L, 2)) {
+		return luaL_error(L, "invalid arguments: function expected");
 	}
 
 	if (!task || !MESSAGE_FIELD_CHECK(task, text_parts)) {
 		lua_pushnil(L);
 		return 1;
 	}
+
+	/* Create function reference */
+	lua_pushvalue(L, 2);
+	int func_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
 	/* Create result table */
 	lua_newtable(L);
@@ -7831,8 +7834,9 @@ lua_task_rewrite_html_urls(lua_State *L)
 		/* Process URL rewriting using C wrapper */
 		int ret = rspamd_html_url_rewrite(
 			task,
+			L,
 			text_part->html,
-			func_name,
+			func_ref,
 			text_part->mime_part->part_number,
 			(const char *) text_part->parsed.begin,
 			text_part->parsed.len,
@@ -7854,6 +7858,9 @@ lua_task_rewrite_html_urls(lua_State *L)
 			results++;
 		}
 	}
+
+	/* Unreference the function */
+	luaL_unref(L, LUA_REGISTRYINDEX, func_ref);
 
 	if (results == 0) {
 		lua_pop(L, 1);
