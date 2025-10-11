@@ -111,7 +111,7 @@ define(["jquery", "app/common"],
 
         ui.getMaps = function () {
             const $listmaps = $("#listMaps");
-            $listmaps.closest(".card").hide();
+            common.hide($listmaps.closest(".card"));
             common.query("maps", {
                 success: function (json) {
                     const [{data}] = json;
@@ -137,7 +137,7 @@ define(["jquery", "app/common"],
                         $("<td>" + item.description + "</td>").appendTo($tr);
                         $tr.appendTo($tbody);
                     });
-                    $listmaps.closest(".card").show();
+                    common.show($listmaps.closest(".card"));
                 },
                 server: common.getServer()
             });
@@ -191,9 +191,9 @@ define(["jquery", "app/common"],
                     if (item.editable === false || common.read_only) {
                         $("#editor").attr(editor[mode].readonly_attr);
                         icon = "fa-eye";
-                        $("#modalSaveGroup").hide();
+                        common.hide("#modalSaveGroup");
                     } else {
-                        $("#modalSaveGroup").show();
+                        common.show("#modalSaveGroup");
                     }
                     $("#modalDialog .modal-header").find("[data-fa-i2svg]").addClass(icon);
                     $("#modalTitle").html(item.uri);

@@ -139,9 +139,9 @@ define(["jquery", "app/common", "stickytabs", "visibility",
                         () => module.statWidgets(graphs, checked_server));
                     if (id !== "#autoRefresh") module.statWidgets(graphs, checked_server);
 
-                    $(".preset").show();
-                    $(".history").hide();
-                    $(".dynamic").hide();
+                    common.show(".preset");
+                    common.hide(".history");
+                    common.hide(".dynamic");
                 });
                 break;
             case "#throughput_nav":
@@ -161,9 +161,9 @@ define(["jquery", "app/common", "stickytabs", "visibility",
                         () => module.draw(graphs, common.neighbours, checked_server, selData));
                     if (id !== "#autoRefresh") module.draw(graphs, common.neighbours, checked_server, selData);
 
-                    $(".preset").hide();
-                    $(".history").hide();
-                    $(".dynamic").show();
+                    common.hide(".preset");
+                    common.hide(".history");
+                    common.show(".dynamic");
                 });
                 break;
             case "#configuration_nav":
@@ -195,9 +195,9 @@ define(["jquery", "app/common", "stickytabs", "visibility",
                         () => getHistoryAndErrors());
                     if (id !== "#autoRefresh") getHistoryAndErrors();
 
-                    $(".preset").hide();
-                    $(".history").show();
-                    $(".dynamic").hide();
+                    common.hide(".preset");
+                    common.show(".history");
+                    common.hide(".dynamic");
 
                     module.updateHistoryControlsState();
                 });
@@ -245,10 +245,10 @@ define(["jquery", "app/common", "stickytabs", "visibility",
 
                 if (common.read_only) {
                     $(".ro-disable").attr("disabled", true);
-                    $(".ro-hide").hide();
+                    common.hide(".ro-hide");
                 } else {
                     $(".ro-disable").removeAttr("disabled", true);
-                    $(".ro-hide").show();
+                    common.show(".ro-hide");
                 }
 
                 $("#preloader").addClass("d-none");
@@ -280,7 +280,7 @@ define(["jquery", "app/common", "stickytabs", "visibility",
             error: function () {
                 function clearFeedback() {
                     $("#connectPassword").off("input").removeClass("is-invalid");
-                    $("#authInvalidCharFeedback,#authUnauthorizedFeedback").hide();
+                    common.hide("#authInvalidCharFeedback,#authUnauthorizedFeedback");
                 }
 
                 $("#connectDialog")
@@ -302,7 +302,7 @@ define(["jquery", "app/common", "stickytabs", "visibility",
                         $("#connectPassword")
                             .addClass("is-invalid")
                             .off("input").on("input", () => clearFeedback());
-                        $(tooltip).show();
+                        common.show(tooltip);
                     }
 
                     if (!(/^[\u0020-\u007e]*$/).test(password)) {
