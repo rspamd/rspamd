@@ -2112,6 +2112,24 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   0,
 									   "Enable UTF8 mode for mime");
 		rspamd_rcl_add_default_handler(sub,
+									   "enable_url_rewrite",
+									   rspamd_rcl_parse_struct_boolean,
+									   G_STRUCT_OFFSET(struct rspamd_config, enable_url_rewrite),
+									   0,
+									   "Enable HTML URL rewriting");
+		rspamd_rcl_add_default_handler(sub,
+									   "url_rewrite_lua_func",
+									   rspamd_rcl_parse_struct_string,
+									   G_STRUCT_OFFSET(struct rspamd_config, url_rewrite_lua_func),
+									   0,
+									   "Lua function name for URL rewriting callback");
+		rspamd_rcl_add_default_handler(sub,
+									   "url_rewrite_fold_limit",
+									   rspamd_rcl_parse_struct_integer,
+									   G_STRUCT_OFFSET(struct rspamd_config, url_rewrite_fold_limit),
+									   0,
+									   "Line fold limit for MIME re-encoding (default: 76)");
+		rspamd_rcl_add_default_handler(sub,
 									   "enable_experimental",
 									   rspamd_rcl_parse_struct_boolean,
 									   G_STRUCT_OFFSET(struct rspamd_config, enable_experimental),

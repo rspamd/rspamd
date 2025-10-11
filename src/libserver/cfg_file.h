@@ -347,6 +347,7 @@ struct rspamd_config {
 	char *pid_file;                  /**< name of pid file									*/
 	char *temp_dir;                  /**< dir for temp files									*/
 	char *control_socket_path;       /**< path to the control socket							*/
+	char *url_rewrite_lua_func;      /**< Lua function for URL rewriting						*/
 	const ucl_object_t *local_addrs; /**< tree of local addresses							*/
 #ifdef WITH_GPERF_TOOLS
 	char *profile_path;
@@ -375,6 +376,7 @@ struct rspamd_config {
 	enum rspamd_gtube_patterns_policy gtube_patterns_policy; /**< Enable test patterns								*/
 	gboolean enable_css_parser;                              /**< Enable css parsing in HTML							*/
 	gboolean enable_mime_utf;                                /**< Enable utf8 mime parsing							*/
+	gboolean enable_url_rewrite;                             /**< Enable HTML URL rewriting							*/
 
 	gsize max_cores_size;        /**< maximum size occupied by rspamd core files			*/
 	gsize max_cores_count;       /**< maximum number of core files						*/
@@ -384,6 +386,7 @@ struct rspamd_config {
 	gsize images_cache_size;     /**< size of LRU cache for DCT data from images			*/
 	double task_timeout;         /**< maximum message processing time					*/
 	int default_max_shots;       /**< default maximum count of symbols hits permitted (-1 for unlimited) */
+	int url_rewrite_fold_limit;  /**< line fold limit for URL rewrite MIME encoding (default 76) */
 	int32_t heartbeats_loss_max; /**< number of heartbeats lost to consider worker's termination */
 	double heartbeat_interval;   /**< interval for heartbeats for workers				*/
 
