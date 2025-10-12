@@ -420,6 +420,19 @@ table#symbolsTable input[type="number"] {
     display: none;
 }
 
+.search-syntax-icon {
+    position: absolute;
+    top: 50%;
+    transform: translate(-150%, -50%);
+    z-index: 3;
+    opacity: 0.3;
+    cursor: help;
+    transition: opacity 0.2s ease-in-out;
+}
+.search-syntax-icon:hover {
+    opacity: 0.6;
+}
+
 #history-from,
 #history-count,
 #history_page_size {
