@@ -261,6 +261,21 @@ define(["jquery", "app/common", "footable"],
                 $create: function () {
                     this._super();
                     const self = this;
+
+                    if (self.$input && self.$input.length && !self.$input.parent().find(".search-syntax-icon").length) {
+                        self.$input.parent().css("position", "relative");
+                        const $icon = $("<i/>", {
+                            class: "fas fa-circle-question search-syntax-icon text-muted",
+                            title: "Search syntax: match all rows containing\n\n" +
+                                   "\"exact phrase\" — exact string (including spaces)\n" +
+                                   "term1 OR term2 — either term\n" +
+                                   "term1 AND term2 — both terms\n" +
+                                   "term1 term2 — both terms (same as AND)\n" +
+                                   "term1 -term2 — term1 but exclude rows with term2"
+                        });
+                        $icon.insertAfter(self.$input);
+                    }
+
                     const $form_grp = $("<div/>", {
                         class: "form-group d-inline-flex align-items-center"
                     }).append($("<label/>", {
