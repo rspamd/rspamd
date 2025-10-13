@@ -123,10 +123,8 @@ auto enumerate_rewrite_candidates(const html_content *hc, struct rspamd_task *ta
 		}
 
 		// Skip data: and cid: schemes by default
-		if (url_value.size() >= 5) {
-			if (url_value.substr(0, 5) == "data:" || url_value.substr(0, 4) == "cid:") {
-				return true;// Continue to next
-			}
+		if (url_value.starts_with("data:") || url_value.starts_with("cid:")) {
+			return true;// Continue to next
 		}
 
 		// Build absolute URL (already done by parser, but we have it in url_value)

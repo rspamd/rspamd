@@ -460,4 +460,41 @@ Content-Type: text/html
     task:destroy()
   end)
 
+  test("Edge case: bare cid: and data: schemes", function()
+    local msg = [[
+From: test@example.com
+To: nobody@example.com
+Subject: test
+Content-Type: text/html
+
+<html>
+<body>
+<img src="cid:">
+<img src="data:">
+<a href="http://example.com/test">Real link</a>
+</body>
+</html>
+]]
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+
+    task:process_message()
+
+    local urls_seen = {}
+    local function rewrite_callback(task, url)
+      table.insert(urls_seen, url)
+      return "http://safe.com/redirect"
+    end
+
+    local result = task:rewrite_html_urls(rewrite_callback)
+
+    assert_not_nil(result, "should rewrite non-special scheme URLs")
+
+    -- Should only see the http URL, not bare cid: or data:
+    assert_equal(#urls_seen, 1, "should see exactly 1 URL (the http one)")
+    assert_equal(urls_seen[1], "http://example.com/test", "should see the http URL")
+
+    task:destroy()
+  end)
+
 end)
