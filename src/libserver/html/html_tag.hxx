@@ -156,8 +156,8 @@ struct html_component_name : html_component_base {
 
 struct html_component_href : html_component_base {
 	std::string_view value;
-	std::size_t offset = 0;// offset in decoded HTML buffer
-	std::size_t len = 0;   // length of raw attribute value
+	std::size_t offset = 0;// offset in UTF-8 HTML buffer (utf_raw_content)
+	std::size_t len = 0;   // length in UTF-8 HTML buffer (utf_raw_content)
 	explicit constexpr html_component_href(std::string_view v, std::size_t off = 0, std::size_t l = 0)
 		: value(v), offset(off), len(l)
 	{
@@ -992,8 +992,8 @@ struct html_component_title : html_component_base {
 
 struct html_component_src : html_component_base {
 	std::string_view value;
-	std::size_t offset = 0;// offset in decoded HTML buffer
-	std::size_t len = 0;   // length of raw attribute value
+	std::size_t offset = 0;// offset in UTF-8 HTML buffer (utf_raw_content)
+	std::size_t len = 0;   // length in UTF-8 HTML buffer (utf_raw_content)
 	explicit html_component_src(std::string_view v, std::size_t off = 0, std::size_t l = 0)
 		: value(v), offset(off), len(l)
 	{

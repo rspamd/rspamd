@@ -7828,18 +7828,23 @@ lua_task_rewrite_html_urls(lua_State *L)
 			continue;
 		}
 
+		/* Skip if no UTF-8 content available */
+		if (!text_part->utf_raw_content || text_part->utf_raw_content->len == 0) {
+			continue;
+		}
+
 		char *output_html = NULL;
 		gsize output_len = 0;
 
-		/* Process URL rewriting using C wrapper */
+		/* Process URL rewriting using C wrapper on UTF-8 buffer */
 		int ret = rspamd_html_url_rewrite(
 			task,
 			L,
 			text_part->html,
 			func_ref,
 			text_part->mime_part->part_number,
-			(const char *) text_part->parsed.begin,
-			text_part->parsed.len,
+			(const char *) text_part->utf_raw_content->data,
+			text_part->utf_raw_content->len,
 			&output_html,
 			&output_len);
 

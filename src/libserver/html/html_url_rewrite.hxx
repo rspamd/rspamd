@@ -40,19 +40,19 @@ struct rewrite_candidate {
 	const html_tag *tag;       // Tag containing the attribute
 	std::string_view attr_name;// "href" or "src"
 	std::string absolute_url;  // Absolute/canonicalized URL for Lua policy
-	std::size_t offset;        // Offset of attribute value in decoded HTML buffer
-	std::size_t len;           // Length of attribute value in decoded HTML buffer
+	std::size_t offset;        // Offset of attribute value in UTF-8 HTML buffer (utf_raw_content)
+	std::size_t len;           // Length of attribute value in UTF-8 HTML buffer (utf_raw_content)
 	int part_id;               // MIME part ID (for multi-part messages)
 };
 
 /**
- * Patch to apply to the decoded HTML buffer
+ * Patch to apply to the UTF-8 HTML buffer
  * Represents a single replacement operation
  */
 struct rewrite_patch {
 	int part_id;            // MIME part ID
-	std::size_t offset;     // Offset in decoded buffer
-	std::size_t len;        // Length to replace
+	std::size_t offset;     // Offset in UTF-8 HTML buffer (utf_raw_content)
+	std::size_t len;        // Length to replace in UTF-8 HTML buffer (utf_raw_content)
 	std::string replacement;// Replacement string
 
 	// For sorting patches by offset
@@ -83,8 +83,8 @@ auto enumerate_rewrite_candidates(const html_content *hc, struct rspamd_task *ta
 auto validate_patches(std::vector<rewrite_patch> &patches) -> bool;
 
 /**
- * Apply patches to a decoded HTML buffer
- * @param original original decoded buffer
+ * Apply patches to a UTF-8 HTML buffer
+ * @param original original UTF-8 HTML buffer (utf_raw_content)
  * @param patches sorted, non-overlapping patches
  * @return rewritten buffer
  */
@@ -99,7 +99,7 @@ auto apply_patches(std::string_view original, const std::vector<rewrite_patch> &
  * @param hc HTML content
  * @param func_ref Lua function reference from luaL_ref
  * @param part_id MIME part ID
- * @param original_html Original HTML content (decoded)
+ * @param original_html Original HTML content (UTF-8, from utf_raw_content)
  * @return Rewritten HTML or nullopt if no changes
  */
 auto process_html_url_rewrite(struct rspamd_task *task,
