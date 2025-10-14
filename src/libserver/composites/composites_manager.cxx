@@ -383,9 +383,11 @@ composite_dep_callback(const rspamd_ftok_t *atom, gpointer ud)
 	}
 
 	/* Check if the symbol itself needs second pass */
-	if (symbol_needs_second_pass(cfg, atom->begin)) {
-		msg_debug_config("composite depends on second-pass symbol: %*s",
-						 (int) atom->len, atom->begin);
+	/* Create null-terminated string for C API (rspamd_ftok_t is not null-terminated) */
+	std::string symbol_name(atom->begin, atom->len);
+	if (symbol_needs_second_pass(cfg, symbol_name.c_str())) {
+		msg_debug_config("composite depends on second-pass symbol: %s",
+						 symbol_name.c_str());
 		cbd->needs_second_pass = true;
 	}
 }
