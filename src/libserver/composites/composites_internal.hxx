@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,7 @@ struct rspamd_composite {
 	struct rspamd_expression *expr;
 	int id;
 	rspamd_composite_policy policy;
+	bool second_pass; /**< true if this composite needs second pass evaluation */
 };
 
 #define COMPOSITE_MANAGER_FROM_PTR(ptr) (reinterpret_cast<rspamd::composites::composites_manager *>(ptr))
@@ -93,6 +94,7 @@ private:
 		composite->id = all_composites.size() - 1;
 		composite->str_expr = composite_expression;
 		composite->sym = composite_name;
+		composite->second_pass = false; /* Initially all composites are first pass */
 
 		composites[composite->sym] = composite;
 
@@ -104,7 +106,16 @@ private:
 		composites;
 	/* Store all composites here, even if we have duplicates */
 	std::vector<std::shared_ptr<rspamd_composite>> all_composites;
+
 	struct rspamd_config *cfg;
+
+public:
+	/* Two-phase evaluation: composites are split into first and second pass */
+	std::vector<rspamd_composite *> first_pass_composites;  /* Evaluated during COMPOSITES stage */
+	std::vector<rspamd_composite *> second_pass_composites; /* Evaluated during COMPOSITES_POST stage */
+
+	/* Analyze composite dependencies and split into first/second pass vectors */
+	void process_dependencies();
 };
 
 }// namespace rspamd::composites

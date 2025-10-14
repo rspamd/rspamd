@@ -332,3 +332,148 @@ bool rspamd_composites_add_map_handlers(const ucl_object_t *obj, struct rspamd_c
 
 	return true;
 }
+
+namespace rspamd::composites {
+
+/* Helper to check if a symbol requires second pass evaluation */
+static bool
+symbol_needs_second_pass(struct rspamd_config *cfg, const char *symbol_name)
+{
+	if (!cfg->cache) {
+		return false;
+	}
+
+	auto flags = rspamd_symcache_get_symbol_flags(cfg->cache, symbol_name);
+
+	/* Postfilters and classifiers/statistics symbols require second pass */
+	return (flags & (SYMBOL_TYPE_POSTFILTER | SYMBOL_TYPE_CLASSIFIER | SYMBOL_TYPE_NOSTAT)) != 0;
+}
+
+/* Callback data for walking expression atoms to find symbol dependencies */
+struct composite_dep_cbdata {
+	struct rspamd_config *cfg;
+	bool needs_second_pass;
+	composites_manager *cm;
+};
+
+static void
+composite_dep_callback(const rspamd_ftok_t *atom, gpointer ud)
+{
+	auto *cbd = reinterpret_cast<composite_dep_cbdata *>(ud);
+	auto *cfg = cbd->cfg;
+
+	if (cbd->needs_second_pass) {
+		/* Already marked, no need to continue */
+		return;
+	}
+
+	/* Convert atom to string */
+	std::string_view atom_str(atom->begin, atom->len);
+
+	/* Skip operators and special characters */
+	if (atom->len == 0 || atom->begin[0] == '&' || atom->begin[0] == '|' ||
+		atom->begin[0] == '!' || atom->begin[0] == '(' || atom->begin[0] == ')') {
+		return;
+	}
+
+	/* Check if this is a reference to another composite */
+	if (auto *dep_comp = cbd->cm->find(atom_str); dep_comp != nullptr) {
+		/* Dependency on another composite - will be handled in transitive pass */
+		return;
+	}
+
+	/* Check if the symbol itself needs second pass */
+	if (symbol_needs_second_pass(cfg, atom->begin)) {
+		msg_debug_config("composite depends on second-pass symbol: %*s",
+						 (int) atom->len, atom->begin);
+		cbd->needs_second_pass = true;
+	}
+}
+
+void composites_manager::process_dependencies()
+{
+	ankerl::unordered_dense::set<rspamd_composite *> second_pass_set;
+	bool changed;
+
+	msg_debug_config("analyzing composite dependencies for two-phase evaluation");
+
+	/* Initially, all composites start in first pass */
+	for (const auto &comp: all_composites) {
+		first_pass_composites.push_back(comp.get());
+	}
+
+	/* First pass: mark composites that directly depend on postfilters/stats */
+	for (auto *comp: first_pass_composites) {
+		composite_dep_cbdata cbd{cfg, false, this};
+
+		rspamd_expression_atom_foreach(comp->expr,
+									   composite_dep_callback,
+									   &cbd);
+
+		if (cbd.needs_second_pass) {
+			second_pass_set.insert(comp);
+			msg_debug_config("composite '%s' marked for second pass (direct dependency)",
+							 comp->sym.c_str());
+		}
+	}
+
+	/* Second pass: handle transitive dependencies */
+	do {
+		changed = false;
+		for (auto *comp: first_pass_composites) {
+			if (second_pass_set.contains(comp)) {
+				continue;
+			}
+
+			bool has_second_pass_dep = false;
+
+			/* Helper struct for lambda capture */
+			struct trans_check_data {
+				composites_manager *cm;
+				ankerl::unordered_dense::set<rspamd_composite *> *second_pass_set;
+				bool *has_dep;
+			} trans_data{this, &second_pass_set, &has_second_pass_dep};
+
+			rspamd_expression_atom_foreach(comp->expr, [](const rspamd_ftok_t *atom, gpointer ud) {
+											   auto *data = reinterpret_cast<trans_check_data *>(ud);
+											   std::string_view atom_str(atom->begin, atom->len);
+											   if (auto *dep_comp = data->cm->find(atom_str); dep_comp != nullptr) {
+												   /* Cast away const since we know this points to a modifiable composite */
+												   if (data->second_pass_set->contains(const_cast<rspamd_composite *>(dep_comp))) {
+													   *data->has_dep = true;
+												   }
+											   } }, &trans_data);
+
+			if (has_second_pass_dep) {
+				second_pass_set.insert(comp);
+				changed = true;
+				msg_debug_config("composite '%s' marked for second pass (transitive dependency)",
+								 comp->sym.c_str());
+			}
+		}
+	} while (changed);
+
+	/* Move second-pass composites from first_pass to second_pass vector and mark them */
+	auto it = first_pass_composites.begin();
+	while (it != first_pass_composites.end()) {
+		if (second_pass_set.contains(*it)) {
+			(*it)->second_pass = true;
+			second_pass_composites.push_back(*it);
+			it = first_pass_composites.erase(it);
+		}
+		else {
+			++it;
+		}
+	}
+
+	msg_debug_config("composite dependency analysis complete: %d first-pass, %d second-pass composites",
+					 (int) first_pass_composites.size(), (int) second_pass_composites.size());
+}
+
+}// namespace rspamd::composites
+
+void rspamd_composites_process_deps(void *cm_ptr, struct rspamd_config *cfg)
+{
+	auto *cm = COMPOSITE_MANAGER_FROM_PTR(cm_ptr);
+	cm->process_dependencies();
+}

@@ -1004,6 +1004,11 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 		if (hs_ret == RSPAMD_HYPERSCAN_LOAD_ERROR) {
 			msg_debug_config("cannot load hyperscan database, disable it");
 		}
+
+		/* Process composite dependencies after symcache is initialized */
+		if (cfg->composites_manager && rspamd_composites_manager_nelts(cfg->composites_manager) > 0) {
+			rspamd_composites_process_deps(cfg->composites_manager, cfg);
+		}
 	}
 
 	if (opts & RSPAMD_CONFIG_INIT_LIBS) {
