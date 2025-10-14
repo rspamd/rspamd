@@ -33,6 +33,7 @@
 #include <math.h>
 #include "libmime/received.h"
 #include "libserver/html/html_url_rewrite_c.h"
+#include "lua_html_url_rewrite.h"
 
 /***
  * @module rspamd_task
@@ -1291,7 +1292,8 @@ LUA_FUNCTION_DEF(task, rewrite_html_urls);
  * Useful for async URL checking workflows where URLs need to be batched.
  * @return {table|nil} table indexed by part number, each containing an array of URL info tables with keys: url, attr, tag
  */
-LUA_FUNCTION_DEF(task, get_html_urls);
+/* Implemented in lua_html_url_rewrite.cxx as C++ binding */
+extern int lua_task_get_html_urls(lua_State *L);
 
 static const struct luaL_reg tasklib_f[] = {
 	LUA_INTERFACE_DEF(task, create),
@@ -7884,87 +7886,7 @@ lua_task_rewrite_html_urls(lua_State *L)
 	return 1;
 }
 
-static int
-lua_task_get_html_urls(lua_State *L)
-{
-	struct rspamd_task *task = lua_check_task(L, 1);
-
-	if (!task || !MESSAGE_FIELD_CHECK(task, text_parts)) {
-		lua_pushnil(L);
-		return 1;
-	}
-
-	/* Create result table */
-	lua_newtable(L);
-	int results = 0;
-	unsigned int i;
-	void *part;
-
-	/* Iterate through text parts */
-	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, part)
-	{
-		struct rspamd_mime_text_part *text_part = (struct rspamd_mime_text_part *) part;
-
-		/* Only process HTML parts */
-		if (!IS_TEXT_PART_HTML(text_part) || !text_part->html) {
-			continue;
-		}
-
-		/* Skip if no UTF-8 content available */
-		if (!text_part->utf_raw_content || text_part->utf_raw_content->len == 0) {
-			continue;
-		}
-
-		struct rspamd_html_url_candidate *candidates = NULL;
-		gsize n_candidates = 0;
-
-		/* Enumerate URLs using C wrapper */
-		int ret = rspamd_html_enumerate_urls(
-			task,
-			text_part->html,
-			text_part->mime_part->part_number,
-			&candidates,
-			&n_candidates);
-
-		if (ret == 0 && candidates && n_candidates > 0) {
-			/* Create array for this part: table[part_number] = {url_info_1, url_info_2, ...} */
-			lua_pushinteger(L, text_part->mime_part->part_number);
-			lua_newtable(L); /* URLs array for this part */
-
-			for (gsize j = 0; j < n_candidates; j++) {
-				lua_pushinteger(L, j + 1); /* 1-indexed array */
-				lua_newtable(L);           /* URL info table */
-
-				/* url field */
-				lua_pushstring(L, "url");
-				lua_pushstring(L, candidates[j].url);
-				lua_settable(L, -3);
-
-				/* attr field */
-				lua_pushstring(L, "attr");
-				lua_pushstring(L, candidates[j].attr);
-				lua_settable(L, -3);
-
-				/* tag field */
-				lua_pushstring(L, "tag");
-				lua_pushstring(L, candidates[j].tag);
-				lua_settable(L, -3);
-
-				lua_settable(L, -3); /* Add url info to URLs array */
-			}
-
-			lua_settable(L, -3); /* Add part to main table */
-			results++;
-		}
-	}
-
-	if (results == 0) {
-		lua_pop(L, 1);
-		lua_pushnil(L);
-	}
-
-	return 1;
-}
+/* lua_task_get_html_urls is implemented in lua_html_url_rewrite.cxx */
 
 /* Init part */
 

@@ -28,33 +28,6 @@ struct rspamd_task;
 struct lua_State;
 
 /**
- * URL candidate info for C interface
- */
-struct rspamd_html_url_candidate {
-	const char *url; // Absolute URL string (NUL-terminated)
-	const char *attr;// Attribute name: "href" or "src" (NUL-terminated)
-	const char *tag; // Tag name (NUL-terminated)
-	gsize url_len;   // Length of URL string
-	gsize attr_len;  // Length of attr string
-	gsize tag_len;   // Length of tag string
-};
-
-/**
- * C wrapper for enumerating HTML URL rewrite candidates
- * @param task Rspamd task
- * @param html_content HTML content pointer (void* cast of html_content*)
- * @param part_id MIME part ID
- * @param candidates Output array of candidates (allocated from task pool if successful)
- * @param n_candidates Output count of candidates
- * @return 0 on success, -1 on error
- */
-int rspamd_html_enumerate_urls(struct rspamd_task *task,
-							   void *html_content,
-							   int part_id,
-							   struct rspamd_html_url_candidate **candidates,
-							   gsize *n_candidates);
-
-/**
  * C wrapper for HTML URL rewriting
  * @param task Rspamd task
  * @param L Lua state
