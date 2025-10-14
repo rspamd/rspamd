@@ -1113,7 +1113,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			if (parser_env.value_start == nullptr) {
 				parser_env.value_start = in;
 			}
-			store_value_character(true);
+			store_value_character(false);
 			state = parse_value;
 		}
 		break;
@@ -1133,13 +1133,17 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			if (parser_env.value_start == nullptr) {
 				parser_env.value_start = in;
 			}
-			store_value_character(true);
+			store_value_character(false);
 			state = parse_value;
 		}
 		break;
 
 	case parse_start_dquote:
 		if (*in == '"') {
+			// Empty quoted value - set value_start to point to the closing quote
+			if (parser_env.value_start == nullptr) {
+				parser_env.value_start = in;
+			}
 			store_component_value();
 			state = spaces_after_param;
 		}
@@ -1155,6 +1159,10 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 
 	case parse_start_squote:
 		if (*in == '\'') {
+			// Empty quoted value - set value_start to point to the closing quote
+			if (parser_env.value_start == nullptr) {
+				parser_env.value_start = in;
+			}
 			store_component_value();
 			state = spaces_after_param;
 		}
