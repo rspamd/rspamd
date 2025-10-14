@@ -803,13 +803,8 @@ rspamd_task_process(struct rspamd_task *task, unsigned int stages)
 		}
 		break;
 	case RSPAMD_TASK_STAGE_COMPOSITES_POST:
-		/* Second run of composites processing before idempotent filters (if needed) */
-		if (task->result->nresults_postfilters != task->result->nresults) {
-			rspamd_composites_process_task(task);
-		}
-		else {
-			msg_debug_task("skip second run of composites as the result has not been changed");
-		}
+		/* Second run of composites processing for composites that depend on postfilters/stats */
+		rspamd_composites_process_task(task);
 		break;
 
 	case RSPAMD_TASK_STAGE_IDEMPOTENT:

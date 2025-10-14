@@ -57,6 +57,14 @@ void *rspamd_composites_manager_add_from_ucl_silent(void *, const char *, const 
 void *rspamd_composites_manager_add_from_string(void *, const char *, const char *);
 void *rspamd_composites_manager_add_from_string_silent(void *, const char *, const char *);
 
+/**
+ * Process composite dependencies to split into first/second pass
+ * Should be called after symcache is finalized
+ * @param cm_ptr composites manager pointer
+ * @param cfg config structure
+ */
+void rspamd_composites_process_deps(void *cm_ptr, struct rspamd_config *cfg);
+
 #ifdef __cplusplus
 }
 #endif

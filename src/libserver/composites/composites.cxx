@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,12 +85,15 @@ struct composites_data {
 								 std::vector<symbol_remove_data>>
 		symbols_to_remove;
 	std::vector<bool> checked;
+	bool is_second_pass; /**< true if we're in COMPOSITES_POST stage */
 
 	explicit composites_data(struct rspamd_task *task, struct rspamd_scan_result *mres)
 		: task(task), composite(nullptr), metric_res(mres)
 	{
 		checked.resize(rspamd_composites_manager_nelts(task->cfg->composites_manager) * 2,
 					   false);
+		/* Determine if we're in second pass by checking if POST_FILTERS stage has been processed */
+		is_second_pass = (task->processed_stages & RSPAMD_TASK_STAGE_POST_FILTERS) != 0;
 	}
 };
 
@@ -808,11 +811,24 @@ composites_foreach_callback(gpointer key, gpointer value, void *data)
 	cd->composite = comp;
 	task = cd->task;
 
+	/* Skip composites that don't belong to current pass */
+	if (cd->is_second_pass != comp->second_pass) {
+		msg_debug_composites("skip composite %s (pass mismatch: current=%s, composite=%s)",
+							 str_key,
+							 cd->is_second_pass ? "second" : "first",
+							 comp->second_pass ? "second" : "first");
+		return;
+	}
+
 	msg_debug_composites("process composite %s", str_key);
 
 	if (!cd->checked[cd->composite->id * 2]) {
-		if (rspamd_symcache_is_checked(cd->task, cd->task->cfg->cache,
-									   str_key)) {
+		/* For second-pass composites during second pass, skip symcache check since they were
+		 * already marked as checked during first pass but not actually evaluated */
+		bool skip_symcache_check = (cd->is_second_pass && comp->second_pass);
+
+		if (!skip_symcache_check &&
+			rspamd_symcache_is_checked(cd->task, cd->task->cfg->cache, str_key)) {
 			msg_debug_composites("composite %s is checked in symcache but not "
 								 "in composites bitfield",
 								 cd->composite->sym.c_str());
@@ -956,6 +972,8 @@ composites_metric_callback(struct rspamd_task *task)
 {
 	std::vector<composites_data> comp_data_vec;
 	struct rspamd_scan_result *mres;
+	auto *cm = COMPOSITE_MANAGER_FROM_PTR(task->cfg->composites_manager);
+	bool is_second_pass = (task->processed_stages & RSPAMD_TASK_STAGE_POST_FILTERS) != 0;
 
 	comp_data_vec.reserve(1);
 
@@ -963,11 +981,23 @@ composites_metric_callback(struct rspamd_task *task)
 	{
 		auto &cd = comp_data_vec.emplace_back(task, mres);
 
-		/* Process metric result */
-		rspamd_symcache_composites_foreach(task,
-										   task->cfg->cache,
-										   composites_foreach_callback,
-										   &cd);
+		if (is_second_pass) {
+			/* Second pass: process only second-pass composites directly from manager */
+			msg_debug_composites("processing second-pass composites");
+			for (auto *comp: cm->second_pass_composites) {
+				composites_foreach_callback((gpointer) comp->sym.c_str(),
+											(gpointer) comp,
+											&cd);
+			}
+		}
+		else {
+			/* First pass: use symcache iteration (will skip second-pass composites in callback) */
+			msg_debug_composites("processing first-pass composites via symcache");
+			rspamd_symcache_composites_foreach(task,
+											   task->cfg->cache,
+											   composites_foreach_callback,
+											   &cd);
+		}
 	}
 
 	for (const auto &cd: comp_data_vec) {
