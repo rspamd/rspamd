@@ -228,6 +228,70 @@ TEST_SUITE("html_url_rewrite")
 		auto result = apply_patches(original, patches);
 		CHECK(result == "abcdefghi");
 	}
+
+	TEST_CASE("apply_patches - HTML entity encoding for ampersand")
+	{
+		std::string_view original = R"(<a href="old">link</a>)";
+		std::vector<rewrite_patch> patches{
+			{0, 9, 3, "http://example.com?foo=1&bar=2"}// URL with & character
+		};
+		auto result = apply_patches(original, patches);
+		// & should be encoded as &amp;
+		CHECK(result == R"(<a href="http://example.com?foo=1&amp;bar=2">link</a>)");
+	}
+
+	TEST_CASE("apply_patches - HTML entity encoding for quotes")
+	{
+		std::string_view original = R"(<a href="old">link</a>)";
+		std::vector<rewrite_patch> patches{
+			{0, 9, 3, R"(url"with'quotes)"}// URL with quotes
+		};
+		auto result = apply_patches(original, patches);
+		// " should be encoded as &quot;, ' as &#39;
+		CHECK(result == R"(<a href="url&quot;with&#39;quotes">link</a>)");
+	}
+
+	TEST_CASE("apply_patches - HTML entity encoding for angle brackets")
+	{
+		std::string_view original = R"(<a href="old">link</a>)";
+		std::vector<rewrite_patch> patches{
+			{0, 9, 3, "url<with>brackets"}// URL with angle brackets
+		};
+		auto result = apply_patches(original, patches);
+		// < should be encoded as &lt;, > as &gt;
+		CHECK(result == R"(<a href="url&lt;with&gt;brackets">link</a>)");
+	}
+
+	TEST_CASE("apply_patches - HTML entity encoding for all special chars")
+	{
+		std::string_view original = R"(<a href="old">link</a>)";
+		std::vector<rewrite_patch> patches{
+			{0, 9, 3, R"(&<>"')"}// All special HTML chars
+		};
+		auto result = apply_patches(original, patches);
+		CHECK(result == R"(<a href="&amp;&lt;&gt;&quot;&#39;">link</a>)");
+	}
+
+	TEST_CASE("apply_patches - HTML entity encoding preserves normal chars")
+	{
+		std::string_view original = R"(<a href="old">link</a>)";
+		std::vector<rewrite_patch> patches{
+			{0, 9, 3, "http://normal-url.com/path?q=test"}// Normal URL
+		};
+		auto result = apply_patches(original, patches);
+		CHECK(result == R"(<a href="http://normal-url.com/path?q=test">link</a>)");
+	}
+
+	TEST_CASE("apply_patches - HTML entity encoding for multiple URLs")
+	{
+		std::string_view original = R"(<a href="url1">A</a> <a href="url2">B</a>)";
+		std::vector<rewrite_patch> patches{
+			{0, 9, 4, "http://a.com?x=1&y=2"},// First URL with &
+			{0, 30, 4, "http://b.com?a=3&b=4"}// Second URL with & (starts at position 30)
+		};
+		auto result = apply_patches(original, patches);
+		CHECK(result == R"(<a href="http://a.com?x=1&amp;y=2">A</a> <a href="http://b.com?a=3&amp;b=4">B</a>)");
+	}
 }
 
 #endif

@@ -168,6 +168,43 @@ auto validate_patches(std::vector<rewrite_patch> &patches) -> bool
 	return true;
 }
 
+/**
+ * Encode a string for safe insertion as HTML attribute value
+ * Encodes: & < > " '
+ * @param input The string to encode
+ * @return HTML-encoded string
+ */
+static auto encode_html_attribute(const std::string &input) -> std::string
+{
+	std::string result;
+	result.reserve(input.size() + input.size() / 4);// Reserve extra for entities
+
+	for (char ch: input) {
+		switch (ch) {
+		case '&':
+			result.append("&amp;");
+			break;
+		case '<':
+			result.append("&lt;");
+			break;
+		case '>':
+			result.append("&gt;");
+			break;
+		case '"':
+			result.append("&quot;");
+			break;
+		case '\'':
+			result.append("&#39;");
+			break;
+		default:
+			result.push_back(ch);
+			break;
+		}
+	}
+
+	return result;
+}
+
 auto apply_patches(std::string_view original, const std::vector<rewrite_patch> &patches)
 	-> std::string
 {
@@ -186,8 +223,8 @@ auto apply_patches(std::string_view original, const std::vector<rewrite_patch> &
 			result.append(original.substr(pos, patch.offset - pos));
 		}
 
-		// Apply the replacement
-		result.append(patch.replacement);
+		// Apply the replacement with HTML entity encoding
+		result.append(encode_html_attribute(patch.replacement));
 
 		// Move position to after the patched region
 		pos = patch.offset + patch.len;
