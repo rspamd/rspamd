@@ -72,7 +72,7 @@ local function parse_multimap_value(parse_rule, p_ret)
             (number.fractional ^ -1)) +      -- Fractional
           (lpeg.S("+-") * number.fractional) -- Completely fractional number
 
-      local sym_start = lpeg.R("az", "AZ") + lpeg.S("_")
+      local sym_start = lpeg.R("az", "AZ", "09") + lpeg.S("_")
       local sym_elt = sym_start + lpeg.R("09")
       local symbol = sym_start * sym_elt ^ 0
       local symbol_cap = lpeg.Cg(symbol, 'symbol')
@@ -80,7 +80,7 @@ local function parse_multimap_value(parse_rule, p_ret)
       local opts_cap = lpeg.Cg(lpeg.Ct(lpeg.C(symbol) * (lpeg.P(",") * lpeg.C(symbol)) ^ 0), 'opts')
       local symscore_cap = (symbol_cap * lpeg.P(":") * score_cap)
       local symscoreopt_cap = symscore_cap * lpeg.P(":") * opts_cap
-      local grammar = symscoreopt_cap + symscore_cap + symbol_cap + score_cap
+      local grammar = symscoreopt_cap + symscore_cap + score_cap + symbol_cap
       multimap_grammar = lpeg.Ct(grammar)
     end
     local tbl = multimap_grammar:match(p_ret)
