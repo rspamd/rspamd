@@ -721,7 +721,6 @@ rspamd_task_process(struct rspamd_task *task, unsigned int stages)
 
 	case RSPAMD_TASK_STAGE_COMPOSITES:
 		rspamd_composites_process_task(task);
-		task->result->nresults_postfilters = task->result->nresults;
 		break;
 
 	case RSPAMD_TASK_STAGE_POST_FILTERS:
@@ -736,6 +735,11 @@ rspamd_task_process(struct rspamd_task *task, unsigned int stages)
 			!RSPAMD_TASK_IS_EMPTY(task) &&
 			!(task->flags & (RSPAMD_TASK_FLAG_LEARN_SPAM | RSPAMD_TASK_FLAG_LEARN_HAM | RSPAMD_TASK_FLAG_LEARN_CLASS))) {
 			rspamd_stat_check_autolearn(task);
+		}
+
+		if (all_done) {
+			/* Record results count after postfilters to detect if learning stages add symbols */
+			task->result->nresults_postfilters = task->result->nresults;
 		}
 		break;
 
