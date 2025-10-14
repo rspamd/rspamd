@@ -156,8 +156,10 @@ struct html_component_name : html_component_base {
 
 struct html_component_href : html_component_base {
 	std::string_view value;
-	explicit constexpr html_component_href(std::string_view v)
-		: value(v)
+	std::size_t offset = 0;// offset in UTF-8 HTML buffer (utf_raw_content)
+	std::size_t len = 0;   // length in UTF-8 HTML buffer (utf_raw_content)
+	explicit constexpr html_component_href(std::string_view v, std::size_t off = 0, std::size_t l = 0)
+		: value(v), offset(off), len(l)
 	{
 	}
 	constexpr std::string_view get_string_value() const override
@@ -990,8 +992,10 @@ struct html_component_title : html_component_base {
 
 struct html_component_src : html_component_base {
 	std::string_view value;
-	explicit html_component_src(std::string_view v)
-		: value(v)
+	std::size_t offset = 0;// offset in UTF-8 HTML buffer (utf_raw_content)
+	std::size_t len = 0;   // length in UTF-8 HTML buffer (utf_raw_content)
+	explicit html_component_src(std::string_view v, std::size_t off = 0, std::size_t l = 0)
+		: value(v), offset(off), len(l)
 	{
 	}
 	std::string_view get_string_value() const override
@@ -1259,9 +1263,11 @@ using html_tag_component = std::variant<
  * Returns component variant from a string
  * @param name attribute name
  * @param value attribute value
+ * @param offset offset of attribute value in decoded HTML buffer (for URL rewriting)
+ * @param len length of attribute value in decoded HTML buffer (for URL rewriting)
  * @return variant component
  */
-auto html_component_from_string(std::string_view name, std::string_view value) -> html_tag_component;
+auto html_component_from_string(std::string_view name, std::string_view value, std::size_t offset = 0, std::size_t len = 0) -> html_tag_component;
 
 /* Public tags flags */
 /* XML tag */
@@ -1286,6 +1292,12 @@ struct html_closing_tag {
 	{
 		start = end = -1;
 	}
+};
+
+/* Attribute span in decoded HTML buffer (for URL rewriting) */
+struct attr_span {
+	std::size_t offset;
+	std::size_t len;
 };
 
 struct html_tag {
@@ -1382,6 +1394,25 @@ struct html_tag {
 	auto is_hidden() const -> bool
 	{
 		return find_component<html_component_hidden>().has_value();
+	}
+
+	auto get_attr_span(std::string_view attr_name) const -> std::optional<attr_span>
+	{
+		if (attr_name == "href") {
+			if (auto comp = find_component<html_component_href>()) {
+				if (comp.value()->len > 0) {
+					return attr_span{comp.value()->offset, comp.value()->len};
+				}
+			}
+		}
+		else if (attr_name == "src") {
+			if (auto comp = find_component<html_component_src>()) {
+				if (comp.value()->len > 0) {
+					return attr_span{comp.value()->offset, comp.value()->len};
+				}
+			}
+		}
+		return std::nullopt;
 	}
 
 	auto find_unknown_component(std::string_view attr_name) const -> std::optional<std::string_view>

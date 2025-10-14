@@ -265,7 +265,7 @@ html_check_balance(struct html_content *hc,
 	return nullptr;
 }
 
-auto html_component_from_string(std::string_view name, std::string_view value) -> html_tag_component
+auto html_component_from_string(std::string_view name, std::string_view value, std::size_t offset, std::size_t len) -> html_tag_component
 {
 	auto known_component_it = html_components_map.find(name);
 
@@ -274,7 +274,7 @@ auto html_component_from_string(std::string_view name, std::string_view value) -
 		case html_component_enum_type::RSPAMD_HTML_COMPONENT_NAME:
 			return html_component_name{value};
 		case html_component_enum_type::RSPAMD_HTML_COMPONENT_HREF:
-			return html_component_href{value};
+			return html_component_href{value, offset, len};
 		case html_component_enum_type::RSPAMD_HTML_COMPONENT_COLOR:
 			return html_component_color{value};
 		case html_component_enum_type::RSPAMD_HTML_COMPONENT_BGCOLOR:
@@ -387,7 +387,7 @@ auto html_component_from_string(std::string_view name, std::string_view value) -
 		case html_component_enum_type::RSPAMD_HTML_COMPONENT_TITLE:
 			return html_component_title{value};
 		case html_component_enum_type::RSPAMD_HTML_COMPONENT_SRC:
-			return html_component_src{value};
+			return html_component_src{value, offset, len};
 		// Meta
 		case html_component_enum_type::RSPAMD_HTML_COMPONENT_CHARSET:
 			return html_component_charset{value};
@@ -891,12 +891,15 @@ struct tag_content_parser_state {
 	tag_parser_state cur_state = parse_start;
 	std::string buf;
 	std::string attr_name;// Store current attribute name
+	const char *value_start = nullptr;// Track where attribute value starts in input
+	const char *html_start = nullptr; // Base pointer to HTML buffer start
 
 	void reset()
 	{
 		cur_state = parse_start;
 		buf.clear();
 		attr_name.clear();
+		value_start = nullptr;
 	}
 };
 
@@ -924,6 +927,13 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 				attr_name_view = {name_storage, parser_env.attr_name.size()};
 			}
 
+			// Calculate attribute value span for URL rewriting (href/src only)
+			std::size_t value_offset = 0, value_len = 0;
+			if (parser_env.value_start != nullptr && parser_env.html_start != nullptr) {
+				value_offset = parser_env.value_start - parser_env.html_start;
+				value_len = in - parser_env.value_start;
+			}
+
 			// Store value in persistent memory if not empty
 			if (!parser_env.buf.empty()) {
 				auto *value_storage = rspamd_mempool_alloc_buffer(pool, parser_env.buf.size());
@@ -940,13 +950,14 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 				value_view = {value_storage, sz};
 			}
 
-			// Create the appropriate component variant
-			auto component = html_component_from_string(attr_name_view, value_view);
+			// Create the appropriate component variant with span info
+			auto component = html_component_from_string(attr_name_view, value_view, value_offset, value_len);
 			tag->components.emplace_back(std::move(component));
 		}
 
 		parser_env.buf.clear();
 		parser_env.attr_name.clear();
+		parser_env.value_start = nullptr;
 	};
 
 	auto store_component_name = [&]() -> bool {
@@ -1098,7 +1109,11 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			state = parse_start_squote;
 		}
 		else if (!g_ascii_isspace(*in)) {
-			store_value_character(true);
+			// Mark start of unquoted attribute value
+			if (parser_env.value_start == nullptr) {
+				parser_env.value_start = in;
+			}
+			store_value_character(false);
 			state = parse_value;
 		}
 		break;
@@ -1114,17 +1129,29 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			state = parse_start_squote;
 		}
 		else {
-			store_value_character(true);
+			// Mark start of unquoted attribute value
+			if (parser_env.value_start == nullptr) {
+				parser_env.value_start = in;
+			}
+			store_value_character(false);
 			state = parse_value;
 		}
 		break;
 
 	case parse_start_dquote:
 		if (*in == '"') {
+			// Empty quoted value - set value_start to point to the closing quote
+			if (parser_env.value_start == nullptr) {
+				parser_env.value_start = in;
+			}
 			store_component_value();
 			state = spaces_after_param;
 		}
 		else {
+			// Mark start of attribute value (first char inside quotes)
+			if (parser_env.value_start == nullptr) {
+				parser_env.value_start = in;
+			}
 			store_value_character(false);
 			state = parse_dqvalue;
 		}
@@ -1132,10 +1159,18 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 
 	case parse_start_squote:
 		if (*in == '\'') {
+			// Empty quoted value - set value_start to point to the closing quote
+			if (parser_env.value_start == nullptr) {
+				parser_env.value_start = in;
+			}
 			store_component_value();
 			state = spaces_after_param;
 		}
 		else {
+			// Mark start of attribute value (first char inside quotes)
+			if (parser_env.value_start == nullptr) {
+				parser_env.value_start = in;
+			}
 			store_value_character(false);
 			state = parse_sqvalue;
 		}
@@ -1171,6 +1206,10 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			state = spaces_after_param;
 		}
 		else {
+			// Mark start of unquoted attribute value
+			if (parser_env.value_start == nullptr) {
+				parser_env.value_start = in;
+			}
 			store_value_character(false);
 		}
 		break;
@@ -2475,6 +2514,7 @@ auto html_process_input(struct rspamd_task *task,
 	c = p;
 	end = p + process_size;
 	start = c;
+	content_parser_env.html_start = start;// Initialize for span tracking
 
 	while (p < end) {
 		t = *p;
