@@ -1916,7 +1916,15 @@ rspamc_mime_output(FILE *out, ucl_object_t *result, GString *input,
 				it = nullptr;
 				while ((cur = ucl_object_iterate(add_headers, &it, true)) != nullptr) {
 					const char *header_name = ucl_object_key(cur);
-					if (ucl_object_type(cur) == UCL_STRING) {
+					if (ucl_object_type(cur) == UCL_OBJECT) {
+						/* Handle {order: N, value: "..."} format */
+						const auto *value_obj = ucl_object_lookup(cur, "value");
+						if (value_obj) {
+							fmt::format_to(std::back_inserter(added_headers), "{}: {}{}",
+										   header_name, ucl_object_tostring(value_obj), line_end);
+						}
+					}
+					else if (ucl_object_type(cur) == UCL_STRING) {
 						fmt::format_to(std::back_inserter(added_headers), "{}: {}{}",
 									   header_name, ucl_object_tostring(cur), line_end);
 					}
@@ -1924,8 +1932,17 @@ rspamc_mime_output(FILE *out, ucl_object_t *result, GString *input,
 						ucl_object_iter_t header_it = nullptr;
 						const ucl_object_t *header_value;
 						while ((header_value = ucl_object_iterate(cur, &header_it, true)) != nullptr) {
-							fmt::format_to(std::back_inserter(added_headers), "{}: {}{}",
-										   header_name, ucl_object_tostring(header_value), line_end);
+							if (ucl_object_type(header_value) == UCL_OBJECT) {
+								const auto *value_obj = ucl_object_lookup(header_value, "value");
+								if (value_obj) {
+									fmt::format_to(std::back_inserter(added_headers), "{}: {}{}",
+												   header_name, ucl_object_tostring(value_obj), line_end);
+								}
+							}
+							else {
+								fmt::format_to(std::back_inserter(added_headers), "{}: {}{}",
+											   header_name, ucl_object_tostring(header_value), line_end);
+							}
 						}
 					}
 				}
