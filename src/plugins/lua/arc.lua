@@ -581,17 +581,6 @@ local function arc_sign_seal(task, params, header)
     cur_auth_results,
     { stop_chars = ';', structured = true, encode = false })
 
-  -- Add AAR and AMS headers first
-  lua_util.debugm(N, task, 'adding ARC-Authentication-Results: %s', cur_auth_results)
-  lua_util.debugm(N, task, 'adding ARC-Message-Signature: %s', header)
-
-  lua_mime.modify_headers(task, {
-    add = {
-      ['ARC-Authentication-Results'] = { order = 1, value = cur_auth_results },
-      ['ARC-Message-Signature'] = { order = 1, value = header },
-    },
-  })
-
   -- Create ARC-Seal signature manually using SHA256 hash
   -- We must canonicalize all ARC headers in order and sign them
   local sha_ctx = hash.create_specific('sha256')
@@ -681,10 +670,15 @@ local function arc_sign_seal(task, params, header)
   local folded_sig = rspamd_util.encode_base64(rspamd_util.decode_base64(sig_b64), 70, nl_type)
   cur_arc_seal = cur_arc_seal .. folded_sig
 
+  -- Add all ARC headers in a single call with explicit ordering
+  lua_util.debugm(N, task, 'adding ARC-Authentication-Results: %s', cur_auth_results)
+  lua_util.debugm(N, task, 'adding ARC-Message-Signature: %s', header)
   lua_util.debugm(N, task, 'adding ARC-Seal: %s', cur_arc_seal)
 
   lua_mime.modify_headers(task, {
     add = {
+      ['ARC-Authentication-Results'] = { order = 1, value = cur_auth_results },
+      ['ARC-Message-Signature'] = { order = 1, value = header },
       ['ARC-Seal'] = {
         order = 1,
         value = lua_util.fold_header_with_encoding(task,
@@ -692,6 +686,8 @@ local function arc_sign_seal(task, params, header)
           { structured = true, encode = false })
       }
     },
+    -- RFC 8617 requires strict ordering of ARC headers
+    order = { 'ARC-Authentication-Results', 'ARC-Message-Signature', 'ARC-Seal' },
   })
   task:insert_result(settings.sign_symbol, 1.0,
     string.format('%s:s=%s:i=%d', params.domain, params.selector, cur_idx))
