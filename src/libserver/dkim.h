@@ -224,6 +224,26 @@ rspamd_dkim_sign_key_t *rspamd_dkim_sign_key_ref(rspamd_dkim_sign_key_t *k);
 
 void rspamd_dkim_sign_key_unref(rspamd_dkim_sign_key_t *k);
 
+/**
+ * Get the type of a signing key
+ * @param key signing key
+ * @return key type (RSA, EDDSA, etc)
+ */
+enum rspamd_dkim_key_type rspamd_dkim_sign_key_get_type(rspamd_dkim_sign_key_t *key);
+
+/**
+ * Sign a digest with a DKIM signing key
+ * @param key signing key
+ * @param digest SHA256 digest (32 bytes)
+ * @param dlen digest length (must be 32)
+ * @param sig_out output signature buffer (base64 encoded), must be freed by caller
+ * @param err error pointer
+ * @return TRUE if successful
+ */
+gboolean rspamd_dkim_sign_digest(rspamd_dkim_sign_key_t *key,
+								 const unsigned char *digest, gsize dlen,
+								 char **sig_out, GError **err);
+
 const char *rspamd_dkim_get_domain(rspamd_dkim_context_t *ctx);
 
 const char *rspamd_dkim_get_selector(rspamd_dkim_context_t *ctx);

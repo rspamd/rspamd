@@ -107,6 +107,30 @@ static void dkim_symbol_callback(struct rspamd_task *task,
 static int lua_dkim_sign_handler(lua_State *L);
 static int lua_dkim_verify_handler(lua_State *L);
 static int lua_dkim_canonicalize_handler(lua_State *L);
+static int lua_dkim_load_sign_key_handler(lua_State *L);
+static int lua_dkim_sign_key_get_alg_handler(lua_State *L);
+static int lua_dkim_sign_digest_handler(lua_State *L);
+
+/* Lua userdata classname for DKIM signing keys */
+#define rspamd_dkim_sign_key_classname "rspamd{dkim_sign_key}"
+
+static rspamd_dkim_sign_key_t *
+lua_check_dkim_sign_key(lua_State *L, int pos)
+{
+	void *ud = rspamd_lua_check_udata(L, pos, rspamd_dkim_sign_key_classname);
+	luaL_argcheck(L, ud != NULL, pos, "'dkim_sign_key' expected");
+	return ud ? *((rspamd_dkim_sign_key_t **) ud) : NULL;
+}
+
+static int
+lua_dkim_sign_key_gc(lua_State *L)
+{
+	rspamd_dkim_sign_key_t *key = lua_check_dkim_sign_key(L, 1);
+	if (key) {
+		rspamd_dkim_sign_key_unref(key);
+	}
+	return 0;
+}
 
 /* Initialization */
 int dkim_module_init(struct rspamd_config *cfg, struct module_ctx **ctx);
@@ -328,9 +352,25 @@ int dkim_module_config(struct rspamd_config *cfg, bool validate)
 		lua_pushstring(cfg->lua_state, "canon_header_relaxed");
 		lua_pushcfunction(cfg->lua_state, lua_dkim_canonicalize_handler);
 		lua_settable(cfg->lua_state, -3);
+		lua_pushstring(cfg->lua_state, "load_sign_key");
+		lua_pushcfunction(cfg->lua_state, lua_dkim_load_sign_key_handler);
+		lua_settable(cfg->lua_state, -3);
+		lua_pushstring(cfg->lua_state, "sign_key_get_alg");
+		lua_pushcfunction(cfg->lua_state, lua_dkim_sign_key_get_alg_handler);
+		lua_settable(cfg->lua_state, -3);
+		lua_pushstring(cfg->lua_state, "sign_digest");
+		lua_pushcfunction(cfg->lua_state, lua_dkim_sign_digest_handler);
+		lua_settable(cfg->lua_state, -3);
 		/* Finish dkim key */
 		lua_settable(cfg->lua_state, -3);
 	}
+
+	/* Register metatable for dkim_sign_key userdata */
+	luaL_Reg dkim_sign_key_mt[] = {
+		{"__gc", lua_dkim_sign_key_gc},
+		{NULL, NULL}};
+	rspamd_lua_new_class(cfg->lua_state, rspamd_dkim_sign_key_classname, dkim_sign_key_mt);
+	lua_pop(cfg->lua_state, 1);
 
 	lua_pop(cfg->lua_state, 1); /* Remove global function */
 	dkim_module_ctx->whitelist_ip = NULL;
@@ -900,6 +940,157 @@ lua_dkim_sign_handler(lua_State *L)
 
 	lua_pushboolean(L, FALSE);
 	lua_pushnil(L);
+
+	return 2;
+}
+
+/* Load a DKIM signing key and return it as userdata */
+static int
+lua_dkim_load_sign_key_handler(lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task(L, 1);
+	GError *err = NULL;
+	const char *key = NULL, *rawkey = NULL;
+	rspamd_dkim_sign_key_t *dkim_key;
+	gsize rawlen = 0, keylen = 0;
+	struct dkim_ctx *dkim_module_ctx;
+	rspamd_dkim_sign_key_t **pkey;
+
+	luaL_argcheck(L, lua_type(L, 2) == LUA_TTABLE, 2, "'table' expected");
+
+	if (!rspamd_lua_parse_table_arguments(L, 2, &err,
+										  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
+										  "key=V;rawkey=V",
+										  &keylen, &key, &rawlen, &rawkey)) {
+		msg_err_task("cannot parse table arguments: %e", err);
+		g_error_free(err);
+		lua_pushnil(L);
+		return 1;
+	}
+
+	dkim_module_ctx = dkim_get_context(task->cfg);
+
+	if (key) {
+		dkim_key = dkim_module_load_key_format(task, dkim_module_ctx, key,
+											   keylen, RSPAMD_DKIM_KEY_UNKNOWN);
+	}
+	else if (rawkey) {
+		dkim_key = dkim_module_load_key_format(task, dkim_module_ctx, rawkey,
+											   rawlen, RSPAMD_DKIM_KEY_UNKNOWN);
+	}
+	else {
+		msg_err_task("neither key nor rawkey are specified");
+		lua_pushnil(L);
+		return 1;
+	}
+
+	if (dkim_key == NULL) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	/* Store key in userdata */
+	pkey = lua_newuserdata(L, sizeof(rspamd_dkim_sign_key_t *));
+	*pkey = rspamd_dkim_sign_key_ref(dkim_key);
+	rspamd_lua_setclass(L, rspamd_dkim_sign_key_classname, -1);
+
+	return 1;
+}
+
+/* Get algorithm name from a loaded signing key */
+static int
+lua_dkim_sign_key_get_alg_handler(lua_State *L)
+{
+	rspamd_dkim_sign_key_t *dkim_key = lua_check_dkim_sign_key(L, 1);
+	enum rspamd_dkim_key_type key_type;
+
+	if (dkim_key == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	key_type = rspamd_dkim_sign_key_get_type(dkim_key);
+
+	if (key_type == RSPAMD_DKIM_KEY_RSA) {
+		lua_pushstring(L, "rsa-sha256");
+	}
+	else if (key_type == RSPAMD_DKIM_KEY_EDDSA) {
+		lua_pushstring(L, "ed25519-sha256");
+	}
+	else {
+		lua_pushstring(L, "unknown");
+	}
+
+	return 1;
+}
+
+static int
+lua_dkim_sign_digest_handler(lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task(L, 1);
+	GError *err = NULL;
+	rspamd_dkim_sign_key_t *dkim_key;
+	const char *digest_str = NULL;
+	gsize digest_len = 0;
+	struct rspamd_lua_text *digest_text = NULL;
+	const unsigned char *digest_data;
+	char *sig_b64 = NULL;
+
+	luaL_argcheck(L, lua_type(L, 2) == LUA_TTABLE, 2, "'table' expected");
+
+	/* Get sign_key from table */
+	lua_pushstring(L, "sign_key");
+	lua_gettable(L, 2);
+	dkim_key = lua_check_dkim_sign_key(L, -1);
+	lua_pop(L, 1);
+
+	if (dkim_key == NULL) {
+		msg_err_task("sign_key is not specified or invalid");
+		lua_pushboolean(L, FALSE);
+		return 1;
+	}
+
+	/* Get digest from table - can be string or rspamd_text */
+	lua_pushstring(L, "digest");
+	lua_gettable(L, 2);
+
+	if (lua_type(L, -1) == LUA_TSTRING) {
+		digest_str = lua_tolstring(L, -1, &digest_len);
+		digest_data = (const unsigned char *) digest_str;
+	}
+	else {
+		digest_text = lua_check_text(L, -1);
+		if (digest_text) {
+			digest_data = (const unsigned char *) digest_text->start;
+			digest_len = digest_text->len;
+		}
+		else {
+			lua_pop(L, 1);
+			msg_err_task("digest is not specified or invalid");
+			lua_pushboolean(L, FALSE);
+			return 1;
+		}
+	}
+	lua_pop(L, 1);
+
+	if (digest_len != 32) {
+		msg_err_task("digest must be exactly 32 bytes (SHA256), got %zu", digest_len);
+		lua_pushboolean(L, FALSE);
+		return 1;
+	}
+
+	/* Call C function to sign the digest */
+	if (!rspamd_dkim_sign_digest(dkim_key, digest_data, digest_len,
+								 &sig_b64, &err)) {
+		msg_err_task("cannot sign digest: %e", err);
+		g_error_free(err);
+		lua_pushboolean(L, FALSE);
+		return 1;
+	}
+
+	lua_pushboolean(L, TRUE);
+	lua_pushstring(L, sig_b64);
+
+	g_free(sig_b64);
 
 	return 2;
 }

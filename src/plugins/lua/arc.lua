@@ -21,6 +21,7 @@ local rspamd_util = require "rspamd_util"
 local fun = require "fun"
 local lua_auth_results = require "lua_auth_results"
 local lua_mime = require "lua_mime"
+local hash = require "rspamd_cryptobox_hash"
 
 if confighelp then
   return
@@ -36,6 +37,9 @@ end
 
 local dkim_verify = rspamd_plugins.dkim.verify
 local dkim_sign = rspamd_plugins.dkim.sign
+local dkim_load_sign_key = rspamd_plugins.dkim.load_sign_key
+local dkim_sign_key_get_alg = rspamd_plugins.dkim.sign_key_get_alg
+local dkim_sign_digest = rspamd_plugins.dkim.sign_digest
 local dkim_canonicalize = rspamd_plugins.dkim.canon_header_relaxed
 local redis_params
 
@@ -197,7 +201,31 @@ local function arc_callback(task)
   local arc_seal_headers = task:get_header_full('ARC-Seal')
   local arc_ar_headers = task:get_header_full('ARC-Authentication-Results')
 
+  lua_util.debugm(N, task, 'ARC verification: found %s ARC-MS, %s ARC-Seal, %s ARC-AR headers',
+                  arc_sig_headers and #arc_sig_headers or 0,
+                  arc_seal_headers and #arc_seal_headers or 0,
+                  arc_ar_headers and #arc_ar_headers or 0)
+
+  if arc_sig_headers then
+    for i, hdr in ipairs(arc_sig_headers) do
+      lua_util.debugm(N, task, 'ARC-Message-Signature[%s]: %s', i, hdr.decoded)
+    end
+  end
+
+  if arc_seal_headers then
+    for i, hdr in ipairs(arc_seal_headers) do
+      lua_util.debugm(N, task, 'ARC-Seal[%s]: %s', i, hdr.decoded)
+    end
+  end
+
+  if arc_ar_headers then
+    for i, hdr in ipairs(arc_ar_headers) do
+      lua_util.debugm(N, task, 'ARC-Authentication-Results[%s]: %s', i, hdr.decoded)
+    end
+  end
+
   if not arc_sig_headers or not arc_seal_headers then
+    lua_util.debugm(N, task, 'ARC verification failed: missing required headers')
     task:insert_result(arc_symbols['na'], 1.0)
     return
   end
@@ -553,7 +581,10 @@ local function arc_sign_seal(task, params, header)
     cur_auth_results,
     { stop_chars = ';', structured = true, encode = false })
 
-  -- Temporarily add AAR and AMS headers so they can be signed by the seal
+  -- Add AAR and AMS headers first
+  lua_util.debugm(N, task, 'adding ARC-Authentication-Results: %s', cur_auth_results)
+  lua_util.debugm(N, task, 'adding ARC-Message-Signature: %s', header)
+
   lua_mime.modify_headers(task, {
     add = {
       ['ARC-Authentication-Results'] = { order = 1, value = cur_auth_results },
@@ -561,37 +592,106 @@ local function arc_sign_seal(task, params, header)
     },
   })
 
-  -- Create ARC-Seal using the native C dkim_sign function
-  -- This supports both RSA and ed25519 keys automatically
-  local seal_params = {
-    domain = params.domain,
-    selector = params.selector,
+  -- Create ARC-Seal signature manually using SHA256 hash
+  -- We must canonicalize all ARC headers in order and sign them
+  local sha_ctx = hash.create_specific('sha256')
+
+  -- Canonicalize previous ARC sets if they exist (arc_seals already retrieved above)
+  local arc_sigs = task:cache_get('arc-sigs')
+  local arc_auth_results = task:cache_get('arc-authres')
+
+  if arc_seals then
+    for i = 1, #arc_seals do
+      if arc_auth_results[i] then
+        local s = dkim_canonicalize('ARC-Authentication-Results', arc_auth_results[i].raw_header)
+        sha_ctx:update(s)
+        lua_util.debugm(N, task, 'canonicalized previous AAR[%d]: %s', i, s)
+      end
+      if arc_sigs[i] then
+        local s = dkim_canonicalize('ARC-Message-Signature', arc_sigs[i].raw_header)
+        sha_ctx:update(s)
+        lua_util.debugm(N, task, 'canonicalized previous AMS[%d]: %s', i, s)
+      end
+      if arc_seals[i] then
+        local s = dkim_canonicalize('ARC-Seal', arc_seals[i].raw_header)
+        sha_ctx:update(s)
+        lua_util.debugm(N, task, 'canonicalized previous AS[%d]: %s', i, s)
+      end
+    end
+  end
+
+  -- Canonicalize the new ARC-Authentication-Results header
+  local s = dkim_canonicalize('ARC-Authentication-Results', cur_auth_results)
+  sha_ctx:update(s)
+  lua_util.debugm(N, task, 'canonicalized new AAR: %s', s)
+
+  -- Canonicalize the new ARC-Message-Signature header
+  s = dkim_canonicalize('ARC-Message-Signature', header)
+  sha_ctx:update(s)
+  lua_util.debugm(N, task, 'canonicalized new AMS: %s', s)
+
+  -- Load the signing key
+  local sign_key = dkim_load_sign_key(task, {
     key = params.key,
     rawkey = params.rawkey,
-    sign_type = 'arc-seal',
-    arc_idx = cur_idx,
-    arc_cv = params.arc_cv,
-    headers = 'arc-authentication-results:arc-message-signature' ..
-              string.rep(':arc-seal', cur_idx - 1), -- Include previous seals
-  }
+  })
 
-  local dret, seal_header = dkim_sign(task, seal_params)
-  if not dret then
+  if not sign_key then
+    rspamd_logger.errx(task, 'cannot load signing key')
+    return
+  end
+
+  -- Get the algorithm from the key
+  local algorithm = dkim_sign_key_get_alg(sign_key)
+  if not algorithm or algorithm == 'unknown' then
+    rspamd_logger.errx(task, 'cannot determine key algorithm')
+    return
+  end
+
+  -- Construct partial ARC-Seal header (without signature) using detected algorithm
+  local cur_arc_seal = string.format('i=%d; a=%s; d=%s; s=%s; cv=%s; t=%d; b=',
+    cur_idx, algorithm, params.domain, params.selector, params.arc_cv,
+    math.floor(rspamd_util.get_time()))
+
+  -- Canonicalize the partial ARC-Seal and add to hash
+  local seal_canon = string.format('%s:%s', 'arc-seal', cur_arc_seal)
+  sha_ctx:update(seal_canon)
+  lua_util.debugm(N, task, 'canonicalized partial seal: %s', seal_canon)
+
+  -- Now sign the complete digest
+  local dret, sig_b64 = dkim_sign_digest(task, {
+    sign_key = sign_key,
+    digest = sha_ctx:bin(),
+  })
+
+  if not dret or not sig_b64 then
     rspamd_logger.errx(task, 'cannot create ARC seal signature')
     return
   end
+
+  -- Get appropriate line ending
+  local nl_type
+  if task:has_flag("milter") then
+    nl_type = "lf"
+  else
+    nl_type = task:get_newlines_type()
+  end
+
+  -- Fold the signature to 70 chars per line
+  local folded_sig = rspamd_util.encode_base64(rspamd_util.decode_base64(sig_b64), 70, nl_type)
+  cur_arc_seal = cur_arc_seal .. folded_sig
+
+  lua_util.debugm(N, task, 'adding ARC-Seal: %s', cur_arc_seal)
 
   lua_mime.modify_headers(task, {
     add = {
       ['ARC-Seal'] = {
         order = 1,
         value = lua_util.fold_header_with_encoding(task,
-          'ARC-Seal', seal_header,
+          'ARC-Seal', cur_arc_seal,
           { structured = true, encode = false })
       }
     },
-    -- RFC requires a strict order for these headers to be inserted
-    order = { 'ARC-Authentication-Results', 'ARC-Message-Signature', 'ARC-Seal' },
   })
   task:insert_result(settings.sign_symbol, 1.0,
     string.format('%s:s=%s:i=%d', params.domain, params.selector, cur_idx))
