@@ -1851,9 +1851,6 @@ rspamc_mime_output(FILE *out, ucl_object_t *result, GString *input,
 		fmt::format_to(std::back_inserter(added_headers), "X-Spam-Scan-Time: {:.3}{}",
 					   time, line_end);
 
-		/*
-		 * TODO: add milter_headers support here
-		 */
 		if (is_spam) {
 			fmt::format_to(std::back_inserter(added_headers), "X-Spam: yes{}", line_end);
 		}
@@ -1908,6 +1905,30 @@ rspamc_mime_output(FILE *out, ucl_object_t *result, GString *input,
 			while ((cur = ucl_object_iterate(res, &it, true)) != nullptr) {
 				fmt::format_to(std::back_inserter(added_headers), "DKIM-Signature: {}{}",
 							   ucl_object_tostring(cur), line_end);
+			}
+		}
+
+		/* Process milter.add_headers */
+		const auto *milter = ucl_object_lookup(result, "milter");
+		if (milter) {
+			const auto *add_headers = ucl_object_lookup(milter, "add_headers");
+			if (add_headers && ucl_object_type(add_headers) == UCL_OBJECT) {
+				it = nullptr;
+				while ((cur = ucl_object_iterate(add_headers, &it, true)) != nullptr) {
+					const char *header_name = ucl_object_key(cur);
+					if (ucl_object_type(cur) == UCL_STRING) {
+						fmt::format_to(std::back_inserter(added_headers), "{}: {}{}",
+									   header_name, ucl_object_tostring(cur), line_end);
+					}
+					else if (ucl_object_type(cur) == UCL_ARRAY) {
+						ucl_object_iter_t header_it = nullptr;
+						const ucl_object_t *header_value;
+						while ((header_value = ucl_object_iterate(cur, &header_it, true)) != nullptr) {
+							fmt::format_to(std::back_inserter(added_headers), "{}: {}{}",
+										   header_name, ucl_object_tostring(header_value), line_end);
+						}
+					}
+				}
 			}
 		}
 
