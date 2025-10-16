@@ -191,7 +191,12 @@ local function prepare_dkim_signing(N, task, settings)
   elseif settings.sign_inbound and not is_local and not auser then
     lua_util.debugm(N, task, 'mail was sent to us')
   else
-    lua_util.debugm(N, task, 'mail is ineligible for signing')
+    lua_util.debugm(N, task,
+      'mail is ineligible for signing: auser=%s, ip=%s, is_local=%s, ' ..
+      'sign_authenticated=%s, sign_networks=%s, sign_local=%s, sign_inbound=%s',
+      auser, tostring(ip), is_local,
+      settings.sign_authenticated, settings.sign_networks ~= nil,
+      settings.sign_local, settings.sign_inbound)
     return false, {}
   end
 

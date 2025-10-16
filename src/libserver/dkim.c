@@ -3220,6 +3220,87 @@ void rspamd_dkim_sign_key_unref(rspamd_dkim_sign_key_t *k)
 	REF_RELEASE(k);
 }
 
+enum rspamd_dkim_key_type
+rspamd_dkim_sign_key_get_type(rspamd_dkim_sign_key_t *key)
+{
+	if (key) {
+		return key->type;
+	}
+	return RSPAMD_DKIM_KEY_UNKNOWN;
+}
+
+gboolean
+rspamd_dkim_sign_digest(rspamd_dkim_sign_key_t *key,
+						const unsigned char *digest, gsize dlen,
+						char **sig_out, GError **err)
+{
+	unsigned char *sig_buf;
+	unsigned int sig_len;
+
+	if (!key || !digest || dlen != 32 || !sig_out) {
+		g_set_error(err, DKIM_ERROR, DKIM_SIGERROR_INVALID_HC,
+					"invalid arguments");
+		return FALSE;
+	}
+
+#ifdef HAVE_OPENSSL
+	if (key->type == RSPAMD_DKIM_KEY_RSA) {
+		sig_len = EVP_PKEY_size(key->specific.key_ssl.key_evp);
+		sig_buf = g_alloca(sig_len);
+		EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(key->specific.key_ssl.key_evp, NULL);
+		if (EVP_PKEY_sign_init(pctx) <= 0) {
+			g_set_error(err, DKIM_ERROR, DKIM_SIGERROR_KEYFAIL,
+						"rsa sign error: %s",
+						ERR_error_string(ERR_get_error(), NULL));
+			EVP_PKEY_CTX_free(pctx);
+			return FALSE;
+		}
+		if (EVP_PKEY_CTX_set_rsa_padding(pctx, RSA_PKCS1_PADDING) <= 0) {
+			g_set_error(err, DKIM_ERROR, DKIM_SIGERROR_KEYFAIL,
+						"rsa sign error: %s",
+						ERR_error_string(ERR_get_error(), NULL));
+			EVP_PKEY_CTX_free(pctx);
+			return FALSE;
+		}
+		if (EVP_PKEY_CTX_set_signature_md(pctx, EVP_sha256()) <= 0) {
+			g_set_error(err, DKIM_ERROR, DKIM_SIGERROR_KEYFAIL,
+						"rsa sign error: %s",
+						ERR_error_string(ERR_get_error(), NULL));
+			EVP_PKEY_CTX_free(pctx);
+			return FALSE;
+		}
+		size_t sig_len_size_t = sig_len;
+		if (EVP_PKEY_sign(pctx, sig_buf, &sig_len_size_t, digest, dlen) <= 0) {
+			g_set_error(err, DKIM_ERROR, DKIM_SIGERROR_KEYFAIL,
+						"rsa sign error: %s",
+						ERR_error_string(ERR_get_error(), NULL));
+			EVP_PKEY_CTX_free(pctx);
+			return FALSE;
+		}
+		sig_len = sig_len_size_t;
+		EVP_PKEY_CTX_free(pctx);
+	}
+	else
+#endif
+#ifdef HAVE_ED25519
+		if (key->type == RSPAMD_DKIM_KEY_EDDSA) {
+		sig_len = crypto_sign_bytes();
+		sig_buf = g_alloca(sig_len);
+		rspamd_cryptobox_sign(sig_buf, NULL, digest, dlen, key->specific.key_eddsa);
+	}
+	else
+#endif
+	{
+		g_set_error(err, DKIM_ERROR, DKIM_SIGERROR_KEYFAIL,
+					"unsupported key type");
+		return FALSE;
+	}
+
+	/* Encode signature as base64 */
+	*sig_out = rspamd_encode_base64(sig_buf, sig_len, 0, NULL);
+	return TRUE;
+}
+
 const char *
 rspamd_dkim_get_domain(rspamd_dkim_context_t *ctx)
 {
