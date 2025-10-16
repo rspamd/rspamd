@@ -63,6 +63,70 @@ ARC RSA ALGORITHM CHECK
   Should Contain  ${result.stdout}  a=rsa-sha256
   Should Not Contain  ${result.stdout}  a=ed25519-sha256
 
+ARC CHAIN ROUNDTRIP RSA DOUBLE SIGN AND VERIFY
+  # First sign: Create i=1
+  ${result1} =  Scan Message With Rspamc  ${MESSAGE_RSA}  -u  bob@cacophony.za.org  --mime
+  Should Contain  ${result1.stdout}  ARC_SIGNED
+
+  # Write first signed message
+  ${signed_file1} =  Write Mime Message To File  ${result1}  rsa_chain_i1.eml
+
+  # Verify i=1 header is present
+  Should Contain  ${result1.stdout}  i=1
+
+  # Second sign: Create i=2 (sign the already-signed message)
+  ${result2} =  Scan Message With Rspamc  ${signed_file1}  -u  bob@cacophony.za.org  --mime
+  Should Contain  ${result2.stdout}  ARC_SIGNED
+
+  # Write second signed message
+  ${signed_file2} =  Write Mime Message To File  ${result2}  rsa_chain_i2.eml
+
+  # Verify both i=1 and i=2 headers are present in the chain
+  Should Contain  ${result2.stdout}  i=1
+  Should Contain  ${result2.stdout}  i=2
+
+  # Verify the whole chain
+  ${verify_result} =  Scan Message With Rspamc  ${signed_file2}  --header=Settings-Id:arc_verify
+  Should Contain  ${verify_result.stdout}  ARC_ALLOW
+  Should Not Contain  ${verify_result.stdout}  ARC_INVALID
+  Should Not Contain  ${verify_result.stdout}  ARC_REJECT
+
+  # Cleanup
+  Remove File  ${signed_file1}
+  Remove File  ${signed_file2}
+
+ARC CHAIN ROUNDTRIP ED25519 DOUBLE SIGN AND VERIFY
+  # First sign: Create i=1
+  ${result1} =  Scan Message With Rspamc  ${MESSAGE_ED25519}  -u  bob@ed25519.za.org  --mime
+  Should Contain  ${result1.stdout}  ARC_SIGNED
+
+  # Write first signed message
+  ${signed_file1} =  Write Mime Message To File  ${result1}  ed25519_chain_i1.eml
+
+  # Verify i=1 header is present
+  Should Contain  ${result1.stdout}  i=1
+
+  # Second sign: Create i=2 (sign the already-signed message)
+  ${result2} =  Scan Message With Rspamc  ${signed_file1}  -u  bob@ed25519.za.org  --mime
+  Should Contain  ${result2.stdout}  ARC_SIGNED
+
+  # Write second signed message
+  ${signed_file2} =  Write Mime Message To File  ${result2}  ed25519_chain_i2.eml
+
+  # Verify both i=1 and i=2 headers are present in the chain
+  Should Contain  ${result2.stdout}  i=1
+  Should Contain  ${result2.stdout}  i=2
+
+  # Verify the whole chain
+  ${verify_result} =  Scan Message With Rspamc  ${signed_file2}  --header=Settings-Id:arc_verify
+  Should Contain  ${verify_result.stdout}  ARC_ALLOW
+  Should Not Contain  ${verify_result.stdout}  ARC_INVALID
+  Should Not Contain  ${verify_result.stdout}  ARC_REJECT
+
+  # Cleanup
+  Remove File  ${signed_file1}
+  Remove File  ${signed_file2}
+
 *** Keywords ***
 Write Mime Message To File
   [Arguments]  ${mime_result}  ${filename}
