@@ -111,6 +111,7 @@ enum rspamd_sign_type {
 };
 
 enum rspamd_dkim_key_type {
+	RSPAMD_DKIM_KEY_INVALID = -1,
 	RSPAMD_DKIM_KEY_RSA = 0,
 	RSPAMD_DKIM_KEY_ECDSA,
 	RSPAMD_DKIM_KEY_EDDSA

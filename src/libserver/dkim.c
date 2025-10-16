@@ -3008,6 +3008,12 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 		nid = NID_sha1;
 	}
 	switch (key->type) {
+	case RSPAMD_DKIM_KEY_INVALID:
+		/* Invalid key type - should not happen */
+		res->rcode = DKIM_PERM_ERROR;
+		res->fail_reason = "invalid key type";
+		msg_err_dkim("invalid key type for verification");
+		break;
 	case RSPAMD_DKIM_KEY_RSA: {
 		GError *err = NULL;
 
@@ -3226,7 +3232,7 @@ rspamd_dkim_sign_key_get_type(rspamd_dkim_sign_key_t *key)
 	if (key) {
 		return key->type;
 	}
-	return RSPAMD_DKIM_KEY_UNKNOWN;
+	return RSPAMD_DKIM_KEY_INVALID;
 }
 
 gboolean

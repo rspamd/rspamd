@@ -345,13 +345,13 @@ lua_logger_out_int(lua_State *L, int pos, char *outbuf, gsize len, gboolean is_u
 		gsize slen;
 		const char *str = lua_tolstring(L, pos, &slen);
 		if (is_unsigned) {
-			guint64 uval;
+			gulong uval;
 			if (rspamd_strtoul(str, slen, &uval)) {
 				return rspamd_snprintf(outbuf, len, "%uL", uval);
 			}
 		}
 		else {
-			gint64 ival;
+			glong ival;
 			if (rspamd_strtol(str, slen, &ival)) {
 				return rspamd_snprintf(outbuf, len, "%L", ival);
 			}
