@@ -66,6 +66,9 @@ MIME-Version: 1.0
 Message-ID: <{= message_id =}>
 Content-Type: multipart/mixed;
 	boundary="----=_NextPart_{= uuid =}"
+Auto-Submitted: auto-generated
+Precedence: bulk
+X-Auto-Response-Suppress: All
 
 This is a multipart message in MIME format.
 
