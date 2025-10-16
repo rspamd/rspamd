@@ -230,7 +230,7 @@ exports.add_text_footer = function(task, html_footer, text_footer)
           -- Need to close previous boundary, if ct_subtype is related
           if #boundaries > 1 and boundaries[#boundaries].ct_type == "multipart" and boundaries[#boundaries].ct_subtype == "related" then
             out[#out + 1] = string.format('--%s--%s',
-                boundaries[#boundaries -1].boundary, newline_s)
+                boundaries[#boundaries - 1].boundary, newline_s)
             table.remove(boundaries)
           end
           table.remove(boundaries)
@@ -1025,6 +1025,9 @@ end
 exports.anonymize_message = function(task, settings)
   local rspamd_re = require "rspamd_regexp"
   local lua_util = require "lua_util"
+
+  logger.debugm('lua_mime', task, 'anonymize_message: starting, gpt mode: %s', settings.gpt or false)
+
   -- We exclude words with digits, currency symbols and so on
   local exclude_words_re = rspamd_re.create_cached([=[/^(?:\d+|\d+\D{1,3}|\p{Sc}.*|(\+?\d{1,3}[\s\-]?)?)$/(:?^[[:alpha:]]*\d{4,}.*$)/u]=])
   local newline_s = newline(task)
@@ -1050,7 +1053,20 @@ exports.anonymize_message = function(task, settings)
   local function anonymize_received_header(hdr)
     local processed = string.gsub(hdr.value, '%d+%.%d+%.%d+%.%d+', 'x.x.x.x')
     processed = string.gsub(processed, '%x+:%x+:%x+:%x+:%x+:%x+:%x+:%x+', 'x:x:x:x:x:x:x:x')
+    -- Anonymize email addresses in "for <email@domain.com>" clauses
+    processed = string.gsub(processed, 'for%s+<([^@>]+)@([^>]+)>', 'for <anonymous@%2>')
     return processed
+  end
+
+  local function remove_header(hdr)
+    -- Return nil to remove the header
+    return nil
+  end
+
+  local function anonymize_subject_header(hdr)
+    -- Will be replaced by LLM anonymization if GPT mode is enabled
+    -- Otherwise use generic subject
+    return 'Email message'
   end
 
   local default_header_process = {
@@ -1058,7 +1074,18 @@ exports.anonymize_message = function(task, settings)
     ['to'] = anonymize_email_header,
     ['cc'] = anonymize_email_header,
     ['bcc'] = anonymize_email_header,
+    ['return-path'] = anonymize_email_header,
+    ['delivered-to'] = anonymize_email_header,
     ['received'] = anonymize_received_header,
+    ['dkim-signature'] = remove_header,
+    ['arc-seal'] = remove_header,
+    ['arc-message-signature'] = remove_header,
+    ['arc-authentication-results'] = remove_header,
+    ['x-spamd-result'] = remove_header,
+    ['x-rspamd-server'] = remove_header,
+    ['x-rspamd-queue-id'] = remove_header,
+    ['subject'] = anonymize_subject_header,
+    ['thread-topic'] = anonymize_subject_header,
   }
 
   -- Merge with custom processors
@@ -1137,6 +1164,8 @@ exports.anonymize_message = function(task, settings)
 
   task:headers_foreach(process_hdr, { full = true })
 
+  logger.debugm('lua_mime', task, 'anonymize_message: processed %s headers', #modified_headers)
+
   -- Create new text content
   local text_content = {}
   local urls = {}
@@ -1144,19 +1173,37 @@ exports.anonymize_message = function(task, settings)
 
   local sel_part = exports.get_displayed_text_part(task)
 
-  if sel_part and settings.gpt then
+  if not sel_part then
+    logger.warnx(task, 'anonymize_message: no displayed text part found')
+    return false
+  end
+
+  logger.debugm('lua_mime', task, 'anonymize_message: selected text part, is_html: %s, length: %s',
+      sel_part:is_html(), sel_part:get_length())
+
+  if settings.gpt then
     -- LLM version
+    logger.debugm('lua_mime', task, 'anonymize_message: using GPT mode')
     local gpt_settings = rspamd_config:get_all_opt('gpt')
 
     if not gpt_settings then
-      logger.errx(task, 'no gpt settings found')
-
+      logger.errx(task, 'anonymize_message: no gpt settings found in config')
       return false
     end
 
+    logger.debugm('lua_mime', task, 'anonymize_message: loaded gpt settings, type: %s', gpt_settings.type)
+
+    -- Get original Subject and Thread-Topic for anonymization
+    local orig_subject = task:get_header('Subject') or ''
+    local orig_thread_topic = task:get_header('Thread-Topic') or ''
+
     -- Prepare the LLM request
-    local function send_to_llm(input_content)
+    local function send_to_llm(input_content, subject, thread_topic)
       local rspamd_http = require 'rspamd_http'
+
+      logger.debugm('lua_mime', task, 'anonymize_message: preparing LLM request, content length: %s bytes',
+          #tostring(input_content))
+
       -- settings for LLM API
       local llm_settings = lua_util.override_defaults(gpt_settings, {
         api_key = settings.api_key,
@@ -1164,66 +1211,246 @@ exports.anonymize_message = function(task, settings)
         timeout = settings.timeout,
         url = settings.url,
       })
-      -- Do not use prompt settings from the module
-      llm_settings.prompt = settings.gpt_prompt or 'Remove all personal data from the following email ' ..
-          'and return just the anonymized content'
 
-      local request_body = {
-        model = llm_settings.model,
-        max_tokens = llm_settings.max_tokens,
-        temperature = 0,
-        messages = {
-          {
-            role = 'system',
-            content = llm_settings.prompt
-          },
-          {
-            role = 'user',
-            content = input_content
+      -- Check for model-specific parameters
+      if gpt_settings.model_parameters and llm_settings.model then
+        local model_params = gpt_settings.model_parameters[llm_settings.model]
+        if model_params then
+          logger.debugm('lua_mime', task, 'anonymize_message: found model-specific parameters for %s',
+              llm_settings.model)
+          llm_settings = lua_util.override_defaults(llm_settings, model_params)
+        end
+      end
+
+      logger.debugm('lua_mime', task, 'anonymize_message: using LLM %s, model: %s, url: %s',
+          llm_settings.type or 'unknown', llm_settings.model or 'default', llm_settings.url)
+
+      -- Build the system prompt with subject information
+      local base_prompt = settings.prompt or [[You are a privacy-focused email anonymization assistant. Your task is to remove all personally identifiable information (PII) from emails while preserving their structure and meaning.
+
+Remove or anonymize:
+- Real names (replace with "Person A", "Person B", etc.)
+- Email addresses (replace with "email@example.com" format)
+- Phone numbers (replace with "XXX-XXX-XXXX" format)
+- Physical addresses (replace with "City, Country" format)
+- Organization names (replace with generic terms like "Company A", "Organization B")
+- Account numbers, IDs, and credentials
+- IP addresses (replace with "X.X.X.X" format)
+- Dates that could identify individuals (keep year if relevant to context)
+- URLs (keep domain only if relevant, anonymize paths)
+
+Preserve:
+- The overall message structure and flow
+- Technical terms and generic concepts
+- The general topic and context
+- Sentiment and tone
+
+Response format:
+First line must be: "SUBJECT: <anonymized subject line>"
+Then a blank line
+Then the anonymized email content
+
+The anonymized subject should preserve the general topic but remove all PII. Keep it concise and relevant.
+
+Example:
+SUBJECT: Discussion about project timeline
+
+<anonymized email content here>
+
+Return ONLY the response in this format without any explanations, markdown formatting, or meta-commentary.]]
+
+      -- Add subject context to the prompt
+      llm_settings.prompt = base_prompt .. string.format("\n\nThe original email subject is: %s",
+          subject and subject ~= '' and subject or 'No subject')
+
+      logger.debugm('lua_mime', task, 'anonymize_message: prepared LLM prompt with subject: %s',
+          subject and subject ~= '' and subject or 'No subject')
+
+      local request_body
+      if llm_settings.type == 'anthropic' or llm_settings.type == 'claude' then
+        -- Claude/Anthropic API format
+        request_body = {
+          model = llm_settings.model,
+          max_tokens = llm_settings.max_tokens or llm_settings.max_completion_tokens or 4096,
+          system = llm_settings.prompt,
+          messages = {
+            {
+              role = 'user',
+              content = input_content
+            }
           }
         }
-      }
+        -- Add temperature if configured
+        if llm_settings.temperature then
+          request_body.temperature = llm_settings.temperature
+        end
+      else
+        -- OpenAI/Ollama API format
+        request_body = {
+          model = llm_settings.model,
+          messages = {
+            {
+              role = 'system',
+              content = llm_settings.prompt
+            },
+            {
+              role = 'user',
+              content = input_content
+            }
+          }
+        }
+      end
 
+      -- Add temperature if configured (only for OpenAI/Ollama, Claude handles it above)
+      if llm_settings.temperature and llm_settings.type ~= 'anthropic' and llm_settings.type ~= 'claude' then
+        request_body.temperature = llm_settings.temperature
+      end
+
+      -- Add max tokens parameter - only for OpenAI/Ollama (Claude already has it)
+      if not (llm_settings.type == 'anthropic' or llm_settings.type == 'claude') then
+        if llm_settings.max_completion_tokens then
+          -- Model-specific config uses new parameter name
+          request_body.max_completion_tokens = llm_settings.max_completion_tokens
+        elseif llm_settings.max_tokens then
+          -- Use legacy parameter or convert based on API type
+          if llm_settings.type == 'openai' then
+            request_body.max_completion_tokens = llm_settings.max_tokens
+          else
+            request_body.max_tokens = llm_settings.max_tokens
+          end
+        end
+      end
+
+      -- Ollama-specific settings
       if llm_settings.type == 'ollama' then
         request_body.stream = false
+        logger.debugm('lua_mime', task, 'anonymize_message: disabled streaming for ollama')
+      end
+
+      -- Prepare HTTP headers based on API type
+      local headers
+      if llm_settings.type == 'anthropic' or llm_settings.type == 'claude' then
+        headers = {
+          ['x-api-key'] = llm_settings.api_key,
+          ['anthropic-version'] = llm_settings.anthropic_version or '2023-06-01',
+          ['Content-Type'] = 'application/json'
+        }
+      else
+        headers = {
+          ['Authorization'] = 'Bearer ' .. llm_settings.api_key,
+          ['Content-Type'] = 'application/json'
+        }
       end
 
       -- Make the HTTP request to the LLM API
       local http_params = {
         url = llm_settings.url,
-        headers = {
-          ['Authorization'] = 'Bearer ' .. llm_settings.api_key,
-          ['Content-Type'] = 'application/json'
-        },
+        headers = headers,
         body = ucl.to_format(request_body, 'json-compact'),
         method = 'POST',
         task = task,
         timeout = llm_settings.timeout,
       }
+
+      logger.debugm('lua_mime', task, 'anonymize_message: sending HTTP request to LLM, timeout: %s',
+          llm_settings.timeout or 'default')
+
       local err, data = rspamd_http.request(http_params)
 
       if err then
-        logger.errx(task, 'LLM request failed: %s', err)
-        return
+        logger.errx(task, 'anonymize_message: LLM request failed: %s', err)
+        return false
       end
+
+      logger.debugm('lua_mime', task, 'anonymize_message: LLM response received, size: %s bytes',
+          data.content and #data.content or 0)
 
       local parser = ucl.parser()
       local res, parse_err = parser:parse_string(data.content)
       if not res then
-        logger.errx(task, 'Cannot parse LLM response: %s', parse_err)
-        return
+        logger.errx(task, 'anonymize_message: cannot parse LLM response: %s', parse_err)
+        return false
       end
 
       local reply = parser:get_object()
-      local anonymized_content
-      if llm_settings.type == 'openai' then
-        anonymized_content = reply.choices and reply.choices[1] and reply.choices[1].message and reply.choices[1].message.content
-      elseif llm_settings.type == 'ollama' then
-        anonymized_content = reply.message.content
+      logger.debugm('lua_mime', task, 'anonymize_message: parsed LLM response successfully')
+
+      -- Log the response structure for debugging
+      logger.debugm('lua_mime', task, 'anonymize_message: response structure: %s',
+          logger.slog('%1', reply))
+
+      -- Check for API errors in response
+      if reply.error then
+        logger.errx(task, 'anonymize_message: LLM API returned error: %s (type: %s, code: %s)',
+            reply.error.message or 'unknown', reply.error.type or 'unknown', reply.error.code or 'unknown')
+        return false
       end
-      if anonymized_content then
-        -- Replace the original content with the anonymized content
-        -- sel_part:set_content(anonymized_content) -- Not available, so rebuild message instead
+
+      local anonymized_content
+      local finish_reason
+      if llm_settings.type == 'anthropic' or llm_settings.type == 'claude' then
+        logger.debugm('lua_mime', task, 'anonymize_message: extracting content from Claude/Anthropic response')
+        logger.debugm('lua_mime', task, 'anonymize_message: reply.content exists: %s, type: %s',
+            reply.content ~= nil, type(reply.content))
+        if reply.content and reply.content[1] then
+          logger.debugm('lua_mime', task, 'anonymize_message: reply.content[1] exists, has text: %s',
+              reply.content[1].text ~= nil)
+          anonymized_content = reply.content[1].text
+          finish_reason = reply.stop_reason
+        end
+      elseif llm_settings.type == 'openai' then
+        logger.debugm('lua_mime', task, 'anonymize_message: extracting content from OpenAI response')
+        logger.debugm('lua_mime', task, 'anonymize_message: reply.choices exists: %s, type: %s',
+            reply.choices ~= nil, type(reply.choices))
+        if reply.choices and reply.choices[1] then
+          logger.debugm('lua_mime', task, 'anonymize_message: reply.choices[1] exists, has message: %s',
+              reply.choices[1].message ~= nil)
+          if reply.choices[1].message then
+            logger.debugm('lua_mime', task, 'anonymize_message: reply.choices[1].message.content exists: %s',
+                reply.choices[1].message.content ~= nil)
+          end
+          anonymized_content = reply.choices[1].message and reply.choices[1].message.content
+          finish_reason = reply.choices[1].finish_reason
+        end
+      elseif llm_settings.type == 'ollama' then
+        logger.debugm('lua_mime', task, 'anonymize_message: extracting content from Ollama response')
+        logger.debugm('lua_mime', task, 'anonymize_message: reply.message exists: %s',
+            reply.message ~= nil)
+        anonymized_content = reply.message and reply.message.content
+        finish_reason = reply.finish_reason
+      else
+        logger.warnx(task, 'anonymize_message: unknown LLM type: %s', llm_settings.type)
+      end
+
+      if anonymized_content and #tostring(anonymized_content) > 0 then
+        logger.debugm('lua_mime', task,
+            'anonymize_message: successfully extracted anonymized content, length: %s bytes',
+            #tostring(anonymized_content))
+
+        -- Parse the subject from the LLM response
+        -- Expected format: "SUBJECT: <anonymized subject>\n\n<content>"
+        local anonymized_subject = 'Email message' -- default fallback
+        local body_content = anonymized_content
+
+        local subject_pattern = '^SUBJECT:%s*([^\n]+)\n\n(.*)$'
+        local subj, content = string.match(tostring(anonymized_content), subject_pattern)
+        if subj and content then
+          anonymized_subject = subj
+          body_content = content
+          logger.debugm('lua_mime', task, 'anonymize_message: extracted anonymized subject: %s', anonymized_subject)
+        else
+          logger.debugm('lua_mime', task,
+              'anonymize_message: could not extract subject from LLM response, using default')
+        end
+
+        -- Update the subject header in modified_headers with LLM-anonymized value
+        for i, hdr in ipairs(modified_headers) do
+          if hdr.name:lower() == 'subject' or hdr.name:lower() == 'thread-topic' then
+            modified_headers[i].value = anonymized_subject
+            logger.debugm('lua_mime', task, 'anonymize_message: updated %s header with LLM-anonymized value',
+                hdr.name)
+          end
+        end
 
         -- Create new message with anonymized content
         local cur_boundary = '--XXX'
@@ -1254,7 +1481,7 @@ exports.anonymize_message = function(task, settings)
         }
         out[#out + 1] = { '', true }
         out[#out + 1] = {
-          rspamd_util.encode_qp(anonymized_content, 76, task:get_newlines_type()),
+          rspamd_util.encode_qp(body_content, 76, task:get_newlines_type()),
           true
         }
 
@@ -1271,15 +1498,30 @@ exports.anonymize_message = function(task, settings)
           subtype = 'mixed'
         }
 
+        logger.debugm('lua_mime', task, 'anonymize_message: GPT anonymization complete, %s output parts', #out)
         return state
+      else
+        -- Provide helpful error message based on finish_reason/stop_reason
+        if finish_reason == 'length' or finish_reason == 'max_tokens' then
+          logger.errx(task,
+              'anonymize_message: LLM response was truncated due to token limit (finish_reason: %s), increase max_tokens in GPT config',
+              finish_reason)
+        elseif finish_reason then
+          logger.errx(task, 'anonymize_message: LLM returned empty content (finish_reason: %s)', finish_reason)
+        else
+          logger.errx(task, 'anonymize_message: no anonymized content extracted from LLM response')
+        end
       end
 
       return false
     end
 
-    -- Send content to LLM
-    return send_to_llm(sel_part:get_content())
+    -- Send content to LLM with subject
+    logger.debugm('lua_mime', task, 'anonymize_message: sending content to LLM with subject: %s',
+        orig_subject ~= '' and orig_subject or 'No subject')
+    return send_to_llm(sel_part:get_content(), orig_subject, orig_thread_topic)
   else
+    logger.debugm('lua_mime', task, 'anonymize_message: using regex-based anonymization')
 
     if sel_part then
       text_content = sel_part:get_words('norm')
@@ -1300,7 +1542,9 @@ exports.anonymize_message = function(task, settings)
       return string.format('https://%s', clean_url)
     end
 
-    for _, url in ipairs(task:get_urls(true)) do
+    local url_list = task:get_urls(true) or {}
+    logger.debugm('lua_mime', task, 'anonymize_message: processing %s URLs', #url_list)
+    for _, url in ipairs(url_list) do
       urls[process_url(url)] = true
     end
 
@@ -1309,7 +1553,9 @@ exports.anonymize_message = function(task, settings)
       return string.format('nobody@%s', email.domain or 'example.com')
     end
 
-    for _, email in ipairs(task:get_emails()) do
+    local email_list = task:get_emails() or {}
+    logger.debugm('lua_mime', task, 'anonymize_message: processing %s emails', #email_list)
+    for _, email in ipairs(email_list) do
       emails[process_email(email)] = true
     end
 
@@ -1366,6 +1612,9 @@ exports.anonymize_message = function(task, settings)
       subtype = 'mixed'
     }
 
+    logger.debugm('lua_mime', task,
+        'anonymize_message: regex anonymization complete, %s output parts, %s unique URLs, %s unique emails',
+        #out, lua_util.table_len(urls), lua_util.table_len(emails))
     return state
   end
 end
