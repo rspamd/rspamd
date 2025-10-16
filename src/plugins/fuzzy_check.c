@@ -228,6 +228,7 @@ struct fuzzy_tcp_write_buf {
 struct fuzzy_tcp_connection {
 	struct fuzzy_rule *rule;  /* Parent rule */
 	struct upstream *server;  /* Connected upstream */
+	char *server_name;        /* Cached upstream name for logging */
 	rspamd_inet_addr_t *addr; /* Server address */
 
 	int fd;                     /* Socket file descriptor */
@@ -564,8 +565,12 @@ fuzzy_tcp_connection_free(struct fuzzy_tcp_connection *conn)
 	}
 
 	msg_debug("fuzzy_tcp: freeing connection to %s for rule %s",
-			  rspamd_upstream_name(conn->server),
-			  conn->rule->name);
+			  conn->server_name ? conn->server_name : "unknown",
+			  conn->rule ? conn->rule->name : "unknown");
+
+	if (conn->server_name) {
+		g_free(conn->server_name);
+	}
 
 	g_free(conn);
 }
@@ -669,6 +674,7 @@ fuzzy_tcp_connect_async(struct fuzzy_rule *rule,
 	conn = fuzzy_tcp_connection_new(rule, task->event_loop);
 	conn->fd = fd;
 	conn->server = upstream;
+	conn->server_name = g_strdup(rspamd_upstream_name(upstream));
 	conn->addr = addr;
 	conn->connecting = TRUE;
 	conn->connect_start = rspamd_get_calendar_ticks();
@@ -800,7 +806,7 @@ fuzzy_tcp_connection_cleanup(struct fuzzy_tcp_connection *conn, const char *reas
 	}
 
 	msg_info("fuzzy_tcp: cleaning up connection to %s for rule %s, reason: %s",
-			 rspamd_upstream_name(conn->server),
+			 conn->server_name ? conn->server_name : "unknown",
 			 conn->rule->name,
 			 reason ? reason : "unknown");
 
