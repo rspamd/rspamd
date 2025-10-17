@@ -1028,7 +1028,13 @@ local function anonymize_handler(opts)
     local task = load_task(opts, fname)
     local newline_s = newline(task)
 
-    local rewrite = lua_mime.anonymize_message(task, opts) or {}
+    local rewrite = lua_mime.anonymize_message(task, opts)
+
+    if not rewrite or not rewrite.out then
+      rspamd_logger.errx('cannot anonymize message from %s', fname)
+      task:destroy()
+      os.exit(1)
+    end
 
     for _, o in ipairs(rewrite.out) do
       if type(o) == 'string' then
