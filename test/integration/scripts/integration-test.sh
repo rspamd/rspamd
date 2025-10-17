@@ -192,6 +192,11 @@ if [ "$TOTAL" -eq 0 ]; then
     exit 1
 fi
 
+# Ensure counts are numeric (default to 0 if empty)
+FUZZY_COUNT=${FUZZY_COUNT:-0}
+BAYES_SPAM_COUNT=${BAYES_SPAM_COUNT:-0}
+BAYES_HAM_COUNT=${BAYES_HAM_COUNT:-0}
+
 # Calculate percentages using awk
 FUZZY_RATE=$(awk "BEGIN {printf \"%.1f\", ($FUZZY_COUNT / $TOTAL) * 100}")
 BAYES_SPAM_RATE=$(awk "BEGIN {printf \"%.1f\", ($BAYES_SPAM_COUNT / $TOTAL) * 100}")
