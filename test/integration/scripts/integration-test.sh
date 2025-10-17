@@ -154,9 +154,9 @@ echo "============================================================"
 echo ""
 
 echo "Scanning $TOTAL_EMAILS emails (parallelism: $PARALLEL)..."
-# Scan all files from the corpus
-rspamc -h "$RSPAMD_HOST:$CONTROLLER_PORT" -P "$PASSWORD" -n "$PARALLEL" -j \
-    $(cat "$DATA_DIR/shuffled_files.txt") > "$DATA_DIR/scan_results.json" 2>&1
+# Scan all files from the corpus using xargs to handle long argument list
+cat "$DATA_DIR/shuffled_files.txt" | xargs rspamc -h "$RSPAMD_HOST:$CONTROLLER_PORT" \
+    -P "$PASSWORD" -n "$PARALLEL" -j > "$DATA_DIR/scan_results.json" 2>&1
 
 echo "✓ Scanning complete"
 echo ""
@@ -231,8 +231,8 @@ if [ "$TEST_PROXY" = "true" ]; then
 
     echo "Testing via proxy worker ($PROXY_PORT)..."
     # Use a sample of files for proxy test
-    rspamc -h "$RSPAMD_HOST:$PROXY_PORT" -n "$PARALLEL" -j \
-        $(head -n 100 "$DATA_DIR/shuffled_files.txt") > "$DATA_DIR/proxy_results.json" 2>&1
+    head -n 100 "$DATA_DIR/shuffled_files.txt" | xargs rspamc -h "$RSPAMD_HOST:$PROXY_PORT" \
+        -n "$PARALLEL" -j > "$DATA_DIR/proxy_results.json" 2>&1
     echo "✓ Proxy test complete"
     echo "Results saved to $DATA_DIR/proxy_results.json"
 fi
