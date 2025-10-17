@@ -156,12 +156,16 @@ echo ""
 echo "Scanning $TOTAL_EMAILS emails (parallelism: $PARALLEL)..."
 # Scan all files from the corpus using xargs to handle long argument list
 # Log errors separately for debugging
+# Temporarily disable set -e to capture exit code
+set +e
 cat "$DATA_DIR/shuffled_files.txt" | xargs rspamc -h "$RSPAMD_HOST:$CONTROLLER_PORT" \
     -P "$PASSWORD" -n "$PARALLEL" -j > "$DATA_DIR/scan_results.json" 2> "$DATA_DIR/scan_errors.log"
-
 SCAN_EXIT=$?
+set -e
+
 if [ $SCAN_EXIT -ne 0 ]; then
     echo "ERROR: Scanning failed with exit code $SCAN_EXIT"
+    echo ""
     echo "First 50 lines of error log:"
     head -n 50 "$DATA_DIR/scan_errors.log" || true
     echo ""
