@@ -84,12 +84,8 @@ jobs:
 
           # Generate keypair for fuzzy worker
           KEYPAIR=$(rspamadm keypair -u)
-          PRIVKEY=$(echo "$KEYPAIR" | grep privkey | cut -d'"' -f2)
-          PUBKEY=$(echo "$KEYPAIR" | grep pubkey | cut -d'"' -f2)
-
-          # Generate encryption key (use public key from another keypair)
-          ENCRYPTION_KEYPAIR=$(rspamadm keypair -u)
-          ENCRYPTION_KEY=$(echo "$ENCRYPTION_KEYPAIR" | grep pubkey | cut -d'"' -f2)
+          FUZZY_PRIVKEY=$(echo "$KEYPAIR" | grep privkey | cut -d'"' -f2)
+          FUZZY_PUBKEY=$(echo "$KEYPAIR" | grep pubkey | cut -d'"' -f2)
 
           # Generate worker and proxy keypairs
           WORKER_KEYPAIR=$(rspamadm keypair -u)
@@ -100,20 +96,29 @@ jobs:
           PROXY_PRIVKEY=$(echo "$PROXY_KEYPAIR" | grep privkey | cut -d'"' -f2)
           PROXY_PUBKEY=$(echo "$PROXY_KEYPAIR" | grep pubkey | cut -d'"' -f2)
 
-          # Create config
-          cat > configs/fuzzy-keys.conf <<EOF
-          # Auto-generated Rspamd encryption keys
-          fuzzy_worker_privkey = "$PRIVKEY";
-          fuzzy_worker_pubkey = "$PUBKEY";
-          fuzzy_encryption_key = "$ENCRYPTION_KEY";
-          rspamd_worker_privkey = "$WORKER_PRIVKEY";
-          rspamd_worker_pubkey = "$WORKER_PUBKEY";
-          rspamd_proxy_privkey = "$PROXY_PRIVKEY";
-          rspamd_proxy_pubkey = "$PROXY_PUBKEY";
+          # Create .env.keys file for docker-compose
+          cat > .env.keys <<EOF
+          # Rspamd integration test keys
+          # Generated at $(date)
+
+          # Fuzzy worker keypair
+          RSPAMD_FUZZY_WORKER_PRIVKEY=$FUZZY_PRIVKEY
+          RSPAMD_FUZZY_WORKER_PUBKEY=$FUZZY_PUBKEY
+
+          # Fuzzy check encryption key (same as fuzzy worker pubkey)
+          RSPAMD_FUZZY_ENCRYPTION_KEY=$FUZZY_PUBKEY
+
+          # Normal worker keypair (for encrypted inter-worker communication)
+          RSPAMD_WORKER_PRIVKEY=$WORKER_PRIVKEY
+          RSPAMD_WORKER_PUBKEY=$WORKER_PUBKEY
+
+          # Proxy worker keypair
+          RSPAMD_PROXY_PRIVKEY=$PROXY_PRIVKEY
+          RSPAMD_PROXY_PUBKEY=$PROXY_PUBKEY
           EOF
 
           echo "Keys generated successfully"
-          cat configs/fuzzy-keys.conf
+          cat .env.keys
 
       - name: Update Docker Compose to use local build
         working-directory: test/integration
