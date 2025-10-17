@@ -63,14 +63,19 @@ docker compose logs rspamd
 ### 4. Run test
 
 ```bash
-# With local corpus (uses test/functional/messages)
-./scripts/integration-test.py
+# With local corpus (uses test/functional/messages by default)
+./scripts/integration-test.sh
 
-# With remote corpus
-./scripts/integration-test.py --corpus-url https://example.com/emails.zip
+# With rspamd-test-corpus (recommended)
+# Download and extract the corpus
+curl -L https://github.com/rspamd/rspamd-test-corpus/releases/latest/download/rspamd-test-corpus.zip -o corpus.zip
+unzip corpus.zip
+export CORPUS_DIR=$(pwd)/corpus/corpus
+./scripts/integration-test.sh
 
 # With local directory
-./scripts/integration-test.py --corpus-dir /path/to/emails
+export CORPUS_DIR=/path/to/emails
+./scripts/integration-test.sh
 ```
 
 ### 5. Check for memory leaks
@@ -89,19 +94,20 @@ docker compose down
 
 ## Test Parameters
 
-```bash
-./scripts/integration-test.py --help
+The test script uses environment variables for configuration:
 
-Options:
-  --corpus-url URL          URL to download email corpus from
-  --corpus-dir DIR          Directory containing email corpus
-  --rspamd-host HOST        Rspamd host (default: localhost)
-  --rspamd-port PORT        Controller port (default: 50002)
-  --proxy-port PORT         Proxy port (default: 50004)
-  --password PASS           Password (default: q1)
-  --train-ratio RATIO       Training ratio (default: 0.1 = 10%)
-  --output FILE             Output file for results (default: results.json)
-  --test-proxy              Also test via proxy worker
+```bash
+# Configuration via environment variables
+export RSPAMD_HOST=localhost        # Rspamd host
+export CONTROLLER_PORT=50002        # Controller port
+export PROXY_PORT=50004             # Proxy port
+export PASSWORD=q1                  # API password
+export PARALLEL=10                  # Parallel requests
+export TRAIN_RATIO=0.1              # Training ratio (10%)
+export TEST_PROXY=true              # Test via proxy worker
+export CORPUS_DIR=/path/to/emails   # Corpus directory
+
+./scripts/integration-test.sh
 ```
 
 ## Project Structure
@@ -121,7 +127,7 @@ test/integration/
 │   └── fuzzy-keys.conf        # Encryption keys (generated)
 ├── scripts/
 │   ├── generate-keys.sh       # Key generation
-│   ├── integration-test.py    # Test script
+│   ├── integration-test.sh    # Test script
 │   └── check-asan-logs.sh     # ASan log checker
 ├── data/                       # Data (corpus, results)
 └── README.md
@@ -218,16 +224,50 @@ curl -H "Password: q1" http://localhost:50002/fuzzystats
 
 ```bash
 # Run test with proxy check
-./scripts/integration-test.py --test-proxy
+export TEST_PROXY=true
+./scripts/integration-test.sh
 
 # Results will be saved in:
-# - data/results.json (via controller)
+# - data/scan_results.json (via controller)
 # - data/proxy_results.json (via proxy)
 ```
+
+## Email Corpus
+
+### Using rspamd-test-corpus
+
+The recommended way to run integration tests is with the [rspamd-test-corpus](https://github.com/rspamd/rspamd-test-corpus) repository.
+
+This corpus contains:
+- **~1000 base messages** from SpamAssassin public corpus
+- **Regression tests** from real bug reports
+- **Edge cases** for corner case testing
+
+Download the latest release:
+
+```bash
+curl -L https://github.com/rspamd/rspamd-test-corpus/releases/latest/download/rspamd-test-corpus.zip -o corpus.zip
+unzip corpus.zip
+export CORPUS_DIR=$(pwd)/corpus/corpus
+```
+
+### Using Local Messages
+
+By default, the test uses `test/functional/messages` directory. However, these messages are often too small or synthetic for realistic testing.
+
+### Adding Regression Tests
+
+If you find a problematic email that causes a bug:
+
+1. Report the issue on GitHub
+2. Add the email to [rspamd-test-corpus](https://github.com/rspamd/rspamd-test-corpus)
+3. The corpus will be automatically used in CI tests
 
 ## CI/CD
 
 See `.github/workflows/integration-test.yml` for automated runs in GitHub Actions.
+
+The CI automatically downloads the latest corpus from rspamd-test-corpus repository.
 
 ## AddressSanitizer
 

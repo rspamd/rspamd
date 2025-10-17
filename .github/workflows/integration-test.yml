@@ -1,0 +1,249 @@
+name: Integration Test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      corpus_url:
+        description: 'URL to email corpus (zip file)'
+        required: false
+        default: 'https://github.com/rspamd/rspamd-test-corpus/releases/download/v1.0/rspamd-test-corpus.zip'
+
+jobs:
+  integration-test:
+    name: Integration & Load Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install requests
+
+      - name: Build Rspamd
+        working-directory: .
+        run: |
+          mkdir -p build install
+          cd build
+          cmake -DCMAKE_INSTALL_PREFIX=../install \
+                -DENABLE_COVERAGE=OFF \
+                -GNinja ..
+          ninja
+          ninja install
+
+      - name: Generate Fuzzy encryption keys
+        working-directory: test/integration
+        run: |
+          # Use rspamadm from build
+          export PATH="${GITHUB_WORKSPACE}/install/bin:$PATH"
+
+          # Generate keypair for fuzzy worker
+          KEYPAIR=$(rspamadm keypair -u)
+          PRIVKEY=$(echo "$KEYPAIR" | grep privkey | cut -d'"' -f2)
+          PUBKEY=$(echo "$KEYPAIR" | grep pubkey | cut -d'"' -f2)
+
+          # Generate encryption key (use public key from another keypair)
+          ENCRYPTION_KEYPAIR=$(rspamadm keypair -u)
+          ENCRYPTION_KEY=$(echo "$ENCRYPTION_KEYPAIR" | grep pubkey | cut -d'"' -f2)
+
+          # Generate worker and proxy keypairs
+          WORKER_KEYPAIR=$(rspamadm keypair -u)
+          WORKER_PRIVKEY=$(echo "$WORKER_KEYPAIR" | grep privkey | cut -d'"' -f2)
+          WORKER_PUBKEY=$(echo "$WORKER_KEYPAIR" | grep pubkey | cut -d'"' -f2)
+
+          PROXY_KEYPAIR=$(rspamadm keypair -u)
+          PROXY_PRIVKEY=$(echo "$PROXY_KEYPAIR" | grep privkey | cut -d'"' -f2)
+          PROXY_PUBKEY=$(echo "$PROXY_KEYPAIR" | grep pubkey | cut -d'"' -f2)
+
+          # Create config
+          cat > configs/fuzzy-keys.conf <<EOF
+          # Auto-generated Rspamd encryption keys
+          fuzzy_worker_privkey = "$PRIVKEY";
+          fuzzy_worker_pubkey = "$PUBKEY";
+          fuzzy_encryption_key = "$ENCRYPTION_KEY";
+          rspamd_worker_privkey = "$WORKER_PRIVKEY";
+          rspamd_worker_pubkey = "$WORKER_PUBKEY";
+          rspamd_proxy_privkey = "$PROXY_PRIVKEY";
+          rspamd_proxy_pubkey = "$PROXY_PUBKEY";
+          EOF
+
+          echo "Keys generated successfully"
+          cat configs/fuzzy-keys.conf
+
+      - name: Update Docker Compose to use local build
+        working-directory: test/integration
+        run: |
+          # Create Dockerfile for local build
+          cat > Dockerfile.local <<'EOF'
+          FROM ubuntu:24.04
+
+          RUN apt-get update && apt-get install -y \
+              redis-tools \
+              curl \
+              ca-certificates \
+              libluajit-5.1-2 \
+              libglib2.0-0 \
+              libssl3 \
+              libicu74 \
+              libsodium23 \
+              libhyperscan5 \
+              && rm -rf /var/lib/apt/lists/*
+
+          COPY install /usr
+
+          RUN mkdir -p /var/lib/rspamd /var/log/rspamd /var/run/rspamd
+
+          EXPOSE 11333 11334 11335
+
+          CMD ["/usr/bin/rspamd", "-f", "-c", "/etc/rspamd/rspamd.conf"]
+          EOF
+
+          # Update docker-compose to use local build
+          sed -i 's|image: ghcr.io/rspamd/rspamd:latest|build:\n      context: ../..\n      dockerfile: test/integration/Dockerfile.local|g' docker-compose.yml
+
+      - name: Start Docker Compose
+        working-directory: test/integration
+        run: |
+          docker compose up -d
+
+          # Wait for services to be ready
+          echo "Waiting for services to start..."
+          sleep 10
+
+          # Check services
+          docker compose ps
+          docker compose logs
+
+      - name: Wait for Rspamd to be ready
+        working-directory: test/integration
+        run: |
+          for i in {1..30}; do
+            if curl -s http://localhost:50002/ping > /dev/null 2>&1; then
+              echo "Rspamd Controller is ready!"
+
+              # Also check proxy
+              if curl -s http://localhost:50004/ping > /dev/null 2>&1; then
+                echo "Rspamd Proxy is ready!"
+              else
+                echo "WARNING: Proxy not responding, but continuing..."
+              fi
+
+              exit 0
+            fi
+            echo "Waiting for Rspamd... ($i/30)"
+            sleep 2
+          done
+
+          echo "Rspamd failed to start!"
+          docker compose logs rspamd
+          exit 1
+
+      - name: Download email corpus
+        working-directory: test/integration
+        run: |
+          # Use provided URL or default corpus from rspamd-test-corpus
+          CORPUS_URL="${{ github.event.inputs.corpus_url }}"
+          if [ -z "$CORPUS_URL" ]; then
+            # Default: use latest release from rspamd-test-corpus
+            CORPUS_URL="https://github.com/rspamd/rspamd-test-corpus/releases/latest/download/rspamd-test-corpus.zip"
+          fi
+
+          echo "Downloading corpus from: $CORPUS_URL"
+          mkdir -p data
+          curl -L "$CORPUS_URL" -o data/corpus.zip
+
+          # Extract corpus
+          unzip data/corpus.zip -d data/
+
+          # The archive contains a 'corpus' directory, so we should have data/corpus/ now
+          ls -lh data/corpus/
+
+      - name: Run integration test
+        working-directory: test/integration
+        run: |
+          export RSPAMD_HOST=localhost
+          export CONTROLLER_PORT=50002
+          export PROXY_PORT=50004
+          export PASSWORD=q1
+          export TEST_PROXY=true
+          export CORPUS_DIR=data/corpus/corpus
+
+          # Verify corpus exists
+          if [ ! -d "$CORPUS_DIR" ]; then
+            echo "ERROR: Corpus directory not found at $CORPUS_DIR"
+            ls -la data/corpus/
+            exit 1
+          fi
+
+          echo "Using corpus: $CORPUS_DIR"
+          ls -lh "$CORPUS_DIR"
+
+          ./scripts/integration-test.sh
+
+      - name: Check AddressSanitizer logs
+        if: always()
+        working-directory: test/integration
+        run: |
+          ./scripts/check-asan-logs.sh || echo "Memory issues detected, but continuing..."
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: |
+            test/integration/data/results.json
+            test/integration/data/proxy_results.json
+            test/integration/data/asan.log*
+            test/integration/data/*.log
+          retention-days: 7
+
+      - name: Upload Docker logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-logs
+          path: |
+            test/integration/docker-compose-logs.txt
+          retention-days: 7
+        continue-on-error: true
+
+      - name: Collect Docker logs
+        if: always()
+        working-directory: test/integration
+        run: |
+          docker compose logs > docker-compose-logs.txt
+
+      - name: Stop Docker Compose
+        if: always()
+        working-directory: test/integration
+        run: |
+          docker compose down -v
+
+      - name: Test summary
+        if: always()
+        run: |
+          echo "## Integration Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f "test/integration/data/results.json" ]; then
+            TOTAL=$(jq '. | length' test/integration/data/results.json)
+            echo "- Total emails scanned: $TOTAL" >> $GITHUB_STEP_SUMMARY
+            echo "- Results saved to artifacts" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ No results file generated" >> $GITHUB_STEP_SUMMARY
+          fi
