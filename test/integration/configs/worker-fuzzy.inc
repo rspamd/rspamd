@@ -9,6 +9,6 @@ allow_update = ["0.0.0.0/0", "::/0"];
 encrypted_only = true;
 
 keypair {
-	privkey = "{= env.RSPAMD_FUZZY_WORKER_PRIVKEY =}";
-	pubkey = "{= env.RSPAMD_FUZZY_WORKER_PUBKEY =}";
+	privkey = "{= env.FUZZY_WORKER_PRIVKEY =}";
+	pubkey = "{= env.FUZZY_WORKER_PUBKEY =}";
 }

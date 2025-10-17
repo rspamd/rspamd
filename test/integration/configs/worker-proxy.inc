@@ -13,6 +13,6 @@ milter = yes;
 
 #Enable encryption for proxy connections
 keypair {
-	pubkey = "{= env.RSPAMD_PROXY_PUBKEY =}";
-	privkey = "{= env.RSPAMD_PROXY_PRIVKEY =}";
+	pubkey = "{= env.PROXY_PUBKEY =}";
+	privkey = "{= env.PROXY_PRIVKEY =}";
 }
