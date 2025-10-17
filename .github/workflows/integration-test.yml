@@ -199,7 +199,11 @@ jobs:
           fi
 
           echo "Downloading corpus from: $CORPUS_URL"
-          mkdir -p data
+
+          # Create data directory with proper permissions
+          sudo mkdir -p data
+          sudo chmod 777 data
+
           curl -L "$CORPUS_URL" -o data/corpus.zip
 
           # Extract corpus
