@@ -200,9 +200,8 @@ jobs:
 
           echo "Downloading corpus from: $CORPUS_URL"
 
-          # Create data directory with proper permissions for Docker container
+          # Create data directory for corpus
           mkdir -p data
-          chmod 777 data
 
           curl -L "$CORPUS_URL" -o data/corpus.zip
 
