@@ -26,8 +26,8 @@ else
     CORPUS_DIR="${CORPUS_DIR:-$SCRIPT_DIR/../../functional/messages}"
 fi
 
-# Create working directories
-mkdir -p "$DATA_DIR"/{fuzzy_train,bayes_spam,bayes_ham,test_corpus}
+# Create working directory
+mkdir -p "$DATA_DIR"
 
 echo "=== Rspamd Integration Test ==="
 echo ""
@@ -74,36 +74,21 @@ echo ""
 FUZZY_SIZE=$(awk "BEGIN {printf \"%.0f\", $TOTAL_EMAILS * $TRAIN_RATIO}")
 BAYES_SIZE=$(awk "BEGIN {printf \"%.0f\", $TOTAL_EMAILS * $TRAIN_RATIO}")
 
-# Split corpus
-echo "Splitting corpus..."
+# Split corpus into lists (no copying needed)
+echo "Splitting corpus into training sets..."
 shuf -e "${EMAIL_FILES[@]}" > "$DATA_DIR/shuffled_files.txt"
 
 # Fuzzy training set
 head -n "$FUZZY_SIZE" "$DATA_DIR/shuffled_files.txt" > "$DATA_DIR/fuzzy_train_list.txt"
-while IFS= read -r file; do
-    cp "$file" "$DATA_DIR/fuzzy_train/"
-done < "$DATA_DIR/fuzzy_train_list.txt"
+FUZZY_COUNT=$(wc -l < "$DATA_DIR/fuzzy_train_list.txt")
 
 # Bayes training set (spam)
 tail -n +$((FUZZY_SIZE + 1)) "$DATA_DIR/shuffled_files.txt" | head -n "$BAYES_SIZE" > "$DATA_DIR/bayes_spam_list.txt"
-while IFS= read -r file; do
-    cp "$file" "$DATA_DIR/bayes_spam/"
-done < "$DATA_DIR/bayes_spam_list.txt"
+SPAM_COUNT=$(wc -l < "$DATA_DIR/bayes_spam_list.txt")
 
 # Bayes training set (ham)
 tail -n +$((FUZZY_SIZE + BAYES_SIZE + 1)) "$DATA_DIR/shuffled_files.txt" | head -n "$BAYES_SIZE" > "$DATA_DIR/bayes_ham_list.txt"
-while IFS= read -r file; do
-    cp "$file" "$DATA_DIR/bayes_ham/"
-done < "$DATA_DIR/bayes_ham_list.txt"
-
-# Test corpus (copy all for scanning)
-while IFS= read -r file; do
-    cp "$file" "$DATA_DIR/test_corpus/"
-done < "$DATA_DIR/shuffled_files.txt"
-
-FUZZY_COUNT=$(ls -1 "$DATA_DIR/fuzzy_train" | wc -l)
-SPAM_COUNT=$(ls -1 "$DATA_DIR/bayes_spam" | wc -l)
-HAM_COUNT=$(ls -1 "$DATA_DIR/bayes_ham" | wc -l)
+HAM_COUNT=$(wc -l < "$DATA_DIR/bayes_ham_list.txt")
 
 echo "Corpus split:"
 echo "  Fuzzy training: $FUZZY_COUNT emails"
@@ -121,10 +106,10 @@ echo ""
 # Train fuzzy storage
 echo "Training Fuzzy storage ($FUZZY_COUNT emails, flag=1)..."
 if [ $FUZZY_COUNT -gt 0 ]; then
-    find "$DATA_DIR/fuzzy_train" -type f | while IFS= read -r file; do
+    while IFS= read -r file; do
         rspamc -h "$RSPAMD_HOST:$CONTROLLER_PORT" -P "$PASSWORD" \
             fuzzy_add "$file" -f 1 -w 10
-    done 2>&1 | tee "$DATA_DIR/fuzzy_train.log"
+    done < "$DATA_DIR/fuzzy_train_list.txt" 2>&1 | tee "$DATA_DIR/fuzzy_train.log"
     echo "✓ Fuzzy training complete"
 else
     echo "⚠ No files to train"
@@ -134,10 +119,10 @@ echo ""
 # Train Bayes spam
 echo "Training Bayes SPAM ($SPAM_COUNT emails)..."
 if [ $SPAM_COUNT -gt 0 ]; then
-    find "$DATA_DIR/bayes_spam" -type f | while IFS= read -r file; do
+    while IFS= read -r file; do
         rspamc -h "$RSPAMD_HOST:$CONTROLLER_PORT" -P "$PASSWORD" \
             learn_spam "$file"
-    done 2>&1 | tee "$DATA_DIR/bayes_spam.log"
+    done < "$DATA_DIR/bayes_spam_list.txt" 2>&1 | tee "$DATA_DIR/bayes_spam.log"
     echo "✓ Bayes SPAM training complete"
 else
     echo "⚠ No files to train"
@@ -147,10 +132,10 @@ echo ""
 # Train Bayes ham
 echo "Training Bayes HAM ($HAM_COUNT emails)..."
 if [ $HAM_COUNT -gt 0 ]; then
-    find "$DATA_DIR/bayes_ham" -type f | while IFS= read -r file; do
+    while IFS= read -r file; do
         rspamc -h "$RSPAMD_HOST:$CONTROLLER_PORT" -P "$PASSWORD" \
             learn_ham "$file"
-    done 2>&1 | tee "$DATA_DIR/bayes_ham.log"
+    done < "$DATA_DIR/bayes_ham_list.txt" 2>&1 | tee "$DATA_DIR/bayes_ham.log"
     echo "✓ Bayes HAM training complete"
 else
     echo "⚠ No files to train"
@@ -169,8 +154,10 @@ echo "============================================================"
 echo ""
 
 echo "Scanning $TOTAL_EMAILS emails (parallelism: $PARALLEL)..."
-rspamc -h "$RSPAMD_HOST:$CONTROLLER_PORT" -P "$PASSWORD" -n "$PARALLEL" \
-    -j "$DATA_DIR/test_corpus" > "$DATA_DIR/scan_results.json" 2>&1
+# Scan all files from the shuffled list
+cat "$DATA_DIR/shuffled_files.txt" | xargs -n 1 -P "$PARALLEL" \
+    rspamc -h "$RSPAMD_HOST:$CONTROLLER_PORT" -P "$PASSWORD" -j \
+    > "$DATA_DIR/scan_results.json" 2>&1
 
 echo "✓ Scanning complete"
 echo ""
@@ -244,8 +231,10 @@ if [ "$TEST_PROXY" = "true" ]; then
     echo ""
 
     echo "Testing via proxy worker ($PROXY_PORT)..."
-    rspamc -h "$RSPAMD_HOST:$PROXY_PORT" -n "$PARALLEL" \
-        "$DATA_DIR/test_corpus" > "$DATA_DIR/proxy_results.json" 2>&1
+    # Use a sample of files for proxy test
+    head -n 100 "$DATA_DIR/shuffled_files.txt" | xargs -n 1 -P "$PARALLEL" \
+        rspamc -h "$RSPAMD_HOST:$PROXY_PORT" -j \
+        > "$DATA_DIR/proxy_results.json" 2>&1
     echo "✓ Proxy test complete"
     echo "Results saved to $DATA_DIR/proxy_results.json"
 fi
