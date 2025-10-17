@@ -120,6 +120,29 @@ jobs:
           echo "Keys generated successfully"
           cat .env.keys
 
+      - name: Download email corpus
+        working-directory: test/integration
+        run: |
+          # Use provided URL or default corpus from rspamd-test-corpus
+          CORPUS_URL="${{ github.event.inputs.corpus_url }}"
+          if [ -z "$CORPUS_URL" ]; then
+            # Default: use latest release from rspamd-test-corpus
+            CORPUS_URL="https://github.com/rspamd/rspamd-test-corpus/releases/latest/download/rspamd-test-corpus.zip"
+          fi
+
+          echo "Downloading corpus from: $CORPUS_URL"
+
+          # Create data directory for corpus
+          mkdir -p data
+
+          curl -L "$CORPUS_URL" -o data/corpus.zip
+
+          # Extract corpus
+          unzip data/corpus.zip -d data/
+
+          # The archive contains a 'corpus' directory, so we should have data/corpus/ now
+          ls -lh data/corpus/
+
       - name: Update Docker Compose to use local build
         working-directory: test/integration
         run: |
@@ -187,29 +210,6 @@ jobs:
           echo "Rspamd failed to start!"
           docker compose logs rspamd
           exit 1
-
-      - name: Download email corpus
-        working-directory: test/integration
-        run: |
-          # Use provided URL or default corpus from rspamd-test-corpus
-          CORPUS_URL="${{ github.event.inputs.corpus_url }}"
-          if [ -z "$CORPUS_URL" ]; then
-            # Default: use latest release from rspamd-test-corpus
-            CORPUS_URL="https://github.com/rspamd/rspamd-test-corpus/releases/latest/download/rspamd-test-corpus.zip"
-          fi
-
-          echo "Downloading corpus from: $CORPUS_URL"
-
-          # Create data directory for corpus
-          mkdir -p data
-
-          curl -L "$CORPUS_URL" -o data/corpus.zip
-
-          # Extract corpus
-          unzip data/corpus.zip -d data/
-
-          # The archive contains a 'corpus' directory, so we should have data/corpus/ now
-          ls -lh data/corpus/
 
       - name: Run integration test
         working-directory: test/integration
