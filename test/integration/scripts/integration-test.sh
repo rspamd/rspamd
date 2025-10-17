@@ -58,8 +58,8 @@ echo ""
 echo "Finding email files in $CORPUS_DIR..."
 MIN_SIZE=200  # bytes, roughly 11+ tokens for Bayes
 
-# Find files with minimum size
-mapfile -t EMAIL_FILES < <(find "$CORPUS_DIR" -type f -size +${MIN_SIZE}c \( -name "*.eml" -o -name "*.msg" -o -name "*.txt" \))
+# Find files with minimum size and verify they're readable
+mapfile -t EMAIL_FILES < <(find "$CORPUS_DIR" -type f -readable -size +${MIN_SIZE}c \( -name "*.eml" -o -name "*.msg" -o -name "*.txt" \))
 TOTAL_EMAILS=${#EMAIL_FILES[@]}
 
 if [ $TOTAL_EMAILS -eq 0 ]; then
@@ -154,25 +154,9 @@ echo "============================================================"
 echo ""
 
 echo "Scanning $TOTAL_EMAILS emails (parallelism: $PARALLEL)..."
-# Scan all files from the corpus using xargs to handle long argument list
-# Log errors separately for debugging
-# Temporarily disable set -e to capture exit code
-set +e
-cat "$DATA_DIR/shuffled_files.txt" | xargs rspamc -h "$RSPAMD_HOST:$CONTROLLER_PORT" \
-    -P "$PASSWORD" -n "$PARALLEL" -j > "$DATA_DIR/scan_results.json" 2> "$DATA_DIR/scan_errors.log"
-SCAN_EXIT=$?
-set -e
-
-if [ $SCAN_EXIT -ne 0 ]; then
-    echo "ERROR: Scanning failed with exit code $SCAN_EXIT"
-    echo ""
-    echo "First 50 lines of error log:"
-    head -n 50 "$DATA_DIR/scan_errors.log" || true
-    echo ""
-    echo "Last 50 lines of error log:"
-    tail -n 50 "$DATA_DIR/scan_errors.log" || true
-    exit 1
-fi
+# rspamc can scan directories recursively
+rspamc -h "$RSPAMD_HOST:$CONTROLLER_PORT" -P "$PASSWORD" -n "$PARALLEL" -j \
+    "$CORPUS_DIR" > "$DATA_DIR/scan_results.json" 2>&1
 
 echo "✓ Scanning complete"
 echo ""
@@ -246,9 +230,9 @@ if [ "$TEST_PROXY" = "true" ]; then
     echo ""
 
     echo "Testing via proxy worker ($PROXY_PORT)..."
-    # Use a sample of files for proxy test
-    head -n 100 "$DATA_DIR/shuffled_files.txt" | xargs rspamc -h "$RSPAMD_HOST:$PROXY_PORT" \
-        -n "$PARALLEL" -j > "$DATA_DIR/proxy_results.json" 2>&1
+    # Use corpus directory for proxy test too
+    rspamc -h "$RSPAMD_HOST:$PROXY_PORT" -n "$PARALLEL" -j \
+        "$CORPUS_DIR" > "$DATA_DIR/proxy_results.json" 2>&1
     echo "✓ Proxy test complete"
     echo "Results saved to $DATA_DIR/proxy_results.json"
 fi
