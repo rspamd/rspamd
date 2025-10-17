@@ -154,9 +154,10 @@ echo "============================================================"
 echo ""
 
 echo "Scanning $TOTAL_EMAILS emails (parallelism: $PARALLEL)..."
-# rspamc can scan directories recursively
-rspamc -h "$RSPAMD_HOST:$CONTROLLER_PORT" -P "$PASSWORD" -n "$PARALLEL" -j \
-    "$CORPUS_DIR" > "$DATA_DIR/scan_results.json" 2>&1
+# Scan the same files we used for training (from shuffled list)
+# Use xargs with -a to read from file and avoid argument list too long
+xargs -a "$DATA_DIR/shuffled_files.txt" rspamc -h "$RSPAMD_HOST:$CONTROLLER_PORT" \
+    -P "$PASSWORD" -n "$PARALLEL" -j > "$DATA_DIR/scan_results.json" 2>&1
 
 echo "✓ Scanning complete"
 echo ""

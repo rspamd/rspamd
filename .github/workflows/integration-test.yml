@@ -72,6 +72,8 @@ jobs:
           cd build
           cmake -DCMAKE_INSTALL_PREFIX=../install \
                 -DENABLE_COVERAGE=OFF \
+                -DENABLE_SANITIZER=address \
+                -DSANITIZER=address \
                 -GNinja ..
           ninja
           ninja install
@@ -161,6 +163,15 @@ jobs:
               libicu74 \
               libsodium23 \
               libhyperscan5 \
+              libpcre2-8-0 \
+              libjemalloc2 \
+              libmagic1 \
+              libarchive13 \
+              libzstd1 \
+              libbrotli1 \
+              libfann2 \
+              libstemmer0d \
+              libasan8 \
               && rm -rf /var/lib/apt/lists/*
 
           COPY install /usr
