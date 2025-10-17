@@ -220,19 +220,18 @@ jobs:
           export PROXY_PORT=50004
           export PASSWORD=q1
           export TEST_PROXY=true
-          export CORPUS_DIR=data/corpus
 
           # Verify corpus exists
-          if [ ! -d "$CORPUS_DIR/spam" ] || [ ! -d "$CORPUS_DIR/ham" ]; then
+          if [ ! -d "data/corpus/spam" ] || [ ! -d "data/corpus/ham" ]; then
             echo "ERROR: Corpus directories not found"
-            echo "Expected: $CORPUS_DIR/spam and $CORPUS_DIR/ham"
+            echo "Expected: data/corpus/spam and data/corpus/ham"
             ls -la data/
             ls -la data/corpus/ || true
             exit 1
           fi
 
-          echo "Using corpus: $CORPUS_DIR"
-          ls -lh "$CORPUS_DIR"
+          echo "Corpus downloaded successfully:"
+          ls -lh data/corpus/
 
           ./scripts/integration-test.sh
 

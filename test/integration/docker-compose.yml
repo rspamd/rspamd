@@ -33,7 +33,7 @@ services:
       - ./configs/statistic.conf:/etc/rspamd/local.d/statistic.conf:ro
       - ./configs/lsan.supp:/etc/rspamd/lsan.supp:ro
       - ./data:/data
-      - ../functional/messages:/corpus:ro
+      - ./data/corpus:/corpus:ro
       - rspamd-db:/var/lib/rspamd
     env_file:
       - .env.keys

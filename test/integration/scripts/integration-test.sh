@@ -54,17 +54,20 @@ fi
 echo "✓ Rspamd is running"
 echo ""
 
-# Find all email files
+# Find all email files, filtering by size (min 200 bytes to have enough tokens)
 echo "Finding email files in $CORPUS_DIR..."
-EMAIL_FILES=($(find "$CORPUS_DIR" -type f \( -name "*.eml" -o -name "*.msg" -o -name "*.txt" \)))
+MIN_SIZE=200  # bytes, roughly 11+ tokens for Bayes
+
+# Find files with minimum size
+mapfile -t EMAIL_FILES < <(find "$CORPUS_DIR" -type f -size +${MIN_SIZE}c \( -name "*.eml" -o -name "*.msg" -o -name "*.txt" \))
 TOTAL_EMAILS=${#EMAIL_FILES[@]}
 
 if [ $TOTAL_EMAILS -eq 0 ]; then
-    echo "ERROR: No email files found in $CORPUS_DIR"
+    echo "ERROR: No email files found in $CORPUS_DIR (min size: $MIN_SIZE bytes)"
     exit 1
 fi
 
-echo "Found $TOTAL_EMAILS email files"
+echo "Found $TOTAL_EMAILS email files (filtered by min size: $MIN_SIZE bytes)"
 echo ""
 
 # Calculate split sizes (using bash arithmetic)
