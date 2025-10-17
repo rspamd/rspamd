@@ -157,7 +157,7 @@ echo "Scanning $TOTAL_EMAILS emails (parallelism: $PARALLEL)..."
 # Scan the same files we used for training (from shuffled list)
 # Use xargs with -a to read from file and avoid argument list too long
 xargs -a "$DATA_DIR/shuffled_files.txt" rspamc -h "$RSPAMD_HOST:$CONTROLLER_PORT" \
-    -P "$PASSWORD" -n "$PARALLEL" -j > "$DATA_DIR/scan_results.json" 2>&1
+    -P "$PASSWORD" -n "$PARALLEL" -j > "$DATA_DIR/results.json" 2>&1
 
 echo "✓ Scanning complete"
 echo ""
@@ -171,16 +171,16 @@ echo ""
 # Count detections using grep and jq (or grep if jq not available)
 if command -v jq &> /dev/null; then
     # Use jq for JSON parsing
-    TOTAL=$(jq 'length' "$DATA_DIR/scan_results.json")
-    FUZZY_COUNT=$(jq '[.[] | select(.symbols | keys[] | startswith("FUZZY_"))] | length' "$DATA_DIR/scan_results.json")
-    BAYES_SPAM_COUNT=$(jq '[.[] | select(.symbols.BAYES_SPAM)] | length' "$DATA_DIR/scan_results.json")
-    BAYES_HAM_COUNT=$(jq '[.[] | select(.symbols.BAYES_HAM)] | length' "$DATA_DIR/scan_results.json")
+    TOTAL=$(jq 'length' "$DATA_DIR/results.json")
+    FUZZY_COUNT=$(jq '[.[] | select(.symbols | keys[] | startswith("FUZZY_"))] | length' "$DATA_DIR/results.json")
+    BAYES_SPAM_COUNT=$(jq '[.[] | select(.symbols.BAYES_SPAM)] | length' "$DATA_DIR/results.json")
+    BAYES_HAM_COUNT=$(jq '[.[] | select(.symbols.BAYES_HAM)] | length' "$DATA_DIR/results.json")
 else
     # Fallback to grep
-    TOTAL=$(grep -c '"symbols"' "$DATA_DIR/scan_results.json" || echo 0)
-    FUZZY_COUNT=$(grep -c '"FUZZY_' "$DATA_DIR/scan_results.json" || echo 0)
-    BAYES_SPAM_COUNT=$(grep -c '"BAYES_SPAM"' "$DATA_DIR/scan_results.json" || echo 0)
-    BAYES_HAM_COUNT=$(grep -c '"BAYES_HAM"' "$DATA_DIR/scan_results.json" || echo 0)
+    TOTAL=$(grep -c '"symbols"' "$DATA_DIR/results.json" || echo 0)
+    FUZZY_COUNT=$(grep -c '"FUZZY_' "$DATA_DIR/results.json" || echo 0)
+    BAYES_SPAM_COUNT=$(grep -c '"BAYES_SPAM"' "$DATA_DIR/results.json" || echo 0)
+    BAYES_HAM_COUNT=$(grep -c '"BAYES_HAM"' "$DATA_DIR/results.json" || echo 0)
 fi
 
 if [ "$TOTAL" -eq 0 ]; then
@@ -244,7 +244,7 @@ echo "TEST COMPLETE"
 echo "============================================================"
 echo ""
 echo "Results saved to:"
-echo "  - $DATA_DIR/scan_results.json"
+echo "  - $DATA_DIR/results.json"
 echo "  - $DATA_DIR/fuzzy_train.log"
 echo "  - $DATA_DIR/bayes_spam.log"
 echo "  - $DATA_DIR/bayes_ham.log"

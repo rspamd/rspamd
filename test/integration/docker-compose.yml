@@ -40,9 +40,9 @@ services:
     environment:
       - RSPAMD_REDIS_ADDR=redis
       - RSPAMD_REDIS_PORT=6379
-      # AddressSanitizer configuration
-      - ASAN_OPTIONS=detect_leaks=1:halt_on_error=0:abort_on_error=0:print_stats=1:log_path=/data/asan.log
-      - LSAN_OPTIONS=suppressions=/etc/rspamd/lsan.supp:print_suppressions=0
+      # AddressSanitizer configuration for multiple processes
+      - ASAN_OPTIONS=detect_leaks=1:halt_on_error=0:abort_on_error=0:print_stats=1:log_path=/data/asan.log:log_suffix=.%p:log_exe_name=1
+      - LSAN_OPTIONS=suppressions=/etc/rspamd/lsan.supp:print_suppressions=0:log_threads=1
     healthcheck:
       test: [ "CMD-SHELL", "pidof rspamd > /dev/null || exit 1" ]
       interval: 10s
