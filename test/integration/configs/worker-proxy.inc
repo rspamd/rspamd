@@ -3,8 +3,7 @@
 bind_socket = "*:50004";
 count = 1;
 timeout = 120s;
-upstream "local"
-{
+upstream "local" {
 	default = yes;
 	self_scan = yes;
 }
@@ -13,8 +12,7 @@ upstream "local"
 milter = yes;
 
 #Enable encryption for proxy connections
-keypair
-{
-	pubkey = "{= env.PROXY_PUBKEY =}";
-	privkey = "{= env.PROXY_PRIVKEY =}";
+keypair {
+	pubkey = "{= env.RSPAMD_PROXY_PUBKEY =}";
+	privkey = "{= env.RSPAMD_PROXY_PRIVKEY =}";
 }
