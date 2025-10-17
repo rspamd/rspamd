@@ -118,8 +118,10 @@ echo ""
 # Train fuzzy storage
 echo "Training Fuzzy storage ($FUZZY_COUNT emails, flag=1)..."
 if [ $FUZZY_COUNT -gt 0 ]; then
-    rspamc -h "$RSPAMD_HOST:$CONTROLLER_PORT" -P "$PASSWORD" -n "$PARALLEL" \
-        fuzzy_add:"$DATA_DIR/fuzzy_train" -f 1 -w 10 2>&1 | tee "$DATA_DIR/fuzzy_train.log"
+    find "$DATA_DIR/fuzzy_train" -type f | while IFS= read -r file; do
+        rspamc -h "$RSPAMD_HOST:$CONTROLLER_PORT" -P "$PASSWORD" \
+            fuzzy_add "$file" -f 1 -w 10
+    done 2>&1 | tee "$DATA_DIR/fuzzy_train.log"
     echo "✓ Fuzzy training complete"
 else
     echo "⚠ No files to train"
@@ -129,8 +131,10 @@ echo ""
 # Train Bayes spam
 echo "Training Bayes SPAM ($SPAM_COUNT emails)..."
 if [ $SPAM_COUNT -gt 0 ]; then
-    rspamc -h "$RSPAMD_HOST:$CONTROLLER_PORT" -P "$PASSWORD" -n "$PARALLEL" \
-        learn_spam "$DATA_DIR/bayes_spam" 2>&1 | tee "$DATA_DIR/bayes_spam.log"
+    find "$DATA_DIR/bayes_spam" -type f | while IFS= read -r file; do
+        rspamc -h "$RSPAMD_HOST:$CONTROLLER_PORT" -P "$PASSWORD" \
+            learn_spam "$file"
+    done 2>&1 | tee "$DATA_DIR/bayes_spam.log"
     echo "✓ Bayes SPAM training complete"
 else
     echo "⚠ No files to train"
@@ -140,8 +144,10 @@ echo ""
 # Train Bayes ham
 echo "Training Bayes HAM ($HAM_COUNT emails)..."
 if [ $HAM_COUNT -gt 0 ]; then
-    rspamc -h "$RSPAMD_HOST:$CONTROLLER_PORT" -P "$PASSWORD" -n "$PARALLEL" \
-        learn_ham "$DATA_DIR/bayes_ham" 2>&1 | tee "$DATA_DIR/bayes_ham.log"
+    find "$DATA_DIR/bayes_ham" -type f | while IFS= read -r file; do
+        rspamc -h "$RSPAMD_HOST:$CONTROLLER_PORT" -P "$PASSWORD" \
+            learn_ham "$file"
+    done 2>&1 | tee "$DATA_DIR/bayes_ham.log"
     echo "✓ Bayes HAM training complete"
 else
     echo "⚠ No files to train"
