@@ -192,15 +192,16 @@ if [ "$TOTAL" -eq 0 ]; then
     exit 1
 fi
 
-# Ensure counts are numeric (default to 0 if empty)
-FUZZY_COUNT=${FUZZY_COUNT:-0}
-BAYES_SPAM_COUNT=${BAYES_SPAM_COUNT:-0}
-BAYES_HAM_COUNT=${BAYES_HAM_COUNT:-0}
+# Ensure counts are numeric (default to 0 if empty or non-numeric)
+FUZZY_COUNT=$(echo "$FUZZY_COUNT" | grep -E '^[0-9]+$' || echo 0)
+BAYES_SPAM_COUNT=$(echo "$BAYES_SPAM_COUNT" | grep -E '^[0-9]+$' || echo 0)
+BAYES_HAM_COUNT=$(echo "$BAYES_HAM_COUNT" | grep -E '^[0-9]+$' || echo 0)
+TOTAL=$(echo "$TOTAL" | grep -E '^[0-9]+$' || echo 0)
 
-# Calculate percentages using awk
-FUZZY_RATE=$(awk "BEGIN {printf \"%.1f\", ($FUZZY_COUNT / $TOTAL) * 100}")
-BAYES_SPAM_RATE=$(awk "BEGIN {printf \"%.1f\", ($BAYES_SPAM_COUNT / $TOTAL) * 100}")
-BAYES_HAM_RATE=$(awk "BEGIN {printf \"%.1f\", ($BAYES_HAM_COUNT / $TOTAL) * 100}")
+# Calculate percentages using awk (pass variables safely)
+FUZZY_RATE=$(awk -v count="$FUZZY_COUNT" -v total="$TOTAL" 'BEGIN {printf "%.1f", (count / total) * 100}')
+BAYES_SPAM_RATE=$(awk -v count="$BAYES_SPAM_COUNT" -v total="$TOTAL" 'BEGIN {printf "%.1f", (count / total) * 100}')
+BAYES_HAM_RATE=$(awk -v count="$BAYES_HAM_COUNT" -v total="$TOTAL" 'BEGIN {printf "%.1f", (count / total) * 100}')
 
 echo "Total scanned: $TOTAL"
 echo "Fuzzy detections: $FUZZY_COUNT ($FUZZY_RATE%)"
