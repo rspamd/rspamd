@@ -134,6 +134,7 @@ jobs:
 
           # Create data directory for corpus
           mkdir -p data
+          chmod 777 data
 
           curl -L "$CORPUS_URL" -o data/corpus.zip
 
