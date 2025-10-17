@@ -1055,6 +1055,8 @@ exports.anonymize_message = function(task, settings)
     processed = string.gsub(processed, '%x+:%x+:%x+:%x+:%x+:%x+:%x+:%x+', 'x:x:x:x:x:x:x:x')
     -- Anonymize email addresses in "for <email@domain.com>" clauses
     processed = string.gsub(processed, 'for%s+<([^@>]+)@([^>]+)>', 'for <anonymous@%2>')
+    -- Anonymize email addresses in "envelope-from <email@domain.com>" clauses
+    processed = string.gsub(processed, 'envelope%-from%s+<([^@>]+)@([^>]+)>', 'envelope-from <anonymous@%2>')
     return processed
   end
 
@@ -1081,6 +1083,7 @@ exports.anonymize_message = function(task, settings)
     ['arc-seal'] = remove_header,
     ['arc-message-signature'] = remove_header,
     ['arc-authentication-results'] = remove_header,
+    ['authentication-results'] = remove_header,
     ['x-spamd-result'] = remove_header,
     ['x-rspamd-server'] = remove_header,
     ['x-rspamd-queue-id'] = remove_header,
