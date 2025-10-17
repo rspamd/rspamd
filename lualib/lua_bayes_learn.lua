@@ -83,6 +83,22 @@ exports.autolearn = function(task, conf)
     return
   end
 
+  -- To retain old behaviour, we check local and authed mail by default
+  local check_local = conf.check_local
+  if check_local == nil then
+    check_local = true
+  end
+  local check_authed = conf.check_authed
+  if check_authed == nil then
+    check_authed = true
+  end
+
+  local skip_conf = {check_local, check_authed}
+  if lua_util.is_skip_local_or_authed(task, skip_conf) then
+    lua_util.debugm(N, task, 'skip autolearn for local or authed network')
+    return
+  end
+
   -- We have autolearn config so let's figure out what is requested
   local verdict, score = lua_verdict.get_specific_verdict("bayes", task)
   local learn_spam, learn_ham = false, false
