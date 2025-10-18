@@ -250,6 +250,8 @@ jobs:
         if: always()
         working-directory: test/integration
         run: |
+          # Fix permissions on ASAN logs created by Docker
+          sudo chmod -R 644 data/asan.log* 2>/dev/null || true
           ./scripts/check-asan-logs.sh || echo "Memory issues detected, but continuing..."
 
       - name: Upload results
