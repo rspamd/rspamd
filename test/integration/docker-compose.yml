@@ -1,0 +1,61 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: rspamd-redis
+    networks:
+      - rspamd-net
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  rspamd:
+    image: rspamd/rspamd:asan-nightly
+    container_name: rspamd-main
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - rspamd-net
+    ports:
+      - "50001:50001"  # Normal worker
+      - "50002:50002"  # Controller
+      - "50003:50003"  # Fuzzy worker
+      - "50004:50004"  # Proxy worker
+    volumes:
+      - ./configs/worker-normal.inc:/etc/rspamd/local.d/worker-normal.inc:ro
+      - ./configs/worker-controller.inc:/etc/rspamd/local.d/worker-controller.inc:ro
+      - ./configs/worker-fuzzy.inc:/etc/rspamd/local.d/worker-fuzzy.inc:ro
+      - ./configs/worker-proxy.inc:/etc/rspamd/local.d/worker-proxy.inc:ro
+      - ./configs/fuzzy_check.conf:/etc/rspamd/local.d/fuzzy_check.conf:ro
+      - ./configs/redis.conf:/etc/rspamd/local.d/redis.conf:ro
+      - ./configs/statistic.conf:/etc/rspamd/local.d/statistic.conf:ro
+      - ./configs/lsan.supp:/etc/rspamd/lsan.supp:ro
+      - ./data:/data
+      - ./data/corpus:/corpus:ro
+      - rspamd-db:/var/lib/rspamd
+    env_file:
+      - .env.keys
+    environment:
+      - RSPAMD_REDIS_ADDR=redis
+      - RSPAMD_REDIS_PORT=6379
+      # AddressSanitizer configuration for multiple processes
+      # ASAN errors (buffer overflow, etc) immediately fail the test
+      # Leak sanitizer collects all leaks without failing (exitcode=0)
+      # NOTE: fast_unwind_on_malloc=0 causes rspamd to hang, so it's omitted
+      - ASAN_OPTIONS=detect_leaks=1:print_stats=1:log_path=/data/asan.log:quarantine_size_mb=2048:malloc_context_size=20
+      - LSAN_OPTIONS=suppressions=/etc/rspamd/lsan.supp:print_suppressions=0:exitcode=0
+    healthcheck:
+      test: [ "CMD-SHELL", "pidof rspamd > /dev/null || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+networks:
+  rspamd-net:
+    driver: bridge
+
+volumes:
+  rspamd-db:

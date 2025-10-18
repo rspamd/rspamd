@@ -1,0 +1,4 @@
+# UCL config files require opening brace on same line as key
+# clang-format would move it to next line which breaks UCL parser
+*.inc
+*.conf
