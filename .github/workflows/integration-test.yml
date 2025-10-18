@@ -4,10 +4,6 @@ permissions:
   contents: read
 
 on:
-  push:
-    branches: [master]
-  pull_request:
-    branches: [master]
   schedule:
     # Run daily at 2 AM UTC
     - cron: '0 2 * * *'
