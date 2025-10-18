@@ -253,6 +253,18 @@ jobs:
         if: always()
         working-directory: test/integration
         run: |
+          # Debug: Check if ASAN environment is set in container
+          echo "=== Checking ASAN configuration in container ==="
+          docker compose exec -T rspamd sh -c 'echo ASAN_OPTIONS=$ASAN_OPTIONS; echo LSAN_OPTIONS=$LSAN_OPTIONS'
+
+          # Debug: Check what files exist in /data
+          echo "=== Files in /data inside container ==="
+          docker compose exec -T rspamd ls -la /data/
+
+          # Debug: Check what files exist in data on host
+          echo "=== Files in data/ on host ==="
+          ls -la data/
+
           # Fix permissions on ASAN logs created by Docker
           sudo chmod -R 644 data/asan.log* 2>/dev/null || true
           ./scripts/check-asan-logs.sh || echo "Memory issues detected, but continuing..."
@@ -269,6 +281,12 @@ jobs:
             test/integration/data/*.log
           retention-days: 7
 
+      - name: Collect Docker logs
+        if: always()
+        working-directory: test/integration
+        run: |
+          docker compose logs > docker-compose-logs.txt
+
       - name: Upload Docker logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -278,12 +296,6 @@ jobs:
             test/integration/docker-compose-logs.txt
           retention-days: 7
         continue-on-error: true
-
-      - name: Collect Docker logs
-        if: always()
-        working-directory: test/integration
-        run: |
-          docker compose logs > docker-compose-logs.txt
 
       - name: Stop Docker Compose
         if: always()
