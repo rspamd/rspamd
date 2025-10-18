@@ -199,8 +199,21 @@ jobs:
           sleep 10
 
           # Check services
+          echo "=== Docker Compose Services Status ==="
           docker compose ps
-          docker compose logs
+
+          echo ""
+          echo "=== Redis Logs ==="
+          docker compose logs redis
+
+          echo ""
+          echo "=== Rspamd Logs ==="
+          docker compose logs rspamd
+
+          # Check if rspamd process is running
+          echo ""
+          echo "=== Processes in Rspamd container ==="
+          docker compose exec -T rspamd ps aux || echo "Cannot execute ps in container"
 
       - name: Wait for Rspamd to be ready
         working-directory: test/integration
@@ -223,7 +236,16 @@ jobs:
           done
 
           echo "Rspamd failed to start!"
+          echo ""
+          echo "=== Full Rspamd logs ==="
           docker compose logs rspamd
+          echo ""
+          echo "=== Checking for ASAN logs in container ==="
+          docker compose exec -T rspamd ls -la /data/ || true
+          docker compose exec -T rspamd cat /data/asan.log* 2>/dev/null || echo "No ASAN logs found"
+          echo ""
+          echo "=== Container stderr/stdout ==="
+          docker logs rspamd-main 2>&1 || true
           exit 1
 
       - name: Run integration test
