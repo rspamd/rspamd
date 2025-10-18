@@ -227,6 +227,9 @@ LUA_FUNCTION_DEF(config, get_classifier);
  *   + `explicit_disable` requires explicit disabling (e.g. via settings)
  *   + `ignore_passthrough` executed even if passthrough result has been set
  * - `parent`: id of parent symbol (useful for virtual symbols)
+ * - `score`: default score of the symbol
+ * - `description`: description of the symbol
+ * - `group`: group of the symbol (ungrouped if missing)
  *
  * @return {number} id of symbol registered
  */
