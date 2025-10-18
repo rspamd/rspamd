@@ -207,11 +207,6 @@ jobs:
           echo "=== Rspamd Logs ==="
           docker compose logs rspamd
 
-          # Check if rspamd process is running
-          echo ""
-          echo "=== Processes in Rspamd container ==="
-          docker compose exec -T rspamd ps aux || echo "Cannot execute ps in container"
-
       - name: Wait for Rspamd to be ready
         working-directory: test/integration
         run: |
