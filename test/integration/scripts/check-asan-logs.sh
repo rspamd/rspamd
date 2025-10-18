@@ -25,8 +25,9 @@ for log_file in $ASAN_LOGS; do
     echo "----------------------------------------"
 
     # Count memory leaks
-    LEAKS=$(grep -c "LeakSanitizer" "$log_file" 2>/dev/null || echo "0")
-    if [ "$LEAKS" -gt 0 ]; then
+    LEAKS=$(grep "LeakSanitizer" "$log_file" 2>/dev/null | wc -l | tr -d ' ')
+    LEAKS=${LEAKS:-0}
+    if [ "$LEAKS" -gt 0 ] 2>/dev/null; then
         echo "  Memory leaks detected: $LEAKS"
         TOTAL_LEAKS=$((TOTAL_LEAKS + LEAKS))
 
@@ -35,8 +36,9 @@ for log_file in $ASAN_LOGS; do
     fi
 
     # Count other errors
-    ERRORS=$(grep -c "ERROR: AddressSanitizer" "$log_file" 2>/dev/null || echo "0")
-    if [ "$ERRORS" -gt 0 ]; then
+    ERRORS=$(grep "ERROR: AddressSanitizer" "$log_file" 2>/dev/null | wc -l | tr -d ' ')
+    ERRORS=${ERRORS:-0}
+    if [ "$ERRORS" -gt 0 ] 2>/dev/null; then
         echo "  AddressSanitizer errors: $ERRORS"
         TOTAL_ERRORS=$((TOTAL_ERRORS + ERRORS))
 
@@ -45,14 +47,16 @@ for log_file in $ASAN_LOGS; do
     fi
 
     # Check for heap-use-after-free
-    UAF=$(grep -c "heap-use-after-free" "$log_file" 2>/dev/null || echo "0")
-    if [ "$UAF" -gt 0 ]; then
+    UAF=$(grep "heap-use-after-free" "$log_file" 2>/dev/null | wc -l | tr -d ' ')
+    UAF=${UAF:-0}
+    if [ "$UAF" -gt 0 ] 2>/dev/null; then
         echo "  Heap-use-after-free: $UAF"
     fi
 
     # Check for heap-buffer-overflow
-    OVERFLOW=$(grep -c "heap-buffer-overflow" "$log_file" 2>/dev/null || echo "0")
-    if [ "$OVERFLOW" -gt 0 ]; then
+    OVERFLOW=$(grep "heap-buffer-overflow" "$log_file" 2>/dev/null | wc -l | tr -d ' ')
+    OVERFLOW=${OVERFLOW:-0}
+    if [ "$OVERFLOW" -gt 0 ] 2>/dev/null; then
         echo "  Heap-buffer-overflow: $OVERFLOW"
     fi
 
