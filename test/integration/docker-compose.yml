@@ -43,7 +43,8 @@ services:
       # AddressSanitizer configuration for multiple processes
       # ASAN errors (buffer overflow, etc) immediately fail the test
       # Leak sanitizer collects all leaks without failing (exitcode=0)
-      - ASAN_OPTIONS=detect_leaks=1:print_stats=1:log_path=/data/asan.log:quarantine_size_mb=2048:malloc_context_size=20:fast_unwind_on_malloc=0
+      # NOTE: fast_unwind_on_malloc=0 causes rspamd to hang, so it's omitted
+      - ASAN_OPTIONS=detect_leaks=1:print_stats=1:log_path=/data/asan.log:quarantine_size_mb=2048:malloc_context_size=20
       - LSAN_OPTIONS=suppressions=/etc/rspamd/lsan.supp:print_suppressions=0:exitcode=0
     healthcheck:
       test: [ "CMD-SHELL", "pidof rspamd > /dev/null || exit 1" ]

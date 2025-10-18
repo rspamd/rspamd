@@ -195,8 +195,9 @@ jobs:
           docker compose up -d
 
           # Wait for services to be ready
+          # Rspamd takes ~30-40s to compile TLD database and load maps
           echo "Waiting for services to start..."
-          sleep 10
+          sleep 20
 
           # Check services
           echo "=== Docker Compose Services Status ==="
@@ -218,7 +219,7 @@ jobs:
       - name: Wait for Rspamd to be ready
         working-directory: test/integration
         run: |
-          for i in {1..30}; do
+          for i in {1..60}; do
             if curl -s http://localhost:50002/ping > /dev/null 2>&1; then
               echo "Rspamd Controller is ready!"
 
@@ -231,8 +232,8 @@ jobs:
 
               exit 0
             fi
-            echo "Waiting for Rspamd... ($i/30)"
-            sleep 2
+            echo "Waiting for Rspamd... ($i/60)"
+            sleep 3
           done
 
           echo "Rspamd failed to start!"
