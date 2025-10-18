@@ -72,8 +72,8 @@ jobs:
           cd build
           cmake -DCMAKE_INSTALL_PREFIX=../install \
                 -DENABLE_COVERAGE=OFF \
-                -DENABLE_SANITIZER=address \
-                -DSANITIZER=address \
+                -DENABLE_FULL_DEBUG=ON \
+                -DSANITIZE=address,leak \
                 -GNinja ..
           ninja
           ninja install
