@@ -105,6 +105,13 @@ rspamd_task_get_autolearn_class(struct rspamd_task *task)
 }
 
 static void
+rspamd_words_kvec_dtor(gpointer p)
+{
+	rspamd_words_t *words = (rspamd_words_t *) p;
+	kv_destroy(*words);
+}
+
+static void
 rspamd_stat_tokenize_parts_metadata(struct rspamd_stat_ctx *st_ctx,
 									struct rspamd_task *task)
 {
@@ -115,6 +122,7 @@ rspamd_stat_tokenize_parts_metadata(struct rspamd_stat_ctx *st_ctx,
 
 	words = rspamd_mempool_alloc(task->task_pool, sizeof(*words));
 	kv_init(*words);
+	rspamd_mempool_add_destructor(task->task_pool, rspamd_words_kvec_dtor, words);
 	memset(&elt, 0, sizeof(elt));
 	elt.flags = RSPAMD_STAT_TOKEN_FLAG_META;
 
