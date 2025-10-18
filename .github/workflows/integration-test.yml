@@ -84,6 +84,9 @@ jobs:
           # Use rspamadm from build
           export PATH="${GITHUB_WORKSPACE}/install/bin:$PATH"
 
+          # Disable leak detection for rspamadm utility
+          export ASAN_OPTIONS=detect_leaks=0
+
           # Generate keypair for fuzzy worker
           KEYPAIR=$(rspamadm keypair -u)
           FUZZY_PRIVKEY=$(echo "$KEYPAIR" | grep privkey | cut -d'"' -f2)

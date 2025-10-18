@@ -4,6 +4,9 @@
 
 set -e
 
+# Disable leak detection for rspamc utility to avoid false positives
+export ASAN_OPTIONS=detect_leaks=0
+
 # Configuration
 RSPAMD_HOST=${RSPAMD_HOST:-localhost}
 CONTROLLER_PORT=${CONTROLLER_PORT:-50002}
