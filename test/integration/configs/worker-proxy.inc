@@ -6,7 +6,7 @@ timeout = 120s;
 upstream "local" {
 	default = yes;
 	self_scan = no;
-  hosts = "localhost:5001";
+  hosts = "localhost:50001";
   encryption_key = "{= env.WORKER_PUBKEY =}";
 }
 
