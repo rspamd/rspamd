@@ -260,9 +260,9 @@ if [ "$TEST_PROXY" = "true" ]; then
     echo ""
 
     echo "Testing via proxy worker ($PROXY_PORT)..."
-    # Use corpus directory for proxy test too
-    if ASAN_OPTIONS=detect_leaks=0 rspamc -h "$RSPAMD_HOST:$PROXY_PORT" -n "$PARALLEL" -j \
-        "$CORPUS_DIR" > "$DATA_DIR/proxy_results.json" 2> "$DATA_DIR/proxy_errors.log"; then
+    # Use same file list approach as controller test to avoid permission issues
+    if xargs -a "$DATA_DIR/shuffled_files.txt" rspamc -h "$RSPAMD_HOST:$PROXY_PORT" \
+        -n "$PARALLEL" -j > "$DATA_DIR/proxy_results.json" 2> "$DATA_DIR/proxy_errors.log"; then
         echo "✓ Proxy test complete"
         echo "Results saved to $DATA_DIR/proxy_results.json"
     else
