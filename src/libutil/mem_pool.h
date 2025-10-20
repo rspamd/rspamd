@@ -111,6 +111,8 @@ struct rspamd_mempool_tag {
 
 enum rspamd_mempool_flags {
 	RSPAMD_MEMPOOL_DEBUG = (1u << 0u),
+	RSPAMD_MEMPOOL_LONG_LIVED = (1u << 1u),  /**< Pool for long-lived data (config, etc.) */
+	RSPAMD_MEMPOOL_SHORT_LIVED = (1u << 2u), /**< Pool for short-lived data (tasks, etc.) */
 };
 
 /**
@@ -151,6 +153,12 @@ rspamd_mempool_t *rspamd_mempool_new_(gsize size, const char *tag, int flags,
 	rspamd_mempool_new_((size), (tag), (flags), G_STRLOC)
 #define rspamd_mempool_new_default(tag, flags) \
 	rspamd_mempool_new_(rspamd_mempool_suggest_size_(G_STRLOC), (tag), (flags), G_STRLOC)
+
+/* Convenient macros for creating typed pools */
+#define rspamd_mempool_new_long_lived(size, tag) \
+	rspamd_mempool_new_((size), (tag), RSPAMD_MEMPOOL_LONG_LIVED, G_STRLOC)
+#define rspamd_mempool_new_short_lived(tag) \
+	rspamd_mempool_new_(rspamd_mempool_suggest_size_(G_STRLOC), (tag), RSPAMD_MEMPOOL_SHORT_LIVED, G_STRLOC)
 
 /**
  * Get memory from pool
@@ -258,20 +266,27 @@ void *rspamd_mempool_alloc0_shared_(rspamd_mempool_t *pool, gsize size, gsize al
 											MAX(MIN_MEM_ALIGNMENT, RSPAMD_ALIGNOF(type)), (G_STRLOC)))
 
 /**
- * Add destructor callback to pool
+ * Add destructor callback to pool with priority
  * @param pool memory pool object
  * @param func pointer to function-destructor
  * @param data pointer to data that would be passed to destructor
+ * @param function function name
+ * @param line line number
+ * @param priority destructor priority (lower values = earlier execution, 0 = default)
  */
 void rspamd_mempool_add_destructor_full(rspamd_mempool_t *pool,
 										rspamd_mempool_destruct_t func,
 										void *data,
 										const char *function,
-										const char *line);
+										const char *line,
+										unsigned int priority);
 
 /* Macros for common usage */
 #define rspamd_mempool_add_destructor(pool, func, data) \
-	rspamd_mempool_add_destructor_full(pool, func, data, (MEMPOOL_STR_FUNC), (G_STRLOC))
+	rspamd_mempool_add_destructor_full(pool, func, data, (MEMPOOL_STR_FUNC), (G_STRLOC), 0)
+
+#define rspamd_mempool_add_destructor_priority(pool, func, data, priority) \
+	rspamd_mempool_add_destructor_full(pool, func, data, (MEMPOOL_STR_FUNC), (G_STRLOC), priority)
 
 /**
  * Replace destructor callback to pool for specified pointer

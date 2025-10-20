@@ -195,3 +195,10 @@ rspamd_min_heap_index(struct rspamd_min_heap *heap, unsigned int idx)
 
 	return g_ptr_array_index(heap->ar, idx);
 }
+
+gsize rspamd_min_heap_size(struct rspamd_min_heap *heap)
+{
+	g_assert(heap != NULL);
+
+	return heap->ar->len;
+}

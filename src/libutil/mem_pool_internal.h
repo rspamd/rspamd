@@ -17,6 +17,9 @@
 #ifndef RSPAMD_MEM_POOL_INTERNAL_H
 #define RSPAMD_MEM_POOL_INTERNAL_H
 
+#include "config.h"
+#include "heap.h"
+
 /*
  * Internal memory pool stuff
  */
@@ -42,20 +45,28 @@ struct rspamd_mempool_entry_point {
 	uint32_t cur_suggestion;
 	uint32_t cur_elts;
 	uint32_t cur_vars;
+	uint32_t cur_dtors; /**< suggested number of destructors to preallocate */
 	struct entry_elt elts[ENTRY_NELTS];
 };
 
 /**
- * Destructors list item structure
+ * Destructors heap item structure
  */
 struct _pool_destructors {
-	rspamd_mempool_destruct_t func; /**< pointer to destructor					*/
-	void *data;                     /**< data to free							*/
+	rspamd_mempool_destruct_t func; /**< pointer to destructor             */
+	void *data;                     /**< data to free                      */
 	const char *function;           /**< function from which this destructor was added */
-	const char *loc;                /**< line number                            */
-	struct _pool_destructors *next;
+	const char *loc;                /**< line number                       */
+	unsigned int priority;          /**< destructor priority (0 = default) */
 };
 
+/**
+ * Wrapper for destructor with heap element
+ */
+struct _pool_destructor_heap_elt {
+	struct rspamd_min_heap_elt heap_elt;
+	struct _pool_destructors *dtor;
+};
 
 struct rspamd_mempool_variable {
 	gpointer data;
@@ -68,7 +79,7 @@ KHASH_INIT(rspamd_mempool_vars_hash,
 
 struct rspamd_mempool_specific {
 	struct _pool_chain *pools[RSPAMD_MEMPOOL_MAX];
-	struct _pool_destructors *dtors_head, *dtors_tail;
+	struct rspamd_min_heap *dtors_heap;
 	GPtrArray *trash_stack;
 	khash_t(rspamd_mempool_vars_hash) * variables;
 	struct rspamd_mempool_entry_point *entry;

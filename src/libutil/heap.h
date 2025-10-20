@@ -90,6 +90,13 @@ void rspamd_min_heap_destroy(struct rspamd_min_heap *heap);
 struct rspamd_min_heap_elt *rspamd_min_heap_index(struct rspamd_min_heap *heap,
 												  unsigned int idx);
 
+/**
+ * Returns the number of elements in the heap
+ * @param heap
+ * @return number of elements
+ */
+gsize rspamd_min_heap_size(struct rspamd_min_heap *heap);
+
 #ifdef __cplusplus
 }
 #endif
