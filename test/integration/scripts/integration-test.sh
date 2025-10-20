@@ -45,7 +45,16 @@ echo ""
 # Check if rspamc is available
 if ! command -v rspamc &> /dev/null; then
     echo "ERROR: rspamc not found. Running inside docker container..."
-    exec docker compose exec -T rspamd bash -s < "$0"
+    exec docker compose exec -T \
+        -e RSPAMD_HOST="$RSPAMD_HOST" \
+        -e CONTROLLER_PORT="$CONTROLLER_PORT" \
+        -e PROXY_PORT="$PROXY_PORT" \
+        -e PASSWORD="$PASSWORD" \
+        -e PARALLEL="$PARALLEL" \
+        -e TRAIN_RATIO="$TRAIN_RATIO" \
+        -e TEST_PROXY="$TEST_PROXY" \
+        -e ASAN_OPTIONS="detect_leaks=0" \
+        rspamd bash -s < "$0"
 fi
 
 # Check if Rspamd is running

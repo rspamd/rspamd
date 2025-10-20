@@ -210,24 +210,35 @@ jobs:
       - name: Wait for Rspamd to be ready
         working-directory: test/integration
         run: |
+          echo "Waiting for Rspamd services to initialize..."
+
+          # Wait for healthcheck to pass
           for i in {1..60}; do
             if curl -s http://localhost:50002/ping > /dev/null 2>&1; then
-              echo "Rspamd Controller is ready!"
+              echo "✓ Rspamd Controller is ready!"
 
               # Also check proxy
               if curl -s http://localhost:50004/ping > /dev/null 2>&1; then
-                echo "Rspamd Proxy is ready!"
+                echo "✓ Rspamd Proxy is ready!"
               else
-                echo "WARNING: Proxy not responding, but continuing..."
+                echo "⚠ WARNING: Proxy not responding, but continuing..."
               fi
+
+              # Show Rspamd stat
+              echo ""
+              echo "=== Rspamd Status ==="
+              curl -s http://localhost:50002/stat 2>/dev/null | head -20 || echo "Cannot get stat"
 
               exit 0
             fi
-            echo "Waiting for Rspamd... ($i/60)"
+            echo "Waiting for Rspamd... (attempt $i/60)"
             sleep 3
           done
 
-          echo "Rspamd failed to start!"
+          echo "❌ Rspamd failed to start within timeout!"
+          echo ""
+          echo "=== Docker Compose Status ==="
+          docker compose ps
           echo ""
           echo "=== Full Rspamd logs ==="
           docker compose logs rspamd
