@@ -402,13 +402,13 @@ use POSIX qw(strftime);
 my %opt = (
     source_host => 'localhost',
     source_port => 6379,
-    source_db => 0,
-    dest_port => undef,
-    dest_db => undef,
-    prefix => 'fuzzy',
-    scan_count => 5000,       # High default for maximum performance with lots of RAM
-    pipeline_size => 500,     # Large batch size for pipelining
-    verbose => 0,
+    source_db   => 0,
+    dest_port   => undef,
+    dest_db     => undef,
+    prefix      => 'fuzzy',
+    scan_count  => 5000, # High default for maximum performance with lots of RAM
+    pipeline_size => 500,    # Large batch size for pipelining
+    verbose       => 0,
 );
 
 my @flags;
@@ -417,46 +417,46 @@ my $import_file;
 my $dry_run = 0;
 
 GetOptions(
-    'source-host=s' => \$opt{source_host},
-    'source-port=i' => \$opt{source_port},
-    'source-db=i' => \$opt{source_db},
+    'source-host=s'     => \$opt{source_host},
+    'source-port=i'     => \$opt{source_port},
+    'source-db=i'       => \$opt{source_db},
     'source-password=s' => \$opt{source_password},
-    'dest-host=s' => \$opt{dest_host},
-    'dest-port=i' => \$opt{dest_port},
-    'dest-db=i' => \$opt{dest_db},
-    'dest-password=s' => \$opt{dest_password},
-    'password=s' => \$opt{password},
-    'prefix=s' => \$opt{prefix},
-    'flags=i{1,}' => \@flags,
-    'export=s' => \$export_file,
-    'import=s' => \$import_file,
-    'dry-run' => \$dry_run,
-    'scan-count=i' => \$opt{scan_count},
-    'pipeline-size=i' => \$opt{pipeline_size},
-    'verbose' => \$opt{verbose},
-    'help' => sub { usage(); exit 0; },
+    'dest-host=s'       => \$opt{dest_host},
+    'dest-port=i'       => \$opt{dest_port},
+    'dest-db=i'         => \$opt{dest_db},
+    'dest-password=s'   => \$opt{dest_password},
+    'password=s'        => \$opt{password},
+    'prefix=s'          => \$opt{prefix},
+    'flags=i{1,}'       => \@flags,
+    'export=s'          => \$export_file,
+    'import=s'          => \$import_file,
+    'dry-run'           => \$dry_run,
+    'scan-count=i'      => \$opt{scan_count},
+    'pipeline-size=i'   => \$opt{pipeline_size},
+    'verbose'           => \$opt{verbose},
+    'help'              => sub { usage(); exit 0; },
 ) or die "Error in command line arguments\n";
 
 # Validate
-if (!$export_file && !$import_file) {
+if ( !$export_file && !$import_file ) {
     die "Error: Either --export or --import is required\n";
 }
 
-if ($export_file && !@flags) {
+if ( $export_file && !@flags ) {
     die "Error: --flags required for export\n";
 }
 
 # Statistics
 my %stats = (
-    scanned => 0,
-    hash_keys => 0,
-    shingle_keys => 0,
-    matched => 0,
+    scanned             => 0,
+    hash_keys           => 0,
+    shingle_keys        => 0,
+    matched             => 0,
     skipped_other_flags => 0,
-    exported => 0,
-    shingles_saved => 0,
-    orphan_shingles => 0,
-    errors => 0,
+    exported            => 0,
+    shingles_saved      => 0,
+    orphan_shingles     => 0,
+    errors              => 0,
 );
 
 # Per-flag statistics
@@ -539,18 +539,25 @@ sub connect_redis {
     my ($type) = @_;
 
     my $host = $type eq 'source' ? $opt{source_host} : $opt{dest_host};
-    my $port = $type eq 'source' ? $opt{source_port} : ($opt{dest_port} || $opt{source_port});
-    my $db = $type eq 'source' ? $opt{source_db} : (defined $opt{dest_db} ? $opt{dest_db} : $opt{source_db});
-    my $password = $type eq 'source' ?
-        ($opt{source_password} || $opt{password}) :
-        ($opt{dest_password} || $opt{password});
+    my $port =
+        $type eq 'source'
+      ? $opt{source_port}
+      : ( $opt{dest_port} || $opt{source_port} );
+    my $db =
+        $type eq 'source'
+      ? $opt{source_db}
+      : ( defined $opt{dest_db} ? $opt{dest_db} : $opt{source_db} );
+    my $password =
+      $type eq 'source'
+      ? ( $opt{source_password} || $opt{password} )
+      : ( $opt{dest_password}   || $opt{password} );
 
     return unless $host;
 
     my %conn_opts = (
-        server => "$host:$port",
+        server    => "$host:$port",
         reconnect => 2,
-        every => 100,
+        every     => 100,
     );
 
     $conn_opts{password} = $password if $password;
@@ -564,21 +571,21 @@ sub connect_redis {
 sub is_hash_key {
     my ($key) = @_;
 
-    my $prefix = $opt{prefix};
+    my $prefix     = $opt{prefix};
     my $prefix_len = length($prefix);
 
     # Check if key starts with prefix
     return 0 unless length($key) > $prefix_len;
-    return 0 unless substr($key, 0, $prefix_len) eq $prefix;
+    return 0 unless substr( $key, 0, $prefix_len ) eq $prefix;
 
     # Get first byte after prefix
-    my $first_byte_after_prefix = substr($key, $prefix_len, 1);
+    my $first_byte_after_prefix = substr( $key, $prefix_len, 1 );
 
-    # Hash keys: fuzzy<binary_digest>
-    # Shingles:  fuzzy_<num>_<hash>
-    # Counters:  fuzzy_count or fuzzy_<source>
-    #
-    # Simple rule: if first character after prefix is underscore, it's NOT a hash key
+# Hash keys: fuzzy<binary_digest>
+# Shingles:  fuzzy_<num>_<hash>
+# Counters:  fuzzy_count or fuzzy_<source>
+#
+# Simple rule: if first character after prefix is underscore, it's NOT a hash key
     return 0 if $first_byte_after_prefix eq '_';
 
     # Additional sanity check: digest should be 32-64 bytes
@@ -595,12 +602,14 @@ sub is_shingle_key {
 
 sub extract_digest_from_hash_key {
     my ($key) = @_;
-    my $prefix_len = length($opt{prefix});
-    return substr($key, $prefix_len);
+    my $prefix_len = length( $opt{prefix} );
+    return substr( $key, $prefix_len );
 }
 
 sub process_hash_batch {
-    my ($redis, $batch, $flag_filter, $flag_distribution, $needed_digests, $records) = @_;
+    my ( $redis, $batch, $flag_filter, $flag_distribution, $needed_digests,
+        $records )
+      = @_;
 
     return unless @$batch;
 
@@ -610,15 +619,17 @@ sub process_hash_batch {
     eval {
         # Use pipeline for batch operations
         foreach my $key (@$batch) {
+
             # Queue commands - Redis.pm will send them all at once
-            $redis->type($key, sub { push @results, {key => $key, type => $_[0]} });
+            $redis->type( $key,
+                sub { push @results, { key => $key, type => $_[0] } } );
         }
         $redis->wait_all_responses;
 
         # Now queue flag checks and data retrieval for hash keys
         my @hash_keys_to_fetch;
         foreach my $result (@results) {
-            if ($result->{type} eq 'hash') {
+            if ( $result->{type} eq 'hash' ) {
                 push @hash_keys_to_fetch, $result->{key};
             }
         }
@@ -626,7 +637,7 @@ sub process_hash_batch {
         # Pipeline: HGET F for all hash keys
         my %key_to_flag;
         foreach my $key (@hash_keys_to_fetch) {
-            $redis->hget($key, 'F', sub { $key_to_flag{$key} = $_[0] });
+            $redis->hget( $key, 'F', sub { $key_to_flag{$key} = $_[0] } );
         }
         $redis->wait_all_responses;
 
@@ -638,10 +649,11 @@ sub process_hash_batch {
 
             $flag_distribution->{$flag}++;
 
-            if (exists $flag_filter->{$flag}) {
-                push @keys_to_export, {key => $key, flag => $flag};
+            if ( exists $flag_filter->{$flag} ) {
+                push @keys_to_export, { key => $key, flag => $flag };
                 $stats{matched}++;
-            } else {
+            }
+            else {
                 $stats{skipped_other_flags}++;
             }
         }
@@ -650,42 +662,48 @@ sub process_hash_batch {
         my %key_data;
         foreach my $item (@keys_to_export) {
             my $key = $item->{key};
-            $redis->hgetall($key, sub {
-                # Redis.pm HGETALL callback receives arrayref, not flat list
-                my $result = $_[0];
-                if (ref($result) eq 'ARRAY') {
-                    # Convert arrayref to hash
-                    my %hash = @$result;
-                    $key_data{$key}{hash} = \%hash;
-                } else {
-                    # Fallback: assume flat list
-                    my %hash = @_;
-                    $key_data{$key}{hash} = \%hash;
+            $redis->hgetall(
+                $key,
+                sub {
+                    # Redis.pm HGETALL callback receives arrayref, not flat list
+                    my $result = $_[0];
+                    if ( ref($result) eq 'ARRAY' ) {
+
+                        # Convert arrayref to hash
+                        my %hash = @$result;
+                        $key_data{$key}{hash} = \%hash;
+                    }
+                    else {
+                        # Fallback: assume flat list
+                        my %hash = @_;
+                        $key_data{$key}{hash} = \%hash;
+                    }
                 }
-            });
-            $redis->ttl($key, sub { $key_data{$key}{ttl} = $_[0] });
+            );
+            $redis->ttl( $key, sub { $key_data{$key}{ttl} = $_[0] } );
         }
         $redis->wait_all_responses;
 
         # Store results
         foreach my $item (@keys_to_export) {
-            my $key = $item->{key};
+            my $key  = $item->{key};
             my $data = $key_data{$key};
 
             my $ttl = $data->{ttl};
-            next if $ttl == -2;  # Key doesn't exist
-            $ttl = 0 if $ttl == -1;  # No expiration
+            next     if $ttl == -2;    # Key doesn't exist
+            $ttl = 0 if $ttl == -1;    # No expiration
 
             my $digest = extract_digest_from_hash_key($key);
             $needed_digests->{$digest} = 1;
 
-            push @$records, {
-                key => $key,
-                digest => $digest,
-                hash => $data->{hash},
-                ttl => $ttl,
+            push @$records,
+              {
+                key      => $key,
+                digest   => $digest,
+                hash     => $data->{hash},
+                ttl      => $ttl,
                 shingles => [],
-            };
+              };
         }
     };
 
@@ -696,7 +714,7 @@ sub process_hash_batch {
 }
 
 sub process_shingle_batch {
-    my ($redis, $batch, $digest_to_shingles) = @_;
+    my ( $redis, $batch, $digest_to_shingles ) = @_;
 
     return unless @$batch;
 
@@ -705,8 +723,8 @@ sub process_shingle_batch {
         my %key_data;
 
         foreach my $key (@$batch) {
-            $redis->get($key, sub { $key_data{$key}{digest} = $_[0] });
-            $redis->ttl($key, sub { $key_data{$key}{ttl} = $_[0] });
+            $redis->get( $key, sub { $key_data{$key}{digest} = $_[0] } );
+            $redis->ttl( $key, sub { $key_data{$key}{ttl} = $_[0] } );
         }
         $redis->wait_all_responses;
 
@@ -716,14 +734,15 @@ sub process_shingle_batch {
             next unless defined $digest;
 
             my $ttl = $key_data{$key}{ttl};
-            next if $ttl == -2;  # Key doesn't exist
-            $ttl = 0 if $ttl == -1;  # No expiration
+            next     if $ttl == -2;    # Key doesn't exist
+            $ttl = 0 if $ttl == -1;    # No expiration
 
-            push @{$digest_to_shingles->{$digest}}, {
-                key => $key,
+            push @{ $digest_to_shingles->{$digest} },
+              {
+                key    => $key,
                 digest => $digest,
-                ttl => $ttl,
-            };
+                ttl    => $ttl,
+              };
         }
     };
 
@@ -735,14 +754,16 @@ sub process_shingle_batch {
 
 sub do_export {
     print "Connecting to source Redis...\n";
-    my $redis = connect_redis('source') or die "Cannot connect to source Redis\n";
+    my $redis = connect_redis('source')
+      or die "Cannot connect to source Redis\n";
 
-    print "Scanning Redis with prefix '$opt{prefix}' for flags: " . join(', ', @flags) . "\n";
+    print "Scanning Redis with prefix '$opt{prefix}' for flags: "
+      . join( ', ', @flags ) . "\n";
     print "Using optimized single-pass algorithm...\n";
 
     my @records;
-    my $cursor = 0;
-    my $pattern = "$opt{prefix}*";
+    my $cursor      = 0;
+    my $pattern     = "$opt{prefix}*";
     my %flag_filter = map { $_ => 1 } @flags;
 
     # Hash to collect shingles: digest => [shingle_records]
@@ -751,7 +772,7 @@ sub do_export {
     # Hash to track which digests we need (by digest key)
     my %needed_digests;
 
-    # First pass: collect all hash keys with matching flags and note shingle keys
+   # First pass: collect all hash keys with matching flags and note shingle keys
     print "Pass 1: Scanning for hash keys and shingles...\n";
 
     # Batch processing with pipelining
@@ -759,7 +780,8 @@ sub do_export {
     my @shingle_key_batch;
 
     do {
-        my ($next_cursor, $keys_ref) = $redis->scan($cursor, MATCH => $pattern, COUNT => $opt{scan_count});
+        my ( $next_cursor, $keys_ref ) =
+          $redis->scan( $cursor, MATCH => $pattern, COUNT => $opt{scan_count} );
         $cursor = $next_cursor;
 
         # Redis.pm returns arrayref for keys
@@ -769,53 +791,64 @@ sub do_export {
             $stats{scanned}++;
 
             # Debug first 10 keys
-            if ($opt{verbose} && $stats{scanned} <= 10) {
+            if ( $opt{verbose} && $stats{scanned} <= 10 ) {
                 my $key_display = $key;
                 $key_display =~ s/[^[:print:]]/./g;
-                my $prefix_len = length($opt{prefix});
-                my $first_char = length($key) > $prefix_len ? substr($key, $prefix_len, 1) : '';
-                my $is_hash = is_hash_key($key);
+                my $prefix_len = length( $opt{prefix} );
+                my $first_char =
+                  length($key) > $prefix_len
+                  ? substr( $key, $prefix_len, 1 )
+                  : '';
+                my $is_hash    = is_hash_key($key);
                 my $is_shingle = is_shingle_key($key);
                 print STDERR "DEBUG key #$stats{scanned}: $key_display\n";
-                print STDERR "  First char after prefix: [" . (ord($first_char) < 32 || ord($first_char) > 126 ? sprintf("0x%02x", ord($first_char)) : $first_char) . "]\n";
+                print STDERR "  First char after prefix: ["
+                  . ( ord($first_char) < 32 || ord($first_char) > 126
+                    ? sprintf( "0x%02x", ord($first_char) )
+                    : $first_char ) . "]\n";
                 print STDERR "  is_hash: $is_hash, is_shingle: $is_shingle\n";
             }
 
-            if ($stats{scanned} % 10000 == 0) {
-                print STDERR "Scanned $stats{scanned} keys (hashes: $stats{hash_keys}, shingles: $stats{shingle_keys}, matched: $stats{matched})...\r";
+            if ( $stats{scanned} % 10000 == 0 ) {
+                print STDERR
+"Scanned $stats{scanned} keys (hashes: $stats{hash_keys}, shingles: $stats{shingle_keys}, matched: $stats{matched})...\r";
             }
 
             # Classify keys
-            if (is_hash_key($key)) {
+            if ( is_hash_key($key) ) {
                 push @hash_key_batch, $key;
                 $stats{hash_keys}++;
             }
-            elsif (is_shingle_key($key)) {
+            elsif ( is_shingle_key($key) ) {
                 push @shingle_key_batch, $key;
                 $stats{shingle_keys}++;
             }
 
             # Process batches when they reach pipeline size
-            if (@hash_key_batch >= $opt{pipeline_size}) {
-                process_hash_batch($redis, \@hash_key_batch, \%flag_filter,
-                                   \%flag_distribution, \%needed_digests, \@records);
+            if ( @hash_key_batch >= $opt{pipeline_size} ) {
+                process_hash_batch( $redis, \@hash_key_batch, \%flag_filter,
+                    \%flag_distribution, \%needed_digests, \@records );
                 @hash_key_batch = ();
             }
 
-            if (@shingle_key_batch >= $opt{pipeline_size}) {
-                process_shingle_batch($redis, \@shingle_key_batch, \%digest_to_shingles);
+            if ( @shingle_key_batch >= $opt{pipeline_size} ) {
+                process_shingle_batch( $redis, \@shingle_key_batch,
+                    \%digest_to_shingles );
                 @shingle_key_batch = ();
             }
         }
-    } while ($cursor != 0);
+    } while ( $cursor != 0 );
 
     # Process remaining batches
-    process_hash_batch($redis, \@hash_key_batch, \%flag_filter,
-                       \%flag_distribution, \%needed_digests, \@records) if @hash_key_batch;
-    process_shingle_batch($redis, \@shingle_key_batch, \%digest_to_shingles) if @shingle_key_batch;
+    process_hash_batch( $redis, \@hash_key_batch, \%flag_filter,
+        \%flag_distribution, \%needed_digests, \@records )
+      if @hash_key_batch;
+    process_shingle_batch( $redis, \@shingle_key_batch, \%digest_to_shingles )
+      if @shingle_key_batch;
 
     print STDERR "\n";
-    print "Pass 1 complete: found $stats{matched} matching hashes, $stats{shingle_keys} shingle keys\n";
+    print
+"Pass 1 complete: found $stats{matched} matching hashes, $stats{shingle_keys} shingle keys\n";
 
     # Second pass: match shingles to hash records
     print "Pass 2: Matching shingles to hashes...\n";
@@ -823,29 +856,30 @@ sub do_export {
     foreach my $record (@records) {
         my $digest = $record->{digest};
 
-        if (exists $digest_to_shingles{$digest}) {
+        if ( exists $digest_to_shingles{$digest} ) {
             $record->{shingles} = $digest_to_shingles{$digest};
-            $stats{shingles_saved} += scalar @{$digest_to_shingles{$digest}};
+            $stats{shingles_saved} += scalar @{ $digest_to_shingles{$digest} };
         }
     }
 
     # Count orphan shingles (shingles pointing to digests we don't need)
-    foreach my $digest (keys %digest_to_shingles) {
-        unless (exists $needed_digests{$digest}) {
-            $stats{orphan_shingles} += scalar @{$digest_to_shingles{$digest}};
+    foreach my $digest ( keys %digest_to_shingles ) {
+        unless ( exists $needed_digests{$digest} ) {
+            $stats{orphan_shingles} += scalar @{ $digest_to_shingles{$digest} };
         }
     }
 
-    print "Pass 2 complete: matched $stats{shingles_saved} shingles, skipped $stats{orphan_shingles} orphans\n";
+    print
+"Pass 2 complete: matched $stats{shingles_saved} shingles, skipped $stats{orphan_shingles} orphans\n";
 
     # Export to binary file using Storable
     my $export_data = {
-        prefix => $opt{prefix},
-        timestamp => time(),
-        flags => \@flags,
-        stats => \%stats,
+        prefix            => $opt{prefix},
+        timestamp         => time(),
+        flags             => \@flags,
+        stats             => \%stats,
         flag_distribution => \%flag_distribution,
-        records => \@records,
+        records           => \@records,
     };
 
     print "Serializing to binary format...\n";
@@ -856,15 +890,17 @@ sub do_export {
     print $fh $frozen;
     close $fh;
 
-    my $size_mb = (-s $export_file) / (1024 * 1024);
+    my $size_mb = ( -s $export_file ) / ( 1024 * 1024 );
 
     $stats{exported} = scalar @records;
-    printf "Exported %d records to %s (%.2f MB)\n", $stats{exported}, $export_file, $size_mb;
+    printf "Exported %d records to %s (%.2f MB)\n", $stats{exported},
+      $export_file, $size_mb;
 }
 
 sub do_import {
     unless ($dry_run) {
-        die "Destination host required for import (use --dry-run for testing)\n" unless $opt{dest_host};
+        die "Destination host required for import (use --dry-run for testing)\n"
+          unless $opt{dest_host};
         print "Connecting to destination Redis...\n";
     }
 
@@ -880,101 +916,116 @@ sub do_import {
     print "Deserializing...\n";
     my $export_data = thaw($frozen);
 
-    my $prefix = $export_data->{prefix};
-    my $records = $export_data->{records};
+    my $prefix       = $export_data->{prefix};
+    my $records      = $export_data->{records};
     my $export_stats = $export_data->{stats};
-    my $flag_dist = $export_data->{flag_distribution} || {};
+    my $flag_dist    = $export_data->{flag_distribution} || {};
 
     print "Import info:\n";
     print "  Prefix: $prefix\n";
-    print "  Exported: " . strftime("%Y-%m-%d %H:%M:%S", localtime($export_data->{timestamp})) . "\n";
-    print "  Flags: " . join(', ', @{$export_data->{flags}}) . "\n";
+    print "  Exported: "
+      . strftime( "%Y-%m-%d %H:%M:%S", localtime( $export_data->{timestamp} ) )
+      . "\n";
+    print "  Flags: " . join( ', ', @{ $export_data->{flags} } ) . "\n";
     print "  Records: " . scalar(@$records) . "\n";
-    print "  Shingles: " . ($export_stats->{shingles_saved} || 0) . "\n";
+    print "  Shingles: " . ( $export_stats->{shingles_saved} || 0 ) . "\n";
 
     if (%$flag_dist) {
         print "\n  Flag distribution (from source Redis scan):\n";
-        my %exported_flags = map { $_ => 1 } @{$export_data->{flags}};
-        foreach my $flag (sort { $a <=> $b } keys %$flag_dist) {
-            my $status = exists $exported_flags{$flag} ? '[EXPORTED]' : '[skipped during export]';
-            printf "    Flag %-3d: %8d hashes %s\n", $flag, $flag_dist->{$flag}, $status;
+        my %exported_flags = map { $_ => 1 } @{ $export_data->{flags} };
+        foreach my $flag ( sort { $a <=> $b } keys %$flag_dist ) {
+            my $status =
+              exists $exported_flags{$flag}
+              ? '[EXPORTED]'
+              : '[skipped during export]';
+            printf "    Flag %-3d: %8d hashes %s\n", $flag,
+              $flag_dist->{$flag}, $status;
         }
     }
 
     print "\n";
 
-    print "Importing " . scalar(@$records) . " records with prefix '$prefix'...\n";
+    print "Importing "
+      . scalar(@$records)
+      . " records with prefix '$prefix'...\n";
 
-    my $imported = 0;
+    my $imported          = 0;
     my $shingles_imported = 0;
 
     # Process in batches for better performance
     my $batch_size = $opt{pipeline_size};
-    my $total = scalar(@$records);
+    my $total      = scalar(@$records);
 
-    for (my $i = 0; $i < $total; $i += $batch_size) {
+    for ( my $i = 0 ; $i < $total ; $i += $batch_size ) {
         my $end = $i + $batch_size - 1;
         $end = $total - 1 if $end >= $total;
 
-        my @batch = @$records[$i..$end];
+        my @batch = @$records[ $i .. $end ];
 
         eval {
             if ($dry_run) {
                 foreach my $record (@batch) {
-                    if ($opt{verbose} || $imported < 10) {
-                        my $flag = $record->{hash}{F};
-                        my $ttl = $record->{ttl};
-                        my $shingle_count = scalar @{$record->{shingles}};
-                        print "Would import: flag=${flag} ttl=${ttl} shingles=${shingle_count}\n";
+                    if ( $opt{verbose} || $imported < 10 ) {
+                        my $flag          = $record->{hash}{F};
+                        my $ttl           = $record->{ttl};
+                        my $shingle_count = scalar @{ $record->{shingles} };
+                        print
+"Would import: flag=${flag} ttl=${ttl} shingles=${shingle_count}\n";
                     }
                     $imported++;
                 }
-            } else {
+            }
+            else {
                 # Pipeline all commands in batch
                 my $batch_commands = 0;
                 foreach my $record (@batch) {
-                    my $key = $record->{key};
-                    my $ttl = $record->{ttl};
-                    my %hash = %{$record->{hash}};
+                    my $key  = $record->{key};
+                    my $ttl  = $record->{ttl};
+                    my %hash = %{ $record->{hash} };
 
                     # Debug first few imports
-                    if ($opt{verbose} && $imported < 5) {
+                    if ( $opt{verbose} && $imported < 5 ) {
                         my $key_display = $key;
                         $key_display =~ s/[^[:print:]]/./g;
                         print STDERR "DEBUG: Importing key: $key_display\n";
-                        print STDERR "  Hash fields: " . join(", ", map { "$_=$hash{$_}" } keys %hash) . "\n";
+                        print STDERR "  Hash fields: "
+                          . join( ", ", map { "$_=$hash{$_}" } keys %hash )
+                          . "\n";
                         print STDERR "  TTL: $ttl\n";
                     }
 
                     # HMSET hash - convert hash to array of key-value pairs
                     # This is critical for binary data handling
                     my @hash_pairs;
-                    foreach my $field (keys %hash) {
+                    foreach my $field ( keys %hash ) {
                         push @hash_pairs, $field, $hash{$field};
                     }
 
-                    my $result = $redis->hmset($key, @hash_pairs);
-                    if ($opt{verbose} && $imported < 5) {
-                        print STDERR "  HMSET result: " . (defined $result ? $result : 'undef') . "\n";
+                    my $result = $redis->hmset( $key, @hash_pairs );
+                    if ( $opt{verbose} && $imported < 5 ) {
+                        print STDERR "  HMSET result: "
+                          . ( defined $result ? $result : 'undef' ) . "\n";
                     }
                     $batch_commands++;
 
                     # EXPIRE if needed
-                    if ($ttl > 0) {
-                        $redis->expire($key, $ttl);
+                    if ( $ttl > 0 ) {
+                        $redis->expire( $key, $ttl );
                         $batch_commands++;
                     }
 
                     # Import shingles
-                    foreach my $shingle (@{$record->{shingles}}) {
-                        my $shingle_key = $shingle->{key};
+                    foreach my $shingle ( @{ $record->{shingles} } ) {
+                        my $shingle_key    = $shingle->{key};
                         my $shingle_digest = $shingle->{digest};
-                        my $shingle_ttl = $shingle->{ttl};
+                        my $shingle_ttl    = $shingle->{ttl};
 
-                        if ($shingle_ttl > 0) {
-                            $redis->setex($shingle_key, $shingle_ttl, $shingle_digest);
-                        } else {
-                            $redis->set($shingle_key, $shingle_digest);
+                        if ( $shingle_ttl > 0 ) {
+                            $redis->setex( $shingle_key, $shingle_ttl,
+                                $shingle_digest );
+                        }
+                        else {
+                            $redis->set( $shingle_key, $shingle_digest );
                         }
                         $shingles_imported++;
                         $batch_commands++;
@@ -983,13 +1034,15 @@ sub do_import {
                     $imported++;
                 }
 
-                if ($opt{verbose} && $batch_commands > 0) {
-                    print STDERR "Batch: executed $batch_commands Redis commands\n";
+                if ( $opt{verbose} && $batch_commands > 0 ) {
+                    print STDERR
+                      "Batch: executed $batch_commands Redis commands\n";
                 }
             }
 
-            if ($imported % 1000 == 0 || $imported == $total) {
-                print STDERR "Imported $imported/$total (shingles: $shingles_imported)...\r";
+            if ( $imported % 1000 == 0 || $imported == $total ) {
+                print STDERR
+"Imported $imported/$total (shingles: $shingles_imported)...\r";
             }
         };
 
@@ -1001,7 +1054,8 @@ sub do_import {
 
     print STDERR "\n";
     printf "Import complete: %d records and %d shingles %s\n",
-        $imported, $shingles_imported, ($dry_run ? "would be imported" : "imported");
+      $imported, $shingles_imported,
+      ( $dry_run ? "would be imported" : "imported" );
 
     # Verification step (if not dry-run)
     unless ($dry_run) {
@@ -1011,25 +1065,27 @@ sub do_import {
 
         # Count fuzzy keys
         my $fuzzy_count = 0;
-        my $cursor = 0;
+        my $cursor      = 0;
         do {
-            my ($next_cursor, $keys_ref) = $redis->scan($cursor, MATCH => "$prefix*", COUNT => 1000);
+            my ( $next_cursor, $keys_ref ) =
+              $redis->scan( $cursor, MATCH => "$prefix*", COUNT => 1000 );
             $cursor = $next_cursor;
             my @keys = ref($keys_ref) eq 'ARRAY' ? @$keys_ref : ($keys_ref);
             $fuzzy_count += scalar @keys;
-        } while ($cursor != 0);
+        } while ( $cursor != 0 );
         print "  Fuzzy keys ($prefix*): $fuzzy_count keys\n";
 
         # Sample verify first few imported keys exist
-        if (@$records > 0 && $opt{verbose}) {
+        if ( @$records > 0 && $opt{verbose} ) {
             print "\n  Checking first 3 imported keys:\n";
             my $check_count = @$records < 3 ? @$records : 3;
-            for (my $i = 0; $i < $check_count; $i++) {
-                my $key = $records->[$i]{key};
-                my $exists = $redis->exists($key);
+            for ( my $i = 0 ; $i < $check_count ; $i++ ) {
+                my $key         = $records->[$i]{key};
+                my $exists      = $redis->exists($key);
                 my $key_display = $key;
                 $key_display =~ s/[^[:print:]]/./g;
-                print "    $key_display: " . ($exists ? "EXISTS" : "NOT FOUND") . "\n";
+                print "    $key_display: "
+                  . ( $exists ? "EXISTS" : "NOT FOUND" ) . "\n";
             }
         }
     }
@@ -1038,7 +1094,8 @@ sub do_import {
 sub print_stats {
     print "\nFinal statistics:\n";
 
-    my @stat_order = qw(scanned hash_keys shingle_keys matched skipped_other_flags exported shingles_saved orphan_shingles errors);
+    my @stat_order =
+      qw(scanned hash_keys shingle_keys matched skipped_other_flags exported shingles_saved orphan_shingles errors);
 
     foreach my $key (@stat_order) {
         next unless exists $stats{$key};
@@ -1048,19 +1105,22 @@ sub print_stats {
     # Print flag distribution
     if (%flag_distribution) {
         print "\nFlag distribution (all hashes found):\n";
-        foreach my $flag (sort { $a <=> $b } keys %flag_distribution) {
+        foreach my $flag ( sort { $a <=> $b } keys %flag_distribution ) {
             my $count = $flag_distribution{$flag};
-            my $marker = exists {map {$_ => 1} @flags}->{$flag} ? ' [EXPORTED]' : ' [skipped]';
+            my $marker =
+              exists { map { $_ => 1 } @flags }->{$flag}
+              ? ' [EXPORTED]'
+              : ' [skipped]';
             printf "  Flag %-3d: %8d hashes%s\n", $flag, $count, $marker;
         }
     }
 
     # Print shingle statistics per exported flag
-    if ($stats{shingles_saved} > 0) {
+    if ( $stats{shingles_saved} > 0 ) {
         print "\nShingle statistics:\n";
         printf "  Total shingles saved:    %d\n", $stats{shingles_saved};
         printf "  Orphan shingles skipped: %d\n", $stats{orphan_shingles};
-        if ($stats{matched} > 0) {
+        if ( $stats{matched} > 0 ) {
             my $avg_shingles = $stats{shingles_saved} / $stats{matched};
             printf "  Average per hash:        %.1f\n", $avg_shingles;
         }
