@@ -5,8 +5,12 @@ count = 1;
 timeout = 120s;
 upstream "local" {
 	default = yes;
-	self_scan = yes;
+	self_scan = no;
+  hosts = "localhost:5001";
+  encryption_key = "{= env.WORKER_PUBKEY =}";
 }
+
+milter = no;
 
 #Enable encryption for proxy connections
 keypair {
