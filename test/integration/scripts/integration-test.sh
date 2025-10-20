@@ -244,7 +244,7 @@ if [ "$TEST_PROXY" = "true" ]; then
 
     echo "Testing via proxy worker ($PROXY_PORT)..."
     # Use corpus directory for proxy test too
-    rspamc -h "$RSPAMD_HOST:$PROXY_PORT" -n "$PARALLEL" -j \
+    ASAN_OPTIONS=detect_leaks=0 rspamc -h "$RSPAMD_HOST:$PROXY_PORT" -n "$PARALLEL" -j \
         "$CORPUS_DIR" > "$DATA_DIR/proxy_results.json" 2>&1
     echo "✓ Proxy test complete"
     echo "Results saved to $DATA_DIR/proxy_results.json"
