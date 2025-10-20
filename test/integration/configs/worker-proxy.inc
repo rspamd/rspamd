@@ -8,9 +8,6 @@ upstream "local" {
 	self_scan = yes;
 }
 
-#Enable milter protocol
-milter = yes;
-
 #Enable encryption for proxy connections
 keypair {
 	pubkey = "{= env.PROXY_PUBKEY =}";

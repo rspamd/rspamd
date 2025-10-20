@@ -14,7 +14,7 @@ PROXY_PORT=${PROXY_PORT:-50004}
 PASSWORD=${PASSWORD:-q1}
 PARALLEL=${PARALLEL:-10}
 TRAIN_RATIO=${TRAIN_RATIO:-0.1}
-TEST_PROXY=${TEST_PROXY:-false}
+TEST_PROXY=${TEST_PROXY:-true}
 
 # Directories
 # When running inside container via stdin, BASH_SOURCE won't work properly
