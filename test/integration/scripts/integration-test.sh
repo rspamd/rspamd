@@ -167,11 +167,21 @@ echo ""
 
 echo "Scanning $TOTAL_EMAILS emails (parallelism: $PARALLEL)..."
 # Scan the same files we used for training (from shuffled list)
-# Use xargs with -a to read from file and avoid argument list too long
-xargs -a "$DATA_DIR/shuffled_files.txt" rspamc -h "$RSPAMD_HOST:$CONTROLLER_PORT" \
-    -P "$PASSWORD" -n "$PARALLEL" -j > "$DATA_DIR/results.json" 2>&1
-
-echo "✓ Scanning complete"
+# Use xargs with -a to read from file and avoid argument list too
+if xargs -a "$DATA_DIR/shuffled_files.txt" rspamc -h "$RSPAMD_HOST:$CONTROLLER_PORT" \
+    -P "$PASSWORD" -n "$PARALLEL" -j > "$DATA_DIR/results.json" 2> "$DATA_DIR/scan_errors.log"; then
+    echo "✓ Scanning complete"
+else
+    EXIT_CODE=$?
+    echo "✗ Scanning FAILED with exit code $EXIT_CODE"
+    echo ""
+    echo "=== Scan Error Output ==="
+    cat "$DATA_DIR/scan_errors.log"
+    echo ""
+    echo "=== Partial Results (if any) ==="
+    head -20 "$DATA_DIR/results.json" 2>/dev/null || echo "(no output)"
+    exit 1
+fi
 echo ""
 
 # Analyze results
@@ -217,6 +227,13 @@ echo "Bayes SPAM: $BAYES_SPAM_COUNT ($BAYES_SPAM_RATE%)"
 echo "Bayes HAM: $BAYES_HAM_COUNT ($BAYES_HAM_RATE%)"
 echo ""
 
+# Show sample result for debugging
+if command -v jq &> /dev/null && [ -f "$DATA_DIR/results.json" ]; then
+    echo "Sample scan result (first entry):"
+    jq '.[0] | {symbols: .symbols | keys, score: .score}' "$DATA_DIR/results.json" 2>/dev/null || echo "  (cannot parse)"
+    echo ""
+fi
+
 # Validation (fuzzy should detect ~10% since we trained on 10%)
 echo "Validation:"
 FUZZY_RATE_INT=$(echo "$FUZZY_RATE" | cut -d. -f1)
@@ -244,10 +261,21 @@ if [ "$TEST_PROXY" = "true" ]; then
 
     echo "Testing via proxy worker ($PROXY_PORT)..."
     # Use corpus directory for proxy test too
-    ASAN_OPTIONS=detect_leaks=0 rspamc -h "$RSPAMD_HOST:$PROXY_PORT" -n "$PARALLEL" -j \
-        "$CORPUS_DIR" > "$DATA_DIR/proxy_results.json" 2>&1
-    echo "✓ Proxy test complete"
-    echo "Results saved to $DATA_DIR/proxy_results.json"
+    if ASAN_OPTIONS=detect_leaks=0 rspamc -h "$RSPAMD_HOST:$PROXY_PORT" -n "$PARALLEL" -j \
+        "$CORPUS_DIR" > "$DATA_DIR/proxy_results.json" 2> "$DATA_DIR/proxy_errors.log"; then
+        echo "✓ Proxy test complete"
+        echo "Results saved to $DATA_DIR/proxy_results.json"
+    else
+        EXIT_CODE=$?
+        echo "✗ Proxy test FAILED with exit code $EXIT_CODE"
+        echo ""
+        echo "=== Proxy Error Output ==="
+        cat "$DATA_DIR/proxy_errors.log"
+        echo ""
+        echo "=== Proxy Results (if any) ==="
+        cat "$DATA_DIR/proxy_results.json" 2>/dev/null || echo "(no output)"
+        exit 1
+    fi
 fi
 
 echo ""
