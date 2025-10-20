@@ -21,8 +21,8 @@ fuzzy_redis_migrate.pl - Rspamd Fuzzy Backend Redis Migration Tool
 
 =head1 DESCRIPTION
 
-This tool migrates Rspamd fuzzy backend data between Redis instances with
-flag filtering, TTL preservation, and automatic shingle handling.
+This tool migrates Rspamd fuzzy backend data between Redis instances with flag filtering, TTL preservation, and
+automatic shingle handling.
 
 Key features:
 
@@ -104,15 +104,13 @@ Key prefix in Redis (default: fuzzy)
 
 =item B<--scan-count> N
 
-Redis SCAN COUNT parameter (default: 5000)
-Higher values = faster but more Redis load.
-Use 100-500 for high-load production, 1000-10000 for idle/maintenance.
+Redis SCAN COUNT parameter (default: 5000) Higher values = faster but more Redis load. Use 100-500 for high-load
+production, 1000-10000 for idle/maintenance.
 
 =item B<--pipeline-size> N
 
-Number of Redis commands to pipeline (default: 500)
-Higher values = faster but more memory.
-Use 50-100 for limited RAM, 200-1000 for servers with lots of RAM.
+Number of Redis commands to pipeline (default: 500) Higher values = faster but more memory. Use 50-100 for limited RAM,
+200-1000 for servers with lots of RAM.
 
 =back
 
@@ -122,8 +120,7 @@ Use 50-100 for limited RAM, 200-1000 for servers with lots of RAM.
 
 =item B<--flags> FLAG [FLAG...]
 
-Fuzzy flags to filter and export (required for export)
-Examples: --flags 1  or  --flags 1 8 11
+Fuzzy flags to filter and export (required for export) Examples: --flags 1  or  --flags 1 8 11
 
 =item B<--export> FILE
 
