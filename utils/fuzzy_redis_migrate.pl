@@ -545,7 +545,7 @@ sub connect_redis {
         ($opt{source_password} || $opt{password}) :
         ($opt{dest_password} || $opt{password});
 
-    return undef unless $host;
+    return unless $host;
 
     my %conn_opts = (
         server => "$host:$port",
