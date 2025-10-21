@@ -1438,8 +1438,8 @@ int main(int argc, char **argv, char **env)
 
 	rspamd_main = (struct rspamd_main *) g_malloc0(sizeof(struct rspamd_main));
 
-	rspamd_main->server_pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
-												  "main", 0);
+	rspamd_main->server_pool = rspamd_mempool_new_long_lived(rspamd_mempool_suggest_size(),
+															 "main");
 	rspamd_main->stat = rspamd_mempool_alloc0_shared_(rspamd_main->server_pool,
 													  sizeof(struct rspamd_stat),
 													  RSPAMD_ALIGNOF(struct rspamd_stat),

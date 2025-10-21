@@ -73,8 +73,10 @@ rspamd_task_new(struct rspamd_worker *worker,
 	unsigned int flags = RSPAMD_TASK_FLAG_LEARN_AUTO;
 
 	if (pool == NULL) {
-		task_pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
-									   "task", debug_mem ? RSPAMD_MEMPOOL_DEBUG : 0);
+		task_pool = rspamd_mempool_new_(rspamd_mempool_suggest_size_(G_STRLOC),
+										"task",
+										RSPAMD_MEMPOOL_SHORT_LIVED | (debug_mem ? RSPAMD_MEMPOOL_DEBUG : 0),
+										G_STRLOC);
 		flags |= RSPAMD_TASK_FLAG_OWN_POOL;
 	}
 	else {

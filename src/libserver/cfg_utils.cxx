@@ -226,7 +226,7 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 	struct rspamd_config *cfg;
 	rspamd_mempool_t *pool;
 
-	pool = rspamd_mempool_new(8 * 1024 * 1024, "cfg", 0);
+	pool = rspamd_mempool_new_long_lived(8 * 1024 * 1024, "cfg");
 	cfg = rspamd_mempool_alloc0_type(pool, struct rspamd_config);
 	/* Allocate larger pool for cfg */
 	cfg->cfg_pool = pool;

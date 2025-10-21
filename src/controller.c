@@ -3636,8 +3636,7 @@ rspamd_controller_accept_socket(EV_P_ ev_io *w, int revents)
 	}
 
 	session = g_malloc0(sizeof(struct rspamd_controller_session));
-	session->pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
-									   "csession", 0);
+	session->pool = rspamd_mempool_new_short_lived("csession");
 	session->ctx = ctx;
 	session->cfg = ctx->cfg;
 	session->lang_det = ctx->lang_det;

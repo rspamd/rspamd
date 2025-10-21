@@ -1398,7 +1398,7 @@ rspamd_milter_handle_socket(int fd, ev_tstamp timeout,
 	priv->parser.buf = rspamd_fstring_sized_new(RSPAMD_MILTER_MESSAGE_CHUNK + 5);
 	priv->event_loop = ev_base;
 	priv->state = RSPAMD_MILTER_READ_MORE;
-	priv->pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "milter", 0);
+	priv->pool = rspamd_mempool_new_short_lived("milter");
 	priv->discard_on_reject = milter_ctx->discard_on_reject;
 	priv->quarantine_on_reject = milter_ctx->quarantine_on_reject;
 	priv->ev.timeout = timeout;

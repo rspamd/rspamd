@@ -393,8 +393,8 @@ int main(int argc, char **argv, char **env)
 	rspamd_main->cfg = cfg;
 	rspamd_main->pid = getpid();
 	rspamd_main->type = process_quark;
-	rspamd_main->server_pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
-												  "rspamadm", 0);
+	rspamd_main->server_pool = rspamd_mempool_new_long_lived(rspamd_mempool_suggest_size(),
+															 "rspamadm");
 
 	rspamadm_fill_internal_commands(all_commands);
 	help_command.command_data = all_commands;

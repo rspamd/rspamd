@@ -231,7 +231,7 @@ int lua_parsers_parse_html(lua_State *L)
 	}
 
 	if (start != NULL) {
-		pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), NULL, 0);
+		pool = rspamd_mempool_new_short_lived("lua_parser");
 		in = g_byte_array_sized_new(len);
 		g_byte_array_append(in, start, len);
 
@@ -327,8 +327,7 @@ int lua_parsers_parse_mail_address(lua_State *L)
 			}
 		}
 		else {
-			pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
-									  "lua parsers", 0);
+			pool = rspamd_mempool_new_short_lived("lua_parsers");
 			own_pool = TRUE;
 		}
 
