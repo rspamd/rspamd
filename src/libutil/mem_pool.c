@@ -849,6 +849,8 @@ void rspamd_mempool_destructors_enforce(rspamd_mempool_t *pool)
 
 		/* Destroy the heap itself */
 		rspamd_heap_destroy(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap);
+		/* Mark heap as destroyed to prevent double-free in rspamd_mempool_delete */
+		pool->priv->dtors_heap.a = NULL;
 	}
 
 	rspamd_mempool_variables_cleanup(pool);
