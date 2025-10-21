@@ -670,15 +670,6 @@ void rspamd_mempool_add_destructor_full(rspamd_mempool_t *pool,
 
 	POOL_MTX_LOCK();
 
-	/* Allocate destructor structure */
-	dtor = rspamd_mempool_alloc_(pool, sizeof(*dtor),
-								 RSPAMD_ALIGNOF(struct _pool_destructors), line);
-	dtor->func = func;
-	dtor->data = data;
-	dtor->function = function;
-	dtor->loc = line;
-	dtor->pri = priority;
-
 	/* Initialize heap if not yet created */
 	if (pool->priv->dtors_heap.a == NULL) {
 		rspamd_heap_init(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap);
@@ -690,8 +681,21 @@ void rspamd_mempool_add_destructor_full(rspamd_mempool_t *pool,
 		}
 	}
 
-	/* Push to heap - using non-safe version as we're in mempool */
-	rspamd_heap_push_safe(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap, dtor, cleanup);
+	/* Allocate slot directly in heap (avoids double allocation) */
+	dtor = rspamd_heap_push_slot(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap);
+	if (dtor == NULL) {
+		goto cleanup;
+	}
+
+	/* Fill destructor structure */
+	dtor->func = func;
+	dtor->data = data;
+	dtor->function = function;
+	dtor->loc = line;
+	dtor->pri = priority;
+
+	/* Restore heap property after filling the slot */
+	rspamd_heap_swim(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap, dtor);
 
 	POOL_MTX_UNLOCK();
 	return;

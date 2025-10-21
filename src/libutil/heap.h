@@ -154,6 +154,22 @@ extern "C" {
 	} while (0)
 
 /**
+ * Allocate slot in heap and return pointer to it (zero-initialized)
+ * User fills the slot, then must call rspamd_heap_swim to restore heap property
+ * Returns NULL on allocation failure
+ */
+#define rspamd_heap_push_slot(name, heap)                                           \
+	({                                                                              \
+		typeof(&kv_A(*(heap), 0)) slot = NULL;                                      \
+		kv_push(typeof(kv_A(*(heap), 0)), *(heap), (typeof(kv_A(*(heap), 0))) {0}); \
+		if (kv_size(*(heap)) > 0) {                                                 \
+			slot = &kv_A(*(heap), kv_size(*(heap)) - 1);                            \
+			slot->idx = kv_size(*(heap)) - 1;                                       \
+		}                                                                           \
+		slot;                                                                       \
+	})
+
+/**
  * Push element to heap (safe version with error handling)
  * Element is copied into the heap array.
  */
