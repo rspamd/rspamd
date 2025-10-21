@@ -23,7 +23,6 @@
 #include "cryptobox.h"
 #include "contrib/uthash/utlist.h"
 #include "mem_pool_internal.h"
-#include "heap.h"
 
 #ifdef WITH_JEMALLOC
 #include <jemalloc/jemalloc.h>
@@ -668,7 +667,6 @@ void rspamd_mempool_add_destructor_full(rspamd_mempool_t *pool,
 										unsigned int priority)
 {
 	struct _pool_destructors *dtor;
-	struct _pool_destructor_heap_elt *heap_wrapper;
 
 	POOL_MTX_LOCK();
 
@@ -679,30 +677,28 @@ void rspamd_mempool_add_destructor_full(rspamd_mempool_t *pool,
 	dtor->data = data;
 	dtor->function = function;
 	dtor->loc = line;
-	dtor->priority = priority;
+	dtor->pri = priority;
 
 	/* Initialize heap if not yet created */
-	if (pool->priv->dtors_heap == NULL) {
-		gsize reserved_size = 8;
+	if (pool->priv->dtors_heap.a == NULL) {
+		rspamd_heap_init(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap);
 
-		/* Use entry point statistics if available */
+		/* Reserve space based on statistics */
 		if (pool->priv->entry && pool->priv->entry->cur_dtors > 0) {
-			reserved_size = pool->priv->entry->cur_dtors;
+			kv_resize_safe(struct _pool_destructors, pool->priv->dtors_heap,
+						   pool->priv->entry->cur_dtors, cleanup);
 		}
-
-		pool->priv->dtors_heap = rspamd_min_heap_create(reserved_size);
 	}
 
-	/* Allocate heap wrapper */
-	heap_wrapper = rspamd_mempool_alloc_(pool, sizeof(*heap_wrapper),
-										 RSPAMD_ALIGNOF(struct _pool_destructor_heap_elt), line);
-	heap_wrapper->dtor = dtor;
-	heap_wrapper->heap_elt.data = heap_wrapper;
-	heap_wrapper->heap_elt.pri = priority;
-
-	rspamd_min_heap_push(pool->priv->dtors_heap, &heap_wrapper->heap_elt);
+	/* Push to heap - using non-safe version as we're in mempool */
+	rspamd_heap_push_safe(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap, dtor, cleanup);
 
 	POOL_MTX_UNLOCK();
+	return;
+
+cleanup:
+	POOL_MTX_UNLOCK();
+	/* Allocation failed, but we can't really handle it in mempool context */
 }
 
 void rspamd_mempool_replace_destructor(rspamd_mempool_t *pool,
@@ -710,21 +706,17 @@ void rspamd_mempool_replace_destructor(rspamd_mempool_t *pool,
 									   void *old_data,
 									   void *new_data)
 {
-	struct _pool_destructor_heap_elt *heap_wrapper;
 	struct _pool_destructors *dtor;
-	struct rspamd_min_heap_elt *elt;
 	gsize i, heap_size;
 
-	if (pool->priv->dtors_heap == NULL) {
+	if (pool->priv->dtors_heap.a == NULL) {
 		return;
 	}
 
 	/* Linear search through heap to find matching destructor */
-	heap_size = rspamd_min_heap_size(pool->priv->dtors_heap);
+	heap_size = rspamd_heap_size(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap);
 	for (i = 0; i < heap_size; i++) {
-		elt = rspamd_min_heap_index(pool->priv->dtors_heap, i);
-		heap_wrapper = (struct _pool_destructor_heap_elt *) elt->data;
-		dtor = heap_wrapper->dtor;
+		dtor = rspamd_heap_index(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap, i);
 
 		if (dtor->func == func && dtor->data == old_data) {
 			dtor->data = new_data;
@@ -828,18 +820,13 @@ rspamd_mempool_variables_cleanup(rspamd_mempool_t *pool)
 
 void rspamd_mempool_destructors_enforce(rspamd_mempool_t *pool)
 {
-	struct _pool_destructor_heap_elt *heap_wrapper;
 	struct _pool_destructors *dtor;
-	struct rspamd_min_heap_elt *elt;
 
 	POOL_MTX_LOCK();
 
-	if (pool->priv->dtors_heap) {
+	if (pool->priv->dtors_heap.a != NULL) {
 		/* Pop destructors in priority order (min heap = lowest priority first) */
-		while ((elt = rspamd_min_heap_pop(pool->priv->dtors_heap)) != NULL) {
-			heap_wrapper = (struct _pool_destructor_heap_elt *) elt->data;
-			dtor = heap_wrapper->dtor;
-
+		while ((dtor = rspamd_heap_pop(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap)) != NULL) {
 			/* Avoid calling destructors for NULL pointers */
 			if (dtor->data != NULL) {
 				dtor->func(dtor->data);
@@ -847,8 +834,7 @@ void rspamd_mempool_destructors_enforce(rspamd_mempool_t *pool)
 		}
 
 		/* Destroy the heap itself */
-		rspamd_min_heap_destroy(pool->priv->dtors_heap);
-		pool->priv->dtors_heap = NULL;
+		rspamd_heap_destroy(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap);
 	}
 
 	rspamd_mempool_variables_cleanup(pool);
@@ -874,7 +860,6 @@ void rspamd_mempool_delete(rspamd_mempool_t *pool)
 {
 	struct _pool_chain *cur, *tmp;
 	struct _pool_destructors *dtor;
-	struct rspamd_min_heap_elt *elt;
 	gpointer ptr;
 	unsigned int i;
 	gsize len;
@@ -888,8 +873,8 @@ void rspamd_mempool_delete(rspamd_mempool_t *pool)
 		/* Show debug info */
 		gsize ndtor = 0;
 
-		if (pool->priv->dtors_heap) {
-			ndtor = rspamd_min_heap_size(pool->priv->dtors_heap);
+		if (pool->priv->dtors_heap.a != NULL) {
+			ndtor = rspamd_heap_size(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap);
 		}
 
 		msg_info_pool("destructing of the memory pool %p; elt size = %z; "
@@ -943,13 +928,12 @@ void rspamd_mempool_delete(rspamd_mempool_t *pool)
 	}
 
 	/* Call all pool destructors in priority order */
-	if (pool->priv->dtors_heap) {
-		struct _pool_destructor_heap_elt *heap_wrapper;
+	if (pool->priv->dtors_heap.a != NULL) {
 		gsize ndtors = 0;
 
 		/* Update destructor statistics before destroying */
 		if (pool->priv->entry && mempool_entries) {
-			ndtors = rspamd_min_heap_size(pool->priv->dtors_heap);
+			ndtors = rspamd_heap_size(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap);
 
 			/* Update suggestion using similar logic to variables */
 			if (pool->priv->entry->cur_dtors < ndtors) {
@@ -975,18 +959,14 @@ void rspamd_mempool_delete(rspamd_mempool_t *pool)
 			}
 		}
 
-		while ((elt = rspamd_min_heap_pop(pool->priv->dtors_heap)) != NULL) {
-			heap_wrapper = (struct _pool_destructor_heap_elt *) elt->data;
-			dtor = heap_wrapper->dtor;
-
+		while ((dtor = rspamd_heap_pop(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap)) != NULL) {
 			/* Avoid calling destructors for NULL pointers */
 			if (dtor->data != NULL) {
 				dtor->func(dtor->data);
 			}
 		}
 
-		rspamd_min_heap_destroy(pool->priv->dtors_heap);
-		pool->priv->dtors_heap = NULL;
+		rspamd_heap_destroy(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap);
 	}
 
 	rspamd_mempool_variables_cleanup(pool);

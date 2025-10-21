@@ -50,23 +50,19 @@ struct rspamd_mempool_entry_point {
 };
 
 /**
- * Destructors heap item structure
+ * Destructors heap item structure (intrusive)
  */
 struct _pool_destructors {
 	rspamd_mempool_destruct_t func; /**< pointer to destructor             */
 	void *data;                     /**< data to free                      */
 	const char *function;           /**< function from which this destructor was added */
 	const char *loc;                /**< line number                       */
-	unsigned int priority;          /**< destructor priority (0 = default) */
+	unsigned int pri;               /**< destructor priority (0 = default) - used by heap */
+	unsigned int idx;               /**< heap index (managed by heap)      */
 };
 
-/**
- * Wrapper for destructor with heap element
- */
-struct _pool_destructor_heap_elt {
-	struct rspamd_min_heap_elt heap_elt;
-	struct _pool_destructors *dtor;
-};
+/* Declare heap type for destructors */
+RSPAMD_HEAP_DECLARE(rspamd_mempool_destruct_heap, struct _pool_destructors);
 
 struct rspamd_mempool_variable {
 	gpointer data;
@@ -79,7 +75,7 @@ KHASH_INIT(rspamd_mempool_vars_hash,
 
 struct rspamd_mempool_specific {
 	struct _pool_chain *pools[RSPAMD_MEMPOOL_MAX];
-	struct rspamd_min_heap *dtors_heap;
+	rspamd_mempool_destruct_heap_t dtors_heap;
 	GPtrArray *trash_stack;
 	khash_t(rspamd_mempool_vars_hash) * variables;
 	struct rspamd_mempool_entry_point *entry;

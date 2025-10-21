@@ -17,85 +17,223 @@
 #define SRC_LIBUTIL_HEAP_H_
 
 #include "config.h"
+#include "contrib/libucl/kvec.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /**
- * Binary minimal heap interface based on glib
+ * Fully intrusive binary min-heap implementation using kvec
+ *
+ * Elements are stored directly in the array (not pointers), providing
+ * excellent cache locality and eliminating pointer indirection overhead.
+ *
+ * Requirements for element type:
+ * - Must have 'unsigned int pri' field for priority
+ * - Must have 'unsigned int idx' field for heap index (managed internally)
+ *
+ * If you need a heap of large objects, embed a pointer in your element type:
+ *
+ * struct my_heap_entry {
+ *     unsigned int pri;
+ *     unsigned int idx;
+ *     struct large_object *data;  // pointer to actual data
+ * };
+ *
+ * Example usage:
+ *
+ * struct my_element {
+ *     unsigned int pri;  // priority (lower = higher priority)
+ *     unsigned int idx;  // heap index (managed by heap)
+ *     int data;          // your data stored directly
+ * };
+ *
+ * RSPAMD_HEAP_DECLARE(my_heap, struct my_element);
+ *
+ * struct my_heap heap;
+ * rspamd_heap_init(my_heap, &heap);
+ *
+ * struct my_element elt = {.pri = 10, .data = 42};
+ * rspamd_heap_push_safe(my_heap, &heap, &elt, error);
+ *
+ * struct my_element *min = rspamd_heap_pop(my_heap, &heap);
+ * rspamd_heap_destroy(my_heap, &heap);
  */
-
-struct rspamd_min_heap_elt {
-	gpointer data;
-	unsigned int pri;
-	unsigned int idx;
-};
-
-struct rspamd_min_heap;
 
 /**
- * Creates min heap with the specified reserved size and compare function
- * @param reserved_size reserved size in elements
- * @return opaque minimal heap
+ * Declare heap type
+ * @param name heap type name
+ * @param elt_type element type (must have 'pri' and 'idx' fields)
  */
-struct rspamd_min_heap *rspamd_min_heap_create(gsize reserved_size);
+#define RSPAMD_HEAP_DECLARE(name, elt_type) \
+	typedef kvec_t(elt_type) name##_t
 
 /**
- * Pushes an element to the heap. `pri` should be initialized to use this function,
- * `idx` is used internally by heap interface
- * @param heap heap structure
- * @param elt element to push
+ * Initialize heap
  */
-void rspamd_min_heap_push(struct rspamd_min_heap *heap,
-						  struct rspamd_min_heap_elt *elt);
+#define rspamd_heap_init(name, heap) kv_init(*(heap))
 
 /**
- * Pops the minimum element from the heap and reorder the queue
- * @param heap heap structure
- * @return minimum element
+ * Destroy heap (does not free elements as they're stored inline)
  */
-struct rspamd_min_heap_elt *rspamd_min_heap_pop(struct rspamd_min_heap *heap);
+#define rspamd_heap_destroy(name, heap) kv_destroy(*(heap))
 
 /**
- * Updates priority for the element. It must be in queue (so `idx` should be sane)
- * @param heap heap structure
- * @param elt element to update
- * @param npri new priority
+ * Get heap size
  */
-void rspamd_min_heap_update_elt(struct rspamd_min_heap *heap,
-								struct rspamd_min_heap_elt *elt, unsigned int npri);
-
+#define rspamd_heap_size(name, heap) kv_size(*(heap))
 
 /**
- * Removes element from the heap
- * @param heap
- * @param elt
+ * Get pointer to element at index (0-based)
  */
-void rspamd_min_heap_remove_elt(struct rspamd_min_heap *heap,
-								struct rspamd_min_heap_elt *elt);
+#define rspamd_heap_index(name, heap, i) (&kv_A(*(heap), i))
 
 /**
- * Destroys heap (elements are not destroyed themselves)
- * @param heap
+ * Swim element up to maintain heap invariant
  */
-void rspamd_min_heap_destroy(struct rspamd_min_heap *heap);
+#define rspamd_heap_swim(name, heap, elt)                    \
+	do {                                                     \
+		unsigned int cur_idx = (elt)->idx;                   \
+		while (cur_idx > 0) {                                \
+			unsigned int parent_idx = (cur_idx - 1) / 2;     \
+			typeof(elt) cur = &kv_A(*(heap), cur_idx);       \
+			typeof(elt) parent = &kv_A(*(heap), parent_idx); \
+			if (parent->pri > cur->pri) {                    \
+				/* Swap elements directly */                 \
+				typeof(*elt) tmp = *parent;                  \
+				*parent = *cur;                              \
+				*cur = tmp;                                  \
+				/* Update indices */                         \
+				parent->idx = parent_idx;                    \
+				cur->idx = cur_idx;                          \
+				/* Move up */                                \
+				cur_idx = parent_idx;                        \
+			}                                                \
+			else {                                           \
+				break;                                       \
+			}                                                \
+		}                                                    \
+	} while (0)
 
 /**
- * Returns element from the heap with the specified index
- * @param heap
- * @param idx
- * @return
+ * Sink element down to maintain heap invariant
  */
-struct rspamd_min_heap_elt *rspamd_min_heap_index(struct rspamd_min_heap *heap,
-												  unsigned int idx);
+#define rspamd_heap_sink(name, heap, elt)                            \
+	do {                                                             \
+		unsigned int size = kv_size(*(heap));                        \
+		unsigned int cur_idx = (elt)->idx;                           \
+		while (cur_idx * 2 + 1 < size) {                             \
+			unsigned int left_idx = cur_idx * 2 + 1;                 \
+			unsigned int right_idx = cur_idx * 2 + 2;                \
+			unsigned int min_idx = left_idx;                         \
+			typeof(elt) cur = &kv_A(*(heap), cur_idx);               \
+			typeof(elt) min_child = &kv_A(*(heap), left_idx);        \
+			if (right_idx < size) {                                  \
+				typeof(elt) right_child = &kv_A(*(heap), right_idx); \
+				if (right_child->pri < min_child->pri) {             \
+					min_idx = right_idx;                             \
+					min_child = right_child;                         \
+				}                                                    \
+			}                                                        \
+			if (cur->pri > min_child->pri) {                         \
+				/* Swap elements directly */                         \
+				typeof(*elt) tmp = *min_child;                       \
+				*min_child = *cur;                                   \
+				*cur = tmp;                                          \
+				/* Update indices */                                 \
+				cur->idx = cur_idx;                                  \
+				min_child->idx = min_idx;                            \
+				/* Move down */                                      \
+				cur_idx = min_idx;                                   \
+			}                                                        \
+			else {                                                   \
+				break;                                               \
+			}                                                        \
+		}                                                            \
+	} while (0)
 
 /**
- * Returns the number of elements in the heap
- * @param heap
- * @return number of elements
+ * Push element to heap (safe version with error handling)
+ * Element is copied into the heap array.
  */
-gsize rspamd_min_heap_size(struct rspamd_min_heap *heap);
+#define rspamd_heap_push_safe(name, heap, elt, error_label)                 \
+	do {                                                                    \
+		kv_push_safe(typeof(*(elt)), *(heap), *(elt), error_label);         \
+		kv_A(*(heap), kv_size(*(heap)) - 1).idx = kv_size(*(heap)) - 1;     \
+		rspamd_heap_swim(name, heap, &kv_A(*(heap), kv_size(*(heap)) - 1)); \
+	} while (0)
+
+/**
+ * Pop minimum element from heap
+ * Returns pointer to last element in the array (which now holds the popped value)
+ * Valid until next heap modification.
+ */
+#define rspamd_heap_pop(name, heap)                                     \
+	({                                                                  \
+		typeof(&kv_A(*(heap), 0)) result = NULL;                        \
+		if (kv_size(*(heap)) > 0) {                                     \
+			if (kv_size(*(heap)) > 1) {                                 \
+				/* Swap min to end, then sink the new root */           \
+				typeof(kv_A(*(heap), 0)) tmp = kv_A(*(heap), 0);        \
+				kv_A(*(heap), 0) = kv_A(*(heap), kv_size(*(heap)) - 1); \
+				kv_A(*(heap), kv_size(*(heap)) - 1) = tmp;              \
+				kv_size(*(heap))--;                                     \
+				kv_A(*(heap), 0).idx = 0;                               \
+				rspamd_heap_sink(name, heap, &kv_A(*(heap), 0));        \
+				/* Return pointer to element that was moved to end */   \
+				result = &kv_A(*(heap), kv_size(*(heap)));              \
+			}                                                           \
+			else {                                                      \
+				/* Single element - return it and decrement */          \
+				result = &kv_A(*(heap), 0);                             \
+				kv_size(*(heap))--;                                     \
+			}                                                           \
+		}                                                               \
+		result;                                                         \
+	})
+
+/**
+ * Update element priority (element must be in heap)
+ * Pass pointer to element obtained from rspamd_heap_index()
+ */
+#define rspamd_heap_update(name, heap, elt, new_pri) \
+	do {                                             \
+		unsigned int old_pri = (elt)->pri;           \
+		(elt)->pri = (new_pri);                      \
+		if ((new_pri) < old_pri) {                   \
+			rspamd_heap_swim(name, heap, elt);       \
+		}                                            \
+		else if ((new_pri) > old_pri) {              \
+			rspamd_heap_sink(name, heap, elt);       \
+		}                                            \
+	} while (0)
+
+/**
+ * Remove element from heap (element must be in heap)
+ * Pass pointer to element obtained from rspamd_heap_index()
+ */
+#define rspamd_heap_remove(name, heap, elt)                                      \
+	do {                                                                         \
+		if ((elt)->idx < kv_size(*(heap))) {                                     \
+			if ((elt)->idx < kv_size(*(heap)) - 1) {                             \
+				kv_A(*(heap), (elt)->idx) = kv_A(*(heap), kv_size(*(heap)) - 1); \
+				kv_size(*(heap))--;                                              \
+				kv_A(*(heap), (elt)->idx).idx = (elt)->idx;                      \
+				typeof(elt) moved = &kv_A(*(heap), (elt)->idx);                  \
+				/* Need to restore heap property */                              \
+				if (moved->pri < (elt)->pri) {                                   \
+					rspamd_heap_swim(name, heap, moved);                         \
+				}                                                                \
+				else {                                                           \
+					rspamd_heap_sink(name, heap, moved);                         \
+				}                                                                \
+			}                                                                    \
+			else {                                                               \
+				kv_size(*(heap))--;                                              \
+			}                                                                    \
+		}                                                                        \
+	} while (0)
 
 #ifdef __cplusplus
 }
