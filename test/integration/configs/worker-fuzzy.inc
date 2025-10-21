@@ -1,7 +1,6 @@
 #Fuzzy storage worker configuration
 
 bind_socket = "*:50003";
-use_tcp = true;
 count = 1;
 backend = "redis";
 hashfile = "/var/lib/rspamd/fuzzy.db";
