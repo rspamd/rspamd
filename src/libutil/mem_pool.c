@@ -674,10 +674,20 @@ void rspamd_mempool_add_destructor_full(rspamd_mempool_t *pool,
 	if (pool->priv->dtors_heap.a == NULL) {
 		rspamd_heap_init(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap);
 
-		/* Reserve space based on statistics */
-		if (pool->priv->entry && pool->priv->entry->cur_dtors > 0) {
+		/* Reserve space based on pool type and statistics */
+		unsigned int preallocate = 0;
+		if (pool->priv->flags & RSPAMD_MEMPOOL_LONG_LIVED) {
+			/* Long-lived pools: fixed preallocation (32 slots) */
+			preallocate = 32;
+		}
+		else if (pool->priv->entry && pool->priv->entry->cur_dtors > 0) {
+			/* Short-lived pools: use statistics, cap at 64 */
+			preallocate = MIN(pool->priv->entry->cur_dtors, 64);
+		}
+
+		if (preallocate > 0) {
 			kv_resize_safe(struct _pool_destructors, pool->priv->dtors_heap,
-						   pool->priv->entry->cur_dtors, cleanup);
+						   preallocate, cleanup);
 		}
 	}
 
@@ -939,27 +949,9 @@ void rspamd_mempool_delete(rspamd_mempool_t *pool)
 		if (pool->priv->entry && mempool_entries) {
 			ndtors = rspamd_heap_size(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap);
 
-			/* Update suggestion using similar logic to variables */
-			if (pool->priv->entry->cur_dtors < ndtors) {
-				static const unsigned int max_preallocated_dtors = 128;
-
-				unsigned int old_guess = pool->priv->entry->cur_dtors;
-				unsigned int new_guess;
-
-				if (old_guess == 0) {
-					new_guess = MIN(ndtors, max_preallocated_dtors);
-				}
-				else {
-					if (old_guess * 2 < ndtors) {
-						new_guess = MIN(ndtors, max_preallocated_dtors);
-					}
-					else {
-						/* Too large step */
-						new_guess = MIN(old_guess * 2, max_preallocated_dtors);
-					}
-				}
-
-				pool->priv->entry->cur_dtors = new_guess;
+			/* Track maximum number of destructors seen, cap at 64 */
+			if (ndtors > pool->priv->entry->cur_dtors) {
+				pool->priv->entry->cur_dtors = MIN(ndtors, 64);
 			}
 		}
 
