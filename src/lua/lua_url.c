@@ -831,8 +831,8 @@ static rspamd_mempool_t *static_lua_url_pool;
 
 RSPAMD_CONSTRUCTOR(rspamd_urls_static_pool_ctor)
 {
-	static_lua_url_pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
-											 "static_lua_url", 0);
+	static_lua_url_pool = rspamd_mempool_new_long_lived(rspamd_mempool_suggest_size(),
+														"static_lua_url");
 }
 
 RSPAMD_DESTRUCTOR(rspamd_urls_static_pool_dtor)

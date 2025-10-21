@@ -746,12 +746,12 @@ rspamd_map_helper_new_hash(struct rspamd_map *map)
 	rspamd_mempool_t *pool;
 
 	if (map) {
-		pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
-								  map->tag, 0);
+		pool = rspamd_mempool_new_long_lived(rspamd_mempool_suggest_size(),
+											 map->tag);
 	}
 	else {
-		pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
-								  NULL, 0);
+		pool = rspamd_mempool_new_long_lived(rspamd_mempool_suggest_size(),
+											 "map");
 	}
 
 	htb = rspamd_mempool_alloc0_type(pool, struct rspamd_hash_map_helper);
@@ -804,13 +804,13 @@ rspamd_map_helper_new_radix(struct rspamd_map *map)
 	const char *name = "unnamed";
 
 	if (map) {
-		pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
-								  map->tag, 0);
+		pool = rspamd_mempool_new_long_lived(rspamd_mempool_suggest_size(),
+											 map->tag);
 		name = map->name;
 	}
 	else {
-		pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
-								  NULL, 0);
+		pool = rspamd_mempool_new_long_lived(rspamd_mempool_suggest_size(),
+											 "radix_map");
 	}
 
 	r = rspamd_mempool_alloc0_type(pool, struct rspamd_radix_map_helper);
@@ -863,8 +863,8 @@ rspamd_map_helper_new_regexp(struct rspamd_map *map,
 	struct rspamd_regexp_map_helper *re_map;
 	rspamd_mempool_t *pool;
 
-	pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
-							  map->tag, 0);
+	pool = rspamd_mempool_new_long_lived(rspamd_mempool_suggest_size(),
+										 map->tag);
 
 	re_map = rspamd_mempool_alloc0_type(pool, struct rspamd_regexp_map_helper);
 	re_map->pool = pool;

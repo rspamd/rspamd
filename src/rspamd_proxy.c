@@ -1513,7 +1513,7 @@ proxy_session_refresh(struct rspamd_proxy_session *session)
 	session->client_addr = NULL;
 	nsession->ctx = session->ctx;
 	nsession->worker = session->worker;
-	nsession->pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "proxy", 0);
+	nsession->pool = rspamd_mempool_new_short_lived("proxy");
 	nsession->client_sock = session->client_sock;
 	session->client_sock = -1;
 	nsession->mirror_conns = g_ptr_array_sized_new(nsession->ctx->mirrors->len);
@@ -2990,8 +2990,7 @@ proxy_accept_socket(EV_P_ ev_io *w, int revents)
 	session->client_addr = addr;
 	session->mirror_conns = g_ptr_array_sized_new(ctx->mirrors->len);
 
-	session->pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
-									   "proxy", 0);
+	session->pool = rspamd_mempool_new_short_lived("proxy");
 	session->ctx = ctx;
 	session->worker = worker;
 
