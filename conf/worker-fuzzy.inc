@@ -13,6 +13,7 @@
 # Module documentation: https://rspamd.com/doc/workers/fuzzy_storage.html
 
 backend = "redis";
+use_tcp = true;
 
 # For sqlite stuff
 #backend = "sqlite";
