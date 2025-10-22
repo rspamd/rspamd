@@ -11,7 +11,9 @@ services:
       retries: 5
 
   rspamd:
-    image: rspamd/rspamd:asan-nightly
+    build:
+      context: ../..
+      dockerfile: test/integration/Dockerfile.local
     container_name: rspamd-main
     depends_on:
       redis:
