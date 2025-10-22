@@ -5292,8 +5292,8 @@ register_fuzzy_client_call(struct rspamd_task *task,
 
 		/* Use UDP as fallback or when TCP not available */
 		if (selected) {
-			msg_info_task("fuzzy_check: sending %d commands via UDP to %s",
-						  (int) commands->len, rspamd_upstream_name(selected));
+			msg_debug_fuzzy_check("fuzzy_check: sending %d commands via UDP to %s",
+								  (int) commands->len, rspamd_upstream_name(selected));
 			addr = rspamd_upstream_addr_next(selected);
 
 			if ((sock = rspamd_inet_address_connect(addr, SOCK_DGRAM, TRUE)) == -1) {
