@@ -179,7 +179,7 @@ struct fuzzy_client_session {
 	struct fuzzy_rule *rule;
 	struct ev_loop *event_loop;
 	struct rspamd_io_ev ev;
-	struct rspamd_io_ev timer_ev; /* Separate timer for TCP requests */
+	ev_timer timer_ev; /* Pure timer for TCP session timeout */
 	int state;
 	int fd;
 	int retransmits;
@@ -2777,8 +2777,10 @@ fuzzy_io_fin(void *ud)
 	if (session->fd == -1) {
 		/* TCP session - cleanup pending requests and stop timer */
 		fuzzy_tcp_session_cleanup(session);
-		/* Stop timer using rspamd's wrapper */
-		rspamd_ev_watcher_stop(session->event_loop, &session->timer_ev);
+		/* Stop timer */
+		if (ev_is_active(&session->timer_ev)) {
+			ev_timer_stop(session->event_loop, &session->timer_ev);
+		}
 	}
 
 	if (session->commands) {
@@ -4514,9 +4516,9 @@ fuzzy_check_timer_callback(int fd, short what, void *arg)
 
 /* TCP timeout callback - session-level timeout, does NOT mark connection as failed */
 static void
-fuzzy_tcp_timer_callback(int fd, short what, void *arg)
+fuzzy_tcp_timer_callback(EV_P_ ev_timer *w, int revents)
 {
-	struct fuzzy_client_session *session = arg;
+	struct fuzzy_client_session *session = (struct fuzzy_client_session *) w->data;
 	struct rspamd_task *task = session->task;
 	struct fuzzy_cmd_io *io;
 	unsigned int i, nreplied = 0;
@@ -4564,8 +4566,10 @@ fuzzy_tcp_timer_callback(int fd, short what, void *arg)
 	/* Clean up pending requests for THIS session only */
 	fuzzy_tcp_session_cleanup(session);
 
-	/* Stop timer using rspamd's wrapper */
-	rspamd_ev_watcher_stop(session->event_loop, &session->timer_ev);
+	/* Stop timer */
+	if (ev_is_active(&session->timer_ev)) {
+		ev_timer_stop(session->event_loop, &session->timer_ev);
+	}
 
 	/* Decrement async counter for TCP session */
 	if (session->item) {
@@ -5236,14 +5240,14 @@ register_fuzzy_client_call(struct rspamd_task *task,
 			tcp_conn = fuzzy_tcp_get_or_create_connection(rule, selected, task, FALSE);
 		}
 		else {
-			msg_info_task("fuzzy_check: using UDP for rule %s to %s (TCP disabled or rate below threshold)",
-						  rule->name, rspamd_upstream_name(selected));
+			msg_debug_fuzzy_check("fuzzy_check: using UDP for rule %s to %s (TCP disabled or rate below threshold)",
+								  rule->name, rspamd_upstream_name(selected));
 		}
 
 		/* Use TCP if available and connected */
 		if (tcp_conn && tcp_conn->connected) {
-			msg_info_task("fuzzy_check: sending %d commands via TCP to %s",
-						  (int) commands->len, rspamd_upstream_name(selected));
+			msg_debug_fuzzy_check("fuzzy_check: sending %d commands via TCP to %s",
+								  (int) commands->len, rspamd_upstream_name(selected));
 			/* Create session for TCP */
 			session = rspamd_mempool_alloc0(task->task_pool,
 											sizeof(struct fuzzy_client_session));
@@ -5268,19 +5272,16 @@ register_fuzzy_client_call(struct rspamd_task *task,
 					rspamd_symcache_item_async_inc(task, session->item, M);
 				}
 
-				/* Start timer for TCP request timeout using rspamd's event wrapper */
-				rspamd_ev_watcher_init(&session->timer_ev,
-									   -1,
-									   EV_TIMER,
-									   fuzzy_tcp_timer_callback,
-									   session);
-				rspamd_ev_watcher_start(session->event_loop, &session->timer_ev,
-										rule->io_timeout);
+				/* Start timer for TCP request timeout using libev directly */
+				session->timer_ev.data = session;
+				ev_timer_init(&session->timer_ev, fuzzy_tcp_timer_callback,
+							  rule->io_timeout, 0.0);
+				ev_timer_start(session->event_loop, &session->timer_ev);
 
 				return; /* TCP send successful */
 			}
 			else {
-				msg_warn_task("fuzzy_tcp: failed to send commands, falling back to UDP");
+				msg_info_task("fuzzy_tcp: failed to send commands, falling back to UDP");
 				/* Fall through to UDP */
 			}
 		}
