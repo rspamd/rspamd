@@ -23,7 +23,10 @@ RUN apt-get update && apt-get install -y \
     libunwind8 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY install /usr
+COPY install/bin /usr/bin
+COPY install/lib /usr/lib
+COPY install/share /usr/share
+COPY install/etc /etc
 
 RUN mkdir -p /var/lib/rspamd /var/log/rspamd /var/run/rspamd && \
     echo "/usr/lib/rspamd" > /etc/ld.so.conf.d/rspamd.conf && \
