@@ -49,6 +49,10 @@
 #include <math.h>
 #include "libutil/libev_helper.h"
 
+#ifdef HAVE_NETINET_TCP_H
+#include <netinet/tcp.h> /* for TCP_NODELAY */
+#endif
+
 #define DEFAULT_SYMBOL "R_FUZZY_HASH"
 #define RSPAMD_FUZZY_SYMBOL_FORBIDDEN "FUZZY_FORBIDDEN"
 #define RSPAMD_FUZZY_SYMBOL_RATELIMITED "FUZZY_RATELIMITED"
