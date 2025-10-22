@@ -19,6 +19,8 @@ RUN apt-get update && apt-get install -y \
     libfann2 \
     libstemmer0d \
     libasan8 \
+    libsqlite3-0 \
+    libunwind8 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY install /usr
