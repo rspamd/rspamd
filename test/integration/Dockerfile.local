@@ -23,7 +23,9 @@ RUN apt-get update && apt-get install -y \
 
 COPY install /usr
 
-RUN mkdir -p /var/lib/rspamd /var/log/rspamd /var/run/rspamd
+RUN mkdir -p /var/lib/rspamd /var/log/rspamd /var/run/rspamd && \
+    echo "/usr/lib/rspamd" > /etc/ld.so.conf.d/rspamd.conf && \
+    ldconfig
 
 EXPOSE 11333 11334 11335
 
