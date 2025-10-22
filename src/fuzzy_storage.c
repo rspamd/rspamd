@@ -2680,7 +2680,7 @@ rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents)
 			/* Now we have full length */
 			frame_len = session->cur_frame_state & 0x3FFF;
 
-			if (frame_len > sizeof(struct rspamd_fuzzy_encrypted_shingle_cmd)) {
+			if (frame_len > FUZZY_TCP_BUFFER_LENGTH || frame_len == 0) {
 				msg_err("invalid frame length %d from %s, closing connection",
 						(int) frame_len,
 						rspamd_inet_address_to_string(session->common.addr));

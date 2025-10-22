@@ -778,8 +778,8 @@ fuzzy_tcp_get_or_create_connection(struct fuzzy_rule *rule,
 							  time_since_failure,
 							  rspamd_upstream_name(upstream),
 							  rule->tcp_retry_delay);
+				/* g_ptr_array_remove automatically calls fuzzy_tcp_connection_unref via free_func */
 				g_ptr_array_remove(rule->tcp_connections, conn);
-				FUZZY_TCP_RELEASE(conn); /* Release reference held by array */
 				conn = NULL;
 			}
 		}
@@ -1087,8 +1087,10 @@ fuzzy_tcp_write_handler(struct fuzzy_tcp_connection *conn)
 		}
 		else {
 			/* Writing data */
-			write_ptr = buf->data + (buf->bytes_written - sizeof(buf->size_hdr));
-			remaining = buf->total_len - buf->bytes_written;
+			gsize data_offset = buf->bytes_written - sizeof(buf->size_hdr);
+			gsize data_len = buf->total_len - sizeof(buf->size_hdr);
+			write_ptr = buf->data + data_offset;
+			remaining = data_len - data_offset;
 		}
 
 		r = write(conn->fd, write_ptr, remaining);
