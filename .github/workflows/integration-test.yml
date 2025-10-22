@@ -145,46 +145,6 @@ jobs:
           # The archive contains a 'corpus' directory, so we should have data/corpus/ now
           ls -lh data/corpus/
 
-      - name: Update Docker Compose to use local build
-        working-directory: test/integration
-        run: |
-          # Create Dockerfile for local build
-          cat > Dockerfile.local <<'EOF'
-          FROM ubuntu:24.04
-
-          RUN apt-get update && apt-get install -y \
-              redis-tools \
-              curl \
-              ca-certificates \
-              libluajit-5.1-2 \
-              libglib2.0-0 \
-              libssl3 \
-              libicu74 \
-              libsodium23 \
-              libhyperscan5 \
-              libpcre2-8-0 \
-              libjemalloc2 \
-              libmagic1 \
-              libarchive13 \
-              libzstd1 \
-              libbrotli1 \
-              libfann2 \
-              libstemmer0d \
-              libasan8 \
-              && rm -rf /var/lib/apt/lists/*
-
-          COPY install /usr
-
-          RUN mkdir -p /var/lib/rspamd /var/log/rspamd /var/run/rspamd
-
-          EXPOSE 11333 11334 11335
-
-          CMD ["/usr/bin/rspamd", "-f", "-c", "/etc/rspamd/rspamd.conf"]
-          EOF
-
-          # Update docker-compose to use local build
-          sed -i 's|image: ghcr.io/rspamd/rspamd:latest|build:\n      context: ../..\n      dockerfile: test/integration/Dockerfile.local|g' docker-compose.yml
-
       - name: Start Docker Compose
         working-directory: test/integration
         run: |

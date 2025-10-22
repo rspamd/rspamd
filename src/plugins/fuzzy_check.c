@@ -49,6 +49,10 @@
 #include <math.h>
 #include "libutil/libev_helper.h"
 
+#ifdef HAVE_NETINET_TCP_H
+#include <netinet/tcp.h> /* for TCP_NODELAY */
+#endif
+
 #define DEFAULT_SYMBOL "R_FUZZY_HASH"
 #define RSPAMD_FUZZY_SYMBOL_FORBIDDEN "FUZZY_FORBIDDEN"
 #define RSPAMD_FUZZY_SYMBOL_RATELIMITED "FUZZY_RATELIMITED"
@@ -175,7 +179,7 @@ struct fuzzy_client_session {
 	struct fuzzy_rule *rule;
 	struct ev_loop *event_loop;
 	struct rspamd_io_ev ev;
-	struct rspamd_io_ev timer_ev; /* Separate timer for TCP requests */
+	ev_timer timer_ev; /* Pure timer for TCP session timeout */
 	int state;
 	int fd;
 	int retransmits;
@@ -535,6 +539,7 @@ static void fuzzy_tcp_read_handler(struct fuzzy_tcp_connection *conn);
 static gboolean fuzzy_tcp_send_command(struct fuzzy_tcp_connection *conn,
 									   GPtrArray *commands,
 									   struct fuzzy_client_session *session);
+static void fuzzy_tcp_connection_close(struct fuzzy_tcp_connection *conn);
 static void fuzzy_tcp_connection_cleanup(struct fuzzy_tcp_connection *conn, const char *reason);
 static gboolean fuzzy_check_session_is_completed(struct fuzzy_client_session *session);
 
@@ -558,6 +563,7 @@ fuzzy_tcp_connection_free(struct fuzzy_tcp_connection *conn)
 	if (conn->fd != -1) {
 		rspamd_ev_watcher_stop(conn->event_loop, &conn->ev);
 		close(conn->fd);
+		conn->fd = -1;
 	}
 
 	if (conn->write_queue) {
@@ -699,13 +705,15 @@ fuzzy_tcp_connect_async(struct fuzzy_rule *rule,
 		conn->encrypted = FALSE;
 	}
 
+	/* Store in connection pool array BEFORE starting event watcher
+	 * This prevents race condition where another task might create duplicate connection
+	 * Array takes ownership of initial reference */
+	g_ptr_array_add(rule->tcp_connections, conn);
+
 	/* Initialize event watcher for connection establishment (wait for write) */
 	rspamd_ev_watcher_init(&conn->ev, fd, EV_WRITE,
 						   fuzzy_tcp_io_handler, conn);
 	rspamd_ev_watcher_start(conn->event_loop, &conn->ev, rule->tcp_timeout);
-
-	/* Store in connection pool array - array takes ownership of initial reference */
-	g_ptr_array_add(rule->tcp_connections, conn);
 
 	msg_info_task("fuzzy_tcp: initiating connection to %s for rule %s",
 				  rspamd_inet_address_to_string_pretty(addr),
@@ -770,8 +778,8 @@ fuzzy_tcp_get_or_create_connection(struct fuzzy_rule *rule,
 							  time_since_failure,
 							  rspamd_upstream_name(upstream),
 							  rule->tcp_retry_delay);
+				/* g_ptr_array_remove automatically calls fuzzy_tcp_connection_unref via free_func */
 				g_ptr_array_remove(rule->tcp_connections, conn);
-				FUZZY_TCP_RELEASE(conn); /* Release reference held by array */
 				conn = NULL;
 			}
 		}
@@ -783,6 +791,25 @@ fuzzy_tcp_get_or_create_connection(struct fuzzy_rule *rule,
 	}
 
 	return conn;
+}
+
+/**
+ * Close connection socket and mark as failed
+ * Stops event watcher, closes fd, marks connection as failed
+ * Should be called before fuzzy_tcp_connection_cleanup
+ */
+static void
+fuzzy_tcp_connection_close(struct fuzzy_tcp_connection *conn)
+{
+	if (conn->fd != -1) {
+		rspamd_ev_watcher_stop(conn->event_loop, &conn->ev);
+		close(conn->fd);
+		conn->fd = -1;
+	}
+	conn->failed = TRUE;
+	conn->last_failure = rspamd_get_calendar_ticks();
+	conn->connecting = FALSE;
+	conn->connected = FALSE;
 }
 
 /**
@@ -960,11 +987,8 @@ fuzzy_tcp_io_handler(int fd, short what, gpointer ud)
 				 elapsed,
 				 conn->connecting,
 				 conn->connected);
-		conn->failed = TRUE;
-		conn->last_failure = rspamd_get_calendar_ticks();
-		conn->connecting = FALSE;
+		fuzzy_tcp_connection_close(conn);
 		fuzzy_tcp_connection_cleanup(conn, "connection timeout");
-		rspamd_ev_watcher_stop(conn->event_loop, &conn->ev);
 		rspamd_upstream_fail(conn->server, TRUE, "connection timeout");
 		FUZZY_TCP_RELEASE(conn);
 		return;
@@ -979,11 +1003,8 @@ fuzzy_tcp_io_handler(int fd, short what, gpointer ud)
 						 conn->rule->name,
 						 rspamd_upstream_name(conn->server),
 						 strerror(errno));
-				conn->failed = TRUE;
-				conn->last_failure = rspamd_get_calendar_ticks();
-				conn->connecting = FALSE;
+				fuzzy_tcp_connection_close(conn);
 				fuzzy_tcp_connection_cleanup(conn, "getsockopt failed");
-				rspamd_ev_watcher_stop(conn->event_loop, &conn->ev);
 				rspamd_upstream_fail(conn->server, TRUE, "getsockopt failed");
 				FUZZY_TCP_RELEASE(conn);
 				return;
@@ -996,11 +1017,8 @@ fuzzy_tcp_io_handler(int fd, short what, gpointer ud)
 						 conn->rule->name,
 						 rspamd_upstream_name(conn->server),
 						 strerror(so_error));
-				conn->failed = TRUE;
-				conn->last_failure = rspamd_get_calendar_ticks();
-				conn->connecting = FALSE;
+				fuzzy_tcp_connection_close(conn);
 				fuzzy_tcp_connection_cleanup(conn, error_buf);
-				rspamd_ev_watcher_stop(conn->event_loop, &conn->ev);
 				rspamd_upstream_fail(conn->server, TRUE, strerror(so_error));
 				FUZZY_TCP_RELEASE(conn);
 				return;
@@ -1069,8 +1087,10 @@ fuzzy_tcp_write_handler(struct fuzzy_tcp_connection *conn)
 		}
 		else {
 			/* Writing data */
-			write_ptr = buf->data + (buf->bytes_written - sizeof(buf->size_hdr));
-			remaining = buf->total_len - buf->bytes_written;
+			gsize data_offset = buf->bytes_written - sizeof(buf->size_hdr);
+			gsize data_len = buf->total_len - sizeof(buf->size_hdr);
+			write_ptr = buf->data + data_offset;
+			remaining = data_len - data_offset;
 		}
 
 		r = write(conn->fd, write_ptr, remaining);
@@ -1086,20 +1106,16 @@ fuzzy_tcp_write_handler(struct fuzzy_tcp_connection *conn)
 					conn->rule->name,
 					rspamd_upstream_name(conn->server),
 					strerror(errno));
-			conn->failed = TRUE;
-			conn->last_failure = rspamd_get_calendar_ticks();
+			fuzzy_tcp_connection_close(conn);
 			fuzzy_tcp_connection_cleanup(conn, error_buf);
-			rspamd_ev_watcher_stop(conn->event_loop, &conn->ev);
 			return;
 		}
 		else if (r == 0) {
 			msg_info("fuzzy_tcp: connection closed by %s for rule %s",
 					 rspamd_upstream_name(conn->server),
 					 conn->rule->name);
-			conn->failed = TRUE;
-			conn->last_failure = rspamd_get_calendar_ticks();
+			fuzzy_tcp_connection_close(conn);
 			fuzzy_tcp_connection_cleanup(conn, "connection closed by peer");
-			rspamd_ev_watcher_stop(conn->event_loop, &conn->ev);
 			return;
 		}
 
@@ -1377,10 +1393,8 @@ fuzzy_tcp_read_handler(struct fuzzy_tcp_connection *conn)
 	if (available_space == 0) {
 		msg_err("fuzzy_tcp: read buffer full for rule %s, closing connection",
 				conn->rule->name);
-		conn->failed = TRUE;
-		conn->last_failure = rspamd_get_calendar_ticks();
+		fuzzy_tcp_connection_close(conn);
 		fuzzy_tcp_connection_cleanup(conn, "read buffer overflow");
-		rspamd_ev_watcher_stop(conn->event_loop, &conn->ev);
 		return;
 	}
 
@@ -1394,20 +1408,16 @@ fuzzy_tcp_read_handler(struct fuzzy_tcp_connection *conn)
 		rspamd_snprintf(error_buf, sizeof(error_buf), "read error: %s", strerror(errno));
 		msg_err("fuzzy_tcp: read error for rule %s: %s",
 				conn->rule->name, strerror(errno));
-		conn->failed = TRUE;
-		conn->last_failure = rspamd_get_calendar_ticks();
+		fuzzy_tcp_connection_close(conn);
 		fuzzy_tcp_connection_cleanup(conn, error_buf);
-		rspamd_ev_watcher_stop(conn->event_loop, &conn->ev);
 		return;
 	}
 	else if (r == 0) {
 		msg_info("fuzzy_tcp: connection closed by %s for rule %s",
 				 rspamd_upstream_name(conn->server),
 				 conn->rule->name);
-		conn->failed = TRUE;
-		conn->last_failure = rspamd_get_calendar_ticks();
+		fuzzy_tcp_connection_close(conn);
 		fuzzy_tcp_connection_cleanup(conn, "connection closed by peer");
-		rspamd_ev_watcher_stop(conn->event_loop, &conn->ev);
 		return;
 	}
 
@@ -1456,10 +1466,8 @@ fuzzy_tcp_read_handler(struct fuzzy_tcp_connection *conn)
 			msg_err("fuzzy_tcp: invalid frame length %d from %s, closing",
 					(int) frame_len,
 					rspamd_upstream_name(conn->server));
-			conn->failed = TRUE;
-			conn->last_failure = rspamd_get_calendar_ticks();
+			fuzzy_tcp_connection_close(conn);
 			fuzzy_tcp_connection_cleanup(conn, error_buf);
-			rspamd_ev_watcher_stop(conn->event_loop, &conn->ev);
 			return;
 		}
 
@@ -2771,8 +2779,10 @@ fuzzy_io_fin(void *ud)
 	if (session->fd == -1) {
 		/* TCP session - cleanup pending requests and stop timer */
 		fuzzy_tcp_session_cleanup(session);
-		/* Stop timer using rspamd's wrapper */
-		rspamd_ev_watcher_stop(session->event_loop, &session->timer_ev);
+		/* Stop timer */
+		if (ev_is_active(&session->timer_ev)) {
+			ev_timer_stop(session->event_loop, &session->timer_ev);
+		}
 	}
 
 	if (session->commands) {
@@ -4508,9 +4518,9 @@ fuzzy_check_timer_callback(int fd, short what, void *arg)
 
 /* TCP timeout callback - session-level timeout, does NOT mark connection as failed */
 static void
-fuzzy_tcp_timer_callback(int fd, short what, void *arg)
+fuzzy_tcp_timer_callback(EV_P_ ev_timer *w, int revents)
 {
-	struct fuzzy_client_session *session = arg;
+	struct fuzzy_client_session *session = (struct fuzzy_client_session *) w->data;
 	struct rspamd_task *task = session->task;
 	struct fuzzy_cmd_io *io;
 	unsigned int i, nreplied = 0;
@@ -4558,8 +4568,10 @@ fuzzy_tcp_timer_callback(int fd, short what, void *arg)
 	/* Clean up pending requests for THIS session only */
 	fuzzy_tcp_session_cleanup(session);
 
-	/* Stop timer using rspamd's wrapper */
-	rspamd_ev_watcher_stop(session->event_loop, &session->timer_ev);
+	/* Stop timer */
+	if (ev_is_active(&session->timer_ev)) {
+		ev_timer_stop(session->event_loop, &session->timer_ev);
+	}
 
 	/* Decrement async counter for TCP session */
 	if (session->item) {
@@ -5230,14 +5242,14 @@ register_fuzzy_client_call(struct rspamd_task *task,
 			tcp_conn = fuzzy_tcp_get_or_create_connection(rule, selected, task, FALSE);
 		}
 		else {
-			msg_info_task("fuzzy_check: using UDP for rule %s to %s (TCP disabled or rate below threshold)",
-						  rule->name, rspamd_upstream_name(selected));
+			msg_debug_fuzzy_check("fuzzy_check: using UDP for rule %s to %s (TCP disabled or rate below threshold)",
+								  rule->name, rspamd_upstream_name(selected));
 		}
 
 		/* Use TCP if available and connected */
 		if (tcp_conn && tcp_conn->connected) {
-			msg_info_task("fuzzy_check: sending %d commands via TCP to %s",
-						  (int) commands->len, rspamd_upstream_name(selected));
+			msg_debug_fuzzy_check("fuzzy_check: sending %d commands via TCP to %s",
+								  (int) commands->len, rspamd_upstream_name(selected));
 			/* Create session for TCP */
 			session = rspamd_mempool_alloc0(task->task_pool,
 											sizeof(struct fuzzy_client_session));
@@ -5262,19 +5274,16 @@ register_fuzzy_client_call(struct rspamd_task *task,
 					rspamd_symcache_item_async_inc(task, session->item, M);
 				}
 
-				/* Start timer for TCP request timeout using rspamd's event wrapper */
-				rspamd_ev_watcher_init(&session->timer_ev,
-									   -1,
-									   EV_TIMER,
-									   fuzzy_tcp_timer_callback,
-									   session);
-				rspamd_ev_watcher_start(session->event_loop, &session->timer_ev,
-										rule->io_timeout);
+				/* Start timer for TCP request timeout using libev directly */
+				session->timer_ev.data = session;
+				ev_timer_init(&session->timer_ev, fuzzy_tcp_timer_callback,
+							  rule->io_timeout, 0.0);
+				ev_timer_start(session->event_loop, &session->timer_ev);
 
 				return; /* TCP send successful */
 			}
 			else {
-				msg_warn_task("fuzzy_tcp: failed to send commands, falling back to UDP");
+				msg_info_task("fuzzy_tcp: failed to send commands, falling back to UDP");
 				/* Fall through to UDP */
 			}
 		}
@@ -5285,8 +5294,8 @@ register_fuzzy_client_call(struct rspamd_task *task,
 
 		/* Use UDP as fallback or when TCP not available */
 		if (selected) {
-			msg_info_task("fuzzy_check: sending %d commands via UDP to %s",
-						  (int) commands->len, rspamd_upstream_name(selected));
+			msg_debug_fuzzy_check("fuzzy_check: sending %d commands via UDP to %s",
+								  (int) commands->len, rspamd_upstream_name(selected));
 			addr = rspamd_upstream_addr_next(selected);
 
 			if ((sock = rspamd_inet_address_connect(addr, SOCK_DGRAM, TRUE)) == -1) {

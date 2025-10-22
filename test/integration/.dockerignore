@@ -1,0 +1,4 @@
+data/
+*.log
+.env.keys
+docker-compose.yml
