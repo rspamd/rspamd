@@ -31,4 +31,4 @@ RUN mkdir -p /var/lib/rspamd /var/log/rspamd /var/run/rspamd && \
 
 EXPOSE 11333 11334 11335
 
-CMD ["/usr/bin/rspamd", "-f", "-c", "/etc/rspamd/rspamd.conf"]
+CMD ["/usr/bin/rspamd", "-f", "-c", "/etc/rspamd/rspamd.conf", "--insecure"]
