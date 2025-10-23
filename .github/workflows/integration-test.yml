@@ -66,13 +66,14 @@ jobs:
         run: |
           mkdir -p build install
           cd build
-          cmake -DCMAKE_INSTALL_PREFIX=../install \
+          cmake -DCMAKE_INSTALL_PREFIX=/usr \
+                -DCONFDIR=/etc/rspamd \
                 -DENABLE_COVERAGE=OFF \
                 -DENABLE_FULL_DEBUG=ON \
                 -DSANITIZE=address,leak \
                 -GNinja ..
           ninja
-          ninja install
+          DESTDIR="${GITHUB_WORKSPACE}/install" ninja install
 
       - name: Generate Fuzzy encryption keys
         working-directory: test/integration
