@@ -217,7 +217,11 @@ jobs:
         if: always()
         working-directory: test/integration
         run: |
-          docker compose logs > docker-compose-logs.txt
+          echo "=== Collecting logs from all services ==="
+          docker compose logs --no-color > docker-compose-logs.txt 2>&1 || true
+          echo "=== Direct container logs ==="
+          docker logs rspamd-main >> docker-compose-logs.txt 2>&1 || true
+          docker logs rspamd-redis >> docker-compose-logs.txt 2>&1 || true
 
       - name: Stop Docker Compose
         if: always()
