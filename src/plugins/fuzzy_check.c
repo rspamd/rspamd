@@ -129,6 +129,7 @@ struct fuzzy_rule {
 	struct {
 		uint32_t requests_count; /* Number of requests in current window */
 		ev_tstamp window_start;  /* Start of the current window */
+		gboolean last_was_tcp;   /* Last request used TCP (for transition logging) */
 	} rate_tracker;
 
 	/* TCP connection pool - array of connections, one per upstream */
@@ -715,9 +716,9 @@ fuzzy_tcp_connect_async(struct fuzzy_rule *rule,
 						   fuzzy_tcp_io_handler, conn);
 	rspamd_ev_watcher_start(conn->event_loop, &conn->ev, rule->tcp_timeout);
 
-	msg_info_task("fuzzy_tcp: initiating connection to %s for rule %s",
-				  rspamd_inet_address_to_string_pretty(addr),
-				  rule->name);
+	msg_debug_task("fuzzy_tcp: initiating connection to %s for rule %s",
+				   rspamd_inet_address_to_string_pretty(addr),
+				   rule->name);
 
 	return conn;
 }
@@ -774,10 +775,19 @@ fuzzy_tcp_get_or_create_connection(struct fuzzy_rule *rule,
 			}
 			else {
 				/* Old failure - remove and try reconnecting */
-				msg_info_task("fuzzy_tcp: connection failed %.1fs ago for %s (retry_delay=%.1fs), retrying TCP",
-							  time_since_failure,
-							  rspamd_upstream_name(upstream),
-							  rule->tcp_retry_delay);
+				/* Log at info for auto-switch (important), debug for always-on TCP */
+				if (rule->tcp_auto) {
+					msg_info_task("fuzzy_tcp: connection failed %.1fs ago for %s (retry_delay=%.1fs), retrying TCP",
+								  time_since_failure,
+								  rspamd_upstream_name(upstream),
+								  rule->tcp_retry_delay);
+				}
+				else {
+					msg_debug_task("fuzzy_tcp: connection failed %.1fs ago for %s (retry_delay=%.1fs), retrying TCP",
+								   time_since_failure,
+								   rspamd_upstream_name(upstream),
+								   rule->tcp_retry_delay);
+				}
 				/* g_ptr_array_remove automatically calls fuzzy_tcp_connection_unref via free_func */
 				g_ptr_array_remove(rule->tcp_connections, conn);
 				conn = NULL;
@@ -887,8 +897,8 @@ fuzzy_tcp_connection_cleanup(struct fuzzy_tcp_connection *conn, const char *reas
 	}
 
 	if (sessions_checked > 0 && task) {
-		msg_info_task("fuzzy_tcp: checked %d sessions for completion after connection cleanup",
-					  sessions_checked);
+		msg_debug_task("fuzzy_tcp: checked %d sessions for completion after connection cleanup",
+					   sessions_checked);
 	}
 
 	g_ptr_array_free(to_remove, TRUE);
@@ -938,10 +948,19 @@ fuzzy_tcp_check_pending_timeouts(struct fuzzy_rule *rule, ev_tstamp now)
 
 			if (pending->task) {
 				struct rspamd_task *task = pending->task;
-				msg_info_task("fuzzy_tcp: request timeout after %.2fs for tag %ud to %s",
-							  now - pending->send_time,
-							  pending->io->tag,
-							  rspamd_upstream_name(pending->connection->server));
+				/* Log timeout at info for auto mode, debug otherwise */
+				if (rule->tcp_auto) {
+					msg_info_task("fuzzy_tcp: request timeout after %.2fs for tag %ud to %s",
+								  now - pending->send_time,
+								  pending->io->tag,
+								  rspamd_upstream_name(pending->connection->server));
+				}
+				else {
+					msg_debug_task("fuzzy_tcp: request timeout after %.2fs for tag %ud to %s",
+								   now - pending->send_time,
+								   pending->io->tag,
+								   rspamd_upstream_name(pending->connection->server));
+				}
 			}
 		}
 	}
@@ -1029,12 +1048,23 @@ fuzzy_tcp_io_handler(int fd, short what, gpointer ud)
 			conn->connecting = FALSE;
 			ev_tstamp elapsed = rspamd_get_calendar_ticks() - conn->connect_start;
 
-			msg_info("fuzzy_tcp: connection established to %s for rule %s in %.3fs (fd=%d, encrypted=%d)",
-					 rspamd_inet_address_to_string_pretty(conn->addr),
-					 conn->rule->name,
-					 elapsed,
-					 conn->fd,
-					 conn->encrypted);
+			/* Log at info level only for auto-switch mode (important event), debug otherwise */
+			if (conn->rule->tcp_auto) {
+				msg_info("fuzzy_tcp: connection established to %s for rule %s in %.3fs (fd=%d, encrypted=%d)",
+						 rspamd_inet_address_to_string_pretty(conn->addr),
+						 conn->rule->name,
+						 elapsed,
+						 conn->fd,
+						 conn->encrypted);
+			}
+			else {
+				msg_debug("fuzzy_tcp: connection established to %s for rule %s in %.3fs (fd=%d, encrypted=%d)",
+						  rspamd_inet_address_to_string_pretty(conn->addr),
+						  conn->rule->name,
+						  elapsed,
+						  conn->fd,
+						  conn->encrypted);
+			}
 
 			rspamd_upstream_ok(conn->server);
 
@@ -1111,9 +1141,17 @@ fuzzy_tcp_write_handler(struct fuzzy_tcp_connection *conn)
 			return;
 		}
 		else if (r == 0) {
-			msg_info("fuzzy_tcp: connection closed by %s for rule %s",
-					 rspamd_upstream_name(conn->server),
-					 conn->rule->name);
+			/* Connection closed by peer - log at info for auto mode, debug otherwise */
+			if (conn->rule->tcp_auto) {
+				msg_info("fuzzy_tcp: connection closed by %s for rule %s",
+						 rspamd_upstream_name(conn->server),
+						 conn->rule->name);
+			}
+			else {
+				msg_debug("fuzzy_tcp: connection closed by %s for rule %s",
+						  rspamd_upstream_name(conn->server),
+						  conn->rule->name);
+			}
 			fuzzy_tcp_connection_close(conn);
 			fuzzy_tcp_connection_cleanup(conn, "connection closed by peer");
 			return;
@@ -1413,9 +1451,17 @@ fuzzy_tcp_read_handler(struct fuzzy_tcp_connection *conn)
 		return;
 	}
 	else if (r == 0) {
-		msg_info("fuzzy_tcp: connection closed by %s for rule %s",
-				 rspamd_upstream_name(conn->server),
-				 conn->rule->name);
+		/* Connection closed by peer - log at info for auto mode, debug otherwise */
+		if (conn->rule->tcp_auto) {
+			msg_info("fuzzy_tcp: connection closed by %s for rule %s",
+					 rspamd_upstream_name(conn->server),
+					 conn->rule->name);
+		}
+		else {
+			msg_debug("fuzzy_tcp: connection closed by %s for rule %s",
+					  rspamd_upstream_name(conn->server),
+					  conn->rule->name);
+		}
 		fuzzy_tcp_connection_close(conn);
 		fuzzy_tcp_connection_cleanup(conn, "connection closed by peer");
 		return;
@@ -1702,17 +1748,17 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 
 
 	if (rule->tcp_enabled) {
-		msg_info_config("rule %s: TCP explicitly enabled (timeout=%.1fs)",
-						rule->name ? rule->name : "default", rule->tcp_timeout);
+		msg_debug_config("rule %s: TCP explicitly enabled (timeout=%.1fs)",
+						 rule->name ? rule->name : "default", rule->tcp_timeout);
 	}
 	else if (rule->tcp_auto) {
-		msg_info_config("rule %s: TCP auto-switch enabled (threshold=%.2f req/s, window=%.1fs)",
-						rule->name ? rule->name : "default",
-						rule->tcp_threshold, rule->tcp_window);
+		msg_debug_config("rule %s: TCP auto-switch enabled (threshold=%.2f req/s, window=%.1fs)",
+						 rule->name ? rule->name : "default",
+						 rule->tcp_threshold, rule->tcp_window);
 	}
 	else {
-		msg_info_config("rule %s: TCP disabled (using UDP only)",
-						rule->name ? rule->name : "default");
+		msg_debug_config("rule %s: TCP disabled (using UDP only)",
+						 rule->name ? rule->name : "default");
 	}
 
 	if ((value = ucl_object_lookup(obj, "algorithm")) != NULL) {
@@ -1852,7 +1898,7 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 		}
 
 		rule->read_local_key = rspamd_keypair_new(RSPAMD_KEYPAIR_KEX);
-		msg_info_config("using separate read encryption key for rule %s", name);
+		msg_debug_config("using separate read encryption key for rule %s", name);
 	}
 	else if (rule->peer_key) {
 		/* Use common encryption key for read operations */
@@ -1871,7 +1917,7 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 		}
 
 		rule->write_local_key = rspamd_keypair_new(RSPAMD_KEYPAIR_KEX);
-		msg_info_config("using separate write encryption key for rule %s", name);
+		msg_debug_config("using separate write encryption key for rule %s", name);
 	}
 	else if (rule->peer_key) {
 		/* Use common encryption key for write operations */
@@ -1884,13 +1930,13 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 		/* No read key, but write key exists - use write key for read */
 		rule->read_peer_key = rspamd_pubkey_ref(rule->write_peer_key);
 		rule->read_local_key = rspamd_keypair_ref(rule->write_local_key);
-		msg_info_config("using write encryption key for read operations in rule %s", name);
+		msg_debug_config("using write encryption key for read operations in rule %s", name);
 	}
 	if (!rule->write_peer_key && rule->read_peer_key) {
 		/* No write key, but read key exists - use read key for write */
 		rule->write_peer_key = rspamd_pubkey_ref(rule->read_peer_key);
 		rule->write_local_key = rspamd_keypair_ref(rule->read_local_key);
-		msg_info_config("using read encryption key for write operations in rule %s", name);
+		msg_debug_config("using read encryption key for write operations in rule %s", name);
 	}
 
 	if ((value = ucl_object_lookup(obj, "learn_condition")) != NULL) {
@@ -2001,6 +2047,7 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 	/* Initialize rate tracker */
 	rule->rate_tracker.requests_count = 0;
 	rule->rate_tracker.window_start = 0;
+	rule->rate_tracker.last_was_tcp = FALSE;
 
 	/* Initialize TCP connection pool - array of connections with proper free function */
 	rule->tcp_connections = g_ptr_array_new_with_free_func(fuzzy_tcp_connection_unref);
@@ -5230,20 +5277,34 @@ register_fuzzy_client_call(struct rspamd_task *task,
 
 		/* Try TCP if enabled/auto and rate threshold exceeded */
 		struct fuzzy_tcp_connection *tcp_conn = NULL;
-		if (fuzzy_should_try_tcp(rule, now)) {
-			/* Calculate current rate for logging */
-			double time_diff = now - rule->rate_tracker.window_start;
-			double current_rate = (time_diff > 0) ? (rule->rate_tracker.requests_count / time_diff) : 0;
+		gboolean should_try_tcp = fuzzy_should_try_tcp(rule, now);
 
-			msg_info_task("fuzzy_check: trying TCP for rule %s to %s (rate=%.2f req/s, threshold=%.2f)",
-						  rule->name, rspamd_upstream_name(selected),
-						  current_rate, rule->tcp_threshold);
+		if (should_try_tcp) {
+			/* Log transition to TCP only on auto-switch (not when explicitly enabled) */
+			if (rule->tcp_auto && !rule->rate_tracker.last_was_tcp) {
+				double time_diff = now - rule->rate_tracker.window_start;
+				double current_rate = (time_diff > 0) ? (rule->rate_tracker.requests_count / time_diff) : 0;
+				msg_info_task("fuzzy_check: auto-switching to TCP for rule %s to %s (rate=%.2f req/s > threshold %.2f)",
+							  rule->name, rspamd_upstream_name(selected),
+							  current_rate, rule->tcp_threshold);
+			}
+			else {
+				msg_debug_fuzzy_check("fuzzy_check: using TCP for rule %s to %s",
+									  rule->name, rspamd_upstream_name(selected));
+			}
 			/* This is read server (CHECK operation) */
 			tcp_conn = fuzzy_tcp_get_or_create_connection(rule, selected, task, FALSE);
 		}
 		else {
-			msg_debug_fuzzy_check("fuzzy_check: using UDP for rule %s to %s (TCP disabled or rate below threshold)",
-								  rule->name, rspamd_upstream_name(selected));
+			/* Log transition to UDP only when switching from TCP */
+			if (rule->tcp_auto && rule->rate_tracker.last_was_tcp) {
+				msg_info_task("fuzzy_check: switching back to UDP for rule %s to %s (rate below threshold)",
+							  rule->name, rspamd_upstream_name(selected));
+			}
+			else {
+				msg_debug_fuzzy_check("fuzzy_check: using UDP for rule %s to %s",
+									  rule->name, rspamd_upstream_name(selected));
+			}
 		}
 
 		/* Use TCP if available and connected */
@@ -5267,6 +5328,9 @@ register_fuzzy_client_call(struct rspamd_task *task,
 				msg_debug_fuzzy_check("fuzzy_tcp: sent %d commands to %s via TCP",
 									  (int) commands->len, rspamd_upstream_name(selected));
 
+				/* Mark that we used TCP for this request */
+				rule->rate_tracker.last_was_tcp = TRUE;
+
 				rspamd_session_add_event(task->s, fuzzy_io_fin, session, M);
 				session->item = rspamd_symcache_get_cur_item(task);
 
@@ -5283,13 +5347,26 @@ register_fuzzy_client_call(struct rspamd_task *task,
 				return; /* TCP send successful */
 			}
 			else {
-				msg_info_task("fuzzy_tcp: failed to send commands, falling back to UDP");
+				/* Log fallback to UDP only for auto-switch mode */
+				if (rule->tcp_auto && rule->rate_tracker.last_was_tcp) {
+					msg_info_task("fuzzy_tcp: failed to send commands, falling back to UDP");
+				}
+				else {
+					msg_debug_fuzzy_check("fuzzy_tcp: failed to send commands, using UDP");
+				}
 				/* Fall through to UDP */
 			}
 		}
 		else if (tcp_conn && !tcp_conn->connected) {
-			msg_info_task("fuzzy_check: TCP connection not ready for rule %s to %s, using UDP",
-						  rule->name, rspamd_upstream_name(selected));
+			/* Log fallback only for auto-switch or when transition happens */
+			if (rule->tcp_auto && rule->rate_tracker.last_was_tcp) {
+				msg_info_task("fuzzy_check: TCP connection not ready for rule %s to %s, falling back to UDP",
+							  rule->name, rspamd_upstream_name(selected));
+			}
+			else {
+				msg_debug_fuzzy_check("fuzzy_check: TCP connection not ready for rule %s to %s, using UDP",
+									  rule->name, rspamd_upstream_name(selected));
+			}
 		}
 
 		/* Use UDP as fallback or when TCP not available */
@@ -5308,6 +5385,9 @@ register_fuzzy_client_call(struct rspamd_task *task,
 				g_ptr_array_free(commands, TRUE);
 			}
 			else {
+				/* Mark that we used UDP for this request */
+				rule->rate_tracker.last_was_tcp = FALSE;
+
 				/* Create session for a socket */
 				session =
 					rspamd_mempool_alloc0(task->task_pool,
