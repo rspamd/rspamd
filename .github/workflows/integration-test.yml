@@ -79,7 +79,7 @@ jobs:
         working-directory: test/integration
         run: |
           # Use rspamadm from build
-          export PATH="${GITHUB_WORKSPACE}/install/bin:$PATH"
+          export PATH="${GITHUB_WORKSPACE}/install/usr/bin:$PATH"
 
           # Disable leak detection for rspamadm utility
           export ASAN_OPTIONS=detect_leaks=0
