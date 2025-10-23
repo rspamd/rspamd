@@ -57,9 +57,7 @@ void rspamd_ev_watcher_start(struct ev_loop *loop,
 {
 	g_assert(ev->cb != NULL);
 
-	if (ev->io.fd >= 0) {
-		ev_io_start(EV_A, &ev->io);
-	}
+	ev_io_start(EV_A, &ev->io);
 
 	if (timeout > 0) {
 		/* Update timestamp to avoid timers running early */
@@ -94,17 +92,15 @@ void rspamd_ev_watcher_reschedule(struct ev_loop *loop,
 {
 	g_assert(ev->cb != NULL);
 
-	if (ev->io.fd >= 0) {
-		if (ev_can_stop(&ev->io)) {
-			ev_io_stop(EV_A, &ev->io);
-			ev_io_set(&ev->io, ev->io.fd, what);
-			ev_io_start(EV_A, &ev->io);
-		}
-		else {
-			ev->io.data = ev;
-			ev_io_init(&ev->io, rspamd_ev_watcher_io_cb, ev->io.fd, what);
-			ev_io_start(EV_A, &ev->io);
-		}
+	if (ev_can_stop(&ev->io)) {
+		ev_io_stop(EV_A, &ev->io);
+		ev_io_set(&ev->io, ev->io.fd, what);
+		ev_io_start(EV_A, &ev->io);
+	}
+	else {
+		ev->io.data = ev;
+		ev_io_init(&ev->io, rspamd_ev_watcher_io_cb, ev->io.fd, what);
+		ev_io_start(EV_A, &ev->io);
 	}
 
 	if (ev->timeout > 0) {
@@ -126,17 +122,15 @@ void rspamd_ev_watcher_reschedule_at(struct ev_loop *loop,
 {
 	g_assert(ev->cb != NULL);
 
-	if (ev->io.fd >= 0) {
-		if (ev_can_stop(&ev->io)) {
-			ev_io_stop(EV_A, &ev->io);
-			ev_io_set(&ev->io, ev->io.fd, what);
-			ev_io_start(EV_A, &ev->io);
-		}
-		else {
-			ev->io.data = ev;
-			ev_io_init(&ev->io, rspamd_ev_watcher_io_cb, ev->io.fd, what);
-			ev_io_start(EV_A, &ev->io);
-		}
+	if (ev_can_stop(&ev->io)) {
+		ev_io_stop(EV_A, &ev->io);
+		ev_io_set(&ev->io, ev->io.fd, what);
+		ev_io_start(EV_A, &ev->io);
+	}
+	else {
+		ev->io.data = ev;
+		ev_io_init(&ev->io, rspamd_ev_watcher_io_cb, ev->io.fd, what);
+		ev_io_start(EV_A, &ev->io);
 	}
 
 	if (at > 0) {
