@@ -4,3 +4,4 @@ level = "info";
 systemd = false;
 color = false;
 log_usec = true;
+debug_modules = ["fuzzy_check"];
