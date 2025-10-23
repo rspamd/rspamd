@@ -26,6 +26,7 @@ services:
       - "50003:50003"  # Fuzzy worker
       - "50004:50004"  # Proxy worker
     volumes:
+      - ./configs/logging.inc:/etc/rspamd/local.d/logging.inc:ro
       - ./configs/worker-normal.inc:/etc/rspamd/local.d/worker-normal.inc:ro
       - ./configs/worker-controller.inc:/etc/rspamd/local.d/worker-controller.inc:ro
       - ./configs/worker-fuzzy.inc:/etc/rspamd/local.d/worker-fuzzy.inc:ro
