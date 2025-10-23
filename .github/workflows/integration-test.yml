@@ -75,52 +75,30 @@ jobs:
           ninja
           DESTDIR="${GITHUB_WORKSPACE}/install" ninja install
 
-      - name: Generate Fuzzy encryption keys
+      - name: Create static encryption keys
         working-directory: test/integration
         run: |
-          # Use rspamadm from build
-          export PATH="${GITHUB_WORKSPACE}/install/usr/bin:$PATH"
-
-          # Disable leak detection for rspamadm utility
-          export ASAN_OPTIONS=detect_leaks=0
-
-          # Generate keypair for fuzzy worker
-          KEYPAIR=$(rspamadm keypair -u)
-          FUZZY_PRIVKEY=$(echo "$KEYPAIR" | grep privkey | cut -d'"' -f2)
-          FUZZY_PUBKEY=$(echo "$KEYPAIR" | grep pubkey | cut -d'"' -f2)
-
-          # Generate worker and proxy keypairs
-          WORKER_KEYPAIR=$(rspamadm keypair -u)
-          WORKER_PRIVKEY=$(echo "$WORKER_KEYPAIR" | grep privkey | cut -d'"' -f2)
-          WORKER_PUBKEY=$(echo "$WORKER_KEYPAIR" | grep pubkey | cut -d'"' -f2)
-
-          PROXY_KEYPAIR=$(rspamadm keypair -u)
-          PROXY_PRIVKEY=$(echo "$PROXY_KEYPAIR" | grep privkey | cut -d'"' -f2)
-          PROXY_PUBKEY=$(echo "$PROXY_KEYPAIR" | grep pubkey | cut -d'"' -f2)
-
-          # Create .env.keys file for docker-compose
-          cat > .env.keys <<EOF
-          # Rspamd integration test keys
-          # Generated at $(date)
+          # Use static keys to avoid LD_LIBRARY_PATH issues with rspamadm
+          cat > .env.keys <<'EOF'
+          # Rspamd integration test keys (static for testing)
 
           # Fuzzy worker keypair
-          RSPAMD_FUZZY_WORKER_PRIVKEY=$FUZZY_PRIVKEY
-          RSPAMD_FUZZY_WORKER_PUBKEY=$FUZZY_PUBKEY
+          RSPAMD_FUZZY_WORKER_PRIVKEY=aergrxbdfppyo8x3upyw5brui1sug93ztyd9gcuuan141iy8zi1y
+          RSPAMD_FUZZY_WORKER_PUBKEY=dsrea5fbqaqtzccno8roczeym5hgbokn5wxr5cyyhhzrqciiogpy
 
           # Fuzzy check encryption key (same as fuzzy worker pubkey)
-          RSPAMD_FUZZY_ENCRYPTION_KEY=$FUZZY_PUBKEY
+          RSPAMD_FUZZY_ENCRYPTION_KEY=dsrea5fbqaqtzccno8roczeym5hgbokn5wxr5cyyhhzrqciiogpy
 
           # Normal worker keypair (for encrypted inter-worker communication)
-          RSPAMD_WORKER_PRIVKEY=$WORKER_PRIVKEY
-          RSPAMD_WORKER_PUBKEY=$WORKER_PUBKEY
+          RSPAMD_WORKER_PRIVKEY=y8rq4a5rb7wj3xpefhx9t8gg3npfy4fswbwxyw7ma8hj46m36w1y
+          RSPAMD_WORKER_PUBKEY=bnw1ga6h7q155qei7tzz9k5z4rb9msbf8gwra4jbzsyj8chg5n3y
 
           # Proxy worker keypair
-          RSPAMD_PROXY_PRIVKEY=$PROXY_PRIVKEY
-          RSPAMD_PROXY_PUBKEY=$PROXY_PUBKEY
+          RSPAMD_PROXY_PRIVKEY=ad9cz7mhb881ngsr3pncxydm9d6t917hyrysywixwpzntzhikruy
+          RSPAMD_PROXY_PUBKEY=bjkakz1r7zps7z774yn11gb9det5rw3dxb7z7559p5twzucneucy
           EOF
 
-          echo "Keys generated successfully"
-          cat .env.keys
+          echo "Static keys configured for testing"
 
       - name: Download email corpus
         working-directory: test/integration
