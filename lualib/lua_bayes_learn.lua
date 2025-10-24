@@ -312,7 +312,7 @@ exports.can_learn = function(task, is_spam, is_unlearn, overrides)
       if opts.bypass_header._set then
         matched = opts.bypass_header._set[header_value]
       else
-        matched = header_value ~= nil
+        matched = false
       end
 
       if matched then
