@@ -56,6 +56,9 @@ parser:option "-b --batch-size"
       :default "10"
 
 local report_template = [[From: "{= from_name =}" <{= from_addr =}>
+Auto-Submitted: auto-generated
+Precedence: bulk
+X-Auto-Response-Suppress: DR,RN,NRN,OOF,AutoReply
 To: {= rcpt =}
 {%+ if is_string(bcc) %}Bcc: {= bcc =}{%- endif %}
 Subject: Report Domain: {= reporting_domain =}
