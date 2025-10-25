@@ -253,7 +253,12 @@ define(["jquery", "app/common", "stickytabs", "visibility",
 
                 $("#preloader").addClass("d-none");
                 $("#navBar, #mainUI").removeClass("d-none");
-                $(".nav-tabs-sticky").stickyTabs({initialTab: "#status_nav"});
+
+                // Initialize FontAwesome icon replacement for FooTable before activating tabs
+                require(["app/footable-fontawesome"], (FootableFA) => {
+                    FootableFA.init();
+                    $(".nav-tabs-sticky").stickyTabs({initialTab: "#status_nav"});
+                });
             },
             errorMessage: "Cannot get server status",
             server: "All SERVERS"

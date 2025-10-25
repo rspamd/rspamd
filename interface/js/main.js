@@ -55,7 +55,7 @@ requirejs.onError = function (e) {
             "<button type=\"button\" class=\"btn btn-info btn-xs float-end\" " +
                 "onClick=\"window.location.reload(); this.parentNode.parentNode.removeChild(this.parentNode);\" " +
                 "title=\"Reload current page\">" +
-                "<i class=\"glyphicon glyphicon-repeat\"></i> Reload" +
+                "Reload" +
             "</button>" +
         "</div>";
     throw e;
