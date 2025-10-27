@@ -88,7 +88,7 @@ local function spf_handler(opts)
   local rspamd_task = require "rspamd_task"
   local rspamd_ip = require "rspamd_ip"
 
-  local task = rspamd_task:create(rspamd_config, rspamadm_ev_base)
+  local task = rspamd_task.create(rspamd_config, rspamadm_ev_base)
   task:set_session(rspamadm_session)
   task:set_resolver(rspamadm_dns_resolver)
 
