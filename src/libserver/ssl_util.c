@@ -1056,6 +1056,8 @@ gpointer rspamd_init_ssl_ctx_noverify(void)
 }
 #if defined(RSPAMD_LEGACY_SSL_PROVIDER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 #include <openssl/provider.h>
+static OSSL_PROVIDER *rspamd_legacy_provider = NULL;
+static OSSL_PROVIDER *rspamd_default_provider = NULL;
 #endif
 
 void rspamd_openssl_maybe_init(void)
@@ -1079,11 +1081,13 @@ void rspamd_openssl_maybe_init(void)
 		OPENSSL_init_ssl(0, NULL);
 #endif
 #if defined(RSPAMD_LEGACY_SSL_PROVIDER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-		if (OSSL_PROVIDER_load(NULL, "legacy") == NULL) {
+		rspamd_legacy_provider = OSSL_PROVIDER_load(NULL, "legacy");
+		if (rspamd_legacy_provider == NULL) {
 			msg_err("cannot load legacy OpenSSL provider: %s", ERR_lib_error_string(ERR_get_error()));
 			ERR_clear_error();
 		}
-		if (OSSL_PROVIDER_load(NULL, "default") == NULL) {
+		rspamd_default_provider = OSSL_PROVIDER_load(NULL, "default");
+		if (rspamd_default_provider == NULL) {
 			msg_err("cannot load default OpenSSL provider: %s", ERR_lib_error_string(ERR_get_error()));
 			ERR_clear_error();
 		}
@@ -1103,6 +1107,20 @@ void rspamd_openssl_maybe_init(void)
 
 		openssl_initialized = TRUE;
 	}
+}
+
+void rspamd_openssl_cleanup(void)
+{
+#if defined(RSPAMD_LEGACY_SSL_PROVIDER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+	if (rspamd_legacy_provider) {
+		OSSL_PROVIDER_unload(rspamd_legacy_provider);
+		rspamd_legacy_provider = NULL;
+	}
+	if (rspamd_default_provider) {
+		OSSL_PROVIDER_unload(rspamd_default_provider);
+		rspamd_default_provider = NULL;
+	}
+#endif
 }
 
 void rspamd_ssl_ctx_config(struct rspamd_config *cfg, gpointer ssl_ctx)

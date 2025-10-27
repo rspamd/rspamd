@@ -24,6 +24,7 @@
 #include "cryptobox.h"
 #include "utlist.h"
 #include "unix-std.h"
+#include "libserver/ssl_util.h"
 /* pwd and grp */
 #ifdef HAVE_PWD_H
 #include <pwd.h>
@@ -1740,6 +1741,7 @@ int main(int argc, char **argv, char **env)
 #endif
 	REF_RELEASE(rspamd_main->cfg);
 	rspamd_log_close(rspamd_main->logger);
+	rspamd_openssl_cleanup();
 	g_hash_table_unref(rspamd_main->spairs);
 	g_hash_table_unref(rspamd_main->workers);
 	rspamd_mempool_delete(rspamd_main->server_pool);
