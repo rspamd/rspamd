@@ -4172,6 +4172,7 @@ start_fuzzy(struct rspamd_worker *worker)
 	ctx->peer_fd = -1;
 	ctx->worker = worker;
 	ctx->cfg = worker->srv->cfg;
+	CFG_REF_RETAIN(ctx->cfg);
 	ctx->resolver = rspamd_dns_resolver_init(worker->srv->logger,
 											 ctx->event_loop,
 											 worker->srv->cfg);
@@ -4460,7 +4461,8 @@ start_fuzzy(struct rspamd_worker *worker)
 		kh_destroy(fuzzy_key_ids_set, ctx->weak_ids);
 	}
 
-	REF_RELEASE(ctx->cfg);
+	CFG_REF_RELEASE(ctx->cfg);
+	CFG_REF_RELEASE(ctx->cfg);
 	rspamd_log_close(worker->srv->logger);
 	rspamd_unset_crash_handler(worker->srv);
 

@@ -363,9 +363,10 @@ rspamd_cryptobox_init(void)
 
 void rspamd_cryptobox_deinit(struct rspamd_cryptobox_library_ctx *ctx)
 {
-	if (ctx) {
+	if (ctx && cryptobox_loaded) {
 		g_free(ctx->cpu_extensions);
 		g_free(ctx);
+		cryptobox_loaded = FALSE;
 	}
 }
 

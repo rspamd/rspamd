@@ -486,6 +486,7 @@ start_worker(struct rspamd_worker *worker)
 
 	g_assert(rspamd_worker_check_context(worker->ctx, rspamd_worker_magic));
 	ctx->cfg = worker->srv->cfg;
+	CFG_REF_RETAIN(ctx->cfg);
 	ctx->event_loop = rspamd_prepare_worker(worker, "normal", accept_socket);
 	rspamd_symcache_start_refresh(worker->srv->cfg->cache, ctx->event_loop,
 								  worker);
@@ -527,7 +528,8 @@ start_worker(struct rspamd_worker *worker)
 	}
 
 	rspamd_stat_close();
-	REF_RELEASE(ctx->cfg);
+	CFG_REF_RELEASE(ctx->cfg);
+	CFG_REF_RELEASE(ctx->cfg);
 	rspamd_log_close(worker->srv->logger);
 	rspamd_unset_crash_handler(worker->srv);
 

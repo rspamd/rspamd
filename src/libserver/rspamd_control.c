@@ -742,7 +742,7 @@ rspamd_control_default_cmd_handler(int fd,
 			}
 
 			rep.reply.reresolve.status = 0;
-			REF_RELEASE(cfg);
+			CFG_REF_RELEASE(cfg);
 		}
 		else {
 			rep.reply.reresolve.status = EINVAL;

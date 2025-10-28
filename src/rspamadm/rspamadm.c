@@ -607,7 +607,7 @@ end:
 	rspamd_session_destroy(rspamadm_session);
 	g_option_context_free(context);
 	rspamd_dns_resolver_deinit(resolver);
-	REF_RELEASE(rspamd_main->cfg);
+	CFG_REF_RELEASE(rspamd_main->cfg);
 	rspamd_http_context_free(rspamd_main->http_ctx);
 	rspamd_log_close(rspamd_main->logger);
 	rspamd_url_deinit();

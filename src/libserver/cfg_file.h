@@ -914,6 +914,49 @@ extern unsigned int rspamd_config_log_id;
 															RSPAMD_LOG_FUNC,                               \
 															__VA_ARGS__)
 
+/**
+ * Special refcount macros for rspamd_config with logging
+ */
+#define CFG_REF_INIT_RETAIN(cfg, dtor_cb)                                                        \
+	do {                                                                                         \
+		if ((cfg) != NULL) {                                                                     \
+			(cfg)->ref.refcount = 1;                                                             \
+			(cfg)->ref.dtor = (ref_dtor_cb_t) (dtor_cb);                                         \
+			rspamd_default_log_function(G_LOG_LEVEL_DEBUG, "config", NULL,                       \
+										G_STRFUNC, "CFG_REF_INIT_RETAIN %p at %s:%d refcount=1", \
+										(void *) (cfg), __FILE__, __LINE__);                     \
+		}                                                                                        \
+	} while (0)
+
+#define CFG_REF_RETAIN(cfg)                                                                       \
+	do {                                                                                          \
+		if ((cfg) != NULL) {                                                                      \
+			(cfg)->ref.refcount++;                                                                \
+			rspamd_default_log_function(G_LOG_LEVEL_DEBUG, "config", NULL,                        \
+										G_STRFUNC, "CFG_REF_RETAIN %p at %s:%d refcount=%ud",     \
+										(void *) (cfg), __FILE__, __LINE__, (cfg)->ref.refcount); \
+		}                                                                                         \
+	} while (0)
+
+#define CFG_REF_RELEASE(cfg)                                                                                     \
+	do {                                                                                                         \
+		if ((cfg) != NULL) {                                                                                     \
+			unsigned int _old_rc = (cfg)->ref.refcount;                                                          \
+			if (--(cfg)->ref.refcount == 0 && (cfg)->ref.dtor) {                                                 \
+				rspamd_default_log_function(G_LOG_LEVEL_DEBUG, "config", NULL,                                   \
+											G_STRFUNC, "CFG_REF_RELEASE %p at %s:%d refcount=%ud->0 DESTROYING", \
+											(void *) (cfg), __FILE__, __LINE__, _old_rc);                        \
+				(cfg)->ref.dtor(cfg);                                                                            \
+			}                                                                                                    \
+			else {                                                                                               \
+				rspamd_default_log_function(G_LOG_LEVEL_DEBUG, "config", NULL,                                   \
+											G_STRFUNC, "CFG_REF_RELEASE %p at %s:%d refcount=%ud->%ud",          \
+											(void *) (cfg), __FILE__, __LINE__, _old_rc,                         \
+											(cfg)->ref.refcount);                                                \
+			}                                                                                                    \
+		}                                                                                                        \
+	} while (0)
+
 #ifdef __cplusplus
 }
 #endif

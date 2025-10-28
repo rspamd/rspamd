@@ -3720,7 +3720,7 @@ void rspamd_rcl_maybe_apply_lua_transform(struct rspamd_config *cfg)
 		msg_info_config("configuration has been transformed in Lua");
 	}
 
-	/* error function */
+	/* Clear stack completely */
 	lua_settop(L, 0);
 }
 
@@ -3742,6 +3742,12 @@ rspamd_rcl_decrypt_handler(struct ucl_parser *parser,
 	}
 
 	return true;
+}
+
+static void
+rspamd_rcl_jinja_free(unsigned char *data, size_t len, void *user_data)
+{
+	UCL_FREE(len, data);
 }
 
 static bool
@@ -3905,6 +3911,7 @@ rspamd_config_parse_ucl(struct rspamd_config *cfg,
 		jinja_handler->user_data = cfg;
 		jinja_handler->flags = UCL_SPECIAL_HANDLER_PREPROCESS_ALL;
 		jinja_handler->handler = rspamd_rcl_jinja_handler;
+		jinja_handler->free_function = rspamd_rcl_jinja_free;
 
 		ucl_parser_add_special_handler(parser.get(), jinja_handler);
 	}
@@ -3914,6 +3921,14 @@ rspamd_config_parse_ucl(struct rspamd_config *cfg,
 					"ucl parser error: %s", ucl_parser_get_error(parser.get()));
 
 		return FALSE;
+	}
+
+	/* Free old UCL object if it exists (e.g., after lua_cfg_transform) */
+	if (cfg->cfg_ucl_obj) {
+		ucl_object_unref(cfg->cfg_ucl_obj);
+	}
+	if (cfg->config_comments) {
+		ucl_object_unref(cfg->config_comments);
 	}
 
 	cfg->cfg_ucl_obj = ucl_parser_get_object(parser.get());
