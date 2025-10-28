@@ -744,6 +744,29 @@ lua_ucl_object_get(lua_State *L, int index)
 	return NULL;
 }
 
+#if LUA_VERSION_NUM < 502
+/**
+ * __gc metamethod for userdata that holds UCL object pointer.
+ * This is necessary because Lua 5.1/LuaJIT does not support __gc for tables,
+ * only for userdata. The userdata is stored at index [0] in the table created
+ * by ucl_object_push_lua_unwrapped.
+ */
+static int
+lua_ucl_userdata_gc(lua_State *L)
+{
+	ucl_object_t **pobj;
+
+	if (lua_isuserdata(L, 1)) {
+		pobj = (ucl_object_t **) lua_touserdata(L, 1);
+		if (pobj && *pobj) {
+			ucl_object_unref(*pobj);
+		}
+	}
+
+	return 0;
+}
+#endif
+
 void ucl_object_push_lua_unwrapped(lua_State *L, const ucl_object_t *obj)
 {
 	ucl_object_t **pobj;
@@ -755,6 +778,17 @@ void ucl_object_push_lua_unwrapped(lua_State *L, const ucl_object_t *obj)
 	lua_createtable(L, 1, 9);
 	pobj = lua_newuserdata(L, sizeof(*pobj));
 	*pobj = ucl_object_ref(obj);
+
+#if LUA_VERSION_NUM < 502
+	/* For Lua 5.1/LuaJIT: Set a metatable on the userdata itself to ensure __gc is called.
+	 * Lua 5.1 does not support __gc for tables, only for userdata.
+	 * For Lua 5.2+, we use table __gc instead (see lua_ucl_object_mt). */
+	lua_newtable(L);
+	lua_pushcfunction(L, lua_ucl_userdata_gc);
+	lua_setfield(L, -2, "__gc");
+	lua_setmetatable(L, -2);
+#endif
+
 	lua_rawseti(L, -2, 0);
 
 	lua_pushcfunction(L, lua_ucl_index);
@@ -1340,6 +1374,7 @@ lua_ucl_object_validate(lua_State *L)
 	return 2;
 }
 
+#if LUA_VERSION_NUM >= 502
 static int
 lua_ucl_object_gc(lua_State *L)
 {
@@ -1347,10 +1382,13 @@ lua_ucl_object_gc(lua_State *L)
 
 	obj = lua_ucl_object_get(L, 1);
 
-	ucl_object_unref(obj);
+	if (obj) {
+		ucl_object_unref(obj);
+	}
 
 	return 0;
 }
+#endif
 
 static int
 lua_ucl_iter_gc(lua_State *L)
@@ -1746,8 +1784,12 @@ lua_ucl_object_mt(lua_State *L)
 	lua_pushcfunction(L, lua_ucl_len);
 	lua_setfield(L, -2, "__len");
 
+#if LUA_VERSION_NUM >= 502
+	/* Table __gc is only supported in Lua 5.2+.
+	 * For Lua 5.1/LuaJIT, we use userdata __gc in ucl_object_push_lua_unwrapped */
 	lua_pushcfunction(L, lua_ucl_object_gc);
 	lua_setfield(L, -2, "__gc");
+#endif
 	lua_pushcfunction(L, lua_ucl_object_tostring);
 	lua_setfield(L, -2, "__tostring");
 
