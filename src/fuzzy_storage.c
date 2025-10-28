@@ -3824,7 +3824,13 @@ init_fuzzy(struct rspamd_config *cfg)
 	ctx->delay = NAN;
 	ctx->tcp_timeout = DEFAULT_TCP_TIMEOUT;
 	ctx->default_forbidden_ids = kh_init(fuzzy_key_ids_set);
+	rspamd_mempool_add_destructor(cfg->cfg_pool,
+								  (rspamd_mempool_destruct_t) kh_destroy_fuzzy_key_ids_set,
+								  ctx->default_forbidden_ids);
 	ctx->weak_ids = kh_init(fuzzy_key_ids_set);
+	rspamd_mempool_add_destructor(cfg->cfg_pool,
+								  (rspamd_mempool_destruct_t) kh_destroy_fuzzy_key_ids_set,
+								  ctx->weak_ids);
 
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
