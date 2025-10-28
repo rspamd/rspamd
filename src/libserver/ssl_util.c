@@ -19,6 +19,7 @@
 #include "libutil/hash.h"
 #include "libserver/logger.h"
 #include "libserver/cfg_file.h"
+#include "rspamd.h"
 #include "ssl_util.h"
 #include "unix-std.h"
 #include "cryptobox.h"
@@ -1002,8 +1003,6 @@ rspamd_init_ssl_ctx_common(void)
 	int ssl_options;
 	static const unsigned int client_cache_size = 1024;
 
-	rspamd_openssl_maybe_init();
-
 	ret = g_malloc0(sizeof(*ret));
 	ssl_options = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3;
 	ssl_ctx = SSL_CTX_new(SSLv23_method());
@@ -1056,11 +1055,9 @@ gpointer rspamd_init_ssl_ctx_noverify(void)
 }
 #if defined(RSPAMD_LEGACY_SSL_PROVIDER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 #include <openssl/provider.h>
-static OSSL_PROVIDER *rspamd_legacy_provider = NULL;
-static OSSL_PROVIDER *rspamd_default_provider = NULL;
 #endif
 
-void rspamd_openssl_maybe_init(void)
+void rspamd_openssl_maybe_init(struct rspamd_external_libs_ctx *ctx)
 {
 	static gboolean openssl_initialized = FALSE;
 
@@ -1081,15 +1078,17 @@ void rspamd_openssl_maybe_init(void)
 		OPENSSL_init_ssl(0, NULL);
 #endif
 #if defined(RSPAMD_LEGACY_SSL_PROVIDER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-		rspamd_legacy_provider = OSSL_PROVIDER_load(NULL, "legacy");
-		if (rspamd_legacy_provider == NULL) {
-			msg_err("cannot load legacy OpenSSL provider: %s", ERR_lib_error_string(ERR_get_error()));
-			ERR_clear_error();
-		}
-		rspamd_default_provider = OSSL_PROVIDER_load(NULL, "default");
-		if (rspamd_default_provider == NULL) {
-			msg_err("cannot load default OpenSSL provider: %s", ERR_lib_error_string(ERR_get_error()));
-			ERR_clear_error();
+		if (ctx) {
+			ctx->ssl_legacy_provider = OSSL_PROVIDER_load(NULL, "legacy");
+			if (ctx->ssl_legacy_provider == NULL) {
+				msg_err("cannot load legacy OpenSSL provider: %s", ERR_lib_error_string(ERR_get_error()));
+				ERR_clear_error();
+			}
+			ctx->ssl_default_provider = OSSL_PROVIDER_load(NULL, "default");
+			if (ctx->ssl_default_provider == NULL) {
+				msg_err("cannot load default OpenSSL provider: %s", ERR_lib_error_string(ERR_get_error()));
+				ERR_clear_error();
+			}
 		}
 #endif
 
@@ -1107,20 +1106,6 @@ void rspamd_openssl_maybe_init(void)
 
 		openssl_initialized = TRUE;
 	}
-}
-
-void rspamd_openssl_cleanup(void)
-{
-#if defined(RSPAMD_LEGACY_SSL_PROVIDER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-	if (rspamd_legacy_provider) {
-		OSSL_PROVIDER_unload(rspamd_legacy_provider);
-		rspamd_legacy_provider = NULL;
-	}
-	if (rspamd_default_provider) {
-		OSSL_PROVIDER_unload(rspamd_default_provider);
-		rspamd_default_provider = NULL;
-	}
-#endif
 }
 
 void rspamd_ssl_ctx_config(struct rspamd_config *cfg, gpointer ssl_ctx)
