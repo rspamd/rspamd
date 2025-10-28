@@ -1477,7 +1477,7 @@ rspamd_parse_host_port_priority(const char *str,
 
 		if (*addrs == NULL) {
 			*addrs = g_ptr_array_new_full(1,
-										  pool == NULL ? NULL : (GDestroyNotify) rspamd_inet_address_free);
+										  (GDestroyNotify) rspamd_inet_address_free);
 
 			if (pool != NULL) {
 				rspamd_mempool_add_destructor(pool,
