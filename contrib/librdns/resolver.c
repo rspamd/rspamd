@@ -473,7 +473,7 @@ rdns_reschedule_req_over_tcp(struct rdns_request *req, struct rdns_server *serv)
 
 		struct rdns_tcp_output_chain *oc;
 
-		oc = calloc(1, sizeof(*oc) + req->packet_len);
+		oc = calloc(1, sizeof(*oc) + req->pos);
 
 		if (oc == NULL) {
 			rdns_err("failed to allocate output buffer for TCP ioc: %s",
@@ -482,8 +482,8 @@ rdns_reschedule_req_over_tcp(struct rdns_request *req, struct rdns_server *serv)
 		}
 
 		oc->write_buf = ((unsigned char *) oc) + sizeof(*oc);
-		memcpy(oc->write_buf, req->packet, req->packet_len);
-		oc->next_write_size = htons(req->packet_len);
+		memcpy(oc->write_buf, req->packet, req->pos);
+		oc->next_write_size = htons(req->pos);
 
 		DL_APPEND(ioc->tcp->output_chain, oc);
 
