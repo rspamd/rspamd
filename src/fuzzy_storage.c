@@ -4459,13 +4459,7 @@ start_fuzzy(struct rspamd_worker *worker)
 		g_free(cur);
 	}
 
-	if (ctx->default_forbidden_ids) {
-		kh_destroy(fuzzy_key_ids_set, ctx->default_forbidden_ids);
-	}
-
-	if (ctx->weak_ids) {
-		kh_destroy(fuzzy_key_ids_set, ctx->weak_ids);
-	}
+	/* default_forbidden_ids and weak_ids are freed by mempool destructor */
 
 	CFG_REF_RELEASE(ctx->cfg);
 	CFG_REF_RELEASE(ctx->cfg);
