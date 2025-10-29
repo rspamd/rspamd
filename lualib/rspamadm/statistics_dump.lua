@@ -150,16 +150,23 @@ local function check_redis_classifier(cls, cfg)
     end
 
     local redis_params
+    -- Try load from classifier config
     redis_params = lua_redis.try_load_redis_servers(cls,
         rspamd_config, false, 'bayes')
     if not redis_params then
+      -- Try load from statistics_dump module config
       redis_params = lua_redis.try_load_redis_servers(cfg[N] or E,
           rspamd_config, false, 'bayes')
       if not redis_params then
         redis_params = lua_redis.try_load_redis_servers(cfg[N] or E,
             rspamd_config, true)
         if not redis_params then
-          return false
+          -- Try load from global redis config
+          redis_params = lua_redis.try_load_redis_servers(rspamd_config:get_all_opt('redis'),
+              rspamd_config, true)
+          if not redis_params then
+            return false
+          end
         end
       end
     end
