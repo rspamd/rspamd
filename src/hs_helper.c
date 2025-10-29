@@ -655,9 +655,9 @@ start_hs_helper(struct rspamd_worker *worker)
 	ev_loop(ctx->event_loop, 0);
 	rspamd_worker_block_signals();
 
+	CFG_REF_RELEASE(ctx->cfg);
+	CFG_REF_RELEASE(ctx->cfg);
 	rspamd_log_close(worker->srv->logger);
-	CFG_REF_RELEASE(ctx->cfg);
-	CFG_REF_RELEASE(ctx->cfg);
 	rspamd_unset_crash_handler(worker->srv);
 
 	exit(EXIT_SUCCESS);
