@@ -3665,11 +3665,56 @@ rspamd_create_dkim_sign_context(struct rspamd_task *task,
 	return nctx;
 }
 
+/**
+ * Validate that AUID domain is the same or subdomain of the d= tag domain
+ * @param auid AUID string (can be just domain or local-part@domain)
+ * @param domain the d= tag domain
+ * @return true if valid, false otherwise
+ */
+static bool
+rspamd_dkim_validate_auid_domain(const char *auid, const char *domain)
+{
+	const char *auid_domain;
+	size_t auid_len, domain_len;
+
+	if (!auid || !domain) {
+		return false;
+	}
+
+	/* Find @ in auid to extract domain part */
+	auid_domain = strchr(auid, '@');
+	if (auid_domain) {
+		auid_domain++; /* Skip @ */
+	}
+	else {
+		/* No @, so the whole auid is the domain */
+		auid_domain = auid;
+	}
+
+	auid_len = strlen(auid_domain);
+	domain_len = strlen(domain);
+
+	/* Check if domains match exactly */
+	if (auid_len == domain_len && g_ascii_strcasecmp(auid_domain, domain) == 0) {
+		return true;
+	}
+
+	/* Check if auid_domain is a subdomain of domain */
+	if (auid_len > domain_len) {
+		/* Check if it ends with .domain */
+		if (auid_domain[auid_len - domain_len - 1] == '.' &&
+			g_ascii_strcasecmp(auid_domain + auid_len - domain_len, domain) == 0) {
+			return true;
+		}
+	}
+
+	return false;
+}
 
 GString *
 rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 				 const char *domain, time_t expire, size_t len, unsigned int idx,
-				 const char *arc_cv, rspamd_dkim_sign_context_t *ctx)
+				 const char *arc_cv, const char *auid, rspamd_dkim_sign_context_t *ctx)
 {
 	GString *hdr;
 	struct rspamd_dkim_header *dh;
@@ -3713,6 +3758,15 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 		}
 	}
 
+	/* Validate AUID if provided */
+	if (auid && *auid) {
+		if (!rspamd_dkim_validate_auid_domain(auid, domain)) {
+			msg_warn_task("AUID domain does not match or is not a subdomain of d=%s, ignoring AUID: %s",
+						  domain, auid);
+			auid = NULL;
+		}
+	}
+
 	hdr = g_string_sized_new(255);
 
 	if (ctx->common.type == RSPAMD_DKIM_NORMAL) {
@@ -3721,6 +3775,10 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 							  ctx->common.header_canon_type == DKIM_CANON_RELAXED ? "relaxed" : "simple",
 							  ctx->common.body_canon_type == DKIM_CANON_RELAXED ? "relaxed" : "simple",
 							  domain, selector);
+		/* Add AUID (i= tag) if provided and valid */
+		if (auid && *auid) {
+			rspamd_printf_gstring(hdr, "i=%s; ", auid);
+		}
 	}
 	else if (ctx->common.type == RSPAMD_DKIM_ARC_SIG) {
 		rspamd_printf_gstring(hdr, "i=%d; a=%s; c=%s/%s; d=%s; s=%s; ",
@@ -3729,6 +3787,10 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 							  ctx->common.header_canon_type == DKIM_CANON_RELAXED ? "relaxed" : "simple",
 							  ctx->common.body_canon_type == DKIM_CANON_RELAXED ? "relaxed" : "simple",
 							  domain, selector);
+		/* Add AUID if provided and valid - note: i= is used for instance in ARC-Seal, but for AUID in ARC-Sig */
+		if (auid && *auid) {
+			rspamd_printf_gstring(hdr, "auid=%s; ", auid);
+		}
 	}
 	else {
 		g_assert(arc_cv != NULL);
@@ -3738,6 +3800,7 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 							  domain,
 							  selector,
 							  arc_cv);
+		/* Note: For ARC-Seal, i= is reserved for instance, so AUID is not supported */
 	}
 
 	if (expire > 0) {

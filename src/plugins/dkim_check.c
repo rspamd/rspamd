@@ -751,7 +751,7 @@ lua_dkim_sign_handler(lua_State *L)
 	GList *sigs = NULL;
 	const char *selector = NULL, *domain = NULL, *key = NULL, *rawkey = NULL,
 			   *headers = NULL, *sign_type_str = NULL, *arc_cv = NULL,
-			   *pubkey = NULL;
+			   *pubkey = NULL, *auid = NULL;
 	rspamd_dkim_sign_context_t *ctx;
 	rspamd_dkim_sign_key_t *dkim_key;
 	gsize rawlen = 0, keylen = 0;
@@ -764,16 +764,17 @@ lua_dkim_sign_handler(lua_State *L)
 	 * - selector
 	 * - domain
 	 * - key
+	 * - auid (optional)
 	 */
 	if (!rspamd_lua_parse_table_arguments(L, 2, &err,
 										  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
 										  "key=V;rawkey=V;*domain=S;*selector=S;no_cache=B;headers=S;"
 										  "sign_type=S;arc_idx=I;arc_cv=S;expire=I;pubkey=S;"
-										  "strict_pubkey_check=B",
+										  "strict_pubkey_check=B;auid=S",
 										  &keylen, &key, &rawlen, &rawkey, &domain,
 										  &selector, &no_cache, &headers,
 										  &sign_type_str, &arc_idx, &arc_cv, &expire, &pubkey,
-										  &strict_pubkey_check)) {
+										  &strict_pubkey_check, &auid)) {
 		msg_err_task("cannot parse table arguments: %e",
 					 err);
 		g_error_free(err);
@@ -909,7 +910,7 @@ lua_dkim_sign_handler(lua_State *L)
 	}
 
 	hdr = rspamd_dkim_sign(task, selector, domain, 0,
-						   expire, arc_idx, arc_cv, ctx);
+						   expire, arc_idx, arc_cv, auid, ctx);
 
 	if (hdr) {
 

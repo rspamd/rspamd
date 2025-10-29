@@ -215,6 +215,7 @@ GString *rspamd_dkim_sign(struct rspamd_task *task,
 						  size_t len,
 						  unsigned int idx,
 						  const char *arc_cv,
+						  const char *auid,
 						  rspamd_dkim_sign_context_t *ctx);
 
 rspamd_dkim_key_t *rspamd_dkim_key_ref(rspamd_dkim_key_t *k);
