@@ -3602,7 +3602,7 @@ rspamd_controller_finish_handler(struct rspamd_http_connection_entry *conn_ent)
 
 	session->wrk->nconns--;
 	rspamd_inet_address_free(session->from_addr);
-	REF_RELEASE(session->cfg);
+	CFG_REF_RELEASE(session->cfg);
 
 	if (session->pool) {
 		msg_debug_session("destroy session %p", session);
@@ -3640,7 +3640,7 @@ rspamd_controller_accept_socket(EV_P_ ev_io *w, int revents)
 	session->ctx = ctx;
 	session->cfg = ctx->cfg;
 	session->lang_det = ctx->lang_det;
-	REF_RETAIN(session->cfg);
+	CFG_REF_RETAIN(session->cfg);
 
 	session->from_addr = addr;
 	session->wrk = worker;
@@ -4072,6 +4072,7 @@ start_controller_worker(struct rspamd_worker *worker)
 
 	ctx->worker = worker;
 	ctx->cfg = worker->srv->cfg;
+	CFG_REF_RETAIN(ctx->cfg);
 	ctx->srv = worker->srv;
 	ctx->custom_commands = g_hash_table_new(rspamd_strcase_hash,
 											rspamd_strcase_equal);
@@ -4280,7 +4281,8 @@ start_controller_worker(struct rspamd_worker *worker)
 	g_hash_table_unref(ctx->plugins);
 	g_hash_table_unref(ctx->custom_commands);
 
-	REF_RELEASE(ctx->cfg);
+	CFG_REF_RELEASE(ctx->cfg);
+	CFG_REF_RELEASE(ctx->cfg);
 	rspamd_log_close(worker->srv->logger);
 	rspamd_unset_crash_handler(worker->srv);
 

@@ -24,6 +24,7 @@
 #include "cryptobox.h"
 #include "utlist.h"
 #include "unix-std.h"
+#include "libserver/ssl_util.h"
 /* pwd and grp */
 #ifdef HAVE_PWD_H
 #include <pwd.h>
@@ -333,14 +334,14 @@ reread_config(struct rspamd_main *rspamd_main)
 		rspamd_main->cfg = old_cfg;
 		rspamd_main->logger = old_logger;
 		msg_err_main("cannot parse new config file, revert to old one");
-		REF_RELEASE(tmp_cfg);
+		CFG_REF_RELEASE(tmp_cfg);
 
 		return FALSE;
 	}
 	else {
 		rspamd_log_close(old_logger);
 		msg_info_main("replacing config");
-		REF_RELEASE(old_cfg);
+		CFG_REF_RELEASE(old_cfg);
 		rspamd_main->cfg->rspamd_user = rspamd_user;
 		rspamd_main->cfg->rspamd_group = rspamd_group;
 		/* Here, we can do post actions with the existing config */
@@ -1738,7 +1739,7 @@ int main(int argc, char **argv, char **env)
 #ifdef WITH_HYPERSCAN
 	rspamd_hyperscan_cleanup_maybe();
 #endif
-	REF_RELEASE(rspamd_main->cfg);
+	CFG_REF_RELEASE(rspamd_main->cfg);
 	rspamd_log_close(rspamd_main->logger);
 	g_hash_table_unref(rspamd_main->spairs);
 	g_hash_table_unref(rspamd_main->workers);

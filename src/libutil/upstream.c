@@ -1304,6 +1304,12 @@ rspamd_upstreams_add_upstream(struct upstream_list *ups, const char *str,
 								(int) (semicolon_pos - (plus_pos + 1)), plus_pos + 1);
 				upstream->flags |= RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE;
 				ret = RSPAMD_PARSE_ADDR_RESOLVED;
+
+				if (ups->ctx) {
+					rspamd_mempool_add_destructor(ups->ctx->pool,
+												  (rspamd_mempool_destruct_t) rspamd_ptr_array_free_hard,
+												  addrs);
+				}
 			}
 		}
 		else {
@@ -1390,6 +1396,7 @@ rspamd_upstreams_add_upstream(struct upstream_list *ups, const char *str,
 			}
 			else {
 				g_ptr_array_free(addrs, TRUE);
+				addrs = NULL;
 			}
 		}
 
@@ -1397,6 +1404,10 @@ rspamd_upstreams_add_upstream(struct upstream_list *ups, const char *str,
 	}
 
 	if (ret == RSPAMD_PARSE_ADDR_FAIL) {
+		/* Clean up addrs if created but not managed by mempool */
+		if (addrs && !ups->ctx) {
+			g_ptr_array_free(addrs, TRUE);
+		}
 		g_free(upstream);
 		return FALSE;
 	}
@@ -1410,6 +1421,11 @@ rspamd_upstreams_add_upstream(struct upstream_list *ups, const char *str,
 		for (i = 0; i < addrs->len; i++) {
 			addr = g_ptr_array_index(addrs, i);
 			rspamd_upstream_add_addr(upstream, rspamd_inet_address_copy(addr, NULL));
+		}
+
+		/* Free addrs array if no pool (not managed by mempool destructor) */
+		if (!ups->ctx) {
+			g_ptr_array_free(addrs, TRUE);
 		}
 	}
 

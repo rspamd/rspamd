@@ -111,7 +111,7 @@ gpointer rspamd_init_ssl_ctx(void);
 gpointer rspamd_init_ssl_ctx_noverify(void);
 void rspamd_ssl_ctx_config(struct rspamd_config *cfg, gpointer ssl_ctx);
 void rspamd_ssl_ctx_free(gpointer ssl_ctx);
-void rspamd_openssl_maybe_init(void);
+void rspamd_openssl_maybe_init(struct rspamd_external_libs_ctx *ctx);
 
 #ifdef __cplusplus
 }

@@ -91,7 +91,7 @@ rspamd_task_new(struct rspamd_worker *worker,
 
 	if (cfg) {
 		new_task->cfg = cfg;
-		REF_RETAIN(cfg);
+		CFG_REF_RETAIN(cfg);
 
 		if (cfg->check_all_filters) {
 			new_task->flags |= RSPAMD_TASK_FLAG_PASS_ALL;
@@ -289,7 +289,7 @@ void rspamd_task_free(struct rspamd_task *task)
 												(double) task->cfg->full_gc_iters / 2);
 			}
 
-			REF_RELEASE(task->cfg);
+			CFG_REF_RELEASE(task->cfg);
 		}
 
 		kh_destroy(rspamd_req_headers_hash, task->request_headers);

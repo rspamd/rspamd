@@ -624,6 +624,7 @@ start_hs_helper(struct rspamd_worker *worker)
 
 	g_assert(rspamd_worker_check_context(worker->ctx, rspamd_hs_helper_magic));
 	ctx->cfg = worker->srv->cfg;
+	CFG_REF_RETAIN(ctx->cfg);
 
 	if (ctx->hs_dir == NULL) {
 		ctx->hs_dir = ctx->cfg->hs_cache_dir;
@@ -654,8 +655,9 @@ start_hs_helper(struct rspamd_worker *worker)
 	ev_loop(ctx->event_loop, 0);
 	rspamd_worker_block_signals();
 
+	CFG_REF_RELEASE(ctx->cfg);
+	CFG_REF_RELEASE(ctx->cfg);
 	rspamd_log_close(worker->srv->logger);
-	REF_RELEASE(ctx->cfg);
 	rspamd_unset_crash_handler(worker->srv);
 
 	exit(EXIT_SUCCESS);

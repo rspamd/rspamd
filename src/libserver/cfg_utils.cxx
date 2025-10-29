@@ -51,6 +51,9 @@
 #include <openssl/evp.h>
 #include <openssl/ssl.h>
 #include <openssl/conf.h>
+#if defined(RSPAMD_LEGACY_SSL_PROVIDER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+#include <openssl/provider.h>
+#endif
 #endif
 #ifdef HAVE_LOCALE_H
 #include <locale.h>
@@ -2736,7 +2739,7 @@ rspamd_init_libs(void)
 	ottery_config_init(ottery_cfg);
 	ctx->ottery_cfg = ottery_cfg;
 
-	rspamd_openssl_maybe_init();
+	rspamd_openssl_maybe_init(ctx);
 
 	/* Check if we have rdrand */
 	if ((ctx->crypto_ctx->cpu_config & CPUID_RDRAND) == 0) {
@@ -3016,6 +3019,14 @@ void rspamd_deinit_libs(struct rspamd_external_libs_ctx *ctx)
 		ERR_free_strings();
 		rspamd_ssl_ctx_free(ctx->ssl_ctx);
 		rspamd_ssl_ctx_free(ctx->ssl_ctx_noverify);
+#if defined(RSPAMD_LEGACY_SSL_PROVIDER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+		if (ctx->ssl_legacy_provider) {
+			OSSL_PROVIDER_unload((OSSL_PROVIDER *) ctx->ssl_legacy_provider);
+		}
+		if (ctx->ssl_default_provider) {
+			OSSL_PROVIDER_unload((OSSL_PROVIDER *) ctx->ssl_default_provider);
+		}
+#endif
 #endif
 		rspamd_inet_library_destroy();
 		rspamd_free_zstd_dictionary(ctx->in_dict);

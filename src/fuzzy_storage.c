@@ -493,7 +493,8 @@ ucl_keymap_dtor_cb(struct map_cb_data *data)
 		kh_foreach_value(jb->ctx->dynamic_keys, key, {
 			REF_RELEASE(key);
 		});
-		kh_destroy(rspamd_fuzzy_keys_hash, jb->ctx->dynamic_keys);
+		/* Clear hash content but don't destroy - mempool destructor will handle it */
+		kh_clear(rspamd_fuzzy_keys_hash, jb->ctx->dynamic_keys);
 
 		g_free(jb);
 	}
@@ -812,6 +813,10 @@ fuzzy_key_dtor(gpointer p)
 	struct fuzzy_key *key = p;
 
 	if (key) {
+		if (key->key) {
+			rspamd_keypair_unref(key->key);
+		}
+
 		if (key->stat) {
 			REF_RELEASE(key->stat);
 		}
@@ -3565,6 +3570,7 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
 	}
 
 	if (rspamd_keypair_type(kp) != RSPAMD_KEYPAIR_KEX) {
+		rspamd_keypair_unref(kp);
 		return FALSE;
 	}
 
@@ -3824,7 +3830,13 @@ init_fuzzy(struct rspamd_config *cfg)
 	ctx->delay = NAN;
 	ctx->tcp_timeout = DEFAULT_TCP_TIMEOUT;
 	ctx->default_forbidden_ids = kh_init(fuzzy_key_ids_set);
+	rspamd_mempool_add_destructor(cfg->cfg_pool,
+								  (rspamd_mempool_destruct_t) kh_destroy_fuzzy_key_ids_set,
+								  ctx->default_forbidden_ids);
 	ctx->weak_ids = kh_init(fuzzy_key_ids_set);
+	rspamd_mempool_add_destructor(cfg->cfg_pool,
+								  (rspamd_mempool_destruct_t) kh_destroy_fuzzy_key_ids_set,
+								  ctx->weak_ids);
 
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
@@ -4172,6 +4184,7 @@ start_fuzzy(struct rspamd_worker *worker)
 	ctx->peer_fd = -1;
 	ctx->worker = worker;
 	ctx->cfg = worker->srv->cfg;
+	CFG_REF_RETAIN(ctx->cfg);
 	ctx->resolver = rspamd_dns_resolver_init(worker->srv->logger,
 											 ctx->event_loop,
 											 worker->srv->cfg);
@@ -4301,6 +4314,9 @@ start_fuzzy(struct rspamd_worker *worker)
 		struct fuzzy_keymap_ucl_buf *jb, **pjb;
 
 		ctx->dynamic_keys = kh_init(rspamd_fuzzy_keys_hash);
+		rspamd_mempool_add_destructor(ctx->cfg->cfg_pool,
+									  (rspamd_mempool_destruct_t) fuzzy_hash_table_dtor,
+									  ctx->dynamic_keys);
 		/* Now try to add map with ucl data */
 		jb = g_malloc(sizeof(struct fuzzy_keymap_ucl_buf));
 		pjb = g_malloc(sizeof(struct fuzzy_keymap_ucl_buf *));
@@ -4452,15 +4468,10 @@ start_fuzzy(struct rspamd_worker *worker)
 		g_free(cur);
 	}
 
-	if (ctx->default_forbidden_ids) {
-		kh_destroy(fuzzy_key_ids_set, ctx->default_forbidden_ids);
-	}
+	/* default_forbidden_ids and weak_ids are freed by mempool destructor */
 
-	if (ctx->weak_ids) {
-		kh_destroy(fuzzy_key_ids_set, ctx->weak_ids);
-	}
-
-	REF_RELEASE(ctx->cfg);
+	CFG_REF_RELEASE(ctx->cfg);
+	CFG_REF_RELEASE(ctx->cfg);
 	rspamd_log_close(worker->srv->logger);
 	rspamd_unset_crash_handler(worker->srv);
 

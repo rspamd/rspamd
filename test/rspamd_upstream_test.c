@@ -178,5 +178,5 @@ void rspamd_upstream_test_func(void)
 	g_assert(rspamd_upstreams_alive(ls) == 3);
 
 	rspamd_upstreams_destroy(ls);
-	REF_RELEASE(cfg);
+	CFG_REF_RELEASE(cfg);
 }

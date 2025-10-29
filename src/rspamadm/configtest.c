@@ -84,11 +84,13 @@ rspamadm_configtest(int argc, char **argv, const struct rspamadm_command *cmd)
 	GOptionContext *context;
 	GError *error = NULL;
 	const char *confdir;
-	struct rspamd_config *cfg = rspamd_main->cfg;
+	struct rspamd_config *cfg;
 	gboolean ret = TRUE;
 	worker_t **pworker;
 	const uint64_t *log_cnt;
 
+	cfg = rspamd_config_new(RSPAMD_CONFIG_INIT_DEFAULT | RSPAMD_CONFIG_INIT_WIPE_LUA_MEM);
+	cfg->libs_ctx = rspamd_init_libs();
 	context = g_option_context_new(
 		"configtest - perform configuration file test");
 	g_option_context_set_summary(context,
@@ -137,7 +139,7 @@ rspamadm_configtest(int argc, char **argv, const struct rspamadm_command *cmd)
 		/* Do post-load actions */
 		rspamd_lua_post_load_config(cfg);
 
-		if (!rspamd_init_filters(rspamd_main->cfg, false, strict)) {
+		if (!rspamd_init_filters(cfg, false, strict)) {
 			ret = FALSE;
 		}
 
@@ -184,6 +186,7 @@ rspamadm_configtest(int argc, char **argv, const struct rspamadm_command *cmd)
 		rspamd_printf("syntax %s\n", ret ? "OK" : "BAD");
 	}
 
+	CFG_REF_RELEASE(cfg);
 	if (!ret) {
 		exit(EXIT_FAILURE);
 	}

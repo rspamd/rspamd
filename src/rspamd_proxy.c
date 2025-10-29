@@ -3092,6 +3092,7 @@ start_rspamd_proxy(struct rspamd_worker *worker)
 
 	g_assert(rspamd_worker_check_context(worker->ctx, rspamd_rspamd_proxy_magic));
 	ctx->cfg = worker->srv->cfg;
+	CFG_REF_RETAIN(ctx->cfg);
 	ctx->srv = worker->srv;
 	ctx->event_loop = rspamd_prepare_worker(worker, "rspamd_proxy",
 											proxy_accept_socket);
@@ -3166,7 +3167,8 @@ start_rspamd_proxy(struct rspamd_worker *worker)
 		rspamd_controller_on_terminate(worker, NULL);
 	}
 
-	REF_RELEASE(ctx->cfg);
+	CFG_REF_RELEASE(ctx->cfg);
+	CFG_REF_RELEASE(ctx->cfg);
 	rspamd_log_close(worker->srv->logger);
 	rspamd_unset_crash_handler(worker->srv);
 

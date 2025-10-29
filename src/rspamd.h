@@ -361,6 +361,10 @@ struct rspamd_external_libs_ctx {
 	struct zstd_dictionary *out_dict;
 	void *out_zstream;
 	void *in_zstream;
+#if defined(RSPAMD_LEGACY_SSL_PROVIDER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+	void *ssl_legacy_provider;
+	void *ssl_default_provider;
+#endif
 	ref_entry_t ref;
 };
 

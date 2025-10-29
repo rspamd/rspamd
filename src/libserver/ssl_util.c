@@ -19,6 +19,7 @@
 #include "libutil/hash.h"
 #include "libserver/logger.h"
 #include "libserver/cfg_file.h"
+#include "rspamd.h"
 #include "ssl_util.h"
 #include "unix-std.h"
 #include "cryptobox.h"
@@ -1002,8 +1003,6 @@ rspamd_init_ssl_ctx_common(void)
 	int ssl_options;
 	static const unsigned int client_cache_size = 1024;
 
-	rspamd_openssl_maybe_init();
-
 	ret = g_malloc0(sizeof(*ret));
 	ssl_options = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3;
 	ssl_ctx = SSL_CTX_new(SSLv23_method());
@@ -1058,7 +1057,7 @@ gpointer rspamd_init_ssl_ctx_noverify(void)
 #include <openssl/provider.h>
 #endif
 
-void rspamd_openssl_maybe_init(void)
+void rspamd_openssl_maybe_init(struct rspamd_external_libs_ctx *ctx)
 {
 	static gboolean openssl_initialized = FALSE;
 
@@ -1079,13 +1078,17 @@ void rspamd_openssl_maybe_init(void)
 		OPENSSL_init_ssl(0, NULL);
 #endif
 #if defined(RSPAMD_LEGACY_SSL_PROVIDER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-		if (OSSL_PROVIDER_load(NULL, "legacy") == NULL) {
-			msg_err("cannot load legacy OpenSSL provider: %s", ERR_lib_error_string(ERR_get_error()));
-			ERR_clear_error();
-		}
-		if (OSSL_PROVIDER_load(NULL, "default") == NULL) {
-			msg_err("cannot load default OpenSSL provider: %s", ERR_lib_error_string(ERR_get_error()));
-			ERR_clear_error();
+		if (ctx) {
+			ctx->ssl_legacy_provider = OSSL_PROVIDER_load(NULL, "legacy");
+			if (ctx->ssl_legacy_provider == NULL) {
+				msg_err("cannot load legacy OpenSSL provider: %s", ERR_lib_error_string(ERR_get_error()));
+				ERR_clear_error();
+			}
+			ctx->ssl_default_provider = OSSL_PROVIDER_load(NULL, "default");
+			if (ctx->ssl_default_provider == NULL) {
+				msg_err("cannot load default OpenSSL provider: %s", ERR_lib_error_string(ERR_get_error()));
+				ERR_clear_error();
+			}
 		}
 #endif
 
