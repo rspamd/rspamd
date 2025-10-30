@@ -101,13 +101,21 @@ local function check_redis_classifier(cls, cfg)
     -- Now try to load redis_params if needed
 
     local redis_params
+    -- Try load from classifier config
     redis_params = lredis.try_load_redis_servers(cls, rspamd_config, false, 'bayes')
     if not redis_params then
+      -- Try load from bayes_expiry module config
       redis_params = lredis.try_load_redis_servers(cfg[N] or E, rspamd_config, false, 'bayes')
       if not redis_params then
         redis_params = lredis.try_load_redis_servers(cfg[N] or E, rspamd_config, true)
         if not redis_params then
-          return false
+          -- Try load from global redis config
+          redis_params = lredis.try_load_redis_servers(rspamd_config:get_all_opt('redis'), rspamd_config, true)
+          if not redis_params then
+            logger.debugm(N, rspamd_config,
+                'disable expiry for classifier: cannot load redis parameters')
+            return false
+          end
         end
       end
     end
