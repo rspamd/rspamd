@@ -28,6 +28,7 @@
  * - whitelist (map string): map of ip addresses that should not be checked with this module
  * - servers (string): list of fuzzy servers in format "server1:port,server2:port" - these servers would be used for checking and storing
  *   fuzzy hashes
+ * - checks (object): structured configuration of content hashing routines (e.g. checks { text { enabled = true; }, html { enabled = true; } })
  */
 
 #include "config.h"
@@ -410,6 +411,87 @@ parse_fuzzy_headers(struct rspamd_config *cfg, const char *str)
 	g_strfreev(strvec);
 
 	return res;
+}
+
+static void
+fuzzy_rule_apply_checks(struct fuzzy_rule *rule,
+						struct rspamd_config *cfg,
+						const ucl_object_t *checks)
+{
+	const ucl_object_t *cur, *opt;
+	ucl_object_iter_t it = NULL;
+	const char *rule_name;
+
+	if (checks == NULL) {
+		return;
+	}
+
+	if (checks->type != UCL_OBJECT) {
+		rule_name = rule->name ? rule->name : (rule->symbol ? rule->symbol : "unknown");
+		msg_warn_config("checks parameter for fuzzy rule %s must be an object", rule_name);
+		return;
+	}
+
+	rule_name = rule->name ? rule->name : (rule->symbol ? rule->symbol : "unknown");
+
+	while ((cur = ucl_object_iterate(checks, &it, true)) != NULL) {
+		const char *check_name = ucl_object_key(cur);
+
+		if (check_name == NULL) {
+			continue;
+		}
+
+		if (cur->type != UCL_OBJECT) {
+			msg_warn_config("check %s in fuzzy rule %s must be an object", check_name, rule_name);
+			continue;
+		}
+
+		if (g_ascii_strcasecmp(check_name, "text") == 0) {
+			gboolean enabled = TRUE;
+
+			if ((opt = ucl_object_lookup(cur, "enabled")) != NULL) {
+				enabled = ucl_obj_toboolean(opt);
+			}
+
+			rule->text_hashes = enabled;
+
+			if ((opt = ucl_object_lookup(cur, "no_subject")) != NULL) {
+				rule->no_subject = ucl_obj_toboolean(opt);
+			}
+		}
+		else if (g_ascii_strcasecmp(check_name, "html") == 0) {
+			gboolean enabled = TRUE;
+
+			if ((opt = ucl_object_lookup(cur, "enabled")) != NULL) {
+				enabled = ucl_obj_toboolean(opt);
+			}
+
+			rule->html_shingles = enabled;
+
+			if ((opt = ucl_object_lookup(cur, "min_html_tags")) != NULL) {
+				rule->min_html_tags = ucl_obj_toint(opt);
+			}
+			else if ((opt = ucl_object_lookup(cur, "min_tags")) != NULL) {
+				rule->min_html_tags = ucl_obj_toint(opt);
+			}
+
+			if ((opt = ucl_object_lookup(cur, "html_weight")) != NULL) {
+				rule->html_weight = ucl_obj_todouble(opt);
+			}
+			else if ((opt = ucl_object_lookup(cur, "weight")) != NULL) {
+				rule->html_weight = ucl_obj_todouble(opt);
+			}
+		}
+		else {
+			/* Other checks are processed by lua_fuzzy; keep legacy behaviour */
+			if (g_ascii_strcasecmp(check_name, "images") != 0 &&
+				g_ascii_strcasecmp(check_name, "image") != 0 &&
+				g_ascii_strcasecmp(check_name, "archives") != 0 &&
+				g_ascii_strcasecmp(check_name, "archive") != 0) {
+				msg_warn_config("unknown check type '%s' in fuzzy rule %s", check_name, rule_name);
+			}
+		}
+	}
 }
 
 static double
@@ -2050,6 +2132,10 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 		rule->html_weight = ucl_object_todouble(value);
 	}
 
+	if ((value = ucl_object_lookup(obj, "checks")) != NULL) {
+		fuzzy_rule_apply_checks(rule, cfg, value);
+	}
+
 	/* Initialize rate tracker */
 	rule->rate_tracker.requests_count = 0;
 	rule->rate_tracker.window_start = 0;
@@ -2435,6 +2521,15 @@ int fuzzy_check_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 				   "Multiplier applied to HTML fuzzy matches",
 				   "html_weight",
 				   UCL_FLOAT,
+				   NULL,
+				   0,
+				   NULL,
+				   0);
+	rspamd_rcl_add_doc_by_path(cfg,
+				   "fuzzy_check.rule",
+				   "Content hashing checks configuration object (e.g. { text = { enabled = true; }, html = { enabled = true; } })",
+				   "checks",
+				   UCL_OBJECT,
 				   NULL,
 				   0,
 				   NULL,
