@@ -188,7 +188,8 @@ struct ucl_macro {
 
 enum ucl_stack_flags {
 	UCL_STACK_HAS_OBRACE = (1u << 0),
-	UCL_STACK_MAX = (1u << 1),
+	UCL_STACK_AUTOMATIC = (1u << 1),
+	UCL_STACK_MAX = (1u << 2),
 };
 
 struct ucl_stack {
