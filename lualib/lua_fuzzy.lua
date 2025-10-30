@@ -42,6 +42,7 @@ local policies = {
     scan_archives = true,
     short_text_direct_hash = true,
     text_shingles = true,
+  text_hashes = true,
     skip_images = false,
   }
 }
@@ -58,6 +59,7 @@ local schema_fields = {
   scan_archives = ts.boolean,
   short_text_direct_hash = ts.boolean,
   text_shingles = ts.boolean,
+  text_hashes = ts.boolean,
   skip_images = ts.boolean,
 }
 local policy_schema = ts.shape(schema_fields)
@@ -176,6 +178,12 @@ local function check_text_part(task, part, rule, text)
 
   local id = part:get_id()
   lua_util.debugm(N, task, 'check text part %s', id)
+
+  if rule.text_hashes == false then
+    lua_util.debugm(N, task, 'text hashes disabled, relying on HTML for part %s', id)
+    return rule.html_shingles == true, false
+  end
+
   local wcnt = text:get_words_count()
 
   if rule.text_shingles then

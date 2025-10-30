@@ -110,6 +110,7 @@ struct fuzzy_rule {
 	gboolean no_share;
 	gboolean no_subject;
 	gboolean html_shingles;     /* Enable HTML fuzzy hashing */
+	gboolean text_hashes;        /* Enable/disable generation of text hashes */
 	unsigned int min_html_tags; /* Minimum tags for HTML hash */
 	int learn_condition_cb;
 	uint32_t retransmits;
@@ -440,6 +441,7 @@ fuzzy_rule_new(const char *default_symbol, rspamd_mempool_t *pool)
 	rule->weight_threshold = NAN;
 	rule->html_weight = 1.0;
 	rule->html_shingles = FALSE;
+	rule->text_hashes = TRUE;
 	rule->min_html_tags = 10;
 
 	return rule;
@@ -2032,6 +2034,10 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 		rule->weight_threshold = ucl_object_todouble(value);
 	}
 
+	if ((value = ucl_object_lookup(obj, "text_hashes")) != NULL) {
+		rule->text_hashes = ucl_obj_toboolean(value);
+	}
+
 	if ((value = ucl_object_lookup(obj, "html_shingles")) != NULL) {
 		rule->html_shingles = ucl_object_toboolean(value);
 	}
@@ -2397,6 +2403,42 @@ int fuzzy_check_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 							   0,
 							   "true",
 							   0);
+	rspamd_rcl_add_doc_by_path(cfg,
+				   "fuzzy_check.rule",
+				   "Enable hashing of text content (set to false to disable text hashes)",
+				   "text_hashes",
+				   UCL_BOOLEAN,
+				   NULL,
+				   0,
+				   "true",
+				   0);
+	rspamd_rcl_add_doc_by_path(cfg,
+				   "fuzzy_check.rule",
+				   "Enable HTML structure hashing for this rule",
+				   "html_shingles",
+				   UCL_BOOLEAN,
+				   NULL,
+				   0,
+				   "false",
+				   0);
+	rspamd_rcl_add_doc_by_path(cfg,
+				   "fuzzy_check.rule",
+				   "Minimum number of HTML tags required to generate HTML hashes",
+				   "min_html_tags",
+				   UCL_INT,
+				   NULL,
+				   0,
+				   NULL,
+				   0);
+	rspamd_rcl_add_doc_by_path(cfg,
+				   "fuzzy_check.rule",
+				   "Multiplier applied to HTML fuzzy matches",
+				   "html_weight",
+				   UCL_FLOAT,
+				   NULL,
+				   0,
+				   NULL,
+				   0);
 	rspamd_rcl_add_doc_by_path(cfg,
 							   "fuzzy_check.rule",
 							   "Override module default min bytes for this rule",
@@ -5086,7 +5128,7 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 			g_ptr_array_add(res, io);
 		}
 
-		goto end;
+		return res;
 	}
 	else if (c == FUZZY_PING) {
 		res = g_ptr_array_sized_new(1);
@@ -5096,11 +5138,11 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 			g_ptr_array_add(res, io);
 		}
 
-		goto end;
+		return res;
 	}
 
 	if (task->message == NULL) {
-		goto end;
+		return res;
 	}
 
 	res = g_ptr_array_sized_new(MESSAGE_FIELD(task, parts)->len + 1);
@@ -5118,21 +5160,25 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 				if (mime_part->part_type == RSPAMD_MIME_PART_TEXT &&
 					!(flags & FUZZY_CHECK_FLAG_NOTEXT)) {
 					part = mime_part->specific.txt;
+					gboolean allow_html = rule->html_shingles &&
+						!(flags & FUZZY_CHECK_FLAG_NOHTML) &&
+						(check_part || !rule->text_hashes);
 
-					io = fuzzy_cmd_from_text_part(task, rule,
-												  c,
-												  flag,
-												  value,
-												  !fuzzy_check,
-												  part,
-												  mime_part);
+					if (check_part && rule->text_hashes) {
+						io = fuzzy_cmd_from_text_part(task, rule,
+											c,
+											flag,
+											value,
+											!fuzzy_check,
+											part,
+											mime_part);
+					}
 
-					/* Try HTML fuzzy hash if enabled and text hash generation succeeded/failed */
-					if (rule->html_shingles && !(flags & FUZZY_CHECK_FLAG_NOHTML)) {
+					if (allow_html && part != NULL) {
 						struct fuzzy_cmd_io *html_io;
 
 						html_io = fuzzy_cmd_from_html_part(task, rule, c, flag, value,
-														   part, mime_part);
+											part, mime_part);
 
 						if (html_io) {
 							/* Add HTML hash as separate command */
@@ -5140,17 +5186,17 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 						}
 					}
 				}
-				else if (mime_part->part_type == RSPAMD_MIME_PART_IMAGE &&
-						 !(flags & FUZZY_CHECK_FLAG_NOIMAGES)) {
+				else if (check_part && mime_part->part_type == RSPAMD_MIME_PART_IMAGE &&
+					 !(flags & FUZZY_CHECK_FLAG_NOIMAGES)) {
 					image = mime_part->specific.img;
 
 					io = fuzzy_cmd_from_data_part(rule, c, flag, value,
-												  task,
-												  image->parent->digest,
-												  mime_part);
+											  task,
+											  image->parent->digest,
+											  mime_part);
 					io->flags |= FUZZY_CMD_FLAG_IMAGE;
 				}
-				else if (mime_part->part_type == RSPAMD_MIME_PART_CUSTOM_LUA) {
+				else if (check_part && mime_part->part_type == RSPAMD_MIME_PART_CUSTOM_LUA) {
 					const struct rspamd_lua_specific_part *lua_spec;
 
 					lua_spec = &mime_part->specific.lua_specific;
@@ -5189,10 +5235,10 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 
 								if (hlen == rspamd_cryptobox_HASHBYTES) {
 									io = fuzzy_cmd_from_data_part(rule, c,
-																  flag, value,
-																  task,
-																  (unsigned char *) h,
-																  mime_part);
+											      flag, value,
+											      task,
+											      (unsigned char *) h,
+											      mime_part);
 
 									if (io) {
 										io->flags |= FUZZY_CMD_FLAG_CONTENT;
@@ -5208,16 +5254,16 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 						 * Add part itself as well
 						 */
 						io = fuzzy_cmd_from_data_part(rule, c,
-													  flag, value,
-													  task,
-													  mime_part->digest,
-													  mime_part);
+											  flag, value,
+											  task,
+											  mime_part->digest,
+											  mime_part);
 					}
 				}
-				else {
+				else if (check_part) {
 					io = fuzzy_cmd_from_data_part(rule, c, flag, value,
-												  task,
-												  mime_part->digest, mime_part);
+											  task,
+											  mime_part->digest, mime_part);
 				}
 
 				if (io) {
@@ -5226,7 +5272,7 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 					PTR_ARRAY_FOREACH(res, j, cur)
 					{
 						if (memcmp(cur->cmd.digest, io->cmd.digest,
-								   sizeof(io->cmd.digest)) == 0) {
+							   sizeof(io->cmd.digest)) == 0) {
 							skip_existing = TRUE;
 							break;
 						}
@@ -5240,7 +5286,6 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 		}
 	}
 
-end:
 	if (res && res->len == 0) {
 		g_ptr_array_free(res, TRUE);
 
