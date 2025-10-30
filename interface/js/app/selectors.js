@@ -23,7 +23,7 @@ define(["jquery", "app/common"],
                         $("#selectorsResArea")
                             .val(Object.prototype.hasOwnProperty.call(json, "data") ? json.data.toString() : "");
                     } else {
-                        common.alertMessage("alert-error", "Unexpected error processing message");
+                        common.alertMessage("alert-danger", "Unexpected error processing message");
                     }
                 },
                 server: common.getServer()

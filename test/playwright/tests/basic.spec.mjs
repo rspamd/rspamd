@@ -38,8 +38,8 @@ test.describe("WebUI basic", () => {
             page.waitForResponse((resp) => resp.url().includes("/notfound") && !resp.ok()),
             page.evaluate(() => fetch("/notfound"))
         ]);
-        // WebUI shows alert-error only for errors handled via AJAX (common.query)
+        // WebUI shows alert-danger only for errors handled via AJAX (common.query)
         // If alert is not shown, the test should not fail
-        await expect(page.locator(".alert-error, .alert-modal.alert-error")).not.toBeVisible({timeout: 2000});
+        await expect(page.locator(".alert-danger, .alert-modal.alert-danger")).not.toBeVisible({timeout: 2000});
     });
 });

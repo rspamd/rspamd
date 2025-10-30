@@ -173,6 +173,7 @@ table#symbolsTable input[type="number"] {
 }
 .alert {
     margin-bottom: 4px;
+    color: #c09853;
 }
 .alert.alert-modal {
     top: 0;
@@ -181,38 +182,20 @@ table#symbolsTable input[type="number"] {
     display: inline-block;
     padding-left: 35px;
 }
-.alert,
-.alert h4 {
-    color: #c09853;
-}
-.alert h4 {
-    margin: 0;
-}
 .alert-success {
     color: #468847;
     background: #dff0d8;
     border-color: #d6e9c6;
 }
-.alert-success h4 {
-    color: #468847;
-}
-.alert-danger,
-.alert-error {
+.alert-danger {
     color: #b94a48;
     background: #f2dede;
     border-color: #eed3d7;
-}
-.alert-danger h4,
-.alert-error h4 {
-    color: #b94a48;
 }
 .alert-info {
     color: #3a87ad;
     background: #d9edf7;
     border-color: #bce8f1;
-}
-.alert-info h4 {
-    color: #3a87ad;
 }
 
 #authInvalidCharFeedback,

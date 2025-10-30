@@ -121,20 +121,20 @@ define(["jquery", "app/common", "app/libft"],
                             });
                         }
                     } else {
-                        common.alertMessage("alert-error", "Cannot scan data");
+                        common.alertMessage("alert-danger", "Cannot scan data");
                     }
                 },
                 error: enable_disable_scan_btn,
                 errorMessage: "Cannot upload data",
                 statusCode: {
                     404: function () {
-                        common.alertMessage("alert-error", "Cannot upload data, no server found");
+                        common.alertMessage("alert-danger", "Cannot upload data, no server found");
                     },
                     500: function () {
-                        common.alertMessage("alert-error", "Cannot tokenize message: no text data");
+                        common.alertMessage("alert-danger", "Cannot tokenize message: no text data");
                     },
                     503: function () {
-                        common.alertMessage("alert-error", "Cannot tokenize message: no text data");
+                        common.alertMessage("alert-danger", "Cannot tokenize message: no text data");
                     }
                 },
                 server: common.getServer()
@@ -166,7 +166,7 @@ define(["jquery", "app/common", "app/libft"],
                         common.alertMessage("alert-success", "Message successfully processed");
                         fillHashTable(json.hashes);
                     } else {
-                        common.alertMessage("alert-error", "Unexpected error processing message");
+                        common.alertMessage("alert-danger", "Unexpected error processing message");
                     }
                 },
                 server: common.getServer()
@@ -237,7 +237,7 @@ define(["jquery", "app/common", "app/libft"],
                     uploadText(data, source, headers);
                 }
             } else {
-                common.alertMessage("alert-error", "Message source field cannot be blank");
+                common.alertMessage("alert-danger", "Message source field cannot be blank");
             }
             return false;
         });
