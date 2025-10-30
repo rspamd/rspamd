@@ -335,7 +335,7 @@ define(["jquery", "app/common", "stickytabs", "visibility",
                             if (textStatus.statusText === "Unauthorized") {
                                 invalidFeedback("#authUnauthorizedFeedback");
                             } else {
-                                common.alertMessage("alert-modal alert-error", textStatus.statusText);
+                                common.alertMessage("alert-modal alert-danger", textStatus.statusText);
                             }
                             $("#connectPassword").val("");
                             $("#connectPassword").focus();

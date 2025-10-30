@@ -88,13 +88,13 @@ define(["jquery", "app/common"],
             // String to array for comparison
             const eltsArray = JSON.parse(elts);
             if (eltsArray[0] < 0) {
-                common.alertMessage("alert-modal alert-error", "Spam can not be negative");
+                common.alertMessage("alert-modal alert-danger", "Spam can not be negative");
             } else if (eltsArray[1] < 0) {
-                common.alertMessage("alert-modal alert-error", "Rewrite subject can not be negative");
+                common.alertMessage("alert-modal alert-danger", "Rewrite subject can not be negative");
             } else if (eltsArray[2] < 0) {
-                common.alertMessage("alert-modal alert-error", "Probable spam can not be negative");
+                common.alertMessage("alert-modal alert-danger", "Probable spam can not be negative");
             } else if (eltsArray[3] < 0) {
-                common.alertMessage("alert-modal alert-error", "Greylist can not be negative");
+                common.alertMessage("alert-modal alert-danger", "Greylist can not be negative");
             } else if (descending(eltsArray)) {
                 common.query("saveactions", {
                     method: "POST",
@@ -105,7 +105,7 @@ define(["jquery", "app/common"],
                     server: server
                 });
             } else {
-                common.alertMessage("alert-modal alert-error", "Incorrect order of actions thresholds");
+                common.alertMessage("alert-modal alert-danger", "Incorrect order of actions thresholds");
             }
         };
 

@@ -164,7 +164,7 @@ define(["jquery", "app/common", "app/libft", "footable"],
                     function differentVersions(neighbours_data) {
                         const dv = neighbours_data.some((e) => e.version !== neighbours_data[0].version);
                         if (dv) {
-                            common.alertMessage("alert-error",
+                            common.alertMessage("alert-danger",
                                 "Neighbours history backend versions do not match. Cannot display history.");
                             return true;
                         }

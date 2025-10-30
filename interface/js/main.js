@@ -50,7 +50,7 @@ requirejs.onError = function (e) {
     "use strict";
     document.getElementById("loading").classList.add("d-none");
     document.getElementsByClassName("notification-area")[0].innerHTML =
-        "<div class=\"alert alert-error\">" +
+        "<div class=\"alert alert-danger\">" +
             "<strong>Module loading error: " + e.requireType + ", module: " + e.requireModules + "</strong>" +
             "<button type=\"button\" class=\"btn btn-info btn-xs float-end\" " +
                 "onClick=\"window.location.reload(); this.parentNode.parentNode.removeChild(this.parentNode);\" " +

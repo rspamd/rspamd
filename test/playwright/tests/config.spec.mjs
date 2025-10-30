@@ -25,7 +25,7 @@ test("Config page: always checks order error and valid save for actions", async 
     await expect(page.locator("#actionsFormField")).toBeVisible({timeout: 10000});
 
     function getInputs() { return page.locator("#actionsFormField input[data-id='action']"); }
-    const alert = page.locator(".alert-error, .alert-modal.alert-error");
+    const alert = page.locator(".alert-danger, .alert-modal.alert-danger");
 
     const inputs = getInputs();
     const count = await inputs.count();

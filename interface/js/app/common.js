@@ -103,7 +103,7 @@ define(["jquery", "nprogress"],
                 error: function (jqXHR, textStatus, errorThrown) {
                     neighbours_status[ind].checked = true;
                     function errorMessage() {
-                        alertMessage("alert-error", neighbours_status[ind].name + " > " +
+                        alertMessage("alert-danger", neighbours_status[ind].name + " > " +
                             (o.errorMessage ? o.errorMessage : "Request failed") +
                             (errorThrown ? ": " + errorThrown : ""));
                     }
@@ -129,7 +129,7 @@ define(["jquery", "nprogress"],
                                 alertMessage("alert-success", "Request completed");
                             }
                         } else {
-                            alertMessage("alert-error", "Request failed");
+                            alertMessage("alert-danger", "Request failed");
                         }
                         if (o.complete) o.complete();
                         NProgress.done();
@@ -351,7 +351,7 @@ define(["jquery", "nprogress"],
             readFile(files, callback, index = 0) {
                 const file = files[index];
                 const reader = new FileReader();
-                reader.onerror = () => alertMessage("alert-error", `Error reading file: ${file.name}`);
+                reader.onerror = () => alertMessage("alert-danger", `Error reading file: ${file.name}`);
                 reader.onloadend = () => callback(reader.result);
                 reader.readAsText(file);
             },
