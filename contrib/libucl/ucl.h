@@ -89,6 +89,19 @@ extern "C" {
 #ifndef UCL_FREE
 #define UCL_FREE(size, ptr) free(ptr)
 #endif
+#ifndef UCL_REALLOC
+#define UCL_REALLOC(ptr, size) realloc(ptr, size)
+#endif
+#ifndef UCL_STRDUP
+static inline char *ucl_strdup_impl(const char *s)
+{
+	size_t len = strlen(s) + 1;
+	char *p = (char *) UCL_ALLOC(len);
+	if (p) memcpy(p, s, len);
+	return p;
+}
+#define UCL_STRDUP(str) ucl_strdup_impl(str)
+#endif
 
 #if    __GNUC__ > 3 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 4)
 #define UCL_WARN_UNUSED_RESULT               \

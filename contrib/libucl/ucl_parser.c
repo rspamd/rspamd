@@ -2865,7 +2865,7 @@ bool ucl_parser_register_macro(struct ucl_parser *parser, const char *macro,
 
 	memset(new, 0, sizeof(struct ucl_macro));
 	new->h.handler = handler;
-	new->name = strdup(macro);
+	new->name = UCL_STRDUP(macro);
 	if (new->name == NULL) {
 		UCL_FREE(sizeof(struct ucl_macro), new);
 		return false;
@@ -2891,7 +2891,7 @@ bool ucl_parser_register_context_macro(struct ucl_parser *parser, const char *ma
 
 	memset(new, 0, sizeof(struct ucl_macro));
 	new->h.context_handler = handler;
-	new->name = strdup(macro);
+	new->name = UCL_STRDUP(macro);
 	if (new->name == NULL) {
 		UCL_FREE(sizeof(struct ucl_macro), new);
 		return false;
@@ -2925,8 +2925,8 @@ void ucl_parser_register_variable(struct ucl_parser *parser, const char *var,
 		if (new != NULL) {
 			/* Remove variable */
 			DL_DELETE(parser->variables, new);
-			free(new->var);
-			free(new->value);
+			UCL_FREE(new->var_len + 1, new->var);
+			UCL_FREE(new->value_len + 1, new->value);
 			UCL_FREE(sizeof(struct ucl_variable), new);
 		}
 		else {
@@ -2941,16 +2941,16 @@ void ucl_parser_register_variable(struct ucl_parser *parser, const char *var,
 				return;
 			}
 			memset(new, 0, sizeof(struct ucl_variable));
-			new->var = strdup(var);
+			new->var = UCL_STRDUP(var);
 			new->var_len = strlen(var);
-			new->value = strdup(value);
+			new->value = UCL_STRDUP(value);
 			new->value_len = strlen(value);
 
 			DL_APPEND(parser->variables, new);
 		}
 		else {
-			free(new->value);
-			new->value = strdup(value);
+			UCL_FREE(new->value_len + 1, new->value);
+			new->value = UCL_STRDUP(value);
 			new->value_len = strlen(value);
 		}
 	}
@@ -3043,7 +3043,7 @@ bool ucl_parser_add_chunk_full(struct ucl_parser *parser, const unsigned char *d
 		chunk->parse_type = parse_type;
 
 		if (parser->cur_file) {
-			chunk->fname = strdup(parser->cur_file);
+			chunk->fname = UCL_STRDUP(parser->cur_file);
 		}
 
 		LL_PREPEND(parser->chunks, chunk);
