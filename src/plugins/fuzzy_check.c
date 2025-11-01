@@ -6922,7 +6922,7 @@ fuzzy_lua_ping_storage(lua_State *L)
 
 	if (addr != NULL) {
 		int sock;
-		GPtrArray *commands = fuzzy_generate_commands(task, rule, FUZZY_PING, 0, 0, 0);
+		GPtrArray *commands = fuzzy_generate_commands(task, rule_found, FUZZY_PING, 0, 0, 0);
 
 		if ((sock = rspamd_inet_address_connect(addr, SOCK_DGRAM, TRUE)) == -1) {
 			lua_pushboolean(L, FALSE);
