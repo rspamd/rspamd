@@ -263,94 +263,188 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
   end
 
   if policy.rua and redis_params and settings.reporting.enabled then
-    if settings.reporting.only_domains then
-      if not (settings.reporting.only_domains:get_key(policy.domain) or
-            settings.reporting.only_domains:get_key(rspamd_util.get_tld(policy.domain))) then
-        rspamd_logger.info(task, 'DMARC reporting suppressed for sender domain %s', policy.domain)
-        return
+    -- Helper function to perform the actual report generation
+    local function generate_dmarc_report()
+      local function dmarc_report_cb(err)
+        if not err then
+          rspamd_logger.infox(task, 'dmarc report saved for %s (rua = %s)',
+            hdrfromdom, policy.rua)
+        else
+          rspamd_logger.errx(task, 'dmarc report is not saved for %s: %s',
+            hdrfromdom, err)
+        end
       end
-    end
-    if settings.reporting.exclude_domains then
-      if settings.reporting.exclude_domains:get_key(policy.domain) or
-          settings.reporting.exclude_domains:get_key(rspamd_util.get_tld(policy.domain)) then
-        rspamd_logger.info(task, 'DMARC reporting suppressed for sender domain %s', policy.domain)
-        return
-      end
-    end
-    if settings.reporting.exclude_recipients then
-      local rcpt = task:get_principal_recipient()
-      if rcpt and settings.reporting.exclude_recipients:get_key(rcpt) then
-        rspamd_logger.info(task, 'DMARC reporting suppressed for recipient %s', rcpt)
-        return
-      end
-    end
-    if policy.rua:match("^mailto:") and settings.reporting.exclude_rua_addresses then
-      local rua = policy.rua:gsub("^mailto:", "")
-      if settings.reporting.exclude_rua_addresses:get_key(rua) then
-        rspamd_logger.info(task, 'DMARC reporting suppressed for rua recipient %s', rua)
-        return
-      end
-    end
 
-    local function dmarc_report_cb(err)
-      if not err then
-        rspamd_logger.infox(task, 'dmarc report saved for %s (rua = %s)',
-          hdrfromdom, policy.rua)
+      local spf_result
+      if spf_ok then
+        spf_result = 'pass'
+      elseif spf_tmpfail then
+        spf_result = 'temperror'
       else
-        rspamd_logger.errx(task, 'dmarc report is not saved for %s: %s',
-          hdrfromdom, err)
+        if task:has_symbol(settings.symbols.spf_deny_symbol) then
+          spf_result = 'fail'
+        elseif task:has_symbol(settings.symbols.spf_softfail_symbol) then
+          spf_result = 'softfail'
+        elseif task:has_symbol(settings.symbols.spf_neutral_symbol) then
+          spf_result = 'neutral'
+        elseif task:has_symbol(settings.symbols.spf_permfail_symbol) then
+          spf_result = 'permerror'
+        else
+          spf_result = 'none'
+        end
+      end
+
+      -- Prepare and send redis report element
+      local period = os.date('%Y%m%d',
+        task:get_date({ format = 'connect', gmt = false }))
+
+      -- Dmarc domain key must include dmarc domain, rua and period
+      local dmarc_domain_key = table.concat(
+        { settings.reporting.redis_keys.report_prefix, policy.domain, policy.rua, period },
+        settings.reporting.redis_keys.join_char)
+      local report_data = dmarc_common.dmarc_report(task, settings, {
+        spf_ok = spf_ok and 'pass' or 'fail',
+        dkim_ok = dkim_ok and 'pass' or 'fail',
+        disposition = (disposition == "softfail") and "none" or disposition,
+        sampled_out = sampled_out,
+        domain = hdrfromdom,
+        spf_domain = spf_domain,
+        dkim_results = dkim_results,
+        spf_result = spf_result
+      })
+
+      local idx_key = table.concat({ settings.reporting.redis_keys.index_prefix, period },
+        settings.reporting.redis_keys.join_char)
+
+      if report_data then
+        lua_redis.exec_redis_script(take_report_id,
+          { task = task, is_write = true },
+          dmarc_report_cb,
+          { idx_key, dmarc_domain_key,
+            tostring(settings.reporting.max_entries), tostring(settings.reporting.keys_expire) },
+          { hdrfromdom, report_data })
       end
     end
 
-    local spf_result
-    if spf_ok then
-      spf_result = 'pass'
-    elseif spf_tmpfail then
-      spf_result = 'temperror'
-    else
-      if task:has_symbol(settings.symbols.spf_deny_symbol) then
-        spf_result = 'fail'
-      elseif task:has_symbol(settings.symbols.spf_softfail_symbol) then
-        spf_result = 'softfail'
-      elseif task:has_symbol(settings.symbols.spf_neutral_symbol) then
-        spf_result = 'neutral'
-      elseif task:has_symbol(settings.symbols.spf_permfail_symbol) then
-        spf_result = 'permerror'
+    -- Helper function to check a map with support for both sync and external maps
+    local function check_map(map_obj, key, continue_cb, suppress_reason)
+      if not map_obj then
+        -- No map configured, continue
+        continue_cb()
+        return
+      end
+
+      if map_obj.__external then
+        -- External map, use async callback
+        map_obj:get_key(key, function(found, _, _, _)
+          if found then
+            rspamd_logger.infox(task, 'DMARC reporting suppressed: %s', suppress_reason)
+          else
+            continue_cb()
+          end
+        end, task)
       else
-        spf_result = 'none'
+        -- Regular map, synchronous check
+        if map_obj:get_key(key) then
+          rspamd_logger.infox(task, 'DMARC reporting suppressed: %s', suppress_reason)
+        else
+          continue_cb()
+        end
       end
     end
 
-    -- Prepare and send redis report element
-    local period = os.date('%Y%m%d',
-      task:get_date({ format = 'connect', gmt = false }))
+    -- Forward declarations for chain of exclusion checks
+    local check_only_domains, check_exclude_domains, check_exclude_recipients, check_exclude_rua
 
-    -- Dmarc domain key must include dmarc domain, rua and period
-    local dmarc_domain_key = table.concat(
-      { settings.reporting.redis_keys.report_prefix, policy.domain, policy.rua, period },
-      settings.reporting.redis_keys.join_char)
-    local report_data = dmarc_common.dmarc_report(task, settings, {
-      spf_ok = spf_ok and 'pass' or 'fail',
-      dkim_ok = dkim_ok and 'pass' or 'fail',
-      disposition = (disposition == "softfail") and "none" or disposition,
-      sampled_out = sampled_out,
-      domain = hdrfromdom,
-      spf_domain = spf_domain,
-      dkim_results = dkim_results,
-      spf_result = spf_result
-    })
-
-    local idx_key = table.concat({ settings.reporting.redis_keys.index_prefix, period },
-      settings.reporting.redis_keys.join_char)
-
-    if report_data then
-      lua_redis.exec_redis_script(take_report_id,
-        { task = task, is_write = true },
-        dmarc_report_cb,
-        { idx_key, dmarc_domain_key,
-          tostring(settings.reporting.max_entries), tostring(settings.reporting.keys_expire) },
-        { hdrfromdom, report_data })
+    -- Chain exclusion checks together
+    check_only_domains = function()
+      if settings.reporting.only_domains then
+        if settings.reporting.only_domains.__external then
+          -- Check both domain and TLD for external maps
+          settings.reporting.only_domains:get_key(policy.domain, function(found1, _, _, _)
+            if found1 then
+              check_exclude_domains()
+            else
+              settings.reporting.only_domains:get_key(rspamd_util.get_tld(policy.domain), function(found2, _, _, _)
+                if found2 then
+                  check_exclude_domains()
+                else
+                  rspamd_logger.infox(task, 'DMARC reporting suppressed for sender domain %s (not in only_domains)', policy.domain)
+                end
+              end, task)
+            end
+          end, task)
+        else
+          -- Synchronous check for regular maps
+          if settings.reporting.only_domains:get_key(policy.domain) or
+              settings.reporting.only_domains:get_key(rspamd_util.get_tld(policy.domain)) then
+            check_exclude_domains()
+          else
+            rspamd_logger.infox(task, 'DMARC reporting suppressed for sender domain %s (not in only_domains)', policy.domain)
+          end
+        end
+      else
+        check_exclude_domains()
+      end
     end
+
+    check_exclude_domains = function()
+      if settings.reporting.exclude_domains then
+        if settings.reporting.exclude_domains.__external then
+          -- Check both domain and TLD for external maps
+          settings.reporting.exclude_domains:get_key(policy.domain, function(found1, _, _, _)
+            if found1 then
+              rspamd_logger.infox(task, 'DMARC reporting suppressed for sender domain %s', policy.domain)
+            else
+              settings.reporting.exclude_domains:get_key(rspamd_util.get_tld(policy.domain), function(found2, _, _, _)
+                if found2 then
+                  rspamd_logger.infox(task, 'DMARC reporting suppressed for sender domain %s', policy.domain)
+                else
+                  check_exclude_recipients()
+                end
+              end, task)
+            end
+          end, task)
+        else
+          -- Synchronous check for regular maps
+          if settings.reporting.exclude_domains:get_key(policy.domain) or
+              settings.reporting.exclude_domains:get_key(rspamd_util.get_tld(policy.domain)) then
+            rspamd_logger.infox(task, 'DMARC reporting suppressed for sender domain %s', policy.domain)
+          else
+            check_exclude_recipients()
+          end
+        end
+      else
+        check_exclude_recipients()
+      end
+    end
+
+    check_exclude_recipients = function()
+      if settings.reporting.exclude_recipients then
+        local rcpt = task:get_principal_recipient()
+        if rcpt then
+          check_map(settings.reporting.exclude_recipients, rcpt, check_exclude_rua,
+            string.format('recipient %s', rcpt))
+        else
+          check_exclude_rua()
+        end
+      else
+        check_exclude_rua()
+      end
+    end
+
+    check_exclude_rua = function()
+      if policy.rua:match("^mailto:") and settings.reporting.exclude_rua_addresses then
+        local rua = policy.rua:gsub("^mailto:", "")
+        check_map(settings.reporting.exclude_rua_addresses, rua, generate_dmarc_report,
+          string.format('rua recipient %s', rua))
+      else
+        generate_dmarc_report()
+      end
+    end
+
+    -- Start the exclusion check chain
+    check_only_domains()
   end
 end
 
