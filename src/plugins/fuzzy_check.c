@@ -39,6 +39,7 @@
 #include "libserver/worker_util.h"
 #include "libserver/mempool_vars_internal.h"
 #include "libserver/html/html_features.h"
+#include "khash.h"
 #include "fuzzy_wire.h"
 #include "utlist.h"
 #include "ottery.h"
@@ -83,6 +84,9 @@ enum fuzzy_rule_mode {
 	fuzzy_rule_read_write
 };
 
+struct fuzzy_tcp_pending_command; /* Forward declaration */
+KHASH_MAP_INIT_INT(fuzzy_pending_hash, struct fuzzy_tcp_pending_command *);
+
 struct fuzzy_rule {
 	struct upstream_list *read_servers;  /* Servers for read operations */
 	struct upstream_list *write_servers; /* Servers for write operations */
@@ -111,7 +115,7 @@ struct fuzzy_rule {
 	gboolean no_share;
 	gboolean no_subject;
 	gboolean html_shingles;     /* Enable HTML fuzzy hashing */
-	gboolean text_hashes;        /* Enable/disable generation of text hashes */
+	gboolean text_hashes;       /* Enable/disable generation of text hashes */
 	unsigned int min_html_tags; /* Minimum tags for HTML hash */
 	int learn_condition_cb;
 	uint32_t retransmits;
@@ -135,8 +139,8 @@ struct fuzzy_rule {
 	} rate_tracker;
 
 	/* TCP connection pool - array of connections, one per upstream */
-	GPtrArray *tcp_connections;   /* Array of fuzzy_tcp_connection* */
-	GHashTable *pending_requests; /* Global: tag -> fuzzy_tcp_pending_command */
+	GPtrArray *tcp_connections;                     /* Array of fuzzy_tcp_connection* */
+	khash_t(fuzzy_pending_hash) * pending_requests; /* Global: tag -> fuzzy_tcp_pending_command */
 };
 
 struct fuzzy_ctx {
@@ -568,7 +572,12 @@ fuzzy_free_rule(gpointer r)
 
 	/* Clean up pending requests pool */
 	if (rule->pending_requests) {
-		g_hash_table_destroy(rule->pending_requests);
+		struct fuzzy_tcp_pending_command *pending;
+
+		kh_foreach_value(rule->pending_requests, pending, {
+			g_free(pending);
+		});
+		kh_destroy(fuzzy_pending_hash, rule->pending_requests);
 	}
 }
 
@@ -914,15 +923,16 @@ fuzzy_tcp_connection_close(struct fuzzy_tcp_connection *conn)
 static void
 fuzzy_tcp_connection_cleanup(struct fuzzy_tcp_connection *conn, const char *reason)
 {
-	GHashTableIter iter;
-	gpointer key, value;
+	khash_t(fuzzy_pending_hash) * pending_ht;
 	struct fuzzy_tcp_pending_command *pending;
-	GPtrArray *to_remove;
 	GHashTable *sessions_to_check;
-	unsigned int i;
+	GHashTableIter session_iter;
+	struct fuzzy_client_session *session;
 	struct rspamd_task *task = NULL;
+	int sessions_checked = 0;
+	unsigned int removed = 0;
 
-	if (!conn || !conn->rule || !conn->rule->pending_requests) {
+	if (!conn || !conn->rule || !(pending_ht = conn->rule->pending_requests)) {
 		return;
 	}
 
@@ -931,49 +941,39 @@ fuzzy_tcp_connection_cleanup(struct fuzzy_tcp_connection *conn, const char *reas
 			 conn->rule->name,
 			 reason ? reason : "unknown");
 
-	/* Collect commands to remove and sessions to check */
-	to_remove = g_ptr_array_new();
 	sessions_to_check = g_hash_table_new(g_direct_hash, g_direct_equal);
 
-	g_hash_table_iter_init(&iter, conn->rule->pending_requests);
-	while (g_hash_table_iter_next(&iter, &key, &value)) {
-		pending = (struct fuzzy_tcp_pending_command *) value;
+	for (khiter_t k = kh_begin(pending_ht); k != kh_end(pending_ht); ++k) {
+		if (!kh_exist(pending_ht, k)) {
+			continue;
+		}
+
+		pending = kh_val(pending_ht, k);
 
 		if (pending->connection == conn) {
-			/* Mark command as replied (failed) */
 			if (!(pending->io->flags & FUZZY_CMD_FLAG_REPLIED)) {
 				pending->io->flags |= FUZZY_CMD_FLAG_REPLIED;
 			}
 
-			/* Collect session for completion check */
 			if (pending->session) {
 				g_hash_table_add(sessions_to_check, pending->session);
 			}
 
-			g_ptr_array_add(to_remove, key);
-
-			/* Get task for logging */
 			if (!task && pending->task) {
 				task = pending->task;
 			}
+
+			g_free(pending);
+			kh_del(fuzzy_pending_hash, pending_ht, k);
+			removed++;
 		}
 	}
 
-	/* Remove pending commands from hash table */
-	for (i = 0; i < to_remove->len; i++) {
-		g_hash_table_remove(conn->rule->pending_requests,
-							g_ptr_array_index(to_remove, i));
+	if (removed > 0 && task) {
+		msg_warn_task("fuzzy_tcp: cleaned up %u pending commands due to connection failure: %s",
+					  removed, reason ? reason : "unknown");
 	}
 
-	if (to_remove->len > 0 && task) {
-		msg_warn_task("fuzzy_tcp: cleaned up %d pending commands due to connection failure: %s",
-					  (int) to_remove->len, reason ? reason : "unknown");
-	}
-
-	/* Check session completion for all affected sessions */
-	GHashTableIter session_iter;
-	struct fuzzy_client_session *session;
-	int sessions_checked = 0;
 	g_hash_table_iter_init(&session_iter, sessions_to_check);
 	while (g_hash_table_iter_next(&session_iter, (gpointer *) &session, NULL)) {
 		sessions_checked++;
@@ -985,7 +985,6 @@ fuzzy_tcp_connection_cleanup(struct fuzzy_tcp_connection *conn, const char *reas
 					   sessions_checked);
 	}
 
-	g_ptr_array_free(to_remove, TRUE);
 	g_hash_table_unref(sessions_to_check);
 }
 
@@ -996,43 +995,39 @@ fuzzy_tcp_connection_cleanup(struct fuzzy_tcp_connection *conn, const char *reas
 static void
 fuzzy_tcp_check_pending_timeouts(struct fuzzy_rule *rule, ev_tstamp now)
 {
-	GHashTableIter iter;
-	gpointer key, value;
+	khash_t(fuzzy_pending_hash) * pending_ht;
 	struct fuzzy_tcp_pending_command *pending;
-	GPtrArray *to_remove;
 	GHashTable *sessions_to_check;
-	unsigned int i;
+	GHashTableIter session_iter;
+	struct fuzzy_client_session *session;
 	ev_tstamp timeout;
 
-	if (!rule || !rule->pending_requests) {
+	if (!rule || !(pending_ht = rule->pending_requests)) {
 		return;
 	}
 
 	timeout = rule->io_timeout;
-	to_remove = g_ptr_array_new();
 	sessions_to_check = g_hash_table_new(g_direct_hash, g_direct_equal);
 
-	g_hash_table_iter_init(&iter, rule->pending_requests);
-	while (g_hash_table_iter_next(&iter, &key, &value)) {
-		pending = (struct fuzzy_tcp_pending_command *) value;
+	for (khiter_t k = kh_begin(pending_ht); k != kh_end(pending_ht); ++k) {
+		if (!kh_exist(pending_ht, k)) {
+			continue;
+		}
 
-		/* Check if request timed out */
+		pending = kh_val(pending_ht, k);
+
 		if ((now - pending->send_time) > timeout) {
-			/* Mark command as replied (timed out) */
 			if (!(pending->io->flags & FUZZY_CMD_FLAG_REPLIED)) {
 				pending->io->flags |= FUZZY_CMD_FLAG_REPLIED;
 			}
 
-			/* Collect session for completion check */
 			if (pending->session) {
 				g_hash_table_add(sessions_to_check, pending->session);
 			}
 
-			g_ptr_array_add(to_remove, key);
-
 			if (pending->task) {
 				struct rspamd_task *task = pending->task;
-				/* Log timeout at info for auto mode, debug otherwise */
+
 				if (rule->tcp_auto) {
 					msg_info_task("fuzzy_tcp: request timeout after %.2fs for tag %ud to %s",
 								  now - pending->send_time,
@@ -1046,24 +1041,17 @@ fuzzy_tcp_check_pending_timeouts(struct fuzzy_rule *rule, ev_tstamp now)
 								   rspamd_upstream_name(pending->connection->server));
 				}
 			}
+
+			g_free(pending);
+			kh_del(fuzzy_pending_hash, pending_ht, k);
 		}
 	}
 
-	/* Remove timed out commands */
-	for (i = 0; i < to_remove->len; i++) {
-		g_hash_table_remove(rule->pending_requests,
-							g_ptr_array_index(to_remove, i));
-	}
-
-	/* Check session completion for all affected sessions */
-	GHashTableIter session_iter;
-	struct fuzzy_client_session *session;
 	g_hash_table_iter_init(&session_iter, sessions_to_check);
 	while (g_hash_table_iter_next(&session_iter, (gpointer *) &session, NULL)) {
 		fuzzy_check_session_is_completed(session);
 	}
 
-	g_ptr_array_free(to_remove, TRUE);
 	g_hash_table_unref(sessions_to_check);
 }
 
@@ -1316,8 +1304,25 @@ fuzzy_tcp_send_command(struct fuzzy_tcp_connection *conn,
 		pending->connection = conn;
 		pending->send_time = rspamd_get_calendar_ticks();
 
-		g_hash_table_insert(conn->rule->pending_requests,
-							GINT_TO_POINTER(io->tag), pending);
+		khiter_t k;
+		int kh_ret;
+
+		k = kh_put(fuzzy_pending_hash, conn->rule->pending_requests, io->tag, &kh_ret);
+
+		if (kh_ret < 0) {
+			msg_err_task("fuzzy_tcp: cannot register pending command for tag %ud", io->tag);
+			g_free(pending);
+		}
+		else {
+			if (kh_ret == 0) {
+				struct fuzzy_tcp_pending_command *old = kh_val(conn->rule->pending_requests, k);
+				if (old) {
+					g_free(old);
+				}
+			}
+
+			kh_val(conn->rule->pending_requests, k) = pending;
+		}
 
 		/* Mark as sent */
 		io->flags |= FUZZY_CMD_FLAG_SENT;
@@ -1410,13 +1415,15 @@ fuzzy_tcp_process_reply(struct fuzzy_tcp_connection *conn,
 
 	/* Extract tag and lookup pending command */
 	tag = rep->v1.tag;
-	pending = g_hash_table_lookup(rule->pending_requests, GINT_TO_POINTER(tag));
+	khiter_t k = kh_get(fuzzy_pending_hash, rule->pending_requests, tag);
 
-	if (!pending) {
+	if (k == kh_end(rule->pending_requests)) {
 		msg_debug("fuzzy_tcp: unexpected tag %ud from %s",
 				  tag, rspamd_upstream_name(conn->server));
 		return;
 	}
+
+	pending = kh_val(rule->pending_requests, k);
 
 	/* Get task for debug logging */
 	struct rspamd_task *task = pending->task;
@@ -1494,7 +1501,8 @@ fuzzy_tcp_process_reply(struct fuzzy_tcp_connection *conn,
 	struct fuzzy_client_session *session_to_check = pending->session;
 
 	/* Remove from pending requests */
-	g_hash_table_remove(rule->pending_requests, GINT_TO_POINTER(tag));
+	kh_del(fuzzy_pending_hash, rule->pending_requests, k);
+	g_free(pending);
 
 	/* Check if session is completed */
 	fuzzy_check_session_is_completed(session_to_check);
@@ -2145,8 +2153,7 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 	rule->tcp_connections = g_ptr_array_new_with_free_func(fuzzy_tcp_connection_unref);
 
 	/* Initialize global pending requests pool - keyed by tag */
-	rule->pending_requests = g_hash_table_new_full(g_direct_hash, g_direct_equal,
-												   NULL, g_free);
+	rule->pending_requests = kh_init(fuzzy_pending_hash);
 
 	/*
 	 * Process rule in Lua
@@ -2490,50 +2497,50 @@ int fuzzy_check_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 							   "true",
 							   0);
 	rspamd_rcl_add_doc_by_path(cfg,
-				   "fuzzy_check.rule",
-				   "Enable hashing of text content (set to false to disable text hashes)",
-				   "text_hashes",
-				   UCL_BOOLEAN,
-				   NULL,
-				   0,
-				   "true",
-				   0);
+							   "fuzzy_check.rule",
+							   "Enable hashing of text content (set to false to disable text hashes)",
+							   "text_hashes",
+							   UCL_BOOLEAN,
+							   NULL,
+							   0,
+							   "true",
+							   0);
 	rspamd_rcl_add_doc_by_path(cfg,
-				   "fuzzy_check.rule",
-				   "Enable HTML structure hashing for this rule",
-				   "html_shingles",
-				   UCL_BOOLEAN,
-				   NULL,
-				   0,
-				   "false",
-				   0);
+							   "fuzzy_check.rule",
+							   "Enable HTML structure hashing for this rule",
+							   "html_shingles",
+							   UCL_BOOLEAN,
+							   NULL,
+							   0,
+							   "false",
+							   0);
 	rspamd_rcl_add_doc_by_path(cfg,
-				   "fuzzy_check.rule",
-				   "Minimum number of HTML tags required to generate HTML hashes",
-				   "min_html_tags",
-				   UCL_INT,
-				   NULL,
-				   0,
-				   NULL,
-				   0);
+							   "fuzzy_check.rule",
+							   "Minimum number of HTML tags required to generate HTML hashes",
+							   "min_html_tags",
+							   UCL_INT,
+							   NULL,
+							   0,
+							   NULL,
+							   0);
 	rspamd_rcl_add_doc_by_path(cfg,
-				   "fuzzy_check.rule",
-				   "Multiplier applied to HTML fuzzy matches",
-				   "html_weight",
-				   UCL_FLOAT,
-				   NULL,
-				   0,
-				   NULL,
-				   0);
+							   "fuzzy_check.rule",
+							   "Multiplier applied to HTML fuzzy matches",
+							   "html_weight",
+							   UCL_FLOAT,
+							   NULL,
+							   0,
+							   NULL,
+							   0);
 	rspamd_rcl_add_doc_by_path(cfg,
-				   "fuzzy_check.rule",
-				   "Content hashing checks configuration object (e.g. { text = { enabled = true; }, html = { enabled = true; } })",
-				   "checks",
-				   UCL_OBJECT,
-				   NULL,
-				   0,
-				   NULL,
-				   0);
+							   "fuzzy_check.rule",
+							   "Content hashing checks configuration object (e.g. { text = { enabled = true; }, html = { enabled = true; } })",
+							   "checks",
+							   UCL_OBJECT,
+							   NULL,
+							   0,
+							   NULL,
+							   0);
 	rspamd_rcl_add_doc_by_path(cfg,
 							   "fuzzy_check.rule",
 							   "Override module default min bytes for this rule",
@@ -2911,46 +2918,37 @@ int fuzzy_check_module_reconfig(struct rspamd_config *cfg)
 static void
 fuzzy_tcp_session_cleanup(struct fuzzy_client_session *session)
 {
-	GHashTableIter iter;
-	gpointer key, value;
+	khash_t(fuzzy_pending_hash) * pending_ht;
 	struct fuzzy_tcp_pending_command *pending;
-	GPtrArray *to_remove;
-	unsigned int i;
+	unsigned int removed = 0;
+	struct rspamd_task *task = session->task;
 
-	if (!session || !session->rule || !session->rule->pending_requests) {
+	if (!session || !session->rule || !(pending_ht = session->rule->pending_requests)) {
 		return;
 	}
 
-	/* Collect tags to remove (can't modify hash table during iteration) */
-	to_remove = g_ptr_array_new();
+	for (khiter_t k = kh_begin(pending_ht); k != kh_end(pending_ht); ++k) {
+		if (!kh_exist(pending_ht, k)) {
+			continue;
+		}
 
-	g_hash_table_iter_init(&iter, session->rule->pending_requests);
-	while (g_hash_table_iter_next(&iter, &key, &value)) {
-		pending = (struct fuzzy_tcp_pending_command *) value;
+		pending = kh_val(pending_ht, k);
 
 		if (pending->session == session) {
-			/* Mark command as replied (session finished) */
 			if (!(pending->io->flags & FUZZY_CMD_FLAG_REPLIED)) {
 				pending->io->flags |= FUZZY_CMD_FLAG_REPLIED;
 			}
 
-			g_ptr_array_add(to_remove, key);
+			g_free(pending);
+			kh_del(fuzzy_pending_hash, pending_ht, k);
+			removed++;
 		}
 	}
 
-	/* Remove pending commands */
-	for (i = 0; i < to_remove->len; i++) {
-		g_hash_table_remove(session->rule->pending_requests,
-							g_ptr_array_index(to_remove, i));
+	if (removed > 0 && session->task) {
+		msg_debug_fuzzy_check("fuzzy_tcp: cleaned up %u pending commands for finished session",
+							  removed);
 	}
-
-	if (to_remove->len > 0 && session->task) {
-		struct rspamd_task *task = session->task;
-		msg_debug_fuzzy_check("fuzzy_tcp: cleaned up %d pending commands for finished session",
-							  (int) to_remove->len);
-	}
-
-	g_ptr_array_free(to_remove, TRUE);
 }
 
 /* Finalize IO */
@@ -3695,6 +3693,7 @@ fuzzy_cmd_from_html_part(struct rspamd_task *task,
 	struct fuzzy_cmd_io *io;
 	unsigned int additional_length;
 	unsigned char *additional_data;
+
 
 	/* Check if HTML shingles are enabled for this rule */
 	if (!rule->html_shingles) {
@@ -5256,24 +5255,24 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 					!(flags & FUZZY_CHECK_FLAG_NOTEXT)) {
 					part = mime_part->specific.txt;
 					gboolean allow_html = rule->html_shingles &&
-						!(flags & FUZZY_CHECK_FLAG_NOHTML) &&
-						(check_part || !rule->text_hashes);
+										  !(flags & FUZZY_CHECK_FLAG_NOHTML) &&
+										  (check_part || !rule->text_hashes);
 
 					if (check_part && rule->text_hashes) {
 						io = fuzzy_cmd_from_text_part(task, rule,
-											c,
-											flag,
-											value,
-											!fuzzy_check,
-											part,
-											mime_part);
+													  c,
+													  flag,
+													  value,
+													  !fuzzy_check,
+													  part,
+													  mime_part);
 					}
 
 					if (allow_html && part != NULL) {
 						struct fuzzy_cmd_io *html_io;
 
 						html_io = fuzzy_cmd_from_html_part(task, rule, c, flag, value,
-											part, mime_part);
+														   part, mime_part);
 
 						if (html_io) {
 							/* Add HTML hash as separate command */
@@ -5282,13 +5281,13 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 					}
 				}
 				else if (check_part && mime_part->part_type == RSPAMD_MIME_PART_IMAGE &&
-					 !(flags & FUZZY_CHECK_FLAG_NOIMAGES)) {
+						 !(flags & FUZZY_CHECK_FLAG_NOIMAGES)) {
 					image = mime_part->specific.img;
 
 					io = fuzzy_cmd_from_data_part(rule, c, flag, value,
-											  task,
-											  image->parent->digest,
-											  mime_part);
+												  task,
+												  image->parent->digest,
+												  mime_part);
 					io->flags |= FUZZY_CMD_FLAG_IMAGE;
 				}
 				else if (check_part && mime_part->part_type == RSPAMD_MIME_PART_CUSTOM_LUA) {
@@ -5330,10 +5329,10 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 
 								if (hlen == rspamd_cryptobox_HASHBYTES) {
 									io = fuzzy_cmd_from_data_part(rule, c,
-											      flag, value,
-											      task,
-											      (unsigned char *) h,
-											      mime_part);
+																  flag, value,
+																  task,
+																  (unsigned char *) h,
+																  mime_part);
 
 									if (io) {
 										io->flags |= FUZZY_CMD_FLAG_CONTENT;
@@ -5349,16 +5348,16 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 						 * Add part itself as well
 						 */
 						io = fuzzy_cmd_from_data_part(rule, c,
-											  flag, value,
-											  task,
-											  mime_part->digest,
-											  mime_part);
+													  flag, value,
+													  task,
+													  mime_part->digest,
+													  mime_part);
 					}
 				}
 				else if (check_part) {
 					io = fuzzy_cmd_from_data_part(rule, c, flag, value,
-											  task,
-											  mime_part->digest, mime_part);
+												  task,
+												  mime_part->digest, mime_part);
 				}
 
 				if (io) {
@@ -5367,7 +5366,7 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 					PTR_ARRAY_FOREACH(res, j, cur)
 					{
 						if (memcmp(cur->cmd.digest, io->cmd.digest,
-							   sizeof(io->cmd.digest)) == 0) {
+								   sizeof(io->cmd.digest)) == 0) {
 							skip_existing = TRUE;
 							break;
 						}
