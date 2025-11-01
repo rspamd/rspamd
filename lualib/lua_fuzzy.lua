@@ -42,6 +42,7 @@ local policies = {
     scan_archives = true,
     short_text_direct_hash = true,
     text_shingles = true,
+  text_hashes = true,
     skip_images = false,
   }
 }
@@ -58,6 +59,7 @@ local schema_fields = {
   scan_archives = ts.boolean,
   short_text_direct_hash = ts.boolean,
   text_shingles = ts.boolean,
+  text_hashes = ts.boolean,
   skip_images = ts.boolean,
 }
 local policy_schema = ts.shape(schema_fields)
@@ -68,6 +70,155 @@ local policy_schema_open = ts.shape(schema_fields, {
 
 local exports = {}
 
+local function apply_checks_overrides(rule)
+  local checks = rule.checks
+
+  if type(checks) ~= 'table' then
+    return
+  end
+
+  local function find_section(name)
+    local lname = name:lower()
+
+    for k, v in pairs(checks) do
+      if type(k) == 'string' and k:lower() == lname then
+        return v
+      end
+    end
+
+    return nil
+  end
+
+  local function bool_opt(section, key)
+    if type(section) ~= 'table' then
+      return nil
+    end
+
+    if section[key] == nil then
+      return nil
+    end
+
+    return lua_util.toboolean(section[key])
+  end
+
+  local function number_opt(section, key)
+    if type(section) ~= 'table' then
+      return nil
+    end
+
+    if section[key] == nil then
+      return nil
+    end
+
+    return tonumber(section[key])
+  end
+
+  local text_section = find_section('text')
+
+  if text_section then
+    local enabled = bool_opt(text_section, 'enabled')
+
+    if enabled == nil then
+      enabled = true
+    end
+
+    rule.text_hashes = enabled
+
+    local opt = bool_opt(text_section, 'no_subject')
+
+    if opt ~= nil then
+      rule.no_subject = opt
+    end
+
+    opt = bool_opt(text_section, 'short_text_direct_hash')
+
+    if opt ~= nil then
+      rule.short_text_direct_hash = opt
+    end
+
+    local num = number_opt(text_section, 'min_length')
+
+    if num ~= nil then
+      rule.min_length = num
+    end
+
+    num = number_opt(text_section, 'text_multiplier')
+
+    if num ~= nil then
+      rule.text_multiplier = num
+    end
+  end
+
+  local html_section = find_section('html')
+
+  if html_section then
+    local enabled = bool_opt(html_section, 'enabled')
+
+    if enabled == nil then
+      enabled = true
+    end
+
+    rule.html_shingles = enabled
+
+    local num = number_opt(html_section, 'min_html_tags')
+
+    if num == nil then
+      num = number_opt(html_section, 'min_tags')
+    end
+
+    if num ~= nil then
+      rule.min_html_tags = num
+    end
+
+    num = number_opt(html_section, 'html_weight')
+
+    if num == nil then
+      num = number_opt(html_section, 'weight')
+    end
+
+    if num ~= nil then
+      rule.html_weight = num
+    end
+  end
+
+  local image_section = find_section('image') or find_section('images')
+
+  if image_section then
+    local enabled = bool_opt(image_section, 'enabled')
+
+    if enabled == nil then
+      enabled = true
+    end
+
+    rule.skip_images = not enabled
+
+    local num = number_opt(image_section, 'min_height')
+
+    if num ~= nil then
+      rule.min_height = num
+    end
+
+    num = number_opt(image_section, 'min_width')
+
+    if num ~= nil then
+      rule.min_width = num
+    end
+  end
+
+  local archive_section = find_section('archive') or find_section('archives')
+
+  if archive_section then
+    local enabled = bool_opt(archive_section, 'enabled')
+
+    if enabled == nil then
+      enabled = true
+    end
+
+    rule.scan_archives = enabled
+  end
+
+  rule.checks = nil
+end
 
 --[[[
 -- @function lua_fuzzy.register_policy(name, policy)
@@ -105,6 +256,8 @@ exports.process_rule = function(rule)
   if policy then
     processed_rule = lua_util.override_defaults(policy, processed_rule)
 
+    apply_checks_overrides(processed_rule)
+
     local parsed_policy, err = policy_schema_open:transform(processed_rule)
 
     if not parsed_policy then
@@ -114,6 +267,7 @@ exports.process_rule = function(rule)
     end
   else
     rspamd_logger.warnx(rspamd_config, "unknown policy %s", processed_rule.policy)
+    apply_checks_overrides(processed_rule)
   end
 
   if processed_rule.mime_types then
@@ -176,6 +330,12 @@ local function check_text_part(task, part, rule, text)
 
   local id = part:get_id()
   lua_util.debugm(N, task, 'check text part %s', id)
+
+  if rule.text_hashes == false then
+    lua_util.debugm(N, task, 'text hashes disabled, relying on HTML for part %s', id)
+    return rule.html_shingles == true, false
+  end
+
   local wcnt = text:get_words_count()
 
   if rule.text_shingles then
