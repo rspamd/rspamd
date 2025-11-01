@@ -910,7 +910,7 @@ rspamd_dns_resolver_init(rspamd_logger_t *logger,
 			rspamd_upstreams_set_flags(dns_resolver->ups,
 									   RSPAMD_UPSTREAM_FLAG_DNS);
 			rspamd_upstreams_set_rotation(dns_resolver->ups,
-										  RSPAMD_UPSTREAM_MASTER_SLAVE);
+										  RSPAMD_UPSTREAM_ROUND_ROBIN);
 
 			if (!rdns_resolver_parse_resolv_conf_cb(dns_resolver->r,
 													"/etc/resolv.conf",
