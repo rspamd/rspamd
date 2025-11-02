@@ -28,10 +28,11 @@
 
 <body>
 <!-- .vw-100 and .pe-3 prevent navbar layout shift caused by scrollbar -->
-<nav class="navbar navbar-light bg-light navbar-expand-xl vw-100 pe-3 d-none" id="navBar">
+<nav class="navbar bg-body-tertiary border-bottom navbar-expand-xl vw-100 pe-3 d-none" id="navBar">
 	<div class="container-fluid">
 		<div class="navbar-header navbar-brand p-0">
-			<img src="./img/rspamd_logo_navbar.png" alt="Rspamd">
+			<img class="logo-light" src="./img/rspamd_logo_navbar.png" alt="Rspamd">
+			<img class="logo-dark" src="./img/rspamd_logo_navbar_dark.png" alt="Rspamd">
 		</div>
 		<div class="collapse navbar-collapse order-3 order-xl-2 flex-grow-0">
 			<form class="my-2 me-auto">
@@ -89,6 +90,7 @@
 					</div>
 				</div>
 				<button class="btn btn-outline-secondary ms-2" id="disconnect" title="Disconnect"><i class="fas fa-power-off"></i></button>
+				<button class="btn btn-outline-secondary ms-2" id="theme-toggle" title="Toggle theme"><i class="fas fa-moon" id="theme-icon"></i></button>
 				<button class="btn btn-outline-secondary ms-2" id="settings" title="WebUI settings"><i class="fas fa-cog"></i></button>
 				<div class="d-none">
 					<div id="settings-popover">
@@ -109,6 +111,24 @@
 									<input type="text" id="locale" placeholder="Enter locale" class="form-control" />
 								</div>
 								<p class="mt-2 mb-0">Date: <span id="date-example"></span></p>
+							</div>
+						</div>
+
+						<div class="card mt-1">
+							<div class="card-body">
+								<h6 class="card-title fw-bolder">Theme</h6>
+								<label class="ms-2">
+									<input type="radio" class="me-2" name="theme" value="light">
+									Light
+								</label>
+								<label class="ms-2">
+									<input type="radio" class="me-2" name="theme" value="dark">
+									Dark
+								</label>
+								<label class="ms-2">
+									<input type="radio" class="me-2" name="theme" value="auto" checked>
+									Auto
+								</label>
 							</div>
 						</div>
 
@@ -156,7 +176,8 @@
 	</div>
 	<script>document.getElementById("loading").classList.remove("d-none");</script>
 	<div class="row position-absolute w-100 h-100 align-items-center text-center">
-		<img class="img-fluid w-auto mh-100 mx-auto" src="./img/rspamd_logo_navbar.png" alt="Rspamd" />
+		<img class="img-fluid w-auto mh-100 mx-auto logo-light" src="./img/rspamd_logo_navbar.png" alt="Rspamd" />
+		<img class="img-fluid w-auto mh-100 mx-auto logo-dark" src="./img/rspamd_logo_navbar_dark.png" alt="Rspamd" />
 	</div>
 </div>
 
@@ -172,7 +193,7 @@
 				</div>
 				<div class="row">
 					<div class="col-lg-6">
-						<div class="card bg-light shadow my-3">
+						<div class="card shadow my-3">
 							<div class="card-header text-secondary py-2 d-flex align-items-center">
 								<span class="icon me-3"><i class="fas fa-server"></i></span>
 								<span class="h6 fw-bolder my-auto">Servers</span>
@@ -196,7 +217,7 @@
 									</table>
 								</div>
 						</div>
-						<div class="card bg-light shadow my-3">
+						<div class="card shadow my-3">
 							<div class="card-header text-secondary py-2 d-flex align-items-center">
 								<span class="icon me-3"><i class="fas fa-dice"></i></span>
 								<span class="h6 fw-bolder my-auto">Bayesian statistics</span>
@@ -217,7 +238,7 @@
 									</table>
 								</div>
 						</div>
-						<div class="card bg-light shadow my-3">
+						<div class="card shadow my-3">
 							<div class="card-header text-secondary py-2 d-flex align-items-center">
 								<span class="icon me-3"><i class="fas fa-hashtag"></i></span>
 								<span class="h6 fw-bolder my-auto">Fuzzy hashes</span>
@@ -238,14 +259,14 @@
 						</div>
 					</div>
 					<div class="col-lg-6">
-						<div class="card bg-light shadow my-3">
+						<div class="card shadow my-3">
 							<div class="card-header text-secondary py-2 d-flex align-items-center">
 								<span class="icon me-3"><i class="fas fa-chart-pie"></i></span>
 								<span class="h6 fw-bolder my-auto">Statistics</span>
 							</div>
 							<div class="card-body">
 								<div class="row">
-									<div class="bg-white w-auto mx-auto" id="chart"></div>
+									<div class="w-auto mx-auto" id="chart"></div>
 								</div>
 							</div>
 						</div>
@@ -254,20 +275,20 @@
 			</div>
 
 			<div class="tab-pane" id="throughput">
-				<div class="card bg-light shadow my-3">
+				<div class="card shadow my-3">
 					<div class="card-header text-secondary py-2 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-chart-area"></i></span>
 						<span class="h6 fw-bolder my-auto">Throughput</span>
 					</div>
 					<div class="card-body text-center">
-						<div class="d-inline-block bg-white">
+						<div class="d-inline-block">
 							<div class="row">
 								<div id="graph" class="mx-auto"></div>
 							</div>
 							<div id="summary-row" class="row">
 								<div class="col-fixed" id="rrd-pie"></div>
 								<div class="col-fluid">
-									<table id="rrd-table" class="table table-light table-striped table-hover"></table>
+									<table id="rrd-table" class="table table-striped table-hover"></table>
 									<div id="rrd-table_toggle"></div>
 									<div id="rrd-total">Total messages: <span id="rrd-total-value"></span></div>
 								</div>
@@ -317,7 +338,7 @@
 			</div>
 
 			<div class="tab-pane" id="configuration">
-				<div class="card bg-light shadow my-3">
+				<div class="card shadow my-3">
 					<div class="card-header text-secondary py-2 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-tasks"></i></span>
 						<span class="h6 fw-bolder my-auto">Actions</span>
@@ -334,7 +355,7 @@
 						</div>
 					</div>
 				</div>
-				<div class="card bg-light shadow my-3">
+				<div class="card shadow my-3">
 					<div class="card-header text-secondary py-2 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-list"></i></span>
 						<span class="h6 fw-bolder my-auto">Maps</span>
@@ -359,7 +380,7 @@
 			</div>
 
 			<div class="tab-pane" id="symbols">
-				<div class="card bg-light shadow my-3">
+				<div class="card shadow my-3">
 					<div class="card-header text-secondary py-1 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-tasks"></i></span>
 						<span class="h6 fw-bolder my-auto ms-0">Symbols and rules</span>
@@ -388,7 +409,7 @@
 			</div>
 
 			<div class="tab-pane" id="scan">
-				<div class="card bg-light shadow my-3">
+				<div class="card shadow my-3">
 					<div class="card-header text-secondary py-1 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-envelope"></i></span>
 						<span class="h6 fw-bolder my-auto">Scan suspected message</span>
@@ -486,7 +507,7 @@
 					<div class="card-body">
 						<div class="row g-3">
 							<div class="col-lg-auto d-flex">
-								<div class="card bg-light shadow card-body card p-2">
+								<div class="card shadow card-body card p-2">
 									<p>Learn Bayesian classifier:</p>
 									<form>
 										<div class="d-flex flex-wrap flex-lg-column align-items-start align-items-lg-stretch gap-2">
@@ -500,7 +521,7 @@
 								</div>
 							</div>
 							<div class="col-lg d-flex">
-								<div class="card bg-light shadow card-body p-2">
+								<div class="card shadow card-body p-2">
 									<p>Fuzzy hash storage management:</p>
 									<div class="row g-2 align-items-center">
 										<div class="col-auto d-flex align-items-center me-1">
@@ -539,7 +560,7 @@
 					</div>
 				</div>
 
-				<div id="hash-card" class="card bg-light shadow my-3 d-none">
+				<div id="hash-card" class="card shadow my-3 d-none">
 					<div class="card-header text-secondary py-2 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-hashtag"></i></span>
 						<span class="h6 fw-bolder my-auto">Fuzzy hashes</span>
@@ -559,7 +580,7 @@
 						</div>
 				</div>
 
-				<div class="card bg-light shadow my-3">
+				<div class="card shadow my-3">
 					<div class="card-header text-secondary py-1 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-eye"></i></span>
 						<span class="h6 fw-bolder my-auto ms-0">Scan results history</span>
@@ -590,7 +611,7 @@
 			</div>
 
 			<div class="tab-pane" id="selectors">
-				<div class="card bg-light shadow my-3">
+				<div class="card shadow my-3">
 					<div class="card-header text-secondary py-2 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-envelope"></i></span>
 						<span class="h6 fw-bolder my-auto">Test Rspamd selectors</span>
@@ -602,7 +623,7 @@
 					<div class="card-body p-0">
 						<div class="row h-100 m-0" id="row-main">
 							<div class="col-lg-3 sidebar h-100" id="sidebar-left">
-								<div class="p-0 table-responsive mh-100 bg-white">
+								<div class="p-0 table-responsive mh-100">
 									<table class="table table-sm small table-striped table-hover table-bordered mb-0" id="selectorsTable-extractors">
 										<thead><tr><th>Name</th><th>Description</th></tr></thead>
 										<tbody/>
@@ -676,7 +697,7 @@
 
 			<div class="tab-pane" id="history">
 
-				<div class="card bg-light shadow my-3">
+				<div class="card shadow my-3">
 					<div class="card-header text-secondary py-1 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-eye"></i></span>
 						<span class="h6 fw-bolder my-auto ms-0">History</span>
@@ -715,7 +736,7 @@
 						</div>
 					</div>
 				</div>
-				<div class="card bg-light shadow my-3 ro-hide" id="errors-history">
+				<div class="card shadow my-3 ro-hide" id="errors-history">
 					<div class="card-header text-secondary py-1 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-exclamation-triangle"></i></span>
 						<span class="h6 fw-bolder my-auto ms-0">Errors</span>
