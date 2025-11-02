@@ -3884,3 +3884,53 @@ rspamd_str_has_8bit(const unsigned char *beg, gsize len)
 
 	return rspamd_str_has_8bit_u64(beg, len);
 }
+
+gssize
+rspamd_getline(char **lineptr, gsize *n, FILE *stream)
+{
+	char *line = *lineptr;
+	gsize len = *n;
+	gssize nread = 0;
+	int c;
+
+	if (line == NULL || len == 0) {
+		len = 120;
+		line = g_malloc(len);
+		if (line == NULL) {
+			return -1;
+		}
+	}
+
+	while ((c = fgetc(stream)) != EOF) {
+		if ((gsize) nread >= len - 1) {
+			gsize new_len = len * 2;
+			char *new_line = g_realloc(line, new_len);
+			if (new_line == NULL) {
+				return -1;
+			}
+			line = new_line;
+			len = new_len;
+		}
+
+		line[nread++] = c;
+
+		if (c == '\n') {
+			break;
+		}
+	}
+
+	if (nread == 0 && c == EOF) {
+		return -1;
+	}
+
+	line[nread] = '\0';
+	*lineptr = line;
+	*n = len;
+
+	return nread;
+}
+
+void rspamd_getline_free(char *lineptr)
+{
+	g_free(lineptr);
+}

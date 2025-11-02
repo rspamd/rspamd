@@ -2727,6 +2727,17 @@ rspamd_config_ev_backend_to_string(int ev_backend, gboolean *effective)
 #undef SET_EFFECTIVE
 }
 
+extern "C" {
+#include "../../contrib/hiredis/alloc.h"
+}
+
+/* Wrapper for calloc with correct signature for hiredis */
+static void *
+rspamd_hiredis_calloc(size_t nmemb, size_t size)
+{
+	return g_malloc0_n(nmemb, size);
+}
+
 struct rspamd_external_libs_ctx *
 rspamd_init_libs(void)
 {
@@ -2740,6 +2751,16 @@ rspamd_init_libs(void)
 	ctx->ottery_cfg = ottery_cfg;
 
 	rspamd_openssl_maybe_init(ctx);
+
+	/* Configure hiredis allocators to use glib (jemalloc) */
+	hiredisAllocFuncs hiredis_allocators = {
+		.mallocFn = g_malloc,
+		.callocFn = rspamd_hiredis_calloc,
+		.reallocFn = g_realloc,
+		.strdupFn = g_strdup,
+		.freeFn = g_free,
+	};
+	hiredisSetAllocators(&hiredis_allocators);
 
 	/* Check if we have rdrand */
 	if ((ctx->crypto_ctx->cpu_config & CPUID_RDRAND) == 0) {

@@ -558,6 +558,25 @@ char **rspamd_string_len_split(const char *in, gsize len,
 #define RSPAMD_LEN_CHECK_STARTS_WITH(s, len, lit) \
 	((len) >= sizeof(lit) - 1 && g_ascii_strncasecmp((s), (lit), sizeof(lit) - 1) == 0)
 
+/**
+ * Wrapper around getline(3) that handles allocator mismatches when jemalloc is enabled.
+ * When jemalloc is used, getline() allocates memory with system malloc, but rspamd's
+ * free() uses jemalloc, causing crashes. This function ensures proper cleanup.
+ *
+ * @param lineptr pointer to buffer (will be allocated/reallocated as needed)
+ * @param n pointer to buffer size
+ * @param stream file stream to read from
+ * @return number of characters read, or -1 on error
+ */
+gssize rspamd_getline(char **lineptr, gsize *n, FILE *stream);
+
+/**
+ * Free memory allocated by rspamd_getline using the correct allocator.
+ *
+ * @param lineptr buffer to free
+ */
+void rspamd_getline_free(char *lineptr);
+
 #ifdef __cplusplus
 }
 #endif

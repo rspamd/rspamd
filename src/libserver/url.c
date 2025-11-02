@@ -435,7 +435,7 @@ rspamd_url_parse_tld_file(const char *fname,
 	m.start = url_tld_start;
 	m.prefix = "http://";
 
-	while ((r = getline(&linebuf, &buflen, f)) > 0) {
+	while ((r = rspamd_getline(&linebuf, &buflen, f)) > 0) {
 		if (linebuf[0] == '/' || g_ascii_isspace(linebuf[0])) {
 			/* Skip comment or empty line */
 			continue;
@@ -474,7 +474,7 @@ rspamd_url_parse_tld_file(const char *fname,
 		g_array_append_val(url_scanner->matchers_full, m);
 	}
 
-	free(linebuf);
+	rspamd_getline_free(linebuf);
 	fclose(f);
 
 	return TRUE;

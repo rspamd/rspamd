@@ -724,7 +724,7 @@ rspamd_dns_read_hosts_file(struct rspamd_config *cfg,
 		return false;
 	}
 
-	while ((r = getline(&linebuf, &buflen, fp)) > 0) {
+	while ((r = rspamd_getline(&linebuf, &buflen, fp)) > 0) {
 		if (linebuf[0] == '#' || g_ascii_isspace(linebuf[0])) {
 			/* Skip comment or empty line */
 			continue;
@@ -794,7 +794,7 @@ rspamd_dns_read_hosts_file(struct rspamd_config *cfg,
 	}
 
 	if (linebuf) {
-		free(linebuf);
+		rspamd_getline_free(linebuf);
 	}
 
 	msg_info_config("processed host file %s; %d records added", fname, nadded);
