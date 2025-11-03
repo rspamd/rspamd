@@ -426,6 +426,104 @@ hs_shared_from_serialized(hs_known_files_cache &hs_cache, raii_mmaped_file &&map
 	return tl::expected<hs_shared_database, error>{tl::in_place, target, map.get_file().get_name().data()};
 }
 
+#if defined(HS_MAJOR) && defined(HS_MINOR) && HS_MAJOR >= 5 && HS_MINOR >= 4
+/**
+ * Helper function to create unserialized hyperscan database file from serialized data
+ * This function handles the entire process of creating a temporary file, deserializing
+ * the database into it, and atomically replacing the target file.
+ */
+template<typename T>
+static auto
+create_unserialized_file(const char *unserialized_fname, T &&cached_serialized, std::int64_t offset) -> tl::expected<raii_file, error>
+{
+	const auto *log_func = RSPAMD_LOG_FUNC;
+	return raii_locked_file::create(unserialized_fname, O_CREAT | O_RDWR | O_EXCL, 00644)
+		.and_then([&](auto &&new_file_locked) -> tl::expected<raii_file, error> {
+			auto tmpfile_pattern = fmt::format("{}{}hsmp-XXXXXXXXXXXXXXXXXX",
+											   cached_serialized.get_file().get_dir(), G_DIR_SEPARATOR);
+			auto tmpfile = raii_locked_file::mkstemp(tmpfile_pattern.data(), O_CREAT | O_RDWR | O_EXCL, 00644);
+
+			if (!tmpfile) {
+				return tl::make_unexpected(tmpfile.error());
+			}
+
+			auto &tmpfile_checked = tmpfile.value();
+			auto tmpfile_name = std::string{tmpfile_checked.get_name()};
+			std::size_t unserialized_size;
+
+			if (auto ret = hs_serialized_database_size(((const char *) cached_serialized.get_map()) + offset,
+													   cached_serialized.get_size() - offset, &unserialized_size);
+				ret != HS_SUCCESS) {
+				return tl::make_unexpected(error{
+					fmt::format("cannot get unserialized database size: {}", ret),
+					EINVAL,
+					error_category::IMPORTANT});
+			}
+
+			msg_debug_hyperscan_lambda("multipattern: create new database in %s; %Hz size",
+									   tmpfile_name.c_str(), unserialized_size);
+
+			void *buf;
+#ifdef HAVE_GETPAGESIZE
+			auto page_size = getpagesize();
+#else
+			auto page_size = sysconf(_SC_PAGESIZE);
+#endif
+			if (page_size == -1) {
+				page_size = 4096;
+			}
+			auto errcode = posix_memalign(&buf, page_size, unserialized_size);
+			if (errcode != 0 || buf == nullptr) {
+				return tl::make_unexpected(error{"Cannot allocate memory",
+												 errno, error_category::CRITICAL});
+			}
+
+			if (auto ret = hs_deserialize_database_at(((const char *) cached_serialized.get_map()) + offset,
+													  cached_serialized.get_size() - offset, (hs_database_t *) buf);
+				ret != HS_SUCCESS) {
+				free(buf);
+				return tl::make_unexpected(error{
+					fmt::format("cannot deserialize hyperscan database: {}", ret), ret});
+			}
+
+			if (write(tmpfile_checked.get_fd(), buf, unserialized_size) == -1) {
+				free(buf);
+				return tl::make_unexpected(error{fmt::format("cannot write to {}: {}",
+															 tmpfile_name, ::strerror(errno)),
+												 errno, error_category::CRITICAL});
+			}
+
+			free(buf);
+			/*
+			 * Unlink target file before renaming to avoid race condition.
+			 * new_file_locked will have flock on that file, so it will be
+			 * replaced after unlink safely, and also unlocked.
+			 */
+			(void) unlink(unserialized_fname);
+			if (rename(tmpfile_name.c_str(), unserialized_fname) == -1) {
+				if (errno != EEXIST) {
+					msg_info_hyperscan_lambda("cannot rename %s -> %s: %s",
+											  tmpfile_name.c_str(),
+											  unserialized_fname,
+											  strerror(errno));
+				}
+			}
+			else {
+				/* Unlock file but mark it as immortal first to avoid deletion */
+				tmpfile_checked.make_immortal();
+				(void) tmpfile_checked.unlock();
+			}
+
+			/* Reopen in RO mode */
+			return raii_file::open(unserialized_fname, O_RDONLY);
+		})
+		.or_else([&](auto unused) -> tl::expected<raii_file, error> {
+			// Cannot create file, so try to open it in RO mode
+			return raii_file::open(unserialized_fname, O_RDONLY);
+		});
+}
+#endif
+
 auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expected<hs_shared_database, error>
 {
 	auto &hs_cache = hs_known_files_cache::get();
@@ -438,96 +536,7 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 			}
 #if defined(HS_MAJOR) && defined(HS_MINOR) && HS_MAJOR >= 5 && HS_MINOR >= 4
 			auto unserialized_fname = fmt::format("{}.unser", fname);
-			auto unserialized_file = raii_locked_file::create(unserialized_fname.c_str(), O_CREAT | O_RDWR | O_EXCL,
-															  00644)
-										 .and_then([&](auto &&new_file_locked) -> tl::expected<raii_file, error> {
-											 auto tmpfile_pattern = fmt::format("{}{}hsmp-XXXXXXXXXXXXXXXXXX",
-																				cached_serialized.get_file().get_dir(), G_DIR_SEPARATOR);
-											 auto tmpfile = raii_locked_file::mkstemp(tmpfile_pattern.data(), O_CREAT | O_RDWR | O_EXCL,
-																					  00644);
-
-											 if (!tmpfile) {
-												 return tl::make_unexpected(tmpfile.error());
-											 }
-											 else {
-												 auto &tmpfile_checked = tmpfile.value();
-												 // Store owned string
-												 auto tmpfile_name = std::string{tmpfile_checked.get_name()};
-												 std::size_t unserialized_size;
-
-												 if (auto ret = hs_serialized_database_size(((const char *) cached_serialized.get_map()) + offset,
-																							cached_serialized.get_size() - offset, &unserialized_size);
-													 ret != HS_SUCCESS) {
-													 return tl::make_unexpected(error{
-														 fmt::format("cannot get unserialized database size: {}", ret),
-														 EINVAL,
-														 error_category::IMPORTANT});
-												 }
-
-												 msg_debug_hyperscan_lambda("multipattern: create new database in %s; %Hz size",
-																			tmpfile_name.c_str(), unserialized_size);
-												 void *buf;
-#ifdef HAVE_GETPAGESIZE
-												 auto page_size = getpagesize();
-#else
-												 auto page_size = sysconf(_SC_PAGESIZE);
-#endif
-												 if (page_size == -1) {
-													 page_size = 4096;
-												 }
-												 auto errcode = posix_memalign(&buf, page_size, unserialized_size);
-												 if (errcode != 0 || buf == nullptr) {
-													 return tl::make_unexpected(error{"Cannot allocate memory",
-																					  errno, error_category::CRITICAL});
-												 }
-
-												 if (auto ret = hs_deserialize_database_at(((const char *) cached_serialized.get_map()) + offset,
-																						   cached_serialized.get_size() - offset, (hs_database_t *) buf);
-													 ret != HS_SUCCESS) {
-													 return tl::make_unexpected(error{
-														 fmt::format("cannot deserialize hyperscan database: {}", ret), ret});
-												 }
-												 else {
-													 if (write(tmpfile_checked.get_fd(), buf, unserialized_size) == -1) {
-														 free(buf);
-														 return tl::make_unexpected(error{fmt::format("cannot write to {}: {}",
-																									  tmpfile_name, ::strerror(errno)),
-																						  errno, error_category::CRITICAL});
-													 }
-													 else {
-														 free(buf);
-														 /*
-														 * Unlink target file before renaming to avoid
-														 * race condition.
-														 * So what we have is that `new_file_locked`
-														 * will have flock on that file, so it will be
-														 * replaced after unlink safely, and also unlocked.
-														 */
-														 (void) unlink(unserialized_fname.c_str());
-														 if (rename(tmpfile_name.c_str(),
-																	unserialized_fname.c_str()) == -1) {
-															 if (errno != EEXIST) {
-																 msg_info_hyperscan_lambda("cannot rename %s -> %s: %s",
-																						   tmpfile_name.c_str(),
-																						   unserialized_fname.c_str(),
-																						   strerror(errno));
-															 }
-														 }
-														 else {
-															 /* Unlock file but mark it as immortal first to avoid deletion */
-															 tmpfile_checked.make_immortal();
-															 (void) tmpfile_checked.unlock();
-														 }
-													 }
-												 }
-												 /* Reopen in RO mode */
-												 return raii_file::open(unserialized_fname.c_str(), O_RDONLY);
-											 };
-										 })
-										 .or_else([&](auto unused) -> tl::expected<raii_file, error> {
-											 // Cannot create file, so try to open it in RO mode
-											 return raii_file::open(unserialized_fname.c_str(), O_RDONLY);
-										 });
+			auto unserialized_file = create_unserialized_file(unserialized_fname.c_str(), std::forward<T>(cached_serialized), offset);
 
 			tl::expected<hs_shared_database, error> ret;
 
@@ -547,6 +556,38 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 					ret = raii_mmaped_file::mmap_shared(std::move(unserialized_checked), PROT_READ)
 							  .and_then([&]<class U>(U &&mmapped_unserialized) -> auto {
 								  return hs_shared_from_unserialized(hs_cache, std::forward<U>(mmapped_unserialized));
+							  })
+							  .or_else([&](const error &err) -> tl::expected<hs_shared_database, error> {
+								  // If validation failed (e.g., version mismatch), try to recreate the file
+								  msg_info_hyperscan_lambda("unserialized hyperscan file %s is invalid (%s), attempting to recreate",
+															unserialized_fname.c_str(), err.error_message.data());
+
+								  // Delete the invalid file
+								  if (unlink(unserialized_fname.c_str()) == -1) {
+									  msg_debug_hyperscan_lambda("cannot unlink invalid unserialized file %s: %s",
+																 unserialized_fname.c_str(), strerror(errno));
+								  }
+
+								  // Try to create it again
+								  auto recreated_file = create_unserialized_file(unserialized_fname.c_str(),
+																				 std::forward<T>(cached_serialized), offset);
+
+								  if (recreated_file.has_value() && recreated_file.value().get_size() > 0) {
+									  return raii_mmaped_file::mmap_shared(std::move(recreated_file.value()), PROT_READ)
+										  .and_then([&]<class V>(V &&mmapped_recreated) -> auto {
+											  return hs_shared_from_unserialized(hs_cache, std::forward<V>(mmapped_recreated));
+										  })
+										  .or_else([&](const error &recreate_err) -> tl::expected<hs_shared_database, error> {
+											  // If recreation also failed, fall back to serialized version
+											  msg_info_hyperscan_lambda("failed to recreate unserialized file, using serialized version: %s",
+																		recreate_err.error_message.data());
+											  return hs_shared_from_serialized(hs_cache, std::forward<T>(cached_serialized), offset);
+										  });
+								  }
+
+								  // If we couldn't recreate, fall back to serialized version
+								  msg_debug_hyperscan_lambda("falling back to serialized version");
+								  return hs_shared_from_serialized(hs_cache, std::forward<T>(cached_serialized), offset);
 							  });
 				}
 			}
