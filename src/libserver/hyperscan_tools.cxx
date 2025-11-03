@@ -334,6 +334,42 @@ struct real_hs_db {
 	std::uint64_t platform;
 	std::uint32_t crc32;
 };
+
+/**
+ * Get the runtime version of Hyperscan library in 32-bit format
+ * This is important because the .so version might differ from headers version
+ */
+static auto
+hs_get_runtime_db_version() -> std::uint32_t
+{
+	static std::uint32_t cached_version = 0;
+
+	if (cached_version == 0) {
+		const char *version_str = hs_version();
+		unsigned int major = 0, minor = 0, patch = 0;
+
+		// Parse version string like "5.4.0"
+		if (sscanf(version_str, "%u.%u.%u", &major, &minor, &patch) == 3) {
+			// Format: (major << 24) | (minor << 16) | (patch << 8) | 0
+			cached_version = (major << 24) | (minor << 16) | (patch << 8);
+			msg_debug_hyperscan("detected hyperscan runtime version: %s (0x%08x)",
+								version_str, cached_version);
+		}
+		else {
+			msg_err_hyperscan("cannot parse hyperscan version string: %s", version_str);
+			// Fallback to compile-time version if available
+#ifdef HS_DB_VERSION
+			cached_version = HS_DB_VERSION;
+			msg_debug_hyperscan("using compile-time hyperscan version: 0x%08x", cached_version);
+#else
+			cached_version = 0;
+#endif
+		}
+	}
+
+	return cached_version;
+}
+
 static auto
 hs_is_valid_database(void *raw, std::size_t len, std::string_view fname) -> tl::expected<bool, std::string>
 {
@@ -350,12 +386,12 @@ hs_is_valid_database(void *raw, std::size_t len, std::string_view fname) -> tl::
 											   fname, test.magic, HS_DB_MAGIC));
 	}
 
-#ifdef HS_DB_VERSION
-	if (test.version != HS_DB_VERSION) {
-		return tl::make_unexpected(fmt::format("cannot load hyperscan database from {}: invalid version: {} ({} expected)",
-											   fname, test.version, HS_DB_VERSION));
+	// Use runtime version instead of compile-time version
+	auto runtime_version = hs_get_runtime_db_version();
+	if (runtime_version != 0 && test.version != runtime_version) {
+		return tl::make_unexpected(fmt::format("cannot load hyperscan database from {}: invalid version: 0x{:08x} (0x{:08x} expected)",
+											   fname, test.version, runtime_version));
 	}
-#endif
 
 	return true;
 }
