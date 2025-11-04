@@ -49,7 +49,7 @@ jobs:
             pkg install -y cmake ninja pkgconf \
               pcre2 sqlite3 openssl ragel icu \
               libsodium glib libunwind \
-              perl5 libarchive libzstd xxhash \
+              perl5 libarchive zstd xxhash \
               hyperscan file ca_root_nss
 
             # Install Lua version based on user selection

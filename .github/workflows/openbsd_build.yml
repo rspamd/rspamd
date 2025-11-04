@@ -47,7 +47,7 @@ jobs:
               pcre2 sqlite3 openssl ragel icu4c \
               libsodium glib2 libunwind \
               perl libarchive zstd xxhash \
-              hyperscan file gettext-tools
+              file gettext-tools
 
             # Install Lua version based on user selection
             case "${{ inputs.lua_version }}" in
@@ -86,7 +86,7 @@ jobs:
             cmake -G Ninja \
               -DCMAKE_BUILD_TYPE=Release \
               -DCMAKE_INSTALL_PREFIX=/usr/local \
-              -DENABLE_HYPERSCAN=ON \
+              -DENABLE_HYPERSCAN=OFF \
               $LUA_FLAGS \
               -DSYSTEM_ZSTD=ON \
               -DSYSTEM_XXHASH=ON \
