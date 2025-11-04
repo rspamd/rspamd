@@ -350,6 +350,22 @@ define(["jquery", "app/common", "stickytabs", "visibility",
         });
     };
 
+    function updateThemeIcon(theme) {
+        const icon = $("#theme-icon");
+        icon.removeClass("fa-moon fa-sun fa-display");
+
+        switch (theme) {
+            case "light":
+                icon.addClass("fa-sun");
+                break;
+            case "dark":
+                icon.addClass("fa-moon");
+                break;
+            default:
+                icon.addClass("fa-display");
+                break;
+        }
+    }
 
     (function initSettings() {
         let selected_locale = null;
@@ -417,6 +433,10 @@ define(["jquery", "app/common", "stickytabs", "visibility",
             ajaxSetup(localStorage.getItem("ajax_timeout"), true);
 
             $(historyCountSelector).val(parseInt(localStorage.getItem("historyCount"), 10) || historyCountDef);
+
+            // Restore theme selection
+            const savedTheme = localStorage.getItem("theme") || "auto";
+            $('.popover #settings-popover input:radio[name="theme"]').val([savedTheme]);
         });
         $(document).on("change", '.popover #settings-popover input:radio[name="locale"]', function () {
             selected_locale = this.value;
@@ -427,6 +447,14 @@ define(["jquery", "app/common", "stickytabs", "visibility",
             custom_locale = $(localeTextbox).val();
             validateLocale(true);
         });
+        $(document).on("change", '.popover #settings-popover input:radio[name="theme"]', function () {
+            const theme = this.value;
+            if (window.rspamd && window.rspamd.theme) {
+                window.rspamd.theme.applyPreference(theme);
+            }
+            updateThemeIcon(theme || "auto");
+        });
+        updateThemeIcon(localStorage.getItem("theme") || "auto");
         $(document).on("input", ajaxTimeoutBox, () => {
             ajaxSetup($(ajaxTimeoutBox).val(), false, true);
         });
@@ -490,6 +518,34 @@ define(["jquery", "app/common", "stickytabs", "visibility",
         $(".dropdown-menu a.active." + menuClass).removeClass("active");
         $(this).addClass("active");
         tabClick("#autoRefresh");
+    });
+
+    $("#theme-toggle").on("click", (e) => {
+        e.preventDefault();
+        const currentTheme = localStorage.getItem("theme") || "auto";
+        // eslint-disable-next-line no-useless-assignment
+        let newTheme = null;
+
+        // Cycle through: light -> dark -> auto -> light
+        switch (currentTheme) {
+            case "light":
+                newTheme = "dark";
+                break;
+            case "dark":
+                newTheme = "auto";
+                break;
+            default:
+                newTheme = "light";
+                break;
+        }
+
+        if (window.rspamd && window.rspamd.theme) {
+            window.rspamd.theme.applyPreference(newTheme);
+        }
+        updateThemeIcon(newTheme);
+
+        // Update radio button in settings popover if it's open
+        $('.popover #settings-popover input:radio[name="theme"]').val([newTheme]);
     });
 
     $("#selSrv").change(function () {
