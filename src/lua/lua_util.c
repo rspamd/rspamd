@@ -2546,7 +2546,7 @@ lua_util_get_memory_usage(lua_State *L)
 		lua_settable(L, -3);
 
 		lua_pushstring(L, "vsize");
-		lua_pushinteger(L, kp.p_vm_vsize);
+		lua_pushinteger(L, kp.p_vm_vsize * getpagesize());
 		lua_settable(L, -3);
 	}
 #elif defined(__FreeBSD__) || defined(__OpenBSD__)
