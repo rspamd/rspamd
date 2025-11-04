@@ -8,12 +8,11 @@ on:
       freebsd_version:
         description: 'FreeBSD version to use'
         required: false
-        default: '14.2'
+        default: '14.3'
         type: choice
         options:
-          - '14.2'
-          - '13.4'
-          - '13.3'
+          - '14.3'
+          - '13.5'
       lua_version:
         description: 'Lua version to use'
         required: false
@@ -40,6 +39,9 @@ jobs:
           release: ${{ inputs.freebsd_version }}
           usesh: true
           prepare: |
+            # Ignore OS version mismatch between pkg repository and running system
+            export IGNORE_OSVERSION=yes
+
             # Update package repository
             pkg update -f
 
