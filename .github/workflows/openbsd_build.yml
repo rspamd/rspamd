@@ -92,7 +92,7 @@ jobs:
 
             # Build
             echo "==> Building Rspamd"
-            ninja -j$(sysctl -n hw.ncpu)
+            ninja
 
             # Run tests
             echo "==> Running C++ unit tests"
