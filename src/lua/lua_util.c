@@ -2549,7 +2549,7 @@ lua_util_get_memory_usage(lua_State *L)
 		lua_pushinteger(L, kp.p_vm_vsize * getpagesize());
 		lua_settable(L, -3);
 	}
-#elif defined(__FreeBSD__) || defined(__OpenBSD__)
+#elif defined(__FreeBSD__)
 	struct kinfo_proc kp;
 	size_t len = sizeof(kp);
 	int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()};
@@ -2561,6 +2561,20 @@ lua_util_get_memory_usage(lua_State *L)
 
 		lua_pushstring(L, "vsize");
 		lua_pushinteger(L, kp.ki_size);
+		lua_settable(L, -3);
+	}
+#elif defined(__OpenBSD__)
+	struct kinfo_proc kp;
+	size_t len = sizeof(kp);
+	int mib[6] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid(), sizeof(struct kinfo_proc), 1};
+
+	if (sysctl(mib, 6, &kp, &len, NULL, 0) == 0) {
+		lua_pushstring(L, "rss");
+		lua_pushinteger(L, kp.p_vm_rssize * getpagesize());
+		lua_settable(L, -3);
+
+		lua_pushstring(L, "vsize");
+		lua_pushinteger(L, (kp.p_vm_tsize + kp.p_vm_dsize + kp.p_vm_ssize) * getpagesize());
 		lua_settable(L, -3);
 	}
 #endif
