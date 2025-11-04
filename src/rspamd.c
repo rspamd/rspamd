@@ -1061,8 +1061,13 @@ rspamd_term_handler(struct ev_loop *loop, ev_signal *w, int revents)
 		msg_info_main("catch termination signal, waiting for %d children for %.2f seconds",
 					  (int) g_hash_table_size(rspamd_main->workers),
 					  valgrind_mode ? shutdown_ts * 10 : shutdown_ts);
-		/* Stop srv events to avoid false notifications */
-		g_hash_table_foreach(rspamd_main->workers, stop_srv_ev, rspamd_main);
+		/*
+		 * Keep srv events active to process ON_FORK notifications from dying workers.
+		 * This is critical for tracking auxiliary processes (e.g., neural network training)
+		 * that may still be running when shutdown begins. Without this, child_dead
+		 * notifications get lost and the main process hangs waiting for already-terminated
+		 * processes. srv_ev will be stopped naturally when workers close their pipes.
+		 */
 		rspamd_pass_signal(rspamd_main->workers, SIGTERM);
 
 		if (control_fd != -1) {
