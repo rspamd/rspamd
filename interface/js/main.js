@@ -76,6 +76,7 @@
             apply(getEffectiveTheme(themePref));
 
             const {isAuto} = normalizeTheme(themePref);
+            // Safe to call even if listener isn't attached (MDN doc)
             mq.removeEventListener("change", handler);
             if (isAuto) {
                 mq.addEventListener("change", handler);
