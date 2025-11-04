@@ -522,7 +522,7 @@ define(["jquery", "app/common", "stickytabs", "visibility",
 
     $("#theme-toggle").on("click", (e) => {
         e.preventDefault();
-        const currentTheme = localStorage.getItem("theme") || "light";
+        const currentTheme = localStorage.getItem("theme") || "auto";
         // eslint-disable-next-line no-useless-assignment
         let newTheme = null;
 
