@@ -1,51 +1,50 @@
-name: NetBSD Build
+name: OpenBSD Build
 permissions:
   contents: read
 
 on:
   workflow_dispatch:
     inputs:
-      netbsd_version:
-        description: 'NetBSD version to use'
+      openbsd_version:
+        description: 'OpenBSD version to use'
         required: false
-        default: '10.0'
+        default: '7.6'
         type: choice
         options:
-          - '10.0'
-          - '9.4'
-          - '9.3'
+          - '7.6'
+          - '7.5'
+          - '7.4'
       lua_version:
         description: 'Lua version to use'
         required: false
-        default: 'lua54'
+        default: 'luajit'
         type: choice
         options:
           - 'luajit'
           - 'lua51'
           - 'lua53'
-          - 'lua54'
 
 jobs:
-  netbsd-build:
+  openbsd-build:
     runs-on: ubuntu-latest
-    name: Build on NetBSD ${{ inputs.netbsd_version }} with ${{ inputs.lua_version }}
+    name: Build on OpenBSD ${{ inputs.openbsd_version }} with ${{ inputs.lua_version }}
 
     steps:
       - name: Check out source code
         uses: actions/checkout@v4
 
-      - name: Build on NetBSD
-        uses: vmactions/netbsd-vm@v1
+      - name: Build on OpenBSD
+        uses: vmactions/openbsd-vm@v1
         with:
-          release: ${{ inputs.netbsd_version }}
+          release: ${{ inputs.openbsd_version }}
           usesh: true
           prepare: |
             # Install base build dependencies
-            pkg_add cmake ninja-build pkgconf \
-              pcre2 sqlite3 openssl ragel icu \
+            pkg_add cmake ninja pkgconf \
+              pcre2 sqlite3 openssl ragel icu4c \
               libsodium glib2 libunwind \
-              perl5 libarchive zstd xxhash \
-              file
+              perl-5 libarchive zstd xxhash \
+              hyperscan file gettext-tools
 
             # Install Lua version based on user selection
             case "${{ inputs.lua_version }}" in
@@ -53,20 +52,17 @@ jobs:
                 pkg_add luajit
                 ;;
               lua51)
-                pkg_add lua51
+                pkg_add lua%5.1
                 ;;
               lua53)
-                pkg_add lua53
-                ;;
-              lua54)
-                pkg_add lua54
+                pkg_add lua%5.3
                 ;;
             esac
 
           run: |
             set -e
 
-            echo "==> Building Rspamd on NetBSD $(uname -r) with ${{ inputs.lua_version }}"
+            echo "==> Building Rspamd on OpenBSD $(uname -r) with ${{ inputs.lua_version }}"
 
             # Determine Lua CMake flags
             case "${{ inputs.lua_version }}" in
@@ -87,10 +83,11 @@ jobs:
             cmake -G Ninja \
               -DCMAKE_BUILD_TYPE=Release \
               -DCMAKE_INSTALL_PREFIX=/usr/local \
-              -DENABLE_HYPERSCAN=OFF \
+              -DENABLE_HYPERSCAN=ON \
               $LUA_FLAGS \
               -DSYSTEM_ZSTD=ON \
               -DSYSTEM_XXHASH=ON \
+              -DENABLE_JEMALLOC=OFF \
               ..
 
             # Build
