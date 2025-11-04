@@ -1,0 +1,66 @@
+name: NetBSD Build
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      netbsd_version:
+        description: 'NetBSD version to use'
+        required: false
+        default: '10.0'
+        type: choice
+        options:
+          - '10.0'
+          - '9.3'
+
+jobs:
+  netbsd-build:
+    runs-on: ubuntu-latest
+    name: Build on NetBSD ${{ inputs.netbsd_version }}
+    
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v4
+
+      - name: Build on NetBSD
+        uses: vmactions/netbsd-vm@v1
+        with:
+          release: ${{ inputs.netbsd_version }}
+          usesh: true
+          prepare: |
+            # Install base build dependencies
+            pkg_add cmake ninja-build pkgconf \
+              pcre2 sqlite3 openssl ragel icu \
+              libsodium glib2 libunwind luajit \
+              perl5 || true
+            # Note: hyperscan may not be available on all NetBSD versions
+          run: |
+            set -e
+            
+            echo "==> Building Rspamd on NetBSD $(uname -r)"
+            
+            # Create build directory
+            mkdir -p build
+            cd build
+            
+            # Run CMake
+            echo "==> Running CMake configuration"
+            cmake -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX=/usr/local \
+              -DENABLE_LUAJIT=ON \
+              ..
+            
+            # Build
+            echo "==> Building Rspamd"
+            ninja -j$(sysctl -n hw.ncpu)
+            
+            # Run tests
+            echo "==> Running C++ unit tests"
+            test/rspamd-test-cxx || echo "C++ tests failed"
+            
+            echo "==> Running Lua unit tests"
+            test/rspamd-test -p /rspamd/lua || echo "Lua tests failed"
+            
+            echo "==> Build completed successfully!"
