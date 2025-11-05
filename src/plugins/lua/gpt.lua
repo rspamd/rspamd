@@ -99,8 +99,6 @@ if confighelp then
     timeout = 5; # HTTP timeout in seconds
     cache_ttl = 3600; # Cache TTL in seconds (1 hour)
     cache_key_prefix = "gpt_search"; # Redis cache key prefix
-    retry_count = 3; # Number of retry attempts on failure
-    retry_delay = 1; # Initial retry delay in seconds (exponential backoff)
     as_system = true; # Inject as system message (false = user message)
     # Optional gating expressions to enable/disable search context dynamically
     # enable_expression = { ... }; # Enable for specific conditions
@@ -244,8 +242,6 @@ local settings = {
     timeout = 5,                                        -- HTTP timeout in seconds
     cache_ttl = 3600,                                   -- Cache TTL (1 hour)
     cache_key_prefix = 'gpt_search',                    -- Redis cache key prefix
-    retry_count = 3,                                    -- Number of retry attempts
-    retry_delay = 1,                                    -- Initial retry delay in seconds
     as_system = true,                                   -- Inject as system message (false = user message)
     -- Optional gating using selectors and maps to enable/disable search context dynamically
     enable_expression = nil,
