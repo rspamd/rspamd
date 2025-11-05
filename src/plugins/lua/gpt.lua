@@ -93,7 +93,8 @@ if confighelp then
   # Optional web search context (extract domains from URLs and search for context)
   search_context = {
     enabled = false; # fetch web search context for domains in email
-    search_url = "https://leta.mullvad.net/api/search"; # Search API endpoint
+    search_url = "https://leta.mullvad.net/search/__data.json"; # Search API endpoint
+    search_engine = "brave"; # Search engine (brave, google, etc.)
     max_domains = 3; # Maximum domains to search
     max_results_per_query = 3; # Maximum results per domain
     timeout = 5; # HTTP timeout in seconds
@@ -236,7 +237,8 @@ local settings = {
   -- Web search context options (for extracting and searching domains from URLs)
   search_context = {
     enabled = false,
-    search_url = 'https://leta.mullvad.net/api/search', -- Search API endpoint
+    search_url = 'https://leta.mullvad.net/search/__data.json', -- Search API endpoint
+    search_engine = 'brave',                            -- Search engine (brave, google, etc.)
     max_domains = 3,                                    -- Maximum domains to search
     max_results_per_query = 3,                          -- Maximum results per domain
     timeout = 5,                                        -- HTTP timeout in seconds
