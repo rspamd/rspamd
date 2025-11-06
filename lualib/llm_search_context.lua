@@ -45,6 +45,7 @@ local rspamd_http = require "rspamd_http"
 local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
 local lua_cache = require "lua_cache"
+local lua_mime = require "lua_mime"
 local ucl = require "ucl"
 
 local DEFAULTS = {
@@ -77,11 +78,18 @@ local function extract_domains(task, max_domains, debug_module)
 
   -- First, try to get CTA URLs from HTML (most relevant for spam detection)
   -- Uses button weight and HTML structure analysis from C code
-  local cta_urls = task:get_cta_urls(max_domains * 2) or {}
-  lua_util.debugm(Np, task, "CTA analysis found %d URLs", #cta_urls)
+  local cta_urls = {}
+  local sel_part = lua_mime.get_displayed_text_part(task)
+  if sel_part then
+    cta_urls = sel_part:get_cta_urls()
+  end
+  lua_util.debugm(Np, task,
+      "CTA analysis found %d URLs across", #cta_urls)
 
   for _, url in ipairs(cta_urls) do
-    if #domains >= max_domains then break end
+    if #domains >= max_domains then
+      break
+    end
 
     local host = url:get_host()
     if host and not skip_domains[host:lower()] and not seen[host] then
@@ -94,20 +102,22 @@ local function extract_domains(task, max_domains, debug_module)
   -- If we don't have enough domains from CTA, get more from content URLs
   if #domains < max_domains then
     lua_util.debugm(Np, task, "need more domains (%d/%d), extracting from content URLs",
-      #domains, max_domains)
+        #domains, max_domains)
 
     local urls = lua_util.extract_specific_urls({
       task = task,
       limit = max_domains * 3,
       esld_limit = max_domains,
-      need_content = true,      -- Content URLs (buttons, links in text)
+      need_content = true, -- Content URLs (buttons, links in text)
       need_images = false,
     }) or {}
 
     lua_util.debugm(Np, task, "extracted %d content URLs", #urls)
 
     for _, url in ipairs(urls) do
-      if #domains >= max_domains then break end
+      if #domains >= max_domains then
+        break
+      end
 
       local host = url:get_host()
       if host and not seen[host] and not skip_domains[host:lower()] then
@@ -121,7 +131,7 @@ local function extract_domains(task, max_domains, debug_module)
   -- Still need more? Get from any URLs
   if #domains < max_domains then
     lua_util.debugm(Np, task, "still need more domains (%d/%d), extracting from all URLs",
-      #domains, max_domains)
+        #domains, max_domains)
 
     local urls = lua_util.extract_specific_urls({
       task = task,
@@ -132,7 +142,9 @@ local function extract_domains(task, max_domains, debug_module)
     lua_util.debugm(Np, task, "extracted %d all URLs", #urls)
 
     for _, url in ipairs(urls) do
-      if #domains >= max_domains then break end
+      if #domains >= max_domains then
+        break
+      end
 
       local host = url:get_host()
       if host and not seen[host] and not skip_domains[host:lower()] then
@@ -176,7 +188,7 @@ local function query_search_api(task, domain, opts, callback, debug_module)
 
     if code ~= 200 then
       rspamd_logger.infox(task, "search API returned code %s for domain '%s', url: %s, body: %s",
-        code, domain, full_url, body and body:sub(1, 200) or 'nil')
+          code, domain, full_url, body and body:sub(1, 200) or 'nil')
       callback(nil, domain, string.format("HTTP %s", code))
       return
     end
@@ -188,7 +200,7 @@ local function query_search_api(task, domain, opts, callback, debug_module)
     local ok, parse_err = parser:parse_string(body)
     if not ok then
       rspamd_logger.errx(task, "%s: failed to parse search API response for %s: %s",
-        Np, domain, parse_err)
+          Np, domain, parse_err)
       callback(nil, domain, parse_err)
       return
     end
@@ -208,7 +220,7 @@ local function query_search_api(task, domain, opts, callback, debug_module)
         local metadata = flat_data[1]
 
         lua_util.debugm(Np, task, "parsing domain '%s': flat_data has %d elements, metadata type: %s",
-          domain, #flat_data, type(metadata))
+            domain, #flat_data, type(metadata))
 
         if metadata and metadata.items and type(metadata.items) == 'number' then
           -- metadata.items is a 0-indexed pointer, add 1 for Lua
@@ -217,7 +229,7 @@ local function query_search_api(task, domain, opts, callback, debug_module)
 
           if items and type(items) == 'table' then
             lua_util.debugm(Np, task, "found %d item indices for domain '%s', items_idx=%d",
-              #items, domain, items_idx)
+                #items, domain, items_idx)
 
             local count = 0
 
@@ -237,8 +249,8 @@ local function query_search_api(task, domain, opts, callback, debug_module)
                 local title = result_template.title and flat_data[result_template.title + 1]
 
                 lua_util.debugm(Np, task, "result %d template: link_idx=%s, snippet_idx=%s, title_idx=%s",
-                  count + 1, tostring(result_template.link), tostring(result_template.snippet),
-                  tostring(result_template.title))
+                    count + 1, tostring(result_template.link), tostring(result_template.snippet),
+                    tostring(result_template.title))
 
                 if link or title or snippet then
                   table.insert(search_results.results, {
@@ -248,16 +260,16 @@ local function query_search_api(task, domain, opts, callback, debug_module)
                   })
                   count = count + 1
                   lua_util.debugm(Np, task, "extracted result %d: title='%s', snippet_len=%d",
-                    count, title or "nil", snippet and #snippet or 0)
+                      count, title or "nil", snippet and #snippet or 0)
                 end
               else
                 lua_util.debugm(Np, task, "result_template at idx %d is not a table: %s",
-                  result_template_idx, type(result_template))
+                    result_template_idx, type(result_template))
               end
             end
           else
             lua_util.debugm(Np, task, "items is not a table for domain '%s', type: %s",
-              domain, type(items))
+                domain, type(items))
           end
         else
           lua_util.debugm(Np, task, "no valid metadata.items for domain '%s'", domain)
@@ -266,7 +278,7 @@ local function query_search_api(task, domain, opts, callback, debug_module)
     end
 
     lua_util.debugm(Np, task, "extracted %d search results for domain '%s'",
-      #search_results.results, domain)
+        #search_results.results, domain)
     callback(search_results, domain, nil)
   end
 
@@ -342,7 +354,7 @@ function M.fetch_and_format(task, redis_params, opts, callback, debug_module)
   end
 
   lua_util.debugm(Np, task, "final domain list (%d domains) for search: %s",
-    #domains, table.concat(domains, ", "))
+      #domains, table.concat(domains, ", "))
 
   -- Create cache context
   local cache_ctx = nil
@@ -378,7 +390,7 @@ function M.fetch_and_format(task, redis_params, opts, callback, debug_module)
       else
         local context_snippet = format_search_results(all_results, opts)
         lua_util.debugm(Np, task, "search context formatted (%s bytes)",
-          context_snippet and #context_snippet or 0)
+            context_snippet and #context_snippet or 0)
         callback(task, true, context_snippet)
       end
     end
@@ -391,29 +403,29 @@ function M.fetch_and_format(task, redis_params, opts, callback, debug_module)
     if cache_ctx then
       -- Use lua_cache for caching
       lua_cache.cache_get(task, cache_key, cache_ctx, opts.timeout,
-        function()
-          -- Cache miss - query API
-          query_search_api(task, domain, opts, function(api_results, d, api_err)
-            if api_results then
-              lua_cache.cache_set(task, cache_key, api_results, cache_ctx)
-              domain_complete(d, api_results)
-            else
-              lua_util.debugm(Np, task, "search failed for domain %s: %s", d, api_err)
-              domain_complete(d, nil)
+          function()
+            -- Cache miss - query API
+            query_search_api(task, domain, opts, function(api_results, d, api_err)
+              if api_results then
+                lua_cache.cache_set(task, cache_key, api_results, cache_ctx)
+                domain_complete(d, api_results)
+              else
+                lua_util.debugm(Np, task, "search failed for domain %s: %s", d, api_err)
+                domain_complete(d, nil)
+              end
+            end, Np)
+          end,
+          function(_, err, data)
+            -- Cache hit or after miss callback
+            if data and type(data) == 'table' then
+              lua_util.debugm(Np, task, "cache hit for domain %s", domain)
+              domain_complete(domain, data)
+              -- If no data and no error, the miss callback was already invoked
+            elseif err then
+              lua_util.debugm(Np, task, "cache error for domain %s: %s", domain, err)
+              domain_complete(domain, nil)
             end
-          end, Np)
-        end,
-        function(_, err, data)
-          -- Cache hit or after miss callback
-          if data and type(data) == 'table' then
-            lua_util.debugm(Np, task, "cache hit for domain %s", domain)
-            domain_complete(domain, data)
-          -- If no data and no error, the miss callback was already invoked
-          elseif err then
-            lua_util.debugm(Np, task, "cache error for domain %s: %s", domain, err)
-            domain_complete(domain, nil)
-          end
-        end)
+          end)
     else
       -- No Redis, query directly
       query_search_api(task, domain, opts, function(api_results, d, api_err)

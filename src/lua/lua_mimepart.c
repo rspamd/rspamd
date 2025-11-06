@@ -128,6 +128,13 @@ LUA_FUNCTION_DEF(textpart, get_lines_count);
  */
 LUA_FUNCTION_DEF(textpart, get_stats);
 /***
+ * @method text_part:get_cta_urls([max_urls])
+ * Get CTA (call-to-action) URLs from HTML part sorted by button weight
+ * @param {number} max_urls optional maximum number of URLs to return
+ * @return {table} array of URL objects sorted by importance (descending)
+ */
+LUA_FUNCTION_DEF(textpart, get_cta_urls);
+/***
  * @method mime_part:get_words_count()
  * Get words number in the part
  * @return {integer} number of words in the part
@@ -254,6 +261,7 @@ static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF(textpart, get_stats),
 	LUA_INTERFACE_DEF(textpart, get_fuzzy_hashes),
 	LUA_INTERFACE_DEF(textpart, get_html_fuzzy_hashes),
+	LUA_INTERFACE_DEF(textpart, get_cta_urls),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
@@ -1418,6 +1426,58 @@ lua_textpart_get_html_fuzzy_hashes(lua_State *L)
 	lua_settable(L, -3);
 
 	return 2;
+}
+
+/***
+ * @method text_part:get_cta_urls([max_urls])
+ * Get CTA (call-to-action) URLs from HTML part sorted by button weight
+ * @param {number} max_urls optional maximum number of URLs to return
+ * @return {table} array of URL objects sorted by importance (descending)
+ */
+static int
+lua_textpart_get_cta_urls(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_text_part *part = lua_check_textpart(L);
+	unsigned int max_urls = 0;
+	unsigned int nret = 0;
+
+	if (part == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	/* Get optional max_urls parameter */
+	if (lua_gettop(L) >= 2 && lua_isnumber(L, 2)) {
+		max_urls = lua_tointeger(L, 2);
+	}
+
+	/* Check if this HTML part has CTA URLs */
+	if (!part->cta_urls) {
+		lua_newtable(L);
+		return 1;
+	}
+
+	/* Access heap structure from html.h */
+	rspamd_html_heap_storage_t *heap = part->cta_urls;
+
+	/* Heap is already top-K, but in min-heap order - need to reverse for descending */
+	unsigned int result_size = max_urls > 0 ? MIN(max_urls, heap->n) : heap->n;
+	lua_createtable(L, result_size, 0);
+
+	/* Iterate heap from end to start for descending order */
+	for (int i = (int) heap->n - 1; i >= 0 && nret < result_size; i--) {
+		struct rspamd_html_cta_entry *entry = &heap->a[i];
+		if (entry && entry->url) {
+			struct rspamd_lua_url *lua_url;
+
+			lua_url = lua_newuserdata(L, sizeof(struct rspamd_lua_url));
+			rspamd_lua_setclass(L, rspamd_url_classname, -1);
+			lua_url->url = entry->url;
+			lua_rawseti(L, -2, ++nret);
+		}
+	}
+
+	return 1;
 }
 
 static int

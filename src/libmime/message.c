@@ -59,6 +59,9 @@ static const char gtube_pattern_no_action[] = "AJS*C4JDBQADN1.NSBN3*2IDNEN*"
 struct rspamd_multipattern *gtube_matcher = NULL;
 static const uint64_t words_hash_seed = 0xdeadbabe;
 
+/* CTA URL configuration */
+#define MAX_CTA_URLS_PER_PART 25
+
 static void
 free_byte_array_callback(void *pointer)
 {
@@ -127,16 +130,16 @@ rspamd_mime_part_extract_words(struct rspamd_task *task,
 				*avg_len_p += total_len;
 			}
 
-		short_len_p = rspamd_mempool_get_variable(task->task_pool,
-												  RSPAMD_MEMPOOL_SHORT_WORDS_CNT);
+			short_len_p = rspamd_mempool_get_variable(task->task_pool,
+													  RSPAMD_MEMPOOL_SHORT_WORDS_CNT);
 
-		if (short_len_p == NULL) {
-			short_len_p = rspamd_mempool_alloc(task->task_pool,
-											   sizeof(double));
-			*short_len_p = short_len;
-			rspamd_mempool_set_variable(task->task_pool,
-										RSPAMD_MEMPOOL_SHORT_WORDS_CNT, short_len_p, NULL);
-		}
+			if (short_len_p == NULL) {
+				short_len_p = rspamd_mempool_alloc(task->task_pool,
+												   sizeof(double));
+				*short_len_p = short_len;
+				rspamd_mempool_set_variable(task->task_pool,
+											RSPAMD_MEMPOOL_SHORT_WORDS_CNT, short_len_p, NULL);
+			}
 			else {
 				*short_len_p += short_len;
 			}
@@ -795,6 +798,11 @@ rspamd_message_process_html_text_part(struct rspamd_task *task,
 	/* Wire aggregated HTML features */
 	text_part->html_features = (struct rspamd_html_features *) rspamd_html_get_features(text_part->html);
 
+	/* Collect top CTA URLs for this HTML part */
+	if (text_part->html && text_part->mime_part && text_part->mime_part->urls) {
+		rspamd_html_process_cta_urls(text_part, task, MAX_CTA_URLS_PER_PART);
+	}
+
 	/* Optionally call CTA/affiliation Lua hook with capped candidates */
 	if (task->cfg && task->cfg->lua_state) {
 		lua_State *L = task->cfg->lua_state;
@@ -943,55 +951,6 @@ rspamd_message_process_html_text_part(struct rspamd_task *task,
 			}
 
 			lua_settop(L, old_top);
-		}
-
-		/* Store top CTA URLs for LLM and other use cases */
-		if (text_part->html && text_part->mime_part && text_part->mime_part->urls) {
-			/* Simple approach: just store URLs sorted by button weight */
-			/* Use task-wide array to aggregate across all HTML parts */
-			GPtrArray *cta_urls = rspamd_mempool_get_variable(task->task_pool, "html_cta_urls");
-			if (!cta_urls) {
-				cta_urls = g_ptr_array_new();
-				rspamd_mempool_add_destructor(task->task_pool,
-											  (rspamd_mempool_destruct_t) rspamd_ptr_array_free_hard,
-											  cta_urls);
-				rspamd_mempool_set_variable(task->task_pool, "html_cta_urls", cta_urls, NULL);
-			}
-
-			/* Find best URLs by button weight in this HTML part */
-			float best_weights[5] = {0.0, 0.0, 0.0, 0.0, 0.0};
-			struct rspamd_url *best_urls[5] = {NULL, NULL, NULL, NULL, NULL};
-			unsigned int max_cta_per_part = 5;
-
-			for (unsigned int i = 0; i < text_part->mime_part->urls->len; i++) {
-				struct rspamd_url *u = g_ptr_array_index(text_part->mime_part->urls, i);
-				if (!u) continue;
-				if (!(u->protocol == PROTOCOL_HTTP || u->protocol == PROTOCOL_HTTPS)) continue;
-				if (u->flags & RSPAMD_URL_FLAG_INVISIBLE) continue;
-
-				float weight = rspamd_html_url_button_weight(text_part->html, u);
-
-				/* Insert into best list if weight is high enough */
-				for (unsigned int j = 0; j < max_cta_per_part; j++) {
-					if (weight > best_weights[j]) {
-						/* Shift lower entries down */
-						for (unsigned int k = max_cta_per_part - 1; k > j; k--) {
-							best_weights[k] = best_weights[k - 1];
-							best_urls[k] = best_urls[k - 1];
-						}
-						best_weights[j] = weight;
-						best_urls[j] = u;
-						break;
-					}
-				}
-			}
-
-			/* Add to task-wide array */
-			for (unsigned int i = 0; i < max_cta_per_part; i++) {
-				if (best_urls[i] && best_weights[i] > 0.0) {
-					g_ptr_array_add(cta_urls, best_urls[i]);
-				}
-			}
 		}
 	}
 	rspamd_html_get_parsed_content(text_part->html, &text_part->utf_content);

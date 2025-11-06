@@ -279,14 +279,6 @@ LUA_FUNCTION_DEF(task, get_urls);
  */
 LUA_FUNCTION_DEF(task, get_urls_filtered);
 /***
- * @method task:get_cta_urls([max_urls])
- * Get call-to-action URLs from HTML content, prioritized by button weight
- * These are URLs that users are likely to click (buttons, prominent links, etc.)
- * @param {number} max_urls maximum number of URLs to return (default: all)
- * @return {table rspamd_url} list of CTA urls sorted by importance
- */
-LUA_FUNCTION_DEF(task, get_cta_urls);
-/***
  * @method task:has_urls([need_emails])
  * Returns 'true' if a task has urls listed
  * @param {boolean} need_emails if `true` then return also email urls
@@ -1333,7 +1325,6 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, has_urls),
 	LUA_INTERFACE_DEF(task, get_urls),
 	LUA_INTERFACE_DEF(task, get_urls_filtered),
-	LUA_INTERFACE_DEF(task, get_cta_urls),
 	LUA_INTERFACE_DEF(task, inject_url),
 	LUA_INTERFACE_DEF(task, get_content),
 	LUA_INTERFACE_DEF(task, get_filename),
@@ -2728,61 +2719,6 @@ lua_task_get_urls_filtered(lua_State *L)
 	}
 	else {
 		return luaL_error(L, "invalid arguments, no task");
-	}
-
-	return 1;
-}
-
-static int
-lua_task_get_cta_urls(lua_State *L)
-{
-	LUA_TRACE_POINT;
-	struct rspamd_task *task = lua_check_task(L, 1);
-	GPtrArray *cta_urls;
-	unsigned int max_urls = 0;
-	unsigned int nret = 0;
-
-	if (task == NULL) {
-		return luaL_error(L, "invalid arguments, no task");
-	}
-
-	if (task->message == NULL) {
-		lua_newtable(L);
-		return 1;
-	}
-
-	/* Get optional max_urls parameter */
-	if (lua_gettop(L) >= 2 && lua_isnumber(L, 2)) {
-		max_urls = lua_tointeger(L, 2);
-	}
-
-	/* Retrieve CTA URLs from mempool */
-	cta_urls = rspamd_mempool_get_variable(task->task_pool, "html_cta_urls");
-
-	if (cta_urls == NULL || cta_urls->len == 0) {
-		lua_newtable(L);
-		return 1;
-	}
-
-	/* Create result table */
-	unsigned int result_size = max_urls > 0 ? MIN(max_urls, cta_urls->len) : cta_urls->len;
-	lua_createtable(L, result_size, 0);
-
-	/* Add URLs to result */
-	for (unsigned int i = 0; i < cta_urls->len; i++) {
-		struct rspamd_url *u = g_ptr_array_index(cta_urls, i);
-		if (u) {
-			struct rspamd_lua_url *lua_url;
-
-			lua_url = lua_newuserdata(L, sizeof(struct rspamd_lua_url));
-			rspamd_lua_setclass(L, rspamd_url_classname, -1);
-			lua_url->url = u;
-			lua_rawseti(L, -2, ++nret);
-
-			if (max_urls > 0 && nret >= max_urls) {
-				break;
-			}
-		}
 	}
 
 	return 1;
