@@ -883,6 +883,44 @@ exports.filter_specific_urls = function(urls, params)
   local res = {}
   local nres = 0
 
+  local cta_priority_map
+
+  if params.task and params.task.get_text_parts then
+    local text_parts = params.task:get_text_parts()
+    if text_parts then
+      cta_priority_map = {}
+      for _, part in ipairs(text_parts) do
+        if part.is_html and part:is_html() and part.get_cta_urls then
+          local entries = part:get_cta_urls({original = true, with_weights = true})
+          if type(entries) == 'table' then
+            for _, entry in ipairs(entries) do
+              if entry and entry.url then
+                local url = entry.url
+                local str = tostring(url)
+                local weight = entry.weight or 0
+                local score = 6 + math.floor(weight * 10 + 0.5)
+                if not cta_priority_map[str] or score > cta_priority_map[str] then
+                  cta_priority_map[str] = score
+                end
+                local redir = url:get_redirected()
+                if redir then
+                  local rstr = tostring(redir)
+                  if not cta_priority_map[rstr] or score > cta_priority_map[rstr] then
+                    cta_priority_map[rstr] = score
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+
+      if next(cta_priority_map) == nil then
+        cta_priority_map = nil
+      end
+    end
+  end
+
   local function insert_url(str, u)
     if not res[str] then
       res[str] = u
@@ -926,6 +964,20 @@ exports.filter_specific_urls = function(urls, params)
 
     local esld = u:get_tld()
     local str_hash = tostring(u)
+
+    if cta_priority_map then
+      local cta_pr = cta_priority_map[str_hash]
+      if not cta_pr and flags.redirected then
+        local redir_url = u:get_redirected()
+        if redir_url then
+          cta_pr = cta_priority_map[tostring(redir_url)]
+        end
+      end
+
+      if cta_pr then
+        priority = math.max(priority, cta_pr)
+      end
+    end
 
     if esld then
       -- Special cases

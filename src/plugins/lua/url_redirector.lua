@@ -344,24 +344,75 @@ local function url_redirector_process_url(task, url)
 end
 
 local function url_redirector_handler(task)
-  local sp_urls = lua_util.extract_specific_urls({
-    task = task,
-    limit = settings.max_urls,
-    filter = function(url)
-      local host = url:get_host()
-      if settings.redirector_hosts_map:get_key(host) then
-        lua_util.debugm(N, task, 'check url %s', tostring(url))
-        return true
-      end
-    end,
-    no_cache = true,
-    need_content = true,
-  })
+  local selected = {}
+  local seen = {}
 
-  if sp_urls then
-    for _, u in ipairs(sp_urls) do
-      url_redirector_process_url(task, u)
+  local text_parts = task:get_text_parts()
+  if text_parts then
+    for _, part in ipairs(text_parts) do
+      if part:is_html() and part.get_cta_urls then
+        local cta_urls = part:get_cta_urls(settings.max_urls, true)
+        if cta_urls then
+          for _, url in ipairs(cta_urls) do
+            local host = url:get_host()
+            if host and settings.redirector_hosts_map:get_key(host) then
+              local key = tostring(url)
+              if not seen[key] then
+                lua_util.debugm(N, task, 'prefer CTA url %s for redirector', key)
+                table.insert(selected, url)
+                seen[key] = true
+                if #selected >= settings.max_urls then
+                  break
+                end
+              end
+            end
+          end
+        end
+      end
+
+      if #selected >= settings.max_urls then
+        break
+      end
     end
+  end
+
+  local remaining = settings.max_urls - #selected
+
+  if remaining > 0 then
+    local sp_urls = lua_util.extract_specific_urls({
+      task = task,
+      limit = remaining,
+      filter = function(url)
+        local host = url:get_host()
+        if host and settings.redirector_hosts_map:get_key(host) then
+          local key = tostring(url)
+          if not seen[key] then
+            lua_util.debugm(N, task, 'consider redirector url %s', key)
+            return true
+          end
+        end
+        return false
+      end,
+      no_cache = true,
+      need_content = true,
+    })
+
+    if sp_urls then
+      for _, u in ipairs(sp_urls) do
+        local key = tostring(u)
+        if not seen[key] then
+          table.insert(selected, u)
+          seen[key] = true
+          if #selected >= settings.max_urls then
+            break
+          end
+        end
+      end
+    end
+  end
+
+  for _, u in ipairs(selected) do
+    url_redirector_process_url(task, u)
   end
 end
 

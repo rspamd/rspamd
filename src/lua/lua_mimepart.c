@@ -1441,14 +1441,51 @@ lua_textpart_get_cta_urls(lua_State *L)
 	struct rspamd_mime_text_part *part = lua_check_textpart(L);
 	unsigned int max_urls = 0;
 	unsigned int nret = 0;
+	gboolean return_original = FALSE;
+	gboolean include_weights = FALSE;
 
 	if (part == NULL) {
 		return luaL_error(L, "invalid arguments");
 	}
 
-	/* Get optional max_urls parameter */
-	if (lua_gettop(L) >= 2 && lua_isnumber(L, 2)) {
-		max_urls = lua_tointeger(L, 2);
+	int top = lua_gettop(L);
+
+	if (top >= 2) {
+		if (lua_istable(L, 2)) {
+			lua_getfield(L, 2, "max");
+			if (lua_isnumber(L, -1)) {
+				max_urls = lua_tointeger(L, -1);
+			}
+			lua_pop(L, 1);
+			lua_getfield(L, 2, "original");
+			if (lua_isboolean(L, -1)) {
+				return_original = lua_toboolean(L, -1);
+			}
+			lua_pop(L, 1);
+			lua_getfield(L, 2, "with_weights");
+			if (lua_isboolean(L, -1)) {
+				include_weights = lua_toboolean(L, -1);
+			}
+			lua_pop(L, 1);
+		}
+		else if (lua_isnumber(L, 2)) {
+			max_urls = lua_tointeger(L, 2);
+			if (top >= 3 && lua_isboolean(L, 3)) {
+				return_original = lua_toboolean(L, 3);
+			}
+			if (top >= 4 && lua_isboolean(L, 4)) {
+				include_weights = lua_toboolean(L, 4);
+			}
+		}
+		else if (lua_isboolean(L, 2)) {
+			return_original = lua_toboolean(L, 2);
+			if (top >= 3 && lua_isnumber(L, 3)) {
+				max_urls = lua_tointeger(L, 3);
+			}
+			if (top >= 4 && lua_isboolean(L, 4)) {
+				include_weights = lua_toboolean(L, 4);
+			}
+		}
 	}
 
 	/* Check if this HTML part has CTA URLs */
@@ -1462,20 +1499,47 @@ lua_textpart_get_cta_urls(lua_State *L)
 
 	/* Heap is already top-K, but in min-heap order - need to reverse for descending */
 	unsigned int result_size = max_urls > 0 ? MIN(max_urls, heap->n) : heap->n;
-	lua_createtable(L, result_size, 0);
+	lua_createtable(L, result_size, include_weights ? 0 : 0);
+
+	GHashTable *seen = g_hash_table_new(g_direct_hash, g_direct_equal);
 
 	/* Iterate heap from end to start for descending order */
 	for (int i = (int) heap->n - 1; i >= 0 && nret < result_size; i--) {
 		struct rspamd_html_cta_entry *entry = &heap->a[i];
 		if (entry && entry->url) {
-			struct rspamd_lua_url *lua_url;
+			struct rspamd_url *chosen = entry->url;
 
-			lua_url = lua_newuserdata(L, sizeof(struct rspamd_lua_url));
-			rspamd_lua_setclass(L, rspamd_url_classname, -1);
-			lua_url->url = entry->url;
-			lua_rawseti(L, -2, ++nret);
+			if (!return_original && chosen->ext && chosen->ext->linked_url &&
+				chosen->ext->linked_url != chosen) {
+				chosen = chosen->ext->linked_url;
+			}
+
+			if (g_hash_table_lookup(seen, chosen)) {
+				continue;
+			}
+
+			g_hash_table_insert(seen, chosen, chosen);
+
+			if (include_weights) {
+				lua_createtable(L, 0, 2);
+				struct rspamd_lua_url *lua_url = lua_newuserdata(L, sizeof(struct rspamd_lua_url));
+				rspamd_lua_setclass(L, rspamd_url_classname, -1);
+				lua_url->url = chosen;
+				lua_setfield(L, -2, "url");
+				lua_pushnumber(L, entry->weight);
+				lua_setfield(L, -2, "weight");
+				lua_rawseti(L, -2, ++nret);
+			}
+			else {
+				struct rspamd_lua_url *lua_url = lua_newuserdata(L, sizeof(struct rspamd_lua_url));
+				rspamd_lua_setclass(L, rspamd_url_classname, -1);
+				lua_url->url = chosen;
+				lua_rawseti(L, -2, ++nret);
+			}
 		}
 	}
+
+	g_hash_table_unref(seen);
 
 	return 1;
 }
