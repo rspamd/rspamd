@@ -61,36 +61,84 @@ local DEFAULTS = {
   disable_expression = nil,
 }
 
--- Extract unique domains from task URLs
-local function extract_domains(task, max_domains)
+-- Extract unique domains from task URLs, prioritizing CTA (call-to-action) links
+local function extract_domains(task, max_domains, debug_module)
+  local Np = debug_module or N
   local domains = {}
   local seen = {}
 
-  -- Get URLs from the task using extract_specific_urls
-  local urls = lua_util.extract_specific_urls({
-    task = task,
-    limit = max_domains * 3, -- Get more to filter
-    esld_limit = max_domains,
-  }) or {}
+  -- Skip common domains that won't provide useful context
+  local skip_domains = {
+    ['localhost'] = true,
+    ['127.0.0.1'] = true,
+    ['example.com'] = true,
+    ['example.org'] = true,
+  }
 
-  for _, url in ipairs(urls) do
-    if #domains >= max_domains then
-      break
-    end
+  -- First, try to get CTA URLs from HTML (most relevant for spam detection)
+  -- Uses button weight and HTML structure analysis from C code
+  local cta_urls = task:get_cta_urls(max_domains * 2) or {}
+  lua_util.debugm(Np, task, "CTA analysis found %d URLs", #cta_urls)
+
+  for _, url in ipairs(cta_urls) do
+    if #domains >= max_domains then break end
 
     local host = url:get_host()
-    if host and not seen[host] then
-      -- Skip common domains that won't provide useful context
-      local skip_domains = {
-        ['localhost'] = true,
-        ['127.0.0.1'] = true,
-        ['example.com'] = true,
-        ['example.org'] = true,
-      }
+    if host and not skip_domains[host:lower()] and not seen[host] then
+      seen[host] = true
+      table.insert(domains, host)
+      lua_util.debugm(Np, task, "added CTA domain: %s", host)
+    end
+  end
 
-      if not skip_domains[host:lower()] then
+  -- If we don't have enough domains from CTA, get more from content URLs
+  if #domains < max_domains then
+    lua_util.debugm(Np, task, "need more domains (%d/%d), extracting from content URLs",
+      #domains, max_domains)
+
+    local urls = lua_util.extract_specific_urls({
+      task = task,
+      limit = max_domains * 3,
+      esld_limit = max_domains,
+      need_content = true,      -- Content URLs (buttons, links in text)
+      need_images = false,
+    }) or {}
+
+    lua_util.debugm(Np, task, "extracted %d content URLs", #urls)
+
+    for _, url in ipairs(urls) do
+      if #domains >= max_domains then break end
+
+      local host = url:get_host()
+      if host and not seen[host] and not skip_domains[host:lower()] then
         seen[host] = true
         table.insert(domains, host)
+        lua_util.debugm(Np, task, "added content domain: %s", host)
+      end
+    end
+  end
+
+  -- Still need more? Get from any URLs
+  if #domains < max_domains then
+    lua_util.debugm(Np, task, "still need more domains (%d/%d), extracting from all URLs",
+      #domains, max_domains)
+
+    local urls = lua_util.extract_specific_urls({
+      task = task,
+      limit = max_domains * 3,
+      esld_limit = max_domains,
+    }) or {}
+
+    lua_util.debugm(Np, task, "extracted %d all URLs", #urls)
+
+    for _, url in ipairs(urls) do
+      if #domains >= max_domains then break end
+
+      local host = url:get_host()
+      if host and not seen[host] and not skip_domains[host:lower()] then
+        seen[host] = true
+        table.insert(domains, host)
+        lua_util.debugm(Np, task, "added general domain: %s", host)
       end
     end
   end
@@ -285,7 +333,7 @@ function M.fetch_and_format(task, redis_params, opts, callback, debug_module)
   end
 
   -- Extract domains from task
-  local domains = extract_domains(task, opts.max_domains)
+  local domains = extract_domains(task, opts.max_domains, Np)
 
   if #domains == 0 then
     lua_util.debugm(Np, task, "no domains to search")
@@ -293,7 +341,7 @@ function M.fetch_and_format(task, redis_params, opts, callback, debug_module)
     return
   end
 
-  lua_util.debugm(Np, task, "extracted %s domain(s) for search: %s",
+  lua_util.debugm(Np, task, "final domain list (%d domains) for search: %s",
     #domains, table.concat(domains, ", "))
 
   -- Create cache context
