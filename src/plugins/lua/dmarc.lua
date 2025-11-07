@@ -21,6 +21,7 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local lua_redis = require "lua_redis"
 local lua_util = require "lua_util"
+local fun = require "fun"
 local dmarc_common = require "plugins/dmarc"
 
 if confighelp then
@@ -434,11 +435,116 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
     end
 
     check_exclude_rua = function()
-      if policy.rua:match("^mailto:") and settings.reporting.exclude_rua_addresses then
-        local rua = policy.rua:gsub("^mailto:", "")
-        check_map(settings.reporting.exclude_rua_addresses, rua, generate_dmarc_report,
-          string.format('rua recipient %s', rua))
+      local raw_rua = tostring(policy.rua or '')
+      local rua_map = settings.reporting.exclude_rua_addresses
+
+      if not rua_map then
+        -- No exclude map configured
+        generate_dmarc_report()
+        return
+      end
+
+      local parsed = {}
+      local mailto_count = 0
+
+      if #raw_rua > 0 then
+        for _, uri in fun.map(lua_util.str_trim, lua_util.str_split(raw_rua, ',')) do
+          local schema, tail = uri:match('^(%a[%w%+%.%-]*)%s*:%s*(.+)$')
+          if schema and tail then
+            local ls = schema:lower()
+            if ls == 'mailto' then
+              local addr, opts = tail:match('^([^!%s]+)(.*)$')
+              addr = lua_util.str_trim(addr or '')
+              opts = opts or ''
+              if addr ~= '' then
+                table.insert(parsed, { schema = 'mailto', addr = addr, opts = opts })
+                mailto_count = mailto_count + 1
+              end
+            else
+              table.insert(parsed, { schema = ls, raw_tail = tail })
+            end
+          else
+            table.insert(parsed, { schema = 'unknown', raw_tail = uri })
+          end
+        end
+      end
+
+      if mailto_count == 0 then
+        generate_dmarc_report()
+        return
+      end
+
+      local function rebuild_rua(list)
+        local out = {}
+        for _, e in ipairs(list) do
+          if e.schema == 'mailto' then
+            table.insert(out, 'mailto:' .. e.addr .. (e.opts or ''))
+          elseif e.schema == 'unknown' then
+            table.insert(out, e.raw_tail)
+          else
+            table.insert(out, e.schema .. ':' .. (e.raw_tail or ''))
+          end
+        end
+        return table.concat(out, ',')
+      end
+
+      if rua_map.__external then
+        -- Async map
+        local kept = {}
+        -- Pre-collect all non-mailto entries
+        for _, e in ipairs(parsed) do
+          if e.schema ~= 'mailto' then
+            table.insert(kept, e)
+          end
+        end
+
+        -- Initialize pending with the number of mailto entries
+        local pending = mailto_count
+        local finished = false
+        local function finalize()
+          if finished then return end
+          finished = true
+          if #kept == 0 then
+            rspamd_logger.infox(task, 'DMARC reporting suppressed: all RUA recipients excluded (%s)', raw_rua)
+          else
+            policy.rua = rebuild_rua(kept) -- rebuild only with exclude map
+            generate_dmarc_report()
+          end
+        end
+
+        -- Check mailto entries against the map
+        for _, e in ipairs(parsed) do
+          if e.schema == 'mailto' then
+            rua_map:get_key(e.addr, function(found, _, _, _)
+              if not found then
+                table.insert(kept, e)
+              end
+              pending = pending - 1
+              if pending == 0 then
+                finalize()
+              end
+            end, task)
+          end
+        end
       else
+        -- Sync map
+        local kept = {}
+        for _, e in ipairs(parsed) do
+          if e.schema == 'mailto' then
+            if not rua_map:get_key(e.addr) then
+              table.insert(kept, e)
+            end
+          else
+            table.insert(kept, e) -- http/https/unknown
+          end
+        end
+
+        if #kept == 0 then
+          rspamd_logger.infox(task, 'DMARC reporting suppressed: all RUA recipients excluded (%s)', raw_rua)
+          return
+        end
+
+        policy.rua = rebuild_rua(kept) -- rebuild only with exclude map
         generate_dmarc_report()
       end
     end
