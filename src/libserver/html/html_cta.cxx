@@ -529,6 +529,7 @@ void rspamd_html_process_cta_urls(struct rspamd_mime_text_part *text_part,
 		if (!(u->protocol == PROTOCOL_HTTP || u->protocol == PROTOCOL_HTTPS)) continue;
 		if (u->flags & RSPAMD_URL_FLAG_INVISIBLE) continue;
 		if (u->flags & RSPAMD_URL_FLAG_IMAGE) continue;
+		if (u->flags & RSPAMD_URL_FLAG_HTML_DISPLAYED) continue; /* Skip display-only URLs (phishing bait text) */
 
 		/* Use button_weight to filter CTA URLs vs technical URLs
          * Technical tags like <link rel>, <script src> have weight=0
