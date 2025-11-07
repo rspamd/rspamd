@@ -25,7 +25,7 @@
 #include "libutil/util.h"
 #include "lua/lua_common.h"
 
-static char *control_path = RSPAMD_DBDIR "/rspamd.sock";
+static char *control_path = RSPAMD_RUNDIR "/rspamd.sock";
 static gboolean json = FALSE;
 static gboolean ucl = TRUE;
 static gboolean compact = FALSE;
@@ -75,7 +75,7 @@ rspamadm_control_help(gboolean full_help, const struct rspamadm_command *cmd)
 				   "-c: output compacted json\n"
 				   "-j: output linted json\n"
 				   "-u: output ucl (default)\n"
-				   "-s: use the following socket instead of " RSPAMD_DBDIR "/rspamd.sock\n"
+				   "-s: use the following socket instead of " RSPAMD_RUNDIR "/rspamd.sock\n"
 				   "-t: set IO timeout (1.0 seconds default)\n"
 				   "--help: shows available options and commands\n\n"
 				   "Supported commands:\n"
