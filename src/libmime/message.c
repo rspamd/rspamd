@@ -59,6 +59,9 @@ static const char gtube_pattern_no_action[] = "AJS*C4JDBQADN1.NSBN3*2IDNEN*"
 struct rspamd_multipattern *gtube_matcher = NULL;
 static const uint64_t words_hash_seed = 0xdeadbabe;
 
+/* CTA URL configuration */
+#define MAX_CTA_URLS_PER_PART 25
+
 static void
 free_byte_array_callback(void *pointer)
 {
@@ -127,16 +130,16 @@ rspamd_mime_part_extract_words(struct rspamd_task *task,
 				*avg_len_p += total_len;
 			}
 
-		short_len_p = rspamd_mempool_get_variable(task->task_pool,
-												  RSPAMD_MEMPOOL_SHORT_WORDS_CNT);
+			short_len_p = rspamd_mempool_get_variable(task->task_pool,
+													  RSPAMD_MEMPOOL_SHORT_WORDS_CNT);
 
-		if (short_len_p == NULL) {
-			short_len_p = rspamd_mempool_alloc(task->task_pool,
-											   sizeof(double));
-			*short_len_p = short_len;
-			rspamd_mempool_set_variable(task->task_pool,
-										RSPAMD_MEMPOOL_SHORT_WORDS_CNT, short_len_p, NULL);
-		}
+			if (short_len_p == NULL) {
+				short_len_p = rspamd_mempool_alloc(task->task_pool,
+												   sizeof(double));
+				*short_len_p = short_len;
+				rspamd_mempool_set_variable(task->task_pool,
+											RSPAMD_MEMPOOL_SHORT_WORDS_CNT, short_len_p, NULL);
+			}
 			else {
 				*short_len_p += short_len;
 			}
@@ -794,6 +797,11 @@ rspamd_message_process_html_text_part(struct rspamd_task *task,
 
 	/* Wire aggregated HTML features */
 	text_part->html_features = (struct rspamd_html_features *) rspamd_html_get_features(text_part->html);
+
+	/* Collect top CTA URLs for this HTML part */
+	if (text_part->html && text_part->mime_part && text_part->mime_part->urls) {
+		rspamd_html_process_cta_urls(text_part, task, MAX_CTA_URLS_PER_PART);
+	}
 
 	/* Optionally call CTA/affiliation Lua hook with capped candidates */
 	if (task->cfg && task->cfg->lua_state) {

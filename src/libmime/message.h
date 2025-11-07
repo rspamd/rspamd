@@ -16,6 +16,7 @@
 #include "libserver/url.h"
 #include "libutil/ref.h"
 #include "libutil/str_util.h"
+#include "libutil/heap.h"
 #include "libserver/word.h"
 
 #include <unicode/uchar.h>
@@ -126,6 +127,15 @@ struct rspamd_mime_part {
 #define IS_TEXT_PART_HTML(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_HTML)
 #define IS_TEXT_PART_ATTACHMENT(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_ATTACHMENT)
 
+/* CTA (call-to-action) URL heap entry structure */
+struct rspamd_html_cta_entry {
+	unsigned int pri;       /* Priority for heap (weight * scale) */
+	unsigned int idx;       /* Heap index (managed by heap) */
+	struct rspamd_url *url; /* URL pointer */
+	float weight;           /* Original button weight */
+};
+
+RSPAMD_HEAP_DECLARE(rspamd_html_heap_storage, struct rspamd_html_cta_entry);
 
 struct rspamd_mime_text_part {
 	const char *language;
@@ -148,7 +158,9 @@ struct rspamd_mime_text_part {
 	void *html;
 	/* Optional HTML features collected during parsing */
 	struct rspamd_html_features *html_features;
-	GList *exceptions; /**< list of offsets of urls						*/
+	/* CTA (call-to-action) URLs extracted from HTML with weights */
+	rspamd_html_heap_storage_t *cta_urls; /**< cta_heap_t* for HTML parts, NULL for plain text */
+	GList *exceptions;                    /**< list of offsets of urls						*/
 	struct rspamd_mime_part *mime_part;
 
 	unsigned int flags;

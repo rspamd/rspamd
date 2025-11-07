@@ -27,6 +27,7 @@
 #include "rspamd_cxx_unit_cryptobox.hxx"
 #include "rspamd_cxx_unit_rfc2047.hxx"
 #include "rspamd_cxx_unit_html_url_rewrite.hxx"
+#include "rspamd_cxx_unit_html_cta.hxx"
 
 static gboolean verbose = false;
 static const GOptionEntry entries[] =
