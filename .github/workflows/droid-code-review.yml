@@ -28,6 +28,16 @@ jobs:
       )
 
     steps:
+      - name: Acknowledge review start with reaction
+        run: |
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            -f content='eyes'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -170,7 +180,18 @@ jobs:
 
           # Run droid exec with the prompt
           echo "Running code review analysis and submitting results..."
-          droid exec --auto high --model claude-sonnet-4-5-20250929 -f prompt.txt
+          droid exec --model gpt-5-codex -f prompt.txt
+
+      - name: Mark review as complete
+        if: ${{ success() }}
+        run: |
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            -f content='+1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload debug artifacts on failure
         if: ${{ failure() }}
