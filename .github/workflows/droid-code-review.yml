@@ -17,10 +17,15 @@ jobs:
   code-review:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Only run on PR comments that contain "@droid review"
+    # Only run on PR comments that contain "@droid review" from authorized users
     if: |
       github.event.issue.pull_request &&
-      contains(github.event.comment.body, '@droid review')
+      contains(github.event.comment.body, '@droid review') &&
+      (
+        github.event.comment.user.login == 'vstakhov' ||
+        github.event.comment.user.login == 'moisseev' ||
+        github.event.comment.user.login == 'fatalbanana'
+      )
 
     steps:
       - name: Checkout repository
