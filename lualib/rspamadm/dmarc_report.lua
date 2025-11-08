@@ -668,8 +668,9 @@ local function handler(args)
 
   local opts = parser:parse(args)
 
-  -- Normalize batch_size to prevent invalid values (0 or negative) breaking loops
-  opts.batch_size = math.max(1, opts.batch_size or 10)
+  -- Normalize batch_size: floor to integer and clamp to >= 1
+  -- Fractional values would break array indexing in batching loops
+  opts.batch_size = math.max(1, math.floor(opts.batch_size or 10))
 
   pool = rspamd_mempool.create()
   load_config(opts)
