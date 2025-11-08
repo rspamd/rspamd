@@ -609,7 +609,7 @@ local function process_report_date(opts, start_time, end_time, date)
 
   -- Process reports in batches to limit Redis connections
   local reports = {}
-  local batch_size = opts.batch_size or 10
+  local batch_size = math.max(1, opts.batch_size or 10)
 
   for batch_start = 1, #results, batch_size do
     local batch_end = math.min(batch_start + batch_size - 1, #results)
