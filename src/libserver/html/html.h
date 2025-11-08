@@ -140,6 +140,17 @@ float rspamd_html_url_button_weight(void *html_content, struct rspamd_url *u);
  */
 const struct rspamd_html_features *rspamd_html_get_features(void *html_content);
 
+/**
+ * Creates CTA (call-to-action) URLs heap for a text part
+ * Collects top-K URLs by button weight using min-heap (O(n log k))
+ * @param text_part text part to fill cta_urls for
+ * @param task task for mempool allocation
+ * @param max_cta maximum number of CTA URLs to collect
+ */
+void rspamd_html_process_cta_urls(struct rspamd_mime_text_part *text_part,
+								  struct rspamd_task *task,
+								  unsigned int max_cta);
+
 
 #ifdef __cplusplus
 }

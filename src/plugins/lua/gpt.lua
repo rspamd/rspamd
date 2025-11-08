@@ -89,6 +89,22 @@ if confighelp then
     last_labels_count = 10; # keep last N labels
     as_system = true; # place context snippet as additional system message
   };
+
+  # Optional web search context (extract domains from URLs and search for context)
+  search_context = {
+    enabled = false; # fetch web search context for domains in email
+    search_url = "https://leta.mullvad.net/search/__data.json"; # Search API endpoint
+    search_engine = "brave"; # Search engine (brave, google, etc.)
+    max_domains = 3; # Maximum domains to search
+    max_results_per_query = 3; # Maximum results per domain
+    timeout = 5; # HTTP timeout in seconds
+    cache_ttl = 3600; # Cache TTL in seconds (1 hour)
+    cache_key_prefix = "gpt_search"; # Redis cache key prefix
+    as_system = true; # Inject as system message (false = user message)
+    # Optional gating expressions to enable/disable search context dynamically
+    # enable_expression = { ... }; # Enable for specific conditions
+    # disable_expression = { ... }; # Disable for specific conditions
+  };
   }
   ]])
   return
@@ -104,6 +120,7 @@ local ucl = require "ucl"
 -- local fun = require "fun" -- no longer needed after llm_common usage
 local lua_cache = require "lua_cache"
 local llm_context = require "llm_context"
+local llm_search_context = require "llm_search_context"
 local lua_maps_expressions = require "lua_maps_expressions"
 local lua_maps = require "lua_maps"
 local lua_selectors = require "lua_selectors"
@@ -217,6 +234,21 @@ local settings = {
     -- Optional negative gating
     disable_expression = nil,
   },
+  -- Web search context options (for extracting and searching domains from URLs)
+  search_context = {
+    enabled = false,
+    search_url = 'https://leta.mullvad.net/search/__data.json', -- Search API endpoint
+    search_engine = 'brave',                            -- Search engine (brave, google, etc.)
+    max_domains = 3,                                    -- Maximum domains to search
+    max_results_per_query = 3,                          -- Maximum results per domain
+    timeout = 5,                                        -- HTTP timeout in seconds
+    cache_ttl = 3600,                                   -- Cache TTL (1 hour)
+    cache_key_prefix = 'gpt_search',                    -- Redis cache key prefix
+    as_system = true,                                   -- Inject as system message (false = user message)
+    -- Optional gating using selectors and maps to enable/disable search context dynamically
+    enable_expression = nil,
+    disable_expression = nil,
+  },
 }
 local redis_params
 local cache_context
@@ -224,6 +256,10 @@ local compiled_context_gating = {
   enable_expr = nil,
   disable_expr = nil,
   enable_map = nil, -- { selector_fn, map }
+}
+local compiled_search_context_gating = {
+  enable_expr = nil,
+  disable_expr = nil,
 }
 
 local function is_context_enabled_for_task(task)
@@ -262,6 +298,31 @@ local function is_context_enabled_for_task(task)
   -- Negative gating
   if enabled and compiled_context_gating.disable_expr then
     local res = compiled_context_gating.disable_expr:process(task)
+    if res then
+      enabled = false
+    end
+  end
+
+  return enabled
+end
+
+local function is_search_context_enabled_for_task(task)
+  local ctx = settings.search_context
+  if not ctx then return false end
+
+  local enabled = ctx.enabled or false
+
+  -- Positive gating via expression
+  if compiled_search_context_gating.enable_expr then
+    local res = compiled_search_context_gating.enable_expr:process(task)
+    if res then
+      enabled = true
+    end
+  end
+
+  -- Negative gating
+  if enabled and compiled_search_context_gating.disable_expr then
+    local res = compiled_search_context_gating.disable_expr:process(task)
     if res then
       enabled = false
     end
@@ -1117,19 +1178,60 @@ local function gpt_check(task)
     return
   end
 
-  local function proceed(context_snippet)
+  local function proceed(combined_context)
     if sel_part then
       -- Check digest
-      check_llm_cached(task, content, sel_part, context_snippet)
+      check_llm_cached(task, content, sel_part, combined_context)
     else
-      check_llm_uncached(task, content, nil, context_snippet)
+      check_llm_uncached(task, content, nil, combined_context)
     end
   end
 
-  if context_enabled then
-    llm_context.fetch(task, redis_params, settings.context, function(_, _, snippet)
-      proceed(snippet)
-    end, N)
+  -- Check if we need to fetch search context
+  local search_context_enabled = is_search_context_enabled_for_task(task)
+
+  if context_enabled or search_context_enabled then
+    local pending_fetches = 0
+    local user_context_snippet = nil
+    local search_context_snippet = nil
+
+    local function maybe_proceed()
+      if pending_fetches == 0 then
+        -- Combine contexts
+        local combined_context = nil
+        if user_context_snippet and search_context_snippet then
+          combined_context = user_context_snippet .. "\n\n" .. search_context_snippet
+        elseif user_context_snippet then
+          combined_context = user_context_snippet
+        elseif search_context_snippet then
+          combined_context = search_context_snippet
+        end
+        proceed(combined_context)
+      end
+    end
+
+    if context_enabled then
+      pending_fetches = pending_fetches + 1
+      llm_context.fetch(task, redis_params, settings.context, function(_, _, snippet)
+        user_context_snippet = snippet
+        pending_fetches = pending_fetches - 1
+        maybe_proceed()
+      end, N)
+    end
+
+    if search_context_enabled then
+      pending_fetches = pending_fetches + 1
+      llm_search_context.fetch_and_format(task, redis_params, settings.search_context, function(_, _, snippet)
+        search_context_snippet = snippet
+        pending_fetches = pending_fetches - 1
+        maybe_proceed()
+      end, N)
+    end
+
+    -- If no fetches were initiated, proceed immediately
+    if pending_fetches == 0 then
+      proceed(nil)
+    end
   else
     proceed(nil)
   end
@@ -1309,6 +1411,27 @@ if opts then
         }
       else
         rspamd_logger.warnx(rspamd_config, 'failed to compile context enable_map: selector or map invalid')
+      end
+    end
+  end
+
+  -- Compile optional search context gating
+  if settings.search_context then
+    local sctx = settings.search_context
+    if sctx.enable_expression then
+      local expr = lua_maps_expressions.create(rspamd_config, sctx.enable_expression, N .. "/search-context-enable")
+      if expr then
+        compiled_search_context_gating.enable_expr = expr
+      else
+        rspamd_logger.warnx(rspamd_config, 'failed to compile search_context enable_expression')
+      end
+    end
+    if sctx.disable_expression then
+      local expr = lua_maps_expressions.create(rspamd_config, sctx.disable_expression, N .. "/search-context-disable")
+      if expr then
+        compiled_search_context_gating.disable_expr = expr
+      else
+        rspamd_logger.warnx(rspamd_config, 'failed to compile search_context disable_expression')
       end
     end
   end

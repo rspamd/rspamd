@@ -20,6 +20,8 @@ static GOptionEntry entries[] =
 		 "Lua test to run (i.e. selectors.lua)", NULL},
 		{"test-case", 'c', 0, G_OPTION_ARG_STRING, &lua_test_case,
 		 "Lua test to run, lua pattern i.e. \"case .* rcpts\"", NULL},
+		{"verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose,
+		 "Enable verbose output", NULL},
 		{NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL}};
 
 int main(int argc, char **argv)

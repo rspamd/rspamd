@@ -1,0 +1,206 @@
+name: Droid Code Review
+
+on:
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: droid-review-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+permissions:
+  pull-requests: write
+  contents: read
+  issues: write
+
+jobs:
+  code-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Only run on PR comments that contain "@droid review" from authorized users
+    if: |
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '@droid review') &&
+      (
+        github.event.comment.user.login == 'vstakhov' ||
+        github.event.comment.user.login == 'moisseev' ||
+        github.event.comment.user.login == 'fatalbanana'
+      )
+
+    steps:
+      - name: Acknowledge review start with reaction
+        run: |
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            -f content='eyes'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout PR branch
+        run: |
+          gh pr checkout ${{ github.event.issue.number }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Droid CLI
+        run: |
+          curl -fsSL https://app.factory.ai/cli | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          "$HOME/.local/bin/droid" --version
+
+      - name: Configure git identity
+        run: |
+          git config user.name "Droid Code Reviewer"
+          git config user.email "droid@factory.ai"
+
+      - name: Perform automated code review
+        env:
+          FACTORY_API_KEY: ${{ secrets.FACTORY_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cat > prompt.txt << 'EOF'
+          You are an automated code review system for the Rspamd mail filtering project.
+          Review the PR diff and identify clear issues that need to be fixed.
+
+          First, use the Web Fetch tool to get the full PR context from:
+          https://github.com/${{ github.repository }}/pull/${{ github.event.issue.number }}
+
+          This will provide you with:
+          - PR title, description, and metadata
+          - Complete diff with line numbers for positioning comments
+          - Changed files with their status
+          - Existing comments and review threads (to avoid duplicates)
+
+          Task: After fetching the PR data, review the code changes and directly submit your findings using the GitHub CLI.
+
+          ## Rspamd-Specific C/C++ Review Guidelines
+
+          ### Memory Management (CRITICAL)
+          - All C allocations MUST use rspamd_mempool or g_malloc/g_free
+          - Never use raw malloc/free without proper cleanup
+          - Check for memory leaks: every allocation must have a matching free
+          - Verify mempool ownership: objects allocated from mempool are freed when pool is destroyed
+          - Use rspamd_mempool_new() / rspamd_mempool_delete() properly
+          - Check for use-after-free: accessing freed memory or destroyed mempool objects
+
+          ### C++ Standards and Containers
+          - Code MUST use C++20 standard features where appropriate
+          - DO NOT use std::unordered_map or std::hash - use ankerl::unordered_dense instead
+          - Prefer std::string_view over const std::string& for read-only strings
+          - Use auto with structured bindings where it improves readability
+          - Check for proper RAII: resources acquired in constructors, released in destructors
+
+          ### Logging
+          - Debug logging uses custom printf format (see src/libutil/printf.h)
+          - Lua rspamd_logger uses %s for all argument placeholders
+          - Never use format strings from untrusted input (format string vulnerabilities)
+          - Check for proper log levels: debug/info/warning/error
+
+          ### Lua Integration
+          - Lua stack management: every lua_push* must be balanced with proper stack cleanup
+          - Use LUA_TRACE_POINT at function entry for debugging
+          - Check lua_check_* return values before dereferencing
+          - Verify proper class registration with rspamd_lua_setclass
+          - Never hold Lua references across yield points without proper handling
+
+          ### Security Issues
+          - Buffer overflows: check array bounds, string lengths
+          - Integer overflows in size calculations
+          - SQL/command injection in external calls
+          - Path traversal in file operations
+          - Unvalidated redirects
+          - DoS vulnerabilities: unbounded loops, excessive memory allocation
+          - NULL pointer dereferences
+
+          ### Concurrency and Threading
+          - Race conditions on shared data
+          - Missing locks or improper lock ordering (deadlocks)
+          - Use of thread-unsafe functions
+          - Proper event loop integration (libev)
+
+          ### Error Handling
+          - Check return values from all functions that can fail
+          - Proper error propagation to callers
+          - Resource cleanup in error paths
+          - Avoid silent failures
+
+          ### Code Quality
+          - Dead/unreachable code
+          - Incorrect operator usage (bitwise vs logical, assignment in conditions)
+          - Off-by-one errors in loops
+          - Missing break in switch statements
+          - Unintended fallthrough
+          - Use-before-initialization
+          - Signed/unsigned comparison issues
+
+          Comment format:
+          - Clearly describe the issue: "Memory leak: allocated buffer not freed on error path"
+          - Provide a concrete fix: "Add g_free(buffer) before returning NULL"
+          - When possible, suggest exact code change
+          - Be specific about why it's a problem: "This will leak memory if parsing fails"
+          - Use technical language, no emojis
+
+          Skip commenting on:
+          - Code style and formatting (clang-format handles this)
+          - Naming conventions
+          - Minor performance optimizations
+          - Architectural decisions
+          - Test coverage (unless tests are broken)
+          - Documentation (unless it's misleading)
+
+          Use the fetched PR data to:
+          - Avoid repeating resolved issues unless the problem still exists
+          - Reference ongoing discussions when adding follow-ups
+          - Prefer replying to existing threads instead of creating duplicates
+          - Ignore your own previous resolved comments
+
+          Position calculation:
+          - Use the line position from the diff data (line number in diff, not file)
+          - Comments must align with exact changed lines only
+
+          How to submit your review:
+          Use the GitHub CLI (gh) to submit your review. The PR number is ${{ github.event.issue.number }}
+          and repository is ${{ github.repository }}.
+
+          Guidelines:
+          - Submit at most 10 comments total, prioritizing the most critical issues
+          - Each comment must be actionable and clear about what needs to be fixed
+          - Check for existing bot comments before posting duplicates
+          - Include a summary in the review body when submitting multiple inline comments
+          - If no issues found, post a single approval comment
+          EOF
+
+          # Run droid exec with the prompt
+          echo "Running code review analysis and submitting results..."
+          droid exec --auto high --model gpt-5-codex -f prompt.txt
+
+      - name: Mark review as complete
+        if: ${{ success() }}
+        run: |
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            -f content='+1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload debug artifacts on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: droid-review-debug-${{ github.run_id }}
+          path: |
+            prompt.txt
+            ${{ runner.home }}/.factory/logs/droid-log-single.log
+            ${{ runner.home }}/.factory/logs/console.log
+          if-no-files-found: ignore
+          retention-days: 7

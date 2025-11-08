@@ -67,6 +67,7 @@ LUA_FUNCTION_DEF(url, get_phished);
 LUA_FUNCTION_DEF(url, set_redirected);
 LUA_FUNCTION_DEF(url, get_count);
 LUA_FUNCTION_DEF(url, get_visible);
+LUA_FUNCTION_DEF(url, get_hash);
 LUA_FUNCTION_DEF(url, create);
 LUA_FUNCTION_DEF(url, init);
 LUA_FUNCTION_DEF(url, all);
@@ -98,6 +99,7 @@ static const struct luaL_reg urllib_m[] = {
 
 	LUA_INTERFACE_DEF(url, get_visible),
 	LUA_INTERFACE_DEF(url, get_count),
+	LUA_INTERFACE_DEF(url, get_hash),
 	LUA_INTERFACE_DEF(url, get_flags),
 	LUA_INTERFACE_DEF(url, get_flags_num),
 	LUA_INTERFACE_DEF(url, get_order),
@@ -739,6 +741,32 @@ lua_url_get_visible(lua_State *L)
 
 	if (url != NULL && url->url->ext && url->url->ext->visible_part) {
 		lua_pushstring(L, url->url->ext->visible_part);
+	}
+	else {
+		lua_pushnil(L);
+	}
+
+	return 1;
+}
+
+/***
+ * @method url:get_hash()
+ * Get fast hash of the url for deduplication purposes. Uses the same hash function
+ * as internal URL storage (rspamd_cryptobox_fast_hash). This is much more efficient
+ * than converting URLs to strings for deduplication, especially with large numbers of URLs.
+ * @return {number} 64-bit hash as a Lua number
+ */
+static int
+lua_url_get_hash(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_url *url = lua_check_url(L, 1);
+
+	if (url != NULL && url->url != NULL && url->url->urllen > 0) {
+		uint64_t hash = rspamd_cryptobox_fast_hash(url->url->string,
+												   url->url->urllen,
+												   rspamd_hash_seed());
+		lua_pushnumber(L, (lua_Number) hash);
 	}
 	else {
 		lua_pushnil(L);
