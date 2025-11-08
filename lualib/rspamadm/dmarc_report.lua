@@ -607,12 +607,27 @@ local function process_report_date(opts, start_time, end_time, date)
     return {}
   end
 
+  -- Process reports in batches to limit Redis connections
   local reports = {}
-  for _, rep in ipairs(results) do
-    local report = prepare_report(opts, start_time, end_time, rep)
+  local batch_size = opts.batch_size or 10
 
-    if report then
-      table.insert(reports, report)
+  for batch_start = 1, #results, batch_size do
+    local batch_end = math.min(batch_start + batch_size - 1, #results)
+    lua_util.debugm(N, 'processing report batch %s to %s (of %s total)',
+        batch_start, batch_end, #results)
+
+    for i = batch_start, batch_end do
+      local rep = results[i]
+      local report = prepare_report(opts, start_time, end_time, rep)
+
+      if report then
+        table.insert(reports, report)
+      end
+    end
+
+    -- Force garbage collection between batches to release Redis connections
+    if batch_end < #results then
+      collectgarbage("collect")
     end
   end
 
