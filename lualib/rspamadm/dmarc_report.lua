@@ -609,10 +609,9 @@ local function process_report_date(opts, start_time, end_time, date)
 
   -- Process reports in batches to limit Redis connections
   local reports = {}
-  local batch_size = math.max(1, opts.batch_size or 10)
 
-  for batch_start = 1, #results, batch_size do
-    local batch_end = math.min(batch_start + batch_size - 1, #results)
+  for batch_start = 1, #results, opts.batch_size do
+    local batch_end = math.min(batch_start + opts.batch_size - 1, #results)
     lua_util.debugm(N, 'processing report batch %s to %s (of %s total)',
         batch_start, batch_end, #results)
 
@@ -668,6 +667,9 @@ local function handler(args)
   local start_collection = today_midnight()
 
   local opts = parser:parse(args)
+
+  -- Normalize batch_size to prevent invalid values (0 or negative) breaking loops
+  opts.batch_size = math.max(1, opts.batch_size or 10)
 
   pool = rspamd_mempool.create()
   load_config(opts)
