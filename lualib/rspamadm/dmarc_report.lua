@@ -624,10 +624,8 @@ local function process_report_date(opts, start_time, end_time, date)
       end
     end
 
-    -- Force garbage collection between batches to release Redis connections
-    if batch_end < #results then
-      collectgarbage("collect")
-    end
+    -- Force garbage collection after each batch to release Redis connections
+    collectgarbage("collect")
   end
 
   -- Shuffle reports to make sending more fair
