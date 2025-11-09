@@ -607,13 +607,25 @@ local function process_report_date(opts, start_time, end_time, date)
     return {}
   end
 
+  -- Process reports in batches to limit Redis connections
   local reports = {}
-  for _, rep in ipairs(results) do
-    local report = prepare_report(opts, start_time, end_time, rep)
 
-    if report then
-      table.insert(reports, report)
+  for batch_start = 1, #results, opts.batch_size do
+    local batch_end = math.min(batch_start + opts.batch_size - 1, #results)
+    lua_util.debugm(N, 'processing report batch %s to %s (of %s total)',
+        batch_start, batch_end, #results)
+
+    for i = batch_start, batch_end do
+      local rep = results[i]
+      local report = prepare_report(opts, start_time, end_time, rep)
+
+      if report then
+        table.insert(reports, report)
+      end
     end
+
+    -- Force garbage collection after each batch to release Redis connections
+    collectgarbage("collect")
   end
 
   -- Shuffle reports to make sending more fair
@@ -653,6 +665,10 @@ local function handler(args)
   local start_collection = today_midnight()
 
   local opts = parser:parse(args)
+
+  -- Normalize batch_size: floor to integer and clamp to >= 1
+  -- Fractional values would break array indexing in batching loops
+  opts.batch_size = math.max(1, math.floor(opts.batch_size or 10))
 
   pool = rspamd_mempool.create()
   load_config(opts)
