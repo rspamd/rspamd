@@ -21,6 +21,7 @@
 #include "libstat/stat_api.h"
 #include "libcryptobox/cryptobox.h"
 #include "libutil/shingles.h"
+#include "khash.h"
 
 #include "contrib/uthash/utlist.h"
 
@@ -1434,6 +1435,9 @@ lua_textpart_get_html_fuzzy_hashes(lua_State *L)
  * @param {number} max_urls optional maximum number of URLs to return
  * @return {table} array of URL objects sorted by importance (descending)
  */
+
+KHASH_SET_INIT_INT64(lua_cta_url_set);
+
 static int
 lua_textpart_get_cta_urls(lua_State *L)
 {
@@ -1501,7 +1505,7 @@ lua_textpart_get_cta_urls(lua_State *L)
 	unsigned int result_size = max_urls > 0 ? MIN(max_urls, heap->n) : heap->n;
 	lua_createtable(L, result_size, include_weights ? 0 : 0);
 
-	GHashTable *seen = g_hash_table_new(g_direct_hash, g_direct_equal);
+	khash_t(lua_cta_url_set) *seen = kh_init(lua_cta_url_set);
 
 	/* Iterate heap from end to start for descending order */
 	for (int i = (int) heap->n - 1; i >= 0 && nret < result_size; i--) {
@@ -1514,11 +1518,13 @@ lua_textpart_get_cta_urls(lua_State *L)
 				chosen = chosen->ext->linked_url;
 			}
 
-			if (g_hash_table_lookup(seen, chosen)) {
+			khiter_t k = kh_get(lua_cta_url_set, seen, (khint64_t) (uintptr_t) chosen);
+			if (k != kh_end(seen)) {
 				continue;
 			}
 
-			g_hash_table_insert(seen, chosen, chosen);
+			int ret;
+			kh_put(lua_cta_url_set, seen, (khint64_t) (uintptr_t) chosen, &ret);
 
 			if (include_weights) {
 				lua_createtable(L, 0, 2);
@@ -1539,7 +1545,7 @@ lua_textpart_get_cta_urls(lua_State *L)
 		}
 	}
 
-	g_hash_table_unref(seen);
+	kh_destroy(lua_cta_url_set, seen);
 
 	return 1;
 }
