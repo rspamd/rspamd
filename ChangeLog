@@ -1,3 +1,143 @@
+3.14.0: 10 Nov 2025
+  * [Feature] Fuzzy check: Add HTML fuzzy hashing for structural similarity matching
+  * [Feature] Fuzzy check: Add per-rule text_hashes toggle for HTML-only fuzzy rules
+  * [Feature] Fuzzy check: Add structured checks configuration with backward compatibility
+  * [Feature] Fuzzy storage: Implement full TCP protocol support with auto-switch
+  * [Feature] Fuzzy check: Add TCP connection management and error handling
+  * [Feature] URL: Add task:get_cta_urls() API for proper CTA domain extraction
+  * [Feature] URL: Move CTA processing into dedicated module
+  * [Feature] URL: Add url:get_hash() method for efficient deduplication without string conversion
+  * [Feature] GPT: Add web search context support with Redis caching
+  * [Feature] HTML: Add infrastructure for async URL rewriting with Lua bindings
+  * [Feature] HTML: Add task:rewrite_html_urls() and task:get_html_urls() Lua API
+  * [Feature] WebUI: Implement dark mode with theme toggle and auto detection
+  * [Feature] Aliases: Add advanced resolution with loop detection for converging paths
+  * [Feature] Milter: Add ESMTP argument parsing with Lua API access
+  * [Feature] Milter: Add per-recipient ESMTP args parsing and metadata access
+  * [Feature] Milter: Support array of positions for remove_headers operations
+  * [Feature] Proxy: Add client IP preservation in message headers through chain
+  * [Feature] Rspamc: Add milter.add_headers object format support to --mime
+  * [Feature] Configwizard: Add Postfix integration wizard using postconf utility
+  * [Feature] Build: Add comprehensive BSD workflows (FreeBSD, NetBSD, OpenBSD) with Lua version selection
+  * [Feature] Build: Add automated code review GitHub Actions workflow with Rspamd-specific guidelines
+  * [Feature] Build: Add Docker-based integration test suite with ASAN and real corpus
+  * [Feature] Build: Add automatic public suffix list synchronization
+  * [Feature] Multimap: Add support for symbols with leading numerals
+  * [Feature] DMARC: Add Auto-Reply-To and Precedence headers to prevent out-of-office replies
+  * [Feature] Platform: Add NetBSD memory usage tracking support
+  * [Feature] Utilities: Add fuzzy Redis migration utility
+  * [Feature] Bayes: Allow skipping local/authenticated mail in autolearn condition
+  * [Feature] ARC: Add DKIM signing key API for flexible ARC signing
+  * [Feature] Logger: Add type specifiers support for better formatting
+  * [Feature] Heap: Add rspamd_heap_push_slot to eliminate double allocation
+  * [Fix] DNS: Preserve req->pos during reply validation to prevent packet truncation on UDP-to-TCP retransmits
+  * [Fix] DNS: Regenerate transaction ID before copying to TCP buffer to avoid collisions
+  * [Fix] DNS: Fix nameserver round-robin when using /etc/resolv.conf
+  * [Fix] DNS: Fix TCP uninitialized memory leak
+  * [Fix] DMARC: Add batching and forced GC for Redis connections to prevent pool exhaustion
+  * [Fix] DMARC: Validate and normalize batch_size to prevent fractional indexing and loop errors
+  * [Fix] DMARC: Refactor reporting to use helper functions and async maps
+  * [Fix] Allocator: Fix jemalloc/system malloc mixing in getline() to prevent crashes
+  * [Fix] Allocator: Fix allocator mismatches in hiredis
+  * [Fix] Allocator: Fix allocator mismatches in libucl
+  * [Fix] Hyperscan: Use runtime version instead of compile-time for database validation
+  * [Fix] Hyperscan: Auto-recreate invalid unserialized cache files on version mismatch
+  * [Fix] Memory: Fix leaks in fuzzy storage khash tables
+  * [Fix] Memory: Fix leaks in upstream address parsing
+  * [Fix] Memory: Fix leaks in *-any address parsing
+  * [Fix] Memory: Fix OpenSSL providers cleanup
+  * [Fix] Memory: Fix UCL object memory leak in Lua integration
+  * [Fix] Memory: Fix stat metadata tokenization leak
+  * [Fix] Fuzzy TCP: Fix double-release in fuzzy_tcp_session
+  * [Fix] Fuzzy TCP: Fix refcount leak in destructor
+  * [Fix] Fuzzy TCP: Fix timeout handling and buffer overflow
+  * [Fix] Fuzzy TCP: Fix endianness mismatch in framing protocol
+  * [Fix] Fuzzy TCP: Fix race conditions and fd reuse bugs
+  * [Fix] Fuzzy TCP: Use pure ev_timer for session timeouts
+  * [Fix] Fuzzy TCP: Fix server replies and client event handling
+  * [Fix] Shutdown: Keep srv events active during shutdown to track auxiliary processes
+  * [Fix] ARC: Restore strict header ordering to comply with RFC 8617
+  * [Fix] ARC: Add ed25519 key support
+  * [Fix] Composites: Implement two-phase evaluation for postfilter dependencies
+  * [Fix] Composites: Use null-terminated string for symbol lookup
+  * [Fix] URL: Refactor extraction to prevent DoS with hash-based deduplication
+  * [Fix] URL: Add 50k URL limit with warning for DoS protection
+  * [Fix] URL: Skip HTML_DISPLAYED URLs in CTA detection
+  * [Fix] URL: Fix CTA priority preservation in extract_specific_urls
+  * [Fix] Bayes: Improve Redis server discovery
+  * [Fix] Bayes: Only bypass learn when header value matches
+  * [Fix] ESMTP: Robust per-recipient parsing in milter with safe cursor advance
+  * [Fix] ESMTP: Refcount ESMTP args in proxy_session_refresh to avoid use-after-free
+  * [Fix] ESMTP: Correct Lua stack cleanup in lua_task_get_rcpt_esmtp_args
+  * [Fix] HTML: Correct attribute value offset calculation for URL rewriting
+  * [Fix] HTML: Add HTML entity encoding for URL rewriting
+  * [Fix] HTML: Fix segfault due to incorrect HTML features access
+  * [Fix] HTML: Fix frequency-based ordering in domain hashing
+  * [Fix] HTML: Fix shingles hash generation bugs
+  * [Fix] HTML: Fix memory leaks in shingles generation
+  * [Fix] HTML: Fix memory management in html_cta.process_html_links
+  * [Fix] HTML: Fix CSS class normalization in fuzzy tokens
+  * [Fix] HTML: Fix cache key collision between text and HTML fuzzy hashes
+  * [Fix] OpenBSD: Fix kinfo_proc structure member names
+  * [Fix] OpenBSD: Disable Hyperscan (not available)
+  * [Fix] FreeBSD: Fix zstd package name
+  * [Fix] FreeBSD: Add IGNORE_OSVERSION for package version mismatches
+  * [Fix] NetBSD: Setup pkgin and PKG_PATH before installing packages
+  * [Fix] NetBSD: Fix missing dependencies and package names
+  * [Fix] BSD: Remove -j flag from ninja in all BSD workflows
+  * [Fix] Multimap: Handle symbols with leading numerals
+  * [Fix] Aliases: Prevent creation of malformed email addresses
+  * [Fix] Aliases: Fix alias loop detection for converging paths
+  * [Fix] Aliases: Fix is_local_domain to support backend objects
+  * [Fix] Aliases: Correct to_local when no recipients present
+  * [Fix] Aliases: Fix set_addr validation to prevent malformed addresses
+  * [Fix] MIME: Remove Authentication-Results and anonymize envelope-from in Received headers
+  * [Fix] Mempool: Prevent double-free in destructor cleanup
+  * [Fix] Rspamadm: Unbreak dnstool command
+  * [Fix] Integration tests: Fix ASAN configuration and startup diagnostics
+  * [Minor] Replace GHashTable with khash in fuzzy_check.c and lua_textpart_get_cta_urls
+  * [Minor] Update cache key prefix to match module name in llm_search_context
+  * [Minor] Fix llm_search_context to follow Rspamd idioms
+  * [Minor] Refactor llm_search_context to use lua_cache module
+  * [Minor] Address review comments in various modules
+  * [Minor] Fix droid usage
+  * [Minor] Use GPT-5 Codex for code reviews
+  * [Minor] Update libucl with automatic stack management
+  * [Rework] Prioritize CTA URLs in redirector and Lua helpers
+  * [Rework] RBL configuration: Add new from selectors, content_urls checks, and lower_utf8 for hashed domains
+  * [Rework] Make Bayes learn guards configurable
+  * [Rework] Refactor element visibility control to use Bootstrap classes
+  * [Rework] Use postconf utility for Postfix configuration in configwizard
+  * [Rework] Remove Lua-level HTTP header parsing in ESMTP args getters
+  * [Rework] Add CFG_REF_* macros with debug logging for config refcounting
+  * [Rework] Move OpenSSL providers from global to libs_ctx
+  * [Rework] Convert heap to fully intrusive kvec-based implementation
+  * [Rework] Add specialized pool types for long-lived and short-lived allocations
+  * [Rework] Improve memory pool destructors with smart preallocation based on pool type
+  * [Project] Restrict code review workflow to authorized maintainers
+  * [Project] Add Claude Code and Cursor AI assistant configuration
+  * [WebUI] Replace Glyphicons with FontAwesome SVG icons
+  * [WebUI] Update CodeJar to version 4.3.0
+  * [WebUI] Update Node.js and ESLint
+  * [WebUI] Update D3-based visualization libs
+  * [WebUI] Replace deprecated alert-error class with alert-danger
+  * [WebUI] Add search syntax hint to history table filter input
+  * [WebUI] Fix theme toggle default to auto
+  * [WebUI] Keep classifiers list when request is skipped
+  * [WebUI] Repopulate classifier dropdown
+  * [WebUI] Add comment for removeEventListener
+  * [WebUI] Fix icon rendering race condition in tab initialization
+  * [Test] Add comprehensive Lua unit tests for HTML URL rewriting
+  * [Test] Add unit tests for HTML URL rewriting patch engine
+  * [Test] Add functional tests for HTML fuzzy hashing
+  * [Test] Add ARC chain verification tests with multiple signatures
+  * [Test] Add e2e for classifier dropdown population
+  * [Test] Multimap symbol with leading numerals
+  * [Test] Sync public suffix list automatically
+  * [Test] Update JS linters
+  * [Test] Fix integration test environment variable passing
+  * [Test] Add detailed error output for integration test failures
+
 3.13.2: 5 Oct 2025
   * [Feature] Fuzzy check: Add separate encryption keys for read and write operations
   * [Feature] DKIM: Add ED25519 support for DKIM signing and verification with OpenSSL version checks
