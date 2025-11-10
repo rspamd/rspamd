@@ -220,17 +220,20 @@ rdns_parse_reply(uint8_t *in, int r, struct rdns_request *req,
 	 * Now we have request and query data is now at the end of header, so compare
 	 * request QR section and reply QR section
 	 */
+	unsigned int saved_pos = req->pos;
 	req->pos = sizeof(struct dns_header);
 	pos = in + sizeof(struct dns_header);
 	t = r - sizeof(struct dns_header);
 	for (i = 0; i < (int) qdcount; i++) {
 		if ((npos = rdns_request_reply_cmp(req, pos, t)) == NULL) {
 			rdns_info("DNS request with id %d is for different query, ignoring", (int) req->id);
+			req->pos = saved_pos;
 			return false;
 		}
 		t -= npos - pos;
 		pos = npos;
 	}
+	req->pos = saved_pos;
 	/*
 	 * Now pos is in answer section, so we should extract data and form reply
 	 */
