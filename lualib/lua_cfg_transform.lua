@@ -350,9 +350,16 @@ return function(cfg)
     actions_set['grow_factor'] = true
     actions_set['subject'] = true
 
-    for k, _ in cfg:at('actions'):pairs() do
+    for k, v in cfg:at('actions'):pairs() do
       if not actions_set[k] then
-        logger.warnx(rspamd_config, 'unknown element in actions section: %s', k)
+        -- Check if this is a custom action with flags (e.g., no_threshold)
+        local is_custom_action = false
+        if v and v:type() == 'object' and v:at('flags') then
+          is_custom_action = true
+        end
+        if not is_custom_action then
+          logger.warnx(rspamd_config, 'unknown element in actions section: %s', k)
+        end
       end
     end
 
