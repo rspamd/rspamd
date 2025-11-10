@@ -484,19 +484,6 @@ rdns_reschedule_req_over_tcp(struct rdns_request *req, struct rdns_server *serv)
 			return false;
 		}
 
-		oc->write_buf = ((unsigned char *) oc) + sizeof(*oc);
-		memcpy(oc->write_buf, req->packet, req->pos);
-		oc->next_write_size = htons(req->pos);
-
-		DL_APPEND(ioc->tcp->output_chain, oc);
-
-		if (ioc->tcp->async_write == NULL) {
-			ioc->tcp->async_write = resolver->async->add_write(
-				resolver->async->data,
-				ioc->sock, ioc);
-		}
-
-		req->state = RDNS_REQUEST_TCP;
 		/* Switch IO channel from UDP to TCP */
 		rdns_request_remove_from_hash(req);
 		req->io = ioc;
@@ -517,6 +504,20 @@ rdns_reschedule_req_over_tcp(struct rdns_request *req, struct rdns_server *serv)
 				break;
 			}
 		}
+
+		oc->write_buf = ((unsigned char *) oc) + sizeof(*oc);
+		memcpy(oc->write_buf, req->packet, req->pos);
+		oc->next_write_size = htons(req->pos);
+
+		DL_APPEND(ioc->tcp->output_chain, oc);
+
+		if (ioc->tcp->async_write == NULL) {
+			ioc->tcp->async_write = resolver->async->add_write(
+				resolver->async->data,
+				ioc->sock, ioc);
+		}
+
+		req->state = RDNS_REQUEST_TCP;
 
 		req->async_event = resolver->async->add_timer(resolver->async->data,
 													  req->timeout, req);
