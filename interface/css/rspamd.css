@@ -346,10 +346,10 @@ table#symbolsTable input[type="number"] {
 .symbol-special {
     background-color: var(--rspamd-symbol-special-bg);
 }
-.symbol-negative:hover {
+.parent:not(.status-table) .symbol-negative:hover {
     background-color: var(--rspamd-symbol-hover-bg);
 }
-.symbol-positive:hover {
+.parent:not(.status-table) .symbol-positive:hover {
     background-color: var(--rspamd-symbol-hover-bg);
 }
 .symbol-special:hover {
@@ -426,6 +426,12 @@ table#symbolsTable input[type="number"] {
 .status-table :not(:has([rowspan])) tr:last-child td:first-child,
 .status-table :nth-last-child(1 of tr:has([rowspan])) td:first-child  {
     border-radius: 0 0 0 calc(var(--bs-border-radius) + 1px);
+}
+
+/* Hover effect for table cells in tables with rowspan groups */
+.status-table tbody td.table-hover-cell {
+    --bs-table-color-state: var(--bs-table-hover-color);
+    --bs-table-bg-state: var(--bs-table-hover-bg);
 }
 
 /* RRD summary */

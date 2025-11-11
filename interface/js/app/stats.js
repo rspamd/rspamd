@@ -55,6 +55,51 @@ define(["jquery", "app/common", "d3pie", "d3"],
             return out;
         }
 
+        let rowspanHoverHandlersInitialized = false;
+
+        function attachRowspanHoverHandlers(tableId) {
+            const $table = $(tableId);
+
+            function findRowspanCell($row) {
+                const headerCount = $table.find("thead th").length;
+                if ($row.find("td").length >= headerCount) return null;
+
+                // Assumes rowspan cells always appear in the first column
+                let result = null;
+                $row.prevAll().find("td:first-child[rowspan]").each((_, el) => {
+                    const $cell = $(el);
+                    const rowspan = parseInt($cell.attr("rowspan"), 10);
+                    const distance = $row.prevAll().length - $cell.parent().prevAll().length;
+                    if (distance < rowspan) {
+                        result = $cell;
+                        return false; // break
+                    }
+                    return true;
+                });
+                return result;
+            }
+
+            $table.on("mouseenter", "tbody td", (event) => {
+                const $cell = $(event.currentTarget);
+                const $row = $cell.parent();
+
+                if ($cell.attr("rowspan")) {
+                    // Hovering over rowspan cell - highlight entire group
+                    const rowspan = parseInt($cell.attr("rowspan"), 10);
+                    $cell.addClass("table-hover-cell");
+                    $row.find("td").addClass("table-hover-cell");
+                    $row.nextAll().slice(0, rowspan - 1).find("td").addClass("table-hover-cell");
+                } else {
+                    // Hovering over regular cell - highlight current row
+                    $row.find("td").addClass("table-hover-cell");
+
+                    // Highlight rowspan cell if exists
+                    const $rowspanCell = findRowspanCell($row);
+                    if ($rowspanCell) $rowspanCell.addClass("table-hover-cell");
+                }
+            }).on("mouseleave", "tbody td", () => $table.find("tbody td").removeClass("table-hover-cell"));
+        }
+
         function displayStatWidgets(checked_server) {
             const servers = JSON.parse(sessionStorage.getItem("Credentials"));
             let data = {};
@@ -222,6 +267,12 @@ define(["jquery", "app/common", "d3pie", "d3"],
             } else {
                 addStatfiles(checked_server, data.statfiles);
                 addFuzzyStorage(checked_server, data.fuzzy_hashes);
+            }
+
+            if (!rowspanHoverHandlersInitialized) {
+                attachRowspanHoverHandlers("#bayesTable");
+                attachRowspanHoverHandlers("#fuzzyTable");
+                rowspanHoverHandlersInitialized = true;
             }
         }
 
