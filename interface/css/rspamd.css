@@ -49,6 +49,11 @@ THE SOFTWARE.
     --rspamd-table-warning-bg: #fff8e6;
     --rspamd-bs-table-bg: #f8f9fa;
 
+    /* Per-type hover colors (light theme) */
+    --rspamd-symbol-negative-hover-bg: #dcf9d3;
+    --rspamd-symbol-positive-hover-bg: #fbd6d1;
+    --rspamd-symbol-special-hover-bg: #cddbff;
+
     /* Light mode logo display rules */
     --rspamd-display-logo-light: inline;
     --rspamd-display-logo-dark: none;
@@ -71,6 +76,11 @@ THE SOFTWARE.
     --rspamd-table-success-bg: #102d00;
     --rspamd-table-warning-bg: #43380b;
     --rspamd-bs-table-bg: #272b2f;
+
+    /* Per-type hover colors (dark theme) */
+    --rspamd-symbol-negative-hover-bg: #274f27;
+    --rspamd-symbol-positive-hover-bg: #4b2b2b;
+    --rspamd-symbol-special-hover-bg: #41426a;
 
     /* Dark mode logo display rules */
     --rspamd-display-logo-light: none;
@@ -347,13 +357,13 @@ table#symbolsTable input[type="number"] {
     background-color: var(--rspamd-symbol-special-bg);
 }
 .symbol-negative:hover {
-    background-color: var(--rspamd-symbol-hover-bg);
+    background-color: var(--rspamd-symbol-negative-hover-bg);
 }
 .symbol-positive:hover {
-    background-color: var(--rspamd-symbol-hover-bg);
+    background-color: var(--rspamd-symbol-positive-hover-bg);
 }
 .symbol-special:hover {
-    background-color: var(--rspamd-symbol-hover-bg);
+    background-color: var(--rspamd-symbol-special-hover-bg);
 }
 
 /* For symbol description display on hover/focus */
