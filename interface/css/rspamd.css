@@ -346,14 +346,22 @@ table#symbolsTable input[type="number"] {
 .symbol-special {
     background-color: var(--rspamd-symbol-special-bg);
 }
-.parent:not(.status-table) .symbol-negative:hover {
+.symbol-negative:hover {
     background-color: var(--rspamd-symbol-hover-bg);
 }
-.parent:not(.status-table) .symbol-positive:hover {
+.symbol-positive:hover {
     background-color: var(--rspamd-symbol-hover-bg);
 }
 .symbol-special:hover {
     background-color: var(--rspamd-symbol-hover-bg);
+}
+
+/* Disable individual cell hover in status tables - use table-hover-cell instead */
+.status-table tbody .symbol-negative:hover {
+    background-color: var(--rspamd-symbol-negative-bg);
+}
+.status-table tbody .symbol-positive:hover {
+    background-color: var(--rspamd-symbol-positive-bg);
 }
 
 /* For symbol description display on hover/focus */
