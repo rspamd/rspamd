@@ -193,16 +193,30 @@ jobs:
 
           # Run droid exec with the prompt
           echo "Running code review analysis and submitting results..."
-          droid exec --auto high --model gpt-5-codex -f prompt.txt
+          droid exec --auto high --model claude-sonnet-4-5-20250929 -f prompt.txt
 
-      - name: Mark review as complete
+      - name: Post review completion comment
         if: ${{ success() }}
         run: |
-          gh api \
-            --method POST \
-            -H "Accept: application/vnd.github+json" \
-            /repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
-            -f content='+1'
+          gh pr comment ${{ github.event.issue.number }} --body "Code review completed successfully. The review has been submitted."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Dismiss previous change requests if approved
+        if: ${{ success() }}
+        run: |
+          # Get all reviews for this PR
+          REVIEWS=$(gh api "/repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}/reviews" --jq '.[] | select(.state == "CHANGES_REQUESTED" and .user.login == "github-actions[bot]") | .id')
+
+          # Dismiss each change request review
+          for REVIEW_ID in $REVIEWS; do
+            echo "Dismissing review $REVIEW_ID"
+            gh api \
+              --method PUT \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}/reviews/$REVIEW_ID/dismissals" \
+              -f message="Dismissed after new approval" || echo "Failed to dismiss review $REVIEW_ID (may already be dismissed)"
+          done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
