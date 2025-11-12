@@ -161,6 +161,10 @@ jobs:
           - Reference ongoing discussions when adding follow-ups
           - Prefer replying to existing threads instead of creating duplicates
           - Ignore your own previous resolved comments
+          - **CRITICAL: Stop repeating dismissed feedback** - If a maintainer (vstakhov, moisseev, fatalbanana) has replied to your comment explaining why something is intentional, by design, or not a bug, DO NOT report the same issue again in subsequent reviews
+          - **Respect maintainer decisions** - When a human reviewer disagrees with your assessment and provides rationale, defer to their judgment and do not re-raise the same concern
+          - **Check comment thread context** - Before posting a comment, review all replies in existing threads. If a maintainer has already addressed your concern with an explanation, skip that issue entirely
+          - **Recognize intentional design** - Code that a maintainer explicitly defends as "intentional behavior" or "by design" should not be flagged as a bug, even if it doesn't match your expectations
 
           Position calculation:
           - Use the line position from the diff data (line number in diff, not file)
@@ -169,6 +173,15 @@ jobs:
           How to submit your review:
           Use the GitHub CLI (gh) to submit your review. The PR number is ${{ github.event.issue.number }}
           and repository is ${{ github.repository }}.
+
+          GitHub CLI command examples:
+          - For inline comments with review summary: gh pr review ${{ github.event.issue.number }} --comment --body "Review summary text here"
+          - To request changes with inline comments: gh pr review ${{ github.event.issue.number }} --request-changes --body "Found issues that need fixing"
+          - To approve: gh pr review ${{ github.event.issue.number }} --approve --body "No issues found"
+          - For inline comments on specific lines: gh pr review ${{ github.event.issue.number }} --comment --body-file review.txt (where review.txt contains formatted review)
+
+          CRITICAL: DO NOT post test comments or experiment with the API - every comment is visible to maintainers and contributors.
+          You must use the correct command on the first attempt. If unsure about syntax, default to: gh pr review ${{ github.event.issue.number }} --comment --body "your message"
 
           Guidelines:
           - Submit at most 10 comments total, prioritizing the most critical issues
