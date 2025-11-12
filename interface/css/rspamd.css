@@ -366,6 +366,14 @@ table#symbolsTable input[type="number"] {
     background-color: var(--rspamd-symbol-special-hover-bg);
 }
 
+/* Disable individual cell hover in status tables - use table-hover-cell instead */
+.status-table tbody .symbol-negative:hover {
+    background-color: var(--rspamd-symbol-negative-bg);
+}
+.status-table tbody .symbol-positive:hover {
+    background-color: var(--rspamd-symbol-positive-bg);
+}
+
 /* For symbol description display on hover/focus */
 .symbol-default.has-description:not(:focus) strong {
     text-decoration: underline dotted;
@@ -436,6 +444,12 @@ table#symbolsTable input[type="number"] {
 .status-table :not(:has([rowspan])) tr:last-child td:first-child,
 .status-table :nth-last-child(1 of tr:has([rowspan])) td:first-child  {
     border-radius: 0 0 0 calc(var(--bs-border-radius) + 1px);
+}
+
+/* Hover effect for table cells in tables with rowspan groups */
+.status-table tbody td.table-hover-cell {
+    --bs-table-color-state: var(--bs-table-hover-color);
+    --bs-table-bg-state: var(--bs-table-hover-bg);
 }
 
 /* RRD summary */
