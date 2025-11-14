@@ -986,7 +986,7 @@ lua_url_all(lua_State *L)
 			lua_newtable(L);
 			rspamd_url_find_multiple(pool, text, length,
 									 RSPAMD_URL_FIND_ALL, NULL,
-									 lua_url_table_inserter, L);
+									 lua_url_table_inserter, L, L);
 		}
 		else {
 			lua_pushnil(L);

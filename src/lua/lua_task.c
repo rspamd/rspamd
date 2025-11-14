@@ -2807,7 +2807,8 @@ inject_url_query(struct rspamd_task *task, struct rspamd_url *url,
 		rspamd_url_find_multiple(task->task_pool,
 								 rspamd_url_query_unsafe(url), url->querylen,
 								 RSPAMD_URL_FIND_ALL, NULL,
-								 inject_url_query_callback, &cbd);
+								 inject_url_query_callback, &cbd,
+								 task->cfg ? task->cfg->lua_state : NULL);
 	}
 
 	if (part_urls) {
