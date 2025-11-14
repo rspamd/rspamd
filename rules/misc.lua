@@ -124,43 +124,50 @@ rspamd_config:register_symbol({
   parent = date_id,
 })
 
-local obscured_id = rspamd_config:register_symbol {
-  callback = function(task)
-    local susp_urls = task:get_urls_filtered({ 'obscured', 'zw_spaces' })
+-- Check if url_suspect plugin is enabled (it provides better R_SUSPICIOUS_URL)
+local url_suspect_enabled = rspamd_config:get_all_opt('url_suspect')
+if url_suspect_enabled and url_suspect_enabled.enabled ~= false then
+  rspamd_logger.infox(rspamd_config, 'url_suspect plugin is enabled, skipping old R_SUSPICIOUS_URL registration')
+else
+  -- Legacy R_SUSPICIOUS_URL implementation (kept for backward compatibility)
+  local obscured_id = rspamd_config:register_symbol {
+    callback = function(task)
+      local susp_urls = task:get_urls_filtered({ 'obscured', 'zw_spaces' })
 
-    if susp_urls and susp_urls[1] then
-      local obs_flag = url_flags_tab.obscured
-      local zw_flag = url_flags_tab.zw_spaces
+      if susp_urls and susp_urls[1] then
+        local obs_flag = url_flags_tab.obscured
+        local zw_flag = url_flags_tab.zw_spaces
 
-      for _, u in ipairs(susp_urls) do
-        local fl = u:get_flags_num()
-        if bit.band(fl, obs_flag) ~= 0 then
-          task:insert_result('R_SUSPICIOUS_URL', 1.0, u:get_host())
-        end
-        if bit.band(fl, zw_flag) ~= 0 then
-          task:insert_result('ZERO_WIDTH_SPACE_URL', 1.0, u:get_host())
+        for _, u in ipairs(susp_urls) do
+          local fl = u:get_flags_num()
+          if bit.band(fl, obs_flag) ~= 0 then
+            task:insert_result('R_SUSPICIOUS_URL', 1.0, u:get_host())
+          end
+          if bit.band(fl, zw_flag) ~= 0 then
+            task:insert_result('ZERO_WIDTH_SPACE_URL', 1.0, u:get_host())
+          end
         end
       end
-    end
 
-    return false
-  end,
-  name = 'R_SUSPICIOUS_URL',
-  score = 5.0,
-  one_shot = true,
-  description = 'A message has been identified to contain an obfuscated or suspicious URL',
-  group = 'url'
-}
+      return false
+    end,
+    name = 'R_SUSPICIOUS_URL',
+    score = 5.0,
+    one_shot = true,
+    description = 'A message has been identified to contain an obfuscated or suspicious URL',
+    group = 'url'
+  }
 
-rspamd_config:register_symbol {
-  type = 'virtual',
-  name = 'ZERO_WIDTH_SPACE_URL',
-  score = 7.0,
-  one_shot = true,
-  description = 'Zero width space in URL',
-  group = 'url',
-  parent = obscured_id,
-}
+  rspamd_config:register_symbol {
+    type = 'virtual',
+    name = 'ZERO_WIDTH_SPACE_URL',
+    score = 7.0,
+    one_shot = true,
+    description = 'Zero width space in URL',
+    group = 'url',
+    parent = obscured_id,
+  }
+end
 
 rspamd_config.ENVFROM_PRVS = {
   callback = function(task)
