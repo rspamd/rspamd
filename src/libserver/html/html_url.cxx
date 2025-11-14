@@ -159,7 +159,7 @@ auto html_url_is_phished(rspamd_mempool_t *pool,
 
 		text_url = rspamd_mempool_alloc0_type(pool, struct rspamd_url);
 		auto rc = rspamd_url_parse(text_url, url_str, strlen(url_str), pool,
-								   RSPAMD_URL_PARSE_TEXT, NULL);
+								   RSPAMD_URL_PARSE_TEXT, L);
 
 		if (rc == URI_ERRNO_OK) {
 			text_url->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
@@ -229,7 +229,8 @@ void html_check_displayed_url(rspamd_mempool_t *pool,
 							  void *url_set,
 							  std::string_view visible_part,
 							  goffset href_offset,
-							  struct rspamd_url *url)
+							  struct rspamd_url *url,
+							  lua_State *L)
 {
 	struct rspamd_url *displayed_url = nullptr;
 	struct rspamd_url *turl;
@@ -307,7 +308,7 @@ void html_check_displayed_url(rspamd_mempool_t *pool,
 	rspamd_normalise_unicode_inplace(url->ext->visible_part, &dlen);
 }
 
-auto html_process_url(rspamd_mempool_t *pool, std::string_view &input)
+auto html_process_url(rspamd_mempool_t *pool, std::string_view &input, lua_State *L)
 	-> std::optional<struct rspamd_url *>
 {
 	struct rspamd_url *url;
@@ -455,7 +456,7 @@ auto html_process_url(rspamd_mempool_t *pool, std::string_view &input)
 
 	url = rspamd_mempool_alloc0_type(pool, struct rspamd_url);
 	rspamd_url_normalise_propagate_flags(pool, decoded, &dlen, saved_flags);
-	rc = rspamd_url_parse(url, decoded, dlen, pool, RSPAMD_URL_PARSE_HREF, NULL);
+	rc = rspamd_url_parse(url, decoded, dlen, pool, RSPAMD_URL_PARSE_HREF, L);
 
 	/* Filter some completely damaged urls */
 	if (rc == URI_ERRNO_OK && url->hostlen > 0 &&

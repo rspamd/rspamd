@@ -1313,7 +1313,8 @@ html_is_absolute_url(std::string_view st) -> bool
 static auto
 html_process_url_tag(rspamd_mempool_t *pool,
 					 struct html_tag *tag,
-					 struct html_content *hc) -> std::optional<struct rspamd_url *>
+					 struct html_content *hc,
+					 lua_State *L) -> std::optional<struct rspamd_url *>
 {
 	auto found_href_maybe = tag->find_href();
 
@@ -1370,7 +1371,7 @@ html_process_url_tag(rspamd_mempool_t *pool,
 			}
 		}
 
-		auto url = html_process_url(pool, href_value).value_or(nullptr);
+		auto url = html_process_url(pool, href_value, L).value_or(nullptr);
 
 		if (url) {
 			if (tag->id != Tag_A) {
@@ -1431,7 +1432,8 @@ html_url_query_callback(struct rspamd_url *url, gsize start_offset,
 static void
 html_process_query_url(rspamd_mempool_t *pool, struct rspamd_url *url,
 					   khash_t(rspamd_url_hash) * url_set,
-					   GPtrArray *part_urls)
+					   GPtrArray *part_urls,
+					   lua_State *L)
 {
 	if (url->querylen > 0) {
 		struct rspamd_html_url_query_cbd qcbd;
@@ -1444,7 +1446,7 @@ html_process_query_url(rspamd_mempool_t *pool, struct rspamd_url *url,
 		rspamd_url_find_multiple(pool,
 								 rspamd_url_query_unsafe(url), url->querylen,
 								 RSPAMD_URL_FIND_ALL, NULL,
-								 html_url_query_callback, &qcbd, NULL);
+								 html_url_query_callback, &qcbd, L);
 	}
 
 	if (part_urls) {
@@ -1549,7 +1551,7 @@ html_process_img_tag(rspamd_mempool_t *pool,
 				if (img->src) {
 
 					std::string_view cpy{*href_value};
-					auto maybe_url = html_process_url(pool, cpy);
+					auto maybe_url = html_process_url(pool, cpy, L);
 
 					if (maybe_url) {
 						img->url = maybe_url.value();
@@ -1852,7 +1854,8 @@ html_process_displayed_href_tag(rspamd_mempool_t *pool,
 								const struct html_tag *cur_tag,
 								GList **exceptions,
 								khash_t(rspamd_url_hash) * url_set,
-								goffset dest_offset) -> void
+								goffset dest_offset,
+								lua_State *L) -> void
 {
 
 	if (std::holds_alternative<rspamd_url *>(cur_tag->extra)) {
@@ -1862,7 +1865,7 @@ html_process_displayed_href_tag(rspamd_mempool_t *pool,
 								 exceptions, url_set,
 								 data,
 								 dest_offset,
-								 url);
+								 url, L);
 	}
 }
 
@@ -2040,7 +2043,8 @@ html_append_tag_content(rspamd_mempool_t *pool,
 			html_process_displayed_href_tag(pool, hc,
 											{hc->parsed.data() + initial_parsed_offset, std::size_t(written_len)},
 											tag, exceptions,
-											url_set, initial_parsed_offset);
+											url_set, initial_parsed_offset,
+											task->cfg ? task->cfg->lua_state : NULL);
 			/* Count display URL mismatches when URL is present */
 			if (std::holds_alternative<rspamd_url *>(tag->extra)) {
 				auto *u = std::get<rspamd_url *>(tag->extra);
@@ -2218,7 +2222,8 @@ auto html_process_input(struct rspamd_task *task,
 			/* If action present and absolute, compare eTLD+1 with first-party */
 			if (auto href = cur_tag->find_href()) {
 				if (html_is_absolute_url(*href)) {
-					auto maybe_url = html_process_url(pool, *href);
+					auto maybe_url = html_process_url(pool, *href,
+													  task->cfg ? task->cfg->lua_state : NULL);
 					if (maybe_url) {
 						struct rspamd_url *u = maybe_url.value();
 						if (u->hostlen > 0) {
@@ -2268,7 +2273,8 @@ auto html_process_input(struct rspamd_task *task,
 
 								if (!urlv.empty()) {
 									/* validate and count; do not add to urls set */
-									auto maybe_url = html_process_url(pool, urlv);
+									auto maybe_url = html_process_url(pool, urlv,
+																	  task->cfg ? task->cfg->lua_state : NULL);
 									if (maybe_url) {
 										hc->features.meta_refresh_urls++;
 									}
@@ -2338,7 +2344,8 @@ auto html_process_input(struct rspamd_task *task,
 		}
 
 		if (cur_tag->flags & FL_HREF && html_document_state == html_document_state::body) {
-			auto maybe_url = html_process_url_tag(pool, cur_tag, hc);
+			auto maybe_url = html_process_url_tag(pool, cur_tag, hc,
+												  task->cfg ? task->cfg->lua_state : NULL);
 
 			if (maybe_url.has_value()) {
 				url = maybe_url.value();
@@ -2352,7 +2359,8 @@ auto html_process_input(struct rspamd_task *task,
 						}
 						url->part_order = cur_url_part_order++;
 						html_process_query_url(pool, url, url_set,
-											   part_urls);
+											   part_urls,
+											   task->cfg ? task->cfg->lua_state : NULL);
 					}
 					else {
 						url = maybe_existing;
@@ -2438,7 +2446,8 @@ auto html_process_input(struct rspamd_task *task,
 			/*
 			 * Base is allowed only within head tag but HTML is retarded
 			 */
-			auto maybe_url = html_process_url_tag(pool, cur_tag, hc);
+			auto maybe_url = html_process_url_tag(pool, cur_tag, hc,
+												  task->cfg ? task->cfg->lua_state : NULL);
 
 			if (maybe_url) {
 				msg_debug_html("got valid base tag");
