@@ -177,4 +177,54 @@ function exports.register_custom_filter(name, func)
   return true
 end
 
+-- Function called from C parser when encountering suspicious URL patterns
+-- This is called DURING parsing when C is unsure how to proceed
+-- @param url_str: URL string fragment (may be partial URL being parsed)
+-- @param flags: Current parsing flags from C
+-- @return 0=ACCEPT (continue), 1=SUSPICIOUS (mark obscured), 2=REJECT (abort)
+function exports.filter_url_string(url_str, flags)
+  if not url_str or #url_str == 0 then
+    return exports.ACCEPT
+  end
+
+  -- Quick rejection of obviously malicious patterns
+  if #url_str > 2048 then
+    return exports.REJECT -- Absurdly long URL
+  end
+
+  -- Count @ signs (excessive indicates obfuscation)
+  local at_count = select(2, url_str:gsub("@", ""))
+  if at_count > 20 then
+    return exports.REJECT -- Too many @ signs
+  end
+
+  -- Check for extremely long user field
+  local user = url_str:match("^[^:/@]*://([^:/@]+)@") or url_str:match("^([^@]+)@")
+  if user then
+    if #user > 512 then
+      return exports.REJECT -- Absurdly long user field
+    elseif #user > 128 then
+      return exports.SUSPICIOUS -- Long user field, mark for inspection
+    end
+  end
+
+  -- Check for null bytes or other control characters (except tab/newline)
+  if url_str:find("[\0-\8\11-\31\127]") then
+    return exports.REJECT -- Control characters
+  end
+
+  -- Basic UTF-8 validation (reject obviously broken)
+  local ok = pcall(function()
+    -- Try to iterate UTF-8 codepoints
+    for _ in url_str:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+    end
+  end)
+  if not ok then
+    return exports.REJECT -- Invalid UTF-8
+  end
+
+  -- Allow through - looks reasonable enough to continue parsing
+  return exports.ACCEPT
+end
+
 return exports

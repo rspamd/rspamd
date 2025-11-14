@@ -22,6 +22,7 @@
 #include "multipattern.h"
 #include "contrib/uthash/utlist.h"
 #include "contrib/http-parser/http_parser.h"
+#include "lua/lua_common.h"
 #include <unicode/utf8.h>
 #include <unicode/uchar.h>
 #include <unicode/usprep.h>
@@ -1200,7 +1201,10 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 			}
 			else if (p - c > max_email_user) {
 				/* Allow oversized user fields but mark them - fixes #5731 */
-				/* Don't fail completely, just mark with flag and continue */
+				/* TODO: Call rspamd_url_lua_consult(pool, c, p-c, *flags, L) here
+				 * to ask Lua if we should continue parsing this URL.
+				 * Returns: 0=continue, 1=mark obscured, 2=abort (goto out)
+				 * Challenge: need lua_State *L passed through call chain */
 				*flags |= RSPAMD_URL_FLAG_HAS_USER;
 				/* Continue parsing - the Lua plugin will handle scoring */
 			}
@@ -2187,6 +2191,64 @@ rspamd_url_remove_dots(struct rspamd_url *uri)
 	}
 
 	return ret;
+}
+
+/**
+ * Consult Lua filter when C parser encounters suspicious/ambiguous URL patterns
+ * This is called DURING parsing when C is unsure how to proceed
+ * @param pool Memory pool
+ * @param url_str URL string fragment being examined
+ * @param len Length of the fragment
+ * @param flags Current URL parsing flags
+ * @param L Lua state (may be NULL)
+ * @return 0=ACCEPT (continue), 1=SUSPICIOUS (mark obscured), 2=REJECT (abort)
+ */
+static int
+rspamd_url_lua_consult(rspamd_mempool_t *pool,
+					   const char *url_str,
+					   gsize len,
+					   unsigned int flags,
+					   lua_State *L)
+{
+	int result = 0; /* Default: ACCEPT */
+	int err_idx, ret;
+
+	if (!L) {
+		return 0; /* No Lua available, accept */
+	}
+
+	lua_pushcfunction(L, &rspamd_lua_traceback);
+	err_idx = lua_gettop(L);
+
+	/* Try to load lua_url_filter.filter_url_string function */
+	if (!rspamd_lua_require_function(L, "lua_url_filter", "filter_url_string")) {
+		lua_pop(L, 1); /* Remove error handler */
+		return 0;      /* Filter not available, accept */
+	}
+
+	/* Push arguments: url_string, flags */
+	lua_pushlstring(L, url_str, len);
+	lua_pushinteger(L, flags);
+
+	/* Call filter_url_string(url_str, flags) */
+	if ((ret = lua_pcall(L, 2, 1, err_idx)) != 0) {
+		msg_err("cannot call lua_url_filter.filter_url_string: %s",
+				lua_isstring(L, -1) ? lua_tostring(L, -1) : "unknown error");
+		lua_pop(L, 2); /* Error + error handler */
+		return 0;      /* On error, accept */
+	}
+
+	/* Get result */
+	if (lua_isnumber(L, -1)) {
+		result = lua_tointeger(L, -1);
+		/* Clamp to valid range */
+		if (result < 0) result = 0;
+		if (result > 2) result = 2;
+	}
+
+	lua_pop(L, 2); /* Result + error handler */
+
+	return result;
 }
 
 enum uri_errno
