@@ -231,7 +231,7 @@ struct url_callback_data {
 	const char *begin;
 	char *url_str;
 	rspamd_mempool_t *pool;
-	lua_State *lua_state; /* Lua state for consultation (may be NULL) */
+	void *lua_state; /* Lua state for consultation (may be NULL) */
 	int len;
 	enum rspamd_url_find_type how;
 	gboolean prefix_added;
@@ -1029,7 +1029,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				 char const **end,
 				 enum rspamd_url_parse_flags parse_flags,
 				 unsigned int *flags,
-				 lua_State *L)
+				 void *lua_state)
 {
 	const char *p = str, *c = str, *last = str + len, *slash = NULL,
 			   *password_start = NULL, *user_start = NULL;
@@ -1211,7 +1211,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 			else if (p - c > max_email_user) {
 				/* Oversized user field - consult Lua filter (fixes #5731) */
 				enum rspamd_url_lua_filter_result lua_decision =
-					rspamd_url_lua_consult(NULL, c, p - c, *flags, L);
+					rspamd_url_lua_consult(NULL, c, p - c, *flags, (lua_State *) lua_state);
 
 				if (lua_decision == RSPAMD_URL_LUA_FILTER_REJECT) {
 					/* REJECT: Lua says this is garbage, abort parsing */
@@ -1235,7 +1235,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 
 				/* Multiple @ signs detected - consult Lua */
 				enum rspamd_url_lua_filter_result lua_decision =
-					rspamd_url_lua_consult(NULL, c, p - c, *flags, L);
+					rspamd_url_lua_consult(NULL, c, p - c, *flags, (lua_State *) lua_state);
 
 				if (lua_decision == RSPAMD_URL_LUA_FILTER_REJECT) {
 					/* REJECT: Too suspicious, abort */
@@ -2283,7 +2283,7 @@ rspamd_url_parse(struct rspamd_url *uri,
 				 char *uristring, gsize len,
 				 rspamd_mempool_t *pool,
 				 enum rspamd_url_parse_flags parse_flags,
-				 lua_State *L)
+				 void *lua_state)
 {
 	struct http_parser_url u;
 	char *p;
@@ -2324,11 +2324,11 @@ rspamd_url_parse(struct rspamd_url *uri,
 		}
 		else {
 			ret = rspamd_web_parse(&u, uristring, len, &end, parse_flags,
-								   &flags, L);
+								   &flags, lua_state);
 		}
 	}
 	else {
-		ret = rspamd_web_parse(&u, uristring, len, &end, parse_flags, &flags, L);
+		ret = rspamd_web_parse(&u, uristring, len, &end, parse_flags, &flags, lua_state);
 	}
 
 	if (ret != 0) {
@@ -3698,7 +3698,7 @@ void rspamd_url_find_multiple(rspamd_mempool_t *pool,
 							  GPtrArray *nlines,
 							  url_insert_function func,
 							  gpointer ud,
-							  lua_State *L)
+							  void *lua_state)
 {
 	struct url_callback_data cb;
 
@@ -3713,7 +3713,7 @@ void rspamd_url_find_multiple(rspamd_mempool_t *pool,
 	cb.end = in + inlen;
 	cb.how = how;
 	cb.pool = pool;
-	cb.lua_state = L;
+	cb.lua_state = lua_state;
 
 	cb.funcd = ud;
 	cb.func = func;

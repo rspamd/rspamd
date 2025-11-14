@@ -30,7 +30,6 @@ extern "C" {
 
 struct rspamd_task;
 struct rspamd_mime_text_part;
-struct lua_State;
 
 enum rspamd_url_flags {
 	RSPAMD_URL_FLAG_PHISHED = 1u << 0u,
@@ -193,7 +192,7 @@ enum uri_errno rspamd_url_parse(struct rspamd_url *uri,
 								gsize len,
 								rspamd_mempool_t *pool,
 								enum rspamd_url_parse_flags flags,
-								lua_State *L);
+								void *lua_state);
 
 /*
  * Try to extract url from a text
@@ -246,7 +245,7 @@ void rspamd_url_find_multiple(rspamd_mempool_t *pool,
 							  GPtrArray *nlines,
 							  url_insert_function func,
 							  gpointer ud,
-							  lua_State *L);
+							  void *lua_state);
 
 /**
  * Search for a single url in text and call `func` for each url found
