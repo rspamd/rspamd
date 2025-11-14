@@ -237,13 +237,15 @@ typedef gboolean (*url_insert_function)(struct rspamd_url *url,
  * @param is_html
  * @param func
  * @param ud
+ * @param L Lua state for consultation (may be NULL)
  */
 void rspamd_url_find_multiple(rspamd_mempool_t *pool,
 							  const char *in, gsize inlen,
 							  enum rspamd_url_find_type how,
 							  GPtrArray *nlines,
 							  url_insert_function func,
-							  gpointer ud);
+							  gpointer ud,
+							  lua_State *L);
 
 /**
  * Search for a single url in text and call `func` for each url found

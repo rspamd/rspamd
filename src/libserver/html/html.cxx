@@ -1444,7 +1444,7 @@ html_process_query_url(rspamd_mempool_t *pool, struct rspamd_url *url,
 		rspamd_url_find_multiple(pool,
 								 rspamd_url_query_unsafe(url), url->querylen,
 								 RSPAMD_URL_FIND_ALL, NULL,
-								 html_url_query_callback, &qcbd);
+								 html_url_query_callback, &qcbd, NULL);
 	}
 
 	if (part_urls) {
