@@ -815,7 +815,6 @@ local rnds_check_id = rspamd_config:register_symbol {
       -- Try to resolve
       local task_ip = task:get_ip()
       if task_ip and task_ip:is_valid() then
-        local rspamd_logger = require "rspamd_logger"
         local function rdns_dns_cb(_, to_resolve, results, err)
           if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
             rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, err)
