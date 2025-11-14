@@ -30,6 +30,7 @@ extern "C" {
 
 struct rspamd_task;
 struct rspamd_mime_text_part;
+struct lua_State;
 
 enum rspamd_url_flags {
 	RSPAMD_URL_FLAG_PHISHED = 1u << 0u,
