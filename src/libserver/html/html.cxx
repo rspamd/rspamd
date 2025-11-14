@@ -1506,7 +1506,8 @@ html_process_img_tag(rspamd_mempool_t *pool,
 					 struct html_tag *tag,
 					 struct html_content *hc,
 					 khash_t(rspamd_url_hash) * url_set,
-					 GPtrArray *part_urls)
+					 GPtrArray *part_urls,
+					 lua_State *L)
 {
 	struct html_image *img;
 
@@ -1672,13 +1673,14 @@ static auto
 html_process_link_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 					  struct html_content *hc,
 					  khash_t(rspamd_url_hash) * url_set,
-					  GPtrArray *part_urls) -> void
+					  GPtrArray *part_urls,
+					  lua_State *L) -> void
 {
 	auto found_rel_maybe = tag->find_rel();
 
 	if (found_rel_maybe) {
 		if (found_rel_maybe.value() == "icon") {
-			html_process_img_tag(pool, tag, hc, url_set, part_urls);
+			html_process_img_tag(pool, tag, hc, url_set, part_urls, L);
 		}
 	}
 }
@@ -1875,7 +1877,8 @@ html_append_tag_content(rspamd_mempool_t *pool,
 						struct html_content *hc,
 						html_tag *tag,
 						GList **exceptions,
-						khash_t(rspamd_url_hash) * url_set) -> goffset
+						khash_t(rspamd_url_hash) * url_set,
+						lua_State *L) -> goffset
 {
 	auto is_visible = true, is_block = false, is_spaces = false, is_transparent = false;
 	goffset next_tag_offset = tag->closing.end,
@@ -2002,7 +2005,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 		}
 
 		auto next_offset = html_append_tag_content(pool, start, len,
-												   hc, cld, exceptions, url_set);
+												   hc, cld, exceptions, url_set, L);
 
 		/* Do not allow shifting back */
 		if (next_offset > cur_offset) {
@@ -2044,7 +2047,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 											{hc->parsed.data() + initial_parsed_offset, std::size_t(written_len)},
 											tag, exceptions,
 											url_set, initial_parsed_offset,
-											task->cfg ? task->cfg->lua_state : NULL);
+											L);
 			/* Count display URL mismatches when URL is present */
 			if (std::holds_alternative<rspamd_url *>(tag->extra)) {
 				auto *u = std::get<rspamd_url *>(tag->extra);
@@ -2223,7 +2226,7 @@ auto html_process_input(struct rspamd_task *task,
 			if (auto href = cur_tag->find_href()) {
 				if (html_is_absolute_url(*href)) {
 					auto maybe_url = html_process_url(pool, *href,
-													  task->cfg ? task->cfg->lua_state : NULL);
+													  task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
 					if (maybe_url) {
 						struct rspamd_url *u = maybe_url.value();
 						if (u->hostlen > 0) {
@@ -2274,7 +2277,7 @@ auto html_process_input(struct rspamd_task *task,
 								if (!urlv.empty()) {
 									/* validate and count; do not add to urls set */
 									auto maybe_url = html_process_url(pool, urlv,
-																	  task->cfg ? task->cfg->lua_state : NULL);
+																	  task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
 									if (maybe_url) {
 										hc->features.meta_refresh_urls++;
 									}
@@ -2345,7 +2348,7 @@ auto html_process_input(struct rspamd_task *task,
 
 		if (cur_tag->flags & FL_HREF && html_document_state == html_document_state::body) {
 			auto maybe_url = html_process_url_tag(pool, cur_tag, hc,
-												  task->cfg ? task->cfg->lua_state : NULL);
+												  task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
 
 			if (maybe_url.has_value()) {
 				url = maybe_url.value();
@@ -2360,7 +2363,7 @@ auto html_process_input(struct rspamd_task *task,
 						url->part_order = cur_url_part_order++;
 						html_process_query_url(pool, url, url_set,
 											   part_urls,
-											   task->cfg ? task->cfg->lua_state : NULL);
+											   task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
 					}
 					else {
 						url = maybe_existing;
@@ -2447,7 +2450,7 @@ auto html_process_input(struct rspamd_task *task,
 			 * Base is allowed only within head tag but HTML is retarded
 			 */
 			auto maybe_url = html_process_url_tag(pool, cur_tag, hc,
-												  task->cfg ? task->cfg->lua_state : NULL);
+												  task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
 
 			if (maybe_url) {
 				msg_debug_html("got valid base tag");
@@ -2468,11 +2471,13 @@ auto html_process_input(struct rspamd_task *task,
 
 		if (cur_tag->id == Tag_IMG) {
 			html_process_img_tag(pool, cur_tag, hc, url_set,
-								 part_urls);
+								 part_urls,
+								 task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
 		}
 		else if (cur_tag->id == Tag_LINK) {
 			html_process_link_tag(pool, cur_tag, hc, url_set,
-								  part_urls);
+								  part_urls,
+								  task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
 		}
 
 		/* Track DOM tag count and max depth */
@@ -3106,7 +3111,8 @@ auto html_process_input(struct rspamd_task *task,
 
 	if (!hc->all_tags.empty() && hc->root_tag) {
 		html_append_tag_content(pool, start, end - start, hc, hc->root_tag,
-								exceptions, url_set);
+								exceptions, url_set,
+								task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
 	}
 
 	/* Leftover after content */

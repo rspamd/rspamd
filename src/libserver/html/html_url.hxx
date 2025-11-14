@@ -24,6 +24,7 @@
 #include <optional>
 
 struct rspamd_url; /* Forward declaration */
+struct lua_State;  /* Forward declaration */
 
 namespace rspamd::html {
 

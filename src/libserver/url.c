@@ -1024,6 +1024,14 @@ out:
 	return ret;
 }
 
+/* Forward declaration for Lua consultation */
+static enum rspamd_url_lua_filter_result
+rspamd_url_lua_consult(rspamd_mempool_t *pool,
+					   const char *url_str,
+					   gsize len,
+					   unsigned int flags,
+					   lua_State *L);
+
 static int
 rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				 char const **end,
