@@ -44,23 +44,20 @@ local settings = {
         long = 128,
         very_long = 256
       },
-      use_pattern_map = false,
-      use_blacklist = false
+
     },
     numeric_ip = {
       enabled = true,
       base_score = 1.5,
       with_user_score = 4.0,
       allow_private_ranges = true,
-      private_score = 0.5,
-      use_range_map = false
+      private_score = 0.5
     },
     tld = {
       enabled = true,
       builtin_suspicious = { ".tk", ".ml", ".ga", ".cf", ".gq" },
       builtin_score = 3.0,
-      missing_tld_score = 2.0,
-      use_tld_map = false
+      missing_tld_score = 2.0
     },
     unicode = {
       enabled = true,
@@ -77,8 +74,7 @@ local settings = {
       check_excessive_dots = true,
       max_host_dots = 6,
       check_length = true,
-      max_url_length = 2048,
-      use_port_map = false
+      max_url_length = 2048
     }
   },
   symbols = {
@@ -171,8 +167,8 @@ function checks.user_password_analysis(task, url, cfg)
     })
   end
 
-  -- Optional: check pattern map if enabled
-  if cfg.use_pattern_map and maps.user_patterns then
+  -- Optional: check pattern map if configured
+  if maps.user_patterns then
     local match = maps.user_patterns:get_key(user)
     if match then
       lua_util.debugm(N, task, "User field matches suspicious pattern")
@@ -180,8 +176,8 @@ function checks.user_password_analysis(task, url, cfg)
     end
   end
 
-  -- Optional: check blacklist if enabled
-  if cfg.use_blacklist and maps.user_blacklist then
+  -- Optional: check blacklist if configured
+  if maps.user_blacklist then
     if maps.user_blacklist:get_key(user) then
       lua_util.debugm(N, task, "User field is blacklisted")
       -- Could add additional symbol or increase score
@@ -238,8 +234,8 @@ function checks.numeric_ip_analysis(task, url, cfg)
     end
   end
 
-  -- Optional: check IP range map if enabled
-  if cfg.use_range_map and maps.suspicious_ips then
+  -- Optional: check IP range map if configured
+  if maps.suspicious_ips then
     if maps.suspicious_ips:get_key(host) then
       lua_util.debugm(N, task, "IP is in suspicious range")
       -- Could add additional penalty
@@ -292,8 +288,8 @@ function checks.tld_analysis(task, url, cfg)
     end
   end
 
-  -- Optional: check TLD map if enabled
-  if cfg.use_tld_map and maps.suspicious_tlds then
+  -- Optional: check TLD map if configured
+  if maps.suspicious_tlds then
     if maps.suspicious_tlds:get_key(tld) then
       lua_util.debugm(N, task, "URL TLD in suspicious map: %s", tld)
       -- Already handled by built-in check, or could add extra penalty
@@ -521,40 +517,37 @@ local function url_suspect_callback(task)
   return false
 end
 
--- Initialize maps (only if enabled)
+-- Initialize maps (only if configured)
 local function init_maps(cfg)
-  if cfg.use_whitelist and cfg.whitelist_map then
-    local lua_maps = require "lua_maps"
+  local lua_maps = require "lua_maps"
+
+  -- Load maps if they are configured (not nil)
+  if cfg.whitelist_map then
     maps.whitelist = lua_maps.map_add_from_ucl(
         cfg.whitelist_map, 'set', 'url_suspect_whitelist')
   end
 
-  if cfg.checks.user_password.use_pattern_map and cfg.checks.user_password.pattern_map then
-    local lua_maps = require "lua_maps"
+  if cfg.checks.user_password.pattern_map then
     maps.user_patterns = lua_maps.map_add_from_ucl(
         cfg.checks.user_password.pattern_map, 'regexp', 'url_suspect_user_patterns')
   end
 
-  if cfg.checks.user_password.use_blacklist and cfg.checks.user_password.blacklist_map then
-    local lua_maps = require "lua_maps"
+  if cfg.checks.user_password.blacklist_map then
     maps.user_blacklist = lua_maps.map_add_from_ucl(
         cfg.checks.user_password.blacklist_map, 'set', 'url_suspect_user_blacklist')
   end
 
-  if cfg.checks.numeric_ip.use_range_map and cfg.checks.numeric_ip.range_map then
-    local lua_maps = require "lua_maps"
+  if cfg.checks.numeric_ip.range_map then
     maps.suspicious_ips = lua_maps.map_add_from_ucl(
         cfg.checks.numeric_ip.range_map, 'radix', 'url_suspect_ip_ranges')
   end
 
-  if cfg.checks.tld.use_tld_map and cfg.checks.tld.tld_map then
-    local lua_maps = require "lua_maps"
+  if cfg.checks.tld.tld_map then
     maps.suspicious_tlds = lua_maps.map_add_from_ucl(
         cfg.checks.tld.tld_map, 'set', 'url_suspect_tlds')
   end
 
-  if cfg.checks.structure.use_port_map and cfg.checks.structure.port_map then
-    local lua_maps = require "lua_maps"
+  if cfg.checks.structure.port_map then
     maps.suspicious_ports = lua_maps.map_add_from_ucl(
         cfg.checks.structure.port_map, 'set', 'url_suspect_ports')
   end
