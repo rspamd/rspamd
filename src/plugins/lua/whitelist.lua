@@ -22,6 +22,7 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local fun = require "fun"
 local lua_util = require "lua_util"
+local lua_maps = require "lua_maps"
 
 local N = "whitelist"
 
@@ -338,11 +339,8 @@ local configure_whitelist_module = function()
     fun.each(function(symbol, rule)
       if rule['domains'] then
         if type(rule['domains']) == 'string' then
-          rule['map'] = rspamd_config:add_map {
-            url = rule['domains'],
-            description = "Whitelist map for " .. symbol,
-            type = 'map'
-          }
+          rule['map'] = lua_maps.rspamd_map_add_from_ucl(rule['domains'], 'map',
+              "Whitelist map for " .. symbol)
         elseif type(rule['domains']) == 'table' then
           -- Transform ['domain1', 'domain2' ...] to indexes:
           -- {'domain1' = 1, 'domain2' = 1 ...]
@@ -366,11 +364,8 @@ local configure_whitelist_module = function()
               return d, 1.0
             end, rule['domains']))
           else
-            rule['map'] = rspamd_config:add_map {
-              url = rule['domains'],
-              description = "Whitelist map for " .. symbol,
-              type = 'map'
-            }
+            rule['map'] = lua_maps.rspamd_map_add_from_ucl(rule['domains'], 'map',
+                "Whitelist map for " .. symbol)
           end
         else
           rspamd_logger.errx(rspamd_config, 'whitelist %s has bad "domains" value',
