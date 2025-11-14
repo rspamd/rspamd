@@ -1199,7 +1199,10 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				goto out;
 			}
 			else if (p - c > max_email_user) {
-				goto out;
+				/* Allow oversized user fields but mark them - fixes #5731 */
+				/* Don't fail completely, just mark with flag and continue */
+				*flags |= RSPAMD_URL_FLAG_HAS_USER;
+				/* Continue parsing - the Lua plugin will handle scoring */
 			}
 
 			p++;

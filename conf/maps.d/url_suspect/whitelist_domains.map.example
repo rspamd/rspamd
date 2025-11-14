@@ -1,0 +1,19 @@
+# Whitelist Domains for URL Suspect Plugin
+# URLs from these domains will skip all URL suspect checks
+# Format: One domain per line
+
+# Major tech companies
+google.com
+microsoft.com
+apple.com
+amazon.com
+
+# Development platforms
+github.com
+gitlab.com
+bitbucket.org
+stackoverflow.com
+
+# Add your trusted domains below:
+# example.com
+# internal-cdn.mycompany.com
