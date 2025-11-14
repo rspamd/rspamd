@@ -1020,7 +1020,8 @@ static int
 rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				 char const **end,
 				 enum rspamd_url_parse_flags parse_flags,
-				 unsigned int *flags)
+				 unsigned int *flags,
+				 lua_State *L)
 {
 	const char *p = str, *c = str, *last = str + len, *slash = NULL,
 			   *password_start = NULL, *user_start = NULL;
@@ -1200,13 +1201,18 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				goto out;
 			}
 			else if (p - c > max_email_user) {
-				/* Allow oversized user fields but mark them - fixes #5731 */
-				/* TODO: Call rspamd_url_lua_consult(pool, c, p-c, *flags, L) here
-				 * to ask Lua if we should continue parsing this URL.
-				 * Returns: 0=continue, 1=mark obscured, 2=abort (goto out)
-				 * Challenge: need lua_State *L passed through call chain */
+				/* Oversized user field - consult Lua filter (fixes #5731) */
+				int lua_decision = rspamd_url_lua_consult(NULL, c, p - c, *flags, L);
+				if (lua_decision == 2) {
+					/* REJECT: Lua says this is garbage, abort parsing */
+					goto out;
+				}
+				else if (lua_decision == 1) {
+					/* SUSPICIOUS: Mark as obscured for plugin analysis */
+					*flags |= RSPAMD_URL_FLAG_OBSCURED;
+				}
+				/* ACCEPT or SUSPICIOUS: continue parsing */
 				*flags |= RSPAMD_URL_FLAG_HAS_USER;
-				/* Continue parsing - the Lua plugin will handle scoring */
 			}
 
 			p++;
@@ -1217,7 +1223,13 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 					goto out;
 				}
 
-				/* For now, we ignore all that stuff as it is bogus */
+				/* Multiple @ signs detected - consult Lua */
+				int lua_decision = rspamd_url_lua_consult(NULL, c, p - c, *flags, L);
+				if (lua_decision == 2) {
+					/* REJECT: Too suspicious, abort */
+					goto out;
+				}
+				/* ACCEPT or SUSPICIOUS: Continue but mark as obscured */
 				/* Off by one */
 				p--;
 				SET_U(u, UF_USERINFO);
@@ -2255,7 +2267,8 @@ enum uri_errno
 rspamd_url_parse(struct rspamd_url *uri,
 				 char *uristring, gsize len,
 				 rspamd_mempool_t *pool,
-				 enum rspamd_url_parse_flags parse_flags)
+				 enum rspamd_url_parse_flags parse_flags,
+				 lua_State *L)
 {
 	struct http_parser_url u;
 	char *p;
@@ -2296,11 +2309,11 @@ rspamd_url_parse(struct rspamd_url *uri,
 		}
 		else {
 			ret = rspamd_web_parse(&u, uristring, len, &end, parse_flags,
-								   &flags);
+								   &flags, L);
 		}
 	}
 	else {
-		ret = rspamd_web_parse(&u, uristring, len, &end, parse_flags, &flags);
+		ret = rspamd_web_parse(&u, uristring, len, &end, parse_flags, &flags, L);
 	}
 
 	if (ret != 0) {
@@ -2972,7 +2985,7 @@ url_web_end(struct url_callback_data *cb,
 	}
 
 	if (rspamd_web_parse(NULL, pos, len, &last,
-						 RSPAMD_URL_PARSE_CHECK, &flags) != 0) {
+						 RSPAMD_URL_PARSE_CHECK, &flags, NULL) != 0) {
 		return FALSE;
 	}
 
@@ -3455,7 +3468,7 @@ rspamd_url_trie_generic_callback_common(struct rspamd_multipattern *mp,
 		g_strstrip(cb->url_str);
 		rc = rspamd_url_parse(url, cb->url_str,
 							  strlen(cb->url_str), pool,
-							  RSPAMD_URL_PARSE_TEXT);
+							  RSPAMD_URL_PARSE_TEXT, NULL);
 
 		if (rc == URI_ERRNO_OK && url->hostlen > 0) {
 			if (cb->prefix_added) {
@@ -3797,7 +3810,8 @@ rspamd_url_task_subject_callback(struct rspamd_url *url, gsize start_offset,
 								  url_str,
 								  strlen(url_str),
 								  task->task_pool,
-								  RSPAMD_URL_PARSE_TEXT);
+								  RSPAMD_URL_PARSE_TEXT,
+								  task->cfg ? task->cfg->lua_state : NULL);
 
 			if (rc == URI_ERRNO_OK &&
 				url->hostlen > 0) {

@@ -185,12 +185,14 @@ void rspamd_url_text_extract(rspamd_mempool_t *pool,
  * @param pool memory pool
  * @param uristring text form of url
  * @param uri url object, must be pre allocated
+ * @param L Lua state for consultation (may be NULL)
  */
 enum uri_errno rspamd_url_parse(struct rspamd_url *uri,
 								char *uristring,
 								gsize len,
 								rspamd_mempool_t *pool,
-								enum rspamd_url_parse_flags flags);
+								enum rspamd_url_parse_flags flags,
+								lua_State *L);
 
 /*
  * Try to extract url from a text
