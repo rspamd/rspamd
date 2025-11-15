@@ -1026,8 +1026,7 @@ out:
 
 /* Forward declaration for Lua consultation */
 static enum rspamd_url_lua_filter_result
-rspamd_url_lua_consult(rspamd_mempool_t *pool,
-					   const char *url_str,
+rspamd_url_lua_consult(const char *url_str,
 					   gsize len,
 					   unsigned int flags,
 					   lua_State *L);
@@ -1219,7 +1218,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 			else if (p - c > max_email_user) {
 				/* Oversized user field - consult Lua filter (fixes #5731) */
 				enum rspamd_url_lua_filter_result lua_decision =
-					rspamd_url_lua_consult(NULL, c, p - c, *flags, (lua_State *) lua_state);
+					rspamd_url_lua_consult(c, p - c, *flags, (lua_State *) lua_state);
 
 				if (lua_decision == RSPAMD_URL_LUA_FILTER_REJECT) {
 					/* REJECT: Lua says this is garbage, abort parsing */
@@ -1243,7 +1242,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 
 				/* Multiple @ signs detected - consult Lua */
 				enum rspamd_url_lua_filter_result lua_decision =
-					rspamd_url_lua_consult(NULL, c, p - c, *flags, (lua_State *) lua_state);
+					rspamd_url_lua_consult(c, p - c, *flags, (lua_State *) lua_state);
 
 				if (lua_decision == RSPAMD_URL_LUA_FILTER_REJECT) {
 					/* REJECT: Too suspicious, abort */
@@ -2228,7 +2227,6 @@ rspamd_url_remove_dots(struct rspamd_url *uri)
 /**
  * Consult Lua filter when C parser encounters suspicious/ambiguous URL patterns
  * This is called DURING parsing when C is unsure how to proceed
- * @param pool Memory pool
  * @param url_str URL string fragment being examined
  * @param len Length of the fragment
  * @param flags Current URL parsing flags
@@ -2236,8 +2234,7 @@ rspamd_url_remove_dots(struct rspamd_url *uri)
  * @return enum rspamd_url_lua_filter_result
  */
 static enum rspamd_url_lua_filter_result
-rspamd_url_lua_consult(rspamd_mempool_t *pool,
-					   const char *url_str,
+rspamd_url_lua_consult(const char *url_str,
 					   gsize len,
 					   unsigned int flags,
 					   lua_State *L)

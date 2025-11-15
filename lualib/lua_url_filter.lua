@@ -89,6 +89,10 @@ function exports.filter_url_string(url_text, flags)
     at_count = at_count + 1
     -- Adjust found position to be relative to start of url_text
     local absolute_pos = search_from + found - 1
+    -- Defensive check: ensure position is within bounds (should always be true due to url_len check)
+    if absolute_pos > url_len then
+      return exports.REJECT -- Position overflow, should not happen
+    end
     if at_count == 1 then
       first_at_pos = absolute_pos
     end
