@@ -8,7 +8,7 @@ Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 URL Suspect - Issue 5731 - Long User Field
   # Test that URLs with oversized user fields are parsed and scored
   Scan File  ${RSPAMD_TESTDIR}/messages/url_suspect_long_user.eml
-  Expect Symbol With Exact Options  URL_USER_LONG  80
+  Expect Symbol With Exact Options  URL_USER_LONG  129
   Do Not Expect Symbol  URL_USER_VERY_LONG
   # Should also generate R_SUSPICIOUS_URL for backward compatibility
   Expect Symbol  R_SUSPICIOUS_URL

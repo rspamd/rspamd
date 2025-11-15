@@ -478,14 +478,33 @@ end
 
 -- Main callback
 local function url_suspect_callback(task)
-  -- Get URLs with suspicious flags (using existing flags)
-  local suspect_urls = task:get_urls_filtered(settings.process_flags)
+  local suspect_urls
+
+  -- Determine if we need to check all URLs or just flagged ones
+  -- TLD and structure checks don't have corresponding URL flags, so need all URLs
+  local need_all_urls = (
+      (settings.checks.tld and settings.checks.tld.enabled) or
+      (settings.checks.structure and settings.checks.structure.enabled and
+          (settings.checks.structure.check_multiple_at or
+              settings.checks.structure.check_excessive_dots or
+              settings.checks.structure.check_length))
+  )
+
+  if need_all_urls then
+    -- Get all URLs (more expensive, but necessary for TLD/structure checks)
+    suspect_urls = task:get_urls(true) -- true = include emails
+    lua_util.debugm(N, task, "Processing all %s URLs (TLD/structure checks enabled)",
+        suspect_urls and #suspect_urls or 0)
+  else
+    -- Get only URLs with suspicious flags (faster)
+    suspect_urls = task:get_urls_filtered(settings.process_flags)
+    lua_util.debugm(N, task, "Processing %s flagged URLs",
+        suspect_urls and #suspect_urls or 0)
+  end
 
   if not suspect_urls or #suspect_urls == 0 then
     return false
   end
-
-  lua_util.debugm(N, task, "Processing %s URLs with suspicious flags", #suspect_urls)
 
   local total_findings = 0
 

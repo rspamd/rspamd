@@ -6,6 +6,6 @@ Content-Type: text/html; charset=utf-8
 <html>
 <body>
 <p>Click this link:</p>
-<a href="http://192.168.1.100/phishing">Click Here</a>
+<a href="http://203.0.113.42/phishing">Click Here</a>
 </body>
 </html>
