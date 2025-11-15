@@ -2258,11 +2258,17 @@ rspamd_url_lua_consult(rspamd_mempool_t *pool,
 		return RSPAMD_URL_LUA_FILTER_ACCEPT; /* Filter not available, accept */
 	}
 
-	/* Push arguments: url_string, flags */
-	lua_pushlstring(L, url_str, len);
+	/* Push arguments: url_text (as rspamd_text), flags */
+	struct rspamd_lua_text *t;
+	t = lua_newuserdata(L, sizeof(*t));
+	rspamd_lua_setclass(L, rspamd_text_classname, -1);
+	t->start = url_str;
+	t->len = len;
+	t->flags = 0; /* Read-only, don't own memory */
+
 	lua_pushinteger(L, flags);
 
-	/* Call filter_url_string(url_str, flags) */
+	/* Call filter_url_string(url_text, flags) */
 	if ((ret = lua_pcall(L, 2, 1, err_idx)) != 0) {
 		msg_err("cannot call lua_url_filter.filter_url_string: %s",
 				lua_isstring(L, -1) ? lua_tostring(L, -1) : "unknown error");

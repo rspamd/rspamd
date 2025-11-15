@@ -14,217 +14,128 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
---[[[
--- @module lua_url_filter
--- This module provides fast URL filtering during parsing phase.
--- Called from C code to decide whether to create URL object or reject text.
---]]
+---@module lua_url_filter
+-- Fast URL validation during parsing - called from C
+-- URLs passed as rspamd_text for efficient processing
 
 local exports = {}
+local rspamd_util = require "rspamd_util"
 
 -- Filter result constants
 exports.ACCEPT = 0
 exports.SUSPICIOUS = 1
 exports.REJECT = 2
 
--- Default settings (work without configuration)
-local settings = {
-  enabled = true,
-  builtin_filters = {
-    oversized_user = {
-      enabled = true,
-      max_length = 512  -- Absolute limit for user field
-    },
-    basic_unicode = {
-      enabled = true,
-      reject_invalid_utf8 = true
-    },
-    garbage_pattern = {
-      enabled = true,
-      max_at_signs = 20  -- Obvious garbage threshold
-    }
-  },
-  custom_filters = {}
-}
+-- Custom filters (user can add their own)
+local custom_filters = {}
 
--- Built-in filter: Check for extremely long user fields
-local function filter_oversized_user(url_text, url_obj, flags, cfg)
-  if not url_obj then
-    return exports.ACCEPT
-  end
-
-  local user = url_obj:get_user()
-  if not user then
-    return exports.ACCEPT
-  end
-
-  local user_len = #user
-  if user_len > cfg.max_length then
-    -- This is obviously garbage, reject
-    return exports.REJECT
-  end
-
-  return exports.ACCEPT
+---
+-- Register a custom URL filter
+-- @param filter_func function(url_text, flags) -> result
+function exports.register_filter(filter_func)
+  table.insert(custom_filters, filter_func)
 end
 
--- Built-in filter: Check for invalid UTF-8
-local function filter_basic_unicode(url_text, url_obj, flags, cfg)
-  if not cfg.reject_invalid_utf8 then
-    return exports.ACCEPT
+---
+-- Main entry point called from C during URL parsing
+-- @param url_text rspamd_text - URL string as text object
+-- @param flags number - URL parsing flags
+-- @return number - ACCEPT/SUSPICIOUS/REJECT
+function exports.filter_url_string(url_text, flags)
+  -- Sanity check: URL length
+  local url_len = url_text:len()
+  if url_len > 2048 then
+    return exports.REJECT -- Overly long URL
   end
 
-  local ok, rspamd_util = pcall(require, "rspamd_util")
-  if ok and rspamd_util.is_valid_utf8 then
-    if not rspamd_util.is_valid_utf8(url_text) then
-      -- Invalid UTF-8, reject
-      return exports.REJECT
-    end
-  end
+  -- Convert to string for pattern matching
+  -- This is acceptable since we're called rarely (only on suspicious patterns)
+  local url_str = url_text:str()
 
-  return exports.ACCEPT
-end
-
--- Built-in filter: Check for obvious garbage patterns
-local function filter_garbage_pattern(url_text, url_obj, flags, cfg)
-  -- Count @ signs
-  local _, at_count = url_text:gsub("@", "")
-  if at_count > cfg.max_at_signs then
-    -- Way too many @ signs, this is garbage
-    return exports.REJECT
-  end
-
-  return exports.ACCEPT
-end
-
--- Main entry point (called from C)
-function exports.filter_url(url_text, url_obj, flags)
-  if not settings.enabled then
-    return exports.ACCEPT
-  end
-
-  local result = exports.ACCEPT
-
-  -- Run built-in filters
-  if settings.builtin_filters.oversized_user and
-     settings.builtin_filters.oversized_user.enabled then
-    local r = filter_oversized_user(url_text, url_obj, flags,
-                                     settings.builtin_filters.oversized_user)
-    if r == exports.REJECT then
-      return r
-    end
-  end
-
-  if settings.builtin_filters.basic_unicode and
-     settings.builtin_filters.basic_unicode.enabled then
-    local r = filter_basic_unicode(url_text, url_obj, flags,
-                                   settings.builtin_filters.basic_unicode)
-    if r == exports.REJECT then
-      return r
-    end
-  end
-
-  if settings.builtin_filters.garbage_pattern and
-     settings.builtin_filters.garbage_pattern.enabled then
-    local r = filter_garbage_pattern(url_text, url_obj, flags,
-                                     settings.builtin_filters.garbage_pattern)
-    if r == exports.REJECT then
-      return r
-    end
-  end
-
-  -- Run custom filters (if any)
-  for name, filter_func in pairs(settings.custom_filters) do
-    local ok, r = pcall(filter_func, url_text, url_obj, flags)
-    if not ok then
-      -- Log error but don't fail
-      local rspamd_logger = require "rspamd_logger"
-      rspamd_logger.errx("Error in custom URL filter %s: %s", name, r)
-    else
-      if r == "reject" then
-        return exports.REJECT
-      elseif r == "suspicious" then
-        result = exports.SUSPICIOUS
+  -- Check for control characters (0x00-0x1F except tab/newline, and 0x7F)
+  -- Using string.find with byte patterns
+  for i = 0, 31 do
+    if i ~= 9 and i ~= 10 then -- Allow tab (\t) and newline (\n)
+      if url_str:find(string.char(i), 1, true) then
+        return exports.REJECT -- Control character found
       end
     end
   end
-
-  return result
-end
-
--- Initialize from configuration
-function exports.init(cfg)
-  local lua_util = require "lua_util"
-  local opts = cfg:get_all_opt('url_filter')
-  if opts then
-    settings = lua_util.override_defaults(settings, opts)
+  if url_str:find(string.char(127), 1, true) then -- DEL
+    return exports.REJECT
   end
 
-  local rspamd_logger = require "rspamd_logger"
-  rspamd_logger.infox(cfg, "URL filter initialized (enabled=%s)", settings.enabled)
-end
-
--- Allow runtime registration of custom filters
-function exports.register_custom_filter(name, func)
-  if type(func) ~= 'function' then
-    local rspamd_logger = require "rspamd_logger"
-    rspamd_logger.errx("Cannot register custom filter %s: not a function", name)
-    return false
-  end
-
-  settings.custom_filters[name] = func
-  local rspamd_logger = require "rspamd_logger"
-  rspamd_logger.infox("Registered custom URL filter: %s", name)
-  return true
-end
-
--- Function called from C parser when encountering suspicious URL patterns
--- This is called DURING parsing when C is unsure how to proceed
--- @param url_str: URL string fragment (may be partial URL being parsed)
--- @param flags: Current parsing flags from C
--- @return 0=ACCEPT (continue), 1=SUSPICIOUS (mark obscured), 2=REJECT (abort)
-function exports.filter_url_string(url_str, flags)
-  if not url_str or #url_str == 0 then
-    return exports.ACCEPT
-  end
-
-  -- Quick rejection of obviously malicious patterns
-  if #url_str > 2048 then
-    return exports.REJECT -- Absurdly long URL
-  end
-
-  -- Count @ signs (excessive indicates obfuscation)
-  local at_count = select(2, url_str:gsub("@", ""))
-  if at_count > 20 then
-    return exports.REJECT -- Too many @ signs
-  end
-
-  -- Check for extremely long user field
-  local user = url_str:match("^[^:/@]*://([^:/@]+)@") or url_str:match("^([^@]+)@")
-  if user then
-    if #user > 512 then
-      return exports.REJECT -- Absurdly long user field
-    elseif #user > 128 then
-      return exports.SUSPICIOUS -- Long user field, mark for inspection
-    end
-  end
-
-  -- Check for null bytes or other control characters (except tab/newline)
-  if url_str:find("[\0-\8\11-\31\127]") then
-    return exports.REJECT -- Control characters
-  end
-
-  -- Basic UTF-8 validation (reject obviously broken)
-  local ok = pcall(function()
-    -- Try to iterate UTF-8 codepoints
-    for _ in url_str:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
-    end
-  end)
-  if not ok then
+  -- UTF-8 validation using rspamd_util
+  if not rspamd_util.is_valid_utf8(url_str) then
     return exports.REJECT -- Invalid UTF-8
   end
 
-  -- Allow through - looks reasonable enough to continue parsing
+  -- Count @ signs for suspicious patterns
+  local _, at_count = url_str:gsub("@", "")
+  if at_count > 20 then
+    return exports.REJECT -- Way too many @ signs
+  end
+
+  -- Check user field length (if @ present)
+  if at_count > 0 then
+    -- Find first @
+    local first_at = url_str:find("@", 1, true)
+    if first_at then
+      -- Check what comes before it (could be schema://user@host)
+      -- Look for :// to find start of user field
+      local schema_end = url_str:find("://", 1, true)
+      local user_start = schema_end and (schema_end + 3) or 1
+      local user_len = first_at - user_start
+
+      if user_len > 512 then
+        return exports.REJECT -- Extremely long user field
+      elseif user_len > 128 then
+        return exports.SUSPICIOUS -- Long user field, mark for inspection
+      end
+    end
+
+    -- Multiple @ signs is suspicious
+    if at_count > 1 then
+      return exports.SUSPICIOUS
+    end
+  end
+
+  -- Run custom filters
+  for _, filter in ipairs(custom_filters) do
+    local result = filter(url_text, flags)
+    if result == exports.REJECT then
+      return exports.REJECT -- First filter to reject wins
+    end
+    -- Note: SUSPICIOUS results don't immediately return; we continue checking
+    -- other filters as one might REJECT (upgrade), but we won't downgrade to ACCEPT
+  end
+
   return exports.ACCEPT
+end
+
+---
+-- Filter URL object (called from Lua plugin context)
+-- @param url userdata - URL object
+-- @return number - ACCEPT/SUSPICIOUS/REJECT
+function exports.filter_url(url)
+  if not url then
+    return exports.ACCEPT
+  end
+
+  -- Get URL as text
+  local url_text = url:get_text()
+  if not url_text then
+    return exports.ACCEPT
+  end
+
+  -- Get flags from URL object
+  local flags = 0
+  local url_table = url:to_table()
+  if url_table and url_table.flags then
+    flags = url_table.flags
+  end
+
+  return exports.filter_url_string(url_text, flags)
 end
 
 return exports
