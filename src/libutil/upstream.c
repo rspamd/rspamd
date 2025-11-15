@@ -1526,7 +1526,7 @@ rspamd_upstreams_parse_line_len(struct upstream_list *ups,
 	}
 
 	while (p < end) {
-		span_len = rspamd_memcspn(p, separators, end - p);
+		span_len = rspamd_memcspn(p, end - p, separators, strlen(separators));
 
 		if (span_len > 0) {
 			tmp = g_malloc(span_len + 1);

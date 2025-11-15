@@ -4,6 +4,10 @@ node_modules/
 .idea
 # Added by CLion
 cmake-build-debug/
+# Transient documentation and planning files
+doc/
+# User-created map files for optional plugins
+conf/maps.d/url_suspect/
 # Logs and databases #
 ######################
 *.log
@@ -27,3 +31,7 @@ luacov.stats.out
 .Trashes
 ehthumbs.db
 Thumbs.db
+# Robot Framework outputs
+/log.html
+/report.html
+/output.xml

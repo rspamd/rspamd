@@ -1,0 +1,11 @@
+From: sender@example.com
+To: victim@example.com
+Subject: Test Numeric IP with User
+Content-Type: text/html; charset=utf-8
+
+<html>
+<body>
+<p>Click this link:</p>
+<a href="http://admin@203.0.113.42/phishing">Click Here</a>
+</body>
+</html>

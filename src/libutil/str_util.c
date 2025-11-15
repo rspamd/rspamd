@@ -2810,13 +2810,13 @@ rspamd_decode_uue_buf(const char *in, gsize inlen,
 		p += sizeof("begin ") - 1;
 		remain -= sizeof("begin ") - 1;
 
-		pos = rspamd_memcspn(p, nline, remain);
+		pos = rspamd_memcspn(p, remain, nline, strlen(nline));
 	}
 	else if (memcmp(p, "begin-base64 ", sizeof("begin-base64 ") - 1) == 0) {
 		base64 = TRUE;
 		p += sizeof("begin-base64 ") - 1;
 		remain -= sizeof("begin-base64 ") - 1;
-		pos = rspamd_memcspn(p, nline, remain);
+		pos = rspamd_memcspn(p, remain, nline, strlen(nline));
 	}
 	else {
 		/* Crap */
@@ -2857,7 +2857,7 @@ rspamd_decode_uue_buf(const char *in, gsize inlen,
 		const char *eol;
 		int i, ch;
 
-		pos = rspamd_memcspn(p, nline, remain);
+		pos = rspamd_memcspn(p, remain, nline, strlen(nline));
 
 		if (pos == 0) {
 			/* Skip empty lines */
@@ -2936,20 +2936,24 @@ rspamd_decode_uue_buf(const char *in, gsize inlen,
 	((a)[(gsize) (b) / (8 * sizeof *(a))] op(gsize) 1 << ((gsize) (b) % (8 * sizeof *(a))))
 
 
-gsize rspamd_memcspn(const char *s, const char *e, gsize len)
+gsize rspamd_memcspn(const void *data, gsize dlen, const void *reject, gsize rlen)
 {
 	gsize byteset[32 / sizeof(gsize)];
-	const char *p = s, *end = s + len;
+	const unsigned char *s = (const unsigned char *) data;
+	const unsigned char *r = (const unsigned char *) reject;
+	const unsigned char *p = s, *end = s + dlen;
 
-	if (!e[1]) {
-		for (; p < end && *p != *e; p++);
-		return p - s;
+	memset(byteset, 0, sizeof(byteset));
+
+	/* Build bitset from reject set */
+	for (gsize i = 0; i < rlen; i++) {
+		BITOP(byteset, r[i], |=);
 	}
 
-	memset(byteset, 0, sizeof byteset);
-
-	for (; *e && BITOP(byteset, *(unsigned char *) e, |=); e++);
-	for (; p < end && !BITOP(byteset, *(unsigned char *) p, &); p++);
+	/* Scan for first character in reject set */
+	while (p < end && !BITOP(byteset, *p, &)) {
+		p++;
+	}
 
 	return p - s;
 }
@@ -3044,7 +3048,7 @@ rspamd_decode_qp2047_buf(const char *in, gsize inlen,
 		}
 		else {
 			if (end - o >= remain) {
-				processed = rspamd_memcspn(p, "=_", remain);
+				processed = rspamd_memcspn(p, remain, "=_", 2);
 				memcpy(o, p, processed);
 				o += processed;
 
@@ -3764,8 +3768,9 @@ rspamd_string_len_split(const char *in, gsize len, const char *spill,
 	char **res;
 
 	/* Detect number of elements */
+	gsize spill_len = strlen(spill);
 	while (p < end) {
-		gsize cur_fragment = rspamd_memcspn(p, spill, end - p);
+		gsize cur_fragment = rspamd_memcspn(p, end - p, spill, spill_len);
 
 		if (cur_fragment > 0) {
 			detected_elts++;
@@ -3787,7 +3792,7 @@ rspamd_string_len_split(const char *in, gsize len, const char *spill,
 	p = in;
 
 	while (p < end) {
-		gsize cur_fragment = rspamd_memcspn(p, spill, end - p);
+		gsize cur_fragment = rspamd_memcspn(p, end - p, spill, spill_len);
 
 		if (cur_fragment > 0) {
 			char *elt;

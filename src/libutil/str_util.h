@@ -451,13 +451,14 @@ void *rspamd_memrchr(const void *m, int c, gsize len);
 #endif
 
 /**
- * Return length of memory segment starting in `s` that contains no chars from `e`
- * @param s any input
- * @param e zero terminated string of exceptions
- * @param len length of `s`
- * @return segment size
+ * Return length of memory segment starting in `data` that contains no bytes from `reject`
+ * @param data input data
+ * @param dlen length of data
+ * @param reject set of bytes to reject (can contain binary data including nulls)
+ * @param rlen length of reject set
+ * @return length of initial segment with no rejected bytes
  */
-gsize rspamd_memcspn(const char *s, const char *e, gsize len);
+gsize rspamd_memcspn(const void *data, gsize dlen, const void *reject, gsize rlen);
 
 /**
  * Return length of memory segment starting in `s` that contains only chars from `e`

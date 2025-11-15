@@ -265,7 +265,7 @@ rspamd_composite_expr_parse(const char *line, gsize len,
 
 		switch (state) {
 		case comp_state_read_symbol:
-			clen = rspamd_memcspn(p, "[; \t()><!|&\n", len);
+			clen = rspamd_memcspn(p, len, "[; \t()><!|&\n", 12);
 			p += clen;
 
 			if (*p == '[') {
@@ -362,7 +362,7 @@ rspamd_composite_expr_parse(const char *line, gsize len,
 
 		switch (state) {
 		case comp_state_read_symbol: {
-			clen = rspamd_memcspn(p, "[; \t()><!|&\n", len);
+			clen = rspamd_memcspn(p, len, "[; \t()><!|&\n", 12);
 			p += clen;
 
 			if (*p == '[') {

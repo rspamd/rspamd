@@ -58,6 +58,31 @@ local settings = {
   redirector_hosts_map = nil -- check only those redirectors
 }
 
+--[[
+Encode characters that are not allowed in URLs according to RFC 3986
+This is needed because redirect Location headers sometimes contain unencoded spaces
+and other special characters that http_parser_parse_url() doesn't accept.
+Only encodes the truly problematic characters (space, control chars, etc.)
+]]
+local function encode_url_for_redirect(url_str)
+  if not url_str then
+    return nil
+  end
+
+  -- Encode space and other problematic characters that are common in redirect URLs
+  -- We're conservative - only encode what http_parser_parse_url actually rejects
+  -- Don't encode already-encoded sequences (%XX)
+  local encoded = url_str:gsub("([^%w%-%._~:/?#%[%]@!$&'()*+,;=%%])", function(c)
+    -- Don't double-encode already encoded characters
+    if c == '%' then
+      return c
+    end
+    return string.format("%%%02X", string.byte(c))
+  end)
+
+  return encoded
+end
+
 local function adjust_url(task, orig_url, redir_url)
   local mempool = task:get_mempool()
   if type(redir_url) == 'string' then
@@ -221,7 +246,14 @@ local function resolve_cached(task, orig_url, url, key, ntries)
           local loc = headers['location']
           local redir_url
           if loc then
-            redir_url = rspamd_url.create(task:get_mempool(), loc)
+            -- Encode problematic characters (spaces, etc.) that http_parser doesn't accept
+            -- This fixes issue #5525 where redirect locations contain unencoded spaces
+            local encoded_loc = encode_url_for_redirect(loc)
+            redir_url = rspamd_url.create(task:get_mempool(), encoded_loc)
+            if not redir_url and encoded_loc ~= loc then
+              -- Encoding didn't help, log the issue
+              rspamd_logger.infox(task, 'failed to parse redirect location even after encoding: %s', loc)
+            end
           end
           lua_util.debugm(N, task, 'found redirect from %s to %s, err code %s',
               orig_url, loc, code)

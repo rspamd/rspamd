@@ -102,7 +102,7 @@ bool rspamd_log_syslog_log(const char *module, const char *id,
 
 	if (log_json) {
 		long now = rspamd_get_calendar_ticks();
-		if (rspamd_memcspn(message, "\"\\\r\n\b\t\v", mlen) == mlen) {
+		if (rspamd_memcspn(message, mlen, "\"\\\r\n\b\t\v", 6) == mlen) {
 			/* Fast path */
 			syslog(syslog_level, "{\"ts\": %ld, "
 								 "\"pid\": %d, "

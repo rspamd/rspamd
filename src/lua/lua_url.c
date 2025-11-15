@@ -290,18 +290,34 @@ lua_url_get_fragment(lua_State *L)
 }
 
 /***
- * @method url:get_text()
+ * @method url:get_text([as_text])
  * Get full content of the url
- * @return {string} url string
+ * @param {boolean} as_text if true, return as rspamd_text, otherwise as string
+ * @return {string|rspamd_text} url string or text object
  */
 static int
 lua_url_get_text(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url(L, 1);
+	gboolean as_text = FALSE;
+
+	if (lua_isboolean(L, 2)) {
+		as_text = lua_toboolean(L, 2);
+	}
 
 	if (url != NULL) {
-		lua_pushlstring(L, url->url->string, url->url->urllen);
+		if (as_text) {
+			struct rspamd_lua_text *t;
+			t = lua_newuserdata(L, sizeof(*t));
+			rspamd_lua_setclass(L, rspamd_text_classname, -1);
+			t->start = url->url->string;
+			t->len = url->url->urllen;
+			t->flags = 0; /* Read-only, not owned */
+		}
+		else {
+			lua_pushlstring(L, url->url->string, url->url->urllen);
+		}
 	}
 	else {
 		lua_pushnil(L);
@@ -986,7 +1002,7 @@ lua_url_all(lua_State *L)
 			lua_newtable(L);
 			rspamd_url_find_multiple(pool, text, length,
 									 RSPAMD_URL_FIND_ALL, NULL,
-									 lua_url_table_inserter, L);
+									 lua_url_table_inserter, L, L);
 		}
 		else {
 			lua_pushnil(L);

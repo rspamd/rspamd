@@ -185,12 +185,14 @@ void rspamd_url_text_extract(rspamd_mempool_t *pool,
  * @param pool memory pool
  * @param uristring text form of url
  * @param uri url object, must be pre allocated
+ * @param L Lua state for consultation (may be NULL)
  */
 enum uri_errno rspamd_url_parse(struct rspamd_url *uri,
 								char *uristring,
 								gsize len,
 								rspamd_mempool_t *pool,
-								enum rspamd_url_parse_flags flags);
+								enum rspamd_url_parse_flags flags,
+								void *lua_state);
 
 /*
  * Try to extract url from a text
@@ -235,13 +237,15 @@ typedef gboolean (*url_insert_function)(struct rspamd_url *url,
  * @param is_html
  * @param func
  * @param ud
+ * @param L Lua state for consultation (may be NULL)
  */
 void rspamd_url_find_multiple(rspamd_mempool_t *pool,
 							  const char *in, gsize inlen,
 							  enum rspamd_url_find_type how,
 							  GPtrArray *nlines,
 							  url_insert_function func,
-							  gpointer ud);
+							  gpointer ud,
+							  void *lua_state);
 
 /**
  * Search for a single url in text and call `func` for each url found

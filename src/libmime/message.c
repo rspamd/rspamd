@@ -1776,7 +1776,8 @@ void rspamd_message_process(struct rspamd_task *task)
 								 strlen(MESSAGE_FIELD(task, subject)),
 								 RSPAMD_URL_FIND_STRICT, NULL,
 								 rspamd_url_task_subject_callback,
-								 task);
+								 task,
+								 task->cfg ? task->cfg->lua_state : NULL);
 	}
 
 	/* Calculate average words length and number of short words */
