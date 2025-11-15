@@ -181,6 +181,14 @@ LUA_FUNCTION_DEF(text, take_ownership);
  */
 LUA_FUNCTION_DEF(text, exclude_chars);
 /***
+ * @method rspamd_text:memcspn(reject_chars)
+ * Returns the length of the initial segment of text that consists entirely
+ * of characters NOT in reject_chars (like C's strcspn, but for binary data)
+ * @param {string} reject_chars set of characters to reject
+ * @return {integer} length of the initial segment
+ */
+LUA_FUNCTION_DEF(text, memcspn);
+/***
  * @method rspamd_text:oneline([always_copy])
  * Returns a text (if owned, then the original text is modified, if not, then it is copied and owned)
  * where the following transformations are made:
@@ -266,6 +274,7 @@ static const struct luaL_reg textlib_m[] = {
 	LUA_INTERFACE_DEF(text, bytes),
 	LUA_INTERFACE_DEF(text, lower),
 	LUA_INTERFACE_DEF(text, exclude_chars),
+	LUA_INTERFACE_DEF(text, memcspn),
 	LUA_INTERFACE_DEF(text, oneline),
 	LUA_INTERFACE_DEF(text, base32),
 	LUA_INTERFACE_DEF(text, base64),
@@ -1571,6 +1580,32 @@ lua_text_exclude_chars(lua_State *L)
 	else {
 		return luaL_error(L, "invalid arguments");
 	}
+
+	return 1;
+}
+
+static int
+lua_text_memcspn(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text(L, 1);
+	const char *reject_chars;
+	gsize reject_len, span_len;
+
+	if (t == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	reject_chars = luaL_checklstring(L, 2, &reject_len);
+	if (reject_chars == NULL || reject_len == 0) {
+		/* No reject chars - return full length */
+		lua_pushinteger(L, t->len);
+		return 1;
+	}
+
+	/* Use rspamd_memcspn from str_util */
+	span_len = rspamd_memcspn(t->start, t->len, reject_chars, reject_len);
+	lua_pushinteger(L, span_len);
 
 	return 1;
 }

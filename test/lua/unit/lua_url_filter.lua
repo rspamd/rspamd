@@ -6,6 +6,7 @@ context("URL filter functions", function()
   local mpool = require("rspamd_mempool")
   local test_helper = require("rspamd_test_helper")
   local logger = require("rspamd_logger")
+  local rspamd_text = require("rspamd_text")
 
   test_helper.init_url_parser()
 
@@ -42,7 +43,8 @@ context("URL filter functions", function()
 
   for i, c in ipairs(filter_cases) do
     test("filter_url_string: " .. c[4], function()
-      local result = lua_url_filter.filter_url_string(c[1], c[2])
+      local url_text = rspamd_text.fromstring(c[1])
+      local result = lua_url_filter.filter_url_string(url_text, c[2])
       assert_equal(c[3], result,
           logger.slog('expected result %s, but got %s for "%s"',
               c[3], result, c[4]))
@@ -77,7 +79,8 @@ context("URL filter functions", function()
 
   for i, c in ipairs(utf8_cases) do
     test("UTF-8 validation: " .. c[3], function()
-      local result = lua_url_filter.filter_url_string(c[1], 0)
+      local url_text = rspamd_text.fromstring(c[1])
+      local result = lua_url_filter.filter_url_string(url_text, 0)
       assert_equal(c[2], result,
           logger.slog('expected result %s, but got %s for "%s"',
               c[2], result, c[3]))
@@ -86,10 +89,13 @@ context("URL filter functions", function()
 
   -- Test custom filter registration
   test("register custom filter", function()
+    lua_url_filter.clear_filters() -- Clear any previously registered filters
+
     local called = false
-    local custom_filter = function(url_str, flags)
+    local custom_filter = function(url_text, flags)
       called = true
-      if url_str:match("blocked") then
+      -- Custom filters receive rspamd_text, use :find instead of :match
+      if url_text:find("blocked") then
         return REJECT
       end
       return ACCEPT
@@ -97,13 +103,18 @@ context("URL filter functions", function()
 
     lua_url_filter.register_filter(custom_filter)
 
-    local result = lua_url_filter.filter_url_string("http://blocked.example.com", 0)
+    local url_text = rspamd_text.fromstring("http://blocked.example.com")
+    local result = lua_url_filter.filter_url_string(url_text, 0)
     assert_true(called, "custom filter was not called")
     assert_equal(REJECT, result, "custom filter did not reject")
+
+    lua_url_filter.clear_filters() -- Clean up after test
   end)
 
   -- Test filter chaining
   test("filter chaining stops on REJECT", function()
+    lua_url_filter.clear_filters() -- Clear any previously registered filters
+
     local filter1_called = false
     local filter2_called = false
 
@@ -117,10 +128,13 @@ context("URL filter functions", function()
       return ACCEPT
     end)
 
-    lua_url_filter.filter_url_string("http://example.com", 0)
+    local url_text = rspamd_text.fromstring("http://example.com")
+    lua_url_filter.filter_url_string(url_text, 0)
 
     assert_true(filter1_called, "first filter not called")
     assert_false(filter2_called, "second filter called despite REJECT")
+
+    lua_url_filter.clear_filters() -- Clean up after test
   end)
 
   -- Test oversized user field (issue #5731)
@@ -128,7 +142,8 @@ context("URL filter functions", function()
     local long_user = string.rep("a", 80)
     local url_str = "http://" .. long_user .. ":password@example.com/path"
 
-    local result = lua_url_filter.filter_url_string(url_str, 0)
+    local url_text = rspamd_text.fromstring(url_str)
+    local result = lua_url_filter.filter_url_string(url_text, 0)
 
     -- Should be SUSPICIOUS, not REJECT, allowing C parser to continue
     assert_equal(SUSPICIOUS, result,
