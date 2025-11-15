@@ -31,3 +31,7 @@ luacov.stats.out
 .Trashes
 ehthumbs.db
 Thumbs.db
+# Robot Framework outputs
+/log.html
+/report.html
+/output.xml

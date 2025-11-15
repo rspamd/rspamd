@@ -1,0 +1,11 @@
+From: sender@example.com
+To: victim@example.com
+Subject: Test Issue #5731 - Long User Field
+Content-Type: text/html; charset=utf-8
+
+<html>
+<body>
+<p>Click this link:</p>
+<a href="https://XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX@phishing.com/page">Click Here</a>
+</body>
+</html>
