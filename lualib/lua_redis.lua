@@ -17,71 +17,153 @@ limitations under the License.
 local logger = require "rspamd_logger"
 local lutil = require "lua_util"
 local rspamd_util = require "rspamd_util"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
 
 local exports = {}
 
 local E = {}
 local N = "lua_redis"
 
-local db_schema = (ts.number / tostring + ts.string):is_optional():describe("Database number")
-local common_schema = {
-  timeout = (ts.number + ts.string / lutil.parse_time_interval):is_optional():describe("Connection timeout (seconds)"),
+local db_schema = T.one_of({
+  T.transform(T.number(), tostring),
+  T.string()
+}):optional():doc({ summary = "Database number" })
+
+local common_schema = T.table({
+  timeout = T.one_of({
+    T.number(),
+    T.transform(T.string(), lutil.parse_time_interval)
+  }):optional():doc({ summary = "Connection timeout (seconds)" }),
   db = db_schema,
   database = db_schema,
   dbname = db_schema,
-  prefix = ts.string:is_optional():describe("Key prefix"),
-  username = ts.string:is_optional():describe("Username"),
-  password = ts.string:is_optional():describe("Password"),
+  prefix = T.string():optional():doc({ summary = "Key prefix" }),
+  username = T.string():optional():doc({ summary = "Username" }),
+  password = T.string():optional():doc({ summary = "Password" }),
   -- TLS options
-  ssl = ts.boolean:is_optional():describe("Enable TLS to Redis"),
-  no_ssl_verify = ts.boolean:is_optional():describe("Disable TLS certificate verification"),
-  ssl_ca = ts.string:is_optional():describe("CA certificate file"),
-  ssl_ca_dir = ts.string:is_optional():describe("CA certificates directory"),
-  ssl_cert = ts.string:is_optional():describe("Client certificate file (PEM)"),
-  ssl_key = ts.string:is_optional():describe("Client private key file (PEM)"),
-  sni = ts.string:is_optional():describe("SNI server name override"),
-  expand_keys = ts.boolean:is_optional():describe("Expand keys"),
-  sentinels = (ts.string + ts.array_of(ts.string)):is_optional():describe("Sentinel servers"),
-  sentinel_watch_time = (ts.number + ts.string / lutil.parse_time_interval):is_optional():describe("Sentinel watch time"),
-  sentinel_masters_pattern = ts.string:is_optional():describe("Sentinel masters pattern"),
-  sentinel_master_maxerrors = (ts.number + ts.string / tonumber):is_optional():describe("Sentinel master max errors"),
-  sentinel_username = ts.string:is_optional():describe("Sentinel username"),
-  sentinel_password = ts.string:is_optional():describe("Sentinel password"),
-  redis_version = (ts.number + ts.string / tonumber):is_optional():describe("Redis server version (6 or 7)"),
-}
-
-local read_schema = lutil.table_merge({
-  read_servers = ts.string + ts.array_of(ts.string),
-}, common_schema)
-
-local write_schema = lutil.table_merge({
-  write_servers = ts.string + ts.array_of(ts.string),
-}, common_schema)
-
-local rw_schema = lutil.table_merge({
-  read_servers = ts.string + ts.array_of(ts.string),
-  write_servers = ts.string + ts.array_of(ts.string),
-}, common_schema)
-
-local servers_schema = lutil.table_merge({
-  servers = ts.string + ts.array_of(ts.string),
-}, common_schema)
-
-local server_schema = lutil.table_merge({
-  server = ts.string + ts.array_of(ts.string),
-}, common_schema)
+  ssl = T.boolean():optional():doc({ summary = "Enable TLS to Redis" }),
+  no_ssl_verify = T.boolean():optional():doc({ summary = "Disable TLS certificate verification" }),
+  ssl_ca = T.string():optional():doc({ summary = "CA certificate file" }),
+  ssl_ca_dir = T.string():optional():doc({ summary = "CA certificates directory" }),
+  ssl_cert = T.string():optional():doc({ summary = "Client certificate file (PEM)" }),
+  ssl_key = T.string():optional():doc({ summary = "Client private key file (PEM)" }),
+  sni = T.string():optional():doc({ summary = "SNI server name override" }),
+  expand_keys = T.boolean():optional():doc({ summary = "Expand keys" }),
+  sentinels = T.one_of({
+    T.string(),
+    T.array(T.string())
+  }):optional():doc({ summary = "Sentinel servers" }),
+  sentinel_watch_time = T.one_of({
+    T.number(),
+    T.transform(T.string(), lutil.parse_time_interval)
+  }):optional():doc({ summary = "Sentinel watch time" }),
+  sentinel_masters_pattern = T.string():optional():doc({ summary = "Sentinel masters pattern" }),
+  sentinel_master_maxerrors = T.one_of({
+    T.number(),
+    T.transform(T.string(), tonumber)
+  }):optional():doc({ summary = "Sentinel master max errors" }),
+  sentinel_username = T.string():optional():doc({ summary = "Sentinel username" }),
+  sentinel_password = T.string():optional():doc({ summary = "Sentinel password" }),
+  redis_version = T.one_of({
+    T.number(),
+    T.transform(T.string(), tonumber)
+  }):optional():doc({ summary = "Redis server version (6 or 7)" }),
+}, { open = true })
 
 local enrich_schema = function(external)
-  return ts.one_of {
-    ts.shape(lutil.table_merge(common_schema,
-        external)), -- no specific redis servers (e.g when global settings are used)
-    ts.shape(lutil.table_merge(read_schema, external)), -- read_servers specified
-    ts.shape(lutil.table_merge(write_schema, external)), -- write_servers specified
-    ts.shape(lutil.table_merge(rw_schema, external)), -- both read and write servers defined
-    ts.shape(lutil.table_merge(servers_schema, external)), -- just servers for both ops
-    ts.shape(lutil.table_merge(server_schema, external)), -- legacy `server` attribute
-  }
+  local external_schema = T.table(external, { open = true })
+
+  return T.one_of({
+    {
+      name = "common_only",
+      schema = T.table({}, {
+        open = true,
+        mixins = {
+          T.mixin(common_schema, { as = "redis_common" }),
+          T.mixin(external_schema, { as = "external" })
+        }
+      })
+    },
+    {
+      name = "read_servers",
+      schema = T.table({
+        read_servers = T.one_of({
+          T.string(),
+          T.array(T.string())
+        }),
+      }, {
+        open = true,
+        mixins = {
+          T.mixin(common_schema, { as = "redis_common" }),
+          T.mixin(external_schema, { as = "external" })
+        }
+      })
+    },
+    {
+      name = "write_servers",
+      schema = T.table({
+        write_servers = T.one_of({
+          T.string(),
+          T.array(T.string())
+        }),
+      }, {
+        open = true,
+        mixins = {
+          T.mixin(common_schema, { as = "redis_common" }),
+          T.mixin(external_schema, { as = "external" })
+        }
+      })
+    },
+    {
+      name = "rw_servers",
+      schema = T.table({
+        read_servers = T.one_of({
+          T.string(),
+          T.array(T.string())
+        }),
+        write_servers = T.one_of({
+          T.string(),
+          T.array(T.string())
+        }),
+      }, {
+        open = true,
+        mixins = {
+          T.mixin(common_schema, { as = "redis_common" }),
+          T.mixin(external_schema, { as = "external" })
+        }
+      })
+    },
+    {
+      name = "servers",
+      schema = T.table({
+        servers = T.one_of({
+          T.string(),
+          T.array(T.string())
+        }),
+      }, {
+        open = true,
+        mixins = {
+          T.mixin(common_schema, { as = "redis_common" }),
+          T.mixin(external_schema, { as = "external" })
+        }
+      })
+    },
+    {
+      name = "server_legacy",
+      schema = T.table({
+        server = T.one_of({
+          T.string(),
+          T.array(T.string())
+        }),
+      }, {
+        open = true,
+        mixins = {
+          T.mixin(common_schema, { as = "redis_common" }),
+          T.mixin(external_schema, { as = "external" })
+        }
+      })
+    }
+  })
 end
 
 exports.enrich_schema = enrich_schema
