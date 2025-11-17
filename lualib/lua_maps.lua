@@ -20,7 +20,7 @@ limitations under the License.
 ]]--
 
 local rspamd_logger = require "rspamd_logger"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
 local lua_util = require "lua_util"
 
 local exports = {}
@@ -86,14 +86,17 @@ local function maybe_adjust_type(data, mtype)
   return data, mtype
 end
 
-local external_map_schema = ts.shape {
-  external = ts.equivalent(true), -- must be true
-  backend = ts.string:is_optional(), -- where to get data, required for HTTP
-  cdb = ts.string:is_optional(), -- path to CDB file, required for CDB
-  method = ts.one_of { "body", "header", "query" }:is_optional(), -- how to pass input
-  encode = ts.one_of { "json", "messagepack" }:is_optional(), -- how to encode input (if relevant)
-  timeout = (ts.number + ts.string / lua_util.parse_time_interval):is_optional(),
-}
+local external_map_schema = T.table({
+  external = T.literal(true), -- must be true
+  backend = T.string():optional(), -- where to get data, required for HTTP
+  cdb = T.string():optional(), -- path to CDB file, required for CDB
+  method = T.enum({ "body", "header", "query" }):optional(), -- how to pass input
+  encode = T.enum({ "json", "messagepack" }):optional(), -- how to encode input (if relevant)
+  timeout = T.transform(
+    T.one_of({T.number(), T.string()}),
+    lua_util.parse_time_interval
+  ):optional(),
+})
 
 -- Storage for CDB instances
 local cdb_maps = {}
@@ -649,27 +652,27 @@ exports.fill_config_maps = function(mname, opts, map_defs)
   return true
 end
 
-local direct_map_schema = ts.shape { -- complex object
-  name = ts.string:is_optional(),
-  description = ts.string:is_optional(),
-  selector_alias = ts.string:is_optional(), -- an optional alias for the selectos framework
-  timeout = ts.number,
-  data = ts.array_of(ts.string):is_optional(),
-  -- Tableshape has no options support for something like key1 or key2?
-  upstreams = ts.one_of {
-    ts.string,
-    ts.array_of(ts.string),
-  }             :is_optional(),
-  url = ts.one_of {
-    ts.string,
-    ts.array_of(ts.string),
-  }       :is_optional(),
-}
+local direct_map_schema = T.table({ -- complex object
+  name = T.string():optional(),
+  description = T.string():optional(),
+  selector_alias = T.string():optional(), -- an optional alias for the selectors framework
+  timeout = T.number(),
+  data = T.array(T.string()):optional(),
+  -- Can specify either upstreams or url
+  upstreams = T.one_of({
+    T.string(),
+    T.array(T.string()),
+  }):optional(),
+  url = T.one_of({
+    T.string(),
+    T.array(T.string()),
+  }):optional(),
+})
 
-exports.map_schema = ts.one_of {
-  ts.string, -- 'http://some_map'
-  ts.array_of(ts.string), -- ['foo', 'bar']
-  ts.one_of { direct_map_schema, external_map_schema }
-}
+exports.map_schema = T.one_of({
+  T.string(), -- 'http://some_map'
+  T.array(T.string()), -- ['foo', 'bar']
+  T.one_of({ direct_map_schema, external_map_schema })
+})
 
 return exports
