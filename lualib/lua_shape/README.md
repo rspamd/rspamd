@@ -382,20 +382,6 @@ Quick reference:
 - `MIGRATION.md` - Migration guide from tableshape
 - `README.md` - This file
 
-## Testing
-
-Test files are in the repository root:
-- `test_rspamd_schema.lua` - Basic functionality tests
-- `test_one_of_intersection.lua` - Intersection logic tests
-- `test_export_and_docs.lua` - Export and documentation tests
-
-Run tests:
-```bash
-lua test_rspamd_schema.lua
-lua test_one_of_intersection.lua
-lua test_export_and_docs.lua
-```
-
 ## License
 
 Apache License 2.0 - Same as Rspamd
