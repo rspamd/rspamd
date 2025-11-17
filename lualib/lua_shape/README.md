@@ -72,7 +72,7 @@ local ok, config = config_schema:transform({
 ### Composition
 
 - `schema:optional()` - Make schema optional
-- `schema:with_default(value)` - Add default value
+- `schema:with_default(value)` - Add default value (can be a function for dynamic defaults)
 - `schema:doc(doc_table)` - Add documentation
 - `schema:transform_with(fn)` - Apply transformation
 - `T.transform(schema, fn)` - Transform wrapper
@@ -165,6 +165,26 @@ local timeout_schema = T.transform(T.number({ min = 0 }), function(val)
     error("Expected number or time interval string")
   end
 end)
+```
+
+### Callable Defaults
+
+Defaults can be functions that are called each time a default is needed:
+
+```lua
+local function get_current_timestamp()
+  return os.time()
+end
+
+local event_schema = T.table({
+  name = T.string(),
+  timestamp = T.number():with_default(get_current_timestamp),  -- Function called each time
+  priority = T.integer():with_default(0)  -- Static default
+})
+
+-- Each transform gets a fresh timestamp
+local ok, event1 = event_schema:transform({ name = "login" })
+-- event1.timestamp will be the current time when transform was called
 ```
 
 ### Schema Registry

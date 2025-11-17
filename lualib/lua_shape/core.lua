@@ -414,7 +414,12 @@ local function check_table(node, value, ctx)
       if field_spec.optional then
         -- Apply default in transform mode
         if ctx.mode == "transform" and field_spec.default ~= nil then
-          result[field_name] = field_spec.default
+          local default_val = field_spec.default
+          -- Support callable defaults: if default is a function, call it
+          if type(default_val) == "function" then
+            default_val = default_val()
+          end
+          result[field_name] = default_val
         end
       else
         has_errors = true
@@ -513,7 +518,12 @@ end
 local function check_optional(node, value, ctx)
   if value == nil then
     if ctx.mode == "transform" and node.default ~= nil then
-      return true, node.default
+      local default_val = node.default
+      -- Support callable defaults: if default is a function, call it
+      if type(default_val) == "function" then
+        default_val = default_val()
+      end
+      return true, default_val
     end
     return true, nil
   end

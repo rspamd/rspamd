@@ -170,25 +170,13 @@ end
 exports.aws_canon_request_hash = aws_canon_request_hash
 
 local aws_authorization_hdr_args_schema = T.table({
-  date = T.transform(
-    T.one_of({T.string(), T.literal(nil)}),
-    function(v) return v or today_canonical() end
-  ),
+  date = T.string():with_default(today_canonical),
   secret_key = T.string(),
-  method = T.transform(
-    T.one_of({T.string(), T.literal(nil)}),
-    function(v) return v or 'GET' end
-  ),
+  method = T.string():with_default('GET'),
   uri = T.string(),
   region = T.string(),
-  service = T.transform(
-    T.one_of({T.string(), T.literal(nil)}),
-    function(v) return v or 's3' end
-  ),
-  req_type = T.transform(
-    T.one_of({T.string(), T.literal(nil)}),
-    function(v) return v or 'aws4_request' end
-  ),
+  service = T.string():with_default('s3'),
+  req_type = T.string():with_default('aws4_request'),
   -- headers is a table with string keys and string values (map_of equivalent)
   headers = T.table({}, { open = true, extra = T.string() }),
   key_id = T.string(),
