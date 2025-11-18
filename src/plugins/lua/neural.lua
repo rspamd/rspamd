@@ -15,10 +15,6 @@ limitations under the License.
 ]] --
 
 
-if confighelp then
-  return
-end
-
 local fun = require "fun"
 local lua_redis = require "lua_redis"
 local lua_util = require "lua_util"
@@ -30,6 +26,7 @@ local rspamd_tensor = require "rspamd_tensor"
 local rspamd_text = require "rspamd_text"
 local rspamd_util = require "rspamd_util"
 local T = require "lua_shape.core"
+local PluginSchema = require "lua_shape.plugin_schema"
 -- Load providers
 pcall(require, "plugins/neural/providers/llm")
 pcall(require, "plugins/neural/providers/symbols")
@@ -46,6 +43,12 @@ local redis_profile_schema = T.table({
   distance = T.number():optional():doc({ summary = "Distance metric" }),
   providers_digest = T.string():optional():doc({ summary = "Providers digest" }),
 }):doc({ summary = "Neural network profile schema" })
+
+PluginSchema.register("plugins.neural.profile", redis_profile_schema)
+
+if confighelp then
+  return
+end
 
 local has_blas = rspamd_tensor.has_blas()
 local text_cookie = rspamd_text.cookie

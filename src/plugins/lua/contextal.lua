@@ -17,15 +17,6 @@ limitations under the License.
 local E = {}
 local N = 'contextal'
 
-if confighelp then
-  return
-end
-
-local opts = rspamd_config:get_all_opt(N)
-if not opts then
-  return
-end
-
 local lua_redis = require "lua_redis"
 local lua_util = require "lua_util"
 local redis_cache = require "lua_cache"
@@ -34,6 +25,7 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local T = require "lua_shape.core"
 local ucl = require "ucl"
+local PluginSchema = require "lua_shape.plugin_schema"
 
 local cache_context, redis_params
 
@@ -64,6 +56,17 @@ local config_schema = lua_redis.enrich_schema {
   write_timeout = T.number():optional():doc({ summary = "Write timeout (seconds)" }),
   read_timeout = T.number():optional():doc({ summary = "Read timeout (seconds)" }),
 }
+
+PluginSchema.register("plugins.contextal", config_schema)
+
+if confighelp then
+  return
+end
+
+local opts = rspamd_config:get_all_opt(N)
+if not opts then
+  return
+end
 
 local settings = {
   action_symbol_prefix = 'CONTEXTAL_ACTION',

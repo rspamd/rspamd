@@ -15,10 +15,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]] --
 
-if confighelp then
-  return
-end
-
 -- A plugin that provides common header manipulations
 
 local logger = require "rspamd_logger"
@@ -28,6 +24,7 @@ local lua_util = require "lua_util"
 local lua_maps = require "lua_maps"
 local lua_mime = require "lua_mime"
 local T = require "lua_shape.core"
+local PluginSchema = require "lua_shape.plugin_schema"
 local E = {}
 
 local HOSTNAME = rspamd_util.get_hostname()
@@ -656,6 +653,12 @@ local config_schema = T.table({
 }, {
   open = true
 }):doc({ summary = "Milter headers plugin configuration" })
+
+PluginSchema.register("plugins.milter_headers", config_schema)
+
+if confighelp then
+  return
+end
 
 local opts = rspamd_config:get_all_opt(N) or
     rspamd_config:get_all_opt('rmilter_headers')

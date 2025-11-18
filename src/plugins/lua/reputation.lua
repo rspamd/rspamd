@@ -14,10 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
-if confighelp then
-  return
-end
-
 -- A generic plugin for reputation handling
 
 local E = {}
@@ -33,6 +29,7 @@ local lua_redis = require "lua_redis"
 local fun = require "fun"
 local lua_selectors = require "lua_selectors"
 local T = require "lua_shape.core"
+local PluginSchema = require "lua_shape.plugin_schema"
 
 local redis_params = nil
 local default_expiry = 864000 -- 10 day by default
@@ -848,6 +845,8 @@ local generic_selector = {
   idempotent = generic_reputation_idempotent -- used to set scores
 }
 
+PluginSchema.register("plugins.reputation.selector.generic", generic_selector.schema)
+
 local selectors = {
   ip = ip_selector,
   sender = ip_selector, -- Better name
@@ -1202,6 +1201,13 @@ local backends = {
     init = reputation_dns_init,
   }
 }
+
+PluginSchema.register("plugins.reputation.backend.redis", backends.redis.schema)
+PluginSchema.register("plugins.reputation.backend.dns", backends.dns.schema)
+
+if confighelp then
+  return
+end
 
 local function is_rule_applicable(task, rule)
   local ip = task:get_from_ip()

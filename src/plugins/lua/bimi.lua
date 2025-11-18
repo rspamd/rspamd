@@ -19,6 +19,7 @@ local lua_util = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
 local T = require "lua_shape.core"
 local lua_redis = require "lua_redis"
+local PluginSchema = require "lua_shape.plugin_schema"
 local ucl = require "ucl"
 local lua_mime = require "lua_mime"
 local rspamd_http = require "rspamd_http"
@@ -66,6 +67,8 @@ local settings_schema = lua_redis.enrich_schema({
     T.transform(T.string(), lua_util.parse_time_interval)
   }):optional():doc({ summary = "Helper read timeout (seconds)" }),
 })
+
+PluginSchema.register("plugins.bimi", settings_schema)
 
 local function check_dmarc_policy(task)
   local dmarc_sym = task:get_symbol('DMARC_POLICY_ALLOW')

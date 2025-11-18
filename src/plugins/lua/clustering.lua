@@ -14,10 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
-if confighelp then
-  return
-end
-
 -- Plugin for finding patterns in email flows
 
 local N = 'clustering'
@@ -28,6 +24,7 @@ local lua_verdict = require "lua_verdict"
 local lua_redis = require "lua_redis"
 local lua_selectors = require "lua_selectors"
 local T = require "lua_shape.core"
+local PluginSchema = require "lua_shape.plugin_schema"
 
 local redis_params
 
@@ -67,6 +64,20 @@ local rule_schema = T.table({
   symbol = T.string():optional():doc({ summary = "Symbol name" }),
   prefix = T.string():optional():doc({ summary = "Redis key prefix" }),
 }):doc({ summary = "Clustering rule configuration" })
+
+local config_schema = lua_redis.enrich_schema({
+  enabled = T.boolean():optional():doc({ summary = "Enable the plugin" }),
+  rules = T.table({}, {
+    open = true,
+    extra = rule_schema
+  }):doc({ summary = "Clustering rules keyed by name" })
+}):doc({ summary = "Clustering plugin configuration" })
+
+PluginSchema.register("plugins.clustering", config_schema)
+
+if confighelp then
+  return
+end
 
 -- Redis scripts
 
@@ -256,7 +267,6 @@ local function clusterting_idempotent_cb(task, rule)
   )
 end
 -- Init part
-redis_params = lua_redis.parse_redis_server('clustering')
 local opts = rspamd_config:get_all_opt("clustering")
 
 -- Initialization part
@@ -264,6 +274,17 @@ if not (opts and type(opts) == 'table') then
   lua_util.disable_module(N, "config")
   return
 end
+
+local cfg, cfg_err = config_schema:transform(opts)
+if not cfg then
+  rspamd_logger.errx(rspamd_config, 'invalid clustering config: %s', cfg_err)
+  lua_util.disable_module(N, "config")
+  return
+end
+
+opts = cfg
+
+redis_params = lua_redis.parse_redis_server('clustering', opts)
 
 if not redis_params then
   lua_util.disable_module(N, "redis")

@@ -18,14 +18,11 @@ limitations under the License.
 external_relay plugin - sets IP/hostname from Received headers
 ]]--
 
-if confighelp then
-  return
-end
-
 local lua_maps = require "lua_maps"
 local lua_util = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
 local T = require "lua_shape.core"
+local PluginSchema = require "lua_shape.plugin_schema"
 
 local E = {}
 local N = "external_relay"
@@ -91,6 +88,12 @@ local config_schema = T.table({
     })
   }):doc({ summary = "External relay rules keyed by name" }),
 }):doc({ summary = "External relay plugin configuration" })
+
+PluginSchema.register("plugins.external_relay", config_schema)
+
+if confighelp then
+  return
+end
 
 local function set_from_rcvd(task, rcvd)
   local rcvd_ip = rcvd.real_ip

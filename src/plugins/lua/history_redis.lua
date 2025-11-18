@@ -14,32 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
-if confighelp then
-  rspamd_config:add_example(nil, 'history_redis',
-      "Store history of checks for WebUI using Redis",
-      [[
-redis_history {
-  # History key name
-  key_prefix = 'rs_history{{HOSTNAME}}{{COMPRESS}}';
-  # Expire in seconds for inactive keys, default to 5 days
-  expire = 432000;
-  # History rows limit
-  nrows = 200;
-  # Use zstd compression when storing data in redis
-  compress = true;
-  # Obfuscate subjects for privacy
-  subject_privacy = false;
-  # Default hash-algorithm to obfuscate subject
-  subject_privacy_alg = 'blake2';
-  # Prefix to show it's obfuscated
-  subject_privacy_prefix = 'obf';
-  # Cut the length of the hash if desired
-  subject_privacy_length = 16;
-}
-  ]])
-  return
-end
-
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local lua_util = require "lua_util"
@@ -47,6 +21,7 @@ local lua_redis = require "lua_redis"
 local fun = require "fun"
 local ucl = require "ucl"
 local T = require "lua_shape.core"
+local PluginSchema = require "lua_shape.plugin_schema"
 local E = {}
 local N = "history_redis"
 
@@ -80,6 +55,34 @@ local settings_schema = lua_redis.enrich_schema({
   subject_privacy_prefix = T.string():optional():doc({ summary = "Prefix for obfuscated subjects" }),
   subject_privacy_length = T.number():optional():doc({ summary = "Hash length for obfuscated subjects" }),
 })
+
+PluginSchema.register("plugins.history_redis", settings_schema)
+
+if confighelp then
+  rspamd_config:add_example(nil, 'history_redis',
+      "Store history of checks for WebUI using Redis",
+      [[
+redis_history {
+  # History key name
+  key_prefix = 'rs_history{{HOSTNAME}}{{COMPRESS}}';
+  # Expire in seconds for inactive keys, default to 5 days
+  expire = 432000;
+  # History rows limit
+  nrows = 200;
+  # Use zstd compression when storing data in redis
+  compress = true;
+  # Obfuscate subjects for privacy
+  subject_privacy = false;
+  # Default hash-algorithm to obfuscate subject
+  subject_privacy_alg = 'blake2';
+  # Prefix to show it's obfuscated
+  subject_privacy_prefix = 'obf';
+  # Cut the length of the hash if desired
+  subject_privacy_length = 16;
+}
+  ]])
+  return
+end
 
 local function process_addr(addr)
   if addr then

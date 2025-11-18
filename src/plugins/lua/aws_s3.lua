@@ -22,6 +22,7 @@ local T = require "lua_shape.core"
 local rspamd_text = require "rspamd_text"
 local rspamd_http = require "rspamd_http"
 local rspamd_util = require "rspamd_util"
+local PluginSchema = require "lua_shape.plugin_schema"
 
 local settings = {
   s3_bucket = nil,
@@ -52,6 +53,8 @@ local settings_schema = T.table({
   save_structure = T.boolean():optional():doc({ summary = "Save structured email" }),
   inline_content_limit = T.number():optional():doc({ summary = "Max inline content size before external ref" }),
 }):doc({ summary = "AWS S3 plugin configuration" })
+
+PluginSchema.register("plugins.aws_s3", settings_schema)
 
 local function raw_data(task, nonce, queue_id)
   local ext, content, content_type
