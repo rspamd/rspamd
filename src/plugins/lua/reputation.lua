@@ -32,7 +32,7 @@ local hash = require 'rspamd_cryptobox_hash'
 local lua_redis = require "lua_redis"
 local fun = require "fun"
 local lua_selectors = require "lua_selectors"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
 
 local redis_params = nil
 local default_expiry = 864000 -- 10 day by default
@@ -283,7 +283,7 @@ local dkim_selector = {
     outbound = true,
     inbound = true,
     max_accept_adjustment = 2.0, -- How to adjust accepted DKIM score
-    exclusion_map = nil 
+    exclusion_map = nil
   },
   dependencies = { "DKIM_TRACE" },
   filter = dkim_reputation_filter, -- used to get scores
@@ -416,7 +416,7 @@ local url_selector = {
     check_from = true,
     outbound = true,
     inbound = true,
-    exclusion_map = nil 
+    exclusion_map = nil
   },
   filter = url_reputation_filter, -- used to get scores
   idempotent = url_reputation_idempotent -- used to set scores
@@ -626,7 +626,7 @@ local ip_selector = {
     inbound = true,
     ipv4_mask = 32, -- Mask bits for ipv4
     ipv6_mask = 64, -- Mask bits for ipv6
-    exclusion_map = nil 
+    exclusion_map = nil
   },
   --dependencies = {"ASN"}, -- ASN is a prefilter now...
   init = ip_reputation_init,
@@ -812,17 +812,26 @@ local function generic_reputation_idempotent(task, rule)
 end
 
 local generic_selector = {
-  schema = ts.shape {
-    lower_bound = ts.number + ts.string / tonumber,
-    max_score = ts.number:is_optional(),
-    min_score = ts.number:is_optional(),
-    outbound = ts.boolean,
-    inbound = ts.boolean,
-    selector = ts.string,
-    delimiter = ts.string,
-    whitelist = ts.one_of(lua_maps.map_schema, lua_maps_exprs.schema):is_optional(),
-    exclusion_map = ts.one_of(lua_maps.map_schema, lua_maps_exprs.schema):is_optional()
-  },
+  schema = T.table({
+    lower_bound = T.one_of({
+      T.number(),
+      T.transform(T.string(), tonumber)
+    }):doc({ summary = "Minimum number of messages to be scored" }),
+    max_score = T.number():optional():doc({ summary = "Maximum score" }),
+    min_score = T.number():optional():doc({ summary = "Minimum score" }),
+    outbound = T.boolean():doc({ summary = "Apply to outbound messages" }),
+    inbound = T.boolean():doc({ summary = "Apply to inbound messages" }),
+    selector = T.string():doc({ summary = "Selector expression" }),
+    delimiter = T.string():doc({ summary = "Selector delimiter" }),
+    whitelist = T.one_of({
+      { name = "map", schema = lua_maps.map_schema },
+      { name = "expr", schema = lua_maps_exprs.schema }
+    }):optional():doc({ summary = "Whitelist map or expression" }),
+    exclusion_map = T.one_of({
+      { name = "map", schema = lua_maps.map_schema },
+      { name = "expr", schema = lua_maps_exprs.schema }
+    }):optional():doc({ summary = "Exclusion map or expression" })
+  }):doc({ summary = "Generic selector reputation backend configuration" }),
   config = {
     lower_bound = 10, -- minimum number of messages to be scored
     min_score = nil,
@@ -832,7 +841,7 @@ local generic_selector = {
     selector = nil,
     delimiter = ':',
     whitelist = nil,
-    exclusion_map = nil 
+    exclusion_map = nil
   },
   init = generic_reputation_init,
   filter = generic_reputation_filter, -- used to get scores
@@ -1149,13 +1158,22 @@ end
 local backends = {
   redis = {
     schema = lua_redis.enrich_schema({
-      prefix = ts.string:is_optional(),
-      expiry = (ts.number + ts.string / lua_util.parse_time_interval):is_optional(),
-      buckets = ts.array_of(ts.shape {
-        time = ts.number + ts.string / lua_util.parse_time_interval,
-        name = ts.string,
-        mult = ts.number + ts.string / tonumber
-      })          :is_optional(),
+      prefix = T.string():optional():doc({ summary = "Redis key prefix" }),
+      expiry = T.one_of({
+        T.number(),
+        T.transform(T.string(), lua_util.parse_time_interval)
+      }):optional():doc({ summary = "Default expiry time (seconds)" }),
+      buckets = T.array(T.table({
+        time = T.one_of({
+          T.number(),
+          T.transform(T.string(), lua_util.parse_time_interval)
+        }):doc({ summary = "Bucket time window (seconds)" }),
+        name = T.string():doc({ summary = "Bucket name" }),
+        mult = T.one_of({
+          T.number(),
+          T.transform(T.string(), tonumber)
+        }):doc({ summary = "Bucket multiplier" })
+      })):optional():doc({ summary = "Time buckets configuration" }),
     }),
     config = {
       expiry = default_expiry,
@@ -1173,9 +1191,9 @@ local backends = {
     set_token = reputation_redis_set_token,
   },
   dns = {
-    schema = ts.shape {
-      list = ts.string,
-    },
+    schema = T.table({
+      list = T.string():doc({ summary = "DNS list domain" }),
+    }):doc({ summary = "DNS reputation backend configuration" }),
     config = {
       -- list = rep.example.com
     },
