@@ -293,6 +293,25 @@ function T.boolean(opts)
   })
 end
 
+local function check_callable(node, value, ctx)
+  if type(value) ~= "function" then
+    return false, make_error("type_mismatch", ctx.path, {
+      expected = "function",
+      got = type(value)
+    })
+  end
+
+  return true, value
+end
+
+function T.callable(opts)
+  return make_node("scalar", {
+    kind = "callable",
+    opts = opts or {},
+    _check = check_callable
+  })
+end
+
 function T.enum(values, opts)
   opts = opts or {}
   opts.enum = values

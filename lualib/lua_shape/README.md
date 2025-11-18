@@ -55,6 +55,7 @@ local ok, config = config_schema:transform({
 - `T.number(opts)` - Number with optional range constraints (min, max)
 - `T.integer(opts)` - Integer (number with integer constraint)
 - `T.boolean()` - Boolean value
+- `T.callable()` - Function/callable value
 - `T.enum(values)` - One of a fixed set of values
 - `T.literal(value)` - Exact value match
 
