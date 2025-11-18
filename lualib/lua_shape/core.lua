@@ -81,9 +81,15 @@ local schema_methods = {
   end,
 
   -- Transform value according to schema
+  -- Returns: (value) on success, (nil, error) on failure (tableshape-compatible)
   transform = function(self, value, ctx)
     ctx = ctx or make_context("transform")
-    return self._check(self, value, ctx)
+    local ok, result = self._check(self, value, ctx)
+    if ok then
+      return result
+    else
+      return nil, result
+    end
   end,
 
   -- Make schema optional
