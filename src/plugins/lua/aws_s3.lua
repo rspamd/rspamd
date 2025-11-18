@@ -18,7 +18,7 @@ local N = "aws_s3"
 local lua_util = require "lua_util"
 local lua_aws = require "lua_aws"
 local rspamd_logger = require "rspamd_logger"
-local ts = (require "tableshape").types
+local T = require "lua_shape.core"
 local rspamd_text = require "rspamd_text"
 local rspamd_http = require "rspamd_http"
 local rspamd_util = require "rspamd_util"
@@ -35,20 +35,23 @@ local settings = {
   inline_content_limit = nil,
 }
 
-local settings_schema = ts.shape {
-  s3_bucket = ts.string,
-  s3_region = ts.string,
-  s3_host = ts.string,
-  s3_secret_key = ts.string,
-  s3_key_id = ts.string,
-  s3_timeout = ts.number + ts.string / lua_util.parse_time_interval,
-  enabled = ts.boolean:is_optional(),
-  fail_action = ts.string:is_optional(),
-  zstd_compress = ts.boolean:is_optional(),
-  save_raw = ts.boolean:is_optional(),
-  save_structure = ts.boolean:is_optional(),
-  inline_content_limit = ts.number:is_optional(),
-}
+local settings_schema = T.table({
+  s3_bucket = T.string():doc({ summary = "S3 bucket name" }),
+  s3_region = T.string():doc({ summary = "AWS region" }),
+  s3_host = T.string():doc({ summary = "S3 host endpoint" }),
+  s3_secret_key = T.string():doc({ summary = "AWS secret key" }),
+  s3_key_id = T.string():doc({ summary = "AWS access key ID" }),
+  s3_timeout = T.one_of({
+    T.number(),
+    T.transform(T.string(), lua_util.parse_time_interval)
+  }):doc({ summary = "Request timeout" }),
+  enabled = T.boolean():optional():doc({ summary = "Enable the plugin" }),
+  fail_action = T.string():optional():doc({ summary = "Action to take on save failure" }),
+  zstd_compress = T.boolean():optional():doc({ summary = "Compress with zstd" }),
+  save_raw = T.boolean():optional():doc({ summary = "Save raw email" }),
+  save_structure = T.boolean():optional():doc({ summary = "Save structured email" }),
+  inline_content_limit = T.number():optional():doc({ summary = "Max inline content size before external ref" }),
+}):doc({ summary = "AWS S3 plugin configuration" })
 
 local function raw_data(task, nonce, queue_id)
   local ext, content, content_type
