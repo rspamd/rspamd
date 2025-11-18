@@ -5,6 +5,7 @@ local known_attrs = {
   type = 1,
   required = 1,
   default = 1,
+  mixins = 1,
 }
 local argparse = require "argparse"
 local ansicolors = require "ansicolors"
@@ -92,6 +93,14 @@ local function print_help(key, value, tabs)
     end
     if value['default'] then
       print(string.format('%s\tDefault: %s', tabs, value['default']))
+    end
+    if value['mixins'] then
+      local mixin_names = {}
+      for _, mixin in ipairs(value['mixins']) do
+        table.insert(mixin_names, mixin.name or mixin.schema_id or 'unknown')
+      end
+      print(string.format('%s\tMixins: %s', tabs, table.concat(mixin_names, ', ')))
+      print(string.format('%s\t(Use `rspamadm confighelp <mixin>` for details)', tabs))
     end
     if not opts['no-examples'] and value['example'] then
       local nv = string.match(value['example'], '^%s*(.*[^%s])%s*$') or value.example

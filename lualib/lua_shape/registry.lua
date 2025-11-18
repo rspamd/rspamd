@@ -54,6 +54,14 @@ function Registry:define(id, schema)
     error("Schema already defined: " .. id)
   end
 
+  -- Set schema_id in opts if not already set
+  if not schema.opts then
+    schema.opts = {}
+  end
+  if not schema.opts.schema_id then
+    schema.opts.schema_id = id
+  end
+
   -- Resolve mixins if this is a table schema
   local resolved = self:resolve_schema(schema)
 
@@ -84,9 +92,9 @@ function Registry:resolve_schema(schema)
   local tag = schema.tag
 
   -- If already resolved, return from cache
-  local cache_key = tostring(schema)
-  if self.resolved_cache[cache_key] then
-    return self.resolved_cache[cache_key]
+  -- Use the schema table itself as key (works with weak tables)
+  if self.resolved_cache[schema] then
+    return self.resolved_cache[schema]
   end
 
   -- Handle reference nodes
@@ -146,7 +154,7 @@ function Registry:resolve_schema(schema)
       -- Create new table schema with merged fields
       local resolved = shallowcopy(schema)
       resolved.fields = merged_fields
-      self.resolved_cache[cache_key] = resolved
+      self.resolved_cache[schema] = resolved
       return resolved
     end
   end
@@ -157,7 +165,7 @@ function Registry:resolve_schema(schema)
     if resolved_item ~= schema.item_schema then
       local resolved = shallowcopy(schema)
       resolved.item_schema = resolved_item
-      self.resolved_cache[cache_key] = resolved
+      self.resolved_cache[schema] = resolved
       return resolved
     end
   end
@@ -182,7 +190,7 @@ function Registry:resolve_schema(schema)
     if changed then
       local resolved = shallowcopy(schema)
       resolved.variants = resolved_variants
-      self.resolved_cache[cache_key] = resolved
+      self.resolved_cache[schema] = resolved
       return resolved
     end
   end
@@ -193,7 +201,7 @@ function Registry:resolve_schema(schema)
     if resolved_inner ~= schema.inner then
       local resolved = shallowcopy(schema)
       resolved.inner = resolved_inner
-      self.resolved_cache[cache_key] = resolved
+      self.resolved_cache[schema] = resolved
       return resolved
     end
   end

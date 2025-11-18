@@ -18,6 +18,7 @@ local logger = require "rspamd_logger"
 local lutil = require "lua_util"
 local rspamd_util = require "rspamd_util"
 local T = require "lua_shape.core"
+local PluginSchema = require "lua_shape.plugin_schema"
 
 local exports = {}
 
@@ -70,53 +71,143 @@ local common_schema = T.table({
   }):optional():doc({ summary = "Redis server version (6 or 7)" }),
 }, { open = true })
 
+local function extend_fields(...)
+  local res = {}
+  for i = 1, select('#', ...) do
+    local tbl = select(i, ...)
+    if tbl then
+      for k, v in pairs(tbl) do
+        res[k] = v
+      end
+    end
+  end
+  return res
+end
+
+-- Register common schema as redis_common first
+PluginSchema.register("mixins.redis_common", common_schema)
+
+-- Create full redis mixin schema for documentation
+local redis_mixin_schema = T.one_of({
+  {
+    name = "common_only",
+    schema = T.table({}, {
+      open = true,
+      mixins = { T.mixin(common_schema, { as = "redis_common" }) }
+    }):doc({ summary = "Redis with no explicit servers (uses localhost)" })
+  },
+  {
+    name = "read_servers",
+    schema = T.table({
+      read_servers = T.one_of({
+        T.string():doc({ summary = "Single Redis server" }),
+        T.array(T.string()):doc({ summary = "Multiple Redis servers" })
+      }):doc({ summary = "Read servers list" })
+    }, {
+      open = true,
+      mixins = { T.mixin(common_schema, { as = "redis_common" }) }
+    }):doc({ summary = "Redis with read-only servers" })
+  },
+  {
+    name = "write_servers",
+    schema = T.table({
+      write_servers = T.one_of({
+        T.string():doc({ summary = "Single Redis server" }),
+        T.array(T.string()):doc({ summary = "Multiple Redis servers" })
+      }):doc({ summary = "Write servers list" })
+    }, {
+      open = true,
+      mixins = { T.mixin(common_schema, { as = "redis_common" }) }
+    }):doc({ summary = "Redis with write-only servers" })
+  },
+  {
+    name = "rw_servers",
+    schema = T.table({
+      read_servers = T.one_of({
+        T.string():doc({ summary = "Single Redis server" }),
+        T.array(T.string()):doc({ summary = "Multiple Redis servers" })
+      }):doc({ summary = "Read servers list" }),
+      write_servers = T.one_of({
+        T.string():doc({ summary = "Single Redis server" }),
+        T.array(T.string()):doc({ summary = "Multiple Redis servers" })
+      }):doc({ summary = "Write servers list" })
+    }, {
+      open = true,
+      mixins = { T.mixin(common_schema, { as = "redis_common" }) }
+    }):doc({ summary = "Redis with separate read and write servers" })
+  },
+  {
+    name = "servers",
+    schema = T.table({
+      servers = T.one_of({
+        T.string():doc({ summary = "Single Redis server" }),
+        T.array(T.string()):doc({ summary = "Multiple Redis servers" })
+      }):doc({ summary = "Redis servers list" })
+    }, {
+      open = true,
+      mixins = { T.mixin(common_schema, { as = "redis_common" }) }
+    }):doc({ summary = "Redis with server list" })
+  },
+  {
+    name = "server_legacy",
+    schema = T.table({
+      server = T.one_of({
+        T.string():doc({ summary = "Single Redis server" }),
+        T.array(T.string()):doc({ summary = "Multiple Redis servers" })
+      }):doc({ summary = "Redis server (legacy)" })
+    }, {
+      open = true,
+      mixins = { T.mixin(common_schema, { as = "redis_common" }) }
+    }):doc({ summary = "Redis with legacy server parameter" })
+  }
+}):doc({ summary = "Redis connection configuration" })
+
+PluginSchema.register("mixins.redis", redis_mixin_schema)
+
 local enrich_schema = function(external)
-  local external_schema = T.table(external, { open = true })
+  local external_fields = external or {}
 
   return T.one_of({
     {
       name = "common_only",
-      schema = T.table({}, {
+      schema = T.table(extend_fields(external_fields), {
         open = true,
         mixins = {
-          T.mixin(common_schema, { as = "redis_common" }),
-          T.mixin(external_schema, { as = "external" })
+          T.mixin(common_schema, { as = "redis" })
         }
       })
     },
     {
       name = "read_servers",
-      schema = T.table({
+      schema = T.table(extend_fields(external_fields, {
         read_servers = T.one_of({
           T.string(),
           T.array(T.string())
-        }),
-      }, {
+        })
+      }), {
         open = true,
         mixins = {
-          T.mixin(common_schema, { as = "redis_common" }),
-          T.mixin(external_schema, { as = "external" })
+          T.mixin(common_schema, { as = "redis" })
         }
       })
     },
     {
       name = "write_servers",
-      schema = T.table({
+      schema = T.table(extend_fields(external_fields, {
         write_servers = T.one_of({
           T.string(),
           T.array(T.string())
-        }),
-      }, {
+        })
+      }), {
         open = true,
         mixins = {
-          T.mixin(common_schema, { as = "redis_common" }),
-          T.mixin(external_schema, { as = "external" })
+          T.mixin(common_schema, { as = "redis" })
         }
       })
     },
     {
       name = "rw_servers",
-      schema = T.table({
+      schema = T.table(extend_fields(external_fields, {
         read_servers = T.one_of({
           T.string(),
           T.array(T.string())
@@ -124,42 +215,39 @@ local enrich_schema = function(external)
         write_servers = T.one_of({
           T.string(),
           T.array(T.string())
-        }),
-      }, {
+        })
+      }), {
         open = true,
         mixins = {
-          T.mixin(common_schema, { as = "redis_common" }),
-          T.mixin(external_schema, { as = "external" })
+          T.mixin(common_schema, { as = "redis" })
         }
       })
     },
     {
       name = "servers",
-      schema = T.table({
+      schema = T.table(extend_fields(external_fields, {
         servers = T.one_of({
           T.string(),
           T.array(T.string())
-        }),
-      }, {
+        })
+      }), {
         open = true,
         mixins = {
-          T.mixin(common_schema, { as = "redis_common" }),
-          T.mixin(external_schema, { as = "external" })
+          T.mixin(common_schema, { as = "redis" })
         }
       })
     },
     {
       name = "server_legacy",
-      schema = T.table({
+      schema = T.table(extend_fields(external_fields, {
         server = T.one_of({
           T.string(),
           T.array(T.string())
-        }),
-      }, {
+        })
+      }), {
         open = true,
         mixins = {
-          T.mixin(common_schema, { as = "redis_common" }),
-          T.mixin(external_schema, { as = "external" })
+          T.mixin(common_schema, { as = "redis" })
         }
       })
     }

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <ucl.h>
+#include <string.h>
 #include "config.h"
 #include "rspamadm.h"
 #include "cfg_file.h"
@@ -35,6 +36,10 @@ static void rspamadm_confighelp(int argc, char **argv,
 
 static const char *rspamadm_confighelp_help(gboolean full_help,
 											const struct rspamadm_command *cmd);
+
+static ucl_object_t *rspamadm_confighelp_load_plugins_doc(struct rspamd_config *cfg);
+static const ucl_object_t *rspamadm_confighelp_lookup_plugin_doc(ucl_object_t *plugins_doc,
+																 const char *key);
 
 struct rspamadm_command confighelp_command = {
 	.name = "confighelp",
@@ -189,6 +194,107 @@ rspamadm_confighelp_search_word(const ucl_object_t *obj, const char *str)
 	return res;
 }
 
+static ucl_object_t *
+rspamadm_confighelp_load_plugins_doc(struct rspamd_config *cfg)
+{
+	lua_State *L = cfg->lua_state;
+	struct ucl_parser *parser;
+	ucl_object_t *doc = NULL;
+	const char *json;
+	size_t len;
+
+	/* Load the confighelp_plugins module */
+	lua_getglobal(L, "require");
+	lua_pushstring(L, "rspamadm.confighelp_plugins");
+
+	if (lua_pcall(L, 1, 1, 0) != LUA_OK) {
+		rspamd_fprintf(stderr, "cannot load confighelp_plugins module: %s\n",
+					   lua_tostring(L, -1));
+		lua_pop(L, 1);
+		return NULL;
+	}
+
+	/* Module should return a function, call it */
+	if (!lua_isfunction(L, -1)) {
+		rspamd_fprintf(stderr, "confighelp_plugins module should return a function\n");
+		lua_pop(L, 1);
+		return NULL;
+	}
+
+	if (lua_pcall(L, 0, 1, 0) != LUA_OK) {
+		rspamd_fprintf(stderr, "cannot execute confighelp_plugins function: %s\n",
+					   lua_tostring(L, -1));
+		lua_pop(L, 1);
+		return NULL;
+	}
+
+	/* Check result */
+	if (lua_isnil(L, -1)) {
+		lua_pop(L, 1);
+		return NULL;
+	}
+
+	json = lua_tolstring(L, -1, &len);
+	if (json == NULL) {
+		lua_pop(L, 1);
+		return NULL;
+	}
+
+	/* Parse JSON result */
+	parser = ucl_parser_new(0);
+	if (parser == NULL) {
+		lua_pop(L, 1);
+		return NULL;
+	}
+
+	if (!ucl_parser_add_chunk(parser, json, len)) {
+		rspamd_fprintf(stderr, "cannot parse plugin registry docs: %s\n",
+					   ucl_parser_get_error(parser));
+		ucl_parser_free(parser);
+		lua_pop(L, 1);
+		return NULL;
+	}
+
+	doc = ucl_parser_get_object(parser);
+	ucl_parser_free(parser);
+	lua_pop(L, 1);
+
+	return doc;
+}
+
+static const ucl_object_t *
+rspamadm_confighelp_lookup_plugin_doc(ucl_object_t *plugins_doc, const char *key)
+{
+	const ucl_object_t *schemas, *elt;
+
+	if (plugins_doc == NULL || key == NULL) {
+		return NULL;
+	}
+
+	schemas = ucl_object_lookup(plugins_doc, "schemas");
+	if (schemas == NULL) {
+		return NULL;
+	}
+
+	elt = ucl_object_lookup(schemas, key);
+	if (elt == NULL) {
+		const char *prefixes[] = {"plugins.", "mixins."};
+		gsize i;
+		for (i = 0; i < G_N_ELEMENTS(prefixes) && elt == NULL; i++) {
+			const char *pref = prefixes[i];
+			size_t plen = strlen(pref);
+			if (strncmp(key, pref, plen) == 0) {
+				continue;
+			}
+			gchar *tmp = g_strdup_printf("%s%s", pref, key);
+			elt = ucl_object_lookup(schemas, tmp);
+			g_free(tmp);
+		}
+	}
+
+	return elt;
+}
+
 __attribute__((noreturn)) static void
 rspamadm_confighelp(int argc, char **argv, const struct rspamadm_command *cmd)
 {
@@ -201,6 +307,7 @@ rspamadm_confighelp(int argc, char **argv, const struct rspamadm_command *cmd)
 	worker_t **pworker;
 	struct module_ctx *mod_ctx;
 	int i, ret = 0, processed_args = 0;
+	ucl_object_t *plugins_doc = NULL;
 
 	context = g_option_context_new(
 		"confighelp - displays help for the configuration options");
@@ -266,12 +373,25 @@ rspamadm_confighelp(int argc, char **argv, const struct rspamadm_command *cmd)
 															  argv[i]);
 				}
 				else {
-					doc_obj = ucl_object_typed_new(UCL_OBJECT);
+					doc_obj = NULL;
 					elt = ucl_object_lookup_path(cfg->doc_strings, argv[i]);
 
 					if (elt) {
+						doc_obj = ucl_object_typed_new(UCL_OBJECT);
 						ucl_object_insert_key(doc_obj, ucl_object_ref(elt),
 											  argv[i], 0, false);
+					}
+					else {
+						const ucl_object_t *plugin_doc = NULL;
+						if (plugins_doc == NULL) {
+							plugins_doc = rspamadm_confighelp_load_plugins_doc(cfg);
+						}
+						plugin_doc = rspamadm_confighelp_lookup_plugin_doc(plugins_doc, argv[i]);
+						if (plugin_doc) {
+							doc_obj = ucl_object_typed_new(UCL_OBJECT);
+							ucl_object_insert_key(doc_obj, ucl_object_ref(plugin_doc),
+												  argv[i], 0, false);
+						}
 					}
 				}
 
@@ -293,6 +413,10 @@ rspamadm_confighelp(int argc, char **argv, const struct rspamadm_command *cmd)
 	if (processed_args == 0) {
 		/* Show all documentation strings */
 		rspamadm_confighelp_show(cfg, argc, argv, NULL, cfg->doc_strings);
+	}
+
+	if (plugins_doc) {
+		ucl_object_unref(plugins_doc);
 	}
 
 	rspamd_config_free(cfg);
