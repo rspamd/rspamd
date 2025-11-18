@@ -29,7 +29,7 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_tensor = require "rspamd_tensor"
 local rspamd_text = require "rspamd_text"
 local rspamd_util = require "rspamd_util"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
 -- Load providers
 pcall(require, "plugins/neural/providers/llm")
 pcall(require, "plugins/neural/providers/symbols")
@@ -38,14 +38,14 @@ local N = "neural"
 
 local settings = neural_common.settings
 
-local redis_profile_schema = ts.shape {
-  digest = ts.string,
-  symbols = ts.array_of(ts.string),
-  version = ts.number,
-  redis_key = ts.string,
-  distance = ts.number:is_optional(),
-  providers_digest = ts.string:is_optional(),
-}
+local redis_profile_schema = T.table({
+  digest = T.string():doc({ summary = "Symbols digest" }),
+  symbols = T.array(T.string()):doc({ summary = "List of symbols" }),
+  version = T.number():doc({ summary = "Profile version" }),
+  redis_key = T.string():doc({ summary = "Redis key for ANN" }),
+  distance = T.number():optional():doc({ summary = "Distance metric" }),
+  providers_digest = T.string():optional():doc({ summary = "Providers digest" }),
+}):doc({ summary = "Neural network profile schema" })
 
 local has_blas = rspamd_tensor.has_blas()
 local text_cookie = rspamd_text.cookie
