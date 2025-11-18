@@ -497,7 +497,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
     else
       if opt.external then
         -- External map definition, missing fields are handled by schema
-        local parse_res, parse_err = external_map_schema(opt)
+        local parse_res, parse_err = external_map_schema:transform(opt)
 
         if parse_res then
           if opt.cdb then
