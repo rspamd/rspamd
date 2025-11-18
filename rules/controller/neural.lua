@@ -15,7 +15,7 @@ limitations under the License.
 ]] --
 
 local neural_common = require "plugins/neural"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
 local ucl = require "ucl"
 local lua_util = require "lua_util"
 local rspamd_util = require "rspamd_util"
@@ -27,11 +27,11 @@ local N = 'neural'
 
 -- Controller neural plugin
 
-local learn_request_schema = ts.shape {
-  ham_vec = ts.array_of(ts.array_of(ts.number)),
-  rule = ts.string:is_optional(),
-  spam_vec = ts.array_of(ts.array_of(ts.number)),
-}
+local learn_request_schema = T.table({
+  ham_vec = T.array(T.array(T.number())):doc({ summary = "Ham training vectors" }),
+  rule = T.string():optional():doc({ summary = "Rule name to train" }),
+  spam_vec = T.array(T.array(T.number())):doc({ summary = "Spam training vectors" }),
+}):doc({ summary = "Neural network learning request" })
 
 local function handle_learn(task, conn)
   lua_util.debugm(N, task, 'controller.neural: learn called')
