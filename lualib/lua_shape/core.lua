@@ -574,8 +574,8 @@ end
 
 local function check_transform(node, value, ctx)
   if ctx.mode == "transform" then
-    -- Apply transformation
-    local new_value = node.fn(value, ctx)
+    -- Apply transformation (function receives only the value, not ctx)
+    local new_value = node.fn(value)
     -- Validate transformed value
     return node.inner:_check(new_value, ctx)
   else

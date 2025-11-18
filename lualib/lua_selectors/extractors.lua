@@ -258,7 +258,7 @@ The optional second argument accepts list of flags:
   - `full`: returns all headers with this name with all data (like task:get_header_full())
   - `strong`: use case sensitive match when matching header's name]],
     ['args_schema'] = { T.string(),
-                        T.one_of({ T.literal("strong"), T.literal("full") }):optional() }
+                        T.string():optional() }
   },
   -- Get list of received headers (returns list of tables)
   ['received'] = {
@@ -320,10 +320,18 @@ e.g. `get_tld`]],
       flags = url_flags_ts,
       flags_mode = T.enum { 'explicit' }:optional(),
       prefix = T.string():optional(),
-      need_content = T.one_of({ T.boolean(), T.transform(T.string(), lua_util.toboolean) }):optional(),
-      need_emails = T.one_of({ T.boolean(), T.transform(T.string(), lua_util.toboolean) }):optional(),
-      need_images = T.one_of({ T.boolean(), T.transform(T.string(), lua_util.toboolean) }):optional(),
-      ignore_redirected = T.one_of({ T.boolean(), T.transform(T.string(), lua_util.toboolean) }):optional(),
+      need_content = T.transform(T.boolean(), function(v)
+        return type(v) == "string" and lua_util.toboolean(v) or v
+      end):optional(),
+      need_emails = T.transform(T.boolean(), function(v)
+        return type(v) == "string" and lua_util.toboolean(v) or v
+      end):optional(),
+      need_images = T.transform(T.boolean(), function(v)
+        return type(v) == "string" and lua_util.toboolean(v) or v
+      end):optional(),
+      ignore_redirected = T.transform(T.boolean(), function(v)
+        return type(v) == "string" and lua_util.toboolean(v) or v
+      end):optional(),
     } }
   },
   ['specific_urls_filter_map'] = {
@@ -354,10 +362,18 @@ e.g. `get_tld`]],
       flags = url_flags_ts,
       flags_mode = T.enum { 'explicit' }:optional(),
       prefix = T.string():optional(),
-      need_content = T.one_of({ T.boolean(), T.transform(T.string(), lua_util.toboolean) }):optional(),
-      need_emails = T.one_of({ T.boolean(), T.transform(T.string(), lua_util.toboolean) }):optional(),
-      need_images = T.one_of({ T.boolean(), T.transform(T.string(), lua_util.toboolean) }):optional(),
-      ignore_redirected = T.one_of({ T.boolean(), T.transform(T.string(), lua_util.toboolean) }):optional(),
+      need_content = T.transform(T.boolean(), function(v)
+        return type(v) == "string" and lua_util.toboolean(v) or v
+      end):optional(),
+      need_emails = T.transform(T.boolean(), function(v)
+        return type(v) == "string" and lua_util.toboolean(v) or v
+      end):optional(),
+      need_images = T.transform(T.boolean(), function(v)
+        return type(v) == "string" and lua_util.toboolean(v) or v
+      end):optional(),
+      ignore_redirected = T.transform(T.boolean(), function(v)
+        return type(v) == "string" and lua_util.toboolean(v) or v
+      end):optional(),
     } }
   },
   -- URLs filtered by flags

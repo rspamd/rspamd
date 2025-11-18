@@ -205,8 +205,8 @@ context("Lua shape validation", function()
         port = { schema = T.integer(), optional = true, default = 8080 }
       })
 
-      local ok, val = schema:transform({ name = "server" })
-      assert_true(ok)
+      local val, err = schema:transform({ name = "server" })
+      assert_nil(err)
       assert_equal(val.port, 8080)
     end)
 
@@ -256,8 +256,8 @@ context("Lua shape validation", function()
     test("Optional with default in transform mode", function()
       local schema = T.string():with_default("default")
 
-      local ok, val = schema:transform(nil)
-      assert_true(ok)
+      local val, err = schema:transform(nil)
+      assert_nil(err)
       assert_equal(val, "default")
     end)
   end)
@@ -272,8 +272,8 @@ context("Lua shape validation", function()
         return val
       end)
 
-      local ok, val = schema:transform("42")
-      assert_true(ok)
+      local val, err = schema:transform("42")
+      assert_nil(err)
       assert_equal(val, 42)
     end)
 
@@ -286,13 +286,14 @@ context("Lua shape validation", function()
       end)
 
       -- Valid transform
-      local ok, val = schema:transform("10")
-      assert_true(ok)
+      local val, err = schema:transform("10")
+      assert_nil(err)
       assert_equal(val, 10)
 
       -- Transform result fails validation
-      ok = schema:transform("-5")
-      assert_false(ok)
+      val, err = schema:transform("-5")
+      assert_nil(val)
+      assert_not_nil(err)
     end)
 
     test("Transform only in transform mode", function()
@@ -306,8 +307,8 @@ context("Lua shape validation", function()
       assert_equal(val, 5)
 
       -- Transform mode: applies transform
-      ok, val = schema:transform(5)
-      assert_true(ok)
+      val, err = schema:transform(5)
+      assert_nil(err)
       assert_equal(val, 10)
     end)
 
@@ -316,8 +317,8 @@ context("Lua shape validation", function()
         return val:upper()
       end)
 
-      local ok, val = schema:transform("hello")
-      assert_true(ok)
+      local val, err = schema:transform("hello")
+      assert_nil(err)
       assert_equal(val, "HELLO")
     end)
   end)
