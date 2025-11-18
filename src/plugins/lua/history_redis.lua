@@ -46,7 +46,7 @@ local lua_util = require "lua_util"
 local lua_redis = require "lua_redis"
 local fun = require "fun"
 local ucl = require "ucl"
-local ts = (require "tableshape").types
+local T = require "lua_shape.core"
 local E = {}
 local N = "history_redis"
 
@@ -68,14 +68,17 @@ local settings = {
 }
 
 local settings_schema = lua_redis.enrich_schema({
-  key_prefix = ts.string,
-  expire = (ts.number + ts.string / lua_util.parse_time_interval):is_optional(),
-  nrows = ts.number,
-  compress = ts.boolean,
-  subject_privacy = ts.boolean:is_optional(),
-  subject_privacy_alg = ts.string:is_optional(),
-  subject_privacy_prefix = ts.string:is_optional(),
-  subject_privacy_length = ts.number:is_optional(),
+  key_prefix = T.string():doc({ summary = "History key name template" }),
+  expire = T.one_of({
+    T.number(),
+    T.transform(T.string(), lua_util.parse_time_interval)
+  }):optional():doc({ summary = "Expire time for inactive keys (seconds)" }),
+  nrows = T.number():doc({ summary = "History rows limit" }),
+  compress = T.boolean():doc({ summary = "Use zstd compression" }),
+  subject_privacy = T.boolean():optional():doc({ summary = "Obfuscate subjects for privacy" }),
+  subject_privacy_alg = T.string():optional():doc({ summary = "Hash algorithm for subject obfuscation" }),
+  subject_privacy_prefix = T.string():optional():doc({ summary = "Prefix for obfuscated subjects" }),
+  subject_privacy_length = T.number():optional():doc({ summary = "Hash length for obfuscated subjects" }),
 })
 
 local function process_addr(addr)
