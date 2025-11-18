@@ -53,6 +53,7 @@ local ok, config = config_schema:transform({
   - `pattern` - Lua pattern for validation (e.g., `"^%d+$"` for digits only)
   - `lpeg` - Optional lpeg pattern for complex parsing
 - `T.number(opts)` - Number with optional range constraints (min, max)
+  - Accepts both numbers and values convertible via `tonumber`
 - `T.integer(opts)` - Integer (number with integer constraint)
 - `T.boolean()` - Boolean value
 - `T.callable()` - Function/callable value
@@ -62,12 +63,13 @@ local ok, config = config_schema:transform({
 ### Structured Types
 
 - `T.array(item_schema, opts)` - Array with item validation
+  - Underlying table must be a dense, 1-indexed array (no sparse or string keys)
   - `min_items`, `max_items` - Size constraints
 - `T.table(fields, opts)` - Table/object with field schemas
   - `open = true` - Allow additional fields not defined in schema
   - `open = false` (default) - Reject unknown fields
   - `extra = schema` - Schema for validating extra fields
-  - `mixins` - Array of mixin schemas for composition
+  - `mixins` - Array of mixin schemas for composition (applied when the schema is resolved via the registry)
 - `T.one_of(variants)` - Sum type (match exactly one alternative)
 
 ### Composition
@@ -168,6 +170,8 @@ local timeout_schema = T.transform(T.number({ min = 0 }), function(val)
 end)
 ```
 
+> **Note:** transform functions are evaluated only when you call `schema:transform(...)`. A plain `schema:check(...)` validates the original input without invoking the transform, matching tableshape semantics.
+
 ### Callable Defaults
 
 Defaults can be functions that are called each time a default is needed:
@@ -207,6 +211,12 @@ local app_schema = T.table({
 
 -- Resolve references
 local resolved = reg:resolve_schema(app_schema)
+-- Validate/transforms should use the resolved schema so mixins/references are applied
+local ok, cfg_or_err = resolved:transform({
+  cache = {
+    servers = {"redis:6379"}
+  }
+})
 ```
 
 ### Mixins with Origin Tracking
@@ -232,6 +242,8 @@ local plugin_schema = T.table({
 -- Direct fields: enabled, plugin_option
 -- Mixin "redis": redis_host, redis_port
 ```
+
+Mixins are merged into the resulting table schema by `Registry:resolve_schema` (or `Registry:define`). Always validate against the resolved schema so that mixin fields participate in `:check` / `:transform` and emit proper documentation/JSON Schema output.
 
 ### JSON Schema Export
 
@@ -317,7 +329,7 @@ value does not match any alternative at :
 
 ## API Reference
 
-### Core Module (`rspamd_schema.core`)
+### Core Module (`lua_shape.core`)
 
 #### Type Constructors
 
@@ -338,24 +350,24 @@ value does not match any alternative at :
 - `T.optional(schema, opts?)` - Optional wrapper
 - `T.default(schema, value)` - Default value wrapper
 - `T.transform(schema, fn, opts?)` - Transform wrapper
-- `T.ref(id, opts?)` - Schema reference
+- `T.ref(id, opts?)` - Schema reference placeholder (must be resolved via the registry before validation)
 - `T.mixin(schema, opts?)` - Mixin definition
 
 #### Schema Methods
 
 - `schema:check(value, ctx?)` - Validate value
-- `schema:transform(value, ctx?)` - Transform and validate
+- `schema:transform(value, ctx?)` - Transform and validate (tableshape-compatible `(result)` / `(nil, err)` contract)
 - `schema:optional(opts?)` - Make optional
 - `schema:with_default(value)` - Add default
 - `schema:doc(doc_table)` - Add documentation
 - `schema:transform_with(fn, opts?)` - Add transformation
 
-### Registry Module (`rspamd_schema.registry`)
+### Registry Module (`lua_shape.registry`)
 
 - `Registry.global()` - Get/create global registry
-- `registry:define(id, schema)` - Register schema with ID
+- `registry:define(id, schema)` - Register schema with ID (returns the resolved version with mixins/reference chains applied)
 - `registry:get(id)` - Get schema by ID
-- `registry:resolve_schema(schema)` - Resolve references and mixins
+- `registry:resolve_schema(schema)` - Resolve references and mixins (recurses into nested arrays/one_of/options and caches the result)
 - `registry:list()` - List all schema IDs
 - `registry:export_all()` - Export all schemas
 
@@ -366,12 +378,12 @@ The core module also includes utility functions:
 - `T.format_error(err)` - Format error tree as human-readable string
 - `T.deep_clone(value)` - Deep clone value for immutable transformations
 
-### JSON Schema Module (`rspamd_schema.jsonschema`)
+### JSON Schema Module (`lua_shape.jsonschema`)
 
 - `jsonschema.from_schema(schema, opts?)` - Convert to JSON Schema
 - `jsonschema.export_registry(registry, opts?)` - Export all schemas
 
-### Docs Module (`rspamd_schema.docs`)
+### Docs Module (`lua_shape.docs`)
 
 - `docs.for_schema(schema, opts?)` - Generate documentation IR
 - `docs.for_registry(registry, opts?)` - Generate docs for all schemas
@@ -383,7 +395,7 @@ See [MIGRATION.md](MIGRATION.md) for detailed migration guide.
 
 Quick reference:
 
-| tableshape | rspamd_schema |
+| tableshape | lua_shape |
 |------------|---------------|
 | `ts.string` | `T.string()` |
 | `ts.number` | `T.number()` |
