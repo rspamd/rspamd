@@ -361,7 +361,7 @@ the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`,
       return '', 'string'
     end,
     ['description'] = 'Drops input value and return values from function\'s arguments or an empty string',
-    ['args_schema'] = (T.string() + T.array(T.string())):optional()
+    ['args_schema'] = T.one_of({ T.string(), T.array(T.string()) }):optional()
   },
   ['equal'] = {
     ['types'] = {
