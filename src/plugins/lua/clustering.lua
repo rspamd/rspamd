@@ -27,7 +27,7 @@ local lua_util = require "lua_util"
 local lua_verdict = require "lua_verdict"
 local lua_redis = require "lua_redis"
 local lua_selectors = require "lua_selectors"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
 
 local redis_params
 
@@ -44,20 +44,29 @@ local default_rule = {
   score_mult = 0.1,
 }
 
-local rule_schema = ts.shape {
-  max_elts = ts.number + ts.string / tonumber,
-  expire = ts.number + ts.string / lua_util.parse_time_interval,
-  expire_overflow = ts.number + ts.string / lua_util.parse_time_interval,
-  spam_mult = ts.number,
-  junk_mult = ts.number,
-  ham_mult = ts.number,
-  size_mult = ts.number,
-  score_mult = ts.number,
-  source_selector = ts.string,
-  cluster_selector = ts.string,
-  symbol = ts.string:is_optional(),
-  prefix = ts.string:is_optional(),
-}
+local rule_schema = T.table({
+  max_elts = T.one_of({
+    T.number(),
+    T.transform(T.string(), tonumber)
+  }):doc({ summary = "Maximum elements in a cluster" }),
+  expire = T.one_of({
+    T.number(),
+    T.transform(T.string(), lua_util.parse_time_interval)
+  }):doc({ summary = "Expire time for bucket (seconds)" }),
+  expire_overflow = T.one_of({
+    T.number(),
+    T.transform(T.string(), lua_util.parse_time_interval)
+  }):doc({ summary = "Expire time when limit is reached (seconds)" }),
+  spam_mult = T.number():doc({ summary = "Score multiplier for spam" }),
+  junk_mult = T.number():doc({ summary = "Score multiplier for junk" }),
+  ham_mult = T.number():doc({ summary = "Score multiplier for ham" }),
+  size_mult = T.number():doc({ summary = "Size-based score multiplier" }),
+  score_mult = T.number():doc({ summary = "Cluster score multiplier" }),
+  source_selector = T.string():doc({ summary = "Selector for cluster source" }),
+  cluster_selector = T.string():doc({ summary = "Selector for cluster grouping" }),
+  symbol = T.string():optional():doc({ summary = "Symbol name" }),
+  prefix = T.string():optional():doc({ summary = "Redis key prefix" }),
+}):doc({ summary = "Clustering rule configuration" })
 
 -- Redis scripts
 
