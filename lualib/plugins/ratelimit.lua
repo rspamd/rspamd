@@ -100,21 +100,11 @@ end
 local bucket_schema = T.table({
   burst = T.one_of({
     T.number(),
-    T.transform(T.number(), function(val)
-      if type(val) == "string" then
-        return lua_util.dehumanize_number(val)
-      end
-      return val
-    end)
+    T.transform(T.string(), lua_util.dehumanize_number)
   }):doc({ summary = "Burst size (number of messages)" }),
   rate = T.one_of({
     T.number(),
-    T.transform(T.number(), function(val)
-      if type(val) == "string" then
-        return str_to_rate(val)
-      end
-      return val
-    end)
+    T.transform(T.string(), str_to_rate)
   }):doc({ summary = "Rate limit (messages per time unit)" }),
   skip_recipients = T.boolean():optional():doc({ summary = "Skip per-recipient limits" }),
   symbol = T.string():optional():doc({ summary = "Custom symbol name" }),

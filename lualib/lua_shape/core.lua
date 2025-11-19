@@ -610,21 +610,34 @@ end
 -- Transform wrapper
 
 local function check_transform(node, value, ctx)
-  if ctx.mode == "transform" then
-    -- Apply transformation (protect against errors in user-provided function)
-    local ok_transform, new_value = pcall(node.fn, value)
-    if not ok_transform then
-      return false, make_error("transform_error", ctx.path, {
-        error = tostring(new_value)
-      })
-    end
-
-    -- Validate transformed value against inner schema
-    return node.inner:_check(new_value, ctx)
-  else
-    -- In check mode, validate original value against inner schema
-    return node.inner:_check(value, ctx)
+  -- First, validate the input value against the accepted type
+  local ok_input, err = node.inner:_check(value, make_context("check", ctx.path))
+  if not ok_input then
+    return false, err
   end
+
+  -- In check mode, we're done - input is valid
+  if ctx.mode ~= "transform" then
+    return true, value
+  end
+
+  -- In transform mode, apply the functor (protect against errors)
+  local ok_transform, new_value = pcall(node.fn, value)
+  if not ok_transform then
+    return false, make_error("transform_error", ctx.path, {
+      error = tostring(new_value)
+    })
+  end
+
+  -- Check if transformation returned nil (transformation failed)
+  if new_value == nil then
+    return false, make_error("transform_error", ctx.path, {
+      error = "transformation function returned nil"
+    })
+  end
+
+  -- Accept the transformed value without type checking the output
+  return true, new_value
 end
 
 function T.transform(schema, fn, opts)

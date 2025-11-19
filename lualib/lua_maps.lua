@@ -92,14 +92,10 @@ local external_map_schema = T.table({
   cdb = T.string():optional(), -- path to CDB file, required for CDB
   method = T.enum({ "body", "header", "query" }):optional(), -- how to pass input
   encode = T.enum({ "json", "messagepack" }):optional(), -- how to encode input (if relevant)
-  timeout = T.transform(T.number({ min = 0 }), function(val)
-    if type(val) == "number" then
-      return val
-    elseif type(val) == "string" then
-      return lua_util.parse_time_interval(val)
-    end
-    return val
-  end):optional(),
+  timeout = T.one_of({
+    T.number({ min = 0 }),
+    T.transform(T.string(), lua_util.parse_time_interval)
+  }):optional(),
 })
 
 -- Storage for CDB instances

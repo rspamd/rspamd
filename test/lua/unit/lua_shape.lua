@@ -265,35 +265,46 @@ context("Lua shape validation", function()
   -- Transform tests
   context("Transform support", function()
     test("Transform string to number", function()
-      local schema = T.transform(T.number(), function(val)
-        if type(val) == "string" then
-          return tonumber(val)
-        end
-        return val
-      end)
+      -- New semantics: first arg is accepted type, second is transformer
+      local schema = T.transform(T.string(), tonumber)
 
+      -- Transform mode: converts string to number
       local val, err = schema:transform("42")
       assert_nil(err)
       assert_equal(val, 42)
-    end)
 
-    test("Transform with validation", function()
-      local schema = T.transform(T.integer({ min = 0 }), function(val)
-        if type(val) == "string" then
-          return tonumber(val)
-        end
-        return val
-      end)
-
-      -- Valid transform
-      local val, err = schema:transform("10")
-      assert_nil(err)
-      assert_equal(val, 10)
-
-      -- Transform result fails validation
-      val, err = schema:transform("-5")
+      -- Invalid string returns nil, which is caught as error
+      val, err = schema:transform("not a number")
       assert_nil(val)
       assert_not_nil(err)
+      assert_equal(err.kind, "transform_error")
+    end)
+
+    test("Transform validates input type first", function()
+      local schema = T.transform(T.string(), tonumber)
+
+      -- Number input fails because accepted type is string
+      local val, err = schema:transform(42)
+      assert_nil(val)
+      assert_not_nil(err)
+      assert_equal(err.kind, "type_mismatch")
+    end)
+
+    test("Transform accepts number or string using one_of", function()
+      local schema = T.one_of({
+        T.number(),
+        T.transform(T.string(), tonumber)
+      })
+
+      -- Number passes through
+      local val, err = schema:transform(42)
+      assert_nil(err)
+      assert_equal(val, 42)
+
+      -- String is converted
+      val, err = schema:transform("123")
+      assert_nil(err)
+      assert_equal(val, 123)
     end)
 
     test("Transform only in transform mode", function()
@@ -301,7 +312,7 @@ context("Lua shape validation", function()
         return val * 2
       end)
 
-      -- Check mode: no transform
+      -- Check mode: no transform, just validates input is number
       local ok, val = schema:check(5)
       assert_true(ok)
       assert_equal(val, 5)
@@ -320,6 +331,18 @@ context("Lua shape validation", function()
       local val, err = schema:transform("hello")
       assert_nil(err)
       assert_equal(val, "HELLO")
+    end)
+
+    test("Transform result is not type-checked", function()
+      -- Transform string to table - result type is not validated
+      local schema = T.transform(T.string(), function(val)
+        return { value = val }
+      end)
+
+      local val, err = schema:transform("test")
+      assert_nil(err)
+      assert_equal(type(val), "table")
+      assert_equal(val.value, "test")
     end)
   end)
 

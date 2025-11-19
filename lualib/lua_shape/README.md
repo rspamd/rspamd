@@ -157,20 +157,32 @@ local config_schema = T.one_of({
 
 ### Transforms
 
+`T.transform(accepted_type, transformer)` validates input against `accepted_type`, then applies `transformer` function.
+
 ```lua
--- Parse time interval string to number
-local timeout_schema = T.transform(T.number({ min = 0 }), function(val)
-  if type(val) == "number" then
-    return val
-  elseif type(val) == "string" then
-    return parse_time_interval(val)  -- "5s" -> 5.0
-  else
-    error("Expected number or time interval string")
-  end
-end)
+-- Accept string, convert to number
+local num_from_string = T.transform(T.string(), tonumber)
+
+-- Accept number or string, convert both to number
+local flexible_number = T.one_of({
+  T.number(),
+  T.transform(T.string(), tonumber)
+})
+
+-- Accept string, parse time interval to number
+local timeout_schema = T.one_of({
+  T.number({ min = 0 }),
+  T.transform(T.string(), parse_time_interval)  -- "5s" -> 5.0
+})
 ```
 
-> **Note:** transform functions are evaluated only when you call `schema:transform(...)`. A plain `schema:check(...)` validates the original input without invoking the transform, matching tableshape semantics.
+**Semantics:**
+1. Input is validated against accepted type (first argument)
+2. If valid, transformer function is called with pcall
+3. If transformer returns `nil` or errors, validation fails
+4. Otherwise, result is accepted without type checking
+
+> **Note:** Transform functions run only in `schema:transform(...)` mode. In `schema:check(...)` mode, only the input type is validated.
 
 ### Callable Defaults
 
@@ -349,7 +361,7 @@ value does not match any alternative at :
 - `T.one_of(variants, opts?)` - Sum type
 - `T.optional(schema, opts?)` - Optional wrapper
 - `T.default(schema, value)` - Default value wrapper
-- `T.transform(schema, fn, opts?)` - Transform wrapper
+- `T.transform(accepted_type, transformer, opts?)` - Transform wrapper (validates input against accepted_type, then applies transformer)
 - `T.ref(id, opts?)` - Schema reference placeholder (must be resolved via the registry before validation)
 - `T.mixin(schema, opts?)` - Mixin definition
 
@@ -403,7 +415,7 @@ Quick reference:
 | `ts.shape({...})` | `T.table({...})` |
 | `field:is_optional()` | `field:optional()` or `{ schema = ..., optional = true }` |
 | `ts.string + ts.number` | `T.one_of({ T.string(), T.number() })` |
-| `ts.string / fn` | `T.string():transform_with(fn)` or `T.transform(T.number(), fn)` |
+| `ts.string / fn` | `T.string():transform_with(fn)` or `T.transform(T.string(), fn)` |
 | `field:describe("...")` | `field:doc({ summary = "..." })` |
 
 ## Files
