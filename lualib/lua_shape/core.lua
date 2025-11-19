@@ -490,10 +490,24 @@ local function check_table(node, value, ctx)
       end
     end
   else
-    -- Open table: copy unknown fields as-is
+    -- Open table: validate unknown fields with extra schema if provided
     for key, val in pairs(value) do
       if not fields[key] then
-        result[key] = val
+        if opts.extra then
+          -- Validate extra field
+          local extra_ctx = make_context(ctx.mode, clone_path(ctx.path))
+          table.insert(extra_ctx.path, key)
+          local ok, val_or_err = opts.extra:_check(val, extra_ctx)
+          if ok then
+            result[key] = val_or_err
+          else
+            has_errors = true
+            errors[key] = val_or_err
+          end
+        else
+          -- No extra schema, copy as-is
+          result[key] = val
+        end
       end
     end
   end
@@ -574,10 +588,15 @@ end
 
 local function check_transform(node, value, ctx)
   if ctx.mode == "transform" then
-    -- Apply transformation (function receives only the value, not ctx)
+    -- First validate the original value against the inner schema in check mode
+    local check_ctx = make_context("check", clone_path(ctx.path))
+    local ok, val_or_err = node.inner:_check(value, check_ctx)
+    if not ok then
+      return false, val_or_err
+    end
+    -- Then apply transformation and return transformed value
     local new_value = node.fn(value)
-    -- Validate transformed value
-    return node.inner:_check(new_value, ctx)
+    return true, new_value
   else
     -- In check mode, just validate original value
     return node.inner:_check(value, ctx)
