@@ -62,8 +62,12 @@ local return_codes_schema = T.table({}, {
   key = T.transform(T.string(), string.upper),
   extra = T.one_of({
     T.array(T.string()),
-    T.transform(T.string(), function(s)
-      return { s }
+    -- Transform string to array, inner schema validates the result
+    T.transform(T.array(T.string()), function(val)
+      if type(val) == "string" then
+        return { val }
+      end
+      return val
     end)
   })
 }):doc({ summary = "Map of symbol names to IP patterns" })
@@ -76,11 +80,14 @@ local return_bits_schema = T.table({}, {
       T.number(),
       T.transform(T.string(), tonumber)
     })),
-    T.transform(T.string(), function(s)
-      return { tonumber(s) }
-    end),
-    T.transform(T.number(), function(s)
-      return { s }
+    -- Transform string or number to array, inner schema validates the result
+    T.transform(T.array(T.number()), function(val)
+      if type(val) == "string" then
+        return { tonumber(val) }
+      elseif type(val) == "number" then
+        return { val }
+      end
+      return val
     end)
   })
 }):doc({ summary = "Map of symbol names to bit numbers" })
