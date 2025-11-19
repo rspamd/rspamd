@@ -92,7 +92,8 @@ local config_schema = T.table({
   }):doc({ summary = "External relay rules keyed by name" }),
 }):doc({ summary = "External relay plugin configuration" })
 
-PluginSchema.register("plugins.external_relay", config_schema)
+-- Register and get the resolved schema (with mixins expanded)
+config_schema = PluginSchema.register("plugins.external_relay", config_schema)
 
 if confighelp then
   return

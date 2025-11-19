@@ -114,14 +114,40 @@ function Registry:resolve_schema(schema)
     return target.resolved
   end
 
-  -- Handle table nodes with mixins
+  -- Handle table nodes with mixins and/or extra schema
   if tag == "table" then
     local opts = schema.opts or {}
     local mixins = opts.mixins or {}
+    local has_mixins = #mixins > 0
+    local has_extra = opts.extra ~= nil
 
-    if #mixins > 0 then
-      -- Merge mixin fields into table
-      local merged_fields = shallowcopy(schema.fields or {})
+    -- First, recursively resolve all field schemas
+    local fields = schema.fields or {}
+    local resolved_fields = nil
+    local fields_changed = false
+
+    for field_name, field_spec in pairs(fields) do
+      local field_schema = field_spec.schema
+      local resolved_field_schema = self:resolve_schema(field_schema)
+      if resolved_field_schema ~= field_schema then
+        if not resolved_fields then
+          resolved_fields = shallowcopy(fields)
+        end
+        local resolved_field_spec = shallowcopy(field_spec)
+        resolved_field_spec.schema = resolved_field_schema
+        resolved_fields[field_name] = resolved_field_spec
+        fields_changed = true
+      end
+    end
+
+    local merged_fields = resolved_fields or fields
+    local resolved_extra = opts.extra
+
+    -- Merge mixin fields if present
+    if has_mixins then
+      if not resolved_fields then
+        merged_fields = shallowcopy(fields)
+      end
 
       for _, mixin_def in ipairs(mixins) do
         if mixin_def._is_mixin then
@@ -157,10 +183,22 @@ function Registry:resolve_schema(schema)
           end
         end
       end
+    end
 
-      -- Create new table schema with merged fields
+    -- Resolve extra schema if present
+    if has_extra then
+      resolved_extra = self:resolve_schema(opts.extra)
+    end
+
+    -- Create new table schema if anything changed
+    if fields_changed or has_mixins or (has_extra and resolved_extra ~= opts.extra) then
       local resolved = shallowcopy(schema)
       resolved.fields = merged_fields
+      if resolved_extra ~= opts.extra then
+        local resolved_opts = shallowcopy(opts)
+        resolved_opts.extra = resolved_extra
+        resolved.opts = resolved_opts
+      end
       self.resolved_cache[schema] = resolved
       return resolved
     end
