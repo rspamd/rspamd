@@ -73,7 +73,7 @@ local function maybe_adjust_type(data, mtype)
   }
 
   if mtype == 'callback' then
-    return mtype
+    return data, mtype
   end
 
   for _, t in ipairs(known_types) do
@@ -303,6 +303,10 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
 
   if type(opt) == 'string' then
     opt, mtype = maybe_adjust_type(opt, mtype)
+    if not opt or opt == '' then
+      rspamd_logger.errx(rspamd_config, 'invalid map url (nil or empty): %s', description)
+      return nil
+    end
     local cache_key = map_hash_key(opt, mtype)
     if not callback and maps_cache[cache_key] then
       rspamd_logger.infox(rspamd_config, 'reuse url for %s(%s)',
