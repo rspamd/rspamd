@@ -1316,10 +1316,10 @@ local function parse_rule(name, tbl)
   rule.config = lua_util.override_defaults(rule.config, tbl)
 
   if rule.config.whitelist then
-    if lua_maps_exprs.schema(rule.config.whitelist) then
+    if lua_maps_exprs.schema:check(rule.config.whitelist) then
       rule.config.whitelist_map = lua_maps_exprs.create(rspamd_config,
           rule.config.whitelist, N)
-    elseif lua_maps.map_schema(rule.config.whitelist) then
+    elseif lua_maps.map_schema:check(rule.config.whitelist) then
       local map = lua_maps.map_add_from_ucl(rule.config.whitelist,
           'radix',
           sel_type .. ' reputation whitelist')
