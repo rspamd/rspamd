@@ -379,6 +379,9 @@ rspamd_tokenize_text(const char *text, gsize len,
 					*hash = mum_hash_finish(hv);
 				}
 
+				/* Free the dynamically allocated array from custom tokenizer */
+				kv_destroy(*custom_res);
+
 				return res;
 			}
 			else {
