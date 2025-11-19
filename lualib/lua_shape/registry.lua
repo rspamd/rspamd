@@ -26,6 +26,11 @@ local function shallowcopy(t)
   for k, v in pairs(t) do
     result[k] = v
   end
+  -- Preserve metatable if present
+  local mt = getmetatable(t)
+  if mt then
+    setmetatable(result, mt)
+  end
   return result
 end
 

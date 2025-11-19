@@ -321,6 +321,9 @@ Run Rspamd
   [Arguments]  ${check_port}=${RSPAMD_PORT_NORMAL}
   Export Rspamd Variables To Environment
 
+  # Copy config file to TMPDIR so it gets saved on teardown
+  Copy File  ${CONFIG}  ${RSPAMD_TMPDIR}/rspamd.conf
+
   # Dump templated config or errors to log
   ${result} =  Run Process  ${RSPAMADM}
   ...  --var\=TMPDIR\=${RSPAMD_TMPDIR}
@@ -336,10 +339,37 @@ Run Rspamd
   ...  env:ASAN_OPTIONS=quarantine_size_mb=2048:malloc_context_size=20:fast_unwind_on_malloc=0:log_path=${RSPAMD_TMPDIR}/rspamd-asan
   # We need to send output to files (or discard output) to avoid hanging Robot
   ...  stdout=${RSPAMD_TMPDIR}/configdump.stdout  stderr=${RSPAMD_TMPDIR}/configdump.stderr
+
+  # Always save configdump output to files, even if it failed
+  # First save process output directly to ensure we have something even if files weren't created
+  ${stdout_exists} =  Run Keyword And Return Status  File Should Exist  ${RSPAMD_TMPDIR}/configdump.stdout
+  ${stderr_exists} =  Run Keyword And Return Status  File Should Exist  ${RSPAMD_TMPDIR}/configdump.stderr
+
+  IF  not ${stdout_exists}
+    # File wasn't created, use process stdout if available
+    ${stdout_len} =  Get Length  ${result.stdout}
+    IF  ${stdout_len} > 0
+      Create File  ${RSPAMD_TMPDIR}/configdump.stdout  ${result.stdout}
+    ELSE
+      Create File  ${RSPAMD_TMPDIR}/configdump.stdout  <configdump stdout not created, process crashed?>
+    END
+  END
+
+  IF  not ${stderr_exists}
+    # File wasn't created, use process stderr if available
+    ${stderr_len} =  Get Length  ${result.stderr}
+    IF  ${stderr_len} > 0
+      Create File  ${RSPAMD_TMPDIR}/configdump.stderr  ${result.stderr}
+    ELSE
+      Create File  ${RSPAMD_TMPDIR}/configdump.stderr  <configdump stderr not created, process crashed?>
+    END
+  END
+
   IF  ${result.rc} == 0
     ${configdump} =  Get File  ${RSPAMD_TMPDIR}/configdump.stdout  encoding_errors=ignore
   ELSE
     ${configdump} =  Get File  ${RSPAMD_TMPDIR}/configdump.stderr  encoding_errors=ignore
+    Log  Configdump failed with rc=${result.rc}  level=WARN
   END
   Log  ${configdump}
 
