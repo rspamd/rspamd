@@ -76,8 +76,13 @@ local function print_help(key, value, tabs)
 
   if not opts['short'] then
     if value['data'] then
-      local nv = string.match(value['data'], '^#%s*(.*)%s*$') or value.data
-      print(string.format('%s\tDescription: %s', tabs, nv))
+      local data = value['data']
+      if type(data) == 'string' then
+        local nv = string.match(data, '^#%s*(.*)%s*$') or data
+        print(string.format('%s\tDescription: %s', tabs, nv))
+      elseif type(data) == 'table' and data.summary then
+        print(string.format('%s\tDescription: %s', tabs, data.summary))
+      end
     end
     if type(value['type']) == 'string' then
       print(string.format('%s\tType: %s', tabs, value['type']))

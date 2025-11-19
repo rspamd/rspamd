@@ -36,6 +36,9 @@ local rule_common = T.table({
   symbol = T.string():optional():doc({ summary = "Symbol name" }),
 }):doc({ summary = "Common rule fields" })
 
+-- Register rule_common as a mixin for documentation
+PluginSchema.register("mixins.external_relay_common", rule_common)
+
 local config_schema = T.table({
   enabled = T.boolean():optional():doc({ summary = "Enable the plugin" }),
   rules = T.table({}, {
