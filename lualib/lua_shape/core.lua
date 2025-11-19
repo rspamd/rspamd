@@ -162,7 +162,14 @@ local function check_string(node, value, ctx)
 
   -- Pattern matching
   if opts.pattern then
-    if not string.match(value, opts.pattern) then
+    local ok, match_result = pcall(string.match, value, opts.pattern)
+    if not ok then
+      return false, make_error("pattern_error", ctx.path, {
+        pattern = opts.pattern,
+        error = tostring(match_result)
+      })
+    end
+    if not match_result then
       return false, make_error("constraint_violation", ctx.path, {
         constraint = "pattern",
         pattern = opts.pattern
@@ -173,7 +180,13 @@ local function check_string(node, value, ctx)
   -- lpeg pattern (optional)
   if opts.lpeg then
     local lpeg = require "lpeg"
-    if not lpeg.match(opts.lpeg, value) then
+    local ok, match_result = pcall(lpeg.match, opts.lpeg, value)
+    if not ok then
+      return false, make_error("lpeg_pattern_error", ctx.path, {
+        error = tostring(match_result)
+      })
+    end
+    if not match_result then
       return false, make_error("constraint_violation", ctx.path, {
         constraint = "lpeg_pattern"
       })
@@ -442,9 +455,19 @@ local function check_table(node, value, ctx)
           local default_val = field_spec.default
           -- Support callable defaults: if default is a function, call it
           if type(default_val) == "function" then
-            default_val = default_val()
+            local ok, val = pcall(default_val)
+            if not ok then
+              has_errors = true
+              errors[field_name] = make_error("default_function_error", field_ctx.path, {
+                field = field_name,
+                error = tostring(val)
+              })
+            else
+              result[field_name] = val
+            end
+          else
+            result[field_name] = default_val
           end
-          result[field_name] = default_val
         end
       else
         has_errors = true
@@ -588,17 +611,18 @@ end
 
 local function check_transform(node, value, ctx)
   if ctx.mode == "transform" then
-    -- First validate the original value against the inner schema in check mode
-    local check_ctx = make_context("check", clone_path(ctx.path))
-    local ok, val_or_err = node.inner:_check(value, check_ctx)
-    if not ok then
-      return false, val_or_err
+    -- Apply transformation (protect against errors in user-provided function)
+    local ok_transform, new_value = pcall(node.fn, value)
+    if not ok_transform then
+      return false, make_error("transform_error", ctx.path, {
+        error = tostring(new_value)
+      })
     end
-    -- Then apply transformation and return transformed value
-    local new_value = node.fn(value)
-    return true, new_value
+
+    -- Validate transformed value against inner schema
+    return node.inner:_check(new_value, ctx)
   else
-    -- In check mode, just validate original value
+    -- In check mode, validate original value against inner schema
     return node.inner:_check(value, ctx)
   end
 end
@@ -798,7 +822,10 @@ function T.ref(id, opts)
     ref_id = id,
     opts = opts or {},
     _check = function(node, value, ctx)
-      error("Unresolved reference: " .. id .. ". Use registry to resolve references.")
+      return false, make_error("unresolved_reference", ctx.path, {
+        ref_id = id,
+        message = "Use registry to resolve references before validation"
+      })
     end
   })
 end

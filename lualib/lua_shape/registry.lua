@@ -102,7 +102,9 @@ function Registry:resolve_schema(schema)
     local ref_id = schema.ref_id
     local target = self.schemas[ref_id]
     if not target then
-      error("Unresolved reference: " .. ref_id)
+      -- Return schema as-is with unresolved reference
+      -- It will error during validation, not during schema registration
+      return schema
     end
     return target.resolved
   end
