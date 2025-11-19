@@ -59,7 +59,12 @@ local default_options = {
 
 local return_codes_schema = T.table({}, {
   open = true,
-  key = T.transform(T.string(), string.upper),
+  key = T.transform(T.string(), function(val)
+    if type(val) == "string" then
+      return string.upper(val)
+    end
+    return val
+  end),
   extra = T.one_of({
     T.array(T.string()),
     -- Transform string to array, inner schema validates the result
@@ -74,11 +79,21 @@ local return_codes_schema = T.table({}, {
 
 local return_bits_schema = T.table({}, {
   open = true,
-  key = T.transform(T.string(), string.upper),
+  key = T.transform(T.string(), function(val)
+    if type(val) == "string" then
+      return string.upper(val)
+    end
+    return val
+  end),
   extra = T.one_of({
     T.array(T.one_of({
       T.number(),
-      T.transform(T.string(), tonumber)
+      T.transform(T.number(), function(val)
+        if type(val) == "string" then
+          return tonumber(val)
+        end
+        return val
+      end)
     })),
     -- Transform string or number to array, inner schema validates the result
     T.transform(T.array(T.number()), function(val)

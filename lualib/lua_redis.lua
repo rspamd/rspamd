@@ -33,7 +33,12 @@ local db_schema = T.one_of({
 local common_schema = T.table({
   timeout = T.one_of({
     T.number(),
-    T.transform(T.string(), lutil.parse_time_interval)
+    T.transform(T.number({ min = 0 }), function(val)
+      if type(val) == "string" then
+        return lutil.parse_time_interval(val)
+      end
+      return val
+    end)
   }):optional():doc({ summary = "Connection timeout (seconds)" }),
   db = db_schema,
   database = db_schema,
@@ -56,18 +61,33 @@ local common_schema = T.table({
   }):optional():doc({ summary = "Sentinel servers" }),
   sentinel_watch_time = T.one_of({
     T.number(),
-    T.transform(T.string(), lutil.parse_time_interval)
+    T.transform(T.number({ min = 0 }), function(val)
+      if type(val) == "string" then
+        return lutil.parse_time_interval(val)
+      end
+      return val
+    end)
   }):optional():doc({ summary = "Sentinel watch time" }),
   sentinel_masters_pattern = T.string():optional():doc({ summary = "Sentinel masters pattern" }),
   sentinel_master_maxerrors = T.one_of({
     T.number(),
-    T.transform(T.string(), tonumber)
+    T.transform(T.number(), function(val)
+      if type(val) == "string" then
+        return tonumber(val)
+      end
+      return val
+    end)
   }):optional():doc({ summary = "Sentinel master max errors" }),
   sentinel_username = T.string():optional():doc({ summary = "Sentinel username" }),
   sentinel_password = T.string():optional():doc({ summary = "Sentinel password" }),
   redis_version = T.one_of({
     T.number(),
-    T.transform(T.string(), tonumber)
+    T.transform(T.number(), function(val)
+      if type(val) == "string" then
+        return tonumber(val)
+      end
+      return val
+    end)
   }):optional():doc({ summary = "Redis server version (6 or 7)" }),
 }, { open = true })
 
