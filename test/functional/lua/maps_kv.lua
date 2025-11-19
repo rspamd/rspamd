@@ -2,25 +2,35 @@ local rspamd_ip = require 'rspamd_ip'
 local rspamd_logger = require 'rspamd_logger'
 local lua_maps = require "lua_maps"
 
-local radix_map = rspamd_config:add_map ({
-  url = rspamd_env.RADIX_MAP,
-  type = 'radix',
-})
+-- Only load maps if environment variables are set
+local radix_map, map_map, regexp_map
 
-local map_map = rspamd_config:add_map ({
-  url = rspamd_env.MAP_MAP,
-  type = 'map',
-})
+if rspamd_env.RADIX_MAP then
+  radix_map = rspamd_config:add_map ({
+    url = rspamd_env.RADIX_MAP,
+    type = 'radix',
+  })
+end
 
-local regexp_map = rspamd_config:add_map ({
-  url = rspamd_env.REGEXP_MAP,
-  type = 'regexp',
-})
+if rspamd_env.MAP_MAP then
+  map_map = rspamd_config:add_map ({
+    url = rspamd_env.MAP_MAP,
+    type = 'map',
+  })
+end
+
+if rspamd_env.REGEXP_MAP then
+  regexp_map = rspamd_config:add_map ({
+    url = rspamd_env.REGEXP_MAP,
+    type = 'regexp',
+  })
+end
 
 rspamd_config:register_symbol({
   name = 'RADIX_KV',
   score = 1.0,
   callback = function()
+    if not radix_map then return true, 'map not loaded' end
     local sip = {'8.8.8.8', '::1', '192.168.1.1', '10.0.1.1'}
     local expected = {'test one', 'another', '1', false}
     for i = 1, #sip do
@@ -42,6 +52,7 @@ rspamd_config:register_symbol({
   name = 'MAP_KV',
   score = 1.0,
   callback = function()
+    if not map_map then return true, 'map not loaded' end
     local str = {'foo', 'asdf.example.com', 'asdf', 'barf'}
     local expected = {'bar', 'value', '', false}
     for i = 1, #str do
@@ -58,6 +69,7 @@ rspamd_config:register_symbol({
   name = 'REGEXP_KV',
   score = 1.0,
   callback = function()
+    if not regexp_map then return true, 'map not loaded' end
     local str = {'foo', 'asdf.example.com', 'asdf', 'barf'}
     local expected = {'bar', 'value', '1', false}
     for i = 1, #str do
