@@ -1329,6 +1329,14 @@ parse_spf_a(struct spf_record *rec,
 
 	CHECK_REC(rec);
 
+	/* Check if element has unresolved macros */
+	if (addr->flags & RSPAMD_SPF_FLAG_MACRO_UNRESOLVED) {
+		msg_debug_spf("a element has unresolved macros: %s", addr->spf_string);
+		addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
+		spf_record_addr_set(addr, FALSE);
+		return TRUE;
+	}
+
 	host = parse_spf_domain_mask(rec, addr, resolved, TRUE);
 
 	if (host == NULL) {
@@ -1386,7 +1394,23 @@ parse_spf_ptr(struct spf_record *rec,
 
 	CHECK_REC(rec);
 
+	/* Check if element has unresolved macros */
+	if (addr->flags & RSPAMD_SPF_FLAG_MACRO_UNRESOLVED) {
+		msg_debug_spf("ptr element has unresolved macros: %s", addr->spf_string);
+		addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
+		spf_record_addr_set(addr, FALSE);
+		return TRUE;
+	}
+
 	host = parse_spf_domain_mask(rec, addr, resolved, FALSE);
+
+	if (!task->from_addr) {
+		/* PTR requires from_addr to generate reverse DNS query */
+		msg_debug_spf("ptr element requires sender IP: %s", addr->spf_string);
+		addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
+		spf_record_addr_set(addr, FALSE);
+		return TRUE;
+	}
 
 	rec->dns_requests++;
 	cb = rspamd_mempool_alloc0(task->task_pool, sizeof(struct spf_dns_cb));
@@ -1395,6 +1419,7 @@ parse_spf_ptr(struct spf_record *rec,
 	cb->initiated_by = SPF_RESOLVE_PTR;
 	cb->resolved = resolved;
 	cb->initiated_dns_name = rspamd_mempool_strdup(task->task_pool, host);
+
 	ptr =
 		rdns_generate_ptr_from_str(rspamd_inet_address_to_string(
 			task->from_addr));
@@ -1431,6 +1456,14 @@ parse_spf_mx(struct spf_record *rec,
 	struct rspamd_task *task = rec->task;
 
 	CHECK_REC(rec);
+
+	/* Check if element has unresolved macros */
+	if (addr->flags & RSPAMD_SPF_FLAG_MACRO_UNRESOLVED) {
+		msg_debug_spf("mx element has unresolved macros: %s", addr->spf_string);
+		addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
+		spf_record_addr_set(addr, FALSE);
+		return TRUE;
+	}
 
 	host = parse_spf_domain_mask(rec, addr, resolved, TRUE);
 
@@ -1753,6 +1786,14 @@ parse_spf_exists(struct spf_record *rec, struct spf_addr *addr)
 	resolved = g_ptr_array_index(rec->resolved, rec->resolved->len - 1);
 	CHECK_REC(rec);
 
+	/* Check if element has unresolved macros */
+	if (addr->flags & RSPAMD_SPF_FLAG_MACRO_UNRESOLVED) {
+		msg_debug_spf("exists element has unresolved macros: %s", addr->spf_string);
+		addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
+		spf_record_addr_set(addr, FALSE);
+		return TRUE;
+	}
+
 	host = strchr(addr->spf_string, ':');
 	if (host == NULL) {
 		host = strchr(addr->spf_string, '=');
@@ -1765,6 +1806,7 @@ parse_spf_exists(struct spf_record *rec, struct spf_addr *addr)
 	}
 
 	host++;
+
 	rec->dns_requests++;
 
 	cb = rspamd_mempool_alloc0(task->task_pool, sizeof(struct spf_dns_cb));
@@ -1897,7 +1939,7 @@ rspamd_spf_process_substitution(const char *macro_value,
 
 static const char *
 expand_spf_macro(struct spf_record *rec, struct spf_resolved_element *resolved,
-				 const char *begin)
+				 const char *begin, gboolean *macro_unresolved)
 {
 	const char *p, *macro_value = NULL;
 	char *c, *new, *tmp, delim = '.';
@@ -1909,6 +1951,10 @@ expand_spf_macro(struct spf_record *rec, struct spf_resolved_element *resolved,
 
 	g_assert(rec != NULL);
 	g_assert(begin != NULL);
+
+	if (macro_unresolved) {
+		*macro_unresolved = FALSE;
+	}
 
 	task = rec->task;
 	p = begin;
@@ -2031,13 +2077,24 @@ expand_spf_macro(struct spf_record *rec, struct spf_resolved_element *resolved,
 		return begin;
 	}
 
-	new = rspamd_mempool_alloc(task->task_pool, len + 1);
-
 	/* Reduce TTL to avoid caching of records with macros */
 	if (rec->ttl != 0) {
 		rec->ttl = 0;
 		msg_debug_spf("disable SPF caching as there is macro expansion");
 	}
+
+	/* Check if we have necessary data for macro expansion */
+	if (!task->from_addr || !rec->sender) {
+		/* Cannot expand macros without sender IP and sender, return original */
+		msg_debug_spf("SPF macro expansion skipped: missing required data (from_addr=%p, sender=%s) for %s",
+					  task->from_addr, rec->sender ? rec->sender : "null", begin);
+		if (macro_unresolved) {
+			*macro_unresolved = TRUE;
+		}
+		return begin;
+	}
+
+	new = rspamd_mempool_alloc(task->task_pool, len + 1);
 
 	c = new;
 	p = begin;
@@ -2289,9 +2346,13 @@ spf_process_element(struct spf_record *rec,
 		return TRUE;
 	}
 
-	begin = expand_spf_macro(rec, resolved, elt);
+	gboolean macro_unresolved = FALSE;
+	begin = expand_spf_macro(rec, resolved, elt, &macro_unresolved);
 	addr = rspamd_spf_new_addr(rec, resolved, begin);
 	g_assert(addr != NULL);
+	if (macro_unresolved) {
+		addr->flags |= RSPAMD_SPF_FLAG_MACRO_UNRESOLVED;
+	}
 	t = g_ascii_tolower(addr->spf_string[0]);
 	begin = addr->spf_string;
 
