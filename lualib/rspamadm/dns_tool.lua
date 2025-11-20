@@ -385,22 +385,32 @@ local function spf_flatten_handler(opts)
     end
 
     for _, item in ipairs(all_v4) do
-      table.insert(current_chunk_v4, item)
-      local test_record = build_spf_record(current_chunk_v4, current_chunk_v6, {}, all_mechs, nil)
-      if #test_record > max_record_length then
-        table.remove(current_chunk_v4)
-        finalize_chunk()
+      local single_item_test = build_spf_record({item}, {}, {}, all_mechs, nil)
+      if #single_item_test > max_record_length then
+        printf('Warning: IPv4 network %s is too large to fit in a single SPF record, skipping', item.net)
+      else
         table.insert(current_chunk_v4, item)
+        local test_record = build_spf_record(current_chunk_v4, current_chunk_v6, {}, all_mechs, nil)
+        if #test_record > max_record_length then
+          table.remove(current_chunk_v4)
+          finalize_chunk()
+          table.insert(current_chunk_v4, item)
+        end
       end
     end
 
     for _, item in ipairs(all_v6) do
-      table.insert(current_chunk_v6, item)
-      local test_record = build_spf_record(current_chunk_v4, current_chunk_v6, {}, all_mechs, nil)
-      if #test_record > max_record_length then
-        table.remove(current_chunk_v6)
-        finalize_chunk()
+      local single_item_test = build_spf_record({}, {item}, {}, all_mechs, nil)
+      if #single_item_test > max_record_length then
+        printf('Warning: IPv6 network %s is too large to fit in a single SPF record, skipping', item.net)
+      else
         table.insert(current_chunk_v6, item)
+        local test_record = build_spf_record(current_chunk_v4, current_chunk_v6, {}, all_mechs, nil)
+        if #test_record > max_record_length then
+          table.remove(current_chunk_v6)
+          finalize_chunk()
+          table.insert(current_chunk_v6, item)
+        end
       end
     end
 
