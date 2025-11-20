@@ -17,23 +17,15 @@ limitations under the License.
 local E = {}
 local N = 'contextal'
 
-if confighelp then
-  return
-end
-
-local opts = rspamd_config:get_all_opt(N)
-if not opts then
-  return
-end
-
 local lua_redis = require "lua_redis"
 local lua_util = require "lua_util"
 local redis_cache = require "lua_cache"
 local rspamd_http = require "rspamd_http"
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
 local ucl = require "ucl"
+local PluginSchema = require "lua_shape.plugin_schema"
 
 local cache_context, redis_params
 
@@ -46,24 +38,35 @@ local contextal_actions = {
 }
 
 local config_schema = lua_redis.enrich_schema {
-  action_symbol_prefix = ts.string:is_optional(),
-  base_url = ts.string:is_optional(),
-  cache_prefix = ts.string:is_optional(),
-  cache_timeout = ts.number:is_optional(),
-  cache_ttl = ts.number:is_optional(),
-  custom_actions = ts.array_of(ts.string):is_optional(),
-  defer_if_no_result = ts.boolean:is_optional(),
-  defer_message = ts.string:is_optional(),
-  enabled = ts.boolean:is_optional(),
-  http_timeout = ts.number:is_optional(),
-  request_ttl = ts.number:is_optional(),
-  submission_symbol = ts.string:is_optional(),
+  action_symbol_prefix = T.string():optional():doc({ summary = "Prefix for action symbols" }),
+  base_url = T.string():optional():doc({ summary = "Base URL for Contextal API" }),
+  cache_prefix = T.string():optional():doc({ summary = "Redis cache key prefix" }),
+  cache_timeout = T.number():optional():doc({ summary = "Cache lookup timeout (seconds)" }),
+  cache_ttl = T.number():optional():doc({ summary = "Cache TTL (seconds)" }),
+  custom_actions = T.array(T.string()):optional():doc({ summary = "Additional custom actions" }),
+  defer_if_no_result = T.boolean():optional():doc({ summary = "Defer message if no result yet" }),
+  defer_message = T.string():optional():doc({ summary = "Defer message text" }),
+  enabled = T.boolean():optional():doc({ summary = "Enable the plugin" }),
+  http_timeout = T.number():optional():doc({ summary = "HTTP request timeout (seconds)" }),
+  request_ttl = T.number():optional():doc({ summary = "Result polling timeout (seconds)" }),
+  submission_symbol = T.string():optional():doc({ summary = "Submission symbol name" }),
   -- staged timeouts
-  connect_timeout = ts.number:is_optional(),
-  ssl_timeout = ts.number:is_optional(),
-  write_timeout = ts.number:is_optional(),
-  read_timeout = ts.number:is_optional(),
+  connect_timeout = T.number():optional():doc({ summary = "Connection timeout (seconds)" }),
+  ssl_timeout = T.number():optional():doc({ summary = "SSL negotiation timeout (seconds)" }),
+  write_timeout = T.number():optional():doc({ summary = "Write timeout (seconds)" }),
+  read_timeout = T.number():optional():doc({ summary = "Read timeout (seconds)" }),
 }
+
+PluginSchema.register("plugins.contextal", config_schema)
+
+if confighelp then
+  return
+end
+
+local opts = rspamd_config:get_all_opt(N)
+if not opts then
+  return
+end
 
 local settings = {
   action_symbol_prefix = 'CONTEXTAL_ACTION',

@@ -22,7 +22,7 @@ limitations under the License.
 
 local N = "aws"
 --local rspamd_logger = require "rspamd_logger"
-local ts = (require "tableshape").types
+local T = require "lua_shape.core"
 local lua_util = require "lua_util"
 local fun = require "fun"
 local rspamd_crypto_hash = require "rspamd_cryptobox_hash"
@@ -169,39 +169,33 @@ end
 
 exports.aws_canon_request_hash = aws_canon_request_hash
 
-local aws_authorization_hdr_args_schema = ts.shape {
-  date = ts.string + ts['nil'] / today_canonical,
-  secret_key = ts.string,
-  method = ts.string + ts['nil'] / function()
-    return 'GET'
-  end,
-  uri = ts.string,
-  region = ts.string,
-  service = ts.string + ts['nil'] / function()
-    return 's3'
-  end,
-  req_type = ts.string + ts['nil'] / function()
-    return 'aws4_request'
-  end,
-  headers = ts.map_of(ts.string, ts.string),
-  key_id = ts.string,
-}
+local aws_authorization_hdr_args_schema = T.table({
+  date = T.string():with_default(today_canonical),
+  secret_key = T.string(),
+  method = T.string():with_default('GET'),
+  uri = T.string(),
+  region = T.string(),
+  service = T.string():with_default('s3'),
+  req_type = T.string():with_default('aws4_request'),
+  -- headers is a table with string keys and string values (map_of equivalent)
+  headers = T.table({}, { open = true, extra = T.string() }),
+  key_id = T.string(),
+})
 --[[[
 -- @function lua_aws.aws_authorization_hdr(params)
 -- Produces an authorization header as required by AWS
--- Parameters schema is the following:
-ts.shape{
-  date = ts.string + ts['nil'] / today_canonical,
-  secret_key = ts.string,
-  method = ts.string + ts['nil'] / function() return 'GET' end,
-  uri = ts.string,
-  region = ts.string,
-  service = ts.string + ts['nil'] / function() return 's3' end,
-  req_type = ts.string + ts['nil'] / function() return 'aws4_request' end,
-  headers = ts.map_of(ts.string, ts.string),
-  key_id = ts.string,
-}
---
+-- Parameters schema:
+-- {
+--   date = string or nil (default: today),
+--   secret_key = string,
+--   method = string or nil (default: 'GET'),
+--   uri = string,
+--   region = string,
+--   service = string or nil (default: 's3'),
+--   req_type = string or nil (default: 'aws4_request'),
+--   headers = table of string->string,
+--   key_id = string,
+-- }
 --]]
 local function aws_authorization_hdr(tbl, transformed)
   local res, err
@@ -244,20 +238,19 @@ exports.aws_authorization_hdr = aws_authorization_hdr
 --[[[
 -- @function lua_aws.aws_request_enrich(params, content)
 -- Produces an authorization header as required by AWS
--- Parameters schema is the following:
-ts.shape{
-  date = ts.string + ts['nil'] / today_canonical,
-  secret_key = ts.string,
-  method = ts.string + ts['nil'] / function() return 'GET' end,
-  uri = ts.string,
-  region = ts.string,
-  service = ts.string + ts['nil'] / function() return 's3' end,
-  req_type = ts.string + ts['nil'] / function() return 'aws4_request' end,
-  headers = ts.map_of(ts.string, ts.string),
-  key_id = ts.string,
-}
-This method returns new/modified in place table of the headers
---
+-- Parameters schema (same as aws_authorization_hdr):
+-- {
+--   date = string or nil (default: today),
+--   secret_key = string,
+--   method = string or nil (default: 'GET'),
+--   uri = string,
+--   region = string,
+--   service = string or nil (default: 's3'),
+--   req_type = string or nil (default: 'aws4_request'),
+--   headers = table of string->string,
+--   key_id = string,
+-- }
+-- This method returns new/modified in place table of the headers
 --]]
 local function aws_request_enrich(tbl, content)
   local res, err = aws_authorization_hdr_args_schema:transform(tbl)

@@ -15,10 +15,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]] --
 
-if confighelp then
-  return
-end
-
 -- A plugin that provides common header manipulations
 
 local logger = require "rspamd_logger"
@@ -27,7 +23,8 @@ local N = 'milter_headers'
 local lua_util = require "lua_util"
 local lua_maps = require "lua_maps"
 local lua_mime = require "lua_mime"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
+local PluginSchema = require "lua_shape.plugin_schema"
 local E = {}
 
 local HOSTNAME = rspamd_util.get_hostname()
@@ -638,21 +635,30 @@ local function milter_headers(task)
   end
 end
 
-local config_schema = ts.shape({
-  use = ts.array_of(ts.string) + ts.string / function(s)
-    return { s }
-  end,
-  remove_upstream_spam_flag = ts.boolean:is_optional(),
-  extended_spam_headers = ts.boolean:is_optional(),
-  skip_local = ts.boolean:is_optional(),
-  skip_authenticated = ts.boolean:is_optional(),
-  local_headers = ts.array_of(ts.string):is_optional(),
-  authenticated_headers = ts.array_of(ts.string):is_optional(),
-  extended_headers_rcpt = lua_maps.map_schema:is_optional(),
-  custom = ts.map_of(ts.string, ts.string):is_optional(),
+local config_schema = T.table({
+  use = T.one_of({
+    T.array(T.string()),
+    T.transform(T.string(), function(s)
+      return { s }
+    end)
+  }):doc({ summary = "List of routines to activate" }),
+  remove_upstream_spam_flag = T.boolean():optional():doc({ summary = "Remove upstream spam flag" }),
+  extended_spam_headers = T.boolean():optional():doc({ summary = "Add extended spam headers" }),
+  skip_local = T.boolean():optional():doc({ summary = "Skip local connections" }),
+  skip_authenticated = T.boolean():optional():doc({ summary = "Skip authenticated users" }),
+  local_headers = T.array(T.string()):optional():doc({ summary = "Headers for local connections" }),
+  authenticated_headers = T.array(T.string()):optional():doc({ summary = "Headers for authenticated users" }),
+  extended_headers_rcpt = lua_maps.map_schema:optional():doc({ summary = "Recipients for extended headers" }),
+  custom = T.table({}, { open = true, extra = T.string() }):optional():doc({ summary = "Custom header definitions" }),
 }, {
-  extra_fields = ts.map_of(ts.string, ts.any)
-})
+  open = true
+}):doc({ summary = "Milter headers plugin configuration" })
+
+PluginSchema.register("plugins.milter_headers", config_schema)
+
+if confighelp then
+  return
+end
 
 local opts = rspamd_config:get_all_opt(N) or
     rspamd_config:get_all_opt('rmilter_headers')

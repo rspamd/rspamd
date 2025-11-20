@@ -18,14 +18,11 @@ limitations under the License.
 external_relay plugin - sets IP/hostname from Received headers
 ]]--
 
-if confighelp then
-  return
-end
-
 local lua_maps = require "lua_maps"
 local lua_util = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
+local PluginSchema = require "lua_shape.plugin_schema"
 
 local E = {}
 local N = "external_relay"
@@ -34,42 +31,73 @@ local settings = {
   rules = {},
 }
 
-local config_schema = ts.shape {
-  enabled = ts.boolean:is_optional(),
-  rules = ts.map_of(
-      ts.string, ts.one_of {
-        ts.shape {
-          priority = ts.number:is_optional(),
-          strategy = 'authenticated',
-          symbol = ts.string:is_optional(),
-          user_map = lua_maps.map_schema:is_optional(),
-        },
-        ts.shape {
-          count = ts.number,
-          priority = ts.number:is_optional(),
-          strategy = 'count',
-          symbol = ts.string:is_optional(),
-        },
-        ts.shape {
-          priority = ts.number:is_optional(),
-          strategy = 'local',
-          symbol = ts.string:is_optional(),
-        },
-        ts.shape {
-          hostname_map = lua_maps.map_schema,
-          priority = ts.number:is_optional(),
-          strategy = 'hostname_map',
-          symbol = ts.string:is_optional(),
-        },
-        ts.shape {
-          ip_map = lua_maps.map_schema,
-          priority = ts.number:is_optional(),
-          strategy = 'ip_map',
-          symbol = ts.string:is_optional(),
-        },
-      }
-  ),
-}
+local rule_common = T.table({
+  priority = T.number():optional():doc({ summary = "Symbol priority" }),
+  symbol = T.string():optional():doc({ summary = "Symbol name" }),
+}):doc({ summary = "Common rule fields" })
+
+-- Register rule_common as a mixin for documentation
+PluginSchema.register("mixins.external_relay_common", rule_common)
+
+local config_schema = T.table({
+  enabled = T.boolean():optional():doc({ summary = "Enable the plugin" }),
+  rules = T.table({}, {
+    open = true,
+    extra = T.one_of({
+      {
+        name = "authenticated",
+        schema = T.table({
+          strategy = T.literal('authenticated'):doc({ summary = "Authenticated strategy" }),
+          user_map = lua_maps.map_schema:optional():doc({ summary = "User map for filtering" }),
+        }, {
+          mixins = { T.mixin(rule_common, { as = "rule_common" }) }
+        })
+      },
+      {
+        name = "count",
+        schema = T.table({
+          strategy = T.literal('count'):doc({ summary = "Count strategy" }),
+          count = T.number():doc({ summary = "Number of received headers to skip" }),
+        }, {
+          mixins = { T.mixin(rule_common, { as = "rule_common" }) }
+        })
+      },
+      {
+        name = "local",
+        schema = T.table({
+          strategy = T.literal('local'):doc({ summary = "Local IP strategy" }),
+        }, {
+          mixins = { T.mixin(rule_common, { as = "rule_common" }) }
+        })
+      },
+      {
+        name = "hostname_map",
+        schema = T.table({
+          strategy = T.literal('hostname_map'):doc({ summary = "Hostname map strategy" }),
+          hostname_map = lua_maps.map_schema:doc({ summary = "Map of external relay hostnames" }),
+        }, {
+          mixins = { T.mixin(rule_common, { as = "rule_common" }) }
+        })
+      },
+      {
+        name = "ip_map",
+        schema = T.table({
+          strategy = T.literal('ip_map'):doc({ summary = "IP map strategy" }),
+          ip_map = lua_maps.map_schema:doc({ summary = "Map of external relay IPs" }),
+        }, {
+          mixins = { T.mixin(rule_common, { as = "rule_common" }) }
+        })
+      },
+    })
+  }):doc({ summary = "External relay rules keyed by name" }),
+}):doc({ summary = "External relay plugin configuration" })
+
+-- Register and get the resolved schema (with mixins expanded)
+config_schema = PluginSchema.register("plugins.external_relay", config_schema)
+
+if confighelp then
+  return
+end
 
 local function set_from_rcvd(task, rcvd)
   local rcvd_ip = rcvd.real_ip

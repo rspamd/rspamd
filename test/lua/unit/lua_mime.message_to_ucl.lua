@@ -318,7 +318,8 @@ context("Task piecewise split", function()
       local expected = parser:get_object()
       local ucl_object = lua_mime.message_to_ucl(task, true)
       local schema = lua_mime.message_to_ucl_schema()
-      assert_true(schema(ucl_object))
+      local ok, err = schema:check(ucl_object)
+      assert_true(ok, err)
       assert_rspamd_table_eq({
         actual = ucl_object,
         expect = expected

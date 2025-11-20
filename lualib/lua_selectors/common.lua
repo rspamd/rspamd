@@ -14,15 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
 local exports = {}
 local cr_hash = require 'rspamd_cryptobox_hash'
 
 local blake2b_key = cr_hash.create_specific('blake2'):update('rspamd'):bin()
 
 local function digest_schema()
-  return { ts.one_of { 'hex', 'base32', 'bleach32', 'rbase32', 'base64' }:is_optional(),
-           ts.one_of { 'blake2', 'sha256', 'sha1', 'sha512', 'md5' }:is_optional() }
+  return {
+    T.enum({ 'hex', 'base32', 'bleach32', 'rbase32', 'base64' }):optional():doc({ summary = "Encoding format" }),
+    T.enum({ 'blake2', 'sha256', 'sha1', 'sha512', 'md5' }):optional():doc({ summary = "Hash algorithm" })
+  }
 end
 
 exports.digest_schema = digest_schema

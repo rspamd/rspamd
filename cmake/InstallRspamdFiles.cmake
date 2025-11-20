@@ -68,7 +68,6 @@ function(InstallRspamdFiles)
     # Install third-party Lua libraries
     install(FILES "contrib/lua-fun/fun.lua" DESTINATION ${LUALIBDIR})
     install(FILES "contrib/lua-argparse/argparse.lua" DESTINATION ${LUALIBDIR})
-    install(FILES "contrib/lua-tableshape/tableshape.lua" DESTINATION ${LUALIBDIR})
     install(FILES "contrib/lua-lupa/lupa.lua" DESTINATION ${LUALIBDIR})
     install(FILES "contrib/lua-lpeg/lpegre.lua" DESTINATION ${LUALIBDIR})
 
