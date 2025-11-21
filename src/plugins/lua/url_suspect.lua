@@ -200,9 +200,16 @@ function checks.numeric_ip_analysis(task, url, cfg)
     return findings
   end
 
-  -- Check if private IP using rspamd_ip
-  local ip = rspamd_util.parse_addr(host)
-  local is_private = ip and ip:is_local()
+  -- Parse IP address using rspamd_ip for proper checks
+  local rspamd_ip = require "rspamd_ip"
+  local ip = rspamd_ip.from_string(host)
+
+  if not ip or not ip:is_valid() then
+    return findings
+  end
+
+  -- Check if private IP using rspamd_ip API
+  local is_private = ip:is_local()
 
   if is_private and cfg.allow_private_ranges then
     table.insert(findings, {
@@ -224,8 +231,8 @@ function checks.numeric_ip_analysis(task, url, cfg)
     end
   end
 
-  -- Optional: check IP range map if configured (works with rspamd_ip objects)
-  if maps.suspicious_ips and ip then
+  -- Optional: check IP range map if configured (radix maps work with rspamd_ip)
+  if maps.suspicious_ips then
     if maps.suspicious_ips:get_key(ip) then
       lua_util.debugm(N, task, "IP is in suspicious range")
       -- Could add additional penalty
