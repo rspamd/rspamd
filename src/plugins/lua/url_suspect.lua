@@ -61,6 +61,8 @@ local symbols = {
 local settings = {
   enabled = true,
   process_flags = { 'has_user', 'numeric', 'obscured', 'zw_spaces', 'no_tld' },
+  -- DoS protection
+  max_urls = 10000,
   checks = {
     user_password = {
       enabled = true,
@@ -110,6 +112,8 @@ local maps = {
   suspicious_ports = nil
 }
 
+
+
 -- Check implementations
 local checks = {}
 
@@ -130,11 +134,10 @@ function checks.user_password_analysis(task, url, cfg)
   end
 
   local user_len = #user
-  local host = url:get_host()
 
   lua_util.debugm(N, task, "Checking user field length: %d chars", user_len)
 
-  -- Length-based detection
+  -- Length-based detection (get host only when needed for options)
   if user_len > cfg.length_thresholds.very_long then
     table.insert(findings, {
       symbol = symbols.user_very_long,
@@ -145,17 +148,21 @@ function checks.user_password_analysis(task, url, cfg)
       symbol = symbols.user_long,
       options = { string.format("%d", user_len) }
     })
-  elseif user_len > cfg.length_thresholds.suspicious then
-    table.insert(findings, {
-      symbol = symbols.user_password,
-      options = { host or "unknown" }
-    })
   else
-    -- Normal length user
-    table.insert(findings, {
-      symbol = symbols.user_password,
-      options = { host or "unknown" }
-    })
+    -- Get host only for these cases where we need it in options
+    local host = url:get_host()
+    if user_len > cfg.length_thresholds.suspicious then
+      table.insert(findings, {
+        symbol = symbols.user_password,
+        options = { host or "unknown" }
+      })
+    else
+      -- Normal length user
+      table.insert(findings, {
+        symbol = symbols.user_password,
+        options = { host or "unknown" }
+      })
+    end
   end
 
   -- Optional: check pattern map if configured
@@ -193,14 +200,9 @@ function checks.numeric_ip_analysis(task, url, cfg)
     return findings
   end
 
-  lua_util.debugm(N, task, "Checking numeric IP: %s", host)
-
-  -- Check if private IP
-  local is_private = host:match("^10%.") or
-      host:match("^192%.168%.") or
-      host:match("^172%.1[6-9]%.") or
-      host:match("^172%.2[0-9]%.") or
-      host:match("^172%.3[0-1]%.")
+  -- Check if private IP using rspamd_ip
+  local ip = rspamd_util.parse_addr(host)
+  local is_private = ip and ip:is_local()
 
   if is_private and cfg.allow_private_ranges then
     table.insert(findings, {
@@ -222,9 +224,9 @@ function checks.numeric_ip_analysis(task, url, cfg)
     end
   end
 
-  -- Optional: check IP range map if configured
-  if maps.suspicious_ips then
-    if maps.suspicious_ips:get_key(host) then
+  -- Optional: check IP range map if configured (works with rspamd_ip objects)
+  if maps.suspicious_ips and ip then
+    if maps.suspicious_ips:get_key(ip) then
       lua_util.debugm(N, task, "IP is in suspicious range")
       -- Could add additional penalty
     end
@@ -262,7 +264,7 @@ function checks.tld_analysis(task, url, cfg)
     return findings
   end
 
-  -- Check built-in suspicious TLDs
+  -- Check built-in suspicious TLDs (5 TLDs, O(n) is fine)
   for _, suspicious_tld in ipairs(cfg.builtin_suspicious) do
     if tld == suspicious_tld or tld:sub(-#suspicious_tld) == suspicious_tld then
       lua_util.debugm(N, task, "URL uses suspicious TLD: %s", tld)
@@ -291,28 +293,22 @@ function checks.unicode_analysis(task, url, cfg)
   local url_flags_tab = rspamd_url.flags
   local flags = url:get_flags_num()
 
-  local url_text = url:get_text()
-  local host = url:get_host()
-
-  -- Check validity
-  if cfg.check_validity and not rspamd_util.is_valid_utf8(url_text) then
-    lua_util.debugm(N, task, "URL has invalid UTF-8")
-    table.insert(findings, {
-      symbol = symbols.bad_unicode,
-      options = { host or "unknown" }
-    })
-  end
-
-  -- Check zero-width spaces (existing flag)
+  -- Check zero-width spaces (flag check only, no string needed)
   if cfg.check_zero_width and bit.band(flags, url_flags_tab.zw_spaces) ~= 0 then
     lua_util.debugm(N, task, "URL contains zero-width spaces")
     table.insert(findings, {
       symbol = symbols.zero_width,
-      options = { host or "unknown" }
+      options = { "zw" }
     })
   end
 
-  -- Check homographs
+  -- Get host for homograph/options (host is short, acceptable to intern)
+  local host
+  if cfg.check_homographs or cfg.check_validity or cfg.check_rtl_override then
+    host = url:get_host()
+  end
+
+  -- Check homographs on host (much smaller than full URL)
   if cfg.check_homographs and host then
     if rspamd_util.is_utf_spoofed(host) then
       lua_util.debugm(N, task, "URL uses homograph attack: %s", host)
@@ -323,13 +319,30 @@ function checks.unicode_analysis(task, url, cfg)
     end
   end
 
-  -- Check RTL override (U+202E)
-  if cfg.check_rtl_override and url_text:find("\226\128\174") then
-    lua_util.debugm(N, task, "URL contains RTL override")
-    table.insert(findings, {
-      symbol = symbols.rtl_override,
-      options = { host or "unknown" }
-    })
+  -- Only get full URL text if needed, use rspamd_text to avoid copying
+  if cfg.check_validity or cfg.check_rtl_override then
+    local url_text = url:get_text(true) -- true = return rspamd_text, not string
+
+    -- Check validity on opaque text
+    if cfg.check_validity and url_text and not rspamd_util.is_valid_utf8(url_text) then
+      lua_util.debugm(N, task, "URL has invalid UTF-8")
+      table.insert(findings, {
+        symbol = symbols.bad_unicode,
+        options = { host or "unknown" }
+      })
+    end
+
+    -- Check RTL override (U+202E) using text:find on opaque object
+    if cfg.check_rtl_override and url_text then
+      local rtl_pos = url_text:find("\226\128\174")
+      if rtl_pos then
+        lua_util.debugm(N, task, "URL contains RTL override")
+        table.insert(findings, {
+          symbol = symbols.rtl_override,
+          options = { host or "unknown" }
+        })
+      end
+    end
   end
 
   return findings
@@ -338,35 +351,16 @@ end
 -- Check: URL structure anomalies
 function checks.structure_analysis(task, url, cfg)
   local findings = {}
-  local url_text = url:get_text()
-  local host = url:get_host()
+  local url_flags_tab = rspamd_url.flags
+  local flags = url:get_flags_num()
 
-  -- Check multiple @ signs
-  if cfg.check_multiple_at then
-    local _, at_count = url_text:gsub("@", "")
-    if at_count > cfg.max_at_signs then
-      lua_util.debugm(N, task, "URL has %d @ signs", at_count)
-      table.insert(findings, {
-        symbol = symbols.multiple_at,
-        options = { string.format("%d", at_count) }
-      })
-    end
+  -- Get host only if needed
+  local host
+  if cfg.check_excessive_dots or cfg.check_backslash then
+    host = url:get_host()
   end
 
-  -- Check backslashes (existing flag indicates obscured)
-  if cfg.check_backslash then
-    local url_flags_tab = rspamd_url.flags
-    local flags = url:get_flags_num()
-    if bit.band(flags, url_flags_tab.obscured) ~= 0 and url_text:find("\\") then
-      lua_util.debugm(N, task, "URL contains backslashes")
-      table.insert(findings, {
-        symbol = symbols.backslash,
-        options = { host or "unknown" }
-      })
-    end
-  end
-
-  -- Check excessive dots in hostname
+  -- Check excessive dots in hostname (work on host, not full URL)
   if cfg.check_excessive_dots and host then
     local _, dot_count = host:gsub("%.", "")
     if dot_count > cfg.max_host_dots then
@@ -378,13 +372,39 @@ function checks.structure_analysis(task, url, cfg)
     end
   end
 
-  -- Check URL length
-  if cfg.check_length and #url_text > cfg.max_url_length then
-    lua_util.debugm(N, task, "URL is very long: %d chars", #url_text)
+  -- Check backslashes using existing obscured flag
+  if cfg.check_backslash and bit.band(flags, url_flags_tab.obscured) ~= 0 then
+    lua_util.debugm(N, task, "URL contains backslashes")
     table.insert(findings, {
-      symbol = symbols.very_long,
-      options = { string.format("%d", #url_text) }
+      symbol = symbols.backslash,
+      options = { host or "obscured" }
     })
+  end
+
+  -- Only get full URL text if length/@ checks are enabled (expensive for long URLs)
+  if cfg.check_multiple_at or cfg.check_length then
+    local url_text = url:get_text()
+
+    -- Check URL length first (cheapest check, just #)
+    if cfg.check_length and #url_text > cfg.max_url_length then
+      lua_util.debugm(N, task, "URL is very long: %d chars", #url_text)
+      table.insert(findings, {
+        symbol = symbols.very_long,
+        options = { string.format("%d", #url_text) }
+      })
+    end
+
+    -- Check multiple @ signs (requires gsub scan)
+    if cfg.check_multiple_at then
+      local _, at_count = url_text:gsub("@", "")
+      if at_count > cfg.max_at_signs then
+        lua_util.debugm(N, task, "URL has %d @ signs", at_count)
+        table.insert(findings, {
+          symbol = symbols.multiple_at,
+          options = { string.format("%d", at_count) }
+        })
+      end
+    end
   end
 
   return findings
@@ -484,8 +504,16 @@ local function url_suspect_callback(task)
     return false
   end
 
-  for _, url in ipairs(suspect_urls) do
-    local url_findings = analyze_url(task, url, settings)
+  -- DoS protection: limit number of URLs to process
+  local urls_to_check = #suspect_urls
+  if urls_to_check > settings.max_urls then
+    rspamd_logger.warnx(task, 'Too many URLs (%d), processing only first %d',
+        urls_to_check, settings.max_urls)
+    urls_to_check = settings.max_urls
+  end
+
+  for i = 1, urls_to_check do
+    local url_findings = analyze_url(task, suspect_urls[i], settings)
 
     for _, finding in ipairs(url_findings) do
       task:insert_result(finding.symbol, 1.0, finding.options or {})

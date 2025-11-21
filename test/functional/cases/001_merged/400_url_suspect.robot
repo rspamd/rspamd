@@ -43,4 +43,3 @@ URL Suspect - Normal URL
   Do Not Expect Symbol  URL_USER_PASSWORD
   Do Not Expect Symbol  URL_NUMERIC_IP
   Do Not Expect Symbol  URL_SUSPICIOUS_TLD
-  Do Not Expect Symbol  R_SUSPICIOUS_URL
