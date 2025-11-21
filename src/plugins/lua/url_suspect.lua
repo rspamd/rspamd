@@ -32,10 +32,37 @@ local rspamd_url = require "rspamd_url"
 local rspamd_util = require "rspamd_util"
 local bit = require "bit"
 
+-- Symbol names (fixed, not configurable)
+local symbols = {
+  -- User/password symbols
+  user_password = "URL_USER_PASSWORD",
+  user_long = "URL_USER_LONG",
+  user_very_long = "URL_USER_VERY_LONG",
+  -- Numeric IP symbols
+  numeric_ip = "URL_NUMERIC_IP",
+  numeric_ip_user = "URL_NUMERIC_IP_USER",
+  numeric_private = "URL_NUMERIC_PRIVATE_IP",
+  -- TLD symbols
+  no_tld = "URL_NO_TLD",
+  suspicious_tld = "URL_SUSPICIOUS_TLD",
+  -- Unicode symbols
+  bad_unicode = "URL_BAD_UNICODE",
+  homograph = "URL_HOMOGRAPH_ATTACK",
+  rtl_override = "URL_RTL_OVERRIDE",
+  zero_width = "URL_ZERO_WIDTH_SPACES",
+  -- Structure symbols
+  multiple_at = "URL_MULTIPLE_AT_SIGNS",
+  backslash = "URL_BACKSLASH_PATH",
+  excessive_dots = "URL_EXCESSIVE_DOTS",
+  very_long = "URL_VERY_LONG"
+}
+
 -- Default settings (work without any maps)
 local settings = {
   enabled = true,
   process_flags = { 'has_user', 'numeric', 'obscured', 'zw_spaces', 'no_tld' },
+  -- DoS protection
+  max_urls = 10000,
   checks = {
     user_password = {
       enabled = true,
@@ -43,21 +70,15 @@ local settings = {
         suspicious = 64,
         long = 128,
         very_long = 256
-      },
-
+      }
     },
     numeric_ip = {
       enabled = true,
-      base_score = 1.5,
-      with_user_score = 4.0,
-      allow_private_ranges = true,
-      private_score = 0.5
+      allow_private_ranges = true
     },
     tld = {
       enabled = true,
-      builtin_suspicious = { ".tk", ".ml", ".ga", ".cf", ".gq" },
-      builtin_score = 3.0,
-      missing_tld_score = 2.0
+      builtin_suspicious = { ".tk", ".ml", ".ga", ".cf", ".gq" }
     },
     unicode = {
       enabled = true,
@@ -77,32 +98,8 @@ local settings = {
       max_url_length = 2048
     }
   },
-  symbols = {
-    -- User/password symbols
-    user_password = "URL_USER_PASSWORD",
-    user_long = "URL_USER_LONG",
-    user_very_long = "URL_USER_VERY_LONG",
-    -- Numeric IP symbols
-    numeric_ip = "URL_NUMERIC_IP",
-    numeric_ip_user = "URL_NUMERIC_IP_USER",
-    numeric_private = "URL_NUMERIC_PRIVATE_IP",
-    -- TLD symbols
-    no_tld = "URL_NO_TLD",
-    suspicious_tld = "URL_SUSPICIOUS_TLD",
-    -- Unicode symbols
-    bad_unicode = "URL_BAD_UNICODE",
-    homograph = "URL_HOMOGRAPH_ATTACK",
-    rtl_override = "URL_RTL_OVERRIDE",
-    zero_width = "URL_ZERO_WIDTH_SPACES",
-    -- Structure symbols
-    multiple_at = "URL_MULTIPLE_AT_SIGNS",
-    backslash = "URL_BACKSLASH_PATH",
-    excessive_dots = "URL_EXCESSIVE_DOTS",
-    very_long = "URL_VERY_LONG"
-  },
   use_whitelist = false,
-  custom_checks = {},
-  compat_mode = true
+  custom_checks = {}
 }
 
 -- Optional maps (only loaded if enabled)
@@ -114,6 +111,8 @@ local maps = {
   suspicious_tlds = nil,
   suspicious_ports = nil
 }
+
+
 
 -- Check implementations
 local checks = {}
@@ -135,36 +134,35 @@ function checks.user_password_analysis(task, url, cfg)
   end
 
   local user_len = #user
-  local host = url:get_host()
 
   lua_util.debugm(N, task, "Checking user field length: %d chars", user_len)
 
-  -- Length-based scoring (built-in, no map needed)
+  -- Length-based detection (get host only when needed for options)
   if user_len > cfg.length_thresholds.very_long then
     table.insert(findings, {
-      symbol = settings.symbols.user_very_long,
-      score = 5.0,
+      symbol = symbols.user_very_long,
       options = { string.format("%d", user_len) }
     })
   elseif user_len > cfg.length_thresholds.long then
     table.insert(findings, {
-      symbol = settings.symbols.user_long,
-      score = 3.0,
+      symbol = symbols.user_long,
       options = { string.format("%d", user_len) }
     })
-  elseif user_len > cfg.length_thresholds.suspicious then
-    table.insert(findings, {
-      symbol = settings.symbols.user_password,
-      score = 2.0,
-      options = { host or "unknown" }
-    })
   else
-    -- Normal length user
-    table.insert(findings, {
-      symbol = settings.symbols.user_password,
-      score = 2.0,
-      options = { host or "unknown" }
-    })
+    -- Get host only for these cases where we need it in options
+    local host = url:get_host()
+    if user_len > cfg.length_thresholds.suspicious then
+      table.insert(findings, {
+        symbol = symbols.user_password,
+        options = { host or "unknown" }
+      })
+    else
+      -- Normal length user
+      table.insert(findings, {
+        symbol = symbols.user_password,
+        options = { host or "unknown" }
+      })
+    end
   end
 
   -- Optional: check pattern map if configured
@@ -202,41 +200,40 @@ function checks.numeric_ip_analysis(task, url, cfg)
     return findings
   end
 
-  lua_util.debugm(N, task, "Checking numeric IP: %s", host)
+  -- Parse IP address using rspamd_ip for proper checks
+  local rspamd_ip = require "rspamd_ip"
+  local ip = rspamd_ip.from_string(host)
 
-  -- Check if private IP
-  local is_private = host:match("^10%.") or
-      host:match("^192%.168%.") or
-      host:match("^172%.1[6-9]%.") or
-      host:match("^172%.2[0-9]%.") or
-      host:match("^172%.3[0-1]%.")
+  if not ip or not ip:is_valid() then
+    return findings
+  end
+
+  -- Check if private IP using rspamd_ip API
+  local is_private = ip:is_local()
 
   if is_private and cfg.allow_private_ranges then
     table.insert(findings, {
-      symbol = settings.symbols.numeric_private,
-      score = cfg.private_score,
+      symbol = symbols.numeric_private,
       options = { host }
     })
   else
     -- Check if user present (more suspicious)
     if bit.band(flags, url_flags_tab.has_user) ~= 0 then
       table.insert(findings, {
-        symbol = settings.symbols.numeric_ip_user,
-        score = cfg.with_user_score,
+        symbol = symbols.numeric_ip_user,
         options = { host }
       })
     else
       table.insert(findings, {
-        symbol = settings.symbols.numeric_ip,
-        score = cfg.base_score,
+        symbol = symbols.numeric_ip,
         options = { host }
       })
     end
   end
 
-  -- Optional: check IP range map if configured
+  -- Optional: check IP range map if configured (radix maps work with rspamd_ip)
   if maps.suspicious_ips then
-    if maps.suspicious_ips:get_key(host) then
+    if maps.suspicious_ips:get_key(ip) then
       lua_util.debugm(N, task, "IP is in suspicious range")
       -- Could add additional penalty
     end
@@ -262,8 +259,7 @@ function checks.tld_analysis(task, url, cfg)
     if bit.band(flags, url_flags_tab.numeric) == 0 then
       lua_util.debugm(N, task, "URL has no TLD: %s", host)
       table.insert(findings, {
-        symbol = settings.symbols.no_tld,
-        score = cfg.missing_tld_score,
+        symbol = symbols.no_tld,
         options = { host }
       })
     end
@@ -275,13 +271,12 @@ function checks.tld_analysis(task, url, cfg)
     return findings
   end
 
-  -- Check built-in suspicious TLDs (no map needed)
+  -- Check built-in suspicious TLDs (5 TLDs, O(n) is fine)
   for _, suspicious_tld in ipairs(cfg.builtin_suspicious) do
     if tld == suspicious_tld or tld:sub(-#suspicious_tld) == suspicious_tld then
       lua_util.debugm(N, task, "URL uses suspicious TLD: %s", tld)
       table.insert(findings, {
-        symbol = settings.symbols.suspicious_tld,
-        score = cfg.builtin_score,
+        symbol = symbols.suspicious_tld,
         options = { tld }
       })
       break
@@ -305,49 +300,56 @@ function checks.unicode_analysis(task, url, cfg)
   local url_flags_tab = rspamd_url.flags
   local flags = url:get_flags_num()
 
-  local url_text = url:get_text()
-  local host = url:get_host()
-
-  -- Check validity
-  if cfg.check_validity and not rspamd_util.is_valid_utf8(url_text) then
-    lua_util.debugm(N, task, "URL has invalid UTF-8")
-    table.insert(findings, {
-      symbol = settings.symbols.bad_unicode,
-      score = 3.0,
-      options = { host or "unknown" }
-    })
-  end
-
-  -- Check zero-width spaces (existing flag)
+  -- Check zero-width spaces (flag check only, no string needed)
   if cfg.check_zero_width and bit.band(flags, url_flags_tab.zw_spaces) ~= 0 then
     lua_util.debugm(N, task, "URL contains zero-width spaces")
     table.insert(findings, {
-      symbol = settings.symbols.zero_width,
-      score = 7.0,
-      options = { host or "unknown" }
+      symbol = symbols.zero_width,
+      options = { "zw" }
     })
   end
 
-  -- Check homographs
+  -- Get host for homograph/options (host is short, acceptable to intern)
+  local host
+  if cfg.check_homographs or cfg.check_validity or cfg.check_rtl_override then
+    host = url:get_host()
+  end
+
+  -- Check homographs on host (much smaller than full URL)
   if cfg.check_homographs and host then
     if rspamd_util.is_utf_spoofed(host) then
       lua_util.debugm(N, task, "URL uses homograph attack: %s", host)
       table.insert(findings, {
-        symbol = settings.symbols.homograph,
-        score = 5.0,
+        symbol = symbols.homograph,
         options = { host }
       })
     end
   end
 
-  -- Check RTL override (U+202E)
-  if cfg.check_rtl_override and url_text:find("\226\128\174") then
-    lua_util.debugm(N, task, "URL contains RTL override")
-    table.insert(findings, {
-      symbol = settings.symbols.rtl_override,
-      score = 6.0,
-      options = { host or "unknown" }
-    })
+  -- Only get full URL text if needed, use rspamd_text to avoid copying
+  if cfg.check_validity or cfg.check_rtl_override then
+    local url_text = url:get_text(true) -- true = return rspamd_text, not string
+
+    -- Check validity on opaque text
+    if cfg.check_validity and url_text and not rspamd_util.is_valid_utf8(url_text) then
+      lua_util.debugm(N, task, "URL has invalid UTF-8")
+      table.insert(findings, {
+        symbol = symbols.bad_unicode,
+        options = { host or "unknown" }
+      })
+    end
+
+    -- Check RTL override (U+202E) using text:find on opaque object
+    if cfg.check_rtl_override and url_text then
+      local rtl_pos = url_text:find("\226\128\174")
+      if rtl_pos then
+        lua_util.debugm(N, task, "URL contains RTL override")
+        table.insert(findings, {
+          symbol = symbols.rtl_override,
+          options = { host or "unknown" }
+        })
+      end
+    end
   end
 
   return findings
@@ -356,57 +358,60 @@ end
 -- Check: URL structure anomalies
 function checks.structure_analysis(task, url, cfg)
   local findings = {}
-  local url_text = url:get_text()
-  local host = url:get_host()
+  local url_flags_tab = rspamd_url.flags
+  local flags = url:get_flags_num()
 
-  -- Check multiple @ signs
-  if cfg.check_multiple_at then
-    local _, at_count = url_text:gsub("@", "")
-    if at_count > cfg.max_at_signs then
-      lua_util.debugm(N, task, "URL has %d @ signs", at_count)
-      table.insert(findings, {
-        symbol = settings.symbols.multiple_at,
-        score = 3.0,
-        options = { string.format("%d", at_count) }
-      })
-    end
+  -- Get host only if needed
+  local host
+  if cfg.check_excessive_dots or cfg.check_backslash then
+    host = url:get_host()
   end
 
-  -- Check backslashes (existing flag indicates obscured)
-  if cfg.check_backslash then
-    local url_flags_tab = rspamd_url.flags
-    local flags = url:get_flags_num()
-    if bit.band(flags, url_flags_tab.obscured) ~= 0 and url_text:find("\\") then
-      lua_util.debugm(N, task, "URL contains backslashes")
-      table.insert(findings, {
-        symbol = settings.symbols.backslash,
-        score = 2.0,
-        options = { host or "unknown" }
-      })
-    end
-  end
-
-  -- Check excessive dots in hostname
+  -- Check excessive dots in hostname (work on host, not full URL)
   if cfg.check_excessive_dots and host then
     local _, dot_count = host:gsub("%.", "")
     if dot_count > cfg.max_host_dots then
       lua_util.debugm(N, task, "URL hostname has %d dots", dot_count)
       table.insert(findings, {
-        symbol = settings.symbols.excessive_dots,
-        score = 2.0,
+        symbol = symbols.excessive_dots,
         options = { string.format("%d", dot_count) }
       })
     end
   end
 
-  -- Check URL length
-  if cfg.check_length and #url_text > cfg.max_url_length then
-    lua_util.debugm(N, task, "URL is very long: %d chars", #url_text)
+  -- Check backslashes using existing obscured flag
+  if cfg.check_backslash and bit.band(flags, url_flags_tab.obscured) ~= 0 then
+    lua_util.debugm(N, task, "URL contains backslashes")
     table.insert(findings, {
-      symbol = settings.symbols.very_long,
-      score = 1.5,
-      options = { string.format("%d", #url_text) }
+      symbol = symbols.backslash,
+      options = { host or "obscured" }
     })
+  end
+
+  -- Only get full URL text if length/@ checks are enabled (expensive for long URLs)
+  if cfg.check_multiple_at or cfg.check_length then
+    local url_text = url:get_text()
+
+    -- Check URL length first (cheapest check, just #)
+    if cfg.check_length and #url_text > cfg.max_url_length then
+      lua_util.debugm(N, task, "URL is very long: %d chars", #url_text)
+      table.insert(findings, {
+        symbol = symbols.very_long,
+        options = { string.format("%d", #url_text) }
+      })
+    end
+
+    -- Check multiple @ signs (requires gsub scan)
+    if cfg.check_multiple_at then
+      local _, at_count = url_text:gsub("@", "")
+      if at_count > cfg.max_at_signs then
+        lua_util.debugm(N, task, "URL has %d @ signs", at_count)
+        table.insert(findings, {
+          symbol = symbols.multiple_at,
+          options = { string.format("%d", at_count) }
+        })
+      end
+    end
   end
 
   return findings
@@ -484,10 +489,10 @@ local function url_suspect_callback(task)
   -- TLD and structure checks don't have corresponding URL flags, so need all URLs
   local need_all_urls = (
       (settings.checks.tld and settings.checks.tld.enabled) or
-      (settings.checks.structure and settings.checks.structure.enabled and
-          (settings.checks.structure.check_multiple_at or
-              settings.checks.structure.check_excessive_dots or
-              settings.checks.structure.check_length))
+          (settings.checks.structure and settings.checks.structure.enabled and
+              (settings.checks.structure.check_multiple_at or
+                  settings.checks.structure.check_excessive_dots or
+                  settings.checks.structure.check_length))
   )
 
   if need_all_urls then
@@ -506,30 +511,19 @@ local function url_suspect_callback(task)
     return false
   end
 
-  local total_findings = 0
-
-  for _, url in ipairs(suspect_urls) do
-    local url_findings = analyze_url(task, url, settings)
-
-    for _, finding in ipairs(url_findings) do
-      task:insert_result(finding.symbol, finding.score, finding.options or {})
-      total_findings = total_findings + 1
-    end
+  -- DoS protection: limit number of URLs to process
+  local urls_to_check = #suspect_urls
+  if urls_to_check > settings.max_urls then
+    rspamd_logger.warnx(task, 'Too many URLs (%d), processing only first %d',
+        urls_to_check, settings.max_urls)
+    urls_to_check = settings.max_urls
   end
 
-  -- Backward compatibility: R_SUSPICIOUS_URL
-  if settings.compat_mode and total_findings > 0 then
-    -- Check if we inserted any symbols
-    local has_findings = false
-    for _, symbol_name in pairs(settings.symbols) do
-      if task:has_symbol(symbol_name) then
-        has_findings = true
-        break
-      end
-    end
+  for i = 1, urls_to_check do
+    local url_findings = analyze_url(task, suspect_urls[i], settings)
 
-    if has_findings then
-      task:insert_result('R_SUSPICIOUS_URL', 5.0)
+    for _, finding in ipairs(url_findings) do
+      task:insert_result(finding.symbol, 1.0, finding.options or {})
     end
   end
 
@@ -591,24 +585,12 @@ if settings.enabled then
   })
 
   -- Register all symbol names as virtual
-  for _, symbol_name in pairs(settings.symbols) do
+  for _, symbol_name in pairs(symbols) do
     rspamd_config:register_symbol({
       name = symbol_name,
       type = 'virtual',
       parent = id,
       group = 'url'
-    })
-  end
-
-  -- Backward compat symbol
-  if settings.compat_mode then
-    rspamd_config:register_symbol({
-      name = 'R_SUSPICIOUS_URL',
-      type = 'virtual',
-      parent = id,
-      score = 5.0,
-      group = 'url',
-      description = 'Suspicious URL (legacy symbol)'
     })
   end
 end
