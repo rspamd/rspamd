@@ -927,6 +927,6 @@ if settings.enabled and settings.checks.obfuscated_text and settings.checks.obfu
     }
 
     rspamd_logger.infox(rspamd_config, 'Registered obfuscated URL detection with %d patterns',
-        lua_util.table_len(patterns))
+        #re_parts)
   end
 end
