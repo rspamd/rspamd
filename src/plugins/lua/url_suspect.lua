@@ -96,7 +96,52 @@ local settings = {
       max_host_dots = 6,
       check_length = true,
       max_url_length = 2048
+    },
+    obfuscated_text = {
+      enabled = true,
+      -- DoS protection limits
+      max_matches_per_message = 50,
+      max_extracted_urls = 20,
+      min_match_length = 8,
+      max_match_length = 1024,
+      -- Context window for extraction
+      context_before = 64,
+      context_after = 256,
+      max_normalize_length = 512,
+      -- Pattern toggles
+      patterns_enabled = {
+        spaced_protocol = true,
+        hxxp = true,
+        bracket_dots = true,
+        word_dots = true,
+        html_entities = true
+      }
     }
+  },
+  symbols = {
+    -- User/password symbols
+    user_password = "URL_USER_PASSWORD",
+    user_long = "URL_USER_LONG",
+    user_very_long = "URL_USER_VERY_LONG",
+    -- Numeric IP symbols
+    numeric_ip = "URL_NUMERIC_IP",
+    numeric_ip_user = "URL_NUMERIC_IP_USER",
+    numeric_private = "URL_NUMERIC_PRIVATE_IP",
+    -- TLD symbols
+    no_tld = "URL_NO_TLD",
+    suspicious_tld = "URL_SUSPICIOUS_TLD",
+    -- Unicode symbols
+    bad_unicode = "URL_BAD_UNICODE",
+    homograph = "URL_HOMOGRAPH_ATTACK",
+    rtl_override = "URL_RTL_OVERRIDE",
+    zero_width = "URL_ZERO_WIDTH_SPACES",
+    -- Structure symbols
+    multiple_at = "URL_MULTIPLE_AT_SIGNS",
+    backslash = "URL_BACKSLASH_PATH",
+    excessive_dots = "URL_EXCESSIVE_DOTS",
+    very_long = "URL_VERY_LONG",
+    -- Obfuscated text symbol
+    obfuscated_text = "URL_OBFUSCATED_TEXT"
   },
   use_whitelist = false,
   custom_checks = {}
@@ -109,10 +154,96 @@ local maps = {
   user_blacklist = nil,
   suspicious_ips = nil,
   suspicious_tlds = nil,
-  suspicious_ports = nil
+  suspicious_ports = nil,
+  -- Obfuscated text pattern control
+  obfuscated_patterns = nil
 }
 
+-- Obfuscated text helpers
+local function normalize_obfuscated_text(text, max_len)
+  max_len = max_len or 512
 
+  -- Hard limit to prevent DoS
+  if #text > max_len then
+    text = text:sub(1, max_len)
+  end
+
+  -- 1. Remove zero-width characters (U+200B, U+200C, U+200D, BOM, soft hyphen)
+  text = text:gsub("[\226\128\139\226\128\140\226\128\141\239\187\191\194\173]", "")
+
+  -- 2. HTML entity decode
+  text = rspamd_util.decode_html(text)
+
+  -- 3. Normalize spaced protocol: h t t p s : / / -> https://
+  text = text:gsub("[hH]%s+[tT]%s+[tT]%s+[pP]%s*[sS]?%s*:%s*/%s*/", "https://")
+  text = text:gsub("[hH]%s+[tT]%s+[tT]%s+[pP]%s*:%s*/%s*/", "http://")
+
+  -- 4. hxxp -> http (case insensitive)
+  text = text:gsub("[hH][xX][xX][pP][sS]?", "http")
+
+  -- 5. Deobfuscate dots: [.] (.) {.} -> .
+  text = text:gsub("[%[%(%{]%s*%.%s*[%]%)%}]", ".")
+
+  -- 6. Word "dot" or "DOT" -> .
+  text = text:gsub("%s+[dD][oO][tT]%s+", ".")
+
+  -- 7. Collapse multiple spaces and slashes
+  text = text:gsub("%s+", " ")
+  text = text:gsub("/+", "/")
+
+  -- 8. Special unicode dots -> ASCII dot
+  text = text:gsub("\226\128\164", ".")  -- U+2024 ONE DOT LEADER
+  text = text:gsub("\226\128\167", ".")  -- U+2027 HYPHENATION POINT
+  text = text:gsub("\194\183", ".")      -- U+00B7 MIDDLE DOT
+
+  return lua_util.str_trim(text)
+end
+
+local function extract_url_from_normalized(text)
+  if not text or #text == 0 then
+    return nil, nil
+  end
+
+  -- Pattern 1: URL with explicit protocol
+  local url_with_proto = text:match("https?://[%w%.%-_~:/?#@!$&'()*+,;=%%]+")
+  if url_with_proto then
+    -- Validate: must have at least a dot in the host part
+    local host_part = url_with_proto:match("https?://([^/]+)")
+    if host_part and host_part:find("%.") then
+      return url_with_proto, "explicit_protocol"
+    end
+  end
+
+  -- Pattern 2: Naked domain (more strict to avoid false positives)
+  -- Must start with word boundary, have valid structure
+  local naked = text:match("[%w][%w%-]+%.[%a][%w%-%.]+")
+  if naked then
+    -- Validate: must have valid TLD (at least 2 chars)
+    local tld = naked:match("%.([%a][%w%-]*)$")
+    if tld and #tld >= 2 and #tld <= 10 then
+      -- Additional check: must not be too many dots (likely random text)
+      local _, dot_count = naked:gsub("%.", "")
+      if dot_count <= 4 then
+        return "http://" .. naked, "naked_domain"
+      end
+    end
+  end
+
+  return nil, nil
+end
+
+local function extract_context_window(text, start_pos, end_pos, cfg)
+  local window_start = math.max(1, start_pos - cfg.context_before)
+  local window_end = math.min(#text, end_pos + cfg.context_after)
+  local window_len = window_end - window_start
+
+  -- Apply hard limit
+  if window_len > cfg.max_normalize_length then
+    window_end = window_start + cfg.max_normalize_length
+  end
+
+  return text:sub(window_start, window_end)
+end
 
 -- Check implementations
 local checks = {}
@@ -564,6 +695,12 @@ local function init_maps(cfg)
     maps.suspicious_ports = lua_maps.map_add_from_ucl(
         cfg.checks.structure.port_map, 'set', 'url_suspect_ports')
   end
+
+  -- Load obfuscated pattern control map if configured
+  if cfg.checks.obfuscated_text and cfg.checks.obfuscated_text.pattern_map then
+    maps.obfuscated_patterns = lua_maps.map_add_from_ucl(
+        cfg.checks.obfuscated_text.pattern_map, 'set', 'url_suspect_obfuscated_patterns')
+  end
 end
 
 -- Plugin registration
@@ -592,5 +729,204 @@ if settings.enabled then
       parent = id,
       group = 'url'
     })
+  end
+end
+
+-- Obfuscated URL detection in message text
+-- Uses Hyperscan for fast pre-filtering, then normalizes and extracts URLs
+if settings.enabled and settings.checks.obfuscated_text and settings.checks.obfuscated_text.enabled then
+  local obf_cfg = settings.checks.obfuscated_text
+
+  -- Counters for DoS protection (per task)
+  local obf_state = {}
+
+  -- Helper: try to extract and inject URL from matched text
+  local function process_obfuscated_match(task, txt, start_pos, end_pos, obf_type)
+    -- Get or initialize state for this task
+    local task_id = tostring(task)
+    if not obf_state[task_id] then
+      obf_state[task_id] = {
+        match_count = 0,
+        extracted_count = 0
+      }
+    end
+    local state = obf_state[task_id]
+
+    -- Check limits
+    state.match_count = state.match_count + 1
+    if state.match_count > obf_cfg.max_matches_per_message then
+      lua_util.debugm(N, task, 'Reached max matches limit (%d), skipping further checks',
+          obf_cfg.max_matches_per_message)
+      return false
+    end
+
+    if state.extracted_count >= obf_cfg.max_extracted_urls then
+      lua_util.debugm(N, task, 'Reached max extracted URLs limit (%d)',
+          obf_cfg.max_extracted_urls)
+      return false
+    end
+
+    -- Extract context window
+    local window = extract_context_window(txt, start_pos, end_pos, obf_cfg)
+    if #window < obf_cfg.min_match_length then
+      return false
+    end
+
+    lua_util.debugm(N, task, 'Processing %s match at %d-%d, window: %s',
+        obf_type, start_pos, end_pos, window:sub(1, 100))
+
+    -- Normalize
+    local normalized = normalize_obfuscated_text(window, obf_cfg.max_normalize_length)
+    if not normalized or #normalized < obf_cfg.min_match_length then
+      lua_util.debugm(N, task, 'Normalized text too short or empty')
+      return false
+    end
+
+    lua_util.debugm(N, task, 'Normalized text: %s', normalized:sub(1, 100))
+
+    -- Extract URL
+    local extracted_url, url_type = extract_url_from_normalized(normalized)
+    if not extracted_url then
+      lua_util.debugm(N, task, 'Could not extract URL from normalized text')
+      return false
+    end
+
+    lua_util.debugm(N, task, 'Extracted URL: %s (type: %s)', extracted_url, url_type)
+
+    -- Create URL object
+    local url_obj = rspamd_url.create(task:get_mempool(), extracted_url)
+    if not url_obj then
+      lua_util.debugm(N, task, 'Failed to create URL object for: %s', extracted_url)
+      return false
+    end
+
+    -- Set obscured flag
+    url_obj:add_flag('obscured')
+
+    -- Inject URL into task
+    local success = task:inject_url(url_obj)
+    if success then
+      state.extracted_count = state.extracted_count + 1
+
+      -- Insert result symbol with details
+      local original_snippet = window:sub(1, 50):gsub("%s+", " ")
+      task:insert_result(settings.symbols.obfuscated_text, 1.0, {
+        string.format("type=%s", obf_type),
+        string.format("url=%s", extracted_url:sub(1, 50)),
+        string.format("orig=%s", original_snippet)
+      })
+
+      lua_util.debugm(N, task, 'Successfully injected obfuscated URL: %s (obfuscation: %s)',
+          extracted_url, obf_type)
+      return true
+    else
+      lua_util.debugm(N, task, 'Failed to inject URL: %s', extracted_url)
+      return false
+    end
+  end
+
+  -- Helper: check if pattern is enabled
+  local function is_pattern_enabled(pattern_name)
+    -- If map is configured, check it
+    if maps.obfuscated_patterns then
+      return maps.obfuscated_patterns:get_key(pattern_name)
+    end
+    -- Otherwise use built-in config
+    return obf_cfg.patterns_enabled[pattern_name]
+  end
+
+  -- Build regex patterns
+  local patterns = {}
+  local re_conditions = {}
+
+  if is_pattern_enabled('spaced_protocol') then
+    -- Match spaced protocol: h t t p s : / /
+    local spaced_proto_re = [[/[hH]\s+[tT]\s+[tT]\s+[pP]\s*[sS]?\s*[:\/]/L{sa_body}]]
+    patterns.spaced_proto = spaced_proto_re
+    re_conditions[spaced_proto_re] = function(task, txt, s, e)
+      local len = e - s
+      if len < obf_cfg.min_match_length or len > obf_cfg.max_match_length then
+        return false
+      end
+      return process_obfuscated_match(task, txt, s + 1, e, 'spaced_protocol')
+    end
+  end
+
+  if is_pattern_enabled('hxxp') then
+    -- Match hxxp:// or hXXp://
+    local hxxp_re = [[/[hH][xX][xX][pP][sS]?:\/\//L{sa_body}]]
+    patterns.hxxp = hxxp_re
+    re_conditions[hxxp_re] = function(task, txt, s, e)
+      local len = e - s
+      if len < obf_cfg.min_match_length or len > obf_cfg.max_match_length then
+        return false
+      end
+      return process_obfuscated_match(task, txt, s + 1, e, 'hxxp')
+    end
+  end
+
+  if is_pattern_enabled('bracket_dots') then
+    -- Match dots in brackets: [.] (.) {.}
+    local bracket_dots_re = [[/[\[\(\{]\s*\.\s*[\]\)\}]/L{sa_body}]]
+    patterns.bracket_dots = bracket_dots_re
+    re_conditions[bracket_dots_re] = function(task, txt, s, e)
+      local len = e - s
+      if len < obf_cfg.min_match_length or len > obf_cfg.max_match_length then
+        return false
+      end
+      return process_obfuscated_match(task, txt, s + 1, e, 'bracket_dots')
+    end
+  end
+
+  if is_pattern_enabled('word_dots') then
+    -- Match word "dot" between word characters
+    local word_dot_re = [[/\w+\s+[dD][oO][tT]\s+\w+/L{sa_body}]]
+    patterns.word_dot = word_dot_re
+    re_conditions[word_dot_re] = function(task, txt, s, e)
+      local len = e - s
+      if len < obf_cfg.min_match_length or len > obf_cfg.max_match_length then
+        return false
+      end
+      return process_obfuscated_match(task, txt, s + 1, e, 'word_dot')
+    end
+  end
+
+  if is_pattern_enabled('html_entities') then
+    -- Match HTML entities that might be dots or slashes
+    local html_entity_re = [[/&#\d{2,3};[^&]{0,20}&#\d{2,3};/L{sa_body}]]
+    patterns.html_entity = html_entity_re
+    re_conditions[html_entity_re] = function(task, txt, s, e)
+      local len = e - s
+      if len < obf_cfg.min_match_length or len > obf_cfg.max_match_length then
+        return false
+      end
+      return process_obfuscated_match(task, txt, s + 1, e, 'html_entity')
+    end
+  end
+
+  -- Build combined regex expression
+  local re_parts = {}
+  for _, pattern_re in pairs(patterns) do
+    table.insert(re_parts, string.format("(%s)", pattern_re))
+  end
+
+  if #re_parts == 0 then
+    rspamd_logger.infox(rspamd_config, 'No obfuscated text patterns enabled, skipping registration')
+  else
+    local combined_re = table.concat(re_parts, " + ")
+
+    -- Register using config.regexp (like bitcoin.lua)
+    config.regexp[settings.symbols.obfuscated_text] = {
+      description = 'Obfuscated URL found in message text',
+      re = string.format('%s > 0', combined_re),
+      expression_flags = { 'noopt' },
+      re_conditions = re_conditions,
+      score = 5.0,
+      one_shot = true,
+      group = 'url'
+    }
+
+    rspamd_logger.infox(rspamd_config, 'Registered obfuscated URL detection with %d patterns',
+        lua_util.table_len(patterns))
   end
 end
