@@ -1,0 +1,6 @@
+From: sender@example.com
+To: victim@example.com
+Subject: Test spaced protocol obfuscation
+Content-Type: text/plain; charset=utf-8
+
+Visit h t t p s : / / evil-site.com/page for details

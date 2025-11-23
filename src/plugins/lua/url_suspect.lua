@@ -54,7 +54,9 @@ local symbols = {
   multiple_at = "URL_MULTIPLE_AT_SIGNS",
   backslash = "URL_BACKSLASH_PATH",
   excessive_dots = "URL_EXCESSIVE_DOTS",
-  very_long = "URL_VERY_LONG"
+  very_long = "URL_VERY_LONG",
+  -- Obfuscated text symbol
+  obfuscated_text = "URL_OBFUSCATED_TEXT"
 }
 
 -- Default settings (work without any maps)
@@ -171,8 +173,11 @@ local function normalize_obfuscated_text(text, max_len)
   -- 1. Remove zero-width characters (U+200B, U+200C, U+200D, BOM, soft hyphen)
   text = text:gsub("[\226\128\139\226\128\140\226\128\141\239\187\191\194\173]", "")
 
-  -- 2. HTML entity decode
-  text = rspamd_util.decode_html(text)
+  -- 2. HTML entity decode (using C binding for comprehensive entity support)
+  local decoded = rspamd_util.decode_html_entities(text)
+  if decoded then
+    text = tostring(decoded)
+  end
 
   -- 3. Normalize spaced protocol: h t t p s : / / -> https://
   text = text:gsub("[hH]%s+[tT]%s+[tT]%s+[pP]%s*[sS]?%s*:%s*/%s*/", "https://")
@@ -721,212 +726,180 @@ if settings.enabled then
     flags = 'empty,nice'
   })
 
-  -- Register all symbol names as virtual
-  for _, symbol_name in pairs(symbols) do
-    rspamd_config:register_symbol({
-      name = symbol_name,
-      type = 'virtual',
-      parent = id,
-      group = 'url'
-    })
+  -- Register all symbol names as virtual (except obfuscated_text which is handled separately)
+  for key, symbol_name in pairs(symbols) do
+    if key ~= 'obfuscated_text' then
+      rspamd_config:register_symbol({
+        name = symbol_name,
+        type = 'virtual',
+        parent = id,
+        group = 'url'
+      })
+    end
   end
 end
 
 -- Obfuscated URL detection in message text
--- Uses Hyperscan for fast pre-filtering, then normalizes and extracts URLs
+-- Uses rspamd_trie (Hyperscan when available) for fast multi-pattern matching
 if settings.enabled and settings.checks.obfuscated_text and settings.checks.obfuscated_text.enabled then
   local obf_cfg = settings.checks.obfuscated_text
-
-  -- Counters for DoS protection (per task)
-  local obf_state = {}
-
-  -- Helper: try to extract and inject URL from matched text
-  local function process_obfuscated_match(task, txt, start_pos, end_pos, obf_type)
-    -- Get or initialize state for this task
-    local task_id = tostring(task)
-    if not obf_state[task_id] then
-      obf_state[task_id] = {
-        match_count = 0,
-        extracted_count = 0
-      }
-    end
-    local state = obf_state[task_id]
-
-    -- Check limits
-    state.match_count = state.match_count + 1
-    if state.match_count > obf_cfg.max_matches_per_message then
-      lua_util.debugm(N, task, 'Reached max matches limit (%d), skipping further checks',
-          obf_cfg.max_matches_per_message)
-      return false
-    end
-
-    if state.extracted_count >= obf_cfg.max_extracted_urls then
-      lua_util.debugm(N, task, 'Reached max extracted URLs limit (%d)',
-          obf_cfg.max_extracted_urls)
-      return false
-    end
-
-    -- Extract context window
-    local window = extract_context_window(txt, start_pos, end_pos, obf_cfg)
-    if #window < obf_cfg.min_match_length then
-      return false
-    end
-
-    lua_util.debugm(N, task, 'Processing %s match at %d-%d, window: %s',
-        obf_type, start_pos, end_pos, window:sub(1, 100))
-
-    -- Normalize
-    local normalized = normalize_obfuscated_text(window, obf_cfg.max_normalize_length)
-    if not normalized or #normalized < obf_cfg.min_match_length then
-      lua_util.debugm(N, task, 'Normalized text too short or empty')
-      return false
-    end
-
-    lua_util.debugm(N, task, 'Normalized text: %s', normalized:sub(1, 100))
-
-    -- Extract URL
-    local extracted_url, url_type = extract_url_from_normalized(normalized)
-    if not extracted_url then
-      lua_util.debugm(N, task, 'Could not extract URL from normalized text')
-      return false
-    end
-
-    lua_util.debugm(N, task, 'Extracted URL: %s (type: %s)', extracted_url, url_type)
-
-    -- Create URL object
-    local url_obj = rspamd_url.create(task:get_mempool(), extracted_url)
-    if not url_obj then
-      lua_util.debugm(N, task, 'Failed to create URL object for: %s', extracted_url)
-      return false
-    end
-
-    -- Set obscured flag
-    url_obj:add_flag('obscured')
-
-    -- Inject URL into task
-    local success = task:inject_url(url_obj)
-    if success then
-      state.extracted_count = state.extracted_count + 1
-
-      -- Insert result symbol with details
-      local original_snippet = window:sub(1, 50):gsub("%s+", " ")
-      task:insert_result(settings.symbols.obfuscated_text, 1.0, {
-        string.format("type=%s", obf_type),
-        string.format("url=%s", extracted_url:sub(1, 50)),
-        string.format("orig=%s", original_snippet)
-      })
-
-      lua_util.debugm(N, task, 'Successfully injected obfuscated URL: %s (obfuscation: %s)',
-          extracted_url, obf_type)
-      return true
-    else
-      lua_util.debugm(N, task, 'Failed to inject URL: %s', extracted_url)
-      return false
-    end
-  end
+  local rspamd_trie = require "rspamd_trie"
 
   -- Helper: check if pattern is enabled
   local function is_pattern_enabled(pattern_name)
-    -- If map is configured, check it
     if maps.obfuscated_patterns then
       return maps.obfuscated_patterns:get_key(pattern_name)
     end
-    -- Otherwise use built-in config
     return obf_cfg.patterns_enabled[pattern_name]
   end
 
-  -- Build regex patterns
-  local patterns = {}
-  local re_conditions = {}
+  -- Build pattern list with metadata
+  local pattern_list = {}   -- array of pattern strings for trie
+  local pattern_meta = {}   -- metadata for each pattern (indexed by pattern position)
 
   if is_pattern_enabled('spaced_protocol') then
-    -- Match spaced protocol: h t t p s : / /
-    local spaced_proto_re = [[/[hH]\s+[tT]\s+[tT]\s+[pP]\s*[sS]?\s*[:\/]/L{sa_body}]]
-    patterns.spaced_proto = spaced_proto_re
-    re_conditions[spaced_proto_re] = function(task, txt, s, e)
-      local len = e - s
-      if len < obf_cfg.min_match_length or len > obf_cfg.max_match_length then
-        return false
-      end
-      return process_obfuscated_match(task, txt, s + 1, e, 'spaced_protocol')
-    end
+    table.insert(pattern_list, [=[[hH]\s+[tT]\s+[tT]\s+[pP]\s*[sS]?\s*[:\/]]=])
+    pattern_meta[#pattern_list] = { name = 'spaced_protocol' }
   end
 
   if is_pattern_enabled('hxxp') then
-    -- Match hxxp:// or hXXp://
-    local hxxp_re = [[/[hH][xX][xX][pP][sS]?:\/\//L{sa_body}]]
-    patterns.hxxp = hxxp_re
-    re_conditions[hxxp_re] = function(task, txt, s, e)
-      local len = e - s
-      if len < obf_cfg.min_match_length or len > obf_cfg.max_match_length then
-        return false
-      end
-      return process_obfuscated_match(task, txt, s + 1, e, 'hxxp')
-    end
+    table.insert(pattern_list, [=[[hH][xX][xX][pP][sS]?:\/\/]=])
+    pattern_meta[#pattern_list] = { name = 'hxxp' }
   end
 
   if is_pattern_enabled('bracket_dots') then
-    -- Match dots in brackets: [.] (.) {.}
-    local bracket_dots_re = [[/[\[\(\{]\s*\.\s*[\]\)\}]/L{sa_body}]]
-    patterns.bracket_dots = bracket_dots_re
-    re_conditions[bracket_dots_re] = function(task, txt, s, e)
-      local len = e - s
-      if len < obf_cfg.min_match_length or len > obf_cfg.max_match_length then
-        return false
-      end
-      return process_obfuscated_match(task, txt, s + 1, e, 'bracket_dots')
-    end
+    table.insert(pattern_list, [=[[\[\(\{]\s*\.\s*[\]\)\}]]=])
+    pattern_meta[#pattern_list] = { name = 'bracket_dots' }
   end
 
   if is_pattern_enabled('word_dots') then
-    -- Match word "dot" between word characters
-    local word_dot_re = [[/\w+\s+[dD][oO][tT]\s+\w+/L{sa_body}]]
-    patterns.word_dot = word_dot_re
-    re_conditions[word_dot_re] = function(task, txt, s, e)
-      local len = e - s
-      if len < obf_cfg.min_match_length or len > obf_cfg.max_match_length then
-        return false
-      end
-      return process_obfuscated_match(task, txt, s + 1, e, 'word_dot')
-    end
+    table.insert(pattern_list, [=[\w+\s+[dD][oO][tT]\s+\w+]=])
+    pattern_meta[#pattern_list] = { name = 'word_dot' }
   end
 
   if is_pattern_enabled('html_entities') then
-    -- Match HTML entities that might be dots or slashes
-    local html_entity_re = [[/&#\d{2,3};[^&]{0,20}&#\d{2,3};/L{sa_body}]]
-    patterns.html_entity = html_entity_re
-    re_conditions[html_entity_re] = function(task, txt, s, e)
-      local len = e - s
-      if len < obf_cfg.min_match_length or len > obf_cfg.max_match_length then
-        return false
-      end
-      return process_obfuscated_match(task, txt, s + 1, e, 'html_entity')
-    end
+    table.insert(pattern_list, [=[&#\d{2,3};[^&]{0,20}&#\d{2,3};]=])
+    pattern_meta[#pattern_list] = { name = 'html_entity' }
   end
 
-  -- Build combined regex expression
-  local re_parts = {}
-  for _, pattern_re in pairs(patterns) do
-    table.insert(re_parts, string.format("(%s)", pattern_re))
-  end
-
-  if #re_parts == 0 then
+  if #pattern_list == 0 then
     rspamd_logger.infox(rspamd_config, 'No obfuscated text patterns enabled, skipping registration')
   else
-    local combined_re = table.concat(re_parts, " + ")
+    -- Create trie with regex support
+    -- flags: re (regex mode) + icase (case insensitive)
+    local trie_flags = rspamd_trie.flags.re + rspamd_trie.flags.icase
+    local obf_trie = rspamd_trie.create(pattern_list, trie_flags)
 
-    -- Register using config.regexp (like bitcoin.lua)
-    config.regexp[settings.symbols.obfuscated_text] = {
-      description = 'Obfuscated URL found in message text',
-      re = string.format('%s > 0', combined_re),
-      expression_flags = { 'noopt' },
-      re_conditions = re_conditions,
-      score = 5.0,
-      one_shot = true,
-      group = 'url'
-    }
+    if not obf_trie then
+      rspamd_logger.errx(rspamd_config, 'Failed to create obfuscated URL trie')
+    else
+      local has_hs = rspamd_trie.has_hyperscan()
+      rspamd_logger.infox(rspamd_config, 'Created obfuscated URL trie with %d patterns (hyperscan: %s)',
+          #pattern_list, has_hs)
 
-    rspamd_logger.infox(rspamd_config, 'Registered obfuscated URL detection with %d patterns',
-        #re_parts)
+      -- Prefilter callback for obfuscated URL detection
+      local function obfuscated_text_prefilter(task)
+        local text_parts = task:get_text_parts()
+        if not text_parts or #text_parts == 0 then
+          return false
+        end
+
+        -- DoS protection counters
+        local match_count = 0
+        local extracted_count = 0
+
+        -- Process a match
+        local function process_match(txt, start_pos, end_pos, pattern_idx)
+          match_count = match_count + 1
+          if match_count > obf_cfg.max_matches_per_message then
+            return 1  -- stop matching
+          end
+
+          if extracted_count >= obf_cfg.max_extracted_urls then
+            return 1  -- stop matching
+          end
+
+          local meta = pattern_meta[pattern_idx]
+          local obf_type = meta and meta.name or 'unknown'
+
+          -- Extract context window
+          local window = extract_context_window(txt, start_pos, end_pos, obf_cfg)
+          if #window < obf_cfg.min_match_length then
+            return 0  -- continue matching
+          end
+
+          lua_util.debugm(N, task, 'Processing %s match at %d-%d', obf_type, start_pos, end_pos)
+
+          -- Normalize and extract URL
+          local normalized = normalize_obfuscated_text(window, obf_cfg.max_normalize_length)
+          if not normalized or #normalized < obf_cfg.min_match_length then
+            return 0
+          end
+
+          local extracted_url = extract_url_from_normalized(normalized)
+          if not extracted_url then
+            return 0
+          end
+
+          lua_util.debugm(N, task, 'Extracted URL: %s (type: %s)', extracted_url, obf_type)
+
+          -- Create and inject URL with obscured flag
+          local url_obj = rspamd_url.create(task:get_mempool(), extracted_url, {'obscured'})
+          if not url_obj then
+            return 0
+          end
+
+          task:inject_url(url_obj)
+          extracted_count = extracted_count + 1
+
+          local snippet = window:sub(1, 50):gsub("%s+", " ")
+          task:insert_result(symbols.obfuscated_text, 1.0, {
+            string.format("type=%s", obf_type),
+            string.format("url=%s", extracted_url:sub(1, 50)),
+            string.format("orig=%s", snippet)
+          })
+          lua_util.debugm(N, task, 'Injected obfuscated URL: %s', extracted_url)
+
+          return 0  -- continue matching
+        end
+
+        -- Search each text part using trie
+        for _, part in ipairs(text_parts) do
+          local content = part:get_content()
+          if content and #content > 0 then
+            local txt = tostring(content)
+
+            -- Use trie:match with callback and report_start=true for positions
+            obf_trie:match(txt, function(pattern_idx, match_pos)
+              local start_pos, end_pos
+              if type(match_pos) == 'table' then
+                start_pos, end_pos = match_pos[1], match_pos[2]
+              else
+                -- Only end position provided
+                end_pos = match_pos
+                start_pos = math.max(1, end_pos - obf_cfg.max_match_length)
+              end
+
+              return process_match(txt, start_pos, end_pos, pattern_idx)
+            end, true)  -- report_start = true
+          end
+        end
+
+        return false
+      end
+
+      -- Register as prefilter for early URL injection
+      local prefilter_id = rspamd_config:register_symbol({
+        name = symbols.obfuscated_text,
+        type = 'prefilter',
+        callback = obfuscated_text_prefilter,
+        group = 'url',
+        score = 5.0,
+        description = 'Obfuscated URL found in message text'
+      })
+
+      rspamd_logger.infox(rspamd_config, 'Registered obfuscated URL prefilter (id=%s, hyperscan=%s)',
+          prefilter_id, has_hs)
+    end
   end
 end
