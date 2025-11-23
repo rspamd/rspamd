@@ -61,6 +61,8 @@ extract:argument "file"
 
 extract:flag "-t --text"
     :description "Extracts plain text data from a message"
+extract:flag "-r --raw"
+    :description "Load as raw file"
 extract:flag "-H --html"
     :description "Extracts htm data from a message"
 extract:option "-o --output"
@@ -292,7 +294,7 @@ local function cleanup_tokenizers()
   end
 end
 
-local function load_task(_, fname)
+local function load_task(opts, fname)
   if not fname then
     fname = '-'
   end
@@ -301,12 +303,53 @@ local function load_task(_, fname)
   task:set_session(rspamadm_session)
   task:set_resolver(rspamadm_dns_resolver)
 
-  local res = task:load_from_file(fname)
+  if opts.raw then
+    local f
+    if fname == '-' then
+      f = io.stdin
+    else
+      f = io.open(fname, "rb")
+    end
 
-  if not res then
-    parser:error(string.format('cannot read message from %s: %s', fname,
-      task))
-    return nil
+    if not f then
+      parser:error("cannot open file " .. fname)
+    end
+
+    local content = f:read("*a")
+    if fname ~= '-' then
+      f:close()
+    end
+
+    local lua_magic = require "lua_magic"
+    local dummy_part = {
+      get_content = function()
+        return content
+      end,
+      get_filename = function()
+        return fname
+      end,
+    }
+    local _, type_data = lua_magic.detect(dummy_part, rspamd_config)
+    local ct = "application/octet-stream"
+    if type_data and type_data.type then
+      ct = type_data.type
+    end
+
+    if fname:match('%.pdf$') and (not ct or ct == 'application/octet-stream' or ct == 'binary') then
+      ct = 'application/pdf'
+    end
+
+    -- Construct message
+    local msg = string.format("Content-Type: %s\r\nContent-Transfer-Encoding: 8bit\r\n\r\n", ct)
+    task:load_from_string(msg .. content)
+  else
+    local res = task:load_from_file(fname)
+
+    if not res then
+      parser:error(string.format('cannot read message from %s: %s', fname,
+          task))
+      return nil
+    end
   end
 
   if not task:process_message() then
@@ -541,6 +584,26 @@ local function extract_handler(opts)
               table.insert(out_elts[fname], string.format('invisible content: %s',
                 tostring(hc:get_invisible())))
             end
+          end
+        else
+          -- Not a text part, check for PDF
+          local _, msubtype = mime_part:get_type()
+          if msubtype == 'pdf' and opts.text then
+             local lua_content_pdf = require "lua_content.pdf"
+             -- Get raw content of the part
+             local content = mime_part:get_content()
+             if content then
+               local res = lua_content_pdf.process(content, mime_part, task)
+               if res and res.extract_text then
+                 local text_data = res.extract_text(res)
+                 if text_data and #text_data > 0 then
+                   maybe_print_mime_part_info(mime_part, out_elts[fname])
+                   for _, txt in ipairs(text_data) do
+                     table.insert(out_elts[fname], tostring(txt))
+                   end
+                 end
+               end
+             end
           end
         end
 
