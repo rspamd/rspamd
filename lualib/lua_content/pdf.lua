@@ -63,19 +63,6 @@ local pdf_patterns = {
   }
 }
 
-local pdf_text_patterns = {
-  start = {
-    patterns = {
-      [[\sBT\s]]
-    }
-  },
-  stop = {
-    patterns = {
-      [[\sET\b]]
-    }
-  }
-}
-
 local pdf_cmap_patterns = {
   start = {
     patterns = {
@@ -97,7 +84,6 @@ local pdf_cmap_patterns = {
 --  t[3] - value in patterns table
 --  t[4] - local pattern index
 local pdf_indexes = {}
-local pdf_text_indexes = {}
 local pdf_cmap_indexes = {}
 
 local pdf_trie
@@ -118,7 +104,7 @@ local config = {
   max_pdf_objects = 10000, -- Maximum number of objects to be considered
   max_pdf_trailer = 10 * 1024 * 1024, -- Maximum trailer size (to avoid abuse)
   max_pdf_trailer_lines = 100, -- Maximum number of lines in pdf trailer
-  pdf_process_timeout = 1.0, -- Timeout in seconds for processing
+  pdf_process_timeout = 10.0, -- Timeout in seconds for processing
 }
 
 -- Used to process patterns found in PDF
@@ -161,7 +147,10 @@ local function compile_tries()
     pdf_trie = compile_pats(pdf_patterns, pdf_indexes)
   end
   if not pdf_text_trie then
-    pdf_text_trie = compile_pats(pdf_text_patterns, pdf_text_indexes)
+    pdf_text_trie = rspamd_trie.create({
+      [[\sBT\s]],
+      [[\sET\b]]
+    }, default_compile_flags)
   end
   if not pdf_cmap_trie then
     pdf_cmap_trie = compile_pats(pdf_cmap_patterns, pdf_cmap_indexes)
@@ -1151,6 +1140,8 @@ local function postprocess_pdf_objects(task, input, pdf)
       if now >= pdf.end_timestamp then
         pdf.timeout_processing = now - pdf.start_timestamp
 
+        io.stderr:write(string.format("DEBUG: Timeout! Start: %f, End: %f, Now: %f\n", pdf.start_timestamp, pdf.end_timestamp, now))
+
         lua_util.debugm(N, task, 'pdf: timeout processing grammars after spending %s seconds, ' ..
             '%s elements processed',
             pdf.timeout_processing, i)
@@ -1254,8 +1245,8 @@ local function search_text(task, pdf)
             end
 
             bl.data = tobj.uncompressed:span(bl.start, bl.len)
-            --lua_util.debugm(N, task, 'extracted text from object %s:%s: %s',
-            --    tobj.major, tobj.minor, bl.data)
+            lua_util.debugm(N, task, 'extracted text from object %s:%s: %s',
+                tobj.major, tobj.minor, bl.data)
 
             if bl.len < config.max_processing_size then
               local ret, obj_or_err = pcall(pdf_text_grammar.match, pdf_text_grammar,
@@ -1308,8 +1299,28 @@ local function search_text(task, pdf)
         end
         local res = table.concat(text, '')
         obj.text = rspamd_text.fromstring(res)
+
         lua_util.debugm(N, task, 'object %s:%s is parsed to: %s',
             obj.major, obj.minor, obj.text)
+      end
+    end
+  end
+  -- Aggregate and inject once
+  if task.inject_part then
+    local all_text = {}
+    for _, obj in ipairs(pdf.objects) do
+      if obj.text then
+        table.insert(all_text, tostring(obj.text))
+      end
+    end
+
+    if #all_text > 0 then
+      local final_text = table.concat(all_text, "\n")
+      -- Only inject if it contains non-whitespace characters
+      if final_text:match("%S") then
+        task:inject_part('text', final_text)
+      else
+        lua_util.debugm(N, task, 'skipping injection of empty/whitespace-only text')
       end
     end
   end
@@ -1350,6 +1361,7 @@ local function search_urls(task, pdf, mpart)
 end
 
 local function process_pdf(input, mpart, task)
+  -- io.stderr:write("DEBUG: process_pdf called, input len: " .. tostring(#input) .. "\n")
 
   if not config.enabled then
     -- Skip processing
@@ -1359,6 +1371,7 @@ local function process_pdf(input, mpart, task)
   local matches = pdf_trie:match(input)
 
   if matches then
+    -- io.stderr:write("DEBUG: PDF matches found\n")
     local start_ts = rspamd_util.get_ticks()
     -- Temp object used to share data between pdf extraction methods
     local pdf_object = {

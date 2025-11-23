@@ -37,6 +37,7 @@ enum rspamd_mime_part_flags {
 	RSPAMD_MIME_PART_BAD_CTE = (1u << 4u),
 	RSPAMD_MIME_PART_MISSING_CTE = (1u << 5u),
 	RSPAMD_MIME_PART_NO_TEXT_EXTRACTION = (1u << 6u),
+	RSPAMD_MIME_PART_COMPUTED = (1u << 7u),
 };
 
 enum rspamd_mime_part_type {

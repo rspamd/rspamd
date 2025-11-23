@@ -319,6 +319,14 @@ LUA_FUNCTION_DEF(task, get_rawbody);
  */
 LUA_FUNCTION_DEF(task, get_emails);
 /***
+ * @method task:inject_part(type, content)
+ * Injects a virtual mime part into the task structure
+ * @param {string} type part type (currently only "text" is supported)
+ * @param {string} content part content
+ * @return {boolean} true if part was injected
+ */
+LUA_FUNCTION_DEF(task, inject_part);
+/***
  * @method task:get_text_parts()
  * Get all text (and HTML) parts found in a message
  * @return {table rspamd_text_part} list of text parts
@@ -1331,6 +1339,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, get_rawbody),
 	LUA_INTERFACE_DEF(task, get_emails),
 	LUA_INTERFACE_DEF(task, get_text_parts),
+	LUA_INTERFACE_DEF(task, inject_part),
 	LUA_INTERFACE_DEF(task, get_parts),
 	LUA_INTERFACE_DEF(task, get_request_header),
 	LUA_INTERFACE_DEF(task, set_request_header),
@@ -2768,6 +2777,66 @@ lua_task_has_urls(lua_State *L)
 	return 2;
 }
 
+static int
+lua_task_inject_part(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+	const char *type = luaL_checkstring(L, 2);
+	gsize content_len;
+	const char *content = luaL_checklstring(L, 3, &content_len);
+	struct rspamd_mime_part *part;
+	struct rspamd_mime_text_part *txt_part;
+
+	if (task && task->message) {
+		if (g_ascii_strcasecmp(type, "text") == 0) {
+			part = rspamd_mempool_alloc0(task->task_pool, sizeof(*part));
+			part->part_type = RSPAMD_MIME_PART_TEXT;
+			part->flags |= RSPAMD_MIME_PART_COMPUTED;
+
+			/* Basic headers setup */
+			part->ct = rspamd_mempool_alloc0(task->task_pool, sizeof(*part->ct));
+
+			part->ct->type.begin = "text";
+			part->ct->type.len = 4;
+			part->ct->subtype.begin = "plain";
+			part->ct->subtype.len = 5;
+			part->ct->flags = RSPAMD_CONTENT_TYPE_TEXT;
+			part->ct->charset.begin = "utf-8";
+			part->ct->charset.len = 5;
+
+			/* Content setup */
+			part->parsed_data.begin = rspamd_mempool_strdup(task->task_pool, content);
+			part->parsed_data.len = content_len;
+			part->raw_data = part->parsed_data;
+
+			/* Text part specific setup */
+			txt_part = rspamd_mempool_alloc0(task->task_pool, sizeof(*txt_part));
+			txt_part->mime_part = part;
+			txt_part->raw.begin = part->parsed_data.begin;
+			txt_part->raw.len = content_len;
+			txt_part->parsed = txt_part->raw;
+			txt_part->utf_content = txt_part->raw;
+			txt_part->real_charset = "utf-8";
+
+			/* Add to message */
+			part->specific.txt = txt_part;
+			g_ptr_array_add(task->message->parts, part);
+			g_ptr_array_add(task->message->text_parts, txt_part);
+
+			lua_pushboolean(L, true);
+		}
+		else {
+			lua_pushboolean(L, false);
+		}
+	}
+	else {
+		lua_pushboolean(L, false);
+	}
+
+	return 1;
+}
+
 struct rspamd_url_query_to_inject_cbd {
 	struct rspamd_task *task;
 	struct rspamd_url *url;
@@ -2980,22 +3049,36 @@ lua_task_get_text_parts(lua_State *L)
 	unsigned int i;
 	struct rspamd_task *task = lua_check_task(L, 1);
 	struct rspamd_mime_text_part *part, **ppart;
+	gboolean include_virtual = FALSE;
+
+	if (lua_gettop(L) >= 2) {
+		include_virtual = lua_toboolean(L, 2);
+	}
 
 	if (task != NULL) {
 
 		if (task->message) {
-			if (!lua_task_get_cached(L, task, "text_parts")) {
-				lua_createtable(L, MESSAGE_FIELD(task, text_parts)->len, 0);
+			if (!include_virtual && lua_task_get_cached(L, task, "text_parts")) {
+				return 1;
+			}
 
-				PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, part)
-				{
-					ppart = lua_newuserdata(L, sizeof(struct rspamd_mime_text_part *));
-					*ppart = part;
-					rspamd_lua_setclass(L, rspamd_textpart_classname, -1);
-					/* Make it array */
-					lua_rawseti(L, -2, i + 1);
+			lua_newtable(L);
+			int idx = 1;
+
+			PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, part)
+			{
+				if (!include_virtual && (part->mime_part->flags & RSPAMD_MIME_PART_COMPUTED)) {
+					continue;
 				}
 
+				ppart = lua_newuserdata(L, sizeof(struct rspamd_mime_text_part *));
+				*ppart = part;
+				rspamd_lua_setclass(L, rspamd_textpart_classname, -1);
+				/* Make it array */
+				lua_rawseti(L, -2, idx++);
+			}
+
+			if (!include_virtual) {
 				lua_task_set_cached(L, task, "text_parts", -1);
 			}
 		}
