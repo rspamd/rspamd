@@ -404,7 +404,7 @@ local function gen_text_grammar()
           local garbage_limit = 0
           local clen = #conv
           for i = 1, clen do
-            local b = string.byte(conv, i)
+            local b = conv:byte(i)
             if b < 32 and b ~= 9 and b ~= 10 and b ~= 13 then
               garbage_limit = garbage_limit + 1
             end
