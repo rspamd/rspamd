@@ -1115,6 +1115,26 @@ rspamd_message_process_text_part_maybe(struct rspamd_task *task,
 	return TRUE;
 }
 
+void rspamd_message_process_injected_text_part(struct rspamd_task *task,
+											   struct rspamd_mime_text_part *text_part,
+											   uint16_t *cur_url_order)
+{
+	/* Process plain text (no HTML support for injected parts yet) */
+	if (!rspamd_message_process_plain_text_part(task, text_part)) {
+		return;
+	}
+
+	/* Normalize text */
+	rspamd_normalize_text_part(task, text_part);
+
+	/* Extract URLs - always use FIND_ALL for injected parts (plain text) */
+	rspamd_url_text_extract(task->task_pool, task, text_part, cur_url_order,
+							RSPAMD_URL_FIND_ALL);
+
+	/* Create words for Bayes/stats */
+	rspamd_mime_part_create_words(task, text_part);
+}
+
 /* Creates message from various data using libmagic to detect type */
 static void
 rspamd_message_from_data(struct rspamd_task *task, const unsigned char *start,

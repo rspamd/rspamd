@@ -2876,12 +2876,20 @@ lua_task_inject_part(lua_State *L)
 			txt_part->raw.len = content_len;
 			txt_part->parsed = txt_part->raw;
 			txt_part->utf_content = txt_part->raw;
+			txt_part->utf_stripped_text = (UText) UTEXT_INITIALIZER;
 			txt_part->real_charset = "utf-8";
 
 			/* Add to message */
 			part->specific.txt = txt_part;
 			g_ptr_array_add(task->message->parts, part);
 			g_ptr_array_add(task->message->text_parts, txt_part);
+
+			/* Process injected text part fully (URLs, words, normalization) */
+			if (task->cfg && task->message) {
+				/* Use high order number to ensure injected URLs are after original ones */
+				uint16_t cur_url_order = 10000;
+				rspamd_message_process_injected_text_part(task, txt_part, &cur_url_order);
+			}
 
 			lua_pushboolean(L, true);
 		}
