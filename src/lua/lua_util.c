@@ -20,6 +20,7 @@
 #include "libmime/content_type.h"
 #include "libmime/mime_headers.h"
 #include "libutil/hash.h"
+#include "libserver/html/html.h"
 
 #include "lua_parsers.h"
 
@@ -94,6 +95,14 @@ LUA_FUNCTION_DEF(util, encode_qp);
  * @return {rspamd_text} decoded data chunk
  */
 LUA_FUNCTION_DEF(util, decode_qp);
+
+/***
+ * @function util.decode_html_entities(input)
+ * Decodes HTML entities in text (numeric &#XX; &#xXX; and named &amp; etc)
+ * @param {text or string} input input data
+ * @return {rspamd_text} decoded data chunk
+ */
+LUA_FUNCTION_DEF(util, decode_html_entities);
 
 /***
  * @function util.decode_base64(input)
@@ -713,6 +722,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF(util, encode_base64),
 	LUA_INTERFACE_DEF(util, encode_qp),
 	LUA_INTERFACE_DEF(util, decode_qp),
+	LUA_INTERFACE_DEF(util, decode_html_entities),
 	LUA_INTERFACE_DEF(util, decode_base64),
 	LUA_INTERFACE_DEF(util, encode_base32),
 	LUA_INTERFACE_DEF(util, decode_base32),
@@ -1192,6 +1202,44 @@ lua_util_decode_qp(lua_State *L)
 			lua_pop(L, 1);
 			lua_pushnil(L);
 		}
+	}
+
+	return 1;
+}
+
+static int
+lua_util_decode_html_entities(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t, *out;
+	const char *s = NULL;
+	gsize inlen = 0;
+	unsigned int outlen;
+
+	if (lua_type(L, 1) == LUA_TSTRING) {
+		s = luaL_checklstring(L, 1, &inlen);
+	}
+	else if (lua_type(L, 1) == LUA_TUSERDATA) {
+		t = lua_check_text(L, 1);
+
+		if (t != NULL) {
+			s = t->start;
+			inlen = t->len;
+		}
+	}
+
+	if (s == NULL || inlen == 0) {
+		lua_pushnil(L);
+	}
+	else {
+		out = lua_newuserdata(L, sizeof(*out));
+		rspamd_lua_setclass(L, rspamd_text_classname, -1);
+		out->start = g_malloc(inlen + 1);
+		out->flags = RSPAMD_TEXT_FLAG_OWN;
+		memcpy((char *) out->start, s, inlen);
+		((char *) out->start)[inlen] = '\0';
+		outlen = rspamd_html_decode_entitles_inplace((char *) out->start, inlen);
+		out->len = outlen;
 	}
 
 	return 1;

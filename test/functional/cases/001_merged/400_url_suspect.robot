@@ -50,3 +50,27 @@ URL Suspect - Normal URL
   Do Not Expect Symbol  URL_USER_PASSWORD
   Do Not Expect Symbol  URL_NUMERIC_IP
   Do Not Expect Symbol  URL_SUSPICIOUS_TLD
+
+URL Suspect - Obfuscated hxxp
+  # Test hxxp:// obfuscation detection
+  Scan File  ${RSPAMD_TESTDIR}/messages/url_obfuscated_hxxp.eml
+  ...  Settings={symbols_enabled = [URL_OBFUSCATED_TEXT]}
+  Expect Symbol  URL_OBFUSCATED_TEXT
+
+URL Suspect - Obfuscated Bracket Dots
+  # Test bracket dots obfuscation detection: example[.]com
+  Scan File  ${RSPAMD_TESTDIR}/messages/url_obfuscated_bracket_dots.eml
+  ...  Settings={symbols_enabled = [URL_OBFUSCATED_TEXT]}
+  Expect Symbol  URL_OBFUSCATED_TEXT
+
+URL Suspect - Obfuscated Word Dot
+  # Test word dot obfuscation detection: example dot com
+  Scan File  ${RSPAMD_TESTDIR}/messages/url_obfuscated_word_dot.eml
+  ...  Settings={symbols_enabled = [URL_OBFUSCATED_TEXT]}
+  Expect Symbol  URL_OBFUSCATED_TEXT
+
+URL Suspect - Obfuscated Spaced Protocol
+  # Test spaced protocol obfuscation: h t t p s : / /
+  Scan File  ${RSPAMD_TESTDIR}/messages/url_obfuscated_spaced.eml
+  ...  Settings={symbols_enabled = [URL_OBFUSCATED_TEXT]}
+  Expect Symbol  URL_OBFUSCATED_TEXT
