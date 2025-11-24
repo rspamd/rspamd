@@ -335,7 +335,7 @@ local function gen_text_grammar()
   local gen = generic_grammar_elts()
 
   local function text_op_handler(...)
-    local args = {...}
+    local args = { ... }
     local op = args[#args]
     local t = args[#args - 1]
 
@@ -363,7 +363,7 @@ local function gen_text_grammar()
   end
 
   local function nary_op_handler(...)
-    local args = {...}
+    local args = { ... }
     local op = args[#args]
     -- local t = args[#args - 1] -- The table of numbers
 
@@ -375,7 +375,7 @@ local function gen_text_grammar()
   end
 
   local function ternary_op_handler(...)
-    local args = {...}
+    local args = { ... }
     local op = args[#args]
     local a2 = args[#args - 2] -- Second to last argument (ty)
 
@@ -510,9 +510,9 @@ local function maybe_apply_filter(dict, data, pdf, task)
           -- We can handle Predictor 1 (No prediction) or maybe others in future
           local predictor = tonumber(decode_params.Predictor) or 1
           if predictor > 1 then
-             -- For now, we just log debug and fail, or maybe try to continue if it's simple PNG prediction
-             -- But without implementation, better to return nil to avoid garbage
-             return nil, 'predictor exists: ' .. tostring(predictor)
+            -- For now, we just log debug and fail, or maybe try to continue if it's simple PNG prediction
+            -- But without implementation, better to return nil to avoid garbage
+            return nil, 'predictor exists: ' .. tostring(predictor)
           end
         end
       end
@@ -1139,9 +1139,6 @@ local function postprocess_pdf_objects(task, input, pdf)
 
       if now >= pdf.end_timestamp then
         pdf.timeout_processing = now - pdf.start_timestamp
-
-        io.stderr:write(string.format("DEBUG: Timeout! Start: %f, End: %f, Now: %f\n", pdf.start_timestamp, pdf.end_timestamp, now))
-
         lua_util.debugm(N, task, 'pdf: timeout processing grammars after spending %s seconds, ' ..
             '%s elements processed',
             pdf.timeout_processing, i)
@@ -1210,7 +1207,7 @@ local function offsets_to_blocks(starts, ends, out)
   end
 end
 
-local function search_text(task, pdf)
+local function search_text(task, pdf, mpart)
   for _, obj in ipairs(pdf.objects) do
     if obj.type == 'Page' and obj.contents then
       local text = {}
@@ -1254,7 +1251,7 @@ local function search_text(task, pdf)
 
               if ret then
                 if #obj_or_err == 0 then
-                   lua_util.debugm(N, task, 'empty text match from block: %s', bl.data)
+                  lua_util.debugm(N, task, 'empty text match from block: %s', bl.data)
                 end
                 for _, chunk in ipairs(obj_or_err) do
                   text[#text + 1] = chunk
@@ -1308,20 +1305,17 @@ local function search_text(task, pdf)
   -- Aggregate and inject once
   if task.inject_part then
     local all_text = {}
+
     for _, obj in ipairs(pdf.objects) do
-      if obj.text then
-        table.insert(all_text, tostring(obj.text))
+      if obj.text and obj.text:len() > 0 then
+        -- Keep as rspamd_text, don't convert to string
+        table.insert(all_text, obj.text)
       end
     end
 
     if #all_text > 0 then
-      local final_text = table.concat(all_text, "\n")
-      -- Only inject if it contains non-whitespace characters
-      if final_text:match("%S") then
-        task:inject_part('text', final_text)
-      else
-        lua_util.debugm(N, task, 'skipping injection of empty/whitespace-only text')
-      end
+      -- Pass table of rspamd_text directly - will be efficiently merged in C
+      task:inject_part('text', all_text, mpart)
     end
   end
 end
@@ -1361,8 +1355,6 @@ local function search_urls(task, pdf, mpart)
 end
 
 local function process_pdf(input, mpart, task)
-  -- io.stderr:write("DEBUG: process_pdf called, input len: " .. tostring(#input) .. "\n")
-
   if not config.enabled then
     -- Skip processing
     return {}
@@ -1371,7 +1363,6 @@ local function process_pdf(input, mpart, task)
   local matches = pdf_trie:match(input)
 
   if matches then
-    -- io.stderr:write("DEBUG: PDF matches found\n")
     local start_ts = rspamd_util.get_ticks()
     -- Temp object used to share data between pdf extraction methods
     local pdf_object = {
@@ -1423,7 +1414,7 @@ local function process_pdf(input, mpart, task)
       postprocess_pdf_objects(task, input, pdf_object)
       pdf_output.objects = pdf_object.objects
       if config.text_extraction then
-        search_text(task, pdf_object, pdf_output)
+        search_text(task, pdf_object, mpart)
       end
       if config.url_extraction then
         search_urls(task, pdf_object, mpart, pdf_output)

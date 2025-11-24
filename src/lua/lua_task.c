@@ -319,22 +319,25 @@ LUA_FUNCTION_DEF(task, get_rawbody);
  */
 LUA_FUNCTION_DEF(task, get_emails);
 /***
- * @method task:inject_part(type, content)
+ * @method task:inject_part(type, content[, original_part])
  * Injects a virtual mime part into the task structure
  * @param {string} type part type (currently only "text" is supported)
- * @param {string} content part content
+ * @param {string/text/table} content part content (accepts string, rspamd_text, or table of rspamd_text chunks - will be efficiently concatenated in C)
+ * @param {rspamd_mimepart} original_part optional original mime part that this injected part is derived from (sets parent relationship)
  * @return {boolean} true if part was injected
  */
 LUA_FUNCTION_DEF(task, inject_part);
 /***
- * @method task:get_text_parts()
- * Get all text (and HTML) parts found in a message
+ * @method task:get_text_parts([include_virtual])
+ * Get all text (and HTML) parts found in a message. By default, injected/virtual parts are excluded.
+ * @param {boolean} include_virtual if true, include injected/virtual parts (default: false)
  * @return {table rspamd_text_part} list of text parts
  */
 LUA_FUNCTION_DEF(task, get_text_parts);
 /***
- * @method task:get_parts()
- * Get all mime parts found in a message
+ * @method task:get_parts([include_virtual])
+ * Get all mime parts found in a message. By default, injected/virtual parts are excluded.
+ * @param {boolean} include_virtual if true, include injected/virtual parts (default: false)
  * @return {table rspamd_mime_part} list of mime parts
  */
 LUA_FUNCTION_DEF(task, get_parts);
@@ -2783,16 +2786,51 @@ lua_task_inject_part(lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task(L, 1);
 	const char *type = luaL_checkstring(L, 2);
-	gsize content_len;
-	const char *content = luaL_checklstring(L, 3, &content_len);
-	struct rspamd_mime_part *part;
+	struct rspamd_lua_text *content_text;
+	const char *content = NULL;
+	gsize content_len = 0;
+	struct rspamd_mime_part *part, *original_part = NULL;
 	struct rspamd_mime_text_part *txt_part;
+	gboolean is_table = FALSE;
+
+	/* Accept string, rspamd_text, or table of texts */
+	if (lua_type(L, 3) == LUA_TTABLE) {
+		is_table = TRUE;
+		/* Calculate total length first */
+		lua_pushnil(L);
+		while (lua_next(L, 3) != 0) {
+			struct rspamd_lua_text *t = lua_check_text_or_string(L, -1);
+			if (t) {
+				content_len += t->len;
+			}
+			lua_pop(L, 1);
+		}
+	}
+	else {
+		content_text = lua_check_text_or_string(L, 3);
+		if (!content_text) {
+			return luaL_error(L, "invalid content argument (expected string, text, or table)");
+		}
+		content = content_text->start;
+		content_len = content_text->len;
+	}
+
+	/* Check for optional original_part parameter */
+	if (lua_gettop(L) >= 4 && lua_isuserdata(L, 4)) {
+		original_part = *((struct rspamd_mime_part **)
+							  rspamd_lua_check_udata_maybe(L, 4, rspamd_mimepart_classname));
+	}
 
 	if (task && task->message) {
 		if (g_ascii_strcasecmp(type, "text") == 0) {
 			part = rspamd_mempool_alloc0(task->task_pool, sizeof(*part));
 			part->part_type = RSPAMD_MIME_PART_TEXT;
 			part->flags |= RSPAMD_MIME_PART_COMPUTED;
+
+			/* Set parent part if provided */
+			if (original_part) {
+				part->parent_part = original_part;
+			}
 
 			/* Basic headers setup */
 			part->ct = rspamd_mempool_alloc0(task->task_pool, sizeof(*part->ct));
@@ -2805,9 +2843,30 @@ lua_task_inject_part(lua_State *L)
 			part->ct->charset.begin = "utf-8";
 			part->ct->charset.len = 5;
 
-			/* Content setup */
-			part->parsed_data.begin = rspamd_mempool_strdup(task->task_pool, content);
+			/* Content setup - merge table or copy single content */
+			part->parsed_data.begin = rspamd_mempool_alloc(task->task_pool, content_len + 1);
 			part->parsed_data.len = content_len;
+
+			if (is_table) {
+				/* Efficiently merge all text chunks */
+				char *dst = (char *) part->parsed_data.begin;
+				lua_pushnil(L);
+				while (lua_next(L, 3) != 0) {
+					struct rspamd_lua_text *t = lua_check_text_or_string(L, -1);
+					if (t && t->len > 0) {
+						memcpy(dst, t->start, t->len);
+						dst += t->len;
+					}
+					lua_pop(L, 1);
+				}
+				*dst = '\0';
+			}
+			else {
+				/* Single content */
+				memcpy((char *) part->parsed_data.begin, content, content_len);
+				((char *) part->parsed_data.begin)[content_len] = '\0';
+			}
+
 			part->raw_data = part->parsed_data;
 
 			/* Text part specific setup */
@@ -3100,18 +3159,28 @@ lua_task_get_parts(lua_State *L)
 	unsigned int i;
 	struct rspamd_task *task = lua_check_task(L, 1);
 	struct rspamd_mime_part *part, **ppart;
+	gboolean include_virtual = FALSE;
+
+	if (lua_gettop(L) >= 2) {
+		include_virtual = lua_toboolean(L, 2);
+	}
 
 	if (task != NULL) {
 		if (task->message) {
 			lua_createtable(L, MESSAGE_FIELD(task, parts)->len, 0);
+			int idx = 1;
 
 			PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, parts), i, part)
 			{
+				if (!include_virtual && (part->flags & RSPAMD_MIME_PART_COMPUTED)) {
+					continue;
+				}
+
 				ppart = lua_newuserdata(L, sizeof(struct rspamd_mime_part *));
 				*ppart = part;
 				rspamd_lua_setclass(L, rspamd_mimepart_classname, -1);
 				/* Make it array */
-				lua_rawseti(L, -2, i + 1);
+				lua_rawseti(L, -2, idx++);
 			}
 		}
 		else {
