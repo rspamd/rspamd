@@ -334,6 +334,44 @@ local function gen_text_grammar()
   local C = lpeg.C
   local gen = generic_grammar_elts()
 
+  local function sanitize_pdf_text(s)
+    if not s or #s < 4 then return s end
+
+    local nulls_odd = 0
+    local nulls_even = 0
+    local len = #s
+
+    for i = 1, len do
+      local b = string.byte(s, i)
+      if b == 0 then
+        if i % 2 == 1 then
+          nulls_odd = nulls_odd + 1
+        else
+          nulls_even = nulls_even + 1
+        end
+      end
+    end
+
+    local ratio_odd = nulls_odd / math.ceil(len / 2)
+    local ratio_even = nulls_even / math.floor(len / 2)
+    local charset
+
+    if ratio_odd > 0.8 and ratio_even < 0.2 then
+       charset = 'UTF-16BE'
+    elseif ratio_even > 0.8 and ratio_odd < 0.2 then
+       charset = 'UTF-16LE'
+    end
+
+    if charset and rspamd_util.to_utf8 then
+       local conv = rspamd_util.to_utf8(s, charset)
+       if conv then
+          return conv
+       end
+    end
+
+    return s
+  end
+
   local function text_op_handler(...)
     local args = { ... }
     local op = args[#args]
@@ -354,6 +392,8 @@ local function gen_text_grammar()
       end
       res = table.concat(tres)
     end
+
+    res = sanitize_pdf_text(res)
 
     if op == "'" or op == '"' then
       return '\n' .. res

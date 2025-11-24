@@ -44,6 +44,7 @@
 
 #include "unicode/uspoof.h"
 #include "unicode/uscript.h"
+#include <unicode/ucnv.h>
 #include "rspamd_simdutf.h"
 
 /***
@@ -274,6 +275,15 @@ LUA_FUNCTION_DEF(util, normalize_utf8);
  * @return {text} transliterated string
  */
 LUA_FUNCTION_DEF(util, transliterate);
+
+/***
+ * @function util.to_utf8(str, charset)
+ * Converts a string from a specific charset to UTF-8
+ * @param {string/text} str input string
+ * @param {string} charset input charset (e.g. "utf-16le", "utf-16be")
+ * @return {text} utf8 string or nil on error
+ */
+LUA_FUNCTION_DEF(util, to_utf8);
 
 /***
  * @function util.strequal_caseless(str1, str2)
@@ -732,6 +742,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF(util, lower_utf8),
 	LUA_INTERFACE_DEF(util, normalize_utf8),
 	LUA_INTERFACE_DEF(util, transliterate),
+	LUA_INTERFACE_DEF(util, to_utf8),
 	LUA_INTERFACE_DEF(util, strequal_caseless),
 	LUA_INTERFACE_DEF(util, strequal_caseless_utf8),
 	LUA_INTERFACE_DEF(util, get_ticks),
@@ -1705,6 +1716,48 @@ lua_util_transliterate(lua_State *L)
 
 	t = lua_new_text(L, transliterated, outlen, FALSE);
 	t->flags = RSPAMD_TEXT_FLAG_OWN;
+
+	return 1;
+}
+
+static int
+lua_util_to_utf8(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t;
+	const char *charset;
+	char *dest;
+	int32_t dest_len, dest_cap;
+	UErrorCode err = U_ZERO_ERROR;
+
+	t = lua_check_text_or_string(L, 1);
+	charset = luaL_checkstring(L, 2);
+
+	if (!t || !charset) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	dest_cap = t->len * 1.5 + 16;
+	dest = g_malloc(dest_cap);
+
+	dest_len = ucnv_convert("UTF-8", charset, dest, dest_cap, t->start, t->len, &err);
+
+	if (err == U_BUFFER_OVERFLOW_ERROR) {
+		g_free(dest);
+		err = U_ZERO_ERROR;
+		dest_cap = dest_len + 1;
+		dest = g_malloc(dest_cap);
+		dest_len = ucnv_convert("UTF-8", charset, dest, dest_cap, t->start, t->len, &err);
+	}
+
+	if (U_FAILURE(err)) {
+		g_free(dest);
+		lua_pushnil(L);
+		return 1;
+	}
+
+	struct rspamd_lua_text *out = lua_new_text(L, dest, dest_len, FALSE);
+	out->flags |= RSPAMD_TEXT_FLAG_OWN;
 
 	return 1;
 }
