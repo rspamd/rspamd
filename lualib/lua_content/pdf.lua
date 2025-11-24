@@ -341,7 +341,8 @@ local function gen_text_grammar()
     local nulls_even = 0
     local len = #s
 
-    for i = 1, len do
+    local limit = math.min(len, 16)
+    for i = 1, limit do
       local b = string.byte(s, i)
       if b == 0 then
         if i % 2 == 1 then
@@ -352,8 +353,42 @@ local function gen_text_grammar()
       end
     end
 
-    local ratio_odd = nulls_odd / math.ceil(len / 2)
-    local ratio_even = nulls_even / math.floor(len / 2)
+    if len > 32 then
+      for i = len - 15, len do
+        local b = string.byte(s, i)
+        if b == 0 then
+          if i % 2 == 1 then
+            nulls_odd = nulls_odd + 1
+          else
+            nulls_even = nulls_even + 1
+          end
+        end
+      end
+    elseif len > 16 then
+      for i = 17, len do
+        local b = string.byte(s, i)
+        if b == 0 then
+          if i % 2 == 1 then
+            nulls_odd = nulls_odd + 1
+          else
+            nulls_even = nulls_even + 1
+          end
+        end
+      end
+    end
+
+    local total_checked = (len > 32) and 32 or len
+    local total_odd = math.ceil(total_checked / 2)
+    local total_even = math.floor(total_checked / 2)
+
+    -- Correction for disjoint ranges if len > 32
+    if len > 32 then
+        total_odd = 16
+        total_even = 16
+    end
+
+    local ratio_odd = nulls_odd / total_odd
+    local ratio_even = nulls_even / total_even
     local charset
 
     if ratio_odd > 0.8 and ratio_even < 0.2 then
