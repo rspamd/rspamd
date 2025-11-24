@@ -400,6 +400,21 @@ local function gen_text_grammar()
     if charset and rspamd_util.to_utf8 then
        local conv = rspamd_util.to_utf8(s, charset)
        if conv then
+          -- Check for control characters to avoid garbage
+          local garbage_limit = 0
+          local clen = #conv
+          for i = 1, clen do
+            local b = string.byte(conv, i)
+            if b < 32 and b ~= 9 and b ~= 10 and b ~= 13 then
+              garbage_limit = garbage_limit + 1
+            end
+          end
+
+          if garbage_limit > 0 then
+             -- Treat as garbage
+             return ''
+          end
+
           return conv
        end
     end
