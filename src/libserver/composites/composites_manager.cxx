@@ -472,10 +472,78 @@ void composites_manager::process_dependencies()
 					 (int) first_pass_composites.size(), (int) second_pass_composites.size());
 }
 
+/* Context for building inverted index */
+struct inverted_index_cbdata {
+	composites_manager *cm;
+	rspamd_composite *comp;
+	bool has_positive;
+};
+
+static void
+inverted_index_atom_callback(GNode *atom_node, rspamd_expression_atom_t *atom, gpointer ud)
+{
+	auto *cbd = reinterpret_cast<inverted_index_cbdata *>(ud);
+
+	/* Check if this atom is under NOT operation */
+	if (atom_node->parent && rspamd_expression_node_is_op(atom_node->parent, OP_NOT)) {
+		/* Negated atom - don't add to inverted index */
+		return;
+	}
+
+	/* Extract normalized symbol name from atom string */
+	std::string_view atom_str(atom->str, atom->len);
+
+	/* Skip special characters and find the actual symbol name */
+	/* Atom format: [~-^]SYMBOL[options] */
+	auto start = atom_str.begin();
+	while (start != atom_str.end() && (*start == '~' || *start == '-' || *start == '^')) {
+		++start;
+	}
+
+	/* Find end of symbol name (before '[' if present) */
+	auto end = std::find(start, atom_str.end(), '[');
+
+	if (start >= end) {
+		return; /* Empty or invalid symbol */
+	}
+
+	std::string symbol_name(start, end);
+
+	/* Mark that we have at least one positive atom */
+	cbd->has_positive = true;
+
+	/* Add to inverted index */
+	cbd->cm->symbol_to_composites[symbol_name].push_back(cbd->comp);
+}
+
+void composites_manager::build_inverted_index()
+{
+	msg_debug_config("building inverted index for %d composites", (int) all_composites.size());
+
+	for (auto &comp: all_composites) {
+		inverted_index_cbdata cbd{this, comp.get(), false};
+
+		rspamd_expression_atom_foreach_ex(comp->expr, inverted_index_atom_callback, &cbd);
+
+		comp->has_positive_atoms = cbd.has_positive;
+
+		if (!cbd.has_positive) {
+			/* Composite with only negated atoms - must always be checked */
+			not_only_composites.push_back(comp.get());
+			msg_debug_config("composite '%s' has only negated atoms, will always be checked",
+							 comp->sym.c_str());
+		}
+	}
+
+	msg_debug_config("inverted index built: %d unique symbols, %d not-only composites",
+					 (int) symbol_to_composites.size(), (int) not_only_composites.size());
+}
+
 }// namespace rspamd::composites
 
 void rspamd_composites_process_deps(void *cm_ptr, struct rspamd_config *cfg)
 {
 	auto *cm = COMPOSITE_MANAGER_FROM_PTR(cm_ptr);
 	cm->process_dependencies();
+	cm->build_inverted_index();
 }

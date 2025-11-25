@@ -991,12 +991,47 @@ composites_metric_callback(struct rspamd_task *task)
 			}
 		}
 		else {
-			/* First pass: use symcache iteration (will skip second-pass composites in callback) */
-			msg_debug_composites("processing first-pass composites via symcache");
-			rspamd_symcache_composites_foreach(task,
-											   task->cfg->cache,
-											   composites_foreach_callback,
-											   &cd);
+			/* First pass: use inverted index for fast lookup */
+			ankerl::unordered_dense::set<rspamd_composite *> potentially_active;
+
+			/* Callback data for collecting potentially active composites */
+			struct collect_active_cbdata {
+				composites_manager *cm;
+				ankerl::unordered_dense::set<rspamd_composite *> *active;
+			} collect_data{cm, &potentially_active};
+
+			/* Collect composites that have at least one positive atom present */
+			rspamd_task_symbol_result_foreach(task, mres, [](gpointer key, gpointer value, gpointer ud) {
+												  auto *cbd = reinterpret_cast<collect_active_cbdata *>(ud);
+												  std::string_view sym_name{reinterpret_cast<const char *>(key)};
+
+												  auto it = cbd->cm->symbol_to_composites.find(sym_name);
+												  if (it != cbd->cm->symbol_to_composites.end()) {
+													  for (auto *comp: it->second) {
+														  /* Only add first-pass composites */
+														  if (!comp->second_pass) {
+															  cbd->active->insert(comp);
+														  }
+													  }
+												  } }, &collect_data);
+
+			/* Always add NOT-only composites (they have no positive atoms) */
+			for (auto *comp: cm->not_only_composites) {
+				if (!comp->second_pass) {
+					potentially_active.insert(comp);
+				}
+			}
+
+			msg_debug_composites("processing %d potentially active composites (from %d first-pass)",
+								 (int) potentially_active.size(),
+								 (int) cm->first_pass_composites.size());
+
+			/* Process only potentially active composites */
+			for (auto *comp: potentially_active) {
+				composites_foreach_callback((gpointer) comp->sym.c_str(),
+											(gpointer) comp,
+											&cd);
+			}
 		}
 	}
 

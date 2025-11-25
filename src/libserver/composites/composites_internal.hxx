@@ -47,7 +47,8 @@ struct rspamd_composite {
 	struct rspamd_expression *expr;
 	int id;
 	rspamd_composite_policy policy;
-	bool second_pass; /**< true if this composite needs second pass evaluation */
+	bool second_pass;        /**< true if this composite needs second pass evaluation */
+	bool has_positive_atoms; /**< true if composite has at least one non-negated atom */
 };
 
 #define COMPOSITE_MANAGER_FROM_PTR(ptr) (reinterpret_cast<rspamd::composites::composites_manager *>(ptr))
@@ -114,8 +115,17 @@ public:
 	std::vector<rspamd_composite *> first_pass_composites;  /* Evaluated during COMPOSITES stage */
 	std::vector<rspamd_composite *> second_pass_composites; /* Evaluated during COMPOSITES_POST stage */
 
+	/* Inverted index: symbol -> composites that contain this symbol as positive atom */
+	ankerl::unordered_dense::map<std::string, std::vector<rspamd_composite *>,
+								 rspamd::smart_str_hash, rspamd::smart_str_equal>
+		symbol_to_composites;
+	/* Composites that have only negated atoms (must always be checked) */
+	std::vector<rspamd_composite *> not_only_composites;
+
 	/* Analyze composite dependencies and split into first/second pass vectors */
 	void process_dependencies();
+	/* Build inverted index for fast composite lookup */
+	void build_inverted_index();
 };
 
 }// namespace rspamd::composites
