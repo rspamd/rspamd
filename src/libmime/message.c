@@ -1131,6 +1131,15 @@ void rspamd_message_process_injected_text_part(struct rspamd_task *task,
 	rspamd_url_text_extract(task->task_pool, task, text_part, cur_url_order,
 							RSPAMD_URL_FIND_ALL);
 
+	/* Add destructor for exceptions list (created by normalize and URL extraction) */
+	if (text_part->exceptions) {
+		text_part->exceptions = g_list_sort(text_part->exceptions,
+											exceptions_compare_func);
+		rspamd_mempool_add_destructor(task->task_pool,
+									  (rspamd_mempool_destruct_t) g_list_free,
+									  text_part->exceptions);
+	}
+
 	/* Create words for Bayes/stats */
 	rspamd_mime_part_create_words(task, text_part);
 }
