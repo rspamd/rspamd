@@ -2796,14 +2796,25 @@ lua_task_inject_part(lua_State *L)
 	/* Accept string, rspamd_text, or table of texts */
 	if (lua_type(L, 3) == LUA_TTABLE) {
 		is_table = TRUE;
-		/* Calculate total length first */
+		/* Calculate total length first and validate all entries */
+		int table_len = lua_objlen(L, 3);
+		if (table_len <= 0) {
+			return luaL_error(L, "empty table provided");
+		}
+
 		lua_pushnil(L);
 		while (lua_next(L, 3) != 0) {
 			struct rspamd_lua_text *t = lua_check_text_or_string(L, -1);
-			if (t) {
-				content_len += t->len;
+			if (!t) {
+				lua_pop(L, 2); /* pop value and key */
+				return luaL_error(L, "invalid entry in table (expected string or text)");
 			}
+			content_len += t->len;
 			lua_pop(L, 1);
+		}
+
+		if (content_len == 0) {
+			return luaL_error(L, "all table entries are empty");
 		}
 	}
 	else {

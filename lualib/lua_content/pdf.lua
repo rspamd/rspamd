@@ -104,7 +104,10 @@ local config = {
   max_pdf_objects = 10000, -- Maximum number of objects to be considered
   max_pdf_trailer = 10 * 1024 * 1024, -- Maximum trailer size (to avoid abuse)
   max_pdf_trailer_lines = 100, -- Maximum number of lines in pdf trailer
-  pdf_process_timeout = 10.0, -- Timeout in seconds for processing
+  -- Timeout for PDF processing in seconds. If exceeded, text extraction is skipped
+  -- as partial results would be incorrect. Can be overridden via
+  -- pdf.pdf_process_timeout in configuration.
+  pdf_process_timeout = 2.0,
 }
 
 -- Used to process patterns found in PDF
@@ -562,6 +565,11 @@ end
 
 -- Apply PDF stream filter
 local function apply_pdf_filter(input, filt)
+  -- Validate input before processing
+  if not input or (type(input) == 'string' and #input == 0) then
+    return nil
+  end
+
   if filt == 'FlateDecode' or filt == 'Fl' then
     return rspamd_util.inflate(input, config.max_extraction_size)
   elseif filt == 'ASCIIHexDecode' or filt == 'AHx' then
@@ -570,6 +578,9 @@ local function apply_pdf_filter(input, filt)
     local to_decode = input:gsub('%s', '')
     if to_decode:sub(-1) == '>' then
       to_decode = to_decode:sub(1, -2)
+    end
+    if #to_decode == 0 then
+      return nil
     end
     return lua_util.unhex(to_decode)
   end
@@ -1332,8 +1343,14 @@ local function search_text(task, pdf, mpart)
             end
 
             bl.data = tobj.uncompressed:span(bl.start, bl.len)
-            lua_util.debugm(N, task, 'extracted text from object %s:%s: %s',
-                tobj.major, tobj.minor, bl.data)
+            -- Only log preview of extracted text to avoid verbose logs
+            if bl.len <= 256 then
+              lua_util.debugm(N, task, 'extracted text from object %s:%s: %s',
+                  tobj.major, tobj.minor, bl.data)
+            else
+              lua_util.debugm(N, task, 'extracted text from object %s:%s (%d bytes)',
+                  tobj.major, tobj.minor, bl.len)
+            end
 
             if bl.len < config.max_processing_size then
               local ret, obj_or_err = pcall(pdf_text_grammar.match, pdf_text_grammar,
@@ -1367,18 +1384,34 @@ local function search_text(task, pdf, mpart)
           if type(chunk) == 'userdata' then
             text[i] = tostring(chunk)
           elseif type(chunk) == 'table' then
-            -- Nested table?
+            -- Iterative flatten to avoid stack overflow with deeply nested tables
             local function flatten(t)
               local res = {}
-              for _, v in ipairs(t) do
-                if type(v) == 'userdata' then
-                  res[#res + 1] = tostring(v)
-                elseif type(v) == 'table' then
-                  res[#res + 1] = flatten(v)
+              local stack = { { tbl = t, idx = 1 } }
+              local max_depth = 100 -- Limit depth to prevent infinite loops
+
+              while #stack > 0 and #stack <= max_depth do
+                local frame = stack[#stack]
+                local tbl, idx = frame.tbl, frame.idx
+
+                if idx > #tbl then
+                  -- Done with this table, pop frame
+                  stack[#stack] = nil
                 else
-                  res[#res + 1] = v
+                  local v = tbl[idx]
+                  frame.idx = idx + 1
+
+                  if type(v) == 'userdata' then
+                    res[#res + 1] = tostring(v)
+                  elseif type(v) == 'table' then
+                    -- Push new frame for nested table
+                    stack[#stack + 1] = { tbl = v, idx = 1 }
+                  elseif v ~= nil then
+                    res[#res + 1] = tostring(v)
+                  end
                 end
               end
+
               return table.concat(res, '')
             end
             text[i] = flatten(chunk)
@@ -1503,7 +1536,8 @@ local function process_pdf(input, mpart, task)
       -- Postprocess objects
       postprocess_pdf_objects(task, input, pdf_object)
       pdf_output.objects = pdf_object.objects
-      if config.text_extraction then
+      -- Skip text extraction if timeout occurred - partial results would be incorrect
+      if config.text_extraction and not pdf_object.timeout_processing then
         search_text(task, pdf_object, mpart)
       end
       if config.url_extraction then
