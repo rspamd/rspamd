@@ -378,6 +378,9 @@ struct rspamd_config {
 	gboolean enable_mime_utf;                                /**< Enable utf8 mime parsing							*/
 	gboolean enable_url_rewrite;                             /**< Enable HTML URL rewriting							*/
 
+	gboolean composites_inverted_index; /**< Use inverted index for composite lookup			*/
+	gboolean composites_stats_always;   /**< Always collect composite stats (not sampled)		*/
+
 	gsize max_cores_size;        /**< maximum size occupied by rspamd core files			*/
 	gsize max_cores_count;       /**< maximum number of core files						*/
 	char *cores_dir;             /**< directory for core files							*/

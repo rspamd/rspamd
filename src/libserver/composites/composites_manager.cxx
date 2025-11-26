@@ -614,3 +614,32 @@ void rspamd_composites_process_deps(void *cm_ptr, struct rspamd_config *cfg)
 	rspamd_composites_resolve_atom_types(cm);
 	cm->build_inverted_index();
 }
+
+void rspamd_composites_set_inverted_index(void *cm_ptr, gboolean enabled)
+{
+	auto *cm = COMPOSITE_MANAGER_FROM_PTR(cm_ptr);
+	cm->use_inverted_index = enabled;
+}
+
+gboolean rspamd_composites_get_inverted_index(void *cm_ptr)
+{
+	auto *cm = COMPOSITE_MANAGER_FROM_PTR(cm_ptr);
+	return cm->use_inverted_index;
+}
+
+void rspamd_composites_get_stats(void *cm_ptr, struct rspamd_composites_stats_export *stats)
+{
+	auto *cm = COMPOSITE_MANAGER_FROM_PTR(cm_ptr);
+
+	stats->checked_slow = cm->stats.checked_slow;
+	stats->checked_fast = cm->stats.checked_fast;
+	stats->matched = cm->stats.matched;
+
+	stats->time_slow_mean = cm->stats.time_slow.mean;
+	stats->time_slow_stddev = cm->stats.time_slow.stddev;
+	stats->time_slow_count = cm->stats.time_slow.number;
+
+	stats->time_fast_mean = cm->stats.time_fast.mean;
+	stats->time_fast_stddev = cm->stats.time_fast.stddev;
+	stats->time_fast_count = cm->stats.time_fast.number;
+}

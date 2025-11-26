@@ -35,6 +35,7 @@
 #include "libmime/lang_detection.h"
 #include "mempool_vars_internal.h"
 #include "lua/lua_classnames.h"
+#include "libserver/composites/composites.h"
 #include <math.h>
 
 /* 60 seconds for worker's IO */
@@ -2915,6 +2916,46 @@ rspamd_controller_handle_stat_common(
 						  "chunks_oversized", 0, false);
 	ucl_object_insert_key(top,
 						  ucl_object_fromint(mem_st.fragmented_size), "fragmented", 0, false);
+
+	/* Composites statistics */
+	if (ctx->cfg->composites_manager) {
+		struct rspamd_composites_stats_export comp_stats;
+		ucl_object_t *comp_obj, *time_obj;
+
+		rspamd_composites_get_stats(ctx->cfg->composites_manager, &comp_stats);
+
+		comp_obj = ucl_object_typed_new(UCL_OBJECT);
+		ucl_object_insert_key(comp_obj, ucl_object_fromint(comp_stats.checked_slow),
+							  "checked_slow", 0, false);
+		ucl_object_insert_key(comp_obj, ucl_object_fromint(comp_stats.checked_fast),
+							  "checked_fast", 0, false);
+		ucl_object_insert_key(comp_obj, ucl_object_fromint(comp_stats.matched),
+							  "matched", 0, false);
+
+		time_obj = ucl_object_typed_new(UCL_OBJECT);
+		ucl_object_insert_key(time_obj, ucl_object_fromdouble(comp_stats.time_slow_mean),
+							  "mean", 0, false);
+		ucl_object_insert_key(time_obj, ucl_object_fromdouble(comp_stats.time_slow_stddev),
+							  "stddev", 0, false);
+		ucl_object_insert_key(time_obj, ucl_object_fromint(comp_stats.time_slow_count),
+							  "count", 0, false);
+		ucl_object_insert_key(comp_obj, time_obj, "time_slow_ms", 0, false);
+
+		time_obj = ucl_object_typed_new(UCL_OBJECT);
+		ucl_object_insert_key(time_obj, ucl_object_fromdouble(comp_stats.time_fast_mean),
+							  "mean", 0, false);
+		ucl_object_insert_key(time_obj, ucl_object_fromdouble(comp_stats.time_fast_stddev),
+							  "stddev", 0, false);
+		ucl_object_insert_key(time_obj, ucl_object_fromint(comp_stats.time_fast_count),
+							  "count", 0, false);
+		ucl_object_insert_key(comp_obj, time_obj, "time_fast_ms", 0, false);
+
+		ucl_object_insert_key(comp_obj,
+							  ucl_object_frombool(rspamd_composites_get_inverted_index(ctx->cfg->composites_manager)),
+							  "inverted_index_enabled", 0, false);
+
+		ucl_object_insert_key(top, comp_obj, "composites", 0, false);
+	}
 
 	if (do_reset) {
 		session->ctx->srv->stat->messages_scanned = 0;

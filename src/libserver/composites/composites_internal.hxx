@@ -20,6 +20,7 @@
 
 #include <string>
 #include "libutil/expression.h"
+#include "libutil/util.h"
 #include "libutil/cxx/hash_util.hxx"
 #include "libserver/cfg_file.h"
 
@@ -53,10 +54,21 @@ struct rspamd_composite {
 
 #define COMPOSITE_MANAGER_FROM_PTR(ptr) (reinterpret_cast<rspamd::composites::composites_manager *>(ptr))
 
+/**
+ * Statistics for composite processing
+ */
+struct composites_stats {
+	uint64_t checked_slow = 0;              /**< composites checked via slow path */
+	uint64_t checked_fast = 0;              /**< composites checked via inverted index */
+	uint64_t matched = 0;                   /**< composites that matched */
+	struct rspamd_counter_data time_slow{}; /**< EMA timing for slow path */
+	struct rspamd_counter_data time_fast{}; /**< EMA timing for fast path */
+};
+
 class composites_manager {
 public:
 	composites_manager(struct rspamd_config *_cfg)
-		: cfg(_cfg)
+		: cfg(_cfg), use_inverted_index(true)
 	{
 		rspamd_mempool_add_destructor(_cfg->cfg_pool, composites_manager_dtor, this);
 	}
@@ -121,6 +133,12 @@ public:
 		symbol_to_composites;
 	/* Composites that have only negated atoms (must always be checked) */
 	std::vector<rspamd_composite *> not_only_composites;
+
+	/* Configuration flags */
+	bool use_inverted_index; /**< Use inverted index for fast composite lookup (default: true) */
+
+	/* Statistics (updated probabilistically for performance) */
+	composites_stats stats{};
 
 	/* Analyze composite dependencies and split into first/second pass vectors */
 	void process_dependencies();

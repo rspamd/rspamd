@@ -65,6 +65,42 @@ void *rspamd_composites_manager_add_from_string_silent(void *, const char *, con
  */
 void rspamd_composites_process_deps(void *cm_ptr, struct rspamd_config *cfg);
 
+/**
+ * Enable or disable inverted index for fast composite lookup
+ * @param cm_ptr composites manager pointer
+ * @param enabled true to enable, false to disable
+ */
+void rspamd_composites_set_inverted_index(void *cm_ptr, gboolean enabled);
+
+/**
+ * Get whether inverted index is enabled
+ * @param cm_ptr composites manager pointer
+ * @return true if enabled
+ */
+gboolean rspamd_composites_get_inverted_index(void *cm_ptr);
+
+/**
+ * Statistics structure for composite processing
+ */
+struct rspamd_composites_stats_export {
+	uint64_t checked_slow;    /**< composites checked via slow path */
+	uint64_t checked_fast;    /**< composites checked via inverted index */
+	uint64_t matched;         /**< composites that matched */
+	double time_slow_mean;    /**< EMA mean time in slow path (ms) */
+	double time_slow_stddev;  /**< EMA stddev time in slow path (ms) */
+	double time_fast_mean;    /**< EMA mean time in fast path (ms) */
+	double time_fast_stddev;  /**< EMA stddev time in fast path (ms) */
+	uint64_t time_slow_count; /**< number of slow path measurements */
+	uint64_t time_fast_count; /**< number of fast path measurements */
+};
+
+/**
+ * Get composite processing statistics
+ * @param cm_ptr composites manager pointer
+ * @param stats output structure
+ */
+void rspamd_composites_get_stats(void *cm_ptr, struct rspamd_composites_stats_export *stats);
+
 #ifdef __cplusplus
 }
 #endif

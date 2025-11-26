@@ -20,6 +20,8 @@
 #include "utlist.h"
 #include "scan_result.h"
 #include "composites.h"
+#include "contrib/libev/ev.h"
+#include "libutil/util.h"
 
 #include <cmath>
 #include <vector>
@@ -967,6 +969,9 @@ remove_symbols(const composites_data &cd, const std::vector<symbol_remove_data> 
 	}
 }
 
+/* Sampling rate for timing measurements: 1 in 256 tasks */
+constexpr uint64_t COMPOSITES_SAMPLING_MASK = 0xFF;
+
 static void
 composites_metric_callback(struct rspamd_task *task)
 {
@@ -974,6 +979,19 @@ composites_metric_callback(struct rspamd_task *task)
 	struct rspamd_scan_result *mres;
 	auto *cm = COMPOSITE_MANAGER_FROM_PTR(task->cfg->composites_manager);
 	bool is_second_pass = (task->processed_stages & RSPAMD_TASK_STAGE_POST_FILTERS) != 0;
+	bool use_fast_path = cm->use_inverted_index && !is_second_pass;
+
+	/* Probabilistic sampling for timing measurements (unless always_sample is set in config) */
+	bool do_sample = task->cfg->composites_stats_always ||
+					 (rspamd_random_uint64_fast() & COMPOSITES_SAMPLING_MASK) == 0;
+	ev_tstamp start_time = 0.0;
+
+	if (do_sample && task->event_loop) {
+		ev_now_update_if_cheap(task->event_loop);
+		start_time = ev_now(task->event_loop);
+	}
+
+	uint64_t composites_checked = 0;
 
 	comp_data_vec.reserve(1);
 
@@ -989,9 +1007,10 @@ composites_metric_callback(struct rspamd_task *task)
 											(gpointer) comp,
 											&cd);
 			}
+			composites_checked += cm->second_pass_composites.size();
 		}
-		else {
-			/* First pass: use inverted index for fast lookup */
+		else if (use_fast_path) {
+			/* First pass with inverted index: fast lookup */
 			ankerl::unordered_dense::set<rspamd_composite *> potentially_active;
 
 			/* Callback data for collecting potentially active composites */
@@ -1032,6 +1051,39 @@ composites_metric_callback(struct rspamd_task *task)
 											(gpointer) comp,
 											&cd);
 			}
+			composites_checked += potentially_active.size();
+		}
+		else {
+			/* Slow path: check all first-pass composites */
+			msg_debug_composites("processing all %d first-pass composites (slow path)",
+								 (int) cm->first_pass_composites.size());
+			for (auto *comp: cm->first_pass_composites) {
+				composites_foreach_callback((gpointer) comp->sym.c_str(),
+											(gpointer) comp,
+											&cd);
+			}
+			composites_checked += cm->first_pass_composites.size();
+		}
+	}
+
+	/* Update statistics */
+	if (use_fast_path) {
+		cm->stats.checked_fast += composites_checked;
+	}
+	else if (!is_second_pass) {
+		cm->stats.checked_slow += composites_checked;
+	}
+
+	/* Record timing with EMA */
+	if (do_sample && task->event_loop) {
+		ev_now_update_if_cheap(task->event_loop);
+		ev_tstamp elapsed_ms = (ev_now(task->event_loop) - start_time) * 1000.0;
+
+		if (use_fast_path) {
+			rspamd_set_counter_ema(&cm->stats.time_fast, elapsed_ms, 0.5);
+		}
+		else if (!is_second_pass) {
+			rspamd_set_counter_ema(&cm->stats.time_slow, elapsed_ms, 0.5);
 		}
 	}
 
