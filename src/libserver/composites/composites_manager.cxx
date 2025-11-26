@@ -479,13 +479,35 @@ struct inverted_index_cbdata {
 	bool has_positive;
 };
 
+/*
+ * Count NOT operations from atom to root to determine atom polarity.
+ * Even number of NOTs = positive atom (must be true for expression to be true)
+ * Odd number of NOTs = negative atom (must be false for expression to be true)
+ */
+static bool
+atom_is_negated(GNode *atom_node)
+{
+	int not_count = 0;
+	GNode *node = atom_node->parent;
+
+	while (node != nullptr) {
+		if (rspamd_expression_node_is_op(node, OP_NOT)) {
+			not_count++;
+		}
+		node = node->parent;
+	}
+
+	/* Odd number of NOTs means atom is negated */
+	return (not_count & 1) != 0;
+}
+
 static void
 inverted_index_atom_callback(GNode *atom_node, rspamd_expression_atom_t *atom, gpointer ud)
 {
 	auto *cbd = reinterpret_cast<inverted_index_cbdata *>(ud);
 
-	/* Check if this atom is under NOT operation */
-	if (atom_node->parent && rspamd_expression_node_is_op(atom_node->parent, OP_NOT)) {
+	/* Check atom polarity by counting NOTs to root */
+	if (atom_is_negated(atom_node)) {
 		/* Negated atom - don't add to inverted index */
 		return;
 	}
