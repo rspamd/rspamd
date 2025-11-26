@@ -166,7 +166,15 @@ auto composites_manager::add_composite(std::string_view composite_name,
 		}
 	}
 
-	if (!rspamd_parse_expression(composite_expression.data(),
+	/*
+	 * Copy expression string to memory pool - the expression parser stores
+	 * pointers into this string in atom->str, so it must outlive the expression.
+	 */
+	char *expr_copy = rspamd_mempool_alloc_buffer(cfg->cfg_pool, composite_expression.size() + 1);
+	memcpy(expr_copy, composite_expression.data(), composite_expression.size());
+	expr_copy[composite_expression.size()] = '\0';
+
+	if (!rspamd_parse_expression(expr_copy,
 								 composite_expression.size(), &composite_expr_subr,
 								 nullptr, cfg->cfg_pool, &err, &expr)) {
 		msg_err_config("cannot parse composite expression for %s: %e",
@@ -513,39 +521,49 @@ inverted_index_atom_callback(GNode *atom_node, rspamd_expression_atom_t *atom, g
 		return;
 	}
 
-	/* Extract normalized symbol name from atom string */
-	std::string_view atom_str(atom->str, atom->len);
-
-	/* Skip special characters and find the actual symbol name */
-	/* Atom format: [~-^]SYMBOL[options] */
-	auto start = atom_str.begin();
-	while (start != atom_str.end() && (*start == '~' || *start == '-' || *start == '^')) {
-		++start;
+	if (atom->str == nullptr || atom->len == 0) {
+		return;
 	}
 
-	std::string_view remaining(start, atom_str.end());
+	/* Get the atom string with correct length */
+	std::string_view atom_str(atom->str, atom->len);
+
+	/* Skip prefix characters (~, -, ^) to find the symbol name */
+	size_t sym_start = 0;
+	while (sym_start < atom_str.size() &&
+		   (atom_str[sym_start] == '~' || atom_str[sym_start] == '-' || atom_str[sym_start] == '^')) {
+		++sym_start;
+	}
+
+	if (sym_start >= atom_str.size()) {
+		return;
+	}
+
+	std::string_view remaining = atom_str.substr(sym_start);
 
 	/* Check for group matchers: g:, g+:, g-: */
-	if (remaining.substr(0, 2) == "g:" ||
-		remaining.substr(0, 3) == "g+:" ||
-		remaining.substr(0, 3) == "g-:") {
-		/*
-		 * Group matcher - we can't know which symbols will match at config time.
-		 * Mark composite as having a group atom so it gets added to not_only list.
-		 * This is conservative but safe.
-		 */
+	if (remaining.size() >= 2 && remaining.substr(0, 2) == "g:") {
+		cbd->has_group_atom = true;
+		return;
+	}
+	if (remaining.size() >= 3 && (remaining.substr(0, 3) == "g+:" || remaining.substr(0, 3) == "g-:")) {
 		cbd->has_group_atom = true;
 		return;
 	}
 
-	/* Find end of symbol name (before '[' if present) */
-	auto end = std::find(start, atom_str.end(), '[');
-
-	if (start >= end) {
-		return; /* Empty or invalid symbol */
+	/* Find end of symbol name (before '[' if present for options) */
+	auto bracket_pos = remaining.find('[');
+	std::string symbol_name;
+	if (bracket_pos != std::string_view::npos) {
+		symbol_name = std::string(remaining.substr(0, bracket_pos));
+	}
+	else {
+		symbol_name = std::string(remaining);
 	}
 
-	std::string symbol_name(start, end);
+	if (symbol_name.empty()) {
+		return;
+	}
 
 	/* Mark that we have at least one positive atom */
 	cbd->has_positive = true;
