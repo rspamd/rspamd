@@ -128,6 +128,13 @@ public:
 	void build_inverted_index();
 };
 
+/**
+ * Precompute atom types (ATOM_COMPOSITE vs ATOM_PLAIN) for all composites.
+ * This eliminates lazy lookups during expression evaluation.
+ * Should be called after all composites are registered.
+ */
+void rspamd_composites_resolve_atom_types(composites_manager *cm);
+
 }// namespace rspamd::composites
 
 #endif//RSPAMD_COMPOSITES_INTERNAL_HXX

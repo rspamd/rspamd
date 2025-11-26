@@ -1043,6 +1043,43 @@ composites_metric_callback(struct rspamd_task *task)
 	}
 }
 
+void rspamd_composites_resolve_atom_types(composites_manager *cm)
+{
+	auto resolve_callback = [](GNode *, rspamd_expression_atom_t *atom, gpointer ud) {
+		auto *manager = reinterpret_cast<composites_manager *>(ud);
+		auto *comp_atom = reinterpret_cast<rspamd_composite_atom *>(atom->data);
+
+		if (comp_atom == nullptr) {
+			return;
+		}
+
+		if (comp_atom->comp_type != rspamd_composite_atom_type::ATOM_UNKNOWN) {
+			/* Already resolved */
+			return;
+		}
+
+		const auto *ncomp = manager->find(comp_atom->symbol);
+		if (ncomp != nullptr) {
+			comp_atom->comp_type = rspamd_composite_atom_type::ATOM_COMPOSITE;
+			comp_atom->ncomp = ncomp;
+		}
+		else {
+			comp_atom->comp_type = rspamd_composite_atom_type::ATOM_PLAIN;
+			comp_atom->ncomp = nullptr;
+		}
+	};
+
+	/* Process all first-pass composites */
+	for (auto *comp: cm->first_pass_composites) {
+		rspamd_expression_atom_foreach_ex(comp->expr, resolve_callback, cm);
+	}
+
+	/* Process all second-pass composites */
+	for (auto *comp: cm->second_pass_composites) {
+		rspamd_expression_atom_foreach_ex(comp->expr, resolve_callback, cm);
+	}
+}
+
 }// namespace rspamd::composites
 
 

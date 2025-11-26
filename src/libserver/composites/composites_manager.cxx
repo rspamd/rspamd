@@ -611,5 +611,6 @@ void rspamd_composites_process_deps(void *cm_ptr, struct rspamd_config *cfg)
 {
 	auto *cm = COMPOSITE_MANAGER_FROM_PTR(cm_ptr);
 	cm->process_dependencies();
+	rspamd_composites_resolve_atom_types(cm);
 	cm->build_inverted_index();
 }
