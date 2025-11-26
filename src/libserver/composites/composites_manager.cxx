@@ -477,6 +477,7 @@ struct inverted_index_cbdata {
 	composites_manager *cm;
 	rspamd_composite *comp;
 	bool has_positive;
+	bool has_group_atom; /* Composite uses group matcher (g:, g+:, g-:) */
 };
 
 /*
@@ -522,6 +523,21 @@ inverted_index_atom_callback(GNode *atom_node, rspamd_expression_atom_t *atom, g
 		++start;
 	}
 
+	std::string_view remaining(start, atom_str.end());
+
+	/* Check for group matchers: g:, g+:, g-: */
+	if (remaining.substr(0, 2) == "g:" ||
+		remaining.substr(0, 3) == "g+:" ||
+		remaining.substr(0, 3) == "g-:") {
+		/*
+		 * Group matcher - we can't know which symbols will match at config time.
+		 * Mark composite as having a group atom so it gets added to not_only list.
+		 * This is conservative but safe.
+		 */
+		cbd->has_group_atom = true;
+		return;
+	}
+
 	/* Find end of symbol name (before '[' if present) */
 	auto end = std::find(start, atom_str.end(), '[');
 
@@ -543,17 +559,27 @@ void composites_manager::build_inverted_index()
 	msg_debug_config("building inverted index for %d composites", (int) all_composites.size());
 
 	for (auto &comp: all_composites) {
-		inverted_index_cbdata cbd{this, comp.get(), false};
+		inverted_index_cbdata cbd{this, comp.get(), false, false};
 
 		rspamd_expression_atom_foreach_ex(comp->expr, inverted_index_atom_callback, &cbd);
 
 		comp->has_positive_atoms = cbd.has_positive;
 
-		if (!cbd.has_positive) {
-			/* Composite with only negated atoms - must always be checked */
+		if (!cbd.has_positive || cbd.has_group_atom) {
+			/*
+			 * Composite must always be checked if:
+			 * - It has only negated atoms (no positive symbols to match)
+			 * - It uses group matchers (we don't know which symbols will match)
+			 */
 			not_only_composites.push_back(comp.get());
-			msg_debug_config("composite '%s' has only negated atoms, will always be checked",
-							 comp->sym.c_str());
+			if (cbd.has_group_atom) {
+				msg_debug_config("composite '%s' uses group matcher, will always be checked",
+								 comp->sym.c_str());
+			}
+			else {
+				msg_debug_config("composite '%s' has only negated atoms, will always be checked",
+								 comp->sym.c_str());
+			}
 		}
 	}
 
