@@ -84,7 +84,8 @@ rspamadm_control_help(gboolean full_help, const struct rspamadm_command *cmd)
 				   "reresolve - resolve upstreams addresses\n"
 				   "recompile - recompile hyperscan regexes\n"
 				   "fuzzystat - show fuzzy statistics\n"
-				   "fuzzysync - immediately sync fuzzy database to storage\n";
+				   "fuzzysync - immediately sync fuzzy database to storage\n"
+				   "compositesstats - show composites processing statistics\n";
 	}
 	else {
 		help_str = "Manage rspamd main control interface";
@@ -214,6 +215,10 @@ rspamadm_control(int argc, char **argv, const struct rspamadm_command *_cmd)
 	else if (g_ascii_strcasecmp(cmd, "fuzzysync") == 0 ||
 			 g_ascii_strcasecmp(cmd, "fuzzy_sync") == 0) {
 		path = "/fuzzysync";
+	}
+	else if (g_ascii_strcasecmp(cmd, "compositesstats") == 0 ||
+			 g_ascii_strcasecmp(cmd, "composites_stats") == 0) {
+		path = "/compositesstats";
 	}
 	else {
 		rspamd_fprintf(stderr, "unknown command: %s\n", cmd);

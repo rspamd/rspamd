@@ -38,6 +38,7 @@ enum rspamd_control_type {
 	RSPAMD_CONTROL_CHILD_CHANGE,
 	RSPAMD_CONTROL_FUZZY_BLOCKED,
 	RSPAMD_CONTROL_WORKERS_SPAWNED,
+	RSPAMD_CONTROL_COMPOSITES_STATS,
 	RSPAMD_CONTROL_MAX
 };
 
@@ -112,6 +113,9 @@ struct rspamd_control_command {
 		struct {
 			unsigned int workers_count;
 		} workers_spawned;
+		struct {
+			unsigned int unused;
+		} composites_stats;
 	} cmd;
 };
 
@@ -156,6 +160,15 @@ struct rspamd_control_reply {
 		struct {
 			unsigned int status;
 		} workers_spawned;
+		struct {
+			uint64_t checked_slow;   /**< composites checked via slow path */
+			uint64_t checked_fast;   /**< composites checked via inverted index */
+			uint64_t matched;        /**< composites that matched */
+			double time_slow_mean;   /**< EMA mean time in slow path (ms) */
+			double time_slow_stddev; /**< EMA stddev time in slow path (ms) */
+			double time_fast_mean;   /**< EMA mean time in fast path (ms) */
+			double time_fast_stddev; /**< EMA stddev time in fast path (ms) */
+		} composites_stats;
 	} reply;
 };
 

@@ -87,10 +87,11 @@ struct composites_data {
 								 std::vector<symbol_remove_data>>
 		symbols_to_remove;
 	std::vector<bool> checked;
-	bool is_second_pass; /**< true if we're in COMPOSITES_POST stage */
+	bool is_second_pass;      /**< true if we're in COMPOSITES_POST stage */
+	uint64_t matched_count{}; /**< number of matched composites */
 
 	explicit composites_data(struct rspamd_task *task, struct rspamd_scan_result *mres)
-		: task(task), composite(nullptr), metric_res(mres)
+		: task(task), composite(nullptr), metric_res(mres), matched_count(0)
 	{
 		checked.resize(rspamd_composites_manager_nelts(task->cfg->composites_manager) * 2,
 					   false);
@@ -867,6 +868,7 @@ composites_foreach_callback(gpointer key, gpointer value, void *data)
 			/* Result bit */
 			if (fabs(rc) > epsilon) {
 				cd->checked[comp->id * 2 + 1] = true;
+				cd->matched_count++;
 				rspamd_task_insert_result_full(cd->task, str_key, 1.0, NULL,
 											   RSPAMD_SYMBOL_INSERT_SINGLE, cd->metric_res);
 			}
@@ -981,7 +983,7 @@ composites_metric_callback(struct rspamd_task *task)
 	bool is_second_pass = (task->processed_stages & RSPAMD_TASK_STAGE_POST_FILTERS) != 0;
 	bool use_fast_path = cm->use_inverted_index && !is_second_pass;
 
-	/* Probabilistic sampling for timing measurements (unless always_sample is set in config) */
+	/* Probabilistic sampling for timing measurements (unless always_sample is set) */
 	bool do_sample = task->cfg->composites_stats_always ||
 					 (rspamd_random_uint64_fast() & COMPOSITES_SAMPLING_MASK) == 0;
 	ev_tstamp start_time = 0.0;
@@ -1067,6 +1069,12 @@ composites_metric_callback(struct rspamd_task *task)
 	}
 
 	/* Update statistics */
+	uint64_t total_matched = 0;
+	for (const auto &cd: comp_data_vec) {
+		total_matched += cd.matched_count;
+	}
+	cm->stats.matched += total_matched;
+
 	if (use_fast_path) {
 		cm->stats.checked_fast += composites_checked;
 	}
@@ -1074,7 +1082,7 @@ composites_metric_callback(struct rspamd_task *task)
 		cm->stats.checked_slow += composites_checked;
 	}
 
-	/* Record timing with EMA */
+	/* Record timing with EMA (probabilistic sampling unless always_sample is set) */
 	if (do_sample && task->event_loop) {
 		ev_now_update_if_cheap(task->event_loop);
 		ev_tstamp elapsed_ms = (ev_now(task->event_loop) - start_time) * 1000.0;
