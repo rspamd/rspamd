@@ -662,6 +662,61 @@ exports.add_map = function(name, map)
   end
 end
 
+-- Combinator functions registry for use with external maps and other consumers
+-- that need structured data instead of plain strings
+local combinators = {
+  -- Default: concatenate all selector results into a single string
+  string = exports.combine_selectors,
+  -- Flatten all results into a flat array
+  array = exports.flatten_selectors,
+  -- Convert pairs of selectors into key-value object (use `id` extractor for keys)
+  object = exports.kv_table_from_pairs,
+}
+
+--[[[
+-- @function lua_selectors.get_combinator(name)
+-- Returns a combinator function by name
+-- @param {string} name combinator name: 'string', 'array', or 'object'
+-- @return {function} combinator function or nil if not found
+--]]
+exports.get_combinator = function(name)
+  return combinators[name]
+end
+
+--[[[
+-- @function lua_selectors.list_combinators()
+-- Returns list of available combinator names
+-- @return {table} array of combinator names
+--]]
+exports.list_combinators = function()
+  local res = {}
+  for k, _ in pairs(combinators) do
+    table.insert(res, k)
+  end
+  return res
+end
+
+--[[[
+-- @function lua_selectors.create_selector_closure_with_combinator(cfg, selector_str, delimiter, combinator_name)
+-- Creates a closure from a string selector using named combinator
+-- @param {rspamd_config} cfg rspamd config object
+-- @param {string} selector_str selector string to parse
+-- @param {string} delimiter delimiter for combining results (used by some combinators)
+-- @param {string} combinator_name name of combinator: 'string', 'array', or 'object'
+-- @return {function} closure that processes selector on task, or nil on error
+--]]
+exports.create_selector_closure_with_combinator = function(cfg, selector_str, delimiter, combinator_name)
+  local combinator_fn = combinators[combinator_name or 'string']
+
+  if not combinator_fn then
+    logger.errx(cfg, 'unknown combinator: %s, available: %s',
+        combinator_name, table.concat(exports.list_combinators(), ', '))
+    return nil
+  end
+
+  return exports.create_selector_closure_fn(cfg, cfg, selector_str, delimiter, combinator_fn)
+end
+
 -- Publish log target
 exports.M = M
 
