@@ -2118,6 +2118,18 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   0,
 									   "Enable HTML URL rewriting");
 		rspamd_rcl_add_default_handler(sub,
+									   "composites_inverted_index",
+									   rspamd_rcl_parse_struct_boolean,
+									   G_STRUCT_OFFSET(struct rspamd_config, composites_inverted_index),
+									   0,
+									   "Use inverted index for fast composite lookup (default: true)");
+		rspamd_rcl_add_default_handler(sub,
+									   "composites_stats_always",
+									   rspamd_rcl_parse_struct_boolean,
+									   G_STRUCT_OFFSET(struct rspamd_config, composites_stats_always),
+									   0,
+									   "Always collect composite statistics instead of probabilistic sampling (default: false)");
+		rspamd_rcl_add_default_handler(sub,
 									   "url_rewrite_lua_func",
 									   rspamd_rcl_parse_struct_string,
 									   G_STRUCT_OFFSET(struct rspamd_config, url_rewrite_lua_func),

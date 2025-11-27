@@ -32,6 +32,58 @@
 
 INIT_LOG_MODULE(metric)
 
+/*
+ * Bloom filter helpers for fast negative symbol lookups.
+ * Uses two hash functions for better distribution.
+ */
+static inline uint32_t
+rspamd_bloom_hash1(const char *s)
+{
+	/* wyhash-based, same as kh_str_hash_func */
+	uint32_t h = 0xcafebabe;
+	while (*s) {
+		h ^= (uint32_t) *s++;
+		h *= 0x5bd1e995;
+		h ^= h >> 15;
+	}
+	return h;
+}
+
+static inline uint32_t
+rspamd_bloom_hash2(uint32_t h)
+{
+	/* Secondary hash using murmur-like mixing */
+	h ^= h >> 16;
+	h *= 0x85ebca6b;
+	h ^= h >> 13;
+	h *= 0xc2b2ae35;
+	h ^= h >> 16;
+	return h;
+}
+
+#define RSPAMD_BLOOM_BITS (RSPAMD_BLOOM_SIZE * 8)
+#define RSPAMD_BLOOM_MASK (RSPAMD_BLOOM_BITS - 1)
+#define rspamd_bloom_set(bv, h) ((bv)[(h) >> 3] |= (1U << ((h) & 7)))
+#define rspamd_bloom_test(bv, h) ((bv)[(h) >> 3] & (1U << ((h) & 7)))
+
+static inline void
+rspamd_bloom_add(uint8_t *bloom, const char *symbol)
+{
+	uint32_t h1 = rspamd_bloom_hash1(symbol);
+	uint32_t h2 = rspamd_bloom_hash2(h1);
+	rspamd_bloom_set(bloom, h1 & RSPAMD_BLOOM_MASK);
+	rspamd_bloom_set(bloom, h2 & RSPAMD_BLOOM_MASK);
+}
+
+static inline int
+rspamd_bloom_check(const uint8_t *bloom, const char *symbol)
+{
+	uint32_t h1 = rspamd_bloom_hash1(symbol);
+	uint32_t h2 = rspamd_bloom_hash2(h1);
+	return rspamd_bloom_test(bloom, h1 & RSPAMD_BLOOM_MASK) &&
+		   rspamd_bloom_test(bloom, h2 & RSPAMD_BLOOM_MASK);
+}
+
 /* Average symbols count to optimize hash allocation */
 static struct rspamd_counter_data symbols_count;
 
@@ -443,6 +495,9 @@ insert_metric_result(struct rspamd_task *task,
 		g_assert(ret > 0);
 		symbol_result = rspamd_mempool_alloc0(task->task_pool, sizeof(*symbol_result));
 		kh_value(metric_res->symbols, k) = symbol_result;
+
+		/* Add to bloom filter for fast negative lookups */
+		rspamd_bloom_add(metric_res->symbols_bloom, sym_cpy);
 
 		symbol_result->name = sym_cpy;
 		symbol_result->sym = sdef;
@@ -976,6 +1031,11 @@ rspamd_task_find_symbol_result(struct rspamd_task *task, const char *sym,
 	if (result == NULL) {
 		/* Use default result */
 		result = task->result;
+	}
+
+	/* Fast path: bloom filter check for negative lookups */
+	if (!rspamd_bloom_check(result->symbols_bloom, sym)) {
+		return NULL;
 	}
 
 	k = kh_get(rspamd_symbols_hash, result->symbols, sym);

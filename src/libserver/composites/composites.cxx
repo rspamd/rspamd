@@ -20,6 +20,8 @@
 #include "utlist.h"
 #include "scan_result.h"
 #include "composites.h"
+#include "contrib/libev/ev.h"
+#include "libutil/util.h"
 
 #include <cmath>
 #include <vector>
@@ -85,10 +87,11 @@ struct composites_data {
 								 std::vector<symbol_remove_data>>
 		symbols_to_remove;
 	std::vector<bool> checked;
-	bool is_second_pass; /**< true if we're in COMPOSITES_POST stage */
+	bool is_second_pass;      /**< true if we're in COMPOSITES_POST stage */
+	uint64_t matched_count{}; /**< number of matched composites */
 
 	explicit composites_data(struct rspamd_task *task, struct rspamd_scan_result *mres)
-		: task(task), composite(nullptr), metric_res(mres)
+		: task(task), composite(nullptr), metric_res(mres), matched_count(0)
 	{
 		checked.resize(rspamd_composites_manager_nelts(task->cfg->composites_manager) * 2,
 					   false);
@@ -865,6 +868,7 @@ composites_foreach_callback(gpointer key, gpointer value, void *data)
 			/* Result bit */
 			if (fabs(rc) > epsilon) {
 				cd->checked[comp->id * 2 + 1] = true;
+				cd->matched_count++;
 				rspamd_task_insert_result_full(cd->task, str_key, 1.0, NULL,
 											   RSPAMD_SYMBOL_INSERT_SINGLE, cd->metric_res);
 			}
@@ -967,6 +971,9 @@ remove_symbols(const composites_data &cd, const std::vector<symbol_remove_data> 
 	}
 }
 
+/* Sampling rate for timing measurements: 1 in 256 tasks */
+constexpr uint64_t COMPOSITES_SAMPLING_MASK = 0xFF;
+
 static void
 composites_metric_callback(struct rspamd_task *task)
 {
@@ -974,6 +981,19 @@ composites_metric_callback(struct rspamd_task *task)
 	struct rspamd_scan_result *mres;
 	auto *cm = COMPOSITE_MANAGER_FROM_PTR(task->cfg->composites_manager);
 	bool is_second_pass = (task->processed_stages & RSPAMD_TASK_STAGE_POST_FILTERS) != 0;
+	bool use_fast_path = cm->use_inverted_index && !is_second_pass;
+
+	/* Probabilistic sampling for timing measurements (unless always_sample is set) */
+	bool do_sample = task->cfg->composites_stats_always ||
+					 (rspamd_random_uint64_fast() & COMPOSITES_SAMPLING_MASK) == 0;
+	ev_tstamp start_time = 0.0;
+
+	if (do_sample && task->event_loop) {
+		ev_now_update_if_cheap(task->event_loop);
+		start_time = ev_now(task->event_loop);
+	}
+
+	uint64_t composites_checked = 0;
 
 	comp_data_vec.reserve(1);
 
@@ -989,14 +1009,89 @@ composites_metric_callback(struct rspamd_task *task)
 											(gpointer) comp,
 											&cd);
 			}
+			composites_checked += cm->second_pass_composites.size();
+		}
+		else if (use_fast_path) {
+			/* First pass with inverted index: fast lookup */
+			ankerl::unordered_dense::set<rspamd_composite *> potentially_active;
+
+			/* Callback data for collecting potentially active composites */
+			struct collect_active_cbdata {
+				composites_manager *cm;
+				ankerl::unordered_dense::set<rspamd_composite *> *active;
+			} collect_data{cm, &potentially_active};
+
+			/* Collect composites that have at least one positive atom present */
+			rspamd_task_symbol_result_foreach(task, mres, [](gpointer key, gpointer value, gpointer ud) {
+												  auto *cbd = reinterpret_cast<collect_active_cbdata *>(ud);
+												  std::string_view sym_name{reinterpret_cast<const char *>(key)};
+
+												  auto it = cbd->cm->symbol_to_composites.find(sym_name);
+												  if (it != cbd->cm->symbol_to_composites.end()) {
+													  for (auto *comp: it->second) {
+														  /* Only add first-pass composites */
+														  if (!comp->second_pass) {
+															  cbd->active->insert(comp);
+														  }
+													  }
+												  } }, &collect_data);
+
+			/* Always add NOT-only composites (they have no positive atoms) */
+			for (auto *comp: cm->not_only_composites) {
+				if (!comp->second_pass) {
+					potentially_active.insert(comp);
+				}
+			}
+
+			msg_debug_composites("processing %d potentially active composites (from %d first-pass)",
+								 (int) potentially_active.size(),
+								 (int) cm->first_pass_composites.size());
+
+			/* Process only potentially active composites */
+			for (auto *comp: potentially_active) {
+				composites_foreach_callback((gpointer) comp->sym.c_str(),
+											(gpointer) comp,
+											&cd);
+			}
+			composites_checked += potentially_active.size();
 		}
 		else {
-			/* First pass: use symcache iteration (will skip second-pass composites in callback) */
-			msg_debug_composites("processing first-pass composites via symcache");
-			rspamd_symcache_composites_foreach(task,
-											   task->cfg->cache,
-											   composites_foreach_callback,
-											   &cd);
+			/* Slow path: check all first-pass composites */
+			msg_debug_composites("processing all %d first-pass composites (slow path)",
+								 (int) cm->first_pass_composites.size());
+			for (auto *comp: cm->first_pass_composites) {
+				composites_foreach_callback((gpointer) comp->sym.c_str(),
+											(gpointer) comp,
+											&cd);
+			}
+			composites_checked += cm->first_pass_composites.size();
+		}
+	}
+
+	/* Update statistics */
+	uint64_t total_matched = 0;
+	for (const auto &cd: comp_data_vec) {
+		total_matched += cd.matched_count;
+	}
+	cm->stats.matched += total_matched;
+
+	if (use_fast_path) {
+		cm->stats.checked_fast += composites_checked;
+	}
+	else if (!is_second_pass) {
+		cm->stats.checked_slow += composites_checked;
+	}
+
+	/* Record timing with EMA (probabilistic sampling unless always_sample is set) */
+	if (do_sample && task->event_loop) {
+		ev_now_update_if_cheap(task->event_loop);
+		ev_tstamp elapsed_ms = (ev_now(task->event_loop) - start_time) * 1000.0;
+
+		if (use_fast_path) {
+			rspamd_set_counter_ema(&cm->stats.time_fast, elapsed_ms, 0.5);
+		}
+		else if (!is_second_pass) {
+			rspamd_set_counter_ema(&cm->stats.time_slow, elapsed_ms, 0.5);
 		}
 	}
 
@@ -1005,6 +1100,43 @@ composites_metric_callback(struct rspamd_task *task)
 		for (const auto &srd_it: cd.symbols_to_remove) {
 			remove_symbols(cd, srd_it.second);
 		}
+	}
+}
+
+void rspamd_composites_resolve_atom_types(composites_manager *cm)
+{
+	auto resolve_callback = [](GNode *, rspamd_expression_atom_t *atom, gpointer ud) {
+		auto *manager = reinterpret_cast<composites_manager *>(ud);
+		auto *comp_atom = reinterpret_cast<rspamd_composite_atom *>(atom->data);
+
+		if (comp_atom == nullptr) {
+			return;
+		}
+
+		if (comp_atom->comp_type != rspamd_composite_atom_type::ATOM_UNKNOWN) {
+			/* Already resolved */
+			return;
+		}
+
+		const auto *ncomp = manager->find(comp_atom->symbol);
+		if (ncomp != nullptr) {
+			comp_atom->comp_type = rspamd_composite_atom_type::ATOM_COMPOSITE;
+			comp_atom->ncomp = ncomp;
+		}
+		else {
+			comp_atom->comp_type = rspamd_composite_atom_type::ATOM_PLAIN;
+			comp_atom->ncomp = nullptr;
+		}
+	};
+
+	/* Process all first-pass composites */
+	for (auto *comp: cm->first_pass_composites) {
+		rspamd_expression_atom_foreach_ex(comp->expr, resolve_callback, cm);
+	}
+
+	/* Process all second-pass composites */
+	for (auto *comp: cm->second_pass_composites) {
+		rspamd_expression_atom_foreach_ex(comp->expr, resolve_callback, cm);
 	}
 }
 

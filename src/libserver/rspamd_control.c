@@ -22,6 +22,7 @@
 #include "libutil/libev_helper.h"
 #include "unix-std.h"
 #include "utlist.h"
+#include "composites/composites.h"
 
 #ifdef HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
@@ -82,6 +83,7 @@ static const struct rspamd_control_cmd_match {
 	{.name = {.begin = "/recompile", .len = sizeof("/recompile") - 1}, .type = RSPAMD_CONTROL_RECOMPILE},
 	{.name = {.begin = "/fuzzystat", .len = sizeof("/fuzzystat") - 1}, .type = RSPAMD_CONTROL_FUZZY_STAT},
 	{.name = {.begin = "/fuzzysync", .len = sizeof("/fuzzysync") - 1}, .type = RSPAMD_CONTROL_FUZZY_SYNC},
+	{.name = {.begin = "/compositesstats", .len = sizeof("/compositesstats") - 1}, .type = RSPAMD_CONTROL_COMPOSITES_STATS},
 };
 
 static void rspamd_control_ignore_io_handler(int fd, short what, void *ud);
@@ -170,6 +172,8 @@ rspamd_control_write_reply(struct rspamd_control_session *session)
 	double total_utime = 0, total_systime = 0;
 	struct ucl_parser *parser;
 	unsigned int total_conns = 0;
+	/* Composites stats aggregation */
+	uint64_t total_checked_slow = 0, total_checked_fast = 0, total_matched = 0;
 
 	rep = ucl_object_typed_new(UCL_OBJECT);
 	workers = ucl_object_typed_new(UCL_OBJECT);
@@ -259,6 +263,26 @@ rspamd_control_write_reply(struct rspamd_control_session *session)
 		case RSPAMD_CONTROL_FUZZY_SYNC:
 			ucl_object_insert_key(cur, ucl_object_fromint(elt->reply.reply.fuzzy_sync.status), "status", 0, false);
 			break;
+		case RSPAMD_CONTROL_COMPOSITES_STATS:
+			ucl_object_insert_key(cur, ucl_object_fromint(elt->reply.reply.composites_stats.checked_slow),
+								  "checked_slow", 0, false);
+			ucl_object_insert_key(cur, ucl_object_fromint(elt->reply.reply.composites_stats.checked_fast),
+								  "checked_fast", 0, false);
+			ucl_object_insert_key(cur, ucl_object_fromint(elt->reply.reply.composites_stats.matched),
+								  "matched", 0, false);
+			ucl_object_insert_key(cur, ucl_object_fromdouble(elt->reply.reply.composites_stats.time_slow_mean),
+								  "time_slow_mean", 0, false);
+			ucl_object_insert_key(cur, ucl_object_fromdouble(elt->reply.reply.composites_stats.time_slow_stddev),
+								  "time_slow_stddev", 0, false);
+			ucl_object_insert_key(cur, ucl_object_fromdouble(elt->reply.reply.composites_stats.time_fast_mean),
+								  "time_fast_mean", 0, false);
+			ucl_object_insert_key(cur, ucl_object_fromdouble(elt->reply.reply.composites_stats.time_fast_stddev),
+								  "time_fast_stddev", 0, false);
+
+			total_checked_slow += elt->reply.reply.composites_stats.checked_slow;
+			total_checked_fast += elt->reply.reply.composites_stats.checked_fast;
+			total_matched += elt->reply.reply.composites_stats.matched;
+			break;
 		default:
 			break;
 		}
@@ -279,6 +303,15 @@ rspamd_control_write_reply(struct rspamd_control_session *session)
 		ucl_object_insert_key(cur, ucl_object_fromint(total_conns), "conns", 0, false);
 		ucl_object_insert_key(cur, ucl_object_fromdouble(total_utime), "utime", 0, false);
 		ucl_object_insert_key(cur, ucl_object_fromdouble(total_systime), "systime", 0, false);
+
+		ucl_object_insert_key(rep, cur, "total", 0, false);
+	}
+	else if (session->cmd.type == RSPAMD_CONTROL_COMPOSITES_STATS) {
+		/* Total composites stats */
+		cur = ucl_object_typed_new(UCL_OBJECT);
+		ucl_object_insert_key(cur, ucl_object_fromint(total_checked_slow), "checked_slow", 0, false);
+		ucl_object_insert_key(cur, ucl_object_fromint(total_checked_fast), "checked_fast", 0, false);
+		ucl_object_insert_key(cur, ucl_object_fromint(total_matched), "matched", 0, false);
 
 		ucl_object_insert_key(rep, cur, "total", 0, false);
 	}
@@ -730,6 +763,19 @@ rspamd_control_default_cmd_handler(int fd,
 		break;
 	case RSPAMD_CONTROL_WORKERS_SPAWNED:
 		rep.reply.workers_spawned.status = 0;
+		break;
+	case RSPAMD_CONTROL_COMPOSITES_STATS:
+		if (cd->worker->srv->cfg && cd->worker->srv->cfg->composites_manager) {
+			struct rspamd_composites_stats_export comp_stats;
+			rspamd_composites_get_stats(cd->worker->srv->cfg->composites_manager, &comp_stats);
+			rep.reply.composites_stats.checked_slow = comp_stats.checked_slow;
+			rep.reply.composites_stats.checked_fast = comp_stats.checked_fast;
+			rep.reply.composites_stats.matched = comp_stats.matched;
+			rep.reply.composites_stats.time_slow_mean = comp_stats.time_slow_mean;
+			rep.reply.composites_stats.time_slow_stddev = comp_stats.time_slow_stddev;
+			rep.reply.composites_stats.time_fast_mean = comp_stats.time_fast_mean;
+			rep.reply.composites_stats.time_fast_stddev = comp_stats.time_fast_stddev;
+		}
 		break;
 	case RSPAMD_CONTROL_RERESOLVE:
 		if (cd->worker->srv->cfg) {
@@ -1432,6 +1478,9 @@ rspamd_control_command_from_string(const char *str)
 	else if (g_ascii_strcasecmp(str, "workers_spawned") == 0) {
 		ret = RSPAMD_CONTROL_WORKERS_SPAWNED;
 	}
+	else if (g_ascii_strcasecmp(str, "composites_stats") == 0) {
+		ret = RSPAMD_CONTROL_COMPOSITES_STATS;
+	}
 
 	return ret;
 }
@@ -1474,6 +1523,9 @@ rspamd_control_command_to_string(enum rspamd_control_type cmd)
 		break;
 	case RSPAMD_CONTROL_WORKERS_SPAWNED:
 		reply = "workers_spawned";
+		break;
+	case RSPAMD_CONTROL_COMPOSITES_STATS:
+		reply = "composites_stats";
 		break;
 	default:
 		break;
