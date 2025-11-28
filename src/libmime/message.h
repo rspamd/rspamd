@@ -37,6 +37,7 @@ enum rspamd_mime_part_flags {
 	RSPAMD_MIME_PART_BAD_CTE = (1u << 4u),
 	RSPAMD_MIME_PART_MISSING_CTE = (1u << 5u),
 	RSPAMD_MIME_PART_NO_TEXT_EXTRACTION = (1u << 6u),
+	RSPAMD_MIME_PART_COMPUTED = (1u << 7u),
 };
 
 enum rspamd_mime_part_type {
@@ -218,6 +219,15 @@ gboolean rspamd_message_parse(struct rspamd_task *task);
  */
 void rspamd_message_process(struct rspamd_task *task);
 
+/**
+ * Process an injected text part (URL extraction, words, normalization)
+ * @param task
+ * @param text_part the injected text part to process
+ * @param cur_url_order pointer to current URL order counter
+ */
+void rspamd_message_process_injected_text_part(struct rspamd_task *task,
+											   struct rspamd_mime_text_part *text_part,
+											   uint16_t *cur_url_order);
 
 /**
  * Converts string to cte
