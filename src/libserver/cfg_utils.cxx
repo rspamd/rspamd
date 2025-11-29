@@ -1016,6 +1016,8 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 			rspamd_composites_set_inverted_index(cfg->composites_manager,
 												 cfg->composites_inverted_index);
 			rspamd_composites_process_deps(cfg->composites_manager, cfg);
+			/* Mark symbols used by whitelist composites (negative score) as FINE */
+			rspamd_composites_mark_whitelist_deps(cfg->composites_manager, cfg);
 		}
 	}
 

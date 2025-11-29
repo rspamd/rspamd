@@ -144,6 +144,8 @@ public:
 	void process_dependencies();
 	/* Build inverted index for fast composite lookup */
 	void build_inverted_index();
+	/* Mark symbols used in whitelist composites (negative score) as FINE */
+	void mark_whitelist_dependencies();
 };
 
 /**

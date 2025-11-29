@@ -101,6 +101,15 @@ struct rspamd_composites_stats_export {
  */
 void rspamd_composites_get_stats(void *cm_ptr, struct rspamd_composites_stats_export *stats);
 
+/**
+ * Mark symbols used in whitelist composites (negative score) with SYMBOL_TYPE_FINE
+ * so they won't be skipped when reject threshold is reached. This ensures
+ * whitelist composites can still evaluate correctly.
+ * @param cm_ptr composites manager pointer
+ * @param cfg config structure
+ */
+void rspamd_composites_mark_whitelist_deps(void *cm_ptr, struct rspamd_config *cfg);
+
 #ifdef __cplusplus
 }
 #endif

@@ -24,6 +24,7 @@
 #include "libserver/cfg_file.h"
 #include "libserver/logger.h"
 #include "libserver/maps/map.h"
+#include "libserver/rspamd_symcache.h"
 #include "libutil/cxx/util.hxx"
 
 namespace rspamd::composites {
@@ -605,6 +606,112 @@ void composites_manager::build_inverted_index()
 					 (int) symbol_to_composites.size(), (int) not_only_composites.size());
 }
 
+/* Callback data for collecting atoms from whitelist composites */
+struct whitelist_atom_cbdata {
+	ankerl::unordered_dense::set<std::string> *fine_symbols;
+};
+
+static void
+whitelist_atom_callback(const rspamd_ftok_t *atom, gpointer ud)
+{
+	auto *cbd = reinterpret_cast<whitelist_atom_cbdata *>(ud);
+
+	if (atom->len == 0) {
+		return;
+	}
+
+	std::string_view atom_str(atom->begin, atom->len);
+
+	/* Skip operators */
+	if (atom_str[0] == '&' || atom_str[0] == '|' ||
+		atom_str[0] == '!' || atom_str[0] == '(' || atom_str[0] == ')') {
+		return;
+	}
+
+	/* Skip prefix characters (~, -, ^) */
+	size_t start = 0;
+	while (start < atom_str.size() &&
+		   (atom_str[start] == '~' || atom_str[start] == '-' || atom_str[start] == '^')) {
+		++start;
+	}
+
+	if (start >= atom_str.size()) {
+		return;
+	}
+
+	auto remaining = atom_str.substr(start);
+
+	/* Skip group matchers (g:, g+:, g-:) - we can't determine specific symbols */
+	if (remaining.starts_with("g:") || remaining.starts_with("g+:") || remaining.starts_with("g-:")) {
+		return;
+	}
+
+	/* Extract symbol name (before '[' if present for options) */
+	auto bracket_pos = remaining.find('[');
+	std::string symbol_name;
+	if (bracket_pos != std::string_view::npos) {
+		symbol_name = std::string(remaining.substr(0, bracket_pos));
+	}
+	else {
+		symbol_name = std::string(remaining);
+	}
+
+	if (!symbol_name.empty()) {
+		cbd->fine_symbols->emplace(std::move(symbol_name));
+	}
+}
+
+void composites_manager::mark_whitelist_dependencies()
+{
+	ankerl::unordered_dense::set<std::string> fine_symbols;
+
+	msg_debug_config("analyzing whitelist composites for FINE symbol marking");
+
+	/* Step 1: Find composites with negative score and collect their atoms */
+	for (const auto &comp: all_composites) {
+		auto *sym_def = static_cast<struct rspamd_symbol *>(
+			g_hash_table_lookup(cfg->symbols, comp->sym.c_str()));
+
+		if (sym_def && *sym_def->weight_ptr < 0) {
+			/* This is a whitelist composite - collect all its atoms */
+			whitelist_atom_cbdata cbd{&fine_symbols};
+			rspamd_expression_atom_foreach(comp->expr, whitelist_atom_callback, &cbd);
+
+			msg_debug_config("composite '%s' has negative weight (%.2f), collecting dependencies",
+							 comp->sym.c_str(), *sym_def->weight_ptr);
+		}
+	}
+
+	/* Step 2: Transitively expand - if an atom is also a whitelist composite, add its atoms */
+	bool changed;
+	do {
+		changed = false;
+		for (const auto &comp: all_composites) {
+			if (fine_symbols.contains(comp->sym)) {
+				size_t before = fine_symbols.size();
+				whitelist_atom_cbdata cbd{&fine_symbols};
+				rspamd_expression_atom_foreach(comp->expr, whitelist_atom_callback, &cbd);
+				if (fine_symbols.size() > before) {
+					changed = true;
+				}
+			}
+		}
+	} while (changed);
+
+	/* Step 3: Mark all collected symbols as FINE in symcache */
+	int marked_count = 0;
+	for (const auto &sym_name: fine_symbols) {
+		if (rspamd_symcache_set_symbol_fine(cfg->cache, sym_name.c_str())) {
+			msg_debug_config("marked symbol '%s' as FINE (whitelist composite dependency)",
+							 sym_name.c_str());
+			marked_count++;
+		}
+	}
+
+	msg_info_config("marked %d symbols as FINE for whitelist composite dependencies",
+					marked_count);
+}
+
 }// namespace rspamd::composites
 
 void rspamd_composites_process_deps(void *cm_ptr, struct rspamd_config *cfg)
@@ -642,4 +749,10 @@ void rspamd_composites_get_stats(void *cm_ptr, struct rspamd_composites_stats_ex
 	stats->time_fast_mean = cm->stats.time_fast.mean;
 	stats->time_fast_stddev = cm->stats.time_fast.stddev;
 	stats->time_fast_count = cm->stats.time_fast.number;
+}
+
+void rspamd_composites_mark_whitelist_deps(void *cm_ptr, struct rspamd_config *cfg)
+{
+	auto *cm = COMPOSITE_MANAGER_FROM_PTR(cm_ptr);
+	cm->mark_whitelist_dependencies();
 }
