@@ -118,6 +118,58 @@ local function parse_dkim_http_headers(N, task, settings)
   return false, {}
 end
 
+local function generate_auid(task, settings, domain)
+  if not settings.auid then
+    return nil
+  end
+
+  -- Check the AUID type configuration
+  local auid_type = settings.auid
+  local efrom = task:get_from('smtp')
+  local hfrom = task:get_from('mime')
+
+  if type(auid_type) == 'string' then
+    if auid_type == 'envelope_from' then
+      -- Use envelope from address
+      if efrom and efrom[1] and efrom[1].addr then
+        return efrom[1].addr:lower()
+      end
+    elseif auid_type == 'envelope_domain' then
+      -- Use envelope from domain only
+      if efrom and efrom[1] and efrom[1].domain then
+        return '@' .. efrom[1].domain:lower()
+      end
+    elseif auid_type == 'header_from' then
+      -- Use header from address
+      if hfrom and hfrom[1] and hfrom[1].addr then
+        return hfrom[1].addr:lower()
+      end
+    elseif auid_type == 'header_domain' then
+      -- Use header from domain only
+      if hfrom and hfrom[1] and hfrom[1].domain then
+        return '@' .. hfrom[1].domain:lower()
+      end
+    elseif auid_type == 'domain' then
+      -- Use the signing domain
+      return '@' .. domain
+    else
+      -- Treat as a literal string/template
+      return lua_util.template(auid_type, {
+        domain = domain,
+        envelope_from = (efrom and efrom[1] and efrom[1].addr) or '',
+        envelope_domain = (efrom and efrom[1] and efrom[1].domain) or '',
+        header_from = (hfrom and hfrom[1] and hfrom[1].addr) or '',
+        header_domain = (hfrom and hfrom[1] and hfrom[1].domain) or '',
+      })
+    end
+  elseif type(auid_type) == 'function' then
+    -- Call custom function to generate AUID
+    return auid_type(task, domain)
+  end
+
+  return nil
+end
+
 local function prepare_dkim_signing(N, task, settings)
   local is_local, is_sign_networks, is_authed
 
@@ -548,6 +600,15 @@ local function prepare_dkim_signing(N, task, settings)
 
   insert_or_update_prop(N, task, p, 'domain', 'dkim_domain',
     dkim_domain)
+
+  -- Generate AUID if configured
+  if settings.auid then
+    local auid = generate_auid(task, settings, dkim_domain)
+    if auid then
+      insert_or_update_prop(N, task, p, 'auid', 'auid setting', auid)
+      lua_util.debugm(N, task, 'generated AUID: %s', auid)
+    end
+  end
 
   return #p > 0 and true or false, p
 end
