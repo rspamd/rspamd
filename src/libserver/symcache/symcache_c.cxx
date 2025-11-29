@@ -727,3 +727,36 @@ void rspamd_symcache_promote_resort(struct rspamd_symcache *cache)
 
 	real_cache->promote_resort();
 }
+
+gboolean rspamd_symcache_set_symbol_fine(struct rspamd_symcache *cache,
+										 const char *symbol)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+	auto *item = real_cache->get_item_by_name_mut(symbol, false);
+
+	if (item == nullptr) {
+		return FALSE;
+	}
+
+	if (!(item->flags & SYMBOL_TYPE_FINE)) {
+		item->flags |= SYMBOL_TYPE_FINE;
+
+		/* Also mark parent if this is a virtual symbol */
+		if (item->is_virtual()) {
+			auto *parent = const_cast<rspamd::symcache::cache_item *>(item->get_parent(*real_cache));
+			if (parent && !(parent->flags & SYMBOL_TYPE_FINE)) {
+				parent->flags |= SYMBOL_TYPE_FINE;
+			}
+		}
+
+		/* And mark all virtual children */
+		const auto *children = item->get_children();
+		if (children) {
+			for (auto *child: *children) {
+				child->flags |= SYMBOL_TYPE_FINE;
+			}
+		}
+	}
+
+	return TRUE;
+}
