@@ -376,8 +376,18 @@ return function(cfg)
     for i = 1, (#actions_order - 1) do
       local act = actions_order[i]
 
-      if actions:at(act) and actions:at(act):type() ~= 'object' then
-        local score = actions:at(act):unwrap()
+      local act_value = actions:at(act)
+
+      if act_value then
+        local val_type = act_value:type()
+        local score = 0
+        if val_type == 'string' then
+          if act_value:unwrap() ~= 'null' then
+            score = tonumber(act_value:unwrap())
+          end
+        elseif val_type == 'number' then
+          score = act_value:unwrap()
+        end
 
         for j = i + 1, #actions_order do
           local next_act = actions_order[j]
