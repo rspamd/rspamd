@@ -21,11 +21,18 @@ BuildRequires:    cmake3
 BuildRequires:    devtoolset-10-gcc-c++
 %else
 BuildRequires:    cmake
+%endif
 %if 0%{?el8}
 BuildRequires:    gcc-toolset-10-gcc-c++
 %endif
 %if 0%{?el9}
 BuildRequires:    gcc-toolset-12-gcc-c++
+%endif
+%if 0%{?el10}
+BuildRequires:    gcc-toolset-15
+BuildRequires:    gcc-toolset-15-gcc-plugin-annobin
+%if 0%{getenv:ASAN}
+BuildRequires:    gcc-toolset-15-libasan-devel
 %endif
 %endif
 BuildRequires:    file-devel
@@ -91,13 +98,15 @@ git clone -b v2.1 https://luajit.org/git/luajit-2.0.git %{_builddir}/luajit-src
 %build
 %if 0%{?el7}
 source /opt/rh/devtoolset-10/enable
-%else
+%endif
 %if 0%{?el8}
 source /opt/rh/gcc-toolset-10/enable
 %endif
 %if 0%{?el9}
 source /opt/rh/gcc-toolset-12/enable
 %endif
+%if 0%{?el10}
+source /usr/lib/gcc-toolset/15-env.source
 %endif
 
 %if 0%{getenv:LUAJIT}
