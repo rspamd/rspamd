@@ -19,17 +19,7 @@ limitations under the License.
 -- All forwarding detection functionality has been integrated into the aliases
 -- plugin to ensure correct execution order (prefilter stage before classification).
 --
--- Symbols now registered by aliases plugin:
+-- Symbols now registered by aliases plugin (enabled by default since 3.14.2):
 --   FWD_GOOGLE, FWD_YANDEX, FWD_MAILRU
 --   FWD_SRS, FWD_SIEVE, FWD_CPANEL
 --   FORWARDED
---
--- To use forwarding detection, enable the aliases plugin:
---
---   # local.d/aliases.conf
---   aliases {
---     enabled = true;
---     local_domains = ["your-domain.com"];
---   }
---
--- See: ALIASES_FORWARDING_MIGRATION.md for migration details
