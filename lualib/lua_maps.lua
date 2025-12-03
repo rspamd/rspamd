@@ -143,10 +143,14 @@ local function handle_cdb_map(map_config, key, callback, task)
   return result
 end
 
-local function query_external_map(map_config, upstreams, key, callback, task)
+-- Query external map using HTTP or CDB
+-- task_or_ctx can be either a task object or a context table with:
+--   { config, ev_base, session, resolver } for rspamadm usage
+-- If callback is nil and task_or_ctx is a context table (rspamadm), performs synchronous request
+local function query_external_map(map_config, upstreams, key, callback, task_or_ctx)
   -- Check if this is a CDB map
   if map_config.cdb then
-    return handle_cdb_map(map_config, key, callback, task)
+    return handle_cdb_map(map_config, key, callback, task_or_ctx)
   end
   -- Fallback to HTTP
   local http_method = (map_config.method == 'body' or map_config.method == 'form') and 'POST' or 'GET'
@@ -156,6 +160,12 @@ local function query_external_map(map_config, upstreams, key, callback, task)
   }
   local http_body = nil
   local url = map_config.backend
+
+  -- Determine logging target (task or config)
+  local log_obj = task_or_ctx
+  if type(task_or_ctx) == 'table' and task_or_ctx.config then
+    log_obj = task_or_ctx.config
+  end
 
   if type(key) == 'string' or type(key) == 'userdata' then
     if map_config.method == 'body' then
@@ -178,10 +188,13 @@ local function query_external_map(map_config, upstreams, key, callback, task)
         http_headers['Content-Type'] = 'application/msgpack'
       else
         local caller = debug.getinfo(2) or {}
-        rspamd_logger.errx(task,
+        rspamd_logger.errx(log_obj,
             "requested external map key with a wrong combination body method and missing encode; caller: %s:%s",
             caller.short_src, caller.currentline)
-        callback(false, 'invalid map usage', 500, task)
+        if callback then
+          callback(false, 'invalid map usage', 500, task_or_ctx)
+        end
+        return nil
       end
     else
       -- query/header and no encode
@@ -198,29 +211,20 @@ local function query_external_map(map_config, upstreams, key, callback, task)
         http_headers = key
       else
         local caller = debug.getinfo(2) or {}
-        rspamd_logger.errx(task,
+        rspamd_logger.errx(log_obj,
             "requested external map key with a wrong combination of encode and input; caller: %s:%s",
             caller.short_src, caller.currentline)
-        callback(false, 'invalid map usage', 500, task)
-        return
+        if callback then
+          callback(false, 'invalid map usage', 500, task_or_ctx)
+        end
+        return nil
       end
     end
   end
 
-  local function map_callback(err, code, body, _)
-    if err then
-      callback(false, err, code, task)
-    elseif code == 200 then
-      callback(true, body, 200, task)
-    else
-      callback(false, err, code, task)
-    end
-  end
-
-  local ret = rspamd_http.request {
-    task = task,
+  -- Build HTTP request options - support both task and rspamadm context
+  local http_opts = {
     url = url,
-    callback = map_callback,
     timeout = map_config.timeout or 1.0,
     keepalive = true,
     upstream = upstream,
@@ -229,8 +233,49 @@ local function query_external_map(map_config, upstreams, key, callback, task)
     body = http_body,
   }
 
+  -- Check if task_or_ctx is a context table (rspamadm) or a task (userdata)
+  -- rspamadm context is a Lua table with ev_base, config, session, resolver fields
+  -- task is userdata (C object), so type(task) ~= 'table'
+  local is_rspamadm_ctx = type(task_or_ctx) == 'table' and task_or_ctx.ev_base and task_or_ctx.config
+  if is_rspamadm_ctx then
+    -- rspamadm context
+    http_opts.config = task_or_ctx.config
+    http_opts.ev_base = task_or_ctx.ev_base
+    http_opts.session = task_or_ctx.session
+    http_opts.resolver = task_or_ctx.resolver
+  elseif task_or_ctx then
+    -- Regular task (userdata)
+    http_opts.task = task_or_ctx
+  end
+
+  -- If no callback and rspamadm context, use coroutine-based synchronous mode
+  if not callback and is_rspamadm_ctx then
+    local err, response = rspamd_http.request(http_opts)
+    if err then
+      return nil
+    elseif response and response.code == 200 then
+      return response.content
+    else
+      return nil
+    end
+  end
+
+  -- Async mode with callback
+  local function map_callback(err, code, body, _)
+    if err then
+      callback(false, err, code, task_or_ctx)
+    elseif code == 200 then
+      callback(true, body, 200, task_or_ctx)
+    else
+      callback(false, err, code, task_or_ctx)
+    end
+  end
+
+  http_opts.callback = map_callback
+  local ret = rspamd_http.request(http_opts)
+
   if not ret then
-    callback(false, 'http request error', 500, task)
+    callback(false, 'http request error', 500, task_or_ctx)
   end
 end
 
@@ -246,24 +291,33 @@ end
 --]]
 local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
   local ret = {
-    get_key = function(t, k, key_callback, task)
+    -- get_key supports both task (userdata) and rspamadm context (table with ev_base, config, session, resolver)
+    -- For external maps with rspamadm context (no callback), uses coroutine-based synchronous request
+    get_key = function(t, k, key_callback, task_or_ctx)
       if t.__data then
         local cb = key_callback or callback
         if t.__external then
-          if not cb or not task then
+          -- Check if this is rspamadm context with no callback - use sync mode
+          -- rspamadm context is a Lua table; task is userdata (C object)
+          local is_rspamadm_ctx = type(task_or_ctx) == 'table' and task_or_ctx.ev_base and task_or_ctx.config
+          if not cb and is_rspamadm_ctx then
+            -- Coroutine-based synchronous external map query for rspamadm
+            return query_external_map(t.__data, t.__upstreams, k, nil, task_or_ctx)
+          elseif not cb or not task_or_ctx then
             local caller = debug.getinfo(2) or {}
-            rspamd_logger.errx(rspamd_config, "requested external map key without callback or task; caller: %s:%s",
+            rspamd_logger.errx(rspamd_config, "requested external map key without callback or task/context; caller: %s:%s",
                 caller.short_src, caller.currentline)
             return nil
+          else
+            query_external_map(t.__data, t.__upstreams, k, cb, task_or_ctx)
           end
-          query_external_map(t.__data, t.__upstreams, k, cb, task)
         else
           local result = t.__data:get_key(k)
           if cb then
             if result then
-              cb(true, result, 200, task)
+              cb(true, result, 200, task_or_ctx)
             else
-              cb(false, 'not found', 404, task)
+              cb(false, 'not found', 404, task_or_ctx)
             end
           else
             return result
@@ -281,9 +335,9 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
     end
   }
   local ret_mt = {
-    __index = function(t, k, key_callback, task)
+    __index = function(t, k, key_callback, task_or_ctx)
       if t.__data then
-        return t.get_key(k, key_callback, task)
+        return t.get_key(k, key_callback, task_or_ctx)
       end
 
       return nil

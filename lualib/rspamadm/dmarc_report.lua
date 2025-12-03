@@ -18,6 +18,7 @@ local argparse = require "argparse"
 local lua_util = require "lua_util"
 local logger = require "rspamd_logger"
 local lua_redis = require "lua_redis"
+local lua_maps = require "lua_maps"
 local dmarc_common = require "plugins/dmarc"
 local rspamd_mempool = require "rspamd_mempool"
 local rspamd_url = require "rspamd_url"
@@ -54,6 +55,9 @@ parser:option "-b --batch-size"
       :argname "<number>"
       :convert(tonumber)
       :default "10"
+
+parser:flag "-r --recheck-rua"
+      :description "Re-check RUA addresses against exclude_rua_addresses map before sending"
 
 local report_template = [[From: "{= from_name =}" <{= from_addr =}>
 To: {= rcpt =}
@@ -105,6 +109,14 @@ local redis_attrs = {
 local redis_attrs_write = lua_util.shallowcopy(redis_attrs)
 redis_attrs_write['is_write'] = true
 local pool
+local exclude_rua_map
+-- Context for external map queries (used instead of task in rspamadm)
+local map_context = {
+  config = rspamd_config,
+  ev_base = rspamadm_ev_base,
+  session = rspamadm_session,
+  resolver = rspamadm_dns_resolver,
+}
 
 local function load_config(opts)
   local _r, err = rspamd_config:load_ucl(opts['config'])
@@ -503,6 +515,43 @@ local function prepare_report(opts, start_time, end_time, rep_key)
     return nil
   end
 
+  -- Re-check RUA addresses against exclude_rua_addresses map if enabled
+  -- Works with both local maps and external maps (HTTP) using synchronous requests
+  if exclude_rua_map and dmarc_record.rua then
+    local filtered_rua = {}
+    local excluded_count = 0
+    for _, rua_elt in ipairs(dmarc_record.rua) do
+      local rua_email = string.format('%s@%s', rua_elt:get_user(), rua_elt:get_host())
+      -- For external maps, pass map_context to enable synchronous HTTP requests
+      local excluded = exclude_rua_map:get_key(rua_email, nil, map_context)
+      if not excluded then
+        -- Also check just the domain part
+        excluded = exclude_rua_map:get_key(rua_elt:get_host(), nil, map_context)
+      end
+      if excluded then
+        lua_util.debugm(N, 'RUA address %s for domain %s is excluded by map (re-check)',
+            rua_email, reporting_domain)
+        excluded_count = excluded_count + 1
+      else
+        table.insert(filtered_rua, rua_elt)
+      end
+    end
+
+    if #filtered_rua == 0 then
+      if not opts.no_opt then
+        lua_redis.request(redis_params, redis_attrs_write,
+            { 'DEL', rep_key })
+      end
+      logger.messagex('All RUA addresses for domain %s are excluded by map (re-check), skipping report',
+          reporting_domain)
+      return nil
+    elseif excluded_count > 0 then
+      logger.messagex('Filtered %s RUA addresses for domain %s, %s remaining',
+          excluded_count, reporting_domain, #filtered_rua)
+      dmarc_record.rua = filtered_rua
+    end
+  end
+
   -- Get all reports for a domain
   ret, results = lua_redis.request(redis_params, redis_attrs,
       { 'ZRANGE', rep_key, '0', '-1', 'WITHSCORES' })
@@ -690,6 +739,25 @@ local function handler(args)
   if not redis_params then
     logger.errx('Redis is not configured, exiting')
     os.exit(1)
+  end
+
+  -- Load exclude_rua_addresses map if --recheck-rua flag is set
+  if opts.recheck_rua then
+    if dmarc_settings.reporting.exclude_rua_addresses then
+      exclude_rua_map = lua_maps.map_add_from_ucl(dmarc_settings.reporting.exclude_rua_addresses,
+          'set', 'DMARC RUA exclusion map for report sending')
+      if exclude_rua_map then
+        if exclude_rua_map.__external then
+          logger.messagex('Loaded exclude_rua_addresses external map for RUA re-checking')
+        else
+          logger.messagex('Loaded exclude_rua_addresses map for RUA re-checking')
+        end
+      else
+        logger.warnx('Failed to load exclude_rua_addresses map, RUA re-checking disabled')
+      end
+    else
+      logger.warnx('--recheck-rua specified but no exclude_rua_addresses configured in dmarc settings')
+    end
   end
 
   for _, e in ipairs({ 'email', 'domain', 'org_name' }) do
