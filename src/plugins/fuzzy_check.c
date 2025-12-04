@@ -5747,8 +5747,7 @@ fuzzy_modify_handler(struct rspamd_http_connection_entry *conn_ent,
 		/* Check for flag */
 		if (g_hash_table_lookup(rule->mappings,
 								GINT_TO_POINTER(flag)) == NULL) {
-			msg_info_task("skip rule %s as it has no flag %d defined"
-						  " false",
+			msg_info_task("skip rule %s as it has no flag %d defined",
 						  rule->name, flag);
 			continue;
 		}
@@ -6087,8 +6086,7 @@ fuzzy_check_lua_process_learn(struct rspamd_task *task,
 		/* Check for flag */
 		if (g_hash_table_lookup(rule->mappings,
 								GINT_TO_POINTER(flag)) == NULL) {
-			msg_info_task("skip rule %s as it has no flag %d defined"
-						  " false",
+			msg_info_task("skip rule %s as it has no flag %d defined",
 						  rule->name, flag);
 			continue;
 		}
@@ -6389,8 +6387,7 @@ fuzzy_lua_gen_hashes_handler(lua_State *L)
 		/* Check for flag */
 		if (g_hash_table_lookup(rule->mappings,
 								GINT_TO_POINTER(flag)) == NULL) {
-			msg_info_task("skip rule %s as it has no flag %d defined"
-						  " false",
+			msg_info_task("skip rule %s as it has no flag %d defined",
 						  rule->name, flag);
 			continue;
 		}
@@ -6478,8 +6475,7 @@ fuzzy_lua_hex_hashes_handler(lua_State *L)
 		/* Check for flag */
 		if (g_hash_table_lookup(rule->mappings,
 								GINT_TO_POINTER(flag)) == NULL) {
-			msg_debug_fuzzy_check("skip rule %s as it has no flag %d defined"
-								  " false",
+			msg_debug_fuzzy_check("skip rule %s as it has no flag %d defined",
 								  rule->name, flag);
 			continue;
 		}
