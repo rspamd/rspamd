@@ -36,6 +36,7 @@ Description: Rapid spam filtering system
  Lua.
 
 Package: rspamd-asan
+Build-Profiles: <!noasan>
 Architecture: any
 Conflicts: rspamd
 Provides: rspamd
@@ -57,6 +58,7 @@ Description: debugging symbols for rspamd
  This package contains the debugging symbols for rspamd.
 
 Package: rspamd-asan-dbg
+Build-Profiles: <!noasan>
 Architecture: any
 Section: debug
 Priority: extra
