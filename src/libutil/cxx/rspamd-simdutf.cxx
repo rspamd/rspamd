@@ -28,8 +28,8 @@ const simdutf::implementation *ref_impl{nullptr};
 
 void rspamd_fast_utf8_library_init(unsigned flags)
 {
-	impl = simdutf::get_active_implementation();
 	auto all_impls = simdutf::get_available_implementations();
+	impl = all_impls.detect_best_supported();
 
 	for (auto &i: all_impls) {
 		if (i->name() == "fallback") {
