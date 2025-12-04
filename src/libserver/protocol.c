@@ -713,7 +713,7 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 				msg_debug_protocol("read log-tag header, value: %T", hv_tok);
 				/* Ensure that a tag is valid */
 				if (rspamd_fast_utf8_validate(hv_tok->begin, hv_tok->len) == 0) {
-					int len = MIN(hv_tok->len, sizeof(task->task_pool->tag.uid));
+					int len = MIN(hv_tok->len, sizeof(task->task_pool->tag.uid) - 1);
 					memcpy(task->task_pool->tag.uid, hv_tok->begin, len);
 					task->task_pool->tag.uid[len] = '\0';
 				}
