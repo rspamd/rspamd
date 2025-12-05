@@ -47,8 +47,9 @@ context("Base32 encodning", function()
         local nl = ffi.new("size_t [1]")
         local nb = ffi.C.rspamd_decode_base32(bs, #bs, nl, how)
 
-        assert_equal(tonumber(nl[0]), l,
-            string.format("invalid size reported: %d reported vs %d expected", tonumber(nl[0]), l))
+        local reported_len = tonumber(nl[0]) or 0
+        assert_equal(reported_len, l,
+            string.format("invalid size reported: %s reported vs %s expected", tostring(reported_len), tostring(l)))
         local cmp = ffi.C.memcmp(b, nb, l)
         ffi.C.g_free(ben)
         ffi.C.g_free(nb)
