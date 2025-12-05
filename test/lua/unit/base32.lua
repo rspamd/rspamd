@@ -1,7 +1,10 @@
 -- Test zbase32 encoding/decoding
 
 context("Base32 encodning", function()
-  local ffi = require("ffi")
+  local ok, ffi = pcall(require, "ffi")
+  if not ok then
+    ffi = require("cffi")
+  end
   ffi.cdef[[
     void ottery_rand_bytes(void *buf, size_t n);
     unsigned ottery_rand_unsigned(void);

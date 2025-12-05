@@ -25,7 +25,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ]]--
 
 context("RFC2047 decoding", function()
-  local ffi = require("ffi")
+  local ok, ffi = pcall(require, "ffi")
+  if not ok then
+    ffi = require("cffi")
+  end
 
   ffi.cdef[[
     const char * rspamd_mime_header_decode (void *pool, const char *in, size_t inlen);

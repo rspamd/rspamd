@@ -7,7 +7,10 @@ context("URL check functions", function()
   local lua_util = require("lua_util")
   local logger = require("rspamd_logger")
   local test_helper = require("rspamd_test_helper")
-  local ffi = require("ffi")
+  local ok, ffi = pcall(require, "ffi")
+  if not ok then
+    ffi = require("cffi")
+  end
 
   ffi.cdef [[
   void rspamd_normalize_path_inplace(char *path, size_t len, size_t *nlen);

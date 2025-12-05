@@ -2,7 +2,10 @@
 
 context("SMTP address check functions", function()
   local logger = require("rspamd_logger")
-  local ffi = require("ffi")
+  local ok, ffi = pcall(require, "ffi")
+  if not ok then
+    ffi = require("cffi")
+  end
   local util = require("rspamd_util")
   local fun = require "fun"
   ffi.cdef [[

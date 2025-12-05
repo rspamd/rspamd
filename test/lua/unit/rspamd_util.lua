@@ -90,7 +90,10 @@ context("Rspamd util for lua - check generic functions", function()
 end)
 
 context("Rspamd string utility", function()
-    local ffi = require 'ffi'
+    local ok, ffi = pcall(require, "ffi")
+    if not ok then
+      ffi = require("cffi")
+    end
 
     ffi.cdef[[
 char ** rspamd_string_len_split (const char *in, size_t len,

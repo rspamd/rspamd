@@ -1,7 +1,10 @@
 -- Test utf routines
 
 context("UTF8 check functions", function()
-  local ffi = require("ffi")
+  local ok, ffi = pcall(require, "ffi")
+  if not ok then
+    ffi = require("cffi")
+  end
   ffi.cdef [[
     unsigned int rspamd_str_lc_utf8 (char *str, unsigned int size);
     unsigned int rspamd_str_lc (char *str, unsigned int size);

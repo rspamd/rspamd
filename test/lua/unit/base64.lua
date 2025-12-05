@@ -1,5 +1,8 @@
 context("Base64 encoding", function()
-  local ffi = require("ffi")
+  local ok, ffi = pcall(require, "ffi")
+  if not ok then
+    ffi = require("cffi")
+  end
   local util = require("rspamd_util")
   local logger = require "rspamd_logger"
   ffi.cdef[[

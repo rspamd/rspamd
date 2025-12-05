@@ -1,10 +1,16 @@
-local ffi = require "ffi"
+-- Load FFI: try LuaJIT's built-in ffi first, then cffi-lua for standard Lua
+local ok, ffi = pcall(require, "ffi")
+if not ok then
+  ffi = require("cffi")
+end
 local cfg = rspamd_config
 
 ffi.cdef[[
 void rspamd_url_init (const char *tld_file);
 ]]
 local exports = {}
+-- Export ffi so tests can use it without their own require
+exports.ffi = ffi
 
 local function default_tld_file()
   local test_dir = string.gsub(debug.getinfo(1).source, "^@(.+/)[^/]+$", "%1")

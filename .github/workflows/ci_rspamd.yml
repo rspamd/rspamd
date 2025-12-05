@@ -41,6 +41,11 @@ jobs:
         if: runner.arch == 'ARM64'
         run: echo "HYPERSCAN_ALTROOT=-DHYPERSCAN_ROOT_DIR=/vectorscan" >> "$GITHUB_ENV"
 
+      - name: Install Lua FFI for non-LuaJIT builds
+        if: inputs.enable_luajit == 'OFF'
+        run: |
+          sudo luarocks install cffi-lua
+
       - name: Run cmake
         run: |
           mkdir ${GITHUB_WORKSPACE}/build

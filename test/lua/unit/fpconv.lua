@@ -1,7 +1,10 @@
 -- fpconv tests
 
 context("Fpconv printf functions", function()
-  local ffi = require("ffi")
+  local ok, ffi = pcall(require, "ffi")
+  if not ok then
+    ffi = require("cffi")
+  end
   local niter_fuzz = 100000
   local function small_double()
     return math.random()
