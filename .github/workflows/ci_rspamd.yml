@@ -49,7 +49,7 @@ jobs:
           curl -sL https://github.com/q66/cffi-lua/archive/refs/tags/v0.2.3.tar.gz | tar xz
           cd cffi-lua-0.2.3
           find . -exec touch {} +
-          meson setup build -Dlua_version=5.4 -Dbuildtype=release -Dtests=false
+          meson setup build -Dlua_version=5.4 -Dbuildtype=release -Dtests=false --prefix=/usr --libdir=lib64
           ninja -C build
           sudo ninja -C build install
 
