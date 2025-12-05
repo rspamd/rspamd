@@ -86,11 +86,18 @@ context("SMTP address check functions", function()
     '<a@example.com><>',
   }
 
+  -- Helper to check if a cdata pointer is NULL (cffi-lua compatibility)
+  local function is_null(ptr)
+    if ptr == nil then return true end
+    -- For cffi-lua, check if pointer equals NULL
+    return ptr == ffi.new('void*')
+  end
+
   fun.each(function(case)
     test("Parse invalid smtp addr: " .. case, function()
       local st = ffi.C.rspamd_email_address_from_smtp(case, #case)
 
-      assert_nil(st, "should not be able to parse " .. case)
+      assert_true(is_null(st), "should not be able to parse " .. case)
     end)
   end, cases_invalid)
 

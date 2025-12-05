@@ -53,15 +53,19 @@ test_resume(lua_State *L, int function_call)
 	t1 = rspamd_get_virtual_ticks();
 
 	for (i = 0; i < N; i++) {
-		lua_rawgeti(L, LUA_REGISTRYINDEX, function_call);
+		/* In Lua 5.4, lua_resume must be called on a coroutine, not the main thread */
+		lua_State *coro = lua_newthread(L);
+		lua_rawgeti(coro, LUA_REGISTRYINDEX, function_call);
 #if LUA_VERSION_NUM < 502
-		lua_resume(L, 0);
+		lua_resume(coro, 0);
 #elif LUA_VERSION_NUM >= 504
-		lua_resume(L, NULL, 0, NULL);
+		int nres;
+		lua_resume(coro, NULL, 0, &nres);
 #else
-		lua_resume(L, NULL, 0);
+		lua_resume(coro, NULL, 0);
 #endif
-		lua_pop(L, 1);
+		lua_pop(coro, 1);
+		lua_pop(L, 1); /* pop the coroutine from main state */
 	}
 
 	t2 = rspamd_get_virtual_ticks();
@@ -85,7 +89,8 @@ test_resume_get_thread(int function_call)
 #if LUA_VERSION_NUM < 502
 		lua_resume(ent->lua_state, 0);
 #elif LUA_VERSION_NUM >= 504
-		lua_resume(ent->lua_state, NULL, 0, NULL);
+		int nres;
+		lua_resume(ent->lua_state, NULL, 0, &nres);
 #else
 		lua_resume(ent->lua_state, NULL, 0);
 #endif
@@ -115,7 +120,8 @@ test_resume_get_new_thread(int function_call)
 #if LUA_VERSION_NUM < 502
 		lua_resume(ent->lua_state, 0);
 #elif LUA_VERSION_NUM >= 504
-		lua_resume(ent->lua_state, NULL, 0, NULL);
+		int nres;
+		lua_resume(ent->lua_state, NULL, 0, &nres);
 #else
 		lua_resume(ent->lua_state, NULL, 0);
 #endif

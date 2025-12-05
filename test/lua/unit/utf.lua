@@ -11,8 +11,8 @@ context("UTF8 check functions", function()
     void rspamd_fast_utf8_library_init (unsigned flags);
     void ottery_rand_bytes(void *buf, size_t n);
     double rspamd_get_ticks(int allow);
-    size_t rspamd_fast_utf8_validate (const unsigned char *data, size_t len);
-    size_t rspamd_fast_utf8_validate_ref (const unsigned char *data, size_t len);
+    size_t rspamd_fast_utf8_validate (const char *data, size_t len);
+    size_t rspamd_fast_utf8_validate_ref (const char *data, size_t len);
     char * rspamd_str_make_utf_valid (const char *src, size_t slen, size_t *dstlen, void *);
   ]]
 
@@ -78,6 +78,15 @@ context("UTF8 check functions", function()
     end)
   end
 
+  -- Helper to convert cdata numbers to Lua numbers (cffi-lua compatibility)
+  local function cdata_to_number(v)
+    -- Try tonumber first (works in LuaJIT and for small values)
+    local n = tonumber(v)
+    if n then return n end
+    -- For 64-bit integers in cffi-lua, convert via string
+    return tonumber(tostring(v):match("^(%d+)"))
+  end
+
   -- Enable sse and avx2
   ffi.C.rspamd_fast_utf8_library_init(3)
   local valid_cases = {
@@ -93,7 +102,7 @@ context("UTF8 check functions", function()
       ffi.copy(buf, c)
 
       local ret = ffi.C.rspamd_fast_utf8_validate(buf, #c)
-      assert_equal(ret, 0)
+      assert_equal(cdata_to_number(ret), 0)
     end)
   end
   local invalid_cases = {
@@ -119,7 +128,7 @@ context("UTF8 check functions", function()
       ffi.copy(buf, c)
 
       local ret = ffi.C.rspamd_fast_utf8_validate(buf, #c)
-      assert_not_equal(ret, 0)
+      assert_not_equal(cdata_to_number(ret), 0)
     end)
   end
 
