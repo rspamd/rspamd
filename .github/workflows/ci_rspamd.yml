@@ -12,6 +12,9 @@ on:
       runner:
         type: string
         default: 'ubuntu-24.04'
+      enable_luajit:
+        type: string
+        default: 'ON'
 
 env:
   CTEST_OUTPUT_ON_FAILURE: 1
@@ -42,7 +45,7 @@ jobs:
         run: |
           mkdir ${GITHUB_WORKSPACE}/build
           cd ${GITHUB_WORKSPACE}/build
-          cmake -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/install -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DENABLE_HYPERSCAN=ON ${{ env.HYPERSCAN_ALTROOT }} -GNinja ${GITHUB_WORKSPACE}/src
+          cmake -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/install -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DENABLE_HYPERSCAN=ON -DENABLE_LUAJIT=${{ inputs.enable_luajit }} ${{ env.HYPERSCAN_ALTROOT }} -GNinja ${GITHUB_WORKSPACE}/src
 
       - name: Build rspamd
         run: |
