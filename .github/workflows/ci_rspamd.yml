@@ -44,7 +44,7 @@ jobs:
       - name: Install Lua FFI for non-LuaJIT builds
         if: inputs.enable_luajit == 'OFF'
         run: |
-          sudo dnf install -y luarocks lua-devel libffi-devel
+          sudo dnf install -y luarocks lua-devel libffi-devel meson
           sudo luarocks install cffi-lua
 
       - name: Run cmake
