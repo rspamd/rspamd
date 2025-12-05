@@ -54,7 +54,9 @@ context("Base64 encoding", function()
 
     local nl = ffi.new("size_t [1]")
     for _,c in ipairs(cases) do
-      local b = ffi.C.rspamd_encode_base64(c[1], #c[1], 0, nl)
+      local inp = ffi.new("unsigned char[?]", #c[1] + 1)
+      ffi.copy(inp, c[1])
+      local b = ffi.C.rspamd_encode_base64(inp, #c[1], 0, nl)
       local s = ffi.string(b)
       ffi.C.g_free(b)
       assert_equal(s, c[2], s .. " not equal " .. c[2])
@@ -86,7 +88,9 @@ in the continued and indefatigable generation of knowledge, exceeds the short
 vehemence of any carnal pleasure.]]
     local b64 = "TWFuIGlzIGRpc3Rpbmd1aXNoZWQsIG5vdCBvbmx5IGJ5IGhpcyByZWFzb24sIGJ1dCBieSB0aGlz\r\nIHNpbmd1bGFyIHBhc3Npb24gZnJvbQpvdGhlciBhbmltYWxzLCB3aGljaCBpcyBhIGx1c3Qgb2Yg\r\ndGhlIG1pbmQsIHRoYXQgYnkgYSBwZXJzZXZlcmFuY2Ugb2YgZGVsaWdodAppbiB0aGUgY29udGlu\r\ndWVkIGFuZCBpbmRlZmF0aWdhYmxlIGdlbmVyYXRpb24gb2Yga25vd2xlZGdlLCBleGNlZWRzIHRo\r\nZSBzaG9ydAp2ZWhlbWVuY2Ugb2YgYW55IGNhcm5hbCBwbGVhc3VyZS4="
     local nl = ffi.new("size_t [1]")
-    local b = ffi.C.rspamd_encode_base64(text, #text, 76, nl)
+    local inp = ffi.new("unsigned char[?]", #text + 1)
+    ffi.copy(inp, text)
+    local b = ffi.C.rspamd_encode_base64(inp, #text, 76, nl)
     local cmp = ffi.C.memcmp(b, b64, nl[0])
     ffi.C.g_free(b)
     assert_equal(cmp, 0)

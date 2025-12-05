@@ -29,7 +29,8 @@ context("Base32 encodning", function()
     }
 
     for _,c in ipairs(cases) do
-      local b = ffi.C.rspamd_encode_base32(c[1], #c[1], 0)
+      local inp = ffi.new("unsigned char[?]", #c[1], c[1])
+      local b = ffi.C.rspamd_encode_base32(inp, #c[1], 0)
       local s = ffi.string(b)
       ffi.C.g_free(b)
       assert_equal(s, c[2], s .. " not equal " .. c[2])
