@@ -44,8 +44,14 @@ jobs:
       - name: Install Lua FFI for non-LuaJIT builds
         if: inputs.enable_luajit == 'OFF'
         run: |
-          sudo dnf install -y luarocks lua-devel libffi-devel meson
-          sudo luarocks install cffi-lua
+          sudo dnf install -y luarocks lua-devel libffi-devel meson pkgconf gcc-c++
+          cd /tmp
+          curl -sL https://github.com/q66/cffi-lua/archive/refs/tags/v0.2.3.tar.gz | tar xz
+          cd cffi-lua-0.2.3
+          find . -exec touch {} +
+          meson setup build -Dlua_version=5.4 -Dbuildtype=release -Dtests=false
+          ninja -C build
+          sudo ninja -C build install
 
       - name: Run cmake
         run: |
