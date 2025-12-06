@@ -72,7 +72,8 @@ local function encode_url_for_redirect(url_str)
   -- Encode space and other problematic characters that are common in redirect URLs
   -- We're conservative - only encode what http_parser_parse_url actually rejects
   -- Don't encode already-encoded sequences (%XX)
-  local encoded = url_str:gsub("([^%w%-%._~:/?#%[%]@!$&'()*+,;=%%])", function(c)
+  -- Use explicit ASCII ranges instead of %w which is locale-dependent
+  local encoded = url_str:gsub("([^A-Za-z0-9%-%._~:/?#%[%]@!$&'()*+,;=%%])", function(c)
     -- Don't double-encode already encoded characters
     if c == '%' then
       return c
