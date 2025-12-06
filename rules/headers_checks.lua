@@ -45,9 +45,9 @@ local rcvd_cb_id = rspamd_config:register_symbol {
       return not h['flags']['artificial']
     end, received))
 
-    for k, v in pairs(cnts) do
-      if nreceived >= tonumber(k) then
-        def = v
+    for _, k in ipairs({ 1, 2, 3, 5, 7, 12 }) do
+      if nreceived >= k then
+        def = cnts[k]
       end
     end
 
@@ -133,9 +133,9 @@ local prio_cb_id = rspamd_config:register_symbol {
     local _, _, x = xprio:find('^%s?(%d+)');
     if (x) then
       x = tonumber(x)
-      for k, v in pairs(cnts) do
-        if x >= tonumber(k) then
-          def = v
+      for _, k in ipairs({ 1, 2, 3, 5 }) do
+        if x >= k then
+          def = cnts[k]
         end
       end
       task:insert_result('HAS_X_PRIO_' .. def, 1.0, tostring(x))
@@ -825,9 +825,9 @@ local check_to_cc_id = rspamd_config:register_symbol {
     end
     -- Add symbol for recipient count
     local nrcpt = #to
-    for k, v in pairs(cnts) do
-      if nrcpt >= tonumber(k) then
-        def = v
+    for _, k in ipairs({ 1, 2, 3, 5, 7, 12, 50 }) do
+      if nrcpt >= k then
+        def = cnts[k]
       end
     end
     task:insert_result('RCPT_COUNT_' .. def, 1.0, tostring(nrcpt))
