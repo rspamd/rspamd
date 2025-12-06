@@ -19,14 +19,14 @@ local function http_simple_tcp_async_symbol(task)
   end
   local function http_read_cb(err, data, conn)
     logger.errx(task, 'http_read_cb: got reply: %s, error: %s, conn: %s', data, err, conn)
-    conn:add_write(http_read_post_cb, "POST /request2 HTTP/1.1\r\n\r\n")
+    conn:add_write(http_read_post_cb, "POST /request2 HTTP/1.1\r\nHost: 127.0.0.1:18080\r\n\r\n")
     task:insert_result('HTTP_ASYNC_RESPONSE', 1.0, data or err)
   end
   rspamd_tcp:request({
     task = task,
     callback = http_read_cb,
     host = '127.0.0.1',
-    data = {'GET /request HTTP/1.1\r\nConnection: keep-alive\r\n\r\n'},
+    data = {'GET /request HTTP/1.1\r\nHost: 127.0.0.1:18080\r\nConnection: keep-alive\r\n\r\n'},
     read = true,
     port = 18080,
   })
@@ -122,7 +122,7 @@ local function http_simple_tcp_symbol(task)
 
   logger.errx(task, 'connect_sync %1, %2', is_ok, tostring(connection))
 
-  is_ok, err = connection:write('GET /request HTTP/1.1\r\nConnection: keep-alive\r\n\r\n')
+  is_ok, err = connection:write('GET /request HTTP/1.1\r\nHost: 127.0.0.1:18080\r\nConnection: keep-alive\r\n\r\n')
 
   logger.errx(task, 'write %1, %2', is_ok, err)
   if not is_ok then
@@ -149,7 +149,7 @@ local function http_simple_tcp_symbol(task)
 
   task:insert_result('HTTP_SYNC_RESPONSE', 1.0, got_content)
 
-  is_ok, err = connection:write("POST /request HTTP/1.1\r\n\r\n")
+  is_ok, err = connection:write("POST /request HTTP/1.1\r\nHost: 127.0.0.1:18080\r\n\r\n")
   logger.errx(task, 'write[2] %1, %2', is_ok, err)
 
   got_content = ''
@@ -194,7 +194,7 @@ local function http_tcp_symbol(task)
     return
   end
 
-  is_ok, err = connection:write(string.format('%s %s HTTP/1.1\r\nConnection: close\r\n\r\n', method:upper(), url))
+  is_ok, err = connection:write(string.format('%s %s HTTP/1.1\r\nHost: 127.0.0.1:18080\r\nConnection: close\r\n\r\n', method:upper(), url))
 
   logger.errx(task, 'write %1, %2', is_ok, err)
   if not is_ok then

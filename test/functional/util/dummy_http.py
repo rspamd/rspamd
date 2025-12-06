@@ -113,7 +113,7 @@ def make_app():
 
 async def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--bind", "-b", default="localhost", help="bind address")
+    parser.add_argument("--bind", "-b", default="127.0.0.1", help="bind address")
     parser.add_argument("--port", "-p", type=int, default=18080, help="bind port")
     parser.add_argument("--keyfile", "-k", help="server private key file")
     parser.add_argument("--certfile", "-c", help="server certificate file")
