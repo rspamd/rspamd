@@ -2609,15 +2609,15 @@ int fuzzy_check_module_config(struct rspamd_config *cfg, bool validate)
 	fuzzy_module_ctx->cleanup_rules_ref = -1;
 
 	/* Interact with lua_fuzzy */
+	int lua_fuzzy_top = lua_gettop(L);
 	if (luaL_dostring(L, "return require \"lua_fuzzy\"") != 0) {
 		msg_err_config("cannot require lua_fuzzy: %s",
 					   lua_tostring(L, -1));
 		fuzzy_module_ctx->enabled = FALSE;
 	}
 	else {
-#if LUA_VERSION_NUM >= 504
-		lua_settop(L, -2);
-#endif
+		/* Lua 5.4's require returns 2 values (module + path), keep only first */
+		lua_settop(L, lua_fuzzy_top + 1);
 		if (lua_type(L, -1) != LUA_TTABLE) {
 			msg_err_config("lua fuzzy must return "
 						   "table and not %s",

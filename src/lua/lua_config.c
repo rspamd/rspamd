@@ -5115,11 +5115,14 @@ lua_config_register_re_selector(lua_State *L)
 			}
 		}
 
+		int selector_top = lua_gettop(L);
 		if (luaL_dostring(L, "return require \"lua_selectors\"") != 0) {
 			msg_warn_config("cannot require lua_selectors: %s",
 							lua_tostring(L, -1));
 		}
 		else {
+			/* Lua 5.4's require returns 2 values (module + path), keep only first */
+			lua_settop(L, selector_top + 1);
 			if (lua_type(L, -1) != LUA_TTABLE) {
 				msg_warn_config("lua selectors must return "
 								"table and not %s",
@@ -5541,11 +5544,14 @@ lua_config_register_re_selector_scoped(lua_State *L)
 			}
 		}
 
+		int selector_top = lua_gettop(L);
 		if (luaL_dostring(L, "return require \"lua_selectors\"") != 0) {
 			msg_warn_config("cannot require lua_selectors: %s",
 							lua_tostring(L, -1));
 		}
 		else {
+			/* Lua 5.4's require returns 2 values (module + path), keep only first */
+			lua_settop(L, selector_top + 1);
 			if (lua_type(L, -1) != LUA_TTABLE) {
 				msg_warn_config("lua selectors must return "
 								"table and not %s",
