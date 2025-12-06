@@ -15,13 +15,13 @@ local now = tonumber(KEYS[6])
 redis.call('ZADD', KEYS[2], now, KEYS[4])
 redis.call('HSET', KEYS[1], 'ann', KEYS[3])
 redis.call('HSET', KEYS[1], 'roc_thresholds', KEYS[8])
-if KEYS[9] then
+if KEYS[9] and KEYS[9] ~= '' then
   redis.call('HSET', KEYS[1], 'pca', KEYS[9])
 end
-if KEYS[10] then
+if KEYS[10] and KEYS[10] ~= '' then
   redis.call('HSET', KEYS[1], 'providers_meta', KEYS[10])
 end
-if KEYS[11] then
+if KEYS[11] and KEYS[11] ~= '' then
   redis.call('HSET', KEYS[1], 'norm_stats', KEYS[11])
 end
 redis.call('HDEL', KEYS[1], 'lock')

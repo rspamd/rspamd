@@ -526,8 +526,18 @@ Run Dummy Https
   Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_HTTPS_PROC=${result}
 
 Run Dummy Llm
-  ${result} =  Start Process  python3  ${RSPAMD_TESTDIR}/util/dummy_llm.py  18080
-  Wait Until Created  /tmp/dummy_llm.pid  timeout=2 second
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_llm.py  18080
+  ...  stderr=/tmp/dummy_llm.log  stdout=/tmp/dummy_llm.log
+  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_llm.pid  timeout=2 second
+  IF  '${status}' == 'FAIL'
+    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_llm.log
+    IF  '${logstatus}' == 'PASS'
+      Log  dummy_llm.py failed to start. Log output:\n${log}  level=ERROR
+    ELSE
+      Log  dummy_llm.py failed to start. No log file found at /tmp/dummy_llm.log  level=ERROR
+    END
+    Fail  dummy_llm.py did not create PID file in 2 seconds
+  END
   Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_LLM_PROC=${result}
 
 Dummy Llm Teardown

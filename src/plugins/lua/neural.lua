@@ -892,7 +892,8 @@ local function check_anns(worker, cfg, ev_base, rule, process_callback, what)
       elseif type(data) == 'table' then
         lua_util.debugm(N, cfg, '%s: process element %s:%s (profiles=%s)',
           what, rule.prefix, set.name, #data)
-        process_callback(worker, ev_base, rule, set, fun.map(load_ann_profile, data))
+        -- Use fun.totable to convert iterator to table for Lua 5.4 compatibility
+        process_callback(worker, ev_base, rule, set, fun.totable(fun.map(load_ann_profile, data)))
         set.can_store_vectors = true
       else
         lua_util.debugm(N, cfg, '%s: no profiles for %s:%s', what, rule.prefix, set.name)
