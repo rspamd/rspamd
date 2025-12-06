@@ -385,7 +385,15 @@ local function prepare_dkim_signing(N, task, settings)
       if type(settings.use_domain_custom) == 'string' then
         -- Load custom function
         local loadstring = loadstring or load
-        local ret, res_or_err = pcall(loadstring(settings.use_domain_custom))
+        local chunk, err = loadstring(settings.use_domain_custom)
+        local ret, res_or_err
+        if chunk then
+          ret, res_or_err = pcall(chunk)
+        else
+          ret = false
+          res_or_err = err
+        end
+
         if ret then
           if type(res_or_err) == 'function' then
             settings.use_domain_custom = res_or_err

@@ -1529,7 +1529,12 @@ exports.callback_from_string = function(s)
     inp = 'return function(...)\n' .. s .. '; end'
   end
 
-  local ret, res_or_err = pcall(loadstring(inp))
+  local chunk, err = loadstring(inp)
+  if not chunk then
+    return false, err
+  end
+
+  local ret, res_or_err = pcall(chunk)
 
   if not ret or type(res_or_err) ~= 'function' then
     return false, res_or_err

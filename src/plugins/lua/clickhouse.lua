@@ -1364,7 +1364,14 @@ if opts then
         if rule.schema and rule.first_row and rule.get_row then
           local first_row, get_row
           local loadstring = loadstring or load
-          local ret, res_or_err = pcall(loadstring(rule.first_row))
+          local ret, res_or_err
+          local chunk, err = loadstring(rule.first_row)
+          if chunk then
+            ret, res_or_err = pcall(chunk)
+          else
+            ret = false
+            res_or_err = err
+          end
 
           if not ret or type(res_or_err) ~= 'function' then
             rspamd_logger.errx(rspamd_config, 'invalid first_row (%s) - must be a function',
@@ -1373,7 +1380,13 @@ if opts then
             first_row = res_or_err
           end
 
-          ret, res_or_err = pcall(loadstring(rule.get_row))
+          chunk, err = loadstring(rule.get_row)
+          if chunk then
+            ret, res_or_err = pcall(chunk)
+          else
+            ret = false
+            res_or_err = err
+          end
 
           if not ret or type(res_or_err) ~= 'function' then
             rspamd_logger.errx(rspamd_config,
