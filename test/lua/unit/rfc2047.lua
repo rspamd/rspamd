@@ -72,8 +72,9 @@ context("RFC2047 decoding", function()
       for _ = 0,1000 do
         local r1 = math.random()
         local r2 = math.random()
-        local sl1 = #str / 2.0 * r1
-        local sl2 = #str / 2.0 * r2
+        -- Use math.floor for Lua 5.4 compatibility (string.sub requires integers)
+        local sl1 = math.floor(#str / 2.0 * r1)
+        local sl2 = math.floor(#str / 2.0 * r2)
 
         local s1 = tostring(util.encode_base64(string.sub(str, 1, sl1)))
         local s2 = tostring(util.encode_base64(string.sub(str, sl1 + 1, sl2)))

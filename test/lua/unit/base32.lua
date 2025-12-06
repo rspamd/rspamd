@@ -14,6 +14,13 @@ context("Base32 encodning", function()
     int memcmp(const void *a1, const void *a2, size_t len);
   ]]
 
+  -- Helper to convert cdata numbers to Lua numbers (cffi-lua compatibility)
+  local function cdata_to_number(v)
+    local n = tonumber(v)
+    if n then return n end
+    return tonumber(tostring(v):match("^(%d+)"))
+  end
+
   local function random_buf(max_size)
     local l = ffi.C.ottery_rand_unsigned() % max_size + 1
     local buf = ffi.new("unsigned char[?]", l)
@@ -47,7 +54,7 @@ context("Base32 encodning", function()
         local nl = ffi.new("size_t [1]")
         local nb = ffi.C.rspamd_decode_base32(bs, #bs, nl, how)
 
-        local reported_len = tonumber(nl[0]) or 0
+        local reported_len = cdata_to_number(nl[0]) or 0
         assert_equal(reported_len, l,
             string.format("invalid size reported: %s reported vs %s expected", tostring(reported_len), tostring(l)))
         local cmp = ffi.C.memcmp(b, nb, l)
