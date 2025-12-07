@@ -507,7 +507,7 @@ local function do_train_ann(worker, ev_base, rule, set, ann_key)
     {
       ann_key,
       tostring(os.time()),
-      tostring(math.max(10.0, rule.watch_interval * 2)),
+      tostring(math.floor(math.max(10.0, rule.watch_interval * 2))),
       rspamd_util.get_hostname()
     })
 end
