@@ -650,6 +650,7 @@ local config_schema = T.table({
   authenticated_headers = T.array(T.string()):optional():doc({ summary = "Headers for authenticated users" }),
   extended_headers_rcpt = lua_maps.map_schema:optional():doc({ summary = "Recipients for extended headers" }),
   custom = T.table({}, { open = true, extra = T.string() }):optional():doc({ summary = "Custom header definitions" }),
+  default_headers_order = T.number():optional():doc({ summary = "Default order for headers (1 to insert after first Received header)" }),
 }, {
   open = true
 }):doc({ summary = "Milter headers plugin configuration" })
@@ -736,6 +737,10 @@ end
 
 if type(opts['skip_all']) == 'boolean' then
   settings.skip_all = opts['skip_all']
+end
+
+if type(opts['default_headers_order']) == 'number' then
+  settings.default_headers_order = opts['default_headers_order']
 end
 
 for _, s in ipairs(opts['use']) do
