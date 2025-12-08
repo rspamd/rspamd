@@ -557,9 +557,13 @@ local function milter_headers(task)
               if local_mod.remove_ar_from:get_key(ar_hostname) then
                 should_remove = true
               else
-                local domain_part = ar_hostname:match('%.(.+)$')
-                if domain_part and local_mod.remove_ar_from:get_key('.' .. domain_part) then
-                  should_remove = true
+                for i = 1, #ar_hostname do
+                  if ar_hostname:sub(i, i) == '.' then
+                    if local_mod.remove_ar_from:get_key(ar_hostname:sub(i)) then
+                      should_remove = true
+                      break
+                    end
+                  end
                 end
               end
             elseif type(local_mod.remove_ar_from) == 'table' then
