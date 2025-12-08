@@ -328,7 +328,7 @@ local pushers = {
         if type(v) == 'table' then
           hdrs[pfx .. k] = ucl.to_format(v, 'json-compact')
         else
-          hdrs[pfx .. k] = rspamd_util.mime_header_encode(tostring(v) or '')
+          hdrs[pfx .. k] = tostring(v) or ''
         end
       end
     end
