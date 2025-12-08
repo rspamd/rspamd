@@ -1003,8 +1003,9 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 	rspamd_http_connection_ref(conn);
 
 	if (what & EV_READ) {
-		/* Check for early response while still sending request */
-		if (priv->wr_pos < priv->wr_total && priv->wr_total > 0) {
+		/* Check for early response while still sending request (client only) */
+		if (conn->type == RSPAMD_HTTP_CLIENT &&
+			priv->wr_pos < priv->wr_total && priv->wr_total > 0) {
 			msg_debug("received early server response while still writing request "
 					  "(sent %uz of %uz bytes)",
 					  priv->wr_pos, priv->wr_total);
@@ -2501,8 +2502,9 @@ if (conn->opts & RSPAMD_HTTP_CLIENT_SSL) {
 	}
 }
 else {
-	/* Watch for both READ and WRITE to detect early server responses */
-	rspamd_ev_watcher_init(&priv->ev, conn->fd, EV_WRITE | EV_READ,
+	/* Watch for READ too on client to detect early server responses */
+	short ev_flags = (conn->type == RSPAMD_HTTP_CLIENT) ? (EV_WRITE | EV_READ) : EV_WRITE;
+	rspamd_ev_watcher_init(&priv->ev, conn->fd, ev_flags,
 						   rspamd_http_event_handler, conn);
 	/* Use connect_timeout on initial EV_WRITE stage if provided */
 	ev_tstamp start_to = (priv->connect_timeout > 0 ? priv->connect_timeout : priv->timeout);
