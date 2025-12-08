@@ -298,4 +298,19 @@ local function parse_ar_element(elt)
 end
 exports.parse_ar_element = parse_ar_element
 
+local function get_ar_hostname(ar_value)
+  if not ar_value or ar_value == '' then
+    return nil
+  end
+
+  local hostname = ar_value:match('^%s*([^;%s%(]+)')
+
+  if hostname then
+    return hostname:lower()
+  end
+
+  return nil
+end
+exports.get_ar_hostname = get_ar_hostname
+
 return exports
