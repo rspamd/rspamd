@@ -551,3 +551,22 @@ Dummy Http Teardown
 Dummy Https Teardown
   Terminate Process  ${DUMMY_HTTPS_PROC}
   Wait For Process  ${DUMMY_HTTPS_PROC}
+
+Run Dummy Http Early Response
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http_early_response.py  -pf  /tmp/dummy_http_early.pid  -p  18083
+  ...  stderr=/tmp/dummy_http_early.log  stdout=/tmp/dummy_http_early.log
+  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_http_early.pid  timeout=2 second
+  IF  '${status}' == 'FAIL'
+    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_http_early.log
+    IF  '${logstatus}' == 'PASS'
+      Log  dummy_http_early_response.py failed to start. Log output:\n${log}  level=ERROR
+    ELSE
+      Log  dummy_http_early_response.py failed to start. No log file found at /tmp/dummy_http_early.log  level=ERROR
+    END
+    Fail  dummy_http_early_response.py did not create PID file in 2 seconds
+  END
+  Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_HTTP_EARLY_PROC=${result}
+
+Dummy Http Early Teardown
+  Terminate Process  ${DUMMY_HTTP_EARLY_PROC}
+  Wait For Process  ${DUMMY_HTTP_EARLY_PROC}
