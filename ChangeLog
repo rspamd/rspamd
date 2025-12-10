@@ -1,3 +1,38 @@
+3.14.2: 10 Dec 2025
+  * [Feature] DMARC: Add --recheck-rua option to dmarc_report for RUA filtering at send time
+  * [Feature] Metadata exporter: Add multipart and msgpack formatters
+  * [Feature] Milter headers: Add remove_ar_from option for selective Authentication-Results header removal
+  * [Fix] Security: Backport security fixes from libucl 0.9.3
+  * [Fix] HTTP: Handle early server responses during request write
+  * [Fix] HTTP: Only apply early response handling for HTTP clients
+  * [Fix] MIME: Prevent splitting UTF-8 sequences in header encoding
+  * [Fix] URL: Normalize URLs with multiple slashes between host and path
+  * [Fix] URL: Use locale-independent patterns in URL encoding
+  * [Fix] Milter headers: Allow default_headers_order to be configured
+  * [Fix] Milter headers: Fix hierarchical domain matching in remove_ar_from map lookups
+  * [Fix] Aliases: Enable plugin by default to restore plus-addressing
+  * [Fix] DCC: Handle nil opts in plugin initialization
+  * [Fix] Neural: Fix Lua 5.4 compatibility issues
+  * [Fix] Reputation: Fix whitelist schema and selector-aware checking
+  * [Fix] Logging: Fix off-by-one when at the maximum tag length
+  * [Fix] Logging: Null-terminate the log tag when copying the header
+  * [Fix] Prometheus: Use double type for rspamd_scan_time_average metric
+  * [Fix] Build: FreeBSD 15 inotify build compatibility
+  * [Fix] Build: Remove deprecated OpenSSL engine.h include
+  * [Fix] Lua: Use 0 instead of LUA_OK for lua_pcall result comparison (Lua 5.1 compat)
+  * [Fix] Lua: Handle Lua 5.4 require returning two values
+  * [Fix] Lua: Use math.floor for Lua 5.4 integer division compatibility
+  * [Fix] Lua: Improve loadstring error handling for Lua 5.4 compatibility
+  * [Fix] Lua: Use userdata __gc for UCL objects in all Lua versions
+  * [Fix] Lua: Use ipairs for ordered iteration in header checks
+  * [Fix] Lua: Fix other places of Lua 5.4 rounding issues
+  * [Fix] Performance: Avoid repeated simdutf implementation detection on each call
+  * [Minor] Update public suffix list
+  * [Minor] Debian: Allow skipping ASAN build
+  * [Test] Add Lua 5.4 and cffi-lua support for testing
+  * [Test] Fix Python 3.12+ compatibility in test scripts
+  * [Test] Fix TCP tests for HTTP/1.1 compliance
+
 3.14.1: 1 Dec 2025
   * [Feature] Composites: Add inverted index for fast composite rule evaluation
   * [Feature] Composites: Add bloom filter for fast negative symbol lookups
