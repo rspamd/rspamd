@@ -15,6 +15,7 @@ Build-Depends: cmake,
                libssl-dev (>= 1.0),
                libunwind-dev | libunwind-13-dev,
                binutils-dev,
+               liblua5.4-dev | liblua5.3-dev,
                perl,
                ragel,
                zlib1g-dev

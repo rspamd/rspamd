@@ -63,11 +63,7 @@ BuildRequires:    jemalloc-devel
 %endif
 %endif
 
-%if 0%{getenv:LUAJIT}
-BuildRequires:    git
-%else
 BuildRequires:    lua-devel
-%endif
 BuildRequires:    openblas-devel
 BuildRequires:    openssl-devel
 BuildRequires:    pcre2-devel
@@ -89,11 +85,6 @@ lua.
 
 %prep
 %setup -q -n %{name}-%{version}
-%if 0%{getenv:LUAJIT}
-rm -fr %{_builddir}/luajit-src || true
-rm -fr %{_builddir}/luajit-build || true
-git clone -b v2.1 https://luajit.org/git/luajit-2.0.git %{_builddir}/luajit-src
-%endif
 
 %build
 %if 0%{?el7}
@@ -109,10 +100,7 @@ source /opt/rh/gcc-toolset-12/enable
 source /usr/lib/gcc-toolset/15-env.source
 %endif
 
-%if 0%{getenv:LUAJIT}
-pushd %{_builddir}/luajit-src && make clean && make %{?_smp_mflags} CC="gcc -fPIC" PREFIX=%{_builddir}/luajit-build && make install PREFIX=%{_builddir}/luajit-build ; popd
-rm -f %{_builddir}/luajit-build/lib/*.so || true
-%endif
+
 %if 0%{?el7}
 %{cmake3} \
 %else
@@ -167,13 +155,8 @@ rm -f %{_builddir}/luajit-build/lib/*.so || true
         -DENABLE_JEMALLOC=ON \
 %endif
 %endif
-%if 0%{getenv:LUAJIT}
-        -DENABLE_LUAJIT=ON \
-	      -DLUA_ROOT=%{_builddir}/luajit-build \
-%else
-        -DENABLE_LUAJIT=OFF \
-%endif
-        -DENABLE_FASTTEXT=ON \
+         -DENABLE_LUAJIT=OFF \
+         -DENABLE_FASTTEXT=ON \
         -DFASTTEXT_ROOT_DIR=/fasttext \
         -DENABLE_BLAS=ON
 make %{?_smp_mflags}
