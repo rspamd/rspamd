@@ -108,6 +108,10 @@ local config = {
   -- as partial results would be incorrect. Can be overridden via
   -- pdf.pdf_process_timeout in configuration.
   pdf_process_timeout = 2.0,
+  -- Text quality filtering options for garbage detection
+  text_quality_threshold = 0.4, -- Minimum confidence score (0.0-1.0) to accept extracted text
+  text_quality_min_length = 10, -- Minimum text length to apply quality filtering
+  text_quality_enabled = true, -- Enable/disable text quality filtering
 }
 
 -- Used to process patterns found in PDF
@@ -330,6 +334,73 @@ local function gen_graphics_nary()
       P("RG") + P("rg")
 end
 
+-- Calculate text quality confidence score using UTF-8 aware analysis
+-- Returns a score between 0.0 (garbage) and 1.0 (high quality text)
+local function calculate_text_confidence(text)
+  if not text or #text < config.text_quality_min_length then
+    return 1.0 -- Don't filter short text
+  end
+
+  local stats = rspamd_util.get_text_quality(text)
+  if not stats or stats.total == 0 then
+    return 0.0
+  end
+
+  local score = 0.0
+  local non_ws = stats.total - stats.spaces
+
+  -- Printable ratio (weight: 0.25) - target > 0.95
+  local printable_ratio = stats.printable / stats.total
+  score = score + math.min(printable_ratio / 0.95, 1.0) * 0.25
+
+  -- Letter ratio (weight: 0.20) - target > 0.6
+  local letter_ratio = 0
+  if non_ws > 0 then
+    letter_ratio = stats.letters / non_ws
+  end
+  score = score + math.min(letter_ratio / 0.6, 1.0) * 0.20
+
+  -- Word ratio (weight: 0.25) - target > 0.7
+  local word_ratio = 0
+  if non_ws > 0 then
+    word_ratio = stats.word_chars / non_ws
+  end
+  score = score + math.min(word_ratio / 0.7, 1.0) * 0.25
+
+  -- Average word length (weight: 0.15) - ideal: 3-10
+  local avg_word_len = 0
+  if stats.words > 0 then
+    avg_word_len = stats.word_chars / stats.words
+  end
+  local word_len_score = 0
+  if avg_word_len >= 3 and avg_word_len <= 10 then
+    word_len_score = 1.0
+  elseif avg_word_len >= 2 and avg_word_len < 3 then
+    word_len_score = 0.7
+  elseif avg_word_len > 10 and avg_word_len <= 15 then
+    word_len_score = 0.5
+  else
+    word_len_score = 0.2
+  end
+  score = score + word_len_score * 0.15
+
+  -- Space ratio (weight: 0.15) - ideal: 0.08-0.25
+  local space_ratio = stats.spaces / stats.total
+  local space_score = 0
+  if space_ratio >= 0.08 and space_ratio <= 0.25 then
+    space_score = 1.0
+  elseif space_ratio > 0.25 and space_ratio <= 0.4 then
+    space_score = 0.6
+  elseif space_ratio > 0 and space_ratio < 0.08 then
+    space_score = 0.5
+  else
+    space_score = 0.2
+  end
+  score = score + space_score * 0.15
+
+  return score
+end
+
 -- Generates a grammar to parse text blocks (between BT and ET)
 local function gen_text_grammar()
   local V = lpeg.V
@@ -441,6 +512,16 @@ local function gen_text_grammar()
     end
 
     res = sanitize_pdf_text(res)
+
+    -- Apply text quality filtering to reject garbage chunks
+    if config.text_quality_enabled and res and #res >= config.text_quality_min_length then
+      local confidence = calculate_text_confidence(res)
+      if confidence < config.text_quality_threshold then
+        lua_util.debugm(N, nil, 'rejected low confidence text chunk (%.2f): %s',
+            confidence, res:sub(1, 50))
+        return ''
+      end
+    end
 
     if op == "'" or op == '"' then
       return '\n' .. res
@@ -1398,10 +1479,24 @@ local function search_text(task, pdf, mpart)
           end
         end
         local res = table.concat(text, '')
-        obj.text = rspamd_text.fromstring(res)
 
-        lua_util.debugm(N, task, 'object %s:%s is parsed to: %s',
-            obj.major, obj.minor, obj.text)
+        -- Page-level confidence check before storing text
+        if config.text_quality_enabled and #res >= config.text_quality_min_length then
+          local page_confidence = calculate_text_confidence(res)
+          if page_confidence < config.text_quality_threshold then
+            lua_util.debugm(N, task, 'skipping low confidence page text for %s:%s (%.2f)',
+                obj.major, obj.minor, page_confidence)
+            -- Don't store this page's text
+          else
+            obj.text = rspamd_text.fromstring(res)
+            lua_util.debugm(N, task, 'object %s:%s is parsed (confidence: %.2f): %s',
+                obj.major, obj.minor, page_confidence, obj.text)
+          end
+        else
+          obj.text = rspamd_text.fromstring(res)
+          lua_util.debugm(N, task, 'object %s:%s is parsed to: %s',
+              obj.major, obj.minor, obj.text)
+        end
       end
     end
   end
