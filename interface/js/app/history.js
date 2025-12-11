@@ -333,7 +333,7 @@ define(["jquery", "app/common", "app/libft", "footable"],
         });
 
         libft.set_page_size("history", $("#history_page_size").val());
-        libft.bindHistoryTableEventHandlers("history", 8);
+        libft.bindHistoryTableEventHandlers("history", 9);
 
         $("#updateHistory").off("click");
         $("#updateHistory").on("click", (e) => {

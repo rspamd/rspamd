@@ -175,7 +175,7 @@ define(["jquery", "app/common", "app/libft"],
 
 
         libft.set_page_size("scan", $("#scan_page_size").val());
-        libft.bindHistoryTableEventHandlers("scan", 3);
+        libft.bindHistoryTableEventHandlers("scan", 5);
 
         $("#cleanScanHistory").off("click");
         $("#cleanScanHistory").on("click", (e) => {
