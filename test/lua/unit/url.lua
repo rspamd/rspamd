@@ -7,7 +7,10 @@ context("URL check functions", function()
   local lua_util = require("lua_util")
   local logger = require("rspamd_logger")
   local test_helper = require("rspamd_test_helper")
-  local ffi = require("ffi")
+  local ok, ffi = pcall(require, "ffi")
+  if not ok then
+    ffi = require("cffi")
+  end
 
   ffi.cdef [[
   void rspamd_normalize_path_inplace(char *path, size_t len, size_t *nlen);
@@ -212,13 +215,22 @@ context("URL check functions", function()
     { "///foo", "/foo" },
   }
 
+  -- Helper to convert cdata numbers to Lua numbers (cffi-lua compatibility)
+  local function cdata_to_number(v)
+    -- Try tonumber first (works in LuaJIT and for small values)
+    local n = tonumber(v)
+    if n then return n end
+    -- For 64-bit integers in cffi-lua, convert via string
+    return tonumber(tostring(v):match("^(%d+)"))
+  end
+
   for i, v in ipairs(cases) do
     test(string.format("Normalize paths '%s'", v[1]), function()
-      local buf = ffi.new("uint8_t[?]", #v[1])
+      local buf = ffi.new("char[?]", #v[1])
       local sizbuf = ffi.new("size_t[1]")
       ffi.copy(buf, v[1], #v[1])
       ffi.C.rspamd_normalize_path_inplace(buf, #v[1], sizbuf)
-      local res = ffi.string(buf, tonumber(sizbuf[0]))
+      local res = ffi.string(buf, cdata_to_number(sizbuf[0]))
       assert_equal(v[2], res, 'expected ' .. v[2] .. ' but got ' .. res .. ' in path ' .. v[1])
     end)
   end

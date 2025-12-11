@@ -2916,6 +2916,11 @@ rspamd_controller_handle_stat_common(
 	ucl_object_insert_key(top,
 						  ucl_object_fromint(mem_st.fragmented_size), "fragmented", 0, false);
 
+	/*
+	 * Composites statistics are available via control socket /compositesstats
+	 * which aggregates data from all workers
+	 */
+
 	if (do_reset) {
 		session->ctx->srv->stat->messages_scanned = 0;
 		session->ctx->srv->stat->messages_learned = 0;

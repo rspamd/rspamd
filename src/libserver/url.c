@@ -2251,7 +2251,7 @@ rspamd_url_lua_consult(const char *url_str,
 
 	/* Try to load lua_url_filter.filter_url_string function */
 	if (!rspamd_lua_require_function(L, "lua_url_filter", "filter_url_string")) {
-		lua_pop(L, 1); /* Remove error handler */
+		lua_pop(L, 1);                       /* Remove error handler */
 		return RSPAMD_URL_LUA_FILTER_ACCEPT; /* Filter not available, accept */
 	}
 
@@ -2269,7 +2269,7 @@ rspamd_url_lua_consult(const char *url_str,
 	if ((ret = lua_pcall(L, 2, 1, err_idx)) != 0) {
 		msg_err("cannot call lua_url_filter.filter_url_string: %s",
 				lua_isstring(L, -1) ? lua_tostring(L, -1) : "unknown error");
-		lua_pop(L, 2); /* Error + error handler */
+		lua_pop(L, 2);                       /* Error + error handler */
 		return RSPAMD_URL_LUA_FILTER_ACCEPT; /* On error, accept */
 	}
 
@@ -2441,6 +2441,64 @@ rspamd_url_parse(struct rspamd_url *uri,
 										 &unquoted_len, uri->flags);
 
 	rspamd_url_shift(uri, unquoted_len, UF_HOST);
+
+	/*
+	 * Remove extra slashes between host and path.
+	 * URLs like https://example.com//path should be normalized to https://example.com/path
+	 * The slashes between host end and path start are not part of either component,
+	 * so we need to handle them explicitly here.
+	 */
+	if (uri->datalen > 0) {
+		/* Calculate where host ends: hostshift + hostlen */
+		unsigned int host_end = uri->hostshift + uri->hostlen;
+		/* Path starts at datashift */
+		unsigned int path_start = uri->datashift;
+
+		/*
+		 * Between host_end and path_start we should have exactly one slash.
+		 * Any additional slashes (or backslashes) need to be removed.
+		 * Expected structure: "...host/" + "path..." where datashift points to 'p'
+		 * If we have "...host//" + "path...", the extra '/' needs removal.
+		 */
+		if (path_start > host_end + 1) {
+			/* Check if the gap contains only slashes */
+			unsigned int gap_start = host_end;
+			unsigned int gap_len = path_start - host_end;
+			gboolean all_slashes = TRUE;
+
+			for (unsigned int i = 0; i < gap_len; i++) {
+				char c = uri->string[gap_start + i];
+				if (c != '/' && c != '\\') {
+					all_slashes = FALSE;
+					break;
+				}
+			}
+
+			if (all_slashes && gap_len > 1) {
+				/* Remove extra slashes, keep only one */
+				unsigned int extra_slashes = gap_len - 1;
+				unsigned int remain = uri->urllen - path_start;
+
+				/* Shift path and everything after it backward */
+				memmove(uri->string + host_end + 1,
+						uri->string + path_start,
+						remain);
+
+				/* Null terminate */
+				uri->urllen -= extra_slashes;
+				uri->string[uri->urllen] = '\0';
+
+				/* Adjust all offsets that come after host */
+				uri->datashift -= extra_slashes;
+				if (uri->querylen > 0) {
+					uri->queryshift -= extra_slashes;
+				}
+				if (uri->fragmentlen > 0) {
+					uri->fragmentshift -= extra_slashes;
+				}
+			}
+		}
+	}
 
 	if (rspamd_url_remove_dots(uri)) {
 		uri->flags |= RSPAMD_URL_FLAG_OBSCURED;

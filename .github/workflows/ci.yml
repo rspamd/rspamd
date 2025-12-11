@@ -17,6 +17,7 @@ jobs:
     with:
       image: ghcr.io/rspamd/rspamd-build-docker:fedora-ci
       name: fedora-ci
+      enable_luajit: 'OFF'
 
   ubuntu_amd64:
     uses: ./.github/workflows/ci_rspamd.yml

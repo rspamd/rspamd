@@ -207,7 +207,7 @@ rspamadm_confighelp_load_plugins_doc(struct rspamd_config *cfg)
 	lua_getglobal(L, "require");
 	lua_pushstring(L, "rspamadm.confighelp_plugins");
 
-	if (lua_pcall(L, 1, 1, 0) != LUA_OK) {
+	if (lua_pcall(L, 1, 1, 0) != 0) {
 		rspamd_fprintf(stderr, "cannot load confighelp_plugins module: %s\n",
 					   lua_tostring(L, -1));
 		lua_pop(L, 1);
@@ -221,7 +221,7 @@ rspamadm_confighelp_load_plugins_doc(struct rspamd_config *cfg)
 		return NULL;
 	}
 
-	if (lua_pcall(L, 0, 1, 0) != LUA_OK) {
+	if (lua_pcall(L, 0, 1, 0) != 0) {
 		rspamd_fprintf(stderr, "cannot execute confighelp_plugins function: %s\n",
 					   lua_tostring(L, -1));
 		lua_pop(L, 1);

@@ -353,6 +353,8 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 	cfg->enable_mime_utf = false;
 	cfg->enable_url_rewrite = false;
 	cfg->url_rewrite_lua_func = nullptr;
+	cfg->composites_inverted_index = true; /* Enable inverted index by default */
+	cfg->composites_stats_always = false;  /* Use probabilistic sampling by default */
 	cfg->url_rewrite_fold_limit = 76;
 	cfg->script_modules = g_ptr_array_new();
 
@@ -1010,7 +1012,12 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 
 		/* Process composite dependencies after symcache is initialized */
 		if (cfg->composites_manager && rspamd_composites_manager_nelts(cfg->composites_manager) > 0) {
+			/* Apply config options to composites manager */
+			rspamd_composites_set_inverted_index(cfg->composites_manager,
+												 cfg->composites_inverted_index);
 			rspamd_composites_process_deps(cfg->composites_manager, cfg);
+			/* Mark symbols used by whitelist composites (negative score) as FINE */
+			rspamd_composites_mark_whitelist_deps(cfg->composites_manager, cfg);
 		}
 	}
 

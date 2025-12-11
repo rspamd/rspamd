@@ -1020,6 +1020,11 @@ task:set_milter_reply({
 	add_headers = {['X-Lua'] = 'test'},
 	-- 1 is the position of header to remove
 	remove_headers = {['DKIM-Signature'] = 1},
+	-- change smtp from
+	change_from = 'sender@example.com',
+	-- add and/or remove smtp rcpts
+	add_rcpt = {'new-rcpt1@example.com', 'new-rcpt2@example.com'},
+	del_rcpt = {'old-rcpt1@example.com', 'old-rcpt2@example.com'},
 })
  */
 LUA_FUNCTION_DEF(task, set_milter_reply);

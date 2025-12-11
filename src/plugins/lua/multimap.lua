@@ -2010,13 +2010,32 @@ local function add_multimap_rule(key, newrule)
       rspamd_logger.errx(rspamd_config, 'selector map requires selector definition')
       return nil
     else
-      local selector = lua_selectors.create_selector_closure(
-        rspamd_config, newrule['selector'], newrule['delimiter'] or "")
+      local selector
+      local combinator = newrule['combinator']
 
-      if not selector then
-        rspamd_logger.errx(rspamd_config, 'selector map has invalid selector: "%s", symbol: %s',
-          newrule['selector'], newrule['symbol'])
-        return nil
+      if combinator then
+        -- Use named combinator for structured output (array, object, string)
+        selector = lua_selectors.create_selector_closure_with_combinator(
+          rspamd_config, newrule['selector'], newrule['delimiter'] or "", combinator)
+
+        if not selector then
+          rspamd_logger.errx(rspamd_config, 'selector map has invalid selector or combinator: "%s", combinator: %s, symbol: %s',
+            newrule['selector'], combinator, newrule['symbol'])
+          return nil
+        end
+
+        lua_util.debugm(N, rspamd_config, 'created selector with combinator %s for rule %s',
+          combinator, newrule['symbol'])
+      else
+        -- Default behavior: use combine_selectors (string output)
+        selector = lua_selectors.create_selector_closure(
+          rspamd_config, newrule['selector'], newrule['delimiter'] or "")
+
+        if not selector then
+          rspamd_logger.errx(rspamd_config, 'selector map has invalid selector: "%s", symbol: %s',
+            newrule['selector'], newrule['symbol'])
+          return nil
+        end
       end
 
       newrule.selector = selector
@@ -2044,13 +2063,30 @@ local function add_multimap_rule(key, newrule)
     end
 
     local selector_str = string.match(newrule['map'], '^redis%+selector://(.*)$')
-    local selector = lua_selectors.create_selector_closure(
-      rspamd_config, selector_str, newrule['delimiter'] or "")
+    local selector
+    local combinator = newrule['combinator']
 
-    if not selector then
-      rspamd_logger.errx(rspamd_config, 'redis selector map has invalid selector: "%s", symbol: %s',
-        selector_str, newrule['symbol'])
-      return nil
+    if combinator then
+      selector = lua_selectors.create_selector_closure_with_combinator(
+        rspamd_config, selector_str, newrule['delimiter'] or "", combinator)
+
+      if not selector then
+        rspamd_logger.errx(rspamd_config, 'redis selector map has invalid selector or combinator: "%s", combinator: %s, symbol: %s',
+          selector_str, combinator, newrule['symbol'])
+        return nil
+      end
+
+      lua_util.debugm(N, rspamd_config, 'created redis selector with combinator %s for rule %s',
+        combinator, newrule['symbol'])
+    else
+      selector = lua_selectors.create_selector_closure(
+        rspamd_config, selector_str, newrule['delimiter'] or "")
+
+      if not selector then
+        rspamd_logger.errx(rspamd_config, 'redis selector map has invalid selector: "%s", symbol: %s',
+          selector_str, newrule['symbol'])
+        return nil
+      end
     end
 
     newrule['redis_key'] = selector

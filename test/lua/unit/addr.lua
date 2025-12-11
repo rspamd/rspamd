@@ -1,7 +1,10 @@
 -- inet addr tests
 
 context("Inet addr check functions", function()
-  local ffi = require("ffi")
+  local ok, ffi = pcall(require, "ffi")
+  if not ok then
+    ffi = require("cffi")
+  end
 
   ffi.cdef[[
   typedef struct rspamd_inet_addr_s rspamd_inet_addr_t;

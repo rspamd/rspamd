@@ -165,50 +165,49 @@ start:
 			}
 		}
 	}
-	else if (chunk->remain >= 2 && *p == '/') {
-		if (p[1] == '*') {
-			beg = p;
-			ucl_chunk_skipc(chunk, p);
-			comments_nested++;
-			ucl_chunk_skipc(chunk, p);
-
-			while (p < chunk->end) {
-				if (*p == '"' && *(p - 1) != '\\') {
-					quoted = !quoted;
-				}
-
-				if (!quoted) {
-					if (*p == '*') {
-						ucl_chunk_skipc(chunk, p);
-						if (chunk->remain > 0 && *p == '/') {
-							comments_nested--;
-							if (comments_nested == 0) {
-								if (parser->flags & UCL_PARSER_SAVE_COMMENTS) {
-									ucl_save_comment(parser, beg, p - beg + 1);
-									beg = NULL;
-								}
-
-								ucl_chunk_skipc(chunk, p);
-								goto start;
-							}
-						}
-						ucl_chunk_skipc(chunk, p);
-					}
-					else if (p[0] == '/' && chunk->remain >= 2 && p[1] == '*') {
-						comments_nested++;
-						ucl_chunk_skipc(chunk, p);
-						ucl_chunk_skipc(chunk, p);
-						continue;
-					}
-				}
-
+	else if (chunk->remain >= 2 && *p == '/' && p[1] == '*') {
+		beg = p;
+		comments_nested++;
+		ucl_chunk_skipc(chunk, p);
+		ucl_chunk_skipc(chunk, p);
+		while (p < chunk->end) {
+			if (*p == '"' && *(p - 1) != '\\') {
+				/* begin or end double-quoted string */
+				quoted = !quoted;
 				ucl_chunk_skipc(chunk, p);
 			}
-			if (comments_nested != 0) {
-				ucl_set_err(parser, UCL_ENESTED,
-							"unfinished multiline comment", &parser->err);
-				return false;
+			else if (quoted) {
+				/* quoted character */
+				ucl_chunk_skipc(chunk, p);
 			}
+			else if (chunk->remain >= 2 && *p == '*' && p[1] == '/') {
+				/* end of comment */
+				ucl_chunk_skipc(chunk, p);
+				ucl_chunk_skipc(chunk, p);
+				comments_nested--;
+				if (comments_nested == 0) {
+					if (parser->flags & UCL_PARSER_SAVE_COMMENTS) {
+						ucl_save_comment(parser, beg, p - beg + 1);
+						beg = NULL;
+					}
+					goto start;
+				}
+			}
+			else if (chunk->remain >= 2 && *p == '/' && p[1] == '*') {
+				/* start of nested comment */
+				comments_nested++;
+				ucl_chunk_skipc(chunk, p);
+				ucl_chunk_skipc(chunk, p);
+			}
+			else {
+				/* anything else */
+				ucl_chunk_skipc(chunk, p);
+			}
+		}
+		if (comments_nested != 0) {
+			ucl_set_err(parser, UCL_ENESTED,
+						"unfinished multiline comment", &parser->err);
+			return false;
 		}
 	}
 
@@ -1011,7 +1010,7 @@ int ucl_maybe_parse_number(ucl_object_t *obj,
 			while (p < end && ucl_test_character(*p, UCL_CHARACTER_WHITESPACE)) {
 				p++;
 			}
-			if (ucl_lex_is_atom_end(*p))
+			if (p == end || ucl_lex_is_atom_end(*p))
 				goto set_obj;
 			break;
 		}
@@ -1254,6 +1253,15 @@ bool ucl_parser_process_object_element(struct ucl_parser *parser, ucl_object_t *
 			tobj = __DECONST(ucl_object_t *, ucl_hash_search_obj(cur->value.ov, nobj));
 
 			if (tobj != NULL) {
+				/*
+				 * Check if we have found an object in the same container.
+				 * If not, we should probably ignore it as we cannot replace it
+				 * effectively and we definitely should not unref it.
+				 */
+				if (cur->value.ov != container) {
+					tobj = NULL;
+					continue;
+				}
 				break;
 			}
 		}
@@ -1676,7 +1684,7 @@ ucl_parse_multiline_string(struct ucl_parser *parser,
 			}
 			else if (memcmp(p, term, term_len) == 0) {
 				tend = p + term_len;
-				if (*tend != '\n' && *tend != ';' && *tend != ',') {
+				if (tend < chunk->end && *tend != '\n' && *tend != ';' && *tend != ',') {
 					/* Incomplete terminator */
 					ucl_chunk_skipc(chunk, p);
 					continue;

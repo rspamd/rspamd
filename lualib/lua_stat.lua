@@ -249,7 +249,7 @@ end
         conn:add_cmd('HINCRBYFLOAT', { rkey, hash_key, tostring(tok[2]) })
 
         if expire and expire ~= 0 then
-          conn:add_cmd('EXPIRE', { rkey, tostring(expire) })
+          conn:add_cmd('EXPIRE', { rkey, tostring(math.floor(expire)) })
         end
       end
 

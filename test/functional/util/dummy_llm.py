@@ -56,16 +56,25 @@ class EmbeddingHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    alen = len(sys.argv)
-    if alen > 1:
-        port = int(sys.argv[1])
-    else:
-        port = 18080
-    server = HTTPServer(("127.0.0.1", port), EmbeddingHandler)
-    dummy_killer.write_pid(PID)
+    import traceback
     try:
+        alen = len(sys.argv)
+        if alen > 1:
+            port = int(sys.argv[1])
+        else:
+            port = 18080
+        print(f"dummy_llm.py: Starting server on 127.0.0.1:{port}", file=sys.stderr)
+        server = HTTPServer(("127.0.0.1", port), EmbeddingHandler)
+        dummy_killer.write_pid(PID)
+        print(f"dummy_llm.py: PID file written to {PID}", file=sys.stderr)
+        print(f"dummy_llm.py: Server started successfully", file=sys.stderr)
         server.serve_forever()
     except KeyboardInterrupt:
         pass
+    except Exception as e:
+        print(f"dummy_llm.py: FATAL ERROR: {type(e).__name__}: {e}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        sys.exit(1)
     finally:
-        server.server_close()
+        if 'server' in dir():
+            server.server_close()

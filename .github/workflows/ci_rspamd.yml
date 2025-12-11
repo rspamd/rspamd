@@ -12,6 +12,9 @@ on:
       runner:
         type: string
         default: 'ubuntu-24.04'
+      enable_luajit:
+        type: string
+        default: 'ON'
 
 env:
   CTEST_OUTPUT_ON_FAILURE: 1
@@ -38,11 +41,23 @@ jobs:
         if: runner.arch == 'ARM64'
         run: echo "HYPERSCAN_ALTROOT=-DHYPERSCAN_ROOT_DIR=/vectorscan" >> "$GITHUB_ENV"
 
+      - name: Install Lua FFI for non-LuaJIT builds
+        if: inputs.enable_luajit == 'OFF'
+        run: |
+          sudo dnf install -y luarocks lua-devel libffi-devel meson pkgconf gcc-c++
+          cd /tmp
+          curl -sL https://github.com/q66/cffi-lua/archive/refs/tags/v0.2.3.tar.gz | tar xz
+          cd cffi-lua-0.2.3
+          find . -exec touch {} +
+          meson setup build -Dlua_version=5.4 -Dbuildtype=release -Dtests=false --prefix=/usr --libdir=lib64
+          ninja -C build
+          sudo ninja -C build install
+
       - name: Run cmake
         run: |
           mkdir ${GITHUB_WORKSPACE}/build
           cd ${GITHUB_WORKSPACE}/build
-          cmake -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/install -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DENABLE_HYPERSCAN=ON ${{ env.HYPERSCAN_ALTROOT }} -GNinja ${GITHUB_WORKSPACE}/src
+          cmake -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/install -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DENABLE_HYPERSCAN=ON -DENABLE_LUAJIT=${{ inputs.enable_luajit }} ${{ env.HYPERSCAN_ALTROOT }} -GNinja ${GITHUB_WORKSPACE}/src
 
       - name: Build rspamd
         run: |

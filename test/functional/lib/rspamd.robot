@@ -495,19 +495,49 @@ Sync Fuzzy Storage
 
 Run Dummy Http
   ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py  -pf  /tmp/dummy_http.pid
-  Wait Until Created  /tmp/dummy_http.pid  timeout=2 second
+  ...  stderr=/tmp/dummy_http.log  stdout=/tmp/dummy_http.log
+  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_http.pid  timeout=2 second
+  IF  '${status}' == 'FAIL'
+    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_http.log
+    IF  '${logstatus}' == 'PASS'
+      Log  dummy_http.py failed to start. Log output:\n${log}  level=ERROR
+    ELSE
+      Log  dummy_http.py failed to start. No log file found at /tmp/dummy_http.log  level=ERROR
+    END
+    Fail  dummy_http.py did not create PID file in 2 seconds
+  END
   Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_HTTP_PROC=${result}
 
 Run Dummy Https
   ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py
   ...  -c  ${RSPAMD_TESTDIR}/util/server.pem  -k  ${RSPAMD_TESTDIR}/util/server.pem
   ...  -pf  /tmp/dummy_https.pid  -p  18081
-  Wait Until Created  /tmp/dummy_https.pid  timeout=2 second
+  ...  stderr=/tmp/dummy_https.log  stdout=/tmp/dummy_https.log
+  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_https.pid  timeout=2 second
+  IF  '${status}' == 'FAIL'
+    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_https.log
+    IF  '${logstatus}' == 'PASS'
+      Log  dummy_https.py failed to start. Log output:\n${log}  level=ERROR
+    ELSE
+      Log  dummy_https.py failed to start. No log file found at /tmp/dummy_https.log  level=ERROR
+    END
+    Fail  dummy_https.py did not create PID file in 2 seconds
+  END
   Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_HTTPS_PROC=${result}
 
 Run Dummy Llm
-  ${result} =  Start Process  python3  ${RSPAMD_TESTDIR}/util/dummy_llm.py  18080
-  Wait Until Created  /tmp/dummy_llm.pid  timeout=2 second
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_llm.py  18080
+  ...  stderr=/tmp/dummy_llm.log  stdout=/tmp/dummy_llm.log
+  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_llm.pid  timeout=2 second
+  IF  '${status}' == 'FAIL'
+    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_llm.log
+    IF  '${logstatus}' == 'PASS'
+      Log  dummy_llm.py failed to start. Log output:\n${log}  level=ERROR
+    ELSE
+      Log  dummy_llm.py failed to start. No log file found at /tmp/dummy_llm.log  level=ERROR
+    END
+    Fail  dummy_llm.py did not create PID file in 2 seconds
+  END
   Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_LLM_PROC=${result}
 
 Dummy Llm Teardown
@@ -521,3 +551,22 @@ Dummy Http Teardown
 Dummy Https Teardown
   Terminate Process  ${DUMMY_HTTPS_PROC}
   Wait For Process  ${DUMMY_HTTPS_PROC}
+
+Run Dummy Http Early Response
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http_early_response.py  -pf  /tmp/dummy_http_early.pid  -p  18083
+  ...  stderr=/tmp/dummy_http_early.log  stdout=/tmp/dummy_http_early.log
+  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_http_early.pid  timeout=2 second
+  IF  '${status}' == 'FAIL'
+    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_http_early.log
+    IF  '${logstatus}' == 'PASS'
+      Log  dummy_http_early_response.py failed to start. Log output:\n${log}  level=ERROR
+    ELSE
+      Log  dummy_http_early_response.py failed to start. No log file found at /tmp/dummy_http_early.log  level=ERROR
+    END
+    Fail  dummy_http_early_response.py did not create PID file in 2 seconds
+  END
+  Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_HTTP_EARLY_PROC=${result}
+
+Dummy Http Early Teardown
+  Terminate Process  ${DUMMY_HTTP_EARLY_PROC}
+  Wait For Process  ${DUMMY_HTTP_EARLY_PROC}

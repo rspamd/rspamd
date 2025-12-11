@@ -247,7 +247,7 @@ end
 
 -- Configuration
 local settings = {
-  enabled = false,
+  enabled = true,
 
   --Backend configurations
   system_aliases = nil,

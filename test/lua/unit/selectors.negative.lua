@@ -3,7 +3,10 @@ context("Selectors test", function()
   local rspamd_task = require "rspamd_task"
   local logger = require "rspamd_logger"
   local lua_selectors = require "lua_selectors"
-  local ffi = require "ffi"
+  local ok, ffi = pcall(require, "ffi")
+  if not ok then
+    ffi = require("cffi")
+  end
   local cfg = rspamd_config
 
   local task

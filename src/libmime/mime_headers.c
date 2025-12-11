@@ -883,8 +883,14 @@ rspamd_mime_header_encode(const char *in, gsize len, bool is_structured)
 			size_t pending_ws_budget = include_pending_ws ? (pending_spaces + pending_tabs * 3) : 0;
 
 			/* Determine how much of this piece needs encoding and fits the budget */
+			size_t utf8_char_start = 0;
+			size_t enc_span_at_utf8_start = 0;
+			size_t encoded_len_at_utf8_start = 0;
+
 			for (size_t i = 0; i < piece_len; i++) {
 				unsigned char c = p[i];
+				/* UTF-8 lead byte or ASCII */
+				gboolean is_utf8_start = (c < 0x80) || (c >= 0xC0);
 
 				if (!need_encoding) {
 					if (c >= 128 || (is_structured && !g_ascii_isalnum(c))) {
@@ -901,6 +907,11 @@ rspamd_mime_header_encode(const char *in, gsize len, bool is_structured)
 
 						encoded_len_count = pending_ws_budget + add;
 						enc_span = 1;
+						if (is_utf8_start) {
+							utf8_char_start = i;
+							enc_span_at_utf8_start = 0;
+							encoded_len_at_utf8_start = pending_ws_budget;
+						}
 					}
 					else {
 						/* Still in unencoded prefix */
@@ -908,6 +919,12 @@ rspamd_mime_header_encode(const char *in, gsize len, bool is_structured)
 					}
 				}
 				else {
+					if (is_utf8_start) {
+						utf8_char_start = i;
+						enc_span_at_utf8_start = enc_span;
+						encoded_len_at_utf8_start = encoded_len_count;
+					}
+
 					/* Also stop on parentheses to keep CFWS outside */
 					if (c == '(' || c == ')') {
 						piece_len = i;
@@ -946,9 +963,18 @@ rspamd_mime_header_encode(const char *in, gsize len, bool is_structured)
 					size_t add = (g_ascii_isalnum(c) || c == ' ') ? 1 : 3;
 
 					if (encoded_len_count + add > max_token_size) {
-						/* Budget exceeded; stop encoded span before this char */
-						piece_len = i;
-						piece_end = p + piece_len;
+						/* Budget exceeded; stop at UTF-8 boundary */
+						if (is_utf8_start) {
+							piece_len = i;
+							piece_end = p + piece_len;
+						}
+						else {
+							/* Back up to UTF-8 char start */
+							piece_len = utf8_char_start;
+							piece_end = p + piece_len;
+							enc_span = enc_span_at_utf8_start;
+							encoded_len_count = encoded_len_at_utf8_start;
+						}
 						break;
 					}
 

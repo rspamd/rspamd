@@ -88,14 +88,17 @@ end
 
 -- Schema for maps expressions configuration
 -- Note: map field references lua_maps.map_schema which will be migrated separately
+-- Rules is a key-value table where each key is the rule name and value contains selector+map
 exports.schema = T.table({
   expression = T.string(),
-  rules = T.array(
-    T.table({
+  rules = T.table({}, {
+    extra = T.table({
       selector = T.string(),
-      map = lua_maps.map_schema, -- References schema from lua_maps (to be migrated)
-    })
-  )
+      map = lua_maps.map_schema,
+      type = T.string():optional(), -- Optional map type override
+      description = T.string():optional(), -- Optional description
+    }),
+  }),
 })
 
 --[[[

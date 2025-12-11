@@ -1529,7 +1529,12 @@ exports.callback_from_string = function(s)
     inp = 'return function(...)\n' .. s .. '; end'
   end
 
-  local ret, res_or_err = pcall(loadstring(inp))
+  local chunk, err = loadstring(inp)
+  if not chunk then
+    return false, err
+  end
+
+  local ret, res_or_err = pcall(chunk)
 
   if not ret or type(res_or_err) ~= 'function' then
     return false, res_or_err
@@ -1911,7 +1916,9 @@ local function url_encode_string(str)
   if str == nil then
     return ''
   end
-  str = string.gsub(str, "([^%w _%%%-%.~])",
+  -- Use explicit ASCII ranges instead of %w which is locale-dependent
+  -- and may match non-ASCII bytes in UTF-8 locales
+  str = string.gsub(str, "([^A-Za-z0-9 _%%%-%.~])",
     function(c)
       return string.format("%%%02X", string.byte(c))
     end)

@@ -518,7 +518,7 @@ function M.update_after_classification(task, redis_params, opts, result, sel_par
       end
     end
     local ok = lua_redis.redis_make_request(task, redis_params, ident.key, true, on_set, 'SETEX',
-      { ident.key, tostring(ttl), payload })
+      { ident.key, tostring(math.floor(ttl)), payload })
     if not ok then
       rspamd_logger.errx(task, 'llm_context: set request was not scheduled')
     end

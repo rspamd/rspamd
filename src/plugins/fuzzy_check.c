@@ -2609,15 +2609,15 @@ int fuzzy_check_module_config(struct rspamd_config *cfg, bool validate)
 	fuzzy_module_ctx->cleanup_rules_ref = -1;
 
 	/* Interact with lua_fuzzy */
+	int lua_fuzzy_top = lua_gettop(L);
 	if (luaL_dostring(L, "return require \"lua_fuzzy\"") != 0) {
 		msg_err_config("cannot require lua_fuzzy: %s",
 					   lua_tostring(L, -1));
 		fuzzy_module_ctx->enabled = FALSE;
 	}
 	else {
-#if LUA_VERSION_NUM >= 504
-		lua_settop(L, -2);
-#endif
+		/* Lua 5.4's require returns 2 values (module + path), keep only first */
+		lua_settop(L, lua_fuzzy_top + 1);
 		if (lua_type(L, -1) != LUA_TTABLE) {
 			msg_err_config("lua fuzzy must return "
 						   "table and not %s",
@@ -5747,8 +5747,7 @@ fuzzy_modify_handler(struct rspamd_http_connection_entry *conn_ent,
 		/* Check for flag */
 		if (g_hash_table_lookup(rule->mappings,
 								GINT_TO_POINTER(flag)) == NULL) {
-			msg_info_task("skip rule %s as it has no flag %d defined"
-						  " false",
+			msg_info_task("skip rule %s as it has no flag %d defined",
 						  rule->name, flag);
 			continue;
 		}
@@ -6087,8 +6086,7 @@ fuzzy_check_lua_process_learn(struct rspamd_task *task,
 		/* Check for flag */
 		if (g_hash_table_lookup(rule->mappings,
 								GINT_TO_POINTER(flag)) == NULL) {
-			msg_info_task("skip rule %s as it has no flag %d defined"
-						  " false",
+			msg_info_task("skip rule %s as it has no flag %d defined",
 						  rule->name, flag);
 			continue;
 		}
@@ -6389,8 +6387,7 @@ fuzzy_lua_gen_hashes_handler(lua_State *L)
 		/* Check for flag */
 		if (g_hash_table_lookup(rule->mappings,
 								GINT_TO_POINTER(flag)) == NULL) {
-			msg_info_task("skip rule %s as it has no flag %d defined"
-						  " false",
+			msg_info_task("skip rule %s as it has no flag %d defined",
 						  rule->name, flag);
 			continue;
 		}
@@ -6478,8 +6475,7 @@ fuzzy_lua_hex_hashes_handler(lua_State *L)
 		/* Check for flag */
 		if (g_hash_table_lookup(rule->mappings,
 								GINT_TO_POINTER(flag)) == NULL) {
-			msg_debug_fuzzy_check("skip rule %s as it has no flag %d defined"
-								  " false",
+			msg_debug_fuzzy_check("skip rule %s as it has no flag %d defined",
 								  rule->name, flag);
 			continue;
 		}

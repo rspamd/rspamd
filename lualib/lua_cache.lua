@@ -335,7 +335,7 @@ local function cache_get(task, key, cache_context, timeout, callback_uncached, c
             lua_util.debugm(cache_context.N, task, "calling uncached handler for %s", full_key)
             callback_uncached(task)
           end,
-          'SETEX', { full_key, tostring(timeout * 2), pending_marker }
+          'SETEX', { full_key, tostring(math.floor(timeout * 2)), pending_marker }
         )
       else
         -- Key found, check if it's a pending marker or actual data
@@ -359,7 +359,7 @@ local function cache_get(task, key, cache_context, timeout, callback_uncached, c
                 lua_util.debugm(cache_context.N, task, "successfully extended TTL for %s", full_key)
               end
             end,
-            'EXPIRE', { full_key, tostring(cache_context.opts.cache_ttl) }
+            'EXPIRE', { full_key, tostring(math.floor(cache_context.opts.cache_ttl)) }
           )
 
           lua_util.debugm(cache_context.N, task, "returning cached data for key %s", full_key)
@@ -400,7 +400,7 @@ local function cache_set(task, key, data, cache_context)
           full_key, os.date('%Y-%m-%d %H:%M:%S', expire_at))
       end
     end,
-    'SETEX', { full_key, tostring(ttl), encoded_data }
+    'SETEX', { full_key, tostring(math.floor(ttl)), encoded_data }
   )
 end
 

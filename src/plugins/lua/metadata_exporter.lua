@@ -234,6 +234,42 @@ local formatters = {
   end,
   json = function(task)
     return ucl.to_format(get_general_metadata(task), 'json-compact')
+  end,
+  json_with_message = function(task)
+    local meta = get_general_metadata(task, false, false)
+    local content = task:get_content()
+    if content then
+      meta.message = rspamd_util.encode_base64(content)
+    end
+    return ucl.to_format(meta, 'json-compact')
+  end,
+  msgpack = function(task)
+    local meta = get_general_metadata(task, false, false)
+    local content = task:get_content()
+    if content then
+      meta.message = content
+    end
+    return ucl.to_format(meta, 'msgpack')
+  end,
+  multipart = function(task)
+    local boundary = rspamd_util.random_hex(16)
+    local meta = get_general_metadata(task, false, false)
+    local content = task:get_content()
+    local parts = {
+      metadata = {
+        data = ucl.to_format(meta, 'json-compact'),
+        ['content-type'] = 'application/json'
+      },
+    }
+    if content then
+      parts.message = {
+        data = content,
+        filename = 'message.eml',
+        ['content-type'] = 'message/rfc822'
+      }
+    end
+    return lua_util.table_to_multipart_body(parts, boundary),
+           { multipart_boundary = boundary }
   end
 }
 
@@ -304,7 +340,7 @@ local pushers = {
       maybe_defer(task, rule)
     end
   end,
-  http = function(task, formatted, rule)
+  http = function(task, formatted, rule, extra)
     local function http_callback(err, code)
       local valid_status = { 200, 201, 202, 204 }
 
@@ -321,6 +357,12 @@ local pushers = {
       return maybe_defer(task, rule)
     end
     local hdrs = {}
+    local mime_type = rule.mime_type or settings.mime_type
+
+    if extra and extra.multipart_boundary then
+      mime_type = string.format('multipart/form-data; boundary="%s"', extra.multipart_boundary)
+    end
+
     if rule.meta_headers then
       local gm = get_general_metadata(task, false, true)
       local pfx = rule.meta_header_prefix or 'X-Rspamd-'
@@ -340,7 +382,7 @@ local pushers = {
       password = rule.password,
       body = formatted,
       callback = http_callback,
-      mime_type = rule.mime_type or settings.mime_type,
+      mime_type = mime_type,
       headers = hdrs,
       timeout = rule.timeout or settings.timeout,
       gzip = rule.gzip or settings.gzip,
@@ -625,6 +667,13 @@ local check_element = {
     else
       return true
     end
+  end,
+  meta_headers = function(k, v)
+    if v then
+      rspamd_logger.warnx(rspamd_config,
+        'Rule %s uses deprecated meta_headers option; use format = "multipart" or format = "json" instead', k)
+    end
+    return true
   end,
 }
 local backend_check = {

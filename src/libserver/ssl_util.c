@@ -30,8 +30,11 @@
 #include <openssl/rand.h>
 #include <openssl/conf.h>
 #include <openssl/evp.h>
-#include <openssl/engine.h>
 #include <openssl/x509v3.h>
+/* ENGINE API is deprecated in OpenSSL 3.0 and removed in later versions */
+#if OPENSSL_VERSION_NUMBER >= 0x1000104fL && OPENSSL_VERSION_NUMBER < 0x30000000L && !defined(LIBRESSL_VERSION_NUMBER)
+#include <openssl/engine.h>
+#endif
 
 enum rspamd_ssl_state {
 	ssl_conn_reset = 0,

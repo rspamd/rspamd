@@ -1320,8 +1320,14 @@ local function parse_rule(name, tbl)
       rule.config.whitelist_map = lua_maps_exprs.create(rspamd_config,
           rule.config.whitelist, N)
     elseif lua_maps.map_schema:check(rule.config.whitelist) then
+      -- Determine map type and check method based on selector type
+      local map_type = 'set' -- Default for string-based selectors
+      if sel_type == 'ip' or sel_type == 'sender' then
+        map_type = 'radix' -- Use radix for IP-based selectors
+      end
+
       local map = lua_maps.map_add_from_ucl(rule.config.whitelist,
-          'radix',
+          map_type,
           sel_type .. ' reputation whitelist')
 
       if not map then
@@ -1331,17 +1337,82 @@ local function parse_rule(name, tbl)
         return
       end
 
-      rule.config.whitelist_map = {
-        process = function(_, task)
-          -- Hack: we assume that it is an ip whitelist :(
-          local ip = task:get_from_ip()
-
-          if ip and map:get_key(ip) then
-            return true
+      -- Create selector-aware whitelist check
+      if sel_type == 'ip' or sel_type == 'sender' then
+        rule.config.whitelist_map = {
+          process = function(_, task)
+            local ip = task:get_from_ip()
+            if ip and map:get_key(ip) then
+              return true
+            end
+            return false
           end
-          return false
-        end
-      }
+        }
+      elseif sel_type == 'spf' then
+        rule.config.whitelist_map = {
+          process = function(_, task)
+            local dominated = task:get_mempool():get_variable('spf_domain')
+            if dominated and map:get_key(dominated) then
+              return true
+            end
+            -- Also check from domain
+            local from = task:get_from('smtp')
+            if from and from[1] and from[1].domain then
+              if map:get_key(from[1].domain) then
+                return true
+              end
+            end
+            return false
+          end
+        }
+      elseif sel_type == 'dkim' then
+        rule.config.whitelist_map = {
+          process = function(_, task)
+            local dominated = {}
+            local dominated_trace = (task:get_symbol('DKIM_TRACE') or {})[1]
+            if dominated_trace and dominated_trace.options then
+              for _, opt in ipairs(dominated_trace.options) do
+                local dom = opt:match('^([^:]+):')
+                if dom then
+                  dominated[rspamd_util.get_tld(dom)] = true
+                end
+              end
+            end
+            for dom, _ in pairs(dominated) do
+              if map:get_key(dom) then
+                return true
+              end
+            end
+            return false
+          end
+        }
+      elseif sel_type == 'url' then
+        rule.config.whitelist_map = {
+          process = function(_, task)
+            local dominated = {}
+            for _, u in ipairs(task:get_urls(true) or {}) do
+              dominated[u:get_tld()] = true
+            end
+            for dom, _ in pairs(dominated) do
+              if map:get_key(dom) then
+                return true
+              end
+            end
+            return false
+          end
+        }
+      else
+        -- Generic selector - use IP as fallback
+        rule.config.whitelist_map = {
+          process = function(_, task)
+            local ip = task:get_from_ip()
+            if ip and map:get_key(ip) then
+              return true
+            end
+            return false
+          end
+        }
+      end
     else
       rspamd_logger.errx(rspamd_config, "cannot parse whitelist map config for %s: (%s)",
           sel_type,
