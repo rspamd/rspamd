@@ -14,10 +14,12 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
         return parseInt(text.replace(/\D/g, ""), 10);
     }
 
-    async function readScanTab() {
+    async function readScanTab(skipNavigation = false) {
         // Status tab → scanned widget
-        await gotoTab("status");
-        await page.waitForResponse((resp) => resp.url().includes("/stat") && resp.status() === 200);
+        if (!skipNavigation) {
+            await gotoTab("status");
+            await page.waitForResponse((resp) => resp.url().includes("/stat") && resp.status() === 200);
+        }
         const scannedWidget = page.locator("#statWidgets .widget[title*='scanned']");
         await expect(scannedWidget).toBeVisible();
         const scannedTitle = await scannedWidget.getAttribute("title");
@@ -108,7 +110,7 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
 
     test.describe("Phase 1: before scanning", () => {
         test("Read current Scanned counters", async () => {
-            scannedBefore.scanTab = await readScanTab();
+            scannedBefore.scanTab = await readScanTab(true);
             scannedBefore.throughput = await readThroughput();
         });
     });
