@@ -2802,7 +2802,7 @@ lua_task_inject_part(lua_State *L)
 	if (lua_type(L, 3) == LUA_TTABLE) {
 		is_table = TRUE;
 		/* Calculate total length first and validate all entries */
-		int table_len = lua_objlen(L, 3);
+		int table_len = rspamd_lua_table_size(L, 3);
 		if (table_len <= 0) {
 			return luaL_error(L, "empty table provided");
 		}
@@ -2843,12 +2843,10 @@ lua_task_inject_part(lua_State *L)
 			part->part_type = RSPAMD_MIME_PART_TEXT;
 			part->flags |= RSPAMD_MIME_PART_COMPUTED;
 
-			/* Set parent part if provided */
 			if (original_part) {
 				part->parent_part = original_part;
 			}
 
-			/* Basic headers setup */
 			part->ct = rspamd_mempool_alloc0(task->task_pool, sizeof(*part->ct));
 
 			part->ct->type.begin = "text";
@@ -2859,12 +2857,10 @@ lua_task_inject_part(lua_State *L)
 			part->ct->charset.begin = "utf-8";
 			part->ct->charset.len = 5;
 
-			/* Content setup - merge table or copy single content */
 			part->parsed_data.begin = rspamd_mempool_alloc(task->task_pool, content_len + 1);
 			part->parsed_data.len = content_len;
 
 			if (is_table) {
-				/* Efficiently merge all text chunks */
 				char *dst = (char *) part->parsed_data.begin;
 				lua_pushnil(L);
 				while (lua_next(L, 3) != 0) {
@@ -2878,14 +2874,12 @@ lua_task_inject_part(lua_State *L)
 				*dst = '\0';
 			}
 			else {
-				/* Single content */
 				memcpy((char *) part->parsed_data.begin, content, content_len);
 				((char *) part->parsed_data.begin)[content_len] = '\0';
 			}
 
 			part->raw_data = part->parsed_data;
 
-			/* Text part specific setup */
 			txt_part = rspamd_mempool_alloc0(task->task_pool, sizeof(*txt_part));
 			txt_part->mime_part = part;
 			txt_part->raw.begin = part->parsed_data.begin;
@@ -2895,14 +2889,11 @@ lua_task_inject_part(lua_State *L)
 			txt_part->utf_stripped_text = (UText) UTEXT_INITIALIZER;
 			txt_part->real_charset = "utf-8";
 
-			/* Add to message */
 			part->specific.txt = txt_part;
 			g_ptr_array_add(task->message->parts, part);
 			g_ptr_array_add(task->message->text_parts, txt_part);
 
-			/* Process injected text part fully (URLs, words, normalization) */
 			if (task->cfg && task->message) {
-				/* Use high order number to ensure injected URLs are after original ones */
 				uint16_t cur_url_order = 10000;
 				rspamd_message_process_injected_text_part(task, txt_part, &cur_url_order);
 			}

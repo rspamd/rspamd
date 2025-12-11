@@ -1785,7 +1785,6 @@ lua_util_to_utf8(lua_State *L)
 		return luaL_error(L, "invalid arguments");
 	}
 
-	/* Prevent integer overflow in buffer size calculation */
 	if (t->len > (G_MAXINT32 / 2 - 16)) {
 		lua_pushnil(L);
 		return 1;
@@ -1796,7 +1795,6 @@ lua_util_to_utf8(lua_State *L)
 
 	dest_len = ucnv_convert("UTF-8", charset, dest, dest_cap, t->start, t->len, &err);
 
-	/* Check for negative length (indicates error) or buffer overflow */
 	if (dest_len < 0) {
 		g_free(dest);
 		lua_pushnil(L);
@@ -1810,7 +1808,6 @@ lua_util_to_utf8(lua_State *L)
 		dest = g_malloc(dest_cap);
 		dest_len = ucnv_convert("UTF-8", charset, dest, dest_cap, t->start, t->len, &err);
 
-		/* Check again after retry */
 		if (dest_len < 0) {
 			g_free(dest);
 			lua_pushnil(L);

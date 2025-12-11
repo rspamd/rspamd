@@ -384,7 +384,6 @@ local function gen_text_grammar()
     local total_odd = math.ceil(total_checked / 2)
     local total_even = math.floor(total_checked / 2)
 
-    -- Correction for disjoint ranges if len > 32
     if len > 32 then
         total_odd = 16
         total_even = 16
@@ -403,7 +402,6 @@ local function gen_text_grammar()
     if charset and rspamd_util.to_utf8 then
        local conv = rspamd_util.to_utf8(s, charset)
        if conv then
-          -- Check for control characters to avoid garbage
           local garbage_limit = 0
           local clen = #conv
           for i = 1, clen do
@@ -414,7 +412,6 @@ local function gen_text_grammar()
           end
 
           if garbage_limit > 0 then
-             -- Treat as garbage
              return ''
           end
 
@@ -436,11 +433,8 @@ local function gen_text_grammar()
       for _, chunk in ipairs(t) do
         if type(chunk) == 'string' then
           table.insert(tres, chunk)
-        elseif type(chunk) == 'number' then
-          -- Heuristic: if number is < -200, append space
-          if chunk < -200 then
-            table.insert(tres, ' ')
-          end
+        elseif type(chunk) == 'number' and chunk < -200 then
+          table.insert(tres, ' ')
         end
       end
       res = table.concat(tres)
@@ -458,7 +452,6 @@ local function gen_text_grammar()
   local function nary_op_handler(...)
     local args = { ... }
     local op = args[#args]
-    -- local t = args[#args - 1] -- The table of numbers
 
     if op == 'Tm' then
       return '\n'
@@ -470,7 +463,7 @@ local function gen_text_grammar()
   local function ternary_op_handler(...)
     local args = { ... }
     local op = args[#args]
-    local a2 = args[#args - 2] -- Second to last argument (ty)
+    local a2 = args[#args - 2]
 
     if (op == 'Td' or op == 'TD') and type(a2) == 'number' and a2 ~= 0 then
       return '\n'
@@ -599,7 +592,6 @@ local function maybe_apply_filter(dict, data, pdf, task)
     if type(filt) == 'string' then
       filts = { filt }
     elseif type(filt) == 'table' then
-      -- Array of filters
       filts = filt
     end
 
@@ -608,11 +600,8 @@ local function maybe_apply_filter(dict, data, pdf, task)
 
       if type(decode_params) == 'table' then
         if decode_params.Predictor then
-          -- We can handle Predictor 1 (No prediction) or maybe others in future
           local predictor = tonumber(decode_params.Predictor) or 1
           if predictor > 1 then
-            -- For now, we just log debug and fail, or maybe try to continue if it's simple PNG prediction
-            -- But without implementation, better to return nil to avoid garbage
             return nil, 'predictor exists: ' .. tostring(predictor)
           end
         end
@@ -625,7 +614,6 @@ local function maybe_apply_filter(dict, data, pdf, task)
       if next_uncompressed then
         uncompressed = next_uncompressed
       else
-        -- If chain fails, we stop
         return nil, 'filter failed: ' .. tostring(f)
       end
     end
@@ -641,8 +629,6 @@ local function maybe_extract_object_stream(obj, pdf, task)
     return nil
   end
   local dict = obj.dict
-
-  -- Determine length: try /Length first, fallback to parsed length
   local len = obj.stream.len
   local decl_len = maybe_dereference_object(dict.Length, pdf, task)
 
@@ -1343,7 +1329,6 @@ local function search_text(task, pdf, mpart)
             end
 
             bl.data = tobj.uncompressed:span(bl.start, bl.len)
-            -- Only log preview of extracted text to avoid verbose logs
             if bl.len <= 256 then
               lua_util.debugm(N, task, 'extracted text from object %s:%s: %s',
                   tobj.major, tobj.minor, bl.data)
@@ -1363,9 +1348,7 @@ local function search_text(task, pdf, mpart)
                 for _, chunk in ipairs(obj_or_err) do
                   text[#text + 1] = chunk
                 end
-                -- Add newline after each block to separate lines
                 text[#text + 1] = '\n'
-                -- text[#text + 1] = obj_or_err
                 lua_util.debugm(N, task, 'attached %s from content object %s:%s to %s:%s',
                     obj_or_err, tobj.major, tobj.minor, obj.major, obj.minor)
               else
@@ -1384,18 +1367,16 @@ local function search_text(task, pdf, mpart)
           if type(chunk) == 'userdata' then
             text[i] = tostring(chunk)
           elseif type(chunk) == 'table' then
-            -- Iterative flatten to avoid stack overflow with deeply nested tables
             local function flatten(t)
               local res = {}
               local stack = { { tbl = t, idx = 1 } }
-              local max_depth = 100 -- Limit depth to prevent infinite loops
+              local max_depth = 100
 
               while #stack > 0 and #stack <= max_depth do
                 local frame = stack[#stack]
                 local tbl, idx = frame.tbl, frame.idx
 
                 if idx > #tbl then
-                  -- Done with this table, pop frame
                   stack[#stack] = nil
                 else
                   local v = tbl[idx]
@@ -1404,7 +1385,6 @@ local function search_text(task, pdf, mpart)
                   if type(v) == 'userdata' then
                     res[#res + 1] = tostring(v)
                   elseif type(v) == 'table' then
-                    -- Push new frame for nested table
                     stack[#stack + 1] = { tbl = v, idx = 1 }
                   elseif v ~= nil then
                     res[#res + 1] = tostring(v)
@@ -1425,19 +1405,17 @@ local function search_text(task, pdf, mpart)
       end
     end
   end
-  -- Aggregate and inject once
+
   if task.inject_part then
     local all_text = {}
 
     for _, obj in ipairs(pdf.objects) do
       if obj.text and obj.text:len() > 0 then
-        -- Keep as rspamd_text, don't convert to string
         table.insert(all_text, obj.text)
       end
     end
 
     if #all_text > 0 then
-      -- Pass table of rspamd_text directly - will be efficiently merged in C
       task:inject_part('text', all_text, mpart)
     end
   end
