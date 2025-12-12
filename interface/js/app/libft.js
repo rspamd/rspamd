@@ -7,7 +7,6 @@ define(["jquery", "app/common", "footable"],
         const columnsCustom = JSON.parse(localStorage.getItem("columns")) || {};
 
         let pageSizeTimerId = null;
-        let pageSizeInvocationCounter = 0;
 
         function get_compare_function(table) {
             const compare_functions = {
@@ -194,15 +193,17 @@ define(["jquery", "app/common", "footable"],
 
                 if (changeTablePageSize &&
                     $("#historyTable_" + table + " tbody").is(":parent")) { // Table is not empty
-                    clearTimeout(pageSizeTimerId);
-                    const t = FooTable.get("#historyTable_" + table);
-                    if (t) {
-                        pageSizeInvocationCounter = 0;
-                        // Wait for input finish
-                        pageSizeTimerId = setTimeout(() => t.pageSize(n), 1000);
-                    } else if (++pageSizeInvocationCounter < 10) {
-                        // Wait for FooTable instance ready
-                        pageSizeTimerId = setTimeout(() => ui.set_page_size(table, n, true), 1000);
+                    if (common.tables[table]) {
+                        // Table exists - debounce rapid changes (e.g., spin button clicks)
+                        clearTimeout(pageSizeTimerId);
+                        pageSizeTimerId = setTimeout(() => {
+                            common.tables[table]?.pageSize(n);
+                        }, 1000);
+                    } else {
+                        // Table doesn't exist - wait for initialization with event
+                        $("#historyTable_" + table).one("postinit.ft.table", () => {
+                            common.tables[table]?.pageSize(n);
+                        });
                     }
                 }
             }
