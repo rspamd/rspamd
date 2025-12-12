@@ -235,9 +235,11 @@ define(["jquery", "app/common", "footable"],
             $("#" + table + " .ft-columns-btn.show").trigger("click.bs.dropdown"); // Hide dropdown
             $("#" + table + " .ft-columns-btn").attr("disabled", true);
             if (common.tables[table]) {
-                common.tables[table].destroy();
+                const promise = common.tables[table].destroy();
                 delete common.tables[table];
+                return promise;
             }
+            return new $.Deferred().resolve().promise();
         };
 
         ui.initHistoryTable = function (data, items, table, columnsDefault, expandFirst, postdrawCallback) {
