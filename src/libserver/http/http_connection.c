@@ -1006,6 +1006,25 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 		/* Check for early response while still sending request (client only) */
 		if (conn->type == RSPAMD_HTTP_CLIENT &&
 			priv->wr_pos < priv->wr_total && priv->wr_total > 0) {
+			/* Check for connection errors (io_uring reports POLLERR as EV_READ) */
+			if (!priv->first_write_done) {
+				int sock_err = 0;
+				socklen_t sock_err_len = sizeof(sock_err);
+
+				if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &sock_err, &sock_err_len) == 0 &&
+					sock_err != 0) {
+					err = g_error_new(HTTP_ERROR, 500,
+									  "Connection failed: %s", strerror(sock_err));
+					conn->error_handler(conn, err);
+					g_error_free(err);
+
+					REF_RELEASE(pbuf);
+					rspamd_http_connection_unref(conn);
+
+					return;
+				}
+			}
+
 			msg_debug("received early server response while still writing request "
 					  "(sent %uz of %uz bytes)",
 					  priv->wr_pos, priv->wr_total);
