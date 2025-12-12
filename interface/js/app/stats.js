@@ -101,11 +101,8 @@ define(["jquery", "app/common", "d3pie", "d3"],
         }
 
         function displayStatWidgets(checked_server) {
-            const servers = JSON.parse(sessionStorage.getItem("Credentials"));
-            let data = {};
-            if (servers && servers[checked_server]) {
-                ({data} = servers[checked_server]);
-            }
+            const servers = JSON.parse(sessionStorage.getItem("Credentials") || "{}");
+            const data = servers[checked_server]?.data ?? {};
 
             const stat_w = [];
             $("#statWidgets").empty();
@@ -299,9 +296,9 @@ define(["jquery", "app/common", "d3pie", "d3"],
             }
 
             const data = [];
-            const creds = JSON.parse(sessionStorage.getItem("Credentials"));
+            const creds = JSON.parse(sessionStorage.getItem("Credentials") || "{}");
             // Controller doesn't return the 'actions' object until at least one message is scanned
-            if (creds && creds[checked_server] && creds[checked_server].data.scanned) {
+            if (creds[checked_server]?.data?.scanned) {
                 const {actions} = creds[checked_server].data;
 
                 ["no action", "soft reject", "add header", "rewrite subject", "greylist", "reject"]
