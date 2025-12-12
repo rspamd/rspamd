@@ -933,7 +933,7 @@ reconf['CD_MM_BODY'] = {
 }
 
 reconf['X_PHPOS_FAKE'] = {
-  re = 'X-PHP-Originating-Script=/^\\d{7}:/Hi',
+  re = 'X-PHP-Originating-Script=/^\\d{11}:/Hi',
   description = 'Fake X-PHP-Originating-Script header',
   score = 3.0,
   group = 'headers'
