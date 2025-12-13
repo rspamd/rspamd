@@ -14,10 +14,12 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
         return parseInt(text.replace(/\D/g, ""), 10);
     }
 
-    async function readScanTab() {
+    async function readScanTab(skipNavigation = false) {
         // Status tab → scanned widget
-        await gotoTab("status");
-        await page.waitForResponse((resp) => resp.url().includes("/stat") && resp.status() === 200);
+        if (!skipNavigation) {
+            await gotoTab("status");
+            await page.waitForResponse((resp) => resp.url().includes("/stat") && resp.status() === 200);
+        }
         const scannedWidget = page.locator("#statWidgets .widget[title*='scanned']");
         await expect(scannedWidget).toBeVisible();
         const scannedTitle = await scannedWidget.getAttribute("title");
@@ -51,6 +53,50 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
         await expect(alert).not.toBeVisible({timeout: 10000});
     }
 
+    /**
+     * Test symbol ordering functionality
+     * @param {string} table - Table name ("scan" or "history")
+     * @param {boolean} needsExpand - Whether row needs to be expanded
+     */
+    async function testSymbolOrdering(table, needsExpand) {
+        const tableLocator = page.locator(`#historyTable_${table} tbody`);
+        const firstRow = tableLocator.locator("tr").first();
+        await expect(firstRow).toBeVisible();
+
+        if (needsExpand) {
+            await firstRow.click();
+            await page.waitForTimeout(200); // Wait for expand animation
+        }
+
+        // Get the detail row that immediately follows the row we clicked/selected
+        const detailRow = firstRow.locator("+ tr.footable-detail-row");
+        await expect(detailRow).toBeVisible();
+
+        // Find the symbols row within the detail table (identified by the th containing sort buttons)
+        const symbolsRow = detailRow.locator("tr:has(th:has(.sym-order-toggle))");
+        const symbolsCell = symbolsRow.locator("td");
+
+        // Get initial symbols order
+        let previousSymbols = await symbolsCell.innerHTML();
+
+        // Use the dropdown selector to change symbols order
+        const selector = page.locator(`#selSymOrder_${table}`);
+        await expect(selector).toBeVisible();
+
+        // Test each sort order in sequence (initial order is "magnitude")
+        for (const order of ["name", "score"]) {
+            await selector.selectOption(order);
+            await expect.poll(async () => await symbolsCell.innerHTML(), {timeout: 3000}).not.toBe(previousSymbols);
+            previousSymbols = await symbolsCell.innerHTML();
+        }
+
+        // Verify no JavaScript errors occurred (especially the regression bug)
+        const errors = [];
+        page.on("pageerror", (err) => errors.push(err.message));
+        await page.waitForTimeout(500);
+        expect(errors).toHaveLength(0);
+    }
+
     test.beforeAll(async ({browser}, testInfo) => {
         const context = await browser.newContext();
         page = await context.newPage();
@@ -64,7 +110,7 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
 
     test.describe("Phase 1: before scanning", () => {
         test("Read current Scanned counters", async () => {
-            scannedBefore.scanTab = await readScanTab();
+            scannedBefore.scanTab = await readScanTab(true);
             scannedBefore.throughput = await readThroughput();
         });
     });
@@ -95,10 +141,14 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
                 ).toBeVisible();
             }
         });
+
+        test("Symbol ordering works on Scan tab", async () => {
+            await testSymbolOrdering("scan", false);
+        });
     });
 
     test.describe("Phase 3: after scanning", () => {
-        test("History shows scanned messages and can be reset", async () => {
+        test("History shows scanned messages", async () => {
             await gotoTab("history");
 
             // Check both scanned messages are present in reverse order
@@ -109,7 +159,13 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
                         .locator(`td:has-text("${subject}")`)
                 ).toBeVisible();
             }
+        });
 
+        test("Symbol ordering works on History tab", async () => {
+            await testSymbolOrdering("history", true);
+        });
+
+        test("History can be reset", async () => {
             // Reset history
             const resetBtn = page.locator("#resetHistory");
             await expect(resetBtn).toBeVisible();
