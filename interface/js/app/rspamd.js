@@ -354,17 +354,8 @@ define(["jquery", "app/common", "stickytabs", "visibility",
         const icon = $("#theme-icon");
         icon.removeClass("fa-moon fa-sun fa-display");
 
-        switch (theme) {
-            case "light":
-                icon.addClass("fa-sun");
-                break;
-            case "dark":
-                icon.addClass("fa-moon");
-                break;
-            default:
-                icon.addClass("fa-display");
-                break;
-        }
+        const iconMap = {light: "fa-sun", dark: "fa-moon", auto: "fa-display"};
+        icon.addClass(iconMap[theme] || "fa-display");
     }
 
     (function initSettings() {
@@ -523,21 +514,9 @@ define(["jquery", "app/common", "stickytabs", "visibility",
     $("#theme-toggle").on("click", (e) => {
         e.preventDefault();
         const currentTheme = localStorage.getItem("theme") || "auto";
-        // eslint-disable-next-line no-useless-assignment
-        let newTheme = null;
-
         // Cycle through: light -> dark -> auto -> light
-        switch (currentTheme) {
-            case "light":
-                newTheme = "dark";
-                break;
-            case "dark":
-                newTheme = "auto";
-                break;
-            default:
-                newTheme = "light";
-                break;
-        }
+        const themeMap = {light: "dark", dark: "auto", auto: "light"};
+        const newTheme = themeMap[currentTheme] || "light";
 
         if (window.rspamd && window.rspamd.theme) {
             window.rspamd.theme.applyPreference(newTheme);

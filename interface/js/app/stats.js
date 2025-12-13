@@ -101,11 +101,8 @@ define(["jquery", "app/common", "d3pie", "d3"],
         }
 
         function displayStatWidgets(checked_server) {
-            const servers = JSON.parse(sessionStorage.getItem("Credentials"));
-            let data = {};
-            if (servers && servers[checked_server]) {
-                ({data} = servers[checked_server]);
-            }
+            const servers = JSON.parse(sessionStorage.getItem("Credentials") || "{}");
+            const data = servers[checked_server]?.data ?? {};
 
             const stat_w = [];
             $("#statWidgets").empty();
@@ -226,16 +223,8 @@ define(["jquery", "app/common", "d3pie", "d3"],
 
             function addStatfiles(server, statfiles) {
                 $.each(statfiles, (i, statfile) => {
-                    let cls = "";
-                    switch (statfile.symbol) {
-                        case "BAYES_SPAM":
-                            cls = "symbol-positive";
-                            break;
-                        case "BAYES_HAM":
-                            cls = "symbol-negative";
-                            break;
-                        default:
-                    }
+                    const symbolClassMap = {BAYES_SPAM: "symbol-positive", BAYES_HAM: "symbol-negative"};
+                    const cls = symbolClassMap[statfile.symbol] || "";
                     $("#bayesTable tbody").append("<tr>" +
                       (i === 0 ? '<td rowspan="' + statfiles.length + '">' + server + "</td>" : "") +
                       '<td class="' + cls + '">' + statfile.symbol + "</td>" +
@@ -299,9 +288,9 @@ define(["jquery", "app/common", "d3pie", "d3"],
             }
 
             const data = [];
-            const creds = JSON.parse(sessionStorage.getItem("Credentials"));
+            const creds = JSON.parse(sessionStorage.getItem("Credentials") || "{}");
             // Controller doesn't return the 'actions' object until at least one message is scanned
-            if (creds && creds[checked_server] && creds[checked_server].data.scanned) {
+            if (creds[checked_server]?.data?.scanned) {
                 const {actions} = creds[checked_server].data;
 
                 ["no action", "soft reject", "add header", "rewrite subject", "greylist", "reject"]

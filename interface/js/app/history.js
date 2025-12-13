@@ -195,15 +195,13 @@ define(["jquery", "app/common", "app/libft", "footable"],
                             version === prevVersion) {
                             common.tables.history.rows.load(items);
                         } else {
-                            libft.destroyTable("history");
-                            // Is there a way to get an event when the table is destroyed?
-                            setTimeout(() => {
+                            libft.destroyTable("history").then(() => {
                                 libft.initHistoryTable(data, items, "history", get_history_columns(data), false,
                                     () => {
                                         $("#history .ft-columns-dropdown .btn-dropdown-apply").removeAttr("disabled");
                                         ui.updateHistoryControlsState();
                                     });
-                            }, 200);
+                            });
                         }
                         prevVersion = version;
                     } else {
