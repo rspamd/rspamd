@@ -151,7 +151,11 @@ async def main():
 
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        if hasattr(asyncio, 'run') and callable(getattr(asyncio, 'run')):
+            asyncio.run(main())
+        else:
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(main())
     except Exception as e:
         print(f"dummy_http.py: FATAL ERROR: {type(e).__name__}: {e}", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
