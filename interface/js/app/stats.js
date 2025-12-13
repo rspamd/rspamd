@@ -223,16 +223,8 @@ define(["jquery", "app/common", "d3pie", "d3"],
 
             function addStatfiles(server, statfiles) {
                 $.each(statfiles, (i, statfile) => {
-                    let cls = "";
-                    switch (statfile.symbol) {
-                        case "BAYES_SPAM":
-                            cls = "symbol-positive";
-                            break;
-                        case "BAYES_HAM":
-                            cls = "symbol-negative";
-                            break;
-                        default:
-                    }
+                    const symbolClassMap = {BAYES_SPAM: "symbol-positive", BAYES_HAM: "symbol-negative"};
+                    const cls = symbolClassMap[statfile.symbol] || "";
                     $("#bayesTable tbody").append("<tr>" +
                       (i === 0 ? '<td rowspan="' + statfiles.length + '">' + server + "</td>" : "") +
                       '<td class="' + cls + '">' + statfile.symbol + "</td>" +
