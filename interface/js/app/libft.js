@@ -374,13 +374,11 @@ define(["jquery", "app/common", "footable"],
                     filtering: FooTable.actionFilter
                 },
                 on: {
-                    "expand.ft.row": function (e, ft, row) {
-                        setTimeout(() => {
-                            const detail_row = row.$el.next();
-                            const order = common.getSelector("selSymOrder_" + table);
-                            detail_row.find(".btn-sym-" + table + "-" + order)
-                                .addClass("active").siblings().removeClass("active");
-                        }, 5);
+                    "expanded.ft.row": function (e, ft, row) {
+                        const detail_row = row.$el.next();
+                        const order = common.getSelector("selSymOrder_" + table);
+                        detail_row.find(".btn-sym-" + table + "-" + order)
+                            .addClass("active").siblings().removeClass("active");
                     },
                     "postdraw.ft.table": postdrawCallback
                 }
