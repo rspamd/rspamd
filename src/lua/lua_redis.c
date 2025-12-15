@@ -762,7 +762,8 @@ lua_redis_timeout(EV_P_ ev_timer *w, int revents)
 	REDIS_RETAIN(ctx);
 	msg_debug_lua_redis("timeout while querying redis server: %p, redis: %p", sp_ud,
 						sp_ud->common_ud->ctx);
-	lua_redis_push_error("timeout while connecting the server (%.2f sec)", ctx, sp_ud, TRUE, ud->timeout);
+	/* Note: lua_pushvfstring supports %f but not precision modifiers like %.2f */
+	lua_redis_push_error("timeout while connecting the server (%f sec)", ctx, sp_ud, TRUE, ud->timeout);
 
 	if (sp_ud->common_ud->ctx) {
 		ac = sp_ud->common_ud->ctx;
