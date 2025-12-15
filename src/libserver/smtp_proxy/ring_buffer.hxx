@@ -30,7 +30,6 @@
 #include <string_view>
 #include <tuple>
 #include <utility>
-#include <span>
 
 #include <sys/uio.h>// for readv/writev
 
