@@ -386,13 +386,17 @@ public:
 		return {reinterpret_cast<const char *>(ptr1), len1};
 	}
 
-private:
+	/**
+	 * Advance write head after external write to write regions
+	 * @param len Number of bytes written
+	 */
 	auto advance_write(std::size_t len) noexcept -> void
 	{
 		write_head_ = (write_head_ + len) % capacity;
 		size_ += len;
 	}
 
+private:
 	alignas(64) std::array<std::uint8_t, Capacity> buffer_{};
 	std::size_t read_head_ = 0;
 	std::size_t write_head_ = 0;

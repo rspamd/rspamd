@@ -25,6 +25,7 @@
 #include "contrib/libev/ev.h"
 #include "libutil/mem_pool.h"
 #include "libutil/addr.h"
+#include "libutil/libev_helper.h"
 
 #include <memory>
 #include <string>
@@ -141,6 +142,7 @@ struct client_connection {
 	ev_timer timeout_ev;
 
 	struct rspamd_ssl_connection *ssl = nullptr;
+	struct rspamd_io_ev ssl_ev;// Used for SSL handshake and I/O
 	bool ssl_active = false;
 
 	// Read state
@@ -164,6 +166,7 @@ struct backend_connection {
 	ev_timer connect_timeout_ev;
 
 	struct rspamd_ssl_connection *ssl = nullptr;
+	struct rspamd_io_ev ssl_ev;// Used for SSL handshake and I/O
 	bool ssl_active = false;
 
 	backend_state state = backend_state::disconnected;
@@ -274,8 +277,18 @@ private:
 	auto start_client_tls() -> void;
 	auto start_backend_tls() -> void;
 
+	// SSL callbacks
+	static void client_ssl_handler(int fd, short what, gpointer d);
+	static void client_ssl_error_handler(gpointer d, GError *err);
+	static void backend_ssl_handler(int fd, short what, gpointer d);
+	static void backend_ssl_error_handler(gpointer d, GError *err);
+
+	auto handle_client_ssl_ready() -> void;
+	auto handle_backend_ssl_ready() -> void;
+
 	auto report_violation(violation_type v) -> void;
 	auto run_precheck() -> bool;
+	[[nodiscard]] auto should_run_precheck(command_type cmd) const -> bool;
 
 	auto enable_client_read() -> void;
 	auto disable_client_read() -> void;
@@ -289,6 +302,12 @@ private:
 
 	auto reset_client_timeout() -> void;
 	auto reset_backend_timeout() -> void;
+
+	// SSL-aware I/O helpers
+	auto read_client_data() -> std::pair<io::ring_buffer<>::io_result, std::size_t>;
+	auto write_client_data() -> std::pair<io::ring_buffer<>::io_result, std::size_t>;
+	auto read_backend_data() -> std::pair<io::ring_buffer<>::io_result, std::size_t>;
+	auto write_backend_data() -> std::pair<io::ring_buffer<>::io_result, std::size_t>;
 
 	// Context and configuration
 	smtp_proxy_ctx *ctx_;
@@ -318,6 +337,10 @@ private:
 	// Session bookkeeping
 	bool closed_ = false;
 	std::string close_reason_;
+
+	// Precheck state
+	bool precheck_done_ = false;
+	std::string precheck_reject_reply_;
 
 	// Logging tag
 	char log_tag_[9] = {0};
