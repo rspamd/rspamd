@@ -1042,8 +1042,8 @@ local function clickhouse_maybe_send_data_periodic(cfg, ev_base, now)
   if last_collection > 0 and settings.limits.max_interval > 0 then
     if now - last_collection > settings.limits.max_interval then
       need_collect = true
-      reason = string.format('limit of time since last collection has been reached: %d seconds passed ' ..
-          '(%d seconds trigger)',
+      reason = string.format('limit of time since last collection has been reached: %.0f seconds passed ' ..
+          '(%.0f seconds trigger)',
           (now - last_collection), settings.limits.max_interval)
     end
   end
