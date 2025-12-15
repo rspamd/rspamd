@@ -104,14 +104,10 @@ local config = {
   max_pdf_objects = 10000, -- Maximum number of objects to be considered
   max_pdf_trailer = 10 * 1024 * 1024, -- Maximum trailer size (to avoid abuse)
   max_pdf_trailer_lines = 100, -- Maximum number of lines in pdf trailer
-  -- Timeout for PDF processing in seconds. If exceeded, text extraction is skipped
-  -- as partial results would be incorrect. Can be overridden via
-  -- pdf.pdf_process_timeout in configuration.
-  pdf_process_timeout = 2.0,
-  -- Text quality filtering options for garbage detection
-  text_quality_threshold = 0.4, -- Minimum confidence score (0.0-1.0) to accept extracted text
+  pdf_process_timeout = 2.0, -- Timeout in seconds for processing
+  text_quality_threshold = 0.4, -- Minimum confidence to accept extracted text
   text_quality_min_length = 10, -- Minimum text length to apply quality filtering
-  text_quality_enabled = true, -- Enable/disable text quality filtering
+  text_quality_enabled = true, -- Enable text quality filtering
 }
 
 -- Used to process patterns found in PDF
@@ -188,15 +184,7 @@ local function generic_grammar_elts()
     end
 
     if res then
-      -- Ligature fix for StandardEncoding (common in simple PDFs)
-      -- 0xAB (171) -> ff
-      -- 0xAC (172) -> ffi
-      -- 0xAD (173) -> ffl
-      -- 0xAE (174) -> fi
-      -- 0xAF (175) -> fl
-      -- MacRomanEncoding
-      -- 0xDE (222) -> fi
-      -- 0xDF (223) -> fl
+      -- StandardEncoding/MacRomanEncoding ligature substitutions
       res = res:gsub('\171', 'ff')
       res = res:gsub('\172', 'ffi')
       res = res:gsub('\173', 'ffl')
@@ -228,15 +216,7 @@ local function generic_grammar_elts()
     end
     s = s:gsub('\\%d%d?%d?', ue_octal)
 
-    -- Ligature fix for StandardEncoding (common in simple PDFs)
-    -- 0xAB (171) -> ff
-    -- 0xAC (172) -> ffi
-    -- 0xAD (173) -> ffl
-    -- 0xAE (174) -> fi
-    -- 0xAF (175) -> fl
-    -- MacRomanEncoding
-    -- 0xDE (222) -> fi
-    -- 0xDF (223) -> fl
+    -- StandardEncoding/MacRomanEncoding ligature substitutions
     s = s:gsub('\171', 'ff')
     s = s:gsub('\172', 'ffi')
     s = s:gsub('\173', 'ffl')

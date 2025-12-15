@@ -2831,6 +2831,7 @@ lua_util_get_text_quality(lua_State *L)
 	int32_t i = 0;
 	UChar32 uc, prev_uc = 0;
 	UScriptCode prev_script = USCRIPT_INVALID_CODE;
+	UErrorCode uc_err = U_ZERO_ERROR;
 
 	/* Basic counts */
 	int letters = 0;
@@ -2944,22 +2945,6 @@ lua_util_get_text_quality(lua_State *L)
 			non_ascii_chars++;
 		}
 
-		/* Check for emoji */
-		if (u_hasBinaryProperty(uc, UCHAR_EMOJI)) {
-			emojis++;
-			printable++;
-			/* Emojis break words */
-			if (in_word && current_word_len >= 2) {
-				words++;
-				word_chars += current_word_len;
-			}
-			current_word_len = 0;
-			in_word = FALSE;
-			prev_was_space = FALSE;
-			prev_script = USCRIPT_INVALID_CODE;
-			continue;
-		}
-
 		/* Check if it's a letter (any Unicode script) */
 		if (u_isalpha(uc)) {
 			letters++;
@@ -2976,7 +2961,8 @@ lua_util_get_text_quality(lua_State *L)
 			}
 
 			/* Latin vowel/consonant detection */
-			UScriptCode script = uscript_getScript(uc, NULL);
+			uc_err = U_ZERO_ERROR;
+			UScriptCode script = uscript_getScript(uc, &uc_err);
 			if (script == USCRIPT_LATIN) {
 				if (is_latin_vowel(uc)) {
 					latin_vowels++;
@@ -3043,6 +3029,20 @@ lua_util_get_text_quality(lua_State *L)
 			in_word = FALSE;
 			prev_was_space = FALSE;
 		}
+		else if (u_hasBinaryProperty(uc, UCHAR_EMOJI)) {
+			/* Check for emoji (after digits/letters since 0-9 have UCHAR_EMOJI property) */
+			emojis++;
+			printable++;
+			/* Emojis break words */
+			if (in_word && current_word_len >= 2) {
+				words++;
+				word_chars += current_word_len;
+			}
+			current_word_len = 0;
+			in_word = FALSE;
+			prev_was_space = FALSE;
+			prev_script = USCRIPT_INVALID_CODE;
+		}
 		else if (u_isgraph(uc)) {
 			/* Other printable characters (symbols, etc.) */
 			printable++;
@@ -3075,10 +3075,8 @@ lua_util_get_text_quality(lua_State *L)
 		word_chars += current_word_len;
 	}
 
-	/* Suppress unused variable warning */
 	(void) prev_uc;
 
-	/* Build result table with all metrics */
 	lua_createtable(L, 0, 18);
 
 	lua_pushstring(L, "letters");
