@@ -1518,9 +1518,24 @@ end
 
 local opts = rspamd_config:get_all_opt('elastic')
 
+-- Merge nested tables to preserve defaults when user provides partial config
+local function merge_settings(src, dst)
+  for k, v in pairs(src) do
+    if type(v) == 'table' and type(dst[k]) == 'table' then
+      merge_settings(v, dst[k])
+    else
+      dst[k] = v
+    end
+  end
+end
+
 if opts then
   for k, v in pairs(opts) do
-    settings[k] = v
+    if type(v) == 'table' and settings[k] and type(settings[k]) == 'table' then
+      merge_settings(v, settings[k])
+    else
+      settings[k] = v
+    end
   end
 
   if not settings['enabled'] then
