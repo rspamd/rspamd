@@ -1032,10 +1032,28 @@ local function clickhouse_maybe_send_data_periodic(cfg, ev_base, now)
     return 0
   end
 
+  local dominated = false
+
   if settings.limits.max_rows > 0 then
-    if nrows > settings.limits.max_rows then
+    if nrows > settings.limits.max_rows * 10 then
+      dominated = true
+      rspamd_logger.errx(cfg, 'row count limit exceeded 10x: %d rows (limit %d), discarding data',
+          nrows, settings.limits.max_rows)
+    elseif nrows > settings.limits.max_rows then
       need_collect = true
       reason = string.format('limit of rows has been reached: %d', nrows)
+    end
+  end
+
+  if settings.limits.max_memory > 0 then
+    if used_memory >= settings.limits.max_memory * 10 then
+      dominated = true
+      rspamd_logger.errx(cfg, 'memory limit exceeded 10x: %d bytes (limit %d), discarding data',
+          used_memory, settings.limits.max_memory)
+    elseif used_memory >= settings.limits.max_memory then
+      need_collect = true
+      reason = string.format('limit of memory has been reached: %d bytes used',
+          used_memory)
     end
   end
 
@@ -1048,20 +1066,18 @@ local function clickhouse_maybe_send_data_periodic(cfg, ev_base, now)
     end
   end
 
-  if settings.limits.max_memory > 0 then
-    if used_memory >= settings.limits.max_memory then
-      need_collect = true
-      reason = string.format('limit of memory has been reached: %d bytes used',
-          used_memory)
-    end
-  end
-
   if last_collection == 0 then
     last_collection = now
   end
 
-  if need_collect then
-    -- Do it atomic
+  if dominated then
+    nrows = 0
+    last_collection = now
+    used_memory = 0
+    data_rows = {}
+    custom_rows = {}
+    collectgarbage()
+  elseif need_collect then
     local saved_rows = data_rows
     local saved_custom = custom_rows
     nrows = 0

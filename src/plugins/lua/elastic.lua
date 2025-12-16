@@ -683,7 +683,14 @@ local function periodic_send_data(cfg, ev_base)
   local flush_needed = false
 
   local nlogs_total = buffer['logs']:length()
-  if nlogs_total >= settings['limits']['max_rows'] then
+  if nlogs_total >= settings['limits']['max_rows'] * 10 then
+    rspamd_logger.errx(rspamd_config,
+        'row count limit exceeded 10x: %s rows (limit %s), discarding data',
+        nlogs_total, settings['limits']['max_rows'])
+    buffer['logs'] = lua_util.newdeque()
+    collectgarbage()
+    return
+  elseif nlogs_total >= settings['limits']['max_rows'] then
     rspamd_logger.infox(rspamd_config, 'flushing buffer by reaching max rows: %s/%s', nlogs_total,
         settings['limits']['max_rows'])
     flush_needed = true
@@ -1518,7 +1525,6 @@ end
 
 local opts = rspamd_config:get_all_opt('elastic')
 
--- Merge nested tables to preserve defaults when user provides partial config
 local function merge_settings(src, dst)
   for k, v in pairs(src) do
     if type(v) == 'table' and type(dst[k]) == 'table' then
