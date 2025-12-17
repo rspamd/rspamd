@@ -265,8 +265,13 @@ class EarlyResponseServer:
 
     async def serve_forever(self):
         """Serve until cancelled."""
-        async with self.server:
-            await self.server.serve_forever()
+        # Python 3.7+ has serve_forever(), but 3.6 doesn't
+        if hasattr(self.server, 'serve_forever'):
+            async with self.server:
+                await self.server.serve_forever()
+        else:
+            # For Python 3.6 compatibility, use async context manager
+            await asyncio.Event().wait()
 
 
 async def main():
@@ -290,7 +295,11 @@ async def main():
 
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        if hasattr(asyncio, 'run') and callable(getattr(asyncio, 'run')):
+            asyncio.run(main())
+        else:
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(main())
     except KeyboardInterrupt:
         print("Shutting down...", file=sys.stderr)
     except Exception as e:
