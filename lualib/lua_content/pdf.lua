@@ -63,19 +63,6 @@ local pdf_patterns = {
   }
 }
 
-local pdf_text_patterns = {
-  start = {
-    patterns = {
-      [[\sBT\s]]
-    }
-  },
-  stop = {
-    patterns = {
-      [[\sET\b]]
-    }
-  }
-}
-
 local pdf_cmap_patterns = {
   start = {
     patterns = {
@@ -97,7 +84,6 @@ local pdf_cmap_patterns = {
 --  t[3] - value in patterns table
 --  t[4] - local pattern index
 local pdf_indexes = {}
-local pdf_text_indexes = {}
 local pdf_cmap_indexes = {}
 
 local pdf_trie
@@ -109,7 +95,7 @@ local exports = {}
 local config = {
   max_extraction_size = 512 * 1024,
   max_processing_size = 32 * 1024,
-  text_extraction = false, -- NYI feature
+  text_extraction = true,
   url_extraction = true,
   enabled = true,
   js_fuzzy = true, -- Generate fuzzy hashes from PDF javascripts
@@ -118,7 +104,10 @@ local config = {
   max_pdf_objects = 10000, -- Maximum number of objects to be considered
   max_pdf_trailer = 10 * 1024 * 1024, -- Maximum trailer size (to avoid abuse)
   max_pdf_trailer_lines = 100, -- Maximum number of lines in pdf trailer
-  pdf_process_timeout = 1.0, -- Timeout in seconds for processing
+  pdf_process_timeout = 2.0, -- Timeout in seconds for processing
+  text_quality_threshold = 0.4, -- Minimum confidence to accept extracted text
+  text_quality_min_length = 10, -- Minimum text length to apply quality filtering
+  text_quality_enabled = true, -- Enable text quality filtering
 }
 
 -- Used to process patterns found in PDF
@@ -161,7 +150,10 @@ local function compile_tries()
     pdf_trie = compile_pats(pdf_patterns, pdf_indexes)
   end
   if not pdf_text_trie then
-    pdf_text_trie = compile_pats(pdf_text_patterns, pdf_text_indexes)
+    pdf_text_trie = rspamd_trie.create({
+      [[\sBT\s]],
+      [[\sET\b]]
+    }, default_compile_flags)
   end
   if not pdf_cmap_trie then
     pdf_cmap_trie = compile_pats(pdf_cmap_patterns, pdf_cmap_indexes)
@@ -181,14 +173,28 @@ local function generic_grammar_elts()
 
   -- Helper functions
   local function pdf_hexstring_unescape(s)
+    local res
     if #s % 2 == 0 then
       -- Sane hex string
-      return lua_util.unhex(s)
+      res = lua_util.unhex(s)
+    else
+      -- WTF hex string
+      -- Append '0' to it and unescape...
+      res = lua_util.unhex(s:sub(1, #s - 1)) .. lua_util.unhex((s:sub(#s) .. '0'))
     end
 
-    -- WTF hex string
-    -- Append '0' to it and unescape...
-    return lua_util.unhex(s:sub(1, #s - 1)) .. lua_util.unhex((s:sub(#s) .. '0'))
+    if res then
+      -- StandardEncoding/MacRomanEncoding ligature substitutions
+      res = res:gsub('\171', 'ff')
+      res = res:gsub('\172', 'ffi')
+      res = res:gsub('\173', 'ffl')
+      res = res:gsub('\174', 'fi')
+      res = res:gsub('\175', 'fl')
+      res = res:gsub('\222', 'fi')
+      res = res:gsub('\223', 'fl')
+    end
+
+    return res
   end
 
   local function pdf_string_unescape(s)
@@ -209,6 +215,15 @@ local function generic_grammar_elts()
       return string.char(tonumber(cc:sub(2), 8) or 63)
     end
     s = s:gsub('\\%d%d?%d?', ue_octal)
+
+    -- StandardEncoding/MacRomanEncoding ligature substitutions
+    s = s:gsub('\171', 'ff')
+    s = s:gsub('\172', 'ffi')
+    s = s:gsub('\173', 'ffl')
+    s = s:gsub('\174', 'fi')
+    s = s:gsub('\175', 'fl')
+    s = s:gsub('\222', 'fi')
+    s = s:gsub('\223', 'fl')
 
     return s
   end
@@ -299,12 +314,224 @@ local function gen_graphics_nary()
       P("RG") + P("rg")
 end
 
+-- Calculate text quality confidence score using UTF-8 aware analysis
+-- Returns a score between 0.0 (garbage) and 1.0 (high quality text)
+local function calculate_text_confidence(text)
+  if not text or #text < config.text_quality_min_length then
+    return 1.0 -- Don't filter short text
+  end
+
+  local stats = rspamd_util.get_text_quality(text)
+  if not stats or stats.total == 0 then
+    return 0.0
+  end
+
+  local score = 0.0
+  local non_ws = stats.total - stats.spaces
+
+  -- Printable ratio (weight: 0.25) - target > 0.95
+  local printable_ratio = stats.printable / stats.total
+  score = score + math.min(printable_ratio / 0.95, 1.0) * 0.25
+
+  -- Letter ratio (weight: 0.20) - target > 0.6
+  local letter_ratio = 0
+  if non_ws > 0 then
+    letter_ratio = stats.letters / non_ws
+  end
+  score = score + math.min(letter_ratio / 0.6, 1.0) * 0.20
+
+  -- Word ratio (weight: 0.25) - target > 0.7
+  local word_ratio = 0
+  if non_ws > 0 then
+    word_ratio = stats.word_chars / non_ws
+  end
+  score = score + math.min(word_ratio / 0.7, 1.0) * 0.25
+
+  -- Average word length (weight: 0.15) - ideal: 3-10
+  local avg_word_len = 0
+  if stats.words > 0 then
+    avg_word_len = stats.word_chars / stats.words
+  end
+  local word_len_score = 0
+  if avg_word_len >= 3 and avg_word_len <= 10 then
+    word_len_score = 1.0
+  elseif avg_word_len >= 2 and avg_word_len < 3 then
+    word_len_score = 0.7
+  elseif avg_word_len > 10 and avg_word_len <= 15 then
+    word_len_score = 0.5
+  else
+    word_len_score = 0.2
+  end
+  score = score + word_len_score * 0.15
+
+  -- Space ratio (weight: 0.15) - ideal: 0.08-0.25
+  local space_ratio = stats.spaces / stats.total
+  local space_score = 0
+  if space_ratio >= 0.08 and space_ratio <= 0.25 then
+    space_score = 1.0
+  elseif space_ratio > 0.25 and space_ratio <= 0.4 then
+    space_score = 0.6
+  elseif space_ratio > 0 and space_ratio < 0.08 then
+    space_score = 0.5
+  else
+    space_score = 0.2
+  end
+  score = score + space_score * 0.15
+
+  return score
+end
+
 -- Generates a grammar to parse text blocks (between BT and ET)
 local function gen_text_grammar()
   local V = lpeg.V
   local P = lpeg.P
   local C = lpeg.C
   local gen = generic_grammar_elts()
+
+  local function sanitize_pdf_text(s)
+    if not s or #s < 4 then return s end
+
+    local nulls_odd = 0
+    local nulls_even = 0
+    local len = #s
+
+    local limit = math.min(len, 16)
+    for i = 1, limit do
+      local b = string.byte(s, i)
+      if b == 0 then
+        if i % 2 == 1 then
+          nulls_odd = nulls_odd + 1
+        else
+          nulls_even = nulls_even + 1
+        end
+      end
+    end
+
+    if len > 32 then
+      for i = len - 15, len do
+        local b = string.byte(s, i)
+        if b == 0 then
+          if i % 2 == 1 then
+            nulls_odd = nulls_odd + 1
+          else
+            nulls_even = nulls_even + 1
+          end
+        end
+      end
+    elseif len > 16 then
+      for i = 17, len do
+        local b = string.byte(s, i)
+        if b == 0 then
+          if i % 2 == 1 then
+            nulls_odd = nulls_odd + 1
+          else
+            nulls_even = nulls_even + 1
+          end
+        end
+      end
+    end
+
+    local total_checked = (len > 32) and 32 or len
+    local total_odd = math.ceil(total_checked / 2)
+    local total_even = math.floor(total_checked / 2)
+
+    if len > 32 then
+        total_odd = 16
+        total_even = 16
+    end
+
+    local ratio_odd = nulls_odd / total_odd
+    local ratio_even = nulls_even / total_even
+    local charset
+
+    if ratio_odd > 0.8 and ratio_even < 0.2 then
+       charset = 'UTF-16BE'
+    elseif ratio_even > 0.8 and ratio_odd < 0.2 then
+       charset = 'UTF-16LE'
+    end
+
+    if charset and rspamd_util.to_utf8 then
+       local conv = rspamd_util.to_utf8(s, charset)
+       if conv then
+          local garbage_limit = 0
+          local clen = #conv
+          for i = 1, clen do
+            local b = conv:byte(i)
+            if b < 32 and b ~= 9 and b ~= 10 and b ~= 13 then
+              garbage_limit = garbage_limit + 1
+            end
+          end
+
+          if garbage_limit > 0 then
+             return ''
+          end
+
+          return conv
+       end
+    end
+
+    return s
+  end
+
+  local function text_op_handler(...)
+    local args = { ... }
+    local op = args[#args]
+    local t = args[#args - 1]
+
+    local res = t
+    if type(t) == 'table' then
+      local tres = {}
+      for _, chunk in ipairs(t) do
+        if type(chunk) == 'string' then
+          table.insert(tres, chunk)
+        elseif type(chunk) == 'number' and chunk < -200 then
+          table.insert(tres, ' ')
+        end
+      end
+      res = table.concat(tres)
+    end
+
+    res = sanitize_pdf_text(res)
+
+    -- Apply text quality filtering to reject garbage chunks
+    if config.text_quality_enabled and res and #res >= config.text_quality_min_length then
+      local confidence = calculate_text_confidence(res)
+      if confidence < config.text_quality_threshold then
+        lua_util.debugm(N, nil, 'rejected low confidence text chunk (%.2f): %s',
+            confidence, res:sub(1, 50))
+        return ''
+      end
+    end
+
+    if op == "'" or op == '"' then
+      return '\n' .. res
+    end
+
+    return res
+  end
+
+  local function nary_op_handler(...)
+    local args = { ... }
+    local op = args[#args]
+
+    if op == 'Tm' then
+      return '\n'
+    end
+
+    return ''
+  end
+
+  local function ternary_op_handler(...)
+    local args = { ... }
+    local op = args[#args]
+    local a2 = args[#args - 2]
+
+    if (op == 'Td' or op == 'TD') and type(a2) == 'number' and a2 ~= 0 then
+      return '\n'
+    end
+
+    return ''
+  end
 
   local empty = ""
   local unary_ops = C("T*") / "\n" +
@@ -313,8 +540,8 @@ local function gen_text_grammar()
       gen_graphics_binary()
   local ternary_ops = P("TD") + P("Td") + gen_graphics_ternary()
   local nary_op = P("Tm") + gen_graphics_nary()
-  local text_binary_op = P("Tj") + P("TJ") + P("'")
-  local text_quote_op = P('"')
+  local text_binary_op = C(P("Tj") + P("TJ") + P("'"))
+  local text_quote_op = C(P('"'))
   local font_op = P("Tf")
 
   return lpeg.P {
@@ -324,8 +551,8 @@ local function gen_text_grammar()
         V("FONT") + gen.comment) * gen.ws ^ 0,
     UNARY = unary_ops,
     BINARY = V("ARG") / empty * gen.ws ^ 1 * binary_ops,
-    TERNARY = V("ARG") / empty * gen.ws ^ 1 * V("ARG") / empty * gen.ws ^ 1 * ternary_ops,
-    NARY = (gen.number / 0 * gen.ws ^ 1) ^ 1 * (gen.id / empty * gen.ws ^ 0) ^ -1 * nary_op,
+    TERNARY = (V("ARG") * gen.ws ^ 1 * V("ARG") * gen.ws ^ 1 * ternary_ops) / ternary_op_handler,
+    NARY = lpeg.Ct((V("ARG") * gen.ws ^ 1) ^ 1) * (gen.id / empty * gen.ws ^ 0) ^ -1 * nary_op / nary_op_handler,
     ARG = V("ARRAY") + V("DICT") + V("ATOM"),
     ATOM = (gen.comment + gen.boolean + gen.ref +
         gen.number + V("STRING") + gen.id),
@@ -333,13 +560,13 @@ local function gen_text_grammar()
     KV_PAIR = lpeg.Cg(gen.id * gen.ws ^ 0 * V("ARG") * gen.ws ^ 0),
     ARRAY = "[" * gen.ws ^ 0 * lpeg.Ct(V("ARG") ^ 0) * gen.ws ^ 0 * "]",
     STRING = lpeg.P { gen.str + gen.hexstr },
-    TEXT = (V("TEXT_ARG") * gen.ws ^ 1 * text_binary_op) +
-        (V("ARG") / 0 * gen.ws ^ 1 * V("ARG") / 0 * gen.ws ^ 1 * V("TEXT_ARG") * gen.ws ^ 1 * text_quote_op),
-    FONT = (V("FONT_ARG") * gen.ws ^ 1 * (gen.number / 0) * gen.ws ^ 1 * font_op),
+    TEXT = ((V("TEXT_ARG") * gen.ws ^ 0 * text_binary_op) / text_op_handler) +
+        ((V("ARG") / empty * gen.ws ^ 1 * V("ARG") / empty * gen.ws ^ 1 * V("TEXT_ARG") * gen.ws ^ 0 * text_quote_op) / text_op_handler),
+    FONT = (V("FONT_ARG") * gen.ws ^ 1 * (gen.number / empty) * gen.ws ^ 1 * font_op) / empty,
     FONT_ARG = lpeg.Ct(lpeg.Cc("%font%") * gen.id),
     TEXT_ARG = lpeg.Ct(V("STRING")) + V("TEXT_ARRAY"),
-    TEXT_ARRAY = "[" *
-        lpeg.Ct(((gen.ws ^ 0 * (gen.ws ^ 0 * (gen.number / 0) ^ 0 * gen.ws ^ 0 * (gen.str + gen.hexstr))) ^ 1)) * gen.ws ^ 0 * "]",
+    TEXT_ARRAY = "[" * gen.ws ^ 0 * lpeg.Ct((V("TEXT_ARRAY_ELT") * gen.ws ^ 0) ^ 0) * "]",
+    TEXT_ARRAY_ELT = gen.number + gen.str + gen.hexstr,
   }
 end
 
@@ -351,7 +578,20 @@ pdf_outer_grammar = gen_outer_grammar()
 pdf_text_grammar = gen_text_grammar()
 
 local function extract_text_data(specific)
-  return nil -- NYI
+  local res = {}
+  if specific.objects then
+    for _, obj in ipairs(specific.objects) do
+      if obj.text then
+        if type(obj.text) == 'userdata' then
+          res[#res + 1] = tostring(obj.text)
+        else
+          res[#res + 1] = obj.text
+        end
+      end
+    end
+  end
+
+  return res
 end
 
 -- Generates index for major/minor pair
@@ -379,8 +619,24 @@ end
 
 -- Apply PDF stream filter
 local function apply_pdf_filter(input, filt)
-  if filt == 'FlateDecode' then
+  -- Validate input before processing
+  if not input or (type(input) == 'string' and #input == 0) then
+    return nil
+  end
+
+  if filt == 'FlateDecode' or filt == 'Fl' then
     return rspamd_util.inflate(input, config.max_extraction_size)
+  elseif filt == 'ASCIIHexDecode' or filt == 'AHx' then
+    -- Strip > at the end if present (should be stripped by parser but safety check)
+    -- Also strip whitespaces
+    local to_decode = input:gsub('%s', '')
+    if to_decode:sub(-1) == '>' then
+      to_decode = to_decode:sub(1, -2)
+    end
+    if #to_decode == 0 then
+      return nil
+    end
+    return lua_util.unhex(to_decode)
   end
 
   return nil
@@ -392,8 +648,12 @@ local function maybe_apply_filter(dict, data, pdf, task)
 
   if dict.Filter then
     local filt = dict.Filter
+    local filts = {}
+
     if type(filt) == 'string' then
-      filt = { filt }
+      filts = { filt }
+    elseif type(filt) == 'table' then
+      filts = filt
     end
 
     if dict.DecodeParms then
@@ -401,16 +661,21 @@ local function maybe_apply_filter(dict, data, pdf, task)
 
       if type(decode_params) == 'table' then
         if decode_params.Predictor then
-          return nil, 'predictor exists'
+          local predictor = tonumber(decode_params.Predictor) or 1
+          if predictor > 1 then
+            return nil, 'predictor exists: ' .. tostring(predictor)
+          end
         end
       end
     end
 
-    for _, f in ipairs(filt) do
-      uncompressed = apply_pdf_filter(uncompressed, f)
+    for _, f in ipairs(filts) do
+      local next_uncompressed = apply_pdf_filter(uncompressed, f)
 
-      if not uncompressed then
-        break
+      if next_uncompressed then
+        uncompressed = next_uncompressed
+      else
+        return nil, 'filter failed: ' .. tostring(f)
       end
     end
   end
@@ -425,27 +690,33 @@ local function maybe_extract_object_stream(obj, pdf, task)
     return nil
   end
   local dict = obj.dict
-  if dict.Length and type(obj.stream) == 'table' then
-    local len = math.min(obj.stream.len,
-        tonumber(maybe_dereference_object(dict.Length, pdf, task)) or 0)
-    if len > 0 then
-      local real_stream = obj.stream.data:span(1, len)
+  local len = obj.stream.len
+  local decl_len = maybe_dereference_object(dict.Length, pdf, task)
 
-      local uncompressed, filter_err = maybe_apply_filter(dict, real_stream, pdf, task)
-
-      if uncompressed then
-        obj.uncompressed = uncompressed
-        lua_util.debugm(N, task, 'extracted object %s:%s: (%s -> %s)',
-            obj.major, obj.minor, len, uncompressed:len())
-        return obj.uncompressed
-      else
-        lua_util.debugm(N, task, 'cannot extract object %s:%s; len = %s; filter = %s: %s',
-            obj.major, obj.minor, len, dict.Filter, filter_err)
-      end
-    else
-      lua_util.debugm(N, task, 'cannot extract object %s:%s; len = %s',
-          obj.major, obj.minor, len)
+  if decl_len then
+    local nlen = tonumber(decl_len)
+    if nlen then
+      len = math.min(len, nlen)
     end
+  end
+
+  if len > 0 then
+    local real_stream = obj.stream.data:span(1, len)
+
+    local uncompressed, filter_err = maybe_apply_filter(dict, real_stream, pdf, task)
+
+    if uncompressed then
+      obj.uncompressed = uncompressed
+      lua_util.debugm(N, task, 'extracted object %s:%s: (%s -> %s)',
+          obj.major, obj.minor, len, #uncompressed)
+      return obj.uncompressed
+    else
+      lua_util.debugm(N, task, 'cannot extract object %s:%s; len = %s; filter = %s: %s',
+          obj.major, obj.minor, len, dict.Filter, filter_err)
+    end
+  else
+    lua_util.debugm(N, task, 'cannot extract object %s:%s; len = %s',
+        obj.major, obj.minor, len)
   end
 end
 
@@ -1016,7 +1287,6 @@ local function postprocess_pdf_objects(task, input, pdf)
 
       if now >= pdf.end_timestamp then
         pdf.timeout_processing = now - pdf.start_timestamp
-
         lua_util.debugm(N, task, 'pdf: timeout processing grammars after spending %s seconds, ' ..
             '%s elements processed',
             pdf.timeout_processing, i)
@@ -1085,7 +1355,7 @@ local function offsets_to_blocks(starts, ends, out)
   end
 end
 
-local function search_text(task, pdf)
+local function search_text(task, pdf, mpart)
   for _, obj in ipairs(pdf.objects) do
     if obj.type == 'Page' and obj.contents then
       local text = {}
@@ -1109,6 +1379,9 @@ local function search_text(task, pdf)
             end
           end
 
+          table.sort(starts)
+          table.sort(ends)
+
           offsets_to_blocks(starts, ends, text_blocks)
           for _, bl in ipairs(text_blocks) do
             if bl.len > 2 then
@@ -1117,15 +1390,26 @@ local function search_text(task, pdf)
             end
 
             bl.data = tobj.uncompressed:span(bl.start, bl.len)
-            --lua_util.debugm(N, task, 'extracted text from object %s:%s: %s',
-            --    tobj.major, tobj.minor, bl.data)
+            if bl.len <= 256 then
+              lua_util.debugm(N, task, 'extracted text from object %s:%s: %s',
+                  tobj.major, tobj.minor, bl.data)
+            else
+              lua_util.debugm(N, task, 'extracted text from object %s:%s (%d bytes)',
+                  tobj.major, tobj.minor, bl.len)
+            end
 
             if bl.len < config.max_processing_size then
               local ret, obj_or_err = pcall(pdf_text_grammar.match, pdf_text_grammar,
                   bl.data)
 
               if ret then
-                text[#text + 1] = obj_or_err
+                if #obj_or_err == 0 then
+                  lua_util.debugm(N, task, 'empty text match from block: %s', bl.data)
+                end
+                for _, chunk in ipairs(obj_or_err) do
+                  text[#text + 1] = chunk
+                end
+                text[#text + 1] = '\n'
                 lua_util.debugm(N, task, 'attached %s from content object %s:%s to %s:%s',
                     obj_or_err, tobj.major, tobj.minor, obj.major, obj.minor)
               else
@@ -1140,10 +1424,74 @@ local function search_text(task, pdf)
 
       -- Join all text data together
       if #text > 0 then
-        obj.text = rspamd_text.fromtable(text)
-        lua_util.debugm(N, task, 'object %s:%s is parsed to: %s',
-            obj.major, obj.minor, obj.text)
+        for i, chunk in ipairs(text) do
+          if type(chunk) == 'userdata' then
+            text[i] = tostring(chunk)
+          elseif type(chunk) == 'table' then
+            local function flatten(t)
+              local res = {}
+              local stack = { { tbl = t, idx = 1 } }
+              local max_depth = 100
+
+              while #stack > 0 and #stack <= max_depth do
+                local frame = stack[#stack]
+                local tbl, idx = frame.tbl, frame.idx
+
+                if idx > #tbl then
+                  stack[#stack] = nil
+                else
+                  local v = tbl[idx]
+                  frame.idx = idx + 1
+
+                  if type(v) == 'userdata' then
+                    res[#res + 1] = tostring(v)
+                  elseif type(v) == 'table' then
+                    stack[#stack + 1] = { tbl = v, idx = 1 }
+                  elseif v ~= nil then
+                    res[#res + 1] = tostring(v)
+                  end
+                end
+              end
+
+              return table.concat(res, '')
+            end
+            text[i] = flatten(chunk)
+          end
+        end
+        local res = table.concat(text, '')
+
+        -- Page-level confidence check before storing text
+        if config.text_quality_enabled and #res >= config.text_quality_min_length then
+          local page_confidence = calculate_text_confidence(res)
+          if page_confidence < config.text_quality_threshold then
+            lua_util.debugm(N, task, 'skipping low confidence page text for %s:%s (%.2f)',
+                obj.major, obj.minor, page_confidence)
+            -- Don't store this page's text
+          else
+            obj.text = rspamd_text.fromstring(res)
+            lua_util.debugm(N, task, 'object %s:%s is parsed (confidence: %.2f): %s',
+                obj.major, obj.minor, page_confidence, obj.text)
+          end
+        else
+          obj.text = rspamd_text.fromstring(res)
+          lua_util.debugm(N, task, 'object %s:%s is parsed to: %s',
+              obj.major, obj.minor, obj.text)
+        end
       end
+    end
+  end
+
+  if task.inject_part then
+    local all_text = {}
+
+    for _, obj in ipairs(pdf.objects) do
+      if obj.text and obj.text:len() > 0 then
+        table.insert(all_text, obj.text)
+      end
+    end
+
+    if #all_text > 0 then
+      task:inject_part('text', all_text, mpart)
     end
   end
 end
@@ -1183,7 +1531,6 @@ local function search_urls(task, pdf, mpart)
 end
 
 local function process_pdf(input, mpart, task)
-
   if not config.enabled then
     -- Skip processing
     return {}
@@ -1241,8 +1588,10 @@ local function process_pdf(input, mpart, task)
 
       -- Postprocess objects
       postprocess_pdf_objects(task, input, pdf_object)
-      if config.text_extraction then
-        search_text(task, pdf_object, pdf_output)
+      pdf_output.objects = pdf_object.objects
+      -- Skip text extraction if timeout occurred - partial results would be incorrect
+      if config.text_extraction and not pdf_object.timeout_processing then
+        search_text(task, pdf_object, mpart)
       end
       if config.url_extraction then
         search_urls(task, pdf_object, mpart, pdf_output)

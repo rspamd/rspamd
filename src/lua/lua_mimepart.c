@@ -582,6 +582,13 @@ LUA_FUNCTION_DEF(mimepart, is_specific);
  */
 LUA_FUNCTION_DEF(mimepart, get_urls);
 
+/***
+ * @method mime_part:is_injected()
+ * Returns true if part was injected (computed/virtual) rather than being part of the original message
+ * @return {boolean} true if part is injected
+ */
+LUA_FUNCTION_DEF(mimepart, is_injected);
+
 static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF(mimepart, get_content),
 	LUA_INTERFACE_DEF(mimepart, get_raw_content),
@@ -620,6 +627,7 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF(mimepart, get_specific),
 	LUA_INTERFACE_DEF(mimepart, set_specific),
 	LUA_INTERFACE_DEF(mimepart, is_specific),
+	LUA_INTERFACE_DEF(mimepart, is_injected),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
@@ -2459,6 +2467,21 @@ lua_mimepart_is_specific(lua_State *L)
 	}
 
 	lua_pushboolean(L, part->part_type == RSPAMD_MIME_PART_CUSTOM_LUA);
+
+	return 1;
+}
+
+static int
+lua_mimepart_is_injected(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_part *part = lua_check_mimepart(L);
+
+	if (part == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	lua_pushboolean(L, part->flags & RSPAMD_MIME_PART_COMPUTED);
 
 	return 1;
 }
