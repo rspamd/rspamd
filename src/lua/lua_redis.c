@@ -261,6 +261,7 @@ lua_redis_fin(void *arg)
 	struct lua_redis_request_specific_userdata *sp_ud = arg;
 	struct lua_redis_userdata *ud;
 	struct lua_redis_ctx *ctx;
+	redisAsyncContext *ac;
 
 	ctx = sp_ud->ctx;
 	ud = sp_ud->common_ud;
@@ -272,8 +273,18 @@ lua_redis_fin(void *arg)
 	msg_debug_lua_redis("finished redis query %p from session %p; refcount=%d",
 						sp_ud, ctx, ctx->ref.refcount);
 	sp_ud->flags |= LUA_REDIS_SPECIFIC_FINISHED;
-	/* Prevent callbacks from accessing task data after session cleanup */
-	ud->terminated = 1;
+
+	if (!ud->terminated) {
+		/* Release Redis connection to prevent callbacks after session cleanup */
+		ud->terminated = 1;
+		ac = ud->ctx;
+		ud->ctx = NULL;
+
+		if (ac) {
+			rspamd_redis_pool_release_connection(ud->pool, ac,
+												 RSPAMD_REDIS_RELEASE_FATAL);
+		}
+	}
 
 	REDIS_RELEASE(ctx);
 }
