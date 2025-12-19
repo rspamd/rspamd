@@ -272,8 +272,6 @@ lua_redis_fin(void *arg)
 	msg_debug_lua_redis("finished redis query %p from session %p; refcount=%d",
 						sp_ud, ctx, ctx->ref.refcount);
 	sp_ud->flags |= LUA_REDIS_SPECIFIC_FINISHED;
-	/* Prevent callbacks from accessing task data after session cleanup */
-	ud->terminated = 1;
 
 	REDIS_RELEASE(ctx);
 }
