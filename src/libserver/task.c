@@ -51,6 +51,74 @@ __KHASH_IMPL(rspamd_req_headers_hash, static inline,
 			 rspamd_ftok_t *, struct rspamd_request_header_chain *, 1,
 			 rspamd_ftok_icase_hash, rspamd_ftok_icase_equal)
 
+/* Task registry: maps lua_key -> task pointer for safe Lua references */
+KHASH_INIT(rspamd_task_registry, uint64_t, struct rspamd_task *, 1,
+		   kh_int64_hash_func, kh_int64_hash_equal);
+
+static khash_t(rspamd_task_registry) *task_registry = NULL;
+static uint64_t task_lua_key_counter = 0;
+
+void rspamd_task_registry_init(void)
+{
+	if (task_registry == NULL) {
+		task_registry = kh_init(rspamd_task_registry);
+	}
+}
+
+void rspamd_task_registry_destroy(void)
+{
+	if (task_registry != NULL) {
+		kh_destroy(rspamd_task_registry, task_registry);
+		task_registry = NULL;
+	}
+}
+
+struct rspamd_task *
+rspamd_task_by_lua_key(uint64_t lua_key)
+{
+	if (task_registry == NULL || lua_key == 0) {
+		return NULL;
+	}
+
+	khiter_t k = kh_get(rspamd_task_registry, task_registry, lua_key);
+	if (k != kh_end(task_registry)) {
+		return kh_value(task_registry, k);
+	}
+
+	return NULL;
+}
+
+static inline void
+rspamd_task_registry_add(struct rspamd_task *task)
+{
+	if (task_registry == NULL) {
+		rspamd_task_registry_init();
+	}
+
+	task->lua_key = ++task_lua_key_counter;
+
+	int ret;
+	khiter_t k = kh_put(rspamd_task_registry, task_registry, task->lua_key, &ret);
+	if (ret > 0) {
+		kh_value(task_registry, k) = task;
+	}
+}
+
+static inline void
+rspamd_task_registry_remove(struct rspamd_task *task)
+{
+	if (task_registry == NULL || task->lua_key == 0) {
+		return;
+	}
+
+	khiter_t k = kh_get(rspamd_task_registry, task_registry, task->lua_key);
+	if (k != kh_end(task_registry)) {
+		kh_del(rspamd_task_registry, task_registry, k);
+	}
+
+	task->lua_key = 0;
+}
+
 static GQuark
 rspamd_task_quark(void)
 {
@@ -125,6 +193,8 @@ rspamd_task_new(struct rspamd_worker *worker,
 	new_task->mail_esmtp_args = NULL;
 	new_task->rcpt_esmtp_args = NULL;
 
+	rspamd_task_registry_add(new_task);
+
 	return new_task;
 }
 
@@ -183,6 +253,8 @@ void rspamd_task_free(struct rspamd_task *task)
 	unsigned int i;
 
 	if (task) {
+		rspamd_task_registry_remove(task);
+
 		debug_task("free pointer %p", task);
 
 		if (task->rcpt_envelope) {

@@ -1492,7 +1492,11 @@ lua_check_task(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_task_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'task' expected");
-	return ud ? *((struct rspamd_task **) ud) : NULL;
+	if (ud) {
+		uint64_t lua_key = *((uint64_t *) ud);
+		return rspamd_task_by_lua_key(lua_key);
+	}
+	return NULL;
 }
 
 struct rspamd_task *
@@ -1500,7 +1504,11 @@ lua_check_task_maybe(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata_maybe(L, pos, rspamd_task_classname);
 
-	return ud ? *((struct rspamd_task **) ud) : NULL;
+	if (ud) {
+		uint64_t lua_key = *((uint64_t *) ud);
+		return rspamd_task_by_lua_key(lua_key);
+	}
+	return NULL;
 }
 
 static struct rspamd_image *
@@ -8092,9 +8100,9 @@ void luaopen_image(lua_State *L)
 
 void rspamd_lua_task_push(lua_State *L, struct rspamd_task *task)
 {
-	struct rspamd_task **ptask;
+	uint64_t *pkey;
 
-	ptask = lua_newuserdata(L, sizeof(gpointer));
+	pkey = lua_newuserdata(L, sizeof(uint64_t));
 	rspamd_lua_setclass(L, rspamd_task_classname, -1);
-	*ptask = task;
+	*pkey = task->lua_key;
 }
