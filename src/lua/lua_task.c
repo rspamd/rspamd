@@ -1824,7 +1824,7 @@ static int
 lua_task_load_from_file(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_task *task = NULL, **ptask;
+	struct rspamd_task *task = NULL;
 	const char *fname, *err = NULL;
 	struct rspamd_config *cfg = NULL;
 	gboolean res = FALSE, new_task = FALSE;
@@ -1920,9 +1920,7 @@ lua_task_load_from_file(lua_State *L)
 	lua_pushboolean(L, res);
 
 	if (res && new_task) {
-		ptask = lua_newuserdata(L, sizeof(*ptask));
-		*ptask = task;
-		rspamd_lua_setclass(L, rspamd_task_classname, -1);
+		rspamd_lua_task_push(L, task);
 
 		return 2;
 	}
@@ -1945,7 +1943,7 @@ static int
 lua_task_load_from_string(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_task *task = NULL, **ptask;
+	struct rspamd_task *task = NULL;
 	const char *str_message;
 	gsize message_len = 0;
 	struct rspamd_config *cfg = NULL;
@@ -1991,9 +1989,7 @@ lua_task_load_from_string(lua_State *L)
 	lua_pushboolean(L, true);
 
 	if (new_task) {
-		ptask = lua_newuserdata(L, sizeof(*ptask));
-		*ptask = task;
-		rspamd_lua_setclass(L, rspamd_task_classname, -1);
+		rspamd_lua_task_push(L, task);
 
 		return 2;
 	}
@@ -2006,7 +2002,7 @@ static int
 lua_task_create(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_task *task = NULL, **ptask;
+	struct rspamd_task *task = NULL;
 	struct rspamd_config *cfg = NULL;
 	struct ev_loop *ev_base = NULL;
 
@@ -2034,9 +2030,7 @@ lua_task_create(lua_State *L)
 	task = rspamd_task_new(NULL, cfg, NULL, NULL, ev_base, FALSE);
 	task->flags |= RSPAMD_TASK_FLAG_EMPTY;
 
-	ptask = lua_newuserdata(L, sizeof(*ptask));
-	*ptask = task;
-	rspamd_lua_setclass(L, rspamd_task_classname, -1);
+	rspamd_lua_task_push(L, task);
 
 	return 1;
 }
