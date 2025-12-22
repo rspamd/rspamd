@@ -51,27 +51,24 @@ __KHASH_IMPL(rspamd_req_headers_hash, static inline,
 			 rspamd_ftok_t *, struct rspamd_request_header_chain *, 1,
 			 rspamd_ftok_icase_hash, rspamd_ftok_icase_equal)
 
-/*
- * Task pointer set for validating Lua task references.
- * Mix pointer bits to improve hash distribution since pointers
- * are typically aligned and have predictable low bits.
- */
-static inline uint64_t
-rspamd_task_hash_ptr(struct rspamd_task *task)
-{
-	uint64_t p = (uint64_t) (uintptr_t) task;
-	/* Mix bits: multiply by golden ratio prime and xor with shifted value */
-	p ^= p >> 33;
-	p *= 0xff51afd7ed558ccdULL;
-	p ^= p >> 33;
-	return p;
-}
-
-KHASH_SET_INIT_INT64(rspamd_task_set);
+/* Task pointer set for validating Lua task references */
+KHASH_SET_INIT_INT(rspamd_task_set);
 
 static khash_t(rspamd_task_set) *task_registry = NULL;
 
 #define TASK_REGISTRY_INITIAL_SIZE 16
+
+/*
+ * Mix 64-bit pointer to 32-bit hash using Fibonacci hashing.
+ * Multiply by golden ratio and take high bits for good distribution.
+ * kh_int_hash_func is identity, so we do all mixing here.
+ */
+static inline khint32_t
+rspamd_task_hash_ptr(struct rspamd_task *task)
+{
+	uint64_t p = (uint64_t) (uintptr_t) task;
+	return (khint32_t) ((p * 11400714819323198485ULL) >> 32);
+}
 
 void rspamd_task_registry_init(void)
 {
