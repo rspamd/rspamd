@@ -1497,6 +1497,7 @@ lua_check_task(lua_State *L, int pos)
 		if (rspamd_task_is_valid(task)) {
 			return task;
 		}
+		msg_err("detected use-after-free for task %p", task);
 	}
 	return NULL;
 }
@@ -1511,6 +1512,7 @@ lua_check_task_maybe(lua_State *L, int pos)
 		if (rspamd_task_is_valid(task)) {
 			return task;
 		}
+		msg_err("detected use-after-free for task %p", task);
 	}
 	return NULL;
 }

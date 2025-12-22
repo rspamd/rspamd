@@ -51,15 +51,33 @@ __KHASH_IMPL(rspamd_req_headers_hash, static inline,
 			 rspamd_ftok_t *, struct rspamd_request_header_chain *, 1,
 			 rspamd_ftok_icase_hash, rspamd_ftok_icase_equal)
 
-/* Task pointer set for validating Lua task references */
+/*
+ * Task pointer set for validating Lua task references.
+ * Mix pointer bits to improve hash distribution since pointers
+ * are typically aligned and have predictable low bits.
+ */
+static inline uint64_t
+rspamd_task_hash_ptr(struct rspamd_task *task)
+{
+	uint64_t p = (uint64_t) (uintptr_t) task;
+	/* Mix bits: multiply by golden ratio prime and xor with shifted value */
+	p ^= p >> 33;
+	p *= 0xff51afd7ed558ccdULL;
+	p ^= p >> 33;
+	return p;
+}
+
 KHASH_SET_INIT_INT64(rspamd_task_set);
 
 static khash_t(rspamd_task_set) *task_registry = NULL;
+
+#define TASK_REGISTRY_INITIAL_SIZE 16
 
 void rspamd_task_registry_init(void)
 {
 	if (task_registry == NULL) {
 		task_registry = kh_init(rspamd_task_set);
+		kh_resize(rspamd_task_set, task_registry, TASK_REGISTRY_INITIAL_SIZE);
 	}
 }
 
@@ -78,7 +96,7 @@ rspamd_task_is_valid(struct rspamd_task *task)
 		return FALSE;
 	}
 
-	khiter_t k = kh_get(rspamd_task_set, task_registry, (uint64_t) (uintptr_t) task);
+	khiter_t k = kh_get(rspamd_task_set, task_registry, rspamd_task_hash_ptr(task));
 	return k != kh_end(task_registry);
 }
 
@@ -90,7 +108,7 @@ rspamd_task_registry_add(struct rspamd_task *task)
 	}
 
 	int ret;
-	kh_put(rspamd_task_set, task_registry, (uint64_t) (uintptr_t) task, &ret);
+	kh_put(rspamd_task_set, task_registry, rspamd_task_hash_ptr(task), &ret);
 }
 
 static inline void
@@ -100,7 +118,7 @@ rspamd_task_registry_remove(struct rspamd_task *task)
 		return;
 	}
 
-	khiter_t k = kh_get(rspamd_task_set, task_registry, (uint64_t) (uintptr_t) task);
+	khiter_t k = kh_get(rspamd_task_set, task_registry, rspamd_task_hash_ptr(task));
 	if (k != kh_end(task_registry)) {
 		kh_del(rspamd_task_set, task_registry, k);
 	}
