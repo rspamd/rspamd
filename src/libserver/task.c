@@ -51,41 +51,35 @@ __KHASH_IMPL(rspamd_req_headers_hash, static inline,
 			 rspamd_ftok_t *, struct rspamd_request_header_chain *, 1,
 			 rspamd_ftok_icase_hash, rspamd_ftok_icase_equal)
 
-/* Task registry: maps lua_key -> task pointer for safe Lua references */
-KHASH_INIT(rspamd_task_registry, uint64_t, struct rspamd_task *, 1,
-		   kh_int64_hash_func, kh_int64_hash_equal);
+/* Task pointer set for validating Lua task references */
+KHASH_SET_INIT_INT64(rspamd_task_set);
 
-static khash_t(rspamd_task_registry) *task_registry = NULL;
-static uint64_t task_lua_key_counter = 0;
+static khash_t(rspamd_task_set) *task_registry = NULL;
 
 void rspamd_task_registry_init(void)
 {
 	if (task_registry == NULL) {
-		task_registry = kh_init(rspamd_task_registry);
+		task_registry = kh_init(rspamd_task_set);
 	}
 }
 
 void rspamd_task_registry_destroy(void)
 {
 	if (task_registry != NULL) {
-		kh_destroy(rspamd_task_registry, task_registry);
+		kh_destroy(rspamd_task_set, task_registry);
 		task_registry = NULL;
 	}
 }
 
-struct rspamd_task *
-rspamd_task_by_lua_key(uint64_t lua_key)
+gboolean
+rspamd_task_is_valid(struct rspamd_task *task)
 {
-	if (task_registry == NULL || lua_key == 0) {
-		return NULL;
+	if (task_registry == NULL || task == NULL) {
+		return FALSE;
 	}
 
-	khiter_t k = kh_get(rspamd_task_registry, task_registry, lua_key);
-	if (k != kh_end(task_registry)) {
-		return kh_value(task_registry, k);
-	}
-
-	return NULL;
+	khiter_t k = kh_get(rspamd_task_set, task_registry, (uint64_t) (uintptr_t) task);
+	return k != kh_end(task_registry);
 }
 
 static inline void
@@ -95,28 +89,21 @@ rspamd_task_registry_add(struct rspamd_task *task)
 		rspamd_task_registry_init();
 	}
 
-	task->lua_key = ++task_lua_key_counter;
-
 	int ret;
-	khiter_t k = kh_put(rspamd_task_registry, task_registry, task->lua_key, &ret);
-	if (ret > 0) {
-		kh_value(task_registry, k) = task;
-	}
+	kh_put(rspamd_task_set, task_registry, (uint64_t) (uintptr_t) task, &ret);
 }
 
 static inline void
 rspamd_task_registry_remove(struct rspamd_task *task)
 {
-	if (task_registry == NULL || task->lua_key == 0) {
+	if (task_registry == NULL) {
 		return;
 	}
 
-	khiter_t k = kh_get(rspamd_task_registry, task_registry, task->lua_key);
+	khiter_t k = kh_get(rspamd_task_set, task_registry, (uint64_t) (uintptr_t) task);
 	if (k != kh_end(task_registry)) {
-		kh_del(rspamd_task_registry, task_registry, k);
+		kh_del(rspamd_task_set, task_registry, k);
 	}
-
-	task->lua_key = 0;
 }
 
 static GQuark

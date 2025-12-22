@@ -168,7 +168,6 @@ KHASH_INIT(rspamd_task_lua_cache, char *, struct rspamd_lua_cached_entry, 1, kh_
  */
 struct rspamd_task {
 	struct rspamd_worker *worker; /**< pointer to worker object						*/
-	uint64_t lua_key;             /**< unique key for Lua task registry				*/
 	enum rspamd_command cmd;      /**< command										*/
 	int sock;                     /**< socket descriptor								*/
 	uint32_t dns_requests;        /**< number of DNS requests per this task			*/
@@ -418,11 +417,11 @@ void rspamd_task_timeout(EV_P_ ev_timer *w, int revents);
 void rspamd_worker_guard_handler(EV_P_ ev_io *w, int revents);
 
 /*
- * Task registry for safe Lua task references
+ * Task validity set for safe Lua task references
  */
 void rspamd_task_registry_init(void);
 void rspamd_task_registry_destroy(void);
-struct rspamd_task *rspamd_task_by_lua_key(uint64_t lua_key);
+gboolean rspamd_task_is_valid(struct rspamd_task *task);
 
 #ifdef __cplusplus
 }
