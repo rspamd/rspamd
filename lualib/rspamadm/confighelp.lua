@@ -25,7 +25,7 @@ parser:flag "--no-examples"
 
 local function maybe_print_color(key)
   if not opts['no-color'] then
-    return ansicolors.white .. key .. ansicolors.reset
+    return string.format('%s%s%s', ansicolors.white, key, ansicolors.reset)
   else
     return key
   end

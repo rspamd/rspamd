@@ -59,7 +59,6 @@ if confighelp then
       # if `patterns` is specified virus name will be matched against provided regexes and the related
       # symbol will be yielded if a match is found. If no match is found, default symbol is yielded.
       patterns {
-        # symbol_name = "pattern";
         JUST_EICAR = "^Eicar-Test-Signature$";
       }
       # `whitelist` points to a map of IP addresses. Mail from these addresses is not scanned.

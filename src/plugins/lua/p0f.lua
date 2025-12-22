@@ -45,8 +45,8 @@ if confighelp then
     # Symbol will be yielded on OS string, link type or distance matches
     patterns = {
       WINDOWS = '^Windows.*';
-      #DSL = '^DSL$';
-      #DISTANCE10 = '^distance:10$';
+      DSL = '^DSL$';
+      DISTANCE10 = '^distance:10$';
     }
 
     # Cache lifetime in seconds (default - 2 hours)
