@@ -46,12 +46,11 @@ if confighelp then
       # if `patterns` is specified virus name will be matched against provided regexes and the related
       # symbol will be yielded if a match is found. If no match is found, default symbol is yielded.
       patterns {
-        # symbol_name = "pattern";
         JUST_EICAR = "^Eicar-Test-Signature$";
       }
       # mime-part regex matching in content-type or filename
       mime_parts_filter_regex {
-        #GEN1 = "application\/octet-stream";
+        GEN1 = "application\/octet-stream";
         DOC2 = "application\/msword";
         DOC3 = "application\/vnd\.ms-word.*";
         XLS = "application\/vnd\.ms-excel.*";
