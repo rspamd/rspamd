@@ -2753,6 +2753,7 @@ rspamd_init_libs(void)
 
 	auto *ctx = g_new0(struct rspamd_external_libs_ctx, 1);
 	ctx->crypto_ctx = rspamd_cryptobox_init();
+	rspamd_task_registry_init();
 	ottery_cfg = (struct ottery_config *) g_malloc0(ottery_get_sizeof_config());
 	ottery_config_init(ottery_cfg);
 	ctx->ottery_cfg = ottery_cfg;
@@ -3069,6 +3070,7 @@ void rspamd_deinit_libs(struct rspamd_external_libs_ctx *ctx)
 		}
 
 		rspamd_cryptobox_deinit(ctx->crypto_ctx);
+		rspamd_task_registry_destroy();
 
 		g_free(ctx);
 	}

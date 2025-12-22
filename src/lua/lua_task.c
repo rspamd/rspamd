@@ -1492,7 +1492,14 @@ lua_check_task(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_task_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'task' expected");
-	return ud ? *((struct rspamd_task **) ud) : NULL;
+	if (ud) {
+		struct rspamd_task *task = *((struct rspamd_task **) ud);
+		if (rspamd_task_is_valid(task)) {
+			return task;
+		}
+		msg_err("detected use-after-free for task %p", task);
+	}
+	return NULL;
 }
 
 struct rspamd_task *
@@ -1500,7 +1507,14 @@ lua_check_task_maybe(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata_maybe(L, pos, rspamd_task_classname);
 
-	return ud ? *((struct rspamd_task **) ud) : NULL;
+	if (ud) {
+		struct rspamd_task *task = *((struct rspamd_task **) ud);
+		if (rspamd_task_is_valid(task)) {
+			return task;
+		}
+		msg_err("detected use-after-free for task %p", task);
+	}
+	return NULL;
 }
 
 static struct rspamd_image *
@@ -1816,7 +1830,7 @@ static int
 lua_task_load_from_file(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_task *task = NULL, **ptask;
+	struct rspamd_task *task = NULL;
 	const char *fname, *err = NULL;
 	struct rspamd_config *cfg = NULL;
 	gboolean res = FALSE, new_task = FALSE;
@@ -1912,9 +1926,7 @@ lua_task_load_from_file(lua_State *L)
 	lua_pushboolean(L, res);
 
 	if (res && new_task) {
-		ptask = lua_newuserdata(L, sizeof(*ptask));
-		*ptask = task;
-		rspamd_lua_setclass(L, rspamd_task_classname, -1);
+		rspamd_lua_task_push(L, task);
 
 		return 2;
 	}
@@ -1937,7 +1949,7 @@ static int
 lua_task_load_from_string(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_task *task = NULL, **ptask;
+	struct rspamd_task *task = NULL;
 	const char *str_message;
 	gsize message_len = 0;
 	struct rspamd_config *cfg = NULL;
@@ -1983,9 +1995,7 @@ lua_task_load_from_string(lua_State *L)
 	lua_pushboolean(L, true);
 
 	if (new_task) {
-		ptask = lua_newuserdata(L, sizeof(*ptask));
-		*ptask = task;
-		rspamd_lua_setclass(L, rspamd_task_classname, -1);
+		rspamd_lua_task_push(L, task);
 
 		return 2;
 	}
@@ -1998,7 +2008,7 @@ static int
 lua_task_create(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_task *task = NULL, **ptask;
+	struct rspamd_task *task = NULL;
 	struct rspamd_config *cfg = NULL;
 	struct ev_loop *ev_base = NULL;
 
@@ -2026,9 +2036,7 @@ lua_task_create(lua_State *L)
 	task = rspamd_task_new(NULL, cfg, NULL, NULL, ev_base, FALSE);
 	task->flags |= RSPAMD_TASK_FLAG_EMPTY;
 
-	ptask = lua_newuserdata(L, sizeof(*ptask));
-	*ptask = task;
-	rspamd_lua_setclass(L, rspamd_task_classname, -1);
+	rspamd_lua_task_push(L, task);
 
 	return 1;
 }
