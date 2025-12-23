@@ -1637,6 +1637,7 @@ void rspamd_message_process(struct rspamd_task *task)
 		rspamd_mime_parser_get_lua_magic_cbref(task->cfg->mime_parser_cfg) != -1) {
 		unsigned int j;
 		struct rspamd_mime_part *pp;
+		int second_pass_old_top = lua_gettop(L);
 		PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, parts), j, pp)
 		{
 			gboolean needs_refine = FALSE;
@@ -1708,8 +1709,7 @@ void rspamd_message_process(struct rspamd_task *task)
 				else {
 					msg_err_task("second-pass detect type: %s", lua_tostring(L, -1));
 				}
-				/* restore stack */
-				lua_settop(L, 0);
+				lua_settop(L, second_pass_old_top);
 			}
 		}
 	}
