@@ -1173,6 +1173,7 @@ rspamd_message_from_data(struct rspamd_task *task, const unsigned char *start,
 	}
 	else if (task->cfg && task->cfg->libs_ctx) {
 		lua_State *L = task->cfg->lua_state;
+		int old_top = lua_gettop(L);
 
 		if (task->cfg->mime_parser_cfg &&
 			rspamd_mime_parser_get_lua_magic_cbref(task->cfg->mime_parser_cfg) != -1) {
@@ -1202,7 +1203,7 @@ rspamd_message_from_data(struct rspamd_task *task, const unsigned char *start,
 				}
 			}
 
-			lua_settop(L, 0);
+			lua_settop(L, old_top);
 		}
 		else if (rspamd_lua_require_function(L,
 											 "lua_magic", "detect_mime_part")) {
@@ -1232,7 +1233,7 @@ rspamd_message_from_data(struct rspamd_task *task, const unsigned char *start,
 				}
 			}
 
-			lua_settop(L, 0);
+			lua_settop(L, old_top);
 		}
 		else {
 			msg_err_task("cannot require lua_magic.detect_mime_part");
