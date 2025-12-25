@@ -565,8 +565,18 @@ function T.table(fields, opts)
       local inner_schema = is_optional and val.inner or val
       local default_value = is_optional and val.default or nil
 
+      -- Propagate doc from optional wrapper to inner schema
+      local schema_to_store = inner_schema
+      if is_optional and val.opts and val.opts.doc then
+        schema_to_store = shallowcopy(inner_schema)
+        local new_opts = shallowcopy(inner_schema.opts or {})
+        new_opts.doc = val.opts.doc
+        schema_to_store.opts = new_opts
+        setmetatable(schema_to_store, getmetatable(inner_schema))
+      end
+
       normalized_fields[key] = {
-        schema = inner_schema,
+        schema = schema_to_store,
         optional = is_optional,
         default = default_value
       }

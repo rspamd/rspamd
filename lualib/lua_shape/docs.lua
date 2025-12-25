@@ -143,6 +143,17 @@ local function generate_doc_impl(schema, path)
     if schema.default ~= nil then
       result.default = schema.default
     end
+    -- Preserve doc from optional wrapper
+    local wrapper_doc = get_doc(schema.opts)
+    if wrapper_doc.summary and not result.summary then
+      result.summary = wrapper_doc.summary
+    end
+    if wrapper_doc.description and not result.description then
+      result.description = wrapper_doc.description
+    end
+    if wrapper_doc.examples and not result.examples then
+      result.examples = wrapper_doc.examples
+    end
 
   -- Transform wrapper
   elseif tag == "transform" then
