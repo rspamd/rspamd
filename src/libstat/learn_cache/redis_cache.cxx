@@ -183,6 +183,11 @@ static int
 rspamd_stat_cache_checked(lua_State *L)
 {
 	auto *task = lua_check_task(L, 1);
+
+	if (task == nullptr) {
+		return 0;
+	}
+
 	auto res = lua_toboolean(L, 2);
 
 	if (res) {

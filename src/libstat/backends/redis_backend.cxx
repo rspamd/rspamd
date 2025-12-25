@@ -904,10 +904,15 @@ rspamd_redis_classified(lua_State *L)
 {
 	const auto *cookie = lua_tostring(L, lua_upvalueindex(1));
 	auto *task = lua_check_task(L, 1);
+
+	if (task == nullptr) {
+		return 0;
+	}
+
 	auto *rt = REDIS_RUNTIME(rspamd_mempool_get_variable(task->task_pool, cookie));
 
 	if (rt == nullptr) {
-		msg_err_task("internal error: cannot find runtime for cookie %s", cookie);
+		msg_err_task("cannot find runtime for cookie %s", cookie);
 		return 0;
 	}
 
@@ -1339,10 +1344,15 @@ rspamd_redis_learned(lua_State *L)
 {
 	const auto *cookie = lua_tostring(L, lua_upvalueindex(1));
 	auto *task = lua_check_task(L, 1);
+
+	if (task == nullptr) {
+		return 0;
+	}
+
 	auto *rt = REDIS_RUNTIME(rspamd_mempool_get_variable(task->task_pool, cookie));
 
 	if (rt == nullptr) {
-		msg_err_task("internal error: cannot find runtime for cookie %s", cookie);
+		msg_err_task("cannot find runtime for cookie %s", cookie);
 
 		return 0;
 	}
