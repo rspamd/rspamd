@@ -77,10 +77,18 @@ MACRO(ProcessPackage PKG_NAME)
                 ENDIF()
             ENDIF(NOT _lib)
 
-            FIND_PATH(_incl ${PKG_INCLUDE}
-                    HINTS ${PKG_ROOT} ${RSPAMD_SEARCH_PATH}
-                    PATH_SUFFIXES ${PKG_INCLUDE_SUFFIXES} include
-                    PATHS 	{RSPAMD_DEFAULT_INCLUDE_PATHS})
+            IF(PKG_ROOT)
+                FIND_PATH(_incl ${PKG_INCLUDE}
+                        HINTS ${PKG_ROOT} ${RSPAMD_SEARCH_PATH}
+                        PATH_SUFFIXES ${PKG_INCLUDE_SUFFIXES} include
+                        PATHS ${RSPAMD_DEFAULT_INCLUDE_PATHS}
+                        NO_DEFAULT_PATH)
+            ELSE()
+                FIND_PATH(_incl ${PKG_INCLUDE}
+                        HINTS ${RSPAMD_SEARCH_PATH}
+                        PATH_SUFFIXES ${PKG_INCLUDE_SUFFIXES} include
+                        PATHS ${RSPAMD_DEFAULT_INCLUDE_PATHS})
+            ENDIF()
             IF(NOT _incl)
                 IF(PKG_OPTIONAL OR PKG_OPTIONAL_INCLUDE)
                     MESSAGE(STATUS "Cannot find header ${PKG_INCLUDE} for package ${PKG_NAME}")

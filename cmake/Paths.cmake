@@ -68,5 +68,11 @@ IF(NOT SYSTEMDDIR)
     SET(SYSTEMDDIR ${CMAKE_INSTALL_PREFIX}/lib/systemd/system)
 ENDIF(NOT SYSTEMDDIR)
 
-SET(RSPAMD_DEFAULT_INCLUDE_PATHS "/opt;/usr;/usr/local;/opt/local;/usr/pkg;/opt/csw;/sw")
-SET(RSPAMD_DEFAULT_LIBRARY_PATHS "/usr/local;/usr/pkg;/usr;/Library/Frameworks;/sw;/opt/local;/opt/csw;/opt")
+SET(RSPAMD_DEFAULT_INCLUDE_PATHS "/usr;/usr/local;/opt/local;/usr/pkg;/opt")
+SET(RSPAMD_DEFAULT_LIBRARY_PATHS "/usr/local;/usr/pkg;/usr;/opt/local;/opt")
+IF(APPLE)
+    # Homebrew on Apple Silicon uses /opt/homebrew
+    LIST(PREPEND RSPAMD_DEFAULT_INCLUDE_PATHS "/opt/homebrew")
+    LIST(PREPEND RSPAMD_DEFAULT_LIBRARY_PATHS "/opt/homebrew")
+    LIST(APPEND RSPAMD_DEFAULT_LIBRARY_PATHS "/Library/Frameworks")
+ENDIF()
