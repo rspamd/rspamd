@@ -523,5 +523,39 @@ return function(cfg)
     cfg.options.upstream = cfg.options.upstreams
   end
 
+  -- fuzzy_check: max_score -> hits_limit rename with backward compatibility
+  -- If max_score is specified (e.g., from local.d overrides), it should override hits_limit
+  if cfg.fuzzy_check then
+    try_transform('fuzzy_check', function()
+      local dominated_options = function(rule)
+        -- max_score overrides hits_limit for backward compatibility
+        -- This ensures local.d overrides using legacy max_score still work
+        if rule.max_score then
+          rule.hits_limit = rule.max_score
+          rule.max_score = nil
+        end
+        -- Also transform fuzzy_map entries
+        if rule.fuzzy_map then
+          for _, map_entry in pairs(rule.fuzzy_map) do
+            if type(map_entry) == 'table' and map_entry.max_score then
+              map_entry.hits_limit = map_entry.max_score
+              map_entry.max_score = nil
+            end
+          end
+        end
+      end
+
+      if cfg.fuzzy_check.rule then
+        for _, rule in pairs(cfg.fuzzy_check.rule) do
+          if type(rule) == 'table' then
+            dominated_options(rule)
+          end
+        end
+      end
+      -- Handle case where fuzzy_check itself has these options (single rule syntax)
+      dominated_options(cfg.fuzzy_check)
+    end)
+  end
+
   return ret, cfg
 end

@@ -18,7 +18,8 @@
  *
  * Allowed options:
  * - symbol (string): symbol to insert (default: 'R_FUZZY')
- * - max_score (double): maximum score to that weights of hashes would be normalized (default: 0 - no normalization)
+ * - hits_limit (double): number of fuzzy hash hits at which the normalized score reaches ~1.0 (default: 0 - no normalization)
+ *   The score is calculated as tanh(e * hits / hits_limit). Legacy name: max_score
  *
  * - fuzzy_map (string): a string that contains map in format { fuzzy_key => [ symbol, weight ] } where fuzzy_key is number of
  *   fuzzy list. This string itself should be in format 1:R_FUZZY_SAMPLE1:10,2:R_FUZZY_SAMPLE2:1 etc, where first number is fuzzy
@@ -107,7 +108,7 @@ struct fuzzy_rule {
 	struct rspamd_cryptobox_pubkey *read_peer_key;
 	struct rspamd_cryptobox_keypair *write_local_key;
 	struct rspamd_cryptobox_pubkey *write_peer_key;
-	double max_score;
+	double hits_limit;
 	double weight_threshold;
 	double html_weight; /* Weight multiplier for HTML hashes (default 1.0) */
 	enum fuzzy_rule_mode mode;
@@ -365,13 +366,16 @@ parse_flags(struct fuzzy_rule *rule,
 			if (elt != NULL) {
 				map->fuzzy_flag = ucl_obj_toint(elt);
 
-				elt = ucl_object_lookup(val, "max_score");
+				elt = ucl_object_lookup(val, "hits_limit");
+				if (elt == NULL) {
+					elt = ucl_object_lookup(val, "max_score");
+				}
 
 				if (elt != NULL) {
 					map->weight = ucl_obj_todouble(elt);
 				}
 				else {
-					map->weight = rule->max_score;
+					map->weight = rule->hits_limit;
 				}
 				/* Add flag to hash table */
 				g_hash_table_insert(rule->mappings,
@@ -1715,8 +1719,13 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 	}
 
 
-	if ((value = ucl_object_lookup(obj, "max_score")) != NULL) {
-		rule->max_score = ucl_obj_todouble(value);
+	/* hits_limit: number of fuzzy hits at which normalized score reaches ~1.0
+	 * Legacy name: max_score (supported for backward compatibility) */
+	if ((value = ucl_object_lookup(obj, "hits_limit")) != NULL) {
+		rule->hits_limit = ucl_obj_todouble(value);
+	}
+	else if ((value = ucl_object_lookup(obj, "max_score")) != NULL) {
+		rule->hits_limit = ucl_obj_todouble(value);
 	}
 
 	if ((value = ucl_object_lookup(obj, "retransmits")) != NULL) {
@@ -2362,8 +2371,10 @@ int fuzzy_check_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 							   0);
 	rspamd_rcl_add_doc_by_path(cfg,
 							   "fuzzy_check.rule",
-							   "Maximum value for fuzzy hash when weight of symbol is exactly 1.0 (if value is higher then score is still 1.0)",
-							   "max_score",
+							   "Number of fuzzy hash hits at which the normalized score reaches ~1.0. "
+							   "Score is calculated as tanh(e * hits / hits_limit). "
+							   "Legacy name: max_score",
+							   "hits_limit",
 							   UCL_INT,
 							   NULL,
 							   0,
@@ -2553,8 +2564,9 @@ int fuzzy_check_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 	/* Fuzzy map doc strings */
 	rspamd_rcl_add_doc_by_path(cfg,
 							   "fuzzy_check.rule.fuzzy_map",
-							   "Maximum score for this flag",
-							   "max_score",
+							   "Number of fuzzy hash hits at which the normalized score reaches ~1.0 for this flag. "
+							   "Legacy name: max_score",
+							   "hits_limit",
 							   UCL_INT,
 							   NULL,
 							   0,
@@ -4251,7 +4263,7 @@ fuzzy_insert_result(struct fuzzy_client_session *session,
 								 GINT_TO_POINTER(rep->v1.flag))) == NULL) {
 		/* Default symbol and default weight */
 		symbol = session->rule->symbol;
-		weight = session->rule->max_score;
+		weight = session->rule->hits_limit;
 	}
 	else {
 		/* Get symbol and weight from map */
