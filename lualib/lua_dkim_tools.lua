@@ -760,7 +760,7 @@ exports.process_signing_settings = function(N, settings, opts)
     path_map = { 'map', 'Paths to DKIM signing keys' },
     selector_map = { 'map', 'DKIM selectors' },
     signing_table = { 'glob', 'DKIM signing table' },
-    key_table = { 'glob', 'DKIM keys table' },
+    key_table = { 'map', 'DKIM keys table' },
     vault_domains = { 'glob', 'DKIM signing domains in vault' }
   }
   for k, v in pairs(opts) do
