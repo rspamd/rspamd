@@ -35,6 +35,7 @@
 #include <cstdlib> /* for std::getenv */
 #include "unix-std.h"
 #include "rspamd_control.h"
+#include "cryptobox.h"
 
 #define HYPERSCAN_LOG_TAG "hsxxxx"
 
@@ -282,19 +283,60 @@ public:
 
 
 /**
+ * Simple holder for FD-based mmap (no file path)
+ */
+struct fd_mmap_holder {
+	void *map = nullptr;
+	std::size_t size = 0;
+	int fd = -1;
+
+	fd_mmap_holder() = default;
+	fd_mmap_holder(void *m, std::size_t s, int f)
+		: map(m), size(s), fd(f)
+	{
+	}
+	~fd_mmap_holder()
+	{
+		if (map && map != MAP_FAILED) {
+			munmap(map, size);
+		}
+		if (fd >= 0) {
+			close(fd);
+		}
+	}
+	fd_mmap_holder(const fd_mmap_holder &) = delete;
+	fd_mmap_holder &operator=(const fd_mmap_holder &) = delete;
+	fd_mmap_holder(fd_mmap_holder &&other) noexcept
+		: map(other.map), size(other.size), fd(other.fd)
+	{
+		other.map = nullptr;
+		other.size = 0;
+		other.fd = -1;
+	}
+	fd_mmap_holder &operator=(fd_mmap_holder &&other) noexcept
+	{
+		std::swap(map, other.map);
+		std::swap(size, other.size);
+		std::swap(fd, other.fd);
+		return *this;
+	}
+};
+
+/**
  * This is a higher level representation of the cached hyperscan file
  */
 struct hs_shared_database {
 	hs_database_t *db = nullptr; /**< internal database (might be in a shared memory) */
 	std::optional<raii_mmaped_file> maybe_map;
+	std::optional<fd_mmap_holder> maybe_fd_map; /**< for FD-based loading */
 	std::string cached_path;
 
 	~hs_shared_database()
 	{
-		if (!maybe_map) {
+		if (!maybe_map && !maybe_fd_map) {
 			hs_free_database(db);
 		}
-		// Otherwise, handled by maybe_map dtor
+		// Otherwise, handled by maybe_map or maybe_fd_map dtor
 	}
 
 	explicit hs_shared_database(raii_mmaped_file &&map, hs_database_t *db)
@@ -313,6 +355,11 @@ struct hs_shared_database {
 			cached_path = "";
 		}
 	}
+	explicit hs_shared_database(hs_database_t *db, fd_mmap_holder &&fd_map)
+		: db(db), maybe_fd_map(std::move(fd_map))
+	{
+		cached_path = "";
+	}
 	hs_shared_database(const hs_shared_database &other) = delete;
 	hs_shared_database() = default;
 	hs_shared_database(hs_shared_database &&other) noexcept
@@ -323,6 +370,7 @@ struct hs_shared_database {
 	{
 		std::swap(db, other.db);
 		std::swap(maybe_map, other.maybe_map);
+		std::swap(maybe_fd_map, other.maybe_fd_map);
 		return *this;
 	}
 };
@@ -394,6 +442,69 @@ hs_is_valid_database(void *raw, std::size_t len, std::string_view fname) -> tl::
 	}
 
 	return true;
+}
+
+/**
+ * Get platform identifier string for hyperscan cache keys
+ * Format: hs{major}{minor}_{platform}_{features}_{hash8}
+ * Example: hs54_haswell_avx2_abc12345
+ */
+static auto
+hs_get_platform_id_impl() -> std::string
+{
+	hs_platform_info_t plt;
+	if (hs_populate_platform(&plt) != HS_SUCCESS) {
+		return "hs_unknown";
+	}
+
+	// Parse version string to get major.minor
+	const char *version_str = hs_version();
+	unsigned int major = 0, minor = 0;
+	sscanf(version_str, "%u.%u", &major, &minor);
+
+	// Determine platform name
+	const char *platform_name = "generic";
+	switch (plt.tune) {
+	case HS_TUNE_FAMILY_HSW:
+		platform_name = "haswell";
+		break;
+	case HS_TUNE_FAMILY_SNB:
+		platform_name = "sandy";
+		break;
+	case HS_TUNE_FAMILY_BDW:
+		platform_name = "broadwell";
+		break;
+	case HS_TUNE_FAMILY_IVB:
+		platform_name = "ivy";
+		break;
+	default:
+		break;
+	}
+
+	// Build features string
+	std::string features;
+	if (plt.cpu_features & HS_CPU_FEATURES_AVX2) {
+		features = "avx2";
+	}
+	else if (plt.cpu_features & HS_CPU_FEATURES_AVX512) {
+		features = "avx512";
+	}
+	else {
+		features = "base";
+	}
+
+	// Create hash of platform info for uniqueness
+	unsigned char hash_out[rspamd_cryptobox_HASHBYTES];
+	rspamd_cryptobox_hash_state_t hash_state;
+	rspamd_cryptobox_hash_init(&hash_state, nullptr, 0);
+	rspamd_cryptobox_hash_update(&hash_state, reinterpret_cast<const unsigned char *>(version_str), strlen(version_str));
+	rspamd_cryptobox_hash_update(&hash_state, reinterpret_cast<const unsigned char *>(&plt), sizeof(plt));
+	rspamd_cryptobox_hash_final(&hash_state, hash_out);
+
+	// Format: hs{major}{minor}_{platform}_{features}_{hash8}
+	return fmt::format("hs{}{}_{}_{}_{:02x}{:02x}{:02x}{:02x}",
+					   major, minor, platform_name, features,
+					   hash_out[0], hash_out[1], hash_out[2], hash_out[3]);
 }
 
 static auto
@@ -699,6 +810,122 @@ void rspamd_hyperscan_cleanup_maybe(void)
 void rspamd_hyperscan_notice_loaded(void)
 {
 	rspamd::util::hs_known_files_cache::get().notice_loaded();
+}
+
+const char *rspamd_hyperscan_get_platform_id(void)
+{
+	static std::string cached_platform_id;
+
+	if (cached_platform_id.empty()) {
+		cached_platform_id = rspamd::util::hs_get_platform_id_impl();
+	}
+
+	return cached_platform_id.c_str();
+}
+
+rspamd_hyperscan_t *rspamd_hyperscan_from_fd(int fd, gsize size)
+{
+	if (fd < 0 || size == 0) {
+		msg_err_hyperscan("invalid fd (%d) or size (%z) for hyperscan database", fd, size);
+		return nullptr;
+	}
+
+	void *map = mmap(nullptr, size, PROT_READ, MAP_SHARED, fd, 0);
+	if (map == MAP_FAILED) {
+		msg_err_hyperscan("cannot mmap fd %d: %s", fd, strerror(errno));
+		return nullptr;
+	}
+
+	auto is_valid = rspamd::util::hs_is_valid_database(map, size, "fd");
+	if (!is_valid) {
+		msg_err_hyperscan("invalid hyperscan database from fd: %s", is_valid.error().c_str());
+		munmap(map, size);
+		return nullptr;
+	}
+
+	auto *db = reinterpret_cast<hs_database_t *>(map);
+	// Create fd_mmap_holder to manage the mapping lifetime
+	// Note: we dup() the fd so the holder owns its own copy
+	int owned_fd = dup(fd);
+	if (owned_fd == -1) {
+		msg_err_hyperscan("cannot dup fd %d: %s", fd, strerror(errno));
+		munmap(map, size);
+		return nullptr;
+	}
+	rspamd::util::fd_mmap_holder holder{map, size, owned_fd};
+	auto *ndb = new rspamd::util::hs_shared_database{db, std::move(holder)};
+
+	msg_info_hyperscan("loaded hyperscan database from fd %d, size %z", fd, size);
+	return C_DB_FROM_CXX(ndb);
+}
+
+gboolean rspamd_hyperscan_create_shared_unser(const char *serialized_data,
+											  gsize serialized_size,
+											  int *out_fd,
+											  gsize *out_size)
+{
+	if (!serialized_data || serialized_size == 0 || !out_fd || !out_size) {
+		return FALSE;
+	}
+
+	std::size_t unserialized_size = 0;
+	if (hs_serialized_database_size(serialized_data, serialized_size, &unserialized_size) != HS_SUCCESS) {
+		msg_err_hyperscan("cannot determine unserialized database size");
+		return FALSE;
+	}
+
+	// Create temp file
+	char tmppath[] = "/tmp/rspamd_hs_XXXXXX";
+	int fd = mkstemp(tmppath);
+	if (fd == -1) {
+		msg_err_hyperscan("cannot create temp file: %s", strerror(errno));
+		return FALSE;
+	}
+
+	// Unlink immediately - file stays open via FD
+	if (unlink(tmppath) == -1) {
+		msg_err_hyperscan("cannot unlink temp file %s: %s", tmppath, strerror(errno));
+		close(fd);
+		return FALSE;
+	}
+
+	// Extend file to required size
+	if (ftruncate(fd, unserialized_size) == -1) {
+		msg_err_hyperscan("cannot ftruncate temp file: %s", strerror(errno));
+		close(fd);
+		return FALSE;
+	}
+
+	// Map with MAP_SHARED for sharing between processes
+	void *map = mmap(nullptr, unserialized_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	if (map == MAP_FAILED) {
+		msg_err_hyperscan("cannot mmap temp file: %s", strerror(errno));
+		close(fd);
+		return FALSE;
+	}
+
+	// Deserialize into mapped region
+	if (hs_deserialize_database_at(serialized_data, serialized_size, reinterpret_cast<hs_database_t *>(map)) != HS_SUCCESS) {
+		msg_err_hyperscan("cannot deserialize database into shared memory");
+		munmap(map, unserialized_size);
+		close(fd);
+		return FALSE;
+	}
+
+	// Change protection to read-only
+	if (mprotect(map, unserialized_size, PROT_READ) == -1) {
+		msg_err_hyperscan("cannot mprotect shared memory: %s", strerror(errno));
+	}
+
+	munmap(map, unserialized_size);
+
+	*out_fd = fd;
+	*out_size = unserialized_size;
+
+	msg_info_hyperscan("created shared hyperscan database: serialized %z -> unserialized %z bytes",
+					   serialized_size, unserialized_size);
+
+	return TRUE;
 }
 
 #endif// WITH_HYPERSCAN

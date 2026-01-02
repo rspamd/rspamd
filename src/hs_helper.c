@@ -19,7 +19,12 @@
 #include "libserver/cfg_rcl.h"
 #include "libserver/worker_util.h"
 #include "libserver/rspamd_control.h"
+#include "lua/lua_common.h"
 #include "unix-std.h"
+
+#ifdef WITH_HYPERSCAN
+#include "libserver/hyperscan_tools.h"
+#endif
 
 #ifdef HAVE_GLOB_H
 #include <glob.h>
@@ -42,6 +47,16 @@ static const double default_recompile_time = 60.0;
 static const uint64_t rspamd_hs_helper_magic = 0x22d310157a2288a0ULL;
 
 /*
+ * Cache backend types
+ */
+enum hs_cache_backend_type {
+	HS_CACHE_BACKEND_FILE = 0,
+	HS_CACHE_BACKEND_REDIS,
+	HS_CACHE_BACKEND_HTTP,
+	HS_CACHE_BACKEND_LUA,
+};
+
+/*
  * Worker's context
  */
 struct hs_helper_ctx {
@@ -59,7 +74,31 @@ struct hs_helper_ctx {
 	double max_time;
 	double recompile_time;
 	ev_timer recompile_timer;
+	/* Cache backend configuration */
+	char *cache_backend_str; /* Backend name from config: file, redis, http, lua */
+	enum hs_cache_backend_type cache_backend;
+	ucl_object_t *cache_config; /* Backend-specific configuration */
+	int lua_backend_ref;        /* Lua reference to backend object */
 };
+
+/* Parse cache_backend string to enum */
+static enum hs_cache_backend_type
+rspamd_hs_parse_cache_backend(const char *backend_str)
+{
+	if (backend_str == NULL || g_ascii_strcasecmp(backend_str, "file") == 0) {
+		return HS_CACHE_BACKEND_FILE;
+	}
+	else if (g_ascii_strcasecmp(backend_str, "redis") == 0) {
+		return HS_CACHE_BACKEND_REDIS;
+	}
+	else if (g_ascii_strcasecmp(backend_str, "http") == 0) {
+		return HS_CACHE_BACKEND_HTTP;
+	}
+	else if (g_ascii_strcasecmp(backend_str, "lua") == 0) {
+		return HS_CACHE_BACKEND_LUA;
+	}
+	return HS_CACHE_BACKEND_FILE;
+}
 
 static gpointer
 init_hs_helper(struct rspamd_config *cfg)
@@ -77,6 +116,10 @@ init_hs_helper(struct rspamd_config *cfg)
 	ctx->workers_ready = FALSE;
 	ctx->max_time = default_max_time;
 	ctx->recompile_time = default_recompile_time;
+	ctx->cache_backend_str = NULL;
+	ctx->cache_backend = HS_CACHE_BACKEND_FILE;
+	ctx->cache_config = NULL;
+	ctx->lua_backend_ref = LUA_NOREF;
 
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
@@ -110,6 +153,14 @@ init_hs_helper(struct rspamd_config *cfg)
 									  G_STRUCT_OFFSET(struct hs_helper_ctx, max_time),
 									  RSPAMD_CL_FLAG_TIME_FLOAT,
 									  "Maximum time to wait for compilation of a single expression");
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "cache_backend",
+									  rspamd_rcl_parse_struct_string,
+									  ctx,
+									  G_STRUCT_OFFSET(struct hs_helper_ctx, cache_backend_str),
+									  0,
+									  "Cache backend: file, redis, http, or lua");
 
 	return ctx;
 }
@@ -616,6 +667,87 @@ rspamd_hs_helper_timer(EV_P_ ev_timer *w, int revents)
 	rspamd_rs_compile(ctx, worker, FALSE);
 }
 
+/**
+ * Initialize the Lua cache backend
+ * Loads lua_hs_cache module and creates a backend instance
+ */
+static gboolean
+rspamd_hs_helper_init_lua_backend(struct hs_helper_ctx *ctx, struct rspamd_worker *worker)
+{
+	lua_State *L = ctx->cfg->lua_state;
+	const char *backend_name;
+
+	switch (ctx->cache_backend) {
+	case HS_CACHE_BACKEND_FILE:
+		backend_name = "file";
+		break;
+	case HS_CACHE_BACKEND_REDIS:
+		backend_name = "redis";
+		break;
+	case HS_CACHE_BACKEND_HTTP:
+		backend_name = "http";
+		break;
+	case HS_CACHE_BACKEND_LUA:
+		backend_name = "lua";
+		break;
+	default:
+		backend_name = "file";
+		break;
+	}
+
+	/* Load lua_hs_cache module */
+	lua_getglobal(L, "require");
+	lua_pushstring(L, "lua_hs_cache");
+
+	if (lua_pcall(L, 1, 1, 0) != 0) {
+		msg_err("failed to load lua_hs_cache module: %s", lua_tostring(L, -1));
+		lua_pop(L, 1);
+		return FALSE;
+	}
+
+	/* Get create_backend function */
+	lua_getfield(L, -1, "create_backend");
+	if (!lua_isfunction(L, -1)) {
+		msg_err("lua_hs_cache.create_backend is not a function");
+		lua_pop(L, 2);
+		return FALSE;
+	}
+
+	/* Create configuration table */
+	lua_newtable(L);
+
+	lua_pushstring(L, backend_name);
+	lua_setfield(L, -2, "backend");
+
+	lua_pushstring(L, ctx->hs_dir);
+	lua_setfield(L, -2, "cache_dir");
+
+	/* Add platform_id if available */
+#ifdef WITH_HYPERSCAN
+	const char *platform_id = rspamd_hyperscan_get_platform_id();
+	if (platform_id) {
+		lua_pushstring(L, platform_id);
+		lua_setfield(L, -2, "platform_id");
+	}
+#endif
+
+	/* Call create_backend(config) */
+	if (lua_pcall(L, 1, 1, 0) != 0) {
+		msg_err("failed to create cache backend: %s", lua_tostring(L, -1));
+		lua_pop(L, 2);
+		return FALSE;
+	}
+
+	/* Store reference to backend object */
+	ctx->lua_backend_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+	/* Pop the module table */
+	lua_pop(L, 1);
+
+	msg_info("initialized %s cache backend", backend_name);
+	return TRUE;
+}
+
 static void
 start_hs_helper(struct rspamd_worker *worker)
 {
@@ -633,8 +765,24 @@ start_hs_helper(struct rspamd_worker *worker)
 		ctx->hs_dir = RSPAMD_DBDIR "/";
 	}
 
-	msg_info("hs_helper starting: cache_dir=%s, recompile_time=%.1f, workers_ready=%s",
-			 ctx->hs_dir, ctx->recompile_time, ctx->workers_ready ? "yes" : "no");
+	/* Parse cache backend from config string */
+	ctx->cache_backend = rspamd_hs_parse_cache_backend(ctx->cache_backend_str);
+
+	msg_info("hs_helper starting: cache_dir=%s, cache_backend=%s, recompile_time=%.1f, workers_ready=%s",
+			 ctx->hs_dir,
+			 ctx->cache_backend_str ? ctx->cache_backend_str : "file",
+			 ctx->recompile_time,
+			 ctx->workers_ready ? "yes" : "no");
+
+	/* Initialize Lua cache backend if not using default file backend */
+	if (ctx->cache_backend != HS_CACHE_BACKEND_FILE) {
+		if (!rspamd_hs_helper_init_lua_backend(ctx, worker)) {
+			msg_warn("failed to initialize %s cache backend, falling back to file",
+					 ctx->cache_backend == HS_CACHE_BACKEND_REDIS ? "redis" : ctx->cache_backend == HS_CACHE_BACKEND_HTTP ? "http"
+																														  : "lua");
+			ctx->cache_backend = HS_CACHE_BACKEND_FILE;
+		}
+	}
 
 	ctx->event_loop = rspamd_prepare_worker(worker,
 											"hs_helper",

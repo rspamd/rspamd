@@ -1908,6 +1908,22 @@ rspamd_worker_hyperscan_ready(struct rspamd_main *rspamd_main,
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_HYPERSCAN_LOADED;
 
+	/*
+	 * Check if we received an FD for shared memory hyperscan database.
+	 * FD-based loading is used when hs_helper sends a pre-deserialized
+	 * database via SCM_RIGHTS. This allows workers to mmap the database
+	 * directly without disk I/O.
+	 */
+	if (attached_fd >= 0 && cmd->cmd.hs_loaded.fd_size > 0) {
+		msg_info("received hyperscan fd %d with size %z (scope: %s) - "
+				 "FD-based loading infrastructure ready, using file-based for now",
+				 attached_fd, cmd->cmd.hs_loaded.fd_size,
+				 cmd->cmd.hs_loaded.scope[0] != '\0' ? cmd->cmd.hs_loaded.scope : "all");
+		/* Close the FD since we're not using it yet */
+		close(attached_fd);
+		attached_fd = -1;
+	}
+
 	/* Check if this is a scoped notification */
 	if (cmd->cmd.hs_loaded.scope[0] != '\0') {
 		/* Scoped hyperscan loading */
@@ -1934,6 +1950,11 @@ rspamd_worker_hyperscan_ready(struct rspamd_main *rspamd_main,
 	if (write(fd, &rep, sizeof(rep)) != sizeof(rep)) {
 		msg_err("cannot write reply to the control socket: %s",
 				strerror(errno));
+	}
+
+	/* Close any remaining FD we didn't use */
+	if (attached_fd >= 0) {
+		close(attached_fd);
 	}
 
 	return TRUE;

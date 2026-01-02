@@ -78,6 +78,7 @@ struct rspamd_control_command {
 			gboolean forced;
 			char cache_dir[CONTROL_PATHLEN];
 			char scope[64]; /* Scope name, NULL means all scopes */
+			gsize fd_size;  /* Size of FD-based db, 0 if not using FD */
 		} hs_loaded;
 		struct {
 			char tag[32];
@@ -187,6 +188,7 @@ struct rspamd_srv_command {
 			gboolean forced;
 			char cache_dir[CONTROL_PATHLEN];
 			char scope[64]; /* Scope name, NULL means all scopes */
+			gsize fd_size;  /* Size of FD-based db, 0 if not using FD */
 		} hs_loaded;
 		struct {
 			char tag[32];

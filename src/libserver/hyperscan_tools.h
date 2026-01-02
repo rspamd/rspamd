@@ -70,6 +70,40 @@ void rspamd_hyperscan_notice_loaded(void);
  */
 void rspamd_hyperscan_cleanup_maybe(void);
 
+/**
+ * Get a platform identifier string for hyperscan cache keys.
+ * This includes the hyperscan version, platform tune, and CPU features.
+ * The returned string is owned by the library and should not be freed.
+ * @return platform identifier string (e.g., "hs54_haswell_avx2_abc123")
+ */
+const char *rspamd_hyperscan_get_platform_id(void);
+
+/**
+ * Create a hyperscan database wrapper from a file descriptor pointing to
+ * an unserialized (ready to use) hyperscan database. The FD should be
+ * suitable for mmap with MAP_SHARED.
+ * @param fd file descriptor to mmap
+ * @param size size of the mapped region
+ * @return database wrapper or NULL on error
+ */
+rspamd_hyperscan_t *rspamd_hyperscan_from_fd(int fd, gsize size);
+
+/**
+ * Create a shared memory region containing an unserialized hyperscan database.
+ * The returned FD can be passed to other processes via SCM_RIGHTS and used
+ * with rspamd_hyperscan_from_fd(). The temp file is unlinked immediately
+ * so it will be cleaned up when all FDs are closed.
+ * @param serialized_data pointer to serialized hyperscan database
+ * @param serialized_size size of serialized data
+ * @param[out] out_fd output file descriptor
+ * @param[out] out_size output size of unserialized database
+ * @return TRUE on success
+ */
+gboolean rspamd_hyperscan_create_shared_unser(const char *serialized_data,
+											  gsize serialized_size,
+											  int *out_fd,
+											  gsize *out_size);
+
 G_END_DECLS
 
 #endif
