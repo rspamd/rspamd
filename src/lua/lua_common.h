@@ -426,6 +426,9 @@ void luaopen_shingle(lua_State *L);
 /* libarchive-based archive module */
 void luaopen_libarchive(lua_State *L);
 
+/* Hyperscan module */
+void luaopen_hyperscan(lua_State *L);
+
 void rspamd_lua_dostring(const char *line);
 
 double rspamd_lua_normalize(struct rspamd_config *cfg,
