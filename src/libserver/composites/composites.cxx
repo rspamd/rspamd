@@ -605,42 +605,27 @@ process_single_symbol(struct composites_data *cd,
 			if (!cd->checked[atom->ncomp->id * 2]) {
 				msg_debug_composites("composite dependency %s for %s is not checked",
 									 sym.data(), cd->composite->sym.c_str());
-				/* Set checked for this symbol to avoid cyclic references */
 				cd->checked[cd->composite->id * 2] = true;
-				auto *saved = cd->composite; /* Save the current composite */
-				/* Recursively process nested composite and all its dependencies */
+				auto *saved = cd->composite;
+			
 				composites_foreach_callback((gpointer) atom->ncomp->sym.c_str(),
 											(gpointer) atom->ncomp, (gpointer) cd);
-				/* Restore state */
 				cd->composite = saved;
 				cd->checked[cd->composite->id * 2] = false;
 
-				/* Re-check for the symbol result after processing */
 				ms = rspamd_task_find_symbol_result(cd->task, sym.data(),
 													cd->metric_res);
 			}
 			else {
-				/*
-				 * Composite was already checked. If it matched, the result should be available.
-				 * If it didn't match, there's no symbol result (no match means no result).
-				 * However, if we're processing it recursively (meaning a parent composite needs it),
-				 * and it was checked but didn't match, it might have been evaluated before its
-				 * dependencies were ready. In that case, we need to re-evaluate it.
-				 */
+			
 				if (cd->checked[atom->ncomp->id * 2 + 1]) {
-					/* Composite was checked and matched - result should be available */
 					ms = rspamd_task_find_symbol_result(cd->task, sym.data(),
 														cd->metric_res);
 				}
 				else {
-					/* Composite was checked but didn't match (no symbol result means no match).
-					 * Since we're processing it recursively (a parent composite needs it),
-					 * it might have been evaluated before its dependencies were ready.
-					 * Re-evaluate it now that dependencies might be available. */
 					msg_debug_composites("nested composite %s was checked but didn't match, "
 										 "re-evaluating as dependency might be needed by parent %s",
 										 sym.data(), cd->composite->sym.c_str());
-					/* Clear checked bit to allow re-evaluation */
 					cd->checked[atom->ncomp->id * 2] = false;
 					cd->checked[cd->composite->id * 2] = true;
 					auto *saved = cd->composite;
