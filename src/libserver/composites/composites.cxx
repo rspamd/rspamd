@@ -608,12 +608,14 @@ process_single_symbol(struct composites_data *cd,
 				/* Set checked for this symbol to avoid cyclic references */
 				cd->checked[cd->composite->id * 2] = true;
 				auto *saved = cd->composite; /* Save the current composite */
+				/* Recursively process nested composite and all its dependencies */
 				composites_foreach_callback((gpointer) atom->ncomp->sym.c_str(),
 											(gpointer) atom->ncomp, (gpointer) cd);
 				/* Restore state */
 				cd->composite = saved;
 				cd->checked[cd->composite->id * 2] = false;
 
+				/* Re-check for the symbol result after processing */
 				ms = rspamd_task_find_symbol_result(cd->task, sym.data(),
 													cd->metric_res);
 			}
@@ -622,8 +624,30 @@ process_single_symbol(struct composites_data *cd,
 				 * XXX: in case of cyclic references this would return 0
 				 */
 				if (cd->checked[atom->ncomp->id * 2 + 1]) {
+					/* Composite was checked and matched - result should be available */
 					ms = rspamd_task_find_symbol_result(cd->task, sym.data(),
 														cd->metric_res);
+				}
+				else {
+					/* Composite was checked but didn't match - still try to find it
+					 * as it might have been inserted with score 0 */
+					ms = rspamd_task_find_symbol_result(cd->task, sym.data(),
+														cd->metric_res);
+					if (ms == nullptr) {
+						msg_debug_composites("nested composite %s was checked but not found, "
+											 "may need re-evaluation", sym.data());
+						/* Force re-evaluation if not found - this handles cases where
+						 * the composite was marked as checked but dependencies weren't ready */
+						cd->checked[atom->ncomp->id * 2] = false;
+						cd->checked[cd->composite->id * 2] = true;
+						auto *saved = cd->composite;
+						composites_foreach_callback((gpointer) atom->ncomp->sym.c_str(),
+													(gpointer) atom->ncomp, (gpointer) cd);
+						cd->composite = saved;
+						cd->checked[cd->composite->id * 2] = false;
+						ms = rspamd_task_find_symbol_result(cd->task, sym.data(),
+															cd->metric_res);
+					}
 				}
 			}
 		}
