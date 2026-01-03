@@ -694,6 +694,13 @@ rspamd_language_detector_read_file(struct rspamd_config *cfg,
 	khiter_t k = kh_put(rspamd_languages_hash, d->languages, nelt->name, &ret);
 	g_assert(ret > 0); /* must be unique */
 	kh_value(d->languages, k) = nelt;
+
+	/* Mark Thai as having diacritics to prevent R_MIXED_CHARSET false positives */
+	if (strcmp(nelt->name, "th") == 0) {
+		nelt->flags |= RS_LANGUAGE_DIACRITICS;
+		msg_debug_lang_det_cfg("marked Thai language as having diacritics");
+	}
+
 	ucl_object_unref(top);
 }
 
