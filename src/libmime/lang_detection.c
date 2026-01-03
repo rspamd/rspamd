@@ -324,6 +324,12 @@ rspamd_language_detector_print_flags(struct rspamd_language_elt *elt)
 	if (elt->flags & RS_LANGUAGE_LATIN) {
 		r += rspamd_snprintf(flags_buf + r, sizeof(flags_buf) - r, "latin,");
 	}
+	if (elt->flags & RS_LANGUAGE_DIACRITICS) {
+		r += rspamd_snprintf(flags_buf + r, sizeof(flags_buf) - r, "diacritics,");
+	}
+	if (elt->flags & RS_LANGUAGE_ASCII) {
+		r += rspamd_snprintf(flags_buf + r, sizeof(flags_buf) - r, "ascii,");
+	}
 
 	if (r > 0) {
 		flags_buf[r - 1] = '\0';
