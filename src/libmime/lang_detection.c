@@ -62,7 +62,7 @@ static const struct rspamd_language_unicode_match unicode_langs[] = {
 };
 
 /*
- * Top languages
+ * Top Languages 
  */
 static const char *tier0_langs[] = {
 	"en",
