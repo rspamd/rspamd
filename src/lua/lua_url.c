@@ -46,6 +46,7 @@ local mistake = res:to_table() -- INVALID! as pool is destroyed
 LUA_FUNCTION_DEF(url, get_length);
 LUA_FUNCTION_DEF(url, get_host);
 LUA_FUNCTION_DEF(url, get_port);
+LUA_FUNCTION_DEF(url, get_domain);
 LUA_FUNCTION_DEF(url, get_user);
 LUA_FUNCTION_DEF(url, get_path);
 LUA_FUNCTION_DEF(url, get_query);
@@ -80,6 +81,7 @@ LUA_FUNCTION_DEF(url, to_http);
 static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF(url, get_length),
 	LUA_INTERFACE_DEF(url, get_host),
+	LUA_INTERFACE_DEF(url, get_domain),
 	LUA_INTERFACE_DEF(url, get_port),
 	LUA_INTERFACE_DEF(url, get_user),
 	LUA_INTERFACE_DEF(url, get_path),
@@ -181,10 +183,26 @@ lua_url_get_host(lua_State *L)
 }
 
 /***
- * @method url:get_port()
- * Get port of the url
- * @return {number} url port
+ * @method url:get_domain()
+ * Get domain part of the url (alias for get_host, useful for email addresses)
+ * @return {string} domain part of URL
  */
+static int
+lua_url_get_domain(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_url *url = lua_check_url(L, 1);
+
+	if (url != NULL && url->url && url->url->hostlen > 0) {
+		lua_pushlstring(L, rspamd_url_host(url->url), url->url->hostlen);
+	}
+	else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+
 static int
 lua_url_get_port(lua_State *L)
 {
