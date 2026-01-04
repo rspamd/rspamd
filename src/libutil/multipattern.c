@@ -529,7 +529,7 @@ rspamd_multipattern_compile(struct rspamd_multipattern *mp, int flags, GError **
 				if (!(flags & RSPAMD_MULTIPATTERN_COMPILE_NO_FS)) {
 					if (hs_cache_dir != NULL) {
 						char fpath[PATH_MAX];
-						rspamd_snprintf(fpath, sizeof(fpath), "%s/%*xs.hsmp", hs_cache_dir,
+						rspamd_snprintf(fpath, sizeof(fpath), "%s/%*xs.hs", hs_cache_dir,
 										(int) rspamd_cryptobox_HASHBYTES / 2, hash);
 						mp->hs_db = rspamd_hyperscan_from_raw_db(db, fpath);
 					}
