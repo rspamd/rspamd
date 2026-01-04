@@ -396,16 +396,37 @@ rspamd_multipattern_try_load_hs(struct rspamd_multipattern *mp,
 								const unsigned char *hash)
 {
 	char fp[PATH_MAX];
+	gchar *data;
+	gsize len;
+	GError *err = NULL;
 
 	if (hs_cache_dir == NULL) {
 		return FALSE;
 	}
 
-	rspamd_snprintf(fp, sizeof(fp), "%s/%*xs.hsmp", hs_cache_dir,
+	rspamd_snprintf(fp, sizeof(fp), "%s/%*xs.hs", hs_cache_dir,
 					(int) rspamd_cryptobox_HASHBYTES / 2, hash);
-	mp->hs_db = rspamd_hyperscan_maybe_load(fp, 0);
 
-	return mp->hs_db != NULL;
+	if (!g_file_get_contents(fp, &data, &len, &err)) {
+		if (err) {
+			msg_debug("cannot read hyperscan cache %s: %s", fp, err->message);
+			g_error_free(err);
+		}
+		return FALSE;
+	}
+
+	mp->hs_db = rspamd_hyperscan_load_from_header(data, len, &err);
+	g_free(data);
+
+	if (mp->hs_db == NULL) {
+		if (err) {
+			msg_debug("cannot load hyperscan cache %s: %s", fp, err->message);
+			g_error_free(err);
+		}
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 static void
@@ -421,23 +442,26 @@ rspamd_multipattern_try_save_hs(struct rspamd_multipattern *mp,
 		return;
 	}
 
-	rspamd_snprintf(fp, sizeof(fp), "%s%shsmp-XXXXXXXXXXXXX", G_DIR_SEPARATOR_S,
+	rspamd_snprintf(fp, sizeof(fp), "%s%shs-XXXXXXXXXXXXX", G_DIR_SEPARATOR_S,
 					hs_cache_dir);
 
 	if ((fd = g_mkstemp_full(fp, O_CREAT | O_EXCL | O_WRONLY, 00644)) != -1) {
-		int ret;
-		if ((ret = hs_serialize_database(rspamd_hyperscan_get_database(mp->hs_db), &bytes, &len)) == HS_SUCCESS) {
+		/* Serialize with unified header format (magic, platform, CRC) */
+		if (rspamd_hyperscan_serialize_with_header(
+				rspamd_hyperscan_get_database(mp->hs_db),
+				NULL, NULL, 0, /* No IDs/flags needed for multipattern */
+				&bytes, &len)) {
 			if (write(fd, bytes, len) == -1) {
 				msg_warn("cannot write hyperscan cache to %s: %s",
 						 fp, strerror(errno));
 				unlink(fp);
-				free(bytes);
+				g_free(bytes);
 			}
 			else {
-				free(bytes);
+				g_free(bytes);
 				fsync(fd);
 
-				rspamd_snprintf(np, sizeof(np), "%s/%*xs.hsmp", hs_cache_dir,
+				rspamd_snprintf(np, sizeof(np), "%s/%*xs.hs", hs_cache_dir,
 								(int) rspamd_cryptobox_HASHBYTES / 2, hash);
 
 				if (rename(fp, np) == -1) {
@@ -451,11 +475,9 @@ rspamd_multipattern_try_save_hs(struct rspamd_multipattern *mp,
 			}
 		}
 		else {
-			msg_warn("cannot serialize hyperscan cache to %s: error code %d",
-					 fp, ret);
+			msg_warn("cannot serialize hyperscan cache to %s", fp);
 			unlink(fp);
 		}
-
 
 		close(fd);
 	}

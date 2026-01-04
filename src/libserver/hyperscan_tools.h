@@ -104,6 +104,47 @@ gboolean rspamd_hyperscan_create_shared_unser(const char *serialized_data,
 											  int *out_fd,
 											  gsize *out_size);
 
+/**
+ * Serialize a hyperscan database with unified header format.
+ * Format: [magic 8][platform][count][ids][flags][crc64][hs_blob]
+ * @param db hyperscan database to serialize
+ * @param ids array of pattern IDs (can be NULL)
+ * @param flags array of pattern flags (can be NULL)
+ * @param n number of patterns (0 if ids/flags not provided)
+ * @param[out] out_data pointer to allocated data (caller must g_free)
+ * @param[out] out_len size of serialized data
+ * @return TRUE on success
+ */
+gboolean rspamd_hyperscan_serialize_with_header(hs_database_t *db,
+												const unsigned int *ids,
+												const unsigned int *flags,
+												unsigned int n,
+												char **out_data,
+												gsize *out_len);
+
+/**
+ * Load a hyperscan database from unified format blob.
+ * Validates magic, platform, and CRC before deserializing.
+ * @param data serialized data with header
+ * @param len size of data
+ * @param[out] err error message if validation fails (can be NULL)
+ * @return database wrapper or NULL on error
+ */
+rspamd_hyperscan_t *rspamd_hyperscan_load_from_header(const char *data,
+													  gsize len,
+													  GError **err);
+
+/**
+ * Validate a unified format blob without deserializing.
+ * @param data serialized data with header
+ * @param len size of data
+ * @param[out] err error message if validation fails (can be NULL)
+ * @return TRUE if valid
+ */
+gboolean rspamd_hyperscan_validate_header(const char *data,
+										  gsize len,
+										  GError **err);
+
 G_END_DECLS
 
 #endif

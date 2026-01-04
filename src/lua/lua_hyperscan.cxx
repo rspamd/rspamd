@@ -316,7 +316,8 @@ lua_hyperscan_serialize(lua_State *L)
 	memcpy(p, &n, sizeof(n));
 	p += sizeof(n);
 
-	/* IDs */
+	/* IDs - remember position for CRC */
+	char *ids_start = p;
 	if (n > 0) {
 		memcpy(p, ids.data(), sizeof(unsigned int) * n);
 		p += sizeof(unsigned int) * n;
@@ -331,8 +332,17 @@ lua_hyperscan_serialize(lua_State *L)
 		p += sizeof(unsigned int) * n;
 	}
 
-	/* Calculate CRC over header (excluding CRC field itself) */
-	uint64_t crc = rspamd_cryptobox_fast_hash(buf, p - buf, 0xdeadbabe);
+	/* Calculate CRC over IDs + flags + HS blob (compatible with re_cache.c) */
+	rspamd_cryptobox_fast_hash_state_t crc_st;
+	rspamd_cryptobox_fast_hash_init(&crc_st, 0xdeadbabe);
+	if (n > 0) {
+		rspamd_cryptobox_fast_hash_update(&crc_st, ids_start, sizeof(unsigned int) * n);
+		rspamd_cryptobox_fast_hash_update(&crc_st, ids_start + sizeof(unsigned int) * n,
+										  sizeof(unsigned int) * n);
+	}
+	rspamd_cryptobox_fast_hash_update(&crc_st, ser_bytes, ser_size);
+	uint64_t crc = rspamd_cryptobox_fast_hash_final(&crc_st);
+
 	memcpy(p, &crc, sizeof(crc));
 	p += sizeof(crc);
 
@@ -428,7 +438,8 @@ lua_hyperscan_validate(lua_State *L)
 		return 2;
 	}
 
-	/* Skip IDs and flags */
+	/* Remember start of IDs for CRC calculation */
+	const char *ids_start = p;
 	size_t arrays_size = (n > 0) ? sizeof(unsigned int) * n * 2 : 0;
 	if ((size_t) (end - p) < arrays_size + sizeof(uint64_t)) {
 		lua_pushboolean(L, false);
@@ -438,12 +449,24 @@ lua_hyperscan_validate(lua_State *L)
 
 	p += arrays_size;
 
-	/* Verify CRC */
+	/* Verify CRC (over IDs + flags + HS blob, compatible with re_cache.c) */
 	uint64_t stored_crc;
 	memcpy(&stored_crc, p, sizeof(stored_crc));
 	p += sizeof(stored_crc);
 
-	uint64_t calc_crc = rspamd_cryptobox_fast_hash(data, p - data - sizeof(uint64_t), 0xdeadbabe);
+	const char *hs_blob = p;
+	size_t hs_len = end - p;
+
+	rspamd_cryptobox_fast_hash_state_t crc_st;
+	rspamd_cryptobox_fast_hash_init(&crc_st, 0xdeadbabe);
+	if (n > 0) {
+		rspamd_cryptobox_fast_hash_update(&crc_st, ids_start, sizeof(unsigned int) * n);
+		rspamd_cryptobox_fast_hash_update(&crc_st, ids_start + sizeof(unsigned int) * n,
+										  sizeof(unsigned int) * n);
+	}
+	rspamd_cryptobox_fast_hash_update(&crc_st, hs_blob, hs_len);
+	uint64_t calc_crc = rspamd_cryptobox_fast_hash_final(&crc_st);
+
 	if (stored_crc != calc_crc) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "CRC mismatch");
@@ -451,7 +474,6 @@ lua_hyperscan_validate(lua_State *L)
 	}
 
 	/* Validate hyperscan portion */
-	size_t hs_len = end - p;
 	if (hs_len == 0) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "empty hyperscan database");

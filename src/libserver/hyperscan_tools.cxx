@@ -928,4 +928,224 @@ gboolean rspamd_hyperscan_create_shared_unser(const char *serialized_data,
 	return TRUE;
 }
 
+/* Unified hyperscan format magic */
+static const unsigned char rspamd_hs_magic[] = {'r', 's', 'h', 's', 'r', 'e', '1', '1'};
+#define RSPAMD_HS_MAGIC_LEN (sizeof(rspamd_hs_magic))
+
+gboolean rspamd_hyperscan_serialize_with_header(hs_database_t *db,
+												const unsigned int *ids,
+												const unsigned int *flags,
+												unsigned int n,
+												char **out_data,
+												gsize *out_len)
+{
+	if (!db || !out_data || !out_len) {
+		return FALSE;
+	}
+
+	/* Serialize the database - hyperscan allocates the buffer */
+	char *ser_bytes = nullptr;
+	std::size_t ser_size = 0;
+	if (hs_serialize_database(db, &ser_bytes, &ser_size) != HS_SUCCESS) {
+		msg_err_hyperscan("failed to serialize database");
+		return FALSE;
+	}
+
+	/* Get platform info */
+	hs_platform_info_t plt;
+	if (hs_populate_platform(&plt) != HS_SUCCESS) {
+		g_free(ser_bytes);
+		msg_err_hyperscan("failed to get platform info");
+		return FALSE;
+	}
+
+	/* Calculate header size */
+	std::size_t header_size = RSPAMD_HS_MAGIC_LEN +
+							  sizeof(plt) +
+							  sizeof(n) +
+							  (n > 0 ? sizeof(unsigned int) * n * 2 : 0) +
+							  sizeof(uint64_t); /* CRC */
+
+	std::size_t total_size = header_size + ser_size;
+
+	/* Allocate buffer */
+	char *buf = static_cast<char *>(g_malloc(total_size));
+	char *p = buf;
+
+	/* Magic */
+	memcpy(p, rspamd_hs_magic, RSPAMD_HS_MAGIC_LEN);
+	p += RSPAMD_HS_MAGIC_LEN;
+
+	/* Platform */
+	memcpy(p, &plt, sizeof(plt));
+	p += sizeof(plt);
+
+	/* Count */
+	memcpy(p, &n, sizeof(n));
+	p += sizeof(n);
+
+	/* IDs and flags - remember positions for CRC calculation */
+	char *ids_start = p;
+	if (n > 0 && ids && flags) {
+		memcpy(p, ids, sizeof(unsigned int) * n);
+		p += sizeof(unsigned int) * n;
+		memcpy(p, flags, sizeof(unsigned int) * n);
+		p += sizeof(unsigned int) * n;
+	}
+	else if (n > 0) {
+		memset(p, 0, sizeof(unsigned int) * n * 2);
+		p += sizeof(unsigned int) * n * 2;
+	}
+
+	/* CRC over IDs + flags + HS blob (compatible with re_cache.c format) */
+	rspamd_cryptobox_fast_hash_state_t crc_st;
+	rspamd_cryptobox_fast_hash_init(&crc_st, 0xdeadbabe);
+	if (n > 0) {
+		/* IDs */
+		rspamd_cryptobox_fast_hash_update(&crc_st, ids_start, sizeof(unsigned int) * n);
+		/* Flags */
+		rspamd_cryptobox_fast_hash_update(&crc_st, ids_start + sizeof(unsigned int) * n,
+										  sizeof(unsigned int) * n);
+	}
+	/* HS database */
+	rspamd_cryptobox_fast_hash_update(&crc_st, ser_bytes, ser_size);
+	uint64_t crc = rspamd_cryptobox_fast_hash_final(&crc_st);
+
+	memcpy(p, &crc, sizeof(crc));
+	p += sizeof(crc);
+
+	/* Copy serialized database */
+	memcpy(p, ser_bytes, ser_size);
+	g_free(ser_bytes);
+
+	*out_data = buf;
+	*out_len = total_size;
+
+	return TRUE;
+}
+
+static GQuark rspamd_hyperscan_quark(void)
+{
+	return g_quark_from_static_string("hyperscan");
+}
+
+gboolean rspamd_hyperscan_validate_header(const char *data,
+										  gsize len,
+										  GError **err)
+{
+	if (len < RSPAMD_HS_MAGIC_LEN) {
+		g_set_error(err, rspamd_hyperscan_quark(), EINVAL, "data too small");
+		return FALSE;
+	}
+
+	/* Check magic */
+	if (memcmp(data, rspamd_hs_magic, RSPAMD_HS_MAGIC_LEN) != 0) {
+		g_set_error(err, rspamd_hyperscan_quark(), EINVAL, "invalid magic");
+		return FALSE;
+	}
+
+	const char *p = data + RSPAMD_HS_MAGIC_LEN;
+	const char *end = data + len;
+
+	/* Check platform */
+	if (static_cast<std::size_t>(end - p) < sizeof(hs_platform_info_t)) {
+		g_set_error(err, rspamd_hyperscan_quark(), EINVAL, "truncated platform info");
+		return FALSE;
+	}
+
+	hs_platform_info_t stored_plt;
+	memcpy(&stored_plt, p, sizeof(stored_plt));
+	p += sizeof(stored_plt);
+
+	hs_platform_info_t cur_plt;
+	if (hs_populate_platform(&cur_plt) != HS_SUCCESS) {
+		g_set_error(err, rspamd_hyperscan_quark(), EINVAL, "cannot get current platform");
+		return FALSE;
+	}
+
+	if (stored_plt.tune != cur_plt.tune) {
+		g_set_error(err, rspamd_hyperscan_quark(), EINVAL, "platform mismatch");
+		return FALSE;
+	}
+
+	/* Read count */
+	if (static_cast<std::size_t>(end - p) < sizeof(unsigned int)) {
+		g_set_error(err, rspamd_hyperscan_quark(), EINVAL, "truncated count");
+		return FALSE;
+	}
+
+	unsigned int n;
+	memcpy(&n, p, sizeof(n));
+	p += sizeof(n);
+
+	/* Remember start of IDs for CRC calculation */
+	const char *ids_start = p;
+	std::size_t arrays_size = (n > 0) ? sizeof(unsigned int) * n * 2 : 0;
+	if (static_cast<std::size_t>(end - p) < arrays_size + sizeof(uint64_t)) {
+		g_set_error(err, rspamd_hyperscan_quark(), EINVAL, "truncated arrays or CRC");
+		return FALSE;
+	}
+
+	p += arrays_size;
+
+	/* Verify CRC (over IDs + flags + HS blob, compatible with re_cache.c) */
+	uint64_t stored_crc;
+	memcpy(&stored_crc, p, sizeof(stored_crc));
+	p += sizeof(stored_crc);
+
+	const char *hs_blob = p;
+	std::size_t hs_len = end - p;
+
+	rspamd_cryptobox_fast_hash_state_t crc_st;
+	rspamd_cryptobox_fast_hash_init(&crc_st, 0xdeadbabe);
+	if (n > 0) {
+		/* IDs */
+		rspamd_cryptobox_fast_hash_update(&crc_st, ids_start, sizeof(unsigned int) * n);
+		/* Flags */
+		rspamd_cryptobox_fast_hash_update(&crc_st, ids_start + sizeof(unsigned int) * n,
+										  sizeof(unsigned int) * n);
+	}
+	/* HS database */
+	rspamd_cryptobox_fast_hash_update(&crc_st, hs_blob, hs_len);
+	uint64_t calc_crc = rspamd_cryptobox_fast_hash_final(&crc_st);
+
+	if (stored_crc != calc_crc) {
+		g_set_error(err, rspamd_hyperscan_quark(), EINVAL, "CRC mismatch");
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+rspamd_hyperscan_t *rspamd_hyperscan_load_from_header(const char *data,
+													  gsize len,
+													  GError **err)
+{
+	if (!rspamd_hyperscan_validate_header(data, len, err)) {
+		return nullptr;
+	}
+
+	/* Skip to HS blob */
+	const char *p = data + RSPAMD_HS_MAGIC_LEN + sizeof(hs_platform_info_t);
+	unsigned int n;
+	memcpy(&n, p, sizeof(n));
+	p += sizeof(n);
+
+	/* Skip IDs and flags */
+	p += (n > 0) ? sizeof(unsigned int) * n * 2 : 0;
+	/* Skip CRC */
+	p += sizeof(uint64_t);
+
+	std::size_t hs_len = len - (p - data);
+
+	hs_database_t *db = nullptr;
+	if (hs_deserialize_database(p, hs_len, &db) != HS_SUCCESS) {
+		g_set_error(err, rspamd_hyperscan_quark(), EINVAL, "deserialize failed");
+		return nullptr;
+	}
+
+	auto *ndb = new rspamd::util::hs_shared_database{db, nullptr};
+	return C_DB_FROM_CXX(ndb);
+}
+
 #endif// WITH_HYPERSCAN
