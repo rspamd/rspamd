@@ -41,27 +41,28 @@ static const char *default_languages_path = RSPAMD_SHAREDIR "/languages";
 struct rspamd_language_unicode_match {
 	const char *lang;
 	int unicode_code;
+	int flags; /* enum rspamd_language_elt_flags */
 };
 
 /*
  * List of languages detected by unicode scripts
  */
 static const struct rspamd_language_unicode_match unicode_langs[] = {
-	{"el", RSPAMD_UNICODE_GREEK},
-	{"ml", RSPAMD_UNICODE_MALAYALAM},
-	{"te", RSPAMD_UNICODE_TELUGU},
-	{"ta", RSPAMD_UNICODE_TAMIL},
-	{"gu", RSPAMD_UNICODE_GUJARATI},
-	{"th", RSPAMD_UNICODE_THAI},
-	{"ka", RSPAMD_UNICODE_GEORGIAN},
-	{"si", RSPAMD_UNICODE_SINHALA},
-	{"hy", RSPAMD_UNICODE_ARMENIAN},
-	{"ja", RSPAMD_UNICODE_JP},
-	{"ko", RSPAMD_UNICODE_HANGUL},
+	{"el", RSPAMD_UNICODE_GREEK, 0},
+	{"ml", RSPAMD_UNICODE_MALAYALAM, 0},
+	{"te", RSPAMD_UNICODE_TELUGU, 0},
+	{"ta", RSPAMD_UNICODE_TAMIL, 0},
+	{"gu", RSPAMD_UNICODE_GUJARATI, 0},
+	{"th", RSPAMD_UNICODE_THAI, RS_LANGUAGE_DIACRITICS},
+	{"ka", RSPAMD_UNICODE_GEORGIAN, 0},
+	{"si", RSPAMD_UNICODE_SINHALA, 0},
+	{"hy", RSPAMD_UNICODE_ARMENIAN, 0},
+	{"ja", RSPAMD_UNICODE_JP, 0},
+	{"ko", RSPAMD_UNICODE_HANGUL, 0},
 };
 
 /*
- * Top languages
+ * Top Languages 
  */
 static const char *tier0_langs[] = {
 	"en",
@@ -322,6 +323,12 @@ rspamd_language_detector_print_flags(struct rspamd_language_elt *elt)
 	}
 	if (elt->flags & RS_LANGUAGE_LATIN) {
 		r += rspamd_snprintf(flags_buf + r, sizeof(flags_buf) - r, "latin,");
+	}
+	if (elt->flags & RS_LANGUAGE_DIACRITICS) {
+		r += rspamd_snprintf(flags_buf + r, sizeof(flags_buf) - r, "diacritics,");
+	}
+	if (elt->flags & RS_LANGUAGE_ASCII) {
+		r += rspamd_snprintf(flags_buf + r, sizeof(flags_buf) - r, "ascii,");
 	}
 
 	if (r > 0) {
@@ -694,6 +701,18 @@ rspamd_language_detector_read_file(struct rspamd_config *cfg,
 	khiter_t k = kh_put(rspamd_languages_hash, d->languages, nelt->name, &ret);
 	g_assert(ret > 0); /* must be unique */
 	kh_value(d->languages, k) = nelt;
+
+	/* Apply flags from unicode_langs structure for glyph-based languages */
+	const struct rspamd_language_unicode_match *unicode_match;
+	unicode_match = rspamd_language_search_unicode_match(nelt->name, unicode_langs,
+														 G_N_ELEMENTS(unicode_langs));
+	if (unicode_match != NULL && unicode_match->flags != 0) {
+		nelt->flags |= unicode_match->flags;
+		msg_debug_lang_det_cfg("applied flags from unicode_langs for language %s: %s",
+							   nelt->name,
+							   rspamd_language_detector_print_flags(nelt));
+	}
+
 	ucl_object_unref(top);
 }
 
