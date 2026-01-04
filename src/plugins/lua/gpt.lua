@@ -1375,7 +1375,7 @@ if opts then
           "- Poor grammar/spelling in supposedly professional emails\n\n" ..
           "IMPORTANT: If sender is 'frequent' or 'known', reduce phishing probability " ..
           "unless there are strong contradictory signals.\n\n" ..
-          "Output ONLY 2 lines. Do not include any additional text or explanation. Here is the format to be used:\n" ..
+          "DO NOT include any additional text or explanation, output 2 lines ONLY:\n" ..
           "1. Numeric score (0.00-1.00)\n" ..
           "2. One-sentence reason citing the strongest indicator"
     end
