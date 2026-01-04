@@ -16,6 +16,45 @@ limitations under the License.
 ]] --
 
 if confighelp then
+  rspamd_config:add_example(nil, 'metadata_exporter',
+    "Exports metadata (or whole messages) to external services",
+    [[
+metadata_exporter {
+  rules {
+    HTTP_EXPORT {
+      backend = "http";
+      url = "https://example.com/api/export";
+      selector = "is_spam";
+      formatter = "json";
+      # Optional: disable SSL certificate verification (default: false)
+      # WARNING: Setting this to true disables TLS security verification
+      no_ssl_verify = false;
+      # Optional: overall timeout for HTTP request (default: 5.0 seconds)
+      timeout = 5.0;
+      # Optional: staged timeouts for fine-grained control
+      # Connection timeout (time to establish TCP connection)
+      connect_timeout = 1.0;
+      # SSL/TLS handshake timeout
+      ssl_timeout = 2.0;
+      # Timeout for writing request data
+      write_timeout = 3.0;
+      # Timeout for reading response data
+      read_timeout = 4.0;
+      # Optional: enable gzip compression
+      gzip = false;
+      # Optional: enable HTTP keepalive
+      keepalive = false;
+      # Optional: HTTP Basic Authentication
+      user = "username";
+      password = "password";
+      # Optional: MIME type for request body (default: "text/plain")
+      mime_type = "application/json";
+      # Optional: defer message on export failure
+      defer = false;
+    }
+  }
+}
+]])
   return
 end
 
