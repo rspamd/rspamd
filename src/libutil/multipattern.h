@@ -43,8 +43,19 @@ enum rspamd_multipattern_flags {
 	RSPAMD_MULTIPATTERN_NO_START = (1 << 7),
 };
 
+/**
+ * Multipattern state machine for async compilation
+ */
+enum rspamd_multipattern_state {
+	RSPAMD_MP_STATE_INIT = 0,  /* Patterns added, ACISM ready */
+	RSPAMD_MP_STATE_COMPILING, /* HS compile in progress */
+	RSPAMD_MP_STATE_COMPILED,  /* HS ready */
+	RSPAMD_MP_STATE_FALLBACK   /* HS failed, ACISM permanent */
+};
+
 struct rspamd_multipattern;
 struct rspamd_cryptobox_library_ctx;
+struct ev_loop;
 
 /**
  * Called on pattern match
@@ -63,6 +74,18 @@ typedef int (*rspamd_multipattern_cb_t)(struct rspamd_multipattern *mp,
 										const char *text,
 										gsize len,
 										void *context);
+
+/**
+ * Async compilation callback
+ * @param mp multipattern structure
+ * @param success TRUE if compilation succeeded
+ * @param err error if compilation failed (NULL on success)
+ * @param ud userdata
+ */
+typedef void (*rspamd_multipattern_compile_cb_t)(struct rspamd_multipattern *mp,
+												 gboolean success,
+												 GError *err,
+												 void *ud);
 
 /**
  * Init multipart library and set the appropriate cache dir
@@ -168,6 +191,54 @@ void rspamd_multipattern_destroy(struct rspamd_multipattern *mp);
  * @return
  */
 gboolean rspamd_multipattern_has_hyperscan(void);
+
+/**
+ * Get current state of multipattern compilation
+ * @param mp
+ * @return state enum value
+ */
+enum rspamd_multipattern_state rspamd_multipattern_get_state(
+	struct rspamd_multipattern *mp);
+
+/**
+ * Check if hyperscan database is ready for use
+ * @param mp
+ * @return TRUE if hyperscan is compiled and ready
+ */
+gboolean rspamd_multipattern_is_hs_ready(struct rspamd_multipattern *mp);
+
+/**
+ * Start async hyperscan compilation. ACISM fallback must already be built
+ * (via rspamd_multipattern_compile with appropriate flags).
+ * @param mp multipattern (must be in INIT or COMPILING state)
+ * @param flags compilation flags
+ * @param event_loop event loop for async operations
+ * @param cb callback when compilation completes
+ * @param ud userdata for callback
+ */
+void rspamd_multipattern_compile_async(struct rspamd_multipattern *mp,
+									   int flags,
+									   struct ev_loop *event_loop,
+									   rspamd_multipattern_compile_cb_t cb,
+									   void *ud);
+
+/**
+ * Get pattern hash for cache key generation
+ * @param mp
+ * @param hash_out output buffer (must be rspamd_cryptobox_HASHBYTES)
+ */
+void rspamd_multipattern_get_hash(struct rspamd_multipattern *mp,
+								  unsigned char *hash_out);
+
+/**
+ * Hot-swap hyperscan database after async compilation completes.
+ * Called internally or from IPC handler when hs_helper sends compiled DB.
+ * @param mp multipattern structure
+ * @param hs_db new hyperscan database (takes ownership)
+ * @return TRUE if swap succeeded
+ */
+gboolean rspamd_multipattern_set_hs_db(struct rspamd_multipattern *mp,
+									   void *hs_db);
 
 #ifdef __cplusplus
 }

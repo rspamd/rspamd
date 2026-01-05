@@ -58,6 +58,7 @@ struct RSPAMD_ALIGNED(64) rspamd_multipattern {
 	gboolean compiled;
 	unsigned int cnt;
 	enum rspamd_multipattern_flags flags;
+	enum rspamd_multipattern_state state;
 };
 
 static GQuark
@@ -259,6 +260,7 @@ rspamd_multipattern_create(enum rspamd_multipattern_flags flags)
 	g_assert(mp != NULL);
 	memset(mp, 0, sizeof(*mp));
 	mp->flags = flags;
+	mp->state = RSPAMD_MP_STATE_INIT;
 
 #ifdef WITH_HYPERSCAN
 	if (rspamd_hs_check()) {
@@ -287,6 +289,7 @@ rspamd_multipattern_create_sized(unsigned int npatterns,
 	g_assert(mp != NULL);
 	memset(mp, 0, sizeof(*mp));
 	mp->flags = flags;
+	mp->state = RSPAMD_MP_STATE_INIT;
 
 #ifdef WITH_HYPERSCAN
 	if (rspamd_hs_check()) {
@@ -356,11 +359,26 @@ void rspamd_multipattern_add_pattern_len(struct rspamd_multipattern *mp,
 		g_array_append_val(mp->hs_ids, fl);
 		rspamd_cryptobox_hash_update(&mp->hash_state, np, dlen);
 
+		/* For TLD patterns, also add to pats array for ACISM fallback */
+		if (adjusted_flags & RSPAMD_MULTIPATTERN_TLD) {
+			ac_trie_pat_t acism_pat;
+
+			/* Create pats array on demand for ACISM fallback */
+			if (mp->pats == NULL) {
+				mp->pats = g_array_new(FALSE, TRUE, sizeof(ac_trie_pat_t));
+			}
+
+			acism_pat.ptr = rspamd_multipattern_escape_tld_acism(pattern, patlen, &dlen);
+			acism_pat.len = dlen;
+			g_array_append_val(mp->pats, acism_pat);
+		}
+
 		mp->cnt++;
 
 		return;
 	}
 #endif
+
 	ac_trie_pat_t pat;
 
 	pat.ptr = rspamd_multipattern_pattern_filter(pattern, patlen, flags, &dlen);
@@ -487,6 +505,146 @@ rspamd_multipattern_try_save_hs(struct rspamd_multipattern *mp,
 }
 #endif
 
+/*
+ * Build ACISM fallback trie
+ */
+static gboolean
+rspamd_multipattern_build_acism(struct rspamd_multipattern *mp, GError **err)
+{
+	if (mp->cnt == 0) {
+		return TRUE;
+	}
+
+	if (mp->flags & (RSPAMD_MULTIPATTERN_GLOB | RSPAMD_MULTIPATTERN_RE)) {
+		/* For RE/GLOB, use regex-based slow fallback */
+		rspamd_regexp_t *re;
+		mp->res = g_array_sized_new(FALSE, TRUE, sizeof(rspamd_regexp_t *), mp->cnt);
+
+		for (unsigned int i = 0; i < mp->cnt; i++) {
+			const ac_trie_pat_t *pat;
+			const char *pat_flags = NULL;
+
+			if (mp->flags & RSPAMD_MULTIPATTERN_UTF8) {
+				pat_flags = "u";
+			}
+
+			pat = &g_array_index(mp->pats, ac_trie_pat_t, i);
+			re = rspamd_regexp_new(pat->ptr, pat_flags, err);
+
+			if (re == NULL) {
+				return FALSE;
+			}
+
+			g_array_append_val(mp->res, re);
+		}
+	}
+	else {
+		/* Build ACISM trie for plain/TLD patterns */
+		mp->t = acism_create((const ac_trie_pat_t *) mp->pats->data, mp->cnt);
+	}
+
+	return TRUE;
+}
+
+#ifdef WITH_HYPERSCAN
+/*
+ * Allocate scratch space for hyperscan database
+ */
+static gboolean
+rspamd_multipattern_alloc_scratch(struct rspamd_multipattern *mp, GError **err)
+{
+	for (unsigned int i = 0; i < MAX_SCRATCH; i++) {
+		mp->scratch[i] = NULL;
+	}
+
+	for (unsigned int i = 0; i < MAX_SCRATCH; i++) {
+		int ret;
+
+		if ((ret = hs_alloc_scratch(rspamd_hyperscan_get_database(mp->hs_db),
+									&mp->scratch[i])) != HS_SUCCESS) {
+			msg_err("cannot allocate scratch space for hyperscan: error code %d", ret);
+
+			/* Clean all scratches that are non-NULL */
+			for (unsigned int ii = 0; ii < MAX_SCRATCH; ii++) {
+				if (mp->scratch[ii] != NULL) {
+					hs_free_scratch(mp->scratch[ii]);
+					mp->scratch[ii] = NULL;
+				}
+			}
+			g_set_error(err, rspamd_multipattern_quark(), EINVAL,
+						"cannot allocate scratch space for hyperscan: error code %d", ret);
+
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+/*
+ * Compile hyperscan database synchronously
+ */
+static gboolean
+rspamd_multipattern_compile_hs_sync(struct rspamd_multipattern *mp,
+									const unsigned char *hash,
+									int flags,
+									GError **err)
+{
+	hs_platform_info_t plt;
+	hs_compile_error_t *hs_errors;
+	hs_database_t *db = NULL;
+
+	g_assert(hs_populate_platform(&plt) == HS_SUCCESS);
+
+	if (hs_compile_multi((const char *const *) mp->hs_pats->data,
+						 (const unsigned int *) mp->hs_flags->data,
+						 (const unsigned int *) mp->hs_ids->data,
+						 mp->cnt,
+						 HS_MODE_BLOCK,
+						 &plt,
+						 &db,
+						 &hs_errors) != HS_SUCCESS) {
+
+		g_set_error(err, rspamd_multipattern_quark(), EINVAL,
+					"cannot create tree of regexp when processing '%s': %s",
+					g_array_index(mp->hs_pats, char *, hs_errors->expression),
+					hs_errors->message);
+		hs_free_compile_error(hs_errors);
+		mp->state = RSPAMD_MP_STATE_FALLBACK;
+
+		return FALSE;
+	}
+
+	if (!(flags & RSPAMD_MULTIPATTERN_COMPILE_NO_FS)) {
+		if (hs_cache_dir != NULL) {
+			char fpath[PATH_MAX];
+			rspamd_snprintf(fpath, sizeof(fpath), "%s/%*xs.hs", hs_cache_dir,
+							(int) rspamd_cryptobox_HASHBYTES / 2, hash);
+			mp->hs_db = rspamd_hyperscan_from_raw_db(db, fpath);
+		}
+		else {
+			mp->hs_db = rspamd_hyperscan_from_raw_db(db, NULL);
+		}
+
+		rspamd_multipattern_try_save_hs(mp, hash);
+	}
+	else {
+		mp->hs_db = rspamd_hyperscan_from_raw_db(db, NULL);
+	}
+
+	if (!rspamd_multipattern_alloc_scratch(mp, err)) {
+		rspamd_hyperscan_free(mp->hs_db, true);
+		mp->hs_db = NULL;
+		mp->state = RSPAMD_MP_STATE_FALLBACK;
+
+		return FALSE;
+	}
+
+	mp->state = RSPAMD_MP_STATE_COMPILED;
+	return TRUE;
+}
+#endif
+
 gboolean
 rspamd_multipattern_compile(struct rspamd_multipattern *mp, int flags, GError **err)
 {
@@ -494,121 +652,82 @@ rspamd_multipattern_compile(struct rspamd_multipattern *mp, int flags, GError **
 	g_assert(!mp->compiled);
 
 #ifdef WITH_HYPERSCAN
-	if (rspamd_hs_check()) {
-		unsigned int i;
+	if (rspamd_hs_check() && mp->cnt > 0) {
 		hs_platform_info_t plt;
-		hs_compile_error_t *hs_errors;
 		unsigned char hash[rspamd_cryptobox_HASHBYTES];
+		gboolean has_tld_patterns = (mp->pats != NULL && mp->pats->len > 0);
 
-		if (mp->cnt > 0) {
-			g_assert(hs_populate_platform(&plt) == HS_SUCCESS);
-			rspamd_cryptobox_hash_update(&mp->hash_state, (void *) &plt, sizeof(plt));
-			rspamd_cryptobox_hash_final(&mp->hash_state, hash);
+		g_assert(hs_populate_platform(&plt) == HS_SUCCESS);
+		rspamd_cryptobox_hash_update(&mp->hash_state, (void *) &plt, sizeof(plt));
+		rspamd_cryptobox_hash_final(&mp->hash_state, hash);
 
-			if ((flags & RSPAMD_MULTIPATTERN_COMPILE_NO_FS) || !rspamd_multipattern_try_load_hs(mp, hash)) {
-				hs_database_t *db = NULL;
+		/* Build ACISM fallback for TLD patterns (only works if all patterns are TLD) */
+		if (has_tld_patterns) {
+			gboolean all_tld = (mp->pats->len == mp->cnt);
 
-				if (hs_compile_multi((const char *const *) mp->hs_pats->data,
-									 (const unsigned int *) mp->hs_flags->data,
-									 (const unsigned int *) mp->hs_ids->data,
-									 mp->cnt,
-									 HS_MODE_BLOCK,
-									 &plt,
-									 &db,
-									 &hs_errors) != HS_SUCCESS) {
+			mp->t = acism_create((const ac_trie_pat_t *) mp->pats->data, mp->pats->len);
+			mp->state = RSPAMD_MP_STATE_INIT;
+			mp->compiled = TRUE;
 
-					g_set_error(err, rspamd_multipattern_quark(), EINVAL,
-								"cannot create tree of regexp when processing '%s': %s",
-								g_array_index(mp->hs_pats, char *, hs_errors->expression),
-								hs_errors->message);
-					hs_free_compile_error(hs_errors);
-
-					return FALSE;
-				}
-
-				if (!(flags & RSPAMD_MULTIPATTERN_COMPILE_NO_FS)) {
-					if (hs_cache_dir != NULL) {
-						char fpath[PATH_MAX];
-						rspamd_snprintf(fpath, sizeof(fpath), "%s/%*xs.hs", hs_cache_dir,
-										(int) rspamd_cryptobox_HASHBYTES / 2, hash);
-						mp->hs_db = rspamd_hyperscan_from_raw_db(db, fpath);
-					}
-					else {
-						/* Should not happen in the real life */
-						mp->hs_db = rspamd_hyperscan_from_raw_db(db, NULL);
-					}
-
-					rspamd_multipattern_try_save_hs(mp, hash);
-				}
-				else {
-					mp->hs_db = rspamd_hyperscan_from_raw_db(db, NULL);
-				}
-			}
-
-			for (i = 0; i < MAX_SCRATCH; i++) {
-				mp->scratch[i] = NULL;
-			}
-
-			for (i = 0; i < MAX_SCRATCH; i++) {
-				int ret;
-
-				if ((ret = hs_alloc_scratch(rspamd_hyperscan_get_database(mp->hs_db), &mp->scratch[i])) != HS_SUCCESS) {
-					msg_err("cannot allocate scratch space for hyperscan: error code %d", ret);
-
-					/* Clean all scratches that are non-NULL */
-					for (int ii = 0; ii < MAX_SCRATCH; ii++) {
-						if (mp->scratch[ii] != NULL) {
-							hs_free_scratch(mp->scratch[ii]);
-						}
-					}
-					g_set_error(err, rspamd_multipattern_quark(), EINVAL,
-								"cannot allocate scratch space for hyperscan: error code %d", ret);
-
+			/* Try to load from cache first */
+			if (!(flags & RSPAMD_MULTIPATTERN_COMPILE_NO_FS) &&
+				rspamd_multipattern_try_load_hs(mp, hash)) {
+				/* Cache hit - allocate scratch and we're done */
+				if (!rspamd_multipattern_alloc_scratch(mp, err)) {
 					rspamd_hyperscan_free(mp->hs_db, true);
 					mp->hs_db = NULL;
-
-					return FALSE;
+					mp->state = RSPAMD_MP_STATE_FALLBACK;
+					g_clear_error(err);
 				}
+				else {
+					mp->state = RSPAMD_MP_STATE_COMPILED;
+				}
+				return TRUE;
 			}
+
+			/* Cache miss: async compile only for TLD-only patterns */
+			if (all_tld && !(flags & RSPAMD_MULTIPATTERN_COMPILE_NO_FS)) {
+				mp->state = RSPAMD_MP_STATE_COMPILING;
+				return TRUE;
+			}
+
+			/* Mixed patterns or NO_FS flag - sync compile */
+			if (!rspamd_multipattern_compile_hs_sync(mp, hash, flags, err)) {
+				/* HS failed but ACISM fallback is ready for TLD patterns */
+				g_clear_error(err);
+			}
+			return TRUE;
+		}
+
+		/* No TLD patterns: sync compile only (original behavior) */
+		if ((flags & RSPAMD_MULTIPATTERN_COMPILE_NO_FS) ||
+			!rspamd_multipattern_try_load_hs(mp, hash)) {
+
+			if (!rspamd_multipattern_compile_hs_sync(mp, hash, flags, err)) {
+				return FALSE;
+			}
+		}
+		else {
+			/* Cache hit */
+			if (!rspamd_multipattern_alloc_scratch(mp, err)) {
+				rspamd_hyperscan_free(mp->hs_db, true);
+				mp->hs_db = NULL;
+				return FALSE;
+			}
+			mp->state = RSPAMD_MP_STATE_COMPILED;
 		}
 
 		mp->compiled = TRUE;
-
 		return TRUE;
 	}
 #endif
 
-	if (mp->cnt > 0) {
-
-		if (mp->flags & (RSPAMD_MULTIPATTERN_GLOB | RSPAMD_MULTIPATTERN_RE)) {
-			/* Fallback to pcre... */
-			rspamd_regexp_t *re;
-			mp->res = g_array_sized_new(FALSE, TRUE,
-										sizeof(rspamd_regexp_t *), mp->cnt);
-
-			for (unsigned int i = 0; i < mp->cnt; i++) {
-				const ac_trie_pat_t *pat;
-				const char *pat_flags = NULL;
-
-				if (mp->flags & RSPAMD_MULTIPATTERN_UTF8) {
-					pat_flags = "u";
-				}
-
-				pat = &g_array_index(mp->pats, ac_trie_pat_t, i);
-				re = rspamd_regexp_new(pat->ptr, pat_flags, err);
-
-				if (re == NULL) {
-					return FALSE;
-				}
-
-				g_array_append_val(mp->res, re);
-			}
-		}
-		else {
-			mp->t = acism_create((const ac_trie_pat_t *) mp->pats->data, mp->cnt);
-		}
+	/* No hyperscan - build fallback */
+	if (!rspamd_multipattern_build_acism(mp, err)) {
+		return FALSE;
 	}
 
+	mp->state = RSPAMD_MP_STATE_INIT;
 	mp->compiled = TRUE;
 
 	return TRUE;
@@ -690,7 +809,8 @@ int rspamd_multipattern_lookup(struct rspamd_multipattern *mp,
 	cbd.ret = 0;
 
 #ifdef WITH_HYPERSCAN
-	if (rspamd_hs_check()) {
+	/* Use hyperscan if it's compiled and ready */
+	if (mp->state == RSPAMD_MP_STATE_COMPILED && mp->hs_db != NULL) {
 		hs_scratch_t *scr = NULL;
 		unsigned int i;
 
@@ -722,12 +842,30 @@ int rspamd_multipattern_lookup(struct rspamd_multipattern *mp,
 
 		return ret;
 	}
+
+	/*
+	 * For multipatterns with TLD patterns: use ACISM fallback while HS is compiling
+	 * pats array exists only for multipatterns that have TLD patterns
+	 */
+	if (mp->pats != NULL && mp->t != NULL) {
+		int acism_state = 0;
+
+		ret = acism_lookup(mp->t, in, len, rspamd_multipattern_acism_cb, &cbd,
+						   &acism_state, mp->flags & RSPAMD_MULTIPATTERN_ICASE);
+
+		if (pnfound) {
+			*pnfound = cbd.nfound;
+		}
+
+		return ret;
+	}
 #endif
 
-	int state = 0;
+	/* No hyperscan fallback path */
+	int acism_state = 0;
 
 	if (mp->flags & (RSPAMD_MULTIPATTERN_GLOB | RSPAMD_MULTIPATTERN_RE)) {
-		/* Terribly inefficient, but who cares - just use hyperscan */
+		/* Regex-based fallback for GLOB/RE patterns */
 		for (unsigned int i = 0; i < mp->cnt; i++) {
 			rspamd_regexp_t *re = g_array_index(mp->res, rspamd_regexp_t *, i);
 			const char *start = NULL, *end = NULL;
@@ -740,7 +878,6 @@ int rspamd_multipattern_lookup(struct rspamd_multipattern *mp,
 										TRUE,
 										NULL)) {
 				if (start >= end) {
-					/* We found all matches, so no more hits are possible (protect from empty patterns) */
 					break;
 				}
 				if (rspamd_multipattern_acism_cb(i, end - in, &cbd)) {
@@ -756,9 +893,9 @@ int rspamd_multipattern_lookup(struct rspamd_multipattern *mp,
 		}
 	}
 	else {
-		/* Plain trie */
+		/* ACISM trie for plain/TLD patterns */
 		ret = acism_lookup(mp->t, in, len, rspamd_multipattern_acism_cb, &cbd,
-						   &state, mp->flags & RSPAMD_MULTIPATTERN_ICASE);
+						   &acism_state, mp->flags & RSPAMD_MULTIPATTERN_ICASE);
 
 		if (pnfound) {
 			*pnfound = cbd.nfound;
@@ -786,6 +923,11 @@ void rspamd_multipattern_destroy(struct rspamd_multipattern *mp)
 				if (mp->hs_db) {
 					rspamd_hyperscan_free(mp->hs_db, false);
 				}
+
+				/* Clean up ACISM fallback if it was built */
+				if (mp->t) {
+					acism_destroy(mp->t);
+				}
 			}
 
 			for (i = 0; i < mp->cnt; i++) {
@@ -796,6 +938,19 @@ void rspamd_multipattern_destroy(struct rspamd_multipattern *mp)
 			g_array_free(mp->hs_pats, TRUE);
 			g_array_free(mp->hs_ids, TRUE);
 			g_array_free(mp->hs_flags, TRUE);
+
+			/* Clean up pats array if it exists (TLD patterns) */
+			if (mp->pats) {
+				ac_trie_pat_t pat;
+
+				for (i = 0; i < mp->pats->len; i++) {
+					pat = g_array_index(mp->pats, ac_trie_pat_t, i);
+					g_free((char *) pat.ptr);
+				}
+
+				g_array_free(mp->pats, TRUE);
+			}
+
 			free(mp); /* Due to posix_memalign */
 
 			return;
@@ -814,7 +969,7 @@ void rspamd_multipattern_destroy(struct rspamd_multipattern *mp)
 
 		g_array_free(mp->pats, TRUE);
 
-		g_free(mp);
+		free(mp); /* Due to posix_memalign */
 	}
 }
 
@@ -849,4 +1004,126 @@ gboolean
 rspamd_multipattern_has_hyperscan(void)
 {
 	return rspamd_hs_check();
+}
+
+enum rspamd_multipattern_state
+rspamd_multipattern_get_state(struct rspamd_multipattern *mp)
+{
+	g_assert(mp != NULL);
+
+	return mp->state;
+}
+
+gboolean
+rspamd_multipattern_is_hs_ready(struct rspamd_multipattern *mp)
+{
+	g_assert(mp != NULL);
+
+#ifdef WITH_HYPERSCAN
+	return mp->state == RSPAMD_MP_STATE_COMPILED && mp->hs_db != NULL;
+#else
+	return FALSE;
+#endif
+}
+
+void rspamd_multipattern_get_hash(struct rspamd_multipattern *mp,
+								  unsigned char *hash_out)
+{
+	g_assert(mp != NULL);
+	g_assert(hash_out != NULL);
+
+#ifdef WITH_HYPERSCAN
+	if (rspamd_hs_check()) {
+		hs_platform_info_t plt;
+		rspamd_cryptobox_hash_state_t hash_state;
+
+		rspamd_cryptobox_hash_init(&hash_state, NULL, 0);
+
+		/* Hash all patterns */
+		for (unsigned int i = 0; i < mp->cnt; i++) {
+			char *p = g_array_index(mp->hs_pats, char *, i);
+			rspamd_cryptobox_hash_update(&hash_state, p, strlen(p));
+		}
+
+		/* Include platform info */
+		g_assert(hs_populate_platform(&plt) == HS_SUCCESS);
+		rspamd_cryptobox_hash_update(&hash_state, (void *) &plt, sizeof(plt));
+
+		rspamd_cryptobox_hash_final(&hash_state, hash_out);
+		return;
+	}
+#endif
+
+	memset(hash_out, 0, rspamd_cryptobox_HASHBYTES);
+}
+
+void rspamd_multipattern_compile_async(struct rspamd_multipattern *mp,
+									   int flags,
+									   struct ev_loop *event_loop,
+									   rspamd_multipattern_compile_cb_t cb,
+									   void *ud)
+{
+	g_assert(mp != NULL);
+	g_assert(cb != NULL);
+
+	/* Placeholder for future hs_helper integration */
+	(void) event_loop;
+	(void) flags;
+
+#ifdef WITH_HYPERSCAN
+	if (mp->state == RSPAMD_MP_STATE_COMPILED) {
+		cb(mp, TRUE, NULL, ud);
+		return;
+	}
+#endif
+
+	GError *err = g_error_new(rspamd_multipattern_quark(), ENOTSUP,
+							  "async compile not yet implemented");
+	cb(mp, FALSE, err, ud);
+	g_error_free(err);
+}
+
+gboolean
+rspamd_multipattern_set_hs_db(struct rspamd_multipattern *mp, void *hs_db)
+{
+	g_assert(mp != NULL);
+
+#ifdef WITH_HYPERSCAN
+	if (!rspamd_hs_check()) {
+		return FALSE;
+	}
+
+	/* Free old database if exists */
+	if (mp->hs_db) {
+		for (unsigned int i = 0; i < MAX_SCRATCH; i++) {
+			if (mp->scratch[i]) {
+				hs_free_scratch(mp->scratch[i]);
+				mp->scratch[i] = NULL;
+			}
+		}
+		rspamd_hyperscan_free(mp->hs_db, false);
+	}
+
+	mp->hs_db = (rspamd_hyperscan_t *) hs_db;
+
+	/* Allocate scratch for new database */
+	GError *err = NULL;
+	if (!rspamd_multipattern_alloc_scratch(mp, &err)) {
+		msg_err("failed to allocate scratch for hot-swapped HS db: %s",
+				err ? err->message : "unknown error");
+		if (err) {
+			g_error_free(err);
+		}
+		rspamd_hyperscan_free(mp->hs_db, true);
+		mp->hs_db = NULL;
+		mp->state = RSPAMD_MP_STATE_FALLBACK;
+		return FALSE;
+	}
+
+	mp->state = RSPAMD_MP_STATE_COMPILED;
+	return TRUE;
+#else
+	(void) hs_db;
+	return FALSE;
+#endif
 }
