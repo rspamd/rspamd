@@ -567,7 +567,7 @@ void rspamd_url_init(const char *tld_file)
 		url_scanner->matchers_full = g_array_sized_new(FALSE, TRUE,
 													   sizeof(struct url_matcher), 13000);
 		url_scanner->search_trie_full = rspamd_multipattern_create_sized(13000,
-																		 RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8);
+																		 RSPAMD_MULTIPATTERN_TLD | RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8);
 	}
 	else {
 		url_scanner->matchers_full = NULL;
