@@ -54,7 +54,6 @@ struct RSPAMD_ALIGNED(64) rspamd_multipattern {
 	ac_trie_t *t;
 	GArray *pats;
 	GArray *res;
-	unsigned int acism_id_offset; /* ID offset for ACISM patterns (for mixed multipatterns) */
 
 	gboolean compiled;
 	unsigned int cnt;
@@ -104,9 +103,11 @@ rspamd_multipattern_escape_tld_hyperscan(const char *pattern, gsize slen,
 
 	/*
 	 * We understand the following cases
-	 * 1) blah -> .blah\b
-	 * 2) *.blah -> ..*\\.blah\b|$
-	 * 3) ???
+	 * 1) blah -> \.blah(?:[^a-zA-Z0-9]|$)
+	 * 2) *.blah -> \.blah(?:[^a-zA-Z0-9]|$)
+	 *
+	 * Note: We use (?:[^a-zA-Z0-9]|$) instead of \b because \b requires
+	 * HS_FLAG_UCP which we don't set for TLD patterns.
 	 */
 
 	if (pattern[0] == '*') {
@@ -129,7 +130,8 @@ rspamd_multipattern_escape_tld_hyperscan(const char *pattern, gsize slen,
 		len = slen + strlen(prefix);
 	}
 
-	suffix = "(:?\\b|$)";
+	/* Match end of TLD: either non-alphanumeric or end of string */
+	suffix = "(?:[^a-zA-Z0-9]|$)";
 	len += strlen(suffix);
 
 	res = g_malloc(len + 1);
@@ -270,6 +272,11 @@ rspamd_multipattern_create(enum rspamd_multipattern_flags flags)
 		mp->hs_ids = g_array_new(FALSE, TRUE, sizeof(int));
 		rspamd_cryptobox_hash_init(&mp->hash_state, NULL, 0);
 
+		/* For TLD multipatterns, also create pats array for ACISM fallback */
+		if (flags & RSPAMD_MULTIPATTERN_TLD) {
+			mp->pats = g_array_new(FALSE, TRUE, sizeof(ac_trie_pat_t));
+		}
+
 		return mp;
 	}
 #endif
@@ -299,6 +306,11 @@ rspamd_multipattern_create_sized(unsigned int npatterns,
 		mp->hs_ids = g_array_sized_new(FALSE, TRUE, sizeof(int), npatterns);
 		rspamd_cryptobox_hash_init(&mp->hash_state, NULL, 0);
 
+		/* For TLD multipatterns, also create pats array for ACISM fallback */
+		if (flags & RSPAMD_MULTIPATTERN_TLD) {
+			mp->pats = g_array_sized_new(FALSE, TRUE, sizeof(ac_trie_pat_t), npatterns);
+		}
+
 		return mp;
 	}
 #endif
@@ -320,10 +332,22 @@ void rspamd_multipattern_add_pattern_len(struct rspamd_multipattern *mp,
 										 const char *pattern, gsize patlen, int flags)
 {
 	gsize dlen;
+	gboolean is_tld = (mp->flags & RSPAMD_MULTIPATTERN_TLD);
 
 	g_assert(pattern != NULL);
 	g_assert(mp != NULL);
 	g_assert(!mp->compiled);
+
+	/*
+	 * For TLD multipatterns: always add to pats array for ACISM fallback
+	 */
+	if (is_tld) {
+		ac_trie_pat_t acism_pat;
+
+		acism_pat.ptr = rspamd_multipattern_escape_tld_acism(pattern, patlen, &dlen);
+		acism_pat.len = dlen;
+		g_array_append_val(mp->pats, acism_pat);
+	}
 
 #ifdef WITH_HYPERSCAN
 	if (rspamd_hs_check()) {
@@ -335,7 +359,7 @@ void rspamd_multipattern_add_pattern_len(struct rspamd_multipattern *mp,
 			fl |= HS_FLAG_CASELESS;
 		}
 		if (adjusted_flags & RSPAMD_MULTIPATTERN_UTF8) {
-			if (adjusted_flags & RSPAMD_MULTIPATTERN_TLD) {
+			if (is_tld) {
 				fl |= HS_FLAG_UTF8;
 			}
 			else {
@@ -360,34 +384,21 @@ void rspamd_multipattern_add_pattern_len(struct rspamd_multipattern *mp,
 		g_array_append_val(mp->hs_ids, fl);
 		rspamd_cryptobox_hash_update(&mp->hash_state, np, dlen);
 
-		/* For TLD patterns, also add to pats array for ACISM fallback */
-		if (adjusted_flags & RSPAMD_MULTIPATTERN_TLD) {
-			ac_trie_pat_t acism_pat;
-
-			/* Create pats array on demand for ACISM fallback */
-			if (mp->pats == NULL) {
-				mp->pats = g_array_new(FALSE, TRUE, sizeof(ac_trie_pat_t));
-				/* Record ID offset: first TLD pattern gets current cnt as its ID */
-				mp->acism_id_offset = mp->cnt;
-			}
-
-			acism_pat.ptr = rspamd_multipattern_escape_tld_acism(pattern, patlen, &dlen);
-			acism_pat.len = dlen;
-			g_array_append_val(mp->pats, acism_pat);
-		}
-
 		mp->cnt++;
 
 		return;
 	}
 #endif
 
-	ac_trie_pat_t pat;
+	/* Non-hyperscan path: add to pats for ACISM/regex fallback */
+	if (!is_tld) {
+		ac_trie_pat_t pat;
 
-	pat.ptr = rspamd_multipattern_pattern_filter(pattern, patlen, flags, &dlen);
-	pat.len = dlen;
+		pat.ptr = rspamd_multipattern_pattern_filter(pattern, patlen, flags, &dlen);
+		pat.len = dlen;
 
-	g_array_append_val(mp->pats, pat);
+		g_array_append_val(mp->pats, pat);
+	}
 
 	mp->cnt++;
 }
@@ -782,12 +793,13 @@ rspamd_multipattern_acism_cb(int strnum, int textpos, void *context)
 	struct rspamd_multipattern_cbdata *cbd = context;
 	int ret;
 	ac_trie_pat_t pat;
-	unsigned int actual_id;
 
 	pat = g_array_index(cbd->mp->pats, ac_trie_pat_t, strnum);
-	/* Adjust pattern ID by offset for mixed multipatterns */
-	actual_id = strnum + cbd->mp->acism_id_offset;
-	ret = cbd->cb(cbd->mp, actual_id, textpos - pat.len,
+	/*
+	 * For TLD multipatterns: strnum IS the pattern ID (0-based)
+	 * All patterns in the multipattern are TLD patterns, so no offset needed
+	 */
+	ret = cbd->cb(cbd->mp, strnum, textpos - pat.len,
 				  textpos, cbd->in, cbd->len, cbd->ud);
 
 	cbd->nfound++;
