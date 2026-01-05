@@ -348,8 +348,14 @@ define(["jquery", "app/common", "d3pie", "d3"],
                                 error: function (jqXHR, textStatus, errorThrown) {
                                     if (!(alerted in sessionStorage)) {
                                         sessionStorage.setItem(alerted, true);
-                                        common.alertMessage("alert-danger", neighbours_status[e].name + " > " +
-                                          "Cannot receive legacy stats data" + (errorThrown ? ": " + errorThrown : ""));
+                                        common.logError({
+                                            server: neighbours_status[e].name,
+                                            endpoint: "graph",
+                                            message: "Cannot receive legacy stats data" +
+                                                (errorThrown ? ": " + errorThrown : ""),
+                                            httpStatus: jqXHR.status,
+                                            errorType: "http_error"
+                                        });
                                     }
                                     process_node_stat(e);
                                 }

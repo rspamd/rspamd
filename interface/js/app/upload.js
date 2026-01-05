@@ -108,7 +108,13 @@ define(["jquery", "app/common", "app/libft"],
                 errorMessage: "Cannot upload data",
                 statusCode: {
                     404: function () {
-                        common.alertMessage("alert-danger", "Cannot upload data, no server found");
+                        common.logError({
+                            server: common.getServer(),
+                            endpoint: "checkv2",
+                            message: "Cannot upload data, no server found",
+                            httpStatus: 404,
+                            errorType: "http_error"
+                        });
                     },
                     500: function () {
                         common.alertMessage("alert-danger", "Cannot tokenize message: no text data");

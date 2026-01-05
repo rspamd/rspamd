@@ -144,8 +144,12 @@ define(["jquery", "app/common", "app/libft", "footable"],
                     function differentVersions(neighbours_data) {
                         const dv = neighbours_data.some((e) => e.version !== neighbours_data[0].version);
                         if (dv) {
-                            common.alertMessage("alert-danger",
-                                "Neighbours history backend versions do not match. Cannot display history.");
+                            common.logError({
+                                server: "Multi-server",
+                                endpoint: "history",
+                                message: "Neighbours history backend versions do not match. Cannot display history.",
+                                errorType: "data_inconsistency"
+                            });
                             return true;
                         }
                         return false;
