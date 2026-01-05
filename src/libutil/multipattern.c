@@ -54,6 +54,7 @@ struct RSPAMD_ALIGNED(64) rspamd_multipattern {
 	ac_trie_t *t;
 	GArray *pats;
 	GArray *res;
+	unsigned int acism_id_offset; /* ID offset for ACISM patterns (for mixed multipatterns) */
 
 	gboolean compiled;
 	unsigned int cnt;
@@ -366,6 +367,8 @@ void rspamd_multipattern_add_pattern_len(struct rspamd_multipattern *mp,
 			/* Create pats array on demand for ACISM fallback */
 			if (mp->pats == NULL) {
 				mp->pats = g_array_new(FALSE, TRUE, sizeof(ac_trie_pat_t));
+				/* Record ID offset: first TLD pattern gets current cnt as its ID */
+				mp->acism_id_offset = mp->cnt;
 			}
 
 			acism_pat.ptr = rspamd_multipattern_escape_tld_acism(pattern, patlen, &dlen);
@@ -443,6 +446,9 @@ rspamd_multipattern_try_load_hs(struct rspamd_multipattern *mp,
 		}
 		return FALSE;
 	}
+
+	/* Register the file so it won't be cleaned up */
+	rspamd_hyperscan_notice_known(fp);
 
 	return TRUE;
 }
@@ -776,9 +782,12 @@ rspamd_multipattern_acism_cb(int strnum, int textpos, void *context)
 	struct rspamd_multipattern_cbdata *cbd = context;
 	int ret;
 	ac_trie_pat_t pat;
+	unsigned int actual_id;
 
 	pat = g_array_index(cbd->mp->pats, ac_trie_pat_t, strnum);
-	ret = cbd->cb(cbd->mp, strnum, textpos - pat.len,
+	/* Adjust pattern ID by offset for mixed multipatterns */
+	actual_id = strnum + cbd->mp->acism_id_offset;
+	ret = cbd->cb(cbd->mp, actual_id, textpos - pat.len,
 				  textpos, cbd->in, cbd->len, cbd->ud);
 
 	cbd->nfound++;
