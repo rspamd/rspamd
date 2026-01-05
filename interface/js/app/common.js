@@ -625,7 +625,7 @@ define(["jquery", "nprogress"],
                     return new Promise((resolve, reject) => {
                         let textarea = null;
                         function cleanup(o) {
-                            if (o && o.parentNode) o.parentNode.removeChild(textarea);
+                            if (o && o.parentNode) o.parentNode.removeChild(o);
                         }
 
                         try {
