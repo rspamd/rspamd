@@ -586,11 +586,6 @@ void rspamd_url_init(const char *tld_file)
 		}
 	}
 
-	if (url_scanner->matchers_full && url_scanner->matchers_full->len > 1000) {
-		msg_info("start compiling of %d TLD suffixes; it might take a long time",
-				 url_scanner->matchers_full->len);
-	}
-
 	if (!rspamd_multipattern_compile(url_scanner->search_trie_strict, mp_compile_flags, &err)) {
 		msg_err("cannot compile url matcher static patterns, fatal error: %e", err);
 		abort();
@@ -608,7 +603,7 @@ void rspamd_url_init(const char *tld_file)
 
 	if (tld_file != NULL) {
 		if (ret) {
-			msg_info("initialized %ud url match suffixes from '%s'",
+			msg_info("loaded %ud TLD suffixes from '%s'",
 					 url_scanner->matchers_full->len - url_scanner->matchers_strict->len,
 					 tld_file);
 		}

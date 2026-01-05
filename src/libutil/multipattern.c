@@ -686,6 +686,8 @@ rspamd_multipattern_compile(struct rspamd_multipattern *mp, int flags, GError **
 			mp->state = RSPAMD_MP_STATE_INIT;
 			mp->compiled = TRUE;
 
+			msg_info("built ACISM fallback trie for %ud TLD patterns", mp->cnt);
+
 			/* Try to load from cache first */
 			if (!(flags & RSPAMD_MULTIPATTERN_COMPILE_NO_FS) &&
 				rspamd_multipattern_try_load_hs(mp, hash)) {
@@ -694,10 +696,14 @@ rspamd_multipattern_compile(struct rspamd_multipattern *mp, int flags, GError **
 					rspamd_hyperscan_free(mp->hs_db, true);
 					mp->hs_db = NULL;
 					mp->state = RSPAMD_MP_STATE_FALLBACK;
+					msg_warn("hyperscan cache loaded but scratch allocation failed, "
+							 "using ACISM fallback for %ud patterns",
+							 mp->cnt);
 					g_clear_error(err);
 				}
 				else {
 					mp->state = RSPAMD_MP_STATE_COMPILED;
+					msg_info("loaded hyperscan database from cache for %ud patterns", mp->cnt);
 				}
 				return TRUE;
 			}
@@ -705,12 +711,17 @@ rspamd_multipattern_compile(struct rspamd_multipattern *mp, int flags, GError **
 			/* Cache miss: async compile only for TLD-only patterns */
 			if (all_tld && !(flags & RSPAMD_MULTIPATTERN_COMPILE_NO_FS)) {
 				mp->state = RSPAMD_MP_STATE_COMPILING;
+				msg_info("hyperscan cache miss for %ud TLD patterns, using ACISM fallback "
+						 "until async compilation completes",
+						 mp->cnt);
 				return TRUE;
 			}
 
 			/* Mixed patterns or NO_FS flag - sync compile */
 			if (!rspamd_multipattern_compile_hs_sync(mp, hash, flags, err)) {
 				/* HS failed but ACISM fallback is ready for TLD patterns */
+				msg_warn("hyperscan compilation failed, using ACISM fallback for %ud patterns",
+						 mp->cnt);
 				g_clear_error(err);
 			}
 			return TRUE;
@@ -1142,6 +1153,7 @@ rspamd_multipattern_set_hs_db(struct rspamd_multipattern *mp, void *hs_db)
 	}
 
 	mp->state = RSPAMD_MP_STATE_COMPILED;
+	msg_info("hot-swapped to hyperscan database for %ud patterns", mp->cnt);
 	return TRUE;
 #else
 	(void) hs_db;
