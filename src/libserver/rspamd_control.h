@@ -39,6 +39,7 @@ enum rspamd_control_type {
 	RSPAMD_CONTROL_FUZZY_BLOCKED,
 	RSPAMD_CONTROL_WORKERS_SPAWNED,
 	RSPAMD_CONTROL_COMPOSITES_STATS,
+	RSPAMD_CONTROL_MULTIPATTERN_LOADED,
 	RSPAMD_CONTROL_MAX
 };
 
@@ -51,8 +52,9 @@ enum rspamd_srv_type {
 	RSPAMD_SRV_HEARTBEAT,
 	RSPAMD_SRV_HEALTH,
 	RSPAMD_SRV_NOTICE_HYPERSCAN_CACHE,
-	RSPAMD_SRV_FUZZY_BLOCKED,   /* Used to notify main process about a blocked ip */
-	RSPAMD_SRV_WORKERS_SPAWNED, /* Used to notify workers that all workers have been spawned */
+	RSPAMD_SRV_FUZZY_BLOCKED,       /* Used to notify main process about a blocked ip */
+	RSPAMD_SRV_WORKERS_SPAWNED,     /* Used to notify workers that all workers have been spawned */
+	RSPAMD_SRV_MULTIPATTERN_LOADED, /* Multipattern HS compiled and ready */
 };
 
 enum rspamd_log_pipe_type {
@@ -80,6 +82,10 @@ struct rspamd_control_command {
 			char scope[64]; /* Scope name, NULL means all scopes */
 			gsize fd_size;  /* Size of FD-based db, 0 if not using FD */
 		} hs_loaded;
+		struct {
+			char name[64];
+			char cache_dir[CONTROL_PATHLEN];
+		} mp_loaded;
 		struct {
 			char tag[32];
 			gboolean alive;
@@ -230,6 +236,11 @@ struct rspamd_srv_command {
 		struct {
 			unsigned int workers_count;
 		} workers_spawned;
+		/* Sent when a multipattern hyperscan db is compiled */
+		struct {
+			char name[64];
+			char cache_dir[CONTROL_PATHLEN];
+		} mp_loaded;
 	} cmd;
 };
 

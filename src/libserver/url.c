@@ -599,6 +599,11 @@ void rspamd_url_init(const char *tld_file)
 			g_error_free(err);
 			ret = FALSE;
 		}
+		else if (rspamd_multipattern_get_state(url_scanner->search_trie_full) ==
+				 RSPAMD_MP_STATE_COMPILING) {
+			/* Add to pending queue for hs_helper to compile */
+			rspamd_multipattern_add_pending(url_scanner->search_trie_full, "tld");
+		}
 	}
 
 	if (tld_file != NULL) {

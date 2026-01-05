@@ -240,6 +240,68 @@ void rspamd_multipattern_get_hash(struct rspamd_multipattern *mp,
 gboolean rspamd_multipattern_set_hs_db(struct rspamd_multipattern *mp,
 									   void *hs_db);
 
+/**
+ * Pending compilation entry for deferred HS compilation
+ */
+struct rspamd_multipattern_pending {
+	struct rspamd_multipattern *mp;
+	char *name;             /* Identifier for logging/IPC */
+	unsigned char hash[64]; /* Cache key hash (rspamd_cryptobox_HASHBYTES) */
+};
+
+/**
+ * Add multipattern to pending compilation queue.
+ * Called during pre-fork initialization when hs_helper is not yet available.
+ * @param mp multipattern in COMPILING state
+ * @param name identifier for this multipattern (e.g., "tld")
+ */
+void rspamd_multipattern_add_pending(struct rspamd_multipattern *mp,
+									 const char *name);
+
+/**
+ * Get list of pending multipattern compilations.
+ * Returns array of rspamd_multipattern_pending, caller must free array (not contents).
+ * @param count output: number of pending entries
+ * @return array of pending entries or NULL if none
+ */
+struct rspamd_multipattern_pending *rspamd_multipattern_get_pending(
+	unsigned int *count);
+
+/**
+ * Clear pending queue after hs_helper has processed it.
+ */
+void rspamd_multipattern_clear_pending(void);
+
+/**
+ * Find a pending multipattern by name.
+ * @param name identifier
+ * @return multipattern or NULL if not found
+ */
+struct rspamd_multipattern *rspamd_multipattern_find_pending(const char *name);
+
+/**
+ * Compile hyperscan database and save to cache file.
+ * This is called by hs_helper for async compilation.
+ * @param mp multipattern in COMPILING state
+ * @param cache_dir directory to save cache file
+ * @param err error output
+ * @return TRUE on success
+ */
+gboolean rspamd_multipattern_compile_hs_to_cache(struct rspamd_multipattern *mp,
+												 const char *cache_dir,
+												 GError **err);
+
+/**
+ * Load hyperscan database from cache file.
+ * This is called by workers when they receive notification that
+ * hs_helper has compiled a multipattern database.
+ * @param mp multipattern in COMPILING state
+ * @param cache_dir directory containing cache files
+ * @return TRUE if loaded successfully
+ */
+gboolean rspamd_multipattern_load_from_cache(struct rspamd_multipattern *mp,
+											 const char *cache_dir);
+
 #ifdef __cplusplus
 }
 #endif

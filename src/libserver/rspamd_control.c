@@ -1172,6 +1172,24 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 				}
 #endif
 				break;
+			case RSPAMD_SRV_MULTIPATTERN_LOADED:
+#ifdef WITH_HYPERSCAN
+				msg_info_main("received multipattern loaded notification for '%s' from %s",
+							  cmd.cmd.mp_loaded.name, cmd.cmd.mp_loaded.cache_dir);
+
+				/* Broadcast command to all workers */
+				memset(&wcmd, 0, sizeof(wcmd));
+				wcmd.type = RSPAMD_CONTROL_MULTIPATTERN_LOADED;
+				rspamd_strlcpy(wcmd.cmd.mp_loaded.name,
+							   cmd.cmd.mp_loaded.name,
+							   sizeof(wcmd.cmd.mp_loaded.name));
+				rspamd_strlcpy(wcmd.cmd.mp_loaded.cache_dir,
+							   cmd.cmd.mp_loaded.cache_dir,
+							   sizeof(wcmd.cmd.mp_loaded.cache_dir));
+				rspamd_control_broadcast_cmd(rspamd_main, &wcmd, rfd,
+											 rspamd_control_ignore_io_handler, NULL, worker->pid);
+#endif
+				break;
 			case RSPAMD_SRV_MONITORED_CHANGE:
 				/* Broadcast command to all workers */
 				memset(&wcmd, 0, sizeof(wcmd));
@@ -1527,6 +1545,12 @@ rspamd_control_command_to_string(enum rspamd_control_type cmd)
 	case RSPAMD_CONTROL_COMPOSITES_STATS:
 		reply = "composites_stats";
 		break;
+	case RSPAMD_CONTROL_FUZZY_BLOCKED:
+		reply = "fuzzy_blocked";
+		break;
+	case RSPAMD_CONTROL_MULTIPATTERN_LOADED:
+		reply = "multipattern_loaded";
+		break;
 	default:
 		break;
 	}
@@ -1568,6 +1592,9 @@ const char *rspamd_srv_command_to_string(enum rspamd_srv_type cmd)
 		break;
 	case RSPAMD_SRV_WORKERS_SPAWNED:
 		reply = "workers_spawned";
+		break;
+	case RSPAMD_SRV_MULTIPATTERN_LOADED:
+		reply = "multipattern_loaded";
 		break;
 	}
 

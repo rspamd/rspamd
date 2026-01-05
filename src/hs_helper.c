@@ -15,6 +15,7 @@
  */
 #include "config.h"
 #include "libutil/util.h"
+#include "libutil/multipattern.h"
 #include "libserver/cfg_file.h"
 #include "libserver/cfg_rcl.h"
 #include "libserver/worker_util.h"
@@ -24,6 +25,7 @@
 
 #ifdef WITH_HYPERSCAN
 #include "libserver/hyperscan_tools.h"
+#include "hs.h"
 #endif
 
 #ifdef HAVE_GLOB_H
@@ -592,6 +594,72 @@ rspamd_hs_helper_reload(struct rspamd_main *rspamd_main,
 	return TRUE;
 }
 
+#ifdef WITH_HYPERSCAN
+/*
+ * Compile pending multipatterns that were queued during pre-fork initialization
+ */
+static void
+rspamd_hs_helper_compile_pending_multipatterns(struct hs_helper_ctx *ctx,
+											   struct rspamd_worker *worker)
+{
+	struct rspamd_multipattern_pending *pending;
+	unsigned int count = 0;
+
+	pending = rspamd_multipattern_get_pending(&count);
+	if (pending == NULL || count == 0) {
+		msg_debug("no pending multipattern compilations");
+		return;
+	}
+
+	msg_info("processing %ud pending multipattern compilations", count);
+
+	for (unsigned int i = 0; i < count; i++) {
+		struct rspamd_multipattern_pending *entry = &pending[i];
+		struct rspamd_multipattern *mp = entry->mp;
+		unsigned int npatterns;
+		char fp[PATH_MAX];
+		GError *err = NULL;
+
+		npatterns = rspamd_multipattern_get_npatterns(mp);
+		msg_info("compiling multipattern '%s' with %ud patterns", entry->name, npatterns);
+
+		/* Build cache file path */
+		rspamd_snprintf(fp, sizeof(fp), "%s/%*xs.hs", ctx->hs_dir,
+						(int) sizeof(entry->hash) / 2, entry->hash);
+
+		/* Check if cache file already exists (race with another process) */
+		if (access(fp, R_OK) == 0) {
+			msg_info("cache file %s already exists for multipattern '%s', skipping compilation",
+					 fp, entry->name);
+		}
+		else {
+			/* Compile and save to cache */
+			if (!rspamd_multipattern_compile_hs_to_cache(mp, ctx->hs_dir, &err)) {
+				msg_err("failed to compile multipattern '%s': %e", entry->name, err);
+				if (err) {
+					g_error_free(err);
+				}
+				continue;
+			}
+		}
+
+		/* Send notification to main process */
+		struct rspamd_srv_command srv_cmd;
+		memset(&srv_cmd, 0, sizeof(srv_cmd));
+		srv_cmd.type = RSPAMD_SRV_MULTIPATTERN_LOADED;
+		rspamd_strlcpy(srv_cmd.cmd.mp_loaded.name, entry->name,
+					   sizeof(srv_cmd.cmd.mp_loaded.name));
+		rspamd_strlcpy(srv_cmd.cmd.mp_loaded.cache_dir, ctx->hs_dir,
+					   sizeof(srv_cmd.cmd.mp_loaded.cache_dir));
+
+		rspamd_srv_send_command(worker, ctx->event_loop, &srv_cmd, -1, NULL, NULL);
+		msg_info("sent multipattern loaded notification for '%s'", entry->name);
+	}
+
+	rspamd_multipattern_clear_pending();
+}
+#endif
+
 static gboolean
 rspamd_hs_helper_workers_spawned(struct rspamd_main *rspamd_main,
 								 struct rspamd_worker *worker, int fd,
@@ -643,6 +711,11 @@ rspamd_hs_helper_workers_spawned(struct rspamd_main *rspamd_main,
 			msg_warn("initial hyperscan compilation failed or not needed");
 		}
 	}
+
+#ifdef WITH_HYPERSCAN
+	/* Process pending multipattern compilations (e.g., TLD patterns) */
+	rspamd_hs_helper_compile_pending_multipatterns(ctx, worker);
+#endif
 
 	if (attached_fd != -1) {
 		close(attached_fd);

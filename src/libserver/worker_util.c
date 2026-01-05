@@ -58,6 +58,7 @@
 #include "contrib/libev/ev.h"
 #include "libstat/stat_api.h"
 #include "libserver/protocol_internal.h"
+#include "libutil/multipattern.h"
 
 struct rspamd_worker *rspamd_current_worker = NULL;
 
@@ -1959,6 +1960,52 @@ rspamd_worker_hyperscan_ready(struct rspamd_main *rspamd_main,
 
 	return TRUE;
 }
+
+static gboolean
+rspamd_worker_multipattern_ready(struct rspamd_main *rspamd_main,
+								 struct rspamd_worker *worker, int fd,
+								 int attached_fd,
+								 struct rspamd_control_command *cmd,
+								 gpointer ud)
+{
+	struct rspamd_control_reply rep;
+	struct rspamd_multipattern *mp;
+	const char *name = cmd->cmd.mp_loaded.name;
+	const char *cache_dir = cmd->cmd.mp_loaded.cache_dir;
+
+	memset(&rep, 0, sizeof(rep));
+	rep.type = RSPAMD_CONTROL_MULTIPATTERN_LOADED;
+
+	mp = rspamd_multipattern_find_pending(name);
+
+	if (mp != NULL) {
+		if (rspamd_multipattern_load_from_cache(mp, cache_dir)) {
+			msg_info("multipattern '%s' hot-swapped to hyperscan", name);
+			rep.reply.hs_loaded.status = 0;
+		}
+		else {
+			msg_warn("failed to load multipattern '%s' from cache, "
+					 "continuing with ACISM fallback",
+					 name);
+			rep.reply.hs_loaded.status = ENOENT;
+		}
+	}
+	else {
+		msg_warn("received multipattern notification for unknown '%s'", name);
+		rep.reply.hs_loaded.status = ENOENT;
+	}
+
+	if (write(fd, &rep, sizeof(rep)) != sizeof(rep)) {
+		msg_err("cannot write reply to the control socket: %s",
+				strerror(errno));
+	}
+
+	if (attached_fd >= 0) {
+		close(attached_fd);
+	}
+
+	return TRUE;
+}
 #endif /* With Hyperscan */
 
 gboolean
@@ -2054,6 +2101,10 @@ void rspamd_worker_init_scanner(struct rspamd_worker *worker,
 	rspamd_control_worker_add_cmd_handler(worker,
 										  RSPAMD_CONTROL_HYPERSCAN_LOADED,
 										  rspamd_worker_hyperscan_ready,
+										  NULL);
+	rspamd_control_worker_add_cmd_handler(worker,
+										  RSPAMD_CONTROL_MULTIPATTERN_LOADED,
+										  rspamd_worker_multipattern_ready,
 										  NULL);
 #endif
 	rspamd_control_worker_add_cmd_handler(worker,
