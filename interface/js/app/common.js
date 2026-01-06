@@ -57,6 +57,156 @@ define(["jquery", "nprogress"],
             }, 5000);
         }
 
+        // Forward declare updateErrorBadge to resolve circular dependency
+        // This function is called by errorLog methods but uses errorLog data
+        // Safe due to hoisting: function is called AFTER errorLog initialization
+        function updateErrorBadge() {
+            const unseenCount = errorLog.getUnseenCount(); // eslint-disable-line no-use-before-define
+            const totalCount = errorLog.errors.length; // eslint-disable-line no-use-before-define
+            const badge = $("#error-log-badge");
+            const counter = $("#error-count");
+
+            // Show badge if there are any errors
+            if (totalCount > 0) {
+                badge.removeClass("d-none");
+                // Show counter only if there are unseen errors
+                if (unseenCount > 0) {
+                    counter.removeClass("d-none");
+                    counter.text(unseenCount);
+                } else {
+                    counter.addClass("d-none");
+                }
+            } else {
+                badge.addClass("d-none");
+            }
+        }
+
+        // Error log storage
+        const errorLog = {
+            errors: [],
+            maxSize: 50,
+            lastViewedIndex: -1, // Track last viewed error for "unseen" counter
+
+            add(entry) {
+                this.errors.push({
+                    timestamp: new Date(),
+                    server: entry.server ?? "Unknown",
+                    endpoint: entry.endpoint ?? "",
+                    message: entry.message ?? "Unknown error",
+                    httpStatus: entry.httpStatus ?? null,
+                    errorType: entry.errorType ?? "unknown"
+                });
+
+                // Keep last 50 errors
+                if (this.errors.length > this.maxSize) {
+                    this.errors.shift();
+                    // Adjust lastViewedIndex after shift
+                    if (this.lastViewedIndex >= 0) {
+                        this.lastViewedIndex--;
+                    }
+                }
+
+                updateErrorBadge();
+            },
+
+            clear() {
+                this.errors = [];
+                this.lastViewedIndex = -1;
+                updateErrorBadge();
+            },
+
+            getAll() {
+                return this.errors;
+            },
+
+            markAsViewed() {
+                // Mark all current errors as viewed
+                this.lastViewedIndex = this.errors.length - 1;
+                updateErrorBadge();
+            },
+
+            getUnseenCount() {
+                // Return count of errors added since last view
+                return Math.max(0, this.errors.length - this.lastViewedIndex - 1);
+            }
+        };
+
+        function updateErrorLogTable() {
+            const tbody = $("#errorLogTable tbody");
+            const noErrors = $("#noErrorsMessage");
+            const copyBtn = $("#copyErrorLog");
+            const clearBtn = $("#clearErrorLog");
+
+            tbody.empty();
+
+            const hasErrors = errorLog.errors.length > 0;
+
+            if (!hasErrors) {
+                $("#errorLogTable").hide();
+                noErrors.show();
+                copyBtn.prop("disabled", true);
+                clearBtn.prop("disabled", true);
+                return;
+            }
+
+            $("#errorLogTable").show();
+            noErrors.hide();
+            copyBtn.prop("disabled", false);
+            clearBtn.prop("disabled", false);
+
+            // Show errors in reverse chronological order (newest first)
+            errorLog.errors.slice().reverse().forEach((err) => {
+                const time = ui.locale
+                    ? err.timestamp.toLocaleString(ui.locale)
+                    : err.timestamp.toLocaleString();
+                const status = err.httpStatus ?? "-";
+                const row = $("<tr></tr>");
+
+                // Map error types to Bootstrap badge colors
+                const errorTypeColors = {
+                    auth: "text-bg-danger",
+                    network: "text-bg-primary",
+                    timeout: "text-bg-info",
+                    http_error: "text-bg-warning",
+                    data_inconsistency: "text-bg-secondary"
+                };
+                const badgeClass = errorTypeColors[err.errorType] || "text-bg-secondary";
+
+                // Column order: Time | Error | Server | Endpoint | HTTP Status | Type
+                row.append($('<td class="text-nowrap"></td>').text(time));
+                row.append($("<td></td>").text(err.message));
+                row.append($('<td class="d-none d-sm-table-cell"></td>').text(err.server));
+                row.append($('<td class="d-none d-md-table-cell"></td>')
+                    .append($('<code class="small"></code>').text(err.endpoint)));
+                row.append($('<td class="d-none d-lg-table-cell text-center"></td>').text(status));
+                row.append($('<td class="d-none d-lg-table-cell"></td>')
+                    .append($(`<span class="badge ${badgeClass}"></span>`).text(err.errorType)));
+                tbody.append(row);
+            });
+        }
+
+        /**
+         * Log error and optionally show alert message
+         *
+         * @param {Object} options - Error details
+         * @param {string} options.server - Server name or "Multi-server" for cluster-wide issues
+         * @param {string} [options.endpoint=""] - API endpoint or empty string
+         * @param {string} options.message - Error message
+         * @param {number} [options.httpStatus=null] - HTTP status code or null
+         * @param {string} options.errorType - Error type: timeout|auth|http_error|network|data_inconsistency
+         * @param {boolean} [options.showAlert=true] - Whether to show alert message
+         */
+        function logError({httpStatus, endpoint, errorType, message, server, showAlert}) {
+            errorLog.add({httpStatus, endpoint, errorType, message, server});
+
+            if (showAlert !== false) {
+                const fullMessage = (server !== "Multi-server")
+                    ? server + " > " + message
+                    : message;
+                alertMessage("alert-danger", fullMessage);
+            }
+        }
+
         /**
          * Perform a request to a single Rspamd neighbour server.
          *
@@ -102,23 +252,42 @@ define(["jquery", "nprogress"],
                 },
                 error: function (jqXHR, textStatus, errorThrown) {
                     neighbours_status[ind].checked = true;
-                    function errorMessage() {
-                        alertMessage("alert-danger", neighbours_status[ind].name + " > " +
-                            (o.errorMessage ? o.errorMessage : "Request failed") +
-                            (errorThrown ? ": " + errorThrown : ""));
+
+                    // Determine error type and create detailed message
+                    let errorType = "network";
+                    let detailedMessage = errorThrown || "Request failed";
+
+                    if (textStatus === "timeout") {
+                        errorType = "timeout";
+                        detailedMessage = "Request timeout";
+                    } else if (jqXHR.status === 401 || jqXHR.status === 403) {
+                        errorType = "auth";
+                        detailedMessage = "Authentication failed";
+                    } else if (jqXHR.status >= 400 && jqXHR.status < 600) {
+                        errorType = "http_error";
+                        detailedMessage = "HTTP " + jqXHR.status + (errorThrown ? ": " + errorThrown : "");
+                    } else if (textStatus === "error" && jqXHR.status === 0) {
+                        errorType = "network";
+                        detailedMessage = "Network error";
                     }
-                    if (o.error) {
-                        o.error(neighbours_status[ind],
-                            jqXHR, textStatus, errorThrown);
-                    } else if (o.errorOnceId) {
-                        const alert_status = o.errorOnceId + neighbours_status[ind].name;
-                        if (!(alert_status in sessionStorage)) {
-                            sessionStorage.setItem(alert_status, true);
-                            errorMessage();
-                        }
-                    } else {
-                        errorMessage();
+
+                    // Log error and show alert
+                    const shouldShowAlert = !o.error &&
+                        !(o.errorOnceId && (o.errorOnceId + neighbours_status[ind].name) in sessionStorage);
+                    if (o.errorOnceId && shouldShowAlert) {
+                        sessionStorage.setItem(o.errorOnceId + neighbours_status[ind].name, true);
                     }
+                    logError({
+                        server: neighbours_status[ind].name,
+                        endpoint: req_url,
+                        message: o.errorMessage ? o.errorMessage + ": " + detailedMessage : detailedMessage,
+                        httpStatus: jqXHR.status,
+                        errorType: errorType,
+                        showAlert: shouldShowAlert
+                    });
+
+                    // Call custom error handler if provided
+                    if (o.error) o.error(neighbours_status[ind], jqXHR, textStatus, errorThrown);
                 },
                 complete: function (jqXHR) {
                     if (neighbours_status.every((elt) => elt.checked)) {
@@ -153,6 +322,7 @@ define(["jquery", "nprogress"],
 
         ui.alertMessage = alertMessage;
         ui.getPassword = getPassword;
+        ui.logError = logError;
 
         // Get selectors' current state
         ui.getSelector = function (id) {
@@ -404,6 +574,121 @@ define(["jquery", "nprogress"],
                 $(fileInput).on("change", (e) => handleFileInput(e.target));
             }
         };
+
+        // Error log event handlers
+        $(document).ready(() => {
+            // Update error log table when modal is shown
+            $("#errorLogModal").on("show.bs.modal", () => {
+                updateErrorLogTable();
+                // Mark all errors as viewed when modal is opened
+                errorLog.markAsViewed();
+            });
+
+            // Clear error log
+            $("#clearErrorLog").on("click", () => {
+                errorLog.clear();
+                updateErrorLogTable();
+            });
+
+            // Copy to clipboard
+            $("#copyErrorLog").on("click", () => {
+                if (errorLog.errors.length === 0) return;
+
+                const selection = window.getSelection();
+                let textToCopy = "";
+
+                // Check if user has selected text in the table
+                if (selection.toString().trim().length > 0) {
+                    textToCopy = selection.toString();
+                } else {
+                    // Copy entire log
+                    const headers = ["Time", "Error", "Server", "Endpoint", "HTTP Status", "Type"];
+                    textToCopy = headers.join("\t") + "\n";
+
+                    errorLog.errors.slice().reverse().forEach((err) => {
+                        const time = ui.locale
+                            ? err.timestamp.toLocaleString(ui.locale)
+                            : err.timestamp.toLocaleString();
+                        const status = err.httpStatus ?? "-";
+                        const row = [time, err.message, err.server, err.endpoint, status, err.errorType];
+                        textToCopy += row.join("\t") + "\n";
+                    });
+                }
+
+                // Copy to clipboard with fallback for HTTP
+                function copyToClipboard(text) {
+                    // Try modern Clipboard API first (HTTPS only)
+                    const clip = navigator.clipboard;
+                    if (clip && clip.writeText) return clip.writeText(text);
+
+                    // Fallback for HTTP or older browsers using execCommand
+                    return new Promise((resolve, reject) => {
+                        let textarea = null;
+                        function cleanup(o) {
+                            if (o && o.parentNode) o.parentNode.removeChild(o);
+                        }
+
+                        try {
+                            textarea = document.createElement("textarea");
+                            textarea.value = text;
+
+                            // Critical: must be visible and in viewport for some browsers
+                            textarea.style.position = "fixed";
+                            textarea.style.top = "50%";
+                            textarea.style.left = "50%";
+                            textarea.style.width = "1px";
+                            textarea.style.height = "1px";
+                            textarea.style.padding = "0";
+                            textarea.style.border = "none";
+                            textarea.style.outline = "none";
+                            textarea.style.boxShadow = "none";
+                            textarea.style.background = "transparent";
+                            textarea.style.zIndex = "99999";
+
+                            // Add to modal body instead of document.body to avoid focus trap
+                            const modalBody = document.querySelector("#errorLogModal .modal-body");
+                            if (modalBody) {
+                                modalBody.appendChild(textarea);
+                            } else {
+                                document.body.appendChild(textarea);
+                            }
+
+                            // Force reflow to ensure textarea is rendered
+                            textarea.offsetHeight; // eslint-disable-line no-unused-expressions
+
+                            // Select all text
+                            textarea.focus();
+                            textarea.select();
+                            textarea.setSelectionRange(0, textarea.value.length);
+
+                            // Execute copy immediately while focused
+                            const successful = document.execCommand("copy");
+
+                            cleanup(textarea);
+
+                            if (successful) {
+                                resolve();
+                            } else {
+                                reject(new Error("Copy command failed (execCommand returned false)"));
+                            }
+                        } catch (err) {
+                            cleanup(textarea);
+                            reject(err);
+                        }
+                    });
+                }
+
+                copyToClipboard(textToCopy)
+                    .then(() => {
+                        // Show success feedback
+                        const btn = $("#copyErrorLog");
+                        const originalHtml = btn.html();
+                        btn.html('<i class="fas fa-check"></i> Copied!');
+                        setTimeout(() => btn.html(originalHtml), 2000);
+                    })
+                    .catch((err) => alertMessage("alert-danger", "Failed to copy to clipboard: " + err.message));
+            });
+        });
 
         return ui;
     });

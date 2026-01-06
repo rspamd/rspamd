@@ -809,6 +809,62 @@
 	</div>
 </div>
 
+<!-- Error Log Badge -->
+<div id="error-log-badge" class="position-fixed bottom-0 end-0 m-3 d-none" style="z-index: 1050;">
+	<button class="btn btn-sm btn-danger bg-light bg-opacity-75 text-danger shadow position-relative"
+			data-bs-toggle="modal"
+			data-bs-target="#errorLogModal"
+			title="View backend API interaction errors"
+			aria-label="View backend API interaction errors">
+		<i class="fas fa-exclamation-triangle"></i>
+		<span id="error-count" class="badge text-bg-warning bg-opacity-100 position-absolute top-0 start-100 translate-middle d-none">0</span>
+	</button>
+</div>
+
+<!-- Backend API Interaction Errors Modal -->
+<div class="modal fade" id="errorLogModal" tabindex="-1" aria-labelledby="errorLogModalLabel" aria-hidden="true">
+	<div class="modal-dialog modal-xl modal-dialog-scrollable">
+		<div class="modal-content">
+			<div class="modal-header text-secondary py-2 d-flex align-items-center">
+				<span class="icon me-3"><i class="fas fa-exclamation-triangle"></i></span>
+				<span class="h6 fw-bolder my-auto" id="errorLogModalLabel">Backend API interaction errors</span>
+				<button type="button" class="btn-close ms-auto" data-bs-dismiss="modal" aria-label="Close"></button>
+			</div>
+			<div class="modal-body">
+				<div class="table-responsive">
+					<table class="table table-sm table-hover table-striped" id="errorLogTable">
+						<thead>
+							<tr>
+								<th class="text-nowrap">Time</th>
+								<th>Error</th>
+								<th class="d-none d-sm-table-cell">Server</th>
+								<th class="d-none d-md-table-cell">Endpoint</th>
+								<th class="d-none d-lg-table-cell text-center">HTTP status</th>
+								<th class="d-none d-lg-table-cell">Type</th>
+							</tr>
+						</thead>
+						<tbody>
+							<!-- Populated dynamically -->
+						</tbody>
+					</table>
+				</div>
+				<p class="text-muted text-center" id="noErrorsMessage" style="display: none;">
+					No errors recorded in this session
+				</p>
+			</div>
+			<div class="modal-footer py-1">
+				<button type="button" class="btn btn-secondary" id="copyErrorLog" title="Copy selection or entire log" disabled>
+					<i class="fas fa-copy"></i> Copy to clipboard
+				</button>
+				<button type="button" class="btn btn-secondary" id="clearErrorLog" disabled>
+					<i class="fas fa-trash-can"></i> Clear log
+				</button>
+				<button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+			</div>
+		</div>
+	</div>
+</div>
+
 <script data-main="./js/main.js" src="./js/lib/require.min.js"></script>
 </body>
 </html>
