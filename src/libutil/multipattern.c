@@ -738,9 +738,26 @@ rspamd_multipattern_compile(struct rspamd_multipattern *mp, int flags, GError **
 		rspamd_cryptobox_hash_update(&mp->hash_state, (void *) &plt, sizeof(plt));
 		rspamd_cryptobox_hash_final(&mp->hash_state, hash);
 
-		/* FALLBACK mode: build ACISM first for immediate use */
+		/* FALLBACK mode: try file cache first, build ACISM only on cache miss */
 		if (mp->mode == RSPAMD_MP_MODE_FALLBACK && has_acism_patterns) {
-			/* Build temporary ac_trie_pat_t array for acism_create */
+			/* Try to load from file cache first - if hit, skip ACISM building */
+			if (!(flags & RSPAMD_MULTIPATTERN_COMPILE_NO_FS) &&
+				rspamd_multipattern_try_load_hs(mp, hash)) {
+				if (!rspamd_multipattern_alloc_scratch(mp, err)) {
+					rspamd_hyperscan_free(mp->hs_db, true);
+					mp->hs_db = NULL;
+					g_clear_error(err);
+					/* Fall through to build ACISM */
+				}
+				else {
+					mp->state = RSPAMD_MP_STATE_COMPILED;
+					mp->compiled = TRUE;
+					msg_debug_multipattern("loaded hyperscan from cache, skipping ACISM build");
+					return TRUE;
+				}
+			}
+
+			/* Cache miss or scratch failed - build ACISM for fallback */
 			ac_trie_pat_t *tmp_pats = g_new(ac_trie_pat_t, mp->pats->len);
 			for (unsigned int i = 0; i < mp->pats->len; i++) {
 				struct rspamd_acism_pat *ap = &g_array_index(mp->pats,
@@ -755,23 +772,7 @@ rspamd_multipattern_compile(struct rspamd_multipattern *mp, int flags, GError **
 
 			msg_debug_multipattern("built ACISM fallback trie for %ud patterns", mp->pats->len);
 
-			/* Try to load from cache */
-			if (!(flags & RSPAMD_MULTIPATTERN_COMPILE_NO_FS) &&
-				rspamd_multipattern_try_load_hs(mp, hash)) {
-				if (!rspamd_multipattern_alloc_scratch(mp, err)) {
-					rspamd_hyperscan_free(mp->hs_db, true);
-					mp->hs_db = NULL;
-					mp->state = RSPAMD_MP_STATE_FALLBACK;
-					g_clear_error(err);
-				}
-				else {
-					mp->state = RSPAMD_MP_STATE_COMPILED;
-					msg_debug_multipattern("loaded hyperscan from cache");
-				}
-				return TRUE;
-			}
-
-			/* Cache miss - mark for async compilation */
+			/* Mark for async compilation (hs_helper will compile and notify) */
 			if (!(flags & RSPAMD_MULTIPATTERN_COMPILE_NO_FS)) {
 				mp->state = RSPAMD_MP_STATE_COMPILING;
 				msg_debug_multipattern("cache miss, queued for async compile");
