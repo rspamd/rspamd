@@ -196,8 +196,13 @@ define(["jquery", "app/common", "d3evolution", "d3pie", "d3", "footable"],
                             if ((curr[0][0].x !== res[0][0].x) ||
                             (curr[0][curr[0].length - 1].x !== res[0][res[0].length - 1].x)) {
                                 time_match = false;
-                                common.alertMessage("alert-danger",
-                                    "Neighbours time extents do not match. Check if time is synchronized on all servers.");
+                                common.logError({
+                                    server: "Multi-server",
+                                    endpoint: "graph",
+                                    message: "Neighbours time extents do not match. " +
+                                        "Check if time is synchronized on all servers.",
+                                    errorType: "data_inconsistency"
+                                });
                                 arr.splice(1); // Break out of .reduce() by mutating the source array
                             }
                             return curr;

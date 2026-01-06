@@ -749,6 +749,15 @@ table#symbolsTable input[type="number"] {
     }
 }
 
+/* Error log badge: enable hover effect on semi-transparent button */
+#error-log-badge .btn:hover {
+    background-color: var(--bs-danger) !important;
+    color: var(--bs-white) !important;
+}
+[data-theme="dark"] #error-log-badge .btn:hover {
+    border-color: var(--bs-light);
+}
+
 /* Dark mode overrides for Bootstrap tables */
 [data-theme="dark"] .table {
     --bs-table-color-state: var(--rspamd-text-primary);
