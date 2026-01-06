@@ -568,6 +568,8 @@ void rspamd_url_init(const char *tld_file)
 													   sizeof(struct url_matcher), 13000);
 		url_scanner->search_trie_full = rspamd_multipattern_create_sized(13000,
 																		 RSPAMD_MULTIPATTERN_TLD | RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8);
+		/* Use FALLBACK mode: ACISM immediately, HS async */
+		rspamd_multipattern_set_mode(url_scanner->search_trie_full, RSPAMD_MP_MODE_FALLBACK);
 	}
 	else {
 		url_scanner->matchers_full = NULL;

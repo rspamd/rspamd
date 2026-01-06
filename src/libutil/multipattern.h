@@ -53,6 +53,16 @@ enum rspamd_multipattern_state {
 	RSPAMD_MP_STATE_FALLBACK   /* HS failed, ACISM permanent */
 };
 
+/**
+ * Multipattern compilation mode - controls how the multipattern is compiled
+ * This is a property of the multipattern as a whole, not per-pattern.
+ */
+enum rspamd_multipattern_mode {
+	RSPAMD_MP_MODE_SYNC = 0, /* Sync compile immediately (original behavior) */
+	RSPAMD_MP_MODE_FALLBACK, /* ACISM fallback + async HS compile (for TLD trie) */
+	RSPAMD_MP_MODE_LAZY,     /* Async HS compile, no fallback (generic multipatterns) */
+};
+
 struct rspamd_multipattern;
 struct rspamd_cryptobox_library_ctx;
 struct ev_loop;
@@ -121,6 +131,14 @@ struct rspamd_multipattern *rspamd_multipattern_create_full(
 	const char **patterns,
 	unsigned int npatterns,
 	enum rspamd_multipattern_flags flags);
+
+/**
+ * Set compilation mode for multipattern (must be called before compile)
+ * @param mp
+ * @param mode compilation mode (SYNC, FALLBACK, or LAZY)
+ */
+void rspamd_multipattern_set_mode(struct rspamd_multipattern *mp,
+								  enum rspamd_multipattern_mode mode);
 
 /**
  * Adds new pattern to match engine from zero-terminated string
