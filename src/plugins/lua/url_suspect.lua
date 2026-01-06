@@ -517,11 +517,15 @@ function checks.structure_analysis(task, url, cfg)
 
   -- Check backslashes using existing obscured flag
   if cfg.check_backslash and bit.band(flags, url_flags_tab.obscured) ~= 0 then
-    lua_util.debugm(N, task, "URL contains backslashes")
-    table.insert(findings, {
-      symbol = symbols.backslash,
-      options = { host or "obscured" }
-    })
+    local url_text = url:get_text()
+    -- We check if we *really* have backslashes here as obscured flag is ambiguous
+    if url_text and url_text:find('\\', 1, true) then
+      lua_util.debugm(N, task, "URL contains backslashes")
+      table.insert(findings, {
+        symbol = symbols.backslash,
+        options = { host or "obscured" }
+      })
+    end
   end
 
   -- Only get full URL text if length/@ checks are enabled (expensive for long URLs)
