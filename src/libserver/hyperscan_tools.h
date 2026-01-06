@@ -71,6 +71,13 @@ void rspamd_hyperscan_notice_loaded(void);
 void rspamd_hyperscan_cleanup_maybe(void);
 
 /**
+ * Check if a file is known to the hyperscan cache (has been noticed)
+ * @param fname path to check
+ * @return TRUE if the file is known
+ */
+gboolean rspamd_hyperscan_is_file_known(const char *fname);
+
+/**
  * Get a platform identifier string for hyperscan cache keys.
  * This includes the hyperscan version, platform tune, and CPU features.
  * The returned string is owned by the library and should not be freed.

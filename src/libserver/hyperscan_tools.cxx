@@ -210,6 +210,21 @@ public:
 		known_cached_files.erase(fpath.string());
 	}
 
+	auto is_file_known(const char *fname) -> bool
+	{
+		auto fpath = std::filesystem::path{fname};
+		std::error_code ec;
+
+		fpath = std::filesystem::canonical(fpath, ec);
+
+		if (ec && ec.value() != 0) {
+			/* File doesn't exist or can't be canonicalized - not known */
+			return false;
+		}
+
+		return known_cached_files.contains(fpath.string());
+	}
+
 	auto cleanup_maybe() -> void
 	{
 		auto env_cleanup_disable = std::getenv("RSPAMD_NO_CLEANUP");
@@ -805,6 +820,11 @@ void rspamd_hyperscan_notice_known(const char *fname)
 void rspamd_hyperscan_cleanup_maybe(void)
 {
 	rspamd::util::hs_known_files_cache::get().cleanup_maybe();
+}
+
+gboolean rspamd_hyperscan_is_file_known(const char *fname)
+{
+	return rspamd::util::hs_known_files_cache::get().is_file_known(fname);
 }
 
 void rspamd_hyperscan_notice_loaded(void)
