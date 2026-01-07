@@ -956,22 +956,40 @@ auto symcache::validate(bool strict) -> bool
 					parent->priority = MAX(p1, p2);
 					item->priority = parent->priority;
 				}
-
-				/*
-				 * Sync SYMBOL_TYPE_FINE between virtual symbol and parent.
-				 * If either has negative weight and is marked FINE, propagate to both.
-				 */
-				if ((item->flags & SYMBOL_TYPE_FINE) && !(parent->flags & SYMBOL_TYPE_FINE)) {
-					parent->flags |= SYMBOL_TYPE_FINE;
-				}
-				else if ((parent->flags & SYMBOL_TYPE_FINE) && !(item->flags & SYMBOL_TYPE_FINE)) {
-					item->flags |= SYMBOL_TYPE_FINE;
-				}
 			}
 		}
 
 		total_weight += fabs(item->st->weight);
 	}
+
+	/*
+	 * Propagate SYMBOL_TYPE_FINE between virtual symbols and their parents until a fixed point.
+	 * This avoids order-dependent results when iterating items_by_symbol.
+	 */
+	bool fine_changed;
+	do {
+		fine_changed = false;
+		for (auto &pair: items_by_symbol) {
+			auto &item = pair.second;
+			if (item->is_virtual() && !(item->flags & SYMBOL_TYPE_GHOST)) {
+				auto *parent = const_cast<cache_item *>(item->get_parent(*this));
+
+				if (parent == nullptr) {
+					item->resolve_parent(*this);
+					parent = const_cast<cache_item *>(item->get_parent(*this));
+				}
+
+				if ((item->flags & SYMBOL_TYPE_FINE) && !(parent->flags & SYMBOL_TYPE_FINE)) {
+					parent->flags |= SYMBOL_TYPE_FINE;
+					fine_changed = true;
+				}
+				else if ((parent->flags & SYMBOL_TYPE_FINE) && !(item->flags & SYMBOL_TYPE_FINE)) {
+					item->flags |= SYMBOL_TYPE_FINE;
+					fine_changed = true;
+				}
+			}
+		}
+	} while (fine_changed);
 
 	/* Now check each metric item and find corresponding symbol in a cache */
 	auto ret = true;
