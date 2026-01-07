@@ -908,7 +908,7 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
       end
 
       local safe_key = generic .. ':' ..
-          specific:gsub('[:%-+&|><]', '_')
+          specific:gsub('[:%-+&|>< %c]', '_')
                   :gsub('%(', '[')
                   :gsub('%)', ']')
                   :lower()

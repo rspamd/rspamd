@@ -2653,19 +2653,22 @@ rspamd_url_parse(struct rspamd_url *uri,
 				}
 
 				if (all_chars_domain) {
-					/* Additionally check for a numeric IP as we can have some number here... */
-					rspamd_url_maybe_regenerate_from_ip(uri, pool);
+					/* Additionally check for a numeric IP as we can have some number here */
+					/* Skip for mailto: as email domains cannot be numeric IPs (see #5823) */
+					if (uri->protocol != PROTOCOL_MAILTO) {
+						rspamd_url_maybe_regenerate_from_ip(uri, pool);
 
-					if (last_c == '.' && uri->hostlen > 1) {
-						/* Skip the last dot */
-						uri->tldlen = uri->hostlen - 1;
-					}
-					else {
-						uri->tldlen = uri->hostlen;
-					}
+						if (last_c == '.' && uri->hostlen > 1) {
+							/* Skip the last dot */
+							uri->tldlen = uri->hostlen - 1;
+						}
+						else {
+							uri->tldlen = uri->hostlen;
+						}
 
-					uri->tldshift = uri->hostshift;
-					is_whole_hostname_tld = true;
+						uri->tldshift = uri->hostshift;
+						is_whole_hostname_tld = true;
+					}
 				}
 			}
 
