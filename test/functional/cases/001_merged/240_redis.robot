@@ -11,6 +11,7 @@ ${SETTINGS_REDIS}     {symbols_enabled = [REDIS_TEST, SIMPLE_REDIS_ASYNC_TEST, S
 Redis client
   Redis SET  test_key  test value
   Scan File  ${MESSAGE}
+  ...  Settings=${SETTINGS_REDIS}
   Expect Symbol With Exact Options  REDIS  hello from lua on redis
   Expect Symbol With Exact Options  REDIS_ASYNC  test value
   Expect Symbol With Exact Options  REDIS_ASYNC201809  test value
