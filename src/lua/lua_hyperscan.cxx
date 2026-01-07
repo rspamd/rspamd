@@ -250,7 +250,7 @@ lua_hyperscan_serialize(lua_State *L)
 	hs_platform_info_t plt;
 	err = hs_populate_platform(&plt);
 	if (err != HS_SUCCESS) {
-		g_free(ser_bytes);
+		free(ser_bytes);
 		lua_pushnil(L);
 		lua_pushstring(L, "failed to get platform info");
 		return 2;
@@ -349,8 +349,8 @@ lua_hyperscan_serialize(lua_State *L)
 	/* Copy serialized database */
 	memcpy(p, ser_bytes, ser_size);
 
-	/* Free hyperscan-allocated buffer */
-	g_free(ser_bytes);
+	/* Free hyperscan-allocated buffer (use free(), not g_free()) */
+	free(ser_bytes);
 
 	return 1;
 }
