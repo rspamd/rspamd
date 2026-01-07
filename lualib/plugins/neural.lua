@@ -1082,7 +1082,7 @@ local function process_rules_settings()
         return not (fl.nostat or fl.idempotent or fl.skip or fl.composite)
       end
 
-      return false
+      return true
     end
 
     -- Generic stuff
