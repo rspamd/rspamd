@@ -904,6 +904,12 @@ rspamd_main_heartbeat_cb(EV_P_ ev_timer *w, int revents)
 	time_from_last -= wrk->hb.last_event;
 	rspamd_main = wrk->srv;
 
+	if (wrk->hb.is_busy || rspamd_main->wanna_die) {
+		/* Worker is doing long-running operation or we're shutting down,
+		 * skip heartbeat check */
+		return;
+	}
+
 	if (wrk->hb.last_event > 0 &&
 		time_from_last > 0 &&
 		time_from_last >= rspamd_main->cfg->heartbeat_interval * 2) {
@@ -1909,18 +1915,8 @@ rspamd_worker_hyperscan_ready(struct rspamd_main *rspamd_main,
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_HYPERSCAN_LOADED;
 
-	/*
-	 * Check if we received an FD for shared memory hyperscan database.
-	 * FD-based loading is used when hs_helper sends a pre-deserialized
-	 * database via SCM_RIGHTS. This allows workers to mmap the database
-	 * directly without disk I/O.
-	 */
+	/* FD-based loading infrastructure - close unused FD for now */
 	if (attached_fd >= 0 && cmd->cmd.hs_loaded.fd_size > 0) {
-		msg_info("received hyperscan fd %d with size %z (scope: %s) - "
-				 "FD-based loading infrastructure ready, using file-based for now",
-				 attached_fd, cmd->cmd.hs_loaded.fd_size,
-				 cmd->cmd.hs_loaded.scope[0] != '\0' ? cmd->cmd.hs_loaded.scope : "all");
-		/* Close the FD since we're not using it yet */
 		close(attached_fd);
 		attached_fd = -1;
 	}
@@ -1953,7 +1949,6 @@ rspamd_worker_hyperscan_ready(struct rspamd_main *rspamd_main,
 				strerror(errno));
 	}
 
-	/* Close any remaining FD we didn't use */
 	if (attached_fd >= 0) {
 		close(attached_fd);
 	}

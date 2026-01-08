@@ -86,6 +86,8 @@ struct rspamd_worker_heartbeat {
 	ev_timer heartbeat_ev; /**< used by main for checking heartbeats and by workers to send heartbeats */
 	ev_tstamp last_event;  /**< last heartbeat received timestamp */
 	int64_t nbeats;        /**< positive for beats received, negative for beats missed */
+	gboolean is_busy;      /**< worker is doing long-running operation, skip heartbeat checks */
+	char busy_reason[32];  /**< reason for being busy (for logging) */
 };
 
 enum rspamd_worker_state {

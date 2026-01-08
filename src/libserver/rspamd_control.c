@@ -1217,6 +1217,22 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 				worker->hb.last_event = ev_time();
 				rdata->rep.reply.heartbeat.status = 0;
 				break;
+			case RSPAMD_SRV_BUSY:
+				worker->hb.is_busy = cmd.cmd.busy.is_busy;
+				if (cmd.cmd.busy.is_busy) {
+					rspamd_strlcpy(worker->hb.busy_reason, cmd.cmd.busy.reason,
+								   sizeof(worker->hb.busy_reason));
+					msg_info_main("worker type %s with pid %P marked as busy: %s",
+								  g_quark_to_string(worker->type), worker->pid,
+								  worker->hb.busy_reason);
+				}
+				else {
+					msg_info_main("worker type %s with pid %P finished: %s",
+								  g_quark_to_string(worker->type), worker->pid,
+								  worker->hb.busy_reason);
+					worker->hb.busy_reason[0] = '\0';
+				}
+				break;
 			case RSPAMD_SRV_HEALTH:
 				rspamd_fill_health_reply(rspamd_main, &rdata->rep);
 				break;
@@ -1596,7 +1612,65 @@ const char *rspamd_srv_command_to_string(enum rspamd_srv_type cmd)
 	case RSPAMD_SRV_MULTIPATTERN_LOADED:
 		reply = "multipattern_loaded";
 		break;
+	case RSPAMD_SRV_BUSY:
+		reply = "busy";
+		break;
 	}
 
 	return reply;
+}
+
+struct rspamd_busy_cb_data {
+	gboolean completed;
+};
+
+static void
+rspamd_worker_busy_reply_handler(struct rspamd_worker *worker,
+								 struct rspamd_srv_reply *rep,
+								 int rep_fd,
+								 gpointer ud)
+{
+	struct rspamd_busy_cb_data *cbd = (struct rspamd_busy_cb_data *) ud;
+	cbd->completed = TRUE;
+}
+
+void rspamd_worker_set_busy(struct rspamd_worker *worker,
+							struct ev_loop *event_loop,
+							const char *reason)
+{
+	struct rspamd_srv_command srv_cmd;
+	struct rspamd_busy_cb_data cbd;
+	int max_iterations = 100; /* Safety limit */
+
+	/* Don't send if worker is terminating */
+	if (worker->state != rspamd_worker_state_running) {
+		return;
+	}
+
+	memset(&srv_cmd, 0, sizeof(srv_cmd));
+	srv_cmd.type = RSPAMD_SRV_BUSY;
+	srv_cmd.cmd.busy.is_busy = (reason != NULL);
+	if (reason) {
+		rspamd_strlcpy(srv_cmd.cmd.busy.reason, reason,
+					   sizeof(srv_cmd.cmd.busy.reason));
+	}
+
+	cbd.completed = FALSE;
+	rspamd_srv_send_command(worker, event_loop, &srv_cmd, -1,
+							rspamd_worker_busy_reply_handler, &cbd);
+
+	/* Run the event loop until the notification is acknowledged
+	 * Also stop if worker starts terminating (signal received during wait) */
+	while (!cbd.completed && max_iterations-- > 0 &&
+		   worker->state == rspamd_worker_state_running) {
+		ev_run(event_loop, EVRUN_ONCE);
+	}
+
+	/* If worker is terminating, propagate the break to the outer event loop */
+	if (worker->state != rspamd_worker_state_running) {
+		ev_break(event_loop, EVBREAK_ALL);
+	}
+	else if (!cbd.completed) {
+		msg_warn("busy notification may not have reached main process");
+	}
 }

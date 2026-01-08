@@ -32,6 +32,7 @@
 #ifdef WITH_HYPERSCAN
 #include "hs.h"
 #include "hyperscan_tools.h"
+#include "rspamd_control.h"
 #endif
 
 #include "unix-std.h"
@@ -2141,6 +2142,7 @@ struct rspamd_re_cache_hs_compile_cbdata {
 	double max_time;
 	gboolean silent;
 	unsigned int total;
+	struct rspamd_worker *worker;
 
 	void (*cb)(unsigned int ncompiled, GError *err, void *cbd);
 
@@ -2191,6 +2193,16 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 	pid_t our_pid = getpid();
 
 	cache = cbdata->cache;
+
+	/* Stop if worker is terminating */
+	if (cbdata->worker && cbdata->worker->state != rspamd_worker_state_running) {
+		ev_timer_stop(EV_A_ w);
+		cbdata->cb(cbdata->total, NULL, cbdata->cbd);
+		g_free(w);
+		g_free(cbdata);
+
+		return;
+	}
 
 	if (!g_hash_table_iter_next(&cbdata->it, &k, &v)) {
 		/* All done */
@@ -2361,17 +2373,49 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 	} while (0)
 
 	if (n > 0) {
-		/* Create the hs tree */
 		hs_errors = NULL;
-		if (hs_compile_ext_multi((const char **) hs_pats,
-								 hs_flags,
-								 hs_ids,
-								 hs_exts,
-								 n,
-								 HS_MODE_BLOCK,
-								 &cache->plt,
-								 &test_db,
-								 &hs_errors) != HS_SUCCESS) {
+
+		if (cbdata->worker) {
+			rspamd_worker_set_busy(cbdata->worker, EV_A, "compile hyperscan");
+
+			if (cbdata->worker->state != rspamd_worker_state_running) {
+				rspamd_worker_set_busy(cbdata->worker, EV_A, NULL);
+				CLEANUP_ALLOCATED(false);
+				ev_timer_stop(EV_A_ w);
+				cbdata->cb(cbdata->total, NULL, cbdata->cbd);
+				g_free(w);
+				g_free(cbdata);
+				return;
+			}
+		}
+
+		hs_error_t compile_result = hs_compile_ext_multi((const char **) hs_pats,
+														 hs_flags,
+														 hs_ids,
+														 hs_exts,
+														 n,
+														 HS_MODE_BLOCK,
+														 &cache->plt,
+														 &test_db,
+														 &hs_errors);
+
+		if (cbdata->worker) {
+			rspamd_worker_set_busy(cbdata->worker, EV_A, NULL);
+
+			if (cbdata->worker->state != rspamd_worker_state_running) {
+				if (test_db) {
+					hs_free_database(test_db);
+				}
+				CLEANUP_ALLOCATED(false);
+				ev_timer_stop(EV_A_ w);
+				cbdata->cb(cbdata->total, NULL, cbdata->cbd);
+				g_free(w);
+				g_free(cbdata);
+				return;
+			}
+		}
+
+		if (compile_result != HS_SUCCESS) {
 			err = g_error_new(rspamd_re_cache_quark(), EINVAL,
 							  "cannot create tree of regexp when processing '%s': %s",
 							  hs_pats[hs_errors->expression], hs_errors->message);
@@ -2516,6 +2560,7 @@ int rspamd_re_cache_compile_hyperscan(struct rspamd_re_cache *cache,
 									  double max_time,
 									  gboolean silent,
 									  struct ev_loop *event_loop,
+									  struct rspamd_worker *worker,
 									  void (*cb)(unsigned int ncompiled, GError *err, void *cbd),
 									  void *cbd)
 {
@@ -2538,6 +2583,7 @@ int rspamd_re_cache_compile_hyperscan(struct rspamd_re_cache *cache,
 	cbdata->max_time = max_time;
 	cbdata->silent = silent;
 	cbdata->total = 0;
+	cbdata->worker = worker;
 	timer = g_malloc0(sizeof(*timer));
 	timer->data = (void *) cbdata; /* static */
 
@@ -2555,6 +2601,7 @@ struct rspamd_re_cache_scoped_compile_data {
 	unsigned int completed_scopes;
 	unsigned int total_compiled;
 	GError *first_error;
+	struct rspamd_worker *worker;
 
 	void (*final_cb)(unsigned int ncompiled, GError *err, void *cbd);
 
@@ -2596,6 +2643,7 @@ int rspamd_re_cache_compile_hyperscan_scoped(struct rspamd_re_cache *cache_head,
 											 double max_time,
 											 gboolean silent,
 											 struct ev_loop *event_loop,
+											 struct rspamd_worker *worker,
 											 void (*cb)(unsigned int ncompiled, GError *err, void *cbd),
 											 void *cbd)
 {
@@ -2628,6 +2676,7 @@ int rspamd_re_cache_compile_hyperscan_scoped(struct rspamd_re_cache *cache_head,
 	coord_data->completed_scopes = 0;
 	coord_data->total_compiled = 0;
 	coord_data->first_error = NULL;
+	coord_data->worker = worker;
 	coord_data->final_cb = cb;
 	coord_data->final_cbd = cbd;
 
@@ -2638,7 +2687,7 @@ int rspamd_re_cache_compile_hyperscan_scoped(struct rspamd_re_cache *cache_head,
 	DL_FOREACH(cache_head, cur)
 	{
 		result = rspamd_re_cache_compile_hyperscan(cur, cache_dir, max_time, silent,
-												   event_loop, rspamd_re_cache_compile_scoped_coordination_cb, coord_data);
+												   event_loop, worker, rspamd_re_cache_compile_scoped_coordination_cb, coord_data);
 		if (result < 0) {
 			/* If we failed to start compilation for this scope, treat it as completed with error */
 			GError *start_error = g_error_new(rspamd_re_cache_quark(), result,
@@ -3432,6 +3481,7 @@ struct rspamd_re_cache_hs_compile_scoped_cbdata {
 	double max_time;
 	gboolean silent;
 	int lock_fd;
+	struct rspamd_worker *worker;
 
 	void (*cb)(const char *scope, unsigned int ncompiled, GError *err, void *cbd);
 
@@ -3462,6 +3512,7 @@ int rspamd_re_cache_compile_hyperscan_scoped_single(struct rspamd_re_cache *cach
 													double max_time,
 													gboolean silent,
 													struct ev_loop *event_loop,
+													struct rspamd_worker *worker,
 													void (*cb)(const char *scope, unsigned int ncompiled, GError *err,
 															   void *cbd),
 													void *cbd)
@@ -3489,11 +3540,12 @@ int rspamd_re_cache_compile_hyperscan_scoped_single(struct rspamd_re_cache *cach
 	scoped_cbd->max_time = max_time;
 	scoped_cbd->silent = silent;
 	scoped_cbd->lock_fd = lock_fd;
+	scoped_cbd->worker = worker;
 	scoped_cbd->cb = cb;
 	scoped_cbd->cbd = cbd;
 
 	return rspamd_re_cache_compile_hyperscan(cache, cache_dir, max_time, silent,
-											 event_loop, rspamd_re_cache_compile_scoped_cb, scoped_cbd);
+											 event_loop, worker, rspamd_re_cache_compile_scoped_cb, scoped_cbd);
 }
 #else
 /* Non hyperscan version stub */
@@ -3503,6 +3555,7 @@ int rspamd_re_cache_compile_hyperscan_scoped_single(struct rspamd_re_cache *cach
 													double max_time,
 													gboolean silent,
 													struct ev_loop *event_loop,
+													struct rspamd_worker *worker,
 													void (*cb)(const char *scope, unsigned int ncompiled, GError *err, void *cbd),
 													void *cbd)
 {

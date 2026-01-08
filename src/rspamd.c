@@ -819,8 +819,16 @@ rspamd_worker_wait(struct rspamd_worker *w)
 				}
 			}
 			else {
-				msg_warn_main("terminate worker %s(%P) with SIGKILL",
-							  g_quark_to_string(w->type), w->pid);
+				if (w->hb.is_busy && w->hb.busy_reason[0]) {
+					msg_warn_main("terminate worker %s(%P) with SIGKILL; "
+								  "worker was busy: %s",
+								  g_quark_to_string(w->type), w->pid,
+								  w->hb.busy_reason);
+				}
+				else {
+					msg_warn_main("terminate worker %s(%P) with SIGKILL",
+								  g_quark_to_string(w->type), w->pid);
+				}
 			}
 		}
 		else {
@@ -830,9 +838,18 @@ rspamd_worker_wait(struct rspamd_worker *w)
 				return;
 			}
 			else {
-				msg_err_main("data corruption warning: terminating "
-							 "special worker %s(%P) with SIGKILL",
-							 g_quark_to_string(w->type), w->pid);
+				if (w->hb.is_busy && w->hb.busy_reason[0]) {
+					msg_err_main("data corruption warning: terminating "
+								 "special worker %s(%P) with SIGKILL; "
+								 "worker was busy: %s",
+								 g_quark_to_string(w->type), w->pid,
+								 w->hb.busy_reason);
+				}
+				else {
+					msg_err_main("data corruption warning: terminating "
+								 "special worker %s(%P) with SIGKILL",
+								 g_quark_to_string(w->type), w->pid);
+				}
 			}
 		}
 	}
@@ -1032,11 +1049,50 @@ start_srv_ev(gpointer key, gpointer value, gpointer ud)
 }
 
 static void
+rspamd_log_pending_worker(gpointer key, gpointer value, gpointer ud)
+{
+	struct rspamd_worker *w = (struct rspamd_worker *) value;
+	struct rspamd_main *rspamd_main = w->srv;
+
+	if (w->hb.is_busy && w->hb.busy_reason[0]) {
+		msg_info_main("  - %s(%P): busy with %s",
+					  g_quark_to_string(w->type), w->pid,
+					  w->hb.busy_reason);
+	}
+	else {
+		msg_info_main("  - %s(%P): shutting down",
+					  g_quark_to_string(w->type), w->pid);
+	}
+}
+
+/* Soft monitoring timer - logs shutdown status periodically */
+static void
+rspamd_shutdown_monitor_handler(EV_P_ ev_timer *w, int revents)
+{
+	struct rspamd_main *rspamd_main = (struct rspamd_main *) w->data;
+	unsigned int nworkers = g_hash_table_size(rspamd_main->workers);
+
+	if (nworkers > 0) {
+		msg_info_main("shutdown: waiting for %d worker(s):", nworkers);
+		g_hash_table_foreach(rspamd_main->workers, rspamd_log_pending_worker, NULL);
+	}
+	else {
+		ev_timer_stop(EV_A_ w);
+	}
+}
+
+static void
 rspamd_final_timer_handler(EV_P_ ev_timer *w, int revents)
 {
 	struct rspamd_main *rspamd_main = (struct rspamd_main *) w->data;
 
 	term_attempts--;
+
+	/* Log pending workers when we're about to force kill them */
+	if (term_attempts == 0 && g_hash_table_size(rspamd_main->workers) > 0) {
+		msg_warn_main("shutdown timeout reached, %d worker(s) still running - sending SIGKILL",
+					  (int) g_hash_table_size(rspamd_main->workers));
+	}
 
 	g_hash_table_foreach(rspamd_main->workers, hash_worker_wait_callback,
 						 NULL);
@@ -1047,11 +1103,15 @@ rspamd_final_timer_handler(EV_P_ ev_timer *w, int revents)
 }
 
 /* Signal handlers */
+#define SHUTDOWN_MONITOR_INITIAL 1.0
+#define SHUTDOWN_MONITOR_REPEAT 10.0
+
 static void
 rspamd_term_handler(struct ev_loop *loop, ev_signal *w, int revents)
 {
 	struct rspamd_main *rspamd_main = (struct rspamd_main *) w->data;
 	static ev_timer ev_finale;
+	static ev_timer ev_monitor;
 	ev_tstamp shutdown_ts;
 
 	if (!rspamd_main->wanna_die) {
@@ -1087,6 +1147,11 @@ rspamd_term_handler(struct ev_loop *loop, ev_signal *w, int revents)
 		ev_timer_init(&ev_finale, rspamd_final_timer_handler,
 					  TERMINATION_INTERVAL, TERMINATION_INTERVAL);
 		ev_timer_start(rspamd_main->event_loop, &ev_finale);
+
+		ev_monitor.data = rspamd_main;
+		ev_timer_init(&ev_monitor, rspamd_shutdown_monitor_handler,
+					  SHUTDOWN_MONITOR_INITIAL, SHUTDOWN_MONITOR_REPEAT);
+		ev_timer_start(rspamd_main->event_loop, &ev_monitor);
 	}
 }
 

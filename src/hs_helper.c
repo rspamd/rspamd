@@ -317,6 +317,14 @@ rspamd_rs_send_final_notification(struct rspamd_hs_helper_compile_cbdata *cbd)
 	struct hs_helper_ctx *ctx = cbd->ctx;
 	static struct rspamd_srv_command srv_cmd;
 
+	/* Don't send if worker is terminating */
+	if (worker->state != rspamd_worker_state_running) {
+		msg_info("skipping final notification, worker is terminating");
+		g_free(cbd);
+		ev_timer_stop(ctx->event_loop, &ctx->recompile_timer);
+		return;
+	}
+
 	memset(&srv_cmd, 0, sizeof(srv_cmd));
 	srv_cmd.type = RSPAMD_SRV_HYPERSCAN_LOADED;
 	rspamd_strlcpy(srv_cmd.cmd.hs_loaded.cache_dir, ctx->hs_dir,
@@ -343,8 +351,17 @@ rspamd_rs_compile_scoped_cb(const char *scope, unsigned int ncompiled, GError *e
 	struct hs_helper_ctx *ctx = compile_cbd->ctx;
 	static struct rspamd_srv_command srv_cmd;
 
+	/* Don't send notifications if worker is terminating */
+	if (worker->state != rspamd_worker_state_running) {
+		compile_cbd->scopes_remaining--;
+		if (compile_cbd->scopes_remaining == 0) {
+			g_free(compile_cbd);
+			ev_timer_stop(ctx->event_loop, &ctx->recompile_timer);
+		}
+		return;
+	}
+
 	if (err != NULL) {
-		/* Failed to compile: log and continue */
 		msg_err("cannot compile Hyperscan database for scope %s: %e",
 				scope ? scope : "default", err);
 	}
@@ -352,7 +369,18 @@ rspamd_rs_compile_scoped_cb(const char *scope, unsigned int ncompiled, GError *e
 		if (ncompiled > 0) {
 			compile_cbd->total_compiled += ncompiled;
 
-			/* Send notification for this specific scope */
+			/* Re-check state before sending - could have changed during compilation */
+			if (worker->state != rspamd_worker_state_running) {
+				msg_info("skipping scope notification for %s, worker is terminating",
+						 scope ? scope : "default");
+				compile_cbd->scopes_remaining--;
+				if (compile_cbd->scopes_remaining == 0) {
+					g_free(compile_cbd);
+					ev_timer_stop(ctx->event_loop, &ctx->recompile_timer);
+				}
+				return;
+			}
+
 			memset(&srv_cmd, 0, sizeof(srv_cmd));
 			srv_cmd.type = RSPAMD_SRV_HYPERSCAN_LOADED;
 			rspamd_strlcpy(srv_cmd.cmd.hs_loaded.cache_dir, ctx->hs_dir,
@@ -376,17 +404,14 @@ rspamd_rs_compile_scoped_cb(const char *scope, unsigned int ncompiled, GError *e
 
 	compile_cbd->scopes_remaining--;
 
-	/* Check if all scopes are done */
 	if (compile_cbd->scopes_remaining == 0) {
 		if (compile_cbd->workers_ready) {
-			/* Workers are ready, send notification immediately */
 			msg_info("compiled %d total regular expressions to the hyperscan tree, "
 					 "send final notification",
 					 compile_cbd->total_compiled);
 			rspamd_rs_send_final_notification(compile_cbd);
 		}
 		else {
-			/* Workers not ready yet, notification will be sent when workers_spawned event is received */
 			msg_info("compiled %d total regular expressions to the hyperscan tree, "
 					 "waiting for workers to be ready before sending notification",
 					 compile_cbd->total_compiled);
@@ -409,6 +434,14 @@ rspamd_rs_send_single_notification(struct rspamd_hs_helper_single_compile_cbdata
 	struct hs_helper_ctx *ctx;
 
 	ctx = (struct hs_helper_ctx *) worker->ctx;
+
+	/* Don't send if worker is terminating */
+	if (worker->state != rspamd_worker_state_running) {
+		msg_info("skipping single notification, worker is terminating");
+		g_free(cbd);
+		return;
+	}
+
 	memset(&srv_cmd, 0, sizeof(srv_cmd));
 	srv_cmd.type = RSPAMD_SRV_HYPERSCAN_LOADED;
 	rspamd_strlcpy(srv_cmd.cmd.hs_loaded.cache_dir, ctx->hs_dir,
@@ -436,8 +469,13 @@ rspamd_rs_compile_cb(unsigned int ncompiled, GError *err, void *cbd)
 
 	ctx = (struct hs_helper_ctx *) worker->ctx;
 
+	/* Don't send notifications if worker is terminating */
+	if (worker->state != rspamd_worker_state_running) {
+		g_free(compile_cbd);
+		return;
+	}
+
 	if (err != NULL) {
-		/* Failed to compile: log and go out */
 		msg_err("cannot compile Hyperscan database: %e", err);
 		g_free(compile_cbd);
 		return;
@@ -449,14 +487,12 @@ rspamd_rs_compile_cb(unsigned int ncompiled, GError *err, void *cbd)
 	timer_cbd->workers_ready = compile_cbd->workers_ready;
 
 	if (timer_cbd->workers_ready) {
-		/* Workers are ready, send notification immediately */
 		msg_info("compiled %d regular expressions to the hyperscan tree, "
 				 "send loaded notification",
 				 ncompiled);
 		rspamd_rs_send_single_notification(timer_cbd);
 	}
 	else {
-		/* Workers not ready yet, notification will be sent when workers_spawned event is received */
 		msg_info("compiled %d regular expressions to the hyperscan tree, "
 				 "waiting for workers to be ready before sending notification",
 				 ncompiled);
@@ -470,6 +506,10 @@ static gboolean
 rspamd_rs_compile(struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 				  gboolean forced)
 {
+	if (worker->state != rspamd_worker_state_running) {
+		return FALSE;
+	}
+
 	msg_info("starting hyperscan compilation (forced: %s, workers_ready: %s)",
 			 forced ? "yes" : "no", ctx->workers_ready ? "yes" : "no");
 
@@ -498,6 +538,7 @@ rspamd_rs_compile(struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 		rspamd_re_cache_compile_hyperscan(ctx->cfg->re_cache,
 										  ctx->hs_dir, ctx->max_time, !forced,
 										  ctx->event_loop,
+										  worker,
 										  rspamd_rs_compile_cb,
 										  (void *) single_cbd);
 		return TRUE;
@@ -530,6 +571,7 @@ rspamd_rs_compile(struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 		rspamd_re_cache_compile_hyperscan(ctx->cfg->re_cache,
 										  ctx->hs_dir, ctx->max_time, !forced,
 										  ctx->event_loop,
+										  worker,
 										  rspamd_rs_compile_cb,
 										  (void *) single_cbd);
 		return TRUE;
@@ -556,6 +598,7 @@ rspamd_rs_compile(struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 			rspamd_re_cache_compile_hyperscan_scoped_single(scope, scope_for_compile,
 															ctx->hs_dir, ctx->max_time, !forced,
 															ctx->event_loop,
+															worker,
 															rspamd_rs_compile_scoped_cb,
 															compile_cbd);
 		}
@@ -621,6 +664,11 @@ rspamd_hs_helper_compile_pending_multipatterns(struct hs_helper_ctx *ctx,
 		char fp[PATH_MAX];
 		GError *err = NULL;
 
+		if (worker->state != rspamd_worker_state_running) {
+			msg_info("worker terminating, stopping multipattern compilation");
+			break;
+		}
+
 		npatterns = rspamd_multipattern_get_npatterns(mp);
 		msg_info("compiling multipattern '%s' with %ud patterns", entry->name, npatterns);
 
@@ -634,17 +682,33 @@ rspamd_hs_helper_compile_pending_multipatterns(struct hs_helper_ctx *ctx,
 					 fp, entry->name);
 		}
 		else {
-			/* Compile and save to cache */
+			rspamd_worker_set_busy(worker, ctx->event_loop, "compile multipattern");
+
+			if (worker->state != rspamd_worker_state_running) {
+				rspamd_worker_set_busy(worker, ctx->event_loop, NULL);
+				break;
+			}
+
 			if (!rspamd_multipattern_compile_hs_to_cache(mp, ctx->hs_dir, &err)) {
+				rspamd_worker_set_busy(worker, ctx->event_loop, NULL);
 				msg_err("failed to compile multipattern '%s': %e", entry->name, err);
 				if (err) {
 					g_error_free(err);
 				}
 				continue;
 			}
+
+			rspamd_worker_set_busy(worker, ctx->event_loop, NULL);
+
+			if (worker->state != rspamd_worker_state_running) {
+				break;
+			}
 		}
 
-		/* Send notification to main process */
+		if (worker->state != rspamd_worker_state_running) {
+			break;
+		}
+
 		struct rspamd_srv_command srv_cmd;
 		memset(&srv_cmd, 0, sizeof(srv_cmd));
 		srv_cmd.type = RSPAMD_SRV_MULTIPATTERN_LOADED;
@@ -689,7 +753,7 @@ rspamd_hs_helper_workers_spawned(struct rspamd_main *rspamd_main,
 	}
 
 	/* If hyperscan compilation has finished but we were waiting for workers, trigger notification now */
-	if (ctx->loaded) {
+	if (ctx->loaded && worker->state == rspamd_worker_state_running) {
 		static struct rspamd_srv_command srv_cmd;
 
 		memset(&srv_cmd, 0, sizeof(srv_cmd));
@@ -705,7 +769,7 @@ rspamd_hs_helper_workers_spawned(struct rspamd_main *rspamd_main,
 		msg_info("sent delayed hyperscan loaded notification after workers spawned");
 		ctx->loaded = FALSE; /* Reset to avoid duplicate notifications */
 	}
-	else {
+	else if (!ctx->loaded && worker->state == rspamd_worker_state_running) {
 		/* Start initial compilation now that workers are ready */
 		msg_info("starting initial hyperscan compilation after workers spawned");
 		if (!rspamd_rs_compile(ctx, worker, FALSE)) {
@@ -733,6 +797,12 @@ rspamd_hs_helper_timer(EV_P_ ev_timer *w, int revents)
 	double tim;
 
 	ctx = worker->ctx;
+
+	if (worker->state != rspamd_worker_state_running) {
+		ev_timer_stop(EV_A_ w);
+		return;
+	}
+
 	tim = rspamd_time_jitter(ctx->recompile_time, 0);
 	w->repeat = tim;
 

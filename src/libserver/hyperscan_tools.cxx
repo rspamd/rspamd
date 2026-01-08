@@ -533,7 +533,9 @@ hs_shared_from_unserialized(hs_known_files_cache &hs_cache, raii_mmaped_file &&m
 		return tl::make_unexpected(error{is_valid.error(), -1, error_category::IMPORTANT});
 	}
 
-	hs_cache.add_cached_file(map.get_file());
+	/* Use rspamd_hyperscan_notice_known() to both add to local cache AND notify main process
+	 * This ensures .unser files are known to main and won't be deleted during cleanup */
+	rspamd_hyperscan_notice_known(map.get_file().get_name().data());
 	return tl::expected<hs_shared_database, error>{tl::in_place, std::move(map), db};
 }
 
