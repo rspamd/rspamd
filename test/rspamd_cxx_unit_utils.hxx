@@ -94,12 +94,15 @@ TEST_SUITE("rspamd_utils")
 		rspamd_fstring_t *fstr;
 
 		// Test empty data compression
+		// Note: gzip has 10-byte header + 8-byte trailer = 18 bytes minimum
+		// Different zlib implementations (zlib vs zlib-ng) may produce slightly different sizes
 		SUBCASE("Empty data")
 		{
 			fstr = rspamd_fstring_new_init("", 0);
 			gboolean result = rspamd_fstring_gzip(&fstr);
 			CHECK(result == TRUE);
-			CHECK(fstr->len == 20);
+			CHECK(fstr->len >= 18);// gzip minimum overhead
+			CHECK(fstr->len <= 24);// reasonable upper bound for empty data
 			result = rspamd_fstring_gunzip(&fstr);
 			CHECK(result == TRUE);
 			CHECK(fstr->len == 0);
@@ -111,7 +114,9 @@ TEST_SUITE("rspamd_utils")
 			fstr = RSPAMD_FSTRING_LIT("helohelo");
 			gboolean result = rspamd_fstring_gzip(&fstr);
 			CHECK(result == TRUE);
-			CHECK(fstr->len == 26);
+			// Compressed size varies by zlib implementation (zlib: 26, zlib-ng: 28)
+			CHECK(fstr->len >= 24);
+			CHECK(fstr->len <= 32);
 			result = rspamd_fstring_gunzip(&fstr);
 			CHECK(result == TRUE);
 			CHECK(memcmp(fstr->str, "helohelo", fstr->len) == 0);
@@ -127,7 +132,9 @@ TEST_SUITE("rspamd_utils")
 			}
 			gboolean result = rspamd_fstring_gzip(&fstr);
 			CHECK(result == TRUE);
-			CHECK(fstr->len == 49);
+			// Highly compressible data, compressed size varies by implementation
+			CHECK(fstr->len >= 40);
+			CHECK(fstr->len <= 60);
 			result = rspamd_fstring_gunzip(&fstr);
 			CHECK(result == TRUE);
 			CHECK(memcmp(fstr->str, "helohelo", sizeof("helohelo") - 1) == 0);

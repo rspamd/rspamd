@@ -97,6 +97,8 @@ struct rspamd_action_config {
 struct kh_rspamd_symbols_hash_s;
 struct kh_rspamd_symbols_group_hash_s;
 
+/* Bloom filter for fast negative symbol lookups */
+#define RSPAMD_BLOOM_SIZE 128 /* 1024 bits */
 
 struct rspamd_scan_result {
 	double score; /**< total score							*/
@@ -104,6 +106,7 @@ struct rspamd_scan_result {
 	double positive_score;
 	double negative_score;
 	struct kh_rspamd_symbols_hash_s *symbols;          /**< symbols of metric						*/
+	uint8_t symbols_bloom[RSPAMD_BLOOM_SIZE];          /**< bloom filter for fast negative lookups	*/
 	struct kh_rspamd_symbols_group_hash_s *sym_groups; /**< groups of symbols						*/
 	struct rspamd_action_config *actions_config;
 	const char *name;         /**< for named results, NULL is the default result */

@@ -97,6 +97,11 @@ public:
 		return ( _data != other_._data );
 	}
 
+	bool operator<(UnicodeString const &other_) const
+	{
+		return (_data < other_._data);
+	}
+
 	UnicodeString& append( UnicodeString const& other ) {
 		_data.insert( _data.end(), other._data.begin(), other._data.end() );
 		return *this;

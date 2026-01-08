@@ -180,14 +180,14 @@ void rspamd_stat_init(struct rspamd_config *cfg, struct ev_loop *ev_base)
 	stat_ctx->lua_stat_tokens_ref = -1;
 
 	/* Interact with lua_stat */
+	int lua_stat_top = lua_gettop(L);
 	if (luaL_dostring(L, "return require \"lua_stat\"") != 0) {
 		msg_err_config("cannot require lua_stat: %s",
 					   lua_tostring(L, -1));
 	}
 	else {
-#if LUA_VERSION_NUM >= 504
-		lua_settop(L, -2);
-#endif
+		/* Lua 5.4's require returns 2 values (module + path), keep only first */
+		lua_settop(L, lua_stat_top + 1);
 		if (lua_type(L, -1) != LUA_TTABLE) {
 			msg_err_config("lua stat must return "
 						   "table and not %s",

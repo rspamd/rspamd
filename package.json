@@ -1,9 +1,9 @@
 {
     "devDependencies": {
-        "@stylistic/eslint-plugin": "^5.5.0",
+        "@stylistic/eslint-plugin": "^5.6.1",
         "eslint": "^9.39.1",
         "postcss-html": "^1.8.0",
-        "stylelint": ">=16.25.0",
+        "stylelint": ">=16.26.0",
         "stylelint-config-standard": "^39.0.1"
     },
     "dependencies": {

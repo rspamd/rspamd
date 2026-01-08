@@ -560,8 +560,8 @@ end
 
 -- Used to generate new ANN key for specific profile
 local function new_ann_key(rule, set, version)
-  local ann_key = string.format('%s_%s_%s_%s_%s', settings.prefix,
-    rule.prefix, set.name, set.digest:sub(1, 8), tostring(version))
+  local ann_key = string.format('%s_%s_%s_%s_%d', settings.prefix,
+    rule.prefix, set.name, set.digest:sub(1, 8), version)
 
   return ann_key
 end
@@ -1016,6 +1016,8 @@ local function spawn_train(params)
           #(params.set.ann.pca or {}), #(pca_data or {}),
           params.set.ann.redis_key, params.ann_key)
 
+        -- Ensure all arguments are non-nil for Lua 5.4 compatibility
+        -- (nil values in tables cause length/iteration issues)
         lua_redis.exec_redis_script(redis_script_id.save_unlock,
           { ev_base = params.ev_base, is_write = true },
           redis_save_cb,
@@ -1026,10 +1028,10 @@ local function spawn_train(params)
             tostring(params.rule.ann_expire),
             tostring(os.time()),
             params.ann_key, -- old key to unlock...
-            roc_thresholds_serialized,
-            pca_data,
-            providers_meta_serialized,
-            ucl.to_format(norm_stats, 'json-compact', true),
+            roc_thresholds_serialized or '',
+            pca_data or '',
+            providers_meta_serialized or '',
+            ucl.to_format(norm_stats, 'json-compact', true) or '',
           })
       end
     end
@@ -1080,7 +1082,7 @@ local function process_rules_settings()
         return not (fl.nostat or fl.idempotent or fl.skip or fl.composite)
       end
 
-      return false
+      return true
     end
 
     -- Generic stuff

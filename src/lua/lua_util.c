@@ -20,6 +20,7 @@
 #include "libmime/content_type.h"
 #include "libmime/mime_headers.h"
 #include "libutil/hash.h"
+#include "libserver/html/html.h"
 
 #include "lua_parsers.h"
 
@@ -44,6 +45,8 @@
 
 #include "unicode/uspoof.h"
 #include "unicode/uscript.h"
+#include "unicode/uchar.h"
+#include <unicode/ucnv.h>
 #include "rspamd_simdutf.h"
 
 /***
@@ -94,6 +97,14 @@ LUA_FUNCTION_DEF(util, encode_qp);
  * @return {rspamd_text} decoded data chunk
  */
 LUA_FUNCTION_DEF(util, decode_qp);
+
+/***
+ * @function util.decode_html_entities(input)
+ * Decodes HTML entities in text (numeric &#XX; &#xXX; and named &amp; etc)
+ * @param {text or string} input input data
+ * @return {rspamd_text} decoded data chunk
+ */
+LUA_FUNCTION_DEF(util, decode_html_entities);
 
 /***
  * @function util.decode_base64(input)
@@ -274,6 +285,15 @@ LUA_FUNCTION_DEF(util, normalize_utf8);
  * @return {text} transliterated string
  */
 LUA_FUNCTION_DEF(util, transliterate);
+
+/***
+ * @function util.to_utf8(str, charset)
+ * Converts a string from a specific charset to UTF-8
+ * @param {string/text} str input string
+ * @param {string} charset input charset (e.g. "utf-16le", "utf-16be")
+ * @return {text} utf8 string or nil on error
+ */
+LUA_FUNCTION_DEF(util, to_utf8);
 
 /***
  * @function util.strequal_caseless(str1, str2)
@@ -501,6 +521,34 @@ LUA_FUNCTION_DEF(util, is_valid_utf8);
 LUA_FUNCTION_DEF(util, has_obscured_unicode);
 
 /***
+ * @function util.get_text_quality(str)
+ * Analyzes text quality for UTF-8 strings, useful for filtering garbage text extracted from PDFs
+ * and other text quality analysis tasks. Uses ICU for proper Unicode character classification
+ * (supports all scripts).
+ * @param {string|rspamd_text} str input text to analyze
+ * @return {table} table with comprehensive text quality metrics:
+ *   - letters: count of Unicode letters (any script)
+ *   - digits: count of Unicode digits
+ *   - punctuation: count of punctuation characters
+ *   - spaces: count of whitespace characters
+ *   - printable: count of all printable characters
+ *   - words: count of word-like sequences (2+ consecutive letters)
+ *   - word_chars: total characters in words
+ *   - total: total character count
+ *   - emojis: count of emoji characters
+ *   - uppercase: count of uppercase letters
+ *   - lowercase: count of lowercase letters
+ *   - ascii_chars: count of ASCII characters (0-127)
+ *   - non_ascii_chars: count of non-ASCII characters
+ *   - latin_vowels: count of Latin vowels (a,e,i,o,u)
+ *   - latin_consonants: count of Latin consonants
+ *   - script_transitions: count of script changes (e.g., Latin to Cyrillic)
+ *   - double_spaces: count of consecutive space sequences
+ *   - non_printable: count of non-printable/invalid characters
+ */
+LUA_FUNCTION_DEF(util, get_text_quality);
+
+/***
  * @function util.readline([prompt])
  * Returns string read from stdin with history and editing support
  * @return {string} string read from the input (with line endings stripped)
@@ -713,6 +761,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF(util, encode_base64),
 	LUA_INTERFACE_DEF(util, encode_qp),
 	LUA_INTERFACE_DEF(util, decode_qp),
+	LUA_INTERFACE_DEF(util, decode_html_entities),
 	LUA_INTERFACE_DEF(util, decode_base64),
 	LUA_INTERFACE_DEF(util, encode_base32),
 	LUA_INTERFACE_DEF(util, decode_base32),
@@ -732,6 +781,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF(util, lower_utf8),
 	LUA_INTERFACE_DEF(util, normalize_utf8),
 	LUA_INTERFACE_DEF(util, transliterate),
+	LUA_INTERFACE_DEF(util, to_utf8),
 	LUA_INTERFACE_DEF(util, strequal_caseless),
 	LUA_INTERFACE_DEF(util, strequal_caseless_utf8),
 	LUA_INTERFACE_DEF(util, get_ticks),
@@ -758,6 +808,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF(util, get_string_stats),
 	LUA_INTERFACE_DEF(util, is_valid_utf8),
 	LUA_INTERFACE_DEF(util, has_obscured_unicode),
+	LUA_INTERFACE_DEF(util, get_text_quality),
 	LUA_INTERFACE_DEF(util, readline),
 	LUA_INTERFACE_DEF(util, readpassphrase),
 	LUA_INTERFACE_DEF(util, file_exists),
@@ -1192,6 +1243,44 @@ lua_util_decode_qp(lua_State *L)
 			lua_pop(L, 1);
 			lua_pushnil(L);
 		}
+	}
+
+	return 1;
+}
+
+static int
+lua_util_decode_html_entities(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t, *out;
+	const char *s = NULL;
+	gsize inlen = 0;
+	unsigned int outlen;
+
+	if (lua_type(L, 1) == LUA_TSTRING) {
+		s = luaL_checklstring(L, 1, &inlen);
+	}
+	else if (lua_type(L, 1) == LUA_TUSERDATA) {
+		t = lua_check_text(L, 1);
+
+		if (t != NULL) {
+			s = t->start;
+			inlen = t->len;
+		}
+	}
+
+	if (s == NULL || inlen == 0) {
+		lua_pushnil(L);
+	}
+	else {
+		out = lua_newuserdata(L, sizeof(*out));
+		rspamd_lua_setclass(L, rspamd_text_classname, -1);
+		out->start = g_malloc(inlen + 1);
+		out->flags = RSPAMD_TEXT_FLAG_OWN;
+		memcpy((char *) out->start, s, inlen);
+		((char *) out->start)[inlen] = '\0';
+		outlen = rspamd_html_decode_entitles_inplace((char *) out->start, inlen);
+		out->len = outlen;
 	}
 
 	return 1;
@@ -1705,6 +1794,65 @@ lua_util_transliterate(lua_State *L)
 
 	t = lua_new_text(L, transliterated, outlen, FALSE);
 	t->flags = RSPAMD_TEXT_FLAG_OWN;
+
+	return 1;
+}
+
+static int
+lua_util_to_utf8(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t;
+	const char *charset;
+	char *dest;
+	int32_t dest_len, dest_cap;
+	UErrorCode err = U_ZERO_ERROR;
+
+	t = lua_check_text_or_string(L, 1);
+	charset = luaL_checkstring(L, 2);
+
+	if (!t || !charset) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	if (t->len > (G_MAXINT32 / 2 - 16)) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	dest_cap = t->len + (t->len / 2) + 16;
+	dest = g_malloc(dest_cap);
+
+	dest_len = ucnv_convert("UTF-8", charset, dest, dest_cap, t->start, t->len, &err);
+
+	if (dest_len < 0) {
+		g_free(dest);
+		lua_pushnil(L);
+		return 1;
+	}
+
+	if (err == U_BUFFER_OVERFLOW_ERROR) {
+		g_free(dest);
+		err = U_ZERO_ERROR;
+		dest_cap = dest_len + 1;
+		dest = g_malloc(dest_cap);
+		dest_len = ucnv_convert("UTF-8", charset, dest, dest_cap, t->start, t->len, &err);
+
+		if (dest_len < 0) {
+			g_free(dest);
+			lua_pushnil(L);
+			return 1;
+		}
+	}
+
+	if (U_FAILURE(err)) {
+		g_free(dest);
+		lua_pushnil(L);
+		return 1;
+	}
+
+	struct rspamd_lua_text *out = lua_new_text(L, dest, dest_len, FALSE);
+	out->flags |= RSPAMD_TEXT_FLAG_OWN;
 
 	return 1;
 }
@@ -2663,6 +2811,345 @@ lua_util_has_obscured_unicode(lua_State *L)
 	}
 
 	lua_pushboolean(L, false);
+
+	return 1;
+}
+
+/* Helper to check if a character is a Latin vowel */
+static inline gboolean
+is_latin_vowel(UChar32 uc)
+{
+	/* Lowercase and uppercase Latin vowels */
+	return uc == 'a' || uc == 'e' || uc == 'i' || uc == 'o' || uc == 'u' ||
+		   uc == 'A' || uc == 'E' || uc == 'I' || uc == 'O' || uc == 'U';
+}
+
+static int
+lua_util_get_text_quality(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	int32_t i = 0;
+	UChar32 uc, prev_uc = 0;
+	UScriptCode prev_script = USCRIPT_INVALID_CODE;
+	UErrorCode uc_err = U_ZERO_ERROR;
+
+	/* Basic counts */
+	int letters = 0;
+	int spaces = 0;
+	int printable = 0;
+	int total = 0;
+	int words = 0;
+	int word_chars = 0;
+	int current_word_len = 0;
+	gboolean in_word = FALSE;
+
+	/* Extended metrics */
+	int digits = 0;
+	int punctuation = 0;
+	int emojis = 0;
+	int uppercase = 0;
+	int lowercase = 0;
+	int ascii_chars = 0;
+	int non_ascii_chars = 0;
+	int latin_vowels = 0;
+	int latin_consonants = 0;
+	int script_transitions = 0;
+	int double_spaces = 0;
+	int non_printable = 0;
+	gboolean prev_was_space = FALSE;
+
+	struct rspamd_lua_text *t = lua_check_text_or_string(L, 1);
+
+	if (t == NULL || t->len == 0) {
+		lua_createtable(L, 0, 18);
+		lua_pushstring(L, "letters");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "digits");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "punctuation");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "spaces");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "printable");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "words");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "word_chars");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "total");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "emojis");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "uppercase");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "lowercase");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "ascii_chars");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "non_ascii_chars");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "latin_vowels");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "latin_consonants");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "script_transitions");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "double_spaces");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "non_printable");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		return 1;
+	}
+
+	while (i < t->len) {
+		U8_NEXT(t->start, i, t->len, uc);
+		total++;
+
+		if (uc < 0) {
+			/* Invalid UTF-8 sequence */
+			non_printable++;
+			in_word = FALSE;
+			if (current_word_len >= 2) {
+				words++;
+				word_chars += current_word_len;
+			}
+			current_word_len = 0;
+			prev_was_space = FALSE;
+			prev_script = USCRIPT_INVALID_CODE;
+			continue;
+		}
+
+		/* ASCII vs non-ASCII */
+		if (uc <= 127) {
+			ascii_chars++;
+		}
+		else {
+			non_ascii_chars++;
+		}
+
+		/* Check if it's a letter (any Unicode script) */
+		if (u_isalpha(uc)) {
+			letters++;
+			printable++;
+			current_word_len++;
+			in_word = TRUE;
+
+			/* Case detection */
+			if (u_isupper(uc)) {
+				uppercase++;
+			}
+			else if (u_islower(uc)) {
+				lowercase++;
+			}
+
+			/* Latin vowel/consonant detection */
+			uc_err = U_ZERO_ERROR;
+			UScriptCode script = uscript_getScript(uc, &uc_err);
+			if (script == USCRIPT_LATIN) {
+				if (is_latin_vowel(uc)) {
+					latin_vowels++;
+				}
+				else {
+					latin_consonants++;
+				}
+			}
+
+			/* Script transition detection (only for letters) */
+			if (prev_script != USCRIPT_INVALID_CODE &&
+				prev_script != USCRIPT_COMMON &&
+				prev_script != USCRIPT_INHERITED &&
+				script != USCRIPT_COMMON &&
+				script != USCRIPT_INHERITED &&
+				script != prev_script) {
+				script_transitions++;
+			}
+			if (script != USCRIPT_COMMON && script != USCRIPT_INHERITED) {
+				prev_script = script;
+			}
+
+			prev_was_space = FALSE;
+		}
+		else if (u_isdigit(uc)) {
+			digits++;
+			printable++;
+			/* Digits break words for our purposes */
+			if (in_word && current_word_len >= 2) {
+				words++;
+				word_chars += current_word_len;
+			}
+			current_word_len = 0;
+			in_word = FALSE;
+			prev_was_space = FALSE;
+		}
+		else if (u_isUWhiteSpace(uc)) {
+			spaces++;
+			printable++;
+
+			/* Double space detection */
+			if (prev_was_space) {
+				double_spaces++;
+			}
+			prev_was_space = TRUE;
+
+			/* End of word */
+			if (in_word && current_word_len >= 2) {
+				words++;
+				word_chars += current_word_len;
+			}
+			current_word_len = 0;
+			in_word = FALSE;
+		}
+		else if (u_ispunct(uc)) {
+			punctuation++;
+			printable++;
+			/* Punctuation breaks words */
+			if (in_word && current_word_len >= 2) {
+				words++;
+				word_chars += current_word_len;
+			}
+			current_word_len = 0;
+			in_word = FALSE;
+			prev_was_space = FALSE;
+		}
+		else if (u_hasBinaryProperty(uc, UCHAR_EMOJI)) {
+			/* Check for emoji (after digits/letters since 0-9 have UCHAR_EMOJI property) */
+			emojis++;
+			printable++;
+			/* Emojis break words */
+			if (in_word && current_word_len >= 2) {
+				words++;
+				word_chars += current_word_len;
+			}
+			current_word_len = 0;
+			in_word = FALSE;
+			prev_was_space = FALSE;
+			prev_script = USCRIPT_INVALID_CODE;
+		}
+		else if (u_isgraph(uc)) {
+			/* Other printable characters (symbols, etc.) */
+			printable++;
+			if (in_word && current_word_len >= 2) {
+				words++;
+				word_chars += current_word_len;
+			}
+			current_word_len = 0;
+			in_word = FALSE;
+			prev_was_space = FALSE;
+		}
+		else {
+			/* Non-printable characters */
+			non_printable++;
+			if (in_word && current_word_len >= 2) {
+				words++;
+				word_chars += current_word_len;
+			}
+			current_word_len = 0;
+			in_word = FALSE;
+			prev_was_space = FALSE;
+		}
+
+		prev_uc = uc;
+	}
+
+	/* Handle trailing word */
+	if (in_word && current_word_len >= 2) {
+		words++;
+		word_chars += current_word_len;
+	}
+
+	(void) prev_uc;
+
+	lua_createtable(L, 0, 18);
+
+	lua_pushstring(L, "letters");
+	lua_pushinteger(L, letters);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "digits");
+	lua_pushinteger(L, digits);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "punctuation");
+	lua_pushinteger(L, punctuation);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "spaces");
+	lua_pushinteger(L, spaces);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "printable");
+	lua_pushinteger(L, printable);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "words");
+	lua_pushinteger(L, words);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "word_chars");
+	lua_pushinteger(L, word_chars);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "total");
+	lua_pushinteger(L, total);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "emojis");
+	lua_pushinteger(L, emojis);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "uppercase");
+	lua_pushinteger(L, uppercase);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "lowercase");
+	lua_pushinteger(L, lowercase);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "ascii_chars");
+	lua_pushinteger(L, ascii_chars);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "non_ascii_chars");
+	lua_pushinteger(L, non_ascii_chars);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "latin_vowels");
+	lua_pushinteger(L, latin_vowels);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "latin_consonants");
+	lua_pushinteger(L, latin_consonants);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "script_transitions");
+	lua_pushinteger(L, script_transitions);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "double_spaces");
+	lua_pushinteger(L, double_spaces);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "non_printable");
+	lua_pushinteger(L, non_printable);
+	lua_settable(L, -3);
 
 	return 1;
 }

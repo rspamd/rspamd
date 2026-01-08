@@ -2460,11 +2460,11 @@ rspamd_metrics_to_prometheus_string(const ucl_object_t *top)
 						  ucl_object_tostring(ucl_object_lookup(top, "config_id")));
 
 
-	rspamd_metrics_add_integer(&output, top,
-							   "rspamd_scan_time_average",
-							   "gauge",
-							   "Average messages scan time.",
-							   "avg_scan_time");
+	rspamd_metrics_add_double(&output, top,
+							  "rspamd_scan_time_average",
+							  "gauge",
+							  "Average messages scan time.",
+							  "avg_scan_time");
 	rspamd_metrics_add_integer(&output, top,
 							   "process_start_time_seconds",
 							   "gauge",

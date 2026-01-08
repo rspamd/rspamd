@@ -78,6 +78,7 @@ typedef enum spf_action_e {
 #define RSPAMD_SPF_FLAG_RESOLVED (1u << 11u)
 #define RSPAMD_SPF_FLAG_CACHED (1u << 12u)
 #define RSPAMD_SPF_FLAG_PLUSALL (1u << 13u)
+#define RSPAMD_SPF_FLAG_MACRO_UNRESOLVED (1u << 14u)
 
 /** Default SPF limits for avoiding abuse **/
 #define SPF_MAX_NESTING 10

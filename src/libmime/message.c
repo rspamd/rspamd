@@ -1115,6 +1115,29 @@ rspamd_message_process_text_part_maybe(struct rspamd_task *task,
 	return TRUE;
 }
 
+void rspamd_message_process_injected_text_part(struct rspamd_task *task,
+											   struct rspamd_mime_text_part *text_part,
+											   uint16_t *cur_url_order)
+{
+	if (!rspamd_message_process_plain_text_part(task, text_part)) {
+		return;
+	}
+
+	rspamd_normalize_text_part(task, text_part);
+	rspamd_url_text_extract(task->task_pool, task, text_part, cur_url_order,
+							RSPAMD_URL_FIND_ALL);
+
+	if (text_part->exceptions) {
+		text_part->exceptions = g_list_sort(text_part->exceptions,
+											exceptions_compare_func);
+		rspamd_mempool_add_destructor(task->task_pool,
+									  (rspamd_mempool_destruct_t) g_list_free,
+									  text_part->exceptions);
+	}
+
+	rspamd_mime_part_create_words(task, text_part);
+}
+
 /* Creates message from various data using libmagic to detect type */
 static void
 rspamd_message_from_data(struct rspamd_task *task, const unsigned char *start,
@@ -1150,6 +1173,7 @@ rspamd_message_from_data(struct rspamd_task *task, const unsigned char *start,
 	}
 	else if (task->cfg && task->cfg->libs_ctx) {
 		lua_State *L = task->cfg->lua_state;
+		int old_top = lua_gettop(L);
 
 		if (task->cfg->mime_parser_cfg &&
 			rspamd_mime_parser_get_lua_magic_cbref(task->cfg->mime_parser_cfg) != -1) {
@@ -1179,7 +1203,7 @@ rspamd_message_from_data(struct rspamd_task *task, const unsigned char *start,
 				}
 			}
 
-			lua_settop(L, 0);
+			lua_settop(L, old_top);
 		}
 		else if (rspamd_lua_require_function(L,
 											 "lua_magic", "detect_mime_part")) {
@@ -1209,7 +1233,7 @@ rspamd_message_from_data(struct rspamd_task *task, const unsigned char *start,
 				}
 			}
 
-			lua_settop(L, 0);
+			lua_settop(L, old_top);
 		}
 		else {
 			msg_err_task("cannot require lua_magic.detect_mime_part");
@@ -1614,6 +1638,7 @@ void rspamd_message_process(struct rspamd_task *task)
 		rspamd_mime_parser_get_lua_magic_cbref(task->cfg->mime_parser_cfg) != -1) {
 		unsigned int j;
 		struct rspamd_mime_part *pp;
+		int second_pass_old_top = lua_gettop(L);
 		PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, parts), j, pp)
 		{
 			gboolean needs_refine = FALSE;
@@ -1685,8 +1710,7 @@ void rspamd_message_process(struct rspamd_task *task)
 				else {
 					msg_err_task("second-pass detect type: %s", lua_tostring(L, -1));
 				}
-				/* restore stack */
-				lua_settop(L, 0);
+				lua_settop(L, second_pass_old_top);
 			}
 		}
 	}

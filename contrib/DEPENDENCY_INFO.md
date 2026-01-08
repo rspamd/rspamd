@@ -10,7 +10,7 @@
 | libottery              | ?       | Public Domain / CC0 | YES     | many changes        |
 | librdns                | ?       | BSD-2-Clause        | YES     |                     |
 | libucl                 | ?       | BSD-2-Clause        | YES     |                     |
-| replxx                 | 6d93360 | BSD-2-Clause        | YES     | libicu usage        |
+| replxx                 | 6d93360 | BSD-2-Clause        | YES     | libicu, libc++ link |
 | lua-argparse           | 0.7.1   | MIT                 | NO      |                     |
 | lua-bit                | 1.0.2   | MIT                 | YES     | build fixes         |
 | lua-fun                | ?       | MIT                 | YES     | rspamd text         |
@@ -32,7 +32,7 @@
 | simdutf                | ef7d39c | Apache 2            | NO      | build system only   |
 | expected               | v1.0    | Public Domain / CC0 | NO      |                     |
 | frozen                 | 1.0.1   | Apache 2            | NO      |                     |
-| fmt                    | 11.0.0  | MIT                 | NO      |                     |
+| fmt                    | 12.1.0  | MIT                 | NO      |                     |
 | doctest                | 2.4.11  | MIT                 | NO      |                     |
 | function2              | 4.1.0   | Boost               | NO      |                     |
 | ankerl/svector         | 1.0.2   | MIT                 | NO      |                     |

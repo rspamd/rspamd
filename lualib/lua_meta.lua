@@ -17,7 +17,7 @@ limitations under the License.
 local exports = {}
 
 local N = "metatokens"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
 local logger = require "rspamd_logger"
 local lua_mime = require "lua_mime"
 
@@ -587,12 +587,12 @@ local metafunctions = {
   },
 }
 
-local meta_schema = ts.shape {
-  cb = ts.func,
-  ninputs = ts.number,
-  names = ts.array_of(ts.string),
-  description = ts.string:is_optional()
-}
+local meta_schema = T.table({
+  cb = T.callable(),
+  ninputs = T.number(),
+  names = T.array(T.string()),
+  description = T.string():optional()
+})
 
 local metatokens_by_name = {}
 

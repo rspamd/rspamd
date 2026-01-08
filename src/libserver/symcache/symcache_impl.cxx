@@ -925,6 +925,17 @@ auto symcache::validate(bool strict) -> bool
 			item->priority++;
 		}
 
+		/*
+		 * Mark symbols with negative weight as FINE, so they are not skipped
+		 * when reject threshold is reached. This ensures whitelist symbols
+		 * always have a chance to execute.
+		 */
+		if (item->st->weight < 0 && !(item->flags & SYMBOL_TYPE_FINE)) {
+			item->flags |= SYMBOL_TYPE_FINE;
+			msg_debug_cache("symbol %s has negative weight (%.2f), marking as FINE",
+							item->symbol.c_str(), item->st->weight);
+		}
+
 		if (item->is_virtual()) {
 			if (!(item->flags & SYMBOL_TYPE_GHOST)) {
 				auto *parent = const_cast<cache_item *>(item->get_parent(*this));
@@ -950,6 +961,35 @@ auto symcache::validate(bool strict) -> bool
 
 		total_weight += fabs(item->st->weight);
 	}
+
+	/*
+	 * Propagate SYMBOL_TYPE_FINE between virtual symbols and their parents until a fixed point.
+	 * This avoids order-dependent results when iterating items_by_symbol.
+	 */
+	bool fine_changed;
+	do {
+		fine_changed = false;
+		for (auto &pair: items_by_symbol) {
+			auto &item = pair.second;
+			if (item->is_virtual() && !(item->flags & SYMBOL_TYPE_GHOST)) {
+				auto *parent = const_cast<cache_item *>(item->get_parent(*this));
+
+				if (parent == nullptr) {
+					item->resolve_parent(*this);
+					parent = const_cast<cache_item *>(item->get_parent(*this));
+				}
+
+				if ((item->flags & SYMBOL_TYPE_FINE) && !(parent->flags & SYMBOL_TYPE_FINE)) {
+					parent->flags |= SYMBOL_TYPE_FINE;
+					fine_changed = true;
+				}
+				else if ((parent->flags & SYMBOL_TYPE_FINE) && !(item->flags & SYMBOL_TYPE_FINE)) {
+					item->flags |= SYMBOL_TYPE_FINE;
+					fine_changed = true;
+				}
+			}
+		}
+	} while (fine_changed);
 
 	/* Now check each metric item and find corresponding symbol in a cache */
 	auto ret = true;

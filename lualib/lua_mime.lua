@@ -706,72 +706,72 @@ end
 -- Returns schema for a message to verify result/document fields
 --]]
 exports.message_to_ucl_schema = function()
-  local ts = require("tableshape").types
+  local T = require "lua_shape.core"
 
   local function headers_schema()
-    return ts.shape {
-      order = ts.integer:describe('Header order in a message'),
-      raw = ts.string:describe('Raw header value'):is_optional(),
-      empty_separator = ts.boolean:describe('Whether header has an empty separator'),
-      separator = ts.string:describe('Separator between a header and a value'),
-      decoded = ts.string:describe('Decoded value'):is_optional(),
-      value = ts.string:describe('Decoded value'):is_optional(),
-      name = ts.string:describe('Header name'),
-      tab_separated = ts.boolean:describe('Whether header has tab as a separator')
-    }
+    return T.table({
+      order = T.integer():doc({ summary = 'Header order in a message' }),
+      raw = T.string():doc({ summary = 'Raw header value' }):optional(),
+      empty_separator = T.boolean():doc({ summary = 'Whether header has an empty separator' }),
+      separator = T.string():doc({ summary = 'Separator between a header and a value' }),
+      decoded = T.string():doc({ summary = 'Decoded value' }):optional(),
+      value = T.string():doc({ summary = 'Decoded value' }):optional(),
+      name = T.string():doc({ summary = 'Header name' }),
+      tab_separated = T.boolean():doc({ summary = 'Whether header has tab as a separator' })
+    })
   end
 
   local function part_schema()
-    return ts.shape {
-      content = ts.string:describe('Decoded content'):is_optional(),
-      multipart_boundary = ts.string:describe('Multipart service boundary'):is_optional(),
-      size = ts.integer:describe('Size of the part'),
-      type = ts.string:describe('Announced type'):is_optional(),
-      detected_type = ts.string:describe('Detected type'):is_optional(),
-      boundary = ts.string:describe('Eclosing boundary'):is_optional(),
-      filename = ts.string:describe('File name for attachments'):is_optional(),
-      headers = ts.array_of(headers_schema()):describe('Part headers'),
-    }
+    return T.table({
+      content = T.string():doc({ summary = 'Decoded content' }):optional(),
+      multipart_boundary = T.string():doc({ summary = 'Multipart service boundary' }):optional(),
+      size = T.integer():doc({ summary = 'Size of the part' }),
+      type = T.string():doc({ summary = 'Announced type' }):optional(),
+      detected_type = T.string():doc({ summary = 'Detected type' }):optional(),
+      boundary = T.string():doc({ summary = 'Eclosing boundary' }):optional(),
+      filename = T.string():doc({ summary = 'File name for attachments' }):optional(),
+      headers = T.array(headers_schema()):doc({ summary = 'Part headers' }),
+    })
   end
 
   local function email_addr_schema()
-    return ts.shape {
-      addr = ts.string:describe('Parsed address'):is_optional(),
-      raw = ts.string:describe('Raw address'),
-      flags = ts.shape {
-        valid = ts.boolean:describe('Valid address'):is_optional(),
-        ip = ts.boolean:describe('IP like address'):is_optional(),
-        braced = ts.boolean:describe('Have braces around address'):is_optional(),
-        quoted = ts.boolean:describe('Have quotes around address'):is_optional(),
-        empty = ts.boolean:describe('Empty address'):is_optional(),
-        backslash = ts.boolean:describe('Backslash in address'):is_optional(),
-        ['8bit'] = ts.boolean:describe('8 bit characters in address'):is_optional(),
-      },
-      user = ts.string:describe('Parsed user part'):is_optional(),
-      name = ts.string:describe('Displayed name'):is_optional(),
-      domain = ts.string:describe('Parsed domain part'):is_optional(),
-    }
+    return T.table({
+      addr = T.string():doc({ summary = 'Parsed address' }):optional(),
+      raw = T.string():doc({ summary = 'Raw address' }),
+      flags = T.table({
+        valid = T.boolean():doc({ summary = 'Valid address' }):optional(),
+        ip = T.boolean():doc({ summary = 'IP like address' }):optional(),
+        braced = T.boolean():doc({ summary = 'Have braces around address' }):optional(),
+        quoted = T.boolean():doc({ summary = 'Have quotes around address' }):optional(),
+        empty = T.boolean():doc({ summary = 'Empty address' }):optional(),
+        backslash = T.boolean():doc({ summary = 'Backslash in address' }):optional(),
+        ['8bit'] = T.boolean():doc({ summary = '8 bit characters in address' }):optional(),
+      }),
+      user = T.string():doc({ summary = 'Parsed user part' }):optional(),
+      name = T.string():doc({ summary = 'Displayed name' }):optional(),
+      domain = T.string():doc({ summary = 'Parsed domain part' }):optional(),
+    })
   end
   local function envelope_schema()
-    return ts.shape {
-      from_smtp = email_addr_schema():describe('SMTP from'):is_optional(),
-      recipients_smtp = ts.array_of(email_addr_schema()):describe('SMTP recipients'):is_optional(),
-      helo = ts.string:describe('SMTP Helo'):is_optional(),
-      hostname = ts.string:describe('Sender hostname'):is_optional(),
-      client_ip = ts.string:describe('Client ip'):is_optional(),
-      from_ip = ts.string:describe('Sender ip'):is_optional(),
-    }
+    return T.table({
+      from_smtp = email_addr_schema():doc({ summary = 'SMTP from' }):optional(),
+      recipients_smtp = T.array(email_addr_schema()):doc({ summary = 'SMTP recipients' }):optional(),
+      helo = T.string():doc({ summary = 'SMTP Helo' }):optional(),
+      hostname = T.string():doc({ summary = 'Sender hostname' }):optional(),
+      client_ip = T.string():doc({ summary = 'Client ip' }):optional(),
+      from_ip = T.string():doc({ summary = 'Sender ip' }):optional(),
+    })
   end
 
-  return ts.shape {
-    headers = ts.array_of(headers_schema()),
-    parts = ts.array_of(part_schema()),
-    digest = ts.pattern(string.format('^%s$', string.rep('%x', 32)))
-               :describe('Message digest'),
-    newlines = ts.one_of({ "cr", "lf", "crlf" }):describe('Newlines type'),
-    size = ts.integer:describe('Size of the message in bytes'),
+  return T.table({
+    headers = T.array(headers_schema()),
+    parts = T.array(part_schema()),
+    digest = T.string({ pattern = string.format('^%s$', string.rep('%x', 32)) })
+               :doc({ summary = 'Message digest' }),
+    newlines = T.enum({ "cr", "lf", "crlf" }):doc({ summary = 'Newlines type' }),
+    size = T.integer():doc({ summary = 'Size of the message in bytes' }),
     envelope = envelope_schema()
-  }
+  })
 end
 
 --[[[

@@ -1,0 +1,6 @@
+From: sender@example.com
+To: victim@example.com
+Subject: Test bracket dots obfuscation
+Content-Type: text/plain; charset=utf-8
+
+Visit our site at example[.]com/login

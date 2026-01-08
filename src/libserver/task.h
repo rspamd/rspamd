@@ -416,6 +416,13 @@ void rspamd_task_timeout(EV_P_ ev_timer *w, int revents);
  */
 void rspamd_worker_guard_handler(EV_P_ ev_io *w, int revents);
 
+/*
+ * Task validity set for safe Lua task references
+ */
+void rspamd_task_registry_init(void);
+void rspamd_task_registry_destroy(void);
+gboolean rspamd_task_is_valid(struct rspamd_task *task);
+
 #ifdef __cplusplus
 }
 #endif

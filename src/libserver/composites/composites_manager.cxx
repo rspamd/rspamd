@@ -24,6 +24,7 @@
 #include "libserver/cfg_file.h"
 #include "libserver/logger.h"
 #include "libserver/maps/map.h"
+#include "libserver/rspamd_symcache.h"
 #include "libutil/cxx/util.hxx"
 
 namespace rspamd::composites {
@@ -166,7 +167,15 @@ auto composites_manager::add_composite(std::string_view composite_name,
 		}
 	}
 
-	if (!rspamd_parse_expression(composite_expression.data(),
+	/*
+	 * Copy expression string to memory pool - the expression parser stores
+	 * pointers into this string in atom->str, so it must outlive the expression.
+	 */
+	char *expr_copy = rspamd_mempool_alloc_buffer(cfg->cfg_pool, composite_expression.size() + 1);
+	memcpy(expr_copy, composite_expression.data(), composite_expression.size());
+	expr_copy[composite_expression.size()] = '\0';
+
+	if (!rspamd_parse_expression(expr_copy,
 								 composite_expression.size(), &composite_expr_subr,
 								 nullptr, cfg->cfg_pool, &err, &expr)) {
 		msg_err_config("cannot parse composite expression for %s: %e",
@@ -472,10 +481,278 @@ void composites_manager::process_dependencies()
 					 (int) first_pass_composites.size(), (int) second_pass_composites.size());
 }
 
+/* Context for building inverted index */
+struct inverted_index_cbdata {
+	composites_manager *cm;
+	rspamd_composite *comp;
+	bool has_positive;
+	bool has_group_atom; /* Composite uses group matcher (g:, g+:, g-:) */
+};
+
+/*
+ * Count NOT operations from atom to root to determine atom polarity.
+ * Even number of NOTs = positive atom (must be true for expression to be true)
+ * Odd number of NOTs = negative atom (must be false for expression to be true)
+ */
+static bool
+atom_is_negated(GNode *atom_node)
+{
+	int not_count = 0;
+	GNode *node = atom_node->parent;
+
+	while (node != nullptr) {
+		if (rspamd_expression_node_is_op(node, OP_NOT)) {
+			not_count++;
+		}
+		node = node->parent;
+	}
+
+	/* Odd number of NOTs means atom is negated */
+	return (not_count & 1) != 0;
+}
+
+static void
+inverted_index_atom_callback(GNode *atom_node, rspamd_expression_atom_t *atom, gpointer ud)
+{
+	auto *cbd = reinterpret_cast<inverted_index_cbdata *>(ud);
+
+	/* Check atom polarity by counting NOTs to root */
+	if (atom_is_negated(atom_node)) {
+		/* Negated atom - don't add to inverted index */
+		return;
+	}
+
+	if (atom->str == nullptr || atom->len == 0) {
+		return;
+	}
+
+	/* Get the atom string with correct length */
+	std::string_view atom_str(atom->str, atom->len);
+
+	/* Skip prefix characters (~, -, ^) to find the symbol name */
+	size_t sym_start = 0;
+	while (sym_start < atom_str.size() &&
+		   (atom_str[sym_start] == '~' || atom_str[sym_start] == '-' || atom_str[sym_start] == '^')) {
+		++sym_start;
+	}
+
+	if (sym_start >= atom_str.size()) {
+		return;
+	}
+
+	std::string_view remaining = atom_str.substr(sym_start);
+
+	/* Check for group matchers: g:, g+:, g-: */
+	if (remaining.size() >= 2 && remaining.substr(0, 2) == "g:") {
+		cbd->has_group_atom = true;
+		return;
+	}
+	if (remaining.size() >= 3 && (remaining.substr(0, 3) == "g+:" || remaining.substr(0, 3) == "g-:")) {
+		cbd->has_group_atom = true;
+		return;
+	}
+
+	/* Find end of symbol name (before '[' if present for options) */
+	auto bracket_pos = remaining.find('[');
+	std::string symbol_name;
+	if (bracket_pos != std::string_view::npos) {
+		symbol_name = std::string(remaining.substr(0, bracket_pos));
+	}
+	else {
+		symbol_name = std::string(remaining);
+	}
+
+	if (symbol_name.empty()) {
+		return;
+	}
+
+	/* Mark that we have at least one positive atom */
+	cbd->has_positive = true;
+
+	/* Add to inverted index */
+	cbd->cm->symbol_to_composites[symbol_name].push_back(cbd->comp);
+}
+
+void composites_manager::build_inverted_index()
+{
+	msg_debug_config("building inverted index for %d composites", (int) all_composites.size());
+
+	for (auto &comp: all_composites) {
+		inverted_index_cbdata cbd{this, comp.get(), false, false};
+
+		rspamd_expression_atom_foreach_ex(comp->expr, inverted_index_atom_callback, &cbd);
+
+		comp->has_positive_atoms = cbd.has_positive;
+
+		if (!cbd.has_positive || cbd.has_group_atom) {
+			/*
+			 * Composite must always be checked if:
+			 * - It has only negated atoms (no positive symbols to match)
+			 * - It uses group matchers (we don't know which symbols will match)
+			 */
+			not_only_composites.push_back(comp.get());
+			if (cbd.has_group_atom) {
+				msg_debug_config("composite '%s' uses group matcher, will always be checked",
+								 comp->sym.c_str());
+			}
+			else {
+				msg_debug_config("composite '%s' has only negated atoms, will always be checked",
+								 comp->sym.c_str());
+			}
+		}
+	}
+
+	msg_debug_config("inverted index built: %d unique symbols, %d not-only composites",
+					 (int) symbol_to_composites.size(), (int) not_only_composites.size());
+}
+
+/* Callback data for collecting atoms from whitelist composites */
+struct whitelist_atom_cbdata {
+	ankerl::unordered_dense::set<std::string> *fine_symbols;
+};
+
+static void
+whitelist_atom_callback(const rspamd_ftok_t *atom, gpointer ud)
+{
+	auto *cbd = reinterpret_cast<whitelist_atom_cbdata *>(ud);
+
+	if (atom->len == 0) {
+		return;
+	}
+
+	std::string_view atom_str(atom->begin, atom->len);
+
+	/* Skip operators */
+	if (atom_str[0] == '&' || atom_str[0] == '|' ||
+		atom_str[0] == '!' || atom_str[0] == '(' || atom_str[0] == ')') {
+		return;
+	}
+
+	/* Skip prefix characters (~, -, ^) */
+	size_t start = 0;
+	while (start < atom_str.size() &&
+		   (atom_str[start] == '~' || atom_str[start] == '-' || atom_str[start] == '^')) {
+		++start;
+	}
+
+	if (start >= atom_str.size()) {
+		return;
+	}
+
+	auto remaining = atom_str.substr(start);
+
+	/* Skip group matchers (g:, g+:, g-:) - we can't determine specific symbols */
+	if (remaining.starts_with("g:") || remaining.starts_with("g+:") || remaining.starts_with("g-:")) {
+		return;
+	}
+
+	/* Extract symbol name (before '[' if present for options) */
+	auto bracket_pos = remaining.find('[');
+	std::string symbol_name;
+	if (bracket_pos != std::string_view::npos) {
+		symbol_name = std::string(remaining.substr(0, bracket_pos));
+	}
+	else {
+		symbol_name = std::string(remaining);
+	}
+
+	if (!symbol_name.empty()) {
+		cbd->fine_symbols->emplace(std::move(symbol_name));
+	}
+}
+
+void composites_manager::mark_whitelist_dependencies()
+{
+	ankerl::unordered_dense::set<std::string> fine_symbols;
+
+	msg_debug_config("analyzing whitelist composites for FINE symbol marking");
+
+	/* Step 1: Find composites with negative score and collect their atoms */
+	for (const auto &comp: all_composites) {
+		auto *sym_def = static_cast<struct rspamd_symbol *>(
+			g_hash_table_lookup(cfg->symbols, comp->sym.c_str()));
+
+		if (sym_def && *sym_def->weight_ptr < 0) {
+			/* This is a whitelist composite - collect all its atoms */
+			whitelist_atom_cbdata cbd{&fine_symbols};
+			rspamd_expression_atom_foreach(comp->expr, whitelist_atom_callback, &cbd);
+
+			msg_debug_config("composite '%s' has negative weight (%.2f), collecting dependencies",
+							 comp->sym.c_str(), *sym_def->weight_ptr);
+		}
+	}
+
+	/* Step 2: Transitively expand - if an atom is also a whitelist composite, add its atoms */
+	bool changed;
+	do {
+		changed = false;
+		for (const auto &comp: all_composites) {
+			if (fine_symbols.contains(comp->sym)) {
+				size_t before = fine_symbols.size();
+				whitelist_atom_cbdata cbd{&fine_symbols};
+				rspamd_expression_atom_foreach(comp->expr, whitelist_atom_callback, &cbd);
+				if (fine_symbols.size() > before) {
+					changed = true;
+				}
+			}
+		}
+	} while (changed);
+
+	/* Step 3: Mark all collected symbols as FINE in symcache */
+	int marked_count = 0;
+	for (const auto &sym_name: fine_symbols) {
+		if (rspamd_symcache_set_symbol_fine(cfg->cache, sym_name.c_str())) {
+			msg_debug_config("marked symbol '%s' as FINE (whitelist composite dependency)",
+							 sym_name.c_str());
+			marked_count++;
+		}
+	}
+
+	msg_info_config("marked %d symbols as FINE for whitelist composite dependencies",
+					marked_count);
+}
+
 }// namespace rspamd::composites
 
 void rspamd_composites_process_deps(void *cm_ptr, struct rspamd_config *cfg)
 {
 	auto *cm = COMPOSITE_MANAGER_FROM_PTR(cm_ptr);
 	cm->process_dependencies();
+	rspamd_composites_resolve_atom_types(cm);
+	cm->build_inverted_index();
+}
+
+void rspamd_composites_set_inverted_index(void *cm_ptr, gboolean enabled)
+{
+	auto *cm = COMPOSITE_MANAGER_FROM_PTR(cm_ptr);
+	cm->use_inverted_index = enabled;
+}
+
+gboolean rspamd_composites_get_inverted_index(void *cm_ptr)
+{
+	auto *cm = COMPOSITE_MANAGER_FROM_PTR(cm_ptr);
+	return cm->use_inverted_index;
+}
+
+void rspamd_composites_get_stats(void *cm_ptr, struct rspamd_composites_stats_export *stats)
+{
+	auto *cm = COMPOSITE_MANAGER_FROM_PTR(cm_ptr);
+
+	stats->checked_slow = cm->stats.checked_slow;
+	stats->checked_fast = cm->stats.checked_fast;
+	stats->matched = cm->stats.matched;
+
+	stats->time_slow_mean = cm->stats.time_slow.mean;
+	stats->time_slow_stddev = cm->stats.time_slow.stddev;
+	stats->time_slow_count = cm->stats.time_slow.number;
+
+	stats->time_fast_mean = cm->stats.time_fast.mean;
+	stats->time_fast_stddev = cm->stats.time_fast.stddev;
+	stats->time_fast_count = cm->stats.time_fast.number;
+}
+
+void rspamd_composites_mark_whitelist_deps(void *cm_ptr, struct rspamd_config *cfg)
+{
+	auto *cm = COMPOSITE_MANAGER_FROM_PTR(cm_ptr);
+	cm->mark_whitelist_dependencies();
 }

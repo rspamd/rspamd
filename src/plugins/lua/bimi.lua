@@ -17,8 +17,9 @@ limitations under the License.
 local N = "bimi"
 local lua_util = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
-local ts = (require "tableshape").types
+local T = require "lua_shape.core"
 local lua_redis = require "lua_redis"
+local PluginSchema = require "lua_shape.plugin_schema"
 local ucl = require "ucl"
 local lua_mime = require "lua_mime"
 local rspamd_http = require "rspamd_http"
@@ -35,19 +36,39 @@ local settings = {
 local redis_params
 
 local settings_schema = lua_redis.enrich_schema({
-  helper_url = ts.string,
-  helper_timeout = ts.number + ts.string / lua_util.parse_time_interval,
-  helper_sync = ts.boolean,
-  vmc_only = ts.boolean,
-  redis_min_expiry = ts.number + ts.string / lua_util.parse_time_interval,
-  redis_prefix = ts.string,
-  enabled = ts.boolean:is_optional(),
-  -- New optional staged timeouts for HTTP helper
-  helper_connect_timeout = (ts.number + ts.string / lua_util.parse_time_interval):is_optional(),
-  helper_ssl_timeout = (ts.number + ts.string / lua_util.parse_time_interval):is_optional(),
-  helper_write_timeout = (ts.number + ts.string / lua_util.parse_time_interval):is_optional(),
-  helper_read_timeout = (ts.number + ts.string / lua_util.parse_time_interval):is_optional(),
+  helper_url = T.string():doc({ summary = "BIMI helper service URL" }),
+  helper_timeout = T.one_of({
+    T.number(),
+    T.transform(T.string(), lua_util.parse_time_interval)
+  }):doc({ summary = "BIMI helper timeout (seconds)" }),
+  helper_sync = T.boolean():doc({ summary = "Use synchronous helper requests" }),
+  vmc_only = T.boolean():doc({ summary = "Only accept VMC (Verified Mark Certificates)" }),
+  redis_min_expiry = T.one_of({
+    T.number(),
+    T.transform(T.string(), lua_util.parse_time_interval)
+  }):doc({ summary = "Minimum Redis cache expiry time (seconds)" }),
+  redis_prefix = T.string():doc({ summary = "Redis key prefix" }),
+  enabled = T.boolean():optional():doc({ summary = "Enable the plugin" }),
+  -- Optional staged timeouts for HTTP helper
+  helper_connect_timeout = T.one_of({
+    T.number(),
+    T.transform(T.string(), lua_util.parse_time_interval)
+  }):optional():doc({ summary = "Helper connection timeout (seconds)" }),
+  helper_ssl_timeout = T.one_of({
+    T.number(),
+    T.transform(T.string(), lua_util.parse_time_interval)
+  }):optional():doc({ summary = "Helper SSL timeout (seconds)" }),
+  helper_write_timeout = T.one_of({
+    T.number(),
+    T.transform(T.string(), lua_util.parse_time_interval)
+  }):optional():doc({ summary = "Helper write timeout (seconds)" }),
+  helper_read_timeout = T.one_of({
+    T.number(),
+    T.transform(T.string(), lua_util.parse_time_interval)
+  }):optional():doc({ summary = "Helper read timeout (seconds)" }),
 })
+
+PluginSchema.register("plugins.bimi", settings_schema)
 
 local function check_dmarc_policy(task)
   local dmarc_sym = task:get_symbol('DMARC_POLICY_ALLOW')

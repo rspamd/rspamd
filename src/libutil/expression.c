@@ -1737,6 +1737,37 @@ void rspamd_expression_atom_foreach(struct rspamd_expression *expr,
 					rspamd_ast_atom_traverse, &data);
 }
 
+struct atom_foreach_cbdata_ex {
+	rspamd_expression_atom_foreach_cb_ex cb;
+	gpointer cbdata;
+};
+
+static gboolean
+rspamd_ast_atom_traverse_ex(GNode *n, gpointer d)
+{
+	struct atom_foreach_cbdata_ex *data = d;
+	struct rspamd_expression_elt *elt = n->data;
+
+	if (elt->type == ELT_ATOM) {
+		data->cb(n, elt->p.atom, data->cbdata);
+	}
+
+	return FALSE;
+}
+
+void rspamd_expression_atom_foreach_ex(struct rspamd_expression *expr,
+									   rspamd_expression_atom_foreach_cb_ex cb, gpointer cbdata)
+{
+	struct atom_foreach_cbdata_ex data;
+
+	g_assert(expr != NULL);
+
+	data.cb = cb;
+	data.cbdata = cbdata;
+	g_node_traverse(expr->ast, G_POST_ORDER, G_TRAVERSE_ALL, -1,
+					rspamd_ast_atom_traverse_ex, &data);
+}
+
 gboolean
 rspamd_expression_node_is_op(GNode *node, enum rspamd_expression_op op)
 {

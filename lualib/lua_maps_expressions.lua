@@ -39,7 +39,7 @@ local lua_maps = require "lua_maps"
 local rspamd_expression = require "rspamd_expression"
 local rspamd_logger = require "rspamd_logger"
 local fun = require "fun"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
 
 local exports = {}
 
@@ -86,15 +86,20 @@ local function process_func(elt, task)
   return nil
 end
 
-exports.schema = ts.shape {
-  expression = ts.string,
-  rules = ts.array_of(
-      ts.shape {
-        selector = ts.string,
-        map = lua_maps.map_schema,
-      }
-  )
-}
+-- Schema for maps expressions configuration
+-- Note: map field references lua_maps.map_schema which will be migrated separately
+-- Rules is a key-value table where each key is the rule name and value contains selector+map
+exports.schema = T.table({
+  expression = T.string(),
+  rules = T.table({}, {
+    extra = T.table({
+      selector = T.string(),
+      map = lua_maps.map_schema,
+      type = T.string():optional(), -- Optional map type override
+      description = T.string():optional(), -- Optional description
+    }),
+  }),
+})
 
 --[[[
 -- @function lua_maps_expression.create(config, object, module_name)

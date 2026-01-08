@@ -758,6 +758,10 @@ lua_dkim_sign_handler(lua_State *L)
 	gboolean no_cache = FALSE, strict_pubkey_check = FALSE;
 	struct dkim_ctx *dkim_module_ctx;
 
+	if (task == NULL) {
+		return luaL_error(L, "invalid task");
+	}
+
 	luaL_argcheck(L, lua_type(L, 2) == LUA_TTABLE, 2, "'table' expected");
 	/*
 	 * Get the following elements:
@@ -956,6 +960,10 @@ lua_dkim_load_sign_key_handler(lua_State *L)
 	struct dkim_ctx *dkim_module_ctx;
 	rspamd_dkim_sign_key_t **pkey;
 
+	if (task == NULL) {
+		return luaL_error(L, "invalid task");
+	}
+
 	luaL_argcheck(L, lua_type(L, 2) == LUA_TTABLE, 2, "'table' expected");
 
 	if (!rspamd_lua_parse_table_arguments(L, 2, &err,
@@ -1034,6 +1042,10 @@ lua_dkim_sign_digest_handler(lua_State *L)
 	struct rspamd_lua_text *digest_text = NULL;
 	const unsigned char *digest_data;
 	char *sig_b64 = NULL;
+
+	if (task == NULL) {
+		return luaL_error(L, "invalid task");
+	}
 
 	luaL_argcheck(L, lua_type(L, 2) == LUA_TTABLE, 2, "'table' expected");
 

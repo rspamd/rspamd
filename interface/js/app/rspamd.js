@@ -1,26 +1,6 @@
 /*
- The MIT License (MIT)
-
- Copyright (C) 2012-2013 Anton Simonov <untone@gmail.com>
- Copyright (C) 2014-2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
-
- Permission is hereby granted, free of charge, to any person obtaining a copy
- of this software and associated documentation files (the "Software"), to deal
- in the Software without restriction, including without limitation the rights
- to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- copies of the Software, and to permit persons to whom the Software is
- furnished to do so, subject to the following conditions:
-
- The above copyright notice and this permission notice shall be included in
- all copies or substantial portions of the Software.
-
- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- THE SOFTWARE.
+ * Copyright (C) 2012-2013 Anton Simonov <untone@gmail.com>
+ * Copyright (C) 2014-2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
  */
 
 /* global require, Visibility */
@@ -354,17 +334,8 @@ define(["jquery", "app/common", "stickytabs", "visibility",
         const icon = $("#theme-icon");
         icon.removeClass("fa-moon fa-sun fa-display");
 
-        switch (theme) {
-            case "light":
-                icon.addClass("fa-sun");
-                break;
-            case "dark":
-                icon.addClass("fa-moon");
-                break;
-            default:
-                icon.addClass("fa-display");
-                break;
-        }
+        const iconMap = {light: "fa-sun", dark: "fa-moon", auto: "fa-display"};
+        icon.addClass(iconMap[theme] || "fa-display");
     }
 
     (function initSettings() {
@@ -523,21 +494,9 @@ define(["jquery", "app/common", "stickytabs", "visibility",
     $("#theme-toggle").on("click", (e) => {
         e.preventDefault();
         const currentTheme = localStorage.getItem("theme") || "auto";
-        // eslint-disable-next-line no-useless-assignment
-        let newTheme = null;
-
         // Cycle through: light -> dark -> auto -> light
-        switch (currentTheme) {
-            case "light":
-                newTheme = "dark";
-                break;
-            case "dark":
-                newTheme = "auto";
-                break;
-            default:
-                newTheme = "light";
-                break;
-        }
+        const themeMap = {light: "dark", dark: "auto", auto: "light"};
+        const newTheme = themeMap[currentTheme] || "light";
 
         if (window.rspamd && window.rspamd.theme) {
             window.rspamd.theme.applyPreference(newTheme);

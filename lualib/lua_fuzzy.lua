@@ -25,7 +25,7 @@ local lua_util = require "lua_util"
 local rspamd_regexp = require "rspamd_regexp"
 local fun = require "fun"
 local rspamd_logger = require "rspamd_logger"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
 
 -- Filled by C code, indexed by number in this table
 local rules = {}
@@ -50,21 +50,33 @@ local policies = {
 local default_policy = policies.recommended
 
 local schema_fields = {
-  min_bytes = ts.number + ts.string / tonumber,
-  min_height = ts.number + ts.string / tonumber,
-  min_width = ts.number + ts.string / tonumber,
-  min_length = ts.number + ts.string / tonumber,
-  text_multiplier = ts.number,
-  mime_types = ts.array_of(ts.string),
-  scan_archives = ts.boolean,
-  short_text_direct_hash = ts.boolean,
-  text_shingles = ts.boolean,
-  text_hashes = ts.boolean,
-  skip_images = ts.boolean,
+  min_bytes = T.transform(
+    T.one_of({T.number(), T.string()}),
+    tonumber
+  ),
+  min_height = T.transform(
+    T.one_of({T.number(), T.string()}),
+    tonumber
+  ),
+  min_width = T.transform(
+    T.one_of({T.number(), T.string()}),
+    tonumber
+  ),
+  min_length = T.transform(
+    T.one_of({T.number(), T.string()}),
+    tonumber
+  ),
+  text_multiplier = T.number(),
+  mime_types = T.array(T.string()),
+  scan_archives = T.boolean(),
+  short_text_direct_hash = T.boolean(),
+  text_shingles = T.boolean(),
+  text_hashes = T.boolean(),
+  skip_images = T.boolean(),
 }
-local policy_schema = ts.shape(schema_fields)
+local policy_schema = T.table(schema_fields)
 
-local policy_schema_open = ts.shape(schema_fields, {
+local policy_schema_open = T.table(schema_fields, {
   open = true,
 })
 

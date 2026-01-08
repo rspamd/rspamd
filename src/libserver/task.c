@@ -51,6 +51,76 @@ __KHASH_IMPL(rspamd_req_headers_hash, static inline,
 			 rspamd_ftok_t *, struct rspamd_request_header_chain *, 1,
 			 rspamd_ftok_icase_hash, rspamd_ftok_icase_equal)
 
+/* Task pointer set for validating Lua task references */
+KHASH_SET_INIT_INT(rspamd_task_set);
+
+static khash_t(rspamd_task_set) *task_registry = NULL;
+
+#define TASK_REGISTRY_INITIAL_SIZE 16
+
+/*
+ * Mix 64-bit pointer to 32-bit hash using Fibonacci hashing.
+ * Multiply by golden ratio and take high bits for good distribution.
+ * kh_int_hash_func is identity, so we do all mixing here.
+ */
+static inline khint32_t
+rspamd_task_hash_ptr(struct rspamd_task *task)
+{
+	uint64_t p = (uint64_t) (uintptr_t) task;
+	return (khint32_t) ((p * 11400714819323198485ULL) >> 32);
+}
+
+void rspamd_task_registry_init(void)
+{
+	if (task_registry == NULL) {
+		task_registry = kh_init(rspamd_task_set);
+		kh_resize(rspamd_task_set, task_registry, TASK_REGISTRY_INITIAL_SIZE);
+	}
+}
+
+void rspamd_task_registry_destroy(void)
+{
+	if (task_registry != NULL) {
+		kh_destroy(rspamd_task_set, task_registry);
+		task_registry = NULL;
+	}
+}
+
+gboolean
+rspamd_task_is_valid(struct rspamd_task *task)
+{
+	if (task_registry == NULL || task == NULL) {
+		return FALSE;
+	}
+
+	khiter_t k = kh_get(rspamd_task_set, task_registry, rspamd_task_hash_ptr(task));
+	return k != kh_end(task_registry);
+}
+
+static inline void
+rspamd_task_registry_add(struct rspamd_task *task)
+{
+	if (task_registry == NULL) {
+		rspamd_task_registry_init();
+	}
+
+	int ret;
+	kh_put(rspamd_task_set, task_registry, rspamd_task_hash_ptr(task), &ret);
+}
+
+static inline void
+rspamd_task_registry_remove(struct rspamd_task *task)
+{
+	if (task_registry == NULL) {
+		return;
+	}
+
+	khiter_t k = kh_get(rspamd_task_set, task_registry, rspamd_task_hash_ptr(task));
+	if (k != kh_end(task_registry)) {
+		kh_del(rspamd_task_set, task_registry, k);
+	}
+}
+
 static GQuark
 rspamd_task_quark(void)
 {
@@ -125,6 +195,8 @@ rspamd_task_new(struct rspamd_worker *worker,
 	new_task->mail_esmtp_args = NULL;
 	new_task->rcpt_esmtp_args = NULL;
 
+	rspamd_task_registry_add(new_task);
+
 	return new_task;
 }
 
@@ -183,6 +255,8 @@ void rspamd_task_free(struct rspamd_task *task)
 	unsigned int i;
 
 	if (task) {
+		rspamd_task_registry_remove(task);
+
 		debug_task("free pointer %p", task);
 
 		if (task->rcpt_envelope) {

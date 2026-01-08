@@ -15,10 +15,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]] --
 
-if confighelp then
-  return
-end
-
 -- A plugin that provides common header manipulations
 
 local logger = require "rspamd_logger"
@@ -27,7 +23,8 @@ local N = 'milter_headers'
 local lua_util = require "lua_util"
 local lua_maps = require "lua_maps"
 local lua_mime = require "lua_mime"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
+local PluginSchema = require "lua_shape.plugin_schema"
 local E = {}
 
 local HOSTNAME = rspamd_util.get_hostname()
@@ -115,6 +112,7 @@ local settings = {
     ['authentication-results'] = {
       header = 'Authentication-Results',
       remove = 0,
+      remove_ar_from = nil,
       add_smtp_user = true,
       stop_chars = ';',
     },
@@ -541,14 +539,74 @@ local function milter_headers(task)
       return
     end
     local ar = require "lua_auth_results"
+    local local_mod = settings.routines['authentication-results']
 
-    if settings.routines['authentication-results'].remove then
-      remove[settings.routines['authentication-results'].header] = settings.routines['authentication-results'].remove
+    if local_mod.remove_ar_from then
+      local hdr_name = local_mod.header
+      local existing_hdrs = task:get_header_full(hdr_name)
+
+      if existing_hdrs and #existing_hdrs > 0 then
+        local indices_to_remove = {}
+
+        for idx, hdr in ipairs(existing_hdrs) do
+          local ar_hostname = ar.get_ar_hostname(hdr.decoded or hdr.value)
+          if ar_hostname then
+            local should_remove = false
+
+            if type(local_mod.remove_ar_from) == 'userdata' then
+              if local_mod.remove_ar_from:get_key(ar_hostname) then
+                should_remove = true
+              else
+                for i = 1, #ar_hostname do
+                  if ar_hostname:sub(i, i) == '.' then
+                    if local_mod.remove_ar_from:get_key(ar_hostname:sub(i)) then
+                      should_remove = true
+                      break
+                    end
+                  end
+                end
+              end
+            elseif type(local_mod.remove_ar_from) == 'table' then
+              for _, pattern in ipairs(local_mod.remove_ar_from) do
+                local pattern_lower = pattern:lower()
+                if pattern_lower == ar_hostname then
+                  should_remove = true
+                  break
+                elseif pattern_lower:sub(1, 1) == '.' then
+                  if ar_hostname:sub(-#pattern_lower) == pattern_lower then
+                    should_remove = true
+                    break
+                  end
+                end
+              end
+            elseif type(local_mod.remove_ar_from) == 'string' then
+              local pattern_lower = local_mod.remove_ar_from:lower()
+              if pattern_lower == ar_hostname then
+                should_remove = true
+              elseif pattern_lower:sub(1, 1) == '.' then
+                if ar_hostname:sub(-#pattern_lower) == pattern_lower then
+                  should_remove = true
+                end
+              end
+            end
+
+            if should_remove then
+              lua_util.debugm(N, task, 'removing AR header from %s (idx %d)', ar_hostname, idx)
+              table.insert(indices_to_remove, idx)
+            end
+          end
+        end
+
+        if #indices_to_remove > 0 then
+          remove[hdr_name] = indices_to_remove
+        end
+      end
+    elseif local_mod.remove then
+      remove[local_mod.header] = local_mod.remove
     end
 
     local res = ar.gen_auth_results(task,
-      lua_util.override_defaults(ar.default_settings,
-        settings.routines['authentication-results']))
+      lua_util.override_defaults(ar.default_settings, local_mod))
 
     if res then
       add_header('authentication-results', res, ';', 1)
@@ -638,21 +696,31 @@ local function milter_headers(task)
   end
 end
 
-local config_schema = ts.shape({
-  use = ts.array_of(ts.string) + ts.string / function(s)
-    return { s }
-  end,
-  remove_upstream_spam_flag = ts.boolean:is_optional(),
-  extended_spam_headers = ts.boolean:is_optional(),
-  skip_local = ts.boolean:is_optional(),
-  skip_authenticated = ts.boolean:is_optional(),
-  local_headers = ts.array_of(ts.string):is_optional(),
-  authenticated_headers = ts.array_of(ts.string):is_optional(),
-  extended_headers_rcpt = lua_maps.map_schema:is_optional(),
-  custom = ts.map_of(ts.string, ts.string):is_optional(),
+local config_schema = T.table({
+  use = T.one_of({
+    T.array(T.string()),
+    T.transform(T.string(), function(s)
+      return { s }
+    end)
+  }):doc({ summary = "List of routines to activate" }),
+  remove_upstream_spam_flag = T.boolean():optional():doc({ summary = "Remove upstream spam flag" }),
+  extended_spam_headers = T.boolean():optional():doc({ summary = "Add extended spam headers" }),
+  skip_local = T.boolean():optional():doc({ summary = "Skip local connections" }),
+  skip_authenticated = T.boolean():optional():doc({ summary = "Skip authenticated users" }),
+  local_headers = T.array(T.string()):optional():doc({ summary = "Headers for local connections" }),
+  authenticated_headers = T.array(T.string()):optional():doc({ summary = "Headers for authenticated users" }),
+  extended_headers_rcpt = lua_maps.map_schema:optional():doc({ summary = "Recipients for extended headers" }),
+  custom = T.table({}, { open = true, extra = T.string() }):optional():doc({ summary = "Custom header definitions" }),
+  default_headers_order = T.number():optional():doc({ summary = "Default order for headers (1 to insert after first Received header)" }),
 }, {
-  extra_fields = ts.map_of(ts.string, ts.any)
-})
+  open = true
+}):doc({ summary = "Milter headers plugin configuration" })
+
+PluginSchema.register("plugins.milter_headers", config_schema)
+
+if confighelp then
+  return
+end
 
 local opts = rspamd_config:get_all_opt(N) or
     rspamd_config:get_all_opt('rmilter_headers')
@@ -732,6 +800,10 @@ if type(opts['skip_all']) == 'boolean' then
   settings.skip_all = opts['skip_all']
 end
 
+if type(opts['default_headers_order']) == 'number' then
+  settings.default_headers_order = opts['default_headers_order']
+end
+
 for _, s in ipairs(opts['use']) do
   if not have_routine[s] then
     activate_routine(s)
@@ -753,6 +825,20 @@ logger.infox(rspamd_config, 'active routines [%s]',
 if opts.extended_headers_rcpt then
   settings.extended_headers_rcpt = lua_maps.rspamd_map_add_from_ucl(opts.extended_headers_rcpt,
     'set', 'Extended headers recipients')
+end
+
+if settings.routines['authentication-results'] and
+    settings.routines['authentication-results'].remove_ar_from then
+  local ar_from = settings.routines['authentication-results'].remove_ar_from
+  if type(ar_from) == 'table' and (ar_from.url or ar_from.file or ar_from.name) then
+    settings.routines['authentication-results'].remove_ar_from =
+      lua_maps.rspamd_map_add_from_ucl(ar_from, 'set', 'AR headers removal hostnames')
+  elseif type(ar_from) == 'string' then
+    if ar_from:match('^[/~]') or ar_from:match('^https?://') or ar_from:match('^file://') then
+      settings.routines['authentication-results'].remove_ar_from =
+        lua_maps.rspamd_map_add_from_ucl(ar_from, 'set', 'AR headers removal hostnames')
+    end
+  end
 end
 
 rspamd_config:register_symbol({

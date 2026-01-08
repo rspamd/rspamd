@@ -22,7 +22,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
 
 if __name__ == "__main__":
 
-    HOST = "localhost"
+    HOST = "127.0.0.1"
 
     alen = len(sys.argv)
     if alen > 1:

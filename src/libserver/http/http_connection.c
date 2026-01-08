@@ -53,10 +53,17 @@ enum rspamd_http_priv_flags {
 	RSPAMD_HTTP_CONN_FLAG_PROXY = 1u << 5u,
 	RSPAMD_HTTP_CONN_FLAG_PROXY_REQUEST = 1u << 6u,
 	RSPAMD_HTTP_CONN_OWN_SOCKET = 1u << 7u,
+	RSPAMD_HTTP_CONN_FLAG_EARLY_RESPONSE = 1u << 8u, /* Server sent early response during write */
 };
 
 #define IS_CONN_ENCRYPTED(c) ((c)->flags & RSPAMD_HTTP_CONN_FLAG_ENCRYPTED)
 #define IS_CONN_RESETED(c) ((c)->flags & RSPAMD_HTTP_CONN_FLAG_RESETED)
+
+static gssize rspamd_http_try_read(int fd,
+								   struct rspamd_http_connection *conn,
+								   struct rspamd_http_connection_private *priv,
+								   struct _rspamd_http_privbuf *pbuf,
+								   const char **buf_ptr);
 
 struct rspamd_http_connection_private {
 	struct rspamd_http_context *ctx;
@@ -826,8 +833,43 @@ rspamd_http_write_helper(struct rspamd_http_connection *conn)
 	}
 
 	if (r == -1) {
+		int saved_errno = errno;
+
 		if (!priv->ssl) {
-			err = g_error_new(HTTP_ERROR, 500, "IO write error: %s", strerror(errno));
+			/* Check if server sent an early response (e.g., 413) */
+			if (saved_errno == EPIPE || saved_errno == ECONNRESET ||
+				saved_errno == ENOTCONN) {
+				struct _rspamd_http_privbuf *pbuf = priv->buf;
+				const char *d;
+				gssize read_res;
+
+				REF_RETAIN(pbuf);
+				read_res = rspamd_http_try_read(conn->fd, conn, priv, pbuf, &d);
+
+				if (read_res > 0) {
+					msg_debug("got early server response (%z bytes) during write, processing",
+							  read_res);
+
+					if (http_parser_execute(&priv->parser, &priv->parser_cb,
+											d, read_res) != (size_t) read_res ||
+						priv->parser.http_errno != 0) {
+						err = g_error_new(HTTP_ERROR, 400,
+										  "HTTP parser error on early response: %s",
+										  http_errno_description(priv->parser.http_errno));
+						rspamd_http_connection_ref(conn);
+						conn->error_handler(conn, err);
+						rspamd_http_connection_unref(conn);
+						g_error_free(err);
+					}
+
+					REF_RELEASE(pbuf);
+					return;
+				}
+
+				REF_RELEASE(pbuf);
+			}
+
+			err = g_error_new(HTTP_ERROR, 500, "IO write error: %s", strerror(saved_errno));
 			rspamd_http_connection_ref(conn);
 			conn->error_handler(conn, err);
 			rspamd_http_connection_unref(conn);
@@ -866,10 +908,15 @@ call_finish_handler:
 		rspamd_http_connection_unref(conn);
 	}
 	else {
-		/* Plan read message */
-		/* Switch to read stage timeout */
-		priv->first_write_done = true;
-		rspamd_http_simple_client_helper(conn);
+		if (priv->flags & RSPAMD_HTTP_CONN_FLAG_EARLY_RESPONSE) {
+			/* Early response already being processed */
+			rspamd_ev_watcher_reschedule(priv->ctx->event_loop, &priv->ev, EV_READ);
+		}
+		else {
+			/* Plan read message */
+			priv->first_write_done = true;
+			rspamd_http_simple_client_helper(conn);
+		}
 	}
 }
 
@@ -955,7 +1002,36 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 	REF_RETAIN(pbuf);
 	rspamd_http_connection_ref(conn);
 
-	if (what == EV_READ) {
+	if (what & EV_READ) {
+		/* Check for early response while still sending request (client only) */
+		if (conn->type == RSPAMD_HTTP_CLIENT &&
+			priv->wr_pos < priv->wr_total && priv->wr_total > 0) {
+			/* Check for connection errors (io_uring reports POLLERR as EV_READ) */
+			if (!priv->first_write_done) {
+				int sock_err = 0;
+				socklen_t sock_err_len = sizeof(sock_err);
+
+				if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &sock_err, &sock_err_len) == 0 &&
+					sock_err != 0) {
+					err = g_error_new(HTTP_ERROR, 500,
+									  "Connection failed: %s", strerror(sock_err));
+					conn->error_handler(conn, err);
+					g_error_free(err);
+
+					REF_RELEASE(pbuf);
+					rspamd_http_connection_unref(conn);
+
+					return;
+				}
+			}
+
+			msg_debug("received early server response while still writing request "
+					  "(sent %uz of %uz bytes)",
+					  priv->wr_pos, priv->wr_total);
+			priv->wr_pos = priv->wr_total;
+			priv->flags |= RSPAMD_HTTP_CONN_FLAG_EARLY_RESPONSE;
+		}
+
 		r = rspamd_http_try_read(fd, conn, priv, pbuf, &d);
 
 		if (r > 0) {
@@ -1039,7 +1115,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 			return;
 		}
 	}
-	else if (what == EV_TIMEOUT) {
+	else if (what & EV_TIMEOUT) {
 		if (!priv->ssl) {
 			/* Let's try to read from the socket first */
 			r = rspamd_http_try_read(fd, conn, priv, pbuf, &d);
@@ -1087,7 +1163,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 			return;
 		}
 	}
-	else if (what == EV_WRITE) {
+	else if (what & EV_WRITE) {
 		rspamd_http_write_helper(conn);
 	}
 
@@ -2440,12 +2516,14 @@ if (conn->opts & RSPAMD_HTTP_CLIENT_SSL) {
 												   rspamd_http_event_handler,
 												   rspamd_http_ssl_err_handler,
 												   conn,
-												   EV_WRITE);
+												   EV_WRITE | EV_READ);
 		}
 	}
 }
 else {
-	rspamd_ev_watcher_init(&priv->ev, conn->fd, EV_WRITE,
+	/* Watch for READ too on client to detect early server responses */
+	short ev_flags = (conn->type == RSPAMD_HTTP_CLIENT) ? (EV_WRITE | EV_READ) : EV_WRITE;
+	rspamd_ev_watcher_init(&priv->ev, conn->fd, ev_flags,
 						   rspamd_http_event_handler, conn);
 	/* Use connect_timeout on initial EV_WRITE stage if provided */
 	ev_tstamp start_to = (priv->connect_timeout > 0 ? priv->connect_timeout : priv->timeout);

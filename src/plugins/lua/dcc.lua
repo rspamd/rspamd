@@ -42,6 +42,11 @@ if confighelp then
   return
 end
 
+if not opts then
+  lua_util.disable_module(N, "config")
+  return
+end
+
 local rule
 
 local function check_dcc (task)

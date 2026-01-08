@@ -1,0 +1,6 @@
+From: sender@example.com
+To: victim@example.com
+Subject: Test hxxp obfuscation
+Content-Type: text/plain; charset=utf-8
+
+Check this link: hxxp://malicious-site.com/phish

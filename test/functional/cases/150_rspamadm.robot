@@ -3,6 +3,7 @@ Suite Setup     Rspamadm Setup
 Suite Teardown  Rspamadm Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Test Timeout    1 minute
 
 *** Variables ***
 ${TEXT}                text

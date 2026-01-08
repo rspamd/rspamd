@@ -1,25 +1,5 @@
 /*
- The MIT License (MIT)
-
- Copyright (C) 2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
-
- Permission is hereby granted, free of charge, to any person obtaining a copy
- of this software and associated documentation files (the "Software"), to deal
- in the Software without restriction, including without limitation the rights
- to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- copies of the Software, and to permit persons to whom the Software is
- furnished to do so, subject to the following conditions:
-
- The above copyright notice and this permission notice shall be included in
- all copies or substantial portions of the Software.
-
- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- THE SOFTWARE.
+ * Copyright (C) 2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
  */
 
 define(["jquery", "app/common", "d3pie", "d3"],
@@ -101,11 +81,8 @@ define(["jquery", "app/common", "d3pie", "d3"],
         }
 
         function displayStatWidgets(checked_server) {
-            const servers = JSON.parse(sessionStorage.getItem("Credentials"));
-            let data = {};
-            if (servers && servers[checked_server]) {
-                ({data} = servers[checked_server]);
-            }
+            const servers = JSON.parse(sessionStorage.getItem("Credentials") || "{}");
+            const data = servers[checked_server]?.data ?? {};
 
             const stat_w = [];
             $("#statWidgets").empty();
@@ -226,16 +203,8 @@ define(["jquery", "app/common", "d3pie", "d3"],
 
             function addStatfiles(server, statfiles) {
                 $.each(statfiles, (i, statfile) => {
-                    let cls = "";
-                    switch (statfile.symbol) {
-                        case "BAYES_SPAM":
-                            cls = "symbol-positive";
-                            break;
-                        case "BAYES_HAM":
-                            cls = "symbol-negative";
-                            break;
-                        default:
-                    }
+                    const symbolClassMap = {BAYES_SPAM: "symbol-positive", BAYES_HAM: "symbol-negative"};
+                    const cls = symbolClassMap[statfile.symbol] || "";
                     $("#bayesTable tbody").append("<tr>" +
                       (i === 0 ? '<td rowspan="' + statfiles.length + '">' + server + "</td>" : "") +
                       '<td class="' + cls + '">' + statfile.symbol + "</td>" +
@@ -299,9 +268,9 @@ define(["jquery", "app/common", "d3pie", "d3"],
             }
 
             const data = [];
-            const creds = JSON.parse(sessionStorage.getItem("Credentials"));
+            const creds = JSON.parse(sessionStorage.getItem("Credentials") || "{}");
             // Controller doesn't return the 'actions' object until at least one message is scanned
-            if (creds && creds[checked_server] && creds[checked_server].data.scanned) {
+            if (creds[checked_server]?.data?.scanned) {
                 const {actions} = creds[checked_server].data;
 
                 ["no action", "soft reject", "add header", "rewrite subject", "greylist", "reject"]
@@ -379,8 +348,14 @@ define(["jquery", "app/common", "d3pie", "d3"],
                                 error: function (jqXHR, textStatus, errorThrown) {
                                     if (!(alerted in sessionStorage)) {
                                         sessionStorage.setItem(alerted, true);
-                                        common.alertMessage("alert-danger", neighbours_status[e].name + " > " +
-                                          "Cannot receive legacy stats data" + (errorThrown ? ": " + errorThrown : ""));
+                                        common.logError({
+                                            server: neighbours_status[e].name,
+                                            endpoint: "graph",
+                                            message: "Cannot receive legacy stats data" +
+                                                (errorThrown ? ": " + errorThrown : ""),
+                                            httpStatus: jqXHR.status,
+                                            errorType: "http_error"
+                                        });
                                     }
                                     process_node_stat(e);
                                 }

@@ -1181,9 +1181,10 @@ rspamd_mime_expr_process(void *ud, rspamd_expression_atom_t *atom)
 		}
 	}
 	else if (mime_atom->type == MIME_ATOM_LOCAL_LUA_FUNCTION) {
-		int err_idx;
+		int err_idx, old_top;
 
 		L = task->cfg->lua_state;
+		old_top = lua_gettop(L);
 		lua_pushcfunction(L, &rspamd_lua_traceback);
 		err_idx = lua_gettop(L);
 
@@ -1208,7 +1209,7 @@ rspamd_mime_expr_process(void *ud, rspamd_expression_atom_t *atom)
 			}
 		}
 
-		lua_settop(L, 0);
+		lua_settop(L, old_top);
 	}
 	else {
 		ret = rspamd_mime_expr_process_function(mime_atom->d.func, task,

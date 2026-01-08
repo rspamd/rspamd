@@ -1,3 +1,93 @@
+3.14.3: 08 Jan 2026
+  * [Feature] Add task registry for safe Lua task reference validation
+  * [Feature] Add text quality analysis for PDF garbage filtering
+  * [Feature] Implement basic PDF text extraction with UTF-16 detection
+  * [Feature] Add extra tables API for clickhouse plugin
+  * [Feature] Add confighelp documentation for RBL module
+  * [Feature] WebUI: add backend API interaction error log
+  * [Fix] Neural: by default include symbols with no flags
+  * [Fix] Symcache: make FINE propagation deterministic
+  * [Fix] URL: Prevent false positives from numeric IP regeneration in mailto URLs
+  * [Fix] Settings: Allow spaces in selector regexps
+  * [Fix] Prevent use-after-free in Redis callbacks after session cleanup
+  * [Fix] Lua 5.4 compatibility in clickhouse and elastic plugins
+  * [Fix] Use exact map lookup for DKIM key_table instead of glob
+  * [Fix] Handle connection errors with io_uring backend in HTTP client
+  * [Minor] Update public suffix list
+
+3.14.2: 10 Dec 2025
+  * [Feature] DMARC: Add --recheck-rua option to dmarc_report for RUA filtering at send time
+  * [Feature] Metadata exporter: Add multipart and msgpack formatters
+  * [Feature] Milter headers: Add remove_ar_from option for selective Authentication-Results header removal
+  * [Fix] Security: Backport security fixes from libucl 0.9.3
+  * [Fix] HTTP: Handle early server responses during request write
+  * [Fix] HTTP: Only apply early response handling for HTTP clients
+  * [Fix] MIME: Prevent splitting UTF-8 sequences in header encoding
+  * [Fix] URL: Normalize URLs with multiple slashes between host and path
+  * [Fix] URL: Use locale-independent patterns in URL encoding
+  * [Fix] Milter headers: Allow default_headers_order to be configured
+  * [Fix] Milter headers: Fix hierarchical domain matching in remove_ar_from map lookups
+  * [Fix] Aliases: Enable plugin by default to restore plus-addressing
+  * [Fix] DCC: Handle nil opts in plugin initialization
+  * [Fix] Neural: Fix Lua 5.4 compatibility issues
+  * [Fix] Reputation: Fix whitelist schema and selector-aware checking
+  * [Fix] Logging: Fix off-by-one when at the maximum tag length
+  * [Fix] Logging: Null-terminate the log tag when copying the header
+  * [Fix] Prometheus: Use double type for rspamd_scan_time_average metric
+  * [Fix] Build: FreeBSD 15 inotify build compatibility
+  * [Fix] Build: Remove deprecated OpenSSL engine.h include
+  * [Fix] Lua: Use 0 instead of LUA_OK for lua_pcall result comparison (Lua 5.1 compat)
+  * [Fix] Lua: Handle Lua 5.4 require returning two values
+  * [Fix] Lua: Use math.floor for Lua 5.4 integer division compatibility
+  * [Fix] Lua: Improve loadstring error handling for Lua 5.4 compatibility
+  * [Fix] Lua: Use userdata __gc for UCL objects in all Lua versions
+  * [Fix] Lua: Use ipairs for ordered iteration in header checks
+  * [Fix] Lua: Fix other places of Lua 5.4 rounding issues
+  * [Fix] Performance: Avoid repeated simdutf implementation detection on each call
+  * [Minor] Update public suffix list
+  * [Minor] Debian: Allow skipping ASAN build
+  * [Test] Add Lua 5.4 and cffi-lua support for testing
+  * [Test] Fix Python 3.12+ compatibility in test scripts
+  * [Test] Fix TCP tests for HTTP/1.1 compliance
+
+3.14.1: 1 Dec 2025
+  * [Feature] Composites: Add inverted index for fast composite rule evaluation
+  * [Feature] Composites: Add bloom filter for fast negative symbol lookups
+  * [Feature] Composites: Add statistics tracking and control protocol command
+  * [Feature] Composites: Precompute atom types at config time
+  * [Feature] Multimap: Add combinator option for selector rules
+  * [Feature] SPF: Add rspamadm spf_flatten tool with macro preservation
+  * [Feature] URL: Add deep processing architecture with C-to-Lua filter consultation
+  * [Feature] URL: Add obfuscated URL detection to url_suspect plugin
+  * [Feature] URL: Add rspamd_util.decode_html_entities for HTML entity decoding
+  * [Feature] lua_shape: Add new validation library as tableshape replacement
+  * [Feature] lua_shape: Add T.callable() type for function validation
+  * [Feature] lua_shape: Add callable defaults support
+  * [Feature] Whitelist: Auto-mark symbols with SYMBOL_TYPE_FINE flag
+  * [Fix] url_suspect: Fix plugin causing massive false positives
+  * [Fix] url_suspect: Optimize for high URL volume messages
+  * [Fix] Network: Prevent infinite loop in split_networks_into_chunks()
+  * [Fix] Memory: Fix leak in custom tokenizer result handling
+  * [Fix] Composites: Fix group matchers handling in inverted index
+  * [Fix] Composites: Improve atom polarity detection in inverted index
+  * [Fix] Composites: Copy expression string to memory pool for Lua composites
+  * [Fix] lua_shape: Fix transform logic and tableshape compatibility
+  * [Fix] lua_shape: Fix registry to recursively resolve nested schemas
+  * [Fix] lua_shape: Improve error safety
+  * [Fix] Settings: Keep groups_*/symbols_* fields for runtime processing
+  * [Fix] URL: Encode redirect URLs to handle unencoded spaces and special characters
+  * [Fix] external_relay: Fix mixins and confighelp
+  * [Fix] RBL: Fix plugin transform schemas
+  * [WebUI] Update D3 libs with bug fixes and validation
+  * [WebUI] Restore hover colors for symbols
+  * [WebUI] Fix hover behavior outside status tables
+  * [Minor] Whitelist: Use contemporary API for maps
+  * [Minor] Migrate all plugins and libraries from tableshape to lua_shape
+  * [Minor] Simplify configuration by removing use_*_map flags
+  * [Minor] Add plugins registry with reworked mixins
+  * [Test] Add comprehensive tests for URL deep processing
+  * [Test] Isolate url_suspect tests with symbols_enabled
+
 3.14.0: 10 Nov 2025
   * [Feature] Fuzzy check: Add HTML fuzzy hashing for structural similarity matching
   * [Feature] Fuzzy check: Add per-rule text_hashes toggle for HTML-only fuzzy rules

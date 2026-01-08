@@ -1,7 +1,10 @@
 -- Test zbase32 encoding/decoding
 
 context("Base32 encodning", function()
-  local ffi = require("ffi")
+  local ok, ffi = pcall(require, "ffi")
+  if not ok then
+    ffi = require("cffi")
+  end
   ffi.cdef[[
     void ottery_rand_bytes(void *buf, size_t n);
     unsigned ottery_rand_unsigned(void);
@@ -10,6 +13,13 @@ context("Base32 encodning", function()
     void g_free(void *ptr);
     int memcmp(const void *a1, const void *a2, size_t len);
   ]]
+
+  -- Helper to convert cdata numbers to Lua numbers (cffi-lua compatibility)
+  local function cdata_to_number(v)
+    local n = tonumber(v)
+    if n then return n end
+    return tonumber(tostring(v):match("^(%d+)"))
+  end
 
   local function random_buf(max_size)
     local l = ffi.C.ottery_rand_unsigned() % max_size + 1
@@ -26,7 +36,8 @@ context("Base32 encodning", function()
     }
 
     for _,c in ipairs(cases) do
-      local b = ffi.C.rspamd_encode_base32(c[1], #c[1], 0)
+      local inp = ffi.new("unsigned char[?]", #c[1], c[1])
+      local b = ffi.C.rspamd_encode_base32(inp, #c[1], 0)
       local s = ffi.string(b)
       ffi.C.g_free(b)
       assert_equal(s, c[2], s .. " not equal " .. c[2])
@@ -43,8 +54,9 @@ context("Base32 encodning", function()
         local nl = ffi.new("size_t [1]")
         local nb = ffi.C.rspamd_decode_base32(bs, #bs, nl, how)
 
-        assert_equal(tonumber(nl[0]), l,
-            string.format("invalid size reported: %d reported vs %d expected", tonumber(nl[0]), l))
+        local reported_len = cdata_to_number(nl[0]) or 0
+        assert_equal(reported_len, l,
+            string.format("invalid size reported: %s reported vs %s expected", tostring(reported_len), tostring(l)))
         local cmp = ffi.C.memcmp(b, nb, l)
         ffi.C.g_free(ben)
         ffi.C.g_free(nb)

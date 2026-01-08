@@ -7,7 +7,6 @@ define(["jquery", "app/common", "footable"],
         const columnsCustom = JSON.parse(localStorage.getItem("columns")) || {};
 
         let pageSizeTimerId = null;
-        let pageSizeInvocationCounter = 0;
 
         function get_compare_function(table) {
             const compare_functions = {
@@ -194,15 +193,17 @@ define(["jquery", "app/common", "footable"],
 
                 if (changeTablePageSize &&
                     $("#historyTable_" + table + " tbody").is(":parent")) { // Table is not empty
-                    clearTimeout(pageSizeTimerId);
-                    const t = FooTable.get("#historyTable_" + table);
-                    if (t) {
-                        pageSizeInvocationCounter = 0;
-                        // Wait for input finish
-                        pageSizeTimerId = setTimeout(() => t.pageSize(n), 1000);
-                    } else if (++pageSizeInvocationCounter < 10) {
-                        // Wait for FooTable instance ready
-                        pageSizeTimerId = setTimeout(() => ui.set_page_size(table, n, true), 1000);
+                    if (common.tables[table]) {
+                        // Table exists - debounce rapid changes (e.g., spin button clicks)
+                        clearTimeout(pageSizeTimerId);
+                        pageSizeTimerId = setTimeout(() => {
+                            common.tables[table]?.pageSize(n);
+                        }, 1000);
+                    } else {
+                        // Table doesn't exist - wait for initialization with event
+                        $("#historyTable_" + table).one("postinit.ft.table", () => {
+                            common.tables[table]?.pageSize(n);
+                        });
                     }
                 }
             }
@@ -234,9 +235,11 @@ define(["jquery", "app/common", "footable"],
             $("#" + table + " .ft-columns-btn.show").trigger("click.bs.dropdown"); // Hide dropdown
             $("#" + table + " .ft-columns-btn").attr("disabled", true);
             if (common.tables[table]) {
-                common.tables[table].destroy();
+                const promise = common.tables[table].destroy();
                 delete common.tables[table];
+                return promise;
             }
+            return new $.Deferred().resolve().promise();
         };
 
         ui.initHistoryTable = function (data, items, table, columnsDefault, expandFirst, postdrawCallback) {
@@ -371,13 +374,11 @@ define(["jquery", "app/common", "footable"],
                     filtering: FooTable.actionFilter
                 },
                 on: {
-                    "expand.ft.row": function (e, ft, row) {
-                        setTimeout(() => {
-                            const detail_row = row.$el.next();
-                            const order = common.getSelector("selSymOrder_" + table);
-                            detail_row.find(".btn-sym-" + table + "-" + order)
-                                .addClass("active").siblings().removeClass("active");
-                        }, 5);
+                    "expanded.ft.row": function (e, ft, row) {
+                        const detail_row = row.$el.next();
+                        const order = common.getSelector("selSymOrder_" + table);
+                        detail_row.find(".btn-sym-" + table + "-" + order)
+                            .addClass("active").siblings().removeClass("active");
                     },
                     "postdraw.ft.table": postdrawCallback
                 }

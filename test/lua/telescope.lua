@@ -36,6 +36,9 @@ local compat_env = require 'compat_env'
 local getfenv = _G.getfenv or compat_env.getfenv
 local setfenv = _G.setfenv or compat_env.setfenv
 
+-- Lua 5.2+ compatibility: unpack was moved to table.unpack
+local unpack = _G.unpack or table.unpack
+
 
 local _VERSION = "0.6.0"
 

@@ -15,10 +15,6 @@ limitations under the License.
 ]] --
 
 
-if confighelp then
-  return
-end
-
 local fun = require "fun"
 local lua_redis = require "lua_redis"
 local lua_util = require "lua_util"
@@ -29,7 +25,8 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_tensor = require "rspamd_tensor"
 local rspamd_text = require "rspamd_text"
 local rspamd_util = require "rspamd_util"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
+local PluginSchema = require "lua_shape.plugin_schema"
 -- Load providers
 pcall(require, "plugins/neural/providers/llm")
 pcall(require, "plugins/neural/providers/symbols")
@@ -38,14 +35,20 @@ local N = "neural"
 
 local settings = neural_common.settings
 
-local redis_profile_schema = ts.shape {
-  digest = ts.string,
-  symbols = ts.array_of(ts.string),
-  version = ts.number,
-  redis_key = ts.string,
-  distance = ts.number:is_optional(),
-  providers_digest = ts.string:is_optional(),
-}
+local redis_profile_schema = T.table({
+  digest = T.string():doc({ summary = "Symbols digest" }),
+  symbols = T.array(T.string()):doc({ summary = "List of symbols" }),
+  version = T.number():doc({ summary = "Profile version" }),
+  redis_key = T.string():doc({ summary = "Redis key for ANN" }),
+  distance = T.number():optional():doc({ summary = "Distance metric" }),
+  providers_digest = T.string():optional():doc({ summary = "Providers digest" }),
+}):doc({ summary = "Neural network profile schema" })
+
+PluginSchema.register("plugins.neural.profile", redis_profile_schema)
+
+if confighelp then
+  return
+end
 
 local has_blas = rspamd_tensor.has_blas()
 local text_cookie = rspamd_text.cookie
@@ -504,7 +507,7 @@ local function do_train_ann(worker, ev_base, rule, set, ann_key)
     {
       ann_key,
       tostring(os.time()),
-      tostring(math.max(10.0, rule.watch_interval * 2)),
+      tostring(math.floor(math.max(10.0, rule.watch_interval * 2))),
       rspamd_util.get_hostname()
     })
 end
@@ -889,7 +892,8 @@ local function check_anns(worker, cfg, ev_base, rule, process_callback, what)
       elseif type(data) == 'table' then
         lua_util.debugm(N, cfg, '%s: process element %s:%s (profiles=%s)',
           what, rule.prefix, set.name, #data)
-        process_callback(worker, ev_base, rule, set, fun.map(load_ann_profile, data))
+        -- Use fun.totable to convert iterator to table for Lua 5.4 compatibility
+        process_callback(worker, ev_base, rule, set, fun.totable(fun.map(load_ann_profile, data)))
         set.can_store_vectors = true
       else
         lua_util.debugm(N, cfg, '%s: no profiles for %s:%s', what, rule.prefix, set.name)

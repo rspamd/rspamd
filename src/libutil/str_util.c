@@ -2963,7 +2963,13 @@ gsize rspamd_memspn(const char *s, const char *e, gsize len)
 	gsize byteset[32 / sizeof(gsize)];
 	const char *p = s, *end = s + len;
 
+	if (!e[0]) {
+		/* Empty set - nothing matches */
+		return 0;
+	}
+
 	if (!e[1]) {
+		/* Single character optimization */
 		for (; p < end && *p == *e; p++);
 		return p - s;
 	}

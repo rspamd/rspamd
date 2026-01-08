@@ -248,12 +248,17 @@ rspamadm_execute_lua_ucl_subr(int argc, char **argv,
 						script_name);
 	}
 
+	int top = lua_gettop(L);
+
 	if (luaL_dostring(L, str) != 0) {
 		msg_err("cannot execute lua script %s: %s",
 				str, lua_tostring(L, -1));
 		return FALSE;
 	}
 	else {
+		/* Lua 5.4's require returns 2 values (module + path), keep only first */
+		lua_settop(L, top + 1);
+
 		if (lua_type(L, -1) == LUA_TTABLE) {
 			lua_pushstring(L, "handler");
 			lua_gettable(L, -2);

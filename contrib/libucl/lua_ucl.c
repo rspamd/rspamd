@@ -744,12 +744,12 @@ lua_ucl_object_get(lua_State *L, int index)
 	return NULL;
 }
 
-#if LUA_VERSION_NUM < 502
 /**
  * __gc metamethod for userdata that holds UCL object pointer.
- * This is necessary because Lua 5.1/LuaJIT does not support __gc for tables,
- * only for userdata. The userdata is stored at index [0] in the table created
+ * The userdata is stored at index [0] in the table created
  * by ucl_object_push_lua_unwrapped.
+ * We use userdata __gc for all Lua versions for consistent behavior,
+ * as table __gc in Lua 5.2+ can cause issues with GC ordering.
  */
 static int
 lua_ucl_userdata_gc(lua_State *L)
@@ -765,7 +765,6 @@ lua_ucl_userdata_gc(lua_State *L)
 
 	return 0;
 }
-#endif
 
 void ucl_object_push_lua_unwrapped(lua_State *L, const ucl_object_t *obj)
 {
@@ -779,15 +778,12 @@ void ucl_object_push_lua_unwrapped(lua_State *L, const ucl_object_t *obj)
 	pobj = lua_newuserdata(L, sizeof(*pobj));
 	*pobj = ucl_object_ref(obj);
 
-#if LUA_VERSION_NUM < 502
-	/* For Lua 5.1/LuaJIT: Set a metatable on the userdata itself to ensure __gc is called.
-	 * Lua 5.1 does not support __gc for tables, only for userdata.
-	 * For Lua 5.2+, we use table __gc instead (see lua_ucl_object_mt). */
+	/* Set a metatable on the userdata to ensure __gc is called.
+	 * We use userdata __gc for all Lua versions for consistent behavior. */
 	lua_newtable(L);
 	lua_pushcfunction(L, lua_ucl_userdata_gc);
 	lua_setfield(L, -2, "__gc");
 	lua_setmetatable(L, -2);
-#endif
 
 	lua_rawseti(L, -2, 0);
 
@@ -1374,22 +1370,6 @@ lua_ucl_object_validate(lua_State *L)
 	return 2;
 }
 
-#if LUA_VERSION_NUM >= 502
-static int
-lua_ucl_object_gc(lua_State *L)
-{
-	ucl_object_t *obj;
-
-	obj = lua_ucl_object_get(L, 1);
-
-	if (obj) {
-		ucl_object_unref(obj);
-	}
-
-	return 0;
-}
-#endif
-
 static int
 lua_ucl_iter_gc(lua_State *L)
 {
@@ -1784,12 +1764,9 @@ lua_ucl_object_mt(lua_State *L)
 	lua_pushcfunction(L, lua_ucl_len);
 	lua_setfield(L, -2, "__len");
 
-#if LUA_VERSION_NUM >= 502
-	/* Table __gc is only supported in Lua 5.2+.
-	 * For Lua 5.1/LuaJIT, we use userdata __gc in ucl_object_push_lua_unwrapped */
-	lua_pushcfunction(L, lua_ucl_object_gc);
-	lua_setfield(L, -2, "__gc");
-#endif
+	/* Note: We use userdata __gc (set in ucl_object_push_lua_unwrapped) for all
+	 * Lua versions instead of table __gc, as table __gc can cause issues with
+	 * GC ordering when UCL objects reference each other or config objects. */
 	lua_pushcfunction(L, lua_ucl_object_tostring);
 	lua_setfield(L, -2, "__tostring");
 
