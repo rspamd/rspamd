@@ -1,3 +1,20 @@
+3.14.3: 08 Jan 2026
+  * [Feature] Add task registry for safe Lua task reference validation
+  * [Feature] Add text quality analysis for PDF garbage filtering
+  * [Feature] Implement basic PDF text extraction with UTF-16 detection
+  * [Feature] Add extra tables API for clickhouse plugin
+  * [Feature] Add confighelp documentation for RBL module
+  * [Feature] WebUI: add backend API interaction error log
+  * [Fix] Neural: by default include symbols with no flags
+  * [Fix] Symcache: make FINE propagation deterministic
+  * [Fix] URL: Prevent false positives from numeric IP regeneration in mailto URLs
+  * [Fix] Settings: Allow spaces in selector regexps
+  * [Fix] Prevent use-after-free in Redis callbacks after session cleanup
+  * [Fix] Lua 5.4 compatibility in clickhouse and elastic plugins
+  * [Fix] Use exact map lookup for DKIM key_table instead of glob
+  * [Fix] Handle connection errors with io_uring backend in HTTP client
+  * [Minor] Update public suffix list
+
 3.14.2: 10 Dec 2025
   * [Feature] DMARC: Add --recheck-rua option to dmarc_report for RUA filtering at send time
   * [Feature] Metadata exporter: Add multipart and msgpack formatters
