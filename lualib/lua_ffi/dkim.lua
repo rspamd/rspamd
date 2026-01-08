@@ -55,6 +55,7 @@ struct GString *rspamd_dkim_sign (struct rspamd_task *task,
     size_t len,
     unsigned int idx,
     const char *arc_cv,
+    const char *auid,
     struct rspamd_dkim_sign_context_s *ctx);
 ]]
 
@@ -110,7 +111,7 @@ local function create_sign_context(task, privkey, dkim_headers, sign_type)
 end
 
 local function do_sign(task, sign_context, selector, domain,
-                       expire, len, arc_idx)
+                       expire, len, arc_idx, auid)
   if not task or not sign_context or not selector or not domain then
     return nil, 'invalid arguments'
   end
@@ -125,7 +126,7 @@ local function do_sign(task, sign_context, selector, domain,
     arc_idx = 0
   end
 
-  local gstring = ffi.C.rspamd_dkim_sign(task:topointer(), selector, domain, expire, len, arc_idx, nil, sign_context)
+  local gstring = ffi.C.rspamd_dkim_sign(task:topointer(), selector, domain, expire, len, arc_idx, nil, auid, sign_context)
 
   if not gstring then
     return nil, 'cannot sign'
