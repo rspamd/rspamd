@@ -30,6 +30,8 @@
 extern "C" {
 #endif
 
+struct ev_loop;
+
 enum rspamd_multipattern_flags {
 	RSPAMD_MULTIPATTERN_DEFAULT = 0,
 	RSPAMD_MULTIPATTERN_ICASE = (1 << 0),
@@ -309,6 +311,22 @@ gboolean rspamd_multipattern_compile_hs_to_cache(struct rspamd_multipattern *mp,
 												 const char *cache_dir,
 												 GError **err);
 
+typedef void (*rspamd_multipattern_hs_cache_cb_t)(struct rspamd_multipattern *mp,
+												  gboolean success,
+												  GError *err,
+												  void *ud);
+
+/**
+ * Compile multipattern HS database and store it in the configured HS cache backend.
+ * If Lua backend is enabled, store is done asynchronously and callback is invoked on completion.
+ * For file backend, compilation+store is synchronous and callback is invoked immediately.
+ */
+void rspamd_multipattern_compile_hs_to_cache_async(struct rspamd_multipattern *mp,
+												   const char *cache_dir,
+												   struct ev_loop *event_loop,
+												   rspamd_multipattern_hs_cache_cb_t cb,
+												   void *ud);
+
 /**
  * Load hyperscan database from cache file.
  * This is called by workers when they receive notification that
@@ -319,6 +337,18 @@ gboolean rspamd_multipattern_compile_hs_to_cache(struct rspamd_multipattern *mp,
  */
 gboolean rspamd_multipattern_load_from_cache(struct rspamd_multipattern *mp,
 											 const char *cache_dir);
+
+/**
+ * Asynchronously load hyperscan database for a multipattern from the configured
+ * HS cache backend (Lua backend if present, otherwise filesystem).
+ *
+ * The callback is invoked when hot-swap has been attempted.
+ */
+void rspamd_multipattern_load_from_cache_async(struct rspamd_multipattern *mp,
+											   const char *cache_dir,
+											   struct ev_loop *event_loop,
+											   void (*cb)(gboolean success, void *ud),
+											   void *ud);
 
 #ifdef __cplusplus
 }

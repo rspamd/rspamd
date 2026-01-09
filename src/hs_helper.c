@@ -20,7 +20,9 @@
 #include "libserver/cfg_rcl.h"
 #include "libserver/worker_util.h"
 #include "libserver/rspamd_control.h"
+#include "libserver/hs_cache_backend.h"
 #include "lua/lua_common.h"
+#include "lua/lua_classnames.h"
 #include "unix-std.h"
 
 #ifdef WITH_HYPERSCAN
@@ -642,6 +644,144 @@ rspamd_hs_helper_reload(struct rspamd_main *rspamd_main,
 /*
  * Compile pending multipatterns that were queued during pre-fork initialization
  */
+
+struct rspamd_hs_helper_mp_async_ctx {
+	struct hs_helper_ctx *ctx;
+	struct rspamd_worker *worker;
+	struct rspamd_multipattern_pending *pending;
+	unsigned int count;
+	unsigned int idx;
+};
+
+static void rspamd_hs_helper_compile_pending_multipatterns_next(struct rspamd_hs_helper_mp_async_ctx *mpctx);
+
+static void
+rspamd_hs_helper_mp_send_notification(struct hs_helper_ctx *ctx,
+									  struct rspamd_worker *worker,
+									  const char *name)
+{
+	struct rspamd_srv_command srv_cmd;
+
+	memset(&srv_cmd, 0, sizeof(srv_cmd));
+	srv_cmd.type = RSPAMD_SRV_MULTIPATTERN_LOADED;
+	rspamd_strlcpy(srv_cmd.cmd.mp_loaded.name, name,
+				   sizeof(srv_cmd.cmd.mp_loaded.name));
+	rspamd_strlcpy(srv_cmd.cmd.mp_loaded.cache_dir, ctx->hs_dir,
+				   sizeof(srv_cmd.cmd.mp_loaded.cache_dir));
+
+	rspamd_srv_send_command(worker, ctx->event_loop, &srv_cmd, -1, NULL, NULL);
+	msg_info("sent multipattern loaded notification for '%s'", name);
+}
+
+static void
+rspamd_hs_helper_mp_compiled_cb(struct rspamd_multipattern *mp,
+								gboolean success,
+								GError *err,
+								void *ud)
+{
+	struct rspamd_hs_helper_mp_async_ctx *mpctx = ud;
+	struct rspamd_multipattern_pending *entry = &mpctx->pending[mpctx->idx];
+
+	(void) mp;
+	rspamd_worker_set_busy(mpctx->worker, mpctx->ctx->event_loop, NULL);
+
+	if (!success) {
+		msg_err("failed to compile multipattern '%s': %e", entry->name, err);
+	}
+	else {
+		rspamd_hs_helper_mp_send_notification(mpctx->ctx, mpctx->worker, entry->name);
+	}
+
+	mpctx->idx++;
+	rspamd_hs_helper_compile_pending_multipatterns_next(mpctx);
+}
+
+static void
+rspamd_hs_helper_mp_exists_cb(gboolean success,
+							  const unsigned char *data,
+							  gsize len,
+							  const char *error,
+							  void *ud)
+{
+	struct rspamd_hs_helper_mp_async_ctx *mpctx = ud;
+	struct rspamd_multipattern_pending *entry = &mpctx->pending[mpctx->idx];
+	bool exists = (success && data == NULL && len == 1);
+
+	(void) error;
+
+	if (exists) {
+		msg_info("multipattern cache already exists for '%s', skipping compilation", entry->name);
+		rspamd_hs_helper_mp_send_notification(mpctx->ctx, mpctx->worker, entry->name);
+		mpctx->idx++;
+		rspamd_hs_helper_compile_pending_multipatterns_next(mpctx);
+		return;
+	}
+
+	/* Need to compile+store */
+	rspamd_worker_set_busy(mpctx->worker, mpctx->ctx->event_loop, "compile multipattern");
+	rspamd_multipattern_compile_hs_to_cache_async(entry->mp, mpctx->ctx->hs_dir,
+												  mpctx->ctx->event_loop,
+												  rspamd_hs_helper_mp_compiled_cb, mpctx);
+}
+
+static void
+rspamd_hs_helper_compile_pending_multipatterns_next(struct rspamd_hs_helper_mp_async_ctx *mpctx)
+{
+	if (mpctx->worker->state != rspamd_worker_state_running) {
+		msg_info("worker terminating, stopping multipattern compilation");
+		goto done;
+	}
+
+	if (mpctx->idx >= mpctx->count) {
+		goto done;
+	}
+
+	struct rspamd_multipattern_pending *entry = &mpctx->pending[mpctx->idx];
+	unsigned int npatterns = rspamd_multipattern_get_npatterns(entry->mp);
+	msg_info("processing multipattern '%s' with %ud patterns", entry->name, npatterns);
+
+	if (rspamd_hs_cache_has_lua_backend()) {
+		char cache_key[rspamd_cryptobox_HASHBYTES * 2 + 1];
+		rspamd_snprintf(cache_key, sizeof(cache_key), "%*xs",
+						(int) sizeof(entry->hash) / 2, entry->hash);
+		rspamd_hs_cache_lua_exists_async(cache_key, rspamd_hs_helper_mp_exists_cb, mpctx);
+		return;
+	}
+
+	/* File backend path: keep existing synchronous behaviour */
+	{
+		char fp[PATH_MAX];
+		GError *err = NULL;
+		rspamd_snprintf(fp, sizeof(fp), "%s/%*xs.hs", mpctx->ctx->hs_dir,
+						(int) sizeof(entry->hash) / 2, entry->hash);
+		if (access(fp, R_OK) == 0) {
+			msg_info("cache file %s already exists for multipattern '%s', skipping compilation",
+					 fp, entry->name);
+		}
+		else {
+			rspamd_worker_set_busy(mpctx->worker, mpctx->ctx->event_loop, "compile multipattern");
+			if (!rspamd_multipattern_compile_hs_to_cache(entry->mp, mpctx->ctx->hs_dir, &err)) {
+				msg_err("failed to compile multipattern '%s': %e", entry->name, err);
+				if (err) g_error_free(err);
+			}
+			rspamd_worker_set_busy(mpctx->worker, mpctx->ctx->event_loop, NULL);
+		}
+
+		rspamd_hs_helper_mp_send_notification(mpctx->ctx, mpctx->worker, entry->name);
+		mpctx->idx++;
+		rspamd_hs_helper_compile_pending_multipatterns_next(mpctx);
+		return;
+	}
+
+done:
+	rspamd_multipattern_clear_pending();
+	for (unsigned int i = 0; i < mpctx->count; i++) {
+		/* names are freed by clear_pending */
+		(void) i;
+	}
+	g_free(mpctx);
+}
+
 static void
 rspamd_hs_helper_compile_pending_multipatterns(struct hs_helper_ctx *ctx,
 											   struct rspamd_worker *worker)
@@ -657,71 +797,14 @@ rspamd_hs_helper_compile_pending_multipatterns(struct hs_helper_ctx *ctx,
 
 	msg_info("processing %ud pending multipattern compilations", count);
 
-	for (unsigned int i = 0; i < count; i++) {
-		struct rspamd_multipattern_pending *entry = &pending[i];
-		struct rspamd_multipattern *mp = entry->mp;
-		unsigned int npatterns;
-		char fp[PATH_MAX];
-		GError *err = NULL;
+	struct rspamd_hs_helper_mp_async_ctx *mpctx = g_malloc0(sizeof(*mpctx));
+	mpctx->ctx = ctx;
+	mpctx->worker = worker;
+	mpctx->pending = pending;
+	mpctx->count = count;
+	mpctx->idx = 0;
 
-		if (worker->state != rspamd_worker_state_running) {
-			msg_info("worker terminating, stopping multipattern compilation");
-			break;
-		}
-
-		npatterns = rspamd_multipattern_get_npatterns(mp);
-		msg_info("compiling multipattern '%s' with %ud patterns", entry->name, npatterns);
-
-		/* Build cache file path */
-		rspamd_snprintf(fp, sizeof(fp), "%s/%*xs.hs", ctx->hs_dir,
-						(int) sizeof(entry->hash) / 2, entry->hash);
-
-		/* Check if cache file already exists (race with another process) */
-		if (access(fp, R_OK) == 0) {
-			msg_info("cache file %s already exists for multipattern '%s', skipping compilation",
-					 fp, entry->name);
-		}
-		else {
-			rspamd_worker_set_busy(worker, ctx->event_loop, "compile multipattern");
-
-			if (worker->state != rspamd_worker_state_running) {
-				rspamd_worker_set_busy(worker, ctx->event_loop, NULL);
-				break;
-			}
-
-			if (!rspamd_multipattern_compile_hs_to_cache(mp, ctx->hs_dir, &err)) {
-				rspamd_worker_set_busy(worker, ctx->event_loop, NULL);
-				msg_err("failed to compile multipattern '%s': %e", entry->name, err);
-				if (err) {
-					g_error_free(err);
-				}
-				continue;
-			}
-
-			rspamd_worker_set_busy(worker, ctx->event_loop, NULL);
-
-			if (worker->state != rspamd_worker_state_running) {
-				break;
-			}
-		}
-
-		if (worker->state != rspamd_worker_state_running) {
-			break;
-		}
-
-		struct rspamd_srv_command srv_cmd;
-		memset(&srv_cmd, 0, sizeof(srv_cmd));
-		srv_cmd.type = RSPAMD_SRV_MULTIPATTERN_LOADED;
-		rspamd_strlcpy(srv_cmd.cmd.mp_loaded.name, entry->name,
-					   sizeof(srv_cmd.cmd.mp_loaded.name));
-		rspamd_strlcpy(srv_cmd.cmd.mp_loaded.cache_dir, ctx->hs_dir,
-					   sizeof(srv_cmd.cmd.mp_loaded.cache_dir));
-
-		rspamd_srv_send_command(worker, ctx->event_loop, &srv_cmd, -1, NULL, NULL);
-		msg_info("sent multipattern loaded notification for '%s'", entry->name);
-	}
-
-	rspamd_multipattern_clear_pending();
+	rspamd_hs_helper_compile_pending_multipatterns_next(mpctx);
 }
 #endif
 
@@ -750,6 +833,14 @@ rspamd_hs_helper_workers_spawned(struct rspamd_main *rspamd_main,
 	if (write(fd, &rep, sizeof(rep)) != sizeof(rep)) {
 		msg_err("cannot write reply to the control socket: %s",
 				strerror(errno));
+	}
+
+	/* If we are shutting down, do not start any long-running work */
+	if (worker->state != rspamd_worker_state_running) {
+		if (attached_fd != -1) {
+			close(attached_fd);
+		}
+		return TRUE;
 	}
 
 	/* If hyperscan compilation has finished but we were waiting for workers, trigger notification now */
@@ -811,87 +902,6 @@ rspamd_hs_helper_timer(EV_P_ ev_timer *w, int revents)
 	rspamd_rs_compile(ctx, worker, FALSE);
 }
 
-/**
- * Initialize the Lua cache backend
- * Loads lua_hs_cache module and creates a backend instance
- */
-static gboolean
-rspamd_hs_helper_init_lua_backend(struct hs_helper_ctx *ctx, struct rspamd_worker *worker)
-{
-	lua_State *L = ctx->cfg->lua_state;
-	const char *backend_name;
-
-	switch (ctx->cache_backend) {
-	case HS_CACHE_BACKEND_FILE:
-		backend_name = "file";
-		break;
-	case HS_CACHE_BACKEND_REDIS:
-		backend_name = "redis";
-		break;
-	case HS_CACHE_BACKEND_HTTP:
-		backend_name = "http";
-		break;
-	case HS_CACHE_BACKEND_LUA:
-		backend_name = "lua";
-		break;
-	default:
-		backend_name = "file";
-		break;
-	}
-
-	/* Load lua_hs_cache module */
-	lua_getglobal(L, "require");
-	lua_pushstring(L, "lua_hs_cache");
-
-	if (lua_pcall(L, 1, 1, 0) != 0) {
-		msg_err("failed to load lua_hs_cache module: %s", lua_tostring(L, -1));
-		lua_pop(L, 1);
-		return FALSE;
-	}
-
-	/* Get create_backend function */
-	lua_getfield(L, -1, "create_backend");
-	if (!lua_isfunction(L, -1)) {
-		msg_err("lua_hs_cache.create_backend is not a function");
-		lua_pop(L, 2);
-		return FALSE;
-	}
-
-	/* Create configuration table */
-	lua_newtable(L);
-
-	lua_pushstring(L, backend_name);
-	lua_setfield(L, -2, "backend");
-
-	lua_pushstring(L, ctx->hs_dir);
-	lua_setfield(L, -2, "cache_dir");
-
-	/* Add platform_id if available */
-#ifdef WITH_HYPERSCAN
-	const char *platform_id = rspamd_hyperscan_get_platform_id();
-	if (platform_id) {
-		lua_pushstring(L, platform_id);
-		lua_setfield(L, -2, "platform_id");
-	}
-#endif
-
-	/* Call create_backend(config) */
-	if (lua_pcall(L, 1, 1, 0) != 0) {
-		msg_err("failed to create cache backend: %s", lua_tostring(L, -1));
-		lua_pop(L, 2);
-		return FALSE;
-	}
-
-	/* Store reference to backend object */
-	ctx->lua_backend_ref = luaL_ref(L, LUA_REGISTRYINDEX);
-
-	/* Pop the module table */
-	lua_pop(L, 1);
-
-	msg_info("initialized %s cache backend", backend_name);
-	return TRUE;
-}
-
 static void
 start_hs_helper(struct rspamd_worker *worker)
 {
@@ -918,19 +928,11 @@ start_hs_helper(struct rspamd_worker *worker)
 			 ctx->recompile_time,
 			 ctx->workers_ready ? "yes" : "no");
 
-	/* Initialize Lua cache backend if not using default file backend */
-	if (ctx->cache_backend != HS_CACHE_BACKEND_FILE) {
-		if (!rspamd_hs_helper_init_lua_backend(ctx, worker)) {
-			msg_warn("failed to initialize %s cache backend, falling back to file",
-					 ctx->cache_backend == HS_CACHE_BACKEND_REDIS ? "redis" : ctx->cache_backend == HS_CACHE_BACKEND_HTTP ? "http"
-																														  : "lua");
-			ctx->cache_backend = HS_CACHE_BACKEND_FILE;
-		}
-	}
-
 	ctx->event_loop = rspamd_prepare_worker(worker,
 											"hs_helper",
 											NULL);
+
+	/* HS cache Lua backend (if configured) is initialized for all workers in rspamd_prepare_worker() */
 
 	rspamd_control_worker_add_cmd_handler(worker, RSPAMD_CONTROL_RECOMPILE,
 										  rspamd_hs_helper_reload, ctx);
@@ -946,6 +948,11 @@ start_hs_helper(struct rspamd_worker *worker)
 	msg_info("hs_helper starting event loop");
 	ev_loop(ctx->event_loop, 0);
 	rspamd_worker_block_signals();
+
+#ifdef WITH_HYPERSCAN
+	/* Prevent any further Lua backend calls during shutdown */
+	rspamd_hs_cache_free_backend();
+#endif
 
 	CFG_REF_RELEASE(ctx->cfg);
 	CFG_REF_RELEASE(ctx->cfg);

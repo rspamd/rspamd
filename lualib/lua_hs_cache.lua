@@ -14,19 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
---[[
-Pluggable Hyperscan cache storage backends.
-
-This module provides a unified interface for storing and loading serialized
-Hyperscan databases from various backends (files, Redis, HTTP).
-
-Usage:
-  local hs_cache = require "lua_hs_cache"
-  local backend = hs_cache.create_backend(config)
-  backend:load(cache_key, platform_id, function(err, data) ... end)
-  backend:store(cache_key, platform_id, data, ttl, function(err) ... end)
-]]--
-
 local logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local lua_redis = require "lua_redis"
@@ -35,38 +22,14 @@ local rspamd_http = require "rspamd_http"
 local exports = {}
 local N = "lua_hs_cache"
 
---[[
-Backend interface definition (for documentation):
-
-backend = {
-  -- Check if cache entry exists
-  -- callback(err, exists: boolean, metadata: table|nil)
-  exists = function(self, cache_key, platform_id, callback) end,
-
-  -- Load serialized database
-  -- callback(err, data: string|nil)
-  load = function(self, cache_key, platform_id, callback) end,
-
-  -- Store serialized database
-  -- callback(err)
-  store = function(self, cache_key, platform_id, data, ttl, callback) end,
-
-  -- Delete cache entry
-  -- callback(err)
-  delete = function(self, cache_key, platform_id, callback) end,
-}
-]]--
-
--------------------------------------------------------------------------------
--- File Backend
--------------------------------------------------------------------------------
+-- File backend
 local file_backend = {}
 file_backend.__index = file_backend
 
 function file_backend.new(config)
   local self = setmetatable({}, file_backend)
   self.cache_dir = config.cache_dir or '/var/lib/rspamd/hs_cache'
-  self.platform_dirs = config.platform_dirs ~= false -- Create platform subdirs by default
+  self.platform_dirs = config.platform_dirs ~= false
   return self
 end
 
@@ -81,7 +44,6 @@ end
 function file_backend:_ensure_dir(path)
   local dir = path:match("(.*/)")
   if dir then
-    -- Create directory if it doesn't exist
     local ok, err = rspamd_util.mkdir(dir, true)
     if not ok and err then
       logger.warnx(N, "failed to create directory %s: %s", dir, err)
@@ -147,9 +109,49 @@ function file_backend:delete(cache_key, platform_id, callback)
   end
 end
 
--------------------------------------------------------------------------------
--- Redis Backend
--------------------------------------------------------------------------------
+function file_backend:exists_sync(cache_key, platform_id)
+  local path = self:_get_path(cache_key, platform_id)
+  return rspamd_util.stat(path) ~= nil, nil
+end
+
+function file_backend:save_async(cache_key, platform_id, data, callback)
+  self:store(cache_key, platform_id, data, nil, callback)
+end
+
+function file_backend:load_async(cache_key, platform_id, callback)
+  self:load(cache_key, platform_id, callback)
+end
+
+function file_backend:exists_async(cache_key, platform_id, callback)
+  local exists, err = self:exists_sync(cache_key, platform_id)
+  callback(err, exists)
+end
+
+function file_backend:load_sync(cache_key, platform_id)
+  local path = self:_get_path(cache_key, platform_id)
+  return rspamd_util.read_file(path)
+end
+
+function file_backend:save_sync(cache_key, platform_id, data)
+  local path = self:_get_path(cache_key, platform_id)
+  self:_ensure_dir(path)
+
+  local tmp_path = path .. ".tmp." .. rspamd_util.random_hex(8)
+  local ok, err = rspamd_util.write_file(tmp_path, data)
+  if not ok then
+    return false, err
+  end
+
+  local renamed, rename_err = os.rename(tmp_path, path)
+  if not renamed then
+    os.remove(tmp_path)
+    return false, rename_err
+  end
+
+  return true, nil
+end
+
+-- Redis backend
 local redis_backend = {}
 redis_backend.__index = redis_backend
 
@@ -159,10 +161,21 @@ function redis_backend.new(config)
   if not self.redis_params then
     self.redis_params = lua_redis.parse_redis_server(nil, config)
   end
+
+  if config.ev_base and self.redis_params then
+    self.redis_params.ev_base = config.ev_base
+  end
+
+  if config.rspamd_config then
+    self.config = config.rspamd_config
+  else
+    self.config = config
+  end
+
   self.prefix = config.prefix or 'rspamd_hs'
   self.default_ttl = config.ttl or (86400 * 30) -- 30 days default
   self.refresh_ttl = config.refresh_ttl ~= false -- Refresh TTL on read by default
-  self.use_compression = config.compression ~= false -- zstd compression by default
+  self.use_compression = config.compression ~= false
   return self
 end
 
@@ -178,9 +191,9 @@ function redis_backend:exists(cache_key, platform_id, callback)
     return
   end
 
-  lua_redis.request(self.redis_params, nil, {
-    cmd = 'EXISTS',
-    args = { key },
+  local attrs = {
+    ev_base = self.redis_params.ev_base,
+    config = self.config,
     callback = function(err, data)
       if err then
         callback(err, false, nil)
@@ -188,7 +201,10 @@ function redis_backend:exists(cache_key, platform_id, callback)
         callback(nil, data == 1, nil)
       end
     end
-  })
+  }
+
+  local req = {'EXISTS', key}
+  lua_redis.request(self.redis_params, attrs, req)
 end
 
 function redis_backend:load(cache_key, platform_id, callback)
@@ -200,41 +216,41 @@ function redis_backend:load(cache_key, platform_id, callback)
   end
 
   -- Use GETEX to refresh TTL on read if enabled
-  local cmd, args
+  local req
   if self.refresh_ttl then
-    cmd = 'GETEX'
-    args = { key, 'EX', tostring(self.default_ttl) }
+    req = {'GETEX', key, 'EX', tostring(self.default_ttl)}
   else
-    cmd = 'GET'
-    args = { key }
+    req = {'GET', key}
   end
 
-  lua_redis.request(self.redis_params, nil, {
-    cmd = cmd,
-    args = args,
+  local attrs = {
+    ev_base = self.redis_params.ev_base,
+    config = self.config,
     callback = function(err, data)
       if err then
         callback(err, nil)
       elseif not data then
         callback("not found", nil)
-      else
-        -- Decompress if needed
-        if self.use_compression then
-          local decompressed, decompress_err = rspamd_util.zstd_decompress(data)
-          if decompressed then
-            logger.debugx(N, "loaded and decompressed %d -> %d bytes from redis key %s",
-                #data, #decompressed, key)
-            callback(nil, decompressed)
-          else
-            callback(decompress_err or "decompression failed", nil)
-          end
-        else
-          logger.debugx(N, "loaded %d bytes from redis key %s", #data, key)
-          callback(nil, data)
-        end
-      end
+	      else
+	        -- Decompress if needed
+	        if self.use_compression then
+	          local decompress_err, decompressed = rspamd_util.zstd_decompress(data)
+	          if not decompress_err and decompressed then
+	            logger.debugx(N, "loaded and decompressed %d -> %d bytes from redis key %s",
+	                #data, #decompressed, key)
+	            callback(nil, decompressed)
+	          else
+	            callback(decompress_err or "decompression failed", nil)
+	          end
+	        else
+	          logger.debugx(N, "loaded %d bytes from redis key %s", #data, key)
+	          callback(nil, data)
+	        end
+	      end
     end
-  })
+  }
+
+  lua_redis.request(self.redis_params, attrs, req)
 end
 
 function redis_backend:store(cache_key, platform_id, data, ttl, callback)
@@ -259,9 +275,9 @@ function redis_backend:store(cache_key, platform_id, data, ttl, callback)
     end
   end
 
-  lua_redis.request(self.redis_params, nil, {
-    cmd = 'SETEX',
-    args = { key, tostring(actual_ttl), store_data },
+  local attrs = {
+    ev_base = self.redis_params.ev_base,
+    config = self.config,
     callback = function(err)
       if err then
         callback(err)
@@ -271,7 +287,10 @@ function redis_backend:store(cache_key, platform_id, data, ttl, callback)
         callback(nil)
       end
     end
-  })
+  }
+
+  local req = {'SETEX', key, tostring(actual_ttl), store_data}
+  lua_redis.request(self.redis_params, attrs, req)
 end
 
 function redis_backend:delete(cache_key, platform_id, callback)
@@ -282,9 +301,9 @@ function redis_backend:delete(cache_key, platform_id, callback)
     return
   end
 
-  lua_redis.request(self.redis_params, nil, {
-    cmd = 'DEL',
-    args = { key },
+  local attrs = {
+    ev_base = self.redis_params.ev_base,
+    config = self.config,
     callback = function(err)
       if err then
         callback(err)
@@ -293,12 +312,130 @@ function redis_backend:delete(cache_key, platform_id, callback)
         callback(nil)
       end
     end
-  })
+  }
+
+  local req = {'DEL', key}
+  lua_redis.request(self.redis_params, attrs, req)
 end
 
--------------------------------------------------------------------------------
--- HTTP Backend
--------------------------------------------------------------------------------
+-- Synchronous methods for C backend interface
+function redis_backend:exists_sync(cache_key, platform_id)
+  local key = self:_get_key(cache_key, platform_id)
+
+  if not self.redis_params then
+    return false, "redis not configured"
+  end
+
+  local ret, conn = lua_redis.redis_connect_sync(self.redis_params, false, key,
+      self.config or rspamd_config, self.redis_params.ev_base)
+  if not ret then
+    return false, "cannot connect to redis"
+  end
+
+  conn:add_cmd('EXISTS', { key })
+  local ok, result = conn:exec()
+  if not ok then
+    return false, "redis EXISTS failed"
+  end
+
+  return result == 1, nil
+end
+
+function redis_backend:load_sync(cache_key, platform_id)
+  local key = self:_get_key(cache_key, platform_id)
+
+  if not self.redis_params then
+    return nil, "redis not configured"
+  end
+
+  local ret, conn = lua_redis.redis_connect_sync(self.redis_params, false, key,
+      self.config or rspamd_config, self.redis_params.ev_base)
+  if not ret then
+    return nil, "cannot connect to redis"
+  end
+
+  -- Use GETEX to refresh TTL on read if enabled
+  if self.refresh_ttl then
+    conn:add_cmd('GETEX', { key, 'EX', tostring(self.default_ttl) })
+  else
+    conn:add_cmd('GET', { key })
+  end
+
+  local ok, data = conn:exec()
+  if not ok then
+    return nil, "redis GET failed"
+  end
+
+  if not data then
+    return nil, nil -- Cache miss, not an error
+  end
+
+  -- Decompress if needed
+  if self.use_compression then
+    local decompress_err, decompressed = rspamd_util.zstd_decompress(data)
+    if not decompress_err and decompressed then
+      logger.debugx(N, "loaded and decompressed %d -> %d bytes from redis key %s",
+          #data, #decompressed, key)
+      return decompressed, nil
+    end
+
+    return nil, decompress_err or "decompression failed"
+  else
+    logger.debugx(N, "loaded %d bytes from redis key %s", #data, key)
+    return data, nil
+  end
+end
+
+function redis_backend:save_async(cache_key, platform_id, data, callback)
+  self:store(cache_key, platform_id, data, nil, callback)
+end
+
+function redis_backend:load_async(cache_key, platform_id, callback)
+  self:load(cache_key, platform_id, callback)
+end
+
+function redis_backend:exists_async(cache_key, platform_id, callback)
+  self:exists(cache_key, platform_id, callback)
+end
+
+function redis_backend:save_sync(cache_key, platform_id, data)
+  local key = self:_get_key(cache_key, platform_id)
+
+  if not self.redis_params then
+    return false, "redis not configured"
+  end
+
+  local ret, conn = lua_redis.redis_connect_sync(self.redis_params, true, key,
+      self.config or rspamd_config, self.redis_params.ev_base)
+  if not ret then
+    return false, "cannot connect to redis"
+  end
+
+  local store_data = data
+  -- Compress if enabled
+  if self.use_compression then
+    local compressed, compress_err = rspamd_util.zstd_compress(data)
+    if compressed then
+      logger.debugx(N, "compressed %d -> %d bytes (%.1f%% reduction)",
+          #data, #compressed, (1 - #compressed / #data) * 100)
+      store_data = compressed
+    else
+      logger.warnx(N, "compression failed: %s, storing uncompressed", compress_err)
+    end
+  end
+
+  conn:add_cmd('SETEX', { key, tostring(self.default_ttl), store_data })
+  local ok, result = conn:exec()
+  if not ok then
+    return false, "redis SETEX failed: " .. tostring(result)
+  end
+
+  logger.debugx(N, "stored %d bytes to redis key %s with TTL %d",
+      #store_data, key, self.default_ttl)
+  return true, nil
+end
+
+-- HTTP backend
 local http_backend = {}
 http_backend.__index = http_backend
 
@@ -353,22 +490,21 @@ function http_backend:load(cache_key, platform_id, callback)
     method = 'GET',
     headers = self:_get_headers(),
     timeout = self.timeout,
-    callback = function(err, code, body, headers)
+	    callback = function(err, code, body, headers)
       if err then
         callback(err, nil)
       elseif code == 200 and body then
         -- Check if content is compressed
         local content_encoding = headers and headers['content-encoding']
         if content_encoding == 'zstd' or self.use_compression then
-          local decompressed = rspamd_util.zstd_decompress(body)
-          if decompressed then
-            callback(nil, decompressed)
+          local decompress_err, decompressed = rspamd_util.zstd_decompress(body)
+          if not decompress_err and decompressed then
+	            callback(nil, decompressed)
           else
-            -- Maybe it wasn't compressed after all
-            callback(nil, body)
+	            callback(nil, body)
           end
         else
-          callback(nil, body)
+	          callback(nil, body)
         end
       elseif code == 404 then
         callback("not found", nil)
@@ -434,9 +570,7 @@ function http_backend:delete(cache_key, platform_id, callback)
   })
 end
 
--------------------------------------------------------------------------------
--- Backend Factory
--------------------------------------------------------------------------------
+-- Backend factory
 
 -- Create a backend instance based on configuration
 -- @param config table with:

@@ -19,6 +19,7 @@
 #include "libutil/str_util.h"
 #include "libcryptobox/cryptobox.h"
 #include "logger.h"
+#include "libserver/hs_cache_backend.h"
 
 #ifdef WITH_HYPERSCAN
 #include "unix-std.h"
@@ -1389,7 +1390,15 @@ rspamd_multipattern_compile_hs_to_cache(struct rspamd_multipattern *mp,
 
 	hs_free_database(db);
 
-	/* Write to temp file and rename */
+	/* Generate cache key from hash */
+	char cache_key[rspamd_cryptobox_HASHBYTES * 2 + 1];
+	rspamd_snprintf(cache_key, sizeof(cache_key), "%*xs",
+					(int) rspamd_cryptobox_HASHBYTES / 2, hash);
+
+	/*
+	 * Multipattern cache is consumed by rspamd_multipattern_load_from_cache(),
+	 * which currently loads from filesystem. Hence, always save to file cache.
+	 */
 	rspamd_snprintf(fp, sizeof(fp), "%s%chs-mp-XXXXXXXXXXXXX",
 					cache_dir, G_DIR_SEPARATOR);
 
@@ -1414,8 +1423,7 @@ rspamd_multipattern_compile_hs_to_cache(struct rspamd_multipattern *mp,
 	close(fd);
 
 	/* Rename to final path */
-	rspamd_snprintf(np, sizeof(np), "%s/%*xs.hs", cache_dir,
-					(int) rspamd_cryptobox_HASHBYTES / 2, hash);
+	rspamd_snprintf(np, sizeof(np), "%s/%s.hs", cache_dir, cache_key);
 
 	if (rename(fp, np) == -1) {
 		g_set_error(err, rspamd_multipattern_quark(), errno,
@@ -1425,13 +1433,170 @@ rspamd_multipattern_compile_hs_to_cache(struct rspamd_multipattern *mp,
 	}
 
 	rspamd_hyperscan_notice_known(np);
-	msg_info("saved hyperscan database to %s (%z bytes)", np, len);
+	msg_info("saved hyperscan multipattern database to %s (%z bytes)", np, len);
 
 	return TRUE;
 #else
 	g_set_error(err, rspamd_multipattern_quark(), ENOTSUP,
 				"hyperscan not available");
 	return FALSE;
+#endif
+}
+
+struct rspamd_multipattern_hs_cache_async_ctx {
+	struct rspamd_multipattern *mp;
+	char *cache_key;
+	rspamd_multipattern_hs_cache_cb_t cb;
+	void *ud;
+};
+
+static void
+rspamd_multipattern_hs_cache_async_ctx_free(struct rspamd_multipattern_hs_cache_async_ctx *ctx)
+{
+	if (!ctx) return;
+	g_free(ctx->cache_key);
+	g_free(ctx);
+}
+
+static void
+rspamd_multipattern_hs_cache_save_cb(gboolean success,
+									 const unsigned char *data,
+									 gsize len,
+									 const char *error,
+									 void *ud)
+{
+	struct rspamd_multipattern_hs_cache_async_ctx *ctx = (struct rspamd_multipattern_hs_cache_async_ctx *) ud;
+	GError *err = NULL;
+
+	(void) data;
+	(void) len;
+
+	if (!success) {
+		g_set_error(&err, rspamd_multipattern_quark(), EIO,
+					"cannot save multipattern cache %s: %s",
+					ctx->cache_key ? ctx->cache_key : "(null)",
+					error ? error : "unknown error");
+	}
+
+	if (ctx->cb) {
+		ctx->cb(ctx->mp, success, err, ctx->ud);
+	}
+
+	if (err) {
+		g_error_free(err);
+	}
+
+	rspamd_multipattern_hs_cache_async_ctx_free(ctx);
+}
+
+void rspamd_multipattern_compile_hs_to_cache_async(struct rspamd_multipattern *mp,
+												   const char *cache_dir,
+												   struct ev_loop *event_loop,
+												   rspamd_multipattern_hs_cache_cb_t cb,
+												   void *ud)
+{
+	GError *err = NULL;
+
+	(void) event_loop;
+
+	if (!rspamd_hs_cache_has_lua_backend()) {
+		/* Legacy file-only path */
+		gboolean ok = rspamd_multipattern_compile_hs_to_cache(mp, cache_dir, &err);
+		if (cb) {
+			cb(mp, ok, err, ud);
+		}
+		if (err) {
+			g_error_free(err);
+		}
+		return;
+	}
+
+#ifdef WITH_HYPERSCAN
+	hs_platform_info_t plt;
+	hs_compile_error_t *hs_errors = NULL;
+	hs_database_t *db = NULL;
+	unsigned char hash[rspamd_cryptobox_HASHBYTES];
+	char *bytes = NULL;
+	gsize len = 0;
+	char cache_key[rspamd_cryptobox_HASHBYTES * 2 + 1];
+
+	if (!mp || !cache_dir) {
+		if (cb) {
+			g_set_error(&err, rspamd_multipattern_quark(), EINVAL, "invalid arguments");
+			cb(mp, FALSE, err, ud);
+			g_error_free(err);
+		}
+		return;
+	}
+
+	if (mp->state != RSPAMD_MP_STATE_COMPILING || mp->hs_pats == NULL || mp->cnt == 0) {
+		if (cb) {
+			g_set_error(&err, rspamd_multipattern_quark(), EINVAL, "multipattern is not ready for compilation");
+			cb(mp, FALSE, err, ud);
+			g_error_free(err);
+		}
+		return;
+	}
+
+	g_assert(hs_populate_platform(&plt) == HS_SUCCESS);
+	rspamd_multipattern_get_hash(mp, hash);
+	rspamd_snprintf(cache_key, sizeof(cache_key), "%*xs",
+					(int) rspamd_cryptobox_HASHBYTES / 2, hash);
+
+	msg_info("compiling hyperscan database for %ud patterns", mp->cnt);
+
+	if (hs_compile_multi((const char *const *) mp->hs_pats->data,
+						 (const unsigned int *) mp->hs_flags->data,
+						 (const unsigned int *) mp->hs_ids->data,
+						 mp->cnt,
+						 HS_MODE_BLOCK,
+						 &plt,
+						 &db,
+						 &hs_errors) != HS_SUCCESS) {
+		g_set_error(&err, rspamd_multipattern_quark(), EINVAL,
+					"cannot compile hyperscan: %s (pattern %d)",
+					hs_errors->message, hs_errors->expression);
+		hs_free_compile_error(hs_errors);
+		if (cb) {
+			cb(mp, FALSE, err, ud);
+		}
+		g_error_free(err);
+		return;
+	}
+
+	if (!rspamd_hyperscan_serialize_with_header(db, NULL, NULL, 0, &bytes, &len)) {
+		hs_free_database(db);
+		g_set_error(&err, rspamd_multipattern_quark(), EINVAL,
+					"cannot serialize hyperscan database");
+		if (cb) {
+			cb(mp, FALSE, err, ud);
+		}
+		g_error_free(err);
+		return;
+	}
+
+	hs_free_database(db);
+
+	/* save_async copies bytes into Lua string (lua_pushlstring), safe to free immediately */
+	struct rspamd_multipattern_hs_cache_async_ctx *ctx = g_malloc0(sizeof(*ctx));
+	ctx->mp = mp;
+	ctx->cache_key = g_strdup(cache_key);
+	ctx->cb = cb;
+	ctx->ud = ud;
+
+	rspamd_hs_cache_lua_save_async(cache_key, (const unsigned char *) bytes, len,
+								   rspamd_multipattern_hs_cache_save_cb, ctx);
+
+	g_free(bytes);
+
+	msg_info("saved hyperscan multipattern database to Lua backend (%z bytes)", len);
+#else
+	if (cb) {
+		g_set_error(&err, rspamd_multipattern_quark(), ENOTSUP,
+					"hyperscan not available");
+		cb(mp, FALSE, err, ud);
+		g_error_free(err);
+	}
 #endif
 }
 
@@ -1499,5 +1664,117 @@ rspamd_multipattern_load_from_cache(struct rspamd_multipattern *mp,
 	return TRUE;
 #else
 	return FALSE;
+#endif
+}
+
+#ifdef WITH_HYPERSCAN
+struct rspamd_multipattern_load_ctx {
+	struct rspamd_multipattern *mp;
+	char *cache_dir;
+	char *cache_key;
+	void (*cb)(gboolean success, void *ud);
+	void *ud;
+};
+
+static void
+rspamd_multipattern_load_ctx_free(struct rspamd_multipattern_load_ctx *ctx)
+{
+	if (!ctx) return;
+	g_free(ctx->cache_dir);
+	g_free(ctx->cache_key);
+	g_free(ctx);
+}
+
+static void
+rspamd_multipattern_load_from_cache_cb(gboolean success,
+									   const unsigned char *data,
+									   gsize len,
+									   const char *err,
+									   void *ud)
+{
+	struct rspamd_multipattern_load_ctx *ctx = (struct rspamd_multipattern_load_ctx *) ud;
+	struct rspamd_multipattern *mp = ctx->mp;
+	GError *gerr = NULL;
+	gboolean ok = FALSE;
+
+	if (success && data && len > 0) {
+		if (mp->state == RSPAMD_MP_STATE_COMPILING) {
+			mp->hs_db = rspamd_hyperscan_load_from_header((const char *) data, len, &gerr);
+			if (mp->hs_db) {
+				if (rspamd_multipattern_alloc_scratch(mp, &gerr)) {
+					mp->state = RSPAMD_MP_STATE_COMPILED;
+					ok = TRUE;
+				}
+				else {
+					rspamd_hyperscan_free(mp->hs_db, true);
+					mp->hs_db = NULL;
+				}
+			}
+		}
+	}
+	else {
+		(void) err;
+	}
+
+	if (!ok && gerr) {
+		msg_debug("multipattern hs load failed: %s", gerr->message);
+	}
+	g_clear_error(&gerr);
+
+	if (ctx->cb) {
+		ctx->cb(ok, ctx->ud);
+	}
+
+	rspamd_multipattern_load_ctx_free(ctx);
+}
+#endif
+
+void rspamd_multipattern_load_from_cache_async(struct rspamd_multipattern *mp,
+											   const char *cache_dir,
+											   struct ev_loop *event_loop,
+											   void (*cb)(gboolean success, void *ud),
+											   void *ud)
+{
+#ifdef WITH_HYPERSCAN
+	unsigned char hash[rspamd_cryptobox_HASHBYTES];
+	char cache_key[rspamd_cryptobox_HASHBYTES * 2 + 1];
+
+	if (!mp || !cache_dir) {
+		if (cb) cb(FALSE, ud);
+		return;
+	}
+
+	if (mp->state != RSPAMD_MP_STATE_COMPILING) {
+		if (cb) cb(FALSE, ud);
+		return;
+	}
+
+	/* Calculate hash for cache key */
+	rspamd_multipattern_get_hash(mp, hash);
+	rspamd_snprintf(cache_key, sizeof(cache_key), "%*xs",
+					(int) rspamd_cryptobox_HASHBYTES / 2, hash);
+
+	if (rspamd_hs_cache_has_lua_backend()) {
+		struct rspamd_multipattern_load_ctx *ctx = g_malloc0(sizeof(*ctx));
+		ctx->mp = mp;
+		ctx->cache_dir = g_strdup(cache_dir);
+		ctx->cache_key = g_strdup(cache_key);
+		ctx->cb = cb;
+		ctx->ud = ud;
+		(void) event_loop;
+		rspamd_hs_cache_lua_load_async(ctx->cache_key, rspamd_multipattern_load_from_cache_cb, ctx);
+		return;
+	}
+
+	/* File backend fallback (synchronous) */
+	if (cb) {
+		cb(rspamd_multipattern_load_from_cache(mp, cache_dir), ud);
+	}
+#else
+	(void) mp;
+	(void) cache_dir;
+	(void) event_loop;
+	if (cb) cb(FALSE, ud);
+	(void) ud;
 #endif
 }

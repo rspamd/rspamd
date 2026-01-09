@@ -278,6 +278,18 @@ enum rspamd_hyperscan_status rspamd_re_cache_load_hyperscan_scoped(
 	const char *cache_dir, bool try_load);
 
 /**
+ * Asynchronously load hyperscan cache for all scopes using the configured cache backend
+ * (Lua backend if present, otherwise filesystem).
+ *
+ * This function does not block; it schedules async loads and applies hot-swap when
+ * blobs arrive.
+ */
+void rspamd_re_cache_load_hyperscan_scoped_async(struct rspamd_re_cache *cache_head,
+												 struct ev_loop *event_loop,
+												 const char *cache_dir,
+												 bool try_load);
+
+/**
  * Compile expressions to the hyperscan tree for a single scope with locking
  */
 int rspamd_re_cache_compile_hyperscan_scoped_single(struct rspamd_re_cache *cache,

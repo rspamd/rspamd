@@ -55,7 +55,7 @@ enum rspamd_srv_type {
 	RSPAMD_SRV_FUZZY_BLOCKED,       /* Used to notify main process about a blocked ip */
 	RSPAMD_SRV_WORKERS_SPAWNED,     /* Used to notify workers that all workers have been spawned */
 	RSPAMD_SRV_MULTIPATTERN_LOADED, /* Multipattern HS compiled and ready */
-	RSPAMD_SRV_BUSY,                /* Worker is busy with long-running operation, suspend heartbeat */
+	RSPAMD_SRV_BUSY,                /* Worker is busy with long-running operation */
 };
 
 enum rspamd_log_pipe_type {
@@ -81,7 +81,6 @@ struct rspamd_control_command {
 			gboolean forced;
 			char cache_dir[CONTROL_PATHLEN];
 			char scope[64]; /* Scope name, NULL means all scopes */
-			gsize fd_size;  /* Size of FD-based db, 0 if not using FD */
 		} hs_loaded;
 		struct {
 			char name[64];
@@ -195,7 +194,6 @@ struct rspamd_srv_command {
 			gboolean forced;
 			char cache_dir[CONTROL_PATHLEN];
 			char scope[64]; /* Scope name, NULL means all scopes */
-			gsize fd_size;  /* Size of FD-based db, 0 if not using FD */
 		} hs_loaded;
 		struct {
 			char tag[32];
@@ -242,10 +240,9 @@ struct rspamd_srv_command {
 			char name[64];
 			char cache_dir[CONTROL_PATHLEN];
 		} mp_loaded;
-		/* Sent when worker starts/finishes long-running operation */
 		struct {
 			gboolean is_busy;
-			char reason[32]; /* Short reason like "compile hyperscan" */
+			char reason[32];
 		} busy;
 	} cmd;
 };
@@ -372,13 +369,6 @@ const char *rspamd_srv_command_to_string(enum rspamd_srv_type cmd);
  */
 void rspamd_pending_control_free(gpointer p);
 
-/**
- * Notify main process that worker is busy with long-running operation
- * Main process will skip heartbeat checks while worker is busy
- * @param worker worker instance
- * @param event_loop worker event loop
- * @param reason short reason string (e.g., "compile hyperscan"), NULL to clear
- */
 void rspamd_worker_set_busy(struct rspamd_worker *worker,
 							struct ev_loop *event_loop,
 							const char *reason);

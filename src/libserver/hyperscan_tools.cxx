@@ -39,11 +39,6 @@
 
 #define HYPERSCAN_LOG_TAG "hsxxxx"
 
-// Hyperscan does not provide any API to check validity of it's databases
-// However, it is required for us to perform migrations properly without
-// failing at `hs_alloc_scratch` phase or even `hs_scan` which is **way too late**
-// Hence, we have to check hyperscan internal guts to prevent that situation...
-
 #ifdef HS_MAJOR
 #ifndef HS_VERSION_32BIT
 #define HS_VERSION_32BIT ((HS_MAJOR << 24) | (HS_MINOR << 16) | (HS_PATCH << 8) | 0)
@@ -83,12 +78,6 @@ INIT_LOG_MODULE_PUBLIC(hyperscan)
 
 namespace rspamd::util {
 
-/*
- * A singleton class that is responsible for deletion of the outdated hyperscan files
- * One issue is that it must know about HS files in all workers, which is a problem
- * TODO: we need to export hyperscan caches from all workers to a single place where
- * we can clean them up (probably, to the main process)
- */
 class hs_known_files_cache {
 private:
 	// These fields are filled when we add new known cache files
@@ -102,7 +91,6 @@ private:
 
 	virtual ~hs_known_files_cache()
 	{
-		// Cleanup cache dir
 		cleanup_maybe();
 	}
 
@@ -918,7 +906,6 @@ gboolean rspamd_hyperscan_create_shared_unser(const char *serialized_data,
 		return FALSE;
 	}
 
-	// Map with MAP_SHARED for sharing between processes
 	void *map = mmap(nullptr, unserialized_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	if (map == MAP_FAILED) {
 		msg_err_hyperscan("cannot mmap temp file: %s", strerror(errno));
@@ -926,7 +913,6 @@ gboolean rspamd_hyperscan_create_shared_unser(const char *serialized_data,
 		return FALSE;
 	}
 
-	// Deserialize into mapped region
 	if (hs_deserialize_database_at(serialized_data, serialized_size, reinterpret_cast<hs_database_t *>(map)) != HS_SUCCESS) {
 		msg_err_hyperscan("cannot deserialize database into shared memory");
 		munmap(map, unserialized_size);
@@ -934,7 +920,6 @@ gboolean rspamd_hyperscan_create_shared_unser(const char *serialized_data,
 		return FALSE;
 	}
 
-	// Change protection to read-only
 	if (mprotect(map, unserialized_size, PROT_READ) == -1) {
 		msg_err_hyperscan("cannot mprotect shared memory: %s", strerror(errno));
 	}
@@ -949,8 +934,6 @@ gboolean rspamd_hyperscan_create_shared_unser(const char *serialized_data,
 
 	return TRUE;
 }
-
-/* Unified hyperscan format magic */
 static const unsigned char rspamd_hs_magic[] = {'r', 's', 'h', 's', 'r', 'e', '1', '1'};
 #define RSPAMD_HS_MAGIC_LEN (sizeof(rspamd_hs_magic))
 

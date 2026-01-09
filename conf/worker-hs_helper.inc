@@ -10,10 +10,6 @@
 #
 # See https://rspamd.com/doc/faq.html#what-are-the-locald-and-overrided-directories
 # for details
-#
-# This worker compiles hyperscan databases in the background, allowing
-# the main rspamd process to start quickly without blocking on compilation.
-
 # Directory to store compiled hyperscan databases
 # cache_dir = "${DBDIR}";
 
