@@ -567,7 +567,9 @@ void rspamd_url_init(const char *tld_file)
 		url_scanner->matchers_full = g_array_sized_new(FALSE, TRUE,
 													   sizeof(struct url_matcher), 13000);
 		url_scanner->search_trie_full = rspamd_multipattern_create_sized(13000,
-																		 RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8);
+																		 RSPAMD_MULTIPATTERN_TLD | RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8);
+		/* Use FALLBACK mode: ACISM immediately, HS async */
+		rspamd_multipattern_set_mode(url_scanner->search_trie_full, RSPAMD_MP_MODE_FALLBACK);
 	}
 	else {
 		url_scanner->matchers_full = NULL;
@@ -586,11 +588,6 @@ void rspamd_url_init(const char *tld_file)
 		}
 	}
 
-	if (url_scanner->matchers_full && url_scanner->matchers_full->len > 1000) {
-		msg_info("start compiling of %d TLD suffixes; it might take a long time",
-				 url_scanner->matchers_full->len);
-	}
-
 	if (!rspamd_multipattern_compile(url_scanner->search_trie_strict, mp_compile_flags, &err)) {
 		msg_err("cannot compile url matcher static patterns, fatal error: %e", err);
 		abort();
@@ -604,11 +601,16 @@ void rspamd_url_init(const char *tld_file)
 			g_error_free(err);
 			ret = FALSE;
 		}
+		else if (rspamd_multipattern_get_state(url_scanner->search_trie_full) ==
+				 RSPAMD_MP_STATE_COMPILING) {
+			/* Add to pending queue for hs_helper to compile */
+			rspamd_multipattern_add_pending(url_scanner->search_trie_full, "tld");
+		}
 	}
 
 	if (tld_file != NULL) {
 		if (ret) {
-			msg_info("initialized %ud url match suffixes from '%s'",
+			msg_info("loaded %ud TLD suffixes from '%s'",
 					 url_scanner->matchers_full->len - url_scanner->matchers_strict->len,
 					 tld_file);
 		}

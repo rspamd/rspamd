@@ -21,6 +21,7 @@
 #include "utlist.h"
 #include "ottery.h"
 #include "rspamd_control.h"
+#include "hs_cache_backend.h"
 #include "libserver/maps/map.h"
 #include "libserver/maps/map_private.h"
 #include "libserver/http/http_private.h"
@@ -58,6 +59,7 @@
 #include "contrib/libev/ev.h"
 #include "libstat/stat_api.h"
 #include "libserver/protocol_internal.h"
+#include "libutil/multipattern.h"
 
 struct rspamd_worker *rspamd_current_worker = NULL;
 
@@ -532,6 +534,11 @@ rspamd_prepare_worker(struct rspamd_worker *worker, const char *name,
 	rspamd_redis_pool_config(worker->srv->cfg->redis_pool,
 							 worker->srv->cfg, event_loop);
 
+#ifdef WITH_HYPERSCAN
+	/* Ensure HS cache Lua backend is configured in this worker if hs_helper uses it */
+	rspamd_hs_cache_try_init_lua_backend(worker->srv->cfg, event_loop);
+#endif
+
 	/* Accept all sockets */
 	if (hdl) {
 		cur = worker->cf->listen_socks;
@@ -902,6 +909,10 @@ rspamd_main_heartbeat_cb(EV_P_ ev_timer *w, int revents)
 
 	time_from_last -= wrk->hb.last_event;
 	rspamd_main = wrk->srv;
+
+	if (wrk->hb.is_busy || rspamd_main->wanna_die) {
+		return;
+	}
 
 	if (wrk->hb.last_event > 0 &&
 		time_from_last > 0 &&
@@ -1895,6 +1906,36 @@ rspamd_check_termination_clause(struct rspamd_main *rspamd_main,
 }
 
 #ifdef WITH_HYPERSCAN
+struct rspamd_worker_mp_async_cbdata {
+	char *name;
+	char *cache_dir;
+	struct rspamd_multipattern *mp;
+};
+
+static void
+rspamd_worker_multipattern_async_loaded(gboolean success, void *ud)
+{
+	struct rspamd_worker_mp_async_cbdata *cbd = (struct rspamd_worker_mp_async_cbdata *) ud;
+
+	if (success) {
+		msg_info("multipattern '%s' hot-swapped to hyperscan (backend)", cbd->name);
+	}
+	else {
+		/* Try file fallback if available */
+		if (cbd->mp && cbd->cache_dir && rspamd_multipattern_load_from_cache(cbd->mp, cbd->cache_dir)) {
+			msg_info("multipattern '%s' hot-swapped to hyperscan (file fallback)", cbd->name);
+		}
+		else {
+			msg_warn("failed to hot-swap multipattern '%s' to hyperscan, continuing with ACISM fallback",
+					 cbd->name);
+		}
+	}
+
+	g_free(cbd->name);
+	g_free(cbd->cache_dir);
+	g_free(cbd);
+}
+
 gboolean
 rspamd_worker_hyperscan_ready(struct rspamd_main *rspamd_main,
 							  struct rspamd_worker *worker, int fd,
@@ -1908,32 +1949,97 @@ rspamd_worker_hyperscan_ready(struct rspamd_main *rspamd_main,
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_HYPERSCAN_LOADED;
 
-	/* Check if this is a scoped notification */
-	if (cmd->cmd.hs_loaded.scope[0] != '\0') {
-		/* Scoped hyperscan loading */
-		const char *scope = cmd->cmd.hs_loaded.scope;
-
-		msg_info("loading hyperscan expressions for scope '%s' after receiving compilation notice", scope);
-
-		rep.reply.hs_loaded.status = rspamd_re_cache_load_hyperscan_scoped(
-			cache, cmd->cmd.hs_loaded.cache_dir, false);
+	if (rspamd_hs_cache_has_lua_backend()) {
+		/*
+		 * Backend-based hot-swap: schedule async loads to avoid blocking control pipe.
+		 * Reply immediately.
+		 */
+		rspamd_re_cache_load_hyperscan_scoped_async(cache, worker->srv->event_loop,
+													cmd->cmd.hs_loaded.cache_dir, false);
+		rep.reply.hs_loaded.status = 0;
 	}
 	else {
-		/* Legacy/full cache loading */
-		if (rspamd_re_cache_is_hs_loaded(cache) != RSPAMD_HYPERSCAN_LOADED_FULL ||
-			cmd->cmd.hs_loaded.forced) {
-
-			msg_info("loading hyperscan expressions after receiving compilation "
-					 "notice: %s",
-					 (rspamd_re_cache_is_hs_loaded(cache) != RSPAMD_HYPERSCAN_LOADED_FULL) ? "new db" : "forced update");
-			rep.reply.hs_loaded.status = rspamd_re_cache_load_hyperscan(
-				worker->srv->cfg->re_cache, cmd->cmd.hs_loaded.cache_dir, false);
+		/* File-based loading (legacy, synchronous) */
+		if (cmd->cmd.hs_loaded.scope[0] != '\0') {
+			const char *scope = cmd->cmd.hs_loaded.scope;
+			msg_info("loading hyperscan expressions for scope '%s' after receiving compilation notice", scope);
+			rep.reply.hs_loaded.status = rspamd_re_cache_load_hyperscan_scoped(
+				cache, cmd->cmd.hs_loaded.cache_dir, false);
+		}
+		else {
+			if (rspamd_re_cache_is_hs_loaded(cache) != RSPAMD_HYPERSCAN_LOADED_FULL ||
+				cmd->cmd.hs_loaded.forced) {
+				msg_info("loading hyperscan expressions after receiving compilation notice: %s",
+						 (rspamd_re_cache_is_hs_loaded(cache) != RSPAMD_HYPERSCAN_LOADED_FULL) ? "new db" : "forced update");
+				rep.reply.hs_loaded.status = rspamd_re_cache_load_hyperscan(
+					worker->srv->cfg->re_cache, cmd->cmd.hs_loaded.cache_dir, false);
+			}
 		}
 	}
 
 	if (write(fd, &rep, sizeof(rep)) != sizeof(rep)) {
 		msg_err("cannot write reply to the control socket: %s",
 				strerror(errno));
+	}
+
+	if (attached_fd >= 0) {
+		close(attached_fd);
+	}
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_worker_multipattern_ready(struct rspamd_main *rspamd_main,
+								 struct rspamd_worker *worker, int fd,
+								 int attached_fd,
+								 struct rspamd_control_command *cmd,
+								 gpointer ud)
+{
+	struct rspamd_control_reply rep;
+	struct rspamd_multipattern *mp;
+	const char *name = cmd->cmd.mp_loaded.name;
+	const char *cache_dir = cmd->cmd.mp_loaded.cache_dir;
+
+	memset(&rep, 0, sizeof(rep));
+	rep.type = RSPAMD_CONTROL_MULTIPATTERN_LOADED;
+
+	mp = rspamd_multipattern_find_pending(name);
+
+	if (mp != NULL) {
+		if (rspamd_hs_cache_has_lua_backend()) {
+			struct rspamd_worker_mp_async_cbdata *cbd = g_malloc0(sizeof(*cbd));
+			cbd->name = g_strdup(name);
+			cbd->cache_dir = g_strdup(cache_dir);
+			cbd->mp = mp;
+			rspamd_multipattern_load_from_cache_async(mp, cache_dir, worker->srv->event_loop,
+													  rspamd_worker_multipattern_async_loaded, cbd);
+			rep.reply.hs_loaded.status = 0;
+		}
+		else {
+			if (rspamd_multipattern_load_from_cache(mp, cache_dir)) {
+				msg_info("multipattern '%s' hot-swapped to hyperscan", name);
+				rep.reply.hs_loaded.status = 0;
+			}
+			else {
+				msg_warn("failed to load multipattern '%s' from cache, continuing with ACISM fallback",
+						 name);
+				rep.reply.hs_loaded.status = ENOENT;
+			}
+		}
+	}
+	else {
+		msg_warn("received multipattern notification for unknown '%s'", name);
+		rep.reply.hs_loaded.status = ENOENT;
+	}
+
+	if (write(fd, &rep, sizeof(rep)) != sizeof(rep)) {
+		msg_err("cannot write reply to the control socket: %s",
+				strerror(errno));
+	}
+
+	if (attached_fd >= 0) {
+		close(attached_fd);
 	}
 
 	return TRUE;
@@ -2033,6 +2139,10 @@ void rspamd_worker_init_scanner(struct rspamd_worker *worker,
 	rspamd_control_worker_add_cmd_handler(worker,
 										  RSPAMD_CONTROL_HYPERSCAN_LOADED,
 										  rspamd_worker_hyperscan_ready,
+										  NULL);
+	rspamd_control_worker_add_cmd_handler(worker,
+										  RSPAMD_CONTROL_MULTIPATTERN_LOADED,
+										  rspamd_worker_multipattern_ready,
 										  NULL);
 #endif
 	rspamd_control_worker_add_cmd_handler(worker,

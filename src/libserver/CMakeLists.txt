@@ -47,6 +47,7 @@ SET(LIBRSPAMDSERVERSRC
         ${CMAKE_CURRENT_SOURCE_DIR}/html/html_url_rewrite_c.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/html/html_tests.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/hyperscan_tools.cxx
+        ${CMAKE_CURRENT_SOURCE_DIR}/hs_cache_backend.c
         ${CMAKE_CURRENT_SOURCE_DIR}/backtrace.cxx
         ${LIBCSSSRC})
 
