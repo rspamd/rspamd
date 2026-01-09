@@ -402,7 +402,7 @@ end
 -- * Spawn learning process
 local function do_train_ann(worker, ev_base, rule, set, ann_key)
   -- Check if we need to train ann
-  if set.store_set_only then
+  if rule.store_set_only then
     lua_util.debugm(N, rspamd_config, 'do_train_ann: skipping %s:%s key=%s due to store_set_only', rule.prefix, set.name, ann_key)
     return
   end
