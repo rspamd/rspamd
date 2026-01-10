@@ -32,6 +32,13 @@
 
 #define MAX_SCRATCH 4
 
+/*
+ * Threshold for "small" multipatterns that are compiled in memory
+ * without file/Redis caching. These are shared with workers via fork().
+ * Patterns above this threshold use async compilation with caching.
+ */
+#define RSPAMD_MULTIPATTERN_SMALL_THRESHOLD 100
+
 #define msg_debug_multipattern(...) rspamd_conditional_debug_fast(NULL, NULL,                 \
 																  rspamd_multipattern_log_id, \
 																  "multipattern", NULL,       \
@@ -819,6 +826,21 @@ rspamd_multipattern_compile(struct rspamd_multipattern *mp, int flags, GError **
 		}
 
 		/* SYNC mode (default): try cache, sync compile on miss */
+
+		/* Small patterns: compile in memory, no file caching.
+		 * They will be shared with workers via fork() COW. */
+		if (mp->cnt < RSPAMD_MULTIPATTERN_SMALL_THRESHOLD) {
+			msg_debug_multipattern("small pattern set (%ud < %d), compiling in memory",
+								   mp->cnt, RSPAMD_MULTIPATTERN_SMALL_THRESHOLD);
+			if (!rspamd_multipattern_compile_hs_sync(mp, hash,
+													 flags | RSPAMD_MULTIPATTERN_COMPILE_NO_FS, err)) {
+				return FALSE;
+			}
+			mp->compiled = TRUE;
+			return TRUE;
+		}
+
+		/* Large patterns: use file cache */
 		if (!(flags & RSPAMD_MULTIPATTERN_COMPILE_NO_FS) &&
 			rspamd_multipattern_try_load_hs(mp, hash)) {
 			if (!rspamd_multipattern_alloc_scratch(mp, err)) {

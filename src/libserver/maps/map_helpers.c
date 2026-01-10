@@ -40,6 +40,15 @@
 static const uint64_t map_hash_seed = 0xdeadbabeULL;
 static const char *const hash_fill = "1";
 
+#ifdef WITH_HYPERSCAN
+/*
+ * Threshold for "small" regexp maps that are compiled in memory
+ * without file/Redis caching. These are shared with workers via fork().
+ * Maps above this threshold use async compilation with caching.
+ */
+#define RSPAMD_REGEXP_MAP_SMALL_THRESHOLD 100
+#endif
+
 struct rspamd_map_helper_value {
 	gsize hits;
 	gconstpointer key;
@@ -1230,16 +1239,62 @@ rspamd_re_map_finalize(struct rspamd_regexp_map_helper *re_map)
 	}
 
 	/*
-	 * Instead of compiling hyperscan synchronously here (which blocks the main process),
-	 * we add this map to the pending compilation queue. The hs_helper worker will compile
-	 * the hyperscan database asynchronously and notify workers when it's ready.
-	 *
-	 * In the meantime, we use PCRE fallback via the regexps array.
+	 * Small regexp maps: compile in memory synchronously.
+	 * They will be shared with workers via fork() COW.
+	 * Large maps: queue for async compilation via hs_helper.
 	 */
-	msg_info_map("regexp map %s (%ud patterns) queued for async hyperscan compilation, using PCRE fallback",
-				 map->name, re_map->regexps->len);
+	if (re_map->regexps->len < RSPAMD_REGEXP_MAP_SMALL_THRESHOLD) {
+		hs_database_t *db = NULL;
+		hs_compile_error_t *hs_errors = NULL;
 
-	rspamd_regexp_map_add_pending(re_map, map->name);
+		msg_info_map("regexp map %s (%ud patterns) is small, compiling in memory",
+					 map->name, re_map->regexps->len);
+
+		if (hs_compile_multi((const char **) re_map->patterns,
+							 re_map->flags,
+							 re_map->ids,
+							 re_map->regexps->len,
+							 HS_MODE_BLOCK,
+							 &plt,
+							 &db,
+							 &hs_errors) != HS_SUCCESS) {
+			msg_warn_map("cannot compile hyperscan for regexp map %s: %s (pattern %d), using PCRE fallback",
+						 map->name,
+						 hs_errors ? hs_errors->message : "unknown error",
+						 hs_errors ? hs_errors->expression : -1);
+			if (hs_errors) {
+				hs_free_compile_error(hs_errors);
+			}
+			/* Fall through - will use PCRE fallback */
+		}
+		else {
+			/* Create hyperscan wrapper without file association */
+			re_map->hs_db = rspamd_hyperscan_from_raw_db(db, NULL);
+
+			if (hs_alloc_scratch(rspamd_hyperscan_get_database(re_map->hs_db),
+								 &re_map->hs_scratch) != HS_SUCCESS) {
+				msg_err_map("cannot allocate scratch for regexp map %s, using PCRE fallback",
+							map->name);
+				rspamd_hyperscan_free(re_map->hs_db, true);
+				re_map->hs_db = NULL;
+				re_map->hs_scratch = NULL;
+			}
+			else {
+				msg_info_map("regexp map %s compiled in memory successfully",
+							 map->name);
+			}
+		}
+	}
+	else {
+		/*
+		 * Large regexp maps: queue for async compilation via hs_helper.
+		 * Use PCRE fallback until hyperscan is ready.
+		 */
+		msg_info_map("regexp map %s (%ud patterns) queued for async hyperscan compilation, using PCRE fallback",
+					 map->name, re_map->regexps->len);
+
+		rspamd_regexp_map_add_pending(re_map, map->name);
+	}
 #endif
 }
 
