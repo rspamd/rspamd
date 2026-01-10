@@ -21,8 +21,17 @@
 #ifdef WITH_HYPERSCAN
 
 #include "hs.h"
+#include "logger.h"
 
 G_BEGIN_DECLS
+
+EXTERN_LOG_MODULE_DEF(hyperscan);
+
+#define HYPERSCAN_LOG_TAG "hsxxxx"
+
+#define msg_debug_hyperscan(...) rspamd_conditional_debug_fast(NULL, NULL,                                              \
+															   rspamd_hyperscan_log_id, "hyperscan", HYPERSCAN_LOG_TAG, \
+															   RSPAMD_LOG_FUNC, __VA_ARGS__)
 
 /**
  * Opaque structure that represents hyperscan (maybe shared/cached database)

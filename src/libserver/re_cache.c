@@ -2368,7 +2368,17 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 			ctx->cbdata = cbdata;
 			ctx->loop = loop;
 			ctx->w = w;
-			rspamd_hs_cache_lua_exists_async(re_class->hash, rspamd_re_cache_exists_cb, ctx);
+			char entity_name[256];
+			if (re_class->type_len > 0) {
+				rspamd_snprintf(entity_name, sizeof(entity_name), "re_class:%s(%*s)",
+								rspamd_re_cache_type_to_string(re_class->type),
+								(int) re_class->type_len - 1, re_class->type_data);
+			}
+			else {
+				rspamd_snprintf(entity_name, sizeof(entity_name), "re_class:%s",
+								rspamd_re_cache_type_to_string(re_class->type));
+			}
+			rspamd_hs_cache_lua_exists_async(re_class->hash, entity_name, rspamd_re_cache_exists_cb, ctx);
 			ev_timer_stop(EV_A_ w);
 			return;
 		}
@@ -2669,7 +2679,17 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 			ctx->w = w;
 			ctx->n = n;
 
-			rspamd_hs_cache_lua_save_async(re_class->hash, combined, total_len, rspamd_re_cache_save_cb, ctx);
+			char entity_name[256];
+			if (re_class->type_len > 0) {
+				rspamd_snprintf(entity_name, sizeof(entity_name), "re_class:%s(%*s)",
+								rspamd_re_cache_type_to_string(re_class->type),
+								(int) re_class->type_len - 1, re_class->type_data);
+			}
+			else {
+				rspamd_snprintf(entity_name, sizeof(entity_name), "re_class:%s",
+								rspamd_re_cache_type_to_string(re_class->type));
+			}
+			rspamd_hs_cache_lua_save_async(re_class->hash, entity_name, combined, total_len, rspamd_re_cache_save_cb, ctx);
 
 			g_free(combined);
 			CLEANUP_ALLOCATED(false);
@@ -3616,7 +3636,17 @@ void rspamd_re_cache_load_hyperscan_scoped_async(struct rspamd_re_cache *cache_h
 			item->cache_key = g_strdup(re_class->hash);
 			sctx->pending++;
 			sctx->total++;
-			rspamd_hs_cache_lua_load_async(item->cache_key, rspamd_re_cache_hs_load_cb, item);
+			char entity_name[256];
+			if (re_class->type_len > 0) {
+				rspamd_snprintf(entity_name, sizeof(entity_name), "re_class:%s(%*s)",
+								rspamd_re_cache_type_to_string(re_class->type),
+								(int) re_class->type_len - 1, re_class->type_data);
+			}
+			else {
+				rspamd_snprintf(entity_name, sizeof(entity_name), "re_class:%s",
+								rspamd_re_cache_type_to_string(re_class->type));
+			}
+			rspamd_hs_cache_lua_load_async(item->cache_key, entity_name, rspamd_re_cache_hs_load_cb, item);
 		}
 
 		if (sctx->pending == 0) {

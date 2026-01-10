@@ -22,8 +22,10 @@
 #include "ottery.h"
 #include "rspamd_control.h"
 #include "hs_cache_backend.h"
+#include "hyperscan_tools.h"
 #include "libserver/maps/map.h"
 #include "libserver/maps/map_private.h"
+#include "libserver/maps/map_helpers.h"
 #include "libserver/http/http_private.h"
 #include "libserver/http/http_router.h"
 #include "libutil/rrd.h"
@@ -1918,12 +1920,12 @@ rspamd_worker_multipattern_async_loaded(gboolean success, void *ud)
 	struct rspamd_worker_mp_async_cbdata *cbd = (struct rspamd_worker_mp_async_cbdata *) ud;
 
 	if (success) {
-		msg_info("multipattern '%s' hot-swapped to hyperscan (backend)", cbd->name);
+		msg_debug_hyperscan("multipattern '%s' hot-swapped to hyperscan (backend)", cbd->name);
 	}
 	else {
 		/* Try file fallback if available */
 		if (cbd->mp && cbd->cache_dir && rspamd_multipattern_load_from_cache(cbd->mp, cbd->cache_dir)) {
-			msg_info("multipattern '%s' hot-swapped to hyperscan (file fallback)", cbd->name);
+			msg_debug_hyperscan("multipattern '%s' hot-swapped to hyperscan (file fallback)", cbd->name);
 		}
 		else {
 			msg_warn("failed to hot-swap multipattern '%s' to hyperscan, continuing with ACISM fallback",
@@ -1949,11 +1951,11 @@ rspamd_worker_hyperscan_ready(struct rspamd_main *rspamd_main,
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_HYPERSCAN_LOADED;
 
+	msg_debug_hyperscan("received hyperscan loaded notification, cache_dir=%s, forced=%d",
+						cmd->cmd.hs_loaded.cache_dir, cmd->cmd.hs_loaded.forced);
+
 	if (rspamd_hs_cache_has_lua_backend()) {
-		/*
-		 * Backend-based hot-swap: schedule async loads to avoid blocking control pipe.
-		 * Reply immediately.
-		 */
+		msg_debug_hyperscan("using async backend-based hyperscan loading");
 		rspamd_re_cache_load_hyperscan_scoped_async(cache, worker->srv->event_loop,
 													cmd->cmd.hs_loaded.cache_dir, false);
 		rep.reply.hs_loaded.status = 0;
@@ -1962,15 +1964,15 @@ rspamd_worker_hyperscan_ready(struct rspamd_main *rspamd_main,
 		/* File-based loading (legacy, synchronous) */
 		if (cmd->cmd.hs_loaded.scope[0] != '\0') {
 			const char *scope = cmd->cmd.hs_loaded.scope;
-			msg_info("loading hyperscan expressions for scope '%s' after receiving compilation notice", scope);
+			msg_debug_hyperscan("loading hyperscan expressions for scope '%s' after receiving compilation notice", scope);
 			rep.reply.hs_loaded.status = rspamd_re_cache_load_hyperscan_scoped(
 				cache, cmd->cmd.hs_loaded.cache_dir, false);
 		}
 		else {
 			if (rspamd_re_cache_is_hs_loaded(cache) != RSPAMD_HYPERSCAN_LOADED_FULL ||
 				cmd->cmd.hs_loaded.forced) {
-				msg_info("loading hyperscan expressions after receiving compilation notice: %s",
-						 (rspamd_re_cache_is_hs_loaded(cache) != RSPAMD_HYPERSCAN_LOADED_FULL) ? "new db" : "forced update");
+				msg_debug_hyperscan("loading hyperscan expressions after receiving compilation notice: %s",
+									(rspamd_re_cache_is_hs_loaded(cache) != RSPAMD_HYPERSCAN_LOADED_FULL) ? "new db" : "forced update");
 				rep.reply.hs_loaded.status = rspamd_re_cache_load_hyperscan(
 					worker->srv->cfg->re_cache, cmd->cmd.hs_loaded.cache_dir, false);
 			}
@@ -2004,10 +2006,14 @@ rspamd_worker_multipattern_ready(struct rspamd_main *rspamd_main,
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_MULTIPATTERN_LOADED;
 
+	msg_debug_hyperscan("received multipattern loaded notification for '%s', cache_dir=%s",
+						name, cache_dir);
+
 	mp = rspamd_multipattern_find_pending(name);
 
 	if (mp != NULL) {
 		if (rspamd_hs_cache_has_lua_backend()) {
+			msg_debug_hyperscan("using async backend-based multipattern loading for '%s'", name);
 			struct rspamd_worker_mp_async_cbdata *cbd = g_malloc0(sizeof(*cbd));
 			cbd->name = g_strdup(name);
 			cbd->cache_dir = g_strdup(cache_dir);
@@ -2018,7 +2024,7 @@ rspamd_worker_multipattern_ready(struct rspamd_main *rspamd_main,
 		}
 		else {
 			if (rspamd_multipattern_load_from_cache(mp, cache_dir)) {
-				msg_info("multipattern '%s' hot-swapped to hyperscan", name);
+				msg_debug_hyperscan("multipattern '%s' hot-swapped to hyperscan", name);
 				rep.reply.hs_loaded.status = 0;
 			}
 			else {
@@ -2030,6 +2036,90 @@ rspamd_worker_multipattern_ready(struct rspamd_main *rspamd_main,
 	}
 	else {
 		msg_warn("received multipattern notification for unknown '%s'", name);
+		rep.reply.hs_loaded.status = ENOENT;
+	}
+
+	if (write(fd, &rep, sizeof(rep)) != sizeof(rep)) {
+		msg_err("cannot write reply to the control socket: %s",
+				strerror(errno));
+	}
+
+	if (attached_fd >= 0) {
+		close(attached_fd);
+	}
+
+	return TRUE;
+}
+
+struct rspamd_worker_remap_async_cbdata {
+	char *name;
+	char *cache_dir;
+	struct rspamd_regexp_map_helper *re_map;
+};
+
+static void
+rspamd_worker_regexp_map_async_loaded(gboolean success, void *ud)
+{
+	struct rspamd_worker_remap_async_cbdata *cbd = ud;
+
+	if (success) {
+		msg_debug_hyperscan("regexp map '%s' hot-swapped to hyperscan (async)", cbd->name);
+	}
+	else {
+		msg_warn("failed to load regexp map '%s' from cache backend, continuing with PCRE fallback",
+				 cbd->name);
+	}
+
+	g_free(cbd->name);
+	g_free(cbd->cache_dir);
+	g_free(cbd);
+}
+
+static gboolean
+rspamd_worker_regexp_map_ready(struct rspamd_main *rspamd_main,
+							   struct rspamd_worker *worker, int fd,
+							   int attached_fd,
+							   struct rspamd_control_command *cmd,
+							   gpointer ud)
+{
+	struct rspamd_control_reply rep;
+	struct rspamd_regexp_map_helper *re_map;
+	const char *name = cmd->cmd.re_map_loaded.name;
+	const char *cache_dir = cmd->cmd.re_map_loaded.cache_dir;
+
+	memset(&rep, 0, sizeof(rep));
+	rep.type = RSPAMD_CONTROL_REGEXP_MAP_LOADED;
+
+	msg_debug_hyperscan("received regexp map loaded notification for '%s', cache_dir=%s",
+						name, cache_dir);
+
+	re_map = rspamd_regexp_map_find_pending(name);
+
+	if (re_map != NULL) {
+		if (rspamd_hs_cache_has_lua_backend()) {
+			msg_debug_hyperscan("using async backend-based regexp map loading for '%s'", name);
+			struct rspamd_worker_remap_async_cbdata *cbd = g_malloc0(sizeof(*cbd));
+			cbd->name = g_strdup(name);
+			cbd->cache_dir = g_strdup(cache_dir);
+			cbd->re_map = re_map;
+			rspamd_regexp_map_load_from_cache_async(re_map, cache_dir, worker->srv->event_loop,
+													rspamd_worker_regexp_map_async_loaded, cbd);
+			rep.reply.hs_loaded.status = 0;
+		}
+		else {
+			if (rspamd_regexp_map_load_from_cache(re_map, cache_dir)) {
+				msg_debug_hyperscan("regexp map '%s' hot-swapped to hyperscan", name);
+				rep.reply.hs_loaded.status = 0;
+			}
+			else {
+				msg_warn("failed to load regexp map '%s' from cache, continuing with PCRE fallback",
+						 name);
+				rep.reply.hs_loaded.status = ENOENT;
+			}
+		}
+	}
+	else {
+		msg_warn("received regexp map notification for unknown '%s'", name);
 		rep.reply.hs_loaded.status = ENOENT;
 	}
 
@@ -2143,6 +2233,10 @@ void rspamd_worker_init_scanner(struct rspamd_worker *worker,
 	rspamd_control_worker_add_cmd_handler(worker,
 										  RSPAMD_CONTROL_MULTIPATTERN_LOADED,
 										  rspamd_worker_multipattern_ready,
+										  NULL);
+	rspamd_control_worker_add_cmd_handler(worker,
+										  RSPAMD_CONTROL_REGEXP_MAP_LOADED,
+										  rspamd_worker_regexp_map_ready,
 										  NULL);
 #endif
 	rspamd_control_worker_add_cmd_handler(worker,

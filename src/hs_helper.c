@@ -21,6 +21,7 @@
 #include "libserver/worker_util.h"
 #include "libserver/rspamd_control.h"
 #include "libserver/hs_cache_backend.h"
+#include "libserver/maps/map_helpers.h"
 #include "lua/lua_common.h"
 #include "lua/lua_classnames.h"
 #include "unix-std.h"
@@ -321,7 +322,7 @@ rspamd_rs_send_final_notification(struct rspamd_hs_helper_compile_cbdata *cbd)
 
 	/* Don't send if worker is terminating */
 	if (worker->state != rspamd_worker_state_running) {
-		msg_info("skipping final notification, worker is terminating");
+		msg_debug_hyperscan("skipping final notification, worker is terminating");
 		g_free(cbd);
 		ev_timer_stop(ctx->event_loop, &ctx->recompile_timer);
 		return;
@@ -337,8 +338,8 @@ rspamd_rs_send_final_notification(struct rspamd_hs_helper_compile_cbdata *cbd)
 	rspamd_srv_send_command(worker,
 							ctx->event_loop, &srv_cmd, -1, NULL, NULL);
 
-	msg_info("sent final hyperscan loaded notification (%d total expressions compiled)",
-			 cbd->total_compiled);
+	msg_debug_hyperscan("sent final hyperscan loaded notification (%d total expressions compiled)",
+						cbd->total_compiled);
 
 	g_free(cbd);
 	ev_timer_stop(ctx->event_loop, &ctx->recompile_timer);
@@ -373,8 +374,8 @@ rspamd_rs_compile_scoped_cb(const char *scope, unsigned int ncompiled, GError *e
 
 			/* Re-check state before sending - could have changed during compilation */
 			if (worker->state != rspamd_worker_state_running) {
-				msg_info("skipping scope notification for %s, worker is terminating",
-						 scope ? scope : "default");
+				msg_debug_hyperscan("skipping scope notification for %s, worker is terminating",
+									scope ? scope : "default");
 				compile_cbd->scopes_remaining--;
 				if (compile_cbd->scopes_remaining == 0) {
 					g_free(compile_cbd);
@@ -399,8 +400,8 @@ rspamd_rs_compile_scoped_cb(const char *scope, unsigned int ncompiled, GError *e
 			rspamd_srv_send_command(worker,
 									ctx->event_loop, &srv_cmd, -1, NULL, NULL);
 
-			msg_info("compiled %d regular expressions for scope %s",
-					 ncompiled, scope ? scope : "default");
+			msg_debug_hyperscan("compiled %d regular expressions for scope %s",
+								ncompiled, scope ? scope : "default");
 		}
 	}
 
@@ -408,15 +409,15 @@ rspamd_rs_compile_scoped_cb(const char *scope, unsigned int ncompiled, GError *e
 
 	if (compile_cbd->scopes_remaining == 0) {
 		if (compile_cbd->workers_ready) {
-			msg_info("compiled %d total regular expressions to the hyperscan tree, "
-					 "send final notification",
-					 compile_cbd->total_compiled);
+			msg_debug_hyperscan("compiled %d total regular expressions to the hyperscan tree, "
+								"send final notification",
+								compile_cbd->total_compiled);
 			rspamd_rs_send_final_notification(compile_cbd);
 		}
 		else {
-			msg_info("compiled %d total regular expressions to the hyperscan tree, "
-					 "waiting for workers to be ready before sending notification",
-					 compile_cbd->total_compiled);
+			msg_debug_hyperscan("compiled %d total regular expressions to the hyperscan tree, "
+								"waiting for workers to be ready before sending notification",
+								compile_cbd->total_compiled);
 			ctx->loaded = TRUE;
 		}
 	}
@@ -439,7 +440,7 @@ rspamd_rs_send_single_notification(struct rspamd_hs_helper_single_compile_cbdata
 
 	/* Don't send if worker is terminating */
 	if (worker->state != rspamd_worker_state_running) {
-		msg_info("skipping single notification, worker is terminating");
+		msg_debug_hyperscan("skipping single notification, worker is terminating");
 		g_free(cbd);
 		return;
 	}
@@ -454,7 +455,7 @@ rspamd_rs_send_single_notification(struct rspamd_hs_helper_single_compile_cbdata
 	rspamd_srv_send_command(worker,
 							ctx->event_loop, &srv_cmd, -1, NULL, NULL);
 
-	msg_info("sent hyperscan loaded notification");
+	msg_debug_hyperscan("sent hyperscan loaded notification");
 
 	g_free(cbd);
 	ev_timer_again(ctx->event_loop, &ctx->recompile_timer);
@@ -489,15 +490,15 @@ rspamd_rs_compile_cb(unsigned int ncompiled, GError *err, void *cbd)
 	timer_cbd->workers_ready = compile_cbd->workers_ready;
 
 	if (timer_cbd->workers_ready) {
-		msg_info("compiled %d regular expressions to the hyperscan tree, "
-				 "send loaded notification",
-				 ncompiled);
+		msg_debug_hyperscan("compiled %d regular expressions to the hyperscan tree, "
+							"send loaded notification",
+							ncompiled);
 		rspamd_rs_send_single_notification(timer_cbd);
 	}
 	else {
-		msg_info("compiled %d regular expressions to the hyperscan tree, "
-				 "waiting for workers to be ready before sending notification",
-				 ncompiled);
+		msg_debug_hyperscan("compiled %d regular expressions to the hyperscan tree, "
+							"waiting for workers to be ready before sending notification",
+							ncompiled);
 		ctx->loaded = TRUE;
 	}
 
@@ -512,8 +513,8 @@ rspamd_rs_compile(struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 		return FALSE;
 	}
 
-	msg_info("starting hyperscan compilation (forced: %s, workers_ready: %s)",
-			 forced ? "yes" : "no", ctx->workers_ready ? "yes" : "no");
+	msg_debug_hyperscan("starting hyperscan compilation (forced: %s, workers_ready: %s)",
+						forced ? "yes" : "no", ctx->workers_ready ? "yes" : "no");
 
 #if !defined(__aarch64__) && !defined(__powerpc64__)
 	if (!(ctx->cfg->libs_ctx->crypto_ctx->cpu_config & CPUID_SSSE3)) {
@@ -605,7 +606,7 @@ rspamd_rs_compile(struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 															compile_cbd);
 		}
 		else {
-			msg_debug("skipping unloaded scope: %s", scope_name);
+			msg_debug_hyperscan("skipping unloaded scope: %s", scope_name);
 		}
 	}
 	return TRUE;
@@ -670,7 +671,7 @@ rspamd_hs_helper_mp_send_notification(struct hs_helper_ctx *ctx,
 				   sizeof(srv_cmd.cmd.mp_loaded.cache_dir));
 
 	rspamd_srv_send_command(worker, ctx->event_loop, &srv_cmd, -1, NULL, NULL);
-	msg_info("sent multipattern loaded notification for '%s'", name);
+	msg_debug_hyperscan("sent multipattern loaded notification for '%s'", name);
 }
 
 static void
@@ -710,7 +711,7 @@ rspamd_hs_helper_mp_exists_cb(gboolean success,
 	(void) error;
 
 	if (exists) {
-		msg_info("multipattern cache already exists for '%s', skipping compilation", entry->name);
+		msg_debug_hyperscan("multipattern cache already exists for '%s', skipping compilation", entry->name);
 		rspamd_hs_helper_mp_send_notification(mpctx->ctx, mpctx->worker, entry->name);
 		mpctx->idx++;
 		rspamd_hs_helper_compile_pending_multipatterns_next(mpctx);
@@ -728,7 +729,7 @@ static void
 rspamd_hs_helper_compile_pending_multipatterns_next(struct rspamd_hs_helper_mp_async_ctx *mpctx)
 {
 	if (mpctx->worker->state != rspamd_worker_state_running) {
-		msg_info("worker terminating, stopping multipattern compilation");
+		msg_debug_hyperscan("worker terminating, stopping multipattern compilation");
 		goto done;
 	}
 
@@ -738,13 +739,14 @@ rspamd_hs_helper_compile_pending_multipatterns_next(struct rspamd_hs_helper_mp_a
 
 	struct rspamd_multipattern_pending *entry = &mpctx->pending[mpctx->idx];
 	unsigned int npatterns = rspamd_multipattern_get_npatterns(entry->mp);
-	msg_info("processing multipattern '%s' with %ud patterns", entry->name, npatterns);
+	msg_debug_hyperscan("processing multipattern '%s' with %ud patterns", entry->name, npatterns);
 
 	if (rspamd_hs_cache_has_lua_backend()) {
 		char cache_key[rspamd_cryptobox_HASHBYTES * 2 + 1];
 		rspamd_snprintf(cache_key, sizeof(cache_key), "%*xs",
 						(int) sizeof(entry->hash) / 2, entry->hash);
-		rspamd_hs_cache_lua_exists_async(cache_key, rspamd_hs_helper_mp_exists_cb, mpctx);
+		rspamd_hs_cache_lua_exists_async(cache_key, entry->name,
+										 rspamd_hs_helper_mp_exists_cb, mpctx);
 		return;
 	}
 
@@ -755,8 +757,8 @@ rspamd_hs_helper_compile_pending_multipatterns_next(struct rspamd_hs_helper_mp_a
 		rspamd_snprintf(fp, sizeof(fp), "%s/%*xs.hs", mpctx->ctx->hs_dir,
 						(int) sizeof(entry->hash) / 2, entry->hash);
 		if (access(fp, R_OK) == 0) {
-			msg_info("cache file %s already exists for multipattern '%s', skipping compilation",
-					 fp, entry->name);
+			msg_debug_hyperscan("cache file %s already exists for multipattern '%s', skipping compilation",
+								fp, entry->name);
 		}
 		else {
 			rspamd_worker_set_busy(mpctx->worker, mpctx->ctx->event_loop, "compile multipattern");
@@ -791,11 +793,11 @@ rspamd_hs_helper_compile_pending_multipatterns(struct hs_helper_ctx *ctx,
 
 	pending = rspamd_multipattern_get_pending(&count);
 	if (pending == NULL || count == 0) {
-		msg_debug("no pending multipattern compilations");
+		msg_debug_hyperscan("no pending multipattern compilations");
 		return;
 	}
 
-	msg_info("processing %ud pending multipattern compilations", count);
+	msg_debug_hyperscan("processing %ud pending multipattern compilations", count);
 
 	struct rspamd_hs_helper_mp_async_ctx *mpctx = g_malloc0(sizeof(*mpctx));
 	mpctx->ctx = ctx;
@@ -805,6 +807,168 @@ rspamd_hs_helper_compile_pending_multipatterns(struct hs_helper_ctx *ctx,
 	mpctx->idx = 0;
 
 	rspamd_hs_helper_compile_pending_multipatterns_next(mpctx);
+}
+
+/*
+ * Compile pending regexp maps that were queued during initialization
+ */
+
+struct rspamd_hs_helper_remap_async_ctx {
+	struct hs_helper_ctx *ctx;
+	struct rspamd_worker *worker;
+	struct rspamd_regexp_map_pending *pending;
+	unsigned int count;
+	unsigned int idx;
+};
+
+static void rspamd_hs_helper_compile_pending_regexp_maps_next(struct rspamd_hs_helper_remap_async_ctx *rmctx);
+
+static void
+rspamd_hs_helper_remap_send_notification(struct hs_helper_ctx *ctx,
+										 struct rspamd_worker *worker,
+										 const char *name)
+{
+	struct rspamd_srv_command srv_cmd;
+
+	memset(&srv_cmd, 0, sizeof(srv_cmd));
+	srv_cmd.type = RSPAMD_SRV_REGEXP_MAP_LOADED;
+	rspamd_strlcpy(srv_cmd.cmd.re_map_loaded.name, name,
+				   sizeof(srv_cmd.cmd.re_map_loaded.name));
+	rspamd_strlcpy(srv_cmd.cmd.re_map_loaded.cache_dir, ctx->hs_dir,
+				   sizeof(srv_cmd.cmd.re_map_loaded.cache_dir));
+
+	rspamd_srv_send_command(worker, ctx->event_loop, &srv_cmd, -1, NULL, NULL);
+	msg_debug_hyperscan("sent regexp map loaded notification for '%s'", name);
+}
+
+static void
+rspamd_hs_helper_remap_compiled_cb(struct rspamd_regexp_map_helper *re_map,
+								   gboolean success,
+								   GError *err,
+								   void *ud)
+{
+	struct rspamd_hs_helper_remap_async_ctx *rmctx = ud;
+	struct rspamd_regexp_map_pending *entry = &rmctx->pending[rmctx->idx];
+
+	(void) re_map;
+	rspamd_worker_set_busy(rmctx->worker, rmctx->ctx->event_loop, NULL);
+
+	if (!success) {
+		msg_err("failed to compile regexp map '%s': %e", entry->name, err);
+	}
+	else {
+		rspamd_hs_helper_remap_send_notification(rmctx->ctx, rmctx->worker, entry->name);
+	}
+
+	rmctx->idx++;
+	rspamd_hs_helper_compile_pending_regexp_maps_next(rmctx);
+}
+
+static void
+rspamd_hs_helper_remap_exists_cb(gboolean success,
+								 const unsigned char *data,
+								 gsize len,
+								 const char *error,
+								 void *ud)
+{
+	struct rspamd_hs_helper_remap_async_ctx *rmctx = ud;
+	struct rspamd_regexp_map_pending *entry = &rmctx->pending[rmctx->idx];
+	bool exists = (success && data == NULL && len == 1);
+
+	(void) error;
+
+	if (exists) {
+		msg_debug_hyperscan("regexp map cache already exists for '%s', skipping compilation", entry->name);
+		rspamd_hs_helper_remap_send_notification(rmctx->ctx, rmctx->worker, entry->name);
+		rmctx->idx++;
+		rspamd_hs_helper_compile_pending_regexp_maps_next(rmctx);
+		return;
+	}
+
+	/* Need to compile+store */
+	rspamd_worker_set_busy(rmctx->worker, rmctx->ctx->event_loop, "compile regexp map");
+	rspamd_regexp_map_compile_hs_to_cache_async(entry->re_map, rmctx->ctx->hs_dir,
+												rmctx->ctx->event_loop,
+												rspamd_hs_helper_remap_compiled_cb, rmctx);
+}
+
+static void
+rspamd_hs_helper_compile_pending_regexp_maps_next(struct rspamd_hs_helper_remap_async_ctx *rmctx)
+{
+	if (rmctx->worker->state != rspamd_worker_state_running) {
+		msg_debug_hyperscan("worker terminating, stopping regexp map compilation");
+		goto done;
+	}
+
+	if (rmctx->idx >= rmctx->count) {
+		goto done;
+	}
+
+	struct rspamd_regexp_map_pending *entry = &rmctx->pending[rmctx->idx];
+	msg_debug_hyperscan("processing regexp map '%s'", entry->name);
+
+	if (rspamd_hs_cache_has_lua_backend()) {
+		char cache_key[rspamd_cryptobox_HASHBYTES * 2 + 1];
+		rspamd_snprintf(cache_key, sizeof(cache_key), "%*xs",
+						(int) sizeof(entry->hash) / 2, entry->hash);
+		rspamd_hs_cache_lua_exists_async(cache_key, entry->name,
+										 rspamd_hs_helper_remap_exists_cb, rmctx);
+		return;
+	}
+
+	/* File backend path: check if cache file exists */
+	{
+		char fp[PATH_MAX];
+		GError *err = NULL;
+		rspamd_snprintf(fp, sizeof(fp), "%s/%*xs.hsmc", rmctx->ctx->hs_dir,
+						(int) sizeof(entry->hash) / 2, entry->hash);
+		if (access(fp, R_OK) == 0) {
+			msg_debug_hyperscan("cache file %s already exists for regexp map '%s', skipping compilation",
+								fp, entry->name);
+		}
+		else {
+			rspamd_worker_set_busy(rmctx->worker, rmctx->ctx->event_loop, "compile regexp map");
+			if (!rspamd_regexp_map_compile_hs_to_cache(entry->re_map, rmctx->ctx->hs_dir, &err)) {
+				msg_err("failed to compile regexp map '%s': %e", entry->name, err);
+				if (err) g_error_free(err);
+			}
+			rspamd_worker_set_busy(rmctx->worker, rmctx->ctx->event_loop, NULL);
+		}
+
+		rspamd_hs_helper_remap_send_notification(rmctx->ctx, rmctx->worker, entry->name);
+		rmctx->idx++;
+		rspamd_hs_helper_compile_pending_regexp_maps_next(rmctx);
+		return;
+	}
+
+done:
+	rspamd_regexp_map_clear_pending();
+	g_free(rmctx);
+}
+
+static void
+rspamd_hs_helper_compile_pending_regexp_maps(struct hs_helper_ctx *ctx,
+											 struct rspamd_worker *worker)
+{
+	struct rspamd_regexp_map_pending *pending;
+	unsigned int count = 0;
+
+	pending = rspamd_regexp_map_get_pending(&count);
+	if (pending == NULL || count == 0) {
+		msg_debug_hyperscan("no pending regexp map compilations");
+		return;
+	}
+
+	msg_debug_hyperscan("processing %ud pending regexp map compilations", count);
+
+	struct rspamd_hs_helper_remap_async_ctx *rmctx = g_malloc0(sizeof(*rmctx));
+	rmctx->ctx = ctx;
+	rmctx->worker = worker;
+	rmctx->pending = pending;
+	rmctx->count = count;
+	rmctx->idx = 0;
+
+	rspamd_hs_helper_compile_pending_regexp_maps_next(rmctx);
 }
 #endif
 
@@ -818,9 +982,9 @@ rspamd_hs_helper_workers_spawned(struct rspamd_main *rspamd_main,
 	struct rspamd_control_reply rep;
 	struct hs_helper_ctx *ctx = ud;
 
-	msg_info("received workers_spawned notification (%d workers); hyperscan compilation finished: %s",
-			 cmd->cmd.workers_spawned.workers_count,
-			 ctx->loaded ? "yes" : "no");
+	msg_debug_hyperscan("received workers_spawned notification (%d workers); hyperscan compilation finished: %s",
+						cmd->cmd.workers_spawned.workers_count,
+						ctx->loaded ? "yes" : "no");
 
 	/* Mark that workers are ready */
 	ctx->workers_ready = TRUE;
@@ -857,20 +1021,23 @@ rspamd_hs_helper_workers_spawned(struct rspamd_main *rspamd_main,
 		rspamd_srv_send_command(worker,
 								ctx->event_loop, &srv_cmd, -1, NULL, NULL);
 
-		msg_info("sent delayed hyperscan loaded notification after workers spawned");
+		msg_debug_hyperscan("sent delayed hyperscan loaded notification after workers spawned");
 		ctx->loaded = FALSE; /* Reset to avoid duplicate notifications */
 	}
 	else if (!ctx->loaded && worker->state == rspamd_worker_state_running) {
 		/* Start initial compilation now that workers are ready */
-		msg_info("starting initial hyperscan compilation after workers spawned");
+		msg_debug_hyperscan("starting initial hyperscan compilation after workers spawned");
 		if (!rspamd_rs_compile(ctx, worker, FALSE)) {
-			msg_warn("initial hyperscan compilation failed or not needed");
+			msg_debug_hyperscan("initial hyperscan compilation skipped or not needed");
 		}
 	}
 
 #ifdef WITH_HYPERSCAN
 	/* Process pending multipattern compilations (e.g., TLD patterns) */
 	rspamd_hs_helper_compile_pending_multipatterns(ctx, worker);
+
+	/* Process pending regexp map compilations */
+	rspamd_hs_helper_compile_pending_regexp_maps(ctx, worker);
 #endif
 
 	if (attached_fd != -1) {
@@ -897,8 +1064,8 @@ rspamd_hs_helper_timer(EV_P_ ev_timer *w, int revents)
 	tim = rspamd_time_jitter(ctx->recompile_time, 0);
 	w->repeat = tim;
 
-	msg_info("periodic recompilation timer triggered (workers_ready: %s)",
-			 ctx->workers_ready ? "yes" : "no");
+	msg_debug_hyperscan("periodic recompilation timer triggered (workers_ready: %s)",
+						ctx->workers_ready ? "yes" : "no");
 	rspamd_rs_compile(ctx, worker, FALSE);
 }
 
@@ -941,11 +1108,11 @@ start_hs_helper(struct rspamd_worker *worker)
 
 	ctx->recompile_timer.data = worker;
 	tim = rspamd_time_jitter(ctx->recompile_time, 0);
-	msg_info("setting up recompile timer for %.1f seconds", tim);
+	msg_debug_hyperscan("setting up recompile timer for %.1f seconds", tim);
 	ev_timer_init(&ctx->recompile_timer, rspamd_hs_helper_timer, tim, 0.0);
 	ev_timer_start(ctx->event_loop, &ctx->recompile_timer);
 
-	msg_info("hs_helper starting event loop");
+	msg_debug_hyperscan("hs_helper starting event loop");
 	ev_loop(ctx->event_loop, 0);
 	rspamd_worker_block_signals();
 

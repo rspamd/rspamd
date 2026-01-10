@@ -1584,7 +1584,7 @@ void rspamd_multipattern_compile_hs_to_cache_async(struct rspamd_multipattern *m
 	ctx->cb = cb;
 	ctx->ud = ud;
 
-	rspamd_hs_cache_lua_save_async(cache_key, (const unsigned char *) bytes, len,
+	rspamd_hs_cache_lua_save_async(cache_key, "multipattern", (const unsigned char *) bytes, len,
 								   rspamd_multipattern_hs_cache_save_cb, ctx);
 
 	g_free(bytes);
@@ -1762,7 +1762,7 @@ void rspamd_multipattern_load_from_cache_async(struct rspamd_multipattern *mp,
 		ctx->cb = cb;
 		ctx->ud = ud;
 		(void) event_loop;
-		rspamd_hs_cache_lua_load_async(ctx->cache_key, rspamd_multipattern_load_from_cache_cb, ctx);
+		rspamd_hs_cache_lua_load_async(ctx->cache_key, "multipattern", rspamd_multipattern_load_from_cache_cb, ctx);
 		return;
 	}
 

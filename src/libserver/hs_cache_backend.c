@@ -115,6 +115,9 @@ rspamd_hs_cache_try_init_lua_backend_with_opts(struct rspamd_config *cfg,
 
 	/* Call create_backend(config) */
 	if (lua_pcall(L, 1, 1, err_idx) != 0) {
+		const char *lua_err = lua_tostring(L, -1);
+		msg_err("failed to create hyperscan cache backend '%s': %s",
+				backend_name, lua_err ? lua_err : "unknown error");
 		lua_settop(L, err_idx - 1);
 		return FALSE;
 	}
@@ -125,6 +128,8 @@ rspamd_hs_cache_try_init_lua_backend_with_opts(struct rspamd_config *cfg,
 
 	rspamd_hs_cache_set_lua_backend(L, ref, platform_id);
 	lua_settop(L, err_idx - 1);
+
+	msg_debug_hyperscan("initialized hyperscan cache backend: %s", backend_name);
 
 	return TRUE;
 }
@@ -224,220 +229,13 @@ rspamd_hs_cache_try_init_lua_backend(struct rspamd_config *cfg,
 	return rspamd_hs_cache_try_init_lua_backend_with_opts(cfg, ev_base, opts, backend_name, cache_dir);
 }
 
-gboolean
-rspamd_hs_cache_lua_save(const char *cache_key,
-						 const unsigned char *data,
-						 gsize len,
-						 GError **err)
-{
-	lua_State *L = lua_backend_L;
-
-	if (rspamd_current_worker && rspamd_current_worker->state != rspamd_worker_state_running) {
-		g_set_error(err, g_quark_from_static_string("hs_cache"), ECANCELED,
-					"worker is terminating");
-		return FALSE;
-	}
-
-	if (!rspamd_hs_cache_has_lua_backend()) {
-		g_set_error(err, g_quark_from_static_string("hs_cache"), EINVAL,
-					"Lua backend not initialized");
-		return FALSE;
-	}
-
-	/* Get backend object */
-	lua_rawgeti(L, LUA_REGISTRYINDEX, lua_backend_ref);
-	if (!lua_istable(L, -1)) {
-		lua_pop(L, 1);
-		g_set_error(err, g_quark_from_static_string("hs_cache"), EINVAL,
-					"Invalid Lua backend reference");
-		return FALSE;
-	}
-
-	/* Get save_sync method */
-	lua_getfield(L, -1, "save_sync");
-	if (!lua_isfunction(L, -1)) {
-		lua_pop(L, 2);
-		g_set_error(err, g_quark_from_static_string("hs_cache"), EINVAL,
-					"Lua backend has no save_sync method");
-		return FALSE;
-	}
-
-	/* Push self (backend object) */
-	lua_pushvalue(L, -2);
-	/* Push cache_key */
-	lua_pushstring(L, cache_key);
-	/* Push platform_id */
-	lua_pushstring(L, lua_backend_platform_id ? lua_backend_platform_id : "default");
-	/* Push data as string */
-	lua_pushlstring(L, (const char *) data, len);
-
-	/* Call backend:save_sync(cache_key, platform_id, data) */
-	if (lua_pcall(L, 4, 2, 0) != 0) {
-		const char *lua_err = lua_tostring(L, -1);
-		g_set_error(err, g_quark_from_static_string("hs_cache"), EINVAL,
-					"Lua save_sync failed: %s", lua_err ? lua_err : "unknown error");
-		lua_pop(L, 2); /* error + backend table */
-		return FALSE;
-	}
-
-	/* Check result: returns success, error_message */
-	gboolean success = lua_toboolean(L, -2);
-	if (!success) {
-		const char *lua_err = lua_tostring(L, -1);
-		g_set_error(err, g_quark_from_static_string("hs_cache"), EINVAL,
-					"Lua backend save failed: %s", lua_err ? lua_err : "unknown error");
-	}
-
-	lua_pop(L, 3); /* result, error, backend table */
-	return success;
-}
-
-gboolean
-rspamd_hs_cache_lua_load(const char *cache_key,
-						 unsigned char **data,
-						 gsize *len,
-						 GError **err)
-{
-	lua_State *L = lua_backend_L;
-
-	if (rspamd_current_worker && rspamd_current_worker->state != rspamd_worker_state_running) {
-		g_set_error(err, g_quark_from_static_string("hs_cache"), ECANCELED,
-					"worker is terminating");
-		return FALSE;
-	}
-
-	if (!rspamd_hs_cache_has_lua_backend()) {
-		g_set_error(err, g_quark_from_static_string("hs_cache"), EINVAL,
-					"Lua backend not initialized");
-		return FALSE;
-	}
-
-	/* Get backend object */
-	lua_rawgeti(L, LUA_REGISTRYINDEX, lua_backend_ref);
-	if (!lua_istable(L, -1)) {
-		lua_pop(L, 1);
-		g_set_error(err, g_quark_from_static_string("hs_cache"), EINVAL,
-					"Invalid Lua backend reference");
-		return FALSE;
-	}
-
-	/* Get load_sync method */
-	lua_getfield(L, -1, "load_sync");
-	if (!lua_isfunction(L, -1)) {
-		lua_pop(L, 2);
-		g_set_error(err, g_quark_from_static_string("hs_cache"), EINVAL,
-					"Lua backend has no load_sync method");
-		return FALSE;
-	}
-
-	/* Push self (backend object) */
-	lua_pushvalue(L, -2);
-	/* Push cache_key */
-	lua_pushstring(L, cache_key);
-	/* Push platform_id */
-	lua_pushstring(L, lua_backend_platform_id ? lua_backend_platform_id : "default");
-
-	/* Call backend:load_sync(cache_key, platform_id) */
-	if (lua_pcall(L, 3, 2, 0) != 0) {
-		const char *lua_err = lua_tostring(L, -1);
-		g_set_error(err, g_quark_from_static_string("hs_cache"), EINVAL,
-					"Lua load_sync failed: %s", lua_err ? lua_err : "unknown error");
-		lua_pop(L, 2); /* error + backend table */
-		return FALSE;
-	}
-
-	/* Check result: returns data_or_nil, error_message */
-	if (lua_isnil(L, -2)) {
-		const char *lua_err = lua_tostring(L, -1);
-		if (lua_err) {
-			g_set_error(err, g_quark_from_static_string("hs_cache"), ENOENT,
-						"Lua backend load failed: %s", lua_err);
-		}
-		/* Not an error - cache miss */
-		lua_pop(L, 3); /* nil, error, backend table */
-		*data = NULL;
-		*len = 0;
-		return TRUE; /* Cache miss is not an error */
-	}
-
-	/* Get data */
-	size_t data_len;
-	const char *lua_data = lua_tolstring(L, -2, &data_len);
-	if (lua_data && data_len > 0) {
-		*data = g_malloc(data_len);
-		memcpy(*data, lua_data, data_len);
-		*len = data_len;
-	}
-	else {
-		*data = NULL;
-		*len = 0;
-	}
-
-	lua_pop(L, 3); /* data, error/nil, backend table */
-	return TRUE;
-}
-
-gboolean
-rspamd_hs_cache_lua_exists(const char *cache_key, GError **err)
-{
-	lua_State *L = lua_backend_L;
-
-	if (rspamd_current_worker && rspamd_current_worker->state != rspamd_worker_state_running) {
-		g_set_error(err, g_quark_from_static_string("hs_cache"), ECANCELED,
-					"worker is terminating");
-		return FALSE;
-	}
-
-	if (!rspamd_hs_cache_has_lua_backend()) {
-		g_set_error(err, g_quark_from_static_string("hs_cache"), EINVAL,
-					"Lua backend not initialized");
-		return FALSE;
-	}
-
-	/* Get backend object */
-	lua_rawgeti(L, LUA_REGISTRYINDEX, lua_backend_ref);
-	if (!lua_istable(L, -1)) {
-		lua_pop(L, 1);
-		g_set_error(err, g_quark_from_static_string("hs_cache"), EINVAL,
-					"Invalid Lua backend reference");
-		return FALSE;
-	}
-
-	/* Get exists_sync method */
-	lua_getfield(L, -1, "exists_sync");
-	if (!lua_isfunction(L, -1)) {
-		lua_pop(L, 2);
-		g_set_error(err, g_quark_from_static_string("hs_cache"), EINVAL,
-					"Lua backend has no exists_sync method");
-		return FALSE;
-	}
-
-	/* Push self (backend object) */
-	lua_pushvalue(L, -2);
-	/* Push cache_key */
-	lua_pushstring(L, cache_key);
-	/* Push platform_id */
-	lua_pushstring(L, lua_backend_platform_id ? lua_backend_platform_id : "default");
-
-	/* Call backend:exists_sync(cache_key, platform_id) */
-	if (lua_pcall(L, 3, 2, 0) != 0) {
-		const char *lua_err = lua_tostring(L, -1);
-		g_set_error(err, g_quark_from_static_string("hs_cache"), EINVAL,
-					"Lua exists_sync failed: %s", lua_err ? lua_err : "unknown error");
-		lua_pop(L, 2);
-		return FALSE;
-	}
-
-	gboolean exists = lua_toboolean(L, -2);
-	lua_pop(L, 3); /* result, error/nil, backend table */
-	return exists;
-}
-
 static int
 lua_hs_cache_async_callback(lua_State *L)
 {
 	rspamd_hs_cache_async_cb cb = (rspamd_hs_cache_async_cb) lua_touserdata(L, lua_upvalueindex(1));
 	void *ud = lua_touserdata(L, lua_upvalueindex(2));
+	const char *entity_name = lua_tostring(L, lua_upvalueindex(3));
+	const char *cache_key = lua_tostring(L, lua_upvalueindex(4));
 	const char *err = lua_tostring(L, 1);
 	const unsigned char *data = NULL;
 	size_t len = 0;
@@ -457,6 +255,11 @@ lua_hs_cache_async_callback(lua_State *L)
 		}
 	}
 
+	msg_debug_hyperscan("async_callback: entity='%s', key=%s, success=%s, len=%z, err=%s",
+						entity_name ? entity_name : "unknown",
+						cache_key ? cache_key : "unknown",
+						err == NULL ? "yes" : "no", len, err ? err : "(none)");
+
 	if (cb) {
 		cb(err == NULL, data, len, err, ud);
 	}
@@ -465,6 +268,7 @@ lua_hs_cache_async_callback(lua_State *L)
 }
 
 void rspamd_hs_cache_lua_save_async(const char *cache_key,
+									const char *entity_name,
 									const unsigned char *data,
 									gsize len,
 									rspamd_hs_cache_async_cb cb,
@@ -473,12 +277,17 @@ void rspamd_hs_cache_lua_save_async(const char *cache_key,
 	lua_State *L = lua_backend_L;
 	int err_idx;
 
+	msg_debug_hyperscan("save_async: entity='%s', key=%s, len=%z",
+						entity_name ? entity_name : "unknown", cache_key, len);
+
 	if (rspamd_current_worker && rspamd_current_worker->state != rspamd_worker_state_running) {
+		msg_debug_hyperscan("save_async: worker terminating, skipping");
 		if (cb) cb(FALSE, NULL, 0, "worker is terminating", ud);
 		return;
 	}
 
 	if (!rspamd_hs_cache_has_lua_backend()) {
+		msg_debug_hyperscan("save_async: no Lua backend");
 		if (cb) cb(FALSE, NULL, 0, "Lua backend not initialized", ud);
 		return;
 	}
@@ -511,10 +320,12 @@ void rspamd_hs_cache_lua_save_async(const char *cache_key,
 	/* Push data */
 	lua_pushlstring(L, (const char *) data, len);
 
-	/* Push callback wrapper */
+	/* Push callback wrapper with 4 upvalues: cb, ud, entity_name, cache_key */
 	lua_pushlightuserdata(L, (void *) cb);
 	lua_pushlightuserdata(L, ud);
-	lua_pushcclosure(L, lua_hs_cache_async_callback, 2);
+	lua_pushstring(L, entity_name ? entity_name : "unknown");
+	lua_pushstring(L, cache_key);
+	lua_pushcclosure(L, lua_hs_cache_async_callback, 4);
 
 	/* Call backend:save_async(cache_key, platform_id, data, callback) */
 	if (lua_pcall(L, 5, 0, err_idx) != 0) {
@@ -528,13 +339,18 @@ void rspamd_hs_cache_lua_save_async(const char *cache_key,
 }
 
 void rspamd_hs_cache_lua_load_async(const char *cache_key,
+									const char *entity_name,
 									rspamd_hs_cache_async_cb cb,
 									void *ud)
 {
 	lua_State *L = lua_backend_L;
 	int err_idx;
 
+	msg_debug_hyperscan("load_async: entity='%s', key=%s",
+						entity_name ? entity_name : "unknown", cache_key);
+
 	if (rspamd_current_worker && rspamd_current_worker->state != rspamd_worker_state_running) {
+		msg_debug_hyperscan("load_async: worker terminating, skipping");
 		if (cb) cb(FALSE, NULL, 0, "worker is terminating", ud);
 		return;
 	}
@@ -570,10 +386,12 @@ void rspamd_hs_cache_lua_load_async(const char *cache_key,
 	/* Push platform_id */
 	lua_pushstring(L, lua_backend_platform_id ? lua_backend_platform_id : "default");
 
-	/* Push callback wrapper */
+	/* Push callback wrapper with 4 upvalues: cb, ud, entity_name, cache_key */
 	lua_pushlightuserdata(L, (void *) cb);
 	lua_pushlightuserdata(L, ud);
-	lua_pushcclosure(L, lua_hs_cache_async_callback, 2);
+	lua_pushstring(L, entity_name ? entity_name : "unknown");
+	lua_pushstring(L, cache_key);
+	lua_pushcclosure(L, lua_hs_cache_async_callback, 4);
 
 	/* Call backend:load_async(cache_key, platform_id, callback) */
 	if (lua_pcall(L, 4, 0, err_idx) != 0) {
@@ -587,18 +405,24 @@ void rspamd_hs_cache_lua_load_async(const char *cache_key,
 }
 
 void rspamd_hs_cache_lua_exists_async(const char *cache_key,
+									  const char *entity_name,
 									  rspamd_hs_cache_async_cb cb,
 									  void *ud)
 {
 	lua_State *L = lua_backend_L;
 	int err_idx;
 
+	msg_debug_hyperscan("exists_async: entity='%s', key=%s",
+						entity_name ? entity_name : "unknown", cache_key);
+
 	if (rspamd_current_worker && rspamd_current_worker->state != rspamd_worker_state_running) {
+		msg_debug_hyperscan("exists_async: worker terminating, skipping");
 		if (cb) cb(FALSE, NULL, 0, "worker is terminating", ud);
 		return;
 	}
 
 	if (!rspamd_hs_cache_has_lua_backend()) {
+		msg_debug_hyperscan("exists_async: no Lua backend");
 		if (cb) cb(FALSE, NULL, 0, "Lua backend not initialized", ud);
 		return;
 	}
@@ -629,10 +453,12 @@ void rspamd_hs_cache_lua_exists_async(const char *cache_key,
 	/* Push platform_id */
 	lua_pushstring(L, lua_backend_platform_id ? lua_backend_platform_id : "default");
 
-	/* Push callback wrapper */
+	/* Push callback wrapper with 4 upvalues: cb, ud, entity_name, cache_key */
 	lua_pushlightuserdata(L, (void *) cb);
 	lua_pushlightuserdata(L, ud);
-	lua_pushcclosure(L, lua_hs_cache_async_callback, 2);
+	lua_pushstring(L, entity_name ? entity_name : "unknown");
+	lua_pushstring(L, cache_key);
+	lua_pushcclosure(L, lua_hs_cache_async_callback, 4);
 
 	/* Call backend:exists_async(cache_key, platform_id, callback) */
 	if (lua_pcall(L, 4, 0, err_idx) != 0) {

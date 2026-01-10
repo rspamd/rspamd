@@ -40,6 +40,7 @@ enum rspamd_control_type {
 	RSPAMD_CONTROL_WORKERS_SPAWNED,
 	RSPAMD_CONTROL_COMPOSITES_STATS,
 	RSPAMD_CONTROL_MULTIPATTERN_LOADED,
+	RSPAMD_CONTROL_REGEXP_MAP_LOADED,
 	RSPAMD_CONTROL_MAX
 };
 
@@ -55,6 +56,7 @@ enum rspamd_srv_type {
 	RSPAMD_SRV_FUZZY_BLOCKED,       /* Used to notify main process about a blocked ip */
 	RSPAMD_SRV_WORKERS_SPAWNED,     /* Used to notify workers that all workers have been spawned */
 	RSPAMD_SRV_MULTIPATTERN_LOADED, /* Multipattern HS compiled and ready */
+	RSPAMD_SRV_REGEXP_MAP_LOADED,   /* Regexp map HS compiled and ready */
 	RSPAMD_SRV_BUSY,                /* Worker is busy with long-running operation */
 };
 
@@ -86,6 +88,10 @@ struct rspamd_control_command {
 			char name[64];
 			char cache_dir[CONTROL_PATHLEN];
 		} mp_loaded;
+		struct {
+			char name[CONTROL_PATHLEN]; /* Map name */
+			char cache_dir[CONTROL_PATHLEN];
+		} re_map_loaded;
 		struct {
 			char tag[32];
 			gboolean alive;
@@ -240,6 +246,11 @@ struct rspamd_srv_command {
 			char name[64];
 			char cache_dir[CONTROL_PATHLEN];
 		} mp_loaded;
+		/* Sent when a regexp map hyperscan db is compiled */
+		struct {
+			char name[CONTROL_PATHLEN]; /* Map name */
+			char cache_dir[CONTROL_PATHLEN];
+		} re_map_loaded;
 		struct {
 			gboolean is_busy;
 			char reason[32];

@@ -37,8 +37,6 @@
 #include "rspamd_control.h"
 #include "cryptobox.h"
 
-#define HYPERSCAN_LOG_TAG "hsxxxx"
-
 #ifdef HS_MAJOR
 #ifndef HS_VERSION_32BIT
 #define HS_VERSION_32BIT ((HS_MAJOR << 24) | (HS_MINOR << 16) | (HS_PATCH << 8) | 0)
@@ -65,10 +63,6 @@
 														   "hyperscan", HYPERSCAN_LOG_TAG, \
 														   RSPAMD_LOG_FUNC,                \
 														   __VA_ARGS__)
-#define msg_debug_hyperscan(...) rspamd_conditional_debug_fast(nullptr, nullptr,                                        \
-															   rspamd_hyperscan_log_id, "hyperscan", HYPERSCAN_LOG_TAG, \
-															   RSPAMD_LOG_FUNC,                                         \
-															   __VA_ARGS__)
 #define msg_debug_hyperscan_lambda(...) rspamd_conditional_debug_fast(nullptr, nullptr,                                        \
 																	  rspamd_hyperscan_log_id, "hyperscan", HYPERSCAN_LOG_TAG, \
 																	  log_func,                                                \
