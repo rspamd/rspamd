@@ -556,9 +556,8 @@ void rspamd_re_cache_init(struct rspamd_re_cache *cache, struct rspamd_config *c
 									 sizeof(fl));
 		rspamd_cryptobox_hash_update(&st_global, (const unsigned char *) &fl,
 									 sizeof(fl));
-		/* Numeric order */
-		rspamd_cryptobox_hash_update(re_class->st, (const unsigned char *) &i,
-									 sizeof(i));
+		/* Global index - only in global hash, not per-class (to avoid
+		 * class hash instability when other classes change) */
 		rspamd_cryptobox_hash_update(&st_global, (const unsigned char *) &i,
 									 sizeof(i));
 	}
