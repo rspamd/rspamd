@@ -1117,18 +1117,12 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 				break;
 			case RSPAMD_SRV_HYPERSCAN_LOADED:
 #ifdef WITH_HYPERSCAN
-				/* Load RE cache to provide it for new forks */
+				/* Main process just broadcasts cache update events to workers */
 				if (cmd.cmd.hs_loaded.scope[0] != '\0') {
 					/* Scoped loading */
 					const char *scope = cmd.cmd.hs_loaded.scope;
 					msg_info_main("received scoped hyperscan cache loaded from %s for scope: %s",
 								  cmd.cmd.hs_loaded.cache_dir, scope);
-
-					/* Load specific scope */
-					rspamd_re_cache_load_hyperscan_scoped(
-						rspamd_main->cfg->re_cache,
-						cmd.cmd.hs_loaded.cache_dir,
-						false);
 
 					/* Broadcast scoped command to all workers */
 					memset(&wcmd, 0, sizeof(wcmd));
@@ -1144,14 +1138,7 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 												 rspamd_control_ignore_io_handler, NULL, worker->pid);
 				}
 				else {
-					/* Legacy full cache loading */
-					if (rspamd_re_cache_is_hs_loaded(rspamd_main->cfg->re_cache) != RSPAMD_HYPERSCAN_LOADED_FULL ||
-						cmd.cmd.hs_loaded.forced) {
-						rspamd_re_cache_load_hyperscan(
-							rspamd_main->cfg->re_cache,
-							cmd.cmd.hs_loaded.cache_dir,
-							false);
-					}
+					/* Legacy full cache update */
 
 					/* After getting this notice, we can clean up old hyperscan files */
 					rspamd_hyperscan_notice_loaded();
@@ -1170,6 +1157,42 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 					rspamd_control_broadcast_cmd(rspamd_main, &wcmd, rfd,
 												 rspamd_control_ignore_io_handler, NULL, worker->pid);
 				}
+#endif
+				break;
+			case RSPAMD_SRV_MULTIPATTERN_LOADED:
+#ifdef WITH_HYPERSCAN
+				msg_info_main("received multipattern loaded notification for '%s' from %s",
+							  cmd.cmd.mp_loaded.name, cmd.cmd.mp_loaded.cache_dir);
+
+				/* Broadcast command to all workers */
+				memset(&wcmd, 0, sizeof(wcmd));
+				wcmd.type = RSPAMD_CONTROL_MULTIPATTERN_LOADED;
+				rspamd_strlcpy(wcmd.cmd.mp_loaded.name,
+							   cmd.cmd.mp_loaded.name,
+							   sizeof(wcmd.cmd.mp_loaded.name));
+				rspamd_strlcpy(wcmd.cmd.mp_loaded.cache_dir,
+							   cmd.cmd.mp_loaded.cache_dir,
+							   sizeof(wcmd.cmd.mp_loaded.cache_dir));
+				rspamd_control_broadcast_cmd(rspamd_main, &wcmd, rfd,
+											 rspamd_control_ignore_io_handler, NULL, worker->pid);
+#endif
+				break;
+			case RSPAMD_SRV_REGEXP_MAP_LOADED:
+#ifdef WITH_HYPERSCAN
+				msg_info_main("received regexp map loaded notification for '%s' from %s",
+							  cmd.cmd.re_map_loaded.name, cmd.cmd.re_map_loaded.cache_dir);
+
+				/* Broadcast command to all workers */
+				memset(&wcmd, 0, sizeof(wcmd));
+				wcmd.type = RSPAMD_CONTROL_REGEXP_MAP_LOADED;
+				rspamd_strlcpy(wcmd.cmd.re_map_loaded.name,
+							   cmd.cmd.re_map_loaded.name,
+							   sizeof(wcmd.cmd.re_map_loaded.name));
+				rspamd_strlcpy(wcmd.cmd.re_map_loaded.cache_dir,
+							   cmd.cmd.re_map_loaded.cache_dir,
+							   sizeof(wcmd.cmd.re_map_loaded.cache_dir));
+				rspamd_control_broadcast_cmd(rspamd_main, &wcmd, rfd,
+											 rspamd_control_ignore_io_handler, NULL, worker->pid);
 #endif
 				break;
 			case RSPAMD_SRV_MONITORED_CHANGE:
@@ -1198,6 +1221,30 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 			case RSPAMD_SRV_HEARTBEAT:
 				worker->hb.last_event = ev_time();
 				rdata->rep.reply.heartbeat.status = 0;
+				break;
+			case RSPAMD_SRV_BUSY:
+				worker->hb.is_busy = cmd.cmd.busy.is_busy;
+				if (cmd.cmd.busy.is_busy) {
+					rspamd_strlcpy(worker->hb.busy_reason, cmd.cmd.busy.reason,
+								   sizeof(worker->hb.busy_reason));
+					rspamd_default_log_function(G_LOG_LEVEL_DEBUG,
+												rspamd_main->server_pool->tag.tagname,
+												rspamd_main->server_pool->tag.uid,
+												RSPAMD_LOG_FUNC,
+												"worker type %s with pid %P marked as busy: %s",
+												g_quark_to_string(worker->type), worker->pid,
+												worker->hb.busy_reason);
+				}
+				else {
+					rspamd_default_log_function(G_LOG_LEVEL_DEBUG,
+												rspamd_main->server_pool->tag.tagname,
+												rspamd_main->server_pool->tag.uid,
+												RSPAMD_LOG_FUNC,
+												"worker type %s with pid %P finished: %s",
+												g_quark_to_string(worker->type), worker->pid,
+												worker->hb.busy_reason);
+					worker->hb.busy_reason[0] = '\0';
+				}
 				break;
 			case RSPAMD_SRV_HEALTH:
 				rspamd_fill_health_reply(rspamd_main, &rdata->rep);
@@ -1527,6 +1574,15 @@ rspamd_control_command_to_string(enum rspamd_control_type cmd)
 	case RSPAMD_CONTROL_COMPOSITES_STATS:
 		reply = "composites_stats";
 		break;
+	case RSPAMD_CONTROL_FUZZY_BLOCKED:
+		reply = "fuzzy_blocked";
+		break;
+	case RSPAMD_CONTROL_MULTIPATTERN_LOADED:
+		reply = "multipattern_loaded";
+		break;
+	case RSPAMD_CONTROL_REGEXP_MAP_LOADED:
+		reply = "regexp_map_loaded";
+		break;
 	default:
 		break;
 	}
@@ -1569,7 +1625,43 @@ const char *rspamd_srv_command_to_string(enum rspamd_srv_type cmd)
 	case RSPAMD_SRV_WORKERS_SPAWNED:
 		reply = "workers_spawned";
 		break;
+	case RSPAMD_SRV_MULTIPATTERN_LOADED:
+		reply = "multipattern_loaded";
+		break;
+	case RSPAMD_SRV_REGEXP_MAP_LOADED:
+		reply = "regexp_map_loaded";
+		break;
+	case RSPAMD_SRV_BUSY:
+		reply = "busy";
+		break;
+	default:
+		break;
 	}
 
 	return reply;
+}
+
+void rspamd_worker_set_busy(struct rspamd_worker *worker,
+							struct ev_loop *event_loop,
+							const char *reason)
+{
+	struct rspamd_srv_command srv_cmd;
+
+	if (worker->state != rspamd_worker_state_running) {
+		return;
+	}
+
+	memset(&srv_cmd, 0, sizeof(srv_cmd));
+	srv_cmd.type = RSPAMD_SRV_BUSY;
+	srv_cmd.cmd.busy.is_busy = (reason != NULL);
+
+	if (reason != NULL) {
+		rspamd_strlcpy(srv_cmd.cmd.busy.reason, reason,
+					   sizeof(srv_cmd.cmd.busy.reason));
+	}
+	else {
+		srv_cmd.cmd.busy.reason[0] = '\0';
+	}
+
+	rspamd_srv_send_command(worker, event_loop, &srv_cmd, -1, NULL, NULL);
 }

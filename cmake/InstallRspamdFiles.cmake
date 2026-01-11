@@ -18,6 +18,12 @@ function(InstallRspamdFiles)
 
     file(GLOB_RECURSE CONF_FILES RELATIVE "${CMAKE_SOURCE_DIR}/conf" CONFIGURE_DEPENDS
             ${GLOB_PATTERNS})
+
+    # Exclude hyperscan-specific config when hyperscan is disabled
+    if (NOT ENABLE_HYPERSCAN)
+        list(REMOVE_ITEM CONF_FILES "worker-hs_helper.conf" "worker-hs_helper.inc")
+    endif ()
+
     foreach (CONF_FILE ${CONF_FILES})
         get_filename_component(_rp ${CONF_FILE} PATH)
         install(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${CONFDIR}/${_rp})")

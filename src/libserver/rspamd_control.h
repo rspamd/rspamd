@@ -39,6 +39,8 @@ enum rspamd_control_type {
 	RSPAMD_CONTROL_FUZZY_BLOCKED,
 	RSPAMD_CONTROL_WORKERS_SPAWNED,
 	RSPAMD_CONTROL_COMPOSITES_STATS,
+	RSPAMD_CONTROL_MULTIPATTERN_LOADED,
+	RSPAMD_CONTROL_REGEXP_MAP_LOADED,
 	RSPAMD_CONTROL_MAX
 };
 
@@ -51,8 +53,11 @@ enum rspamd_srv_type {
 	RSPAMD_SRV_HEARTBEAT,
 	RSPAMD_SRV_HEALTH,
 	RSPAMD_SRV_NOTICE_HYPERSCAN_CACHE,
-	RSPAMD_SRV_FUZZY_BLOCKED,   /* Used to notify main process about a blocked ip */
-	RSPAMD_SRV_WORKERS_SPAWNED, /* Used to notify workers that all workers have been spawned */
+	RSPAMD_SRV_FUZZY_BLOCKED,       /* Used to notify main process about a blocked ip */
+	RSPAMD_SRV_WORKERS_SPAWNED,     /* Used to notify workers that all workers have been spawned */
+	RSPAMD_SRV_MULTIPATTERN_LOADED, /* Multipattern HS compiled and ready */
+	RSPAMD_SRV_REGEXP_MAP_LOADED,   /* Regexp map HS compiled and ready */
+	RSPAMD_SRV_BUSY,                /* Worker is busy with long-running operation */
 };
 
 enum rspamd_log_pipe_type {
@@ -79,6 +84,14 @@ struct rspamd_control_command {
 			char cache_dir[CONTROL_PATHLEN];
 			char scope[64]; /* Scope name, NULL means all scopes */
 		} hs_loaded;
+		struct {
+			char name[64];
+			char cache_dir[CONTROL_PATHLEN];
+		} mp_loaded;
+		struct {
+			char name[CONTROL_PATHLEN]; /* Map name */
+			char cache_dir[CONTROL_PATHLEN];
+		} re_map_loaded;
 		struct {
 			char tag[32];
 			gboolean alive;
@@ -228,6 +241,20 @@ struct rspamd_srv_command {
 		struct {
 			unsigned int workers_count;
 		} workers_spawned;
+		/* Sent when a multipattern hyperscan db is compiled */
+		struct {
+			char name[64];
+			char cache_dir[CONTROL_PATHLEN];
+		} mp_loaded;
+		/* Sent when a regexp map hyperscan db is compiled */
+		struct {
+			char name[CONTROL_PATHLEN]; /* Map name */
+			char cache_dir[CONTROL_PATHLEN];
+		} re_map_loaded;
+		struct {
+			gboolean is_busy;
+			char reason[32];
+		} busy;
 	} cmd;
 };
 
@@ -352,6 +379,10 @@ const char *rspamd_srv_command_to_string(enum rspamd_srv_type cmd);
  * @param p
  */
 void rspamd_pending_control_free(gpointer p);
+
+void rspamd_worker_set_busy(struct rspamd_worker *worker,
+							struct ev_loop *event_loop,
+							const char *reason);
 
 G_END_DECLS
 
