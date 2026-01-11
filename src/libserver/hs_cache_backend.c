@@ -23,6 +23,11 @@
 #include "libserver/redis_pool.h"
 #ifdef WITH_HYPERSCAN
 #include "libserver/hyperscan_tools.h"
+#else
+/* Fallback when hyperscan is not available */
+#define msg_debug_hyperscan(...) \
+	do {                         \
+	} while (0)
 #endif
 
 static struct rspamd_hs_cache_backend *global_hs_cache_backend = NULL;
