@@ -336,8 +336,29 @@ rspamd_metrics_add_integer(rspamd_fstring_t **output,
 						   const char *description,
 						   const char *ucl_key)
 {
-	rspamd_printf_fstring(output, "# HELP %s %s\n", name, description);
-	rspamd_printf_fstring(output, "# TYPE %s %s\n", name, type);
+	/*
+	 * OpenMetrics requires counters to have _total suffix on the metric value,
+	 * but the TYPE declaration uses the base name (without _total).
+	 * E.g.: # TYPE rspamd_scanned counter
+	 *       rspamd_scanned_total 123
+	 */
+	size_t name_len = strlen(name);
+	const char *total_suffix = "_total";
+	size_t suffix_len = 6;
+	gboolean is_counter_with_total = (strcmp(type, "counter") == 0 &&
+									  name_len > suffix_len &&
+									  strcmp(name + name_len - suffix_len, total_suffix) == 0);
+
+	if (is_counter_with_total) {
+		/* Strip _total for HELP and TYPE lines */
+		size_t base_len = name_len - suffix_len;
+		rspamd_printf_fstring(output, "# HELP %.*s %s\n", (int) base_len, name, description);
+		rspamd_printf_fstring(output, "# TYPE %.*s %s\n", (int) base_len, name, type);
+	}
+	else {
+		rspamd_printf_fstring(output, "# HELP %s %s\n", name, description);
+		rspamd_printf_fstring(output, "# TYPE %s %s\n", name, type);
+	}
 	rspamd_printf_fstring(output, "%s %L\n", name,
 						  ucl_object_toint(ucl_object_lookup(top, ucl_key)));
 }
