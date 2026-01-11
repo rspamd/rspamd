@@ -377,7 +377,8 @@ void rspamd_multipattern_add_pattern_len(struct rspamd_multipattern *mp,
 	g_assert(mp != NULL);
 	g_assert(!mp->compiled);
 
-	/* Add to pats array for ACISM/regex fallback */
+#ifdef WITH_HYPERSCAN
+	/* Add to pats array for ACISM/regex fallback (needed for FALLBACK mode) */
 	if (mp->pats != NULL) {
 		struct rspamd_acism_pat acism_pat;
 
@@ -388,7 +389,6 @@ void rspamd_multipattern_add_pattern_len(struct rspamd_multipattern *mp,
 		g_array_append_val(mp->pats, acism_pat);
 	}
 
-#ifdef WITH_HYPERSCAN
 	if (rspamd_hs_check()) {
 		char *np;
 		int fl = HS_FLAG_SOM_LEFTMOST;
