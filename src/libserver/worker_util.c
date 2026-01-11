@@ -28,6 +28,7 @@
 #include "libserver/maps/map_helpers.h"
 #include "libserver/http/http_private.h"
 #include "libserver/http/http_router.h"
+#include "libserver/http_content_negotiation.h"
 #include "libutil/rrd.h"
 
 /* sys/resource.h */
@@ -722,6 +723,90 @@ void rspamd_controller_send_ucl(struct rspamd_http_connection_entry *entry,
 										 msg,
 										 NULL,
 										 "application/json",
+										 entry,
+										 entry->rt->timeout);
+	entry->is_reply = TRUE;
+}
+
+void rspamd_controller_send_openmetrics_negotiated(
+	struct rspamd_http_connection_entry *entry,
+	struct rspamd_http_message *req_msg,
+	rspamd_fstring_t *str)
+{
+	struct rspamd_http_message *msg;
+	struct rspamd_content_negotiation_result neg_result;
+
+	/* Desired content types for metrics: OpenMetrics preferred, text/plain fallback */
+	static const enum rspamd_http_content_type metrics_types[] = {
+		RSPAMD_HTTP_CTYPE_OPENMETRICS,
+		RSPAMD_HTTP_CTYPE_TEXT_PLAIN,
+		RSPAMD_HTTP_CTYPE_UNKNOWN,
+	};
+
+	/* Negotiate content type */
+	rspamd_http_negotiate_content(req_msg, metrics_types,
+								  RSPAMD_HTTP_CTYPE_TEXT_PLAIN, &neg_result);
+
+	msg = rspamd_http_new_message(HTTP_RESPONSE);
+	msg->date = time(NULL);
+	msg->code = 200;
+	msg->status = rspamd_fstring_new_init("OK", 2);
+
+	rspamd_http_message_set_body_from_fstring_steal(msg,
+													rspamd_controller_maybe_compress(entry, str, msg));
+	rspamd_http_connection_reset(entry->conn);
+	rspamd_http_router_insert_headers(entry->rt, msg);
+	rspamd_http_connection_write_message(entry->conn,
+										 msg,
+										 NULL,
+										 neg_result.content_type_str,
+										 entry,
+										 entry->rt->timeout);
+	entry->is_reply = TRUE;
+}
+
+void rspamd_controller_send_ucl_negotiated(
+	struct rspamd_http_connection_entry *entry,
+	struct rspamd_http_message *req_msg,
+	ucl_object_t *obj)
+{
+	struct rspamd_http_message *msg;
+	struct rspamd_content_negotiation_result neg_result;
+	rspamd_fstring_t *reply;
+
+	/* Desired content types for UCL: JSON preferred, msgpack if requested */
+	static const enum rspamd_http_content_type ucl_types[] = {
+		RSPAMD_HTTP_CTYPE_JSON,
+		RSPAMD_HTTP_CTYPE_MSGPACK,
+		RSPAMD_HTTP_CTYPE_UNKNOWN,
+	};
+
+	/* Negotiate content type */
+	rspamd_http_negotiate_content(req_msg, ucl_types,
+								  RSPAMD_HTTP_CTYPE_JSON, &neg_result);
+
+	msg = rspamd_http_new_message(HTTP_RESPONSE);
+	msg->date = time(NULL);
+	msg->code = 200;
+	msg->status = rspamd_fstring_new_init("OK", 2);
+	reply = rspamd_fstring_sized_new(BUFSIZ);
+
+	/* Use negotiated UCL emit type */
+	if (neg_result.ucl_emit_type >= 0) {
+		rspamd_ucl_emit_fstring(obj, neg_result.ucl_emit_type, &reply);
+	}
+	else {
+		rspamd_ucl_emit_fstring(obj, UCL_EMIT_JSON_COMPACT, &reply);
+	}
+
+	rspamd_http_message_set_body_from_fstring_steal(msg,
+													rspamd_controller_maybe_compress(entry, reply, msg));
+	rspamd_http_connection_reset(entry->conn);
+	rspamd_http_router_insert_headers(entry->rt, msg);
+	rspamd_http_connection_write_message(entry->conn,
+										 msg,
+										 NULL,
+										 neg_result.content_type_str,
 										 entry,
 										 entry->rt->timeout);
 	entry->is_reply = TRUE;

@@ -335,9 +335,20 @@ rspamd_http_router_finish_handler(struct rspamd_http_connection *conn,
 
 		encoding = rspamd_http_message_find_header(msg, "Accept-Encoding");
 
-		if (encoding && rspamd_substring_search(encoding->begin, encoding->len,
-												"gzip", 4) != -1) {
-			entry->support_gzip = TRUE;
+		if (encoding) {
+			if (rspamd_substring_search(encoding->begin, encoding->len,
+										"gzip", 4) != -1) {
+				entry->support_gzip = TRUE;
+				entry->compression_flags |= (1 << 0); /* RSPAMD_HTTP_COMPRESS_GZIP */
+			}
+			if (rspamd_substring_search(encoding->begin, encoding->len,
+										"zstd", 4) != -1) {
+				entry->compression_flags |= (1 << 1); /* RSPAMD_HTTP_COMPRESS_ZSTD */
+			}
+			if (rspamd_substring_search(encoding->begin, encoding->len,
+										"deflate", 7) != -1) {
+				entry->compression_flags |= (1 << 2); /* RSPAMD_HTTP_COMPRESS_DEFLATE */
+			}
 		}
 
 		if (handler != NULL) {

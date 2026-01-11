@@ -19,6 +19,7 @@
 #include "config.h"
 #include "util.h"
 #include "libserver/http/http_connection.h"
+#include "libserver/http_content_negotiation.h"
 #include "rspamd.h"
 
 #ifdef __cplusplus
@@ -143,6 +144,28 @@ void rspamd_controller_send_string(struct rspamd_http_connection_entry *entry,
  */
 void rspamd_controller_send_ucl(struct rspamd_http_connection_entry *entry,
 								ucl_object_t *obj);
+
+/**
+ * Send openmetrics-formatted strings using HTTP with content negotiation
+ * @param entry router entry
+ * @param msg original HTTP request message (for Accept header parsing)
+ * @param str rspamd fstring buffer, ownership is transferred
+ */
+void rspamd_controller_send_openmetrics_negotiated(
+	struct rspamd_http_connection_entry *entry,
+	struct rspamd_http_message *msg,
+	rspamd_fstring_t *str);
+
+/**
+ * Send UCL using HTTP with content negotiation (supports JSON and msgpack)
+ * @param entry router entry
+ * @param msg original HTTP request message (for Accept header parsing)
+ * @param obj object to send
+ */
+void rspamd_controller_send_ucl_negotiated(
+	struct rspamd_http_connection_entry *entry,
+	struct rspamd_http_message *msg,
+	ucl_object_t *obj);
 
 /**
  * Return worker's control structure by its type

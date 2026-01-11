@@ -2740,6 +2740,7 @@ rspamd_controller_handle_savemap(struct rspamd_http_connection_entry *conn_ent,
 struct rspamd_stat_cbdata {
 	struct rspamd_http_connection_entry *conn_ent;
 	struct rspamd_controller_worker_ctx *ctx;
+	struct rspamd_http_message *req_msg;
 	ucl_object_t *top;
 	ucl_object_t *stat;
 	struct rspamd_task *task;
@@ -2795,6 +2796,9 @@ rspamd_controller_stat_cleanup_task(void *ud)
 
 	rspamd_task_free(cbdata->task);
 	ucl_object_unref(cbdata->top);
+	if (cbdata->req_msg) {
+		rspamd_http_message_unref(cbdata->req_msg);
+	}
 }
 
 /*
@@ -3099,7 +3103,7 @@ rspamd_controller_metrics_fin_task(void *ud)
 	}
 
 	rspamd_printf_fstring(&output, "# EOF\n");
-	rspamd_controller_send_openmetrics(conn_ent, output);
+	rspamd_controller_send_openmetrics_negotiated(conn_ent, cbdata->req_msg, output);
 
 	return TRUE;
 }
@@ -3134,6 +3138,7 @@ rspamd_controller_handle_metrics_common(
 	cbdata->task = task;
 	cbdata->ctx = ctx;
 	cbdata->top = top;
+	cbdata->req_msg = rspamd_http_message_ref(msg);
 
 	task->s = rspamd_session_create(session->pool,
 									rspamd_controller_metrics_fin_task,
