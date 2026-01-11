@@ -434,13 +434,13 @@ void rspamd_multipattern_add_pattern_len(struct rspamd_multipattern *mp,
 		mp->pats = g_array_new(FALSE, TRUE, sizeof(struct rspamd_acism_pat));
 	}
 
-	if (!is_tld) {
+	{
 		struct rspamd_acism_pat acism_pat;
 
 		acism_pat.pat.ptr = rspamd_multipattern_pattern_filter(pattern, patlen, flags, &dlen);
 		acism_pat.pat.len = dlen;
 		acism_pat.id = mp->cnt;
-		acism_pat.is_tld = FALSE;
+		acism_pat.is_tld = is_tld;
 
 		g_array_append_val(mp->pats, acism_pat);
 	}
