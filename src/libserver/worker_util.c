@@ -46,6 +46,11 @@
 #include <libutil.h>
 #endif
 #include "zlib.h"
+#ifdef SYS_ZSTD
+#include "zstd.h"
+#else
+#include "contrib/zstd/zstd.h"
+#endif
 
 #ifdef HAVE_UCONTEXT_H
 #include <ucontext.h>
@@ -609,7 +614,23 @@ static rspamd_fstring_t *
 rspamd_controller_maybe_compress(struct rspamd_http_connection_entry *entry,
 								 rspamd_fstring_t *buf, struct rspamd_http_message *msg)
 {
-	if (entry->support_gzip) {
+	/* Prefer zstd over gzip if client supports it */
+	if (entry->compression_flags & RSPAMD_HTTP_COMPRESS_ZSTD) {
+		gsize compressed_size = ZSTD_compressBound(buf->len);
+		rspamd_fstring_t *compressed = rspamd_fstring_sized_new(compressed_size);
+
+		compressed->len = ZSTD_compress(compressed->str, compressed->allocated,
+										buf->str, buf->len, 1);
+
+		if (!ZSTD_isError(compressed->len) && compressed->len < buf->len) {
+			rspamd_fstring_free(buf);
+			rspamd_http_message_add_header(msg, CONTENT_ENCODING_HEADER, "zstd");
+			return compressed;
+		}
+
+		rspamd_fstring_free(compressed);
+	}
+	else if (entry->support_gzip) {
 		if (rspamd_fstring_gzip(&buf)) {
 			rspamd_http_message_add_header(msg, CONTENT_ENCODING_HEADER, "gzip");
 		}

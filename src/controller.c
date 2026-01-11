@@ -2783,7 +2783,7 @@ rspamd_controller_stat_fin_task(void *ud)
 		ucl_object_insert_key(top, ar, "fuzzy_hashes", 0, false);
 	}
 
-	rspamd_controller_send_ucl(conn_ent, top);
+	rspamd_controller_send_ucl_negotiated(conn_ent, cbdata->req_msg, top);
 
 
 	return TRUE;
@@ -2837,6 +2837,7 @@ rspamd_controller_handle_stat_common(
 	cbdata->conn_ent = conn_ent;
 	cbdata->task = task;
 	cbdata->ctx = ctx;
+	cbdata->req_msg = rspamd_http_message_ref(msg);
 	top = ucl_object_typed_new(UCL_OBJECT);
 	cbdata->top = top;
 
