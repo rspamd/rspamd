@@ -233,13 +233,7 @@ rspamd_multipattern_escape_acism(const char *pattern, gsize len,
 	if (flags & RSPAMD_MULTIPATTERN_TLD) {
 		ret = rspamd_multipattern_escape_tld_acism(pattern, len, dst_len);
 	}
-	else if (flags & (RSPAMD_MULTIPATTERN_RE | RSPAMD_MULTIPATTERN_GLOB)) {
-		/* ACISM doesn't support regex/glob - use pattern as literal string */
-		ret = g_malloc(len + 1);
-		*dst_len = rspamd_strlcpy(ret, pattern, len + 1);
-	}
 	else {
-		/* Plain pattern - use as-is */
 		ret = g_malloc(len + 1);
 		*dst_len = rspamd_strlcpy(ret, pattern, len + 1);
 	}
@@ -312,10 +306,8 @@ rspamd_multipattern_create(enum rspamd_multipattern_flags flags)
 		mp->hs_ids = g_array_new(FALSE, TRUE, sizeof(int));
 		rspamd_cryptobox_hash_init(&mp->hash_state, NULL, 0);
 
-		/* For TLD multipatterns, also create pats array for ACISM fallback */
-		if (flags & RSPAMD_MULTIPATTERN_TLD) {
-			mp->pats = g_array_new(FALSE, TRUE, sizeof(struct rspamd_acism_pat));
-		}
+		/* Create pats array for ACISM/regex fallback (needed for FALLBACK mode) */
+		mp->pats = g_array_new(FALSE, TRUE, sizeof(struct rspamd_acism_pat));
 
 		return mp;
 	}
@@ -346,10 +338,8 @@ rspamd_multipattern_create_sized(unsigned int npatterns,
 		mp->hs_ids = g_array_sized_new(FALSE, TRUE, sizeof(int), npatterns);
 		rspamd_cryptobox_hash_init(&mp->hash_state, NULL, 0);
 
-		/* For TLD multipatterns, also create pats array for ACISM fallback */
-		if (flags & RSPAMD_MULTIPATTERN_TLD) {
-			mp->pats = g_array_sized_new(FALSE, TRUE, sizeof(struct rspamd_acism_pat), npatterns);
-		}
+		/* Create pats array for ACISM/regex fallback (needed for FALLBACK mode) */
+		mp->pats = g_array_sized_new(FALSE, TRUE, sizeof(struct rspamd_acism_pat), npatterns);
 
 		return mp;
 	}
@@ -381,25 +371,19 @@ void rspamd_multipattern_add_pattern_len(struct rspamd_multipattern *mp,
 										 const char *pattern, gsize patlen, int flags)
 {
 	gsize dlen;
-	/* Use per-pattern flags to determine if this is a TLD pattern */
 	gboolean is_tld = (flags & RSPAMD_MULTIPATTERN_TLD);
 
 	g_assert(pattern != NULL);
 	g_assert(mp != NULL);
 	g_assert(!mp->compiled);
 
-	/*
-	 * If pats array exists (for ACISM fallback), add ALL patterns to it.
-	 * This ensures ACISM can be used as complete fallback when HS is compiling.
-	 * Store the pattern ID so callback can report correct ID to caller.
-	 * Use ACISM-specific escaping, not hyperscan escaping.
-	 */
+	/* Add to pats array for ACISM/regex fallback */
 	if (mp->pats != NULL) {
 		struct rspamd_acism_pat acism_pat;
 
 		acism_pat.pat.ptr = rspamd_multipattern_escape_acism(pattern, patlen, flags, &dlen);
 		acism_pat.pat.len = dlen;
-		acism_pat.id = mp->cnt; /* Current pattern ID (before increment) */
+		acism_pat.id = mp->cnt;
 		acism_pat.is_tld = is_tld;
 		g_array_append_val(mp->pats, acism_pat);
 	}
@@ -765,20 +749,16 @@ rspamd_multipattern_compile(struct rspamd_multipattern *mp, int flags, GError **
 				}
 			}
 
-			/* Cache miss or scratch failed - build ACISM for fallback */
-			ac_trie_pat_t *tmp_pats = g_new(ac_trie_pat_t, mp->pats->len);
-			for (unsigned int i = 0; i < mp->pats->len; i++) {
-				struct rspamd_acism_pat *ap = &g_array_index(mp->pats,
-															 struct rspamd_acism_pat, i);
-				tmp_pats[i] = ap->pat;
+			/* Cache miss or scratch failed - build ACISM/regex fallback */
+			if (!rspamd_multipattern_build_acism(mp, err)) {
+				g_clear_error(err);
+				return FALSE;
 			}
-			mp->t = acism_create(tmp_pats, mp->pats->len);
-			g_free(tmp_pats);
 
 			mp->state = RSPAMD_MP_STATE_INIT;
 			mp->compiled = TRUE;
 
-			msg_debug_multipattern("built ACISM fallback trie for %ud patterns", mp->pats->len);
+			msg_debug_multipattern("built fallback for %ud patterns", mp->pats->len);
 
 			/* Mark for async compilation (hs_helper will compile and notify) */
 			if (!(flags & RSPAMD_MULTIPATTERN_COMPILE_NO_FS)) {
@@ -993,14 +973,44 @@ int rspamd_multipattern_lookup(struct rspamd_multipattern *mp,
 	}
 
 	/*
-	 * For multipatterns with TLD patterns: use ACISM fallback while HS is compiling
-	 * pats array exists only for multipatterns that have TLD patterns
+	 * Use ACISM/regex fallback while HS is compiling (FALLBACK mode)
 	 */
-	if (mp->pats != NULL && mp->t != NULL) {
+	if (mp->t != NULL) {
 		int acism_state = 0;
 
 		ret = acism_lookup(mp->t, in, len, rspamd_multipattern_acism_cb, &cbd,
 						   &acism_state, mp->flags & RSPAMD_MULTIPATTERN_ICASE);
+
+		if (pnfound) {
+			*pnfound = cbd.nfound;
+		}
+
+		return ret;
+	}
+
+	/* Regex fallback for RE/GLOB patterns while HS is compiling */
+	if (mp->res != NULL && mp->res->len > 0) {
+		for (unsigned int i = 0; i < mp->res->len; i++) {
+			rspamd_regexp_t *re = g_array_index(mp->res, rspamd_regexp_t *, i);
+			const char *start = NULL, *end = NULL;
+
+			while (rspamd_regexp_search(re,
+										in,
+										len,
+										&start,
+										&end,
+										TRUE,
+										NULL)) {
+				if (start >= end) {
+					break;
+				}
+				if (rspamd_multipattern_acism_cb(i, end - in, &cbd)) {
+					goto hs_fallback_out;
+				}
+			}
+		}
+	hs_fallback_out:
+		ret = cbd.ret;
 
 		if (pnfound) {
 			*pnfound = cbd.nfound;
@@ -1076,6 +1086,15 @@ void rspamd_multipattern_destroy(struct rspamd_multipattern *mp)
 				/* Clean up ACISM fallback if it was built */
 				if (mp->t) {
 					acism_destroy(mp->t);
+				}
+
+				/* Clean up regex fallback if it was built */
+				if (mp->res) {
+					for (i = 0; i < mp->res->len; i++) {
+						rspamd_regexp_t *re = g_array_index(mp->res, rspamd_regexp_t *, i);
+						rspamd_regexp_unref(re);
+					}
+					g_array_free(mp->res, TRUE);
 				}
 			}
 
