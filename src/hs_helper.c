@@ -52,6 +52,169 @@ static const double default_recompile_time = 60.0;
 static const uint64_t rspamd_hs_helper_magic = 0x22d310157a2288a0ULL;
 
 /*
+ * hs_helper State Machine and Event Flow
+ * =======================================
+ *
+ * STARTUP SEQUENCE:
+ * -----------------
+ *
+ *   +---------------+
+ *   | hs_helper     |
+ *   | starts        |
+ *   +-------+-------+
+ *           |
+ *           v
+ *   +---------------+     recompile_timer
+ *   | Init timer    +-----------------------.
+ *   | (60s default) |                       |
+ *   +-------+-------+                       |
+ *           |                               |
+ *           | WORKERS_SPAWNED cmd           |
+ *           v                               |
+ *   +---------------+                       |
+ *   | workers_ready |                       |
+ *   | = TRUE        |                       |
+ *   +-------+-------+                       |
+ *           |                               |
+ *           +-------------------------------+
+ *           |
+ *           v
+ *   +-------+-------+
+ *   | Start compile |
+ *   | (re_cache,    |
+ *   | multipattern, |
+ *   | regexp_maps)  |
+ *   +---------------+
+ *
+ *
+ * RE_CACHE COMPILATION (per scope):
+ * ---------------------------------
+ *
+ *   +---------------+
+ *   | rspamd_rs_    |
+ *   | compile()     |
+ *   +-------+-------+
+ *           |
+ *           v
+ *   +---------------+     cache hit
+ *   | Check cache   +-------------------.
+ *   | (file/Lua)    |                   |
+ *   +-------+-------+                   |
+ *           | cache miss                |
+ *           v                           |
+ *   +---------------+                   |
+ *   | hs_compile_   |                   |
+ *   | multi()       |                   |
+ *   +-------+-------+                   |
+ *           |                           |
+ *           v                           |
+ *   +---------------+                   |
+ *   | Save to cache |                   |
+ *   | (file/Lua)    |                   |
+ *   +-------+-------+                   |
+ *           |                           |
+ *           +---------------------------+
+ *           |
+ *           v
+ *   +---------------+
+ *   | scoped_cb()   |
+ *   | per-scope     |
+ *   +-------+-------+
+ *           | (if workers_ready && ncompiled > 0)
+ *           v
+ *   +---------------+
+ *   | Send          |
+ *   | HS_LOADED     |-----> main process ----> workers reload
+ *   | (scope)       |
+ *   +-------+-------+
+ *           |
+ *           | (all scopes done)
+ *           v
+ *   +---------------+
+ *   | Send final    |
+ *   | HS_LOADED     |-----> main process ----> workers reload
+ *   | (scope=NULL)  |
+ *   +---------------+
+ *
+ *
+ * MULTIPATTERN/REGEXP_MAP COMPILATION:
+ * ------------------------------------
+ *
+ *   +---------------+
+ *   | Get pending   |
+ *   | queue         |
+ *   +-------+-------+
+ *           |
+ *           v
+ *   +-------+-------+
+ *   | For each item |<---------------------------.
+ *   +-------+-------+                            |
+ *           |                                    |
+ *           v                                    |
+ *   +---------------+     exists                 |
+ *   | Cache exists? +------------.               |
+ *   | (file/Lua)    |            |               |
+ *   +-------+-------+            |               |
+ *           | no                 |               |
+ *           v                    |               |
+ *   +---------------+            |               |
+ *   | hs_compile()  |            |               |
+ *   +-------+-------+            |               |
+ *           |                    |               |
+ *           v                    |               |
+ *   +---------------+            |               |
+ *   | Save to cache |            |               |
+ *   | (file/Lua)    |            |               |
+ *   +-------+-------+            |               |
+ *           |                    |               |
+ *           +--------------------+               |
+ *           |                                    |
+ *           v                                    |
+ *   +---------------+                            |
+ *   | Send          |                            |
+ *   | MP_LOADED or  |-----> main ----> workers   |
+ *   | REMAP_LOADED  |       hot-swap HS db       |
+ *   +-------+-------+                            |
+ *           |                                    |
+ *           | next item                          |
+ *           +------------------------------------+
+ *
+ *
+ * CONTROL COMMANDS:
+ * -----------------
+ *
+ *   WORKERS_SPAWNED:  main -> hs_helper (workers ready to receive notifications)
+ *   RECOMPILE:        main -> hs_helper (force recompile, e.g., after SIGHUP)
+ *
+ *
+ * SERVER COMMANDS (notifications):
+ * --------------------------------
+ *
+ *   HS_LOADED:        hs_helper -> main -> workers (re_cache compiled)
+ *   MP_LOADED:        hs_helper -> main -> workers (multipattern compiled)
+ *   REMAP_LOADED:     hs_helper -> main -> workers (regexp_map compiled)
+ *
+ *
+ * CACHE BACKEND FLOW (Lua/Redis/HTTP):
+ * ------------------------------------
+ *
+ *   +--------+     exists?     +--------+     yes      +--------+
+ *   | caller +---------------->| backend+------------->| skip   |
+ *   +--------+                 +---+----+              | compile|
+ *                                  | no                +--------+
+ *                                  v
+ *                              +--------+
+ *                              |compile |
+ *                              +---+----+
+ *                                  |
+ *                                  v
+ *                              +--------+     save     +--------+
+ *                              | store  +------------->| backend|
+ *                              +--------+              +--------+
+ *
+ */
+
+/*
  * Cache backend types
  */
 enum hs_cache_backend_type {
