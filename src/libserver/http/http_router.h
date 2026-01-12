@@ -42,6 +42,7 @@ struct rspamd_http_connection_entry {
 	gpointer ud;
 	gboolean is_reply;
 	gboolean support_gzip;
+	unsigned int compression_flags; /* Bitmask of rspamd_http_compression */
 	struct rspamd_http_connection_entry *prev, *next;
 };
 

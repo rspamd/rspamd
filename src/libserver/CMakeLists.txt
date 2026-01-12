@@ -28,6 +28,7 @@ SET(LIBRSPAMDSERVERSRC
         ${CMAKE_CURRENT_SOURCE_DIR}/task.c
         ${CMAKE_CURRENT_SOURCE_DIR}/url.c
         ${CMAKE_CURRENT_SOURCE_DIR}/worker_util.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/http_content_negotiation.c
         ${CMAKE_CURRENT_SOURCE_DIR}/logger/logger.c
         ${CMAKE_CURRENT_SOURCE_DIR}/logger/logger_file.c
         ${CMAKE_CURRENT_SOURCE_DIR}/logger/logger_syslog.c
