@@ -830,8 +830,6 @@ rspamd_hs_helper_mp_send_notification(struct hs_helper_ctx *ctx,
 	srv_cmd.type = RSPAMD_SRV_MULTIPATTERN_LOADED;
 	rspamd_strlcpy(srv_cmd.cmd.mp_loaded.name, name,
 				   sizeof(srv_cmd.cmd.mp_loaded.name));
-	rspamd_strlcpy(srv_cmd.cmd.mp_loaded.cache_dir, ctx->hs_dir,
-				   sizeof(srv_cmd.cmd.mp_loaded.cache_dir));
 
 	rspamd_srv_send_command(worker, ctx->event_loop, &srv_cmd, -1, NULL, NULL);
 	msg_debug_hyperscan("sent multipattern loaded notification for '%s'", name);
@@ -997,8 +995,6 @@ rspamd_hs_helper_remap_send_notification(struct hs_helper_ctx *ctx,
 	srv_cmd.type = RSPAMD_SRV_REGEXP_MAP_LOADED;
 	rspamd_strlcpy(srv_cmd.cmd.re_map_loaded.name, name,
 				   sizeof(srv_cmd.cmd.re_map_loaded.name));
-	rspamd_strlcpy(srv_cmd.cmd.re_map_loaded.cache_dir, ctx->hs_dir,
-				   sizeof(srv_cmd.cmd.re_map_loaded.cache_dir));
 
 	rspamd_srv_send_command(worker, ctx->event_loop, &srv_cmd, -1, NULL, NULL);
 	msg_debug_hyperscan("sent regexp map loaded notification for '%s'", name);

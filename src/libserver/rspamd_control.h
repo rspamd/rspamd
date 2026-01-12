@@ -86,11 +86,9 @@ struct rspamd_control_command {
 		} hs_loaded;
 		struct {
 			char name[64];
-			char cache_dir[CONTROL_PATHLEN];
 		} mp_loaded;
 		struct {
-			char name[CONTROL_PATHLEN]; /* Map name */
-			char cache_dir[CONTROL_PATHLEN];
+			char name[64]; /* Map name */
 		} re_map_loaded;
 		struct {
 			char tag[32];
@@ -244,12 +242,10 @@ struct rspamd_srv_command {
 		/* Sent when a multipattern hyperscan db is compiled */
 		struct {
 			char name[64];
-			char cache_dir[CONTROL_PATHLEN];
 		} mp_loaded;
 		/* Sent when a regexp map hyperscan db is compiled */
 		struct {
-			char name[CONTROL_PATHLEN]; /* Map name */
-			char cache_dir[CONTROL_PATHLEN];
+			char name[64]; /* Map name */
 		} re_map_loaded;
 		struct {
 			gboolean is_busy;

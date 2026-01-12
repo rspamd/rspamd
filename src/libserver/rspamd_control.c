@@ -1161,8 +1161,8 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 				break;
 			case RSPAMD_SRV_MULTIPATTERN_LOADED:
 #ifdef WITH_HYPERSCAN
-				msg_info_main("received multipattern loaded notification for '%s' from %s",
-							  cmd.cmd.mp_loaded.name, cmd.cmd.mp_loaded.cache_dir);
+				msg_info_main("received multipattern loaded notification for '%s'",
+							  cmd.cmd.mp_loaded.name);
 
 				/* Broadcast command to all workers */
 				memset(&wcmd, 0, sizeof(wcmd));
@@ -1170,17 +1170,14 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 				rspamd_strlcpy(wcmd.cmd.mp_loaded.name,
 							   cmd.cmd.mp_loaded.name,
 							   sizeof(wcmd.cmd.mp_loaded.name));
-				rspamd_strlcpy(wcmd.cmd.mp_loaded.cache_dir,
-							   cmd.cmd.mp_loaded.cache_dir,
-							   sizeof(wcmd.cmd.mp_loaded.cache_dir));
 				rspamd_control_broadcast_cmd(rspamd_main, &wcmd, rfd,
 											 rspamd_control_ignore_io_handler, NULL, worker->pid);
 #endif
 				break;
 			case RSPAMD_SRV_REGEXP_MAP_LOADED:
 #ifdef WITH_HYPERSCAN
-				msg_info_main("received regexp map loaded notification for '%s' from %s",
-							  cmd.cmd.re_map_loaded.name, cmd.cmd.re_map_loaded.cache_dir);
+				msg_info_main("received regexp map loaded notification for '%s'",
+							  cmd.cmd.re_map_loaded.name);
 
 				/* Broadcast command to all workers */
 				memset(&wcmd, 0, sizeof(wcmd));
@@ -1188,9 +1185,6 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 				rspamd_strlcpy(wcmd.cmd.re_map_loaded.name,
 							   cmd.cmd.re_map_loaded.name,
 							   sizeof(wcmd.cmd.re_map_loaded.name));
-				rspamd_strlcpy(wcmd.cmd.re_map_loaded.cache_dir,
-							   cmd.cmd.re_map_loaded.cache_dir,
-							   sizeof(wcmd.cmd.re_map_loaded.cache_dir));
 				rspamd_control_broadcast_cmd(rspamd_main, &wcmd, rfd,
 											 rspamd_control_ignore_io_handler, NULL, worker->pid);
 #endif

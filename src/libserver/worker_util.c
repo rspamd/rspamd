@@ -2107,13 +2107,12 @@ rspamd_worker_multipattern_ready(struct rspamd_main *rspamd_main,
 	struct rspamd_control_reply rep;
 	struct rspamd_multipattern *mp;
 	const char *name = cmd->cmd.mp_loaded.name;
-	const char *cache_dir = cmd->cmd.mp_loaded.cache_dir;
+	const char *cache_dir = worker->srv->cfg->hs_cache_dir;
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_MULTIPATTERN_LOADED;
 
-	msg_debug_hyperscan("received multipattern loaded notification for '%s', cache_dir=%s",
-						name, cache_dir);
+	msg_debug_hyperscan("received multipattern loaded notification for '%s'", name);
 
 	mp = rspamd_multipattern_find_pending(name);
 
@@ -2191,13 +2190,12 @@ rspamd_worker_regexp_map_ready(struct rspamd_main *rspamd_main,
 	struct rspamd_control_reply rep;
 	struct rspamd_regexp_map_helper *re_map;
 	const char *name = cmd->cmd.re_map_loaded.name;
-	const char *cache_dir = cmd->cmd.re_map_loaded.cache_dir;
+	const char *cache_dir = worker->srv->cfg->hs_cache_dir;
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_REGEXP_MAP_LOADED;
 
-	msg_debug_hyperscan("received regexp map loaded notification for '%s', cache_dir=%s",
-						name, cache_dir);
+	msg_debug_hyperscan("received regexp map loaded notification for '%s'", name);
 
 	re_map = rspamd_regexp_map_find_pending(name);
 
