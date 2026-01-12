@@ -773,7 +773,8 @@ local function urls_handler(opts)
       end
     end
 
-    for _, u in ipairs(task:get_urls(true)) do
+    -- Use get_urls_filtered with nil params to get all URLs including content URLs
+    for _, u in ipairs(task:get_urls_filtered()) do
       process_url(u)
     end
 
