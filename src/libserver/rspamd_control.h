@@ -63,7 +63,7 @@ enum rspamd_srv_type {
 enum rspamd_log_pipe_type {
 	RSPAMD_LOG_PIPE_SYMBOLS = 0,
 };
-#define CONTROL_PATHLEN MIN(PATH_MAX, PIPE_BUF - sizeof(int) * 2 - sizeof(int64_t) * 2)
+
 struct rspamd_control_command {
 	enum rspamd_control_type type;
 	union {
@@ -81,7 +81,6 @@ struct rspamd_control_command {
 		} recompile;
 		struct {
 			gboolean forced;
-			char cache_dir[CONTROL_PATHLEN];
 			char scope[64]; /* Scope name, NULL means all scopes */
 		} hs_loaded;
 		struct {
@@ -196,7 +195,6 @@ struct rspamd_srv_command {
 		} spair;
 		struct {
 			gboolean forced;
-			char cache_dir[CONTROL_PATHLEN];
 			char scope[64]; /* Scope name, NULL means all scopes */
 		} hs_loaded;
 		struct {
@@ -224,7 +222,7 @@ struct rspamd_srv_command {
 		} health;
 		/* Used when a worker loads a valid hyperscan file */
 		struct {
-			char path[CONTROL_PATHLEN];
+			char filename[64]; /* Just the filename, not full path */
 		} hyperscan_cache_file;
 		/* Send when one worker has blocked some IP address */
 		struct {
@@ -379,6 +377,18 @@ void rspamd_pending_control_free(gpointer p);
 void rspamd_worker_set_busy(struct rspamd_worker *worker,
 							struct ev_loop *event_loop,
 							const char *reason);
+
+/**
+ * Initialize srv_pipe handling for a worker
+ * Called automatically by rspamd_srv_send_command if not initialized
+ */
+void rspamd_srv_pipe_init(struct rspamd_worker *worker, struct ev_loop *ev_base);
+
+/**
+ * Cleanup srv_pipe handling for a worker
+ * Should be called during worker shutdown
+ */
+void rspamd_srv_pipe_cleanup(void);
 
 G_END_DECLS
 
