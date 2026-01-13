@@ -362,7 +362,7 @@ lua_worker_control_handler(struct rspamd_main *rspamd_main,
 		lua_setfield(L, -2, "tag");
 		break;
 	case RSPAMD_CONTROL_HYPERSCAN_LOADED:
-		lua_pushstring(L, cmd->cmd.hs_loaded.cache_dir);
+		lua_pushstring(L, worker->srv->cfg->hs_cache_dir);
 		lua_setfield(L, -2, "cache_dir");
 		lua_pushboolean(L, cmd->cmd.hs_loaded.forced);
 		lua_setfield(L, -2, "forced");
