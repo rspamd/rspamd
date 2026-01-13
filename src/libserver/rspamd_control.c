@@ -1238,7 +1238,14 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 				break;
 			case RSPAMD_SRV_NOTICE_HYPERSCAN_CACHE:
 #ifdef WITH_HYPERSCAN
-				rspamd_hyperscan_notice_known(cmd.cmd.hyperscan_cache_file.path);
+				if (rspamd_main->cfg->hs_cache_dir != NULL &&
+					cmd.cmd.hyperscan_cache_file.filename[0] != '\0') {
+					char full_path[PATH_MAX];
+					rspamd_snprintf(full_path, sizeof(full_path), "%s/%s",
+									rspamd_main->cfg->hs_cache_dir,
+									cmd.cmd.hyperscan_cache_file.filename);
+					rspamd_hyperscan_notice_known(full_path);
+				}
 #endif
 				rdata->rep.reply.hyperscan_cache_file.unused = 0;
 				break;

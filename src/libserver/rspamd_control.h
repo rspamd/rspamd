@@ -222,7 +222,7 @@ struct rspamd_srv_command {
 		} health;
 		/* Used when a worker loads a valid hyperscan file */
 		struct {
-			char path[CONTROL_PATHLEN];
+			char filename[64]; /* Just the filename, not full path */
 		} hyperscan_cache_file;
 		/* Send when one worker has blocked some IP address */
 		struct {
