@@ -608,6 +608,9 @@ void rspamd_worker_stop_accept(struct rspamd_worker *worker)
 
 	g_hash_table_unref (worker->signal_events);
 #endif
+
+	/* Clean up srv_pipe context to prevent memory leaks */
+	rspamd_srv_pipe_cleanup();
 }
 
 static rspamd_fstring_t *
@@ -1450,8 +1453,7 @@ rspamd_fork_worker(struct rspamd_main *rspamd_main,
 	wrk->pid = fork();
 	wrk->cores_throttled = rspamd_main->cores_throttling;
 	wrk->term_handler = term_handler;
-	wrk->control_events_pending = g_hash_table_new_full(g_direct_hash, g_direct_equal,
-														NULL, rspamd_pending_control_free);
+	wrk->control_events_pending = rspamd_control_pending_new();
 
 	switch (wrk->pid) {
 	case 0:
@@ -2057,6 +2059,7 @@ rspamd_worker_hyperscan_ready(struct rspamd_main *rspamd_main,
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_HYPERSCAN_LOADED;
+	rep.id = cmd->id;
 
 	msg_debug_hyperscan("received hyperscan loaded notification, forced=%d",
 						cmd->cmd.hs_loaded.forced);
@@ -2112,6 +2115,7 @@ rspamd_worker_multipattern_ready(struct rspamd_main *rspamd_main,
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_MULTIPATTERN_LOADED;
+	rep.id = cmd->id;
 
 	msg_debug_hyperscan("received multipattern loaded notification for '%s'", name);
 
@@ -2195,6 +2199,7 @@ rspamd_worker_regexp_map_ready(struct rspamd_main *rspamd_main,
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_REGEXP_MAP_LOADED;
+	rep.id = cmd->id;
 
 	msg_debug_hyperscan("received regexp map loaded notification for '%s'", name);
 
@@ -2262,6 +2267,7 @@ rspamd_worker_log_pipe_handler(struct rspamd_main *rspamd_main,
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_LOG_PIPE;
+	rep.id = cmd->id;
 
 	if (attached_fd != -1) {
 		lp = g_malloc0(sizeof(*lp));
@@ -2298,6 +2304,7 @@ rspamd_worker_monitored_handler(struct rspamd_main *rspamd_main,
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_MONITORED_CHANGE;
+	rep.id = cmd->id;
 
 	if (cmd->cmd.monitored_change.sender != getpid()) {
 		m = rspamd_monitored_by_tag(mctx, cmd->cmd.monitored_change.tag);
