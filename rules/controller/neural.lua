@@ -139,7 +139,7 @@ local function handle_config(task, conn, req_params)
     local r = {
       requires_scan = requires_scan,
       providers = {},
-      recommended_path = requires_scan and '/checkv2' or '/controller/neural/learn_message',
+      recommended_path = requires_scan and '/checkv2' or '/plugins/neural/learn_message',
       settings = {},
     }
 
@@ -399,7 +399,7 @@ return {
   },
   status = {
     handler = handle_status,
-    enable = false,
+    enable = true,
     need_task = false,
   },
   train = {
