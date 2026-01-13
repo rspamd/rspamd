@@ -493,8 +493,6 @@ rspamd_rs_send_final_notification(struct rspamd_hs_helper_compile_cbdata *cbd)
 
 	memset(&srv_cmd, 0, sizeof(srv_cmd));
 	srv_cmd.type = RSPAMD_SRV_HYPERSCAN_LOADED;
-	rspamd_strlcpy(srv_cmd.cmd.hs_loaded.cache_dir, ctx->hs_dir,
-				   sizeof(srv_cmd.cmd.hs_loaded.cache_dir));
 	srv_cmd.cmd.hs_loaded.forced = cbd->forced;
 	srv_cmd.cmd.hs_loaded.scope[0] = '\0'; /* NULL scope means all scopes */
 
@@ -549,8 +547,6 @@ rspamd_rs_compile_scoped_cb(const char *scope, unsigned int ncompiled, GError *e
 
 			memset(&srv_cmd, 0, sizeof(srv_cmd));
 			srv_cmd.type = RSPAMD_SRV_HYPERSCAN_LOADED;
-			rspamd_strlcpy(srv_cmd.cmd.hs_loaded.cache_dir, ctx->hs_dir,
-						   sizeof(srv_cmd.cmd.hs_loaded.cache_dir));
 			srv_cmd.cmd.hs_loaded.forced = compile_cbd->forced;
 			if (scope) {
 				rspamd_strlcpy(srv_cmd.cmd.hs_loaded.scope, scope,
@@ -610,8 +606,6 @@ rspamd_rs_send_single_notification(struct rspamd_hs_helper_single_compile_cbdata
 
 	memset(&srv_cmd, 0, sizeof(srv_cmd));
 	srv_cmd.type = RSPAMD_SRV_HYPERSCAN_LOADED;
-	rspamd_strlcpy(srv_cmd.cmd.hs_loaded.cache_dir, ctx->hs_dir,
-				   sizeof(srv_cmd.cmd.hs_loaded.cache_dir));
 	srv_cmd.cmd.hs_loaded.forced = cbd->forced;
 	srv_cmd.cmd.hs_loaded.scope[0] = '\0'; /* NULL scope means all scopes */
 
@@ -830,8 +824,6 @@ rspamd_hs_helper_mp_send_notification(struct hs_helper_ctx *ctx,
 	srv_cmd.type = RSPAMD_SRV_MULTIPATTERN_LOADED;
 	rspamd_strlcpy(srv_cmd.cmd.mp_loaded.name, name,
 				   sizeof(srv_cmd.cmd.mp_loaded.name));
-	rspamd_strlcpy(srv_cmd.cmd.mp_loaded.cache_dir, ctx->hs_dir,
-				   sizeof(srv_cmd.cmd.mp_loaded.cache_dir));
 
 	rspamd_srv_send_command(worker, ctx->event_loop, &srv_cmd, -1, NULL, NULL);
 	msg_debug_hyperscan("sent multipattern loaded notification for '%s'", name);
@@ -997,8 +989,6 @@ rspamd_hs_helper_remap_send_notification(struct hs_helper_ctx *ctx,
 	srv_cmd.type = RSPAMD_SRV_REGEXP_MAP_LOADED;
 	rspamd_strlcpy(srv_cmd.cmd.re_map_loaded.name, name,
 				   sizeof(srv_cmd.cmd.re_map_loaded.name));
-	rspamd_strlcpy(srv_cmd.cmd.re_map_loaded.cache_dir, ctx->hs_dir,
-				   sizeof(srv_cmd.cmd.re_map_loaded.cache_dir));
 
 	rspamd_srv_send_command(worker, ctx->event_loop, &srv_cmd, -1, NULL, NULL);
 	msg_debug_hyperscan("sent regexp map loaded notification for '%s'", name);
@@ -1176,8 +1166,6 @@ rspamd_hs_helper_workers_spawned(struct rspamd_main *rspamd_main,
 
 		memset(&srv_cmd, 0, sizeof(srv_cmd));
 		srv_cmd.type = RSPAMD_SRV_HYPERSCAN_LOADED;
-		rspamd_strlcpy(srv_cmd.cmd.hs_loaded.cache_dir, ctx->hs_dir,
-					   sizeof(srv_cmd.cmd.hs_loaded.cache_dir));
 		srv_cmd.cmd.hs_loaded.forced = FALSE;
 		srv_cmd.cmd.hs_loaded.scope[0] = '\0'; /* NULL scope means all scopes */
 

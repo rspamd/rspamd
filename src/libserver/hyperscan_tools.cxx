@@ -783,16 +783,25 @@ void rspamd_hyperscan_notice_known(const char *fname)
 	rspamd::util::hs_known_files_cache::get().add_cached_file(fname);
 
 	if (rspamd_current_worker != nullptr) {
-		/* Also notify main process */
+		/* Also notify main process - send only the basename */
 		struct rspamd_srv_command notice_cmd;
+		const char *basename = strrchr(fname, '/');
 
-		if (strlen(fname) >= sizeof(notice_cmd.cmd.hyperscan_cache_file.path)) {
-			msg_err("internal error: length of the filename %d ('%s') is larger than control buffer path: %d",
-					(int) strlen(fname), fname, (int) sizeof(notice_cmd.cmd.hyperscan_cache_file.path));
+		if (basename != nullptr) {
+			basename++; /* Skip the '/' */
+		}
+		else {
+			basename = fname; /* No '/' found, use the whole string */
+		}
+
+		if (strlen(basename) >= sizeof(notice_cmd.cmd.hyperscan_cache_file.filename)) {
+			msg_err("internal error: length of the filename %d ('%s') is larger than control buffer: %d",
+					(int) strlen(basename), basename, (int) sizeof(notice_cmd.cmd.hyperscan_cache_file.filename));
 		}
 		else {
 			notice_cmd.type = RSPAMD_SRV_NOTICE_HYPERSCAN_CACHE;
-			rspamd_strlcpy(notice_cmd.cmd.hyperscan_cache_file.path, fname, sizeof(notice_cmd.cmd.hyperscan_cache_file.path));
+			rspamd_strlcpy(notice_cmd.cmd.hyperscan_cache_file.filename, basename,
+						   sizeof(notice_cmd.cmd.hyperscan_cache_file.filename));
 			rspamd_srv_send_command(rspamd_current_worker,
 									rspamd_current_worker->srv->event_loop, &notice_cmd, -1,
 									nullptr,

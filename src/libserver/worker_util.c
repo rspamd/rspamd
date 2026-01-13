@@ -1334,9 +1334,14 @@ rspamd_handle_child_fork(struct rspamd_worker *wrk,
 	 * is blocking.
 	 */
 	rspamd_socket_nonblocking(wrk->control_pipe[1]);
-#if 0
-	rspamd_socket_nonblocking (wrk->srv_pipe[1]);
-#endif
+	/*
+	 * srv_pipe must be non-blocking on the worker side to avoid deadlocks
+	 * when multiple rspamd_srv_send_command calls create multiple ev_io
+	 * watchers on the same fd. With a blocking socket, if multiple watchers
+	 * wait for replies and only one reply arrives, the second watcher's
+	 * recvmsg() would block forever.
+	 */
+	rspamd_socket_nonblocking(wrk->srv_pipe[1]);
 	rspamd_main->cfg->cur_worker = wrk;
 	/* Execute worker (this function should not return normally!) */
 	cf->worker->worker_start_func(wrk);
@@ -1355,19 +1360,14 @@ rspamd_handle_main_fork(struct rspamd_worker *wrk,
 	close(wrk->srv_pipe[1]);
 
 	/*
-	 * There are no reasons why control pipes are blocking: the messages
-	 * there are rare and are strictly bounded by command sizes, so if we block
-	 * on some pipe, it is ok, as we still poll that for all operations.
-	 * It is also impossible to block on writing in normal conditions.
-	 * And if the conditions are not normal, e.g. a worker is unresponsive, then
-	 * we can safely think that the non-blocking behaviour as it is implemented
-	 * currently will not make things better, as it would lead to incomplete
-	 * reads/writes that are not handled anyhow and are totally broken from the
-	 * beginning.
+	 * Both control and srv pipes are non-blocking. This is necessary because
+	 * multiple commands can be queued (e.g., during hyperscan compilation with
+	 * rspamd_worker_set_busy calls), creating multiple ev_io watchers on the
+	 * same fd. With blocking sockets, if multiple watchers wait for replies
+	 * and only one arrives, other watchers' recvmsg() would block forever.
+	 * EAGAIN is handled properly in the event handlers.
 	 */
-#if 0
-	rspamd_socket_nonblocking (wrk->srv_pipe[0]);
-#endif
+	rspamd_socket_nonblocking(wrk->srv_pipe[0]);
 	rspamd_socket_nonblocking(wrk->control_pipe[0]);
 
 	rspamd_srv_start_watching(rspamd_main, wrk, ev_base);
@@ -2053,17 +2053,18 @@ rspamd_worker_hyperscan_ready(struct rspamd_main *rspamd_main,
 {
 	struct rspamd_control_reply rep;
 	struct rspamd_re_cache *cache = worker->srv->cfg->re_cache;
+	const char *cache_dir = worker->srv->cfg->hs_cache_dir;
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_HYPERSCAN_LOADED;
 
-	msg_debug_hyperscan("received hyperscan loaded notification, cache_dir=%s, forced=%d",
-						cmd->cmd.hs_loaded.cache_dir, cmd->cmd.hs_loaded.forced);
+	msg_debug_hyperscan("received hyperscan loaded notification, forced=%d",
+						cmd->cmd.hs_loaded.forced);
 
 	if (rspamd_hs_cache_has_lua_backend()) {
 		msg_debug_hyperscan("using async backend-based hyperscan loading");
 		rspamd_re_cache_load_hyperscan_scoped_async(cache, worker->srv->event_loop,
-													cmd->cmd.hs_loaded.cache_dir, false);
+													cache_dir, false);
 		rep.reply.hs_loaded.status = 0;
 	}
 	else {
@@ -2072,7 +2073,7 @@ rspamd_worker_hyperscan_ready(struct rspamd_main *rspamd_main,
 			const char *scope = cmd->cmd.hs_loaded.scope;
 			msg_debug_hyperscan("loading hyperscan expressions for scope '%s' after receiving compilation notice", scope);
 			rep.reply.hs_loaded.status = rspamd_re_cache_load_hyperscan_scoped(
-				cache, cmd->cmd.hs_loaded.cache_dir, false);
+				cache, cache_dir, false);
 		}
 		else {
 			if (rspamd_re_cache_is_hs_loaded(cache) != RSPAMD_HYPERSCAN_LOADED_FULL ||
@@ -2080,7 +2081,7 @@ rspamd_worker_hyperscan_ready(struct rspamd_main *rspamd_main,
 				msg_debug_hyperscan("loading hyperscan expressions after receiving compilation notice: %s",
 									(rspamd_re_cache_is_hs_loaded(cache) != RSPAMD_HYPERSCAN_LOADED_FULL) ? "new db" : "forced update");
 				rep.reply.hs_loaded.status = rspamd_re_cache_load_hyperscan(
-					worker->srv->cfg->re_cache, cmd->cmd.hs_loaded.cache_dir, false);
+					worker->srv->cfg->re_cache, cache_dir, false);
 			}
 		}
 	}
@@ -2107,13 +2108,12 @@ rspamd_worker_multipattern_ready(struct rspamd_main *rspamd_main,
 	struct rspamd_control_reply rep;
 	struct rspamd_multipattern *mp;
 	const char *name = cmd->cmd.mp_loaded.name;
-	const char *cache_dir = cmd->cmd.mp_loaded.cache_dir;
+	const char *cache_dir = worker->srv->cfg->hs_cache_dir;
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_MULTIPATTERN_LOADED;
 
-	msg_debug_hyperscan("received multipattern loaded notification for '%s', cache_dir=%s",
-						name, cache_dir);
+	msg_debug_hyperscan("received multipattern loaded notification for '%s'", name);
 
 	mp = rspamd_multipattern_find_pending(name);
 
@@ -2191,13 +2191,12 @@ rspamd_worker_regexp_map_ready(struct rspamd_main *rspamd_main,
 	struct rspamd_control_reply rep;
 	struct rspamd_regexp_map_helper *re_map;
 	const char *name = cmd->cmd.re_map_loaded.name;
-	const char *cache_dir = cmd->cmd.re_map_loaded.cache_dir;
+	const char *cache_dir = worker->srv->cfg->hs_cache_dir;
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_REGEXP_MAP_LOADED;
 
-	msg_debug_hyperscan("received regexp map loaded notification for '%s', cache_dir=%s",
-						name, cache_dir);
+	msg_debug_hyperscan("received regexp map loaded notification for '%s'", name);
 
 	re_map = rspamd_regexp_map_find_pending(name);
 
