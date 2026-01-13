@@ -933,7 +933,7 @@ rspamd_lua_init(bool wipe_mem)
 		L = luaL_newstate();
 #else
 #if LUA_VERSION_NUM >= 505
-                L = lua_newstate(rspamd_lua_wipe_realloc, NULL, 0);
+		L = lua_newstate(rspamd_lua_wipe_realloc, NULL, 0);
 #else
 		L = lua_newstate(rspamd_lua_wipe_realloc, NULL);
 #endif
@@ -1094,8 +1094,8 @@ void rspamd_lua_start_gc(struct rspamd_config *cfg)
 	/* Set up GC */
 	lua_gc(L, LUA_GCCOLLECT, 0);
 #if LUA_VERSION_NUM >= 505
-        lua_gc(L, LUA_GCPARAM, LUA_GCPSTEPMUL, cfg->lua_gc_step);
-        lua_gc(L, LUA_GCPARAM, LUA_GCPPAUSE, cfg->lua_gc_pause);
+	lua_gc(L, LUA_GCPARAM, LUA_GCPSTEPMUL, cfg->lua_gc_step);
+	lua_gc(L, LUA_GCPARAM, LUA_GCPPAUSE, cfg->lua_gc_pause);
 #else
 	lua_gc(L, LUA_GCSETSTEPMUL, cfg->lua_gc_step);
 	lua_gc(L, LUA_GCSETPAUSE, cfg->lua_gc_pause);
