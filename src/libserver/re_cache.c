@@ -3335,6 +3335,9 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 			g_free(hs_flags);
 			re_class->nhs = n;
 
+			/* Notify main process about the loaded hyperscan file */
+			rspamd_hyperscan_notice_known(path);
+
 			if (!has_valid) {
 				has_valid = TRUE;
 				all_valid = TRUE;
