@@ -1450,11 +1450,14 @@ rspamd_srv_pipe_handler(EV_P_ ev_io *w, int revents)
 				}
 				msg_err("cannot write to server pipe: %s; command = %s",
 						strerror(errno), rspamd_srv_command_to_string(rd->cmd.type));
-				/* Remove from queue and hash, free */
+				/* Remove from queue and hash, close fd if not transferred, free */
 				LL_DELETE(ctx->send_queue, rd);
 				k = kh_get(rspamd_srv_requests, ctx->requests, rd->id);
 				if (k != kh_end(ctx->requests)) {
 					kh_del(rspamd_srv_requests, ctx->requests, k);
+				}
+				if (rd->attached_fd != -1) {
+					close(rd->attached_fd);
 				}
 				g_free(rd);
 				continue;
@@ -1467,6 +1470,9 @@ rspamd_srv_pipe_handler(EV_P_ ev_io *w, int revents)
 				k = kh_get(rspamd_srv_requests, ctx->requests, rd->id);
 				if (k != kh_end(ctx->requests)) {
 					kh_del(rspamd_srv_requests, ctx->requests, k);
+				}
+				if (rd->attached_fd != -1) {
+					close(rd->attached_fd);
 				}
 				g_free(rd);
 				continue;
@@ -1562,7 +1568,7 @@ rspamd_srv_pipe_ctx_create(struct rspamd_worker *worker, struct ev_loop *ev_base
 static void
 rspamd_srv_pipe_ctx_destroy(struct rspamd_srv_pipe_ctx *ctx)
 {
-	struct rspamd_srv_request_data *rd, *tmp;
+	struct rspamd_srv_request_data *rd;
 	khiter_t k;
 
 	if (ctx == NULL) {
@@ -1571,16 +1577,19 @@ rspamd_srv_pipe_ctx_destroy(struct rspamd_srv_pipe_ctx *ctx)
 
 	ev_io_stop(ctx->ev_base, &ctx->io_ev);
 
-	/* Free send queue */
-	LL_FOREACH_SAFE(ctx->send_queue, rd, tmp)
-	{
-		g_free(rd);
-	}
-
-	/* Free pending requests */
+	/*
+	 * Free all pending requests from hash table.
+	 * Note: items in send_queue are also in the hash, so we only iterate
+	 * the hash to avoid double-free. For unsent items, close attached_fd
+	 * since it was never transferred to main process.
+	 */
 	for (k = kh_begin(ctx->requests); k != kh_end(ctx->requests); ++k) {
 		if (kh_exist(ctx->requests, k)) {
-			g_free(kh_val(ctx->requests, k));
+			rd = kh_val(ctx->requests, k);
+			if (!rd->sent && rd->attached_fd != -1) {
+				close(rd->attached_fd);
+			}
+			g_free(rd);
 		}
 	}
 	kh_destroy(rspamd_srv_requests, ctx->requests);
