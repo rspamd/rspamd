@@ -615,7 +615,11 @@ rspamd_rs_send_single_notification(struct rspamd_hs_helper_single_compile_cbdata
 	msg_debug_hyperscan("sent hyperscan loaded notification");
 
 	g_free(cbd);
-	ev_timer_again(ctx->event_loop, &ctx->recompile_timer);
+
+	/* Only restart periodic timer for non-file backends */
+	if (ctx->cache_backend != HS_CACHE_BACKEND_FILE) {
+		ev_timer_again(ctx->event_loop, &ctx->recompile_timer);
+	}
 }
 
 static void
@@ -1257,11 +1261,23 @@ start_hs_helper(struct rspamd_worker *worker)
 	rspamd_control_worker_add_cmd_handler(worker, RSPAMD_CONTROL_WORKERS_SPAWNED,
 										  rspamd_hs_helper_workers_spawned, ctx);
 
-	ctx->recompile_timer.data = worker;
-	tim = rspamd_time_jitter(ctx->recompile_time, 0);
-	msg_debug_hyperscan("setting up recompile timer for %.1f seconds", tim);
-	ev_timer_init(&ctx->recompile_timer, rspamd_hs_helper_timer, tim, 0.0);
-	ev_timer_start(ctx->event_loop, &ctx->recompile_timer);
+	/*
+	 * Periodic recompile timer is only useful for non-file backends (Redis, HTTP, Lua)
+	 * where another instance might have compiled new databases.
+	 * For file backend, recompilation is triggered by:
+	 * - Config reload (new process)
+	 * - Explicit RECOMPILE command (map updates)
+	 */
+	if (ctx->cache_backend != HS_CACHE_BACKEND_FILE) {
+		ctx->recompile_timer.data = worker;
+		tim = rspamd_time_jitter(ctx->recompile_time, 0);
+		msg_debug_hyperscan("setting up recompile timer for %.1f seconds", tim);
+		ev_timer_init(&ctx->recompile_timer, rspamd_hs_helper_timer, tim, 0.0);
+		ev_timer_start(ctx->event_loop, &ctx->recompile_timer);
+	}
+	else {
+		msg_debug_hyperscan("skipping periodic recompile timer for file backend");
+	}
 
 	msg_debug_hyperscan("hs_helper starting event loop");
 	ev_loop(ctx->event_loop, 0);
