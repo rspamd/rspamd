@@ -63,7 +63,7 @@ enum rspamd_srv_type {
 enum rspamd_log_pipe_type {
 	RSPAMD_LOG_PIPE_SYMBOLS = 0,
 };
-#define CONTROL_PATHLEN MIN(PATH_MAX, PIPE_BUF - sizeof(int) * 2 - sizeof(int64_t) * 2)
+
 struct rspamd_control_command {
 	enum rspamd_control_type type;
 	union {
