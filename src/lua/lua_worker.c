@@ -249,6 +249,7 @@ struct rspamd_control_cbdata {
 	struct ev_loop *event_loop;
 	struct rspamd_async_session *session;
 	enum rspamd_control_type cmd;
+	uint64_t cmd_id;
 	int cbref;
 	int fd;
 };
@@ -264,6 +265,7 @@ lua_worker_control_fin_session(void *ud)
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = cbd->cmd;
+	rep.id = cbd->cmd_id;
 
 	if (write(cbd->fd, &rep, sizeof(rep)) != sizeof(rep)) {
 		msg_err_pool("cannot write reply to the control socket: %s",
@@ -304,6 +306,7 @@ lua_worker_control_handler(struct rspamd_main *rspamd_main,
 									cbd);
 	cbd->session = session;
 	cbd->fd = fd;
+	cbd->cmd_id = cmd->id;
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
 	err_idx = lua_gettop(L);

@@ -786,6 +786,7 @@ rspamd_hs_helper_reload(struct rspamd_main *rspamd_main,
 	msg_info("recompiling hyperscan expressions after receiving reload command");
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_RECOMPILE;
+	rep.id = cmd->id;
 	rep.reply.recompile.status = 0;
 
 	/* We write reply before actual recompilation as it takes a lot of time */
@@ -1156,6 +1157,7 @@ rspamd_hs_helper_workers_spawned(struct rspamd_main *rspamd_main,
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_WORKERS_SPAWNED;
+	rep.id = cmd->id;
 	rep.reply.workers_spawned.status = 0;
 
 	/* Write reply */
