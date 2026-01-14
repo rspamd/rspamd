@@ -28,19 +28,77 @@ local N = "hyperscan"
 local file_backend = {}
 file_backend.__index = file_backend
 
+-- Zstd magic number: 0xFD2FB528 (little-endian bytes: 28 B5 2F FD)
+local ZSTD_MAGIC = string.char(0x28, 0xB5, 0x2F, 0xFD)
+
 function file_backend.new(config)
   local self = setmetatable({}, file_backend)
-  self.cache_dir = config.cache_dir or '/var/lib/rspamd/hs_cache'
-  self.platform_dirs = config.platform_dirs ~= false
+  -- Store config for logging context
+  self.config = config.rspamd_config or config
+  -- Remove trailing slashes from cache_dir
+  local cache_dir = config.cache_dir or '/var/lib/rspamd/hs_cache'
+  self.cache_dir = cache_dir:gsub("/+$", "")
+  -- Default to flat directory structure for backward compatibility
+  self.platform_dirs = config.platform_dirs == true
+  -- Enable compression by default (consistent with redis/http backends)
+  local opts = config.file or config
+  self.use_compression = (opts.compression ~= false) and (config.compression ~= false)
+  lua_util.debugm(N, self.config, "file backend config: cache_dir=%s, platform_dirs=%s, compression=%s",
+      self.cache_dir, self.platform_dirs and "yes" or "no",
+      self.use_compression and "enabled" or "disabled")
   return self
 end
 
-function file_backend:_get_path(cache_key, platform_id)
+-- Get file extension based on compression setting
+function file_backend:_get_extension()
+  return self.use_compression and '.hs.zst' or '.hs'
+end
+
+-- Get the path for a cache file
+-- @param cache_key string cache key (hash that already includes platform info)
+-- @param platform_id string platform identifier (unused in flat mode for backward compat)
+-- @param ext string optional extension override (e.g., '.hs' or '.hs.zst')
+function file_backend:_get_path(cache_key, platform_id, ext)
+  local extension = ext or self:_get_extension()
   if self.platform_dirs then
-    return string.format("%s/%s/%s.hs", self.cache_dir, platform_id, cache_key)
+    -- Optional: use platform subdirectories (not default)
+    return string.format("%s/%s/%s%s", self.cache_dir, platform_id, cache_key, extension)
   else
-    return string.format("%s/%s_%s.hs", self.cache_dir, platform_id, cache_key)
+    -- Default: flat structure matching original C code behavior
+    -- Platform info is already embedded in cache_key hash
+    return string.format("%s/%s%s", self.cache_dir, cache_key, extension)
   end
+end
+
+-- Check if data starts with zstd magic bytes
+function file_backend:_is_zstd(data)
+  if not data or #data < 4 then
+    return false
+  end
+  return data:sub(1, 4) == ZSTD_MAGIC
+end
+
+-- Find existing cache file, trying both compressed and uncompressed extensions
+-- Returns: path, is_compressed (or nil if not found)
+function file_backend:_find_existing_path(cache_key, platform_id)
+  -- Try compressed first if compression is enabled, otherwise try uncompressed first
+  local primary_ext = self:_get_extension()
+  local secondary_ext = self.use_compression and '.hs' or '.hs.zst'
+
+  local primary_path = self:_get_path(cache_key, platform_id, primary_ext)
+  -- rspamd_util.stat returns (err, stat_table) - check for no error AND valid stat
+  local err, stat = rspamd_util.stat(primary_path)
+  if not err and stat then
+    return primary_path, primary_ext == '.hs.zst'
+  end
+
+  local secondary_path = self:_get_path(cache_key, platform_id, secondary_ext)
+  err, stat = rspamd_util.stat(secondary_path)
+  if not err and stat then
+    return secondary_path, secondary_ext == '.hs.zst'
+  end
+
+  return nil, nil
 end
 
 function file_backend:_ensure_dir(path)
@@ -54,73 +112,183 @@ function file_backend:_ensure_dir(path)
 end
 
 function file_backend:exists(cache_key, platform_id, callback)
-  local path = self:_get_path(cache_key, platform_id)
-  local stat = rspamd_util.stat(path)
+  local path, is_compressed = self:_find_existing_path(cache_key, platform_id)
 
-  if stat then
-    lua_util.debugm(N, "file exists check: %s found, size: %d", path, stat.size)
-    callback(nil, true, { size = stat.size, mtime = stat.mtime })
+  if path then
+    local err, stat = rspamd_util.stat(path)
+    if not err and stat then
+      lua_util.debugm(N, self.config, "file exists check: %s found, size: %d, compressed: %s",
+          path, stat.size, is_compressed and "yes" or "no")
+      callback(nil, true, { size = stat.size, mtime = stat.mtime, compressed = is_compressed })
+    else
+      -- Race condition: file disappeared between _find_existing_path and stat
+      lua_util.debugm(N, self.config, "file exists check: %s disappeared (race)", path)
+      callback(nil, false, nil)
+    end
   else
-    lua_util.debugm(N, "file exists check: %s not found", path)
+    local expected_path = self:_get_path(cache_key, platform_id)
+    lua_util.debugm(N, self.config, "file exists check: %s not found (checked both extensions)", expected_path)
     callback(nil, false, nil)
   end
 end
 
 function file_backend:load(cache_key, platform_id, callback)
-  local path = self:_get_path(cache_key, platform_id)
+  local path, expected_compressed = self:_find_existing_path(cache_key, platform_id)
 
-  lua_util.debugm(N, "file load from: %s", path)
+  if not path then
+    local expected_path = self:_get_path(cache_key, platform_id)
+    lua_util.debugm(N, self.config, "file load failed: %s not found (checked both extensions)", expected_path)
+    callback("file not found", nil)
+    return
+  end
 
-  local data, err = rspamd_util.read_file(path)
-  if data then
-    lua_util.debugm(N, "file loaded %d bytes from %s", #data, path)
-    callback(nil, data)
+  lua_util.debugm(N, self.config, "file load from: %s (expected compressed: %s)", path, expected_compressed and "yes" or "no")
+
+  local f, err = io.open(path, "rb")
+  if not f then
+    lua_util.debugm(N, self.config, "file load failed from %s: %s", path, err or "open error")
+    callback(err or "open error", nil)
+    return
+  end
+  local data = f:read("*a")
+  f:close()
+  if not data then
+    lua_util.debugm(N, self.config, "file read failed from %s", path)
+    callback("read error", nil)
+    return
+  end
+
+  -- Check if data is actually zstd compressed (magic byte verification)
+  local is_zstd = self:_is_zstd(data)
+  lua_util.debugm(N, self.config, "file loaded %d bytes from %s, zstd magic: %s",
+      #data, path, is_zstd and "yes" or "no")
+
+  -- Notify hyperscan cache that this file is known (for cleanup tracking)
+  rspamd_util.hyperscan_notice_known(path)
+
+  if is_zstd then
+    -- Decompress the data
+    local decompress_err, decompressed = rspamd_util.zstd_decompress(data)
+    if not decompress_err and decompressed then
+      lua_util.debugm(N, self.config, "file decompressed %d -> %d bytes from %s (compression ratio: %.1f%%)",
+          #data, #decompressed, path, (1 - #data / #decompressed) * 100)
+      callback(nil, decompressed)
+    else
+      lua_util.debugm(N, self.config, "file decompression failed for %s: %s", path, decompress_err or "unknown error")
+      callback(decompress_err or "decompression failed", nil)
+    end
   else
-    lua_util.debugm(N, "file load failed from %s: %s", path, err or "file not found")
-    callback(err or "file not found", nil)
+    -- Data is not compressed, return as-is
+    if expected_compressed then
+      lua_util.debugm(N, self.config, "file %s has .zst extension but no zstd magic - treating as uncompressed", path)
+    end
+    callback(nil, data)
   end
 end
 
 function file_backend:store(cache_key, platform_id, data, _ttl, callback)
   local path = self:_get_path(cache_key, platform_id)
 
+  lua_util.debugm(N, self.config, "file store to: %s, original size: %d bytes, compression: %s",
+      path, #data, self.use_compression and "enabled" or "disabled")
+
   self:_ensure_dir(path)
+
+  local store_data = data
+  -- Compress if enabled
+  if self.use_compression then
+    local compressed, compress_err = rspamd_util.zstd_compress(data)
+    if compressed then
+      lua_util.debugm(N, self.config, "file compressed %d -> %d bytes (%.1f%% size reduction) for %s",
+          #data, #compressed, (1 - #compressed / #data) * 100, path)
+      store_data = compressed
+    else
+      logger.warnx(N, "compression failed: %s, storing uncompressed to %s", compress_err, path)
+    end
+  end
 
   -- Write to temp file first, then rename atomically
   local tmp_path = path .. ".tmp." .. rspamd_util.random_hex(8)
-  local ok, err = rspamd_util.write_file(tmp_path, data)
+  -- store_data can be string or rspamd_text userdata
+  local ok, write_err
+  if type(store_data) == "userdata" and store_data.save_in_file then
+    ok, write_err = store_data:save_in_file(tmp_path)
+  else
+    local f, err = io.open(tmp_path, "wb")
+    if not f then
+      callback(err or "open failed")
+      return
+    end
+    ok, write_err = f:write(store_data)
+    f:close()
+  end
+  if not ok then
+    os.remove(tmp_path)
+    callback(write_err or "write failed")
+    return
+  end
 
-  if ok then
+  do
     local renamed, rename_err = os.rename(tmp_path, path)
     if renamed then
-      lua_util.debugm(N, "stored %d bytes to %s", #data, path)
+      lua_util.debugm(N, self.config, "stored %d bytes to %s", #store_data, path)
+      -- Notify hyperscan cache that this file is known (for cleanup tracking)
+      rspamd_util.hyperscan_notice_known(path)
+      -- Remove old file with opposite extension if it exists (migration cleanup)
+      local old_ext = self.use_compression and '.hs' or '.hs.zst'
+      local old_path = self:_get_path(cache_key, platform_id, old_ext)
+      local old_err, old_stat = rspamd_util.stat(old_path)
+      if not old_err and old_stat then
+        local removed = os.remove(old_path)
+        if removed then
+          lua_util.debugm(N, self.config, "removed old cache file %s (migrated to %s)", old_path, path)
+        end
+      end
       callback(nil)
     else
       os.remove(tmp_path)
       callback(rename_err or "rename failed")
     end
-  else
-    callback(err or "write failed")
   end
 end
 
 function file_backend:delete(cache_key, platform_id, callback)
-  local path = self:_get_path(cache_key, platform_id)
-  local ok, err = os.remove(path)
+  -- Try to delete both compressed and uncompressed versions
+  local deleted_any = false
+  local last_err = nil
 
-  if ok then
-    lua_util.debugm(N, "deleted %s", path)
+  for _, ext in ipairs({'.hs', '.hs.zst'}) do
+    local path = self:_get_path(cache_key, platform_id, ext)
+    local stat_err, stat = rspamd_util.stat(path)
+    if not stat_err and stat then
+      local ok, err = os.remove(path)
+      if ok then
+        lua_util.debugm(N, self.config, "deleted %s", path)
+        deleted_any = true
+      else
+        last_err = err
+      end
+    end
+  end
+
+  if deleted_any then
     callback(nil)
   else
-    callback(err or "delete failed")
+    callback(last_err or "file not found")
   end
 end
 
 function file_backend:exists_sync(cache_key, platform_id)
-  local path = self:_get_path(cache_key, platform_id)
-  local exists = rspamd_util.stat(path) ~= nil
-  lua_util.debugm(N, "file sync exists check: %s %s", path, exists and "found" or "not found")
-  return exists, nil
+  local path, is_compressed = self:_find_existing_path(cache_key, platform_id)
+  if path then
+    lua_util.debugm(N, self.config, "file sync exists check: %s found (compressed: %s)",
+        path, is_compressed and "yes" or "no")
+    return true, nil
+  else
+    local expected_path = self:_get_path(cache_key, platform_id)
+    lua_util.debugm(N, self.config, "file sync exists check: %s not found (checked both extensions)", expected_path)
+    return false, nil
+  end
 end
 
 function file_backend:save_async(cache_key, platform_id, data, callback)
@@ -137,37 +305,119 @@ function file_backend:exists_async(cache_key, platform_id, callback)
 end
 
 function file_backend:load_sync(cache_key, platform_id)
-  local path = self:_get_path(cache_key, platform_id)
-  lua_util.debugm(N, "file sync load from: %s", path)
-  local data, err = rspamd_util.read_file(path)
-  if data then
-    lua_util.debugm(N, "file sync loaded %d bytes from %s", #data, path)
-  else
-    lua_util.debugm(N, "file sync load failed from %s: %s", path, err or "file not found")
+  local path, expected_compressed = self:_find_existing_path(cache_key, platform_id)
+
+  if not path then
+    local expected_path = self:_get_path(cache_key, platform_id)
+    lua_util.debugm(N, self.config, "file sync load failed: %s not found (checked both extensions)", expected_path)
+    return nil, "file not found"
   end
-  return data, err
+
+  lua_util.debugm(N, self.config, "file sync load from: %s (expected compressed: %s)",
+      path, expected_compressed and "yes" or "no")
+
+  local f, err = io.open(path, "rb")
+  if not f then
+    lua_util.debugm(N, self.config, "file sync load failed from %s: %s", path, err or "open error")
+    return nil, err or "open error"
+  end
+  local data = f:read("*a")
+  f:close()
+  if not data then
+    lua_util.debugm(N, self.config, "file sync read failed from %s", path)
+    return nil, "read error"
+  end
+
+  -- Check if data is actually zstd compressed (magic byte verification)
+  local is_zstd = self:_is_zstd(data)
+  lua_util.debugm(N, self.config, "file sync loaded %d bytes from %s, zstd magic: %s",
+      #data, path, is_zstd and "yes" or "no")
+
+  -- Notify hyperscan cache that this file is known (for cleanup tracking)
+  rspamd_util.hyperscan_notice_known(path)
+
+  if is_zstd then
+    -- Decompress the data
+    local decompress_err, decompressed = rspamd_util.zstd_decompress(data)
+    if not decompress_err and decompressed then
+      lua_util.debugm(N, self.config, "file sync decompressed %d -> %d bytes from %s (compression ratio: %.1f%%)",
+          #data, #decompressed, path, (1 - #data / #decompressed) * 100)
+      return decompressed, nil
+    else
+      lua_util.debugm(N, self.config, "file sync decompression failed for %s: %s", path, decompress_err or "unknown error")
+      return nil, decompress_err or "decompression failed"
+    end
+  else
+    -- Data is not compressed, return as-is
+    if expected_compressed then
+      lua_util.debugm(N, self.config, "file %s has .zst extension but no zstd magic - treating as uncompressed", path)
+    end
+    return data, nil
+  end
 end
 
 function file_backend:save_sync(cache_key, platform_id, data)
   local path = self:_get_path(cache_key, platform_id)
-  lua_util.debugm(N, "file sync save to: %s, size: %d bytes", path, #data)
+  lua_util.debugm(N, self.config, "file sync save to: %s, original size: %d bytes, compression: %s",
+      path, #data, self.use_compression and "enabled" or "disabled")
   self:_ensure_dir(path)
 
+  local store_data = data
+  -- Compress if enabled
+  if self.use_compression then
+    local compressed, compress_err = rspamd_util.zstd_compress(data)
+    if compressed then
+      lua_util.debugm(N, self.config, "file sync compressed %d -> %d bytes (%.1f%% size reduction) for %s",
+          #data, #compressed, (1 - #compressed / #data) * 100, path)
+      store_data = compressed
+    else
+      logger.warnx(N, "compression failed: %s, storing uncompressed to %s", compress_err, path)
+    end
+  end
+
   local tmp_path = path .. ".tmp." .. rspamd_util.random_hex(8)
-  local ok, err = rspamd_util.write_file(tmp_path, data)
+  -- store_data can be string or rspamd_text userdata
+  local ok, write_err
+  if type(store_data) == "userdata" and store_data.save_in_file then
+    ok, write_err = store_data:save_in_file(tmp_path)
+  else
+    local f, err = io.open(tmp_path, "wb")
+    if not f then
+      lua_util.debugm(N, self.config, "file sync open failed for %s: %s", tmp_path, err)
+      return false, err
+    end
+    ok, write_err = f:write(store_data)
+    f:close()
+  end
   if not ok then
-    lua_util.debugm(N, "file sync write failed to %s: %s", tmp_path, err)
-    return false, err
+    lua_util.debugm(N, self.config, "file sync write failed to %s: %s", tmp_path, write_err)
+    os.remove(tmp_path)
+    return false, write_err
   end
 
   local renamed, rename_err = os.rename(tmp_path, path)
   if not renamed then
-    lua_util.debugm(N, "file sync rename failed %s -> %s: %s", tmp_path, path, rename_err)
+    lua_util.debugm(N, self.config, "file sync rename failed %s -> %s: %s", tmp_path, path, rename_err)
     os.remove(tmp_path)
     return false, rename_err
   end
 
-  lua_util.debugm(N, "file sync stored %d bytes to %s", #data, path)
+  lua_util.debugm(N, self.config, "file sync stored %d bytes to %s", #store_data, path)
+
+  -- Notify hyperscan cache that this file is known (for cleanup tracking)
+  rspamd_util.hyperscan_notice_known(path)
+
+  -- Remove old file with opposite extension if it exists (migration cleanup)
+  local old_ext = self.use_compression and '.hs' or '.hs.zst'
+  local old_path = self:_get_path(cache_key, platform_id, old_ext)
+  local old_err, old_stat = rspamd_util.stat(old_path)
+  if not old_err and old_stat then
+    local removed = os.remove(old_path)
+    if removed then
+      lua_util.debugm(N, self.config, "removed old cache file %s (migrated to %s)", old_path, path)
+    end
+  end
+
   return true, nil
 end
 
@@ -212,7 +462,7 @@ function redis_backend.new(config)
   local default_prefix = self.use_compression and 'rspamd_zhs' or 'rspamd_hs'
   self.prefix = opts.prefix or config.prefix or default_prefix
 
-  lua_util.debugm(N, "redis backend config: prefix=%s, ttl=%s, refresh_ttl=%s, compression=%s",
+  lua_util.debugm(N, self.config, "redis backend config: prefix=%s, ttl=%s, refresh_ttl=%s, compression=%s",
       self.prefix, self.default_ttl, self.refresh_ttl, self.use_compression)
 
   return self
@@ -230,17 +480,17 @@ function redis_backend:exists(cache_key, platform_id, callback)
     return
   end
 
-  lua_util.debugm(N, "redis EXISTS check for key: %s", key)
+  lua_util.debugm(N, self.config, "redis EXISTS check for key: %s", key)
 
   local attrs = {
     ev_base = self.redis_params.ev_base,
     config = self.config,
     callback = function(err, data)
       if err then
-        lua_util.debugm(N, "redis EXISTS failed for key %s: %s", key, err)
+        lua_util.debugm(N, self.config, "redis EXISTS failed for key %s: %s", key, err)
         callback(err, false, nil)
       else
-        lua_util.debugm(N, "redis EXISTS result for key %s: %s", key, data == 1 and "found" or "not found")
+        lua_util.debugm(N, self.config, "redis EXISTS result for key %s: %s", key, data == 1 and "found" or "not found")
         callback(nil, data == 1, nil)
       end
     end
@@ -261,10 +511,10 @@ function redis_backend:load(cache_key, platform_id, callback)
   -- Use GETEX to refresh TTL on read if enabled
   local req
   if self.refresh_ttl then
-    lua_util.debugm(N, "redis GETEX (with TTL refresh %d) for key: %s", self.default_ttl, key)
+    lua_util.debugm(N, self.config, "redis GETEX (with TTL refresh %d) for key: %s", self.default_ttl, key)
     req = {'GETEX', key, 'EX', tostring(self.default_ttl)}
   else
-    lua_util.debugm(N, "redis GET for key: %s", key)
+    lua_util.debugm(N, self.config, "redis GET for key: %s", key)
     req = {'GET', key}
   end
 
@@ -273,25 +523,25 @@ function redis_backend:load(cache_key, platform_id, callback)
     config = self.config,
     callback = function(err, data)
       if err then
-        lua_util.debugm(N, "redis GET failed for key %s: %s", key, err)
+        lua_util.debugm(N, self.config, "redis GET failed for key %s: %s", key, err)
         callback(err, nil)
       elseif not data then
-        lua_util.debugm(N, "redis cache miss for key %s", key)
+        lua_util.debugm(N, self.config, "redis cache miss for key %s", key)
         callback("not found", nil)
       else
         -- Decompress if needed
         if self.use_compression then
           local decompress_err, decompressed = rspamd_util.zstd_decompress(data)
           if not decompress_err and decompressed then
-            lua_util.debugm(N, "redis loaded and decompressed %d -> %d bytes from key %s (compression ratio: %.1f%%)",
+            lua_util.debugm(N, self.config, "redis loaded and decompressed %d -> %d bytes from key %s (compression ratio: %.1f%%)",
                 #data, #decompressed, key, (1 - #data / #decompressed) * 100)
             callback(nil, decompressed)
           else
-            lua_util.debugm(N, "redis decompression failed for key %s: %s", key, decompress_err)
+            lua_util.debugm(N, self.config, "redis decompression failed for key %s: %s", key, decompress_err)
             callback(decompress_err or "decompression failed", nil)
           end
         else
-          lua_util.debugm(N, "redis loaded %d bytes (uncompressed) from key %s", #data, key)
+          lua_util.debugm(N, self.config, "redis loaded %d bytes (uncompressed) from key %s", #data, key)
           callback(nil, data)
         end
       end
@@ -310,7 +560,7 @@ function redis_backend:store(cache_key, platform_id, data, ttl, callback)
     return
   end
 
-  lua_util.debugm(N, "redis SETEX for key: %s, original size: %d bytes, TTL: %d, compression: %s",
+  lua_util.debugm(N, self.config, "redis SETEX for key: %s, original size: %d bytes, TTL: %d, compression: %s",
       key, #data, actual_ttl, self.use_compression and "enabled" or "disabled")
 
   local store_data = data
@@ -318,7 +568,7 @@ function redis_backend:store(cache_key, platform_id, data, ttl, callback)
   if self.use_compression then
     local compressed, compress_err = rspamd_util.zstd_compress(data)
     if compressed then
-      lua_util.debugm(N, "redis compressed %d -> %d bytes (%.1f%% size reduction) for key %s",
+      lua_util.debugm(N, self.config, "redis compressed %d -> %d bytes (%.1f%% size reduction) for key %s",
           #data, #compressed, (1 - #compressed / #data) * 100, key)
       store_data = compressed
     else
@@ -331,10 +581,10 @@ function redis_backend:store(cache_key, platform_id, data, ttl, callback)
     config = self.config,
     callback = function(err)
       if err then
-        lua_util.debugm(N, "redis SETEX failed for key %s: %s", key, err)
+        lua_util.debugm(N, self.config, "redis SETEX failed for key %s: %s", key, err)
         callback(err)
       else
-        lua_util.debugm(N, "redis stored %d bytes to key %s with TTL %d",
+        lua_util.debugm(N, self.config, "redis stored %d bytes to key %s with TTL %d",
             #store_data, key, actual_ttl)
         callback(nil)
       end
@@ -353,17 +603,17 @@ function redis_backend:delete(cache_key, platform_id, callback)
     return
   end
 
-  lua_util.debugm(N, "redis DEL for key: %s", key)
+  lua_util.debugm(N, self.config, "redis DEL for key: %s", key)
 
   local attrs = {
     ev_base = self.redis_params.ev_base,
     config = self.config,
     callback = function(err)
       if err then
-        lua_util.debugm(N, "redis DEL failed for key %s: %s", key, err)
+        lua_util.debugm(N, self.config, "redis DEL failed for key %s: %s", key, err)
         callback(err)
       else
-        lua_util.debugm(N, "redis deleted key %s", key)
+        lua_util.debugm(N, self.config, "redis deleted key %s", key)
         callback(nil)
       end
     end
@@ -391,6 +641,8 @@ http_backend.__index = http_backend
 
 function http_backend.new(config)
   local self = setmetatable({}, http_backend)
+  -- Store config for logging context
+  self.config = config.rspamd_config or config
 
   -- HTTP config can be in 'http' sub-section or at top level
   local opts = config.http or config
@@ -417,7 +669,7 @@ end
 function http_backend:exists(cache_key, platform_id, callback)
   local url = self:_get_url(cache_key, platform_id)
 
-  lua_util.debugm(N, "http HEAD check for url: %s", url)
+  lua_util.debugm(N, self.config, "http HEAD check for url: %s", url)
 
   rspamd_http.request({
     url = url,
@@ -426,14 +678,14 @@ function http_backend:exists(cache_key, platform_id, callback)
     timeout = self.timeout,
     callback = function(err, code, _, headers)
       if err then
-        lua_util.debugm(N, "http HEAD failed for %s: %s", url, err)
+        lua_util.debugm(N, self.config, "http HEAD failed for %s: %s", url, err)
         callback(err, false, nil)
       elseif code == 200 then
         local size = headers and headers['content-length']
-        lua_util.debugm(N, "http HEAD found %s, size: %s", url, size or "unknown")
+        lua_util.debugm(N, self.config, "http HEAD found %s, size: %s", url, size or "unknown")
         callback(nil, true, { size = tonumber(size) })
       else
-        lua_util.debugm(N, "http HEAD not found %s (code: %d)", url, code)
+        lua_util.debugm(N, self.config, "http HEAD not found %s (code: %d)", url, code)
         callback(nil, false, nil)
       end
     end
@@ -443,7 +695,7 @@ end
 function http_backend:load(cache_key, platform_id, callback)
   local url = self:_get_url(cache_key, platform_id)
 
-  lua_util.debugm(N, "http GET for url: %s", url)
+  lua_util.debugm(N, self.config, "http GET for url: %s", url)
 
   rspamd_http.request({
     url = url,
@@ -452,7 +704,7 @@ function http_backend:load(cache_key, platform_id, callback)
     timeout = self.timeout,
     callback = function(err, code, body, headers)
       if err then
-        lua_util.debugm(N, "http GET failed for %s: %s", url, err)
+        lua_util.debugm(N, self.config, "http GET failed for %s: %s", url, err)
         callback(err, nil)
       elseif code == 200 and body then
         -- Check if content is compressed
@@ -460,22 +712,22 @@ function http_backend:load(cache_key, platform_id, callback)
         if content_encoding == 'zstd' or self.use_compression then
           local decompress_err, decompressed = rspamd_util.zstd_decompress(body)
           if not decompress_err and decompressed then
-            lua_util.debugm(N, "http loaded and decompressed %d -> %d bytes from %s",
+            lua_util.debugm(N, self.config, "http loaded and decompressed %d -> %d bytes from %s",
                 #body, #decompressed, url)
             callback(nil, decompressed)
           else
-            lua_util.debugm(N, "http loaded %d bytes (no decompression) from %s", #body, url)
+            lua_util.debugm(N, self.config, "http loaded %d bytes (no decompression) from %s", #body, url)
             callback(nil, body)
           end
         else
-          lua_util.debugm(N, "http loaded %d bytes from %s", #body, url)
+          lua_util.debugm(N, self.config, "http loaded %d bytes from %s", #body, url)
           callback(nil, body)
         end
       elseif code == 404 then
-        lua_util.debugm(N, "http cache miss (404) for %s", url)
+        lua_util.debugm(N, self.config, "http cache miss (404) for %s", url)
         callback("not found", nil)
       else
-        lua_util.debugm(N, "http GET failed for %s: HTTP %d", url, code)
+        lua_util.debugm(N, self.config, "http GET failed for %s: HTTP %d", url, code)
         callback(string.format("HTTP %d", code), nil)
       end
     end
@@ -486,14 +738,14 @@ function http_backend:store(cache_key, platform_id, data, ttl, callback)
   local url = self:_get_url(cache_key, platform_id)
   local headers = self:_get_headers()
 
-  lua_util.debugm(N, "http PUT for url: %s, original size: %d bytes, compression: %s",
+  lua_util.debugm(N, self.config, "http PUT for url: %s, original size: %d bytes, compression: %s",
       url, #data, self.use_compression and "enabled" or "disabled")
 
   local store_data = data
   if self.use_compression then
     local compressed = rspamd_util.zstd_compress(data)
     if compressed then
-      lua_util.debugm(N, "http compressed %d -> %d bytes (%.1f%% size reduction) for %s",
+      lua_util.debugm(N, self.config, "http compressed %d -> %d bytes (%.1f%% size reduction) for %s",
           #data, #compressed, (1 - #compressed / #data) * 100, url)
       store_data = compressed
       headers['Content-Encoding'] = 'zstd'
@@ -512,13 +764,13 @@ function http_backend:store(cache_key, platform_id, data, ttl, callback)
     timeout = self.timeout,
     callback = function(err, code)
       if err then
-        lua_util.debugm(N, "http PUT failed for %s: %s", url, err)
+        lua_util.debugm(N, self.config, "http PUT failed for %s: %s", url, err)
         callback(err)
       elseif code >= 200 and code < 300 then
-        lua_util.debugm(N, "http stored %d bytes to %s", #store_data, url)
+        lua_util.debugm(N, self.config, "http stored %d bytes to %s", #store_data, url)
         callback(nil)
       else
-        lua_util.debugm(N, "http PUT failed for %s: HTTP %d", url, code)
+        lua_util.debugm(N, self.config, "http PUT failed for %s: HTTP %d", url, code)
         callback(string.format("HTTP %d", code))
       end
     end
@@ -528,7 +780,7 @@ end
 function http_backend:delete(cache_key, platform_id, callback)
   local url = self:_get_url(cache_key, platform_id)
 
-  lua_util.debugm(N, "http DELETE for url: %s", url)
+  lua_util.debugm(N, self.config, "http DELETE for url: %s", url)
 
   rspamd_http.request({
     url = url,
@@ -537,13 +789,13 @@ function http_backend:delete(cache_key, platform_id, callback)
     timeout = self.timeout,
     callback = function(err, code)
       if err then
-        lua_util.debugm(N, "http DELETE failed for %s: %s", url, err)
+        lua_util.debugm(N, self.config, "http DELETE failed for %s: %s", url, err)
         callback(err)
       elseif code >= 200 and code < 300 or code == 404 then
-        lua_util.debugm(N, "http deleted %s", url)
+        lua_util.debugm(N, self.config, "http deleted %s", url)
         callback(nil)
       else
-        lua_util.debugm(N, "http DELETE failed for %s: HTTP %d", url, code)
+        lua_util.debugm(N, self.config, "http DELETE failed for %s: HTTP %d", url, code)
         callback(string.format("HTTP %d", code))
       end
     end
@@ -562,19 +814,21 @@ end
 function exports.create_backend(config)
   local backend_type = config.backend or config.cache_backend or 'file'
 
-  lua_util.debugm(N, "creating hyperscan cache backend: %s", backend_type)
+  local cfg = config.rspamd_config or config
+  lua_util.debugm(N, cfg, "creating hyperscan cache backend: %s", backend_type)
 
   -- Always pass full config - backends will extract what they need
   -- (config contains ev_base, rspamd_config at top level, plus optional
   -- redis/http sub-sections for backend-specific settings)
   if backend_type == 'file' then
     local be = file_backend.new(config)
-    lua_util.debugm(N, "file backend created, cache_dir: %s", be.cache_dir or "not set")
+    lua_util.debugm(N, be.config, "file backend created, cache_dir: %s, compression: %s",
+        be.cache_dir or "not set", be.use_compression and "enabled" or "disabled")
     return be
   elseif backend_type == 'redis' then
     local be = redis_backend.new(config)
     if be.redis_params then
-      lua_util.debugm(N, "redis backend created, prefix: %s, compression: %s",
+      lua_util.debugm(N, be.config, "redis backend created, prefix: %s, compression: %s",
           be.prefix, be.use_compression and "enabled" or "disabled")
     else
       logger.errx(N, "redis backend created but no redis params - operations will fail!")
@@ -582,7 +836,7 @@ function exports.create_backend(config)
     return be
   elseif backend_type == 'http' then
     local be = http_backend.new(config)
-    lua_util.debugm(N, "http backend created, base_url: %s", be.base_url or "not set")
+    lua_util.debugm(N, be.config, "http backend created, base_url: %s", be.base_url or "not set")
     return be
   else
     logger.errx(N, "unknown hyperscan cache backend: %s, falling back to file", backend_type)

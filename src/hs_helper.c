@@ -879,6 +879,8 @@ rspamd_hs_helper_mp_exists_cb(gboolean success,
 
 	/* Need to compile+store */
 	rspamd_worker_set_busy(mpctx->worker, mpctx->ctx->event_loop, "compile multipattern");
+	/* Flush the busy notification before blocking on compilation */
+	ev_run(mpctx->ctx->event_loop, EVRUN_NOWAIT);
 	rspamd_multipattern_compile_hs_to_cache_async(entry->mp, mpctx->ctx->hs_dir,
 												  mpctx->ctx->event_loop,
 												  rspamd_hs_helper_mp_compiled_cb, mpctx);
@@ -921,6 +923,8 @@ rspamd_hs_helper_compile_pending_multipatterns_next(struct rspamd_hs_helper_mp_a
 		}
 		else {
 			rspamd_worker_set_busy(mpctx->worker, mpctx->ctx->event_loop, "compile multipattern");
+			/* Flush the busy notification before blocking on compilation */
+			ev_run(mpctx->ctx->event_loop, EVRUN_NOWAIT);
 			if (!rspamd_multipattern_compile_hs_to_cache(entry->mp, mpctx->ctx->hs_dir, &err)) {
 				msg_err("failed to compile multipattern '%s': %e", entry->name, err);
 				if (err) g_error_free(err);
@@ -1044,6 +1048,8 @@ rspamd_hs_helper_remap_exists_cb(gboolean success,
 
 	/* Need to compile+store */
 	rspamd_worker_set_busy(rmctx->worker, rmctx->ctx->event_loop, "compile regexp map");
+	/* Flush the busy notification before blocking on compilation */
+	ev_run(rmctx->ctx->event_loop, EVRUN_NOWAIT);
 	rspamd_regexp_map_compile_hs_to_cache_async(entry->re_map, rmctx->ctx->hs_dir,
 												rmctx->ctx->event_loop,
 												rspamd_hs_helper_remap_compiled_cb, rmctx);
@@ -1085,6 +1091,8 @@ rspamd_hs_helper_compile_pending_regexp_maps_next(struct rspamd_hs_helper_remap_
 		}
 		else {
 			rspamd_worker_set_busy(rmctx->worker, rmctx->ctx->event_loop, "compile regexp map");
+			/* Flush the busy notification before blocking on compilation */
+			ev_run(rmctx->ctx->event_loop, EVRUN_NOWAIT);
 			if (!rspamd_regexp_map_compile_hs_to_cache(entry->re_map, rmctx->ctx->hs_dir, &err)) {
 				msg_err("failed to compile regexp map '%s': %e", entry->name, err);
 				if (err) g_error_free(err);

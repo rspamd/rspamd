@@ -22,6 +22,7 @@
 #include "libutil/hash.h"
 #include "libutil/str_util.h"
 #include "libserver/html/html.h"
+#include "libserver/hyperscan_tools.h"
 
 #include "lua_parsers.h"
 
@@ -419,6 +420,25 @@ LUA_FUNCTION_DEF(util, create_file);
 LUA_FUNCTION_DEF(util, close_file);
 
 /***
+ * @function util.hyperscan_notice_known(fname)
+ * Notifies the hyperscan cache system that a file is known and should not be
+ * deleted during cleanup. This should be called when loading cached hyperscan
+ * databases from files.
+ *
+ * @param {string} fname path to the hyperscan cache file
+ */
+LUA_FUNCTION_DEF(util, hyperscan_notice_known);
+
+/***
+ * @function util.hyperscan_get_platform_id()
+ * Returns the platform identifier string for hyperscan cache keys.
+ * This includes the hyperscan version, platform tune, and CPU features.
+ *
+ * @return {string} platform identifier (e.g., "hs54_haswell_avx2_abc123")
+ */
+LUA_FUNCTION_DEF(util, hyperscan_get_platform_id);
+
+/***
  * @function util.random_hex(size)
  * Returns random hex string of the specified size
  *
@@ -803,6 +823,8 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF(util, unlock_file),
 	LUA_INTERFACE_DEF(util, create_file),
 	LUA_INTERFACE_DEF(util, close_file),
+	LUA_INTERFACE_DEF(util, hyperscan_notice_known),
+	LUA_INTERFACE_DEF(util, hyperscan_get_platform_id),
 	LUA_INTERFACE_DEF(util, random_hex),
 	LUA_INTERFACE_DEF(util, zstd_compress),
 	LUA_INTERFACE_DEF(util, zstd_decompress),
@@ -2245,6 +2267,37 @@ lua_util_close_file(lua_State *L)
 	else {
 		return luaL_error(L, "invalid arguments");
 	}
+
+	return 1;
+}
+
+static int
+lua_util_hyperscan_notice_known(lua_State *L)
+{
+	LUA_TRACE_POINT;
+#ifdef WITH_HYPERSCAN
+	const char *fname = luaL_checkstring(L, 1);
+
+	if (fname) {
+		rspamd_hyperscan_notice_known(fname);
+	}
+#else
+	(void) L;
+#endif
+
+	return 0;
+}
+
+static int
+lua_util_hyperscan_get_platform_id(lua_State *L)
+{
+	LUA_TRACE_POINT;
+#ifdef WITH_HYPERSCAN
+	const char *platform_id = rspamd_hyperscan_get_platform_id();
+	lua_pushstring(L, platform_id);
+#else
+	lua_pushstring(L, "no_hyperscan");
+#endif
 
 	return 1;
 }

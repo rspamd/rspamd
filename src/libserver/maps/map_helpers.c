@@ -2124,19 +2124,8 @@ void rspamd_regexp_map_compile_hs_to_cache_async(struct rspamd_regexp_map_helper
 
 	map = re_map->map;
 
-	if (!rspamd_hs_cache_has_lua_backend()) {
-		/* Synchronous file backend */
-		gboolean success = rspamd_regexp_map_compile_hs_to_cache(re_map, cache_dir, &err);
-		if (cb) {
-			cb(re_map, success, err, ud);
-		}
-		if (err) {
-			g_error_free(err);
-		}
-		return;
-	}
-
-	/* Async Lua backend path */
+	/* All file operations go through Lua backend */
+	g_assert(rspamd_hs_cache_has_lua_backend());
 	hs_platform_info_t plt;
 	hs_compile_error_t *hs_errors = NULL;
 	hs_database_t *db = NULL;
@@ -2353,16 +2342,9 @@ void rspamd_regexp_map_load_from_cache_async(struct rspamd_regexp_map_helper *re
 	g_assert(re_map != NULL);
 	g_assert(cache_dir != NULL);
 
-	if (!rspamd_hs_cache_has_lua_backend()) {
-		/* Synchronous file backend */
-		gboolean success = rspamd_regexp_map_load_from_cache(re_map, cache_dir);
-		if (cb) {
-			cb(success, ud);
-		}
-		return;
-	}
+	/* All file operations go through Lua backend */
+	g_assert(rspamd_hs_cache_has_lua_backend());
 
-	/* Async Lua backend path */
 	char cache_key[rspamd_cryptobox_HASHBYTES * 2 + 1];
 	rspamd_snprintf(cache_key, sizeof(cache_key), "%*xs",
 					(int) rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
