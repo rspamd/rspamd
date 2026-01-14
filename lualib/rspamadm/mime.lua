@@ -135,6 +135,8 @@ urls:flag "--count"
     :description "Print count of each printed element"
 urls:flag "-r --reverse"
     :description "Reverse sort order"
+urls:flag "--raw"
+    :description "Load as raw file (for PDFs and other non-email files)"
 
 local modify = parser:command "modify mod m"
                      :description "Modifies MIME message"

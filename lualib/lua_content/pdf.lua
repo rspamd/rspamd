@@ -637,6 +637,8 @@ local function apply_pdf_filter(input, filt)
       return nil
     end
     return lua_util.unhex(to_decode)
+  elseif filt == 'ASCII85Decode' or filt == 'A85' then
+    return rspamd_util.decode_ascii85(input)
   end
 
   return nil

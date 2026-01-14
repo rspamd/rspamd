@@ -20,6 +20,7 @@
 #include "libmime/content_type.h"
 #include "libmime/mime_headers.h"
 #include "libutil/hash.h"
+#include "libutil/str_util.h"
 #include "libserver/html/html.h"
 
 #include "lua_parsers.h"
@@ -113,6 +114,14 @@ LUA_FUNCTION_DEF(util, decode_html_entities);
  * @return {rspamd_text} decoded data chunk
  */
 LUA_FUNCTION_DEF(util, decode_base64);
+
+/***
+ * @function util.decode_ascii85(input)
+ * Decodes data from ASCII85 (Base85) encoding used in PDF files
+ * @param {text or string} input data to decode
+ * @return {rspamd_text} decoded data chunk or nil on error
+ */
+LUA_FUNCTION_DEF(util, decode_ascii85);
 
 /***
  * @function util.encode_base32(input, [b32type = 'default'])
@@ -763,6 +772,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF(util, decode_qp),
 	LUA_INTERFACE_DEF(util, decode_html_entities),
 	LUA_INTERFACE_DEF(util, decode_base64),
+	LUA_INTERFACE_DEF(util, decode_ascii85),
 	LUA_INTERFACE_DEF(util, encode_base32),
 	LUA_INTERFACE_DEF(util, decode_base32),
 	LUA_INTERFACE_DEF(util, decode_url),
@@ -1316,6 +1326,53 @@ lua_util_decode_base64(lua_State *L)
 									   &outlen);
 		t->len = outlen;
 		t->flags = RSPAMD_TEXT_FLAG_OWN;
+	}
+	else {
+		lua_pushnil(L);
+	}
+
+	return 1;
+}
+
+static int
+lua_util_decode_ascii85(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t;
+	const char *s = NULL;
+	gsize inlen = 0;
+	gssize outlen;
+
+	if (lua_type(L, 1) == LUA_TSTRING) {
+		s = luaL_checklstring(L, 1, &inlen);
+	}
+	else if (lua_type(L, 1) == LUA_TUSERDATA) {
+		t = lua_check_text(L, 1);
+
+		if (t != NULL) {
+			s = t->start;
+			inlen = t->len;
+		}
+	}
+
+	if (s != NULL && inlen > 0) {
+		/* ASCII85 expands 5 chars to 4 bytes, so output is at most (inlen * 4 / 5) + 4 */
+		gsize max_outlen = (inlen * 4 / 5) + 4;
+		unsigned char *buf = g_malloc(max_outlen);
+
+		outlen = rspamd_decode_ascii85_buf(s, inlen, buf, max_outlen);
+
+		if (outlen >= 0) {
+			t = lua_newuserdata(L, sizeof(*t));
+			rspamd_lua_setclass(L, rspamd_text_classname, -1);
+			t->start = (const char *) buf;
+			t->len = outlen;
+			t->flags = RSPAMD_TEXT_FLAG_OWN;
+		}
+		else {
+			g_free(buf);
+			lua_pushnil(L);
+		}
 	}
 	else {
 		lua_pushnil(L);

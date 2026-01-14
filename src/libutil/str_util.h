@@ -319,6 +319,19 @@ gssize rspamd_decode_uue_buf(const char *in, gsize inlen,
 							 char *out, gsize outlen);
 
 /**
+ * Decode ASCII85 (Base85) encoded buffer, input and output must not overlap
+ * ASCII85 encodes 4 bytes as 5 ASCII characters in range '!' to 'u'
+ * Special: 'z' represents 4 null bytes, '~>' marks end of data
+ * @param in input
+ * @param inlen length of input
+ * @param out output
+ * @param outlen length of output
+ * @return real size of decoded output or (-1) if outlen is not enough or invalid input
+ */
+gssize rspamd_decode_ascii85_buf(const char *in, gsize inlen,
+								 unsigned char *out, gsize outlen);
+
+/**
  * Decode quoted-printable encoded buffer using rfc2047 format, input and output must not overlap
  * @param in input
  * @param inlen length of input
