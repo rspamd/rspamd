@@ -72,9 +72,19 @@ local message_func = function(_, limit_type, _, _, _)
 end
 
 local function load_scripts(_, _)
-  bucket_check_id = lua_redis.load_redis_script_from_file(bucket_check_script, redis_params)
-  bucket_update_id = lua_redis.load_redis_script_from_file(bucket_update_script, redis_params)
-  bucket_cleanup_id = lua_redis.load_redis_script_from_file(bucket_cleanup_script, redis_params)
+  local err
+  bucket_check_id, err = lua_redis.load_redis_script_from_file(bucket_check_script, redis_params)
+  if err then
+    rspamd_logger.errx(rspamd_config, err)
+  end
+  bucket_update_id, err = lua_redis.load_redis_script_from_file(bucket_update_script, redis_params)
+  if err then
+    rspamd_logger.errx(rspamd_config, err)
+  end
+  bucket_cleanup_id, err = lua_redis.load_redis_script_from_file(bucket_cleanup_script, redis_params)
+  if err then
+    rspamd_logger.errx(rspamd_config, err)
+  end
 end
 
 --- Check whether this addr is bounce
