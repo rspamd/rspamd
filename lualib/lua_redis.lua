@@ -1649,7 +1649,6 @@ exports.add_redis_script = add_redis_script
 --
 local function load_redis_script_from_file(filename, redis_params, dir)
   local lua_util = require "lua_util"
-  local rspamd_logger = require "rspamd_logger"
 
   if not dir then
     dir = rspamd_paths.LUALIBDIR
@@ -1662,13 +1661,12 @@ local function load_redis_script_from_file(filename, redis_params, dir)
   -- Read file contents
   local file = io.open(path, "r")
   if not file then
-    rspamd_logger.errx("failed to open Redis script file: %s", path)
-    return nil
+    return nil, string.format("failed to open Redis script file: %s", path)
   end
   local script = file:read("*all")
   if not script then
-    rspamd_logger.errx("failed to load Redis script file: %s", path)
-    return nil
+    file:close()
+    return nil, string.format("failed to read Redis script file: %s", path)
   end
   file:close()
   script = lua_util.strip_lua_comments(script)

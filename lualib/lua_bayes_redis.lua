@@ -143,9 +143,23 @@ exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol,
     return nil
   end
 
-  local classify_script_id = lua_redis.load_redis_script_from_file("bayes_classify.lua", redis_params)
-  local learn_script_id = lua_redis.load_redis_script_from_file("bayes_learn.lua", redis_params)
-  local stat_script_id = lua_redis.load_redis_script_from_file("bayes_stat.lua", redis_params)
+  local classify_script_id, script_err = lua_redis.load_redis_script_from_file("bayes_classify.lua", redis_params)
+  if not classify_script_id then
+    logger.errx(ev_base, script_err)
+    return nil
+  end
+  local learn_script_id
+  learn_script_id, script_err = lua_redis.load_redis_script_from_file("bayes_learn.lua", redis_params)
+  if not learn_script_id then
+    logger.errx(ev_base, script_err)
+    return nil
+  end
+  local stat_script_id
+  stat_script_id, script_err = lua_redis.load_redis_script_from_file("bayes_stat.lua", redis_params)
+  if not stat_script_id then
+    logger.errx(ev_base, script_err)
+    return nil
+  end
   local max_users = classifier_ucl.max_users or 1000
 
   local current_data = {
@@ -268,8 +282,17 @@ exports.lua_bayes_init_cache = function(classifier_ucl, statfile_ucl)
     end
   end
 
-  local check_script_id = lua_redis.load_redis_script_from_file("bayes_cache_check.lua", redis_params)
-  local learn_script_id = lua_redis.load_redis_script_from_file("bayes_cache_learn.lua", redis_params)
+  local check_script_id, err = lua_redis.load_redis_script_from_file("bayes_cache_check.lua", redis_params)
+  if not check_script_id then
+    logger.errx(rspamd_config, err)
+    return nil
+  end
+  local learn_script_id
+  learn_script_id, err = lua_redis.load_redis_script_from_file("bayes_cache_learn.lua", redis_params)
+  if not learn_script_id then
+    logger.errx(rspamd_config, err)
+    return nil
+  end
 
   return gen_cache_check_functor(redis_params, check_script_id, conf), gen_cache_learn_functor(redis_params,
       learn_script_id, conf)
