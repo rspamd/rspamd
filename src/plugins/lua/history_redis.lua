@@ -160,7 +160,7 @@ local function history_save(task)
   if data then
     normalise_results(data, task)
   else
-    rspamd_logger.errx('cannot get protocol reply, skip saving in history')
+    rspamd_logger.errx(task, 'cannot get protocol reply, skip saving in history')
     return
   end
 

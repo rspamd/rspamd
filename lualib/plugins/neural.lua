@@ -903,7 +903,7 @@ local function spawn_train(params)
           1 - params.rule.roc_misclassification_cost)
         roc_thresholds = { spam_threshold, ham_threshold }
 
-        rspamd_logger.messagex("ROC thresholds: (spam_threshold: %s, ham_threshold: %s)",
+        rspamd_logger.messagex(rspamd_config, "ROC thresholds: (spam_threshold: %s, ham_threshold: %s)",
           roc_thresholds[1], roc_thresholds[2])
       end
 

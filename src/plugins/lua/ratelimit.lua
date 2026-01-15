@@ -373,7 +373,7 @@ local function ratelimit_cb(task)
   local function gen_check_cb(prefix, bucket, lim_name, lim_key)
     return function(err, data)
       if err then
-        rspamd_logger.errx('cannot check limit %s: %s', prefix, err)
+        rspamd_logger.errx(task, 'cannot check limit %s: %s', prefix, err)
       elseif type(data) == 'table' and data[1] then
         lua_util.debugm(N, task,
             "got reply for limit %s (%s / %s); %s burst, %s:%s dyn, %s leaked",
@@ -476,7 +476,7 @@ local function maybe_cleanup_pending(task)
         local bucket = v.bucket
         local function cleanup_cb(err, data)
           if err then
-            rspamd_logger.errx('cannot cleanup limit %s: %s', k, err)
+            rspamd_logger.errx(task, 'cannot cleanup limit %s: %s', k, err)
           else
             lua_util.debugm(N, task, 'cleaned pending bucked for %s: %s', k, data)
           end
