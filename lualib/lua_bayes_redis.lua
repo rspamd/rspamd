@@ -143,21 +143,21 @@ exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol,
     return nil
   end
 
-  local classify_script_id, err = lua_redis.load_redis_script_from_file("bayes_classify.lua", redis_params)
+  local classify_script_id, script_err = lua_redis.load_redis_script_from_file("bayes_classify.lua", redis_params)
   if not classify_script_id then
-    logger.errx(ev_base, err)
+    logger.errx(ev_base, script_err)
     return nil
   end
   local learn_script_id
-  learn_script_id, err = lua_redis.load_redis_script_from_file("bayes_learn.lua", redis_params)
+  learn_script_id, script_err = lua_redis.load_redis_script_from_file("bayes_learn.lua", redis_params)
   if not learn_script_id then
-    logger.errx(ev_base, err)
+    logger.errx(ev_base, script_err)
     return nil
   end
   local stat_script_id
-  stat_script_id, err = lua_redis.load_redis_script_from_file("bayes_stat.lua", redis_params)
+  stat_script_id, script_err = lua_redis.load_redis_script_from_file("bayes_stat.lua", redis_params)
   if not stat_script_id then
-    logger.errx(ev_base, err)
+    logger.errx(ev_base, script_err)
     return nil
   end
   local max_users = classifier_ucl.max_users or 1000
