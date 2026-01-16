@@ -608,6 +608,9 @@ void rspamd_worker_stop_accept(struct rspamd_worker *worker)
 
 	g_hash_table_unref (worker->signal_events);
 #endif
+
+	/* Clean up srv_pipe context to prevent memory leaks */
+	rspamd_srv_pipe_cleanup();
 }
 
 static rspamd_fstring_t *
@@ -1450,8 +1453,7 @@ rspamd_fork_worker(struct rspamd_main *rspamd_main,
 	wrk->pid = fork();
 	wrk->cores_throttled = rspamd_main->cores_throttling;
 	wrk->term_handler = term_handler;
-	wrk->control_events_pending = g_hash_table_new_full(g_direct_hash, g_direct_equal,
-														NULL, rspamd_pending_control_free);
+	wrk->control_events_pending = rspamd_control_pending_new();
 
 	switch (wrk->pid) {
 	case 0:
@@ -2057,34 +2059,17 @@ rspamd_worker_hyperscan_ready(struct rspamd_main *rspamd_main,
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_HYPERSCAN_LOADED;
+	rep.id = cmd->id;
 
 	msg_debug_hyperscan("received hyperscan loaded notification, forced=%d",
 						cmd->cmd.hs_loaded.forced);
 
-	if (rspamd_hs_cache_has_lua_backend()) {
-		msg_debug_hyperscan("using async backend-based hyperscan loading");
-		rspamd_re_cache_load_hyperscan_scoped_async(cache, worker->srv->event_loop,
-													cache_dir, false);
-		rep.reply.hs_loaded.status = 0;
-	}
-	else {
-		/* File-based loading (legacy, synchronous) */
-		if (cmd->cmd.hs_loaded.scope[0] != '\0') {
-			const char *scope = cmd->cmd.hs_loaded.scope;
-			msg_debug_hyperscan("loading hyperscan expressions for scope '%s' after receiving compilation notice", scope);
-			rep.reply.hs_loaded.status = rspamd_re_cache_load_hyperscan_scoped(
-				cache, cache_dir, false);
-		}
-		else {
-			if (rspamd_re_cache_is_hs_loaded(cache) != RSPAMD_HYPERSCAN_LOADED_FULL ||
-				cmd->cmd.hs_loaded.forced) {
-				msg_debug_hyperscan("loading hyperscan expressions after receiving compilation notice: %s",
-									(rspamd_re_cache_is_hs_loaded(cache) != RSPAMD_HYPERSCAN_LOADED_FULL) ? "new db" : "forced update");
-				rep.reply.hs_loaded.status = rspamd_re_cache_load_hyperscan(
-					worker->srv->cfg->re_cache, cache_dir, false);
-			}
-		}
-	}
+	/* All file operations go through Lua backend */
+	g_assert(rspamd_hs_cache_has_lua_backend());
+	msg_debug_hyperscan("using async backend-based hyperscan loading");
+	rspamd_re_cache_load_hyperscan_scoped_async(cache, worker->srv->event_loop,
+												cache_dir, false);
+	rep.reply.hs_loaded.status = 0;
 
 	if (write(fd, &rep, sizeof(rep)) != sizeof(rep)) {
 		msg_err("cannot write reply to the control socket: %s",
@@ -2112,33 +2097,23 @@ rspamd_worker_multipattern_ready(struct rspamd_main *rspamd_main,
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_MULTIPATTERN_LOADED;
+	rep.id = cmd->id;
 
 	msg_debug_hyperscan("received multipattern loaded notification for '%s'", name);
 
 	mp = rspamd_multipattern_find_pending(name);
 
 	if (mp != NULL) {
-		if (rspamd_hs_cache_has_lua_backend()) {
-			msg_debug_hyperscan("using async backend-based multipattern loading for '%s'", name);
-			struct rspamd_worker_mp_async_cbdata *cbd = g_malloc0(sizeof(*cbd));
-			cbd->name = g_strdup(name);
-			cbd->cache_dir = g_strdup(cache_dir);
-			cbd->mp = mp;
-			rspamd_multipattern_load_from_cache_async(mp, cache_dir, worker->srv->event_loop,
-													  rspamd_worker_multipattern_async_loaded, cbd);
-			rep.reply.hs_loaded.status = 0;
-		}
-		else {
-			if (rspamd_multipattern_load_from_cache(mp, cache_dir)) {
-				msg_debug_hyperscan("multipattern '%s' hot-swapped to hyperscan", name);
-				rep.reply.hs_loaded.status = 0;
-			}
-			else {
-				msg_warn("failed to load multipattern '%s' from cache, continuing with ACISM fallback",
-						 name);
-				rep.reply.hs_loaded.status = ENOENT;
-			}
-		}
+		/* All file operations go through Lua backend */
+		g_assert(rspamd_hs_cache_has_lua_backend());
+		msg_debug_hyperscan("using async backend-based multipattern loading for '%s'", name);
+		struct rspamd_worker_mp_async_cbdata *cbd = g_malloc0(sizeof(*cbd));
+		cbd->name = g_strdup(name);
+		cbd->cache_dir = g_strdup(cache_dir);
+		cbd->mp = mp;
+		rspamd_multipattern_load_from_cache_async(mp, cache_dir, worker->srv->event_loop,
+												  rspamd_worker_multipattern_async_loaded, cbd);
+		rep.reply.hs_loaded.status = 0;
 	}
 	else {
 		msg_warn("received multipattern notification for unknown '%s'", name);
@@ -2195,33 +2170,23 @@ rspamd_worker_regexp_map_ready(struct rspamd_main *rspamd_main,
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_REGEXP_MAP_LOADED;
+	rep.id = cmd->id;
 
 	msg_debug_hyperscan("received regexp map loaded notification for '%s'", name);
 
 	re_map = rspamd_regexp_map_find_pending(name);
 
 	if (re_map != NULL) {
-		if (rspamd_hs_cache_has_lua_backend()) {
-			msg_debug_hyperscan("using async backend-based regexp map loading for '%s'", name);
-			struct rspamd_worker_remap_async_cbdata *cbd = g_malloc0(sizeof(*cbd));
-			cbd->name = g_strdup(name);
-			cbd->cache_dir = g_strdup(cache_dir);
-			cbd->re_map = re_map;
-			rspamd_regexp_map_load_from_cache_async(re_map, cache_dir, worker->srv->event_loop,
-													rspamd_worker_regexp_map_async_loaded, cbd);
-			rep.reply.hs_loaded.status = 0;
-		}
-		else {
-			if (rspamd_regexp_map_load_from_cache(re_map, cache_dir)) {
-				msg_debug_hyperscan("regexp map '%s' hot-swapped to hyperscan", name);
-				rep.reply.hs_loaded.status = 0;
-			}
-			else {
-				msg_warn("failed to load regexp map '%s' from cache, continuing with PCRE fallback",
-						 name);
-				rep.reply.hs_loaded.status = ENOENT;
-			}
-		}
+		/* All file operations go through Lua backend */
+		g_assert(rspamd_hs_cache_has_lua_backend());
+		msg_debug_hyperscan("using async backend-based regexp map loading for '%s'", name);
+		struct rspamd_worker_remap_async_cbdata *cbd = g_malloc0(sizeof(*cbd));
+		cbd->name = g_strdup(name);
+		cbd->cache_dir = g_strdup(cache_dir);
+		cbd->re_map = re_map;
+		rspamd_regexp_map_load_from_cache_async(re_map, cache_dir, worker->srv->event_loop,
+												rspamd_worker_regexp_map_async_loaded, cbd);
+		rep.reply.hs_loaded.status = 0;
 	}
 	else {
 		msg_warn("received regexp map notification for unknown '%s'", name);
@@ -2262,6 +2227,7 @@ rspamd_worker_log_pipe_handler(struct rspamd_main *rspamd_main,
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_LOG_PIPE;
+	rep.id = cmd->id;
 
 	if (attached_fd != -1) {
 		lp = g_malloc0(sizeof(*lp));
@@ -2298,6 +2264,7 @@ rspamd_worker_monitored_handler(struct rspamd_main *rspamd_main,
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_MONITORED_CHANGE;
+	rep.id = cmd->id;
 
 	if (cmd->cmd.monitored_change.sender != getpid()) {
 		m = rspamd_monitored_by_tag(mctx, cmd->cmd.monitored_change.tag);

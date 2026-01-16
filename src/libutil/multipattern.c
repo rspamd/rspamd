@@ -1512,7 +1512,11 @@ rspamd_multipattern_hs_cache_save_cb(gboolean success,
 	(void) data;
 	(void) len;
 
-	if (!success) {
+	if (success) {
+		msg_info("saved hyperscan multipattern cache %s to Lua backend",
+				 ctx->cache_key ? ctx->cache_key : "(null)");
+	}
+	else {
 		g_set_error(&err, rspamd_multipattern_quark(), EIO,
 					"cannot save multipattern cache %s: %s",
 					ctx->cache_key ? ctx->cache_key : "(null)",
@@ -1540,17 +1544,8 @@ void rspamd_multipattern_compile_hs_to_cache_async(struct rspamd_multipattern *m
 
 	(void) event_loop;
 
-	if (!rspamd_hs_cache_has_lua_backend()) {
-		/* Legacy file-only path */
-		gboolean ok = rspamd_multipattern_compile_hs_to_cache(mp, cache_dir, &err);
-		if (cb) {
-			cb(mp, ok, err, ud);
-		}
-		if (err) {
-			g_error_free(err);
-		}
-		return;
-	}
+	/* All file operations go through Lua backend */
+	g_assert(rspamd_hs_cache_has_lua_backend());
 
 #ifdef WITH_HYPERSCAN
 	hs_platform_info_t plt;
@@ -1629,8 +1624,6 @@ void rspamd_multipattern_compile_hs_to_cache_async(struct rspamd_multipattern *m
 								   rspamd_multipattern_hs_cache_save_cb, ctx);
 
 	g_free(bytes);
-
-	msg_info("saved hyperscan multipattern database to Lua backend (%z bytes)", len);
 #else
 	if (cb) {
 		g_set_error(&err, rspamd_multipattern_quark(), ENOTSUP,
@@ -1795,22 +1788,16 @@ void rspamd_multipattern_load_from_cache_async(struct rspamd_multipattern *mp,
 	rspamd_snprintf(cache_key, sizeof(cache_key), "%*xs",
 					(int) rspamd_cryptobox_HASHBYTES / 2, hash);
 
-	if (rspamd_hs_cache_has_lua_backend()) {
-		struct rspamd_multipattern_load_ctx *ctx = g_malloc0(sizeof(*ctx));
-		ctx->mp = mp;
-		ctx->cache_dir = g_strdup(cache_dir);
-		ctx->cache_key = g_strdup(cache_key);
-		ctx->cb = cb;
-		ctx->ud = ud;
-		(void) event_loop;
-		rspamd_hs_cache_lua_load_async(ctx->cache_key, "multipattern", rspamd_multipattern_load_from_cache_cb, ctx);
-		return;
-	}
-
-	/* File backend fallback (synchronous) */
-	if (cb) {
-		cb(rspamd_multipattern_load_from_cache(mp, cache_dir), ud);
-	}
+	/* All file operations go through Lua backend */
+	g_assert(rspamd_hs_cache_has_lua_backend());
+	struct rspamd_multipattern_load_ctx *ctx = g_malloc0(sizeof(*ctx));
+	ctx->mp = mp;
+	ctx->cache_dir = g_strdup(cache_dir);
+	ctx->cache_key = g_strdup(cache_key);
+	ctx->cb = cb;
+	ctx->ud = ud;
+	(void) event_loop;
+	rspamd_hs_cache_lua_load_async(ctx->cache_key, "multipattern", rspamd_multipattern_load_from_cache_cb, ctx);
 #else
 	(void) mp;
 	(void) cache_dir;

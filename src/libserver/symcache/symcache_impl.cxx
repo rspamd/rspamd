@@ -373,7 +373,7 @@ auto symcache::load_items() -> bool
 template<typename T>
 static constexpr auto round_to_hundreds(T x)
 {
-	return (::floor(x) * 100.0) / 100.0;
+	return ::round(x * 100.0) / 100.0;
 }
 
 bool symcache::save_items() const
@@ -1031,7 +1031,7 @@ auto symcache::counters() const -> ucl_object_t *
 	auto *top = ucl_object_typed_new(UCL_ARRAY);
 	constexpr const auto round_float = [](const auto x, const int digits) -> auto {
 		const auto power10 = ::pow(10, digits);
-		return (::floor(x * power10) / power10);
+		return (::round(x * power10) / power10);
 	};
 
 	for (auto &pair: items_by_symbol) {
@@ -1049,8 +1049,11 @@ auto symcache::counters() const -> ucl_object_t *
 									  ucl_object_fromdouble(round_float(item->st->weight, 3)),
 									  "weight", 0, false);
 				ucl_object_insert_key(obj,
-									  ucl_object_fromdouble(round_float(parent->st->avg_frequency, 3)),
+									  ucl_object_fromdouble(round_float(parent->st->avg_frequency, 6)),
 									  "frequency", 0, false);
+				ucl_object_insert_key(obj,
+									  ucl_object_fromdouble(round_float(::sqrt(parent->st->stddev_frequency), 6)),
+									  "frequency_stddev", 0, false);
 				ucl_object_insert_key(obj,
 									  ucl_object_fromint(parent->st->total_hits),
 									  "hits", 0, false);
@@ -1067,6 +1070,9 @@ auto symcache::counters() const -> ucl_object_t *
 									  "frequency", 0, false);
 				ucl_object_insert_key(obj,
 									  ucl_object_fromdouble(0.0),
+									  "frequency_stddev", 0, false);
+				ucl_object_insert_key(obj,
+									  ucl_object_fromdouble(0.0),
 									  "hits", 0, false);
 				ucl_object_insert_key(obj,
 									  ucl_object_fromdouble(0.0),
@@ -1078,8 +1084,11 @@ auto symcache::counters() const -> ucl_object_t *
 								  ucl_object_fromdouble(round_float(item->st->weight, 3)),
 								  "weight", 0, false);
 			ucl_object_insert_key(obj,
-								  ucl_object_fromdouble(round_float(item->st->avg_frequency, 3)),
+								  ucl_object_fromdouble(round_float(item->st->avg_frequency, 6)),
 								  "frequency", 0, false);
+			ucl_object_insert_key(obj,
+								  ucl_object_fromdouble(round_float(::sqrt(item->st->stddev_frequency), 6)),
+								  "frequency_stddev", 0, false);
 			ucl_object_insert_key(obj,
 								  ucl_object_fromint(item->st->total_hits),
 								  "hits", 0, false);

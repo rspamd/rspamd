@@ -47,14 +47,11 @@ rspamd_hs_cache_try_init_lua_backend_with_opts(struct rspamd_config *cfg,
 	lua_State *L;
 	int err_idx;
 
-	if (!cfg || !cfg->lua_state || !ev_base || !opts || !backend_name) {
+	if (!cfg || !cfg->lua_state || !ev_base || !backend_name) {
 		return FALSE;
 	}
 
-	if (strcmp(backend_name, "file") == 0) {
-		return FALSE;
-	}
-
+	/* All backends (file, redis, http) now go through Lua for consistency */
 	L = (lua_State *) cfg->lua_state;
 
 	/* Ensure redis pool is bound to this process event loop (required for lua_redis async requests) */
@@ -81,8 +78,13 @@ rspamd_hs_cache_try_init_lua_backend_with_opts(struct rspamd_config *cfg,
 		return FALSE;
 	}
 
-	/* Push options as config table */
-	ucl_object_push_lua(L, opts, true);
+	/* Push options as config table (or empty table if no opts) */
+	if (opts) {
+		ucl_object_push_lua(L, opts, true);
+	}
+	else {
+		lua_newtable(L);
+	}
 
 	/* Set event loop for lua_redis */
 	{
@@ -198,39 +200,43 @@ rspamd_hs_cache_try_init_lua_backend(struct rspamd_config *cfg,
 		return TRUE;
 	}
 
-	if (!cfg || !cfg->workers) {
+	if (!cfg) {
 		return FALSE;
 	}
 
-	hs_quark = g_quark_try_string("hs_helper");
-	for (cur = cfg->workers; cur != NULL; cur = g_list_next(cur)) {
-		cf = (const struct rspamd_worker_conf *) cur->data;
-		if (cf && (hs_quark != 0 ? (cf->type == hs_quark) : (strcmp(g_quark_to_string(cf->type), "hs_helper") == 0))) {
-			opts = cf->options;
-			break;
+	/* Look for hs_helper worker config if available */
+	if (cfg->workers) {
+		hs_quark = g_quark_try_string("hs_helper");
+		for (cur = cfg->workers; cur != NULL; cur = g_list_next(cur)) {
+			cf = (const struct rspamd_worker_conf *) cur->data;
+			if (cf && (hs_quark != 0 ? (cf->type == hs_quark) : (strcmp(g_quark_to_string(cf->type), "hs_helper") == 0))) {
+				opts = cf->options;
+				break;
+			}
 		}
 	}
 
-	if (!opts) {
-		return FALSE;
+	/* Extract backend config from hs_helper options if available */
+	if (opts) {
+		const ucl_object_t *b = ucl_object_lookup(opts, "cache_backend");
+		if (b && ucl_object_type(b) == UCL_STRING) {
+			backend_name = ucl_object_tostring(b);
+		}
+		const ucl_object_t *d = ucl_object_lookup(opts, "cache_dir");
+		if (d && ucl_object_type(d) == UCL_STRING) {
+			cache_dir = ucl_object_tostring(d);
+		}
 	}
 
-	const ucl_object_t *b = ucl_object_lookup(opts, "cache_backend");
-	if (b && ucl_object_type(b) == UCL_STRING) {
-		backend_name = ucl_object_tostring(b);
-	}
+	/* Default to file backend */
 	if (!backend_name) {
 		backend_name = "file";
-	}
-
-	const ucl_object_t *d = ucl_object_lookup(opts, "cache_dir");
-	if (d && ucl_object_type(d) == UCL_STRING) {
-		cache_dir = ucl_object_tostring(d);
 	}
 	if (!cache_dir) {
 		cache_dir = cfg->hs_cache_dir;
 	}
 
+	/* Always initialize Lua backend (file, redis, or http) */
 	return rspamd_hs_cache_try_init_lua_backend_with_opts(cfg, ev_base, opts, backend_name, cache_dir);
 }
 

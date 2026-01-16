@@ -162,14 +162,27 @@ register_provider('metatokens', {
 })
 
 local function load_scripts()
-  redis_script_id.vectors_len = lua_redis.load_redis_script_from_file(redis_lua_script_vectors_len,
+  local err
+  redis_script_id.vectors_len, err = lua_redis.load_redis_script_from_file(redis_lua_script_vectors_len,
     redis_params)
-  redis_script_id.maybe_invalidate = lua_redis.load_redis_script_from_file(redis_lua_script_maybe_invalidate,
+  if err then
+    rspamd_logger.errx(rspamd_config, err)
+  end
+  redis_script_id.maybe_invalidate, err = lua_redis.load_redis_script_from_file(redis_lua_script_maybe_invalidate,
     redis_params)
-  redis_script_id.maybe_lock = lua_redis.load_redis_script_from_file(redis_lua_script_maybe_lock,
+  if err then
+    rspamd_logger.errx(rspamd_config, err)
+  end
+  redis_script_id.maybe_lock, err = lua_redis.load_redis_script_from_file(redis_lua_script_maybe_lock,
     redis_params)
-  redis_script_id.save_unlock = lua_redis.load_redis_script_from_file(redis_lua_script_save_unlock,
+  if err then
+    rspamd_logger.errx(rspamd_config, err)
+  end
+  redis_script_id.save_unlock, err = lua_redis.load_redis_script_from_file(redis_lua_script_save_unlock,
     redis_params)
+  if err then
+    rspamd_logger.errx(rspamd_config, err)
+  end
 end
 
 local function create_ann(n, nlayers, rule)
@@ -903,7 +916,7 @@ local function spawn_train(params)
           1 - params.rule.roc_misclassification_cost)
         roc_thresholds = { spam_threshold, ham_threshold }
 
-        rspamd_logger.messagex("ROC thresholds: (spam_threshold: %s, ham_threshold: %s)",
+        rspamd_logger.messagex(rspamd_config, "ROC thresholds: (spam_threshold: %s, ham_threshold: %s)",
           roc_thresholds[1], roc_thresholds[2])
       end
 

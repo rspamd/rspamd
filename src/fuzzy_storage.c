@@ -2904,8 +2904,10 @@ rspamd_fuzzy_storage_sync(struct rspamd_main *rspamd_main,
 	struct rspamd_fuzzy_storage_ctx *ctx = ud;
 	struct rspamd_control_reply rep;
 
-	rep.reply.fuzzy_sync.status = 0;
+	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_FUZZY_SYNC;
+	rep.id = cmd->id;
+	rep.reply.fuzzy_sync.status = 0;
 
 	if (ctx->backend && worker->index == 0) {
 		rspamd_fuzzy_process_updates_queue(ctx, local_db_name, FALSE);
@@ -2934,7 +2936,9 @@ rspamd_fuzzy_control_blocked(struct rspamd_main *rspamd_main,
 	ev_tstamp now = ev_now(ctx->event_loop);
 	rspamd_inet_addr_t *addr = NULL;
 
+	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_FUZZY_BLOCKED;
+	rep.id = cmd->id;
 	rep.reply.fuzzy_blocked.status = 0;
 
 	if (cmd->cmd.fuzzy_blocked.af == AF_INET) {
@@ -3017,6 +3021,7 @@ rspamd_fuzzy_storage_reload(struct rspamd_main *rspamd_main,
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_RELOAD;
+	rep.id = cmd->id;
 
 	if ((ctx->backend = rspamd_fuzzy_backend_create(ctx->event_loop,
 													worker->cf->options, rspamd_main->cfg,
@@ -3458,6 +3463,7 @@ rspamd_fuzzy_storage_stat(struct rspamd_main *rspamd_main,
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_FUZZY_STAT;
+	rep.id = cmd->id;
 
 	rspamd_snprintf(tmppath, sizeof(tmppath), "%s%c%s-XXXXXXXXXX",
 					rspamd_main->cfg->temp_dir, G_DIR_SEPARATOR, "fuzzy-stat");
@@ -3468,11 +3474,16 @@ rspamd_fuzzy_storage_stat(struct rspamd_main *rspamd_main,
 					  strerror(errno));
 	}
 	else {
+		const char *backend_id;
+
 		rep.reply.fuzzy_stat.status = 0;
 
-		memcpy(rep.reply.fuzzy_stat.storage_id,
-			   rspamd_fuzzy_backend_id(ctx->backend),
-			   sizeof(rep.reply.fuzzy_stat.storage_id));
+		backend_id = rspamd_fuzzy_backend_id(ctx->backend);
+		if (backend_id) {
+			memcpy(rep.reply.fuzzy_stat.storage_id,
+				   backend_id,
+				   sizeof(rep.reply.fuzzy_stat.storage_id));
+		}
 
 		obj = rspamd_fuzzy_stat_to_ucl(ctx, TRUE);
 		emit_subr = ucl_object_emit_fd_funcs(outfd);

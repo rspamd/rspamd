@@ -932,7 +932,11 @@ rspamd_lua_init(bool wipe_mem)
 		/* TODO: broken on luajit without GC64 */
 		L = luaL_newstate();
 #else
+#if LUA_VERSION_NUM >= 505
+		L = lua_newstate(rspamd_lua_wipe_realloc, NULL, 0);
+#else
 		L = lua_newstate(rspamd_lua_wipe_realloc, NULL);
+#endif
 #endif
 	}
 	else {
@@ -1089,8 +1093,13 @@ void rspamd_lua_start_gc(struct rspamd_config *cfg)
 	lua_settop(L, 0);
 	/* Set up GC */
 	lua_gc(L, LUA_GCCOLLECT, 0);
+#if LUA_VERSION_NUM >= 505
+	lua_gc(L, LUA_GCPARAM, LUA_GCPSTEPMUL, cfg->lua_gc_step);
+	lua_gc(L, LUA_GCPARAM, LUA_GCPPAUSE, cfg->lua_gc_pause);
+#else
 	lua_gc(L, LUA_GCSETSTEPMUL, cfg->lua_gc_step);
 	lua_gc(L, LUA_GCSETPAUSE, cfg->lua_gc_pause);
+#endif
 	lua_gc(L, LUA_GCRESTART, 0);
 }
 

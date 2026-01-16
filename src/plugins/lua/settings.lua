@@ -353,7 +353,7 @@ local function check_settings(task)
       -- No more selection logic
       return
     else
-      rspamd_logger.infox("cannot query selector to make external map request")
+      rspamd_logger.infox(task, "cannot query selector to make external map request")
     end
   end
 
@@ -409,7 +409,7 @@ local function check_settings(task)
               -- No more selection logic
               return
             else
-              rspamd_logger.infox("cannot query selector to make external map request")
+              rspamd_logger.infox(task, "cannot query selector to make external map request")
             end
           end
           if s.rule['symbols'] then

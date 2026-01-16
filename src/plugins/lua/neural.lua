@@ -626,7 +626,7 @@ local function load_new_ann(rule, ev_base, set, profile, min_diff)
             rspamd_logger.infox(rspamd_config,
               'loaded ROC thresholds for %s:%s; version=%s',
               rule.prefix, set.name, profile.version)
-            rspamd_logger.debugx("ROC thresholds: %s", roc_thresholds)
+            rspamd_logger.debugx(rspamd_config, "ROC thresholds: %s", roc_thresholds)
           end
         end
 
@@ -1074,7 +1074,7 @@ for k, r in pairs(rules) do
   end
 
   if rule_elt.max_inputs and not has_blas then
-    rspamd_logger.errx('cannot set max inputs to %s as BLAS is not compiled in',
+    rspamd_logger.errx(rspamd_config, 'cannot set max inputs to %s as BLAS is not compiled in',
       rule_elt.name, rule_elt.max_inputs)
     rule_elt.max_inputs = nil
   end

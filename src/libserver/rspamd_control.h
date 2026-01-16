@@ -66,6 +66,7 @@ enum rspamd_log_pipe_type {
 
 struct rspamd_control_command {
 	enum rspamd_control_type type;
+	uint64_t id;
 	union {
 		struct {
 			unsigned int unused;
@@ -131,6 +132,7 @@ struct rspamd_control_command {
 
 struct rspamd_control_reply {
 	enum rspamd_control_type type;
+	uint64_t id;
 	union {
 		struct {
 			unsigned int conns;
@@ -369,10 +371,22 @@ const char *rspamd_control_command_to_string(enum rspamd_control_type cmd);
 const char *rspamd_srv_command_to_string(enum rspamd_srv_type cmd);
 
 /**
- * Used to cleanup pending events
- * @param p
+ * Create a new control events pending hash table
+ * @return opaque pointer to khash
  */
-void rspamd_pending_control_free(gpointer p);
+void *rspamd_control_pending_new(void);
+
+/**
+ * Destroy control events pending hash table
+ * @param p opaque pointer to khash
+ */
+void rspamd_control_pending_destroy(void *p);
+
+/**
+ * Remove all pending control events
+ * @param p opaque pointer to khash
+ */
+void rspamd_control_pending_remove_all(void *p);
 
 void rspamd_worker_set_busy(struct rspamd_worker *worker,
 							struct ev_loop *event_loop,

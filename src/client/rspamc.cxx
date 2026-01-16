@@ -1564,6 +1564,9 @@ rspamc_counters_output(FILE *out, ucl_object_t *obj)
 	rspamc_print(out, " {} \n", emphasis_argument(dash_buf));
 	rspamc_print(out, "| {:<4} | {:<{}} | {:^7} | {:^13} | {:^7} |\n", "",
 				 "", max_len,
+				 "", "avg (stddev)", "");
+	rspamc_print(out, "| {:<4} | {:<{}} | {:^7} | {:^13} | {:^7} |\n", "",
+				 "", max_len,
 				 "", "hits/min", "");
 
 	for (const auto [i, cur]: rspamd::enumerate(counters_vec)) {
