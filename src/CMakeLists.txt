@@ -92,7 +92,8 @@ set(RSPAMD_SOURCES
         fuzzy_storage.c
         rspamd.c
         worker.c
-        rspamd_proxy.c)
+        rspamd_proxy.c
+        smtp_proxy.cxx)
 
 set(PLUGIN_SOURCES
         plugins/regexp.c
@@ -103,7 +104,7 @@ set(PLUGIN_SOURCES
 
 # Define module and worker lists
 set(MODULES_LIST regexp chartable fuzzy_check dkim)
-set(WORKERS_LIST normal controller fuzzy rspamd_proxy)
+set(WORKERS_LIST normal controller fuzzy rspamd_proxy smtp_proxy)
 
 # Add hyperscan worker if enabled
 if (ENABLE_HYPERSCAN)
