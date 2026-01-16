@@ -39,7 +39,6 @@
 															 __VA_ARGS__)
 
 static ev_tstamp io_timeout = 30.0;
-static ev_tstamp worker_io_timeout = 0.5;
 
 struct rspamd_control_session;
 
@@ -462,11 +461,27 @@ rspamd_control_reply_handler(EV_P_ ev_io *w, int revents)
 	struct rspamd_control_reply rep;
 	struct rspamd_control_reply_elt *elt;
 	struct rspamd_main *rspamd_main = wrk->srv;
+	struct msghdr msg;
+	struct iovec iov;
+	unsigned char fdspace[CMSG_SPACE(sizeof(int))];
+	int rfd;
 	gssize r;
 	khiter_t k;
 
 	for (;;) {
-		r = read(w->fd, &rep, sizeof(rep));
+		rfd = -1;
+		memset(&msg, 0, sizeof(msg));
+		msg.msg_control = fdspace;
+		msg.msg_controllen = sizeof(fdspace);
+		iov.iov_base = &rep;
+		iov.iov_len = sizeof(rep);
+		msg.msg_iov = &iov;
+		msg.msg_iovlen = 1;
+		r = recvmsg(w->fd, &msg, 0);
+
+		if (r > 0 && msg.msg_controllen >= CMSG_LEN(sizeof(int))) {
+			rfd = *(int *) CMSG_DATA(CMSG_FIRSTHDR(&msg));
+		}
 
 		if (r == -1) {
 			if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -482,12 +497,18 @@ rspamd_control_reply_handler(EV_P_ ev_io *w, int revents)
 			/* Connection closed */
 			msg_debug_control("control pipe closed for worker %P", wrk->pid);
 			ev_io_stop(EV_A_ w);
+			if (rfd != -1) {
+				close(rfd);
+			}
 			break;
 		}
 
 		if (r != (gssize) sizeof(rep)) {
 			msg_err_main("incomplete control reply from worker %P: %d != %d",
 						 wrk->pid, (int) r, (int) sizeof(rep));
+			if (rfd != -1) {
+				close(rfd);
+			}
 			continue;
 		}
 
@@ -497,6 +518,9 @@ rspamd_control_reply_handler(EV_P_ ev_io *w, int revents)
 			msg_warn_main("received control reply for unknown request id %" G_GUINT64_FORMAT
 						  " from worker %P",
 						  rep.id, wrk->pid);
+			if (rfd != -1) {
+				close(rfd);
+			}
 			continue;
 		}
 
@@ -505,6 +529,10 @@ rspamd_control_reply_handler(EV_P_ ev_io *w, int revents)
 
 		msg_debug_control("received reply for command %d id %" G_GUINT64_FORMAT " from worker %P(%s)",
 						  (int) rep.type, rep.id, wrk->pid, g_quark_to_string(wrk->type));
+
+		if (rfd != -1) {
+			elt->attached_fd = rfd;
+		}
 
 		/* Copy reply to element and call handler */
 		memcpy(&elt->reply, &rep, sizeof(rep));

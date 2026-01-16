@@ -3474,11 +3474,16 @@ rspamd_fuzzy_storage_stat(struct rspamd_main *rspamd_main,
 					  strerror(errno));
 	}
 	else {
+		const char *backend_id;
+
 		rep.reply.fuzzy_stat.status = 0;
 
-		memcpy(rep.reply.fuzzy_stat.storage_id,
-			   rspamd_fuzzy_backend_id(ctx->backend),
-			   sizeof(rep.reply.fuzzy_stat.storage_id));
+		backend_id = rspamd_fuzzy_backend_id(ctx->backend);
+		if (backend_id) {
+			memcpy(rep.reply.fuzzy_stat.storage_id,
+				   backend_id,
+				   sizeof(rep.reply.fuzzy_stat.storage_id));
+		}
 
 		obj = rspamd_fuzzy_stat_to_ucl(ctx, TRUE);
 		emit_subr = ucl_object_emit_fd_funcs(outfd);
