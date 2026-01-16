@@ -47,6 +47,7 @@ local default_options = {
     spam_skip_prob = 0.0,    -- proportional mode: spam skip probability (0-1)
     ham_skip_prob = 0.0,     -- proportional mode: ham skip probability
     store_pool_only = false, -- store tokens in cache only (disables autotrain);
+    store_set_only = false,  -- store ham and spam sets in Redis, but do not train ANN (autotrain must be enabled);
     -- neural_vec_mpack stores vector of training data in messagepack neural_profile_digest stores profile digest
   },
   watch_interval = 60.0,
