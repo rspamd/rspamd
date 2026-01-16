@@ -630,8 +630,12 @@ local function milter_headers(task)
     local res = task:get_mempool():get_variable("fuzzy_hashes", "fstrings")
 
     if res and #res > 0 then
-      for _, h in ipairs(res) do
-        add_header('fuzzy-hashes', h)
+      if settings.headers_modify_mode == 'compat' then
+        add_header('fuzzy-hashes', table.concat(res, ','))
+      else
+        for _, h in ipairs(res) do
+          add_header('fuzzy-hashes', h)
+        end
       end
     end
   end
@@ -712,6 +716,10 @@ local config_schema = T.table({
   extended_headers_rcpt = lua_maps.map_schema:optional():doc({ summary = "Recipients for extended headers" }),
   custom = T.table({}, { open = true, extra = T.string() }):optional():doc({ summary = "Custom header definitions" }),
   default_headers_order = T.number():optional():doc({ summary = "Default order for headers (1 to insert after first Received header)" }),
+  headers_modify_mode = T.one_of({
+    T.literal('compat'),
+    T.literal('override'),
+  }):optional():doc({ summary = "Headers modification mode (compat or override)" }),
 }, {
   open = true
 }):doc({ summary = "Milter headers plugin configuration" })
@@ -802,6 +810,10 @@ end
 
 if type(opts['default_headers_order']) == 'number' then
   settings.default_headers_order = opts['default_headers_order']
+end
+
+if type(opts['headers_modify_mode']) == 'string' then
+  settings.headers_modify_mode = opts['headers_modify_mode']
 end
 
 for _, s in ipairs(opts['use']) do
