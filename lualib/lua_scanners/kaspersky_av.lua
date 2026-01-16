@@ -90,7 +90,7 @@ local function kaspersky_check(task, content, digest, rule, maybe_part)
     local clamav_compat_cmd = string.format("nSCAN %s\n", fname)
 
     if not message_fd then
-      rspamd_logger.errx('cannot store file for kaspersky scan: %s', fname)
+      rspamd_logger.errx(task, 'cannot store file for kaspersky scan: %s', fname)
       return
     end
 

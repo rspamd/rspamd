@@ -57,9 +57,14 @@ if burst + pending > 0 then
   -- If we have any time passed
   if burst > 0 and last < now then
     if enable_dynamic then
-      dynr = tonumber(redis.call('HGET', prefix, 'dr')) / 10000.0
-      if dynr == 0 then
-        dynr = 0.0001
+      dynr = tonumber(redis.call('HGET', prefix, 'dr'))
+      if dynr then
+        dynr = dynr / 10000.0
+        if dynr == 0 then
+          dynr = 0.0001
+        end
+      else
+        dynr = 1.0
       end
     else
       dynr = 1.0
@@ -75,9 +80,14 @@ if burst + pending > 0 then
   end
 
   if enable_dynamic then
-    dynb = tonumber(redis.call('HGET', prefix, 'db')) / 10000.0
-    if dynb == 0 then
-      dynb = 0.0001
+    dynb = tonumber(redis.call('HGET', prefix, 'db'))
+    if dynb then
+      dynb = dynb / 10000.0
+      if dynb == 0 then
+        dynb = 0.0001
+      end
+    else
+      dynb = 1.0
     end
   else
     dynb = 1.0

@@ -27,6 +27,8 @@
 #ifdef WITH_HYPERSCAN
 #include "hs.h"
 #include "hyperscan_tools.h"
+#include "hs_cache_backend.h"
+#include "unix-std.h"
 #endif
 #ifndef WITH_PCRE2
 #include <pcre.h>
@@ -37,6 +39,15 @@
 
 static const uint64_t map_hash_seed = 0xdeadbabeULL;
 static const char *const hash_fill = "1";
+
+#ifdef WITH_HYPERSCAN
+/*
+ * Threshold for "small" regexp maps that are compiled in memory
+ * without file/Redis caching. These are shared with workers via fork().
+ * Maps above this threshold use async compilation with caching.
+ */
+#define RSPAMD_REGEXP_MAP_SMALL_THRESHOLD 100
+#endif
 
 struct rspamd_map_helper_value {
 	gsize hits;
@@ -1150,12 +1161,16 @@ rspamd_re_map_finalize(struct rspamd_regexp_map_helper *re_map)
 #ifdef WITH_HYPERSCAN
 	unsigned int i;
 	hs_platform_info_t plt;
-	hs_compile_error_t *err;
 	struct rspamd_map *map;
 	rspamd_regexp_t *re;
 	int pcre_flags;
 
 	map = re_map->map;
+
+	if (re_map->regexps == NULL || re_map->regexps->len == 0) {
+		msg_err_map("regexp map is empty");
+		return;
+	}
 
 #if !defined(__aarch64__) && !defined(__powerpc64__)
 	if (!(map->cfg->libs_ctx->crypto_ctx->cpu_config & CPUID_SSSE3)) {
@@ -1170,6 +1185,7 @@ rspamd_re_map_finalize(struct rspamd_regexp_map_helper *re_map)
 		return;
 	}
 
+	/* Prepare patterns for hyperscan compilation */
 	re_map->patterns = g_new(char *, re_map->regexps->len);
 	re_map->flags = g_new(int, re_map->regexps->len);
 	re_map->ids = g_new(int, re_map->regexps->len);
@@ -1222,58 +1238,62 @@ rspamd_re_map_finalize(struct rspamd_regexp_map_helper *re_map)
 		re_map->ids[i] = i;
 	}
 
-	if (re_map->regexps->len > 0 && re_map->patterns) {
+	/*
+	 * Small regexp maps: compile in memory synchronously.
+	 * They will be shared with workers via fork() COW.
+	 * Large maps: queue for async compilation via hs_helper.
+	 */
+	if (re_map->regexps->len < RSPAMD_REGEXP_MAP_SMALL_THRESHOLD) {
+		hs_database_t *db = NULL;
+		hs_compile_error_t *hs_errors = NULL;
 
-		if (!rspamd_try_load_re_map_cache(re_map)) {
-			double ts1 = rspamd_get_ticks(FALSE);
-			hs_database_t *hs_db = NULL;
+		msg_info_map("regexp map %s (%ud patterns) is small, compiling in memory",
+					 map->name, re_map->regexps->len);
 
-			if (hs_compile_multi((const char **) re_map->patterns,
-								 re_map->flags,
-								 re_map->ids,
-								 re_map->regexps->len,
-								 HS_MODE_BLOCK,
-								 &plt,
-								 &hs_db,
-								 &err) != HS_SUCCESS) {
-
-				msg_err_map("cannot create tree of regexp when processing '%s': %s",
-							err->expression >= 0 ? re_map->patterns[err->expression] : "unknown regexp", err->message);
-				re_map->hs_db = NULL;
-				hs_free_compile_error(err);
-
-				return;
+		if (hs_compile_multi((const char **) re_map->patterns,
+							 re_map->flags,
+							 re_map->ids,
+							 re_map->regexps->len,
+							 HS_MODE_BLOCK,
+							 &plt,
+							 &db,
+							 &hs_errors) != HS_SUCCESS) {
+			msg_warn_map("cannot compile hyperscan for regexp map %s: %s (pattern %d), using PCRE fallback",
+						 map->name,
+						 hs_errors ? hs_errors->message : "unknown error",
+						 hs_errors ? hs_errors->expression : -1);
+			if (hs_errors) {
+				hs_free_compile_error(hs_errors);
 			}
-
-			if (re_map->map->cfg->hs_cache_dir) {
-				char fpath[PATH_MAX];
-				rspamd_snprintf(fpath, sizeof(fpath), "%s/%*xs.hsmc",
-								re_map->map->cfg->hs_cache_dir,
-								(int) rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
-				re_map->hs_db = rspamd_hyperscan_from_raw_db(hs_db, fpath);
-			}
-			else {
-				re_map->hs_db = rspamd_hyperscan_from_raw_db(hs_db, NULL);
-			}
-
-			ts1 = (rspamd_get_ticks(FALSE) - ts1) * 1000.0;
-			msg_info_map("hyperscan compiled %d regular expressions from %s in %.1f ms",
-						 re_map->regexps->len, re_map->map->name, ts1);
-			rspamd_try_save_re_map_cache(re_map);
+			/* Fall through - will use PCRE fallback */
 		}
 		else {
-			msg_info_map("hyperscan read %d cached regular expressions from %s",
-						 re_map->regexps->len, re_map->map->name);
-		}
+			/* Create hyperscan wrapper without file association */
+			re_map->hs_db = rspamd_hyperscan_from_raw_db(db, NULL);
 
-		if (hs_alloc_scratch(rspamd_hyperscan_get_database(re_map->hs_db), &re_map->hs_scratch) != HS_SUCCESS) {
-			msg_err_map("cannot allocate scratch space for hyperscan");
-			rspamd_hyperscan_free(re_map->hs_db, true);
-			re_map->hs_db = NULL;
+			if (hs_alloc_scratch(rspamd_hyperscan_get_database(re_map->hs_db),
+								 &re_map->hs_scratch) != HS_SUCCESS) {
+				msg_err_map("cannot allocate scratch for regexp map %s, using PCRE fallback",
+							map->name);
+				rspamd_hyperscan_free(re_map->hs_db, true);
+				re_map->hs_db = NULL;
+				re_map->hs_scratch = NULL;
+			}
+			else {
+				msg_info_map("regexp map %s compiled in memory successfully",
+							 map->name);
+			}
 		}
 	}
 	else {
-		msg_err_map("regexp map is empty");
+		/*
+		 * Large regexp maps: queue for async compilation via hs_helper.
+		 * Use PCRE fallback until hyperscan is ready.
+		 */
+		msg_info_map("regexp map %s (%ud patterns) queued for async hyperscan compilation, using PCRE fallback",
+					 map->name, re_map->regexps->len);
+
+		rspamd_regexp_map_add_pending(re_map, map->name);
 	}
 #endif
 }
@@ -1850,3 +1870,549 @@ rspamd_match_cdb_map(struct rspamd_cdb_map_helper *map,
 
 	return NULL;
 }
+
+/*
+ * Pending regexp map compilation queue for deferred HS compilation
+ */
+static GArray *pending_regexp_maps = NULL;
+
+void rspamd_regexp_map_add_pending(struct rspamd_regexp_map_helper *re_map,
+								   const char *name)
+{
+	struct rspamd_regexp_map_pending entry;
+	struct rspamd_map *map;
+
+	g_assert(re_map != NULL);
+	g_assert(name != NULL);
+
+	map = re_map->map;
+
+	if (pending_regexp_maps == NULL) {
+		pending_regexp_maps = g_array_new(FALSE, FALSE,
+										  sizeof(struct rspamd_regexp_map_pending));
+	}
+
+	entry.re_map = re_map;
+	entry.name = g_strdup(name);
+	rspamd_regexp_map_get_hash(re_map, entry.hash);
+
+	g_array_append_val(pending_regexp_maps, entry);
+
+	msg_info_map("added regexp map '%s' (%ud patterns) to pending compilation queue",
+				 name, re_map->regexps ? re_map->regexps->len : 0);
+}
+
+struct rspamd_regexp_map_pending *
+rspamd_regexp_map_get_pending(unsigned int *count)
+{
+	if (pending_regexp_maps == NULL || pending_regexp_maps->len == 0) {
+		*count = 0;
+		return NULL;
+	}
+
+	*count = pending_regexp_maps->len;
+	return (struct rspamd_regexp_map_pending *) pending_regexp_maps->data;
+}
+
+void rspamd_regexp_map_clear_pending(void)
+{
+	if (pending_regexp_maps == NULL) {
+		return;
+	}
+
+	for (unsigned int i = 0; i < pending_regexp_maps->len; i++) {
+		struct rspamd_regexp_map_pending *entry;
+
+		entry = &g_array_index(pending_regexp_maps,
+							   struct rspamd_regexp_map_pending, i);
+		g_free(entry->name);
+	}
+
+	g_array_free(pending_regexp_maps, TRUE);
+	pending_regexp_maps = NULL;
+}
+
+struct rspamd_regexp_map_helper *
+rspamd_regexp_map_find_pending(const char *name)
+{
+	if (pending_regexp_maps == NULL || name == NULL) {
+		return NULL;
+	}
+
+	for (unsigned int i = 0; i < pending_regexp_maps->len; i++) {
+		struct rspamd_regexp_map_pending *entry;
+
+		entry = &g_array_index(pending_regexp_maps,
+							   struct rspamd_regexp_map_pending, i);
+		if (strcmp(entry->name, name) == 0) {
+			return entry->re_map;
+		}
+	}
+
+	return NULL;
+}
+
+void rspamd_regexp_map_get_hash(struct rspamd_regexp_map_helper *re_map,
+								unsigned char *hash_out)
+{
+	g_assert(re_map != NULL);
+	g_assert(hash_out != NULL);
+
+	memcpy(hash_out, re_map->re_digest, rspamd_cryptobox_HASHBYTES);
+}
+
+#ifdef WITH_HYPERSCAN
+
+gboolean
+rspamd_regexp_map_compile_hs_to_cache(struct rspamd_regexp_map_helper *re_map,
+									  const char *cache_dir,
+									  GError **err)
+{
+	hs_platform_info_t plt;
+	hs_compile_error_t *hs_errors = NULL;
+	hs_database_t *db = NULL;
+	char *bytes = NULL;
+	gsize len;
+	char fp[PATH_MAX], np[PATH_MAX];
+	int fd;
+	struct rspamd_map *map;
+
+	g_assert(re_map != NULL);
+	g_assert(cache_dir != NULL);
+
+	map = re_map->map;
+
+	if (re_map->regexps == NULL || re_map->regexps->len == 0) {
+		g_set_error(err, g_quark_from_static_string("regexp_map"), EINVAL,
+					"regexp map is empty");
+		return FALSE;
+	}
+
+	/* Patterns must already be prepared */
+	if (re_map->patterns == NULL) {
+		g_set_error(err, g_quark_from_static_string("regexp_map"), EINVAL,
+					"regexp map patterns not prepared");
+		return FALSE;
+	}
+
+	if (hs_populate_platform(&plt) != HS_SUCCESS) {
+		g_set_error(err, g_quark_from_static_string("regexp_map"), EINVAL,
+					"cannot populate hyperscan platform");
+		return FALSE;
+	}
+
+	if (hs_compile_multi((const char **) re_map->patterns,
+						 re_map->flags,
+						 re_map->ids,
+						 re_map->regexps->len,
+						 HS_MODE_BLOCK,
+						 &plt,
+						 &db,
+						 &hs_errors) != HS_SUCCESS) {
+		g_set_error(err, g_quark_from_static_string("regexp_map"), EINVAL,
+					"cannot compile hyperscan database: %s (pattern %d)",
+					hs_errors ? hs_errors->message : "unknown error",
+					hs_errors ? hs_errors->expression : -1);
+		if (hs_errors) {
+			hs_free_compile_error(hs_errors);
+		}
+		return FALSE;
+	}
+
+	if (hs_serialize_database(db, &bytes, &len) != HS_SUCCESS) {
+		g_set_error(err, g_quark_from_static_string("regexp_map"), EINVAL,
+					"cannot serialize hyperscan database");
+		hs_free_database(db);
+		return FALSE;
+	}
+
+	hs_free_database(db);
+
+	/* Write to temp file and rename atomically */
+	rspamd_snprintf(fp, sizeof(fp), "%s/hsmc-XXXXXXXXXXXXX", cache_dir);
+
+	if ((fd = g_mkstemp_full(fp, O_WRONLY | O_CREAT | O_EXCL, 00644)) == -1) {
+		g_set_error(err, g_quark_from_static_string("regexp_map"), errno,
+					"cannot create temp file %s: %s", fp, strerror(errno));
+		free(bytes);
+		return FALSE;
+	}
+
+	if (write(fd, bytes, len) != (ssize_t) len) {
+		g_set_error(err, g_quark_from_static_string("regexp_map"), errno,
+					"cannot write to %s: %s", fp, strerror(errno));
+		close(fd);
+		unlink(fp);
+		free(bytes);
+		return FALSE;
+	}
+
+	free(bytes);
+	fsync(fd);
+	close(fd);
+
+	rspamd_snprintf(np, sizeof(np), "%s/%*xs.hsmc",
+					cache_dir,
+					(int) rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
+
+	if (rename(fp, np) == -1) {
+		g_set_error(err, g_quark_from_static_string("regexp_map"), errno,
+					"cannot rename %s to %s: %s", fp, np, strerror(errno));
+		unlink(fp);
+		return FALSE;
+	}
+
+	msg_info_map("written cached hyperscan data for %s to %s (%Hz length)",
+				 map ? map->name : "unknown", np, len);
+	rspamd_hyperscan_notice_known(np);
+
+	return TRUE;
+}
+
+struct rspamd_regexp_map_async_compile_ctx {
+	struct rspamd_regexp_map_helper *re_map;
+	rspamd_regexp_map_hs_cache_cb_t cb;
+	void *ud;
+	char *cache_dir;
+	unsigned char *serialized_db;
+	gsize serialized_len;
+};
+
+static void
+rspamd_regexp_map_async_store_cb(gboolean success,
+								 const unsigned char *data,
+								 gsize len,
+								 const char *error,
+								 void *ud)
+{
+	struct rspamd_regexp_map_async_compile_ctx *ctx = ud;
+	GError *err = NULL;
+
+	(void) data;
+	(void) len;
+
+	if (!success) {
+		g_set_error(&err, g_quark_from_static_string("regexp_map"), EINVAL,
+					"failed to store regexp map to cache backend: %s",
+					error ? error : "unknown error");
+	}
+
+	if (ctx->cb) {
+		ctx->cb(ctx->re_map, success, err, ctx->ud);
+	}
+
+	if (err) {
+		g_error_free(err);
+	}
+
+	g_free(ctx->serialized_db);
+	g_free(ctx->cache_dir);
+	g_free(ctx);
+}
+
+void rspamd_regexp_map_compile_hs_to_cache_async(struct rspamd_regexp_map_helper *re_map,
+												 const char *cache_dir,
+												 struct ev_loop *event_loop,
+												 rspamd_regexp_map_hs_cache_cb_t cb,
+												 void *ud)
+{
+	GError *err = NULL;
+	struct rspamd_map *map;
+
+	g_assert(re_map != NULL);
+	g_assert(cache_dir != NULL);
+
+	map = re_map->map;
+
+	/* All file operations go through Lua backend */
+	g_assert(rspamd_hs_cache_has_lua_backend());
+	hs_platform_info_t plt;
+	hs_compile_error_t *hs_errors = NULL;
+	hs_database_t *db = NULL;
+	char *bytes = NULL;
+	gsize len;
+
+	if (re_map->regexps == NULL || re_map->regexps->len == 0) {
+		g_set_error(&err, g_quark_from_static_string("regexp_map"), EINVAL,
+					"regexp map is empty");
+		if (cb) {
+			cb(re_map, FALSE, err, ud);
+		}
+		g_error_free(err);
+		return;
+	}
+
+	if (re_map->patterns == NULL) {
+		g_set_error(&err, g_quark_from_static_string("regexp_map"), EINVAL,
+					"regexp map patterns not prepared");
+		if (cb) {
+			cb(re_map, FALSE, err, ud);
+		}
+		g_error_free(err);
+		return;
+	}
+
+	if (hs_populate_platform(&plt) != HS_SUCCESS) {
+		g_set_error(&err, g_quark_from_static_string("regexp_map"), EINVAL,
+					"cannot populate hyperscan platform");
+		if (cb) {
+			cb(re_map, FALSE, err, ud);
+		}
+		g_error_free(err);
+		return;
+	}
+
+	if (hs_compile_multi((const char **) re_map->patterns,
+						 re_map->flags,
+						 re_map->ids,
+						 re_map->regexps->len,
+						 HS_MODE_BLOCK,
+						 &plt,
+						 &db,
+						 &hs_errors) != HS_SUCCESS) {
+		g_set_error(&err, g_quark_from_static_string("regexp_map"), EINVAL,
+					"cannot compile hyperscan database: %s (pattern %d)",
+					hs_errors ? hs_errors->message : "unknown error",
+					hs_errors ? hs_errors->expression : -1);
+		if (hs_errors) {
+			hs_free_compile_error(hs_errors);
+		}
+		if (cb) {
+			cb(re_map, FALSE, err, ud);
+		}
+		g_error_free(err);
+		return;
+	}
+
+	if (hs_serialize_database(db, &bytes, &len) != HS_SUCCESS) {
+		g_set_error(&err, g_quark_from_static_string("regexp_map"), EINVAL,
+					"cannot serialize hyperscan database");
+		hs_free_database(db);
+		if (cb) {
+			cb(re_map, FALSE, err, ud);
+		}
+		g_error_free(err);
+		return;
+	}
+
+	hs_free_database(db);
+
+	msg_info_map("compiled hyperscan database for %s (%Hz bytes), storing via Lua backend",
+				 map ? map->name : "unknown", len);
+
+	char cache_key[rspamd_cryptobox_HASHBYTES * 2 + 1];
+	rspamd_snprintf(cache_key, sizeof(cache_key), "%*xs",
+					(int) rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
+
+	struct rspamd_regexp_map_async_compile_ctx *ctx = g_malloc0(sizeof(*ctx));
+	ctx->re_map = re_map;
+	ctx->cb = cb;
+	ctx->ud = ud;
+	ctx->cache_dir = g_strdup(cache_dir);
+	ctx->serialized_db = (unsigned char *) bytes;
+	ctx->serialized_len = len;
+
+	rspamd_hs_cache_lua_save_async(cache_key,
+								   re_map->map ? re_map->map->name : "regexp_map",
+								   ctx->serialized_db, ctx->serialized_len,
+								   rspamd_regexp_map_async_store_cb, ctx);
+}
+
+gboolean
+rspamd_regexp_map_load_from_cache(struct rspamd_regexp_map_helper *re_map,
+								  const char *cache_dir)
+{
+	char fp[PATH_MAX];
+	struct rspamd_map *map;
+
+	g_assert(re_map != NULL);
+	g_assert(cache_dir != NULL);
+
+	map = re_map->map;
+
+	rspamd_snprintf(fp, sizeof(fp), "%s/%*xs.hsmc",
+					cache_dir,
+					(int) rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
+
+	rspamd_hyperscan_t *hs_db = rspamd_hyperscan_maybe_load(fp, 0);
+
+	if (hs_db == NULL) {
+		msg_info_map("cannot load hyperscan database from %s for %s",
+					 fp, map ? map->name : "unknown");
+		return FALSE;
+	}
+
+	/* Free old database if any */
+	if (re_map->hs_db != NULL) {
+		rspamd_hyperscan_free(re_map->hs_db, true);
+		re_map->hs_db = NULL;
+	}
+
+	if (re_map->hs_scratch != NULL) {
+		hs_free_scratch(re_map->hs_scratch);
+		re_map->hs_scratch = NULL;
+	}
+
+	re_map->hs_db = hs_db;
+
+	if (hs_alloc_scratch(rspamd_hyperscan_get_database(re_map->hs_db),
+						 &re_map->hs_scratch) != HS_SUCCESS) {
+		msg_err_map("cannot allocate scratch space for hyperscan");
+		rspamd_hyperscan_free(re_map->hs_db, true);
+		re_map->hs_db = NULL;
+		return FALSE;
+	}
+
+	msg_info_map("loaded hyperscan database from %s for %s",
+				 fp, map ? map->name : "unknown");
+
+	return TRUE;
+}
+
+struct rspamd_regexp_map_async_load_ctx {
+	struct rspamd_regexp_map_helper *re_map;
+	void (*cb)(gboolean success, void *ud);
+	void *ud;
+	char *cache_dir;
+};
+
+static void
+rspamd_regexp_map_async_load_cb(gboolean success,
+								const unsigned char *data,
+								gsize len,
+								const char *error,
+								void *ud)
+{
+	struct rspamd_regexp_map_async_load_ctx *ctx = ud;
+	struct rspamd_map *map = ctx->re_map->map;
+	gboolean result = FALSE;
+
+	if (!success || data == NULL || len == 0) {
+		msg_warn_map("failed to load regexp map from cache backend: %s",
+					 error ? error : "no data");
+	}
+	else {
+		hs_database_t *db = NULL;
+
+		if (hs_deserialize_database((const char *) data, len, &db) != HS_SUCCESS) {
+			msg_err_map("cannot deserialize hyperscan database from cache backend");
+		}
+		else {
+			/* Free old database if any */
+			if (ctx->re_map->hs_db != NULL) {
+				rspamd_hyperscan_free(ctx->re_map->hs_db, true);
+				ctx->re_map->hs_db = NULL;
+			}
+
+			if (ctx->re_map->hs_scratch != NULL) {
+				hs_free_scratch(ctx->re_map->hs_scratch);
+				ctx->re_map->hs_scratch = NULL;
+			}
+
+			ctx->re_map->hs_db = rspamd_hyperscan_from_raw_db(db, NULL);
+
+			if (hs_alloc_scratch(rspamd_hyperscan_get_database(ctx->re_map->hs_db),
+								 &ctx->re_map->hs_scratch) != HS_SUCCESS) {
+				msg_err_map("cannot allocate scratch space for hyperscan");
+				rspamd_hyperscan_free(ctx->re_map->hs_db, true);
+				ctx->re_map->hs_db = NULL;
+			}
+			else {
+				msg_info_map("loaded hyperscan database from cache backend for %s",
+							 map ? map->name : "unknown");
+				result = TRUE;
+			}
+		}
+	}
+
+	if (ctx->cb) {
+		ctx->cb(result, ctx->ud);
+	}
+
+	g_free(ctx->cache_dir);
+	g_free(ctx);
+}
+
+void rspamd_regexp_map_load_from_cache_async(struct rspamd_regexp_map_helper *re_map,
+											 const char *cache_dir,
+											 struct ev_loop *event_loop,
+											 void (*cb)(gboolean success, void *ud),
+											 void *ud)
+{
+	g_assert(re_map != NULL);
+	g_assert(cache_dir != NULL);
+
+	/* All file operations go through Lua backend */
+	g_assert(rspamd_hs_cache_has_lua_backend());
+
+	char cache_key[rspamd_cryptobox_HASHBYTES * 2 + 1];
+	rspamd_snprintf(cache_key, sizeof(cache_key), "%*xs",
+					(int) rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
+
+	struct rspamd_regexp_map_async_load_ctx *ctx = g_malloc0(sizeof(*ctx));
+	ctx->re_map = re_map;
+	ctx->cb = cb;
+	ctx->ud = ud;
+	ctx->cache_dir = g_strdup(cache_dir);
+
+	rspamd_hs_cache_lua_load_async(cache_key,
+								   re_map->map ? re_map->map->name : "regexp_map",
+								   rspamd_regexp_map_async_load_cb, ctx);
+}
+
+#else /* !WITH_HYPERSCAN */
+
+gboolean
+rspamd_regexp_map_compile_hs_to_cache(struct rspamd_regexp_map_helper *re_map,
+									  const char *cache_dir,
+									  GError **err)
+{
+	(void) re_map;
+	(void) cache_dir;
+	g_set_error(err, g_quark_from_static_string("regexp_map"), ENOTSUP,
+				"hyperscan not supported");
+	return FALSE;
+}
+
+void rspamd_regexp_map_compile_hs_to_cache_async(struct rspamd_regexp_map_helper *re_map,
+												 const char *cache_dir,
+												 struct ev_loop *event_loop,
+												 rspamd_regexp_map_hs_cache_cb_t cb,
+												 void *ud)
+{
+	(void) re_map;
+	(void) cache_dir;
+	(void) event_loop;
+	GError *err = NULL;
+	g_set_error(&err, g_quark_from_static_string("regexp_map"), ENOTSUP,
+				"hyperscan not supported");
+	if (cb) {
+		cb(re_map, FALSE, err, ud);
+	}
+	g_error_free(err);
+}
+
+gboolean
+rspamd_regexp_map_load_from_cache(struct rspamd_regexp_map_helper *re_map,
+								  const char *cache_dir)
+{
+	(void) re_map;
+	(void) cache_dir;
+	return FALSE;
+}
+
+void rspamd_regexp_map_load_from_cache_async(struct rspamd_regexp_map_helper *re_map,
+											 const char *cache_dir,
+											 struct ev_loop *event_loop,
+											 void (*cb)(gboolean success, void *ud),
+											 void *ud)
+{
+	(void) re_map;
+	(void) cache_dir;
+	(void) event_loop;
+	if (cb) {
+		cb(FALSE, ud);
+	}
+}
+
+#endif /* WITH_HYPERSCAN */

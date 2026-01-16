@@ -31,7 +31,7 @@ PreCommit:
     command: ['luacheck', 'lualib', 'src/plugins/lua']
   ClangFormat:
     enabled: true
-    command: ['sh', '-c', 'git clang-format --diff --quiet || (echo "Running clang-format to fix issues..." && git clang-format && git add -u && echo "Files formatted and staged.")']
+    command: ['sh', '-c', 'git clang-format --extensions c,cc,cpp,cxx,h,hh,hpp,hxx --diff --quiet || (echo "Running clang-format to fix issues..." && git clang-format --extensions c,cc,cpp,cxx,h,hh,hpp,hxx && git add -u && echo "Files formatted and staged.")']
     on_warn: fail
 #PostCheckout:
 #  ALL: # Special hook name that customizes all hooks of this type

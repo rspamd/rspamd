@@ -30,6 +30,8 @@
 extern "C" {
 #endif
 
+struct ev_loop;
+
 enum rspamd_multipattern_flags {
 	RSPAMD_MULTIPATTERN_DEFAULT = 0,
 	RSPAMD_MULTIPATTERN_ICASE = (1 << 0),
@@ -43,8 +45,29 @@ enum rspamd_multipattern_flags {
 	RSPAMD_MULTIPATTERN_NO_START = (1 << 7),
 };
 
+/**
+ * Multipattern state machine for async compilation
+ */
+enum rspamd_multipattern_state {
+	RSPAMD_MP_STATE_INIT = 0,  /* Patterns added, ACISM ready */
+	RSPAMD_MP_STATE_COMPILING, /* HS compile in progress */
+	RSPAMD_MP_STATE_COMPILED,  /* HS ready */
+	RSPAMD_MP_STATE_FALLBACK   /* HS failed, ACISM permanent */
+};
+
+/**
+ * Multipattern compilation mode - controls how the multipattern is compiled
+ * This is a property of the multipattern as a whole, not per-pattern.
+ */
+enum rspamd_multipattern_mode {
+	RSPAMD_MP_MODE_SYNC = 0, /* Sync compile immediately (original behavior) */
+	RSPAMD_MP_MODE_FALLBACK, /* ACISM fallback + async HS compile (for TLD trie) */
+	RSPAMD_MP_MODE_LAZY,     /* Async HS compile, no fallback (generic multipatterns) */
+};
+
 struct rspamd_multipattern;
 struct rspamd_cryptobox_library_ctx;
+struct ev_loop;
 
 /**
  * Called on pattern match
@@ -63,6 +86,18 @@ typedef int (*rspamd_multipattern_cb_t)(struct rspamd_multipattern *mp,
 										const char *text,
 										gsize len,
 										void *context);
+
+/**
+ * Async compilation callback
+ * @param mp multipattern structure
+ * @param success TRUE if compilation succeeded
+ * @param err error if compilation failed (NULL on success)
+ * @param ud userdata
+ */
+typedef void (*rspamd_multipattern_compile_cb_t)(struct rspamd_multipattern *mp,
+												 gboolean success,
+												 GError *err,
+												 void *ud);
 
 /**
  * Init multipart library and set the appropriate cache dir
@@ -98,6 +133,14 @@ struct rspamd_multipattern *rspamd_multipattern_create_full(
 	const char **patterns,
 	unsigned int npatterns,
 	enum rspamd_multipattern_flags flags);
+
+/**
+ * Set compilation mode for multipattern (must be called before compile)
+ * @param mp
+ * @param mode compilation mode (SYNC, FALLBACK, or LAZY)
+ */
+void rspamd_multipattern_set_mode(struct rspamd_multipattern *mp,
+								  enum rspamd_multipattern_mode mode);
 
 /**
  * Adds new pattern to match engine from zero-terminated string
@@ -168,6 +211,144 @@ void rspamd_multipattern_destroy(struct rspamd_multipattern *mp);
  * @return
  */
 gboolean rspamd_multipattern_has_hyperscan(void);
+
+/**
+ * Get current state of multipattern compilation
+ * @param mp
+ * @return state enum value
+ */
+enum rspamd_multipattern_state rspamd_multipattern_get_state(
+	struct rspamd_multipattern *mp);
+
+/**
+ * Check if hyperscan database is ready for use
+ * @param mp
+ * @return TRUE if hyperscan is compiled and ready
+ */
+gboolean rspamd_multipattern_is_hs_ready(struct rspamd_multipattern *mp);
+
+/**
+ * Start async hyperscan compilation. ACISM fallback must already be built
+ * (via rspamd_multipattern_compile with appropriate flags).
+ * @param mp multipattern (must be in INIT or COMPILING state)
+ * @param flags compilation flags
+ * @param event_loop event loop for async operations
+ * @param cb callback when compilation completes
+ * @param ud userdata for callback
+ */
+void rspamd_multipattern_compile_async(struct rspamd_multipattern *mp,
+									   int flags,
+									   struct ev_loop *event_loop,
+									   rspamd_multipattern_compile_cb_t cb,
+									   void *ud);
+
+/**
+ * Get pattern hash for cache key generation
+ * @param mp
+ * @param hash_out output buffer (must be rspamd_cryptobox_HASHBYTES)
+ */
+void rspamd_multipattern_get_hash(struct rspamd_multipattern *mp,
+								  unsigned char *hash_out);
+
+/**
+ * Hot-swap hyperscan database after async compilation completes.
+ * Called internally or from IPC handler when hs_helper sends compiled DB.
+ * @param mp multipattern structure
+ * @param hs_db new hyperscan database (takes ownership)
+ * @return TRUE if swap succeeded
+ */
+gboolean rspamd_multipattern_set_hs_db(struct rspamd_multipattern *mp,
+									   void *hs_db);
+
+/**
+ * Pending compilation entry for deferred HS compilation
+ */
+struct rspamd_multipattern_pending {
+	struct rspamd_multipattern *mp;
+	char *name;             /* Identifier for logging/IPC */
+	unsigned char hash[64]; /* Cache key hash (rspamd_cryptobox_HASHBYTES) */
+};
+
+/**
+ * Add multipattern to pending compilation queue.
+ * Called during pre-fork initialization when hs_helper is not yet available.
+ * @param mp multipattern in COMPILING state
+ * @param name identifier for this multipattern (e.g., "tld")
+ */
+void rspamd_multipattern_add_pending(struct rspamd_multipattern *mp,
+									 const char *name);
+
+/**
+ * Get list of pending multipattern compilations.
+ * Returns array of rspamd_multipattern_pending, caller must free array (not contents).
+ * @param count output: number of pending entries
+ * @return array of pending entries or NULL if none
+ */
+struct rspamd_multipattern_pending *rspamd_multipattern_get_pending(
+	unsigned int *count);
+
+/**
+ * Clear pending queue after hs_helper has processed it.
+ */
+void rspamd_multipattern_clear_pending(void);
+
+/**
+ * Find a pending multipattern by name.
+ * @param name identifier
+ * @return multipattern or NULL if not found
+ */
+struct rspamd_multipattern *rspamd_multipattern_find_pending(const char *name);
+
+/**
+ * Compile hyperscan database and save to cache file.
+ * This is called by hs_helper for async compilation.
+ * @param mp multipattern in COMPILING state
+ * @param cache_dir directory to save cache file
+ * @param err error output
+ * @return TRUE on success
+ */
+gboolean rspamd_multipattern_compile_hs_to_cache(struct rspamd_multipattern *mp,
+												 const char *cache_dir,
+												 GError **err);
+
+typedef void (*rspamd_multipattern_hs_cache_cb_t)(struct rspamd_multipattern *mp,
+												  gboolean success,
+												  GError *err,
+												  void *ud);
+
+/**
+ * Compile multipattern HS database and store it in the configured HS cache backend.
+ * If Lua backend is enabled, store is done asynchronously and callback is invoked on completion.
+ * For file backend, compilation+store is synchronous and callback is invoked immediately.
+ */
+void rspamd_multipattern_compile_hs_to_cache_async(struct rspamd_multipattern *mp,
+												   const char *cache_dir,
+												   struct ev_loop *event_loop,
+												   rspamd_multipattern_hs_cache_cb_t cb,
+												   void *ud);
+
+/**
+ * Load hyperscan database from cache file.
+ * This is called by workers when they receive notification that
+ * hs_helper has compiled a multipattern database.
+ * @param mp multipattern in COMPILING state
+ * @param cache_dir directory containing cache files
+ * @return TRUE if loaded successfully
+ */
+gboolean rspamd_multipattern_load_from_cache(struct rspamd_multipattern *mp,
+											 const char *cache_dir);
+
+/**
+ * Asynchronously load hyperscan database for a multipattern from the configured
+ * HS cache backend (Lua backend if present, otherwise filesystem).
+ *
+ * The callback is invoked when hot-swap has been attempted.
+ */
+void rspamd_multipattern_load_from_cache_async(struct rspamd_multipattern *mp,
+											   const char *cache_dir,
+											   struct ev_loop *event_loop,
+											   void (*cb)(gboolean success, void *ud),
+											   void *ud);
 
 #ifdef __cplusplus
 }

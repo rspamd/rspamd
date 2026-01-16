@@ -28,6 +28,7 @@ SET(LIBRSPAMDSERVERSRC
         ${CMAKE_CURRENT_SOURCE_DIR}/task.c
         ${CMAKE_CURRENT_SOURCE_DIR}/url.c
         ${CMAKE_CURRENT_SOURCE_DIR}/worker_util.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/http_content_negotiation.c
         ${CMAKE_CURRENT_SOURCE_DIR}/logger/logger.c
         ${CMAKE_CURRENT_SOURCE_DIR}/logger/logger_file.c
         ${CMAKE_CURRENT_SOURCE_DIR}/logger/logger_syslog.c
@@ -47,6 +48,7 @@ SET(LIBRSPAMDSERVERSRC
         ${CMAKE_CURRENT_SOURCE_DIR}/html/html_url_rewrite_c.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/html/html_tests.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/hyperscan_tools.cxx
+        ${CMAKE_CURRENT_SOURCE_DIR}/hs_cache_backend.c
         ${CMAKE_CURRENT_SOURCE_DIR}/backtrace.cxx
         ${LIBCSSSRC})
 

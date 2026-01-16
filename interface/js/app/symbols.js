@@ -68,7 +68,8 @@ define(["jquery", "app/common", "footable"],
                         item.frequency = 0;
                     }
                     freqs.push(item.frequency);
-                    item.frequency = Number(item.frequency).toFixed(2);
+                    // Don't round yet, keep precision for scaling
+                    item.frequency = Number(item.frequency);
                     if (!(item.group in lookup)) {
                         lookup[item.group] = 1;
                         distinct_groups.push(item.group);

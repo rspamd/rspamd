@@ -17,6 +17,7 @@
 #include "http_router.h"
 #include "http_connection.h"
 #include "http_private.h"
+#include "libserver/http_content_negotiation.h"
 #include "libutil/regexp.h"
 #include "libutil/printf.h"
 #include "libserver/logger.h"
@@ -335,9 +336,20 @@ rspamd_http_router_finish_handler(struct rspamd_http_connection *conn,
 
 		encoding = rspamd_http_message_find_header(msg, "Accept-Encoding");
 
-		if (encoding && rspamd_substring_search(encoding->begin, encoding->len,
-												"gzip", 4) != -1) {
-			entry->support_gzip = TRUE;
+		if (encoding) {
+			if (rspamd_substring_search(encoding->begin, encoding->len,
+										"gzip", 4) != -1) {
+				entry->support_gzip = TRUE;
+				entry->compression_flags |= RSPAMD_HTTP_COMPRESS_GZIP;
+			}
+			if (rspamd_substring_search(encoding->begin, encoding->len,
+										"zstd", 4) != -1) {
+				entry->compression_flags |= RSPAMD_HTTP_COMPRESS_ZSTD;
+			}
+			if (rspamd_substring_search(encoding->begin, encoding->len,
+										"deflate", 7) != -1) {
+				entry->compression_flags |= RSPAMD_HTTP_COMPRESS_DEFLATE;
+			}
 		}
 
 		if (handler != NULL) {

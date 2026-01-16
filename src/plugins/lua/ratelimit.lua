@@ -72,9 +72,19 @@ local message_func = function(_, limit_type, _, _, _)
 end
 
 local function load_scripts(_, _)
-  bucket_check_id = lua_redis.load_redis_script_from_file(bucket_check_script, redis_params)
-  bucket_update_id = lua_redis.load_redis_script_from_file(bucket_update_script, redis_params)
-  bucket_cleanup_id = lua_redis.load_redis_script_from_file(bucket_cleanup_script, redis_params)
+  local err
+  bucket_check_id, err = lua_redis.load_redis_script_from_file(bucket_check_script, redis_params)
+  if err then
+    rspamd_logger.errx(rspamd_config, err)
+  end
+  bucket_update_id, err = lua_redis.load_redis_script_from_file(bucket_update_script, redis_params)
+  if err then
+    rspamd_logger.errx(rspamd_config, err)
+  end
+  bucket_cleanup_id, err = lua_redis.load_redis_script_from_file(bucket_cleanup_script, redis_params)
+  if err then
+    rspamd_logger.errx(rspamd_config, err)
+  end
 end
 
 --- Check whether this addr is bounce
@@ -373,7 +383,7 @@ local function ratelimit_cb(task)
   local function gen_check_cb(prefix, bucket, lim_name, lim_key)
     return function(err, data)
       if err then
-        rspamd_logger.errx('cannot check limit %s: %s', prefix, err)
+        rspamd_logger.errx(task, 'cannot check limit %s: %s', prefix, err)
       elseif type(data) == 'table' and data[1] then
         lua_util.debugm(N, task,
             "got reply for limit %s (%s / %s); %s burst, %s:%s dyn, %s leaked",
@@ -476,7 +486,7 @@ local function maybe_cleanup_pending(task)
         local bucket = v.bucket
         local function cleanup_cb(err, data)
           if err then
-            rspamd_logger.errx('cannot cleanup limit %s: %s', k, err)
+            rspamd_logger.errx(task, 'cannot cleanup limit %s: %s', k, err)
           else
             lua_util.debugm(N, task, 'cleaned pending bucked for %s: %s', k, data)
           end

@@ -229,6 +229,7 @@ const char *rspamd_re_cache_type_to_string(enum rspamd_re_type type);
 enum rspamd_re_type rspamd_re_cache_type_from_string(const char *str);
 
 struct ev_loop;
+struct rspamd_worker;
 /**
  * Compile expressions to the hyperscan tree and store in the `cache_dir`
  */
@@ -237,6 +238,7 @@ int rspamd_re_cache_compile_hyperscan(struct rspamd_re_cache *cache,
 									  double max_time,
 									  gboolean silent,
 									  struct ev_loop *event_loop,
+									  struct rspamd_worker *worker,
 									  void (*cb)(unsigned int ncompiled, GError *err, void *cbd),
 									  void *cbd);
 
@@ -248,6 +250,7 @@ int rspamd_re_cache_compile_hyperscan_scoped(struct rspamd_re_cache *cache_head,
 											 double max_time,
 											 gboolean silent,
 											 struct ev_loop *event_loop,
+											 struct rspamd_worker *worker,
 											 void (*cb)(unsigned int ncompiled, GError *err, void *cbd),
 											 void *cbd);
 
@@ -275,6 +278,18 @@ enum rspamd_hyperscan_status rspamd_re_cache_load_hyperscan_scoped(
 	const char *cache_dir, bool try_load);
 
 /**
+ * Asynchronously load hyperscan cache for all scopes using the configured cache backend
+ * (Lua backend if present, otherwise filesystem).
+ *
+ * This function does not block; it schedules async loads and applies hot-swap when
+ * blobs arrive.
+ */
+void rspamd_re_cache_load_hyperscan_scoped_async(struct rspamd_re_cache *cache_head,
+												 struct ev_loop *event_loop,
+												 const char *cache_dir,
+												 bool try_load);
+
+/**
  * Compile expressions to the hyperscan tree for a single scope with locking
  */
 int rspamd_re_cache_compile_hyperscan_scoped_single(struct rspamd_re_cache *cache,
@@ -283,6 +298,7 @@ int rspamd_re_cache_compile_hyperscan_scoped_single(struct rspamd_re_cache *cach
 													double max_time,
 													gboolean silent,
 													struct ev_loop *event_loop,
+													struct rspamd_worker *worker,
 													void (*cb)(const char *scope, unsigned int ncompiled, GError *err, void *cbd),
 													void *cbd);
 

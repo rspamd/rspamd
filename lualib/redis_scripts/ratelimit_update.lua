@@ -32,7 +32,12 @@ if enable_dynamic then
 
   if max_dr > 1 then
     local rate_mult = tonumber(KEYS[3])
-    dr = tonumber(redis.call('HGET', prefix, 'dr')) / 10000
+    dr = tonumber(redis.call('HGET', prefix, 'dr'))
+    if dr then
+      dr = dr / 10000
+    else
+      dr = 1.0
+    end
 
     if rate_mult > 1.0 and dr < max_dr then
       dr = dr * rate_mult
@@ -57,7 +62,12 @@ if enable_dynamic then
   local max_db = tonumber(KEYS[6])
   if max_db > 1 then
     local rate_mult = tonumber(KEYS[4])
-    db = tonumber(redis.call('HGET', prefix, 'db')) / 10000
+    db = tonumber(redis.call('HGET', prefix, 'db'))
+    if db then
+      db = db / 10000
+    else
+      db = 1.0
+    end
 
     if rate_mult > 1.0 and db < max_db then
       db = db * rate_mult

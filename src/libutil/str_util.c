@@ -2932,6 +2932,106 @@ rspamd_decode_uue_buf(const char *in, gsize inlen,
 	return (o - out);
 }
 
+gssize
+rspamd_decode_ascii85_buf(const char *in, gsize inlen,
+						  unsigned char *out, gsize outlen)
+{
+	const char *p = in;
+	const char *end = in + inlen;
+	unsigned char *o = out;
+	unsigned char *out_end = out + outlen;
+	uint32_t tuple = 0;
+	int count = 0;
+
+	while (p < end) {
+		unsigned char c = *p++;
+
+		/* Skip whitespace */
+		if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f') {
+			continue;
+		}
+
+		/* Check for end marker '~>' */
+		if (c == '~') {
+			if (p < end && *p == '>') {
+				/* End of ASCII85 data */
+				break;
+			}
+			if (p >= end) {
+				/* '~' at end of buffer - treat as truncated end marker */
+				break;
+			}
+			/* Invalid: '~' followed by something other than '>' */
+			return -1;
+		}
+
+		/* Special case: 'z' represents 4 zero bytes */
+		if (c == 'z') {
+			if (count != 0) {
+				/* 'z' can only appear between complete groups */
+				return -1;
+			}
+			if (out_end - o < 4) {
+				return -1;
+			}
+			*o++ = 0;
+			*o++ = 0;
+			*o++ = 0;
+			*o++ = 0;
+			continue;
+		}
+
+		/* Valid ASCII85 characters are '!' (33) to 'u' (117) */
+		if (c < '!' || c > 'u') {
+			return -1;
+		}
+
+		/* Accumulate the value */
+		tuple = tuple * 85 + (c - '!');
+		count++;
+
+		if (count == 5) {
+			/* Output 4 bytes (big-endian) */
+			if (out_end - o < 4) {
+				return -1;
+			}
+			*o++ = (tuple >> 24) & 0xFF;
+			*o++ = (tuple >> 16) & 0xFF;
+			*o++ = (tuple >> 8) & 0xFF;
+			*o++ = tuple & 0xFF;
+			tuple = 0;
+			count = 0;
+		}
+	}
+
+	/* Handle final incomplete group */
+	if (count > 0) {
+		/* Pad with 'u' (84) to complete the group */
+		int padding = 5 - count;
+		for (int i = 0; i < padding; i++) {
+			tuple = tuple * 85 + 84;
+		}
+
+		/* Output (count - 1) bytes */
+		int out_bytes = count - 1;
+		if (out_end - o < out_bytes) {
+			return -1;
+		}
+
+		if (out_bytes >= 1) {
+			*o++ = (tuple >> 24) & 0xFF;
+		}
+		if (out_bytes >= 2) {
+			*o++ = (tuple >> 16) & 0xFF;
+		}
+		if (out_bytes >= 3) {
+			*o++ = (tuple >> 8) & 0xFF;
+		}
+	}
+
+	return o - out;
+}
+
 #define BITOP(a, b, op) \
 	((a)[(gsize) (b) / (8 * sizeof *(a))] op(gsize) 1 << ((gsize) (b) % (8 * sizeof *(a))))
 

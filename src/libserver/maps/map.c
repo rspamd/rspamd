@@ -3898,6 +3898,7 @@ void rspamd_map_trigger_hyperscan_compilation(struct rspamd_map *map)
 															1.0,   /* max_time */
 															FALSE, /* silent */
 															worker->ctx ? ((struct rspamd_abstract_worker_ctx *) worker->ctx)->event_loop : NULL,
+															worker,
 															NULL,  /* callback */
 															NULL); /* cbdata */
 		}

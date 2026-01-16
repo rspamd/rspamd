@@ -37,7 +37,7 @@ void css_rule::override_values(const css_rule &other)
 	}
 
 	for (const auto &ov: other.values) {
-		if (isset(&bits, static_cast<int>(1 << ov.value.index()))) {
+		if (bits & (1 << ov.value.index())) {
 			/* We need to override the existing value */
 			/*
 			 * The algorithm is not very efficient,
@@ -119,8 +119,8 @@ auto css_declarations_block::add_rule(rule_shared_ptr rule) -> bool
 				ret = false;
 			}
 			else {
-				/* Merge both */
-				local_rule->merge_values(*rule);
+				/* Override with remote - in CSS, later declarations win */
+				local_rule->override_values(*rule);
 			}
 		}
 	}
@@ -525,6 +525,36 @@ TEST_SUITE("css")
 				CHECK(res->has_property(c.second[i]));
 			}
 		}
+	}
+
+	TEST_CASE("duplicate color properties - last wins")
+	{
+		/* Test case: duplicate color declarations should use the last value
+		 * This is a common spam technique to hide text by declaring white color first,
+		 * then overriding with visible color. CSS spec says last declaration wins.
+		 */
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+										"css", 0);
+
+		/* First color is white (#FFFFFF), second is dark (#232333) - last should win */
+		const char *css_text = "color:#FFFFFF;font-weight:400;color:#232333";
+		auto res = process_declaration_tokens(pool,
+											  get_rules_parser_functor(pool, css_text));
+
+		CHECK(res.get() != nullptr);
+		CHECK(res->has_property(css_property(css_property_type::PROPERTY_COLOR)));
+
+		auto *block = res->compile_to_block(pool);
+		CHECK(block != nullptr);
+		/* Check that fg_color is set (mask is non-zero) */
+		auto fg_mask = block->fg_color_mask;
+		CHECK(fg_mask != 0);
+		/* The color should be #232333 (dark), not #FFFFFF (white) */
+		CHECK(block->fg_color.r == 0x23);
+		CHECK(block->fg_color.g == 0x23);
+		CHECK(block->fg_color.b == 0x33);
+
+		rspamd_mempool_delete(pool);
 	}
 }
 

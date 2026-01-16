@@ -370,7 +370,7 @@ local function aliases_callback(task)
 
     -- Resolve through alias system
     local canonical = lua_aliases.resolve_address(addr, resolve_opts)
-    if canonical and canonical ~= original_addr then
+    if canonical and canonical:lower() ~= original_addr:lower() then
       -- Update address
       local user, domain = canonical:match('^([^@]+)@(.+)$')
       if user and domain then
@@ -419,7 +419,7 @@ local function aliases_callback(task)
 
       -- Resolve through alias system
       local canonical = lua_aliases.resolve_address(addr, resolve_opts)
-      if canonical and canonical ~= original_addr then
+      if canonical and canonical:lower() ~= original_addr:lower() then
         -- Update address
         local user, domain = canonical:match('^([^@]+)@(.+)$')
         if user and domain then

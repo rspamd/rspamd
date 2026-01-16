@@ -148,6 +148,20 @@ def HTTP(method, host, port, path, data=None, headers={}):
     return [s, t]
 
 
+def HTTP_With_Headers(method, host, port, path, data=None, headers={}):
+    """HTTP request that returns response headers.
+    Returns [status, body, headers_dict]
+    """
+    c = http.client.HTTPConnection("%s:%s" % (host, port))
+    c.request(method, path, data, headers)
+    r = c.getresponse()
+    t = r.read()
+    s = r.status
+    h = dict(r.getheaders())
+    c.close()
+    return [s, t, h]
+
+
 def hard_link(src, dst):
     os.link(src, dst)
 

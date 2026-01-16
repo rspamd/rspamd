@@ -279,7 +279,17 @@ Rspamd Setup
   Set Directory Ownership  ${RSPAMD_TMPDIR}  ${RSPAMD_USER}  ${RSPAMD_GROUP}
 
   # Export ${RSPAMD_TMPDIR} to appropriate scope according to ${RSPAMD_SCOPE}
-  Export Scoped Variables  ${RSPAMD_SCOPE}  RSPAMD_TMPDIR=${RSPAMD_TMPDIR}
+  IF  '${RSPAMD_SCOPE}' == 'Test'
+    Set Test Variable  ${RSPAMD_TMPDIR}
+  ELSE IF  '${RSPAMD_SCOPE}' == 'Suite'
+    Set Suite Variable  ${RSPAMD_TMPDIR}
+    # Needed for child suites (e.g. directory suites with per-file .robot suites)
+    Set Global Variable  ${RSPAMD_TMPDIR}
+  ELSE IF  '${RSPAMD_SCOPE}' == 'Global'
+    Set Global Variable  ${RSPAMD_TMPDIR}
+  ELSE
+    Fail  message="Don't know what to do with scope: ${RSPAMD_SCOPE}"
+  END
 
   Run Rspamd  check_port=${check_port}
 
@@ -492,6 +502,24 @@ Sync Fuzzy Storage
   END
   Log  ${result.stdout}
   Sleep  0.1s  Try give fuzzy storage time to sync
+
+Run Control Command
+  [Documentation]  Run a control socket command and return the result
+  [Arguments]  ${command}  ${socket}
+  ${result} =  Run Process  ${RSPAMADM}  control  -s
+  ...  ${socket}  ${command}  timeout=10s
+  Log  ${result.stdout}
+  Log  ${result.stderr}
+  [Return]  ${result}
+
+Run Control Command JSON
+  [Documentation]  Run a control socket command and return JSON result
+  [Arguments]  ${command}  ${socket}
+  ${result} =  Run Process  ${RSPAMADM}  control  -j  -s
+  ...  ${socket}  ${command}  timeout=10s
+  Log  ${result.stdout}
+  Log  ${result.stderr}
+  [Return]  ${result}
 
 Run Dummy Http
   ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py  -pf  /tmp/dummy_http.pid
