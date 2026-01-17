@@ -33,39 +33,34 @@ function M.build_llm_input(task, opts)
   local subject = task:get_subject() or ''
   local url_content, from_content = get_meta_llm_content(task)
 
-  local sel_part = lua_mime.get_displayed_text_part(task)
-  if not sel_part then
-    lua_util.debugm(N, task, 'no displayed text part found')
-    return nil, nil
-  end
-
-  local nwords = sel_part:get_words_count() or 0
-  if nwords < 5 then
-    lua_util.debugm(N, task, 'too few words in part: %s', nwords)
-    return nil, sel_part
-  end
-
+  -- Use extract_text_limited for content
   local max_tokens = tonumber(opts.max_tokens) or 1024
-  local text
-  if nwords > max_tokens then
-    local words = sel_part:get_words('norm') or {}
-    if #words > max_tokens then
-      text = table.concat(words, ' ', 1, max_tokens)
-    else
-      text = table.concat(words, ' ')
-    end
-    lua_util.debugm(N, task, 'truncated text to %s tokens (had %s words)', max_tokens, nwords)
-  else
-    -- Keep rspamd_text (userdata) intact; consumers (http/ucl) can use it directly
-    text = sel_part:get_content_oneline() or ''
+  -- Rough estimation: 1 token approx 4 bytes (english), but let's be generous
+  -- However, we can use max_words as a proxy for tokens?
+  -- opts.max_tokens is typically tokens.
+  -- Rspamd uses bytes for limit.
+  -- Let's stick with what we had but using extract_text_limited
+
+  local extraction_opts = {
+    max_bytes = max_tokens * 6, -- Rough estimate
+    max_words = max_tokens, -- Better estimate if available
+    strip_quotes = true, -- Default cleanup for LLM
+    smart_trim = true, -- Enable heuristics
+  }
+
+  local res = lua_mime.extract_text_limited(task, extraction_opts)
+
+  if not res or res.text == "" then
+    lua_util.debugm(N, task, 'no text extracted')
+    return nil, nil
   end
 
   return {
     subject = subject,
     from = from_content,
     url_domains = url_content,
-    text = text,
-  }, sel_part
+    text = res.text,
+  }, nil -- part is not available as before since we extract from task directly
 end
 
 -- Backwards-compat alias
