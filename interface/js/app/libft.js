@@ -128,7 +128,7 @@ define(["jquery", "app/common", "footable"],
                     "text-align": "right",
                     "white-space": "nowrap"
                 },
-                sortValue: function (val) { return Number(val.options.sortValue); }
+                sortValue: (val) => Number(val.options.sortValue)
             }, {
                 name: "symbols",
                 title: "Symbols" +
@@ -156,14 +156,14 @@ define(["jquery", "app/common", "footable"],
                 title: "Scan time",
                 breakpoints: "lg",
                 style: {maxWidth: 72},
-                sortValue: function (val) { return Number(val); }
+                sortValue: (val) => Number(val)
             }, {
                 classes: "history-col-time",
                 sorted: true,
                 direction: "DESC",
                 name: "time",
                 title: "Time",
-                sortValue: function (val) { return Number(val.options.sortValue); }
+                sortValue: (val) => Number(val.options.sortValue)
             }, {
                 name: "user",
                 title: "Authenticated user",

@@ -92,13 +92,11 @@ define(["jquery", "app/common", "footable"],
                 }
             }
             $.each(items, (i, item) => {
-                item.frequency = Number(item.frequency) * mult;
-
-                if (exp > 0) {
-                    item.frequency = item.frequency.toFixed(2) + "e-" + exp;
-                } else {
-                    item.frequency = item.frequency.toFixed(2);
-                }
+                const numericFreq = Number(item.frequency);
+                item.frequency = {
+                    value: (numericFreq * mult).toFixed(2) + ((exp > 0) ? "e-" + exp : ""),
+                    options: {sortValue: numericFreq}
+                };
             });
             return [items, distinct_groups];
         }
@@ -178,11 +176,11 @@ define(["jquery", "app/common", "footable"],
                             {name: "frequency",
                                 title: "Frequency",
                                 breakpoints: "md",
-                                sortValue: function (value) { return Number(value).toFixed(2); }},
+                                sortValue: (val) => val.options.sortValue},
                             {name: "time",
                                 title: "Avg. time",
                                 breakpoints: "md",
-                                sortValue: function (value) { return parseFloat(value); }},
+                                sortValue: (val) => parseFloat(val)},
                         ],
                         rows: items[0],
                         paging: {
