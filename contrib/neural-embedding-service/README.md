@@ -50,7 +50,7 @@ See the main guide: `doc/neural-llm-embeddings-guide.md`
 |----------|---------|-------------|
 | `EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | FastEmbed model name |
 | `EMBEDDING_PORT` | `8080` | Port to listen on |
-| `EMBEDDING_HOST` | `0.0.0.0` | Host to bind to |
+| `EMBEDDING_HOST` | `0.0.0.0` | Host to bind |
 
 ### Command Line Arguments
 

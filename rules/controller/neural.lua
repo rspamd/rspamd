@@ -25,6 +25,17 @@ local rspamd_logger = require "rspamd_logger"
 local E = {}
 local N = 'neural'
 
+local function get_request_header(task, name)
+  local hdr = task:get_request_header(name)
+  if type(hdr) == 'table' then
+    hdr = hdr[1]
+  end
+  if hdr then
+    return tostring(hdr)
+  end
+  return nil
+end
+
 -- Controller neural plugin
 
 local learn_request_schema = T.table({
@@ -176,7 +187,7 @@ local function handle_learn_message(task, conn)
     return
   end
 
-  local cls = task:get_request_header('ANN-Train') or task:get_request_header('Class')
+  local cls = get_request_header(task, 'ANN-Train') or get_request_header(task, 'Class')
   if not cls then
     conn:send_error(400, 'missing class header (ANN-Train or Class)')
     return
@@ -188,7 +199,7 @@ local function handle_learn_message(task, conn)
     return
   end
 
-  local rule_name = task:get_request_header('Rule') or 'default'
+  local rule_name = get_request_header(task, 'Rule') or 'default'
   local rule = neural_common.settings.rules[rule_name]
   if not rule then
     conn:send_error(400, 'unknown rule')
@@ -275,7 +286,7 @@ local function handle_learn_message(task, conn)
       version = version,
       digest = set.digest,
       distance = 0,
-      providers_digest = neural_common.providers_config_digest(rule.providers),
+      providers_digest = neural_common.providers_config_digest(rule.providers, rule),
     }
 
     local profile_serialized = ucl.to_format(profile, 'json-compact', true)

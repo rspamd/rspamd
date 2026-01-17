@@ -13,8 +13,12 @@ local llm_common = require "llm_common"
 
 local N = "neural.llm"
 
-local function select_text(task)
-  local input_tbl = llm_common.build_llm_input(task)
+local function select_text(task, llm)
+  local opts = {}
+  if llm and llm.max_tokens then
+    opts.max_tokens = llm.max_tokens
+  end
+  local input_tbl = llm_common.build_llm_input(task, opts)
   return input_tbl
 end
 
@@ -23,6 +27,12 @@ local function compose_llm_settings(pcfg)
   -- Provider identity is pcfg.type=='llm'; backend type is specified via one of these keys
   local llm_type = pcfg.llm_type or pcfg.api or pcfg.backend or gpt_settings.type or 'openai'
   local model = pcfg.model or gpt_settings.model
+  local model_params = gpt_settings.model_parameters or {}
+  local model_cfg = model and model_params[model] or {}
+  local max_tokens = pcfg.max_tokens
+  if not max_tokens then
+    max_tokens = model_cfg.max_completion_tokens or model_cfg.max_tokens or gpt_settings.max_tokens
+  end
   local timeout = pcfg.timeout or gpt_settings.timeout or 2.0
   local url = pcfg.url
   local api_key = pcfg.api_key or gpt_settings.api_key
@@ -38,6 +48,7 @@ local function compose_llm_settings(pcfg)
   return {
     type = llm_type,
     model = model,
+    max_tokens = max_tokens,
     timeout = timeout,
     url = url,
     api_key = api_key,
@@ -51,6 +62,13 @@ local function compose_llm_settings(pcfg)
     write_timeout = pcfg.write_timeout or gpt_settings.write_timeout,
     read_timeout = pcfg.read_timeout or gpt_settings.read_timeout,
   }
+end
+
+local function normalize_cache_key_input(input_string)
+  if type(input_string) == 'userdata' then
+    return input_string:str()
+  end
+  return tostring(input_string)
 end
 
 local function extract_embedding(llm_type, parsed)
@@ -89,7 +107,7 @@ neural_common.register_provider('llm', {
       end
     end
 
-    local input_tbl = select_text(task)
+    local input_tbl = select_text(task, llm)
     if not input_tbl then
       rspamd_logger.debugm(N, task, 'llm provider has no content to embed; skip')
       cont(nil)
@@ -102,8 +120,9 @@ neural_common.register_provider('llm', {
       input_string = input_string .. "\nSubject: " .. input_tbl.subject
     end
 
+    local input_key = normalize_cache_key_input(input_string)
     rspamd_logger.debugm(N, task, 'llm embedding request: model=%s url=%s len=%s', tostring(llm.model), tostring(llm.url),
-      tostring(#tostring(input_string)))
+      tostring(#input_key))
 
     local body
     if llm.type == 'openai' then
@@ -126,11 +145,18 @@ neural_common.register_provider('llm', {
     }, N)
 
     -- Use raw key and allow cache module to hash/shorten it per context
-    local key = string.format('%s:%s:%s', llm.type, llm.model or 'model', input_string)
+    local key = string.format('%s:%s:%s', llm.type, llm.model or 'model', input_key)
 
     local function finish_with_vec(vec)
       if type(vec) == 'table' and #vec > 0 then
-        local meta = { name = pcfg.name or 'llm', type = 'llm', dim = #vec, weight = ctx.weight or 1.0 }
+        local meta = {
+          name = pcfg.name or 'llm',
+          type = 'llm',
+          dim = #vec,
+          weight = ctx.weight or 1.0,
+          model = llm.model,
+          provider = llm.type,
+        }
         rspamd_logger.debugm(N, task, 'llm embedding result: dim=%s', #vec)
         cont(vec, meta)
       else

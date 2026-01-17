@@ -25,7 +25,6 @@ Environment variables:
     EMBEDDING_PORT: Port number (default: 8080)
     EMBEDDING_HOST: Host to bind (default: 0.0.0.0)
 """
-
 import argparse
 import logging
 import os
@@ -55,7 +54,6 @@ DEFAULT_HOST = os.getenv('EMBEDDING_HOST', '0.0.0.0')
 model: Optional[TextEmbedding] = None
 model_name: str = DEFAULT_MODEL
 model_dim: int = 0
-
 
 # Request/Response models
 class OllamaEmbeddingRequest(BaseModel):
@@ -104,7 +102,6 @@ class HealthResponse(BaseModel):
     dimensions: int
     uptime_seconds: float
 
-
 # Startup time for uptime calculation
 startup_time: float = 0.0
 
@@ -117,17 +114,12 @@ async def lifespan(app: FastAPI):
     logger.info(f"Loading embedding model: {model_name}")
     start = time.time()
 
-    try:
-        model = TextEmbedding(model_name)
-        # Get embedding dimension from a test inference
-        test_embed = list(model.embed(["test"]))[0]
-        model_dim = len(test_embed)
-        elapsed = time.time() - start
-        logger.info(f"Model loaded in {elapsed:.2f}s, dimensions: {model_dim}")
-        startup_time = time.time()
-    except Exception as e:
-        logger.error(f"Failed to load model: {e}")
-        raise
+    model = TextEmbedding(model_name)
+    test_embed = list(model.embed(["test"]))[0]
+    model_dim = len(test_embed)
+    elapsed = time.time() - start
+    logger.info(f"Model loaded in {elapsed:.2f}s, dimensions: {model_dim}")
+    startup_time = time.time()
 
     yield
 

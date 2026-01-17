@@ -64,7 +64,7 @@ local function new_ann_profile(task, rule, set, version)
     version = version,
     digest = set.digest,
     distance = 0, -- Since we are using our own profile
-    providers_digest = neural_common.providers_config_digest(rule.providers),
+    providers_digest = neural_common.providers_config_digest(rule.providers, rule),
   }
 
   local ucl = require "ucl"
@@ -144,7 +144,7 @@ local function ann_scores_filter(task)
           local spam_threshold = 0
           if rule.spam_score_threshold then
             spam_threshold = rule.spam_score_threshold
-          elseif rule.roc_enabled and not set.ann.roc_thresholds then
+          elseif rule.roc_enabled and set.ann.roc_thresholds then
             spam_threshold = set.ann.roc_thresholds[1]
           end
 
@@ -166,7 +166,7 @@ local function ann_scores_filter(task)
           local ham_threshold = 0
           if rule.ham_score_threshold then
             ham_threshold = rule.ham_score_threshold
-          elseif rule.roc_enabled and not set.ann.roc_thresholds then
+          elseif rule.roc_enabled and set.ann.roc_thresholds then
             ham_threshold = set.ann.roc_thresholds[2]
           end
 
@@ -194,6 +194,17 @@ local function ann_scores_filter(task)
   end
 end
 
+local function get_ann_train_header(task)
+  local hdr = task:get_request_header('ANN-Train')
+  if type(hdr) == 'table' then
+    hdr = hdr[1]
+  end
+  if hdr then
+    return tostring(hdr):lower()
+  end
+  return nil
+end
+
 local function ann_push_task_result(rule, task, verdict, score, set)
   local train_opts = rule.train
   local learn_spam, learn_ham
@@ -202,10 +213,9 @@ local function ann_push_task_result(rule, task, verdict, score, set)
 
   -- First, honor explicit manual training header if present
   do
-    local hdr = task:get_request_header('ANN-Train')
-    if hdr then
-      local hv = tostring(hdr):lower()
-      lua_util.debugm(N, task, 'found ANN-Train header, enable manual train mode', hv)
+    local hv = get_ann_train_header(task)
+    if hv then
+      lua_util.debugm(N, task, 'found ANN-Train header, enable manual train mode: %s', hv)
       if hv == 'spam' then
         learn_spam = true
         manual_train = true
