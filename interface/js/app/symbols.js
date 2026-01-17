@@ -180,7 +180,7 @@ define(["jquery", "app/common", "footable"],
                             {name: "time",
                                 title: "Avg. time",
                                 breakpoints: "md",
-                                sortValue: function (value) { return parseFloat(value); }},
+                                sortValue: (val) => parseFloat(val)},
                         ],
                         rows: items[0],
                         paging: {
