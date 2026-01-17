@@ -120,7 +120,7 @@ local function check_query_settings(task)
   if query_set then
 
     local parser = ucl.parser()
-    local res, err = parser:parse_text(query_set)
+    local res, err = parser:parse_text(tostring(query_set))
     if res then
       if settings_id then
         rspamd_logger.warnx(task, "both settings-id '%s' and settings headers are presented, ignore settings-id; ",
@@ -971,7 +971,7 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
       return function(task)
         local rh = task:get_request_header(hname)
         if rh then
-          return { rh }
+          return { tostring(rh) }
         end
         return {}
       end

@@ -588,17 +588,63 @@ local function redis_ann_prefix(rule, settings_name)
 end
 
 -- Compute a stable digest for providers configuration
-local function providers_config_digest(providers_cfg)
+local function providers_config_digest(providers_cfg, rule)
   if not providers_cfg then return nil end
   -- Normalize minimal subset of fields to keep digest stable across equivalent configs
-  local norm = {}
+  local norm = { providers = {} }
+
+  local fusion = rule and rule.fusion or nil
+  if rule then
+    local effective_fusion = {
+      normalization = (fusion and fusion.normalization) or 'none',
+      include_meta = fusion and fusion.include_meta,
+      meta_weight = fusion and fusion.meta_weight,
+      per_provider_pca = fusion and fusion.per_provider_pca,
+    }
+    if effective_fusion.include_meta == nil then
+      effective_fusion.include_meta = true
+    end
+    if effective_fusion.meta_weight == nil then
+      effective_fusion.meta_weight = 1.0
+    end
+    if effective_fusion.per_provider_pca == nil then
+      effective_fusion.per_provider_pca = false
+    end
+    norm.fusion = effective_fusion
+  end
+
+  if rule and rule.max_inputs then
+    norm.max_inputs = rule.max_inputs
+  end
+
+  local gpt_settings = rspamd_config:get_all_opt('gpt') or {}
+
   for i, p in ipairs(providers_cfg) do
-    norm[i] = {
-      type = p.type,
-      name = p.name,
+    local ptype = p.type or p.name or 'unknown'
+    local entry = {
+      type = ptype,
       weight = p.weight or 1.0,
       dim = p.dim,
     }
+
+    if ptype == 'llm' then
+      local llm_type = p.llm_type or p.api or p.backend or gpt_settings.type
+      local model = p.model or gpt_settings.model
+      local max_tokens = p.max_tokens
+      if not max_tokens and gpt_settings.model_parameters and model then
+        local model_cfg = gpt_settings.model_parameters[model] or {}
+        max_tokens = model_cfg.max_completion_tokens or model_cfg.max_tokens
+      end
+      if not max_tokens then
+        max_tokens = gpt_settings.max_tokens
+      end
+
+      entry.llm_type = llm_type
+      entry.model = model
+      entry.max_tokens = max_tokens
+    end
+
+    norm.providers[i] = entry
   end
   return lua_util.table_digest(norm)
 end
@@ -612,7 +658,7 @@ local function collect_features_async(task, rule, profile_or_set, phase, cb)
   local providers_cfg = rule.providers
   if not providers_cfg or #providers_cfg == 0 then
     if rule.disable_symbols_input then
-      cb(nil, { providers = {}, total_dim = 0, digest = providers_config_digest(providers_cfg) })
+      cb(nil, { providers = {}, total_dim = 0, digest = providers_config_digest(providers_cfg, rule) })
       return
     end
     local prov = get_provider('symbols')
@@ -636,7 +682,7 @@ local function collect_features_async(task, rule, profile_or_set, phase, cb)
         cb(#fused > 0 and fused or nil, {
           providers = build_providers_meta(metas) or metas,
           total_dim = #fused,
-          digest = providers_config_digest(providers_cfg),
+          digest = providers_config_digest(providers_cfg, rule),
         })
       end)
       return
@@ -658,7 +704,7 @@ local function collect_features_async(task, rule, profile_or_set, phase, cb)
         providers = build_providers_meta({ meta }) or { meta },
         total_dim = #fused,
         digest = providers_config_digest(
-          providers_cfg)
+          providers_cfg, rule)
       })
     return
   end
@@ -687,7 +733,7 @@ local function collect_features_async(task, rule, profile_or_set, phase, cb)
       local meta = {
         providers = build_providers_meta(metas) or metas,
         total_dim = #fused,
-        digest = providers_config_digest(providers_cfg),
+        digest = providers_config_digest(providers_cfg, rule),
       }
       if #fused == 0 then
         cb(nil, meta)
@@ -1011,7 +1057,7 @@ local function spawn_train(params)
           digest = params.set.digest,
           redis_key = params.set.ann.redis_key,
           version = version,
-          providers_digest = providers_config_digest(params.rule.providers),
+          providers_digest = providers_config_digest(params.rule.providers, params.rule),
         }
 
         local profile_serialized = ucl.to_format(profile, 'json-compact', true)

@@ -20,6 +20,7 @@ local lua_redis = require "lua_redis"
 local lua_util = require "lua_util"
 local lua_verdict = require "lua_verdict"
 local neural_common = require "plugins/neural"
+local neural_learn = require "lua_neural_learn"
 local rspamd_kann = require "rspamd_kann"
 local rspamd_logger = require "rspamd_logger"
 local rspamd_tensor = require "rspamd_tensor"
@@ -63,7 +64,7 @@ local function new_ann_profile(task, rule, set, version)
     version = version,
     digest = set.digest,
     distance = 0, -- Since we are using our own profile
-    providers_digest = neural_common.providers_config_digest(rule.providers),
+    providers_digest = neural_common.providers_config_digest(rule.providers, rule),
   }
 
   local ucl = require "ucl"
@@ -143,7 +144,7 @@ local function ann_scores_filter(task)
           local spam_threshold = 0
           if rule.spam_score_threshold then
             spam_threshold = rule.spam_score_threshold
-          elseif rule.roc_enabled and not set.ann.roc_thresholds then
+          elseif rule.roc_enabled and set.ann.roc_thresholds then
             spam_threshold = set.ann.roc_thresholds[1]
           end
 
@@ -165,7 +166,7 @@ local function ann_scores_filter(task)
           local ham_threshold = 0
           if rule.ham_score_threshold then
             ham_threshold = rule.ham_score_threshold
-          elseif rule.roc_enabled and not set.ann.roc_thresholds then
+          elseif rule.roc_enabled and set.ann.roc_thresholds then
             ham_threshold = set.ann.roc_thresholds[2]
           end
 
@@ -193,6 +194,17 @@ local function ann_scores_filter(task)
   end
 end
 
+local function get_ann_train_header(task)
+  local hdr = task:get_request_header('ANN-Train')
+  if type(hdr) == 'table' then
+    hdr = hdr[1]
+  end
+  if hdr then
+    return tostring(hdr):lower()
+  end
+  return nil
+end
+
 local function ann_push_task_result(rule, task, verdict, score, set)
   local train_opts = rule.train
   local learn_spam, learn_ham
@@ -201,10 +213,9 @@ local function ann_push_task_result(rule, task, verdict, score, set)
 
   -- First, honor explicit manual training header if present
   do
-    local hdr = task:get_request_header('ANN-Train')
-    if hdr then
-      local hv = tostring(hdr):lower()
-      lua_util.debugm(N, task, 'found ANN-Train header, enable manual train mode', hv)
+    local hv = get_ann_train_header(task)
+    if hv then
+      lua_util.debugm(N, task, 'found ANN-Train header, enable manual train mode: %s', hv)
       if hv == 'spam' then
         learn_spam = true
         manual_train = true
@@ -217,20 +228,55 @@ local function ann_push_task_result(rule, task, verdict, score, set)
     end
   end
 
-  -- If LLM provider is configured, suppress autotrain unless manual training requested
-  if not manual_train and rule.providers and #rule.providers > 0 then
+  -- Check for autolearn class set by mempool (integration with external learning decisions)
+  if not manual_train then
+    local autolearn_class = neural_learn.get_autolearn_class(task)
+    if autolearn_class then
+      lua_util.debugm(N, task, 'found neural autolearn class in mempool: %s', autolearn_class)
+      if autolearn_class == 'spam' then
+        learn_spam = true
+        manual_train = true
+      elseif autolearn_class == 'ham' then
+        learn_ham = true
+        manual_train = true
+      end
+    end
+  end
+
+  -- If LLM provider is configured, use autolearn conditions instead of simple score thresholds
+  local has_llm_provider = false
+  if rule.providers and #rule.providers > 0 then
     for _, p in ipairs(rule.providers) do
       if p.type == 'llm' then
-        lua_util.debugm(N, task, 'suppress autotrain: llm provider present and no manual header')
-        learn_spam = false
-        learn_ham = false
-        skip_reason = 'llm provider requires manual training'
+        has_llm_provider = true
         break
       end
     end
   end
 
-  if not manual_train and (not train_opts.store_pool_only and train_opts.autotrain) then
+  if has_llm_provider and not manual_train then
+    -- Use expression-based autolearn conditions for LLM providers
+    if rule.autolearn and rule.autolearn.enabled then
+      local learn_type, reason = neural_learn.get_learn_type(task, rule)
+      if learn_type == 'spam' then
+        learn_spam = true
+        lua_util.debugm(N, task, 'autolearn spam via expression: %s', reason)
+      elseif learn_type == 'ham' then
+        learn_ham = true
+        lua_util.debugm(N, task, 'autolearn ham via expression: %s', reason)
+      else
+        skip_reason = reason or 'autolearn condition not met'
+        lua_util.debugm(N, task, 'autolearn skip: %s', skip_reason)
+      end
+    else
+      -- LLM provider without autolearn config - require manual training
+      learn_spam = false
+      learn_ham = false
+      skip_reason = 'llm provider requires autolearn config or manual training'
+      lua_util.debugm(N, task, 'suppress autotrain: llm provider present, no autolearn config')
+    end
+  elseif not manual_train and (not train_opts.store_pool_only and train_opts.autotrain) then
+    -- Traditional score/verdict based learning for non-LLM providers
     if train_opts.spam_score then
       learn_spam = score >= train_opts.spam_score
 
@@ -261,8 +307,8 @@ local function ann_push_task_result(rule, task, verdict, score, set)
           verdict)
       end
     end
-  else
-    if train_opts.store_pool_only and not manual_train then
+  elseif not manual_train then
+    if train_opts.store_pool_only then
       local ucl = require "ucl"
       learn_ham = false
       learn_spam = false
@@ -1119,4 +1165,29 @@ for _, rule in pairs(settings.rules) do
         end)
     end
   end)
+end
+
+-- Register plugin API in rspamd_plugins for user hooks
+if rspamd_plugins then
+  rspamd_plugins['neural'] = rspamd_plugins['neural'] or {}
+  -- Expose autolearn hooks for user customization
+  rspamd_plugins['neural'].autolearn = {
+    -- Register a custom guard that can block learning
+    -- cb: function(task, learn_type, ctx) -> bool, reason
+    register_guard = neural_learn.register_guard,
+    -- Remove a registered guard
+    unregister_guard = neural_learn.unregister_guard,
+    -- Configure global autolearn defaults
+    configure = neural_learn.configure,
+    -- Check if task qualifies for autolearn
+    -- Returns: can_learn (bool), reason (string)
+    can_autolearn = neural_learn.can_autolearn,
+    -- Get learn type for task based on conditions
+    -- Returns: 'spam', 'ham', or nil
+    get_learn_type = neural_learn.get_learn_type,
+    -- Set autolearn class in mempool (triggers learning in idempotent callback)
+    set_autolearn_class = neural_learn.set_autolearn_class,
+    -- Get autolearn class from mempool
+    get_autolearn_class = neural_learn.get_autolearn_class,
+  }
 end
