@@ -13,13 +13,8 @@ local llm_common = require "llm_common"
 
 local N = "neural.llm"
 
-local function select_text(task, llm)
-  local opts = {}
-  if llm and llm.max_tokens then
-    opts.max_tokens = llm.max_tokens
-  end
-  local input_tbl = llm_common.build_llm_input(task, opts)
-  return input_tbl
+local function select_text(task, opts)
+  return llm_common.build_llm_input(task, opts)
 end
 
 local function compose_llm_settings(pcfg)
@@ -61,6 +56,7 @@ local function compose_llm_settings(pcfg)
     ssl_timeout = pcfg.ssl_timeout or gpt_settings.ssl_timeout,
     write_timeout = pcfg.write_timeout or gpt_settings.write_timeout,
     read_timeout = pcfg.read_timeout or gpt_settings.read_timeout,
+    reply_trim_mode = pcfg.reply_trim_mode or gpt_settings.reply_trim_mode,
   }
 end
 
@@ -107,7 +103,7 @@ neural_common.register_provider('llm', {
       end
     end
 
-    local input_tbl = select_text(task, llm)
+    local input_tbl = select_text(task, { reply_trim_mode = llm.reply_trim_mode })
     if not input_tbl then
       rspamd_logger.debugm(N, task, 'llm provider has no content to embed; skip')
       cont(nil)

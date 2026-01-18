@@ -26,6 +26,347 @@ local ucl = require "ucl"
 
 local exports = {}
 
+-- Default multilingual patterns for text extraction
+-- These can be overridden via rspamd_config options
+local default_signature_patterns = {
+  -- English
+  "Sent from my iPhone",
+  "Sent from my Android",
+  "Sent from my iPad",
+  "Sent from my mobile",
+  "Sent from Mail for Windows",
+  "Get Outlook for ",
+  "Sent from Samsung Mobile",
+  "Sent from Yahoo Mail",
+  "Sent from AOL Mobile Mail",
+  -- German
+  "Gesendet von meinem iPhone",
+  "Gesendet von meinem Android",
+  "Von meinem iPhone gesendet",
+  "Von meinem Samsung Galaxy gesendet",
+  "Mit freundlichen Grüßen",
+  "Mit freundlichem Gruß",
+  "Viele Grüße",
+  "Liebe Grüße",
+  "Herzliche Grüße",
+  -- French
+  "Envoyé de mon iPhone",
+  "Envoyé de mon Android",
+  "Envoyé depuis mon mobile",
+  "Cordialement",
+  "Bien cordialement",
+  "Salutations",
+  "Meilleures salutations",
+  "Sincères salutations",
+  -- Spanish
+  "Enviado desde mi iPhone",
+  "Enviado desde mi Android",
+  "Enviado desde mi móvil",
+  "Saludos cordiales",
+  "Un cordial saludo",
+  "Atentamente",
+  "Saludos",
+  -- Russian
+  "Отправлено с iPhone",
+  "Отправлено с Android",
+  "Отправлено с мобильного",
+  "С уважением",
+  "С наилучшими пожеланиями",
+  "С наилучшими",
+  "Всего наилучшего",
+  "Всего доброго",
+  -- Portuguese
+  "Enviado do meu iPhone",
+  "Enviado do meu Android",
+  "Atenciosamente",
+  "Abraços",
+  -- Italian
+  "Inviato da iPhone",
+  "Inviato da Android",
+  "Cordiali saluti",
+  "Distinti saluti",
+  -- Chinese (Simplified)
+  "发自我的 iPhone",
+  "发自我的 Android",
+  -- Japanese
+  "iPhoneから送信",
+  -- Polish
+  "Wysłano z iPhone'a",
+  "Wysłano z urządzenia Android",
+  "Z poważaniem",
+  "Pozdrawiam",
+}
+
+local default_reply_header_patterns = {
+  -- English
+  "From: ",
+  "----- Original Message -----",
+  "-------- Original Message --------",
+  "----- Forwarded message -----",
+  "Begin forwarded message:",
+  "_______________",
+  "________________________________",
+  -- German
+  "----- Ursprüngliche Nachricht -----",
+  "-------- Ursprüngliche Nachricht --------",
+  "----- Weitergeleitete Nachricht -----",
+  "Von: ",
+  "Gesendet: ",
+  "An: ",
+  "Betreff: ",
+  -- French
+  "----- Message d'origine -----",
+  "-------- Message original --------",
+  "----- Message transféré -----",
+  "De : ",
+  "Envoyé : ",
+  "À : ",
+  "Objet : ",
+  -- Spanish
+  "----- Mensaje original -----",
+  "-------- Mensaje original --------",
+  "----- Mensaje reenviado -----",
+  "De: ",
+  "Enviado: ",
+  "Para: ",
+  "Asunto: ",
+  -- Russian
+  "----- Исходное сообщение -----",
+  "-------- Исходное сообщение --------",
+  "----- Пересылаемое сообщение -----",
+  "От: ",
+  "Отправлено: ",
+  "Кому: ",
+  "Тема: ",
+  -- Portuguese
+  "----- Mensagem original -----",
+  -- Italian
+  "----- Messaggio originale -----",
+}
+
+local default_reply_wrote_patterns = {
+  -- English
+  "^On .*, .* wrote:$",
+  "wrote:$",
+  -- German
+  "schrieb:$",
+  -- French
+  "a écrit :$",
+  -- Spanish
+  "escribió:$",
+  -- Russian
+  "написал:$",
+  "написала:$",
+}
+
+-- Module-level cached maps (rebuilt when config changes)
+local cached_sig_map = nil
+local cached_reply_header_map = nil
+local cached_reply_header_regexps = nil
+local cached_reply_wrote_map = nil
+local cached_reply_wrote_regexps = nil
+
+local function merge_patterns(defaults, extra)
+  local out = {}
+  for _, pattern in ipairs(defaults) do
+    table.insert(out, pattern)
+  end
+  for _, pattern in ipairs(extra) do
+    table.insert(out, pattern)
+  end
+  return out
+end
+
+local function patterns_count(patterns)
+  if type(patterns) == 'table' and patterns[1] then
+    return #patterns
+  end
+  return nil
+end
+
+local function normalize_patterns(patterns)
+  if type(patterns) ~= 'table' or not patterns[1] then
+    return patterns
+  end
+
+  local out = {}
+  for _, pattern in ipairs(patterns) do
+    if type(pattern) == 'string' then
+      if pattern:match("%s") and not pattern:match('^["/]') then
+        pattern = '"' .. pattern .. '"'
+      end
+      table.insert(out, pattern)
+    end
+  end
+
+  return out
+end
+
+local function build_regexp_list(patterns)
+  if type(patterns) ~= 'table' or not patterns[1] then
+    return nil
+  end
+
+  local rspamd_regexp = require "rspamd_regexp"
+  local out = {}
+
+  for _, pattern in ipairs(patterns) do
+    if type(pattern) == 'string' then
+      if pattern:match('^".*"$') then
+        pattern = pattern:sub(2, -2)
+      end
+      local re = rspamd_regexp.create_cached(pattern)
+      if re then
+        out[#out + 1] = re
+      end
+    end
+  end
+
+  if #out == 0 then
+    return nil
+  end
+
+  return out
+end
+
+local function build_regexp_map(patterns, description, map_type)
+  local lua_maps = require "lua_maps"
+  map_type = map_type or 'regexp'
+
+  if type(patterns) == 'table' and type(patterns.get_key) == 'function' then
+    return patterns
+  end
+
+  if type(patterns) == 'table' and patterns[1] then
+    patterns = normalize_patterns(patterns)
+    if map_type == 'regexp_multi' or map_type == 'glob_multi' then
+      patterns = {
+        url = 'static',
+        data = patterns,
+      }
+    end
+  end
+
+  return lua_maps.map_add_from_ucl(patterns, map_type, description)
+end
+
+--[[[
+-- @function lua_mime.configure_text_extraction(cfg)
+-- Configures text extraction patterns from config
+-- @param {table} cfg Configuration table with optional fields:
+--   * signature_patterns: array of signature patterns or regexp map
+--   * reply_header_patterns: array of reply header patterns or regexp map
+--   * reply_header_wrote_patterns: array of reply header "wrote" patterns or regexp map
+--   * extend_defaults: boolean - if true, adds to defaults instead of replacing
+--]]
+exports.configure_text_extraction = function(cfg)
+  cfg = cfg or {}
+
+  local sig_patterns = default_signature_patterns
+  local reply_patterns = default_reply_header_patterns
+  local reply_wrote_patterns = default_reply_wrote_patterns
+  local sig_count = #default_signature_patterns
+  local reply_count = #default_reply_header_patterns
+  local reply_wrote_count = #default_reply_wrote_patterns
+
+  if cfg.signature_patterns then
+    if cfg.extend_defaults and type(cfg.signature_patterns) == 'table' and cfg.signature_patterns[1] then
+      -- Merge with defaults
+      sig_patterns = merge_patterns(default_signature_patterns, cfg.signature_patterns)
+      sig_count = #sig_patterns
+    else
+      sig_patterns = cfg.signature_patterns
+      sig_count = patterns_count(sig_patterns)
+      if cfg.extend_defaults then
+        logger.infox(rspamd_config, 'text extraction: signature_patterns is a map definition, extend_defaults ignored')
+      end
+    end
+  end
+
+  if cfg.reply_header_patterns then
+    if cfg.extend_defaults and type(cfg.reply_header_patterns) == 'table' and cfg.reply_header_patterns[1] then
+      reply_patterns = merge_patterns(default_reply_header_patterns, cfg.reply_header_patterns)
+      reply_count = #reply_patterns
+    else
+      reply_patterns = cfg.reply_header_patterns
+      reply_count = patterns_count(reply_patterns)
+      if cfg.extend_defaults then
+        logger.infox(rspamd_config, 'text extraction: reply_header_patterns is a map definition, extend_defaults ignored')
+      end
+    end
+  end
+
+  if cfg.reply_header_wrote_patterns then
+    if cfg.extend_defaults and type(cfg.reply_header_wrote_patterns) == 'table' and cfg.reply_header_wrote_patterns[1] then
+      reply_wrote_patterns = merge_patterns(default_reply_wrote_patterns, cfg.reply_header_wrote_patterns)
+      reply_wrote_count = #reply_wrote_patterns
+    else
+      reply_wrote_patterns = cfg.reply_header_wrote_patterns
+      reply_wrote_count = patterns_count(reply_wrote_patterns)
+      if cfg.extend_defaults then
+        logger.infox(rspamd_config, 'text extraction: reply_header_wrote_patterns is a map definition, extend_defaults ignored')
+      end
+    end
+  end
+
+  cached_sig_map = build_regexp_map(sig_patterns, 'text extraction signature patterns', 'regexp')
+  cached_reply_header_map = build_regexp_map(reply_patterns, 'text extraction reply header patterns', 'regexp')
+  cached_reply_header_regexps = build_regexp_list(reply_patterns)
+  cached_reply_wrote_map = build_regexp_map(reply_wrote_patterns,
+      'text extraction reply header wrote patterns', 'regexp')
+  cached_reply_wrote_regexps = build_regexp_list(reply_wrote_patterns)
+
+  if not cached_sig_map then
+    logger.errx(rspamd_config, 'text extraction: cannot build signature map')
+  end
+
+  if not cached_reply_header_map then
+    logger.errx(rspamd_config, 'text extraction: cannot build reply header map')
+  end
+
+  if not cached_reply_wrote_map then
+    logger.errx(rspamd_config, 'text extraction: cannot build reply wrote map')
+  end
+
+  logger.infox(rspamd_config,
+      'text extraction configured: %s signature patterns, %s reply patterns, %s reply wrote patterns',
+      sig_count or 'map', reply_count or 'map', reply_wrote_count or 'map')
+end
+
+-- Get or create signature map
+local function get_signature_map()
+  if cached_sig_map then
+    return cached_sig_map
+  end
+
+  cached_sig_map = build_regexp_map(default_signature_patterns,
+      'text extraction signature patterns (default)', 'regexp')
+  return cached_sig_map
+end
+
+-- Get or create reply header map
+local function get_reply_header_map()
+  if cached_reply_header_map then
+    return cached_reply_header_map
+  end
+
+  cached_reply_header_map = build_regexp_map(default_reply_header_patterns,
+      'text extraction reply header patterns (default)', 'regexp')
+  cached_reply_header_regexps = build_regexp_list(default_reply_header_patterns)
+  return cached_reply_header_map
+end
+
+local function get_reply_wrote_map()
+  if cached_reply_wrote_map then
+    return cached_reply_wrote_map
+  end
+
+  cached_reply_wrote_map = build_regexp_map(default_reply_wrote_patterns,
+      'text extraction reply header wrote patterns (default)', 'regexp')
+  cached_reply_wrote_regexps = build_regexp_list(default_reply_wrote_patterns)
+  return cached_reply_wrote_map
+end
+
 local function newline(task)
   local t = task:get_newlines_type()
 
@@ -1622,4 +1963,184 @@ Return ONLY the response in this format without any explanations, markdown forma
   end
 end
 
+--[[[
+-- @function lua_mime.extract_text_limited(task, opts)
+-- Extracts text from a message with size limits and optional cleanup
+-- @param {task} task Rspamd task object
+-- @param {table} opts Options:
+--   * max_bytes: number - hard limit on output size (default: 32KB)
+--   * max_words: number - alternative limit by word count
+--   * preserve_first_part: boolean - prioritize newest content (top-post style)
+--   * strip_quotes: boolean - remove quoted replies
+--   * strip_reply_headers: boolean - remove "On X wrote:" patterns
+--   * strip_signatures: boolean - remove signature blocks
+--   * strip_footers: boolean - remove common email footers
+--   * smart_trim: boolean - enable all heuristics
+-- @return {table} Result table:
+--   * text: string - extracted text
+--   * truncated: boolean - whether text was truncated
+--   * stats: table - statistics about extraction (removed_quotes, removed_signatures, etc)
+--]]
+exports.extract_text_limited = function(task, opts)
+  opts = opts or {}
+  local max_bytes = opts.max_bytes or 32768
+  local strip_quotes = opts.strip_quotes or opts.smart_trim
+  local strip_reply_headers = opts.strip_reply_headers or opts.smart_trim
+  local strip_signatures = opts.strip_signatures or opts.smart_trim
+  -- strip_footers reserved for future use
+  local _ = opts.strip_footers or opts.smart_trim
+
+  local stats = {
+    removed_quotes = 0,
+    removed_reply_headers = 0,
+    removed_signatures = 0,
+    removed_footers = 0
+  }
+
+  -- Get the most relevant text part
+  local part = exports.get_displayed_text_part(task)
+  if not part then
+    return {
+      text = "",
+      truncated = false,
+      stats = stats
+    }
+  end
+
+  -- Get the text content (parsed for HTML, raw for plain text)
+  -- Use 'content' mode which preserves newlines (needed for line-based processing)
+  -- Keep as rspamd_text userdata for efficient memory usage (no Lua string interning)
+  local content = part:get_content('content') or rspamd_text.fromstring("")
+
+  local rspamd_regexp = require "rspamd_regexp"
+
+  -- Use rspamd_text:lines(true) iterator which returns strings without interning
+  -- the entire content. This is more memory efficient for large emails.
+  local line_iterator = content:lines(true)
+  local result_lines = {}
+  local truncated = false
+  local current_bytes = 0
+
+  -- Regex patterns (pre-compiled for performance)
+  local quote_re = rspamd_regexp.create_cached("^>+ ?")
+
+  -- Use cached multilingual maps (lazy initialization)
+  local signature_map = get_signature_map()
+  local reply_header_map = get_reply_header_map()
+  local reply_wrote_map = get_reply_wrote_map()
+  local reply_header_regexps = cached_reply_header_regexps
+  local reply_wrote_regexps = cached_reply_wrote_regexps
+
+  local skip_rest = false
+
+  for line in line_iterator do
+    if skip_rest then break end
+
+    local keep_line = true
+    local trimmed_line = line:match("^%s*(.-)%s*$") or ""
+
+
+    -- Check for standard signature separator (-- or --- with optional trailing whitespace)
+    if strip_signatures and trimmed_line:match("^%-%-+%s*$") then
+      skip_rest = true
+      stats.removed_signatures = stats.removed_signatures + 1
+      keep_line = false
+    end
+
+    -- Check for mobile signature lines (these are usually at the very end)
+    if keep_line and strip_signatures and signature_map then
+      if signature_map:get_key(line) then
+        skip_rest = true
+        stats.removed_signatures = stats.removed_signatures + 1
+        keep_line = false
+      end
+    end
+
+    -- Check for quoted lines (starting with >)
+    if keep_line and strip_quotes then
+      if quote_re:match(line) then
+        keep_line = false
+        stats.removed_quotes = stats.removed_quotes + 1
+      end
+    end
+
+    -- Check for reply headers using map first
+    if keep_line and strip_reply_headers then
+      local header_matches = reply_header_map and reply_header_map:get_key(trimmed_line)
+      if not header_matches and reply_header_regexps then
+        for _, re in ipairs(reply_header_regexps) do
+          if re:match(trimmed_line) then
+            header_matches = true
+            break
+          end
+        end
+      end
+      if header_matches then
+        if trimmed_line:match("^[-_]+") or trimmed_line:match("^%S+:%s*") then
+          skip_rest = true
+          stats.removed_reply_headers = stats.removed_reply_headers + 1
+          keep_line = false
+        end
+      end
+
+      if keep_line and reply_wrote_map then
+        local wrote_matches = reply_wrote_map:get_key(trimmed_line)
+        if wrote_matches then
+          skip_rest = true
+          stats.removed_reply_headers = stats.removed_reply_headers + 1
+          keep_line = false
+        end
+      end
+
+      if keep_line and reply_wrote_regexps then
+        for _, re in ipairs(reply_wrote_regexps) do
+          if re:match(trimmed_line) then
+            skip_rest = true
+            stats.removed_reply_headers = stats.removed_reply_headers + 1
+            keep_line = false
+            break
+          end
+        end
+      end
+    end
+
+    if keep_line then
+      local line_len = #line + 1 -- +1 for newline
+      if current_bytes + line_len > max_bytes then
+        truncated = true
+        break
+      end
+      table.insert(result_lines, line)
+      current_bytes = current_bytes + line_len
+    end
+
+  end
+
+  local text = table.concat(result_lines, "\n")
+
+  -- Handle max_words limit by counting words in the result
+  if opts.max_words and opts.max_words > 0 then
+    -- Simple word counting by splitting on whitespace
+    local word_count = 0
+    local last_word_end = 0
+    for _, word_end in text:gmatch("()%S+()") do
+      word_count = word_count + 1
+      if word_count <= opts.max_words then
+        last_word_end = word_end - 1
+      else
+        truncated = true
+        text = text:sub(1, last_word_end)
+        break
+      end
+    end
+  end
+
+  return {
+    text = text,
+    truncated = truncated,
+    stats = stats
+  }
+end
+
 return exports
+

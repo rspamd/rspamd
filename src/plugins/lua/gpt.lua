@@ -171,6 +171,7 @@ local settings = {
   type = 'openai',
   api_key = nil,
   model = 'gpt-5-mini', -- or parallel model requests: [ 'gpt-5-mini', 'gpt-4o-mini' ],
+  reply_trim_mode = 'replies',
   model_parameters = {
     ["gpt-5-mini"] = {
       max_completion_tokens = 1000,
@@ -397,7 +398,10 @@ local function default_condition(task)
   -- Unified LLM input building (subject/from/urls/body one-line)
   local model_cfg = settings.model_parameters[settings.model] or {}
   local max_tokens = model_cfg.max_completion_tokens or model_cfg.max_tokens or 1000
-  local input_tbl, sel_part = llm_common.build_llm_input(task, { max_tokens = max_tokens })
+  local input_tbl, sel_part = llm_common.build_llm_input(task, {
+    max_tokens = max_tokens,
+    reply_trim_mode = settings.reply_trim_mode,
+  })
   if not sel_part then
     return false, 'no text part found'
   end
