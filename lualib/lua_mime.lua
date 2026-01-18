@@ -144,82 +144,227 @@ local default_reply_header_patterns = {
   "----- Messaggio originale -----",
 }
 
--- Module-level cached trie (rebuilt when config changes)
-local cached_sig_trie = nil
-local cached_reply_trie = nil
+local default_reply_wrote_patterns = {
+  -- English
+  "^On .*, .* wrote:$",
+  "wrote:$",
+  -- German
+  "schrieb:$",
+  -- French
+  "a écrit :$",
+  -- Spanish
+  "escribió:$",
+  -- Russian
+  "написал:$",
+  "написала:$",
+}
+
+-- Module-level cached maps (rebuilt when config changes)
+local cached_sig_map = nil
+local cached_reply_header_map = nil
+local cached_reply_header_regexps = nil
+local cached_reply_wrote_map = nil
+local cached_reply_wrote_regexps = nil
+
+local function merge_patterns(defaults, extra)
+  local out = {}
+  for _, pattern in ipairs(defaults) do
+    table.insert(out, pattern)
+  end
+  for _, pattern in ipairs(extra) do
+    table.insert(out, pattern)
+  end
+  return out
+end
+
+local function patterns_count(patterns)
+  if type(patterns) == 'table' and patterns[1] then
+    return #patterns
+  end
+  return nil
+end
+
+local function normalize_patterns(patterns)
+  if type(patterns) ~= 'table' or not patterns[1] then
+    return patterns
+  end
+
+  local out = {}
+  for _, pattern in ipairs(patterns) do
+    if type(pattern) == 'string' then
+      if pattern:match("%s") and not pattern:match('^["/]') then
+        pattern = '"' .. pattern .. '"'
+      end
+      table.insert(out, pattern)
+    end
+  end
+
+  return out
+end
+
+local function build_regexp_list(patterns)
+  if type(patterns) ~= 'table' or not patterns[1] then
+    return nil
+  end
+
+  local rspamd_regexp = require "rspamd_regexp"
+  local out = {}
+
+  for _, pattern in ipairs(patterns) do
+    if type(pattern) == 'string' then
+      if pattern:match('^".*"$') then
+        pattern = pattern:sub(2, -2)
+      end
+      local re = rspamd_regexp.create_cached(pattern)
+      if re then
+        out[#out + 1] = re
+      end
+    end
+  end
+
+  if #out == 0 then
+    return nil
+  end
+
+  return out
+end
+
+local function build_regexp_map(patterns, description, map_type)
+  local lua_maps = require "lua_maps"
+  map_type = map_type or 'regexp'
+
+  if type(patterns) == 'table' and type(patterns.get_key) == 'function' then
+    return patterns
+  end
+
+  if type(patterns) == 'table' and patterns[1] then
+    patterns = normalize_patterns(patterns)
+    if map_type == 'regexp_multi' or map_type == 'glob_multi' then
+      patterns = {
+        url = 'static',
+        data = patterns,
+      }
+    end
+  end
+
+  return lua_maps.map_add_from_ucl(patterns, map_type, description)
+end
 
 --[[[
 -- @function lua_mime.configure_text_extraction(cfg)
 -- Configures text extraction patterns from config
 -- @param {table} cfg Configuration table with optional fields:
---   * signature_patterns: array of signature pattern strings
---   * reply_header_patterns: array of reply header pattern strings
+--   * signature_patterns: array of signature patterns or regexp map
+--   * reply_header_patterns: array of reply header patterns or regexp map
+--   * reply_header_wrote_patterns: array of reply header "wrote" patterns or regexp map
 --   * extend_defaults: boolean - if true, adds to defaults instead of replacing
 --]]
 exports.configure_text_extraction = function(cfg)
-  local rspamd_trie = require "rspamd_trie"
-
   cfg = cfg or {}
 
   local sig_patterns = default_signature_patterns
   local reply_patterns = default_reply_header_patterns
+  local reply_wrote_patterns = default_reply_wrote_patterns
+  local sig_count = #default_signature_patterns
+  local reply_count = #default_reply_header_patterns
+  local reply_wrote_count = #default_reply_wrote_patterns
 
   if cfg.signature_patterns then
-    if cfg.extend_defaults then
+    if cfg.extend_defaults and type(cfg.signature_patterns) == 'table' and cfg.signature_patterns[1] then
       -- Merge with defaults
-      sig_patterns = {}
-      for _, p in ipairs(default_signature_patterns) do
-        table.insert(sig_patterns, p)
-      end
-      for _, p in ipairs(cfg.signature_patterns) do
-        table.insert(sig_patterns, p)
-      end
+      sig_patterns = merge_patterns(default_signature_patterns, cfg.signature_patterns)
+      sig_count = #sig_patterns
     else
       sig_patterns = cfg.signature_patterns
+      sig_count = patterns_count(sig_patterns)
+      if cfg.extend_defaults then
+        logger.infox(rspamd_config, 'text extraction: signature_patterns is a map definition, extend_defaults ignored')
+      end
     end
   end
 
   if cfg.reply_header_patterns then
-    if cfg.extend_defaults then
-      reply_patterns = {}
-      for _, p in ipairs(default_reply_header_patterns) do
-        table.insert(reply_patterns, p)
-      end
-      for _, p in ipairs(cfg.reply_header_patterns) do
-        table.insert(reply_patterns, p)
-      end
+    if cfg.extend_defaults and type(cfg.reply_header_patterns) == 'table' and cfg.reply_header_patterns[1] then
+      reply_patterns = merge_patterns(default_reply_header_patterns, cfg.reply_header_patterns)
+      reply_count = #reply_patterns
     else
       reply_patterns = cfg.reply_header_patterns
+      reply_count = patterns_count(reply_patterns)
+      if cfg.extend_defaults then
+        logger.infox(rspamd_config, 'text extraction: reply_header_patterns is a map definition, extend_defaults ignored')
+      end
     end
   end
 
-  cached_sig_trie = rspamd_trie.create(sig_patterns)
-  cached_reply_trie = rspamd_trie.create(reply_patterns)
-
-  logger.infox(rspamd_config, 'text extraction configured: %s signature patterns, %s reply patterns',
-      #sig_patterns, #reply_patterns)
-end
-
--- Get or create signature trie
-local function get_signature_trie()
-  if cached_sig_trie then
-    return cached_sig_trie
+  if cfg.reply_header_wrote_patterns then
+    if cfg.extend_defaults and type(cfg.reply_header_wrote_patterns) == 'table' and cfg.reply_header_wrote_patterns[1] then
+      reply_wrote_patterns = merge_patterns(default_reply_wrote_patterns, cfg.reply_header_wrote_patterns)
+      reply_wrote_count = #reply_wrote_patterns
+    else
+      reply_wrote_patterns = cfg.reply_header_wrote_patterns
+      reply_wrote_count = patterns_count(reply_wrote_patterns)
+      if cfg.extend_defaults then
+        logger.infox(rspamd_config, 'text extraction: reply_header_wrote_patterns is a map definition, extend_defaults ignored')
+      end
+    end
   end
 
-  local rspamd_trie = require "rspamd_trie"
-  cached_sig_trie = rspamd_trie.create(default_signature_patterns)
-  return cached_sig_trie
-end
+  cached_sig_map = build_regexp_map(sig_patterns, 'text extraction signature patterns', 'regexp')
+  cached_reply_header_map = build_regexp_map(reply_patterns, 'text extraction reply header patterns', 'regexp')
+  cached_reply_header_regexps = build_regexp_list(reply_patterns)
+  cached_reply_wrote_map = build_regexp_map(reply_wrote_patterns,
+      'text extraction reply header wrote patterns', 'regexp')
+  cached_reply_wrote_regexps = build_regexp_list(reply_wrote_patterns)
 
--- Get or create reply header trie
-local function get_reply_header_trie()
-  if cached_reply_trie then
-    return cached_reply_trie
+  if not cached_sig_map then
+    logger.errx(rspamd_config, 'text extraction: cannot build signature map')
   end
 
-  local rspamd_trie = require "rspamd_trie"
-  cached_reply_trie = rspamd_trie.create(default_reply_header_patterns)
-  return cached_reply_trie
+  if not cached_reply_header_map then
+    logger.errx(rspamd_config, 'text extraction: cannot build reply header map')
+  end
+
+  if not cached_reply_wrote_map then
+    logger.errx(rspamd_config, 'text extraction: cannot build reply wrote map')
+  end
+
+  logger.infox(rspamd_config,
+      'text extraction configured: %s signature patterns, %s reply patterns, %s reply wrote patterns',
+      sig_count or 'map', reply_count or 'map', reply_wrote_count or 'map')
+end
+
+-- Get or create signature map
+local function get_signature_map()
+  if cached_sig_map then
+    return cached_sig_map
+  end
+
+  cached_sig_map = build_regexp_map(default_signature_patterns,
+      'text extraction signature patterns (default)', 'regexp')
+  return cached_sig_map
+end
+
+-- Get or create reply header map
+local function get_reply_header_map()
+  if cached_reply_header_map then
+    return cached_reply_header_map
+  end
+
+  cached_reply_header_map = build_regexp_map(default_reply_header_patterns,
+      'text extraction reply header patterns (default)', 'regexp')
+  cached_reply_header_regexps = build_regexp_list(default_reply_header_patterns)
+  return cached_reply_header_map
+end
+
+local function get_reply_wrote_map()
+  if cached_reply_wrote_map then
+    return cached_reply_wrote_map
+  end
+
+  cached_reply_wrote_map = build_regexp_map(default_reply_wrote_patterns,
+      'text extraction reply header wrote patterns (default)', 'regexp')
+  cached_reply_wrote_regexps = build_regexp_list(default_reply_wrote_patterns)
+  return cached_reply_wrote_map
 end
 
 local function newline(task)
@@ -1878,29 +2023,22 @@ exports.extract_text_limited = function(task, opts)
 
   -- Regex patterns (pre-compiled for performance)
   local quote_re = rspamd_regexp.create_cached("^>+ ?")
-  -- Multilingual "wrote:" patterns
-  local reply_header_patterns = {
-    rspamd_regexp.create_cached("^On .*, .* wrote:$"),           -- English
-    rspamd_regexp.create_cached("wrote:$"),                       -- English (generic)
-    rspamd_regexp.create_cached("schrieb:$"),                     -- German
-    rspamd_regexp.create_cached("a écrit :$"),                    -- French
-    rspamd_regexp.create_cached("escribió:$"),                    -- Spanish
-    rspamd_regexp.create_cached("написал:$"),                     -- Russian (male)
-    rspamd_regexp.create_cached("написала:$"),                    -- Russian (female)
-  }
 
-  -- Use cached multilingual tries (lazy initialization)
-  local mobile_sig_trie = get_signature_trie()
-  local reply_header_trie = get_reply_header_trie()
+  -- Use cached multilingual maps (lazy initialization)
+  local signature_map = get_signature_map()
+  local reply_header_map = get_reply_header_map()
+  local reply_wrote_map = get_reply_wrote_map()
+  local reply_header_regexps = cached_reply_header_regexps
+  local reply_wrote_regexps = cached_reply_wrote_regexps
 
   local skip_rest = false
-  local prev_line = nil  -- For look-ahead patterns
 
   for line in line_iterator do
     if skip_rest then break end
 
     local keep_line = true
     local trimmed_line = line:match("^%s*(.-)%s*$") or ""
+
 
     -- Check for standard signature separator (-- or --- with optional trailing whitespace)
     if strip_signatures and trimmed_line:match("^%-%-+%s*$") then
@@ -1910,9 +2048,8 @@ exports.extract_text_limited = function(task, opts)
     end
 
     -- Check for mobile signature lines (these are usually at the very end)
-    if keep_line and strip_signatures then
-      local sig_matches = mobile_sig_trie:match(line)
-      if sig_matches and next(sig_matches) then
+    if keep_line and strip_signatures and signature_map then
+      if signature_map:get_key(line) then
         skip_rest = true
         stats.removed_signatures = stats.removed_signatures + 1
         keep_line = false
@@ -1927,29 +2064,37 @@ exports.extract_text_limited = function(task, opts)
       end
     end
 
-    -- Check for reply headers using trie first
+    -- Check for reply headers using map first
     if keep_line and strip_reply_headers then
-      local header_matches = reply_header_trie:match(line)
-      if header_matches and next(header_matches) then
-        -- Found a reply header marker, skip until we see content again
-        -- For "From:" check if previous line was a separator (can't look ahead with iterator)
-        if trimmed_line:match("^[-_]+") then
-          -- Separator line, skip rest
-          skip_rest = true
-          stats.removed_reply_headers = stats.removed_reply_headers + 1
-          keep_line = false
-        elseif trimmed_line:match("^From:") and prev_line and prev_line:match("^[-_]+") then
-          -- From: after separator is likely forwarded header block
+      local header_matches = reply_header_map and reply_header_map:get_key(trimmed_line)
+      if not header_matches and reply_header_regexps then
+        for _, re in ipairs(reply_header_regexps) do
+          if re:match(trimmed_line) then
+            header_matches = true
+            break
+          end
+        end
+      end
+      if header_matches then
+        if trimmed_line:match("^[-_]+") or trimmed_line:match("^%S+:%s*") then
           skip_rest = true
           stats.removed_reply_headers = stats.removed_reply_headers + 1
           keep_line = false
         end
       end
 
-      -- Also check for "On ... wrote:" pattern with pre-compiled regex
-      if keep_line then
-        for _, re in ipairs(reply_header_patterns) do
-          if re:match(line) then
+      if keep_line and reply_wrote_map then
+        local wrote_matches = reply_wrote_map:get_key(trimmed_line)
+        if wrote_matches then
+          skip_rest = true
+          stats.removed_reply_headers = stats.removed_reply_headers + 1
+          keep_line = false
+        end
+      end
+
+      if keep_line and reply_wrote_regexps then
+        for _, re in ipairs(reply_wrote_regexps) do
+          if re:match(trimmed_line) then
             skip_rest = true
             stats.removed_reply_headers = stats.removed_reply_headers + 1
             keep_line = false
@@ -1969,7 +2114,6 @@ exports.extract_text_limited = function(task, opts)
       current_bytes = current_bytes + line_len
     end
 
-    prev_line = trimmed_line
   end
 
   local text = table.concat(result_lines, "\n")
