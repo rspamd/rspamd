@@ -41,6 +41,7 @@ define(["jquery", "app/common", "footable"],
             const items = [];
             const lookup = {};
             const freqs = [];
+            const stddevs = [];
             const distinct_groups = [];
 
             data.forEach((group) => {
@@ -63,13 +64,13 @@ define(["jquery", "app/common", "footable"],
                     if (!item.time) {
                         item.time = 0;
                     }
-                    item.time = Number(item.time).toFixed(2) + "s";
-                    if (!item.frequency) {
-                        item.frequency = 0;
-                    }
+                    item.time = Number(item.time).toFixed(2);
+
+                    // Normalize frequency values for scaling
+                    ["frequency", "frequency_stddev"].forEach((p) => (item[p] = Number(item[p] || 0)));
+
                     freqs.push(item.frequency);
-                    // Don't round yet, keep precision for scaling
-                    item.frequency = Number(item.frequency);
+                    stddevs.push(item.frequency_stddev);
                     if (!(item.group in lookup)) {
                         lookup[item.group] = 1;
                         distinct_groups.push(item.group);
@@ -92,12 +93,16 @@ define(["jquery", "app/common", "footable"],
                     exp++;
                 }
             }
-            $.each(items, (i, item) => {
-                const numericFreq = Number(item.frequency);
-                item.frequency = {
-                    value: (numericFreq * mult).toFixed(2) + ((exp > 0) ? "e-" + exp : ""),
-                    options: {sortValue: numericFreq}
+
+            function formatFrequency(value) {
+                return {
+                    value: (value * mult).toFixed(2) + ((exp > 0) ? "e-" + exp : ""),
+                    options: {sortValue: value}
                 };
+            }
+            $.each(items, (i, item) => {
+                item.frequency = formatFrequency(item.frequency);
+                item.frequency_stddev = formatFrequency(item.frequency_stddev);
             });
             return [items, distinct_groups];
         }
@@ -175,11 +180,15 @@ define(["jquery", "app/common", "footable"],
                             {name: "description", title: "Description", breakpoints: "md"},
                             {name: "weight", title: "Score"},
                             {name: "frequency",
-                                title: "Frequency",
+                                title: "Frequency, <nobr>hits/s</nobr>",
                                 breakpoints: "md",
                                 sortValue: (val) => val.options.sortValue},
+                            {name: "frequency_stddev",
+                                title: "Stddev, <nobr>hits/s</nobr>",
+                                breakpoints: "lg",
+                                sortValue: (val) => val.options.sortValue},
                             {name: "time",
-                                title: "Avg. time",
+                                title: "Avg. time, s",
                                 breakpoints: "md",
                                 sortValue: (val) => parseFloat(val)},
                         ],
