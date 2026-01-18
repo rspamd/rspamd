@@ -78,10 +78,11 @@ define(["jquery", "app/common", "footable"],
                 });
             });
 
-            // For better mean calculations
-            const avg_freq = freqs
-                .sort((a, b) => Number(a) < Number(b))
-                .reduce((f1, acc) => f1 + acc) / (freqs.length !== 0 ? freqs.length : 1.0);
+            // For better mean calculations - use only non-zero values
+            const nonzero_freqs = freqs.filter((f) => Number(f) > 0.0);
+            const avg_freq = nonzero_freqs.length > 0
+                ? nonzero_freqs.reduce((acc, f) => acc + Number(f), 0.0) / nonzero_freqs.length
+                : 0.0;
             let mult = 1.0;
             let exp = 0.0;
 
