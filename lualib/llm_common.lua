@@ -41,11 +41,22 @@ function M.build_llm_input(task, opts)
   -- Rspamd uses bytes for limit.
   -- Let's stick with what we had but using extract_text_limited
 
+  local reply_trim_mode = opts.reply_trim_mode or 'replies'
+  local trim_replies = false
+  if reply_trim_mode == 'always' then
+    trim_replies = true
+  elseif reply_trim_mode == 'none' then
+    trim_replies = false
+  else
+    trim_replies = task:has_header('In-Reply-To') or task:has_header('References')
+  end
+
   local extraction_opts = {
     max_bytes = max_tokens * 6, -- Rough estimate
     max_words = max_tokens, -- Better estimate if available
-    strip_quotes = true, -- Default cleanup for LLM
-    smart_trim = true, -- Enable heuristics
+    strip_quotes = trim_replies,
+    strip_reply_headers = trim_replies,
+    smart_trim = trim_replies,
   }
 
   local res = lua_mime.extract_text_limited(task, extraction_opts)
