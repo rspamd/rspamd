@@ -468,6 +468,13 @@ end
 -- * Loads spam and ham vectors (from versioned key AND pending key)
 -- * Spawn learning process
 local function do_train_ann(worker, ev_base, rule, set, ann_key)
+  -- Check early to prevent concurrent training
+  if set.learning_spawned then
+    lua_util.debugm(N, rspamd_config, 'do_train_ann: training already in progress for %s:%s, skipping',
+      rule.prefix, set.name)
+    return
+  end
+
   local spam_elts = {}
   local ham_elts = {}
   local pending_key = neural_common.pending_train_key(rule, set)

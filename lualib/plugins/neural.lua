@@ -823,12 +823,13 @@ end
 
 -- This function receives training vectors, checks them, spawn learning and saves ANN in Redis
 local function spawn_train(params)
-  -- Prevent concurrent training
+  -- Prevent concurrent training (flag may be set by do_train_ann or needs to be set here for direct calls)
   if params.set.learning_spawned then
     lua_util.debugm(N, rspamd_config, 'spawn_train: training already in progress for %s:%s, skipping',
       params.rule.prefix, params.set.name)
     return
   end
+  params.set.learning_spawned = true
 
   -- Check training data sanity
   -- Now we need to join inputs and create the appropriate test vectors
@@ -1002,8 +1003,6 @@ local function spawn_train(params)
       end
     end
 
-    params.set.learning_spawned = true
-
     local function redis_save_cb(err)
       if err then
         rspamd_logger.errx(rspamd_config, 'cannot save ANN %s:%s to redis key %s: %s',
@@ -1153,8 +1152,7 @@ local function spawn_train(params)
       on_complete = ann_trained,
       proctitle = string.format("ANN train for %s/%s", params.rule.prefix, params.set.name),
     }
-    -- Spawn learn and register lock extension
-    params.set.learning_spawned = true
+    -- Register lock extension (learning_spawned already set at start of spawn_train)
     register_lock_extender(params.rule, params.set, params.ev_base, params.ann_key)
     return
   end
