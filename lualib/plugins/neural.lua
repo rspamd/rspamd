@@ -587,6 +587,13 @@ local function redis_ann_prefix(rule, settings_name)
     settings.prefix, plugin_ver, rule.prefix, n, settings_name)
 end
 
+-- Returns a stable key for pending training vectors (version-independent)
+-- Used for batch/manual training to avoid version mismatch issues
+local function pending_train_key(rule, set)
+  return string.format('%s_%s_%s_pending',
+    settings.prefix, rule.prefix, set.name)
+end
+
 -- Compute a stable digest for providers configuration
 local function providers_config_digest(providers_cfg, rule)
   if not providers_cfg then return nil end
@@ -816,6 +823,13 @@ end
 
 -- This function receives training vectors, checks them, spawn learning and saves ANN in Redis
 local function spawn_train(params)
+  -- Prevent concurrent training
+  if params.set.learning_spawned then
+    lua_util.debugm(N, rspamd_config, 'spawn_train: training already in progress for %s:%s, skipping',
+      params.rule.prefix, params.set.name)
+    return
+  end
+
   -- Check training data sanity
   -- Now we need to join inputs and create the appropriate test vectors
   local n
@@ -1006,6 +1020,28 @@ local function spawn_train(params)
       else
         rspamd_logger.infox(rspamd_config, 'saved ANN %s:%s to redis: %s',
           params.rule.prefix, params.set.name, params.set.ann.redis_key)
+
+        -- Clean up pending training keys if they were used
+        if params.pending_key then
+          local function cleanup_cb(cleanup_err)
+            if cleanup_err then
+              lua_util.debugm(N, rspamd_config, 'failed to cleanup pending keys: %s', cleanup_err)
+            else
+              lua_util.debugm(N, rspamd_config, 'cleaned up pending training keys for %s',
+                params.pending_key)
+            end
+          end
+          -- Delete both spam and ham pending sets
+          lua_redis.redis_make_request_taskless(params.ev_base,
+            rspamd_config,
+            params.rule.redis,
+            nil,
+            true,       -- is write
+            cleanup_cb,
+            'DEL',
+            { params.pending_key .. '_spam_set', params.pending_key .. '_ham_set' }
+          )
+        end
       end
     end
 
@@ -1026,7 +1062,20 @@ local function spawn_train(params)
       else
         local parser = ucl.parser()
         local ok, parse_err = parser:parse_text(data, 'msgpack')
-        assert(ok, parse_err)
+        if not ok then
+          rspamd_logger.errx(rspamd_config, 'cannot parse training result for ANN %s:%s: %s (data size: %s)',
+            params.rule.prefix, params.set.name, parse_err, #data)
+          lua_redis.redis_make_request_taskless(params.ev_base,
+            rspamd_config,
+            params.rule.redis,
+            nil,
+            true,
+            gen_unlock_cb(params.rule, params.set, params.ann_key),
+            'HDEL',
+            { params.ann_key, 'lock' }
+          )
+          return
+        end
         local parsed = parser:get_object()
         local ann_data = rspamd_util.zstd_compress(parsed.ann_data)
         local pca_data = parsed.pca_data
@@ -1045,10 +1094,10 @@ local function spawn_train(params)
 
 
         -- Deserialise ANN from the child process
-        ann_trained = rspamd_kann.load(parsed.ann_data)
+        local loaded_ann = rspamd_kann.load(parsed.ann_data)
         local version = (params.set.ann.version or 0) + 1
         params.set.ann.version = version
-        params.set.ann.ann = ann_trained
+        params.set.ann.ann = loaded_ann
         params.set.ann.symbols = params.set.symbols
         params.set.ann.redis_key = new_ann_key(params.rule, params.set, version)
 
@@ -1306,6 +1355,7 @@ return {
   load_scripts = load_scripts,
   module_config = module_config,
   new_ann_key = new_ann_key,
+  pending_train_key = pending_train_key,
   providers_config_digest = providers_config_digest,
   register_provider = register_provider,
   plugin_ver = plugin_ver,

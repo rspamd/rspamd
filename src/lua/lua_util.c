@@ -24,6 +24,7 @@
 #include "libutil/str_util.h"
 #include "libserver/html/html.h"
 #include "libserver/hyperscan_tools.h"
+#include "libserver/async_session.h"
 
 #include "lua_parsers.h"
 
@@ -4474,8 +4475,16 @@ struct rspamd_ev_base_sleep_cbdata {
 	lua_State *L;
 	int cbref;
 	struct thread_entry *thread;
+	struct rspamd_async_session *session;
 	ev_timer ev;
 };
+
+/* Dummy finalizer for sleep session events - the timer handles cleanup */
+static void
+lua_ev_base_sleep_session_fin(gpointer ud)
+{
+	/* Nothing to do - timer callback handles everything */
+}
 
 static void
 lua_ev_base_sleep_cb(struct ev_loop *loop, struct ev_timer *t, int events)
@@ -4484,6 +4493,12 @@ lua_ev_base_sleep_cb(struct ev_loop *loop, struct ev_timer *t, int events)
 		(struct rspamd_ev_base_sleep_cbdata *) t->data;
 
 	ev_timer_stop(loop, t);
+
+	/* Remove session event if we registered one */
+	if (cbdata->session) {
+		rspamd_session_remove_event(cbdata->session,
+									lua_ev_base_sleep_session_fin, cbdata);
+	}
 
 	if (cbdata->cbref != -1) {
 		/* Async mode: call the callback */
@@ -4516,6 +4531,25 @@ lua_ev_base_sleep_cb(struct ev_loop *loop, struct ev_timer *t, int events)
  * @param {number} time timeout in seconds
  * @param {function} callback optional callback for async mode
  */
+/* Helper to get rspamadm_session from Lua globals if available */
+static struct rspamd_async_session *
+lua_get_rspamadm_session(lua_State *L)
+{
+	struct rspamd_async_session *session = NULL;
+
+	lua_getglobal(L, "rspamadm_session");
+
+	if (lua_type(L, -1) == LUA_TUSERDATA) {
+		void *ud = rspamd_lua_check_udata_maybe(L, -1, rspamd_session_classname);
+		if (ud) {
+			session = *((struct rspamd_async_session **) ud);
+		}
+	}
+
+	lua_pop(L, 1);
+	return session;
+}
+
 static int
 lua_ev_base_sleep(lua_State *L)
 {
@@ -4534,11 +4568,22 @@ lua_ev_base_sleep(lua_State *L)
 	cbdata->ev.data = cbdata;
 	cbdata->cbref = -1;
 	cbdata->thread = NULL;
+	cbdata->session = NULL;
+
+	/* Try to get rspamadm_session for session event tracking */
+	struct rspamd_async_session *session = lua_get_rspamadm_session(L);
 
 	if (lua_isfunction(L, 3)) {
 		/* Async mode with callback */
 		lua_pushvalue(L, 3);
 		cbdata->cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+		/* Register session event if available so wait_session_events waits for us */
+		if (session) {
+			cbdata->session = session;
+			rspamd_session_add_event(session,
+									 lua_ev_base_sleep_session_fin, cbdata, "lua sleep");
+		}
 
 		ev_timer_init(&cbdata->ev, lua_ev_base_sleep_cb, timeout, 0.0);
 		ev_timer_start(ev_base, &cbdata->ev);
@@ -4555,6 +4600,13 @@ lua_ev_base_sleep(lua_State *L)
 
 			if (cfg && cfg->lua_thread_pool) {
 				cbdata->thread = lua_thread_pool_get_running_entry(cfg->lua_thread_pool);
+
+				/* Register session event if available so wait_session_events waits for us */
+				if (session) {
+					cbdata->session = session;
+					rspamd_session_add_event(session,
+											 lua_ev_base_sleep_session_fin, cbdata, "lua sleep");
+				}
 
 				ev_timer_init(&cbdata->ev, lua_ev_base_sleep_cb, timeout, 0.0);
 				ev_timer_start(ev_base, &cbdata->ev);
