@@ -401,15 +401,20 @@ local function check_settings(task)
 
             applied = true
           elseif s.rule.external_map then
-            local external_map = s.rule.external_map
-            local selector_result = external_map.selector(task)
-
-            if selector_result then
-              external_map.map:get_key(selector_result, nil, task)
-              -- No more selection logic
-              return
+            -- Skip external map query if settings were provided via header
+            if query_apply then
+              lua_util.debugm(N, task, "skip external map %s: settings provided via header", s.name)
             else
-              rspamd_logger.infox(task, "cannot query selector to make external map request")
+              local external_map = s.rule.external_map
+              local selector_result = external_map.selector(task)
+
+              if selector_result then
+                external_map.map:get_key(selector_result, nil, task)
+                -- No more selection logic
+                return
+              else
+                rspamd_logger.infox(task, "cannot query selector to make external map request")
+              end
             end
           end
           if s.rule['symbols'] then
