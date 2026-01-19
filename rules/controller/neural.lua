@@ -408,19 +408,9 @@ local function handle_train(task, conn, req_params)
 
   -- Check pending vectors count
   local pending_key = neural_common.pending_train_key(rule, set)
-  local ev_base = task:get_ev_base()
 
   local function check_and_train(spam_count, ham_count)
     if spam_count > 0 and ham_count > 0 then
-      -- We have vectors in pending, find or create a profile and train
-      local ann_key
-      if set.ann and set.ann.redis_key then
-        ann_key = set.ann.redis_key
-      else
-        -- Create a new profile
-        ann_key = neural_common.new_ann_key(rule, set, 0)
-      end
-
       rspamd_logger.infox(task, 'manual train trigger for %s:%s with %s spam, %s ham vectors',
         rule.prefix, set.name, spam_count, ham_count)
 
