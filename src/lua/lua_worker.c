@@ -569,7 +569,7 @@ rspamd_lua_call_on_complete(lua_State *L,
 	}
 
 	if (data) {
-		lua_pushlstring(L, data, datalen);
+		lua_new_text(L, data, datalen, FALSE);
 	}
 	else {
 		lua_pushnil(L);
