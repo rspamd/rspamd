@@ -1,0 +1,21 @@
+# Rspamd Neural Embedding Service Dependencies (GPU)
+#
+# Install: pip install -r requirements-gpu.txt
+#
+# Uses sentence-transformers with PyTorch CUDA for GPU inference.
+# Versions pinned for compatibility with PyTorch 2.1 / CUDA 12.1.
+
+# FastAPI web framework
+fastapi>=0.100.0
+
+# ASGI server
+uvicorn[standard]>=0.23.0
+
+# sentence-transformers for GPU inference (uses PyTorch + CUDA)
+# Pin versions for compatibility
+numpy<2
+transformers==4.40.0
+sentence-transformers==2.7.0
+
+# Data validation
+pydantic>=2.0.0

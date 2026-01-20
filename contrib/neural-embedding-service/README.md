@@ -180,6 +180,145 @@ EMBEDDING_MODEL="BAAI/bge-small-en-v1.5" python embedding_service.py
 - Consider increasing workers for parallel processing
 - Use batching for bulk operations
 
+## GPU Deployment
+
+For higher throughput, you can run this service on a GPU. GPU inference is 10-50x faster than CPU.
+
+### Local GPU (Docker)
+
+```bash
+# Build GPU image
+docker build -f Dockerfile.gpu -t rspamd-embedding-service:gpu .
+
+# Run with GPU access
+docker run --gpus all -p 8080:8080 rspamd-embedding-service:gpu
+
+# With larger model (GPU has more memory)
+docker run --gpus all -p 8080:8080 \
+  -e EMBEDDING_MODEL="BAAI/bge-large-en-v1.5" \
+  rspamd-embedding-service:gpu
+```
+
+### Vast.ai Cloud GPU
+
+[Vast.ai](https://vast.ai) provides affordable GPU rentals ($0.10-0.50/hr). This is useful for:
+- Testing GPU performance before buying hardware
+- Burst capacity during high-volume periods
+- Running larger models that need more VRAM
+
+#### Quick Start
+
+```bash
+# Install vast.ai CLI
+pip install vastai
+
+# Set your API key (get from https://vast.ai/console/account/)
+vastai set api-key YOUR_API_KEY
+
+# Search for available GPUs
+./vastai-launch.sh --search-only
+
+# Launch an instance
+./vastai-launch.sh --model "BAAI/bge-small-en-v1.5" --gpu RTX_3090
+```
+
+#### Launch Script Options
+
+```bash
+./vastai-launch.sh [options]
+
+Options:
+  --model MODEL    Embedding model (default: BAAI/bge-small-en-v1.5)
+  --gpu GPU_TYPE   GPU type filter (default: RTX_3090)
+  --max-price MAX  Maximum $/hr (default: 0.30)
+  --disk DISK_GB   Disk space in GB (default: 20)
+  --search-only    Only search for instances, don't launch
+  --show-url ID    Show service URL for a running instance
+```
+
+#### Getting the Service URL
+
+After launching, get your service URL:
+
+```bash
+# Option 1: Use the helper
+./vastai-launch.sh --show-url <INSTANCE_ID>
+
+# Option 2: Manual lookup
+vastai show instance <INSTANCE_ID>
+# Look for: 8080/tcp -> 0.0.0.0:XXXXX
+# Your URL is: http://<PUBLIC_IP>:XXXXX
+```
+
+**Important:** The SSH port (22) is NOT your service port. Look for port 8080's mapping.
+
+#### Manual Vast.ai Setup
+
+1. Go to [vast.ai/console/create](https://vast.ai/console/create/)
+2. Select a GPU instance (RTX 3090 or better recommended)
+3. Choose `pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime` as the image
+4. In the on-start script, add:
+
+```bash
+pip install uv
+uv pip install --system "numpy<2" "transformers==4.40.0" "sentence-transformers==2.7.0" fastapi uvicorn pydantic
+# Copy embedding_service.py to /root/
+EMBEDDING_MODEL="intfloat/multilingual-e5-large" python /root/embedding_service.py
+```
+
+5. After the instance starts, find your service URL:
+   ```bash
+   # List your instances
+   vastai show instances
+
+   # Get instance details (replace ID with your instance ID)
+   vastai show instance <ID>
+
+   # Look for port mapping like: 8080/tcp -> 0.0.0.0:41234
+   # Your service URL is: http://<PUBLIC_IP>:41234
+   ```
+
+6. Configure Rspamd to use `http://<PUBLIC_IP>:<MAPPED_PORT>/api/embeddings`
+
+**Note:** Vast.ai maps container ports to random high ports. The SSH port (usually 22) is different from your service port (8080 mapped to something like 41234).
+
+#### Recommended GPU Instances
+
+| GPU | VRAM | Price | Use Case |
+|-----|------|-------|----------|
+| RTX 3090 | 24GB | $0.15-0.30/hr | Best value, handles all models |
+| RTX 4090 | 24GB | $0.40-0.60/hr | Faster inference |
+| A100 | 40-80GB | $1.00-2.00/hr | Very large models, batch processing |
+
+#### Cost Estimation
+
+| Volume | GPU Cost | Notes |
+|--------|----------|-------|
+| 10K emails/day | ~$3-7/month | RTX 3090, shared instance |
+| 100K emails/day | ~$20-50/month | Dedicated RTX 3090 |
+| 1M emails/day | ~$150-300/month | Multiple GPUs or A100 |
+
+### GPU Requirements
+
+| Model | VRAM | Dims | Notes |
+|-------|------|------|-------|
+| `intfloat/multilingual-e5-large` | 2GB | 1024 | **Recommended** - 100+ languages, excellent Russian |
+| `sentence-transformers/paraphrase-multilingual-mpnet-base-v2` | 1GB | 768 | Good multilingual, smaller |
+| `BAAI/bge-base-en-v1.5` | 1GB | 768 | English only, fast |
+| `BAAI/bge-large-en-v1.5` | 2GB | 1024 | English only, high quality |
+
+### Multilingual Models (Recommended for GPU)
+
+For multilingual support including Russian, use `intfloat/multilingual-e5-large`:
+- 1024-dim embeddings
+- Supports 100+ languages with excellent Russian performance
+- State-of-the-art on multilingual benchmarks
+
+```bash
+# Use multilingual-e5-large (default for vast.ai script)
+./vastai-launch.sh --model "intfloat/multilingual-e5-large"
+```
+
 ## License
 
 Apache License 2.0
