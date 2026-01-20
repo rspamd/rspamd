@@ -2981,10 +2981,12 @@ fuzzy_io_fin(void *ud)
 
 	if (session->commands) {
 		g_ptr_array_free(session->commands, TRUE);
+		session->commands = NULL;
 	}
 
 	if (session->results) {
 		g_ptr_array_free(session->results, TRUE);
+		session->results = NULL;
 	}
 
 	/* Only cleanup fd and ev_watcher for UDP sessions */
@@ -4723,6 +4725,9 @@ fuzzy_tcp_timer_callback(EV_P_ ev_timer *w, int revents)
 
 	/* Check pending timeouts for all requests in this rule (periodic check) */
 	fuzzy_tcp_check_pending_timeouts(session->rule, now);
+	if (session->commands == NULL) {
+		return;
+	}
 
 	/* Check if all commands have been replied */
 	for (i = 0; i < session->commands->len; i++) {

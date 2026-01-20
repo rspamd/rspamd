@@ -226,10 +226,16 @@ local function build_message_summary(task, sel_part, opts)
   local model_cfg = { max_tokens = 256 }
   local content_tbl
   if sel_part then
-    local itbl = llm_common.build_llm_input(task, { max_tokens = model_cfg.max_tokens })
+    local itbl = llm_common.build_llm_input(task, {
+      max_tokens = model_cfg.max_tokens,
+      reply_trim_mode = opts.reply_trim_mode,
+    })
     content_tbl = itbl
   else
-    content_tbl = llm_common.build_llm_input(task, { max_tokens = model_cfg.max_tokens })
+    content_tbl = llm_common.build_llm_input(task, {
+      max_tokens = model_cfg.max_tokens,
+      reply_trim_mode = opts.reply_trim_mode,
+    })
   end
   if type(content_tbl) ~= 'table' then
     return nil
