@@ -754,7 +754,8 @@ local function process_existing_ann(_, ev_base, rule, set, profiles)
       local dist = lua_util.distance_sorted(elt.symbols, my_symbols)
       -- Check distance
       if dist < #my_symbols * .3 then
-        if dist < min_diff then
+        -- Prefer profiles with smaller distance, or higher version when distance is equal
+        if dist < min_diff or (dist == min_diff and sel_elt and elt.version > sel_elt.version) then
           min_diff = dist
           sel_elt = elt
         end
