@@ -474,7 +474,8 @@ local function get_roc_thresholds(ann, inputs, outputs, alpha, beta)
   spam_count_ahead[n_samples + 1] = 0
 
   for i = n_samples, 1, -1 do
-    if outputs[i][1] == 0 then
+    -- Labels are -1.0 for ham and 1.0 for spam (ceb_neg cost function)
+    if outputs[i][1] < 0 then
       n_ham = n_ham + 1
       ham_count_ahead[i] = 1
       spam_count_ahead[i] = 0
@@ -489,7 +490,8 @@ local function get_roc_thresholds(ann, inputs, outputs, alpha, beta)
   end
 
   for i = 1, n_samples do
-    if outputs[i][1] == 0 then
+    -- Labels are -1.0 for ham and 1.0 for spam (ceb_neg cost function)
+    if outputs[i][1] < 0 then
       ham_count_behind[i] = 1
       spam_count_behind[i] = 0
     else
