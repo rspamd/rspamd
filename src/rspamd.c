@@ -57,6 +57,7 @@
 
 #ifdef WITH_HYPERSCAN
 #include "libserver/hyperscan_tools.h"
+#include "libserver/maps/map_helpers.h"
 #endif
 
 #include "rspamd_simdutf.h"
@@ -341,6 +342,10 @@ reread_config(struct rspamd_main *rspamd_main)
 	else {
 		rspamd_log_close(old_logger);
 		msg_info_main("replacing config");
+#ifdef WITH_HYPERSCAN
+		/* Clear pending regexp maps before releasing old config to avoid use-after-free */
+		rspamd_regexp_map_clear_pending();
+#endif
 		CFG_REF_RELEASE(old_cfg);
 		rspamd_main->cfg->rspamd_user = rspamd_user;
 		rspamd_main->cfg->rspamd_group = rspamd_group;
