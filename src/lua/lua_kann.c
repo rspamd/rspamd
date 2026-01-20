@@ -68,10 +68,13 @@ KANN_LAYER_DEF(conv2d);
 KANN_LAYER_DEF(conv1d);
 KANN_LAYER_DEF(cost);
 
+static int lua_kann_layer_layerdropout(lua_State *L); /* forward declaration */
+
 static luaL_reg rspamd_kann_layers_f[] = {
 	KANN_LAYER_INTERFACE(input),
 	KANN_LAYER_INTERFACE(dense),
 	KANN_LAYER_INTERFACE(layernorm),
+	{"dropout", lua_kann_layer_layerdropout}, /* manually registered - different naming */
 	KANN_LAYER_INTERFACE(rnn),
 	KANN_LAYER_INTERFACE(lstm),
 	KANN_LAYER_INTERFACE(gru),
@@ -94,6 +97,7 @@ KANN_TRANSFORM_DEF(square);
 KANN_TRANSFORM_DEF(sigm);
 KANN_TRANSFORM_DEF(tanh);
 KANN_TRANSFORM_DEF(relu);
+KANN_TRANSFORM_DEF(gelu);
 KANN_TRANSFORM_DEF(softmax);
 KANN_TRANSFORM_DEF(1minus);
 KANN_TRANSFORM_DEF(exp);
@@ -110,6 +114,7 @@ static luaL_reg rspamd_kann_transform_f[] = {
 	KANN_TRANSFORM_INTERFACE(sigm),
 	KANN_TRANSFORM_INTERFACE(tanh),
 	KANN_TRANSFORM_INTERFACE(relu),
+	KANN_TRANSFORM_INTERFACE(gelu),
 	KANN_TRANSFORM_INTERFACE(softmax),
 	KANN_TRANSFORM_INTERFACE(1minus),
 	KANN_TRANSFORM_INTERFACE(exp),
@@ -706,6 +711,7 @@ LUA_UNARY_TRANSFORM_FUNC_IMPL(square)
 LUA_UNARY_TRANSFORM_FUNC_IMPL(sigm)
 LUA_UNARY_TRANSFORM_FUNC_IMPL(tanh)
 LUA_UNARY_TRANSFORM_FUNC_IMPL(relu)
+LUA_UNARY_TRANSFORM_FUNC_IMPL(gelu)
 LUA_UNARY_TRANSFORM_FUNC_IMPL(softmax)
 LUA_UNARY_TRANSFORM_FUNC_IMPL(1minus)
 LUA_UNARY_TRANSFORM_FUNC_IMPL(exp)
