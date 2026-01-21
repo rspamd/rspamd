@@ -756,7 +756,7 @@ local function providers_config_digest(providers_cfg, rule)
 
     norm.providers[i] = entry
   end
-  return lua_util.table_digest(norm)
+  return lua_util.unordered_table_digest(norm)
 end
 
 -- If no providers configured, fallback to symbols provider unless disabled

@@ -1674,6 +1674,62 @@ end
 exports.table_digest = table_digest
 
 ---[[[
+-- @function lua_util.unordered_table_digest(t)
+-- Returns a hash of table contents that is independent of iteration order.
+-- Uses XXH3 fast hash with XOR accumulation for O(n) performance.
+-- All value types (string, number, boolean, table) are included in the hash.
+-- @param {table} t input array or map
+-- @return {string} hex representation of the 64-bit hash
+--]]]
+local function unordered_table_digest(t)
+  local cr = require "rspamd_cryptobox"
+  local bit = require "bit"
+
+  -- Internal function that returns high/low 32-bit parts
+  local function digest_impl(tbl)
+    local acc_hi, acc_lo = 0, 0
+
+    if tbl[1] ~= nil then
+      -- Array: order matters, so include index in hash
+      for i, e in ipairs(tbl) do
+        local str
+        if type(e) == 'table' then
+          -- Recursively compute digest for nested table
+          str = tostring(i) .. '\0' .. digest_impl(e)
+        else
+          str = tostring(i) .. '\0' .. tostring(e)
+        end
+        local hi, lo = cr.fast_hash64(str)
+        acc_hi = bit.bxor(acc_hi, hi)
+        acc_lo = bit.bxor(acc_lo, lo)
+      end
+    else
+      -- Map: order doesn't matter, XOR all k-v hashes
+      for k, v in pairs(tbl) do
+        local str
+        if type(v) == 'table' then
+          -- Recursively compute digest for nested table
+          str = tostring(k) .. '\0' .. digest_impl(v)
+        else
+          str = tostring(k) .. '\0' .. tostring(v)
+        end
+        local hi, lo = cr.fast_hash64(str)
+        acc_hi = bit.bxor(acc_hi, hi)
+        acc_lo = bit.bxor(acc_lo, lo)
+      end
+    end
+
+    -- Return as hex string for nested calls
+    -- Use bit.tohex() which properly handles signed 32-bit values
+    return bit.tohex(acc_hi) .. bit.tohex(acc_lo)
+  end
+
+  return digest_impl(t)
+end
+
+exports.unordered_table_digest = unordered_table_digest
+
+---[[[
 -- @function lua_util.toboolean(v)
 -- Converts a string or a number to boolean
 -- @param {string|number} v

@@ -114,6 +114,7 @@ LUA_FUNCTION_DEF(cryptobox, encrypt_cookie);
 LUA_FUNCTION_DEF(cryptobox, decrypt_cookie);
 LUA_FUNCTION_DEF(cryptobox, pbkdf);
 LUA_FUNCTION_DEF(cryptobox, gen_dkim_keypair);
+LUA_FUNCTION_DEF(cryptobox, fast_hash64);
 
 /* Secretbox API: uses libsodium secretbox and blake2b for key derivation */
 LUA_FUNCTION_DEF(cryptobox_secretbox, create);
@@ -136,6 +137,7 @@ static const struct luaL_reg cryptoboxlib_f[] = {
 	LUA_INTERFACE_DEF(cryptobox, decrypt_cookie),
 	LUA_INTERFACE_DEF(cryptobox, pbkdf),
 	LUA_INTERFACE_DEF(cryptobox, gen_dkim_keypair),
+	LUA_INTERFACE_DEF(cryptobox, fast_hash64),
 	{NULL, NULL}};
 
 static const struct luaL_reg cryptoboxpubkeylib_f[] = {
@@ -2812,6 +2814,52 @@ lua_cryptobox_gen_dkim_keypair(lua_State *L)
 	else {
 		return luaL_error(L, "invalid algorithm %s", alg_str);
 	}
+
+	return 2;
+}
+
+/***
+ * @function rspamd_cryptobox.fast_hash64(data[, seed])
+ * Computes a fast 64-bit hash (XXH3) of the input data.
+ * Returns two numbers: high 32 bits and low 32 bits.
+ * This is useful for order-independent hashing via XOR accumulation.
+ * @param {string|rspamd_text} data input data to hash
+ * @param {number} seed optional seed value (default 0)
+ * @return {number,number} high 32 bits and low 32 bits of the 64-bit hash
+ */
+static int
+lua_cryptobox_fast_hash64(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	const char *data;
+	gsize len;
+	uint64_t seed = 0;
+	uint64_t h;
+
+	if (lua_type(L, 1) == LUA_TSTRING) {
+		data = lua_tolstring(L, 1, &len);
+	}
+	else if (lua_type(L, 1) == LUA_TUSERDATA) {
+		struct rspamd_lua_text *t = lua_check_text(L, 1);
+		if (!t) {
+			return luaL_error(L, "invalid arguments");
+		}
+		data = t->start;
+		len = t->len;
+	}
+	else {
+		return luaL_error(L, "invalid arguments: string or rspamd_text expected");
+	}
+
+	if (lua_type(L, 2) == LUA_TNUMBER) {
+		seed = lua_tointeger(L, 2);
+	}
+
+	h = rspamd_cryptobox_fast_hash_specific(RSPAMD_CRYPTOBOX_XXHASH3, data, len, seed);
+
+	/* Return as two 32-bit integers for easy XOR in LuaJIT */
+	lua_pushinteger(L, (lua_Integer) (h >> 32));        /* high 32 bits */
+	lua_pushinteger(L, (lua_Integer) (h & 0xFFFFFFFF)); /* low 32 bits */
 
 	return 2;
 }
