@@ -401,12 +401,6 @@ end
 -- * Loads spam and ham vectors
 -- * Spawn learning process
 local function do_train_ann(worker, ev_base, rule, set, ann_key)
-  -- Check if we need to train ann
-  if rule.train.store_set_only then
-    lua_util.debugm(N, rspamd_config, 'do_train_ann: skipping %s:%s key=%s due to store_set_only', rule.prefix, set.name, ann_key)
-    return
-  end
-
   local spam_elts = {}
   local ham_elts = {}
   lua_util.debugm(N, rspamd_config, 'do_train_ann: start for %s:%s key=%s', rule.prefix, set.name, ann_key)
@@ -770,6 +764,12 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
   if sel_elt then
     -- We have our ANN and that's train vectors, check if we can learn
     local ann_key = sel_elt.redis_key
+
+   -- Check if we need to train ann
+   if rule.train.store_set_only then
+     lua_util.debugm(N, rspamd_config, "skiped check if ANN %s needs to be trained due to store_set_only", ann_key)
+     return
+   end
 
     lua_util.debugm(N, rspamd_config, "check if ANN %s needs to be trained",
       ann_key)
