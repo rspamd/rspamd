@@ -57,6 +57,22 @@ gboolean rspamd_ssl_connect_fd(struct rspamd_ssl_connection *conn, int fd,
 							   gpointer handler_data);
 
 /**
+ * Accepts SSL session on an already connected (accepted) FD
+ * @param conn connection
+ * @param fd fd to use (already accepted TCP socket)
+ * @param ev event to use
+ * @param tv timeout for handshake
+ * @param handler connected session handler
+ * @param err_handler error handler
+ * @param handler_data opaque data
+ * @return TRUE if handshake has started
+ */
+gboolean rspamd_ssl_accept_fd(struct rspamd_ssl_connection *conn, int fd,
+							  struct rspamd_io_ev *ev, ev_tstamp timeout,
+							  rspamd_ssl_handler_t handler, rspamd_ssl_error_handler_t err_handler,
+							  gpointer handler_data);
+
+/**
  * Restores SSL handlers for the existing ssl connection (e.g. after keepalive)
  * @param conn
  * @param handler
