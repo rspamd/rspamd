@@ -352,6 +352,7 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 	cfg->enable_css_parser = true;
 	cfg->enable_mime_utf = false;
 	cfg->enable_url_rewrite = false;
+	cfg->include_content_urls = true; /* Include URLs from PDF/content by default */
 	cfg->url_rewrite_lua_func = nullptr;
 	cfg->composites_inverted_index = true; /* Enable inverted index by default */
 	cfg->composites_stats_always = false;  /* Use probabilistic sampling by default */
