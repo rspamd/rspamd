@@ -1170,7 +1170,7 @@ end
 - - prefix <string> cache prefix (default = nil)
 - - ignore_redirected <bool> (default = false)
 - - need_images <bool> (default = false)
-- - need_content <bool> (default = false)
+- - need_content <bool> (default = nil, uses global include_content_urls config which defaults to true)
 -- }
 -- Apply heuristic in extracting of urls from task, this function
 -- tries its best to extract specific number of urls from a task based on
@@ -1183,7 +1183,7 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
     esld_limit = 9999,
     need_emails = false,
     need_images = false,
-    need_content = false,
+    need_content = nil, -- nil means use global include_content_urls config (default: true)
     filter = nil,
     prefix = nil,
     ignore_ip = false,
@@ -1227,10 +1227,11 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
       if params.flags then
         cache_key_suffix = table.concat(params.flags) .. (params.flags_mode or '')
       else
+        -- Use tostring directly to distinguish nil (config default) from false (explicit exclude)
         cache_key_suffix = string.format('%s%s%s',
           tostring(params.need_emails or false),
           tostring(params.need_images or false),
-          tostring(params.need_content or false))
+          tostring(params.need_content)) -- nil = config default, false = explicit exclude
       end
       cache_key = string.format('sp_urls_%d%s', params.limit, cache_key_suffix)
     end
