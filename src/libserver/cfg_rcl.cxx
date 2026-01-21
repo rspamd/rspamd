@@ -2118,6 +2118,12 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   0,
 									   "Enable HTML URL rewriting");
 		rspamd_rcl_add_default_handler(sub,
+									   "include_content_urls",
+									   rspamd_rcl_parse_struct_boolean,
+									   G_STRUCT_OFFSET(struct rspamd_config, include_content_urls),
+									   0,
+									   "Include URLs extracted from content (PDF, etc.) in URL API calls (default: true)");
+		rspamd_rcl_add_default_handler(sub,
 									   "composites_inverted_index",
 									   rspamd_rcl_parse_struct_boolean,
 									   G_STRUCT_OFFSET(struct rspamd_config, composites_inverted_index),

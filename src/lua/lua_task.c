@@ -248,6 +248,8 @@ LUA_FUNCTION_DEF(task, append_message);
 /***
  * @method task:get_urls([need_emails|list_protos][, need_images])
  * Get all URLs found in a message. Telephone urls and emails are not included unless explicitly asked in `list_protos`
+ * Content URLs (extracted from PDF and other content types) are included by default unless
+ * `include_content_urls` global option is set to false.
  * @param {boolean} need_emails if `true` then return also email urls, this can be a comma separated string of protocols desired or a table (e.g. `mailto` or `telephone`)
  * @param {boolean} need_images return urls from images (<img src=...>) as well
  * @return {table rspamd_url} list of all urls found
@@ -2632,9 +2634,17 @@ lua_task_get_urls(lua_State *L)
 			return 1;
 		}
 
-		/* Exclude RSPAMD_URL_FLAG_CONTENT to preserve backward compatibility */
+		/*
+		 * By default, include content URLs if configured (default: true).
+		 * Always exclude image URLs unless explicitly requested.
+		 */
+		unsigned int default_flags = ~RSPAMD_URL_FLAG_IMAGE;
+		if (task->cfg && !task->cfg->include_content_urls) {
+			default_flags &= ~RSPAMD_URL_FLAG_CONTENT;
+		}
+
 		if (!lua_url_cbdata_fill(L, 2, &cb, default_protocols_mask,
-								 ~(RSPAMD_URL_FLAG_CONTENT | RSPAMD_URL_FLAG_IMAGE),
+								 default_flags,
 								 max_urls)) {
 			return luaL_error(L, "invalid arguments");
 		}
@@ -3095,8 +3105,17 @@ lua_task_get_emails(lua_State *L)
 				max_urls = task->cfg->max_lua_urls;
 			}
 
+			/*
+			 * By default, include content URLs if configured (default: true).
+			 * Always exclude image URLs unless explicitly requested.
+			 */
+			unsigned int default_flags = ~RSPAMD_URL_FLAG_IMAGE;
+			if (task->cfg && !task->cfg->include_content_urls) {
+				default_flags &= ~RSPAMD_URL_FLAG_CONTENT;
+			}
+
 			if (!lua_url_cbdata_fill(L, 2, &cb, PROTOCOL_MAILTO,
-									 ~(RSPAMD_URL_FLAG_CONTENT | RSPAMD_URL_FLAG_IMAGE),
+									 default_flags,
 									 max_urls)) {
 				return luaL_error(L, "invalid arguments");
 			}

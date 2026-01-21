@@ -1311,9 +1311,8 @@ lua_url_cbdata_fill(lua_State *L,
 						flags_mask &= ~RSPAMD_URL_FLAG_CONTENT;
 					}
 				}
-				else {
-					flags_mask &= ~RSPAMD_URL_FLAG_CONTENT;
-				}
+				/* If content is nil/not specified, keep the default_flags as-is
+				 * (which respects the include_content_urls config option) */
 				lua_pop(L, 1);
 			}
 

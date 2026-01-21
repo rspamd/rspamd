@@ -377,6 +377,7 @@ struct rspamd_config {
 	gboolean enable_css_parser;                              /**< Enable css parsing in HTML							*/
 	gboolean enable_mime_utf;                                /**< Enable utf8 mime parsing							*/
 	gboolean enable_url_rewrite;                             /**< Enable HTML URL rewriting							*/
+	gboolean include_content_urls;                           /**< Include content URLs (from PDF etc) in API calls	*/
 
 	gboolean composites_inverted_index; /**< Use inverted index for composite lookup			*/
 	gboolean composites_stats_always;   /**< Always collect composite stats (not sampled)		*/
