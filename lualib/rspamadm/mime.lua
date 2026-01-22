@@ -746,7 +746,7 @@ local function stat_handler(opts)
           local text = part:get_text()
 
           if text then
-            local digest, shingles = text:get_fuzzy_hashes(task:get_mempool())
+            local digest, shingles = text:get_fuzzy_hashes(task:get_mempool(), task:get_subject())
             table.insert(out_elts[fname], {
               digest = digest,
               shingles = shingles,

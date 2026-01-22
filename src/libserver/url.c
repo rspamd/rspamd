@@ -3651,6 +3651,10 @@ rspamd_url_query_callback(struct rspamd_url *url, gsize start_offset,
 
 	url->flags |= RSPAMD_URL_FLAG_QUERY;
 
+	/* For computed parts (e.g., PDF extracted text), also mark as content URL */
+	if (cbd->part && (cbd->part->mime_part->flags & RSPAMD_MIME_PART_COMPUTED)) {
+		url->flags |= RSPAMD_URL_FLAG_CONTENT;
+	}
 
 	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false)) {
 		if (cbd->part && cbd->part->mime_part->urls) {
@@ -3712,7 +3716,17 @@ rspamd_url_text_part_callback(struct rspamd_url *url, gsize start_offset,
 		}
 	}
 
-	url->flags |= RSPAMD_URL_FLAG_FROM_TEXT;
+	/*
+	 * For computed/virtual parts (e.g., text extracted from PDF), use CONTENT flag
+	 * instead of FROM_TEXT. These URLs may be clickable links in the original document
+	 * rather than plain text URLs.
+	 */
+	if (cbd->part->mime_part->flags & RSPAMD_MIME_PART_COMPUTED) {
+		url->flags |= RSPAMD_URL_FLAG_CONTENT;
+	}
+	else {
+		url->flags |= RSPAMD_URL_FLAG_FROM_TEXT;
+	}
 
 	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false) &&
 		cbd->part->mime_part->urls) {

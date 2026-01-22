@@ -770,6 +770,9 @@ rspamd_http_simple_client_helper(struct rspamd_http_connection *conn)
 	}
 }
 
+static inline void
+rspamd_http_connection_stop_watcher(struct rspamd_http_connection_private *priv);
+
 static void
 rspamd_http_write_helper(struct rspamd_http_connection *conn)
 {
@@ -856,6 +859,7 @@ rspamd_http_write_helper(struct rspamd_http_connection *conn)
 						err = g_error_new(HTTP_ERROR, 400,
 										  "HTTP parser error on early response: %s",
 										  http_errno_description(priv->parser.http_errno));
+						rspamd_http_connection_stop_watcher(priv);
 						rspamd_http_connection_ref(conn);
 						conn->error_handler(conn, err);
 						rspamd_http_connection_unref(conn);
@@ -870,6 +874,7 @@ rspamd_http_write_helper(struct rspamd_http_connection *conn)
 			}
 
 			err = g_error_new(HTTP_ERROR, 500, "IO write error: %s", strerror(saved_errno));
+			rspamd_http_connection_stop_watcher(priv);
 			rspamd_http_connection_ref(conn);
 			conn->error_handler(conn, err);
 			rspamd_http_connection_unref(conn);
@@ -981,10 +986,20 @@ static void
 rspamd_http_ssl_err_handler(gpointer ud, GError *err)
 {
 	struct rspamd_http_connection *conn = (struct rspamd_http_connection *) ud;
+	struct rspamd_http_connection_private *priv = conn->priv;
+
+	/* Error is terminal, stop watcher before delegating to user handler */
+	rspamd_http_connection_stop_watcher(priv);
 
 	rspamd_http_connection_ref(conn);
 	conn->error_handler(conn, err);
 	rspamd_http_connection_unref(conn);
+}
+
+static inline void
+rspamd_http_connection_stop_watcher(struct rspamd_http_connection_private *priv)
+{
+	rspamd_ev_watcher_stop(priv->ctx->event_loop, &priv->ev);
 }
 
 static void
@@ -1015,6 +1030,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 					sock_err != 0) {
 					err = g_error_new(HTTP_ERROR, 500,
 									  "Connection failed: %s", strerror(sock_err));
+					rspamd_http_connection_stop_watcher(priv);
 					conn->error_handler(conn, err);
 					g_error_free(err);
 
@@ -1069,6 +1085,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 				}
 
 				if (!conn->finished) {
+					rspamd_http_connection_stop_watcher(priv);
 					conn->error_handler(conn, err);
 				}
 				else {
@@ -1091,6 +1108,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 				err = g_error_new(HTTP_ERROR,
 								  400,
 								  "IO read error: unexpected EOF");
+				rspamd_http_connection_stop_watcher(priv);
 				conn->error_handler(conn, err);
 				g_error_free(err);
 			}
@@ -1105,6 +1123,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 								  500,
 								  "HTTP IO read error: %s",
 								  strerror(errno));
+				rspamd_http_connection_stop_watcher(priv);
 				conn->error_handler(conn, err);
 				g_error_free(err);
 			}
@@ -1129,6 +1148,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 									  http_errno_description(priv->parser.http_errno));
 
 					if (!conn->finished) {
+						rspamd_http_connection_stop_watcher(priv);
 						conn->error_handler(conn, err);
 					}
 					else {
@@ -1146,6 +1166,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 			else {
 				err = g_error_new(HTTP_ERROR, 408,
 								  "IO timeout");
+				rspamd_http_connection_stop_watcher(priv);
 				conn->error_handler(conn, err);
 				g_error_free(err);
 
