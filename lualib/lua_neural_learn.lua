@@ -101,9 +101,9 @@ local default_autolearn_settings = {
     ham_prob = 1.0,
   },
 
-  -- Skip conditions
-  check_local = false,         -- skip local network messages
-  check_authed = false,        -- skip authenticated users
+  -- Exclusion conditions (matching RBL module naming)
+  exclude_local = false,       -- exclude local network messages from autolearn
+  exclude_users = true,        -- exclude authenticated users from autolearn
 }
 
 -- Helper: convert array to set
@@ -311,12 +311,12 @@ function exports.can_autolearn(task, rule, learn_type, overrides)
     return false, string.format('blocked by guard: %s', guard_reason)
   end
 
-  -- Skip checks
-  if opts.check_local and task:get_from_ip() and task:get_from_ip():is_local() then
+  -- Exclusion checks (matching RBL module naming)
+  if opts.exclude_local and task:get_from_ip() and task:get_from_ip():is_local() then
     return false, 'local network message'
   end
 
-  if opts.check_authed and task:get_user() then
+  if opts.exclude_users and task:get_user() then
     return false, 'authenticated user'
   end
 
