@@ -364,9 +364,10 @@ local function ann_push_task_result(rule, task, verdict, score, set)
             end
 
             local str = rspamd_util.zstd_compress(table.concat(vec, ';'))
-            -- For manual training, use stable pending key to avoid version mismatch
+            -- For manual training with LLM providers, use stable pending key to avoid version mismatch
+            -- For symbols-only mode, use versioned key directly (dimension is stable)
             local target_key
-            if manual_train then
+            if manual_train and has_llm_provider then
               target_key = neural_common.pending_train_key(rule, set) .. '_' .. learn_type .. '_set'
             else
               target_key = set.ann.redis_key .. '_' .. learn_type .. '_set'
