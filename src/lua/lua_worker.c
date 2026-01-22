@@ -481,6 +481,7 @@ struct rspamd_lua_process_cbdata {
 	int cb_cbref;
 	gboolean replied;
 	gboolean is_error;
+	gboolean dead; /* Set by SIGCHLD handler when child exits */
 	pid_t cpid;
 	lua_State *L;
 	uint64_t sz;
@@ -569,7 +570,7 @@ rspamd_lua_call_on_complete(lua_State *L,
 	}
 
 	if (data) {
-		lua_pushlstring(L, data, datalen);
+		lua_new_text(L, data, datalen, FALSE);
 	}
 	else {
 		lua_pushnil(L);
@@ -583,34 +584,13 @@ rspamd_lua_call_on_complete(lua_State *L,
 	lua_settop(L, err_idx - 1);
 }
 
-static gboolean
-rspamd_lua_cld_handler(struct rspamd_worker_signal_handler *sigh, void *ud)
+/* Helper to free cbdata resources */
+static void
+rspamd_lua_cbdata_free(struct rspamd_lua_process_cbdata *cbdata)
 {
-	struct rspamd_lua_process_cbdata *cbdata = ud;
 	struct rspamd_srv_command srv_cmd;
-	lua_State *L;
-	pid_t died;
-	int res = 0;
+	lua_State *L = cbdata->L;
 
-	/* Are we called by a correct children ? */
-	died = waitpid(cbdata->cpid, &res, WNOHANG);
-
-	if (died <= 0) {
-		/* Wait more */
-		return TRUE;
-	}
-
-	L = cbdata->L;
-	msg_info("handled SIGCHLD from %P", cbdata->cpid);
-
-	if (!cbdata->replied) {
-		/* We still need to call on_complete callback */
-		ev_io_stop(cbdata->event_loop, &cbdata->ev);
-		rspamd_lua_call_on_complete(cbdata->L, cbdata,
-									"Worker has died without reply", NULL, 0);
-	}
-
-	/* Free structures */
 	close(cbdata->sp[0]);
 	luaL_unref(L, LUA_REGISTRYINDEX, cbdata->func_cbref);
 	luaL_unref(L, LUA_REGISTRYINDEX, cbdata->cb_cbref);
@@ -629,6 +609,35 @@ rspamd_lua_cld_handler(struct rspamd_worker_signal_handler *sigh, void *ud)
 	rspamd_srv_send_command(cbdata->wrk, cbdata->event_loop, &srv_cmd, -1,
 							NULL, NULL);
 	g_free(cbdata);
+}
+
+static gboolean
+rspamd_lua_cld_handler(struct rspamd_worker_signal_handler *sigh, void *ud)
+{
+	struct rspamd_lua_process_cbdata *cbdata = ud;
+	pid_t died;
+	int res = 0;
+
+	/* Are we called by a correct children ? */
+	died = waitpid(cbdata->cpid, &res, WNOHANG);
+
+	if (died <= 0) {
+		/* Wait more */
+		return TRUE;
+	}
+
+	msg_info("handled SIGCHLD from %P", cbdata->cpid);
+	cbdata->dead = TRUE;
+
+	if (!cbdata->replied) {
+		/* Child died before sending reply - call callback with error and cleanup */
+		ev_io_stop(cbdata->event_loop, &cbdata->ev);
+		rspamd_lua_call_on_complete(cbdata->L, cbdata,
+									"Worker has died without reply", NULL, 0);
+		rspamd_lua_cbdata_free(cbdata);
+	}
+	/* If replied is TRUE, the I/O handler is processing the callback.
+	 * It will call rspamd_lua_cbdata_free() when done. */
 
 	/* We are done with this SIGCHLD */
 	return FALSE;
@@ -650,11 +659,14 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 
 		if (r == 0) {
 			ev_io_stop(cbdata->event_loop, &cbdata->ev);
+			cbdata->replied = TRUE;
 			rspamd_lua_call_on_complete(cbdata->L, cbdata,
 										"Unexpected EOF", NULL, 0);
-			cbdata->replied = TRUE;
 			kill(cbdata->cpid, SIGTERM);
 
+			if (cbdata->dead) {
+				rspamd_lua_cbdata_free(cbdata);
+			}
 			return;
 		}
 		else if (r == -1) {
@@ -663,11 +675,14 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 			}
 			else {
 				ev_io_stop(cbdata->event_loop, &cbdata->ev);
+				cbdata->replied = TRUE;
 				rspamd_lua_call_on_complete(cbdata->L, cbdata,
 											strerror(errno), NULL, 0);
-				cbdata->replied = TRUE;
 				kill(cbdata->cpid, SIGTERM);
 
+				if (cbdata->dead) {
+					rspamd_lua_cbdata_free(cbdata);
+				}
 				return;
 			}
 		}
@@ -695,11 +710,14 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 
 		if (r == 0) {
 			ev_io_stop(cbdata->event_loop, &cbdata->ev);
+			cbdata->replied = TRUE;
 			rspamd_lua_call_on_complete(cbdata->L, cbdata,
 										"Unexpected EOF", NULL, 0);
-			cbdata->replied = TRUE;
 			kill(cbdata->cpid, SIGTERM);
 
+			if (cbdata->dead) {
+				rspamd_lua_cbdata_free(cbdata);
+			}
 			return;
 		}
 		else if (r == -1) {
@@ -708,11 +726,14 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 			}
 			else {
 				ev_io_stop(cbdata->event_loop, &cbdata->ev);
+				cbdata->replied = TRUE;
 				rspamd_lua_call_on_complete(cbdata->L, cbdata,
 											strerror(errno), NULL, 0);
-				cbdata->replied = TRUE;
 				kill(cbdata->cpid, SIGTERM);
 
+				if (cbdata->dead) {
+					rspamd_lua_cbdata_free(cbdata);
+				}
 				return;
 			}
 		}
@@ -723,6 +744,10 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 			char rep[4];
 
 			ev_io_stop(cbdata->event_loop, &cbdata->ev);
+			/* Mark as replied BEFORE calling callback to prevent SIGCHLD handler
+			 * from calling the callback again. The SIGCHLD handler will see
+			 * replied=TRUE and skip cleanup, leaving it for us to do. */
+			cbdata->replied = TRUE;
 			/* Finished reading data */
 			if (cbdata->is_error) {
 				cbdata->io_buf->str[cbdata->io_buf->len] = '\0';
@@ -734,12 +759,16 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 											NULL, cbdata->io_buf->str, cbdata->io_buf->len);
 			}
 
-			cbdata->replied = TRUE;
-
 			/* Write reply to the child */
 			rspamd_socket_blocking(cbdata->sp[0]);
 			memset(rep, 0, sizeof(rep));
 			(void) !write(cbdata->sp[0], rep, sizeof(rep));
+
+			/* If SIGCHLD already ran while we were in the callback,
+			 * the child is dead and we need to cleanup now */
+			if (cbdata->dead) {
+				rspamd_lua_cbdata_free(cbdata);
+			}
 		}
 	}
 }

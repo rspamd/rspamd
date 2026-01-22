@@ -20,6 +20,7 @@ local lua_redis = require "lua_redis"
 local lua_util = require "lua_util"
 local lua_verdict = require "lua_verdict"
 local neural_common = require "plugins/neural"
+local neural_learn = require "lua_neural_learn"
 local rspamd_kann = require "rspamd_kann"
 local rspamd_logger = require "rspamd_logger"
 local rspamd_tensor = require "rspamd_tensor"
@@ -63,7 +64,7 @@ local function new_ann_profile(task, rule, set, version)
     version = version,
     digest = set.digest,
     distance = 0, -- Since we are using our own profile
-    providers_digest = neural_common.providers_config_digest(rule.providers),
+    providers_digest = neural_common.providers_config_digest(rule.providers, rule),
   }
 
   local ucl = require "ucl"
@@ -115,10 +116,24 @@ local function ann_scores_filter(task)
 
     if ann then
       local function after_features(vec, meta)
-        if profile.providers_digest and meta and meta.digest and profile.providers_digest ~= meta.digest then
-          lua_util.debugm(N, task, 'providers digest mismatch for %s:%s, skip ANN apply',
-            rule.prefix, set.name)
-          vec = nil
+        -- For providers-based ANNs, require matching digest
+        -- For symbols-based ANNs (no providers), skip this check
+        local has_providers = rule.providers and #rule.providers > 0
+        if has_providers then
+          local stored_digest = profile.providers_digest
+          local current_digest = meta and meta.digest
+          if not stored_digest then
+            -- Old ANN was trained without providers - needs retraining with current config
+            lua_util.debugm(N, task,
+              'ANN %s:%s was trained without providers, skipping (retrain with current config)',
+              rule.prefix, set.name)
+            vec = nil
+          elseif stored_digest ~= current_digest then
+            rspamd_logger.warnx(task,
+              'providers config changed for %s:%s (stored=%s, current=%s), ANN needs retraining',
+              rule.prefix, set.name, stored_digest, current_digest or 'none')
+            vec = nil
+          end
         end
 
         local score
@@ -143,7 +158,7 @@ local function ann_scores_filter(task)
           local spam_threshold = 0
           if rule.spam_score_threshold then
             spam_threshold = rule.spam_score_threshold
-          elseif rule.roc_enabled and not set.ann.roc_thresholds then
+          elseif rule.roc_enabled and set.ann.roc_thresholds then
             spam_threshold = set.ann.roc_thresholds[1]
           end
 
@@ -165,7 +180,7 @@ local function ann_scores_filter(task)
           local ham_threshold = 0
           if rule.ham_score_threshold then
             ham_threshold = rule.ham_score_threshold
-          elseif rule.roc_enabled and not set.ann.roc_thresholds then
+          elseif rule.roc_enabled and set.ann.roc_thresholds then
             ham_threshold = set.ann.roc_thresholds[2]
           end
 
@@ -193,6 +208,17 @@ local function ann_scores_filter(task)
   end
 end
 
+local function get_ann_train_header(task)
+  local hdr = task:get_request_header('ANN-Train')
+  if type(hdr) == 'table' then
+    hdr = hdr[1]
+  end
+  if hdr then
+    return tostring(hdr):lower()
+  end
+  return nil
+end
+
 local function ann_push_task_result(rule, task, verdict, score, set)
   local train_opts = rule.train
   local learn_spam, learn_ham
@@ -201,10 +227,9 @@ local function ann_push_task_result(rule, task, verdict, score, set)
 
   -- First, honor explicit manual training header if present
   do
-    local hdr = task:get_request_header('ANN-Train')
-    if hdr then
-      local hv = tostring(hdr):lower()
-      lua_util.debugm(N, task, 'found ANN-Train header, enable manual train mode', hv)
+    local hv = get_ann_train_header(task)
+    if hv then
+      lua_util.debugm(N, task, 'found ANN-Train header, enable manual train mode: %s', hv)
       if hv == 'spam' then
         learn_spam = true
         manual_train = true
@@ -217,20 +242,60 @@ local function ann_push_task_result(rule, task, verdict, score, set)
     end
   end
 
-  -- If LLM provider is configured, suppress autotrain unless manual training requested
-  if not manual_train and rule.providers and #rule.providers > 0 then
-    for _, p in ipairs(rule.providers) do
-      if p.type == 'llm' then
-        lua_util.debugm(N, task, 'suppress autotrain: llm provider present and no manual header')
-        learn_spam = false
-        learn_ham = false
-        skip_reason = 'llm provider requires manual training'
-        break
+  -- Check for autolearn class set by mempool (integration with external learning decisions)
+  if not manual_train then
+    local autolearn_class = neural_learn.get_autolearn_class(task)
+    if autolearn_class then
+      lua_util.debugm(N, task, 'found neural autolearn class in mempool: %s', autolearn_class)
+      if autolearn_class == 'spam' then
+        learn_spam = true
+        manual_train = true
+      elseif autolearn_class == 'ham' then
+        learn_ham = true
+        manual_train = true
       end
     end
   end
 
-  if not manual_train and (not train_opts.store_pool_only and train_opts.autotrain) then
+  -- Check which providers are configured
+  local has_llm_provider = false
+  local has_symbols_provider = false
+  if rule.providers and #rule.providers > 0 then
+    for _, p in ipairs(rule.providers) do
+      if p.type == 'llm' then
+        has_llm_provider = true
+      elseif p.type == 'symbols' then
+        has_symbols_provider = true
+      end
+    end
+  else
+    -- No providers configured = implicit symbols-only mode
+    has_symbols_provider = true
+  end
+
+  if has_llm_provider and not manual_train then
+    -- Use expression-based autolearn conditions for LLM providers
+    if rule.autolearn and rule.autolearn.enabled then
+      local learn_type, reason = neural_learn.get_learn_type(task, rule)
+      if learn_type == 'spam' then
+        learn_spam = true
+        lua_util.debugm(N, task, 'autolearn spam via expression: %s', reason)
+      elseif learn_type == 'ham' then
+        learn_ham = true
+        lua_util.debugm(N, task, 'autolearn ham via expression: %s', reason)
+      else
+        skip_reason = reason or 'autolearn condition not met'
+        lua_util.debugm(N, task, 'autolearn skip: %s', skip_reason)
+      end
+    else
+      -- LLM provider without autolearn config - require manual training
+      learn_spam = false
+      learn_ham = false
+      skip_reason = 'llm provider requires autolearn config or manual training'
+      lua_util.debugm(N, task, 'suppress autotrain: llm provider present, no autolearn config')
+    end
+  elseif not manual_train and (not train_opts.store_pool_only and train_opts.autotrain) then
+    -- Traditional score/verdict based learning for non-LLM providers
     if train_opts.spam_score then
       learn_spam = score >= train_opts.spam_score
 
@@ -261,8 +326,8 @@ local function ann_push_task_result(rule, task, verdict, score, set)
           verdict)
       end
     end
-  else
-    if train_opts.store_pool_only and not manual_train then
+  elseif not manual_train then
+    if train_opts.store_pool_only then
       local ucl = require "ucl"
       learn_ham = false
       learn_spam = false
@@ -304,7 +369,15 @@ local function ann_push_task_result(rule, task, verdict, score, set)
             end
 
             local str = rspamd_util.zstd_compress(table.concat(vec, ';'))
-            local target_key = set.ann.redis_key .. '_' .. learn_type .. '_set'
+            -- For manual training:
+            -- - LLM-only mode: use pending key (embedding dims may vary between versions)
+            -- - Symbols-only or hybrid (LLM+symbols): use versioned key (dimension is stable)
+            local target_key
+            if manual_train and has_llm_provider and not has_symbols_provider then
+              target_key = neural_common.pending_train_key(rule, set) .. '_' .. learn_type .. '_set'
+            else
+              target_key = set.ann.redis_key .. '_' .. learn_type .. '_set'
+            end
 
             local function learn_vec_cb(redis_err)
               if redis_err then
@@ -359,13 +432,14 @@ local function ann_push_task_result(rule, task, verdict, score, set)
     end
 
     -- Check if we can learn
-    if set.can_store_vectors then
+    -- For manual training, bypass can_store_vectors check (it may not be set yet)
+    if set.can_store_vectors or manual_train then
       if not set.ann then
         -- Need to create or load a profile corresponding to the current configuration
         set.ann = new_ann_profile(task, rule, set, 0)
         lua_util.debugm(N, task,
-          'requested new profile for %s, set.ann is missing',
-          set.name)
+          'requested new profile for %s, set.ann is missing (manual_train=%s)',
+          set.name, manual_train)
       end
 
       lua_redis.exec_redis_script(neural_common.redis_script_id.vectors_len,
@@ -398,12 +472,21 @@ end
 
 -- This function does the following:
 -- * Tries to lock ANN
--- * Loads spam and ham vectors
+-- * Loads spam and ham vectors (from versioned key AND pending key)
 -- * Spawn learning process
 local function do_train_ann(worker, ev_base, rule, set, ann_key)
+  -- Check early to prevent concurrent training
+  if set.learning_spawned then
+    lua_util.debugm(N, rspamd_config, 'do_train_ann: training already in progress for %s:%s, skipping',
+      rule.prefix, set.name)
+    return
+  end
+
   local spam_elts = {}
   local ham_elts = {}
-  lua_util.debugm(N, rspamd_config, 'do_train_ann: start for %s:%s key=%s', rule.prefix, set.name, ann_key)
+  local pending_key = neural_common.pending_train_key(rule, set)
+  lua_util.debugm(N, rspamd_config, 'do_train_ann: start for %s:%s key=%s pending=%s',
+    rule.prefix, set.name, ann_key, pending_key)
 
   local function redis_ham_cb(err, data)
     if err or type(data) ~= 'table' then
@@ -429,7 +512,8 @@ local function do_train_ann(worker, ev_base, rule, set, ann_key)
         set = set,
         ann_key = ann_key,
         ham_vec = ham_elts,
-        spam_vec = spam_elts
+        spam_vec = spam_elts,
+        pending_key = pending_key
       })
     end
   end
@@ -452,15 +536,15 @@ local function do_train_ann(worker, ev_base, rule, set, ann_key)
     else
       -- Decompress and convert to numbers each training vector
       spam_elts = process_training_vectors(data)
-      -- Now get ham vectors...
+      -- Now get ham vectors from both versioned and pending keys
       lua_redis.redis_make_request_taskless(ev_base,
         rspamd_config,
         rule.redis,
         nil,
         false,        -- is write
         redis_ham_cb, --callback
-        'SMEMBERS',   -- command
-        { ann_key .. '_ham_set' }
+        'SUNION',     -- command (union of sets)
+        { ann_key .. '_ham_set', pending_key .. '_ham_set' }
       )
     end
   end
@@ -471,18 +555,19 @@ local function do_train_ann(worker, ev_base, rule, set, ann_key)
         ann_key, err)
     elseif type(data) == 'number' and data == 1 then
       -- ANN is locked, so we can extract SPAM and HAM vectors and spawn learning
+      -- Fetch from both versioned key and pending key using SUNION
       lua_redis.redis_make_request_taskless(ev_base,
         rspamd_config,
         rule.redis,
         nil,
         false,         -- is write
         redis_spam_cb, --callback
-        'SMEMBERS',    -- command
-        { ann_key .. '_spam_set' }
+        'SUNION',      -- command (union of sets)
+        { ann_key .. '_spam_set', pending_key .. '_spam_set' }
       )
 
-      rspamd_logger.infox(rspamd_config, 'lock ANN %s:%s (key name %s) for learning',
-        rule.prefix, set.name, ann_key)
+      rspamd_logger.infox(rspamd_config, 'lock ANN %s:%s (key name %s, pending %s) for learning',
+        rule.prefix, set.name, ann_key, pending_key)
     else
       local lock_tm = tonumber(data[1])
       rspamd_logger.infox(rspamd_config, 'do not learn ANN %s:%s (key name %s), ' ..
@@ -676,7 +761,8 @@ local function process_existing_ann(_, ev_base, rule, set, profiles)
       local dist = lua_util.distance_sorted(elt.symbols, my_symbols)
       -- Check distance
       if dist < #my_symbols * .3 then
-        if dist < min_diff then
+        -- Prefer profiles with smaller distance, or higher version when distance is equal
+        if dist < min_diff or (dist == min_diff and sel_elt and elt.version > sel_elt.version) then
           min_diff = dist
           sel_elt = elt
         end
@@ -764,6 +850,7 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
   if sel_elt then
     -- We have our ANN and that's train vectors, check if we can learn
     local ann_key = sel_elt.redis_key
+    local pending_key = neural_common.pending_train_key(rule, set)
 
     lua_util.debugm(N, rspamd_config, "check if ANN %s needs to be trained",
       ann_key)
@@ -824,38 +911,130 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
         end
       end
     end
+    lua_util.debugm(N, rspamd_config, "check if ANN %s (pending %s) needs to be trained",
+      ann_key, pending_key)
 
     local function initiate_train()
       rspamd_logger.infox(rspamd_config,
-        'need to learn ANN %s after %s required learn vectors',
-        ann_key, lens)
+        'need to learn ANN %s (pending %s) after %s required learn vectors',
+        ann_key, pending_key, lens)
       lua_util.debugm(N, rspamd_config, 'maybe_train_existing_ann: initiating train for key=%s spam=%s ham=%s', ann_key,
         lens.spam or -1, lens.ham or -1)
       do_train_ann(worker, ev_base, rule, set, ann_key)
     end
 
-    -- Spam vector is OK, check ham vector length
+    -- Final check after all vectors are counted
+    local function maybe_initiate_train()
+      local max_len = math.max(lua_util.unpack(lua_util.values(lens)))
+      local min_len = math.min(lua_util.unpack(lua_util.values(lens)))
+
+      lua_util.debugm(N, rspamd_config,
+        'final vector count for ANN %s: spam=%s ham=%s (min=%s max=%s required=%s)',
+        ann_key, lens.spam, lens.ham, min_len, max_len, rule.train.max_trains)
+
+      if rule.train.learn_type == 'balanced' then
+        local len_bias_check_pred = function(_, l)
+          return l >= rule.train.max_trains * (1.0 - rule.train.classes_bias)
+        end
+        if max_len >= rule.train.max_trains and fun.all(len_bias_check_pred, lens) then
+          initiate_train()
+        else
+          lua_util.debugm(N, rspamd_config,
+            'cannot learn ANN %s: balanced mode requires more vectors (has %s)',
+            ann_key, lens)
+        end
+      else
+        -- Probabilistic mode
+        if min_len > 0 and max_len >= rule.train.max_trains then
+          initiate_train()
+        else
+          lua_util.debugm(N, rspamd_config,
+            'cannot learn ANN %s: need min_len > 0 and max_len >= %s (has %s)',
+            ann_key, rule.train.max_trains, lens)
+        end
+      end
+    end
+
+    -- Callback that adds count from pending key and continues
+    local function add_pending_cb(cont_cb, what)
+      return function(err, data)
+        if not err and (type(data) == 'number' or type(data) == 'string') then
+          local pending_count = tonumber(data) or 0
+          lens[what] = (lens[what] or 0) + pending_count
+          lua_util.debugm(N, rspamd_config, 'added %s pending %s vectors, total now %s',
+            pending_count, what, lens[what])
+        end
+        cont_cb()
+      end
+    end
+
+    -- Simple callback that just adds versioned count and continues
+    local function add_versioned_cb(cont_cb, what)
+      return function(err, data)
+        if not err and (type(data) == 'number' or type(data) == 'string') then
+          local count = tonumber(data) or 0
+          lens[what] = (lens[what] or 0) + count
+          lua_util.debugm(N, rspamd_config, 'added %s versioned %s vectors, total now %s',
+            count, what, lens[what])
+        end
+        cont_cb()
+      end
+    end
+
+    -- Check pending ham, then make final decision
+    local function check_pending_ham()
+      lua_redis.redis_make_request_taskless(ev_base,
+        rspamd_config,
+        rule.redis,
+        nil,
+        false,
+        add_pending_cb(maybe_initiate_train, 'ham'),
+        'SCARD',
+        { pending_key .. '_ham_set' }
+      )
+    end
+
+    -- Check versioned ham, then check pending ham
     local function check_ham_len()
       lua_redis.redis_make_request_taskless(ev_base,
         rspamd_config,
         rule.redis,
         nil,
-        false,                                         -- is write
-        redis_len_cb_gen(initiate_train, 'ham', true), --callback
-        'SCARD',                                       -- command
+        false,
+        add_versioned_cb(check_pending_ham, 'ham'),
+        'SCARD',
         { ann_key .. '_ham_set' }
       )
     end
 
-    lua_redis.redis_make_request_taskless(ev_base,
-      rspamd_config,
-      rule.redis,
-      nil,
-      false,                                          -- is write
-      redis_len_cb_gen(check_ham_len, 'spam', false), --callback
-      'SCARD',                                        -- command
-      { ann_key .. '_spam_set' }
-    )
+    -- Check pending spam, then check ham
+    local function check_pending_spam()
+      lua_redis.redis_make_request_taskless(ev_base,
+        rspamd_config,
+        rule.redis,
+        nil,
+        false,
+        add_pending_cb(check_ham_len, 'spam'),
+        'SCARD',
+        { pending_key .. '_spam_set' }
+      )
+    end
+
+    -- Check versioned spam, then pending spam
+    local function check_spam_len()
+      lua_redis.redis_make_request_taskless(ev_base,
+        rspamd_config,
+        rule.redis,
+        nil,
+        false,
+        add_versioned_cb(check_pending_spam, 'spam'),
+        'SCARD',
+        { ann_key .. '_spam_set' }
+      )
+    end
+
+    -- Start the chain
+    check_spam_len()
   end
 end
 
@@ -953,7 +1132,9 @@ local function ann_push_vector(task)
     lua_util.debugm(N, task, 'do not push data for skipped task')
     return
   end
-  if not settings.allow_local and lua_util.is_rspamc_or_controller(task) then
+  -- Allow manual training via ANN-Train header regardless of allow_local
+  local manual_train_header = get_ann_train_header(task)
+  if not settings.allow_local and not manual_train_header and lua_util.is_rspamc_or_controller(task) then
     lua_util.debugm(N, task, 'do not push data for manual scan')
     return
   end
@@ -1119,4 +1300,29 @@ for _, rule in pairs(settings.rules) do
         end)
     end
   end)
+end
+
+-- Register plugin API in rspamd_plugins for user hooks
+if rspamd_plugins then
+  rspamd_plugins['neural'] = rspamd_plugins['neural'] or {}
+  -- Expose autolearn hooks for user customization
+  rspamd_plugins['neural'].autolearn = {
+    -- Register a custom guard that can block learning
+    -- cb: function(task, learn_type, ctx) -> bool, reason
+    register_guard = neural_learn.register_guard,
+    -- Remove a registered guard
+    unregister_guard = neural_learn.unregister_guard,
+    -- Configure global autolearn defaults
+    configure = neural_learn.configure,
+    -- Check if task qualifies for autolearn
+    -- Returns: can_learn (bool), reason (string)
+    can_autolearn = neural_learn.can_autolearn,
+    -- Get learn type for task based on conditions
+    -- Returns: 'spam', 'ham', or nil
+    get_learn_type = neural_learn.get_learn_type,
+    -- Set autolearn class in mempool (triggers learning in idempotent callback)
+    set_autolearn_class = neural_learn.set_autolearn_class,
+    -- Get autolearn class from mempool
+    get_autolearn_class = neural_learn.get_autolearn_class,
+  }
 end

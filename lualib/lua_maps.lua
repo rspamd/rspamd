@@ -383,7 +383,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
       return ret
     end
   elseif type(opt) == 'table' then
-    local cache_key = lua_util.table_digest(opt)
+    local cache_key = lua_util.unordered_table_digest(opt)
     if not callback and maps_cache[cache_key] then
       rspamd_logger.infox(rspamd_config, 'reuse url for complex map definition %s: %s',
           cache_key:sub(1, 8), description)

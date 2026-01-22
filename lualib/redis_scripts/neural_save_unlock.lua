@@ -26,6 +26,8 @@ if KEYS[11] and KEYS[11] ~= '' then
 end
 redis.call('HDEL', KEYS[1], 'lock')
 redis.call('HDEL', KEYS[7], 'lock')
+redis.call('HSET', KEYS[7], 'obsolete', '1')
+redis.call('EXPIRE', KEYS[7], 600)
 redis.call('EXPIRE', KEYS[1], tonumber(KEYS[5]))
 -- expire in 10m, to not face race condition with other rspamd replicas refill deleted keys
 redis.call('EXPIRE', KEYS[7] .. '_spam_set', 600)
