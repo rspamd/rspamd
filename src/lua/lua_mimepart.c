@@ -215,8 +215,9 @@ LUA_FUNCTION_DEF(textpart, get_charset);
  */
 LUA_FUNCTION_DEF(textpart, get_languages);
 /***
- * @method text_part:get_fuzzy_hashes(mempool)
+ * @method text_part:get_fuzzy_hashes(mempool[, subject])
  * @param {rspamd_mempool} mempool - memory pool (usually task pool)
+ * @param {string} subject - optional message subject (included in hash for short text < 32 words)
  * Returns direct hash of textpart as a string and array [1..32] of shingles each represented as a following table:
  * - [1] - 64 bit fuzzy hash represented as a string
  * - [2..4] - strings used to generate this hash
@@ -1261,12 +1262,17 @@ lua_shingles_filter(uint64_t *input, gsize count,
 
 #undef STORE_TOKEN
 
+/* Minimum words for shingles (matches lua_fuzzy.lua default) */
+#define FUZZY_SHINGLES_MIN_WORDS 32
+
 static int
 lua_textpart_get_fuzzy_hashes(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_mime_text_part *part = lua_check_textpart(L);
 	rspamd_mempool_t *pool = rspamd_lua_check_mempool(L, 2);
+	const char *subject = NULL;
+	gsize subject_len = 0;
 	unsigned char key[rspamd_cryptobox_HASHBYTES], digest[rspamd_cryptobox_HASHBYTES],
 		hexdigest[rspamd_cryptobox_HASHBYTES * 2 + 1], numbuf[64];
 	struct rspamd_shingle *sgl;
@@ -1275,10 +1281,15 @@ lua_textpart_get_fuzzy_hashes(lua_State *L)
 	rspamd_cryptobox_hash_state_t st;
 	rspamd_word_t *word;
 	struct lua_shingle_filter_cbdata cbd;
-
+	gboolean short_text;
 
 	if (part == NULL || pool == NULL) {
 		return luaL_error(L, "invalid arguments");
+	}
+
+	/* Optional subject parameter for short text hashing */
+	if (lua_type(L, 3) == LUA_TSTRING) {
+		subject = lua_tolstring(L, 3, &subject_len);
 	}
 
 	if (IS_TEXT_PART_EMPTY(part) || !part->utf_words.a) {
@@ -1289,15 +1300,41 @@ lua_textpart_get_fuzzy_hashes(lua_State *L)
 		/* TODO: add keys and algorithms support */
 		rspamd_cryptobox_hash(key, "rspamd", strlen("rspamd"), NULL, 0);
 
-		/* TODO: add short text support */
+		/* Determine if this is short text (matches fuzzy_check.c logic) */
+		short_text = (kv_size(part->utf_words) < FUZZY_SHINGLES_MIN_WORDS);
 
 		/* Calculate direct hash */
 		rspamd_cryptobox_hash_init(&st, key, rspamd_cryptobox_HASHKEYBYTES);
 
-		for (i = 0; i < kv_size(part->utf_words); i++) {
-			word = &kv_A(part->utf_words, i);
-			rspamd_cryptobox_hash_update(&st,
-										 word->stemmed.begin, word->stemmed.len);
+		if (short_text) {
+			/*
+			 * For short text, hash the stripped content directly
+			 * This matches fuzzy_cmd_from_text_part behavior in fuzzy_check.c
+			 */
+			if (part->utf_stripped_content && part->utf_stripped_content->len > 0) {
+				rspamd_cryptobox_hash_update(&st, part->utf_stripped_content->data,
+											 part->utf_stripped_content->len);
+			}
+
+			/* Include subject for short text (matches fuzzy_check.c behavior) */
+			if (subject && subject_len > 0) {
+				rspamd_cryptobox_hash_update(&st, subject, subject_len);
+			}
+		}
+		else {
+			/*
+			 * For normal text, hash individual word stems
+			 * Skip words with RSPAMD_WORD_FLAG_SKIPPED or empty stems
+			 * This matches fuzzy_cmd_from_text_part behavior in fuzzy_check.c
+			 */
+			for (i = 0; i < kv_size(part->utf_words); i++) {
+				word = &kv_A(part->utf_words, i);
+
+				if (!((word->flags & RSPAMD_WORD_FLAG_SKIPPED) || word->stemmed.len == 0)) {
+					rspamd_cryptobox_hash_update(&st, word->stemmed.begin,
+												 word->stemmed.len);
+				}
+			}
 		}
 
 		rspamd_cryptobox_hash_final(&st, digest);
