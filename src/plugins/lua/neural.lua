@@ -257,15 +257,20 @@ local function ann_push_task_result(rule, task, verdict, score, set)
     end
   end
 
-  -- If LLM provider is configured, use autolearn conditions instead of simple score thresholds
+  -- Check which providers are configured
   local has_llm_provider = false
+  local has_symbols_provider = false
   if rule.providers and #rule.providers > 0 then
     for _, p in ipairs(rule.providers) do
       if p.type == 'llm' then
         has_llm_provider = true
-        break
+      elseif p.type == 'symbols' then
+        has_symbols_provider = true
       end
     end
+  else
+    -- No providers configured = implicit symbols-only mode
+    has_symbols_provider = true
   end
 
   if has_llm_provider and not manual_train then
@@ -364,10 +369,11 @@ local function ann_push_task_result(rule, task, verdict, score, set)
             end
 
             local str = rspamd_util.zstd_compress(table.concat(vec, ';'))
-            -- For manual training with LLM providers, use stable pending key to avoid version mismatch
-            -- For symbols-only mode, use versioned key directly (dimension is stable)
+            -- For manual training:
+            -- - LLM-only mode: use pending key (embedding dims may vary between versions)
+            -- - Symbols-only or hybrid (LLM+symbols): use versioned key (dimension is stable)
             local target_key
-            if manual_train and has_llm_provider then
+            if manual_train and has_llm_provider and not has_symbols_provider then
               target_key = neural_common.pending_train_key(rule, set) .. '_' .. learn_type .. '_set'
             else
               target_key = set.ann.redis_key .. '_' .. learn_type .. '_set'
