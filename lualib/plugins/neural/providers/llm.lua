@@ -151,10 +151,13 @@ neural_common.register_provider('llm', {
       return
     end
 
-    -- Build request input string (text then optional subject), keeping rspamd_text intact
-    local input_string = input_tbl.text or ''
+    -- Build request input string: subject first (more valuable for spam detection),
+    -- then text content. Subject-first ensures it's always included even if text is truncated.
+    local input_string
     if input_tbl.subject and input_tbl.subject ~= '' then
-      input_string = input_string .. "\nSubject: " .. input_tbl.subject
+      input_string = "Subject: " .. input_tbl.subject .. "\n" .. (input_tbl.text or '')
+    else
+      input_string = input_tbl.text or ''
     end
 
     local input_key = normalize_cache_key_input(input_string)
