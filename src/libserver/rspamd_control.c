@@ -164,6 +164,11 @@ rspamd_control_connection_close(struct rspamd_control_session *session)
 	}
 
 	rspamd_inet_address_free(session->addr);
+	/*
+	 * Stop any pending IO watcher before closing the socket; otherwise libev can
+	 * abort on ev_io_stop() during final unref in some reload/startup races.
+	 */
+	rspamd_http_connection_reset(session->conn);
 	rspamd_http_connection_unref(session->conn);
 	close(session->fd);
 	g_free(session);
