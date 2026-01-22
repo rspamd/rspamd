@@ -788,7 +788,7 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
             local max_len = math.max(lua_util.unpack(lua_util.values(lens)))
             local min_len = math.min(lua_util.unpack(lua_util.values(lens)))
 
-            if rule.train.learn_type == 'balanced' then
+            if rule.train.learn_mode == 'balanced' then
               local len_bias_check_pred = function(_, l)
                 return l >= rule.train.max_trains * (1.0 - rule.train.classes_bias)
               end
