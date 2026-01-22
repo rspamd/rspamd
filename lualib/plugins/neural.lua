@@ -53,7 +53,12 @@ local default_options = {
   lock_expire = 600,
   learning_spawned = false,
   ann_expire = 60 * 60 * 24 * 2,    -- 2 days
-  hidden_layer_mult = 1.5,          -- number of neurons in the hidden layer
+  hidden_layer_mult = 1.5,          -- number of neurons in the hidden layer (symbol-based mode)
+  -- Multi-layer architecture settings (for LLM embeddings mode)
+  layers = nil,                     -- layer size multipliers (auto-computed based on input dim if nil)
+  dropout = nil,                    -- dropout rate (0.2 default for embeddings, nil=disabled for symbols)
+  use_layernorm = nil,              -- enable layer normalization (true default for embeddings)
+  activation = nil,                 -- activation function: 'relu' or 'gelu' (default: gelu for embeddings, relu for symbols)
   roc_enabled = false,              -- Use ROC to find the best possible thresholds for ham and spam. If spam_score_threshold or ham_score_threshold is defined, it takes precedence over ROC thresholds.
   roc_misclassification_cost = 0.5, -- Cost of misclassifying a spam message (must be 0..1).
   spam_score_threshold = nil,       -- neural score threshold for spam (must be 0..1 or nil to disable)
@@ -185,14 +190,110 @@ local function load_scripts()
   end
 end
 
-local function create_ann(n, nlayers, rule)
-  -- We ignore number of layers so far when using kann
+-- Creates a simple single-layer ANN for symbol-based inputs (backward compatible)
+local function create_symbol_ann(n, rule)
   local nhidden = math.floor(n * (rule.hidden_layer_mult or 1.0) + 1.0)
   local t = rspamd_kann.layer.input(n)
   t = rspamd_kann.transform.relu(t)
-  t = rspamd_kann.layer.dense(t, nhidden);
+  t = rspamd_kann.layer.dense(t, nhidden)
   t = rspamd_kann.layer.cost(t, 1, rspamd_kann.cost.ceb_neg)
   return rspamd_kann.new.kann(t)
+end
+
+-- Creates a multi-layer funnel ANN optimized for high-dimensional embeddings
+-- Architecture: Input → [Dense → LayerNorm → Activation → Dropout]* → Cost
+local function create_embedding_ann(n, rule)
+  local t = rspamd_kann.layer.input(n)
+
+  -- Get architecture settings with smart defaults based on input dimension
+  local layers = rule.layers
+  if not layers then
+    -- Auto-compute layer sizes based on input dimension
+    if n > 512 then
+      layers = { 0.5, 0.25, 0.125 } -- 3 layers for large embeddings (e.g., 1024-dim)
+    elseif n > 256 then
+      layers = { 0.5, 0.25 }        -- 2 layers for medium embeddings
+    else
+      layers = { 0.5 }              -- 1 layer for small embeddings
+    end
+  end
+
+  local dropout_rate = rule.dropout
+  if dropout_rate == nil then
+    dropout_rate = 0.2 -- Default dropout for regularization
+  end
+
+  local use_layernorm = rule.use_layernorm
+  if use_layernorm == nil then
+    use_layernorm = true -- Default: enable layer normalization
+  end
+
+  -- Select activation function: GELU for embeddings (better for high-dim), ReLU as fallback
+  local activation = rule.activation
+  if not activation then
+    -- Default to GELU for embeddings if available
+    activation = rspamd_kann.transform.gelu and 'gelu' or 'relu'
+  end
+  local activate_fn = (activation == 'gelu' and rspamd_kann.transform.gelu) or rspamd_kann.transform.relu
+
+  lua_util.debugm(N, rspamd_config, 'embedding ANN: %s layers, dropout=%s, layernorm=%s, activation=%s',
+    #layers, dropout_rate, use_layernorm, activation)
+
+  -- Build funnel architecture with graduated dimension reduction
+  for i, layer_mult in ipairs(layers) do
+    local layer_size = math.max(math.floor(n * layer_mult), 32)
+
+    -- Dense layer
+    t = rspamd_kann.layer.dense(t, layer_size)
+
+    -- Layer normalization for training stability
+    if use_layernorm then
+      t = rspamd_kann.layer.layernorm(t)
+    end
+
+    -- Activation function (GELU or ReLU)
+    t = activate_fn(t)
+
+    -- Dropout for regularization (less on final hidden layer)
+    if dropout_rate > 0 then
+      local rate = (i == #layers) and (dropout_rate * 0.5) or dropout_rate
+      t = rspamd_kann.layer.dropout(t, rate)
+    end
+  end
+
+  t = rspamd_kann.layer.cost(t, 1, rspamd_kann.cost.ceb_neg)
+  return rspamd_kann.new.kann(t)
+end
+
+-- Detects if rule uses LLM embeddings provider
+local function uses_llm_embeddings(rule)
+  if not rule.providers then
+    return false
+  end
+  for _, p in ipairs(rule.providers) do
+    if p.type == 'llm' then
+      return true
+    end
+  end
+  return false
+end
+
+-- Main ANN factory function - auto-selects architecture based on rule configuration
+local function create_ann(n, nlayers, rule)
+  -- Check if we should use the enhanced embedding architecture
+  -- Conditions: has LLM provider, or explicit multi-layer config, or large input dimension
+  local use_embedding_arch = uses_llm_embeddings(rule)
+    or rule.layers ~= nil
+    or rule.use_layernorm ~= nil
+    or rule.dropout ~= nil
+
+  if use_embedding_arch then
+    lua_util.debugm(N, rspamd_config, 'creating multi-layer embedding ANN with %s inputs', n)
+    return create_embedding_ann(n, rule)
+  else
+    lua_util.debugm(N, rspamd_config, 'creating simple symbol ANN with %s inputs', n)
+    return create_symbol_ann(n, rule)
+  end
 end
 
 -- Fills ANN data for a specific settings element
@@ -373,7 +474,8 @@ local function get_roc_thresholds(ann, inputs, outputs, alpha, beta)
   spam_count_ahead[n_samples + 1] = 0
 
   for i = n_samples, 1, -1 do
-    if outputs[i][1] == 0 then
+    -- Labels are -1.0 for ham and 1.0 for spam (ceb_neg cost function)
+    if outputs[i][1] < 0 then
       n_ham = n_ham + 1
       ham_count_ahead[i] = 1
       spam_count_ahead[i] = 0
@@ -388,7 +490,8 @@ local function get_roc_thresholds(ann, inputs, outputs, alpha, beta)
   end
 
   for i = 1, n_samples do
-    if outputs[i][1] == 0 then
+    -- Labels are -1.0 for ham and 1.0 for spam (ceb_neg cost function)
+    if outputs[i][1] < 0 then
       ham_count_behind[i] = 1
       spam_count_behind[i] = 0
     else
@@ -587,20 +690,73 @@ local function redis_ann_prefix(rule, settings_name)
     settings.prefix, plugin_ver, rule.prefix, n, settings_name)
 end
 
+-- Returns a stable key for pending training vectors (version-independent)
+-- Used for batch/manual training to avoid version mismatch issues
+local function pending_train_key(rule, set)
+  return string.format('%s_%s_%s_pending',
+    settings.prefix, rule.prefix, set.name)
+end
+
 -- Compute a stable digest for providers configuration
-local function providers_config_digest(providers_cfg)
+local function providers_config_digest(providers_cfg, rule)
   if not providers_cfg then return nil end
   -- Normalize minimal subset of fields to keep digest stable across equivalent configs
-  local norm = {}
+  local norm = { providers = {} }
+
+  local fusion = rule and rule.fusion or nil
+  if rule then
+    local effective_fusion = {
+      normalization = (fusion and fusion.normalization) or 'none',
+      include_meta = fusion and fusion.include_meta,
+      meta_weight = fusion and fusion.meta_weight,
+      per_provider_pca = fusion and fusion.per_provider_pca,
+    }
+    if effective_fusion.include_meta == nil then
+      effective_fusion.include_meta = true
+    end
+    if effective_fusion.meta_weight == nil then
+      effective_fusion.meta_weight = 1.0
+    end
+    if effective_fusion.per_provider_pca == nil then
+      effective_fusion.per_provider_pca = false
+    end
+    norm.fusion = effective_fusion
+  end
+
+  if rule and rule.max_inputs then
+    norm.max_inputs = rule.max_inputs
+  end
+
+  local gpt_settings = rspamd_config:get_all_opt('gpt') or {}
+
   for i, p in ipairs(providers_cfg) do
-    norm[i] = {
-      type = p.type,
-      name = p.name,
+    local ptype = p.type or p.name or 'unknown'
+    local entry = {
+      type = ptype,
       weight = p.weight or 1.0,
       dim = p.dim,
     }
+
+    if ptype == 'llm' then
+      local llm_type = p.llm_type or p.api or p.backend or gpt_settings.type
+      local model = p.model or gpt_settings.model
+      local max_tokens = p.max_tokens
+      if not max_tokens and gpt_settings.model_parameters and model then
+        local model_cfg = gpt_settings.model_parameters[model] or {}
+        max_tokens = model_cfg.max_completion_tokens or model_cfg.max_tokens
+      end
+      if not max_tokens then
+        max_tokens = gpt_settings.max_tokens
+      end
+
+      entry.llm_type = llm_type
+      entry.model = model
+      entry.max_tokens = max_tokens
+    end
+
+    norm.providers[i] = entry
   end
-  return lua_util.table_digest(norm)
+  return lua_util.unordered_table_digest(norm)
 end
 
 -- If no providers configured, fallback to symbols provider unless disabled
@@ -612,7 +768,7 @@ local function collect_features_async(task, rule, profile_or_set, phase, cb)
   local providers_cfg = rule.providers
   if not providers_cfg or #providers_cfg == 0 then
     if rule.disable_symbols_input then
-      cb(nil, { providers = {}, total_dim = 0, digest = providers_config_digest(providers_cfg) })
+      cb(nil, { providers = {}, total_dim = 0, digest = providers_config_digest(providers_cfg, rule) })
       return
     end
     local prov = get_provider('symbols')
@@ -636,7 +792,7 @@ local function collect_features_async(task, rule, profile_or_set, phase, cb)
         cb(#fused > 0 and fused or nil, {
           providers = build_providers_meta(metas) or metas,
           total_dim = #fused,
-          digest = providers_config_digest(providers_cfg),
+          digest = providers_config_digest(providers_cfg, rule),
         })
       end)
       return
@@ -658,7 +814,7 @@ local function collect_features_async(task, rule, profile_or_set, phase, cb)
         providers = build_providers_meta({ meta }) or { meta },
         total_dim = #fused,
         digest = providers_config_digest(
-          providers_cfg)
+          providers_cfg, rule)
       })
     return
   end
@@ -687,7 +843,7 @@ local function collect_features_async(task, rule, profile_or_set, phase, cb)
       local meta = {
         providers = build_providers_meta(metas) or metas,
         total_dim = #fused,
-        digest = providers_config_digest(providers_cfg),
+        digest = providers_config_digest(providers_cfg, rule),
       }
       if #fused == 0 then
         cb(nil, meta)
@@ -770,6 +926,14 @@ end
 
 -- This function receives training vectors, checks them, spawn learning and saves ANN in Redis
 local function spawn_train(params)
+  -- Prevent concurrent training (flag may be set by do_train_ann or needs to be set here for direct calls)
+  if params.set.learning_spawned then
+    lua_util.debugm(N, rspamd_config, 'spawn_train: training already in progress for %s:%s, skipping',
+      params.rule.prefix, params.set.name)
+    return
+  end
+  params.set.learning_spawned = true
+
   -- Check training data sanity
   -- Now we need to join inputs and create the appropriate test vectors
   local n
@@ -791,13 +955,22 @@ local function spawn_train(params)
       #params.set.symbols, meta_functions.rspamd_count_metatokens(), n)
   end
 
-  -- Now we can train ann
-  local train_ann = create_ann(params.rule.max_inputs or n, 3, params.rule)
+  -- Now we can train ann - wrap in pcall to catch KANN errors
+  local create_ok, train_ann = pcall(create_ann, params.rule.max_inputs or n, 3, params.rule)
+  if not create_ok then
+    rspamd_logger.errx(rspamd_config, 'failed to create ANN for %s:%s: %s',
+      params.rule.prefix, params.set.name, train_ann)
+    params.set.learning_spawned = false
+    return
+  end
 
   if #params.ham_vec + #params.spam_vec < params.rule.train.max_trains / 2 then
-    -- Invalidate ANN as it is definitely invalid
-    -- TODO: add invalidation
-    assert(false)
+    -- Insufficient training data, reset flag and return
+    rspamd_logger.errx(rspamd_config, 'insufficient training data for ANN %s:%s: spam=%s ham=%s (need at least %s total)',
+      params.rule.prefix, params.set.name,
+      #params.spam_vec, #params.ham_vec, params.rule.train.max_trains / 2)
+    params.set.learning_spawned = false
+    return
   else
     local inputs, outputs = {}, {}
 
@@ -942,8 +1115,6 @@ local function spawn_train(params)
       end
     end
 
-    params.set.learning_spawned = true
-
     local function redis_save_cb(err)
       if err then
         rspamd_logger.errx(rspamd_config, 'cannot save ANN %s:%s to redis key %s: %s',
@@ -960,6 +1131,28 @@ local function spawn_train(params)
       else
         rspamd_logger.infox(rspamd_config, 'saved ANN %s:%s to redis: %s',
           params.rule.prefix, params.set.name, params.set.ann.redis_key)
+
+        -- Clean up pending training keys if they were used
+        if params.pending_key then
+          local function cleanup_cb(cleanup_err)
+            if cleanup_err then
+              lua_util.debugm(N, rspamd_config, 'failed to cleanup pending keys: %s', cleanup_err)
+            else
+              lua_util.debugm(N, rspamd_config, 'cleaned up pending training keys for %s',
+                params.pending_key)
+            end
+          end
+          -- Delete both spam and ham pending sets
+          lua_redis.redis_make_request_taskless(params.ev_base,
+            rspamd_config,
+            params.rule.redis,
+            nil,
+            true,       -- is write
+            cleanup_cb,
+            'DEL',
+            { params.pending_key .. '_spam_set', params.pending_key .. '_ham_set' }
+          )
+        end
       end
     end
 
@@ -980,7 +1173,20 @@ local function spawn_train(params)
       else
         local parser = ucl.parser()
         local ok, parse_err = parser:parse_text(data, 'msgpack')
-        assert(ok, parse_err)
+        if not ok then
+          rspamd_logger.errx(rspamd_config, 'cannot parse training result for ANN %s:%s: %s (data size: %s)',
+            params.rule.prefix, params.set.name, parse_err, #data)
+          lua_redis.redis_make_request_taskless(params.ev_base,
+            rspamd_config,
+            params.rule.redis,
+            nil,
+            true,
+            gen_unlock_cb(params.rule, params.set, params.ann_key),
+            'HDEL',
+            { params.ann_key, 'lock' }
+          )
+          return
+        end
         local parsed = parser:get_object()
         local ann_data = rspamd_util.zstd_compress(parsed.ann_data)
         local pca_data = parsed.pca_data
@@ -999,10 +1205,10 @@ local function spawn_train(params)
 
 
         -- Deserialise ANN from the child process
-        ann_trained = rspamd_kann.load(parsed.ann_data)
+        local loaded_ann = rspamd_kann.load(parsed.ann_data)
         local version = (params.set.ann.version or 0) + 1
         params.set.ann.version = version
-        params.set.ann.ann = ann_trained
+        params.set.ann.ann = loaded_ann
         params.set.ann.symbols = params.set.symbols
         params.set.ann.redis_key = new_ann_key(params.rule, params.set, version)
 
@@ -1011,7 +1217,7 @@ local function spawn_train(params)
           digest = params.set.digest,
           redis_key = params.set.ann.redis_key,
           version = version,
-          providers_digest = providers_config_digest(params.rule.providers),
+          providers_digest = providers_config_digest(params.rule.providers, params.rule),
         }
 
         local profile_serialized = ucl.to_format(profile, 'json-compact', true)
@@ -1058,8 +1264,7 @@ local function spawn_train(params)
       on_complete = ann_trained,
       proctitle = string.format("ANN train for %s/%s", params.rule.prefix, params.set.name),
     }
-    -- Spawn learn and register lock extension
-    params.set.learning_spawned = true
+    -- Register lock extension (learning_spawned already set at start of spawn_train)
     register_lock_extender(params.rule, params.set, params.ev_base, params.ann_key)
     return
   end
@@ -1260,6 +1465,7 @@ return {
   load_scripts = load_scripts,
   module_config = module_config,
   new_ann_key = new_ann_key,
+  pending_train_key = pending_train_key,
   providers_config_digest = providers_config_digest,
   register_provider = register_provider,
   plugin_ver = plugin_ver,

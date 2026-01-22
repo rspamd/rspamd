@@ -4,6 +4,10 @@
 -- returns nspam,nham (or nil if locked)
 
 local prefix = KEYS[1]
+local obsolete = redis.call('HGET', prefix, 'obsolete')
+if obsolete then
+  return 'obsolete'
+end
 local locked = redis.call('HGET', prefix, 'lock')
 if locked then
   local host = redis.call('HGET', prefix, 'hostname') or 'unknown'

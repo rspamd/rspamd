@@ -25,6 +25,17 @@ local rspamd_logger = require "rspamd_logger"
 local E = {}
 local N = 'neural'
 
+local function get_request_header(task, name)
+  local hdr = task:get_request_header(name)
+  if type(hdr) == 'table' then
+    hdr = hdr[1]
+  end
+  if hdr then
+    return tostring(hdr)
+  end
+  return nil
+end
+
 -- Controller neural plugin
 
 local learn_request_schema = T.table({
@@ -139,7 +150,7 @@ local function handle_config(task, conn, req_params)
     local r = {
       requires_scan = requires_scan,
       providers = {},
-      recommended_path = requires_scan and '/checkv2' or '/controller/neural/learn_message',
+      recommended_path = requires_scan and '/checkv2' or '/plugins/neural/learn_message',
       settings = {},
     }
 
@@ -176,7 +187,7 @@ local function handle_learn_message(task, conn)
     return
   end
 
-  local cls = task:get_request_header('ANN-Train') or task:get_request_header('Class')
+  local cls = get_request_header(task, 'ANN-Train') or get_request_header(task, 'Class')
   if not cls then
     conn:send_error(400, 'missing class header (ANN-Train or Class)')
     return
@@ -188,7 +199,7 @@ local function handle_learn_message(task, conn)
     return
   end
 
-  local rule_name = task:get_request_header('Rule') or 'default'
+  local rule_name = get_request_header(task, 'Rule') or 'default'
   local rule = neural_common.settings.rules[rule_name]
   if not rule then
     conn:send_error(400, 'unknown rule')
@@ -275,7 +286,7 @@ local function handle_learn_message(task, conn)
       version = version,
       digest = set.digest,
       distance = 0,
-      providers_digest = neural_common.providers_config_digest(rule.providers),
+      providers_digest = neural_common.providers_config_digest(rule.providers, rule),
     }
 
     local profile_serialized = ucl.to_format(profile, 'json-compact', true)
@@ -334,7 +345,9 @@ local function handle_learn_message(task, conn)
     lua_util.debugm(N, task, 'controller.neural: vector size=%s head=[%s]', vlen, vhead)
 
     local compressed = rspamd_util.zstd_compress(table.concat(vec, ';'))
-    local target_key = string.format('%s_%s_set', redis_base, learn_type)
+    -- Use pending key for manual training (picked up by training loop)
+    local pending_key = neural_common.pending_train_key(rule, set)
+    local target_key = string.format('%s_%s_set', pending_key, learn_type)
 
     local function learn_vec_cb(redis_err)
       if redis_err then
@@ -374,11 +387,84 @@ local function handle_train(task, conn, req_params)
     conn:send_error(400, 'unknown rule')
     return
   end
-  -- Trigger check_anns to evaluate training conditions
-  rspamd_config:add_periodic(task:get_ev_base(), 0.0, function()
-    return 0.0
-  end)
-  conn:send_ucl({ success = true, message = 'training scheduled check' })
+
+  -- Get the set for this rule
+  local set = neural_common.get_rule_settings(task, rule)
+  if not set then
+    -- Try to find any available set
+    for sid, s in pairs(rule.settings or {}) do
+      if type(s) == 'table' then
+        set = s
+        set.name = set.name or sid
+        break
+      end
+    end
+  end
+
+  if not set then
+    conn:send_error(400, 'no settings found for rule')
+    return
+  end
+
+  -- Check pending vectors count
+  local pending_key = neural_common.pending_train_key(rule, set)
+
+  local function check_and_train(spam_count, ham_count)
+    if spam_count > 0 and ham_count > 0 then
+      rspamd_logger.infox(task, 'manual train trigger for %s:%s with %s spam, %s ham vectors',
+        rule.prefix, set.name, spam_count, ham_count)
+
+      -- The training will be picked up by the next check_anns cycle
+      -- For immediate training, we'd need access to the worker object
+      conn:send_ucl({
+        success = true,
+        message = 'training vectors available',
+        spam_vectors = spam_count,
+        ham_vectors = ham_count,
+        pending_key = pending_key
+      })
+    else
+      conn:send_ucl({
+        success = false,
+        message = 'not enough vectors for training',
+        spam_vectors = spam_count,
+        ham_vectors = ham_count
+      })
+    end
+  end
+
+  -- Count pending vectors
+  local spam_count = 0
+  local function count_ham_cb(err, data)
+    local ham_count = 0
+    if not err and (type(data) == 'number' or type(data) == 'string') then
+      ham_count = tonumber(data) or 0
+    end
+    check_and_train(spam_count, ham_count)
+  end
+
+  local function count_spam_cb(err, data)
+    if not err and (type(data) == 'number' or type(data) == 'string') then
+      spam_count = tonumber(data) or 0
+    end
+    lua_redis.redis_make_request(task,
+      rule.redis,
+      nil,
+      false,
+      count_ham_cb,
+      'SCARD',
+      { pending_key .. '_ham_set' }
+    )
+  end
+
+  lua_redis.redis_make_request(task,
+    rule.redis,
+    nil,
+    false,
+    count_spam_cb,
+    'SCARD',
+    { pending_key .. '_spam_set' }
+  )
 end
 
 return {
@@ -399,7 +485,7 @@ return {
   },
   status = {
     handler = handle_status,
-    enable = false,
+    enable = true,
     need_task = false,
   },
   train = {

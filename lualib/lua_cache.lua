@@ -160,7 +160,7 @@ local function create_cache_context(redis_params, opts, module_name)
 
     cache_context.decode = function(raw_data)
       local ucl_parser = ucl.parser()
-      local ok, ucl_err = ucl_parser:parse_text(raw_data, 'messagepack')
+      local ok, ucl_err = ucl_parser:parse_text(raw_data, 'msgpack')
       if not ok then
         lua_util.debugm(cache_context.N, rspamd_config, "failed to parse messagepack data: %s", ucl_err)
         return nil
