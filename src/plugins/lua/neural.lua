@@ -850,6 +850,13 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
   if sel_elt then
     -- We have our ANN and that's train vectors, check if we can learn
     local ann_key = sel_elt.redis_key
+
+    -- Check if we need to train ann
+    if rule.train.store_set_only then
+      lua_util.debugm(N, rspamd_config, "skiped check if ANN %s needs to be trained due to store_set_only", ann_key)
+      return
+    end
+
     local pending_key = neural_common.pending_train_key(rule, set)
 
     lua_util.debugm(N, rspamd_config, "check if ANN %s (pending %s) needs to be trained",
