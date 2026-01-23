@@ -873,7 +873,7 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
         'final vector count for ANN %s: spam=%s ham=%s (min=%s max=%s required=%s)',
         ann_key, lens.spam, lens.ham, min_len, max_len, rule.train.max_trains)
 
-      if rule.train.learn_type == 'balanced' then
+      if rule.train.learn_mode == 'balanced' then
         local len_bias_check_pred = function(_, l)
           return l >= rule.train.max_trains * (1.0 - rule.train.classes_bias)
         end
