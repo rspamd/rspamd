@@ -132,9 +132,9 @@ end
 
 local function parse_sa_regexp(rule_symbol, re_expr)
   -- Extract regexp and flags from /regexp/flags format
-  local re_str, flags = string.match(re_expr, '^/(.+)/([gimxsiu]*)$')
+  local re_str, flags = string.match(re_expr, '^/(.+)/([imsx]*)$')
   if not re_str then
-    re_str, flags = string.match(re_expr, '^m{(.+)}([gimxsiu]*)$')
+    re_str, flags = string.match(re_expr, '^m{(.+)}([imsx]*)$')
   end
   if not re_str then
     -- Try without delimiters
