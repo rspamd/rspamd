@@ -14,7 +14,7 @@ uvicorn[standard]>=0.23.0
 # sentence-transformers for GPU inference (uses PyTorch + CUDA)
 # Pin versions for compatibility
 numpy<2
-transformers==4.40.0
+transformers==4.53.0
 sentence-transformers==2.7.0
 
 # Data validation
