@@ -986,6 +986,7 @@ local function openai_check(task, content, sel_part, context_snippet)
     upstream = settings.upstreams:get_upstream_round_robin()
     local http_params = {
       url = settings.url,
+      method = 'post',
       mime_type = 'application/json',
       timeout = settings.timeout,
       log_obj = task,
@@ -1122,6 +1123,7 @@ local function ollama_check(task, content, sel_part, context_snippet)
     upstream = settings.upstreams:get_upstream_round_robin()
     local http_params = {
       url = settings.url,
+      method = 'post',
       mime_type = 'application/json',
       timeout = settings.timeout,
       log_obj = task,
