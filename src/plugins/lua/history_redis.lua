@@ -139,6 +139,12 @@ local function normalise_results(tbl, task)
   end
 
   tbl.user = task:get_user() or 'unknown'
+
+  -- Retrieve fuzzy hashes that matched during scanning
+  local fuzzy_hashes = task:get_mempool():get_variable('fuzzy_hashes', 'fstrings')
+  if fuzzy_hashes and #fuzzy_hashes > 0 then
+    tbl.fuzzy_hashes = fuzzy_hashes
+  end
 end
 
 local function history_save(task)
