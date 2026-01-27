@@ -408,14 +408,16 @@ function checks.tld_analysis(task, url, cfg)
   end
 
   -- Check built-in suspicious TLDs (5 TLDs, O(n) is fine)
-  for _, suspicious_tld in ipairs(cfg.builtin_suspicious) do
-    if tld == suspicious_tld or tld:sub(-#suspicious_tld) == suspicious_tld then
-      lua_util.debugm(N, task, "URL uses suspicious TLD: %s", tld)
-      table.insert(findings, {
-        symbol = symbols.suspicious_tld,
-        options = { tld }
-      })
-      break
+  if type(cfg.builtin_suspicious) == 'table' then
+    for _, suspicious_tld in ipairs(cfg.builtin_suspicious) do
+      if tld == suspicious_tld or tld:sub(-#suspicious_tld) == suspicious_tld then
+        lua_util.debugm(N, task, "URL uses suspicious TLD: %s", tld)
+        table.insert(findings, {
+          symbol = symbols.suspicious_tld,
+          options = { tld }
+        })
+        break
+      end
     end
   end
 
