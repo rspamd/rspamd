@@ -563,8 +563,8 @@ define(["jquery", "app/common", "footable"],
                 const match = opt.match(/^\d+:([a-f0-9]+):[\d.]+:/);
                 if (match) {
                     const [,shortHash] = match;
-                    const idx = fuzzyHashIndex[shortHash];
-                    if (typeof idx !== "undefined") foundIndices.add(idx);
+                    const indices = fuzzyHashIndex[shortHash];
+                    if (Array.isArray(indices)) indices.forEach((i) => foundIndices.add(i));
                 }
             });
 
@@ -574,11 +574,13 @@ define(["jquery", "app/common", "footable"],
         function generateFuzzySearchData(sym, fuzzyHashesArray) {
             if (!sym.fuzzyHashIndices?.length) return "";
 
-            const fullHashes = sym.fuzzyHashIndices.map((i) => fuzzyHashesArray[i]);
+            const fullHashes = sym.fuzzyHashIndices
+                .filter((i) => i >= 0 && i < fuzzyHashesArray.length)
+                .map((i) => fuzzyHashesArray[i]);
             return `<span class="visually-hidden">${common.escapeHTML(fullHashes.join(" "))}</span>`;
         }
 
-        function generateFuzzyActions(sym, symbolName, table, item) {
+        function generateFuzzyActions(sym, table, item) {
             const hasHashes = sym.fuzzyHashIndices?.length > 0;
 
             // eslint-disable-next-line init-declarations
@@ -664,7 +666,8 @@ define(["jquery", "app/common", "footable"],
                     if (Array.isArray(item.fuzzy_hashes)) {
                         item.fuzzy_hashes.forEach((fullHash, idx) => {
                             const shortHash = fullHash.substring(0, 10);
-                            fuzzyHashIndex[shortHash] = idx;
+                            if (!fuzzyHashIndex[shortHash]) fuzzyHashIndex[shortHash] = [];
+                            fuzzyHashIndex[shortHash].push(idx);
                         });
                     }
 
@@ -682,7 +685,7 @@ define(["jquery", "app/common", "footable"],
                             if (isFuzzySymbol(sym)) {
                                 attachFuzzyIndices(sym, item.fuzzy_hashes, fuzzyHashIndex);
                                 sym.str += generateFuzzySearchData(sym, item.fuzzy_hashes);
-                                sym.str += generateFuzzyActions(sym, sym.name, table, item);
+                                sym.str += generateFuzzyActions(sym, table, item);
                             }
                         }
                     });
@@ -734,8 +737,15 @@ define(["jquery", "app/common", "footable"],
                     e.preventDefault();
                     e.stopPropagation();
 
-                    const indices = JSON.parse($(this).attr("data-indices") || "[]");
-                    const hashes = JSON.parse($(this).attr("data-hashes") || "[]");
+                    // eslint-disable-next-line init-declarations
+                    let hashes, indices;
+                    try {
+                        indices = JSON.parse($(this).attr("data-indices") || "[]");
+                        hashes = JSON.parse($(this).attr("data-hashes") || "[]");
+                    } catch (err) {
+                        common.alertMessage("alert-danger", "Invalid hash data: " + err.message);
+                        return;
+                    }
 
                     if (indices.length === 0 || hashes.length === 0) {
                         common.alertMessage("alert-warning", "No full hashes available");
