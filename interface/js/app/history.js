@@ -184,6 +184,7 @@ define(["jquery", "app/common", "app/libft", "footable"],
                                     () => {
                                         $("#history .ft-columns-dropdown .btn-dropdown-apply").removeAttr("disabled");
                                         ui.updateHistoryControlsState();
+                                        if (version) libft.bindFuzzyHashButtons("history");
                                     });
                             });
                         }

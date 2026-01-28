@@ -507,6 +507,15 @@ table#symbolsTable input[type="number"] {
 .footable-filtering-search .dropdown-menu .sym-order-toggle {
     display: none;
 }
+.fuzzy-hash-actions .btn-xs {
+    padding: 1px 0.3rem;
+    font-size: 0.75rem;
+    line-height: 1;
+}
+.fuzzy-hash-actions .btn-xs svg {
+    height: 0.65rem;
+    vertical-align: baseline;
+}
 
 .search-syntax-icon {
     position: absolute;
