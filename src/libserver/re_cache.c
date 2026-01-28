@@ -3191,11 +3191,26 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 				rspamd_hyperscan_free(re_class->hs_db, false);
 			}
 
+			/*
+			 * Reset match_type to PCRE for all regexps that were using hyperscan.
+			 * This must be done BEFORE freeing hs_ids, as we need to iterate over them.
+			 * If we don't reset and reload fails, regexps will have match_type=HYPERSCAN
+			 * but hs_scratch will be NULL, causing assertion failure.
+			 */
 			if (re_class->hs_ids) {
+				for (unsigned int j = 0; j < re_class->nhs; j++) {
+					struct rspamd_re_cache_elt *elt;
+					int id = re_class->hs_ids[j];
+					if (id >= 0 && (unsigned int) id < cache->re->len) {
+						elt = g_ptr_array_index(cache->re, id);
+						elt->match_type = RSPAMD_RE_CACHE_PCRE;
+					}
+				}
 				g_free(re_class->hs_ids);
 			}
 
 			re_class->hs_ids = NULL;
+			re_class->nhs = 0;
 			re_class->hs_scratch = NULL;
 			re_class->hs_db = NULL;
 			munmap(map, st.st_size);
@@ -3241,11 +3256,31 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 
 			/*
 			 * Now find hyperscan elts that are successfully compiled and
-			 * specify that they should be matched using hyperscan
+			 * specify that they should be matched using hyperscan.
+			 * We must verify that each ID still points to a regexp that
+			 * belongs to this re_class, as indices can become stale if
+			 * regexps were reordered since compilation.
 			 */
 			for (i = 0; i < n; i++) {
 				g_assert((int) cache->re->len > hs_ids[i] && hs_ids[i] >= 0);
 				elt = g_ptr_array_index(cache->re, hs_ids[i]);
+
+				/* Verify the regexp at this ID belongs to the current re_class */
+				if (rspamd_regexp_get_class(elt->re) != re_class) {
+					msg_info_re_cache("stale hyperscan file %s: id %d points to "
+									  "wrong re_class, removing to trigger recompilation",
+									  path, hs_ids[i]);
+					g_free(hs_ids);
+					g_free(hs_flags);
+					rspamd_hyperscan_free(re_class->hs_db, true);
+					re_class->hs_ids = NULL;
+					re_class->hs_scratch = NULL;
+					re_class->hs_db = NULL;
+					/* Remove stale file to trigger recompilation by hs_helper */
+					unlink(path);
+					all_valid = FALSE;
+					goto next_class;
+				}
 
 				if (hs_flags[i] & HS_FLAG_PREFILTER) {
 					elt->match_type = RSPAMD_RE_CACHE_HYPERSCAN_PRE;
@@ -3279,6 +3314,7 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 			all_valid = FALSE;
 			continue;
 		}
+	next_class:;
 	}
 
 	if (has_valid) {
@@ -3431,31 +3467,28 @@ rspamd_re_cache_apply_hyperscan_blob(struct rspamd_re_cache *cache,
 		rspamd_hyperscan_free(re_class->hs_db, false);
 		re_class->hs_db = NULL;
 	}
+	/*
+	 * Reset match_type to PCRE for all regexps that were using hyperscan.
+	 * This must be done BEFORE freeing hs_ids. If we don't reset and reload
+	 * fails, regexps will have match_type=HYPERSCAN but hs_scratch will be NULL.
+	 */
 	if (re_class->hs_ids) {
+		for (unsigned int i = 0; i < (unsigned int) re_class->nhs; i++) {
+			int id = re_class->hs_ids[i];
+			if (id >= 0 && (unsigned int) id < cache->re->len) {
+				struct rspamd_re_cache_elt *elt = g_ptr_array_index(cache->re, id);
+				elt->match_type = RSPAMD_RE_CACHE_PCRE;
+			}
+		}
 		g_free(re_class->hs_ids);
 		re_class->hs_ids = NULL;
 	}
+	re_class->nhs = 0;
 
-	/* Apply match types */
-	for (unsigned int i = 0; i < n; i++) {
-		if ((int) ids[i] < 0 || ids[i] >= (unsigned int) cache->re->len) {
-			continue;
-		}
-		struct rspamd_re_cache_elt *elt = g_ptr_array_index(cache->re, ids[i]);
-		if (flags[i] & HS_FLAG_PREFILTER) {
-			elt->match_type = RSPAMD_RE_CACHE_HYPERSCAN_PRE;
-		}
-		else {
-			elt->match_type = RSPAMD_RE_CACHE_HYPERSCAN;
-		}
-	}
-
-	/* Store ids */
-	re_class->hs_ids = g_malloc(sizeof(int) * n);
-	for (unsigned int i = 0; i < n; i++) {
-		re_class->hs_ids[i] = (int) ids[i];
-	}
-	re_class->nhs = (int) n;
+	/*
+	 * We must allocate scratch and set up the database BEFORE setting match_type
+	 * on the elements. If scratch allocation fails, match_types remain PCRE.
+	 */
 	re_class->hs_db = hs_db;
 
 	if ((ret = hs_alloc_scratch(rspamd_hyperscan_get_database(re_class->hs_db),
@@ -3466,10 +3499,49 @@ rspamd_re_cache_apply_hyperscan_blob(struct rspamd_re_cache *cache,
 		}
 		rspamd_hyperscan_free(re_class->hs_db, true);
 		re_class->hs_db = NULL;
-		g_free(re_class->hs_ids);
-		re_class->hs_ids = NULL;
-		re_class->nhs = 0;
 		return FALSE;
+	}
+
+	/* Store ids */
+	re_class->hs_ids = g_malloc(sizeof(int) * n);
+	for (unsigned int i = 0; i < n; i++) {
+		re_class->hs_ids[i] = (int) ids[i];
+	}
+	re_class->nhs = (int) n;
+
+	/*
+	 * Now apply match types - this must be done AFTER scratch is allocated
+	 * so that other workers don't try to use hyperscan with NULL scratch.
+	 * Also verify each ID points to a regexp in this re_class.
+	 */
+	for (unsigned int i = 0; i < n; i++) {
+		if ((int) ids[i] < 0 || ids[i] >= (unsigned int) cache->re->len) {
+			continue;
+		}
+		struct rspamd_re_cache_elt *elt = g_ptr_array_index(cache->re, ids[i]);
+
+		/* Verify the regexp at this ID belongs to the current re_class */
+		if (rspamd_regexp_get_class(elt->re) != re_class) {
+			msg_info_re_cache("stale hyperscan cache for class %s: id %u points to "
+							  "wrong re_class, will use PCRE until recompilation",
+							  re_class->hash, ids[i]);
+			hs_free_scratch(re_class->hs_scratch);
+			re_class->hs_scratch = NULL;
+			rspamd_hyperscan_free(re_class->hs_db, true);
+			re_class->hs_db = NULL;
+			g_free(re_class->hs_ids);
+			re_class->hs_ids = NULL;
+			re_class->nhs = 0;
+			/* Redis cache entry will expire or be overwritten on next compilation */
+			return FALSE;
+		}
+
+		if (flags[i] & HS_FLAG_PREFILTER) {
+			elt->match_type = RSPAMD_RE_CACHE_HYPERSCAN_PRE;
+		}
+		else {
+			elt->match_type = RSPAMD_RE_CACHE_HYPERSCAN;
+		}
 	}
 
 	return TRUE;
