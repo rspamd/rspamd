@@ -402,16 +402,20 @@ function checks.tld_analysis(task, url, cfg)
     return findings
   end
 
-  local tld = url:get_tld()
-  if not tld then
+  local esld = url:get_tld()
+  if not esld then
     return findings
   end
+
+  local tld = esld:match("^[^%.]+%.(.+)$") or esld
+  lua_util.debugm(N, task, "URL eSLD: %s, TLD: %s", esld, tld)
 
   -- Check suspicious TLDs map
   if maps.suspicious_tlds then
     -- Check both with and without leading dot for flexibility
-    local tld_with_dot = tld:sub(1, 1) == '.' and tld or ('.' .. tld)
-    local tld_without_dot = tld:sub(1, 1) == '.' and tld:sub(2) or tld
+    local tld_with_dot = '.' .. tld
+    local tld_without_dot = tld
+    lua_util.debugm(N, task, "Checking TLDs: with_dot=%s, without_dot=%s", tld_with_dot, tld_without_dot)
     if maps.suspicious_tlds:get_key(tld_with_dot) or maps.suspicious_tlds:get_key(tld_without_dot) then
       lua_util.debugm(N, task, "URL uses suspicious TLD: %s", tld)
       table.insert(findings, {
