@@ -814,9 +814,8 @@ struct rspamd_hs_helper_mp_async_ctx {
 	struct rspamd_multipattern_pending *pending;
 	unsigned int count;
 	unsigned int idx;
+	ev_timer deferred_timer; /* Timer for deferring next operation after error */
 };
-
-static void rspamd_hs_helper_compile_pending_multipatterns_next(struct rspamd_hs_helper_mp_async_ctx *mpctx);
 
 static void
 rspamd_hs_helper_mp_send_notification(struct hs_helper_ctx *ctx,
@@ -832,6 +831,19 @@ rspamd_hs_helper_mp_send_notification(struct hs_helper_ctx *ctx,
 
 	rspamd_srv_send_command(worker, ctx->event_loop, &srv_cmd, -1, NULL, NULL);
 	msg_debug_hyperscan("sent multipattern loaded notification for '%s'", name);
+}
+
+static void rspamd_hs_helper_compile_pending_multipatterns_next(struct rspamd_hs_helper_mp_async_ctx *mpctx);
+
+static void
+rspamd_hs_helper_mp_deferred_next_cb(EV_P_ ev_timer *w, int revents)
+{
+	struct rspamd_hs_helper_mp_async_ctx *mpctx = (struct rspamd_hs_helper_mp_async_ctx *) w->data;
+
+	(void) revents;
+	ev_timer_stop(EV_A_ w);
+
+	rspamd_hs_helper_compile_pending_multipatterns_next(mpctx);
 }
 
 static void
@@ -854,7 +866,16 @@ rspamd_hs_helper_mp_compiled_cb(struct rspamd_multipattern *mp,
 	}
 
 	mpctx->idx++;
-	rspamd_hs_helper_compile_pending_multipatterns_next(mpctx);
+
+	/*
+	 * Defer the next operation to the next event loop iteration.
+	 * This is critical when the callback is invoked from an error path
+	 * (e.g., Redis timeout) - we need to let the error handling complete
+	 * fully before starting the next operation to avoid inconsistent state.
+	 */
+	mpctx->deferred_timer.data = mpctx;
+	ev_timer_init(&mpctx->deferred_timer, rspamd_hs_helper_mp_deferred_next_cb, 0.0, 0.0);
+	ev_timer_start(mpctx->ctx->event_loop, &mpctx->deferred_timer);
 }
 
 static void
@@ -874,7 +895,14 @@ rspamd_hs_helper_mp_exists_cb(gboolean success,
 		msg_debug_hyperscan("multipattern cache already exists for '%s', skipping compilation", entry->name);
 		rspamd_hs_helper_mp_send_notification(mpctx->ctx, mpctx->worker, entry->name);
 		mpctx->idx++;
-		rspamd_hs_helper_compile_pending_multipatterns_next(mpctx);
+		/*
+		 * Defer the next operation to avoid nested Redis callbacks.
+		 * This ensures the current callback chain completes fully
+		 * before starting the next operation.
+		 */
+		mpctx->deferred_timer.data = mpctx;
+		ev_timer_init(&mpctx->deferred_timer, rspamd_hs_helper_mp_deferred_next_cb, 0.0, 0.0);
+		ev_timer_start(mpctx->ctx->event_loop, &mpctx->deferred_timer);
 		return;
 	}
 
@@ -940,6 +968,10 @@ rspamd_hs_helper_compile_pending_multipatterns_next(struct rspamd_hs_helper_mp_a
 	}
 
 done:
+	/* Stop the deferred timer if it's somehow still active */
+	if (ev_is_active(&mpctx->deferred_timer)) {
+		ev_timer_stop(mpctx->ctx->event_loop, &mpctx->deferred_timer);
+	}
 	rspamd_multipattern_clear_pending();
 	for (unsigned int i = 0; i < mpctx->count; i++) {
 		/* names are freed by clear_pending */
