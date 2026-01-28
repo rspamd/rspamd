@@ -579,6 +579,7 @@ function redis_backend:store(cache_key, platform_id, data, ttl, callback)
   local attrs = {
     ev_base = self.redis_params.ev_base,
     config = self.config,
+    is_write = true,
     callback = function(err)
       if err then
         lua_util.debugm(N, self.config, "redis SETEX failed for key %s: %s", key, err)
@@ -608,6 +609,7 @@ function redis_backend:delete(cache_key, platform_id, callback)
   local attrs = {
     ev_base = self.redis_params.ev_base,
     config = self.config,
+    is_write = true,
     callback = function(err)
       if err then
         lua_util.debugm(N, self.config, "redis DEL failed for key %s: %s", key, err)
