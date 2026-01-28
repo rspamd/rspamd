@@ -79,8 +79,8 @@ local settings = {
       allow_private_ranges = true
     },
     tld = {
-      enabled = true,
-      builtin_suspicious = { ".tk", ".ml", ".ga", ".cf", ".gq" }
+      enabled = true
+      -- suspicious_tlds_map loaded from config (default: $CONFDIR/maps.d/suspicious_tlds.inc)
     },
     unicode = {
       enabled = true,
@@ -407,23 +407,17 @@ function checks.tld_analysis(task, url, cfg)
     return findings
   end
 
-  -- Check built-in suspicious TLDs (5 TLDs, O(n) is fine)
-  for _, suspicious_tld in ipairs(cfg.builtin_suspicious) do
-    if tld == suspicious_tld or tld:sub(-#suspicious_tld) == suspicious_tld then
+  -- Check suspicious TLDs map
+  if maps.suspicious_tlds then
+    -- Check both with and without leading dot for flexibility
+    local tld_with_dot = tld:sub(1, 1) == '.' and tld or ('.' .. tld)
+    local tld_without_dot = tld:sub(1, 1) == '.' and tld:sub(2) or tld
+    if maps.suspicious_tlds:get_key(tld_with_dot) or maps.suspicious_tlds:get_key(tld_without_dot) then
       lua_util.debugm(N, task, "URL uses suspicious TLD: %s", tld)
       table.insert(findings, {
         symbol = symbols.suspicious_tld,
         options = { tld }
       })
-      break
-    end
-  end
-
-  -- Optional: check TLD map if configured
-  if maps.suspicious_tlds then
-    if maps.suspicious_tlds:get_key(tld) then
-      lua_util.debugm(N, task, "URL TLD in suspicious map: %s", tld)
-      -- Already handled by built-in check, or could add extra penalty
     end
   end
 
@@ -695,9 +689,12 @@ local function init_maps(cfg)
         cfg.checks.numeric_ip.range_map, 'radix', 'url_suspect_ip_ranges')
   end
 
-  if cfg.checks.tld.tld_map then
-    maps.suspicious_tlds = lua_maps.map_add_from_ucl(
-        cfg.checks.tld.tld_map, 'set', 'url_suspect_tlds')
+  if cfg.checks.tld.suspicious_tlds_map then
+    maps.suspicious_tlds = lua_maps.rspamd_map_add_from_ucl(
+        cfg.checks.tld.suspicious_tlds_map, 'set', 'url_suspect_suspicious_tlds')
+    if not maps.suspicious_tlds then
+      rspamd_logger.warnx(rspamd_config, 'failed to load suspicious_tlds_map, TLD check will be disabled')
+    end
   end
 
   if cfg.checks.structure.port_map then
