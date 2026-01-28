@@ -3885,6 +3885,7 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 			g_string_free(hdr, true);
 			msg_err_task("rsa sign error: %s",
 						 ERR_error_string(ERR_get_error(), NULL));
+			EVP_PKEY_CTX_free(pctx);
 
 			return NULL;
 		}
@@ -3892,6 +3893,7 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 			g_string_free(hdr, true);
 			msg_err_task("rsa sign error: %s",
 						 ERR_error_string(ERR_get_error(), NULL));
+			EVP_PKEY_CTX_free(pctx);
 
 			return NULL;
 		}
@@ -3899,6 +3901,7 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 			g_string_free(hdr, true);
 			msg_err_task("rsa sign error: %s",
 						 ERR_error_string(ERR_get_error(), NULL));
+			EVP_PKEY_CTX_free(pctx);
 
 			return NULL;
 		}
@@ -3907,9 +3910,11 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 			g_string_free(hdr, true);
 			msg_err_task("rsa sign error: %s",
 						 ERR_error_string(ERR_get_error(), NULL));
+			EVP_PKEY_CTX_free(pctx);
 
 			return NULL;
 		}
+		EVP_PKEY_CTX_free(pctx);
 	}
 #ifdef HAVE_ED25519
 	else if (ctx->key->type == RSPAMD_DKIM_KEY_EDDSA) {
