@@ -752,7 +752,7 @@ define(["jquery", "app/common", "footable"],
                         return;
                     }
 
-                    const fullHashes = indices.map((i) => hashes[i]);
+                    const fullHashes = [...new Set(indices.map((i) => hashes[i]))];
                     handler.call(this, fullHashes);
                 });
             }
