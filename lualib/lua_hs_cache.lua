@@ -531,7 +531,22 @@ function redis_backend:load(cache_key, platform_id, callback)
       else
         -- Decompress if needed
         if self.use_compression then
-          local decompress_err, decompressed = rspamd_util.zstd_decompress(data)
+          -- Defensive check: ensure data is a string or text before decompression
+          local data_type = type(data)
+          if data_type ~= 'string' and data_type ~= 'userdata' then
+            logger.errx(self.config, "redis GET returned unexpected type %s for key %s, data=%s",
+                data_type, key, tostring(data))
+            callback("unexpected data type: " .. data_type, nil)
+            return
+          end
+          local ok, decompress_err, decompressed = pcall(rspamd_util.zstd_decompress, data)
+          if not ok then
+            -- pcall failed - decompress_err contains the error message
+            logger.errx(self.config, "zstd_decompress pcall failed for key %s: %s, data type=%s, len=%s",
+                key, tostring(decompress_err), data_type, data_type == 'string' and #data or 'N/A')
+            callback("decompression error: " .. tostring(decompress_err), nil)
+            return
+          end
           if not decompress_err and decompressed then
             lua_util.debugm(N, self.config, "redis loaded and decompressed %d -> %d bytes from key %s (compression ratio: %.1f%%)",
                 #data, #decompressed, key, (1 - #data / #decompressed) * 100)
