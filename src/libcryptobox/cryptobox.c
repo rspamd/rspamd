@@ -49,6 +49,7 @@
 #include <signal.h>
 #include <setjmp.h>
 #include <stdalign.h>
+#include <unistd.h>
 
 #include <sodium.h>
 
@@ -57,6 +58,7 @@ unsigned cpu_config = 0;
 static gboolean cryptobox_loaded = FALSE;
 
 #if defined(HAVE_OPENSSL) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+#include <openssl/conf.h>
 /*
  * Dedicated OpenSSL library context for DKIM SHA-1 signature verification.
  * RHEL/CentOS 10+ crypto-policies disable SHA-1 for signatures by default,
@@ -65,6 +67,47 @@ static gboolean cryptobox_loaded = FALSE;
  */
 static OSSL_LIB_CTX *rspamd_legacy_ssl_ctx = NULL;
 static OSSL_PROVIDER *rspamd_legacy_ssl_provider = NULL;
+static char *rspamd_legacy_ssl_config_path = NULL;
+
+/*
+ * Create a minimal OpenSSL config file to enable SHA-1 signatures.
+ * This is needed for RHEL/CentOS 10+ where the rh-allow-sha1-signatures
+ * config option controls SHA-1 signature support per library context.
+ */
+static char *
+rspamd_create_legacy_ssl_config(void)
+{
+	char *tmppath = NULL;
+	int fd;
+	const char *config_content =
+		"openssl_conf = openssl_init\n"
+		"[openssl_init]\n"
+		"alg_section = evp_properties\n"
+		"[evp_properties]\n"
+		"rh-allow-sha1-signatures = yes\n";
+
+#ifdef P_tmpdir
+	tmppath = g_strdup_printf("%s/rspamd-openssl-XXXXXX.cnf", P_tmpdir);
+#else
+	tmppath = g_strdup("/tmp/rspamd-openssl-XXXXXX.cnf");
+#endif
+
+	fd = g_mkstemp(tmppath);
+	if (fd == -1) {
+		g_free(tmppath);
+		return NULL;
+	}
+
+	if (write(fd, config_content, strlen(config_content)) < 0) {
+		close(fd);
+		unlink(tmppath);
+		g_free(tmppath);
+		return NULL;
+	}
+
+	close(fd);
+	return tmppath;
+}
 #endif
 
 static const unsigned char n0[16] = {0};
@@ -392,6 +435,11 @@ void rspamd_cryptobox_deinit(struct rspamd_cryptobox_library_ctx *ctx)
 			OSSL_LIB_CTX_free(rspamd_legacy_ssl_ctx);
 			rspamd_legacy_ssl_ctx = NULL;
 		}
+		if (rspamd_legacy_ssl_config_path != NULL) {
+			unlink(rspamd_legacy_ssl_config_path);
+			g_free(rspamd_legacy_ssl_config_path);
+			rspamd_legacy_ssl_config_path = NULL;
+		}
 #endif
 	}
 }
@@ -487,7 +535,8 @@ bool rspamd_cryptobox_verify_evp_rsa(int nid,
 									 EVP_PKEY *pub_key,
 									 GError **err)
 {
-	bool ret = false, r;
+	bool ret = false;
+	int rc;
 	EVP_PKEY_CTX *pctx;
 	const EVP_MD *md;
 
@@ -502,7 +551,27 @@ bool rspamd_cryptobox_verify_evp_rsa(int nid,
 		if (rspamd_legacy_ssl_ctx == NULL) {
 			rspamd_legacy_ssl_ctx = OSSL_LIB_CTX_new();
 			if (rspamd_legacy_ssl_ctx != NULL) {
+				/*
+				 * Create and load a config file that enables SHA-1 signatures.
+				 * This is required for RHEL/CentOS 10+ where the
+				 * rh-allow-sha1-signatures option is disabled by default.
+				 * On non-RHEL systems, this config option is simply ignored.
+				 */
+				rspamd_legacy_ssl_config_path = rspamd_create_legacy_ssl_config();
+				if (rspamd_legacy_ssl_config_path != NULL) {
+					if (!OSSL_LIB_CTX_load_config(rspamd_legacy_ssl_ctx,
+												  rspamd_legacy_ssl_config_path)) {
+						/* Config load failed, continue anyway - error will surface later */
+						ERR_clear_error();
+						unlink(rspamd_legacy_ssl_config_path);
+						g_free(rspamd_legacy_ssl_config_path);
+						rspamd_legacy_ssl_config_path = NULL;
+					}
+				}
 				rspamd_legacy_ssl_provider = OSSL_PROVIDER_load(rspamd_legacy_ssl_ctx, "default");
+				if (rspamd_legacy_ssl_provider == NULL) {
+					ERR_clear_error();
+				}
 			}
 		}
 
@@ -531,12 +600,33 @@ bool rspamd_cryptobox_verify_evp_rsa(int nid,
 	g_assert(EVP_PKEY_verify_init(pctx) == 1);
 	g_assert(EVP_PKEY_CTX_set_rsa_padding(pctx, RSA_PKCS1_PADDING) == 1);
 
-	if ((r = EVP_PKEY_CTX_set_signature_md(pctx, md)) <= 0) {
+	if ((rc = EVP_PKEY_CTX_set_signature_md(pctx, md)) <= 0) {
+		unsigned long ossl_err = ERR_get_error();
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+		if (nid == NID_sha1) {
+			g_set_error(err, g_quark_from_static_string("OpenSSL"),
+						rc,
+						"cannot set SHA-1 digest for RSA verification (%s from OpenSSL); "
+						"SHA-1 signatures are disabled by crypto-policies on RHEL/CentOS 10+; "
+						"legacy context config: %s; "
+						"try `update-crypto-policies --set DEFAULT:SHA1` or check if rspamd can write to /tmp",
+						ERR_reason_error_string(ossl_err),
+						rspamd_legacy_ssl_config_path ? rspamd_legacy_ssl_config_path : "failed to create");
+		}
+		else {
+			g_set_error(err, g_quark_from_static_string("OpenSSL"),
+						rc,
+						"cannot set digest %s for RSA verification (%s from OpenSSL)",
+						md ? EVP_MD_name(md) : "unknown",
+						ERR_reason_error_string(ossl_err));
+		}
+#else
 		g_set_error(err, g_quark_from_static_string("OpenSSL"),
-					r,
-					"cannot set digest %s for RSA verification (%s returned from OpenSSL), try use `update-crypto-policies --set LEGACY` on RH",
-					EVP_MD_name(md),
-					ERR_lib_error_string(ERR_get_error()));
+					rc,
+					"cannot set digest %s for RSA verification (%s from OpenSSL)",
+					md ? EVP_MD_name(md) : "unknown",
+					ERR_reason_error_string(ossl_err));
+#endif
 		EVP_PKEY_CTX_free(pctx);
 		EVP_MD_CTX_free(mdctx);
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
@@ -547,7 +637,26 @@ bool rspamd_cryptobox_verify_evp_rsa(int nid,
 		return false;
 	}
 
-	ret = (EVP_PKEY_verify(pctx, sig, siglen, digest, dlen) == 1);
+	rc = EVP_PKEY_verify(pctx, sig, siglen, digest, dlen);
+	if (rc == 1) {
+		ret = true;
+	}
+	else {
+		ret = false;
+		/* rc == 0 means signature mismatch, rc < 0 means error */
+		if (rc < 0 && err != NULL) {
+			unsigned long ossl_err = ERR_peek_last_error();
+			if (ossl_err != 0) {
+				g_set_error(err, g_quark_from_static_string("OpenSSL"),
+							rc,
+							"RSA verify failed: %s (lib=%s, reason=%s)",
+							ERR_reason_error_string(ossl_err),
+							ERR_lib_error_string(ossl_err),
+							ERR_reason_error_string(ossl_err));
+			}
+			ERR_clear_error();
+		}
+	}
 
 	EVP_PKEY_CTX_free(pctx);
 	EVP_MD_CTX_free(mdctx);
