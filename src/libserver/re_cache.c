@@ -2424,6 +2424,12 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 			rspamd_snprintf(entity_name, sizeof(entity_name), "re_class:%s",
 							rspamd_re_cache_type_to_string(re_class->type));
 		}
+		/*
+		 * Stop timer while async operation is pending to prevent
+		 * multiple concurrent exists_async calls for the same class.
+		 * The callback will restart the timer with ev_timer_again.
+		 */
+		ev_timer_stop(EV_A_ w);
 		REF_RETAIN(cbdata);
 		rspamd_hs_cache_lua_exists_async(re_class->hash, entity_name, rspamd_re_cache_exists_cb, ctx);
 		return;
@@ -2667,6 +2673,12 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 			rspamd_snprintf(entity_name, sizeof(entity_name), "re_class:%s",
 							rspamd_re_cache_type_to_string(re_class->type));
 		}
+		/*
+		 * Stop timer while async save is pending to prevent
+		 * re-entry into the compilation state machine.
+		 * The callback will restart the timer with ev_timer_again.
+		 */
+		ev_timer_stop(EV_A_ w);
 		REF_RETAIN(cbdata);
 		rspamd_hs_cache_lua_save_async(re_class->hash, entity_name, combined, total_len, rspamd_re_cache_save_cb, ctx);
 
