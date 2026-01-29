@@ -548,6 +548,71 @@ define(["jquery", "app/common", "footable"],
                 : date.toLocaleString();
         };
 
+        function isFuzzySymbol(sym) {
+            if (!sym.options) return false;
+            return sym.options.some((opt) => (/^\d+:[a-f0-9]+:[\d.]+:/).test(opt));
+        }
+
+        function attachFuzzyIndices(sym, fuzzyHashesArray, fuzzyHashIndex) {
+            sym.fuzzyHashIndices = [];
+
+            if (!fuzzyHashesArray || Object.keys(fuzzyHashIndex).length === 0) return;
+
+            const foundIndices = new Set();
+            sym.options.forEach((opt) => {
+                const match = opt.match(/^\d+:([a-f0-9]+):[\d.]+:/);
+                if (match) {
+                    const [,shortHash] = match;
+                    const indices = fuzzyHashIndex[shortHash];
+                    if (Array.isArray(indices)) indices.forEach((i) => foundIndices.add(i));
+                }
+            });
+
+            sym.fuzzyHashIndices = Array.from(foundIndices).sort((a, b) => a - b);
+        }
+
+        function generateFuzzySearchData(sym, fuzzyHashesArray) {
+            if (!sym.fuzzyHashIndices?.length) return "";
+
+            const fullHashes = sym.fuzzyHashIndices
+                .filter((i) => i >= 0 && i < fuzzyHashesArray.length)
+                .map((i) => fuzzyHashesArray[i]);
+            return `<span class="visually-hidden">${common.escapeHTML(fullHashes.join(" "))}</span>`;
+        }
+
+        function generateFuzzyActions(sym, table, item) {
+            const hasHashes = sym.fuzzyHashIndices?.length > 0;
+
+            // eslint-disable-next-line init-declarations
+            let copyTitle, delistTitle;
+            if (hasHashes) {
+                copyTitle = "Copy full hashes to clipboard";
+                delistTitle = "Open bl.rspamd.com delisting page";
+            } else if (table === "history") {
+                copyTitle = "Full fuzzy hashes are not available for this message";
+                delistTitle = copyTitle;
+            } else {
+                copyTitle = "Full fuzzy hashes are not available. Enable milter_headers module with 'fuzzy-hashes' routine";
+                delistTitle = copyTitle;
+            }
+
+            function makeButton(cssClass, action, icon, label, title) {
+                const dataAttrs = hasHashes
+                    ? `data-indices='${common.escapeHTML(JSON.stringify(sym.fuzzyHashIndices))}' ` +
+                      `data-hashes='${common.escapeHTML(JSON.stringify(item.fuzzy_hashes))}' data-table="${table}"`
+                    : `data-table="${table}"`;
+                const disabled = hasHashes ? "" : " disabled";
+                const button = `<button class="btn btn-xs ${cssClass} ${action}${disabled}" ${dataAttrs}${disabled} ` +
+                    `title="${title}"><i class="fas ${icon}"></i> ${label}</button>`;
+                return hasHashes ? button : `<span title="${title}">${button}</span>`;
+            }
+
+            const copyBtn = makeButton("btn-outline-secondary", "fuzzy-copy", "fa-copy", "Copy", copyTitle);
+            const delistBtn = makeButton("btn-outline-primary", "fuzzy-delist", "fa-external-link", "Delist", delistTitle);
+
+            return `<span class="fuzzy-hash-actions d-inline-flex gap-1 ms-1 align-baseline">${copyBtn}${delistBtn}</span>`;
+        }
+
         ui.process_history_v2 = function (data, table) {
             // Display no more than rcpt_lim recipients
             const rcpt_lim = 3;
@@ -595,6 +660,17 @@ define(["jquery", "app/common", "footable"],
                     }
 
                     ui.preprocess_item(item);
+
+                    // Build fuzzy hash index for this item
+                    const fuzzyHashIndex = {};
+                    if (Array.isArray(item.fuzzy_hashes)) {
+                        item.fuzzy_hashes.forEach((fullHash, idx) => {
+                            const shortHash = fullHash.substring(0, 10);
+                            if (!fuzzyHashIndex[shortHash]) fuzzyHashIndex[shortHash] = [];
+                            fuzzyHashIndex[shortHash].push(idx);
+                        });
+                    }
+
                     Object.values(item.symbols).forEach((sym) => {
                         sym.str = `
 <span class="symbol-default ${get_symbol_class(sym.name, sym.score)} ${sym.description ? "has-description" : ""}" tabindex="0">
@@ -605,6 +681,12 @@ define(["jquery", "app/common", "footable"],
 
                         if (sym.options) {
                             sym.str += ` [${sym.options.join(",")}]`;
+
+                            if (isFuzzySymbol(sym)) {
+                                attachFuzzyIndices(sym, item.fuzzy_hashes, fuzzyHashIndex);
+                                sym.str += generateFuzzySearchData(sym, item.fuzzy_hashes);
+                                sym.str += generateFuzzyActions(sym, table, item);
+                            }
                         }
                     });
                     unsorted_symbols.push(item.symbols);
@@ -645,6 +727,54 @@ define(["jquery", "app/common", "footable"],
                 });
 
             return {items: items, symbols: unsorted_symbols};
+        };
+
+        ui.bindFuzzyHashButtons = function (table) {
+            function bindAction(action, handler) {
+                const selector = `.fuzzy-${action}[data-table="${table}"]:not(:disabled)`;
+                $(document).off("click", selector);
+                $(document).on("click", selector, function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    // eslint-disable-next-line init-declarations
+                    let hashes, indices;
+                    try {
+                        indices = JSON.parse($(this).attr("data-indices") || "[]");
+                        hashes = JSON.parse($(this).attr("data-hashes") || "[]");
+                    } catch (err) {
+                        common.alertMessage("alert-danger", "Invalid hash data: " + err.message);
+                        return;
+                    }
+
+                    if (indices.length === 0 || hashes.length === 0) {
+                        common.alertMessage("alert-warning", "No full hashes available");
+                        return;
+                    }
+
+                    const fullHashes = [...new Set(indices.map((i) => hashes[i]))];
+                    handler.call(this, fullHashes);
+                });
+            }
+
+            bindAction("copy", function (fullHashes) {
+                const textToCopy = fullHashes.join("\n");
+                common.copyToClipboard(textToCopy)
+                    .then(() => {
+                        const btn = $(this);
+                        const originalHtml = btn.html();
+                        btn.html('<i class="fas fa-check"></i> Copied!');
+                        setTimeout(() => btn.html(originalHtml), 2000);
+                    })
+                    .catch((err) => {
+                        common.alertMessage("alert-danger", "Copy failed: " + err.message);
+                    });
+            });
+
+            bindAction("delist", (fullHashes) => {
+                const url = "https://bl.rspamd.com/removal?type=fuzzy&hash=" + encodeURIComponent(fullHashes.join(","));
+                window.open(url, "_blank");
+            });
         };
 
         return ui;
