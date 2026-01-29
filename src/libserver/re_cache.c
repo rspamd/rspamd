@@ -2410,7 +2410,7 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 
 	if (cbdata->state == RSPAMD_RE_CACHE_COMPILE_STATE_CHECK_EXISTS) {
 		/* Check via Lua backend (handles file, redis, http) */
-		struct rspamd_re_cache_async_ctx *ctx = g_malloc(sizeof(*ctx));
+		struct rspamd_re_cache_async_ctx *ctx = g_malloc0(sizeof(*ctx));
 		ctx->cbdata = cbdata;
 		ctx->loop = loop;
 		ctx->w = w;
@@ -2651,7 +2651,7 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 			offset += iov[j].iov_len;
 		}
 
-		struct rspamd_re_cache_async_ctx *ctx = g_malloc(sizeof(*ctx));
+		struct rspamd_re_cache_async_ctx *ctx = g_malloc0(sizeof(*ctx));
 		ctx->cbdata = cbdata;
 		ctx->loop = loop;
 		ctx->w = w;
