@@ -246,24 +246,10 @@ lua_redis_dtor(struct lua_redis_ctx *ctx)
 static int
 lua_redis_gc(lua_State *L)
 {
-	void *ud = rspamd_lua_check_udata(L, 1, rspamd_redis_classname);
+	struct lua_redis_ctx *ctx = lua_check_redis(L, 1);
 
-	if (ud) {
-		struct lua_redis_ctx **pctx = (struct lua_redis_ctx **) ud;
-		struct lua_redis_ctx *ctx = *pctx;
-
-		/*
-		 * Defensive check: verify the context appears valid before releasing.
-		 * The context might be freed by another code path while this userdata
-		 * still holds a pointer to it. Check that the destructor matches and
-		 * refcount is reasonable to detect garbage/freed memory.
-		 */
-		if (ctx && ctx->ref.dtor == (ref_dtor_cb_t) lua_redis_dtor &&
-			ctx->ref.refcount > 0 && ctx->ref.refcount < 10000) {
-			REDIS_RELEASE(ctx);
-		}
-
-		*pctx = NULL;
+	if (ctx) {
+		REDIS_RELEASE(ctx);
 	}
 
 	return 0;
