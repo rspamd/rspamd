@@ -942,14 +942,19 @@ rspamd_hs_helper_mp_exists_cb(gboolean success,
 
 	/* Need to compile+store */
 	rspamd_worker_set_busy(mpctx->worker, mpctx->ctx->event_loop, "compile multipattern");
-	/* Flush the busy notification before blocking on compilation */
-	ev_run(mpctx->ctx->event_loop, EVRUN_NOWAIT);
-	/* Use saved mp pointer - pending array may have been freed by ev_run */
+	/*
+	 * DO NOT call ev_run() here - we're inside a Redis callback chain and
+	 * ev_run can trigger Lua GC which may try to finalize lua_redis userdata
+	 * while we're still processing. The busy notification will be sent on
+	 * the next event loop iteration after this callback returns.
+	 */
 	mpctx->compile_cb_called = FALSE;
 	REF_RETAIN(mpctx);
 	rspamd_multipattern_compile_hs_to_cache_async(mp, mpctx->ctx->hs_dir,
 												  mpctx->ctx->event_loop,
 												  rspamd_hs_helper_mp_compiled_cb, mpctx);
+	/* Release the reference from exists_async callback */
+	REF_RELEASE(mpctx);
 }
 
 static void
@@ -1138,14 +1143,19 @@ rspamd_hs_helper_remap_exists_cb(gboolean success,
 
 	/* Need to compile+store */
 	rspamd_worker_set_busy(rmctx->worker, rmctx->ctx->event_loop, "compile regexp map");
-	/* Flush the busy notification before blocking on compilation */
-	ev_run(rmctx->ctx->event_loop, EVRUN_NOWAIT);
-	/* Use saved re_map pointer - pending array may have been freed by ev_run */
+	/*
+	 * DO NOT call ev_run() here - we're inside a Redis callback chain and
+	 * ev_run can trigger Lua GC which may try to finalize lua_redis userdata
+	 * while we're still processing. The busy notification will be sent on
+	 * the next event loop iteration after this callback returns.
+	 */
 	rmctx->compile_cb_called = FALSE;
 	REF_RETAIN(rmctx);
 	rspamd_regexp_map_compile_hs_to_cache_async(re_map, rmctx->ctx->hs_dir,
 												rmctx->ctx->event_loop,
 												rspamd_hs_helper_remap_compiled_cb, rmctx);
+	/* Release the reference from exists_async callback */
+	REF_RELEASE(rmctx);
 }
 
 static void
