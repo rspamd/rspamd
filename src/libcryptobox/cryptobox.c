@@ -41,6 +41,10 @@
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
 #include <openssl/err.h>
+#include <openssl/obj_mac.h>
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#include <openssl/provider.h>
+#endif
 #endif
 
 #include <signal.h>
@@ -52,6 +56,17 @@
 unsigned cpu_config = 0;
 
 static gboolean cryptobox_loaded = FALSE;
+
+#if defined(HAVE_OPENSSL) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+/*
+ * Dedicated OpenSSL library context for DKIM SHA-1 signature verification.
+ * RHEL/CentOS 10+ crypto-policies disable SHA-1 for signatures by default,
+ * but DKIM signatures using rsa-sha1 are still common in the wild.
+ * This context bypasses system restrictions for legacy digest verification only.
+ */
+static OSSL_LIB_CTX *rspamd_legacy_ssl_ctx = NULL;
+static OSSL_PROVIDER *rspamd_legacy_ssl_provider = NULL;
+#endif
 
 static const unsigned char n0[16] = {0};
 
@@ -367,6 +382,18 @@ void rspamd_cryptobox_deinit(struct rspamd_cryptobox_library_ctx *ctx)
 		g_free(ctx->cpu_extensions);
 		g_free(ctx);
 		cryptobox_loaded = FALSE;
+
+#if defined(HAVE_OPENSSL) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+		/* Cleanup legacy SSL context used for SHA-1 DKIM verification */
+		if (rspamd_legacy_ssl_provider != NULL) {
+			OSSL_PROVIDER_unload(rspamd_legacy_ssl_provider);
+			rspamd_legacy_ssl_provider = NULL;
+		}
+		if (rspamd_legacy_ssl_ctx != NULL) {
+			OSSL_LIB_CTX_free(rspamd_legacy_ssl_ctx);
+			rspamd_legacy_ssl_ctx = NULL;
+		}
+#endif
 	}
 }
 
@@ -462,11 +489,45 @@ bool rspamd_cryptobox_verify_evp_rsa(int nid,
 									 GError **err)
 {
 	bool ret = false, r;
+	EVP_PKEY_CTX *pctx;
+	const EVP_MD *md;
 
-	EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(pub_key, NULL);
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	/*
+	 * For SHA-1 signatures, use a dedicated library context that bypasses
+	 * system crypto-policies (RHEL/CentOS 10+ disable SHA-1 for signatures).
+	 * For SHA-256/SHA-512, use the normal system context.
+	 */
+	if (nid == NID_sha1) {
+		/* Lazy initialization of legacy context for SHA-1 */
+		if (rspamd_legacy_ssl_ctx == NULL) {
+			rspamd_legacy_ssl_ctx = OSSL_LIB_CTX_new();
+			if (rspamd_legacy_ssl_ctx != NULL) {
+				rspamd_legacy_ssl_provider = OSSL_PROVIDER_load(rspamd_legacy_ssl_ctx, "default");
+			}
+		}
+
+		if (rspamd_legacy_ssl_ctx != NULL) {
+			pctx = EVP_PKEY_CTX_new_from_pkey(rspamd_legacy_ssl_ctx, pub_key, NULL);
+			md = EVP_MD_fetch(rspamd_legacy_ssl_ctx, "SHA1", NULL);
+		}
+		else {
+			/* Fallback if context creation failed */
+			pctx = EVP_PKEY_CTX_new(pub_key, NULL);
+			md = EVP_get_digestbynid(nid);
+		}
+	}
+	else {
+		pctx = EVP_PKEY_CTX_new(pub_key, NULL);
+		md = EVP_get_digestbynid(nid);
+	}
+#else
+	pctx = EVP_PKEY_CTX_new(pub_key, NULL);
+	md = EVP_get_digestbynid(nid);
+#endif
+
 	g_assert(pctx != NULL);
 	EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
-	const EVP_MD *md = EVP_get_digestbynid(nid);
 
 	g_assert(EVP_PKEY_verify_init(pctx) == 1);
 	g_assert(EVP_PKEY_CTX_set_rsa_padding(pctx, RSA_PKCS1_PADDING) == 1);
@@ -479,7 +540,11 @@ bool rspamd_cryptobox_verify_evp_rsa(int nid,
 					ERR_lib_error_string(ERR_get_error()));
 		EVP_PKEY_CTX_free(pctx);
 		EVP_MD_CTX_free(mdctx);
-
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+		if (nid == NID_sha1 && md != NULL) {
+			EVP_MD_free((EVP_MD *) md);
+		}
+#endif
 		return false;
 	}
 
@@ -487,6 +552,11 @@ bool rspamd_cryptobox_verify_evp_rsa(int nid,
 
 	EVP_PKEY_CTX_free(pctx);
 	EVP_MD_CTX_free(mdctx);
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	if (nid == NID_sha1 && md != NULL) {
+		EVP_MD_free((EVP_MD *) md);
+	}
+#endif
 
 	return ret;
 }
