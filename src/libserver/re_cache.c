@@ -2160,6 +2160,8 @@ struct rspamd_re_cache_hs_compile_cbdata {
 	gboolean silent;
 	unsigned int total;
 	struct rspamd_worker *worker;
+	struct ev_loop *event_loop;
+	ev_timer *timer;
 
 	void (*cb)(unsigned int ncompiled, GError *err, void *cbd);
 
@@ -2168,6 +2170,7 @@ struct rspamd_re_cache_hs_compile_cbdata {
 	/* Async state */
 	struct rspamd_re_class *current_class;
 	enum rspamd_re_cache_compile_state state;
+	ref_entry_t ref;
 };
 
 struct rspamd_re_cache_async_ctx {
@@ -2175,6 +2178,7 @@ struct rspamd_re_cache_async_ctx {
 	struct ev_loop *loop;
 	ev_timer *w;
 	int n;
+	gboolean callback_processed;
 };
 
 static void
@@ -2182,12 +2186,37 @@ rspamd_re_cache_compile_err(EV_P_ ev_timer *w, GError *err,
 							struct rspamd_re_cache_hs_compile_cbdata *cbdata, bool is_fatal);
 
 static void
+rspamd_re_cache_hs_compile_cbdata_dtor(void *p)
+{
+	struct rspamd_re_cache_hs_compile_cbdata *cbdata = p;
+
+	if (cbdata->timer && ev_is_active(cbdata->timer)) {
+		ev_timer_stop(cbdata->event_loop, cbdata->timer);
+	}
+	rspamd_heap_destroy(re_compile_queue, &cbdata->compile_queue);
+	g_free(cbdata->timer);
+	g_free(cbdata);
+}
+
+static void
 rspamd_re_cache_exists_cb(gboolean success, const unsigned char *data, gsize len, const char *err, void *ud)
 {
 	struct rspamd_re_cache_async_ctx *ctx = ud;
-	struct rspamd_re_cache_hs_compile_cbdata *cbdata = ctx->cbdata;
+	struct rspamd_re_cache_hs_compile_cbdata *cbdata;
 	const gboolean lua_backend = rspamd_hs_cache_has_lua_backend();
 	char path[PATH_MAX];
+
+	if (ctx->callback_processed) {
+		return;
+	}
+	ctx->callback_processed = TRUE;
+	cbdata = ctx->cbdata;
+
+	if (cbdata->worker && cbdata->worker->state != rspamd_worker_state_running) {
+		g_free(ctx);
+		REF_RELEASE(cbdata);
+		return;
+	}
 
 	if (success && len > 0) {
 		/* Exists */
@@ -2241,20 +2270,33 @@ rspamd_re_cache_exists_cb(gboolean success, const unsigned char *data, gsize len
 		cbdata->state = RSPAMD_RE_CACHE_COMPILE_STATE_COMPILING;
 	}
 
-	ev_timer_again(ctx->loop, ctx->w);
+	ev_timer_again(cbdata->event_loop, cbdata->timer);
 	g_free(ctx);
+	REF_RELEASE(cbdata);
 }
 
 static void
 rspamd_re_cache_save_cb(gboolean success, const unsigned char *data, gsize len, const char *err, void *ud)
 {
 	struct rspamd_re_cache_async_ctx *ctx = ud;
-	struct rspamd_re_cache_hs_compile_cbdata *cbdata = ctx->cbdata;
+	struct rspamd_re_cache_hs_compile_cbdata *cbdata;
+
+	if (ctx->callback_processed) {
+		return;
+	}
+	ctx->callback_processed = TRUE;
+	cbdata = ctx->cbdata;
+
+	if (cbdata->worker && cbdata->worker->state != rspamd_worker_state_running) {
+		g_free(ctx);
+		REF_RELEASE(cbdata);
+		return;
+	}
 
 	if (!success) {
 		GError *gerr = g_error_new(rspamd_re_cache_quark(), EINVAL,
 								   "backend save failed: %s", err ? err : "unknown error");
-		rspamd_re_cache_compile_err(ctx->loop, ctx->w, gerr, cbdata, false);
+		rspamd_re_cache_compile_err(cbdata->event_loop, cbdata->timer, gerr, cbdata, false);
 	}
 	else {
 		struct rspamd_re_class *re_class = cbdata->current_class;
@@ -2291,8 +2333,9 @@ rspamd_re_cache_save_cb(gboolean success, const unsigned char *data, gsize len, 
 	cbdata->state = RSPAMD_RE_CACHE_COMPILE_STATE_INIT;
 	cbdata->current_class = NULL;
 
-	ev_timer_again(ctx->loop, ctx->w);
+	ev_timer_again(cbdata->event_loop, cbdata->timer);
 	g_free(ctx);
+	REF_RELEASE(cbdata);
 }
 
 static void
@@ -2301,13 +2344,10 @@ rspamd_re_cache_compile_err(EV_P_ ev_timer *w, GError *err,
 {
 	if (is_fatal) {
 		cbdata->cb(cbdata->total, err, cbdata->cbd);
-		ev_timer_stop(EV_A_ w);
-		g_free(w);
-		g_free(cbdata);
+		REF_RELEASE(cbdata);
 	}
 	else {
 		msg_err("hyperscan compilation error: %s", err->message);
-		/* Continue compilation */
 		cbdata->state = RSPAMD_RE_CACHE_COMPILE_STATE_INIT;
 		cbdata->current_class = NULL;
 		ev_timer_again(EV_A_ w);
@@ -2344,12 +2384,8 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 
 	/* Stop if worker is terminating */
 	if (cbdata->worker && cbdata->worker->state != rspamd_worker_state_running) {
-		ev_timer_stop(EV_A_ w);
 		cbdata->cb(cbdata->total, NULL, cbdata->cbd);
-		rspamd_heap_destroy(re_compile_queue, &cbdata->compile_queue);
-		g_free(w);
-		g_free(cbdata);
-
+		REF_RELEASE(cbdata);
 		return;
 	}
 
@@ -2362,12 +2398,8 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 			rspamd_heap_pop(re_compile_queue, &cbdata->compile_queue);
 		if (elt == NULL) {
 			/* All done */
-			ev_timer_stop(EV_A_ w);
 			cbdata->cb(cbdata->total, NULL, cbdata->cbd);
-			rspamd_heap_destroy(re_compile_queue, &cbdata->compile_queue);
-			g_free(w);
-			g_free(cbdata);
-
+			REF_RELEASE(cbdata);
 			return;
 		}
 
@@ -2392,10 +2424,8 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 			rspamd_snprintf(entity_name, sizeof(entity_name), "re_class:%s",
 							rspamd_re_cache_type_to_string(re_class->type));
 		}
+		REF_RETAIN(cbdata);
 		rspamd_hs_cache_lua_exists_async(re_class->hash, entity_name, rspamd_re_cache_exists_cb, ctx);
-		/* Don't stop timer here - the callback (rspamd_re_cache_exists_cb) handles
-		 * restarting the timer. For file backend the callback runs synchronously
-		 * within exists_async, so stopping here would undo the timer restart. */
 		return;
 	}
 
@@ -2637,14 +2667,12 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 			rspamd_snprintf(entity_name, sizeof(entity_name), "re_class:%s",
 							rspamd_re_cache_type_to_string(re_class->type));
 		}
+		REF_RETAIN(cbdata);
 		rspamd_hs_cache_lua_save_async(re_class->hash, entity_name, combined, total_len, rspamd_re_cache_save_cb, ctx);
 
 		g_free(combined);
 		CLEANUP_ALLOCATED(false);
 		g_free(hs_serialized);
-		/* Don't stop timer here - the callback (rspamd_re_cache_save_cb) handles
-		 * restarting the timer. For file backend the callback runs synchronously
-		 * within save_async, so stopping here would undo the timer restart. */
 		return;
 	}
 	else {
@@ -2735,8 +2763,11 @@ int rspamd_re_cache_compile_hyperscan(struct rspamd_re_cache *cache,
 	cbdata->silent = silent;
 	cbdata->total = 0;
 	cbdata->worker = worker;
+	cbdata->event_loop = event_loop;
 	timer = g_malloc0(sizeof(*timer));
 	timer->data = (void *) cbdata;
+	cbdata->timer = timer;
+	REF_INIT_RETAIN(cbdata, rspamd_re_cache_hs_compile_cbdata_dtor);
 
 	ev_timer_init(timer, rspamd_re_cache_compile_timer_cb,
 				  timer_interval, timer_interval);

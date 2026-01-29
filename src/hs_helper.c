@@ -16,6 +16,7 @@
 #include "config.h"
 #include "libutil/util.h"
 #include "libutil/multipattern.h"
+#include "libutil/ref.h"
 #include "libserver/cfg_file.h"
 #include "libserver/cfg_rcl.h"
 #include "libserver/worker_util.h"
@@ -814,8 +815,23 @@ struct rspamd_hs_helper_mp_async_ctx {
 	struct rspamd_multipattern_pending *pending;
 	unsigned int count;
 	unsigned int idx;
+	gboolean compile_cb_called;
 	ev_timer deferred_timer; /* Timer for deferring next operation after error */
+	ref_entry_t ref;
 };
+
+static void
+rspamd_hs_helper_mp_async_ctx_dtor(void *p)
+{
+	struct rspamd_hs_helper_mp_async_ctx *mpctx = p;
+
+	/* Stop the deferred timer if it's somehow still active */
+	if (ev_is_active(&mpctx->deferred_timer)) {
+		ev_timer_stop(mpctx->ctx->event_loop, &mpctx->deferred_timer);
+	}
+	rspamd_multipattern_clear_pending();
+	g_free(mpctx);
+}
 
 static void
 rspamd_hs_helper_mp_send_notification(struct hs_helper_ctx *ctx,
@@ -853,9 +869,17 @@ rspamd_hs_helper_mp_compiled_cb(struct rspamd_multipattern *mp,
 								void *ud)
 {
 	struct rspamd_hs_helper_mp_async_ctx *mpctx = ud;
-	struct rspamd_multipattern_pending *entry = &mpctx->pending[mpctx->idx];
+	struct rspamd_multipattern_pending *entry;
 
 	(void) mp;
+
+	if (mpctx->compile_cb_called) {
+		REF_RELEASE(mpctx);
+		return;
+	}
+	mpctx->compile_cb_called = TRUE;
+
+	entry = &mpctx->pending[mpctx->idx];
 	rspamd_worker_set_busy(mpctx->worker, mpctx->ctx->event_loop, NULL);
 
 	if (!success) {
@@ -876,6 +900,8 @@ rspamd_hs_helper_mp_compiled_cb(struct rspamd_multipattern *mp,
 	mpctx->deferred_timer.data = mpctx;
 	ev_timer_init(&mpctx->deferred_timer, rspamd_hs_helper_mp_deferred_next_cb, 0.0, 0.0);
 	ev_timer_start(mpctx->ctx->event_loop, &mpctx->deferred_timer);
+
+	REF_RELEASE(mpctx);
 }
 
 static void
@@ -888,12 +914,19 @@ rspamd_hs_helper_mp_exists_cb(gboolean success,
 	struct rspamd_hs_helper_mp_async_ctx *mpctx = ud;
 	struct rspamd_multipattern_pending *entry = &mpctx->pending[mpctx->idx];
 	bool exists = (success && data == NULL && len == 1);
+	/*
+	 * Save entry data before any operation that might trigger ev_run,
+	 * as ev_run could process deferred timers that call
+	 * rspamd_multipattern_clear_pending() and free the pending array.
+	 */
+	struct rspamd_multipattern *mp = entry->mp;
+	const char *entry_name = entry->name;
 
 	(void) error;
 
 	if (exists) {
-		msg_debug_hyperscan("multipattern cache already exists for '%s', skipping compilation", entry->name);
-		rspamd_hs_helper_mp_send_notification(mpctx->ctx, mpctx->worker, entry->name);
+		msg_debug_hyperscan("multipattern cache already exists for '%s', skipping compilation", entry_name);
+		rspamd_hs_helper_mp_send_notification(mpctx->ctx, mpctx->worker, entry_name);
 		mpctx->idx++;
 		/*
 		 * Defer the next operation to avoid nested Redis callbacks.
@@ -903,6 +936,7 @@ rspamd_hs_helper_mp_exists_cb(gboolean success,
 		mpctx->deferred_timer.data = mpctx;
 		ev_timer_init(&mpctx->deferred_timer, rspamd_hs_helper_mp_deferred_next_cb, 0.0, 0.0);
 		ev_timer_start(mpctx->ctx->event_loop, &mpctx->deferred_timer);
+		REF_RELEASE(mpctx);
 		return;
 	}
 
@@ -910,7 +944,10 @@ rspamd_hs_helper_mp_exists_cb(gboolean success,
 	rspamd_worker_set_busy(mpctx->worker, mpctx->ctx->event_loop, "compile multipattern");
 	/* Flush the busy notification before blocking on compilation */
 	ev_run(mpctx->ctx->event_loop, EVRUN_NOWAIT);
-	rspamd_multipattern_compile_hs_to_cache_async(entry->mp, mpctx->ctx->hs_dir,
+	/* Use saved mp pointer - pending array may have been freed by ev_run */
+	mpctx->compile_cb_called = FALSE;
+	REF_RETAIN(mpctx);
+	rspamd_multipattern_compile_hs_to_cache_async(mp, mpctx->ctx->hs_dir,
 												  mpctx->ctx->event_loop,
 												  rspamd_hs_helper_mp_compiled_cb, mpctx);
 }
@@ -935,6 +972,7 @@ rspamd_hs_helper_compile_pending_multipatterns_next(struct rspamd_hs_helper_mp_a
 		char cache_key[rspamd_cryptobox_HASHBYTES * 2 + 1];
 		rspamd_snprintf(cache_key, sizeof(cache_key), "%*xs",
 						(int) sizeof(entry->hash) / 2, entry->hash);
+		REF_RETAIN(mpctx);
 		rspamd_hs_cache_lua_exists_async(cache_key, entry->name,
 										 rspamd_hs_helper_mp_exists_cb, mpctx);
 		return;
@@ -968,16 +1006,7 @@ rspamd_hs_helper_compile_pending_multipatterns_next(struct rspamd_hs_helper_mp_a
 	}
 
 done:
-	/* Stop the deferred timer if it's somehow still active */
-	if (ev_is_active(&mpctx->deferred_timer)) {
-		ev_timer_stop(mpctx->ctx->event_loop, &mpctx->deferred_timer);
-	}
-	rspamd_multipattern_clear_pending();
-	for (unsigned int i = 0; i < mpctx->count; i++) {
-		/* names are freed by clear_pending */
-		(void) i;
-	}
-	g_free(mpctx);
+	REF_RELEASE(mpctx);
 }
 
 static void
@@ -1001,6 +1030,7 @@ rspamd_hs_helper_compile_pending_multipatterns(struct hs_helper_ctx *ctx,
 	mpctx->pending = pending;
 	mpctx->count = count;
 	mpctx->idx = 0;
+	REF_INIT_RETAIN(mpctx, rspamd_hs_helper_mp_async_ctx_dtor);
 
 	rspamd_hs_helper_compile_pending_multipatterns_next(mpctx);
 }
@@ -1015,9 +1045,19 @@ struct rspamd_hs_helper_remap_async_ctx {
 	struct rspamd_regexp_map_pending *pending;
 	unsigned int count;
 	unsigned int idx;
+	gboolean compile_cb_called;
+	ref_entry_t ref;
 };
 
 static void rspamd_hs_helper_compile_pending_regexp_maps_next(struct rspamd_hs_helper_remap_async_ctx *rmctx);
+
+static void
+rspamd_hs_helper_remap_async_ctx_dtor(void *p)
+{
+	struct rspamd_hs_helper_remap_async_ctx *rmctx = p;
+	rspamd_regexp_map_clear_pending();
+	g_free(rmctx);
+}
 
 static void
 rspamd_hs_helper_remap_send_notification(struct hs_helper_ctx *ctx,
@@ -1042,9 +1082,17 @@ rspamd_hs_helper_remap_compiled_cb(struct rspamd_regexp_map_helper *re_map,
 								   void *ud)
 {
 	struct rspamd_hs_helper_remap_async_ctx *rmctx = ud;
-	struct rspamd_regexp_map_pending *entry = &rmctx->pending[rmctx->idx];
+	struct rspamd_regexp_map_pending *entry;
 
 	(void) re_map;
+
+	if (rmctx->compile_cb_called) {
+		REF_RELEASE(rmctx);
+		return;
+	}
+	rmctx->compile_cb_called = TRUE;
+
+	entry = &rmctx->pending[rmctx->idx];
 	rspamd_worker_set_busy(rmctx->worker, rmctx->ctx->event_loop, NULL);
 
 	if (!success) {
@@ -1056,6 +1104,7 @@ rspamd_hs_helper_remap_compiled_cb(struct rspamd_regexp_map_helper *re_map,
 
 	rmctx->idx++;
 	rspamd_hs_helper_compile_pending_regexp_maps_next(rmctx);
+	REF_RELEASE(rmctx);
 }
 
 static void
@@ -1068,14 +1117,22 @@ rspamd_hs_helper_remap_exists_cb(gboolean success,
 	struct rspamd_hs_helper_remap_async_ctx *rmctx = ud;
 	struct rspamd_regexp_map_pending *entry = &rmctx->pending[rmctx->idx];
 	bool exists = (success && data == NULL && len == 1);
+	/*
+	 * Save entry data before any operation that might trigger ev_run,
+	 * as ev_run could process deferred timers that call
+	 * rspamd_regexp_map_clear_pending() and free the pending array.
+	 */
+	struct rspamd_regexp_map_helper *re_map = entry->re_map;
+	const char *entry_name = entry->name;
 
 	(void) error;
 
 	if (exists) {
-		msg_debug_hyperscan("regexp map cache already exists for '%s', skipping compilation", entry->name);
-		rspamd_hs_helper_remap_send_notification(rmctx->ctx, rmctx->worker, entry->name);
+		msg_debug_hyperscan("regexp map cache already exists for '%s', skipping compilation", entry_name);
+		rspamd_hs_helper_remap_send_notification(rmctx->ctx, rmctx->worker, entry_name);
 		rmctx->idx++;
 		rspamd_hs_helper_compile_pending_regexp_maps_next(rmctx);
+		REF_RELEASE(rmctx);
 		return;
 	}
 
@@ -1083,7 +1140,10 @@ rspamd_hs_helper_remap_exists_cb(gboolean success,
 	rspamd_worker_set_busy(rmctx->worker, rmctx->ctx->event_loop, "compile regexp map");
 	/* Flush the busy notification before blocking on compilation */
 	ev_run(rmctx->ctx->event_loop, EVRUN_NOWAIT);
-	rspamd_regexp_map_compile_hs_to_cache_async(entry->re_map, rmctx->ctx->hs_dir,
+	/* Use saved re_map pointer - pending array may have been freed by ev_run */
+	rmctx->compile_cb_called = FALSE;
+	REF_RETAIN(rmctx);
+	rspamd_regexp_map_compile_hs_to_cache_async(re_map, rmctx->ctx->hs_dir,
 												rmctx->ctx->event_loop,
 												rspamd_hs_helper_remap_compiled_cb, rmctx);
 }
@@ -1107,6 +1167,7 @@ rspamd_hs_helper_compile_pending_regexp_maps_next(struct rspamd_hs_helper_remap_
 		char cache_key[rspamd_cryptobox_HASHBYTES * 2 + 1];
 		rspamd_snprintf(cache_key, sizeof(cache_key), "%*xs",
 						(int) sizeof(entry->hash) / 2, entry->hash);
+		REF_RETAIN(rmctx);
 		rspamd_hs_cache_lua_exists_async(cache_key, entry->name,
 										 rspamd_hs_helper_remap_exists_cb, rmctx);
 		return;
@@ -1140,8 +1201,7 @@ rspamd_hs_helper_compile_pending_regexp_maps_next(struct rspamd_hs_helper_remap_
 	}
 
 done:
-	rspamd_regexp_map_clear_pending();
-	g_free(rmctx);
+	REF_RELEASE(rmctx);
 }
 
 static void
@@ -1165,6 +1225,7 @@ rspamd_hs_helper_compile_pending_regexp_maps(struct hs_helper_ctx *ctx,
 	rmctx->pending = pending;
 	rmctx->count = count;
 	rmctx->idx = 0;
+	REF_INIT_RETAIN(rmctx, rspamd_hs_helper_remap_async_ctx_dtor);
 
 	rspamd_hs_helper_compile_pending_regexp_maps_next(rmctx);
 }

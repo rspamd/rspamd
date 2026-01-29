@@ -2076,6 +2076,7 @@ struct rspamd_regexp_map_async_compile_ctx {
 	char *cache_dir;
 	unsigned char *serialized_db;
 	gsize serialized_len;
+	gboolean callback_processed;
 };
 
 static void
@@ -2090,6 +2091,11 @@ rspamd_regexp_map_async_store_cb(gboolean success,
 
 	(void) data;
 	(void) len;
+
+	if (ctx->callback_processed) {
+		return;
+	}
+	ctx->callback_processed = TRUE;
 
 	if (!success) {
 		g_set_error(&err, g_quark_from_static_string("regexp_map"), EINVAL,
@@ -2274,6 +2280,7 @@ struct rspamd_regexp_map_async_load_ctx {
 	void (*cb)(gboolean success, void *ud);
 	void *ud;
 	char *cache_dir;
+	gboolean callback_processed;
 };
 
 static void
@@ -2284,8 +2291,14 @@ rspamd_regexp_map_async_load_cb(gboolean success,
 								void *ud)
 {
 	struct rspamd_regexp_map_async_load_ctx *ctx = ud;
-	struct rspamd_map *map = ctx->re_map->map;
+	struct rspamd_map *map;
 	gboolean result = FALSE;
+
+	if (ctx->callback_processed) {
+		return;
+	}
+	ctx->callback_processed = TRUE;
+	map = ctx->re_map->map;
 
 	if (!success || data == NULL || len == 0) {
 		msg_warn_map("failed to load regexp map from cache backend: %s",
