@@ -337,6 +337,25 @@ struct rspamd_updates_cbdata {
 	gboolean final;
 };
 
+enum rspamd_ratelimit_event_type {
+	RATELIMIT_EVENT_NEW,
+	RATELIMIT_EVENT_EXISTING,
+	RATELIMIT_EVENT_BLACKLIST,
+};
+
+struct rspamd_ratelimit_callback_ctx {
+	rspamd_inet_addr_t *addr;              /* Client IP */
+	const char *reason;                    /* "ratelimit" or "blacklisted" */
+	enum rspamd_ratelimit_event_type type; /* new, existing, blacklist */
+
+	/* Rate limit bucket state (optional) */
+	struct rspamd_leaky_bucket_elt *bucket;
+	double max_burst;
+	double max_rate;
+
+	/* Session context (optional - only for per-key limits) */
+	struct fuzzy_session *session;
+};
 
 static void rspamd_fuzzy_write_reply(struct fuzzy_session *session);
 static void rspamd_fuzzy_udp_write_reply(struct fuzzy_udp_session *session);
@@ -349,6 +368,8 @@ static gboolean rspamd_fuzzy_check_client(struct rspamd_fuzzy_storage_ctx *ctx,
 static void rspamd_fuzzy_maybe_call_blacklisted(struct rspamd_fuzzy_storage_ctx *ctx,
 												rspamd_inet_addr_t *addr,
 												const char *reason);
+static void rspamd_fuzzy_call_ratelimit_handlers(struct rspamd_fuzzy_storage_ctx *ctx,
+												 const struct rspamd_ratelimit_callback_ctx *cb_ctx);
 static struct fuzzy_key *fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg,
 													const ucl_object_t *obj,
 													khash_t(rspamd_fuzzy_keys_hash) * target);
@@ -570,9 +591,9 @@ rspamd_fuzzy_check_ratelimit_bucket(struct rspamd_fuzzy_storage_ctx *ctx,
 		}
 	}
 
-	if (ratelimited) {
-		rspamd_fuzzy_maybe_call_blacklisted(ctx, addr, "ratelimit");
-	}
+	/* Note: Caller is responsible for calling the ratelimit handlers with
+	 * proper context (new vs existing, bucket info, session info, etc.)
+	 */
 
 	if (new_ratelimit) {
 		return ratelimit_new;
@@ -654,10 +675,32 @@ rspamd_fuzzy_check_ratelimit(struct rspamd_fuzzy_storage_ctx *ctx,
 				}
 			}
 
-			rspamd_fuzzy_maybe_call_blacklisted(ctx, addr, "ratelimit");
+			if (ctx->lua_blacklist_handlers) {
+				struct rspamd_ratelimit_callback_ctx cb_ctx = {
+					.addr = addr,
+					.reason = "ratelimit",
+					.type = RATELIMIT_EVENT_NEW,
+					.bucket = elt,
+					.max_burst = ctx->leaky_bucket_burst,
+					.max_rate = ctx->leaky_bucket_rate,
+					.session = NULL,
+				};
+				rspamd_fuzzy_call_ratelimit_handlers(ctx, &cb_ctx);
+			}
 		}
 		else if (res == ratelimit_existing) {
-			rspamd_fuzzy_maybe_call_blacklisted(ctx, addr, "ratelimit");
+			if (ctx->lua_blacklist_handlers) {
+				struct rspamd_ratelimit_callback_ctx cb_ctx = {
+					.addr = addr,
+					.reason = "ratelimit",
+					.type = RATELIMIT_EVENT_EXISTING,
+					.bucket = elt,
+					.max_burst = ctx->leaky_bucket_burst,
+					.max_rate = ctx->leaky_bucket_rate,
+					.session = NULL,
+				};
+				rspamd_fuzzy_call_ratelimit_handlers(ctx, &cb_ctx);
+			}
 		}
 
 		rspamd_inet_address_free(masked);
@@ -681,35 +724,193 @@ rspamd_fuzzy_check_ratelimit(struct rspamd_fuzzy_storage_ctx *ctx,
 	return TRUE;
 }
 
+/*
+ * Push bucket info as a Lua table
+ */
+static void
+rspamd_fuzzy_bucket_info_tolua(lua_State *L,
+							   const struct rspamd_ratelimit_callback_ctx *cb_ctx)
+{
+	if (!cb_ctx->bucket) {
+		lua_pushnil(L);
+		return;
+	}
+
+	lua_createtable(L, 0, 6);
+
+	/* bucket_level - current fill level (nil if permanently blocked) */
+	if (isnan(cb_ctx->bucket->cur)) {
+		lua_pushnil(L);
+		lua_setfield(L, -2, "bucket_level");
+		lua_pushboolean(L, TRUE);
+		lua_setfield(L, -2, "is_permanent");
+	}
+	else {
+		lua_pushnumber(L, cb_ctx->bucket->cur);
+		lua_setfield(L, -2, "bucket_level");
+		lua_pushboolean(L, FALSE);
+		lua_setfield(L, -2, "is_permanent");
+	}
+
+	/* max_burst */
+	if (!isnan(cb_ctx->max_burst)) {
+		lua_pushnumber(L, cb_ctx->max_burst);
+		lua_setfield(L, -2, "max_burst");
+	}
+
+	/* max_rate */
+	if (!isnan(cb_ctx->max_rate)) {
+		lua_pushnumber(L, cb_ctx->max_rate);
+		lua_setfield(L, -2, "max_rate");
+	}
+
+	/* exceeded_by - how much over the limit */
+	if (!isnan(cb_ctx->bucket->cur) && !isnan(cb_ctx->max_burst) &&
+		cb_ctx->bucket->cur > cb_ctx->max_burst) {
+		lua_pushnumber(L, cb_ctx->bucket->cur - cb_ctx->max_burst);
+		lua_setfield(L, -2, "exceeded_by");
+	}
+
+	/* last_seen */
+	lua_pushnumber(L, cb_ctx->bucket->last);
+	lua_setfield(L, -2, "last_seen");
+}
+
+/*
+ * Push extensions from session or callback context as a Lua table
+ */
+static void
+rspamd_fuzzy_ratelimit_extensions_tolua(lua_State *L,
+										const struct rspamd_ratelimit_callback_ctx *cb_ctx)
+{
+	struct rspamd_fuzzy_cmd_extension *ext;
+	rspamd_inet_addr_t *addr;
+
+	lua_createtable(L, 0, 2);
+
+	if (!cb_ctx->session || !cb_ctx->session->extensions) {
+		return;
+	}
+
+	LL_FOREACH(cb_ctx->session->extensions, ext)
+	{
+		switch (ext->ext) {
+		case RSPAMD_FUZZY_EXT_SOURCE_DOMAIN:
+			lua_pushlstring(L, (const char *) ext->payload, ext->length);
+			lua_setfield(L, -2, "domain");
+			break;
+		case RSPAMD_FUZZY_EXT_SOURCE_IP4:
+			addr = rspamd_inet_address_new(AF_INET, ext->payload);
+			rspamd_lua_ip_push(L, addr);
+			rspamd_inet_address_free(addr);
+			lua_setfield(L, -2, "source_ip");
+			break;
+		case RSPAMD_FUZZY_EXT_SOURCE_IP6:
+			addr = rspamd_inet_address_new(AF_INET6, ext->payload);
+			rspamd_lua_ip_push(L, addr);
+			rspamd_inet_address_free(addr);
+			lua_setfield(L, -2, "source_ip");
+			break;
+		}
+	}
+}
+
+/*
+ * Enhanced Lua callback for ratelimit/blacklist events
+ * Passes 7 arguments to Lua:
+ * 1. ip (rspamd_ip) - Client IP address
+ * 2. reason (string) - "ratelimit" or "blacklisted"
+ * 3. event_type (string) - "new", "existing", or "blacklist"
+ * 4. ratelimit_info (table/nil) - Bucket state details
+ * 5. digest (rspamd_text/nil) - Hash if session available
+ * 6. extensions (table) - Domain, source IP from extensions
+ */
+static void
+rspamd_fuzzy_call_ratelimit_handlers(struct rspamd_fuzzy_storage_ctx *ctx,
+									 const struct rspamd_ratelimit_callback_ctx *cb_ctx)
+{
+	if (ctx->lua_blacklist_handlers == NULL) {
+		return;
+	}
+
+	struct rspamd_lua_fuzzy_script *cur;
+	LL_FOREACH(ctx->lua_blacklist_handlers, cur)
+	{
+		lua_State *L = ctx->cfg->lua_state;
+		int err_idx, ret;
+		const int nargs = 6;
+
+		lua_pushcfunction(L, &rspamd_lua_traceback);
+		err_idx = lua_gettop(L);
+		lua_checkstack(L, err_idx + nargs + 2);
+		lua_rawgeti(L, LUA_REGISTRYINDEX, cur->cbref);
+
+		/* Arg 1: client IP */
+		rspamd_lua_ip_push(L, cb_ctx->addr);
+
+		/* Arg 2: block reason */
+		lua_pushstring(L, cb_ctx->reason);
+
+		/* Arg 3: event type */
+		switch (cb_ctx->type) {
+		case RATELIMIT_EVENT_NEW:
+			lua_pushliteral(L, "new");
+			break;
+		case RATELIMIT_EVENT_EXISTING:
+			lua_pushliteral(L, "existing");
+			break;
+		case RATELIMIT_EVENT_BLACKLIST:
+			lua_pushliteral(L, "blacklist");
+			break;
+		}
+
+		/* Arg 4: ratelimit_info table (or nil) */
+		rspamd_fuzzy_bucket_info_tolua(L, cb_ctx);
+
+		/* Arg 5: digest (or nil) */
+		if (cb_ctx->session) {
+			(void) lua_new_text(L, (const char *) cb_ctx->session->cmd.basic.digest,
+								sizeof(cb_ctx->session->cmd.basic.digest), FALSE);
+		}
+		else {
+			lua_pushnil(L);
+		}
+
+		/* Arg 6: extensions table */
+		rspamd_fuzzy_ratelimit_extensions_tolua(L, cb_ctx);
+
+		if ((ret = lua_pcall(L, nargs, 0, err_idx)) != 0) {
+			msg_err("call to lua_blacklist_cbref "
+					"script failed (%d): %s",
+					ret, lua_tostring(L, -1));
+		}
+
+		lua_settop(L, 0);
+	}
+}
+
+/*
+ * Backwards-compatible wrapper that calls the enhanced handler
+ */
 static void
 rspamd_fuzzy_maybe_call_blacklisted(struct rspamd_fuzzy_storage_ctx *ctx,
 									rspamd_inet_addr_t *addr,
 									const char *reason)
 {
-	if (ctx->lua_blacklist_handlers != NULL) {
-		struct rspamd_lua_fuzzy_script *cur;
-		LL_FOREACH(ctx->lua_blacklist_handlers, cur)
-		{
-			lua_State *L = ctx->cfg->lua_state;
-			int err_idx, ret;
-
-			lua_pushcfunction(L, &rspamd_lua_traceback);
-			err_idx = lua_gettop(L);
-			lua_rawgeti(L, LUA_REGISTRYINDEX, cur->cbref);
-			/* client IP */
-			rspamd_lua_ip_push(L, addr);
-			/* block reason */
-			lua_pushstring(L, reason);
-
-			if ((ret = lua_pcall(L, 2, 0, err_idx)) != 0) {
-				msg_err("call to lua_blacklist_cbref "
-						"script failed (%d): %s",
-						ret, lua_tostring(L, -1));
-			}
-
-			lua_settop(L, 0);
-		}
+	if (ctx->lua_blacklist_handlers == NULL) {
+		return;
 	}
+
+	struct rspamd_ratelimit_callback_ctx cb_ctx = {
+		.addr = addr,
+		.reason = reason,
+		.type = g_strcmp0(reason, "blacklisted") == 0 ? RATELIMIT_EVENT_BLACKLIST : RATELIMIT_EVENT_EXISTING,
+		.bucket = NULL,
+		.max_burst = NAN,
+		.max_rate = NAN,
+		.session = NULL,
+	};
+	rspamd_fuzzy_call_ratelimit_handlers(ctx, &cb_ctx);
 }
 
 static gboolean
@@ -1840,11 +2041,33 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 					}
 				}
 
-				rspamd_fuzzy_maybe_call_blacklisted(session->ctx, session->addr, "ratelimit");
+				if (session->ctx->lua_blacklist_handlers) {
+					struct rspamd_ratelimit_callback_ctx cb_ctx = {
+						.addr = session->addr,
+						.reason = "ratelimit",
+						.type = RATELIMIT_EVENT_NEW,
+						.bucket = session->key->rl_bucket,
+						.max_burst = session->key->burst,
+						.max_rate = session->key->rate,
+						.session = session,
+					};
+					rspamd_fuzzy_call_ratelimit_handlers(session->ctx, &cb_ctx);
+				}
 				is_rate_allowed = session->ctx->ratelimit_log_only ? true : false;
 			}
 			else if (res == ratelimit_existing) {
-				rspamd_fuzzy_maybe_call_blacklisted(session->ctx, session->addr, "ratelimit");
+				if (session->ctx->lua_blacklist_handlers) {
+					struct rspamd_ratelimit_callback_ctx cb_ctx = {
+						.addr = session->addr,
+						.reason = "ratelimit",
+						.type = RATELIMIT_EVENT_EXISTING,
+						.bucket = session->key->rl_bucket,
+						.max_burst = session->key->burst,
+						.max_rate = session->key->rate,
+						.session = session,
+					};
+					rspamd_fuzzy_call_ratelimit_handlers(session->ctx, &cb_ctx);
+				}
 				is_rate_allowed = session->ctx->ratelimit_log_only ? true : false;
 			}
 		}
@@ -2969,7 +3192,18 @@ rspamd_fuzzy_control_blocked(struct rspamd_main *rspamd_main,
 				msg_info("propagating ratelimiting %s, %.1f max elts",
 						 rspamd_inet_address_to_string(addr),
 						 ctx->leaky_bucket_burst);
-				rspamd_fuzzy_maybe_call_blacklisted(ctx, addr, "ratelimit");
+				if (ctx->lua_blacklist_handlers) {
+					struct rspamd_ratelimit_callback_ctx cb_ctx = {
+						.addr = addr,
+						.reason = "ratelimit",
+						.type = RATELIMIT_EVENT_NEW,
+						.bucket = elt,
+						.max_burst = ctx->leaky_bucket_burst,
+						.max_rate = ctx->leaky_bucket_rate,
+						.session = NULL,
+					};
+					rspamd_fuzzy_call_ratelimit_handlers(ctx, &cb_ctx);
+				}
 			}
 
 			rspamd_inet_address_free(addr);
@@ -2989,7 +3223,18 @@ rspamd_fuzzy_control_blocked(struct rspamd_main *rspamd_main,
 			msg_info("propagating ratelimiting %s, %.1f max elts",
 					 rspamd_inet_address_to_string(addr),
 					 ctx->leaky_bucket_burst);
-			rspamd_fuzzy_maybe_call_blacklisted(ctx, addr, "ratelimit");
+			if (ctx->lua_blacklist_handlers) {
+				struct rspamd_ratelimit_callback_ctx cb_ctx = {
+					.addr = addr,
+					.reason = "ratelimit",
+					.type = RATELIMIT_EVENT_NEW,
+					.bucket = elt,
+					.max_burst = ctx->leaky_bucket_burst,
+					.max_rate = ctx->leaky_bucket_rate,
+					.session = NULL,
+				};
+				rspamd_fuzzy_call_ratelimit_handlers(ctx, &cb_ctx);
+			}
 		}
 	}
 
