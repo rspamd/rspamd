@@ -3235,20 +3235,29 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 			}
 
 			/*
-			 * Reset match_type to PCRE for all regexps that were using hyperscan.
-			 * This must be done BEFORE freeing hs_ids, as we need to iterate over them.
-			 * If we don't reset and reload fails, regexps will have match_type=HYPERSCAN
-			 * but hs_scratch will be NULL, causing assertion failure.
+			 * Reset match_type to PCRE for all regexps in this class.
+			 * We iterate re_class->re (the hash table of regexps) rather than
+			 * hs_ids because after config reload the hs_ids may point to different
+			 * regexps in cache->re. By iterating the actual regexps in this class,
+			 * we ensure we reset the correct cache_elts.
 			 */
-			if (re_class->hs_ids) {
-				for (unsigned int j = 0; j < re_class->nhs; j++) {
-					struct rspamd_re_cache_elt *elt;
-					int id = re_class->hs_ids[j];
-					if (id >= 0 && (unsigned int) id < cache->re->len) {
-						elt = g_ptr_array_index(cache->re, id);
+			{
+				GHashTableIter class_it;
+				gpointer class_k, class_v;
+
+				g_hash_table_iter_init(&class_it, re_class->re);
+				while (g_hash_table_iter_next(&class_it, &class_k, &class_v)) {
+					rspamd_regexp_t *class_re = class_v;
+					uint64_t re_cache_id = rspamd_regexp_get_cache_id(class_re);
+
+					if (re_cache_id != RSPAMD_INVALID_ID && re_cache_id < cache->re->len) {
+						struct rspamd_re_cache_elt *elt = g_ptr_array_index(cache->re, re_cache_id);
 						elt->match_type = RSPAMD_RE_CACHE_PCRE;
 					}
 				}
+			}
+
+			if (re_class->hs_ids) {
 				g_free(re_class->hs_ids);
 			}
 
@@ -3298,11 +3307,10 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 			}
 
 			/*
-			 * Now find hyperscan elts that are successfully compiled and
-			 * specify that they should be matched using hyperscan.
-			 * We must verify that each ID still points to a regexp that
-			 * belongs to this re_class, as indices can become stale if
-			 * regexps were reordered since compilation.
+			 * First validate all IDs point to regexps in this re_class.
+			 * We must do validation BEFORE setting any match_types, otherwise if
+			 * validation fails mid-loop, some regexps will have match_type=HYPERSCAN
+			 * but hs_scratch will be NULL.
 			 */
 			for (i = 0; i < n; i++) {
 				g_assert((int) cache->re->len > hs_ids[i] && hs_ids[i] >= 0);
@@ -3324,6 +3332,13 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 					all_valid = FALSE;
 					goto next_class;
 				}
+			}
+
+			/*
+			 * All IDs validated - now set match types.
+			 */
+			for (i = 0; i < n; i++) {
+				elt = g_ptr_array_index(cache->re, hs_ids[i]);
 
 				if (hs_flags[i] & HS_FLAG_PREFILTER) {
 					elt->match_type = RSPAMD_RE_CACHE_HYPERSCAN_PRE;
@@ -3511,18 +3526,29 @@ rspamd_re_cache_apply_hyperscan_blob(struct rspamd_re_cache *cache,
 		re_class->hs_db = NULL;
 	}
 	/*
-	 * Reset match_type to PCRE for all regexps that were using hyperscan.
-	 * This must be done BEFORE freeing hs_ids. If we don't reset and reload
-	 * fails, regexps will have match_type=HYPERSCAN but hs_scratch will be NULL.
+	 * Reset match_type to PCRE for all regexps in this class.
+	 * We iterate re_class->re (the hash table of regexps) rather than
+	 * hs_ids because after config reload the hs_ids may point to different
+	 * regexps in cache->re. By iterating the actual regexps in this class,
+	 * we ensure we reset the correct cache_elts.
 	 */
-	if (re_class->hs_ids) {
-		for (unsigned int i = 0; i < (unsigned int) re_class->nhs; i++) {
-			int id = re_class->hs_ids[i];
-			if (id >= 0 && (unsigned int) id < cache->re->len) {
-				struct rspamd_re_cache_elt *elt = g_ptr_array_index(cache->re, id);
-				elt->match_type = RSPAMD_RE_CACHE_PCRE;
+	{
+		GHashTableIter class_it;
+		gpointer class_k, class_v;
+
+		g_hash_table_iter_init(&class_it, re_class->re);
+		while (g_hash_table_iter_next(&class_it, &class_k, &class_v)) {
+			rspamd_regexp_t *class_re = class_v;
+			uint64_t re_cache_id = rspamd_regexp_get_cache_id(class_re);
+
+			if (re_cache_id != RSPAMD_INVALID_ID && re_cache_id < cache->re->len) {
+				struct rspamd_re_cache_elt *class_elt = g_ptr_array_index(cache->re, re_cache_id);
+				class_elt->match_type = RSPAMD_RE_CACHE_PCRE;
 			}
 		}
+	}
+
+	if (re_class->hs_ids) {
 		g_free(re_class->hs_ids);
 		re_class->hs_ids = NULL;
 	}
@@ -3553,9 +3579,10 @@ rspamd_re_cache_apply_hyperscan_blob(struct rspamd_re_cache *cache,
 	re_class->nhs = (int) n;
 
 	/*
-	 * Now apply match types - this must be done AFTER scratch is allocated
-	 * so that other workers don't try to use hyperscan with NULL scratch.
-	 * Also verify each ID points to a regexp in this re_class.
+	 * First validate all IDs point to regexps in this re_class.
+	 * We must do validation BEFORE setting any match_types, otherwise if
+	 * validation fails mid-loop, some regexps will have match_type=HYPERSCAN
+	 * but hs_scratch will be NULL.
 	 */
 	for (unsigned int i = 0; i < n; i++) {
 		if ((int) ids[i] < 0 || ids[i] >= (unsigned int) cache->re->len) {
@@ -3578,6 +3605,18 @@ rspamd_re_cache_apply_hyperscan_blob(struct rspamd_re_cache *cache,
 			/* Redis cache entry will expire or be overwritten on next compilation */
 			return FALSE;
 		}
+	}
+
+	/*
+	 * All IDs validated - now apply match types.
+	 * This must be done AFTER scratch is allocated so that other workers
+	 * don't try to use hyperscan with NULL scratch.
+	 */
+	for (unsigned int i = 0; i < n; i++) {
+		if ((int) ids[i] < 0 || ids[i] >= (unsigned int) cache->re->len) {
+			continue;
+		}
+		struct rspamd_re_cache_elt *elt = g_ptr_array_index(cache->re, ids[i]);
 
 		if (flags[i] & HS_FLAG_PREFILTER) {
 			elt->match_type = RSPAMD_RE_CACHE_HYPERSCAN_PRE;
