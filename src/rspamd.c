@@ -58,6 +58,7 @@
 #ifdef WITH_HYPERSCAN
 #include "libserver/hyperscan_tools.h"
 #include "libserver/maps/map_helpers.h"
+#include "libutil/multipattern.h"
 #endif
 
 #include "rspamd_simdutf.h"
@@ -343,7 +344,8 @@ reread_config(struct rspamd_main *rspamd_main)
 		rspamd_log_close(old_logger);
 		msg_info_main("replacing config");
 #ifdef WITH_HYPERSCAN
-		/* Clear pending regexp maps before releasing old config to avoid use-after-free */
+		/* Clear pending multipatterns and regexp maps before releasing old config to avoid use-after-free */
+		rspamd_multipattern_clear_pending();
 		rspamd_regexp_map_clear_pending();
 #endif
 		CFG_REF_RELEASE(old_cfg);

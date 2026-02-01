@@ -64,6 +64,16 @@ define(["jquery", "app/common", "app/libft"],
                 headers: scanTextHeaders,
                 success: function (neighbours_status) {
                     const json = neighbours_status[0].data;
+
+                    // Extract fuzzy_hashes from milter headers if available
+                    const fuzzyHeader = json.milter?.add_headers?.["X-Rspamd-Fuzzy"];
+                    if (fuzzyHeader?.value) {
+                        json.fuzzy_hashes = fuzzyHeader.value
+                            .split(",")
+                            .map((h) => h.trim())
+                            .filter((h) => h.length > 0);
+                    }
+
                     if (json.action) {
                         common.alertMessage("alert-success", "Data successfully scanned");
 
@@ -93,6 +103,7 @@ define(["jquery", "app/common", "app/libft"],
                                             enable_disable_scan_btn();
                                             $("#cleanScanHistory, #scan .ft-columns-dropdown .btn-dropdown-apply")
                                                 .removeAttr("disabled");
+                                            libft.bindFuzzyHashButtons("scan");
                                             $("html, body").animate({
                                                 scrollTop: $("#scanResult").offset().top
                                             }, 1000);

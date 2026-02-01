@@ -1489,6 +1489,7 @@ struct rspamd_multipattern_hs_cache_async_ctx {
 	char *cache_key;
 	rspamd_multipattern_hs_cache_cb_t cb;
 	void *ud;
+	gboolean callback_processed;
 };
 
 static void
@@ -1511,6 +1512,11 @@ rspamd_multipattern_hs_cache_save_cb(gboolean success,
 
 	(void) data;
 	(void) len;
+
+	if (ctx->callback_processed) {
+		return;
+	}
+	ctx->callback_processed = TRUE;
 
 	if (success) {
 		msg_info("saved hyperscan multipattern cache %s to Lua backend",

@@ -3037,17 +3037,21 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 		else {
 			if (!rspamd_cryptobox_verify_evp_rsa(nid, ctx->b, ctx->blen, raw_digest, dlen,
 												 key->specific.key_ssl.key_evp, &err)) {
+				const char *sig_alg_name = (ctx->sig_alg == DKIM_SIGN_RSASHA1) ? "rsa-sha1" : (ctx->sig_alg == DKIM_SIGN_RSASHA256) ? "rsa-sha256"
+																						  : (ctx->sig_alg == DKIM_SIGN_RSASHA512)   ? "rsa-sha512"
+																																	: "unknown";
 
 				if (err == NULL) {
-					msg_debug_dkim("headers rsa verify failed");
+					msg_debug_dkim("headers rsa verify failed for %s signature", sig_alg_name);
 					ERR_clear_error();
 					res->rcode = DKIM_REJECT;
 					res->fail_reason = "headers rsa verify failed";
 
 					msg_info_dkim(
-						"%s: headers RSA verification failure; "
+						"%s: headers RSA verification failure (alg=%s); "
 						"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
 						rspamd_dkim_type_to_string(ctx->common.type),
+						sig_alg_name,
 						(int) (body_end - body_start), ctx->common.body_canonicalised,
 						ctx->common.headers_canonicalised,
 						ctx->domain, ctx->selector,
@@ -3057,11 +3061,17 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 				else {
 					res->rcode = DKIM_PERM_ERROR;
 					res->fail_reason = "openssl internal error";
-					msg_err_dkim("internal OpenSSL error: %s", err->message);
+					/*
+					 * On RHEL/CentOS 10+, SHA-1 signatures may be blocked by crypto-policies.
+					 * Include the algorithm in the error to help diagnose.
+					 */
+					msg_err_dkim("OpenSSL error for %s: %s%s", sig_alg_name, err->message,
+								 (ctx->sig_alg == DKIM_SIGN_RSASHA1) ? " (SHA-1 may be blocked by system crypto-policies on RHEL/CentOS)" : "");
 					msg_info_dkim(
-						"%s: headers RSA verification failure due to OpenSSL internal error; "
+						"%s: headers RSA verification failure due to OpenSSL error (alg=%s); "
 						"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
 						rspamd_dkim_type_to_string(ctx->common.type),
+						sig_alg_name,
 						(int) (body_end - body_start), ctx->common.body_canonicalised,
 						ctx->common.headers_canonicalised,
 						ctx->domain, ctx->selector,
@@ -3885,6 +3895,7 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 			g_string_free(hdr, true);
 			msg_err_task("rsa sign error: %s",
 						 ERR_error_string(ERR_get_error(), NULL));
+			EVP_PKEY_CTX_free(pctx);
 
 			return NULL;
 		}
@@ -3892,6 +3903,7 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 			g_string_free(hdr, true);
 			msg_err_task("rsa sign error: %s",
 						 ERR_error_string(ERR_get_error(), NULL));
+			EVP_PKEY_CTX_free(pctx);
 
 			return NULL;
 		}
@@ -3899,6 +3911,7 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 			g_string_free(hdr, true);
 			msg_err_task("rsa sign error: %s",
 						 ERR_error_string(ERR_get_error(), NULL));
+			EVP_PKEY_CTX_free(pctx);
 
 			return NULL;
 		}
@@ -3907,9 +3920,11 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 			g_string_free(hdr, true);
 			msg_err_task("rsa sign error: %s",
 						 ERR_error_string(ERR_get_error(), NULL));
+			EVP_PKEY_CTX_free(pctx);
 
 			return NULL;
 		}
+		EVP_PKEY_CTX_free(pctx);
 	}
 #ifdef HAVE_ED25519
 	else if (ctx->key->type == RSPAMD_DKIM_KEY_EDDSA) {

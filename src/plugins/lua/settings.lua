@@ -120,7 +120,7 @@ local function check_query_settings(task)
   if query_set then
 
     local parser = ucl.parser()
-    local res, err = parser:parse_text(query_set)
+    local res, err = parser:parse_text(tostring(query_set))
     if res then
       if settings_id then
         rspamd_logger.warnx(task, "both settings-id '%s' and settings headers are presented, ignore settings-id; ",
@@ -401,15 +401,20 @@ local function check_settings(task)
 
             applied = true
           elseif s.rule.external_map then
-            local external_map = s.rule.external_map
-            local selector_result = external_map.selector(task)
-
-            if selector_result then
-              external_map.map:get_key(selector_result, nil, task)
-              -- No more selection logic
-              return
+            -- Skip external map query if settings were provided via header
+            if query_apply then
+              lua_util.debugm(N, task, "skip external map %s: settings provided via header", s.name)
             else
-              rspamd_logger.infox(task, "cannot query selector to make external map request")
+              local external_map = s.rule.external_map
+              local selector_result = external_map.selector(task)
+
+              if selector_result then
+                external_map.map:get_key(selector_result, nil, task)
+                -- No more selection logic
+                return
+              else
+                rspamd_logger.infox(task, "cannot query selector to make external map request")
+              end
             end
           end
           if s.rule['symbols'] then
@@ -971,7 +976,7 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
       return function(task)
         local rh = task:get_request_header(hname)
         if rh then
-          return { rh }
+          return { tostring(rh) }
         end
         return {}
       end

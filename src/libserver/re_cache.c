@@ -2160,6 +2160,8 @@ struct rspamd_re_cache_hs_compile_cbdata {
 	gboolean silent;
 	unsigned int total;
 	struct rspamd_worker *worker;
+	struct ev_loop *event_loop;
+	ev_timer *timer;
 
 	void (*cb)(unsigned int ncompiled, GError *err, void *cbd);
 
@@ -2168,6 +2170,7 @@ struct rspamd_re_cache_hs_compile_cbdata {
 	/* Async state */
 	struct rspamd_re_class *current_class;
 	enum rspamd_re_cache_compile_state state;
+	ref_entry_t ref;
 };
 
 struct rspamd_re_cache_async_ctx {
@@ -2175,6 +2178,7 @@ struct rspamd_re_cache_async_ctx {
 	struct ev_loop *loop;
 	ev_timer *w;
 	int n;
+	gboolean callback_processed;
 };
 
 static void
@@ -2182,12 +2186,37 @@ rspamd_re_cache_compile_err(EV_P_ ev_timer *w, GError *err,
 							struct rspamd_re_cache_hs_compile_cbdata *cbdata, bool is_fatal);
 
 static void
+rspamd_re_cache_hs_compile_cbdata_dtor(void *p)
+{
+	struct rspamd_re_cache_hs_compile_cbdata *cbdata = p;
+
+	if (cbdata->timer && ev_is_active(cbdata->timer)) {
+		ev_timer_stop(cbdata->event_loop, cbdata->timer);
+	}
+	rspamd_heap_destroy(re_compile_queue, &cbdata->compile_queue);
+	g_free(cbdata->timer);
+	g_free(cbdata);
+}
+
+static void
 rspamd_re_cache_exists_cb(gboolean success, const unsigned char *data, gsize len, const char *err, void *ud)
 {
 	struct rspamd_re_cache_async_ctx *ctx = ud;
-	struct rspamd_re_cache_hs_compile_cbdata *cbdata = ctx->cbdata;
+	struct rspamd_re_cache_hs_compile_cbdata *cbdata;
 	const gboolean lua_backend = rspamd_hs_cache_has_lua_backend();
 	char path[PATH_MAX];
+
+	if (ctx->callback_processed) {
+		return;
+	}
+	ctx->callback_processed = TRUE;
+	cbdata = ctx->cbdata;
+
+	if (cbdata->worker && cbdata->worker->state != rspamd_worker_state_running) {
+		g_free(ctx);
+		REF_RELEASE(cbdata);
+		return;
+	}
 
 	if (success && len > 0) {
 		/* Exists */
@@ -2241,20 +2270,33 @@ rspamd_re_cache_exists_cb(gboolean success, const unsigned char *data, gsize len
 		cbdata->state = RSPAMD_RE_CACHE_COMPILE_STATE_COMPILING;
 	}
 
-	ev_timer_again(ctx->loop, ctx->w);
+	ev_timer_again(cbdata->event_loop, cbdata->timer);
 	g_free(ctx);
+	REF_RELEASE(cbdata);
 }
 
 static void
 rspamd_re_cache_save_cb(gboolean success, const unsigned char *data, gsize len, const char *err, void *ud)
 {
 	struct rspamd_re_cache_async_ctx *ctx = ud;
-	struct rspamd_re_cache_hs_compile_cbdata *cbdata = ctx->cbdata;
+	struct rspamd_re_cache_hs_compile_cbdata *cbdata;
+
+	if (ctx->callback_processed) {
+		return;
+	}
+	ctx->callback_processed = TRUE;
+	cbdata = ctx->cbdata;
+
+	if (cbdata->worker && cbdata->worker->state != rspamd_worker_state_running) {
+		g_free(ctx);
+		REF_RELEASE(cbdata);
+		return;
+	}
 
 	if (!success) {
 		GError *gerr = g_error_new(rspamd_re_cache_quark(), EINVAL,
 								   "backend save failed: %s", err ? err : "unknown error");
-		rspamd_re_cache_compile_err(ctx->loop, ctx->w, gerr, cbdata, false);
+		rspamd_re_cache_compile_err(cbdata->event_loop, cbdata->timer, gerr, cbdata, false);
 	}
 	else {
 		struct rspamd_re_class *re_class = cbdata->current_class;
@@ -2291,8 +2333,9 @@ rspamd_re_cache_save_cb(gboolean success, const unsigned char *data, gsize len, 
 	cbdata->state = RSPAMD_RE_CACHE_COMPILE_STATE_INIT;
 	cbdata->current_class = NULL;
 
-	ev_timer_again(ctx->loop, ctx->w);
+	ev_timer_again(cbdata->event_loop, cbdata->timer);
 	g_free(ctx);
+	REF_RELEASE(cbdata);
 }
 
 static void
@@ -2301,13 +2344,10 @@ rspamd_re_cache_compile_err(EV_P_ ev_timer *w, GError *err,
 {
 	if (is_fatal) {
 		cbdata->cb(cbdata->total, err, cbdata->cbd);
-		ev_timer_stop(EV_A_ w);
-		g_free(w);
-		g_free(cbdata);
+		REF_RELEASE(cbdata);
 	}
 	else {
 		msg_err("hyperscan compilation error: %s", err->message);
-		/* Continue compilation */
 		cbdata->state = RSPAMD_RE_CACHE_COMPILE_STATE_INIT;
 		cbdata->current_class = NULL;
 		ev_timer_again(EV_A_ w);
@@ -2344,12 +2384,8 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 
 	/* Stop if worker is terminating */
 	if (cbdata->worker && cbdata->worker->state != rspamd_worker_state_running) {
-		ev_timer_stop(EV_A_ w);
 		cbdata->cb(cbdata->total, NULL, cbdata->cbd);
-		rspamd_heap_destroy(re_compile_queue, &cbdata->compile_queue);
-		g_free(w);
-		g_free(cbdata);
-
+		REF_RELEASE(cbdata);
 		return;
 	}
 
@@ -2362,12 +2398,8 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 			rspamd_heap_pop(re_compile_queue, &cbdata->compile_queue);
 		if (elt == NULL) {
 			/* All done */
-			ev_timer_stop(EV_A_ w);
 			cbdata->cb(cbdata->total, NULL, cbdata->cbd);
-			rspamd_heap_destroy(re_compile_queue, &cbdata->compile_queue);
-			g_free(w);
-			g_free(cbdata);
-
+			REF_RELEASE(cbdata);
 			return;
 		}
 
@@ -2378,7 +2410,7 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 
 	if (cbdata->state == RSPAMD_RE_CACHE_COMPILE_STATE_CHECK_EXISTS) {
 		/* Check via Lua backend (handles file, redis, http) */
-		struct rspamd_re_cache_async_ctx *ctx = g_malloc(sizeof(*ctx));
+		struct rspamd_re_cache_async_ctx *ctx = g_malloc0(sizeof(*ctx));
 		ctx->cbdata = cbdata;
 		ctx->loop = loop;
 		ctx->w = w;
@@ -2392,10 +2424,14 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 			rspamd_snprintf(entity_name, sizeof(entity_name), "re_class:%s",
 							rspamd_re_cache_type_to_string(re_class->type));
 		}
+		/*
+		 * Stop timer while async operation is pending to prevent
+		 * multiple concurrent exists_async calls for the same class.
+		 * The callback will restart the timer with ev_timer_again.
+		 */
+		ev_timer_stop(EV_A_ w);
+		REF_RETAIN(cbdata);
 		rspamd_hs_cache_lua_exists_async(re_class->hash, entity_name, rspamd_re_cache_exists_cb, ctx);
-		/* Don't stop timer here - the callback (rspamd_re_cache_exists_cb) handles
-		 * restarting the timer. For file backend the callback runs synchronously
-		 * within exists_async, so stopping here would undo the timer restart. */
 		return;
 	}
 
@@ -2621,7 +2657,7 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 			offset += iov[j].iov_len;
 		}
 
-		struct rspamd_re_cache_async_ctx *ctx = g_malloc(sizeof(*ctx));
+		struct rspamd_re_cache_async_ctx *ctx = g_malloc0(sizeof(*ctx));
 		ctx->cbdata = cbdata;
 		ctx->loop = loop;
 		ctx->w = w;
@@ -2637,14 +2673,18 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 			rspamd_snprintf(entity_name, sizeof(entity_name), "re_class:%s",
 							rspamd_re_cache_type_to_string(re_class->type));
 		}
+		/*
+		 * Stop timer while async save is pending to prevent
+		 * re-entry into the compilation state machine.
+		 * The callback will restart the timer with ev_timer_again.
+		 */
+		ev_timer_stop(EV_A_ w);
+		REF_RETAIN(cbdata);
 		rspamd_hs_cache_lua_save_async(re_class->hash, entity_name, combined, total_len, rspamd_re_cache_save_cb, ctx);
 
 		g_free(combined);
 		CLEANUP_ALLOCATED(false);
 		g_free(hs_serialized);
-		/* Don't stop timer here - the callback (rspamd_re_cache_save_cb) handles
-		 * restarting the timer. For file backend the callback runs synchronously
-		 * within save_async, so stopping here would undo the timer restart. */
 		return;
 	}
 	else {
@@ -2735,8 +2775,11 @@ int rspamd_re_cache_compile_hyperscan(struct rspamd_re_cache *cache,
 	cbdata->silent = silent;
 	cbdata->total = 0;
 	cbdata->worker = worker;
+	cbdata->event_loop = event_loop;
 	timer = g_malloc0(sizeof(*timer));
 	timer->data = (void *) cbdata;
+	cbdata->timer = timer;
+	REF_INIT_RETAIN(cbdata, rspamd_re_cache_hs_compile_cbdata_dtor);
 
 	ev_timer_init(timer, rspamd_re_cache_compile_timer_cb,
 				  timer_interval, timer_interval);
@@ -3191,11 +3234,35 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 				rspamd_hyperscan_free(re_class->hs_db, false);
 			}
 
+			/*
+			 * Reset match_type to PCRE for all regexps in this class.
+			 * We iterate re_class->re (the hash table of regexps) rather than
+			 * hs_ids because after config reload the hs_ids may point to different
+			 * regexps in cache->re. By iterating the actual regexps in this class,
+			 * we ensure we reset the correct cache_elts.
+			 */
+			{
+				GHashTableIter class_it;
+				gpointer class_k, class_v;
+
+				g_hash_table_iter_init(&class_it, re_class->re);
+				while (g_hash_table_iter_next(&class_it, &class_k, &class_v)) {
+					rspamd_regexp_t *class_re = class_v;
+					uint64_t re_cache_id = rspamd_regexp_get_cache_id(class_re);
+
+					if (re_cache_id != RSPAMD_INVALID_ID && re_cache_id < cache->re->len) {
+						struct rspamd_re_cache_elt *elt = g_ptr_array_index(cache->re, re_cache_id);
+						elt->match_type = RSPAMD_RE_CACHE_PCRE;
+					}
+				}
+			}
+
 			if (re_class->hs_ids) {
 				g_free(re_class->hs_ids);
 			}
 
 			re_class->hs_ids = NULL;
+			re_class->nhs = 0;
 			re_class->hs_scratch = NULL;
 			re_class->hs_db = NULL;
 			munmap(map, st.st_size);
@@ -3240,11 +3307,37 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 			}
 
 			/*
-			 * Now find hyperscan elts that are successfully compiled and
-			 * specify that they should be matched using hyperscan
+			 * First validate all IDs point to regexps in this re_class.
+			 * We must do validation BEFORE setting any match_types, otherwise if
+			 * validation fails mid-loop, some regexps will have match_type=HYPERSCAN
+			 * but hs_scratch will be NULL.
 			 */
 			for (i = 0; i < n; i++) {
 				g_assert((int) cache->re->len > hs_ids[i] && hs_ids[i] >= 0);
+				elt = g_ptr_array_index(cache->re, hs_ids[i]);
+
+				/* Verify the regexp at this ID belongs to the current re_class */
+				if (rspamd_regexp_get_class(elt->re) != re_class) {
+					msg_info_re_cache("stale hyperscan file %s: id %d points to "
+									  "wrong re_class, removing to trigger recompilation",
+									  path, hs_ids[i]);
+					g_free(hs_ids);
+					g_free(hs_flags);
+					rspamd_hyperscan_free(re_class->hs_db, true);
+					re_class->hs_ids = NULL;
+					re_class->hs_scratch = NULL;
+					re_class->hs_db = NULL;
+					/* Remove stale file to trigger recompilation by hs_helper */
+					unlink(path);
+					all_valid = FALSE;
+					goto next_class;
+				}
+			}
+
+			/*
+			 * All IDs validated - now set match types.
+			 */
+			for (i = 0; i < n; i++) {
 				elt = g_ptr_array_index(cache->re, hs_ids[i]);
 
 				if (hs_flags[i] & HS_FLAG_PREFILTER) {
@@ -3279,6 +3372,7 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 			all_valid = FALSE;
 			continue;
 		}
+	next_class:;
 	}
 
 	if (has_valid) {
@@ -3431,31 +3525,39 @@ rspamd_re_cache_apply_hyperscan_blob(struct rspamd_re_cache *cache,
 		rspamd_hyperscan_free(re_class->hs_db, false);
 		re_class->hs_db = NULL;
 	}
+	/*
+	 * Reset match_type to PCRE for all regexps in this class.
+	 * We iterate re_class->re (the hash table of regexps) rather than
+	 * hs_ids because after config reload the hs_ids may point to different
+	 * regexps in cache->re. By iterating the actual regexps in this class,
+	 * we ensure we reset the correct cache_elts.
+	 */
+	{
+		GHashTableIter class_it;
+		gpointer class_k, class_v;
+
+		g_hash_table_iter_init(&class_it, re_class->re);
+		while (g_hash_table_iter_next(&class_it, &class_k, &class_v)) {
+			rspamd_regexp_t *class_re = class_v;
+			uint64_t re_cache_id = rspamd_regexp_get_cache_id(class_re);
+
+			if (re_cache_id != RSPAMD_INVALID_ID && re_cache_id < cache->re->len) {
+				struct rspamd_re_cache_elt *class_elt = g_ptr_array_index(cache->re, re_cache_id);
+				class_elt->match_type = RSPAMD_RE_CACHE_PCRE;
+			}
+		}
+	}
+
 	if (re_class->hs_ids) {
 		g_free(re_class->hs_ids);
 		re_class->hs_ids = NULL;
 	}
+	re_class->nhs = 0;
 
-	/* Apply match types */
-	for (unsigned int i = 0; i < n; i++) {
-		if ((int) ids[i] < 0 || ids[i] >= (unsigned int) cache->re->len) {
-			continue;
-		}
-		struct rspamd_re_cache_elt *elt = g_ptr_array_index(cache->re, ids[i]);
-		if (flags[i] & HS_FLAG_PREFILTER) {
-			elt->match_type = RSPAMD_RE_CACHE_HYPERSCAN_PRE;
-		}
-		else {
-			elt->match_type = RSPAMD_RE_CACHE_HYPERSCAN;
-		}
-	}
-
-	/* Store ids */
-	re_class->hs_ids = g_malloc(sizeof(int) * n);
-	for (unsigned int i = 0; i < n; i++) {
-		re_class->hs_ids[i] = (int) ids[i];
-	}
-	re_class->nhs = (int) n;
+	/*
+	 * We must allocate scratch and set up the database BEFORE setting match_type
+	 * on the elements. If scratch allocation fails, match_types remain PCRE.
+	 */
 	re_class->hs_db = hs_db;
 
 	if ((ret = hs_alloc_scratch(rspamd_hyperscan_get_database(re_class->hs_db),
@@ -3466,10 +3568,62 @@ rspamd_re_cache_apply_hyperscan_blob(struct rspamd_re_cache *cache,
 		}
 		rspamd_hyperscan_free(re_class->hs_db, true);
 		re_class->hs_db = NULL;
-		g_free(re_class->hs_ids);
-		re_class->hs_ids = NULL;
-		re_class->nhs = 0;
 		return FALSE;
+	}
+
+	/* Store ids */
+	re_class->hs_ids = g_malloc(sizeof(int) * n);
+	for (unsigned int i = 0; i < n; i++) {
+		re_class->hs_ids[i] = (int) ids[i];
+	}
+	re_class->nhs = (int) n;
+
+	/*
+	 * First validate all IDs point to regexps in this re_class.
+	 * We must do validation BEFORE setting any match_types, otherwise if
+	 * validation fails mid-loop, some regexps will have match_type=HYPERSCAN
+	 * but hs_scratch will be NULL.
+	 */
+	for (unsigned int i = 0; i < n; i++) {
+		if ((int) ids[i] < 0 || ids[i] >= (unsigned int) cache->re->len) {
+			continue;
+		}
+		struct rspamd_re_cache_elt *elt = g_ptr_array_index(cache->re, ids[i]);
+
+		/* Verify the regexp at this ID belongs to the current re_class */
+		if (rspamd_regexp_get_class(elt->re) != re_class) {
+			msg_info_re_cache("stale hyperscan cache for class %s: id %u points to "
+							  "wrong re_class, will use PCRE until recompilation",
+							  re_class->hash, ids[i]);
+			hs_free_scratch(re_class->hs_scratch);
+			re_class->hs_scratch = NULL;
+			rspamd_hyperscan_free(re_class->hs_db, true);
+			re_class->hs_db = NULL;
+			g_free(re_class->hs_ids);
+			re_class->hs_ids = NULL;
+			re_class->nhs = 0;
+			/* Redis cache entry will expire or be overwritten on next compilation */
+			return FALSE;
+		}
+	}
+
+	/*
+	 * All IDs validated - now apply match types.
+	 * This must be done AFTER scratch is allocated so that other workers
+	 * don't try to use hyperscan with NULL scratch.
+	 */
+	for (unsigned int i = 0; i < n; i++) {
+		if ((int) ids[i] < 0 || ids[i] >= (unsigned int) cache->re->len) {
+			continue;
+		}
+		struct rspamd_re_cache_elt *elt = g_ptr_array_index(cache->re, ids[i]);
+
+		if (flags[i] & HS_FLAG_PREFILTER) {
+			elt->match_type = RSPAMD_RE_CACHE_HYPERSCAN_PRE;
+		}
+		else {
+			elt->match_type = RSPAMD_RE_CACHE_HYPERSCAN;
+		}
 	}
 
 	return TRUE;
