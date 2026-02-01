@@ -1302,12 +1302,6 @@ gov.gy
 net.gy
 org.gy
 
-// Hercules : https://hercules.app
-// Submitted by Brendan Falk <security@hercules.app>
-onhercules.app
-hercules-app.com
-hercules-dev.com
-
 // hk : https://www.hkirc.hk
 // Submitted by registry <hk.tech@hkirc.hk>
 hk
@@ -5940,7 +5934,6 @@ com.sn
 edu.sn
 gouv.sn
 org.sn
-perso.sn
 univ.sn
 
 // so : http://sonic.so/policies/
@@ -7155,7 +7148,7 @@ org.zw
 
 // newGTLDs
 
-// List of new gTLDs imported from https://www.icann.org/resources/registries/gtlds/v2/gtlds.json on 2025-12-06T15:17:27Z
+// List of new gTLDs imported from https://www.icann.org/resources/registries/gtlds/v2/gtlds.json on 2026-01-29T15:35:06Z
 // This list is auto-generated, don't edit it manually.
 // aaa : American Automobile Association, Inc.
 // https://www.iana.org/domains/root/db/aaa.html
@@ -10093,7 +10086,7 @@ quest
 // https://www.iana.org/domains/root/db/racing.html
 racing
 
-// radio : European Broadcasting Union (EBU)
+// radio : Digity, LLC
 // https://www.iana.org/domains/root/db/radio.html
 radio
 
@@ -10797,7 +10790,7 @@ tokyo
 // https://www.iana.org/domains/root/db/tools.html
 tools
 
-// top : .TOP Registry
+// top : Hong Kong Zhongze International Limited
 // https://www.iana.org/domains/root/db/top.html
 top
 
@@ -11045,7 +11038,7 @@ watch
 // https://www.iana.org/domains/root/db/watches.html
 watches
 
-// weather : International Business Machines Corporation
+// weather : The Weather Company, LLC
 // https://www.iana.org/domains/root/db/weather.html
 weather
 
@@ -11870,7 +11863,7 @@ cloudfront.net
 
 // Amazon Cognito
 // Submitted by AWS Security <psl-maintainers@amazon.com>
-// Reference: e7c02dc1-02f4-4a23-bde3-a8527c830127
+// Reference: d7d4a954-976e-403e-a010-de9ed0cfbbd1
 auth.af-south-1.amazoncognito.com
 auth.ap-east-1.amazoncognito.com
 auth.ap-northeast-1.amazoncognito.com
@@ -11909,6 +11902,7 @@ auth.us-west-1.amazoncognito.com
 auth-fips.us-west-1.amazoncognito.com
 auth.us-west-2.amazoncognito.com
 auth-fips.us-west-2.amazoncognito.com
+auth.cognito-idp.eusc-de-east-1.on.amazonwebservices.eu
 
 // Amazon EC2
 // Submitted by Luke Wells <psl-maintainers@amazon.com>
@@ -12132,7 +12126,7 @@ emrstudio-prod.us-west-2.amazonaws.com
 
 // Amazon S3
 // Submitted by AWS Security <psl-maintainers@amazon.com>
-// Reference: ada5c9df-55e1-4195-a1ce-732d6c81e357
+// Reference: 6f374c1c-1cc9-47de-8b2a-69ca56a3a3b6
 s3.dualstack.cn-north-1.amazonaws.com.cn
 s3-accesspoint.dualstack.cn-north-1.amazonaws.com.cn
 s3-website.dualstack.cn-north-1.amazonaws.com.cn
@@ -12398,6 +12392,7 @@ s3.dualstack.us-gov-east-1.amazonaws.com
 s3-accesspoint.dualstack.us-gov-east-1.amazonaws.com
 s3-accesspoint-fips.dualstack.us-gov-east-1.amazonaws.com
 s3-fips.dualstack.us-gov-east-1.amazonaws.com
+s3-website.dualstack.us-gov-east-1.amazonaws.com
 s3.us-gov-east-1.amazonaws.com
 s3-accesspoint.us-gov-east-1.amazonaws.com
 s3-accesspoint-fips.us-gov-east-1.amazonaws.com
@@ -12408,6 +12403,7 @@ s3.dualstack.us-gov-west-1.amazonaws.com
 s3-accesspoint.dualstack.us-gov-west-1.amazonaws.com
 s3-accesspoint-fips.dualstack.us-gov-west-1.amazonaws.com
 s3-fips.dualstack.us-gov-west-1.amazonaws.com
+s3-website.dualstack.us-gov-west-1.amazonaws.com
 s3.us-gov-west-1.amazonaws.com
 s3-accesspoint.us-gov-west-1.amazonaws.com
 s3-accesspoint-fips.us-gov-west-1.amazonaws.com
@@ -12718,7 +12714,7 @@ lambda-url.us-west-2.on.aws
 
 // AWS Transfer Family web apps
 // Submitted by AWS Security <psl-maintainers@amazon.com>
-// Reference: 57a658c4-8899-410c-aa24-5b01e4a178d2
+// Reference: 9265cdd3-f017-42ab-98bb-08bf427d3fc9
 transfer-webapp.af-south-1.on.aws
 transfer-webapp.ap-east-1.on.aws
 transfer-webapp.ap-northeast-1.on.aws
@@ -12731,6 +12727,7 @@ transfer-webapp.ap-southeast-2.on.aws
 transfer-webapp.ap-southeast-3.on.aws
 transfer-webapp.ap-southeast-4.on.aws
 transfer-webapp.ap-southeast-5.on.aws
+transfer-webapp.ap-southeast-7.on.aws
 transfer-webapp.ca-central-1.on.aws
 transfer-webapp.ca-west-1.on.aws
 transfer-webapp.eu-central-1.on.aws
@@ -12744,6 +12741,7 @@ transfer-webapp.eu-west-3.on.aws
 transfer-webapp.il-central-1.on.aws
 transfer-webapp.me-central-1.on.aws
 transfer-webapp.me-south-1.on.aws
+transfer-webapp.mx-central-1.on.aws
 transfer-webapp.sa-east-1.on.aws
 transfer-webapp.us-east-1.on.aws
 transfer-webapp.us-east-2.on.aws
@@ -12850,18 +12848,10 @@ myasustor.com
 // Submitted by Sam Smyth <devloop@atlassian.com>
 cdn.prod.atlassian-dev.net
 
-// Authentick UG (haftungsbeschränkt) : https://authentick.net
-// Submitted by Lukas Reschke <lukas@authentick.net>
-translated.page
-
 // AVM : https://avm.de
 // Submitted by Andreas Weise <a.weise@avm.de>
 myfritz.link
 myfritz.net
-
-// AVStack Pte. Ltd. : https://avstack.io
-// Submitted by Jasper Hugo <jasper@avstack.io>
-onavstack.net
 
 // AW AdvisorWebsites.com Software Inc : https://advisorwebsites.com
 // Submitted by James Kennedy <domains@advisorwebsites.com>
@@ -12983,6 +12973,10 @@ radio.fm
 cdn.bubble.io
 bubbleapps.io
 
+// bwCloud-OS : https://bwcloud-os.de/
+// Submitted by Klara Mall <dns@bwcloud-os.de>
+*.bwcloud-os-instance.de
+
 // Bytemark Hosting : https://www.bytemark.co.uk
 // Submitted by Paul Cammish <paul.cammish@bytemark.co.uk>
 uk0.bigv.io
@@ -13054,7 +13048,8 @@ com.se
 cx.ua
 
 // Civilized Discourse Construction Kit, Inc. : https://www.discourse.org/
-// Submitted by Rishabh Nambiar & Michael Brown <team@discourse.org>
+// Submitted by Rishabh Nambiar, Michael Brown, Rafael dos Santos Silva <team@discourse.org>
+discourse.diy
 discourse.group
 discourse.team
 
@@ -13211,6 +13206,10 @@ gov.ru
 int.ru
 mil.ru
 
+// CoreSpeed, Inc. : https://corespeed.io
+// Submitted by CoreSpeed Team <ops@corespeed.io>
+corespeed.app
+
 // COSIMO GmbH : http://www.cosimo.de
 // Submitted by Rene Marticke <rmarticke@cosimo.de>
 dyn.cosidns.de
@@ -13318,6 +13317,11 @@ dedyn.io
 // Submitted by Aavash Shrestha <aavash@deta.sh>
 deta.app
 deta.dev
+
+// Deuxfleurs : https://deuxfleurs.fr
+// Submitted by Aeddis Desauw <ca@deuxfleurs.fr>
+deuxfleurs.eu
+deuxfleurs.page
 
 // Developed Methods LLC : https://methods.dev
 // Submitted by Patrick Lorio <security@playit.gg>
@@ -14384,6 +14388,12 @@ heliohost.us
 // Submitted by David Grellscheid <admin@hepforge.org>
 hepforge.org
 
+// Hercules : https://hercules.app
+// Submitted by Brendan Falk <security@hercules.app>
+onhercules.app
+hercules-app.com
+hercules-dev.com
+
 // Heroku : https://www.heroku.com/
 // Submitted by Shumon Huque <public-dns@salesforce.com>
 herokuapp.com
@@ -14484,10 +14494,6 @@ wphostedmail.com
 wpmucdn.com
 tempurl.host
 wpmudev.host
-
-// Indevs : https://indevs.in
-// Submitted by Sudheer Bhuvana <security@admin.indevs.in>
-indevs.in
 
 // Individual Network Berlin e.V. : https://www.in-berlin.de/
 // Submitted by Christian Seitz <chris@in-berlin.de>
@@ -14725,6 +14731,13 @@ kapsi.fi
 ezproxy.kuleuven.be
 kuleuven.cloud
 
+// Keenetic : https://keenetic.com
+// Submitted by Alexey Nikitin <cloud@keenetic.net>
+keenetic.io
+keenetic.link
+keenetic.name
+keenetic.pro
+
 // Kevin Service : https://kevsrv.me
 // Submitted by Kevin Service Team <cs@kevsrv.me>
 ae.kg
@@ -14732,6 +14745,11 @@ ae.kg
 // Keyweb AG : https://www.keyweb.de
 // Submitted by Martin Dannehl <postmaster@keymachine.de>
 keymachine.de
+
+// Kilo Code, Inc. : https://kilo.ai
+// Submitted by Remon Oldenbeuving <security@kilocode.ai>
+kiloapps.ai
+kiloapps.io
 
 // KingHost : https://king.host
 // Submitted by Felipe Keller Braz <felipebraz@kinghost.com.br>
@@ -14762,6 +14780,8 @@ co.de
 
 // Laravel Holdings, Inc. : https://laravel.com
 // Submitted by André Valentin & James Brooks <security@laravel.com>
+shiptoday.app
+shiptoday.build
 laravel.cloud
 on-forge.com
 on-vapor.com
@@ -15047,6 +15067,11 @@ same-preview.com
 // minion.systems : http://minion.systems
 // Submitted by Robert Böttinger <r@minion.systems>
 csx.cc
+
+// Miren, Inc. : https://miren.dev
+// Submitted by Miren Product Team <team-product@miren.dev>
+miren.app
+miren.systems
 
 // Mittwald CM Service GmbH & Co. KG : https://mittwald.de
 // Submitted by Marco Rieger <security@mittwald.de>
@@ -15402,7 +15427,6 @@ can.re
 // Submitted by Authgear Team <hello@authgear.com> & Skygear Developer <hello@skygear.io>
 authgear-staging.com
 authgearapps.com
-skygearapp.com
 
 // OutSystems
 // Submitted by Duarte Santos <domain-admin@outsystemscloud.com>
@@ -15519,8 +15543,9 @@ xen.prgmr.com
 priv.at
 
 // PROJECT ELIV : https://eliv.kr/
-// Submitted by PROJECT ELIV Domain Team <team@eliv.kr>
+// Submitted by PROJECT ELIV DomainName Team <team@eliv.kr>
 c01.kr
+eliv-api.kr
 eliv-cdn.kr
 eliv-dns.kr
 mmv.kr
@@ -15832,7 +15857,20 @@ sakura.tv
 *.dev-builder.code.com
 *.stg-builder.code.com
 *.001.test.code-builder-stg.platform.salesforce.com
+*.aa.crm.dev
+*.ab.crm.dev
+*.ac.crm.dev
+*.ad.crm.dev
+*.ae.crm.dev
+*.af.crm.dev
+*.ci.crm.dev
 *.d.crm.dev
+*.pa.crm.dev
+*.pb.crm.dev
+*.pc.crm.dev
+*.pd.crm.dev
+*.pe.crm.dev
+*.pf.crm.dev
 *.w.crm.dev
 *.wa.crm.dev
 *.wb.crm.dev
@@ -16040,6 +16078,10 @@ try-snowplow.com
 // Submitted by Michal Zalewski <security@mafelo.com>
 mafelo.net
 
+// Solana Name Service :  https://sns.id
+// Submitted by Solana Name Service <contact@sns.id>
+sol.site
+
 // Sony Interactive Entertainment LLC : https://sie.com/
 // Submitted by David Coles <david.coles@sony.com>
 playstation-cloud.com
@@ -16060,6 +16102,10 @@ my.at
 my.de
 *.nxa.eu
 nx.gw
+
+// Spawnbase : https://spawnbase.ai
+// Submitted by Alexander Zuev <security@spawnbase.ai>
+spawnbase.app
 
 // SpeedPartner GmbH : https://www.speedpartner.de/
 // Submitted by Stefan Neufeind <info@speedpartner.de>
@@ -16105,6 +16151,10 @@ stackit.gg
 stackit.rocks
 stackit.run
 stackit.zone
+
+// Stackryze : https://stackryze.com
+// Submitted by Sudheer Bhuvana <security@stackryze.com>
+indevs.in
 
 // Staclar : https://staclar.com
 // Submitted by Q Misell <q@staclar.com>
@@ -16346,22 +16396,6 @@ tunnelmole.net
 // Submitted by TuxFamily administrators <adm@staff.tuxfamily.org>
 tuxfamily.org
 
-// TwoDNS : https://www.twodns.de/
-// Submitted by TwoDNS-Support <support@two-dns.de>
-dd-dns.de
-dray-dns.de
-draydns.de
-dyn-vpn.de
-dynvpn.de
-mein-vigor.de
-my-vigor.de
-my-wan.de
-syno-ds.de
-synology-diskstation.de
-synology-ds.de
-diskstation.eu
-diskstation.org
-
 // Typedream : https://typedream.com
 // Submitted by Putri Karunia <putri@typedream.com>
 typedream.app
@@ -16551,6 +16585,8 @@ daemon.panel.gg
 
 // Wix.com, Inc. : https://www.wix.com
 // Submitted by Shahar Talmi / Alon Kochba <publicsuffixlist@wix.com>
+base44.app
+base44-sandbox.com
 wixsite.com
 wixstudio.com
 editorx.io
