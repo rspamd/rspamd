@@ -198,12 +198,26 @@ local check_replyto_id = rspamd_config:register_symbol({
       return false
     end
     local rt = util.parse_mail_address(replyto, task:get_mempool())
-    if not (rt and rt[1] and (string.len(rt[1].addr) > 0)) then
+    if not (rt and rt[1] and #rt[1].addr > 0) then
       task:insert_result('REPLYTO_UNPARSEABLE', 1.0)
       return false
     else
       local rta = rt[1].addr
       task:insert_result('HAS_REPLYTO', 1.0, rta)
+
+      -- RFC 5321 validity checks
+      local dominated_by_unparseable = not rt[1].flags or not rt[1].flags.valid
+      if dominated_by_unparseable then
+        task:insert_result('REPLYTO_INVALID', 1.0)
+      end
+      local user_len = rt[1].user and #rt[1].user or 0
+      local domain_len = rt[1].domain and #rt[1].domain or 0
+      if user_len > 64 then
+        task:insert_result('REPLYTO_LOCALPART_LONG', 1.0, tostring(user_len))
+      end
+      if domain_len > 255 then
+        task:insert_result('REPLYTO_DOMAIN_LONG', 1.0, tostring(domain_len))
+      end
       -- Check if Reply-To address starts with title seen in display name
       local sym = task:get_symbol('FROM_NAME_HAS_TITLE')
       local title = (((sym or E)[1] or E).options or E)[1]
@@ -351,6 +365,30 @@ rspamd_config:register_symbol {
   parent = check_replyto_id,
   type = 'virtual',
   description = 'Reply-To domain does not match the To domain',
+  group = 'headers',
+}
+rspamd_config:register_symbol {
+  name = 'REPLYTO_INVALID',
+  score = 1.0,
+  parent = check_replyto_id,
+  type = 'virtual',
+  description = 'Reply-To address is not RFC 5321 compliant',
+  group = 'headers',
+}
+rspamd_config:register_symbol {
+  name = 'REPLYTO_LOCALPART_LONG',
+  score = 2.0,
+  parent = check_replyto_id,
+  type = 'virtual',
+  description = 'Reply-To local-part exceeds 64 characters (RFC 5321)',
+  group = 'headers',
+}
+rspamd_config:register_symbol {
+  name = 'REPLYTO_DOMAIN_LONG',
+  score = 2.0,
+  parent = check_replyto_id,
+  type = 'virtual',
+  description = 'Reply-To domain exceeds 255 characters (RFC 5321)',
   group = 'headers',
 }
 
