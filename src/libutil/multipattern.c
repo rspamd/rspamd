@@ -124,16 +124,17 @@ rspamd_multipattern_escape_tld_hyperscan(const char *pattern, gsize slen,
 										 gsize *dst_len)
 {
 	gsize len;
-	const char *p, *prefix, *suffix;
+	const char *p, *prefix;
 	char *res;
 
 	/*
 	 * We understand the following cases
-	 * 1) blah -> \.blah(?:[^a-zA-Z0-9]|$)
-	 * 2) *.blah -> \.blah(?:[^a-zA-Z0-9]|$)
+	 * 1) blah -> \.blah
+	 * 2) *.blah -> \.blah
 	 *
-	 * Note: We use (?:[^a-zA-Z0-9]|$) instead of \b because \b requires
-	 * HS_FLAG_UCP which we don't set for TLD patterns.
+	 * Boundary checking (non-alphanumeric after TLD) is done in the
+	 * hyperscan callback (rspamd_multipattern_hs_cb), similar to ACISM.
+	 * This ensures match length doesn't include the boundary character.
 	 */
 
 	if (pattern[0] == '*') {
@@ -156,14 +157,9 @@ rspamd_multipattern_escape_tld_hyperscan(const char *pattern, gsize slen,
 		len = slen + strlen(prefix);
 	}
 
-	/* Match end of TLD: either non-alphanumeric or end of string */
-	suffix = "(?:[^a-zA-Z0-9]|$)";
-	len += strlen(suffix);
-
 	res = g_malloc(len + 1);
 	slen = rspamd_strlcpy(res, prefix, len + 1);
 	slen += rspamd_strlcpy(res + slen, p, len + 1 - slen);
-	slen += rspamd_strlcpy(res + slen, suffix, len + 1 - slen);
 
 	*dst_len = slen;
 
@@ -878,6 +874,18 @@ rspamd_multipattern_hs_cb(unsigned int id,
 
 		if (from == HS_OFFSET_PAST_HORIZON) {
 			from = 0;
+		}
+
+		/* For TLD patterns, check word boundary at end of match (like ACISM callback) */
+		if (cbd->mp->pats != NULL && id < cbd->mp->pats->len) {
+			struct rspamd_acism_pat *pat = &g_array_index(cbd->mp->pats,
+														  struct rspamd_acism_pat, id);
+			if (pat->is_tld) {
+				if (to < cbd->len && g_ascii_isalnum(cbd->in[to])) {
+					/* TLD followed by alphanumeric - not a valid boundary */
+					return 0;
+				}
+			}
 		}
 
 		ret = cbd->cb(cbd->mp, id, from, to, cbd->in, cbd->len, cbd->ud);
