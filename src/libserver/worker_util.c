@@ -2540,6 +2540,22 @@ void rspamd_worker_init_controller(struct rspamd_worker *worker,
 	ctx = (struct rspamd_abstract_worker_ctx *) worker->ctx;
 	rspamd_controller_load_saved_stats(worker->srv, worker->srv->cfg);
 
+#ifdef WITH_HYPERSCAN
+	/* Controller also needs hyperscan handlers for hot-swap support */
+	rspamd_control_worker_add_cmd_handler(worker,
+										  RSPAMD_CONTROL_HYPERSCAN_LOADED,
+										  rspamd_worker_hyperscan_ready,
+										  NULL);
+	rspamd_control_worker_add_cmd_handler(worker,
+										  RSPAMD_CONTROL_MULTIPATTERN_LOADED,
+										  rspamd_worker_multipattern_ready,
+										  NULL);
+	rspamd_control_worker_add_cmd_handler(worker,
+										  RSPAMD_CONTROL_REGEXP_MAP_LOADED,
+										  rspamd_worker_regexp_map_ready,
+										  NULL);
+#endif
+
 	if (worker->index == 0) {
 		/* Enable periodics and other stuff */
 		static struct rspamd_controller_periodics_cbdata cbd;
