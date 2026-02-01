@@ -1648,10 +1648,11 @@ rspamd_dkim_parse_key(const char *txt, size_t *keylen, GError **err)
 	}
 
 	if (klen == 0 || key == NULL) {
+		/* Per RFC 6376, missing p= tag means key is revoked */
 		g_set_error(err,
 					DKIM_ERROR,
-					DKIM_SIGERROR_KEYFAIL,
-					"key is missing");
+					DKIM_SIGERROR_REVOKED,
+					"key is revoked");
 
 		return NULL;
 	}
@@ -1673,10 +1674,19 @@ rspamd_dkim_parse_key(const char *txt, size_t *keylen, GError **err)
 		return rspamd_dkim_make_key(key, klen,
 									RSPAMD_DKIM_KEY_EDDSA, err);
 	}
-	else {
-		/* We assume RSA default in all cases */
+	else if (alglen == 3 && rspamd_lc_cmp(alg, "rsa", alglen) == 0) {
 		return rspamd_dkim_make_key(key, klen,
 									RSPAMD_DKIM_KEY_RSA, err);
+	}
+	else {
+		/* Unknown key type - per RFC must be ignored (PERMFAIL) */
+		g_set_error(err,
+					DKIM_ERROR,
+					DKIM_SIGERROR_KEYTYPE,
+					"unknown key type: %.*s",
+					(int) alglen, alg);
+
+		return NULL;
 	}
 
 	g_assert_not_reached();

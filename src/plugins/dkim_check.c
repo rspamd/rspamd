@@ -1319,6 +1319,14 @@ dkim_module_key_handler(rspamd_dkim_key_t *key,
 				res->res = rspamd_dkim_create_result(ctx, DKIM_TRYAGAIN, task);
 				res->res->fail_reason = "DNS error when getting key";
 			}
+			else if (err->code == DKIM_SIGERROR_REVOKED) {
+				res->res = rspamd_dkim_create_result(ctx, DKIM_PERM_ERROR, task);
+				res->res->fail_reason = "key revoked";
+			}
+			else if (err->code == DKIM_SIGERROR_KEYTYPE) {
+				res->res = rspamd_dkim_create_result(ctx, DKIM_PERM_ERROR, task);
+				res->res->fail_reason = "unknown key type";
+			}
 			else {
 				res->res = rspamd_dkim_create_result(ctx, DKIM_PERM_ERROR, task);
 				res->res->fail_reason = "invalid DKIM record";

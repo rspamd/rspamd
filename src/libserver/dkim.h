@@ -55,6 +55,8 @@
 #define DKIM_SIGERROR_INVALID_H 32       /* h= missing req'd entries */
 #define DKIM_SIGERROR_KEYHASHMISMATCH 37 /* sig-key hash mismatch */
 #define DKIM_SIGERROR_EMPTY_V 45         /* v= tag empty */
+#define DKIM_SIGERROR_KEYTYPE 46         /* unknown key type */
+#define DKIM_SIGERROR_REVOKED 47         /* key revoked (no p= tag) */
 
 #ifdef __cplusplus
 extern "C" {
