@@ -1909,6 +1909,38 @@ void rspamd_message_process(struct rspamd_task *task)
 													NULL);
 					}
 				}
+				else if (IS_TEXT_PART_EMPTY(p1) != IS_TEXT_PART_EMPTY(p2)) {
+					/*
+					 * One part is empty, another is not - this is 100% difference
+					 */
+					struct rspamd_mime_text_part *non_empty =
+						IS_TEXT_PART_EMPTY(p1) ? p2 : p1;
+
+					if (non_empty->normalized_hashes &&
+						non_empty->normalized_hashes->len > 0) {
+						tw = non_empty->normalized_hashes->len;
+
+						msg_debug_task(
+							"one part is empty, another has %d words, "
+							"got diff between parts of 1.0",
+							tw);
+
+						pdiff = rspamd_mempool_alloc(task->task_pool,
+													 sizeof(double));
+						*pdiff = 1.0;
+						rspamd_mempool_set_variable(task->task_pool,
+													"parts_distance",
+													pdiff,
+													NULL);
+						ptw = rspamd_mempool_alloc(task->task_pool,
+												   sizeof(int));
+						*ptw = tw;
+						rspamd_mempool_set_variable(task->task_pool,
+													"total_words",
+													ptw,
+													NULL);
+					}
+				}
 			}
 		}
 		else {
