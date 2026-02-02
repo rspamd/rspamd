@@ -247,8 +247,12 @@ exit;
 #-------------
 
 sub configdump {
-    my $cmd  = 'rspamadm configdump -C' . ( defined $_[0] ? " $_[0]" : '' );
-    my $json = `$cmd`;
+    my @cmd = ( 'rspamadm', 'configdump' );
+    push @cmd, '-C', $_[0] if defined $_[0];
+
+    open( my $fh, '-|', @cmd ) or die "Cannot execute rspamadm configdump: $!\n";
+    my $json = do { local $/; <$fh> };
+    close($fh);
 
     # Check command execution status
     if ( $? != 0 ) {
@@ -408,7 +412,7 @@ sub ProcessLog {
             }
 
             foreach my $s (@symbols_search) {
-                my @selected = grep /$s/, @symbols;
+                my @selected = grep /\Q$s\E/, @symbols;
                 next
                   unless ( scalar(@selected) > 0 );
 
@@ -799,3 +803,30 @@ Install with: C<apt-get install libnetaddr-ip-perl> (Debian/Ubuntu), C<pkg insta
 install perl-NetAddr-IP> (RHEL/CentOS), or C<cpan NetAddr::IP>
 
 =back
+
+=head1 SECURITY CONSIDERATIONS
+
+This is a diagnostic utility intended for system administrators with trusted access to Rspamd configurations and logs.
+
+=over 4
+
+=item *
+
+B<Map files should be from trusted sources.> Malicious regex patterns in map files could cause excessive CPU usage or
+memory consumption during compilation and matching.
+
+=item *
+
+B<Configuration trust.> The utility processes multimap configuration from C<rspamadm configdump>, which should only
+contain trusted data managed by system administrators.
+
+=item *
+
+B<Log file trust.> Log files should be from trusted Rspamd installations. The utility does not sanitize or validate log
+content beyond basic parsing.
+
+=back
+
+This utility follows the UNIX philosophy: it processes input from trusted sources without extensive sandboxing. If you
+need to analyze untrusted data, review map files and logs before processing.
+
