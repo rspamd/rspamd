@@ -89,6 +89,7 @@ function(InstallRspamdFiles)
 
     # Install utilities
     install(PROGRAMS "utils/rspamd_stats.pl" RENAME rspamd_stats DESTINATION bin)
+    install(PROGRAMS "utils/mapstats.pl" RENAME mapstats DESTINATION bin)
 
     # Install web UI if requested
     if (INSTALL_WEBUI)
