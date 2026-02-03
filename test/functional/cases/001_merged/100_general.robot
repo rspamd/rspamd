@@ -5,6 +5,7 @@ Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
 ${GTUBE}               ${RSPAMD_TESTDIR}/messages/gtube.eml
+${ALT_RELATED}         ${RSPAMD_TESTDIR}/messages/alternative-related.eml
 ${SETTINGS_NOSYMBOLS}  {symbols_enabled = []}
 
 *** Test Cases ***
@@ -59,3 +60,13 @@ HTML ONLY - TRUE NEGATIVE
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
   ...  Settings={symbols_enabled = [MIME_HTML_ONLY]}
   Do Not Expect Symbol  MIME_HTML_ONLY
+
+HTML ONLY - multipart/related inside alternative
+  Scan File  ${ALT_RELATED}
+  ...  Settings={symbols_enabled = [MIME_HTML_ONLY]}
+  Do Not Expect Symbol  MIME_HTML_ONLY
+
+PARTS DIFFER - multipart/related inside alternative
+  Scan File  ${ALT_RELATED}
+  ...  Settings={symbols_enabled = [R_PARTS_DIFFER]}
+  Expect Symbol  R_PARTS_DIFFER

@@ -968,6 +968,36 @@ enum rspamd_message_part_is_text_result {
 	RSPAMD_MESSAGE_PART_IS_NOT_TEXT
 };
 
+static struct rspamd_mime_part *
+rspamd_mime_part_find_parent_multipart_subtype(struct rspamd_mime_part *part,
+											   const char *subtype, gsize subtype_len)
+{
+	rspamd_ftok_t srch;
+
+	srch.begin = subtype;
+	srch.len = subtype_len;
+
+	while (part) {
+		if (part->ct && rspamd_ftok_casecmp(&part->ct->subtype, &srch) == 0) {
+			return part;
+		}
+		part = part->parent_part;
+	}
+
+	return NULL;
+}
+
+static gboolean
+rspamd_mime_part_is_in_multipart_alternative(struct rspamd_mime_part *part)
+{
+	if (!part) {
+		return FALSE;
+	}
+
+	return rspamd_mime_part_find_parent_multipart_subtype(part->parent_part,
+														  "alternative", 11) != NULL;
+}
+
 static enum rspamd_message_part_is_text_result
 rspamd_message_part_can_be_parsed_as_text(struct rspamd_task *task,
 										  struct rspamd_mime_part *mime_part)
@@ -996,7 +1026,8 @@ rspamd_message_part_can_be_parsed_as_text(struct rspamd_task *task,
 	/* Skip attachments */
 	if (res != RSPAMD_MESSAGE_PART_IS_NOT_TEXT &&
 		(mime_part->cd && mime_part->cd->type == RSPAMD_CT_ATTACHMENT)) {
-		if (!task->cfg->check_text_attachements) {
+		if (!task->cfg->check_text_attachements &&
+			!rspamd_mime_part_is_in_multipart_alternative(mime_part)) {
 			debug_task("skip attachments for checking as text parts");
 			return RSPAMD_MESSAGE_PART_IS_NOT_TEXT;
 		}
@@ -1017,7 +1048,9 @@ rspamd_message_process_text_part_maybe(struct rspamd_task *task,
 
 	/* Skip attachments */
 	if ((mime_part->cd && mime_part->cd->type == RSPAMD_CT_ATTACHMENT)) {
-		flags |= RSPAMD_MIME_TEXT_PART_ATTACHMENT;
+		if (!rspamd_mime_part_is_in_multipart_alternative(mime_part)) {
+			flags |= RSPAMD_MIME_TEXT_PART_ATTACHMENT;
+		}
 	}
 
 	text_part = rspamd_mempool_alloc0(task->task_pool,
@@ -1827,132 +1860,129 @@ void rspamd_message_process(struct rspamd_task *task)
 		p1 = g_ptr_array_index(MESSAGE_FIELD(task, text_parts), 0);
 		p2 = g_ptr_array_index(MESSAGE_FIELD(task, text_parts), 1);
 
-		/* First of all check parent object */
-		if (p1->mime_part->parent_part) {
-			rspamd_ftok_t srch;
+		struct rspamd_mime_part *alt_parent1 = rspamd_mime_part_find_parent_multipart_subtype(
+			p1->mime_part->parent_part, "alternative", 11);
+		struct rspamd_mime_part *alt_parent2 = rspamd_mime_part_find_parent_multipart_subtype(
+			p2->mime_part->parent_part, "alternative", 11);
 
-			srch.begin = "alternative";
-			srch.len = 11;
-
-			if (rspamd_ftok_cmp(&p1->mime_part->parent_part->ct->subtype, &srch) == 0) {
-				if (!IS_TEXT_PART_EMPTY(p1) && !IS_TEXT_PART_EMPTY(p2) &&
-					p1->normalized_hashes && p2->normalized_hashes) {
-					/*
+		/* We compare parts only if they belong to the same multipart/alternative container */
+		if (alt_parent1 && alt_parent1 == alt_parent2) {
+			if (!IS_TEXT_PART_EMPTY(p1) && !IS_TEXT_PART_EMPTY(p2) &&
+				p1->normalized_hashes && p2->normalized_hashes) {
+				/*
 					 * We also detect language on one part and propagate it to
 					 * another one
 					 */
-					struct rspamd_mime_text_part *sel;
+				struct rspamd_mime_text_part *sel;
 
-					/* Prefer HTML as text part is not displayed normally */
-					if (IS_TEXT_PART_HTML(p1)) {
-						sel = p1;
-					}
-					else if (IS_TEXT_PART_HTML(p2)) {
-						sel = p2;
-					}
-					else {
-						if (p1->utf_content.len > p2->utf_content.len) {
-							sel = p1;
-						}
-						else {
-							sel = p2;
-						}
-					}
-
-					if (sel->language && sel->language[0]) {
-						/* Propagate language */
-						if (sel == p1) {
-							if (p2->languages) {
-								g_ptr_array_unref(p2->languages);
-							}
-
-							p2->language = sel->language;
-							p2->languages = g_ptr_array_ref(sel->languages);
-						}
-						else {
-							if (p1->languages) {
-								g_ptr_array_unref(p1->languages);
-							}
-
-							p1->language = sel->language;
-							p1->languages = g_ptr_array_ref(sel->languages);
-						}
-					}
-
-					tw = p1->normalized_hashes->len + p2->normalized_hashes->len;
-
-					if (tw > 0) {
-						dw = rspamd_words_levenshtein_distance(task,
-															   p1->normalized_hashes,
-															   p2->normalized_hashes);
-						diff = dw / (double) tw;
-
-						msg_debug_task(
-							"different words: %d, total words: %d, "
-							"got diff between parts of %.2f",
-							dw, tw,
-							diff);
-
-						pdiff = rspamd_mempool_alloc(task->task_pool,
-													 sizeof(double));
-						*pdiff = diff;
-						rspamd_mempool_set_variable(task->task_pool,
-													"parts_distance",
-													pdiff,
-													NULL);
-						ptw = rspamd_mempool_alloc(task->task_pool,
-												   sizeof(int));
-						*ptw = tw;
-						rspamd_mempool_set_variable(task->task_pool,
-													"total_words",
-													ptw,
-													NULL);
-					}
+				/* Prefer HTML as text part is not displayed normally */
+				if (IS_TEXT_PART_HTML(p1)) {
+					sel = p1;
+				}
+				else if (IS_TEXT_PART_HTML(p2)) {
+					sel = p2;
 				}
 				else {
-					/*
+					if (p1->utf_content.len > p2->utf_content.len) {
+						sel = p1;
+					}
+					else {
+						sel = p2;
+					}
+				}
+
+				if (sel->language && sel->language[0]) {
+					/* Propagate language */
+					if (sel == p1) {
+						if (p2->languages) {
+							g_ptr_array_unref(p2->languages);
+						}
+
+						p2->language = sel->language;
+						p2->languages = g_ptr_array_ref(sel->languages);
+					}
+					else {
+						if (p1->languages) {
+							g_ptr_array_unref(p1->languages);
+						}
+
+						p1->language = sel->language;
+						p1->languages = g_ptr_array_ref(sel->languages);
+					}
+				}
+
+				tw = p1->normalized_hashes->len + p2->normalized_hashes->len;
+
+				if (tw > 0) {
+					dw = rspamd_words_levenshtein_distance(task,
+														   p1->normalized_hashes,
+														   p2->normalized_hashes);
+					diff = dw / (double) tw;
+
+					msg_debug_task(
+						"different words: %d, total words: %d, "
+						"got diff between parts of %.2f",
+						dw, tw,
+						diff);
+
+					pdiff = rspamd_mempool_alloc(task->task_pool,
+												 sizeof(double));
+					*pdiff = diff;
+					rspamd_mempool_set_variable(task->task_pool,
+												"parts_distance",
+												pdiff,
+												NULL);
+					ptw = rspamd_mempool_alloc(task->task_pool,
+											   sizeof(int));
+					*ptw = tw;
+					rspamd_mempool_set_variable(task->task_pool,
+												"total_words",
+												ptw,
+												NULL);
+				}
+			}
+			else {
+				/*
 					 * Handle cases where parts differ significantly:
 					 * - One part is empty, another is not
 					 * - One part has words, another has none (but isn't empty)
 					 * In both cases, treat as 100% difference
 					 */
-					gboolean p1_has_words = p1->normalized_hashes &&
-											p1->normalized_hashes->len > 0;
-					gboolean p2_has_words = p2->normalized_hashes &&
-											p2->normalized_hashes->len > 0;
+				gboolean p1_has_words = p1->normalized_hashes &&
+										p1->normalized_hashes->len > 0;
+				gboolean p2_has_words = p2->normalized_hashes &&
+										p2->normalized_hashes->len > 0;
 
-					if (p1_has_words != p2_has_words) {
-						struct rspamd_mime_text_part *non_empty =
-							p1_has_words ? p1 : p2;
+				if (p1_has_words != p2_has_words) {
+					struct rspamd_mime_text_part *non_empty =
+						p1_has_words ? p1 : p2;
 
-						tw = non_empty->normalized_hashes->len;
+					tw = non_empty->normalized_hashes->len;
 
-						msg_debug_task(
-							"one part has no words, another has %d words, "
-							"got diff between parts of 1.0",
-							tw);
+					msg_debug_task(
+						"one part has no words, another has %d words, "
+						"got diff between parts of 1.0",
+						tw);
 
-						pdiff = rspamd_mempool_alloc(task->task_pool,
-													 sizeof(double));
-						*pdiff = 1.0;
-						rspamd_mempool_set_variable(task->task_pool,
-													"parts_distance",
-													pdiff,
-													NULL);
-						ptw = rspamd_mempool_alloc(task->task_pool,
-												   sizeof(int));
-						*ptw = tw;
-						rspamd_mempool_set_variable(task->task_pool,
-													"total_words",
-													ptw,
-													NULL);
-					}
+					pdiff = rspamd_mempool_alloc(task->task_pool,
+												 sizeof(double));
+					*pdiff = 1.0;
+					rspamd_mempool_set_variable(task->task_pool,
+												"parts_distance",
+												pdiff,
+												NULL);
+					ptw = rspamd_mempool_alloc(task->task_pool,
+											   sizeof(int));
+					*ptw = tw;
+					rspamd_mempool_set_variable(task->task_pool,
+												"total_words",
+												ptw,
+												NULL);
 				}
 			}
 		}
 		else {
-			debug_task(
-				"message contains two parts but they are in different multi-parts");
+			debug_task("message contains two parts but they are in different multi-parts");
 		}
 	}
 
