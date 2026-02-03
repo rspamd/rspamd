@@ -35,6 +35,7 @@ enum rspamd_upstream_rotation {
 	RSPAMD_UPSTREAM_ROUND_ROBIN,
 	RSPAMD_UPSTREAM_MASTER_SLAVE,
 	RSPAMD_UPSTREAM_SEQUENTIAL,
+	RSPAMD_UPSTREAM_TOKEN_BUCKET, /* Token bucket weighted balancing */
 	RSPAMD_UPSTREAM_UNDEF
 };
 
@@ -337,6 +338,50 @@ struct upstream *rspamd_upstream_ref(struct upstream *up);
  * @param up
  */
 void rspamd_upstream_unref(struct upstream *up);
+
+/**
+ * Get the current rotation algorithm for an upstream list
+ * @param ups upstream list
+ * @return rotation algorithm
+ */
+enum rspamd_upstream_rotation rspamd_upstreams_get_rotation(struct upstream_list *ups);
+
+/**
+ * Configure token bucket parameters for an upstream list
+ * @param ups upstream list
+ * @param max_tokens maximum tokens per upstream (default: 10000)
+ * @param scale_factor bytes per token (default: 1024)
+ * @param min_tokens minimum tokens for selection (default: 1)
+ * @param base_cost base cost per request (default: 10)
+ */
+void rspamd_upstreams_set_token_bucket(struct upstream_list *ups,
+									   gsize max_tokens,
+									   gsize scale_factor,
+									   gsize min_tokens,
+									   gsize base_cost);
+
+/**
+ * Get upstream using token bucket algorithm
+ * Selects upstream with lowest inflight tokens (weighted by message size)
+ * @param ups upstream list
+ * @param except upstream to exclude (for retries)
+ * @param message_size size of the message being processed
+ * @param reserved_tokens output: tokens reserved for this request (must be returned later)
+ * @return selected upstream or NULL if none available
+ */
+struct upstream *rspamd_upstream_get_token_bucket(struct upstream_list *ups,
+												  struct upstream *except,
+												  gsize message_size,
+												  gsize *reserved_tokens);
+
+/**
+ * Return tokens to upstream after request completion
+ * Must be called when a request completes (success or failure)
+ * @param up upstream to return tokens to
+ * @param tokens number of tokens to return (from rspamd_upstream_get_token_bucket)
+ * @param success TRUE if request succeeded, FALSE if failed
+ */
+void rspamd_upstream_return_tokens(struct upstream *up, gsize tokens, gboolean success);
 
 #ifdef __cplusplus
 }
