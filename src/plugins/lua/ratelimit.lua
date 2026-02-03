@@ -244,18 +244,24 @@ local function make_prefix(redis_key, name, bucket)
   -- Fill defaults
   -- If settings.dynamic_rate_limit is false, then the default dynamic rate limits are 1.0
   -- We always allow per-bucket overrides of the dyn rate limits
- -- print("print bucket table", table.concat(bucket, '\n'));
 
-  local seen_specific_dyn_rate = bucket.spam_factor_rate or bucket.ham_factor_rate or bucket.spam_factor_burst or bucket.ham_factor_burst or false
-  bucket.specific_dyn_rate = seen_specific_dyn_rate
+  bucket.specific_dyn_rate = bucket.spam_factor_rate or
+    bucket.ham_factor_rate or
+    bucket.spam_factor_burst or
+    bucket.ham_factor_burst or
+    false
 
-  if seen_specific_dyn_rate or settings.dynamic_rate_limit then
+  if bucket.specific_dyn_rate or settings.dynamic_rate_limit then
     bucket.dyn_rate_enabled = true
     bucket.spam_factor_rate = bucket.spam_factor_rate or settings.spam_factor_rate
     bucket.ham_factor_rate = bucket.ham_factor_rate or settings.ham_factor_rate
     bucket.spam_factor_burst = bucket.spam_factor_burst or settings.spam_factor_burst
     bucket.ham_factor_burst = bucket.ham_factor_burst or settings.ham_factor_burst
-    rspamd_logger.infox('creating dynamic prefix %s, %s, %s, %s', bucket.spam_factor_rate, bucket.ham_factor_rate, bucket.spam_factor_burst, bucket.ham_factor_burst)
+    rspamd_logger.infox('creating dynamic prefix %s, %s, %s, %s',
+      bucket.spam_factor_rate,
+      bucket.ham_factor_rate,
+      bucket.spam_factor_burst,
+      bucket.ham_factor_burst)
   else
     bucket.dyn_rate_enabled = false
     bucket.spam_factor_rate = 1.0
@@ -560,11 +566,16 @@ local function ratelimit_update_cb(task)
       if bucket.skip_recipients then
         bincr = 1
       end
-      lua_util.debugm(N, task, "run bucket_update script, verdict %s, with mult_rate %s, mult_burst %s, max_rate %s, max_bucket %s, dyn_rate_enabled %s",
-	verdict,
-	tostring(mult_rate), tostring(mult_burst),
-        tostring(bucket.max_rate_mult), tostring(bucket.max_bucket_mult),
-        tostring(bucket.dyn_rate_enabled))
+      lua_util.debugm(N,
+        task,
+        "run bucket_update script, verdict %s, with mult_rate %s, mult_burst %s, max_rate %s, max_bucket %s, dyn_rate_enabled %s",
+      	verdict,
+      	tostring(mult_rate),
+        tostring(mult_burst),
+        tostring(bucket.max_rate_mult),
+        tostring(bucket.max_bucket_mult),
+        tostring(bucket.dyn_rate_enabled)
+      )
 
       lua_redis.exec_redis_script(bucket_update_id,
           { key = v.hash, task = task, is_write = true },
