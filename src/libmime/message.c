@@ -1909,19 +1909,26 @@ void rspamd_message_process(struct rspamd_task *task)
 													NULL);
 					}
 				}
-				else if (IS_TEXT_PART_EMPTY(p1) != IS_TEXT_PART_EMPTY(p2)) {
+				else {
 					/*
-					 * One part is empty, another is not - this is 100% difference
+					 * Handle cases where parts differ significantly:
+					 * - One part is empty, another is not
+					 * - One part has words, another has none (but isn't empty)
+					 * In both cases, treat as 100% difference
 					 */
-					struct rspamd_mime_text_part *non_empty =
-						IS_TEXT_PART_EMPTY(p1) ? p2 : p1;
+					gboolean p1_has_words = p1->normalized_hashes &&
+											p1->normalized_hashes->len > 0;
+					gboolean p2_has_words = p2->normalized_hashes &&
+											p2->normalized_hashes->len > 0;
 
-					if (non_empty->normalized_hashes &&
-						non_empty->normalized_hashes->len > 0) {
+					if (p1_has_words != p2_has_words) {
+						struct rspamd_mime_text_part *non_empty =
+							p1_has_words ? p1 : p2;
+
 						tw = non_empty->normalized_hashes->len;
 
 						msg_debug_task(
-							"one part is empty, another has %d words, "
+							"one part has no words, another has %d words, "
 							"got diff between parts of 1.0",
 							tw);
 
