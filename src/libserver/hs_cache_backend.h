@@ -188,6 +188,38 @@ void rspamd_hs_cache_lua_exists_async(const char *cache_key,
 									  rspamd_hs_cache_async_cb cb,
 									  void *ud);
 
+/**
+ * Load data from cache via Lua backend (synchronous)
+ * Only works for backends that support synchronous operations (e.g., file backend).
+ * For async-only backends (redis, http), returns FALSE immediately.
+ *
+ * @param cache_key unique cache key (hash)
+ * @param entity_name human-readable name of the entity
+ * @param[out] data pointer to receive loaded data (caller must g_free)
+ * @param[out] len pointer to receive data length
+ * @param[out] error pointer to receive error message (caller must g_free)
+ * @return TRUE on success, FALSE on error or if sync not supported
+ */
+gboolean rspamd_hs_cache_lua_load_sync(const char *cache_key,
+									   const char *entity_name,
+									   unsigned char **data,
+									   gsize *len,
+									   char **error);
+
+/**
+ * Check if cache entry exists via Lua backend (synchronous)
+ * Only works for backends that support synchronous operations (e.g., file backend).
+ * For async-only backends (redis, http), returns FALSE immediately.
+ *
+ * @param cache_key unique cache key (hash)
+ * @param entity_name human-readable name of the entity
+ * @param[out] exists pointer to receive result
+ * @return TRUE if check succeeded (check *exists for result), FALSE if sync not supported
+ */
+gboolean rspamd_hs_cache_lua_exists_sync(const char *cache_key,
+										 const char *entity_name,
+										 gboolean *exists);
+
 #ifdef __cplusplus
 }
 #endif

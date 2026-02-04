@@ -23,6 +23,7 @@
 #include "rspamd_control.h"
 #include "hs_cache_backend.h"
 #include "hyperscan_tools.h"
+#include "re_cache.h"
 #include "libserver/maps/map.h"
 #include "libserver/maps/map_private.h"
 #include "libserver/maps/map_helpers.h"
@@ -545,6 +546,32 @@ rspamd_prepare_worker(struct rspamd_worker *worker, const char *name,
 #ifdef WITH_HYPERSCAN
 	/* Ensure HS cache Lua backend is configured in this worker if hs_helper uses it */
 	rspamd_hs_cache_try_init_lua_backend(worker->srv->cfg, event_loop);
+
+	/*
+	 * Proactively try to load hyperscan on worker startup.
+	 * This handles the race condition where a worker starts after hs_helper
+	 * has already broadcast HYPERSCAN_LOADED - such workers would otherwise
+	 * never receive the notification and run without hyperscan.
+	 *
+	 * This is best-effort: loads what's available and valid, falls back to
+	 * PCRE for missing/stale patterns. Async notifications still handle updates.
+	 */
+	if (rspamd_hs_cache_has_lua_backend() && worker->srv->cfg->re_cache) {
+		const char *cache_dir = worker->srv->cfg->hs_cache_dir ? worker->srv->cfg->hs_cache_dir : RSPAMD_DBDIR "/";
+		enum rspamd_hyperscan_status hs_status;
+
+		hs_status = rspamd_re_cache_load_hyperscan_scoped(worker->srv->cfg->re_cache,
+														  cache_dir, true);
+		if (hs_status == RSPAMD_HYPERSCAN_LOADED_FULL) {
+			msg_info("worker startup: hyperscan fully loaded from cache");
+		}
+		else if (hs_status == RSPAMD_HYPERSCAN_LOADED_PARTIAL) {
+			msg_info("worker startup: hyperscan partially loaded, waiting for hs_helper");
+		}
+		else {
+			msg_debug("worker startup: no hyperscan available yet, waiting for hs_helper");
+		}
+	}
 #endif
 
 	/* Accept all sockets */
