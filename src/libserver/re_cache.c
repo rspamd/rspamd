@@ -1585,6 +1585,9 @@ rspamd_re_cache_exec_re(struct rspamd_task *task,
 		 * encoding, but HTML tags and line breaks will still be present.
 		 * Multiline expressions will need to be used to match strings that are
 		 * broken by line breaks.
+		 *
+		 * Note: parsed content is transfer-decoded but NOT charset-converted,
+		 * so it may contain non-UTF-8 data. Always use raw mode.
 		 */
 		if (MESSAGE_FIELD(task, text_parts)->len > 0) {
 			cnt = MESSAGE_FIELD(task, text_parts)->len;
@@ -1597,10 +1600,6 @@ rspamd_re_cache_exec_re(struct rspamd_task *task,
 				if (text_part->parsed.len > 0) {
 					scvec[i] = (unsigned char *) text_part->parsed.begin;
 					lenvec[i] = text_part->parsed.len;
-
-					if (!IS_TEXT_PART_UTF(text_part)) {
-						raw = TRUE;
-					}
 				}
 				else {
 					scvec[i] = (unsigned char *) "";
@@ -1608,8 +1607,9 @@ rspamd_re_cache_exec_re(struct rspamd_task *task,
 				}
 			}
 
+			/* Always raw - parsed content is not charset-converted */
 			ret = rspamd_re_cache_process_regexp_data(rt, re,
-													  task, scvec, lenvec, cnt, raw, &processed_hyperscan);
+													  task, scvec, lenvec, cnt, TRUE, &processed_hyperscan);
 			msg_debug_re_task("checked sa rawbody regexp: %s -> %d",
 							  rspamd_regexp_get_pattern(re), ret);
 			g_free(scvec);
