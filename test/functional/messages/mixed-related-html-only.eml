@@ -1,0 +1,35 @@
+Return-Path: test@test.com
+From: TEST <test@test.com>
+To: Me <me@me.me>
+Subject: multipart/mixed with related (html only)
+MIME-Version: 1.0
+Date: Mon, 01 Jan 2024 00:00:00 +0000
+Message-ID: <mixed-related-html-only@test.com>
+Content-Type: multipart/mixed; boundary="19//AYBSG9F/KH4LSBP="
+
+--19//AYBSG9F/KH4LSBP=
+Content-Type: multipart/related; boundary="29//AYBSG9F/KH4LSBP="
+
+--29//AYBSG9F/KH4LSBP=
+Content-Type: text/html; charset="UTF-8"
+
+<html>
+<body>
+This is an HTML-only message body.
+</body>
+</html>
+
+--29//AYBSG9F/KH4LSBP=
+Content-Type: image/jpeg; name="dc660250d1b3d161181bd661989c2a74.jpg"
+Content-ID: <dc660250d1b3d161181bd661989c2a74.jpg>
+
+dummy
+
+--29//AYBSG9F/KH4LSBP=--
+
+--19//AYBSG9F/KH4LSBP=
+Content-Type: application/pdf; name="Chamblisslaw Payroll Wages_Memo_1NZ7-CIRM1N-MGX6.pdf"
+
+dummy
+
+--19//AYBSG9F/KH4LSBP=--

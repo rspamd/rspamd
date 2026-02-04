@@ -230,6 +230,13 @@ LUA_FUNCTION_DEF(textpart, get_fuzzy_hashes);
  * @return {mimepart} mimepart object
  */
 LUA_FUNCTION_DEF(textpart, get_mimepart);
+/***
+ * @method text_part:get_alt_part()
+ * Returns the alternative text part (text/plain for HTML, text/html for plain text)
+ * within the same multipart/alternative container. Returns nil if no alternative exists.
+ * @return {text_part|nil} alternative text part or nil
+ */
+LUA_FUNCTION_DEF(textpart, get_alt_part);
 
 /***
  * @method text_part:get_html_fuzzy_hashes(mempool)
@@ -260,6 +267,7 @@ static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF(textpart, get_charset),
 	LUA_INTERFACE_DEF(textpart, get_languages),
 	LUA_INTERFACE_DEF(textpart, get_mimepart),
+	LUA_INTERFACE_DEF(textpart, get_alt_part),
 	LUA_INTERFACE_DEF(textpart, get_stats),
 	LUA_INTERFACE_DEF(textpart, get_fuzzy_hashes),
 	LUA_INTERFACE_DEF(textpart, get_html_fuzzy_hashes),
@@ -1607,6 +1615,27 @@ lua_textpart_get_mimepart(lua_State *L)
 			pmime = lua_newuserdata(L, sizeof(struct rspamd_mime_part *));
 			rspamd_lua_setclass(L, rspamd_mimepart_classname, -1);
 			*pmime = part->mime_part;
+
+			return 1;
+		}
+	}
+
+	lua_pushnil(L);
+	return 1;
+}
+
+static int
+lua_textpart_get_alt_part(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_text_part *part = lua_check_textpart(L);
+	struct rspamd_mime_text_part **ppart;
+
+	if (part != NULL) {
+		if (part->alt_text_part != NULL) {
+			ppart = lua_newuserdata(L, sizeof(struct rspamd_mime_text_part *));
+			rspamd_lua_setclass(L, rspamd_textpart_classname, -1);
+			*ppart = part->alt_text_part;
 
 			return 1;
 		}
