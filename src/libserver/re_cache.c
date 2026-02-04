@@ -3180,7 +3180,7 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 
 		/* Load via Lua backend (handles files, compression, etc.) */
 		if (rspamd_hs_cache_lua_load_sync(re_class->hash, "re_class", &data, &data_len, &error)) {
-			msg_debug_re_cache("loaded hyperscan via Lua backend for '%s' (%z bytes)",
+			msg_debug_re_cache("loaded hyperscan via Lua backend for '%s' (%uz bytes)",
 							   re_class->hash, data_len);
 		}
 		else {
@@ -3215,7 +3215,7 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 
 	if (has_valid) {
 		if (all_valid) {
-			msg_info_re_cache("full hyperscan database (%u classes) has been loaded%s%s%s",
+			msg_info_re_cache("full hyperscan database (%ud classes) has been loaded%s%s%s",
 							  total_loaded,
 							  cache->scope ? " for scope '" : "",
 							  cache->scope ? cache->scope : "",
@@ -3223,7 +3223,7 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 			cache->hyperscan_loaded = RSPAMD_HYPERSCAN_LOADED_FULL;
 		}
 		else {
-			msg_info_re_cache("partial hyperscan database (%u classes) has been loaded%s%s%s",
+			msg_info_re_cache("partial hyperscan database (%ud classes) has been loaded%s%s%s",
 							  total_loaded,
 							  cache->scope ? " for scope '" : "",
 							  cache->scope ? cache->scope : "",

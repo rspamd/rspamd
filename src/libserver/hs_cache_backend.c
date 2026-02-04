@@ -556,7 +556,7 @@ gboolean rspamd_hs_cache_lua_load_sync(const char *cache_key,
 			memcpy(*data, t->start, t->len);
 		}
 		if (len) *len = t->len;
-		msg_debug_hyperscan("load_sync: loaded %z bytes for %s", t->len, cache_key);
+		msg_debug_hyperscan("load_sync: loaded %uz bytes for %s", t->len, cache_key);
 	}
 	else {
 		if (error) *error = g_strdup("Empty or invalid data returned");
