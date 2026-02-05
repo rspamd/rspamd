@@ -3342,13 +3342,30 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 		}
 	}
 	else {
-		msg_info_re_cache("hyperscan database has NOT been loaded; no valid expressions (%ud classes)%s%s%s",
-						  total_classes,
-						  cache->scope ? " for scope '" : "",
-						  cache->scope ? cache->scope : "",
-						  cache->scope ? "'" : "");
-		if (missing_classes && missing_classes->len > 0) {
-			msg_info_re_cache("all classes failed: %s", missing_classes->str);
+		/*
+		 * During startup probe (try_load=true), "no valid expressions" is expected
+		 * when hs_helper hasn't finished compiling yet. Use debug level to avoid
+		 * log spam. Workers will receive async notifications when databases are ready.
+		 */
+		if (try_load) {
+			msg_debug_re_cache("hyperscan database has NOT been loaded; no valid expressions (%ud classes)%s%s%s",
+							   total_classes,
+							   cache->scope ? " for scope '" : "",
+							   cache->scope ? cache->scope : "",
+							   cache->scope ? "'" : "");
+			if (missing_classes && missing_classes->len > 0) {
+				msg_debug_re_cache("all classes failed (startup probe): %s", missing_classes->str);
+			}
+		}
+		else {
+			msg_info_re_cache("hyperscan database has NOT been loaded; no valid expressions (%ud classes)%s%s%s",
+							  total_classes,
+							  cache->scope ? " for scope '" : "",
+							  cache->scope ? cache->scope : "",
+							  cache->scope ? "'" : "");
+			if (missing_classes && missing_classes->len > 0) {
+				msg_info_re_cache("all classes failed: %s", missing_classes->str);
+			}
 		}
 		cache->hyperscan_loaded = RSPAMD_HYPERSCAN_LOAD_ERROR;
 	}
