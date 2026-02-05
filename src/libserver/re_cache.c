@@ -1586,8 +1586,10 @@ rspamd_re_cache_exec_re(struct rspamd_task *task,
 		 * Multiline expressions will need to be used to match strings that are
 		 * broken by line breaks.
 		 *
-		 * Note: parsed content is transfer-decoded but NOT charset-converted,
-		 * so it may contain non-UTF-8 data. Always use raw mode.
+		 * If the regexp class contains UTF-8 patterns (/u flag), we use
+		 * charset-converted utf_content to allow Unicode matching.
+		 * Otherwise, we use parsed content (transfer-decoded only) for
+		 * backward compatibility with raw byte matching.
 		 */
 		if (MESSAGE_FIELD(task, text_parts)->len > 0) {
 			cnt = MESSAGE_FIELD(task, text_parts)->len;
@@ -1597,19 +1599,43 @@ rspamd_re_cache_exec_re(struct rspamd_task *task,
 			for (i = 0; i < cnt; i++) {
 				text_part = g_ptr_array_index(MESSAGE_FIELD(task, text_parts), i);
 
-				if (text_part->parsed.len > 0) {
-					scvec[i] = (unsigned char *) text_part->parsed.begin;
-					lenvec[i] = text_part->parsed.len;
+				if (re_class->has_utf8) {
+					/*
+					 * Use charset-converted content for UTF-8 patterns.
+					 * This allows Unicode matching while preserving HTML tags.
+					 */
+					if (text_part->utf_content.len > 0) {
+						scvec[i] = (unsigned char *) text_part->utf_content.begin;
+						lenvec[i] = text_part->utf_content.len;
+
+						if (!IS_TEXT_PART_UTF(text_part)) {
+							raw = TRUE;
+						}
+					}
+					else {
+						scvec[i] = (unsigned char *) "";
+						lenvec[i] = 0;
+					}
 				}
 				else {
-					scvec[i] = (unsigned char *) "";
-					lenvec[i] = 0;
+					/*
+					 * Use transfer-decoded content for raw byte matching.
+					 * This is not charset-converted, so always use raw mode.
+					 */
+					if (text_part->parsed.len > 0) {
+						scvec[i] = (unsigned char *) text_part->parsed.begin;
+						lenvec[i] = text_part->parsed.len;
+					}
+					else {
+						scvec[i] = (unsigned char *) "";
+						lenvec[i] = 0;
+					}
+					raw = TRUE;
 				}
 			}
 
-			/* Always raw - parsed content is not charset-converted */
 			ret = rspamd_re_cache_process_regexp_data(rt, re,
-													  task, scvec, lenvec, cnt, TRUE, &processed_hyperscan);
+													  task, scvec, lenvec, cnt, raw, &processed_hyperscan);
 			msg_debug_re_task("checked sa rawbody regexp: %s -> %d",
 							  rspamd_regexp_get_pattern(re), ret);
 			g_free(scvec);
