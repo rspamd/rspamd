@@ -3578,7 +3578,7 @@ rspamd_re_cache_apply_hyperscan_blob(struct rspamd_re_cache *cache,
 
 		/* Verify the regexp at this ID belongs to the current re_class */
 		if (rspamd_regexp_get_class(elt->re) != re_class) {
-			msg_info_re_cache("stale hyperscan cache for class %s: id %u points to "
+			msg_info_re_cache("stale hyperscan cache for class %s: id %ud points to "
 							  "wrong re_class, will use PCRE until recompilation",
 							  re_class->hash, ids[i]);
 			hs_free_scratch(re_class->hs_scratch);

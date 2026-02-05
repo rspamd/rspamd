@@ -198,7 +198,7 @@ rspamd_tokenizer_manager_load_tokenizer(struct rspamd_tokenizer_manager *mgr,
 	msg_info_tokenizer("successfully obtained API from custom tokenizer '%s'", name);
 
 	/* Check API version */
-	msg_info_tokenizer("checking API version for custom tokenizer '%s' (got %u, expected %u)",
+	msg_info_tokenizer("checking API version for custom tokenizer '%s' (got %ud, expected %ud)",
 					   name, api->api_version, RSPAMD_CUSTOM_TOKENIZER_API_VERSION);
 	if (api->api_version != RSPAMD_CUSTOM_TOKENIZER_API_VERSION) {
 		dlclose(handle);
@@ -258,7 +258,7 @@ rspamd_tokenizer_manager_load_tokenizer(struct rspamd_tokenizer_manager *mgr,
 
 	/* Re-sort by priority */
 	g_array_sort(mgr->detection_order, rspamd_custom_tokenizer_priority_cmp);
-	msg_info_tokenizer("custom tokenizer '%s' registered and sorted by priority (total tokenizers: %u)",
+	msg_info_tokenizer("custom tokenizer '%s' registered and sorted by priority (total tokenizers: %ud)",
 					   name, mgr->detection_order->len);
 
 	msg_info_tokenizer("successfully loaded custom tokenizer '%s' (priority %.1f) from %s",
@@ -329,7 +329,7 @@ rspamd_tokenizer_manager_detect(struct rspamd_tokenizer_manager *mgr,
 	}
 
 	/* Try each tokenizer in priority order */
-	msg_info_tokenizer("trying %u tokenizers for general detection", mgr->detection_order->len);
+	msg_info_tokenizer("trying %ud tokenizers for general detection", mgr->detection_order->len);
 	for (i = 0; i < mgr->detection_order->len; i++) {
 		tok = g_array_index(mgr->detection_order, struct rspamd_custom_tokenizer *, i);
 
