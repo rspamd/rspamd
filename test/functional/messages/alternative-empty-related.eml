@@ -1,0 +1,21 @@
+Return-Path: test@test.com
+From: TEST <test@test.com>
+To: Me <me@me.me>
+Subject: multipart/alternative with malformed related
+MIME-Version: 1.0
+Date: Mon, 01 Jan 2024 00:00:00 +0000
+Message-ID: <alternative-empty-related@test.com>
+Content-Type: multipart/alternative; boundary="=-alt="
+
+--=-alt=
+Content-Type: text/html; charset="UTF-8"
+
+<html><body>HTML only - the sibling related has no valid children</body></html>
+
+--=-alt=
+Content-Type: multipart/related; boundary="=-related="
+
+This is body content but no proper MIME parts inside the related.
+The boundary is never used, so children array may be empty/NULL.
+
+--=-alt=--
