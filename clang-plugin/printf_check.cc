@@ -764,6 +764,14 @@ check_struct_type(const Expr *arg, struct PrintfArgChecker *ctx,
 	}
 
 	auto struct_type = desugared_type->getAsStructureType();
+	if (!struct_type) {
+		/* Could be a C++ class or union, not a struct */
+		auto err_msg = std::string("not a struct type for ") + fmt + " arg: " +
+					   arg->getType().getAsString();
+		print_error(err_msg.c_str(),
+					arg, ctx->past, ctx->pci);
+		return false;
+	}
 	auto struct_decl = struct_type->getDecl();
 	auto struct_def = struct_decl->getNameAsString();
 
