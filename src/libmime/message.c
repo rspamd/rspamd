@@ -1033,6 +1033,10 @@ rspamd_mime_part_find_text_in_subtree(struct rspamd_mime_part *root,
 
 	struct rspamd_mime_multipart *mp = root->specific.mp;
 
+	if (!mp->children) {
+		return NULL;
+	}
+
 	for (unsigned int i = 0; i < mp->children->len; i++) {
 		struct rspamd_mime_part *child = g_ptr_array_index(mp->children, i);
 
@@ -1221,7 +1225,8 @@ rspamd_message_process_text_part_maybe(struct rspamd_task *task,
 		if (mime_part->parent_part) {
 			struct rspamd_mime_part *parent = mime_part->parent_part;
 
-			if (IS_PART_MULTIPART(parent) && parent->specific.mp->children->len == 2) {
+			if (IS_PART_MULTIPART(parent) && parent->specific.mp->children &&
+				parent->specific.mp->children->len == 2) {
 				/*
 				 * Use strict extraction mode: we will extract missing urls from
 				 * an html part if needed
