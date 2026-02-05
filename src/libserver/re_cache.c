@@ -3196,10 +3196,23 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 
 	/* Lua backend is required for sync loading */
 	if (!rspamd_hs_cache_has_lua_backend()) {
-		msg_warn_re_cache("no Lua backend available for synchronous hyperscan loading%s%s%s",
-						  cache->scope ? " for scope '" : "",
-						  cache->scope ? cache->scope : "",
-						  cache->scope ? "'" : "");
+		/*
+		 * During config init (try_load=true), no event loop is available,
+		 * so Lua backend can't be initialized. This is expected - use debug level.
+		 * Workers will initialize the backend and load databases properly.
+		 */
+		if (try_load) {
+			msg_debug_re_cache("no Lua backend available for synchronous hyperscan loading%s%s%s",
+							   cache->scope ? " for scope '" : "",
+							   cache->scope ? cache->scope : "",
+							   cache->scope ? "'" : "");
+		}
+		else {
+			msg_warn_re_cache("no Lua backend available for synchronous hyperscan loading%s%s%s",
+							  cache->scope ? " for scope '" : "",
+							  cache->scope ? cache->scope : "",
+							  cache->scope ? "'" : "");
+		}
 		cache->hyperscan_loaded = RSPAMD_HYPERSCAN_LOAD_ERROR;
 		return cache->hyperscan_loaded;
 	}
