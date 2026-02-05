@@ -384,14 +384,12 @@ public:
 	bool VisitCallExpr(CallExpr *E)
 	{
 		if (E->getCalleeDecl() == nullptr) {
-			print_remark("cannot get callee decl",
-						 E, this->pcontext, this->ci);
+			/* Cannot resolve callee - skip silently (common for templates) */
 			return true;
 		}
 		auto callee = dyn_cast<NamedDecl>(E->getCalleeDecl());
 		if (callee == NULL) {
-			print_remark("cannot get named callee decl",
-						 E, this->pcontext, this->ci);
+			/* Not a named decl - skip silently */
 			return true;
 		}
 
