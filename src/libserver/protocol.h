@@ -81,6 +81,19 @@ gboolean rspamd_protocol_handle_request(struct rspamd_task *task,
 										struct rspamd_http_message *msg);
 
 /**
+ * Handle checkv3 multipart/form-data request.
+ * Parses metadata part (JSON/msgpack), sets task fields, and sets message data.
+ * @param task
+ * @param msg HTTP message
+ * @param chunk body data
+ * @param len body length
+ * @return TRUE on success
+ */
+gboolean rspamd_protocol_handle_v3_request(struct rspamd_task *task,
+										   struct rspamd_http_message *msg,
+										   const char *chunk, gsize len);
+
+/**
  * Write task results to http message
  * @param msg
  * @param task
@@ -88,6 +101,16 @@ gboolean rspamd_protocol_handle_request(struct rspamd_task *task,
 void rspamd_protocol_http_reply(struct rspamd_http_message *msg,
 								struct rspamd_task *task, ucl_object_t **pobj,
 								int how);
+
+/**
+ * Write checkv3 multipart/mixed reply.
+ * Result part contains JSON/msgpack scan results.
+ * Optional body part contains rewritten message.
+ * @param msg HTTP response message to fill
+ * @param task task object
+ */
+void rspamd_protocol_http_reply_v3(struct rspamd_http_message *msg,
+								   struct rspamd_task *task);
 
 /**
  * Write data to log pipes

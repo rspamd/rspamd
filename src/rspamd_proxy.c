@@ -2335,6 +2335,12 @@ rspamd_proxy_scan_self_reply(struct rspamd_task *task)
 		rspamd_protocol_http_reply(msg, task, &rep, out_type);
 		rspamd_protocol_write_log_pipe(task);
 		break;
+	case CMD_CHECK_V3:
+		rspamd_task_set_finish_time(task);
+		rspamd_protocol_http_reply_v3(msg, task);
+		rspamd_protocol_write_log_pipe(task);
+		ctype = NULL; /* Content-Type set by rspamd_protocol_http_reply_v3 as a header */
+		break;
 	case CMD_PING:
 		rspamd_http_message_set_body(msg, "pong" CRLF, 6);
 		ctype = "text/plain";
@@ -2505,6 +2511,12 @@ rspamd_proxy_self_scan(struct rspamd_proxy_session *session)
 	else {
 		if (task->cmd == CMD_PING || task->cmd == CMD_METRICS) {
 			task->flags |= RSPAMD_TASK_FLAG_SKIP;
+		}
+		else if (task->cmd == CMD_CHECK_V3) {
+			if (!rspamd_protocol_handle_v3_request(task, msg, data, len)) {
+				msg_err_task("cannot handle v3 request: %e", task->err);
+				task->flags |= RSPAMD_TASK_FLAG_SKIP;
+			}
 		}
 		else {
 			if (!rspamd_task_load_message(task, msg, data, len)) {

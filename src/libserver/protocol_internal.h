@@ -31,6 +31,10 @@ extern "C" {
  * Modern check version
  */
 #define MSG_CMD_CHECK_V2 "checkv2"
+/*
+ * Multipart check version
+ */
+#define MSG_CMD_CHECK_V3 "checkv3"
 #define MSG_CMD_SCAN "scan"
 
 /*

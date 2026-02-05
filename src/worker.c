@@ -175,6 +175,12 @@ rspamd_worker_body_handler(struct rspamd_http_connection *conn,
 		if (task->cmd == CMD_PING || task->cmd == CMD_METRICS) {
 			task->flags |= RSPAMD_TASK_FLAG_SKIP;
 		}
+		else if (task->cmd == CMD_CHECK_V3) {
+			if (!rspamd_protocol_handle_v3_request(task, msg, chunk, len)) {
+				msg_err_task("cannot handle v3 request: %e", task->err);
+				task->flags |= RSPAMD_TASK_FLAG_SKIP;
+			}
+		}
 		else {
 			if (!rspamd_task_load_message(task, msg, chunk, len)) {
 				msg_err_task("cannot load message: %e", task->err);
