@@ -597,7 +597,7 @@ rspamd_config_process_var(struct rspamd_config *cfg, const rspamd_ftok_t *var,
 		else {
 			/* Load lua code and ensure that we have function ref returned */
 			if (!content || content->len == 0) {
-				msg_err_config("lua variable needs content: %T", &tok);
+				msg_err_config("lua variable needs content: %*s", (int) tok.size(), tok.data());
 				return FALSE;
 			}
 

@@ -206,7 +206,7 @@ rspamd_fasttext_predict_result_t rspamd_lang_detection_fasttext_detect(void *ud,
 		}
 	}
 
-	msg_debug_lang_det("fasttext: got %z word tokens from %ud words", words_vec.size(), words_count);
+	msg_debug_lang_det("fasttext: got %z word tokens from %z words", words_vec.size(), words_count);
 
 	auto *res = real_model->detect_language(words_vec, k);
 

@@ -678,8 +678,8 @@ lua_cryptobox_signature_load(lua_State *L)
 					*psig = sig;
 				}
 				else {
-					msg_err("size of %s mismatches: %d while %d is expected",
-							filename, (int) st.st_size,
+					msg_err("size of %s mismatches: %z while %z is expected",
+							filename, (size_t) st.st_size,
 							crypto_sign_bytes());
 					lua_pushnil(L);
 				}
