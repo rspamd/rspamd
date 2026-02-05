@@ -288,7 +288,7 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg,
 
 	if (rspamd_keypair_type(kp) != RSPAMD_KEYPAIR_KEX) {
 		rspamd_keypair_unref(kp);
-		return FALSE;
+		return NULL;
 	}
 
 	struct fuzzy_key *key = g_malloc0(sizeof(*key));
@@ -325,14 +325,14 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg,
 				32, pk);
 		REF_RELEASE(key);
 
-		return FALSE;
+		return NULL;
 	}
 	else if (r == -1) {
 		msg_err("hash insertion error: pk=%*bs",
 				32, pk);
 		REF_RELEASE(key);
 
-		return FALSE;
+		return NULL;
 	}
 
 	kh_val(target, k) = key;
@@ -352,9 +352,9 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg,
 			while ((cur = ucl_object_iterate(forbidden_ids, &it, true)) != NULL) {
 				if (ucl_object_type(cur) == UCL_INT || ucl_object_type(cur) == UCL_FLOAT) {
 					int id = ucl_object_toint(cur);
-					int r;
+					int ids_r;
 
-					kh_put(fuzzy_key_ids_set, key->forbidden_ids, id, &r);
+					kh_put(fuzzy_key_ids_set, key->forbidden_ids, id, &ids_r);
 				}
 			}
 		}
