@@ -520,8 +520,7 @@ rspamd_control_reply_handler(EV_P_ ev_io *w, int revents)
 		/* Look up request by ID */
 		k = kh_get(rspamd_control_requests, h, rep.id);
 		if (k == kh_end(h)) {
-			msg_warn_main("received control reply for unknown request id %" G_GUINT64_FORMAT
-						  " from worker %P",
+			msg_warn_main("received control reply for unknown request id %uL from worker %P",
 						  rep.id, wrk->pid);
 			if (rfd != -1) {
 				close(rfd);
@@ -532,7 +531,7 @@ rspamd_control_reply_handler(EV_P_ ev_io *w, int revents)
 		elt = kh_val(h, k);
 		kh_del(rspamd_control_requests, h, k);
 
-		msg_debug_control("received reply for command %d id %" G_GUINT64_FORMAT " from worker %P(%s)",
+		msg_debug_control("received reply for command %d id %uL from worker %P(%s)",
 						  (int) rep.type, rep.id, wrk->pid, g_quark_to_string(wrk->type));
 
 		if (rfd != -1) {
@@ -620,8 +619,7 @@ rspamd_control_broadcast_cmd(struct rspamd_main *rspamd_main,
 			}
 			if (ret == 0) {
 				/* Key already exists - ID collision (extremely unlikely with 64-bit random) */
-				msg_warn_main("control command ID collision for %" G_GUINT64_FORMAT
-							  ", previous request will be orphaned",
+				msg_warn_main("control command ID collision for %uL, previous request will be orphaned",
 							  cmd->id);
 				/* Free the old entry to prevent memory leak */
 				struct rspamd_control_reply_elt *old_elt = kh_val(h, kh);
@@ -640,7 +638,7 @@ rspamd_control_broadcast_cmd(struct rspamd_main *rspamd_main,
 			}
 
 			DL_APPEND(res, rep_elt);
-			msg_debug_control("sent command %d id %" G_GUINT64_FORMAT " to worker %P(%s), fd: %d",
+			msg_debug_control("sent command %d id %uL to worker %P(%s), fd: %d",
 							  (int) cmd->type, cmd->id,
 							  wrk->pid,
 							  g_quark_to_string(wrk->type),
@@ -1548,7 +1546,7 @@ rspamd_srv_pipe_handler(EV_P_ ev_io *w, int revents)
 			/* Look up request by ID */
 			k = kh_get(rspamd_srv_requests, ctx->requests, rep.id);
 			if (k == kh_end(ctx->requests)) {
-				msg_warn("received reply for unknown request id %" G_GUINT64_FORMAT,
+				msg_warn("received reply for unknown request id %uL",
 						 rep.id);
 				continue;
 			}

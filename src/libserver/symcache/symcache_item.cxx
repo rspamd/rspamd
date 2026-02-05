@@ -488,8 +488,8 @@ auto cache_item::add_augmentation(const symcache &cache, std::string_view augmen
 		}
 	}
 	else {
-		msg_debug_cache("added unknown augmentation %s for symbol %s",
-						"unknown", augmentation.data(), symbol.data());
+		msg_debug_cache("added augmentation %s for symbol %s",
+						augmentation.data(), symbol.data());
 		return augmentations.try_emplace(augmentation, 0).second;
 	}
 

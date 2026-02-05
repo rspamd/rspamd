@@ -218,7 +218,7 @@ rspamd_stat_cache_checked(lua_State *L)
 			}
 			else {
 				/* Different class learned, unlearn flag */
-				msg_debug_task("<%s> cached value %ld != expected %lu for class %s, will unlearn",
+				msg_debug_task("<%s> cached value %L != expected %uL for class %s, will unlearn",
 							   MESSAGE_FIELD(task, message_id),
 							   val, expected_id, autolearn_class);
 				task->flags |= RSPAMD_TASK_FLAG_UNLEARN;

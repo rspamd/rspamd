@@ -447,12 +447,15 @@ local patterns = {
     matches = {
       {
         -- Case-insensitive <svg ...> in the first chunk
+        -- Use heuristic to avoid misdetecting HTML with embedded SVG
         string = [[(?i)<svg\b]],
         position = { '<=', 4096 },
         weight = 40,
+        heuristic = heuristics.svg_format_heuristic
       },
       {
         -- Case-insensitive <!DOCTYPE svg ...> within the first 4KiB
+        -- DOCTYPE svg is unambiguous - no heuristic needed
         string = [[(?i)<!doctype\s+svg]],
         position = { '<=', 4096 },
         weight = 40,

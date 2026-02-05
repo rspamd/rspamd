@@ -260,8 +260,8 @@ auto symcache::load_items() -> bool
 
 
 	if (cached_map->get_size() < (int) sizeof(symcache_header)) {
-		msg_info_cache("cannot use file %s, truncated: %z", cfg->cache_filename,
-					   errno, strerror(errno));
+		msg_info_cache("cannot use file %s, error: %s", cfg->cache_filename,
+					   strerror(errno));
 		return false;
 	}
 
@@ -401,8 +401,8 @@ bool symcache::save_items() const
 	memcpy(hdr.magic, symcache_magic, sizeof(symcache_magic));
 
 	if (write(file_sink->get_fd(), &hdr, sizeof(hdr)) == -1) {
-		msg_err_cache("cannot write to file %s, error %d, %s", cfg->cache_filename,
-					  errno, strerror(errno));
+		msg_err_cache("cannot write to file %s, error %d, %s", cfg->cache_filename, errno,
+					  strerror(errno));
 
 		return false;
 	}
@@ -667,7 +667,7 @@ auto symcache::resort() -> void
 	 */
 	total_hits = 0;
 	auto used_items = ord->d.size();
-	msg_debug_cache("topologically sort %d filters", used_items);
+	msg_debug_cache("topologically sort %z filters", used_items);
 
 	for (const auto &it: ord->d) {
 		if (it->order == 0) {

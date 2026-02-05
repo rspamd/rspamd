@@ -350,12 +350,18 @@ define(["jquery", "app/common", "app/libft"],
             {
                 picker: "#fuzzy-flag-picker",
                 input: "#fuzzy-flag",
-                container: ($picker) => $picker.parent()
+                container: ($picker) => $picker.parent(),
+                includeReadOnly: true,
+                requiresWritable: false,
+                emptyText: "No fuzzy storages"
             },
             {
                 picker: "#fuzzyFlagText-picker",
                 input: "#fuzzyFlagText",
-                container: ($picker) => $picker.closest("div.card")
+                container: ($picker) => $picker.closest("div.card"),
+                includeReadOnly: false,
+                requiresWritable: true,
+                emptyText: "No writable storages"
             }
         ];
 
@@ -366,8 +372,10 @@ define(["jquery", "app/common", "app/libft"],
             });
         }
 
-        function setWidgetsDisabled(disable) {
-            fuzzyWidgets.forEach(({picker, container}) => {
+        function setWidgetsDisabled(disable, predicate = () => true) {
+            fuzzyWidgets.forEach((widget) => {
+                if (!predicate(widget)) return;
+                const {picker, container} = widget;
                 container($(picker))[disable ? "addClass" : "removeClass"]("disabled");
             });
         }
@@ -384,25 +392,30 @@ define(["jquery", "app/common", "app/libft"],
                     const hasWritableStorages = Object.keys(storages).some((name) => !storages[name].read_only);
 
                     toggleWidgets(true, false);
-                    setWidgetsDisabled(!hasWritableStorages);
+                    setWidgetsDisabled(!hasWritableStorages, (widget) => widget.requiresWritable);
 
-                    fuzzyWidgets.forEach(({picker, input}) => {
+                    fuzzyWidgets.forEach((widget) => {
+                        const {picker, input, includeReadOnly, emptyText} = widget;
                         const $sel = $(picker);
 
                         $sel.empty();
 
-                        if (hasWritableStorages) {
-                            Object.entries(storages).forEach(([name, info]) => {
-                                if (!info.read_only) {
-                                    Object.entries(info.flags).forEach(([symbol, val]) => {
-                                        $sel.append($("<option>", {value: val, text: `${name}:${symbol} (${val})`}));
-                                    });
-                                }
+                        const applicableStorages = Object.entries(storages)
+                            .filter(([, info]) => includeReadOnly || !info.read_only);
+
+                        applicableStorages.forEach(([name, info]) => {
+                            Object.entries(info.flags).forEach(([symbol, val]) => {
+                                $sel.append($("<option>", {value: val, text: `${name}:${symbol} (${val})`}));
                             });
+                        });
+
+                        if ($sel.children().length > 0) {
                             $(input).val($sel.val());
                             $sel.off("change").on("change", () => $(input).val($sel.val()));
                         } else {
-                            $sel.append($("<option>", {value: "", text: "No writable storages"}));
+                            $sel.append($("<option>", {value: "", text: emptyText}));
+                            $(input).val("");
+                            $sel.off("change");
                         }
                     });
                 },

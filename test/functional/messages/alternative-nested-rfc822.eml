@@ -1,0 +1,55 @@
+Return-Path: test@test.com
+From: TEST <test@test.com>
+To: Me <me@me.me>
+Subject: multipart/alternative with nested rfc822
+MIME-Version: 1.0
+Date: Mon, 01 Jan 2024 00:00:00 +0000
+Message-ID: <alternative-nested-rfc822@test.com>
+Content-Type: multipart/mixed; boundary="=-outer="
+
+--=-outer=
+Content-Type: multipart/alternative; boundary="=-alt="
+
+--=-alt=
+Content-Type: text/html; charset="UTF-8"
+
+<html><body>HTML only content - the sibling related has no text alternative</body></html>
+
+--=-alt=
+Content-Type: multipart/related; boundary="=-related="
+
+--=-related=
+Content-Type: image/png; name="spacer.png"
+Content-Transfer-Encoding: base64
+
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==
+
+--=-related=--
+
+--=-alt=--
+
+--=-outer=
+Content-Type: message/rfc822; name="attached.eml"
+
+Return-Path: inner@test.com
+From: Inner <inner@test.com>
+To: Me <me@me.me>
+Subject: Inner message
+MIME-Version: 1.0
+Date: Mon, 01 Jan 2024 00:00:00 +0000
+Message-ID: <inner@test.com>
+Content-Type: multipart/alternative; boundary="=-inner-alt="
+
+--=-inner-alt=
+Content-Type: text/plain; charset="UTF-8"
+
+This is the plain text version of the inner message.
+
+--=-inner-alt=
+Content-Type: text/html; charset="UTF-8"
+
+<html><body>This is the HTML version of the inner message.</body></html>
+
+--=-inner-alt=--
+
+--=-outer=--

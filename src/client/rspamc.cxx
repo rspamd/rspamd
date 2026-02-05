@@ -1582,7 +1582,7 @@ rspamc_counters_output(FILE *out, ucl_object_t *obj)
 
 			if (sym->len > max_len) {
 				rspamd_snprintf(sym_buf, sizeof(sym_buf), "%*s...",
-								(max_len - 3), ucl_object_tostring(sym));
+								(int) (max_len - 3), ucl_object_tostring(sym));
 				sym_name = sym_buf;
 			}
 			else {

@@ -481,3 +481,148 @@ void rspamd_hs_cache_lua_exists_async(const char *cache_key,
 
 	lua_settop(L, err_idx - 1);
 }
+
+gboolean rspamd_hs_cache_lua_load_sync(const char *cache_key,
+									   const char *entity_name,
+									   unsigned char **data,
+									   gsize *len,
+									   char **error)
+{
+	lua_State *L = lua_backend_L;
+	int err_idx;
+
+	msg_debug_hyperscan("load_sync: entity='%s', key=%s",
+						entity_name ? entity_name : "unknown", cache_key);
+
+	if (data) *data = NULL;
+	if (len) *len = 0;
+	if (error) *error = NULL;
+
+	if (!rspamd_hs_cache_has_lua_backend()) {
+		msg_debug_hyperscan("load_sync: no Lua backend");
+		if (error) *error = g_strdup("Lua backend not initialized");
+		return FALSE;
+	}
+
+	lua_pushcfunction(L, rspamd_lua_traceback);
+	err_idx = lua_gettop(L);
+
+	/* Get backend object from registry */
+	lua_rawgeti(L, LUA_REGISTRYINDEX, lua_backend_ref);
+	if (!lua_istable(L, -1)) {
+		lua_settop(L, err_idx - 1);
+		if (error) *error = g_strdup("Invalid Lua backend reference");
+		return FALSE;
+	}
+
+	/* Get load_sync method */
+	lua_getfield(L, -1, "load_sync");
+	if (!lua_isfunction(L, -1)) {
+		lua_settop(L, err_idx - 1);
+		msg_debug_hyperscan("load_sync: backend has no load_sync method (async-only backend)");
+		if (error) *error = g_strdup("Backend does not support synchronous loading");
+		return FALSE;
+	}
+
+	/* Push self (backend object) */
+	lua_pushvalue(L, -2);
+	/* Push cache_key */
+	lua_pushstring(L, cache_key);
+	/* Push platform_id */
+	lua_pushstring(L, lua_backend_platform_id ? lua_backend_platform_id : "");
+
+	/* Call backend:load_sync(cache_key, platform_id) -> data, err */
+	if (lua_pcall(L, 3, 2, err_idx) != 0) {
+		const char *lua_err = lua_tostring(L, -1);
+		if (error) *error = g_strdup(lua_err ? lua_err : "Lua call failed");
+		lua_settop(L, err_idx - 1);
+		return FALSE;
+	}
+
+	/* Check results: data, err */
+	if (lua_isnil(L, -2)) {
+		/* Load failed - check error */
+		const char *lua_err = lua_tostring(L, -1);
+		if (error) *error = g_strdup(lua_err ? lua_err : "Load failed");
+		lua_settop(L, err_idx - 1);
+		return FALSE;
+	}
+
+	/* Get data - prefer rspamd{text} or Lua string */
+	struct rspamd_lua_text *t = lua_check_text_or_string(L, -2);
+	if (t && t->start && t->len > 0) {
+		if (data) {
+			*data = g_malloc(t->len);
+			memcpy(*data, t->start, t->len);
+		}
+		if (len) *len = t->len;
+		msg_debug_hyperscan("load_sync: loaded %ud bytes for %s", t->len, cache_key);
+	}
+	else {
+		if (error) *error = g_strdup("Empty or invalid data returned");
+		lua_settop(L, err_idx - 1);
+		return FALSE;
+	}
+
+	lua_settop(L, err_idx - 1);
+	return TRUE;
+}
+
+gboolean rspamd_hs_cache_lua_exists_sync(const char *cache_key,
+										 const char *entity_name,
+										 gboolean *exists)
+{
+	lua_State *L = lua_backend_L;
+	int err_idx;
+
+	msg_debug_hyperscan("exists_sync: entity='%s', key=%s",
+						entity_name ? entity_name : "unknown", cache_key);
+
+	if (exists) *exists = FALSE;
+
+	if (!rspamd_hs_cache_has_lua_backend()) {
+		msg_debug_hyperscan("exists_sync: no Lua backend");
+		return FALSE;
+	}
+
+	lua_pushcfunction(L, rspamd_lua_traceback);
+	err_idx = lua_gettop(L);
+
+	/* Get backend object from registry */
+	lua_rawgeti(L, LUA_REGISTRYINDEX, lua_backend_ref);
+	if (!lua_istable(L, -1)) {
+		lua_settop(L, err_idx - 1);
+		return FALSE;
+	}
+
+	/* Get exists_sync method */
+	lua_getfield(L, -1, "exists_sync");
+	if (!lua_isfunction(L, -1)) {
+		lua_settop(L, err_idx - 1);
+		msg_debug_hyperscan("exists_sync: backend has no exists_sync method (async-only backend)");
+		return FALSE;
+	}
+
+	/* Push self (backend object) */
+	lua_pushvalue(L, -2);
+	/* Push cache_key */
+	lua_pushstring(L, cache_key);
+	/* Push platform_id */
+	lua_pushstring(L, lua_backend_platform_id ? lua_backend_platform_id : "");
+
+	/* Call backend:exists_sync(cache_key, platform_id) -> exists, err */
+	if (lua_pcall(L, 3, 2, err_idx) != 0) {
+		lua_settop(L, err_idx - 1);
+		return FALSE;
+	}
+
+	/* Check result */
+	if (exists) {
+		*exists = lua_toboolean(L, -2);
+	}
+
+	msg_debug_hyperscan("exists_sync: %s -> %s", cache_key, *exists ? "found" : "not found");
+
+	lua_settop(L, err_idx - 1);
+	return TRUE;
+}

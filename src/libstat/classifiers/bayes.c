@@ -757,7 +757,7 @@ bayes_classify(struct rspamd_classifier *ctx,
 	g_assert(tokens != NULL);
 
 	/* Check if this is a multi-class classifier */
-	msg_debug_bayes("classification check: class_names=%p, len=%uz",
+	msg_debug_bayes("classification check: class_names=%p, len=%ud",
 					ctx->cfg->class_names,
 					ctx->cfg->class_names ? ctx->cfg->class_names->len : 0);
 

@@ -974,7 +974,7 @@ fuzzy_tcp_connection_cleanup(struct fuzzy_tcp_connection *conn, const char *reas
 	}
 
 	if (removed > 0 && task) {
-		msg_warn_task("fuzzy_tcp: cleaned up %u pending commands due to connection failure: %s",
+		msg_warn_task("fuzzy_tcp: cleaned up %ud pending commands due to connection failure: %s",
 					  removed, reason ? reason : "unknown");
 	}
 
@@ -2958,7 +2958,7 @@ fuzzy_tcp_session_cleanup(struct fuzzy_client_session *session)
 	}
 
 	if (removed > 0 && session->task) {
-		msg_debug_fuzzy_check("fuzzy_tcp: cleaned up %u pending commands for finished session",
+		msg_debug_fuzzy_check("fuzzy_tcp: cleaned up %ud pending commands for finished session",
 							  removed);
 	}
 }
