@@ -3187,6 +3187,10 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 	unsigned int total_classes, total_loaded = 0, total_regexps = 0;
 	GString *missing_classes = NULL;
 
+	if (cache->disable_hyperscan) {
+		return RSPAMD_HYPERSCAN_UNSUPPORTED;
+	}
+
 	total_classes = g_hash_table_size(cache->re_classes);
 	g_hash_table_iter_init(&it, cache->re_classes);
 
@@ -3659,6 +3663,11 @@ void rspamd_re_cache_load_hyperscan_scoped_async(struct rspamd_re_cache *cache_h
 	struct rspamd_re_cache *cur;
 
 	if (!cache_head || !event_loop) {
+		return;
+	}
+
+	/* Check if hyperscan is disabled */
+	if (cache_head->disable_hyperscan) {
 		return;
 	}
 
