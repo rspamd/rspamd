@@ -75,6 +75,7 @@ local settings = {
   use_redis = false,
   key_prefix = 'arc_keys',       -- default hash name
   reuse_auth_results = false,    -- Reuse the existing authentication results
+  trusted_authserv_id = nil,     -- AuthservID to match when reusing auth results
   whitelisted_signers_map = nil, -- Trusted signers domains
   whitelist = nil,               -- Domains with broken ARC implementations to trust despite validation failures
   adjust_dmarc = true,           -- Adjust DMARC rejected policy for trusted forwarders
@@ -84,6 +85,27 @@ local settings = {
 
 -- To match normal AR
 local ar_settings = lua_auth_results.default_settings
+
+-- Get Authentication-Results header, optionally filtering by trusted authserv-id
+local function get_trusted_ar_header(task)
+  if settings.trusted_authserv_id then
+    local ar_headers = task:get_header_full('Authentication-Results')
+    if ar_headers then
+      for _, hdr in ipairs(ar_headers) do
+        local authserv_id = string.match(hdr.decoded, '^%s*([^;%s]+)')
+        if authserv_id and authserv_id == settings.trusted_authserv_id then
+          lua_util.debugm(N, task, 'found trusted AR header with authserv-id: %s', authserv_id)
+          return hdr.decoded
+        end
+      end
+      lua_util.debugm(N, task, 'no AR header matched trusted authserv-id: %s',
+          settings.trusted_authserv_id)
+    end
+    return nil
+  else
+    return task:get_header('Authentication-Results')
+  end
+end
 
 local function parse_arc_header(hdr, target, is_aar)
   -- Split elements by ';' and trim spaces
@@ -552,7 +574,7 @@ local function arc_sign_seal(task, params, header)
   local cur_auth_results
 
   if settings.reuse_auth_results then
-    local ar_header = task:get_header('Authentication-Results')
+    local ar_header = get_trusted_ar_header(task)
 
     if ar_header then
       lua_util.debugm(N, task, 'reuse authentication results header for ARC')
@@ -732,7 +754,7 @@ local function prepare_arc_selector(task, sel)
     end
 
     if settings.reuse_auth_results then
-      local ar_header = task:get_header('Authentication-Results')
+      local ar_header = get_trusted_ar_header(task)
 
       if ar_header then
         local arc_match = arc_result_from_ar(ar_header)
