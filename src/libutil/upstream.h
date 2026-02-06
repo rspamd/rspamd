@@ -361,10 +361,12 @@ void rspamd_upstreams_set_token_bucket(struct upstream_list *ups,
 									   gsize base_cost);
 
 /**
- * Get upstream using token bucket algorithm
- * Selects upstream with lowest inflight tokens (weighted by message size)
+ * Get upstream using token bucket algorithm.
+ * Selects upstream with lowest inflight tokens (weighted by message size).
+ * Falls back to round-robin if heap initialization fails.
+ * Token cost is calculated as: base_cost + (message_size / scale).
  * @param ups upstream list
- * @param except upstream to exclude (for retries)
+ * @param except upstream to exclude (for retries), or NULL
  * @param message_size size of the message being processed
  * @param reserved_tokens output: tokens reserved for this request (must be returned later)
  * @return selected upstream or NULL if none available
@@ -375,11 +377,13 @@ struct upstream *rspamd_upstream_get_token_bucket(struct upstream_list *ups,
 												  gsize *reserved_tokens);
 
 /**
- * Return tokens to upstream after request completion
- * Must be called when a request completes (success or failure)
+ * Return tokens to upstream after request completion.
+ * Must be called exactly once for each successful rspamd_upstream_get_token_bucket call.
+ * On success, tokens are restored to the available pool.
+ * On failure, tokens are NOT restored - this penalises failing backends.
  * @param up upstream to return tokens to
  * @param tokens number of tokens to return (from rspamd_upstream_get_token_bucket)
- * @param success TRUE if request succeeded, FALSE if failed
+ * @param success TRUE if request succeeded, FALSE if failed (penalty)
  */
 void rspamd_upstream_return_tokens(struct upstream *up, gsize tokens, gboolean success);
 
