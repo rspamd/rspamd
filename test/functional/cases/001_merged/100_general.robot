@@ -9,6 +9,7 @@ ${ALT_RELATED}         ${RSPAMD_TESTDIR}/messages/alternative-related.eml
 ${MIXED_RELATED_HTML}  ${RSPAMD_TESTDIR}/messages/mixed-related-html-only.eml
 ${ALT_NESTED_RFC822}   ${RSPAMD_TESTDIR}/messages/alternative-nested-rfc822.eml
 ${ALT_EMPTY_RELATED}   ${RSPAMD_TESTDIR}/messages/alternative-empty-related.eml
+${MIXED_HTML_ZIP}      ${RSPAMD_TESTDIR}/messages/mixed-html-zip.eml
 ${SETTINGS_NOSYMBOLS}  {symbols_enabled = []}
 
 *** Test Cases ***
@@ -86,5 +87,10 @@ HTML ONLY - nested message/rfc822 with alternative
 
 HTML ONLY - malformed related with no children
   Scan File  ${ALT_EMPTY_RELATED}
+  ...  Settings={symbols_enabled = [MIME_HTML_ONLY]}
+  Expect Symbol  MIME_HTML_ONLY
+
+HTML ONLY - multipart/mixed with html and non-text attachment
+  Scan File  ${MIXED_HTML_ZIP}
   ...  Settings={symbols_enabled = [MIME_HTML_ONLY]}
   Expect Symbol  MIME_HTML_ONLY

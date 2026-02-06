@@ -1,0 +1,24 @@
+Return-Path: test@test.com
+From: TEST <test@test.com>
+To: Me <me@me.me>
+Subject: multipart/mixed with html and zip attachment
+MIME-Version: 1.0
+Date: Mon, 01 Jan 2024 00:00:00 +0000
+Message-ID: <mixed-html-zip@test.com>
+Content-Type: multipart/mixed; boundary="a3f1e7d94b2c80569e1f3a7d6c4b2e8f"
+
+--a3f1e7d94b2c80569e1f3a7d6c4b2e8f
+Content-Type: text/html
+
+<html>
+<body>
+<p>This is an HTML-only message with a zip attachment.</p>
+<a href="https://example.com">Click here</a>
+</body>
+</html>
+
+--a3f1e7d94b2c80569e1f3a7d6c4b2e8f
+Content-Type: application/zip; name="ComplaintLetter_1508658544.zip"
+
+UEsDBBQAAAAIAGRlZmF1bHQAAAAAAAAAAAAAAAALABAAZHVtbXkudHh0VVgMAGR1bW15
+--a3f1e7d94b2c80569e1f3a7d6c4b2e8f--
