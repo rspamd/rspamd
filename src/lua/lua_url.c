@@ -331,6 +331,50 @@ lua_url_get_text(lua_State *L)
  * Get full content of the url or user@domain in case of email
  * @return {string} url as a string
  */
+/*
+ * Re-encode characters that cannot appear literally in URLs.
+ * Like browsers: decode internally for matching/display, re-encode on copy/serialization.
+ * Returns the string pushed onto the Lua stack (via lua_pushlstring).
+ */
+static void
+lua_url_push_encoded(lua_State *L, const char *s, gsize len)
+{
+	static const char hexdigits[] = "0123456789ABCDEF";
+	gsize i, extra = 0;
+
+	/* Fast check: count characters that need encoding */
+	for (i = 0; i < len; i++) {
+		unsigned char c = (unsigned char) s[i];
+		if (c <= 0x20) {
+			extra += 2; /* %XX is 3 chars vs 1 original */
+		}
+	}
+
+	if (extra == 0) {
+		/* No encoding needed — fast path */
+		lua_pushlstring(L, s, len);
+		return;
+	}
+
+	char *encoded = g_malloc(len + extra);
+	char *d = encoded;
+
+	for (i = 0; i < len; i++) {
+		unsigned char c = (unsigned char) s[i];
+		if (c <= 0x20) {
+			*d++ = '%';
+			*d++ = hexdigits[c >> 4];
+			*d++ = hexdigits[c & 0x0f];
+		}
+		else {
+			*d++ = (char) c;
+		}
+	}
+
+	lua_pushlstring(L, encoded, d - encoded);
+	g_free(encoded);
+}
+
 static int
 lua_url_tostring(lua_State *L)
 {
@@ -353,7 +397,7 @@ lua_url_tostring(lua_State *L)
 			g_free(tmp);
 		}
 		else {
-			lua_pushlstring(L, url->url->string, url->url->urllen);
+			lua_url_push_encoded(L, url->url->string, url->url->urllen);
 		}
 	}
 	else {
