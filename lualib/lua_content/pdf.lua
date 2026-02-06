@@ -160,6 +160,21 @@ local function compile_tries()
   end
 end
 
+-- StandardEncoding/MacRomanEncoding ligature substitutions
+-- Applied only to rendered text, NOT to dictionary strings (URI values etc.)
+-- to avoid corrupting soft hyphens (U+00AD = byte 0xAD = \173) in URLs
+local function apply_ligature_substitutions(s)
+  if not s then return s end
+  s = s:gsub('\171', 'ff')
+  s = s:gsub('\172', 'ffi')
+  s = s:gsub('\173', 'ffl')
+  s = s:gsub('\174', 'fi')
+  s = s:gsub('\175', 'fl')
+  s = s:gsub('\222', 'fi')
+  s = s:gsub('\223', 'fl')
+  return s
+end
+
 -- Returns a table with generic grammar elements for PDF
 local function generic_grammar_elts()
   local P = lpeg.P
@@ -183,17 +198,6 @@ local function generic_grammar_elts()
       res = lua_util.unhex(s:sub(1, #s - 1)) .. lua_util.unhex((s:sub(#s) .. '0'))
     end
 
-    if res then
-      -- StandardEncoding/MacRomanEncoding ligature substitutions
-      res = res:gsub('\171', 'ff')
-      res = res:gsub('\172', 'ffi')
-      res = res:gsub('\173', 'ffl')
-      res = res:gsub('\174', 'fi')
-      res = res:gsub('\175', 'fl')
-      res = res:gsub('\222', 'fi')
-      res = res:gsub('\223', 'fl')
-    end
-
     return res
   end
 
@@ -215,15 +219,6 @@ local function generic_grammar_elts()
       return string.char(tonumber(cc:sub(2), 8) or 63)
     end
     s = s:gsub('\\%d%d?%d?', ue_octal)
-
-    -- StandardEncoding/MacRomanEncoding ligature substitutions
-    s = s:gsub('\171', 'ff')
-    s = s:gsub('\172', 'ffi')
-    s = s:gsub('\173', 'ffl')
-    s = s:gsub('\174', 'fi')
-    s = s:gsub('\175', 'fl')
-    s = s:gsub('\222', 'fi')
-    s = s:gsub('\223', 'fl')
 
     return s
   end
@@ -489,6 +484,11 @@ local function gen_text_grammar()
         end
       end
       res = table.concat(tres)
+    end
+
+    -- Apply ligature substitutions for rendered text only (not dictionary strings like /URI)
+    if type(res) == 'string' then
+      res = apply_ligature_substitutions(res)
     end
 
     res = sanitize_pdf_text(res)
