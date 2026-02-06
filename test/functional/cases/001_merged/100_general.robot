@@ -5,6 +5,10 @@ Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
 ${GTUBE}               ${RSPAMD_TESTDIR}/messages/gtube.eml
+${ALT_RELATED}         ${RSPAMD_TESTDIR}/messages/alternative-related.eml
+${MIXED_RELATED_HTML}  ${RSPAMD_TESTDIR}/messages/mixed-related-html-only.eml
+${ALT_NESTED_RFC822}   ${RSPAMD_TESTDIR}/messages/alternative-nested-rfc822.eml
+${ALT_EMPTY_RELATED}   ${RSPAMD_TESTDIR}/messages/alternative-empty-related.eml
 ${SETTINGS_NOSYMBOLS}  {symbols_enabled = []}
 
 *** Test Cases ***
@@ -59,3 +63,28 @@ HTML ONLY - TRUE NEGATIVE
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
   ...  Settings={symbols_enabled = [MIME_HTML_ONLY]}
   Do Not Expect Symbol  MIME_HTML_ONLY
+
+HTML ONLY - multipart/related inside alternative
+  Scan File  ${ALT_RELATED}
+  ...  Settings={symbols_enabled = [MIME_HTML_ONLY]}
+  Do Not Expect Symbol  MIME_HTML_ONLY
+
+HTML ONLY - multipart/mixed with related (html only)
+  Scan File  ${MIXED_RELATED_HTML}
+  ...  Settings={symbols_enabled = [MIME_HTML_ONLY]}
+  Expect Symbol  MIME_HTML_ONLY
+
+PARTS DIFFER - multipart/related inside alternative
+  Scan File  ${ALT_RELATED}
+  ...  Settings={symbols_enabled = [R_PARTS_DIFFER]}
+  Expect Symbol  R_PARTS_DIFFER
+
+HTML ONLY - nested message/rfc822 with alternative
+  Scan File  ${ALT_NESTED_RFC822}
+  ...  Settings={symbols_enabled = [MIME_HTML_ONLY]}
+  Expect Symbol  MIME_HTML_ONLY
+
+HTML ONLY - malformed related with no children
+  Scan File  ${ALT_EMPTY_RELATED}
+  ...  Settings={symbols_enabled = [MIME_HTML_ONLY]}
+  Expect Symbol  MIME_HTML_ONLY

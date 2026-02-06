@@ -1,0 +1,43 @@
+Return-Path: test@test.com
+From: TEST <test@test.com>
+To: Me <me@me.me>
+Subject: multipart/alternative with related
+MIME-Version: 1.0
+Date: Mon, 01 Jan 2024 00:00:00 +0000
+Message-ID: <alternative-related@test.com>
+Content-Type: multipart/alternative; boundary="19//NAEGP9L/QH6Y34N="
+
+--19//NAEGP9L/QH6Y34N=
+Content-Type: text/plain; charset="UTF-8"; name="plain.txt"
+
+test
+
+--19//NAEGP9L/QH6Y34N=
+Content-Type: multipart/related; boundary="29//NAEGP9L/QH6Y34N="
+
+--29//NAEGP9L/QH6Y34N=
+Content-Type: text/html; charset="UTF-8"
+
+<html>
+<body>
+This is an html part with enough distinct words to trigger parts distance calculations.
+It also contains a link: <a href="http://example.com/">example</a>.
+</body>
+</html>
+
+--29//NAEGP9L/QH6Y34N=
+Content-Type: image/png; name="docd.png"
+Content-Transfer-Encoding: 7bit
+Content-ID: <docd.png>
+
+dummy
+
+--29//NAEGP9L/QH6Y34N=
+Content-Type: image/png; name="dw.png"
+Content-Transfer-Encoding: 7bit
+Content-ID: <dw.png>
+
+dummy
+
+--29//NAEGP9L/QH6Y34N=--
+--19//NAEGP9L/QH6Y34N=--

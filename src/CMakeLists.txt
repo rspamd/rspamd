@@ -57,21 +57,24 @@ endfunction()
 
 # Configure Clang Plugin if enabled
 if (ENABLE_CLANG_PLUGIN)
-    set(CLANG_PLUGIN_FLAGS "-Xclang -load -Xclang ${CMAKE_CURRENT_BINARY_DIR}/../clang-plugin/librspamd-clang${CMAKE_SHARED_LIBRARY_SUFFIX} -Xclang -add-plugin -Xclang rspamd-ast")
-
-    # Apply to both C and C++ compiler flags
-    add_compile_options(${CLANG_PLUGIN_FLAGS})
+    # Apply clang plugin flags - use SHELL: to prevent CMake from deduplicating -Xclang
+    add_compile_options(
+        "SHELL:-Xclang -load"
+        "SHELL:-Xclang ${CMAKE_CURRENT_BINARY_DIR}/../clang-plugin/librspamd-clang${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        "SHELL:-Xclang -add-plugin"
+        "SHELL:-Xclang rspamd-ast"
+    )
 
     # Add any extra clang plugins
     if (CLANG_EXTRA_PLUGINS_LIBS)
         foreach (lib ${CLANG_EXTRA_PLUGINS_LIBS})
-            add_compile_options("-Xclang" "-load" "-Xclang" "${lib}")
+            add_compile_options("SHELL:-Xclang -load" "SHELL:-Xclang ${lib}")
         endforeach ()
     endif ()
 
     if (CLANG_EXTRA_PLUGINS)
         foreach (plug ${CLANG_EXTRA_PLUGINS})
-            add_compile_options("-Xclang" "-add-plugin" "-Xclang" "${plug}")
+            add_compile_options("SHELL:-Xclang -add-plugin" "SHELL:-Xclang ${plug}")
         endforeach ()
     endif ()
 endif ()

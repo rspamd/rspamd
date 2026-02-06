@@ -968,6 +968,155 @@ enum rspamd_message_part_is_text_result {
 	RSPAMD_MESSAGE_PART_IS_NOT_TEXT
 };
 
+static struct rspamd_mime_part *
+rspamd_mime_part_find_parent_multipart_subtype(struct rspamd_mime_part *part,
+											   const char *subtype, gsize subtype_len)
+{
+	rspamd_ftok_t srch;
+
+	srch.begin = subtype;
+	srch.len = subtype_len;
+
+	while (part) {
+		if (part->ct && rspamd_ftok_casecmp(&part->ct->subtype, &srch) == 0) {
+			return part;
+		}
+		part = part->parent_part;
+	}
+
+	return NULL;
+}
+
+static gboolean
+rspamd_mime_part_is_in_multipart_alternative(struct rspamd_mime_part *part)
+{
+	if (!part) {
+		return FALSE;
+	}
+
+	return rspamd_mime_part_find_parent_multipart_subtype(part->parent_part,
+														  "alternative", 11) != NULL;
+}
+
+/*
+ * Check if `ancestor` is an ancestor of `part` (or equal to it)
+ */
+static gboolean
+rspamd_mime_part_is_ancestor(struct rspamd_mime_part *part,
+							 struct rspamd_mime_part *ancestor)
+{
+	while (part) {
+		if (part == ancestor) {
+			return TRUE;
+		}
+		part = part->parent_part;
+	}
+	return FALSE;
+}
+
+/*
+ * Recursively search for a text part in a subtree.
+ * - `root` is the multipart to search in
+ * - `exclude` is the subtree to skip (the branch containing the original part)
+ * - `want_html` TRUE means we want HTML part, FALSE means we want plain text
+ * - Returns the first matching text part, or NULL
+ * - Stops recursion if we hit a message/rfc822 part
+ */
+static struct rspamd_mime_text_part *
+rspamd_mime_part_find_text_in_subtree(struct rspamd_mime_part *root,
+									  struct rspamd_mime_part *exclude,
+									  gboolean want_html)
+{
+	if (!root || !IS_PART_MULTIPART(root) || !root->specific.mp) {
+		return NULL;
+	}
+
+	struct rspamd_mime_multipart *mp = root->specific.mp;
+
+	if (!mp->children) {
+		return NULL;
+	}
+
+	for (unsigned int i = 0; i < mp->children->len; i++) {
+		struct rspamd_mime_part *child = g_ptr_array_index(mp->children, i);
+
+		/* Skip the excluded subtree */
+		if (exclude && rspamd_mime_part_is_ancestor(exclude, child)) {
+			continue;
+		}
+
+		/* Stop at message/rfc822 parts (embedded messages) */
+		if (IS_PART_MESSAGE(child)) {
+			continue;
+		}
+
+		/* Check if this is the text part we want */
+		if (IS_PART_TEXT(child) && child->specific.txt) {
+			struct rspamd_mime_text_part *txt = child->specific.txt;
+
+			/* Skip attachments */
+			if (IS_TEXT_PART_ATTACHMENT(txt)) {
+				continue;
+			}
+
+			gboolean is_html = IS_TEXT_PART_HTML(txt);
+			if (want_html == is_html) {
+				return txt;
+			}
+		}
+
+		/* Recurse into multiparts */
+		if (IS_PART_MULTIPART(child)) {
+			struct rspamd_mime_text_part *found =
+				rspamd_mime_part_find_text_in_subtree(child, NULL, want_html);
+			if (found) {
+				return found;
+			}
+		}
+	}
+
+	return NULL;
+}
+
+/*
+ * Find the alternative text part for a given text part.
+ * Algorithm:
+ * 1. Walk up from the part's mime_part to find a multipart/alternative ancestor
+ * 2. If found, identify which child subtree contains our part
+ * 3. Search other children for a text part of the opposite type
+ *    (plain for HTML, HTML for plain)
+ * 4. Stop if we hit message/rfc822 (embedded message)
+ */
+static struct rspamd_mime_text_part *
+rspamd_mime_text_part_find_alternative(struct rspamd_mime_text_part *text_part)
+{
+	if (!text_part || !text_part->mime_part) {
+		return NULL;
+	}
+
+	struct rspamd_mime_part *mime_part = text_part->mime_part;
+	gboolean is_html = IS_TEXT_PART_HTML(text_part);
+
+	/* Find the multipart/alternative ancestor */
+	struct rspamd_mime_part *alt_parent =
+		rspamd_mime_part_find_parent_multipart_subtype(mime_part->parent_part,
+													   "alternative", 11);
+
+	if (!alt_parent) {
+		/* No alternative parent, no alternative part */
+		return NULL;
+	}
+
+	/* Find the direct child of alt_parent that contains our mime_part */
+	struct rspamd_mime_part *our_branch = mime_part;
+	while (our_branch->parent_part && our_branch->parent_part != alt_parent) {
+		our_branch = our_branch->parent_part;
+	}
+
+	/* Search other branches for a text part of the opposite type */
+	return rspamd_mime_part_find_text_in_subtree(alt_parent, our_branch, !is_html);
+}
+
 static enum rspamd_message_part_is_text_result
 rspamd_message_part_can_be_parsed_as_text(struct rspamd_task *task,
 										  struct rspamd_mime_part *mime_part)
@@ -996,7 +1145,8 @@ rspamd_message_part_can_be_parsed_as_text(struct rspamd_task *task,
 	/* Skip attachments */
 	if (res != RSPAMD_MESSAGE_PART_IS_NOT_TEXT &&
 		(mime_part->cd && mime_part->cd->type == RSPAMD_CT_ATTACHMENT)) {
-		if (!task->cfg->check_text_attachements) {
+		if (!task->cfg->check_text_attachements &&
+			!rspamd_mime_part_is_in_multipart_alternative(mime_part)) {
 			debug_task("skip attachments for checking as text parts");
 			return RSPAMD_MESSAGE_PART_IS_NOT_TEXT;
 		}
@@ -1017,7 +1167,9 @@ rspamd_message_process_text_part_maybe(struct rspamd_task *task,
 
 	/* Skip attachments */
 	if ((mime_part->cd && mime_part->cd->type == RSPAMD_CT_ATTACHMENT)) {
-		flags |= RSPAMD_MIME_TEXT_PART_ATTACHMENT;
+		if (!rspamd_mime_part_is_in_multipart_alternative(mime_part)) {
+			flags |= RSPAMD_MIME_TEXT_PART_ATTACHMENT;
+		}
 	}
 
 	text_part = rspamd_mempool_alloc0(task->task_pool,
@@ -1073,7 +1225,8 @@ rspamd_message_process_text_part_maybe(struct rspamd_task *task,
 		if (mime_part->parent_part) {
 			struct rspamd_mime_part *parent = mime_part->parent_part;
 
-			if (IS_PART_MULTIPART(parent) && parent->specific.mp->children->len == 2) {
+			if (IS_PART_MULTIPART(parent) && parent->specific.mp->children &&
+				parent->specific.mp->children->len == 2) {
 				/*
 				 * Use strict extraction mode: we will extract missing urls from
 				 * an html part if needed
@@ -1822,137 +1975,117 @@ void rspamd_message_process(struct rspamd_task *task)
 		}
 	}
 
-	/* Calculate distance for 2-parts messages */
-	if (i == 2) {
-		p1 = g_ptr_array_index(MESSAGE_FIELD(task, text_parts), 0);
-		p2 = g_ptr_array_index(MESSAGE_FIELD(task, text_parts), 1);
+	/* Compute alternative text parts for each text part */
+	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, text_part)
+	{
+		text_part->alt_text_part = rspamd_mime_text_part_find_alternative(text_part);
+	}
 
-		/* First of all check parent object */
-		if (p1->mime_part->parent_part) {
-			rspamd_ftok_t srch;
+	/* Calculate distance for alternative parts */
+	struct rspamd_mime_text_part *html_part = NULL;
 
-			srch.begin = "alternative";
-			srch.len = 11;
+	/* Find the first non-attachment HTML part that has an alternative */
+	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, text_part)
+	{
+		if (IS_TEXT_PART_HTML(text_part) &&
+			!IS_TEXT_PART_ATTACHMENT(text_part) &&
+			text_part->alt_text_part) {
+			html_part = text_part;
+			break;
+		}
+	}
 
-			if (rspamd_ftok_cmp(&p1->mime_part->parent_part->ct->subtype, &srch) == 0) {
-				if (!IS_TEXT_PART_EMPTY(p1) && !IS_TEXT_PART_EMPTY(p2) &&
-					p1->normalized_hashes && p2->normalized_hashes) {
-					/*
-					 * We also detect language on one part and propagate it to
-					 * another one
-					 */
-					struct rspamd_mime_text_part *sel;
+	if (html_part) {
+		p1 = html_part;
+		p2 = html_part->alt_text_part;
 
-					/* Prefer HTML as text part is not displayed normally */
-					if (IS_TEXT_PART_HTML(p1)) {
-						sel = p1;
-					}
-					else if (IS_TEXT_PART_HTML(p2)) {
-						sel = p2;
-					}
-					else {
-						if (p1->utf_content.len > p2->utf_content.len) {
-							sel = p1;
-						}
-						else {
-							sel = p2;
-						}
-					}
+		/* alt_text_part already ensures they share a multipart/alternative parent */
+		if (!IS_TEXT_PART_EMPTY(p1) && !IS_TEXT_PART_EMPTY(p2) &&
+			p1->normalized_hashes && p2->normalized_hashes) {
+			/*
+			 * We also detect language on one part and propagate it to
+			 * another one. Prefer HTML as text part is not displayed normally.
+			 */
+			struct rspamd_mime_text_part *sel = p1; /* p1 is always HTML here */
 
-					if (sel->language && sel->language[0]) {
-						/* Propagate language */
-						if (sel == p1) {
-							if (p2->languages) {
-								g_ptr_array_unref(p2->languages);
-							}
-
-							p2->language = sel->language;
-							p2->languages = g_ptr_array_ref(sel->languages);
-						}
-						else {
-							if (p1->languages) {
-								g_ptr_array_unref(p1->languages);
-							}
-
-							p1->language = sel->language;
-							p1->languages = g_ptr_array_ref(sel->languages);
-						}
-					}
-
-					tw = p1->normalized_hashes->len + p2->normalized_hashes->len;
-
-					if (tw > 0) {
-						dw = rspamd_words_levenshtein_distance(task,
-															   p1->normalized_hashes,
-															   p2->normalized_hashes);
-						diff = dw / (double) tw;
-
-						msg_debug_task(
-							"different words: %d, total words: %d, "
-							"got diff between parts of %.2f",
-							dw, tw,
-							diff);
-
-						pdiff = rspamd_mempool_alloc(task->task_pool,
-													 sizeof(double));
-						*pdiff = diff;
-						rspamd_mempool_set_variable(task->task_pool,
-													"parts_distance",
-													pdiff,
-													NULL);
-						ptw = rspamd_mempool_alloc(task->task_pool,
-												   sizeof(int));
-						*ptw = tw;
-						rspamd_mempool_set_variable(task->task_pool,
-													"total_words",
-													ptw,
-													NULL);
-					}
+			if (sel->language && sel->language[0]) {
+				/* Propagate language from HTML to text part */
+				if (p2->languages) {
+					g_ptr_array_unref(p2->languages);
 				}
-				else {
-					/*
-					 * Handle cases where parts differ significantly:
-					 * - One part is empty, another is not
-					 * - One part has words, another has none (but isn't empty)
-					 * In both cases, treat as 100% difference
-					 */
-					gboolean p1_has_words = p1->normalized_hashes &&
-											p1->normalized_hashes->len > 0;
-					gboolean p2_has_words = p2->normalized_hashes &&
-											p2->normalized_hashes->len > 0;
 
-					if (p1_has_words != p2_has_words) {
-						struct rspamd_mime_text_part *non_empty =
-							p1_has_words ? p1 : p2;
+				p2->language = sel->language;
+				p2->languages = g_ptr_array_ref(sel->languages);
+			}
 
-						tw = non_empty->normalized_hashes->len;
+			tw = p1->normalized_hashes->len + p2->normalized_hashes->len;
 
-						msg_debug_task(
-							"one part has no words, another has %d words, "
-							"got diff between parts of 1.0",
-							tw);
+			if (tw > 0) {
+				dw = rspamd_words_levenshtein_distance(task,
+													   p1->normalized_hashes,
+													   p2->normalized_hashes);
+				diff = dw / (double) tw;
 
-						pdiff = rspamd_mempool_alloc(task->task_pool,
-													 sizeof(double));
-						*pdiff = 1.0;
-						rspamd_mempool_set_variable(task->task_pool,
-													"parts_distance",
-													pdiff,
-													NULL);
-						ptw = rspamd_mempool_alloc(task->task_pool,
-												   sizeof(int));
-						*ptw = tw;
-						rspamd_mempool_set_variable(task->task_pool,
-													"total_words",
-													ptw,
-													NULL);
-					}
-				}
+				msg_debug_task(
+					"different words: %d, total words: %d, "
+					"got diff between parts of %.2f",
+					dw, tw,
+					diff);
+
+				pdiff = rspamd_mempool_alloc(task->task_pool,
+											 sizeof(double));
+				*pdiff = diff;
+				rspamd_mempool_set_variable(task->task_pool,
+											"parts_distance",
+											pdiff,
+											NULL);
+				ptw = rspamd_mempool_alloc(task->task_pool,
+										   sizeof(int));
+				*ptw = tw;
+				rspamd_mempool_set_variable(task->task_pool,
+											"total_words",
+											ptw,
+											NULL);
 			}
 		}
 		else {
-			debug_task(
-				"message contains two parts but they are in different multi-parts");
+			/*
+			 * Handle cases where parts differ significantly:
+			 * - One part is empty, another is not
+			 * - One part has words, another has none (but isn't empty)
+			 * In both cases, treat as 100% difference
+			 */
+			gboolean p1_has_words = p1->normalized_hashes &&
+									p1->normalized_hashes->len > 0;
+			gboolean p2_has_words = p2->normalized_hashes &&
+									p2->normalized_hashes->len > 0;
+
+			if (p1_has_words != p2_has_words) {
+				struct rspamd_mime_text_part *non_empty =
+					p1_has_words ? p1 : p2;
+
+				tw = non_empty->normalized_hashes->len;
+
+				msg_debug_task(
+					"one part has no words, another has %d words, "
+					"got diff between parts of 1.0",
+					tw);
+
+				pdiff = rspamd_mempool_alloc(task->task_pool,
+											 sizeof(double));
+				*pdiff = 1.0;
+				rspamd_mempool_set_variable(task->task_pool,
+											"parts_distance",
+											pdiff,
+											NULL);
+				ptw = rspamd_mempool_alloc(task->task_pool,
+										   sizeof(int));
+				*ptw = tw;
+				rspamd_mempool_set_variable(task->task_pool,
+											"total_words",
+											ptw,
+											NULL);
+			}
 		}
 	}
 

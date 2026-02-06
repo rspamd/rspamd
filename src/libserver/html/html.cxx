@@ -2177,7 +2177,7 @@ auto html_process_input(struct rspamd_task *task,
 	}
 
 	if (task->cfg && in->len > task->cfg->max_html_len) {
-		msg_notice_task("html input is too big: %z, limit is %z",
+		msg_notice_task("html input is too big: %ud, limit is %z",
 						in->len,
 						task->cfg->max_html_len);
 		process_size = task->cfg->max_html_len;

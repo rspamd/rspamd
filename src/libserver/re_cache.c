@@ -1585,6 +1585,11 @@ rspamd_re_cache_exec_re(struct rspamd_task *task,
 		 * encoding, but HTML tags and line breaks will still be present.
 		 * Multiline expressions will need to be used to match strings that are
 		 * broken by line breaks.
+		 *
+		 * If the regexp class contains UTF-8 patterns (/u flag), we use
+		 * charset-converted utf_content to allow Unicode matching.
+		 * Otherwise, we use parsed content (transfer-decoded only) for
+		 * backward compatibility with raw byte matching.
 		 */
 		if (MESSAGE_FIELD(task, text_parts)->len > 0) {
 			cnt = MESSAGE_FIELD(task, text_parts)->len;
@@ -1594,17 +1599,38 @@ rspamd_re_cache_exec_re(struct rspamd_task *task,
 			for (i = 0; i < cnt; i++) {
 				text_part = g_ptr_array_index(MESSAGE_FIELD(task, text_parts), i);
 
-				if (text_part->parsed.len > 0) {
-					scvec[i] = (unsigned char *) text_part->parsed.begin;
-					lenvec[i] = text_part->parsed.len;
+				if (re_class->has_utf8) {
+					/*
+					 * Use charset-converted content for UTF-8 patterns.
+					 * This allows Unicode matching while preserving HTML tags.
+					 */
+					if (text_part->utf_content.len > 0) {
+						scvec[i] = (unsigned char *) text_part->utf_content.begin;
+						lenvec[i] = text_part->utf_content.len;
 
-					if (!IS_TEXT_PART_UTF(text_part)) {
-						raw = TRUE;
+						if (!IS_TEXT_PART_UTF(text_part)) {
+							raw = TRUE;
+						}
+					}
+					else {
+						scvec[i] = (unsigned char *) "";
+						lenvec[i] = 0;
 					}
 				}
 				else {
-					scvec[i] = (unsigned char *) "";
-					lenvec[i] = 0;
+					/*
+					 * Use transfer-decoded content for raw byte matching.
+					 * This is not charset-converted, so always use raw mode.
+					 */
+					if (text_part->parsed.len > 0) {
+						scvec[i] = (unsigned char *) text_part->parsed.begin;
+						lenvec[i] = text_part->parsed.len;
+					}
+					else {
+						scvec[i] = (unsigned char *) "";
+						lenvec[i] = 0;
+					}
+					raw = TRUE;
 				}
 			}
 
@@ -2363,7 +2389,7 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 	GHashTableIter cit;
 	gpointer k, v;
 	struct rspamd_re_class *re_class;
-	char path[PATH_MAX], npath[PATH_MAX];
+	char path[PATH_MAX];
 	hs_database_t *test_db;
 	int fd, i, n, *hs_ids = NULL, pcre_flags, re_flags;
 	rspamd_cryptobox_fast_hash_state_t crc_st;
@@ -2378,7 +2404,6 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 	struct iovec iov[7];
 	struct rspamd_re_cache *cache;
 	GError *err;
-	pid_t our_pid = getpid();
 
 	cache = cbdata->cache;
 
@@ -3137,6 +3162,13 @@ rspamd_re_cache_is_valid_hyperscan_file(struct rspamd_re_cache *cache,
 #endif
 }
 
+/* Forward declaration - defined after rspamd_re_cache_load_hyperscan_scoped */
+static gboolean
+rspamd_re_cache_apply_hyperscan_blob(struct rspamd_re_cache *cache,
+									 struct rspamd_re_class *re_class,
+									 const unsigned char *data,
+									 gsize len,
+									 bool try_load);
 
 enum rspamd_hyperscan_status
 rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
@@ -3148,259 +3180,212 @@ rspamd_re_cache_load_hyperscan(struct rspamd_re_cache *cache,
 #ifndef WITH_HYPERSCAN
 	return RSPAMD_HYPERSCAN_UNSUPPORTED;
 #else
-	char path[PATH_MAX];
-	int fd, i, n, *hs_ids = NULL, *hs_flags = NULL, total = 0, ret;
 	GHashTableIter it;
 	gpointer k, v;
-	uint8_t *map, *p;
 	struct rspamd_re_class *re_class;
-	struct rspamd_re_cache_elt *elt;
-	struct stat st;
-	gboolean has_valid = FALSE, all_valid = FALSE;
+	gboolean has_valid = FALSE, all_valid = TRUE;
+	unsigned int total_classes, total_loaded = 0, total_regexps = 0;
+	GString *missing_classes = NULL;
 
+	if (cache->disable_hyperscan) {
+		return RSPAMD_HYPERSCAN_UNSUPPORTED;
+	}
+
+	total_classes = g_hash_table_size(cache->re_classes);
 	g_hash_table_iter_init(&it, cache->re_classes);
+
+	/* Lua backend is required for sync loading */
+	if (!rspamd_hs_cache_has_lua_backend()) {
+		/*
+		 * During config init (try_load=true), no event loop is available,
+		 * so Lua backend can't be initialized. This is expected - use debug level.
+		 * Workers will initialize the backend and load databases properly.
+		 */
+		if (try_load) {
+			msg_debug_re_cache("no Lua backend available for synchronous hyperscan loading%s%s%s",
+							   cache->scope ? " for scope '" : "",
+							   cache->scope ? cache->scope : "",
+							   cache->scope ? "'" : "");
+		}
+		else {
+			msg_warn_re_cache("no Lua backend available for synchronous hyperscan loading%s%s%s",
+							  cache->scope ? " for scope '" : "",
+							  cache->scope ? cache->scope : "",
+							  cache->scope ? "'" : "");
+		}
+		cache->hyperscan_loaded = RSPAMD_HYPERSCAN_LOAD_ERROR;
+		return cache->hyperscan_loaded;
+	}
 
 	while (g_hash_table_iter_next(&it, &k, &v)) {
 		re_class = v;
-		rspamd_snprintf(path, sizeof(path), "%s%c%s.hs", cache_dir,
-						G_DIR_SEPARATOR, re_class->hash);
+		unsigned char *data = NULL;
+		gsize data_len = 0;
+		char *error = NULL;
+		const char *class_type_name = rspamd_re_cache_type_to_string(re_class->type);
 
-		if (rspamd_re_cache_is_valid_hyperscan_file(cache, path, try_load, FALSE, NULL)) {
-			msg_debug_re_cache("load hyperscan database from '%s'",
-							   re_class->hash);
-
-			fd = open(path, O_RDONLY);
-
-			/* Read number of regexps */
-			g_assert(fd != -1);
-			fstat(fd, &st);
-
-			map = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
-
-			if (map == MAP_FAILED) {
-				if (!try_load) {
-					msg_err_re_cache("cannot mmap %s: %s", path, strerror(errno));
-				}
-				else {
-					msg_debug_re_cache("cannot mmap %s: %s", path, strerror(errno));
-				}
-
-				close(fd);
-				all_valid = FALSE;
-				continue;
-			}
-
-			close(fd);
-			p = map + RSPAMD_HS_MAGIC_LEN + sizeof(cache->plt);
-			n = *(int *) p;
-
-			if (n <= 0 || 2 * n * sizeof(int) +         /* IDs + flags */
-								  sizeof(uint64_t) +    /* crc */
-								  RSPAMD_HS_MAGIC_LEN + /* header */
-								  sizeof(cache->plt) >
-							  (gsize) st.st_size) {
-				/* Some wrong amount of regexps */
-				if (!try_load) {
-					msg_err_re_cache("bad number of expressions in %s: %d",
-									 path, n);
-				}
-				else {
-					msg_debug_re_cache("bad number of expressions in %s: %d",
-									   path, n);
-				}
-
-				munmap(map, st.st_size);
-				all_valid = FALSE;
-				continue;
-			}
-
-			total += n;
-			p += sizeof(n);
-			hs_ids = g_malloc(n * sizeof(*hs_ids));
-			memcpy(hs_ids, p, n * sizeof(*hs_ids));
-			p += n * sizeof(*hs_ids);
-			hs_flags = g_malloc(n * sizeof(*hs_flags));
-			memcpy(hs_flags, p, n * sizeof(*hs_flags));
-
-			/* Skip crc */
-			p += n * sizeof(*hs_ids) + sizeof(uint64_t);
-
-			/* Cleanup */
-			if (re_class->hs_scratch != NULL) {
-				hs_free_scratch(re_class->hs_scratch);
-			}
-
-			if (re_class->hs_db != NULL) {
-				rspamd_hyperscan_free(re_class->hs_db, false);
-			}
-
-			/*
-			 * Reset match_type to PCRE for all regexps in this class.
-			 * We iterate re_class->re (the hash table of regexps) rather than
-			 * hs_ids because after config reload the hs_ids may point to different
-			 * regexps in cache->re. By iterating the actual regexps in this class,
-			 * we ensure we reset the correct cache_elts.
-			 */
-			{
-				GHashTableIter class_it;
-				gpointer class_k, class_v;
-
-				g_hash_table_iter_init(&class_it, re_class->re);
-				while (g_hash_table_iter_next(&class_it, &class_k, &class_v)) {
-					rspamd_regexp_t *class_re = class_v;
-					uint64_t re_cache_id = rspamd_regexp_get_cache_id(class_re);
-
-					if (re_cache_id != RSPAMD_INVALID_ID && re_cache_id < cache->re->len) {
-						struct rspamd_re_cache_elt *elt = g_ptr_array_index(cache->re, re_cache_id);
-						elt->match_type = RSPAMD_RE_CACHE_PCRE;
-					}
-				}
-			}
-
-			if (re_class->hs_ids) {
-				g_free(re_class->hs_ids);
-			}
-
-			re_class->hs_ids = NULL;
-			re_class->nhs = 0;
-			re_class->hs_scratch = NULL;
-			re_class->hs_db = NULL;
-			munmap(map, st.st_size);
-
-			re_class->hs_db = rspamd_hyperscan_maybe_load(path, p - map);
-			if (re_class->hs_db == NULL) {
-				if (!try_load) {
-					msg_err_re_cache("bad hs database in %s", path);
-				}
-				else {
-					msg_debug_re_cache("bad hs database in %s", path);
-				}
-				g_free(hs_ids);
-				g_free(hs_flags);
-
-				re_class->hs_ids = NULL;
-				re_class->hs_scratch = NULL;
-				re_class->hs_db = NULL;
-				all_valid = FALSE;
-
-				continue;
-			}
-
-			if ((ret = hs_alloc_scratch(rspamd_hyperscan_get_database(re_class->hs_db),
-										&re_class->hs_scratch)) != HS_SUCCESS) {
-				if (!try_load) {
-					msg_err_re_cache("bad hs database in %s; error code: %d", path, ret);
-				}
-				else {
-					msg_debug_re_cache("bad hs database in %s; error code: %d", path, ret);
-				}
-				g_free(hs_ids);
-				g_free(hs_flags);
-
-				rspamd_hyperscan_free(re_class->hs_db, true);
-				re_class->hs_ids = NULL;
-				re_class->hs_scratch = NULL;
-				re_class->hs_db = NULL;
-				all_valid = FALSE;
-
-				continue;
-			}
-
-			/*
-			 * First validate all IDs point to regexps in this re_class.
-			 * We must do validation BEFORE setting any match_types, otherwise if
-			 * validation fails mid-loop, some regexps will have match_type=HYPERSCAN
-			 * but hs_scratch will be NULL.
-			 */
-			for (i = 0; i < n; i++) {
-				g_assert((int) cache->re->len > hs_ids[i] && hs_ids[i] >= 0);
-				elt = g_ptr_array_index(cache->re, hs_ids[i]);
-
-				/* Verify the regexp at this ID belongs to the current re_class */
-				if (rspamd_regexp_get_class(elt->re) != re_class) {
-					msg_info_re_cache("stale hyperscan file %s: id %d points to "
-									  "wrong re_class, removing to trigger recompilation",
-									  path, hs_ids[i]);
-					g_free(hs_ids);
-					g_free(hs_flags);
-					rspamd_hyperscan_free(re_class->hs_db, true);
-					re_class->hs_ids = NULL;
-					re_class->hs_scratch = NULL;
-					re_class->hs_db = NULL;
-					/* Remove stale file to trigger recompilation by hs_helper */
-					unlink(path);
-					all_valid = FALSE;
-					goto next_class;
-				}
-			}
-
-			/*
-			 * All IDs validated - now set match types.
-			 */
-			for (i = 0; i < n; i++) {
-				elt = g_ptr_array_index(cache->re, hs_ids[i]);
-
-				if (hs_flags[i] & HS_FLAG_PREFILTER) {
-					elt->match_type = RSPAMD_RE_CACHE_HYPERSCAN_PRE;
-				}
-				else {
-					elt->match_type = RSPAMD_RE_CACHE_HYPERSCAN;
-				}
-			}
-
-			re_class->hs_ids = hs_ids;
-			g_free(hs_flags);
-			re_class->nhs = n;
-
-			/* Notify main process about the loaded hyperscan file */
-			rspamd_hyperscan_notice_known(path);
-
-			if (!has_valid) {
-				has_valid = TRUE;
-				all_valid = TRUE;
-			}
+		/* Load via Lua backend (handles files, compression, etc.) */
+		if (rspamd_hs_cache_lua_load_sync(re_class->hash, "re_class", &data, &data_len, &error)) {
+			msg_debug_re_cache("loaded hyperscan via Lua backend for '%s' (%uz bytes)",
+							   re_class->hash, data_len);
 		}
 		else {
-			if (!try_load) {
-				msg_err_re_cache("invalid hyperscan hash file '%s'",
-								 path);
+			/* Lua backend failed - async-only backend or file not found */
+			if (error) {
+				msg_debug_re_cache("Lua backend load failed for '%s': %s",
+								   re_class->hash, error);
+
+				/* Track missing class with reason */
+				if (!missing_classes) {
+					missing_classes = g_string_new(NULL);
+				}
+				if (missing_classes->len > 0) {
+					g_string_append(missing_classes, ", ");
+				}
+				if (re_class->type_data && re_class->type_len > 0) {
+					g_string_append_printf(missing_classes, "%s(%.*s): %s",
+										   class_type_name,
+										   (int) re_class->type_len - 1,
+										   (const char *) re_class->type_data,
+										   error);
+				}
+				else {
+					g_string_append_printf(missing_classes, "%s: %s",
+										   class_type_name, error);
+				}
+				g_free(error);
 			}
 			else {
-				msg_debug_re_cache("invalid hyperscan hash file '%s'",
-								   path);
+				/* No error message - file not found */
+				if (!missing_classes) {
+					missing_classes = g_string_new(NULL);
+				}
+				if (missing_classes->len > 0) {
+					g_string_append(missing_classes, ", ");
+				}
+				if (re_class->type_data && re_class->type_len > 0) {
+					g_string_append_printf(missing_classes, "%s(%.*s): not cached",
+										   class_type_name,
+										   (int) re_class->type_len - 1,
+										   (const char *) re_class->type_data);
+				}
+				else {
+					g_string_append_printf(missing_classes, "%s: not cached",
+										   class_type_name);
+				}
 			}
 			all_valid = FALSE;
 			continue;
 		}
-	next_class:;
+
+		if (!data || data_len == 0) {
+			if (!missing_classes) {
+				missing_classes = g_string_new(NULL);
+			}
+			if (missing_classes->len > 0) {
+				g_string_append(missing_classes, ", ");
+			}
+			if (re_class->type_data && re_class->type_len > 0) {
+				g_string_append_printf(missing_classes, "%s(%.*s): empty data",
+									   class_type_name,
+									   (int) re_class->type_len - 1,
+									   (const char *) re_class->type_data);
+			}
+			else {
+				g_string_append_printf(missing_classes, "%s: empty data",
+									   class_type_name);
+			}
+			all_valid = FALSE;
+			continue;
+		}
+
+		/* Process the loaded data using the blob apply function */
+		if (rspamd_re_cache_apply_hyperscan_blob(cache, re_class, data, data_len, try_load)) {
+			has_valid = TRUE;
+			total_loaded++;
+			total_regexps += re_class->nhs;
+			msg_debug_re_cache("successfully applied hyperscan blob for '%s'", re_class->hash);
+		}
+		else {
+			if (!missing_classes) {
+				missing_classes = g_string_new(NULL);
+			}
+			if (missing_classes->len > 0) {
+				g_string_append(missing_classes, ", ");
+			}
+			if (re_class->type_data && re_class->type_len > 0) {
+				g_string_append_printf(missing_classes, "%s(%.*s): load failed",
+									   class_type_name,
+									   (int) re_class->type_len - 1,
+									   (const char *) re_class->type_data);
+			}
+			else {
+				g_string_append_printf(missing_classes, "%s: load failed",
+									   class_type_name);
+			}
+			all_valid = FALSE;
+			msg_debug_re_cache("failed to apply hyperscan blob for '%s'", re_class->hash);
+		}
+
+		g_free(data);
 	}
 
 	if (has_valid) {
 		if (all_valid) {
-			msg_info_re_cache("full hyperscan database of %d regexps has been loaded%s%s%s",
-							  total,
+			msg_info_re_cache("full hyperscan database of %ud regexps (%ud/%ud classes) has been loaded%s%s%s",
+							  total_regexps,
+							  total_loaded, total_classes,
 							  cache->scope ? " for scope '" : "",
 							  cache->scope ? cache->scope : "",
 							  cache->scope ? "'" : "");
 			cache->hyperscan_loaded = RSPAMD_HYPERSCAN_LOADED_FULL;
 		}
 		else {
-			msg_info_re_cache("partial hyperscan database of %d regexps has been loaded%s%s%s",
-							  total,
+			msg_info_re_cache("partial hyperscan database of %ud regexps (%ud/%ud classes) has been loaded%s%s%s",
+							  total_regexps,
+							  total_loaded, total_classes,
 							  cache->scope ? " for scope '" : "",
 							  cache->scope ? cache->scope : "",
 							  cache->scope ? "'" : "");
+			/* Log missing classes */
+			if (missing_classes && missing_classes->len > 0) {
+				msg_info_re_cache("missing hyperscan classes: %s", missing_classes->str);
+			}
 			cache->hyperscan_loaded = RSPAMD_HYPERSCAN_LOADED_PARTIAL;
 		}
 	}
 	else {
-		msg_info_re_cache("hyperscan database has NOT been loaded; no valid expressions%s%s%s",
-						  cache->scope ? " for scope '" : "",
-						  cache->scope ? cache->scope : "",
-						  cache->scope ? "'" : "");
+		/*
+		 * During startup probe (try_load=true), "no valid expressions" is expected
+		 * when hs_helper hasn't finished compiling yet. Use debug level to avoid
+		 * log spam. Workers will receive async notifications when databases are ready.
+		 */
+		if (try_load) {
+			msg_debug_re_cache("hyperscan database has NOT been loaded; no valid expressions (%ud classes)%s%s%s",
+							   total_classes,
+							   cache->scope ? " for scope '" : "",
+							   cache->scope ? cache->scope : "",
+							   cache->scope ? "'" : "");
+			if (missing_classes && missing_classes->len > 0) {
+				msg_debug_re_cache("all classes failed (startup probe): %s", missing_classes->str);
+			}
+		}
+		else {
+			msg_info_re_cache("hyperscan database has NOT been loaded; no valid expressions (%ud classes)%s%s%s",
+							  total_classes,
+							  cache->scope ? " for scope '" : "",
+							  cache->scope ? cache->scope : "",
+							  cache->scope ? "'" : "");
+			if (missing_classes && missing_classes->len > 0) {
+				msg_info_re_cache("all classes failed: %s", missing_classes->str);
+			}
+		}
 		cache->hyperscan_loaded = RSPAMD_HYPERSCAN_LOAD_ERROR;
 	}
 
+	if (missing_classes) {
+		g_string_free(missing_classes, TRUE);
+	}
 
 	return cache->hyperscan_loaded;
 #endif
@@ -3463,6 +3448,7 @@ struct rspamd_re_cache_hs_load_scope {
 	unsigned int pending;
 	unsigned int total;
 	unsigned int loaded;
+	unsigned int total_regexps;
 	gboolean all_loaded;
 };
 
@@ -3592,7 +3578,7 @@ rspamd_re_cache_apply_hyperscan_blob(struct rspamd_re_cache *cache,
 
 		/* Verify the regexp at this ID belongs to the current re_class */
 		if (rspamd_regexp_get_class(elt->re) != re_class) {
-			msg_info_re_cache("stale hyperscan cache for class %s: id %u points to "
+			msg_info_re_cache("stale hyperscan cache for class %s: id %ud points to "
 							  "wrong re_class, will use PCRE until recompilation",
 							  re_class->hash, ids[i]);
 			hs_free_scratch(re_class->hs_scratch);
@@ -3647,6 +3633,7 @@ rspamd_re_cache_hs_load_cb(gboolean success, const unsigned char *data, gsize le
 	if (success && data && len > 0) {
 		if (rspamd_re_cache_apply_hyperscan_blob(it->cache, it->re_class, data, len, sctx->try_load)) {
 			sctx->loaded++;
+			sctx->total_regexps += it->re_class->nhs;
 		}
 		else {
 			sctx->all_loaded = FALSE;
@@ -3663,11 +3650,34 @@ rspamd_re_cache_hs_load_cb(gboolean success, const unsigned char *data, gsize le
 	}
 
 	if (sctx->pending == 0) {
+		struct rspamd_re_cache *cache = sctx->cache;
+
 		if (sctx->loaded > 0) {
-			sctx->cache->hyperscan_loaded = sctx->all_loaded ? RSPAMD_HYPERSCAN_LOADED_FULL : RSPAMD_HYPERSCAN_LOADED_PARTIAL;
+			cache->hyperscan_loaded = sctx->all_loaded ? RSPAMD_HYPERSCAN_LOADED_FULL : RSPAMD_HYPERSCAN_LOADED_PARTIAL;
+			if (sctx->all_loaded) {
+				msg_info_re_cache("full hyperscan database of %ud regexps (%ud/%ud classes) has been loaded asynchronously%s%s%s",
+								  sctx->total_regexps,
+								  sctx->loaded, sctx->total,
+								  cache->scope ? " for scope '" : "",
+								  cache->scope ? cache->scope : "",
+								  cache->scope ? "'" : "");
+			}
+			else {
+				msg_info_re_cache("partial hyperscan database of %ud regexps (%ud/%ud classes) has been loaded asynchronously%s%s%s",
+								  sctx->total_regexps,
+								  sctx->loaded, sctx->total,
+								  cache->scope ? " for scope '" : "",
+								  cache->scope ? cache->scope : "",
+								  cache->scope ? "'" : "");
+			}
 		}
 		else {
-			sctx->cache->hyperscan_loaded = RSPAMD_HYPERSCAN_LOAD_ERROR;
+			cache->hyperscan_loaded = RSPAMD_HYPERSCAN_LOAD_ERROR;
+			msg_info_re_cache("hyperscan database has NOT been loaded asynchronously; no valid expressions (%ud classes)%s%s%s",
+							  sctx->total,
+							  cache->scope ? " for scope '" : "",
+							  cache->scope ? cache->scope : "",
+							  cache->scope ? "'" : "");
 		}
 		g_free(sctx);
 	}
@@ -3683,6 +3693,11 @@ void rspamd_re_cache_load_hyperscan_scoped_async(struct rspamd_re_cache *cache_h
 	struct rspamd_re_cache *cur;
 
 	if (!cache_head || !event_loop) {
+		return;
+	}
+
+	/* Check if hyperscan is disabled */
+	if (cache_head->disable_hyperscan) {
 		return;
 	}
 

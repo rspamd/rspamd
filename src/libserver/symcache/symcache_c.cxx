@@ -628,7 +628,7 @@ unsigned int rspamd_symcache_item_async_dec_full(struct rspamd_task *task,
 						 real_dyn_item->async_events, subsystem, loc);
 
 	if (G_UNLIKELY(real_dyn_item->async_events == 0)) {
-		msg_err_cache_task("INTERNAL ERROR: trying decrease async events counter for %s(%d) that is already zero; "
+		msg_err_cache_task("INTERNAL ERROR: trying decrease async events counter for %s(%d) that is already zero (events: %ud); "
 						   "subsystem %s (%s)",
 						   static_item->symbol.c_str(), static_item->id,
 						   real_dyn_item->async_events, subsystem, loc);

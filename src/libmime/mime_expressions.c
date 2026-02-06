@@ -1470,21 +1470,26 @@ rspamd_has_only_html_part(struct rspamd_task *task, GArray *args,
 						  void *unused)
 {
 	struct rspamd_mime_text_part *p;
-	unsigned int i, cnt_html = 0, cnt_txt = 0;
+	unsigned int i;
 
+	/*
+	 * Return TRUE if there's any HTML part (not attachment) that has no
+	 * text/plain alternative in its multipart/alternative parent.
+	 * This properly handles nested structures like:
+	 * - multipart/mixed → multipart/related → text/html (no text/plain)
+	 * - multipart/alternative → text/plain + multipart/related → text/html
+	 */
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, p)
 	{
-		if (!IS_TEXT_PART_ATTACHMENT(p)) {
-			if (IS_TEXT_PART_HTML(p)) {
-				cnt_html++;
-			}
-			else {
-				cnt_txt++;
+		if (!IS_TEXT_PART_ATTACHMENT(p) && IS_TEXT_PART_HTML(p)) {
+			if (p->alt_text_part == NULL) {
+				/* HTML part with no text alternative */
+				return TRUE;
 			}
 		}
 	}
 
-	return (cnt_html > 0 && cnt_txt == 0);
+	return FALSE;
 }
 
 static gboolean
