@@ -36,6 +36,8 @@ import shutil
 import signal
 import socket
 import stat
+import random
+import re
 import sys
 import tempfile
 
@@ -219,6 +221,168 @@ def Scan_File(filename, **headers):
     c.close()
     BuiltIn().set_test_variable("${SCAN_RESULT}", d)
     return
+
+
+def _build_multipart(boundary, metadata_json, message_bytes):
+    """Build a multipart/form-data body with metadata and message parts."""
+    body = b""
+    body += ("--" + boundary + "\r\n").encode()
+    body += b"Content-Disposition: form-data; name=\"metadata\"\r\n"
+    body += b"Content-Type: application/json\r\n"
+    body += b"\r\n"
+    if isinstance(metadata_json, str):
+        metadata_json = metadata_json.encode('utf-8')
+    body += metadata_json
+    body += b"\r\n"
+    body += ("--" + boundary + "\r\n").encode()
+    body += b"Content-Disposition: form-data; name=\"message\"\r\n"
+    body += b"\r\n"
+    if isinstance(message_bytes, str):
+        message_bytes = message_bytes.encode('utf-8')
+    body += message_bytes
+    body += b"\r\n"
+    body += ("--" + boundary + "--\r\n").encode()
+    return body
+
+
+def _build_multipart_single(boundary, part_name, part_data, content_type=None):
+    """Build a multipart/form-data body with a single part."""
+    body = b""
+    body += ("--" + boundary + "\r\n").encode()
+    body += ("Content-Disposition: form-data; name=\"%s\"\r\n" % part_name).encode()
+    if content_type:
+        body += ("Content-Type: %s\r\n" % content_type).encode()
+    body += b"\r\n"
+    if isinstance(part_data, str):
+        part_data = part_data.encode('utf-8')
+    body += part_data
+    body += b"\r\n"
+    body += ("--" + boundary + "--\r\n").encode()
+    return body
+
+
+def _parse_multipart_response(body, content_type):
+    """Parse a multipart/mixed response and return the 'result' part data as string."""
+    if isinstance(body, bytes):
+        body = body.decode('utf-8', errors='replace')
+
+    # Extract boundary from Content-Type header
+    m = re.search(r'boundary="?([^";]+)"?', content_type)
+    if not m:
+        raise ValueError("No boundary found in Content-Type: %s" % content_type)
+    boundary = m.group(1)
+
+    # Split on boundary
+    parts = body.split("--" + boundary)
+    for part in parts:
+        if part.startswith("--"):
+            continue  # closing boundary
+        if not part.strip():
+            continue
+
+        # Split headers from body
+        if "\r\n\r\n" in part:
+            headers, data = part.split("\r\n\r\n", 1)
+        elif "\n\n" in part:
+            headers, data = part.split("\n\n", 1)
+        else:
+            continue
+
+        # Check if this is the "result" part
+        if 'name="result"' in headers:
+            # Strip trailing \r\n
+            data = data.rstrip("\r\n")
+            return data
+
+    raise ValueError("No 'result' part found in multipart response")
+
+
+def Scan_File_V3(filename, metadata=None, **headers):
+    """Send a /checkv3 multipart request and set ${SCAN_RESULT}."""
+    addr = BuiltIn().get_variable_value("${RSPAMD_LOCAL_ADDR}")
+    port = BuiltIn().get_variable_value("${RSPAMD_PORT_NORMAL}")
+
+    meta = metadata if metadata else {}
+    meta_json = json.dumps(meta)
+    message_data = open(filename, "rb").read()
+
+    boundary = "----rspamd-test-%016x" % random.getrandbits(64)
+    body = _build_multipart(boundary, meta_json, message_data)
+
+    headers["Content-Type"] = "multipart/form-data; boundary=" + boundary
+    if "Queue-Id" not in headers:
+        headers["Queue-Id"] = BuiltIn().get_variable_value("${TEST_NAME}")
+
+    c = http.client.HTTPConnection("%s:%s" % (addr, port))
+    c.request("POST", "/checkv3", body, headers)
+    r = c.getresponse()
+    assert r.status == 200, "Expected HTTP 200 but got %d" % r.status
+
+    resp_body = r.read()
+    resp_ct = r.getheader("Content-Type", "")
+    result_data = _parse_multipart_response(resp_body, resp_ct)
+
+    d = json.JSONDecoder(strict=True).decode(result_data)
+    c.close()
+    BuiltIn().set_test_variable("${SCAN_RESULT}", d)
+    return
+
+
+def Scan_File_V3_Expect_Error(filename, expected_status, metadata=None,
+                               body_override=None, content_type_override=None,
+                               **headers):
+    """Send a /checkv3 request and expect a specific HTTP error status."""
+    addr = BuiltIn().get_variable_value("${RSPAMD_LOCAL_ADDR}")
+    port = BuiltIn().get_variable_value("${RSPAMD_PORT_NORMAL}")
+
+    boundary = "----rspamd-test-%016x" % random.getrandbits(64)
+
+    if body_override is not None:
+        body = body_override
+    else:
+        meta = metadata if metadata else {}
+        meta_json = json.dumps(meta)
+        message_data = open(filename, "rb").read() if filename else b""
+        body = _build_multipart(boundary, meta_json, message_data)
+
+    if content_type_override:
+        headers["Content-Type"] = content_type_override
+    else:
+        headers["Content-Type"] = "multipart/form-data; boundary=" + boundary
+
+    if "Queue-Id" not in headers:
+        headers["Queue-Id"] = BuiltIn().get_variable_value("${TEST_NAME}")
+
+    c = http.client.HTTPConnection("%s:%s" % (addr, port))
+    c.request("POST", "/checkv3", body, headers)
+    r = c.getresponse()
+    actual_status = r.status
+    r.read()
+    c.close()
+    assert actual_status == int(expected_status), \
+        "Expected HTTP %s but got %d" % (expected_status, actual_status)
+    return
+
+
+def Scan_File_V3_Single_Part(part_name, part_data, content_type_part=None, **headers):
+    """Send a /checkv3 request with only a single part."""
+    addr = BuiltIn().get_variable_value("${RSPAMD_LOCAL_ADDR}")
+    port = BuiltIn().get_variable_value("${RSPAMD_PORT_NORMAL}")
+
+    boundary = "----rspamd-test-%016x" % random.getrandbits(64)
+    body = _build_multipart_single(boundary, part_name, part_data, content_type_part)
+
+    headers["Content-Type"] = "multipart/form-data; boundary=" + boundary
+    if "Queue-Id" not in headers:
+        headers["Queue-Id"] = BuiltIn().get_variable_value("${TEST_NAME}")
+
+    c = http.client.HTTPConnection("%s:%s" % (addr, port))
+    c.request("POST", "/checkv3", body, headers)
+    r = c.getresponse()
+    status = r.status
+    r.read()
+    c.close()
+    return status
 
 
 def Send_SIGUSR1(pid):

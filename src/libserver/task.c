@@ -418,7 +418,7 @@ rspamd_task_load_message(struct rspamd_task *task,
 	ft = "file";
 #endif
 
-	if (msg) {
+	if (msg && task->cmd != CMD_CHECK_V3) {
 		rspamd_protocol_handle_headers(task, msg);
 	}
 

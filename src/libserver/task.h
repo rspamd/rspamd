@@ -37,6 +37,7 @@ enum rspamd_command {
 	CMD_CHECK_RSPAMC, /* Legacy rspamc format (like SA one) */
 	CMD_CHECK,        /* Legacy check - metric json reply */
 	CMD_CHECK_V2,     /* Modern check - symbols in json reply  */
+	CMD_CHECK_V3,     /* Multipart check - structured metadata + multipart response */
 	CMD_METRICS,
 };
 
@@ -128,7 +129,9 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_PROTOCOL_FLAG_BODY_BLOCK (1u << 5u)
 /* Emit groups information */
 #define RSPAMD_TASK_PROTOCOL_FLAG_GROUPS (1u << 6u)
-#define RSPAMD_TASK_PROTOCOL_FLAG_MAX_SHIFT (6u)
+/* Request is multipart/form-data v3 protocol */
+#define RSPAMD_TASK_PROTOCOL_FLAG_MULTIPART_V3 (1u << 7u)
+#define RSPAMD_TASK_PROTOCOL_FLAG_MAX_SHIFT (7u)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (G_UNLIKELY((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_SPAMC(task) (G_UNLIKELY((task)->cmd == CMD_CHECK_SPAMC))
