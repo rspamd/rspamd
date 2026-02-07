@@ -90,6 +90,7 @@ static gboolean profile = FALSE;
 static gboolean skip_images = FALSE;
 static gboolean skip_attachments = FALSE;
 static gboolean protocol_v3 = FALSE;
+static gboolean msgpack_mode = FALSE;
 static const char *pubkey = nullptr;
 static const char *user_agent = "rspamc";
 static const char *files_list = nullptr;
@@ -196,6 +197,8 @@ static GOptionEntry entries[] =
 		 "Skip attachments when learning/unlearning fuzzy", nullptr},
 		{"protocol-v3", '\0', 0, G_OPTION_ARG_NONE, &protocol_v3,
 		 "Use v3 multipart protocol (structured metadata, multipart response)", nullptr},
+		{"msgpack", '\0', 0, G_OPTION_ARG_NONE, &msgpack_mode,
+		 "Use msgpack for v3 metadata and response (requires --protocol-v3)", nullptr},
 		{"user-agent", 'U', 0, G_OPTION_ARG_STRING, &user_agent,
 		 "Use specific User-Agent instead of \"rspamc\"", nullptr},
 		{"files-list", '\0', 0, G_OPTION_ARG_FILENAME, &files_list,
@@ -2362,6 +2365,7 @@ rspamc_process_input(struct ev_loop *ev_base, const struct rspamc_command &cmd,
 
 			rspamd_client_command_v3(conn, "checkv3", metadata, in,
 									 rspamc_client_cb, cbdata, compressed,
+									 msgpack_mode,
 									 cbdata->filename.c_str(), &err);
 			ucl_object_unref(metadata);
 		}

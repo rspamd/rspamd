@@ -95,7 +95,8 @@ gboolean rspamd_client_command(
 
 /**
  * Send a v3 multipart/form-data command.
- * Metadata is sent as a JSON part, message as an octet-stream part.
+ * Metadata is sent as a JSON (or msgpack if msgpack=TRUE) part,
+ * message as an octet-stream part.
  * Response is multipart/mixed with "result" (JSON/msgpack) and optional "body" parts.
  */
 gboolean rspamd_client_command_v3(
@@ -106,6 +107,7 @@ gboolean rspamd_client_command_v3(
 	rspamd_client_callback cb,
 	gpointer ud,
 	gboolean compressed,
+	gboolean msgpack,
 	const char *filename,
 	GError **err);
 

@@ -705,6 +705,7 @@ rspamd_client_command_v3(struct rspamd_client_connection *conn,
 						 rspamd_client_callback cb,
 						 gpointer ud,
 						 gboolean compressed,
+						 gboolean msgpack,
 						 const char *filename,
 						 GError **err)
 {
@@ -761,17 +762,36 @@ rspamd_client_command_v3(struct rspamd_client_connection *conn,
 		req->input = input;
 	}
 
-	/* Serialize metadata to JSON */
-	char *metadata_json = NULL;
+	/* Serialize metadata to JSON or msgpack */
+	char *metadata_buf = NULL;
 	gsize metadata_len = 0;
+	const char *metadata_ctype = "application/json";
 
 	if (metadata) {
-		metadata_json = (char *) ucl_object_emit(metadata, UCL_EMIT_JSON_COMPACT);
-		metadata_len = strlen(metadata_json);
+		if (msgpack) {
+			size_t emit_len;
+			metadata_buf = (char *) ucl_object_emit_len(metadata,
+														UCL_EMIT_MSGPACK, &emit_len);
+			metadata_len = emit_len;
+			metadata_ctype = "application/msgpack";
+		}
+		else {
+			metadata_buf = (char *) ucl_object_emit(metadata, UCL_EMIT_JSON_COMPACT);
+			metadata_len = strlen(metadata_buf);
+		}
 	}
 	else {
-		metadata_json = g_strdup("{}");
-		metadata_len = 2;
+		if (msgpack) {
+			/* Empty msgpack map: 0x80 */
+			metadata_buf = g_malloc(1);
+			metadata_buf[0] = '\x80';
+			metadata_len = 1;
+			metadata_ctype = "application/msgpack";
+		}
+		else {
+			metadata_buf = g_strdup("{}");
+			metadata_len = 2;
+		}
 	}
 
 	/* Build multipart/form-data body with random boundary */
@@ -786,10 +806,10 @@ rspamd_client_command_v3(struct rspamd_client_connection *conn,
 	rspamd_printf_gstring(mp_body,
 						  "--%s\r\n"
 						  "Content-Disposition: form-data; name=\"metadata\"\r\n"
-						  "Content-Type: application/json\r\n"
+						  "Content-Type: %s\r\n"
 						  "\r\n",
-						  boundary);
-	g_string_append_len(mp_body, metadata_json, metadata_len);
+						  boundary, metadata_ctype);
+	g_string_append_len(mp_body, metadata_buf, metadata_len);
 	g_string_append(mp_body, "\r\n");
 
 	/* Message part */
@@ -804,7 +824,7 @@ rspamd_client_command_v3(struct rspamd_client_connection *conn,
 			if (ZSTD_isError(comp_len)) {
 				g_set_error(err, RCLIENT_ERROR, 500, "compression error");
 				g_free(comp_buf);
-				g_free(metadata_json);
+				g_free(metadata_buf);
 				g_string_free(mp_body, TRUE);
 				g_free(req);
 				if (input) g_string_free(input, TRUE);
@@ -837,7 +857,7 @@ rspamd_client_command_v3(struct rspamd_client_connection *conn,
 	/* Closing boundary */
 	rspamd_printf_gstring(mp_body, "--%s--\r\n", boundary);
 
-	g_free(metadata_json);
+	g_free(metadata_buf);
 
 	/* Set body */
 	body = rspamd_fstring_new_init(mp_body->str, mp_body->len);
@@ -850,7 +870,12 @@ rspamd_client_command_v3(struct rspamd_client_connection *conn,
 					"multipart/form-data; boundary=%s", boundary);
 
 	/* Add Accept headers */
-	rspamd_http_message_add_header(req->msg, "Accept", "application/json");
+	if (msgpack) {
+		rspamd_http_message_add_header(req->msg, "Accept", "application/msgpack");
+	}
+	else {
+		rspamd_http_message_add_header(req->msg, "Accept", "application/json");
+	}
 	if (compressed) {
 		rspamd_http_message_add_header(req->msg, "Accept-Encoding", "zstd");
 	}

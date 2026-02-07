@@ -53,3 +53,27 @@ checkv3 malformed boundary
   [Documentation]  Send body with wrong boundary, expect HTTP 500 (400 error mapped to 5xx)
   Scan File V3 Expect Error  ${GTUBE}  500
   ...  content_type_override=multipart/form-data; boundary=wrong-boundary-does-not-match
+
+checkv3 via rspamc with zstd compression
+  [Documentation]  Scan via rspamc --protocol-v3 (zstd compression enabled by default)
+  ${result} =  Run Rspamc  -p  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_NORMAL}  --protocol-v3
+  ...  --settings=${SETTINGS_NOSYMBOLS}  ${GTUBE}
+  Check Rspamc  ${result}  GTUBE (
+
+checkv3 via rspamc encrypted
+  [Documentation]  Scan via rspamc --protocol-v3 with httpcrypt encryption
+  ${result} =  Run Rspamc  -p  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_NORMAL}  --protocol-v3
+  ...  --key  ${RSPAMD_KEY_PUB1}  --settings=${SETTINGS_NOSYMBOLS}  ${GTUBE}
+  Check Rspamc  ${result}  GTUBE (
+
+checkv3 via rspamc with msgpack metadata
+  [Documentation]  Scan via rspamc --protocol-v3 --msgpack (msgpack metadata and response)
+  ${result} =  Run Rspamc  -p  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_NORMAL}  --protocol-v3
+  ...  --msgpack  --settings=${SETTINGS_NOSYMBOLS}  ${GTUBE}
+  Check Rspamc  ${result}  GTUBE (
+
+checkv3 via rspamc encrypted with msgpack
+  [Documentation]  Scan via rspamc --protocol-v3 --msgpack --key (encrypted + msgpack)
+  ${result} =  Run Rspamc  -p  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_NORMAL}  --protocol-v3
+  ...  --msgpack  --key  ${RSPAMD_KEY_PUB1}  --settings=${SETTINGS_NOSYMBOLS}  ${GTUBE}
+  Check Rspamc  ${result}  GTUBE (
