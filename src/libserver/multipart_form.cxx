@@ -16,7 +16,9 @@
 
 #include "multipart_form.hxx"
 #include <algorithm>
+#include <cctype>
 #include <cstring>
+#include <string>
 
 namespace rspamd::http {
 
