@@ -2429,6 +2429,15 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 								  (rspamd_mempool_destruct_t) rspamd_multipart_form_free,
 								  form);
 
+	/* Enforce single message per request: expect at most 2 parts (metadata + message) */
+	gsize nparts = rspamd_multipart_form_nparts(form);
+	if (nparts > 2) {
+		g_set_error(&task->err, rspamd_protocol_quark(), 400,
+					"v3 request must contain at most 2 parts (metadata + message), got %lu",
+					(unsigned long) nparts);
+		return FALSE;
+	}
+
 	/* Find metadata part */
 	const struct rspamd_multipart_entry_c *metadata_part =
 		rspamd_multipart_form_find(form, "metadata", sizeof("metadata") - 1);
@@ -2450,7 +2459,7 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 										 "msgpack",
 										 sizeof("msgpack") - 1) != -1) {
 		is_msgpack = TRUE;
-		parser = ucl_parser_new(UCL_PARSER_DEFAULT | UCL_PARSER_NO_FILEVARS);
+		parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 		ucl_parser_add_chunk_full(parser, (const unsigned char *) metadata_part->data,
 								  metadata_part->data_len,
 								  ucl_parser_get_default_priority(parser),
@@ -2458,7 +2467,8 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 								  UCL_PARSE_MSGPACK);
 	}
 	else {
-		parser = ucl_parser_new(UCL_PARSER_DEFAULT | UCL_PARSER_NO_FILEVARS);
+		/* Strict mode: disable UCL macros/includes, treat as plain JSON */
+		parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 		ucl_parser_add_chunk(parser, (const unsigned char *) metadata_part->data,
 							 metadata_part->data_len);
 	}
