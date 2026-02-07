@@ -5,6 +5,8 @@ Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
 ${GTUBE}               ${RSPAMD_TESTDIR}/messages/gtube.eml
+${ALT_RELATED}         ${RSPAMD_TESTDIR}/messages/alternative-related.eml
+${MIXED_RELATED_HTML}  ${RSPAMD_TESTDIR}/messages/mixed-related-html-only.eml
 ${SETTINGS_NOSYMBOLS}  {symbols_enabled = []}
 
 *** Test Cases ***
@@ -34,6 +36,18 @@ checkv3 missing message part
   [Documentation]  Send only metadata part without message, expect HTTP 400
   ${status} =  Scan File V3 Single Part  metadata  {}  application/json
   Should Be Equal As Integers  ${status}  400
+
+checkv3 multipart/alternative MIME message
+  [Documentation]  Message with own MIME boundaries (multipart/alternative) must parse correctly
+  Scan File V3  ${ALT_RELATED}
+  ...  Settings={symbols_enabled = [R_PARTS_DIFFER]}
+  Expect Symbol  R_PARTS_DIFFER
+
+checkv3 multipart/mixed MIME message
+  [Documentation]  Message with multipart/mixed MIME structure and attachments
+  Scan File V3  ${MIXED_RELATED_HTML}
+  ...  Settings={symbols_enabled = [MIME_HTML_ONLY]}
+  Expect Symbol  MIME_HTML_ONLY
 
 checkv3 malformed boundary
   [Documentation]  Send body with wrong boundary, expect HTTP 400

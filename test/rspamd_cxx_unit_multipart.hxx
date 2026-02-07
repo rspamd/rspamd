@@ -234,6 +234,107 @@ TEST_SUITE("multipart_form")
 		CHECK(result->parts[0].data == "This text mentions boundary as a word");
 	}
 
+	TEST_CASE("message with own MIME boundaries")
+	{
+		/* The message part contains a multipart/alternative email with its own
+		 * MIME boundaries. The outer form-data boundary must not be confused
+		 * by the inner MIME boundary markers. */
+		std::string mime_message =
+			"From: test@example.com\r\n"
+			"To: rcpt@example.com\r\n"
+			"Subject: multipart test\r\n"
+			"MIME-Version: 1.0\r\n"
+			"Content-Type: multipart/alternative; boundary=\"inner-mime-boundary\"\r\n"
+			"\r\n"
+			"--inner-mime-boundary\r\n"
+			"Content-Type: text/plain; charset=\"UTF-8\"\r\n"
+			"\r\n"
+			"Plain text part\r\n"
+			"\r\n"
+			"--inner-mime-boundary\r\n"
+			"Content-Type: text/html; charset=\"UTF-8\"\r\n"
+			"\r\n"
+			"<html><body>HTML part</body></html>\r\n"
+			"\r\n"
+			"--inner-mime-boundary--\r\n";
+
+		std::string body =
+			"--outer-form-boundary\r\n"
+			"Content-Disposition: form-data; name=\"metadata\"\r\n"
+			"Content-Type: application/json\r\n"
+			"\r\n"
+			"{\"from\":\"test@example.com\"}\r\n"
+			"--outer-form-boundary\r\n"
+			"Content-Disposition: form-data; name=\"message\"\r\n"
+			"\r\n" +
+			mime_message +
+			"\r\n"
+			"--outer-form-boundary--\r\n";
+
+		auto result = rspamd::http::parse_multipart_form(body, "outer-form-boundary");
+		REQUIRE(result.has_value());
+		CHECK(result->parts.size() == 2);
+
+		auto *meta = rspamd::http::find_part(*result, "metadata");
+		REQUIRE(meta != nullptr);
+		CHECK(meta->data == "{\"from\":\"test@example.com\"}");
+
+		auto *msg = rspamd::http::find_part(*result, "message");
+		REQUIRE(msg != nullptr);
+		/* The entire MIME message must be preserved intact */
+		CHECK(msg->data == mime_message);
+		/* Verify inner MIME boundaries are present in the data */
+		CHECK(msg->data.find("--inner-mime-boundary") != std::string_view::npos);
+		CHECK(msg->data.find("--inner-mime-boundary--") != std::string_view::npos);
+		CHECK(msg->data.find("Plain text part") != std::string_view::npos);
+		CHECK(msg->data.find("<html><body>HTML part</body></html>") != std::string_view::npos);
+	}
+
+	TEST_CASE("message with nested multipart/mixed MIME")
+	{
+		/* A more complex case: multipart/mixed with attachments.
+		 * The inner boundaries contain -- prefixes and look similar
+		 * to form-data boundaries but must not interfere. */
+		std::string mime_message =
+			"From: sender@test.com\r\n"
+			"Content-Type: multipart/mixed; boundary=\"----=_Part_123\"\r\n"
+			"\r\n"
+			"------=_Part_123\r\n"
+			"Content-Type: text/plain\r\n"
+			"\r\n"
+			"Body text\r\n"
+			"\r\n"
+			"------=_Part_123\r\n"
+			"Content-Type: application/pdf; name=\"doc.pdf\"\r\n"
+			"\r\n"
+			"fake-pdf-content\r\n"
+			"\r\n"
+			"------=_Part_123--\r\n";
+
+		std::string body =
+			"--formbnd\r\n"
+			"Content-Disposition: form-data; name=\"metadata\"\r\n"
+			"\r\n"
+			"{}\r\n"
+			"--formbnd\r\n"
+			"Content-Disposition: form-data; name=\"message\"\r\n"
+			"\r\n" +
+			mime_message +
+			"\r\n"
+			"--formbnd--\r\n";
+
+		auto result = rspamd::http::parse_multipart_form(body, "formbnd");
+		REQUIRE(result.has_value());
+		CHECK(result->parts.size() == 2);
+
+		auto *msg = rspamd::http::find_part(*result, "message");
+		REQUIRE(msg != nullptr);
+		/* Message data must contain the full MIME structure */
+		CHECK(msg->data == mime_message);
+		CHECK(msg->data.find("------=_Part_123") != std::string_view::npos);
+		CHECK(msg->data.find("fake-pdf-content") != std::string_view::npos);
+	}
+
 	TEST_CASE("no headers in part")
 	{
 		/* Part has no Content-Disposition header, just raw data after boundary.
