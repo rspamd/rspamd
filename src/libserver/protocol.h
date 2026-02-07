@@ -108,9 +108,10 @@ void rspamd_protocol_http_reply(struct rspamd_http_message *msg,
  * Optional body part contains rewritten message.
  * @param msg HTTP response message to fill
  * @param task task object
+ * @return Content-Type string (allocated on task pool) including boundary
  */
-void rspamd_protocol_http_reply_v3(struct rspamd_http_message *msg,
-								   struct rspamd_task *task);
+const char *rspamd_protocol_http_reply_v3(struct rspamd_http_message *msg,
+										  struct rspamd_task *task);
 
 /**
  * Write data to log pipes

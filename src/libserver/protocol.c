@@ -2649,9 +2649,12 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 
 /*
  * Build a v3 multipart/mixed HTTP reply.
+ * Returns the Content-Type string (allocated on task pool) for use as
+ * the mime_type parameter in rspamd_http_connection_write_message.
  */
-void rspamd_protocol_http_reply_v3(struct rspamd_http_message *msg,
-								   struct rspamd_task *task)
+const char *
+rspamd_protocol_http_reply_v3(struct rspamd_http_message *msg,
+							  struct rspamd_task *task)
 {
 	int flags = RSPAMD_PROTOCOL_DEFAULT | RSPAMD_PROTOCOL_URLS;
 	ucl_object_t *top = rspamd_protocol_write_ucl(task, flags);
@@ -2730,10 +2733,10 @@ void rspamd_protocol_http_reply_v3(struct rspamd_http_message *msg,
 	}
 
 	rspamd_fstring_t *reply = rspamd_multipart_response_serialize(resp, zstream);
-	const char *ctype = rspamd_multipart_response_content_type(resp);
+	const char *resp_ctype = rspamd_multipart_response_content_type(resp);
 
-	/* Set the content type on the HTTP message */
-	rspamd_http_message_add_header(msg, "Content-Type", ctype);
+	/* Copy Content-Type to task pool so it survives after response is freed */
+	const char *pool_ctype = rspamd_mempool_strdup(task->task_pool, resp_ctype);
 
 	rspamd_http_message_set_body_from_fstring_steal(msg, reply);
 	rspamd_fstring_free(result_data);
@@ -2784,6 +2787,8 @@ void rspamd_protocol_http_reply_v3(struct rspamd_http_message *msg,
 		slot = slot % MAX_AVG_TIME_SLOTS;
 		task->worker->srv->stat->avg_time.avg_time[slot] = processing_time;
 	}
+
+	return pool_ctype;
 }
 
 void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout, struct rspamd_main *srv)
@@ -2866,10 +2871,8 @@ void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout, st
 			rspamd_protocol_write_log_pipe(task);
 			break;
 		case CMD_CHECK_V3:
-			rspamd_protocol_http_reply_v3(msg, task);
+			ctype = rspamd_protocol_http_reply_v3(msg, task);
 			rspamd_protocol_write_log_pipe(task);
-			/* Override ctype — it was set by the v3 reply builder via header */
-			ctype = NULL;
 			break;
 		case CMD_PING:
 			msg_debug_protocol("writing pong to client");

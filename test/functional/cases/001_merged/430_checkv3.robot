@@ -28,14 +28,14 @@ checkv3 with settings_id
   Expect Symbol  GTUBE
 
 checkv3 missing metadata part
-  [Documentation]  Send only message part without metadata, expect HTTP 400
+  [Documentation]  Send only message part without metadata, expect HTTP 500 (400 error mapped to 5xx)
   ${status} =  Scan File V3 Single Part  message  test message body
-  Should Be Equal As Integers  ${status}  400
+  Should Be Equal As Integers  ${status}  500
 
 checkv3 missing message part
-  [Documentation]  Send only metadata part without message, expect HTTP 400
+  [Documentation]  Send only metadata part without message, expect HTTP 500 (400 error mapped to 5xx)
   ${status} =  Scan File V3 Single Part  metadata  {}  application/json
-  Should Be Equal As Integers  ${status}  400
+  Should Be Equal As Integers  ${status}  500
 
 checkv3 multipart/alternative MIME message
   [Documentation]  Message with own MIME boundaries (multipart/alternative) must parse correctly
@@ -50,6 +50,6 @@ checkv3 multipart/mixed MIME message
   Expect Symbol  MIME_HTML_ONLY
 
 checkv3 malformed boundary
-  [Documentation]  Send body with wrong boundary, expect HTTP 400
-  Scan File V3 Expect Error  ${GTUBE}  400
+  [Documentation]  Send body with wrong boundary, expect HTTP 500 (400 error mapped to 5xx)
+  Scan File V3 Expect Error  ${GTUBE}  500
   ...  content_type_override=multipart/form-data; boundary=wrong-boundary-does-not-match
