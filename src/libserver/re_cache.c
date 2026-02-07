@@ -1586,10 +1586,13 @@ rspamd_re_cache_exec_re(struct rspamd_task *task,
 		 * Multiline expressions will need to be used to match strings that are
 		 * broken by line breaks.
 		 *
-		 * If the regexp class contains UTF-8 patterns (/u flag), we use
-		 * charset-converted utf_content to allow Unicode matching.
-		 * Otherwise, we use parsed content (transfer-decoded only) for
-		 * backward compatibility with raw byte matching.
+		 * We always use utf_raw_content (charset-converted to UTF-8 with
+		 * HTML tags preserved) so that patterns match consistently
+		 * regardless of the original message encoding. This prevents
+		 * trivial bypass via exotic charsets like UTF-16.
+		 *
+		 * If charset conversion failed (utf_raw_content is NULL), fall
+		 * back to parsed content (transfer-decoded only) with raw mode.
 		 */
 		if (MESSAGE_FIELD(task, text_parts)->len > 0) {
 			cnt = MESSAGE_FIELD(task, text_parts)->len;
@@ -1599,38 +1602,32 @@ rspamd_re_cache_exec_re(struct rspamd_task *task,
 			for (i = 0; i < cnt; i++) {
 				text_part = g_ptr_array_index(MESSAGE_FIELD(task, text_parts), i);
 
-				if (re_class->has_utf8) {
+				if (text_part->utf_raw_content != NULL &&
+					text_part->utf_raw_content->len > 0) {
 					/*
-					 * Use charset-converted content for UTF-8 patterns.
-					 * This allows Unicode matching while preserving HTML tags.
+					 * Use charset-converted UTF-8 content with HTML tags
+					 * preserved. This is the correct representation for
+					 * SA rawbody matching.
 					 */
-					if (text_part->utf_content.len > 0) {
-						scvec[i] = (unsigned char *) text_part->utf_content.begin;
-						lenvec[i] = text_part->utf_content.len;
+					scvec[i] = text_part->utf_raw_content->data;
+					lenvec[i] = text_part->utf_raw_content->len;
 
-						if (!IS_TEXT_PART_UTF(text_part)) {
-							raw = TRUE;
-						}
-					}
-					else {
-						scvec[i] = (unsigned char *) "";
-						lenvec[i] = 0;
+					if (!IS_TEXT_PART_UTF(text_part)) {
+						raw = TRUE;
 					}
 				}
-				else {
+				else if (text_part->parsed.len > 0) {
 					/*
-					 * Use transfer-decoded content for raw byte matching.
-					 * This is not charset-converted, so always use raw mode.
+					 * Charset conversion failed; fall back to
+					 * transfer-decoded content in raw mode.
 					 */
-					if (text_part->parsed.len > 0) {
-						scvec[i] = (unsigned char *) text_part->parsed.begin;
-						lenvec[i] = text_part->parsed.len;
-					}
-					else {
-						scvec[i] = (unsigned char *) "";
-						lenvec[i] = 0;
-					}
+					scvec[i] = (unsigned char *) text_part->parsed.begin;
+					lenvec[i] = text_part->parsed.len;
 					raw = TRUE;
+				}
+				else {
+					scvec[i] = (unsigned char *) "";
+					lenvec[i] = 0;
 				}
 			}
 

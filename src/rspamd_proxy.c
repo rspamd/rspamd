@@ -203,6 +203,7 @@ struct rspamd_proxy_backend_connection {
 	int parser_from_ref;
 	int parser_to_ref;
 	struct rspamd_task *task;
+	gsize reserved_tokens; /* Tokens reserved for this request (token bucket) */
 };
 
 enum rspamd_proxy_legacy_support {
@@ -644,6 +645,53 @@ rspamd_proxy_parse_upstream(rspamd_mempool_t *pool,
 	elt = ucl_object_lookup_any(obj, "log_tag", "log_tag_type", NULL);
 	if (elt && ucl_object_type(elt) == UCL_STRING) {
 		up->log_tag_type = rspamd_proxy_parse_log_tag_type(ucl_object_tostring(elt));
+	}
+
+	/* Parse token_bucket configuration for weighted load balancing */
+	elt = ucl_object_lookup(obj, "token_bucket");
+	if (elt != NULL && ucl_object_type(elt) == UCL_OBJECT && up->u != NULL) {
+		gsize max_tokens = 10000, scale = 1024, min_tokens = 1, base_cost = 10;
+		const ucl_object_t *tb_elt;
+
+		if ((tb_elt = ucl_object_lookup(elt, "max_tokens")) != NULL) {
+			max_tokens = ucl_object_toint(tb_elt);
+			if (max_tokens == 0) {
+				msg_warn_pool("token_bucket.max_tokens must be > 0, using default 10000");
+				max_tokens = 10000;
+			}
+		}
+		if ((tb_elt = ucl_object_lookup(elt, "scale")) != NULL) {
+			scale = ucl_object_toint(tb_elt);
+			if (scale == 0) {
+				msg_warn_pool("token_bucket.scale cannot be 0 (division by zero), using default 1024");
+				scale = 1024;
+			}
+		}
+		if ((tb_elt = ucl_object_lookup(elt, "min_tokens")) != NULL) {
+			min_tokens = ucl_object_toint(tb_elt);
+		}
+		if ((tb_elt = ucl_object_lookup(elt, "base_cost")) != NULL) {
+			base_cost = ucl_object_toint(tb_elt);
+		}
+
+		/* Validate relationships */
+		if (min_tokens > max_tokens) {
+			msg_warn_pool("token_bucket.min_tokens (%zu) > max_tokens (%zu), clamping",
+						  min_tokens, max_tokens);
+			min_tokens = max_tokens;
+		}
+		if (base_cost >= max_tokens) {
+			msg_warn_pool("token_bucket.base_cost (%zu) >= max_tokens (%zu), reducing to max/2",
+						  base_cost, max_tokens);
+			base_cost = max_tokens / 2;
+		}
+
+		/* Enable token bucket rotation and configure parameters */
+		rspamd_upstreams_set_rotation(up->u, RSPAMD_UPSTREAM_TOKEN_BUCKET);
+		rspamd_upstreams_set_token_bucket(up->u, max_tokens, scale, min_tokens, base_cost);
+
+		msg_info_pool_check("upstream %s: token_bucket enabled (max=%zu, scale=%zu, min=%zu, base=%zu)",
+							up->name, max_tokens, scale, min_tokens, base_cost);
 	}
 
 	/*
@@ -1119,6 +1167,12 @@ static void
 proxy_backend_close_connection(struct rspamd_proxy_backend_connection *conn)
 {
 	if (conn && !(conn->flags & RSPAMD_BACKEND_CLOSED)) {
+		/* Return any reserved tokens if not already returned (safety net) */
+		if (conn->reserved_tokens > 0 && conn->up) {
+			rspamd_upstream_return_tokens(conn->up, conn->reserved_tokens, FALSE);
+			conn->reserved_tokens = 0;
+		}
+
 		if (conn->backend_conn) {
 			rspamd_http_connection_reset(conn->backend_conn);
 			rspamd_http_connection_unref(conn->backend_conn);
@@ -2113,6 +2167,13 @@ proxy_backend_master_error_handler(struct rspamd_http_connection *conn, GError *
 											  : "self-scan",
 					 err,
 					 session->ctx->max_retries - session->retries);
+
+	/* Return reserved tokens on error (token bucket load balancing) */
+	if (bk_conn->reserved_tokens > 0 && bk_conn->up) {
+		rspamd_upstream_return_tokens(bk_conn->up, bk_conn->reserved_tokens, FALSE);
+		bk_conn->reserved_tokens = 0;
+	}
+
 	rspamd_upstream_fail(bk_conn->up, FALSE, err ? err->message : "unknown");
 	proxy_backend_close_connection(session->master_conn);
 
@@ -2213,6 +2274,12 @@ proxy_backend_master_finish_handler(struct rspamd_http_connection *conn,
 			msg_warn_session("cannot parse results from the master backend, "
 							 "return them as is");
 		}
+	}
+
+	/* Return reserved tokens on success (token bucket load balancing) */
+	if (bk_conn->reserved_tokens > 0 && bk_conn->up) {
+		rspamd_upstream_return_tokens(bk_conn->up, bk_conn->reserved_tokens, TRUE);
+		bk_conn->reserved_tokens = 0;
 	}
 
 	rspamd_upstream_ok(bk_conn->up);
@@ -2614,8 +2681,30 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 		gpointer hash_key = rspamd_inet_address_get_hash_key(session->client_addr,
 															 &hash_len);
 
-		if (session->ctx->max_retries > 1 &&
-			session->retries == session->ctx->max_retries) {
+		/* Initialize reserved_tokens to 0 */
+		session->master_conn->reserved_tokens = 0;
+
+		/* Check if token bucket algorithm is configured */
+		if (rspamd_upstreams_get_rotation(backend->u) == RSPAMD_UPSTREAM_TOKEN_BUCKET) {
+			/* Calculate message size for token bucket */
+			gsize message_size = 0;
+
+			if (session->map && session->map_len) {
+				message_size = session->map_len;
+			}
+			else if (session->client_message && session->client_message->body_buf.len > 0) {
+				message_size = session->client_message->body_buf.len;
+			}
+
+			/* Use token bucket selection */
+			session->master_conn->up = rspamd_upstream_get_token_bucket(
+				backend->u,
+				(session->retries > 0) ? session->master_conn->up : NULL,
+				message_size,
+				&session->master_conn->reserved_tokens);
+		}
+		else if (session->ctx->max_retries > 1 &&
+				 session->retries == session->ctx->max_retries) {
 
 			session->master_conn->up = rspamd_upstream_get_except(backend->u,
 																  session->master_conn->up,
