@@ -1,6 +1,7 @@
 # Librspamdserver
 ADD_SUBDIRECTORY(css)
 SET(LIBRSPAMDSERVERSRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/smtp_proxy/smtp_proxy_session.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/cfg_utils.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/cfg_rcl.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/composites/composites.cxx
