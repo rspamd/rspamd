@@ -2385,6 +2385,21 @@ rspamd_protocol_handle_metadata(struct rspamd_task *task,
 	return TRUE;
 }
 
+/* Shared memory mapping cleanup for v3 request body */
+struct rspamd_v3_shm_map {
+	gpointer begin;
+	gulong len;
+	int fd;
+};
+
+static void
+rspamd_v3_shm_unmapper(gpointer ud)
+{
+	struct rspamd_v3_shm_map *m = ud;
+	munmap(m->begin, m->len);
+	close(m->fd);
+}
+
 /*
  * Handle v3 multipart/form-data request.
  */
@@ -2395,6 +2410,108 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 {
 	const char *boundary = NULL;
 	gsize boundary_len = 0;
+	const char *body_data = chunk;
+	gsize body_len = len;
+
+	/*
+	 * When the proxy forwards to a local upstream, it uses shared memory
+	 * (GET + Shm/Shm-Offset/Shm-Length headers) instead of sending the
+	 * body inline.  In that case chunk/len are empty, so we must read
+	 * the body from the shared memory segment referenced by the headers.
+	 */
+	if (body_len == 0 || body_data == NULL) {
+		const rspamd_ftok_t *shm_tok = rspamd_http_message_find_header(msg, "Shm");
+
+		if (shm_tok) {
+			char filepath[PATH_MAX], *fp;
+			int fd;
+			struct stat st;
+			gulong offset = 0, shmem_size = 0;
+
+			rspamd_strlcpy(filepath, shm_tok->begin,
+						   MIN(sizeof(filepath), shm_tok->len + 1));
+			rspamd_url_decode(filepath, filepath, strlen(filepath) + 1);
+
+			int flen = strlen(filepath);
+			if (filepath[0] == '"' && flen > 2) {
+				fp = &filepath[1];
+				fp[flen - 2] = '\0';
+			}
+			else {
+				fp = &filepath[0];
+			}
+
+#ifdef HAVE_SANE_SHMEM
+			fd = shm_open(fp, O_RDONLY, 00600);
+#else
+			fd = open(fp, O_RDONLY, 00600);
+#endif
+			if (fd == -1) {
+				g_set_error(&task->err, rspamd_protocol_quark(), 500,
+							"cannot open shm segment (%s): %s", fp, strerror(errno));
+				return FALSE;
+			}
+
+			if (fstat(fd, &st) == -1) {
+				g_set_error(&task->err, rspamd_protocol_quark(), 500,
+							"cannot stat shm segment (%s): %s", fp, strerror(errno));
+				close(fd);
+				return FALSE;
+			}
+
+			gpointer map = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+			if (map == MAP_FAILED) {
+				g_set_error(&task->err, rspamd_protocol_quark(), 500,
+							"cannot mmap shm segment (%s): %s", fp, strerror(errno));
+				close(fd);
+				return FALSE;
+			}
+
+			const rspamd_ftok_t *off_tok = rspamd_http_message_find_header(msg, "Shm-Offset");
+			if (off_tok) {
+				rspamd_strtoul(off_tok->begin, off_tok->len, &offset);
+				if (offset > (gulong) st.st_size) {
+					munmap(map, st.st_size);
+					close(fd);
+					g_set_error(&task->err, rspamd_protocol_quark(), 500,
+								"invalid shm offset");
+					return FALSE;
+				}
+			}
+
+			shmem_size = st.st_size;
+			const rspamd_ftok_t *len_tok = rspamd_http_message_find_header(msg, "Shm-Length");
+			if (len_tok) {
+				rspamd_strtoul(len_tok->begin, len_tok->len, &shmem_size);
+				if (shmem_size > (gulong) st.st_size) {
+					munmap(map, st.st_size);
+					close(fd);
+					g_set_error(&task->err, rspamd_protocol_quark(), 500,
+								"invalid shm length");
+					return FALSE;
+				}
+			}
+
+			body_data = ((const char *) map) + offset;
+			body_len = shmem_size;
+
+			/* Register cleanup for the mapping */
+			struct rspamd_v3_shm_map *m = rspamd_mempool_alloc(task->task_pool, sizeof(*m));
+			m->begin = map;
+			m->len = st.st_size;
+			m->fd = fd;
+			rspamd_mempool_add_destructor(task->task_pool,
+										  rspamd_v3_shm_unmapper, m);
+
+			msg_info_task("v3 request: loaded body from shm %s (%ul size, %ul offset)",
+						  fp, (unsigned long) shmem_size, (unsigned long) offset);
+		}
+		else if (msg->body_buf.len > 0) {
+			/* Fallback: use the HTTP message body buffer directly */
+			body_data = msg->body_buf.begin;
+			body_len = msg->body_buf.len;
+		}
+	}
 
 	/* Extract boundary from HTTP Content-Type header */
 	const rspamd_ftok_t *ct_hdr = rspamd_http_message_find_header(msg, "Content-Type");
@@ -2419,7 +2536,7 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 
 	/* Parse multipart body */
 	struct rspamd_multipart_form_c *form = rspamd_multipart_form_parse(
-		chunk, len, boundary, boundary_len);
+		body_data, body_len, boundary, boundary_len);
 
 	if (!form) {
 		g_set_error(&task->err, rspamd_protocol_quark(), 400,

@@ -533,6 +533,60 @@ rspamd_client_v3_finish_handler(struct rspamd_http_connection *conn,
 		return 0;
 	}
 
+	/* Decompress whole-body compression (proxy may compress the entire response) */
+	unsigned char *whole_body_decompressed = NULL;
+	const char *resp_body = msg->body_buf.begin;
+	gsize resp_body_len = msg->body_buf.len;
+
+	const rspamd_ftok_t *comp_tok = rspamd_http_message_find_header(msg, COMPRESSION_HEADER);
+	if (comp_tok) {
+		rspamd_ftok_t zstd_tok;
+		zstd_tok.begin = "zstd";
+		zstd_tok.len = 4;
+
+		if (rspamd_ftok_casecmp(comp_tok, &zstd_tok) == 0) {
+			ZSTD_DStream *zstream = ZSTD_createDStream();
+			ZSTD_initDStream(zstream);
+			ZSTD_inBuffer zin;
+			zin.src = msg->body_buf.begin;
+			zin.size = msg->body_buf.len;
+			zin.pos = 0;
+			gsize outlen = ZSTD_getDecompressedSize(zin.src, zin.size);
+			if (outlen == 0) {
+				outlen = ZSTD_DStreamOutSize();
+			}
+			whole_body_decompressed = g_malloc(outlen);
+			ZSTD_outBuffer zout;
+			zout.dst = whole_body_decompressed;
+			zout.size = outlen;
+			zout.pos = 0;
+
+			while (zin.pos < zin.size) {
+				gsize r = ZSTD_decompressStream(zstream, &zout, &zin);
+				if (ZSTD_isError(r)) {
+					err = g_error_new(RCLIENT_ERROR, 500,
+									  "Whole-body decompression error: %s",
+									  ZSTD_getErrorName(r));
+					req->cb(c, msg, c->server_name->str, NULL,
+							req->input, req->ud, c->start_time,
+							c->send_time, NULL, 0, err);
+					g_error_free(err);
+					g_free(whole_body_decompressed);
+					ZSTD_freeDStream(zstream);
+					return 0;
+				}
+				if (zout.pos == zout.size) {
+					zout.size *= 2;
+					whole_body_decompressed = g_realloc(zout.dst, zout.size);
+					zout.dst = whole_body_decompressed;
+				}
+			}
+			ZSTD_freeDStream(zstream);
+			resp_body = (const char *) whole_body_decompressed;
+			resp_body_len = zout.pos;
+		}
+	}
+
 	/* Check if response is multipart/mixed */
 	const rspamd_ftok_t *ct = rspamd_http_message_find_header(msg, "Content-Type");
 
@@ -546,7 +600,7 @@ rspamd_client_v3_finish_handler(struct rspamd_http_connection *conn,
 
 		if (parsed_ct && parsed_ct->boundary.len > 0) {
 			struct rspamd_multipart_form_c *form = rspamd_multipart_form_parse(
-				msg->body_buf.begin, msg->body_buf.len,
+				resp_body, resp_body_len,
 				parsed_ct->boundary.begin, parsed_ct->boundary.len);
 
 			if (form) {
@@ -585,6 +639,7 @@ rspamd_client_v3_finish_handler(struct rspamd_http_connection *conn,
 										req->input, req->ud, c->start_time,
 										c->send_time, NULL, 0, err);
 								g_error_free(err);
+								g_free(whole_body_decompressed);
 								return 0;
 							}
 							if (zout.pos == zout.size) {
@@ -671,6 +726,7 @@ rspamd_client_v3_finish_handler(struct rspamd_http_connection *conn,
 								c->send_time, body, bodylen, err);
 						g_error_free(err);
 						g_free(body_decompressed);
+						g_free(whole_body_decompressed);
 						return 0;
 					}
 
@@ -712,8 +768,8 @@ rspamd_client_v3_finish_handler(struct rspamd_http_connection *conn,
 	}
 	else {
 		/* Fallback: non-multipart response, handle like v2 */
-		start = msg->body_buf.begin;
-		len = msg->body_buf.len;
+		start = resp_body;
+		len = resp_body_len;
 
 		parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 		if (!ucl_parser_add_chunk(parser, (const unsigned char *) start, len)) {
@@ -724,6 +780,7 @@ rspamd_client_v3_finish_handler(struct rspamd_http_connection *conn,
 					req->input, req->ud, c->start_time,
 					c->send_time, NULL, 0, err);
 			g_error_free(err);
+			g_free(whole_body_decompressed);
 			return 0;
 		}
 
@@ -734,6 +791,7 @@ rspamd_client_v3_finish_handler(struct rspamd_http_connection *conn,
 		ucl_parser_free(parser);
 	}
 
+	g_free(whole_body_decompressed);
 	return 0;
 }
 
