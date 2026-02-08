@@ -600,12 +600,50 @@ rspamd_client_v3_finish_handler(struct rspamd_http_connection *conn,
 					}
 
 					/* Extract optional body part */
+					unsigned char *body_decompressed = NULL;
 					const struct rspamd_multipart_entry_c *body_part =
 						rspamd_multipart_form_find(form, "body", sizeof("body") - 1);
 					if (body_part && body_part->data_len > 0) {
 						body = body_part->data;
 						bodylen = body_part->data_len;
-						/* TODO: decompress body part if needed */
+
+						/* Decompress body part if needed */
+						if (body_part->content_encoding &&
+							body_part->content_encoding_len > 0 &&
+							rspamd_substring_search_caseless(body_part->content_encoding,
+															 body_part->content_encoding_len,
+															 "zstd", 4) != -1) {
+							ZSTD_DStream *bzstream = ZSTD_createDStream();
+							ZSTD_initDStream(bzstream);
+							ZSTD_inBuffer bzin = {body, bodylen, 0};
+							gsize boutlen = ZSTD_getDecompressedSize(body, bodylen);
+							if (boutlen == 0) boutlen = ZSTD_DStreamOutSize();
+							body_decompressed = g_malloc(boutlen);
+							ZSTD_outBuffer bzout = {body_decompressed, boutlen, 0};
+
+							while (bzin.pos < bzin.size) {
+								gsize r = ZSTD_decompressStream(bzstream, &bzout, &bzin);
+								if (ZSTD_isError(r)) {
+									g_free(body_decompressed);
+									body_decompressed = NULL;
+									ZSTD_freeDStream(bzstream);
+									/* Non-fatal: pass compressed body as-is */
+									body = body_part->data;
+									bodylen = body_part->data_len;
+									break;
+								}
+								if (bzout.pos == bzout.size) {
+									bzout.size *= 2;
+									body_decompressed = g_realloc(bzout.dst, bzout.size);
+									bzout.dst = body_decompressed;
+								}
+							}
+							if (body_decompressed) {
+								ZSTD_freeDStream(bzstream);
+								body = (const char *) bzout.dst;
+								bodylen = bzout.pos;
+							}
+						}
 					}
 
 					parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
@@ -632,6 +670,7 @@ rspamd_client_v3_finish_handler(struct rspamd_http_connection *conn,
 								req->input, req->ud, c->start_time,
 								c->send_time, body, bodylen, err);
 						g_error_free(err);
+						g_free(body_decompressed);
 						return 0;
 					}
 
@@ -640,6 +679,7 @@ rspamd_client_v3_finish_handler(struct rspamd_http_connection *conn,
 							req->input, req->ud,
 							c->start_time, c->send_time, body, bodylen, NULL);
 					ucl_parser_free(parser);
+					g_free(body_decompressed);
 				}
 				else {
 					err = g_error_new(RCLIENT_ERROR, 500,
