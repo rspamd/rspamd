@@ -20,6 +20,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <sys/uio.h>
 
 namespace rspamd::http {
 
@@ -45,6 +46,27 @@ public:
 	auto serialize(void *zstream = nullptr) const -> std::string;
 
 	/**
+	 * Prepare body as iovec segments for zero-copy writev.
+	 * Boundary/header strings and compressed buffers are owned internally.
+	 * Data pointers for uncompressed parts reference the original part.data.
+	 * @param zstream ZSTD compression stream (may be null)
+	 */
+	void prepare_iov(void *zstream = nullptr);
+
+	const struct iovec *body_iov() const
+	{
+		return body_iov_.data();
+	}
+	std::size_t body_iov_count() const
+	{
+		return body_iov_.size();
+	}
+	std::size_t body_total_len() const
+	{
+		return body_total_len_;
+	}
+
+	/**
 	 * Get the Content-Type header value including boundary.
 	 */
 	auto content_type() const -> std::string;
@@ -57,6 +79,12 @@ public:
 private:
 	std::string boundary_;
 	std::vector<response_part> parts_;
+
+	/* Iov support (populated by prepare_iov) */
+	std::vector<struct iovec> body_iov_;
+	std::vector<std::string> owned_headers_;    /* boundary+headers per part */
+	std::vector<std::string> owned_compressed_; /* compressed data buffers */
+	std::size_t body_total_len_ = 0;
 };
 
 }// namespace rspamd::http

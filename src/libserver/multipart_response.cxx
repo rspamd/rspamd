@@ -129,6 +129,118 @@ auto multipart_response::serialize(void *zstream) const -> std::string
 	return out;
 }
 
+void multipart_response::prepare_iov(void *zstream)
+{
+	body_iov_.clear();
+	owned_headers_.clear();
+	owned_compressed_.clear();
+	body_total_len_ = 0;
+
+	for (size_t idx = 0; idx < parts_.size(); idx++) {
+		const auto &part = parts_[idx];
+
+		/* Build part header string */
+		std::string hdr;
+		if (idx == 0) {
+			hdr.append("--");
+		}
+		else {
+			hdr.append("\r\n--");
+		}
+		hdr.append(boundary_);
+		hdr.append("\r\n");
+		hdr.append("Content-Disposition: form-data; name=\"");
+		hdr.append(part.name);
+		hdr.append("\"\r\n");
+		if (!part.content_type.empty()) {
+			hdr.append("Content-Type: ");
+			hdr.append(part.content_type);
+			hdr.append("\r\n");
+		}
+
+		/* Handle compression */
+		bool compressed = false;
+		if (part.compress && zstream && !part.data.empty()) {
+			auto *cstream = static_cast<ZSTD_CStream *>(zstream);
+			size_t bound = ZSTD_compressBound(part.data.size());
+			std::string compressed_buf(bound, '\0');
+
+			ZSTD_inBuffer zin{};
+			zin.src = part.data.data();
+			zin.size = part.data.size();
+			zin.pos = 0;
+
+			ZSTD_outBuffer zout{};
+			zout.dst = compressed_buf.data();
+			zout.size = compressed_buf.size();
+			zout.pos = 0;
+
+			ZSTD_CCtx_reset(cstream, ZSTD_reset_session_only);
+
+			bool ok = true;
+			while (zin.pos < zin.size) {
+				size_t r = ZSTD_compressStream2(cstream, &zout, &zin, ZSTD_e_continue);
+				if (ZSTD_isError(r)) {
+					ok = false;
+					break;
+				}
+			}
+
+			if (ok) {
+				size_t r = ZSTD_compressStream2(cstream, &zout, &zin, ZSTD_e_end);
+				if (ZSTD_isError(r)) {
+					ok = false;
+				}
+			}
+
+			if (ok) {
+				compressed_buf.resize(zout.pos);
+				compressed = true;
+				hdr.append("Content-Encoding: zstd\r\n");
+				hdr.append("\r\n");
+				owned_compressed_.push_back(std::move(compressed_buf));
+			}
+		}
+		if (!compressed) {
+			hdr.append("\r\n");
+		}
+
+		/* Store owned header, add iov for it */
+		owned_headers_.push_back(std::move(hdr));
+		body_iov_.push_back({
+			const_cast<char *>(owned_headers_.back().data()),
+			owned_headers_.back().size(),
+		});
+		body_total_len_ += owned_headers_.back().size();
+
+		/* Add iov for data (compressed or original — zero-copy for original) */
+		if (compressed) {
+			const auto &comp = owned_compressed_.back();
+			body_iov_.push_back({
+				const_cast<char *>(comp.data()),
+				comp.size(),
+			});
+			body_total_len_ += comp.size();
+		}
+		else if (!part.data.empty()) {
+			body_iov_.push_back({
+				const_cast<char *>(part.data.data()),
+				part.data.size(),
+			});
+			body_total_len_ += part.data.size();
+		}
+	}
+
+	/* Closing boundary: "\r\n--boundary--\r\n" */
+	std::string trailer = "\r\n--" + boundary_ + "--\r\n";
+	owned_headers_.push_back(std::move(trailer));
+	body_iov_.push_back({
+		const_cast<char *>(owned_headers_.back().data()),
+		owned_headers_.back().size(),
+	});
+	body_total_len_ += owned_headers_.back().size();
+}
+
 auto multipart_response::content_type() const -> std::string
 {
 	return "multipart/mixed; boundary=\"" + boundary_ + "\"";
@@ -181,6 +293,32 @@ rspamd_multipart_response_serialize(
 	}
 	auto serialized = resp->resp.serialize(zstream);
 	return rspamd_fstring_new_init(serialized.data(), serialized.size());
+}
+
+void rspamd_multipart_response_prepare_iov(
+	struct rspamd_multipart_response_c *resp,
+	void *zstream)
+{
+	if (!resp) {
+		return;
+	}
+	resp->resp.prepare_iov(zstream);
+}
+
+const struct iovec *
+rspamd_multipart_response_body_iov(
+	struct rspamd_multipart_response_c *resp,
+	gsize *count,
+	gsize *total_len)
+{
+	if (!resp) {
+		if (count) *count = 0;
+		if (total_len) *total_len = 0;
+		return NULL;
+	}
+	if (count) *count = resp->resp.body_iov_count();
+	if (total_len) *total_len = resp->resp.body_total_len();
+	return resp->resp.body_iov();
 }
 
 const char *

@@ -1702,9 +1702,10 @@ rspamd_http_connection_encrypt_message(
 	outlen = priv->out[0].iov_len + priv->out[1].iov_len;
 	/*
 	 * Create segments from the following:
-	 * Method, [URL], CRLF, nheaders, CRLF, body
+	 * Method, [URL], CRLF, nheaders, CRLF, body segment(s)
 	 */
-	segments = g_new(struct rspamd_cryptobox_segment, hdrcount + 5);
+	gsize body_seg_count = (msg->body_iov_count > 0) ? msg->body_iov_count : (pbody ? 1 : 0);
+	segments = g_new(struct rspamd_cryptobox_segment, hdrcount + 4 + body_seg_count);
 
 	segments[0].data = pmethod;
 	segments[0].len = methodlen;
@@ -1739,7 +1740,13 @@ rspamd_http_connection_encrypt_message(
 segments[i].data = crlfp;
 segments[i++].len = 2;
 
-if (pbody) {
+if (msg->body_iov_count > 0) {
+	for (gsize j = 0; j < msg->body_iov_count; j++) {
+		segments[i].data = msg->body_iov[j].iov_base;
+		segments[i++].len = msg->body_iov[j].iov_len;
+	}
+}
+else if (pbody) {
 	segments[i].data = pbody;
 	segments[i++].len = bodylen;
 }
@@ -2267,7 +2274,12 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 	}
 
 	if (encrypted) {
-		if (msg->body_buf.len == 0) {
+		if (msg->body_iov_count > 0) {
+			pbody = NULL;
+			bodylen = msg->body_buf.len;
+			msg->method = HTTP_POST;
+		}
+		else if (msg->body_buf.len == 0) {
 			pbody = NULL;
 			bodylen = 0;
 			msg->method = HTTP_GET;
@@ -2288,7 +2300,7 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 			 * iov[6] = encrypted crlf
 			 * iov[7..n] = encrypted headers
 			 * iov[n + 1] = encrypted crlf
-			 * [iov[n + 2] = encrypted body]
+			 * [iov[n + 2..] = encrypted body segment(s)]
 			 */
 			priv->outlen = 7;
 			enclen = crypto_box_noncebytes() +
@@ -2307,7 +2319,7 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 			 * iov[7] = encrypted prelude
 			 * iov[8..n] = encrypted headers
 			 * iov[n + 1] = encrypted crlf
-			 * [iov[n + 2] = encrypted body]
+			 * [iov[n + 2..] = encrypted body segment(s)]
 			 */
 			priv->outlen = 8;
 
@@ -2341,12 +2353,26 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 		}
 
 		if (bodylen > 0) {
-			priv->outlen++;
+			if (msg->body_iov_count > 0) {
+				priv->outlen += msg->body_iov_count;
+			}
+			else {
+				priv->outlen++;
+			}
 		}
 	}
 	else {
 		if (msg->method < HTTP_SYMBOLS) {
-			if (msg->body_buf.len == 0 || allow_shared) {
+			if (msg->body_iov_count > 0) {
+				pbody = NULL;
+				bodylen = msg->body_buf.len;
+				priv->outlen = 2 + msg->body_iov_count;
+
+				if (msg->method == HTTP_INVALID) {
+					msg->method = HTTP_POST;
+				}
+			}
+			else if (msg->body_buf.len == 0 || allow_shared) {
 				pbody = NULL;
 				bodylen = 0;
 				priv->outlen = 2;
@@ -2475,7 +2501,13 @@ else
 	priv->wr_total -= 2;
 }
 
-if (pbody != NULL) {
+if (msg->body_iov_count > 0) {
+	for (gsize j = 0; j < msg->body_iov_count; j++) {
+		priv->out[i].iov_base = msg->body_iov[j].iov_base;
+		priv->out[i++].iov_len = msg->body_iov[j].iov_len;
+	}
+}
+else if (pbody != NULL) {
 	priv->out[i].iov_base = pbody;
 	priv->out[i++].iov_len = bodylen;
 }

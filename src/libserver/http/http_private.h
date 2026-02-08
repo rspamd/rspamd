@@ -72,6 +72,12 @@ struct rspamd_http_message {
 		} c;
 	} body_buf;
 
+	/* Piecewise body: multiple iovec segments instead of single buffer.
+	 * When body_iov_count > 0, the write path uses these instead of body_buf.begin.
+	 * body_buf.len still holds total length (for Content-Length). */
+	struct iovec *body_iov;
+	gsize body_iov_count;
+
 	struct rspamd_cryptobox_pubkey *peer_key;
 	time_t date;
 	time_t last_modified;

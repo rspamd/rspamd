@@ -19,6 +19,7 @@
 
 #include "config.h"
 #include "libutil/fstring.h"
+#include <sys/uio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -44,6 +45,28 @@ void rspamd_multipart_response_add_part(
 rspamd_fstring_t *rspamd_multipart_response_serialize(
 	struct rspamd_multipart_response_c *resp,
 	void *zstream);
+
+/**
+ * Prepare piecewise iov segments for zero-copy writev.
+ * @param resp response handle
+ * @param zstream ZSTD compression stream (may be NULL)
+ */
+void rspamd_multipart_response_prepare_iov(
+	struct rspamd_multipart_response_c *resp,
+	void *zstream);
+
+/**
+ * Get the prepared body iov segments.
+ * Returned pointer is valid until resp is freed.
+ * @param resp response handle
+ * @param count [out] number of iov segments
+ * @param total_len [out] total byte length across all segments
+ * @return pointer to iov array
+ */
+const struct iovec *rspamd_multipart_response_body_iov(
+	struct rspamd_multipart_response_c *resp,
+	gsize *count,
+	gsize *total_len);
 
 /**
  * Get the Content-Type header value (includes boundary).

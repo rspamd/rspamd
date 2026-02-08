@@ -2711,15 +2711,29 @@ rspamd_protocol_http_reply_v3(struct rspamd_http_message *msg,
 		zstream = task->cfg->libs_ctx->out_zstream;
 	}
 
-	rspamd_fstring_t *reply = rspamd_multipart_response_serialize(resp, zstream);
-	const char *resp_ctype = rspamd_multipart_response_content_type(resp);
+	rspamd_multipart_response_prepare_iov(resp, zstream);
 
+	gsize niov, total_len;
+	const struct iovec *body_segments =
+		rspamd_multipart_response_body_iov(resp, &niov, &total_len);
+
+	/* Copy iov array — message takes ownership of the copy */
+	struct iovec *iov_copy = g_new(struct iovec, niov);
+	memcpy(iov_copy, body_segments, sizeof(struct iovec) * niov);
+	rspamd_http_message_set_body_iov(msg, iov_copy, niov, total_len);
+
+	const char *resp_ctype = rspamd_multipart_response_content_type(resp);
 	/* Copy Content-Type to task pool so it survives after response is freed */
 	const char *pool_ctype = rspamd_mempool_strdup(task->task_pool, resp_ctype);
 
-	rspamd_http_message_set_body_from_fstring_steal(msg, reply);
-	rspamd_fstring_free(result_data);
-	rspamd_multipart_response_free(resp);
+	/* Keep data alive until after HTTP write:
+	 * - resp owns boundary/header strings and compressed buffers
+	 * - result_data fstring owns the UCL result data
+	 * Both freed when task_pool is destroyed (after write completes) */
+	rspamd_mempool_add_destructor(task->task_pool,
+								  (rspamd_mempool_destruct_t) rspamd_multipart_response_free, resp);
+	rspamd_mempool_add_destructor(task->task_pool,
+								  (rspamd_mempool_destruct_t) rspamd_fstring_free, result_data);
 
 	rspamd_protocol_update_stats(task);
 

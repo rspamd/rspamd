@@ -21,6 +21,7 @@
 #include "keypairs_cache.h"
 #include "fstring.h"
 #include "ref.h"
+#include <sys/uio.h>
 
 
 #ifdef __cplusplus
@@ -148,6 +149,19 @@ gboolean rspamd_http_message_set_body_from_fstring_copy(struct rspamd_http_messa
  */
 gboolean rspamd_http_message_append_body(struct rspamd_http_message *msg,
 										 const char *data, gsize len);
+
+/**
+ * Set message body from an array of iovec segments (piecewise/scatter body).
+ * The message takes ownership of the iov array (will g_free it).
+ * The data pointers inside iovecs are NOT owned — caller must keep data alive.
+ * @param msg message
+ * @param iov array of iovec segments (ownership transferred)
+ * @param count number of segments
+ * @param total_len sum of all iov_len values
+ */
+void rspamd_http_message_set_body_iov(struct rspamd_http_message *msg,
+									  struct iovec *iov, gsize count,
+									  gsize total_len);
 
 /**
  * Append a header to http message

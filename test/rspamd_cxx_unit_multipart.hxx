@@ -508,6 +508,81 @@ TEST_SUITE("multipart_roundtrip")
 		REQUIRE(result_part != nullptr);
 		CHECK(result_part->data == data);
 	}
+
+	TEST_CASE("prepare_iov matches serialize for two parts")
+	{
+		rspamd::http::multipart_response resp;
+		std::string result_data = "{\"action\":\"reject\",\"score\":15.0}";
+		std::string body_data = "Subject: test\r\n\r\nRewritten body content here";
+		resp.add_part("result", "application/json", result_data);
+		resp.add_part("body", "application/octet-stream", body_data);
+
+		auto serialized = resp.serialize();
+
+		resp.prepare_iov();
+
+		/* Reassemble iov into a single string */
+		std::string reassembled;
+		reassembled.reserve(resp.body_total_len());
+		for (gsize i = 0; i < resp.body_iov_count(); i++) {
+			const auto *iov = &resp.body_iov()[i];
+			reassembled.append(static_cast<const char *>(iov->iov_base), iov->iov_len);
+		}
+
+		CHECK(reassembled.size() == resp.body_total_len());
+		CHECK(reassembled == serialized);
+	}
+
+	TEST_CASE("prepare_iov matches serialize for single part")
+	{
+		rspamd::http::multipart_response resp;
+		std::string data = "{\"action\":\"no action\"}";
+		resp.add_part("result", "application/json", data);
+
+		auto serialized = resp.serialize();
+
+		resp.prepare_iov();
+
+		std::string reassembled;
+		reassembled.reserve(resp.body_total_len());
+		for (gsize i = 0; i < resp.body_iov_count(); i++) {
+			const auto *iov = &resp.body_iov()[i];
+			reassembled.append(static_cast<const char *>(iov->iov_base), iov->iov_len);
+		}
+
+		CHECK(reassembled == serialized);
+	}
+
+	TEST_CASE("prepare_iov roundtrip through parser")
+	{
+		rspamd::http::multipart_response resp;
+		std::string result_data = "{\"score\":42}";
+		std::string body_data = "Hello world body";
+		resp.add_part("result", "application/json", result_data);
+		resp.add_part("body", "application/octet-stream", body_data);
+
+		resp.prepare_iov();
+
+		/* Reassemble and parse */
+		std::string reassembled;
+		for (gsize i = 0; i < resp.body_iov_count(); i++) {
+			const auto *iov = &resp.body_iov()[i];
+			reassembled.append(static_cast<const char *>(iov->iov_base), iov->iov_len);
+		}
+
+		auto boundary = std::string(resp.get_boundary());
+		auto parsed = rspamd::http::parse_multipart_form(reassembled, boundary);
+		REQUIRE(parsed.has_value());
+		CHECK(parsed->parts.size() == 2);
+
+		auto *rp = rspamd::http::find_part(*parsed, "result");
+		REQUIRE(rp != nullptr);
+		CHECK(rp->data == result_data);
+
+		auto *bp = rspamd::http::find_part(*parsed, "body");
+		REQUIRE(bp != nullptr);
+		CHECK(bp->data == body_data);
+	}
 }
 
 #endif// RSPAMD_CXX_UNIT_MULTIPART_HXX
