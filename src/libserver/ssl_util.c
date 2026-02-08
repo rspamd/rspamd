@@ -38,7 +38,8 @@
 
 enum rspamd_ssl_state {
 	ssl_conn_reset = 0,
-	ssl_conn_init,
+	ssl_conn_init,        /* Client-side: connecting */
+	ssl_conn_init_accept, /* Server-side: accepting */
 	ssl_conn_connected,
 	ssl_next_read,
 	ssl_next_write,
@@ -570,7 +571,7 @@ rspamd_ssl_event_handler(int fd, short what, gpointer ud)
 
 	switch (conn->state) {
 	case ssl_conn_init:
-		/* Continue connection */
+		/* Continue client-side connection */
 		ret = SSL_connect(conn->ssl);
 
 		if (ret == 1) {
@@ -599,6 +600,38 @@ rspamd_ssl_event_handler(int fd, short what, gpointer ud)
 			else {
 				rspamd_ev_watcher_stop(conn->event_loop, conn->ev);
 				rspamd_tls_set_error(ret, "connect", &err);
+				conn->err_handler(conn->handler_data, err);
+				g_error_free(err);
+				return;
+			}
+
+			rspamd_ev_watcher_reschedule(conn->event_loop, conn->ev, what);
+		}
+		break;
+	case ssl_conn_init_accept:
+		/* Continue server-side accept handshake */
+		ret = SSL_accept(conn->ssl);
+
+		if (ret == 1) {
+			rspamd_ev_watcher_stop(conn->event_loop, conn->ev);
+			msg_debug_ssl("ssl accept: connected");
+			conn->state = ssl_conn_connected;
+			conn->handler(fd, EV_WRITE, conn->handler_data);
+		}
+		else {
+			ret = SSL_get_error(conn->ssl, ret);
+
+			if (ret == SSL_ERROR_WANT_READ) {
+				msg_debug_ssl("ssl accept: need read");
+				what = EV_READ;
+			}
+			else if (ret == SSL_ERROR_WANT_WRITE) {
+				msg_debug_ssl("ssl accept: need write");
+				what = EV_WRITE;
+			}
+			else {
+				rspamd_ev_watcher_stop(conn->event_loop, conn->ev);
+				rspamd_tls_set_error(ret, "accept", &err);
 				conn->err_handler(conn->handler_data, err);
 				g_error_free(err);
 				return;
@@ -747,6 +780,87 @@ rspamd_ssl_connect_fd(struct rspamd_ssl_connection *conn, int fd,
 			msg_debug_ssl("not connected, fatal error %e", err);
 			g_error_free(err);
 
+
+			return FALSE;
+		}
+
+		rspamd_ev_watcher_stop(conn->event_loop, ev);
+		rspamd_ev_watcher_init(ev, nfd, EV_WRITE | EV_READ,
+							   rspamd_ssl_event_handler, conn);
+		rspamd_ev_watcher_start(conn->event_loop, ev, timeout);
+	}
+
+	return TRUE;
+}
+
+gboolean
+rspamd_ssl_accept_fd(struct rspamd_ssl_connection *conn, int fd,
+					 struct rspamd_io_ev *ev, ev_tstamp timeout,
+					 rspamd_ssl_handler_t handler, rspamd_ssl_error_handler_t err_handler,
+					 gpointer handler_data)
+{
+	int ret;
+
+	g_assert(conn != NULL);
+
+	/* Ensure that we start from the empty SSL errors stack */
+	ERR_clear_error();
+	conn->ssl = SSL_new(conn->ssl_ctx->s);
+
+	SSL_set_app_data(conn->ssl, conn);
+	msg_debug_ssl("new ssl accept connection %p", conn->ssl);
+
+	if (conn->state != ssl_conn_reset) {
+		return FALSE;
+	}
+
+	/* We dup fd to allow graceful closing */
+	int nfd = dup(fd);
+
+	if (nfd == -1) {
+		return FALSE;
+	}
+
+	conn->fd = nfd;
+	conn->ev = ev;
+	conn->handler = handler;
+	conn->err_handler = err_handler;
+	conn->handler_data = handler_data;
+	conn->verify_peer = FALSE; /* Server-side doesn't verify client by default */
+
+	if (SSL_set_fd(conn->ssl, conn->fd) != 1) {
+		close(conn->fd);
+		return FALSE;
+	}
+
+	conn->state = ssl_conn_init_accept;
+
+	ret = SSL_accept(conn->ssl);
+
+	if (ret == 1) {
+		conn->state = ssl_conn_connected;
+
+		msg_debug_ssl("ssl accept: connected immediately, start write event");
+		rspamd_ev_watcher_stop(conn->event_loop, ev);
+		rspamd_ev_watcher_init(ev, nfd, EV_WRITE, rspamd_ssl_event_handler, conn);
+		rspamd_ev_watcher_start(conn->event_loop, ev, timeout);
+	}
+	else {
+		ret = SSL_get_error(conn->ssl, ret);
+
+		if (ret == SSL_ERROR_WANT_READ) {
+			msg_debug_ssl("ssl accept: not connected, want read");
+		}
+		else if (ret == SSL_ERROR_WANT_WRITE) {
+			msg_debug_ssl("ssl accept: not connected, want write");
+		}
+		else {
+			GError *err = NULL;
+
+			conn->shut = ssl_shut_unclean;
+			rspamd_tls_set_error(ret, "initial accept", &err);
+			msg_debug_ssl("ssl accept: not connected, fatal error %e", err);
+			g_error_free(err);
 
 			return FALSE;
 		}
