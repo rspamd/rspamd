@@ -18,6 +18,8 @@ SET(LIBRSPAMDSERVERSRC
         ${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_storage_stat.c
         ${CMAKE_CURRENT_SOURCE_DIR}/milter.c
         ${CMAKE_CURRENT_SOURCE_DIR}/monitored.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/multipart_form.cxx
+        ${CMAKE_CURRENT_SOURCE_DIR}/multipart_response.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/protocol.c
         ${CMAKE_CURRENT_SOURCE_DIR}/re_cache.c
         ${CMAKE_CURRENT_SOURCE_DIR}/redis_pool.cxx

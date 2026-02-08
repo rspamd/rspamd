@@ -29,6 +29,9 @@
 #include "rspamd_simdutf.h"
 #include "task.h"
 #include "lua/lua_classnames.h"
+#include "multipart_form.h"
+#include "multipart_response.h"
+#include "libmime/content_type.h"
 #include <math.h>
 
 #ifdef SYS_ZSTD
@@ -148,7 +151,12 @@ rspamd_protocol_handle_url(struct rspamd_task *task,
 	case 'c':
 	case 'C':
 		/* check */
-		if (COMPARE_CMD(p, MSG_CMD_CHECK_V2, pathlen)) {
+		if (COMPARE_CMD(p, MSG_CMD_CHECK_V3, pathlen)) {
+			task->cmd = CMD_CHECK_V3;
+			task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_MULTIPART_V3;
+			msg_debug_protocol("got checkv3 command");
+		}
+		else if (COMPARE_CMD(p, MSG_CMD_CHECK_V2, pathlen)) {
 			task->cmd = CMD_CHECK_V2;
 			msg_debug_protocol("got checkv2 command");
 		}
@@ -462,6 +470,120 @@ rspamd_protocol_process_flags(struct rspamd_task *task, const rspamd_ftok_t *hdr
 	}
 }
 
+/*
+ * Shared helpers for populating task fields from both v2 (HTTP headers) and
+ * v3 (UCL metadata) request formats.
+ */
+
+static void
+rspamd_protocol_set_from_envelope(struct rspamd_task *task,
+								  const char *from_str, gsize from_len)
+{
+	if (from_len == 0) {
+		from_str = "<>";
+		from_len = 2;
+	}
+
+	task->from_envelope = rspamd_email_address_from_smtp(from_str, from_len);
+
+	if (!task->from_envelope) {
+		msg_err_protocol("bad from value: '%*s'", (int) from_len, from_str);
+		task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
+	}
+}
+
+static void
+rspamd_protocol_set_ip(struct rspamd_task *task,
+					   const char *ip_str, gsize ip_len,
+					   gboolean *has_ip)
+{
+	if (!rspamd_parse_inet_address(&task->from_addr,
+								   ip_str, ip_len,
+								   RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
+		msg_err_protocol("bad ip value: '%*s'", (int) ip_len, ip_str);
+	}
+	else {
+		msg_debug_protocol("read IP value: %*s", (int) ip_len, ip_str);
+		*has_ip = TRUE;
+	}
+}
+
+static void
+rspamd_protocol_set_settings_id(struct rspamd_task *task,
+								const char *id_str, gsize id_len)
+{
+	task->settings_elt = rspamd_config_find_settings_name_ref(
+		task->cfg, id_str, id_len);
+
+	if (!task->settings_elt) {
+		msg_warn_protocol("unknown settings id: '%*s'", (int) id_len, id_str);
+	}
+}
+
+static void
+rspamd_protocol_set_log_tag(struct rspamd_task *task,
+							const char *tag, gsize tag_len)
+{
+	if (rspamd_fast_utf8_validate(tag, tag_len) == 0) {
+		int len = MIN(tag_len, sizeof(task->task_pool->tag.uid) - 1);
+		memcpy(task->task_pool->tag.uid, tag, len);
+		task->task_pool->tag.uid[len] = '\0';
+	}
+}
+
+static void
+rspamd_protocol_add_mail_esmtp_arg(struct rspamd_task *task,
+								   const char *key, gsize key_len,
+								   const char *val, gsize val_len)
+{
+	if (!task->mail_esmtp_args) {
+		task->mail_esmtp_args = g_hash_table_new_full(
+			rspamd_ftok_icase_hash,
+			rspamd_ftok_icase_equal,
+			rspamd_fstring_mapped_ftok_free,
+			rspamd_fstring_mapped_ftok_free);
+	}
+
+	rspamd_fstring_t *fkey = rspamd_fstring_new_init(key, key_len);
+	rspamd_fstring_t *fval = rspamd_fstring_new_init(val, val_len);
+	rspamd_ftok_t *key_tok = rspamd_ftok_map(fkey);
+	rspamd_ftok_t *val_tok = rspamd_ftok_map(fval);
+
+	g_hash_table_replace(task->mail_esmtp_args, key_tok, val_tok);
+}
+
+static void
+rspamd_protocol_add_rcpt_esmtp_arg(struct rspamd_task *task,
+								   int rcpt_idx,
+								   const char *key, gsize key_len,
+								   const char *val, gsize val_len)
+{
+	if (!task->rcpt_esmtp_args) {
+		task->rcpt_esmtp_args = g_ptr_array_new();
+	}
+
+	while ((int) task->rcpt_esmtp_args->len <= rcpt_idx) {
+		g_ptr_array_add(task->rcpt_esmtp_args, NULL);
+	}
+
+	GHashTable *rcpt_args = g_ptr_array_index(task->rcpt_esmtp_args, rcpt_idx);
+	if (!rcpt_args) {
+		rcpt_args = g_hash_table_new_full(
+			rspamd_ftok_icase_hash,
+			rspamd_ftok_icase_equal,
+			rspamd_fstring_mapped_ftok_free,
+			rspamd_fstring_mapped_ftok_free);
+		g_ptr_array_index(task->rcpt_esmtp_args, rcpt_idx) = rcpt_args;
+	}
+
+	rspamd_fstring_t *fkey = rspamd_fstring_new_init(key, key_len);
+	rspamd_fstring_t *fval = rspamd_fstring_new_init(val, val_len);
+	rspamd_ftok_t *key_tok = rspamd_ftok_map(fkey);
+	rspamd_ftok_t *val_tok = rspamd_ftok_map(fval);
+
+	g_hash_table_replace(rcpt_args, key_tok, val_tok);
+}
+
 #define IF_HEADER(name)          \
 	srch.begin = (name);         \
 	srch.len = sizeof(name) - 1; \
@@ -521,19 +643,8 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 		case 'F':
 			IF_HEADER(FROM_HEADER)
 			{
-				if (hv_tok->len == 0) {
-					/* Replace '' with '<>' to fix parsing issue */
-					RSPAMD_FTOK_ASSIGN(hv_tok, "<>");
-				}
-				task->from_envelope = rspamd_email_address_from_smtp(
-					hv_tok->begin,
-					hv_tok->len);
 				msg_debug_protocol("read from header, value: %T", hv_tok);
-
-				if (!task->from_envelope) {
-					msg_err_protocol("bad from header: '%T'", hv_tok);
-					task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
-				}
+				rspamd_protocol_set_from_envelope(task, hv_tok->begin, hv_tok->len);
 			}
 			IF_HEADER(FILENAME_HEADER)
 			{
@@ -584,15 +695,7 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 		case 'I':
 			IF_HEADER(IP_ADDR_HEADER)
 			{
-				if (!rspamd_parse_inet_address(&task->from_addr,
-											   hv_tok->begin, hv_tok->len,
-											   RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
-					msg_err_protocol("bad ip header: '%T'", hv_tok);
-				}
-				else {
-					msg_debug_protocol("read IP header, value: %T", hv_tok);
-					has_ip = TRUE;
-				}
+				rspamd_protocol_set_ip(task, hv_tok->begin, hv_tok->len, &has_ip);
 			}
 			else
 			{
@@ -624,8 +727,7 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 			IF_HEADER(SETTINGS_ID_HEADER)
 			{
 				msg_debug_protocol("read settings-id header, value: %T", hv_tok);
-				task->settings_elt = rspamd_config_find_settings_name_ref(
-					task->cfg, hv_tok->begin, hv_tok->len);
+				rspamd_protocol_set_settings_id(task, hv_tok->begin, hv_tok->len);
 
 				if (task->settings_elt == NULL) {
 					GString *known_ids = g_string_new(NULL);
@@ -637,7 +739,7 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 											  cur->name, cur->id);
 					}
 
-					msg_warn_protocol("unknown settings id: %T(%d); known_ids: %v",
+					msg_warn_protocol("settings id %T(%d) not found; known_ids: %v",
 									  hv_tok,
 									  rspamd_config_name_to_id(hv_tok->begin, hv_tok->len),
 									  known_ids);
@@ -711,12 +813,7 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 			IF_HEADER(LOG_TAG_HEADER)
 			{
 				msg_debug_protocol("read log-tag header, value: %T", hv_tok);
-				/* Ensure that a tag is valid */
-				if (rspamd_fast_utf8_validate(hv_tok->begin, hv_tok->len) == 0) {
-					int len = MIN(hv_tok->len, sizeof(task->task_pool->tag.uid) - 1);
-					memcpy(task->task_pool->tag.uid, hv_tok->begin, len);
-					task->task_pool->tag.uid[len] = '\0';
-				}
+				rspamd_protocol_set_log_tag(task, hv_tok->begin, hv_tok->len);
 			}
 			break;
 		case 'm':
@@ -757,37 +854,18 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 		case 'X':
 			IF_HEADER("X-Rspamd-Mail-Esmtp-Args")
 			{
-				/* Parse MAIL ESMTP arguments from HTTP header */
-				if (!task->mail_esmtp_args) {
-					task->mail_esmtp_args = g_hash_table_new_full(
-						rspamd_ftok_icase_hash,
-						rspamd_ftok_icase_equal,
-						rspamd_fstring_mapped_ftok_free,
-						rspamd_fstring_mapped_ftok_free);
-				}
-
 				/* Parse KEY=VALUE format */
-				const char *p = hv_tok->begin;
-				const char *end = hv_tok->begin + hv_tok->len;
-				const char *eq = memchr(p, '=', hv_tok->len);
+				const char *eq = memchr(hv_tok->begin, '=', hv_tok->len);
 
-				if (eq && eq > p) {
-					rspamd_fstring_t *key = rspamd_fstring_new_init(p, eq - p);
-					rspamd_fstring_t *value = rspamd_fstring_new_init(eq + 1, end - eq - 1);
-					rspamd_ftok_t *key_tok = rspamd_ftok_map(key);
-					rspamd_ftok_t *value_tok = rspamd_ftok_map(value);
-
-					g_hash_table_replace(task->mail_esmtp_args, key_tok, value_tok);
-					msg_debug_protocol("parsed mail ESMTP arg: %T=%T", key_tok, value_tok);
+				if (eq && eq > hv_tok->begin) {
+					rspamd_protocol_add_mail_esmtp_arg(task,
+													   hv_tok->begin, eq - hv_tok->begin,
+													   eq + 1, hv_tok->begin + hv_tok->len - eq - 1);
+					msg_debug_protocol("parsed mail ESMTP arg from header");
 				}
 			}
 			IF_HEADER("X-Rspamd-Rcpt-Esmtp-Args")
 			{
-				/* Parse RCPT ESMTP arguments from HTTP header */
-				if (!task->rcpt_esmtp_args) {
-					task->rcpt_esmtp_args = g_ptr_array_new();
-				}
-
 				/* Parse IDX:KEY=VALUE format */
 				const char *p = hv_tok->begin;
 				const char *end = hv_tok->begin + hv_tok->len;
@@ -798,34 +876,15 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 					int rcpt_idx = strtol(p, &endptr, 10);
 
 					if (endptr == colon) {
-						/* Ensure we have enough entries in the array */
-						while (task->rcpt_esmtp_args->len <= rcpt_idx) {
-							g_ptr_array_add(task->rcpt_esmtp_args, NULL);
-						}
-
-						/* Get or create hash table for this recipient */
-						GHashTable *rcpt_args = g_ptr_array_index(task->rcpt_esmtp_args, rcpt_idx);
-						if (!rcpt_args) {
-							rcpt_args = g_hash_table_new_full(
-								rspamd_ftok_icase_hash,
-								rspamd_ftok_icase_equal,
-								rspamd_fstring_mapped_ftok_free,
-								rspamd_fstring_mapped_ftok_free);
-							g_ptr_array_index(task->rcpt_esmtp_args, rcpt_idx) = rcpt_args;
-						}
-
 						/* Parse KEY=VALUE */
 						p = colon + 1;
 						const char *eq = memchr(p, '=', end - p);
 
 						if (eq && eq > p) {
-							rspamd_fstring_t *key = rspamd_fstring_new_init(p, eq - p);
-							rspamd_fstring_t *value = rspamd_fstring_new_init(eq + 1, end - eq - 1);
-							rspamd_ftok_t *key_tok = rspamd_ftok_map(key);
-							rspamd_ftok_t *value_tok = rspamd_ftok_map(value);
-
-							g_hash_table_replace(rcpt_args, key_tok, value_tok);
-							msg_debug_protocol("parsed rcpt ESMTP arg for idx %d: %T=%T", rcpt_idx, key_tok, value_tok);
+							rspamd_protocol_add_rcpt_esmtp_arg(task, rcpt_idx,
+															   p, eq - p,
+															   eq + 1, end - eq - 1);
+							msg_debug_protocol("parsed rcpt ESMTP arg for idx %d", rcpt_idx);
 						}
 					}
 				}
@@ -1150,7 +1209,7 @@ rspamd_metric_symbol_ucl(struct rspamd_task *task, struct rspamd_symbol_result *
 	ucl_object_insert_key(obj, ucl_object_fromstring(sym->name), "name", 0, false);
 	ucl_object_insert_key(obj, ucl_object_fromdouble(sym->score), "score", 0, false);
 
-	if (task->cmd == CMD_CHECK_V2) {
+	if (task->cmd == CMD_CHECK_V2 || task->cmd == CMD_CHECK_V3) {
 		if (sym->sym) {
 			ucl_object_insert_key(obj, ucl_object_fromdouble(sym->sym->score), "metric_score", 0, false);
 		}
@@ -1615,16 +1674,120 @@ rspamd_protocol_write_ucl(struct rspamd_task *task,
 	return top;
 }
 
+/*
+ * Helper: update rolling history and write task log.
+ * Shared between v2 and v3 reply handlers.
+ */
+static void
+rspamd_protocol_update_history_and_log(struct rspamd_task *task)
+{
+	if (!(task->flags & RSPAMD_TASK_FLAG_NO_LOG)) {
+		if (task->worker->srv->history) {
+			rspamd_roll_history_update(task->worker->srv->history, task);
+		}
+	}
+	else {
+		msg_debug_protocol("skip history update due to no log flag");
+	}
+
+	rspamd_task_write_log(task);
+}
+
+/*
+ * Helper: update action stats, messages_scanned counter, and avg processing time.
+ * Shared between v2 and v3 reply handlers.
+ */
+static void
+rspamd_protocol_update_stats(struct rspamd_task *task)
+{
+	if (!(task->flags & RSPAMD_TASK_FLAG_NO_STAT)) {
+		struct rspamd_scan_result *metric_res = task->result;
+
+		if (metric_res != NULL) {
+			struct rspamd_action *action = rspamd_check_action_metric(task, NULL, NULL);
+
+			if (action->action_type == METRIC_ACTION_SOFT_REJECT &&
+				(task->flags & RSPAMD_TASK_FLAG_GREYLISTED)) {
+#ifndef HAVE_ATOMIC_BUILTINS
+				task->worker->srv->stat->actions_stat[METRIC_ACTION_GREYLIST]++;
+#else
+				__atomic_add_fetch(&task->worker->srv->stat->actions_stat[METRIC_ACTION_GREYLIST],
+								   1, __ATOMIC_RELEASE);
+#endif
+			}
+			else if (action->action_type < METRIC_ACTION_MAX) {
+#ifndef HAVE_ATOMIC_BUILTINS
+				task->worker->srv->stat->actions_stat[action->action_type]++;
+#else
+				__atomic_add_fetch(&task->worker->srv->stat->actions_stat[action->action_type],
+								   1, __ATOMIC_RELEASE);
+#endif
+			}
+		}
+
+#ifndef HAVE_ATOMIC_BUILTINS
+		task->worker->srv->stat->messages_scanned++;
+#else
+		__atomic_add_fetch(&task->worker->srv->stat->messages_scanned,
+						   1, __ATOMIC_RELEASE);
+#endif
+
+		/* Set average processing time */
+		uint32_t slot;
+		float processing_time = task->time_real_finish - task->task_timestamp;
+
+#ifndef HAVE_ATOMIC_BUILTINS
+		slot = task->worker->srv->stat->avg_time.cur_slot++;
+#else
+		slot = __atomic_fetch_add(&task->worker->srv->stat->avg_time.cur_slot,
+								  1, __ATOMIC_RELEASE);
+#endif
+		slot = slot % MAX_AVG_TIME_SLOTS;
+		task->worker->srv->stat->avg_time.avg_time[slot] = processing_time;
+	}
+}
+
+/*
+ * Helper: compute the rewritten message body start and length.
+ * For milter protocol, skip past the raw headers to return only the body.
+ * Shared between v2 and v3 reply handlers.
+ */
+static void
+rspamd_protocol_get_rewritten_body(struct rspamd_task *task,
+								   const char **body_start,
+								   gsize *body_len)
+{
+	*body_start = task->msg.begin;
+	*body_len = task->msg.len;
+
+	if (task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_MILTER) {
+		goffset hdr_off = MESSAGE_FIELD(task, raw_headers_content).len;
+
+		if (hdr_off < (goffset) *body_len) {
+			*body_start += hdr_off;
+			*body_len -= hdr_off;
+
+			/* Skip the \r\n separator between headers and body */
+			if (**body_start == '\r' && *body_len > 0) {
+				(*body_start)++;
+				(*body_len)--;
+			}
+
+			if (**body_start == '\n' && *body_len > 0) {
+				(*body_start)++;
+				(*body_len)--;
+			}
+		}
+	}
+}
+
 void rspamd_protocol_http_reply(struct rspamd_http_message *msg,
 								struct rspamd_task *task, ucl_object_t **pobj, int how)
 {
-	struct rspamd_scan_result *metric_res;
 	const struct rspamd_re_cache_stat *restat;
-
 	ucl_object_t *top = NULL;
 	rspamd_fstring_t *reply;
 	int flags = RSPAMD_PROTOCOL_DEFAULT;
-	struct rspamd_action *action;
 
 	/* Removed in 2.0 */
 #if 0
@@ -1647,16 +1810,7 @@ void rspamd_protocol_http_reply(struct rspamd_http_message *msg,
 		*pobj = top;
 	}
 
-	if (!(task->flags & RSPAMD_TASK_FLAG_NO_LOG)) {
-		if (task->worker->srv->history) {
-			rspamd_roll_history_update(task->worker->srv->history, task);
-		}
-	}
-	else {
-		msg_debug_protocol("skip history update due to no log flag");
-	}
-
-	rspamd_task_write_log(task);
+	rspamd_protocol_update_history_and_log(task);
 
 	if (task->cfg->log_flags & RSPAMD_LOG_FLAG_RE_CACHE) {
 		restat = rspamd_re_cache_get_stat(task->re_rt);
@@ -1702,48 +1856,14 @@ void rspamd_protocol_http_reply(struct rspamd_http_message *msg,
 							   hdr_offset->str);
 			g_string_free(hdr_offset, TRUE);
 
-			/* In case of milter, we append just body, otherwise - full message */
-			if (task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_MILTER) {
-				const char *start;
-				goffset len, hdr_off;
+			const char *body_start;
+			gsize body_len;
 
-				start = task->msg.begin;
-				len = task->msg.len;
-
-				hdr_off = MESSAGE_FIELD(task, raw_headers_content).len;
-
-				if (hdr_off < len) {
-					start += hdr_off;
-					len -= hdr_off;
-
-					/* The problem here is that we need not end of headers, we need
-					 * start of body.
-					 *
-					 * Hence, we need to skip one \r\n till there is anything else in
-					 * a line.
-					 */
-
-					if (*start == '\r' && len > 0) {
-						start++;
-						len--;
-					}
-
-					if (*start == '\n' && len > 0) {
-						start++;
-						len--;
-					}
-
-					msg_debug_protocol("milter version of body block size %d",
-									   (int) len);
-					reply = rspamd_fstring_append(reply, start, len);
-				}
-			}
-			else {
-				msg_debug_protocol("general version of body block size %d",
-								   (int) task->msg.len);
-				reply = rspamd_fstring_append(reply,
-											  task->msg.begin, task->msg.len);
-			}
+			rspamd_protocol_get_rewritten_body(task, &body_start, &body_len);
+			msg_debug_protocol("body block size %d (milter=%s)",
+							   (int) body_len,
+							   (task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_MILTER) ? "yes" : "no");
+			reply = rspamd_fstring_append(reply, body_start, body_len);
 		}
 	}
 
@@ -1824,58 +1944,7 @@ void rspamd_protocol_http_reply(struct rspamd_http_message *msg,
 	}
 
 end:
-	if (!(task->flags & RSPAMD_TASK_FLAG_NO_STAT)) {
-		/* Update stat for default metric */
-
-		msg_debug_protocol("skip stats update due to no_stat flag");
-		metric_res = task->result;
-
-		if (metric_res != NULL) {
-
-			action = rspamd_check_action_metric(task, NULL, NULL);
-			/* TODO: handle custom actions in stats */
-			if (action->action_type == METRIC_ACTION_SOFT_REJECT &&
-				(task->flags & RSPAMD_TASK_FLAG_GREYLISTED)) {
-				/* Set stat action to greylist to display greylisted messages */
-#ifndef HAVE_ATOMIC_BUILTINS
-				task->worker->srv->stat->actions_stat[METRIC_ACTION_GREYLIST]++;
-#else
-				__atomic_add_fetch(&task->worker->srv->stat->actions_stat[METRIC_ACTION_GREYLIST],
-								   1, __ATOMIC_RELEASE);
-#endif
-			}
-			else if (action->action_type < METRIC_ACTION_MAX) {
-#ifndef HAVE_ATOMIC_BUILTINS
-				task->worker->srv->stat->actions_stat[action->action_type]++;
-#else
-				__atomic_add_fetch(&task->worker->srv->stat->actions_stat[action->action_type],
-								   1, __ATOMIC_RELEASE);
-#endif
-			}
-		}
-
-		/* Increase counters */
-#ifndef HAVE_ATOMIC_BUILTINS
-		task->worker->srv->stat->messages_scanned++;
-#else
-		__atomic_add_fetch(&task->worker->srv->stat->messages_scanned,
-						   1, __ATOMIC_RELEASE);
-#endif
-
-		/* Set average processing time */
-		uint32_t slot;
-		float processing_time = task->time_real_finish - task->task_timestamp;
-
-#ifndef HAVE_ATOMIC_BUILTINS
-		slot = task->worker->srv->stat->avg_time.cur_slot++;
-#else
-		slot = __atomic_fetch_add(&task->worker->srv->stat->avg_time.cur_slot,
-								  1, __ATOMIC_RELEASE);
-#endif
-		slot = slot % MAX_AVG_TIME_SLOTS;
-		/* TODO: this should be atomic but it is not supported in C */
-		task->worker->srv->stat->avg_time.avg_time[slot] = processing_time;
-	}
+	rspamd_protocol_update_stats(task);
 }
 
 void rspamd_protocol_write_log_pipe(struct rspamd_task *task)
@@ -2094,6 +2163,700 @@ void rspamd_protocol_write_log_pipe(struct rspamd_task *task)
 	g_array_free(extra, TRUE);
 }
 
+/*
+ * Handle metadata from a parsed UCL object for v3 protocol.
+ * Maps structured metadata fields to task fields.
+ */
+static gboolean
+rspamd_protocol_handle_metadata(struct rspamd_task *task,
+								const ucl_object_t *metadata)
+{
+	const ucl_object_t *elt, *cur;
+	gboolean has_ip = FALSE;
+
+	if (!metadata || ucl_object_type(metadata) != UCL_OBJECT) {
+		g_set_error(&task->err, rspamd_protocol_quark(), 400,
+					"metadata is not a valid object");
+		return FALSE;
+	}
+
+	/* from */
+	elt = ucl_object_lookup(metadata, "from");
+	if (elt && ucl_object_type(elt) == UCL_STRING) {
+		const char *from_str = ucl_object_tostring(elt);
+		rspamd_protocol_set_from_envelope(task, from_str, strlen(from_str));
+	}
+
+	/* rcpt (array) */
+	elt = ucl_object_lookup(metadata, "rcpt");
+	if (elt) {
+		if (ucl_object_type(elt) == UCL_ARRAY) {
+			ucl_object_iter_t it = NULL;
+
+			while ((cur = ucl_object_iterate(elt, &it, true)) != NULL) {
+				if (ucl_object_type(cur) == UCL_STRING) {
+					const char *rcpt_str = ucl_object_tostring(cur);
+					struct rspamd_email_address *addr =
+						rspamd_email_address_from_smtp(rcpt_str, strlen(rcpt_str));
+
+					if (addr) {
+						if (!task->rcpt_envelope) {
+							task->rcpt_envelope = g_ptr_array_sized_new(2);
+						}
+						g_ptr_array_add(task->rcpt_envelope, addr);
+					}
+					else {
+						msg_err_protocol("bad rcpt in metadata: '%s'", rcpt_str);
+						task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
+					}
+				}
+			}
+		}
+		else if (ucl_object_type(elt) == UCL_STRING) {
+			/* Single recipient as string */
+			const char *rcpt_str = ucl_object_tostring(elt);
+			struct rspamd_email_address *addr =
+				rspamd_email_address_from_smtp(rcpt_str, strlen(rcpt_str));
+
+			if (addr) {
+				if (!task->rcpt_envelope) {
+					task->rcpt_envelope = g_ptr_array_sized_new(2);
+				}
+				g_ptr_array_add(task->rcpt_envelope, addr);
+			}
+		}
+	}
+
+	/* ip */
+	elt = ucl_object_lookup(metadata, "ip");
+	if (elt && ucl_object_type(elt) == UCL_STRING) {
+		const char *ip_str = ucl_object_tostring(elt);
+		rspamd_protocol_set_ip(task, ip_str, strlen(ip_str), &has_ip);
+	}
+
+	if (!has_ip) {
+		task->flags |= RSPAMD_TASK_FLAG_NO_IP;
+	}
+
+	/* helo */
+	elt = ucl_object_lookup(metadata, "helo");
+	if (elt && ucl_object_type(elt) == UCL_STRING) {
+		task->helo = rspamd_mempool_strdup(task->task_pool, ucl_object_tostring(elt));
+	}
+
+	/* hostname */
+	elt = ucl_object_lookup(metadata, "hostname");
+	if (elt && ucl_object_type(elt) == UCL_STRING) {
+		task->hostname = rspamd_mempool_strdup(task->task_pool, ucl_object_tostring(elt));
+	}
+
+	/* queue_id */
+	elt = ucl_object_lookup(metadata, "queue_id");
+	if (elt && ucl_object_type(elt) == UCL_STRING) {
+		task->queue_id = rspamd_mempool_strdup(task->task_pool, ucl_object_tostring(elt));
+	}
+
+	/* user */
+	elt = ucl_object_lookup(metadata, "user");
+	if (elt && ucl_object_type(elt) == UCL_STRING) {
+		task->auth_user = rspamd_mempool_strdup(task->task_pool, ucl_object_tostring(elt));
+	}
+
+	/* deliver_to */
+	elt = ucl_object_lookup(metadata, "deliver_to");
+	if (elt && ucl_object_type(elt) == UCL_STRING) {
+		task->deliver_to = rspamd_mempool_strdup(task->task_pool, ucl_object_tostring(elt));
+	}
+
+	/* settings_id */
+	elt = ucl_object_lookup(metadata, "settings_id");
+	if (elt && ucl_object_type(elt) == UCL_STRING) {
+		const char *sid = ucl_object_tostring(elt);
+		rspamd_protocol_set_settings_id(task, sid, strlen(sid));
+	}
+
+	/* settings (inline UCL object) */
+	elt = ucl_object_lookup(metadata, "settings");
+	if (elt && ucl_object_type(elt) == UCL_OBJECT) {
+		/* If both settings_id and settings are present, settings wins */
+		if (task->settings_elt) {
+			msg_warn_protocol("ignore settings_id because inline settings is also present");
+			REF_RELEASE(task->settings_elt);
+			task->settings_elt = NULL;
+		}
+		task->settings = ucl_object_ref(elt);
+	}
+
+	/* tls.cipher - sets SSL flag */
+	elt = ucl_object_lookup_path(metadata, "tls.cipher");
+	if (elt && ucl_object_type(elt) == UCL_STRING) {
+		task->flags |= RSPAMD_TASK_FLAG_SSL;
+	}
+
+	/* mta.tag */
+	elt = ucl_object_lookup_path(metadata, "mta.tag");
+	if (elt && ucl_object_type(elt) == UCL_STRING) {
+		char *mta_tag = rspamd_mempool_strdup(task->task_pool, ucl_object_tostring(elt));
+		rspamd_mempool_set_variable(task->task_pool, RSPAMD_MEMPOOL_MTA_TAG, mta_tag, NULL);
+	}
+
+	/* mta.name */
+	elt = ucl_object_lookup_path(metadata, "mta.name");
+	if (elt && ucl_object_type(elt) == UCL_STRING) {
+		char *mta_name = rspamd_mempool_strdup(task->task_pool, ucl_object_tostring(elt));
+		rspamd_mempool_set_variable(task->task_pool, RSPAMD_MEMPOOL_MTA_NAME, mta_name, NULL);
+	}
+
+	/* flags (array of strings) */
+	elt = ucl_object_lookup(metadata, "flags");
+	if (elt && ucl_object_type(elt) == UCL_ARRAY) {
+		ucl_object_iter_t it = NULL;
+
+		while ((cur = ucl_object_iterate(elt, &it, true)) != NULL) {
+			if (ucl_object_type(cur) == UCL_STRING) {
+				const char *flag_str = ucl_object_tostring(cur);
+				rspamd_protocol_handle_flag(task, flag_str, strlen(flag_str));
+			}
+		}
+	}
+
+	/* raw - disable MIME parsing */
+	elt = ucl_object_lookup(metadata, "raw");
+	if (elt && ucl_object_type(elt) == UCL_BOOLEAN) {
+		if (ucl_object_toboolean(elt)) {
+			task->flags &= ~RSPAMD_TASK_FLAG_MIME;
+		}
+	}
+
+	/* log_tag */
+	elt = ucl_object_lookup(metadata, "log_tag");
+	if (elt && ucl_object_type(elt) == UCL_STRING) {
+		const char *tag = ucl_object_tostring(elt);
+		rspamd_protocol_set_log_tag(task, tag, strlen(tag));
+	}
+
+	/* mail_esmtp_args (object: key -> value) */
+	elt = ucl_object_lookup(metadata, "mail_esmtp_args");
+	if (elt && ucl_object_type(elt) == UCL_OBJECT) {
+		ucl_object_iter_t it = NULL;
+		while ((cur = ucl_object_iterate(elt, &it, true)) != NULL) {
+			if (ucl_object_type(cur) == UCL_STRING) {
+				const char *key = ucl_object_key(cur);
+				const char *val = ucl_object_tostring(cur);
+				rspamd_protocol_add_mail_esmtp_arg(task,
+												   key, strlen(key), val, strlen(val));
+			}
+		}
+	}
+
+	/* rcpt_esmtp_args (array of objects) */
+	elt = ucl_object_lookup(metadata, "rcpt_esmtp_args");
+	if (elt && ucl_object_type(elt) == UCL_ARRAY) {
+		ucl_object_iter_t arr_it = NULL;
+		int rcpt_idx = 0;
+
+		while ((cur = ucl_object_iterate(elt, &arr_it, true)) != NULL) {
+			if (ucl_object_type(cur) == UCL_OBJECT) {
+				ucl_object_iter_t obj_it = NULL;
+				const ucl_object_t *kv;
+
+				while ((kv = ucl_object_iterate(cur, &obj_it, true)) != NULL) {
+					if (ucl_object_type(kv) == UCL_STRING) {
+						const char *key = ucl_object_key(kv);
+						const char *val = ucl_object_tostring(kv);
+						rspamd_protocol_add_rcpt_esmtp_arg(task, rcpt_idx,
+														   key, strlen(key), val, strlen(val));
+					}
+				}
+			}
+			else {
+				/* Non-object entry: ensure array slot exists as NULL */
+				if (!task->rcpt_esmtp_args) {
+					task->rcpt_esmtp_args = g_ptr_array_new();
+				}
+				while ((int) task->rcpt_esmtp_args->len <= rcpt_idx) {
+					g_ptr_array_add(task->rcpt_esmtp_args, NULL);
+				}
+			}
+			rcpt_idx++;
+		}
+	}
+
+	return TRUE;
+}
+
+/* Shared memory mapping cleanup for v3 request body */
+struct rspamd_v3_shm_map {
+	gpointer begin;
+	gulong len;
+	int fd;
+};
+
+static void
+rspamd_v3_shm_unmapper(gpointer ud)
+{
+	struct rspamd_v3_shm_map *m = ud;
+	munmap(m->begin, m->len);
+	close(m->fd);
+}
+
+/*
+ * Handle v3 multipart/form-data request.
+ */
+gboolean
+rspamd_protocol_handle_v3_request(struct rspamd_task *task,
+								  struct rspamd_http_message *msg,
+								  const char *chunk, gsize len)
+{
+	const char *boundary = NULL;
+	gsize boundary_len = 0;
+	const char *body_data = chunk;
+	gsize body_len = len;
+
+	/*
+	 * When the proxy forwards to a local upstream, it uses shared memory
+	 * (GET + Shm/Shm-Offset/Shm-Length headers) instead of sending the
+	 * body inline.  In that case chunk/len are empty, so we must read
+	 * the body from the shared memory segment referenced by the headers.
+	 */
+	if (body_len == 0 || body_data == NULL) {
+		const rspamd_ftok_t *shm_tok = rspamd_http_message_find_header(msg, "Shm");
+
+		if (shm_tok) {
+			char filepath[PATH_MAX], *fp;
+			int fd;
+			struct stat st;
+			gulong offset = 0, shmem_size = 0;
+
+			rspamd_strlcpy(filepath, shm_tok->begin,
+						   MIN(sizeof(filepath), shm_tok->len + 1));
+			rspamd_url_decode(filepath, filepath, strlen(filepath) + 1);
+
+			int flen = strlen(filepath);
+			if (filepath[0] == '"' && flen > 2) {
+				fp = &filepath[1];
+				fp[flen - 2] = '\0';
+			}
+			else {
+				fp = &filepath[0];
+			}
+
+#ifdef HAVE_SANE_SHMEM
+			fd = shm_open(fp, O_RDONLY, 00600);
+#else
+			fd = open(fp, O_RDONLY, 00600);
+#endif
+			if (fd == -1) {
+				g_set_error(&task->err, rspamd_protocol_quark(), 500,
+							"cannot open shm segment (%s): %s", fp, strerror(errno));
+				return FALSE;
+			}
+
+			if (fstat(fd, &st) == -1) {
+				g_set_error(&task->err, rspamd_protocol_quark(), 500,
+							"cannot stat shm segment (%s): %s", fp, strerror(errno));
+				close(fd);
+				return FALSE;
+			}
+
+			gpointer map = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+			if (map == MAP_FAILED) {
+				g_set_error(&task->err, rspamd_protocol_quark(), 500,
+							"cannot mmap shm segment (%s): %s", fp, strerror(errno));
+				close(fd);
+				return FALSE;
+			}
+
+			const rspamd_ftok_t *off_tok = rspamd_http_message_find_header(msg, "Shm-Offset");
+			if (off_tok) {
+				rspamd_strtoul(off_tok->begin, off_tok->len, &offset);
+				if (offset > (gulong) st.st_size) {
+					munmap(map, st.st_size);
+					close(fd);
+					g_set_error(&task->err, rspamd_protocol_quark(), 500,
+								"invalid shm offset");
+					return FALSE;
+				}
+			}
+
+			shmem_size = st.st_size;
+			const rspamd_ftok_t *len_tok = rspamd_http_message_find_header(msg, "Shm-Length");
+			if (len_tok) {
+				rspamd_strtoul(len_tok->begin, len_tok->len, &shmem_size);
+				if (shmem_size > (gulong) st.st_size) {
+					munmap(map, st.st_size);
+					close(fd);
+					g_set_error(&task->err, rspamd_protocol_quark(), 500,
+								"invalid shm length");
+					return FALSE;
+				}
+			}
+
+			body_data = ((const char *) map) + offset;
+			body_len = shmem_size;
+
+			/* Register cleanup for the mapping */
+			struct rspamd_v3_shm_map *m = rspamd_mempool_alloc(task->task_pool, sizeof(*m));
+			m->begin = map;
+			m->len = st.st_size;
+			m->fd = fd;
+			rspamd_mempool_add_destructor(task->task_pool,
+										  rspamd_v3_shm_unmapper, m);
+
+			msg_info_task("v3 request: loaded body from shm %s (%ul size, %ul offset)",
+						  fp, (unsigned long) shmem_size, (unsigned long) offset);
+		}
+		else if (msg->body_buf.len > 0) {
+			/* Fallback: use the HTTP message body buffer directly */
+			body_data = msg->body_buf.begin;
+			body_len = msg->body_buf.len;
+		}
+	}
+
+	/* Extract boundary from HTTP Content-Type header */
+	const rspamd_ftok_t *ct_hdr = rspamd_http_message_find_header(msg, "Content-Type");
+
+	if (!ct_hdr) {
+		g_set_error(&task->err, rspamd_protocol_quark(), 400,
+					"missing Content-Type header for v3 request");
+		return FALSE;
+	}
+
+	struct rspamd_content_type *ct = rspamd_content_type_parse(
+		ct_hdr->begin, ct_hdr->len, task->task_pool);
+
+	if (!ct || ct->boundary.len == 0) {
+		g_set_error(&task->err, rspamd_protocol_quark(), 400,
+					"cannot extract boundary from Content-Type");
+		return FALSE;
+	}
+
+	boundary = ct->boundary.begin;
+	boundary_len = ct->boundary.len;
+
+	/* Parse multipart body */
+	struct rspamd_multipart_form_c *form = rspamd_multipart_form_parse(
+		body_data, body_len, boundary, boundary_len);
+
+	if (!form) {
+		g_set_error(&task->err, rspamd_protocol_quark(), 400,
+					"cannot parse multipart/form-data body");
+		return FALSE;
+	}
+
+	/* Register destructor for the form */
+	rspamd_mempool_add_destructor(task->task_pool,
+								  (rspamd_mempool_destruct_t) rspamd_multipart_form_free,
+								  form);
+
+	/* Enforce single message per request: expect at most 2 parts (metadata + message) */
+	gsize nparts = rspamd_multipart_form_nparts(form);
+	if (nparts > 2) {
+		g_set_error(&task->err, rspamd_protocol_quark(), 400,
+					"v3 request must contain at most 2 parts (metadata + message), got %lu",
+					(unsigned long) nparts);
+		return FALSE;
+	}
+
+	/* Find metadata part */
+	const struct rspamd_multipart_entry_c *metadata_part =
+		rspamd_multipart_form_find(form, "metadata", sizeof("metadata") - 1);
+
+	if (!metadata_part || metadata_part->data_len == 0) {
+		g_set_error(&task->err, rspamd_protocol_quark(), 400,
+					"missing 'metadata' part in v3 request");
+		return FALSE;
+	}
+
+	/* Parse metadata as UCL (detect JSON vs msgpack from Content-Type) */
+	struct ucl_parser *parser;
+	gboolean is_msgpack = FALSE;
+
+	if (metadata_part->content_type &&
+		metadata_part->content_type_len > 0 &&
+		rspamd_substring_search_caseless(metadata_part->content_type,
+										 metadata_part->content_type_len,
+										 "msgpack",
+										 sizeof("msgpack") - 1) != -1) {
+		is_msgpack = TRUE;
+		parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
+		ucl_parser_add_chunk_full(parser, (const unsigned char *) metadata_part->data,
+								  metadata_part->data_len,
+								  ucl_parser_get_default_priority(parser),
+								  UCL_DUPLICATE_APPEND,
+								  UCL_PARSE_MSGPACK);
+	}
+	else {
+		/* Strict mode: disable UCL macros/includes, treat as plain JSON */
+		parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
+		ucl_parser_add_chunk(parser, (const unsigned char *) metadata_part->data,
+							 metadata_part->data_len);
+	}
+
+	if (ucl_parser_get_error(parser) != NULL) {
+		g_set_error(&task->err, rspamd_protocol_quark(), 400,
+					"cannot parse metadata: %s", ucl_parser_get_error(parser));
+		ucl_parser_free(parser);
+		return FALSE;
+	}
+
+	ucl_object_t *metadata_obj = ucl_parser_get_object(parser);
+	ucl_parser_free(parser);
+
+	if (!metadata_obj) {
+		g_set_error(&task->err, rspamd_protocol_quark(), 400,
+					"empty metadata object");
+		return FALSE;
+	}
+
+	rspamd_mempool_add_destructor(task->task_pool,
+								  (rspamd_mempool_destruct_t) ucl_object_unref,
+								  metadata_obj);
+
+	/* Apply metadata to task */
+	if (!rspamd_protocol_handle_metadata(task, metadata_obj)) {
+		return FALSE;
+	}
+
+	/* Check for file/shm in metadata (zero-copy paths) */
+	const ucl_object_t *file_elt = ucl_object_lookup(metadata_obj, "file");
+	const ucl_object_t *shm_elt = ucl_object_lookup(metadata_obj, "shm");
+
+	if (file_elt && ucl_object_type(file_elt) == UCL_STRING) {
+		/* Set file path and let rspamd_task_load_message handle it via task header */
+		const char *fpath = ucl_object_tostring(file_elt);
+		task->msg.fpath = rspamd_mempool_strdup(task->task_pool, fpath);
+
+		/* Synthesize a request header so rspamd_task_load_message's file path works */
+		rspamd_fstring_t *fhdr = rspamd_fstring_new_init(fpath, strlen(fpath));
+		rspamd_ftok_t *name_tok = rspamd_mempool_alloc(task->task_pool, sizeof(*name_tok));
+		rspamd_ftok_t *val_tok = rspamd_ftok_map(fhdr);
+
+		RSPAMD_FTOK_ASSIGN(name_tok, "file");
+		rspamd_task_add_request_header(task, name_tok, val_tok);
+
+		/* Now load the message from file */
+		return rspamd_task_load_message(task, NULL, NULL, 0);
+	}
+	else if (shm_elt && ucl_object_type(shm_elt) == UCL_STRING) {
+		/* Synthesize shm headers */
+		const char *shm_name = ucl_object_tostring(shm_elt);
+		rspamd_fstring_t *fhdr = rspamd_fstring_new_init(shm_name, strlen(shm_name));
+		rspamd_ftok_t *name_tok = rspamd_mempool_alloc(task->task_pool, sizeof(*name_tok));
+		rspamd_ftok_t *val_tok = rspamd_ftok_map(fhdr);
+
+		RSPAMD_FTOK_ASSIGN(name_tok, "shm");
+		rspamd_task_add_request_header(task, name_tok, val_tok);
+
+		const ucl_object_t *off_elt = ucl_object_lookup(metadata_obj, "shm_offset");
+		if (off_elt) {
+			char buf[32];
+			int blen = rspamd_snprintf(buf, sizeof(buf), "%L",
+									   ucl_object_toint(off_elt));
+			rspamd_fstring_t *foff = rspamd_fstring_new_init(buf, blen);
+			rspamd_ftok_t *off_name = rspamd_mempool_alloc(task->task_pool, sizeof(*off_name));
+			rspamd_ftok_t *off_val = rspamd_ftok_map(foff);
+
+			RSPAMD_FTOK_ASSIGN(off_name, "shm-offset");
+			rspamd_task_add_request_header(task, off_name, off_val);
+		}
+
+		const ucl_object_t *len_elt = ucl_object_lookup(metadata_obj, "shm_length");
+		if (len_elt) {
+			char buf[32];
+			int blen = rspamd_snprintf(buf, sizeof(buf), "%L",
+									   ucl_object_toint(len_elt));
+			rspamd_fstring_t *flen = rspamd_fstring_new_init(buf, blen);
+			rspamd_ftok_t *len_name = rspamd_mempool_alloc(task->task_pool, sizeof(*len_name));
+			rspamd_ftok_t *len_val = rspamd_ftok_map(flen);
+
+			RSPAMD_FTOK_ASSIGN(len_name, "shm-length");
+			rspamd_task_add_request_header(task, len_name, len_val);
+		}
+
+		return rspamd_task_load_message(task, NULL, NULL, 0);
+	}
+	else {
+		/* Use inline message part */
+		const struct rspamd_multipart_entry_c *msg_part =
+			rspamd_multipart_form_find(form, "message", sizeof("message") - 1);
+
+		if (!msg_part || msg_part->data_len == 0) {
+			g_set_error(&task->err, rspamd_protocol_quark(), 400,
+						"missing 'message' part in v3 request");
+			return FALSE;
+		}
+
+		/* Check for per-part zstd compression */
+		if (msg_part->content_encoding && msg_part->content_encoding_len > 0 &&
+			rspamd_substring_search_caseless(msg_part->content_encoding,
+											 msg_part->content_encoding_len,
+											 "zstd", 4) != -1) {
+			/* Decompress message */
+			ZSTD_DStream *zstream;
+			ZSTD_inBuffer zin;
+			ZSTD_outBuffer zout;
+			gsize outlen, r;
+
+			if (!rspamd_libs_reset_decompression(task->cfg->libs_ctx)) {
+				g_set_error(&task->err, rspamd_protocol_quark(), 500,
+							"cannot init decompressor");
+				return FALSE;
+			}
+
+			zstream = task->cfg->libs_ctx->in_zstream;
+			zin.src = msg_part->data;
+			zin.size = msg_part->data_len;
+			zin.pos = 0;
+
+			outlen = ZSTD_getDecompressedSize(msg_part->data, msg_part->data_len);
+			if (outlen == 0) {
+				outlen = ZSTD_DStreamOutSize();
+			}
+
+			unsigned char *out = (unsigned char *) g_malloc(outlen);
+			zout.dst = out;
+			zout.pos = 0;
+			zout.size = outlen;
+
+			while (zin.pos < zin.size) {
+				r = ZSTD_decompressStream(zstream, &zout, &zin);
+
+				if (ZSTD_isError(r)) {
+					g_set_error(&task->err, rspamd_protocol_quark(), 400,
+								"message decompression error: %s",
+								ZSTD_getErrorName(r));
+					g_free(out);
+					return FALSE;
+				}
+
+				if (zout.pos == zout.size) {
+					if (zout.size > task->cfg->max_message) {
+						g_set_error(&task->err, rspamd_protocol_quark(), 413,
+									"decompressed message exceeds max_message limit: %lu > %lu",
+									(unsigned long) zout.size, (unsigned long) task->cfg->max_message);
+						g_free(out);
+						return FALSE;
+					}
+					zout.size = zout.size * 2 + 1;
+					out = g_realloc(zout.dst, zout.size);
+					zout.dst = out;
+				}
+			}
+
+			rspamd_mempool_add_destructor(task->task_pool, g_free, zout.dst);
+			task->msg.begin = (const char *) zout.dst;
+			task->msg.len = zout.pos;
+			task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_COMPRESSED;
+
+			msg_info_protocol("v3: loaded message from zstd compressed part; "
+							  "compressed: %ul; uncompressed: %ul",
+							  (gulong) zin.size, (gulong) zout.pos);
+		}
+		else {
+			/* Zero-copy: point directly into the multipart buffer */
+			task->msg.begin = msg_part->data;
+			task->msg.len = msg_part->data_len;
+		}
+
+		if (task->msg.len == 0) {
+			task->flags |= RSPAMD_TASK_FLAG_EMPTY;
+		}
+
+		return TRUE;
+	}
+}
+
+/*
+ * Build a v3 multipart/mixed HTTP reply.
+ * Returns the Content-Type string (allocated on task pool) for use as
+ * the mime_type parameter in rspamd_http_connection_write_message.
+ */
+const char *
+rspamd_protocol_http_reply_v3(struct rspamd_http_message *msg,
+							  struct rspamd_task *task)
+{
+	int flags = RSPAMD_PROTOCOL_DEFAULT | RSPAMD_PROTOCOL_URLS;
+	ucl_object_t *top = rspamd_protocol_write_ucl(task, flags);
+
+	rspamd_protocol_update_history_and_log(task);
+
+	/* Determine output format from metadata part's Content-Type or Accept header */
+	const rspamd_ftok_t *accept_hdr = rspamd_task_get_request_header(task, "Accept");
+	int out_type = UCL_EMIT_JSON_COMPACT;
+	const char *result_ctype = "application/json";
+
+	if (accept_hdr && rspamd_substring_search(accept_hdr->begin, accept_hdr->len,
+											  "application/msgpack",
+											  sizeof("application/msgpack") - 1) != -1) {
+		out_type = UCL_EMIT_MSGPACK;
+		result_ctype = "application/msgpack";
+	}
+
+	/* Serialize result UCL */
+	rspamd_fstring_t *result_data = rspamd_fstring_sized_new(1000);
+	rspamd_ucl_emit_fstring(top, out_type, &result_data);
+
+	/* Check if client wants compression */
+	gboolean want_compress = FALSE;
+	const rspamd_ftok_t *ae_hdr = rspamd_task_get_request_header(task, "Accept-Encoding");
+	if (ae_hdr && rspamd_substring_search_caseless(ae_hdr->begin, ae_hdr->len,
+												   "zstd", 4) != -1) {
+		want_compress = TRUE;
+	}
+
+	/* Build multipart response */
+	struct rspamd_multipart_response_c *resp = rspamd_multipart_response_new();
+
+	rspamd_multipart_response_add_part(resp, "result", result_ctype,
+									   result_data->str, result_data->len,
+									   want_compress);
+
+	/* If message was rewritten, add body part */
+	if (task->flags & RSPAMD_TASK_FLAG_MESSAGE_REWRITE) {
+		const char *body_start;
+		gsize body_len;
+
+		rspamd_protocol_get_rewritten_body(task, &body_start, &body_len);
+		rspamd_multipart_response_add_part(resp, "body", "application/octet-stream",
+										   body_start, body_len, want_compress);
+	}
+
+	/* Get compression stream if needed */
+	void *zstream = NULL;
+	if (want_compress && rspamd_libs_reset_compression(task->cfg->libs_ctx)) {
+		zstream = task->cfg->libs_ctx->out_zstream;
+	}
+
+	rspamd_multipart_response_prepare_iov(resp, zstream);
+
+	gsize niov, total_len;
+	const struct iovec *body_segments =
+		rspamd_multipart_response_body_iov(resp, &niov, &total_len);
+
+	/* Copy iov array — message takes ownership of the copy */
+	struct iovec *iov_copy = g_new(struct iovec, niov);
+	memcpy(iov_copy, body_segments, sizeof(struct iovec) * niov);
+	rspamd_http_message_set_body_iov(msg, iov_copy, niov, total_len);
+
+	const char *resp_ctype = rspamd_multipart_response_content_type(resp);
+	/* Copy Content-Type to task pool so it survives after response is freed */
+	const char *pool_ctype = rspamd_mempool_strdup(task->task_pool, resp_ctype);
+
+	/* Keep data alive until after HTTP write:
+	 * - resp owns boundary/header strings and compressed buffers
+	 * - result_data fstring owns the UCL result data
+	 * Both freed when task_pool is destroyed (after write completes) */
+	rspamd_mempool_add_destructor(task->task_pool,
+								  (rspamd_mempool_destruct_t) rspamd_multipart_response_free, resp);
+	rspamd_mempool_add_destructor(task->task_pool,
+								  (rspamd_mempool_destruct_t) rspamd_fstring_free, result_data);
+
+	rspamd_protocol_update_stats(task);
+
+	return pool_ctype;
+}
+
 void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout, struct rspamd_main *srv)
 {
 	struct rspamd_http_message *msg;
@@ -2171,6 +2934,10 @@ void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout, st
 		case CMD_SKIP:
 		case CMD_CHECK_V2:
 			rspamd_protocol_http_reply(msg, task, NULL, out_type);
+			rspamd_protocol_write_log_pipe(task);
+			break;
+		case CMD_CHECK_V3:
+			ctype = rspamd_protocol_http_reply_v3(msg, task);
 			rspamd_protocol_write_log_pipe(task);
 			break;
 		case CMD_PING:
