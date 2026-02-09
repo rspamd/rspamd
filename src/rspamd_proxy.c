@@ -583,11 +583,6 @@ rspamd_proxy_parse_upstream(rspamd_mempool_t *pool,
 		up->keepalive = TRUE;
 	}
 
-	elt = ucl_object_lookup_any(obj, "keepalive", "keep_alive", NULL);
-	if (elt && ucl_object_toboolean(elt)) {
-		up->keepalive = TRUE;
-	}
-
 	elt = ucl_object_lookup(obj, "hosts");
 
 	if (elt == NULL && !up->self_scan) {
@@ -858,6 +853,16 @@ rspamd_proxy_parse_mirror(rspamd_mempool_t *pool,
 	elt = ucl_object_lookup_any(obj, "compress", "compression", NULL);
 	if (elt && ucl_object_toboolean(elt)) {
 		up->compress = TRUE;
+	}
+
+	elt = ucl_object_lookup(obj, "ssl");
+	if (elt && ucl_object_toboolean(elt)) {
+		up->ssl = TRUE;
+	}
+
+	elt = ucl_object_lookup_any(obj, "keepalive", "keep_alive", NULL);
+	if (elt && ucl_object_toboolean(elt)) {
+		up->keepalive = TRUE;
 	}
 
 	elt = ucl_object_lookup(obj, "timeout");
