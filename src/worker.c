@@ -489,15 +489,6 @@ init_worker(struct rspamd_config *cfg)
 
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
-									  "ssl",
-									  rspamd_rcl_parse_struct_boolean,
-									  ctx,
-									  G_STRUCT_OFFSET(struct rspamd_worker_ctx, use_ssl),
-									  0,
-									  "Enable SSL for this worker");
-
-	rspamd_rcl_register_worker_option(cfg,
-									  type,
 									  "ssl_cert",
 									  rspamd_rcl_parse_struct_string,
 									  ctx,
@@ -547,15 +538,20 @@ start_worker(struct rspamd_worker *worker)
 								  (rspamd_mempool_destruct_t) rspamd_http_context_free,
 								  ctx->http_ctx);
 
-	if (ctx->use_ssl && ctx->ssl_cert && ctx->ssl_key) {
-		ctx->server_ssl_ctx = rspamd_init_ssl_ctx_server(ctx->ssl_cert, ctx->ssl_key);
+	if (rspamd_worker_has_ssl_socket(worker)) {
+		if (ctx->ssl_cert && ctx->ssl_key) {
+			ctx->server_ssl_ctx = rspamd_init_ssl_ctx_server(ctx->ssl_cert, ctx->ssl_key);
 
-		if (ctx->server_ssl_ctx) {
-			rspamd_ssl_ctx_config(ctx->cfg, ctx->server_ssl_ctx);
-			msg_info_ctx("enabled SSL for normal worker");
+			if (ctx->server_ssl_ctx) {
+				rspamd_ssl_ctx_config(ctx->cfg, ctx->server_ssl_ctx);
+				msg_info_ctx("enabled SSL for normal worker");
+			}
+			else {
+				msg_err_ctx("failed to create SSL context for normal worker");
+			}
 		}
 		else {
-			msg_err_ctx("failed to create SSL context for normal worker");
+			msg_err_ctx("ssl bind socket configured but ssl_cert or ssl_key is missing");
 		}
 	}
 

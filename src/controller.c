@@ -140,8 +140,6 @@ struct rspamd_controller_worker_ctx {
 	struct rspamd_config *cfg;
 	/* END OF COMMON PART */
 	ev_tstamp timeout;
-	/* Whether we use ssl for this server */
-	gboolean use_ssl;
 	/* Webui password */
 	char *password;
 	/* Privileged password */
@@ -3723,15 +3721,6 @@ init_controller_worker(struct rspamd_config *cfg)
 
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
-									  "ssl",
-									  rspamd_rcl_parse_struct_boolean,
-									  ctx,
-									  G_STRUCT_OFFSET(struct rspamd_controller_worker_ctx, use_ssl),
-									  0,
-									  "Enable SSL for this worker");
-
-	rspamd_rcl_register_worker_option(cfg,
-									  type,
 									  "ssl_cert",
 									  rspamd_rcl_parse_struct_string,
 									  ctx,
@@ -4119,16 +4108,21 @@ start_controller_worker(struct rspamd_worker *worker)
 									   rspamd_controller_finish_handler, ctx->timeout,
 									   ctx->static_files_dir, ctx->http_ctx);
 
-	if (ctx->use_ssl && ctx->ssl_cert && ctx->ssl_key) {
-		gpointer server_ssl_ctx = rspamd_init_ssl_ctx_server(ctx->ssl_cert, ctx->ssl_key);
+	if (rspamd_worker_has_ssl_socket(worker)) {
+		if (ctx->ssl_cert && ctx->ssl_key) {
+			gpointer server_ssl_ctx = rspamd_init_ssl_ctx_server(ctx->ssl_cert, ctx->ssl_key);
 
-		if (server_ssl_ctx) {
-			rspamd_ssl_ctx_config(ctx->cfg, server_ssl_ctx);
-			rspamd_http_router_set_ssl(ctx->http, server_ssl_ctx);
-			msg_info_ctx("enabled SSL for controller worker");
+			if (server_ssl_ctx) {
+				rspamd_ssl_ctx_config(ctx->cfg, server_ssl_ctx);
+				rspamd_http_router_set_ssl(ctx->http, server_ssl_ctx);
+				msg_info_ctx("enabled SSL for controller worker");
+			}
+			else {
+				msg_err_ctx("failed to create SSL context for controller worker");
+			}
 		}
 		else {
-			msg_err_ctx("failed to create SSL context for controller worker");
+			msg_err_ctx("ssl bind socket configured but ssl_cert or ssl_key is missing");
 		}
 	}
 

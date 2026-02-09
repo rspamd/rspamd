@@ -2914,3 +2914,22 @@ rspamd_worker_is_ssl_socket(struct rspamd_worker *worker, int fd)
 
 	return FALSE;
 }
+
+gboolean
+rspamd_worker_has_ssl_socket(struct rspamd_worker *worker)
+{
+	struct rspamd_worker_bind_conf *bcf;
+
+	if (worker == NULL || worker->cf == NULL) {
+		return FALSE;
+	}
+
+	LL_FOREACH(worker->cf->bind_conf, bcf)
+	{
+		if (bcf->is_ssl) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}

@@ -391,6 +391,13 @@ rspamd_fstring_t *rspamd_metrics_to_prometheus_string(const ucl_object_t *top);
  */
 gboolean rspamd_worker_is_ssl_socket(struct rspamd_worker *worker, int fd);
 
+/**
+ * Check if any bind socket for this worker has SSL enabled
+ * @param worker
+ * @return TRUE if any socket is SSL
+ */
+gboolean rspamd_worker_has_ssl_socket(struct rspamd_worker *worker);
+
 #ifdef WITH_HYPERSCAN
 struct rspamd_control_command;
 

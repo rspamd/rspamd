@@ -181,8 +181,6 @@ struct rspamd_proxy_ctx {
 	/* Default log tag type for worker */
 	enum rspamd_proxy_log_tag_type log_tag_type;
 	struct rspamd_main *srv;
-	/* Whether we use ssl for this server */
-	gboolean use_ssl;
 	/* SSL cert */
 	char *ssl_cert;
 	/* SSL private key */
@@ -1065,14 +1063,6 @@ init_rspamd_proxy(struct rspamd_config *cfg)
 									  G_STRUCT_OFFSET(struct rspamd_proxy_ctx, encrypted_only),
 									  0,
 									  "Allow only encrypted connections");
-	rspamd_rcl_register_worker_option(cfg,
-									  type,
-									  "ssl",
-									  rspamd_rcl_parse_struct_boolean,
-									  ctx,
-									  G_STRUCT_OFFSET(struct rspamd_proxy_ctx, use_ssl),
-									  0,
-									  "Enable SSL for this worker");
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
 									  "ssl_cert",
@@ -3416,15 +3406,20 @@ start_rspamd_proxy(struct rspamd_worker *worker)
 								  (rspamd_mempool_destruct_t) rspamd_http_context_free,
 								  ctx->http_ctx);
 
-	if (ctx->use_ssl && ctx->ssl_cert && ctx->ssl_key) {
-		ctx->server_ssl_ctx = rspamd_init_ssl_ctx_server(ctx->ssl_cert, ctx->ssl_key);
+	if (rspamd_worker_has_ssl_socket(worker)) {
+		if (ctx->ssl_cert && ctx->ssl_key) {
+			ctx->server_ssl_ctx = rspamd_init_ssl_ctx_server(ctx->ssl_cert, ctx->ssl_key);
 
-		if (ctx->server_ssl_ctx) {
-			rspamd_ssl_ctx_config(ctx->cfg, ctx->server_ssl_ctx);
-			msg_info("enabled SSL for proxy worker");
+			if (ctx->server_ssl_ctx) {
+				rspamd_ssl_ctx_config(ctx->cfg, ctx->server_ssl_ctx);
+				msg_info("enabled SSL for proxy worker");
+			}
+			else {
+				msg_err("failed to create SSL context for proxy worker");
+			}
 		}
 		else {
-			msg_err("failed to create SSL context for proxy worker");
+			msg_err("ssl bind socket configured but ssl_cert or ssl_key is missing");
 		}
 	}
 
