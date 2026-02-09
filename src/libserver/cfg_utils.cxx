@@ -221,7 +221,7 @@ rspamd_parse_bind_line(struct rspamd_config *cfg,
 		}
 	}
 	else {
-		if (rspamd_parse_host_port_priority(str, &cnf->addrs,
+		if (rspamd_parse_host_port_priority(cnf->bind_line, &cnf->addrs,
 											nullptr, &cnf->name, DEFAULT_BIND_PORT, TRUE, cfg->cfg_pool) == RSPAMD_PARSE_ADDR_FAIL) {
 			msg_err_config("cannot parse bind line: %s", str);
 			ret = FALSE;
