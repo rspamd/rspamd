@@ -35,7 +35,9 @@ import pwd
 import shutil
 import signal
 import socket
+import ssl
 import stat
+import subprocess
 import random
 import re
 import sys
@@ -162,6 +164,55 @@ def HTTP_With_Headers(method, host, port, path, data=None, headers={}):
     h = dict(r.getheaders())
     c.close()
     return [s, t, h]
+
+
+def HTTPS(method, host, port, path, data=None, headers={}):
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    c = http.client.HTTPSConnection("%s:%s" % (host, port), context=ctx)
+    c.request(method, path, data, headers)
+    r = c.getresponse()
+    t = r.read()
+    s = r.status
+    c.close()
+    return [s, t]
+
+
+def HTTPS_With_Headers(method, host, port, path, data=None, headers={}):
+    """HTTPS request that returns response headers.
+    Returns [status, body, headers_dict]
+    """
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    c = http.client.HTTPSConnection("%s:%s" % (host, port), context=ctx)
+    c.request(method, path, data, headers)
+    r = c.getresponse()
+    t = r.read()
+    s = r.status
+    h = dict(r.getheaders())
+    c.close()
+    return [s, t, h]
+
+
+def generate_ssl_cert(tmpdir):
+    """Generate a self-signed EC certificate and key in tmpdir.
+    Returns (cert_path, key_path).
+    """
+    cert_path = os.path.join(tmpdir, "test-cert.pem")
+    key_path = os.path.join(tmpdir, "test-key.pem")
+    subprocess.check_call([
+        "openssl", "req", "-x509", "-newkey", "ec",
+        "-pkeyopt", "ec_paramgen_curve:prime256v1",
+        "-keyout", key_path, "-out", cert_path,
+        "-days", "1", "-nodes",
+        "-subj", "/CN=rspamd-test",
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # Make readable by rspamd worker (runs as nobody)
+    os.chmod(cert_path, 0o644)
+    os.chmod(key_path, 0o644)
+    return cert_path, key_path
 
 
 def hard_link(src, dst):
@@ -383,6 +434,60 @@ def Scan_File_V3_Single_Part(part_name, part_data, content_type_part=None, **hea
     r.read()
     c.close()
     return status
+
+
+def Scan_File_SSL(filename, port=None, **headers):
+    """Like Scan_File but over HTTPS (TLS) to the normal worker SSL port."""
+    addr = BuiltIn().get_variable_value("${RSPAMD_LOCAL_ADDR}")
+    if port is None:
+        port = BuiltIn().get_variable_value("${RSPAMD_PORT_NORMAL_SSL}")
+    headers["Queue-Id"] = BuiltIn().get_variable_value("${TEST_NAME}")
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    c = http.client.HTTPSConnection("%s:%s" % (addr, port), context=ctx)
+    c.request("POST", "/checkv2", open(filename, "rb"), headers)
+    r = c.getresponse()
+    assert r.status == 200, "Expected HTTP 200 but got %d" % r.status
+    d = json.JSONDecoder(strict=True).decode(r.read().decode('utf-8'))
+    c.close()
+    BuiltIn().set_test_variable("${SCAN_RESULT}", d)
+    return
+
+
+def Scan_File_V3_SSL(filename, port=None, metadata=None, **headers):
+    """Like Scan_File_V3 but over HTTPS (TLS)."""
+    addr = BuiltIn().get_variable_value("${RSPAMD_LOCAL_ADDR}")
+    if port is None:
+        port = BuiltIn().get_variable_value("${RSPAMD_PORT_NORMAL_SSL}")
+
+    meta = metadata if metadata else {}
+    meta_json = json.dumps(meta)
+    message_data = open(filename, "rb").read()
+
+    boundary = "----rspamd-test-%016x" % random.getrandbits(64)
+    body = _build_multipart(boundary, meta_json, message_data)
+
+    headers["Content-Type"] = "multipart/form-data; boundary=" + boundary
+    if "Queue-Id" not in headers:
+        headers["Queue-Id"] = BuiltIn().get_variable_value("${TEST_NAME}")
+
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    c = http.client.HTTPSConnection("%s:%s" % (addr, port), context=ctx)
+    c.request("POST", "/checkv3", body, headers)
+    r = c.getresponse()
+    assert r.status == 200, "Expected HTTP 200 but got %d" % r.status
+
+    resp_body = r.read()
+    resp_ct = r.getheader("Content-Type", "")
+    result_data = _parse_multipart_response(resp_body, resp_ct)
+
+    d = json.JSONDecoder(strict=True).decode(result_data)
+    c.close()
+    BuiltIn().set_test_variable("${SCAN_RESULT}", d)
+    return
 
 
 def Send_SIGUSR1(pid):
