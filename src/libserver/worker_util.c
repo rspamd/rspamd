@@ -2889,3 +2889,28 @@ rspamd_metrics_to_prometheus_string(const ucl_object_t *top)
 	/* Must be finalized and freed by caller */
 	return output;
 }
+
+gboolean
+rspamd_worker_is_ssl_socket(struct rspamd_worker *worker, int fd)
+{
+	GList *cur;
+	struct rspamd_worker_listen_socket *ls;
+
+	if (worker == NULL || worker->cf == NULL) {
+		return FALSE;
+	}
+
+	cur = worker->cf->listen_socks;
+
+	while (cur) {
+		ls = (struct rspamd_worker_listen_socket *) cur->data;
+
+		if (ls->fd == fd) {
+			return ls->is_ssl;
+		}
+
+		cur = g_list_next(cur);
+	}
+
+	return FALSE;
+}

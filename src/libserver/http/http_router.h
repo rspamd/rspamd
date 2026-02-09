@@ -59,6 +59,7 @@ struct rspamd_http_connection_router {
 	struct rspamd_cryptobox_keypair *key;
 	rspamd_http_router_error_handler_t error_handler;
 	rspamd_http_router_finish_handler_t finish_handler;
+	gpointer server_ssl_ctx;
 };
 
 /**
@@ -127,6 +128,14 @@ void rspamd_http_router_add_regexp(struct rspamd_http_connection_router *router,
 								   struct rspamd_regexp_s *re, rspamd_http_router_handler_t handler);
 
 /**
+ * Set server SSL context for the router
+ * @param router router object
+ * @param ssl_ctx server SSL context (from rspamd_init_ssl_ctx_server)
+ */
+void rspamd_http_router_set_ssl(struct rspamd_http_connection_router *router,
+								gpointer ssl_ctx);
+
+/**
  * Handle new accepted socket
  * @param router router object
  * @param fd server socket
@@ -136,6 +145,19 @@ void rspamd_http_router_handle_socket(
 	struct rspamd_http_connection_router *router,
 	int fd,
 	gpointer ud);
+
+/**
+ * Handle new accepted socket with optional SSL
+ * @param router router object
+ * @param fd server socket
+ * @param ud opaque userdata
+ * @param ssl whether to use SSL on this socket
+ */
+void rspamd_http_router_handle_socket_ssl(
+	struct rspamd_http_connection_router *router,
+	int fd,
+	gpointer ud,
+	gboolean ssl);
 
 /**
  * Free router and all connections associated

@@ -2573,6 +2573,14 @@ if (conn->opts & RSPAMD_HTTP_CLIENT_SSL) {
 		}
 	}
 }
+else if (priv->ssl) {
+	/* Server-side SSL: connection already established, restore handlers */
+	rspamd_ssl_connection_restore_handlers(priv->ssl,
+										   rspamd_http_event_handler,
+										   rspamd_http_ssl_err_handler,
+										   conn,
+										   EV_WRITE);
+}
 else {
 	/* Watch for READ too on client to detect early server responses */
 	short ev_flags = (conn->type == RSPAMD_HTTP_CLIENT) ? (EV_WRITE | EV_READ) : EV_WRITE;
@@ -2896,4 +2904,91 @@ double rspamd_http_connection_keepalive_idle_timeout(struct rspamd_http_connecti
 {
 	struct rspamd_http_connection_private *priv = conn->priv;
 	return (priv->ka_idle_override > 0 ? priv->ka_idle_override : default_idle);
+}
+
+static void
+rspamd_http_ssl_accept_handler(int fd, short what, gpointer ud)
+{
+	struct rspamd_http_connection *conn = (struct rspamd_http_connection *) ud;
+	struct rspamd_http_connection_private *priv = conn->priv;
+
+	/* SSL handshake complete, start reading HTTP message */
+	rspamd_http_connection_read_message_common(conn, conn->ud, priv->timeout, 0);
+}
+
+static void
+rspamd_http_ssl_accept_shared_handler(int fd, short what, gpointer ud)
+{
+	struct rspamd_http_connection *conn = (struct rspamd_http_connection *) ud;
+	struct rspamd_http_connection_private *priv = conn->priv;
+
+	/* SSL handshake complete, start reading HTTP message with shared body */
+	rspamd_http_connection_read_message_common(conn, conn->ud, priv->timeout,
+											   RSPAMD_HTTP_FLAG_SHMEM);
+}
+
+static gboolean
+rspamd_http_connection_accept_ssl_common(struct rspamd_http_connection *conn,
+										 gpointer ssl_ctx,
+										 gpointer ud,
+										 ev_tstamp timeout,
+										 rspamd_ssl_handler_t accept_handler)
+{
+	struct rspamd_http_connection_private *priv = conn->priv;
+	GError *err;
+
+	g_assert(conn != NULL);
+	g_assert(ssl_ctx != NULL);
+
+	conn->ud = ud;
+	priv->timeout = timeout;
+
+	priv->ssl = rspamd_ssl_connection_new(ssl_ctx, priv->ctx->event_loop,
+										  FALSE, conn->log_tag);
+
+	if (priv->ssl == NULL) {
+		err = g_error_new(HTTP_ERROR, 400, "cannot create SSL connection");
+		rspamd_http_connection_ref(conn);
+		conn->error_handler(conn, err);
+		rspamd_http_connection_unref(conn);
+		g_error_free(err);
+		return FALSE;
+	}
+
+	if (!rspamd_ssl_accept_fd(priv->ssl, conn->fd, &priv->ev,
+							  timeout, accept_handler,
+							  rspamd_http_ssl_err_handler, conn)) {
+
+		err = g_error_new(HTTP_ERROR, 400,
+						  "ssl accept error: ssl error=%s, errno=%s",
+						  ERR_error_string(ERR_get_error(), NULL),
+						  strerror(errno));
+		rspamd_http_connection_ref(conn);
+		conn->error_handler(conn, err);
+		rspamd_http_connection_unref(conn);
+		g_error_free(err);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+gboolean
+rspamd_http_connection_accept_ssl(struct rspamd_http_connection *conn,
+								  gpointer ssl_ctx,
+								  gpointer ud,
+								  ev_tstamp timeout)
+{
+	return rspamd_http_connection_accept_ssl_common(conn, ssl_ctx, ud, timeout,
+													rspamd_http_ssl_accept_handler);
+}
+
+gboolean
+rspamd_http_connection_accept_ssl_shared(struct rspamd_http_connection *conn,
+										 gpointer ssl_ctx,
+										 gpointer ud,
+										 ev_tstamp timeout)
+{
+	return rspamd_http_connection_accept_ssl_common(conn, ssl_ctx, ud, timeout,
+													rspamd_http_ssl_accept_shared_handler);
 }

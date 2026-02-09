@@ -45,6 +45,8 @@ struct rspamd_worker_ctx {
 	gboolean is_mime;
 	/* Allow encrypted requests only using network */
 	gboolean encrypted_only;
+	/* Whether we use ssl for this server */
+	gboolean use_ssl;
 	/* Limit of tasks */
 	uint32_t max_tasks;
 	/* Maximum time for task processing */
@@ -55,6 +57,12 @@ struct rspamd_worker_ctx {
 	struct rspamd_http_context *http_ctx;
 	/* Language detector */
 	struct rspamd_lang_detector *lang_det;
+	/* SSL cert */
+	char *ssl_cert;
+	/* SSL private key */
+	char *ssl_key;
+	/* Server SSL context */
+	gpointer server_ssl_ctx;
 };
 
 /*

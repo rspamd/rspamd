@@ -1170,6 +1170,51 @@ gpointer rspamd_init_ssl_ctx_noverify(void)
 
 	return ssl_ctx_noverify;
 }
+
+gpointer
+rspamd_init_ssl_ctx_server(const char *cert_path, const char *key_path)
+{
+	struct rspamd_ssl_ctx *ctx;
+
+	g_assert(cert_path != NULL);
+	g_assert(key_path != NULL);
+
+	ctx = rspamd_init_ssl_ctx_common();
+
+	/* Server-side session cache */
+	SSL_CTX_set_session_cache_mode(ctx->s, SSL_SESS_CACHE_SERVER);
+	/* Remove client session callback set by common init */
+	SSL_CTX_sess_set_new_cb(ctx->s, NULL);
+
+	/* Load certificate chain */
+	if (SSL_CTX_use_certificate_chain_file(ctx->s, cert_path) != 1) {
+		msg_err("cannot load certificate chain from %s: %s",
+				cert_path, ERR_error_string(ERR_get_error(), NULL));
+		rspamd_ssl_ctx_free(ctx);
+		return NULL;
+	}
+
+	/* Load private key */
+	if (SSL_CTX_use_PrivateKey_file(ctx->s, key_path, SSL_FILETYPE_PEM) != 1) {
+		msg_err("cannot load private key from %s: %s",
+				key_path, ERR_error_string(ERR_get_error(), NULL));
+		rspamd_ssl_ctx_free(ctx);
+		return NULL;
+	}
+
+	/* Verify that the key matches the certificate */
+	if (SSL_CTX_check_private_key(ctx->s) != 1) {
+		msg_err("ssl private key does not match certificate: %s",
+				ERR_error_string(ERR_get_error(), NULL));
+		rspamd_ssl_ctx_free(ctx);
+		return NULL;
+	}
+
+	/* No client certificate verification */
+	SSL_CTX_set_verify(ctx->s, SSL_VERIFY_NONE, NULL);
+
+	return ctx;
+}
 #if defined(RSPAMD_LEGACY_SSL_PROVIDER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 #include <openssl/provider.h>
 #endif

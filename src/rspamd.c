@@ -708,6 +708,16 @@ spawn_workers(struct rspamd_main *rspamd_main, struct ev_loop *ev_base)
 										 strerror(errno));
 						}
 						else {
+							/* Propagate SSL flag to listen sockets */
+							if (bcf->is_ssl) {
+								GList *cur;
+
+								for (cur = ls; cur != NULL; cur = g_list_next(cur)) {
+									struct rspamd_worker_listen_socket *cur_ls =
+										(struct rspamd_worker_listen_socket *) cur->data;
+									cur_ls->is_ssl = true;
+								}
+							}
 							g_hash_table_insert(listen_sockets, (gpointer) key, ls);
 							listen_ok = TRUE;
 						}

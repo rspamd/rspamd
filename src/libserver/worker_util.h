@@ -383,6 +383,14 @@ rspamd_metrics_add_double(rspamd_fstring_t **output,
  */
 rspamd_fstring_t *rspamd_metrics_to_prometheus_string(const ucl_object_t *top);
 
+/**
+ * Check if the given listen fd is an SSL socket for this worker
+ * @param worker
+ * @param fd listen fd from accept event
+ * @return TRUE if the socket is SSL
+ */
+gboolean rspamd_worker_is_ssl_socket(struct rspamd_worker *worker, int fd);
+
 #ifdef WITH_HYPERSCAN
 struct rspamd_control_command;
 

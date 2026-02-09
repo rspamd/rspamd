@@ -27,6 +27,7 @@
 #include "libmime/message.h"
 #include "rspamd.h"
 #include "libserver/worker_util.h"
+#include "libserver/ssl_util.h"
 #include "worker_private.h"
 #include "lua/lua_common.h"
 #include "keypairs_cache.h"
@@ -180,6 +181,14 @@ struct rspamd_proxy_ctx {
 	/* Default log tag type for worker */
 	enum rspamd_proxy_log_tag_type log_tag_type;
 	struct rspamd_main *srv;
+	/* Whether we use ssl for this server */
+	gboolean use_ssl;
+	/* SSL cert */
+	char *ssl_cert;
+	/* SSL private key */
+	char *ssl_key;
+	/* Server SSL context */
+	gpointer server_ssl_ctx;
 };
 
 enum rspamd_backend_flags {
@@ -1056,6 +1065,30 @@ init_rspamd_proxy(struct rspamd_config *cfg)
 									  G_STRUCT_OFFSET(struct rspamd_proxy_ctx, encrypted_only),
 									  0,
 									  "Allow only encrypted connections");
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "ssl",
+									  rspamd_rcl_parse_struct_boolean,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_proxy_ctx, use_ssl),
+									  0,
+									  "Enable SSL for this worker");
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "ssl_cert",
+									  rspamd_rcl_parse_struct_string,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_proxy_ctx, ssl_cert),
+									  0,
+									  "Path to SSL certificate chain file");
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "ssl_key",
+									  rspamd_rcl_parse_struct_string,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_proxy_ctx, ssl_key),
+									  0,
+									  "Path to SSL private key file");
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
 									  "upstream",
@@ -3286,9 +3319,17 @@ proxy_accept_socket(EV_P_ ev_io *w, int revents)
 						 rspamd_inet_address_to_string(addr),
 						 rspamd_inet_address_get_port(addr));
 
-		rspamd_http_connection_read_message_shared(session->client_conn,
-												   session,
-												   session->ctx->timeout);
+		if (ctx->server_ssl_ctx && rspamd_worker_is_ssl_socket(worker, w->fd)) {
+			rspamd_http_connection_accept_ssl_shared(session->client_conn,
+													 ctx->server_ssl_ctx,
+													 session,
+													 session->ctx->timeout);
+		}
+		else {
+			rspamd_http_connection_read_message_shared(session->client_conn,
+													   session,
+													   session->ctx->timeout);
+		}
 	}
 	else {
 		msg_info_session("accepted milter connection from %s port %d",
@@ -3374,6 +3415,18 @@ start_rspamd_proxy(struct rspamd_worker *worker)
 	rspamd_mempool_add_destructor(ctx->cfg->cfg_pool,
 								  (rspamd_mempool_destruct_t) rspamd_http_context_free,
 								  ctx->http_ctx);
+
+	if (ctx->use_ssl && ctx->ssl_cert && ctx->ssl_key) {
+		ctx->server_ssl_ctx = rspamd_init_ssl_ctx_server(ctx->ssl_cert, ctx->ssl_key);
+
+		if (ctx->server_ssl_ctx) {
+			rspamd_ssl_ctx_config(ctx->cfg, ctx->server_ssl_ctx);
+			msg_info("enabled SSL for proxy worker");
+		}
+		else {
+			msg_err("failed to create SSL context for proxy worker");
+		}
+	}
 
 	if (ctx->has_self_scan) {
 		/* Additional initialisation needed */
