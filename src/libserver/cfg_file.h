@@ -196,6 +196,7 @@ struct rspamd_worker_bind_conf {
 	char *name;
 	char *bind_line;
 	gboolean is_systemd;
+	gboolean is_ssl;
 	struct rspamd_worker_bind_conf *next;
 };
 

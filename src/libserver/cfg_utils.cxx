@@ -189,6 +189,18 @@ rspamd_parse_bind_line(struct rspamd_config *cfg,
 
 	auto bind_line = std::string_view{cnf->bind_line};
 
+	/* Check for trailing " ssl" suffix (case-insensitive) */
+	if (bind_line.size() > 4 &&
+		bind_line[bind_line.size() - 4] == ' ' &&
+		g_ascii_tolower(bind_line[bind_line.size() - 3]) == 's' &&
+		g_ascii_tolower(bind_line[bind_line.size() - 2]) == 's' &&
+		g_ascii_tolower(bind_line[bind_line.size() - 1]) == 'l') {
+		cnf->is_ssl = TRUE;
+		/* Strip the suffix for address parsing */
+		cnf->bind_line[bind_line.size() - 4] = '\0';
+		bind_line = std::string_view{cnf->bind_line};
+	}
+
 	if (bind_line.starts_with("systemd:")) {
 		/* The actual socket will be passed by systemd environment */
 		fdname = str + sizeof("systemd:") - 1;
@@ -209,7 +221,7 @@ rspamd_parse_bind_line(struct rspamd_config *cfg,
 		}
 	}
 	else {
-		if (rspamd_parse_host_port_priority(str, &cnf->addrs,
+		if (rspamd_parse_host_port_priority(cnf->bind_line, &cnf->addrs,
 											nullptr, &cnf->name, DEFAULT_BIND_PORT, TRUE, cfg->cfg_pool) == RSPAMD_PARSE_ADDR_FAIL) {
 			msg_err_config("cannot parse bind line: %s", str);
 			ret = FALSE;

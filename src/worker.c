@@ -30,6 +30,7 @@
 #include "libstat/stat_api.h"
 #include "libserver/worker_util.h"
 #include "libserver/rspamd_control.h"
+#include "libserver/ssl_util.h"
 #include "worker_private.h"
 #include "libserver/http/http_private.h"
 #include "libserver/cfg_file_private.h"
@@ -398,9 +399,17 @@ accept_socket(EV_P_ ev_io *w, int revents)
 		rspamd_http_connection_set_key(session->http_conn, ctx->key);
 	}
 
-	rspamd_http_connection_read_message(session->http_conn,
-										session,
-										ctx->timeout);
+	if (ctx->server_ssl_ctx && rspamd_worker_is_ssl_socket(worker, w->fd)) {
+		rspamd_http_connection_accept_ssl(session->http_conn,
+										  ctx->server_ssl_ctx,
+										  session,
+										  ctx->timeout);
+	}
+	else {
+		rspamd_http_connection_read_message(session->http_conn,
+											session,
+											ctx->timeout);
+	}
 }
 
 gpointer
@@ -478,6 +487,24 @@ init_worker(struct rspamd_config *cfg)
 									  0,
 									  "Encryption keypair");
 
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "ssl_cert",
+									  rspamd_rcl_parse_struct_string,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_worker_ctx, ssl_cert),
+									  0,
+									  "Path to SSL certificate chain file");
+
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "ssl_key",
+									  rspamd_rcl_parse_struct_string,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_worker_ctx, ssl_key),
+									  0,
+									  "Path to SSL private key file");
+
 	return ctx;
 }
 
@@ -510,6 +537,24 @@ start_worker(struct rspamd_worker *worker)
 	rspamd_mempool_add_destructor(ctx->cfg->cfg_pool,
 								  (rspamd_mempool_destruct_t) rspamd_http_context_free,
 								  ctx->http_ctx);
+
+	if (rspamd_worker_has_ssl_socket(worker)) {
+		if (ctx->ssl_cert && ctx->ssl_key) {
+			ctx->server_ssl_ctx = rspamd_init_ssl_ctx_server(ctx->ssl_cert, ctx->ssl_key);
+
+			if (ctx->server_ssl_ctx) {
+				rspamd_ssl_ctx_config(ctx->cfg, ctx->server_ssl_ctx);
+				msg_info_ctx("enabled SSL for normal worker");
+			}
+			else {
+				msg_err_ctx("failed to create SSL context for normal worker");
+			}
+		}
+		else {
+			msg_err_ctx("ssl bind socket configured but ssl_cert or ssl_key is missing");
+		}
+	}
+
 	rspamd_worker_init_scanner(worker, ctx->event_loop, ctx->resolver,
 							   &ctx->lang_det);
 

@@ -25,6 +25,7 @@
 #include "libstat/stat_api.h"
 #include "rspamd.h"
 #include "libserver/worker_util.h"
+#include "libserver/ssl_util.h"
 #include "worker_private.h"
 #include "lua/lua_common.h"
 #include "cryptobox.h"
@@ -139,8 +140,6 @@ struct rspamd_controller_worker_ctx {
 	struct rspamd_config *cfg;
 	/* END OF COMMON PART */
 	ev_tstamp timeout;
-	/* Whether we use ssl for this server */
-	gboolean use_ssl;
 	/* Webui password */
 	char *password;
 	/* Privileged password */
@@ -3657,7 +3656,8 @@ rspamd_controller_accept_socket(EV_P_ ev_io *w, int revents)
 	session->wrk = worker;
 	worker->nconns++;
 
-	rspamd_http_router_handle_socket(ctx->http, nfd, session);
+	rspamd_http_router_handle_socket_ssl(ctx->http, nfd, session,
+										 rspamd_worker_is_ssl_socket(worker, w->fd));
 }
 
 static void
@@ -3721,21 +3721,12 @@ init_controller_worker(struct rspamd_config *cfg)
 
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
-									  "ssl",
-									  rspamd_rcl_parse_struct_boolean,
-									  ctx,
-									  G_STRUCT_OFFSET(struct rspamd_controller_worker_ctx, use_ssl),
-									  0,
-									  "Unimplemented");
-
-	rspamd_rcl_register_worker_option(cfg,
-									  type,
 									  "ssl_cert",
 									  rspamd_rcl_parse_struct_string,
 									  ctx,
 									  G_STRUCT_OFFSET(struct rspamd_controller_worker_ctx, ssl_cert),
 									  0,
-									  "Unimplemented");
+									  "Path to SSL certificate chain file");
 
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
@@ -3744,7 +3735,7 @@ init_controller_worker(struct rspamd_config *cfg)
 									  ctx,
 									  G_STRUCT_OFFSET(struct rspamd_controller_worker_ctx, ssl_key),
 									  0,
-									  "Unimplemented");
+									  "Path to SSL private key file");
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
 									  "timeout",
@@ -4116,6 +4107,24 @@ start_controller_worker(struct rspamd_worker *worker)
 	ctx->http = rspamd_http_router_new(rspamd_controller_error_handler,
 									   rspamd_controller_finish_handler, ctx->timeout,
 									   ctx->static_files_dir, ctx->http_ctx);
+
+	if (rspamd_worker_has_ssl_socket(worker)) {
+		if (ctx->ssl_cert && ctx->ssl_key) {
+			gpointer server_ssl_ctx = rspamd_init_ssl_ctx_server(ctx->ssl_cert, ctx->ssl_key);
+
+			if (server_ssl_ctx) {
+				rspamd_ssl_ctx_config(ctx->cfg, server_ssl_ctx);
+				rspamd_http_router_set_ssl(ctx->http, server_ssl_ctx);
+				msg_info_ctx("enabled SSL for controller worker");
+			}
+			else {
+				msg_err_ctx("failed to create SSL context for controller worker");
+			}
+		}
+		else {
+			msg_err_ctx("ssl bind socket configured but ssl_cert or ssl_key is missing");
+		}
+	}
 
 	/* Add callbacks for different methods */
 	rspamd_http_router_add_path(ctx->http,
