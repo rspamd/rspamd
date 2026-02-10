@@ -186,21 +186,26 @@ local function get_map(symbol_cfg, map_file)
 end
 
 local function ip_within(ip_obj, cidr_str)
-  local cidr_ip = rspamd_ip.from_string(cidr_str)
-  if not cidr_ip or not cidr_ip:is_valid() then
-    return false
-  end
-
-  -- Extract mask from CIDR notation
-  local _, mask_str = cidr_str:match('^(.+)/(%d+)$')
-  if mask_str then
+  -- Extract mask from CIDR notation before parsing
+  local ip_part, mask_str = cidr_str:match('^(.+)/(%d+)$')
+  if ip_part then
+    local cidr_ip = rspamd_ip.from_string(ip_part)
+    if not cidr_ip or not cidr_ip:is_valid() then
+      return false
+    end
     local mask = tonumber(mask_str)
-    local ip_masked = ip_obj:copy()
-    local cidr_masked = cidr_ip:copy()
-    ip_masked:apply_mask(mask)
-    cidr_masked:apply_mask(mask)
+    -- apply_mask returns a new IP object with the mask applied
+    local ip_masked = ip_obj:apply_mask(mask)
+    local cidr_masked = cidr_ip:apply_mask(mask)
+    if not ip_masked or not cidr_masked then
+      return false
+    end
     return tostring(ip_masked) == tostring(cidr_masked)
   else
+    local cidr_ip = rspamd_ip.from_string(cidr_str)
+    if not cidr_ip or not cidr_ip:is_valid() then
+      return false
+    end
     return tostring(ip_obj) == tostring(cidr_ip)
   end
 end
