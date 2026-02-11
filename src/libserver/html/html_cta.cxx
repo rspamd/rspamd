@@ -411,7 +411,7 @@ static auto compute_penalty(const html_tag &tag,
 		penalty += 0.2f;
 	}
 
-	if (url.flags & RSPAMD_URL_FLAG_INVISIBLE) {
+	if (url.ext && (url.ext->obfuscation_flags & RSPAMD_URL_OBF_INVISIBLE)) {
 		penalty += 0.3f;
 	}
 
@@ -452,7 +452,8 @@ static auto compute_cta_weight(const html_tag &tag,
 	else {
 		order_bonus = std::max(0.0f, 0.06f / (1.0f + static_cast<float>(url.order)));
 	}
-	if (url.ext && url.ext->linked_url && url.ext->linked_url != &url) {
+	if (url.ext && ((url.ext->displayed_url && url.ext->displayed_url != &url) ||
+					(url.ext->redirected_url && url.ext->redirected_url != &url))) {
 		order_bonus += 0.12f;
 	}
 	float penalty = compute_penalty(tag, url, lowered, label_view);
@@ -527,7 +528,7 @@ void rspamd_html_process_cta_urls(struct rspamd_mime_text_part *text_part,
 	{
 		if (!u) continue;
 		if (!(u->protocol == PROTOCOL_HTTP || u->protocol == PROTOCOL_HTTPS)) continue;
-		if (u->flags & RSPAMD_URL_FLAG_INVISIBLE) continue;
+		if (u->ext && (u->ext->obfuscation_flags & RSPAMD_URL_OBF_INVISIBLE)) continue;
 		if (u->flags & RSPAMD_URL_FLAG_IMAGE) continue;
 		if (u->flags & RSPAMD_URL_FLAG_HTML_DISPLAYED) continue; /* Skip display-only URLs (phishing bait text) */
 

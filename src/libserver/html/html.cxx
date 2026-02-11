@@ -2052,8 +2052,8 @@ html_append_tag_content(rspamd_mempool_t *pool,
 			if (std::holds_alternative<rspamd_url *>(tag->extra)) {
 				auto *u = std::get<rspamd_url *>(tag->extra);
 				if (u && (u->flags & RSPAMD_URL_FLAG_DISPLAY_URL) && (u->flags & RSPAMD_URL_FLAG_HTML_DISPLAYED)) {
-					/* html_process_displayed_href_tag sets linked_url when display URL differs */
-					if (u->ext && u->ext->linked_url && u->ext->linked_url != u) {
+					/* html_process_displayed_href_tag sets displayed_url when display URL differs */
+					if (u->ext && u->ext->displayed_url && u->ext->displayed_url != u) {
 						hc->features.links.display_mismatch_links++;
 					}
 				}
@@ -2088,7 +2088,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 			 * url to the hash set
 			 */
 			if (url_enclosed) {
-				url_enclosed->flags |= RSPAMD_URL_FLAG_INVISIBLE;
+				rspamd_url_ensure_ext(url_enclosed, pool)->obfuscation_flags |= RSPAMD_URL_OBF_INVISIBLE;
 			}
 		}
 	}
@@ -2385,7 +2385,7 @@ auto html_process_input(struct rspamd_task *task,
 				if (url->flags & RSPAMD_URL_FLAG_NUMERIC) {
 					hc->features.links.ip_links++;
 				}
-				if (url->flags & RSPAMD_URL_FLAG_HAS_PORT) {
+				if (url->ext && (url->ext->obfuscation_flags & RSPAMD_URL_OBF_HAS_PORT)) {
 					hc->features.links.port_links++;
 				}
 				if (url->flags & RSPAMD_URL_FLAG_QUERY) {

@@ -850,7 +850,7 @@ rspamd_message_process_html_text_part(struct rspamd_task *task,
 					if (!u) continue;
 					/* filter: only http/https, visible */
 					if (!(u->protocol == PROTOCOL_HTTP || u->protocol == PROTOCOL_HTTPS)) continue;
-					if (u->flags & RSPAMD_URL_FLAG_INVISIBLE) continue;
+					if (u->ext && (u->ext->obfuscation_flags & RSPAMD_URL_OBF_INVISIBLE)) continue;
 					/* Build small table */
 					lua_createtable(L, 0, 8);
 					/* host */
@@ -867,13 +867,13 @@ rspamd_message_process_html_text_part(struct rspamd_task *task,
 					lua_pushboolean(L, !!(u->flags & RSPAMD_URL_FLAG_NUMERIC));
 					lua_settable(L, -3);
 					lua_pushstring(L, "has_port");
-					lua_pushboolean(L, !!(u->flags & RSPAMD_URL_FLAG_HAS_PORT));
+					lua_pushboolean(L, u->ext && !!(u->ext->obfuscation_flags & RSPAMD_URL_OBF_HAS_PORT));
 					lua_settable(L, -3);
 					lua_pushstring(L, "has_query");
 					lua_pushboolean(L, !!(u->flags & RSPAMD_URL_FLAG_QUERY));
 					lua_settable(L, -3);
 					lua_pushstring(L, "display_mismatch");
-					lua_pushboolean(L, (u->ext && u->ext->linked_url && u->ext->linked_url != u));
+					lua_pushboolean(L, (u->ext && rspamd_url_get_linked(u) && rspamd_url_get_linked(u) != u));
 					lua_settable(L, -3);
 					/* order */
 					lua_pushstring(L, "order");
@@ -922,7 +922,7 @@ rspamd_message_process_html_text_part(struct rspamd_task *task,
 						struct rspamd_url *u = g_ptr_array_index(text_part->mime_part->urls, ui);
 						if (!u) continue;
 						if (!(u->protocol == PROTOCOL_HTTP || u->protocol == PROTOCOL_HTTPS)) continue;
-						if (u->flags & RSPAMD_URL_FLAG_INVISIBLE) continue;
+						if (u->ext && (u->ext->obfuscation_flags & RSPAMD_URL_OBF_INVISIBLE)) continue;
 						float cw = rspamd_html_url_button_weight(text_part->html, u);
 						if (cw > best_w) best_w = cw;
 					}
