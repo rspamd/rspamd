@@ -54,7 +54,6 @@ parser:option "-x --exclude-logs"
 local re_non_file_url = rspamd_regexp.create('/^.*(?<!file):\\/\\//')
 local re_regexp_line = rspamd_regexp.create('/^\\/(.+)\\/(\\S?)(?:\\s+(\\d+\\.?\\d*))?(?:\\s+#\\s*(.*))?$/')
 local re_plain_line = rspamd_regexp.create('/^(\\S+)(?:\\s+(\\d+\\.?\\d*))?(?:\\s+#\\s*(.*))?$/')
-local re_comment_line = rspamd_regexp.create('/^#|^\\s*$/')
 local re_sym_with_opts = rspamd_regexp.create('/([^(]+)\\([.0-9]+\\)\\{([^;]+);\\}/')
 
 local function get_multimap_config(config_path)
@@ -105,7 +104,8 @@ local function get_map(symbol_cfg, map_file)
   for line in fh:lines() do
     line_num = line_num + 1
 
-    if re_comment_line:match(line) then
+    local trimmed = line:match('^%s*(.-)%s*$')
+    if trimmed == '' or trimmed:match('^#') then
       table.insert(entries, {
         line_num = line_num,
         is_comment = true,
