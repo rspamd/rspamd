@@ -53,8 +53,8 @@ parser:option "-x --exclude-logs"
   :convert(tonumber)
 
 local re_non_file_url = rspamd_regexp.create('/^.*(?<!file):\\/\\//')
-local re_regexp_line = rspamd_regexp.create('/^\\/(.+)\\/(\\S?)(?:\\s+(\\d+\\.?\\d*))?(?:\\s+#\\s*(.*))?$/')
-local re_plain_line = rspamd_regexp.create('/^(\\S+)(?:\\s+(\\d+\\.?\\d*))?(?:\\s+#\\s*(.*))?$/')
+local re_regexp_line = rspamd_regexp.create('/^\\/(.+)\\/(\\S?)(?:\\s+(\\d+\\.?\\d*))?$/')
+local re_plain_line = rspamd_regexp.create('/^(\\S+)(?:\\s+(\\d+\\.?\\d*))?$/')
 local re_sym_with_opts = rspamd_regexp.create('/([^(]+)\\([.0-9]+\\)\\{([^;]+);\\}/')
 
 local function get_multimap_config(config_path)
@@ -112,73 +112,101 @@ local function get_map(symbol_cfg, map_file)
         is_comment = true,
         content = line,
       })
-    elseif is_regexp then
-      local results = re_regexp_line:search(line, false, true)
-      if not results or #results == 0 then
-        io.stderr:write(string.format("Syntax error in %s at line %d\n", map_file, line_num))
-        fh:close()
-        return {}
-      end
-      local caps = results[1]
-      if not caps or #caps < 2 then
-        io.stderr:write(string.format("Syntax error in %s at line %d\n", map_file, line_num))
-        fh:close()
-        return {}
-      end
-
-      local pattern = tostring(caps[2])
-      local flags = caps[3] and tostring(caps[3]) or ''
-      local result = caps[4] and tostring(caps[4]) or nil
-      local comment = caps[5] and tostring(caps[5]) or nil
-
-      if not validate_regex_flags(flags, map_file, line_num) then
-        fh:close()
-        return {}
-      end
-
-      -- Compile with rspamd_regexp (handles all rspamd flags natively)
-      local re_pattern = '/' .. pattern .. '/' .. flags
-      local compiled = rspamd_regexp.create(re_pattern)
-      if not compiled then
-        io.stderr:write(string.format("Invalid regex in %s at line %d\n", map_file, line_num))
-        fh:close()
-        return {}
-      end
-
-      table.insert(entries, {
-        line_num = line_num,
-        pattern = pattern,
-        flag = flags,
-        compiled = compiled,
-        result = result,
-        comment = comment,
-        count = 0,
-      })
     else
-      local results = re_plain_line:search(line, false, true)
-      if not results or #results == 0 then
-        io.stderr:write(string.format("Syntax error in %s at line %d\n", map_file, line_num))
-        fh:close()
-        return {}
-      end
-      local caps = results[1]
-      if not caps or #caps < 2 then
-        io.stderr:write(string.format("Syntax error in %s at line %d\n", map_file, line_num))
-        fh:close()
-        return {}
+      -- Extract inline comment before regex parsing to avoid
+      -- rspamd_regexp capture truncation on unmatched optional groups
+      local comment = nil
+      local body = trimmed
+      if is_regexp then
+        -- For regexes, comment must come after the closing / and optional flags/score
+        -- Find the last # that's preceded by whitespace (outside the regex pattern)
+        local close_slash = trimmed:find('/', 2)
+        if close_slash then
+          local after = trimmed:sub(close_slash + 1)
+          local cmt_pos = after:find('%s+#%s*')
+          if cmt_pos then
+            -- Find actual position of # in after
+            local hash_pos = after:find('#', cmt_pos)
+            if hash_pos then
+              comment = after:sub(hash_pos + 1):match('^%s*(.*)')
+              body = trimmed:sub(1, close_slash) .. after:sub(1, cmt_pos - 1)
+            end
+          end
+        end
+      else
+        local pre, cmt = trimmed:match('^(.-)%s+#%s*(.*)$')
+        if pre and cmt then
+          comment = cmt
+          body = pre
+        end
       end
 
-      local pattern = tostring(caps[2])
-      local result = caps[3] and tostring(caps[3]) or nil
-      local comment = caps[4] and tostring(caps[4]) or nil
+      if is_regexp then
+        local results = re_regexp_line:search(body, false, true)
+        if not results or #results == 0 then
+          io.stderr:write(string.format("Syntax error in %s at line %d\n", map_file, line_num))
+          fh:close()
+          return {}
+        end
+        local caps = results[1]
+        if not caps or #caps < 2 then
+          io.stderr:write(string.format("Syntax error in %s at line %d\n", map_file, line_num))
+          fh:close()
+          return {}
+        end
 
-      table.insert(entries, {
-        line_num = line_num,
-        pattern = pattern,
-        result = result,
-        comment = comment,
-        count = 0,
-      })
+        local pattern = tostring(caps[2])
+        local flags = caps[3] and tostring(caps[3]) or ''
+        local result = caps[4] and tostring(caps[4]) or nil
+
+        if not validate_regex_flags(flags, map_file, line_num) then
+          fh:close()
+          return {}
+        end
+
+        -- Compile with rspamd_regexp (handles all rspamd flags natively)
+        local re_pattern = '/' .. pattern .. '/' .. flags
+        local compiled = rspamd_regexp.create(re_pattern)
+        if not compiled then
+          io.stderr:write(string.format("Invalid regex in %s at line %d\n", map_file, line_num))
+          fh:close()
+          return {}
+        end
+
+        table.insert(entries, {
+          line_num = line_num,
+          pattern = pattern,
+          flag = flags,
+          compiled = compiled,
+          result = result,
+          comment = comment,
+          count = 0,
+        })
+      else
+        local results = re_plain_line:search(body, false, true)
+        if not results or #results == 0 then
+          io.stderr:write(string.format("Syntax error in %s at line %d\n", map_file, line_num))
+          fh:close()
+          return {}
+        end
+        local caps = results[1]
+        if not caps or #caps < 2 then
+          io.stderr:write(string.format("Syntax error in %s at line %d\n", map_file, line_num))
+          fh:close()
+          return {}
+        end
+
+        local pattern = tostring(caps[2])
+        local result = caps[3] and tostring(caps[3]) or nil
+
+        table.insert(entries, {
+          line_num = line_num,
+          pattern = pattern,
+          result = result,
+          comment = comment,
+          count = 0,
+        })
+      end
     end
   end
 
