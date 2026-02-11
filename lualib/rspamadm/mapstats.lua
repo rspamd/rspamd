@@ -24,9 +24,9 @@ local parser = argparse()
   :description "Count Rspamd multimap matches by parsing log files"
   :help_description_margin(32)
 
-parser:option "-l --log"
-  :description "Log file or directory to read (stdin by default)"
-  :argname "<file>"
+parser:argument "log"
+  :description "Log file or directory to read (stdin if omitted)"
+  :args "?"
   :default ""
 parser:option "-c --config"
   :description "Path to config file"
