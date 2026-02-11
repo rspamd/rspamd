@@ -19,6 +19,8 @@ local rspamd_util = require "rspamd_util"
 
 local exports = {}
 
+local isatty = rspamd_util.isatty()
+
 local decompressor = {
   bz2 = 'bzip2 -cd',
   gz  = 'gzip -cd',
@@ -35,6 +37,9 @@ local spinner_chars = { '/', '-', '\\', '|' }
 local spinner_update_time = 0
 
 function exports.spinner()
+  if not isatty then
+    return
+  end
   local now = os.time()
   if (now - spinner_update_time) < 1 then
     return
@@ -315,15 +320,22 @@ function exports.process_logs(log_file, start_time, end_time, callback, opts)
         if not h then
           io.stderr:write(string.format("Cannot open %s: %s\n", path, open_err or 'unknown error'))
         else
-          io.stderr:write(string.format("\027[J  Parsing log files: [%d/%d] %s\027[G",
-            idx, #logs, fname))
+          if isatty then
+            io.stderr:write(string.format("\027[J  Parsing log files: [%d/%d] %s\027[G",
+              idx, #logs, fname))
+          else
+            io.stderr:write(string.format("  Parsing log files: [%d/%d] %s\n",
+              idx, #logs, fname))
+          end
           exports.reset_spinner()
           exports.spinner()
           exports.iterate_log(h, start_time, end_time, callback, opts)
           h:close()
         end
       end
-      io.stderr:write("\027[J\027[G")
+      if isatty then
+        io.stderr:write("\027[J\027[G")
+      end
     else
       local h, open_err = exports.open_log_file(log_file)
       if not h then

@@ -18,6 +18,16 @@ local argparse = require "argparse"
 local rspamd_regexp = require "rspamd_regexp"
 local ucl = require "ucl"
 local log_utils = require "lua_log_utils"
+local ansicolors = require "ansicolors"
+
+local action_colors = {
+  reject = ansicolors.red,
+  ['add header'] = ansicolors.yellow,
+  ['rewrite subject'] = ansicolors.yellow,
+  ['soft reject'] = ansicolors.magenta,
+  greylist = ansicolors.cyan,
+  ['no action'] = ansicolors.green,
+}
 
 local parser = argparse()
   :name "rspamadm logstats"
@@ -539,13 +549,17 @@ local function handler(args)
           local jtp = (total_junk ~= 0) and (jh * 100.0 / total_junk) or 0
 
           io.write(string.format(
-            "%s   avg. weight %.3f, hits %d(%.3f%%):\n" ..
-            "  Ham  %7.3f%%, %6d/%-6d (%7.3f%%)\n" ..
-            "  Spam %7.3f%%, %6d/%-6d (%7.3f%%)\n" ..
-            "  Junk %7.3f%%, %6d/%-6d (%7.3f%%)\n",
-            s, r.weight / th, th, (th / total * 100),
+            "%s   avg. weight %.3f, hits %d (%.3f%%):\n" ..
+            "  %s %7.3f%%, %6d/%-6d (%7.3f%%)\n" ..
+            "  %s %7.3f%%, %6d/%-6d (%7.3f%%)\n" ..
+            "  %s %7.3f%%, %6d/%-6d (%7.3f%%)\n",
+            ansicolors.bright .. s .. ansicolors.reset,
+            r.weight / th, th, (th / total * 100),
+            ansicolors.green .. "Ham " .. ansicolors.reset,
             (hh / th * 100), hh, total_ham, htp,
+            ansicolors.red .. "Spam" .. ansicolors.reset,
             (sh / th * 100), sh, total_spam, stp,
+            ansicolors.yellow .. "Junk" .. ansicolors.reset,
             (jh / th * 100), jh, total_junk, jtp))
 
           local schp = (total_spam > 0) and (r.spam_change / total_spam * 100.0) or 0
@@ -617,16 +631,19 @@ local function handler(args)
 
     if next(alpha_filtered) then
       io.write(string.format(
-        "\nWARNING: the following symbols were found but ignored" ..
-        " due to score < alpha_score (%.2f):\n", diff_alpha))
+        "\n%s the following symbols were found but ignored" ..
+        " due to score < alpha_score (%.2f):\n",
+        ansicolors.yellow .. "WARNING:" .. ansicolors.reset, diff_alpha))
       for sym, count in pairs(alpha_filtered) do
-        io.write(string.format("  %s: %d hit(s)\n", sym, count))
+        io.write(string.format("  %s: %d hit(s)\n",
+          ansicolors.bright .. sym .. ansicolors.reset, count))
       end
       io.write("Use --alpha-score 0 to include them.\n")
     end
 
-    io.write(string.format("\n=== Summary %s\nMessages scanned: %d",
-      string.rep('=', 68), total))
+    io.write(string.format("\n%s\nMessages scanned: %d",
+      ansicolors.bright .. "=== Summary " .. string.rep('=', 68) .. ansicolors.reset,
+      total))
     if timeStamp['start'] then
       io.write(string.format(" [ %s / %s ]\n", timeStamp['start'], timeStamp['end']))
     else
@@ -639,7 +656,10 @@ local function handler(args)
     end
     table.sort(sorted_actions)
     for _, a in ipairs(sorted_actions) do
-      io.write(string.format("%11s: %6.2f%%, %d\n", a, 100 * actions[a] / total, actions[a]))
+      local color = action_colors[a] or ansicolors.white
+      io.write(string.format("%s: %6.2f%%, %d\n",
+        color .. string.format("%11s", a) .. ansicolors.reset,
+        100 * actions[a] / total, actions[a]))
     end
     io.write('\n')
     if scanTime['min'] then

@@ -18,6 +18,7 @@ local argparse = require "argparse"
 local rspamd_regexp = require "rspamd_regexp"
 local rspamd_ip = require "rspamd_ip"
 local log_utils = require "lua_log_utils"
+local ansicolors = require "ansicolors"
 
 local parser = argparse()
   :name "rspamadm mapstats"
@@ -253,7 +254,9 @@ local function handler(args)
 
       -- Skip non-file maps
       if re_non_file_url:match(map_source) then
-        io.write(string.format("%s: %s [SKIPPED]\n", symbol, map_source))
+        io.write(string.format("%s: %s %s\n",
+          ansicolors.bright .. symbol .. ansicolors.reset, map_source,
+          ansicolors.yellow .. "[SKIPPED]" .. ansicolors.reset))
         goto continue_map
       end
 
@@ -262,7 +265,9 @@ local function handler(args)
 
       local entries = get_map(cfg, file_path)
       if #entries == 0 then
-        io.write(string.format("%s: %s [FAILED]\n", symbol, map_source))
+        io.write(string.format("%s: %s %s\n",
+          ansicolors.bright .. symbol .. ansicolors.reset, map_source,
+          ansicolors.red .. "[FAILED]" .. ansicolors.reset))
         goto continue_map
       end
 
@@ -272,7 +277,9 @@ local function handler(args)
           entry_count = entry_count + 1
         end
       end
-      io.write(string.format("%s: %s [OK] - %d entries\n", symbol, map_source, entry_count))
+      io.write(string.format("%s: %s %s - %d entries\n",
+        ansicolors.bright .. symbol .. ansicolors.reset, map_source,
+        ansicolors.green .. "[OK]" .. ansicolors.reset, entry_count))
 
       table.insert(map[symbol].maps, {
         source = map_source,
@@ -389,7 +396,7 @@ local function handler(args)
 
   -- Output results
   for _, symbol in ipairs(symbols_search) do
-    io.write(string.format("%s:\n", symbol))
+    io.write(string.format("%s:\n", ansicolors.bright .. symbol .. ansicolors.reset))
     io.write(string.format("    type=%s\n", map[symbol].type))
 
     for _, map_entry in ipairs(map[symbol].maps) do
@@ -408,7 +415,8 @@ local function handler(args)
           end
 
           if entry.count and entry.count > 0 then
-            io.write(string.format("\t%d", entry.count))
+            io.write(string.format("\t%s",
+              ansicolors.green .. tostring(entry.count) .. ansicolors.reset))
           else
             io.write("\t-")
           end
@@ -427,7 +435,8 @@ local function handler(args)
 
   -- Unmatched report
   if next(unmatched) then
-    io.write("\nSymbols with unmatched values:\n")
+    io.write(string.format("\n%s\n",
+      ansicolors.yellow .. "Symbols with unmatched values:" .. ansicolors.reset))
     io.write(string.rep('-', 80) .. '\n')
 
     local grouped = {}
@@ -451,7 +460,9 @@ local function handler(args)
       local entries = grouped[symbol]
       table.sort(entries, function(a, b) return a.count > b.count end)
 
-      io.write(string.format("\n%s: %d unmatched value(s)\n", symbol, #entries))
+      io.write(string.format("\n%s: %s\n",
+        ansicolors.bright .. symbol .. ansicolors.reset,
+        ansicolors.yellow .. string.format("%d unmatched value(s)", #entries) .. ansicolors.reset))
       local limit = math.min(#entries, 5)
       for i = 1, limit do
         io.write(string.format("  %dx: %s\n", entries[i].count, entries[i].full))
