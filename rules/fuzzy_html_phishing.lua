@@ -37,20 +37,40 @@ local function check_fuzzy_mismatch(task)
   end
 
   -- Get fuzzy check symbols from task results
-  local fuzzy_symbols = task:get_symbols_all()
+  local all_symbols = task:get_symbols_all()
   local has_text_fuzzy = false
   local has_html_fuzzy = false
   local text_score = 0
   local html_score = 0
 
-  for _, sym in ipairs(fuzzy_symbols) do
-    if sym.name:match('FUZZY.*TEXT') or sym.name == 'R_FUZZY_HASH' then
-      has_text_fuzzy = true
-      text_score = math.max(text_score, sym.score or 0)
+  if not all_symbols then
+    return false
+  end
+
+  for _, sym in ipairs(all_symbols) do
+    -- Only consider symbols in the "fuzzy" group
+    local is_fuzzy = false
+    if sym.groups then
+      for _, gr in ipairs(sym.groups) do
+        if gr == 'fuzzy' then
+          is_fuzzy = true
+          break
+        end
+      end
     end
-    if sym.name:match('FUZZY.*HTML') then
-      has_html_fuzzy = true
-      html_score = math.max(html_score, sym.score or 0)
+
+    if is_fuzzy and sym.options then
+      for _, opt in ipairs(sym.options) do
+        -- Option format: flag:hexhash:probability:type
+        local opt_type = opt:match'^%d+:%w+:[%d%.]+:(%a+)$'
+        if opt_type == 'txt' then
+          has_text_fuzzy = true
+          text_score = math.max(text_score, sym.score or 0)
+        elseif opt_type == 'html' then
+          has_html_fuzzy = true
+          html_score = math.max(html_score, sym.score or 0)
+        end
+      end
     end
   end
 
