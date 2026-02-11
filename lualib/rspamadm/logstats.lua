@@ -271,6 +271,7 @@ local function handler(args)
   local total_spam = 0
   local total_junk = 0
   local sym_res = {}
+  local alpha_filtered = {}
   local actions = {}
   local timeStamp = {}
   local scanTime = { max = 0, total = 0 }
@@ -356,6 +357,7 @@ local function handler(args)
           if caps[4] then
             sym_score = (tonumber(tostring(caps[4])) or 0) * (symbols_mult[sym_name] or 1.0)
             if math.abs(sym_score) < diff_alpha then
+              alpha_filtered[sym_name] = (alpha_filtered[sym_name] or 0) + 1
               goto continue_sym
             end
             local bm = bidir_match[sym_name]
@@ -611,6 +613,16 @@ local function handler(args)
 
         io.write(string.rep('-', 80) .. '\n')
       end
+    end
+
+    if next(alpha_filtered) then
+      io.write(string.format(
+        "\nWARNING: the following symbols were found but ignored" ..
+        " due to score < alpha_score (%.2f):\n", diff_alpha))
+      for sym, count in pairs(alpha_filtered) do
+        io.write(string.format("  %s: %d hit(s)\n", sym, count))
+      end
+      io.write("Use --alpha-score 0 to include them.\n")
     end
 
     io.write(string.format("\n=== Summary %s\nMessages scanned: %d",
