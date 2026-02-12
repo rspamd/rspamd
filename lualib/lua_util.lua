@@ -1750,7 +1750,9 @@ exports.toboolean = function(v)
     ['False'] = false,
   };
 
-  if type(v) == 'string' then
+  if type(v) == 'boolean' then
+    return v
+  elseif type(v) == 'string' then
     if true_t[v] == true then
       return true;
     elseif false_t[v] == false then
