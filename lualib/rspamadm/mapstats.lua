@@ -229,13 +229,13 @@ local function ip_within(ip_obj, cidr_str)
     if not ip_masked or not cidr_masked then
       return false
     end
-    return tostring(ip_masked) == tostring(cidr_masked)
+    return ip_masked == cidr_masked
   else
     local cidr_ip = rspamd_ip.from_string(cidr_str)
     if not cidr_ip or not cidr_ip:is_valid() then
       return false
     end
-    return tostring(ip_obj) == tostring(cidr_ip)
+    return ip_obj == cidr_ip
   end
 end
 

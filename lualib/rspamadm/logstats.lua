@@ -107,10 +107,20 @@ parser:option "-x --exclude-logs"
 parser:flag "--json"
   :description "Print JSON output"
 
-local function is_ignored(sym, ignored_list)
+local function compile_ignored(ignored_list)
+  local compiled = {}
   for _, ex in ipairs(ignored_list) do
     local re = rspamd_regexp.create('^' .. ex .. '$')
-    if re and re:match(sym) then
+    if re then
+      table.insert(compiled, re)
+    end
+  end
+  return compiled
+end
+
+local function is_ignored(sym, ignored_compiled)
+  for _, re in ipairs(ignored_compiled) do
+    if re:match(sym) then
       return true
     end
   end
@@ -211,7 +221,7 @@ local function handler(args)
   local symbols_search = res['symbol'] or {}
   local symbols_bidir = res['symbol_bidir'] or {}
   local symbols_exclude = res['exclude'] or {}
-  local symbols_ignored = res['ignore'] or {}
+  local symbols_ignored = compile_ignored(res['ignore'] or {})
   local symbols_groups = res['group'] or {}
   local symbols_mult = parse_mult_options(res['mult'] or {})
   local diff_alpha = res['alpha_score']
@@ -525,7 +535,7 @@ local function handler(args)
               local sym_prob = r.hits / total
               corr_data[cs] = corr_prob / sym_prob
             end
-            sym_data.correllations = corr_data
+            sym_data.correlations = corr_data
           end
 
           result.symbols[s] = sym_data
@@ -566,27 +576,23 @@ local function handler(args)
           local jchp = (total_junk > 0) and (r.junk_change / total_junk * 100.0) or 0
 
           if r.weight ~= 0 then
+            local spam_desc, junk_desc
             if r.weight > 0 then
-              io.write(string.format(
-                "\nSpam changes (ham/junk -> spam): %6d/%-6d (%7.3f%%)\n" ..
-                "Spam  changes / total spam hits: %6d/%-6d (%7.3f%%)\n" ..
-                "Junk changes      (ham -> junk): %6d/%-6d (%7.3f%%)\n" ..
-                "Junk  changes / total junk hits: %6d/%-6d (%7.3f%%)\n",
-                r.spam_change, th, (r.spam_change / th * 100),
-                r.spam_change, total_spam, schp,
-                r.junk_change, th, (r.junk_change / th * 100),
-                r.junk_change, total_junk, jchp))
+              spam_desc = "Spam changes (ham/junk -> spam)"
+              junk_desc = "Junk changes      (ham -> junk)"
             else
-              io.write(string.format(
-                "\nSpam changes (spam -> junk/ham): %6d/%-6d (%7.3f%%)\n" ..
-                "Spam changes / total spam hits : %6d/%-6d (%7.3f%%)\n" ..
-                "Junk changes (junk -> ham)     : %6d/%-6d (%7.3f%%)\n" ..
-                "Junk changes / total junk hits : %6d/%-6d (%7.3f%%)\n",
-                r.spam_change, th, (r.spam_change / th * 100),
-                r.spam_change, total_spam, schp,
-                r.junk_change, th, (r.junk_change / th * 100),
-                r.junk_change, total_junk, jchp))
+              spam_desc = "Spam changes (spam -> junk/ham)"
+              junk_desc = "Junk changes (junk -> ham)     "
             end
+            io.write(string.format(
+              "\n%s: %6d/%-6d (%7.3f%%)\n" ..
+              "Spam  changes / total spam hits: %6d/%-6d (%7.3f%%)\n" ..
+              "%s: %6d/%-6d (%7.3f%%)\n" ..
+              "Junk  changes / total junk hits: %6d/%-6d (%7.3f%%)\n",
+              spam_desc, r.spam_change, th, (r.spam_change / th * 100),
+              r.spam_change, total_spam, schp,
+              junk_desc, r.junk_change, th, (r.junk_change / th * 100),
+              r.junk_change, total_junk, jchp))
           end
 
           if correlations then

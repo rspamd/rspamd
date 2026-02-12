@@ -135,11 +135,15 @@ function exports.normalized_time(s)
   return s
 end
 
+local function shell_quote(s)
+  return "'" .. s:gsub("'", "'\\''") .. "'"
+end
+
 function exports.open_log_file(path)
   local ext = path:match('%.([^%.]+)$')
   local dc = decompressor[ext]
   if dc then
-    return io.popen(dc .. ' ' .. path, 'r')
+    return io.popen(dc .. ' ' .. shell_quote(path), 'r')
   else
     return io.open(path, 'r')
   end
