@@ -1430,7 +1430,7 @@ lua_textpart_get_html_fuzzy_hashes(lua_State *L)
 	/* Generate HTML shingles */
 	html_sgl = rspamd_shingles_from_html(part->html, key, pool,
 										 rspamd_shingles_default_filter,
-										 NULL, RSPAMD_SHINGLES_MUMHASH);
+										 NULL, RSPAMD_SHINGLES_MUMHASH, FALSE);
 
 	if (html_sgl == NULL) {
 		lua_pushnil(L);

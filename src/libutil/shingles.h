@@ -117,7 +117,8 @@ struct rspamd_html_shingle *rspamd_shingles_from_html(void *html_content,
 													  rspamd_mempool_t *pool,
 													  rspamd_shingles_filter filter,
 													  gpointer filterd,
-													  enum rspamd_shingle_alg alg);
+													  enum rspamd_shingle_alg alg,
+													  gboolean ignore_link_domains);
 
 /**
  * Compares two shingles and return result as a floating point value - 1.0

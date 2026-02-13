@@ -129,7 +129,8 @@ html_extract_structural_tokens(html_content *hc,
 							   rspamd_mempool_t *pool,
 							   std::vector<std::string> &tokens,
 							   std::vector<std::string_view> &cta_domains,
-							   std::vector<std::string_view> &all_domains)
+							   std::vector<std::string_view> &all_domains,
+							   bool ignore_link_domains)
 {
 	tokens.reserve(hc->all_tags.size());
 	cta_domains.reserve(16);
@@ -175,10 +176,12 @@ html_extract_structural_tokens(html_content *hc,
 				auto etld1 = extract_etld1_from_url(url);
 
 				if (!etld1.empty()) {
-					token += '@';
-					token += etld1;
+					if (!ignore_link_domains) {
+						token += '@';
+						token += etld1;
+					}
 
-					/* Add to all_domains */
+					/* Domain collection for separate hashes still happens unconditionally */
 					all_domains.push_back(etld1);
 
 					/* Check if this is a CTA link using button weights */
@@ -426,7 +429,8 @@ rspamd_shingles_from_html(void *html_content,
 						  rspamd_mempool_t *pool,
 						  rspamd_shingles_filter filter,
 						  gpointer filterd,
-						  enum rspamd_shingle_alg alg)
+						  enum rspamd_shingle_alg alg,
+						  gboolean ignore_link_domains)
 {
 	if (!html_content) {
 		return nullptr;
@@ -446,7 +450,7 @@ rspamd_shingles_from_html(void *html_content,
 	/* 1. Extract structural tokens and domain lists using modern C++ */
 	std::vector<std::string> tokens;
 	std::vector<std::string_view> cta_domains, all_domains;
-	html_extract_structural_tokens(hc_ptr, pool, tokens, cta_domains, all_domains);
+	html_extract_structural_tokens(hc_ptr, pool, tokens, cta_domains, all_domains, ignore_link_domains);
 
 	if (tokens.empty()) {
 		/* Empty HTML structure after filtering */

@@ -118,6 +118,7 @@ struct fuzzy_rule {
 	gboolean html_shingles;     /* Enable HTML fuzzy hashing */
 	gboolean text_hashes;       /* Enable/disable generation of text hashes */
 	unsigned int min_html_tags; /* Minimum tags for HTML hash */
+	gboolean html_ignore_domains; /* Ignore link domains in HTML structural tokens */
 	int learn_condition_cb;
 	uint32_t retransmits;
 	struct rspamd_hash_map_helper *skip_map;
@@ -489,6 +490,10 @@ fuzzy_rule_apply_checks(struct fuzzy_rule *rule,
 			else if ((opt = ucl_object_lookup(cur, "weight")) != NULL) {
 				rule->html_weight = ucl_obj_todouble(opt);
 			}
+
+			if ((opt = ucl_object_lookup(cur, "ignore_link_domains")) != NULL) {
+				rule->html_ignore_domains = ucl_obj_toboolean(opt);
+			}
 		}
 		else {
 			/* Other checks are processed by lua_fuzzy; keep legacy behaviour */
@@ -533,6 +538,7 @@ fuzzy_rule_new(const char *default_symbol, rspamd_mempool_t *pool)
 	rule->html_shingles = FALSE;
 	rule->text_hashes = TRUE;
 	rule->min_html_tags = 10;
+	rule->html_ignore_domains = FALSE;
 
 	return rule;
 }
@@ -2545,6 +2551,15 @@ int fuzzy_check_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 							   0);
 	rspamd_rcl_add_doc_by_path(cfg,
 							   "fuzzy_check.rule",
+							   "Ignore link domains in HTML structural tokens (for template-only matching)",
+							   "html_ignore_domains",
+							   UCL_BOOLEAN,
+							   NULL,
+							   0,
+							   "false",
+							   0);
+	rspamd_rcl_add_doc_by_path(cfg,
+							   "fuzzy_check.rule",
 							   "Content hashing checks configuration object (e.g. { text = { enabled = true; }, html = { enabled = true; } })",
 							   "checks",
 							   UCL_OBJECT,
@@ -3757,8 +3772,9 @@ fuzzy_cmd_from_html_part(struct rspamd_task *task,
 	struct rspamd_cached_shingles **html_cached_ptr;
 
 	memcpy(&key_part, rule->shingles_key->str, sizeof(key_part));
-	rspamd_snprintf(html_cache_key, sizeof(html_cache_key), "%s%d_html",
-					rule->algorithm_str, key_part);
+	rspamd_snprintf(html_cache_key, sizeof(html_cache_key), "%s%d_html%s",
+					rule->algorithm_str, key_part,
+					rule->html_ignore_domains ? "_nd" : "");
 
 	html_cached_ptr = (struct rspamd_cached_shingles **) rspamd_mempool_get_variable(
 		task->task_pool, html_cache_key);
@@ -3801,7 +3817,7 @@ fuzzy_cmd_from_html_part(struct rspamd_task *task,
 		html_sh = rspamd_shingles_from_html(part->html,
 											(const unsigned char *) rule->shingles_key->str, task->task_pool,
 											rspamd_shingles_default_filter, NULL,
-											rule->alg);
+											rule->alg, rule->html_ignore_domains);
 
 		if (html_sh != NULL) {
 			/* Use structure shingles for fuzzy matching */
