@@ -279,6 +279,7 @@ struct fuzzy_tcp_connection {
 #define FUZZY_CMD_FLAG_IMAGE (1 << 2)
 #define FUZZY_CMD_FLAG_CONTENT (1 << 3)
 #define FUZZY_CMD_FLAG_HTML (1 << 4)
+#define FUZZY_CMD_FLAG_HTML_DOMAINS (1 << 5)
 
 #define FUZZY_CHECK_FLAG_NOIMAGES (1 << 0)
 #define FUZZY_CHECK_FLAG_NOATTACHMENTS (1 << 1)
@@ -3713,7 +3714,8 @@ fuzzy_cmd_from_html_part(struct rspamd_task *task,
 						 int flag,
 						 uint32_t weight,
 						 struct rspamd_mime_text_part *part,
-						 struct rspamd_mime_part *mp)
+						 struct rspamd_mime_part *mp,
+						 gboolean ignore_link_domains)
 {
 	struct rspamd_fuzzy_shingle_cmd *shcmd = NULL;
 	struct rspamd_fuzzy_encrypted_shingle_cmd *encshcmd = NULL;
@@ -3774,7 +3776,7 @@ fuzzy_cmd_from_html_part(struct rspamd_task *task,
 	memcpy(&key_part, rule->shingles_key->str, sizeof(key_part));
 	rspamd_snprintf(html_cache_key, sizeof(html_cache_key), "%s%d_html%s",
 					rule->algorithm_str, key_part,
-					rule->html_ignore_domains ? "_nd" : "");
+					ignore_link_domains ? "_nd" : "");
 
 	html_cached_ptr = (struct rspamd_cached_shingles **) rspamd_mempool_get_variable(
 		task->task_pool, html_cache_key);
@@ -3817,7 +3819,7 @@ fuzzy_cmd_from_html_part(struct rspamd_task *task,
 		html_sh = rspamd_shingles_from_html(part->html,
 											(const unsigned char *) rule->shingles_key->str, task->task_pool,
 											rspamd_shingles_default_filter, NULL,
-											rule->alg, rule->html_ignore_domains);
+											rule->alg, ignore_link_domains);
 
 		if (html_sh != NULL) {
 			/* Use structure shingles for fuzzy matching */
@@ -4311,8 +4313,16 @@ fuzzy_insert_result(struct fuzzy_client_session *session,
 			type = "img";
 			res->type = FUZZY_RESULT_IMG;
 		}
+		else if ((io->flags & FUZZY_CMD_FLAG_HTML_DOMAINS)) {
+			/* HTML domain-sensitive hash (structure + domains) */
+			nval *= sqrtf(rep->v1.prob);
+			nval *= session->rule->html_weight;
+
+			type = "htmld";
+			res->type = FUZZY_RESULT_HTML;
+		}
 		else if ((io->flags & FUZZY_CMD_FLAG_HTML)) {
-			/* HTML structural hash */
+			/* HTML structural hash (template mode, domains ignored) */
 			nval *= sqrtf(rep->v1.prob);
 			/* Apply HTML weight multiplier from rule config */
 			nval *= session->rule->html_weight;
@@ -5047,6 +5057,9 @@ fuzzy_controller_io_callback(int fd, short what, void *arg)
 					if ((io->flags & FUZZY_CMD_FLAG_IMAGE)) {
 						ftype = "img";
 					}
+					else if ((io->flags & FUZZY_CMD_FLAG_HTML_DOMAINS)) {
+						ftype = "htmld";
+					}
 					else if ((io->flags & FUZZY_CMD_FLAG_HTML)) {
 						ftype = "html";
 					}
@@ -5305,11 +5318,27 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 						struct fuzzy_cmd_io *html_io;
 
 						html_io = fuzzy_cmd_from_html_part(task, rule, c, flag, value,
-														   part, mime_part);
+														   part, mime_part,
+														   rule->html_ignore_domains);
 
 						if (html_io) {
-							/* Add HTML hash as separate command */
+							/* Add HTML hash as separate command (template mode) */
 							g_ptr_array_add(res, html_io);
+						}
+
+						/* Generate domain-sensitive command when ignore_domains is on */
+						if (rule->html_ignore_domains) {
+							struct fuzzy_cmd_io *htmld_io;
+
+							htmld_io = fuzzy_cmd_from_html_part(task, rule, c, flag, value,
+																part, mime_part,
+																FALSE);
+
+							if (htmld_io) {
+								/* Mark as domain-sensitive HTML command */
+								htmld_io->flags |= FUZZY_CMD_FLAG_HTML_DOMAINS;
+								g_ptr_array_add(res, htmld_io);
+							}
 						}
 					}
 				}

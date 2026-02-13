@@ -109,6 +109,12 @@ local function check_fuzzy_mismatch(task)
       lua_util.debugm(N, task, 'html matched but text did not for %s', sym.name)
     end
 
+    -- Phishing detection: HTML template matches but domains differ
+    if matched['html'] and not matched['htmld'] then
+      task:insert_result('FUZZY_HTML_PHISHING', 1.0, sym.name)
+      lua_util.debugm(N, task, 'html template matched but domains differ for %s (possible phishing)', sym.name)
+    end
+
     ::continue::
   end
 end
@@ -138,6 +144,15 @@ rspamd_config:register_symbol{
   parent = cb_id,
   group = 'fuzzy',
   description = 'HTML structure fuzzy matches but text content does not',
+}
+
+rspamd_config:register_symbol{
+  name = 'FUZZY_HTML_PHISHING',
+  type = 'virtual',
+  score = 6.0,
+  parent = cb_id,
+  group = 'fuzzy',
+  description = 'HTML template matches but link domains differ (possible phishing)',
 }
 
 rspamd_config:register_dependency('FUZZY_MISMATCH_CHECK', 'FUZZY_CALLBACK')
