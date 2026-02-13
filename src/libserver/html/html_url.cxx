@@ -185,10 +185,10 @@ auto html_url_is_phished(rspamd_mempool_t *pool,
 							href_url->flags |= RSPAMD_URL_FLAG_PHISHED;
 							text_url->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
 
-							if (href_url->ext == nullptr) {
-								href_url->ext = rspamd_mempool_alloc0_type(pool, rspamd_url_ext);
-							}
-							href_url->ext->linked_url = text_url;
+							auto *ext = rspamd_url_ensure_ext(href_url, pool);
+							ext->displayed_url = text_url;
+							ext->obfuscation_flags |= RSPAMD_URL_OBF_PHISH_MISMATCH;
+							ext->obfuscation_count = __builtin_popcount(ext->obfuscation_flags);
 						}
 					}
 				}
@@ -218,6 +218,9 @@ auto html_url_is_phished(rspamd_mempool_t *pool,
 
 			if (obfuscation_found) {
 				href_url->flags |= RSPAMD_URL_FLAG_PHISHED | RSPAMD_URL_FLAG_OBSCURED;
+				auto *ext = rspamd_url_ensure_ext(href_url, pool);
+				ext->obfuscation_flags |= RSPAMD_URL_OBF_PHISH_MISMATCH;
+				ext->obfuscation_count = __builtin_popcount(ext->obfuscation_flags);
 			}
 		}
 	}
@@ -456,7 +459,7 @@ auto html_process_url(rspamd_mempool_t *pool, std::string_view &input, lua_State
 	dlen = d - decoded;
 
 	url = rspamd_mempool_alloc0_type(pool, struct rspamd_url);
-	rspamd_url_normalise_propagate_flags(pool, decoded, &dlen, saved_flags);
+	rspamd_url_normalise_propagate_flags(pool, decoded, &dlen, NULL, saved_flags);
 	rc = rspamd_url_parse(url, decoded, dlen, pool, RSPAMD_URL_PARSE_HREF, (void *) L);
 
 	/* Filter some completely damaged urls */
@@ -466,12 +469,13 @@ auto html_process_url(rspamd_mempool_t *pool, std::string_view &input, lua_State
 
 		if (has_bad_chars) {
 			url->flags |= RSPAMD_URL_FLAG_OBSCURED;
+			rspamd_url_ensure_ext(url, pool)->obfuscation_flags |= RSPAMD_URL_OBF_HTML_BADCHARS;
 		}
 
 		if (no_prefix) {
-			url->flags |= RSPAMD_URL_FLAG_SCHEMALESS;
+			rspamd_url_ensure_ext(url, pool)->obfuscation_flags |= RSPAMD_URL_OBF_SCHEMALESS;
 
-			if (url->tldlen == 0 || (url->flags & RSPAMD_URL_FLAG_NO_TLD)) {
+			if (url->tldlen == 0 || (url->ext && (url->ext->obfuscation_flags & RSPAMD_URL_OBF_NO_TLD))) {
 				/* Ignore urls with both no schema and no tld */
 				return std::nullopt;
 			}

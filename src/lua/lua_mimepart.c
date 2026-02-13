@@ -1566,9 +1566,9 @@ lua_textpart_get_cta_urls(lua_State *L)
 		if (entry && entry->url) {
 			struct rspamd_url *chosen = entry->url;
 
-			if (!return_original && chosen->ext && chosen->ext->linked_url &&
-				chosen->ext->linked_url != chosen) {
-				chosen = chosen->ext->linked_url;
+			if (!return_original && chosen->ext && rspamd_url_get_linked(chosen) &&
+				rspamd_url_get_linked(chosen) != chosen) {
+				chosen = rspamd_url_get_linked(chosen);
 			}
 
 			khiter_t k = kh_get(lua_cta_url_set, seen, (khint64_t) (uintptr_t) chosen);

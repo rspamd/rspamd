@@ -39,29 +39,15 @@ enum rspamd_url_flags {
 	RSPAMD_URL_FLAG_HTML_DISPLAYED = 1u << 4u,
 	RSPAMD_URL_FLAG_FROM_TEXT = 1u << 5u,
 	RSPAMD_URL_FLAG_SUBJECT = 1u << 6u,
-	RSPAMD_URL_FLAG_HOSTENCODED = 1u << 7u,
-	RSPAMD_URL_FLAG_SCHEMAENCODED = 1u << 8u,
-	RSPAMD_URL_FLAG_PATHENCODED = 1u << 9u,
-	RSPAMD_URL_FLAG_QUERYENCODED = 1u << 10u,
-	RSPAMD_URL_FLAG_MISSINGSLASHES = 1u << 11u,
-	RSPAMD_URL_FLAG_IDN = 1u << 12u,
-	RSPAMD_URL_FLAG_HAS_PORT = 1u << 13u,
-	RSPAMD_URL_FLAG_HAS_USER = 1u << 14u,
-	RSPAMD_URL_FLAG_SCHEMALESS = 1u << 15u,
-	RSPAMD_URL_FLAG_UNNORMALISED = 1u << 16u,
-	RSPAMD_URL_FLAG_ZW_SPACES = 1u << 17u,
-	RSPAMD_URL_FLAG_DISPLAY_URL = 1u << 18u,
-	RSPAMD_URL_FLAG_IMAGE = 1u << 19u,
-	RSPAMD_URL_FLAG_QUERY = 1u << 20u,
-	RSPAMD_URL_FLAG_CONTENT = 1u << 21u,
-	RSPAMD_URL_FLAG_NO_TLD = 1u << 22u,
-	RSPAMD_URL_FLAG_TRUNCATED = 1u << 23u,
-	RSPAMD_URL_FLAG_REDIRECT_TARGET = 1u << 24u,
-	RSPAMD_URL_FLAG_INVISIBLE = 1u << 25u,
-	RSPAMD_URL_FLAG_SPECIAL = 1u << 26u,
-
+	RSPAMD_URL_FLAG_IDN = 1u << 7u,
+	RSPAMD_URL_FLAG_DISPLAY_URL = 1u << 8u,
+	RSPAMD_URL_FLAG_IMAGE = 1u << 9u,
+	RSPAMD_URL_FLAG_QUERY = 1u << 10u,
+	RSPAMD_URL_FLAG_CONTENT = 1u << 11u,
+	RSPAMD_URL_FLAG_REDIRECT_TARGET = 1u << 12u,
+	RSPAMD_URL_FLAG_SPECIAL = 1u << 13u,
 };
-#define RSPAMD_URL_MAX_FLAG_SHIFT (26u)
+#define RSPAMD_URL_MAX_FLAG_SHIFT (14u)
 
 struct rspamd_url_tag {
 	const char *data;
@@ -110,9 +96,14 @@ struct rspamd_url {
  */
 struct rspamd_url_ext {
 	char *visible_part;
-	struct rspamd_url *linked_url;
+	struct rspamd_url *redirected_url; /* t.co -> example.com */
+	struct rspamd_url *displayed_url;  /* <a href="phish.com">example.com</a> */
 
+	uint32_t obfuscation_flags;
 	uint16_t port;
+	uint8_t extra_slashes;
+	uint8_t obfuscation_count;
+	uint8_t zw_spaces_count;
 };
 
 #define rspamd_url_user(u) ((u)->userlen > 0 ? (u)->string + (u)->usershift : NULL)
@@ -153,6 +144,39 @@ enum rspamd_url_parse_flags {
 	RSPAMD_URL_PARSE_HREF = (1u << 0u),
 	RSPAMD_URL_PARSE_CHECK = (1u << 1u),
 };
+
+/**
+ * Fine-grained obfuscation flags for rspamd_url_ext
+ * Each bit indicates a specific obfuscation technique detected.
+ * RSPAMD_URL_FLAG_OBSCURED remains the summary bit for backward compatibility.
+ */
+enum rspamd_url_obfuscation_flag {
+	RSPAMD_URL_OBF_MULTIPLE_AT = 1u << 0u,
+	RSPAMD_URL_OBF_BACKSLASHES = 1u << 1u,
+	RSPAMD_URL_OBF_IP_NUMERIC = 1u << 2u,
+	RSPAMD_URL_OBF_DOT_TRICKS = 1u << 3u,
+	RSPAMD_URL_OBF_MISSING_SLASHES = 1u << 4u,
+	RSPAMD_URL_OBF_HAS_PASSWORD = 1u << 5u,
+	RSPAMD_URL_OBF_USER_BADCHARS = 1u << 6u,
+	RSPAMD_URL_OBF_DOMAIN_IN_USER = 1u << 7u,
+	RSPAMD_URL_OBF_ZW_SPACES = 1u << 8u,
+	RSPAMD_URL_OBF_HTML_BADCHARS = 1u << 9u,
+	RSPAMD_URL_OBF_HOST_ENCODED = 1u << 10u,
+	RSPAMD_URL_OBF_PHISH_MISMATCH = 1u << 11u,
+	RSPAMD_URL_OBF_LUA_SUSPICIOUS = 1u << 12u,
+	RSPAMD_URL_OBF_DOUBLE_SLASH_PATH = 1u << 13u,
+	RSPAMD_URL_OBF_SCHEMA_ENCODED = 1u << 14u,
+	RSPAMD_URL_OBF_PATH_ENCODED = 1u << 15u,
+	RSPAMD_URL_OBF_QUERY_ENCODED = 1u << 16u,
+	RSPAMD_URL_OBF_HAS_PORT = 1u << 17u,
+	RSPAMD_URL_OBF_HAS_USER = 1u << 18u,
+	RSPAMD_URL_OBF_SCHEMALESS = 1u << 19u,
+	RSPAMD_URL_OBF_UNNORMALISED = 1u << 20u,
+	RSPAMD_URL_OBF_NO_TLD = 1u << 21u,
+	RSPAMD_URL_OBF_TRUNCATED = 1u << 22u,
+	RSPAMD_URL_OBF_INVISIBLE = 1u << 23u,
+};
+#define RSPAMD_URL_MAX_OBF_FLAG_SHIFT (24u)
 
 enum rspamd_url_find_type {
 	RSPAMD_URL_FIND_ALL = 0,
@@ -330,6 +354,53 @@ bool rspamd_url_flag_from_string(const char *str, int *flag);
  */
 const char *rspamd_url_flag_to_string(int flag);
 
+/**
+ * Converts obfuscation flag to a string name
+ * @param flag single obfuscation flag bit
+ * @return string name or NULL
+ */
+const char *rspamd_url_obfuscation_flag_to_string(int flag);
+
+/**
+ * Converts string name to an obfuscation flag
+ * @param str flag name
+ * @param flag output bitmask (ORed)
+ * @return true if found
+ */
+bool rspamd_url_obfuscation_flag_from_string(const char *str, int *flag);
+
+/**
+ * Ensure that ext is allocated for a URL, allocating from pool if needed
+ * @param url
+ * @param pool
+ * @return ext pointer (never NULL)
+ */
+static inline struct rspamd_url_ext *
+rspamd_url_ensure_ext(struct rspamd_url *url, rspamd_mempool_t *pool)
+{
+	if (url->ext == NULL) {
+		url->ext = (struct rspamd_url_ext *) rspamd_mempool_alloc0(pool, sizeof(struct rspamd_url_ext));
+	}
+	return url->ext;
+}
+
+/**
+ * Get the linked URL (displayed or redirected) for backward compatibility
+ * @param url
+ * @return linked url or NULL
+ */
+static inline struct rspamd_url *
+rspamd_url_get_linked(struct rspamd_url *url)
+{
+	if (url->ext == NULL) {
+		return NULL;
+	}
+	if (url->ext->displayed_url != NULL) {
+		return url->ext->displayed_url;
+	}
+	return url->ext->redirected_url;
+}
+
 /* Defines sets of urls indexed by url as is */
 KHASH_DECLARE(rspamd_url_hash, struct rspamd_url *, char);
 KHASH_DECLARE(rspamd_url_host_hash, struct rspamd_url *, char);
@@ -394,7 +465,7 @@ int rspamd_url_cmp_qsort(const void *u1, const void *u2);
  */
 static RSPAMD_PURE_FUNCTION inline uint16_t rspamd_url_get_port(struct rspamd_url *u)
 {
-	if ((u->flags & RSPAMD_URL_FLAG_HAS_PORT) && u->ext) {
+	if (u->ext && (u->ext->obfuscation_flags & RSPAMD_URL_OBF_HAS_PORT)) {
 		return u->ext->port;
 	}
 	else {
@@ -415,7 +486,7 @@ static RSPAMD_PURE_FUNCTION inline uint16_t rspamd_url_get_port(struct rspamd_ur
  */
 static RSPAMD_PURE_FUNCTION inline uint16_t rspamd_url_get_port_if_special(struct rspamd_url *u)
 {
-	if ((u->flags & RSPAMD_URL_FLAG_HAS_PORT) && u->ext) {
+	if (u->ext && (u->ext->obfuscation_flags & RSPAMD_URL_OBF_HAS_PORT)) {
 		return u->ext->port;
 	}
 
@@ -423,25 +494,33 @@ static RSPAMD_PURE_FUNCTION inline uint16_t rspamd_url_get_port_if_special(struc
 }
 
 /**
- * Normalize unicode input and set out url flags as appropriate
- * @param pool
- * @param input
+ * Normalize unicode input and set url flags as appropriate.
+ * Sets OBF_UNNORMALISED and OBF_ZW_SPACES in ext->obfuscation_flags when url is non-NULL.
+ * @param pool memory pool
+ * @param input input string
  * @param len_out (must be &var)
+ * @param url url object (may be NULL)
  * @param url_flags_out (must be just a var with no dereference)
  */
-#define rspamd_url_normalise_propagate_flags(pool, input, len_out, url_flags_out) \
-	do {                                                                          \
-		enum rspamd_utf8_normalise_result norm_res;                               \
-		norm_res = rspamd_normalise_unicode_inplace((input), (len_out));          \
-		if (norm_res & RSPAMD_UNICODE_NORM_UNNORMAL) {                            \
-			url_flags_out |= RSPAMD_URL_FLAG_UNNORMALISED;                        \
-		}                                                                         \
-		if (norm_res & RSPAMD_UNICODE_NORM_ZERO_SPACES) {                         \
-			url_flags_out |= RSPAMD_URL_FLAG_ZW_SPACES;                           \
-		}                                                                         \
-		if (norm_res & (RSPAMD_UNICODE_NORM_ERROR)) {                             \
-			url_flags_out |= RSPAMD_URL_FLAG_OBSCURED;                            \
-		}                                                                         \
+#define rspamd_url_normalise_propagate_flags(pool, input, len_out, url, url_flags_out) \
+	do {                                                                               \
+		enum rspamd_utf8_normalise_result norm_res;                                    \
+		norm_res = rspamd_normalise_unicode_inplace((input), (len_out));               \
+		if (norm_res & RSPAMD_UNICODE_NORM_UNNORMAL) {                                 \
+			if ((url) != NULL) {                                                       \
+				rspamd_url_ensure_ext((url), (pool))->obfuscation_flags |=             \
+					RSPAMD_URL_OBF_UNNORMALISED;                                       \
+			}                                                                          \
+		}                                                                              \
+		if (norm_res & RSPAMD_UNICODE_NORM_ZERO_SPACES) {                              \
+			if ((url) != NULL) {                                                       \
+				rspamd_url_ensure_ext((url), (pool))->obfuscation_flags |=             \
+					RSPAMD_URL_OBF_ZW_SPACES;                                          \
+			}                                                                          \
+		}                                                                              \
+		if (norm_res & (RSPAMD_UNICODE_NORM_ERROR)) {                                  \
+			url_flags_out |= RSPAMD_URL_FLAG_OBSCURED;                                 \
+		}                                                                              \
 	} while (0)
 #ifdef __cplusplus
 }
