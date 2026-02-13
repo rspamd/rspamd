@@ -1805,10 +1805,12 @@ rspamd_config_add_symbol(struct rspamd_config *cfg,
 				*sym_def->weight_ptr = score;
 				sym_def->score = score;
 				sym_def->priority = priority;
-				sym_def->flags &= ~RSPAMD_SYMBOL_FLAG_UNSCORED;
+				sym_def->flags = flags & ~RSPAMD_SYMBOL_FLAG_UNSCORED;
 			}
-
-			sym_def->flags = flags;
+			else {
+				/* Preserve UNSCORED flag when not setting a real score */
+				sym_def->flags = flags | (sym_def->flags & RSPAMD_SYMBOL_FLAG_UNSCORED);
+			}
 
 			if (nshots != 0) {
 				sym_def->nshots = nshots;

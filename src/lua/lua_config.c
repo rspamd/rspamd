@@ -2824,7 +2824,7 @@ lua_config_set_metric_symbol(lua_State *L)
 	struct rspamd_config *cfg = lua_check_config(L, 1);
 	const char *description = NULL,
 			   *group = NULL, *name = NULL, *flags_str = NULL;
-	double score;
+	double score = NAN;
 	gboolean one_shot = FALSE, one_param = FALSE;
 	GError *err = NULL;
 	double priority = 0.0;
