@@ -2011,9 +2011,10 @@ rspamd_controller_learn_fin_task(void *ud)
 
 	if (RSPAMD_TASK_IS_PROCESSED(task)) {
 		/* Successful learn */
+		const char *learn_class = rspamd_task_get_autolearn_class(task);
 		msg_info_task("<%s> learned message as %s: %s",
 					  rspamd_inet_address_to_string(session->from_addr),
-					  session->is_spam ? "spam" : "ham",
+					  learn_class ? learn_class : (session->is_spam ? "spam" : "ham"),
 					  MESSAGE_FIELD_CHECK(task, message_id));
 		rspamd_controller_send_string(conn_ent, "{\"success\":true}");
 		return TRUE;
@@ -2039,9 +2040,10 @@ rspamd_controller_learn_fin_task(void *ud)
 										 task->err->message);
 		}
 		else {
+			const char *learn_class = rspamd_task_get_autolearn_class(task);
 			msg_info_task("<%s> learned message as %s: %s",
 						  rspamd_inet_address_to_string(session->from_addr),
-						  session->is_spam ? "spam" : "ham",
+						  learn_class ? learn_class : (session->is_spam ? "spam" : "ham"),
 						  MESSAGE_FIELD_CHECK(task, message_id));
 			rspamd_controller_send_string(conn_ent, "{\"success\":true}");
 		}

@@ -205,6 +205,11 @@ get_class_label(struct rspamd_statfile_config *stcf)
 		return stcf->class_name;
 	}
 
+	/* For multiclass without explicit label mapping, use class_name directly */
+	if (stcf->class_name && !stcf->is_spam_converted) {
+		return stcf->class_name;
+	}
+
 	/* Fallback to legacy binary classification */
 	return stcf->is_spam ? "S" : "H";
 }
