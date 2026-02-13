@@ -30,12 +30,6 @@ local lua_util = require "lua_util"
 local N = 'fuzzy_html_phishing'
 
 local function check_fuzzy_mismatch(task)
-  local fuzzy_results = task:get_mempool():get_variable('fuzzy_result')
-
-  if not fuzzy_results then
-    return false
-  end
-
   -- Get fuzzy check symbols from task results
   local all_symbols = task:get_symbols_all()
   local has_text_fuzzy = false
