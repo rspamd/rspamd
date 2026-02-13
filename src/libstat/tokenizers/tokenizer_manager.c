@@ -376,6 +376,40 @@ rspamd_tokenizer_manager_detect(struct rspamd_tokenizer_manager *mgr,
 	return best_tok;
 }
 
+/*
+ * Copy per-token strings (normalized, stemmed, unicode) from custom tokenizer
+ * allocations into the mempool so that cleanup_result can safely free the originals.
+ * Tokens from start_idx to the end of the words kvec are processed.
+ */
+static void
+rspamd_custom_tokens_to_mempool(rspamd_words_t *words,
+								gsize start_idx,
+								rspamd_mempool_t *pool)
+{
+	for (gsize i = start_idx; i < kv_size(*words); i++) {
+		rspamd_word_t *w = &kv_A(*words, i);
+
+		if (w->normalized.begin && w->normalized.len > 0) {
+			char *copy = rspamd_mempool_alloc(pool, w->normalized.len);
+			memcpy(copy, w->normalized.begin, w->normalized.len);
+			w->normalized.begin = copy;
+		}
+
+		if (w->stemmed.begin && w->stemmed.len > 0) {
+			char *copy = rspamd_mempool_alloc(pool, w->stemmed.len);
+			memcpy(copy, w->stemmed.begin, w->stemmed.len);
+			w->stemmed.begin = copy;
+		}
+
+		if (w->unicode.begin && w->unicode.len > 0) {
+			uint32_t *copy = rspamd_mempool_alloc(pool,
+												  w->unicode.len * sizeof(uint32_t));
+			memcpy(copy, w->unicode.begin, w->unicode.len * sizeof(uint32_t));
+			w->unicode.begin = copy;
+		}
+	}
+}
+
 /* Helper function to tokenize with a custom tokenizer handling exceptions */
 rspamd_tokenizer_result_t *
 rspamd_custom_tokenizer_tokenize_with_exceptions(
@@ -403,11 +437,16 @@ rspamd_custom_tokenizer_tokenize_with_exceptions(
 
 		ret = tokenizer->api->tokenize(text, len, &result);
 		if (ret == 0 && result.a) {
+			gsize start_idx = kv_size(*words);
+
 			/* Copy tokens from result to output */
 			for (i = 0; i < kv_size(result); i++) {
 				rspamd_word_t tok = kv_A(result, i);
 				kv_push(rspamd_word_t, *words, tok);
 			}
+
+			/* Copy per-token strings to mempool before cleanup frees them */
+			rspamd_custom_tokens_to_mempool(words, start_idx, pool);
 
 			/* Use tokenizer's cleanup function */
 			if (tokenizer->api->cleanup_result) {
@@ -429,6 +468,8 @@ rspamd_custom_tokenizer_tokenize_with_exceptions(
 
 			ret = tokenizer->api->tokenize(text + pos, segment_len, &result);
 			if (ret == 0 && result.a) {
+				gsize start_idx = kv_size(*words);
+
 				/* Copy tokens from result, adjusting positions for segment offset */
 				for (i = 0; i < kv_size(result); i++) {
 					rspamd_word_t tok = kv_A(result, i);
@@ -443,6 +484,9 @@ rspamd_custom_tokenizer_tokenize_with_exceptions(
 						}
 					}
 				}
+
+				/* Copy per-token strings to mempool before cleanup frees them */
+				rspamd_custom_tokens_to_mempool(words, start_idx, pool);
 
 				/* Use tokenizer's cleanup function */
 				if (tokenizer->api->cleanup_result) {
@@ -477,6 +521,8 @@ rspamd_custom_tokenizer_tokenize_with_exceptions(
 
 		ret = tokenizer->api->tokenize(text + pos, len - pos, &result);
 		if (ret == 0 && result.a) {
+			gsize start_idx = kv_size(*words);
+
 			/* Copy tokens from result, adjusting positions for segment offset */
 			for (i = 0; i < kv_size(result); i++) {
 				rspamd_word_t tok = kv_A(result, i);
@@ -488,6 +534,9 @@ rspamd_custom_tokenizer_tokenize_with_exceptions(
 					kv_push(rspamd_word_t, *words, tok);
 				}
 			}
+
+			/* Copy per-token strings to mempool before cleanup frees them */
+			rspamd_custom_tokens_to_mempool(words, start_idx, pool);
 
 			/* Use tokenizer's cleanup function */
 			if (tokenizer->api->cleanup_result) {

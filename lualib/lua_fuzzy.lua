@@ -292,6 +292,12 @@ exports.process_rule = function(rule)
   return #rules
 end
 
+-- CJK languages use multi-byte characters (3 bytes per char in UTF-8) and
+-- carry more semantic content per token than Latin languages.
+local function is_cjk_language(lang)
+  return lang and (lang == 'ja' or lang == 'zh' or lang == 'ko')
+end
+
 local function check_length(task, part, rule)
   local bytes = part:get_length()
   local length_ok = bytes > 0
@@ -317,7 +323,18 @@ local function check_length(task, part, rule)
       end
 
       if rule.text_multiplier then
-        adjusted_bytes = bytes * rule.text_multiplier
+        local multiplier = rule.text_multiplier
+
+        -- CJK characters are 3 bytes in UTF-8, so the same semantic content
+        -- takes ~3x more bytes than Latin text; boost the multiplier to compensate
+        local lang = part:get_text():get_language()
+        if is_cjk_language(lang) then
+          multiplier = multiplier * 3.0
+          lua_util.debugm(N, task, 'CJK language %s: boosted text_multiplier to %s',
+              lang, multiplier)
+        end
+
+        adjusted_bytes = bytes * multiplier
       end
     end
 
@@ -353,12 +370,25 @@ local function check_text_part(task, part, rule, text)
   if rule.text_shingles then
     -- Check number of words
     local min_words = rule.min_length or 0
-    if min_words < 32 then
-      min_words = 32 -- Minimum for shingles
+    local min_floor = 32
+
+    -- CJK morphemes carry higher semantic density per token, so fewer words
+    -- are needed for meaningful shingle generation (3-word window still works
+    -- well with as few as 12 tokens producing 10 windows)
+    local lang = text:get_language()
+    if is_cjk_language(lang) then
+      min_words = math.floor(min_words / 3)
+      min_floor = 12
+      lua_util.debugm(N, task, 'CJK language %s: adjusted min_words to %s (floor %s)',
+          lang, min_words, min_floor)
+    end
+
+    if min_words < min_floor then
+      min_words = min_floor
     end
     if wcnt < min_words then
       lua_util.debugm(N, task, 'text has less than %s words: %s; disable shingles',
-          rule.min_length, wcnt)
+          min_words, wcnt)
       allow_shingles = false
     else
       lua_util.debugm(N, task, 'allow shingles in text %s, %s words',
