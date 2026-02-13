@@ -14,102 +14,130 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
---[[
-HTML Fuzzy Phishing Detection Rules
-
-Detects phishing based on fuzzy hash mismatches:
-1. Text content matches known legitimate email (whitelist)
-2. But HTML structure doesn't match or has different CTA domains
-3. Or vice versa: HTML structure matches but text/CTA is suspicious
-
-This indicates possible template reuse for phishing.
-]]
-
 local lua_util = require "lua_util"
-
 local N = 'fuzzy_html_phishing'
 
-local function check_fuzzy_mismatch(task)
-  -- Get fuzzy check symbols from task results
-  local all_symbols = task:get_symbols_all()
-  local has_text_fuzzy = false
-  local has_html_fuzzy = false
-  local text_score = 0
-  local html_score = 0
+-- Collect symbols from fuzzy rules that have html_shingles enabled
+local html_fuzzy_symbols = {}
 
+local fuzzy_conf = rspamd_config:get_all_opt('fuzzy_check')
+if fuzzy_conf and fuzzy_conf.rule then
+  local function process_rule(rule)
+    if not rule.html_shingles then
+      return
+    end
+
+    -- Default symbol for the rule
+    if rule.symbol then
+      html_fuzzy_symbols[rule.symbol] = true
+    end
+
+    -- Per-flag mapped symbols
+    if rule.fuzzy_map then
+      for _, map in pairs(rule.fuzzy_map) do
+        if type(map) == 'table' and map.symbol then
+          html_fuzzy_symbols[map.symbol] = true
+        end
+      end
+    end
+  end
+
+  for _, rule in pairs(fuzzy_conf.rule) do
+    if type(rule) == 'table' then
+      if rule.servers or rule.read_servers or rule.write_servers then
+        -- Unnamed rule
+        process_rule(rule)
+      else
+        -- Named rules container
+        for _, subrule in pairs(rule) do
+          if type(subrule) == 'table' then
+            process_rule(subrule)
+          end
+        end
+      end
+    end
+  end
+end
+
+if not next(html_fuzzy_symbols) then
+  lua_util.debugm(N, rspamd_config, 'no fuzzy rules with html_shingles enabled, skip registration')
+  return
+end
+
+local function check_fuzzy_mismatch(task)
+  local text_parts = task:get_text_parts()
+  if not text_parts then
+    return
+  end
+
+  local has_html = false
+  for _, tp in ipairs(text_parts) do
+    if tp:is_html() then
+      has_html = true
+      break
+    end
+  end
+
+  if not has_html then
+    return
+  end
+
+  local all_symbols = task:get_symbols_all()
   if not all_symbols then
-    return false
+    return
   end
 
   for _, sym in ipairs(all_symbols) do
-    -- Only consider symbols in the "fuzzy" group
-    local is_fuzzy = false
-    if sym.groups then
-      for _, gr in ipairs(sym.groups) do
-        if gr == 'fuzzy' then
-          is_fuzzy = true
-          break
-        end
+    if not html_fuzzy_symbols[sym.name] or not sym.options then
+      goto continue
+    end
+
+    local matched = {}
+
+    for _, opt in ipairs(sym.options) do
+      local mtype = opt:match('^%d+:%w+:[%d%.]+:(%a+)')
+      if mtype then
+        matched[mtype] = true
       end
     end
 
-    if is_fuzzy and sym.options then
-      for _, opt in ipairs(sym.options) do
-        -- Option format: flag:hexhash:probability:type
-        local opt_type = opt:match'^%d+:%w+:[%d%.]+:(%a+)$'
-        if opt_type == 'txt' then
-          has_text_fuzzy = true
-          text_score = math.max(text_score, sym.score or 0)
-        elseif opt_type == 'html' then
-          has_html_fuzzy = true
-          html_score = math.max(html_score, sym.score or 0)
-        end
-      end
+    if matched['txt'] and not matched['html'] then
+      task:insert_result('FUZZY_TEXT_WITHOUT_HTML', 1.0, sym.name)
+      lua_util.debugm(N, task, 'text matched but html did not for %s', sym.name)
+    elseif matched['html'] and not matched['txt'] then
+      task:insert_result('FUZZY_HTML_WITHOUT_TEXT', 1.0, sym.name)
+      lua_util.debugm(N, task, 'html matched but text did not for %s', sym.name)
     end
-  end
 
-  -- Scenario 1: Text matches legitimate but no HTML match
-  -- This could indicate phishing with copied text but fake HTML/CTA
-  if has_text_fuzzy and not has_html_fuzzy and text_score > 5.0 then
-    task:insert_result('FUZZY_HTML_PHISHING_MISMATCH', 0.5,
-      string.format('text_score:%.2f', text_score))
-    lua_util.debugm(N, task,
-      'Phishing suspect: text fuzzy match (%.2f) without HTML match',
-      text_score)
-    return true
+    ::continue::
   end
-
-  -- Scenario 2: HTML matches but text doesn't (less suspicious)
-  -- This is common for newsletters/notifications with varying content
-  if has_html_fuzzy and not has_text_fuzzy and html_score > 8.0 then
-    -- Only flag if HTML score is very high (known template)
-    lua_util.debugm(N, task,
-      'HTML template match (%.2f) with varying text - likely legitimate newsletter',
-      html_score)
-    -- Could add negative score or just log
-  end
-
-  return false
 end
 
--- Register symbol
-rspamd_config:register_symbol{
-  name = 'FUZZY_HTML_PHISHING_MISMATCH',
-  type = 'virtual',
-  score = 5.0,
-  description = 'Text fuzzy matches legitimate but HTML structure does not',
-  group = 'fuzzy'
-}
-
--- Register callback
-rspamd_config:register_symbol{
-  name = 'FUZZY_HTML_PHISHING_CHECK',
+local cb_id = rspamd_config:register_symbol{
+  name = 'FUZZY_MISMATCH_CHECK',
   type = 'callback',
   callback = check_fuzzy_mismatch,
   score = 0.0,
   group = 'fuzzy',
-  description = 'Check for HTML/text fuzzy mismatches indicating phishing'
+  description = 'Check for text/HTML fuzzy type mismatches',
 }
 
--- Depends on fuzzy_check
-rspamd_config:register_dependency('FUZZY_HTML_PHISHING_CHECK', 'FUZZY_CALLBACK')
+rspamd_config:register_symbol{
+  name = 'FUZZY_TEXT_WITHOUT_HTML',
+  type = 'virtual',
+  score = 4.0,
+  parent = cb_id,
+  group = 'fuzzy',
+  description = 'Text fuzzy matches but HTML structure does not (possible template swap)',
+}
+
+rspamd_config:register_symbol{
+  name = 'FUZZY_HTML_WITHOUT_TEXT',
+  type = 'virtual',
+  score = 2.0,
+  parent = cb_id,
+  group = 'fuzzy',
+  description = 'HTML structure fuzzy matches but text content does not',
+}
+
+rspamd_config:register_dependency('FUZZY_MISMATCH_CHECK', 'FUZZY_CALLBACK')
