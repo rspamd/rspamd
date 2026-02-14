@@ -272,8 +272,9 @@ local formatters = {
     return lua_util.table_to_multipart_body(parts, boundary),
            { multipart_boundary = boundary }
   end,
-  structured = function(task)
+  structured = function(task, rule)
     local meta = get_general_metadata(task, false, false)
+    local zstd_compress = rule and rule.zstd_compress
     -- Correlation identifier
     local uuid = task:get_uuid()
     meta.uuid = uuid
@@ -287,7 +288,12 @@ local formatters = {
       smart_trim = true,
     })
     if text_result and text_result.text and #text_result.text > 0 then
-      meta.text = text_result.text
+      if zstd_compress then
+        meta.text = rspamd_util.zstd_compress(text_result.text)
+        meta.text_compressed = true
+      else
+        meta.text = text_result.text
+      end
       meta.text_truncated = text_result.truncated or false
     end
     -- Attachments and images
@@ -297,6 +303,9 @@ local formatters = {
       local img = part:get_image()
       if img then
         local content = part:get_content()
+        if zstd_compress and content and #content > 0 then
+          content = rspamd_util.zstd_compress(content)
+        end
         table.insert(images, {
           filename = img:get_filename() or '',
           content_type = img:get_type() or '',
@@ -304,6 +313,7 @@ local formatters = {
           height = img:get_height(),
           size = part:get_length(),
           content = content or '',
+          content_compressed = zstd_compress or nil,
         })
       elseif part:is_attachment() then
         -- Prefer detected type over announced type if available
@@ -312,12 +322,16 @@ local formatters = {
           mime_type, mime_subtype = part:get_type()
         end
         local content = part:get_content()
+        if zstd_compress and content and #content > 0 then
+          content = rspamd_util.zstd_compress(content)
+        end
         table.insert(attachments, {
           filename = part:get_filename() or '',
           content_type = string.format('%s/%s', mime_type or '', mime_subtype or ''),
           size = part:get_length(),
           digest = string.sub(part:get_digest(), 1, 16),
           content = content or '',
+          content_compressed = zstd_compress or nil,
         })
       end
     end
