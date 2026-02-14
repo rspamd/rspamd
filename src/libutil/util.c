@@ -1667,6 +1667,25 @@ int rspamd_uuid_v7(char uuid_out[37], char *opt_uid_buf, gsize uid_buflen, doubl
 	return 0;
 }
 
+void rspamd_uuid_v7_patch_uid(char uuid[37], const char *tag, gsize tag_len)
+{
+	uint8_t bytes[8];
+	char hex[16];
+
+	/* Hash the tag to get 8 bytes for UUID positions 8-15 */
+	uint64_t h = rspamd_cryptobox_fast_hash(tag, tag_len, 0x7569645f763700ULL);
+	memcpy(bytes, &h, sizeof(h));
+
+	/* Preserve variant bits: byte 8 must have top 2 bits = 10 */
+	bytes[0] = 0x80 | (bytes[0] & 0x3f);
+
+	/* Hex-encode and patch into UUID string:
+	 * positions 19-22 = bytes 8-9, positions 24-35 = bytes 10-15 */
+	rspamd_encode_hex_buf(bytes, 8, hex, sizeof(hex));
+	memcpy(uuid + 19, hex, 4);
+	memcpy(uuid + 24, hex + 4, 12);
+}
+
 int rspamd_shmem_mkstemp(char *pattern)
 {
 	int fd = -1;
