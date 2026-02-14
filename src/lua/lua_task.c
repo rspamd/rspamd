@@ -498,6 +498,11 @@ LUA_FUNCTION_DEF(task, get_queue_id);
  */
 LUA_FUNCTION_DEF(task, get_uid);
 /***
+ * @method task:get_uuid()
+ * Returns UUID v7 of the task (time-ordered, suitable for cross-system correlation).
+ */
+LUA_FUNCTION_DEF(task, get_uuid);
+/***
  * @method task:get_resolver()
  * Returns ready to use rspamd_resolver object suitable for making asynchronous DNS requests.
  * @return {rspamd_resolver} resolver object associated with the task's session
@@ -1364,6 +1369,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, get_received_headers),
 	LUA_INTERFACE_DEF(task, get_queue_id),
 	LUA_INTERFACE_DEF(task, get_uid),
+	LUA_INTERFACE_DEF(task, get_uuid),
 	LUA_INTERFACE_DEF(task, get_resolver),
 	LUA_INTERFACE_DEF(task, set_resolver),
 	LUA_INTERFACE_DEF(task, inc_dns_req),
@@ -3638,6 +3644,22 @@ lua_task_get_uid(lua_State *L)
 
 	if (task) {
 		lua_pushstring(L, task->task_pool->tag.uid);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_task_get_uuid(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+
+	if (task) {
+		lua_pushstring(L, task->task_uuid);
 	}
 	else {
 		return luaL_error(L, "invalid arguments");

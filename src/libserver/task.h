@@ -206,6 +206,7 @@ struct rspamd_task {
 	rspamd_mempool_t *task_pool; /**< memory pool for task							*/
 	double time_real_finish;
 	ev_tstamp task_timestamp;
+	char task_uuid[37]; /**< UUID v7 for cross-system correlation */
 
 	gboolean (*fin_callback)(struct rspamd_task *task, void *arg);
 	/**< callback for filters finalizing					*/
