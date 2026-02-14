@@ -306,7 +306,11 @@ local formatters = {
           content = content or '',
         })
       elseif part:is_attachment() then
-        local mime_type, mime_subtype = part:get_type()
+        -- Prefer detected type over announced type if available
+        local mime_type, mime_subtype = part:get_detected_type()
+        if not mime_type then
+          mime_type, mime_subtype = part:get_type()
+        end
         local content = part:get_content()
         table.insert(attachments, {
           filename = part:get_filename() or '',
