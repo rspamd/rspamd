@@ -33,7 +33,7 @@ local nrows = 0
 local used_memory = 0
 local last_collection = 0
 local final_call = false -- If the final collection has been started
-local schema_version = 9 -- Current schema version
+local schema_version = 10 -- Current schema version
 
 local extra_tables = {}
 local extra_table_rows = {}
@@ -88,6 +88,7 @@ local settings = {
   no_ssl_verify = false,
   custom_rules = {},
   enable_digest = false,
+  enable_uuid = true,
   exceptions = nil,
   retention = {
     enable = false,
@@ -151,6 +152,7 @@ CREATE TABLE IF NOT EXISTS rspamd
     AuthUser String COMMENT 'Username for authenticated SMTP client',
     SettingsId LowCardinality(String) COMMENT 'ID for the settings profile',
     Digest FixedString(32) COMMENT '[Deprecated]',
+    TaskUUID UUID CODEC(Delta, LZ4) COMMENT 'Native UUID v7 (RFC 9562) for task identification',
     SMTPFrom ALIAS if(From = '', '', concat(FromUser, '@', From)) COMMENT 'Return address (RFC5321.MailFrom)',
     SMTPRcpt ALIAS SMTPRecipients[1] COMMENT 'The first envelope recipient (RFC5321.RcptTo)',
     MIMEFrom ALIAS if(MimeFrom = '', '', concat(MimeUser, '@', MimeFrom)) COMMENT 'Address in From: header (RFC5322.From)',
@@ -258,6 +260,14 @@ local migrations = {
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (9)]],
   },
+  [9] = {
+    -- Add UUID column with Delta compression for efficient storage of time-ordered UUIDv7
+    [[ALTER TABLE rspamd
+      ADD COLUMN IF NOT EXISTS TaskUUID UUID CODEC(Delta, LZ4) AFTER Digest
+    ]],
+    -- New version
+    [[INSERT INTO rspamd_version (Version) Values (10)]],
+  },
 }
 
 local predefined_actions = {
@@ -296,6 +306,7 @@ local function clickhouse_main_row(res)
     'ListId',
     'Subject',
     'Digest',
+    'UUID',
     -- 1.9.2 +
     'IsSpf',
     'MimeRecipients',
@@ -820,6 +831,12 @@ local function clickhouse_collect(task)
     digest = task:get_digest()
   end
 
+  local task_uuid = ''
+
+  if settings.enable_uuid then
+    task_uuid = task:get_uuid() or ''
+  end
+
   local subject = ''
   if settings.insert_subject then
     subject = lua_util.maybe_obfuscate_string(task:get_subject() or '', settings, 'subject')
@@ -876,6 +893,7 @@ local function clickhouse_collect(task)
     list_id,
     subject,
     digest,
+    task_uuid,
     fields.spf,
     mime_recipients,
     message_id,

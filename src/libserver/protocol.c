@@ -528,6 +528,8 @@ rspamd_protocol_set_log_tag(struct rspamd_task *task,
 		int len = MIN(tag_len, sizeof(task->task_pool->tag.uid) - 1);
 		memcpy(task->task_pool->tag.uid, tag, len);
 		task->task_pool->tag.uid[len] = '\0';
+		/* Keep UUID random portion in sync with the new log tag */
+		rspamd_uuid_v7_patch_uid(task->task_uuid, tag, tag_len);
 	}
 }
 

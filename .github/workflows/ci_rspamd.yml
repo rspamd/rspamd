@@ -78,6 +78,10 @@ jobs:
         run: |
           sudo mv /usr/bin/miltertest /usr/bin/miltertest.is.broken.on.fedora || true
 
+      - name: Install Python dependencies for functional tests
+        run: |
+          pip install --break-system-packages msgpack redis
+
       - name: Run functional tests
         run: |
           cd ${GITHUB_WORKSPACE}/build
