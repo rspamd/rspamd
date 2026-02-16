@@ -355,6 +355,15 @@ bool ucl_hash_iter_has_next(ucl_hash_t *hashlin, ucl_hash_iter_t iter)
 	return it->cur != NULL;
 }
 
+void ucl_hash_iterate_free(ucl_hash_iter_t iter)
+{
+	struct ucl_hash_real_iter *it = (struct ucl_hash_real_iter *) (iter);
+
+	if (it != NULL) {
+		UCL_FREE(sizeof(*it), it);
+	}
+}
+
 
 const ucl_object_t *
 ucl_hash_search(ucl_hash_t *hashlin, const char *key, unsigned keylen)
