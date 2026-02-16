@@ -323,10 +323,16 @@ ucl_emitter_common_start_object(struct ucl_emitter_context *ctx,
 		else {
 			/* Expand implicit arrays */
 			if (cur->next != NULL) {
-				if (first) {
-					ucl_add_tabs(func, ctx->indent, compact);
+				if (!first) {
+					if (compact) {
+						func->ucl_emitter_append_character(',', 1, func->ud);
+					}
+					else {
+						func->ucl_emitter_append_len(",\n", 2, func->ud);
+					}
 				}
-				ucl_emitter_common_start_array(ctx, cur, first, compact);
+				ucl_add_tabs(func, ctx->indent, compact);
+				ucl_emitter_common_start_array(ctx, cur, true, compact);
 				ucl_emitter_common_end_array(ctx, cur, compact);
 			}
 			else {
