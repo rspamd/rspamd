@@ -1738,6 +1738,71 @@ rspamd_stat_check_autolearn(struct rspamd_task *task)
 	return ret;
 }
 
+static gboolean
+rspamd_classifier_is_per_user(const struct rspamd_classifier_config *cfg)
+{
+	const ucl_object_t *users_enabled;
+
+	if (cfg == NULL || cfg->opts == NULL) {
+		return FALSE;
+	}
+
+	users_enabled = ucl_object_lookup_any(cfg->opts, "per_user",
+			"users_enabled", NULL);
+	if (users_enabled == NULL) {
+		return FALSE;
+	}
+
+	if (ucl_object_type(users_enabled) == UCL_BOOLEAN) {
+		return ucl_object_toboolean(users_enabled);
+	}
+
+	return TRUE;
+}
+
+static const char *
+rspamd_classifier_type(const struct rspamd_classifier_config *cfg)
+{
+	gboolean has_spam = FALSE;
+	gboolean has_ham = FALSE;
+	gboolean has_other = FALSE;
+	GList *cur;
+
+	if (cfg == NULL) {
+		return "binary";
+	}
+
+	for (cur = cfg->statfiles; cur != NULL; cur = g_list_next(cur)) {
+		struct rspamd_statfile_config *stcf = cur->data;
+
+		if (stcf == NULL || stcf->class_name == NULL) {
+			has_other = TRUE;
+			continue;
+		}
+
+		if (g_ascii_strcasecmp(stcf->class_name, "spam") == 0) {
+			has_spam = TRUE;
+		}
+		else if (g_ascii_strcasecmp(stcf->class_name, "ham") == 0) {
+			has_ham = TRUE;
+		}
+		else {
+			has_other = TRUE;
+		}
+	}
+
+	if (has_spam && has_ham && !has_other) {
+		return "binary";
+	}
+
+	/* Empty classifier (no statfiles) defaults to binary */
+	if (!has_spam && !has_ham && !has_other) {
+		return "binary";
+	}
+
+	return "multi-class";
+}
+
 /**
  * Get the overall statistics for all statfile backends
  * @param cfg configuration
@@ -1756,6 +1821,9 @@ rspamd_stat_statistics(struct rspamd_task *task,
 	gpointer backend_runtime;
 	ucl_object_t *res = NULL, *elt;
 	uint64_t learns = 0;
+	const char *classifier_name;
+	const char *classifier_type;
+	gboolean classifier_per_user;
 	unsigned int i, j;
 	int id;
 
@@ -1771,6 +1839,10 @@ rspamd_stat_statistics(struct rspamd_task *task,
 			continue;
 		}
 
+		classifier_name = cl->cfg->name;
+		classifier_type = rspamd_classifier_type(cl->cfg);
+		classifier_per_user = rspamd_classifier_is_per_user(cl->cfg);
+
 		for (j = 0; j < cl->statfiles_ids->len; j++) {
 			id = g_array_index(cl->statfiles_ids, int, j);
 			st = g_ptr_array_index(st_ctx->statfiles, id);
@@ -1780,6 +1852,47 @@ rspamd_stat_statistics(struct rspamd_task *task,
 
 			if (elt && ucl_object_type(elt) == UCL_OBJECT) {
 				const ucl_object_t *rev = ucl_object_lookup(elt, "revision");
+				ucl_object_t *elt_copy, *classifier_obj;
+
+				/* Create new object and copy fields from original (avoiding cached object modification) */
+				elt_copy = ucl_object_typed_new(UCL_OBJECT);
+				{
+					ucl_object_iter_t it = NULL;
+					const ucl_object_t *cur;
+					const char *key;
+
+					while ((cur = ucl_object_iterate(elt, &it, true))) {
+						key = ucl_object_key(cur);
+						/* Skip classifier and class keys if they exist */
+						if (key && strcmp(key, "classifier") != 0 && strcmp(key, "class") != 0) {
+							ucl_object_insert_key(elt_copy, ucl_object_ref(cur), key, 0, true);
+						}
+					}
+				}
+				ucl_object_unref(elt);
+				elt = elt_copy;
+
+				/* Add classifier metadata */
+				classifier_obj = ucl_object_typed_new(UCL_OBJECT);
+				ucl_object_insert_key(classifier_obj,
+						ucl_object_fromstring(classifier_name),
+						"name", 0, false);
+				ucl_object_insert_key(classifier_obj,
+						ucl_object_fromstring(classifier_type),
+						"type", 0, false);
+				ucl_object_insert_key(classifier_obj,
+						ucl_object_frombool(classifier_per_user),
+						"per_user", 0, false);
+
+				if (!ucl_object_insert_key(elt, classifier_obj, "classifier", 0, false)) {
+					ucl_object_unref(classifier_obj);
+				}
+
+				if (st->stcf->class_name) {
+					ucl_object_insert_key(elt,
+							ucl_object_fromstring(st->stcf->class_name),
+							"class", 0, false);
+				}
 
 				learns += ucl_object_toint(rev);
 			}
