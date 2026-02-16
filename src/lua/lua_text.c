@@ -203,6 +203,21 @@ LUA_FUNCTION_DEF(text, memcspn);
  */
 LUA_FUNCTION_DEF(text, oneline);
 /***
+ * @method rspamd_text:normalize_newlines([mode, [pool]])
+ * Normalizes line endings in text to the specified format.
+ * - If mode is "lf" or "unix": converts CRLF to LF
+ * - If mode is "crlf" or "windows" (default): converts bare LF to CRLF
+ *
+ * If the text is owned, it may be modified in-place.
+ * If a mempool is provided, new memory is allocated from it.
+ * Otherwise, g_malloc is used and OWN flag is set.
+ *
+ * @param {string} mode target newline mode: "lf" or "crlf" (default: "crlf")
+ * @param {mempool} pool optional mempool for allocation
+ * @return {rspamd_text} normalized text (may be same as input if no changes)
+ */
+LUA_FUNCTION_DEF(text, normalize_newlines);
+/***
  * @method rspamd_text:base32([b32type])
  * Returns a text encoded in base32 (new rspamd_text is allocated)
  *
@@ -276,6 +291,7 @@ static const struct luaL_reg textlib_m[] = {
 	LUA_INTERFACE_DEF(text, exclude_chars),
 	LUA_INTERFACE_DEF(text, memcspn),
 	LUA_INTERFACE_DEF(text, oneline),
+	LUA_INTERFACE_DEF(text, normalize_newlines),
 	LUA_INTERFACE_DEF(text, base32),
 	LUA_INTERFACE_DEF(text, base64),
 	LUA_INTERFACE_DEF(text, hex),
@@ -418,6 +434,143 @@ bool lua_is_text_binary(struct rspamd_lua_text *t)
 	}
 
 	return false;
+}
+
+struct rspamd_lua_text *
+rspamd_lua_text_normalize_newlines(struct rspamd_lua_text *t,
+								   rspamd_mempool_t *pool,
+								   enum rspamd_text_newline_mode mode)
+{
+	if (t == NULL || t->len == 0) {
+		return t;
+	}
+
+	const char *p, *end;
+	size_t count = 0;
+
+	p = t->start;
+	end = t->start + t->len;
+
+	if (mode == RSPAMD_TEXT_NEWLINES_CRLF) {
+		/* LF -> CRLF: count bare LFs (not preceded by CR) */
+		while (p < end) {
+			size_t span = rspamd_memcspn(p, end - p, "\n", 1);
+			p += span;
+
+			if (p < end) {
+				/* Found LF, check if bare */
+				if (p == t->start || *(p - 1) != '\r') {
+					count++;
+				}
+				p++;
+			}
+		}
+
+		if (count == 0) {
+			return t; /* Already normalized */
+		}
+
+		/* Need to insert 'count' CR characters */
+		size_t new_len = t->len + count;
+		char *new_start;
+
+		if (pool) {
+			new_start = rspamd_mempool_alloc(pool, new_len);
+		}
+		else {
+			new_start = g_malloc(new_len);
+		}
+
+		/* Copy with CR insertion */
+		char *out = new_start;
+		p = t->start;
+
+		while (p < end) {
+			size_t span = rspamd_memcspn(p, end - p, "\n", 1);
+			memcpy(out, p, span);
+			out += span;
+			p += span;
+
+			if (p < end) {
+				if (p == t->start || *(p - 1) != '\r') {
+					*out++ = '\r'; /* Insert CR */
+				}
+				*out++ = *p++; /* Copy LF */
+			}
+		}
+
+		/* Free old memory if owned */
+		if (t->flags & RSPAMD_TEXT_FLAG_OWN) {
+			g_free((void *) t->start);
+		}
+
+		t->start = new_start;
+		t->len = new_len;
+		t->flags = pool ? 0 : RSPAMD_TEXT_FLAG_OWN;
+	}
+	else {
+		/* CRLF -> LF: count CR followed by LF */
+		while (p < end) {
+			size_t span = rspamd_memcspn(p, end - p, "\r", 1);
+			p += span;
+
+			if (p < end) {
+				/* Found CR, check if followed by LF */
+				if (p + 1 < end && *(p + 1) == '\n') {
+					count++;
+				}
+				p++;
+			}
+		}
+
+		if (count == 0) {
+			return t; /* Already normalized */
+		}
+
+		/* Need to remove 'count' CR characters */
+		size_t new_len = t->len - count;
+		char *new_start;
+
+		if (pool) {
+			new_start = rspamd_mempool_alloc(pool, new_len);
+		}
+		else {
+			new_start = g_malloc(new_len);
+		}
+
+		/* Copy, skipping CR before LF */
+		char *out = new_start;
+		p = t->start;
+
+		while (p < end) {
+			size_t span = rspamd_memcspn(p, end - p, "\r", 1);
+			memcpy(out, p, span);
+			out += span;
+			p += span;
+
+			if (p < end) {
+				/* Check if CR is followed by LF */
+				if (p + 1 < end && *(p + 1) == '\n') {
+					/* Skip the CR, will copy LF on next iteration */
+					p++;
+				}
+				else {
+					*out++ = *p++; /* Copy CR (not followed by LF) */
+				}
+			}
+		}
+
+		/* Free old memory if owned */
+		if (t->flags & RSPAMD_TEXT_FLAG_OWN) {
+			g_free((void *) t->start);
+		}
+
+		t->start = new_start;
+		t->len = new_len;
+		t->flags = pool ? 0 : RSPAMD_TEXT_FLAG_OWN;
+	}
+
+	return t;
 }
 
 
@@ -1746,6 +1899,49 @@ lua_text_oneline(lua_State *L)
 	else {
 		return luaL_error(L, "invalid arguments");
 	}
+
+	return 1;
+}
+
+static int
+lua_text_normalize_newlines(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text(L, 1);
+	rspamd_mempool_t *pool = NULL;
+	enum rspamd_text_newline_mode mode = RSPAMD_TEXT_NEWLINES_CRLF;
+
+	if (t == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	/* Check for mode argument */
+	if (lua_type(L, 2) == LUA_TSTRING) {
+		const char *mode_str = lua_tostring(L, 2);
+
+		if (g_ascii_strcasecmp(mode_str, "lf") == 0 ||
+			g_ascii_strcasecmp(mode_str, "unix") == 0) {
+			mode = RSPAMD_TEXT_NEWLINES_LF;
+		}
+		else if (g_ascii_strcasecmp(mode_str, "crlf") == 0 ||
+				 g_ascii_strcasecmp(mode_str, "windows") == 0) {
+			mode = RSPAMD_TEXT_NEWLINES_CRLF;
+		}
+		else {
+			return luaL_error(L, "invalid mode: %s (expected 'lf' or 'crlf')", mode_str);
+		}
+	}
+
+	/* Check for pool argument */
+	if (lua_type(L, 3) == LUA_TUSERDATA) {
+		pool = rspamd_lua_check_mempool(L, 3);
+	}
+
+	/* Normalize the text (may return same pointer if no changes) */
+	rspamd_lua_text_normalize_newlines(t, pool, mode);
+
+	/* Return the (possibly modified) text */
+	lua_pushvalue(L, 1);
 
 	return 1;
 }

@@ -112,6 +112,14 @@ struct rspamd_lua_ip {
 #define RSPAMD_TEXT_FLAG_SYSMALLOC (1u << 3u)
 #define RSPAMD_TEXT_FLAG_FAKE (1u << 4u)
 #define RSPAMD_TEXT_FLAG_BINARY (1u << 5u)
+
+/**
+ * Line ending normalization modes for rspamd_lua_text
+ */
+enum rspamd_text_newline_mode {
+	RSPAMD_TEXT_NEWLINES_LF = 0,   /* Normalize to LF only */
+	RSPAMD_TEXT_NEWLINES_CRLF = 1, /* Normalize to CRLF */
+};
 struct rspamd_lua_text {
 	const char *start;
 	unsigned int len;
@@ -298,6 +306,22 @@ struct rspamd_lua_text *lua_new_text_task(lua_State *L, struct rspamd_task *task
  * @return
  */
 bool lua_is_text_binary(struct rspamd_lua_text *t);
+
+/**
+ * Normalize line endings in a text.
+ *
+ * If the text is owned and can be modified, this function may reallocate it.
+ * Otherwise, it allocates new memory from pool or g_malloc.
+ *
+ * @param t      text to normalize (may be modified in-place if owned)
+ * @param pool   optional mempool for allocation (NULL = g_malloc)
+ * @param mode   target newline mode (LF or CRLF)
+ * @return       normalized text (may be same pointer if no changes needed)
+ */
+struct rspamd_lua_text *rspamd_lua_text_normalize_newlines(
+	struct rspamd_lua_text *t,
+	rspamd_mempool_t *pool,
+	enum rspamd_text_newline_mode mode);
 
 struct rspamd_lua_regexp *lua_check_regexp(lua_State *L, int pos);
 
