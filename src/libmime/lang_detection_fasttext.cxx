@@ -23,9 +23,9 @@
 #include "contrib/fmt/include/fmt/base.h"
 #include "stat_api.h"
 #include "libserver/word.h"
-#include <exception>
 #include <string_view>
 #include <vector>
+#include <unistd.h>
 #endif
 
 #ifdef WITH_FASTTEXT
@@ -53,13 +53,24 @@ public:
 			const auto *model = ucl_object_find_key(opts_section, "fasttext_model");
 
 			if (model) {
+				const char *model_path = ucl_object_tostring(model);
+
+				if (access(model_path, R_OK) != 0) {
+					msg_err_config("fasttext model '%s' is not readable: %s",
+								   model_path, strerror(errno));
+					loaded = false;
+					return;
+				}
+
 				try {
-					ft.loadModel(ucl_object_tostring(model));
+					ft.loadModel(model_path);
 					loaded = true;
-					model_fname = std::string{ucl_object_tostring(model)};
-				} catch (std::exception &e) {
-					auto err_message = fmt::format("cannot load fasttext model: {}", e.what());
-					msg_err_config("%s", err_message.c_str());
+					model_fname = std::string{model_path};
+				} catch (const std::exception &e) {
+					msg_err_config("cannot load fasttext model '%s': %s", model_path, e.what());
+					loaded = false;
+				} catch (...) {
+					msg_err_config("cannot load fasttext model '%s': unknown error", model_path);
 					loaded = false;
 				}
 			}
