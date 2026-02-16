@@ -2572,7 +2572,6 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 
 	/* Parse metadata as UCL (detect JSON vs msgpack from Content-Type) */
 	struct ucl_parser *parser;
-	gboolean is_msgpack = FALSE;
 
 	if (metadata_part->content_type &&
 		metadata_part->content_type_len > 0 &&
@@ -2580,7 +2579,6 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 										 metadata_part->content_type_len,
 										 "msgpack",
 										 sizeof("msgpack") - 1) != -1) {
-		is_msgpack = TRUE;
 		parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 		ucl_parser_add_chunk_full(parser, (const unsigned char *) metadata_part->data,
 								  metadata_part->data_len,

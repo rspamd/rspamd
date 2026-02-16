@@ -4214,7 +4214,7 @@ rspamd_url_encode(struct rspamd_url *url, gsize *pdlen,
 				  rspamd_mempool_t *pool)
 {
 	unsigned char *dest, *d, *dend;
-	static const char hexdigests[16] = "0123456789ABCDEF";
+	static const char hexdigests[] = "0123456789ABCDEF";
 	unsigned int i;
 	gsize dlen = 0;
 

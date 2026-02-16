@@ -1588,7 +1588,7 @@ rspamd_get_calendar_ticks(void)
 
 void rspamd_random_hex(char *buf, uint64_t len)
 {
-	static const char hexdigests[16] = "0123456789abcdef";
+	static const char hexdigests[] = "0123456789abcdef";
 	int64_t i;
 
 	g_assert(len > 0);

@@ -25,6 +25,7 @@ extern "C" {
 #endif
 
 struct rspamd_ssl_connection;
+struct rspamd_external_libs_ctx;
 
 typedef void (*rspamd_ssl_handler_t)(int fd, short what, gpointer d);
 

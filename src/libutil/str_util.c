@@ -578,7 +578,7 @@ rspamd_xstrtoul(const char *s, gsize len, gulong *value)
 				v += c;
 			}
 		}
-		else if (c >= 'a' || c <= 'f') {
+		else if (c >= 'a' && c <= 'f') {
 			c = c - 'a' + 10;
 			if (v > cutoff || (v == cutoff && (uint8_t) c > cutlim)) {
 				/* Range error */
@@ -1450,7 +1450,7 @@ rspamd_encode_qp_fold(const unsigned char *in, gsize inlen, int str_len,
 	char *out;
 	int ch, last_sp;
 	const unsigned char *end = in + inlen, *p = in;
-	static const char hexdigests[16] = "0123456789ABCDEF";
+	static const char hexdigests[] = "0123456789ABCDEF";
 
 	while (p < end) {
 		ch = *p;
@@ -2503,7 +2503,7 @@ int rspamd_encode_hex_buf(const unsigned char *in, gsize inlen, char *out,
 {
 	char *o, *end;
 	const unsigned char *p;
-	static const char hexdigests[16] = "0123456789abcdef";
+	static const char hexdigests[] = "0123456789abcdef";
 
 	end = out + outlen;
 	o = out;
@@ -3194,7 +3194,7 @@ rspamd_encode_qp2047_buf(const char *in, gsize inlen,
 						 char *out, gsize outlen)
 {
 	char *o = out, *end = out + outlen, c;
-	static const char hexdigests[16] = "0123456789ABCDEF";
+	static const char hexdigests[] = "0123456789ABCDEF";
 
 	while (inlen > 0 && o < end) {
 		c = *in;
@@ -3454,7 +3454,7 @@ rspamd_str_regexp_escape(const char *pattern, gsize slen,
 	const char *p, *end = pattern + slen;
 	char *res, *d, t, *tmp_utf = NULL, *dend;
 	gsize len;
-	static const char hexdigests[16] = "0123456789abcdef";
+	static const char hexdigests[] = "0123456789abcdef";
 
 	len = 0;
 	p = pattern;

@@ -397,7 +397,7 @@ hs_get_runtime_db_version() -> std::uint32_t
 		if (sscanf(version_str, "%u.%u.%u", &major, &minor, &patch) == 3) {
 			// Format: (major << 24) | (minor << 16) | (patch << 8) | 0
 			cached_version = (major << 24) | (minor << 16) | (patch << 8);
-			msg_debug_hyperscan("detected hyperscan runtime version: %s (0x%08x)",
+			msg_debug_hyperscan("detected hyperscan runtime version: %s (0x%08xd)",
 								version_str, cached_version);
 		}
 		else {
@@ -405,7 +405,7 @@ hs_get_runtime_db_version() -> std::uint32_t
 			// Fallback to compile-time version if available
 #ifdef HS_DB_VERSION
 			cached_version = HS_DB_VERSION;
-			msg_debug_hyperscan("using compile-time hyperscan version: 0x%08x", cached_version);
+			msg_debug_hyperscan("using compile-time hyperscan version: 0x%08xd", cached_version);
 #else
 			cached_version = 0;
 #endif
