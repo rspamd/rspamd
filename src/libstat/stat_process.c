@@ -1766,6 +1766,7 @@ rspamd_classifier_type(const struct rspamd_classifier_config *cfg)
 	gboolean has_spam = FALSE;
 	gboolean has_ham = FALSE;
 	gboolean has_other = FALSE;
+	gboolean has_explicit_classes = FALSE;
 	GList *cur;
 
 	if (cfg == NULL) {
@@ -1780,6 +1781,10 @@ rspamd_classifier_type(const struct rspamd_classifier_config *cfg)
 			continue;
 		}
 
+		if (!stcf->is_spam_converted) {
+			has_explicit_classes = TRUE;
+		}
+
 		if (g_ascii_strcasecmp(stcf->class_name, "spam") == 0) {
 			has_spam = TRUE;
 		}
@@ -1791,6 +1796,12 @@ rspamd_classifier_type(const struct rspamd_classifier_config *cfg)
 		}
 	}
 
+	/* If any statfile has explicit class (not converted from is_spam) */
+	if (has_explicit_classes) {
+		return "multi-class";
+	}
+
+	/* Legacy binary: spam=true/false converted to class names */
 	if (has_spam && has_ham && !has_other) {
 		return "binary";
 	}
