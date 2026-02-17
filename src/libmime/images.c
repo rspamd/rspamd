@@ -160,10 +160,9 @@ process_jpg_image(rspamd_mempool_t *pool, rspamd_ftok_t *data)
 
 			if (*p == 0xc0 || *p == 0xc1 || *p == 0xc2 || *p == 0xc3 ||
 				*p == 0xc9 || *p == 0xca || *p == 0xcb) {
-				memcpy(&h, p + 4, sizeof(uint16_t));
-				h = p[4] * 0xff + p[5];
+				h = p[4] * 256 + p[5];
 				img->height = h;
-				w = p[6] * 0xff + p[7];
+				w = p[6] * 256 + p[7];
 				img->width = w;
 
 				return img;
