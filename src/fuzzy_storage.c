@@ -615,6 +615,78 @@ enum rspamd_fuzzy_reply_flags {
 	RSPAMD_FUZZY_REPLY_DELAY = 0x1u << 2u,
 };
 
+/*
+ * Check if a flag ID is forbidden by the given set or per-key set.
+ * Returns true if the flag should be suppressed.
+ */
+static bool
+rspamd_fuzzy_flag_is_forbidden(struct fuzzy_session *session,
+							   uint32_t flag, int reply_flags)
+{
+	khiter_t k;
+
+	k = kh_get(fuzzy_key_ids_set, session->ctx->default_forbidden_ids, flag);
+	if (k != kh_end(session->ctx->default_forbidden_ids)) {
+		return true;
+	}
+
+	if ((reply_flags & RSPAMD_FUZZY_REPLY_ENCRYPTED) &&
+		session->key && session->key->forbidden_ids) {
+		k = kh_get(fuzzy_key_ids_set, session->key->forbidden_ids, flag);
+		if (k != kh_end(session->key->forbidden_ids)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/*
+ * Filter forbidden flags from a v2 reply.
+ * Removes forbidden extra flags in-place. If the primary flag is forbidden,
+ * promotes the first valid extra flag to primary; if all flags are forbidden,
+ * zeroes the entire reply.
+ */
+static void
+rspamd_fuzzy_filter_forbidden_v2(struct rspamd_fuzzy_reply_v2 *rep_v2,
+								 struct fuzzy_session *session,
+								 int reply_flags)
+{
+	/* First, filter forbidden extra flags */
+	uint8_t dst = 0;
+	for (uint8_t i = 0; i < rep_v2->n_extra_flags; i++) {
+		if (!rspamd_fuzzy_flag_is_forbidden(session,
+											rep_v2->extra_flags[i].flag, reply_flags)) {
+			if (dst != i) {
+				rep_v2->extra_flags[dst] = rep_v2->extra_flags[i];
+			}
+			dst++;
+		}
+	}
+	rep_v2->n_extra_flags = dst;
+
+	/* Check if primary flag is forbidden */
+	if (rspamd_fuzzy_flag_is_forbidden(session, rep_v2->v1.flag, reply_flags)) {
+		if (rep_v2->n_extra_flags > 0) {
+			/* Promote the first valid extra flag to primary */
+			rep_v2->v1.value = rep_v2->extra_flags[0].value;
+			rep_v2->v1.flag = rep_v2->extra_flags[0].flag;
+			/* Shift remaining extras down */
+			for (uint8_t i = 1; i < rep_v2->n_extra_flags; i++) {
+				rep_v2->extra_flags[i - 1] = rep_v2->extra_flags[i];
+			}
+			rep_v2->n_extra_flags--;
+		}
+		else {
+			/* All flags forbidden — suppress the entire result */
+			rep_v2->ts = 0;
+			rep_v2->v1.prob = 0.0f;
+			rep_v2->v1.value = 0;
+			rep_v2->v1.flag = 0;
+		}
+	}
+}
+
 static void
 rspamd_fuzzy_make_reply(struct rspamd_fuzzy_cmd *cmd,
 						struct rspamd_fuzzy_reply *result,
@@ -650,32 +722,10 @@ rspamd_fuzzy_make_reply(struct rspamd_fuzzy_cmd *cmd,
 				rep_v2->v1.value = 0;
 			}
 
-			bool default_disabled = false;
-			{
-				khiter_t k;
-				k = kh_get(fuzzy_key_ids_set, session->ctx->default_forbidden_ids, rep_v2->v1.flag);
-				if (k != kh_end(session->ctx->default_forbidden_ids)) {
-					default_disabled = true;
-				}
-			}
+			/* Filter forbidden flags from primary and extra flags */
+			rspamd_fuzzy_filter_forbidden_v2(rep_v2, session, flags);
 
 			if (flags & RSPAMD_FUZZY_REPLY_ENCRYPTED) {
-				if (rep_v2->v1.prob > 0 && session->key && session->key->forbidden_ids) {
-					khiter_t k;
-					k = kh_get(fuzzy_key_ids_set, session->key->forbidden_ids, rep_v2->v1.flag);
-					if (k != kh_end(session->key->forbidden_ids)) {
-						rep_v2->ts = 0;
-						rep_v2->v1.prob = 0.0f;
-						rep_v2->v1.value = 0;
-						rep_v2->v1.flag = 0;
-					}
-				}
-				else if (default_disabled) {
-					rep_v2->ts = 0;
-					rep_v2->v1.prob = 0.0f;
-					rep_v2->v1.value = 0;
-					rep_v2->v1.flag = 0;
-				}
 
 				/* Use a temporary v1 reply for stats (stats API expects rspamd_fuzzy_reply) */
 				struct rspamd_fuzzy_reply stats_rep;
@@ -709,13 +759,6 @@ rspamd_fuzzy_make_reply(struct rspamd_fuzzy_cmd *cmd,
 													session->reply.v2.hdr.mac);
 			}
 			else {
-				if (default_disabled) {
-					rep_v2->ts = 0;
-					rep_v2->v1.prob = 0.0f;
-					rep_v2->v1.value = 0;
-					rep_v2->v1.flag = 0;
-				}
-
 				struct rspamd_fuzzy_reply stats_rep;
 				memset(&stats_rep, 0, sizeof(stats_rep));
 				stats_rep.v1 = rep_v2->v1;
