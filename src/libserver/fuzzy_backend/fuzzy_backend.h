@@ -28,9 +28,18 @@ struct rspamd_fuzzy_backend;
 struct rspamd_config;
 
 /*
+ * Multi-flag result from backend check
+ */
+struct rspamd_fuzzy_multiflag_result {
+	struct rspamd_fuzzy_reply rep;
+	struct rspamd_fuzzy_flag_entry extra_flags[RSPAMD_FUZZY_MAX_EXTRA_FLAGS];
+	uint8_t n_extra_flags;
+};
+
+/*
  * Callbacks for fuzzy methods
  */
-typedef void (*rspamd_fuzzy_check_cb)(struct rspamd_fuzzy_reply *rep, void *ud);
+typedef void (*rspamd_fuzzy_check_cb)(struct rspamd_fuzzy_multiflag_result *result, void *ud);
 
 typedef void (*rspamd_fuzzy_update_cb)(gboolean success,
 									   unsigned int nadded,

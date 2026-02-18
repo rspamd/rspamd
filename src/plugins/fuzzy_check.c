@@ -1379,13 +1379,17 @@ fuzzy_tcp_process_reply(struct fuzzy_tcp_connection *conn,
 						unsigned char *data, gsize len)
 {
 	struct rspamd_fuzzy_encrypted_reply encrep;
+	struct rspamd_fuzzy_encrypted_reply_v2 encrep_v2;
 	const struct rspamd_fuzzy_reply *rep;
+	const struct rspamd_fuzzy_reply_v2 *rep_v2 = NULL;
+	struct rspamd_fuzzy_reply synthetic_rep;
 	struct fuzzy_rule *rule = conn->rule;
 	unsigned int required_size;
 	struct fuzzy_tcp_pending_command *pending;
 	uint32_t tag;
+	gboolean is_v2 = FALSE;
 
-	/* Check if we have encryption */
+	/* Check minimum size — accept v1 as minimum */
 	if (conn->encrypted) {
 		required_size = sizeof(encrep);
 	}
@@ -1399,29 +1403,69 @@ fuzzy_tcp_process_reply(struct fuzzy_tcp_connection *conn,
 		return;
 	}
 
+	/* Detect v2 reply by size */
+	if (conn->encrypted && len >= sizeof(encrep_v2)) {
+		is_v2 = TRUE;
+	}
+	else if (!conn->encrypted && len >= sizeof(struct rspamd_fuzzy_reply_v2)) {
+		is_v2 = TRUE;
+	}
+
 	/* Decrypt if needed - use keys from connection */
 	if (conn->encrypted) {
-		memcpy(&encrep, data, sizeof(encrep));
-
 		/* Process keys through cache */
 		rspamd_keypair_cache_process(rule->ctx->keypairs_cache,
 									 conn->local_key, conn->peer_key);
 
-		/* Decrypt with connection keys */
-		if (!rspamd_cryptobox_decrypt_nm_inplace((unsigned char *) &encrep.rep,
-												 sizeof(encrep.rep),
-												 encrep.hdr.nonce,
-												 rspamd_pubkey_get_nm(conn->peer_key, conn->local_key),
-												 encrep.hdr.mac)) {
-			msg_warn("fuzzy_tcp: cannot decrypt reply from %s",
-					 rspamd_upstream_name(conn->server));
-			return;
-		}
+		if (is_v2) {
+			memcpy(&encrep_v2, data, sizeof(encrep_v2));
 
-		rep = &encrep.rep;
+			if (!rspamd_cryptobox_decrypt_nm_inplace((unsigned char *) &encrep_v2.rep,
+													 sizeof(encrep_v2.rep),
+													 encrep_v2.hdr.nonce,
+													 rspamd_pubkey_get_nm(conn->peer_key, conn->local_key),
+													 encrep_v2.hdr.mac)) {
+				msg_warn("fuzzy_tcp: cannot decrypt v2 reply from %s",
+						 rspamd_upstream_name(conn->server));
+				return;
+			}
+
+			rep_v2 = &encrep_v2.rep;
+			/* Build a v1-compatible rep from v2 for primary processing */
+			memset(&synthetic_rep, 0, sizeof(synthetic_rep));
+			synthetic_rep.v1 = rep_v2->v1;
+			memcpy(synthetic_rep.digest, rep_v2->digest, sizeof(synthetic_rep.digest));
+			synthetic_rep.ts = rep_v2->ts;
+			rep = &synthetic_rep;
+		}
+		else {
+			memcpy(&encrep, data, sizeof(encrep));
+
+			if (!rspamd_cryptobox_decrypt_nm_inplace((unsigned char *) &encrep.rep,
+													 sizeof(encrep.rep),
+													 encrep.hdr.nonce,
+													 rspamd_pubkey_get_nm(conn->peer_key, conn->local_key),
+													 encrep.hdr.mac)) {
+				msg_warn("fuzzy_tcp: cannot decrypt reply from %s",
+						 rspamd_upstream_name(conn->server));
+				return;
+			}
+
+			rep = &encrep.rep;
+		}
 	}
 	else {
-		rep = (const struct rspamd_fuzzy_reply *) data;
+		if (is_v2) {
+			rep_v2 = (const struct rspamd_fuzzy_reply_v2 *) data;
+			memset(&synthetic_rep, 0, sizeof(synthetic_rep));
+			synthetic_rep.v1 = rep_v2->v1;
+			memcpy(synthetic_rep.digest, rep_v2->digest, sizeof(synthetic_rep.digest));
+			synthetic_rep.ts = rep_v2->ts;
+			rep = &synthetic_rep;
+		}
+		else {
+			rep = (const struct rspamd_fuzzy_reply *) data;
+		}
 	}
 
 	/* Extract tag and lookup pending command */
@@ -1442,8 +1486,26 @@ fuzzy_tcp_process_reply(struct fuzzy_tcp_connection *conn,
 	/* Process the reply - similar to UDP code in fuzzy_check_try_read */
 	if (rep->v1.prob > 0.5) {
 		if (pending->io->cmd.cmd == FUZZY_CHECK) {
+			/* Insert result for primary flag */
 			fuzzy_insert_result(pending->session, rep, &pending->io->cmd,
 								pending->io, rep->v1.flag);
+
+			/* Insert results for extra flags from v2 reply */
+			if (rep_v2 && rep_v2->n_extra_flags > 0) {
+				for (uint8_t ei = 0; ei < rep_v2->n_extra_flags && ei < RSPAMD_FUZZY_MAX_EXTRA_FLAGS; ei++) {
+					struct rspamd_fuzzy_reply extra_rep;
+					memset(&extra_rep, 0, sizeof(extra_rep));
+					extra_rep.v1.value = rep_v2->extra_flags[ei].value;
+					extra_rep.v1.flag = rep_v2->extra_flags[ei].flag;
+					extra_rep.v1.tag = rep->v1.tag;
+					extra_rep.v1.prob = rep->v1.prob;
+					memcpy(extra_rep.digest, rep_v2->digest, sizeof(extra_rep.digest));
+					extra_rep.ts = rep_v2->ts;
+
+					fuzzy_insert_result(pending->session, &extra_rep, &pending->io->cmd,
+										pending->io, extra_rep.v1.flag);
+				}
+			}
 		}
 		else if (pending->io->cmd.cmd == FUZZY_STAT) {
 			/*
@@ -4122,7 +4184,8 @@ fuzzy_cmd_vector_to_wire(int fd, GPtrArray *v)
 static const struct rspamd_fuzzy_reply *
 fuzzy_process_reply(unsigned char **pos, int *r, GPtrArray *req,
 					struct fuzzy_rule *rule, struct rspamd_fuzzy_cmd **pcmd,
-					struct fuzzy_cmd_io **pio)
+					struct fuzzy_cmd_io **pio,
+					const struct rspamd_fuzzy_reply_v2 **p_rep_v2)
 {
 	unsigned char *p = *pos;
 	int remain = *r;
@@ -4130,23 +4193,39 @@ fuzzy_process_reply(unsigned char **pos, int *r, GPtrArray *req,
 	struct fuzzy_cmd_io *io;
 	const struct rspamd_fuzzy_reply *rep;
 	struct rspamd_fuzzy_encrypted_reply encrep;
+	struct rspamd_fuzzy_encrypted_reply_v2 encrep_v2;
+	static struct rspamd_fuzzy_reply synthetic_rep;
 	gboolean found = FALSE;
+	gboolean is_v2 = FALSE;
 
+	if (p_rep_v2) {
+		*p_rep_v2 = NULL;
+	}
+
+	/* Use v1 size as minimum */
 	if (fuzzy_rule_has_encryption(rule)) {
 		required_size = sizeof(encrep);
 	}
 	else {
-		required_size = sizeof(*rep);
+		required_size = sizeof(struct rspamd_fuzzy_reply);
 	}
 
 	if (remain <= 0 || (unsigned int) remain < required_size) {
 		return NULL;
 	}
 
+	/* Detect v2 by available size */
+	if (fuzzy_rule_has_encryption(rule) && (unsigned int) remain >= sizeof(encrep_v2)) {
+		is_v2 = TRUE;
+	}
+	else if (!fuzzy_rule_has_encryption(rule) && (unsigned int) remain >= sizeof(struct rspamd_fuzzy_reply_v2)) {
+		is_v2 = TRUE;
+	}
+
 	if (fuzzy_rule_has_encryption(rule)) {
-		memcpy(&encrep, p, sizeof(encrep));
-		*pos += required_size;
-		*r -= required_size;
+		gsize actual_size = is_v2 ? sizeof(encrep_v2) : sizeof(encrep);
+		*pos += actual_size;
+		*r -= actual_size;
 
 		/* Try to decrypt with available keys, starting with read keys (more common) */
 		struct rspamd_cryptobox_keypair *local_keys[3];
@@ -4191,41 +4270,112 @@ fuzzy_process_reply(unsigned char **pos, int *r, GPtrArray *req,
 			}
 		}
 
-		/* Try decryption with each key pair */
-		for (i = 0; i < nkeys && !decrypted; i++) {
-			struct rspamd_fuzzy_encrypted_reply encrep_copy;
-			memcpy(&encrep_copy, &encrep, sizeof(encrep_copy));
+		if (is_v2) {
+			memcpy(&encrep_v2, p, sizeof(encrep_v2));
 
-			rspamd_keypair_cache_process(rule->ctx->keypairs_cache,
-										 local_keys[i], peer_keys[i]);
+			for (i = 0; i < (unsigned int) nkeys && !decrypted; i++) {
+				struct rspamd_fuzzy_encrypted_reply_v2 encrep_v2_copy;
+				memcpy(&encrep_v2_copy, &encrep_v2, sizeof(encrep_v2_copy));
 
-			if (rspamd_cryptobox_decrypt_nm_inplace((unsigned char *) &encrep_copy.rep,
-													sizeof(encrep_copy.rep),
-													encrep_copy.hdr.nonce,
-													rspamd_pubkey_get_nm(peer_keys[i], local_keys[i]),
-													encrep_copy.hdr.mac)) {
-				/* Successfully decrypted */
-				memcpy(&encrep, &encrep_copy, sizeof(encrep));
-				decrypted = TRUE;
-				break;
+				rspamd_keypair_cache_process(rule->ctx->keypairs_cache,
+											 local_keys[i], peer_keys[i]);
+
+				if (rspamd_cryptobox_decrypt_nm_inplace((unsigned char *) &encrep_v2_copy.rep,
+														sizeof(encrep_v2_copy.rep),
+														encrep_v2_copy.hdr.nonce,
+														rspamd_pubkey_get_nm(peer_keys[i], local_keys[i]),
+														encrep_v2_copy.hdr.mac)) {
+					memcpy(&encrep_v2, &encrep_v2_copy, sizeof(encrep_v2));
+					decrypted = TRUE;
+					break;
+				}
+			}
+
+			if (!decrypted) {
+				/* Fallback: try as v1 */
+				is_v2 = FALSE;
+				memcpy(&encrep, p, sizeof(encrep));
+
+				for (i = 0; i < (unsigned int) nkeys && !decrypted; i++) {
+					struct rspamd_fuzzy_encrypted_reply encrep_copy;
+					memcpy(&encrep_copy, &encrep, sizeof(encrep_copy));
+
+					rspamd_keypair_cache_process(rule->ctx->keypairs_cache,
+												 local_keys[i], peer_keys[i]);
+
+					if (rspamd_cryptobox_decrypt_nm_inplace((unsigned char *) &encrep_copy.rep,
+															sizeof(encrep_copy.rep),
+															encrep_copy.hdr.nonce,
+															rspamd_pubkey_get_nm(peer_keys[i], local_keys[i]),
+															encrep_copy.hdr.mac)) {
+						memcpy(&encrep, &encrep_copy, sizeof(encrep));
+						decrypted = TRUE;
+						break;
+					}
+				}
+
+				if (!decrypted) {
+					msg_info("cannot decrypt reply with any available keys");
+					return NULL;
+				}
+
+				memcpy(p, &encrep.rep, sizeof(encrep.rep));
+			}
+			else {
+				/* Copy decrypted v2 back and build synthetic v1 rep */
+				memcpy(p, &encrep_v2.rep, sizeof(encrep_v2.rep));
 			}
 		}
+		else {
+			memcpy(&encrep, p, sizeof(encrep));
 
-		if (!decrypted) {
-			msg_info("cannot decrypt reply with any available keys");
-			return NULL;
+			for (i = 0; i < (unsigned int) nkeys && !decrypted; i++) {
+				struct rspamd_fuzzy_encrypted_reply encrep_copy;
+				memcpy(&encrep_copy, &encrep, sizeof(encrep_copy));
+
+				rspamd_keypair_cache_process(rule->ctx->keypairs_cache,
+											 local_keys[i], peer_keys[i]);
+
+				if (rspamd_cryptobox_decrypt_nm_inplace((unsigned char *) &encrep_copy.rep,
+														sizeof(encrep_copy.rep),
+														encrep_copy.hdr.nonce,
+														rspamd_pubkey_get_nm(peer_keys[i], local_keys[i]),
+														encrep_copy.hdr.mac)) {
+					memcpy(&encrep, &encrep_copy, sizeof(encrep));
+					decrypted = TRUE;
+					break;
+				}
+			}
+
+			if (!decrypted) {
+				msg_info("cannot decrypt reply with any available keys");
+				return NULL;
+			}
+
+			memcpy(p, &encrep.rep, sizeof(encrep.rep));
 		}
-
-		/* Copy decrypted over the input wire */
-		memcpy(p, &encrep.rep, sizeof(encrep.rep));
 	}
 	else {
-
-		*pos += required_size;
-		*r -= required_size;
+		gsize actual_size = is_v2 ? sizeof(struct rspamd_fuzzy_reply_v2)
+								  : sizeof(struct rspamd_fuzzy_reply);
+		*pos += actual_size;
+		*r -= actual_size;
 	}
 
-	rep = (const struct rspamd_fuzzy_reply *) p;
+	if (is_v2) {
+		const struct rspamd_fuzzy_reply_v2 *rv2 = (const struct rspamd_fuzzy_reply_v2 *) p;
+		memset(&synthetic_rep, 0, sizeof(synthetic_rep));
+		synthetic_rep.v1 = rv2->v1;
+		memcpy(synthetic_rep.digest, rv2->digest, sizeof(synthetic_rep.digest));
+		synthetic_rep.ts = rv2->ts;
+		rep = &synthetic_rep;
+		if (p_rep_v2) {
+			*p_rep_v2 = rv2;
+		}
+	}
+	else {
+		rep = (const struct rspamd_fuzzy_reply *) p;
+	}
 	/*
 	 * Search for tag
 	 */
@@ -4468,11 +4618,29 @@ fuzzy_check_try_read(struct fuzzy_client_session *session)
 
 		ret = 0;
 
+		const struct rspamd_fuzzy_reply_v2 *rep_v2 = NULL;
+
 		while ((rep = fuzzy_process_reply(&p, &r,
-										  session->commands, session->rule, &cmd, &io)) != NULL) {
+										  session->commands, session->rule, &cmd, &io, &rep_v2)) != NULL) {
 			if (rep->v1.prob > 0.5) {
 				if (cmd->cmd == FUZZY_CHECK) {
 					fuzzy_insert_result(session, rep, cmd, io, rep->v1.flag);
+
+					/* Insert extra flag results from v2 reply */
+					if (rep_v2 && rep_v2->n_extra_flags > 0) {
+						for (uint8_t ei = 0; ei < rep_v2->n_extra_flags && ei < RSPAMD_FUZZY_MAX_EXTRA_FLAGS; ei++) {
+							struct rspamd_fuzzy_reply extra_rep;
+							memset(&extra_rep, 0, sizeof(extra_rep));
+							extra_rep.v1.value = rep_v2->extra_flags[ei].value;
+							extra_rep.v1.flag = rep_v2->extra_flags[ei].flag;
+							extra_rep.v1.tag = rep->v1.tag;
+							extra_rep.v1.prob = rep->v1.prob;
+							memcpy(extra_rep.digest, rep_v2->digest, sizeof(extra_rep.digest));
+							extra_rep.ts = rep_v2->ts;
+
+							fuzzy_insert_result(session, &extra_rep, cmd, io, extra_rep.v1.flag);
+						}
+					}
 				}
 				else if (cmd->cmd == FUZZY_STAT) {
 					/*
@@ -5039,7 +5207,7 @@ fuzzy_controller_io_callback(int fd, short what, void *arg)
 			ret = return_want_more;
 
 			while ((rep = fuzzy_process_reply(&p, &r,
-											  session->commands, session->rule, &cmd, &io)) != NULL) {
+											  session->commands, session->rule, &cmd, &io, NULL)) != NULL) {
 				if ((map =
 						 g_hash_table_lookup(session->rule->mappings,
 											 GINT_TO_POINTER(rep->v1.flag))) == NULL) {
@@ -6817,7 +6985,7 @@ fuzzy_lua_try_read(struct fuzzy_lua_session *session)
 		ret = 0;
 
 		while ((rep = fuzzy_process_reply(&p, &r,
-										  session->commands, session->rule, &cmd, &io)) != NULL) {
+										  session->commands, session->rule, &cmd, &io, NULL)) != NULL) {
 
 			if (rep->v1.prob > 0.5) {
 				if (cmd->cmd == FUZZY_PING) {

@@ -26,7 +26,7 @@
 extern "C" {
 #endif
 
-#define RSPAMD_FUZZY_VERSION 4
+#define RSPAMD_FUZZY_VERSION 5
 #define RSPAMD_FUZZY_KEYLEN 8
 
 #define RSPAMD_FUZZY_FLAG_WEAK (1u << 7u)
@@ -49,6 +49,7 @@ extern "C" {
 enum rspamd_fuzzy_epoch {
 	RSPAMD_FUZZY_EPOCH10, /**< 1.0+ encryption */
 	RSPAMD_FUZZY_EPOCH11, /**< 1.7+ extended reply */
+	RSPAMD_FUZZY_EPOCH12, /**< multi-flag reply */
 	RSPAMD_FUZZY_EPOCH_MAX
 };
 
@@ -116,6 +117,30 @@ RSPAMD_PACKED(rspamd_fuzzy_encrypted_reply)
 {
 	struct rspamd_fuzzy_encrypted_rep_hdr hdr;
 	struct rspamd_fuzzy_reply rep;
+};
+
+#define RSPAMD_FUZZY_MAX_EXTRA_FLAGS 7
+
+RSPAMD_PACKED(rspamd_fuzzy_flag_entry)
+{
+	int32_t value;
+	uint32_t flag;
+};
+
+RSPAMD_PACKED(rspamd_fuzzy_reply_v2)
+{
+	struct rspamd_fuzzy_reply_v1 v1;
+	char digest[rspamd_cryptobox_HASHBYTES];
+	uint32_t ts;
+	uint8_t n_extra_flags;
+	uint8_t reserved[3];
+	struct rspamd_fuzzy_flag_entry extra_flags[RSPAMD_FUZZY_MAX_EXTRA_FLAGS];
+};
+
+RSPAMD_PACKED(rspamd_fuzzy_encrypted_reply_v2)
+{
+	struct rspamd_fuzzy_encrypted_rep_hdr hdr;
+	struct rspamd_fuzzy_reply_v2 rep;
 };
 
 static const unsigned char fuzzy_encrypted_magic[4] = {'r', 's', 'f', 'e'};

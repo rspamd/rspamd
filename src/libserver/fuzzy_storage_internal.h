@@ -209,7 +209,10 @@ struct fuzzy_session {
 	struct rspamd_fuzzy_storage_ctx *ctx;
 
 	struct rspamd_fuzzy_shingle_cmd cmd;       /* Can handle both shingles and non-shingles */
-	struct rspamd_fuzzy_encrypted_reply reply; /* Again: contains everything */
+	union {
+		struct rspamd_fuzzy_encrypted_reply v1;
+		struct rspamd_fuzzy_encrypted_reply_v2 v2;
+	} reply;
 	struct fuzzy_key_stat *ip_stat;
 
 	enum rspamd_fuzzy_epoch epoch;
