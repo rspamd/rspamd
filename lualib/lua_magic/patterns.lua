@@ -462,16 +462,6 @@ local patterns = {
       },
     }
   },
-  xml = {
-    matches = {
-      {
-        -- XML prolog
-        string = [[<\?xml\b.+\?>]],
-        position = { '>=', 0 },
-        weight = 30,
-      },
-    }
-  },
   -- Other
   pgp = {
     matches = {
