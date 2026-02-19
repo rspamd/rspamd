@@ -102,6 +102,7 @@ local config = {
   min_js_fuzzy = 256, -- Minimum size of js to be considered as a fuzzy
   openaction_fuzzy_only = false, -- Generate fuzzy from all scripts
   max_pdf_objects = 10000, -- Maximum number of objects to be considered
+  min_obj_content_size = 32, -- Skip objects smaller than this (evasion padding)
   max_pdf_trailer = 10 * 1024 * 1024, -- Maximum trailer size (to avoid abuse)
   max_pdf_trailer_lines = 100, -- Maximum number of lines in pdf trailer
   pdf_process_timeout = 2.0, -- Timeout in seconds for processing
@@ -1196,15 +1197,27 @@ end
 -- set of objects
 local function extract_outer_objects(task, input, pdf)
   local start_pos, end_pos = 1, 1
-  local max_start_pos, max_end_pos
   local obj_count = 0
+  local skip_count = 0
+  local total_start = #pdf.start_objects
+  local total_end = #pdf.end_objects
 
-  max_start_pos = math.min(config.max_pdf_objects, #pdf.start_objects)
-  max_end_pos = math.min(config.max_pdf_objects, #pdf.end_objects)
   lua_util.debugm(N, task, "pdf: extract objects from %s start positions and %s end positions",
-      max_start_pos, max_end_pos)
+      total_start, total_end)
 
-  while start_pos <= max_start_pos and end_pos <= max_end_pos do
+  while start_pos <= total_start and end_pos <= total_end do
+    -- Timeout check every 500 iterations
+    if start_pos % 500 == 0 then
+      local now = rspamd_util.get_ticks()
+      if now >= pdf.end_timestamp then
+        pdf.timeout_processing = now - pdf.start_timestamp
+        lua_util.debugm(N, task, 'pdf: timeout extracting objects after %s seconds, ' ..
+            '%s stored, %s skipped, %s/%s positions',
+            pdf.timeout_processing, obj_count, skip_count, start_pos, total_start)
+        break
+      end
+    end
+
     local first = pdf.start_objects[start_pos]
     local last = pdf.end_objects[end_pos]
 
@@ -1212,39 +1225,51 @@ local function extract_outer_objects(task, input, pdf)
     if first + 6 < last then
       local len = last - first - 6
 
-      -- Also get the starting span and try to match it versus obj re to get numbers
-      local obj_line_potential = first - 32
-      if obj_line_potential < 1 then
-        obj_line_potential = 1
-      end
-      local prev_obj_end = pdf.end_objects[end_pos - 1]
-      if end_pos > 1 and prev_obj_end >= obj_line_potential and prev_obj_end < first then
-        obj_line_potential = prev_obj_end + 1
-      end
-
-      local obj_line_span = input:span(obj_line_potential, first - obj_line_potential + 1)
-      local matches = object_re:search(obj_line_span, true, true)
-
-      if matches and matches[1] then
-        local nobj = {
-          start = first,
-          len = len,
-          data = input:span(first, len),
-          major = tonumber(matches[1][2]),
-          minor = tonumber(matches[1][3]),
-        }
-        pdf.objects[obj_count + 1] = nobj
-        if nobj.major and nobj.minor then
-          -- Add reference
-          local ref = obj_ref(nobj.major, nobj.minor)
-          nobj.ref = ref -- Our internal reference
-          pdf.ref[ref] = nobj
+      -- Skip tiny objects (evasion padding)
+      if len < config.min_obj_content_size then
+        skip_count = skip_count + 1
+        start_pos = start_pos + 1
+        end_pos = end_pos + 1
+      else
+        -- Cap on stored objects
+        if obj_count >= config.max_pdf_objects then
+          break
         end
-      end
 
-      obj_count = obj_count + 1
-      start_pos = start_pos + 1
-      end_pos = end_pos + 1
+        -- Also get the starting span and try to match it versus obj re to get numbers
+        local obj_line_potential = first - 32
+        if obj_line_potential < 1 then
+          obj_line_potential = 1
+        end
+        local prev_obj_end = pdf.end_objects[end_pos - 1]
+        if end_pos > 1 and prev_obj_end >= obj_line_potential and prev_obj_end < first then
+          obj_line_potential = prev_obj_end + 1
+        end
+
+        local obj_line_span = input:span(obj_line_potential, first - obj_line_potential + 1)
+        local matches = object_re:search(obj_line_span, true, true)
+
+        if matches and matches[1] then
+          local nobj = {
+            start = first,
+            len = len,
+            data = input:span(first, len),
+            major = tonumber(matches[1][2]),
+            minor = tonumber(matches[1][3]),
+          }
+          pdf.objects[obj_count + 1] = nobj
+          if nobj.major and nobj.minor then
+            -- Add reference
+            local ref = obj_ref(nobj.major, nobj.minor)
+            nobj.ref = ref -- Our internal reference
+            pdf.ref[ref] = nobj
+          end
+        end
+
+        obj_count = obj_count + 1
+        start_pos = start_pos + 1
+        end_pos = end_pos + 1
+      end
     elseif first > last then
       end_pos = end_pos + 1
     else
@@ -1252,19 +1277,35 @@ local function extract_outer_objects(task, input, pdf)
       end_pos = end_pos + 1
     end
   end
+
+  if skip_count > 0 then
+    lua_util.debugm(N, task, 'pdf: skipped %s tiny objects (< %s bytes), stored %s objects',
+        skip_count, config.min_obj_content_size, obj_count)
+  end
 end
 
 -- This function attaches streams to objects and processes outer pdf grammar
 local function attach_pdf_streams(task, input, pdf)
   if pdf.start_streams and pdf.end_streams then
     local start_pos, end_pos = 1, 1
-    local max_start_pos, max_end_pos
-
-    max_start_pos = math.min(config.max_pdf_objects, #pdf.start_streams)
-    max_end_pos = math.min(config.max_pdf_objects, #pdf.end_streams)
+    local total_start = #pdf.start_streams
+    local total_end = #pdf.end_streams
+    local iter_count = 0
 
     for _, obj in ipairs(pdf.objects) do
-      while start_pos <= max_start_pos and end_pos <= max_end_pos do
+      while start_pos <= total_start and end_pos <= total_end do
+        -- Timeout check every 500 iterations
+        iter_count = iter_count + 1
+        if iter_count % 500 == 0 then
+          local now = rspamd_util.get_ticks()
+          if now >= pdf.end_timestamp then
+            pdf.timeout_processing = now - pdf.start_timestamp
+            lua_util.debugm(N, task, 'pdf: timeout attaching streams after %s seconds',
+                pdf.timeout_processing)
+            return
+          end
+        end
+
         local first = pdf.start_streams[start_pos]
         local last = pdf.end_streams[end_pos]
         last = last - 10 -- Exclude endstream\n pattern
