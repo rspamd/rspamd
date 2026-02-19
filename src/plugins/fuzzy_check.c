@@ -124,6 +124,7 @@ struct fuzzy_rule {
 	struct rspamd_hash_map_helper *skip_map;
 	struct fuzzy_ctx *ctx;
 	int lua_id;
+	gboolean server_supports_v2;
 
 	/* TCP configuration */
 	gboolean tcp_enabled;   /* Explicitly enable TCP */
@@ -162,6 +163,15 @@ struct fuzzy_ctx {
 	uint32_t retransmits;
 	gboolean enabled;
 };
+
+static inline uint8_t
+fuzzy_cmd_version(const struct fuzzy_rule *rule)
+{
+	if (rule->server_supports_v2) {
+		return 5; /* Native v5 after server confirmed v2 support */
+	}
+	return RSPAMD_FUZZY_VERSION | RSPAMD_FUZZY_V2_CAP; /* 4 | 0x10 = 0x14 */
+}
 
 enum fuzzy_result_type {
 	FUZZY_RESULT_TXT,
@@ -1466,6 +1476,10 @@ fuzzy_tcp_process_reply(struct fuzzy_tcp_connection *conn,
 		else {
 			rep = (const struct rspamd_fuzzy_reply *) data;
 		}
+	}
+
+	if (is_v2) {
+		rule->server_supports_v2 = TRUE;
 	}
 
 	/* Extract tag and lookup pending command */
@@ -3158,7 +3172,7 @@ fuzzy_cmd_stat(struct fuzzy_rule *rule,
 	}
 
 	cmd->cmd = c;
-	cmd->version = RSPAMD_FUZZY_PLUGIN_VERSION;
+	cmd->version = fuzzy_cmd_version(rule);
 	cmd->shingles_count = 0;
 	cmd->tag = ottery_rand_uint32();
 
@@ -3215,7 +3229,7 @@ fuzzy_cmd_ping(struct fuzzy_rule *rule,
 
 
 	cmd->cmd = FUZZY_PING;
-	cmd->version = RSPAMD_FUZZY_PLUGIN_VERSION;
+	cmd->version = fuzzy_cmd_version(rule);
 	cmd->shingles_count = 0;
 	cmd->value = fuzzy_milliseconds_since_midnight(); /* Record timestamp */
 	cmd->tag = ottery_rand_uint32();
@@ -3277,7 +3291,7 @@ fuzzy_cmd_hash(struct fuzzy_rule *rule,
 	}
 
 	cmd->cmd = c;
-	cmd->version = RSPAMD_FUZZY_PLUGIN_VERSION;
+	cmd->version = fuzzy_cmd_version(rule);
 	cmd->shingles_count = 0;
 	cmd->tag = ottery_rand_uint32();
 
@@ -3706,7 +3720,7 @@ fuzzy_cmd_from_text_part(struct rspamd_task *task,
 	if (!short_text) {
 		shcmd->basic.tag = ottery_rand_uint32();
 		shcmd->basic.cmd = c;
-		shcmd->basic.version = RSPAMD_FUZZY_PLUGIN_VERSION;
+		shcmd->basic.version = fuzzy_cmd_version(rule);
 
 		if (c != FUZZY_CHECK) {
 			shcmd->basic.flag = flag;
@@ -3718,7 +3732,7 @@ fuzzy_cmd_from_text_part(struct rspamd_task *task,
 	else {
 		cmd->tag = ottery_rand_uint32();
 		cmd->cmd = c;
-		cmd->version = RSPAMD_FUZZY_PLUGIN_VERSION;
+		cmd->version = fuzzy_cmd_version(rule);
 
 		if (c != FUZZY_CHECK) {
 			cmd->flag = flag;
@@ -3915,7 +3929,7 @@ fuzzy_cmd_from_html_part(struct rspamd_task *task,
 
 	shcmd->basic.tag = ottery_rand_uint32();
 	shcmd->basic.cmd = c;
-	shcmd->basic.version = RSPAMD_FUZZY_PLUGIN_VERSION;
+	shcmd->basic.version = fuzzy_cmd_version(rule);
 
 	if (c != FUZZY_CHECK) {
 		shcmd->basic.flag = flag;
@@ -4017,7 +4031,7 @@ fuzzy_cmd_from_image_part (struct fuzzy_rule *rule,
 
 	shcmd->basic.tag = ottery_rand_uint32 ();
 	shcmd->basic.cmd = c;
-	shcmd->basic.version = RSPAMD_FUZZY_PLUGIN_VERSION;
+	shcmd->basic.version = fuzzy_cmd_version(rule);
 
 	if (c != FUZZY_CHECK) {
 		shcmd->basic.flag = flag;
@@ -4075,7 +4089,7 @@ fuzzy_cmd_from_data_part(struct fuzzy_rule *rule,
 	}
 
 	cmd->cmd = c;
-	cmd->version = RSPAMD_FUZZY_PLUGIN_VERSION;
+	cmd->version = fuzzy_cmd_version(rule);
 	if (c != FUZZY_CHECK) {
 		cmd->flag = flag;
 		cmd->value = weight;
@@ -4622,6 +4636,9 @@ fuzzy_check_try_read(struct fuzzy_client_session *session)
 
 		while ((rep = fuzzy_process_reply(&p, &r,
 										  session->commands, session->rule, &cmd, &io, &rep_v2)) != NULL) {
+			if (rep_v2) {
+				session->rule->server_supports_v2 = TRUE;
+			}
 			if (rep->v1.prob > 0.5) {
 				if (cmd->cmd == FUZZY_CHECK) {
 					fuzzy_insert_result(session, rep, cmd, io, rep->v1.flag);

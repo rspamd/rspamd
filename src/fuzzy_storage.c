@@ -1517,12 +1517,12 @@ rspamd_fuzzy_command_valid(struct rspamd_fuzzy_cmd *cmd, int r)
 	case 4:
 		if (cmd->shingles_count > 0) {
 			if (r >= sizeof(struct rspamd_fuzzy_shingle_cmd)) {
-				ret = RSPAMD_FUZZY_EPOCH11;
+				ret = (cmd->version & RSPAMD_FUZZY_V2_CAP) ? RSPAMD_FUZZY_EPOCH12 : RSPAMD_FUZZY_EPOCH11;
 			}
 		}
 		else {
 			if (r >= sizeof(*cmd)) {
-				ret = RSPAMD_FUZZY_EPOCH11;
+				ret = (cmd->version & RSPAMD_FUZZY_V2_CAP) ? RSPAMD_FUZZY_EPOCH12 : RSPAMD_FUZZY_EPOCH11;
 			}
 		}
 		break;
