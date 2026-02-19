@@ -1198,7 +1198,7 @@ end
 local function extract_outer_objects(task, input, pdf)
   local start_pos, end_pos = 1, 1
   local obj_count = 0
-  local skip_count = 0
+  local stored = 0
   local total_start = #pdf.start_objects
   local total_end = #pdf.end_objects
 
@@ -1212,8 +1212,8 @@ local function extract_outer_objects(task, input, pdf)
       if now >= pdf.end_timestamp then
         pdf.timeout_processing = now - pdf.start_timestamp
         lua_util.debugm(N, task, 'pdf: timeout extracting objects after %s seconds, ' ..
-            '%s stored, %s skipped, %s/%s positions',
-            pdf.timeout_processing, obj_count, skip_count, start_pos, total_start)
+            '%s stored, %s/%s positions',
+            pdf.timeout_processing, stored, start_pos, total_start)
         break
       end
     end
@@ -1225,51 +1225,48 @@ local function extract_outer_objects(task, input, pdf)
     if first + 6 < last then
       local len = last - first - 6
 
-      -- Skip tiny objects (evasion padding)
-      if len < config.min_obj_content_size then
-        skip_count = skip_count + 1
-        start_pos = start_pos + 1
-        end_pos = end_pos + 1
-      else
-        -- Cap on stored objects
+      -- Only count non-tiny objects toward the limit; small objects (e.g. padding)
+      -- are still stored but don't consume the budget
+      if len >= config.min_obj_content_size then
         if obj_count >= config.max_pdf_objects then
           break
         end
-
-        -- Also get the starting span and try to match it versus obj re to get numbers
-        local obj_line_potential = first - 32
-        if obj_line_potential < 1 then
-          obj_line_potential = 1
-        end
-        local prev_obj_end = pdf.end_objects[end_pos - 1]
-        if end_pos > 1 and prev_obj_end >= obj_line_potential and prev_obj_end < first then
-          obj_line_potential = prev_obj_end + 1
-        end
-
-        local obj_line_span = input:span(obj_line_potential, first - obj_line_potential + 1)
-        local matches = object_re:search(obj_line_span, true, true)
-
-        if matches and matches[1] then
-          local nobj = {
-            start = first,
-            len = len,
-            data = input:span(first, len),
-            major = tonumber(matches[1][2]),
-            minor = tonumber(matches[1][3]),
-          }
-          pdf.objects[obj_count + 1] = nobj
-          if nobj.major and nobj.minor then
-            -- Add reference
-            local ref = obj_ref(nobj.major, nobj.minor)
-            nobj.ref = ref -- Our internal reference
-            pdf.ref[ref] = nobj
-          end
-        end
-
         obj_count = obj_count + 1
-        start_pos = start_pos + 1
-        end_pos = end_pos + 1
       end
+
+      -- Also get the starting span and try to match it versus obj re to get numbers
+      local obj_line_potential = first - 32
+      if obj_line_potential < 1 then
+        obj_line_potential = 1
+      end
+      local prev_obj_end = pdf.end_objects[end_pos - 1]
+      if end_pos > 1 and prev_obj_end >= obj_line_potential and prev_obj_end < first then
+        obj_line_potential = prev_obj_end + 1
+      end
+
+      local obj_line_span = input:span(obj_line_potential, first - obj_line_potential + 1)
+      local matches = object_re:search(obj_line_span, true, true)
+
+      if matches and matches[1] then
+        stored = stored + 1
+        local nobj = {
+          start = first,
+          len = len,
+          data = input:span(first, len),
+          major = tonumber(matches[1][2]),
+          minor = tonumber(matches[1][3]),
+        }
+        pdf.objects[stored] = nobj
+        if nobj.major and nobj.minor then
+          -- Add reference
+          local ref = obj_ref(nobj.major, nobj.minor)
+          nobj.ref = ref -- Our internal reference
+          pdf.ref[ref] = nobj
+        end
+      end
+
+      start_pos = start_pos + 1
+      end_pos = end_pos + 1
     elseif first > last then
       end_pos = end_pos + 1
     else
@@ -1278,10 +1275,8 @@ local function extract_outer_objects(task, input, pdf)
     end
   end
 
-  if skip_count > 0 then
-    lua_util.debugm(N, task, 'pdf: skipped %s tiny objects (< %s bytes), stored %s objects',
-        skip_count, config.min_obj_content_size, obj_count)
-  end
+  lua_util.debugm(N, task, 'pdf: stored %s objects (%s non-tiny toward limit) from %s positions',
+      stored, obj_count, total_start)
 end
 
 -- This function attaches streams to objects and processes outer pdf grammar
