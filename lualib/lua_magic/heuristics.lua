@@ -84,7 +84,7 @@ local txt_patterns = {
     { [[^BEGIN:VCARD\r?\n]], 40 },
   },
   xml = {
-    { [[<\?xml\b.+\?>]], 31 },
+    { [[<\?xml\b.+\?>]], 40 },
   }
 }
 
@@ -528,6 +528,11 @@ exports.text_part_heuristic = function(part, log_obj, _)
         if res.html and res.html >= 40 then
           -- HTML has priority over something like js...
           return 'html', res.html
+        end
+
+        -- XML prolog can appear inside HTML; do not let xml override html
+        if res.xml and res.html then
+          res.xml = nil
         end
 
         local ext, weight = process_top_detected(res)

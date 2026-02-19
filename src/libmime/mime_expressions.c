@@ -1474,16 +1474,69 @@ rspamd_has_only_html_part(struct rspamd_task *task, GArray *args,
 
 	/*
 	 * Return TRUE if there's any HTML part (not attachment) that has no
-	 * text/plain alternative in its multipart/alternative parent.
-	 * This properly handles nested structures like:
-	 * - multipart/mixed → multipart/related → text/html (no text/plain)
-	 * - multipart/alternative → text/plain + multipart/related → text/html
+	 * alternative in its multipart/alternative parent.
+	 *
+	 * We check two things:
+	 * 1. alt_text_part: a text/plain sibling found in text_parts
+	 * 2. MIME structure: a sibling leaf text/* (non-html) part in a
+	 *    multipart/alternative ancestor — covers alternatives like
+	 *    text/calendar that may not be in text_parts due to no_text flag
 	 */
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, p)
 	{
 		if (!IS_TEXT_PART_ATTACHMENT(p) && IS_TEXT_PART_HTML(p)) {
-			if (p->alt_text_part == NULL) {
-				/* HTML part with no text alternative */
+			if (p->alt_text_part != NULL) {
+				/* Has a text/plain alternative */
+				continue;
+			}
+
+			/* Check MIME structure: walk up to find multipart/alternative */
+			struct rspamd_mime_part *mime_part = p->mime_part;
+			struct rspamd_mime_part *parent = mime_part->parent_part;
+			gboolean has_structural_alt = FALSE;
+			rspamd_ftok_t alt_tok = {.begin = "alternative", .len = 11};
+			rspamd_ftok_t html_tok = {.begin = "html", .len = 4};
+
+			while (parent) {
+				if (IS_PART_MULTIPART(parent) && parent->ct &&
+					rspamd_ftok_casecmp(&parent->ct->subtype, &alt_tok) == 0) {
+
+					if (parent->specific.mp && parent->specific.mp->children) {
+						GPtrArray *children = parent->specific.mp->children;
+
+						/* Find which direct child branch contains our HTML part */
+						struct rspamd_mime_part *our_branch = mime_part;
+						while (our_branch->parent_part &&
+							   our_branch->parent_part != parent) {
+							our_branch = our_branch->parent_part;
+						}
+
+						/* Check siblings for leaf text/* non-html parts */
+						for (unsigned int j = 0; j < children->len; j++) {
+							struct rspamd_mime_part *sibling =
+								g_ptr_array_index(children, j);
+
+							if (sibling == our_branch) {
+								continue;
+							}
+
+							/* A leaf text/* part that isn't html is a
+							 * real alternative (e.g. text/calendar) */
+							if (sibling->ct &&
+								(sibling->ct->flags & RSPAMD_CONTENT_TYPE_TEXT) &&
+								rspamd_ftok_casecmp(&sibling->ct->subtype,
+													&html_tok) != 0) {
+								has_structural_alt = TRUE;
+								break;
+							}
+						}
+					}
+					break;
+				}
+				parent = parent->parent_part;
+			}
+
+			if (!has_structural_alt) {
 				return TRUE;
 			}
 		}

@@ -3390,8 +3390,8 @@ rspamd_url_trie_callback(struct rspamd_multipattern *mp,
 
 		cb->start = m.m_begin;
 
-		if (pos > cb->fin) {
-			cb->fin = pos;
+		if (m.m_begin + m.m_len > cb->fin) {
+			cb->fin = m.m_begin + m.m_len;
 		}
 
 		return 1;
@@ -3549,8 +3549,8 @@ rspamd_url_trie_generic_callback_common(struct rspamd_multipattern *mp,
 
 		cb->start = m.m_begin;
 
-		if (pos > cb->fin) {
-			cb->fin = pos;
+		if (m.m_begin + m.m_len > cb->fin) {
+			cb->fin = m.m_begin + m.m_len;
 		}
 
 		url = rspamd_mempool_alloc0(pool, sizeof(struct rspamd_url));
