@@ -165,6 +165,13 @@ struct rspamd_tokenizer_config {
  * No backend required for classifier
  */
 #define RSPAMD_FLAG_CLASSIFIER_NO_BACKEND (1 << 2)
+/*
+ * Set if classifier has at least one class that is neither "spam" nor "ham"
+ * (i.e. a genuinely multiclass classifier, not just a binary spam/ham one).
+ * When set, can_learn uses multiclass_result:<name> for probability checks
+ * instead of the legacy bayes_prob binary variable.
+ */
+#define RSPAMD_FLAG_CLASSIFIER_MULTICLASS (1 << 3)
 
 /**
  * Classifier config definition

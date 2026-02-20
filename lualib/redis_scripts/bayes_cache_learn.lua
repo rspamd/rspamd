@@ -1,15 +1,20 @@
--- Lua script to perform cache checking for bayes classification (multi-class)
+-- Lua script to perform cache learning for bayes classification (multi-class)
 -- This script accepts the following parameters:
 -- key1 - cache id
--- key2 - class_id (numeric hash of class name, computed by C side)
+-- key2 - class name string (e.g. "spam", "ham", "transactional")
 -- key3 - configuration table in message pack
+--
+-- The cache value stored in Redis is the class name string.  A numeric class_id
+-- hash was used previously, but uint64_t values > 2^53 lose precision when
+-- round-tripped through Lua doubles, so the equality check on retrieval was
+-- unreliable for arbitrary multiclass names.
 
 local cache_id = KEYS[1]
-local class_id = KEYS[2]
+local class_name = KEYS[2]
 local conf = cmsgpack.unpack(KEYS[3])
 
--- Use class_id directly as cache value
-local cache_value = tostring(class_id)
+-- Store the class name directly as the cache value
+local cache_value = class_name
 cache_id = string.sub(cache_id, 1, conf.cache_elt_len)
 
 -- Try each prefix that is in Redis (as some other instance might have set it)

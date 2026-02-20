@@ -13,7 +13,10 @@ for i = 0, conf.cache_max_keys do
   local have = redis.call('HGET', prefix, cache_id)
 
   if have then
-    return tonumber(have)
+    -- Return the raw string value (class name, e.g. "spam", "ham", "transactional").
+    -- Previously tonumber() was used here, but 64-bit integer class IDs exceed
+    -- Lua's 53-bit double precision, corrupting the value for multiclass classifiers.
+    return have
   end
 end
 

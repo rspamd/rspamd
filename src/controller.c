@@ -2163,6 +2163,7 @@ rspamd_controller_handle_learn_common(
 	cl_header = rspamd_http_message_find_header(msg, "classifier");
 	if (cl_header) {
 		session->classifier = rspamd_mempool_ftokdup(session->pool, cl_header);
+		task->classifier = session->classifier;
 	}
 	else {
 		session->classifier = NULL;
@@ -2278,6 +2279,7 @@ rspamd_controller_handle_learnclass(
 	cl_header = rspamd_http_message_find_header(msg, "classifier");
 	if (cl_header) {
 		session->classifier = rspamd_mempool_ftokdup(session->pool, cl_header);
+		task->classifier = session->classifier;
 	}
 	else {
 		session->classifier = NULL;
