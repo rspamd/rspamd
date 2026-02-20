@@ -40,21 +40,18 @@ define(["jquery", "app/common", "d3pie", "d3"],
         function attachRowspanHoverHandlers(tableId) {
             const $table = $(tableId);
 
-            function findRowspanCell($row) {
+            function findRowspanCells($row) {
                 const headerCount = $table.find("thead th").length;
-                if ($row.find("td").length >= headerCount) return null;
+                if ($row.find("td").length >= headerCount) return [];
 
-                // Assumes rowspan cells always appear in the first column
-                let result = null;
-                $row.prevAll().find("td:first-child[rowspan]").each((_, el) => {
+                const result = [];
+                $row.prevAll().find("td[rowspan]").each((_, el) => {
                     const $cell = $(el);
                     const rowspan = parseInt($cell.attr("rowspan"), 10);
                     const distance = $row.prevAll().length - $cell.parent().prevAll().length;
                     if (distance < rowspan) {
-                        result = $cell;
-                        return false; // break
+                        result.push($cell);
                     }
-                    return true;
                 });
                 return result;
             }
@@ -69,13 +66,17 @@ define(["jquery", "app/common", "d3pie", "d3"],
                     $cell.addClass("table-hover-cell");
                     $row.find("td").addClass("table-hover-cell");
                     $row.nextAll().slice(0, rowspan - 1).find("td").addClass("table-hover-cell");
+
+                    // Also highlight parent rowspan cells (e.g., server when hovering classifier)
+                    findRowspanCells($row).forEach(($parentCell) => {
+                        if ($parentCell[0] !== $cell[0]) $parentCell.addClass("table-hover-cell");
+                    });
                 } else {
                     // Hovering over regular cell - highlight current row
                     $row.find("td").addClass("table-hover-cell");
 
-                    // Highlight rowspan cell if exists
-                    const $rowspanCell = findRowspanCell($row);
-                    if ($rowspanCell) $rowspanCell.addClass("table-hover-cell");
+                    // Highlight all rowspan cells for this row
+                    findRowspanCells($row).forEach(($rowspanCell) => $rowspanCell.addClass("table-hover-cell"));
                 }
             }).on("mouseleave", "tbody td", () => $table.find("tbody td").removeClass("table-hover-cell"));
         }
@@ -202,24 +203,75 @@ define(["jquery", "app/common", "d3pie", "d3"],
             });
 
             function addStatfiles(server, statfiles) {
-                $.each(statfiles, (i, statfile) => {
-                    const symbolClassMap = {BAYES_SPAM: "symbol-positive", BAYES_HAM: "symbol-negative"};
-                    const cls = symbolClassMap[statfile.symbol] || "";
-                    $("#bayesTable tbody").append("<tr>" +
-                      (i === 0 ? '<td rowspan="' + statfiles.length + '">' + server + "</td>" : "") +
-                      '<td class="' + cls + '">' + statfile.symbol + "</td>" +
-                      '<td class="' + cls + '">' + statfile.type + "</td>" +
-                      '<td class="text-end ' + cls + '">' + statfile.revision + "</td>" +
-                      '<td class="text-end ' + cls + '">' + statfile.users + "</td></tr>");
+                const safeStatfiles = Array.isArray(statfiles) ? statfiles : [];
+                const symbolClassMap = {BAYES_SPAM: "symbol-positive", BAYES_HAM: "symbol-negative"};
+                const rowsCount = safeStatfiles.length;
+
+                function coerceNumber(value) { return (Number.isFinite(value) ? value : Number(value) || 0); }
+
+                function guessClassFromSymbol(symbol) {
+                    if (!symbol) return "-";
+
+                    const upperSymbol = symbol.toUpperCase();
+                    if (upperSymbol.includes("SPAM")) return "spam";
+                    if (upperSymbol.includes("HAM")) return "ham";
+
+                    return "-";
+                }
+
+                function formatClassifierLabel(statfile) {
+                    const classifier = statfile.classifier ?? {};
+                    const badges = [];
+                    function badge(cls, text) { return ` <span class="badge ${cls} ms-1">${text}</span>`; }
+
+                    if (classifier.type === "multi-class") badges.push(badge("bg-secondary", "multi-class"));
+                    if (classifier.per_user) badges.push(badge("bg-info", "per-user"));
+
+                    return common.escapeHTML(classifier.name ?? "-") + badges.join("");
+                }
+
+                function renderCell(value, className) {
+                    const cls = className?.trim();
+                    return cls ? `<td class="${cls}">${value}</td>` : `<td>${value}</td>`;
+                }
+
+                $.each(safeStatfiles, (i, statfile) => {
+                    const symbol = statfile.symbol ?? "-";
+                    const cls = symbolClassMap[symbol] || "";
+                    const clName = statfile.classifier?.name ?? "-";
+                    const prevClName = i > 0 ? (safeStatfiles[i - 1].classifier?.name ?? "-") : null;
+
+                    const serverCell = i === 0 ? `<td rowspan="${rowsCount}">${common.escapeHTML(server)}</td>` : "";
+
+                    let classifierCell = "";
+                    if (clName !== prevClName) {
+                        let groupSize = 1;
+                        for (let k = i + 1; k < safeStatfiles.length; k++) {
+                            if ((safeStatfiles[k].classifier?.name ?? "-") === clName) {
+                                groupSize++;
+                            } else break;
+                        }
+                        classifierCell = `<td rowspan="${groupSize}">${formatClassifierLabel(statfile)}</td>`;
+                    }
+
+                    $("#bayesTable tbody").append(`<tr>${serverCell}${classifierCell}${[
+                        renderCell(common.escapeHTML(statfile.class ?? guessClassFromSymbol(symbol)), cls),
+                        renderCell(common.escapeHTML(symbol), cls),
+                        renderCell(common.escapeHTML(statfile.type ?? "-"), cls),
+                        renderCell(coerceNumber(statfile.revision), `text-end ${cls}`),
+                        renderCell(coerceNumber(statfile.users), `text-end ${cls}`),
+                    ].join("")}</tr>`);
                 });
             }
 
             function addFuzzyStorage(server, storages) {
                 let i = 0;
                 $.each(storages, (storage, hashes) => {
-                    $("#fuzzyTable tbody").append("<tr>" +
-                      (i === 0 ? '<td rowspan="' + Object.keys(storages).length + '">' + server + "</td>" : "") +
-                      "<td>" + storage + "</td>" +
+                    const serverCell = (i === 0)
+                        ? '<td rowspan="' + Object.keys(storages).length + '">' + common.escapeHTML(server) + "</td>"
+                        : "";
+                    $("#fuzzyTable tbody").append("<tr>" + serverCell +
+                      "<td>" + common.escapeHTML(storage) + "</td>" +
                       '<td class="text-end">' + hashes + "</td></tr>");
                     i++;
                 });
