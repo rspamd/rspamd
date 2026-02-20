@@ -67,7 +67,6 @@ option(ENABLE_JEMALLOC "Build rspamd with jemalloc allocator" OFF)
 option(ENABLE_UTILS "Build rspamd internal utils" OFF)
 option(ENABLE_LIBUNWIND "Obsoleted" OFF) # Deprecated option
 option(ENABLE_LUA_TRACE "Trace all Lua C API invocations" OFF)
-option(ENABLE_FASTTEXT "Link with FastText library" OFF)
 option(ENABLE_BACKWARD "Build rspamd with backward-cpp stacktrace" ON)
 option(SYSTEM_ZSTD "Use system zstd instead of bundled one" OFF)
 option(SYSTEM_DOCTEST "Use system doctest instead of bundled one" OFF)
@@ -138,6 +137,7 @@ include_directories(
         "${CMAKE_SOURCE_DIR}/contrib/lua-lpeg"
         "${CMAKE_SOURCE_DIR}/contrib/frozen/include"
         "${CMAKE_SOURCE_DIR}/contrib/fu2/include"
+        "${CMAKE_SOURCE_DIR}/src/libserver/fasttext"
         "${CMAKE_BINARY_DIR}/src" # Stored in the binary dir
         "${CMAKE_BINARY_DIR}/src/libcryptobox"
 )
@@ -261,12 +261,6 @@ ProcessPackage(SODIUM LIBRARY sodium INCLUDE sodium.h
         ROOT ${LIBSODIUM_ROOT_DIR} MODULES libsodium>=1.0.0)
 ProcessPackage(LIBARCHIVE LIBRARY archive INCLUDE archive.h
         ROOT ${LIBARCHIVE_ROOT_DIR} MODULES libarchive>=3.0.0)
-
-if (ENABLE_FASTTEXT)
-    ProcessPackage(FASTTEXT LIBRARY fasttext INCLUDE fasttext/fasttext.h
-            ROOT ${FASTTEXT_ROOT_DIR} MODULES fasttext)
-    set(WITH_FASTTEXT "1")
-endif ()
 
 # Include common compiler and platform specific configurations
 include(CompilerWarnings)

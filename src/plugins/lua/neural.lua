@@ -31,6 +31,8 @@ local PluginSchema = require "lua_shape.plugin_schema"
 -- Load providers
 pcall(require, "plugins/neural/providers/llm")
 pcall(require, "plugins/neural/providers/symbols")
+pcall(require, "plugins/neural/providers/text_hash")
+pcall(require, "plugins/neural/providers/fasttext_embed")
 
 local N = "neural"
 

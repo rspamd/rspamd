@@ -15,9 +15,7 @@
  */
 
 #include "lang_detection_fasttext.h"
-
-#ifdef WITH_FASTTEXT
-#include "fasttext/fasttext.h"
+#include "fasttext_shim.h"
 #include "libserver/cfg_file.h"
 #include "libserver/logger.h"
 #include "contrib/fmt/include/fmt/base.h"
@@ -25,10 +23,8 @@
 #include "libserver/word.h"
 #include <string_view>
 #include <vector>
+#include <optional>
 #include <unistd.h>
-#endif
-
-#ifdef WITH_FASTTEXT
 
 EXTERN_LOG_MODULE_DEF(langdet);
 #define msg_debug_lang_det(...) rspamd_conditional_debug_fast(nullptr, nullptr,                                           \
@@ -39,9 +35,8 @@ EXTERN_LOG_MODULE_DEF(langdet);
 namespace rspamd::langdet {
 class fasttext_langdet {
 private:
-	fasttext::FastText ft;
+	std::optional<rspamd::fasttext::fasttext_model> model_;
 	std::string model_fname;
-	bool loaded = false;
 
 public:
 	explicit fasttext_langdet(struct rspamd_config *cfg)
@@ -58,20 +53,17 @@ public:
 				if (access(model_path, R_OK) != 0) {
 					msg_err_config("fasttext model '%s' is not readable: %s",
 								   model_path, strerror(errno));
-					loaded = false;
 					return;
 				}
 
-				try {
-					ft.loadModel(model_path);
-					loaded = true;
+				auto result = rspamd::fasttext::fasttext_model::load(model_path);
+				if (result) {
+					model_.emplace(std::move(*result));
 					model_fname = std::string{model_path};
-				} catch (const std::exception &e) {
-					msg_err_config("cannot load fasttext model '%s': %s", model_path, e.what());
-					loaded = false;
-				} catch (...) {
-					msg_err_config("cannot load fasttext model '%s': unknown error", model_path);
-					loaded = false;
+				}
+				else {
+					msg_err_config("cannot load fasttext model '%s': %s",
+								   model_path, result.error().error_message.data());
 				}
 			}
 		}
@@ -86,106 +78,77 @@ public:
 
 	auto is_enabled() const -> bool
 	{
-		return loaded;
+		return model_.has_value();
 	}
+
 	auto word2vec(const char *in, std::size_t len, std::vector<std::int32_t> &word_ngramms) const
 	{
-		if (!loaded) {
+		if (!model_) {
 			return;
 		}
 
-		std::string tok{in, len};
-		const auto &dic = ft.getDictionary();
-		auto h = dic->hash(tok);
-		auto wid = dic->getId(tok, h);
-		auto type = wid < 0 ? dic->getType(tok) : dic->getType(wid);
-
-		if (type == fasttext::entry_type::word) {
-			if (wid < 0) {
-				auto pipelined_word = fmt::format("{}{}{}", fasttext::Dictionary::BOW, tok, fasttext::Dictionary::EOW);
-				dic->computeSubwords(pipelined_word, word_ngramms);
-			}
-			else {
-				if (ft.getArgs().maxn <= 0) {
-					word_ngramms.push_back(wid);
-				}
-				else {
-					const auto ngrams = dic->getSubwords(wid);
-					word_ngramms.insert(word_ngramms.end(), ngrams.cbegin(), ngrams.cend());
-				}
-			}
-		}
+		model_->word2vec(std::string_view{in, len}, word_ngramms);
 	}
+
 	auto detect_language(std::vector<std::int32_t> &words, int k)
-		-> std::vector<std::pair<fasttext::real, std::string>> *
+		-> std::vector<std::pair<float, std::string>> *
 	{
-		if (!loaded) {
+		if (!model_) {
 			return nullptr;
 		}
 
-		auto predictions = new std::vector<std::pair<fasttext::real, std::string>>;
-		predictions->reserve(k);
-		fasttext::Predictions line_predictions;
-		line_predictions.reserve(k);
-		ft.predict(k, words, line_predictions, 0.0f);
-		const auto *dict = ft.getDictionary().get();
+		std::vector<rspamd::fasttext::prediction> preds;
+		model_->predict(k, words, preds, 0.0f);
 
-		for (const auto &pred: line_predictions) {
-			predictions->push_back(std::make_pair(std::exp(pred.first), dict->getLabel(pred.second)));
+		auto *results = new std::vector<std::pair<float, std::string>>;
+		results->reserve(preds.size());
+
+		for (const auto &pred: preds) {
+			results->push_back(std::make_pair(pred.prob, pred.label));
 		}
-		return predictions;
+
+		return results;
 	}
 
 	auto model_info(void) const -> const std::string
 	{
-		if (!loaded) {
+		if (!model_) {
 			static const auto not_loaded = std::string{"fasttext model is not loaded"};
 			return not_loaded;
 		}
 		else {
 			return fmt::format("fasttext model {}: {} languages, {} tokens", model_fname,
-							   ft.getDictionary()->nlabels(), ft.getDictionary()->ntokens());
+							   model_->get_nlabels(), model_->get_ntokens());
 		}
 	}
 };
 }// namespace rspamd::langdet
-#endif
 
 /* C API part */
 G_BEGIN_DECLS
 
 #define FASTTEXT_MODEL_TO_C_API(p) reinterpret_cast<rspamd::langdet::fasttext_langdet *>(p)
-#define FASTTEXT_RESULT_TO_C_API(res) reinterpret_cast<std::vector<std::pair<fasttext::real, std::string>> *>(res)
+#define FASTTEXT_RESULT_TO_C_API(res) reinterpret_cast<std::vector<std::pair<float, std::string>> *>(res)
 
 void *rspamd_lang_detection_fasttext_init(struct rspamd_config *cfg)
 {
-#ifndef WITH_FASTTEXT
-	return nullptr;
-#else
 	return (void *) new rspamd::langdet::fasttext_langdet(cfg);
-#endif
 }
 
 char *rspamd_lang_detection_fasttext_show_info(void *ud)
 {
-#ifndef WITH_FASTTEXT
-	return g_strdup("fasttext is not compiled in");
-#else
 	auto model_info = FASTTEXT_MODEL_TO_C_API(ud)->model_info();
 
 	return g_strdup(model_info.c_str());
-#endif
 }
 
 bool rspamd_lang_detection_fasttext_is_enabled(void *ud)
 {
-#ifdef WITH_FASTTEXT
 	auto *real_model = FASTTEXT_MODEL_TO_C_API(ud);
 
 	if (real_model) {
 		return real_model->is_enabled();
 	}
-#endif
 
 	return false;
 }
@@ -195,9 +158,6 @@ rspamd_fasttext_predict_result_t rspamd_lang_detection_fasttext_detect(void *ud,
 																	   rspamd_words_t *utf_words,
 																	   int k)
 {
-#ifndef WITH_FASTTEXT
-	return nullptr;
-#else
 	/* Avoid too long inputs */
 	static const size_t max_fasttext_input_len = 1024 * 1024;
 	auto *real_model = FASTTEXT_MODEL_TO_C_API(ud);
@@ -222,33 +182,27 @@ rspamd_fasttext_predict_result_t rspamd_lang_detection_fasttext_detect(void *ud,
 	auto *res = real_model->detect_language(words_vec, k);
 
 	return (rspamd_fasttext_predict_result_t) res;
-#endif
 }
 
 void rspamd_lang_detection_fasttext_destroy(void *ud)
 {
-#ifdef WITH_FASTTEXT
 	delete FASTTEXT_MODEL_TO_C_API(ud);
-#endif
 }
 
 
 unsigned int rspamd_lang_detection_fasttext_get_nlangs(rspamd_fasttext_predict_result_t res)
 {
-#ifdef WITH_FASTTEXT
 	auto *real_res = FASTTEXT_RESULT_TO_C_API(res);
 
 	if (real_res) {
 		return real_res->size();
 	}
-#endif
 	return 0;
 }
 
 const char *
 rspamd_lang_detection_fasttext_get_lang(rspamd_fasttext_predict_result_t res, unsigned int idx)
 {
-#ifdef WITH_FASTTEXT
 	auto *real_res = FASTTEXT_RESULT_TO_C_API(res);
 
 	if (real_res && real_res->size() > idx) {
@@ -259,29 +213,24 @@ rspamd_lang_detection_fasttext_get_lang(rspamd_fasttext_predict_result_t res, un
 		}
 		return lang.data();
 	}
-#endif
 	return nullptr;
 }
 
 float rspamd_lang_detection_fasttext_get_prob(rspamd_fasttext_predict_result_t res, unsigned int idx)
 {
-#ifdef WITH_FASTTEXT
 	auto *real_res = FASTTEXT_RESULT_TO_C_API(res);
 
 	if (real_res && real_res->size() > idx) {
 		return real_res->at(idx).first;
 	}
-#endif
 	return 0.0f;
 }
 
 void rspamd_fasttext_predict_result_destroy(rspamd_fasttext_predict_result_t res)
 {
-#ifdef WITH_FASTTEXT
 	auto *real_res = FASTTEXT_RESULT_TO_C_API(res);
 
 	delete real_res;
-#endif
 }
 
 G_END_DECLS
