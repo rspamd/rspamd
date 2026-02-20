@@ -1,0 +1,8 @@
+# Generated keys
+.env.keys
+
+# Runtime data
+data/
+
+# Docker volumes
+rspamd-db/

@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 --[[[
 -- @module lua_magic/patterns
@@ -283,6 +283,17 @@ local types = {
     type = 'image',
     ct = 'image/heic',
     av_check = false,
+  },
+  webp = {
+    type = 'image',
+    ct = 'image/webp',
+    av_check = false,
+  },
+  svg = {
+    type = 'image',
+    ct = 'image/svg+xml',
+    av_check = false,
+    no_text = true,
   },
   dwg = {
     type = 'image',

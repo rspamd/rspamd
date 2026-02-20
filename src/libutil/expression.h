@@ -159,6 +159,22 @@ void rspamd_expression_atom_foreach(struct rspamd_expression *expr,
 									rspamd_expression_atom_foreach_cb cb, gpointer cbdata);
 
 /**
+ * Extended callback that provides access to the AST node (for checking parent operations like NOT)
+ */
+typedef void (*rspamd_expression_atom_foreach_cb_ex)(GNode *atom_node,
+													 rspamd_expression_atom_t *atom,
+													 gpointer ud);
+
+/**
+ * Traverse over all atoms in the expression with access to AST nodes
+ * @param expr expression
+ * @param cb callback to be called with GNode and full atom structure
+ * @param ud opaque data passed to `cb`
+ */
+void rspamd_expression_atom_foreach_ex(struct rspamd_expression *expr,
+									   rspamd_expression_atom_foreach_cb_ex cb, gpointer cbdata);
+
+/**
  * Checks if a specified node in AST is the specified operation
  * @param node AST node packed in GNode container
  * @param op operation to check

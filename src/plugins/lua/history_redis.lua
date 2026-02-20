@@ -14,6 +14,50 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+local rspamd_logger = require "rspamd_logger"
+local rspamd_util = require "rspamd_util"
+local lua_util = require "lua_util"
+local lua_redis = require "lua_redis"
+local fun = require "fun"
+local ucl = require "ucl"
+local T = require "lua_shape.core"
+local PluginSchema = require "lua_shape.plugin_schema"
+local E = {}
+local N = "history_redis"
+
+local template_env = {
+  HOSTNAME = rspamd_util.get_hostname(),
+}
+
+local redis_params
+
+local settings = {
+  key_prefix = 'rs_history{{HOSTNAME}}{{COMPRESS}}', -- default key name template
+  expire = nil, -- default no expire
+  nrows = 200, -- default rows limit
+  compress = true, -- use zstd compression when storing data in redis
+  subject_privacy = false, -- subject privacy is off
+  subject_privacy_alg = 'blake2', -- default hash-algorithm to obfuscate subject
+  subject_privacy_prefix = 'obf', -- prefix to show it's obfuscated
+  subject_privacy_length = 16, -- cut the length of the hash
+}
+
+local settings_schema = lua_redis.enrich_schema({
+  key_prefix = T.string():doc({ summary = "History key name template" }),
+  expire = T.one_of({
+    T.number(),
+    T.transform(T.string(), lua_util.parse_time_interval)
+  }):optional():doc({ summary = "Expire time for inactive keys (seconds)" }),
+  nrows = T.number():doc({ summary = "History rows limit" }),
+  compress = T.boolean():doc({ summary = "Use zstd compression" }),
+  subject_privacy = T.boolean():optional():doc({ summary = "Obfuscate subjects for privacy" }),
+  subject_privacy_alg = T.string():optional():doc({ summary = "Hash algorithm for subject obfuscation" }),
+  subject_privacy_prefix = T.string():optional():doc({ summary = "Prefix for obfuscated subjects" }),
+  subject_privacy_length = T.number():optional():doc({ summary = "Hash length for obfuscated subjects" }),
+})
+
+PluginSchema.register("plugins.history_redis", settings_schema)
+
 if confighelp then
   rspamd_config:add_example(nil, 'history_redis',
       "Store history of checks for WebUI using Redis",
@@ -39,44 +83,6 @@ redis_history {
   ]])
   return
 end
-
-local rspamd_logger = require "rspamd_logger"
-local rspamd_util = require "rspamd_util"
-local lua_util = require "lua_util"
-local lua_redis = require "lua_redis"
-local fun = require "fun"
-local ucl = require "ucl"
-local ts = (require "tableshape").types
-local E = {}
-local N = "history_redis"
-
-local template_env = {
-  HOSTNAME = rspamd_util.get_hostname(),
-}
-
-local redis_params
-
-local settings = {
-  key_prefix = 'rs_history{{HOSTNAME}}{{COMPRESS}}', -- default key name template
-  expire = nil, -- default no expire
-  nrows = 200, -- default rows limit
-  compress = true, -- use zstd compression when storing data in redis
-  subject_privacy = false, -- subject privacy is off
-  subject_privacy_alg = 'blake2', -- default hash-algorithm to obfuscate subject
-  subject_privacy_prefix = 'obf', -- prefix to show it's obfuscated
-  subject_privacy_length = 16, -- cut the length of the hash
-}
-
-local settings_schema = lua_redis.enrich_schema({
-  key_prefix = ts.string,
-  expire = (ts.number + ts.string / lua_util.parse_time_interval):is_optional(),
-  nrows = ts.number,
-  compress = ts.boolean,
-  subject_privacy = ts.boolean:is_optional(),
-  subject_privacy_alg = ts.string:is_optional(),
-  subject_privacy_prefix = ts.string:is_optional(),
-  subject_privacy_length = ts.number:is_optional(),
-})
 
 local function process_addr(addr)
   if addr then
@@ -133,6 +139,12 @@ local function normalise_results(tbl, task)
   end
 
   tbl.user = task:get_user() or 'unknown'
+
+  -- Retrieve fuzzy hashes that matched during scanning
+  local fuzzy_hashes = task:get_mempool():get_variable('fuzzy_hashes', 'fstrings')
+  if fuzzy_hashes and #fuzzy_hashes > 0 then
+    tbl.fuzzy_hashes = fuzzy_hashes
+  end
 end
 
 local function history_save(task)
@@ -154,7 +166,7 @@ local function history_save(task)
   if data then
     normalise_results(data, task)
   else
-    rspamd_logger.errx('cannot get protocol reply, skip saving in history')
+    rspamd_logger.errx(task, 'cannot get protocol reply, skip saving in history')
     return
   end
 

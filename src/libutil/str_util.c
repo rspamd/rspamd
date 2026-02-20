@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -367,8 +367,7 @@ gsize rspamd_strlcpy_fast(char *dst, const char *src, gsize siz)
 	if (n-- != 0) {
 		if (((uintptr_t) s & MEM_ALIGN) == ((uintptr_t) d & MEM_ALIGN)) {
 			/* Init copy byte by byte */
-			for (; ((uintptr_t) s & MEM_ALIGN) && n && (*d = *s); n--, s++, d++)
-				;
+			for (; ((uintptr_t) s & MEM_ALIGN) && n && (*d = *s); n--, s++, d++);
 			if (n && *s) {
 				wd = (void *) d;
 				ws = (const void *) s;
@@ -386,8 +385,7 @@ gsize rspamd_strlcpy_fast(char *dst, const char *src, gsize siz)
 		}
 
 		/* Copy the rest */
-		for (; n && (*d = *s); n--, s++, d++)
-			;
+		for (; n && (*d = *s); n--, s++, d++);
 
 		*d = 0;
 	}
@@ -459,6 +457,11 @@ rspamd_strtol(const char *s, gsize len, glong *value)
 	const glong cutoff = G_MAXLONG / 10, cutlim = G_MAXLONG % 10;
 	gboolean neg;
 
+	/* Avoid absurd length */
+	if (len == 0 || len > sizeof("-18446744073709551615")) {
+		return FALSE;
+	}
+
 	/* Case negative values */
 	if (*p == '-') {
 		neg = TRUE;
@@ -527,6 +530,9 @@ rspamd_strtoul(const char *s, gsize len, gulong *value)
 	gulong v = 0;
 	const gulong cutoff = G_MAXULONG / 10, cutlim = G_MAXULONG % 10;
 
+	if (len == 0 || len > sizeof("-18446744073709551615")) {
+		return FALSE;
+	}
 	/* Some preparations for range errors */
 	CONV_STR_LIM_DECIMAL(G_MAXULONG);
 
@@ -572,7 +578,7 @@ rspamd_xstrtoul(const char *s, gsize len, gulong *value)
 				v += c;
 			}
 		}
-		else if (c >= 'a' || c <= 'f') {
+		else if (c >= 'a' && c <= 'f') {
 			c = c - 'a' + 10;
 			if (v > cutoff || (v == cutoff && (uint8_t) c > cutlim)) {
 				/* Range error */
@@ -1444,7 +1450,7 @@ rspamd_encode_qp_fold(const unsigned char *in, gsize inlen, int str_len,
 	char *out;
 	int ch, last_sp;
 	const unsigned char *end = in + inlen, *p = in;
-	static const char hexdigests[16] = "0123456789ABCDEF";
+	static const char hexdigests[] = "0123456789ABCDEF";
 
 	while (p < end) {
 		ch = *p;
@@ -2497,7 +2503,7 @@ int rspamd_encode_hex_buf(const unsigned char *in, gsize inlen, char *out,
 {
 	char *o, *end;
 	const unsigned char *p;
-	static const char hexdigests[16] = "0123456789abcdef";
+	static const char hexdigests[] = "0123456789abcdef";
 
 	end = out + outlen;
 	o = out;
@@ -2804,13 +2810,13 @@ rspamd_decode_uue_buf(const char *in, gsize inlen,
 		p += sizeof("begin ") - 1;
 		remain -= sizeof("begin ") - 1;
 
-		pos = rspamd_memcspn(p, nline, remain);
+		pos = rspamd_memcspn(p, remain, nline, strlen(nline));
 	}
 	else if (memcmp(p, "begin-base64 ", sizeof("begin-base64 ") - 1) == 0) {
 		base64 = TRUE;
 		p += sizeof("begin-base64 ") - 1;
 		remain -= sizeof("begin-base64 ") - 1;
-		pos = rspamd_memcspn(p, nline, remain);
+		pos = rspamd_memcspn(p, remain, nline, strlen(nline));
 	}
 	else {
 		/* Crap */
@@ -2851,7 +2857,7 @@ rspamd_decode_uue_buf(const char *in, gsize inlen,
 		const char *eol;
 		int i, ch;
 
-		pos = rspamd_memcspn(p, nline, remain);
+		pos = rspamd_memcspn(p, remain, nline, strlen(nline));
 
 		if (pos == 0) {
 			/* Skip empty lines */
@@ -2926,27 +2932,128 @@ rspamd_decode_uue_buf(const char *in, gsize inlen,
 	return (o - out);
 }
 
+gssize
+rspamd_decode_ascii85_buf(const char *in, gsize inlen,
+						  unsigned char *out, gsize outlen)
+{
+	const char *p = in;
+	const char *end = in + inlen;
+	unsigned char *o = out;
+	unsigned char *out_end = out + outlen;
+	uint32_t tuple = 0;
+	int count = 0;
+
+	while (p < end) {
+		unsigned char c = *p++;
+
+		/* Skip whitespace */
+		if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f') {
+			continue;
+		}
+
+		/* Check for end marker '~>' */
+		if (c == '~') {
+			if (p < end && *p == '>') {
+				/* End of ASCII85 data */
+				break;
+			}
+			if (p >= end) {
+				/* '~' at end of buffer - treat as truncated end marker */
+				break;
+			}
+			/* Invalid: '~' followed by something other than '>' */
+			return -1;
+		}
+
+		/* Special case: 'z' represents 4 zero bytes */
+		if (c == 'z') {
+			if (count != 0) {
+				/* 'z' can only appear between complete groups */
+				return -1;
+			}
+			if (out_end - o < 4) {
+				return -1;
+			}
+			*o++ = 0;
+			*o++ = 0;
+			*o++ = 0;
+			*o++ = 0;
+			continue;
+		}
+
+		/* Valid ASCII85 characters are '!' (33) to 'u' (117) */
+		if (c < '!' || c > 'u') {
+			return -1;
+		}
+
+		/* Accumulate the value */
+		tuple = tuple * 85 + (c - '!');
+		count++;
+
+		if (count == 5) {
+			/* Output 4 bytes (big-endian) */
+			if (out_end - o < 4) {
+				return -1;
+			}
+			*o++ = (tuple >> 24) & 0xFF;
+			*o++ = (tuple >> 16) & 0xFF;
+			*o++ = (tuple >> 8) & 0xFF;
+			*o++ = tuple & 0xFF;
+			tuple = 0;
+			count = 0;
+		}
+	}
+
+	/* Handle final incomplete group */
+	if (count > 0) {
+		/* Pad with 'u' (84) to complete the group */
+		int padding = 5 - count;
+		for (int i = 0; i < padding; i++) {
+			tuple = tuple * 85 + 84;
+		}
+
+		/* Output (count - 1) bytes */
+		int out_bytes = count - 1;
+		if (out_end - o < out_bytes) {
+			return -1;
+		}
+
+		if (out_bytes >= 1) {
+			*o++ = (tuple >> 24) & 0xFF;
+		}
+		if (out_bytes >= 2) {
+			*o++ = (tuple >> 16) & 0xFF;
+		}
+		if (out_bytes >= 3) {
+			*o++ = (tuple >> 8) & 0xFF;
+		}
+	}
+
+	return o - out;
+}
+
 #define BITOP(a, b, op) \
 	((a)[(gsize) (b) / (8 * sizeof *(a))] op(gsize) 1 << ((gsize) (b) % (8 * sizeof *(a))))
 
 
-gsize rspamd_memcspn(const char *s, const char *e, gsize len)
+gsize rspamd_memcspn(const void *data, gsize dlen, const void *reject, gsize rlen)
 {
 	gsize byteset[32 / sizeof(gsize)];
-	const char *p = s, *end = s + len;
+	const unsigned char *s = (const unsigned char *) data;
+	const unsigned char *r = (const unsigned char *) reject;
+	const unsigned char *p = s, *end = s + dlen;
 
-	if (!e[1]) {
-		for (; p < end && *p != *e; p++)
-			;
-		return p - s;
+	memset(byteset, 0, sizeof(byteset));
+
+	/* Build bitset from reject set */
+	for (gsize i = 0; i < rlen; i++) {
+		BITOP(byteset, r[i], |=);
 	}
 
-	memset(byteset, 0, sizeof byteset);
-
-	for (; *e && BITOP(byteset, *(unsigned char *) e, |=); e++)
-		;
-	for (; p < end && !BITOP(byteset, *(unsigned char *) p, &); p++)
-		;
+	/* Scan for first character in reject set */
+	while (p < end && !BITOP(byteset, *p, &)) {
+		p++;
+	}
 
 	return p - s;
 }
@@ -2956,18 +3063,21 @@ gsize rspamd_memspn(const char *s, const char *e, gsize len)
 	gsize byteset[32 / sizeof(gsize)];
 	const char *p = s, *end = s + len;
 
+	if (!e[0]) {
+		/* Empty set - nothing matches */
+		return 0;
+	}
+
 	if (!e[1]) {
-		for (; p < end && *p == *e; p++)
-			;
+		/* Single character optimization */
+		for (; p < end && *p == *e; p++);
 		return p - s;
 	}
 
 	memset(byteset, 0, sizeof byteset);
 
-	for (; *e && BITOP(byteset, *(unsigned char *) e, |=); e++)
-		;
-	for (; p < end && BITOP(byteset, *(unsigned char *) p, &); p++)
-		;
+	for (; *e && BITOP(byteset, *(unsigned char *) e, |=); e++);
+	for (; p < end && BITOP(byteset, *(unsigned char *) p, &); p++);
 
 	return p - s;
 }
@@ -3044,7 +3154,7 @@ rspamd_decode_qp2047_buf(const char *in, gsize inlen,
 		}
 		else {
 			if (end - o >= remain) {
-				processed = rspamd_memcspn(p, "=_", remain);
+				processed = rspamd_memcspn(p, remain, "=_", 2);
 				memcpy(o, p, processed);
 				o += processed;
 
@@ -3084,7 +3194,7 @@ rspamd_encode_qp2047_buf(const char *in, gsize inlen,
 						 char *out, gsize outlen)
 {
 	char *o = out, *end = out + outlen, c;
-	static const char hexdigests[16] = "0123456789ABCDEF";
+	static const char hexdigests[] = "0123456789ABCDEF";
 
 	while (inlen > 0 && o < end) {
 		c = *in;
@@ -3344,7 +3454,7 @@ rspamd_str_regexp_escape(const char *pattern, gsize slen,
 	const char *p, *end = pattern + slen;
 	char *res, *d, t, *tmp_utf = NULL, *dend;
 	gsize len;
-	static const char hexdigests[16] = "0123456789abcdef";
+	static const char hexdigests[] = "0123456789abcdef";
 
 	len = 0;
 	p = pattern;
@@ -3764,8 +3874,9 @@ rspamd_string_len_split(const char *in, gsize len, const char *spill,
 	char **res;
 
 	/* Detect number of elements */
+	gsize spill_len = strlen(spill);
 	while (p < end) {
-		gsize cur_fragment = rspamd_memcspn(p, spill, end - p);
+		gsize cur_fragment = rspamd_memcspn(p, end - p, spill, spill_len);
 
 		if (cur_fragment > 0) {
 			detected_elts++;
@@ -3787,7 +3898,7 @@ rspamd_string_len_split(const char *in, gsize len, const char *spill,
 	p = in;
 
 	while (p < end) {
-		gsize cur_fragment = rspamd_memcspn(p, spill, end - p);
+		gsize cur_fragment = rspamd_memcspn(p, end - p, spill, spill_len);
 
 		if (cur_fragment > 0) {
 			char *elt;
@@ -3883,4 +3994,54 @@ rspamd_str_has_8bit(const unsigned char *beg, gsize len)
 #endif
 
 	return rspamd_str_has_8bit_u64(beg, len);
+}
+
+gssize
+rspamd_getline(char **lineptr, gsize *n, FILE *stream)
+{
+	char *line = *lineptr;
+	gsize len = *n;
+	gssize nread = 0;
+	int c;
+
+	if (line == NULL || len == 0) {
+		len = 120;
+		line = g_malloc(len);
+		if (line == NULL) {
+			return -1;
+		}
+	}
+
+	while ((c = fgetc(stream)) != EOF) {
+		if ((gsize) nread >= len - 1) {
+			gsize new_len = len * 2;
+			char *new_line = g_realloc(line, new_len);
+			if (new_line == NULL) {
+				return -1;
+			}
+			line = new_line;
+			len = new_len;
+		}
+
+		line[nread++] = c;
+
+		if (c == '\n') {
+			break;
+		}
+	}
+
+	if (nread == 0 && c == EOF) {
+		return -1;
+	}
+
+	line[nread] = '\0';
+	*lineptr = line;
+	*n = len;
+
+	return nread;
+}
+
+void rspamd_getline_free(char *lineptr)
+{
+	g_free(lineptr);
 }

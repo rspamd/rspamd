@@ -45,7 +45,13 @@ Password option should be changed for sure for your specific configuration. Encr
 Interface itself is written in pure HTML5/js and, hence, it requires zero setup.
 Just enter a password for webui access and you are ready.
 
+## Development
+
+For developers looking to contribute to or modify the WebUI, see [ARCHITECTURE.md](ARCHITECTURE.md) for:
+- Code structure and organization
+- Technology stack details
+- Development patterns and practices
+
 ## Contact information
 
-Rspamd interface is distributed under the terms of [MIT license](http://opensource.org/licenses/MIT). For all questions related to this
-product please see the [support page](https://rspamd.com/support.html)
+For all questions related to this product please see the [support page](https://rspamd.com/support.html)

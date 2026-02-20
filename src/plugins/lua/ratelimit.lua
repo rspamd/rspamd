@@ -72,9 +72,19 @@ local message_func = function(_, limit_type, _, _, _)
 end
 
 local function load_scripts(_, _)
-  bucket_check_id = lua_redis.load_redis_script_from_file(bucket_check_script, redis_params)
-  bucket_update_id = lua_redis.load_redis_script_from_file(bucket_update_script, redis_params)
-  bucket_cleanup_id = lua_redis.load_redis_script_from_file(bucket_cleanup_script, redis_params)
+  local err
+  bucket_check_id, err = lua_redis.load_redis_script_from_file(bucket_check_script, redis_params)
+  if err then
+    rspamd_logger.errx(rspamd_config, err)
+  end
+  bucket_update_id, err = lua_redis.load_redis_script_from_file(bucket_update_script, redis_params)
+  if err then
+    rspamd_logger.errx(rspamd_config, err)
+  end
+  bucket_cleanup_id, err = lua_redis.load_redis_script_from_file(bucket_cleanup_script, redis_params)
+  if err then
+    rspamd_logger.errx(rspamd_config, err)
+  end
 end
 
 --- Check whether this addr is bounce
@@ -235,33 +245,34 @@ local function make_prefix(redis_key, name, bucket)
   -- If settings.dynamic_rate_limit is false, then the default dynamic rate limits are 1.0
   -- We always allow per-bucket overrides of the dyn rate limits
 
-  local seen_specific_dyn_rate = false
+  bucket.specific_dyn_rate = bucket.spam_factor_rate or
+    bucket.ham_factor_rate or
+    bucket.spam_factor_burst or
+    bucket.ham_factor_burst or
+    false
 
-  if not bucket.spam_factor_rate then
-    bucket.spam_factor_rate = settings.dynamic_rate_limit and settings.spam_factor_rate or 1.0
+  if bucket.specific_dyn_rate or settings.dynamic_rate_limit then
+    bucket.dyn_rate_enabled = true
+    bucket.spam_factor_rate = bucket.spam_factor_rate or settings.spam_factor_rate
+    bucket.ham_factor_rate = bucket.ham_factor_rate or settings.ham_factor_rate
+    bucket.spam_factor_burst = bucket.spam_factor_burst or settings.spam_factor_burst
+    bucket.ham_factor_burst = bucket.ham_factor_burst or settings.ham_factor_burst
+    rspamd_logger.infox('creating dynamic prefix %s, %s, %s, %s',
+      bucket.spam_factor_rate,
+      bucket.ham_factor_rate,
+      bucket.spam_factor_burst,
+      bucket.ham_factor_burst)
   else
-    seen_specific_dyn_rate = true
-  end
-  if not bucket.ham_factor_rate then
-    bucket.ham_factor_rate = settings.dynamic_rate_limit and settings.ham_factor_rate or 1.0
-  else
-    seen_specific_dyn_rate = true
-  end
-  if not bucket.spam_factor_burst then
-    bucket.spam_factor_burst = settings.dynamic_rate_limit and settings.spam_factor_burst or 1.0
-  else
-    seen_specific_dyn_rate = true
-  end
-  if not bucket.ham_factor_burst then
-    bucket.ham_factor_burst = settings.dynamic_rate_limit and settings.ham_factor_burst or 1.0
-  else
-    seen_specific_dyn_rate = true
+    bucket.dyn_rate_enabled = false
+    bucket.spam_factor_rate = 1.0
+    bucket.ham_factor_rate = 1.0
+    bucket.spam_factor_burst = 1.0
+    bucket.ham_factor_burst = 1.0
   end
 
-  if seen_specific_dyn_rate then
-    -- Use if afterwards in case we don't use global dyn rates
-    bucket.specific_dyn_rate = true
-  end
+  bucket.max_rate_mult = bucket.max_rate_mult or settings.max_rate_mult
+  bucket.max_bucket_mult = bucket.max_bucket_mult or settings.max_bucket_mult
+
 
   return {
     bucket = bucket,
@@ -373,7 +384,7 @@ local function ratelimit_cb(task)
   local function gen_check_cb(prefix, bucket, lim_name, lim_key)
     return function(err, data)
       if err then
-        rspamd_logger.errx('cannot check limit %s: %s', prefix, err)
+        rspamd_logger.errx(task, 'cannot check limit %s: %s', prefix, err)
       elseif type(data) == 'table' and data[1] then
         lua_util.debugm(N, task,
             "got reply for limit %s (%s / %s); %s burst, %s:%s dyn, %s leaked",
@@ -449,15 +460,13 @@ local function ratelimit_cb(task)
         bincr = 1
       end
 
-      local dyn_rate_enabled = settings.dynamic_rate_limit or bucket.specific_dyn_rate
-
       lua_util.debugm(N, task, "check limit %s:%s -> %s (%s/%s)",
           value.name, pr, value.hash, bucket.burst, bucket.rate)
       lua_redis.exec_redis_script(bucket_check_id,
           { key = value.hash, task = task, is_write = true },
           gen_check_cb(pr, bucket, value.name, value.hash),
           { value.hash, tostring(now), tostring(rate), tostring(bucket.burst),
-            tostring(settings.expire), tostring(bincr), tostring(dyn_rate_enabled),
+            tostring(settings.expire), tostring(bincr), tostring(bucket.dyn_rate_enabled),
             tostring(settings.lfb_cache_prefix), tostring(settings.lfb_max_cache_size) })
     end
   end
@@ -476,7 +485,7 @@ local function maybe_cleanup_pending(task)
         local bucket = v.bucket
         local function cleanup_cb(err, data)
           if err then
-            rspamd_logger.errx('cannot cleanup limit %s: %s', k, err)
+            rspamd_logger.errx(task, 'cannot cleanup limit %s: %s', k, err)
           else
             lua_util.debugm(N, task, 'cleaned pending bucked for %s: %s', k, data)
           end
@@ -546,26 +555,34 @@ local function ratelimit_update_cb(task)
       local mult_rate = 1.0
 
       if verdict == 'spam' or verdict == 'junk' then
-        mult_burst = bucket.spam_factor_burst or 1.0
-        mult_rate = bucket.spam_factor_rate or 1.0
+        mult_burst = bucket.spam_factor_burst
+        mult_rate = bucket.spam_factor_rate
       elseif verdict == 'ham' then
-        mult_burst = bucket.ham_factor_burst or 1.0
-        mult_rate = bucket.ham_factor_rate or 1.0
+        mult_burst = bucket.ham_factor_burst
+        mult_rate = bucket.ham_factor_rate
       end
 
       local bincr = nrcpt
       if bucket.skip_recipients then
         bincr = 1
       end
-
-      local dyn_rate_enabled = settings.dynamic_rate_limit or bucket.specific_dyn_rate
+      lua_util.debugm(N,
+        task,
+        "run bucket_update script, verdict %s, with mult_rate %s, mult_burst %s, max_rate %s, max_bucket %s, dyn_rate_enabled %s",
+        verdict,
+        tostring(mult_rate),
+        tostring(mult_burst),
+        tostring(bucket.max_rate_mult),
+        tostring(bucket.max_bucket_mult),
+        tostring(bucket.dyn_rate_enabled)
+      )
 
       lua_redis.exec_redis_script(bucket_update_id,
           { key = v.hash, task = task, is_write = true },
           update_bucket_cb,
           { v.hash, tostring(now), tostring(mult_rate), tostring(mult_burst),
-            tostring(settings.max_rate_mult), tostring(settings.max_bucket_mult),
-            tostring(settings.expire), tostring(bincr), tostring(dyn_rate_enabled) })
+            tostring(bucket.max_rate_mult), tostring(bucket.max_bucket_mult),
+            tostring(settings.expire), tostring(bincr), tostring(bucket.dyn_rate_enabled) })
     end
   end
 end

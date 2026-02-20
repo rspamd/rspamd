@@ -118,6 +118,15 @@ struct http_map_data {
 	gboolean request_sent;
 	uint64_t gen;
 	uint16_t port;
+	/* Optional per-map HTTP staged timeouts */
+	ev_tstamp connect_timeout;
+	ev_tstamp ssl_timeout;
+	ev_tstamp write_timeout;
+	ev_tstamp read_timeout;
+	/* Optional keepalive tuning */
+	double connection_ttl;
+	double idle_timeout;
+	unsigned int max_reuse;
 };
 
 struct static_map_data {
@@ -134,20 +143,16 @@ union rspamd_map_backend_data {
 
 
 struct rspamd_map;
-/*
- * Shared between workers
- */
-struct rspamd_map_shared_backend_data {
-	int locked;
-	int loaded;
-	int cached;
-};
+
 struct rspamd_map_backend {
 	enum fetch_proto protocol;
 	gboolean is_signed;
 	gboolean is_compressed;
+	/* Symmetric encryption (Secretbox) */
+	gboolean is_encrypted;
+	gboolean has_secretbox_key;
+	unsigned char secretbox_key[32]; /* crypto_secretbox_KEYBYTES */
 	gboolean is_fallback;
-	struct rspamd_map_shared_backend_data *shared;
 	struct rspamd_map *map;
 	struct ev_loop *event_loop;
 	uint64_t id;
@@ -158,6 +163,14 @@ struct rspamd_map_backend {
 };
 
 struct map_periodic_cbdata;
+
+/*
+ * Shared between workers
+ */
+struct rspamd_map_shared_data {
+	int loaded;
+	int cached;
+};
 
 struct rspamd_map {
 	struct rspamd_dns_resolver *r;
@@ -193,6 +206,8 @@ struct rspamd_map {
 	bool static_only;  /* No need to check */
 	bool no_file_read; /* Do not read files */
 	bool seen;         /* This map has already been watched or pre-loaded */
+	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
+	struct rspamd_map_shared_data *shared;
 	char tag[MEMPOOL_UID_LEN];
 };
 
@@ -209,7 +224,6 @@ struct map_periodic_cbdata {
 	ev_timer ev;
 	gboolean need_modify;
 	gboolean errored;
-	gboolean locked;
 	unsigned int cur_backend;
 	ref_entry_t ref;
 };

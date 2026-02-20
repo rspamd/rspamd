@@ -15,6 +15,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+-- Load RBL common module early to register schema for confighelp
+local rbl_common = require "plugins/rbl"
+
 if confighelp then
   return
 end
@@ -28,7 +31,6 @@ local lua_util = require 'lua_util'
 local selectors = require "lua_selectors"
 local bit = require 'bit'
 local lua_maps = require "lua_maps"
-local rbl_common = require "plugins/rbl"
 local rspamd_url = require "rspamd_url"
 
 -- This plugin implements various types of RBL checks
@@ -857,7 +859,9 @@ local function gen_rbl_callback(rule)
     check_required_symbols -- if we have require_symbols then check those symbols
   }
   local description = {
+    'allowed',
     'alive',
+    'required_symbols',
   }
 
   if rule.exclude_users then
@@ -934,8 +938,8 @@ local function gen_rbl_callback(rule)
     for i, f in ipairs(pipeline) do
       if not f(task, dns_req, whitelist) then
         lua_util.debugm(N, task,
-            "skip rbl check: %s; pipeline condition %s returned false",
-            rule.symbol, i)
+            "skip rbl check: %s; pipeline condition %s (%s) returned false",
+            rule.symbol, i, description[i])
         return
       end
     end

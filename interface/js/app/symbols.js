@@ -1,25 +1,5 @@
 /*
- The MIT License (MIT)
-
- Copyright (C) 2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
-
- Permission is hereby granted, free of charge, to any person obtaining a copy
- of this software and associated documentation files (the "Software"), to deal
- in the Software without restriction, including without limitation the rights
- to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- copies of the Software, and to permit persons to whom the Software is
- furnished to do so, subject to the following conditions:
-
- The above copyright notice and this permission notice shall be included in
- all copies or substantial portions of the Software.
-
- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- THE SOFTWARE.
+ * Copyright (C) 2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
  */
 
 /* global FooTable */
@@ -61,6 +41,7 @@ define(["jquery", "app/common", "footable"],
             const items = [];
             const lookup = {};
             const freqs = [];
+            const stddevs = [];
             const distinct_groups = [];
 
             data.forEach((group) => {
@@ -83,12 +64,13 @@ define(["jquery", "app/common", "footable"],
                     if (!item.time) {
                         item.time = 0;
                     }
-                    item.time = Number(item.time).toFixed(2) + "s";
-                    if (!item.frequency) {
-                        item.frequency = 0;
-                    }
+                    item.time = Number(item.time).toFixed(2);
+
+                    // Normalize frequency values for scaling
+                    ["frequency", "frequency_stddev"].forEach((p) => (item[p] = Number(item[p] || 0)));
+
                     freqs.push(item.frequency);
-                    item.frequency = Number(item.frequency).toFixed(2);
+                    stddevs.push(item.frequency_stddev);
                     if (!(item.group in lookup)) {
                         lookup[item.group] = 1;
                         distinct_groups.push(item.group);
@@ -97,10 +79,11 @@ define(["jquery", "app/common", "footable"],
                 });
             });
 
-            // For better mean calculations
-            const avg_freq = freqs
-                .sort((a, b) => Number(a) < Number(b))
-                .reduce((f1, acc) => f1 + acc) / (freqs.length !== 0 ? freqs.length : 1.0);
+            // For better mean calculations - use only non-zero values
+            const nonzero_freqs = freqs.filter((f) => Number(f) > 0.0);
+            const avg_freq = nonzero_freqs.length > 0
+                ? nonzero_freqs.reduce((acc, f) => acc + Number(f), 0.0) / nonzero_freqs.length
+                : 0.0;
             let mult = 1.0;
             let exp = 0.0;
 
@@ -110,14 +93,16 @@ define(["jquery", "app/common", "footable"],
                     exp++;
                 }
             }
-            $.each(items, (i, item) => {
-                item.frequency = Number(item.frequency) * mult;
 
-                if (exp > 0) {
-                    item.frequency = item.frequency.toFixed(2) + "e-" + exp;
-                } else {
-                    item.frequency = item.frequency.toFixed(2);
-                }
+            function formatFrequency(value) {
+                return {
+                    value: (value * mult).toFixed(2) + ((exp > 0) ? "e-" + exp : ""),
+                    options: {sortValue: value}
+                };
+            }
+            $.each(items, (i, item) => {
+                item.frequency = formatFrequency(item.frequency);
+                item.frequency_stddev = formatFrequency(item.frequency_stddev);
             });
             return [items, distinct_groups];
         }
@@ -135,6 +120,7 @@ define(["jquery", "app/common", "footable"],
                         construct: function (instance) {
                             this._super(instance);
                             [,this.groups] = items;
+                            this.groups.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
                             this.def = "Any group";
                             this.$group = null;
                         },
@@ -194,13 +180,17 @@ define(["jquery", "app/common", "footable"],
                             {name: "description", title: "Description", breakpoints: "md"},
                             {name: "weight", title: "Score"},
                             {name: "frequency",
-                                title: "Frequency",
+                                title: "Frequency, <nobr>hits/s</nobr>",
                                 breakpoints: "md",
-                                sortValue: function (value) { return Number(value).toFixed(2); }},
+                                sortValue: (val) => val.options.sortValue},
+                            {name: "frequency_stddev",
+                                title: "Stddev, <nobr>hits/s</nobr>",
+                                breakpoints: "lg",
+                                sortValue: (val) => val.options.sortValue},
                             {name: "time",
-                                title: "Avg. time",
+                                title: "Avg. time, s",
                                 breakpoints: "md",
-                                sortValue: function (value) { return parseFloat(value); }},
+                                sortValue: (val) => parseFloat(val)},
                         ],
                         rows: items[0],
                         paging: {

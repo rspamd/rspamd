@@ -1,27 +1,7 @@
 /*
-The MIT License (MIT)
-
-Copyright (C) 2012-2013 Anton Simonov <untone@gmail.com>
-Copyright (C) 2014-2015 Vsevolod Stakhov <vsevolod@highsecure.ru>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
+ * Copyright (C) 2012-2013 Anton Simonov <untone@gmail.com>
+ * Copyright (C) 2014-2015 Vsevolod Stakhov <vsevolod@highsecure.ru>
+ */
 
 /* stylelint-disable selector-id-pattern */
 
@@ -31,6 +11,60 @@ THE SOFTWARE.
     /* Tweak bootstrap 5 colors for better accessibility */
     --bs-danger-rgb: 221, 0, 0;
     --bs-success-rgb: 40, 139, 69;
+
+    /* Light mode (default) colors */
+    --rspamd-bg-card-gradient-start: #f9f9f9;
+    --rspamd-bg-card-gradient-end: #ededed;
+    --rspamd-text-primary: #000000;
+    --rspamd-text-secondary: #666666;
+    --rspamd-nav-active-bg: #e7e7e7;
+    --rspamd-sidebar-bg: #ffffee;
+    --rspamd-symbol-description-color: #484848;
+    --rspamd-symbol-negative-bg: #eef9e7;
+    --rspamd-symbol-positive-bg: #fbe9e5;
+    --rspamd-symbol-special-bg: #e2e9fe;
+    --rspamd-symbol-hover-bg: #e6e6e6;
+    --rspamd-table-danger-bg: #fbe9e5;
+    --rspamd-table-success-bg: #eef9e7;
+    --rspamd-table-warning-bg: #fff8e6;
+    --rspamd-bs-table-bg: #f8f9fa;
+
+    /* Per-type hover colors (light theme) */
+    --rspamd-symbol-negative-hover-bg: #dcf9d3;
+    --rspamd-symbol-positive-hover-bg: #fbd6d1;
+    --rspamd-symbol-special-hover-bg: #cddbff;
+
+    /* Light mode logo display rules */
+    --rspamd-display-logo-light: inline;
+    --rspamd-display-logo-dark: none;
+}
+
+[data-theme="dark"] {
+    /* Dark mode colors */
+    --rspamd-bg-card-gradient-start: #2a2a2a;
+    --rspamd-bg-card-gradient-end: #252525;
+    --rspamd-text-primary: #cccccc;
+    --rspamd-text-secondary: #b0b0b0;
+    --rspamd-nav-active-bg: #404040;
+    --rspamd-sidebar-bg: #444422;
+    --rspamd-symbol-description-color: #848484;
+    --rspamd-symbol-negative-bg: #1a3a1a;
+    --rspamd-symbol-positive-bg: #3a1a1a;
+    --rspamd-symbol-special-bg: #3a3a5a;
+    --rspamd-symbol-hover-bg: #000000;
+    --rspamd-table-danger-bg: #390b00;
+    --rspamd-table-success-bg: #102d00;
+    --rspamd-table-warning-bg: #43380b;
+    --rspamd-bs-table-bg: #272b2f;
+
+    /* Per-type hover colors (dark theme) */
+    --rspamd-symbol-negative-hover-bg: #274f27;
+    --rspamd-symbol-positive-hover-bg: #4b2b2b;
+    --rspamd-symbol-special-hover-bg: #41426a;
+
+    /* Dark mode logo display rules */
+    --rspamd-display-logo-light: none;
+    --rspamd-display-logo-dark: inline;
 }
 
 /* bootstrap 4 overrides */
@@ -45,25 +79,24 @@ small,
     font-size: 85%;
 }
 .text-secondary {
-    color: #666 !important;
+    color: var(--rspamd-text-secondary) !important;
 }
 .navbar {
     padding-top: 0;
     padding-bottom: 0;
     margin-bottom: 20px;
-    border-bottom: 1px solid rgb(231 231 231);
 }
 .nav-pills .nav-link.active {
-    background-color: #e7e7e7;
+    background-color: var(--rspamd-nav-active-bg);
 }
 .danger > td {
-    background-color: #fbe9e5;
+    background-color: var(--rspamd-table-danger-bg);
 }
 .success > td {
-    background-color: #eef9e7;
+    background-color: var(--rspamd-table-success-bg);
 }
 td.warning {
-    background-color: #fff8e6;
+    background-color: var(--rspamd-table-warning-bg);
 }
 @media (max-width: 1199px) {
     .navbar-collapse.order-3 {
@@ -94,6 +127,15 @@ td.warning {
 fieldset[disabled] .btn {
     pointer-events: auto;
     cursor: not-allowed;
+}
+.card.disabled,
+.input-group.disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+.card.disabled *,
+.input-group.disabled * {
+    pointer-events: none;
 }
 .w-1 {
     width: 1%;
@@ -131,9 +173,65 @@ textarea {
     border-bottom-right-radius:4px
 }
 
+/* FooTable dark mode */
+[data-theme="dark"] .footable .pagination .footable-page-link,
+[data-theme="dark"] .footable .form-control {
+    color: #aaaaaa;
+    background-color: var(--bs-body-bg);
+    border-color: var(--bs-border-color)
+}
+[data-theme="dark"] .footable .btn-primary {
+    color: #ffffff;
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+[data-theme="dark"] .footable .btn-primary:hover {
+  background-color: #0b5ed7;
+  border-color: #0a58ca;
+}
+[data-theme="dark"] .footable .btn-default {
+    color: #ffffff;
+    background-color: #6c757d;
+    border-color: #6c757d;
+}
+[data-theme="dark"] .footable .btn-default:hover,
+[data-theme="dark"] .footable .open > .dropdown-toggle.btn-default {
+    background-color: #5c636a;
+    border-color: #565e64;
+}
+
+[data-theme="dark"] .footable .dropdown-menu {
+    background-color: var(--bs-body-bg);
+    border-color: var(--bs-dropdown-border-color);
+}
+[data-theme="dark"] .footable .dropdown-menu > li > a {
+    color: #aaaaaa;
+}
+[data-theme="dark"] .footable .dropdown-menu > li > a:hover {
+    background-color: var(--bs-dropdown-link-hover-bg);
+}
+
+[data-theme="dark"] .footable .pagination > li a:hover {
+    background-color: var(--bs-nav-link-disabled-color);
+    border-color: var(--bs-border-color);
+}
+[data-theme="dark"] .footable .pagination .footable-page-link:hover {
+    color: var(--bs-nav-link-hover-color);
+}
+[data-theme="dark"] .footable .pagination .footable-page.active .footable-page-link {
+    background-color: var(--rspamd-nav-active-bg);
+    color: var(--rspamd-text-primary);
+}
+
 /* local overrides */
 .navbar-brand > img {
     height: 50px;
+}
+.logo-light {
+    display: var(--rspamd-display-logo-light);
+}
+.logo-dark {
+    display: var(--rspamd-display-logo-dark);
 }
 .btn-group > .btn.radius-right {
     border-top-right-radius: var(--bs-btn-border-radius) !important;
@@ -172,38 +270,23 @@ table#symbolsTable input[type="number"] {
     display: inline-block;
     padding-left: 35px;
 }
-.alert,
-.alert h4 {
-    color: #c09853;
-}
-.alert h4 {
-    margin: 0;
-}
-.alert-success {
+[data-theme="light"] .alert-success {
     color: #468847;
     background: #dff0d8;
     border-color: #d6e9c6;
 }
-.alert-success h4 {
-    color: #468847;
-}
-.alert-danger,
-.alert-error {
+[data-theme="light"] .alert-danger {
     color: #b94a48;
     background: #f2dede;
     border-color: #eed3d7;
 }
-.alert-danger h4,
-.alert-error h4 {
-    color: #b94a48;
+[data-theme="light"] .alert-warning {
+    color: #c09853;
 }
-.alert-info {
+[data-theme="light"] .alert-info {
     color: #3a87ad;
     background: #d9edf7;
     border-color: #bce8f1;
-}
-.alert-info h4 {
-    color: #3a87ad;
 }
 
 #authInvalidCharFeedback,
@@ -215,16 +298,14 @@ table#symbolsTable input[type="number"] {
 
 .card-header,
 .modal-header {
-    background-color: #f3f3f3;
-    background-image: linear-gradient(to bottom, #fdfdfd, #eaeaea);
+    background-image: linear-gradient(to bottom, var(--rspamd-bg-card-gradient-start), var(--rspamd-bg-card-gradient-end));
 }
 .card-header .h6 {
     font-size: 0.857rem;
 }
 
 .stat-box {
-    background-color: #f3f3f3;
-    background-image: linear-gradient(to bottom, #f9f9f9, #ededed);
+    background-image: linear-gradient(to bottom, var(--rspamd-bg-card-gradient-start), var(--rspamd-bg-card-gradient-end));
     line-height: 1;
 }
 .stat-box:not(.float-end) {
@@ -244,25 +325,33 @@ table#symbolsTable input[type="number"] {
     padding-right: 2px;
 }
 .symbol-default:hover {
-    background-color: #e6e6e6;
+    background-color: var(--rspamd-symbol-hover-bg);
 }
 .symbol-negative.symbol-negative {
-    background-color: #eef9e7;
+    background-color: var(--rspamd-symbol-negative-bg);
 }
 .symbol-positive.symbol-positive {
-    background-color: #fbe9e5;
+    background-color: var(--rspamd-symbol-positive-bg);
 }
 .symbol-special {
-    background-color: #e2e9fe;
+    background-color: var(--rspamd-symbol-special-bg);
 }
 .symbol-negative:hover {
-    background-color: #dcf9d3;
+    background-color: var(--rspamd-symbol-negative-hover-bg);
 }
 .symbol-positive:hover {
-    background-color: #fbd6d1;
+    background-color: var(--rspamd-symbol-positive-hover-bg);
 }
 .symbol-special:hover {
-    background-color: #cddbff;
+    background-color: var(--rspamd-symbol-special-hover-bg);
+}
+
+/* Disable individual cell hover in status tables - use table-hover-cell instead */
+.status-table tbody .symbol-negative:hover {
+    background-color: var(--rspamd-symbol-negative-bg);
+}
+.status-table tbody .symbol-positive:hover {
+    background-color: var(--rspamd-symbol-positive-bg);
 }
 
 /* For symbol description display on hover/focus */
@@ -271,7 +360,7 @@ table#symbolsTable input[type="number"] {
 }
 .symbol-description {
     display: none;
-    color: #484848;
+    color: var(--rspamd-symbol-description-color);
 }
 .symbol-default:hover .symbol-description,
 .symbol-default:focus .symbol-description {
@@ -337,6 +426,12 @@ table#symbolsTable input[type="number"] {
     border-radius: 0 0 0 calc(var(--bs-border-radius) + 1px);
 }
 
+/* Hover effect for table cells in tables with rowspan groups */
+.status-table tbody td.table-hover-cell {
+    --bs-table-color-state: var(--bs-table-hover-color);
+    --bs-table-bg-state: var(--bs-table-hover-bg);
+}
+
 /* RRD summary */
 #summary-row {
     padding-left: 80px;
@@ -366,6 +461,8 @@ table#symbolsTable input[type="number"] {
     text-align: left;
     font-size: 12px;
     z-index: 100;
+
+    --bs-table-bg: var(--rspamd-bs-table-bg);
 }
 #rrd-table td {
     color: inherit;
@@ -410,9 +507,33 @@ table#symbolsTable input[type="number"] {
 .footable-filtering-search .dropdown-menu .sym-order-toggle {
     display: none;
 }
+.fuzzy-hash-actions .btn-xs {
+    padding: 1px 0.3rem;
+    font-size: 0.75rem;
+    line-height: 1;
+}
+.fuzzy-hash-actions .btn-xs svg {
+    height: 0.65rem;
+    vertical-align: baseline;
+}
 
+.search-syntax-icon {
+    position: absolute;
+    top: 50%;
+    transform: translate(-150%, -50%);
+    z-index: 3;
+    opacity: 0.3;
+    cursor: help;
+    transition: opacity 0.2s ease-in-out;
+}
+.search-syntax-icon:hover {
+    opacity: 0.6;
+}
+
+#history-from,
+#history-count,
 #history_page_size {
-    width: 6em !important;
+    width: 6em;
     text-align: center;
 }
 
@@ -432,10 +553,10 @@ table#symbolsTable input[type="number"] {
 }
 
 .scorebar-spam {
-    background-color: rgba(240 0 0 / 0.1) !important;
+    background-color: rgb(240 0 0 / 0.1) !important;
 }
 .scorebar-ham {
-    background: rgba(100 230 80 / 0.1) !important;
+    background: rgb(100 230 80 / 0.1) !important;
 }
 
 .danger .icon {
@@ -470,9 +591,13 @@ table#symbolsTable input[type="number"] {
     transition-property: flex-basis, max-width, width;
 }
 
+.sidebar,
+#sidebar-tab-left > a,
+#sidebar-tab-right > a {
+    background-color: var(--rspamd-sidebar-bg);
+}
 .sidebar {
     padding: 8px;
-    background-color: #ffe;
     transition: margin 0.3s ease;
 }
 .collapsed {
@@ -502,11 +627,10 @@ table#symbolsTable input[type="number"] {
 }
 .sidebar-nav .nav-link,
 .sidebar-nav .nav-link:hover {
-    border: 1px solid #ddd;
+    border: 1px solid var(--bs-card-border-color);
 }
 #sidebar-tab-left > a,
 #sidebar-tab-right > a {
-    background-color: #ffe;
     margin-left: 12px;
     margin-right: 12px;
 }
@@ -528,8 +652,8 @@ table#symbolsTable input[type="number"] {
         display: block;
     }
     #content {
-        border-left: 1px solid #ddd;
-        border-right: 1px solid #ddd;
+        border-left: 1px solid var(--bs-card-border-color);
+        border-right: 1px solid var(--bs-card-border-color);
     }
     #sidebar-tab-left {
         display: flex;
@@ -546,8 +670,8 @@ table#symbolsTable input[type="number"] {
         border-bottom-right-radius: 3.5px;
     }
     #content {
-        border-top: 1px solid #ddd;
-        border-bottom: 1px solid #ddd;
+        border-top: 1px solid var(--bs-card-border-color);
+        border-bottom: 1px solid var(--bs-card-border-color);
     }
     #sidebar-tab-right {
         bottom: 0;
@@ -593,10 +717,10 @@ table#symbolsTable input[type="number"] {
     bottom: unset;
 }
 .codejar-linenumbers {
-    background: rgba(255 255 255 / 0.07) !important;
+    background: rgb(255 255 255 / 0.07) !important;
 }
 .codejar-linenumber {
-    color: rgba(120 120 120 / 1) !important;
+    color: rgb(120 120 120 / 1) !important;
     text-align: right;
 }
 .editor {
@@ -632,4 +756,58 @@ table#symbolsTable input[type="number"] {
         -webkit-filter: invert(1);
         filter: invert(1);
     }
+}
+
+/* Error log badge: enable hover effect on semi-transparent button */
+#error-log-badge .btn:hover {
+    background-color: var(--bs-danger) !important;
+    color: var(--bs-white) !important;
+}
+[data-theme="dark"] #error-log-badge .btn:hover {
+    border-color: var(--bs-light);
+}
+
+/* Dark mode overrides for Bootstrap tables */
+[data-theme="dark"] .table {
+    --bs-table-color-state: var(--rspamd-text-primary);
+}
+
+/* Dark mode overrides for D3Evolution */
+[data-theme="dark"] .d3evolution .grid line {
+    stroke: #404040;
+}
+[data-theme="dark"] .d3evolution .cursor .background {
+    stroke: #1a1a1a;
+}
+[data-theme="dark"] .d3evolution .cursor .x.foreground {
+    stroke: #4db8ff;
+}
+[data-theme="dark"] .d3evolution .cursor circle.foreground {
+    stroke: white;
+}
+[data-theme="dark"] .d3evolution .chart-title,
+[data-theme="dark"] .d3evolution .axis,
+[data-theme="dark"] .d3evolution .legend,
+[data-theme="dark"] .d3evolution .y.label,
+[data-theme="dark"] .d3evolution .cursor-time {
+    fill: var(--rspamd-text-primary);
+}
+
+/* Dark mode overrides for D3Pie */
+[data-theme="dark"] .d3pie .chart-title,
+[data-theme="dark"] .d3pie .outer-label,
+[data-theme="dark"] .d3pie .total-text,
+[data-theme="dark"] .d3pie .total-value {
+    fill: var(--rspamd-text-primary);
+}
+[data-theme="dark"] .d3pie .slice-g.first-slice .inner-label {
+    fill: #666666;
+}
+[data-theme="dark"] .d3pie-tooltip {
+    background-color: rgb(80 80 80 / 80%);
+}
+
+/* Dark mode for NProgress */
+[data-theme="dark"] #nprogress .bar {
+    background: #4db8ff;
 }

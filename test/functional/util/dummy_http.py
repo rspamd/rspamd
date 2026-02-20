@@ -8,6 +8,8 @@ import tornado.httpserver
 import ssl
 import argparse
 import os
+import sys
+import traceback
 
 class MainHandler(tornado.web.RequestHandler):
     @tornado.gen.coroutine
@@ -111,12 +113,14 @@ def make_app():
 
 async def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--bind", "-b", default="localhost", help="bind address")
+    parser.add_argument("--bind", "-b", default="127.0.0.1", help="bind address")
     parser.add_argument("--port", "-p", type=int, default=18080, help="bind port")
     parser.add_argument("--keyfile", "-k", help="server private key file")
     parser.add_argument("--certfile", "-c", help="server certificate file")
     parser.add_argument("--pidfile", "-pf", help="path to the PID file")
     args = parser.parse_args()
+
+    print(f"dummy_http.py: Starting server on {args.bind}:{args.port}", file=sys.stderr)
 
     # Create the Tornado application
     app = make_app()
@@ -124,22 +128,35 @@ async def main():
     # If keyfile and certfile are provided, create an HTTPS server.
     # Otherwise, create an HTTP server.
     if args.keyfile and args.certfile:
+        print(f"dummy_http.py: Using SSL with cert={args.certfile}, key={args.keyfile}", file=sys.stderr)
         ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         ssl_ctx.load_cert_chain(args.certfile, args.keyfile)
         server = tornado.httpserver.HTTPServer(app, ssl_options=ssl_ctx)
     else:
         server = tornado.httpserver.HTTPServer(app)
 
-    # Write the PID to the specified PID file, if provided
-    if args.pidfile:
-        dummy_killer.write_pid(args.pidfile)
-
     # Start the server
     server.bind(args.port, args.bind)
     server.start(1)
 
+    # Write the PID to the specified PID file, if provided
+    # Do this AFTER successful bind/start so we know the server is actually running
+    if args.pidfile:
+        dummy_killer.write_pid(args.pidfile)
+        print(f"dummy_http.py: PID file written to {args.pidfile}", file=sys.stderr)
+
+    print(f"dummy_http.py: Server started successfully, listening on {args.bind}:{args.port}", file=sys.stderr)
+
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    try:
+        if hasattr(asyncio, 'run') and callable(getattr(asyncio, 'run')):
+            asyncio.run(main())
+        else:
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(main())
+    except Exception as e:
+        print(f"dummy_http.py: FATAL ERROR: {type(e).__name__}: {e}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        sys.exit(1)

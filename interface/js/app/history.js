@@ -1,25 +1,5 @@
 /*
- The MIT License (MIT)
-
- Copyright (C) 2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
-
- Permission is hereby granted, free of charge, to any person obtaining a copy
- of this software and associated documentation files (the "Software"), to deal
- in the Software without restriction, including without limitation the rights
- to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- copies of the Software, and to permit persons to whom the Software is
- furnished to do so, subject to the following conditions:
-
- The above copyright notice and this permission notice shall be included in
- all copies or substantial portions of the Software.
-
- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- THE SOFTWARE.
+ * Copyright (C) 2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
  */
 
 /* global FooTable */
@@ -30,12 +10,18 @@ define(["jquery", "app/common", "app/libft", "footable"],
         const ui = {};
         let prevVersion = null;
 
+        // History range: offset and count
+        const histFromDef = 0;
+        const historyCountDef = 1000;
+        let histFrom = histFromDef;
+        let histCount = parseInt(localStorage.getItem("historyCount"), 10) || historyCountDef;
+
         function process_history_legacy(data) {
             const items = [];
 
             function compare(e1, e2) { return e1.name.localeCompare(e2.name); }
 
-            $("#selSymOrder_history, label[for='selSymOrder_history']").hide();
+            common.hide("#selSymOrder_history, label[for='selSymOrder_history']");
 
             $.each(data, (i, item) => {
                 item.time = libft.unix_time_format(item.unix_time);
@@ -83,7 +69,7 @@ define(["jquery", "app/common", "app/libft", "footable"],
                 name: "score",
                 title: "Score",
                 style: {maxWidth: 110},
-                sortValue: function (val) { return Number(val.options.sortValue); }
+                sortValue: (val) => Number(val.options.sortValue)
             }, {
                 name: "symbols",
                 title: "Symbols",
@@ -100,13 +86,13 @@ define(["jquery", "app/common", "app/libft", "footable"],
                 title: "Scan time",
                 breakpoints: "md",
                 style: {maxWidth: 80},
-                sortValue: function (val) { return Number(val); }
+                sortValue: (val) => Number(val)
             }, {
                 sorted: true,
                 direction: "DESC",
                 name: "time",
                 title: "Time",
-                sortValue: function (val) { return Number(val.options.sortValue); }
+                sortValue: (val) => Number(val.options.sortValue)
             }, {
                 name: "user",
                 title: "Authenticated user",
@@ -152,13 +138,18 @@ define(["jquery", "app/common", "app/libft", "footable"],
 
         ui.getHistory = function () {
             $("#refresh, #updateHistory").attr("disabled", true);
-            common.query("history", {
+            const histTo = histFrom - 1 + histCount;
+            common.query(`history?from=${histFrom}&to=${histTo}`, {
                 success: function (req_data) {
                     function differentVersions(neighbours_data) {
                         const dv = neighbours_data.some((e) => e.version !== neighbours_data[0].version);
                         if (dv) {
-                            common.alertMessage("alert-error",
-                                "Neighbours history backend versions do not match. Cannot display history.");
+                            common.logError({
+                                server: "Multi-server",
+                                endpoint: "history",
+                                message: "Neighbours history backend versions do not match. Cannot display history.",
+                                errorType: "data_inconsistency"
+                            });
                             return true;
                         }
                         return false;
@@ -174,11 +165,11 @@ define(["jquery", "app/common", "app/libft", "footable"],
                             data.rows = [].concat.apply([], neighbours_data
                                 .map((e) => e.rows));
                             data.version = version;
-                            $("#legacy-history-badge").hide();
+                            common.hide("#legacy-history-badge");
                         } else {
                             // Legacy version
                             data = [].concat.apply([], neighbours_data);
-                            $("#legacy-history-badge").show();
+                            common.show("#legacy-history-badge");
                         }
                         const o = process_history_data(data);
                         const {items} = o;
@@ -188,20 +179,21 @@ define(["jquery", "app/common", "app/libft", "footable"],
                             version === prevVersion) {
                             common.tables.history.rows.load(items);
                         } else {
-                            libft.destroyTable("history");
-                            // Is there a way to get an event when the table is destroyed?
-                            setTimeout(() => {
+                            libft.destroyTable("history").then(() => {
                                 libft.initHistoryTable(data, items, "history", get_history_columns(data), false,
-                                    () => $("#refresh, #updateHistory, #history .ft-columns-dropdown .btn-dropdown-apply")
-                                        .removeAttr("disabled"));
-                            }, 200);
+                                    () => {
+                                        $("#history .ft-columns-dropdown .btn-dropdown-apply").removeAttr("disabled");
+                                        ui.updateHistoryControlsState();
+                                        if (version) libft.bindFuzzyHashButtons("history");
+                                    });
+                            });
                         }
                         prevVersion = version;
                     } else {
                         libft.destroyTable("history");
                     }
                 },
-                error: () => $("#refresh, #updateHistory").removeAttr("disabled"),
+                error: () => ui.updateHistoryControlsState(),
                 errorMessage: "Cannot receive history",
             });
         };
@@ -216,7 +208,7 @@ define(["jquery", "app/common", "app/libft", "footable"],
                         name: "ts",
                         title: "Time",
                         style: {width: 300, maxWidth: 300},
-                        sortValue: function (val) { return Number(val.options.sortValue); }},
+                        sortValue: (val) => Number(val.options.sortValue)},
                     {name: "type",
                         title: "Worker type",
                         breakpoints: "md",
@@ -282,9 +274,49 @@ define(["jquery", "app/common", "app/libft", "footable"],
             });
         };
 
+        ui.updateHistoryControlsState = function () {
+            const from = parseInt($("#history-from").val(), 10);
+            const count = parseInt($("#history-count").val(), 10);
+            const valid = !(isNaN(from) || from < 0 || isNaN(count) || count < 1);
+
+            if (valid) {
+                $("#refresh, #updateHistory").removeAttr("disabled").removeClass("disabled");
+            } else {
+                $("#refresh, #updateHistory").attr("disabled", true).addClass("disabled");
+            }
+        };
+
+        function validateAndClampInput(el) {
+            const min = el.id === "history-from" ? 0 : 1;
+            let v = parseInt(el.value, 10);
+            if (isNaN(v) || v < min) {
+                v = min;
+                $(el).addClass("is-invalid");
+            } else {
+                $(el).removeClass("is-invalid");
+            }
+            return v;
+        }
+
+        $("#history-from").val(histFrom);
+        $("#history-count").val(histCount);
+        $("#history-from, #history-count").on("input", (e) => {
+            validateAndClampInput(e.currentTarget);
+            ui.updateHistoryControlsState();
+        });
+        $("#history-from, #history-count").on("blur", (e) => {
+            const el = e.currentTarget;
+            const v = validateAndClampInput(el);
+            $(el).val(v).removeClass("is-invalid");
+            ui.updateHistoryControlsState();
+        });
+        $("#history-from,#history-count").on("change", () => {
+            histFrom = parseInt($("#history-from").val(), 10) || histFromDef;
+            histCount = parseInt($("#history-count").val(), 10) || historyCountDef;
+        });
 
         libft.set_page_size("history", $("#history_page_size").val());
-        libft.bindHistoryTableEventHandlers("history", 8);
+        libft.bindHistoryTableEventHandlers("history", 9);
 
         $("#updateHistory").off("click");
         $("#updateHistory").on("click", (e) => {

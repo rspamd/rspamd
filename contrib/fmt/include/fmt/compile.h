@@ -15,17 +15,10 @@
 #include "format.h"
 
 FMT_BEGIN_NAMESPACE
+FMT_BEGIN_EXPORT
 
 // A compile-time string which is compiled into fast formatting code.
-FMT_EXPORT class compiled_string {};
-
-namespace detail {
-
-template <typename T, typename InputIt>
-FMT_CONSTEXPR inline auto copy(InputIt begin, InputIt end, counting_iterator it)
-    -> counting_iterator {
-  return it + (end - begin);
-}
+class compiled_string {};
 
 template <typename S>
 struct is_compiled_string : std::is_base_of<compiled_string, S> {};
@@ -42,34 +35,47 @@ struct is_compiled_string : std::is_base_of<compiled_string, S> {};
  *     std::string s = fmt::format(FMT_COMPILE("{}"), 42);
  */
 #if defined(__cpp_if_constexpr) && defined(__cpp_return_type_deduction)
-#  define FMT_COMPILE(s) FMT_STRING_IMPL(s, fmt::compiled_string, explicit)
+#  define FMT_COMPILE(s) FMT_STRING_IMPL(s, fmt::compiled_string)
 #else
 #  define FMT_COMPILE(s) FMT_STRING(s)
 #endif
 
+/**
+ * Converts a string literal into a format string that will be parsed at
+ * compile time and converted into efficient formatting code. Requires support
+ * for class types in constant template parameters (a C++20 feature).
+ *
+ *  **Example**:
+ *
+ *     // Converts 42 into std::string using the most efficient method and no
+ *     // runtime format string processing.
+ *     using namespace fmt::literals;
+ *     std::string s = fmt::format("{}"_cf, 42);
+ */
 #if FMT_USE_NONTYPE_TEMPLATE_ARGS
-template <typename Char, size_t N,
-          fmt::detail_exported::fixed_string<Char, N> Str>
-struct udl_compiled_string : compiled_string {
-  using char_type = Char;
-  explicit constexpr operator basic_string_view<char_type>() const {
-    return {Str.data, N - 1};
-  }
-};
+inline namespace literals {
+template <detail::fixed_string Str> constexpr auto operator""_cf() {
+  return FMT_COMPILE(Str.data);
+}
+}  // namespace literals
 #endif
 
+FMT_END_EXPORT
+
+namespace detail {
+
 template <typename T, typename... Tail>
-auto first(const T& value, const Tail&...) -> const T& {
+constexpr auto first(const T& value, const Tail&...) -> const T& {
   return value;
 }
 
 #if defined(__cpp_if_constexpr) && defined(__cpp_return_type_deduction)
-template <typename... Args> struct type_list {};
+template <typename... T> struct type_list {};
 
 // Returns a reference to the argument at index N from [first, rest...].
 template <int N, typename T, typename... Args>
-constexpr const auto& get([[maybe_unused]] const T& first,
-                          [[maybe_unused]] const Args&... rest) {
+constexpr auto get([[maybe_unused]] const T& first,
+                   [[maybe_unused]] const Args&... rest) -> const auto& {
   static_assert(N < 1 + sizeof...(Args), "index is out of bounds");
   if constexpr (N == 0)
     return first;
@@ -77,9 +83,32 @@ constexpr const auto& get([[maybe_unused]] const T& first,
     return detail::get<N - 1>(rest...);
 }
 
+#  if FMT_USE_NONTYPE_TEMPLATE_ARGS
+template <int N, typename T, typename... Args, typename Char>
+constexpr auto get_arg_index_by_name(basic_string_view<Char> name) -> int {
+  if constexpr (is_static_named_arg<T>()) {
+    if (name == T::name) return N;
+  }
+  if constexpr (sizeof...(Args) > 0)
+    return get_arg_index_by_name<N + 1, Args...>(name);
+  (void)name;  // Workaround an MSVC bug about "unused" parameter.
+  return -1;
+}
+#  endif
+
+template <typename... Args, typename Char>
+FMT_CONSTEXPR auto get_arg_index_by_name(basic_string_view<Char> name) -> int {
+#  if FMT_USE_NONTYPE_TEMPLATE_ARGS
+  if constexpr (sizeof...(Args) > 0)
+    return get_arg_index_by_name<0, Args...>(name);
+#  endif
+  (void)name;
+  return -1;
+}
+
 template <typename Char, typename... Args>
-constexpr int get_arg_index_by_name(basic_string_view<Char> name,
-                                    type_list<Args...>) {
+constexpr auto get_arg_index_by_name(basic_string_view<Char> name,
+                                     type_list<Args...>) -> int {
   return get_arg_index_by_name<Args...>(name);
 }
 
@@ -99,8 +128,8 @@ template <typename Char> struct text {
   basic_string_view<Char> data;
   using char_type = Char;
 
-  template <typename OutputIt, typename... Args>
-  constexpr OutputIt format(OutputIt out, const Args&...) const {
+  template <typename OutputIt, typename... T>
+  constexpr auto format(OutputIt out, const T&...) const -> OutputIt {
     return write<Char>(out, data);
   }
 };
@@ -109,8 +138,8 @@ template <typename Char>
 struct is_compiled_format<text<Char>> : std::true_type {};
 
 template <typename Char>
-constexpr text<Char> make_text(basic_string_view<Char> s, size_t pos,
-                               size_t size) {
+constexpr auto make_text(basic_string_view<Char> s, size_t pos, size_t size)
+    -> text<Char> {
   return {{&s[pos], size}};
 }
 
@@ -118,8 +147,8 @@ template <typename Char> struct code_unit {
   Char value;
   using char_type = Char;
 
-  template <typename OutputIt, typename... Args>
-  constexpr OutputIt format(OutputIt out, const Args&...) const {
+  template <typename OutputIt, typename... T>
+  constexpr auto format(OutputIt out, const T&...) const -> OutputIt {
     *out++ = value;
     return out;
   }
@@ -127,7 +156,7 @@ template <typename Char> struct code_unit {
 
 // This ensures that the argument type is convertible to `const T&`.
 template <typename T, int N, typename... Args>
-constexpr const T& get_arg_checked(const Args&... args) {
+constexpr auto get_arg_checked(const Args&... args) -> const T& {
   const auto& arg = detail::get<N>(args...);
   if constexpr (detail::is_named_arg<remove_cvref_t<decltype(arg)>>()) {
     return arg.value;
@@ -140,17 +169,18 @@ template <typename Char>
 struct is_compiled_format<code_unit<Char>> : std::true_type {};
 
 // A replacement field that refers to argument N.
-template <typename Char, typename T, int N> struct field {
+template <typename Char, typename V, int N> struct field {
   using char_type = Char;
 
-  template <typename OutputIt, typename... Args>
-  constexpr OutputIt format(OutputIt out, const Args&... args) const {
-    const T& arg = get_arg_checked<T, N>(args...);
-    if constexpr (std::is_convertible<T, basic_string_view<Char>>::value) {
+  template <typename OutputIt, typename... T>
+  constexpr auto format(OutputIt out, const T&... args) const -> OutputIt {
+    const V& arg = get_arg_checked<V, N>(args...);
+    if constexpr (std::is_convertible<V, basic_string_view<Char>>::value) {
       auto s = basic_string_view<Char>(arg);
       return copy<Char>(s.begin(), s.end(), out);
+    } else {
+      return write<Char>(out, arg);
     }
-    return write<Char>(out, arg);
   }
 };
 
@@ -163,10 +193,10 @@ template <typename Char> struct runtime_named_field {
   basic_string_view<Char> name;
 
   template <typename OutputIt, typename T>
-  constexpr static bool try_format_argument(
+  constexpr static auto try_format_argument(
       OutputIt& out,
       // [[maybe_unused]] due to unused-but-set-parameter warning in GCC 7,8,9
-      [[maybe_unused]] basic_string_view<Char> arg_name, const T& arg) {
+      [[maybe_unused]] basic_string_view<Char> arg_name, const T& arg) -> bool {
     if constexpr (is_named_arg<typename std::remove_cv<T>::type>::value) {
       if (arg_name == arg.name) {
         out = write<Char>(out, arg.value);
@@ -176,8 +206,8 @@ template <typename Char> struct runtime_named_field {
     return false;
   }
 
-  template <typename OutputIt, typename... Args>
-  constexpr OutputIt format(OutputIt out, const Args&... args) const {
+  template <typename OutputIt, typename... T>
+  constexpr auto format(OutputIt out, const T&... args) const -> OutputIt {
     bool found = (try_format_argument(out, name, args) || ...);
     if (!found) {
       FMT_THROW(format_error("argument with specified name is not found"));
@@ -190,17 +220,17 @@ template <typename Char>
 struct is_compiled_format<runtime_named_field<Char>> : std::true_type {};
 
 // A replacement field that refers to argument N and has format specifiers.
-template <typename Char, typename T, int N> struct spec_field {
+template <typename Char, typename V, int N> struct spec_field {
   using char_type = Char;
-  formatter<T, Char> fmt;
+  formatter<V, Char> fmt;
 
-  template <typename OutputIt, typename... Args>
-  constexpr FMT_INLINE OutputIt format(OutputIt out,
-                                       const Args&... args) const {
+  template <typename OutputIt, typename... T>
+  constexpr FMT_INLINE auto format(OutputIt out, const T&... args) const
+      -> OutputIt {
     const auto& vargs =
         fmt::make_format_args<basic_format_context<OutputIt, Char>>(args...);
     basic_format_context<OutputIt, Char> ctx(out, vargs);
-    return fmt.format(get_arg_checked<T, N>(args...), ctx);
+    return fmt.format(get_arg_checked<V, N>(args...), ctx);
   }
 };
 
@@ -212,8 +242,8 @@ template <typename L, typename R> struct concat {
   R rhs;
   using char_type = typename L::char_type;
 
-  template <typename OutputIt, typename... Args>
-  constexpr OutputIt format(OutputIt out, const Args&... args) const {
+  template <typename OutputIt, typename... T>
+  constexpr auto format(OutputIt out, const T&... args) const -> OutputIt {
     out = lhs.format(out, args...);
     return rhs.format(out, args...);
   }
@@ -223,14 +253,14 @@ template <typename L, typename R>
 struct is_compiled_format<concat<L, R>> : std::true_type {};
 
 template <typename L, typename R>
-constexpr concat<L, R> make_concat(L lhs, R rhs) {
+constexpr auto make_concat(L lhs, R rhs) -> concat<L, R> {
   return {lhs, rhs};
 }
 
 struct unknown_format {};
 
 template <typename Char>
-constexpr size_t parse_text(basic_string_view<Char> str, size_t pos) {
+constexpr auto parse_text(basic_string_view<Char> str, size_t pos) -> size_t {
   for (size_t size = str.size(); pos != size; ++pos) {
     if (str[pos] == '{' || str[pos] == '}') break;
   }
@@ -263,8 +293,8 @@ template <typename T, typename Char> struct parse_specs_result {
 enum { manual_indexing_id = -1 };
 
 template <typename T, typename Char>
-constexpr parse_specs_result<T, Char> parse_specs(basic_string_view<Char> str,
-                                                  size_t pos, int next_arg_id) {
+constexpr auto parse_specs(basic_string_view<Char> str, size_t pos,
+                           int next_arg_id) -> parse_specs_result<T, Char> {
   str.remove_prefix(pos);
   auto ctx =
       compile_parse_context<Char>(str, max_value<int>(), nullptr, next_arg_id);
@@ -275,32 +305,36 @@ constexpr parse_specs_result<T, Char> parse_specs(basic_string_view<Char> str,
 }
 
 template <typename Char> struct arg_id_handler {
+  arg_id_kind kind;
   arg_ref<Char> arg_id;
 
-  constexpr int on_auto() {
+  constexpr auto on_auto() -> int {
     FMT_ASSERT(false, "handler cannot be used with automatic indexing");
     return 0;
   }
-  constexpr int on_index(int id) {
+  constexpr auto on_index(int id) -> int {
+    kind = arg_id_kind::index;
     arg_id = arg_ref<Char>(id);
     return 0;
   }
-  constexpr int on_name(basic_string_view<Char> id) {
+  constexpr auto on_name(basic_string_view<Char> id) -> int {
+    kind = arg_id_kind::name;
     arg_id = arg_ref<Char>(id);
     return 0;
   }
 };
 
 template <typename Char> struct parse_arg_id_result {
+  arg_id_kind kind;
   arg_ref<Char> arg_id;
   const Char* arg_id_end;
 };
 
 template <int ID, typename Char>
 constexpr auto parse_arg_id(const Char* begin, const Char* end) {
-  auto handler = arg_id_handler<Char>{arg_ref<Char>{}};
+  auto handler = arg_id_handler<Char>{arg_id_kind::none, arg_ref<Char>{}};
   auto arg_id_end = parse_arg_id(begin, end, handler);
-  return parse_arg_id_result<Char>{handler.arg_id, arg_id_end};
+  return parse_arg_id_result<Char>{handler.kind, handler.arg_id, arg_id_end};
 }
 
 template <typename T, typename Enable = void> struct field_type {
@@ -363,18 +397,18 @@ constexpr auto compile_format_string(S fmt) {
       constexpr char_type c =
           arg_id_end_pos != str.size() ? str[arg_id_end_pos] : char_type();
       static_assert(c == '}' || c == ':', "missing '}' in format string");
-      if constexpr (arg_id_result.arg_id.kind == arg_id_kind::index) {
+      if constexpr (arg_id_result.kind == arg_id_kind::index) {
         static_assert(
             ID == manual_indexing_id || ID == 0,
             "cannot switch from automatic to manual argument indexing");
-        constexpr auto arg_index = arg_id_result.arg_id.val.index;
+        constexpr auto arg_index = arg_id_result.arg_id.index;
         return parse_replacement_field_then_tail<get_type<arg_index, Args>,
                                                  Args, arg_id_end_pos,
                                                  arg_index, manual_indexing_id>(
             fmt);
-      } else if constexpr (arg_id_result.arg_id.kind == arg_id_kind::name) {
+      } else if constexpr (arg_id_result.kind == arg_id_kind::name) {
         constexpr auto arg_index =
-            get_arg_index_by_name(arg_id_result.arg_id.val.name, Args{});
+            get_arg_index_by_name(arg_id_result.arg_id.name, Args{});
         if constexpr (arg_index >= 0) {
           constexpr auto next_id =
               ID != manual_indexing_id ? ID + 1 : manual_indexing_id;
@@ -383,8 +417,7 @@ constexpr auto compile_format_string(S fmt) {
               arg_index, next_id>(fmt);
         } else if constexpr (c == '}') {
           return parse_tail<Args, arg_id_end_pos + 1, ID>(
-              runtime_named_field<char_type>{arg_id_result.arg_id.val.name},
-              fmt);
+              runtime_named_field<char_type>{arg_id_result.arg_id.name}, fmt);
         } else if constexpr (c == ':') {
           return unknown_format();  // no type info for specs parsing
         }
@@ -405,7 +438,7 @@ constexpr auto compile_format_string(S fmt) {
 }
 
 template <typename... Args, typename S,
-          FMT_ENABLE_IF(detail::is_compiled_string<S>::value)>
+          FMT_ENABLE_IF(is_compiled_string<S>::value)>
 constexpr auto compile(S fmt) {
   constexpr auto str = basic_string_view<typename S::char_type>(fmt);
   if constexpr (str.size() == 0) {
@@ -423,27 +456,28 @@ FMT_BEGIN_EXPORT
 
 #if defined(__cpp_if_constexpr) && defined(__cpp_return_type_deduction)
 
-template <typename CompiledFormat, typename... Args,
+template <typename CompiledFormat, typename... T,
           typename Char = typename CompiledFormat::char_type,
           FMT_ENABLE_IF(detail::is_compiled_format<CompiledFormat>::value)>
-FMT_INLINE std::basic_string<Char> format(const CompiledFormat& cf,
-                                          const Args&... args) {
+FMT_INLINE FMT_CONSTEXPR_STRING auto format(const CompiledFormat& cf,
+                                            const T&... args)
+    -> std::basic_string<Char> {
   auto s = std::basic_string<Char>();
   cf.format(std::back_inserter(s), args...);
   return s;
 }
 
-template <typename OutputIt, typename CompiledFormat, typename... Args,
+template <typename OutputIt, typename CompiledFormat, typename... T,
           FMT_ENABLE_IF(detail::is_compiled_format<CompiledFormat>::value)>
-constexpr FMT_INLINE OutputIt format_to(OutputIt out, const CompiledFormat& cf,
-                                        const Args&... args) {
+constexpr FMT_INLINE auto format_to(OutputIt out, const CompiledFormat& cf,
+                                    const T&... args) -> OutputIt {
   return cf.format(out, args...);
 }
 
-template <typename S, typename... Args,
-          FMT_ENABLE_IF(detail::is_compiled_string<S>::value)>
-FMT_INLINE std::basic_string<typename S::char_type> format(const S&,
-                                                           Args&&... args) {
+template <typename S, typename... T,
+          FMT_ENABLE_IF(is_compiled_string<S>::value)>
+FMT_INLINE FMT_CONSTEXPR_STRING auto format(const S&, T&&... args)
+    -> std::basic_string<typename S::char_type> {
   if constexpr (std::is_same<typename S::char_type, char>::value) {
     constexpr auto str = basic_string_view<typename S::char_type>(S());
     if constexpr (str.size() == 2 && str[0] == '{' && str[1] == '}') {
@@ -456,72 +490,97 @@ FMT_INLINE std::basic_string<typename S::char_type> format(const S&,
       }
     }
   }
-  constexpr auto compiled = detail::compile<Args...>(S());
+  constexpr auto compiled = detail::compile<T...>(S());
   if constexpr (std::is_same<remove_cvref_t<decltype(compiled)>,
                              detail::unknown_format>()) {
     return fmt::format(
         static_cast<basic_string_view<typename S::char_type>>(S()),
-        std::forward<Args>(args)...);
+        std::forward<T>(args)...);
   } else {
-    return fmt::format(compiled, std::forward<Args>(args)...);
+    return fmt::format(compiled, std::forward<T>(args)...);
   }
 }
 
-template <typename OutputIt, typename S, typename... Args,
-          FMT_ENABLE_IF(detail::is_compiled_string<S>::value)>
-FMT_CONSTEXPR OutputIt format_to(OutputIt out, const S&, Args&&... args) {
-  constexpr auto compiled = detail::compile<Args...>(S());
+template <typename OutputIt, typename S, typename... T,
+          FMT_ENABLE_IF(is_compiled_string<S>::value)>
+FMT_CONSTEXPR auto format_to(OutputIt out, const S&, T&&... args) -> OutputIt {
+  constexpr auto compiled = detail::compile<T...>(S());
   if constexpr (std::is_same<remove_cvref_t<decltype(compiled)>,
                              detail::unknown_format>()) {
     return fmt::format_to(
         out, static_cast<basic_string_view<typename S::char_type>>(S()),
-        std::forward<Args>(args)...);
+        std::forward<T>(args)...);
   } else {
-    return fmt::format_to(out, compiled, std::forward<Args>(args)...);
+    return fmt::format_to(out, compiled, std::forward<T>(args)...);
   }
 }
 #endif
 
-template <typename OutputIt, typename S, typename... Args,
-          FMT_ENABLE_IF(detail::is_compiled_string<S>::value)>
-auto format_to_n(OutputIt out, size_t n, const S& fmt, Args&&... args)
+template <typename OutputIt, typename S, typename... T,
+          FMT_ENABLE_IF(is_compiled_string<S>::value)>
+auto format_to_n(OutputIt out, size_t n, const S& fmt, T&&... args)
     -> format_to_n_result<OutputIt> {
   using traits = detail::fixed_buffer_traits;
   auto buf = detail::iterator_buffer<OutputIt, char, traits>(out, n);
-  fmt::format_to(std::back_inserter(buf), fmt, std::forward<Args>(args)...);
+  fmt::format_to(std::back_inserter(buf), fmt, std::forward<T>(args)...);
   return {buf.out(), buf.count()};
 }
 
-template <typename S, typename... Args,
-          FMT_ENABLE_IF(detail::is_compiled_string<S>::value)>
-FMT_CONSTEXPR20 auto formatted_size(const S& fmt, const Args&... args)
-    -> size_t {
-  return fmt::format_to(detail::counting_iterator(), fmt, args...).count();
+template <typename S, typename... T,
+          FMT_ENABLE_IF(is_compiled_string<S>::value)>
+FMT_CONSTEXPR20 auto formatted_size(const S& fmt, T&&... args) -> size_t {
+  auto buf = detail::counting_buffer<>();
+  fmt::format_to(appender(buf), fmt, std::forward<T>(args)...);
+  return buf.count();
 }
 
-template <typename S, typename... Args,
-          FMT_ENABLE_IF(detail::is_compiled_string<S>::value)>
-void print(std::FILE* f, const S& fmt, const Args&... args) {
-  memory_buffer buffer;
-  fmt::format_to(std::back_inserter(buffer), fmt, args...);
-  detail::print(f, {buffer.data(), buffer.size()});
+template <typename S, typename... T,
+          FMT_ENABLE_IF(is_compiled_string<S>::value)>
+void print(std::FILE* f, const S& fmt, T&&... args) {
+  auto buf = memory_buffer();
+  fmt::format_to(appender(buf), fmt, std::forward<T>(args)...);
+  detail::print(f, {buf.data(), buf.size()});
 }
 
-template <typename S, typename... Args,
-          FMT_ENABLE_IF(detail::is_compiled_string<S>::value)>
-void print(const S& fmt, const Args&... args) {
-  print(stdout, fmt, args...);
+template <typename S, typename... T,
+          FMT_ENABLE_IF(is_compiled_string<S>::value)>
+void print(const S& fmt, T&&... args) {
+  print(stdout, fmt, std::forward<T>(args)...);
 }
 
-#if FMT_USE_NONTYPE_TEMPLATE_ARGS
-inline namespace literals {
-template <detail_exported::fixed_string Str> constexpr auto operator""_cf() {
-  using char_t = remove_cvref_t<decltype(Str.data[0])>;
-  return detail::udl_compiled_string<char_t, sizeof(Str.data) / sizeof(char_t),
-                                     Str>();
-}
-}  // namespace literals
-#endif
+template <size_t N> class static_format_result {
+ private:
+  char data[N];
+
+ public:
+  template <typename S, typename... T,
+            FMT_ENABLE_IF(is_compiled_string<S>::value)>
+  explicit FMT_CONSTEXPR static_format_result(const S& fmt, T&&... args) {
+    *fmt::format_to(data, fmt, std::forward<T>(args)...) = '\0';
+  }
+
+  auto str() const -> fmt::string_view { return {data, N - 1}; }
+  auto c_str() const -> const char* { return data; }
+};
+
+/**
+ * Formats arguments according to the format string `fmt_str` and produces
+ * a string of the exact required size at compile time. Both the format string
+ * and the arguments must be compile-time expressions.
+ *
+ * The resulting string can be accessed as a C string via `c_str()` or as
+ * a `fmt::string_view` via `str()`.
+ *
+ * **Example**:
+ *
+ *     // Produces the static string "42" at compile time.
+ *     static constexpr auto result = FMT_STATIC_FORMAT("{}", 42);
+ *     const char* s = result.c_str();
+ */
+#define FMT_STATIC_FORMAT(fmt_str, ...)                            \
+  fmt::static_format_result<                                       \
+      fmt::formatted_size(FMT_COMPILE(fmt_str), __VA_ARGS__) + 1>( \
+      FMT_COMPILE(fmt_str), __VA_ARGS__)
 
 FMT_END_EXPORT
 FMT_END_NAMESPACE

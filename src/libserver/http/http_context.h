@@ -41,6 +41,17 @@ struct rspamd_http_context_cfg {
 	const char *user_agent;
 	const char *http_proxy;
 	const char *server_hdr;
+	/* Client-side staged timeouts (seconds) */
+	double connect_timeout; /* TCP connect */
+	double ssl_timeout;     /* SSL handshake */
+	double write_timeout;   /* Request write */
+	double read_timeout;    /* Response read */
+	/* Keep-alive/pool tuning */
+	unsigned int keepalive_pool_size; /* max conns per key */
+	double keepalive_connection_ttl;  /* absolute TTL */
+	double keepalive_idle_timeout;    /* idle timeout */
+	unsigned int keepalive_max_reuse; /* reuse limit */
+	int keepalive_eviction_policy;    /* 0=LIFO,1=LRU */
 };
 
 /**

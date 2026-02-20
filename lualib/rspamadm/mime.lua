@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 local argparse = require "argparse"
 local ansicolors = require "ansicolors"
@@ -61,6 +61,8 @@ extract:argument "file"
 
 extract:flag "-t --text"
        :description "Extracts plain text data from a message"
+extract:flag "-r --raw"
+       :description "Load as raw file"
 extract:flag "-H --html"
        :description "Extracts htm data from a message"
 extract:option "-o --output"
@@ -92,6 +94,18 @@ extract:option "-F --words-format"
   full = "full",
 }
        :default "stem"
+extract:option "-L --limit"
+       :description "Maximum output size in bytes"
+       :argname("<bytes>")
+       :convert(tonumber)
+extract:flag "-Q --strip-quotes"
+       :description "Remove quoted content (lines starting with >)"
+extract:flag "-S --strip-signatures"
+       :description "Remove email signatures"
+extract:flag "-R --strip-reply-headers"
+       :description "Remove reply headers (On X wrote:, From: Sent:)"
+extract:flag "-T --smart-trim"
+       :description "Enable all text trimming heuristics"
 
 local stat = parser:command "stat st s"
                    :description "Extracts statistical data from MIME messages"
@@ -133,6 +147,8 @@ urls:flag "--count"
     :description "Print count of each printed element"
 urls:flag "-r --reverse"
     :description "Reverse sort order"
+urls:flag "--raw"
+    :description "Load as raw file (for PDFs and other non-email files)"
 
 local modify = parser:command "modify mod m"
                      :description "Modifies MIME message"
@@ -260,7 +276,7 @@ dump:option "-o --outdir"
     :description "Output directory"
     :argname("<directory>")
 
-local function load_config(opts)
+local function load_config(opts, load_tokenizers)
   local _r, err = rspamd_config:load_ucl(opts['config'])
 
   if not _r then
@@ -273,9 +289,26 @@ local function load_config(opts)
     rspamd_logger.errx('cannot process %s: %s', opts['config'], err)
     os.exit(1)
   end
+
+  -- Load custom tokenizers if requested
+  if load_tokenizers then
+    local success, tokenizer_err = rspamd_config:load_custom_tokenizers()
+    if not success then
+      rspamd_logger.errx('cannot load custom tokenizers: %s', tokenizer_err or 'unknown error')
+      -- Don't exit here as custom tokenizers are optional
+      rspamd_logger.warnx('proceeding without custom tokenizers')
+    end
+  end
 end
 
-local function load_task(_, fname)
+-- Helper function to ensure proper cleanup of tokenizers
+local function cleanup_tokenizers()
+  if rspamd_config then
+    rspamd_config:unload_custom_tokenizers()
+  end
+end
+
+local function load_task(opts, fname)
   if not fname then
     fname = '-'
   end
@@ -284,12 +317,53 @@ local function load_task(_, fname)
   task:set_session(rspamadm_session)
   task:set_resolver(rspamadm_dns_resolver)
 
-  local res = task:load_from_file(fname)
+  if opts.raw then
+    local f
+    if fname == '-' then
+      f = io.stdin
+    else
+      f = io.open(fname, "rb")
+    end
 
-  if not res then
-    parser:error(string.format('cannot read message from %s: %s', fname,
-        task))
-    return nil
+    if not f then
+      parser:error("cannot open file " .. fname)
+    end
+
+    local content = f:read("*a")
+    if fname ~= '-' then
+      f:close()
+    end
+
+    local lua_magic = require "lua_magic"
+    local dummy_part = {
+      get_content = function()
+        return content
+      end,
+      get_filename = function()
+        return fname
+      end,
+    }
+    local _, type_data = lua_magic.detect(dummy_part, rspamd_config)
+    local ct = "application/octet-stream"
+    if type_data and type_data.type then
+      ct = type_data.type
+    end
+
+    if fname:match('%.pdf$') and (not ct or ct == 'application/octet-stream' or ct == 'binary') then
+      ct = 'application/pdf'
+    end
+
+    -- Construct message
+    local msg = string.format("Content-Type: %s\r\nContent-Transfer-Encoding: 8bit\r\n\r\n", ct)
+    task:load_from_string(msg .. content)
+  else
+    local res = task:load_from_file(fname)
+
+    if not res then
+      parser:error(string.format('cannot read message from %s: %s', fname,
+          task))
+      return nil
+    end
   end
 
   if not task:process_message() then
@@ -335,7 +409,6 @@ local function print_elts(elts, opts, func)
     io.write(ucl.to_format(elts, output_fmt(opts)))
   else
     fun.each(function(fname, elt)
-
       if not opts.json and not opts.ucl then
         if func then
           elt = fun.map(func, elt)
@@ -357,7 +430,7 @@ local function extract_handler(opts)
 
   if opts.words then
     -- Enable stemming and urls detection
-    load_config(opts)
+    load_config(opts, true) -- Load with custom tokenizers
     rspamd_url.init(rspamd_config:get_tld_path())
     rspamd_config:init_subsystem('langdet')
   end
@@ -393,7 +466,6 @@ local function extract_handler(opts)
 
   local function maybe_print_mime_part_info(part, out)
     if opts.part then
-
       if not opts.json and not opts.ucl then
         local mtype, msubtype = part:get_type()
         local det_mtype, det_msubtype = part:get_detected_type()
@@ -440,6 +512,37 @@ local function extract_handler(opts)
       opts.html = true
     end
 
+    -- Check if we use extract_text_limited options
+    if opts.limit or opts['strip_quotes'] or opts['strip_signatures'] or opts['smart_trim'] or opts['strip_reply_headers'] then
+        local res = lua_mime.extract_text_limited(task, {
+            max_bytes = opts.limit,
+            strip_quotes = opts['strip_quotes'],
+            strip_signatures = opts['strip_signatures'],
+            strip_reply_headers = opts['strip_reply_headers'],
+            smart_trim = opts['smart_trim']
+        })
+
+        if opts.json or opts.ucl then
+           table.insert(out_elts[fname], res)
+        else
+           if res.truncated then
+             table.insert(out_elts[fname], string.format("[Truncated] %s", res.text))
+           else
+             table.insert(out_elts[fname], res.text)
+           end
+
+           if opts.part then
+               table.insert(out_elts[fname], rspamd_logger.slog("Stats: %s", res.stats))
+           end
+        end
+
+        table.insert(out_elts[fname], "")
+        table.insert(tasks, task)
+
+        -- Skip normal processing
+        goto continue
+    end
+
     if opts.words then
       local how_words = opts['words_format'] or 'stem'
       table.insert(out_elts[fname], 'meta_words: ' ..
@@ -447,11 +550,35 @@ local function extract_handler(opts)
     end
 
     if opts.text or opts.html then
-      local mp = task:get_parts() or {}
+      local mp_all = task:get_parts(true) or {}
 
-      for _, mime_part in ipairs(mp) do
+      -- Build map: parent_part -> injected_text_part
+      local injected_map = {}
+      for _, p in ipairs(mp_all) do
+        if p:is_injected() and p:is_text() then
+
+          local parent = p:get_parent()
+          if parent then
+            injected_map[parent:get_digest()] = p:get_text()
+          end
+        end
+      end
+
+      -- Build table: {{part, injected_text or nil}, ...}
+      local parts_to_process = {}
+      for _, p in ipairs(mp_all) do
+        if not p:is_injected() then
+          table.insert(parts_to_process, { p, injected_map[p:get_digest()] })
+        end
+      end
+
+      -- Process the parts
+      for _, entry in ipairs(parts_to_process) do
+        local mime_part = entry[1]
+        local injected_part = entry[2]
         local how = opts.output
         local part
+
         if mime_part:is_text() then
           part = mime_part:get_text()
         end
@@ -469,6 +596,22 @@ local function extract_handler(opts)
                 how_words == 'full'))
           else
             table.insert(out_elts[fname], tostring(part:get_content(how)))
+          end
+        elseif injected_part and opts.text and not injected_part:is_html() then
+          -- Show parent part info but content from injected child
+          maybe_print_mime_part_info(mime_part, out_elts[fname])
+          if not opts.json and not opts.ucl then
+            table.insert(out_elts[fname], string.format('[Extracted text from %s]',
+                mime_part:get_filename() or 'attachment'))
+            table.insert(out_elts[fname], '\n')
+          end
+
+          if opts.words then
+            local how_words = opts['words_format'] or 'stem'
+            table.insert(out_elts[fname], print_words(injected_part:get_words(how_words),
+                how_words == 'full'))
+          else
+            table.insert(out_elts[fname], tostring(injected_part:get_content(how)))
           end
         elseif part and opts.html and part:is_html() then
           maybe_print_text_part_info(part, out_elts[fname])
@@ -537,6 +680,8 @@ local function extract_handler(opts)
 
     table.insert(out_elts[fname], "")
     table.insert(tasks, task)
+
+    ::continue::
   end
 
   print_elts(out_elts, opts, process_func)
@@ -544,13 +689,18 @@ local function extract_handler(opts)
   for _, task in ipairs(tasks) do
     task:destroy()
   end
+
+  -- Cleanup custom tokenizers if they were loaded
+  if opts.words then
+    cleanup_tokenizers()
+  end
 end
 
 local function stat_handler(opts)
   local fun = require "fun"
   local out_elts = {}
 
-  load_config(opts)
+  load_config(opts, true)                      -- Load with custom tokenizers for stat generation
   rspamd_url.init(rspamd_config:get_tld_path())
   rspamd_config:init_subsystem('langdet,stat') -- Needed to gen stat tokens
 
@@ -596,7 +746,7 @@ local function stat_handler(opts)
           local text = part:get_text()
 
           if text then
-            local digest, shingles = text:get_fuzzy_hashes(task:get_mempool())
+            local digest, shingles = text:get_fuzzy_hashes(task:get_mempool(), task:get_subject())
             table.insert(out_elts[fname], {
               digest = digest,
               shingles = shingles,
@@ -621,10 +771,13 @@ local function stat_handler(opts)
   end
 
   print_elts(out_elts, opts, process_func)
+
+  -- Cleanup custom tokenizers
+  cleanup_tokenizers()
 end
 
 local function urls_handler(opts)
-  load_config(opts)
+  load_config(opts, false) -- URLs don't need custom tokenizers
   rspamd_url.init(rspamd_config:get_tld_path())
   local out_elts = {}
 
@@ -667,7 +820,8 @@ local function urls_handler(opts)
       end
     end
 
-    for _, u in ipairs(task:get_urls(true)) do
+    -- Use get_urls_filtered with nil params to get all URLs including content URLs
+    for _, u in ipairs(task:get_urls_filtered()) do
       process_url(u)
     end
 
@@ -764,7 +918,7 @@ local function newline(task)
 end
 
 local function modify_handler(opts)
-  load_config(opts)
+  load_config(opts, false) -- Modification doesn't need custom tokenizers
   rspamd_url.init(rspamd_config:get_tld_path())
 
   local function read_file(file)
@@ -883,7 +1037,7 @@ local function modify_handler(opts)
 end
 
 local function sign_handler(opts)
-  load_config(opts)
+  load_config(opts, false) -- Signing doesn't need custom tokenizers
   rspamd_url.init(rspamd_config:get_tld_path())
 
   local lua_dkim = require("lua_ffi").dkim
@@ -942,7 +1096,7 @@ local function sign_handler(opts)
 end
 
 local function strip_handler(opts)
-  load_config(opts)
+  load_config(opts, false) -- Stripping doesn't need custom tokenizers
   rspamd_url.init(rspamd_config:get_tld_path())
 
   for _, fname in ipairs(opts.file) do
@@ -998,14 +1152,20 @@ local function strip_handler(opts)
 end
 
 local function anonymize_handler(opts)
-  load_config(opts)
+  load_config(opts, false) -- Anonymization doesn't need custom tokenizers
   rspamd_url.init(rspamd_config:get_tld_path())
 
   for _, fname in ipairs(opts.file) do
     local task = load_task(opts, fname)
     local newline_s = newline(task)
 
-    local rewrite = lua_mime.anonymize_message(task, opts) or {}
+    local rewrite = lua_mime.anonymize_message(task, opts)
+
+    if not rewrite or not rewrite.out then
+      rspamd_logger.errx('cannot anonymize message from %s', fname)
+      task:destroy()
+      os.exit(1)
+    end
 
     for _, o in ipairs(rewrite.out) do
       if type(o) == 'string' then
@@ -1103,7 +1263,7 @@ local function get_dump_content(task, opts, fname)
 end
 
 local function dump_handler(opts)
-  load_config(opts)
+  load_config(opts, false) -- Dumping doesn't need custom tokenizers
   rspamd_url.init(rspamd_config:get_tld_path())
 
   for _, fname in ipairs(opts.file) do

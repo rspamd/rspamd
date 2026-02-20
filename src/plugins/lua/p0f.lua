@@ -45,8 +45,8 @@ if confighelp then
     # Symbol will be yielded on OS string, link type or distance matches
     patterns = {
       WINDOWS = '^Windows.*';
-      #DSL = '^DSL$';
-      #DISTANCE10 = '^distance:10$';
+      DSL = '^DSL$';
+      DISTANCE10 = '^distance:10$';
     }
 
     # Cache lifetime in seconds (default - 2 hours)
@@ -120,5 +120,5 @@ if rule then
   end
 else
   lua_util.disable_module(N, 'config')
-  rspamd_logger.infox('p0f module not configured');
+  rspamd_logger.infox(rspamd_config, 'p0f module not configured');
 end

@@ -18,7 +18,7 @@ limitations under the License.
 local maps_cache
 local maps_aliases
 local lua_util = require "lua_util"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
 local ucl = require "ucl"
 
 local function maybe_fill_maps_cache()
@@ -142,11 +142,11 @@ local function handle_list_maps(_, conn, _)
   }
 end
 
-local query_json_schema = ts.shape {
-  maps = ts.array_of(ts.string):is_optional(),
-  report_misses = ts.boolean:is_optional(),
-  values = ts.array_of(ts.string),
-}
+local query_json_schema = T.table({
+  maps = T.array(T.string()):optional():doc({ summary = "List of map names to query" }),
+  report_misses = T.boolean():optional():doc({ summary = "Report keys that do not match" }),
+  values = T.array(T.string()):doc({ summary = "Values to check against maps" }),
+}):doc({ summary = "Query multiple maps with given values" })
 
 local function handle_query_json(task, conn)
   maybe_fill_maps_cache()

@@ -24,6 +24,7 @@
 #include "dns.h"
 #include "re_cache.h"
 #include "khash.h"
+#include "libserver/word.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,6 +37,7 @@ enum rspamd_command {
 	CMD_CHECK_RSPAMC, /* Legacy rspamc format (like SA one) */
 	CMD_CHECK,        /* Legacy check - metric json reply */
 	CMD_CHECK_V2,     /* Modern check - symbols in json reply  */
+	CMD_CHECK_V3,     /* Multipart check - structured metadata + multipart response */
 	CMD_METRICS,
 };
 
@@ -103,9 +105,9 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_FLAG_LEARN_SPAM (1u << 12u)
 #define RSPAMD_TASK_FLAG_LEARN_HAM (1u << 13u)
 #define RSPAMD_TASK_FLAG_LEARN_AUTO (1u << 14u)
+#define RSPAMD_TASK_FLAG_LEARN_CLASS (1u << 25u)
 #define RSPAMD_TASK_FLAG_BROKEN_HEADERS (1u << 15u)
-#define RSPAMD_TASK_FLAG_HAS_SPAM_TOKENS (1u << 16u)
-#define RSPAMD_TASK_FLAG_HAS_HAM_TOKENS (1u << 17u)
+/* Removed RSPAMD_TASK_FLAG_HAS_SPAM_TOKENS and RSPAMD_TASK_FLAG_HAS_HAM_TOKENS - not needed in multi-class */
 #define RSPAMD_TASK_FLAG_EMPTY (1u << 18u)
 #define RSPAMD_TASK_FLAG_PROFILE (1u << 19u)
 #define RSPAMD_TASK_FLAG_GREYLISTED (1u << 20u)
@@ -113,7 +115,7 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_FLAG_SSL (1u << 22u)
 #define RSPAMD_TASK_FLAG_BAD_UNICODE (1u << 23u)
 #define RSPAMD_TASK_FLAG_MESSAGE_REWRITE (1u << 24u)
-#define RSPAMD_TASK_FLAG_MAX_SHIFT (24u)
+#define RSPAMD_TASK_FLAG_MAX_SHIFT (25u)
 
 /* Request has been done by a local client */
 #define RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT (1u << 1u)
@@ -127,7 +129,9 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_PROTOCOL_FLAG_BODY_BLOCK (1u << 5u)
 /* Emit groups information */
 #define RSPAMD_TASK_PROTOCOL_FLAG_GROUPS (1u << 6u)
-#define RSPAMD_TASK_PROTOCOL_FLAG_MAX_SHIFT (6u)
+/* Request is multipart/form-data v3 protocol */
+#define RSPAMD_TASK_PROTOCOL_FLAG_MULTIPART_V3 (1u << 7u)
+#define RSPAMD_TASK_PROTOCOL_FLAG_MAX_SHIFT (7u)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (G_UNLIKELY((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_SPAMC(task) (G_UNLIKELY((task)->cmd == CMD_CHECK_SPAMC))
@@ -187,7 +191,7 @@ struct rspamd_task {
 	struct rspamd_scan_result *result;                  /**< Metric result									*/
 	khash_t(rspamd_task_lua_cache) lua_cache;           /**< cache of lua objects							*/
 	GPtrArray *tokens;                                  /**< statistics tokens */
-	GArray *meta_words;                                 /**< rspamd_stat_token_t produced from meta headers
+	rspamd_words_t meta_words;                          /**< rspamd_word_t produced from meta headers
 														(e.g. Subject) */
 
 	GPtrArray *rcpt_envelope; /**< array of rspamd_email_address					*/
@@ -202,6 +206,7 @@ struct rspamd_task {
 	rspamd_mempool_t *task_pool; /**< memory pool for task							*/
 	double time_real_finish;
 	ev_tstamp task_timestamp;
+	char task_uuid[37]; /**< UUID v7 for cross-system correlation */
 
 	gboolean (*fin_callback)(struct rspamd_task *task, void *arg);
 	/**< callback for filters finalizing					*/
@@ -219,6 +224,10 @@ struct rspamd_task {
 	const char *classifier;                /**< Classifier to learn (if needed)				*/
 	struct rspamd_lang_detector *lang_det; /**< Languages detector								*/
 	struct rspamd_message *message;
+
+	/* ESMTP arguments from milter protocol */
+	GHashTable *mail_esmtp_args; /**< ESMTP arguments from MAIL FROM command */
+	GPtrArray *rcpt_esmtp_args;  /**< Array of GHashTable, one per recipient with ESMTP arguments */
 };
 
 /**
@@ -285,6 +294,34 @@ const char *rspamd_task_get_principal_recipient(struct rspamd_task *task);
  * @return TRUE if an address has been parsed and added
  */
 gboolean rspamd_task_add_recipient(struct rspamd_task *task, const char *rcpt);
+
+/**
+ * Set ESMTP arguments for MAIL FROM command
+ * @param task task object
+ * @param args hash table with ESMTP arguments
+ */
+void rspamd_task_set_mail_esmtp_args(struct rspamd_task *task, GHashTable *args);
+
+/**
+ * Set ESMTP arguments for RCPT TO commands
+ * @param task task object
+ * @param args array of hash tables with ESMTP arguments (one per recipient)
+ */
+void rspamd_task_set_rcpt_esmtp_args(struct rspamd_task *task, GPtrArray *args);
+
+/**
+ * Get ESMTP arguments for MAIL FROM command
+ * @param task task object
+ * @return hash table with ESMTP arguments or NULL
+ */
+GHashTable *rspamd_task_get_mail_esmtp_args(struct rspamd_task *task);
+
+/**
+ * Get ESMTP arguments for RCPT TO commands
+ * @param task task object
+ * @return array of hash tables with ESMTP arguments or NULL
+ */
+GPtrArray *rspamd_task_get_rcpt_esmtp_args(struct rspamd_task *task);
 
 /**
  * Learn specified statfile with message in a task
@@ -382,6 +419,13 @@ void rspamd_task_timeout(EV_P_ ev_timer *w, int revents);
  * Called on unexpected IO error (e.g. ECONNRESET)
  */
 void rspamd_worker_guard_handler(EV_P_ ev_io *w, int revents);
+
+/*
+ * Task validity set for safe Lua task references
+ */
+void rspamd_task_registry_init(void);
+void rspamd_task_registry_destroy(void);
+gboolean rspamd_task_is_valid(struct rspamd_task *task);
 
 #ifdef __cplusplus
 }

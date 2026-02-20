@@ -1588,7 +1588,7 @@ rspamd_get_calendar_ticks(void)
 
 void rspamd_random_hex(char *buf, uint64_t len)
 {
-	static const char hexdigests[16] = "0123456789abcdef";
+	static const char hexdigests[] = "0123456789abcdef";
 	int64_t i;
 
 	g_assert(len > 0);
@@ -1602,6 +1602,88 @@ void rspamd_random_hex(char *buf, uint64_t len)
 			buf[i - 1] = hexdigests[(buf[i / 2] >> 4) & 0xf];
 		}
 	}
+}
+
+int rspamd_uuid_v7(char uuid_out[37], char *opt_uid_buf, gsize uid_buflen, double timestamp)
+{
+	uint8_t uuid[16];
+	uint8_t rand_bytes[10];
+	char hex[32];
+	uint64_t ms = (uint64_t) (timestamp * 1000.0);
+
+	ottery_rand_bytes(rand_bytes, sizeof(rand_bytes));
+
+	/* Bytes 0-5: 48-bit millisecond timestamp, big-endian */
+	uuid[0] = (ms >> 40) & 0xff;
+	uuid[1] = (ms >> 32) & 0xff;
+	uuid[2] = (ms >> 24) & 0xff;
+	uuid[3] = (ms >> 16) & 0xff;
+	uuid[4] = (ms >> 8) & 0xff;
+	uuid[5] = ms & 0xff;
+
+	/* Bytes 6-7: version 7 (0111) + 12 random bits */
+	uuid[6] = 0x70 | (rand_bytes[0] & 0x0f);
+	uuid[7] = rand_bytes[1];
+
+	/* Bytes 8-9: variant 10 + 14 random bits */
+	uuid[8] = 0x80 | (rand_bytes[2] & 0x3f);
+	uuid[9] = rand_bytes[3];
+
+	/* Bytes 10-15: 48 random bits */
+	uuid[10] = rand_bytes[4];
+	uuid[11] = rand_bytes[5];
+	uuid[12] = rand_bytes[6];
+	uuid[13] = rand_bytes[7];
+	uuid[14] = rand_bytes[8];
+	uuid[15] = rand_bytes[9];
+
+	/* Encode all 16 bytes as 32 hex chars, then insert dashes */
+	rspamd_encode_hex_buf(uuid, 16, hex, sizeof(hex));
+
+	/* Format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx */
+	memcpy(uuid_out, hex, 8);
+	uuid_out[8] = '-';
+	memcpy(uuid_out + 9, hex + 8, 4);
+	uuid_out[13] = '-';
+	memcpy(uuid_out + 14, hex + 12, 4);
+	uuid_out[18] = '-';
+	memcpy(uuid_out + 19, hex + 16, 4);
+	uuid_out[23] = '-';
+	memcpy(uuid_out + 24, hex + 20, 12);
+	uuid_out[36] = '\0';
+
+	/* Derive log UID from bytes 8-15 (variant + random portion) */
+	if (opt_uid_buf) {
+		/* 8 binary bytes -> 16 hex chars + NUL = 17 bytes minimum */
+		if (uid_buflen < 17) {
+			return -1;
+		}
+		int enc_len = rspamd_encode_hex_buf(&uuid[8], 8,
+											opt_uid_buf, uid_buflen - 1);
+		opt_uid_buf[enc_len] = '\0';
+		return enc_len;
+	}
+
+	return 0;
+}
+
+void rspamd_uuid_v7_patch_uid(char uuid[37], const char *tag, gsize tag_len)
+{
+	uint8_t bytes[8];
+	char hex[16];
+
+	/* Hash the tag to get 8 bytes for UUID positions 8-15 */
+	uint64_t h = rspamd_cryptobox_fast_hash(tag, tag_len, 0x7569645f763700ULL);
+	memcpy(bytes, &h, sizeof(h));
+
+	/* Preserve variant bits: byte 8 must have top 2 bits = 10 */
+	bytes[0] = 0x80 | (bytes[0] & 0x3f);
+
+	/* Hex-encode and patch into UUID string:
+	 * positions 19-22 = bytes 8-9, positions 24-35 = bytes 10-15 */
+	rspamd_encode_hex_buf(bytes, 8, hex, sizeof(hex));
+	memcpy(uuid + 19, hex, 4);
+	memcpy(uuid + 24, hex + 4, 12);
 }
 
 int rspamd_shmem_mkstemp(char *pattern)

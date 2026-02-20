@@ -341,6 +341,25 @@ rspamd_mempool_new_(gsize size, const char *tag, int flags, const char *loc)
 		size = entry->cur_suggestion;
 	}
 
+	/* Adjust size based on pool type */
+	if (flags & RSPAMD_MEMPOOL_LONG_LIVED) {
+		/* Long-lived pools: use larger pages to reduce fragmentation */
+		if (size < 16384) {
+			size = 16384; /* 16KB minimum for long-lived pools */
+		}
+	}
+	else if (flags & RSPAMD_MEMPOOL_SHORT_LIVED) {
+		/* Short-lived pools: optimize for quick allocation/deallocation */
+		if (entry && entry->cur_suggestion > 0) {
+			/* Use entry point statistics for short-lived pools */
+			size = entry->cur_suggestion;
+		}
+		else if (size == 0) {
+			/* Default to smaller size for short-lived */
+			size = 4096;
+		}
+	}
+
 	total_size = sizeof(rspamd_mempool_t) +
 				 sizeof(struct rspamd_mempool_specific) +
 				 MIN_MEM_ALIGNMENT +
@@ -644,29 +663,56 @@ void rspamd_mempool_add_destructor_full(rspamd_mempool_t *pool,
 										rspamd_mempool_destruct_t func,
 										void *data,
 										const char *function,
-										const char *line)
+										const char *line,
+										unsigned int priority)
 {
-	struct _pool_destructors *cur;
+	struct _pool_destructors *dtor;
 
 	POOL_MTX_LOCK();
-	cur = rspamd_mempool_alloc_(pool, sizeof(*cur),
-								RSPAMD_ALIGNOF(struct _pool_destructors), line);
-	cur->func = func;
-	cur->data = data;
-	cur->function = function;
-	cur->loc = line;
-	cur->next = NULL;
 
-	if (pool->priv->dtors_tail) {
-		pool->priv->dtors_tail->next = cur;
-		pool->priv->dtors_tail = cur;
+	/* Initialize heap if not yet created */
+	if (pool->priv->dtors_heap.a == NULL) {
+		rspamd_heap_init(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap);
+
+		/* Reserve space based on pool type and statistics */
+		unsigned int preallocate = 0;
+		if (pool->priv->flags & RSPAMD_MEMPOOL_LONG_LIVED) {
+			/* Long-lived pools: fixed preallocation (32 slots) */
+			preallocate = 32;
+		}
+		else if (pool->priv->entry && pool->priv->entry->cur_dtors > 0) {
+			/* Short-lived pools: use statistics, cap at 64 */
+			preallocate = MIN(pool->priv->entry->cur_dtors, 64);
+		}
+
+		if (preallocate > 0) {
+			kv_resize_safe(struct _pool_destructors, pool->priv->dtors_heap,
+						   preallocate, cleanup);
+		}
 	}
-	else {
-		pool->priv->dtors_head = cur;
-		pool->priv->dtors_tail = cur;
+
+	/* Allocate slot directly in heap (avoids double allocation) */
+	dtor = rspamd_heap_push_slot(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap);
+	if (dtor == NULL) {
+		goto cleanup;
 	}
+
+	/* Fill destructor structure */
+	dtor->func = func;
+	dtor->data = data;
+	dtor->function = function;
+	dtor->loc = line;
+	dtor->pri = priority;
+
+	/* Restore heap property after filling the slot */
+	rspamd_heap_swim(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap, dtor);
 
 	POOL_MTX_UNLOCK();
+	return;
+
+cleanup:
+	POOL_MTX_UNLOCK();
+	/* Allocation failed, but we can't really handle it in mempool context */
 }
 
 void rspamd_mempool_replace_destructor(rspamd_mempool_t *pool,
@@ -674,13 +720,20 @@ void rspamd_mempool_replace_destructor(rspamd_mempool_t *pool,
 									   void *old_data,
 									   void *new_data)
 {
-	struct _pool_destructors *tmp;
+	struct _pool_destructors *dtor;
+	gsize i, heap_size;
 
-	LL_FOREACH(pool->priv->dtors_head, tmp)
-	{
-		if (tmp->func == func && tmp->data == old_data) {
-			tmp->func = func;
-			tmp->data = new_data;
+	if (pool->priv->dtors_heap.a == NULL) {
+		return;
+	}
+
+	/* Linear search through heap to find matching destructor */
+	heap_size = rspamd_heap_size(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap);
+	for (i = 0; i < heap_size; i++) {
+		dtor = rspamd_heap_index(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap, i);
+
+		if (dtor->func == func && dtor->data == old_data) {
+			dtor->data = new_data;
 			break;
 		}
 	}
@@ -781,19 +834,24 @@ rspamd_mempool_variables_cleanup(rspamd_mempool_t *pool)
 
 void rspamd_mempool_destructors_enforce(rspamd_mempool_t *pool)
 {
-	struct _pool_destructors *destructor;
+	struct _pool_destructors *dtor;
 
 	POOL_MTX_LOCK();
 
-	LL_FOREACH(pool->priv->dtors_head, destructor)
-	{
-		/* Avoid calling destructors for NULL pointers */
-		if (destructor->data != NULL) {
-			destructor->func(destructor->data);
+	if (pool->priv->dtors_heap.a != NULL) {
+		/* Pop destructors in priority order (min heap = lowest priority first) */
+		while ((dtor = rspamd_heap_pop(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap)) != NULL) {
+			/* Avoid calling destructors for NULL pointers */
+			if (dtor->data != NULL) {
+				dtor->func(dtor->data);
+			}
 		}
-	}
 
-	pool->priv->dtors_head = pool->priv->dtors_tail = NULL;
+		/* Destroy the heap itself */
+		rspamd_heap_destroy(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap);
+		/* Mark heap as destroyed to prevent double-free in rspamd_mempool_delete */
+		pool->priv->dtors_heap.a = NULL;
+	}
 
 	rspamd_mempool_variables_cleanup(pool);
 
@@ -817,7 +875,7 @@ rspamd_mempool_debug_elt_cmp(const void *a, const void *b)
 void rspamd_mempool_delete(rspamd_mempool_t *pool)
 {
 	struct _pool_chain *cur, *tmp;
-	struct _pool_destructors *destructor;
+	struct _pool_destructors *dtor;
 	gpointer ptr;
 	unsigned int i;
 	gsize len;
@@ -830,7 +888,11 @@ void rspamd_mempool_delete(rspamd_mempool_t *pool)
 		GHashTable *debug_tbl = *(GHashTable **) (((unsigned char *) pool) + sizeof(*pool));
 		/* Show debug info */
 		gsize ndtor = 0;
-		LL_COUNT(pool->priv->dtors_head, destructor, ndtor);
+
+		if (pool->priv->dtors_heap.a != NULL) {
+			ndtor = rspamd_heap_size(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap);
+		}
+
 		msg_info_pool("destructing of the memory pool %p; elt size = %z; "
 					  "used memory = %Hz; wasted memory = %Hd; "
 					  "vars = %z; destructors = %z",
@@ -881,13 +943,28 @@ void rspamd_mempool_delete(rspamd_mempool_t *pool)
 		}
 	}
 
-	/* Call all pool destructors */
-	LL_FOREACH(pool->priv->dtors_head, destructor)
-	{
-		/* Avoid calling destructors for NULL pointers */
-		if (destructor->data != NULL) {
-			destructor->func(destructor->data);
+	/* Call all pool destructors in priority order */
+	if (pool->priv->dtors_heap.a != NULL) {
+		gsize ndtors = 0;
+
+		/* Update destructor statistics before destroying */
+		if (pool->priv->entry && mempool_entries) {
+			ndtors = rspamd_heap_size(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap);
+
+			/* Track maximum number of destructors seen, cap at 64 */
+			if (ndtors > pool->priv->entry->cur_dtors) {
+				pool->priv->entry->cur_dtors = MIN(ndtors, 64);
+			}
 		}
+
+		while ((dtor = rspamd_heap_pop(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap)) != NULL) {
+			/* Avoid calling destructors for NULL pointers */
+			if (dtor->data != NULL) {
+				dtor->func(dtor->data);
+			}
+		}
+
+		rspamd_heap_destroy(rspamd_mempool_destruct_heap, &pool->priv->dtors_heap);
 	}
 
 	rspamd_mempool_variables_cleanup(pool);

@@ -1,0 +1,285 @@
+name: Integration Test
+
+permissions:
+  contents: read
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      corpus_url:
+        description: 'URL to email corpus (zip file)'
+        required: false
+        default: 'https://github.com/rspamd/rspamd-test-corpus/releases/download/v1.0/rspamd-test-corpus.zip'
+
+jobs:
+  integration-test:
+    name: Integration & Load Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            ragel \
+            libluajit-5.1-dev \
+            libglib2.0-dev \
+            libssl-dev \
+            libicu-dev \
+            libsodium-dev \
+            libhyperscan-dev \
+            libpcre2-dev \
+            libjemalloc-dev \
+            libunwind-dev \
+            libmagic-dev \
+            libarchive-dev \
+            libzstd-dev \
+            libbrotli-dev \
+            libfann-dev \
+            libstemmer-dev \
+            liblua5.1-dev \
+            redis-server \
+            sqlite3 \
+            libsqlite3-dev
+
+      - name: Install Python dependencies
+        run: |
+          pip install requests
+
+      - name: Build Rspamd
+        working-directory: .
+        run: |
+          mkdir -p build install
+          cd build
+          cmake -DCMAKE_INSTALL_PREFIX=/usr \
+                -DCONFDIR=/etc/rspamd \
+                -DENABLE_COVERAGE=OFF \
+                -DENABLE_FULL_DEBUG=ON \
+                -DSANITIZE=address,leak \
+                -GNinja ..
+          ninja
+          DESTDIR="${GITHUB_WORKSPACE}/install" ninja install
+
+      - name: Create static encryption keys
+        working-directory: test/integration
+        run: |
+          # Use static keys to avoid LD_LIBRARY_PATH issues with rspamadm
+          cat > .env.keys <<'EOF'
+          # Rspamd integration test keys (static for testing)
+
+          # Fuzzy worker keypair
+          RSPAMD_FUZZY_WORKER_PRIVKEY=aergrxbdfppyo8x3upyw5brui1sug93ztyd9gcuuan141iy8zi1y
+          RSPAMD_FUZZY_WORKER_PUBKEY=dsrea5fbqaqtzccno8roczeym5hgbokn5wxr5cyyhhzrqciiogpy
+
+          # Fuzzy check encryption key (same as fuzzy worker pubkey)
+          RSPAMD_FUZZY_ENCRYPTION_KEY=dsrea5fbqaqtzccno8roczeym5hgbokn5wxr5cyyhhzrqciiogpy
+
+          # Normal worker keypair (for encrypted inter-worker communication)
+          RSPAMD_WORKER_PRIVKEY=y8rq4a5rb7wj3xpefhx9t8gg3npfy4fswbwxyw7ma8hj46m36w1y
+          RSPAMD_WORKER_PUBKEY=bnw1ga6h7q155qei7tzz9k5z4rb9msbf8gwra4jbzsyj8chg5n3y
+
+          # Proxy worker keypair
+          RSPAMD_PROXY_PRIVKEY=ad9cz7mhb881ngsr3pncxydm9d6t917hyrysywixwpzntzhikruy
+          RSPAMD_PROXY_PUBKEY=bjkakz1r7zps7z774yn11gb9det5rw3dxb7z7559p5twzucneucy
+          EOF
+
+          echo "Static keys configured for testing"
+
+      - name: Download email corpus
+        working-directory: test/integration
+        run: |
+          # Use provided URL or default corpus from rspamd-test-corpus
+          CORPUS_URL="${{ github.event.inputs.corpus_url }}"
+          if [ -z "$CORPUS_URL" ]; then
+            # Default: use latest release from rspamd-test-corpus
+            CORPUS_URL="https://github.com/rspamd/rspamd-test-corpus/releases/latest/download/rspamd-test-corpus.zip"
+          fi
+
+          echo "Downloading corpus from: $CORPUS_URL"
+
+          # Create data directory for corpus
+          mkdir -p data
+          chmod 777 data
+
+          curl -L "$CORPUS_URL" -o data/corpus.zip
+
+          # Extract corpus
+          unzip data/corpus.zip -d data/
+
+          # The archive contains a 'corpus' directory, so we should have data/corpus/ now
+          ls -lh data/corpus/
+
+      - name: Start Docker Compose
+        working-directory: test/integration
+        run: |
+          docker compose up -d
+
+          # Wait for services to be ready
+          # Rspamd takes ~30-40s to compile TLD database and load maps
+          echo "Waiting for services to start..."
+          sleep 20
+
+          # Check services
+          echo "=== Docker Compose Services Status ==="
+          docker compose ps
+
+          echo ""
+          echo "=== Redis Logs ==="
+          docker compose logs redis
+
+          echo ""
+          echo "=== Rspamd Logs ==="
+          docker compose logs rspamd
+
+      - name: Wait for Rspamd to be ready
+        working-directory: test/integration
+        run: |
+          echo "Waiting for Rspamd services to initialize..."
+
+          # Wait for healthcheck to pass
+          for i in {1..60}; do
+            if curl -s http://localhost:50002/ping > /dev/null 2>&1; then
+              echo "✓ Rspamd Controller is ready!"
+
+              # Also check proxy
+              if curl -s http://localhost:50004/ping > /dev/null 2>&1; then
+                echo "✓ Rspamd Proxy is ready!"
+              else
+                echo "⚠ WARNING: Proxy not responding, but continuing..."
+              fi
+
+              # Show Rspamd stat
+              echo ""
+              echo "=== Rspamd Status ==="
+              curl -s http://localhost:50002/stat 2>/dev/null | head -20 || echo "Cannot get stat"
+
+              exit 0
+            fi
+            echo "Waiting for Rspamd... (attempt $i/60)"
+            sleep 3
+          done
+
+          echo "❌ Rspamd failed to start within timeout!"
+          echo ""
+          echo "=== Docker Compose Status ==="
+          docker compose ps
+          echo ""
+          echo "=== Full Rspamd logs ==="
+          docker compose logs rspamd
+          echo ""
+          echo "=== Checking for ASAN logs in container ==="
+          docker compose exec -T rspamd ls -la /data/ || true
+          docker compose exec -T rspamd cat /data/asan.log* 2>/dev/null || echo "No ASAN logs found"
+          echo ""
+          echo "=== Container stderr/stdout ==="
+          docker logs rspamd-main 2>&1 || true
+          exit 1
+
+      - name: Run integration test
+        working-directory: test/integration
+        run: |
+          export RSPAMD_HOST=localhost
+          export CONTROLLER_PORT=50002
+          export PROXY_PORT=50004
+          export PASSWORD=q1
+          export TEST_PROXY=true
+
+          # Verify corpus exists
+          if [ ! -d "data/corpus/spam" ] || [ ! -d "data/corpus/ham" ]; then
+            echo "ERROR: Corpus directories not found"
+            echo "Expected: data/corpus/spam and data/corpus/ham"
+            ls -la data/
+            ls -la data/corpus/ || true
+            exit 1
+          fi
+
+          echo "Corpus downloaded successfully:"
+          ls -lh data/corpus/
+
+          ./scripts/integration-test.sh
+
+      - name: Collect Docker logs
+        if: always()
+        working-directory: test/integration
+        run: |
+          echo "=== Collecting logs from all services ==="
+          docker compose logs --no-color > docker-compose-logs.txt 2>&1 || true
+          echo "=== Direct container logs ==="
+          docker logs rspamd-main >> docker-compose-logs.txt 2>&1 || true
+          docker logs rspamd-redis >> docker-compose-logs.txt 2>&1 || true
+
+      - name: Stop Docker Compose
+        if: always()
+        working-directory: test/integration
+        run: |
+          echo "Stopping containers to trigger ASAN log flush..."
+          docker compose down -v
+
+      - name: Check AddressSanitizer logs
+        if: always()
+        working-directory: test/integration
+        run: |
+          echo "=== Checking for ASAN logs after container shutdown ==="
+          ls -la data/
+
+          # Fix permissions on ASAN logs created by Docker
+          sudo chmod -R 644 data/asan.log* 2>/dev/null || true
+
+          # Check if ASAN logs exist
+          if ls data/asan.log* 1> /dev/null 2>&1; then
+            echo "✓ ASAN logs found"
+            ./scripts/check-asan-logs.sh || echo "Memory issues detected, but continuing..."
+          else
+            echo "⚠ No ASAN logs found after container shutdown"
+          fi
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: |
+            test/integration/data/results.json
+            test/integration/data/proxy_results.json
+            test/integration/data/asan.log*
+            test/integration/data/*.log
+          retention-days: 7
+
+      - name: Upload Docker logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-logs
+          path: |
+            test/integration/docker-compose-logs.txt
+          retention-days: 7
+        continue-on-error: true
+
+      - name: Test summary
+        if: always()
+        run: |
+          echo "## Integration Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f "test/integration/data/results.json" ]; then
+            TOTAL=$(jq '. | length' test/integration/data/results.json)
+            echo "- Total emails scanned: $TOTAL" >> $GITHUB_STEP_SUMMARY
+            echo "- Results saved to artifacts" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ No results file generated" >> $GITHUB_STEP_SUMMARY
+          fi

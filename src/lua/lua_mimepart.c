@@ -21,6 +21,7 @@
 #include "libstat/stat_api.h"
 #include "libcryptobox/cryptobox.h"
 #include "libutil/shingles.h"
+#include "khash.h"
 
 #include "contrib/uthash/utlist.h"
 
@@ -128,6 +129,13 @@ LUA_FUNCTION_DEF(textpart, get_lines_count);
  */
 LUA_FUNCTION_DEF(textpart, get_stats);
 /***
+ * @method text_part:get_cta_urls([max_urls])
+ * Get CTA (call-to-action) URLs from HTML part sorted by button weight
+ * @param {number} max_urls optional maximum number of URLs to return
+ * @return {table} array of URL objects sorted by importance (descending)
+ */
+LUA_FUNCTION_DEF(textpart, get_cta_urls);
+/***
  * @method mime_part:get_words_count()
  * Get words number in the part
  * @return {integer} number of words in the part
@@ -207,8 +215,9 @@ LUA_FUNCTION_DEF(textpart, get_charset);
  */
 LUA_FUNCTION_DEF(textpart, get_languages);
 /***
- * @method text_part:get_fuzzy_hashes(mempool)
+ * @method text_part:get_fuzzy_hashes(mempool[, subject])
  * @param {rspamd_mempool} mempool - memory pool (usually task pool)
+ * @param {string} subject - optional message subject (included in hash for short text < 32 words)
  * Returns direct hash of textpart as a string and array [1..32] of shingles each represented as a following table:
  * - [1] - 64 bit fuzzy hash represented as a string
  * - [2..4] - strings used to generate this hash
@@ -221,6 +230,21 @@ LUA_FUNCTION_DEF(textpart, get_fuzzy_hashes);
  * @return {mimepart} mimepart object
  */
 LUA_FUNCTION_DEF(textpart, get_mimepart);
+/***
+ * @method text_part:get_alt_part()
+ * Returns the alternative text part (text/plain for HTML, text/html for plain text)
+ * within the same multipart/alternative container. Returns nil if no alternative exists.
+ * @return {text_part|nil} alternative text part or nil
+ */
+LUA_FUNCTION_DEF(textpart, get_alt_part);
+
+/***
+ * @method text_part:get_html_fuzzy_hashes(mempool)
+ * Generate fuzzy hashes for HTML structure (if part is HTML)
+ * @param {rspamd_mempool} mempool memory pool to use
+ * @return {digest, shingles} hex digest and shingles table with metadata
+ */
+LUA_FUNCTION_DEF(textpart, get_html_fuzzy_hashes);
 
 static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF(textpart, is_utf),
@@ -243,8 +267,11 @@ static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF(textpart, get_charset),
 	LUA_INTERFACE_DEF(textpart, get_languages),
 	LUA_INTERFACE_DEF(textpart, get_mimepart),
+	LUA_INTERFACE_DEF(textpart, get_alt_part),
 	LUA_INTERFACE_DEF(textpart, get_stats),
 	LUA_INTERFACE_DEF(textpart, get_fuzzy_hashes),
+	LUA_INTERFACE_DEF(textpart, get_html_fuzzy_hashes),
+	LUA_INTERFACE_DEF(textpart, get_cta_urls),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
@@ -564,6 +591,13 @@ LUA_FUNCTION_DEF(mimepart, is_specific);
  */
 LUA_FUNCTION_DEF(mimepart, get_urls);
 
+/***
+ * @method mime_part:is_injected()
+ * Returns true if part was injected (computed/virtual) rather than being part of the original message
+ * @return {boolean} true if part is injected
+ */
+LUA_FUNCTION_DEF(mimepart, is_injected);
+
 static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF(mimepart, get_content),
 	LUA_INTERFACE_DEF(mimepart, get_raw_content),
@@ -602,6 +636,7 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF(mimepart, get_specific),
 	LUA_INTERFACE_DEF(mimepart, set_specific),
 	LUA_INTERFACE_DEF(mimepart, is_specific),
+	LUA_INTERFACE_DEF(mimepart, is_injected),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
@@ -901,7 +936,7 @@ lua_textpart_get_words_count(lua_State *L)
 		return 1;
 	}
 
-	if (IS_TEXT_PART_EMPTY(part) || part->utf_words == NULL) {
+	if (IS_TEXT_PART_EMPTY(part) || !part->utf_words.a) {
 		lua_pushinteger(L, 0);
 	}
 	else {
@@ -943,7 +978,7 @@ lua_textpart_get_words(lua_State *L)
 		return luaL_error(L, "invalid arguments");
 	}
 
-	if (IS_TEXT_PART_EMPTY(part) || part->utf_words == NULL) {
+	if (IS_TEXT_PART_EMPTY(part) || !part->utf_words.a) {
 		lua_createtable(L, 0, 0);
 	}
 	else {
@@ -957,7 +992,7 @@ lua_textpart_get_words(lua_State *L)
 			}
 		}
 
-		return rspamd_lua_push_words(L, part->utf_words, how);
+		return rspamd_lua_push_words_kvec(L, &part->utf_words, how);
 	}
 
 	return 1;
@@ -976,7 +1011,7 @@ lua_textpart_filter_words(lua_State *L)
 		return luaL_error(L, "invalid arguments");
 	}
 
-	if (IS_TEXT_PART_EMPTY(part) || part->utf_words == NULL) {
+	if (IS_TEXT_PART_EMPTY(part) || !part->utf_words.a) {
 		lua_createtable(L, 0, 0);
 	}
 	else {
@@ -998,9 +1033,8 @@ lua_textpart_filter_words(lua_State *L)
 
 		lua_createtable(L, 8, 0);
 
-		for (i = 0, cnt = 1; i < part->utf_words->len; i++) {
-			rspamd_stat_token_t *w = &g_array_index(part->utf_words,
-													rspamd_stat_token_t, i);
+		for (i = 0, cnt = 1; i < kv_size(part->utf_words); i++) {
+			rspamd_word_t *w = &kv_A(part->utf_words, i);
 
 			switch (how) {
 			case RSPAMD_LUA_WORDS_STEM:
@@ -1194,13 +1228,13 @@ struct lua_shingle_filter_cbdata {
 	rspamd_mempool_t *pool;
 };
 
-#define STORE_TOKEN(i, t)                                                     \
-	do {                                                                      \
-		if ((i) < part->utf_words->len) {                                     \
-			word = &g_array_index(part->utf_words, rspamd_stat_token_t, (i)); \
-			sd->t.begin = word->stemmed.begin;                                \
-			sd->t.len = word->stemmed.len;                                    \
-		}                                                                     \
+#define STORE_TOKEN(i, t)                       \
+	do {                                        \
+		if ((i) < kv_size(part->utf_words)) {   \
+			word = &kv_A(part->utf_words, (i)); \
+			sd->t.begin = word->stemmed.begin;  \
+			sd->t.len = word->stemmed.len;      \
+		}                                       \
 	} while (0)
 
 static uint64_t
@@ -1210,7 +1244,7 @@ lua_shingles_filter(uint64_t *input, gsize count,
 	uint64_t minimal = G_MAXUINT64;
 	gsize i, min_idx = 0;
 	struct lua_shingle_data *sd;
-	rspamd_stat_token_t *word;
+	rspamd_word_t *word;
 	struct lua_shingle_filter_cbdata *cbd = (struct lua_shingle_filter_cbdata *) ud;
 	struct rspamd_mime_text_part *part;
 
@@ -1236,27 +1270,37 @@ lua_shingles_filter(uint64_t *input, gsize count,
 
 #undef STORE_TOKEN
 
+/* Minimum words for shingles (matches lua_fuzzy.lua default) */
+#define FUZZY_SHINGLES_MIN_WORDS 32
+
 static int
 lua_textpart_get_fuzzy_hashes(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_mime_text_part *part = lua_check_textpart(L);
 	rspamd_mempool_t *pool = rspamd_lua_check_mempool(L, 2);
+	const char *subject = NULL;
+	gsize subject_len = 0;
 	unsigned char key[rspamd_cryptobox_HASHBYTES], digest[rspamd_cryptobox_HASHBYTES],
 		hexdigest[rspamd_cryptobox_HASHBYTES * 2 + 1], numbuf[64];
 	struct rspamd_shingle *sgl;
 	unsigned int i;
 	struct lua_shingle_data *sd;
 	rspamd_cryptobox_hash_state_t st;
-	rspamd_stat_token_t *word;
+	rspamd_word_t *word;
 	struct lua_shingle_filter_cbdata cbd;
-
+	gboolean short_text;
 
 	if (part == NULL || pool == NULL) {
 		return luaL_error(L, "invalid arguments");
 	}
 
-	if (IS_TEXT_PART_EMPTY(part) || part->utf_words == NULL) {
+	/* Optional subject parameter for short text hashing */
+	if (lua_type(L, 3) == LUA_TSTRING) {
+		subject = lua_tolstring(L, 3, &subject_len);
+	}
+
+	if (IS_TEXT_PART_EMPTY(part) || !part->utf_words.a) {
 		lua_pushnil(L);
 		lua_pushnil(L);
 	}
@@ -1264,15 +1308,41 @@ lua_textpart_get_fuzzy_hashes(lua_State *L)
 		/* TODO: add keys and algorithms support */
 		rspamd_cryptobox_hash(key, "rspamd", strlen("rspamd"), NULL, 0);
 
-		/* TODO: add short text support */
+		/* Determine if this is short text (matches fuzzy_check.c logic) */
+		short_text = (kv_size(part->utf_words) < FUZZY_SHINGLES_MIN_WORDS);
 
 		/* Calculate direct hash */
 		rspamd_cryptobox_hash_init(&st, key, rspamd_cryptobox_HASHKEYBYTES);
 
-		for (i = 0; i < part->utf_words->len; i++) {
-			word = &g_array_index(part->utf_words, rspamd_stat_token_t, i);
-			rspamd_cryptobox_hash_update(&st,
-										 word->stemmed.begin, word->stemmed.len);
+		if (short_text) {
+			/*
+			 * For short text, hash the stripped content directly
+			 * This matches fuzzy_cmd_from_text_part behavior in fuzzy_check.c
+			 */
+			if (part->utf_stripped_content && part->utf_stripped_content->len > 0) {
+				rspamd_cryptobox_hash_update(&st, part->utf_stripped_content->data,
+											 part->utf_stripped_content->len);
+			}
+
+			/* Include subject for short text (matches fuzzy_check.c behavior) */
+			if (subject && subject_len > 0) {
+				rspamd_cryptobox_hash_update(&st, subject, subject_len);
+			}
+		}
+		else {
+			/*
+			 * For normal text, hash individual word stems
+			 * Skip words with RSPAMD_WORD_FLAG_SKIPPED or empty stems
+			 * This matches fuzzy_cmd_from_text_part behavior in fuzzy_check.c
+			 */
+			for (i = 0; i < kv_size(part->utf_words); i++) {
+				word = &kv_A(part->utf_words, i);
+
+				if (!((word->flags & RSPAMD_WORD_FLAG_SKIPPED) || word->stemmed.len == 0)) {
+					rspamd_cryptobox_hash_update(&st, word->stemmed.begin,
+												 word->stemmed.len);
+				}
+			}
 		}
 
 		rspamd_cryptobox_hash_final(&st, digest);
@@ -1283,7 +1353,7 @@ lua_textpart_get_fuzzy_hashes(lua_State *L)
 
 		cbd.pool = pool;
 		cbd.part = part;
-		sgl = rspamd_shingles_from_text(part->utf_words, key,
+		sgl = rspamd_shingles_from_text(&part->utf_words, key,
 										pool, lua_shingles_filter, &cbd, RSPAMD_SHINGLES_MUMHASH);
 
 		if (sgl == NULL) {
@@ -1318,6 +1388,221 @@ lua_textpart_get_fuzzy_hashes(lua_State *L)
 	return 2;
 }
 
+/***
+ * @method text_part:get_html_fuzzy_hashes(mempool)
+ * Generate fuzzy hashes for HTML content (if text part is HTML).
+ * Returns digest and shingles table similar to get_fuzzy_hashes, but
+ * for HTML structure instead of text content.
+ *
+ * HTML shingles include:
+ * - Structure shingles (DOM tag sequence with domains)
+ * - CTA domains hash (critical for phishing detection)
+ * - All domains hash
+ * - Statistical features hash
+ *
+ * @param {rspamd_mempool} mempool memory pool to use
+ * @return {digest, shingles} digest is hex string, shingles is array of hashes + metadata
+ */
+static int
+lua_textpart_get_html_fuzzy_hashes(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_text_part *part = lua_check_textpart(L);
+	rspamd_mempool_t *pool = rspamd_lua_check_mempool(L, 2);
+	unsigned char key[rspamd_cryptobox_HASHBYTES];
+	struct rspamd_html_shingle *html_sgl = NULL;
+	unsigned int i;
+
+	if (part == NULL || pool == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	/* Check if this is an HTML part with parsed HTML */
+	if (!IS_TEXT_PART_HTML(part) || part->html == NULL) {
+		lua_pushnil(L);
+		lua_pushnil(L);
+		return 2;
+	}
+
+	/* Generate key */
+	rspamd_cryptobox_hash(key, "rspamd", strlen("rspamd"), NULL, 0);
+
+	/* Generate HTML shingles */
+	html_sgl = rspamd_shingles_from_html(part->html, key, pool,
+										 rspamd_shingles_default_filter,
+										 NULL, RSPAMD_SHINGLES_MUMHASH, FALSE);
+
+	if (html_sgl == NULL) {
+		lua_pushnil(L);
+		lua_pushnil(L);
+		return 2;
+	}
+
+	/* Return direct hash (like text parts - hash of all tokens for exact matching) */
+	unsigned char hexdigest[rspamd_cryptobox_HASHBYTES * 2 + 1];
+	rspamd_encode_hex_buf(html_sgl->direct_hash, rspamd_cryptobox_HASHBYTES,
+						  hexdigest, sizeof(hexdigest));
+	lua_pushlstring(L, (const char *) hexdigest, sizeof(hexdigest) - 1);
+
+	/* Create shingles table */
+	lua_createtable(L, RSPAMD_SHINGLE_SIZE, 6);
+
+	/* Add structure shingles */
+	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i++) {
+		lua_pushinteger(L, i + 1);
+		lua_pushinteger(L, html_sgl->structure_shingles.hashes[i]);
+		lua_settable(L, -3);
+	}
+
+	/* Add metadata */
+	lua_pushstring(L, "cta_domains_hash");
+	lua_pushinteger(L, html_sgl->cta_domains_hash);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "all_domains_hash");
+	lua_pushinteger(L, html_sgl->all_domains_hash);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "features_hash");
+	lua_pushinteger(L, html_sgl->features_hash);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "tags_count");
+	lua_pushinteger(L, html_sgl->tags_count);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "links_count");
+	lua_pushinteger(L, html_sgl->links_count);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "dom_depth");
+	lua_pushinteger(L, html_sgl->dom_depth);
+	lua_settable(L, -3);
+
+	return 2;
+}
+
+/***
+ * @method text_part:get_cta_urls([max_urls])
+ * Get CTA (call-to-action) URLs from HTML part sorted by button weight
+ * @param {number} max_urls optional maximum number of URLs to return
+ * @return {table} array of URL objects sorted by importance (descending)
+ */
+
+KHASH_SET_INIT_INT64(lua_cta_url_set);
+
+static int
+lua_textpart_get_cta_urls(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_text_part *part = lua_check_textpart(L);
+	unsigned int max_urls = 0;
+	unsigned int nret = 0;
+	gboolean return_original = FALSE;
+	gboolean include_weights = FALSE;
+
+	if (part == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	int top = lua_gettop(L);
+
+	if (top >= 2) {
+		if (lua_istable(L, 2)) {
+			lua_getfield(L, 2, "max");
+			if (lua_isnumber(L, -1)) {
+				max_urls = lua_tointeger(L, -1);
+			}
+			lua_pop(L, 1);
+			lua_getfield(L, 2, "original");
+			if (lua_isboolean(L, -1)) {
+				return_original = lua_toboolean(L, -1);
+			}
+			lua_pop(L, 1);
+			lua_getfield(L, 2, "with_weights");
+			if (lua_isboolean(L, -1)) {
+				include_weights = lua_toboolean(L, -1);
+			}
+			lua_pop(L, 1);
+		}
+		else if (lua_isnumber(L, 2)) {
+			max_urls = lua_tointeger(L, 2);
+			if (top >= 3 && lua_isboolean(L, 3)) {
+				return_original = lua_toboolean(L, 3);
+			}
+			if (top >= 4 && lua_isboolean(L, 4)) {
+				include_weights = lua_toboolean(L, 4);
+			}
+		}
+		else if (lua_isboolean(L, 2)) {
+			return_original = lua_toboolean(L, 2);
+			if (top >= 3 && lua_isnumber(L, 3)) {
+				max_urls = lua_tointeger(L, 3);
+			}
+			if (top >= 4 && lua_isboolean(L, 4)) {
+				include_weights = lua_toboolean(L, 4);
+			}
+		}
+	}
+
+	/* Check if this HTML part has CTA URLs */
+	if (!part->cta_urls) {
+		lua_newtable(L);
+		return 1;
+	}
+
+	/* Access heap structure from html.h */
+	rspamd_html_heap_storage_t *heap = part->cta_urls;
+
+	/* Heap is already top-K, but in min-heap order - need to reverse for descending */
+	unsigned int result_size = max_urls > 0 ? MIN(max_urls, heap->n) : heap->n;
+	lua_createtable(L, result_size, include_weights ? 0 : 0);
+
+	khash_t(lua_cta_url_set) *seen = kh_init(lua_cta_url_set);
+
+	/* Iterate heap from end to start for descending order */
+	for (int i = (int) heap->n - 1; i >= 0 && nret < result_size; i--) {
+		struct rspamd_html_cta_entry *entry = &heap->a[i];
+		if (entry && entry->url) {
+			struct rspamd_url *chosen = entry->url;
+
+			if (!return_original && chosen->ext && chosen->ext->linked_url &&
+				chosen->ext->linked_url != chosen) {
+				chosen = chosen->ext->linked_url;
+			}
+
+			khiter_t k = kh_get(lua_cta_url_set, seen, (khint64_t) (uintptr_t) chosen);
+			if (k != kh_end(seen)) {
+				continue;
+			}
+
+			int ret;
+			kh_put(lua_cta_url_set, seen, (khint64_t) (uintptr_t) chosen, &ret);
+
+			if (include_weights) {
+				lua_createtable(L, 0, 2);
+				struct rspamd_lua_url *lua_url = lua_newuserdata(L, sizeof(struct rspamd_lua_url));
+				rspamd_lua_setclass(L, rspamd_url_classname, -1);
+				lua_url->url = chosen;
+				lua_setfield(L, -2, "url");
+				lua_pushnumber(L, entry->weight);
+				lua_setfield(L, -2, "weight");
+				lua_rawseti(L, -2, ++nret);
+			}
+			else {
+				struct rspamd_lua_url *lua_url = lua_newuserdata(L, sizeof(struct rspamd_lua_url));
+				rspamd_lua_setclass(L, rspamd_url_classname, -1);
+				lua_url->url = chosen;
+				lua_rawseti(L, -2, ++nret);
+			}
+		}
+	}
+
+	kh_destroy(lua_cta_url_set, seen);
+
+	return 1;
+}
+
 static int
 lua_textpart_get_mimepart(lua_State *L)
 {
@@ -1330,6 +1615,27 @@ lua_textpart_get_mimepart(lua_State *L)
 			pmime = lua_newuserdata(L, sizeof(struct rspamd_mime_part *));
 			rspamd_lua_setclass(L, rspamd_mimepart_classname, -1);
 			*pmime = part->mime_part;
+
+			return 1;
+		}
+	}
+
+	lua_pushnil(L);
+	return 1;
+}
+
+static int
+lua_textpart_get_alt_part(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_text_part *part = lua_check_textpart(L);
+	struct rspamd_mime_text_part **ppart;
+
+	if (part != NULL) {
+		if (part->alt_text_part != NULL) {
+			ppart = lua_newuserdata(L, sizeof(struct rspamd_mime_text_part *));
+			rspamd_lua_setclass(L, rspamd_textpart_classname, -1);
+			*ppart = part->alt_text_part;
 
 			return 1;
 		}
@@ -2227,6 +2533,21 @@ lua_mimepart_is_specific(lua_State *L)
 	}
 
 	lua_pushboolean(L, part->part_type == RSPAMD_MIME_PART_CUSTOM_LUA);
+
+	return 1;
+}
+
+static int
+lua_mimepart_is_injected(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_part *part = lua_check_mimepart(L);
+
+	if (part == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	lua_pushboolean(L, part->flags & RSPAMD_MIME_PART_COMPUTED);
 
 	return 1;
 }

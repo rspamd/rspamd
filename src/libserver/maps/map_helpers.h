@@ -38,6 +38,7 @@ extern "C" {
 struct rspamd_radix_map_helper;
 struct rspamd_hash_map_helper;
 struct rspamd_regexp_map_helper;
+struct ev_loop;
 struct rspamd_cdb_map_helper;
 struct rspamd_map_helper_value;
 
@@ -261,6 +262,103 @@ void rspamd_map_helper_insert_re(gpointer st, gconstpointer key, gconstpointer v
  * @param re_map
  */
 void rspamd_map_helper_destroy_regexp(struct rspamd_regexp_map_helper *re_map);
+
+/**
+ * Pending regexp map entry for deferred HS compilation
+ */
+struct rspamd_regexp_map_pending {
+	struct rspamd_regexp_map_helper *re_map;
+	char *name;             /* Map identifier for logging/IPC */
+	unsigned char hash[64]; /* Cache key hash (rspamd_cryptobox_HASHBYTES) */
+};
+
+/**
+ * Add regexp map to pending compilation queue.
+ * Called during initialization when hs_helper is not yet available.
+ * @param re_map regexp map helper
+ * @param name identifier for this map (e.g., map name)
+ */
+void rspamd_regexp_map_add_pending(struct rspamd_regexp_map_helper *re_map,
+								   const char *name);
+
+/**
+ * Get list of pending regexp map compilations.
+ * Returns array of rspamd_regexp_map_pending, caller must free array (not contents).
+ * @param count output: number of pending entries
+ * @return array of pending entries or NULL if none
+ */
+struct rspamd_regexp_map_pending *rspamd_regexp_map_get_pending(unsigned int *count);
+
+/**
+ * Clear pending queue after hs_helper has processed it.
+ */
+void rspamd_regexp_map_clear_pending(void);
+
+/**
+ * Find a pending regexp map by name.
+ * @param name identifier
+ * @return regexp map helper or NULL if not found
+ */
+struct rspamd_regexp_map_helper *rspamd_regexp_map_find_pending(const char *name);
+
+/**
+ * Get hash/digest from regexp map for cache key generation.
+ * @param re_map
+ * @param hash_out output buffer (must be rspamd_cryptobox_HASHBYTES)
+ */
+void rspamd_regexp_map_get_hash(struct rspamd_regexp_map_helper *re_map,
+								unsigned char *hash_out);
+
+/**
+ * Compile hyperscan database for regexp map and save to cache.
+ * This is called by hs_helper for async compilation.
+ * @param re_map regexp map helper
+ * @param cache_dir directory to save cache file
+ * @param err error output
+ * @return TRUE on success
+ */
+gboolean rspamd_regexp_map_compile_hs_to_cache(struct rspamd_regexp_map_helper *re_map,
+											   const char *cache_dir,
+											   GError **err);
+
+typedef void (*rspamd_regexp_map_hs_cache_cb_t)(struct rspamd_regexp_map_helper *re_map,
+												gboolean success,
+												GError *err,
+												void *ud);
+
+/**
+ * Compile regexp map HS database and store it in the configured HS cache backend.
+ * If Lua backend is enabled, store is done asynchronously and callback is invoked on completion.
+ * For file backend, compilation+store is synchronous and callback is invoked immediately.
+ */
+void rspamd_regexp_map_compile_hs_to_cache_async(struct rspamd_regexp_map_helper *re_map,
+												 const char *cache_dir,
+												 struct ev_loop *event_loop,
+												 rspamd_regexp_map_hs_cache_cb_t cb,
+												 void *ud);
+
+/**
+ * Load hyperscan database from cache for regexp map.
+ * This is called by workers when they receive notification that
+ * hs_helper has compiled a regexp map database.
+ * @param re_map regexp map helper
+ * @param cache_dir directory containing cache files
+ * @return TRUE if loaded successfully
+ */
+gboolean rspamd_regexp_map_load_from_cache(struct rspamd_regexp_map_helper *re_map,
+										   const char *cache_dir);
+
+/**
+ * Asynchronously load hyperscan database for a regexp map from the configured
+ * HS cache backend (Lua backend if present, otherwise filesystem).
+ *
+ * The callback is invoked when hot-swap has been attempted.
+ */
+void rspamd_regexp_map_load_from_cache_async(struct rspamd_regexp_map_helper *re_map,
+											 const char *cache_dir,
+											 struct ev_loop *event_loop,
+											 void (*cb)(gboolean success, void *ud),
+											 void *ud);
 
 #ifdef __cplusplus
 }

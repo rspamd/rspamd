@@ -260,8 +260,8 @@ auto symcache::load_items() -> bool
 
 
 	if (cached_map->get_size() < (int) sizeof(symcache_header)) {
-		msg_info_cache("cannot use file %s, truncated: %z", cfg->cache_filename,
-					   errno, strerror(errno));
+		msg_info_cache("cannot use file %s, error: %s", cfg->cache_filename,
+					   strerror(errno));
 		return false;
 	}
 
@@ -373,7 +373,7 @@ auto symcache::load_items() -> bool
 template<typename T>
 static constexpr auto round_to_hundreds(T x)
 {
-	return (::floor(x) * 100.0) / 100.0;
+	return ::round(x * 100.0) / 100.0;
 }
 
 bool symcache::save_items() const
@@ -401,8 +401,8 @@ bool symcache::save_items() const
 	memcpy(hdr.magic, symcache_magic, sizeof(symcache_magic));
 
 	if (write(file_sink->get_fd(), &hdr, sizeof(hdr)) == -1) {
-		msg_err_cache("cannot write to file %s, error %d, %s", cfg->cache_filename,
-					  errno, strerror(errno));
+		msg_err_cache("cannot write to file %s, error %d, %s", cfg->cache_filename, errno,
+					  strerror(errno));
 
 		return false;
 	}
@@ -667,7 +667,7 @@ auto symcache::resort() -> void
 	 */
 	total_hits = 0;
 	auto used_items = ord->d.size();
-	msg_debug_cache("topologically sort %d filters", used_items);
+	msg_debug_cache("topologically sort %z filters", used_items);
 
 	for (const auto &it: ord->d) {
 		if (it->order == 0) {
@@ -925,6 +925,17 @@ auto symcache::validate(bool strict) -> bool
 			item->priority++;
 		}
 
+		/*
+		 * Mark symbols with negative weight as FINE, so they are not skipped
+		 * when reject threshold is reached. This ensures whitelist symbols
+		 * always have a chance to execute.
+		 */
+		if (item->st->weight < 0 && !(item->flags & SYMBOL_TYPE_FINE)) {
+			item->flags |= SYMBOL_TYPE_FINE;
+			msg_debug_cache("symbol %s has negative weight (%.2f), marking as FINE",
+							item->symbol.c_str(), item->st->weight);
+		}
+
 		if (item->is_virtual()) {
 			if (!(item->flags & SYMBOL_TYPE_GHOST)) {
 				auto *parent = const_cast<cache_item *>(item->get_parent(*this));
@@ -950,6 +961,35 @@ auto symcache::validate(bool strict) -> bool
 
 		total_weight += fabs(item->st->weight);
 	}
+
+	/*
+	 * Propagate SYMBOL_TYPE_FINE between virtual symbols and their parents until a fixed point.
+	 * This avoids order-dependent results when iterating items_by_symbol.
+	 */
+	bool fine_changed;
+	do {
+		fine_changed = false;
+		for (auto &pair: items_by_symbol) {
+			auto &item = pair.second;
+			if (item->is_virtual() && !(item->flags & SYMBOL_TYPE_GHOST)) {
+				auto *parent = const_cast<cache_item *>(item->get_parent(*this));
+
+				if (parent == nullptr) {
+					item->resolve_parent(*this);
+					parent = const_cast<cache_item *>(item->get_parent(*this));
+				}
+
+				if ((item->flags & SYMBOL_TYPE_FINE) && !(parent->flags & SYMBOL_TYPE_FINE)) {
+					parent->flags |= SYMBOL_TYPE_FINE;
+					fine_changed = true;
+				}
+				else if ((parent->flags & SYMBOL_TYPE_FINE) && !(item->flags & SYMBOL_TYPE_FINE)) {
+					item->flags |= SYMBOL_TYPE_FINE;
+					fine_changed = true;
+				}
+			}
+		}
+	} while (fine_changed);
 
 	/* Now check each metric item and find corresponding symbol in a cache */
 	auto ret = true;
@@ -991,7 +1031,7 @@ auto symcache::counters() const -> ucl_object_t *
 	auto *top = ucl_object_typed_new(UCL_ARRAY);
 	constexpr const auto round_float = [](const auto x, const int digits) -> auto {
 		const auto power10 = ::pow(10, digits);
-		return (::floor(x * power10) / power10);
+		return (::round(x * power10) / power10);
 	};
 
 	for (auto &pair: items_by_symbol) {
@@ -1009,8 +1049,11 @@ auto symcache::counters() const -> ucl_object_t *
 									  ucl_object_fromdouble(round_float(item->st->weight, 3)),
 									  "weight", 0, false);
 				ucl_object_insert_key(obj,
-									  ucl_object_fromdouble(round_float(parent->st->avg_frequency, 3)),
+									  ucl_object_fromdouble(round_float(parent->st->avg_frequency, 6)),
 									  "frequency", 0, false);
+				ucl_object_insert_key(obj,
+									  ucl_object_fromdouble(round_float(::sqrt(parent->st->stddev_frequency), 6)),
+									  "frequency_stddev", 0, false);
 				ucl_object_insert_key(obj,
 									  ucl_object_fromint(parent->st->total_hits),
 									  "hits", 0, false);
@@ -1027,6 +1070,9 @@ auto symcache::counters() const -> ucl_object_t *
 									  "frequency", 0, false);
 				ucl_object_insert_key(obj,
 									  ucl_object_fromdouble(0.0),
+									  "frequency_stddev", 0, false);
+				ucl_object_insert_key(obj,
+									  ucl_object_fromdouble(0.0),
 									  "hits", 0, false);
 				ucl_object_insert_key(obj,
 									  ucl_object_fromdouble(0.0),
@@ -1038,8 +1084,11 @@ auto symcache::counters() const -> ucl_object_t *
 								  ucl_object_fromdouble(round_float(item->st->weight, 3)),
 								  "weight", 0, false);
 			ucl_object_insert_key(obj,
-								  ucl_object_fromdouble(round_float(item->st->avg_frequency, 3)),
+								  ucl_object_fromdouble(round_float(item->st->avg_frequency, 6)),
 								  "frequency", 0, false);
+			ucl_object_insert_key(obj,
+								  ucl_object_fromdouble(round_float(::sqrt(item->st->stddev_frequency), 6)),
+								  "frequency_stddev", 0, false);
 			ucl_object_insert_key(obj,
 								  ucl_object_fromint(item->st->total_hits),
 								  "hits", 0, false);

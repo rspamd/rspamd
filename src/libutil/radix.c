@@ -172,7 +172,7 @@ radix_create_compressed(const char *tree_name)
 		return NULL;
 	}
 
-	tree->pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), NULL, 0);
+	tree->pool = rspamd_mempool_new_long_lived(rspamd_mempool_suggest_size(), "radix");
 	tree->size = 0;
 	tree->duplicates = 0;
 	tree->tree = btrie_init(tree->pool);

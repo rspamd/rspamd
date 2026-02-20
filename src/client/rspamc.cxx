@@ -32,6 +32,7 @@
 #include <cstdio>
 #include <cmath>
 #include <locale>
+#include <unordered_map>
 
 #include "frozen/string.h"
 #include "frozen/unordered_map.h"
@@ -59,6 +60,7 @@ static const char *user = nullptr;
 static const char *helo = nullptr;
 static const char *hostname = nullptr;
 static const char *classifier = nullptr;
+static std::string learn_class_name;
 static const char *local_addr = nullptr;
 static const char *execute = nullptr;
 static const char *sort = nullptr;
@@ -87,9 +89,19 @@ static gboolean compressed = TRUE;
 static gboolean profile = FALSE;
 static gboolean skip_images = FALSE;
 static gboolean skip_attachments = FALSE;
+static gboolean protocol_v3 = FALSE;
+static gboolean msgpack_mode = FALSE;
 static const char *pubkey = nullptr;
 static const char *user_agent = "rspamc";
 static const char *files_list = nullptr;
+static const char *queue_id = nullptr;
+static const char *log_tag = nullptr;
+static const char *output_body = nullptr;
+static std::string settings;
+static std::string neural_train;
+static std::string neural_rule;
+static bool neural_cfg_loaded = false;
+static std::unordered_map<std::string, bool> neural_rule_requires_scan;
 
 std::vector<GPid> children;
 static GPatternSpec **exclude_compiled = nullptr;
@@ -98,6 +110,11 @@ static struct rspamd_http_context *http_ctx;
 static int retcode = EXIT_SUCCESS;
 
 static gboolean rspamc_password_callback(const char *option_name,
+										 const char *value,
+										 gpointer data,
+										 GError **error);
+
+static gboolean rspamc_settings_callback(const char *option_name,
 										 const char *value,
 										 gpointer data,
 										 GError **error);
@@ -178,10 +195,22 @@ static GOptionEntry entries[] =
 		 "Skip images when learning/unlearning fuzzy", nullptr},
 		{"skip-attachments", '\0', 0, G_OPTION_ARG_NONE, &skip_attachments,
 		 "Skip attachments when learning/unlearning fuzzy", nullptr},
+		{"protocol-v3", '\0', 0, G_OPTION_ARG_NONE, &protocol_v3,
+		 "Use v3 multipart protocol (structured metadata, multipart response)", nullptr},
+		{"msgpack", '\0', 0, G_OPTION_ARG_NONE, &msgpack_mode,
+		 "Use msgpack for v3 metadata and response (requires --protocol-v3)", nullptr},
 		{"user-agent", 'U', 0, G_OPTION_ARG_STRING, &user_agent,
 		 "Use specific User-Agent instead of \"rspamc\"", nullptr},
 		{"files-list", '\0', 0, G_OPTION_ARG_FILENAME, &files_list,
 		 "Read one or more newline separated filenames to scan from file", nullptr},
+		{"queue-id", '\0', 0, G_OPTION_ARG_STRING, &queue_id,
+		 "Set Queue-ID header for the request", nullptr},
+		{"log-tag", '\0', 0, G_OPTION_ARG_STRING, &log_tag,
+		 "Set Log-Tag header for the request", nullptr},
+		{"output-body", '\0', 0, G_OPTION_ARG_FILENAME, &output_body,
+		 "Save rewritten message body to file", nullptr},
+		{"settings", '\0', 0, G_OPTION_ARG_CALLBACK, (void *) &rspamc_settings_callback,
+		 "Set Settings header as JSON/UCL for the request", nullptr},
 		{nullptr, 0, 0, G_OPTION_ARG_NONE, nullptr, nullptr, nullptr}};
 
 static void rspamc_symbols_output(FILE *out, ucl_object_t *obj);
@@ -192,12 +221,69 @@ static void rspamc_counters_output(FILE *out, ucl_object_t *obj);
 
 static void rspamc_stat_output(FILE *out, ucl_object_t *obj);
 
+static void
+rspamc_neural_learn_output(FILE *out, ucl_object_t *obj)
+{
+	bool is_success = true;
+	const char *filename = nullptr;
+	double scan_time = -1.0;
+	const char *redis_key = nullptr;
+	std::uintmax_t stored_bytes = 0;
+	bool have_stored = false;
+
+	if (obj != nullptr) {
+		const auto *ok = ucl_object_lookup(obj, "success");
+		if (ok) {
+			is_success = ucl_object_toboolean(ok);
+		}
+		const auto *fn = ucl_object_lookup(obj, "filename");
+		if (fn) {
+			filename = ucl_object_tostring(fn);
+		}
+		const auto *st = ucl_object_lookup(obj, "scan_time");
+		if (st) {
+			scan_time = ucl_object_todouble(st);
+		}
+		const auto *rb = ucl_object_lookup(obj, "stored");
+		if (rb) {
+			stored_bytes = (std::uintmax_t) ucl_object_toint(rb);
+			have_stored = true;
+		}
+		const auto *rk = ucl_object_lookup(obj, "key");
+		if (rk) {
+			redis_key = ucl_object_tostring(rk);
+		}
+	}
+
+	// First line: success
+	fprintf(out, "success = %s;\n", is_success ? "true" : "false");
+
+	// Then other fields in k = v; format
+	if (filename) {
+		fprintf(out, "filename = \"%s\";\n", filename);
+	}
+	if (scan_time >= 0) {
+		fprintf(out, "scan_time = %.6f;\n", scan_time);
+	}
+	if (!neural_train.empty()) {
+		fprintf(out, "class = \"%s\";\n", neural_train.c_str());
+	}
+	if (have_stored) {
+		fprintf(out, "stored = %ju bytes;\n", stored_bytes);
+	}
+	if (redis_key) {
+		fprintf(out, "key = \"%s\";\n", redis_key);
+	}
+}
+
 enum rspamc_command_type {
 	RSPAMC_COMMAND_UNKNOWN = 0,
 	RSPAMC_COMMAND_CHECK,
 	RSPAMC_COMMAND_SYMBOLS,
 	RSPAMC_COMMAND_LEARN_SPAM,
 	RSPAMC_COMMAND_LEARN_HAM,
+	RSPAMC_COMMAND_LEARN_CLASS,
+	RSPAMC_COMMAND_NEURAL_LEARN,
 	RSPAMC_COMMAND_FUZZY_ADD,
 	RSPAMC_COMMAND_FUZZY_DEL,
 	RSPAMC_COMMAND_FUZZY_DELHASH,
@@ -225,7 +311,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_SYMBOLS,
 		.name = "symbols",
-		.path = "checkv2",
+		.path = "/checkv2",
 		.description = "scan message and show symbols (default command)",
 		.is_controller = FALSE,
 		.is_privileged = FALSE,
@@ -234,7 +320,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_LEARN_SPAM,
 		.name = "learn_spam",
-		.path = "learnspam",
+		.path = "/learnspam",
 		.description = "learn message as spam",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
@@ -243,16 +329,34 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_LEARN_HAM,
 		.name = "learn_ham",
-		.path = "learnham",
+		.path = "/learnham",
 		.description = "learn message as ham",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
 		.need_input = TRUE,
 		.command_output_func = nullptr},
 	rspamc_command{
+		.cmd = RSPAMC_COMMAND_LEARN_CLASS,
+		.name = "learn_class",
+		.path = "/learnclass",
+		.description = "learn message as class",
+		.is_controller = TRUE,
+		.is_privileged = TRUE,
+		.need_input = TRUE,
+		.command_output_func = nullptr},
+	rspamc_command{
+		.cmd = RSPAMC_COMMAND_NEURAL_LEARN,
+		.name = "neural_learn",
+		.path = "/checkv2",
+		.description = "learn neural with a class (use neural_learn:<class>)",
+		.is_controller = FALSE,
+		.is_privileged = FALSE,
+		.need_input = TRUE,
+		.command_output_func = rspamc_neural_learn_output},
+	rspamc_command{
 		.cmd = RSPAMC_COMMAND_FUZZY_ADD,
 		.name = "fuzzy_add",
-		.path = "fuzzyadd",
+		.path = "/fuzzyadd",
 		.description =
 			"add hashes from a message to the fuzzy storage (check -f and -w options for this command)",
 		.is_controller = TRUE,
@@ -262,7 +366,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_FUZZY_DEL,
 		.name = "fuzzy_del",
-		.path = "fuzzydel",
+		.path = "/fuzzydel",
 		.description =
 			"delete hashes from a message from the fuzzy storage (check -f option for this command)",
 		.is_controller = TRUE,
@@ -272,7 +376,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_FUZZY_DELHASH,
 		.name = "fuzzy_delhash",
-		.path = "fuzzydelhash",
+		.path = "/fuzzydelhash",
 		.description =
 			"delete a hash from fuzzy storage (check -f option for this command)",
 		.is_controller = TRUE,
@@ -282,7 +386,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_STAT,
 		.name = "stat",
-		.path = "stat",
+		.path = "/stat",
 		.description = "show rspamd statistics",
 		.is_controller = TRUE,
 		.is_privileged = FALSE,
@@ -292,7 +396,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_STAT_RESET,
 		.name = "stat_reset",
-		.path = "statreset",
+		.path = "/statreset",
 		.description = "show and reset rspamd statistics (useful for graphs)",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
@@ -301,7 +405,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_COUNTERS,
 		.name = "counters",
-		.path = "counters",
+		.path = "/counters",
 		.description = "display rspamd symbols statistics",
 		.is_controller = TRUE,
 		.is_privileged = FALSE,
@@ -310,7 +414,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_UPTIME,
 		.name = "uptime",
-		.path = "auth",
+		.path = "/auth",
 		.description = "show rspamd uptime",
 		.is_controller = TRUE,
 		.is_privileged = FALSE,
@@ -319,7 +423,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_ADD_SYMBOL,
 		.name = "add_symbol",
-		.path = "addsymbol",
+		.path = "/addsymbol",
 		.description = "add or modify symbol settings in rspamd",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
@@ -328,7 +432,7 @@ static const constexpr auto rspamc_commands = rspamd::array_of(
 	rspamc_command{
 		.cmd = RSPAMC_COMMAND_ADD_ACTION,
 		.name = "add_action",
-		.path = "addaction",
+		.path = "/addaction",
 		.description = "add or modify action settings",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
@@ -527,8 +631,7 @@ rspamc_password_callback(const char *option_name,
 				auto *map = (char *) locked_mmap.value().get_map();
 				value_view = std::string_view{map, locked_mmap->get_size()};
 				auto right = value_view.end() - 1;
-				for (; right > value_view.cbegin() && g_ascii_isspace(*right); --right)
-					;
+				for (; right > value_view.cbegin() && g_ascii_isspace(*right); --right);
 				std::string_view str{value_view.begin(), static_cast<size_t>(right - value_view.begin()) + 1};
 				processed_passwd.assign(std::begin(str), std::end(str));
 				processed_passwd.push_back('\0'); /* Null-terminate for C part */
@@ -553,6 +656,46 @@ rspamc_password_callback(const char *option_name,
 	}
 
 	password = processed_passwd.data();
+
+	return TRUE;
+}
+
+static gboolean
+rspamc_settings_callback(const char *option_name,
+						 const char *value,
+						 gpointer data,
+						 GError **error)
+{
+	if (value == nullptr) {
+		g_set_error(error, G_OPTION_ERROR, G_OPTION_ERROR_BAD_VALUE,
+					"Settings parameter cannot be empty");
+		return FALSE;
+	}
+
+	// Parse the settings string using UCL to validate it
+	struct ucl_parser *parser = ucl_parser_new(UCL_PARSER_KEY_LOWERCASE);
+	if (!ucl_parser_add_string(parser, value, strlen(value))) {
+		auto *ucl_error = ucl_parser_get_error(parser);
+		g_set_error(error, G_OPTION_ERROR, G_OPTION_ERROR_BAD_VALUE,
+					"Invalid JSON/UCL in settings: %s", ucl_error);
+		ucl_parser_free(parser);
+		return FALSE;
+	}
+
+	// Get the parsed object and validate it
+	auto *obj = ucl_parser_get_object(parser);
+	if (obj == nullptr) {
+		g_set_error(error, G_OPTION_ERROR, G_OPTION_ERROR_BAD_VALUE,
+					"Failed to parse settings as JSON/UCL");
+		ucl_parser_free(parser);
+		return FALSE;
+	}
+
+	// Store the validated settings string
+	settings = value;
+
+	ucl_object_unref(obj);
+	ucl_parser_free(parser);
 
 	return TRUE;
 }
@@ -649,6 +792,8 @@ check_rspamc_command(const char *cmd) -> std::optional<rspamc_command>
 		{"report", RSPAMC_COMMAND_SYMBOLS},
 		{"learn_spam", RSPAMC_COMMAND_LEARN_SPAM},
 		{"learn_ham", RSPAMC_COMMAND_LEARN_HAM},
+		{"learn_class", RSPAMC_COMMAND_LEARN_CLASS},
+		{"neural_learn", RSPAMC_COMMAND_NEURAL_LEARN},
 		{"fuzzy_add", RSPAMC_COMMAND_FUZZY_ADD},
 		{"fuzzy_del", RSPAMC_COMMAND_FUZZY_DEL},
 		{"fuzzy_delhash", RSPAMC_COMMAND_FUZZY_DELHASH},
@@ -659,10 +804,45 @@ check_rspamc_command(const char *cmd) -> std::optional<rspamc_command>
 	});
 
 	std::string cmd_lc = rspamd_string_tolower(cmd);
+
+	/* Handle colon-suffixed commands in a unified way */
+	{
+		auto colon_pos = cmd_lc.find(':');
+		if (colon_pos != std::string::npos) {
+			auto base = cmd_lc.substr(0, colon_pos);
+			auto arg = cmd_lc.substr(colon_pos + 1);
+
+			if (!arg.empty()) {
+				auto find_cmd = [](enum rspamc_command_type t) -> std::optional<rspamc_command> {
+					const auto it = std::find_if(rspamc_commands.begin(), rspamc_commands.end(), [&t](const auto &item) {
+						return item.cmd == t;
+					});
+					if (it != std::end(rspamc_commands)) {
+						return *it;
+					}
+					return std::nullopt;
+				};
+
+				if (base == "learn_class") {
+					learn_class_name = arg;
+					return find_cmd(RSPAMC_COMMAND_LEARN_CLASS);
+				}
+				else if (base == "neural_learn") {
+					neural_train = arg; /* allow any class name, plugin validates */
+					return find_cmd(RSPAMC_COMMAND_NEURAL_LEARN);
+				}
+			}
+		}
+	}
+
 	auto ct = rspamd::find_map(str_map, std::string_view{cmd_lc});
 
+	if (!ct.has_value()) {
+		return std::nullopt;
+	}
+
 	auto elt_it = std::find_if(rspamc_commands.begin(), rspamc_commands.end(), [&](const auto &item) {
-		return item.cmd == ct;
+		return item.cmd == ct.value();
 	});
 
 	if (elt_it != std::end(rspamc_commands)) {
@@ -799,6 +979,14 @@ add_options(GQueue *opts)
 		add_client_header(opts, "Classifier", classifier);
 	}
 
+	if (!learn_class_name.empty()) {
+		add_client_header(opts, "Class", learn_class_name.c_str());
+	}
+
+	if (!neural_train.empty()) {
+		add_client_header(opts, "ANN-Train", neural_train.c_str());
+	}
+
 	if (weight != 0) {
 		auto nstr = fmt::format("{}", weight);
 		add_client_header(opts, "Weight", nstr.c_str());
@@ -847,9 +1035,30 @@ add_options(GQueue *opts)
 			add_client_header(opts,
 							  hdr_view.substr(0, std::distance(std::begin(hdr_view), delim_pos)),
 							  hdr_view.substr(std::distance(std::begin(hdr_view), delim_pos) + 1));
+			/* Capture Rule header for neural selection */
+			if (neural_rule.empty()) {
+				std::string name_copy{hdr_view.substr(0, std::distance(std::begin(hdr_view), delim_pos))};
+				std::transform(name_copy.begin(), name_copy.end(), name_copy.begin(), [](unsigned char c) { return std::tolower(c); });
+				if (name_copy == "rule") {
+					auto value_view = hdr_view.substr(std::distance(std::begin(hdr_view), delim_pos) + 1);
+					neural_rule.assign(value_view.begin(), value_view.end());
+				}
+			}
 		}
 
 		hdr++;
+	}
+
+	if (queue_id != nullptr) {
+		add_client_header(opts, "Queue-Id", queue_id);
+	}
+
+	if (log_tag != nullptr) {
+		add_client_header(opts, "Log-Tag", log_tag);
+	}
+
+	if (!settings.empty()) {
+		add_client_header(opts, "Settings", settings.c_str());
 	}
 
 	if (!flagbuf.empty()) {
@@ -1361,6 +1570,9 @@ rspamc_counters_output(FILE *out, ucl_object_t *obj)
 	rspamc_print(out, " {} \n", emphasis_argument(dash_buf));
 	rspamc_print(out, "| {:<4} | {:<{}} | {:^7} | {:^13} | {:^7} |\n", "",
 				 "", max_len,
+				 "", "avg (stddev)", "");
+	rspamc_print(out, "| {:<4} | {:<{}} | {:^7} | {:^13} | {:^7} |\n", "",
+				 "", max_len,
 				 "", "hits/min", "");
 
 	for (const auto [i, cur]: rspamd::enumerate(counters_vec)) {
@@ -1376,7 +1588,7 @@ rspamc_counters_output(FILE *out, ucl_object_t *obj)
 
 			if (sym->len > max_len) {
 				rspamd_snprintf(sym_buf, sizeof(sym_buf), "%*s...",
-								(max_len - 3), ucl_object_tostring(sym));
+								(int) (max_len - 3), ucl_object_tostring(sym));
 				sym_name = sym_buf;
 			}
 			else {
@@ -1648,9 +1860,6 @@ rspamc_mime_output(FILE *out, ucl_object_t *result, GString *input,
 		fmt::format_to(std::back_inserter(added_headers), "X-Spam-Scan-Time: {:.3}{}",
 					   time, line_end);
 
-		/*
-		 * TODO: add milter_headers support here
-		 */
 		if (is_spam) {
 			fmt::format_to(std::back_inserter(added_headers), "X-Spam: yes{}", line_end);
 		}
@@ -1705,6 +1914,47 @@ rspamc_mime_output(FILE *out, ucl_object_t *result, GString *input,
 			while ((cur = ucl_object_iterate(res, &it, true)) != nullptr) {
 				fmt::format_to(std::back_inserter(added_headers), "DKIM-Signature: {}{}",
 							   ucl_object_tostring(cur), line_end);
+			}
+		}
+
+		/* Process milter.add_headers */
+		const auto *milter = ucl_object_lookup(result, "milter");
+		if (milter) {
+			const auto *add_headers = ucl_object_lookup(milter, "add_headers");
+			if (add_headers && ucl_object_type(add_headers) == UCL_OBJECT) {
+				it = nullptr;
+				while ((cur = ucl_object_iterate(add_headers, &it, true)) != nullptr) {
+					const char *header_name = ucl_object_key(cur);
+					if (ucl_object_type(cur) == UCL_OBJECT) {
+						/* Handle {order: N, value: "..."} format */
+						const auto *value_obj = ucl_object_lookup(cur, "value");
+						if (value_obj) {
+							fmt::format_to(std::back_inserter(added_headers), "{}: {}{}",
+										   header_name, ucl_object_tostring(value_obj), line_end);
+						}
+					}
+					else if (ucl_object_type(cur) == UCL_STRING) {
+						fmt::format_to(std::back_inserter(added_headers), "{}: {}{}",
+									   header_name, ucl_object_tostring(cur), line_end);
+					}
+					else if (ucl_object_type(cur) == UCL_ARRAY) {
+						ucl_object_iter_t header_it = nullptr;
+						const ucl_object_t *header_value;
+						while ((header_value = ucl_object_iterate(cur, &header_it, true)) != nullptr) {
+							if (ucl_object_type(header_value) == UCL_OBJECT) {
+								const auto *value_obj = ucl_object_lookup(header_value, "value");
+								if (value_obj) {
+									fmt::format_to(std::back_inserter(added_headers), "{}: {}{}",
+												   header_name, ucl_object_tostring(value_obj), line_end);
+								}
+							}
+							else {
+								fmt::format_to(std::back_inserter(added_headers), "{}: {}{}",
+											   header_name, ucl_object_tostring(header_value), line_end);
+							}
+						}
+					}
+				}
 			}
 		}
 
@@ -1902,8 +2152,29 @@ rspamc_client_cb(struct rspamd_client_connection *conn,
 				}
 
 				if (body) {
-					rspamc_print(out, "\nNew body:\n{}\n",
-								 std::string_view{body, bodylen});
+					if (output_body) {
+						/* Save body to file */
+						FILE *body_file = fopen(output_body, "wb");
+						if (body_file) {
+							if (fwrite(body, 1, bodylen, body_file) != bodylen) {
+								rspamc_print(stderr, "Failed to write body to file {}: {}\n",
+											 output_body, strerror(errno));
+							}
+							else {
+								rspamc_print(out, "\nNew body saved to: {}\n", output_body);
+							}
+							fclose(body_file);
+						}
+						else {
+							rspamc_print(stderr, "Failed to open output file {}: {}\n",
+										 output_body, strerror(errno));
+						}
+					}
+					else {
+						/* Print to stdout */
+						rspamc_print(out, "\nNew body:\n{}\n",
+									 std::string_view{body, bodylen});
+					}
 				}
 
 				ucl_object_unref(result);
@@ -1918,7 +2189,7 @@ rspamc_client_cb(struct rspamd_client_connection *conn,
 
 					if (raw_body) {
 						/* We can also output the resulting json */
-						rspamc_print(out, "{}\n", std::string_view{raw_body, (std::size_t)(rawlen - bodylen)});
+						rspamc_print(out, "{}\n", std::string_view{raw_body, (std::size_t) (rawlen - bodylen)});
 					}
 				}
 			}
@@ -1945,12 +2216,13 @@ rspamc_process_input(struct ev_loop *ev_base, const struct rspamc_command &cmd,
 	uint16_t port;
 	GError *err = nullptr;
 	std::string hostbuf;
+	std::string path_override;
 
 	if (connect_str[0] == '[') {
 		p = strrchr(connect_str, ']');
 
 		if (p != nullptr) {
-			hostbuf.assign(connect_str + 1, (std::size_t)(p - connect_str - 1));
+			hostbuf.assign(connect_str + 1, (std::size_t) (p - connect_str - 1));
 			p++;
 		}
 		else {
@@ -1965,7 +2237,7 @@ rspamc_process_input(struct ev_loop *ev_base, const struct rspamc_command &cmd,
 
 	if (hostbuf.empty()) {
 		if (p != nullptr) {
-			hostbuf.assign(connect_str, (std::size_t)(p - connect_str));
+			hostbuf.assign(connect_str, (std::size_t) (p - connect_str));
 		}
 		else {
 			hostbuf.assign(connect_str);
@@ -1992,6 +2264,22 @@ rspamc_process_input(struct ev_loop *ev_base, const struct rspamc_command &cmd,
 		}
 	}
 
+	/* Dynamic path/port override for neural_learn based on fetched config */
+	if (cmd.cmd == RSPAMC_COMMAND_NEURAL_LEARN && neural_cfg_loaded) {
+		const auto &rule = !neural_rule.empty() ? neural_rule : std::string{"default"};
+		auto it = neural_rule_requires_scan.find(rule);
+		bool requires_scan = true;
+		if (it != neural_rule_requires_scan.end()) {
+			requires_scan = it->second;
+		}
+		if (!requires_scan) {
+			path_override = "/plugins/neural/learn_message";
+			if (p == nullptr) {
+				port = DEFAULT_CONTROL_PORT;
+			}
+		}
+	}
+
 	conn = rspamd_client_init(http_ctx, ev_base, hostbuf.c_str(), port, timeout, pubkey);
 
 	if (conn != nullptr) {
@@ -1999,13 +2287,97 @@ rspamc_process_input(struct ev_loop *ev_base, const struct rspamc_command &cmd,
 		cbdata->cmd = cmd;
 		cbdata->filename = name;
 
-		if (cmd.need_input) {
-			rspamd_client_command(conn, cmd.path, attrs, in, rspamc_client_cb,
+		if (protocol_v3 && cmd.need_input &&
+			(cmd.cmd == RSPAMC_COMMAND_SYMBOLS || cmd.cmd == RSPAMC_COMMAND_CHECK)) {
+			/* Build metadata UCL object from CLI options */
+			ucl_object_t *metadata = ucl_object_typed_new(UCL_OBJECT);
+
+			if (from) {
+				ucl_object_insert_key(metadata, ucl_object_fromstring(from),
+									  "from", 0, false);
+			}
+			if (rcpts) {
+				ucl_object_t *rcpt_arr = ucl_object_typed_new(UCL_ARRAY);
+				for (auto *rcpt = rcpts; *rcpt; rcpt++) {
+					ucl_array_append(rcpt_arr, ucl_object_fromstring(*rcpt));
+				}
+				ucl_object_insert_key(metadata, rcpt_arr, "rcpt", 0, false);
+			}
+			if (ip) {
+				ucl_object_insert_key(metadata, ucl_object_fromstring(ip),
+									  "ip", 0, false);
+			}
+			if (helo) {
+				ucl_object_insert_key(metadata, ucl_object_fromstring(helo),
+									  "helo", 0, false);
+			}
+			if (hostname) {
+				ucl_object_insert_key(metadata, ucl_object_fromstring(hostname),
+									  "hostname", 0, false);
+			}
+			if (user) {
+				ucl_object_insert_key(metadata, ucl_object_fromstring(user),
+									  "user", 0, false);
+			}
+			if (deliver_to) {
+				ucl_object_insert_key(metadata, ucl_object_fromstring(deliver_to),
+									  "deliver_to", 0, false);
+			}
+			if (queue_id) {
+				ucl_object_insert_key(metadata, ucl_object_fromstring(queue_id),
+									  "queue_id", 0, false);
+			}
+			if (log_tag) {
+				ucl_object_insert_key(metadata, ucl_object_fromstring(log_tag),
+									  "log_tag", 0, false);
+			}
+			if (!settings.empty()) {
+				/* Try to parse settings as UCL */
+				struct ucl_parser *sp = ucl_parser_new(UCL_PARSER_DEFAULT);
+				if (ucl_parser_add_string(sp, settings.c_str(), settings.size())) {
+					ucl_object_t *sobj = ucl_parser_get_object(sp);
+					ucl_object_insert_key(metadata, sobj, "settings", 0, false);
+				}
+				ucl_parser_free(sp);
+			}
+			if (raw) {
+				ucl_object_insert_key(metadata, ucl_object_frombool(true),
+									  "raw", 0, false);
+			}
+
+			/* Build flags array */
+			ucl_object_t *flags_arr = ucl_object_typed_new(UCL_ARRAY);
+			if (pass_all) {
+				ucl_array_append(flags_arr, ucl_object_fromstring("pass_all"));
+			}
+			if (extended_urls) {
+				ucl_array_append(flags_arr, ucl_object_fromstring("ext_urls"));
+			}
+			if (profile) {
+				ucl_array_append(flags_arr, ucl_object_fromstring("profile"));
+			}
+			if (ucl_array_size(flags_arr) > 0) {
+				ucl_object_insert_key(metadata, flags_arr, "flags", 0, false);
+			}
+			else {
+				ucl_object_unref(flags_arr);
+			}
+
+			rspamd_client_command_v3(conn, "checkv3", metadata, in,
+									 rspamc_client_cb, cbdata, compressed,
+									 msgpack_mode,
+									 cbdata->filename.c_str(), &err);
+			ucl_object_unref(metadata);
+		}
+		else if (cmd.need_input) {
+			const char *path = path_override.empty() ? cmd.path : path_override.c_str();
+			rspamd_client_command(conn, path, attrs, in, rspamc_client_cb,
 								  cbdata, compressed, dictionary, cbdata->filename.c_str(), &err);
 		}
 		else {
+			const char *path = path_override.empty() ? cmd.path : path_override.c_str();
 			rspamd_client_command(conn,
-								  cmd.path,
+								  path,
 								  attrs,
 								  nullptr,
 								  rspamc_client_cb,
@@ -2177,6 +2549,102 @@ rspamc_kwattr_free(gpointer p)
 	g_free(h);
 }
 
+/* Fetch /controller/neural/config once per run and populate neural_cfg_loaded
+ * and neural_rule_requires_scan map. */
+static void rspamc_neural_config_cb(struct rspamd_client_connection *conn,
+									struct rspamd_http_message *msg,
+									const char *name, ucl_object_t *result, GString *input,
+									gpointer ud, double start_time, double send_time,
+									const char *body, gsize bodylen,
+									GError *err)
+{
+	/* Populate map: data.rules[rule].requires_scan */
+	if (result != nullptr) {
+		const auto *data = ucl_object_lookup(result, "data");
+		if (data && ucl_object_type(data) == UCL_OBJECT) {
+			const auto *rules = ucl_object_lookup(data, "rules");
+			if (rules && ucl_object_type(rules) == UCL_OBJECT) {
+				ucl_object_iter_t it = nullptr;
+				const ucl_object_t *cur;
+				while ((cur = ucl_object_iterate(rules, &it, true)) != nullptr) {
+					std::string rule_name = ucl_object_key(cur) ? ucl_object_key(cur) : "";
+					auto requires_scan = true;
+					const auto *rq = ucl_object_lookup(cur, "requires_scan");
+					if (rq) {
+						requires_scan = ucl_object_toboolean(rq);
+					}
+					neural_rule_requires_scan[rule_name] = requires_scan;
+				}
+				neural_cfg_loaded = true;
+			}
+		}
+		ucl_object_unref(result);
+	}
+	else if (err) {
+		/* Do not fail the whole run if config not available */
+		neural_cfg_loaded = false;
+	}
+
+	rspamd_client_destroy(conn);
+}
+
+static void
+rspamc_fetch_neural_config(struct ev_loop *ev_base, GQueue *attrs)
+{
+	/* Build connection to controller port */
+	const char *p;
+	uint16_t port;
+	std::string hostbuf;
+	GError *err = nullptr;
+
+	if (connect_str[0] == '[') {
+		p = strrchr(connect_str, ']');
+		if (p != nullptr) {
+			hostbuf.assign(connect_str + 1, (std::size_t) (p - connect_str - 1));
+			p++;
+		}
+		else {
+			p = connect_str;
+		}
+	}
+	else {
+		p = connect_str;
+	}
+
+	p = strrchr(p, ':');
+	if (hostbuf.empty()) {
+		if (p != nullptr) {
+			hostbuf.assign(connect_str, (std::size_t) (p - connect_str));
+		}
+		else {
+			hostbuf.assign(connect_str);
+		}
+	}
+
+	if (p != nullptr) {
+		port = strtoul(p + 1, nullptr, 10);
+	}
+	else {
+		/* Default to controller port if not specified */
+		port = DEFAULT_CONTROL_PORT;
+	}
+
+	auto *conn = rspamd_client_init(http_ctx, ev_base, hostbuf.c_str(), port, timeout, pubkey);
+	if (conn != nullptr) {
+		/* Minimal headers; reuse attrs so users can pass Password, etc. */
+		rspamd_client_command(conn,
+							  "/plugins/neural/config",
+							  attrs,
+							  nullptr,
+							  rspamc_neural_config_cb,
+							  nullptr,
+							  compressed,
+							  dictionary,
+							  "neural_config",
+							  &err);
+	}
+}
+
 int main(int argc, char **argv, char **env)
 {
 	auto *kwattrs = g_queue_new();
@@ -2293,6 +2761,13 @@ int main(int argc, char **argv, char **env)
 
 	add_options(kwattrs);
 	auto cmd = maybe_cmd.value();
+
+	/* Preload neural config once if we are going to use neural_learn */
+	if (cmd.cmd == RSPAMC_COMMAND_NEURAL_LEARN && !neural_cfg_loaded) {
+		rspamc_fetch_neural_config(event_loop, kwattrs);
+		/* Drive loop once to complete config request */
+		ev_loop(event_loop, 0);
+	}
 
 	if (start_argc == argc && files_list == nullptr) {
 		/* Do command without input or with stdin */

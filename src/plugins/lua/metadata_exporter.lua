@@ -13,7 +13,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 if confighelp then
   return
@@ -28,6 +28,7 @@ local rspamd_util = require "rspamd_util"
 local rspamd_logger = require "rspamd_logger"
 local rspamd_tcp = require "rspamd_tcp"
 local lua_redis = require "lua_redis"
+local lua_mime = require "lua_mime"
 local ucl = require "ucl"
 local E = {}
 local N = 'metadata_exporter'
@@ -164,8 +165,8 @@ local function get_general_metadata(task, flatten, no_content)
   scan_real = math.floor(scan_real * 1000)
   if scan_real < 0 then
     rspamd_logger.messagex(task,
-        'clock skew detected for message: %s ms real sca time (reset to 0)',
-        scan_real)
+      'clock skew detected for message: %s ms real sca time (reset to 0)',
+      scan_real)
     scan_real = 0
   end
 
@@ -234,6 +235,135 @@ local formatters = {
   end,
   json = function(task)
     return ucl.to_format(get_general_metadata(task), 'json-compact')
+  end,
+  json_with_message = function(task)
+    local meta = get_general_metadata(task, false, false)
+    local content = task:get_content()
+    if content then
+      meta.message = rspamd_util.encode_base64(content)
+    end
+    return ucl.to_format(meta, 'json-compact')
+  end,
+  msgpack = function(task)
+    local meta = get_general_metadata(task, false, false)
+    local content = task:get_content()
+    if content then
+      meta.message = content
+    end
+    return ucl.to_format(meta, 'msgpack')
+  end,
+  multipart = function(task)
+    local boundary = rspamd_util.random_hex(16)
+    local meta = get_general_metadata(task, false, false)
+    local content = task:get_content()
+    local parts = {
+      metadata = {
+        data = ucl.to_format(meta, 'json-compact'),
+        ['content-type'] = 'application/json'
+      },
+    }
+    if content then
+      parts.message = {
+        data = content,
+        filename = 'message.eml',
+        ['content-type'] = 'message/rfc822'
+      }
+    end
+    return lua_util.table_to_multipart_body(parts, boundary),
+           { multipart_boundary = boundary }
+  end,
+  structured = function(task, rule)
+    local meta = get_general_metadata(task, false, false)
+    local zstd_compress = rule and rule.zstd_compress
+    -- Correlation identifier
+    local uuid = task:get_uuid()
+    meta.uuid = uuid
+    -- Inject X-Rspamd-UUID header for IMAP/external correlation
+    lua_mime.modify_headers(task, {
+      add = { ['X-Rspamd-UUID'] = { value = uuid, order = 0 } }
+    })
+    -- Extracted text (cleaned, reply-trimmed)
+    local text_result = lua_mime.extract_text_limited(task, {
+      max_bytes = 32768,
+      smart_trim = true,
+    })
+    if text_result and text_result.text and #text_result.text > 0 then
+      if zstd_compress then
+        meta.text = rspamd_util.zstd_compress(text_result.text)
+        meta.text_compressed = true
+      else
+        meta.text = text_result.text
+      end
+      meta.text_truncated = text_result.truncated or false
+    end
+    -- Attachments and images
+    local attachments = {}
+    local images = {}
+    for _, part in ipairs(task:get_parts()) do
+      local img = part:get_image()
+      if img then
+        local content = part:get_content()
+        if zstd_compress and content and #content > 0 then
+          content = rspamd_util.zstd_compress(content)
+        end
+        table.insert(images, {
+          filename = img:get_filename() or '',
+          content_type = img:get_type() or '',
+          width = img:get_width(),
+          height = img:get_height(),
+          size = part:get_length(),
+          content = content or '',
+          content_compressed = zstd_compress or nil,
+        })
+      elseif part:is_attachment() then
+        -- Prefer detected type over announced type if available
+        local mime_type, mime_subtype = part:get_detected_type()
+        if not mime_type then
+          mime_type, mime_subtype = part:get_type()
+        end
+        local content = part:get_content()
+        if zstd_compress and content and #content > 0 then
+          content = rspamd_util.zstd_compress(content)
+        end
+        table.insert(attachments, {
+          filename = part:get_filename() or '',
+          content_type = string.format('%s/%s', mime_type or '', mime_subtype or ''),
+          size = part:get_length(),
+          digest = string.sub(part:get_digest(), 1, 16),
+          content = content or '',
+          content_compressed = zstd_compress or nil,
+        })
+      end
+    end
+    if #attachments > 0 then
+      meta.attachments = attachments
+    end
+    if #images > 0 then
+      meta.images = images
+    end
+    -- URLs
+    local urls = lua_util.extract_specific_urls({
+      task = task,
+      limit = 100,
+      esld_limit = 10,
+      need_emails = false,
+      need_images = false,
+    })
+    if urls and #urls > 0 then
+      local url_list = {}
+      for _, u in ipairs(urls) do
+        table.insert(url_list, {
+          url = u:get_text(),
+          host = u:get_host(),
+          tld = u:get_tld(),
+        })
+      end
+      meta.urls = url_list
+    end
+    -- Reply detection
+    local dominated_by = task:get_header('In-Reply-To')
+    meta.is_reply = (dominated_by ~= nil)
+    return ucl.to_format(meta, 'msgpack')
   end
 }
 
@@ -286,25 +416,25 @@ local pushers = {
     local function redis_pub_cb(err)
       if err then
         rspamd_logger.errx(task, 'got error %s when publishing on server %s',
-            err, upstream:get_addr())
+          err, upstream:get_addr())
         return maybe_defer(task, rule)
       end
       return true
     end
     ret, _, upstream = lua_redis.redis_make_request(task,
-        redis_params, -- connect params
-        nil, -- hash key
-        true, -- is write
-        redis_pub_cb, --callback
-        'PUBLISH', -- command
-        { rule.channel, formatted } -- arguments
+      redis_params,                 -- connect params
+      nil,                          -- hash key
+      true,                         -- is write
+      redis_pub_cb,                 --callback
+      'PUBLISH',                    -- command
+      { rule.channel, formatted }   -- arguments
     )
     if not ret then
       rspamd_logger.errx(task, 'error connecting to redis')
       maybe_defer(task, rule)
     end
   end,
-  http = function(task, formatted, rule)
+  http = function(task, formatted, rule, extra)
     local function http_callback(err, code)
       local valid_status = { 200, 201, 202, 204 }
 
@@ -321,6 +451,12 @@ local pushers = {
       return maybe_defer(task, rule)
     end
     local hdrs = {}
+    local mime_type = rule.mime_type or settings.mime_type
+
+    if extra and extra.multipart_boundary then
+      mime_type = string.format('multipart/form-data; boundary="%s"', extra.multipart_boundary)
+    end
+
     if rule.meta_headers then
       local gm = get_general_metadata(task, false, true)
       local pfx = rule.meta_header_prefix or 'X-Rspamd-'
@@ -340,12 +476,17 @@ local pushers = {
       password = rule.password,
       body = formatted,
       callback = http_callback,
-      mime_type = rule.mime_type or settings.mime_type,
+      mime_type = mime_type,
       headers = hdrs,
       timeout = rule.timeout or settings.timeout,
       gzip = rule.gzip or settings.gzip,
       keepalive = rule.keepalive or settings.keepalive,
       no_ssl_verify = rule.no_ssl_verify or settings.no_ssl_verify,
+      -- staged timeouts
+      connect_timeout = rule.connect_timeout or settings.connect_timeout,
+      ssl_timeout = rule.ssl_timeout or settings.ssl_timeout,
+      write_timeout = rule.write_timeout or settings.write_timeout,
+      read_timeout = rule.read_timeout or settings.read_timeout,
     })
   end,
   send_mail = function(task, formatted, rule, extra)
@@ -384,6 +525,54 @@ local pushers = {
       timeout = rule.timeout or settings.timeout,
       read = false,
     })
+  end,
+  redis_stream = function(task, formatted, rule)
+    local function do_xadd(stream_key)
+      local _, ret, upstream
+      local function redis_xadd_cb(err)
+        if err then
+          rspamd_logger.errx(task, 'got error %s when publishing to stream on server %s',
+            err, upstream:get_addr())
+          return maybe_defer(task, rule)
+        end
+        return true
+      end
+      local args = { stream_key }
+      if rule.max_len then
+        table.insert(args, 'MAXLEN')
+        table.insert(args, '~')
+        table.insert(args, tostring(rule.max_len))
+      end
+      table.insert(args, '*')
+      table.insert(args, 'data')
+      table.insert(args, formatted)
+      ret, _, upstream = lua_redis.redis_make_request(task,
+        redis_params,
+        nil,
+        true,
+        redis_xadd_cb,
+        'XADD',
+        args
+      )
+      if not ret then
+        rspamd_logger.errx(task, 'error connecting to redis')
+        maybe_defer(task, rule)
+      end
+    end
+    if rule.per_recipient then
+      local rcpt = task:get_recipients('smtp')
+      if rcpt then
+        for _, a in ipairs(rcpt) do
+          if a.addr and #a.addr > 0 then
+            do_xadd(rule.stream_key .. ':' .. a.addr)
+          end
+        end
+      else
+        do_xadd(rule.stream_key)
+      end
+    else
+      do_xadd(rule.stream_key)
+    end
   end,
 }
 
@@ -603,6 +792,9 @@ local backend_required_elements = {
     'host',
     'port',
   },
+  redis_stream = {
+    'stream_key',
+  },
 }
 local check_element = {
   selector = function(k, v)
@@ -620,6 +812,13 @@ local check_element = {
     else
       return true
     end
+  end,
+  meta_headers = function(k, v)
+    if v then
+      rspamd_logger.warnx(rspamd_config,
+        'Rule %s uses deprecated meta_headers option; use format = "multipart" or format = "json" instead', k)
+    end
+    return true
   end,
 }
 local backend_check = {
@@ -644,6 +843,18 @@ local backend_check = {
   end,
 }
 backend_check.redis_pubsub = function(k, rule)
+  if not redis_params then
+    redis_params = rspamd_parse_redis_server(N)
+  end
+  if not redis_params then
+    rspamd_logger.errx(rspamd_config, 'No redis servers are specified')
+    settings.rules[k] = nil
+  else
+    backend_check.default(k, rule)
+    rule.timeout = redis_params.timeout
+  end
+end
+backend_check.redis_stream = function(k, rule)
   if not redis_params then
     redis_params = rspamd_parse_redis_server(N)
   end

@@ -1,0 +1,5 @@
+# LeakSanitizer suppressions file for Rspamd integration tests
+# This file lists known memory leaks that should be suppressed during testing
+
+# Example suppressions (adjust based on actual leaks found):
+# leak:some_known_leak_function

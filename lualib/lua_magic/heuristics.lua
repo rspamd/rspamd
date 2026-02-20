@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 --[[[
 -- @module lua_magic/heuristics
@@ -63,16 +63,16 @@ local zip_patterns = {
 local txt_trie
 local txt_patterns = {
   html = {
-    { [=[(?i)<html[\s>]]=], 32 },
-    { [[(?i)<script\b]], 20 }, -- Commonly used by spammers
+    { [=[(?i)<html[\s>]]=],                   32 },
+    { [[(?i)<script\b]],                      20 }, -- Commonly used by spammers
     { [[<script\s+type="text\/javascript">]], 31 }, -- Another spammy pattern
-    { [[(?i)<\!DOCTYPE HTML\b]], 33 },
-    { [[(?i)<body\b]], 20 },
-    { [[(?i)<table\b]], 20 },
-    { [[(?i)<a\s]], 10 },
-    { [[(?i)<p\b]], 10 },
-    { [[(?i)<div\b]], 10 },
-    { [[(?i)<span\b]], 10 },
+    { [[(?i)<\!DOCTYPE HTML\b]],              33 },
+    { [[(?i)<body\b]],                        20 },
+    { [[(?i)<table\b]],                       20 },
+    { [[(?i)<a\s]],                           10 },
+    { [[(?i)<p\b]],                           10 },
+    { [[(?i)<div\b]],                         10 },
+    { [[(?i)<span\b]],                        10 },
   },
   csv = {
     { [[(?:[-a-zA-Z0-9_]+\s*,){2,}(?:[-a-zA-Z0-9_]+,?[ ]*[\r\n])]], 20 }
@@ -84,7 +84,7 @@ local txt_patterns = {
     { [[^BEGIN:VCARD\r?\n]], 40 },
   },
   xml = {
-    { [[<\?xml\b.+\?>]], 31 },
+    { [[<\?xml\b.+\?>]], 40 },
   }
 }
 
@@ -98,9 +98,9 @@ local exports = {}
 
 local function compile_tries()
   local default_compile_flags = bit.bor(rspamd_trie.flags.re,
-      rspamd_trie.flags.dot_all,
-      rspamd_trie.flags.single_match,
-      rspamd_trie.flags.no_start)
+    rspamd_trie.flags.dot_all,
+    rspamd_trie.flags.single_match,
+    rspamd_trie.flags.no_start)
   local function compile_pats(patterns, indexes, transform_func, compile_flags)
     local strs = {}
     for ext, pats in pairs(patterns) do
@@ -119,11 +119,11 @@ local function compile_tries()
     local function msoffice_pattern_transform(pat)
       return '^' ..
           table.concat(
-              fun.totable(
-                  fun.map(function(c)
-                    return c .. [[\x{00}]]
-                  end,
-                      fun.iter(pat))))
+            fun.totable(
+              fun.map(function(c)
+                  return c .. [[\x{00}]]
+                end,
+                fun.iter(pat))))
     end
     local function msoffice_clsid_transform(pat)
       local hex_table = {}
@@ -136,23 +136,23 @@ local function compile_tries()
     end
     -- Directory entries
     msoffice_trie = compile_pats(msoffice_patterns, msoffice_patterns_indexes,
-        msoffice_pattern_transform)
+      msoffice_pattern_transform)
     -- Clsids
     msoffice_trie_clsid = compile_pats(msoffice_clsids, msoffice_clsid_indexes,
-        msoffice_clsid_transform)
+      msoffice_clsid_transform)
     -- Misc zip patterns at the initial fragment
     zip_trie = compile_pats(zip_patterns, zip_patterns_indexes,
-        function(pat)
-          return pat
-        end)
+      function(pat)
+        return pat
+      end)
     -- Text patterns at the initial fragment
     txt_trie = compile_pats(txt_patterns, txt_patterns_indexes,
-        function(pat_tbl)
-          return pat_tbl[1]
-        end,
-        bit.bor(rspamd_trie.flags.re,
-            rspamd_trie.flags.dot_all,
-            rspamd_trie.flags.no_start))
+      function(pat_tbl)
+        return pat_tbl[1]
+      end,
+      bit.bor(rspamd_trie.flags.re,
+        rspamd_trie.flags.dot_all,
+        rspamd_trie.flags.no_start))
   end
 end
 
@@ -204,7 +204,7 @@ local function detect_ole_format(input, log_obj, _, part)
           for n, _ in pairs(matches) do
             if msoffice_clsid_indexes[n] then
               lua_util.debugm(N, log_obj, "found valid clsid for %s",
-                  msoffice_clsid_indexes[n][1])
+                msoffice_clsid_indexes[n][1])
               return true, msoffice_clsid_indexes[n][1]
             end
           end
@@ -273,6 +273,15 @@ local function detect_archive_flaw(part, arch, log_obj, _)
     apk = 0,
   } -- ext + confidence pairs
 
+  local function has_control_or_zw(fname)
+    -- control ASCII
+    if fname:find("[%z\1-\31]") then return true end
+    -- common zero-width UTF-8: U+200B..U+200D, U+FEFF
+    if fname:find("\226\128[\139-\141]") then return true end -- U+200B..U+200D
+    if fname:find("\239\187\191") then return true end        -- U+FEFF
+    return false
+  end
+
   -- General msoffice patterns
   local function add_msoffice_confidence(incr)
     res.docx = res.docx + incr
@@ -284,6 +293,9 @@ local function detect_archive_flaw(part, arch, log_obj, _)
     -- Find specific files/folders in zip file
     local files = arch:get_files(100) or {}
     for _, file in ipairs(files) do
+      if has_control_or_zw(file) then
+        lua_util.debugm(N, log_obj, "archive filename has control/zw chars: %s", file)
+      end
       if file == '[Content_Types].xml' then
         add_msoffice_confidence(10)
       elseif file:sub(1, 3) == 'xl/' then
@@ -316,7 +328,7 @@ local function detect_archive_flaw(part, arch, log_obj, _)
         for n, _ in pairs(matches) do
           if zip_patterns_indexes[n] then
             lua_util.debugm(N, log_obj, "found zip pattern for %s",
-                zip_patterns_indexes[n][1])
+              zip_patterns_indexes[n][1])
             return zip_patterns_indexes[n][1], 40
           end
         end
@@ -338,9 +350,9 @@ local function get_csv_grammar()
 
     csv_grammar = lpeg.Cf(lpeg.Cc(0) * field * lpeg.P((lpeg.P(',') +
         lpeg.P('\t')) * field) ^ 1 * (lpeg.S '\r\n' + -1),
-        function(acc)
-          return acc + 1
-        end)
+      function(acc)
+        return acc + 1
+      end)
   end
 
   return csv_grammar
@@ -360,14 +372,14 @@ local function validate_csv(part, content, log_obj)
 
     if not ncommas then
       lua_util.debugm(N, log_obj, "not a csv line at line number %s",
-          matched_lines)
+        matched_lines)
       return false
     end
 
     if expected_commas and ncommas ~= expected_commas then
       -- Mismatched commas
       lua_util.debugm(N, log_obj, "missmatched commas on line %s: %s != %s",
-          matched_lines, ncommas, expected_commas)
+        matched_lines, ncommas, expected_commas)
       return false
     elseif not expected_commas then
       if ncommas == 0 then
@@ -385,7 +397,7 @@ local function validate_csv(part, content, log_obj)
   end
 
   lua_util.debugm(N, log_obj, "csv content is sane: %s fields; %s lines checked",
-      expected_commas, matched_lines)
+    expected_commas, matched_lines)
 
   return true
 end
@@ -460,7 +472,7 @@ exports.text_part_heuristic = function(part, log_obj, _)
     until i > tlen
 
     lua_util.debugm(N, log_obj, "text part check: %s printable, %s non-printable, %s total",
-        tlen - non_printable, non_printable, tlen)
+      tlen - non_printable, non_printable, tlen)
     if non_printable / tlen > 0.0078125 then
       return false
     end
@@ -509,13 +521,18 @@ exports.text_part_heuristic = function(part, log_obj, _)
           if ext then
             res[ext] = (res[ext] or 0) + weight * #positions
             lua_util.debugm(N, log_obj, "found txt pattern for %s: %s, total: %s; %s/%s announced",
-                ext, weight * #positions, res[ext], mtype, msubtype)
+              ext, weight * #positions, res[ext], mtype, msubtype)
           end
         end
 
         if res.html and res.html >= 40 then
           -- HTML has priority over something like js...
           return 'html', res.html
+        end
+
+        -- XML prolog can appear inside HTML; do not let xml override html
+        if res.xml and res.html then
+          res.xml = nil
         end
 
         local ext, weight = process_top_detected(res)
@@ -600,6 +617,36 @@ exports.pe_part_heuristic = function(input, log_obj, pos, part)
   end
 
   return 'exe', 30
+end
+
+-- SVG heuristic: check if this is actually HTML with embedded SVG
+exports.svg_format_heuristic = function(input, log_obj, pos, part)
+  if not input then
+    return
+  end
+
+  -- Only check content before the <svg> tag position
+  local check_len = math.min(pos, 4096)
+  if check_len < 5 then
+    -- <svg> is at the very beginning, likely a real SVG
+    return 'svg', 40
+  end
+
+  local head = tostring(input:span(1, check_len)):lower()
+
+  -- Check for HTML markers that would appear before <svg> in an HTML document
+  -- If we find these, it's HTML with embedded SVG, not a standalone SVG
+  if head:find('<!doctype%s+html') or
+      head:find('<html[%s>]') or
+      head:find('<head[%s>]') or
+      head:find('<body[%s>]') or
+      head:find('<meta[%s>]') then
+    lua_util.debugm(N, log_obj, 'svg pattern found at %s but HTML markers present, skipping svg detection',
+      pos)
+    return nil
+  end
+
+  return 'svg', 40
 end
 
 return exports

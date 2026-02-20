@@ -589,12 +589,7 @@ rspamd_sqlite3_process_tokens(struct rspamd_task *task,
 			}
 		}
 
-		if (rt->cf->is_spam) {
-			task->flags |= RSPAMD_TASK_FLAG_HAS_SPAM_TOKENS;
-		}
-		else {
-			task->flags |= RSPAMD_TASK_FLAG_HAS_HAM_TOKENS;
-		}
+		/* No longer need to set flags - multi-class handles missing data naturally */
 	}
 
 

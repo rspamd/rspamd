@@ -319,6 +319,19 @@ gssize rspamd_decode_uue_buf(const char *in, gsize inlen,
 							 char *out, gsize outlen);
 
 /**
+ * Decode ASCII85 (Base85) encoded buffer, input and output must not overlap
+ * ASCII85 encodes 4 bytes as 5 ASCII characters in range '!' to 'u'
+ * Special: 'z' represents 4 null bytes, '~>' marks end of data
+ * @param in input
+ * @param inlen length of input
+ * @param out output
+ * @param outlen length of output
+ * @return real size of decoded output or (-1) if outlen is not enough or invalid input
+ */
+gssize rspamd_decode_ascii85_buf(const char *in, gsize inlen,
+								 unsigned char *out, gsize outlen);
+
+/**
  * Decode quoted-printable encoded buffer using rfc2047 format, input and output must not overlap
  * @param in input
  * @param inlen length of input
@@ -451,13 +464,14 @@ void *rspamd_memrchr(const void *m, int c, gsize len);
 #endif
 
 /**
- * Return length of memory segment starting in `s` that contains no chars from `e`
- * @param s any input
- * @param e zero terminated string of exceptions
- * @param len length of `s`
- * @return segment size
+ * Return length of memory segment starting in `data` that contains no bytes from `reject`
+ * @param data input data
+ * @param dlen length of data
+ * @param reject set of bytes to reject (can contain binary data including nulls)
+ * @param rlen length of reject set
+ * @return length of initial segment with no rejected bytes
  */
-gsize rspamd_memcspn(const char *s, const char *e, gsize len);
+gsize rspamd_memcspn(const void *data, gsize dlen, const void *reject, gsize rlen);
 
 /**
  * Return length of memory segment starting in `s` that contains only chars from `e`
@@ -557,6 +571,25 @@ char **rspamd_string_len_split(const char *in, gsize len,
 
 #define RSPAMD_LEN_CHECK_STARTS_WITH(s, len, lit) \
 	((len) >= sizeof(lit) - 1 && g_ascii_strncasecmp((s), (lit), sizeof(lit) - 1) == 0)
+
+/**
+ * Wrapper around getline(3) that handles allocator mismatches when jemalloc is enabled.
+ * When jemalloc is used, getline() allocates memory with system malloc, but rspamd's
+ * free() uses jemalloc, causing crashes. This function ensures proper cleanup.
+ *
+ * @param lineptr pointer to buffer (will be allocated/reallocated as needed)
+ * @param n pointer to buffer size
+ * @param stream file stream to read from
+ * @return number of characters read, or -1 on error
+ */
+gssize rspamd_getline(char **lineptr, gsize *n, FILE *stream);
+
+/**
+ * Free memory allocated by rspamd_getline using the correct allocator.
+ *
+ * @param lineptr buffer to free
+ */
+void rspamd_getline_free(char *lineptr);
 
 #ifdef __cplusplus
 }

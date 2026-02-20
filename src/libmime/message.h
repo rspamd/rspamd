@@ -16,6 +16,8 @@
 #include "libserver/url.h"
 #include "libutil/ref.h"
 #include "libutil/str_util.h"
+#include "libutil/heap.h"
+#include "libserver/word.h"
 
 #include <unicode/uchar.h>
 #include <unicode/utext.h>
@@ -28,12 +30,14 @@ struct rspamd_task;
 struct controller_session;
 struct rspamd_image;
 struct rspamd_archive;
+struct rspamd_html_features;
 
 enum rspamd_mime_part_flags {
 	RSPAMD_MIME_PART_ATTACHEMENT = (1u << 1u),
 	RSPAMD_MIME_PART_BAD_CTE = (1u << 4u),
 	RSPAMD_MIME_PART_MISSING_CTE = (1u << 5u),
 	RSPAMD_MIME_PART_NO_TEXT_EXTRACTION = (1u << 6u),
+	RSPAMD_MIME_PART_COMPUTED = (1u << 7u),
 };
 
 enum rspamd_mime_part_type {
@@ -124,6 +128,15 @@ struct rspamd_mime_part {
 #define IS_TEXT_PART_HTML(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_HTML)
 #define IS_TEXT_PART_ATTACHMENT(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_ATTACHMENT)
 
+/* CTA (call-to-action) URL heap entry structure */
+struct rspamd_html_cta_entry {
+	unsigned int pri;       /* Priority for heap (weight * scale) */
+	unsigned int idx;       /* Heap index (managed by heap) */
+	struct rspamd_url *url; /* URL pointer */
+	float weight;           /* Original button weight */
+};
+
+RSPAMD_HEAP_DECLARE(rspamd_html_heap_storage, struct rspamd_html_cta_entry);
 
 struct rspamd_mime_text_part {
 	const char *language;
@@ -139,13 +152,18 @@ struct rspamd_mime_text_part {
 	GByteArray *utf_raw_content;      /* utf raw content */
 	GByteArray *utf_stripped_content; /* utf content with no newlines */
 	GArray *normalized_hashes;        /* Array of uint64_t */
-	GArray *utf_words;                /* Array of rspamd_stat_token_t */
+	rspamd_words_t utf_words;         /* kvec of rspamd_word_t */
 	UText utf_stripped_text;          /* Used by libicu to represent the utf8 content */
 
 	GPtrArray *newlines; /**< positions of newlines in text, relative to content*/
 	void *html;
-	GList *exceptions; /**< list of offsets of urls						*/
+	/* Optional HTML features collected during parsing */
+	struct rspamd_html_features *html_features;
+	/* CTA (call-to-action) URLs extracted from HTML with weights */
+	rspamd_html_heap_storage_t *cta_urls; /**< cta_heap_t* for HTML parts, NULL for plain text */
+	GList *exceptions;                    /**< list of offsets of urls						*/
 	struct rspamd_mime_part *mime_part;
+	struct rspamd_mime_text_part *alt_text_part; /**< alternative text part (text for html, html for text) */
 
 	unsigned int flags;
 	unsigned int nlines;
@@ -202,6 +220,15 @@ gboolean rspamd_message_parse(struct rspamd_task *task);
  */
 void rspamd_message_process(struct rspamd_task *task);
 
+/**
+ * Process an injected text part (URL extraction, words, normalization)
+ * @param task
+ * @param text_part the injected text part to process
+ * @param cur_url_order pointer to current URL order counter
+ */
+void rspamd_message_process_injected_text_part(struct rspamd_task *task,
+											   struct rspamd_mime_text_part *text_part,
+											   uint16_t *cur_url_order);
 
 /**
  * Converts string to cte

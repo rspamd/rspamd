@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 local util = require "rspamd_util"
 local ipairs = ipairs
@@ -45,9 +45,9 @@ local rcvd_cb_id = rspamd_config:register_symbol {
       return not h['flags']['artificial']
     end, received))
 
-    for k, v in pairs(cnts) do
-      if nreceived >= tonumber(k) then
-        def = v
+    for _, k in ipairs({ 1, 2, 3, 5, 7, 12 }) do
+      if nreceived >= k then
+        def = cnts[k]
       end
     end
 
@@ -133,9 +133,9 @@ local prio_cb_id = rspamd_config:register_symbol {
     local _, _, x = xprio:find('^%s?(%d+)');
     if (x) then
       x = tonumber(x)
-      for k, v in pairs(cnts) do
-        if x >= tonumber(k) then
-          def = v
+      for _, k in ipairs({ 1, 2, 3, 5 }) do
+        if x >= k then
+          def = cnts[k]
         end
       end
       task:insert_result('HAS_X_PRIO_' .. def, 1.0, tostring(x))
@@ -198,12 +198,26 @@ local check_replyto_id = rspamd_config:register_symbol({
       return false
     end
     local rt = util.parse_mail_address(replyto, task:get_mempool())
-    if not (rt and rt[1] and (string.len(rt[1].addr) > 0)) then
+    if not (rt and rt[1] and #rt[1].addr > 0) then
       task:insert_result('REPLYTO_UNPARSEABLE', 1.0)
       return false
     else
       local rta = rt[1].addr
       task:insert_result('HAS_REPLYTO', 1.0, rta)
+
+      -- RFC 5321 validity checks
+      local dominated_by_unparseable = not rt[1].flags or not rt[1].flags.valid
+      if dominated_by_unparseable then
+        task:insert_result('REPLYTO_INVALID', 1.0)
+      end
+      local user_len = rt[1].user and #rt[1].user or 0
+      local domain_len = rt[1].domain and #rt[1].domain or 0
+      if user_len > 64 then
+        task:insert_result('REPLYTO_LOCALPART_LONG', 1.0, tostring(user_len))
+      end
+      if domain_len > 255 then
+        task:insert_result('REPLYTO_DOMAIN_LONG', 1.0, tostring(domain_len))
+      end
       -- Check if Reply-To address starts with title seen in display name
       local sym = task:get_symbol('FROM_NAME_HAS_TITLE')
       local title = (((sym or E)[1] or E).options or E)[1]
@@ -238,7 +252,7 @@ local check_replyto_id = rspamd_config:register_symbol({
         end
         -- See if the Display Names match
         if (from[1].name and rt[1].name and
-            util.strequal_caseless(from[1].name, rt[1].name)) then
+              util.strequal_caseless(from[1].name, rt[1].name)) then
           task:insert_result('REPLYTO_DN_EQ_FROM_DN', 1.0)
         end
       end
@@ -248,9 +262,9 @@ local check_replyto_id = rspamd_config:register_symbol({
       if (to and to[1] and to[1].addr:lower() == rt[1].addr:lower()) then
         -- Ignore this for mailing-lists and automatic submissions
         if (not (task:get_header('List-Unsubscribe') or
-          task:get_header('X-To-Get-Off-This-List') or
-          task:get_header('X-List') or
-          task:get_header('Auto-Submitted')))
+              task:get_header('X-To-Get-Off-This-List') or
+              task:get_header('X-List') or
+              task:get_header('Auto-Submitted')))
         then
           task:insert_result('REPLYTO_EQ_TO_ADDR', 1.0)
         end
@@ -351,6 +365,30 @@ rspamd_config:register_symbol {
   parent = check_replyto_id,
   type = 'virtual',
   description = 'Reply-To domain does not match the To domain',
+  group = 'headers',
+}
+rspamd_config:register_symbol {
+  name = 'REPLYTO_INVALID',
+  score = 1.0,
+  parent = check_replyto_id,
+  type = 'virtual',
+  description = 'Reply-To address is not RFC 5321 compliant',
+  group = 'headers',
+}
+rspamd_config:register_symbol {
+  name = 'REPLYTO_LOCALPART_LONG',
+  score = 2.0,
+  parent = check_replyto_id,
+  type = 'virtual',
+  description = 'Reply-To local-part exceeds 64 characters (RFC 5321)',
+  group = 'headers',
+}
+rspamd_config:register_symbol {
+  name = 'REPLYTO_DOMAIN_LONG',
+  score = 2.0,
+  parent = check_replyto_id,
+  type = 'virtual',
+  description = 'Reply-To domain exceeds 255 characters (RFC 5321)',
   group = 'headers',
 }
 
@@ -471,9 +509,9 @@ rspamd_config.BROKEN_HEADERS = {
 rspamd_config.BROKEN_CONTENT_TYPE = {
   callback = function(task)
     return fun.any(function(p)
-      return p:is_broken()
-    end,
-        task:get_parts())
+        return p:is_broken()
+      end,
+      task:get_parts())
   end,
   score = 1.5,
   group = 'headers',
@@ -672,7 +710,7 @@ local check_from_id = rspamd_config:register_symbol {
       if (from[1].name == nil or from[1].name == '') then
         task:insert_result('FROM_NO_DN', 1.0)
       elseif (from[1].name and
-          util.strequal_caseless(from[1].name, from[1].addr)) then
+            util.strequal_caseless(from[1].name, from[1].addr)) then
         task:insert_result('FROM_DN_EQ_ADDR', 1.0)
       elseif (from[1].name and from[1].name ~= '') then
         task:insert_result('FROM_HAS_DN', 1.0)
@@ -710,7 +748,7 @@ local check_from_id = rspamd_config:register_symbol {
     if (util.strequal_caseless(to[1].addr, from[1].addr)) then
       task:insert_result('TO_EQ_FROM', 1.0)
     elseif (to[1].domain and from[1].domain and
-        util.strequal_caseless(to[1].domain, from[1].domain))
+          util.strequal_caseless(to[1].domain, from[1].domain))
     then
       task:insert_result('TO_DOM_EQ_FROM_DOM', 1.0)
     end
@@ -838,9 +876,9 @@ local check_to_cc_id = rspamd_config:register_symbol {
     end
     -- Add symbol for recipient count
     local nrcpt = #to
-    for k, v in pairs(cnts) do
-      if nrcpt >= tonumber(k) then
-        def = v
+    for _, k in ipairs({ 1, 2, 3, 5, 7, 12, 50 }) do
+      if nrcpt >= k then
+        def = cnts[k]
       end
     end
     task:insert_result('RCPT_COUNT_' .. def, 1.0, tostring(nrcpt))
@@ -850,7 +888,7 @@ local check_to_cc_id = rspamd_config:register_symbol {
     for _, toa in ipairs(to) do
       -- To: Recipients <noreply@dropbox.com>
       if (toa['name'] and (toa['name']:lower() == 'recipient'
-          or toa['name']:lower() == 'recipients')) then
+            or toa['name']:lower() == 'recipients')) then
         task:insert_result('TO_DN_RECIPIENTS', 1.0)
       end
       if (toa['name'] and util.strequal_caseless(toa['name'], toa['addr'])) then
@@ -862,7 +900,7 @@ local check_to_cc_id = rspamd_config:register_symbol {
       if (rcpts) then
         for _, rcpt in ipairs(rcpts) do
           if (toa and toa['addr'] and rcpt and rcpt['addr'] and
-              util.strequal_caseless(rcpt['addr'], toa['addr']))
+                util.strequal_caseless(rcpt['addr'], toa['addr']))
           then
             to_match_envrcpt = to_match_envrcpt + 1
           end
@@ -1171,7 +1209,7 @@ local function is_8bit_addr(addr)
   return false;
 end
 
-rspamd_config.INVALID_FROM_8BIT = {
+local invalid_from_8bit = {
   callback = function(task)
     local from = (task:get_from('mime') or {})[1] or {}
     if is_8bit_addr(from) then
@@ -1184,7 +1222,7 @@ rspamd_config.INVALID_FROM_8BIT = {
   group = 'headers'
 }
 
-rspamd_config.INVALID_RCPT_8BIT = {
+local invalid_rcpt_8bit = {
   callback = function(task)
     local rcpts = task:get_recipients('mime') or {}
     return fun.any(function(rcpt)
@@ -1198,6 +1236,19 @@ rspamd_config.INVALID_RCPT_8BIT = {
   score = 6.0,
   group = 'headers'
 }
+
+if rspamd_config:is_mime_utf8() then
+  -- Disable some of the rules preserving the underlying logic
+  invalid_from_8bit.condition = function()
+    return false
+  end
+  invalid_rcpt_8bit.condition = function()
+    return false
+  end
+end
+
+rspamd_config.INVALID_FROM_8BIT = invalid_from_8bit
+rspamd_config.INVALID_RCPT_8BIT = invalid_rcpt_8bit
 
 rspamd_config.XM_CASE = {
   callback = function(task)

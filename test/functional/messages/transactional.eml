@@ -1,0 +1,18 @@
+From: noreply@example.com
+To: user@example.org
+Subject: Password Reset Request
+Date: Thu, 21 Jul 2023 11:00:00 +0000
+Message-ID: <pwd-reset-456@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain
+
+Hello,
+
+You have requested a password reset for your account.
+
+Click here to reset your password: https://example.com/reset?token=abc123
+
+This link expires in 24 hours.
+
+Best regards,
+Security Team

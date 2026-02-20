@@ -114,11 +114,10 @@ local function register_settings_cb(from_postload)
 
       rspamd_config:register_settings_id(set.name, enabled_symbols, disabled_symbols)
 
-      -- Remove to avoid clash
-      s.symbols_disabled = nil
-      s.symbols_enabled = nil
-      s.groups_enabled = nil
-      s.groups_disabled = nil
+      -- Note: we do NOT remove groups_*/symbols_* here anymore, as the C++ runtime
+      -- needs them for processing settings when they are applied to tasks.
+      -- The preprocessing above builds the allowed/forbidden symbol lists for the
+      -- settings element, but the runtime also needs to mark symbols as disabled/enabled.
     end
 
     -- We now iterate over all symbols and check for allowed_ids/forbidden_ids

@@ -4,7 +4,7 @@ import stylistic from "@stylistic/eslint-plugin";
 
 export default [
     js.configs.all,
-    stylistic.configs["all-flat"],
+    stylistic.configs.all,
     {ignores: ["interface/js/lib/"]},
     {
         languageOptions: {
@@ -12,6 +12,9 @@ export default [
             globals: {
                 ...globals.browser,
                 define: false,
+            },
+            parserOptions: {
+                ecmaVersion: 2020,
             },
             sourceType: "script",
         },
@@ -79,6 +82,15 @@ export default [
         languageOptions: {ecmaVersion: 2020, sourceType: "module"},
         rules: {
             "sort-keys": "error",
+        },
+    },
+    {
+        // Playwright E2E tests
+        files: ["test/playwright/tests/*.mjs"],
+        rules: {
+            "no-await-in-loop": "off", // Playwright operations in loops are often sequential and not independent
+            "no-empty-pattern": ["error", {allowObjectPatternsAsParameters: true}],
+            "sort-keys": ["error", "asc", {minKeys: 4}]
         },
     },
 ];

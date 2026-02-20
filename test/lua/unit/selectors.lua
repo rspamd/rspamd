@@ -230,11 +230,11 @@ context("Selectors test", function()
 
     ["pool_var double"] = {
                 selector = [[pool_var("int_var", 'double')]],
-                expect = {"1"}},
+                expect = {tostring(1.0)}},
 
     ["time"] = {
                 selector = "time",
-                expect = {"1537364211"}},
+                expect = {tostring(1537364211.0)}},
 
 --    ["request_header"] = {
 --                selector = "request_header(hdr1)",

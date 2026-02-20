@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,76 @@ __KHASH_IMPL(rspamd_req_headers_hash, static inline,
 			 rspamd_ftok_t *, struct rspamd_request_header_chain *, 1,
 			 rspamd_ftok_icase_hash, rspamd_ftok_icase_equal)
 
+/* Task pointer set for validating Lua task references */
+KHASH_SET_INIT_INT(rspamd_task_set);
+
+static khash_t(rspamd_task_set) *task_registry = NULL;
+
+#define TASK_REGISTRY_INITIAL_SIZE 16
+
+/*
+ * Mix 64-bit pointer to 32-bit hash using Fibonacci hashing.
+ * Multiply by golden ratio and take high bits for good distribution.
+ * kh_int_hash_func is identity, so we do all mixing here.
+ */
+static inline khint32_t
+rspamd_task_hash_ptr(struct rspamd_task *task)
+{
+	uint64_t p = (uint64_t) (uintptr_t) task;
+	return (khint32_t) ((p * 11400714819323198485ULL) >> 32);
+}
+
+void rspamd_task_registry_init(void)
+{
+	if (task_registry == NULL) {
+		task_registry = kh_init(rspamd_task_set);
+		kh_resize(rspamd_task_set, task_registry, TASK_REGISTRY_INITIAL_SIZE);
+	}
+}
+
+void rspamd_task_registry_destroy(void)
+{
+	if (task_registry != NULL) {
+		kh_destroy(rspamd_task_set, task_registry);
+		task_registry = NULL;
+	}
+}
+
+gboolean
+rspamd_task_is_valid(struct rspamd_task *task)
+{
+	if (task_registry == NULL || task == NULL) {
+		return FALSE;
+	}
+
+	khiter_t k = kh_get(rspamd_task_set, task_registry, rspamd_task_hash_ptr(task));
+	return k != kh_end(task_registry);
+}
+
+static inline void
+rspamd_task_registry_add(struct rspamd_task *task)
+{
+	if (task_registry == NULL) {
+		rspamd_task_registry_init();
+	}
+
+	int ret;
+	kh_put(rspamd_task_set, task_registry, rspamd_task_hash_ptr(task), &ret);
+}
+
+static inline void
+rspamd_task_registry_remove(struct rspamd_task *task)
+{
+	if (task_registry == NULL) {
+		return;
+	}
+
+	khiter_t k = kh_get(rspamd_task_set, task_registry, rspamd_task_hash_ptr(task));
+	if (k != kh_end(task_registry)) {
+		kh_del(rspamd_task_set, task_registry, k);
+	}
+}
+
 static GQuark
 rspamd_task_quark(void)
 {
@@ -73,8 +143,10 @@ rspamd_task_new(struct rspamd_worker *worker,
 	unsigned int flags = RSPAMD_TASK_FLAG_LEARN_AUTO;
 
 	if (pool == NULL) {
-		task_pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
-									   "task", debug_mem ? RSPAMD_MEMPOOL_DEBUG : 0);
+		task_pool = rspamd_mempool_new_(rspamd_mempool_suggest_size_(G_STRLOC),
+										"task",
+										RSPAMD_MEMPOOL_SHORT_LIVED | (debug_mem ? RSPAMD_MEMPOOL_DEBUG : 0),
+										G_STRLOC);
 		flags |= RSPAMD_TASK_FLAG_OWN_POOL;
 	}
 	else {
@@ -89,7 +161,7 @@ rspamd_task_new(struct rspamd_worker *worker,
 
 	if (cfg) {
 		new_task->cfg = cfg;
-		REF_RETAIN(cfg);
+		CFG_REF_RETAIN(cfg);
 
 		if (cfg->check_all_filters) {
 			new_task->flags |= RSPAMD_TASK_FLAG_PASS_ALL;
@@ -108,6 +180,8 @@ rspamd_task_new(struct rspamd_worker *worker,
 	new_task->event_loop = event_loop;
 	new_task->task_timestamp = ev_time();
 	new_task->time_real_finish = NAN;
+	rspamd_uuid_v7(new_task->task_uuid, new_task->task_pool->tag.uid,
+				   sizeof(new_task->task_pool->tag.uid), new_task->task_timestamp);
 
 	new_task->request_headers = kh_init(rspamd_req_headers_hash);
 	new_task->sock = -1;
@@ -118,6 +192,12 @@ rspamd_task_new(struct rspamd_worker *worker,
 	new_task->queue_id = "undef";
 	new_task->messages = ucl_object_typed_new(UCL_OBJECT);
 	kh_static_init(rspamd_task_lua_cache, &new_task->lua_cache);
+
+	/* Initialize ESMTP arguments fields */
+	new_task->mail_esmtp_args = NULL;
+	new_task->rcpt_esmtp_args = NULL;
+
+	rspamd_task_registry_add(new_task);
 
 	return new_task;
 }
@@ -177,6 +257,8 @@ void rspamd_task_free(struct rspamd_task *task)
 	unsigned int i;
 
 	if (task) {
+		rspamd_task_registry_remove(task);
+
 		debug_task("free pointer %p", task);
 
 		if (task->rcpt_envelope) {
@@ -196,8 +278,8 @@ void rspamd_task_free(struct rspamd_task *task)
 			rspamd_email_address_free(task->from_envelope_orig);
 		}
 
-		if (task->meta_words) {
-			g_array_free(task->meta_words, TRUE);
+		if (task->meta_words.a) {
+			kv_destroy(task->meta_words);
 		}
 
 		ucl_object_unref(task->messages);
@@ -283,7 +365,7 @@ void rspamd_task_free(struct rspamd_task *task)
 												(double) task->cfg->full_gc_iters / 2);
 			}
 
-			REF_RELEASE(task->cfg);
+			CFG_REF_RELEASE(task->cfg);
 		}
 
 		kh_destroy(rspamd_req_headers_hash, task->request_headers);
@@ -338,7 +420,7 @@ rspamd_task_load_message(struct rspamd_task *task,
 	ft = "file";
 #endif
 
-	if (msg) {
+	if (msg && task->cmd != CMD_CHECK_V3) {
 		rspamd_protocol_handle_headers(task, msg);
 	}
 
@@ -730,7 +812,7 @@ rspamd_task_process(struct rspamd_task *task, unsigned int stages)
 
 		if (all_done && (task->flags & RSPAMD_TASK_FLAG_LEARN_AUTO) &&
 			!RSPAMD_TASK_IS_EMPTY(task) &&
-			!(task->flags & (RSPAMD_TASK_FLAG_LEARN_SPAM | RSPAMD_TASK_FLAG_LEARN_HAM))) {
+			!(task->flags & (RSPAMD_TASK_FLAG_LEARN_SPAM | RSPAMD_TASK_FLAG_LEARN_HAM | RSPAMD_TASK_FLAG_LEARN_CLASS))) {
 			rspamd_stat_check_autolearn(task);
 		}
 		break;
@@ -738,12 +820,32 @@ rspamd_task_process(struct rspamd_task *task, unsigned int stages)
 	case RSPAMD_TASK_STAGE_LEARN:
 	case RSPAMD_TASK_STAGE_LEARN_PRE:
 	case RSPAMD_TASK_STAGE_LEARN_POST:
-		if (task->flags & (RSPAMD_TASK_FLAG_LEARN_SPAM | RSPAMD_TASK_FLAG_LEARN_HAM)) {
+		if (task->flags & (RSPAMD_TASK_FLAG_LEARN_SPAM | RSPAMD_TASK_FLAG_LEARN_HAM | RSPAMD_TASK_FLAG_LEARN_CLASS)) {
 			if (task->err == NULL) {
-				if (!rspamd_stat_learn(task,
-									   task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM,
-									   task->cfg->lua_state, task->classifier,
-									   st, &stat_error)) {
+				gboolean learn_result = FALSE;
+
+				if (task->flags & RSPAMD_TASK_FLAG_LEARN_CLASS) {
+					/* Multi-class learning */
+					const char *autolearn_class = rspamd_task_get_autolearn_class(task);
+					if (autolearn_class) {
+						learn_result = rspamd_stat_learn_class(task, autolearn_class,
+															   task->cfg->lua_state, task->classifier,
+															   st, &stat_error);
+					}
+					else {
+						g_set_error(&stat_error, g_quark_from_static_string("stat"), 500,
+									"No autolearn class specified for multi-class learning");
+					}
+				}
+				else {
+					/* Legacy binary learning */
+					learn_result = rspamd_stat_learn(task,
+													 task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM,
+													 task->cfg->lua_state, task->classifier,
+													 st, &stat_error);
+				}
+
+				if (!learn_result) {
 
 					if (stat_error == NULL) {
 						g_set_error(&stat_error,
@@ -779,13 +881,8 @@ rspamd_task_process(struct rspamd_task *task, unsigned int stages)
 		}
 		break;
 	case RSPAMD_TASK_STAGE_COMPOSITES_POST:
-		/* Second run of composites processing before idempotent filters (if needed) */
-		if (task->result->nresults_postfilters != task->result->nresults) {
-			rspamd_composites_process_task(task);
-		}
-		else {
-			msg_debug_task("skip second run of composites as the result has not been changed");
-		}
+		/* Second run of composites processing for composites that depend on postfilters/stats */
+		rspamd_composites_process_task(task);
 		break;
 
 	case RSPAMD_TASK_STAGE_IDEMPOTENT:
@@ -922,15 +1019,14 @@ rspamd_learn_task_spam(struct rspamd_task *task,
 					   const char *classifier,
 					   GError **err)
 {
+	/* Use unified class-based approach internally */
+	const char *class_name = is_spam ? "spam" : "ham";
+
 	/* Disable learn auto flag to avoid bad learn codes */
 	task->flags &= ~RSPAMD_TASK_FLAG_LEARN_AUTO;
 
-	if (is_spam) {
-		task->flags |= RSPAMD_TASK_FLAG_LEARN_SPAM;
-	}
-	else {
-		task->flags |= RSPAMD_TASK_FLAG_LEARN_HAM;
-	}
+	/* Use the unified class-based learning approach */
+	rspamd_task_set_autolearn_class(task, class_name);
 
 	task->classifier = classifier;
 
@@ -1945,4 +2041,40 @@ void rspamd_worker_guard_handler(EV_P_ ev_io *w, int revents)
 			return;
 		}
 	}
+}
+
+/*
+ * ESMTP arguments management functions
+ */
+
+void rspamd_task_set_mail_esmtp_args(struct rspamd_task *task, GHashTable *args)
+{
+	if (task && args) {
+		task->mail_esmtp_args = args;
+	}
+}
+
+void rspamd_task_set_rcpt_esmtp_args(struct rspamd_task *task, GPtrArray *args)
+{
+	if (task && args) {
+		task->rcpt_esmtp_args = args;
+	}
+}
+
+GHashTable *
+rspamd_task_get_mail_esmtp_args(struct rspamd_task *task)
+{
+	if (task) {
+		return task->mail_esmtp_args;
+	}
+	return NULL;
+}
+
+GPtrArray *
+rspamd_task_get_rcpt_esmtp_args(struct rspamd_task *task)
+{
+	if (task) {
+		return task->rcpt_esmtp_args;
+	}
+	return NULL;
 }

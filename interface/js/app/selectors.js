@@ -23,7 +23,7 @@ define(["jquery", "app/common"],
                         $("#selectorsResArea")
                             .val(Object.prototype.hasOwnProperty.call(json, "data") ? json.data.toString() : "");
                     } else {
-                        common.alertMessage("alert-error", "Unexpected error processing message");
+                        common.alertMessage("alert-danger", "Unexpected error processing message");
                     }
                 },
                 server: common.getServer()
@@ -90,18 +90,10 @@ define(["jquery", "app/common"],
 
         function toggleSidebar(side) {
             $("#sidebar-" + side).toggleClass("collapsed");
-            let contentClass = "col-lg-6";
             const openSidebarsCount = $("#sidebar-left").hasClass("collapsed") +
                 $("#sidebar-right").hasClass("collapsed");
-            switch (openSidebarsCount) {
-                case 1:
-                    contentClass = "col-lg-9";
-                    break;
-                case 2:
-                    contentClass = "col-lg-12";
-                    break;
-                default:
-            }
+            const layoutMap = {1: "col-lg-9", 2: "col-lg-12"};
+            const contentClass = layoutMap[openSidebarsCount] || "col-lg-6";
             $("#content").removeClass("col-lg-12 col-lg-9 col-lg-6")
                 .addClass(contentClass);
         }

@@ -86,6 +86,8 @@ struct rspamd_worker_heartbeat {
 	ev_timer heartbeat_ev; /**< used by main for checking heartbeats and by workers to send heartbeats */
 	ev_tstamp last_event;  /**< last heartbeat received timestamp */
 	int64_t nbeats;        /**< positive for beats received, negative for beats missed */
+	gboolean is_busy;
+	char busy_reason[32];
 };
 
 enum rspamd_worker_state {
@@ -120,12 +122,13 @@ struct rspamd_worker {
 	int srv_pipe[2];                                  /**< used by workers to request something from the
 	                                     main process. [0] - main, [1] - worker			*/
 	ev_io srv_ev;                                     /**< used by main for read workers' requests		*/
+	ev_io control_ev;                                 /**< used by main for read control replies			*/
 	struct rspamd_worker_heartbeat hb;                /**< heartbeat data */
 	gpointer control_data;                            /**< used by control protocol to handle commands	*/
 	gpointer tmp_data;                                /**< used to avoid race condition to deal with control messages */
 	ev_child cld_ev;                                  /**< to allow reaping								*/
 	rspamd_worker_term_cb term_handler;               /**< custom term handler						*/
-	GHashTable *control_events_pending;               /**< control events pending indexed by ptr		*/
+	void *control_events_pending;                     /**< khash of pending control requests by id	*/
 };
 
 struct rspamd_abstract_worker_ctx {
@@ -238,6 +241,7 @@ struct rspamd_worker_listen_socket {
 	int fd;
 	enum rspamd_worker_socket_type type;
 	bool is_systemd;
+	bool is_ssl;
 };
 
 typedef struct worker_s {
@@ -361,6 +365,10 @@ struct rspamd_external_libs_ctx {
 	struct zstd_dictionary *out_dict;
 	void *out_zstream;
 	void *in_zstream;
+#if defined(RSPAMD_LEGACY_SSL_PROVIDER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+	void *ssl_legacy_provider;
+	void *ssl_default_provider;
+#endif
 	ref_entry_t ref;
 };
 

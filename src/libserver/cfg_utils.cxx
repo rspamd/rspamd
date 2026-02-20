@@ -21,6 +21,7 @@
 #include "cfg_file.h"
 #include "rspamd.h"
 #include "cfg_file_private.h"
+#include "libmime/mime_parser.h"
 
 #include "maps/map.h"
 #include "maps/map_helpers.h"
@@ -50,6 +51,9 @@
 #include <openssl/evp.h>
 #include <openssl/ssl.h>
 #include <openssl/conf.h>
+#if defined(RSPAMD_LEGACY_SSL_PROVIDER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+#include <openssl/provider.h>
+#endif
 #endif
 #ifdef HAVE_LOCALE_H
 #include <locale.h>
@@ -71,6 +75,11 @@
 #include "frozen/string.h"
 #include "contrib/expected/expected.hpp"
 #include "contrib/ankerl/unordered_dense.h"
+
+#include "libserver/task.h"
+#include "libserver/url.h"
+#define RSPAMD_TOKENIZER_INTERNAL// We need to use internal tokenizer API
+#include "libstat/tokenizers/custom_tokenizer.h"
 
 #define DEFAULT_SCORE 10.0
 
@@ -180,6 +189,18 @@ rspamd_parse_bind_line(struct rspamd_config *cfg,
 
 	auto bind_line = std::string_view{cnf->bind_line};
 
+	/* Check for trailing " ssl" suffix (case-insensitive) */
+	if (bind_line.size() > 4 &&
+		bind_line[bind_line.size() - 4] == ' ' &&
+		g_ascii_tolower(bind_line[bind_line.size() - 3]) == 's' &&
+		g_ascii_tolower(bind_line[bind_line.size() - 2]) == 's' &&
+		g_ascii_tolower(bind_line[bind_line.size() - 1]) == 'l') {
+		cnf->is_ssl = TRUE;
+		/* Strip the suffix for address parsing */
+		cnf->bind_line[bind_line.size() - 4] = '\0';
+		bind_line = std::string_view{cnf->bind_line};
+	}
+
 	if (bind_line.starts_with("systemd:")) {
 		/* The actual socket will be passed by systemd environment */
 		fdname = str + sizeof("systemd:") - 1;
@@ -200,7 +221,7 @@ rspamd_parse_bind_line(struct rspamd_config *cfg,
 		}
 	}
 	else {
-		if (rspamd_parse_host_port_priority(str, &cnf->addrs,
+		if (rspamd_parse_host_port_priority(cnf->bind_line, &cnf->addrs,
 											nullptr, &cnf->name, DEFAULT_BIND_PORT, TRUE, cfg->cfg_pool) == RSPAMD_PARSE_ADDR_FAIL) {
 			msg_err_config("cannot parse bind line: %s", str);
 			ret = FALSE;
@@ -220,7 +241,7 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 	struct rspamd_config *cfg;
 	rspamd_mempool_t *pool;
 
-	pool = rspamd_mempool_new(8 * 1024 * 1024, "cfg", 0);
+	pool = rspamd_mempool_new_long_lived(8 * 1024 * 1024, "cfg");
 	cfg = rspamd_mempool_alloc0_type(pool, struct rspamd_config);
 	/* Allocate larger pool for cfg */
 	cfg->cfg_pool = pool;
@@ -342,6 +363,12 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 
 	cfg->enable_css_parser = true;
 	cfg->enable_mime_utf = false;
+	cfg->enable_url_rewrite = false;
+	cfg->include_content_urls = true; /* Include URLs from PDF/content by default */
+	cfg->url_rewrite_lua_func = nullptr;
+	cfg->composites_inverted_index = true; /* Enable inverted index by default */
+	cfg->composites_stats_always = false;  /* Use probabilistic sampling by default */
+	cfg->url_rewrite_fold_limit = 76;
 	cfg->script_modules = g_ptr_array_new();
 
 	REF_INIT_RETAIN(cfg, rspamd_config_free);
@@ -376,6 +403,12 @@ void rspamd_config_free(struct rspamd_config *cfg)
 	DL_FOREACH_SAFE(cfg->config_unload_scripts, sc, sctmp)
 	{
 		luaL_unref(RSPAMD_LUA_CFG_STATE(cfg), LUA_REGISTRYINDEX, sc->cbref);
+	}
+
+	/* Free mime parser shared config if created */
+	if (cfg->mime_parser_cfg) {
+		rspamd_mime_parser_free_shared(cfg->mime_parser_cfg);
+		cfg->mime_parser_cfg = nullptr;
 	}
 
 	DL_FOREACH_SAFE(cfg->setting_ids, set, stmp)
@@ -576,7 +609,7 @@ rspamd_config_process_var(struct rspamd_config *cfg, const rspamd_ftok_t *var,
 		else {
 			/* Load lua code and ensure that we have function ref returned */
 			if (!content || content->len == 0) {
-				msg_err_config("lua variable needs content: %T", &tok);
+				msg_err_config("lua variable needs content: %*s", (int) tok.size(), tok.data());
 				return FALSE;
 			}
 
@@ -821,6 +854,65 @@ rspamd_adjust_clocks_resolution(struct rspamd_config *cfg)
 #endif
 }
 
+extern "C" {
+
+gboolean
+rspamd_config_load_custom_tokenizers(struct rspamd_config *cfg, GError **err)
+{
+	/* Load custom tokenizers */
+	const ucl_object_t *custom_tokenizers = ucl_object_lookup_path(cfg->cfg_ucl_obj,
+																   "options.custom_tokenizers");
+	if (custom_tokenizers != NULL) {
+		msg_info_config("loading custom tokenizers");
+
+		if (!cfg->tokenizer_manager) {
+			cfg->tokenizer_manager = rspamd_tokenizer_manager_new(cfg->cfg_pool);
+		}
+
+		ucl_object_iter_t it = ucl_object_iterate_new(custom_tokenizers);
+		const ucl_object_t *tok_obj;
+		const char *tok_name;
+
+		while ((tok_obj = ucl_object_iterate_safe(it, true)) != NULL) {
+			tok_name = ucl_object_key(tok_obj);
+			GError *local_err = NULL;
+
+			if (!rspamd_tokenizer_manager_load_tokenizer(cfg->tokenizer_manager,
+														 tok_name, tok_obj, &local_err)) {
+				msg_err_config("failed to load custom tokenizer '%s': %s",
+							   tok_name, local_err ? local_err->message : "unknown error");
+
+				if (err && !*err) {
+					*err = g_error_copy(local_err);
+				}
+
+				if (local_err) {
+					g_error_free(local_err);
+				}
+
+				ucl_object_iterate_free(it);
+				return FALSE;
+			}
+		}
+		ucl_object_iterate_free(it);
+
+		msg_info_config("loaded custom tokenizers successfully");
+	}
+
+	return TRUE;
+}
+
+void rspamd_config_unload_custom_tokenizers(struct rspamd_config *cfg)
+{
+	if (cfg->tokenizer_manager) {
+		msg_info_config("unloading custom tokenizers");
+		rspamd_tokenizer_manager_destroy(cfg->tokenizer_manager);
+		cfg->tokenizer_manager = NULL;
+	}
+}
+
+}// extern "C"
+
 /*
  * Perform post load actions
  */
@@ -930,6 +1022,16 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 		if (hs_ret == RSPAMD_HYPERSCAN_LOAD_ERROR) {
 			msg_debug_config("cannot load hyperscan database, disable it");
 		}
+
+		/* Process composite dependencies after symcache is initialized */
+		if (cfg->composites_manager && rspamd_composites_manager_nelts(cfg->composites_manager) > 0) {
+			/* Apply config options to composites manager */
+			rspamd_composites_set_inverted_index(cfg->composites_manager,
+												 cfg->composites_inverted_index);
+			rspamd_composites_process_deps(cfg->composites_manager, cfg);
+			/* Mark symbols used by whitelist composites (negative score) as FINE */
+			rspamd_composites_mark_whitelist_deps(cfg->composites_manager, cfg);
+		}
 	}
 
 	if (opts & RSPAMD_CONFIG_INIT_LIBS) {
@@ -939,6 +1041,20 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 		if (!libs_ret) {
 			msg_err_config("cannot configure libraries, fatal error");
 			return FALSE;
+		}
+
+		/* Load custom tokenizers using the new function */
+		GError *tokenizer_err = NULL;
+		if (!rspamd_config_load_custom_tokenizers(cfg, &tokenizer_err)) {
+			msg_err_config("failed to load custom tokenizers: %s",
+						   tokenizer_err ? tokenizer_err->message : "unknown error");
+			if (tokenizer_err) {
+				g_error_free(tokenizer_err);
+			}
+
+			if (opts & RSPAMD_CONFIG_INIT_VALIDATE) {
+				ret = tl::make_unexpected(std::string{"failed to load custom tokenizers"});
+			}
 		}
 	}
 
@@ -1689,10 +1805,12 @@ rspamd_config_add_symbol(struct rspamd_config *cfg,
 				*sym_def->weight_ptr = score;
 				sym_def->score = score;
 				sym_def->priority = priority;
-				sym_def->flags &= ~RSPAMD_SYMBOL_FLAG_UNSCORED;
+				sym_def->flags = flags & ~RSPAMD_SYMBOL_FLAG_UNSCORED;
 			}
-
-			sym_def->flags = flags;
+			else {
+				/* Preserve UNSCORED flag when not setting a real score */
+				sym_def->flags = flags | (sym_def->flags & RSPAMD_SYMBOL_FLAG_UNSCORED);
+			}
 
 			if (nshots != 0) {
 				sym_def->nshots = nshots;
@@ -2631,6 +2749,17 @@ rspamd_config_ev_backend_to_string(int ev_backend, gboolean *effective)
 #undef SET_EFFECTIVE
 }
 
+extern "C" {
+#include "../../contrib/hiredis/alloc.h"
+}
+
+/* Wrapper for calloc with correct signature for hiredis */
+static void *
+rspamd_hiredis_calloc(size_t nmemb, size_t size)
+{
+	return g_malloc0_n(nmemb, size);
+}
+
 struct rspamd_external_libs_ctx *
 rspamd_init_libs(void)
 {
@@ -2639,11 +2768,22 @@ rspamd_init_libs(void)
 
 	auto *ctx = g_new0(struct rspamd_external_libs_ctx, 1);
 	ctx->crypto_ctx = rspamd_cryptobox_init();
+	rspamd_task_registry_init();
 	ottery_cfg = (struct ottery_config *) g_malloc0(ottery_get_sizeof_config());
 	ottery_config_init(ottery_cfg);
 	ctx->ottery_cfg = ottery_cfg;
 
-	rspamd_openssl_maybe_init();
+	rspamd_openssl_maybe_init(ctx);
+
+	/* Configure hiredis allocators to use glib (jemalloc) */
+	hiredisAllocFuncs hiredis_allocators = {
+		.mallocFn = g_malloc,
+		.callocFn = rspamd_hiredis_calloc,
+		.reallocFn = g_realloc,
+		.strdupFn = g_strdup,
+		.freeFn = g_free,
+	};
+	hiredisSetAllocators(&hiredis_allocators);
 
 	/* Check if we have rdrand */
 	if ((ctx->crypto_ctx->cpu_config & CPUID_RDRAND) == 0) {
@@ -2923,6 +3063,14 @@ void rspamd_deinit_libs(struct rspamd_external_libs_ctx *ctx)
 		ERR_free_strings();
 		rspamd_ssl_ctx_free(ctx->ssl_ctx);
 		rspamd_ssl_ctx_free(ctx->ssl_ctx_noverify);
+#if defined(RSPAMD_LEGACY_SSL_PROVIDER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+		if (ctx->ssl_legacy_provider) {
+			OSSL_PROVIDER_unload((OSSL_PROVIDER *) ctx->ssl_legacy_provider);
+		}
+		if (ctx->ssl_default_provider) {
+			OSSL_PROVIDER_unload((OSSL_PROVIDER *) ctx->ssl_default_provider);
+		}
+#endif
 #endif
 		rspamd_inet_library_destroy();
 		rspamd_free_zstd_dictionary(ctx->in_dict);
@@ -2937,6 +3085,7 @@ void rspamd_deinit_libs(struct rspamd_external_libs_ctx *ctx)
 		}
 
 		rspamd_cryptobox_deinit(ctx->crypto_ctx);
+		rspamd_task_registry_destroy();
 
 		g_free(ctx);
 	}
@@ -2963,4 +3112,190 @@ rspamd_ip_is_local_cfg(struct rspamd_config *cfg,
 	}
 
 	return FALSE;
+}
+
+gboolean
+rspamd_config_parse_class_labels(const ucl_object_t *obj, GHashTable **class_labels)
+{
+	const ucl_object_t *cur;
+	ucl_object_iter_t it = nullptr;
+
+	if (!obj || ucl_object_type(obj) != UCL_OBJECT) {
+		return FALSE;
+	}
+
+	if (*class_labels == nullptr) {
+		*class_labels = g_hash_table_new_full(g_str_hash, g_str_equal,
+											  g_free, g_free);
+	}
+
+	while ((cur = ucl_object_iterate(obj, &it, true)) != nullptr) {
+		const char *class_name = ucl_object_key(cur);
+		const char *label = ucl_object_tostring(cur);
+
+		if (class_name && label) {
+			/* Validate class name: alphanumeric + underscore, max 32 chars */
+			if (strlen(class_name) > 32) {
+				msg_err("class name '%s' is too long (max 32 characters)", class_name);
+				g_hash_table_destroy(*class_labels);
+				*class_labels = nullptr;
+				return FALSE;
+			}
+
+			for (const char *p = class_name; *p; p++) {
+				if (!g_ascii_isalnum(*p) && *p != '_') {
+					msg_err("class name '%s' contains invalid character '%c'", class_name, *p);
+					g_hash_table_destroy(*class_labels);
+					*class_labels = nullptr;
+					return FALSE;
+				}
+			}
+
+			/* Validate label uniqueness */
+			if (g_hash_table_lookup(*class_labels, label)) {
+				msg_err("backend label '%s' is used by multiple classes", label);
+				g_hash_table_destroy(*class_labels);
+				*class_labels = nullptr;
+				return FALSE;
+			}
+		}
+
+		g_hash_table_insert(*class_labels, g_strdup(class_name), g_strdup(label));
+	}
+
+	return g_hash_table_size(*class_labels) > 0;
+}
+
+gboolean
+rspamd_config_migrate_binary_config(struct rspamd_statfile_config *stcf)
+{
+	if (stcf->class_name != nullptr) {
+		/* Already migrated or using new format */
+		return TRUE;
+	}
+
+	if (stcf->is_spam) {
+		stcf->class_name = g_strdup("spam");
+		msg_info("migrated statfile '%s' from is_spam=true to class='spam'",
+				 stcf->symbol ? stcf->symbol : "unknown");
+	}
+	else {
+		stcf->class_name = g_strdup("ham");
+		msg_info("migrated statfile '%s' from is_spam=false to class='ham'",
+				 stcf->symbol ? stcf->symbol : "unknown");
+	}
+
+	return TRUE;
+}
+
+gboolean
+rspamd_config_validate_class_config(struct rspamd_classifier_config *ccf, GError **err)
+{
+	GList *cur;
+	GHashTable *seen_classes = nullptr;
+	struct rspamd_statfile_config *stcf;
+	unsigned int class_count = 0;
+
+	if (!ccf || !ccf->statfiles) {
+		g_set_error(err, g_quark_from_static_string("config"), 1,
+					"classifier has no statfiles defined");
+		return FALSE;
+	}
+
+	seen_classes = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, nullptr);
+
+	/* Iterate through statfiles and collect classes */
+	cur = ccf->statfiles;
+	while (cur) {
+		stcf = (struct rspamd_statfile_config *) cur->data;
+
+		/* Migrate binary config if needed */
+		if (!rspamd_config_migrate_binary_config(stcf)) {
+			g_set_error(err, g_quark_from_static_string("config"), 1,
+						"failed to migrate binary config for statfile '%s'",
+						stcf->symbol ? stcf->symbol : "unknown");
+			g_hash_table_destroy(seen_classes);
+			return FALSE;
+		}
+
+		/* Check class name */
+		if (!stcf->class_name || strlen(stcf->class_name) == 0) {
+			g_set_error(err, g_quark_from_static_string("config"), 1,
+						"statfile '%s' has no class defined",
+						stcf->symbol ? stcf->symbol : "unknown");
+			g_hash_table_destroy(seen_classes);
+			return FALSE;
+		}
+
+		/* Track unique classes */
+		if (!g_hash_table_contains(seen_classes, stcf->class_name)) {
+			g_hash_table_insert(seen_classes, g_strdup(stcf->class_name), GINT_TO_POINTER(1));
+			class_count++;
+		}
+
+		cur = g_list_next(cur);
+	}
+
+	/* Validate class count */
+	if (class_count < 2) {
+		g_set_error(err, g_quark_from_static_string("config"), 1,
+					"classifier must have at least 2 classes, found %ud", class_count);
+		g_hash_table_destroy(seen_classes);
+		return FALSE;
+	}
+
+	if (class_count > 20) {
+		msg_warn("classifier has %ud classes, performance may be degraded above 20 classes",
+				 class_count);
+	}
+
+	/* Initialize classifier class tracking - only for explicit multiclass configurations */
+	gboolean has_explicit_classes = FALSE;
+
+	/* Check if any statfile uses explicit class declaration (not converted from is_spam) */
+	cur = ccf->statfiles;
+	while (cur) {
+		stcf = (struct rspamd_statfile_config *) cur->data;
+		if (stcf->class_name && !stcf->is_spam_converted) {
+			has_explicit_classes = TRUE;
+			break;
+		}
+		cur = g_list_next(cur);
+	}
+
+	/* Only populate class_names for explicit multiclass configurations */
+	if (has_explicit_classes) {
+		if (ccf->class_names) {
+			g_ptr_array_unref(ccf->class_names);
+		}
+		ccf->class_names = g_ptr_array_new_with_free_func(g_free);
+
+		/* Populate class names array */
+		GHashTableIter iter;
+		gpointer key, value;
+		g_hash_table_iter_init(&iter, seen_classes);
+		while (g_hash_table_iter_next(&iter, &key, &value)) {
+			g_ptr_array_add(ccf->class_names, g_strdup((const char *) key));
+		}
+	}
+	else {
+		/* Binary configuration - ensure class_names is NULL */
+		if (ccf->class_names) {
+			g_ptr_array_unref(ccf->class_names);
+			ccf->class_names = nullptr;
+		}
+	}
+
+	g_hash_table_destroy(seen_classes);
+	return TRUE;
+}
+
+const char *
+rspamd_config_get_class_label(struct rspamd_classifier_config *ccf, const char *class_name)
+{
+	if (!ccf || !ccf->class_labels || !class_name) {
+		return nullptr;
+	}
+
+	return (const char *) g_hash_table_lookup(ccf->class_labels, class_name);
 }

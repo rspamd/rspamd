@@ -57,3 +57,17 @@ DKIM Verify ED25519 PASS
 DKIM Verify ED25519 REJECT
   Scan File  ${RSPAMD_TESTDIR}/messages/ed25519-broken.eml
   Expect Symbol  R_DKIM_REJECT
+
+DKIM Verify Unknown Key Type
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_broken_key.eml
+  Expect Symbol  R_DKIM_PERMFAIL
+
+DKIM Verify Revoked Key (missing p=)
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_revoked_key.eml
+  Expect Symbol  R_DKIM_PERMFAIL
+
+DKIM Sign ED25519 PEM
+  ${result} =  Scan Message With Rspamc  ${RSPAMD_TESTDIR}/messages/spam_message.eml  --mime  --header=dodkim=ed25519
+  Check Rspamc  ${result}  ed25519-sha256
+  Set Suite Variable  ${SIGNED_ED25519_MESSAGE}  ${RSPAMD_TMPDIR}/dkim_sign_ed25519_pem_test.eml
+  Create File  ${SIGNED_ED25519_MESSAGE}  ${result.stdout}

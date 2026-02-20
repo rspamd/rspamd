@@ -22,10 +22,18 @@
 #include "multipattern.h"
 #include "contrib/uthash/utlist.h"
 #include "contrib/http-parser/http_parser.h"
+#include "lua/lua_common.h"
 #include <unicode/utf8.h>
 #include <unicode/uchar.h>
 #include <unicode/usprep.h>
 #include <unicode/ucnv.h>
+
+/* Lua URL filter consultation return values */
+enum rspamd_url_lua_filter_result {
+	RSPAMD_URL_LUA_FILTER_ACCEPT = 0,     /* Continue parsing normally */
+	RSPAMD_URL_LUA_FILTER_SUSPICIOUS = 1, /* Continue but mark as obscured */
+	RSPAMD_URL_LUA_FILTER_REJECT = 2      /* Abort parsing */
+};
 
 typedef struct url_match_s {
 	const char *m_begin;
@@ -223,6 +231,7 @@ struct url_callback_data {
 	const char *begin;
 	char *url_str;
 	rspamd_mempool_t *pool;
+	void *lua_state; /* Lua state for consultation (may be NULL) */
 	int len;
 	enum rspamd_url_find_type how;
 	gboolean prefix_added;
@@ -435,7 +444,7 @@ rspamd_url_parse_tld_file(const char *fname,
 	m.start = url_tld_start;
 	m.prefix = "http://";
 
-	while ((r = getline(&linebuf, &buflen, f)) > 0) {
+	while ((r = rspamd_getline(&linebuf, &buflen, f)) > 0) {
 		if (linebuf[0] == '/' || g_ascii_isspace(linebuf[0])) {
 			/* Skip comment or empty line */
 			continue;
@@ -474,7 +483,7 @@ rspamd_url_parse_tld_file(const char *fname,
 		g_array_append_val(url_scanner->matchers_full, m);
 	}
 
-	free(linebuf);
+	rspamd_getline_free(linebuf);
 	fclose(f);
 
 	return TRUE;
@@ -558,7 +567,9 @@ void rspamd_url_init(const char *tld_file)
 		url_scanner->matchers_full = g_array_sized_new(FALSE, TRUE,
 													   sizeof(struct url_matcher), 13000);
 		url_scanner->search_trie_full = rspamd_multipattern_create_sized(13000,
-																		 RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8);
+																		 RSPAMD_MULTIPATTERN_TLD | RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8);
+		/* Use FALLBACK mode: ACISM immediately, HS async */
+		rspamd_multipattern_set_mode(url_scanner->search_trie_full, RSPAMD_MP_MODE_FALLBACK);
 	}
 	else {
 		url_scanner->matchers_full = NULL;
@@ -577,11 +588,6 @@ void rspamd_url_init(const char *tld_file)
 		}
 	}
 
-	if (url_scanner->matchers_full && url_scanner->matchers_full->len > 1000) {
-		msg_info("start compiling of %d TLD suffixes; it might take a long time",
-				 url_scanner->matchers_full->len);
-	}
-
 	if (!rspamd_multipattern_compile(url_scanner->search_trie_strict, mp_compile_flags, &err)) {
 		msg_err("cannot compile url matcher static patterns, fatal error: %e", err);
 		abort();
@@ -595,11 +601,16 @@ void rspamd_url_init(const char *tld_file)
 			g_error_free(err);
 			ret = FALSE;
 		}
+		else if (rspamd_multipattern_get_state(url_scanner->search_trie_full) ==
+				 RSPAMD_MP_STATE_COMPILING) {
+			/* Add to pending queue for hs_helper to compile */
+			rspamd_multipattern_add_pending(url_scanner->search_trie_full, "tld");
+		}
 	}
 
 	if (tld_file != NULL) {
 		if (ret) {
-			msg_info("initialized %ud url match suffixes from '%s'",
+			msg_info("loaded %ud TLD suffixes from '%s'",
 					 url_scanner->matchers_full->len - url_scanner->matchers_strict->len,
 					 tld_file);
 		}
@@ -1015,11 +1026,19 @@ out:
 	return ret;
 }
 
+/* Forward declaration for Lua consultation */
+static enum rspamd_url_lua_filter_result
+rspamd_url_lua_consult(const char *url_str,
+					   gsize len,
+					   unsigned int flags,
+					   lua_State *L);
+
 static int
 rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				 char const **end,
 				 enum rspamd_url_parse_flags parse_flags,
-				 unsigned int *flags)
+				 unsigned int *flags,
+				 void *lua_state)
 {
 	const char *p = str, *c = str, *last = str + len, *slash = NULL,
 			   *password_start = NULL, *user_start = NULL;
@@ -1199,7 +1218,20 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				goto out;
 			}
 			else if (p - c > max_email_user) {
-				goto out;
+				/* Oversized user field - consult Lua filter (fixes #5731) */
+				enum rspamd_url_lua_filter_result lua_decision =
+					rspamd_url_lua_consult(c, p - c, *flags, (lua_State *) lua_state);
+
+				if (lua_decision == RSPAMD_URL_LUA_FILTER_REJECT) {
+					/* REJECT: Lua says this is garbage, abort parsing */
+					goto out;
+				}
+				else if (lua_decision == RSPAMD_URL_LUA_FILTER_SUSPICIOUS) {
+					/* SUSPICIOUS: Mark as obscured for plugin analysis */
+					*flags |= RSPAMD_URL_FLAG_OBSCURED;
+				}
+				/* ACCEPT or SUSPICIOUS: continue parsing */
+				*flags |= RSPAMD_URL_FLAG_HAS_USER;
 			}
 
 			p++;
@@ -1210,7 +1242,15 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 					goto out;
 				}
 
-				/* For now, we ignore all that stuff as it is bogus */
+				/* Multiple @ signs detected - consult Lua */
+				enum rspamd_url_lua_filter_result lua_decision =
+					rspamd_url_lua_consult(c, p - c, *flags, (lua_State *) lua_state);
+
+				if (lua_decision == RSPAMD_URL_LUA_FILTER_REJECT) {
+					/* REJECT: Too suspicious, abort */
+					goto out;
+				}
+				/* ACCEPT or SUSPICIOUS: Continue but mark as obscured */
 				/* Off by one */
 				p--;
 				SET_U(u, UF_USERINFO);
@@ -2186,11 +2226,77 @@ rspamd_url_remove_dots(struct rspamd_url *uri)
 	return ret;
 }
 
+/**
+ * Consult Lua filter when C parser encounters suspicious/ambiguous URL patterns
+ * This is called DURING parsing when C is unsure how to proceed
+ * @param url_str URL string fragment being examined
+ * @param len Length of the fragment
+ * @param flags Current URL parsing flags
+ * @param L Lua state (may be NULL)
+ * @return enum rspamd_url_lua_filter_result
+ */
+static enum rspamd_url_lua_filter_result
+rspamd_url_lua_consult(const char *url_str,
+					   gsize len,
+					   unsigned int flags,
+					   lua_State *L)
+{
+	enum rspamd_url_lua_filter_result result = RSPAMD_URL_LUA_FILTER_ACCEPT;
+	int err_idx, ret;
+
+	if (!L) {
+		return RSPAMD_URL_LUA_FILTER_ACCEPT; /* No Lua available, accept */
+	}
+
+	lua_pushcfunction(L, &rspamd_lua_traceback);
+	err_idx = lua_gettop(L);
+
+	/* Try to load lua_url_filter.filter_url_string function */
+	if (!rspamd_lua_require_function(L, "lua_url_filter", "filter_url_string")) {
+		lua_pop(L, 1);                       /* Remove error handler */
+		return RSPAMD_URL_LUA_FILTER_ACCEPT; /* Filter not available, accept */
+	}
+
+	/* Push arguments: url_text (as rspamd_text), flags */
+	struct rspamd_lua_text *t;
+	t = lua_newuserdata(L, sizeof(*t));
+	rspamd_lua_setclass(L, rspamd_text_classname, -1);
+	t->start = url_str;
+	t->len = len;
+	t->flags = 0; /* Read-only, don't own memory */
+
+	lua_pushinteger(L, flags);
+
+	/* Call filter_url_string(url_text, flags) */
+	if ((ret = lua_pcall(L, 2, 1, err_idx)) != 0) {
+		msg_err("cannot call lua_url_filter.filter_url_string: %s",
+				lua_isstring(L, -1) ? lua_tostring(L, -1) : "unknown error");
+		lua_pop(L, 2);                       /* Error + error handler */
+		return RSPAMD_URL_LUA_FILTER_ACCEPT; /* On error, accept */
+	}
+
+	/* Get result */
+	if (lua_isnumber(L, -1)) {
+		int lua_result = lua_tointeger(L, -1);
+		/* Validate and convert to enum */
+		if (lua_result >= RSPAMD_URL_LUA_FILTER_ACCEPT &&
+			lua_result <= RSPAMD_URL_LUA_FILTER_REJECT) {
+			result = (enum rspamd_url_lua_filter_result) lua_result;
+		}
+		/* else: keep default ACCEPT for invalid values */
+	}
+
+	lua_pop(L, 2); /* Result + error handler */
+
+	return result;
+}
+
 enum uri_errno
 rspamd_url_parse(struct rspamd_url *uri,
 				 char *uristring, gsize len,
 				 rspamd_mempool_t *pool,
-				 enum rspamd_url_parse_flags parse_flags)
+				 enum rspamd_url_parse_flags parse_flags,
+				 void *lua_state)
 {
 	struct http_parser_url u;
 	char *p;
@@ -2231,11 +2337,11 @@ rspamd_url_parse(struct rspamd_url *uri,
 		}
 		else {
 			ret = rspamd_web_parse(&u, uristring, len, &end, parse_flags,
-								   &flags);
+								   &flags, lua_state);
 		}
 	}
 	else {
-		ret = rspamd_web_parse(&u, uristring, len, &end, parse_flags, &flags);
+		ret = rspamd_web_parse(&u, uristring, len, &end, parse_flags, &flags, lua_state);
 	}
 
 	if (ret != 0) {
@@ -2337,6 +2443,64 @@ rspamd_url_parse(struct rspamd_url *uri,
 										 &unquoted_len, uri->flags);
 
 	rspamd_url_shift(uri, unquoted_len, UF_HOST);
+
+	/*
+	 * Remove extra slashes between host and path.
+	 * URLs like https://example.com//path should be normalized to https://example.com/path
+	 * The slashes between host end and path start are not part of either component,
+	 * so we need to handle them explicitly here.
+	 */
+	if (uri->datalen > 0) {
+		/* Calculate where host ends: hostshift + hostlen */
+		unsigned int host_end = uri->hostshift + uri->hostlen;
+		/* Path starts at datashift */
+		unsigned int path_start = uri->datashift;
+
+		/*
+		 * Between host_end and path_start we should have exactly one slash.
+		 * Any additional slashes (or backslashes) need to be removed.
+		 * Expected structure: "...host/" + "path..." where datashift points to 'p'
+		 * If we have "...host//" + "path...", the extra '/' needs removal.
+		 */
+		if (path_start > host_end + 1) {
+			/* Check if the gap contains only slashes */
+			unsigned int gap_start = host_end;
+			unsigned int gap_len = path_start - host_end;
+			gboolean all_slashes = TRUE;
+
+			for (unsigned int i = 0; i < gap_len; i++) {
+				char c = uri->string[gap_start + i];
+				if (c != '/' && c != '\\') {
+					all_slashes = FALSE;
+					break;
+				}
+			}
+
+			if (all_slashes && gap_len > 1) {
+				/* Remove extra slashes, keep only one */
+				unsigned int extra_slashes = gap_len - 1;
+				unsigned int remain = uri->urllen - path_start;
+
+				/* Shift path and everything after it backward */
+				memmove(uri->string + host_end + 1,
+						uri->string + path_start,
+						remain);
+
+				/* Null terminate */
+				uri->urllen -= extra_slashes;
+				uri->string[uri->urllen] = '\0';
+
+				/* Adjust all offsets that come after host */
+				uri->datashift -= extra_slashes;
+				if (uri->querylen > 0) {
+					uri->queryshift -= extra_slashes;
+				}
+				if (uri->fragmentlen > 0) {
+					uri->fragmentshift -= extra_slashes;
+				}
+			}
+		}
+	}
 
 	if (rspamd_url_remove_dots(uri)) {
 		uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
@@ -2489,19 +2653,22 @@ rspamd_url_parse(struct rspamd_url *uri,
 				}
 
 				if (all_chars_domain) {
-					/* Additionally check for a numeric IP as we can have some number here... */
-					rspamd_url_maybe_regenerate_from_ip(uri, pool);
+					/* Additionally check for a numeric IP as we can have some number here */
+					/* Skip for mailto: as email domains cannot be numeric IPs (see #5823) */
+					if (uri->protocol != PROTOCOL_MAILTO) {
+						rspamd_url_maybe_regenerate_from_ip(uri, pool);
 
-					if (last_c == '.' && uri->hostlen > 1) {
-						/* Skip the last dot */
-						uri->tldlen = uri->hostlen - 1;
-					}
-					else {
-						uri->tldlen = uri->hostlen;
-					}
+						if (last_c == '.' && uri->hostlen > 1) {
+							/* Skip the last dot */
+							uri->tldlen = uri->hostlen - 1;
+						}
+						else {
+							uri->tldlen = uri->hostlen;
+						}
 
-					uri->tldshift = uri->hostshift;
-					is_whole_hostname_tld = true;
+						uri->tldshift = uri->hostshift;
+						is_whole_hostname_tld = true;
+					}
 				}
 			}
 
@@ -2907,7 +3074,7 @@ url_web_end(struct url_callback_data *cb,
 	}
 
 	if (rspamd_web_parse(NULL, pos, len, &last,
-						 RSPAMD_URL_PARSE_CHECK, &flags) != 0) {
+						 RSPAMD_URL_PARSE_CHECK, &flags, NULL) != 0) {
 		return FALSE;
 	}
 
@@ -3223,8 +3390,8 @@ rspamd_url_trie_callback(struct rspamd_multipattern *mp,
 
 		cb->start = m.m_begin;
 
-		if (pos > cb->fin) {
-			cb->fin = pos;
+		if (m.m_begin + m.m_len > cb->fin) {
+			cb->fin = m.m_begin + m.m_len;
 		}
 
 		return 1;
@@ -3382,15 +3549,15 @@ rspamd_url_trie_generic_callback_common(struct rspamd_multipattern *mp,
 
 		cb->start = m.m_begin;
 
-		if (pos > cb->fin) {
-			cb->fin = pos;
+		if (m.m_begin + m.m_len > cb->fin) {
+			cb->fin = m.m_begin + m.m_len;
 		}
 
 		url = rspamd_mempool_alloc0(pool, sizeof(struct rspamd_url));
 		g_strstrip(cb->url_str);
 		rc = rspamd_url_parse(url, cb->url_str,
 							  strlen(cb->url_str), pool,
-							  RSPAMD_URL_PARSE_TEXT);
+							  RSPAMD_URL_PARSE_TEXT, cb->lua_state);
 
 		if (rc == URI_ERRNO_OK && url->hostlen > 0) {
 			if (cb->prefix_added) {
@@ -3484,6 +3651,10 @@ rspamd_url_query_callback(struct rspamd_url *url, gsize start_offset,
 
 	url->flags |= RSPAMD_URL_FLAG_QUERY;
 
+	/* For computed parts (e.g., PDF extracted text), also mark as content URL */
+	if (cbd->part && (cbd->part->mime_part->flags & RSPAMD_MIME_PART_COMPUTED)) {
+		url->flags |= RSPAMD_URL_FLAG_CONTENT;
+	}
 
 	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false)) {
 		if (cbd->part && cbd->part->mime_part->urls) {
@@ -3545,7 +3716,17 @@ rspamd_url_text_part_callback(struct rspamd_url *url, gsize start_offset,
 		}
 	}
 
-	url->flags |= RSPAMD_URL_FLAG_FROM_TEXT;
+	/*
+	 * For computed/virtual parts (e.g., text extracted from PDF), use CONTENT flag
+	 * instead of FROM_TEXT. These URLs may be clickable links in the original document
+	 * rather than plain text URLs.
+	 */
+	if (cbd->part->mime_part->flags & RSPAMD_MIME_PART_COMPUTED) {
+		url->flags |= RSPAMD_URL_FLAG_CONTENT;
+	}
+	else {
+		url->flags |= RSPAMD_URL_FLAG_FROM_TEXT;
+	}
 
 	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false) &&
 		cbd->part->mime_part->urls) {
@@ -3566,7 +3747,8 @@ rspamd_url_text_part_callback(struct rspamd_url *url, gsize start_offset,
 		rspamd_url_find_multiple(task->task_pool,
 								 rspamd_url_query_unsafe(url), url->querylen,
 								 RSPAMD_URL_FIND_ALL, NULL,
-								 rspamd_url_query_callback, cbd);
+								 rspamd_url_query_callback, cbd,
+								 task->cfg ? task->cfg->lua_state : NULL);
 	}
 
 	return TRUE;
@@ -3593,7 +3775,8 @@ void rspamd_url_text_extract(rspamd_mempool_t *pool,
 
 	rspamd_url_find_multiple(task->task_pool, part->utf_stripped_content->data,
 							 part->utf_stripped_content->len, how, part->newlines,
-							 rspamd_url_text_part_callback, &mcbd);
+							 rspamd_url_text_part_callback, &mcbd,
+							 task->cfg ? task->cfg->lua_state : NULL);
 }
 
 void rspamd_url_find_multiple(rspamd_mempool_t *pool,
@@ -3602,7 +3785,8 @@ void rspamd_url_find_multiple(rspamd_mempool_t *pool,
 							  enum rspamd_url_find_type how,
 							  GPtrArray *nlines,
 							  url_insert_function func,
-							  gpointer ud)
+							  gpointer ud,
+							  void *lua_state)
 {
 	struct url_callback_data cb;
 
@@ -3617,6 +3801,7 @@ void rspamd_url_find_multiple(rspamd_mempool_t *pool,
 	cb.end = in + inlen;
 	cb.how = how;
 	cb.pool = pool;
+	cb.lua_state = lua_state;
 
 	cb.funcd = ud;
 	cb.func = func;
@@ -3732,7 +3917,8 @@ rspamd_url_task_subject_callback(struct rspamd_url *url, gsize start_offset,
 								  url_str,
 								  strlen(url_str),
 								  task->task_pool,
-								  RSPAMD_URL_PARSE_TEXT);
+								  RSPAMD_URL_PARSE_TEXT,
+								  task->cfg ? task->cfg->lua_state : NULL);
 
 			if (rc == URI_ERRNO_OK &&
 				url->hostlen > 0) {
@@ -4028,7 +4214,7 @@ rspamd_url_encode(struct rspamd_url *url, gsize *pdlen,
 				  rspamd_mempool_t *pool)
 {
 	unsigned char *dest, *d, *dend;
-	static const char hexdigests[16] = "0123456789ABCDEF";
+	static const char hexdigests[] = "0123456789ABCDEF";
 	unsigned int i;
 	gsize dlen = 0;
 

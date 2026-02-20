@@ -1,25 +1,5 @@
 /*
- The MIT License (MIT)
-
- Copyright (C) 2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
-
- Permission is hereby granted, free of charge, to any person obtaining a copy
- of this software and associated documentation files (the "Software"), to deal
- in the Software without restriction, including without limitation the rights
- to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- copies of the Software, and to permit persons to whom the Software is
- furnished to do so, subject to the following conditions:
-
- The above copyright notice and this permission notice shall be included in
- all copies or substantial portions of the Software.
-
- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- THE SOFTWARE.
+ * Copyright (C) 2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
  */
 
 /* global require */
@@ -29,6 +9,10 @@ define(["jquery", "app/common", "app/libft"],
         "use strict";
         const ui = {};
         const fileSet = {files: null, index: null};
+        const lastReqContext = {
+            classifiers: {config_id: null, server: null},
+            storages: {config_id: null, server: null}
+        };
         let scanTextHeaders = {};
 
         function uploadText(data, url, headers, method = "POST") {
@@ -80,6 +64,16 @@ define(["jquery", "app/common", "app/libft"],
                 headers: scanTextHeaders,
                 success: function (neighbours_status) {
                     const json = neighbours_status[0].data;
+
+                    // Extract fuzzy_hashes from milter headers if available
+                    const fuzzyHeader = json.milter?.add_headers?.["X-Rspamd-Fuzzy"];
+                    if (fuzzyHeader?.value) {
+                        json.fuzzy_hashes = fuzzyHeader.value
+                            .split(",")
+                            .map((h) => h.trim())
+                            .filter((h) => h.length > 0);
+                    }
+
                     if (json.action) {
                         common.alertMessage("alert-success", "Data successfully scanned");
 
@@ -109,6 +103,7 @@ define(["jquery", "app/common", "app/libft"],
                                             enable_disable_scan_btn();
                                             $("#cleanScanHistory, #scan .ft-columns-dropdown .btn-dropdown-apply")
                                                 .removeAttr("disabled");
+                                            libft.bindFuzzyHashButtons("scan");
                                             $("html, body").animate({
                                                 scrollTop: $("#scanResult").offset().top
                                             }, 1000);
@@ -117,20 +112,26 @@ define(["jquery", "app/common", "app/libft"],
                             });
                         }
                     } else {
-                        common.alertMessage("alert-error", "Cannot scan data");
+                        common.alertMessage("alert-danger", "Cannot scan data");
                     }
                 },
                 error: enable_disable_scan_btn,
                 errorMessage: "Cannot upload data",
                 statusCode: {
                     404: function () {
-                        common.alertMessage("alert-error", "Cannot upload data, no server found");
+                        common.logError({
+                            server: common.getServer(),
+                            endpoint: "checkv2",
+                            message: "Cannot upload data, no server found",
+                            httpStatus: 404,
+                            errorType: "http_error"
+                        });
                     },
                     500: function () {
-                        common.alertMessage("alert-error", "Cannot tokenize message: no text data");
+                        common.alertMessage("alert-danger", "Cannot tokenize message: no text data");
                     },
                     503: function () {
-                        common.alertMessage("alert-error", "Cannot tokenize message: no text data");
+                        common.alertMessage("alert-danger", "Cannot tokenize message: no text data");
                     }
                 },
                 server: common.getServer()
@@ -147,7 +148,7 @@ define(["jquery", "app/common", "app/libft"],
                           "<td>" + hash + "</td></tr>");
                     });
                 }
-                $("#hash-card").slideDown();
+                common.show("#hash-card", true);
             }
 
             common.query("plugins/fuzzy/hashes?flag=" + $("#fuzzy-flag").val(), {
@@ -162,7 +163,7 @@ define(["jquery", "app/common", "app/libft"],
                         common.alertMessage("alert-success", "Message successfully processed");
                         fillHashTable(json.hashes);
                     } else {
-                        common.alertMessage("alert-error", "Unexpected error processing message");
+                        common.alertMessage("alert-danger", "Unexpected error processing message");
                     }
                 },
                 server: common.getServer()
@@ -171,7 +172,7 @@ define(["jquery", "app/common", "app/libft"],
 
 
         libft.set_page_size("scan", $("#scan_page_size").val());
-        libft.bindHistoryTableEventHandlers("scan", 3);
+        libft.bindHistoryTableEventHandlers("scan", 5);
 
         $("#cleanScanHistory").off("click");
         $("#cleanScanHistory").on("click", (e) => {
@@ -194,7 +195,7 @@ define(["jquery", "app/common", "app/libft"],
         });
 
         $(".card-close-btn").on("click", function () {
-            $(this).closest(".card").slideUp();
+            common.hide($(this).closest(".card"), true);
         });
 
         function getScanTextHeaders() {
@@ -217,7 +218,10 @@ define(["jquery", "app/common", "app/libft"],
                     getFuzzyHashes(data);
                 } else {
                     let headers = {};
-                    if (source === "fuzzyadd") {
+                    if (source === "learnham" || source === "learnspam") {
+                        const classifier = $("#classifier").val();
+                        if (classifier) headers = {classifier: classifier};
+                    } else if (source === "fuzzyadd") {
                         headers = {
                             flag: $("#fuzzyFlagText").val(),
                             weight: $("#fuzzyWeightText").val()
@@ -230,7 +234,7 @@ define(["jquery", "app/common", "app/libft"],
                     uploadText(data, source, headers);
                 }
             } else {
-                common.alertMessage("alert-error", "Message source field cannot be blank");
+                common.alertMessage("alert-danger", "Message source field cannot be blank");
             }
             return false;
         });
@@ -295,6 +299,148 @@ define(["jquery", "app/common", "app/libft"],
         }
 
         common.fileUtils.setupFileHandling("#scanMsgSource", "#formFile", fileSet, enable_disable_scan_btn, multiple_files_cb);
+
+
+        /**
+         * Returns `true` if we should skip the request as configuration is not changed,
+         * otherwise bumps the request context cache and returns `false`.
+         *
+         * @param {string} server
+         *   Name of the currently selected Rspamd neighbour.
+         * @param {"classifiers"|"storages"} key
+         *   Which endpoint’s cache to check.
+         * @returns {boolean}
+         */
+        function shouldSkipRequest(server, key) {
+            const servers = JSON.parse(sessionStorage.getItem("Credentials") || "{}");
+            const config_id = servers[server]?.data?.config_id;
+            const last = lastReqContext[key];
+
+            if ((config_id && config_id === last.config_id) ||
+                (!config_id && server === last.server)) {
+                return true;
+            }
+
+            lastReqContext[key] = {config_id, server};
+            return false;
+        }
+
+        ui.getClassifiers = function () {
+            if (!common.read_only) {
+                const server = common.getServer();
+                const sel = $("#classifier");
+                const hadOptions = sel.children().length > 0; // remember pre-state
+
+                // Skip request only if we already had options populated for this config/server
+                if (shouldSkipRequest(server, "classifiers") && hadOptions) return;
+
+                sel.empty().append($("<option>", {value: "", text: "All classifiers"}));
+
+                common.query("bayes/classifiers", {
+                    success: function (data) {
+                        data[0].data.forEach((c) => sel.append($("<option>", {value: c, text: c})));
+                    },
+                    server: server
+                });
+            }
+        };
+
+
+        const fuzzyWidgets = [
+            {
+                picker: "#fuzzy-flag-picker",
+                input: "#fuzzy-flag",
+                container: ($picker) => $picker.parent(),
+                includeReadOnly: true,
+                requiresWritable: false,
+                emptyText: "No fuzzy storages"
+            },
+            {
+                picker: "#fuzzyFlagText-picker",
+                input: "#fuzzyFlagText",
+                container: ($picker) => $picker.closest("div.card"),
+                includeReadOnly: false,
+                requiresWritable: true,
+                emptyText: "No writable storages"
+            }
+        ];
+
+        function toggleWidgets(showPicker, showInput) {
+            fuzzyWidgets.forEach(({picker, input}) => {
+                (showPicker ? common.show : common.hide)(picker);
+                (showInput ? common.show : common.hide)(input);
+            });
+        }
+
+        function setWidgetsDisabled(disable, predicate = () => true) {
+            fuzzyWidgets.forEach((widget) => {
+                if (!predicate(widget)) return;
+                const {picker, container} = widget;
+                container($(picker))[disable ? "addClass" : "removeClass"]("disabled");
+            });
+        }
+
+        ui.getFuzzyStorages = function () {
+            const server = common.getServer();
+            if (shouldSkipRequest(server, "storages")) return;
+
+            fuzzyWidgets.forEach(({picker, container}) => container($(picker)).removeAttr("title"));
+
+            common.query("plugins/fuzzy/storages", {
+                success: function (data) {
+                    const storages = data[0].data.storages || {};
+                    const hasWritableStorages = Object.keys(storages).some((name) => !storages[name].read_only);
+
+                    toggleWidgets(true, false);
+                    setWidgetsDisabled(!hasWritableStorages, (widget) => widget.requiresWritable);
+
+                    fuzzyWidgets.forEach((widget) => {
+                        const {picker, input, includeReadOnly, emptyText} = widget;
+                        const $sel = $(picker);
+
+                        $sel.empty();
+
+                        const applicableStorages = Object.entries(storages)
+                            .filter(([, info]) => includeReadOnly || !info.read_only);
+
+                        applicableStorages.forEach(([name, info]) => {
+                            Object.entries(info.flags).forEach(([symbol, val]) => {
+                                $sel.append($("<option>", {value: val, text: `${name}:${symbol} (${val})`}));
+                            });
+                        });
+
+                        if ($sel.children().length > 0) {
+                            $(input).val($sel.val());
+                            $sel.off("change").on("change", () => $(input).val($sel.val()));
+                        } else {
+                            $sel.append($("<option>", {value: "", text: emptyText}));
+                            $(input).val("");
+                            $sel.off("change");
+                        }
+                    });
+                },
+                error: function (_result, _jqXHR, _textStatus, errorThrown) {
+                    if (errorThrown === "fuzzy_check is not enabled") {
+                        toggleWidgets(true, false);
+                        setWidgetsDisabled(true);
+
+                        fuzzyWidgets.forEach(({picker, container}) => {
+                            const $picker = $(picker);
+                            $picker
+                                .empty()
+                                .append($("<option>", {value: "", text: "fuzzy_check disabled"}));
+                            common.show($picker);
+                            container($picker)
+                                .attr("title", "fuzzy_check module is not enabled in server configuration.");
+                        });
+                    } else {
+                        toggleWidgets(false, true);
+                        setWidgetsDisabled(false);
+                    }
+                },
+                server: server
+            });
+        };
 
         return ui;
     });

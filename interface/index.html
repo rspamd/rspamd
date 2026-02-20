@@ -15,9 +15,8 @@
 	<meta name="msapplication-TileColor" content="#2b5797">
 
 	<link href="./css/bootstrap.min.css" rel="stylesheet">
-	<link rel="stylesheet" type="text/css" href="./css/font-glyphicons.css">
 	<link rel="stylesheet" type="text/css" href="./css/footable.standalone.min.css"/>
-	<link rel="stylesheet" type="text/css" href="./css/FooTable.Glyphicons.css"/>
+	<link rel="stylesheet" type="text/css" href="./css/FooTable.FontAwesome.css"/>
 	<link rel="stylesheet" type="text/css" href="./css/svg-with-js.min.css">
 	<link rel="stylesheet" type="text/css" href="./css/d3evolution.css">
 	<link rel="stylesheet" type="text/css" href="./css/d3pie.css">
@@ -29,10 +28,11 @@
 
 <body>
 <!-- .vw-100 and .pe-3 prevent navbar layout shift caused by scrollbar -->
-<nav class="navbar navbar-light bg-light navbar-expand-xl vw-100 pe-3 d-none" id="navBar">
+<nav class="navbar bg-body-tertiary border-bottom navbar-expand-xl vw-100 pe-3 d-none" id="navBar">
 	<div class="container-fluid">
 		<div class="navbar-header navbar-brand p-0">
-			<img src="./img/rspamd_logo_navbar.png" alt="Rspamd">
+			<img class="logo-light" src="./img/rspamd_logo_navbar.png" alt="Rspamd">
+			<img class="logo-dark" src="./img/rspamd_logo_navbar_dark.png" alt="Rspamd">
 		</div>
 		<div class="collapse navbar-collapse order-3 order-xl-2 flex-grow-0">
 			<form class="my-2 me-auto">
@@ -48,8 +48,8 @@
 
 				<li role="presentation" class="nav-item"><a id="configuration_nav" aria-controls="configuration" role="tab" href="#configuration" data-bs-toggle="tab" class="nav-link">Configuration</a></li>
 				<li role="presentation" class="nav-item"><a id="symbols_nav" aria-controls="symbols" role="tab" href="#symbols" data-bs-toggle="tab" class="nav-link">Symbols</a></li>
-				<li role="presentation" class="nav-item"><a id="scan_nav" aria-controls="scan" role="tab" href="#scan" data-bs-toggle="tab" class="nav-link">Scan<span class="ro-hide" style="display: none;">/Learn</span></a></li>
-				<li role="presentation" class="nav-item"><a id="selectors_nav" aria-controls="selectors" role="tab" href="#selectors" data-bs-toggle="tab" class="nav-link ro-hide" style="display: none;">Test selectors</a></li>
+				<li role="presentation" class="nav-item"><a id="scan_nav" aria-controls="scan" role="tab" href="#scan" data-bs-toggle="tab" class="nav-link">Scan<span class="ro-hide d-none">/Learn</span></a></li>
+				<li role="presentation" class="nav-item"><a id="selectors_nav" aria-controls="selectors" role="tab" href="#selectors" data-bs-toggle="tab" class="nav-link ro-hide d-none">Test selectors</a></li>
 				<li role="presentation" class="nav-item"><a id="history_nav" aria-controls="history" role="tab" href="#history" data-bs-toggle="tab" class="nav-link">History</a></li>
 			</ul>
 		</div>
@@ -90,6 +90,7 @@
 					</div>
 				</div>
 				<button class="btn btn-outline-secondary ms-2" id="disconnect" title="Disconnect"><i class="fas fa-power-off"></i></button>
+				<button class="btn btn-outline-secondary ms-2" id="theme-toggle" title="Toggle theme"><i class="fas fa-moon" id="theme-icon"></i></button>
 				<button class="btn btn-outline-secondary ms-2" id="settings" title="WebUI settings"><i class="fas fa-cog"></i></button>
 				<div class="d-none">
 					<div id="settings-popover">
@@ -115,12 +116,40 @@
 
 						<div class="card mt-1">
 							<div class="card-body">
+								<h6 class="card-title fw-bolder">Theme</h6>
+								<label class="ms-2">
+									<input type="radio" class="me-2" name="theme" value="light">
+									Light
+								</label>
+								<label class="ms-2">
+									<input type="radio" class="me-2" name="theme" value="dark">
+									Dark
+								</label>
+								<label class="ms-2">
+									<input type="radio" class="me-2" name="theme" value="auto" checked>
+									Auto
+								</label>
+							</div>
+						</div>
+
+						<div class="card mt-1">
+							<div class="card-body">
 								<h6 class="card-title fw-bolder">HTTP requests timeout, ms</h6>
 								<div class="input-group input-group-sm was-validated">
 									<input type="number" id="ajax-timeout" class="form-control" min="0" step="any" />
 									<div class="input-group-sm">
 										<button id="ajax-timeout-restore" class="btn btn-secondary">Restore default</button>
 									</div>
+								</div>
+							</div>
+						</div>
+
+						<div class="card mt-1">
+							<div class="card-body">
+								<h6 class="card-title fw-bolder">History rows per load</h6>
+								<div class="input-group input-group-sm was-validated">
+									<input type="number" id="settings-history-count" class="form-control" min="1" step="1" placeholder="1000">
+									<button id="settings-history-count-restore" class="btn btn-secondary">Restore default</button>
 								</div>
 							</div>
 						</div>
@@ -136,7 +165,7 @@
 
 <div class="notification-area">
 	<noscript>
-    	<div class="alert alert-error"><strong>Please enable JavaScript</strong></div>
+    	<div class="alert alert-danger"><strong>Please enable JavaScript</strong></div>
     </noscript>
 </div>
 
@@ -147,7 +176,8 @@
 	</div>
 	<script>document.getElementById("loading").classList.remove("d-none");</script>
 	<div class="row position-absolute w-100 h-100 align-items-center text-center">
-		<img class="img-fluid w-auto mh-100 mx-auto" src="./img/rspamd_logo_navbar.png" alt="Rspamd" />
+		<img class="img-fluid w-auto mh-100 mx-auto logo-light" src="./img/rspamd_logo_navbar.png" alt="Rspamd" />
+		<img class="img-fluid w-auto mh-100 mx-auto logo-dark" src="./img/rspamd_logo_navbar_dark.png" alt="Rspamd" />
 	</div>
 </div>
 
@@ -158,12 +188,12 @@
 		<div class="tab-content">
 			<div class="tab-pane" id="status">
 				<div class="row">
-					<div id="statWidgets" class="col-lg-12 stat-boxes fw-bold text-secondary" style="display: none;">
+					<div id="statWidgets" class="col-lg-12 stat-boxes fw-bold text-secondary d-none">
 					</div>
 				</div>
 				<div class="row">
 					<div class="col-lg-6">
-						<div class="card bg-light shadow my-3">
+						<div class="card shadow my-3">
 							<div class="card-header text-secondary py-2 d-flex align-items-center">
 								<span class="icon me-3"><i class="fas fa-server"></i></span>
 								<span class="h6 fw-bolder my-auto">Servers</span>
@@ -187,7 +217,7 @@
 									</table>
 								</div>
 						</div>
-						<div class="card bg-light shadow my-3">
+						<div class="card shadow my-3">
 							<div class="card-header text-secondary py-2 d-flex align-items-center">
 								<span class="icon me-3"><i class="fas fa-dice"></i></span>
 								<span class="h6 fw-bolder my-auto">Bayesian statistics</span>
@@ -197,6 +227,8 @@
 										<thead class="text-secondary">
 											<tr>
 												<th>Server name</th>
+												<th>Classifier name</th>
+												<th>Class</th>
 												<th>Symbol</th>
 												<th>Type</th>
 												<th>Learns</th>
@@ -208,7 +240,7 @@
 									</table>
 								</div>
 						</div>
-						<div class="card bg-light shadow my-3">
+						<div class="card shadow my-3">
 							<div class="card-header text-secondary py-2 d-flex align-items-center">
 								<span class="icon me-3"><i class="fas fa-hashtag"></i></span>
 								<span class="h6 fw-bolder my-auto">Fuzzy hashes</span>
@@ -229,14 +261,14 @@
 						</div>
 					</div>
 					<div class="col-lg-6">
-						<div class="card bg-light shadow my-3">
+						<div class="card shadow my-3">
 							<div class="card-header text-secondary py-2 d-flex align-items-center">
 								<span class="icon me-3"><i class="fas fa-chart-pie"></i></span>
 								<span class="h6 fw-bolder my-auto">Statistics</span>
 							</div>
 							<div class="card-body">
 								<div class="row">
-									<div class="bg-white w-auto mx-auto" id="chart"></div>
+									<div class="w-auto mx-auto" id="chart"></div>
 								</div>
 							</div>
 						</div>
@@ -245,20 +277,20 @@
 			</div>
 
 			<div class="tab-pane" id="throughput">
-				<div class="card bg-light shadow my-3">
+				<div class="card shadow my-3">
 					<div class="card-header text-secondary py-2 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-chart-area"></i></span>
 						<span class="h6 fw-bolder my-auto">Throughput</span>
 					</div>
 					<div class="card-body text-center">
-						<div class="d-inline-block bg-white">
+						<div class="d-inline-block">
 							<div class="row">
 								<div id="graph" class="mx-auto"></div>
 							</div>
 							<div id="summary-row" class="row">
 								<div class="col-fixed" id="rrd-pie"></div>
 								<div class="col-fluid">
-									<table id="rrd-table" class="table table-light table-striped table-hover"></table>
+									<table id="rrd-table" class="table table-striped table-hover"></table>
 									<div id="rrd-table_toggle"></div>
 									<div id="rrd-total">Total messages: <span id="rrd-total-value"></span></div>
 								</div>
@@ -308,7 +340,7 @@
 			</div>
 
 			<div class="tab-pane" id="configuration">
-				<div class="card bg-light shadow my-3">
+				<div class="card shadow my-3">
 					<div class="card-header text-secondary py-2 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-tasks"></i></span>
 						<span class="h6 fw-bolder my-auto">Actions</span>
@@ -325,7 +357,7 @@
 						</div>
 					</div>
 				</div>
-				<div class="card bg-light shadow my-3">
+				<div class="card shadow my-3">
 					<div class="card-header text-secondary py-2 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-list"></i></span>
 						<span class="h6 fw-bolder my-auto">Maps</span>
@@ -350,7 +382,7 @@
 			</div>
 
 			<div class="tab-pane" id="symbols">
-				<div class="card bg-light shadow my-3">
+				<div class="card shadow my-3">
 					<div class="card-header text-secondary py-1 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-tasks"></i></span>
 						<span class="h6 fw-bolder my-auto ms-0">Symbols and rules</span>
@@ -379,7 +411,7 @@
 			</div>
 
 			<div class="tab-pane" id="scan">
-				<div class="card bg-light shadow my-3">
+				<div class="card shadow my-3">
 					<div class="card-header text-secondary py-1 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-envelope"></i></span>
 						<span class="h6 fw-bolder my-auto">Scan suspected message</span>
@@ -453,7 +485,8 @@
 						</div>
 						<div class="input-group d-inline-flex w-auto my-1">
 							<label for="fuzzy-flag" class="input-group-text">Flag</label>
-							<input id="fuzzy-flag" class="form-control" value="1" min="1" type="number">
+							<select id="fuzzy-flag-picker" class="form-select"></select>
+							<input id="fuzzy-flag" class="form-control flex-grow-0" value="1" min="1" type="number">
 							<button class="btn btn-warning d-flex align-items-center" data-upload="compute-fuzzy"><i class="fas fa-hashtag me-2"></i>Compute fuzzy hashes</button>
 						</div>
 						<div class="float-end my-1">
@@ -461,7 +494,7 @@
 						</div>
 					</div>
 				</div>
-				<div class="card ro-hide" style="display: none;">
+				<div class="card ro-hide d-none">
 					<div class="card-header text-secondary py-1 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-graduation-cap"></i></span>
 						<span class="h6 fw-bolder my-auto">Learn Rspamd</span>
@@ -476,22 +509,26 @@
 					<div class="card-body">
 						<div class="row g-3">
 							<div class="col-lg-auto d-flex">
-								<div class="card bg-light shadow card-body card p-2">
+								<div class="card shadow card-body card p-2">
 									<p>Learn Bayesian classifier:</p>
 									<form>
-										<div class="btn-group">
-											<button class="btn btn-success d-flex align-items-center" type="button" data-upload="learnham" disabled><i class="fas fa-thumbs-up me-2"></i>Upload HAM</button>
-											<button class="btn btn-danger d-flex align-items-center" type="button" data-upload="learnspam" disabled><i class="fas fa-thumbs-down me-2"></i>Upload SPAM</button>
+										<div class="d-flex flex-wrap flex-lg-column align-items-start align-items-lg-stretch gap-2">
+											<select id="classifier" class="form-select w-auto"></select>
+											<div class="btn-group">
+												<button class="btn btn-success d-flex align-items-center" type="button" data-upload="learnham" disabled><i class="fas fa-thumbs-up me-2"></i>Upload HAM</button>
+												<button class="btn btn-danger d-flex align-items-center" type="button" data-upload="learnspam" disabled><i class="fas fa-thumbs-down me-2"></i>Upload SPAM</button>
+											</div>
 										</div>
 									</form>
 								</div>
 							</div>
 							<div class="col-lg d-flex">
-								<div class="card bg-light shadow card-body p-2">
+								<div class="card shadow card-body p-2">
 									<p>Fuzzy hash storage management:</p>
 									<div class="row g-2 align-items-center">
 										<div class="col-auto d-flex align-items-center me-1">
 											<label for="fuzzyFlagText" class="me-1">Flag:</label>
+											<select id="fuzzyFlagText-picker" class="form-select"></select>
 											<input id="fuzzyFlagText" class="form-control" type="number" value="1"/>
 										</div>
 										<div class="col-auto d-flex align-items-center me-2">
@@ -525,7 +562,7 @@
 					</div>
 				</div>
 
-				<div id="hash-card" class="card bg-light shadow my-3" style="display: none;">
+				<div id="hash-card" class="card shadow my-3 d-none">
 					<div class="card-header text-secondary py-2 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-hashtag"></i></span>
 						<span class="h6 fw-bolder my-auto">Fuzzy hashes</span>
@@ -545,7 +582,7 @@
 						</div>
 				</div>
 
-				<div class="card bg-light shadow my-3">
+				<div class="card shadow my-3">
 					<div class="card-header text-secondary py-1 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-eye"></i></span>
 						<span class="h6 fw-bolder my-auto ms-0">Scan results history</span>
@@ -576,7 +613,7 @@
 			</div>
 
 			<div class="tab-pane" id="selectors">
-				<div class="card bg-light shadow my-3">
+				<div class="card shadow my-3">
 					<div class="card-header text-secondary py-2 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-envelope"></i></span>
 						<span class="h6 fw-bolder my-auto">Test Rspamd selectors</span>
@@ -588,7 +625,7 @@
 					<div class="card-body p-0">
 						<div class="row h-100 m-0" id="row-main">
 							<div class="col-lg-3 sidebar h-100" id="sidebar-left">
-								<div class="p-0 table-responsive mh-100 bg-white">
+								<div class="p-0 table-responsive mh-100">
 									<table class="table table-sm small table-striped table-hover table-bordered mb-0" id="selectorsTable-extractors">
 										<thead><tr><th>Name</th><th>Description</th></tr></thead>
 										<tbody/>
@@ -662,13 +699,13 @@
 
 			<div class="tab-pane" id="history">
 
-				<div class="card bg-light shadow my-3">
+				<div class="card shadow my-3">
 					<div class="card-header text-secondary py-1 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-eye"></i></span>
 						<span class="h6 fw-bolder my-auto ms-0">History</span>
 						<a href="https://rspamd.com/doc/modules/history_redis.html" target="_blank" rel="noopener noreferrer"
 							title="If you'd like to use the modern version of History, please enable History redis module."
-							 id="legacy-history-badge" class="my-2 ms-2 badge text-bg-info" style="display: none;">Legacy version</a>
+							 id="legacy-history-badge" class="my-2 ms-2 badge text-bg-info d-none">Legacy version</a>
 						<div class="d-flex input-group-sm align-items-center text-nowrap ms-auto me-1">
 							<label for="selSymOrder_history">Symbols order:</label>
 							<select id="selSymOrder_history" class="form-select ms-1">
@@ -676,9 +713,13 @@
 								<option value="score">Score value</option>
 								<option value="name">Name</option>
 							</select>
-							<label for="history_page_size" class="ms-2">Rows per page:</label>
+							<label for="history-from" class="ms-3" title="Start from this row number">Offset:</label>
+							<input type="number" id="history-from" class="form-control ms-1" value="0" min="0" step="1" title="Start from this row number">
+							<label for="history-count" class="ms-2" title="Number of rows to load">Count:</label>
+							<input type="number" id="history-count" class="form-control ms-1" value="1000" min="1" step="1" title="Number of rows to load">
+							<label for="history_page_size" class="ms-2">Rows/page:</label>
 							<input id="history_page_size" class="form-control ms-1" value="25" min="1" type="number">
-							<button class="btn btn-outline-secondary btn-sm ms-2 d-flex align-items-center dropdown-toggle ft-columns-btn" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" disabled>
+							<button class="btn btn-outline-secondary btn-sm ms-3 d-flex align-items-center dropdown-toggle ft-columns-btn" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" disabled>
 								<i class="fas fa-columns me-1"></i>Columns
 							</button>
 							<div class="dropdown-menu ft-columns-dropdown p-2"></div>
@@ -697,7 +738,7 @@
 						</div>
 					</div>
 				</div>
-				<div class="card bg-light shadow my-3 ro-hide" id="errors-history">
+				<div class="card shadow my-3 ro-hide" id="errors-history">
 					<div class="card-header text-secondary py-1 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-exclamation-triangle"></i></span>
 						<span class="h6 fw-bolder my-auto ms-0">Errors</span>
@@ -755,7 +796,7 @@
 					    Browser detects passwords by form.elements[n].type == "password" and then detects
 						the username field by searching backwards through form elements for the text field
 						immediately before the password fields. -->
-					<input value="Rspamd controller password" style="display: none;"/>
+					<input value="Rspamd controller password" class="d-none"/>
 					<div class="input-group">
 						<input class="form-control"
 							   type="password"
@@ -765,6 +806,62 @@
 						<button type="submit" id="connectButton" class="btn btn-primary">Connect</button>
 					</div>
 				</form>
+			</div>
+		</div>
+	</div>
+</div>
+
+<!-- Error Log Badge -->
+<div id="error-log-badge" class="position-fixed bottom-0 end-0 m-3 d-none" style="z-index: 1050;">
+	<button class="btn btn-sm btn-danger bg-light bg-opacity-75 text-danger shadow position-relative"
+			data-bs-toggle="modal"
+			data-bs-target="#errorLogModal"
+			title="View backend API interaction errors"
+			aria-label="View backend API interaction errors">
+		<i class="fas fa-exclamation-triangle"></i>
+		<span id="error-count" class="badge text-bg-warning bg-opacity-100 position-absolute top-0 start-100 translate-middle d-none">0</span>
+	</button>
+</div>
+
+<!-- Backend API Interaction Errors Modal -->
+<div class="modal fade" id="errorLogModal" tabindex="-1" aria-labelledby="errorLogModalLabel" aria-hidden="true">
+	<div class="modal-dialog modal-xl modal-dialog-scrollable">
+		<div class="modal-content">
+			<div class="modal-header text-secondary py-2 d-flex align-items-center">
+				<span class="icon me-3"><i class="fas fa-exclamation-triangle"></i></span>
+				<span class="h6 fw-bolder my-auto" id="errorLogModalLabel">Backend API interaction errors</span>
+				<button type="button" class="btn-close ms-auto" data-bs-dismiss="modal" aria-label="Close"></button>
+			</div>
+			<div class="modal-body">
+				<div class="table-responsive">
+					<table class="table table-sm table-hover table-striped" id="errorLogTable">
+						<thead>
+							<tr>
+								<th class="text-nowrap">Time</th>
+								<th>Error</th>
+								<th class="d-none d-sm-table-cell">Server</th>
+								<th class="d-none d-md-table-cell">Endpoint</th>
+								<th class="d-none d-lg-table-cell text-center">HTTP status</th>
+								<th class="d-none d-lg-table-cell">Type</th>
+							</tr>
+						</thead>
+						<tbody>
+							<!-- Populated dynamically -->
+						</tbody>
+					</table>
+				</div>
+				<p class="text-muted text-center" id="noErrorsMessage" style="display: none;">
+					No errors recorded in this session
+				</p>
+			</div>
+			<div class="modal-footer py-1">
+				<button type="button" class="btn btn-secondary" id="copyErrorLog" title="Copy selection or entire log" disabled>
+					<i class="fas fa-copy"></i> Copy to clipboard
+				</button>
+				<button type="button" class="btn btn-secondary" id="clearErrorLog" disabled>
+					<i class="fas fa-trash-can"></i> Clear log
+				</button>
+				<button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
 			</div>
 		</div>
 	</div>

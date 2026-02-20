@@ -14,12 +14,17 @@
  * limitations under the License.
  */
 #include "lua_common.h"
+#include "lua_thread_pool.h"
 #include "unix-std.h"
 #include "lua_compress.h"
 #include "libmime/email_addr.h"
 #include "libmime/content_type.h"
 #include "libmime/mime_headers.h"
 #include "libutil/hash.h"
+#include "libutil/str_util.h"
+#include "libserver/html/html.h"
+#include "libserver/hyperscan_tools.h"
+#include "libserver/async_session.h"
 
 #include "lua_parsers.h"
 
@@ -27,9 +32,25 @@
 #include "replxx.h"
 #include <math.h>
 #include <glob.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+#include <sys/sysctl.h>
+#ifdef __FreeBSD__
+#include <sys/user.h>
+#endif
+#ifdef __NetBSD__
+#include <sys/param.h>
+#endif
+#endif
+#ifdef __APPLE__
+#include <mach/mach.h>
+#endif
 
 #include "unicode/uspoof.h"
 #include "unicode/uscript.h"
+#include "unicode/uchar.h"
+#include <unicode/ucnv.h>
 #include "rspamd_simdutf.h"
 
 /***
@@ -82,12 +103,28 @@ LUA_FUNCTION_DEF(util, encode_qp);
 LUA_FUNCTION_DEF(util, decode_qp);
 
 /***
+ * @function util.decode_html_entities(input)
+ * Decodes HTML entities in text (numeric &#XX; &#xXX; and named &amp; etc)
+ * @param {text or string} input input data
+ * @return {rspamd_text} decoded data chunk
+ */
+LUA_FUNCTION_DEF(util, decode_html_entities);
+
+/***
  * @function util.decode_base64(input)
  * Decodes data from base64 ignoring whitespace characters
  * @param {text or string} input data to decode; if `rspamd{text}` is used then the string is modified **in-place**
  * @return {rspamd_text} decoded data chunk
  */
 LUA_FUNCTION_DEF(util, decode_base64);
+
+/***
+ * @function util.decode_ascii85(input)
+ * Decodes data from ASCII85 (Base85) encoding used in PDF files
+ * @param {text or string} input data to decode
+ * @return {rspamd_text} decoded data chunk or nil on error
+ */
+LUA_FUNCTION_DEF(util, decode_ascii85);
 
 /***
  * @function util.encode_base32(input, [b32type = 'default'])
@@ -180,7 +217,9 @@ LUA_FUNCTION_DEF(util, humanize_number);
 
 /***
  * @function util.get_tld(host)
- * Returns effective second level domain part (eSLD) for the specified host
+ * Returns effective second level domain (eSLD) for the specified host.
+ * This function uses the Public Suffix List (PSL) to determine boundaries
+ * and compute the eSLD, not the top-level domain.
  *
  * @param {string} host hostname
  * @return {string} eSLD part of the hostname or the full hostname if eSLD was not found
@@ -258,6 +297,15 @@ LUA_FUNCTION_DEF(util, normalize_utf8);
  * @return {text} transliterated string
  */
 LUA_FUNCTION_DEF(util, transliterate);
+
+/***
+ * @function util.to_utf8(str, charset)
+ * Converts a string from a specific charset to UTF-8
+ * @param {string/text} str input string
+ * @param {string} charset input charset (e.g. "utf-16le", "utf-16be")
+ * @return {text} utf8 string or nil on error
+ */
+LUA_FUNCTION_DEF(util, to_utf8);
 
 /***
  * @function util.strequal_caseless(str1, str2)
@@ -374,6 +422,25 @@ LUA_FUNCTION_DEF(util, create_file);
 LUA_FUNCTION_DEF(util, close_file);
 
 /***
+ * @function util.hyperscan_notice_known(fname)
+ * Notifies the hyperscan cache system that a file is known and should not be
+ * deleted during cleanup. This should be called when loading cached hyperscan
+ * databases from files.
+ *
+ * @param {string} fname path to the hyperscan cache file
+ */
+LUA_FUNCTION_DEF(util, hyperscan_notice_known);
+
+/***
+ * @function util.hyperscan_get_platform_id()
+ * Returns the platform identifier string for hyperscan cache keys.
+ * This includes the hyperscan version, platform tune, and CPU features.
+ *
+ * @return {string} platform identifier (e.g., "hs54_haswell_avx2_abc123")
+ */
+LUA_FUNCTION_DEF(util, hyperscan_get_platform_id);
+
+/***
  * @function util.random_hex(size)
  * Returns random hex string of the specified size
  *
@@ -483,6 +550,34 @@ LUA_FUNCTION_DEF(util, is_valid_utf8);
  * @return {boolean} true if a has obscured unicode characters (+ character and offset if found)
  */
 LUA_FUNCTION_DEF(util, has_obscured_unicode);
+
+/***
+ * @function util.get_text_quality(str)
+ * Analyzes text quality for UTF-8 strings, useful for filtering garbage text extracted from PDFs
+ * and other text quality analysis tasks. Uses ICU for proper Unicode character classification
+ * (supports all scripts).
+ * @param {string|rspamd_text} str input text to analyze
+ * @return {table} table with comprehensive text quality metrics:
+ *   - letters: count of Unicode letters (any script)
+ *   - digits: count of Unicode digits
+ *   - punctuation: count of punctuation characters
+ *   - spaces: count of whitespace characters
+ *   - printable: count of all printable characters
+ *   - words: count of word-like sequences (2+ consecutive letters)
+ *   - word_chars: total characters in words
+ *   - total: total character count
+ *   - emojis: count of emoji characters
+ *   - uppercase: count of uppercase letters
+ *   - lowercase: count of lowercase letters
+ *   - ascii_chars: count of ASCII characters (0-127)
+ *   - non_ascii_chars: count of non-ASCII characters
+ *   - latin_vowels: count of Latin vowels (a,e,i,o,u)
+ *   - latin_consonants: count of Latin consonants
+ *   - script_transitions: count of script changes (e.g., Latin to Cyrillic)
+ *   - double_spaces: count of consecutive space sequences
+ *   - non_printable: count of non-printable/invalid characters
+ */
+LUA_FUNCTION_DEF(util, get_text_quality);
 
 /***
  * @function util.readline([prompt])
@@ -627,6 +722,27 @@ LUA_FUNCTION_DEF(util, caseless_hash_fast);
 LUA_FUNCTION_DEF(util, get_hostname);
 
 /***
+ *  @function util.get_uptime()
+ * Returns system uptime in seconds
+ * @return {number} uptime in seconds
+ */
+LUA_FUNCTION_DEF(util, get_uptime);
+
+/***
+ *  @function util.get_pid()
+ * Returns current process PID
+ * @return {number} process ID
+ */
+LUA_FUNCTION_DEF(util, get_pid);
+
+/***
+ *  @function util.get_memory_usage()
+ * Returns memory usage information for current process
+ * @return {table} memory usage info with 'rss' and 'vsize' fields in bytes
+ */
+LUA_FUNCTION_DEF(util, get_memory_usage);
+
+/***
  *  @function util.parse_content_type(ct_string, mempool)
  * Parses content-type string to a table:
  * - `type`
@@ -676,7 +792,9 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF(util, encode_base64),
 	LUA_INTERFACE_DEF(util, encode_qp),
 	LUA_INTERFACE_DEF(util, decode_qp),
+	LUA_INTERFACE_DEF(util, decode_html_entities),
 	LUA_INTERFACE_DEF(util, decode_base64),
+	LUA_INTERFACE_DEF(util, decode_ascii85),
 	LUA_INTERFACE_DEF(util, encode_base32),
 	LUA_INTERFACE_DEF(util, decode_base32),
 	LUA_INTERFACE_DEF(util, decode_url),
@@ -695,6 +813,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF(util, lower_utf8),
 	LUA_INTERFACE_DEF(util, normalize_utf8),
 	LUA_INTERFACE_DEF(util, transliterate),
+	LUA_INTERFACE_DEF(util, to_utf8),
 	LUA_INTERFACE_DEF(util, strequal_caseless),
 	LUA_INTERFACE_DEF(util, strequal_caseless_utf8),
 	LUA_INTERFACE_DEF(util, get_ticks),
@@ -706,6 +825,8 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF(util, unlock_file),
 	LUA_INTERFACE_DEF(util, create_file),
 	LUA_INTERFACE_DEF(util, close_file),
+	LUA_INTERFACE_DEF(util, hyperscan_notice_known),
+	LUA_INTERFACE_DEF(util, hyperscan_get_platform_id),
 	LUA_INTERFACE_DEF(util, random_hex),
 	LUA_INTERFACE_DEF(util, zstd_compress),
 	LUA_INTERFACE_DEF(util, zstd_decompress),
@@ -721,6 +842,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF(util, get_string_stats),
 	LUA_INTERFACE_DEF(util, is_valid_utf8),
 	LUA_INTERFACE_DEF(util, has_obscured_unicode),
+	LUA_INTERFACE_DEF(util, get_text_quality),
 	LUA_INTERFACE_DEF(util, readline),
 	LUA_INTERFACE_DEF(util, readpassphrase),
 	LUA_INTERFACE_DEF(util, file_exists),
@@ -728,6 +850,9 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF(util, umask),
 	LUA_INTERFACE_DEF(util, isatty),
 	LUA_INTERFACE_DEF(util, get_hostname),
+	LUA_INTERFACE_DEF(util, get_uptime),
+	LUA_INTERFACE_DEF(util, get_pid),
+	LUA_INTERFACE_DEF(util, get_memory_usage),
 	LUA_INTERFACE_DEF(util, parse_content_type),
 	LUA_INTERFACE_DEF(util, mime_header_encode),
 	LUA_INTERFACE_DEF(util, pack),
@@ -757,6 +882,7 @@ LUA_FUNCTION_DEF(ev_base, update_time);
 LUA_FUNCTION_DEF(ev_base, timestamp);
 LUA_FUNCTION_DEF(ev_base, pending_events);
 LUA_FUNCTION_DEF(ev_base, add_timer);
+LUA_FUNCTION_DEF(ev_base, sleep);
 
 static const struct luaL_reg ev_baselib_m[] = {
 	LUA_INTERFACE_DEF(ev_base, loop),
@@ -764,6 +890,7 @@ static const struct luaL_reg ev_baselib_m[] = {
 	LUA_INTERFACE_DEF(ev_base, timestamp),
 	LUA_INTERFACE_DEF(ev_base, pending_events),
 	LUA_INTERFACE_DEF(ev_base, add_timer),
+	LUA_INTERFACE_DEF(ev_base, sleep),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
@@ -1158,6 +1285,44 @@ lua_util_decode_qp(lua_State *L)
 }
 
 static int
+lua_util_decode_html_entities(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t, *out;
+	const char *s = NULL;
+	gsize inlen = 0;
+	unsigned int outlen;
+
+	if (lua_type(L, 1) == LUA_TSTRING) {
+		s = luaL_checklstring(L, 1, &inlen);
+	}
+	else if (lua_type(L, 1) == LUA_TUSERDATA) {
+		t = lua_check_text(L, 1);
+
+		if (t != NULL) {
+			s = t->start;
+			inlen = t->len;
+		}
+	}
+
+	if (s == NULL || inlen == 0) {
+		lua_pushnil(L);
+	}
+	else {
+		out = lua_newuserdata(L, sizeof(*out));
+		rspamd_lua_setclass(L, rspamd_text_classname, -1);
+		out->start = g_malloc(inlen + 1);
+		out->flags = RSPAMD_TEXT_FLAG_OWN;
+		memcpy((char *) out->start, s, inlen);
+		((char *) out->start)[inlen] = '\0';
+		outlen = rspamd_html_decode_entitles_inplace((char *) out->start, inlen);
+		out->len = outlen;
+	}
+
+	return 1;
+}
+
+static int
 lua_util_decode_base64(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1187,6 +1352,53 @@ lua_util_decode_base64(lua_State *L)
 									   &outlen);
 		t->len = outlen;
 		t->flags = RSPAMD_TEXT_FLAG_OWN;
+	}
+	else {
+		lua_pushnil(L);
+	}
+
+	return 1;
+}
+
+static int
+lua_util_decode_ascii85(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t;
+	const char *s = NULL;
+	gsize inlen = 0;
+	gssize outlen;
+
+	if (lua_type(L, 1) == LUA_TSTRING) {
+		s = luaL_checklstring(L, 1, &inlen);
+	}
+	else if (lua_type(L, 1) == LUA_TUSERDATA) {
+		t = lua_check_text(L, 1);
+
+		if (t != NULL) {
+			s = t->start;
+			inlen = t->len;
+		}
+	}
+
+	if (s != NULL && inlen > 0) {
+		/* ASCII85 expands 5 chars to 4 bytes, so output is at most (inlen * 4 / 5) + 4 */
+		gsize max_outlen = (inlen * 4 / 5) + 4;
+		unsigned char *buf = g_malloc(max_outlen);
+
+		outlen = rspamd_decode_ascii85_buf(s, inlen, buf, max_outlen);
+
+		if (outlen >= 0) {
+			t = lua_newuserdata(L, sizeof(*t));
+			rspamd_lua_setclass(L, rspamd_text_classname, -1);
+			t->start = (const char *) buf;
+			t->len = outlen;
+			t->flags = RSPAMD_TEXT_FLAG_OWN;
+		}
+		else {
+			g_free(buf);
+			lua_pushnil(L);
+		}
 	}
 	else {
 		lua_pushnil(L);
@@ -1670,6 +1882,65 @@ lua_util_transliterate(lua_State *L)
 }
 
 static int
+lua_util_to_utf8(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t;
+	const char *charset;
+	char *dest;
+	int32_t dest_len, dest_cap;
+	UErrorCode err = U_ZERO_ERROR;
+
+	t = lua_check_text_or_string(L, 1);
+	charset = luaL_checkstring(L, 2);
+
+	if (!t || !charset) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	if (t->len > (G_MAXINT32 / 2 - 16)) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	dest_cap = t->len + (t->len / 2) + 16;
+	dest = g_malloc(dest_cap);
+
+	dest_len = ucnv_convert("UTF-8", charset, dest, dest_cap, t->start, t->len, &err);
+
+	if (dest_len < 0) {
+		g_free(dest);
+		lua_pushnil(L);
+		return 1;
+	}
+
+	if (err == U_BUFFER_OVERFLOW_ERROR) {
+		g_free(dest);
+		err = U_ZERO_ERROR;
+		dest_cap = dest_len + 1;
+		dest = g_malloc(dest_cap);
+		dest_len = ucnv_convert("UTF-8", charset, dest, dest_cap, t->start, t->len, &err);
+
+		if (dest_len < 0) {
+			g_free(dest);
+			lua_pushnil(L);
+			return 1;
+		}
+	}
+
+	if (U_FAILURE(err)) {
+		g_free(dest);
+		lua_pushnil(L);
+		return 1;
+	}
+
+	struct rspamd_lua_text *out = lua_new_text(L, dest, dest_len, FALSE);
+	out->flags |= RSPAMD_TEXT_FLAG_OWN;
+
+	return 1;
+}
+
+static int
 lua_util_strequal_caseless(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -2000,6 +2271,37 @@ lua_util_close_file(lua_State *L)
 	else {
 		return luaL_error(L, "invalid arguments");
 	}
+
+	return 1;
+}
+
+static int
+lua_util_hyperscan_notice_known(lua_State *L)
+{
+	LUA_TRACE_POINT;
+#ifdef WITH_HYPERSCAN
+	const char *fname = luaL_checkstring(L, 1);
+
+	if (fname) {
+		rspamd_hyperscan_notice_known(fname);
+	}
+#else
+	(void) L;
+#endif
+
+	return 0;
+}
+
+static int
+lua_util_hyperscan_get_platform_id(lua_State *L)
+{
+	LUA_TRACE_POINT;
+#ifdef WITH_HYPERSCAN
+	const char *platform_id = rspamd_hyperscan_get_platform_id();
+	lua_pushstring(L, platform_id);
+#else
+	lua_pushstring(L, "no_hyperscan");
+#endif
 
 	return 1;
 }
@@ -2414,6 +2716,135 @@ lua_util_get_hostname(lua_State *L)
 }
 
 static int
+lua_util_get_uptime(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	double uptime = 0.0;
+
+#ifdef __linux__
+	FILE *f = fopen("/proc/uptime", "r");
+	if (f) {
+		if (fscanf(f, "%lf", &uptime) != 1) {
+			uptime = 0.0;
+		}
+		fclose(f);
+	}
+#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+	struct timeval boottime;
+	size_t len = sizeof(boottime);
+	int mib[2] = {CTL_KERN, KERN_BOOTTIME};
+
+	if (sysctl(mib, 2, &boottime, &len, NULL, 0) == 0) {
+		struct timeval now;
+		gettimeofday(&now, NULL);
+		uptime = (now.tv_sec - boottime.tv_sec) +
+				 (now.tv_usec - boottime.tv_usec) / 1000000.0;
+	}
+#endif
+
+	lua_pushnumber(L, uptime);
+	return 1;
+}
+
+static int
+lua_util_get_pid(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	lua_pushinteger(L, getpid());
+	return 1;
+}
+
+static int
+lua_util_get_memory_usage(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	lua_createtable(L, 0, 2);
+
+#ifdef __linux__
+	FILE *f = fopen("/proc/self/status", "r");
+	if (f) {
+		char line[256];
+		long rss = 0, vsize = 0;
+
+		while (fgets(line, sizeof(line), f)) {
+			if (sscanf(line, "VmRSS: %ld kB", &rss) == 1) {
+				rss *= 1024; /* Convert to bytes */
+			}
+			else if (sscanf(line, "VmSize: %ld kB", &vsize) == 1) {
+				vsize *= 1024; /* Convert to bytes */
+			}
+		}
+		fclose(f);
+
+		lua_pushstring(L, "rss");
+		lua_pushinteger(L, rss);
+		lua_settable(L, -3);
+
+		lua_pushstring(L, "vsize");
+		lua_pushinteger(L, vsize);
+		lua_settable(L, -3);
+	}
+#elif defined(__APPLE__)
+	struct task_basic_info info;
+	mach_msg_type_number_t count = TASK_BASIC_INFO_COUNT;
+
+	if (task_info(mach_task_self(), TASK_BASIC_INFO, (task_info_t) &info, &count) == KERN_SUCCESS) {
+		lua_pushstring(L, "rss");
+		lua_pushinteger(L, info.resident_size);
+		lua_settable(L, -3);
+
+		lua_pushstring(L, "vsize");
+		lua_pushinteger(L, info.virtual_size);
+		lua_settable(L, -3);
+	}
+#elif defined(__NetBSD__)
+	struct kinfo_proc2 kp;
+	size_t len = sizeof(kp);
+	int mib[6] = {CTL_KERN, KERN_PROC2, KERN_PROC_PID, getpid(), sizeof(struct kinfo_proc2), 1};
+
+	if (sysctl(mib, 6, &kp, &len, NULL, 0) == 0) {
+		lua_pushstring(L, "rss");
+		lua_pushinteger(L, kp.p_vm_rssize * getpagesize());
+		lua_settable(L, -3);
+
+		lua_pushstring(L, "vsize");
+		lua_pushinteger(L, kp.p_vm_vsize * getpagesize());
+		lua_settable(L, -3);
+	}
+#elif defined(__FreeBSD__)
+	struct kinfo_proc kp;
+	size_t len = sizeof(kp);
+	int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()};
+
+	if (sysctl(mib, 4, &kp, &len, NULL, 0) == 0) {
+		lua_pushstring(L, "rss");
+		lua_pushinteger(L, kp.ki_rssize * getpagesize());
+		lua_settable(L, -3);
+
+		lua_pushstring(L, "vsize");
+		lua_pushinteger(L, kp.ki_size);
+		lua_settable(L, -3);
+	}
+#elif defined(__OpenBSD__)
+	struct kinfo_proc kp;
+	size_t len = sizeof(kp);
+	int mib[6] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid(), sizeof(struct kinfo_proc), 1};
+
+	if (sysctl(mib, 6, &kp, &len, NULL, 0) == 0) {
+		lua_pushstring(L, "rss");
+		lua_pushinteger(L, kp.p_vm_rssize * getpagesize());
+		lua_settable(L, -3);
+
+		lua_pushstring(L, "vsize");
+		lua_pushinteger(L, (kp.p_vm_tsize + kp.p_vm_dsize + kp.p_vm_ssize) * getpagesize());
+		lua_settable(L, -3);
+	}
+#endif
+
+	return 1;
+}
+
+static int
 lua_util_parse_content_type(lua_State *L)
 {
 	return lua_parsers_parse_content_type(L);
@@ -2494,6 +2925,345 @@ lua_util_has_obscured_unicode(lua_State *L)
 	}
 
 	lua_pushboolean(L, false);
+
+	return 1;
+}
+
+/* Helper to check if a character is a Latin vowel */
+static inline gboolean
+is_latin_vowel(UChar32 uc)
+{
+	/* Lowercase and uppercase Latin vowels */
+	return uc == 'a' || uc == 'e' || uc == 'i' || uc == 'o' || uc == 'u' ||
+		   uc == 'A' || uc == 'E' || uc == 'I' || uc == 'O' || uc == 'U';
+}
+
+static int
+lua_util_get_text_quality(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	int32_t i = 0;
+	UChar32 uc, prev_uc = 0;
+	UScriptCode prev_script = USCRIPT_INVALID_CODE;
+	UErrorCode uc_err = U_ZERO_ERROR;
+
+	/* Basic counts */
+	int letters = 0;
+	int spaces = 0;
+	int printable = 0;
+	int total = 0;
+	int words = 0;
+	int word_chars = 0;
+	int current_word_len = 0;
+	gboolean in_word = FALSE;
+
+	/* Extended metrics */
+	int digits = 0;
+	int punctuation = 0;
+	int emojis = 0;
+	int uppercase = 0;
+	int lowercase = 0;
+	int ascii_chars = 0;
+	int non_ascii_chars = 0;
+	int latin_vowels = 0;
+	int latin_consonants = 0;
+	int script_transitions = 0;
+	int double_spaces = 0;
+	int non_printable = 0;
+	gboolean prev_was_space = FALSE;
+
+	struct rspamd_lua_text *t = lua_check_text_or_string(L, 1);
+
+	if (t == NULL || t->len == 0) {
+		lua_createtable(L, 0, 18);
+		lua_pushstring(L, "letters");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "digits");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "punctuation");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "spaces");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "printable");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "words");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "word_chars");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "total");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "emojis");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "uppercase");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "lowercase");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "ascii_chars");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "non_ascii_chars");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "latin_vowels");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "latin_consonants");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "script_transitions");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "double_spaces");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		lua_pushstring(L, "non_printable");
+		lua_pushinteger(L, 0);
+		lua_settable(L, -3);
+		return 1;
+	}
+
+	while (i < t->len) {
+		U8_NEXT(t->start, i, t->len, uc);
+		total++;
+
+		if (uc < 0) {
+			/* Invalid UTF-8 sequence */
+			non_printable++;
+			in_word = FALSE;
+			if (current_word_len >= 2) {
+				words++;
+				word_chars += current_word_len;
+			}
+			current_word_len = 0;
+			prev_was_space = FALSE;
+			prev_script = USCRIPT_INVALID_CODE;
+			continue;
+		}
+
+		/* ASCII vs non-ASCII */
+		if (uc <= 127) {
+			ascii_chars++;
+		}
+		else {
+			non_ascii_chars++;
+		}
+
+		/* Check if it's a letter (any Unicode script) */
+		if (u_isalpha(uc)) {
+			letters++;
+			printable++;
+			current_word_len++;
+			in_word = TRUE;
+
+			/* Case detection */
+			if (u_isupper(uc)) {
+				uppercase++;
+			}
+			else if (u_islower(uc)) {
+				lowercase++;
+			}
+
+			/* Latin vowel/consonant detection */
+			uc_err = U_ZERO_ERROR;
+			UScriptCode script = uscript_getScript(uc, &uc_err);
+			if (script == USCRIPT_LATIN) {
+				if (is_latin_vowel(uc)) {
+					latin_vowels++;
+				}
+				else {
+					latin_consonants++;
+				}
+			}
+
+			/* Script transition detection (only for letters) */
+			if (prev_script != USCRIPT_INVALID_CODE &&
+				prev_script != USCRIPT_COMMON &&
+				prev_script != USCRIPT_INHERITED &&
+				script != USCRIPT_COMMON &&
+				script != USCRIPT_INHERITED &&
+				script != prev_script) {
+				script_transitions++;
+			}
+			if (script != USCRIPT_COMMON && script != USCRIPT_INHERITED) {
+				prev_script = script;
+			}
+
+			prev_was_space = FALSE;
+		}
+		else if (u_isdigit(uc)) {
+			digits++;
+			printable++;
+			/* Digits break words for our purposes */
+			if (in_word && current_word_len >= 2) {
+				words++;
+				word_chars += current_word_len;
+			}
+			current_word_len = 0;
+			in_word = FALSE;
+			prev_was_space = FALSE;
+		}
+		else if (u_isUWhiteSpace(uc)) {
+			spaces++;
+			printable++;
+
+			/* Double space detection */
+			if (prev_was_space) {
+				double_spaces++;
+			}
+			prev_was_space = TRUE;
+
+			/* End of word */
+			if (in_word && current_word_len >= 2) {
+				words++;
+				word_chars += current_word_len;
+			}
+			current_word_len = 0;
+			in_word = FALSE;
+		}
+		else if (u_ispunct(uc)) {
+			punctuation++;
+			printable++;
+			/* Punctuation breaks words */
+			if (in_word && current_word_len >= 2) {
+				words++;
+				word_chars += current_word_len;
+			}
+			current_word_len = 0;
+			in_word = FALSE;
+			prev_was_space = FALSE;
+		}
+		else if (u_hasBinaryProperty(uc, UCHAR_EMOJI)) {
+			/* Check for emoji (after digits/letters since 0-9 have UCHAR_EMOJI property) */
+			emojis++;
+			printable++;
+			/* Emojis break words */
+			if (in_word && current_word_len >= 2) {
+				words++;
+				word_chars += current_word_len;
+			}
+			current_word_len = 0;
+			in_word = FALSE;
+			prev_was_space = FALSE;
+			prev_script = USCRIPT_INVALID_CODE;
+		}
+		else if (u_isgraph(uc)) {
+			/* Other printable characters (symbols, etc.) */
+			printable++;
+			if (in_word && current_word_len >= 2) {
+				words++;
+				word_chars += current_word_len;
+			}
+			current_word_len = 0;
+			in_word = FALSE;
+			prev_was_space = FALSE;
+		}
+		else {
+			/* Non-printable characters */
+			non_printable++;
+			if (in_word && current_word_len >= 2) {
+				words++;
+				word_chars += current_word_len;
+			}
+			current_word_len = 0;
+			in_word = FALSE;
+			prev_was_space = FALSE;
+		}
+
+		prev_uc = uc;
+	}
+
+	/* Handle trailing word */
+	if (in_word && current_word_len >= 2) {
+		words++;
+		word_chars += current_word_len;
+	}
+
+	(void) prev_uc;
+
+	lua_createtable(L, 0, 18);
+
+	lua_pushstring(L, "letters");
+	lua_pushinteger(L, letters);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "digits");
+	lua_pushinteger(L, digits);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "punctuation");
+	lua_pushinteger(L, punctuation);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "spaces");
+	lua_pushinteger(L, spaces);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "printable");
+	lua_pushinteger(L, printable);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "words");
+	lua_pushinteger(L, words);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "word_chars");
+	lua_pushinteger(L, word_chars);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "total");
+	lua_pushinteger(L, total);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "emojis");
+	lua_pushinteger(L, emojis);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "uppercase");
+	lua_pushinteger(L, uppercase);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "lowercase");
+	lua_pushinteger(L, lowercase);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "ascii_chars");
+	lua_pushinteger(L, ascii_chars);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "non_ascii_chars");
+	lua_pushinteger(L, non_ascii_chars);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "latin_vowels");
+	lua_pushinteger(L, latin_vowels);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "latin_consonants");
+	lua_pushinteger(L, latin_consonants);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "script_transitions");
+	lua_pushinteger(L, script_transitions);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "double_spaces");
+	lua_pushinteger(L, double_spaces);
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "non_printable");
+	lua_pushinteger(L, non_printable);
+	lua_settable(L, -3);
 
 	return 1;
 }
@@ -3699,4 +4469,157 @@ lua_ev_base_add_timer(lua_State *L)
 	ev_timer_start(ev_base, &cbdata->ev);
 
 	return 0;
+}
+
+struct rspamd_ev_base_sleep_cbdata {
+	lua_State *L;
+	int cbref;
+	struct thread_entry *thread;
+	struct rspamd_async_session *session;
+	ev_timer ev;
+};
+
+/* Dummy finalizer for sleep session events - the timer handles cleanup */
+static void
+lua_ev_base_sleep_session_fin(gpointer ud)
+{
+	/* Nothing to do - timer callback handles everything */
+}
+
+static void
+lua_ev_base_sleep_cb(struct ev_loop *loop, struct ev_timer *t, int events)
+{
+	struct rspamd_ev_base_sleep_cbdata *cbdata =
+		(struct rspamd_ev_base_sleep_cbdata *) t->data;
+
+	ev_timer_stop(loop, t);
+
+	/* Remove session event if we registered one */
+	if (cbdata->session) {
+		rspamd_session_remove_event(cbdata->session,
+									lua_ev_base_sleep_session_fin, cbdata);
+	}
+
+	if (cbdata->cbref != -1) {
+		/* Async mode: call the callback */
+		lua_State *L = cbdata->L;
+
+		lua_pushcfunction(L, &rspamd_lua_traceback);
+		int err_idx = lua_gettop(L);
+		lua_rawgeti(L, LUA_REGISTRYINDEX, cbdata->cbref);
+
+		if (lua_pcall(L, 0, 0, err_idx) != 0) {
+			msg_err("call to sleep callback failed: %s", lua_tostring(L, -1));
+		}
+
+		lua_settop(L, err_idx - 1);
+		luaL_unref(L, LUA_REGISTRYINDEX, cbdata->cbref);
+	}
+	else if (cbdata->thread) {
+		/* Sync mode: resume the coroutine */
+		lua_thread_resume(cbdata->thread, 0);
+	}
+
+	g_free(cbdata);
+}
+
+/***
+ * @method ev_base:sleep(time[, callback])
+ * Sleep for the specified time. If callback is provided, it's called asynchronously
+ * after the timeout. If no callback, this yields the current coroutine and resumes
+ * it after the timeout (synchronous mode).
+ * @param {number} time timeout in seconds
+ * @param {function} callback optional callback for async mode
+ */
+/* Helper to get rspamadm_session from Lua globals if available */
+static struct rspamd_async_session *
+lua_get_rspamadm_session(lua_State *L)
+{
+	struct rspamd_async_session *session = NULL;
+
+	lua_getglobal(L, "rspamadm_session");
+
+	if (lua_type(L, -1) == LUA_TUSERDATA) {
+		void *ud = rspamd_lua_check_udata_maybe(L, -1, rspamd_session_classname);
+		if (ud) {
+			session = *((struct rspamd_async_session **) ud);
+		}
+	}
+
+	lua_pop(L, 1);
+	return session;
+}
+
+static int
+lua_ev_base_sleep(lua_State *L)
+{
+	struct ev_loop *ev_base;
+
+	ev_base = lua_check_ev_base(L, 1);
+
+	if (!lua_isnumber(L, 2)) {
+		return luaL_error(L, "invalid arguments: timeout expected");
+	}
+
+	double timeout = lua_tonumber(L, 2);
+
+	struct rspamd_ev_base_sleep_cbdata *cbdata = g_malloc0(sizeof(*cbdata));
+	cbdata->L = L;
+	cbdata->ev.data = cbdata;
+	cbdata->cbref = -1;
+	cbdata->thread = NULL;
+	cbdata->session = NULL;
+
+	/* Try to get rspamadm_session for session event tracking */
+	struct rspamd_async_session *session = lua_get_rspamadm_session(L);
+
+	if (lua_isfunction(L, 3)) {
+		/* Async mode with callback */
+		lua_pushvalue(L, 3);
+		cbdata->cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+		/* Register session event if available so wait_session_events waits for us */
+		if (session) {
+			cbdata->session = session;
+			rspamd_session_add_event(session,
+									 lua_ev_base_sleep_session_fin, cbdata, "lua sleep");
+		}
+
+		ev_timer_init(&cbdata->ev, lua_ev_base_sleep_cb, timeout, 0.0);
+		ev_timer_start(ev_base, &cbdata->ev);
+
+		return 0;
+	}
+	else {
+		/* Sync mode using coroutines - get config from global */
+		lua_getglobal(L, "rspamd_config");
+
+		if (lua_type(L, -1) == LUA_TUSERDATA) {
+			struct rspamd_config *cfg = lua_check_config(L, -1);
+			lua_pop(L, 1);
+
+			if (cfg && cfg->lua_thread_pool) {
+				cbdata->thread = lua_thread_pool_get_running_entry(cfg->lua_thread_pool);
+
+				/* Register session event if available so wait_session_events waits for us */
+				if (session) {
+					cbdata->session = session;
+					rspamd_session_add_event(session,
+											 lua_ev_base_sleep_session_fin, cbdata, "lua sleep");
+				}
+
+				ev_timer_init(&cbdata->ev, lua_ev_base_sleep_cb, timeout, 0.0);
+				ev_timer_start(ev_base, &cbdata->ev);
+
+				return lua_thread_yield(cbdata->thread, 0);
+			}
+		}
+		else {
+			lua_pop(L, 1);
+		}
+
+		/* No thread pool available, cannot do sync sleep */
+		g_free(cbdata);
+		return luaL_error(L, "sync sleep requires lua_thread_pool (use callback for async)");
+	}
 }

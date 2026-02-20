@@ -23,6 +23,58 @@ local lua_util = require "lua_util"
 local lua_redis = require "lua_redis"
 local lua_maps = require "lua_maps"
 local rspamd_cryptobox_hash = require "rspamd_cryptobox_hash"
+local T = require "lua_shape.core"
+local PluginSchema = require "lua_shape.plugin_schema"
+
+local redis_params
+local settings = {
+  domains = nil,
+  max_senders = 100000,
+  max_ttl = 30 * 86400,
+  use_bloom = false,
+  symbol = 'KNOWN_SENDER',
+  symbol_unknown = 'UNKNOWN_SENDER',
+  symbol_check_mail_global = 'INC_MAIL_KNOWN_GLOBALLY',
+  symbol_check_mail_local = 'INC_MAIL_KNOWN_LOCALLY',
+  max_recipients = 15,
+  redis_key = 'rs_known_senders',
+  sender_prefix = 'rsrk',
+  sender_key_global = 'verified_senders',
+  sender_key_size = 20,
+  reply_sender_privacy = false,
+  reply_sender_privacy_alg = 'blake2',
+  reply_sender_privacy_prefix = 'obf',
+  reply_sender_privacy_length = 16,
+}
+
+local settings_schema = lua_redis.enrich_schema({
+  domains = lua_maps.map_schema:optional():doc({ summary = "Map of domains to track senders" }),
+  enabled = T.boolean():optional():doc({ summary = "Enable the plugin" }),
+  max_senders = T.one_of({
+    T.number(),
+    T.transform(T.string(), tonumber)
+  }):optional():doc({ summary = "Maximum number of senders to keep" }),
+  max_ttl = T.one_of({
+    T.number(),
+    T.transform(T.string(), lua_util.parse_time_interval)
+  }):optional():doc({ summary = "Maximum sender lifetime (seconds)" }),
+  use_bloom = T.boolean():optional():doc({ summary = "Use Redis bloom filters" }),
+  redis_key = T.string():optional():doc({ summary = "Redis key for known senders" }),
+  symbol = T.string():optional():doc({ summary = "Symbol for known senders" }),
+  symbol_unknown = T.string():optional():doc({ summary = "Symbol for unknown senders" }),
+  symbol_check_mail_global = T.string():optional():doc({ summary = "Symbol to check global replies" }),
+  symbol_check_mail_local = T.string():optional():doc({ summary = "Symbol to check local replies" }),
+  max_recipients = T.number():optional():doc({ summary = "Maximum recipients to inspect" }),
+  sender_prefix = T.string():optional():doc({ summary = "Redis prefix for sender reply sets" }),
+  sender_key_global = T.string():optional():doc({ summary = "Redis key for global replies" }),
+  sender_key_size = T.number():optional():doc({ summary = "Length of hashed sender keys" }),
+  reply_sender_privacy = T.boolean():optional():doc({ summary = "Enable reply sender privacy mode" }),
+  reply_sender_privacy_alg = T.string():optional():doc({ summary = "Hash algorithm for sender privacy" }),
+  reply_sender_privacy_prefix = T.string():optional():doc({ summary = "Prefix for hashed sender keys" }),
+  reply_sender_privacy_length = T.number():optional():doc({ summary = "Length of hashed sender output" }),
+}):doc({ summary = "Known senders plugin configuration" })
+
+PluginSchema.register("plugins.known_senders", settings_schema)
 
 if confighelp then
   rspamd_config:add_example(nil, 'known_senders',
@@ -43,49 +95,6 @@ known_senders {
   ]])
   return
 end
-
-local redis_params
-local settings = {
-  domains = {},
-  max_senders = 100000,
-  max_ttl = 30 * 86400,
-  use_bloom = false,
-  symbol = 'KNOWN_SENDER',
-  symbol_unknown = 'UNKNOWN_SENDER',
-  symbol_check_mail_global = 'INC_MAIL_KNOWN_GLOBALLY',
-  symbol_check_mail_local = 'INC_MAIL_KNOWN_LOCALLY',
-  max_recipients = 15,
-  redis_key = 'rs_known_senders',
-  sender_prefix = 'rsrk',
-  sender_key_global = 'verified_senders',
-  sender_key_size = 20,
-  reply_sender_privacy = false,
-  reply_sender_privacy_alg = 'blake2',
-  reply_sender_privacy_prefix = 'obf',
-  reply_sender_privacy_length = 16,
-}
-
---[[
-XXX: please fix tableshape one day
-local settings_schema = lua_redis.enrich_schema({
-  domains = lua_maps.map_schema:is_optional(),
-  enabled = ts.boolean:is_optional(),
-  max_senders = (ts.integer + ts.string / tonumber):is_optional(),
-  max_ttl = (ts.integer + ts.string / tonumber):is_optional(),
-  use_bloom = ts.boolean:is_optional(),
-  redis_key = ts.string:is_optional(),
-  symbol = ts.string:is_optional(),
-  symbol_unknown = ts.string:is_optional(),
-  max_recipients = ts.integer:is_optional(),
-  sender_prefix = ts.string:is_optional(),
-  sender_key_global = ts.string:is_optional(),
-  sender_key_size = ts.integer:is_optional(),
-  reply_sender_privacy = ts.boolean:is_optional(),
-  reply_sender_privacy_alg = ts.string:is_optional(),
-  reply_sender_privacy_prefix = ts.string:is_optional(),
-  reply_sender_privacy_length = ts.integer:is_optional(),
-})
-]]--
 
 local function make_key(input)
   local hash = rspamd_cryptobox_hash.create_specific('md5')
@@ -367,6 +376,20 @@ end
 local opts = rspamd_config:get_all_opt('known_senders')
 if opts then
   settings = lua_util.override_defaults(settings, opts)
+  local res, err = settings_schema:transform(settings)
+  if not res then
+    rspamd_logger.errx(rspamd_config, 'invalid %s config: %s', N, err)
+    lua_util.disable_module(N, "config")
+    return
+  end
+  settings = res
+
+  if not settings.domains then
+    rspamd_logger.errx(rspamd_config, '%s requires "domains" map to be defined', N)
+    lua_util.disable_module(N, "config")
+    return
+  end
+
   redis_params = lua_redis.parse_redis_server(N, opts)
 
   if redis_params then

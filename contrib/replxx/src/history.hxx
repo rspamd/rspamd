@@ -2,29 +2,12 @@
 #define REPLXX_HISTORY_HXX_INCLUDED 1
 
 #include <list>
-#include <unordered_map>
+#include <map>
 
 #include "unicodestring.hxx"
 #include "utf8string.hxx"
 #include "conversion.hxx"
 #include "util.hxx"
-
-namespace std {
-template<>
-struct hash<replxx::UnicodeString> {
-	std::size_t operator()( replxx::UnicodeString const& us_ ) const {
-		std::size_t h( 0 );
-		char32_t const* p( us_.get() );
-		char32_t const* e( p + us_.length() );
-		while ( p != e ) {
-			h *= 31;
-			h += *p;
-			++ p;
-		}
-		return ( h );
-	}
-};
-}
 
 namespace replxx {
 
@@ -49,7 +32,8 @@ public:
 		}
 	};
 	typedef std::list<Entry> entries_t;
-	typedef std::unordered_map<UnicodeString, entries_t::const_iterator> locations_t;
+	typedef std::map<UnicodeString, entries_t::const_iterator> locations_t;
+
 private:
 	entries_t _entries;
 	locations_t _locations;

@@ -154,6 +154,11 @@ local function emails_section_convert(cfg, section)
 end
 
 local function group_transform(cfg, k, v)
+  if v:type() ~= 'object' then
+    logger.warnx(rspamd_config, 'invalid group definition for %s: expected object', k)
+    return
+  end
+
   if v:at('name') then
     k = v:at('name'):unwrap()
   end
@@ -168,13 +173,14 @@ local function group_transform(cfg, k, v)
   if v:at('disabled') then
     new_group.disabled = v:at('disabled'):unwrap()
   end
-  if v.max_score then
+  if v:at('max_score') then
     new_group.max_score = v:at('max_score'):unwrap()
   end
 
-  if v:at('symbol') then
-    for sk, sv in v:at('symbol'):pairs() do
-      if sv:at('name') then
+  local symbol_section = v:at('symbol')
+  if symbol_section and symbol_section:type() == 'object' then
+    for sk, sv in symbol_section:pairs() do
+      if sv:type() == 'object' and sv:at('name') then
         sk = sv:at('name'):unwrap()
         sv.name = nil -- Remove field
       end
@@ -187,10 +193,11 @@ local function group_transform(cfg, k, v)
     cfg.group = {}
   end
 
-  if cfg:at('group'):at(k) then
-    cfg:at('group')[k] = lua_util.override_defaults(cfg:at('group')[k]:unwrap(), new_group)
+  local cfg_group = cfg:at('group')
+  if cfg_group:at(k) and cfg_group:at(k):type() == 'object' then
+    cfg_group[k] = lua_util.override_defaults(cfg_group:at(k):unwrap(), new_group)
   else
-    cfg:at('group')[k] = new_group
+    cfg_group[k] = new_group
   end
 
   logger.infox("overriding group %s from the legacy metric settings", k)
@@ -198,31 +205,39 @@ end
 
 local function symbol_transform(cfg, k, v)
   local groups = cfg:at('group')
-  if groups then
+  if groups and groups:type() == 'object' then
     -- first try to find any group where there is a definition of this symbol
     for gr_n, gr in groups:pairs() do
-      local symbols = gr:at('symbols')
-      if symbols and symbols:at(k) then
-        -- We override group symbol with ungrouped symbol
-        logger.infox("overriding group symbol %s in the group %s", k, gr_n)
-        symbols[k] = lua_util.override_defaults(symbols:at(k):unwrap(), v:unwrap())
-        return
+      if gr:type() == 'object' then
+        local symbols = gr:at('symbols')
+        if symbols and symbols:type() == 'object' and symbols:at(k) then
+          -- We override group symbol with ungrouped symbol
+          logger.infox("overriding group symbol %s in the group %s", k, gr_n)
+          symbols[k] = lua_util.override_defaults(symbols:at(k):unwrap(), v:unwrap())
+          return
+        end
       end
     end
   end
   -- Now check what Rspamd knows about this symbol
   local sym = rspamd_config:get_symbol(k)
 
-  if groups and (not sym or not sym.group) then
+  if groups and groups:type() == 'object' and (not sym or not sym.group) then
     -- Otherwise we just use group 'ungrouped'
-    if not groups:at('ungrouped') then
+    local ungrouped = groups:at('ungrouped')
+    if not ungrouped or ungrouped:type() ~= 'object' then
       groups.ungrouped = {
         symbols = {
           [k] = v
         }
       }
     else
-      groups:at('ungrouped'):at('symbols')[k] = v
+      local ug_symbols = ungrouped:at('symbols')
+      if not ug_symbols or ug_symbols:type() ~= 'object' then
+        ungrouped.symbols = { [k] = v }
+      else
+        ug_symbols[k] = v
+      end
     end
 
     logger.debugx("adding symbol %s to the group 'ungrouped'", k)
@@ -278,32 +293,46 @@ local function check_statistics_sanity()
   end
 end
 
+-- Helper to run a transform function with error handling
+local function try_transform(name, func)
+  local ok, err = pcall(func)
+  if not ok then
+    logger.errx(rspamd_config, 'config transform %s failed: %s', name, err)
+    return false
+  end
+  return true
+end
+
 return function(cfg)
   local ret = false
 
   if cfg:at('metric') then
-    local metric = cfg:at('metric')
+    try_transform('metric', function()
+      local metric = cfg:at('metric')
 
-    -- There are two things that we can have (old `metric_pairs` logic)
-    -- 1. A metric is a single metric definition like: metric { name = "default", ... }
-    -- 2. A metric is a list of metrics like: metric { "default": ... }
-    if metric:at('actions') or metric:at('name') then
-      convert_metric(cfg, metric)
-    else
-      for _, v in cfg:at('metric'):pairs() do
-        if v:type() == 'object' then
-          logger.infox('converting metric element %s', v)
-          convert_metric(cfg, v)
+      -- There are two things that we can have (old `metric_pairs` logic)
+      -- 1. A metric is a single metric definition like: metric { name = "default", ... }
+      -- 2. A metric is a list of metrics like: metric { "default": ... }
+      if metric:at('actions') or metric:at('name') then
+        convert_metric(cfg, metric)
+      else
+        for _, v in cfg:at('metric'):pairs() do
+          if v:type() == 'object' then
+            logger.infox('converting metric element %s', v)
+            convert_metric(cfg, v)
+          end
         end
       end
-    end
-    ret = true
+      ret = true
+    end)
   end
 
   if cfg:at('symbols') then
-    for k, v in cfg:at('symbols'):pairs() do
-      symbol_transform(cfg, k, v)
-    end
+    try_transform('symbols', function()
+      for k, v in cfg:at('symbols'):pairs() do
+        symbol_transform(cfg, k, v)
+      end
+    end)
   end
 
   check_statistics_sanity()
@@ -311,169 +340,223 @@ return function(cfg)
   if not cfg:at('actions') then
     logger.errx('no actions defined')
   else
-    -- Perform sanity check for actions
-    local actions_defs = { 'no action', 'no_action', -- In case if that's added
-                           'greylist', 'add header', 'add_header',
-                           'rewrite subject', 'rewrite_subject', 'quarantine',
-                           'reject', 'discard' }
+    try_transform('actions', function()
+      -- Perform sanity check for actions
+      local actions_defs = { 'no action', 'no_action', -- In case if that's added
+                             'greylist', 'add header', 'add_header',
+                             'rewrite subject', 'rewrite_subject', 'quarantine',
+                             'reject', 'discard' }
 
-    local actions = cfg:at('actions')
-    if not actions:at('no action') and not actions:at('no_action') and
-        not actions:at('accept') then
-      for _, d in ipairs(actions_defs) do
-        if actions:at(d) then
+      local actions = cfg:at('actions')
+      if not actions:at('no action') and not actions:at('no_action') and
+          not actions:at('accept') then
+        for _, d in ipairs(actions_defs) do
+          if actions:at(d) then
 
-          local action_score
-          local act = actions:at(d)
-          if act:type() ~= 'object' then
-            action_score = act:unwrap()
-          elseif act:type() == 'object' and act:at('score') then
-            action_score = act:at('score'):unwrap()
-          end
+            local action_score
+            local act = actions:at(d)
+            if act:type() ~= 'object' then
+              action_score = act:unwrap()
+            elseif act:type() == 'object' and act:at('score') then
+              action_score = act:at('score'):unwrap()
+            end
 
-          if act:type() ~= 'object' and not action_score then
-            actions[d] = nil
-          elseif type(action_score) == 'number' and action_score < 0 then
-            actions['no_action'] = actions:at(d):unwrap() - 0.001
-            logger.infox(rspamd_config, 'set no_action score to: %s, as action %s has negative score',
-                actions:at('no_action'):unwrap(), d)
-            break
-          end
-        end
-      end
-    end
-
-    local actions_set = lua_util.list_to_hash(actions_defs)
-
-    -- Now check actions section for garbage
-    actions_set['unknown_weight'] = true
-    actions_set['grow_factor'] = true
-    actions_set['subject'] = true
-
-    for k, _ in cfg:at('actions'):pairs() do
-      if not actions_set[k] then
-        logger.warnx(rspamd_config, 'unknown element in actions section: %s', k)
-      end
-    end
-
-    -- Performs thresholds sanity
-    -- We exclude greylist here as it can be set to whatever threshold in practice
-    local actions_order = {
-      'no_action',
-      'add_header',
-      'rewrite_subject',
-      'quarantine',
-      'reject',
-      'discard'
-    }
-    for i = 1, (#actions_order - 1) do
-      local act = actions_order[i]
-
-      if actions:at(act) and actions:at(act):type() ~= 'object' then
-        local score = actions:at(act):unwrap()
-
-        for j = i + 1, #actions_order do
-          local next_act = actions_order[j]
-          if actions:at(next_act) and actions:at(next_act):type() == 'number' then
-            local next_score = actions:at(next_act):unwrap()
-            if next_score <= score then
-              logger.errx(rspamd_config, 'invalid actions thresholds order: action %s (%s) must have lower ' ..
-                  'score than action %s (%s)', act, score, next_act, next_score)
-              ret = false
+            if act:type() ~= 'object' and not action_score then
+              actions[d] = nil
+            elseif type(action_score) == 'number' and action_score < 0 then
+              actions['no_action'] = actions:at(d):unwrap() - 0.001
+              logger.infox(rspamd_config, 'set no_action score to: %s, as action %s has negative score',
+                  actions:at('no_action'):unwrap(), d)
+              break
             end
           end
         end
       end
-    end
+
+      local actions_set = lua_util.list_to_hash(actions_defs)
+
+      -- Now check actions section for garbage
+      actions_set['unknown_weight'] = true
+      actions_set['grow_factor'] = true
+      actions_set['subject'] = true
+
+      for k, v in cfg:at('actions'):pairs() do
+        if not actions_set[k] then
+          -- Check if this is a custom action with flags (e.g., no_threshold)
+          local is_custom_action = false
+          if v and v:type() == 'object' and v:at('flags') then
+            is_custom_action = true
+          end
+          if not is_custom_action then
+            logger.warnx(rspamd_config, 'unknown element in actions section: %s', k)
+          end
+        end
+      end
+
+      -- Performs thresholds sanity
+      -- We exclude greylist here as it can be set to whatever threshold in practice
+      local actions_order = {
+        'no_action',
+        'add_header',
+        'rewrite_subject',
+        'quarantine',
+        'reject',
+        'discard'
+      }
+      for i = 1, (#actions_order - 1) do
+        local act = actions_order[i]
+
+        if actions:at(act) and actions:at(act):type() ~= 'object' then
+          local score = actions:at(act):unwrap()
+
+          for j = i + 1, #actions_order do
+            local next_act = actions_order[j]
+            if actions:at(next_act) and actions:at(next_act):type() == 'number' then
+              local next_score = actions:at(next_act):unwrap()
+              if type(score) == 'number' and type(next_score) == 'number' and next_score <= score then
+                logger.errx(rspamd_config, 'invalid actions thresholds order: action %s (%s) must have lower ' ..
+                    'score than action %s (%s)', act, score, next_act, next_score)
+                ret = false
+              end
+            end
+          end
+        end
+      end
+    end)
   end
 
   -- DKIM signing/ARC legacy
-  for _, mod in ipairs({ 'dkim_signing', 'arc' }) do
-    if cfg:at(mod) then
-      if cfg:at(mod):at('auth_only') then
-        if cfg:at(mod):at('sign_authenticated') then
-          logger.warnx(rspamd_config,
-              'both auth_only (%s) and sign_authenticated (%s) for %s are specified, prefer auth_only',
-              cfg:at(mod):at('auth_only'):unwrap(), cfg:at(mod):at('sign_authenticated'):unwrap(), mod)
+  try_transform('dkim_arc_legacy', function()
+    for _, mod in ipairs({ 'dkim_signing', 'arc' }) do
+      if cfg:at(mod) then
+        if cfg:at(mod):at('auth_only') then
+          if cfg:at(mod):at('sign_authenticated') then
+            logger.warnx(rspamd_config,
+                'both auth_only (%s) and sign_authenticated (%s) for %s are specified, prefer auth_only',
+                cfg:at(mod):at('auth_only'):unwrap(), cfg:at(mod):at('sign_authenticated'):unwrap(), mod)
+          end
+          cfg:at(mod).sign_authenticated = cfg:at(mod):at('auth_only')
         end
-        cfg:at(mod).sign_authenticated = cfg:at(mod):at('auth_only')
       end
     end
-  end
 
-  -- Deal with dkim settings
-  if not cfg.dkim then
-    cfg.dkim = {}
-  else
-    if cfg.dkim.sign_condition then
-      -- We have an obsoleted sign condition, so we need to either add dkim_signing and move it
-      -- there or just move sign condition there...
-      if not cfg.dkim_signing then
-        logger.warnx('obsoleted DKIM signing method used, converting it to "dkim_signing" module')
-        cfg.dkim_signing = {
-          sign_condition = cfg.dkim.sign_condition
-        }
-      else
-        if not cfg.dkim_signing.sign_condition then
-          logger.warnx('obsoleted DKIM signing method used, move it to "dkim_signing" module')
-          cfg.dkim_signing.sign_condition = cfg.dkim.sign_condition
+    -- Deal with dkim settings
+    if not cfg.dkim then
+      cfg.dkim = {}
+    else
+      if cfg.dkim.sign_condition then
+        -- We have an obsoleted sign condition, so we need to either add dkim_signing and move it
+        -- there or just move sign condition there...
+        if not cfg.dkim_signing then
+          logger.warnx('obsoleted DKIM signing method used, converting it to "dkim_signing" module')
+          cfg.dkim_signing = {
+            sign_condition = cfg.dkim.sign_condition
+          }
         else
-          logger.warnx('obsoleted DKIM signing method used, ignore it as "dkim_signing" also defines condition!')
+          if not cfg.dkim_signing.sign_condition then
+            logger.warnx('obsoleted DKIM signing method used, move it to "dkim_signing" module')
+            cfg.dkim_signing.sign_condition = cfg.dkim.sign_condition
+          else
+            logger.warnx('obsoleted DKIM signing method used, ignore it as "dkim_signing" also defines condition!')
+          end
         end
       end
     end
-  end
+  end)
 
   -- Try to find some obvious issues with configuration
-  for k, v in cfg:pairs() do
-    if v:type() == 'object' and v:at(k) and v:at(k):type() == 'object' then
-      logger.errx('nested section: %s { %s { ... } }, it is likely a configuration error',
-          k, k)
+  try_transform('config_sanity', function()
+    for k, v in cfg:pairs() do
+      if v:type() == 'object' and v:at(k) and v:at(k):type() == 'object' then
+        logger.errx('nested section: %s { %s { ... } }, it is likely a configuration error',
+            k, k)
+      end
     end
-  end
+  end)
 
   -- If neural network is enabled we MUST have `check_all_filters` flag
   if cfg:at('neural') then
-
-    if cfg:at('options') then
-      if not cfg:at('options'):at('check_all_filters') then
-        logger.infox(rspamd_config, 'enable `options.check_all_filters` for neural network')
-        cfg:at('options')['check_all_filters'] = true
+    try_transform('neural', function()
+      if cfg:at('options') then
+        if not cfg:at('options'):at('check_all_filters') then
+          logger.infox(rspamd_config, 'enable `options.check_all_filters` for neural network')
+          cfg:at('options')['check_all_filters'] = true
+        end
       end
-    end
+    end)
   end
 
   if cfg.surbl then
-    if not cfg.rbl then
-      cfg.rbl = {
-        rbls = {}
-      }
-    end
-    if not cfg.rbl.rbls then
-      cfg.rbl.rbls = {}
-    end
-    surbl_section_convert(cfg, cfg.surbl)
-    logger.infox(rspamd_config, 'converted surbl rules to rbl rules')
-    cfg.surbl = nil
+    try_transform('surbl', function()
+      if not cfg.rbl then
+        cfg.rbl = {
+          rbls = {}
+        }
+      end
+      if not cfg.rbl.rbls then
+        cfg.rbl.rbls = {}
+      end
+      surbl_section_convert(cfg, cfg.surbl)
+      logger.infox(rspamd_config, 'converted surbl rules to rbl rules')
+      cfg.surbl = nil
+    end)
   end
 
   if cfg.emails then
-    if not cfg.rbl then
-      cfg.rbl = {
-        rbls = {}
-      }
-    end
-    if not cfg.rbl.rbls then
-      cfg.rbl.rbls = {}
-    end
-    emails_section_convert(cfg, cfg.emails)
-    logger.infox(rspamd_config, 'converted emails rules to rbl rules')
-    cfg.emails = nil
+    try_transform('emails', function()
+      if not cfg.rbl then
+        cfg.rbl = {
+          rbls = {}
+        }
+      end
+      if not cfg.rbl.rbls then
+        cfg.rbl.rbls = {}
+      end
+      emails_section_convert(cfg, cfg.emails)
+      logger.infox(rspamd_config, 'converted emails rules to rbl rules')
+      cfg.emails = nil
+    end)
   end
 
   -- Common misprint options.upstreams -> options.upstream
   if type(cfg.options) == 'table' and type(cfg.options.upstreams) == 'table' and not cfg.options.upstream then
     cfg.options.upstream = cfg.options.upstreams
+  end
+
+  -- fuzzy_check: max_score -> hits_limit rename with backward compatibility
+  -- If max_score is specified (e.g., from local.d overrides), it should override hits_limit
+  if cfg.fuzzy_check then
+    try_transform('fuzzy_check', function()
+      local dominated_options = function(rule)
+        -- max_score overrides hits_limit for backward compatibility
+        -- This ensures local.d overrides using legacy max_score still work
+        if rule.max_score then
+          -- Use tonumber() to extract the value, avoiding UCL object reference issues
+          -- that can cause circular linked list pointers and infinite loops
+          rule.hits_limit = tonumber(rule.max_score) or rule.max_score
+          rule.max_score = nil
+        end
+        -- Also transform fuzzy_map entries
+        if rule.fuzzy_map then
+          for _, map_entry in pairs(rule.fuzzy_map) do
+            if type(map_entry) == 'table' and map_entry.max_score then
+              map_entry.hits_limit = tonumber(map_entry.max_score) or map_entry.max_score
+              map_entry.max_score = nil
+            end
+          end
+        end
+      end
+
+      if cfg.fuzzy_check.rule then
+        for _, rule in pairs(cfg.fuzzy_check.rule) do
+          if type(rule) == 'table' then
+            dominated_options(rule)
+          end
+        end
+      end
+      -- Handle case where fuzzy_check itself has these options (single rule syntax)
+      dominated_options(cfg.fuzzy_check)
+    end)
   end
 
   return ret, cfg

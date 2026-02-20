@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,9 +36,11 @@
 #include <unicode/uchar.h>
 #include "sodium.h"
 #include "libserver/cfg_file_private.h"
-#include "lua/lua_common.h"
+#define RSPAMD_TOKENIZER_INTERNAL
 #include "contrib/uthash/utlist.h"
 #include "contrib/t1ha/t1ha.h"
+#include "mime_parser.h"
+#include "libstat/tokenizers/custom_tokenizer.h"
 #include "received.h"
 
 #define GTUBE_SYMBOL "GTUBE"
@@ -57,6 +59,9 @@ static const char gtube_pattern_no_action[] = "AJS*C4JDBQADN1.NSBN3*2IDNEN*"
 struct rspamd_multipattern *gtube_matcher = NULL;
 static const uint64_t words_hash_seed = 0xdeadbabe;
 
+/* CTA URL configuration */
+#define MAX_CTA_URLS_PER_PART 25
+
 static void
 free_byte_array_callback(void *pointer)
 {
@@ -71,14 +76,14 @@ rspamd_mime_part_extract_words(struct rspamd_task *task,
 	rspamd_stat_token_t *w;
 	unsigned int i, total_len = 0, short_len = 0;
 
-	if (part->utf_words) {
-		rspamd_stem_words(part->utf_words, task->task_pool, part->language,
+	if (part->utf_words.a) {
+		rspamd_stem_words(&part->utf_words, task->task_pool, part->language,
 						  task->lang_det);
 
-		for (i = 0; i < part->utf_words->len; i++) {
+		for (i = 0; i < kv_size(part->utf_words); i++) {
 			uint64_t h;
 
-			w = &g_array_index(part->utf_words, rspamd_stat_token_t, i);
+			w = &kv_A(part->utf_words, i);
 
 			if (w->stemmed.len > 0) {
 				/*
@@ -108,7 +113,7 @@ rspamd_mime_part_extract_words(struct rspamd_task *task,
 			}
 		}
 
-		if (part->utf_words->len) {
+		if (kv_size(part->utf_words)) {
 			double *avg_len_p, *short_len_p;
 
 			avg_len_p = rspamd_mempool_get_variable(task->task_pool,
@@ -133,7 +138,7 @@ rspamd_mime_part_extract_words(struct rspamd_task *task,
 												   sizeof(double));
 				*short_len_p = short_len;
 				rspamd_mempool_set_variable(task->task_pool,
-											RSPAMD_MEMPOOL_SHORT_WORDS_CNT, avg_len_p, NULL);
+											RSPAMD_MEMPOOL_SHORT_WORDS_CNT, short_len_p, NULL);
 			}
 			else {
 				*short_len_p += short_len;
@@ -185,21 +190,24 @@ rspamd_mime_part_create_words(struct rspamd_task *task,
 		tok_type = RSPAMD_TOKENIZE_RAW;
 	}
 
-	part->utf_words = rspamd_tokenize_text(
+	/* Initialize kvec for words */
+	kv_init(part->utf_words);
+
+	rspamd_tokenize_text(
 		part->utf_stripped_content->data,
 		part->utf_stripped_content->len,
 		&part->utf_stripped_text,
 		tok_type, task->cfg,
 		part->exceptions,
 		NULL,
-		NULL,
+		&part->utf_words,
 		task->task_pool);
 
 
-	if (part->utf_words) {
+	if (part->utf_words.a) {
 		part->normalized_hashes = g_array_sized_new(FALSE, FALSE,
-													sizeof(uint64_t), part->utf_words->len);
-		rspamd_normalize_words(part->utf_words, task->task_pool);
+													sizeof(uint64_t), kv_size(part->utf_words));
+		rspamd_normalize_words(&part->utf_words, task->task_pool);
 	}
 }
 
@@ -209,7 +217,7 @@ rspamd_mime_part_detect_language(struct rspamd_task *task,
 {
 	struct rspamd_lang_detector_res *lang;
 
-	if (!IS_TEXT_PART_EMPTY(part) && part->utf_words && part->utf_words->len > 0 &&
+	if (!IS_TEXT_PART_EMPTY(part) && part->utf_words.a && kv_size(part->utf_words) > 0 &&
 		task->lang_det) {
 		if (rspamd_language_detector_detect(task, task->lang_det, part)) {
 			lang = g_ptr_array_index(part->languages, 0);
@@ -786,6 +794,165 @@ rspamd_message_process_html_text_part(struct rspamd_task *task,
 		text_part->mime_part->urls,
 		task->cfg ? task->cfg->enable_css_parser : true,
 		cur_url_order);
+
+	/* Wire aggregated HTML features */
+	text_part->html_features = (struct rspamd_html_features *) rspamd_html_get_features(text_part->html);
+
+	/* Collect top CTA URLs for this HTML part */
+	if (text_part->html && text_part->mime_part && text_part->mime_part->urls) {
+		rspamd_html_process_cta_urls(text_part, task, MAX_CTA_URLS_PER_PART);
+	}
+
+	/* Optionally call CTA/affiliation Lua hook with capped candidates */
+	if (task->cfg && task->cfg->lua_state) {
+		lua_State *L = task->cfg->lua_state;
+		int old_top = lua_gettop(L);
+		if (rspamd_lua_require_function(L, "lua_cta", "process_html_links")) {
+			/* Build ctx table with summary and limited candidates */
+			lua_pushcfunction(L, &rspamd_lua_traceback);
+			int err_idx = lua_gettop(L);
+			lua_pushvalue(L, -2); /* function */
+
+			/* Arg1: task */
+			struct rspamd_task **ptask = lua_newuserdata(L, sizeof(struct rspamd_task *));
+			rspamd_lua_setclass(L, rspamd_task_classname, -1);
+			*ptask = task;
+			/* Arg2: text part */
+			struct rspamd_mime_text_part **ptxt = lua_newuserdata(L, sizeof(struct rspamd_mime_text_part *));
+			rspamd_lua_setclass(L, rspamd_textpart_classname, -1);
+			*ptxt = text_part;
+			/* Arg3: ctx table */
+			lua_createtable(L, 0, 4);
+			/* first_party_etld1 if any */
+			if (text_part->html && text_part->html_features) {
+				/* Expose as string if derived */
+				/* Not directly accessible; skip for now, Lua can derive from From: */
+			}
+			/* Summary counters */
+			lua_pushstring(L, "links_total");
+			lua_pushinteger(L, (lua_Integer) text_part->html_features->links.total_links);
+			lua_settable(L, -3);
+			lua_pushstring(L, "domains_total");
+			lua_pushinteger(L, (lua_Integer) text_part->html_features->links.domains_total);
+			lua_settable(L, -3);
+			lua_pushstring(L, "max_links_single_domain");
+			lua_pushinteger(L, (lua_Integer) text_part->html_features->links.max_links_single_domain);
+			lua_settable(L, -3);
+			/* candidates array */
+			lua_pushstring(L, "candidates");
+			int max_candidates = 24; /* TODO: make configurable */
+			lua_createtable(L, max_candidates, 0);
+			int nadded = 0;
+			if (text_part->mime_part && text_part->mime_part->urls && text_part->mime_part->urls->len > 0) {
+				unsigned int i;
+				for (i = 0; i < text_part->mime_part->urls->len && nadded < (unsigned) max_candidates; i++) {
+					struct rspamd_url *u = g_ptr_array_index(text_part->mime_part->urls, i);
+					if (!u) continue;
+					/* filter: only http/https, visible */
+					if (!(u->protocol == PROTOCOL_HTTP || u->protocol == PROTOCOL_HTTPS)) continue;
+					if (u->flags & RSPAMD_URL_FLAG_INVISIBLE) continue;
+					/* Build small table */
+					lua_createtable(L, 0, 8);
+					/* host */
+					lua_pushstring(L, "host");
+					if (u->hostlen > 0) lua_pushlstring(L, rspamd_url_host_unsafe(u), u->hostlen);
+					else
+						lua_pushnil(L);
+					lua_settable(L, -3);
+					/* flags */
+					lua_pushstring(L, "idn");
+					lua_pushboolean(L, !!(u->flags & RSPAMD_URL_FLAG_IDN));
+					lua_settable(L, -3);
+					lua_pushstring(L, "numeric");
+					lua_pushboolean(L, !!(u->flags & RSPAMD_URL_FLAG_NUMERIC));
+					lua_settable(L, -3);
+					lua_pushstring(L, "has_port");
+					lua_pushboolean(L, !!(u->flags & RSPAMD_URL_FLAG_HAS_PORT));
+					lua_settable(L, -3);
+					lua_pushstring(L, "has_query");
+					lua_pushboolean(L, !!(u->flags & RSPAMD_URL_FLAG_QUERY));
+					lua_settable(L, -3);
+					lua_pushstring(L, "display_mismatch");
+					lua_pushboolean(L, (u->ext && u->ext->linked_url && u->ext->linked_url != u));
+					lua_settable(L, -3);
+					/* order */
+					lua_pushstring(L, "order");
+					lua_pushinteger(L, (lua_Integer) u->order);
+					lua_settable(L, -3);
+					lua_pushstring(L, "part_order");
+					lua_pushinteger(L, (lua_Integer) u->part_order);
+					lua_settable(L, -3);
+					/* cta weight from C heuristics */
+					lua_pushstring(L, "weight");
+					lua_pushnumber(L, (lua_Number) rspamd_html_url_button_weight(text_part->html, u));
+					lua_settable(L, -3);
+					/* etld1 computed in Lua if needed */
+					lua_rawseti(L, -2, ++nadded);
+				}
+			}
+			lua_settable(L, -3); /* ctx.candidates = [...] */
+
+			if (lua_pcall(L, 3, 1, err_idx) != 0) {
+				msg_debug_task("lua_cta.process_html_links error: %s", lua_tostring(L, -1));
+			}
+			else if (lua_istable(L, -1)) {
+				/* read result and expose mempool variables */
+				lua_pushstring(L, "cta_affiliated");
+				lua_gettable(L, -2);
+				if (lua_isboolean(L, -1)) {
+					double *val = rspamd_mempool_alloc(task->task_pool, sizeof(double));
+					*val = lua_toboolean(L, -1) ? 1.0 : 0.0;
+					rspamd_mempool_set_variable(task->task_pool, "html_cta_affiliated", val, NULL);
+				}
+				lua_pop(L, 1);
+				lua_pushstring(L, "cta_weight");
+				lua_gettable(L, -2);
+				if (lua_isnumber(L, -1)) {
+					double *w = rspamd_mempool_alloc(task->task_pool, sizeof(double));
+					*w = lua_tonumber(L, -1);
+					rspamd_mempool_set_variable(task->task_pool, "html_cta_weight", w, NULL);
+				}
+				lua_pop(L, 1);
+				/* If no weight set by Lua, derive from C heuristic */
+				if (!rspamd_mempool_get_variable(task->task_pool, "html_cta_weight") &&
+					text_part->html && text_part->mime_part && text_part->mime_part->urls) {
+					double best_w = 0.0;
+					unsigned int ui;
+					for (ui = 0; ui < text_part->mime_part->urls->len; ui++) {
+						struct rspamd_url *u = g_ptr_array_index(text_part->mime_part->urls, ui);
+						if (!u) continue;
+						if (!(u->protocol == PROTOCOL_HTTP || u->protocol == PROTOCOL_HTTPS)) continue;
+						if (u->flags & RSPAMD_URL_FLAG_INVISIBLE) continue;
+						float cw = rspamd_html_url_button_weight(text_part->html, u);
+						if (cw > best_w) best_w = cw;
+					}
+					if (best_w > 0.0) {
+						double *best_w_p = rspamd_mempool_alloc(task->task_pool, sizeof(double));
+						*best_w_p = best_w;
+						rspamd_mempool_set_variable(task->task_pool, "html_cta_weight", best_w_p, NULL);
+					}
+				}
+				lua_pushstring(L, "affiliated_ratio");
+				lua_gettable(L, -2);
+				if (lua_isnumber(L, -1)) {
+					double *r = rspamd_mempool_alloc(task->task_pool, sizeof(double));
+					*r = lua_tonumber(L, -1);
+					rspamd_mempool_set_variable(task->task_pool, "html_affiliated_links_ratio", r, NULL);
+				}
+				lua_pop(L, 1);
+				lua_pushstring(L, "trackerish_ratio");
+				lua_gettable(L, -2);
+				if (lua_isnumber(L, -1)) {
+					double *tr = rspamd_mempool_alloc(task->task_pool, sizeof(double));
+					*tr = lua_tonumber(L, -1);
+					rspamd_mempool_set_variable(task->task_pool, "html_trackerish_ratio", tr, NULL);
+				}
+				lua_pop(L, 1);
+			}
+
+			lua_settop(L, old_top);
+		}
+	}
 	rspamd_html_get_parsed_content(text_part->html, &text_part->utf_content);
 
 	if (text_part->utf_content.len == 0) {
@@ -800,6 +967,155 @@ enum rspamd_message_part_is_text_result {
 	RSPAMD_MESSAGE_PART_IS_TEXT_HTML,
 	RSPAMD_MESSAGE_PART_IS_NOT_TEXT
 };
+
+static struct rspamd_mime_part *
+rspamd_mime_part_find_parent_multipart_subtype(struct rspamd_mime_part *part,
+											   const char *subtype, gsize subtype_len)
+{
+	rspamd_ftok_t srch;
+
+	srch.begin = subtype;
+	srch.len = subtype_len;
+
+	while (part) {
+		if (part->ct && rspamd_ftok_casecmp(&part->ct->subtype, &srch) == 0) {
+			return part;
+		}
+		part = part->parent_part;
+	}
+
+	return NULL;
+}
+
+static gboolean
+rspamd_mime_part_is_in_multipart_alternative(struct rspamd_mime_part *part)
+{
+	if (!part) {
+		return FALSE;
+	}
+
+	return rspamd_mime_part_find_parent_multipart_subtype(part->parent_part,
+														  "alternative", 11) != NULL;
+}
+
+/*
+ * Check if `ancestor` is an ancestor of `part` (or equal to it)
+ */
+static gboolean
+rspamd_mime_part_is_ancestor(struct rspamd_mime_part *part,
+							 struct rspamd_mime_part *ancestor)
+{
+	while (part) {
+		if (part == ancestor) {
+			return TRUE;
+		}
+		part = part->parent_part;
+	}
+	return FALSE;
+}
+
+/*
+ * Recursively search for a text part in a subtree.
+ * - `root` is the multipart to search in
+ * - `exclude` is the subtree to skip (the branch containing the original part)
+ * - `want_html` TRUE means we want HTML part, FALSE means we want plain text
+ * - Returns the first matching text part, or NULL
+ * - Stops recursion if we hit a message/rfc822 part
+ */
+static struct rspamd_mime_text_part *
+rspamd_mime_part_find_text_in_subtree(struct rspamd_mime_part *root,
+									  struct rspamd_mime_part *exclude,
+									  gboolean want_html)
+{
+	if (!root || !IS_PART_MULTIPART(root) || !root->specific.mp) {
+		return NULL;
+	}
+
+	struct rspamd_mime_multipart *mp = root->specific.mp;
+
+	if (!mp->children) {
+		return NULL;
+	}
+
+	for (unsigned int i = 0; i < mp->children->len; i++) {
+		struct rspamd_mime_part *child = g_ptr_array_index(mp->children, i);
+
+		/* Skip the excluded subtree */
+		if (exclude && rspamd_mime_part_is_ancestor(exclude, child)) {
+			continue;
+		}
+
+		/* Stop at message/rfc822 parts (embedded messages) */
+		if (IS_PART_MESSAGE(child)) {
+			continue;
+		}
+
+		/* Check if this is the text part we want */
+		if (IS_PART_TEXT(child) && child->specific.txt) {
+			struct rspamd_mime_text_part *txt = child->specific.txt;
+
+			/* Skip attachments */
+			if (IS_TEXT_PART_ATTACHMENT(txt)) {
+				continue;
+			}
+
+			gboolean is_html = IS_TEXT_PART_HTML(txt);
+			if (want_html == is_html) {
+				return txt;
+			}
+		}
+
+		/* Recurse into multiparts */
+		if (IS_PART_MULTIPART(child)) {
+			struct rspamd_mime_text_part *found =
+				rspamd_mime_part_find_text_in_subtree(child, NULL, want_html);
+			if (found) {
+				return found;
+			}
+		}
+	}
+
+	return NULL;
+}
+
+/*
+ * Find the alternative text part for a given text part.
+ * Algorithm:
+ * 1. Walk up from the part's mime_part to find a multipart/alternative ancestor
+ * 2. If found, identify which child subtree contains our part
+ * 3. Search other children for a text part of the opposite type
+ *    (plain for HTML, HTML for plain)
+ * 4. Stop if we hit message/rfc822 (embedded message)
+ */
+static struct rspamd_mime_text_part *
+rspamd_mime_text_part_find_alternative(struct rspamd_mime_text_part *text_part)
+{
+	if (!text_part || !text_part->mime_part) {
+		return NULL;
+	}
+
+	struct rspamd_mime_part *mime_part = text_part->mime_part;
+	gboolean is_html = IS_TEXT_PART_HTML(text_part);
+
+	/* Find the multipart/alternative ancestor */
+	struct rspamd_mime_part *alt_parent =
+		rspamd_mime_part_find_parent_multipart_subtype(mime_part->parent_part,
+													   "alternative", 11);
+
+	if (!alt_parent) {
+		/* No alternative parent, no alternative part */
+		return NULL;
+	}
+
+	/* Find the direct child of alt_parent that contains our mime_part */
+	struct rspamd_mime_part *our_branch = mime_part;
+	while (our_branch->parent_part && our_branch->parent_part != alt_parent) {
+		our_branch = our_branch->parent_part;
+	}
+
+	/* Search other branches for a text part of the opposite type */
+	return rspamd_mime_part_find_text_in_subtree(alt_parent, our_branch, !is_html);
+}
 
 static enum rspamd_message_part_is_text_result
 rspamd_message_part_can_be_parsed_as_text(struct rspamd_task *task,
@@ -829,7 +1145,8 @@ rspamd_message_part_can_be_parsed_as_text(struct rspamd_task *task,
 	/* Skip attachments */
 	if (res != RSPAMD_MESSAGE_PART_IS_NOT_TEXT &&
 		(mime_part->cd && mime_part->cd->type == RSPAMD_CT_ATTACHMENT)) {
-		if (!task->cfg->check_text_attachements) {
+		if (!task->cfg->check_text_attachements &&
+			!rspamd_mime_part_is_in_multipart_alternative(mime_part)) {
 			debug_task("skip attachments for checking as text parts");
 			return RSPAMD_MESSAGE_PART_IS_NOT_TEXT;
 		}
@@ -850,7 +1167,9 @@ rspamd_message_process_text_part_maybe(struct rspamd_task *task,
 
 	/* Skip attachments */
 	if ((mime_part->cd && mime_part->cd->type == RSPAMD_CT_ATTACHMENT)) {
-		flags |= RSPAMD_MIME_TEXT_PART_ATTACHMENT;
+		if (!rspamd_mime_part_is_in_multipart_alternative(mime_part)) {
+			flags |= RSPAMD_MIME_TEXT_PART_ATTACHMENT;
+		}
 	}
 
 	text_part = rspamd_mempool_alloc0(task->task_pool,
@@ -906,7 +1225,8 @@ rspamd_message_process_text_part_maybe(struct rspamd_task *task,
 		if (mime_part->parent_part) {
 			struct rspamd_mime_part *parent = mime_part->parent_part;
 
-			if (IS_PART_MULTIPART(parent) && parent->specific.mp->children->len == 2) {
+			if (IS_PART_MULTIPART(parent) && parent->specific.mp->children &&
+				parent->specific.mp->children->len == 2) {
 				/*
 				 * Use strict extraction mode: we will extract missing urls from
 				 * an html part if needed
@@ -948,6 +1268,29 @@ rspamd_message_process_text_part_maybe(struct rspamd_task *task,
 	return TRUE;
 }
 
+void rspamd_message_process_injected_text_part(struct rspamd_task *task,
+											   struct rspamd_mime_text_part *text_part,
+											   uint16_t *cur_url_order)
+{
+	if (!rspamd_message_process_plain_text_part(task, text_part)) {
+		return;
+	}
+
+	rspamd_normalize_text_part(task, text_part);
+	rspamd_url_text_extract(task->task_pool, task, text_part, cur_url_order,
+							RSPAMD_URL_FIND_ALL);
+
+	if (text_part->exceptions) {
+		text_part->exceptions = g_list_sort(text_part->exceptions,
+											exceptions_compare_func);
+		rspamd_mempool_add_destructor(task->task_pool,
+									  (rspamd_mempool_destruct_t) g_list_free,
+									  text_part->exceptions);
+	}
+
+	rspamd_mime_part_create_words(task, text_part);
+}
+
 /* Creates message from various data using libmagic to detect type */
 static void
 rspamd_message_from_data(struct rspamd_task *task, const unsigned char *start,
@@ -983,9 +1326,40 @@ rspamd_message_from_data(struct rspamd_task *task, const unsigned char *start,
 	}
 	else if (task->cfg && task->cfg->libs_ctx) {
 		lua_State *L = task->cfg->lua_state;
+		int old_top = lua_gettop(L);
 
-		if (rspamd_lua_require_function(L,
-										"lua_magic", "detect_mime_part")) {
+		if (task->cfg->mime_parser_cfg &&
+			rspamd_mime_parser_get_lua_magic_cbref(task->cfg->mime_parser_cfg) != -1) {
+			struct rspamd_mime_part **pmime;
+			struct rspamd_task **ptask;
+
+			lua_rawgeti(L, LUA_REGISTRYINDEX, rspamd_mime_parser_get_lua_magic_cbref(task->cfg->mime_parser_cfg));
+			pmime = lua_newuserdata(L, sizeof(struct rspamd_mime_part *));
+			rspamd_lua_setclass(L, rspamd_mimepart_classname, -1);
+			*pmime = part;
+			ptask = lua_newuserdata(L, sizeof(struct rspamd_task *));
+			rspamd_lua_setclass(L, rspamd_task_classname, -1);
+			*ptask = task;
+
+			if (lua_pcall(L, 2, 2, 0) != 0) {
+				msg_err_task("cannot detect type: %s", lua_tostring(L, -1));
+			}
+			else {
+				if (lua_istable(L, -1)) {
+					lua_pushstring(L, "ct");
+					lua_gettable(L, -2);
+
+					if (lua_isstring(L, -1)) {
+						mb = rspamd_mempool_strdup(task->task_pool,
+												   lua_tostring(L, -1));
+					}
+				}
+			}
+
+			lua_settop(L, old_top);
+		}
+		else if (rspamd_lua_require_function(L,
+											 "lua_magic", "detect_mime_part")) {
 
 			struct rspamd_mime_part **pmime;
 			struct rspamd_task **ptask;
@@ -1012,7 +1386,7 @@ rspamd_message_from_data(struct rspamd_task *task, const unsigned char *start,
 				}
 			}
 
-			lua_settop(L, 0);
+			lua_settop(L, old_top);
 		}
 		else {
 			msg_err_task("cannot require lua_magic.detect_mime_part");
@@ -1106,8 +1480,8 @@ rspamd_message_dtor(struct rspamd_message *msg)
 
 	PTR_ARRAY_FOREACH(msg->text_parts, i, tp)
 	{
-		if (tp->utf_words) {
-			g_array_free(tp->utf_words, TRUE);
+		if (tp->utf_words.a) {
+			kv_destroy(tp->utf_words);
 		}
 		if (tp->normalized_hashes) {
 			g_array_free(tp->normalized_hashes, TRUE);
@@ -1151,6 +1525,10 @@ rspamd_message_parse(struct rspamd_task *task)
 	unsigned int i;
 	GError *err = NULL;
 	uint64_t n[2], seed;
+
+	if (task->cfg) {
+		rspamd_mime_parser_init_shared(task->cfg);
+	}
 
 	if (RSPAMD_TASK_IS_EMPTY(task)) {
 		/* Don't do anything with empty task */
@@ -1400,7 +1778,7 @@ void rspamd_message_process(struct rspamd_task *task)
 	unsigned int tw, *ptw, dw;
 	struct rspamd_mime_part *part;
 	lua_State *L = NULL;
-	int magic_func_pos = -1, content_func_pos = -1, old_top = -1, funcs_top = -1;
+	int content_func_pos = -1, old_top = -1, funcs_top = -1;
 
 	if (task->cfg) {
 		L = task->cfg->lua_state;
@@ -1408,17 +1786,93 @@ void rspamd_message_process(struct rspamd_task *task)
 
 	rspamd_archives_process(task);
 
+	/* Second pass: fill detected_* for parts not decided during parsing */
+	if (L && task->cfg->mime_parser_cfg &&
+		rspamd_mime_parser_get_lua_magic_cbref(task->cfg->mime_parser_cfg) != -1) {
+		unsigned int j;
+		struct rspamd_mime_part *pp;
+		int second_pass_old_top = lua_gettop(L);
+		PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, parts), j, pp)
+		{
+			gboolean needs_refine = FALSE;
+			if (pp->parsed_data.len > 0) {
+				if (pp->detected_type == NULL && pp->detected_ext == NULL) {
+					needs_refine = TRUE;
+				}
+				else if (pp->part_type == RSPAMD_MIME_PART_ARCHIVE) {
+					needs_refine = TRUE;
+				}
+			}
+
+			if (needs_refine) {
+				msg_debug_mime("second-pass lua_magic for part #%ud: reason=%s; ext=%s type=%s",
+							   pp->part_number,
+							   (pp->detected_type == NULL && pp->detected_ext == NULL) ? "undetected" : "archive",
+							   pp->detected_ext ? pp->detected_ext : "(nil)",
+							   pp->detected_type ? pp->detected_type : "(nil)");
+				struct rspamd_mime_part **pmime;
+				struct rspamd_task **ptask;
+				lua_pushcfunction(L, &rspamd_lua_traceback);
+				int err_idx2 = lua_gettop(L);
+				lua_rawgeti(L, LUA_REGISTRYINDEX, rspamd_mime_parser_get_lua_magic_cbref(task->cfg->mime_parser_cfg));
+				pmime = lua_newuserdata(L, sizeof(struct rspamd_mime_part *));
+				rspamd_lua_setclass(L, rspamd_mimepart_classname, -1);
+				*pmime = pp;
+				ptask = lua_newuserdata(L, sizeof(struct rspamd_task *));
+				rspamd_lua_setclass(L, rspamd_task_classname, -1);
+				*ptask = task;
+
+				if (lua_pcall(L, 2, 2, err_idx2) == 0) {
+					if (lua_istable(L, -1)) {
+						const char *mb;
+						const char *old_ext = pp->detected_ext;
+						const char *old_type = pp->detected_type;
+						if (lua_isstring(L, -2)) {
+							pp->detected_ext = rspamd_mempool_strdup(task->task_pool, lua_tostring(L, -2));
+						}
+						lua_pushstring(L, "ct");
+						lua_gettable(L, -2);
+						if (lua_isstring(L, -1)) {
+							mb = lua_tostring(L, -1);
+							if (mb) {
+								rspamd_ftok_t srch;
+								srch.begin = mb;
+								srch.len = strlen(mb);
+								pp->detected_ct = rspamd_content_type_parse(srch.begin, srch.len, task->task_pool);
+							}
+						}
+						lua_pop(L, 1);
+						lua_pushstring(L, "type");
+						lua_gettable(L, -2);
+						if (lua_isstring(L, -1)) {
+							pp->detected_type = rspamd_mempool_strdup(task->task_pool, lua_tostring(L, -1));
+						}
+						lua_pop(L, 1);
+						lua_pushstring(L, "no_text");
+						lua_gettable(L, -2);
+						if (lua_isboolean(L, -1) && lua_toboolean(L, -1)) {
+							pp->flags |= RSPAMD_MIME_PART_NO_TEXT_EXTRACTION;
+						}
+						lua_pop(L, 1);
+						msg_debug_mime("second-pass result for part #%ud: ext %s->%s, type %s->%s",
+									   pp->part_number,
+									   old_ext ? old_ext : "(nil)", pp->detected_ext ? pp->detected_ext : "(nil)",
+									   old_type ? old_type : "(nil)", pp->detected_type ? pp->detected_type : "(nil)");
+					}
+				}
+				else {
+					msg_err_task("second-pass detect type: %s", lua_tostring(L, -1));
+				}
+				lua_settop(L, second_pass_old_top);
+			}
+		}
+	}
+
 	if (L) {
 		old_top = lua_gettop(L);
 	}
 
-	if (L && rspamd_lua_require_function(L,
-										 "lua_magic", "detect_mime_part")) {
-		magic_func_pos = lua_gettop(L);
-	}
-	else {
-		msg_err_task("cannot require lua_magic.detect_mime_part");
-	}
+	/* lua_magic is preloaded by mime parser init; do not require here */
 
 	if (L && rspamd_lua_require_function(L,
 										 "lua_content", "maybe_process_mime_part")) {
@@ -1436,75 +1890,7 @@ void rspamd_message_process(struct rspamd_task *task)
 
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, parts), i, part)
 	{
-		if (magic_func_pos != -1 && part->parsed_data.len > 0) {
-			struct rspamd_mime_part **pmime;
-			struct rspamd_task **ptask;
-
-			lua_pushcfunction(L, &rspamd_lua_traceback);
-			int err_idx = lua_gettop(L);
-			lua_pushvalue(L, magic_func_pos);
-			pmime = lua_newuserdata(L, sizeof(struct rspamd_mime_part *));
-			rspamd_lua_setclass(L, rspamd_mimepart_classname, -1);
-			*pmime = part;
-			ptask = lua_newuserdata(L, sizeof(struct rspamd_task *));
-			rspamd_lua_setclass(L, rspamd_task_classname, -1);
-			*ptask = task;
-
-			if (lua_pcall(L, 2, 2, err_idx) != 0) {
-				msg_err_task("cannot detect type: %s", lua_tostring(L, -1));
-			}
-			else {
-				if (lua_istable(L, -1)) {
-					const char *mb;
-
-					/* First returned value */
-					part->detected_ext = rspamd_mempool_strdup(task->task_pool,
-															   lua_tostring(L, -2));
-
-					lua_pushstring(L, "ct");
-					lua_gettable(L, -2);
-
-					if (lua_isstring(L, -1)) {
-						mb = lua_tostring(L, -1);
-
-						if (mb) {
-							rspamd_ftok_t srch;
-
-							srch.begin = mb;
-							srch.len = strlen(mb);
-							part->detected_ct = rspamd_content_type_parse(srch.begin,
-																		  srch.len,
-																		  task->task_pool);
-						}
-					}
-
-					lua_pop(L, 1);
-
-					lua_pushstring(L, "type");
-					lua_gettable(L, -2);
-
-					if (lua_isstring(L, -1)) {
-						part->detected_type = rspamd_mempool_strdup(task->task_pool,
-																	lua_tostring(L, -1));
-					}
-
-					lua_pop(L, 1);
-
-					lua_pushstring(L, "no_text");
-					lua_gettable(L, -2);
-
-					if (lua_isboolean(L, -1)) {
-						if (!!lua_toboolean(L, -1)) {
-							part->flags |= RSPAMD_MIME_PART_NO_TEXT_EXTRACTION;
-						}
-					}
-
-					lua_pop(L, 1);
-				}
-			}
-
-			lua_settop(L, funcs_top);
-		}
+		/* detected_* are already set by mime_parser; no extra lua_magic call here */
 
 		/* Now detect content */
 		if (content_func_pos != -1 && part->parsed_data.len > 0 &&
@@ -1567,7 +1953,8 @@ void rspamd_message_process(struct rspamd_task *task)
 								 strlen(MESSAGE_FIELD(task, subject)),
 								 RSPAMD_URL_FIND_STRICT, NULL,
 								 rspamd_url_task_subject_callback,
-								 task);
+								 task,
+								 task->cfg ? task->cfg->lua_state : NULL);
 	}
 
 	/* Calculate average words length and number of short words */
@@ -1583,103 +1970,122 @@ void rspamd_message_process(struct rspamd_task *task)
 
 		rspamd_mime_part_extract_words(task, text_part);
 
-		if (text_part->utf_words) {
+		if (text_part->utf_words.a) {
 			total_words += text_part->nwords;
 		}
 	}
 
-	/* Calculate distance for 2-parts messages */
-	if (i == 2) {
-		p1 = g_ptr_array_index(MESSAGE_FIELD(task, text_parts), 0);
-		p2 = g_ptr_array_index(MESSAGE_FIELD(task, text_parts), 1);
+	/* Compute alternative text parts for each text part */
+	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, text_part)
+	{
+		text_part->alt_text_part = rspamd_mime_text_part_find_alternative(text_part);
+	}
 
-		/* First of all check parent object */
-		if (p1->mime_part->parent_part) {
-			rspamd_ftok_t srch;
+	/* Calculate distance for alternative parts */
+	struct rspamd_mime_text_part *html_part = NULL;
 
-			srch.begin = "alternative";
-			srch.len = 11;
+	/* Find the first non-attachment HTML part that has an alternative */
+	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, text_part)
+	{
+		if (IS_TEXT_PART_HTML(text_part) &&
+			!IS_TEXT_PART_ATTACHMENT(text_part) &&
+			text_part->alt_text_part) {
+			html_part = text_part;
+			break;
+		}
+	}
 
-			if (rspamd_ftok_cmp(&p1->mime_part->parent_part->ct->subtype, &srch) == 0) {
-				if (!IS_TEXT_PART_EMPTY(p1) && !IS_TEXT_PART_EMPTY(p2) &&
-					p1->normalized_hashes && p2->normalized_hashes) {
-					/*
-					 * We also detect language on one part and propagate it to
-					 * another one
-					 */
-					struct rspamd_mime_text_part *sel;
+	if (html_part) {
+		p1 = html_part;
+		p2 = html_part->alt_text_part;
 
-					/* Prefer HTML as text part is not displayed normally */
-					if (IS_TEXT_PART_HTML(p1)) {
-						sel = p1;
-					}
-					else if (IS_TEXT_PART_HTML(p2)) {
-						sel = p2;
-					}
-					else {
-						if (p1->utf_content.len > p2->utf_content.len) {
-							sel = p1;
-						}
-						else {
-							sel = p2;
-						}
-					}
+		/* alt_text_part already ensures they share a multipart/alternative parent */
+		if (!IS_TEXT_PART_EMPTY(p1) && !IS_TEXT_PART_EMPTY(p2) &&
+			p1->normalized_hashes && p2->normalized_hashes) {
+			/*
+			 * We also detect language on one part and propagate it to
+			 * another one. Prefer HTML as text part is not displayed normally.
+			 */
+			struct rspamd_mime_text_part *sel = p1; /* p1 is always HTML here */
 
-					if (sel->language && sel->language[0]) {
-						/* Propagate language */
-						if (sel == p1) {
-							if (p2->languages) {
-								g_ptr_array_unref(p2->languages);
-							}
-
-							p2->language = sel->language;
-							p2->languages = g_ptr_array_ref(sel->languages);
-						}
-						else {
-							if (p1->languages) {
-								g_ptr_array_unref(p1->languages);
-							}
-
-							p1->language = sel->language;
-							p1->languages = g_ptr_array_ref(sel->languages);
-						}
-					}
-
-					tw = p1->normalized_hashes->len + p2->normalized_hashes->len;
-
-					if (tw > 0) {
-						dw = rspamd_words_levenshtein_distance(task,
-															   p1->normalized_hashes,
-															   p2->normalized_hashes);
-						diff = dw / (double) tw;
-
-						msg_debug_task(
-							"different words: %d, total words: %d, "
-							"got diff between parts of %.2f",
-							dw, tw,
-							diff);
-
-						pdiff = rspamd_mempool_alloc(task->task_pool,
-													 sizeof(double));
-						*pdiff = diff;
-						rspamd_mempool_set_variable(task->task_pool,
-													"parts_distance",
-													pdiff,
-													NULL);
-						ptw = rspamd_mempool_alloc(task->task_pool,
-												   sizeof(int));
-						*ptw = tw;
-						rspamd_mempool_set_variable(task->task_pool,
-													"total_words",
-													ptw,
-													NULL);
-					}
+			if (sel->language && sel->language[0]) {
+				/* Propagate language from HTML to text part */
+				if (p2->languages) {
+					g_ptr_array_unref(p2->languages);
 				}
+
+				p2->language = sel->language;
+				p2->languages = g_ptr_array_ref(sel->languages);
+			}
+
+			tw = p1->normalized_hashes->len + p2->normalized_hashes->len;
+
+			if (tw > 0) {
+				dw = rspamd_words_levenshtein_distance(task,
+													   p1->normalized_hashes,
+													   p2->normalized_hashes);
+				diff = dw / (double) tw;
+
+				msg_debug_task(
+					"different words: %d, total words: %d, "
+					"got diff between parts of %.2f",
+					dw, tw,
+					diff);
+
+				pdiff = rspamd_mempool_alloc(task->task_pool,
+											 sizeof(double));
+				*pdiff = diff;
+				rspamd_mempool_set_variable(task->task_pool,
+											"parts_distance",
+											pdiff,
+											NULL);
+				ptw = rspamd_mempool_alloc(task->task_pool,
+										   sizeof(int));
+				*ptw = tw;
+				rspamd_mempool_set_variable(task->task_pool,
+											"total_words",
+											ptw,
+											NULL);
 			}
 		}
 		else {
-			debug_task(
-				"message contains two parts but they are in different multi-parts");
+			/*
+			 * Handle cases where parts differ significantly:
+			 * - One part is empty, another is not
+			 * - One part has words, another has none (but isn't empty)
+			 * In both cases, treat as 100% difference
+			 */
+			gboolean p1_has_words = p1->normalized_hashes &&
+									p1->normalized_hashes->len > 0;
+			gboolean p2_has_words = p2->normalized_hashes &&
+									p2->normalized_hashes->len > 0;
+
+			if (p1_has_words != p2_has_words) {
+				struct rspamd_mime_text_part *non_empty =
+					p1_has_words ? p1 : p2;
+
+				tw = non_empty->normalized_hashes->len;
+
+				msg_debug_task(
+					"one part has no words, another has %d words, "
+					"got diff between parts of 1.0",
+					tw);
+
+				pdiff = rspamd_mempool_alloc(task->task_pool,
+											 sizeof(double));
+				*pdiff = 1.0;
+				rspamd_mempool_set_variable(task->task_pool,
+											"parts_distance",
+											pdiff,
+											NULL);
+				ptw = rspamd_mempool_alloc(task->task_pool,
+										   sizeof(int));
+				*ptw = tw;
+				rspamd_mempool_set_variable(task->task_pool,
+											"total_words",
+											ptw,
+											NULL);
+			}
 		}
 	}
 

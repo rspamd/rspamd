@@ -72,7 +72,6 @@ local checks_hellohost = [[
 /host[.-][0-9]/i 2
 /[.-]ppp[.-]/i 5
 /[.-]dhcp[.-]/i 5
-/[.-]comcast[.-]/i 5
 /cable[.-][0-9]/i 3
 /[-.0-9][0-9][.-]?dial-?up/i 5
 /[-.0-9][0-9][.-]?bredband/i 5
@@ -131,6 +130,7 @@ local checks_hellohost = [[
 /modem[.-][0-9]/i 5
 /[0-9][.-]?dhcp/i 5
 /wifi[.-][0-9]/i 5
+/[.-]vps[.-]/i 1
 ]]
 local checks_hellohost_map
 

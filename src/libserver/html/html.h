@@ -20,6 +20,7 @@
 #include "config.h"
 #include "libutil/mem_pool.h"
 #include "libserver/url.h"
+#include "libserver/html/html_features.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -128,6 +129,27 @@ bool rspamd_html_get_parsed_content(void *html_content, rspamd_ftok_t *dest);
  * @return
  */
 gsize rspamd_html_get_tags_count(void *html_content);
+
+/**
+ * Returns heuristic button weight for a given URL within this HTML content
+ */
+float rspamd_html_url_button_weight(void *html_content, struct rspamd_url *u);
+
+/**
+ * Returns an immutable pointer to aggregated html features
+ */
+const struct rspamd_html_features *rspamd_html_get_features(void *html_content);
+
+/**
+ * Creates CTA (call-to-action) URLs heap for a text part
+ * Collects top-K URLs by button weight using min-heap (O(n log k))
+ * @param text_part text part to fill cta_urls for
+ * @param task task for mempool allocation
+ * @param max_cta maximum number of CTA URLs to collect
+ */
+void rspamd_html_process_cta_urls(struct rspamd_mime_text_part *text_part,
+								  struct rspamd_task *task,
+								  unsigned int max_cta);
 
 
 #ifdef __cplusplus

@@ -21,11 +21,18 @@ BuildRequires:    cmake3
 BuildRequires:    devtoolset-10-gcc-c++
 %else
 BuildRequires:    cmake
+%endif
 %if 0%{?el8}
 BuildRequires:    gcc-toolset-10-gcc-c++
 %endif
 %if 0%{?el9}
 BuildRequires:    gcc-toolset-12-gcc-c++
+%endif
+%if 0%{?el10}
+BuildRequires:    gcc-toolset-15
+BuildRequires:    gcc-toolset-15-gcc-plugin-annobin
+%if 0%{getenv:ASAN}
+BuildRequires:    gcc-toolset-15-libasan-devel
 %endif
 %endif
 BuildRequires:    file-devel
@@ -51,7 +58,9 @@ BuildRequires:    gcc-toolset-12-libasan-devel
 %if 0%{?el8} || 0%{?fedora} > 10
 BuildRequires:    hyperscan-devel
 %endif
+%if !0%{?el10}
 BuildRequires:    jemalloc-devel
+%endif
 %endif
 
 %if 0%{getenv:LUAJIT}
@@ -62,7 +71,9 @@ BuildRequires:    lua-devel
 BuildRequires:    openblas-devel
 BuildRequires:    openssl-devel
 BuildRequires:    pcre2-devel
+%if !0%{?el10}
 BuildRequires:    ragel
+%endif
 BuildRequires:    sqlite-devel
 BuildRequires:    systemd
 BuildRequires:    binutils-devel
@@ -87,13 +98,15 @@ git clone -b v2.1 https://luajit.org/git/luajit-2.0.git %{_builddir}/luajit-src
 %build
 %if 0%{?el7}
 source /opt/rh/devtoolset-10/enable
-%else
+%endif
 %if 0%{?el8}
 source /opt/rh/gcc-toolset-10/enable
 %endif
 %if 0%{?el9}
 source /opt/rh/gcc-toolset-12/enable
 %endif
+%if 0%{?el10}
+source /usr/lib/gcc-toolset/15-env.source
 %endif
 
 %if 0%{getenv:LUAJIT}
@@ -145,12 +158,14 @@ rm -f %{_builddir}/luajit-build/lib/*.so || true
         -DHYPERSCAN_ROOT_DIR=/vectorscan \
 %endif
 %ifarch x86_64 amd64
-%if 0%{?el7}
+%if 0%{?el7} || 0%{?el10}
         -DHYPERSCAN_ROOT_DIR=/vectorscan \
 %endif
 %endif
 %ifarch x86_64 amd64
+%if !0%{?el10}
         -DENABLE_JEMALLOC=ON \
+%endif
 %endif
 %if 0%{getenv:LUAJIT}
         -DENABLE_LUAJIT=ON \
@@ -202,6 +217,7 @@ systemctl --no-reload preset rspamd.service >/dev/null 2>&1 || :
 
 %{_bindir}/rspamd
 %{_bindir}/rspamd_stats
+%{_bindir}/mapstats
 %{_bindir}/rspamc
 %{_bindir}/rspamadm
 

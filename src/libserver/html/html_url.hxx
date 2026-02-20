@@ -24,6 +24,7 @@
 #include <optional>
 
 struct rspamd_url; /* Forward declaration */
+struct lua_State;  /* Forward declaration */
 
 namespace rspamd::html {
 
@@ -53,15 +54,17 @@ auto html_check_displayed_url(rspamd_mempool_t *pool,
 							  void *url_set,
 							  std::string_view visible_part,
 							  goffset href_offset,
-							  struct rspamd_url *url) -> void;
+							  struct rspamd_url *url,
+							  lua_State *L) -> void;
 
 /**
  * Process HTML url (e.g. for href component)
  * @param pool
  * @param input may be modified during the process
+ * @param L Lua state for consultation (may be NULL)
  * @return
  */
-auto html_process_url(rspamd_mempool_t *pool, std::string_view &input)
+auto html_process_url(rspamd_mempool_t *pool, std::string_view &input, lua_State *L)
 	-> std::optional<struct rspamd_url *>;
 }// namespace rspamd::html
 

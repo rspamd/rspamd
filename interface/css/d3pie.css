@@ -29,7 +29,7 @@
 }
 
 /* pie placeholder */
-.d3pie .slice-g:first-of-type .inner-label {
+.d3pie .slice-g.first-slice .inner-label {
     fill: #cccccc;
 }
 .d3pie defs radialGradient:first-of-type stop {

@@ -24,6 +24,7 @@
 #include "lua/lua_thread_pool.h"
 #include "message.h"
 #include "unix-std.h"
+#include "str_util.h"
 
 #include "replxx.h"
 #include "worker_util.h"
@@ -601,10 +602,10 @@ rspamadm_lua_run_repl(lua_State *L, bool is_batch)
 
 	for (;;) {
 		if (is_batch) {
-			size_t linecap = 0;
-			ssize_t linelen;
+			gsize linecap = 0;
+			gssize linelen;
 
-			linelen = getline(&input, &linecap, stdin);
+			linelen = rspamd_getline(&input, &linecap, stdin);
 
 			if (linelen > 0) {
 				if (input[linelen - 1] == '\n') {
@@ -690,6 +691,10 @@ rspamadm_lua_run_repl(lua_State *L, bool is_batch)
 				}
 			}
 		}
+	}
+
+	if (is_batch && input) {
+		rspamd_getline_free(input);
 	}
 }
 

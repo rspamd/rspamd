@@ -18,6 +18,12 @@ function(InstallRspamdFiles)
 
     file(GLOB_RECURSE CONF_FILES RELATIVE "${CMAKE_SOURCE_DIR}/conf" CONFIGURE_DEPENDS
             ${GLOB_PATTERNS})
+
+    # Exclude hyperscan-specific config when hyperscan is disabled
+    if (NOT ENABLE_HYPERSCAN)
+        list(REMOVE_ITEM CONF_FILES "worker-hs_helper.conf" "worker-hs_helper.inc")
+    endif ()
+
     foreach (CONF_FILE ${CONF_FILES})
         get_filename_component(_rp ${CONF_FILE} PATH)
         install(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${CONFDIR}/${_rp})")
@@ -68,7 +74,6 @@ function(InstallRspamdFiles)
     # Install third-party Lua libraries
     install(FILES "contrib/lua-fun/fun.lua" DESTINATION ${LUALIBDIR})
     install(FILES "contrib/lua-argparse/argparse.lua" DESTINATION ${LUALIBDIR})
-    install(FILES "contrib/lua-tableshape/tableshape.lua" DESTINATION ${LUALIBDIR})
     install(FILES "contrib/lua-lupa/lupa.lua" DESTINATION ${LUALIBDIR})
     install(FILES "contrib/lua-lpeg/lpegre.lua" DESTINATION ${LUALIBDIR})
 
@@ -84,6 +89,7 @@ function(InstallRspamdFiles)
 
     # Install utilities
     install(PROGRAMS "utils/rspamd_stats.pl" RENAME rspamd_stats DESTINATION bin)
+    install(PROGRAMS "utils/mapstats.pl" RENAME mapstats DESTINATION bin)
 
     # Install web UI if requested
     if (INSTALL_WEBUI)

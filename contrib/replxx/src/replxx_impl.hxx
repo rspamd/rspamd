@@ -35,7 +35,7 @@
 #include <deque>
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <thread>
 #include <mutex>
 #include <chrono>
@@ -87,9 +87,10 @@ public:
 		TRIM,
 		SKIP
 	};
-	typedef std::unordered_map<std::string, Replxx::key_press_handler_t> named_actions_t;
+	typedef std::map<std::string, Replxx::key_press_handler_t> named_actions_t;
 	typedef Replxx::ACTION_RESULT ( ReplxxImpl::* key_press_handler_raw_t )( char32_t );
-	typedef std::unordered_map<int, Replxx::key_press_handler_t> key_press_handlers_t;
+	typedef std::map<int, Replxx::key_press_handler_t> key_press_handlers_t;
+
 private:
 	typedef int long long unsigned action_trait_t;
 	static action_trait_t const NOOP                       =  0;

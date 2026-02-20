@@ -41,6 +41,7 @@ dofile(local_rules .. '/parts.lua')
 dofile(local_rules .. '/bitcoin.lua')
 dofile(local_rules .. '/bounce.lua')
 dofile(local_rules .. '/content.lua')
+dofile(local_rules .. '/fuzzy_html_phishing.lua')
 dofile(local_rules .. '/controller/init.lua')
 
 if rspamd_util.file_exists(local_conf .. '/rspamd.local.lua') then

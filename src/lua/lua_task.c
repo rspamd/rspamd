@@ -32,6 +32,8 @@
 
 #include <math.h>
 #include "libmime/received.h"
+#include "libserver/html/html_url_rewrite_c.h"
+#include "lua_html_url_rewrite.h"
 
 /***
  * @module rspamd_task
@@ -246,6 +248,8 @@ LUA_FUNCTION_DEF(task, append_message);
 /***
  * @method task:get_urls([need_emails|list_protos][, need_images])
  * Get all URLs found in a message. Telephone urls and emails are not included unless explicitly asked in `list_protos`
+ * Content URLs (extracted from PDF and other content types) are included by default unless
+ * `include_content_urls` global option is set to false.
  * @param {boolean} need_emails if `true` then return also email urls, this can be a comma separated string of protocols desired or a table (e.g. `mailto` or `telephone`)
  * @param {boolean} need_images return urls from images (<img src=...>) as well
  * @return {table rspamd_url} list of all urls found
@@ -317,14 +321,25 @@ LUA_FUNCTION_DEF(task, get_rawbody);
  */
 LUA_FUNCTION_DEF(task, get_emails);
 /***
- * @method task:get_text_parts()
- * Get all text (and HTML) parts found in a message
+ * @method task:inject_part(type, content[, original_part])
+ * Injects a virtual mime part into the task structure
+ * @param {string} type part type (currently only "text" is supported)
+ * @param {string/text/table} content part content (accepts string, rspamd_text, or table of rspamd_text chunks - will be efficiently concatenated in C)
+ * @param {rspamd_mimepart} original_part optional original mime part that this injected part is derived from (sets parent relationship)
+ * @return {boolean} true if part was injected
+ */
+LUA_FUNCTION_DEF(task, inject_part);
+/***
+ * @method task:get_text_parts([include_virtual])
+ * Get all text (and HTML) parts found in a message. By default, injected/virtual parts are excluded.
+ * @param {boolean} include_virtual if true, include injected/virtual parts (default: false)
  * @return {table rspamd_text_part} list of text parts
  */
 LUA_FUNCTION_DEF(task, get_text_parts);
 /***
- * @method task:get_parts()
- * Get all mime parts found in a message
+ * @method task:get_parts([include_virtual])
+ * Get all mime parts found in a message. By default, injected/virtual parts are excluded.
+ * @param {boolean} include_virtual if true, include injected/virtual parts (default: false)
  * @return {table rspamd_mime_part} list of mime parts
  */
 LUA_FUNCTION_DEF(task, get_parts);
@@ -483,6 +498,11 @@ LUA_FUNCTION_DEF(task, get_queue_id);
  */
 LUA_FUNCTION_DEF(task, get_uid);
 /***
+ * @method task:get_uuid()
+ * Returns UUID v7 of the task (time-ordered, suitable for cross-system correlation).
+ */
+LUA_FUNCTION_DEF(task, get_uuid);
+/***
  * @method task:get_resolver()
  * Returns ready to use rspamd_resolver object suitable for making asynchronous DNS requests.
  * @return {rspamd_resolver} resolver object associated with the task's session
@@ -626,6 +646,48 @@ LUA_FUNCTION_DEF(task, get_from);
  * @return {boolean} success or not
  */
 LUA_FUNCTION_DEF(task, set_from);
+
+/***
+ * @method task:get_mail_esmtp_args()
+ * Returns a table of ESMTP arguments from MAIL FROM command (milter only).
+ * Each argument is a key-value pair where the key is the argument name and
+ * the value is the argument value (or empty string if no value).
+ * @return {table} ESMTP arguments or nil if not available
+ * @example
+ * local esmtp_args = task:get_mail_esmtp_args()
+ * if esmtp_args then
+ *   -- Check for DSN arguments
+ *   local ret = esmtp_args['RET']
+ *   local envid = esmtp_args['ENVID']
+ * end
+ */
+LUA_FUNCTION_DEF(task, get_mail_esmtp_args);
+
+/***
+ * @method task:get_rcpt_esmtp_args([idx])
+ * Returns a table of ESMTP arguments from RCPT TO command (milter only).
+ * If idx is specified, returns arguments for the recipient at that index (0-based).
+ * If idx is not specified, returns an array of tables, one per recipient.
+ * Each argument is a key-value pair where the key is the argument name and
+ * the value is the argument value (or empty string if no value).
+ * @param {integer} idx optional index of the recipient (0-based)
+ * @return {table|array of tables} ESMTP arguments or nil if not available
+ * @example
+ * -- Get args for all recipients
+ * local rcpt_args = task:get_rcpt_esmtp_args()
+ * if rcpt_args then
+ *   for i, args in ipairs(rcpt_args) do
+ *     if args and args['NOTIFY'] then
+ *       -- Process NOTIFY argument
+ *     end
+ *   end
+ * end
+ *
+ * -- Get args for first recipient only
+ * local first_rcpt_args = task:get_rcpt_esmtp_args(0)
+ */
+LUA_FUNCTION_DEF(task, get_rcpt_esmtp_args);
+
 /***
  * @method task:get_user()
  * Returns authenticated user name for this task if specified by an MTA.
@@ -965,6 +1027,11 @@ task:set_milter_reply({
 	add_headers = {['X-Lua'] = 'test'},
 	-- 1 is the position of header to remove
 	remove_headers = {['DKIM-Signature'] = 1},
+	-- change smtp from
+	change_from = 'sender@example.com',
+	-- add and/or remove smtp rcpts
+	add_rcpt = {'new-rcpt1@example.com', 'new-rcpt2@example.com'},
+	del_rcpt = {'old-rcpt1@example.com', 'old-rcpt2@example.com'},
 })
  */
 LUA_FUNCTION_DEF(task, set_milter_reply);
@@ -1233,6 +1300,24 @@ LUA_FUNCTION_DEF(task, get_dns_req);
  */
 LUA_FUNCTION_DEF(task, add_timer);
 
+/***
+ * @method task:rewrite_html_urls(callback)
+ * Rewrites URLs in HTML parts using the specified Lua callback function.
+ * The callback receives (task, url) and should return the replacement URL or nil.
+ * @param {function} callback Lua function to call for each URL
+ * @return {table|nil} table of rewritten HTML parts indexed by part number, or nil on error
+ */
+LUA_FUNCTION_DEF(task, rewrite_html_urls);
+
+/***
+ * @method task:get_html_urls()
+ * Extracts all URLs from HTML parts without rewriting.
+ * Useful for async URL checking workflows where URLs need to be batched.
+ * @return {table|nil} table indexed by part number, each containing an array of URL info tables with keys: url, attr, tag
+ */
+/* Implemented in lua_html_url_rewrite.cxx as C++ binding */
+extern int lua_task_get_html_urls(lua_State *L);
+
 static const struct luaL_reg tasklib_f[] = {
 	LUA_INTERFACE_DEF(task, create),
 	LUA_INTERFACE_DEF(task, load_from_file),
@@ -1269,6 +1354,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, get_rawbody),
 	LUA_INTERFACE_DEF(task, get_emails),
 	LUA_INTERFACE_DEF(task, get_text_parts),
+	LUA_INTERFACE_DEF(task, inject_part),
 	LUA_INTERFACE_DEF(task, get_parts),
 	LUA_INTERFACE_DEF(task, get_request_header),
 	LUA_INTERFACE_DEF(task, set_request_header),
@@ -1283,6 +1369,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, get_received_headers),
 	LUA_INTERFACE_DEF(task, get_queue_id),
 	LUA_INTERFACE_DEF(task, get_uid),
+	LUA_INTERFACE_DEF(task, get_uuid),
 	LUA_INTERFACE_DEF(task, get_resolver),
 	LUA_INTERFACE_DEF(task, set_resolver),
 	LUA_INTERFACE_DEF(task, inc_dns_req),
@@ -1295,6 +1382,8 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, has_from),
 	LUA_INTERFACE_DEF(task, get_from),
 	LUA_INTERFACE_DEF(task, set_from),
+	LUA_INTERFACE_DEF(task, get_mail_esmtp_args),
+	LUA_INTERFACE_DEF(task, get_rcpt_esmtp_args),
 	LUA_INTERFACE_DEF(task, get_user),
 	LUA_INTERFACE_DEF(task, set_user),
 	{"get_addr", lua_task_get_from_ip},
@@ -1361,6 +1450,8 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, get_all_named_results),
 	LUA_INTERFACE_DEF(task, topointer),
 	LUA_INTERFACE_DEF(task, add_timer),
+	LUA_INTERFACE_DEF(task, rewrite_html_urls),
+	LUA_INTERFACE_DEF(task, get_html_urls),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
@@ -1409,7 +1500,14 @@ lua_check_task(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_task_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'task' expected");
-	return ud ? *((struct rspamd_task **) ud) : NULL;
+	if (ud) {
+		struct rspamd_task *task = *((struct rspamd_task **) ud);
+		if (rspamd_task_is_valid(task)) {
+			return task;
+		}
+		msg_err("detected use-after-free for task %p", task);
+	}
+	return NULL;
 }
 
 struct rspamd_task *
@@ -1417,7 +1515,14 @@ lua_check_task_maybe(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata_maybe(L, pos, rspamd_task_classname);
 
-	return ud ? *((struct rspamd_task **) ud) : NULL;
+	if (ud) {
+		struct rspamd_task *task = *((struct rspamd_task **) ud);
+		if (rspamd_task_is_valid(task)) {
+			return task;
+		}
+		msg_err("detected use-after-free for task %p", task);
+	}
+	return NULL;
 }
 
 static struct rspamd_image *
@@ -1733,7 +1838,7 @@ static int
 lua_task_load_from_file(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_task *task = NULL, **ptask;
+	struct rspamd_task *task = NULL;
 	const char *fname, *err = NULL;
 	struct rspamd_config *cfg = NULL;
 	gboolean res = FALSE, new_task = FALSE;
@@ -1829,9 +1934,7 @@ lua_task_load_from_file(lua_State *L)
 	lua_pushboolean(L, res);
 
 	if (res && new_task) {
-		ptask = lua_newuserdata(L, sizeof(*ptask));
-		*ptask = task;
-		rspamd_lua_setclass(L, rspamd_task_classname, -1);
+		rspamd_lua_task_push(L, task);
 
 		return 2;
 	}
@@ -1854,7 +1957,7 @@ static int
 lua_task_load_from_string(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_task *task = NULL, **ptask;
+	struct rspamd_task *task = NULL;
 	const char *str_message;
 	gsize message_len = 0;
 	struct rspamd_config *cfg = NULL;
@@ -1900,9 +2003,7 @@ lua_task_load_from_string(lua_State *L)
 	lua_pushboolean(L, true);
 
 	if (new_task) {
-		ptask = lua_newuserdata(L, sizeof(*ptask));
-		*ptask = task;
-		rspamd_lua_setclass(L, rspamd_task_classname, -1);
+		rspamd_lua_task_push(L, task);
 
 		return 2;
 	}
@@ -1915,7 +2016,7 @@ static int
 lua_task_create(lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_task *task = NULL, **ptask;
+	struct rspamd_task *task = NULL;
 	struct rspamd_config *cfg = NULL;
 	struct ev_loop *ev_base = NULL;
 
@@ -1937,12 +2038,13 @@ lua_task_create(lua_State *L)
 		}
 	}
 
+	if (cfg == NULL) {
+		return luaL_error(L, "rspamd_task.create requires cfg");
+	}
 	task = rspamd_task_new(NULL, cfg, NULL, NULL, ev_base, FALSE);
 	task->flags |= RSPAMD_TASK_FLAG_EMPTY;
 
-	ptask = lua_newuserdata(L, sizeof(*ptask));
-	*ptask = task;
-	rspamd_lua_setclass(L, rspamd_task_classname, -1);
+	rspamd_lua_task_push(L, task);
 
 	return 1;
 }
@@ -2538,9 +2640,17 @@ lua_task_get_urls(lua_State *L)
 			return 1;
 		}
 
-		/* Exclude RSPAMD_URL_FLAG_CONTENT to preserve backward compatibility */
+		/*
+		 * By default, include content URLs if configured (default: true).
+		 * Always exclude image URLs unless explicitly requested.
+		 */
+		unsigned int default_flags = ~RSPAMD_URL_FLAG_IMAGE;
+		if (task->cfg && !task->cfg->include_content_urls) {
+			default_flags &= ~RSPAMD_URL_FLAG_CONTENT;
+		}
+
 		if (!lua_url_cbdata_fill(L, 2, &cb, default_protocols_mask,
-								 ~(RSPAMD_URL_FLAG_CONTENT | RSPAMD_URL_FLAG_IMAGE),
+								 default_flags,
 								 max_urls)) {
 			return luaL_error(L, "invalid arguments");
 		}
@@ -2699,6 +2809,132 @@ lua_task_has_urls(lua_State *L)
 	return 2;
 }
 
+static int
+lua_task_inject_part(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+	const char *type = luaL_checkstring(L, 2);
+	struct rspamd_lua_text *content_text;
+	const char *content = NULL;
+	gsize content_len = 0;
+	struct rspamd_mime_part *part, *original_part = NULL;
+	struct rspamd_mime_text_part *txt_part;
+	gboolean is_table = FALSE;
+
+	/* Accept string, rspamd_text, or table of texts */
+	if (lua_type(L, 3) == LUA_TTABLE) {
+		is_table = TRUE;
+		/* Calculate total length first and validate all entries */
+		int table_len = rspamd_lua_table_size(L, 3);
+		if (table_len <= 0) {
+			return luaL_error(L, "empty table provided");
+		}
+
+		lua_pushnil(L);
+		while (lua_next(L, 3) != 0) {
+			struct rspamd_lua_text *t = lua_check_text_or_string(L, -1);
+			if (!t) {
+				lua_pop(L, 2); /* pop value and key */
+				return luaL_error(L, "invalid entry in table (expected string or text)");
+			}
+			content_len += t->len;
+			lua_pop(L, 1);
+		}
+
+		if (content_len == 0) {
+			return luaL_error(L, "all table entries are empty");
+		}
+	}
+	else {
+		content_text = lua_check_text_or_string(L, 3);
+		if (!content_text) {
+			return luaL_error(L, "invalid content argument (expected string, text, or table)");
+		}
+		content = content_text->start;
+		content_len = content_text->len;
+	}
+
+	/* Check for optional original_part parameter */
+	if (lua_gettop(L) >= 4 && lua_isuserdata(L, 4)) {
+		original_part = *((struct rspamd_mime_part **)
+							  rspamd_lua_check_udata_maybe(L, 4, rspamd_mimepart_classname));
+	}
+
+	if (task && task->message) {
+		if (g_ascii_strcasecmp(type, "text") == 0) {
+			part = rspamd_mempool_alloc0(task->task_pool, sizeof(*part));
+			part->part_type = RSPAMD_MIME_PART_TEXT;
+			part->flags |= RSPAMD_MIME_PART_COMPUTED;
+
+			if (original_part) {
+				part->parent_part = original_part;
+			}
+
+			part->ct = rspamd_mempool_alloc0(task->task_pool, sizeof(*part->ct));
+
+			part->ct->type.begin = "text";
+			part->ct->type.len = 4;
+			part->ct->subtype.begin = "plain";
+			part->ct->subtype.len = 5;
+			part->ct->flags = RSPAMD_CONTENT_TYPE_TEXT;
+			part->ct->charset.begin = "utf-8";
+			part->ct->charset.len = 5;
+
+			part->parsed_data.begin = rspamd_mempool_alloc(task->task_pool, content_len + 1);
+			part->parsed_data.len = content_len;
+
+			if (is_table) {
+				char *dst = (char *) part->parsed_data.begin;
+				lua_pushnil(L);
+				while (lua_next(L, 3) != 0) {
+					struct rspamd_lua_text *t = lua_check_text_or_string(L, -1);
+					if (t && t->len > 0) {
+						memcpy(dst, t->start, t->len);
+						dst += t->len;
+					}
+					lua_pop(L, 1);
+				}
+				*dst = '\0';
+			}
+			else {
+				memcpy((char *) part->parsed_data.begin, content, content_len);
+				((char *) part->parsed_data.begin)[content_len] = '\0';
+			}
+
+			part->raw_data = part->parsed_data;
+
+			txt_part = rspamd_mempool_alloc0(task->task_pool, sizeof(*txt_part));
+			txt_part->mime_part = part;
+			txt_part->raw.begin = part->parsed_data.begin;
+			txt_part->raw.len = content_len;
+			txt_part->parsed = txt_part->raw;
+			txt_part->utf_content = txt_part->raw;
+			txt_part->utf_stripped_text = (UText) UTEXT_INITIALIZER;
+			txt_part->real_charset = "utf-8";
+
+			part->specific.txt = txt_part;
+			g_ptr_array_add(task->message->parts, part);
+			g_ptr_array_add(task->message->text_parts, txt_part);
+
+			if (task->cfg && task->message) {
+				uint16_t cur_url_order = 10000;
+				rspamd_message_process_injected_text_part(task, txt_part, &cur_url_order);
+			}
+
+			lua_pushboolean(L, true);
+		}
+		else {
+			lua_pushboolean(L, false);
+		}
+	}
+	else {
+		lua_pushboolean(L, false);
+	}
+
+	return 1;
+}
+
 struct rspamd_url_query_to_inject_cbd {
 	struct rspamd_task *task;
 	struct rspamd_url *url;
@@ -2738,7 +2974,8 @@ inject_url_query(struct rspamd_task *task, struct rspamd_url *url,
 		rspamd_url_find_multiple(task->task_pool,
 								 rspamd_url_query_unsafe(url), url->querylen,
 								 RSPAMD_URL_FIND_ALL, NULL,
-								 inject_url_query_callback, &cbd);
+								 inject_url_query_callback, &cbd,
+								 task->cfg ? task->cfg->lua_state : NULL);
 	}
 
 	if (part_urls) {
@@ -2874,8 +3111,17 @@ lua_task_get_emails(lua_State *L)
 				max_urls = task->cfg->max_lua_urls;
 			}
 
+			/*
+			 * By default, include content URLs if configured (default: true).
+			 * Always exclude image URLs unless explicitly requested.
+			 */
+			unsigned int default_flags = ~RSPAMD_URL_FLAG_IMAGE;
+			if (task->cfg && !task->cfg->include_content_urls) {
+				default_flags &= ~RSPAMD_URL_FLAG_CONTENT;
+			}
+
 			if (!lua_url_cbdata_fill(L, 2, &cb, PROTOCOL_MAILTO,
-									 ~(RSPAMD_URL_FLAG_CONTENT | RSPAMD_URL_FLAG_IMAGE),
+									 default_flags,
 									 max_urls)) {
 				return luaL_error(L, "invalid arguments");
 			}
@@ -2910,22 +3156,36 @@ lua_task_get_text_parts(lua_State *L)
 	unsigned int i;
 	struct rspamd_task *task = lua_check_task(L, 1);
 	struct rspamd_mime_text_part *part, **ppart;
+	gboolean include_virtual = FALSE;
+
+	if (lua_gettop(L) >= 2) {
+		include_virtual = lua_toboolean(L, 2);
+	}
 
 	if (task != NULL) {
 
 		if (task->message) {
-			if (!lua_task_get_cached(L, task, "text_parts")) {
-				lua_createtable(L, MESSAGE_FIELD(task, text_parts)->len, 0);
+			if (!include_virtual && lua_task_get_cached(L, task, "text_parts")) {
+				return 1;
+			}
 
-				PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, part)
-				{
-					ppart = lua_newuserdata(L, sizeof(struct rspamd_mime_text_part *));
-					*ppart = part;
-					rspamd_lua_setclass(L, rspamd_textpart_classname, -1);
-					/* Make it array */
-					lua_rawseti(L, -2, i + 1);
+			lua_newtable(L);
+			int idx = 1;
+
+			PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, part)
+			{
+				if (!include_virtual && (part->mime_part->flags & RSPAMD_MIME_PART_COMPUTED)) {
+					continue;
 				}
 
+				ppart = lua_newuserdata(L, sizeof(struct rspamd_mime_text_part *));
+				*ppart = part;
+				rspamd_lua_setclass(L, rspamd_textpart_classname, -1);
+				/* Make it array */
+				lua_rawseti(L, -2, idx++);
+			}
+
+			if (!include_virtual) {
 				lua_task_set_cached(L, task, "text_parts", -1);
 			}
 		}
@@ -2947,18 +3207,28 @@ lua_task_get_parts(lua_State *L)
 	unsigned int i;
 	struct rspamd_task *task = lua_check_task(L, 1);
 	struct rspamd_mime_part *part, **ppart;
+	gboolean include_virtual = FALSE;
+
+	if (lua_gettop(L) >= 2) {
+		include_virtual = lua_toboolean(L, 2);
+	}
 
 	if (task != NULL) {
 		if (task->message) {
 			lua_createtable(L, MESSAGE_FIELD(task, parts)->len, 0);
+			int idx = 1;
 
 			PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, parts), i, part)
 			{
+				if (!include_virtual && (part->flags & RSPAMD_MIME_PART_COMPUTED)) {
+					continue;
+				}
+
 				ppart = lua_newuserdata(L, sizeof(struct rspamd_mime_part *));
 				*ppart = part;
 				rspamd_lua_setclass(L, rspamd_mimepart_classname, -1);
 				/* Make it array */
-				lua_rawseti(L, -2, i + 1);
+				lua_rawseti(L, -2, idx++);
 			}
 		}
 		else {
@@ -3374,6 +3644,22 @@ lua_task_get_uid(lua_State *L)
 
 	if (task) {
 		lua_pushstring(L, task->task_pool->tag.uid);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_task_get_uuid(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+
+	if (task) {
+		lua_pushstring(L, task->task_uuid);
 	}
 	else {
 		return luaL_error(L, "invalid arguments");
@@ -4276,6 +4562,128 @@ lua_task_get_reply_sender(lua_State *L)
 		else if (task->from_envelope) {
 			lua_pushlstring(L, task->from_envelope->addr,
 							task->from_envelope->addr_len);
+		}
+		else {
+			lua_pushnil(L);
+		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_task_get_mail_esmtp_args(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+
+	if (task) {
+		/* First try to get ESMTP args from task */
+		GHashTable *mail_args = rspamd_task_get_mail_esmtp_args(task);
+
+		if (mail_args) {
+			GHashTableIter iter;
+			gpointer key, value;
+
+			lua_createtable(L, 0, 0);
+
+			g_hash_table_iter_init(&iter, mail_args);
+			while (g_hash_table_iter_next(&iter, &key, &value)) {
+				rspamd_ftok_t *k = (rspamd_ftok_t *) key;
+				rspamd_ftok_t *v = (rspamd_ftok_t *) value;
+
+				lua_pushlstring(L, k->begin, k->len);
+				lua_pushlstring(L, v->begin, v->len);
+				lua_settable(L, -3);
+			}
+		}
+		else {
+			lua_pushnil(L);
+		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_task_get_rcpt_esmtp_args(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+	int idx = -1;
+	gboolean all_rcpts = TRUE;
+
+	if (task) {
+		/* Check if idx was specified */
+		if (lua_gettop(L) >= 2 && lua_type(L, 2) == LUA_TNUMBER) {
+			idx = lua_tointeger(L, 2);
+			all_rcpts = FALSE;
+		}
+
+		/* First try to get ESMTP args from task */
+		GPtrArray *rcpt_args = rspamd_task_get_rcpt_esmtp_args(task);
+
+		if (rcpt_args) {
+			if (all_rcpts) {
+				/* Return all recipients' args */
+				lua_createtable(L, 0, 0);
+
+				for (unsigned int i = 0; i < rcpt_args->len; i++) {
+					GHashTable *args = g_ptr_array_index(rcpt_args, i);
+					if (args) {
+						GHashTableIter iter;
+						gpointer key, value;
+
+						lua_createtable(L, 0, 0);
+
+						g_hash_table_iter_init(&iter, args);
+						while (g_hash_table_iter_next(&iter, &key, &value)) {
+							rspamd_ftok_t *k = (rspamd_ftok_t *) key;
+							rspamd_ftok_t *v = (rspamd_ftok_t *) value;
+
+							lua_pushlstring(L, k->begin, k->len);
+							lua_pushlstring(L, v->begin, v->len);
+							lua_settable(L, -3);
+						}
+
+						lua_rawseti(L, -2, i + 1);
+					}
+				}
+			}
+			else {
+				/* Return specific recipient's args */
+				if (idx >= 0 && idx < (int) rcpt_args->len) {
+					GHashTable *args = g_ptr_array_index(rcpt_args, idx);
+					if (args) {
+						GHashTableIter iter;
+						gpointer key, value;
+
+						lua_createtable(L, 0, 0);
+
+						g_hash_table_iter_init(&iter, args);
+						while (g_hash_table_iter_next(&iter, &key, &value)) {
+							rspamd_ftok_t *k = (rspamd_ftok_t *) key;
+							rspamd_ftok_t *v = (rspamd_ftok_t *) value;
+
+							lua_pushlstring(L, k->begin, k->len);
+							lua_pushlstring(L, v->begin, v->len);
+							lua_settable(L, -3);
+						}
+					}
+					else {
+						lua_pushnil(L);
+					}
+				}
+				else {
+					lua_pushnil(L);
+				}
+			}
 		}
 		else {
 			lua_pushnil(L);
@@ -6293,49 +6701,83 @@ lua_task_process_regexp(lua_State *L)
 	struct rspamd_task *task = lua_check_task(L, 1);
 	struct rspamd_lua_regexp *re = NULL;
 	gboolean strong = FALSE;
-	const char *type_str = NULL, *header_str = NULL;
-	gsize header_len = 0;
+	const char *type_str = NULL, *header_str = NULL, *selector_str = NULL;
 	GError *err = NULL;
 	int ret = 0;
 	enum rspamd_re_type type = RSPAMD_RE_BODY;
 
 	/*
-	 * - `re`* : regular expression object
- 	 * - `type`*: type of regular expression:
-	 *   + `mime`: mime regexp
-	 *   + `rawmime`: raw mime regexp
-	 *   + `header`: header regexp
-	 *   + `rawheader`: raw header expression
-	 *   + `body`: raw body regexp
-	 *   + `url`: url regexp
-	 * - `header`: for header and rawheader regexp means the name of header
-	 * - `strong`: case sensitive match for headers
+	 * Two calling conventions are supported:
+	 * 1) Table form: task:process_regexp({ re=..., type=..., header=?, selector=?, strong=? })
+	 * 2) Positional: task:process_regexp(re, type, header_or_selector, strong)
 	 */
 	if (task != NULL) {
-		if (!rspamd_lua_parse_table_arguments(L, 2, &err,
-											  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
-											  "*re=U{regexp};*type=S;header=V;strong=B",
-											  &re, &type_str, &header_len, &header_str,
-											  &strong)) {
-			msg_err_task("cannot get parameters list: %e", err);
+		if (lua_type(L, 2) == LUA_TTABLE) {
+			/* Table-based API */
+			size_t header_len = 0, selector_len = 0;
+			if (!rspamd_lua_parse_table_arguments(L, 2, &err,
+												  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
+												  "*re=U{regexp};*type=S;header=V;selector=V;strong=B",
+												  &re, &type_str,
+												  &header_len, &header_str,
+												  &selector_len, &selector_str,
+												  &strong)) {
+				msg_err_task("cannot get parameters list: %e", err);
 
-			if (err) {
-				g_error_free(err);
-			}
+				if (err) {
+					g_error_free(err);
+				}
 
-			return luaL_error(L, "invalid arguments");
-		}
-		else {
-			type = rspamd_re_cache_type_from_string(type_str);
-
-			if ((type == RSPAMD_RE_HEADER || type == RSPAMD_RE_RAWHEADER) && header_str == NULL) {
-				msg_err_task(
-					"header argument is mandatory for header/rawheader regexps");
+				return luaL_error(L, "invalid arguments");
 			}
 			else {
-				ret = rspamd_re_cache_process(task, re->re, type,
-											  (gpointer) header_str, header_len, strong);
+				type = rspamd_re_cache_type_from_string(type_str);
+
+				if ((type == RSPAMD_RE_HEADER || type == RSPAMD_RE_RAWHEADER || type == RSPAMD_RE_MIMEHEADER) && header_str == NULL) {
+					msg_err_task(
+						"header argument is mandatory for header/rawheader regexps");
+				}
+				else {
+					const char *type_data = NULL;
+					size_t type_len = 0;
+
+					if (type == RSPAMD_RE_HEADER || type == RSPAMD_RE_RAWHEADER || type == RSPAMD_RE_MIMEHEADER) {
+						type_data = header_str;
+						type_len = header_str ? (strlen(header_str) + 1) : 0;
+					}
+					else if (type == RSPAMD_RE_SELECTOR) {
+						type_data = selector_str;
+						type_len = selector_str ? (strlen(selector_str) + 1) : 0;
+					}
+
+					ret = rspamd_re_cache_process(task, re->re, type,
+												  (gpointer) type_data, type_len, strong);
+				}
 			}
+		}
+		else {
+			/* Positional API: (re, type, header_or_selector, strong) */
+			re = lua_check_regexp(L, 2);
+			type_str = luaL_checkstring(L, 3);
+			type = rspamd_re_cache_type_from_string(type_str);
+			const char *type_data = NULL;
+			size_t type_len = 0;
+
+			if (lua_type(L, 4) == LUA_TSTRING) {
+				type_data = lua_tostring(L, 4);
+				type_len = strlen(type_data) + 1;
+			}
+			if (lua_type(L, 5) == LUA_TBOOLEAN) {
+				strong = lua_toboolean(L, 5);
+			}
+
+			/* For header/rawheader/mimeheader, arg4 is header; for selector, arg4 is selector name */
+			if ((type == RSPAMD_RE_HEADER || type == RSPAMD_RE_RAWHEADER || type == RSPAMD_RE_MIMEHEADER) && type_data == NULL) {
+				msg_err_task("header argument is mandatory for header/rawheader regexps");
+			}
+
+			ret = rspamd_re_cache_process(task, re->re, type,
+										  (gpointer) type_data, type_len, strong);
 		}
 	}
 	else {
@@ -6943,7 +7385,7 @@ lua_task_get_meta_words(lua_State *L)
 		return luaL_error(L, "invalid arguments");
 	}
 
-	if (task->meta_words == NULL) {
+	if (!task->meta_words.a) {
 		lua_createtable(L, 0, 0);
 	}
 	else {
@@ -6967,7 +7409,7 @@ lua_task_get_meta_words(lua_State *L)
 			}
 		}
 
-		return rspamd_lua_push_words(L, task->meta_words, how);
+		return rspamd_lua_push_words_kvec(L, &task->meta_words, how);
 	}
 
 	return 1;
@@ -6989,6 +7431,76 @@ lua_lookup_words_array(lua_State *L,
 
 	for (i = 0; i < words->len; i++) {
 		tok = &g_array_index(words, rspamd_stat_token_t, i);
+
+		matched = FALSE;
+
+		if (tok->normalized.len == 0) {
+			continue;
+		}
+
+		key = tok->normalized.begin;
+		keylen = tok->normalized.len;
+
+		switch (map->type) {
+		case RSPAMD_LUA_MAP_SET:
+		case RSPAMD_LUA_MAP_HASH:
+			/* We know that tok->normalized is zero terminated in fact */
+			if (rspamd_match_hash_map(map->data.hash, key, keylen)) {
+				matched = TRUE;
+			}
+			break;
+		case RSPAMD_LUA_MAP_REGEXP:
+		case RSPAMD_LUA_MAP_REGEXP_MULTIPLE:
+			if (rspamd_match_regexp_map_single(map->data.re_map, key,
+											   keylen)) {
+				matched = TRUE;
+			}
+			break;
+		default:
+			g_assert_not_reached();
+			break;
+		}
+
+		if (matched) {
+			nmatched++;
+
+			lua_pushcfunction(L, &rspamd_lua_traceback);
+			err_idx = lua_gettop(L);
+			lua_pushvalue(L, cbpos); /* Function */
+			rspamd_lua_push_full_word(L, tok);
+
+			if (lua_pcall(L, 1, 0, err_idx) != 0) {
+				msg_err_task("cannot call callback function for lookup words: %s",
+							 lua_tostring(L, -1));
+			}
+
+			lua_settop(L, err_idx - 1);
+		}
+	}
+
+	return nmatched;
+}
+
+static unsigned int
+lua_lookup_words_kvec(lua_State *L,
+					  int cbpos,
+					  struct rspamd_task *task,
+					  struct rspamd_lua_map *map,
+					  rspamd_words_t *words)
+{
+	rspamd_word_t *tok;
+	unsigned int i, nmatched = 0;
+	int err_idx;
+	gboolean matched;
+	const char *key;
+	gsize keylen;
+
+	if (!words || !words->a) {
+		return 0;
+	}
+
+	for (i = 0; i < kv_size(*words); i++) {
+		tok = &kv_A(*words, i);
 
 		matched = FALSE;
 
@@ -7062,13 +7574,13 @@ lua_task_lookup_words(lua_State *L)
 
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, tp)
 	{
-		if (tp->utf_words) {
-			matches += lua_lookup_words_array(L, 3, task, map, tp->utf_words);
+		if (tp->utf_words.a) {
+			matches += lua_lookup_words_kvec(L, 3, task, map, &tp->utf_words);
 		}
 	}
 
-	if (task->meta_words) {
-		matches += lua_lookup_words_array(L, 3, task, map, task->meta_words);
+	if (task->meta_words.a) {
+		matches += lua_lookup_words_kvec(L, 3, task, map, &task->meta_words);
 	}
 
 	lua_pushinteger(L, matches);
@@ -7509,6 +8021,89 @@ lua_task_add_timer(lua_State *L)
 
 	return 0;
 }
+
+static int
+lua_task_rewrite_html_urls(lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task(L, 1);
+
+	if (!lua_isfunction(L, 2)) {
+		return luaL_error(L, "invalid arguments: function expected");
+	}
+
+	if (!task || !MESSAGE_FIELD_CHECK(task, text_parts)) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	/* Create function reference */
+	lua_pushvalue(L, 2);
+	int func_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+	/* Create result table */
+	lua_newtable(L);
+	int results = 0;
+	unsigned int i;
+	void *part;
+
+	/* Iterate through text parts */
+	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, part)
+	{
+		struct rspamd_mime_text_part *text_part = (struct rspamd_mime_text_part *) part;
+
+		/* Only process HTML parts */
+		if (!IS_TEXT_PART_HTML(text_part) || !text_part->html) {
+			continue;
+		}
+
+		/* Skip if no UTF-8 content available */
+		if (!text_part->utf_raw_content || text_part->utf_raw_content->len == 0) {
+			continue;
+		}
+
+		char *output_html = NULL;
+		gsize output_len = 0;
+
+		/* Process URL rewriting using C wrapper on UTF-8 buffer */
+		int ret = rspamd_html_url_rewrite(
+			task,
+			L,
+			text_part->html,
+			func_ref,
+			text_part->mime_part->part_number,
+			(const char *) text_part->utf_raw_content->data,
+			text_part->utf_raw_content->len,
+			&output_html,
+			&output_len);
+
+		if (ret == 0 && output_html) {
+			/* Store result in table: table[part_number] = rewritten_html */
+			lua_pushinteger(L, text_part->mime_part->part_number);
+
+			/* Create rspamd_text userdata for the rewritten content */
+			struct rspamd_lua_text *t = (struct rspamd_lua_text *) lua_newuserdata(L, sizeof(struct rspamd_lua_text));
+			rspamd_lua_setclass(L, rspamd_text_classname, -1);
+			t->flags = 0;
+			t->start = output_html;
+			t->len = output_len;
+
+			lua_settable(L, -3);
+			results++;
+		}
+	}
+
+	/* Unreference the function */
+	luaL_unref(L, LUA_REGISTRYINDEX, func_ref);
+
+	if (results == 0) {
+		lua_pop(L, 1);
+		lua_pushnil(L);
+	}
+
+	return 1;
+}
+
+/* lua_task_get_html_urls is implemented in lua_html_url_rewrite.cxx */
 
 /* Init part */
 

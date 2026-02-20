@@ -20,14 +20,14 @@ local lua_util = require "lua_util"
 local rspamd_util = require "rspamd_util"
 local rspamd_url = require "rspamd_url"
 local common = require "lua_selectors/common"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
 local maps = require "lua_selectors/maps"
 local E = {}
 local M = "selectors"
 
 local HOSTNAME = rspamd_util.get_hostname()
 
-local url_flags_ts = ts.array_of(ts.one_of(lua_util.keys(rspamd_url.flags))):is_optional()
+local url_flags_ts = T.array(T.enum(lua_util.keys(rspamd_url.flags))):optional()
 
 local function gen_exclude_flags_filter(exclude_flags)
   return function(u)
@@ -53,7 +53,7 @@ local extractors = {
     end,
     ['description'] = [[Return value from function's argument or an empty string,
 For example, `id('Something')` returns a string 'Something']],
-    ['args_schema'] = { ts.string:is_optional() }
+    ['args_schema'] = { T.string():optional() }
   },
   -- Similar but for making lists
   ['list'] = {
@@ -257,8 +257,8 @@ the second optional argument is optional hash type (`blake2`, `sha256`, `sha1`, 
 The optional second argument accepts list of flags:
   - `full`: returns all headers with this name with all data (like task:get_header_full())
   - `strong`: use case sensitive match when matching header's name]],
-    ['args_schema'] = { ts.string,
-                        (ts.pattern("strong") + ts.pattern("full")):is_optional() }
+    ['args_schema'] = { T.string(),
+                        T.string():optional() }
   },
   -- Get list of received headers (returns list of tables)
   ['received'] = {
@@ -313,17 +313,29 @@ e.g. `get_tld`]],
       return urls, 'userdata_list'
     end,
     ['description'] = [[Get most specific urls. Arguments are equal to the Lua API function]],
-    ['args_schema'] = { ts.shape {
-      limit = ts.number + ts.string / tonumber,
-      esld_limit = (ts.number + ts.string / tonumber):is_optional(),
+    ['args_schema'] = { T.table {
+      limit = T.one_of({ T.number(), T.transform(T.string(), tonumber) }),
+      esld_limit = T.one_of({ T.number(), T.transform(T.string(), tonumber) }):optional(),
       exclude_flags = url_flags_ts,
       flags = url_flags_ts,
-      flags_mode = ts.one_of { 'explicit' }:is_optional(),
-      prefix = ts.string:is_optional(),
-      need_content = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
-      need_emails = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
-      need_images = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
-      ignore_redirected = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
+      flags_mode = T.enum { 'explicit' }:optional(),
+      prefix = T.string():optional(),
+      need_content = T.one_of({
+        T.boolean(),
+        T.transform(T.string(), lua_util.toboolean)
+      }):optional(),
+      need_emails = T.one_of({
+        T.boolean(),
+        T.transform(T.string(), lua_util.toboolean)
+      }):optional(),
+      need_images = T.one_of({
+        T.boolean(),
+        T.transform(T.string(), lua_util.toboolean)
+      }):optional(),
+      ignore_redirected = T.one_of({
+        T.boolean(),
+        T.transform(T.string(), lua_util.toboolean)
+      }):optional(),
     } }
   },
   ['specific_urls_filter_map'] = {
@@ -347,17 +359,29 @@ e.g. `get_tld`]],
       end, urls), 'userdata_list'
     end,
     ['description'] = [[Get most specific urls, filtered by some map. Arguments are equal to the Lua API function]],
-    ['args_schema'] = { ts.string, ts.shape {
-      limit = ts.number + ts.string / tonumber,
-      esld_limit = (ts.number + ts.string / tonumber):is_optional(),
+    ['args_schema'] = { T.string(), T.table {
+      limit = T.one_of({ T.number(), T.transform(T.string(), tonumber) }),
+      esld_limit = T.one_of({ T.number(), T.transform(T.string(), tonumber) }):optional(),
       exclude_flags = url_flags_ts,
       flags = url_flags_ts,
-      flags_mode = ts.one_of { 'explicit' }:is_optional(),
-      prefix = ts.string:is_optional(),
-      need_content = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
-      need_emails = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
-      need_images = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
-      ignore_redirected = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
+      flags_mode = T.enum { 'explicit' }:optional(),
+      prefix = T.string():optional(),
+      need_content = T.one_of({
+        T.boolean(),
+        T.transform(T.string(), lua_util.toboolean)
+      }):optional(),
+      need_emails = T.one_of({
+        T.boolean(),
+        T.transform(T.string(), lua_util.toboolean)
+      }):optional(),
+      need_images = T.one_of({
+        T.boolean(),
+        T.transform(T.string(), lua_util.toboolean)
+      }):optional(),
+      ignore_redirected = T.one_of({
+        T.boolean(),
+        T.transform(T.string(), lua_util.toboolean)
+      }):optional(),
     } }
   },
   -- URLs filtered by flags
@@ -371,8 +395,8 @@ e.g. `get_tld`]],
     end,
     ['description'] = [[Get list of all urls filtered by flags_include/exclude
 (see rspamd_task:get_urls_filtered for description)]],
-    ['args_schema'] = { ts.array_of {
-      url_flags_ts:is_optional(), url_flags_ts:is_optional()
+    ['args_schema'] = { T.array {
+      url_flags_ts:optional(), url_flags_ts:optional()
     } }
   },
   -- Get all emails
@@ -402,7 +426,7 @@ e.g. `get_user`]],
     end,
     ['description'] = [[Get specific pool var. The first argument must be variable name,
 the second argument is optional and defines the type (string by default)]],
-    ['args_schema'] = { ts.string, ts.string:is_optional() }
+    ['args_schema'] = { T.string(), T.string():optional() }
   },
   -- Get value of specific key from task cache
   ['task_cache'] = {
@@ -421,21 +445,21 @@ the second argument is optional and defines the type (string by default)]],
     end,
     ['description'] = [[Get value of specific key from task cache. The first argument must be
 the key name]],
-    ['args_schema'] = { ts.string }
+    ['args_schema'] = { T.string() }
   },
   -- Get specific HTTP request header. The first argument must be header name.
   ['request_header'] = {
     ['get_value'] = function(task, args)
       local hdr = task:get_request_header(args[1])
       if hdr then
-        return hdr, 'string'
+        return tostring(hdr), 'string'
       end
 
       return nil
     end,
     ['description'] = [[Get specific HTTP request header.
 The first argument must be header name.]],
-    ['args_schema'] = { ts.string }
+    ['args_schema'] = { T.string() }
   },
   -- Get task date, optionally formatted
   ['time'] = {
@@ -459,8 +483,8 @@ The first argument must be header name.]],
   - `message`: timestamp as defined by `Date` header
 
   The second argument is optional time format, see [os.date](http://pgl.yoyo.org/luai/i/os.date) description]],
-    ['args_schema'] = { ts.one_of { 'connect', 'message' }:is_optional(),
-                        ts.string:is_optional() }
+    ['args_schema'] = { T.enum { 'connect', 'message' }:optional(),
+                        T.string():optional() }
   },
   -- Get text words from a message
   ['words'] = {
@@ -488,7 +512,7 @@ The first argument must be header name.]],
   - `norm`: normalised words (lowercased)
   - `full`: list of tables
   ]],
-    ['args_schema'] = { ts.one_of { 'stem', 'raw', 'norm', 'full' }:is_optional() },
+    ['args_schema'] = { T.enum { 'stem', 'raw', 'norm', 'full' }:optional() },
   },
   -- Get queue ID
   ['queueid'] = {
@@ -534,7 +558,7 @@ The first argument must be header name.]],
     ['description'] = 'Get specific symbol. The first argument must be the symbol name. ' ..
         'The second argument is an optional shadow result name. ' ..
         'Returns the symbol table. See task:get_symbol()',
-    ['args_schema'] = { ts.string, ts.string:is_optional() }
+    ['args_schema'] = { T.string(), T.string():optional() }
   },
   -- Get full scan result
   ['scan_result'] = {
@@ -546,7 +570,7 @@ The first argument must be header name.]],
     end,
     ['description'] = 'Get full scan result (either default or shadow if shadow result name is specified)' ..
         'Returns the result table. See task:get_metric_result()',
-    ['args_schema'] = { ts.string:is_optional() }
+    ['args_schema'] = { T.string():optional() }
   },
   -- Get list of metatokens as strings
   ['metatokens'] = {

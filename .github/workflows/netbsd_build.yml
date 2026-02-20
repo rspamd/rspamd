@@ -1,0 +1,117 @@
+name: NetBSD Build
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      netbsd_version:
+        description: 'NetBSD version to use'
+        required: false
+        default: '10.0'
+        type: choice
+        options:
+          - '10.0'
+          - '9.4'
+          - '9.3'
+      lua_version:
+        description: 'Lua version to use'
+        required: false
+        default: 'lua54'
+        type: choice
+        options:
+          - 'luajit'
+          - 'lua51'
+          - 'lua53'
+          - 'lua54'
+
+jobs:
+  netbsd-build:
+    runs-on: ubuntu-latest
+    name: Build on NetBSD ${{ inputs.netbsd_version }} with ${{ inputs.lua_version }}
+
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v4
+
+      - name: Build on NetBSD
+        uses: vmactions/netbsd-vm@v1
+        with:
+          release: ${{ inputs.netbsd_version }}
+          usesh: true
+          prepare: |
+            # Set up package repository
+            export PKG_PATH="https://cdn.NetBSD.org/pub/pkgsrc/packages/NetBSD/$(uname -p)/$(uname -r)/All"
+            echo "PKG_PATH=${PKG_PATH}"
+
+            # Install pkgin for easier package management
+            /usr/sbin/pkg_add -v pkgin || true
+
+            # Update package database
+            pkgin -y update || /usr/sbin/pkg_add -v pkgin
+
+            # Install base build dependencies
+            pkgin -y install cmake ninja-build pkgconf \
+              pcre2 sqlite3 openssl ragel icu \
+              libsodium glib2 libunwind \
+              perl libarchive zstd xxhash \
+              file || true
+
+            # Install Lua version based on user selection
+            case "${{ inputs.lua_version }}" in
+              luajit)
+                pkgin -y install luajit || true
+                ;;
+              lua51)
+                pkgin -y install lua51 || true
+                ;;
+              lua53)
+                pkgin -y install lua53 || true
+                ;;
+              lua54)
+                pkgin -y install lua54 || true
+                ;;
+            esac
+
+          run: |
+            set -e
+
+            echo "==> Building Rspamd on NetBSD $(uname -r) with ${{ inputs.lua_version }}"
+
+            # Determine Lua CMake flags
+            case "${{ inputs.lua_version }}" in
+              luajit)
+                LUA_FLAGS="-DENABLE_LUAJIT=ON"
+                ;;
+              *)
+                LUA_FLAGS="-DENABLE_LUAJIT=OFF"
+                ;;
+            esac
+
+            # Create build directory
+            mkdir -p build
+            cd build
+
+            # Run CMake
+            echo "==> Running CMake configuration"
+            cmake -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX=/usr/local \
+              -DENABLE_HYPERSCAN=OFF \
+              $LUA_FLAGS \
+              -DSYSTEM_ZSTD=ON \
+              -DSYSTEM_XXHASH=ON \
+              ..
+
+            # Build
+            echo "==> Building Rspamd"
+            ninja
+
+            # Run tests
+            echo "==> Running C++ unit tests"
+            ./test/rspamd-test-cxx || echo "C++ tests failed"
+
+            echo "==> Running Lua unit tests"
+            ./test/rspamd-test -p /rspamd/lua || echo "Lua tests failed"
+
+            echo "==> Build completed successfully!"

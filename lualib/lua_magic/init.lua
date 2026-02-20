@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 --[[[
 -- @module lua_magic
@@ -57,17 +57,17 @@ local function process_patterns(log_obj)
         end
 
         lua_util.debugm(N, log_obj, 'add tail pattern %s for ext %s',
-            str, pattern.ext)
+          str, pattern.ext)
       elseif match.position < short_match_limit then
         short_patterns[#short_patterns + 1] = {
           str, match, pattern
         }
         if str:sub(1, 1) == '^' then
           lua_util.debugm(N, log_obj, 'add head pattern %s for ext %s',
-              str, pattern.ext)
+            str, pattern.ext)
         else
           lua_util.debugm(N, log_obj, 'add short pattern %s for ext %s',
-              str, pattern.ext)
+            str, pattern.ext)
         end
 
         if max_short_offset < match.position then
@@ -79,7 +79,7 @@ local function process_patterns(log_obj)
         }
 
         lua_util.debugm(N, log_obj, 'add long pattern %s for ext %s',
-            str, pattern.ext)
+          str, pattern.ext)
       end
     else
       processed_patterns[#processed_patterns + 1] = {
@@ -87,7 +87,7 @@ local function process_patterns(log_obj)
       }
 
       lua_util.debugm(N, log_obj, 'add long pattern %s for ext %s',
-          str, pattern.ext)
+        str, pattern.ext)
     end
   end
 
@@ -133,25 +133,25 @@ local function process_patterns(log_obj)
         fun.map(function(t)
           return t[1]
         end, processed_patterns)),
-        compile_flags
+      compile_flags
     )
     compiled_short_patterns = rspamd_trie.create(fun.totable(
         fun.map(function(t)
           return t[1]
         end, short_patterns)),
-        compile_flags
+      compile_flags
     )
     compiled_tail_patterns = rspamd_trie.create(fun.totable(
         fun.map(function(t)
           return t[1]
         end, tail_patterns)),
-        compile_flags
+      compile_flags
     )
 
     lua_util.debugm(N, log_obj,
-        'compiled %s (%s short; %s long; %s tail) patterns',
-        #processed_patterns + #short_patterns + #tail_patterns,
-        #short_patterns, #processed_patterns, #tail_patterns)
+      'compiled %s (%s short; %s long; %s tail) patterns',
+      #processed_patterns + #short_patterns + #tail_patterns,
+      #short_patterns, #processed_patterns, #tail_patterns)
   end
 end
 
@@ -173,7 +173,7 @@ local function match_chunk(chunk, input, tlen, offset, trie, processed_tbl, log_
     end
 
     lua_util.debugm(N, log_obj, 'add pattern for %s, weight %s, total weight %s',
-        ext, weight, res[ext])
+      ext, weight, res[ext])
   end
 
   local function match_position(pos, expected)
@@ -224,7 +224,7 @@ local function match_chunk(chunk, input, tlen, offset, trie, processed_tbl, log_
 
       for _, pos in ipairs(matched_positions) do
         lua_util.debugm(N, log_obj, 'found match %s at offset %s(from %s)',
-            pattern.ext, pos, offset)
+          pattern.ext, pos, offset)
         if match_position(pos + offset, position) then
           if match.heuristic then
             local ext, weight = match.heuristic(input, log_obj, pos + offset, part)
@@ -247,7 +247,7 @@ local function match_chunk(chunk, input, tlen, offset, trie, processed_tbl, log_
         local matched = false
         for _, pos in ipairs(matched_positions) do
           lua_util.debugm(N, log_obj, 'found match %s at offset %s(from %s)',
-              pattern.ext, pos, offset)
+            pattern.ext, pos, offset)
           if not match_position(pos + offset, position) then
             matched = true
             matched_pos = pos
@@ -275,7 +275,6 @@ local function match_chunk(chunk, input, tlen, offset, trie, processed_tbl, log_
       end
     end
   end
-
 end
 
 local function process_detected(res)
@@ -307,18 +306,24 @@ exports.detect = function(part, log_obj)
 
   if type(input) == 'userdata' then
     local inplen = #input
+    if inplen == 0 then
+      -- Empty input: nothing to match
+      return nil
+    end
 
     -- Check tail matches
     if inplen > min_tail_offset then
       local tail = input:span(inplen - min_tail_offset, min_tail_offset)
       match_chunk(tail, input, inplen, inplen - min_tail_offset,
-          compiled_tail_patterns, tail_patterns, log_obj, res, part)
+        compiled_tail_patterns, tail_patterns, log_obj, res, part)
     end
 
     -- Try short match
-    local head = input:span(1, math.min(max_short_offset, inplen))
-    match_chunk(head, input, inplen, 0,
+    if max_short_offset > 0 then
+      local head = input:span(1, math.min(max_short_offset, inplen))
+      match_chunk(head, input, inplen, 0,
         compiled_short_patterns, short_patterns, log_obj, res, part)
+    end
 
     -- Check if we have enough data or go to long patterns
     local extensions, confidence = process_detected(res)
@@ -332,17 +337,17 @@ exports.detect = function(part, log_obj)
     if #input > exports.chunk_size * 3 then
       -- Chunked version as input is too long
       local chunk1, chunk2 = input:span(1, exports.chunk_size * 2),
-      input:span(inplen - exports.chunk_size, exports.chunk_size)
+          input:span(inplen - exports.chunk_size, exports.chunk_size)
       local offset1, offset2 = 0, inplen - exports.chunk_size
 
       match_chunk(chunk1, input, inplen,
-          offset1, compiled_patterns, processed_patterns, log_obj, res, part)
+        offset1, compiled_patterns, processed_patterns, log_obj, res, part)
       match_chunk(chunk2, input, inplen,
-          offset2, compiled_patterns, processed_patterns, log_obj, res, part)
+        offset2, compiled_patterns, processed_patterns, log_obj, res, part)
     else
       -- Input is short enough to match it at all
       match_chunk(input, input, inplen, 0,
-          compiled_patterns, processed_patterns, log_obj, res, part)
+        compiled_patterns, processed_patterns, log_obj, res, part)
     end
   else
     -- Table input is NYI
@@ -370,6 +375,18 @@ exports.detect_mime_part = function(part, log_obj)
 
   if ext then
     return ext, types[ext]
+  end
+
+  -- Fallback by filename extension (e.g. .eml attachments with generic content-type)
+  local fname
+  if part.get_filename then
+    fname = part:get_filename()
+  end
+  if type(fname) == 'string' then
+    local lfn = fname:lower()
+    if #lfn > 4 and lfn:sub(-4) == '.eml' then
+      return 'eml', types['eml']
+    end
   end
 
   -- Text/html and other parts

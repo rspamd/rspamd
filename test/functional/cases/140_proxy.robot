@@ -25,6 +25,18 @@ RSPAMC Legacy Protocol
   ${result} =  Rspamc  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_PROXY}  ${MESSAGE}
   Should Contain  ${result}  RSPAMD/1.3 0 EX_OK
 
+CHECKV3 VIA PROXY
+  [Documentation]  Send /checkv3 multipart request through proxy, verify result
+  Set Test Variable  ${RSPAMD_PORT_NORMAL}  ${RSPAMD_PORT_PROXY}
+  Scan File V3  ${MESSAGE}
+  Expect Symbol  SIMPLE_TEST
+
+CHECKV3 VIA PROXY WITH COMPRESSION
+  [Documentation]  Send /checkv3 via rspamc through proxy with zstd compression
+  ${result} =  Run Rspamc  -p  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_PROXY}  --protocol-v3
+  ...  ${MESSAGE}
+  Check Rspamc  ${result}  SIMPLE_TEST
+
 *** Keywords ***
 Proxy Setup
   # Run slave & copy variables

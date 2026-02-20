@@ -25,7 +25,7 @@ local lua_util = require "lua_util"
 local rspamd_regexp = require "rspamd_regexp"
 local fun = require "fun"
 local rspamd_logger = require "rspamd_logger"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
 
 -- Filled by C code, indexed by number in this table
 local rules = {}
@@ -42,6 +42,7 @@ local policies = {
     scan_archives = true,
     short_text_direct_hash = true,
     text_shingles = true,
+  text_hashes = true,
     skip_images = false,
   }
 }
@@ -49,25 +50,187 @@ local policies = {
 local default_policy = policies.recommended
 
 local schema_fields = {
-  min_bytes = ts.number + ts.string / tonumber,
-  min_height = ts.number + ts.string / tonumber,
-  min_width = ts.number + ts.string / tonumber,
-  min_length = ts.number + ts.string / tonumber,
-  text_multiplier = ts.number,
-  mime_types = ts.array_of(ts.string),
-  scan_archives = ts.boolean,
-  short_text_direct_hash = ts.boolean,
-  text_shingles = ts.boolean,
-  skip_images = ts.boolean,
+  min_bytes = T.transform(
+    T.one_of({T.number(), T.string()}),
+    tonumber
+  ),
+  min_height = T.transform(
+    T.one_of({T.number(), T.string()}),
+    tonumber
+  ),
+  min_width = T.transform(
+    T.one_of({T.number(), T.string()}),
+    tonumber
+  ),
+  min_length = T.transform(
+    T.one_of({T.number(), T.string()}),
+    tonumber
+  ),
+  text_multiplier = T.number(),
+  mime_types = T.array(T.string()),
+  scan_archives = T.boolean(),
+  short_text_direct_hash = T.boolean(),
+  text_shingles = T.boolean(),
+  text_hashes = T.boolean(),
+  skip_images = T.boolean(),
 }
-local policy_schema = ts.shape(schema_fields)
+local policy_schema = T.table(schema_fields)
 
-local policy_schema_open = ts.shape(schema_fields, {
+local policy_schema_open = T.table(schema_fields, {
   open = true,
 })
 
 local exports = {}
 
+local function apply_checks_overrides(rule)
+  local checks = rule.checks
+
+  if type(checks) ~= 'table' then
+    return
+  end
+
+  local function find_section(name)
+    local lname = name:lower()
+
+    for k, v in pairs(checks) do
+      if type(k) == 'string' and k:lower() == lname then
+        return v
+      end
+    end
+
+    return nil
+  end
+
+  local function bool_opt(section, key)
+    if type(section) ~= 'table' then
+      return nil
+    end
+
+    if section[key] == nil then
+      return nil
+    end
+
+    return lua_util.toboolean(section[key])
+  end
+
+  local function number_opt(section, key)
+    if type(section) ~= 'table' then
+      return nil
+    end
+
+    if section[key] == nil then
+      return nil
+    end
+
+    return tonumber(section[key])
+  end
+
+  local text_section = find_section('text')
+
+  if text_section then
+    local enabled = bool_opt(text_section, 'enabled')
+
+    if enabled == nil then
+      enabled = true
+    end
+
+    rule.text_hashes = enabled
+
+    local opt = bool_opt(text_section, 'no_subject')
+
+    if opt ~= nil then
+      rule.no_subject = opt
+    end
+
+    opt = bool_opt(text_section, 'short_text_direct_hash')
+
+    if opt ~= nil then
+      rule.short_text_direct_hash = opt
+    end
+
+    local num = number_opt(text_section, 'min_length')
+
+    if num ~= nil then
+      rule.min_length = num
+    end
+
+    num = number_opt(text_section, 'text_multiplier')
+
+    if num ~= nil then
+      rule.text_multiplier = num
+    end
+  end
+
+  local html_section = find_section('html')
+
+  if html_section then
+    local enabled = bool_opt(html_section, 'enabled')
+
+    if enabled == nil then
+      enabled = true
+    end
+
+    rule.html_shingles = enabled
+
+    local num = number_opt(html_section, 'min_html_tags')
+
+    if num == nil then
+      num = number_opt(html_section, 'min_tags')
+    end
+
+    if num ~= nil then
+      rule.min_html_tags = num
+    end
+
+    num = number_opt(html_section, 'html_weight')
+
+    if num == nil then
+      num = number_opt(html_section, 'weight')
+    end
+
+    if num ~= nil then
+      rule.html_weight = num
+    end
+  end
+
+  local image_section = find_section('image') or find_section('images')
+
+  if image_section then
+    local enabled = bool_opt(image_section, 'enabled')
+
+    if enabled == nil then
+      enabled = true
+    end
+
+    rule.skip_images = not enabled
+
+    local num = number_opt(image_section, 'min_height')
+
+    if num ~= nil then
+      rule.min_height = num
+    end
+
+    num = number_opt(image_section, 'min_width')
+
+    if num ~= nil then
+      rule.min_width = num
+    end
+  end
+
+  local archive_section = find_section('archive') or find_section('archives')
+
+  if archive_section then
+    local enabled = bool_opt(archive_section, 'enabled')
+
+    if enabled == nil then
+      enabled = true
+    end
+
+    rule.scan_archives = enabled
+  end
+
+  rule.checks = nil
+end
 
 --[[[
 -- @function lua_fuzzy.register_policy(name, policy)
@@ -105,6 +268,8 @@ exports.process_rule = function(rule)
   if policy then
     processed_rule = lua_util.override_defaults(policy, processed_rule)
 
+    apply_checks_overrides(processed_rule)
+
     local parsed_policy, err = policy_schema_open:transform(processed_rule)
 
     if not parsed_policy then
@@ -114,6 +279,7 @@ exports.process_rule = function(rule)
     end
   else
     rspamd_logger.warnx(rspamd_config, "unknown policy %s", processed_rule.policy)
+    apply_checks_overrides(processed_rule)
   end
 
   if processed_rule.mime_types then
@@ -124,6 +290,12 @@ exports.process_rule = function(rule)
 
   table.insert(rules, processed_rule)
   return #rules
+end
+
+-- CJK languages use multi-byte characters (3 bytes per char in UTF-8) and
+-- carry more semantic content per token than Latin languages.
+local function is_cjk_language(lang)
+  return lang and (lang == 'ja' or lang == 'zh' or lang == 'ko')
 end
 
 local function check_length(task, part, rule)
@@ -151,7 +323,18 @@ local function check_length(task, part, rule)
       end
 
       if rule.text_multiplier then
-        adjusted_bytes = bytes * rule.text_multiplier
+        local multiplier = rule.text_multiplier
+
+        -- CJK characters are 3 bytes in UTF-8, so the same semantic content
+        -- takes ~3x more bytes than Latin text; boost the multiplier to compensate
+        local lang = part:get_text():get_language()
+        if is_cjk_language(lang) then
+          multiplier = multiplier * 3.0
+          lua_util.debugm(N, task, 'CJK language %s: boosted text_multiplier to %s',
+              lang, multiplier)
+        end
+
+        adjusted_bytes = bytes * multiplier
       end
     end
 
@@ -176,17 +359,36 @@ local function check_text_part(task, part, rule, text)
 
   local id = part:get_id()
   lua_util.debugm(N, task, 'check text part %s', id)
+
+  if rule.text_hashes == false then
+    lua_util.debugm(N, task, 'text hashes disabled, relying on HTML for part %s', id)
+    return rule.html_shingles == true, false
+  end
+
   local wcnt = text:get_words_count()
 
   if rule.text_shingles then
     -- Check number of words
     local min_words = rule.min_length or 0
-    if min_words < 32 then
-      min_words = 32 -- Minimum for shingles
+    local min_floor = 32
+
+    -- CJK morphemes carry higher semantic density per token, so fewer words
+    -- are needed for meaningful shingle generation (3-word window still works
+    -- well with as few as 12 tokens producing 10 windows)
+    local lang = text:get_language()
+    if is_cjk_language(lang) then
+      min_words = math.floor(min_words / 3)
+      min_floor = 12
+      lua_util.debugm(N, task, 'CJK language %s: adjusted min_words to %s (floor %s)',
+          lang, min_words, min_floor)
+    end
+
+    if min_words < min_floor then
+      min_words = min_floor
     end
     if wcnt < min_words then
       lua_util.debugm(N, task, 'text has less than %s words: %s; disable shingles',
-          rule.min_length, wcnt)
+          min_words, wcnt)
       allow_shingles = false
     else
       lua_util.debugm(N, task, 'allow shingles in text %s, %s words',

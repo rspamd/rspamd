@@ -1,0 +1,28 @@
+/* Hide the old Glyphicons pseudo-elements */
+.fooicon::before,
+.fooicon::after {
+    content: none !important;
+    display: none;
+}
+
+/* Critical: allow clicks to pass through SVG to parent span */
+.fooicon svg {
+    pointer-events: none;
+}
+
+/* Smaller toggle icon and icons in footable header */
+.footable-header .fooicon svg,
+.footable-toggle.fooicon svg {
+    font-size: 12px;
+}
+
+/* Stop span rotation for loader - we animate the SVG instead */
+.fooicon-loader {
+    animation: none !important;
+    transform: none !important;
+}
+
+/* Make spinner icon larger to match original size */
+.fooicon-loader.fooicon svg {
+    font-size: 36px;
+}

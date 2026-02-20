@@ -18,6 +18,7 @@ local argparse = require "argparse"
 local lua_util = require "lua_util"
 local logger = require "rspamd_logger"
 local lua_redis = require "lua_redis"
+local lua_maps = require "lua_maps"
 local dmarc_common = require "plugins/dmarc"
 local rspamd_mempool = require "rspamd_mempool"
 local rspamd_url = require "rspamd_url"
@@ -55,6 +56,9 @@ parser:option "-b --batch-size"
       :convert(tonumber)
       :default "10"
 
+parser:flag "-r --recheck-rua"
+      :description "Re-check RUA addresses against exclude_rua_addresses map before sending"
+
 local report_template = [[From: "{= from_name =}" <{= from_addr =}>
 To: {= rcpt =}
 {%+ if is_string(bcc) %}Bcc: {= bcc =}{%- endif %}
@@ -66,6 +70,9 @@ MIME-Version: 1.0
 Message-ID: <{= message_id =}>
 Content-Type: multipart/mixed;
 	boundary="----=_NextPart_{= uuid =}"
+Auto-Submitted: auto-generated
+Precedence: bulk
+X-Auto-Response-Suppress: All
 
 This is a multipart message in MIME format.
 
@@ -99,7 +106,17 @@ local redis_attrs = {
   log_obj = rspamd_config,
   resolver = rspamadm_dns_resolver,
 }
+local redis_attrs_write = lua_util.shallowcopy(redis_attrs)
+redis_attrs_write['is_write'] = true
 local pool
+local exclude_rua_map
+-- Context for external map queries (used instead of task in rspamadm)
+local map_context = {
+  config = rspamd_config,
+  ev_base = rspamadm_ev_base,
+  session = rspamadm_session,
+  resolver = rspamadm_dns_resolver,
+}
 
 local function load_config(opts)
   local _r, err = rspamd_config:load_ucl(opts['config'])
@@ -481,7 +498,7 @@ local function prepare_report(opts, start_time, end_time, rep_key)
 
   -- Rename report key to avoid races
   if not opts.no_opt then
-    lua_redis.request(redis_params, redis_attrs,
+    lua_redis.request(redis_params, redis_attrs_write,
         { 'RENAME', rep_key, rep_key .. '_processing' })
     rep_key = rep_key .. '_processing'
   end
@@ -491,11 +508,48 @@ local function prepare_report(opts, start_time, end_time, rep_key)
 
   if not dmarc_record then
     if not opts.no_opt then
-      lua_redis.request(redis_params, redis_attrs,
+      lua_redis.request(redis_params, redis_attrs_write,
           { 'DEL', rep_key })
     end
     logger.messagex('Cannot process reports for domain %s; invalid dmarc record', reporting_domain)
     return nil
+  end
+
+  -- Re-check RUA addresses against exclude_rua_addresses map if enabled
+  -- Works with both local maps and external maps (HTTP) using synchronous requests
+  if exclude_rua_map and dmarc_record.rua then
+    local filtered_rua = {}
+    local excluded_count = 0
+    for _, rua_elt in ipairs(dmarc_record.rua) do
+      local rua_email = string.format('%s@%s', rua_elt:get_user(), rua_elt:get_host())
+      -- For external maps, pass map_context to enable synchronous HTTP requests
+      local excluded = exclude_rua_map:get_key(rua_email, nil, map_context)
+      if not excluded then
+        -- Also check just the domain part
+        excluded = exclude_rua_map:get_key(rua_elt:get_host(), nil, map_context)
+      end
+      if excluded then
+        lua_util.debugm(N, 'RUA address %s for domain %s is excluded by map (re-check)',
+            rua_email, reporting_domain)
+        excluded_count = excluded_count + 1
+      else
+        table.insert(filtered_rua, rua_elt)
+      end
+    end
+
+    if #filtered_rua == 0 then
+      if not opts.no_opt then
+        lua_redis.request(redis_params, redis_attrs_write,
+            { 'DEL', rep_key })
+      end
+      logger.messagex('All RUA addresses for domain %s are excluded by map (re-check), skipping report',
+          reporting_domain)
+      return nil
+    elseif excluded_count > 0 then
+      logger.messagex('Filtered %s RUA addresses for domain %s, %s remaining',
+          excluded_count, reporting_domain, #filtered_rua)
+      dmarc_record.rua = filtered_rua
+    end
   end
 
   -- Get all reports for a domain
@@ -554,7 +608,7 @@ local function prepare_report(opts, start_time, end_time, rep_key)
   lua_util.debugm(N, 'got final message: %s', message)
 
   if not opts.no_opt then
-    lua_redis.request(redis_params, redis_attrs,
+    lua_redis.request(redis_params, redis_attrs_write,
         { 'DEL', rep_key })
   end
 
@@ -585,7 +639,7 @@ local function process_report_date(opts, start_time, end_time, date)
 
   -- Rename index key to avoid races
   if not opts.no_opt then
-    lua_redis.request(redis_params, redis_attrs,
+    lua_redis.request(redis_params, redis_attrs_write,
         { 'RENAME', idx_key, idx_key .. '_processing' })
     idx_key = idx_key .. '_processing'
   end
@@ -595,27 +649,39 @@ local function process_report_date(opts, start_time, end_time, date)
   if not ret or not results then
     -- Remove bad key
     if not opts.no_opt then
-      lua_redis.request(redis_params, redis_attrs,
+      lua_redis.request(redis_params, redis_attrs_write,
           { 'DEL', idx_key })
     end
     logger.messagex('Cannot get reports for %s', date)
     return {}
   end
 
+  -- Process reports in batches to limit Redis connections
   local reports = {}
-  for _, rep in ipairs(results) do
-    local report = prepare_report(opts, start_time, end_time, rep)
 
-    if report then
-      table.insert(reports, report)
+  for batch_start = 1, #results, opts.batch_size do
+    local batch_end = math.min(batch_start + opts.batch_size - 1, #results)
+    lua_util.debugm(N, 'processing report batch %s to %s (of %s total)',
+        batch_start, batch_end, #results)
+
+    for i = batch_start, batch_end do
+      local rep = results[i]
+      local report = prepare_report(opts, start_time, end_time, rep)
+
+      if report then
+        table.insert(reports, report)
+      end
     end
+
+    -- Force garbage collection after each batch to release Redis connections
+    collectgarbage("collect")
   end
 
   -- Shuffle reports to make sending more fair
   lua_util.shuffle(reports)
   -- Remove processed key
   if not opts.no_opt then
-    lua_redis.request(redis_params, redis_attrs,
+    lua_redis.request(redis_params, redis_attrs_write,
         { 'DEL', idx_key })
   end
 
@@ -649,6 +715,10 @@ local function handler(args)
 
   local opts = parser:parse(args)
 
+  -- Normalize batch_size: floor to integer and clamp to >= 1
+  -- Fractional values would break array indexing in batching loops
+  opts.batch_size = math.max(1, math.floor(opts.batch_size or 10))
+
   pool = rspamd_mempool.create()
   load_config(opts)
   rspamd_url.init(rspamd_config:get_tld_path())
@@ -669,6 +739,25 @@ local function handler(args)
   if not redis_params then
     logger.errx('Redis is not configured, exiting')
     os.exit(1)
+  end
+
+  -- Load exclude_rua_addresses map if --recheck-rua flag is set
+  if opts.recheck_rua then
+    if dmarc_settings.reporting.exclude_rua_addresses then
+      exclude_rua_map = lua_maps.map_add_from_ucl(dmarc_settings.reporting.exclude_rua_addresses,
+          'set', 'DMARC RUA exclusion map for report sending')
+      if exclude_rua_map then
+        if exclude_rua_map.__external then
+          logger.messagex('Loaded exclude_rua_addresses external map for RUA re-checking')
+        else
+          logger.messagex('Loaded exclude_rua_addresses map for RUA re-checking')
+        end
+      else
+        logger.warnx('Failed to load exclude_rua_addresses map, RUA re-checking disabled')
+      end
+    else
+      logger.warnx('--recheck-rua specified but no exclude_rua_addresses configured in dmarc settings')
+    end
   end
 
   for _, e in ipairs({ 'email', 'domain', 'org_name' }) do
@@ -715,11 +804,11 @@ local function handler(args)
     if not opts.no_opt then
       lua_util.debugm(N, 'set last report date to %s', start_collection)
       -- Hack to avoid coroutines + async functions mess: we use async redis call here
-      redis_attrs.callback = function()
+      redis_attrs_write.callback = function()
         logger.messagex('Reporting collection has finished %s dates processed, %s reports: %s completed, %s failed',
             ndates, nreports, nsuccess, nfail)
       end
-      lua_redis.request(redis_params, redis_attrs,
+      lua_redis.request(redis_params, redis_attrs_write,
           { 'SETEX', 'rspamd_dmarc_last_collection', dmarc_settings.reporting.keys_expire * 2,
             tostring(start_collection) })
     else

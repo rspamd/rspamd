@@ -119,7 +119,7 @@ rspamd_redis_get_servers(struct rspamd_fuzzy_backend_redis *ctx,
 		char outbuf[8192];
 
 		lua_logger_out(L, -2, outbuf, sizeof(outbuf),
-							LUA_ESCAPE_UNPRINTABLE);
+					   LUA_ESCAPE_UNPRINTABLE);
 
 		msg_err("cannot get %s upstreams for Redis fuzzy storage %s; table content: %s",
 				what, ctx->id, outbuf);
@@ -689,6 +689,15 @@ void rspamd_fuzzy_backend_check_redis(struct rspamd_fuzzy_backend *bk,
 							 NULL,
 							 0);
 
+	if (up == NULL) {
+		rspamd_fuzzy_redis_session_dtor(session, TRUE);
+		if (cb) {
+			memset(&rep, 0, sizeof(rep));
+			cb(&rep, ud);
+		}
+		return;
+	}
+
 	session->up = rspamd_upstream_ref(up);
 	addr = rspamd_upstream_addr_next(up);
 	g_assert(addr != NULL);
@@ -828,6 +837,14 @@ void rspamd_fuzzy_backend_count_redis(struct rspamd_fuzzy_backend *bk,
 							 NULL,
 							 0);
 
+	if (up == NULL) {
+		rspamd_fuzzy_redis_session_dtor(session, TRUE);
+		if (cb) {
+			cb(0, ud);
+		}
+		return;
+	}
+
 	session->up = rspamd_upstream_ref(up);
 	addr = rspamd_upstream_addr_next(up);
 	g_assert(addr != NULL);
@@ -965,6 +982,14 @@ void rspamd_fuzzy_backend_version_redis(struct rspamd_fuzzy_backend *bk,
 							 RSPAMD_UPSTREAM_ROUND_ROBIN,
 							 NULL,
 							 0);
+
+	if (up == NULL) {
+		rspamd_fuzzy_redis_session_dtor(session, TRUE);
+		if (cb) {
+			cb(0, ud);
+		}
+		return;
+	}
 
 	session->up = rspamd_upstream_ref(up);
 	addr = rspamd_upstream_addr_next(up);
@@ -1537,6 +1562,14 @@ void rspamd_fuzzy_backend_update_redis(struct rspamd_fuzzy_backend *bk,
 							 RSPAMD_UPSTREAM_MASTER_SLAVE,
 							 NULL,
 							 0);
+
+	if (up == NULL) {
+		rspamd_fuzzy_redis_session_dtor(session, TRUE);
+		if (cb) {
+			cb(FALSE, 0, 0, 0, 0, ud);
+		}
+		return;
+	}
 
 	session->up = rspamd_upstream_ref(up);
 	addr = rspamd_upstream_addr_next(up);

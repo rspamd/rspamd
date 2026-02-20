@@ -105,6 +105,7 @@ void rspamd_lua_new_class(lua_State *L,
 	lua_createtable(L, 0, 3 + nmethods);
 
 	if (!seen_index) {
+		/* Default __index = metatable only for plain classes without custom __index */
 		lua_pushstring(L, "__index");
 		lua_pushvalue(L, -2); /* pushes the metatable */
 		lua_settable(L, -3);  /* metatable.__index = metatable */
@@ -931,7 +932,11 @@ rspamd_lua_init(bool wipe_mem)
 		/* TODO: broken on luajit without GC64 */
 		L = luaL_newstate();
 #else
+#if LUA_VERSION_NUM >= 505
+		L = lua_newstate(rspamd_lua_wipe_realloc, NULL, 0);
+#else
 		L = lua_newstate(rspamd_lua_wipe_realloc, NULL);
+#endif
 #endif
 	}
 	else {
@@ -985,6 +990,7 @@ rspamd_lua_init(bool wipe_mem)
 	luaopen_tensor(L);
 	luaopen_parsers(L);
 	luaopen_compress(L);
+	luaopen_libarchive(L);
 	luaopen_shingle(L);
 #ifndef WITH_LUAJIT
 	rspamd_lua_add_preload(L, "bit", luaopen_bit);
@@ -1087,8 +1093,13 @@ void rspamd_lua_start_gc(struct rspamd_config *cfg)
 	lua_settop(L, 0);
 	/* Set up GC */
 	lua_gc(L, LUA_GCCOLLECT, 0);
+#if LUA_VERSION_NUM >= 505
+	lua_gc(L, LUA_GCPARAM, LUA_GCPSTEPMUL, cfg->lua_gc_step);
+	lua_gc(L, LUA_GCPARAM, LUA_GCPPAUSE, cfg->lua_gc_pause);
+#else
 	lua_gc(L, LUA_GCSETSTEPMUL, cfg->lua_gc_step);
 	lua_gc(L, LUA_GCSETPAUSE, cfg->lua_gc_pause);
+#endif
 	lua_gc(L, LUA_GCRESTART, 0);
 }
 
@@ -2401,7 +2412,7 @@ rspamd_lua_try_load_redis(lua_State *L, const ucl_object_t *obj,
 	return FALSE;
 }
 
-void rspamd_lua_push_full_word(lua_State *L, rspamd_stat_token_t *w)
+void rspamd_lua_push_full_word(lua_State *L, rspamd_word_t *w)
 {
 	int fl_cnt;
 
@@ -2488,6 +2499,54 @@ int rspamd_lua_push_words(lua_State *L, GArray *words,
 
 	for (i = 0, cnt = 1; i < words->len; i++) {
 		w = &g_array_index(words, rspamd_stat_token_t, i);
+
+		switch (how) {
+		case RSPAMD_LUA_WORDS_STEM:
+			if (w->stemmed.len > 0) {
+				lua_pushlstring(L, w->stemmed.begin, w->stemmed.len);
+				lua_rawseti(L, -2, cnt++);
+			}
+			break;
+		case RSPAMD_LUA_WORDS_NORM:
+			if (w->normalized.len > 0) {
+				lua_pushlstring(L, w->normalized.begin, w->normalized.len);
+				lua_rawseti(L, -2, cnt++);
+			}
+			break;
+		case RSPAMD_LUA_WORDS_RAW:
+			if (w->original.len > 0) {
+				lua_pushlstring(L, w->original.begin, w->original.len);
+				lua_rawseti(L, -2, cnt++);
+			}
+			break;
+		case RSPAMD_LUA_WORDS_FULL:
+			rspamd_lua_push_full_word(L, w);
+			/* Push to the resulting vector */
+			lua_rawseti(L, -2, cnt++);
+			break;
+		default:
+			break;
+		}
+	}
+
+	return 1;
+}
+
+int rspamd_lua_push_words_kvec(lua_State *L, rspamd_words_t *words,
+							   enum rspamd_lua_words_type how)
+{
+	rspamd_word_t *w;
+	unsigned int i, cnt;
+
+	if (!words || !words->a) {
+		lua_createtable(L, 0, 0);
+		return 1;
+	}
+
+	lua_createtable(L, kv_size(*words), 0);
+
+	for (i = 0, cnt = 1; i < kv_size(*words); i++) {
+		w = &kv_A(*words, i);
 
 		switch (how) {
 		case RSPAMD_LUA_WORDS_STEM:

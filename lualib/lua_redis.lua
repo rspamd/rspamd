@@ -17,63 +17,241 @@ limitations under the License.
 local logger = require "rspamd_logger"
 local lutil = require "lua_util"
 local rspamd_util = require "rspamd_util"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
+local PluginSchema = require "lua_shape.plugin_schema"
 
 local exports = {}
 
 local E = {}
 local N = "lua_redis"
 
-local db_schema = (ts.number / tostring + ts.string):is_optional():describe("Database number")
-local common_schema = {
-  timeout = (ts.number + ts.string / lutil.parse_time_interval):is_optional():describe("Connection timeout (seconds)"),
+local db_schema = T.one_of({
+  T.transform(T.number(), tostring),
+  T.string()
+}):optional():doc({ summary = "Database number" })
+
+local common_schema = T.table({
+  timeout = T.one_of({
+    T.number({ min = 0 }),
+    T.transform(T.string(), lutil.parse_time_interval)
+  }):optional():doc({ summary = "Connection timeout (seconds)" }),
   db = db_schema,
   database = db_schema,
   dbname = db_schema,
-  prefix = ts.string:is_optional():describe("Key prefix"),
-  username = ts.string:is_optional():describe("Username"),
-  password = ts.string:is_optional():describe("Password"),
-  expand_keys = ts.boolean:is_optional():describe("Expand keys"),
-  sentinels = (ts.string + ts.array_of(ts.string)):is_optional():describe("Sentinel servers"),
-  sentinel_watch_time = (ts.number + ts.string / lutil.parse_time_interval):is_optional():describe("Sentinel watch time"),
-  sentinel_masters_pattern = ts.string:is_optional():describe("Sentinel masters pattern"),
-  sentinel_master_maxerrors = (ts.number + ts.string / tonumber):is_optional():describe("Sentinel master max errors"),
-  sentinel_username = ts.string:is_optional():describe("Sentinel username"),
-  sentinel_password = ts.string:is_optional():describe("Sentinel password"),
-  redis_version = (ts.number + ts.string / tonumber):is_optional():describe("Redis server version (6 or 7)"),
-}
+  prefix = T.string():optional():doc({ summary = "Key prefix" }),
+  username = T.string():optional():doc({ summary = "Username" }),
+  password = T.string():optional():doc({ summary = "Password" }),
+  -- TLS options
+  ssl = T.boolean():optional():doc({ summary = "Enable TLS to Redis" }),
+  no_ssl_verify = T.boolean():optional():doc({ summary = "Disable TLS certificate verification" }),
+  ssl_ca = T.string():optional():doc({ summary = "CA certificate file" }),
+  ssl_ca_dir = T.string():optional():doc({ summary = "CA certificates directory" }),
+  ssl_cert = T.string():optional():doc({ summary = "Client certificate file (PEM)" }),
+  ssl_key = T.string():optional():doc({ summary = "Client private key file (PEM)" }),
+  sni = T.string():optional():doc({ summary = "SNI server name override" }),
+  expand_keys = T.boolean():optional():doc({ summary = "Expand keys" }),
+  sentinels = T.one_of({
+    T.string(),
+    T.array(T.string())
+  }):optional():doc({ summary = "Sentinel servers" }),
+  sentinel_watch_time = T.one_of({
+    T.number({ min = 0 }),
+    T.transform(T.string(), lutil.parse_time_interval)
+  }):optional():doc({ summary = "Sentinel watch time" }),
+  sentinel_masters_pattern = T.string():optional():doc({ summary = "Sentinel masters pattern" }),
+  sentinel_master_maxerrors = T.one_of({
+    T.number(),
+    T.transform(T.string(), tonumber)
+  }):optional():doc({ summary = "Sentinel master max errors" }),
+  sentinel_username = T.string():optional():doc({ summary = "Sentinel username" }),
+  sentinel_password = T.string():optional():doc({ summary = "Sentinel password" }),
+  redis_version = T.one_of({
+    T.number(),
+    T.transform(T.string(), tonumber)
+  }):optional():doc({ summary = "Redis server version (6 or 7)" }),
+}, { open = true })
 
-local read_schema = lutil.table_merge({
-  read_servers = ts.string + ts.array_of(ts.string),
-}, common_schema)
+local function extend_fields(...)
+  local res = {}
+  for i = 1, select('#', ...) do
+    local tbl = select(i, ...)
+    if tbl then
+      for k, v in pairs(tbl) do
+        res[k] = v
+      end
+    end
+  end
+  return res
+end
 
-local write_schema = lutil.table_merge({
-  write_servers = ts.string + ts.array_of(ts.string),
-}, common_schema)
+-- Register common schema as redis_common first
+PluginSchema.register("mixins.redis_common", common_schema)
 
-local rw_schema = lutil.table_merge({
-  read_servers = ts.string + ts.array_of(ts.string),
-  write_servers = ts.string + ts.array_of(ts.string),
-}, common_schema)
+-- Create full redis mixin schema for documentation
+local redis_mixin_schema = T.one_of({
+  {
+    name = "common_only",
+    schema = T.table({}, {
+      open = true,
+      mixins = { T.mixin(common_schema, { as = "redis_common" }) }
+    }):doc({ summary = "Redis with no explicit servers (uses localhost)" })
+  },
+  {
+    name = "read_servers",
+    schema = T.table({
+      read_servers = T.one_of({
+        T.string():doc({ summary = "Single Redis server" }),
+        T.array(T.string()):doc({ summary = "Multiple Redis servers" })
+      }):doc({ summary = "Read servers list" })
+    }, {
+      open = true,
+      mixins = { T.mixin(common_schema, { as = "redis_common" }) }
+    }):doc({ summary = "Redis with read-only servers" })
+  },
+  {
+    name = "write_servers",
+    schema = T.table({
+      write_servers = T.one_of({
+        T.string():doc({ summary = "Single Redis server" }),
+        T.array(T.string()):doc({ summary = "Multiple Redis servers" })
+      }):doc({ summary = "Write servers list" })
+    }, {
+      open = true,
+      mixins = { T.mixin(common_schema, { as = "redis_common" }) }
+    }):doc({ summary = "Redis with write-only servers" })
+  },
+  {
+    name = "rw_servers",
+    schema = T.table({
+      read_servers = T.one_of({
+        T.string():doc({ summary = "Single Redis server" }),
+        T.array(T.string()):doc({ summary = "Multiple Redis servers" })
+      }):doc({ summary = "Read servers list" }),
+      write_servers = T.one_of({
+        T.string():doc({ summary = "Single Redis server" }),
+        T.array(T.string()):doc({ summary = "Multiple Redis servers" })
+      }):doc({ summary = "Write servers list" })
+    }, {
+      open = true,
+      mixins = { T.mixin(common_schema, { as = "redis_common" }) }
+    }):doc({ summary = "Redis with separate read and write servers" })
+  },
+  {
+    name = "servers",
+    schema = T.table({
+      servers = T.one_of({
+        T.string():doc({ summary = "Single Redis server" }),
+        T.array(T.string()):doc({ summary = "Multiple Redis servers" })
+      }):doc({ summary = "Redis servers list" })
+    }, {
+      open = true,
+      mixins = { T.mixin(common_schema, { as = "redis_common" }) }
+    }):doc({ summary = "Redis with server list" })
+  },
+  {
+    name = "server_legacy",
+    schema = T.table({
+      server = T.one_of({
+        T.string():doc({ summary = "Single Redis server" }),
+        T.array(T.string()):doc({ summary = "Multiple Redis servers" })
+      }):doc({ summary = "Redis server (legacy)" })
+    }, {
+      open = true,
+      mixins = { T.mixin(common_schema, { as = "redis_common" }) }
+    }):doc({ summary = "Redis with legacy server parameter" })
+  }
+}):doc({ summary = "Redis connection configuration" })
 
-local servers_schema = lutil.table_merge({
-  servers = ts.string + ts.array_of(ts.string),
-}, common_schema)
-
-local server_schema = lutil.table_merge({
-  server = ts.string + ts.array_of(ts.string),
-}, common_schema)
+PluginSchema.register("mixins.redis", redis_mixin_schema)
 
 local enrich_schema = function(external)
-  return ts.one_of {
-    ts.shape(lutil.table_merge(common_schema,
-        external)), -- no specific redis servers (e.g when global settings are used)
-    ts.shape(lutil.table_merge(read_schema, external)), -- read_servers specified
-    ts.shape(lutil.table_merge(write_schema, external)), -- write_servers specified
-    ts.shape(lutil.table_merge(rw_schema, external)), -- both read and write servers defined
-    ts.shape(lutil.table_merge(servers_schema, external)), -- just servers for both ops
-    ts.shape(lutil.table_merge(server_schema, external)), -- legacy `server` attribute
-  }
+  local external_fields = external or {}
+
+  return T.one_of({
+    {
+      name = "common_only",
+      schema = T.table(extend_fields(external_fields), {
+        open = true,
+        mixins = {
+          T.mixin(common_schema, { as = "redis" })
+        }
+      })
+    },
+    {
+      name = "read_servers",
+      schema = T.table(extend_fields(external_fields, {
+        read_servers = T.one_of({
+          T.string(),
+          T.array(T.string())
+        })
+      }), {
+        open = true,
+        mixins = {
+          T.mixin(common_schema, { as = "redis" })
+        }
+      })
+    },
+    {
+      name = "write_servers",
+      schema = T.table(extend_fields(external_fields, {
+        write_servers = T.one_of({
+          T.string(),
+          T.array(T.string())
+        })
+      }), {
+        open = true,
+        mixins = {
+          T.mixin(common_schema, { as = "redis" })
+        }
+      })
+    },
+    {
+      name = "rw_servers",
+      schema = T.table(extend_fields(external_fields, {
+        read_servers = T.one_of({
+          T.string(),
+          T.array(T.string())
+        }),
+        write_servers = T.one_of({
+          T.string(),
+          T.array(T.string())
+        })
+      }), {
+        open = true,
+        mixins = {
+          T.mixin(common_schema, { as = "redis" })
+        }
+      })
+    },
+    {
+      name = "servers",
+      schema = T.table(extend_fields(external_fields, {
+        servers = T.one_of({
+          T.string(),
+          T.array(T.string())
+        })
+      }), {
+        open = true,
+        mixins = {
+          T.mixin(common_schema, { as = "redis" })
+        }
+      })
+    },
+    {
+      name = "server_legacy",
+      schema = T.table(extend_fields(external_fields, {
+        server = T.one_of({
+          T.string(),
+          T.array(T.string())
+        })
+      }), {
+        open = true,
+        mixins = {
+          T.mixin(common_schema, { as = "redis" })
+        }
+      })
+    }
+  })
 end
 
 exports.enrich_schema = enrich_schema
@@ -384,12 +562,51 @@ local function process_redis_opts(options, redis_params)
     redis_params['password'] = options['password']
   end
 
+  -- TLS passthrough
+  if options['ssl'] ~= nil and redis_params['ssl'] == nil then
+    redis_params['ssl'] = options['ssl'] and true or false
+  end
+  if options['no_ssl_verify'] ~= nil and redis_params['no_ssl_verify'] == nil then
+    redis_params['no_ssl_verify'] = options['no_ssl_verify'] and true or false
+  end
+  if options['ssl_ca'] and not redis_params['ssl_ca'] then
+    redis_params['ssl_ca'] = options['ssl_ca']
+  end
+  if options['ssl_ca_dir'] and not redis_params['ssl_ca_dir'] then
+    redis_params['ssl_ca_dir'] = options['ssl_ca_dir']
+  end
+  if options['ssl_cert'] and not redis_params['ssl_cert'] then
+    redis_params['ssl_cert'] = options['ssl_cert']
+  end
+  if options['ssl_key'] and not redis_params['ssl_key'] then
+    redis_params['ssl_key'] = options['ssl_key']
+  end
+  if options['sni'] and not redis_params['sni'] then
+    redis_params['sni'] = options['sni']
+  end
+
   if not redis_params.sentinels and options.sentinels then
     redis_params.sentinels = options.sentinels
   end
 
   if options['sentinel_masters_pattern'] and not redis_params['sentinel_masters_pattern'] then
     redis_params['sentinel_masters_pattern'] = options['sentinel_masters_pattern']
+  end
+
+  if options['sentinel_watch_time'] and not redis_params['sentinel_watch_time'] then
+    redis_params['sentinel_watch_time'] = options['sentinel_watch_time']
+  end
+
+  if options['sentinel_username'] and not redis_params['sentinel_username'] then
+    redis_params['sentinel_username'] = options['sentinel_username']
+  end
+
+  if options['sentinel_password'] and not redis_params['sentinel_password'] then
+    redis_params['sentinel_password'] = options['sentinel_password']
+  end
+
+  if options['sentinel_master_maxerrors'] and not redis_params['sentinel_master_maxerrors'] then
+    redis_params['sentinel_master_maxerrors'] = options['sentinel_master_maxerrors']
   end
 
 end
@@ -1022,6 +1239,15 @@ local function rspamd_redis_make_request(task, redis_params, key, is_write,
     options['dbname'] = redis_params['db']
   end
 
+  -- TLS options
+  if redis_params.ssl ~= nil then options.ssl = redis_params.ssl end
+  if redis_params.no_ssl_verify ~= nil then options.no_ssl_verify = redis_params.no_ssl_verify end
+  if redis_params.ssl_ca then options.ssl_ca = redis_params.ssl_ca end
+  if redis_params.ssl_ca_dir then options.ssl_ca_dir = redis_params.ssl_ca_dir end
+  if redis_params.ssl_cert then options.ssl_cert = redis_params.ssl_cert end
+  if redis_params.ssl_key then options.ssl_key = redis_params.ssl_key end
+  if redis_params.sni then options.sni = redis_params.sni end
+
   lutil.debugm(N, task, 'perform request to redis server' ..
       ' (host=%s, timeout=%s): cmd: %s', ip_addr,
       options.timeout, options.cmd)
@@ -1115,6 +1341,15 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key,
   if redis_params['db'] then
     options['dbname'] = redis_params['db']
   end
+
+  -- TLS options
+  if redis_params.ssl ~= nil then options.ssl = redis_params.ssl end
+  if redis_params.no_ssl_verify ~= nil then options.no_ssl_verify = redis_params.no_ssl_verify end
+  if redis_params.ssl_ca then options.ssl_ca = redis_params.ssl_ca end
+  if redis_params.ssl_ca_dir then options.ssl_ca_dir = redis_params.ssl_ca_dir end
+  if redis_params.ssl_cert then options.ssl_cert = redis_params.ssl_cert end
+  if redis_params.ssl_key then options.ssl_key = redis_params.ssl_key end
+  if redis_params.sni then options.sni = redis_params.sni end
 
   lutil.debugm(N, cfg, 'perform taskless request to redis server' ..
       ' (host=%s, timeout=%s): cmd: %s', options.host:tostring(true),
@@ -1414,7 +1649,6 @@ exports.add_redis_script = add_redis_script
 --
 local function load_redis_script_from_file(filename, redis_params, dir)
   local lua_util = require "lua_util"
-  local rspamd_logger = require "rspamd_logger"
 
   if not dir then
     dir = rspamd_paths.LUALIBDIR
@@ -1427,13 +1661,12 @@ local function load_redis_script_from_file(filename, redis_params, dir)
   -- Read file contents
   local file = io.open(path, "r")
   if not file then
-    rspamd_logger.errx("failed to open Redis script file: %s", path)
-    return nil
+    return nil, string.format("failed to open Redis script file: %s", path)
   end
   local script = file:read("*all")
   if not script then
-    rspamd_logger.errx("failed to load Redis script file: %s", path)
-    return nil
+    file:close()
+    return nil, string.format("failed to read Redis script file: %s", path)
   end
   file:close()
   script = lua_util.strip_lua_comments(script)
@@ -1748,6 +1981,15 @@ exports.request = function(redis_params, attrs, req)
     opts.dbname = redis_params.db
   end
 
+  -- TLS options
+  if redis_params.ssl ~= nil then opts.ssl = redis_params.ssl end
+  if redis_params.no_ssl_verify ~= nil then opts.no_ssl_verify = redis_params.no_ssl_verify end
+  if redis_params.ssl_ca then opts.ssl_ca = redis_params.ssl_ca end
+  if redis_params.ssl_ca_dir then opts.ssl_ca_dir = redis_params.ssl_ca_dir end
+  if redis_params.ssl_cert then opts.ssl_cert = redis_params.ssl_cert end
+  if redis_params.ssl_key then opts.ssl_key = redis_params.ssl_key end
+  if redis_params.sni then opts.sni = redis_params.sni end
+
   if opts.callback then
     lutil.debugm(N, 'perform generic async request to redis server' ..
         ' (host=%s, timeout=%s): cmd: %s, arguments: %s', addr,
@@ -1852,6 +2094,15 @@ exports.connect = function(redis_params, attrs)
   if redis_params.db then
     opts.dbname = redis_params.db
   end
+
+  -- TLS options
+  if redis_params.ssl ~= nil then opts.ssl = redis_params.ssl end
+  if redis_params.no_ssl_verify ~= nil then opts.no_ssl_verify = redis_params.no_ssl_verify end
+  if redis_params.ssl_ca then opts.ssl_ca = redis_params.ssl_ca end
+  if redis_params.ssl_ca_dir then opts.ssl_ca_dir = redis_params.ssl_ca_dir end
+  if redis_params.ssl_cert then opts.ssl_cert = redis_params.ssl_cert end
+  if redis_params.ssl_key then opts.ssl_key = redis_params.ssl_key end
+  if redis_params.sni then opts.sni = redis_params.sni end
 
   if opts.callback then
     local ret, conn = rspamd_redis.connect(opts)

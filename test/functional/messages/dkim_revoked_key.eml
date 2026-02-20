@@ -1,0 +1,16 @@
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+ d=revokedkey.za.org; s=revoked;
+ q=dns/txt; t=1528637909; h=from : to : subject : date;
+ bh=7HkRgYnNru3SR2EWfgWU8yhM0MOH6ZZrPoEIgNIh8wc=;
+ b=kTIV4jcgv9sWFh2JFrS/+PcNxiloituqjmHHqeJOTfa+/9C+Er8BjnMysTJyYVq36Gnv0OZDgLr3Yy4YP5Lzbt1M9ZdN5cJqO7yn1N7wyaGfkt++b09rIYBy5Dkk7OWyP3cDThqDzv8C9heSvqBSEsirFsbt3Wx2g/hWiJlnjew=
+From: Joe SixPack <joe@revokedkey.za.org>
+To: Suzie Q <suzie@shopping.example.net>
+Subject: Test revoked key
+Date: Fri, 11 Jul 2003 21:00:37 -0700 (PDT)
+Message-ID: <20030712040037.46341.5F8J@revokedkey.za.org>
+
+Hi.
+
+This message uses a revoked DKIM key (no p= parameter).
+
+Joe.

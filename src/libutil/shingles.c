@@ -18,6 +18,7 @@
 #include "cryptobox.h"
 #include "images.h"
 #include "libstat/stat_api.h"
+#include "libserver/word.h"
 
 #define SHINGLES_WINDOW 3
 #define SHINGLES_KEY_SIZE rspamd_cryptobox_SIPKEYBYTES
@@ -63,7 +64,7 @@ rspamd_shingles_keys_new(void)
 	return k;
 }
 
-static unsigned char **
+unsigned char **
 rspamd_shingles_get_keys_cached(const unsigned char key[SHINGLES_KEY_SIZE])
 {
 	static GHashTable *ht = NULL;
@@ -112,7 +113,7 @@ rspamd_shingles_get_keys_cached(const unsigned char key[SHINGLES_KEY_SIZE])
 }
 
 struct rspamd_shingle *RSPAMD_OPTIMIZE("unroll-loops")
-	rspamd_shingles_from_text(GArray *input,
+	rspamd_shingles_from_text(rspamd_words_t *input,
 							  const unsigned char key[16],
 							  rspamd_mempool_t *pool,
 							  rspamd_shingles_filter filter,
@@ -123,11 +124,15 @@ struct rspamd_shingle *RSPAMD_OPTIMIZE("unroll-loops")
 	uint64_t **hashes;
 	unsigned char **keys;
 	rspamd_fstring_t *row;
-	rspamd_stat_token_t *word;
+	rspamd_word_t *word;
 	uint64_t val;
 	int i, j, k;
 	gsize hlen, ilen = 0, beg = 0, widx = 0;
 	enum rspamd_cryptobox_fast_hash_type ht;
+
+	if (!input || !input->a) {
+		return NULL;
+	}
 
 	if (pool != NULL) {
 		res = rspamd_mempool_alloc(pool, sizeof(*res));
@@ -138,10 +143,10 @@ struct rspamd_shingle *RSPAMD_OPTIMIZE("unroll-loops")
 
 	row = rspamd_fstring_sized_new(256);
 
-	for (i = 0; i < input->len; i++) {
-		word = &g_array_index(input, rspamd_stat_token_t, i);
+	for (i = 0; i < kv_size(*input); i++) {
+		word = &kv_A(*input, i);
 
-		if (!((word->flags & RSPAMD_STAT_TOKEN_FLAG_SKIPPED) || word->stemmed.len == 0)) {
+		if (!((word->flags & RSPAMD_WORD_FLAG_SKIPPED) || word->stemmed.len == 0)) {
 			ilen++;
 		}
 	}
@@ -162,10 +167,10 @@ struct rspamd_shingle *RSPAMD_OPTIMIZE("unroll-loops")
 				for (j = beg; j < i; j++) {
 
 					word = NULL;
-					while (widx < input->len) {
-						word = &g_array_index(input, rspamd_stat_token_t, widx);
+					while (widx < kv_size(*input)) {
+						word = &kv_A(*input, widx);
 
-						if ((word->flags & RSPAMD_STAT_TOKEN_FLAG_SKIPPED) || word->stemmed.len == 0) {
+						if ((word->flags & RSPAMD_WORD_FLAG_SKIPPED) || word->stemmed.len == 0) {
 							widx++;
 						}
 						else {
@@ -237,10 +242,10 @@ struct rspamd_shingle *RSPAMD_OPTIMIZE("unroll-loops")
 
 					word = NULL;
 
-					while (widx < input->len) {
-						word = &g_array_index(input, rspamd_stat_token_t, widx);
+					while (widx < kv_size(*input)) {
+						word = &kv_A(*input, widx);
 
-						if ((word->flags & RSPAMD_STAT_TOKEN_FLAG_SKIPPED) || word->stemmed.len == 0) {
+						if ((word->flags & RSPAMD_WORD_FLAG_SKIPPED) || word->stemmed.len == 0) {
 							widx++;
 						}
 						else {
@@ -410,3 +415,5 @@ double rspamd_shingles_compare(const struct rspamd_shingle *a,
 
 	return (double) common / (double) RSPAMD_SHINGLE_SIZE;
 }
+
+/* HTML shingles implementation is in shingles_html.cxx */

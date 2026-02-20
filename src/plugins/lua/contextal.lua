@@ -12,19 +12,10 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 local E = {}
 local N = 'contextal'
-
-if confighelp then
-  return
-end
-
-local opts = rspamd_config:get_all_opt(N)
-if not opts then
-  return
-end
 
 local lua_redis = require "lua_redis"
 local lua_util = require "lua_util"
@@ -32,8 +23,9 @@ local redis_cache = require "lua_cache"
 local rspamd_http = require "rspamd_http"
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
 local ucl = require "ucl"
+local PluginSchema = require "lua_shape.plugin_schema"
 
 local cache_context, redis_params
 
@@ -46,19 +38,35 @@ local contextal_actions = {
 }
 
 local config_schema = lua_redis.enrich_schema {
-  action_symbol_prefix = ts.string:is_optional(),
-  base_url = ts.string:is_optional(),
-  cache_prefix = ts.string:is_optional(),
-  cache_timeout = ts.number:is_optional(),
-  cache_ttl = ts.number:is_optional(),
-  custom_actions = ts.array_of(ts.string):is_optional(),
-  defer_if_no_result = ts.boolean:is_optional(),
-  defer_message = ts.string:is_optional(),
-  enabled = ts.boolean:is_optional(),
-  http_timeout = ts.number:is_optional(),
-  request_ttl = ts.number:is_optional(),
-  submission_symbol = ts.string:is_optional(),
+  action_symbol_prefix = T.string():optional():doc({ summary = "Prefix for action symbols" }),
+  base_url = T.string():optional():doc({ summary = "Base URL for Contextal API" }),
+  cache_prefix = T.string():optional():doc({ summary = "Redis cache key prefix" }),
+  cache_timeout = T.number():optional():doc({ summary = "Cache lookup timeout (seconds)" }),
+  cache_ttl = T.number():optional():doc({ summary = "Cache TTL (seconds)" }),
+  custom_actions = T.array(T.string()):optional():doc({ summary = "Additional custom actions" }),
+  defer_if_no_result = T.boolean():optional():doc({ summary = "Defer message if no result yet" }),
+  defer_message = T.string():optional():doc({ summary = "Defer message text" }),
+  enabled = T.boolean():optional():doc({ summary = "Enable the plugin" }),
+  http_timeout = T.number():optional():doc({ summary = "HTTP request timeout (seconds)" }),
+  request_ttl = T.number():optional():doc({ summary = "Result polling timeout (seconds)" }),
+  submission_symbol = T.string():optional():doc({ summary = "Submission symbol name" }),
+  -- staged timeouts
+  connect_timeout = T.number():optional():doc({ summary = "Connection timeout (seconds)" }),
+  ssl_timeout = T.number():optional():doc({ summary = "SSL negotiation timeout (seconds)" }),
+  write_timeout = T.number():optional():doc({ summary = "Write timeout (seconds)" }),
+  read_timeout = T.number():optional():doc({ summary = "Read timeout (seconds)" }),
 }
+
+PluginSchema.register("plugins.contextal", config_schema)
+
+if confighelp then
+  return
+end
+
+local opts = rspamd_config:get_all_opt(N)
+if not opts then
+  return
+end
 
 local settings = {
   action_symbol_prefix = 'CONTEXTAL_ACTION',
@@ -104,11 +112,11 @@ local function process_actions(task, obj, is_cached)
 
   local cache_obj
   if (obj[1] or E).actions then
-    cache_obj = {[1] = {["actions"] = obj[1].actions}}
+    cache_obj = { [1] = { ["actions"] = obj[1].actions } }
   else
     local work_id = task:get_mempool():get_variable('contextal_work_id', 'string')
     if work_id then
-      cache_obj = {[1] = {["work_id"] = work_id}}
+      cache_obj = { [1] = { ["work_id"] = work_id } }
     else
       rspamd_logger.err(task, 'no work id found in mempool')
       return
@@ -116,9 +124,9 @@ local function process_actions(task, obj, is_cached)
   end
 
   redis_cache.cache_set(task,
-      task:get_digest(),
-      cache_obj,
-      cache_context)
+    task:get_digest(),
+    cache_obj,
+    cache_context)
 
   maybe_defer(task, obj)
 end
@@ -167,18 +175,22 @@ local function action_cb(task)
   end
 
   rspamd_http.request({
-      task = task,
-      url = settings.actions_url .. work_id,
-      callback = http_callback,
-      timeout = settings.http_timeout,
-      gzip = settings.gzip,
-      keepalive = settings.keepalive,
-      no_ssl_verify = settings.no_ssl_verify,
+    task = task,
+    url = settings.actions_url .. work_id,
+    callback = http_callback,
+    timeout = settings.http_timeout,
+    gzip = settings.gzip,
+    keepalive = settings.keepalive,
+    no_ssl_verify = settings.no_ssl_verify,
+    -- staged timeouts
+    connect_timeout = settings.connect_timeout,
+    ssl_timeout = settings.ssl_timeout,
+    write_timeout = settings.write_timeout,
+    read_timeout = settings.read_timeout,
   })
 end
 
 local function submit(task)
-
   local function http_callback(err, code, body, hdrs)
     if err then
       rspamd_logger.err(task, 'http error: %s', err)
@@ -203,33 +215,38 @@ local function submit(task)
       task:get_mempool():set_variable('contextal_work_id', work_id)
     end
     task:insert_result(settings.submission_symbol, 1.0,
-        string.format('work_id=%s', work_id or 'nil'))
+      string.format('work_id=%s', work_id or 'nil'))
     if wait_request_ttl then
       task:add_timer(settings.request_ttl, action_cb)
     end
   end
 
   local req = {
-    object_data = {['data'] = task:get_content()},
+    object_data = { ['data'] = task:get_content() },
   }
   if settings.request_ttl then
-    req.ttl = {['data'] = tostring(settings.request_ttl)}
+    req.ttl = { ['data'] = tostring(settings.request_ttl) }
   end
   if settings.max_recursion then
-    req.maxrec = {['data'] = tostring(settings.max_recursion)}
+    req.maxrec = { ['data'] = tostring(settings.max_recursion) }
   end
   rspamd_http.request({
-      task = task,
-      url = settings.submit_url,
-      body = lua_util.table_to_multipart_body(req, static_boundary),
-      callback = http_callback,
-      headers = {
-        ['Content-Type'] = string.format('multipart/form-data; boundary="%s"', static_boundary)
-      },
-      timeout = settings.http_timeout,
-      gzip = settings.gzip,
-      keepalive = settings.keepalive,
-      no_ssl_verify = settings.no_ssl_verify,
+    task = task,
+    url = settings.submit_url,
+    body = lua_util.table_to_multipart_body(req, static_boundary),
+    callback = http_callback,
+    headers = {
+      ['Content-Type'] = string.format('multipart/form-data; boundary="%s"', static_boundary)
+    },
+    timeout = settings.http_timeout,
+    gzip = settings.gzip,
+    keepalive = settings.keepalive,
+    no_ssl_verify = settings.no_ssl_verify,
+    -- staged timeouts
+    connect_timeout = settings.connect_timeout,
+    ssl_timeout = settings.ssl_timeout,
+    write_timeout = settings.write_timeout,
+    read_timeout = settings.read_timeout,
   })
 end
 
@@ -244,11 +261,11 @@ end
 local function submit_cb(task)
   if cache_context then
     redis_cache.cache_get(task,
-        task:get_digest(),
-        cache_context,
-        settings.cache_timeout,
-        submit,
-        cache_hit
+      task:get_digest(),
+      cache_context,
+      settings.cache_timeout,
+      submit,
+      cache_hit
     )
   else
     submit(task)
@@ -293,10 +310,10 @@ end
 redis_params = lua_redis.parse_redis_server(N)
 if redis_params then
   cache_context = redis_cache.create_cache_context(redis_params, {
-      cache_prefix = settings.cache_prefix,
-      cache_ttl = settings.cache_ttl,
-      cache_format = 'json',
-      cache_use_hashing = false
+    cache_prefix = settings.cache_prefix,
+    cache_ttl = settings.cache_ttl,
+    cache_format = 'json',
+    cache_use_hashing = false
   })
 end
 

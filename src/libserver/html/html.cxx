@@ -29,6 +29,7 @@
 #include "contrib/libucl/khash.h"
 #include "libmime/images.h"
 #include "libutil/cxx/utf8_util.h"
+#include "libserver/html/html_cta.hxx"
 
 #include "html_tag_defs.hxx"
 #include "html_entities.hxx"
@@ -39,6 +40,9 @@
 #include "contrib/frozen/include/frozen/string.h"
 #include "contrib/fmt/include/fmt/core.h"
 
+#include <functional>
+#include <algorithm>
+#include <string>
 #include <unicode/uversion.h>
 
 namespace rspamd::html {
@@ -47,23 +51,88 @@ static const unsigned int max_tags = 8192; /* Ignore tags if this maximum is rea
 
 static const html_tags_storage html_tags_defs;
 
-auto html_components_map = frozen::make_unordered_map<frozen::string, html_component_type>(
+auto html_components_map = frozen::make_unordered_map<frozen::string, html_component_enum_type>(
 	{
-		{"name", html_component_type::RSPAMD_HTML_COMPONENT_NAME},
-		{"href", html_component_type::RSPAMD_HTML_COMPONENT_HREF},
-		{"src", html_component_type::RSPAMD_HTML_COMPONENT_HREF},
-		{"action", html_component_type::RSPAMD_HTML_COMPONENT_HREF},
-		{"color", html_component_type::RSPAMD_HTML_COMPONENT_COLOR},
-		{"bgcolor", html_component_type::RSPAMD_HTML_COMPONENT_BGCOLOR},
-		{"style", html_component_type::RSPAMD_HTML_COMPONENT_STYLE},
-		{"class", html_component_type::RSPAMD_HTML_COMPONENT_CLASS},
-		{"width", html_component_type::RSPAMD_HTML_COMPONENT_WIDTH},
-		{"height", html_component_type::RSPAMD_HTML_COMPONENT_HEIGHT},
-		{"size", html_component_type::RSPAMD_HTML_COMPONENT_SIZE},
-		{"rel", html_component_type::RSPAMD_HTML_COMPONENT_REL},
-		{"alt", html_component_type::RSPAMD_HTML_COMPONENT_ALT},
-		{"id", html_component_type::RSPAMD_HTML_COMPONENT_ID},
-		{"hidden", html_component_type::RSPAMD_HTML_COMPONENT_HIDDEN},
+		{"name", html_component_enum_type::RSPAMD_HTML_COMPONENT_NAME},
+		{"href", html_component_enum_type::RSPAMD_HTML_COMPONENT_HREF},
+		{"src", html_component_enum_type::RSPAMD_HTML_COMPONENT_SRC},
+		{"action", html_component_enum_type::RSPAMD_HTML_COMPONENT_HREF},
+		{"color", html_component_enum_type::RSPAMD_HTML_COMPONENT_COLOR},
+		{"bgcolor", html_component_enum_type::RSPAMD_HTML_COMPONENT_BGCOLOR},
+		{"style", html_component_enum_type::RSPAMD_HTML_COMPONENT_STYLE},
+		{"class", html_component_enum_type::RSPAMD_HTML_COMPONENT_CLASS},
+		{"width", html_component_enum_type::RSPAMD_HTML_COMPONENT_WIDTH},
+		{"height", html_component_enum_type::RSPAMD_HTML_COMPONENT_HEIGHT},
+		{"size", html_component_enum_type::RSPAMD_HTML_COMPONENT_SIZE},
+		{"rel", html_component_enum_type::RSPAMD_HTML_COMPONENT_REL},
+		{"alt", html_component_enum_type::RSPAMD_HTML_COMPONENT_ALT},
+		{"id", html_component_enum_type::RSPAMD_HTML_COMPONENT_ID},
+		{"hidden", html_component_enum_type::RSPAMD_HTML_COMPONENT_HIDDEN},
+		// Typography
+		{"font-family", html_component_enum_type::RSPAMD_HTML_COMPONENT_FONT_FAMILY},
+		{"font-size", html_component_enum_type::RSPAMD_HTML_COMPONENT_FONT_SIZE},
+		{"font-weight", html_component_enum_type::RSPAMD_HTML_COMPONENT_FONT_WEIGHT},
+		{"font-style", html_component_enum_type::RSPAMD_HTML_COMPONENT_FONT_STYLE},
+		{"text-align", html_component_enum_type::RSPAMD_HTML_COMPONENT_TEXT_ALIGN},
+		{"text-decoration", html_component_enum_type::RSPAMD_HTML_COMPONENT_TEXT_DECORATION},
+		{"line-height", html_component_enum_type::RSPAMD_HTML_COMPONENT_LINE_HEIGHT},
+		// Layout & positioning
+		{"margin", html_component_enum_type::RSPAMD_HTML_COMPONENT_MARGIN},
+		{"margin-top", html_component_enum_type::RSPAMD_HTML_COMPONENT_MARGIN_TOP},
+		{"margin-bottom", html_component_enum_type::RSPAMD_HTML_COMPONENT_MARGIN_BOTTOM},
+		{"margin-left", html_component_enum_type::RSPAMD_HTML_COMPONENT_MARGIN_LEFT},
+		{"margin-right", html_component_enum_type::RSPAMD_HTML_COMPONENT_MARGIN_RIGHT},
+		{"padding", html_component_enum_type::RSPAMD_HTML_COMPONENT_PADDING},
+		{"padding-top", html_component_enum_type::RSPAMD_HTML_COMPONENT_PADDING_TOP},
+		{"padding-bottom", html_component_enum_type::RSPAMD_HTML_COMPONENT_PADDING_BOTTOM},
+		{"padding-left", html_component_enum_type::RSPAMD_HTML_COMPONENT_PADDING_LEFT},
+		{"padding-right", html_component_enum_type::RSPAMD_HTML_COMPONENT_PADDING_RIGHT},
+		{"border", html_component_enum_type::RSPAMD_HTML_COMPONENT_BORDER},
+		{"border-color", html_component_enum_type::RSPAMD_HTML_COMPONENT_BORDER_COLOR},
+		{"border-width", html_component_enum_type::RSPAMD_HTML_COMPONENT_BORDER_WIDTH},
+		{"border-style", html_component_enum_type::RSPAMD_HTML_COMPONENT_BORDER_STYLE},
+		// Display & visibility
+		{"display", html_component_enum_type::RSPAMD_HTML_COMPONENT_DISPLAY},
+		{"visibility", html_component_enum_type::RSPAMD_HTML_COMPONENT_VISIBILITY},
+		{"opacity", html_component_enum_type::RSPAMD_HTML_COMPONENT_OPACITY},
+		// Dimensions
+		{"min-width", html_component_enum_type::RSPAMD_HTML_COMPONENT_MIN_WIDTH},
+		{"max-width", html_component_enum_type::RSPAMD_HTML_COMPONENT_MAX_WIDTH},
+		{"min-height", html_component_enum_type::RSPAMD_HTML_COMPONENT_MIN_HEIGHT},
+		{"max-height", html_component_enum_type::RSPAMD_HTML_COMPONENT_MAX_HEIGHT},
+		// Table attributes
+		{"cellpadding", html_component_enum_type::RSPAMD_HTML_COMPONENT_CELLPADDING},
+		{"cellspacing", html_component_enum_type::RSPAMD_HTML_COMPONENT_CELLSPACING},
+		{"valign", html_component_enum_type::RSPAMD_HTML_COMPONENT_VALIGN},
+		{"align", html_component_enum_type::RSPAMD_HTML_COMPONENT_ALIGN},
+		// Form attributes
+		{"type", html_component_enum_type::RSPAMD_HTML_COMPONENT_TYPE},
+		{"value", html_component_enum_type::RSPAMD_HTML_COMPONENT_VALUE},
+		{"placeholder", html_component_enum_type::RSPAMD_HTML_COMPONENT_PLACEHOLDER},
+		{"disabled", html_component_enum_type::RSPAMD_HTML_COMPONENT_DISABLED},
+		{"readonly", html_component_enum_type::RSPAMD_HTML_COMPONENT_READONLY},
+		{"checked", html_component_enum_type::RSPAMD_HTML_COMPONENT_CHECKED},
+		{"selected", html_component_enum_type::RSPAMD_HTML_COMPONENT_SELECTED},
+		// Link & media
+		{"target", html_component_enum_type::RSPAMD_HTML_COMPONENT_TARGET},
+		{"title", html_component_enum_type::RSPAMD_HTML_COMPONENT_TITLE},
+		// Meta & document
+		{"charset", html_component_enum_type::RSPAMD_HTML_COMPONENT_CHARSET},
+		{"content", html_component_enum_type::RSPAMD_HTML_COMPONENT_CONTENT},
+		{"http-equiv", html_component_enum_type::RSPAMD_HTML_COMPONENT_HTTP_EQUIV},
+		// Accessibility
+		{"role", html_component_enum_type::RSPAMD_HTML_COMPONENT_ROLE},
+		{"tabindex", html_component_enum_type::RSPAMD_HTML_COMPONENT_TABINDEX},
+		// Background
+		{"background", html_component_enum_type::RSPAMD_HTML_COMPONENT_BACKGROUND},
+		{"background-image", html_component_enum_type::RSPAMD_HTML_COMPONENT_BACKGROUND_IMAGE},
+		{"background-color", html_component_enum_type::RSPAMD_HTML_COMPONENT_BACKGROUND_COLOR},
+		{"background-repeat", html_component_enum_type::RSPAMD_HTML_COMPONENT_BACKGROUND_REPEAT},
+		{"background-position", html_component_enum_type::RSPAMD_HTML_COMPONENT_BACKGROUND_POSITION},
+		// Email-specific tracking
+		{"data-track", html_component_enum_type::RSPAMD_HTML_COMPONENT_DATA_TRACK},
+		{"data-id", html_component_enum_type::RSPAMD_HTML_COMPONENT_DATA_ID},
+		{"data-url", html_component_enum_type::RSPAMD_HTML_COMPONENT_DATA_URL},
 	});
 
 #define msg_debug_html(...) rspamd_conditional_debug_fast(NULL, NULL,                                \
@@ -199,16 +268,607 @@ html_check_balance(struct html_content *hc,
 	return nullptr;
 }
 
-auto html_component_from_string(const std::string_view &st) -> std::optional<html_component_type>
+auto html_component_from_string(std::string_view name, std::string_view value, std::size_t offset, std::size_t len) -> html_tag_component
 {
-	auto known_component_it = html_components_map.find(st);
+	auto known_component_it = html_components_map.find(name);
 
 	if (known_component_it != html_components_map.end()) {
-		return known_component_it->second;
+		switch (known_component_it->second) {
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_NAME:
+			return html_component_name{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_HREF:
+			return html_component_href{value, offset, len};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_COLOR:
+			return html_component_color{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_BGCOLOR:
+			return html_component_bgcolor{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_STYLE:
+			return html_component_style{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_CLASS:
+			return html_component_class{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_WIDTH:
+			return html_component_width{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_HEIGHT:
+			return html_component_height{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_SIZE:
+			return html_component_size{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_REL:
+			return html_component_rel{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_ALT:
+			return html_component_alt{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_ID:
+			return html_component_id{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_HIDDEN:
+			return html_component_hidden{};
+		// Typography
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_FONT_FAMILY:
+			return html_component_font_family{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_FONT_SIZE:
+			return html_component_font_size{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_FONT_WEIGHT:
+			return html_component_font_weight{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_FONT_STYLE:
+			return html_component_font_style{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_TEXT_ALIGN:
+			return html_component_text_align{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_TEXT_DECORATION:
+			return html_component_text_decoration{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_LINE_HEIGHT:
+			return html_component_line_height{value};
+		// Layout
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_MARGIN:
+			return html_component_margin{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_MARGIN_TOP:
+			return html_component_margin_top{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_MARGIN_BOTTOM:
+			return html_component_margin_bottom{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_MARGIN_LEFT:
+			return html_component_margin_left{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_MARGIN_RIGHT:
+			return html_component_margin_right{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_PADDING:
+			return html_component_padding{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_PADDING_TOP:
+			return html_component_padding_top{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_PADDING_BOTTOM:
+			return html_component_padding_bottom{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_PADDING_LEFT:
+			return html_component_padding_left{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_PADDING_RIGHT:
+			return html_component_padding_right{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_BORDER:
+			return html_component_border{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_BORDER_COLOR:
+			return html_component_border_color{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_BORDER_WIDTH:
+			return html_component_border_width{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_BORDER_STYLE:
+			return html_component_border_style{value};
+		// Display
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_DISPLAY:
+			return html_component_display{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_VISIBILITY:
+			return html_component_visibility{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_OPACITY:
+			return html_component_opacity{value};
+		// Dimensions
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_MIN_WIDTH:
+			return html_component_min_width{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_MAX_WIDTH:
+			return html_component_max_width{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_MIN_HEIGHT:
+			return html_component_min_height{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_MAX_HEIGHT:
+			return html_component_max_height{value};
+		// Table
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_CELLPADDING:
+			return html_component_cellpadding{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_CELLSPACING:
+			return html_component_cellspacing{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_VALIGN:
+			return html_component_valign{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_ALIGN:
+			return html_component_align{value};
+		// Form
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_TYPE:
+			return html_component_type{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_VALUE:
+			return html_component_value{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_PLACEHOLDER:
+			return html_component_placeholder{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_DISABLED:
+			return html_component_disabled{};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_READONLY:
+			return html_component_readonly{};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_CHECKED:
+			return html_component_checked{};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_SELECTED:
+			return html_component_selected{};
+		// Link & media
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_TARGET:
+			return html_component_target{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_TITLE:
+			return html_component_title{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_SRC:
+			return html_component_src{value, offset, len};
+		// Meta
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_CHARSET:
+			return html_component_charset{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_CONTENT:
+			return html_component_content{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_HTTP_EQUIV:
+			return html_component_http_equiv{value};
+		// Accessibility
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_ROLE:
+			return html_component_role{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_TABINDEX:
+			return html_component_tabindex{value};
+		// Background
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_BACKGROUND:
+			return html_component_background{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_BACKGROUND_IMAGE:
+			return html_component_background_image{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_BACKGROUND_COLOR:
+			return html_component_background_color{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_BACKGROUND_REPEAT:
+			return html_component_background_repeat{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_BACKGROUND_POSITION:
+			return html_component_background_position{value};
+		// Email tracking
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_DATA_TRACK:
+			return html_component_data_track{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_DATA_ID:
+			return html_component_data_id{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_DATA_URL:
+			return html_component_data_url{value};
+		default:
+			return html_component_unknown{name, value};
+		}
 	}
 	else {
-		return std::nullopt;
+		return html_component_unknown{name, value};
 	}
+}
+
+using component_extractor_func = std::function<std::optional<std::string_view>(const html_tag *)>;
+static const auto component_extractors = frozen::make_unordered_map<frozen::string, component_extractor_func>(
+	{
+		// Basic components
+		{"name", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_name>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"href", [](const html_tag *tag) { return tag->find_href(); }},
+		{"src", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_src>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"class", [](const html_tag *tag) { return tag->find_class(); }},
+		{"id", [](const html_tag *tag) { return tag->find_id(); }},
+		{"style", [](const html_tag *tag) { return tag->find_style(); }},
+		{"alt", [](const html_tag *tag) { return tag->find_alt(); }},
+		{"rel", [](const html_tag *tag) { return tag->find_rel(); }},
+		{"color", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_color>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"bgcolor", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_bgcolor>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+
+		// Numeric components (return string representation)
+		{"width", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_width>()) {
+				 return comp.value()->get_string_value();
+			 }
+			 return std::nullopt;
+		 }},
+		{"height", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_height>()) {
+				 return comp.value()->get_string_value();
+			 }
+			 return std::nullopt;
+		 }},
+		{"size", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_size>()) {
+				 return comp.value()->get_string_value();
+			 }
+			 return std::nullopt;
+		 }},
+
+		// Boolean components
+		{"hidden", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 return tag->is_hidden() ? std::optional<std::string_view>{"true"} : std::nullopt;
+		 }},
+
+		// Typography components
+		{"font-family", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_font_family>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"font-size", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_font_size>()) {
+				 return comp.value()->get_string_value();
+			 }
+			 return std::nullopt;
+		 }},
+		{"font-weight", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_font_weight>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"font-style", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_font_style>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"text-align", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_text_align>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"text-decoration", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_text_decoration>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"line-height", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_line_height>()) {
+				 return comp.value()->get_string_value();
+			 }
+			 return std::nullopt;
+		 }},
+
+		// Layout components
+		{"margin", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_margin>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"margin-top", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_margin_top>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"margin-bottom", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_margin_bottom>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"margin-left", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_margin_left>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"margin-right", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_margin_right>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"padding", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_padding>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"padding-top", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_padding_top>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"padding-bottom", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_padding_bottom>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"padding-left", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_padding_left>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"padding-right", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_padding_right>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"border", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_border>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"border-color", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_border_color>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"border-width", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_border_width>()) {
+				 return comp.value()->get_string_value();
+			 }
+			 return std::nullopt;
+		 }},
+		{"border-style", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_border_style>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+
+		// Display components
+		{"display", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_display>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"visibility", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_visibility>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"opacity", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_opacity>()) {
+				 return comp.value()->get_string_value();
+			 }
+			 return std::nullopt;
+		 }},
+
+		// Additional dimensions
+		{"min-width", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_min_width>()) {
+				 return comp.value()->get_string_value();
+			 }
+			 return std::nullopt;
+		 }},
+		{"max-width", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_max_width>()) {
+				 return comp.value()->get_string_value();
+			 }
+			 return std::nullopt;
+		 }},
+		{"min-height", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_min_height>()) {
+				 return comp.value()->get_string_value();
+			 }
+			 return std::nullopt;
+		 }},
+		{"max-height", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_max_height>()) {
+				 return comp.value()->get_string_value();
+			 }
+			 return std::nullopt;
+		 }},
+
+		// Table components
+		{"cellpadding", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_cellpadding>()) {
+				 return comp.value()->get_string_value();
+			 }
+			 return std::nullopt;
+		 }},
+		{"cellspacing", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_cellspacing>()) {
+				 return comp.value()->get_string_value();
+			 }
+			 return std::nullopt;
+		 }},
+		{"valign", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_valign>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"align", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_align>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+
+		// Form components
+		{"type", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_type>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"value", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_value>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"placeholder", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_placeholder>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"disabled", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_disabled>()) {
+				 return comp.value()->is_present() ? std::optional<std::string_view>{"true"} : std::nullopt;
+			 }
+			 return std::nullopt;
+		 }},
+		{"readonly", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_readonly>()) {
+				 return comp.value()->is_present() ? std::optional<std::string_view>{"true"} : std::nullopt;
+			 }
+			 return std::nullopt;
+		 }},
+		{"checked", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_checked>()) {
+				 return comp.value()->is_present() ? std::optional<std::string_view>{"true"} : std::nullopt;
+			 }
+			 return std::nullopt;
+		 }},
+		{"selected", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_selected>()) {
+				 return comp.value()->is_present() ? std::optional<std::string_view>{"true"} : std::nullopt;
+			 }
+			 return std::nullopt;
+		 }},
+
+		// Link & media components
+		{"target", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_target>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"title", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_title>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+
+		// Meta components
+		{"charset", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_charset>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"content", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_content>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"http-equiv", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_http_equiv>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+
+		// Accessibility components
+		{"role", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_role>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"tabindex", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_tabindex>()) {
+				 return comp.value()->get_string_value();
+			 }
+			 return std::nullopt;
+		 }},
+
+		// Background components
+		{"background", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_background>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"background-image", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_background_image>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"background-color", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_background_color>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"background-repeat", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_background_repeat>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"background-position", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_background_position>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+
+		// Email tracking components
+		{"data-track", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_data_track>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"data-id", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_data_id>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"data-url", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_data_url>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+	});
+
+
+auto html_tag::find_component_by_name(std::string_view attr_name) const -> std::optional<std::string_view>
+{
+	auto it = component_extractors.find(attr_name);
+	if (it != component_extractors.end()) {
+		return it->second(this);
+	}
+
+	// Fallback to unknown components
+	return find_unknown_component(attr_name);
+}
+
+auto html_tag::get_all_attributes() const -> std::vector<std::pair<std::string_view, std::string_view>>
+{
+	std::vector<std::pair<std::string_view, std::string_view>> result;
+
+	// First, get all known attributes using the component_extractors map
+	for (const auto &[attr_name, extractor_func]: component_extractors) {
+		if (auto value = extractor_func(this)) {
+			// Convert frozen::string to std::string_view for the key
+			std::string_view name_view{attr_name.data(), attr_name.size()};
+			result.emplace_back(name_view, value.value());
+		}
+	}
+
+	// Then add all unknown attributes
+	auto unknown_attrs = get_unknown_components();
+	for (const auto &[name, value]: unknown_attrs) {
+		result.emplace_back(name, value);
+	}
+
+	return result;
 }
 
 enum tag_parser_state {
@@ -234,13 +894,16 @@ enum tag_parser_state {
 struct tag_content_parser_state {
 	tag_parser_state cur_state = parse_start;
 	std::string buf;
-	std::optional<html_component_type> cur_component;
+	std::string attr_name;            // Store current attribute name
+	const char *value_start = nullptr;// Track where attribute value starts in input
+	const char *html_start = nullptr; // Base pointer to HTML buffer start
 
 	void reset()
 	{
 		cur_state = parse_start;
 		buf.clear();
-		cur_component = std::nullopt;
+		attr_name.clear();
+		value_start = nullptr;
 	}
 };
 
@@ -254,56 +917,58 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 	auto state = parser_env.cur_state;
 
 	/*
-	 * Stores tag component if it doesn't exist, performing copy of the
-	 * value + decoding of the entities
-	 * Parser env is set to clear the current html attribute fields (saved_p and
-	 * cur_component)
+	 * Stores tag component creating the appropriate variant type
+	 * Parser env is cleared after storing
 	 */
 	auto store_component_value = [&]() -> void {
-		if (parser_env.cur_component) {
+		if (!parser_env.attr_name.empty()) {
+			std::string_view attr_name_view, value_view;
 
-			if (parser_env.buf.empty()) {
-				tag->components.emplace_back(parser_env.cur_component.value(),
-											 std::string_view{});
+			// Store attribute name in persistent memory
+			if (!parser_env.attr_name.empty()) {
+				auto *name_storage = rspamd_mempool_alloc_buffer(pool, parser_env.attr_name.size());
+				memcpy(name_storage, parser_env.attr_name.data(), parser_env.attr_name.size());
+				attr_name_view = {name_storage, parser_env.attr_name.size()};
 			}
-			else {
-				/* We need to copy buf to a persistent storage */
-				auto *s = rspamd_mempool_alloc_buffer(pool, parser_env.buf.size());
 
-				if (parser_env.cur_component.value() == html_component_type::RSPAMD_HTML_COMPONENT_ID ||
-					parser_env.cur_component.value() == html_component_type::RSPAMD_HTML_COMPONENT_CLASS) {
-					/* Lowercase */
-					rspamd_str_copy_lc(parser_env.buf.data(), s, parser_env.buf.size());
+			// Calculate attribute value span for URL rewriting (href/src only)
+			std::size_t value_offset = 0, value_len = 0;
+			if (parser_env.value_start != nullptr && parser_env.html_start != nullptr) {
+				value_offset = parser_env.value_start - parser_env.html_start;
+				value_len = in - parser_env.value_start;
+			}
+
+			// Store value in persistent memory if not empty
+			if (!parser_env.buf.empty()) {
+				auto *value_storage = rspamd_mempool_alloc_buffer(pool, parser_env.buf.size());
+
+				// Lowercase for id and class attributes
+				if (parser_env.attr_name == "id" || parser_env.attr_name == "class") {
+					rspamd_str_copy_lc(parser_env.buf.data(), value_storage, parser_env.buf.size());
 				}
 				else {
-					memcpy(s, parser_env.buf.data(), parser_env.buf.size());
+					memcpy(value_storage, parser_env.buf.data(), parser_env.buf.size());
 				}
 
-				auto sz = rspamd_html_decode_entitles_inplace(s, parser_env.buf.size());
-				tag->components.emplace_back(parser_env.cur_component.value(),
-											 std::string_view{s, sz});
+				auto sz = rspamd_html_decode_entitles_inplace(value_storage, parser_env.buf.size());
+				value_view = {value_storage, sz};
 			}
+
+			// Create the appropriate component variant with span info
+			auto component = html_component_from_string(attr_name_view, value_view, value_offset, value_len);
+			tag->components.emplace_back(std::move(component));
 		}
 
 		parser_env.buf.clear();
-		parser_env.cur_component = std::nullopt;
+		parser_env.attr_name.clear();
+		parser_env.value_start = nullptr;
 	};
 
 	auto store_component_name = [&]() -> bool {
 		decode_html_entitles_inplace(parser_env.buf);
-		auto known_component_it = html_components_map.find(std::string_view{parser_env.buf});
+		parser_env.attr_name = parser_env.buf;
 		parser_env.buf.clear();
-
-		if (known_component_it != html_components_map.end()) {
-			parser_env.cur_component = known_component_it->second;
-
-			return true;
-		}
-		else {
-			parser_env.cur_component = std::nullopt;
-		}
-
-		return false;
+		return true;
 	};
 
 	auto store_value_character = [&](bool lc) -> void {
@@ -448,7 +1113,11 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			state = parse_start_squote;
 		}
 		else if (!g_ascii_isspace(*in)) {
-			store_value_character(true);
+			// Mark start of unquoted attribute value
+			if (parser_env.value_start == nullptr) {
+				parser_env.value_start = in;
+			}
+			store_value_character(false);
 			state = parse_value;
 		}
 		break;
@@ -464,16 +1133,29 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			state = parse_start_squote;
 		}
 		else {
-			store_value_character(true);
+			// Mark start of unquoted attribute value
+			if (parser_env.value_start == nullptr) {
+				parser_env.value_start = in;
+			}
+			store_value_character(false);
 			state = parse_value;
 		}
 		break;
 
 	case parse_start_dquote:
 		if (*in == '"') {
+			// Empty quoted value - set value_start to point to the closing quote
+			if (parser_env.value_start == nullptr) {
+				parser_env.value_start = in;
+			}
+			store_component_value();
 			state = spaces_after_param;
 		}
 		else {
+			// Mark start of attribute value (first char inside quotes)
+			if (parser_env.value_start == nullptr) {
+				parser_env.value_start = in;
+			}
 			store_value_character(false);
 			state = parse_dqvalue;
 		}
@@ -481,9 +1163,18 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 
 	case parse_start_squote:
 		if (*in == '\'') {
+			// Empty quoted value - set value_start to point to the closing quote
+			if (parser_env.value_start == nullptr) {
+				parser_env.value_start = in;
+			}
+			store_component_value();
 			state = spaces_after_param;
 		}
 		else {
+			// Mark start of attribute value (first char inside quotes)
+			if (parser_env.value_start == nullptr) {
+				parser_env.value_start = in;
+			}
 			store_value_character(false);
 			state = parse_sqvalue;
 		}
@@ -519,6 +1210,10 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			state = spaces_after_param;
 		}
 		else {
+			// Mark start of unquoted attribute value
+			if (parser_env.value_start == nullptr) {
+				parser_env.value_start = in;
+			}
 			store_value_character(false);
 		}
 		break;
@@ -618,9 +1313,10 @@ html_is_absolute_url(std::string_view st) -> bool
 static auto
 html_process_url_tag(rspamd_mempool_t *pool,
 					 struct html_tag *tag,
-					 struct html_content *hc) -> std::optional<struct rspamd_url *>
+					 struct html_content *hc,
+					 lua_State *L) -> std::optional<struct rspamd_url *>
 {
-	auto found_href_maybe = tag->find_component(html_component_type::RSPAMD_HTML_COMPONENT_HREF);
+	auto found_href_maybe = tag->find_href();
 
 	if (found_href_maybe) {
 		/* Check base url */
@@ -675,7 +1371,7 @@ html_process_url_tag(rspamd_mempool_t *pool,
 			}
 		}
 
-		auto url = html_process_url(pool, href_value).value_or(nullptr);
+		auto url = html_process_url(pool, href_value, L).value_or(nullptr);
 
 		if (url) {
 			if (tag->id != Tag_A) {
@@ -736,7 +1432,8 @@ html_url_query_callback(struct rspamd_url *url, gsize start_offset,
 static void
 html_process_query_url(rspamd_mempool_t *pool, struct rspamd_url *url,
 					   khash_t(rspamd_url_hash) * url_set,
-					   GPtrArray *part_urls)
+					   GPtrArray *part_urls,
+					   lua_State *L)
 {
 	if (url->querylen > 0) {
 		struct rspamd_html_url_query_cbd qcbd;
@@ -749,7 +1446,7 @@ html_process_query_url(rspamd_mempool_t *pool, struct rspamd_url *url,
 		rspamd_url_find_multiple(pool,
 								 rspamd_url_query_unsafe(url), url->querylen,
 								 RSPAMD_URL_FIND_ALL, NULL,
-								 html_url_query_callback, &qcbd);
+								 html_url_query_callback, &qcbd, L);
 	}
 
 	if (part_urls) {
@@ -809,137 +1506,134 @@ html_process_img_tag(rspamd_mempool_t *pool,
 					 struct html_tag *tag,
 					 struct html_content *hc,
 					 khash_t(rspamd_url_hash) * url_set,
-					 GPtrArray *part_urls)
+					 GPtrArray *part_urls,
+					 lua_State *L)
 {
 	struct html_image *img;
 
 	img = rspamd_mempool_alloc0_type(pool, struct html_image);
 	img->tag = tag;
 
-	for (const auto &param: tag->components) {
+	// Process SRC component (preferred for img tags) or HREF component (fallback)
+	std::optional<std::string_view> href_value;
 
-		if (param.type == html_component_type::RSPAMD_HTML_COMPONENT_HREF) {
-			/* Check base url */
-			const auto &href_value = param.value;
+	// Try SRC first (standard for img tags)
+	if (auto src_comp = tag->find_component<html_component_src>()) {
+		href_value = src_comp.value()->value;
+	}
+	// Fallback to HREF (for backward compatibility or non-standard usage)
+	else if (auto href_comp = tag->find_href()) {
+		href_value = href_comp;
+	}
 
-			if (href_value.size() > 0) {
-				rspamd_ftok_t fstr;
-				fstr.begin = href_value.data();
-				fstr.len = href_value.size();
-				img->src = rspamd_mempool_ftokdup(pool, &fstr);
+	if (href_value && href_value->size() > 0) {
+		rspamd_ftok_t fstr;
+		fstr.begin = href_value->data();
+		fstr.len = href_value->size();
+		img->src = rspamd_mempool_ftokdup(pool, &fstr);
 
-				if (href_value.size() > sizeof("cid:") - 1 && memcmp(href_value.data(),
-																	 "cid:", sizeof("cid:") - 1) == 0) {
-					/* We have an embedded image */
-					img->src += sizeof("cid:") - 1;
-					img->flags |= RSPAMD_HTML_FLAG_IMAGE_EMBEDDED;
-				}
-				else {
-					if (href_value.size() > sizeof("data:") - 1 && memcmp(href_value.data(),
-																		  "data:", sizeof("data:") - 1) == 0) {
-						/* We have an embedded image in HTML tag */
-						img->flags |=
-							(RSPAMD_HTML_FLAG_IMAGE_EMBEDDED | RSPAMD_HTML_FLAG_IMAGE_DATA);
-						html_process_data_image(pool, img, href_value);
-						hc->flags |= RSPAMD_HTML_FLAG_HAS_DATA_URLS;
-					}
-					else {
-						img->flags |= RSPAMD_HTML_FLAG_IMAGE_EXTERNAL;
-						if (img->src) {
+		if (href_value->size() > sizeof("cid:") - 1 && memcmp(href_value->data(),
+															  "cid:", sizeof("cid:") - 1) == 0) {
+			/* We have an embedded image */
+			img->src += sizeof("cid:") - 1;
+			img->flags |= RSPAMD_HTML_FLAG_IMAGE_EMBEDDED;
+		}
+		else {
+			if (href_value->size() > sizeof("data:") - 1 && memcmp(href_value->data(),
+																   "data:", sizeof("data:") - 1) == 0) {
+				/* We have an embedded image in HTML tag */
+				img->flags |=
+					(RSPAMD_HTML_FLAG_IMAGE_EMBEDDED | RSPAMD_HTML_FLAG_IMAGE_DATA);
+				html_process_data_image(pool, img, *href_value);
+				hc->flags |= RSPAMD_HTML_FLAG_HAS_DATA_URLS;
+			}
+			else {
+				img->flags |= RSPAMD_HTML_FLAG_IMAGE_EXTERNAL;
+				if (img->src) {
 
-							std::string_view cpy{href_value};
-							auto maybe_url = html_process_url(pool, cpy);
+					std::string_view cpy{*href_value};
+					auto maybe_url = html_process_url(pool, cpy, L);
 
-							if (maybe_url) {
-								img->url = maybe_url.value();
-								struct rspamd_url *existing;
+					if (maybe_url) {
+						img->url = maybe_url.value();
+						struct rspamd_url *existing;
 
-								img->url->flags |= RSPAMD_URL_FLAG_IMAGE;
-								existing = rspamd_url_set_add_or_return(url_set,
-																		img->url);
+						img->url->flags |= RSPAMD_URL_FLAG_IMAGE;
+						existing = rspamd_url_set_add_or_return(url_set,
+																img->url);
 
-								if (existing && existing != img->url) {
-									/*
-									 * We have some other URL that could be
-									 * found, e.g. from another part. However,
-									 * we still want to set an image flag on it
-									 */
-									existing->flags |= img->url->flags;
-									existing->count++;
-								}
-								else if (part_urls) {
-									/* New url */
-									g_ptr_array_add(part_urls, img->url);
-								}
-							}
+						if (existing && existing != img->url) {
+							/*
+							 * We have some other URL that could be
+							 * found, e.g. from another part. However,
+							 * we still want to set an image flag on it
+							 */
+							existing->flags |= img->url->flags;
+							existing->count++;
+						}
+						else if (part_urls) {
+							/* New url */
+							g_ptr_array_add(part_urls, img->url);
 						}
 					}
 				}
 			}
 		}
+	}
 
+	// Process numeric dimensions using the new helper methods
+	if (auto height = tag->find_height()) {
+		img->height = height.value();
+	}
 
-		if (param.type == html_component_type::RSPAMD_HTML_COMPONENT_HEIGHT) {
-			unsigned long val;
+	if (auto width = tag->find_width()) {
+		img->width = width.value();
+	}
 
-			rspamd_strtoul(param.value.data(), param.value.size(), &val);
-			img->height = val;
-		}
+	// Process style component for dimensions
+	if (auto style_value = tag->find_style()) {
+		if (img->height == 0) {
+			auto pos = rspamd_substring_search_caseless(style_value->data(),
+														style_value->size(),
+														"height", sizeof("height") - 1);
+			if (pos != -1) {
+				auto substr = style_value->substr(pos + sizeof("height") - 1);
 
-		if (param.type == html_component_type::RSPAMD_HTML_COMPONENT_WIDTH) {
-			unsigned long val;
-
-			rspamd_strtoul(param.value.data(), param.value.size(), &val);
-			img->width = val;
-		}
-
-		/* TODO: rework to css at some time */
-		if (param.type == html_component_type::RSPAMD_HTML_COMPONENT_STYLE) {
-			if (img->height == 0) {
-				auto style_st = param.value;
-				auto pos = rspamd_substring_search_caseless(style_st.data(),
-															style_st.size(),
-															"height", sizeof("height") - 1);
-				if (pos != -1) {
-					auto substr = style_st.substr(pos + sizeof("height") - 1);
-
-					for (auto i = 0; i < substr.size(); i++) {
-						auto t = substr[i];
-						if (g_ascii_isdigit(t)) {
-							unsigned long val;
-							rspamd_strtoul(substr.data(),
-										   substr.size(), &val);
-							img->height = val;
-							break;
-						}
-						else if (!g_ascii_isspace(t) && t != '=' && t != ':') {
-							/* Fallback */
-							break;
-						}
+				for (auto i = 0; i < substr.size(); i++) {
+					auto t = substr[i];
+					if (g_ascii_isdigit(t)) {
+						unsigned long val;
+						rspamd_strtoul(substr.data(),
+									   substr.size(), &val);
+						img->height = val;
+						break;
+					}
+					else if (!g_ascii_isspace(t) && t != '=' && t != ':') {
+						/* Fallback */
+						break;
 					}
 				}
 			}
-			if (img->width == 0) {
-				auto style_st = param.value;
-				auto pos = rspamd_substring_search_caseless(style_st.data(),
-															style_st.size(),
-															"width", sizeof("width") - 1);
-				if (pos != -1) {
-					auto substr = style_st.substr(pos + sizeof("width") - 1);
+		}
+		if (img->width == 0) {
+			auto pos = rspamd_substring_search_caseless(style_value->data(),
+														style_value->size(),
+														"width", sizeof("width") - 1);
+			if (pos != -1) {
+				auto substr = style_value->substr(pos + sizeof("width") - 1);
 
-					for (auto i = 0; i < substr.size(); i++) {
-						auto t = substr[i];
-						if (g_ascii_isdigit(t)) {
-							unsigned long val;
-							rspamd_strtoul(substr.data(),
-										   substr.size(), &val);
-							img->width = val;
-							break;
-						}
-						else if (!g_ascii_isspace(t) && t != '=' && t != ':') {
-							/* Fallback */
-							break;
-						}
+				for (auto i = 0; i < substr.size(); i++) {
+					auto t = substr[i];
+					if (g_ascii_isdigit(t)) {
+						unsigned long val;
+						rspamd_strtoul(substr.data(),
+									   substr.size(), &val);
+						img->width = val;
+						break;
+					}
+					else if (!g_ascii_isspace(t) && t != '=' && t != ':') {
+						/* Fallback */
+						break;
 					}
 				}
 			}
@@ -957,6 +1651,19 @@ html_process_img_tag(rspamd_mempool_t *pool,
 
 	hc->images.push_back(img);
 
+	/* Update image-related features */
+	hc->features.images_total++;
+	if (img->flags & RSPAMD_HTML_FLAG_IMAGE_DATA) {
+		hc->features.images_data++;
+	}
+	if (img->flags & RSPAMD_HTML_FLAG_IMAGE_EXTERNAL) {
+		hc->features.images_external++;
+		/* tiny external pixel tracking */
+		if (img->width > 0 && img->height > 0 && (img->width * img->height) <= 4u) {
+			hc->features.images_tiny_external++;
+		}
+	}
+
 	if (std::holds_alternative<std::monostate>(tag->extra)) {
 		tag->extra = img;
 	}
@@ -966,13 +1673,14 @@ static auto
 html_process_link_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 					  struct html_content *hc,
 					  khash_t(rspamd_url_hash) * url_set,
-					  GPtrArray *part_urls) -> void
+					  GPtrArray *part_urls,
+					  lua_State *L) -> void
 {
-	auto found_rel_maybe = tag->find_component(html_component_type::RSPAMD_HTML_COMPONENT_REL);
+	auto found_rel_maybe = tag->find_rel();
 
 	if (found_rel_maybe) {
 		if (found_rel_maybe.value() == "icon") {
-			html_process_img_tag(pool, tag, hc, url_set, part_urls);
+			html_process_img_tag(pool, tag, hc, url_set, part_urls, L);
 		}
 	}
 }
@@ -984,23 +1692,22 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 	std::optional<css::css_value> maybe_fgcolor, maybe_bgcolor;
 	bool hidden = false;
 
-	for (const auto &param: tag->components) {
-		if (param.type == html_component_type::RSPAMD_HTML_COMPONENT_COLOR) {
-			maybe_fgcolor = css::css_value::maybe_color_from_string(param.value);
-		}
-
-		if (param.type == html_component_type::RSPAMD_HTML_COMPONENT_BGCOLOR) {
-			maybe_bgcolor = css::css_value::maybe_color_from_string(param.value);
-		}
-
-		if (param.type == html_component_type::RSPAMD_HTML_COMPONENT_STYLE) {
-			tag->block = rspamd::css::parse_css_declaration(pool, param.value);
-		}
-
-		if (param.type == html_component_type::RSPAMD_HTML_COMPONENT_HIDDEN) {
-			hidden = true;
-		}
+	// Process color components
+	if (auto color_comp = tag->find_component<html_component_color>()) {
+		maybe_fgcolor = css::css_value::maybe_color_from_string(color_comp.value()->value);
 	}
+
+	if (auto bgcolor_comp = tag->find_component<html_component_bgcolor>()) {
+		maybe_bgcolor = css::css_value::maybe_color_from_string(bgcolor_comp.value()->value);
+	}
+
+	// Process style component
+	if (auto style_value = tag->find_style()) {
+		tag->block = rspamd::css::parse_css_declaration(pool, *style_value);
+	}
+
+	// Check if hidden
+	hidden = tag->is_hidden();
 
 	if (!tag->block) {
 		tag->block = html_block::undefined_html_block_pool(pool);
@@ -1016,6 +1723,48 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 
 	if (maybe_bgcolor) {
 		tag->block->set_bgcolor(maybe_bgcolor->to_color().value());
+	}
+
+	/* Offscreen heuristic: negative text-indent or large negative left/top */
+	if (auto style = tag->find_style()) {
+		auto sv = *style;
+		/* text-indent */
+		auto p_ti = rspamd_substring_search_caseless(sv.data(), sv.size(), "text-indent", sizeof("text-indent") - 1);
+		if (p_ti != -1) {
+			/* look ahead for '-' before a digit */
+			for (std::size_t i = p_ti; i < sv.size(); i++) {
+				char c = sv[i];
+				if (c == '-') {
+					/* consider offscreen */
+					hc->features.offscreen_blocks++;
+					break;
+				}
+				if (g_ascii_isdigit(c)) break;
+			}
+		}
+		/* left/top negative absolute */
+		auto p_left = rspamd_substring_search_caseless(sv.data(), sv.size(), "left", sizeof("left") - 1);
+		if (p_left != -1) {
+			for (std::size_t i = p_left; i < sv.size(); i++) {
+				char c = sv[i];
+				if (c == '-') {
+					hc->features.offscreen_blocks++;
+					break;
+				}
+				if (g_ascii_isdigit(c)) break;
+			}
+		}
+		auto p_top = rspamd_substring_search_caseless(sv.data(), sv.size(), "top", sizeof("top") - 1);
+		if (p_top != -1) {
+			for (std::size_t i = p_top; i < sv.size(); i++) {
+				char c = sv[i];
+				if (c == '-') {
+					hc->features.offscreen_blocks++;
+					break;
+				}
+				if (g_ascii_isdigit(c)) break;
+			}
+		}
 	}
 }
 
@@ -1080,6 +1829,21 @@ html_append_parsed(struct html_content *hc,
 				return !g_ascii_isspace(c);
 			},
 			' ');
+		/* Accumulate transparent text bytes */
+		hc->features.text_transparent += (unsigned int) nlen;
+		hc->features.blocks_transparent++;
+	}
+	else {
+		/* Visible or hidden text accounted outside; keep helper here for visible path */
+		if (&dest == &hc->parsed) {
+			/* Visible text */
+			hc->features.text_visible += (unsigned int) nlen;
+		}
+		else if (&dest == &hc->invisible) {
+			/* Hidden text */
+			hc->features.text_hidden += (unsigned int) nlen;
+			hc->features.blocks_hidden++;
+		}
 	}
 
 	return nlen;
@@ -1092,7 +1856,8 @@ html_process_displayed_href_tag(rspamd_mempool_t *pool,
 								const struct html_tag *cur_tag,
 								GList **exceptions,
 								khash_t(rspamd_url_hash) * url_set,
-								goffset dest_offset) -> void
+								goffset dest_offset,
+								lua_State *L) -> void
 {
 
 	if (std::holds_alternative<rspamd_url *>(cur_tag->extra)) {
@@ -1102,7 +1867,7 @@ html_process_displayed_href_tag(rspamd_mempool_t *pool,
 								 exceptions, url_set,
 								 data,
 								 dest_offset,
-								 url);
+								 url, L);
 	}
 }
 
@@ -1112,7 +1877,8 @@ html_append_tag_content(rspamd_mempool_t *pool,
 						struct html_content *hc,
 						html_tag *tag,
 						GList **exceptions,
-						khash_t(rspamd_url_hash) * url_set) -> goffset
+						khash_t(rspamd_url_hash) * url_set,
+						lua_State *L) -> goffset
 {
 	auto is_visible = true, is_block = false, is_spaces = false, is_transparent = false;
 	goffset next_tag_offset = tag->closing.end,
@@ -1239,7 +2005,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 		}
 
 		auto next_offset = html_append_tag_content(pool, start, len,
-												   hc, cld, exceptions, url_set);
+												   hc, cld, exceptions, url_set, L);
 
 		/* Do not allow shifting back */
 		if (next_offset > cur_offset) {
@@ -1280,11 +2046,22 @@ html_append_tag_content(rspamd_mempool_t *pool,
 			html_process_displayed_href_tag(pool, hc,
 											{hc->parsed.data() + initial_parsed_offset, std::size_t(written_len)},
 											tag, exceptions,
-											url_set, initial_parsed_offset);
+											url_set, initial_parsed_offset,
+											L);
+			/* Count display URL mismatches when URL is present */
+			if (std::holds_alternative<rspamd_url *>(tag->extra)) {
+				auto *u = std::get<rspamd_url *>(tag->extra);
+				if (u && (u->flags & RSPAMD_URL_FLAG_DISPLAY_URL) && (u->flags & RSPAMD_URL_FLAG_HTML_DISPLAYED)) {
+					/* html_process_displayed_href_tag sets linked_url when display URL differs */
+					if (u->ext && u->ext->linked_url && u->ext->linked_url != u) {
+						hc->features.links.display_mismatch_links++;
+					}
+				}
+			}
 		}
 		else if (tag->id == Tag_IMG) {
 			/* Process ALT if presented */
-			auto maybe_alt = tag->find_component(html_component_type::RSPAMD_HTML_COMPONENT_ALT);
+			auto maybe_alt = tag->find_alt();
 
 			if (maybe_alt) {
 				if (!hc->parsed.empty() && !g_ascii_isspace(hc->parsed.back())) {
@@ -1376,17 +2153,38 @@ auto html_process_input(struct rspamd_task *task,
 	auto *hc = new html_content;
 	rspamd_mempool_add_destructor(task->task_pool, html_content::html_content_dtor, hc);
 
+	/* Derive first-party eTLD+1 from From: if present (task->message can be NULL) */
+	{
+		auto *from_mime = MESSAGE_FIELD_CHECK(task, from_mime);
+		if (from_mime && from_mime->len > 0) {
+			struct rspamd_email_address *addr = (struct rspamd_email_address *) g_ptr_array_index(from_mime, 0);
+			if (addr && addr->domain && addr->domain_len > 0) {
+				rspamd_ftok_t tld;
+				if (rspamd_url_find_tld(addr->domain, addr->domain_len, &tld)) {
+					/* eTLD+1: take the last label before tld and the tld */
+					const char *dom = addr->domain;
+					const char *dom_end = addr->domain + addr->domain_len;
+					const char *tld_begin = tld.begin;
+					/* Find start of the registrable part */
+					const char *p = tld_begin;
+					while (p > dom && *(p - 1) != '.') {
+						p--;
+					}
+					hc->first_party_etld1.assign(p, dom_end - p);
+				}
+			}
+		}
+	}
+
 	if (task->cfg && in->len > task->cfg->max_html_len) {
-		msg_notice_task("html input is too big: %z, limit is %z",
+		msg_notice_task("html input is too big: %ud, limit is %z",
 						in->len,
 						task->cfg->max_html_len);
 		process_size = task->cfg->max_html_len;
 		overflow_input = true;
 	}
 
-	auto new_tag = [&](int flags = 0) -> struct html_tag *
-	{
-
+	auto new_tag = [&](int flags = 0) -> struct html_tag * {
 		if (hc->all_tags.size() > rspamd::html::max_tags) {
 			hc->flags |= RSPAMD_HTML_FLAG_TOO_MANY_TAGS;
 
@@ -1418,6 +2216,91 @@ auto html_process_input(struct rspamd_task *task,
 				}
 			}
 			hc->tags_seen[cur_tag->id] = true;
+		}
+
+		/* Simple feature collection on opening */
+		switch (cur_tag->id) {
+		case Tag_FORM:
+			hc->features.forms_count++;
+			/* If action present and absolute, compare eTLD+1 with first-party */
+			if (auto href = cur_tag->find_href()) {
+				if (html_is_absolute_url(*href)) {
+					auto maybe_url = html_process_url(pool, *href,
+													  task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
+					if (maybe_url) {
+						struct rspamd_url *u = maybe_url.value();
+						if (u->hostlen > 0) {
+							/* Find eTLD+1 of action host */
+							rspamd_ftok_t tld2;
+							if (rspamd_url_find_tld(rspamd_url_host_unsafe(u), u->hostlen, &tld2)) {
+								const char *host = rspamd_url_host_unsafe(u);
+								const char *p2 = tld2.begin;
+								while (p2 > host && *(p2 - 1) != '.') {
+									p2--;
+								}
+								std::string etld1_action{p2, static_cast<std::size_t>(host + u->hostlen - p2)};
+								if (!hc->first_party_etld1.empty() && !g_ascii_strcasecmp(etld1_action.c_str(), hc->first_party_etld1.c_str())) {
+									hc->features.forms_post_affiliated++;
+								}
+								else {
+									hc->features.forms_post_unaffiliated++;
+								}
+							}
+						}
+					}
+				}
+			}
+			break;
+		case Tag_META: {
+			/* Detect meta refresh */
+			auto http_equiv = cur_tag->find_component<html_component_http_equiv>();
+			if (http_equiv) {
+				auto hv = http_equiv.value()->value;
+				if (hv.size() >= sizeof("refresh") - 1 &&
+					g_ascii_strncasecmp(hv.data(), "refresh", hv.size()) == 0) {
+					hc->features.meta_refresh++;
+					/* Try to extract URL from content */
+					if (auto content = cur_tag->find_component<html_component_content>()) {
+						auto cv = content.value()->value;
+						/* naive parse: look for 'url=' and capture token */
+						auto p = rspamd_substring_search_caseless(cv.data(), cv.size(), "url=", sizeof("url=") - 1);
+						if (p != -1) {
+							constexpr auto url_key_len = sizeof("url=") - 1;
+							/* compute offset as size_type to avoid narrowing on 32-bit */
+							auto url_off = static_cast<std::string_view::size_type>(p) + url_key_len;
+							if (url_off <= cv.size()) {
+								std::string_view urlv{cv.data() + url_off, cv.size() - url_off};
+								/* Trim quotes/spaces and trailing separators */
+								while (!urlv.empty() && (g_ascii_isspace(urlv.front()) || urlv.front() == '\'' || urlv.front() == '"')) urlv.remove_prefix(1);
+								while (!urlv.empty() && (urlv.back() == ';' || urlv.back() == '\'' || urlv.back() == '"' || g_ascii_isspace(urlv.back()))) urlv.remove_suffix(1);
+
+								if (!urlv.empty()) {
+									/* validate and count; do not add to urls set */
+									auto maybe_url = html_process_url(pool, urlv,
+																	  task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
+									if (maybe_url) {
+										hc->features.meta_refresh_urls++;
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			break;
+		}
+		case Tag_INPUT: {
+			if (auto type_comp = cur_tag->find_component<html_component_type>()) {
+				auto tv = type_comp.value()->get_string_value();
+				if (tv.size() == sizeof("password") - 1 &&
+					g_ascii_strncasecmp(tv.data(), "password", tv.size()) == 0) {
+					hc->features.has_password_input = 1u;
+				}
+			}
+			break;
+		}
+		default:
+			break;
 		}
 
 		/* Shift to the first unclosed tag */
@@ -1464,7 +2347,8 @@ auto html_process_input(struct rspamd_task *task,
 		}
 
 		if (cur_tag->flags & FL_HREF && html_document_state == html_document_state::body) {
-			auto maybe_url = html_process_url_tag(pool, cur_tag, hc);
+			auto maybe_url = html_process_url_tag(pool, cur_tag, hc,
+												  task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
 
 			if (maybe_url.has_value()) {
 				url = maybe_url.value();
@@ -1478,7 +2362,8 @@ auto html_process_input(struct rspamd_task *task,
 						}
 						url->part_order = cur_url_part_order++;
 						html_process_query_url(pool, url, url_set,
-											   part_urls);
+											   part_urls,
+											   task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
 					}
 					else {
 						url = maybe_existing;
@@ -1492,6 +2377,71 @@ auto html_process_input(struct rspamd_task *task,
 					g_ptr_array_add(part_urls, url);
 				}
 
+				/* Minimal link features collection */
+				hc->features.links.total_links++;
+				if (url->flags & RSPAMD_URL_FLAG_IDN) {
+					hc->features.links.punycode_links++;
+				}
+				if (url->flags & RSPAMD_URL_FLAG_NUMERIC) {
+					hc->features.links.ip_links++;
+				}
+				if (url->flags & RSPAMD_URL_FLAG_HAS_PORT) {
+					hc->features.links.port_links++;
+				}
+				if (url->flags & RSPAMD_URL_FLAG_QUERY) {
+					/* Heuristic: long query length */
+					if (url->querylen > 64) {
+						hc->features.links.long_query_links++;
+					}
+				}
+				/* Scheme type */
+				if (url->protocol == PROTOCOL_MAILTO) {
+					hc->features.links.mailto_links++;
+				}
+				else if (url->protocol == PROTOCOL_HTTP || url->protocol == PROTOCOL_HTTPS) {
+					hc->features.links.http_links++;
+				}
+				/* data/javascript schemes can be detected by flags set during parsing */
+				if (url->protocol == PROTOCOL_UNKNOWN) {
+					/* We don't have explicit scheme enum for data/js; check raw prefix quickly */
+					if (url->raw && url->rawlen >= 5) {
+						if (g_ascii_strncasecmp(url->raw, "data:", 5) == 0) {
+							hc->features.links.data_scheme_links++;
+						}
+						else if (url->rawlen >= 11 && g_ascii_strncasecmp(url->raw, "javascript:", 11) == 0) {
+							hc->features.links.js_scheme_links++;
+						}
+					}
+				}
+				/* Domain counting + affiliation */
+				if (url->hostlen > 0) {
+					std::string host{rspamd_url_host_unsafe(url), url->hostlen};
+					auto &cnt = hc->link_domain_counts[host];
+					cnt++;
+					if (cnt > hc->features.links.max_links_single_domain) {
+						hc->features.links.max_links_single_domain = cnt;
+					}
+					/* same eTLD+1 as first-party? */
+					if (!hc->first_party_etld1.empty()) {
+						rspamd_ftok_t tld2;
+						if (rspamd_url_find_tld(host.c_str(), host.size(), &tld2)) {
+							const char *h = host.c_str();
+							const char *p2 = tld2.begin;
+							while (p2 > h && *(p2 - 1) != '.') {
+								p2--;
+							}
+							std::string etld1_link{p2, static_cast<std::size_t>(h + host.size() - p2)};
+							if (!g_ascii_strcasecmp(etld1_link.c_str(), hc->first_party_etld1.c_str())) {
+								hc->features.links.same_etld1_links++;
+							}
+						}
+					}
+				}
+				/* Query presence */
+				if (url->querylen > 0) {
+					hc->features.links.query_links++;
+				}
+
 				href_offset = hc->parsed.size();
 			}
 		}
@@ -1499,7 +2449,8 @@ auto html_process_input(struct rspamd_task *task,
 			/*
 			 * Base is allowed only within head tag but HTML is retarded
 			 */
-			auto maybe_url = html_process_url_tag(pool, cur_tag, hc);
+			auto maybe_url = html_process_url_tag(pool, cur_tag, hc,
+												  task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
 
 			if (maybe_url) {
 				msg_debug_html("got valid base tag");
@@ -1520,11 +2471,25 @@ auto html_process_input(struct rspamd_task *task,
 
 		if (cur_tag->id == Tag_IMG) {
 			html_process_img_tag(pool, cur_tag, hc, url_set,
-								 part_urls);
+								 part_urls,
+								 task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
 		}
 		else if (cur_tag->id == Tag_LINK) {
 			html_process_link_tag(pool, cur_tag, hc, url_set,
-								  part_urls);
+								  part_urls,
+								  task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
+		}
+
+		/* Track DOM tag count and max depth */
+		hc->features.tags_count++;
+		{
+			unsigned int depth = 0;
+			for (auto *pdepth = cur_tag->parent; pdepth != nullptr; pdepth = pdepth->parent) {
+				depth++;
+			}
+			if (depth > hc->features.max_dom_depth) {
+				hc->features.max_dom_depth = depth;
+			}
 		}
 
 		if (!(cur_tag->flags & CM_EMPTY)) {
@@ -1547,6 +2512,7 @@ auto html_process_input(struct rspamd_task *task,
 	c = p;
 	end = p + process_size;
 	start = c;
+	content_parser_env.html_start = start;// Initialize for span tracking
 
 	while (p < end) {
 		t = *p;
@@ -2145,13 +3111,14 @@ auto html_process_input(struct rspamd_task *task,
 
 	if (!hc->all_tags.empty() && hc->root_tag) {
 		html_append_tag_content(pool, start, end - start, hc, hc->root_tag,
-								exceptions, url_set);
+								exceptions, url_set,
+								task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
 	}
 
 	/* Leftover after content */
 	switch (state) {
 	case tags_limit_overflow:
-		html_append_parsed(hc, {c, (std::size_t)(end - c)},
+		html_append_parsed(hc, {c, (std::size_t) (end - c)},
 						   false, end - start, hc->parsed);
 		break;
 	default:
@@ -2187,6 +3154,32 @@ auto html_process_input(struct rspamd_task *task,
 							 last_it);
 		}
 	}
+
+	/* Finalize derived link domain counters */
+	if (!hc->link_domain_counts.empty()) {
+		hc->features.links.domains_total = (unsigned int) hc->link_domain_counts.size();
+	}
+
+	/* Mirror parser flags into features */
+	hc->features.flags = (unsigned int) hc->flags;
+
+	/* Clamp visibility counters to input length */
+	{
+		unsigned int total_decoded = hc->features.text_visible + hc->features.text_hidden;
+		if (total_decoded > (unsigned int) (end - start)) {
+			/* Best-effort clamp */
+			unsigned int excess = total_decoded - (unsigned int) (end - start);
+			if (hc->features.text_hidden >= excess) {
+				hc->features.text_hidden -= excess;
+			}
+			else {
+				hc->features.text_visible -= (excess - hc->features.text_hidden);
+				hc->features.text_hidden = 0;
+			}
+		}
+	}
+
+	html_compute_cta_weights(*hc);
 
 	return hc;
 }
@@ -2341,6 +3334,29 @@ rspamd_html_tag_by_id(int id)
 	}
 
 	return nullptr;
+}
+
+float rspamd_html_url_button_weight(void *html_content, struct rspamd_url *u)
+{
+	if (html_content == NULL || u == NULL) return 0.0f;
+	auto *hc = rspamd::html::html_content::from_ptr(html_content);
+	auto it = hc->url_button_weights.find(u);
+	if (it != hc->url_button_weights.end()) {
+		return it->second;
+	}
+
+	return 0.0f;
+}
+
+const struct rspamd_html_features *
+rspamd_html_get_features(void *html_content)
+{
+	if (html_content == NULL) {
+		return NULL;
+	}
+
+	auto *hc = rspamd::html::html_content::from_ptr(html_content);
+	return &hc->features;
 }
 
 const char *

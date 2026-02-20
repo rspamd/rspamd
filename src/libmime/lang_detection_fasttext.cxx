@@ -22,9 +22,10 @@
 #include "libserver/logger.h"
 #include "contrib/fmt/include/fmt/base.h"
 #include "stat_api.h"
-#include <exception>
+#include "libserver/word.h"
 #include <string_view>
 #include <vector>
+#include <unistd.h>
 #endif
 
 #ifdef WITH_FASTTEXT
@@ -52,13 +53,24 @@ public:
 			const auto *model = ucl_object_find_key(opts_section, "fasttext_model");
 
 			if (model) {
+				const char *model_path = ucl_object_tostring(model);
+
+				if (access(model_path, R_OK) != 0) {
+					msg_err_config("fasttext model '%s' is not readable: %s",
+								   model_path, strerror(errno));
+					loaded = false;
+					return;
+				}
+
 				try {
-					ft.loadModel(ucl_object_tostring(model));
+					ft.loadModel(model_path);
 					loaded = true;
-					model_fname = std::string{ucl_object_tostring(model)};
-				} catch (std::exception &e) {
-					auto err_message = fmt::format("cannot load fasttext model: {}", e.what());
-					msg_err_config("%s", err_message.c_str());
+					model_fname = std::string{model_path};
+				} catch (const std::exception &e) {
+					msg_err_config("cannot load fasttext model '%s': %s", model_path, e.what());
+					loaded = false;
+				} catch (...) {
+					msg_err_config("cannot load fasttext model '%s': unknown error", model_path);
 					loaded = false;
 				}
 			}
@@ -180,26 +192,32 @@ bool rspamd_lang_detection_fasttext_is_enabled(void *ud)
 
 rspamd_fasttext_predict_result_t rspamd_lang_detection_fasttext_detect(void *ud,
 																	   struct rspamd_task *task,
-																	   GArray *utf_words,
+																	   rspamd_words_t *utf_words,
 																	   int k)
 {
 #ifndef WITH_FASTTEXT
 	return nullptr;
 #else
 	/* Avoid too long inputs */
-	static const unsigned int max_fasttext_input_len = 1024 * 1024;
+	static const size_t max_fasttext_input_len = 1024 * 1024;
 	auto *real_model = FASTTEXT_MODEL_TO_C_API(ud);
 	std::vector<std::int32_t> words_vec;
-	words_vec.reserve(utf_words->len);
 
-	for (auto i = 0; i < std::min(utf_words->len, max_fasttext_input_len); i++) {
-		const auto *w = &g_array_index(utf_words, rspamd_stat_token_t, i);
+	if (!utf_words || !utf_words->a) {
+		return nullptr;
+	}
+
+	auto words_count = kv_size(*utf_words);
+	words_vec.reserve(words_count);
+
+	for (auto i = 0; i < std::min(words_count, max_fasttext_input_len); i++) {
+		const auto *w = &kv_A(*utf_words, i);
 		if (w->original.len > 0) {
 			real_model->word2vec(w->original.begin, w->original.len, words_vec);
 		}
 	}
 
-	msg_debug_lang_det("fasttext: got %z word tokens from %ud words", words_vec.size(), utf_words->len);
+	msg_debug_lang_det("fasttext: got %z word tokens from %z words", words_vec.size(), words_count);
 
 	auto *res = real_model->detect_language(words_vec, k);
 

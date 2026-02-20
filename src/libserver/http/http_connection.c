@@ -53,10 +53,17 @@ enum rspamd_http_priv_flags {
 	RSPAMD_HTTP_CONN_FLAG_PROXY = 1u << 5u,
 	RSPAMD_HTTP_CONN_FLAG_PROXY_REQUEST = 1u << 6u,
 	RSPAMD_HTTP_CONN_OWN_SOCKET = 1u << 7u,
+	RSPAMD_HTTP_CONN_FLAG_EARLY_RESPONSE = 1u << 8u, /* Server sent early response during write */
 };
 
 #define IS_CONN_ENCRYPTED(c) ((c)->flags & RSPAMD_HTTP_CONN_FLAG_ENCRYPTED)
 #define IS_CONN_RESETED(c) ((c)->flags & RSPAMD_HTTP_CONN_FLAG_RESETED)
+
+static gssize rspamd_http_try_read(int fd,
+								   struct rspamd_http_connection *conn,
+								   struct rspamd_http_connection_private *priv,
+								   struct _rspamd_http_privbuf *pbuf,
+								   const char **buf_ptr);
 
 struct rspamd_http_connection_private {
 	struct rspamd_http_context *ctx;
@@ -69,13 +76,27 @@ struct rspamd_http_connection_private {
 	struct http_parser parser;
 	struct http_parser_settings parser_cb;
 	struct rspamd_io_ev ev;
-	ev_tstamp timeout;
+	ev_tstamp timeout; /* legacy/global timeout (fallback) */
+	/* Staged timeouts (seconds); 0 means use ctx/defaults */
+	ev_tstamp connect_timeout;
+	ev_tstamp ssl_timeout;
+	ev_tstamp write_timeout;
+	ev_tstamp read_timeout;
 	struct rspamd_http_message *msg;
 	struct iovec *out;
 	unsigned int outlen;
 	enum rspamd_http_priv_flags flags;
 	gsize wr_pos;
 	gsize wr_total;
+	/* Keepalive tuning and telemetry */
+	double created_ts;                  /* when connection object was created */
+	double last_used_ts;                /* last time returned to pool */
+	unsigned int reuse_count;           /* number of reuses from keepalive */
+	double ka_ttl_override;             /* per-request TTL */
+	double ka_idle_override;            /* per-request idle timeout */
+	unsigned int ka_max_reuse_override; /* per-request max reuse */
+	/* Internal state */
+	bool first_write_done;
 };
 
 static const rspamd_ftok_t key_header = {
@@ -731,11 +752,11 @@ rspamd_http_simple_client_helper(struct rspamd_http_connection *conn)
 
 	if (conn->opts & RSPAMD_HTTP_CLIENT_SHARED) {
 		rspamd_http_connection_read_message_shared(conn, conn->ud,
-												   conn->priv->timeout);
+												   (priv->read_timeout > 0 ? priv->read_timeout : conn->priv->timeout));
 	}
 	else {
 		rspamd_http_connection_read_message(conn, conn->ud,
-											conn->priv->timeout);
+											(priv->read_timeout > 0 ? priv->read_timeout : conn->priv->timeout));
 	}
 
 	if (priv->msg) {
@@ -748,6 +769,9 @@ rspamd_http_simple_client_helper(struct rspamd_http_connection *conn)
 		}
 	}
 }
+
+static inline void
+rspamd_http_connection_stop_watcher(struct rspamd_http_connection_private *priv);
 
 static void
 rspamd_http_write_helper(struct rspamd_http_connection *conn)
@@ -812,8 +836,45 @@ rspamd_http_write_helper(struct rspamd_http_connection *conn)
 	}
 
 	if (r == -1) {
+		int saved_errno = errno;
+
 		if (!priv->ssl) {
-			err = g_error_new(HTTP_ERROR, 500, "IO write error: %s", strerror(errno));
+			/* Check if server sent an early response (e.g., 413) */
+			if (saved_errno == EPIPE || saved_errno == ECONNRESET ||
+				saved_errno == ENOTCONN) {
+				struct _rspamd_http_privbuf *pbuf = priv->buf;
+				const char *d;
+				gssize read_res;
+
+				REF_RETAIN(pbuf);
+				read_res = rspamd_http_try_read(conn->fd, conn, priv, pbuf, &d);
+
+				if (read_res > 0) {
+					msg_debug("got early server response (%z bytes) during write, processing",
+							  read_res);
+
+					if (http_parser_execute(&priv->parser, &priv->parser_cb,
+											d, read_res) != (size_t) read_res ||
+						priv->parser.http_errno != 0) {
+						err = g_error_new(HTTP_ERROR, 400,
+										  "HTTP parser error on early response: %s",
+										  http_errno_description(priv->parser.http_errno));
+						rspamd_http_connection_stop_watcher(priv);
+						rspamd_http_connection_ref(conn);
+						conn->error_handler(conn, err);
+						rspamd_http_connection_unref(conn);
+						g_error_free(err);
+					}
+
+					REF_RELEASE(pbuf);
+					return;
+				}
+
+				REF_RELEASE(pbuf);
+			}
+
+			err = g_error_new(HTTP_ERROR, 500, "IO write error: %s", strerror(saved_errno));
+			rspamd_http_connection_stop_watcher(priv);
 			rspamd_http_connection_ref(conn);
 			conn->error_handler(conn, err);
 			rspamd_http_connection_unref(conn);
@@ -852,8 +913,15 @@ call_finish_handler:
 		rspamd_http_connection_unref(conn);
 	}
 	else {
-		/* Plan read message */
-		rspamd_http_simple_client_helper(conn);
+		if (priv->flags & RSPAMD_HTTP_CONN_FLAG_EARLY_RESPONSE) {
+			/* Early response already being processed */
+			rspamd_ev_watcher_reschedule(priv->ctx->event_loop, &priv->ev, EV_READ);
+		}
+		else {
+			/* Plan read message */
+			priv->first_write_done = true;
+			rspamd_http_simple_client_helper(conn);
+		}
 	}
 }
 
@@ -918,10 +986,20 @@ static void
 rspamd_http_ssl_err_handler(gpointer ud, GError *err)
 {
 	struct rspamd_http_connection *conn = (struct rspamd_http_connection *) ud;
+	struct rspamd_http_connection_private *priv = conn->priv;
+
+	/* Error is terminal, stop watcher before delegating to user handler */
+	rspamd_http_connection_stop_watcher(priv);
 
 	rspamd_http_connection_ref(conn);
 	conn->error_handler(conn, err);
 	rspamd_http_connection_unref(conn);
+}
+
+static inline void
+rspamd_http_connection_stop_watcher(struct rspamd_http_connection_private *priv)
+{
+	rspamd_ev_watcher_stop(priv->ctx->event_loop, &priv->ev);
 }
 
 static void
@@ -939,7 +1017,37 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 	REF_RETAIN(pbuf);
 	rspamd_http_connection_ref(conn);
 
-	if (what == EV_READ) {
+	if (what & EV_READ) {
+		/* Check for early response while still sending request (client only) */
+		if (conn->type == RSPAMD_HTTP_CLIENT &&
+			priv->wr_pos < priv->wr_total && priv->wr_total > 0) {
+			/* Check for connection errors (io_uring reports POLLERR as EV_READ) */
+			if (!priv->first_write_done) {
+				int sock_err = 0;
+				socklen_t sock_err_len = sizeof(sock_err);
+
+				if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &sock_err, &sock_err_len) == 0 &&
+					sock_err != 0) {
+					err = g_error_new(HTTP_ERROR, 500,
+									  "Connection failed: %s", strerror(sock_err));
+					rspamd_http_connection_stop_watcher(priv);
+					conn->error_handler(conn, err);
+					g_error_free(err);
+
+					REF_RELEASE(pbuf);
+					rspamd_http_connection_unref(conn);
+
+					return;
+				}
+			}
+
+			msg_debug("received early server response while still writing request "
+					  "(sent %uz of %uz bytes)",
+					  priv->wr_pos, priv->wr_total);
+			priv->wr_pos = priv->wr_total;
+			priv->flags |= RSPAMD_HTTP_CONN_FLAG_EARLY_RESPONSE;
+		}
+
 		r = rspamd_http_try_read(fd, conn, priv, pbuf, &d);
 
 		if (r > 0) {
@@ -977,6 +1085,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 				}
 
 				if (!conn->finished) {
+					rspamd_http_connection_stop_watcher(priv);
 					conn->error_handler(conn, err);
 				}
 				else {
@@ -999,6 +1108,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 				err = g_error_new(HTTP_ERROR,
 								  400,
 								  "IO read error: unexpected EOF");
+				rspamd_http_connection_stop_watcher(priv);
 				conn->error_handler(conn, err);
 				g_error_free(err);
 			}
@@ -1013,6 +1123,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 								  500,
 								  "HTTP IO read error: %s",
 								  strerror(errno));
+				rspamd_http_connection_stop_watcher(priv);
 				conn->error_handler(conn, err);
 				g_error_free(err);
 			}
@@ -1023,7 +1134,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 			return;
 		}
 	}
-	else if (what == EV_TIMEOUT) {
+	else if (what & EV_TIMEOUT) {
 		if (!priv->ssl) {
 			/* Let's try to read from the socket first */
 			r = rspamd_http_try_read(fd, conn, priv, pbuf, &d);
@@ -1037,6 +1148,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 									  http_errno_description(priv->parser.http_errno));
 
 					if (!conn->finished) {
+						rspamd_http_connection_stop_watcher(priv);
 						conn->error_handler(conn, err);
 					}
 					else {
@@ -1054,6 +1166,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 			else {
 				err = g_error_new(HTTP_ERROR, 408,
 								  "IO timeout");
+				rspamd_http_connection_stop_watcher(priv);
 				conn->error_handler(conn, err);
 				g_error_free(err);
 
@@ -1071,7 +1184,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 			return;
 		}
 	}
-	else if (what == EV_WRITE) {
+	else if (what & EV_WRITE) {
 		rspamd_http_write_helper(conn);
 	}
 
@@ -1130,6 +1243,18 @@ rspamd_http_connection_new_common(struct rspamd_http_context *ctx,
 	priv = g_malloc0(sizeof(struct rspamd_http_connection_private));
 	conn->priv = priv;
 	priv->ctx = ctx;
+	/* Initialize staged timeouts and keepalive telemetry */
+	priv->connect_timeout = ctx->config.connect_timeout;
+	priv->ssl_timeout = ctx->config.ssl_timeout;
+	priv->write_timeout = ctx->config.write_timeout;
+	priv->read_timeout = ctx->config.read_timeout;
+	priv->created_ts = (ctx->event_loop ? ev_now(ctx->event_loop) : rspamd_get_ticks(FALSE));
+	priv->last_used_ts = 0;
+	priv->reuse_count = 0;
+	priv->ka_ttl_override = 0;
+	priv->ka_idle_override = 0;
+	priv->ka_max_reuse_override = 0;
+	priv->first_write_done = false;
 	priv->flags = priv_flags;
 
 	if (type == RSPAMD_HTTP_SERVER) {
@@ -1513,7 +1638,8 @@ rspamd_http_connection_read_message_common(struct rspamd_http_connection *conn,
 		priv->flags |= RSPAMD_HTTP_CONN_FLAG_ENCRYPTED;
 	}
 
-	priv->timeout = timeout;
+	/* Use read-stage timeout override if set; else fallback */
+	priv->timeout = (priv->read_timeout > 0 ? priv->read_timeout : timeout);
 	priv->header = NULL;
 	priv->buf = g_malloc0(sizeof(*priv->buf));
 	REF_INIT_RETAIN(priv->buf, rspamd_http_privbuf_dtor);
@@ -1576,9 +1702,10 @@ rspamd_http_connection_encrypt_message(
 	outlen = priv->out[0].iov_len + priv->out[1].iov_len;
 	/*
 	 * Create segments from the following:
-	 * Method, [URL], CRLF, nheaders, CRLF, body
+	 * Method, [URL], CRLF, nheaders, CRLF, body segment(s)
 	 */
-	segments = g_new(struct rspamd_cryptobox_segment, hdrcount + 5);
+	gsize body_seg_count = (msg->body_iov_count > 0) ? msg->body_iov_count : (pbody ? 1 : 0);
+	segments = g_new(struct rspamd_cryptobox_segment, hdrcount + 4 + body_seg_count);
 
 	segments[0].data = pmethod;
 	segments[0].len = methodlen;
@@ -1613,7 +1740,13 @@ rspamd_http_connection_encrypt_message(
 segments[i].data = crlfp;
 segments[i++].len = 2;
 
-if (pbody) {
+if (msg->body_iov_count > 0) {
+	for (gsize j = 0; j < msg->body_iov_count; j++) {
+		segments[i].data = msg->body_iov[j].iov_base;
+		segments[i++].len = msg->body_iov[j].iov_len;
+	}
+}
+else if (pbody) {
 	segments[i].data = pbody;
 	segments[i++].len = bodylen;
 }
@@ -2045,7 +2178,8 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 
 	conn->ud = ud;
 	priv->msg = msg;
-	priv->timeout = timeout;
+	/* Use write-stage timeout override if set */
+	priv->timeout = (priv->write_timeout > 0 ? priv->write_timeout : timeout);
 
 	priv->header = NULL;
 	priv->buf = g_malloc0(sizeof(*priv->buf));
@@ -2140,7 +2274,12 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 	}
 
 	if (encrypted) {
-		if (msg->body_buf.len == 0) {
+		if (msg->body_iov_count > 0) {
+			pbody = NULL;
+			bodylen = msg->body_buf.len;
+			msg->method = HTTP_POST;
+		}
+		else if (msg->body_buf.len == 0) {
 			pbody = NULL;
 			bodylen = 0;
 			msg->method = HTTP_GET;
@@ -2161,7 +2300,7 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 			 * iov[6] = encrypted crlf
 			 * iov[7..n] = encrypted headers
 			 * iov[n + 1] = encrypted crlf
-			 * [iov[n + 2] = encrypted body]
+			 * [iov[n + 2..] = encrypted body segment(s)]
 			 */
 			priv->outlen = 7;
 			enclen = crypto_box_noncebytes() +
@@ -2180,7 +2319,7 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 			 * iov[7] = encrypted prelude
 			 * iov[8..n] = encrypted headers
 			 * iov[n + 1] = encrypted crlf
-			 * [iov[n + 2] = encrypted body]
+			 * [iov[n + 2..] = encrypted body segment(s)]
 			 */
 			priv->outlen = 8;
 
@@ -2214,12 +2353,26 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 		}
 
 		if (bodylen > 0) {
-			priv->outlen++;
+			if (msg->body_iov_count > 0) {
+				priv->outlen += msg->body_iov_count;
+			}
+			else {
+				priv->outlen++;
+			}
 		}
 	}
 	else {
 		if (msg->method < HTTP_SYMBOLS) {
-			if (msg->body_buf.len == 0 || allow_shared) {
+			if (msg->body_iov_count > 0) {
+				pbody = NULL;
+				bodylen = msg->body_buf.len;
+				priv->outlen = 2 + msg->body_iov_count;
+
+				if (msg->method == HTTP_INVALID) {
+					msg->method = HTTP_POST;
+				}
+			}
+			else if (msg->body_buf.len == 0 || allow_shared) {
 				pbody = NULL;
 				bodylen = 0;
 				priv->outlen = 2;
@@ -2348,7 +2501,13 @@ else
 	priv->wr_total -= 2;
 }
 
-if (pbody != NULL) {
+if (msg->body_iov_count > 0) {
+	for (gsize j = 0; j < msg->body_iov_count; j++) {
+		priv->out[i].iov_base = msg->body_iov[j].iov_base;
+		priv->out[i++].iov_len = msg->body_iov[j].iov_len;
+	}
+}
+else if (pbody != NULL) {
 	priv->out[i].iov_base = pbody;
 	priv->out[i++].iov_len = bodylen;
 }
@@ -2387,8 +2546,10 @@ if (conn->opts & RSPAMD_HTTP_CLIENT_SSL) {
 												  conn->log_tag);
 			g_assert(priv->ssl != NULL);
 
+			/* Use ssl_timeout for handshake if provided */
+			ev_tstamp ssl_to = (priv->ssl_timeout > 0 ? priv->ssl_timeout : (priv->connect_timeout > 0 ? priv->connect_timeout : priv->timeout));
 			if (!rspamd_ssl_connect_fd(priv->ssl, conn->fd, host, &priv->ev,
-									   priv->timeout, rspamd_http_event_handler,
+									   ssl_to, rspamd_http_event_handler,
 									   rspamd_http_ssl_err_handler, conn)) {
 
 				err = g_error_new(HTTP_ERROR, 400,
@@ -2408,14 +2569,26 @@ if (conn->opts & RSPAMD_HTTP_CLIENT_SSL) {
 												   rspamd_http_event_handler,
 												   rspamd_http_ssl_err_handler,
 												   conn,
-												   EV_WRITE);
+												   EV_WRITE | EV_READ);
 		}
 	}
 }
+else if (priv->ssl) {
+	/* Server-side SSL: connection already established, restore handlers */
+	rspamd_ssl_connection_restore_handlers(priv->ssl,
+										   rspamd_http_event_handler,
+										   rspamd_http_ssl_err_handler,
+										   conn,
+										   EV_WRITE);
+}
 else {
-	rspamd_ev_watcher_init(&priv->ev, conn->fd, EV_WRITE,
+	/* Watch for READ too on client to detect early server responses */
+	short ev_flags = (conn->type == RSPAMD_HTTP_CLIENT) ? (EV_WRITE | EV_READ) : EV_WRITE;
+	rspamd_ev_watcher_init(&priv->ev, conn->fd, ev_flags,
 						   rspamd_http_event_handler, conn);
-	rspamd_ev_watcher_start(priv->ctx->event_loop, &priv->ev, priv->timeout);
+	/* Use connect_timeout on initial EV_WRITE stage if provided */
+	ev_tstamp start_to = (priv->connect_timeout > 0 ? priv->connect_timeout : priv->timeout);
+	rspamd_ev_watcher_start(priv->ctx->event_loop, &priv->ev, start_to);
 }
 
 return TRUE;
@@ -2653,4 +2826,169 @@ void rspamd_http_connection_disable_encryption(struct rspamd_http_connection *co
 		priv->peer_key = NULL;
 		priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_ENCRYPTED;
 	}
+}
+
+void rspamd_http_connection_set_timeouts(struct rspamd_http_connection *conn,
+										 ev_tstamp connect_timeout,
+										 ev_tstamp ssl_timeout,
+										 ev_tstamp write_timeout,
+										 ev_tstamp read_timeout)
+{
+	struct rspamd_http_connection_private *priv = conn->priv;
+
+	if (connect_timeout > 0) {
+		priv->connect_timeout = connect_timeout;
+	}
+	if (ssl_timeout > 0) {
+		priv->ssl_timeout = ssl_timeout;
+	}
+	if (write_timeout > 0) {
+		priv->write_timeout = write_timeout;
+	}
+	if (read_timeout > 0) {
+		priv->read_timeout = read_timeout;
+	}
+}
+
+void rspamd_http_connection_set_keepalive_tuning(struct rspamd_http_connection *conn,
+												 double connection_ttl,
+												 double idle_timeout,
+												 unsigned int max_reuse)
+{
+	struct rspamd_http_connection_private *priv = conn->priv;
+
+	if (connection_ttl > 0) {
+		priv->ka_ttl_override = connection_ttl;
+	}
+	if (idle_timeout > 0) {
+		priv->ka_idle_override = idle_timeout;
+	}
+	if (max_reuse > 0) {
+		priv->ka_max_reuse_override = max_reuse;
+	}
+}
+
+void rspamd_http_connection_keepalive_note_put(struct rspamd_http_connection *conn,
+											   double now_ts)
+{
+	struct rspamd_http_connection_private *priv = conn->priv;
+	priv->last_used_ts = now_ts;
+}
+
+void rspamd_http_connection_keepalive_note_reuse(struct rspamd_http_connection *conn)
+{
+	struct rspamd_http_connection_private *priv = conn->priv;
+	priv->reuse_count++;
+}
+
+gboolean rspamd_http_connection_keepalive_is_valid(struct rspamd_http_connection *conn,
+												   double now_ts,
+												   double default_ttl,
+												   unsigned int default_max_reuse)
+{
+	struct rspamd_http_connection_private *priv = conn->priv;
+	double ttl = (priv->ka_ttl_override > 0 ? priv->ka_ttl_override : default_ttl);
+	unsigned int max_reuse = (priv->ka_max_reuse_override > 0 ? priv->ka_max_reuse_override : default_max_reuse);
+
+	if (ttl > 0 && now_ts - priv->created_ts > ttl) {
+		return FALSE;
+	}
+	if (max_reuse > 0 && priv->reuse_count >= max_reuse) {
+		return FALSE;
+	}
+	return TRUE;
+}
+
+double rspamd_http_connection_keepalive_idle_timeout(struct rspamd_http_connection *conn,
+													 double default_idle)
+{
+	struct rspamd_http_connection_private *priv = conn->priv;
+	return (priv->ka_idle_override > 0 ? priv->ka_idle_override : default_idle);
+}
+
+static void
+rspamd_http_ssl_accept_handler(int fd, short what, gpointer ud)
+{
+	struct rspamd_http_connection *conn = (struct rspamd_http_connection *) ud;
+	struct rspamd_http_connection_private *priv = conn->priv;
+
+	/* SSL handshake complete, start reading HTTP message */
+	rspamd_http_connection_read_message_common(conn, conn->ud, priv->timeout, 0);
+}
+
+static void
+rspamd_http_ssl_accept_shared_handler(int fd, short what, gpointer ud)
+{
+	struct rspamd_http_connection *conn = (struct rspamd_http_connection *) ud;
+	struct rspamd_http_connection_private *priv = conn->priv;
+
+	/* SSL handshake complete, start reading HTTP message with shared body */
+	rspamd_http_connection_read_message_common(conn, conn->ud, priv->timeout,
+											   RSPAMD_HTTP_FLAG_SHMEM);
+}
+
+static gboolean
+rspamd_http_connection_accept_ssl_common(struct rspamd_http_connection *conn,
+										 gpointer ssl_ctx,
+										 gpointer ud,
+										 ev_tstamp timeout,
+										 rspamd_ssl_handler_t accept_handler)
+{
+	struct rspamd_http_connection_private *priv = conn->priv;
+	GError *err;
+
+	g_assert(conn != NULL);
+	g_assert(ssl_ctx != NULL);
+
+	conn->ud = ud;
+	priv->timeout = timeout;
+
+	priv->ssl = rspamd_ssl_connection_new(ssl_ctx, priv->ctx->event_loop,
+										  FALSE, conn->log_tag);
+
+	if (priv->ssl == NULL) {
+		err = g_error_new(HTTP_ERROR, 400, "cannot create SSL connection");
+		rspamd_http_connection_ref(conn);
+		conn->error_handler(conn, err);
+		rspamd_http_connection_unref(conn);
+		g_error_free(err);
+		return FALSE;
+	}
+
+	if (!rspamd_ssl_accept_fd(priv->ssl, conn->fd, &priv->ev,
+							  timeout, accept_handler,
+							  rspamd_http_ssl_err_handler, conn)) {
+
+		err = g_error_new(HTTP_ERROR, 400,
+						  "ssl accept error: ssl error=%s, errno=%s",
+						  ERR_error_string(ERR_get_error(), NULL),
+						  strerror(errno));
+		rspamd_http_connection_ref(conn);
+		conn->error_handler(conn, err);
+		rspamd_http_connection_unref(conn);
+		g_error_free(err);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+gboolean
+rspamd_http_connection_accept_ssl(struct rspamd_http_connection *conn,
+								  gpointer ssl_ctx,
+								  gpointer ud,
+								  ev_tstamp timeout)
+{
+	return rspamd_http_connection_accept_ssl_common(conn, ssl_ctx, ud, timeout,
+													rspamd_http_ssl_accept_handler);
+}
+
+gboolean
+rspamd_http_connection_accept_ssl_shared(struct rspamd_http_connection *conn,
+										 gpointer ssl_ctx,
+										 gpointer ud,
+										 ev_tstamp timeout)
+{
+	return rspamd_http_connection_accept_ssl_common(conn, ssl_ctx, ud, timeout,
+													rspamd_http_ssl_accept_shared_handler);
 }

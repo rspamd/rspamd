@@ -16,7 +16,7 @@ limitations under the License.
 
 local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
 
 local exports = {}
 
@@ -97,14 +97,26 @@ local function str_to_rate(str)
   return divisor / divider
 end
 
-local bucket_schema = ts.shape {
-  burst = ts.number + ts.string / lua_util.dehumanize_number,
-  rate = ts.number + ts.string / str_to_rate,
-  skip_recipients = ts.boolean:is_optional(),
-  symbol = ts.string:is_optional(),
-  message = ts.string:is_optional(),
-  skip_soft_reject = ts.boolean:is_optional(),
-}
+local bucket_schema = T.table({
+  burst = T.one_of({
+    T.number(),
+    T.transform(T.string(), lua_util.dehumanize_number)
+  }):doc({ summary = "Burst size (number of messages)" }),
+  rate = T.one_of({
+    T.number(),
+    T.transform(T.string(), str_to_rate)
+  }):doc({ summary = "Rate limit (messages per time unit)" }),
+  skip_recipients = T.boolean():optional():doc({ summary = "Skip per-recipient limits" }),
+  symbol = T.string():optional():doc({ summary = "Custom symbol name" }),
+  message = T.string():optional():doc({ summary = "Custom reject message" }),
+  skip_soft_reject = T.boolean():optional():doc({ summary = "Skip soft reject" }),
+  ham_factor_rate = T.number():optional():doc({ summary = "Bucket-specific ham_factor_rate"}),
+  spam_factor_rate = T.number():optional():doc({ summary = "Bucket-specific spam_factor_rate"}),
+  ham_factor_burst = T.number():optional():doc({ summary = "Bucket-specific ham_factor_burst"}),
+  spam_factor_burst = T.number():optional():doc({ summary = "Bucket-specific spam_factor_burst"}),
+  max_rate_mult = T.number():optional():doc({ summary = "Bucket-specific rate multiplicator limit"}),
+  max_bucket_mult = T.number():optional():doc({ summary = "Bucket-specific bucket multiplicator limit"}),
+}):doc({ summary = "Ratelimit bucket configuration" })
 
 exports.parse_limit = function(name, data)
   if type(data) == 'table' then

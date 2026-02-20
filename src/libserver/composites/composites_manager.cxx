@@ -1,11 +1,11 @@
-/*-
- * Copyright 2021 Vsevolod Stakhov
+/*
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,12 +24,14 @@
 #include "libserver/cfg_file.h"
 #include "libserver/logger.h"
 #include "libserver/maps/map.h"
+#include "libserver/rspamd_symcache.h"
 #include "libutil/cxx/util.hxx"
 
 namespace rspamd::composites {
 
 static auto
-composite_policy_from_str(const std::string_view &inp) -> enum rspamd_composite_policy {
+composite_policy_from_str(const std::string_view &inp) -> enum rspamd_composite_policy
+{
 	const static ankerl::unordered_dense::map<std::string_view,
 											  enum rspamd_composite_policy>
 		names{
@@ -43,10 +45,11 @@ composite_policy_from_str(const std::string_view &inp) -> enum rspamd_composite_
 		};
 
 	auto found = names.find(inp);
-	if (found != names.end()){
-		return found->second;}
+	if (found != names.end()) {
+		return found->second;
+	}
 
-return rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_UNKNOWN;
+	return rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_UNKNOWN;
 }// namespace rspamd::composites
 
 auto composites_manager::add_composite(std::string_view composite_name, const ucl_object_t *obj, bool silent_duplicate) -> rspamd_composite *
@@ -164,7 +167,15 @@ auto composites_manager::add_composite(std::string_view composite_name,
 		}
 	}
 
-	if (!rspamd_parse_expression(composite_expression.data(),
+	/*
+	 * Copy expression string to memory pool - the expression parser stores
+	 * pointers into this string in atom->str, so it must outlive the expression.
+	 */
+	char *expr_copy = rspamd_mempool_alloc_buffer(cfg->cfg_pool, composite_expression.size() + 1);
+	memcpy(expr_copy, composite_expression.data(), composite_expression.size());
+	expr_copy[composite_expression.size()] = '\0';
+
+	if (!rspamd_parse_expression(expr_copy,
 								 composite_expression.size(), &composite_expr_subr,
 								 nullptr, cfg->cfg_pool, &err, &expr)) {
 		msg_err_config("cannot parse composite expression for %s: %e",
@@ -237,7 +248,9 @@ struct map_cbdata {
 					/* I wish it was supported properly */
 					//auto conv_res = std::from_chars(value->data(), value->size(), num);
 					char numbuf[128], *endptr = nullptr;
-					rspamd_strlcpy(numbuf, score.data(), MIN(score.size(), sizeof(numbuf)));
+					size_t n = std::min(score.size(), sizeof(numbuf) - 1);
+					memcpy(numbuf, score.data(), n);
+					numbuf[n] = '\0';
 					auto num = g_ascii_strtod(numbuf, &endptr);
 
 					if (fabs(num) >= G_MAXFLOAT || std::isnan(num)) {
@@ -270,7 +283,7 @@ struct map_cbdata {
 		delete cbd;
 	}
 };
-}
+}// namespace rspamd::composites
 
 
 void *
@@ -327,4 +340,557 @@ bool rspamd_composites_add_map_handlers(const ucl_object_t *obj, struct rspamd_c
 	}
 
 	return true;
+}
+
+namespace rspamd::composites {
+
+/* Helper to check if a symbol requires second pass evaluation */
+static bool
+symbol_needs_second_pass(struct rspamd_config *cfg, const char *symbol_name)
+{
+	if (!cfg->cache) {
+		return false;
+	}
+
+	auto flags = rspamd_symcache_get_symbol_flags(cfg->cache, symbol_name);
+
+	/* Postfilters and classifiers/statistics symbols require second pass */
+	return (flags & (SYMBOL_TYPE_POSTFILTER | SYMBOL_TYPE_CLASSIFIER | SYMBOL_TYPE_NOSTAT)) != 0;
+}
+
+/* Callback data for walking expression atoms to find symbol dependencies */
+struct composite_dep_cbdata {
+	struct rspamd_config *cfg;
+	bool needs_second_pass;
+	composites_manager *cm;
+};
+
+static void
+composite_dep_callback(const rspamd_ftok_t *atom, gpointer ud)
+{
+	auto *cbd = reinterpret_cast<composite_dep_cbdata *>(ud);
+	auto *cfg = cbd->cfg;
+
+	if (cbd->needs_second_pass) {
+		/* Already marked, no need to continue */
+		return;
+	}
+
+	/* Convert atom to string */
+	std::string_view atom_str(atom->begin, atom->len);
+
+	/* Skip operators and special characters */
+	if (atom->len == 0 || atom->begin[0] == '&' || atom->begin[0] == '|' ||
+		atom->begin[0] == '!' || atom->begin[0] == '(' || atom->begin[0] == ')') {
+		return;
+	}
+
+	/* Check if this is a reference to another composite */
+	if (auto *dep_comp = cbd->cm->find(atom_str); dep_comp != nullptr) {
+		/* Dependency on another composite - will be handled in transitive pass */
+		return;
+	}
+
+	/* Check if the symbol itself needs second pass */
+	/* Create null-terminated string for C API (rspamd_ftok_t is not null-terminated) */
+	std::string symbol_name(atom->begin, atom->len);
+	if (symbol_needs_second_pass(cfg, symbol_name.c_str())) {
+		msg_debug_config("composite depends on second-pass symbol: %s",
+						 symbol_name.c_str());
+		cbd->needs_second_pass = true;
+	}
+}
+
+void composites_manager::process_dependencies()
+{
+	ankerl::unordered_dense::set<rspamd_composite *> second_pass_set;
+	bool changed;
+
+	msg_debug_config("analyzing composite dependencies for two-phase evaluation");
+
+	/* Initially, all composites start in first pass */
+	for (const auto &comp: all_composites) {
+		first_pass_composites.push_back(comp.get());
+	}
+
+	/* First pass: mark composites that directly depend on postfilters/stats */
+	for (auto *comp: first_pass_composites) {
+		composite_dep_cbdata cbd{cfg, false, this};
+
+		rspamd_expression_atom_foreach(comp->expr,
+									   composite_dep_callback,
+									   &cbd);
+
+		if (cbd.needs_second_pass) {
+			second_pass_set.insert(comp);
+			msg_debug_config("composite '%s' marked for second pass (direct dependency)",
+							 comp->sym.c_str());
+		}
+	}
+
+	/* Second pass: handle transitive dependencies */
+	do {
+		changed = false;
+		for (auto *comp: first_pass_composites) {
+			if (second_pass_set.contains(comp)) {
+				continue;
+			}
+
+			bool has_second_pass_dep = false;
+
+			/* Helper struct for lambda capture */
+			struct trans_check_data {
+				composites_manager *cm;
+				ankerl::unordered_dense::set<rspamd_composite *> *second_pass_set;
+				bool *has_dep;
+			} trans_data{this, &second_pass_set, &has_second_pass_dep};
+
+			rspamd_expression_atom_foreach(comp->expr, [](const rspamd_ftok_t *atom, gpointer ud) {
+											   auto *data = reinterpret_cast<trans_check_data *>(ud);
+											   std::string_view atom_str(atom->begin, atom->len);
+											   if (auto *dep_comp = data->cm->find(atom_str); dep_comp != nullptr) {
+												   /* Cast away const since we know this points to a modifiable composite */
+												   if (data->second_pass_set->contains(const_cast<rspamd_composite *>(dep_comp))) {
+													   *data->has_dep = true;
+												   }
+											   } }, &trans_data);
+
+			if (has_second_pass_dep) {
+				second_pass_set.insert(comp);
+				changed = true;
+				msg_debug_config("composite '%s' marked for second pass (transitive dependency)",
+								 comp->sym.c_str());
+			}
+		}
+	} while (changed);
+
+	/* Move second-pass composites from first_pass to second_pass vector and mark them */
+	auto it = first_pass_composites.begin();
+	while (it != first_pass_composites.end()) {
+		if (second_pass_set.contains(*it)) {
+			(*it)->second_pass = true;
+			second_pass_composites.push_back(*it);
+			it = first_pass_composites.erase(it);
+		}
+		else {
+			++it;
+		}
+	}
+
+	msg_debug_config("composite dependency analysis complete: %d first-pass, %d second-pass composites",
+					 (int) first_pass_composites.size(), (int) second_pass_composites.size());
+}
+
+/*
+ * Count NOT operations from atom to root to determine atom polarity.
+ * Even number of NOTs = positive atom (must be true for expression to be true)
+ * Odd number of NOTs = negative atom (must be false for expression to be true)
+ */
+static bool
+atom_is_negated(GNode *atom_node)
+{
+	int not_count = 0;
+	GNode *node = atom_node->parent;
+
+	while (node != nullptr) {
+		if (rspamd_expression_node_is_op(node, OP_NOT)) {
+			not_count++;
+		}
+		node = node->parent;
+	}
+
+	/* Odd number of NOTs means atom is negated */
+	return (not_count & 1) != 0;
+}
+
+/* Extract the symbol name from an expression atom string, stripping prefixes (~, -, ^)
+ * and option brackets ([...]). Returns empty string for group matchers or invalid atoms. */
+static std::string
+extract_atom_symbol_name(const rspamd_expression_atom_t *atom)
+{
+	if (atom->str == nullptr || atom->len == 0) {
+		return {};
+	}
+
+	std::string_view atom_str(atom->str, atom->len);
+
+	/* Skip prefix characters (~, -, ^) */
+	size_t sym_start = 0;
+	while (sym_start < atom_str.size() &&
+		   (atom_str[sym_start] == '~' || atom_str[sym_start] == '-' || atom_str[sym_start] == '^')) {
+		++sym_start;
+	}
+
+	if (sym_start >= atom_str.size()) {
+		return {};
+	}
+
+	std::string_view remaining = atom_str.substr(sym_start);
+
+	/* Skip group matchers: g:, g+:, g-: */
+	if (remaining.size() >= 2 && remaining.substr(0, 2) == "g:") {
+		return {};
+	}
+	if (remaining.size() >= 3 && (remaining.substr(0, 3) == "g+:" || remaining.substr(0, 3) == "g-:")) {
+		return {};
+	}
+
+	/* Find end of symbol name (before '[' if present for options) */
+	auto bracket_pos = remaining.find('[');
+	if (bracket_pos != std::string_view::npos) {
+		return std::string(remaining.substr(0, bracket_pos));
+	}
+
+	return std::string(remaining);
+}
+
+/*
+ * Recursively collect all non-composite (leaf) positive atom symbol names
+ * for a composite. Handles transitive composite references with cycle detection.
+ */
+static void
+collect_leaf_atoms(composites_manager *cm, const rspamd_composite *comp,
+				   ankerl::unordered_dense::set<std::string> &leaf_atoms,
+				   ankerl::unordered_dense::set<int> &visited)
+{
+	if (visited.contains(comp->id)) {
+		return;
+	}
+	visited.insert(comp->id);
+
+	struct walk_data {
+		composites_manager *cm;
+		ankerl::unordered_dense::set<std::string> *leaves;
+		ankerl::unordered_dense::set<int> *visited;
+	} wd{cm, &leaf_atoms, &visited};
+
+	rspamd_expression_atom_foreach_ex(comp->expr, [](GNode *node, rspamd_expression_atom_t *atom, gpointer ud) {
+			auto *wd = reinterpret_cast<walk_data *>(ud);
+
+			if (atom_is_negated(node)) {
+				return;
+			}
+
+			auto sym = extract_atom_symbol_name(atom);
+			if (sym.empty()) {
+				return;
+			}
+
+			auto *ref = wd->cm->find(sym);
+			if (ref != nullptr) {
+				/* Atom is a composite reference - recurse into it */
+				collect_leaf_atoms(wd->cm, ref, *wd->leaves, *wd->visited);
+			}
+			else {
+				wd->leaves->insert(std::move(sym));
+			} }, &wd);
+}
+
+/* Context for building inverted index */
+struct inverted_index_cbdata {
+	composites_manager *cm;
+	rspamd_composite *comp;
+	bool has_positive;
+	bool has_group_atom; /* Composite uses group matcher (g:, g+:, g-:) */
+};
+
+static void
+inverted_index_atom_callback(GNode *atom_node, rspamd_expression_atom_t *atom, gpointer ud)
+{
+	auto *cbd = reinterpret_cast<inverted_index_cbdata *>(ud);
+
+	/* Check atom polarity by counting NOTs to root */
+	if (atom_is_negated(atom_node)) {
+		/* Negated atom - don't add to inverted index */
+		return;
+	}
+
+	if (atom->str == nullptr || atom->len == 0) {
+		return;
+	}
+
+	/* Check for group matchers first (need to look at full atom string) */
+	std::string_view atom_str(atom->str, atom->len);
+	size_t sym_start = 0;
+	while (sym_start < atom_str.size() &&
+		   (atom_str[sym_start] == '~' || atom_str[sym_start] == '-' || atom_str[sym_start] == '^')) {
+		++sym_start;
+	}
+	if (sym_start < atom_str.size()) {
+		auto remaining = atom_str.substr(sym_start);
+		if ((remaining.size() >= 2 && remaining.substr(0, 2) == "g:") ||
+			(remaining.size() >= 3 && (remaining.substr(0, 3) == "g+:" || remaining.substr(0, 3) == "g-:"))) {
+			cbd->has_group_atom = true;
+			return;
+		}
+	}
+
+	auto symbol_name = extract_atom_symbol_name(atom);
+	if (symbol_name.empty()) {
+		return;
+	}
+
+	/* Mark that we have at least one positive atom */
+	cbd->has_positive = true;
+
+	/* Add to inverted index */
+	cbd->cm->symbol_to_composites[symbol_name].push_back(cbd->comp);
+}
+
+void composites_manager::build_inverted_index()
+{
+	msg_debug_config("building inverted index for %d composites", (int) all_composites.size());
+
+	for (auto &comp: all_composites) {
+		inverted_index_cbdata cbd{this, comp.get(), false, false};
+
+		rspamd_expression_atom_foreach_ex(comp->expr, inverted_index_atom_callback, &cbd);
+
+		comp->has_positive_atoms = cbd.has_positive;
+
+		if (!cbd.has_positive || cbd.has_group_atom) {
+			/*
+			 * Composite must always be checked if:
+			 * - It has only negated atoms (no positive symbols to match)
+			 * - It uses group matchers (we don't know which symbols will match)
+			 */
+			not_only_composites.push_back(comp.get());
+			if (cbd.has_group_atom) {
+				msg_debug_config("composite '%s' uses group matcher, will always be checked",
+								 comp->sym.c_str());
+			}
+			else {
+				msg_debug_config("composite '%s' has only negated atoms, will always be checked",
+								 comp->sym.c_str());
+			}
+		}
+	}
+
+	/*
+	 * Resolve composite references in the inverted index.
+	 *
+	 * When a composite C references another composite D as an atom, the inverted
+	 * index will have an entry D -> [C]. But D is not in the scan result at lookup
+	 * time (it gets inserted during composite evaluation), so C would never be
+	 * activated via the fast path.
+	 *
+	 * Fix: for each composite-name key in the index, recursively find its leaf
+	 * (non-composite) atoms and propagate the dependents to those leaf atoms'
+	 * entries. Then remove the composite-name keys.
+	 */
+	ankerl::unordered_dense::set<std::string> composite_keys;
+	for (const auto &[sym, _]: symbol_to_composites) {
+		if (find(sym) != nullptr) {
+			composite_keys.insert(sym);
+		}
+	}
+
+	if (!composite_keys.empty()) {
+		msg_debug_config("resolving %d composite references in inverted index",
+						 (int) composite_keys.size());
+
+		for (const auto &comp_key: composite_keys) {
+			auto it = symbol_to_composites.find(comp_key);
+			if (it == symbol_to_composites.end()) {
+				continue;
+			}
+
+			auto dependents = it->second; /* Copy before modifying the map */
+			auto *ref_comp = find(comp_key);
+
+			/* Collect all leaf (non-composite) atoms reachable from this composite */
+			ankerl::unordered_dense::set<std::string> leaf_atoms;
+			ankerl::unordered_dense::set<int> visited;
+			collect_leaf_atoms(this, ref_comp, leaf_atoms, visited);
+
+			/* Propagate dependents to each leaf atom's index entry */
+			for (const auto &leaf: leaf_atoms) {
+				auto &entry = symbol_to_composites[leaf];
+				for (auto *dep: dependents) {
+					if (std::find(entry.begin(), entry.end(), dep) == entry.end()) {
+						entry.push_back(dep);
+					}
+				}
+			}
+
+			/*
+			 * If no leaf atoms found (e.g. composite depends only on other
+			 * composites with only negated/group atoms), ensure the dependent
+			 * composites are always checked.
+			 */
+			if (leaf_atoms.empty()) {
+				for (auto *dep: dependents) {
+					if (std::find(not_only_composites.begin(),
+								  not_only_composites.end(), dep) == not_only_composites.end()) {
+						not_only_composites.push_back(dep);
+						msg_debug_config("composite '%s' depends on composite '%s' "
+										 "with no leaf atoms, will always be checked",
+										 dep->sym.c_str(), comp_key.c_str());
+					}
+				}
+			}
+
+			/* Remove the composite-name key from the index */
+			symbol_to_composites.erase(comp_key);
+
+			msg_debug_config("resolved composite reference '%s': "
+							 "propagated %d dependents to %d leaf atoms",
+							 comp_key.c_str(), (int) dependents.size(),
+							 (int) leaf_atoms.size());
+		}
+	}
+
+	msg_debug_config("inverted index built: %d unique symbols, %d not-only composites",
+					 (int) symbol_to_composites.size(), (int) not_only_composites.size());
+}
+
+/* Callback data for collecting atoms from whitelist composites */
+struct whitelist_atom_cbdata {
+	ankerl::unordered_dense::set<std::string> *fine_symbols;
+};
+
+static void
+whitelist_atom_callback(const rspamd_ftok_t *atom, gpointer ud)
+{
+	auto *cbd = reinterpret_cast<whitelist_atom_cbdata *>(ud);
+
+	if (atom->len == 0) {
+		return;
+	}
+
+	std::string_view atom_str(atom->begin, atom->len);
+
+	/* Skip operators */
+	if (atom_str[0] == '&' || atom_str[0] == '|' ||
+		atom_str[0] == '!' || atom_str[0] == '(' || atom_str[0] == ')') {
+		return;
+	}
+
+	/* Skip prefix characters (~, -, ^) */
+	size_t start = 0;
+	while (start < atom_str.size() &&
+		   (atom_str[start] == '~' || atom_str[start] == '-' || atom_str[start] == '^')) {
+		++start;
+	}
+
+	if (start >= atom_str.size()) {
+		return;
+	}
+
+	auto remaining = atom_str.substr(start);
+
+	/* Skip group matchers (g:, g+:, g-:) - we can't determine specific symbols */
+	if (remaining.starts_with("g:") || remaining.starts_with("g+:") || remaining.starts_with("g-:")) {
+		return;
+	}
+
+	/* Extract symbol name (before '[' if present for options) */
+	auto bracket_pos = remaining.find('[');
+	std::string symbol_name;
+	if (bracket_pos != std::string_view::npos) {
+		symbol_name = std::string(remaining.substr(0, bracket_pos));
+	}
+	else {
+		symbol_name = std::string(remaining);
+	}
+
+	if (!symbol_name.empty()) {
+		cbd->fine_symbols->emplace(std::move(symbol_name));
+	}
+}
+
+void composites_manager::mark_whitelist_dependencies()
+{
+	ankerl::unordered_dense::set<std::string> fine_symbols;
+
+	msg_debug_config("analyzing whitelist composites for FINE symbol marking");
+
+	/* Step 1: Find composites with negative score and collect their atoms */
+	for (const auto &comp: all_composites) {
+		auto *sym_def = static_cast<struct rspamd_symbol *>(
+			g_hash_table_lookup(cfg->symbols, comp->sym.c_str()));
+
+		if (sym_def && *sym_def->weight_ptr < 0) {
+			/* This is a whitelist composite - collect all its atoms */
+			whitelist_atom_cbdata cbd{&fine_symbols};
+			rspamd_expression_atom_foreach(comp->expr, whitelist_atom_callback, &cbd);
+
+			msg_debug_config("composite '%s' has negative weight (%.2f), collecting dependencies",
+							 comp->sym.c_str(), *sym_def->weight_ptr);
+		}
+	}
+
+	/* Step 2: Transitively expand - if an atom is also a whitelist composite, add its atoms */
+	bool changed;
+	do {
+		changed = false;
+		for (const auto &comp: all_composites) {
+			if (fine_symbols.contains(comp->sym)) {
+				size_t before = fine_symbols.size();
+				whitelist_atom_cbdata cbd{&fine_symbols};
+				rspamd_expression_atom_foreach(comp->expr, whitelist_atom_callback, &cbd);
+				if (fine_symbols.size() > before) {
+					changed = true;
+				}
+			}
+		}
+	} while (changed);
+
+	/* Step 3: Mark all collected symbols as FINE in symcache */
+	int marked_count = 0;
+	for (const auto &sym_name: fine_symbols) {
+		if (rspamd_symcache_set_symbol_fine(cfg->cache, sym_name.c_str())) {
+			msg_debug_config("marked symbol '%s' as FINE (whitelist composite dependency)",
+							 sym_name.c_str());
+			marked_count++;
+		}
+	}
+
+	msg_info_config("marked %d symbols as FINE for whitelist composite dependencies",
+					marked_count);
+}
+
+}// namespace rspamd::composites
+
+void rspamd_composites_process_deps(void *cm_ptr, struct rspamd_config *cfg)
+{
+	auto *cm = COMPOSITE_MANAGER_FROM_PTR(cm_ptr);
+	cm->process_dependencies();
+	rspamd_composites_resolve_atom_types(cm);
+	cm->build_inverted_index();
+}
+
+void rspamd_composites_set_inverted_index(void *cm_ptr, gboolean enabled)
+{
+	auto *cm = COMPOSITE_MANAGER_FROM_PTR(cm_ptr);
+	cm->use_inverted_index = enabled;
+}
+
+gboolean rspamd_composites_get_inverted_index(void *cm_ptr)
+{
+	auto *cm = COMPOSITE_MANAGER_FROM_PTR(cm_ptr);
+	return cm->use_inverted_index;
+}
+
+void rspamd_composites_get_stats(void *cm_ptr, struct rspamd_composites_stats_export *stats)
+{
+	auto *cm = COMPOSITE_MANAGER_FROM_PTR(cm_ptr);
+
+	stats->checked_slow = cm->stats.checked_slow;
+	stats->checked_fast = cm->stats.checked_fast;
+	stats->matched = cm->stats.matched;
+
+	stats->time_slow_mean = cm->stats.time_slow.mean;
+	stats->time_slow_stddev = cm->stats.time_slow.stddev;
+	stats->time_slow_count = cm->stats.time_slow.number;
+
+	stats->time_fast_mean = cm->stats.time_fast.mean;
+	stats->time_fast_stddev = cm->stats.time_fast.stddev;
+	stats->time_fast_count = cm->stats.time_fast.number;
+}
+
+void rspamd_composites_mark_whitelist_deps(void *cm_ptr, struct rspamd_config *cfg)
+{
+	auto *cm = COMPOSITE_MANAGER_FROM_PTR(cm_ptr);
+	cm->mark_whitelist_dependencies();
 }

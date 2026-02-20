@@ -672,6 +672,15 @@ local function elastic_collect(task)
     end
   end
 
+  local nlogs = buffer['logs']:length()
+  if nlogs >= settings['limits']['max_rows'] * 10 then
+    rspamd_logger.errx(task, 'row count limit exceeded 10x: %s rows (limit %s), discarding data',
+        nlogs, settings['limits']['max_rows'])
+    buffer['logs'] = lua_util.newdeque()
+    collectgarbage()
+    return
+  end
+
   local now = tostring(rspamd_util.get_time() * 1000)
   local row = { ['rspamd_meta'] = get_general_metadata(task), ['@timestamp'] = now }
   buffer['logs']:push(row)
@@ -1518,9 +1527,23 @@ end
 
 local opts = rspamd_config:get_all_opt('elastic')
 
+local function merge_settings(src, dst)
+  for k, v in pairs(src) do
+    if type(v) == 'table' and type(dst[k]) == 'table' then
+      merge_settings(v, dst[k])
+    else
+      dst[k] = v
+    end
+  end
+end
+
 if opts then
   for k, v in pairs(opts) do
-    settings[k] = v
+    if type(v) == 'table' and settings[k] and type(settings[k]) == 'table' then
+      merge_settings(v, settings[k])
+    else
+      settings[k] = v
+    end
   end
 
   if not settings['enabled'] then

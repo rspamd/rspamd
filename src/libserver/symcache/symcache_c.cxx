@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Vsevolod Stakhov
+ * Copyright 2025 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -628,7 +628,7 @@ unsigned int rspamd_symcache_item_async_dec_full(struct rspamd_task *task,
 						 real_dyn_item->async_events, subsystem, loc);
 
 	if (G_UNLIKELY(real_dyn_item->async_events == 0)) {
-		msg_err_cache_task("INTERNAL ERROR: trying decrease async events counter for %s(%d) that is already zero; "
+		msg_err_cache_task("INTERNAL ERROR: trying decrease async events counter for %s(%d) that is already zero (events: %ud); "
 						   "subsystem %s (%s)",
 						   static_item->symbol.c_str(), static_item->id,
 						   real_dyn_item->async_events, subsystem, loc);
@@ -719,4 +719,44 @@ void rspamd_symcache_runtime_destroy(struct rspamd_task *task)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 	cache_runtime->savepoint_dtor(task);
+}
+
+void rspamd_symcache_promote_resort(struct rspamd_symcache *cache)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	real_cache->promote_resort();
+}
+
+gboolean rspamd_symcache_set_symbol_fine(struct rspamd_symcache *cache,
+										 const char *symbol)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+	auto *item = real_cache->get_item_by_name_mut(symbol, false);
+
+	if (item == nullptr) {
+		return FALSE;
+	}
+
+	if (!(item->flags & SYMBOL_TYPE_FINE)) {
+		item->flags |= SYMBOL_TYPE_FINE;
+
+		/* Also mark parent if this is a virtual symbol */
+		if (item->is_virtual()) {
+			auto *parent = const_cast<rspamd::symcache::cache_item *>(item->get_parent(*real_cache));
+			if (parent && !(parent->flags & SYMBOL_TYPE_FINE)) {
+				parent->flags |= SYMBOL_TYPE_FINE;
+			}
+		}
+
+		/* And mark all virtual children */
+		const auto *children = item->get_children();
+		if (children) {
+			for (auto *child: *children) {
+				child->flags |= SYMBOL_TYPE_FINE;
+			}
+		}
+	}
+
+	return TRUE;
 }

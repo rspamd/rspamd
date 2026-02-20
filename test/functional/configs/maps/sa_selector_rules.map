@@ -1,0 +1,56 @@
+# SA-like rules set to test selector/header/body/rawbody/uri/full/meta
+
+# Header atom
+header SA_HDR_SUBJ Subject =~ /test\s+subject/i
+
+# Body atom
+body SA_BODY_SIMPLE /hello\s+world/i
+
+# Rawbody atom
+rawbody SA_RAW_SIMPLE /RAW\s+TOKEN/i
+
+# URI atom
+uri SA_URI_SHORT /bit\.ly|tinyurl/i
+
+# Full message atom
+full SA_FULL_BOUNDARY /From:.*\n(?:.*\n)*?Subject:/i
+
+# Selector atom: from domain equals example.com
+selector SA_SEL_FROM_DOM from:domain =~ /^example\.com$/i
+
+# Selector atom: specific_urls tld equals example.com
+selector SA_SEL_URL_TLD specific_urls({need_content = true, limit = 10}):get_tld =~ /^example\.com$/i
+
+# Selector negation (use domain to avoid addr formatting quirks)
+selector SA_SEL_NOT_CORP from:domain !~ /^corp\.example$/i
+
+# Meta rules combining atoms and selectors
+meta SA_META_AND SA_HDR_SUBJ & SA_BODY_SIMPLE & SA_SEL_FROM_DOM
+meta SA_META_OR SA_URI_SHORT | SA_SEL_URL_TLD
+meta SA_META_COMPLEX (SA_BODY_SIMPLE & SA_SEL_NOT_CORP) | SA_RAW_SIMPLE
+
+# Scores
+score SA_HDR_SUBJ 1.0
+score SA_BODY_SIMPLE 1.0
+score SA_RAW_SIMPLE 1.0
+score SA_URI_SHORT 1.0
+score SA_FULL_BOUNDARY 0.5
+score SA_SEL_FROM_DOM 1.0
+score SA_SEL_URL_TLD 1.0
+score SA_SEL_NOT_CORP 0.5
+score SA_META_AND 2.5
+score SA_META_OR 2.0
+score SA_META_COMPLEX 2.0
+
+# Descriptions
+describe SA_HDR_SUBJ Subject matches test subject
+describe SA_BODY_SIMPLE Body contains hello world
+describe SA_RAW_SIMPLE Raw body contains RAW TOKEN
+describe SA_URI_SHORT Message contains a shortener URL
+describe SA_FULL_BOUNDARY Header boundary present
+describe SA_SEL_FROM_DOM From domain equals example.com
+describe SA_SEL_URL_TLD URL tld equals example.com
+describe SA_SEL_NOT_CORP From address is not corp.example
+describe SA_META_AND Header+Body+Selector combo
+describe SA_META_OR URI or URL TLD selector
+describe SA_META_COMPLEX Complex combination with negation

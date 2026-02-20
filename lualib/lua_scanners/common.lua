@@ -13,7 +13,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 --[[[
 -- @module lua_scanners_common
@@ -30,7 +30,6 @@ local fun = require "fun"
 local exports = {}
 
 local function log_clean(task, rule, msg)
-
   msg = msg or 'message or mime_part is clean'
 
   if rule.log_clean then
@@ -38,7 +37,6 @@ local function log_clean(task, rule, msg)
   else
     lua_util.debugm(rule.name, task, '%s: %s', rule.log_prefix, msg)
   end
-
 end
 
 local function match_patterns(default_sym, found, patterns, dyn_weight)
@@ -111,16 +109,15 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail, maybe_part)
     else
       all_whitelisted = false
       rspamd_logger.infox(task, '%s: result - %s: "%s - score: %s"',
-          rule.log_prefix, threat_info, tm, symscore)
+        rule.log_prefix, threat_info, tm, symscore)
 
       if maybe_part and rule.show_attachments and maybe_part:get_filename() then
         local fname = maybe_part:get_filename()
         task:insert_result(symname, symscore, string.format("%s|%s",
-            tm, fname))
+          tm, fname))
       else
         task:insert_result(symname, symscore, tm)
       end
-
     end
   end
 
@@ -130,10 +127,10 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail, maybe_part)
       flags = 'least'
     end
     task:set_pre_result(rule.action,
-        lua_util.template(rule.message or 'Rejected', {
-          SCANNER = rule.name,
-          VIRUS = threat_table,
-        }), rule.name, nil, nil, flags)
+      lua_util.template(rule.message or 'Rejected', {
+        SCANNER = rule.name,
+        VIRUS = threat_table,
+      }), rule.name, nil, nil, flags)
   end
 end
 
@@ -144,7 +141,7 @@ local function message_not_too_large(task, content, rule)
   end
   if #content > max_size then
     rspamd_logger.infox(task, "skip %s check as it is too large: %s (%s is allowed)",
-        rule.log_prefix, #content, max_size)
+      rule.log_prefix, #content, max_size)
     return false
   end
   return true
@@ -157,7 +154,7 @@ local function message_not_too_small(task, content, rule)
   end
   if #content < min_size then
     rspamd_logger.infox(task, "skip %s check as it is too small: %s (%s is allowed)",
-        rule.log_prefix, #content, min_size)
+      rule.log_prefix, #content, min_size)
     return false
   end
   return true
@@ -178,7 +175,7 @@ local function message_min_words(task, rule)
 
     if not text_part_above_limit then
       rspamd_logger.infox(task, '%s: #words in all text parts is below text_part_min_words limit: %s',
-          rule.log_prefix, rule.text_part_min_words)
+        rule.log_prefix, rule.text_part_min_words)
     end
 
     return text_part_above_limit
@@ -217,7 +214,6 @@ local function dynamic_scan(task, rule)
 end
 
 local function need_check(task, content, rule, digest, fn, maybe_part)
-
   local uncached = true
   local key = digest
 
@@ -231,19 +227,30 @@ local function need_check(task, content, rule, digest, fn, maybe_part)
       if threat_string[1] ~= 'OK' then
         if threat_string[1] == 'MACRO' then
           yield_result(task, rule, 'File contains macros',
-              0.0, 'macro', maybe_part)
+            0.0, 'macro', maybe_part)
         elseif threat_string[1] == 'ENCRYPTED' then
           yield_result(task, rule, 'File is encrypted',
-              0.0, 'encrypted', maybe_part)
+            0.0, 'encrypted', maybe_part)
         else
-          lua_util.debugm(rule.name, task, '%s: got cached threat result for %s: %s - score: %s',
+          -- Check if cached data contains symbol name (for category-based scanners)
+          -- Format: "SYMBOL_NAME\vdetails" or just "details"
+          if #threat_string >= 2 and rule.symbols then
+            -- New format with symbol name
+            local symbol_name = threat_string[1]
+            local details = threat_string[2]
+            lua_util.debugm(rule.name, task, '%s: got cached threat result for %s: %s - %s',
+              rule.log_prefix, key, symbol_name, details)
+            task:insert_result(symbol_name, 1.0, details)
+          else
+            -- Old format without symbol name
+            lua_util.debugm(rule.name, task, '%s: got cached threat result for %s: %s - score: %s',
               rule.log_prefix, key, threat_string[1], score)
-          yield_result(task, rule, threat_string, score, false, maybe_part)
+            yield_result(task, rule, threat_string, score, false, maybe_part)
+          end
         end
-
       else
         lua_util.debugm(rule.name, task, '%s: got cached negative result for %s: %s',
-            rule.log_prefix, key, threat_string[1])
+          rule.log_prefix, key, threat_string[1])
       end
       uncached = false
     else
@@ -262,31 +269,26 @@ local function need_check(task, content, rule, digest, fn, maybe_part)
         f_message_not_too_small and
         f_message_min_words and
         f_dynamic_scan then
-
       fn()
-
     end
-
   end
 
   if rule.redis_params and not rule.no_cache then
-
     key = rule.prefix .. key
 
     if lua_redis.redis_make_request(task,
-        rule.redis_params, -- connect params
-        key, -- hash key
-        false, -- is write
-        redis_av_cb, --callback
-        'GET', -- command
-        { key } -- arguments)
-    ) then
+          rule.redis_params, -- connect params
+          key,             -- hash key
+          false,           -- is write
+          redis_av_cb,     --callback
+          'GET',           -- command
+          { key }          -- arguments)
+        ) then
       return true
     end
   end
 
   return false
-
 end
 
 local function save_cache(task, digest, rule, to_save, dyn_weight, maybe_part)
@@ -299,10 +301,10 @@ local function save_cache(task, digest, rule, to_save, dyn_weight, maybe_part)
     -- Do nothing
     if err then
       rspamd_logger.errx(task, 'failed to save %s cache for %s -> "%s": %s',
-          rule.detection_category, to_save, key, err)
+        rule.detection_category, to_save, key, err)
     else
       lua_util.debugm(rule.name, task, '%s: saved cached result for %s: %s - score %s - ttl %s',
-          rule.log_prefix, key, to_save, dyn_weight, rule.cache_expire)
+        rule.log_prefix, key, to_save, dyn_weight, rule.cache_expire)
     end
   end
 
@@ -321,12 +323,12 @@ local function save_cache(task, digest, rule, to_save, dyn_weight, maybe_part)
     key = rule.prefix .. key
 
     lua_redis.redis_make_request(task,
-        rule.redis_params, -- connect params
-        key, -- hash key
-        true, -- is write
-        redis_set_cb, --callback
-        'SETEX', -- command
-        { key, rule.cache_expire or 0, value }
+      rule.redis_params,   -- connect params
+      key,                 -- hash key
+      true,                -- is write
+      redis_set_cb,        --callback
+      'SETEX',             -- command
+      { key, rule.cache_expire or 0, value }
     )
   end
 
@@ -396,7 +398,6 @@ local function gen_extension(fname)
 end
 
 local function check_parts_match(task, rule)
-
   local filter_func = function(p)
     local mtype, msubtype = p:get_type()
     local detected_ext = p:get_detected_ext()
@@ -434,7 +435,7 @@ local function check_parts_match(task, rule)
           return true
         elseif magic.ct and match_filter(task, rule, magic.ct, rule.mime_parts_filter_regex, 'regex') then
           lua_util.debugm(rule.name, task, '%s: regex detected libmagic content-type: %s',
-              rule.log_prefix, magic.ct)
+            rule.log_prefix, magic.ct)
           return true
         end
       end
@@ -489,7 +490,6 @@ local function check_parts_match(task, rule)
 end
 
 local function check_metric_results(task, rule)
-
   if rule.action ~= 'reject' then
     local metric_result = task:get_metric_score()
     local metric_action = task:get_metric_action()

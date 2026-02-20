@@ -173,7 +173,16 @@ struct lua_http_cbdata {
 	struct ev_loop *event_loop;
 	struct rspamd_config *cfg;
 	struct rspamd_task *task;
+	lua_State *L;
 	ev_tstamp timeout;
+	/* optional per-request tuning */
+	double connect_timeout;
+	double ssl_timeout;
+	double write_timeout;
+	double read_timeout;
+	double connection_ttl;
+	double idle_timeout;
+	unsigned int max_reuse;
 	struct rspamd_cryptobox_keypair *local_kp;
 	struct rspamd_cryptobox_pubkey *peer_pk;
 	rspamd_inet_addr_t *addr;
@@ -368,6 +377,9 @@ lua_http_finish_handler(struct rspamd_http_connection *conn,
 
 	L = lcbd.L;
 
+	lua_pushcfunction(L, &rspamd_lua_traceback);
+	int err_idx = lua_gettop(L);
+
 	lua_rawgeti(L, LUA_REGISTRYINDEX, cbd->cbref);
 	/* Error */
 	lua_pushnil(L);
@@ -411,10 +423,12 @@ lua_http_finish_handler(struct rspamd_http_connection *conn,
 		rspamd_symcache_set_cur_item(cbd->task, cbd->item);
 	}
 
-	if (lua_pcall(L, 4, 0, 0) != 0) {
+	if (lua_pcall(L, 4, 0, err_idx) != 0) {
 		msg_info("callback call failed: %s", lua_tostring(L, -1));
 		lua_pop(L, 1);
 	}
+
+	lua_pop(L, 1); /* Remove traceback function */
 
 	REF_RELEASE(cbd);
 
@@ -574,6 +588,43 @@ lua_http_make_connection(struct lua_http_cbdata *cbd)
 			cbd->flags |= RSPAMD_LUA_HTTP_FLAG_RESOLVED;
 		}
 
+		/* Optional per-request tuning from table (if present) */
+		if (lua_type(cbd->L, 1) == LUA_TTABLE) {
+			double connect_timeout = 0, ssl_timeout = 0, write_timeout = 0, read_timeout = 0;
+			double connection_ttl = 0, idle_timeout = 0;
+			unsigned int max_reuse = 0;
+			lua_pushstring(cbd->L, "connect_timeout");
+			lua_gettable(cbd->L, 1);
+			if (lua_type(cbd->L, -1) == LUA_TNUMBER) connect_timeout = lua_tonumber(cbd->L, -1);
+			lua_pop(cbd->L, 1);
+			lua_pushstring(cbd->L, "ssl_timeout");
+			lua_gettable(cbd->L, 1);
+			if (lua_type(cbd->L, -1) == LUA_TNUMBER) ssl_timeout = lua_tonumber(cbd->L, -1);
+			lua_pop(cbd->L, 1);
+			lua_pushstring(cbd->L, "write_timeout");
+			lua_gettable(cbd->L, 1);
+			if (lua_type(cbd->L, -1) == LUA_TNUMBER) write_timeout = lua_tonumber(cbd->L, -1);
+			lua_pop(cbd->L, 1);
+			lua_pushstring(cbd->L, "read_timeout");
+			lua_gettable(cbd->L, 1);
+			if (lua_type(cbd->L, -1) == LUA_TNUMBER) read_timeout = lua_tonumber(cbd->L, -1);
+			lua_pop(cbd->L, 1);
+			rspamd_http_connection_set_timeouts(cbd->conn, connect_timeout, ssl_timeout, write_timeout, read_timeout);
+			lua_pushstring(cbd->L, "connection_ttl");
+			lua_gettable(cbd->L, 1);
+			if (lua_type(cbd->L, -1) == LUA_TNUMBER) connection_ttl = lua_tonumber(cbd->L, -1);
+			lua_pop(cbd->L, 1);
+			lua_pushstring(cbd->L, "idle_timeout");
+			lua_gettable(cbd->L, 1);
+			if (lua_type(cbd->L, -1) == LUA_TNUMBER) idle_timeout = lua_tonumber(cbd->L, -1);
+			lua_pop(cbd->L, 1);
+			lua_pushstring(cbd->L, "max_reuse");
+			lua_gettable(cbd->L, 1);
+			if (lua_type(cbd->L, -1) == LUA_TNUMBER) max_reuse = lua_tointeger(cbd->L, -1);
+			lua_pop(cbd->L, 1);
+			rspamd_http_connection_set_keepalive_tuning(cbd->conn, connection_ttl, idle_timeout, max_reuse);
+		}
+
 		if (cbd->task) {
 			cbd->conn->log_tag = cbd->task->task_pool->tag.uid;
 
@@ -713,6 +764,13 @@ lua_http_push_headers(lua_State *L, struct rspamd_http_message *msg)
  * @param {boolean} keepalive enable keep-alive pool
  * @param {string} user for HTTP authentication
  * @param {string} password for HTTP authentication, only if "user" present
+ * @param {number} connect_timeout optional TCP connect timeout (seconds)
+ * @param {number} ssl_timeout optional SSL handshake timeout (seconds)
+ * @param {number} write_timeout optional request write timeout (seconds)
+ * @param {number} read_timeout optional response read timeout (seconds)
+ * @param {number} connection_ttl optional absolute keep-alive connection TTL (seconds)
+ * @param {number} idle_timeout optional keep-alive idle timeout override (seconds)
+ * @param {number} max_reuse optional keep-alive max reuse count per connection
  * @return {boolean} `true`, in **async** mode, if a request has been successfully scheduled. If this value is `false` then some error occurred, the callback thus will not be called.
  * @return In **sync** mode `string|nil, nil|table` In sync mode  error message if any and response as table: `int` _code_, `string` _content_ and `table` _headers_ (header -> value)
  */
@@ -1190,6 +1248,7 @@ lua_http_request(lua_State *L)
 	cbd->url = url;
 	cbd->auth = auth;
 	cbd->task = task;
+	cbd->L = L;
 
 	if (up) {
 		cbd->up = rspamd_upstream_ref(up);

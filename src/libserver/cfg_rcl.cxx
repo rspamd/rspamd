@@ -1197,35 +1197,102 @@ rspamd_rcl_statfile_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 		st->opts = (ucl_object_t *) obj;
 		st->clcf = ccf;
 
-		const auto *val = ucl_object_lookup(obj, "spam");
-		if (val == nullptr) {
+		/* Handle migration from old 'spam' field to new 'class' field */
+		const auto *class_val = ucl_object_lookup(obj, "class");
+		const auto *spam_val = ucl_object_lookup(obj, "spam");
+
+		if (class_val != nullptr && spam_val != nullptr) {
+			msg_warn_config("statfile %s has both 'class' and 'spam' fields, using 'class' field",
+							st->symbol);
+		}
+
+		if (class_val == nullptr && spam_val == nullptr) {
+			/* Neither field present, try to guess by symbol name */
 			msg_info_config(
-				"statfile %s has no explicit 'spam' setting, trying to guess by symbol",
+				"statfile %s has no explicit 'class' or 'spam' setting, trying to guess by symbol",
 				st->symbol);
 			if (rspamd_substring_search_caseless(st->symbol,
 												 strlen(st->symbol), "spam", 4) != -1) {
 				st->is_spam = TRUE;
+				st->class_name = rspamd_mempool_strdup(pool, "spam");
+				st->is_spam_converted = TRUE;
 			}
 			else if (rspamd_substring_search_caseless(st->symbol,
 													  strlen(st->symbol), "ham", 3) != -1) {
 				st->is_spam = FALSE;
+				st->class_name = rspamd_mempool_strdup(pool, "ham");
+				st->is_spam_converted = TRUE;
 			}
 			else {
 				g_set_error(err,
 							CFG_RCL_ERROR,
 							EINVAL,
-							"cannot guess spam setting from %s",
+							"cannot guess class setting from %s, please specify 'class' field",
 							st->symbol);
 				return FALSE;
 			}
-			msg_info_config("guessed that statfile with symbol %s is %s",
-							st->symbol,
-							st->is_spam ? "spam" : "ham");
+			msg_info_config("guessed that statfile with symbol %s has class '%s'",
+							st->symbol, st->class_name);
 		}
+		else if (class_val == nullptr && spam_val != nullptr) {
+			/* Only spam field present - migrate to class */
+			msg_debug_config("statfile %s uses deprecated 'spam' field, please use 'class' instead",
+							 st->symbol);
+			if (st->is_spam) {
+				st->class_name = rspamd_mempool_strdup(pool, "spam");
+			}
+			else {
+				st->class_name = rspamd_mempool_strdup(pool, "ham");
+			}
+			st->is_spam_converted = TRUE;
+		}
+		else if (class_val != nullptr && spam_val == nullptr) {
+			/* Only class field present - set is_spam for backward compatibility */
+			if (st->class_name != nullptr) {
+				if (strcmp(st->class_name, "spam") == 0) {
+					st->is_spam = TRUE;
+				}
+				else if (strcmp(st->class_name, "ham") == 0) {
+					st->is_spam = FALSE;
+				}
+				else {
+					/* For non-binary classes, default to not spam */
+					st->is_spam = FALSE;
+				}
+				msg_debug_config("statfile %s with class '%s' set is_spam=%s for compatibility",
+								 st->symbol, st->class_name, st->is_spam ? "true" : "false");
+			}
+		}
+		/* If both fields are present, class takes precedence and was already parsed by the default parser */
 		return TRUE;
 	}
 
 	return FALSE;
+}
+
+static gboolean
+rspamd_rcl_class_labels_handler(rspamd_mempool_t *pool,
+								const ucl_object_t *obj,
+								const char *key,
+								gpointer ud,
+								struct rspamd_rcl_section *section,
+								GError **err)
+{
+	auto *ccf = static_cast<rspamd_classifier_config *>(ud);
+
+	if (obj->type != UCL_OBJECT) {
+		g_set_error(err, CFG_RCL_ERROR, EINVAL,
+					"class_labels must be an object");
+		return FALSE;
+	}
+
+	if (!rspamd_config_parse_class_labels(obj, &ccf->class_labels)) {
+		g_set_error(err, CFG_RCL_ERROR, EINVAL,
+					"invalid class_labels configuration");
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 static gboolean
@@ -1299,6 +1366,22 @@ rspamd_rcl_classifier_handler(rspamd_mempool_t *pool,
 								tkcf->opts = val;
 							}
 						}
+					}
+				}
+				else if (g_ascii_strcasecmp(st_key, "class_labels") == 0) {
+					/* Parse class_labels configuration directly */
+					if (ucl_object_type(val) != UCL_OBJECT) {
+						g_set_error(err, CFG_RCL_ERROR, EINVAL,
+									"class_labels must be an object");
+						ucl_object_iterate_free(it);
+						return FALSE;
+					}
+
+					if (!rspamd_config_parse_class_labels(val, &ccf->class_labels)) {
+						g_set_error(err, CFG_RCL_ERROR, EINVAL,
+									"invalid class_labels configuration");
+						ucl_object_iterate_free(it);
+						return FALSE;
 					}
 				}
 			}
@@ -1375,7 +1458,79 @@ rspamd_rcl_classifier_handler(rspamd_mempool_t *pool,
 	}
 
 	ccf->opts = (ucl_object_t *) obj;
+
+	/* Validate multi-class configuration */
+	GError *validation_err = nullptr;
+	if (!rspamd_config_validate_class_config(ccf, &validation_err)) {
+		if (validation_err) {
+			g_propagate_error(err, validation_err);
+		}
+		else {
+			g_set_error(err, CFG_RCL_ERROR, EINVAL,
+						"multi-class configuration validation failed for classifier '%s'",
+						ccf->name ? ccf->name : "unknown");
+		}
+		return FALSE;
+	}
+
 	cfg->classifiers = g_list_prepend(cfg->classifiers, ccf);
+
+	/* Populate class_names array from statfiles - only for explicit multiclass configs */
+	if (ccf->statfiles) {
+		GList *cur = ccf->statfiles;
+		gboolean has_explicit_classes = FALSE;
+
+		/* Check if any statfile uses explicit class declaration (not converted from is_spam) */
+		cur = ccf->statfiles;
+		while (cur) {
+			struct rspamd_statfile_config *stcf = (struct rspamd_statfile_config *) cur->data;
+			msg_debug("checking statfile %s: class_name=%s, is_spam_converted=%s",
+					  stcf->symbol, stcf->class_name ? stcf->class_name : "NULL",
+					  stcf->is_spam_converted ? "true" : "false");
+			if (stcf->class_name && !stcf->is_spam_converted) {
+				has_explicit_classes = TRUE;
+				break;
+			}
+			cur = g_list_next(cur);
+		}
+
+		msg_debug("has_explicit_classes = %s", has_explicit_classes ? "true" : "false");
+
+		/* Only populate class_names for explicit multiclass configurations */
+		if (has_explicit_classes) {
+			msg_debug("populating class_names for multiclass configuration");
+		}
+		else {
+			msg_debug("skipping class_names population for binary configuration");
+		}
+
+		if (has_explicit_classes) {
+			ccf->class_names = g_ptr_array_new();
+
+			cur = ccf->statfiles;
+			while (cur) {
+				struct rspamd_statfile_config *stcf = (struct rspamd_statfile_config *) cur->data;
+				if (stcf->class_name) {
+					/* Check if class already exists */
+					bool found = false;
+					for (unsigned int i = 0; i < ccf->class_names->len; i++) {
+						if (strcmp((char *) g_ptr_array_index(ccf->class_names, i), stcf->class_name) == 0) {
+							stcf->class_index = i; /* Store the index for O(1) lookup */
+							found = true;
+							break;
+						}
+					}
+
+					if (!found) {
+						/* Add new class */
+						stcf->class_index = ccf->class_names->len;
+						g_ptr_array_add(ccf->class_names, g_strdup(stcf->class_name));
+					}
+				}
+				cur = g_list_next(cur);
+			}
+		}
+	}
 
 	return TRUE;
 }
@@ -1957,6 +2112,42 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   0,
 									   "Enable UTF8 mode for mime");
 		rspamd_rcl_add_default_handler(sub,
+									   "enable_url_rewrite",
+									   rspamd_rcl_parse_struct_boolean,
+									   G_STRUCT_OFFSET(struct rspamd_config, enable_url_rewrite),
+									   0,
+									   "Enable HTML URL rewriting");
+		rspamd_rcl_add_default_handler(sub,
+									   "include_content_urls",
+									   rspamd_rcl_parse_struct_boolean,
+									   G_STRUCT_OFFSET(struct rspamd_config, include_content_urls),
+									   0,
+									   "Include URLs extracted from content (PDF, etc.) in URL API calls (default: true)");
+		rspamd_rcl_add_default_handler(sub,
+									   "composites_inverted_index",
+									   rspamd_rcl_parse_struct_boolean,
+									   G_STRUCT_OFFSET(struct rspamd_config, composites_inverted_index),
+									   0,
+									   "Use inverted index for fast composite lookup (default: true)");
+		rspamd_rcl_add_default_handler(sub,
+									   "composites_stats_always",
+									   rspamd_rcl_parse_struct_boolean,
+									   G_STRUCT_OFFSET(struct rspamd_config, composites_stats_always),
+									   0,
+									   "Always collect composite statistics instead of probabilistic sampling (default: false)");
+		rspamd_rcl_add_default_handler(sub,
+									   "url_rewrite_lua_func",
+									   rspamd_rcl_parse_struct_string,
+									   G_STRUCT_OFFSET(struct rspamd_config, url_rewrite_lua_func),
+									   0,
+									   "Lua function name for URL rewriting callback");
+		rspamd_rcl_add_default_handler(sub,
+									   "url_rewrite_fold_limit",
+									   rspamd_rcl_parse_struct_integer,
+									   G_STRUCT_OFFSET(struct rspamd_config, url_rewrite_fold_limit),
+									   0,
+									   "Line fold limit for MIME re-encoding (default: 76)");
+		rspamd_rcl_add_default_handler(sub,
 									   "enable_experimental",
 									   rspamd_rcl_parse_struct_boolean,
 									   G_STRUCT_OFFSET(struct rspamd_config, enable_experimental),
@@ -2457,7 +2648,7 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 											   FALSE,
 											   TRUE,
 											   cfg->doc_strings,
-											   "CLassifier options");
+											   "Classifier options");
 		/* Default classifier is 'bayes' for now */
 		sub->default_key = "bayes";
 
@@ -2476,7 +2667,7 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 		rspamd_rcl_add_default_handler(sub,
 									   "min_prob_strength",
 									   rspamd_rcl_parse_struct_double,
-									   G_STRUCT_OFFSET(struct rspamd_classifier_config, min_token_hits),
+									   G_STRUCT_OFFSET(struct rspamd_classifier_config, min_prob_strength),
 									   0,
 									   "Use only tokens with probability in [0.5 - MPS, 0.5 + MPS]");
 		rspamd_rcl_add_default_handler(sub,
@@ -2505,6 +2696,18 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   "Name of classifier");
 
 		/*
+		 * Multi-class configuration
+		 */
+		rspamd_rcl_add_section_doc(&top, sub,
+								   "class_labels", nullptr,
+								   rspamd_rcl_class_labels_handler,
+								   UCL_OBJECT,
+								   FALSE,
+								   TRUE,
+								   sub->doc_ref,
+								   "Class to backend label mapping for multi-class classification");
+
+		/*
 		 * Statfile defaults
 		 */
 		auto *ssub = rspamd_rcl_add_section_doc(&top, sub,
@@ -2522,11 +2725,17 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   0,
 									   "Statfile unique label");
 		rspamd_rcl_add_default_handler(ssub,
+									   "class",
+									   rspamd_rcl_parse_struct_string,
+									   G_STRUCT_OFFSET(struct rspamd_statfile_config, class_name),
+									   0,
+									   "Class name for multi-class classification");
+		rspamd_rcl_add_default_handler(ssub,
 									   "spam",
 									   rspamd_rcl_parse_struct_boolean,
 									   G_STRUCT_OFFSET(struct rspamd_statfile_config, is_spam),
 									   0,
-									   "Sets if this statfile contains spam samples");
+									   "DEPRECATED: Sets if this statfile contains spam samples (use 'class' instead)");
 	}
 
 	if (!(skip_sections && g_hash_table_lookup(skip_sections, "composite"))) {
@@ -3529,7 +3738,7 @@ void rspamd_rcl_maybe_apply_lua_transform(struct rspamd_config *cfg)
 		msg_info_config("configuration has been transformed in Lua");
 	}
 
-	/* error function */
+	/* Clear stack completely */
 	lua_settop(L, 0);
 }
 
@@ -3551,6 +3760,12 @@ rspamd_rcl_decrypt_handler(struct ucl_parser *parser,
 	}
 
 	return true;
+}
+
+static void
+rspamd_rcl_jinja_free(unsigned char *data, size_t len, void *user_data)
+{
+	UCL_FREE(len, data);
 }
 
 static bool
@@ -3714,6 +3929,7 @@ rspamd_config_parse_ucl(struct rspamd_config *cfg,
 		jinja_handler->user_data = cfg;
 		jinja_handler->flags = UCL_SPECIAL_HANDLER_PREPROCESS_ALL;
 		jinja_handler->handler = rspamd_rcl_jinja_handler;
+		jinja_handler->free_function = rspamd_rcl_jinja_free;
 
 		ucl_parser_add_special_handler(parser.get(), jinja_handler);
 	}
@@ -3723,6 +3939,14 @@ rspamd_config_parse_ucl(struct rspamd_config *cfg,
 					"ucl parser error: %s", ucl_parser_get_error(parser.get()));
 
 		return FALSE;
+	}
+
+	/* Free old UCL object if it exists (e.g., after lua_cfg_transform) */
+	if (cfg->cfg_ucl_obj) {
+		ucl_object_unref(cfg->cfg_ucl_obj);
+	}
+	if (cfg->config_comments) {
+		ucl_object_unref(cfg->config_comments);
 	}
 
 	cfg->cfg_ucl_obj = ucl_parser_get_object(parser.get());

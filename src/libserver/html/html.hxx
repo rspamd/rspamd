@@ -22,10 +22,12 @@
 #include "libserver/url.h"
 #include "libserver/html/html_tag.hxx"
 #include "libserver/html/html.h"
+#include "libserver/html/html_features.h"
 #include "libserver/html/html_tags.h"
 
 
 #include <vector>
+#include "contrib/ankerl/unordered_dense.h"
 #include <memory>
 #include <string>
 #include "function2/function2.hpp"
@@ -50,12 +52,23 @@ struct html_content {
 	std::string invisible;
 	std::shared_ptr<css::css_style_sheet> css_style;
 
+	/* Aggregated HTML features */
+	struct rspamd_html_features features;
+	/* Helper: per-domain link counts */
+	ankerl::unordered_dense::map<std::string, unsigned int> link_domain_counts;
+	/* Heuristic weights for button-like links */
+	ankerl::unordered_dense::map<struct rspamd_url *, float> url_button_weights;
+	/* First-party eTLD+1 derived from message (e.g. From:) */
+	std::string first_party_etld1;
+
 	/* Preallocate and reserve all internal structures */
 	html_content()
 	{
 		tags_seen.resize(Tag_MAX, false);
 		all_tags.reserve(128);
 		parsed.reserve(256);
+		memset(&features, 0, sizeof(features));
+		features.version = 1u;
 	}
 
 	static void html_content_dtor(void *ptr)
@@ -124,6 +137,35 @@ struct html_content {
 		}
 
 		return true;
+	}
+
+	/**
+	 * Enumerate all clickable attributes (href, src) with their spans for URL rewriting
+	 * @param callback function(tag, attr_name, span) -> bool (return false to stop iteration)
+	 */
+	auto for_each_clickable_attr(fu2::function<bool(const html_tag *, std::string_view, const attr_span &)> &&callback) const -> void
+	{
+		for (const auto &tag: all_tags) {
+			if (tag->flags & (FL_XML | FL_VIRTUAL | FL_BROKEN)) {
+				continue;
+			}
+
+			// Check for tags with href or src attributes
+			if (tag->flags & FL_HREF || tag->id == Tag_A || tag->id == Tag_IMG || tag->id == Tag_LINK || tag->id == Tag_BASE) {
+				// Try href first
+				if (auto span = tag->get_attr_span("href")) {
+					if (!callback(tag.get(), "href", span.value())) {
+						return;
+					}
+				}
+				// Then try src
+				else if (auto span = tag->get_attr_span("src")) {
+					if (!callback(tag.get(), "src", span.value())) {
+						return;
+					}
+				}
+			}
+		}
 	}
 
 private:

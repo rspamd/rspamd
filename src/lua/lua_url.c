@@ -67,6 +67,7 @@ LUA_FUNCTION_DEF(url, get_phished);
 LUA_FUNCTION_DEF(url, set_redirected);
 LUA_FUNCTION_DEF(url, get_count);
 LUA_FUNCTION_DEF(url, get_visible);
+LUA_FUNCTION_DEF(url, get_hash);
 LUA_FUNCTION_DEF(url, create);
 LUA_FUNCTION_DEF(url, init);
 LUA_FUNCTION_DEF(url, all);
@@ -98,6 +99,7 @@ static const struct luaL_reg urllib_m[] = {
 
 	LUA_INTERFACE_DEF(url, get_visible),
 	LUA_INTERFACE_DEF(url, get_count),
+	LUA_INTERFACE_DEF(url, get_hash),
 	LUA_INTERFACE_DEF(url, get_flags),
 	LUA_INTERFACE_DEF(url, get_flags_num),
 	LUA_INTERFACE_DEF(url, get_order),
@@ -288,18 +290,34 @@ lua_url_get_fragment(lua_State *L)
 }
 
 /***
- * @method url:get_text()
+ * @method url:get_text([as_text])
  * Get full content of the url
- * @return {string} url string
+ * @param {boolean} as_text if true, return as rspamd_text, otherwise as string
+ * @return {string|rspamd_text} url string or text object
  */
 static int
 lua_url_get_text(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url(L, 1);
+	gboolean as_text = FALSE;
+
+	if (lua_isboolean(L, 2)) {
+		as_text = lua_toboolean(L, 2);
+	}
 
 	if (url != NULL) {
-		lua_pushlstring(L, url->url->string, url->url->urllen);
+		if (as_text) {
+			struct rspamd_lua_text *t;
+			t = lua_newuserdata(L, sizeof(*t));
+			rspamd_lua_setclass(L, rspamd_text_classname, -1);
+			t->start = url->url->string;
+			t->len = url->url->urllen;
+			t->flags = 0; /* Read-only, not owned */
+		}
+		else {
+			lua_pushlstring(L, url->url->string, url->url->urllen);
+		}
 	}
 	else {
 		lua_pushnil(L);
@@ -313,6 +331,50 @@ lua_url_get_text(lua_State *L)
  * Get full content of the url or user@domain in case of email
  * @return {string} url as a string
  */
+/*
+ * Re-encode characters that cannot appear literally in URLs.
+ * Like browsers: decode internally for matching/display, re-encode on copy/serialization.
+ * Returns the string pushed onto the Lua stack (via lua_pushlstring).
+ */
+static void
+lua_url_push_encoded(lua_State *L, const char *s, gsize len)
+{
+	static const char hexdigits[] = "0123456789ABCDEF";
+	gsize i, extra = 0;
+
+	/* Fast check: count characters that need encoding */
+	for (i = 0; i < len; i++) {
+		unsigned char c = (unsigned char) s[i];
+		if (c <= 0x20) {
+			extra += 2; /* %XX is 3 chars vs 1 original */
+		}
+	}
+
+	if (extra == 0) {
+		/* No encoding needed — fast path */
+		lua_pushlstring(L, s, len);
+		return;
+	}
+
+	char *encoded = g_malloc(len + extra);
+	char *d = encoded;
+
+	for (i = 0; i < len; i++) {
+		unsigned char c = (unsigned char) s[i];
+		if (c <= 0x20) {
+			*d++ = '%';
+			*d++ = hexdigits[c >> 4];
+			*d++ = hexdigits[c & 0x0f];
+		}
+		else {
+			*d++ = (char) c;
+		}
+	}
+
+	lua_pushlstring(L, encoded, d - encoded);
+	g_free(encoded);
+}
+
 static int
 lua_url_tostring(lua_State *L)
 {
@@ -335,7 +397,7 @@ lua_url_tostring(lua_State *L)
 			g_free(tmp);
 		}
 		else {
-			lua_pushlstring(L, url->url->string, url->url->urllen);
+			lua_url_push_encoded(L, url->url->string, url->url->urllen);
 		}
 	}
 	else {
@@ -663,7 +725,9 @@ lua_url_set_redirected(lua_State *L)
 
 /***
  * @method url:get_tld()
- * Get effective second level domain part (eSLD) of the url host
+ * Get effective second level domain (eSLD) of the URL host.
+ * This method uses the Public Suffix List (PSL) to determine boundaries
+ * and compute the eSLD, not the top-level domain.
  * @return {string} effective second level domain part (eSLD) of the url host
  */
 static int
@@ -737,6 +801,32 @@ lua_url_get_visible(lua_State *L)
 
 	if (url != NULL && url->url->ext && url->url->ext->visible_part) {
 		lua_pushstring(L, url->url->ext->visible_part);
+	}
+	else {
+		lua_pushnil(L);
+	}
+
+	return 1;
+}
+
+/***
+ * @method url:get_hash()
+ * Get fast hash of the url for deduplication purposes. Uses the same hash function
+ * as internal URL storage (rspamd_cryptobox_fast_hash). This is much more efficient
+ * than converting URLs to strings for deduplication, especially with large numbers of URLs.
+ * @return {number} 64-bit hash as a Lua number
+ */
+static int
+lua_url_get_hash(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_url *url = lua_check_url(L, 1);
+
+	if (url != NULL && url->url != NULL && url->url->urllen > 0) {
+		uint64_t hash = rspamd_cryptobox_fast_hash(url->url->string,
+												   url->url->urllen,
+												   rspamd_hash_seed());
+		lua_pushnumber(L, (lua_Number) hash);
 	}
 	else {
 		lua_pushnil(L);
@@ -829,8 +919,8 @@ static rspamd_mempool_t *static_lua_url_pool;
 
 RSPAMD_CONSTRUCTOR(rspamd_urls_static_pool_ctor)
 {
-	static_lua_url_pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
-											 "static_lua_url", 0);
+	static_lua_url_pool = rspamd_mempool_new_long_lived(rspamd_mempool_suggest_size(),
+														"static_lua_url");
 }
 
 RSPAMD_DESTRUCTOR(rspamd_urls_static_pool_dtor)
@@ -956,7 +1046,7 @@ lua_url_all(lua_State *L)
 			lua_newtable(L);
 			rspamd_url_find_multiple(pool, text, length,
 									 RSPAMD_URL_FIND_ALL, NULL,
-									 lua_url_table_inserter, L);
+									 lua_url_table_inserter, L, L);
 		}
 		else {
 			lua_pushnil(L);
@@ -1265,9 +1355,8 @@ lua_url_cbdata_fill(lua_State *L,
 						flags_mask &= ~RSPAMD_URL_FLAG_CONTENT;
 					}
 				}
-				else {
-					flags_mask &= ~RSPAMD_URL_FLAG_CONTENT;
-				}
+				/* If content is nil/not specified, keep the default_flags as-is
+				 * (which respects the include_content_urls config option) */
 				lua_pop(L, 1);
 			}
 

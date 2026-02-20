@@ -41,27 +41,28 @@ static const char *default_languages_path = RSPAMD_SHAREDIR "/languages";
 struct rspamd_language_unicode_match {
 	const char *lang;
 	int unicode_code;
+	int flags; /* enum rspamd_language_elt_flags */
 };
 
 /*
  * List of languages detected by unicode scripts
  */
 static const struct rspamd_language_unicode_match unicode_langs[] = {
-	{"el", RSPAMD_UNICODE_GREEK},
-	{"ml", RSPAMD_UNICODE_MALAYALAM},
-	{"te", RSPAMD_UNICODE_TELUGU},
-	{"ta", RSPAMD_UNICODE_TAMIL},
-	{"gu", RSPAMD_UNICODE_GUJARATI},
-	{"th", RSPAMD_UNICODE_THAI},
-	{"ka", RSPAMD_UNICODE_GEORGIAN},
-	{"si", RSPAMD_UNICODE_SINHALA},
-	{"hy", RSPAMD_UNICODE_ARMENIAN},
-	{"ja", RSPAMD_UNICODE_JP},
-	{"ko", RSPAMD_UNICODE_HANGUL},
+	{"el", RSPAMD_UNICODE_GREEK, 0},
+	{"ml", RSPAMD_UNICODE_MALAYALAM, 0},
+	{"te", RSPAMD_UNICODE_TELUGU, 0},
+	{"ta", RSPAMD_UNICODE_TAMIL, 0},
+	{"gu", RSPAMD_UNICODE_GUJARATI, 0},
+	{"th", RSPAMD_UNICODE_THAI, RS_LANGUAGE_DIACRITICS},
+	{"ka", RSPAMD_UNICODE_GEORGIAN, 0},
+	{"si", RSPAMD_UNICODE_SINHALA, 0},
+	{"hy", RSPAMD_UNICODE_ARMENIAN, 0},
+	{"ja", RSPAMD_UNICODE_JP, 0},
+	{"ko", RSPAMD_UNICODE_HANGUL, 0},
 };
 
 /*
- * Top languages
+ * Top Languages
  */
 static const char *tier0_langs[] = {
 	"en",
@@ -322,6 +323,12 @@ rspamd_language_detector_print_flags(struct rspamd_language_elt *elt)
 	}
 	if (elt->flags & RS_LANGUAGE_LATIN) {
 		r += rspamd_snprintf(flags_buf + r, sizeof(flags_buf) - r, "latin,");
+	}
+	if (elt->flags & RS_LANGUAGE_DIACRITICS) {
+		r += rspamd_snprintf(flags_buf + r, sizeof(flags_buf) - r, "diacritics,");
+	}
+	if (elt->flags & RS_LANGUAGE_ASCII) {
+		r += rspamd_snprintf(flags_buf + r, sizeof(flags_buf) - r, "ascii,");
 	}
 
 	if (r > 0) {
@@ -694,6 +701,18 @@ rspamd_language_detector_read_file(struct rspamd_config *cfg,
 	khiter_t k = kh_put(rspamd_languages_hash, d->languages, nelt->name, &ret);
 	g_assert(ret > 0); /* must be unique */
 	kh_value(d->languages, k) = nelt;
+
+	/* Apply flags from unicode_langs structure for glyph-based languages */
+	const struct rspamd_language_unicode_match *unicode_match;
+	unicode_match = rspamd_language_search_unicode_match(nelt->name, unicode_langs,
+														 G_N_ELEMENTS(unicode_langs));
+	if (unicode_match != NULL && unicode_match->flags != 0) {
+		nelt->flags |= unicode_match->flags;
+		msg_debug_lang_det_cfg("applied flags from unicode_langs for language %s: %s",
+							   nelt->name,
+							   rspamd_language_detector_print_flags(nelt));
+	}
+
 	ucl_object_unref(top);
 }
 
@@ -863,6 +882,8 @@ rspamd_language_detector_init(struct rspamd_config *cfg)
 		ret->stop_words[i].mp = rspamd_multipattern_create(
 			RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8 |
 			RSPAMD_MULTIPATTERN_RE);
+		/* Use FALLBACK mode: ACISM first, async hyperscan compile later */
+		rspamd_multipattern_set_mode(ret->stop_words[i].mp, RSPAMD_MP_MODE_FALLBACK);
 #else
 		ret->stop_words[i].mp = rspamd_multipattern_create(
 			RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8);
@@ -898,11 +919,22 @@ rspamd_language_detector_init(struct rspamd_config *cfg)
 			rspamd_language_detector_process_chain(cfg, chain);
 		});
 
+		/* Compile with ACISM fallback, queue for async hyperscan via hs_helper */
 		if (!rspamd_multipattern_compile(ret->stop_words[i].mp, 0, &err)) {
 			msg_err_config("cannot compile stop words for %z language group: %e",
 						   i, err);
 			g_error_free(err);
 		}
+#ifdef WITH_HYPERSCAN
+		else if (rspamd_multipattern_get_state(ret->stop_words[i].mp) ==
+				 RSPAMD_MP_STATE_COMPILING) {
+			/* Cache miss - add to pending queue for hs_helper */
+			static const char *cat_names[] = {"latin", "cyrillic", "devanagari", "arab"};
+			char name[64];
+			rspamd_snprintf(name, sizeof(name), "stopwords_%s", cat_names[i]);
+			rspamd_multipattern_add_pending(ret->stop_words[i].mp, name);
+		}
+#endif
 
 		total += kh_size(ret->trigrams[i]);
 	}
@@ -936,7 +968,7 @@ end:
 }
 
 static void
-rspamd_language_detector_random_select(GArray *ucs_tokens, unsigned int nwords,
+rspamd_language_detector_random_select(rspamd_words_t *ucs_tokens, unsigned int nwords,
 									   goffset *offsets_out,
 									   uint64_t *seed)
 {
@@ -946,7 +978,7 @@ rspamd_language_detector_random_select(GArray *ucs_tokens, unsigned int nwords,
 
 	g_assert(nwords != 0);
 	g_assert(offsets_out != NULL);
-	g_assert(ucs_tokens->len >= nwords);
+	g_assert(kv_size(*ucs_tokens) >= nwords);
 	/*
 	 * We split input array into `nwords` parts. For each part we randomly select
 	 * an element from this particular split. Here is an example:
@@ -963,22 +995,22 @@ rspamd_language_detector_random_select(GArray *ucs_tokens, unsigned int nwords,
 	 * their splits. It is not uniform distribution but it seems to be better
 	 * to include words from different text parts
 	 */
-	step_len = ucs_tokens->len / nwords;
-	remainder = ucs_tokens->len % nwords;
+	step_len = kv_size(*ucs_tokens) / nwords;
+	remainder = kv_size(*ucs_tokens) % nwords;
 
 	out_idx = 0;
 	coin = rspamd_random_uint64_fast_seed(seed);
 	sel = coin % (step_len + remainder);
 	offsets_out[out_idx] = sel;
 
-	for (i = step_len + remainder; i < ucs_tokens->len;
+	for (i = step_len + remainder; i < kv_size(*ucs_tokens);
 		 i += step_len, out_idx++) {
 		unsigned int ntries = 0;
 		coin = rspamd_random_uint64_fast_seed(seed);
 		sel = (coin % step_len) + i;
 
 		for (;;) {
-			tok = &g_array_index(ucs_tokens, rspamd_stat_token_t, sel);
+			tok = &kv_A(*ucs_tokens, sel);
 			/* Filter bad tokens */
 
 			if (tok->unicode.len >= 2 &&
@@ -995,8 +1027,8 @@ rspamd_language_detector_random_select(GArray *ucs_tokens, unsigned int nwords,
 				if (ntries < step_len) {
 					sel = (coin % step_len) + i;
 				}
-				else if (ntries < ucs_tokens->len) {
-					sel = coin % ucs_tokens->len;
+				else if (ntries < kv_size(*ucs_tokens)) {
+					sel = coin % kv_size(*ucs_tokens);
 				}
 				else {
 					offsets_out[out_idx] = sel;
@@ -1223,12 +1255,12 @@ static void
 rspamd_language_detector_detect_type(struct rspamd_task *task,
 									 unsigned int nwords,
 									 struct rspamd_lang_detector *d,
-									 GArray *words,
+									 rspamd_words_t *words,
 									 enum rspamd_language_category cat,
 									 khash_t(rspamd_candidates_hash) * candidates,
 									 struct rspamd_mime_text_part *part)
 {
-	unsigned int nparts = MIN(words->len, nwords);
+	unsigned int nparts = MIN(kv_size(*words), nwords);
 	goffset *selected_words;
 	rspamd_stat_token_t *tok;
 	unsigned int i;
@@ -1241,8 +1273,7 @@ rspamd_language_detector_detect_type(struct rspamd_task *task,
 	msg_debug_lang_det("randomly selected %d words", nparts);
 
 	for (i = 0; i < nparts; i++) {
-		tok = &g_array_index(words, rspamd_stat_token_t,
-							 selected_words[i]);
+		tok = &kv_A(*words, selected_words[i]);
 
 		if (tok->unicode.len >= 3) {
 			rspamd_language_detector_detect_word(task, d, tok, candidates,
@@ -1282,7 +1313,7 @@ static enum rspamd_language_detected_type
 rspamd_language_detector_try_ngramm(struct rspamd_task *task,
 									unsigned int nwords,
 									struct rspamd_lang_detector *d,
-									GArray *ucs_tokens,
+									rspamd_words_t *ucs_tokens,
 									enum rspamd_language_category cat,
 									khash_t(rspamd_candidates_hash) * candidates,
 									struct rspamd_mime_text_part *part)
@@ -1863,7 +1894,7 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 		if (rspamd_lang_detection_fasttext_is_enabled(d->fasttext_detector)) {
 			rspamd_fasttext_predict_result_t fasttext_predict_result =
 				rspamd_lang_detection_fasttext_detect(d->fasttext_detector, task,
-													  part->utf_words, 4);
+													  &part->utf_words, 4);
 
 			ndetected = rspamd_lang_detection_fasttext_get_nlangs(fasttext_predict_result);
 
@@ -1930,11 +1961,11 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 			if (!ret) {
 				/* Apply trigramms detection */
 				candidates = kh_init(rspamd_candidates_hash);
-				if (part->utf_words->len < default_short_text_limit) {
+				if (kv_size(part->utf_words) < default_short_text_limit) {
 					r = rs_detect_none;
 					msg_debug_lang_det("text is too short for trigrams detection: "
 									   "%d words; at least %d words required",
-									   (int) part->utf_words->len,
+									   (int) kv_size(part->utf_words),
 									   (int) default_short_text_limit);
 					switch (cat) {
 					case RSPAMD_LANGUAGE_CYRILLIC:
@@ -1960,7 +1991,7 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 					r = rspamd_language_detector_try_ngramm(task,
 															default_words,
 															d,
-															part->utf_words,
+															&part->utf_words,
 															cat,
 															candidates,
 															part);

@@ -55,6 +55,8 @@ struct rspamd_archive {
 	GPtrArray *files; /* Array of struct rspamd_archive_file */
 };
 
+/* Writer API removed: use libarchive for writing ZIP archives */
+
 /**
  * Process archives from a worker task
  */

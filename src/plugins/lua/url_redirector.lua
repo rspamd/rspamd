@@ -58,6 +58,32 @@ local settings = {
   redirector_hosts_map = nil -- check only those redirectors
 }
 
+--[[
+Encode characters that are not allowed in URLs according to RFC 3986
+This is needed because redirect Location headers sometimes contain unencoded spaces
+and other special characters that http_parser_parse_url() doesn't accept.
+Only encodes the truly problematic characters (space, control chars, etc.)
+]]
+local function encode_url_for_redirect(url_str)
+  if not url_str then
+    return nil
+  end
+
+  -- Encode space and other problematic characters that are common in redirect URLs
+  -- We're conservative - only encode what http_parser_parse_url actually rejects
+  -- Don't encode already-encoded sequences (%XX)
+  -- Use explicit ASCII ranges instead of %w which is locale-dependent
+  local encoded = url_str:gsub("([^A-Za-z0-9%-%._~:/?#%[%]@!$&'()*+,;=%%])", function(c)
+    -- Don't double-encode already encoded characters
+    if c == '%' then
+      return c
+    end
+    return string.format("%%%02X", string.byte(c))
+  end)
+
+  return encoded
+end
+
 local function adjust_url(task, orig_url, redir_url)
   local mempool = task:get_mempool()
   if type(redir_url) == 'string' then
@@ -221,7 +247,14 @@ local function resolve_cached(task, orig_url, url, key, ntries)
           local loc = headers['location']
           local redir_url
           if loc then
-            redir_url = rspamd_url.create(task:get_mempool(), loc)
+            -- Encode problematic characters (spaces, etc.) that http_parser doesn't accept
+            -- This fixes issue #5525 where redirect locations contain unencoded spaces
+            local encoded_loc = encode_url_for_redirect(loc)
+            redir_url = rspamd_url.create(task:get_mempool(), encoded_loc)
+            if not redir_url and encoded_loc ~= loc then
+              -- Encoding didn't help, log the issue
+              rspamd_logger.infox(task, 'failed to parse redirect location even after encoding: %s', loc)
+            end
           end
           lua_util.debugm(N, task, 'found redirect from %s to %s, err code %s',
               orig_url, loc, code)
@@ -312,7 +345,7 @@ local function resolve_cached(task, orig_url, url, key, ntries)
           true, -- is write
           redis_reserve_cb, --callback
           'SET', -- command
-          { key, 'processing', 'EX', tostring(settings.timeout * 2), 'NX' } -- arguments
+          { key, 'processing', 'EX', tostring(math.floor(settings.timeout * 2)), 'NX' } -- arguments
       )
       if not ret then
         rspamd_logger.errx(task, 'Couldn\'t schedule SET')
@@ -344,24 +377,75 @@ local function url_redirector_process_url(task, url)
 end
 
 local function url_redirector_handler(task)
-  local sp_urls = lua_util.extract_specific_urls({
-    task = task,
-    limit = settings.max_urls,
-    filter = function(url)
-      local host = url:get_host()
-      if settings.redirector_hosts_map:get_key(host) then
-        lua_util.debugm(N, task, 'check url %s', tostring(url))
-        return true
-      end
-    end,
-    no_cache = true,
-    need_content = true,
-  })
+  local selected = {}
+  local seen = {}
 
-  if sp_urls then
-    for _, u in ipairs(sp_urls) do
-      url_redirector_process_url(task, u)
+  local text_parts = task:get_text_parts()
+  if text_parts then
+    for _, part in ipairs(text_parts) do
+      if part:is_html() and part.get_cta_urls then
+        local cta_urls = part:get_cta_urls(settings.max_urls, true)
+        if cta_urls then
+          for _, url in ipairs(cta_urls) do
+            local host = url:get_host()
+            if host and settings.redirector_hosts_map:get_key(host) then
+              local key = tostring(url)
+              if not seen[key] then
+                lua_util.debugm(N, task, 'prefer CTA url %s for redirector', key)
+                table.insert(selected, url)
+                seen[key] = true
+                if #selected >= settings.max_urls then
+                  break
+                end
+              end
+            end
+          end
+        end
+      end
+
+      if #selected >= settings.max_urls then
+        break
+      end
     end
+  end
+
+  local remaining = settings.max_urls - #selected
+
+  if remaining > 0 then
+    local sp_urls = lua_util.extract_specific_urls({
+      task = task,
+      limit = remaining,
+      filter = function(url)
+        local host = url:get_host()
+        if host and settings.redirector_hosts_map:get_key(host) then
+          local key = tostring(url)
+          if not seen[key] then
+            lua_util.debugm(N, task, 'consider redirector url %s', key)
+            return true
+          end
+        end
+        return false
+      end,
+      no_cache = true,
+      need_content = true,
+    })
+
+    if sp_urls then
+      for _, u in ipairs(sp_urls) do
+        local key = tostring(u)
+        if not seen[key] then
+          table.insert(selected, u)
+          seen[key] = true
+          if #selected >= settings.max_urls then
+            break
+          end
+        end
+      end
+    end
+  end
+
+  for _, u in ipairs(selected) do
+    url_redirector_process_url(task, u)
   end
 end
 

@@ -48,6 +48,8 @@ struct worker_s;
 struct rspamd_external_libs_ctx;
 struct rspamd_cryptobox_pubkey;
 struct rspamd_dns_resolver;
+struct rspamd_tokenizer_manager;
+struct rspamd_mime_parser_config;
 
 /**
  * Logging type
@@ -138,7 +140,10 @@ struct rspamd_statfile_config {
 	char *symbol;                          /**< symbol of statfile									*/
 	char *label;                           /**< label of this statfile								*/
 	ucl_object_t *opts;                    /**< other options										*/
-	gboolean is_spam;                      /**< spam flag											*/
+	char *class_name;                      /**< class name for multi-class classification			*/
+	unsigned int class_index;              /**< class index for O(1) lookup during classification	*/
+	gboolean is_spam;                      /**< DEPRECATED: spam flag - use class_name instead		*/
+	gboolean is_spam_converted;            /**< TRUE if class_name was converted from is_spam flag	*/
 	struct rspamd_classifier_config *clcf; /**< parent pointer of classifier configuration			*/
 	gpointer data;                         /**< opaque data 										*/
 };
@@ -181,6 +186,8 @@ struct rspamd_classifier_config {
 	double min_prob_strength;                  /**< use only tokens with probability in [0.5 - MPS, 0.5 + MPS] */
 	unsigned int min_learns;                   /**< minimum number of learns for each statfile			*/
 	unsigned int flags;
+	GHashTable *class_labels; /**< class_name -> backend_symbol mapping for multi-class */
+	GPtrArray *class_names;   /**< ordered list of class names						*/
 };
 
 struct rspamd_worker_bind_conf {
@@ -189,6 +196,7 @@ struct rspamd_worker_bind_conf {
 	char *name;
 	char *bind_line;
 	gboolean is_systemd;
+	gboolean is_ssl;
 	struct rspamd_worker_bind_conf *next;
 };
 
@@ -340,6 +348,7 @@ struct rspamd_config {
 	char *pid_file;                  /**< name of pid file									*/
 	char *temp_dir;                  /**< dir for temp files									*/
 	char *control_socket_path;       /**< path to the control socket							*/
+	char *url_rewrite_lua_func;      /**< Lua function for URL rewriting						*/
 	const ucl_object_t *local_addrs; /**< tree of local addresses							*/
 #ifdef WITH_GPERF_TOOLS
 	char *profile_path;
@@ -368,6 +377,11 @@ struct rspamd_config {
 	enum rspamd_gtube_patterns_policy gtube_patterns_policy; /**< Enable test patterns								*/
 	gboolean enable_css_parser;                              /**< Enable css parsing in HTML							*/
 	gboolean enable_mime_utf;                                /**< Enable utf8 mime parsing							*/
+	gboolean enable_url_rewrite;                             /**< Enable HTML URL rewriting							*/
+	gboolean include_content_urls;                           /**< Include content URLs (from PDF etc) in API calls	*/
+
+	gboolean composites_inverted_index; /**< Use inverted index for composite lookup			*/
+	gboolean composites_stats_always;   /**< Always collect composite stats (not sampled)		*/
 
 	gsize max_cores_size;        /**< maximum size occupied by rspamd core files			*/
 	gsize max_cores_count;       /**< maximum number of core files						*/
@@ -377,6 +391,7 @@ struct rspamd_config {
 	gsize images_cache_size;     /**< size of LRU cache for DCT data from images			*/
 	double task_timeout;         /**< maximum message processing time					*/
 	int default_max_shots;       /**< default maximum count of symbols hits permitted (-1 for unlimited) */
+	int url_rewrite_fold_limit;  /**< line fold limit for URL rewrite MIME encoding (default 76) */
 	int32_t heartbeats_loss_max; /**< number of heartbeats lost to consider worker's termination */
 	double heartbeat_interval;   /**< interval for heartbeats for workers				*/
 
@@ -455,6 +470,8 @@ struct rspamd_config {
 	double upstream_revive_time;              /**< revive timeout for upstreams						*/
 	double upstream_lazy_resolve_time;        /**< lazy resolve time for upstreams					*/
 	double upstream_resolve_min_interval;     /**< minimum interval for resolving attempts (60 seconds by default) */
+	double upstream_probe_max_backoff;        /**< maximum backoff for probe retries when all upstreams are down */
+	double upstream_probe_jitter;             /**< jitter coefficient applied to probe backoff scheduling */
 	struct upstream_ctx *ups_ctx;             /**< upstream context									*/
 	struct rspamd_dns_resolver *dns_resolver; /**< dns resolver if loaded								*/
 
@@ -482,7 +499,8 @@ struct rspamd_config {
 	struct rspamd_monitored_ctx *monitored_ctx; /**< context for monitored resources					*/
 	void *redis_pool;                           /**< redis connection pool								*/
 
-	struct rspamd_re_cache *re_cache; /**< static regexp cache								*/
+	struct rspamd_re_cache *re_cache;                  /**< static regexp cache								*/
+	struct rspamd_mime_parser_config *mime_parser_cfg; /**< mime parser shared config */
 
 	GHashTable *trusted_keys; /**< list of trusted public keys						*/
 
@@ -497,9 +515,10 @@ struct rspamd_config {
 	char *zstd_output_dictionary; /**< path to zstd output dictionary						*/
 	ucl_object_t *neighbours;     /**< other servers in the cluster						*/
 
-	struct rspamd_config_settings_elt *setting_ids; /**< preprocessed settings ids							*/
-	struct rspamd_lang_detector *lang_det;          /**< language detector									*/
-	struct rspamd_worker *cur_worker;               /**< set dynamically by each worker							*/
+	struct rspamd_config_settings_elt *setting_ids;     /**< preprocessed settings ids							*/
+	struct rspamd_lang_detector *lang_det;              /**< language detector									*/
+	struct rspamd_tokenizer_manager *tokenizer_manager; /**< custom tokenizer manager						*/
+	struct rspamd_worker *cur_worker;                   /**< set dynamically by each worker							*/
 
 	ref_entry_t ref; /**< reference counter									*/
 };
@@ -619,12 +638,25 @@ void rspamd_config_insert_classify_symbols(struct rspamd_config *cfg);
  */
 gboolean rspamd_config_check_statfiles(struct rspamd_classifier_config *cf);
 
-/*
- * Find classifier config by name
+/**
+ * Multi-class configuration helpers
+ */
+gboolean rspamd_config_parse_class_labels(const ucl_object_t *obj,
+										  GHashTable **class_labels);
+
+gboolean rspamd_config_migrate_binary_config(struct rspamd_statfile_config *stcf);
+
+gboolean rspamd_config_validate_class_config(struct rspamd_classifier_config *ccf,
+											 GError **err);
+
+const char *rspamd_config_get_class_label(struct rspamd_classifier_config *ccf,
+										  const char *class_name);
+
+/**
+ * Find classifier by name
  */
 struct rspamd_classifier_config *rspamd_config_find_classifier(
-	struct rspamd_config *cfg,
-	const char *name);
+	struct rspamd_config *cfg, const char *name);
 
 void rspamd_ucl_add_conf_macros(struct ucl_parser *parser,
 								struct rspamd_config *cfg);
@@ -886,6 +918,49 @@ extern unsigned int rspamd_config_log_id;
 															rspamd_config_log_id, "config", cfg->checksum, \
 															RSPAMD_LOG_FUNC,                               \
 															__VA_ARGS__)
+
+/**
+ * Special refcount macros for rspamd_config with logging
+ */
+#define CFG_REF_INIT_RETAIN(cfg, dtor_cb)                                                        \
+	do {                                                                                         \
+		if ((cfg) != NULL) {                                                                     \
+			(cfg)->ref.refcount = 1;                                                             \
+			(cfg)->ref.dtor = (ref_dtor_cb_t) (dtor_cb);                                         \
+			rspamd_default_log_function(G_LOG_LEVEL_DEBUG, "config", NULL,                       \
+										G_STRFUNC, "CFG_REF_INIT_RETAIN %p at %s:%d refcount=1", \
+										(void *) (cfg), __FILE__, __LINE__);                     \
+		}                                                                                        \
+	} while (0)
+
+#define CFG_REF_RETAIN(cfg)                                                                       \
+	do {                                                                                          \
+		if ((cfg) != NULL) {                                                                      \
+			(cfg)->ref.refcount++;                                                                \
+			rspamd_default_log_function(G_LOG_LEVEL_DEBUG, "config", NULL,                        \
+										G_STRFUNC, "CFG_REF_RETAIN %p at %s:%d refcount=%ud",     \
+										(void *) (cfg), __FILE__, __LINE__, (cfg)->ref.refcount); \
+		}                                                                                         \
+	} while (0)
+
+#define CFG_REF_RELEASE(cfg)                                                                                     \
+	do {                                                                                                         \
+		if ((cfg) != NULL) {                                                                                     \
+			unsigned int _old_rc = (cfg)->ref.refcount;                                                          \
+			if (--(cfg)->ref.refcount == 0 && (cfg)->ref.dtor) {                                                 \
+				rspamd_default_log_function(G_LOG_LEVEL_DEBUG, "config", NULL,                                   \
+											G_STRFUNC, "CFG_REF_RELEASE %p at %s:%d refcount=%ud->0 DESTROYING", \
+											(void *) (cfg), __FILE__, __LINE__, _old_rc);                        \
+				(cfg)->ref.dtor(cfg);                                                                            \
+			}                                                                                                    \
+			else {                                                                                               \
+				rspamd_default_log_function(G_LOG_LEVEL_DEBUG, "config", NULL,                                   \
+											G_STRFUNC, "CFG_REF_RELEASE %p at %s:%d refcount=%ud->%ud",          \
+											(void *) (cfg), __FILE__, __LINE__, _old_rc,                         \
+											(cfg)->ref.refcount);                                                \
+			}                                                                                                    \
+		}                                                                                                        \
+	} while (0)
 
 #ifdef __cplusplus
 }

@@ -980,7 +980,7 @@ char *
 rspamd_log_line_hex_escape(const unsigned char *src, gsize srclen,
 						   char *dst, gsize dstlen)
 {
-	static const char hexdigests[16] = "0123456789ABCDEF";
+	static const char hexdigests[] = "0123456789ABCDEF";
 	char *d = dst;
 
 	static uint32_t escape[] = {
@@ -1198,7 +1198,7 @@ void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
 		iov_ctx->iov[0].iov_base = tmpbuf;
 		iov_ctx->iov[0].iov_len = r;
 		/* TODO: is it possible to have other 'bad' symbols here? */
-		if (rspamd_memcspn(message, "\"\\\r\n\b\t\v", mlen) == mlen) {
+		if (rspamd_memcspn(message, mlen, "\"\\\r\n\b\t\v", 6) == mlen) {
 			iov_ctx->iov[1].iov_base = (void *) message;
 			iov_ctx->iov[1].iov_len = mlen;
 		}

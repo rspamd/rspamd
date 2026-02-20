@@ -724,7 +724,7 @@ rspamd_dns_read_hosts_file(struct rspamd_config *cfg,
 		return false;
 	}
 
-	while ((r = getline(&linebuf, &buflen, fp)) > 0) {
+	while ((r = rspamd_getline(&linebuf, &buflen, fp)) > 0) {
 		if (linebuf[0] == '#' || g_ascii_isspace(linebuf[0])) {
 			/* Skip comment or empty line */
 			continue;
@@ -794,7 +794,7 @@ rspamd_dns_read_hosts_file(struct rspamd_config *cfg,
 	}
 
 	if (linebuf) {
-		free(linebuf);
+		rspamd_getline_free(linebuf);
 	}
 
 	msg_info_config("processed host file %s; %d records added", fname, nadded);
@@ -908,9 +908,9 @@ rspamd_dns_resolver_init(rspamd_logger_t *logger,
 			/* Parse resolv.conf */
 			dns_resolver->ups = rspamd_upstreams_create(cfg->ups_ctx);
 			rspamd_upstreams_set_flags(dns_resolver->ups,
-									   RSPAMD_UPSTREAM_FLAG_NORESOLVE);
+									   RSPAMD_UPSTREAM_FLAG_DNS);
 			rspamd_upstreams_set_rotation(dns_resolver->ups,
-										  RSPAMD_UPSTREAM_MASTER_SLAVE);
+										  RSPAMD_UPSTREAM_ROUND_ROBIN);
 
 			if (!rdns_resolver_parse_resolv_conf_cb(dns_resolver->r,
 													"/etc/resolv.conf",
@@ -931,7 +931,7 @@ rspamd_dns_resolver_init(rspamd_logger_t *logger,
 		else {
 			dns_resolver->ups = rspamd_upstreams_create(cfg->ups_ctx);
 			rspamd_upstreams_set_flags(dns_resolver->ups,
-									   RSPAMD_UPSTREAM_FLAG_NORESOLVE);
+									   RSPAMD_UPSTREAM_FLAG_DNS);
 
 			if (!rspamd_upstreams_from_ucl(dns_resolver->ups, cfg->nameservers,
 										   53, dns_resolver)) {

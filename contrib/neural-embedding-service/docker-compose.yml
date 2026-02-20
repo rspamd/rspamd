@@ -1,0 +1,47 @@
+# Docker Compose for Rspamd Neural Embedding Service Testing
+#
+# Usage:
+#   cd contrib/neural-embedding-service
+#   docker compose up -d
+#
+# Test:
+#   curl http://localhost:8080/health
+#   curl http://localhost:8080/api/embeddings -d '{"model":"bge-small-en-v1.5","prompt":"test spam"}'
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  embedding:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        EMBEDDING_MODEL: BAAI/bge-small-en-v1.5
+    ports:
+      - "8080:8080"
+    environment:
+      - EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
+      - EMBEDDING_PORT=8080
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  redis_data:

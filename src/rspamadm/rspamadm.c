@@ -248,12 +248,17 @@ rspamadm_execute_lua_ucl_subr(int argc, char **argv,
 						script_name);
 	}
 
+	int top = lua_gettop(L);
+
 	if (luaL_dostring(L, str) != 0) {
 		msg_err("cannot execute lua script %s: %s",
 				str, lua_tostring(L, -1));
 		return FALSE;
 	}
 	else {
+		/* Lua 5.4's require returns 2 values (module + path), keep only first */
+		lua_settop(L, top + 1);
+
 		if (lua_type(L, -1) == LUA_TTABLE) {
 			lua_pushstring(L, "handler");
 			lua_gettable(L, -2);
@@ -393,8 +398,8 @@ int main(int argc, char **argv, char **env)
 	rspamd_main->cfg = cfg;
 	rspamd_main->pid = getpid();
 	rspamd_main->type = process_quark;
-	rspamd_main->server_pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
-												  "rspamadm", 0);
+	rspamd_main->server_pool = rspamd_mempool_new_long_lived(rspamd_mempool_suggest_size(),
+															 "rspamadm");
 
 	rspamadm_fill_internal_commands(all_commands);
 	help_command.command_data = all_commands;
@@ -607,7 +612,7 @@ end:
 	rspamd_session_destroy(rspamadm_session);
 	g_option_context_free(context);
 	rspamd_dns_resolver_deinit(resolver);
-	REF_RELEASE(rspamd_main->cfg);
+	CFG_REF_RELEASE(rspamd_main->cfg);
 	rspamd_http_context_free(rspamd_main->http_ctx);
 	rspamd_log_close(rspamd_main->logger);
 	rspamd_url_deinit();

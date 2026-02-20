@@ -279,7 +279,17 @@ Rspamd Setup
   Set Directory Ownership  ${RSPAMD_TMPDIR}  ${RSPAMD_USER}  ${RSPAMD_GROUP}
 
   # Export ${RSPAMD_TMPDIR} to appropriate scope according to ${RSPAMD_SCOPE}
-  Export Scoped Variables  ${RSPAMD_SCOPE}  RSPAMD_TMPDIR=${RSPAMD_TMPDIR}
+  IF  '${RSPAMD_SCOPE}' == 'Test'
+    Set Test Variable  ${RSPAMD_TMPDIR}
+  ELSE IF  '${RSPAMD_SCOPE}' == 'Suite'
+    Set Suite Variable  ${RSPAMD_TMPDIR}
+    # Needed for child suites (e.g. directory suites with per-file .robot suites)
+    Set Global Variable  ${RSPAMD_TMPDIR}
+  ELSE IF  '${RSPAMD_SCOPE}' == 'Global'
+    Set Global Variable  ${RSPAMD_TMPDIR}
+  ELSE
+    Fail  message="Don't know what to do with scope: ${RSPAMD_SCOPE}"
+  END
 
   Run Rspamd  check_port=${check_port}
 
@@ -321,6 +331,9 @@ Run Rspamd
   [Arguments]  ${check_port}=${RSPAMD_PORT_NORMAL}
   Export Rspamd Variables To Environment
 
+  # Copy config file to TMPDIR so it gets saved on teardown
+  Copy File  ${CONFIG}  ${RSPAMD_TMPDIR}/rspamd.conf
+
   # Dump templated config or errors to log
   ${result} =  Run Process  ${RSPAMADM}
   ...  --var\=TMPDIR\=${RSPAMD_TMPDIR}
@@ -336,10 +349,37 @@ Run Rspamd
   ...  env:ASAN_OPTIONS=quarantine_size_mb=2048:malloc_context_size=20:fast_unwind_on_malloc=0:log_path=${RSPAMD_TMPDIR}/rspamd-asan
   # We need to send output to files (or discard output) to avoid hanging Robot
   ...  stdout=${RSPAMD_TMPDIR}/configdump.stdout  stderr=${RSPAMD_TMPDIR}/configdump.stderr
+
+  # Always save configdump output to files, even if it failed
+  # First save process output directly to ensure we have something even if files weren't created
+  ${stdout_exists} =  Run Keyword And Return Status  File Should Exist  ${RSPAMD_TMPDIR}/configdump.stdout
+  ${stderr_exists} =  Run Keyword And Return Status  File Should Exist  ${RSPAMD_TMPDIR}/configdump.stderr
+
+  IF  not ${stdout_exists}
+    # File wasn't created, use process stdout if available
+    ${stdout_len} =  Get Length  ${result.stdout}
+    IF  ${stdout_len} > 0
+      Create File  ${RSPAMD_TMPDIR}/configdump.stdout  ${result.stdout}
+    ELSE
+      Create File  ${RSPAMD_TMPDIR}/configdump.stdout  <configdump stdout not created, process crashed?>
+    END
+  END
+
+  IF  not ${stderr_exists}
+    # File wasn't created, use process stderr if available
+    ${stderr_len} =  Get Length  ${result.stderr}
+    IF  ${stderr_len} > 0
+      Create File  ${RSPAMD_TMPDIR}/configdump.stderr  ${result.stderr}
+    ELSE
+      Create File  ${RSPAMD_TMPDIR}/configdump.stderr  <configdump stderr not created, process crashed?>
+    END
+  END
+
   IF  ${result.rc} == 0
     ${configdump} =  Get File  ${RSPAMD_TMPDIR}/configdump.stdout  encoding_errors=ignore
   ELSE
     ${configdump} =  Get File  ${RSPAMD_TMPDIR}/configdump.stderr  encoding_errors=ignore
+    Log  Configdump failed with rc=${result.rc}  level=WARN
   END
   Log  ${configdump}
 
@@ -419,10 +459,23 @@ Run Nginx
   ${nginx_log} =  Get File  ${RSPAMD_TMPDIR}/nginx.log
   Log  ${nginx_log}
 
+Set Test Hash Documentation
+  ${log_tag} =  Evaluate  __import__('hashlib').md5('${TEST NAME}'.encode()).hexdigest()[:8]
+  Log    TEST CONTEXT: [${log_tag}] ${TEST NAME}    console=True
+
 Run Rspamc
   [Arguments]  @{args}
-  ${result} =  Run Process  ${RSPAMC}  -t  60  --header  Queue-ID\=${TEST NAME}
-  ...  @{args}  env:LD_LIBRARY_PATH=${RSPAMD_TESTDIR}/../../contrib/aho-corasick
+  ${log_tag} =  Evaluate  __import__('hashlib').md5('${TEST NAME}'.encode()).hexdigest()[:8]
+  # Check if --queue-id is already provided in the arguments
+  ${args_str} =  Evaluate  ' '.join(@{args})
+  ${has_queue_id} =  Evaluate  '--queue-id' in '${args_str}'
+  IF  ${has_queue_id}
+    ${result} =  Run Process  ${RSPAMC}  -t  60  --log-tag  ${log_tag}
+    ...  @{args}  env:LD_LIBRARY_PATH=${RSPAMD_TESTDIR}/../../contrib/aho-corasick
+  ELSE
+    ${result} =  Run Process  ${RSPAMC}  -t  60  --queue-id  ${TEST NAME}  --log-tag  ${log_tag}
+    ...  @{args}  env:LD_LIBRARY_PATH=${RSPAMD_TESTDIR}/../../contrib/aho-corasick
+  END
   Log  ${result.stdout}
   [Return]  ${result}
 
@@ -450,17 +503,74 @@ Sync Fuzzy Storage
   Log  ${result.stdout}
   Sleep  0.1s  Try give fuzzy storage time to sync
 
+Run Control Command
+  [Documentation]  Run a control socket command and return the result
+  [Arguments]  ${command}  ${socket}
+  ${result} =  Run Process  ${RSPAMADM}  control  -s
+  ...  ${socket}  ${command}  timeout=10s
+  Log  ${result.stdout}
+  Log  ${result.stderr}
+  [Return]  ${result}
+
+Run Control Command JSON
+  [Documentation]  Run a control socket command and return JSON result
+  [Arguments]  ${command}  ${socket}
+  ${result} =  Run Process  ${RSPAMADM}  control  -j  -s
+  ...  ${socket}  ${command}  timeout=10s
+  Log  ${result.stdout}
+  Log  ${result.stderr}
+  [Return]  ${result}
+
 Run Dummy Http
   ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py  -pf  /tmp/dummy_http.pid
-  Wait Until Created  /tmp/dummy_http.pid  timeout=2 second
+  ...  stderr=/tmp/dummy_http.log  stdout=/tmp/dummy_http.log
+  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_http.pid  timeout=2 second
+  IF  '${status}' == 'FAIL'
+    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_http.log
+    IF  '${logstatus}' == 'PASS'
+      Log  dummy_http.py failed to start. Log output:\n${log}  level=ERROR
+    ELSE
+      Log  dummy_http.py failed to start. No log file found at /tmp/dummy_http.log  level=ERROR
+    END
+    Fail  dummy_http.py did not create PID file in 2 seconds
+  END
   Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_HTTP_PROC=${result}
 
 Run Dummy Https
   ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py
   ...  -c  ${RSPAMD_TESTDIR}/util/server.pem  -k  ${RSPAMD_TESTDIR}/util/server.pem
   ...  -pf  /tmp/dummy_https.pid  -p  18081
-  Wait Until Created  /tmp/dummy_https.pid  timeout=2 second
+  ...  stderr=/tmp/dummy_https.log  stdout=/tmp/dummy_https.log
+  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_https.pid  timeout=2 second
+  IF  '${status}' == 'FAIL'
+    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_https.log
+    IF  '${logstatus}' == 'PASS'
+      Log  dummy_https.py failed to start. Log output:\n${log}  level=ERROR
+    ELSE
+      Log  dummy_https.py failed to start. No log file found at /tmp/dummy_https.log  level=ERROR
+    END
+    Fail  dummy_https.py did not create PID file in 2 seconds
+  END
   Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_HTTPS_PROC=${result}
+
+Run Dummy Llm
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_llm.py  18080
+  ...  stderr=/tmp/dummy_llm.log  stdout=/tmp/dummy_llm.log
+  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_llm.pid  timeout=2 second
+  IF  '${status}' == 'FAIL'
+    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_llm.log
+    IF  '${logstatus}' == 'PASS'
+      Log  dummy_llm.py failed to start. Log output:\n${log}  level=ERROR
+    ELSE
+      Log  dummy_llm.py failed to start. No log file found at /tmp/dummy_llm.log  level=ERROR
+    END
+    Fail  dummy_llm.py did not create PID file in 2 seconds
+  END
+  Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_LLM_PROC=${result}
+
+Dummy Llm Teardown
+  Terminate Process  ${DUMMY_LLM_PROC}
+  Wait For Process  ${DUMMY_LLM_PROC}
 
 Dummy Http Teardown
   Terminate Process  ${DUMMY_HTTP_PROC}
@@ -469,3 +579,22 @@ Dummy Http Teardown
 Dummy Https Teardown
   Terminate Process  ${DUMMY_HTTPS_PROC}
   Wait For Process  ${DUMMY_HTTPS_PROC}
+
+Run Dummy Http Early Response
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http_early_response.py  -pf  /tmp/dummy_http_early.pid  -p  18083
+  ...  stderr=/tmp/dummy_http_early.log  stdout=/tmp/dummy_http_early.log
+  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_http_early.pid  timeout=2 second
+  IF  '${status}' == 'FAIL'
+    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_http_early.log
+    IF  '${logstatus}' == 'PASS'
+      Log  dummy_http_early_response.py failed to start. Log output:\n${log}  level=ERROR
+    ELSE
+      Log  dummy_http_early_response.py failed to start. No log file found at /tmp/dummy_http_early.log  level=ERROR
+    END
+    Fail  dummy_http_early_response.py did not create PID file in 2 seconds
+  END
+  Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_HTTP_EARLY_PROC=${result}
+
+Dummy Http Early Teardown
+  Terminate Process  ${DUMMY_HTTP_EARLY_PROC}
+  Wait For Process  ${DUMMY_HTTP_EARLY_PROC}

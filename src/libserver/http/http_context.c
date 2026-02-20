@@ -101,6 +101,16 @@ rspamd_http_context_new_default(struct rspamd_config *cfg,
 	ctx->config.user_agent = default_user_agent;
 	ctx->config.keepalive_interval = default_keepalive_interval;
 	ctx->config.server_hdr = default_server_hdr;
+	/* New defaults (disabled -> 0 to preserve legacy single-timeout behavior) */
+	ctx->config.connect_timeout = 0.0;
+	ctx->config.ssl_timeout = 0.0;
+	ctx->config.write_timeout = 0.0;
+	ctx->config.read_timeout = 0.0;
+	ctx->config.keepalive_pool_size = 0;
+	ctx->config.keepalive_connection_ttl = 0.0;
+	ctx->config.keepalive_idle_timeout = 0.0;  /* fall back to keepalive_interval */
+	ctx->config.keepalive_max_reuse = 0;       /* unlimited */
+	ctx->config.keepalive_eviction_policy = 1; /* LRU */
 	ctx->ups_ctx = ups_ctx;
 
 	if (cfg) {
@@ -270,6 +280,58 @@ rspamd_http_context_create(struct rspamd_config *cfg,
 			if (http_proxy) {
 				ctx->config.http_proxy = ucl_object_tostring(http_proxy);
 			}
+
+			/* New staged timeouts */
+			const ucl_object_t *connect_timeout = ucl_object_lookup(client_obj, "connect_timeout");
+			if (connect_timeout) {
+				ctx->config.connect_timeout = ucl_object_todouble(connect_timeout);
+			}
+			const ucl_object_t *ssl_timeout = ucl_object_lookup(client_obj, "ssl_timeout");
+			if (ssl_timeout) {
+				ctx->config.ssl_timeout = ucl_object_todouble(ssl_timeout);
+			}
+			const ucl_object_t *write_timeout = ucl_object_lookup(client_obj, "write_timeout");
+			if (write_timeout) {
+				ctx->config.write_timeout = ucl_object_todouble(write_timeout);
+			}
+			const ucl_object_t *read_timeout = ucl_object_lookup(client_obj, "read_timeout");
+			if (read_timeout) {
+				ctx->config.read_timeout = ucl_object_todouble(read_timeout);
+			}
+
+			/* Keepalive/pooling */
+			const ucl_object_t *ka_pool_size = ucl_object_lookup(client_obj, "pool_size");
+			if (ka_pool_size) {
+				ctx->config.keepalive_pool_size = ucl_object_toint(ka_pool_size);
+			}
+			const ucl_object_t *ka_ttl = ucl_object_lookup(client_obj, "connection_ttl");
+			if (ka_ttl) {
+				ctx->config.keepalive_connection_ttl = ucl_object_todouble(ka_ttl);
+			}
+			const ucl_object_t *ka_idle = ucl_object_lookup(client_obj, "idle_timeout");
+			if (ka_idle) {
+				ctx->config.keepalive_idle_timeout = ucl_object_todouble(ka_idle);
+			}
+			const ucl_object_t *ka_reuse = ucl_object_lookup(client_obj, "max_reuse");
+			if (ka_reuse) {
+				ctx->config.keepalive_max_reuse = ucl_object_toint(ka_reuse);
+			}
+			const ucl_object_t *ka_evict = ucl_object_lookup(client_obj, "eviction_policy");
+			if (ka_evict) {
+				/* map string to int policy if string provided */
+				if (ucl_object_type(ka_evict) == UCL_STRING) {
+					const char *pol = ucl_object_tostring(ka_evict);
+					if (g_ascii_strcasecmp(pol, "lifo") == 0) {
+						ctx->config.keepalive_eviction_policy = 0;
+					}
+					else {
+						ctx->config.keepalive_eviction_policy = 1;
+					}
+				}
+				else {
+					ctx->config.keepalive_eviction_policy = ucl_object_toint(ka_evict);
+				}
+			}
 		}
 
 		server_obj = ucl_object_lookup(http_obj, "server");
@@ -429,7 +491,16 @@ rspamd_http_context_check_keepalive(struct rspamd_http_context *ctx,
 			int err;
 			socklen_t len = sizeof(int);
 
-			cbd = g_queue_pop_head(conns);
+			if (ctx->config.keepalive_eviction_policy == 1) {
+				/* LRU: reuse the tail (oldest) */
+				GList *tail = g_queue_peek_tail_link(conns);
+				cbd = (struct rspamd_http_keepalive_cbdata *) tail->data;
+				g_queue_delete_link(conns, tail);
+			}
+			else {
+				/* LIFO: reuse the head (most recent) */
+				cbd = g_queue_pop_head(conns);
+			}
 			rspamd_ev_watcher_stop(ctx->event_loop, &cbd->ev);
 			conn = cbd->conn;
 			g_free(cbd);
@@ -452,6 +523,22 @@ rspamd_http_context_check_keepalive(struct rspamd_http_context *ctx,
 
 				return NULL;
 			}
+
+			/* Enforce ttl/reuse limits */
+			double now_ts = ev_now(ctx->event_loop);
+			if (!rspamd_http_connection_keepalive_is_valid(conn, now_ts,
+														   ctx->config.keepalive_connection_ttl,
+														   ctx->config.keepalive_max_reuse)) {
+				msg_debug_http_context("evict expired keepalive element %s (%s, ssl=%d)",
+									   rspamd_inet_address_to_string_pretty(phk->addr),
+									   phk->host,
+									   (int) phk->is_ssl);
+				rspamd_http_connection_unref(conn);
+				return NULL;
+			}
+
+			/* Track reuse */
+			rspamd_http_connection_keepalive_note_reuse(conn);
 
 			msg_debug_http_context("reused keepalive element %s (%s, ssl=%d), %d connections queued",
 								   rspamd_inet_address_to_string_pretty(phk->addr),
@@ -656,14 +743,36 @@ void rspamd_http_context_push_keepalive(struct rspamd_http_context *ctx,
 	cbdata->ctx = ctx;
 	conn->finished = FALSE;
 
+	/* Enforce pool size (evict tail if exceeded) */
+	if (ctx->config.keepalive_pool_size > 0) {
+		while ((unsigned) cbdata->queue->length > ctx->config.keepalive_pool_size) {
+			GList *last = g_queue_peek_tail_link(cbdata->queue);
+			if (last) {
+				struct rspamd_http_keepalive_cbdata *to_evict = (struct rspamd_http_keepalive_cbdata *) last->data;
+				g_queue_delete_link(cbdata->queue, last);
+				rspamd_ev_watcher_stop(cbdata->ctx->event_loop, &to_evict->ev);
+				rspamd_http_connection_unref(to_evict->conn);
+				g_free(to_evict);
+			}
+			else {
+				break;
+			}
+		}
+	}
+
+	/* Note time of putting into pool */
+	rspamd_http_connection_keepalive_note_put(conn, ev_now(event_loop));
+
 	rspamd_ev_watcher_init(&cbdata->ev, conn->fd, EV_READ,
 						   rspamd_http_keepalive_handler,
 						   cbdata);
-	rspamd_ev_watcher_start(event_loop, &cbdata->ev, timeout);
+	/* Idle timeout override if provided */
+	double idle_to = rspamd_http_connection_keepalive_idle_timeout(conn, ctx->config.keepalive_idle_timeout > 0 ? ctx->config.keepalive_idle_timeout : timeout);
+	rspamd_ev_watcher_start(event_loop, &cbdata->ev, idle_to);
 
 	msg_debug_http_context("push keepalive element %s (%s), %d connections queued, %.1f timeout",
 						   rspamd_inet_address_to_string_pretty(cbdata->conn->keepalive_hash_key->addr),
 						   cbdata->conn->keepalive_hash_key->host,
 						   cbdata->queue->length,
-						   timeout);
+						   idle_to);
 }

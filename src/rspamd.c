@@ -24,6 +24,7 @@
 #include "cryptobox.h"
 #include "utlist.h"
 #include "unix-std.h"
+#include "libserver/ssl_util.h"
 /* pwd and grp */
 #ifdef HAVE_PWD_H
 #include <pwd.h>
@@ -56,6 +57,8 @@
 
 #ifdef WITH_HYPERSCAN
 #include "libserver/hyperscan_tools.h"
+#include "libserver/maps/map_helpers.h"
+#include "libutil/multipattern.h"
 #endif
 
 #include "rspamd_simdutf.h"
@@ -333,14 +336,19 @@ reread_config(struct rspamd_main *rspamd_main)
 		rspamd_main->cfg = old_cfg;
 		rspamd_main->logger = old_logger;
 		msg_err_main("cannot parse new config file, revert to old one");
-		REF_RELEASE(tmp_cfg);
+		CFG_REF_RELEASE(tmp_cfg);
 
 		return FALSE;
 	}
 	else {
 		rspamd_log_close(old_logger);
 		msg_info_main("replacing config");
-		REF_RELEASE(old_cfg);
+#ifdef WITH_HYPERSCAN
+		/* Clear pending multipatterns and regexp maps before releasing old config to avoid use-after-free */
+		rspamd_multipattern_clear_pending();
+		rspamd_regexp_map_clear_pending();
+#endif
+		CFG_REF_RELEASE(old_cfg);
 		rspamd_main->cfg->rspamd_user = rspamd_user;
 		rspamd_main->cfg->rspamd_group = rspamd_group;
 		/* Here, we can do post actions with the existing config */
@@ -700,6 +708,16 @@ spawn_workers(struct rspamd_main *rspamd_main, struct ev_loop *ev_base)
 										 strerror(errno));
 						}
 						else {
+							/* Propagate SSL flag to listen sockets */
+							if (bcf->is_ssl) {
+								GList *cur;
+
+								for (cur = ls; cur != NULL; cur = g_list_next(cur)) {
+									struct rspamd_worker_listen_socket *cur_ls =
+										(struct rspamd_worker_listen_socket *) cur->data;
+									cur_ls->is_ssl = true;
+								}
+							}
 							g_hash_table_insert(listen_sockets, (gpointer) key, ls);
 							listen_ok = TRUE;
 						}
@@ -783,7 +801,8 @@ kill_old_workers(gpointer key, gpointer value, gpointer unused)
 		w->state = rspamd_worker_state_terminating;
 		kill(w->pid, SIGUSR2);
 		ev_io_stop(rspamd_main->event_loop, &w->srv_ev);
-		g_hash_table_remove_all(w->control_events_pending);
+		ev_io_stop(rspamd_main->event_loop, &w->control_ev);
+		rspamd_control_pending_remove_all(w->control_events_pending);
 		msg_info_main("send signal to worker %P", w->pid);
 	}
 	else if (w->state != rspamd_worker_state_running) {
@@ -1060,8 +1079,13 @@ rspamd_term_handler(struct ev_loop *loop, ev_signal *w, int revents)
 		msg_info_main("catch termination signal, waiting for %d children for %.2f seconds",
 					  (int) g_hash_table_size(rspamd_main->workers),
 					  valgrind_mode ? shutdown_ts * 10 : shutdown_ts);
-		/* Stop srv events to avoid false notifications */
-		g_hash_table_foreach(rspamd_main->workers, stop_srv_ev, rspamd_main);
+		/*
+		 * Keep srv events active to process ON_FORK notifications from dying workers.
+		 * This is critical for tracking auxiliary processes (e.g., neural network training)
+		 * that may still be running when shutdown begins. Without this, child_dead
+		 * notifications get lost and the main process hangs waiting for already-terminated
+		 * processes. srv_ev will be stopped naturally when workers close their pipes.
+		 */
 		rspamd_pass_signal(rspamd_main->workers, SIGTERM);
 
 		if (control_fd != -1) {
@@ -1155,6 +1179,18 @@ rspamd_hup_handler(struct ev_loop *loop, ev_signal *w, int revents)
 			msg_info_main("spawn workers with a new config");
 			spawn_workers(rspamd_main, rspamd_main->event_loop);
 			msg_info_main("workers spawning has been finished");
+
+			/* Notify all workers that spawning is complete */
+			{
+				struct rspamd_control_command wcmd;
+				memset(&wcmd, 0, sizeof(wcmd));
+				wcmd.type = RSPAMD_CONTROL_WORKERS_SPAWNED;
+				wcmd.cmd.workers_spawned.workers_count = g_hash_table_size(rspamd_main->workers);
+				rspamd_control_broadcast_srv_cmd(rspamd_main, &wcmd, 0);
+				msg_info_main("notified workers that spawning is complete after reload (%d workers)",
+							  wcmd.cmd.workers_spawned.workers_count);
+			}
+
 			/* Kill marked */
 			msg_info_main("kill old workers");
 			g_hash_table_foreach(rspamd_main->workers, kill_old_workers, NULL);
@@ -1181,7 +1217,8 @@ rspamd_cld_handler(EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 
 	/* Remove dead child form children list */
 	g_hash_table_remove(rspamd_main->workers, GSIZE_TO_POINTER(wrk->pid));
-	g_hash_table_remove_all(wrk->control_events_pending);
+	ev_io_stop(rspamd_main->event_loop, &wrk->control_ev);
+	rspamd_control_pending_remove_all(wrk->control_events_pending);
 
 	if (wrk->srv_pipe[0] != -1) {
 		/* Ugly workaround */
@@ -1223,7 +1260,7 @@ rspamd_cld_handler(EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 	}
 
 	REF_RELEASE(wrk->cf);
-	g_hash_table_unref(wrk->control_events_pending);
+	rspamd_control_pending_destroy(wrk->control_events_pending);
 	g_free(wrk);
 }
 
@@ -1426,8 +1463,8 @@ int main(int argc, char **argv, char **env)
 
 	rspamd_main = (struct rspamd_main *) g_malloc0(sizeof(struct rspamd_main));
 
-	rspamd_main->server_pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
-												  "main", 0);
+	rspamd_main->server_pool = rspamd_mempool_new_long_lived(rspamd_mempool_suggest_size(),
+															 "main");
 	rspamd_main->stat = rspamd_mempool_alloc0_shared_(rspamd_main->server_pool,
 													  sizeof(struct rspamd_stat),
 													  RSPAMD_ALIGNOF(struct rspamd_stat),
@@ -1687,6 +1724,17 @@ int main(int argc, char **argv, char **env)
 	spawn_workers(rspamd_main, event_loop);
 	rspamd_mempool_unlock_mutex(rspamd_main->start_mtx);
 
+	/* Notify all workers that spawning is complete */
+	{
+		struct rspamd_control_command wcmd;
+		memset(&wcmd, 0, sizeof(wcmd));
+		wcmd.type = RSPAMD_CONTROL_WORKERS_SPAWNED;
+		wcmd.cmd.workers_spawned.workers_count = g_hash_table_size(rspamd_main->workers);
+		rspamd_control_broadcast_srv_cmd(rspamd_main, &wcmd, 0);
+		msg_info_main("notified workers that spawning is complete (%d workers)",
+					  wcmd.cmd.workers_spawned.workers_count);
+	}
+
 	rspamd_main->http_ctx = rspamd_http_context_create(rspamd_main->cfg,
 													   event_loop, rspamd_main->cfg->ups_ctx);
 
@@ -1715,7 +1763,7 @@ int main(int argc, char **argv, char **env)
 #ifdef WITH_HYPERSCAN
 	rspamd_hyperscan_cleanup_maybe();
 #endif
-	REF_RELEASE(rspamd_main->cfg);
+	CFG_REF_RELEASE(rspamd_main->cfg);
 	rspamd_log_close(rspamd_main->logger);
 	g_hash_table_unref(rspamd_main->spairs);
 	g_hash_table_unref(rspamd_main->workers);

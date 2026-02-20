@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 -- Misc rules
 
@@ -21,6 +21,7 @@ local fun = require "fun"
 local rspamd_util = require "rspamd_util"
 local rspamd_parsers = require "rspamd_parsers"
 local rspamd_regexp = require "rspamd_regexp"
+local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
 local bit = require "bit"
 local rspamd_url = require "rspamd_url"
@@ -47,7 +48,7 @@ rspamd_config.R_PARTS_DIFFER = {
             score = (nd - 0.5)
           end
           task:insert_result('R_PARTS_DIFFER', score,
-              string.format('%.1f%%', tostring(100.0 * nd)))
+            string.format('%.1f%%', tostring(100.0 * nd)))
         end
       end
     end
@@ -124,43 +125,50 @@ rspamd_config:register_symbol({
   parent = date_id,
 })
 
-local obscured_id = rspamd_config:register_symbol {
-  callback = function(task)
-    local susp_urls = task:get_urls_filtered({ 'obscured', 'zw_spaces' })
+-- Check if url_suspect plugin is enabled (it provides better R_SUSPICIOUS_URL)
+local url_suspect_enabled = rspamd_config:get_all_opt('url_suspect')
+if url_suspect_enabled and url_suspect_enabled.enabled ~= false then
+  rspamd_logger.infox(rspamd_config, 'url_suspect plugin is enabled, skipping old R_SUSPICIOUS_URL registration')
+else
+  -- Legacy R_SUSPICIOUS_URL implementation (kept for backward compatibility)
+  local obscured_id = rspamd_config:register_symbol {
+    callback = function(task)
+      local susp_urls = task:get_urls_filtered({ 'obscured', 'zw_spaces' })
 
-    if susp_urls and susp_urls[1] then
-      local obs_flag = url_flags_tab.obscured
-      local zw_flag = url_flags_tab.zw_spaces
+      if susp_urls and susp_urls[1] then
+        local obs_flag = url_flags_tab.obscured
+        local zw_flag = url_flags_tab.zw_spaces
 
-      for _, u in ipairs(susp_urls) do
-        local fl = u:get_flags_num()
-        if bit.band(fl, obs_flag) ~= 0 then
-          task:insert_result('R_SUSPICIOUS_URL', 1.0, u:get_host())
-        end
-        if bit.band(fl, zw_flag) ~= 0 then
-          task:insert_result('ZERO_WIDTH_SPACE_URL', 1.0, u:get_host())
+        for _, u in ipairs(susp_urls) do
+          local fl = u:get_flags_num()
+          if bit.band(fl, obs_flag) ~= 0 then
+            task:insert_result('R_SUSPICIOUS_URL', 1.0, u:get_host())
+          end
+          if bit.band(fl, zw_flag) ~= 0 then
+            task:insert_result('ZERO_WIDTH_SPACE_URL', 1.0, u:get_host())
+          end
         end
       end
-    end
 
-    return false
-  end,
-  name = 'R_SUSPICIOUS_URL',
-  score = 5.0,
-  one_shot = true,
-  description = 'A message has been identified to contain an obfuscated or suspicious URL',
-  group = 'url'
-}
+      return false
+    end,
+    name = 'R_SUSPICIOUS_URL',
+    score = 5.0,
+    one_shot = true,
+    description = 'A message has been identified to contain an obfuscated or suspicious URL',
+    group = 'url'
+  }
 
-rspamd_config:register_symbol {
-  type = 'virtual',
-  name = 'ZERO_WIDTH_SPACE_URL',
-  score = 7.0,
-  one_shot = true,
-  description = 'Zero width space in URL',
-  group = 'url',
-  parent = obscured_id,
-}
+  rspamd_config:register_symbol {
+    type = 'virtual',
+    name = 'ZERO_WIDTH_SPACE_URL',
+    score = 7.0,
+    one_shot = true,
+    description = 'Zero width space in URL',
+    group = 'url',
+    parent = obscured_id,
+  }
+end
 
 rspamd_config.ENVFROM_PRVS = {
   callback = function(task)
@@ -174,7 +182,7 @@ rspamd_config.ENVFROM_PRVS = {
         prvs=USER=TAG@example.com
         btv1==TAG==USER@example.com     Barracuda appliance
         msprvs1=TAG=USER@example.com    Sparkpost email delivery service
-        ]]--
+        ]] --
     if not (task:has_from(1) and task:has_from(2)) then
       return false
     end
@@ -414,7 +422,6 @@ rspamd_config.OMOGRAPH_URL = {
 
       fun.each(function(u)
         if u:is_phished() then
-
           local h1 = u:get_host()
           local h2 = u:get_phished()
           if h2 then
@@ -488,77 +495,11 @@ rspamd_config.URL_IN_SUBJECT = {
   description = 'Subject contains URL'
 }
 
-local aliases_id = rspamd_config:register_symbol {
-  type = 'prefilter',
-  name = 'EMAIL_PLUS_ALIASES',
-  callback = function(task)
-    local function check_from(type)
-      if task:has_from(type) then
-        local addr = task:get_from(type)[1]
-        local na, tags = lua_util.remove_email_aliases(addr)
-        if na then
-          task:set_from(type, addr, 'alias')
-          task:insert_result('TAGGED_FROM', 1.0, fun.totable(
-              fun.filter(function(t)
-                return t and #t > 0
-              end, tags)))
-        end
-      end
-    end
-
-    check_from('smtp')
-    check_from('mime')
-
-    local function check_rcpt(type)
-      if task:has_recipients(type) then
-        local modified = false
-        local all_tags = {}
-        local addrs = task:get_recipients(type)
-
-        for _, addr in ipairs(addrs) do
-          local na, tags = lua_util.remove_email_aliases(addr)
-          if na then
-            modified = true
-            fun.each(function(t)
-              table.insert(all_tags, t)
-            end,
-                fun.filter(function(t)
-                  return t and #t > 0
-                end, tags))
-          end
-        end
-
-        if modified then
-          task:set_recipients(type, addrs, 'alias')
-          task:insert_result('TAGGED_RCPT', 1.0, all_tags)
-        end
-      end
-    end
-
-    check_rcpt('smtp')
-    check_rcpt('mime')
-  end,
-  priority = lua_util.symbols_priorities.top + 1,
-  description = 'Removes plus aliases from the email',
-  group = 'headers',
-}
-
-rspamd_config:register_symbol {
-  type = 'virtual',
-  parent = aliases_id,
-  name = 'TAGGED_RCPT',
-  description = 'SMTP recipients have plus tags',
-  group = 'headers',
-  score = 0.0,
-}
-rspamd_config:register_symbol {
-  type = 'virtual',
-  parent = aliases_id,
-  name = 'TAGGED_FROM',
-  description = 'SMTP from has plus tags',
-  group = 'headers',
-  score = 0.0,
-}
+-- EMAIL_PLUS_ALIASES, TAGGED_FROM, TAGGED_RCPT symbols moved to:
+-- src/plugins/lua/aliases.lua
+--
+-- To use this functionality, enable the aliases plugin in local.d/aliases.conf:
+--   aliases { enabled = true; local_domains = ["your-domain.com"]; }
 
 local check_from_display_name = rspamd_config:register_symbol {
   type = 'callback,mime',
@@ -865,7 +806,7 @@ rspamd_config.COMPLETELY_EMPTY = {
 
 -- Preserve compatibility
 local rdns_auth_and_local_conf = lua_util.config_check_local_or_authed(rspamd_config, 'once_received',
-    false, false)
+  false, false)
 -- Check for the hostname if it was not set
 local rnds_check_id = rspamd_config:register_symbol {
   name = 'RDNS_CHECK',
@@ -874,7 +815,6 @@ local rnds_check_id = rspamd_config:register_symbol {
       -- Try to resolve
       local task_ip = task:get_ip()
       if task_ip and task_ip:is_valid() then
-        local rspamd_logger = require "rspamd_logger"
         local function rdns_dns_cb(_, to_resolve, results, err)
           if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
             rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, err)
@@ -885,15 +825,16 @@ local rnds_check_id = rspamd_config:register_symbol {
             task:insert_result('RDNS_NONE', 1.0)
           else
             rspamd_logger.infox(task, 'source hostname has not been passed to Rspamd from MTA, ' ..
-                'but we could resolve source IP address PTR %s as "%s"',
-                to_resolve, results[1])
+              'but we could resolve source IP address PTR %s as "%s"',
+              to_resolve, results[1])
             task:set_hostname(results[1])
           end
         end
-        task:get_resolver():resolve_ptr({ task = task,
-                                          name = task_ip:to_string(),
-                                          callback = rdns_dns_cb,
-                                          forced = true
+        task:get_resolver():resolve_ptr({
+          task = task,
+          name = task_ip:to_string(),
+          callback = rdns_dns_cb,
+          forced = true
         })
       end
     end
@@ -905,7 +846,7 @@ local rnds_check_id = rspamd_config:register_symbol {
   condition = function(task)
     local task_ip = task:get_ip()
     if ((not rdns_auth_and_local_conf[1] and task:get_user()) or
-        (not rdns_auth_and_local_conf[2] and task_ip and task_ip:is_local())) then
+          (not rdns_auth_and_local_conf[2] and task_ip and task_ip:is_local())) then
       return false
     end
 

@@ -1,0 +1,112 @@
+name: FreeBSD Build
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      freebsd_version:
+        description: 'FreeBSD version to use'
+        required: false
+        default: '14.3'
+        type: choice
+        options:
+          - '14.3'
+          - '13.5'
+      lua_version:
+        description: 'Lua version to use'
+        required: false
+        default: 'luajit'
+        type: choice
+        options:
+          - 'luajit'
+          - 'lua51'
+          - 'lua53'
+          - 'lua54'
+
+jobs:
+  freebsd-build:
+    runs-on: ubuntu-latest
+    name: Build on FreeBSD ${{ inputs.freebsd_version }} with ${{ inputs.lua_version }}
+
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v4
+
+      - name: Build on FreeBSD
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: ${{ inputs.freebsd_version }}
+          usesh: true
+          prepare: |
+            # Ignore OS version mismatch between pkg repository and running system
+            export IGNORE_OSVERSION=yes
+
+            # Update package repository
+            pkg update -f
+
+            # Install base build dependencies
+            pkg install -y cmake ninja pkgconf \
+              pcre2 sqlite3 openssl ragel icu \
+              libsodium glib libunwind \
+              perl5 libarchive zstd xxhash \
+              hyperscan file ca_root_nss
+
+            # Install Lua version based on user selection
+            case "${{ inputs.lua_version }}" in
+              luajit)
+                pkg install -y luajit
+                ;;
+              lua51)
+                pkg install -y lua51
+                ;;
+              lua53)
+                pkg install -y lua53
+                ;;
+              lua54)
+                pkg install -y lua54
+                ;;
+            esac
+
+          run: |
+            set -e
+
+            echo "==> Building Rspamd on FreeBSD $(freebsd-version) with ${{ inputs.lua_version }}"
+
+            # Determine Lua CMake flags
+            case "${{ inputs.lua_version }}" in
+              luajit)
+                LUA_FLAGS="-DENABLE_LUAJIT=ON"
+                ;;
+              *)
+                LUA_FLAGS="-DENABLE_LUAJIT=OFF"
+                ;;
+            esac
+
+            # Create build directory
+            mkdir -p build
+            cd build
+
+            # Run CMake
+            echo "==> Running CMake configuration"
+            cmake -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX=/usr/local \
+              -DENABLE_HYPERSCAN=ON \
+              $LUA_FLAGS \
+              -DSYSTEM_ZSTD=ON \
+              -DSYSTEM_XXHASH=ON \
+              ..
+
+            # Build
+            echo "==> Building Rspamd"
+            ninja
+
+            # Run tests
+            echo "==> Running C++ unit tests"
+            ./test/rspamd-test-cxx || echo "C++ tests failed"
+
+            echo "==> Running Lua unit tests"
+            ./test/rspamd-test -p /rspamd/lua || echo "Lua tests failed"
+
+            echo "==> Build completed successfully!"

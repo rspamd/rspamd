@@ -13,11 +13,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
-
-if confighelp then
-  return
-end
+]] --
 
 -- A plugin that provides common header manipulations
 
@@ -27,20 +23,21 @@ local N = 'milter_headers'
 local lua_util = require "lua_util"
 local lua_maps = require "lua_maps"
 local lua_mime = require "lua_mime"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
+local PluginSchema = require "lua_shape.plugin_schema"
 local E = {}
 
 local HOSTNAME = rspamd_util.get_hostname()
 
 local settings = {
-  remove_upstream_spam_flag = true;
+  remove_upstream_spam_flag = true,
   skip_local = true,
   skip_authenticated = true,
   skip_all = false,
   local_headers = {},
   authenticated_headers = {},
   headers_modify_mode = 'compat', -- To avoid compatibility issues on upgrade
-  default_headers_order = nil, -- Insert at the end (set 1 to insert just after the first received)
+  default_headers_order = nil,    -- Insert at the end (set 1 to insert just after the first received)
   routines = {
     ['remove-headers'] = {
       headers = {},
@@ -115,6 +112,7 @@ local settings = {
     ['authentication-results'] = {
       header = 'Authentication-Results',
       remove = 0,
+      remove_ar_from = nil,
       add_smtp_user = true,
       stop_chars = ';',
     },
@@ -132,7 +130,6 @@ local active_routines = {}
 local custom_routines = {}
 
 local function milter_headers(task)
-
   -- Used to override wanted stuff by means of settings
   local settings_override = false
 
@@ -153,19 +150,19 @@ local function milter_headers(task)
         if r.addr and r.domain and r.user then
           if settings.extended_headers_rcpt:get_key(r.addr) then
             lua_util.debugm(N, task, 'found full addr in recipients for extended headers: %s',
-                r.addr)
+              r.addr)
             found = true
           end
           -- Try user as plain match
           if not found and settings.extended_headers_rcpt:get_key(r.user) then
             lua_util.debugm(N, task, 'found user in recipients for extended headers: %s (%s)',
-                r.user, r.addr)
+              r.user, r.addr)
             found = true
           end
           -- Try @domain to match domain
           if not found and settings.extended_headers_rcpt:get_key('@' .. r.domain) then
             lua_util.debugm(N, task, 'found domain in recipients for extended headers: @%s (%s)',
-                r.domain, r.addr)
+              r.domain, r.addr)
             found = true
           end
         end
@@ -198,7 +195,6 @@ local function milter_headers(task)
     end
 
     return false
-
   end
 
   -- XXX: fix this crap one day
@@ -213,14 +209,10 @@ local function milter_headers(task)
     if not add[hname] then
       add[hname] = {}
     end
-    local folded = lua_util.fold_header(task, hname, value, stop_chars)
-    if rspamd_config:is_mime_utf8() then
-      if not rspamd_util.is_valid_utf8(folded) then
-        folded = rspamd_util.mime_header_encode(folded)
-      end
-    else
-      folded = rspamd_util.mime_header_encode(folded)
-    end
+    local folded = lua_util.fold_header_with_encoding(task, hname, value, {
+      stop_chars = stop_chars,
+      encode = 'auto'
+    })
     table.insert(add[hname], {
       order = (order or settings.default_headers_order or -1),
       value = folded
@@ -247,9 +239,9 @@ local function milter_headers(task)
 
     local buf = {}
     local verdict = string.format('default: %s [%.2f / %.2f]',
-    --TODO: (common.metric_action == 'no action') and 'False' or 'True',
-        (common.metric_action == 'reject') and 'True' or 'False',
-        common.metric_score[1], common.metric_score[2])
+      --TODO: (common.metric_action == 'no action') and 'False' or 'True',
+      (common.metric_action == 'reject') and 'True' or 'False',
+      common.metric_score[1], common.metric_score[2])
     table.insert(buf, verdict)
 
     -- Deal with symbols
@@ -267,7 +259,7 @@ local function milter_headers(task)
 
     for _, s in ipairs(common.symbols) do
       local sym_str = string.format('%s(%.2f)[%s]',
-          s.name, s.score, table.concat(s.options or {}, ','))
+        s.name, s.score, table.concat(s.options or {}, ','))
       table.insert(buf, sym_str)
     end
     add_header('x-spamd-result', table.concat(buf, '; '), ';')
@@ -405,7 +397,7 @@ local function milter_headers(task)
     add[local_mod.header] = action
   end
 
-  local function spam_header (class, name, value, remove_v)
+  local function spam_header(class, name, value, remove_v)
     if skip_wanted(class) then
       return
     end
@@ -423,9 +415,9 @@ local function milter_headers(task)
 
   routines['spam-header'] = function()
     spam_header('spam-header',
-        settings.routines['spam-header'].header,
-        settings.routines['spam-header'].value,
-        settings.routines['spam-header'].remove)
+      settings.routines['spam-header'].header,
+      settings.routines['spam-header'].value,
+      settings.routines['spam-header'].remove)
   end
 
   routines['remove-spam-flag'] = function()
@@ -486,7 +478,7 @@ local function milter_headers(task)
       else
         if local_mod.status_clean then
           add_header('x-virus', string.format('%s(%s)',
-              local_mod.status_fail, fail_reason))
+            local_mod.status_fail, fail_reason))
         end
       end
     end
@@ -499,14 +491,14 @@ local function milter_headers(task)
     local local_mod = settings.routines['x-os-fingerprint']
 
     local os_string, link_type, uptime_min, distance = task:get_mempool():get_variable('os_fingerprint',
-        'string, string, double, double');
+      'string, string, double, double');
 
     if not os_string then
       return
     end
 
     local value = string.format('%s, (up: %i min), (distance %i, link: %s)',
-        os_string, uptime_min, distance, link_type)
+      os_string, uptime_min, distance, link_type)
 
     if local_mod.remove then
       remove[local_mod.header] = local_mod.remove
@@ -547,14 +539,74 @@ local function milter_headers(task)
       return
     end
     local ar = require "lua_auth_results"
+    local local_mod = settings.routines['authentication-results']
 
-    if settings.routines['authentication-results'].remove then
-      remove[settings.routines['authentication-results'].header] = settings.routines['authentication-results'].remove
+    if local_mod.remove_ar_from then
+      local hdr_name = local_mod.header
+      local existing_hdrs = task:get_header_full(hdr_name)
+
+      if existing_hdrs and #existing_hdrs > 0 then
+        local indices_to_remove = {}
+
+        for idx, hdr in ipairs(existing_hdrs) do
+          local ar_hostname = ar.get_ar_hostname(hdr.decoded or hdr.value)
+          if ar_hostname then
+            local should_remove = false
+
+            if type(local_mod.remove_ar_from) == 'userdata' then
+              if local_mod.remove_ar_from:get_key(ar_hostname) then
+                should_remove = true
+              else
+                for i = 1, #ar_hostname do
+                  if ar_hostname:sub(i, i) == '.' then
+                    if local_mod.remove_ar_from:get_key(ar_hostname:sub(i)) then
+                      should_remove = true
+                      break
+                    end
+                  end
+                end
+              end
+            elseif type(local_mod.remove_ar_from) == 'table' then
+              for _, pattern in ipairs(local_mod.remove_ar_from) do
+                local pattern_lower = pattern:lower()
+                if pattern_lower == ar_hostname then
+                  should_remove = true
+                  break
+                elseif pattern_lower:sub(1, 1) == '.' then
+                  if ar_hostname:sub(-#pattern_lower) == pattern_lower then
+                    should_remove = true
+                    break
+                  end
+                end
+              end
+            elseif type(local_mod.remove_ar_from) == 'string' then
+              local pattern_lower = local_mod.remove_ar_from:lower()
+              if pattern_lower == ar_hostname then
+                should_remove = true
+              elseif pattern_lower:sub(1, 1) == '.' then
+                if ar_hostname:sub(-#pattern_lower) == pattern_lower then
+                  should_remove = true
+                end
+              end
+            end
+
+            if should_remove then
+              lua_util.debugm(N, task, 'removing AR header from %s (idx %d)', ar_hostname, idx)
+              table.insert(indices_to_remove, idx)
+            end
+          end
+        end
+
+        if #indices_to_remove > 0 then
+          remove[hdr_name] = indices_to_remove
+        end
+      end
+    elseif local_mod.remove then
+      remove[local_mod.header] = local_mod.remove
     end
 
     local res = ar.gen_auth_results(task,
-        lua_util.override_defaults(ar.default_settings,
-            settings.routines['authentication-results']))
+      lua_util.override_defaults(ar.default_settings, local_mod))
 
     if res then
       add_header('authentication-results', res, ';', 1)
@@ -578,8 +630,12 @@ local function milter_headers(task)
     local res = task:get_mempool():get_variable("fuzzy_hashes", "fstrings")
 
     if res and #res > 0 then
-      for _, h in ipairs(res) do
-        add_header('fuzzy-hashes', h)
+      if settings.headers_modify_mode == 'compat' then
+        add_header('fuzzy-hashes', table.concat(res, ','))
+      else
+        for _, h in ipairs(res) do
+          add_header('fuzzy-hashes', h)
+        end
       end
     end
   end
@@ -592,7 +648,7 @@ local function milter_headers(task)
 
   if user_settings and type(user_settings.routines) == 'table' then
     lua_util.debugm(N, task, 'override routines to %s from user settings',
-        user_settings.routines)
+      user_settings.routines)
     routines_enabled = user_settings.routines
     settings_override = true
   end
@@ -637,7 +693,6 @@ local function milter_headers(task)
     remove = nil
   end
   if add or remove then
-
     lua_mime.modify_headers(task, {
       add = add,
       remove = remove
@@ -645,21 +700,35 @@ local function milter_headers(task)
   end
 end
 
-local config_schema = ts.shape({
-  use = ts.array_of(ts.string) + ts.string / function(s)
-    return { s }
-  end,
-  remove_upstream_spam_flag = ts.boolean:is_optional(),
-  extended_spam_headers = ts.boolean:is_optional(),
-  skip_local = ts.boolean:is_optional(),
-  skip_authenticated = ts.boolean:is_optional(),
-  local_headers = ts.array_of(ts.string):is_optional(),
-  authenticated_headers = ts.array_of(ts.string):is_optional(),
-  extended_headers_rcpt = lua_maps.map_schema:is_optional(),
-  custom = ts.map_of(ts.string, ts.string):is_optional(),
+local config_schema = T.table({
+  use = T.one_of({
+    T.array(T.string()),
+    T.transform(T.string(), function(s)
+      return { s }
+    end)
+  }):doc({ summary = "List of routines to activate" }),
+  remove_upstream_spam_flag = T.boolean():optional():doc({ summary = "Remove upstream spam flag" }),
+  extended_spam_headers = T.boolean():optional():doc({ summary = "Add extended spam headers" }),
+  skip_local = T.boolean():optional():doc({ summary = "Skip local connections" }),
+  skip_authenticated = T.boolean():optional():doc({ summary = "Skip authenticated users" }),
+  local_headers = T.array(T.string()):optional():doc({ summary = "Headers for local connections" }),
+  authenticated_headers = T.array(T.string()):optional():doc({ summary = "Headers for authenticated users" }),
+  extended_headers_rcpt = lua_maps.map_schema:optional():doc({ summary = "Recipients for extended headers" }),
+  custom = T.table({}, { open = true, extra = T.string() }):optional():doc({ summary = "Custom header definitions" }),
+  default_headers_order = T.number():optional():doc({ summary = "Default order for headers (1 to insert after first Received header)" }),
+  headers_modify_mode = T.one_of({
+    T.literal('compat'),
+    T.literal('override'),
+  }):optional():doc({ summary = "Headers modification mode (compat or override)" }),
 }, {
-  extra_fields = ts.map_of(ts.string, ts.any)
-})
+  open = true
+}):doc({ summary = "Milter headers plugin configuration" })
+
+PluginSchema.register("plugins.milter_headers", config_schema)
+
+if confighelp then
+  return
+end
 
 local opts = rspamd_config:get_all_opt(N) or
     rspamd_config:get_all_opt('rmilter_headers')
@@ -687,7 +756,7 @@ local function activate_routine(s)
       table.insert(active_routines, s)
       if (opts.routines and opts.routines[s]) then
         settings.routines[s] = lua_util.override_defaults(settings.routines[s],
-            opts.routines[s])
+          opts.routines[s])
       end
     end
   else
@@ -739,6 +808,14 @@ if type(opts['skip_all']) == 'boolean' then
   settings.skip_all = opts['skip_all']
 end
 
+if type(opts['default_headers_order']) == 'number' then
+  settings.default_headers_order = opts['default_headers_order']
+end
+
+if type(opts['headers_modify_mode']) == 'string' then
+  settings.headers_modify_mode = opts['headers_modify_mode']
+end
+
 for _, s in ipairs(opts['use']) do
   if not have_routine[s] then
     activate_routine(s)
@@ -755,11 +832,25 @@ if (#active_routines < 1) then
 end
 
 logger.infox(rspamd_config, 'active routines [%s]',
-    table.concat(active_routines, ','))
+  table.concat(active_routines, ','))
 
 if opts.extended_headers_rcpt then
   settings.extended_headers_rcpt = lua_maps.rspamd_map_add_from_ucl(opts.extended_headers_rcpt,
-      'set', 'Extended headers recipients')
+    'set', 'Extended headers recipients')
+end
+
+if settings.routines['authentication-results'] and
+    settings.routines['authentication-results'].remove_ar_from then
+  local ar_from = settings.routines['authentication-results'].remove_ar_from
+  if type(ar_from) == 'table' and (ar_from.url or ar_from.file or ar_from.name) then
+    settings.routines['authentication-results'].remove_ar_from =
+      lua_maps.rspamd_map_add_from_ucl(ar_from, 'set', 'AR headers removal hostnames')
+  elseif type(ar_from) == 'string' then
+    if ar_from:match('^[/~]') or ar_from:match('^https?://') or ar_from:match('^file://') then
+      settings.routines['authentication-results'].remove_ar_from =
+        lua_maps.rspamd_map_add_from_ucl(ar_from, 'set', 'AR headers removal hostnames')
+    end
+  end
 end
 
 rspamd_config:register_symbol({

@@ -571,6 +571,23 @@ void rspamd_symcache_timeout_result_free(struct rspamd_symcache_timeout_result *
  * @param task
  */
 void rspamd_symcache_runtime_destroy(struct rspamd_task *task);
+
+/**
+ * Promote symbols cache resort (typically after dynamic symbol registration)
+ * @param cache
+ */
+void rspamd_symcache_promote_resort(struct rspamd_symcache *cache);
+
+/**
+ * Marks a symbol with SYMBOL_TYPE_FINE flag so it won't be skipped on early stop
+ * (when reject threshold is reached). Also propagates flag to parent/children.
+ * @param cache
+ * @param symbol symbol name
+ * @return TRUE if symbol was found and marked
+ */
+gboolean rspamd_symcache_set_symbol_fine(struct rspamd_symcache *cache,
+										 const char *symbol);
+
 #ifdef __cplusplus
 }
 #endif

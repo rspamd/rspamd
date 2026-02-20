@@ -25,6 +25,7 @@ extern "C" {
 #endif
 
 struct rspamd_ssl_connection;
+struct rspamd_external_libs_ctx;
 
 typedef void (*rspamd_ssl_handler_t)(int fd, short what, gpointer d);
 
@@ -55,6 +56,22 @@ gboolean rspamd_ssl_connect_fd(struct rspamd_ssl_connection *conn, int fd,
 							   const char *hostname, struct rspamd_io_ev *ev, ev_tstamp timeout,
 							   rspamd_ssl_handler_t handler, rspamd_ssl_error_handler_t err_handler,
 							   gpointer handler_data);
+
+/**
+ * Accepts SSL session on an already connected (accepted) FD
+ * @param conn connection
+ * @param fd fd to use (already accepted TCP socket)
+ * @param ev event to use
+ * @param tv timeout for handshake
+ * @param handler connected session handler
+ * @param err_handler error handler
+ * @param handler_data opaque data
+ * @return TRUE if handshake has started
+ */
+gboolean rspamd_ssl_accept_fd(struct rspamd_ssl_connection *conn, int fd,
+							  struct rspamd_io_ev *ev, ev_tstamp timeout,
+							  rspamd_ssl_handler_t handler, rspamd_ssl_error_handler_t err_handler,
+							  gpointer handler_data);
 
 /**
  * Restores SSL handlers for the existing ssl connection (e.g. after keepalive)
@@ -109,9 +126,10 @@ void rspamd_ssl_connection_free(struct rspamd_ssl_connection *conn);
 
 gpointer rspamd_init_ssl_ctx(void);
 gpointer rspamd_init_ssl_ctx_noverify(void);
+gpointer rspamd_init_ssl_ctx_server(const char *cert_path, const char *key_path);
 void rspamd_ssl_ctx_config(struct rspamd_config *cfg, gpointer ssl_ctx);
 void rspamd_ssl_ctx_free(gpointer ssl_ctx);
-void rspamd_openssl_maybe_init(void);
+void rspamd_openssl_maybe_init(struct rspamd_external_libs_ctx *ctx);
 
 #ifdef __cplusplus
 }

@@ -27,7 +27,7 @@ local rspamd_logger = require "rspamd_logger"
 
 local a = 'string'
 local b = 1.5
-local c = 1
+local c = 100
 local d = {
 	'aa',
 	1,
@@ -39,17 +39,30 @@ local e = {
 }
 
 -- New extended interface
--- %<number> means numeric arguments and %s means the next argument
--- for example %1, %2, %s: %s would mean the third argument
+-- Positional arguments: %<number> (e.g., %1, %2, %3)
+-- Sequential arguments: %s (uses the next argument)
+-- Type specifiers can be combined with positional or sequential:
+--   %d   - signed integer
+--   %ud  - unsigned integer
+--   %f   - double (floating point)
+--   %.Nf - double with N decimal places (e.g., %.2f for 2 decimals)
 
+-- Default formatting (automatic type detection)
 rspamd_logger.info('a=%1, b=%2, c=%3, d=%4, e=%s', a, b, c, d, e)
--- Output: a=string, b=1.50000, c=1, d={[1] = aa, [2] = 1, [3] = bb} e={[key]=value, [key2]=1.0}
+-- Output: a=string, b=1.500000, c=100, d={[1] = aa, [2] = 1, [3] = bb} e={[key]=value, [key2]=1.0}
+
+-- Using type specifiers
+rspamd_logger.info('count=%1d, price=%.2f, name=%3', c, b, a)
+-- Output: count=100, price=1.50, name=string
+
+-- Sequential formatting with types
+rspamd_logger.info('int=%d, float=%.3f, str=%s', c, b, a)
+-- Output: int=100, float=1.500, str=string
 
 -- Create string using logger API
-local str = rspamd_logger.slog('a=%1, b=%2, c=%3, d=%4, e=%5', a, b, c, d, e)
-
+local str = rspamd_logger.slog('value=%1d, percent=%.1f%%', c, b)
 print(str)
--- Output: a=string, b=1.50000, c=1, d={[1] = aa, [2] = 1, [3] = bb} e={[key]=value, [key2]=1.0}
+-- Output: value=100, percent=1.5%
  */
 
 /* Logger methods */
@@ -86,36 +99,56 @@ LUA_FUNCTION_DEF(logger, debug);
 /***
  * @function logger.errx(fmt[, args)
  * Extended interface to make an error log message
- * @param {string} fmt format string, arguments are encoded as %<number>
- * @param {any} args list of arguments to be replaced in %<number> positions
+ * @param {string} fmt format string supporting:
+ *   - Positional arguments: %<number> (e.g., %1, %2, %3)
+ *   - Sequential arguments: %s
+ *   - Type specifiers: %d (int), %ud (unsigned), %f (float), %.Nf (float with precision)
+ *   - Combined: %1d, %2f, %.2f
+ * @param {any} args list of arguments to be formatted
  */
 LUA_FUNCTION_DEF(logger, errx);
 /***
  * @function logger.warn(fmt[, args)
  * Extended interface to make a warning log message
- * @param {string} fmt format string, arguments are encoded as %<number>
- * @param {any} args list of arguments to be replaced in %<number> positions
+ * @param {string} fmt format string supporting:
+ *   - Positional arguments: %<number> (e.g., %1, %2, %3)
+ *   - Sequential arguments: %s
+ *   - Type specifiers: %d (int), %ud (unsigned), %f (float), %.Nf (float with precision)
+ *   - Combined: %1d, %2f, %.2f
+ * @param {any} args list of arguments to be formatted
  */
 LUA_FUNCTION_DEF(logger, warnx);
 /***
  * @function logger.infox(fmt[, args)
  * Extended interface to make an informational log message
- * @param {string} fmt format string, arguments are encoded as %<number>
- * @param {any} args list of arguments to be replaced in %<number> positions
+ * @param {string} fmt format string supporting:
+ *   - Positional arguments: %<number> (e.g., %1, %2, %3)
+ *   - Sequential arguments: %s
+ *   - Type specifiers: %d (int), %ud (unsigned), %f (float), %.Nf (float with precision)
+ *   - Combined: %1d, %2f, %.2f
+ * @param {any} args list of arguments to be formatted
  */
 LUA_FUNCTION_DEF(logger, infox);
 /***
- * @function logger.infox(fmt[, args)
- * Extended interface to make an informational log message
- * @param {string} fmt format string, arguments are encoded as %<number>
- * @param {any} args list of arguments to be replaced in %<number> positions
+ * @function logger.messagex(fmt[, args)
+ * Extended interface to make a notice log message
+ * @param {string} fmt format string supporting:
+ *   - Positional arguments: %<number> (e.g., %1, %2, %3)
+ *   - Sequential arguments: %s
+ *   - Type specifiers: %d (int), %ud (unsigned), %f (float), %.Nf (float with precision)
+ *   - Combined: %1d, %2f, %.2f
+ * @param {any} args list of arguments to be formatted
  */
 LUA_FUNCTION_DEF(logger, messagex);
 /***
  * @function logger.debugx(fmt[, args)
  * Extended interface to make a debug log message
- * @param {string} fmt format string, arguments are encoded as %<number>
- * @param {any} args list of arguments to be replaced in %<number> positions
+ * @param {string} fmt format string supporting:
+ *   - Positional arguments: %<number> (e.g., %1, %2, %3)
+ *   - Sequential arguments: %s
+ *   - Type specifiers: %d (int), %ud (unsigned), %f (float), %.Nf (float with precision)
+ *   - Combined: %1d, %2f, %.2f
+ * @param {any} args list of arguments to be formatted
  */
 LUA_FUNCTION_DEF(logger, debugx);
 
@@ -124,15 +157,19 @@ LUA_FUNCTION_DEF(logger, debugx);
  * Extended interface to make a debug log message
  * @param {string} module debug module
  * @param {task|cfg|pool|string} id id to log
- * @param {string} fmt format string, arguments are encoded as %<number>
- * @param {any} args list of arguments to be replaced in %<number> positions
+ * @param {string} fmt format string supporting type specifiers (%d, %ud, %f, %.Nf)
+ * @param {any} args list of arguments to be formatted
  */
 LUA_FUNCTION_DEF(logger, debugm);
 /***
  * @function logger.slog(fmt[, args)
  * Create string replacing percent params with corresponding arguments
- * @param {string} fmt format string, arguments are encoded as %<number>
- * @param {any} args list of arguments to be replaced in %<number> positions
+ * @param {string} fmt format string supporting:
+ *   - Positional arguments: %<number> (e.g., %1, %2, %3)
+ *   - Sequential arguments: %s
+ *   - Type specifiers: %d (int), %ud (unsigned), %f (float), %.Nf (float with precision)
+ *   - Combined: %1d, %2f, %.2f
+ * @param {any} args list of arguments to be formatted
  * @return {string} string with percent parameters substituted
  */
 LUA_FUNCTION_DEF(logger, slog);
@@ -142,8 +179,8 @@ LUA_FUNCTION_DEF(logger, slog);
  * Extended interface to make a generic log message on any level
  * @param {number} log level as a number (see GLogLevelFlags enum for values)
  * @param {task|cfg|pool|string} id id to log
- * @param {string} fmt format string, arguments are encoded as %<number>
- * @param {any} args list of arguments to be replaced in %<number> positions
+ * @param {string} fmt format string supporting type specifiers (%d, %ud, %f, %.Nf)
+ * @param {any} args list of arguments to be formatted
  */
 LUA_FUNCTION_DEF(logger, logx);
 
@@ -280,6 +317,120 @@ lua_logger_char_safe(int t, unsigned int esc_type)
 	return true;
 }
 
+/* Format specifier types */
+enum lua_logger_format_type {
+	LUA_FMT_STRING = 0, /* %s - default, any type */
+	LUA_FMT_INT,        /* %d - signed integer */
+	LUA_FMT_UINT,       /* %ud - unsigned integer */
+	LUA_FMT_DOUBLE,     /* %f - double with optional precision */
+};
+
+/* Format a number as integer */
+static gsize
+lua_logger_out_int(lua_State *L, int pos, char *outbuf, gsize len, gboolean is_unsigned)
+{
+	if (lua_type(L, pos) == LUA_TNUMBER) {
+		lua_Number num = lua_tonumber(L, pos);
+		if (is_unsigned) {
+			guint64 uval = (guint64) num;
+			return rspamd_snprintf(outbuf, len, "%uL", uval);
+		}
+		else {
+			gint64 ival = (gint64) num;
+			return rspamd_snprintf(outbuf, len, "%L", ival);
+		}
+	}
+	else if (lua_type(L, pos) == LUA_TSTRING) {
+		/* Try to convert string to number */
+		gsize slen;
+		const char *str = lua_tolstring(L, pos, &slen);
+		if (is_unsigned) {
+			gulong uval;
+			if (rspamd_strtoul(str, slen, &uval)) {
+				return rspamd_snprintf(outbuf, len, "%uL", uval);
+			}
+		}
+		else {
+			glong ival;
+			if (rspamd_strtol(str, slen, &ival)) {
+				return rspamd_snprintf(outbuf, len, "%L", ival);
+			}
+		}
+	}
+	/* Fallback for non-numeric types */
+	return rspamd_snprintf(outbuf, len, is_unsigned ? "0" : "0");
+}
+
+/* Format a number as double with precision */
+static gsize
+lua_logger_out_double(lua_State *L, int pos, char *outbuf, gsize len, int precision)
+{
+	gsize r;
+	char *p;
+
+	if (lua_type(L, pos) == LUA_TNUMBER) {
+		lua_Number num = lua_tonumber(L, pos);
+		if (precision >= 0) {
+			return rspamd_snprintf(outbuf, len, "%.*f", precision, (double) num);
+		}
+		else {
+			/* Default: smart formatting without trailing zeros */
+			r = rspamd_snprintf(outbuf, len, "%.6f", (double) num);
+			/* Remove trailing zeros, but keep at least one digit after decimal point */
+			if (r > 0 && outbuf[0] != '\0') {
+				p = outbuf + r - 1;
+				while (p > outbuf && *p == '0') {
+					p--;
+				}
+				/* Keep at least one digit after decimal point */
+				if (*p == '.') {
+					p++;
+				}
+				p++;
+				*p = '\0';
+				return p - outbuf;
+			}
+			return r;
+		}
+	}
+	else if (lua_type(L, pos) == LUA_TSTRING) {
+		/* Try to convert string to number */
+		gsize slen;
+		const char *str = lua_tolstring(L, pos, &slen);
+		char *endptr;
+		double dval = g_ascii_strtod(str, &endptr);
+		if (endptr != str && (*endptr == '\0' || endptr == str + slen)) {
+			if (precision >= 0) {
+				return rspamd_snprintf(outbuf, len, "%.*f", precision, dval);
+			}
+			else {
+				/* Default: smart formatting without trailing zeros */
+				r = rspamd_snprintf(outbuf, len, "%.6f", dval);
+				/* Remove trailing zeros, but keep at least one digit after decimal point */
+				if (r > 0 && outbuf[0] != '\0') {
+					p = outbuf + r - 1;
+					while (p > outbuf && *p == '0') {
+						p--;
+					}
+					/* Keep at least one digit after decimal point */
+					if (*p == '.') {
+						p++;
+					}
+					p++;
+					*p = '\0';
+					return p - outbuf;
+				}
+				return r;
+			}
+		}
+	}
+	/* Fallback for non-numeric types */
+	if (precision >= 0) {
+		return rspamd_snprintf(outbuf, len, "%.*f", precision, 0.0);
+	}
+	return rspamd_snprintf(outbuf, len, "0.0");
+}
+
 #define LUA_MAX_ARGS 32
 /* Gracefully handles argument mismatches by substituting missing args and noting extra args */
 static glong
@@ -294,17 +445,73 @@ lua_logger_log_format_str(lua_State *L, int offset, char *logbuf, gsize remain,
 	unsigned int arg_num, cur_arg = 0, arg_max = lua_gettop(L) - offset;
 	gboolean args_used[LUA_MAX_ARGS];
 	unsigned int used_args_count = 0;
+	enum lua_logger_format_type fmt_type;
+	int precision;
 
 	memset(args_used, 0, sizeof(args_used));
 	while (remain > 1 && *fmt) {
 		if (*fmt == '%') {
 			++fmt;
+			/* Check for %% (escaped percent) */
+			if (*fmt == '%') {
+				*d++ = '%';
+				++fmt;
+				--remain;
+				continue;
+			}
 			c = fmt;
-			if (*fmt == 's') {
+			fmt_type = LUA_FMT_STRING;
+			precision = -1;
+
+			/* Check for precision specifier (%.Nf) */
+			if (*fmt == '.') {
+				++fmt;
+				precision = 0;
+				while ((digit = g_ascii_digit_value(*fmt)) >= 0) {
+					precision = precision * 10 + digit;
+					++fmt;
+				}
+				/* Expect 'f' after precision */
+				if (*fmt == 'f') {
+					fmt_type = LUA_FMT_DOUBLE;
+					++fmt;
+					++cur_arg;
+				}
+				else {
+					/* Invalid format, reset */
+					fmt = c;
+				}
+			}
+			/* Check for format type specifiers */
+			else if (*fmt == 's') {
+				fmt_type = LUA_FMT_STRING;
 				++fmt;
 				++cur_arg;
 			}
-			else {
+			else if (*fmt == 'd') {
+				fmt_type = LUA_FMT_INT;
+				++fmt;
+				++cur_arg;
+			}
+			else if (*fmt == 'u') {
+				++fmt;
+				if (*fmt == 'd') {
+					fmt_type = LUA_FMT_UINT;
+					++fmt;
+					++cur_arg;
+				}
+				else {
+					/* Just 'u' without 'd', treat as literal */
+					fmt = c;
+				}
+			}
+			else if (*fmt == 'f') {
+				fmt_type = LUA_FMT_DOUBLE;
+				++fmt;
+				++cur_arg;
+			}
+			/* Check for positional argument (%<number>) */
+			else if (g_ascii_isdigit(*fmt)) {
 				arg_num = 0;
 				while ((digit = g_ascii_digit_value(*fmt)) >= 0) {
 					++fmt;
@@ -317,6 +524,27 @@ lua_logger_log_format_str(lua_State *L, int offset, char *logbuf, gsize remain,
 				}
 
 				if (fmt > c) {
+					/* Check for type specifier after number */
+					if (*fmt == 'd') {
+						fmt_type = LUA_FMT_INT;
+						++fmt;
+					}
+					else if (*fmt == 'u') {
+						++fmt;
+						if (*fmt == 'd') {
+							fmt_type = LUA_FMT_UINT;
+							++fmt;
+						}
+						else {
+							--fmt; /* Backtrack */
+						}
+					}
+					else if (*fmt == 'f') {
+						fmt_type = LUA_FMT_DOUBLE;
+						++fmt;
+					}
+					/* else: default to LUA_FMT_STRING */
+
 					/* Update the current argument */
 					cur_arg = arg_num;
 				}
@@ -328,8 +556,22 @@ lua_logger_log_format_str(lua_State *L, int offset, char *logbuf, gsize remain,
 					r = rspamd_snprintf(d, remain, "<MISSING ARGUMENT>");
 				}
 				else {
-					/* Valid argument - output it */
-					r = lua_logger_out(L, offset + cur_arg, d, remain, esc_type);
+					/* Valid argument - output it based on format type */
+					switch (fmt_type) {
+					case LUA_FMT_INT:
+						r = lua_logger_out_int(L, offset + cur_arg, d, remain, FALSE);
+						break;
+					case LUA_FMT_UINT:
+						r = lua_logger_out_int(L, offset + cur_arg, d, remain, TRUE);
+						break;
+					case LUA_FMT_DOUBLE:
+						r = lua_logger_out_double(L, offset + cur_arg, d, remain, precision);
+						break;
+					case LUA_FMT_STRING:
+					default:
+						r = lua_logger_out(L, offset + cur_arg, d, remain, esc_type);
+						break;
+					}
 					/* Track which arguments are used */
 					if (cur_arg <= LUA_MAX_ARGS && !args_used[cur_arg - 1]) {
 						args_used[cur_arg - 1] = TRUE;
@@ -343,8 +585,14 @@ lua_logger_log_format_str(lua_State *L, int offset, char *logbuf, gsize remain,
 				continue;
 			}
 
-			/* Copy % */
-			--fmt;
+			/* Copy % if we couldn't parse a format specifier */
+			if (fmt == c) {
+				--fmt;
+			}
+			else {
+				/* We parsed something but didn't match a valid format */
+				--fmt;
+			}
 		}
 
 		*d++ = *fmt++;
@@ -371,7 +619,7 @@ lua_logger_out_str(lua_State *L, int pos,
 				   char *outbuf, gsize len,
 				   enum lua_logger_escape_type esc_type)
 {
-	static const char hexdigests[16] = "0123456789abcdef";
+	static const char hexdigests[] = "0123456789abcdef";
 	gsize slen;
 	const unsigned char *str = lua_tolstring(L, pos, &slen);
 	unsigned char c;
@@ -675,15 +923,73 @@ lua_logger_get_id(lua_State *L, int pos, GError **err)
 {
 	const char *uid = NULL, *clsname;
 
+	int top = lua_gettop(L);
+
 	if (lua_getmetatable(L, pos) != 0) {
+		/* mt is on top */
 		uid = "";
-		lua_pushstring(L, "__index");
-		lua_gettable(L, -2);
+		clsname = NULL;
 
-		lua_pushstring(L, "class");
-		lua_gettable(L, -2);
+		/* Fast path: use numeric class id stored at mt[1] */
+		lua_rawgeti(L, -1, 1);
+		if (lua_type(L, -1) == LUA_TNUMBER) {
+			glong cid = (glong) lua_tonumber(L, -1);
+			lua_pop(L, 1);
+			/* Map numeric ids to class names via pointer equality */
+			if (cid == GPOINTER_TO_INT(rspamd_task_classname)) {
+				clsname = rspamd_task_classname;
+			}
+			else if (cid == GPOINTER_TO_INT(rspamd_mempool_classname)) {
+				clsname = rspamd_mempool_classname;
+			}
+			else if (cid == GPOINTER_TO_INT(rspamd_ev_base_classname)) {
+				clsname = rspamd_ev_base_classname;
+			}
+			else if (cid == GPOINTER_TO_INT(rspamd_worker_classname)) {
+				clsname = rspamd_worker_classname;
+			}
+			else if (cid == GPOINTER_TO_INT(rspamd_config_classname)) {
+				clsname = rspamd_config_classname;
+			}
+			else if (cid == GPOINTER_TO_INT(rspamd_resolver_classname)) {
+				clsname = rspamd_resolver_classname;
+			}
+			else if (cid == GPOINTER_TO_INT(rspamd_session_classname)) {
+				clsname = rspamd_session_classname;
+			}
+			else if (cid == GPOINTER_TO_INT(rspamd_map_classname)) {
+				clsname = rspamd_map_classname;
+			}
+		}
+		else {
+			lua_pop(L, 1);
+		}
 
-		clsname = lua_tostring(L, -1);
+		/* Slow path: read textual 'class' if needed */
+		if (clsname == NULL) {
+			lua_pushstring(L, "class");
+			lua_gettable(L, -2);
+			if (lua_type(L, -1) == LUA_TSTRING) {
+				clsname = lua_tostring(L, -1);
+			}
+			lua_pop(L, 1);
+		}
+
+		if (clsname == NULL) {
+			/* Fallback to legacy behavior if needed (when __index is a table) */
+			lua_pushstring(L, "__index");
+			lua_gettable(L, -2);
+			if (lua_type(L, -1) == LUA_TTABLE) {
+				lua_pushstring(L, "class");
+				lua_gettable(L, -2);
+				if (lua_type(L, -1) == LUA_TSTRING) {
+					clsname = lua_tostring(L, -1);
+				}
+				lua_pop(L, 1);
+			}
+			/* Pop __index value */
+			lua_pop(L, 1);
+		}
 
 		if (strcmp(clsname, rspamd_task_classname) == 0) {
 			struct rspamd_task *task = lua_check_task(L, pos);
@@ -748,8 +1054,8 @@ lua_logger_get_id(lua_State *L, int pos, GError **err)
 		}
 
 
-		/* Metatable, __index, classname */
-		lua_pop(L, 3);
+		/* Restore stack to state before getmetatable */
+		lua_settop(L, top);
 	}
 	else {
 		g_set_error(err, g_quark_from_static_string("lua_logger"),
@@ -782,11 +1088,13 @@ lua_logger_do_log(lua_State *L,
 	char logbuf[RSPAMD_LOGBUF_SIZE - 128];
 	const char *uid = NULL;
 	int ret;
+	int fmt_pos = start_pos;
 
-	if (lua_type(L, start_pos) == LUA_TUSERDATA) {
+	/* Optional id argument */
+	if (lua_type(L, fmt_pos) == LUA_TUSERDATA) {
 		GError *err = NULL;
 
-		uid = lua_logger_get_id(L, start_pos, &err);
+		uid = lua_logger_get_id(L, fmt_pos, &err);
 
 		if (uid == NULL) {
 			ret = luaL_error(L, "bad userdata for logging: %s",
@@ -799,16 +1107,34 @@ lua_logger_do_log(lua_State *L,
 			return ret;
 		}
 
-		++start_pos;
+		++fmt_pos;
 	}
 
-	if (lua_type(L, start_pos) != LUA_TSTRING) {
-		/* Bad argument type */
-		return luaL_error(L, "bad format string type: %s",
-						  lua_typename(L, lua_type(L, start_pos)));
+	/* Allow calling warnx(fmt, ...) directly without id */
+	if (lua_type(L, fmt_pos) != LUA_TSTRING) {
+		/* Try start_pos first */
+		fmt_pos = start_pos;
 	}
 
-	ret = lua_logger_log_format(L, start_pos, is_string, logbuf, sizeof(logbuf));
+	if (lua_type(L, fmt_pos) != LUA_TSTRING) {
+		/* Scan forward to find the first string arg (robust to accidental extra args) */
+		int top = lua_gettop(L);
+		int i;
+		for (i = fmt_pos + 1; i <= top; i++) {
+			if (lua_type(L, i) == LUA_TSTRING) {
+				fmt_pos = i;
+				break;
+			}
+		}
+
+		if (lua_type(L, fmt_pos) != LUA_TSTRING) {
+			/* Bad argument type */
+			return luaL_error(L, "bad format string type: %s",
+							  lua_typename(L, lua_type(L, fmt_pos)));
+		}
+	}
+
+	ret = lua_logger_log_format(L, fmt_pos, is_string, logbuf, sizeof(logbuf));
 
 	if (ret) {
 		if (is_string) {

@@ -12,12 +12,12 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 local fun = require 'fun'
 local lua_util = require "lua_util"
 local rspamd_util = require "rspamd_util"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
 local logger = require 'rspamd_logger'
 local common = require "lua_selectors/common"
 local M = "selectors"
@@ -80,7 +80,7 @@ local transform_function = {
       return fun.nth(args[1] or 1, inp), pure_type(t)
     end,
     ['description'] = 'Returns the nth element',
-    ['args_schema'] = { ts.number + ts.string / tonumber }
+    ['args_schema'] = { T.one_of({ T.number(), T.transform(T.string(), tonumber) }) }
   },
   ['take_n'] = {
     ['types'] = {
@@ -90,7 +90,7 @@ local transform_function = {
       return fun.take_n(args[1] or 1, inp), t
     end,
     ['description'] = 'Returns the n first elements',
-    ['args_schema'] = { ts.number + ts.string / tonumber }
+    ['args_schema'] = { T.one_of({ T.number(), T.transform(T.string(), tonumber) }) }
   },
   ['drop_n'] = {
     ['types'] = {
@@ -100,7 +100,7 @@ local transform_function = {
       return fun.drop_n(args[1] or 1, inp), t
     end,
     ['description'] = 'Returns list without the first n elements',
-    ['args_schema'] = { ts.number + ts.string / tonumber }
+    ['args_schema'] = { T.one_of({ T.number(), T.transform(T.string(), tonumber) }) }
   },
   -- Joins strings into a single string using separator in the argument
   ['join'] = {
@@ -111,7 +111,7 @@ local transform_function = {
       return table.concat(fun.totable(inp), args[1] or ''), 'string'
     end,
     ['description'] = 'Joins strings into a single string using separator in the argument',
-    ['args_schema'] = { ts.string:is_optional() }
+    ['args_schema'] = { T.string():optional() }
   },
   -- Joins strings into a set of strings using N elements and a separator in the argument
   ['join_nth'] = {
@@ -130,7 +130,7 @@ local transform_function = {
       return res, 'string_list'
     end,
     ['description'] = 'Joins strings into a set of strings using N elements and a separator in the argument',
-    ['args_schema'] = { ts.number + ts.string / tonumber, ts.string:is_optional() }
+    ['args_schema'] = { T.one_of({ T.number(), T.transform(T.string(), tonumber) }), T.string():optional() }
   },
   -- Joins tables into a table of strings
   ['join_tables'] = {
@@ -144,7 +144,7 @@ local transform_function = {
       end, inp), 'string_list'
     end,
     ['description'] = 'Joins tables into a table of strings',
-    ['args_schema'] = { ts.string:is_optional() }
+    ['args_schema'] = { T.string():optional() }
   },
   -- Sort strings
   ['sort'] = {
@@ -201,8 +201,8 @@ the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`,
       return inp:sub(start_pos, end_pos), 'string'
     end,
     ['description'] = 'Extracts substring; the first argument is start, the second is the last (like in Lua)',
-    ['args_schema'] = { (ts.number + ts.string / tonumber):is_optional(),
-                        (ts.number + ts.string / tonumber):is_optional() }
+    ['args_schema'] = { (T.one_of({ T.number(), T.transform(T.string(), tonumber) })):optional(),
+      (T.one_of({ T.number(), T.transform(T.string(), tonumber) })):optional() }
   },
   -- Prepends a string or a strings list
   ['prepend'] = {
@@ -267,7 +267,7 @@ the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`,
       return nil
     end,
     ['description'] = 'Regexp matching, returns all matches flattened in a single list',
-    ['args_schema'] = { ts.string }
+    ['args_schema'] = { T.string() }
   },
   -- Returns a value if it exists in some map (or acts like a `filter` function)
   ['filter_map'] = {
@@ -292,7 +292,7 @@ the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`,
       return nil
     end,
     ['description'] = 'Returns a value if it exists in some map (or acts like a `filter` function)',
-    ['args_schema'] = { ts.string }
+    ['args_schema'] = { T.string() }
   },
   -- Returns a value if it exists in some map (or acts like a `filter` function)
   ['except_map'] = {
@@ -317,7 +317,7 @@ the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`,
       return nil
     end,
     ['description'] = 'Returns a value if it does not exists in some map (or acts like a `except` function)',
-    ['args_schema'] = { ts.string }
+    ['args_schema'] = { T.string() }
   },
   -- Returns a value from some map corresponding to some key (or acts like a `map` function)
   ['apply_map'] = {
@@ -342,7 +342,7 @@ the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`,
       return nil
     end,
     ['description'] = 'Returns a value from some map corresponding to some key (or acts like a `map` function)',
-    ['args_schema'] = { ts.string }
+    ['args_schema'] = { T.string() }
   },
   -- Drops input value and return values from function's arguments or an empty string
   ['id'] = {
@@ -361,7 +361,7 @@ the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`,
       return '', 'string'
     end,
     ['description'] = 'Drops input value and return values from function\'s arguments or an empty string',
-    ['args_schema'] = (ts.string + ts.array_of(ts.string)):is_optional()
+    ['args_schema'] = T.one_of({ T.string(), T.array(T.string()) }):optional()
   },
   ['equal'] = {
     ['types'] = {
@@ -377,7 +377,7 @@ the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`,
     end,
     ['description'] = [[Boolean function equal.
 Returns either nil or its argument if input is equal to argument]],
-    ['args_schema'] = { ts.string }
+    ['args_schema'] = { T.string() }
   },
   -- Boolean function in, returns either nil or its input if input is in args list
   ['in'] = {
@@ -395,7 +395,7 @@ Returns either nil or its argument if input is equal to argument]],
     end,
     ['description'] = [[Boolean function in.
 Returns either nil or its input if input is in args list]],
-    ['args_schema'] = ts.array_of(ts.string)
+    ['args_schema'] = T.array(T.string())
   },
   ['not_in'] = {
     ['types'] = {
@@ -412,7 +412,7 @@ Returns either nil or its input if input is in args list]],
     end,
     ['description'] = [[Boolean function not in.
 Returns either nil or its input if input is not in args list]],
-    ['args_schema'] = ts.array_of(ts.string)
+    ['args_schema'] = T.array(T.string())
   },
   ['inverse'] = {
     ['types'] = {
@@ -428,7 +428,7 @@ Returns either nil or its input if input is not in args list]],
     end,
     ['description'] = [[Inverses input.
 Empty string comes the first argument or 'true', non-empty string comes nil]],
-    ['args_schema'] = { ts.string:is_optional() }
+    ['args_schema'] = { T.string():optional() }
   },
   ['ipmask'] = {
     ['types'] = {
@@ -459,8 +459,8 @@ Empty string comes the first argument or 'true', non-empty string comes nil]],
     end,
     ['description'] = 'Applies mask to IP address.' ..
         ' The first argument is the mask for IPv4 addresses, the second is the mask for IPv6 addresses.',
-    ['args_schema'] = { (ts.number + ts.string / tonumber),
-                        (ts.number + ts.string / tonumber):is_optional() }
+    ['args_schema'] = { (T.one_of({ T.number(), T.transform(T.string(), tonumber) })),
+      (T.one_of({ T.number(), T.transform(T.string(), tonumber) })):optional() }
   },
   -- Returns the string(s) with all non ascii chars replaced
   ['to_ascii'] = {
@@ -472,16 +472,16 @@ Empty string comes the first argument or 'true', non-empty string comes nil]],
     ['process'] = function(inp, _, args)
       if type(inp) == 'table' then
         return fun.map(
-            function(s)
-              return string.gsub(tostring(s), '[\128-\255]', args[1] or '?')
-            end, inp), 'string_list'
+          function(s)
+            return string.gsub(tostring(s), '[\128-\255]', args[1] or '?')
+          end, inp), 'string_list'
       else
         return string.gsub(tostring(inp), '[\128-\255]', '?'), 'string'
       end
     end,
     ['description'] = 'Returns the string with all non-ascii bytes replaced with the character ' ..
         'given as second argument or `?`',
-    ['args_schema'] = { ts.string:is_optional() }
+    ['args_schema'] = { T.string():optional() }
   },
   -- Extracts tld from a hostname
   ['get_tld'] = {
@@ -492,7 +492,7 @@ Empty string comes the first argument or 'true', non-empty string comes nil]],
     ['process'] = function(inp, _, _)
       return rspamd_util.get_tld(inp), 'string'
     end,
-    ['description'] = 'Extracts tld from a hostname represented as a string',
+    ['description'] = 'Returns effective second-level domain (eSLD) using the Public Suffix List',
     ['args_schema'] = {}
   },
   -- Converts list of strings to numbers and returns a packed string
@@ -510,7 +510,7 @@ Empty string comes the first argument or 'true', non-empty string comes nil]],
       return rspamd_util.pack(string.rep(fmt, #res), lua_util.unpack(res)), 'string'
     end,
     ['description'] = 'Converts a list of strings to numbers & returns a packed string',
-    ['args_schema'] = { ts.string:is_optional() }
+    ['args_schema'] = { T.string():optional() }
   },
   -- Filter nils from a list
   ['filter_string_nils'] = {
@@ -562,7 +562,7 @@ Empty string comes the first argument or 'true', non-empty string comes nil]],
     end,
     ['description'] = 'Apply method to list of userdata and use it as a filter,' ..
         ' excluding elements for which method returns false/nil',
-    ['args_schema'] = { ts.string }
+    ['args_schema'] = { T.string() }
   },
 }
 

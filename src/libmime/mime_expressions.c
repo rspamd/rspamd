@@ -1181,9 +1181,10 @@ rspamd_mime_expr_process(void *ud, rspamd_expression_atom_t *atom)
 		}
 	}
 	else if (mime_atom->type == MIME_ATOM_LOCAL_LUA_FUNCTION) {
-		int err_idx;
+		int err_idx, old_top;
 
 		L = task->cfg->lua_state;
+		old_top = lua_gettop(L);
 		lua_pushcfunction(L, &rspamd_lua_traceback);
 		err_idx = lua_gettop(L);
 
@@ -1208,7 +1209,7 @@ rspamd_mime_expr_process(void *ud, rspamd_expression_atom_t *atom)
 			}
 		}
 
-		lua_settop(L, 0);
+		lua_settop(L, old_top);
 	}
 	else {
 		ret = rspamd_mime_expr_process_function(mime_atom->d.func, task,
@@ -1469,21 +1470,79 @@ rspamd_has_only_html_part(struct rspamd_task *task, GArray *args,
 						  void *unused)
 {
 	struct rspamd_mime_text_part *p;
-	unsigned int i, cnt_html = 0, cnt_txt = 0;
+	unsigned int i;
 
+	/*
+	 * Return TRUE if there's any HTML part (not attachment) that has no
+	 * alternative in its multipart/alternative parent.
+	 *
+	 * We check two things:
+	 * 1. alt_text_part: a text/plain sibling found in text_parts
+	 * 2. MIME structure: a sibling leaf text/* (non-html) part in a
+	 *    multipart/alternative ancestor — covers alternatives like
+	 *    text/calendar that may not be in text_parts due to no_text flag
+	 */
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, p)
 	{
-		if (!IS_TEXT_PART_ATTACHMENT(p)) {
-			if (IS_TEXT_PART_HTML(p)) {
-				cnt_html++;
+		if (!IS_TEXT_PART_ATTACHMENT(p) && IS_TEXT_PART_HTML(p)) {
+			if (p->alt_text_part != NULL) {
+				/* Has a text/plain alternative */
+				continue;
 			}
-			else {
-				cnt_txt++;
+
+			/* Check MIME structure: walk up to find multipart/alternative */
+			struct rspamd_mime_part *mime_part = p->mime_part;
+			struct rspamd_mime_part *parent = mime_part->parent_part;
+			gboolean has_structural_alt = FALSE;
+			rspamd_ftok_t alt_tok = {.begin = "alternative", .len = 11};
+			rspamd_ftok_t html_tok = {.begin = "html", .len = 4};
+
+			while (parent) {
+				if (IS_PART_MULTIPART(parent) && parent->ct &&
+					rspamd_ftok_casecmp(&parent->ct->subtype, &alt_tok) == 0) {
+
+					if (parent->specific.mp && parent->specific.mp->children) {
+						GPtrArray *children = parent->specific.mp->children;
+
+						/* Find which direct child branch contains our HTML part */
+						struct rspamd_mime_part *our_branch = mime_part;
+						while (our_branch->parent_part &&
+							   our_branch->parent_part != parent) {
+							our_branch = our_branch->parent_part;
+						}
+
+						/* Check siblings for leaf text/* non-html parts */
+						for (unsigned int j = 0; j < children->len; j++) {
+							struct rspamd_mime_part *sibling =
+								g_ptr_array_index(children, j);
+
+							if (sibling == our_branch) {
+								continue;
+							}
+
+							/* A leaf text/* part that isn't html is a
+							 * real alternative (e.g. text/calendar) */
+							if (sibling->ct &&
+								(sibling->ct->flags & RSPAMD_CONTENT_TYPE_TEXT) &&
+								rspamd_ftok_casecmp(&sibling->ct->subtype,
+													&html_tok) != 0) {
+								has_structural_alt = TRUE;
+								break;
+							}
+						}
+					}
+					break;
+				}
+				parent = parent->parent_part;
+			}
+
+			if (!has_structural_alt) {
+				return TRUE;
 			}
 		}
 	}
 
-	return (cnt_html > 0 && cnt_txt == 0);
+	return FALSE;
 }
 
 static gboolean

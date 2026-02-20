@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 --[[[
 -- @module lua_util
@@ -96,7 +96,7 @@ local function rspamd_str_split(s, sep)
       if type(sep) == 'string' then
         _sep = lpeg.S(sep) -- Assume set
       else
-        _sep = sep -- Assume lpeg object
+        _sep = sep         -- Assume lpeg object
       end
       local elem = lpeg.C((1 - _sep) ^ 0)
       local p = lpeg.Ct(elem * (_sep * elem) ^ 0)
@@ -567,14 +567,14 @@ local function parse_time_interval(str)
   parser.fractional = (lpeg.P(".")) *
       (digit ^ 1)
   parser.number = (parser.integer *
-      (parser.fractional ^ -1)) +
+        (parser.fractional ^ -1)) +
       (lpeg.S("+-") * parser.fractional)
   parser.time = lpeg.Cf(lpeg.Cc(1) *
-      (parser.number / tonumber) *
-      ((lpeg.S("smhdwy") / parse_time_suffix) ^ -1),
-      function(acc, val)
-        return acc * val
-      end)
+    (parser.number / tonumber) *
+    ((lpeg.S("smhdwy") / parse_time_suffix) ^ -1),
+    function(acc, val)
+      return acc * val
+    end)
 
   local t = lpeg.match(parser.time, str)
 
@@ -615,14 +615,14 @@ local function dehumanize_number(str)
   parser.fractional = (lpeg.P(".")) *
       (digit ^ 1)
   parser.number = (parser.integer *
-      (parser.fractional ^ -1)) +
+        (parser.fractional ^ -1)) +
       (lpeg.S("+-") * parser.fractional)
   parser.humanized_number = lpeg.Cf(lpeg.Cc(1) *
-      (parser.number / tonumber) *
-      (((lpeg.S("kmg") * (lpeg.P("b") ^ -1)) / parse_suffix) ^ -1),
-      function(acc, val)
-        return acc * val
-      end)
+    (parser.number / tonumber) *
+    (((lpeg.S("kmg") * (lpeg.P("b") ^ -1)) / parse_suffix) ^ -1),
+    function(acc, val)
+      return acc * val
+    end)
 
   local t = lpeg.match(parser.humanized_number, str)
 
@@ -728,7 +728,6 @@ exports.table_merge = table_merge
 -- Performs header folding
 --]]
 exports.fold_header = function(task, name, value, stop_chars)
-
   local how
 
   if task:has_flag("milter") then
@@ -738,6 +737,41 @@ exports.fold_header = function(task, name, value, stop_chars)
   end
 
   return rspamd_util.fold_header(name, value, how, stop_chars)
+end
+
+--[[[
+-- @function lua_util.fold_header_with_encoding(task, name, value[, opts])
+-- Folds header value using name and optionally encodes the result.
+-- Encoding policy defaults to 'auto':
+-- - If MIME UTF-8 is enabled, encode only when the folded value is not valid UTF-8
+-- - Otherwise, always encode
+-- `opts` table fields:
+--   * stop_chars: optional string with extra fold-on characters
+--   * encode: true|false|'auto' (default: 'auto')
+--   * structured: boolean, pass as `is_structured` to mime_header_encode (default: false)
+-- @return {string} folded (and possibly encoded) header value
+--]]
+exports.fold_header_with_encoding = function(task, name, value, opts)
+  opts = opts or {}
+  local stop_chars = opts.stop_chars
+  local encode = opts.encode
+  local structured = opts.structured or false
+
+  local folded = exports.fold_header(task, name, value, stop_chars)
+
+  if encode == nil or encode == 'auto' then
+    if rspamd_config:is_mime_utf8() then
+      if not rspamd_util.is_valid_utf8(folded) then
+        folded = rspamd_util.mime_header_encode(folded, structured)
+      end
+    else
+      folded = rspamd_util.mime_header_encode(folded, structured)
+    end
+  elseif encode == true then
+    folded = rspamd_util.mime_header_encode(folded, structured)
+  end
+
+  return folded
 end
 
 --[[[
@@ -822,9 +856,9 @@ exports.filter_specific_urls = function(urls, params)
       cache_key = params.prefix
     else
       cache_key = string.format('sp_urls_%d%s%s%s', params.limit,
-          tostring(params.need_emails or false),
-          tostring(params.need_images or false),
-          tostring(params.need_content or false))
+        tostring(params.need_emails or false),
+        tostring(params.need_images or false),
+        tostring(params.need_content or false))
     end
     local cached = params.task:cache_get(cache_key)
 
@@ -841,17 +875,79 @@ exports.filter_specific_urls = function(urls, params)
     urls = fun.totable(fun.filter(params.filter, urls))
   end
 
+  -- Memory bounds protection against DoS: absolute maximum of URLs to process
+  -- Even if we have 100k URLs of 1KB each in input, we process at most first 50k
+  -- This prevents excessive memory usage and CPU time for malicious messages
+  local max_urls_to_process = 50000
+  if #urls > max_urls_to_process then
+    local logger = require "rspamd_logger"
+    logger.warnx(params.task, 'too many URLs to process: %d, limiting to %d',
+      #urls, max_urls_to_process)
+    -- Truncate the urls table
+    local truncated = {}
+    for i = 1, max_urls_to_process do
+      truncated[i] = urls[i]
+    end
+    urls = truncated
+  end
+
   -- Filter by tld:
   local tlds = {}
   local eslds = {}
   local ntlds, neslds = 0, 0
 
-  local res = {}
+  -- Use two structures: hash set for deduplication, array for results
+  local res = {}        -- array of URLs (maintains order)
+  local seen = {}       -- hash set for deduplication (hash -> true)
   local nres = 0
 
-  local function insert_url(str, u)
-    if not res[str] then
-      res[str] = u
+  local cta_priority_map
+
+  if params.task and params.task.get_text_parts then
+    local text_parts = params.task:get_text_parts()
+    if text_parts then
+      cta_priority_map = {}
+      for _, part in ipairs(text_parts) do
+        if part.is_html and part:is_html() and part.get_cta_urls then
+          local entries = part:get_cta_urls({original = true, with_weights = true})
+          if type(entries) == 'table' then
+            for _, entry in ipairs(entries) do
+              if entry and entry.url then
+                local url = entry.url
+                -- Use hash instead of tostring to avoid string interning
+                local hash = url:get_hash()
+                local weight = entry.weight or 0
+                local score = 6 + math.floor(weight * 10 + 0.5)
+                if not cta_priority_map[hash] or score > cta_priority_map[hash] then
+                  cta_priority_map[hash] = score
+                end
+                local redir = url:get_redirected()
+                if redir then
+                  -- Skip display-only URLs (phishing bait text) - only include real redirects
+                  local redir_flags = redir:get_flags()
+                  if not redir_flags.html_displayed then
+                    local rhash = redir:get_hash()
+                    if not cta_priority_map[rhash] or score > cta_priority_map[rhash] then
+                      cta_priority_map[rhash] = score
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+
+      if next(cta_priority_map) == nil then
+        cta_priority_map = nil
+      end
+    end
+  end
+
+  local function insert_url(hash, u)
+    if not seen[hash] then
+      seen[hash] = true
+      table.insert(res, u)
       nres = nres + 1
 
       return true
@@ -860,7 +956,9 @@ exports.filter_specific_urls = function(urls, params)
     return false
   end
 
+  local url_index = 0  -- Track URL processing order for stable sorting
   local function process_single_url(u, default_priority)
+    url_index = url_index + 1
     local priority = default_priority or 1 -- Normal priority
     local flags = u:get_flags()
     if params.ignore_ip and flags.numeric then
@@ -891,30 +989,58 @@ exports.filter_specific_urls = function(urls, params)
     end
 
     local esld = u:get_tld()
-    local str_hash = tostring(u)
+    -- Use fast hash instead of tostring to avoid string interning
+    -- This is critical for DoS protection with 100k+ URLs
+    local url_hash = u:get_hash()
+
+    if cta_priority_map then
+      local cta_pr = cta_priority_map[url_hash]
+      if not cta_pr and flags.redirected then
+        local redir_url = u:get_redirected()
+        if redir_url then
+          cta_pr = cta_priority_map[redir_url:get_hash()]
+        end
+      end
+
+      if cta_pr then
+        -- Use CTA priority as base, but add phished/subject bonuses on top
+        priority = cta_pr
+        if flags.phished then
+          priority = priority + 5  -- Phished URLs get significant extra priority (security critical)
+        end
+        if flags.subject then
+          priority = priority + 2  -- Subject URLs get extra priority
+        end
+      end
+    end
 
     if esld then
-      -- Special cases
-      if (u:get_protocol() ~= 'mailto') and (not flags.html_displayed) then
-        if flags.obscured then
-          priority = 3
-        else
-          if (flags.has_user or flags.has_port) then
-            priority = 2
-          elseif (flags.subject or flags.phished) then
-            priority = 2
+      -- Special cases (only apply if CTA priority wasn't set)
+      -- CTA priority takes precedence as it's explicitly calculated with bonuses
+      local had_cta = priority ~= (default_priority or 1)
+
+      if not had_cta then
+        if (u:get_protocol() ~= 'mailto') and (not flags.html_displayed) then
+          if flags.obscured then
+            priority = 3
+          else
+            if (flags.has_user or flags.has_port) then
+              priority = 2
+            elseif (flags.subject or flags.phished) then
+              priority = 2
+            end
           end
+        elseif flags.html_displayed then
+          priority = 0
         end
-      elseif flags.html_displayed then
-        priority = 0
       end
 
       if not eslds[esld] then
-        eslds[esld] = { { str_hash, u, priority } }
+        eslds[esld] = { { url_hash, u, priority, url_index } }
         neslds = neslds + 1
       else
         if #eslds[esld] < params.esld_limit then
-          table.insert(eslds[esld], { str_hash, u, priority })
+          table.insert(eslds[esld], { url_hash, u, priority, url_index })
         end
       end
 
@@ -924,10 +1050,10 @@ exports.filter_specific_urls = function(urls, params)
       local tld = table.concat(fun.totable(fun.tail(parts)), '.')
 
       if not tlds[tld] then
-        tlds[tld] = { { str_hash, u, priority } }
+        tlds[tld] = { { url_hash, u, priority, url_index } }
         ntlds = ntlds + 1
       else
-        table.insert(tlds[tld], { str_hash, u, priority })
+        table.insert(tlds[tld], { url_hash, u, priority, url_index })
       end
     end
   end
@@ -943,7 +1069,6 @@ exports.filter_specific_urls = function(urls, params)
   end
 
   if limit == 0 then
-    res = exports.values(res)
     if params.task and not params.no_cache then
       params.task:cache_set(cache_key, res)
     end
@@ -954,22 +1079,33 @@ exports.filter_specific_urls = function(urls, params)
   local function sort_stuff(tbl)
     -- Sort according to max priority
     table.sort(tbl, function(e1, e2)
-      -- Sort by priority so max priority is at the end
+      -- Sort by priority (desc) then by url_index (asc) for stable sorting
       table.sort(e1, function(tr1, tr2)
-        return tr1[3] < tr2[3]
+        if tr1[3] ~= tr2[3] then
+          return tr1[3] < tr2[3]  -- Lower priority first
+        else
+          return tr1[4] < tr2[4]  -- Earlier URL index first (stable)
+        end
       end)
       table.sort(e2, function(tr1, tr2)
-        return tr1[3] < tr2[3]
+        if tr1[3] ~= tr2[3] then
+          return tr1[3] < tr2[3]
+        else
+          return tr1[4] < tr2[4]
+        end
       end)
 
       if e1[#e1][3] ~= e2[#e2][3] then
         -- Sort by priority so max priority is at the beginning
         return e1[#e1][3] > e2[#e2][3]
       else
-        -- Prefer less urls to more urls per esld
-        return #e1 < #e2
+        -- Prefer less urls to more urls per esld, then earlier index
+        if #e1 ~= #e2 then
+          return #e1 < #e2
+        else
+          return e1[#e1][4] < e2[#e2][4]  -- Use index as final tiebreaker
+        end
       end
-
     end)
 
     return tbl
@@ -991,10 +1127,8 @@ exports.filter_specific_urls = function(urls, params)
           item_found = true
         end
       end
-
     until limit <= 0 or not item_found
 
-    res = exports.values(res)
     if params.task and not params.no_cache then
       params.task:cache_set(cache_key, res)
     end
@@ -1018,7 +1152,6 @@ exports.filter_specific_urls = function(urls, params)
     end
   end
 
-  res = exports.values(res)
   if params.task and not params.no_cache then
     params.task:cache_set(cache_key, res)
   end
@@ -1037,7 +1170,7 @@ end
 - - prefix <string> cache prefix (default = nil)
 - - ignore_redirected <bool> (default = false)
 - - need_images <bool> (default = false)
-- - need_content <bool> (default = false)
+- - need_content <bool> (default = nil, uses global include_content_urls config which defaults to true)
 -- }
 -- Apply heuristic in extracting of urls from task, this function
 -- tries its best to extract specific number of urls from a task based on
@@ -1050,7 +1183,7 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
     esld_limit = 9999,
     need_emails = false,
     need_images = false,
-    need_content = false,
+    need_content = nil, -- nil means use global include_content_urls config (default: true)
     filter = nil,
     prefix = nil,
     ignore_ip = false,
@@ -1080,7 +1213,7 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
     emails = params.need_emails,
     images = params.need_images,
     content = params.need_content,
-    flags = params.flags, -- maybe nil
+    flags = params.flags,           -- maybe nil
     flags_mode = params.flags_mode, -- maybe nil
   }
 
@@ -1094,10 +1227,11 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
       if params.flags then
         cache_key_suffix = table.concat(params.flags) .. (params.flags_mode or '')
       else
+        -- Use tostring directly to distinguish nil (config default) from false (explicit exclude)
         cache_key_suffix = string.format('%s%s%s',
-            tostring(params.need_emails or false),
-            tostring(params.need_images or false),
-            tostring(params.need_content or false))
+          tostring(params.need_emails or false),
+          tostring(params.need_images or false),
+          tostring(params.need_content)) -- nil = config default, false = explicit exclude
       end
       cache_key = string.format('sp_urls_%d%s', params.limit, cache_key_suffix)
     end
@@ -1188,7 +1322,7 @@ exports.init_debug_logging = function(config)
           if debug_modules[mod] then
             debug_modules[alias] = true
             logger.infox(config, 'enable debug for Lua module %s (%s aliased)',
-                alias, mod)
+              alias, mod)
           end
         end
       end
@@ -1234,7 +1368,7 @@ exports.add_debug_alias = function(mod, alias)
   if debug_modules[mod] then
     debug_modules[alias] = true
     logger.infox(rspamd_config, 'enable debug for Lua module %s (%s aliased)',
-        alias, mod)
+      alias, mod)
   end
 end
 ---[[[
@@ -1396,7 +1530,12 @@ exports.callback_from_string = function(s)
     inp = 'return function(...)\n' .. s .. '; end'
   end
 
-  local ret, res_or_err = pcall(loadstring(inp))
+  local chunk, err = loadstring(inp)
+  if not chunk then
+    return false, err
+  end
+
+  local ret, res_or_err = pcall(chunk)
 
   if not ret or type(res_or_err) ~= 'function' then
     return false, res_or_err
@@ -1536,6 +1675,62 @@ end
 exports.table_digest = table_digest
 
 ---[[[
+-- @function lua_util.unordered_table_digest(t)
+-- Returns a hash of table contents that is independent of iteration order.
+-- Uses XXH3 fast hash with XOR accumulation for O(n) performance.
+-- All value types (string, number, boolean, table) are included in the hash.
+-- @param {table} t input array or map
+-- @return {string} hex representation of the 64-bit hash
+--]]]
+local function unordered_table_digest(t)
+  local cr = require "rspamd_cryptobox"
+  local bit = require "bit"
+
+  -- Internal function that returns high/low 32-bit parts
+  local function digest_impl(tbl)
+    local acc_hi, acc_lo = 0, 0
+
+    if tbl[1] ~= nil then
+      -- Array: order matters, so include index in hash
+      for i, e in ipairs(tbl) do
+        local str
+        if type(e) == 'table' then
+          -- Recursively compute digest for nested table
+          str = tostring(i) .. '\0' .. digest_impl(e)
+        else
+          str = tostring(i) .. '\0' .. tostring(e)
+        end
+        local hi, lo = cr.fast_hash64(str)
+        acc_hi = bit.bxor(acc_hi, hi)
+        acc_lo = bit.bxor(acc_lo, lo)
+      end
+    else
+      -- Map: order doesn't matter, XOR all k-v hashes
+      for k, v in pairs(tbl) do
+        local str
+        if type(v) == 'table' then
+          -- Recursively compute digest for nested table
+          str = tostring(k) .. '\0' .. digest_impl(v)
+        else
+          str = tostring(k) .. '\0' .. tostring(v)
+        end
+        local hi, lo = cr.fast_hash64(str)
+        acc_hi = bit.bxor(acc_hi, hi)
+        acc_lo = bit.bxor(acc_lo, lo)
+      end
+    end
+
+    -- Return as hex string for nested calls
+    -- Use bit.tohex() which properly handles signed 32-bit values
+    return bit.tohex(acc_hi) .. bit.tohex(acc_lo)
+  end
+
+  return digest_impl(t)
+end
+
+exports.unordered_table_digest = unordered_table_digest
+
+---[[[
 -- @function lua_util.toboolean(v)
 -- Converts a string or a number to boolean
 -- @param {string|number} v
@@ -1555,7 +1750,9 @@ exports.toboolean = function(v)
     ['False'] = false,
   };
 
-  if type(v) == 'string' then
+  if type(v) == 'boolean' then
+    return v
+  elseif type(v) == 'string' then
     if true_t[v] == true then
       return true;
     elseif false_t[v] == false then
@@ -1621,7 +1818,7 @@ exports.is_skip_local_or_authed = function(task, conf, ip)
     conf = { false, false }
   end
   if ((not conf[2] and task:get_user()) or
-      (not conf[1] and type(ip) == 'userdata' and ip:is_local())) then
+        (not conf[1] and type(ip) == 'userdata' and ip:is_local())) then
     return true
   end
 
@@ -1778,10 +1975,12 @@ local function url_encode_string(str)
   if str == nil then
     return ''
   end
-  str = string.gsub(str, "([^%w _%%%-%.~])",
-      function(c)
-        return string.format("%%%02X", string.byte(c))
-      end)
+  -- Use explicit ASCII ranges instead of %w which is locale-dependent
+  -- and may match non-ASCII bytes in UTF-8 locales
+  str = string.gsub(str, "([^A-Za-z0-9 _%%%-%.~])",
+    function(c)
+      return string.format("%%%02X", string.byte(c))
+    end)
   str = string.gsub(str, " ", "+")
   return str
 end
@@ -1799,8 +1998,8 @@ end
 
 -- Defines symbols priorities for common usage in prefilters/postfilters
 exports.symbols_priorities = {
-  top = 10, -- Symbols must be executed first (or last), such as settings
-  high = 9, -- Example: asn
+  top = 10,   -- Symbols must be executed first (or last), such as settings
+  high = 9,   -- Example: asn
   medium = 5, -- Everything should use this as default
   low = 0,
 }
@@ -1822,22 +2021,22 @@ local function table_to_multipart_body(tbl, boundary)
       table.insert(out, string.format('--%s\r\n', boundary))
       if v.filename then
         table.insert(out,
-            string.format('Content-Disposition: form-data; name="%s"; filename="%s"\r\n',
-                k, v.filename))
+          string.format('Content-Disposition: form-data; name="%s"; filename="%s"\r\n',
+            k, v.filename))
       else
         table.insert(out,
-            string.format('Content-Disposition: form-data; name="%s"\r\n', k))
+          string.format('Content-Disposition: form-data; name="%s"\r\n', k))
       end
       if v['content-type'] then
         table.insert(out,
-            string.format('Content-Type: %s\r\n', v['content-type']))
+          string.format('Content-Type: %s\r\n', v['content-type']))
       else
         table.insert(out, 'Content-Type: text/plain\r\n')
       end
       if v['content-transfer-encoding'] then
         table.insert(out,
-            string.format('Content-Transfer-Encoding: %s\r\n',
-                v['content-transfer-encoding']))
+          string.format('Content-Transfer-Encoding: %s\r\n',
+            v['content-transfer-encoding']))
       else
         table.insert(out, 'Content-Transfer-Encoding: binary\r\n')
       end

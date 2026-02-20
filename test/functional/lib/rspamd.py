@@ -35,7 +35,11 @@ import pwd
 import shutil
 import signal
 import socket
+import ssl
 import stat
+import subprocess
+import random
+import re
 import sys
 import tempfile
 
@@ -148,6 +152,69 @@ def HTTP(method, host, port, path, data=None, headers={}):
     return [s, t]
 
 
+def HTTP_With_Headers(method, host, port, path, data=None, headers={}):
+    """HTTP request that returns response headers.
+    Returns [status, body, headers_dict]
+    """
+    c = http.client.HTTPConnection("%s:%s" % (host, port))
+    c.request(method, path, data, headers)
+    r = c.getresponse()
+    t = r.read()
+    s = r.status
+    h = dict(r.getheaders())
+    c.close()
+    return [s, t, h]
+
+
+def HTTPS(method, host, port, path, data=None, headers={}):
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    c = http.client.HTTPSConnection("%s:%s" % (host, port), context=ctx)
+    c.request(method, path, data, headers)
+    r = c.getresponse()
+    t = r.read()
+    s = r.status
+    c.close()
+    return [s, t]
+
+
+def HTTPS_With_Headers(method, host, port, path, data=None, headers={}):
+    """HTTPS request that returns response headers.
+    Returns [status, body, headers_dict]
+    """
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    c = http.client.HTTPSConnection("%s:%s" % (host, port), context=ctx)
+    c.request(method, path, data, headers)
+    r = c.getresponse()
+    t = r.read()
+    s = r.status
+    h = dict(r.getheaders())
+    c.close()
+    return [s, t, h]
+
+
+def generate_ssl_cert(tmpdir):
+    """Generate a self-signed EC certificate and key in tmpdir.
+    Returns (cert_path, key_path).
+    """
+    cert_path = os.path.join(tmpdir, "test-cert.pem")
+    key_path = os.path.join(tmpdir, "test-key.pem")
+    subprocess.check_call([
+        "openssl", "req", "-x509", "-newkey", "ec",
+        "-pkeyopt", "ec_paramgen_curve:prime256v1",
+        "-keyout", key_path, "-out", cert_path,
+        "-days", "1", "-nodes",
+        "-subj", "/CN=rspamd-test",
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # Make readable by rspamd worker (runs as nobody)
+    os.chmod(cert_path, 0o644)
+    os.chmod(key_path, 0o644)
+    return cert_path, key_path
+
+
 def hard_link(src, dst):
     os.link(src, dst)
 
@@ -202,6 +269,222 @@ def Scan_File(filename, **headers):
     r = c.getresponse()
     assert r.status == 200
     d = json.JSONDecoder(strict=True).decode(r.read().decode('utf-8'))
+    c.close()
+    BuiltIn().set_test_variable("${SCAN_RESULT}", d)
+    return
+
+
+def _build_multipart(boundary, metadata_json, message_bytes):
+    """Build a multipart/form-data body with metadata and message parts."""
+    body = b""
+    body += ("--" + boundary + "\r\n").encode()
+    body += b"Content-Disposition: form-data; name=\"metadata\"\r\n"
+    body += b"Content-Type: application/json\r\n"
+    body += b"\r\n"
+    if isinstance(metadata_json, str):
+        metadata_json = metadata_json.encode('utf-8')
+    body += metadata_json
+    body += b"\r\n"
+    body += ("--" + boundary + "\r\n").encode()
+    body += b"Content-Disposition: form-data; name=\"message\"\r\n"
+    body += b"\r\n"
+    if isinstance(message_bytes, str):
+        message_bytes = message_bytes.encode('utf-8')
+    body += message_bytes
+    body += b"\r\n"
+    body += ("--" + boundary + "--\r\n").encode()
+    return body
+
+
+def _build_multipart_single(boundary, part_name, part_data, content_type=None):
+    """Build a multipart/form-data body with a single part."""
+    body = b""
+    body += ("--" + boundary + "\r\n").encode()
+    body += ("Content-Disposition: form-data; name=\"%s\"\r\n" % part_name).encode()
+    if content_type:
+        body += ("Content-Type: %s\r\n" % content_type).encode()
+    body += b"\r\n"
+    if isinstance(part_data, str):
+        part_data = part_data.encode('utf-8')
+    body += part_data
+    body += b"\r\n"
+    body += ("--" + boundary + "--\r\n").encode()
+    return body
+
+
+def _parse_multipart_response(body, content_type):
+    """Parse a multipart/mixed response and return the 'result' part data as string."""
+    if isinstance(body, bytes):
+        body = body.decode('utf-8', errors='replace')
+
+    # Extract boundary from Content-Type header
+    m = re.search(r'boundary="?([^";]+)"?', content_type)
+    if not m:
+        raise ValueError("No boundary found in Content-Type: %s" % content_type)
+    boundary = m.group(1)
+
+    # Split on boundary
+    parts = body.split("--" + boundary)
+    for part in parts:
+        if part.startswith("--"):
+            continue  # closing boundary
+        if not part.strip():
+            continue
+
+        # Split headers from body
+        if "\r\n\r\n" in part:
+            headers, data = part.split("\r\n\r\n", 1)
+        elif "\n\n" in part:
+            headers, data = part.split("\n\n", 1)
+        else:
+            continue
+
+        # Check if this is the "result" part
+        if 'name="result"' in headers:
+            # Strip trailing \r\n
+            data = data.rstrip("\r\n")
+            return data
+
+    raise ValueError("No 'result' part found in multipart response")
+
+
+def Scan_File_V3(filename, metadata=None, **headers):
+    """Send a /checkv3 multipart request and set ${SCAN_RESULT}."""
+    addr = BuiltIn().get_variable_value("${RSPAMD_LOCAL_ADDR}")
+    port = BuiltIn().get_variable_value("${RSPAMD_PORT_NORMAL}")
+
+    meta = metadata if metadata else {}
+    meta_json = json.dumps(meta)
+    message_data = open(filename, "rb").read()
+
+    boundary = "----rspamd-test-%016x" % random.getrandbits(64)
+    body = _build_multipart(boundary, meta_json, message_data)
+
+    headers["Content-Type"] = "multipart/form-data; boundary=" + boundary
+    if "Queue-Id" not in headers:
+        headers["Queue-Id"] = BuiltIn().get_variable_value("${TEST_NAME}")
+
+    c = http.client.HTTPConnection("%s:%s" % (addr, port))
+    c.request("POST", "/checkv3", body, headers)
+    r = c.getresponse()
+    assert r.status == 200, "Expected HTTP 200 but got %d" % r.status
+
+    resp_body = r.read()
+    resp_ct = r.getheader("Content-Type", "")
+    result_data = _parse_multipart_response(resp_body, resp_ct)
+
+    d = json.JSONDecoder(strict=True).decode(result_data)
+    c.close()
+    BuiltIn().set_test_variable("${SCAN_RESULT}", d)
+    return
+
+
+def Scan_File_V3_Expect_Error(filename, expected_status, metadata=None,
+                               body_override=None, content_type_override=None,
+                               **headers):
+    """Send a /checkv3 request and expect a specific HTTP error status."""
+    addr = BuiltIn().get_variable_value("${RSPAMD_LOCAL_ADDR}")
+    port = BuiltIn().get_variable_value("${RSPAMD_PORT_NORMAL}")
+
+    boundary = "----rspamd-test-%016x" % random.getrandbits(64)
+
+    if body_override is not None:
+        body = body_override
+    else:
+        meta = metadata if metadata else {}
+        meta_json = json.dumps(meta)
+        message_data = open(filename, "rb").read() if filename else b""
+        body = _build_multipart(boundary, meta_json, message_data)
+
+    if content_type_override:
+        headers["Content-Type"] = content_type_override
+    else:
+        headers["Content-Type"] = "multipart/form-data; boundary=" + boundary
+
+    if "Queue-Id" not in headers:
+        headers["Queue-Id"] = BuiltIn().get_variable_value("${TEST_NAME}")
+
+    c = http.client.HTTPConnection("%s:%s" % (addr, port))
+    c.request("POST", "/checkv3", body, headers)
+    r = c.getresponse()
+    actual_status = r.status
+    r.read()
+    c.close()
+    assert actual_status == int(expected_status), \
+        "Expected HTTP %s but got %d" % (expected_status, actual_status)
+    return
+
+
+def Scan_File_V3_Single_Part(part_name, part_data, content_type_part=None, **headers):
+    """Send a /checkv3 request with only a single part."""
+    addr = BuiltIn().get_variable_value("${RSPAMD_LOCAL_ADDR}")
+    port = BuiltIn().get_variable_value("${RSPAMD_PORT_NORMAL}")
+
+    boundary = "----rspamd-test-%016x" % random.getrandbits(64)
+    body = _build_multipart_single(boundary, part_name, part_data, content_type_part)
+
+    headers["Content-Type"] = "multipart/form-data; boundary=" + boundary
+    if "Queue-Id" not in headers:
+        headers["Queue-Id"] = BuiltIn().get_variable_value("${TEST_NAME}")
+
+    c = http.client.HTTPConnection("%s:%s" % (addr, port))
+    c.request("POST", "/checkv3", body, headers)
+    r = c.getresponse()
+    status = r.status
+    r.read()
+    c.close()
+    return status
+
+
+def Scan_File_SSL(filename, port=None, **headers):
+    """Like Scan_File but over HTTPS (TLS) to the normal worker SSL port."""
+    addr = BuiltIn().get_variable_value("${RSPAMD_LOCAL_ADDR}")
+    if port is None:
+        port = BuiltIn().get_variable_value("${RSPAMD_PORT_NORMAL_SSL}")
+    headers["Queue-Id"] = BuiltIn().get_variable_value("${TEST_NAME}")
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    c = http.client.HTTPSConnection("%s:%s" % (addr, port), context=ctx)
+    c.request("POST", "/checkv2", open(filename, "rb"), headers)
+    r = c.getresponse()
+    assert r.status == 200, "Expected HTTP 200 but got %d" % r.status
+    d = json.JSONDecoder(strict=True).decode(r.read().decode('utf-8'))
+    c.close()
+    BuiltIn().set_test_variable("${SCAN_RESULT}", d)
+    return
+
+
+def Scan_File_V3_SSL(filename, port=None, metadata=None, **headers):
+    """Like Scan_File_V3 but over HTTPS (TLS)."""
+    addr = BuiltIn().get_variable_value("${RSPAMD_LOCAL_ADDR}")
+    if port is None:
+        port = BuiltIn().get_variable_value("${RSPAMD_PORT_NORMAL_SSL}")
+
+    meta = metadata if metadata else {}
+    meta_json = json.dumps(meta)
+    message_data = open(filename, "rb").read()
+
+    boundary = "----rspamd-test-%016x" % random.getrandbits(64)
+    body = _build_multipart(boundary, meta_json, message_data)
+
+    headers["Content-Type"] = "multipart/form-data; boundary=" + boundary
+    if "Queue-Id" not in headers:
+        headers["Queue-Id"] = BuiltIn().get_variable_value("${TEST_NAME}")
+
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    c = http.client.HTTPSConnection("%s:%s" % (addr, port), context=ctx)
+    c.request("POST", "/checkv3", body, headers)
+    r = c.getresponse()
+    assert r.status == 200, "Expected HTTP 200 but got %d" % r.status
+
+    resp_body = r.read()
+    resp_ct = r.getheader("Content-Type", "")
+    result_data = _parse_multipart_response(resp_body, resp_ct)
+
+    d = json.JSONDecoder(strict=True).decode(result_data)
     c.close()
     BuiltIn().set_test_variable("${SCAN_RESULT}", d)
     return
@@ -417,3 +700,130 @@ def collect_lua_coverage():
 
 def file_exists(file):
     return os.path.isfile(file)
+
+
+def redis_stream_read_msgpack(host, port, stream_key):
+    """Read latest entry from Redis stream and decode msgpack data.
+
+    Returns decoded dict with metadata fields.
+
+    Example:
+    | ${data} = | Redis Stream Read Msgpack | ${RSPAMD_REDIS_ADDR} | ${RSPAMD_REDIS_PORT} | test:structured |
+    """
+    try:
+        import redis
+    except ImportError:
+        raise Exception("redis module not installed - run: pip install redis")
+
+    try:
+        import msgpack
+    except ImportError:
+        raise Exception("msgpack module not installed - run: pip install msgpack")
+
+    r = redis.Redis(host=host, port=int(port), decode_responses=False)
+
+    # Read from stream
+    entries = r.xrange(stream_key, count=1)
+    if not entries:
+        raise Exception(f"No data in stream {stream_key}")
+
+    # Get the first entry's data field
+    entry_id, fields = entries[0]
+    if b'data' not in fields:
+        raise Exception(f"No data field in stream entry, keys: {list(fields.keys())}")
+
+    msgpack_data = fields[b'data']
+
+    # Decode msgpack with raw=True to preserve bytes, then convert what we can
+    decoded = msgpack.unpackb(msgpack_data, raw=True)
+
+    # Convert bytes keys to strings for easier access
+    def convert_keys(obj):
+        if isinstance(obj, dict):
+            return {k.decode('utf-8') if isinstance(k, bytes) else k: convert_keys(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_keys(item) for item in obj]
+        elif isinstance(obj, bytes):
+            # Try to decode as UTF-8, otherwise keep as bytes
+            try:
+                return obj.decode('utf-8')
+            except UnicodeDecodeError:
+                return obj
+        return obj
+
+    return convert_keys(decoded)
+
+
+def validate_structured_metadata(data, expected_fields=None):
+    """Validate structured metadata export format.
+
+    Checks that required fields exist and UUID v7 has correct format.
+
+    Example:
+    | Validate Structured Metadata | ${data} | uuid,ip,score,action |
+    """
+    import re
+
+    if expected_fields is None:
+        expected_fields = 'uuid,ip,score,action'
+
+    errors = []
+
+    for field in expected_fields.split(','):
+        field = field.strip()
+        if field not in data:
+            errors.append(f"Missing field: {field}")
+
+    # Validate UUID v7 format if present
+    if 'uuid' in data:
+        uuid = data['uuid']
+        # UUID v7: xxxxxxxx-xxxx-7xxx-xxxx-xxxxxxxxxxxx
+        if not re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$', str(uuid)):
+            errors.append(f"Invalid UUID v7 format: {uuid}")
+
+    if errors:
+        raise Exception("Validation errors: " + "; ".join(errors))
+
+    return True
+
+
+def validate_zstd_compressed_fields(data):
+    """Validate that zstd compression markers are set correctly.
+
+    Returns count of compressed fields found.
+
+    Example:
+    | ${count} = | Validate Zstd Compressed Fields | ${data} |
+    """
+    count = 0
+
+    # Check text_compressed flag
+    if data.get('text_compressed'):
+        count += 1
+
+    # Check attachments
+    for att in data.get('attachments', []):
+        if att.get('content_compressed'):
+            count += 1
+
+    # Check images
+    for img in data.get('images', []):
+        if img.get('content_compressed'):
+            count += 1
+
+    return count
+
+
+def validate_attachments_have_content_type(data):
+    """Validate that attachments have content_type field.
+
+    Returns count of attachments with content_type.
+
+    Example:
+    | ${count} = | Validate Attachments Have Content Type | ${data} |
+    """
+    count = 0
+    for att in data.get('attachments', []):
+        if 'content_type' in att and att['content_type']:
+            count += 1
+    return count

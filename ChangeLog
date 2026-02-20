@@ -1,3 +1,362 @@
+3.14.3: 08 Jan 2026
+  * [Feature] Add task registry for safe Lua task reference validation
+  * [Feature] Add text quality analysis for PDF garbage filtering
+  * [Feature] Implement basic PDF text extraction with UTF-16 detection
+  * [Feature] Add extra tables API for clickhouse plugin
+  * [Feature] Add confighelp documentation for RBL module
+  * [Feature] WebUI: add backend API interaction error log
+  * [Fix] Neural: by default include symbols with no flags
+  * [Fix] Symcache: make FINE propagation deterministic
+  * [Fix] URL: Prevent false positives from numeric IP regeneration in mailto URLs
+  * [Fix] Settings: Allow spaces in selector regexps
+  * [Fix] Prevent use-after-free in Redis callbacks after session cleanup
+  * [Fix] Lua 5.4 compatibility in clickhouse and elastic plugins
+  * [Fix] Use exact map lookup for DKIM key_table instead of glob
+  * [Fix] Handle connection errors with io_uring backend in HTTP client
+  * [Minor] Update public suffix list
+
+3.14.2: 10 Dec 2025
+  * [Feature] DMARC: Add --recheck-rua option to dmarc_report for RUA filtering at send time
+  * [Feature] Metadata exporter: Add multipart and msgpack formatters
+  * [Feature] Milter headers: Add remove_ar_from option for selective Authentication-Results header removal
+  * [Fix] Security: Backport security fixes from libucl 0.9.3
+  * [Fix] HTTP: Handle early server responses during request write
+  * [Fix] HTTP: Only apply early response handling for HTTP clients
+  * [Fix] MIME: Prevent splitting UTF-8 sequences in header encoding
+  * [Fix] URL: Normalize URLs with multiple slashes between host and path
+  * [Fix] URL: Use locale-independent patterns in URL encoding
+  * [Fix] Milter headers: Allow default_headers_order to be configured
+  * [Fix] Milter headers: Fix hierarchical domain matching in remove_ar_from map lookups
+  * [Fix] Aliases: Enable plugin by default to restore plus-addressing
+  * [Fix] DCC: Handle nil opts in plugin initialization
+  * [Fix] Neural: Fix Lua 5.4 compatibility issues
+  * [Fix] Reputation: Fix whitelist schema and selector-aware checking
+  * [Fix] Logging: Fix off-by-one when at the maximum tag length
+  * [Fix] Logging: Null-terminate the log tag when copying the header
+  * [Fix] Prometheus: Use double type for rspamd_scan_time_average metric
+  * [Fix] Build: FreeBSD 15 inotify build compatibility
+  * [Fix] Build: Remove deprecated OpenSSL engine.h include
+  * [Fix] Lua: Use 0 instead of LUA_OK for lua_pcall result comparison (Lua 5.1 compat)
+  * [Fix] Lua: Handle Lua 5.4 require returning two values
+  * [Fix] Lua: Use math.floor for Lua 5.4 integer division compatibility
+  * [Fix] Lua: Improve loadstring error handling for Lua 5.4 compatibility
+  * [Fix] Lua: Use userdata __gc for UCL objects in all Lua versions
+  * [Fix] Lua: Use ipairs for ordered iteration in header checks
+  * [Fix] Lua: Fix other places of Lua 5.4 rounding issues
+  * [Fix] Performance: Avoid repeated simdutf implementation detection on each call
+  * [Minor] Update public suffix list
+  * [Minor] Debian: Allow skipping ASAN build
+  * [Test] Add Lua 5.4 and cffi-lua support for testing
+  * [Test] Fix Python 3.12+ compatibility in test scripts
+  * [Test] Fix TCP tests for HTTP/1.1 compliance
+
+3.14.1: 1 Dec 2025
+  * [Feature] Composites: Add inverted index for fast composite rule evaluation
+  * [Feature] Composites: Add bloom filter for fast negative symbol lookups
+  * [Feature] Composites: Add statistics tracking and control protocol command
+  * [Feature] Composites: Precompute atom types at config time
+  * [Feature] Multimap: Add combinator option for selector rules
+  * [Feature] SPF: Add rspamadm spf_flatten tool with macro preservation
+  * [Feature] URL: Add deep processing architecture with C-to-Lua filter consultation
+  * [Feature] URL: Add obfuscated URL detection to url_suspect plugin
+  * [Feature] URL: Add rspamd_util.decode_html_entities for HTML entity decoding
+  * [Feature] lua_shape: Add new validation library as tableshape replacement
+  * [Feature] lua_shape: Add T.callable() type for function validation
+  * [Feature] lua_shape: Add callable defaults support
+  * [Feature] Whitelist: Auto-mark symbols with SYMBOL_TYPE_FINE flag
+  * [Fix] url_suspect: Fix plugin causing massive false positives
+  * [Fix] url_suspect: Optimize for high URL volume messages
+  * [Fix] Network: Prevent infinite loop in split_networks_into_chunks()
+  * [Fix] Memory: Fix leak in custom tokenizer result handling
+  * [Fix] Composites: Fix group matchers handling in inverted index
+  * [Fix] Composites: Improve atom polarity detection in inverted index
+  * [Fix] Composites: Copy expression string to memory pool for Lua composites
+  * [Fix] lua_shape: Fix transform logic and tableshape compatibility
+  * [Fix] lua_shape: Fix registry to recursively resolve nested schemas
+  * [Fix] lua_shape: Improve error safety
+  * [Fix] Settings: Keep groups_*/symbols_* fields for runtime processing
+  * [Fix] URL: Encode redirect URLs to handle unencoded spaces and special characters
+  * [Fix] external_relay: Fix mixins and confighelp
+  * [Fix] RBL: Fix plugin transform schemas
+  * [WebUI] Update D3 libs with bug fixes and validation
+  * [WebUI] Restore hover colors for symbols
+  * [WebUI] Fix hover behavior outside status tables
+  * [Minor] Whitelist: Use contemporary API for maps
+  * [Minor] Migrate all plugins and libraries from tableshape to lua_shape
+  * [Minor] Simplify configuration by removing use_*_map flags
+  * [Minor] Add plugins registry with reworked mixins
+  * [Test] Add comprehensive tests for URL deep processing
+  * [Test] Isolate url_suspect tests with symbols_enabled
+
+3.14.0: 10 Nov 2025
+  * [Feature] Fuzzy check: Add HTML fuzzy hashing for structural similarity matching
+  * [Feature] Fuzzy check: Add per-rule text_hashes toggle for HTML-only fuzzy rules
+  * [Feature] Fuzzy check: Add structured checks configuration with backward compatibility
+  * [Feature] Fuzzy storage: Implement full TCP protocol support with auto-switch
+  * [Feature] Fuzzy check: Add TCP connection management and error handling
+  * [Feature] URL: Add task:get_cta_urls() API for proper CTA domain extraction
+  * [Feature] URL: Move CTA processing into dedicated module
+  * [Feature] URL: Add url:get_hash() method for efficient deduplication without string conversion
+  * [Feature] GPT: Add web search context support with Redis caching
+  * [Feature] HTML: Add infrastructure for async URL rewriting with Lua bindings
+  * [Feature] HTML: Add task:rewrite_html_urls() and task:get_html_urls() Lua API
+  * [Feature] WebUI: Implement dark mode with theme toggle and auto detection
+  * [Feature] Aliases: Add advanced resolution with loop detection for converging paths
+  * [Feature] Milter: Add ESMTP argument parsing with Lua API access
+  * [Feature] Milter: Add per-recipient ESMTP args parsing and metadata access
+  * [Feature] Milter: Support array of positions for remove_headers operations
+  * [Feature] Proxy: Add client IP preservation in message headers through chain
+  * [Feature] Rspamc: Add milter.add_headers object format support to --mime
+  * [Feature] Configwizard: Add Postfix integration wizard using postconf utility
+  * [Feature] Build: Add comprehensive BSD workflows (FreeBSD, NetBSD, OpenBSD) with Lua version selection
+  * [Feature] Build: Add automated code review GitHub Actions workflow with Rspamd-specific guidelines
+  * [Feature] Build: Add Docker-based integration test suite with ASAN and real corpus
+  * [Feature] Build: Add automatic public suffix list synchronization
+  * [Feature] Multimap: Add support for symbols with leading numerals
+  * [Feature] DMARC: Add Auto-Reply-To and Precedence headers to prevent out-of-office replies
+  * [Feature] Platform: Add NetBSD memory usage tracking support
+  * [Feature] Utilities: Add fuzzy Redis migration utility
+  * [Feature] Bayes: Allow skipping local/authenticated mail in autolearn condition
+  * [Feature] ARC: Add DKIM signing key API for flexible ARC signing
+  * [Feature] Logger: Add type specifiers support for better formatting
+  * [Feature] Heap: Add rspamd_heap_push_slot to eliminate double allocation
+  * [Fix] DNS: Preserve req->pos during reply validation to prevent packet truncation on UDP-to-TCP retransmits
+  * [Fix] DNS: Regenerate transaction ID before copying to TCP buffer to avoid collisions
+  * [Fix] DNS: Fix nameserver round-robin when using /etc/resolv.conf
+  * [Fix] DNS: Fix TCP uninitialized memory leak
+  * [Fix] DMARC: Add batching and forced GC for Redis connections to prevent pool exhaustion
+  * [Fix] DMARC: Validate and normalize batch_size to prevent fractional indexing and loop errors
+  * [Fix] DMARC: Refactor reporting to use helper functions and async maps
+  * [Fix] Allocator: Fix jemalloc/system malloc mixing in getline() to prevent crashes
+  * [Fix] Allocator: Fix allocator mismatches in hiredis
+  * [Fix] Allocator: Fix allocator mismatches in libucl
+  * [Fix] Hyperscan: Use runtime version instead of compile-time for database validation
+  * [Fix] Hyperscan: Auto-recreate invalid unserialized cache files on version mismatch
+  * [Fix] Memory: Fix leaks in fuzzy storage khash tables
+  * [Fix] Memory: Fix leaks in upstream address parsing
+  * [Fix] Memory: Fix leaks in *-any address parsing
+  * [Fix] Memory: Fix OpenSSL providers cleanup
+  * [Fix] Memory: Fix UCL object memory leak in Lua integration
+  * [Fix] Memory: Fix stat metadata tokenization leak
+  * [Fix] Fuzzy TCP: Fix double-release in fuzzy_tcp_session
+  * [Fix] Fuzzy TCP: Fix refcount leak in destructor
+  * [Fix] Fuzzy TCP: Fix timeout handling and buffer overflow
+  * [Fix] Fuzzy TCP: Fix endianness mismatch in framing protocol
+  * [Fix] Fuzzy TCP: Fix race conditions and fd reuse bugs
+  * [Fix] Fuzzy TCP: Use pure ev_timer for session timeouts
+  * [Fix] Fuzzy TCP: Fix server replies and client event handling
+  * [Fix] Shutdown: Keep srv events active during shutdown to track auxiliary processes
+  * [Fix] ARC: Restore strict header ordering to comply with RFC 8617
+  * [Fix] ARC: Add ed25519 key support
+  * [Fix] Composites: Implement two-phase evaluation for postfilter dependencies
+  * [Fix] Composites: Use null-terminated string for symbol lookup
+  * [Fix] URL: Refactor extraction to prevent DoS with hash-based deduplication
+  * [Fix] URL: Add 50k URL limit with warning for DoS protection
+  * [Fix] URL: Skip HTML_DISPLAYED URLs in CTA detection
+  * [Fix] URL: Fix CTA priority preservation in extract_specific_urls
+  * [Fix] Bayes: Improve Redis server discovery
+  * [Fix] Bayes: Only bypass learn when header value matches
+  * [Fix] ESMTP: Robust per-recipient parsing in milter with safe cursor advance
+  * [Fix] ESMTP: Refcount ESMTP args in proxy_session_refresh to avoid use-after-free
+  * [Fix] ESMTP: Correct Lua stack cleanup in lua_task_get_rcpt_esmtp_args
+  * [Fix] HTML: Correct attribute value offset calculation for URL rewriting
+  * [Fix] HTML: Add HTML entity encoding for URL rewriting
+  * [Fix] HTML: Fix segfault due to incorrect HTML features access
+  * [Fix] HTML: Fix frequency-based ordering in domain hashing
+  * [Fix] HTML: Fix shingles hash generation bugs
+  * [Fix] HTML: Fix memory leaks in shingles generation
+  * [Fix] HTML: Fix memory management in html_cta.process_html_links
+  * [Fix] HTML: Fix CSS class normalization in fuzzy tokens
+  * [Fix] HTML: Fix cache key collision between text and HTML fuzzy hashes
+  * [Fix] OpenBSD: Fix kinfo_proc structure member names
+  * [Fix] OpenBSD: Disable Hyperscan (not available)
+  * [Fix] FreeBSD: Fix zstd package name
+  * [Fix] FreeBSD: Add IGNORE_OSVERSION for package version mismatches
+  * [Fix] NetBSD: Setup pkgin and PKG_PATH before installing packages
+  * [Fix] NetBSD: Fix missing dependencies and package names
+  * [Fix] BSD: Remove -j flag from ninja in all BSD workflows
+  * [Fix] Multimap: Handle symbols with leading numerals
+  * [Fix] Aliases: Prevent creation of malformed email addresses
+  * [Fix] Aliases: Fix alias loop detection for converging paths
+  * [Fix] Aliases: Fix is_local_domain to support backend objects
+  * [Fix] Aliases: Correct to_local when no recipients present
+  * [Fix] Aliases: Fix set_addr validation to prevent malformed addresses
+  * [Fix] MIME: Remove Authentication-Results and anonymize envelope-from in Received headers
+  * [Fix] Mempool: Prevent double-free in destructor cleanup
+  * [Fix] Rspamadm: Unbreak dnstool command
+  * [Fix] Integration tests: Fix ASAN configuration and startup diagnostics
+  * [Minor] Replace GHashTable with khash in fuzzy_check.c and lua_textpart_get_cta_urls
+  * [Minor] Update cache key prefix to match module name in llm_search_context
+  * [Minor] Fix llm_search_context to follow Rspamd idioms
+  * [Minor] Refactor llm_search_context to use lua_cache module
+  * [Minor] Address review comments in various modules
+  * [Minor] Fix droid usage
+  * [Minor] Use GPT-5 Codex for code reviews
+  * [Minor] Update libucl with automatic stack management
+  * [Rework] Prioritize CTA URLs in redirector and Lua helpers
+  * [Rework] RBL configuration: Add new from selectors, content_urls checks, and lower_utf8 for hashed domains
+  * [Rework] Make Bayes learn guards configurable
+  * [Rework] Refactor element visibility control to use Bootstrap classes
+  * [Rework] Use postconf utility for Postfix configuration in configwizard
+  * [Rework] Remove Lua-level HTTP header parsing in ESMTP args getters
+  * [Rework] Add CFG_REF_* macros with debug logging for config refcounting
+  * [Rework] Move OpenSSL providers from global to libs_ctx
+  * [Rework] Convert heap to fully intrusive kvec-based implementation
+  * [Rework] Add specialized pool types for long-lived and short-lived allocations
+  * [Rework] Improve memory pool destructors with smart preallocation based on pool type
+  * [Project] Restrict code review workflow to authorized maintainers
+  * [Project] Add Claude Code and Cursor AI assistant configuration
+  * [WebUI] Replace Glyphicons with FontAwesome SVG icons
+  * [WebUI] Update CodeJar to version 4.3.0
+  * [WebUI] Update Node.js and ESLint
+  * [WebUI] Update D3-based visualization libs
+  * [WebUI] Replace deprecated alert-error class with alert-danger
+  * [WebUI] Add search syntax hint to history table filter input
+  * [WebUI] Fix theme toggle default to auto
+  * [WebUI] Keep classifiers list when request is skipped
+  * [WebUI] Repopulate classifier dropdown
+  * [WebUI] Add comment for removeEventListener
+  * [WebUI] Fix icon rendering race condition in tab initialization
+  * [Test] Add comprehensive Lua unit tests for HTML URL rewriting
+  * [Test] Add unit tests for HTML URL rewriting patch engine
+  * [Test] Add functional tests for HTML fuzzy hashing
+  * [Test] Add ARC chain verification tests with multiple signatures
+  * [Test] Add e2e for classifier dropdown population
+  * [Test] Multimap symbol with leading numerals
+  * [Test] Sync public suffix list automatically
+  * [Test] Update JS linters
+  * [Test] Fix integration test environment variable passing
+  * [Test] Add detailed error output for integration test failures
+
+3.13.2: 5 Oct 2025
+  * [Feature] Fuzzy check: Add separate encryption keys for read and write operations
+  * [Feature] DKIM: Add ED25519 support for DKIM signing and verification with OpenSSL version checks
+  * [Feature] Vault: Add HashiCorp Vault KV version 2 support for DKIM key management
+  * [Feature] MetaDefender: Add MetaDefender Cloud Lua module for SHA256 hash lookups
+  * [Feature] LLM: Add user/domain context support for LLM-based classification with Redis-based conversation context
+  * [Feature] DMARC: Add RUA address exclusion configuration option
+  * [Fix] DKIM: Fix relaxed bodyhash calculation for lines with only spaces to comply with RFC 6376
+  * [Fix] DKIM: Fix ED25519 key loading to prevent memory corruption in union handling
+  * [Fix] HTTP maps: Enforce server-controlled refresh intervals and prevent aggressive polling
+  * [Fix] HTTP maps: Prevent time_t overflow in expires header processing
+  * [Fix] Once received plugin: Fix duplicate symbol addition by changing break to return
+  * [Fix] Redis: Propagate unused Sentinel options properly
+  * [Fix] Fuzzy check: Fix reply decryption when using separate read/write keys
+  * [Fix] Fuzzy check: Add fallback when only one specific encryption key is set
+  * [Fix] Fuzzy check: Fix duplicate key filtering in reply decryption
+  * [Fix] Fuzzy ping: Allow read/write servers configuration
+  * [Minor] Fuzzy check: Refactor encryption key selection into helper functions
+  * [Minor] Fuzzy check: Stop early when found a correct key
+  * [Minor] Add cursor rules for development
+
+3.13.1: 30 Sep 2025
+  * [Feature] Archive module: Full support for encrypted ZIP archives with ZipCrypto and AES encryption
+  * [Feature] Archive module: Both reading and writing of AES-encrypted ZIP archives is supported
+  * [Feature] Archive module: Updated Lua bindings for libarchive
+  * [Feature] Encrypted maps: Support for encrypted maps to enable new distribution scenarios
+  * [Feature] Redis TLS: Configurable TLS connections in Redis backend
+  * [Feature] Map helpers alignment: Enforce 64-byte alignment to prevent unaligned memory access
+  * [Feature] Enhanced CLI for secretbox with additional security test coverage
+  * [Fix] MIME encoding: Major overhauls and multiple fixes for MIME encoding logic
+  * [Fix] MIME encoding: Improved handling and decoding of UTF-8 in MIME headers
+  * [Fix] Learning system: Numerous fixes to learn checks and autolearn flag handling
+  * [Fix] Learning system: Prevention of duplicate message learning
+  * [Fix] Learning system: Extended multiclass learning test coverage
+  * [Fix] Critical: Fixed bug when converting zero-length strings to numbers
+  * [Fix] Critical: Fixed XML prolog detection in lua_magic module
+  * [Fix] Build: Fixed build issues on 32-bit platforms
+  * [Fix] Compatibility: Improved compatibility with Lua versions above 5.1
+  * [Fix] Empty input: Addressed issues with empty input handling in lua_magic
+  * [Fix] Testing: Improved stability of automated testing with multiple test fixes
+  * [Fix] Minor compatibility improvements (buffer allocation, missing cmath include)
+
+3.13.0: 17 Sep 2025
+  * [Conf] Add defaults
+  * [Conf] Fix JB IDE damage
+  * [Feature] Add a signal from main to workers for workers ready state
+  * [Feature] Add lua_util.fold_header_with_encoding
+  * [Feature] Add some convenience options to rspamc
+  * [Feature] Add some more OS utility functions
+  * [Feature] Add symbols proxy for piecewise changes
+  * [Feature] Allow lua callback maps to be filled line by line
+  * [Feature] Allow selectors in regexp maps expressions
+  * [Feature] Allow to pass expression flags in the regexp plugin
+  * [Feature] Detect part types in mime parser
+  * [Feature] Resolve DNS nameservers names using getaddrinfo
+  * [Fix] Bayes: Try to be bug-to-bug compatible
+  * [Fix] Check skip_hashes for the returned hashes
+  * [Fix] Fix DL lists initialisations
+  * [Fix] Fix double free in the client...
+  * [Fix] Fix end-to-end proxy compression
+  * [Fix] Fix l= calculations again
+  * [Fix] Fix lua state setting ambiguity
+  * [Fix] Fix order of descriptor closing
+  * [Fix] Fix probabilities overflow
+  * [Fix] Fix rules setup
+  * [Fix] Fix statfiles ordering
+  * [Fix] Fix various corner cases and tests
+  * [Fix] Fix whitelist options in the arc module
+  * [Fix] GPT: Fix occasional damage
+  * [Fix] GPT: fix processing of messages with no subject
+  * [Fix] Prevent WebUI crash with empty RRD
+  * [Fix] Store html attributes that are empty
+  * [Fix] Try to fix learned order
+  * [Fix] Use C++20 standard consistently to resolve ODR violations
+  * [Fix] Use a more straightforward approach for learn cache
+  * [Fix] fix error check in lua_dkim_tools.lua
+  * [Project] Add CTA analytics engine
+  * [Project] Add ability to create custom tokenizers for languages
+  * [Project] Add controller learn endpoints
+  * [Project] Add support of granular timeouts to plugins and maps
+  * [Project] Add tests and fix stuff
+  * [Project] Add tests for LLM provider, fix various issues with metatokens
+  * [Project] Apply changes to bayes_expiry plugin
+  * [Project] Create an isolated API for external tokenizers
+  * [Project] Extract more features from HTML messages
+  * [Project] Fix Lua API and some constexpr compatibility
+  * [Project] Fix binary classification and lua scripts
+  * [Project] Fix more calculation issues
+  * [Project] Fix other classification and learning issues
+  * [Project] Fix scoped compilation again
+  * [Project] Fix symbols finalisation
+  * [Project] Fix unlearn stuff
+  * [Project] Fix various issues
+  * [Project] Fix various other issues
+  * [Project] Further updates
+  * [Project] Implement backoff for upstreams revival
+  * [Project] Implement more flexible http timeouts
+  * [Project] Implement scoped compilation
+  * [Project] Implement scoped regexp cache system
+  * [Project] Multi-class classification project baseline
+  * [Project] Rework rspamc to allow training of different neural types
+  * [Project] Rework system of html tags to allow more tag types
+  * [Project] Rework tokenizers initialisation
+  * [Project] Some rework of the CTA defaults
+  * [Project] Start implementation of the rules maps
+  * [Project] Start to implement better revive strategy for upstreams
+  * [Project] Store regexp rules state to avoid incomplete/orphaned rules
+  * [Project] Support more common html attributes
+  * [Project] Take button weight into consideration
+  * [Project] Use re_cache scopes for maps
+  * [Rework] Fix logger format string mismatch
+  * [Rework] MIME detection via Lua Magic; enforce cfg in Lua task API
+  * [Rework] Return back N-ary optimizations for arithmetic-alike expressions
+  * [Rework] Use GLib agnostic type for words
+  * [Rework]Refactor MIME detection via Lua Magic; enforce cfg in Lua task API
+  * [Rules] Make bitcoin expression to use explicit flags
+
+3.12.1: 17 Jun 2025
+  * [Feature] Add /bayes/classifiers HTTP endpoint
+  * [Feature] Further improvements in scheduling next checks
+  * [Fix] Another fix for maps concurrent load
+  * [Fix] Do not add log tag header in milter logic
+  * [Fix] Do not explicitly add Connection header if it's there
+  * [Fix] Fix proxy headers duplication
+  * [Fix] Fix several issues with the lua_logger
+  * [Fix] Make logger more graceful when dealing with format arguments
+  * [Fix] Try to avoid incomplete writes
+  * [Rework] Eliminate maps locking
+
 3.12.0: 09 Jun 2025
   * [CritFix] In lua-ucl disable macros and file variables by default
   * [Feature] Add keep-alive support

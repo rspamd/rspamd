@@ -1,25 +1,5 @@
 /*
- The MIT License (MIT)
-
- Copyright (C) 2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
-
- Permission is hereby granted, free of charge, to any person obtaining a copy
- of this software and associated documentation files (the "Software"), to deal
- in the Software without restriction, including without limitation the rights
- to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- copies of the Software, and to permit persons to whom the Software is
- furnished to do so, subject to the following conditions:
-
- The above copyright notice and this permission notice shall be included in
- all copies or substantial portions of the Software.
-
- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- THE SOFTWARE.
+ * Copyright (C) 2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
  */
 
 define(["jquery", "app/common", "d3pie", "d3"],
@@ -55,15 +35,59 @@ define(["jquery", "app/common", "d3pie", "d3"],
             return out;
         }
 
-        function displayStatWidgets(checked_server) {
-            const servers = JSON.parse(sessionStorage.getItem("Credentials"));
-            let data = {};
-            if (servers && servers[checked_server]) {
-                ({data} = servers[checked_server]);
+        let rowspanHoverHandlersInitialized = false;
+
+        function attachRowspanHoverHandlers(tableId) {
+            const $table = $(tableId);
+
+            function findRowspanCells($row) {
+                const headerCount = $table.find("thead th").length;
+                if ($row.find("td").length >= headerCount) return [];
+
+                const result = [];
+                $row.prevAll().find("td[rowspan]").each((_, el) => {
+                    const $cell = $(el);
+                    const rowspan = parseInt($cell.attr("rowspan"), 10);
+                    const distance = $row.prevAll().length - $cell.parent().prevAll().length;
+                    if (distance < rowspan) {
+                        result.push($cell);
+                    }
+                });
+                return result;
             }
 
+            $table.on("mouseenter", "tbody td", (event) => {
+                const $cell = $(event.currentTarget);
+                const $row = $cell.parent();
+
+                if ($cell.attr("rowspan")) {
+                    // Hovering over rowspan cell - highlight entire group
+                    const rowspan = parseInt($cell.attr("rowspan"), 10);
+                    $cell.addClass("table-hover-cell");
+                    $row.find("td").addClass("table-hover-cell");
+                    $row.nextAll().slice(0, rowspan - 1).find("td").addClass("table-hover-cell");
+
+                    // Also highlight parent rowspan cells (e.g., server when hovering classifier)
+                    findRowspanCells($row).forEach(($parentCell) => {
+                        if ($parentCell[0] !== $cell[0]) $parentCell.addClass("table-hover-cell");
+                    });
+                } else {
+                    // Hovering over regular cell - highlight current row
+                    $row.find("td").addClass("table-hover-cell");
+
+                    // Highlight all rowspan cells for this row
+                    findRowspanCells($row).forEach(($rowspanCell) => $rowspanCell.addClass("table-hover-cell"));
+                }
+            }).on("mouseleave", "tbody td", () => $table.find("tbody td").removeClass("table-hover-cell"));
+        }
+
+        function displayStatWidgets(checked_server) {
+            const servers = JSON.parse(sessionStorage.getItem("Credentials") || "{}");
+            const data = servers[checked_server]?.data ?? {};
+
             const stat_w = [];
-            $("#statWidgets").empty().hide();
+            $("#statWidgets").empty();
+            common.hide("#statWidgets");
             $.each(data, (i, item) => {
                 const widgetsOrder = ["scanned", "no action", "greylist", "add header", "rewrite subject", "reject", "learned"];
 
@@ -102,7 +126,7 @@ define(["jquery", "app/common", "d3pie", "d3"],
                 .wrapAll('<div class="card stat-box text-center shadow-sm float-end">' +
                   '<div class="widget overflow-hidden p-2 text-capitalize"></div></div>');
             $("#statWidgets").find("div.float-end").appendTo("#statWidgets");
-            $("#statWidgets").show();
+            common.show("#statWidgets");
 
             $("#clusterTable tbody").empty();
             $("#selSrv").empty();
@@ -179,32 +203,75 @@ define(["jquery", "app/common", "d3pie", "d3"],
             });
 
             function addStatfiles(server, statfiles) {
-                $.each(statfiles, (i, statfile) => {
-                    let cls = "";
-                    switch (statfile.symbol) {
-                        case "BAYES_SPAM":
-                            cls = "symbol-positive";
-                            break;
-                        case "BAYES_HAM":
-                            cls = "symbol-negative";
-                            break;
-                        default:
+                const safeStatfiles = Array.isArray(statfiles) ? statfiles : [];
+                const symbolClassMap = {BAYES_SPAM: "symbol-positive", BAYES_HAM: "symbol-negative"};
+                const rowsCount = safeStatfiles.length;
+
+                function coerceNumber(value) { return (Number.isFinite(value) ? value : Number(value) || 0); }
+
+                function guessClassFromSymbol(symbol) {
+                    if (!symbol) return "-";
+
+                    const upperSymbol = symbol.toUpperCase();
+                    if (upperSymbol.includes("SPAM")) return "spam";
+                    if (upperSymbol.includes("HAM")) return "ham";
+
+                    return "-";
+                }
+
+                function formatClassifierLabel(statfile) {
+                    const classifier = statfile.classifier ?? {};
+                    const badges = [];
+                    function badge(cls, text) { return ` <span class="badge ${cls} ms-1">${text}</span>`; }
+
+                    if (classifier.type === "multi-class") badges.push(badge("bg-secondary", "multi-class"));
+                    if (classifier.per_user) badges.push(badge("bg-info", "per-user"));
+
+                    return common.escapeHTML(classifier.name ?? "-") + badges.join("");
+                }
+
+                function renderCell(value, className) {
+                    const cls = className?.trim();
+                    return cls ? `<td class="${cls}">${value}</td>` : `<td>${value}</td>`;
+                }
+
+                $.each(safeStatfiles, (i, statfile) => {
+                    const symbol = statfile.symbol ?? "-";
+                    const cls = symbolClassMap[symbol] || "";
+                    const clName = statfile.classifier?.name ?? "-";
+                    const prevClName = i > 0 ? (safeStatfiles[i - 1].classifier?.name ?? "-") : null;
+
+                    const serverCell = i === 0 ? `<td rowspan="${rowsCount}">${common.escapeHTML(server)}</td>` : "";
+
+                    let classifierCell = "";
+                    if (clName !== prevClName) {
+                        let groupSize = 1;
+                        for (let k = i + 1; k < safeStatfiles.length; k++) {
+                            if ((safeStatfiles[k].classifier?.name ?? "-") === clName) {
+                                groupSize++;
+                            } else break;
+                        }
+                        classifierCell = `<td rowspan="${groupSize}">${formatClassifierLabel(statfile)}</td>`;
                     }
-                    $("#bayesTable tbody").append("<tr>" +
-                      (i === 0 ? '<td rowspan="' + statfiles.length + '">' + server + "</td>" : "") +
-                      '<td class="' + cls + '">' + statfile.symbol + "</td>" +
-                      '<td class="' + cls + '">' + statfile.type + "</td>" +
-                      '<td class="text-end ' + cls + '">' + statfile.revision + "</td>" +
-                      '<td class="text-end ' + cls + '">' + statfile.users + "</td></tr>");
+
+                    $("#bayesTable tbody").append(`<tr>${serverCell}${classifierCell}${[
+                        renderCell(common.escapeHTML(statfile.class ?? guessClassFromSymbol(symbol)), cls),
+                        renderCell(common.escapeHTML(symbol), cls),
+                        renderCell(common.escapeHTML(statfile.type ?? "-"), cls),
+                        renderCell(coerceNumber(statfile.revision), `text-end ${cls}`),
+                        renderCell(coerceNumber(statfile.users), `text-end ${cls}`),
+                    ].join("")}</tr>`);
                 });
             }
 
             function addFuzzyStorage(server, storages) {
                 let i = 0;
                 $.each(storages, (storage, hashes) => {
-                    $("#fuzzyTable tbody").append("<tr>" +
-                      (i === 0 ? '<td rowspan="' + Object.keys(storages).length + '">' + server + "</td>" : "") +
-                      "<td>" + storage + "</td>" +
+                    const serverCell = (i === 0)
+                        ? '<td rowspan="' + Object.keys(storages).length + '">' + common.escapeHTML(server) + "</td>"
+                        : "";
+                    $("#fuzzyTable tbody").append("<tr>" + serverCell +
+                      "<td>" + common.escapeHTML(storage) + "</td>" +
                       '<td class="text-end">' + hashes + "</td></tr>");
                     i++;
                 });
@@ -221,6 +288,12 @@ define(["jquery", "app/common", "d3pie", "d3"],
             } else {
                 addStatfiles(checked_server, data.statfiles);
                 addFuzzyStorage(checked_server, data.fuzzy_hashes);
+            }
+
+            if (!rowspanHoverHandlersInitialized) {
+                attachRowspanHoverHandlers("#bayesTable");
+                attachRowspanHoverHandlers("#fuzzyTable");
+                rowspanHoverHandlersInitialized = true;
             }
         }
 
@@ -247,9 +320,9 @@ define(["jquery", "app/common", "d3pie", "d3"],
             }
 
             const data = [];
-            const creds = JSON.parse(sessionStorage.getItem("Credentials"));
+            const creds = JSON.parse(sessionStorage.getItem("Credentials") || "{}");
             // Controller doesn't return the 'actions' object until at least one message is scanned
-            if (creds && creds[checked_server] && creds[checked_server].data.scanned) {
+            if (creds[checked_server]?.data?.scanned) {
                 const {actions} = creds[checked_server].data;
 
                 ["no action", "soft reject", "add header", "rewrite subject", "greylist", "reject"]
@@ -327,8 +400,14 @@ define(["jquery", "app/common", "d3pie", "d3"],
                                 error: function (jqXHR, textStatus, errorThrown) {
                                     if (!(alerted in sessionStorage)) {
                                         sessionStorage.setItem(alerted, true);
-                                        common.alertMessage("alert-error", neighbours_status[e].name + " > " +
-                                          "Cannot receive legacy stats data" + (errorThrown ? ": " + errorThrown : ""));
+                                        common.logError({
+                                            server: neighbours_status[e].name,
+                                            endpoint: "graph",
+                                            message: "Cannot receive legacy stats data" +
+                                                (errorThrown ? ": " + errorThrown : ""),
+                                            httpStatus: jqXHR.status,
+                                            errorType: "http_error"
+                                        });
                                     }
                                     process_node_stat(e);
                                 }

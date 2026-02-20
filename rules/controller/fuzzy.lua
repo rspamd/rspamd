@@ -37,10 +37,30 @@ local function handle_gen_fuzzy(task, conn, req_params)
   end
 end
 
+local function handle_fuzzy_storages(_task, conn)
+  if type(rspamd_plugins.fuzzy_check) == 'table'
+      and type(rspamd_plugins.fuzzy_check.list_storages) == 'function' then
+    local ok, result = pcall(rspamd_plugins.fuzzy_check.list_storages, rspamd_config)
+
+    if ok then
+      conn:send_ucl({ success = true, storages = result })
+    else
+      conn:send_error(500, 'cannot list fuzzy storages')
+    end
+  else
+    conn:send_error(404, 'fuzzy_check is not enabled')
+  end
+end
+
 return {
   hashes = {
     handler = handle_gen_fuzzy,
     need_task = true,
+    enable = false
+  },
+  storages = {
+    handler = handle_fuzzy_storages,
+    need_task = false,
     enable = false
   },
 }

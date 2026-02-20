@@ -1,0 +1,28 @@
+From: notification@example.com
+To: user@test.com
+Subject: Your weekly newsletter
+Content-Type: text/html; charset=utf-8
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Newsletter</title>
+</head>
+<body>
+  <div class="header">
+    <a href="https://example.com"><img src="https://cdn.example.com/logo.png" alt="Logo"/></a>
+  </div>
+  <div class="content">
+    <h1>Weekly Newsletter</h1>
+    <p>Different stories for different week</p>
+    <div class="article">
+      <h2>Different Article Title</h2>
+      <p>Completely different article content with other text here</p>
+      <a class="button" href="https://example.com/another-article">Read More</a>
+    </div>
+  </div>
+  <div class="footer">
+    <p>Unsubscribe: <a href="https://example.com/unsubscribe">click here</a></p>
+  </div>
+</body>
+</html>

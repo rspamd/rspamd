@@ -139,6 +139,27 @@ rspamd_milter_session_reset(struct rspamd_milter_session *session,
 			session->from = NULL;
 		}
 
+		if (session->mail_esmtp_args) {
+			msg_debug_milter("cleanup mail esmtp args");
+			g_hash_table_unref(session->mail_esmtp_args);
+			session->mail_esmtp_args = NULL;
+		}
+
+		if (session->rcpt_esmtp_args) {
+			GHashTable *args;
+
+			msg_debug_milter("cleanup rcpt esmtp args");
+			PTR_ARRAY_FOREACH(session->rcpt_esmtp_args, i, args)
+			{
+				if (args) {
+					g_hash_table_unref(args);
+				}
+			}
+
+			g_ptr_array_free(session->rcpt_esmtp_args, TRUE);
+			session->rcpt_esmtp_args = NULL;
+		}
+
 		if (priv->headers) {
 			msg_debug_milter("cleanup headers");
 			char *k;
@@ -322,6 +343,65 @@ rspamd_milter_plan_io(struct rspamd_milter_session *session,
 		(pos) += sizeof(var);               \
 		(var) = ntohs(var);                 \
 	} while (0)
+
+/**
+ * Parse ESMTP arguments from MAIL/RCPT commands
+ * Arguments are null-terminated strings after the email address
+ * Format: KEY=VALUE or KEY (without value)
+ */
+static GHashTable *
+rspamd_milter_parse_esmtp_args(const unsigned char *pos,
+							   const unsigned char *end,
+							   rspamd_mempool_t *pool)
+{
+	GHashTable *args = NULL;
+	const unsigned char *arg_start, *arg_end, *eq;
+	rspamd_fstring_t *key, *value;
+	rspamd_ftok_t *key_tok, *value_tok;
+
+	while (pos < end) {
+		/* Each argument is null-terminated */
+		arg_end = memchr(pos, '\0', end - pos);
+
+		if (!arg_end || arg_end == pos) {
+			/* No more arguments or empty argument */
+			break;
+		}
+
+		arg_start = pos;
+
+		/* Look for KEY=VALUE separator */
+		eq = memchr(arg_start, '=', arg_end - arg_start);
+
+		if (!args) {
+			/* Lazy initialization */
+			args = g_hash_table_new_full(rspamd_ftok_icase_hash,
+										 rspamd_ftok_icase_equal,
+										 rspamd_fstring_mapped_ftok_free,
+										 rspamd_fstring_mapped_ftok_free);
+		}
+
+		if (eq && eq > arg_start) {
+			/* KEY=VALUE format */
+			key = rspamd_fstring_new_init(arg_start, eq - arg_start);
+			value = rspamd_fstring_new_init(eq + 1, arg_end - eq - 1);
+		}
+		else {
+			/* KEY only format (no value) */
+			key = rspamd_fstring_new_init(arg_start, arg_end - arg_start);
+			value = rspamd_fstring_new_init("", 0);
+		}
+
+		key_tok = rspamd_ftok_map(key);
+		value_tok = rspamd_ftok_map(value);
+
+		g_hash_table_replace(args, key_tok, value_tok);
+
+		pos = arg_end + 1;
+	}
+
+	return args;
+}
 
 static gboolean
 rspamd_milter_process_command(struct rspamd_milter_session *session,
@@ -658,7 +738,23 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 					session->from = addr;
 				}
 
-				/* TODO: parse esmtp arguments */
+				/* Parse ESMTP arguments */
+				pos = zero + 1;
+				if (pos < end) {
+					session->mail_esmtp_args = rspamd_milter_parse_esmtp_args(pos, end, priv->pool);
+
+					if (session->mail_esmtp_args) {
+						GHashTableIter iter;
+						gpointer key, value;
+
+						g_hash_table_iter_init(&iter, session->mail_esmtp_args);
+						while (g_hash_table_iter_next(&iter, &key, &value)) {
+							rspamd_ftok_t *k = (rspamd_ftok_t *) key;
+							rspamd_ftok_t *v = (rspamd_ftok_t *) value;
+							msg_debug_milter("mail esmtp arg: %T=%T", k, v);
+						}
+					}
+				}
 				break;
 			}
 			else {
@@ -749,15 +845,20 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 		while (pos < end) {
 			struct rspamd_email_address *addr;
 			char *cpy;
+			GHashTable *esmtp_args = NULL;
 
 			zero = memchr(pos, '\0', end - pos);
 
 			if (zero && zero > pos) {
-				cpy = rspamd_mempool_alloc(priv->pool, end - pos);
-				memcpy(cpy, pos, end - pos);
+				gsize addr_len = (gsize) (zero - pos);
 
-				msg_debug_milter("got rcpt: %*s", (int) (zero - pos), cpy);
-				addr = rspamd_email_address_from_smtp(cpy, zero - pos);
+				/* Allocate exact length for address plus NUL terminator */
+				cpy = rspamd_mempool_alloc(priv->pool, addr_len + 1);
+				memcpy(cpy, pos, addr_len);
+				cpy[addr_len] = '\0';
+
+				msg_debug_milter("got rcpt: %*s", (int) addr_len, cpy);
+				addr = rspamd_email_address_from_smtp(cpy, addr_len);
 
 				if (addr) {
 					if (!session->rcpts) {
@@ -765,18 +866,88 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 					}
 
 					g_ptr_array_add(session->rcpts, addr);
-				}
 
-				pos = zero + 1;
+					/* Parse ESMTP arguments for this recipient only */
+					const unsigned char *args_start = zero + 1;
+					const unsigned char *scan = args_start;
+
+					if (args_start < end) {
+						/* Walk over NUL-terminated tokens until a double-NUL or end-of-buffer */
+						while (scan < end) {
+							const unsigned char *z = memchr(scan, '\0', end - scan);
+
+							if (z == NULL) {
+								/* Malformed (no further NUL), treat rest as arguments */
+								scan = end;
+								break;
+							}
+
+							/* Advance past this token */
+							scan = z + 1;
+
+							/* Double-NUL terminates the list; consume the terminator */
+							if (scan < end && *scan == '\0') {
+								scan++;
+								break;
+							}
+						}
+
+						if (args_start < scan) {
+							esmtp_args = rspamd_milter_parse_esmtp_args(args_start, scan, priv->pool);
+						}
+
+						if (!session->rcpt_esmtp_args) {
+							session->rcpt_esmtp_args = g_ptr_array_sized_new(1);
+						}
+
+						if (esmtp_args) {
+							GHashTableIter iter;
+							gpointer key, value;
+
+							g_ptr_array_add(session->rcpt_esmtp_args, esmtp_args);
+
+							g_hash_table_iter_init(&iter, esmtp_args);
+							while (g_hash_table_iter_next(&iter, &key, &value)) {
+								rspamd_ftok_t *k = (rspamd_ftok_t *) key;
+								rspamd_ftok_t *v = (rspamd_ftok_t *) value;
+								msg_debug_milter("rcpt esmtp arg: %T=%T", k, v);
+							}
+						}
+						else {
+							/* Add NULL placeholder to keep indices aligned with rcpts array */
+							g_ptr_array_add(session->rcpt_esmtp_args, NULL);
+						}
+
+						/* Advance cursor to after the args (or end) and stop processing */
+						pos = scan;
+					}
+					else {
+						/* No ESMTP args, add NULL placeholder */
+						if (!session->rcpt_esmtp_args) {
+							session->rcpt_esmtp_args = g_ptr_array_sized_new(1);
+						}
+						g_ptr_array_add(session->rcpt_esmtp_args, NULL);
+						pos = zero + 1;
+					}
+
+					/* Only one recipient per RCPT command is expected */
+					break;
+				}
+				else {
+					/* Address parsing failed, move past address NUL and continue */
+					pos = zero + 1;
+				}
 			}
 			else {
-				cpy = rspamd_mempool_alloc(priv->pool, end - pos);
-				memcpy(cpy, pos, end - pos);
+				gsize weird_len = (gsize) (end - pos);
+				cpy = rspamd_mempool_alloc(priv->pool, weird_len + 1);
+				memcpy(cpy, pos, weird_len);
+				cpy[weird_len] = '\0';
 
-				msg_debug_milter("got weird rcpt: %*s", (int) (end - pos),
-								 pos);
+				msg_debug_milter("got weird rcpt: %*s", (int) weird_len,
+								 cpy);
 				/* That actually should not happen */
-				addr = rspamd_email_address_from_smtp(cpy, end - pos);
+				addr = rspamd_email_address_from_smtp(cpy, weird_len);
 
 				if (addr) {
 					if (!session->rcpts) {
@@ -784,6 +955,12 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 					}
 
 					g_ptr_array_add(session->rcpts, addr);
+
+					/* No ESMTP args in this case, add NULL placeholder */
+					if (!session->rcpt_esmtp_args) {
+						session->rcpt_esmtp_args = g_ptr_array_sized_new(1);
+					}
+					g_ptr_array_add(session->rcpt_esmtp_args, NULL);
 				}
 
 				break;
@@ -1221,7 +1398,7 @@ rspamd_milter_handle_socket(int fd, ev_tstamp timeout,
 	priv->parser.buf = rspamd_fstring_sized_new(RSPAMD_MILTER_MESSAGE_CHUNK + 5);
 	priv->event_loop = ev_base;
 	priv->state = RSPAMD_MILTER_READ_MORE;
-	priv->pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "milter", 0);
+	priv->pool = rspamd_mempool_new_short_lived("milter");
 	priv->discard_on_reject = milter_ctx->discard_on_reject;
 	priv->quarantine_on_reject = milter_ctx->quarantine_on_reject;
 	priv->ev.timeout = timeout;
@@ -1654,6 +1831,87 @@ rspamd_milter_to_http(struct rspamd_milter_session *session)
 	rspamd_milter_macro_http(session, msg);
 	rspamd_http_message_add_header(msg, FLAGS_HEADER, "milter,body_block");
 
+	/* Add ESMTP arguments as HTTP headers */
+	if (session->mail_esmtp_args) {
+		GHashTableIter iter;
+		gpointer key, value;
+		GString *hdr_val;
+
+		g_hash_table_iter_init(&iter, session->mail_esmtp_args);
+		while (g_hash_table_iter_next(&iter, &key, &value)) {
+			rspamd_ftok_t *k = (rspamd_ftok_t *) key;
+			rspamd_ftok_t *v = (rspamd_ftok_t *) value;
+
+			/* Use X-Rspamd-Mail-Esmtp-Arg- prefix for mail ESMTP args */
+			hdr_val = g_string_sized_new(k->len + v->len + 1);
+			g_string_append_len(hdr_val, k->begin, k->len);
+
+			if (v->len > 0) {
+				g_string_append_c(hdr_val, '=');
+				g_string_append_len(hdr_val, v->begin, v->len);
+			}
+
+			rspamd_http_message_add_header(msg, "X-Rspamd-Mail-Esmtp-Args", hdr_val->str);
+			g_string_free(hdr_val, TRUE);
+		}
+	}
+
+	if (session->rcpt_esmtp_args) {
+		GHashTable *rcpt_args;
+		GString *hdr_val;
+		unsigned int idx;
+
+		PTR_ARRAY_FOREACH(session->rcpt_esmtp_args, idx, rcpt_args)
+		{
+			if (rcpt_args) {
+				GHashTableIter iter;
+				gpointer key, value;
+
+				g_hash_table_iter_init(&iter, rcpt_args);
+				while (g_hash_table_iter_next(&iter, &key, &value)) {
+					rspamd_ftok_t *k = (rspamd_ftok_t *) key;
+					rspamd_ftok_t *v = (rspamd_ftok_t *) value;
+
+					/* Use X-Rspamd-Rcpt-Esmtp-Arg- prefix for rcpt ESMTP args */
+					/* Format: rcpt_index:key=value */
+					hdr_val = g_string_sized_new(k->len + v->len + 16);
+					g_string_append_printf(hdr_val, "%u:", idx);
+					g_string_append_len(hdr_val, k->begin, k->len);
+
+					if (v->len > 0) {
+						g_string_append_c(hdr_val, '=');
+						g_string_append_len(hdr_val, v->begin, v->len);
+					}
+
+					rspamd_http_message_add_header(msg, "X-Rspamd-Rcpt-Esmtp-Args", hdr_val->str);
+					g_string_free(hdr_val, TRUE);
+				}
+			}
+		}
+	}
+
+	return msg;
+}
+
+struct rspamd_http_message *
+rspamd_milter_to_http_with_task(struct rspamd_milter_session *session,
+								struct rspamd_task *task)
+{
+	struct rspamd_http_message *msg;
+
+	/* First create the HTTP message using the existing function */
+	msg = rspamd_milter_to_http(session);
+
+	/* Then store ESMTP arguments in the task */
+	if (task && session) {
+		if (session->mail_esmtp_args) {
+			rspamd_task_set_mail_esmtp_args(task, session->mail_esmtp_args);
+		}
+		if (session->rcpt_esmtp_args) {
+			rspamd_task_set_rcpt_esmtp_args(task, session->rcpt_esmtp_args);
+		}
+	}
+
 	return msg;
 }
 
@@ -1810,22 +2068,42 @@ rspamd_milter_process_milter_block(struct rspamd_milter_session *session,
 	GString *hname, *hvalue;
 
 	if (obj && ucl_object_type(obj) == UCL_OBJECT) {
-		elt = ucl_object_lookup(obj, "remove_headers");
-		/*
-		 * remove_headers:  {"name": 1, ... }
-		 * where number is the header's position starting from '1'
-		 */
-		if (elt && ucl_object_type(elt) == UCL_OBJECT) {
-			it = NULL;
+	elt = ucl_object_lookup(obj, "remove_headers");
+	/*
+	 * remove_headers:  {"name": 1, ... }
+	 * -or-
+	 * remove_headers:  {"name": [1, 2, ...], ... }
+	 * where number is the header's position starting from '1'
+	 */
+	if (elt && ucl_object_type(elt) == UCL_OBJECT) {
+		it = NULL;
 
-			while ((cur = ucl_object_iterate(elt, &it, true)) != NULL) {
-				if (ucl_object_type(cur) == UCL_INT) {
-					rspamd_milter_remove_header_safe(session,
-													 ucl_object_key(cur),
-													 ucl_object_toint(cur));
+		while ((cur = ucl_object_iterate(elt, &it, true)) != NULL) {
+			if (ucl_object_type(cur) == UCL_INT) {
+				rspamd_milter_remove_header_safe(session,
+												 ucl_object_key(cur),
+												 ucl_object_toint(cur));
+			}
+			else if (ucl_object_type(cur) == UCL_ARRAY) {
+				/* Multiple positions for the same header name */
+				ucl_object_iter_t *array_it;
+				const ucl_object_t *array_elt;
+
+				array_it = ucl_object_iterate_new(cur);
+
+				while ((array_elt = ucl_object_iterate_safe(array_it,
+															true)) != NULL) {
+					if (ucl_object_type(array_elt) == UCL_INT) {
+						rspamd_milter_remove_header_safe(session,
+														 ucl_object_key(cur),
+														 ucl_object_toint(array_elt));
+					}
 				}
+
+				ucl_object_iterate_free(array_it);
 			}
 		}
+	}
 
 		elt = ucl_object_lookup(obj, "add_headers");
 		/*

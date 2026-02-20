@@ -94,6 +94,24 @@ gboolean rspamd_client_command(
 	GError **err);
 
 /**
+ * Send a v3 multipart/form-data command.
+ * Metadata is sent as a JSON (or msgpack if msgpack=TRUE) part,
+ * message as an octet-stream part.
+ * Response is multipart/mixed with "result" (JSON/msgpack) and optional "body" parts.
+ */
+gboolean rspamd_client_command_v3(
+	struct rspamd_client_connection *conn,
+	const char *command,
+	const ucl_object_t *metadata,
+	FILE *in,
+	rspamd_client_callback cb,
+	gpointer ud,
+	gboolean compressed,
+	gboolean msgpack,
+	const char *filename,
+	GError **err);
+
+/**
  * Destroy a connection to rspamd
  * @param conn
  */

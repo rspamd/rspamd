@@ -295,7 +295,7 @@ char32_t read_unicode_character(void) {
 		if (nread <= 0) return 0;
 		if (c <= 0x7F || locale::is8BitEncoding) { // short circuit ASCII
 			utf8Count = 0;
-			return c;
+			return static_cast<char32_t>(c);
 		} else if (utf8Count < sizeof(utf8String) - 1) {
 			utf8String[utf8Count++] = c;
 			utf8String[utf8Count] = 0;

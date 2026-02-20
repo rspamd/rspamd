@@ -1,0 +1,11 @@
+From: sender@example.com
+To: victim@example.com
+Subject: Test Multiple At Signs
+Content-Type: text/html; charset=utf-8
+
+<html>
+<body>
+<p>Click this link:</p>
+<a href="http://user@@@phishing.com/page">Click Here</a>
+</body>
+</html>

@@ -12,13 +12,14 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 local exports = {}
 
 local N = "metatokens"
-local ts = require("tableshape").types
+local T = require "lua_shape.core"
 local logger = require "rspamd_logger"
+local lua_mime = require "lua_mime"
 
 -- Metafunctions
 local function meta_size_function(task)
@@ -87,7 +88,7 @@ local function meta_images_function(task)
     nlarge = 1.0 * nlarge / ntotal
     nsmall = 1.0 * nsmall / ntotal
   end
-  return { ntotal, njpg, npng, nlarge, nsmall }
+  return { ntotal, npng, njpg, nlarge, nsmall } -- Fixed order to match names
 end
 
 local function meta_nparts_function(task)
@@ -164,29 +165,28 @@ local function meta_received_function(task)
   local fun = require "fun"
 
   if rh and #rh > 0 then
-
     local ntotal = 0.0
     local init_time = 0
 
     fun.each(function(rc)
-      ntotal = ntotal + 1.0
+        ntotal = ntotal + 1.0
 
-      if not rc.by_hostname then
-        invalid_factor = invalid_factor + 1.0
-      end
-      if init_time == 0 and rc.timestamp then
-        init_time = rc.timestamp
-      elseif rc.timestamp then
-        time_factor = time_factor + math.abs(init_time - rc.timestamp)
-        init_time = rc.timestamp
-      end
-      if rc.flags and (rc.flags['ssl'] or rc.flags['authenticated']) then
-        secure_factor = secure_factor + 1.0
-      end
-    end,
-        fun.filter(function(rc)
-          return not rc.flags or not rc.flags['artificial']
-        end, rh))
+        if not rc.by_hostname then
+          invalid_factor = invalid_factor + 1.0
+        end
+        if init_time == 0 and rc.timestamp then
+          init_time = rc.timestamp
+        elseif rc.timestamp then
+          time_factor = time_factor + math.abs(init_time - rc.timestamp)
+          init_time = rc.timestamp
+        end
+        if rc.flags and (rc.flags['ssl'] or rc.flags['authenticated']) then
+          secure_factor = secure_factor + 1.0
+        end
+      end,
+      fun.filter(function(rc)
+        return not rc.flags or not rc.flags['artificial']
+      end, rh))
 
     if ntotal > 0 then
       invalid_factor = invalid_factor / ntotal
@@ -263,8 +263,8 @@ local function meta_words_function(task)
   end
 
   local ret = {
-    short_words,
-    ret_len,
+    ret_len,     -- avg_words_len (moved to match the names array)
+    short_words, -- nshort_words
   }
 
   local divisor = 1.0
@@ -277,6 +277,122 @@ local function meta_words_function(task)
   end
 
   return ret
+end
+
+local function meta_html_features_function(task)
+  local lt, http, ql, same, dom_total, max_per_dom = 0, 0, 0, 0, 0, 0
+  local ft, fua, fa = 0, 0, 0
+
+  local sel_part = lua_mime.get_displayed_text_part(task)
+  if sel_part and sel_part:is_html() then
+    local html = sel_part:get_html()
+    if html and html.get_features then
+      local f = html:get_features()
+      if f and f.links then
+        lt = f.links.total_links or 0
+        http = f.links.http_links or 0
+        ql = f.links.query_links or 0
+        same = f.links.same_etld1_links or 0
+        dom_total = f.links.domains_total or 0
+        max_per_dom = f.links.max_links_single_domain or 0
+      end
+      ft = f.forms_count or 0
+      fua = f.forms_post_unaffiliated or 0
+      fa = f.forms_post_affiliated or 0
+    end
+  end
+
+
+  local nhtml_links = 0
+  local http_ratio = 0
+  local query_ratio = 0
+  local same_etld1_ratio = 0
+  local domains_per_link_ratio = 0
+  local max_links_per_domain_ratio = 0
+
+  if lt > 0 then
+    nhtml_links = 1.0 / lt
+    http_ratio = http / lt
+    query_ratio = ql / lt
+    same_etld1_ratio = same / lt
+    domains_per_link_ratio = dom_total / lt
+    max_links_per_domain_ratio = max_per_dom / lt
+  end
+
+  local nhtml_forms = 0
+  local forms_unaff_ratio = 0
+  local forms_aff_ratio = 0
+
+  if ft > 0 then
+    nhtml_forms = 1.0 / ft
+    forms_unaff_ratio = fua / ft
+    forms_aff_ratio = fa / ft
+  end
+
+  return {
+    nhtml_links,
+    http_ratio,
+    query_ratio,
+    same_etld1_ratio,
+    domains_per_link_ratio,
+    max_links_per_domain_ratio,
+    nhtml_forms,
+    forms_unaff_ratio,
+    forms_aff_ratio,
+  }
+end
+
+local function meta_cta_function(task)
+  local mp = task:get_mempool()
+  local cta_aff = mp:get_variable("html_cta_affiliated", "double") or 0
+  local cta_w = mp:get_variable("html_cta_weight", "double") or 0
+  local aff_ratio = mp:get_variable("html_affiliated_links_ratio", "double") or 0
+  local tr_ratio = mp:get_variable("html_trackerish_ratio", "double") or 0
+
+  return {
+    cta_aff,
+    cta_w,
+    aff_ratio,
+    tr_ratio,
+  }
+end
+
+local function meta_html_visibility_function(task)
+  local sel_part = lua_mime.get_displayed_text_part(task)
+  local hidden_ratio, transparent_ratio = 0, 0
+  local blkh, blkt, off, mref, mrefu = 0, 0, 0, 0, 0
+
+  if sel_part and sel_part:is_html() then
+    local html = sel_part:get_html()
+    if html and html.get_features then
+      local f = html:get_features() or {}
+      local vis = f.text_visible or 0
+      local hid = f.text_hidden or 0
+      local transp = f.text_transparent or 0
+      local total = vis + hid
+      if total > 0 then
+        hidden_ratio = hid / total
+        transparent_ratio = transp / total
+      end
+      blkh = f.blocks_hidden or 0
+      blkt = f.blocks_transparent or 0
+      off = f.offscreen_blocks or 0
+      mref = f.meta_refresh or 0
+      mrefu = f.meta_refresh_urls or 0
+    end
+  end
+
+  -- no mempool fallback; individual mempool exports were removed
+
+  return {
+    hidden_ratio,
+    transparent_ratio,
+    blkh,
+    blkt,
+    off,
+    mref,
+    mrefu,
+  }
 end
 
 local metafunctions = {
@@ -405,14 +521,78 @@ local metafunctions = {
     - rate of numbers
 ]]
   },
+  {
+    cb = meta_html_features_function,
+    ninputs = 9,
+    names = {
+      'nhtml_links',
+      'nhtml_http_links_ratio',
+      'nhtml_query_links_ratio',
+      'nhtml_same_etld1_links_ratio',
+      'nhtml_domains_per_link_ratio',
+      'nhtml_max_links_per_domain_ratio',
+      'nhtml_forms',
+      'nhtml_forms_unaffiliated_ratio',
+      'nhtml_forms_affiliated_ratio',
+    },
+    description = [[HTML link/form aggregated features:
+    - reciprocal of total links
+    - ratio of http(s) links
+    - ratio of links with query
+    - ratio of links with same eTLD+1 as first-party
+    - domains per link ratio
+    - max links per single domain ratio
+    - reciprocal of total forms
+    - ratio of forms posting to unaffiliated domains
+    - ratio of forms posting to affiliated domains
+]]
+  },
+  {
+    cb = meta_cta_function,
+    ninputs = 4,
+    names = {
+      'html_cta_affiliated',
+      'html_cta_weight',
+      'html_affiliated_links_ratio',
+      'html_trackerish_ratio',
+    },
+    description = [[CTA and affiliation metrics from lua_cta:
+    - CTA affiliated flag
+    - CTA weight heuristic
+    - affiliated links ratio among candidates
+    - trackerish domains ratio among candidates
+]]
+  },
+  {
+    cb = meta_html_visibility_function,
+    ninputs = 7,
+    names = {
+      'html_hidden_text_ratio',
+      'html_transparent_text_ratio',
+      'html_hidden_blocks',
+      'html_transparent_blocks',
+      'html_offscreen_blocks',
+      'html_meta_refresh',
+      'html_meta_refresh_urls',
+    },
+    description = [[HTML hidden/offscreen/obfuscation features and meta refresh counters:
+    - ratio of hidden text to total text
+    - ratio of transparent text to total text
+    - number of hidden text blocks appended
+    - number of transparent blocks
+    - number of offscreen-styled blocks
+    - number of meta refresh tags
+    - number of meta refresh URLs extracted
+]]
+  },
 }
 
-local meta_schema = ts.shape {
-  cb = ts.func,
-  ninputs = ts.number,
-  names = ts.array_of(ts.string),
-  description = ts.string:is_optional()
-}
+local meta_schema = T.table({
+  cb = T.callable(),
+  ninputs = T.number(),
+  names = T.array(T.string()),
+  description = T.string():optional()
+})
 
 local metatokens_by_name = {}
 
@@ -460,10 +640,10 @@ local function rspamd_gen_metatokens(task, names)
         local ct = mt.cb(task)
         for i, tok in ipairs(ct) do
           lua_util.debugm(N, task, "metatoken: %s = %s",
-              mt.names[i], tok)
+            mt.names[i], tok)
           if tok ~= tok or tok == math.huge then
             logger.errx(task, 'metatoken %s returned %s; replace it with 0 for sanity',
-                mt.names[i], tok)
+              mt.names[i], tok)
             tok = 0.0
           end
           table.insert(metatokens, tok)
@@ -472,14 +652,13 @@ local function rspamd_gen_metatokens(task, names)
 
       task:cache_set('metatokens', metatokens)
     end
-
   else
     for _, n in ipairs(names) do
       if metatokens_by_name[n] then
         local tok = metatokens_by_name[n](task)
         if tok ~= tok or tok == math.huge then
           logger.errx(task, 'metatoken %s returned %s; replace it with 0 for sanity',
-              n, tok)
+            n, tok)
           tok = 0.0
         end
         table.insert(metatokens, tok)
@@ -503,7 +682,7 @@ local function rspamd_gen_metatokens_table(task)
     for i, tok in ipairs(ct) do
       if tok ~= tok or tok == math.huge then
         logger.errx(task, 'metatoken %s returned %s; replace it with 0 for sanity',
-            mt.names[i], tok)
+          mt.names[i], tok)
         tok = 0.0
       end
 
@@ -529,7 +708,7 @@ end
 
 exports.rspamd_count_metatokens = rspamd_count_metatokens
 exports.count_metatokens = rspamd_count_metatokens
-exports.version = 1 -- MUST be increased on each change of metatokens
+exports.version = 3 -- MUST be increased on each change of metatokens
 
 exports.add_metafunction = function(tbl)
   local ret, err = meta_schema(tbl)

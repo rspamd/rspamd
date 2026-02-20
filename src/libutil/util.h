@@ -380,6 +380,26 @@ uint64_t rspamd_hash_seed(void);
 void rspamd_random_hex(char *buf, uint64_t len);
 
 /**
+ * Generate a UUID v7 (time-ordered) string.
+ * @param uuid_out output buffer for the 36-char UUID string + NUL
+ * @param opt_uid_buf if not NULL, filled with hex log UID derived from UUID's random part
+ * @param uid_buflen size of opt_uid_buf in bytes (ignored when opt_uid_buf is NULL)
+ * @param timestamp wall-clock time as double (e.g. from ev_time())
+ * @return number of UID chars written to opt_uid_buf, 0 if opt_uid_buf is NULL,
+ *         -1 if uid_buflen is too small
+ */
+int rspamd_uuid_v7(char uuid_out[37], char *opt_uid_buf, gsize uid_buflen, double timestamp);
+
+/**
+ * Patch UUID v7 random portion (bytes 8-15) to match a new log tag.
+ * Hashes the tag to derive bytes, preserves timestamp and version/variant bits.
+ * @param uuid UUID string to patch in place (36 chars + NUL)
+ * @param tag new log tag value
+ * @param tag_len length of tag
+ */
+void rspamd_uuid_v7_patch_uid(char uuid[37], const char *tag, gsize tag_len);
+
+/**
  * Returns
  * @param pattern pattern to create (should end with some number of X symbols), modified by this function
  * @return

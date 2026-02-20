@@ -9,8 +9,8 @@ cmake_minimum_required(VERSION 3.15 FATAL_ERROR)
 
 # Define version variables
 set(RSPAMD_VERSION_MAJOR 3)
-set(RSPAMD_VERSION_MINOR 12)
-set(RSPAMD_VERSION_PATCH 1)
+set(RSPAMD_VERSION_MINOR 15)
+set(RSPAMD_VERSION_PATCH 0)
 
 # Keep two digits all the time
 set(RSPAMD_VERSION_MAJOR_NUM ${RSPAMD_VERSION_MAJOR}0)

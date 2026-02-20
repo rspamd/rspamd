@@ -1,0 +1,28 @@
+From: notification@example.com
+To: user@test.com
+Subject: Your weekly newsletter
+Content-Type: text/html; charset=utf-8
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Newsletter</title>
+</head>
+<body>
+  <div class="header">
+    <a href="https://phishing-site.evil"><img src="https://cdn.example.com/logo.png" alt="Logo"/></a>
+  </div>
+  <div class="content">
+    <h1>Weekly Newsletter</h1>
+    <p>URGENT: Verify your account now!</p>
+    <div class="article">
+      <h2>Security Alert</h2>
+      <p>Your account has been compromised click here immediately</p>
+      <a class="button" href="https://phishing-site.evil/steal-credentials">Verify Now</a>
+    </div>
+  </div>
+  <div class="footer">
+    <p>Unsubscribe: <a href="https://phishing-site.evil/fake">click here</a></p>
+  </div>
+</body>
+</html>

@@ -20,6 +20,8 @@
 #include "contrib/libev/ev.h"
 #include "dns.h"
 #include "ref.h"
+#include <stdbool.h>
+#include <stdint.h>
 
 
 /* Main types and definitions */
@@ -53,6 +55,8 @@
 #define DKIM_SIGERROR_INVALID_H 32       /* h= missing req'd entries */
 #define DKIM_SIGERROR_KEYHASHMISMATCH 37 /* sig-key hash mismatch */
 #define DKIM_SIGERROR_EMPTY_V 45         /* v= tag empty */
+#define DKIM_SIGERROR_KEYTYPE 46         /* unknown key type */
+#define DKIM_SIGERROR_REVOKED 47         /* key revoked (no p= tag) */
 
 #ifdef __cplusplus
 extern "C" {
@@ -109,6 +113,7 @@ enum rspamd_sign_type {
 };
 
 enum rspamd_dkim_key_type {
+	RSPAMD_DKIM_KEY_INVALID = -1,
 	RSPAMD_DKIM_KEY_RSA = 0,
 	RSPAMD_DKIM_KEY_ECDSA,
 	RSPAMD_DKIM_KEY_EDDSA
@@ -126,7 +131,7 @@ struct rspamd_dkim_check_result {
 
 
 /* Err MUST be freed if it is not NULL, key is allocated by slice allocator */
-typedef void (*dkim_key_handler_f)(rspamd_dkim_key_t *key, gsize keylen,
+typedef void (*dkim_key_handler_f)(rspamd_dkim_key_t *key, size_t keylen,
 								   rspamd_dkim_context_t *ctx, gpointer ud, GError *err);
 
 /**
@@ -165,7 +170,7 @@ rspamd_dkim_sign_context_t *rspamd_create_dkim_sign_context(struct rspamd_task *
  * @param err
  * @return
  */
-rspamd_dkim_sign_key_t *rspamd_dkim_sign_key_load(const char *what, gsize len,
+rspamd_dkim_sign_key_t *rspamd_dkim_sign_key_load(const char *what, size_t len,
 												  enum rspamd_dkim_key_format type,
 												  GError **err);
 
@@ -174,8 +179,8 @@ rspamd_dkim_sign_key_t *rspamd_dkim_sign_key_load(const char *what, gsize len,
  * @param key
  * @return
 */
-gboolean rspamd_dkim_sign_key_maybe_invalidate(rspamd_dkim_sign_key_t *key,
-											   time_t mtime);
+bool rspamd_dkim_sign_key_maybe_invalidate(rspamd_dkim_sign_key_t *key,
+										   time_t mtime);
 
 /**
  * Make DNS request for specified context and obtain and parse key
@@ -184,10 +189,10 @@ gboolean rspamd_dkim_sign_key_maybe_invalidate(rspamd_dkim_sign_key_t *key,
  * @param s async session to make request
  * @return
  */
-gboolean rspamd_get_dkim_key(rspamd_dkim_context_t *ctx,
-							 struct rspamd_task *task,
-							 dkim_key_handler_f handler,
-							 gpointer ud);
+bool rspamd_get_dkim_key(rspamd_dkim_context_t *ctx,
+						 struct rspamd_task *task,
+						 dkim_key_handler_f handler,
+						 gpointer ud);
 
 /**
  * Check task for dkim context using dkim key
@@ -209,7 +214,7 @@ GString *rspamd_dkim_sign(struct rspamd_task *task,
 						  const char *selector,
 						  const char *domain,
 						  time_t expire,
-						  gsize len,
+						  size_t len,
 						  unsigned int idx,
 						  const char *arc_cv,
 						  rspamd_dkim_sign_context_t *ctx);
@@ -221,6 +226,26 @@ void rspamd_dkim_key_unref(rspamd_dkim_key_t *k);
 rspamd_dkim_sign_key_t *rspamd_dkim_sign_key_ref(rspamd_dkim_sign_key_t *k);
 
 void rspamd_dkim_sign_key_unref(rspamd_dkim_sign_key_t *k);
+
+/**
+ * Get the type of a signing key
+ * @param key signing key
+ * @return key type (RSA, EDDSA, etc)
+ */
+enum rspamd_dkim_key_type rspamd_dkim_sign_key_get_type(rspamd_dkim_sign_key_t *key);
+
+/**
+ * Sign a digest with a DKIM signing key
+ * @param key signing key
+ * @param digest SHA256 digest (32 bytes)
+ * @param dlen digest length (must be 32)
+ * @param sig_out output signature buffer (base64 encoded), must be freed by caller
+ * @param err error pointer
+ * @return TRUE if successful
+ */
+gboolean rspamd_dkim_sign_digest(rspamd_dkim_sign_key_t *key,
+								 const unsigned char *digest, gsize dlen,
+								 char **sig_out, GError **err);
 
 const char *rspamd_dkim_get_domain(rspamd_dkim_context_t *ctx);
 
@@ -258,7 +283,7 @@ const unsigned char *rspamd_dkim_key_id(rspamd_dkim_key_t *key);
  * @param err
  * @return
  */
-rspamd_dkim_key_t *rspamd_dkim_parse_key(const char *txt, gsize *keylen,
+rspamd_dkim_key_t *rspamd_dkim_parse_key(const char *txt, size_t *keylen,
 										 GError **err);
 
 /**
@@ -269,10 +294,10 @@ rspamd_dkim_key_t *rspamd_dkim_parse_key(const char *txt, gsize *keylen,
  * @param outlen
  * @return
  */
-goffset rspamd_dkim_canonize_header_relaxed_str(const char *hname,
-												const char *hvalue,
-												char *out,
-												gsize outlen);
+off_t rspamd_dkim_canonize_header_relaxed_str(const char *hname,
+											  const char *hvalue,
+											  char *out,
+											  size_t outlen);
 
 /**
  * Checks public and private keys for match
@@ -281,9 +306,9 @@ goffset rspamd_dkim_canonize_header_relaxed_str(const char *hname,
  * @param err
  * @return
  */
-gboolean rspamd_dkim_match_keys(rspamd_dkim_key_t *pk,
-								rspamd_dkim_sign_key_t *sk,
-								GError **err);
+bool rspamd_dkim_match_keys(rspamd_dkim_key_t *pk,
+							rspamd_dkim_sign_key_t *sk,
+							GError **err);
 
 /**
  * Free DKIM key

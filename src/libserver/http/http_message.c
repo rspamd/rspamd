@@ -440,10 +440,32 @@ rspamd_http_message_append_body(struct rspamd_http_message *msg,
 	return TRUE;
 }
 
+void rspamd_http_message_set_body_iov(struct rspamd_http_message *msg,
+									  struct iovec *iov, gsize count,
+									  gsize total_len)
+{
+	rspamd_http_message_storage_cleanup(msg);
+
+	msg->body_iov = iov;
+	msg->body_iov_count = count;
+	msg->body_buf.len = total_len;
+	msg->body_buf.begin = NULL;
+	msg->body_buf.str = NULL;
+	msg->body_buf.allocated_len = 0;
+	msg->flags |= RSPAMD_HTTP_FLAG_HAS_BODY;
+}
+
 void rspamd_http_message_storage_cleanup(struct rspamd_http_message *msg)
 {
 	union _rspamd_storage_u *storage;
 	struct stat st;
+
+	/* Free piecewise body iov if present */
+	if (msg->body_iov) {
+		g_free(msg->body_iov);
+		msg->body_iov = NULL;
+		msg->body_iov_count = 0;
+	}
 
 	if (msg->flags & RSPAMD_HTTP_FLAG_SHMEM) {
 		storage = &msg->body_buf.c;

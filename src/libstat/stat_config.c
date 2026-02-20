@@ -28,6 +28,7 @@ static struct rspamd_stat_classifier lua_classifier = {
 	.init_func = lua_classifier_init,
 	.classify_func = lua_classifier_classify,
 	.learn_spam_func = lua_classifier_learn_spam,
+	.learn_class_func = NULL, /* TODO: implement lua multi-class learning */
 	.fin_func = NULL,
 };
 
@@ -37,6 +38,7 @@ static struct rspamd_stat_classifier stat_classifiers[] = {
 		.init_func = bayes_init,
 		.classify_func = bayes_classify,
 		.learn_spam_func = bayes_learn_spam,
+		.learn_class_func = bayes_learn_class,
 		.fin_func = bayes_fin,
 	}};
 
@@ -68,8 +70,7 @@ static struct rspamd_stat_tokenizer stat_tokenizers[] = {
 		.dec_learns = rspamd_##eltn##_dec_learns,                       \
 		.get_stat = rspamd_##eltn##_get_stat,                           \
 		.load_tokenizer_config = rspamd_##eltn##_load_tokenizer_config, \
-		.close = rspamd_##eltn##_close                                  \
-	}
+		.close = rspamd_##eltn##_close}
 #define RSPAMD_STAT_BACKEND_ELT_READONLY(nam, eltn)                     \
 	{                                                                   \
 		.name = #nam,                                                   \
@@ -85,8 +86,7 @@ static struct rspamd_stat_tokenizer stat_tokenizers[] = {
 		.dec_learns = NULL,                                             \
 		.get_stat = rspamd_##eltn##_get_stat,                           \
 		.load_tokenizer_config = rspamd_##eltn##_load_tokenizer_config, \
-		.close = rspamd_##eltn##_close                                  \
-	}
+		.close = rspamd_##eltn##_close}
 
 static struct rspamd_stat_backend stat_backends[] = {
 	RSPAMD_STAT_BACKEND_ELT(mmap, mmaped_file),
@@ -101,8 +101,7 @@ static struct rspamd_stat_backend stat_backends[] = {
 		.runtime = rspamd_stat_cache_##eltn##_runtime, \
 		.check = rspamd_stat_cache_##eltn##_check,     \
 		.learn = rspamd_stat_cache_##eltn##_learn,     \
-		.close = rspamd_stat_cache_##eltn##_close      \
-	}
+		.close = rspamd_stat_cache_##eltn##_close}
 
 static struct rspamd_stat_cache stat_caches[] = {
 	RSPAMD_STAT_CACHE_ELT(sqlite3, sqlite3),
@@ -181,14 +180,14 @@ void rspamd_stat_init(struct rspamd_config *cfg, struct ev_loop *ev_base)
 	stat_ctx->lua_stat_tokens_ref = -1;
 
 	/* Interact with lua_stat */
+	int lua_stat_top = lua_gettop(L);
 	if (luaL_dostring(L, "return require \"lua_stat\"") != 0) {
 		msg_err_config("cannot require lua_stat: %s",
 					   lua_tostring(L, -1));
 	}
 	else {
-#if LUA_VERSION_NUM >= 504
-		lua_settop(L, -2);
-#endif
+		/* Lua 5.4's require returns 2 values (module + path), keep only first */
+		lua_settop(L, lua_stat_top + 1);
 		if (lua_type(L, -1) != LUA_TTABLE) {
 			msg_err_config("lua stat must return "
 						   "table and not %s",

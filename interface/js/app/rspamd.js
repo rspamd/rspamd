@@ -1,26 +1,6 @@
 /*
- The MIT License (MIT)
-
- Copyright (C) 2012-2013 Anton Simonov <untone@gmail.com>
- Copyright (C) 2014-2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
-
- Permission is hereby granted, free of charge, to any person obtaining a copy
- of this software and associated documentation files (the "Software"), to deal
- in the Software without restriction, including without limitation the rights
- to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- copies of the Software, and to permit persons to whom the Software is
- furnished to do so, subject to the following conditions:
-
- The above copyright notice and this permission notice shall be included in
- all copies or substantial portions of the Software.
-
- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- THE SOFTWARE.
+ * Copyright (C) 2012-2013 Anton Simonov <untone@gmail.com>
+ * Copyright (C) 2014-2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
  */
 
 /* global require, Visibility */
@@ -139,9 +119,9 @@ define(["jquery", "app/common", "stickytabs", "visibility",
                         () => module.statWidgets(graphs, checked_server));
                     if (id !== "#autoRefresh") module.statWidgets(graphs, checked_server);
 
-                    $(".preset").show();
-                    $(".history").hide();
-                    $(".dynamic").hide();
+                    common.show(".preset");
+                    common.hide(".history");
+                    common.hide(".dynamic");
                 });
                 break;
             case "#throughput_nav":
@@ -161,9 +141,9 @@ define(["jquery", "app/common", "stickytabs", "visibility",
                         () => module.draw(graphs, common.neighbours, checked_server, selData));
                     if (id !== "#autoRefresh") module.draw(graphs, common.neighbours, checked_server, selData);
 
-                    $(".preset").hide();
-                    $(".history").hide();
-                    $(".dynamic").show();
+                    common.hide(".preset");
+                    common.hide(".history");
+                    common.show(".dynamic");
                 });
                 break;
             case "#configuration_nav":
@@ -176,7 +156,10 @@ define(["jquery", "app/common", "stickytabs", "visibility",
                 require(["app/symbols"], (module) => module.getSymbols());
                 break;
             case "#scan_nav":
-                require(["app/upload"]);
+                require(["app/upload"], (module) => {
+                    module.getClassifiers();
+                    module.getFuzzyStorages();
+                });
                 break;
             case "#selectors_nav":
                 require(["app/selectors"], (module) => module.displayUI());
@@ -192,9 +175,11 @@ define(["jquery", "app/common", "stickytabs", "visibility",
                         () => getHistoryAndErrors());
                     if (id !== "#autoRefresh") getHistoryAndErrors();
 
-                    $(".preset").hide();
-                    $(".history").show();
-                    $(".dynamic").hide();
+                    common.hide(".preset");
+                    common.show(".history");
+                    common.hide(".dynamic");
+
+                    module.updateHistoryControlsState();
                 });
                 break;
             case "#disconnect":
@@ -236,17 +221,24 @@ define(["jquery", "app/common", "stickytabs", "visibility",
             complete: function () {
                 ajaxSetup(localStorage.getItem("ajax_timeout"));
 
+                if (require.defined("app/upload")) require(["app/upload"], (module) => module.getClassifiers());
+
                 if (common.read_only) {
                     $(".ro-disable").attr("disabled", true);
-                    $(".ro-hide").hide();
+                    common.hide(".ro-hide");
                 } else {
                     $(".ro-disable").removeAttr("disabled", true);
-                    $(".ro-hide").show();
+                    common.show(".ro-hide");
                 }
 
                 $("#preloader").addClass("d-none");
                 $("#navBar, #mainUI").removeClass("d-none");
-                $(".nav-tabs-sticky").stickyTabs({initialTab: "#status_nav"});
+
+                // Initialize FontAwesome icon replacement for FooTable before activating tabs
+                require(["app/footable-fontawesome"], (FootableFA) => {
+                    FootableFA.init();
+                    $(".nav-tabs-sticky").stickyTabs({initialTab: "#status_nav"});
+                });
             },
             errorMessage: "Cannot get server status",
             server: "All SERVERS"
@@ -273,7 +265,7 @@ define(["jquery", "app/common", "stickytabs", "visibility",
             error: function () {
                 function clearFeedback() {
                     $("#connectPassword").off("input").removeClass("is-invalid");
-                    $("#authInvalidCharFeedback,#authUnauthorizedFeedback").hide();
+                    common.hide("#authInvalidCharFeedback,#authUnauthorizedFeedback");
                 }
 
                 $("#connectDialog")
@@ -295,7 +287,7 @@ define(["jquery", "app/common", "stickytabs", "visibility",
                         $("#connectPassword")
                             .addClass("is-invalid")
                             .off("input").on("input", () => clearFeedback());
-                        $(tooltip).show();
+                        common.show(tooltip);
                     }
 
                     if (!(/^[\u0020-\u007e]*$/).test(password)) {
@@ -323,7 +315,7 @@ define(["jquery", "app/common", "stickytabs", "visibility",
                             if (textStatus.statusText === "Unauthorized") {
                                 invalidFeedback("#authUnauthorizedFeedback");
                             } else {
-                                common.alertMessage("alert-modal alert-error", textStatus.statusText);
+                                common.alertMessage("alert-modal alert-danger", textStatus.statusText);
                             }
                             $("#connectPassword").val("");
                             $("#connectPassword").focus();
@@ -338,11 +330,20 @@ define(["jquery", "app/common", "stickytabs", "visibility",
         });
     };
 
+    function updateThemeIcon(theme) {
+        const icon = $("#theme-icon");
+        icon.removeClass("fa-moon fa-sun fa-display");
+
+        const iconMap = {light: "fa-sun", dark: "fa-moon", auto: "fa-display"};
+        icon.addClass(iconMap[theme] || "fa-display");
+    }
 
     (function initSettings() {
         let selected_locale = null;
         let custom_locale = null;
         const localeTextbox = ".popover #settings-popover #locale";
+        const historyCountDef = 1000;
+        const historyCountSelector = ".popover #settings-popover #settings-history-count";
 
         function validateLocale(saveToLocalStorage) {
             function toggle_form_group_class(remove, add) {
@@ -401,6 +402,12 @@ define(["jquery", "app/common", "stickytabs", "visibility",
             $(localeTextbox).val(custom_locale);
 
             ajaxSetup(localStorage.getItem("ajax_timeout"), true);
+
+            $(historyCountSelector).val(parseInt(localStorage.getItem("historyCount"), 10) || historyCountDef);
+
+            // Restore theme selection
+            const savedTheme = localStorage.getItem("theme") || "auto";
+            $('.popover #settings-popover input:radio[name="theme"]').val([savedTheme]);
         });
         $(document).on("change", '.popover #settings-popover input:radio[name="locale"]', function () {
             selected_locale = this.value;
@@ -411,11 +418,34 @@ define(["jquery", "app/common", "stickytabs", "visibility",
             custom_locale = $(localeTextbox).val();
             validateLocale(true);
         });
+        $(document).on("change", '.popover #settings-popover input:radio[name="theme"]', function () {
+            const theme = this.value;
+            if (window.rspamd && window.rspamd.theme) {
+                window.rspamd.theme.applyPreference(theme);
+            }
+            updateThemeIcon(theme || "auto");
+        });
+        updateThemeIcon(localStorage.getItem("theme") || "auto");
         $(document).on("input", ajaxTimeoutBox, () => {
             ajaxSetup($(ajaxTimeoutBox).val(), false, true);
         });
         $(document).on("click", ".popover #settings-popover #ajax-timeout-restore", () => {
             ajaxSetup(null, true, true);
+        });
+
+        $(document).on("input", historyCountSelector, (e) => {
+            const v = parseInt($(e.currentTarget).val(), 10);
+            if (v > 0) {
+                localStorage.setItem("historyCount", v);
+                $(e.currentTarget).removeClass("is-invalid");
+                $("#history-count").val(v).trigger("change");
+            } else {
+                $(e.currentTarget).addClass("is-invalid");
+            }
+        });
+        $(document).on("click", ".popover #settings-popover #settings-history-count-restore", () => {
+            localStorage.removeItem("historyCount");
+            $(historyCountSelector).val(historyCountDef);
         });
 
         // Dismiss Bootstrap popover by clicking outside
@@ -459,6 +489,22 @@ define(["jquery", "app/common", "stickytabs", "visibility",
         $(".dropdown-menu a.active." + menuClass).removeClass("active");
         $(this).addClass("active");
         tabClick("#autoRefresh");
+    });
+
+    $("#theme-toggle").on("click", (e) => {
+        e.preventDefault();
+        const currentTheme = localStorage.getItem("theme") || "auto";
+        // Cycle through: light -> dark -> auto -> light
+        const themeMap = {light: "dark", dark: "auto", auto: "light"};
+        const newTheme = themeMap[currentTheme] || "light";
+
+        if (window.rspamd && window.rspamd.theme) {
+            window.rspamd.theme.applyPreference(newTheme);
+        }
+        updateThemeIcon(newTheme);
+
+        // Update radio button in settings popover if it's open
+        $('.popover #settings-popover input:radio[name="theme"]').val([newTheme]);
     });
 
     $("#selSrv").change(function () {
