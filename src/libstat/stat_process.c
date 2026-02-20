@@ -1895,9 +1895,7 @@ rspamd_stat_statistics(struct rspamd_task *task,
 						ucl_object_frombool(classifier_per_user),
 						"per_user", 0, false);
 
-				if (!ucl_object_insert_key(elt, classifier_obj, "classifier", 0, false)) {
-					ucl_object_unref(classifier_obj);
-				}
+				ucl_object_insert_key(elt, classifier_obj, "classifier", 0, false);
 
 				if (st->stcf->class_name) {
 					ucl_object_insert_key(elt,
