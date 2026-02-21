@@ -3561,8 +3561,9 @@ rspamd_controller_handle_lua_plugin(struct rspamd_http_connection_entry *conn_en
  * Bayes classifier list command handler:
  * request: /bayes/classifiers
  * headers: Password
- * reply: JSON array of Bayes classifier names
- *   Note: list is in reverse of declaration order (GList prepend).
+ * reply: JSON object with classifiers array containing metadata:
+ *   {classifiers: [{name, type, per_user, classes: [...]}, ...]}
+ *   Classifiers are listed in declaration order from config.
  */
 static int
 rspamd_controller_handle_bayes_classifiers(struct rspamd_http_connection_entry *conn_ent,
@@ -3570,24 +3571,64 @@ rspamd_controller_handle_bayes_classifiers(struct rspamd_http_connection_entry *
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct rspamd_controller_worker_ctx *ctx = session->ctx;
-	ucl_object_t *arr;
+	ucl_object_t *result, *classifiers_array, *classifier_obj, *classes_array;
 	struct rspamd_classifier_config *clc;
-	GList *cur;
+	GList *cur, *st_cur;
+	GHashTable *classes_seen;
 
 	if (!rspamd_controller_check_password(conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 
-	arr = ucl_object_typed_new(UCL_ARRAY);
+	result = ucl_object_typed_new(UCL_OBJECT);
+	classifiers_array = ucl_object_typed_new(UCL_ARRAY);
+
+	/*
+	 * Iterate backwards to compensate for g_list_prepend() in config parser,
+	 * returning classifiers in declaration order from config file.
+	 */
 	cur = g_list_last(ctx->cfg->classifiers);
 	while (cur) {
 		clc = cur->data;
-		ucl_array_append(arr, ucl_object_fromstring(clc->name));
+
+		classifier_obj = ucl_object_typed_new(UCL_OBJECT);
+		ucl_object_insert_key(classifier_obj,
+				ucl_object_fromstring(clc->name),
+				"name", 0, false);
+		ucl_object_insert_key(classifier_obj,
+				ucl_object_fromstring(rspamd_classifier_type(clc)),
+				"type", 0, false);
+		ucl_object_insert_key(classifier_obj,
+				ucl_object_frombool(rspamd_classifier_is_per_user(clc)),
+				"per_user", 0, false);
+
+		/* Collect unique class names from statfiles */
+		classes_array = ucl_object_typed_new(UCL_ARRAY);
+		/* Hash table stores borrowed pointers from config, no destroy function needed */
+		classes_seen = g_hash_table_new(rspamd_str_hash, rspamd_str_equal);
+
+		st_cur = clc->statfiles;
+		while (st_cur) {
+			struct rspamd_statfile_config *stcf = st_cur->data;
+			if (stcf->class_name && !g_hash_table_contains(classes_seen, stcf->class_name)) {
+				ucl_array_append(classes_array, ucl_object_fromstring(stcf->class_name));
+				g_hash_table_add(classes_seen, stcf->class_name);
+			}
+			st_cur = g_list_next(st_cur);
+		}
+
+		g_hash_table_unref(classes_seen);
+
+		ucl_object_insert_key(classifier_obj, classes_array, "classes", 0, false);
+		ucl_array_append(classifiers_array, classifier_obj);
+
 		cur = g_list_previous(cur);
 	}
 
-	rspamd_controller_send_ucl(conn_ent, arr);
-	ucl_object_unref(arr);
+	ucl_object_insert_key(result, classifiers_array, "classifiers", 0, false);
+
+	rspamd_controller_send_ucl(conn_ent, result);
+	ucl_object_unref(result);
 	return 0;
 }
 
