@@ -170,13 +170,13 @@ lua_fasttext_model_get_word_vector(lua_State *L)
 		return 1;
 	}
 
-	auto dim = model->model->get_dimension();
 	std::vector<float> vec;
 
 	model->model->get_word_vector(vec, std::string_view{word});
 
-	lua_createtable(L, dim, 0);
-	for (std::int32_t i = 0; i < dim; i++) {
+	auto vec_size = static_cast<std::int32_t>(vec.size());
+	lua_createtable(L, vec_size, 0);
+	for (std::int32_t i = 0; i < vec_size; i++) {
 		lua_pushnumber(L, static_cast<double>(vec[i]));
 		lua_rawseti(L, -2, i + 1);
 	}
@@ -205,6 +205,11 @@ lua_fasttext_model_get_sentence_vector(lua_State *L)
 	luaL_argcheck(L, lua_istable(L, 2), 2, "'table' of words expected");
 
 	auto dim = model->model->get_dimension();
+	if (dim <= 0 || dim > 4096) {
+		lua_pushnil(L);
+		return 1;
+	}
+
 	std::vector<float> sentence_vec(dim, 0.0f);
 	std::vector<float> word_vec;
 	int count = 0;
@@ -219,7 +224,8 @@ lua_fasttext_model_get_sentence_vector(lua_State *L)
 			const char *w = lua_tolstring(L, -1, &len);
 			if (len > 0) {
 				model->model->get_word_vector(word_vec, std::string_view{w, len});
-				for (std::int32_t d = 0; d < dim; d++) {
+				auto wv_size = std::min(dim, static_cast<std::int32_t>(word_vec.size()));
+				for (std::int32_t d = 0; d < wv_size; d++) {
 					sentence_vec[d] += word_vec[d];
 				}
 				count++;
