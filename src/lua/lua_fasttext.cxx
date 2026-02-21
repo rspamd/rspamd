@@ -47,6 +47,7 @@ static int lua_fasttext_load(lua_State *L);
 static int lua_fasttext_model_get_dimension(lua_State *L);
 static int lua_fasttext_model_get_sentence_vector(lua_State *L);
 static int lua_fasttext_model_get_word_vector(lua_State *L);
+static int lua_fasttext_model_predict(lua_State *L);
 static int lua_fasttext_model_dtor(lua_State *L);
 static int lua_fasttext_model_is_loaded(lua_State *L);
 
@@ -61,6 +62,7 @@ static const struct luaL_reg fasttextlib_m[] = {
 	{"get_dimension", lua_fasttext_model_get_dimension},
 	{"get_sentence_vector", lua_fasttext_model_get_sentence_vector},
 	{"get_word_vector", lua_fasttext_model_get_word_vector},
+	{"predict", lua_fasttext_model_predict},
 	{"is_loaded", lua_fasttext_model_is_loaded},
 	{"__gc", lua_fasttext_model_dtor},
 	{"__tostring", rspamd_lua_class_tostring},
@@ -263,6 +265,64 @@ lua_fasttext_model_get_sentence_vector(lua_State *L)
 	for (std::int32_t i = 0; i < dim; i++) {
 		lua_pushnumber(L, static_cast<double>(sentence_vec[i]));
 		lua_rawseti(L, -2, i + 1);
+	}
+
+	return 1;
+}
+
+/***
+ * @method model:predict(words, k)
+ * Run supervised classification on a table of words.
+ * Each word is converted to input matrix row IDs internally.
+ * @param {table} words table of word strings
+ * @param {number} k number of top predictions to return (default 1)
+ * @return {table} array of {label=string, prob=number} tables, sorted by probability descending
+ */
+static int
+lua_fasttext_model_predict(lua_State *L)
+{
+	auto *model = lua_check_fasttext_model(L, 1);
+
+	if (!model || !model->loaded) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	luaL_argcheck(L, lua_istable(L, 2), 2, "'table' of words expected");
+	int k = luaL_optinteger(L, 3, 1);
+
+	/* Convert words to input matrix row IDs */
+	std::vector<std::int32_t> word_ids;
+	auto nwords = rspamd_lua_table_size(L, 2);
+
+	for (auto i = 1; i <= nwords; i++) {
+		lua_rawgeti(L, 2, i);
+		if (lua_isstring(L, -1)) {
+			std::size_t len;
+			const char *w = lua_tolstring(L, -1, &len);
+			if (len > 0) {
+				model->model->word2vec(std::string_view{w, len}, word_ids);
+			}
+		}
+		lua_pop(L, 1);
+	}
+
+	if (word_ids.empty()) {
+		lua_newtable(L);
+		return 1;
+	}
+
+	std::vector<rspamd::fasttext::prediction> preds;
+	model->model->predict(k, word_ids, preds, 0.0f);
+
+	lua_createtable(L, static_cast<int>(preds.size()), 0);
+	for (std::size_t i = 0; i < preds.size(); i++) {
+		lua_createtable(L, 0, 2);
+		lua_pushstring(L, preds[i].label.c_str());
+		lua_setfield(L, -2, "label");
+		lua_pushnumber(L, static_cast<double>(preds[i].prob));
+		lua_setfield(L, -2, "prob");
+		lua_rawseti(L, -2, static_cast<int>(i + 1));
 	}
 
 	return 1;
