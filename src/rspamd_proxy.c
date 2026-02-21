@@ -3220,6 +3220,14 @@ proxy_milter_finish_handler(int fd,
 
 		/* Milter protocol doesn't support compression, so no need to set compression flag */
 
+		/* Retain for the master backend request.  The base refcount (from
+		 * REF_INIT_RETAIN) is the milter-connection hold: it is released only
+		 * when the MTA TCP connection closes (empty finish or error handler).
+		 * Each per-message backend round-trip needs its own reference so that
+		 * the session survives across multiple messages on one connection.
+		 * The matching REF_RELEASE is in proxy_backend_master_finish_handler /
+		 * proxy_backend_master_error_handler / proxy_send_master_message err. */
+		REF_RETAIN(session);
 		proxy_open_mirror_connections(session);
 		proxy_send_master_message(session);
 	}
@@ -3348,6 +3356,9 @@ proxy_accept_socket(EV_P_ ev_io *w, int revents)
 		}
 #endif
 
+		/* The milter library owns nfd and will close it; prevent
+		 * proxy_session_dtor from issuing a double-close. */
+		session->client_sock = -1;
 		rspamd_milter_handle_socket(nfd, 0.0,
 									session->pool,
 									ctx->event_loop,
