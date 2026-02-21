@@ -204,7 +204,7 @@ define(["jquery", "app/common", "d3pie", "d3"],
 
             function addStatfiles(server, statfiles) {
                 const safeStatfiles = Array.isArray(statfiles) ? statfiles : [];
-                const symbolClassMap = {BAYES_SPAM: "symbol-positive", BAYES_HAM: "symbol-negative"};
+                const classToSymbolClass = {spam: "symbol-positive", ham: "symbol-negative"};
                 const rowsCount = safeStatfiles.length;
 
                 function coerceNumber(value) { return (Number.isFinite(value) ? value : Number(value) || 0); }
@@ -237,7 +237,8 @@ define(["jquery", "app/common", "d3pie", "d3"],
 
                 $.each(safeStatfiles, (i, statfile) => {
                     const symbol = statfile.symbol ?? "-";
-                    const cls = symbolClassMap[symbol] || "";
+                    const classValue = statfile.class ?? guessClassFromSymbol(symbol);
+                    const cls = classToSymbolClass[classValue] || "";
                     const clName = statfile.classifier?.name ?? "-";
                     const prevClName = i > 0 ? (safeStatfiles[i - 1].classifier?.name ?? "-") : null;
 
@@ -255,7 +256,7 @@ define(["jquery", "app/common", "d3pie", "d3"],
                     }
 
                     $("#bayesTable tbody").append(`<tr>${serverCell}${classifierCell}${[
-                        renderCell(common.escapeHTML(statfile.class ?? guessClassFromSymbol(symbol)), cls),
+                        renderCell(common.escapeHTML(classValue), cls),
                         renderCell(common.escapeHTML(symbol), cls),
                         renderCell(common.escapeHTML(statfile.type ?? "-"), cls),
                         renderCell(coerceNumber(statfile.revision), `text-end ${cls}`),
