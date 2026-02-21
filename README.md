@@ -1,4 +1,4 @@
-# <a href="https://rspamd.com"><img src="https://rspamd.com/img/rspamd_logo_black.png" alt="Rspamd" width="220px"/></a>
+# <a href="https://rspamd.com"><img src="https://rspamd.com/rspamd_logo_black.png" alt="Rspamd" width="220px"/></a>
 
 [![GHA](https://github.com/rspamd/rspamd/actions/workflows/ci.yml/badge.svg)](https://github.com/rspamd/rspamd/actions/workflows/ci.yml)
 
