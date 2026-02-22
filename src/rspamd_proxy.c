@@ -1581,7 +1581,13 @@ proxy_session_dtor(struct rspamd_proxy_session *session)
 		rspamd_mempool_delete(session->pool);
 	}
 
-	session->worker->nconns--;
+	/* For milter sessions nconns is decremented explicitly when the MTA TCP
+	 * connection closes (proxy_milter_finish_handler / proxy_milter_error_handler)
+	 * because proxy_session_refresh creates a new session per message — each
+	 * intermediate session would otherwise decrement nconns prematurely. */
+	if (!session->ctx->milter) {
+		session->worker->nconns--;
+	}
 
 	g_free(session);
 }
@@ -3197,6 +3203,11 @@ proxy_milter_finish_handler(int fd,
 	if (rms->message == NULL || rms->message->len == 0) {
 		msg_info_session("finished milter connection");
 		proxy_backend_close_connection(session->master_conn);
+		/* MTA TCP connection is closing: this is the one authoritative
+		 * decrement for nconns.  proxy_session_dtor skips nconns-- for milter
+		 * because proxy_session_refresh creates a new session per message and
+		 * each intermediate session destruction must not touch the counter. */
+		session->worker->nconns--;
 		REF_RELEASE(session);
 	}
 	else {
@@ -3220,14 +3231,6 @@ proxy_milter_finish_handler(int fd,
 
 		/* Milter protocol doesn't support compression, so no need to set compression flag */
 
-		/* Retain for the master backend request.  The base refcount (from
-		 * REF_INIT_RETAIN) is the milter-connection hold: it is released only
-		 * when the MTA TCP connection closes (empty finish or error handler).
-		 * Each per-message backend round-trip needs its own reference so that
-		 * the session survives across multiple messages on one connection.
-		 * The matching REF_RELEASE is in proxy_backend_master_finish_handler /
-		 * proxy_backend_master_error_handler / proxy_send_master_message err. */
-		REF_RETAIN(session);
 		proxy_open_mirror_connections(session);
 		proxy_send_master_message(session);
 	}
@@ -3247,6 +3250,7 @@ proxy_milter_error_handler(int fd,
 						 err);
 		/* Terminate session immediately */
 		proxy_backend_close_connection(session->master_conn);
+		session->worker->nconns--;
 		REF_RELEASE(session);
 	}
 	else {
@@ -3256,6 +3260,7 @@ proxy_milter_error_handler(int fd,
 						 err);
 		/* Terminate session immediately */
 		proxy_backend_close_connection(session->master_conn);
+		session->worker->nconns--;
 		REF_RELEASE(session);
 	}
 }
