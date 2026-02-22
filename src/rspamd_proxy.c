@@ -1581,7 +1581,13 @@ proxy_session_dtor(struct rspamd_proxy_session *session)
 		rspamd_mempool_delete(session->pool);
 	}
 
-	session->worker->nconns--;
+	/* For milter sessions nconns is decremented explicitly when the MTA TCP
+	 * connection closes (proxy_milter_finish_handler / proxy_milter_error_handler)
+	 * because proxy_session_refresh creates a new session per message — each
+	 * intermediate session would otherwise decrement nconns prematurely. */
+	if (!session->ctx->milter) {
+		session->worker->nconns--;
+	}
 
 	g_free(session);
 }
@@ -3197,6 +3203,11 @@ proxy_milter_finish_handler(int fd,
 	if (rms->message == NULL || rms->message->len == 0) {
 		msg_info_session("finished milter connection");
 		proxy_backend_close_connection(session->master_conn);
+		/* MTA TCP connection is closing: this is the one authoritative
+		 * decrement for nconns.  proxy_session_dtor skips nconns-- for milter
+		 * because proxy_session_refresh creates a new session per message and
+		 * each intermediate session destruction must not touch the counter. */
+		session->worker->nconns--;
 		REF_RELEASE(session);
 	}
 	else {
@@ -3239,6 +3250,7 @@ proxy_milter_error_handler(int fd,
 						 err);
 		/* Terminate session immediately */
 		proxy_backend_close_connection(session->master_conn);
+		session->worker->nconns--;
 		REF_RELEASE(session);
 	}
 	else {
@@ -3248,6 +3260,7 @@ proxy_milter_error_handler(int fd,
 						 err);
 		/* Terminate session immediately */
 		proxy_backend_close_connection(session->master_conn);
+		session->worker->nconns--;
 		REF_RELEASE(session);
 	}
 }
@@ -3348,6 +3361,9 @@ proxy_accept_socket(EV_P_ ev_io *w, int revents)
 		}
 #endif
 
+		/* The milter library owns nfd and will close it; prevent
+		 * proxy_session_dtor from issuing a double-close. */
+		session->client_sock = -1;
 		rspamd_milter_handle_socket(nfd, 0.0,
 									session->pool,
 									ctx->event_loop,
