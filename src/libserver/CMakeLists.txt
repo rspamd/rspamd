@@ -1,5 +1,6 @@
 # Librspamdserver
 ADD_SUBDIRECTORY(css)
+ADD_SUBDIRECTORY(fasttext)
 SET(LIBRSPAMDSERVERSRC
         ${CMAKE_CURRENT_SOURCE_DIR}/cfg_utils.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/cfg_rcl.cxx
