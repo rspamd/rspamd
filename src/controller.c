@@ -3574,7 +3574,6 @@ rspamd_controller_handle_bayes_classifiers(struct rspamd_http_connection_entry *
 	ucl_object_t *result, *classifiers_array, *classifier_obj, *classes_array;
 	struct rspamd_classifier_config *clc;
 	GList *cur, *st_cur;
-	GHashTable *classes_seen;
 
 	if (!rspamd_controller_check_password(conn_ent, session, msg, FALSE)) {
 		return 0;
@@ -3602,22 +3601,30 @@ rspamd_controller_handle_bayes_classifiers(struct rspamd_http_connection_entry *
 				ucl_object_frombool(rspamd_classifier_is_per_user(clc)),
 				"per_user", 0, false);
 
-		/* Collect unique class names from statfiles */
+		/* Collect unique class names from statfiles.
+		 * Linear search is used since N < 10 in practice, avoiding hash table overhead. */
 		classes_array = ucl_object_typed_new(UCL_ARRAY);
-		/* Hash table stores borrowed pointers from config, no destroy function needed */
-		classes_seen = g_hash_table_new(rspamd_str_hash, rspamd_str_equal);
 
 		st_cur = clc->statfiles;
 		while (st_cur) {
 			struct rspamd_statfile_config *stcf = st_cur->data;
-			if (stcf->class_name && !g_hash_table_contains(classes_seen, stcf->class_name)) {
-				ucl_array_append(classes_array, ucl_object_fromstring(stcf->class_name));
-				g_hash_table_add(classes_seen, stcf->class_name);
+			if (stcf->class_name) {
+				gboolean seen = FALSE;
+				ucl_object_iter_t it = NULL;
+				const ucl_object_t *item;
+
+				while ((item = ucl_object_iterate(classes_array, &it, true)) != NULL) {
+					if (strcmp(ucl_object_tostring(item), stcf->class_name) == 0) {
+						seen = TRUE;
+						break;
+					}
+				}
+				if (!seen) {
+					ucl_array_append(classes_array, ucl_object_fromstring(stcf->class_name));
+				}
 			}
 			st_cur = g_list_next(st_cur);
 		}
-
-		g_hash_table_unref(classes_seen);
 
 		ucl_object_insert_key(classifier_obj, classes_array, "classes", 0, false);
 		ucl_array_append(classifiers_array, classifier_obj);
