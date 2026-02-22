@@ -12,6 +12,10 @@ Pooling modes (pooling = "mean_max" by default):
   "mean"     - average of word vectors (classic fasttext sentence vector)
   "mean_max" - concatenation of mean and element-wise max pooling
 
+SIF (Smooth Inverse Frequency) weighting is enabled by default (sif_weight = true).
+Common words (the, is, a) get near-zero weight, distinctive words get high weight.
+Tune with sif_a parameter (default 1e-3). Set sif_weight = false to disable.
+
 Configuration example in neural.conf:
   providers = [
     {
@@ -25,6 +29,8 @@ Configuration example in neural.conf:
       weight = 1.0;
       multi_model = true;    # use all language models (default)
       pooling = "mean_max";  # mean + max pooling (default)
+      sif_weight = true;     # SIF word weighting (default)
+      sif_a = 1e-3;          # SIF smoothing parameter (default)
     }
   ];
 ]] --
@@ -170,11 +176,16 @@ local function extract_words(task, opts)
 end
 
 -- Compute mean and optionally max pooling from word vectors
-local function compute_pooled_vectors(model, words, pooling)
+-- When sif_a > 0, uses SIF (Smooth Inverse Frequency) weighting:
+--   w(word) = a / (a + p(word))
+-- where p(word) is the word probability from the model's vocabulary.
+-- Common words get near-zero weight, distinctive words get high weight.
+local function compute_pooled_vectors(model, words, pooling, sif_a)
   local dim = model:get_dimension()
   local mean_vec = {}
   local max_vec = {}
   local need_max = (pooling == 'mean_max')
+  local use_sif = sif_a and sif_a > 0
 
   for d = 1, dim do
     mean_vec[d] = 0.0
@@ -183,13 +194,22 @@ local function compute_pooled_vectors(model, words, pooling)
     end
   end
 
-  local count = 0
+  local total_weight = 0.0
   for _, w in ipairs(words) do
     local wv = model:get_word_vector(w)
     if wv and #wv >= dim then
-      count = count + 1
+      -- SIF weight: a / (a + p(word)); unknown words get weight 1.0
+      local weight = 1.0
+      if use_sif then
+        local freq = model:get_word_frequency(w)
+        if freq > 0 then
+          weight = sif_a / (sif_a + freq)
+        end
+      end
+
+      total_weight = total_weight + weight
       for d = 1, dim do
-        mean_vec[d] = mean_vec[d] + wv[d]
+        mean_vec[d] = mean_vec[d] + wv[d] * weight
         if need_max and wv[d] > max_vec[d] then
           max_vec[d] = wv[d]
         end
@@ -197,13 +217,13 @@ local function compute_pooled_vectors(model, words, pooling)
     end
   end
 
-  if count == 0 then
+  if total_weight == 0 then
     return nil
   end
 
-  -- Normalize mean
+  -- Normalize weighted mean
   for d = 1, dim do
-    mean_vec[d] = mean_vec[d] / count
+    mean_vec[d] = mean_vec[d] / total_weight
   end
 
   -- L2-normalize mean vector (match fasttext behavior)
@@ -299,12 +319,17 @@ neural_common.register_provider('fasttext_embed', {
     end
 
     local pooling = pcfg.pooling or 'mean_max'
+    -- SIF weighting: enabled by default with a=1e-3
+    local sif_a = pcfg.sif_a
+    if sif_a == nil then
+      sif_a = (pcfg.sif_weight ~= false) and 1e-3 or 0
+    end
     local combined_vec = {}
     local model_names = {}
     local total_dim = 0
 
     for _, m in ipairs(models) do
-      local vec = compute_pooled_vectors(m.model, words, pooling)
+      local vec = compute_pooled_vectors(m.model, words, pooling, sif_a)
       if vec then
         for _, v in ipairs(vec) do
           combined_vec[#combined_vec + 1] = v

@@ -1127,4 +1127,21 @@ auto fasttext_model::get_ntokens() const -> std::int64_t
 	return impl_->dict.get_ntokens();
 }
 
+auto fasttext_model::get_word_frequency(std::string_view word) const -> double
+{
+	auto id = impl_->dict.find(word);
+	if (id < 0) {
+		return 0.0;
+	}
+	auto *entry = impl_->dict.get_entry(id);
+	if (!entry) {
+		return 0.0;
+	}
+	auto ntokens = impl_->dict.get_ntokens();
+	if (ntokens <= 0) {
+		return 0.0;
+	}
+	return static_cast<double>(entry->count) / static_cast<double>(ntokens);
+}
+
 } /* namespace rspamd::fasttext */
