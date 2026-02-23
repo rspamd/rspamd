@@ -152,6 +152,46 @@ rspamd_stat_cache_redis_runtime(struct rspamd_task *task,
 	return (void *) ctx;
 }
 
+/*
+ * Map a class name to the string stored in Redis.
+ * ham → "0", spam → "1" (preserves existing cache entries),
+ * anything else (multiclass) → the literal class name.
+ */
+static const char *
+rspamd_stat_cache_class_to_str(const char *class_name)
+{
+	if (class_name == nullptr) {
+		return "0";
+	}
+	if (strcmp(class_name, "spam") == 0) {
+		return "1";
+	}
+	if (strcmp(class_name, "ham") == 0) {
+		return "0";
+	}
+	return class_name;
+}
+
+/*
+ * Reverse of the above: translate a cached Redis string back to a canonical
+ * class name for comparison.
+ * "0" → "ham", "1" → "spam", anything else → returned as-is.
+ */
+static const char *
+rspamd_stat_cache_str_to_class(const char *cache_str)
+{
+	if (cache_str == nullptr) {
+		return nullptr;
+	}
+	if (strcmp(cache_str, "0") == 0) {
+		return "ham";
+	}
+	if (strcmp(cache_str, "1") == 0) {
+		return "spam";
+	}
+	return cache_str;
+}
+
 static int
 rspamd_stat_cache_checked(lua_State *L)
 {
@@ -164,12 +204,10 @@ rspamd_stat_cache_checked(lua_State *L)
 	auto res = lua_toboolean(L, 2);
 
 	if (res) {
-		/* The cached value is the class name string (e.g. "spam", "ham", "transactional").
-		 * Previously this was stored as a 64-bit integer hash, but uint64_t values
-		 * larger than 2^53 lose precision when passed through Lua doubles, causing
-		 * the equality check to always fail and forcing UNLEARN instead of
-		 * ALREADY_LEARNED for multiclass classifiers. */
-		const char *cached_class = lua_tostring(L, 3);
+		/* Translate the cached Redis value back to a canonical class name.
+		 * ham/spam are stored as "0"/"1" for backward compatibility with
+		 * existing cache entries; multiclass names are stored literally. */
+		const char *cached_class = rspamd_stat_cache_str_to_class(lua_tostring(L, 3));
 
 		/* Get the class being learned */
 		const char *autolearn_class = rspamd_task_get_autolearn_class(task);
@@ -267,7 +305,9 @@ int rspamd_stat_cache_redis_learn(struct rspamd_task *task,
 		autolearn_class = is_spam ? "spam" : "ham";
 	}
 
-	lua_pushstring(L, autolearn_class);
+	/* Translate to the Redis storage form: "0" for ham, "1" for spam,
+	 * literal name for multiclass.  Keeps existing cache entries readable. */
+	lua_pushstring(L, rspamd_stat_cache_class_to_str(autolearn_class));
 
 	if (lua_pcall(L, 3, 0, err_idx) != 0) {
 		msg_err_task("call to redis failed: %s", lua_tostring(L, -1));
