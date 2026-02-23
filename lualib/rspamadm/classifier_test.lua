@@ -16,13 +16,13 @@ parser:option "-S --spam"
       :description("Spam directory")
       :argname("<dir>")
 parser:option "-C --classifier"
-      :description("Classifier type: bayes or llm_embeddings")
+      :description("Classifier type: bayes or neural")
       :argname("<type>")
       :default('bayes')
 parser:flag "-n --no-learning"
       :description("Do not learn classifier")
 parser:flag "-T --train-only"
-      :description("Only train, do not evaluate (llm_embeddings only)")
+      :description("Only train, do not evaluate (neural only)")
 parser:option "--nconns"
       :description("Number of parallel connections")
       :argname("<N>")
@@ -53,7 +53,7 @@ parser:option "--ham-symbol"
       :description("Use specific ham symbol (auto-detected from classifier type)")
       :argname("<symbol>")
 parser:option "--train-wait"
-      :description("Seconds to wait after training for neural network (llm_embeddings only, should be > watch_interval)")
+      :description("Seconds to wait after training for neural network (neural only, should be > watch_interval)")
       :argname("<sec>")
       :convert(tonumber)
       :default(90)
@@ -99,7 +99,7 @@ local function train_bayes(files, command)
   os.remove(fname)
 end
 
--- Function to train with ANN-Train header (for llm_embeddings/neural)
+-- Function to train with ANN-Train header (for neural classifier)
 -- Uses settings to enable only NEURAL_LEARN symbol, skipping full scan
 local function train_neural(files, learn_type)
   local fname = os.tmpname()
@@ -243,16 +243,21 @@ local function handler(args)
     os.exit(1)
   end
 
+  -- Normalize classifier type (accept legacy 'llm_embeddings' as alias for 'neural')
+  if classifier_type == 'llm_embeddings' then
+    classifier_type = 'neural'
+  end
+
   -- Set default symbols based on classifier type
   if not opts.spam_symbol then
-    if classifier_type == 'llm_embeddings' then
+    if classifier_type == 'neural' then
       opts.spam_symbol = 'NEURAL_SPAM'
     else
       opts.spam_symbol = 'BAYES_SPAM'
     end
   end
   if not opts.ham_symbol then
-    if classifier_type == 'llm_embeddings' then
+    if classifier_type == 'neural' then
       opts.ham_symbol = 'NEURAL_HAM'
     else
       opts.ham_symbol = 'BAYES_HAM'
@@ -281,8 +286,8 @@ local function handler(args)
 
     local t, train_spam_time, train_ham_time
 
-    if classifier_type == 'llm_embeddings' then
-      -- Neural/LLM training using ANN-Train header
+    if classifier_type == 'neural' then
+      -- Neural training using ANN-Train header
       -- Interleave spam and ham submissions for balanced training
       print(string.format("Training %d spam + %d ham messages (interleaved)...", #train_spam, #train_ham))
       t = rspamd_util.get_time()

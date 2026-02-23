@@ -514,10 +514,12 @@
 									<form>
 										<div class="d-flex flex-wrap flex-lg-column align-items-start align-items-lg-stretch gap-2">
 											<select id="classifier" class="form-select w-auto"></select>
-											<div class="btn-group">
+											<select id="bayes-class" class="form-select w-auto d-none"></select>
+											<div class="btn-group" id="binary-learn-buttons">
 												<button class="btn btn-success d-flex align-items-center" type="button" data-upload="learnham" disabled><i class="fas fa-thumbs-up me-2"></i>Upload HAM</button>
 												<button class="btn btn-danger d-flex align-items-center" type="button" data-upload="learnspam" disabled><i class="fas fa-thumbs-down me-2"></i>Upload SPAM</button>
 											</div>
+											<button id="learn-class-btn" class="btn btn-primary d-flex align-items-center d-none" type="button" data-upload="learnclass" disabled><i class="fas fa-graduation-cap me-2"></i>Learn</button>
 										</div>
 									</form>
 								</div>

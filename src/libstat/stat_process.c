@@ -1831,7 +1831,7 @@ rspamd_stat_check_autolearn(struct rspamd_task *task)
 	return ret;
 }
 
-static gboolean
+gboolean
 rspamd_classifier_is_per_user(const struct rspamd_classifier_config *cfg)
 {
 	const ucl_object_t *users_enabled;
@@ -1853,7 +1853,7 @@ rspamd_classifier_is_per_user(const struct rspamd_classifier_config *cfg)
 	return TRUE;
 }
 
-static const char *
+const char *
 rspamd_classifier_type(const struct rspamd_classifier_config *cfg)
 {
 	gboolean has_spam = FALSE;
