@@ -266,6 +266,16 @@ local function create_embedding_ann(n, rule)
   return rspamd_kann.new.kann(t)
 end
 
+-- Conv1d ANN: uses the enhanced embedding architecture.
+-- The actual convolution (multi-scale max-over-time pooling) is done in the
+-- fasttext_embed provider, which produces compact feature vectors (n_scales * channels).
+-- The ANN itself is a simple dense network on these pre-convolved features.
+local function create_conv1d_ann(n, rule)
+  lua_util.debugm(N, rspamd_config,
+    'creating conv1d ANN: %s pre-convolved inputs', n)
+  return create_embedding_ann(n, rule)
+end
+
 -- Detects if rule uses LLM embeddings provider
 local function uses_llm_embeddings(rule)
   if not rule.providers then
@@ -281,6 +291,12 @@ end
 
 -- Main ANN factory function - auto-selects architecture based on rule configuration
 local function create_ann(n, nlayers, rule)
+  -- Check for conv1d architecture first
+  if rule.conv1d then
+    lua_util.debugm(N, rspamd_config, 'creating conv1d ANN with %s inputs', n)
+    return create_conv1d_ann(n, rule)
+  end
+
   -- Check if we should use the enhanced embedding architecture
   -- Conditions: has LLM provider, or explicit multi-layer config, or large input dimension
   local use_embedding_arch = uses_llm_embeddings(rule)
@@ -753,6 +769,14 @@ local function providers_config_digest(providers_cfg, rule)
       entry.llm_type = llm_type
       entry.model = model
       entry.max_tokens = max_tokens
+    end
+
+    -- Conv1d feature extraction settings affect output dimensions
+    if p.output_mode == 'conv1d' then
+      entry.output_mode = 'conv1d'
+      entry.max_words = p.max_words or 32
+      entry.kernel_sizes = p.kernel_sizes or { 1, 3, 5 }
+      entry.conv_pooling = p.conv_pooling or 'max'
     end
 
     norm.providers[i] = entry

@@ -12,6 +12,16 @@ Pooling modes (pooling = "mean_max" by default):
   "mean"     - average of word vectors (classic fasttext sentence vector)
   "mean_max" - concatenation of mean and element-wise max pooling
 
+Conv1d output mode (output_mode = "conv1d"):
+  Multi-scale max-over-time pooling over sliding word windows.
+  For each kernel size, averages word vectors in a window, then
+  max-pools across all window positions per channel.
+  Produces compact features: n_scales * pools_per_scale * channels.
+  Options:
+    kernel_sizes = [1, 3, 5]  - window sizes (default)
+    conv_pooling = "max"      - per-scale pooling: "max", "mean", "mean_max"
+    max_words = 32            - max word positions (default)
+
 SIF (Smooth Inverse Frequency) weighting is enabled by default (sif_weight = true).
 Common words (the, is, a) get near-zero weight, distinctive words get high weight.
 Tune with sif_a parameter (default 1e-3). Set sif_weight = false to disable.
@@ -260,6 +270,149 @@ local function compute_pooled_vectors(model, words, pooling, sif_a)
   return mean_vec
 end
 
+-- Multi-scale pooling for conv1d feature extraction.
+-- Instead of storing raw NCW matrices and relying on KANN conv1d,
+-- we apply fixed convolution-like operations in Lua and store compact features.
+--
+-- For each window size k in kernel_sizes (default {1, 3, 5}):
+--   1. Slide a window of k words over the sequence
+--   2. Average word vectors within each window (like a fixed conv filter)
+--   3. Max-pool (and optionally mean-pool) over all window positions
+-- Each scale's features are L2-normalized independently for balanced contribution.
+-- Output: flat table of n_scales * n_pool * C floats (e.g., 3 * 2 * 100 = 600 for mean_max)
+local function compute_conv1d_features(models, words, max_words, sif_a, opts)
+  opts = opts or {}
+  local use_sif = sif_a and sif_a > 0
+  local nwords = math.min(#words, max_words)
+  local kernel_sizes = opts.kernel_sizes or { 1, 3, 5 }
+  local conv_pooling = opts.conv_pooling or 'mean_max'
+  local need_mean = (conv_pooling == 'mean_max' or conv_pooling == 'mean')
+  local need_max = (conv_pooling == 'mean_max' or conv_pooling == 'max')
+
+  if nwords == 0 then
+    return nil, 0, 0
+  end
+
+  -- Compute total channels (sum of all model dimensions)
+  local total_channels = 0
+  for _, m in ipairs(models) do
+    total_channels = total_channels + m.model:get_dimension()
+  end
+
+  -- Collect word vectors: word_vecs[w][c] for word position w, channel c
+  local word_vecs = {}
+  for w = 1, nwords do
+    local wv_all = {}
+    for _, m in ipairs(models) do
+      local wv = m.model:get_word_vector(words[w])
+      local dim = m.model:get_dimension()
+      if wv and #wv >= dim then
+        local weight = 1.0
+        if use_sif then
+          local freq = m.model:get_word_frequency(words[w])
+          if freq > 0 then
+            weight = sif_a / (sif_a + freq)
+          end
+        end
+        for d = 1, dim do
+          wv_all[#wv_all + 1] = wv[d] * weight
+        end
+      else
+        for _ = 1, dim do
+          wv_all[#wv_all + 1] = 0.0
+        end
+      end
+    end
+    word_vecs[w] = wv_all
+  end
+
+  -- Multi-scale pooling with per-scale L2 normalization
+  local output = {}
+
+  for _, k in ipairs(kernel_sizes) do
+    local scale_mean = need_mean and {} or nil
+    local scale_max = need_max and {} or nil
+
+    -- Initialize per-scale accumulators
+    for c = 1, total_channels do
+      if scale_mean then
+        scale_mean[c] = 0.0
+      end
+      if scale_max then
+        scale_max[c] = -math.huge
+      end
+    end
+
+    -- Slide window of size k over word positions
+    local n_windows = nwords - k + 1
+    if n_windows < 1 then
+      -- Sequence too short for this kernel; treat each word as a window
+      n_windows = nwords
+      for c = 1, total_channels do
+        for w = 1, nwords do
+          local val = word_vecs[w][c] or 0.0
+          if scale_mean then
+            scale_mean[c] = scale_mean[c] + val
+          end
+          if scale_max and val > scale_max[c] then
+            scale_max[c] = val
+          end
+        end
+        if scale_mean then
+          scale_mean[c] = scale_mean[c] / nwords
+        end
+      end
+    else
+      for c = 1, total_channels do
+        for start = 1, n_windows do
+          -- Average word vectors within this window
+          local sum = 0.0
+          for w = start, start + k - 1 do
+            sum = sum + (word_vecs[w][c] or 0.0)
+          end
+          local avg = sum / k
+          if scale_mean then
+            scale_mean[c] = scale_mean[c] + avg
+          end
+          if scale_max and avg > scale_max[c] then
+            scale_max[c] = avg
+          end
+        end
+        if scale_mean then
+          scale_mean[c] = scale_mean[c] / n_windows
+        end
+      end
+    end
+
+    -- L2-normalize and append mean features for this scale
+    if scale_mean then
+      local norm = 0.0
+      for c = 1, total_channels do
+        norm = norm + scale_mean[c] * scale_mean[c]
+      end
+      norm = math.sqrt(norm)
+      for c = 1, total_channels do
+        output[#output + 1] = norm > 0 and (scale_mean[c] / norm) or 0.0
+      end
+    end
+
+    -- L2-normalize and append max features for this scale
+    if scale_max then
+      local norm = 0.0
+      for c = 1, total_channels do
+        norm = norm + scale_max[c] * scale_max[c]
+      end
+      norm = math.sqrt(norm)
+      for c = 1, total_channels do
+        output[#output + 1] = norm > 0 and (scale_max[c] / norm) or 0.0
+      end
+    end
+  end
+
+  local pools_per_scale = (need_mean and 1 or 0) + (need_max and 1 or 0)
+  return output, total_channels, pools_per_scale
+end
+
 neural_common.register_provider('fasttext_embed', {
   collect_async = function(task, ctx, cont)
     local pcfg = ctx.config or {}
@@ -315,6 +468,54 @@ neural_common.register_provider('fasttext_embed', {
     if #words == 0 then
       rspamd_logger.debugm(N, task, 'fasttext_embed: no words found; skip')
       cont(nil)
+      return
+    end
+
+    -- Conv1d output mode: multi-scale max-over-time pooling.
+    -- For each kernel size, averages word vectors in sliding windows, then
+    -- max-pools across all positions per channel. Produces compact features:
+    -- n_scales * pools_per_scale * total_channels.
+    if pcfg.output_mode == 'conv1d' then
+      local max_words = pcfg.max_words or 32
+      local sif_a = pcfg.sif_a
+      if sif_a == nil then
+        sif_a = (pcfg.sif_weight ~= false) and 1e-3 or 0
+      end
+
+      local kernel_sizes = pcfg.kernel_sizes or { 1, 3, 5 }
+      local conv_pooling = pcfg.conv_pooling or 'max'
+      local model_names = {}
+      for _, m in ipairs(models) do
+        model_names[#model_names + 1] = m.lang
+      end
+
+      local combined_vec, total_channels, pools_per_scale = compute_conv1d_features(
+        models, words, max_words, sif_a,
+        { kernel_sizes = kernel_sizes, conv_pooling = conv_pooling })
+
+      if not combined_vec or #combined_vec == 0 then
+        rspamd_logger.debugm(N, task, 'fasttext_embed: conv1d produced empty features; skip')
+        cont(nil)
+        return
+      end
+
+      local meta = {
+        name = pcfg.name or 'fasttext_embed',
+        type = 'fasttext_embed',
+        output_mode = 'conv1d',
+        channels = total_channels,
+        n_scales = #kernel_sizes,
+        pools_per_scale = pools_per_scale,
+        dim = #combined_vec,
+        weight = ctx.weight or 1.0,
+        models = table.concat(model_names, '+'),
+      }
+
+      rspamd_logger.debugm(N, task,
+        'fasttext_embed: conv1d k=%s pool=%s dim=%s (%s models, %s words)',
+        table.concat(kernel_sizes, ','), conv_pooling,
+        #combined_vec, #models, math.min(#words, max_words))
+      cont(combined_vec, meta)
       return
     end
 
