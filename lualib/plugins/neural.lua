@@ -1267,11 +1267,12 @@ local function spawn_train(params)
           redis_save_cb,
           { profile.redis_key,
             redis_ann_prefix(params.rule, params.set.name),
-            ann_data,
+            params.ann_key, -- old key to unlock...
+          },
+          { ann_data,
             profile_serialized,
             tostring(params.rule.ann_expire),
             tostring(os.time()),
-            params.ann_key, -- old key to unlock...
             roc_thresholds_serialized or '',
             pca_data or '',
             providers_meta_serialized or '',

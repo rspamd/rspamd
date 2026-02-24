@@ -16,25 +16,25 @@
 -- Handles ADD, DEL, and REFRESH operations including multi-flag merge and shingles
 --
 -- KEYS[1] = hash_key (prefix + digest)
--- KEYS[2] = operation: "add", "del", "refresh"
--- KEYS[3] = flag (string number)
--- KEYS[4] = value (string number)
--- KEYS[5] = expire (string number, seconds)
--- KEYS[6] = timestamp (string number, calendar seconds)
--- KEYS[7] = is_weak ("0" or "1")
--- KEYS[8] = count_key (prefix .. "_count")
--- KEYS[9] = digest (raw bytes, used as value for shingle SETEX)
--- KEYS[10..] = shingle keys (0 or 32 of them)
+-- KEYS[2] = count_key (prefix .. "_count")
+-- KEYS[3..] = shingle keys (0 or 32 of them)
+-- ARGV[1] = operation: "add", "del", "refresh"
+-- ARGV[2] = flag (string number)
+-- ARGV[3] = value (string number)
+-- ARGV[4] = expire (string number, seconds)
+-- ARGV[5] = timestamp (string number, calendar seconds)
+-- ARGV[6] = is_weak ("0" or "1")
+-- ARGV[7] = digest (raw bytes, used as value for shingle SETEX)
 
 local key = KEYS[1]
-local op = KEYS[2]
-local new_flag = tonumber(KEYS[3])
-local new_value = tonumber(KEYS[4])
-local expire = tonumber(KEYS[5])
-local timestamp = KEYS[6]
-local is_weak = tonumber(KEYS[7])
-local count_key = KEYS[8]
-local digest = KEYS[9]
+local count_key = KEYS[2]
+local op = ARGV[1]
+local new_flag = tonumber(ARGV[2])
+local new_value = tonumber(ARGV[3])
+local expire = tonumber(ARGV[4])
+local timestamp = ARGV[5]
+local is_weak = tonumber(ARGV[6])
+local digest = ARGV[7]
 
 if op == "add" then
   -- Multi-flag merge logic: up to 8 flag slots (primary '' + extra '1'..'7')
@@ -145,7 +145,7 @@ if op == "add" then
   redis.call('INCR', count_key)
 
   -- Handle shingles: SETEX each shingle key with expire and digest as value
-  for i = 10, #KEYS do
+  for i = 3, #KEYS do
     redis.call('SETEX', KEYS[i], expire, digest)
   end
 
@@ -153,14 +153,14 @@ elseif op == "del" then
   redis.call('DEL', key)
   redis.call('DECR', count_key)
 
-  for i = 10, #KEYS do
+  for i = 3, #KEYS do
     redis.call('DEL', KEYS[i])
   end
 
 elseif op == "refresh" then
   redis.call('EXPIRE', key, expire)
 
-  for i = 10, #KEYS do
+  for i = 3, #KEYS do
     redis.call('EXPIRE', KEYS[i], expire)
   end
 end

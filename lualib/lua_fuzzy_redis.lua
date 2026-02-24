@@ -76,17 +76,10 @@ local function gen_update_functor(redis_params, update_script_id)
       if upd.op ~= "dup" then
         local hash_key = prefix .. upd.digest
 
-        -- Build KEYS array for the Redis script
+        -- Build KEYS array (only actual Redis key names) and ARGV (parameters)
         local keys = {
           hash_key,
-          upd.op,
-          tostring(upd.flag),
-          tostring(upd.value),
-          tostring(expire),
-          tostring(upd.timestamp),
-          tostring(upd.is_weak),
           count_key,
-          upd.digest,
         }
 
         -- Append shingle keys if present
@@ -95,6 +88,16 @@ local function gen_update_functor(redis_params, update_script_id)
             keys[#keys + 1] = sk
           end
         end
+
+        local args = {
+          upd.op,
+          tostring(upd.flag),
+          tostring(upd.value),
+          tostring(expire),
+          tostring(upd.timestamp),
+          tostring(upd.is_weak),
+          upd.digest,
+        }
 
         local function update_cb(err, _)
           if err then
@@ -106,7 +109,7 @@ local function gen_update_functor(redis_params, update_script_id)
 
         lua_redis.exec_redis_script(update_script_id,
             { ev_base = ev_base, is_write = true, key = hash_key },
-            update_cb, keys)
+            update_cb, keys, args)
       end
     end
   end
