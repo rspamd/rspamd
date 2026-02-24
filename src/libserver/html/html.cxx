@@ -1397,6 +1397,7 @@ struct rspamd_html_url_query_cbd {
 	khash_t(rspamd_url_hash) * url_set;
 	struct rspamd_url *url;
 	GPtrArray *part_urls;
+	uint32_t parent_flags; /* Flags from outer URL to propagate */
 };
 
 static gboolean
@@ -1422,6 +1423,9 @@ html_url_query_callback(struct rspamd_url *url, gsize start_offset,
 
 	url->flags |= RSPAMD_URL_FLAG_QUERY;
 
+	/* Propagate source/classification flags from the parent (outer) URL */
+	url->flags |= (cbd->parent_flags & RSPAMD_URL_FLAG_PROPAGATE_MASK);
+
 	if (rspamd_url_set_add_or_increase(cbd->url_set, url, false) && cbd->part_urls) {
 		g_ptr_array_add(cbd->part_urls, url);
 	}
@@ -1442,6 +1446,7 @@ html_process_query_url(rspamd_mempool_t *pool, struct rspamd_url *url,
 		qcbd.url_set = url_set;
 		qcbd.url = url;
 		qcbd.part_urls = part_urls;
+		qcbd.parent_flags = url->flags;
 
 		rspamd_url_find_multiple(pool,
 								 rspamd_url_query_unsafe(url), url->querylen,
