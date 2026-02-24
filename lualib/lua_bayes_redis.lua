@@ -55,7 +55,7 @@ local function gen_classify_functor(redis_params, classify_script_id)
 
     lua_redis.exec_redis_script(classify_script_id,
         { task = task, is_write = false, key = expanded_key },
-        classify_redis_cb, { expanded_key, script_class_labels, stat_tokens })
+        classify_redis_cb, { expanded_key }, { script_class_labels, stat_tokens })
   end
 end
 
@@ -82,11 +82,11 @@ local function gen_learn_functor(redis_params, learn_script_id)
       lua_redis.exec_redis_script(learn_script_id,
           { task = task, is_write = true, key = expanded_key },
           learn_redis_cb,
-          { expanded_key, script_class_label, symbol, tostring(is_unlearn), stat_tokens, maybe_text_tokens })
+          { expanded_key }, { script_class_label, symbol, tostring(is_unlearn), stat_tokens, maybe_text_tokens })
     else
       lua_redis.exec_redis_script(learn_script_id,
           { task = task, is_write = true, key = expanded_key },
-          learn_redis_cb, { expanded_key, script_class_label, symbol, tostring(is_unlearn), stat_tokens })
+          learn_redis_cb, { expanded_key }, { script_class_label, symbol, tostring(is_unlearn), stat_tokens })
     end
   end
 end
@@ -244,7 +244,7 @@ local function gen_cache_check_functor(redis_params, check_script_id, conf)
     lua_util.debugm(N, task, 'checking cache: %s', cache_id)
     lua_redis.exec_redis_script(check_script_id,
         { task = task, is_write = false, key = cache_id },
-        classify_redis_cb, { cache_id, packed_conf })
+        classify_redis_cb, { cache_id }, { packed_conf })
   end
 end
 
@@ -259,7 +259,7 @@ local function gen_cache_learn_functor(redis_params, learn_script_id, conf)
     lua_redis.exec_redis_script(learn_script_id,
         { task = task, is_write = true, key = cache_id },
         learn_redis_cb,
-        { cache_id, class_name, packed_conf })
+        { cache_id }, { class_name, packed_conf })
   end
 end
 

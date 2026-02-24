@@ -797,7 +797,7 @@ msgpack_str_len(std::size_t len) -> std::size_t
 		return 3 + len;
 	}
 	else {
-		return 4 + len;
+		return 5 + len;
 	}
 }
 

@@ -1,8 +1,8 @@
 -- Lua script to perform cache learning for bayes classification (multi-class)
 -- This script accepts the following parameters:
 -- key1 - cache id
--- key2 - class name string (e.g. "spam", "ham", "transactional")
--- key3 - configuration table in message pack
+-- argv1 - class name string (e.g. "spam", "ham", "transactional")
+-- argv2 - configuration table in message pack
 --
 -- The cache value stored in Redis is the class name string.  A numeric class_id
 -- hash was used previously, but uint64_t values > 2^53 lose precision when
@@ -10,8 +10,8 @@
 -- unreliable for arbitrary multiclass names.
 
 local cache_id = KEYS[1]
-local class_name = KEYS[2]
-local conf = cmsgpack.unpack(KEYS[3])
+local class_name = ARGV[1]
+local conf = cmsgpack.unpack(ARGV[2])
 
 -- Store the class name directly as the cache value
 local cache_value = class_name
