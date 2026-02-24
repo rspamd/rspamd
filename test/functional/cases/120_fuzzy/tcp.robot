@@ -10,8 +10,8 @@ Fuzzy Add TCP
 Fuzzy Delete TCP
   Fuzzy Multimessage Delete Test
 
-Fuzzy Overwrite TCP
-  Fuzzy Multimessage Overwrite Test
+Fuzzy Multi Flag TCP
+  Fuzzy Multimessage Multi Flag Test
 
 Fuzzy TCP High Rate
   # Test that TCP is used after rate threshold exceeded

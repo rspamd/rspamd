@@ -10,8 +10,11 @@ Fuzzy Add
 Fuzzy Delete
   Fuzzy Multimessage Delete Test
 
-Fuzzy Overwrite
-  Fuzzy Multimessage Overwrite Test
+Fuzzy Multi Flag
+  Fuzzy Multimessage Multi Flag Test
+
+Fuzzy Multi Flag Delete
+  Fuzzy Multimessage Multi Flag Delete Test
 
 Fuzzy Skip Hash Test
   Fuzzy Skip Hash Test Message
