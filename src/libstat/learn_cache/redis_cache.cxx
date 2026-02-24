@@ -152,31 +152,44 @@ rspamd_stat_cache_redis_runtime(struct rspamd_task *task,
 	return (void *) ctx;
 }
 
-/* Get class ID using rspamd_cryptobox_fast_hash */
-static uint64_t
-rspamd_stat_cache_get_class_id(const char *class_name)
+/*
+ * Map a class name to the string stored in Redis.
+ * ham → "0", spam → "1" (preserves existing cache entries),
+ * anything else (multiclass) → the literal class name.
+ */
+static const char *
+rspamd_stat_cache_class_to_str(const char *class_name)
 {
-	if (!class_name) {
-		return 0;
+	if (class_name == nullptr) {
+		return "0";
 	}
+	if (strcmp(class_name, "spam") == 0) {
+		return "1";
+	}
+	if (strcmp(class_name, "ham") == 0) {
+		return "0";
+	}
+	return class_name;
+}
 
-	if (strcmp(class_name, "spam") == 0 || strcmp(class_name, "S") == 0) {
-		return 1;
+/*
+ * Reverse of the above: translate a cached Redis string back to a canonical
+ * class name for comparison.
+ * "0" → "ham", "1" → "spam", anything else → returned as-is.
+ */
+static const char *
+rspamd_stat_cache_str_to_class(const char *cache_str)
+{
+	if (cache_str == nullptr) {
+		return nullptr;
 	}
-	else if (strcmp(class_name, "ham") == 0 || strcmp(class_name, "H") == 0) {
-		return 0;
+	if (strcmp(cache_str, "0") == 0) {
+		return "ham";
 	}
-	else {
-		/* For other classes, use rspamd_cryptobox_fast_hash */
-		uint64_t hash = rspamd_cryptobox_fast_hash(class_name, strlen(class_name), 0);
-
-		/* Ensure we don't get 0 or 1 (reserved for ham/spam) */
-		if (hash == 0 || hash == 1) {
-			hash += 2;
-		}
-
-		return hash;
+	if (strcmp(cache_str, "1") == 0) {
+		return "spam";
 	}
+	return cache_str;
 }
 
 static int
@@ -191,7 +204,10 @@ rspamd_stat_cache_checked(lua_State *L)
 	auto res = lua_toboolean(L, 2);
 
 	if (res) {
-		auto val = lua_tointeger(L, 3);
+		/* Translate the cached Redis value back to a canonical class name.
+		 * ham/spam are stored as "0"/"1" for backward compatibility with
+		 * existing cache entries; multiclass names are stored literally. */
+		const char *cached_class = rspamd_stat_cache_str_to_class(lua_tostring(L, 3));
 
 		/* Get the class being learned */
 		const char *autolearn_class = rspamd_task_get_autolearn_class(task);
@@ -205,11 +221,9 @@ rspamd_stat_cache_checked(lua_State *L)
 			}
 		}
 
-		if (autolearn_class) {
-			uint64_t expected_id = rspamd_stat_cache_get_class_id(autolearn_class);
-
-			if ((uint64_t) val == expected_id) {
-				/* Already learned */
+		if (autolearn_class && cached_class) {
+			if (strcmp(cached_class, autolearn_class) == 0) {
+				/* Already learned as the same class */
 				msg_info_task("<%s> has been already "
 							  "learned as %s, ignore it",
 							  MESSAGE_FIELD(task, message_id),
@@ -217,10 +231,10 @@ rspamd_stat_cache_checked(lua_State *L)
 				task->flags |= RSPAMD_TASK_FLAG_ALREADY_LEARNED;
 			}
 			else {
-				/* Different class learned, unlearn flag */
-				msg_debug_task("<%s> cached value %L != expected %uL for class %s, will unlearn",
+				/* Different class was learned previously, mark for unlearn */
+				msg_debug_task("<%s> cached class '%s' != requested '%s', will unlearn",
 							   MESSAGE_FIELD(task, message_id),
-							   val, expected_id, autolearn_class);
+							   cached_class, autolearn_class);
 				task->flags |= RSPAMD_TASK_FLAG_UNLEARN;
 			}
 		}
@@ -291,12 +305,11 @@ int rspamd_stat_cache_redis_learn(struct rspamd_task *task,
 		autolearn_class = is_spam ? "spam" : "ham";
 	}
 
-	/* Push class name and class ID */
-	lua_pushstring(L, autolearn_class);
-	uint64_t class_id = rspamd_stat_cache_get_class_id(autolearn_class);
-	lua_pushinteger(L, class_id);
+	/* Translate to the Redis storage form: "0" for ham, "1" for spam,
+	 * literal name for multiclass.  Keeps existing cache entries readable. */
+	lua_pushstring(L, rspamd_stat_cache_class_to_str(autolearn_class));
 
-	if (lua_pcall(L, 4, 0, err_idx) != 0) {
+	if (lua_pcall(L, 3, 0, err_idx) != 0) {
 		msg_err_task("call to redis failed: %s", lua_tostring(L, -1));
 		lua_settop(L, err_idx - 1);
 		return RSPAMD_LEARN_IGNORE;

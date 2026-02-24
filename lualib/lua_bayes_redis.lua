@@ -230,7 +230,10 @@ local function gen_cache_check_functor(redis_params, check_script_id, conf)
       if err then
         callback(task, false, err)
       else
-        if type(data) == 'number' then
+        -- The cached value is now a class name string (e.g. "spam", "ham",
+        -- "transactional").  Previously it was a number (numeric class_id hash),
+        -- but that caused precision loss for large uint64 hashes in Lua doubles.
+        if type(data) == 'string' then
           callback(task, true, data)
         else
           callback(task, false, 'not found')
@@ -247,16 +250,16 @@ end
 
 local function gen_cache_learn_functor(redis_params, learn_script_id, conf)
   local packed_conf = ucl.to_format(conf, 'msgpack')
-  return function(task, cache_id, class_name, class_id)
+  return function(task, cache_id, class_name)
     local function learn_redis_cb(err, data)
       lua_util.debugm(N, task, 'learn_cache redis cb: %s, %s', err, data)
     end
 
-    lua_util.debugm(N, task, 'try to learn cache: %s as %s (id=%s)', cache_id, class_name, class_id)
+    lua_util.debugm(N, task, 'try to learn cache: %s as %s', cache_id, class_name)
     lua_redis.exec_redis_script(learn_script_id,
         { task = task, is_write = true, key = cache_id },
         learn_redis_cb,
-        { cache_id, tostring(class_id), packed_conf })
+        { cache_id, class_name, packed_conf })
   end
 end
 

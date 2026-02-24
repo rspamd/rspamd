@@ -672,20 +672,22 @@ bayes_classify_multiclass(struct rspamd_classifier *ctx,
 		confidence = normalized_probs[winning_class_idx];
 	}
 
-	/* Create and store multiclass result */
-	result = g_new0(rspamd_multiclass_result_t, 1);
-	result->class_names = g_new(char *, cl.num_classes);
-	result->probabilities = g_new(double, cl.num_classes);
+	/* Create and store multiclass result — all pool-allocated, no destructor needed */
+	result = rspamd_mempool_alloc0(task->task_pool, sizeof(*result));
+	result->class_names = rspamd_mempool_alloc(task->task_pool, cl.num_classes * sizeof(char *));
+	result->probabilities = rspamd_mempool_alloc(task->task_pool, cl.num_classes * sizeof(double));
 	result->num_classes = cl.num_classes;
-	result->winning_class = cl.class_names[winning_class_idx]; /* Reference, not copy */
+	result->winning_class = cl.class_names[winning_class_idx]; /* Reference into cfg, valid for task lifetime */
 	result->confidence = confidence;
 
 	for (i = 0; i < cl.num_classes; i++) {
-		result->class_names[i] = g_strdup(cl.class_names[i]);
+		result->class_names[i] = cl.class_names[i] ?
+			rspamd_mempool_strdup(task->task_pool, cl.class_names[i]) : NULL;
 		result->probabilities[i] = normalized_probs[i];
 	}
 
-	rspamd_task_set_multiclass_result(task, result);
+	/* Store via unified API — keyed as "multiclass_result:<name>" (or "" for unnamed) */
+	rspamd_task_set_multiclass_result(task, result, ctx->cfg->name);
 
 	msg_info_bayes("MULTICLASS_RESULT: winning_class='%s', confidence=%.3f, normalized_prob=%.3f, tokens=%uL",
 				   cl.class_names[winning_class_idx], confidence,
@@ -922,6 +924,19 @@ bayes_classify(struct rspamd_classifier *ctx,
 	pprob = rspamd_mempool_alloc(task->task_pool, sizeof(*pprob));
 	*pprob = final_prob;
 	rspamd_mempool_set_variable(task->task_pool, "bayes_prob", pprob, NULL);
+	/* Also store per-classifier key so can_learn reads the right classifier's result
+	 * when multiple binary classifiers are present. Always written (using "" for
+	 * unnamed classifiers) so the lookup in rspamd_stat_classifier_is_skipped
+	 * always finds it. */
+	{
+		const char *cl_name = (ctx->cfg->name && *ctx->cfg->name) ? ctx->cfg->name : "";
+		gsize key_len = strlen("bayes_prob:") + strlen(cl_name) + 1;
+		char *per_cl_key = rspamd_mempool_alloc(task->task_pool, key_len);
+		rspamd_snprintf(per_cl_key, key_len, "bayes_prob:%s", cl_name);
+		double *pprob_cl = rspamd_mempool_alloc(task->task_pool, sizeof(*pprob_cl));
+		*pprob_cl = final_prob;
+		rspamd_mempool_set_variable(task->task_pool, per_cl_key, pprob_cl, NULL);
+	}
 
 	if (cl.processed_tokens > 0 && fabs(final_prob - 0.5) > 0.05) {
 		/* Now we can have exactly one HAM and exactly one SPAM statfiles per classifier */

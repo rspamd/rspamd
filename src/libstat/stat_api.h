@@ -163,20 +163,20 @@ typedef struct {
 } rspamd_multiclass_result_t;
 
 /**
- * Set multi-class classification result for a task
+ * Set multi-class classification result for a task.
+ * @param classifier_name  classifier name, or NULL/"" for unnamed classifiers
+ * Result is stored under the key "multiclass_result:<classifier_name>".
  */
 void rspamd_task_set_multiclass_result(struct rspamd_task *task,
-									   rspamd_multiclass_result_t *result);
+									   rspamd_multiclass_result_t *result,
+									   const char *classifier_name);
 
 /**
- * Get multi-class classification result from a task
+ * Get multi-class classification result from a task.
+ * @param classifier_name  classifier name, or NULL/"" for unnamed classifiers
  */
-rspamd_multiclass_result_t *rspamd_task_get_multiclass_result(struct rspamd_task *task);
-
-/**
- * Free multi-class result structure
- */
-void rspamd_multiclass_result_free(rspamd_multiclass_result_t *result);
+rspamd_multiclass_result_t *rspamd_task_get_multiclass_result(struct rspamd_task *task,
+															   const char *classifier_name);
 
 /**
  * Set autolearn class for a task

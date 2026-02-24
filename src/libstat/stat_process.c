@@ -32,34 +32,34 @@
 
 static const double similarity_threshold = 80.0;
 
-void rspamd_task_set_multiclass_result(struct rspamd_task *task, rspamd_multiclass_result_t *result)
+void rspamd_task_set_multiclass_result(struct rspamd_task *task,
+									   rspamd_multiclass_result_t *result,
+									   const char *classifier_name)
 {
 	g_assert(task != NULL);
 	g_assert(result != NULL);
 
-	rspamd_mempool_set_variable(task->task_pool, "multiclass_bayes_result", result,
-								(rspamd_mempool_destruct_t) rspamd_multiclass_result_free);
+	/* Unified key: "multiclass_result:<name>", empty string for unnamed classifiers */
+	const char *cl_name = (classifier_name && *classifier_name) ? classifier_name : "";
+	gsize key_len = strlen("multiclass_result:") + strlen(cl_name) + 1;
+	char *key = rspamd_mempool_alloc(task->task_pool, key_len);
+	rspamd_snprintf(key, key_len, "multiclass_result:%s", cl_name);
+
+	/* NULL destructor — result is pool-allocated */
+	rspamd_mempool_set_variable(task->task_pool, key, result, NULL);
 }
 
 rspamd_multiclass_result_t *
-rspamd_task_get_multiclass_result(struct rspamd_task *task)
+rspamd_task_get_multiclass_result(struct rspamd_task *task, const char *classifier_name)
 {
 	g_assert(task != NULL);
 
-	return (rspamd_multiclass_result_t *) rspamd_mempool_get_variable(task->task_pool,
-																	  "multiclass_bayes_result");
-}
+	const char *cl_name = (classifier_name && *classifier_name) ? classifier_name : "";
+	gsize key_len = strlen("multiclass_result:") + strlen(cl_name) + 1;
+	char *key = rspamd_mempool_alloc(task->task_pool, key_len);
+	rspamd_snprintf(key, key_len, "multiclass_result:%s", cl_name);
 
-void rspamd_multiclass_result_free(rspamd_multiclass_result_t *result)
-{
-	if (result == NULL) {
-		return;
-	}
-
-	g_free(result->class_names);
-	g_free(result->probabilities);
-	/* winning_class is a reference, not owned - don't free */
-	g_free(result);
+	return (rspamd_multiclass_result_t *) rspamd_mempool_get_variable(task->task_pool, key);
 }
 
 void rspamd_task_set_autolearn_class(struct rspamd_task *task, const char *class_name)
@@ -280,11 +280,72 @@ void rspamd_stat_process_tokenize(struct rspamd_stat_ctx *st_ctx,
 
 static gboolean
 rspamd_stat_classifier_is_skipped(struct rspamd_task *task,
-								  struct rspamd_classifier *cl, gboolean is_learn, gboolean is_spam)
+								  struct rspamd_classifier *cl, gboolean is_learn, gboolean is_spam,
+								  const char *learn_class_name)
 {
 	GList *cur = is_learn ? cl->cfg->learn_conditions : cl->cfg->classify_conditions;
 	lua_State *L = task->cfg->lua_state;
 	gboolean ret = FALSE;
+
+	/*
+	 * Before calling the Lua learn condition, populate "can_learn_prob" in the
+	 * mempool with the probability from THIS specific classifier's result.
+	 *
+	 * Binary classifiers:   read "bayes_prob:<name>" (set by bayes_classify())
+	 * Multiclass classifiers: read "multiclass_result:<name>", find target class
+	 *
+	 * Per-classifier keys prevent cross-contamination when multiple classifiers
+	 * of the same type are configured. Falls back to NULL (= skip probability
+	 * check) if this classifier has no result yet (e.g. zero learns).
+	 */
+	if (is_learn && learn_class_name != NULL) {
+		double *can_learn_prob_ptr = NULL;
+		/* Use "" for unnamed classifiers — matches what bayes_classify() stores */
+		const char *cl_name = (cl->cfg->name && *cl->cfg->name) ? cl->cfg->name : "";
+
+		if (cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_MULTICLASS) {
+			/* Look up THIS classifier's multiclass result via the unified API */
+			rspamd_multiclass_result_t *mc_result =
+				rspamd_task_get_multiclass_result(task, cl_name);
+			if (mc_result != NULL) {
+				for (unsigned int mci = 0; mci < mc_result->num_classes; mci++) {
+					if (mc_result->class_names[mci] != NULL &&
+						strcmp(mc_result->class_names[mci], learn_class_name) == 0) {
+						can_learn_prob_ptr = rspamd_mempool_alloc(task->task_pool,
+																  sizeof(double));
+						*can_learn_prob_ptr = mc_result->probabilities[mci];
+						break;
+					}
+				}
+			}
+			/* NULL means classifier has no result (zero learns) → skip prob check → allow */
+		}
+		else {
+			/* Look up THIS classifier's binary bayes_prob by name.
+			 * bayes_prob is the spam probability (0=ham, 1=spam).
+			 * Convert to "probability of the class being learned" so the
+			 * unified >= threshold check works correctly for both directions:
+			 * learning spam: use raw prob (high = already spam = skip)
+			 * learning ham:  use 1-prob  (high = already ham = skip) */
+			gsize key_len = strlen("bayes_prob:") + strlen(cl_name) + 1;
+			char *per_cl_key = rspamd_mempool_alloc(task->task_pool, key_len);
+			rspamd_snprintf(per_cl_key, key_len, "bayes_prob:%s", cl_name);
+			double *raw_prob = (double *) rspamd_mempool_get_variable(task->task_pool,
+																	  per_cl_key);
+			if (raw_prob != NULL) {
+				can_learn_prob_ptr = rspamd_mempool_alloc(task->task_pool, sizeof(double));
+				gboolean learning_ham = (strcmp(learn_class_name, "ham") == 0 ||
+										 strcmp(learn_class_name, "H") == 0);
+				*can_learn_prob_ptr = learning_ham ? (1.0 - *raw_prob) : *raw_prob;
+			}
+		}
+
+		rspamd_mempool_set_variable(task->task_pool, "can_learn_prob",
+									can_learn_prob_ptr, NULL);
+		/* Also store the class name so can_learn() can include it in log messages */
+		rspamd_mempool_set_variable(task->task_pool, "can_learn_class",
+									(gpointer) learn_class_name, NULL);
+	}
 
 	while (cur) {
 		int cb_ref = GPOINTER_TO_INT(cur->data);
@@ -371,6 +432,9 @@ rspamd_stat_preprocess(struct rspamd_stat_ctx *st_ctx,
 		g_ptr_array_index(task->stat_runtimes, i) = GSIZE_TO_POINTER(G_MAXSIZE);
 	}
 
+	/* When learning a specific class, retrieve it once for use in the loop below */
+	const char *learn_class_name = is_learn ? rspamd_task_get_autolearn_class(task) : NULL;
+
 	for (i = 0; i < st_ctx->classifiers->len; i++) {
 		struct rspamd_classifier *cl = g_ptr_array_index(st_ctx->classifiers, i);
 		gboolean skip_classifier = FALSE;
@@ -379,8 +443,37 @@ rspamd_stat_preprocess(struct rspamd_stat_ctx *st_ctx,
 			skip_classifier = TRUE;
 		}
 		else {
-			if (rspamd_stat_classifier_is_skipped(task, cl, is_learn, is_spam)) {
+			/* Respect task->classifier filter: if a specific classifier was
+			 * requested, skip all others without running can_learn on them */
+			if (is_learn && task->classifier != NULL &&
+					(cl->cfg->name == NULL ||
+					 g_ascii_strcasecmp(task->classifier, cl->cfg->name) != 0)) {
 				skip_classifier = TRUE;
+			}
+
+			/* For class-based learning: skip classifiers that don't have the
+			 * target class at all — no need to run can_learn on them. */
+			if (!skip_classifier && is_learn && learn_class_name != NULL) {
+				gboolean cl_has_class = FALSE;
+				for (int j = 0; j < cl->statfiles_ids->len; j++) {
+					int id = g_array_index(cl->statfiles_ids, int, j);
+					struct rspamd_statfile *cst = g_ptr_array_index(st_ctx->statfiles, id);
+					if (cst->stcf->class_name &&
+							strcmp(cst->stcf->class_name, learn_class_name) == 0) {
+						cl_has_class = TRUE;
+						break;
+					}
+				}
+				if (!cl_has_class) {
+					skip_classifier = TRUE;
+				}
+			}
+
+			if (!skip_classifier) {
+				if (rspamd_stat_classifier_is_skipped(task, cl, is_learn, is_spam,
+													  learn_class_name)) {
+					skip_classifier = TRUE;
+				}
 			}
 		}
 
@@ -621,8 +714,6 @@ rspamd_stat_cache_check(struct rspamd_stat_ctx *st_ctx,
 	struct rspamd_classifier *cl, *sel = NULL;
 	gpointer rt;
 	unsigned int i;
-	gboolean any_considered = FALSE;
-	gboolean any_available = FALSE;
 
 	/* Check whether we have learned that file */
 	for (i = 0; i < st_ctx->classifiers->len; i++) {
@@ -635,29 +726,6 @@ rspamd_stat_cache_check(struct rspamd_stat_ctx *st_ctx,
 		}
 
 		sel = cl;
-		any_considered = TRUE;
-
-		/* If classifier was skipped by learn conditions in preprocess, skip cache */
-		gboolean cl_skipped = TRUE;
-		if (task->stat_runtimes != NULL) {
-			for (int j = 0; j < cl->statfiles_ids->len; j++) {
-				int id = g_array_index(cl->statfiles_ids, int, j);
-				if (g_ptr_array_index(task->stat_runtimes, id) != NULL) {
-					cl_skipped = FALSE;
-					break;
-				}
-			}
-		}
-		else {
-			/* No runtimes prepared means not skipped */
-			cl_skipped = FALSE;
-		}
-
-		if (cl_skipped) {
-			continue;
-		}
-
-		any_available = TRUE;
 
 		if (sel->cache && sel->cachecf) {
 			rt = cl->cache->runtime(task, sel->cachecf, FALSE);
@@ -714,15 +782,6 @@ rspamd_stat_cache_check(struct rspamd_stat_ctx *st_ctx,
 			task->flags |= RSPAMD_TASK_FLAG_UNLEARN;
 			break;
 		}
-	}
-
-	/* If we considered classifiers but all were skipped by conditions, stop early */
-	if (any_considered && !any_available) {
-		g_set_error(err, rspamd_stat_quark(), 204, "all learn conditions "
-												   "denied learning %s in %s",
-					spam ? "spam" : "ham",
-					classifier ? classifier : "default classifier");
-		return FALSE;
 	}
 
 	if (sel == NULL) {
@@ -1284,6 +1343,40 @@ rspamd_stat_learn_class(struct rspamd_task *task,
 	}
 
 	if (stage == RSPAMD_TASK_STAGE_LEARN_PRE) {
+		/* Validate that the requested class exists in (at least one statfile of) the
+		 * target classifier(s) before doing any further work such as tokenisation,
+		 * running learn-conditions, or hitting the cache.  Failing early avoids the
+		 * confusing situation where /learnham returns success on a multiclass
+		 * classifier that has no "ham" statfile. */
+		gboolean class_valid = FALSE;
+		for (unsigned int ci = 0; ci < st_ctx->classifiers->len; ci++) {
+			struct rspamd_classifier *cl = g_ptr_array_index(st_ctx->classifiers, ci);
+			if (classifier != NULL && (cl->cfg->name == NULL ||
+					g_ascii_strcasecmp(classifier, cl->cfg->name) != 0)) {
+				continue;
+			}
+			for (unsigned int si = 0; si < cl->statfiles_ids->len; si++) {
+				int sid = g_array_index(cl->statfiles_ids, int, si);
+				struct rspamd_statfile *st = g_ptr_array_index(st_ctx->statfiles, sid);
+				if (st->stcf->class_name &&
+						strcmp(st->stcf->class_name, class_name) == 0) {
+					class_valid = TRUE;
+					break;
+				}
+			}
+			if (class_valid) break;
+		}
+		if (!class_valid) {
+			if (err && *err == NULL) {
+				g_set_error(err, rspamd_stat_quark(), 404,
+							"class '%s' is not defined in classifier %s",
+							class_name,
+							classifier ? classifier : "(any)");
+			}
+			task->processed_stages |= stage;
+			return RSPAMD_STAT_PROCESS_ERROR;
+		}
+
 		/* Ensure cache comparison uses the exact class we are about to learn */
 		rspamd_task_set_autolearn_class(task, class_name);
 		/* Process classifiers - determine spam boolean for compatibility */
