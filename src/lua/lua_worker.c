@@ -823,9 +823,16 @@ lua_worker_spawn_process(lua_State *L)
 	cbdata->event_loop = actx->event_loop;
 	cbdata->sz = (uint64_t) -1;
 
+	/* Stop GC before fork to ensure a clean GC state in the child.
+	 * LuaJIT's incremental GC may be mid-cycle; the child would inherit
+	 * a partially-traversed gray list, causing GC thrashing or stalls
+	 * in the atomic phase when the child's first allocation triggers GC.
+	 */
+	lua_gc(L, LUA_GCSTOP, 0);
 	pid = fork();
 
 	if (pid == -1) {
+		lua_gc(L, LUA_GCRESTART, 0);
 		msg_err("cannot spawn process: %s", strerror(errno));
 		close(cbdata->sp[0]);
 		close(cbdata->sp[1]);
@@ -839,6 +846,10 @@ lua_worker_spawn_process(lua_State *L)
 		/* Child */
 		int rc;
 		char inbuf[4];
+
+		/* Complete any in-flight GC cycle and restart with a clean state */
+		lua_gc(L, LUA_GCCOLLECT, 0);
+		lua_gc(L, LUA_GCRESTART, 0);
 
 		rspamd_log_on_fork(w->cf->type, w->srv->cfg, w->srv->logger);
 		rc = ottery_init(w->srv->cfg->libs_ctx->ottery_cfg);
@@ -882,6 +893,9 @@ lua_worker_spawn_process(lua_State *L)
 			exit(EXIT_FAILURE);
 		}
 	}
+
+	/* Parent: restart GC after fork */
+	lua_gc(L, LUA_GCRESTART, 0);
 
 	cbdata->cpid = pid;
 	cbdata->io_buf = g_string_sized_new(8);

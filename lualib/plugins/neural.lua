@@ -1278,6 +1278,9 @@ local function spawn_train(params)
             ucl.to_format(norm_stats, 'json-compact', true) or '',
           })
       end
+      -- Force GC to clean up training temporaries (parsed data, compressed buffers, etc.)
+      -- to prevent LuaJIT GC atomic phase stalls on a bloated heap
+      collectgarbage('collect')
     end
 
     if params.rule.max_inputs then
