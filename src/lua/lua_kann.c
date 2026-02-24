@@ -66,6 +66,8 @@ KANN_LAYER_DEF(lstm);
 KANN_LAYER_DEF(gru);
 KANN_LAYER_DEF(conv2d);
 KANN_LAYER_DEF(conv1d);
+KANN_LAYER_DEF(max1d);
+KANN_LAYER_DEF(input3d);
 KANN_LAYER_DEF(cost);
 
 static int lua_kann_layer_layerdropout(lua_State *L); /* forward declaration */
@@ -80,6 +82,8 @@ static luaL_reg rspamd_kann_layers_f[] = {
 	KANN_LAYER_INTERFACE(gru),
 	KANN_LAYER_INTERFACE(conv2d),
 	KANN_LAYER_INTERFACE(conv1d),
+	KANN_LAYER_INTERFACE(max1d),
+	KANN_LAYER_INTERFACE(input3d),
 	KANN_LAYER_INTERFACE(cost),
 	{NULL, NULL},
 };
@@ -614,8 +618,74 @@ lua_kann_layer_conv1d(lua_State *L)
 }
 
 /***
+ * @function kann.layer.max1d(in, kern_size, stride_size, pad_size[, flags])
+ * Creates 1D max pooling layer (for use after conv1d)
+ * @param {kann_node} in kann node (must be 3D: NCW)
+ * @param {int} kern_size kernel size (use width for global pooling)
+ * @param {int} stride_size stride
+ * @param {int} pad_size padding
+ * @param {table|int} flags optional flags
+ * @return {kann_node} kann node object (should be used to combine ANN)
+*/
+static int
+lua_kann_layer_max1d(lua_State *L)
+{
+	kad_node_t *in = lua_check_kann_node(L, 1);
+	int k_size = luaL_checkinteger(L, 2);
+	int stride = luaL_checkinteger(L, 3);
+	int pad = luaL_checkinteger(L, 4);
+
+	if (in != NULL) {
+		kad_node_t *t;
+		t = kad_max1d(in, k_size, stride, pad);
+
+		if (t == NULL) {
+			return luaL_error(L, "max1d requires 3D (NCW) input");
+		}
+
+		PROCESS_KAD_FLAGS(t, 5);
+		PUSH_KAD_NODE(t);
+	}
+	else {
+		return luaL_error(L, "invalid arguments, input, k, stride, pad required");
+	}
+
+	return 1;
+}
+
+/***
+ * @function kann.layer.input3d(channels, width[, flags])
+ * Creates a 3D input layer in NCW format (for conv1d networks)
+ * @param {int} channels number of channels (e.g. embedding dimension)
+ * @param {int} width sequence length (e.g. max words)
+ * @param {table|int} flags optional flags
+ * @return {kann_node} kann node object (should be used to combine ANN)
+*/
+static int
+lua_kann_layer_input3d(lua_State *L)
+{
+	int channels = luaL_checkinteger(L, 1);
+	int width = luaL_checkinteger(L, 2);
+
+	if (channels > 0 && width > 0) {
+		kad_node_t *t;
+
+		t = kad_feed(3, 1, channels, width);
+		t->ext_flag |= KANN_F_IN;
+
+		PROCESS_KAD_FLAGS(t, 3);
+		PUSH_KAD_NODE(t);
+	}
+	else {
+		return luaL_error(L, "invalid arguments, channels and width required");
+	}
+
+	return 1;
+}
+
+/***
  * @function kann.layer.cost(in, nout, cost_type[, flags])
- * Creates 1D convolution layer
+ * Creates cost layer
  * @param {kann_node} in kann node
  * @param {int} nout number of outputs
  * @param {int} cost_type see kann.cost table

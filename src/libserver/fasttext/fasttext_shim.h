@@ -140,6 +140,12 @@ public:
 	 */
 	auto get_ntokens() const -> std::int64_t;
 
+	/**
+	 * Get word probability p(word) = count(word) / ntokens.
+	 * Returns 0.0 for unknown words.
+	 */
+	auto get_word_frequency(std::string_view word) const -> double;
+
 private:
 	explicit fasttext_model(std::unique_ptr<fasttext_model_impl> impl);
 	std::unique_ptr<fasttext_model_impl> impl_;

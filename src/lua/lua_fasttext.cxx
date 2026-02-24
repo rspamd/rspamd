@@ -48,6 +48,7 @@ static int lua_fasttext_model_get_dimension(lua_State *L);
 static int lua_fasttext_model_get_sentence_vector(lua_State *L);
 static int lua_fasttext_model_get_word_vector(lua_State *L);
 static int lua_fasttext_model_predict(lua_State *L);
+static int lua_fasttext_model_get_word_frequency(lua_State *L);
 static int lua_fasttext_model_dtor(lua_State *L);
 static int lua_fasttext_model_is_loaded(lua_State *L);
 
@@ -62,6 +63,7 @@ static const struct luaL_reg fasttextlib_m[] = {
 	{"get_dimension", lua_fasttext_model_get_dimension},
 	{"get_sentence_vector", lua_fasttext_model_get_sentence_vector},
 	{"get_word_vector", lua_fasttext_model_get_word_vector},
+	{"get_word_frequency", lua_fasttext_model_get_word_frequency},
 	{"predict", lua_fasttext_model_predict},
 	{"is_loaded", lua_fasttext_model_is_loaded},
 	{"__gc", lua_fasttext_model_dtor},
@@ -152,6 +154,30 @@ lua_fasttext_model_get_dimension(lua_State *L)
 	}
 
 	lua_pushinteger(L, model->model->get_dimension());
+	return 1;
+}
+
+/***
+ * @method model:get_word_frequency(word)
+ * Get word probability p(word) = count(word) / total_tokens.
+ * Useful for SIF (Smooth Inverse Frequency) sentence weighting.
+ * @param {string} word input word
+ * @return {number} word probability (0..1), 0 for unknown words
+ */
+static int
+lua_fasttext_model_get_word_frequency(lua_State *L)
+{
+	auto *model = lua_check_fasttext_model(L, 1);
+	const char *word = luaL_checkstring(L, 2);
+
+	if (!model || !model->loaded) {
+		lua_pushnumber(L, 0.0);
+		return 1;
+	}
+
+	auto freq = model->model->get_word_frequency(std::string_view{word});
+	lua_pushnumber(L, freq);
+
 	return 1;
 }
 
