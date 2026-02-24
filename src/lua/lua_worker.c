@@ -636,8 +636,11 @@ rspamd_lua_cld_handler(struct rspamd_worker_signal_handler *sigh, void *ud)
 									"Worker has died without reply", NULL, 0);
 		rspamd_lua_cbdata_free(cbdata);
 	}
-	/* If replied is TRUE, the I/O handler is processing the callback.
-	 * It will call rspamd_lua_cbdata_free() when done. */
+	else {
+		/* I/O handler already processed the reply but couldn't clean up
+		 * because the child wasn't dead yet at that point. Clean up now. */
+		rspamd_lua_cbdata_free(cbdata);
+	}
 
 	/* We are done with this SIGCHLD */
 	return FALSE;
