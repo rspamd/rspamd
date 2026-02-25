@@ -18,17 +18,17 @@ if ARGV[5] then
   text_tokens = cmsgpack.unpack(ARGV[5])
 end
 
--- Handle backward compatibility for boolean values
-if class_label == 'true' then
-  class_label = 'S' -- spam
-elseif class_label == 'false' then
-  class_label = 'H' -- ham
+-- Handle RS_<ID> HASH booleans and full class name strings for backward compatibility
+if class_label == 'true' or class_label == 'spam' then
+  class_label = 'S'
+elseif class_label == 'false' or class_label == 'ham' then
+  class_label = 'H'
 end
 
 local hash_key = class_label
 local learned_key = 'learns_' .. string.lower(class_label)
 
--- Handle legacy keys for backward compatibility
+-- Handle RS HASH keys for backward compatibility
 if class_label == 'S' then
   learned_key = 'learns_spam'
 elseif class_label == 'H' then

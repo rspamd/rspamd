@@ -73,6 +73,8 @@ local function check_redis_classifier(cls, cfg)
 
       if class_name then
         class_symbols[class_name] = symbol
+        logger.debugm(N, rspamd_config,
+          'check_statfile_table: found class_name=%s and its symbol=%s', class_name, symbol)
       end
     end
 
@@ -284,6 +286,12 @@ local expiry_script = [[
       -- Parse hash data into class counts
       for i = 1, #hash_data, 2 do
         local class_label = hash_data[i]
+        -- Handle RS_<ID> HASH short class names for backward compatibility
+        if class_label == 'S' then
+          class_label = 'spam'
+        elseif class_label == 'H' then
+          class_label = 'ham'
+        end
         local count = tonumber(hash_data[i + 1]) or 0
         class_counts[class_label] = count
         total = total + count
