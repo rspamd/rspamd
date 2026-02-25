@@ -240,8 +240,10 @@ static const char rspamd_http_file_magic[] =
  * so no_file_read consumers can mmap the file at that fixed offset.
  * Etag (variable-length) is stored within the header page after the
  * fixed fields; max etag length is RSPAMD_MAP_CACHE_HEADER_SIZE - sizeof(this struct).
+ * Size is 16K to satisfy mmap alignment on all common architectures
+ * (4K on x86_64, 16K on Apple Silicon aarch64).
  */
-#define RSPAMD_MAP_CACHE_HEADER_SIZE 4096
+#define RSPAMD_MAP_CACHE_HEADER_SIZE 16384
 
 struct rspamd_http_file_data {
 	unsigned char magic[sizeof(rspamd_http_file_magic)];
