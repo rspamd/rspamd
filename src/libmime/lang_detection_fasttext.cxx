@@ -46,12 +46,29 @@ struct fasttext_map_data {
 
 class fasttext_langdet {
 private:
-	/* Model pointer; for map-backed models this is managed via map callbacks */
-	rspamd::fasttext::fasttext_model *model_ = nullptr;
 	/* Owned model for direct file loading (non-map case) */
 	std::optional<rspamd::fasttext::fasttext_model> owned_model_;
+	/*
+	 * For map-backed models: pointer to a mempool-allocated slot where the
+	 * map infrastructure writes the current fasttext_map_data*.
+	 * Allocated on cfg->cfg_pool so it outlives this object (maps are
+	 * cleaned up after the lang detector during rspamd_config_free).
+	 */
+	void **map_target_ = nullptr;
 	std::string model_fname;
 	struct rspamd_config *cfg_;
+
+	auto get_model() const -> rspamd::fasttext::fasttext_model *
+	{
+		if (owned_model_) {
+			return const_cast<rspamd::fasttext::fasttext_model *>(&owned_model_.value());
+		}
+		if (map_target_ && *map_target_) {
+			auto *fdata = static_cast<fasttext_map_data *>(*map_target_);
+			return fdata->model;
+		}
+		return nullptr;
+	}
 
 	void load_model_direct(const char *model_path)
 	{
@@ -65,7 +82,6 @@ private:
 		auto result = rspamd::fasttext::fasttext_model::load(model_path);
 		if (result) {
 			owned_model_.emplace(std::move(*result));
-			model_ = &owned_model_.value();
 			model_fname = std::string{model_path};
 		}
 		else {
@@ -79,12 +95,17 @@ private:
 		auto *cfg = cfg_;
 		model_fname = std::string{model_path};
 
+		/* Allocate user_data target on config mempool so it survives until
+		 * rspamd_map_remove_all (which runs after lang detector cleanup) */
+		map_target_ = static_cast<void **>(
+			rspamd_mempool_alloc0(cfg->cfg_pool, sizeof(void *)));
+
 		auto *map = rspamd_map_add(cfg_, model_path,
 								   "fasttext language model",
 								   fasttext_map_read_cb,
 								   fasttext_map_fin_cb,
 								   fasttext_map_dtor_cb,
-								   reinterpret_cast<void **>(&model_),
+								   map_target_,
 								   nullptr,
 								   RSPAMD_MAP_FILE_NO_READ);
 
@@ -142,14 +163,14 @@ private:
 			return;
 		}
 
-		if (new_data && new_data->model) {
-			/* Publish new model pointer to consumer */
-			if (target) {
-				*target = new_data->model;
-			}
+		/* Standard map pattern: publish cur_data (fasttext_map_data*) to target.
+		 * rspamd_map_remove_all reads *target back as cbdata.cur_data for the dtor,
+		 * so the type must match what the dtor expects. */
+		if (target) {
+			*target = data->cur_data;
 		}
 
-		/* Destroy old model */
+		/* Destroy old model and its wrapper */
 		if (old_data) {
 			delete old_data->model;
 			delete old_data;
@@ -198,27 +219,29 @@ public:
 
 	auto is_enabled() const -> bool
 	{
-		return model_ != nullptr;
+		return get_model() != nullptr;
 	}
 
 	auto word2vec(const char *in, std::size_t len, std::vector<std::int32_t> &word_ngramms) const
 	{
-		if (!model_) {
+		auto *model = get_model();
+		if (!model) {
 			return;
 		}
 
-		model_->word2vec(std::string_view{in, len}, word_ngramms);
+		model->word2vec(std::string_view{in, len}, word_ngramms);
 	}
 
 	auto detect_language(std::vector<std::int32_t> &words, int k)
 		-> std::vector<std::pair<float, std::string>> *
 	{
-		if (!model_) {
+		auto *model = get_model();
+		if (!model) {
 			return nullptr;
 		}
 
 		std::vector<rspamd::fasttext::prediction> preds;
-		model_->predict(k, words, preds, 0.0f);
+		model->predict(k, words, preds, 0.0f);
 
 		auto *results = new std::vector<std::pair<float, std::string>>;
 		results->reserve(preds.size());
@@ -232,13 +255,14 @@ public:
 
 	auto model_info(void) const -> const std::string
 	{
-		if (!model_) {
+		auto *model = get_model();
+		if (!model) {
 			static const auto not_loaded = std::string{"fasttext model is not loaded"};
 			return not_loaded;
 		}
 		else {
 			return fmt::format("fasttext model {}: {} languages, {} tokens", model_fname,
-							   model_->get_nlabels(), model_->get_ntokens());
+							   model->get_nlabels(), model->get_ntokens());
 		}
 	}
 };
