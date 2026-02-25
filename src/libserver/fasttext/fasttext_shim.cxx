@@ -971,17 +971,18 @@ fasttext_model::fasttext_model(fasttext_model &&other) noexcept = default;
 
 fasttext_model &fasttext_model::operator=(fasttext_model &&other) noexcept = default;
 
-auto fasttext_model::load(const char *path) -> tl::expected<fasttext_model, rspamd::util::error>
+auto fasttext_model::load(const char *path, std::int64_t offset) -> tl::expected<fasttext_model, rspamd::util::error>
 {
-	/* mmap the entire file */
+	/* mmap the file (possibly at an offset for map cache files) */
 	auto mmap_result = rspamd::util::raii_mmaped_file::mmap_shared(
-		path, O_RDONLY, PROT_READ);
+		path, O_RDONLY, PROT_READ, offset);
 
 	if (!mmap_result) {
 		return tl::make_unexpected(mmap_result.error());
 	}
 
-	auto file_size = mmap_result->get_size();
+	/* Use the mapped region size, not full file size (they differ when offset > 0) */
+	auto file_size = mmap_result->get_size() - (std::size_t) offset;
 	auto *base = static_cast<const unsigned char *>(mmap_result->get_map());
 
 	binary_reader reader(base, file_size);
