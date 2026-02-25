@@ -154,6 +154,59 @@ dkim_get_context(struct rspamd_config *cfg)
 												 dkim_module.ctx_offset);
 }
 
+/**
+ * Convert a UCL sign_headers value to a colon-delimited string.
+ * Handles both UCL_STRING (pass-through) and UCL_ARRAY (join with ':').
+ * Returns NULL if the value cannot be converted.
+ */
+static const char *
+rspamd_dkim_ucl_sign_headers(rspamd_mempool_t *pool,
+							 const ucl_object_t *value,
+							 const char *module_name)
+{
+	const char *str;
+
+	if (value == NULL) {
+		return NULL;
+	}
+
+	if (ucl_object_type(value) == UCL_ARRAY) {
+		GString *joined = g_string_new(NULL);
+		const ucl_object_t *cur;
+		ucl_object_iter_t it = NULL;
+		gboolean first = TRUE;
+
+		while ((cur = ucl_object_iterate(value, &it, true)) != NULL) {
+			str = ucl_object_tostring(cur);
+			if (str != NULL) {
+				if (!first) {
+					g_string_append_c(joined, ':');
+				}
+				g_string_append(joined, str);
+				first = FALSE;
+			}
+		}
+
+		msg_warn("sign_headers in %s is configured as an array; "
+				 "use a colon-delimited string instead (e.g., \"from:to:subject\")",
+				 module_name);
+
+		str = rspamd_mempool_strdup(pool, joined->str);
+		g_string_free(joined, TRUE);
+
+		return str;
+	}
+
+	str = ucl_object_tostring(value);
+	if (str == NULL) {
+		msg_warn("sign_headers in %s has unsupported type %s; ignoring",
+				 module_name,
+				 ucl_object_type_to_string(ucl_object_type(value)));
+	}
+
+	return str;
+}
+
 static void
 dkim_module_key_dtor(gpointer k)
 {
@@ -538,16 +591,19 @@ int dkim_module_config(struct rspamd_config *cfg, bool validate)
 	 */
 	if ((value =
 			 rspamd_config_get_module_opt(cfg, "dkim_signing", "sign_headers")) != NULL) {
-		dkim_module_ctx->sign_headers = ucl_object_tostring(value);
+		dkim_module_ctx->sign_headers = rspamd_dkim_ucl_sign_headers(cfg->cfg_pool,
+			value, "dkim_signing");
 	}
 	else if ((value =
 				  rspamd_config_get_module_opt(cfg, "dkim", "sign_headers")) != NULL) {
-		dkim_module_ctx->sign_headers = ucl_object_tostring(value);
+		dkim_module_ctx->sign_headers = rspamd_dkim_ucl_sign_headers(cfg->cfg_pool,
+			value, "dkim");
 	}
 
 	if ((value =
 			 rspamd_config_get_module_opt(cfg, "arc", "sign_headers")) != NULL) {
-		dkim_module_ctx->arc_sign_headers = ucl_object_tostring(value);
+		dkim_module_ctx->arc_sign_headers = rspamd_dkim_ucl_sign_headers(cfg->cfg_pool,
+			value, "arc");
 	}
 
 	if (cache_size > 0) {

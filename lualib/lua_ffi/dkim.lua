@@ -90,6 +90,11 @@ local function create_sign_context(task, privkey, dkim_headers, sign_type)
 
   if not dkim_headers then
     dkim_headers = default_dkim_headers
+  elseif type(dkim_headers) == 'table' then
+    -- UCL arrays arrive as Lua tables; join into colon-delimited string
+    dkim_headers = table.concat(dkim_headers, ':')
+  elseif type(dkim_headers) ~= 'string' then
+    return nil, 'sign_headers must be a colon-delimited string or array, got ' .. type(dkim_headers)
   end
 
   if not sign_type then
