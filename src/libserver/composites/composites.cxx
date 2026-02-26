@@ -605,12 +605,11 @@ process_single_symbol(struct composites_data *cd,
 			if (!cd->checked[atom->ncomp->id * 2]) {
 				msg_debug_composites("composite dependency %s for %s is not checked",
 									 sym.data(), cd->composite->sym.c_str());
-				/* Set checked for this symbol to avoid cyclic references */
 				cd->checked[cd->composite->id * 2] = true;
-				auto *saved = cd->composite; /* Save the current composite */
+				auto *saved = cd->composite;
+			
 				composites_foreach_callback((gpointer) atom->ncomp->sym.c_str(),
 											(gpointer) atom->ncomp, (gpointer) cd);
-				/* Restore state */
 				cd->composite = saved;
 				cd->checked[cd->composite->id * 2] = false;
 
@@ -618,10 +617,23 @@ process_single_symbol(struct composites_data *cd,
 													cd->metric_res);
 			}
 			else {
-				/*
-				 * XXX: in case of cyclic references this would return 0
-				 */
+			
 				if (cd->checked[atom->ncomp->id * 2 + 1]) {
+					ms = rspamd_task_find_symbol_result(cd->task, sym.data(),
+														cd->metric_res);
+				}
+				else {
+					msg_debug_composites("nested composite %s was checked but didn't match, "
+										 "re-evaluating as dependency might be needed by parent %s",
+										 sym.data(), cd->composite->sym.c_str());
+					cd->checked[atom->ncomp->id * 2] = false;
+					cd->checked[cd->composite->id * 2] = true;
+					auto *saved = cd->composite;
+					composites_foreach_callback((gpointer) atom->ncomp->sym.c_str(),
+												(gpointer) atom->ncomp, (gpointer) cd);
+					cd->composite = saved;
+					cd->checked[cd->composite->id * 2] = false;
+					/* Check for result after re-evaluation */
 					ms = rspamd_task_find_symbol_result(cd->task, sym.data(),
 														cd->metric_res);
 				}
