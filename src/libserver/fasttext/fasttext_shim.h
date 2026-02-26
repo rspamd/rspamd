@@ -93,10 +93,10 @@ public:
 	 * @param path path to the model file
 	 * @return loaded model or error
 	 */
-	static auto load(const char *path) -> tl::expected<fasttext_model, rspamd::util::error>;
-	static auto load(const std::string &path) -> tl::expected<fasttext_model, rspamd::util::error>
+	static auto load(const char *path, std::int64_t offset = 0) -> tl::expected<fasttext_model, rspamd::util::error>;
+	static auto load(const std::string &path, std::int64_t offset = 0) -> tl::expected<fasttext_model, rspamd::util::error>
 	{
-		return load(path.c_str());
+		return load(path.c_str(), offset);
 	}
 
 	/**

@@ -18,6 +18,8 @@
 #include "fasttext_shim.h"
 #include "libserver/cfg_file.h"
 #include "libserver/logger.h"
+#include "libserver/maps/map.h"
+#include "libserver/maps/map_private.h"
 #include "contrib/fmt/include/fmt/base.h"
 #include "stat_api.h"
 #include "libserver/word.h"
@@ -33,13 +35,161 @@ EXTERN_LOG_MODULE_DEF(langdet);
 															  __VA_ARGS__)
 
 namespace rspamd::langdet {
+
+/**
+ * Map callback data for fasttext model loading.
+ * Used by the maps infrastructure to atomically swap old/new models.
+ */
+struct fasttext_map_data {
+	rspamd::fasttext::fasttext_model *model = nullptr;
+};
+
 class fasttext_langdet {
 private:
-	std::optional<rspamd::fasttext::fasttext_model> model_;
+	/* Owned model for direct file loading (non-map case) */
+	std::optional<rspamd::fasttext::fasttext_model> owned_model_;
+	/*
+	 * For map-backed models: pointer to a mempool-allocated slot where the
+	 * map infrastructure writes the current fasttext_map_data*.
+	 * Allocated on cfg->cfg_pool so it outlives this object (maps are
+	 * cleaned up after the lang detector during rspamd_config_free).
+	 */
+	void **map_target_ = nullptr;
 	std::string model_fname;
+	struct rspamd_config *cfg_;
+
+	auto get_model() const -> rspamd::fasttext::fasttext_model *
+	{
+		if (owned_model_) {
+			return const_cast<rspamd::fasttext::fasttext_model *>(&owned_model_.value());
+		}
+		if (map_target_ && *map_target_) {
+			auto *fdata = static_cast<fasttext_map_data *>(*map_target_);
+			return fdata->model;
+		}
+		return nullptr;
+	}
+
+	void load_model_direct(const char *model_path)
+	{
+		auto *cfg = cfg_;
+		if (access(model_path, R_OK) != 0) {
+			msg_err_config("fasttext model '%s' is not readable: %s",
+						   model_path, strerror(errno));
+			return;
+		}
+
+		auto result = rspamd::fasttext::fasttext_model::load(model_path);
+		if (result) {
+			owned_model_.emplace(std::move(*result));
+			model_fname = std::string{model_path};
+		}
+		else {
+			msg_err_config("cannot load fasttext model '%s': %s",
+						   model_path, result.error().error_message.data());
+		}
+	}
+
+	void load_model_map(const char *model_path)
+	{
+		auto *cfg = cfg_;
+		model_fname = std::string{model_path};
+
+		/* Allocate user_data target on config mempool so it survives until
+		 * rspamd_map_remove_all (which runs after lang detector cleanup) */
+		map_target_ = static_cast<void **>(
+			rspamd_mempool_alloc0(cfg->cfg_pool, sizeof(void *)));
+
+		auto *map = rspamd_map_add(cfg_, model_path,
+								   "fasttext language model",
+								   fasttext_map_read_cb,
+								   fasttext_map_fin_cb,
+								   fasttext_map_dtor_cb,
+								   map_target_,
+								   nullptr,
+								   RSPAMD_MAP_FILE_NO_READ);
+
+		if (!map) {
+			msg_err_config("cannot add map for fasttext model '%s'", model_path);
+		}
+	}
+
+	/* Map read callback: receives filename, loads model */
+	static char *fasttext_map_read_cb(char *chunk, int len,
+									  struct map_cb_data *data, gboolean final)
+	{
+		if (data->cur_data == nullptr) {
+			data->cur_data = new fasttext_map_data();
+		}
+
+		if (!final) {
+			return chunk + len;
+		}
+
+		auto *fdata = static_cast<fasttext_map_data *>(data->cur_data);
+		auto *map = data->map;
+		auto fname = std::string{chunk, static_cast<std::size_t>(len)};
+		auto offset = static_cast<std::int64_t>(
+			rspamd_map_get_no_file_read_offset(data->map));
+
+		auto result = rspamd::fasttext::fasttext_model::load(fname, offset);
+		if (result) {
+			fdata->model = new rspamd::fasttext::fasttext_model(std::move(*result));
+			msg_info_map("loaded fasttext model from %s (offset %z)",
+						 fname.c_str(), (gsize) offset);
+		}
+		else {
+			msg_err_map("cannot load fasttext model from %s (offset %z): %s",
+						fname.c_str(), (gsize) offset,
+						result.error().error_message.data());
+		}
+
+		return chunk + len;
+	}
+
+	/* Map fin callback: swap old model for new one */
+	static void fasttext_map_fin_cb(struct map_cb_data *data, void **target)
+	{
+		auto *new_data = static_cast<fasttext_map_data *>(data->cur_data);
+		auto *old_data = static_cast<fasttext_map_data *>(data->prev_data);
+
+		if (data->errored) {
+			/* Clean up new data on error */
+			if (new_data) {
+				delete new_data->model;
+				delete new_data;
+				data->cur_data = nullptr;
+			}
+			return;
+		}
+
+		/* Standard map pattern: publish cur_data (fasttext_map_data*) to target.
+		 * rspamd_map_remove_all reads *target back as cbdata.cur_data for the dtor,
+		 * so the type must match what the dtor expects. */
+		if (target) {
+			*target = data->cur_data;
+		}
+
+		/* Destroy old model and its wrapper */
+		if (old_data) {
+			delete old_data->model;
+			delete old_data;
+		}
+	}
+
+	/* Map destructor callback */
+	static void fasttext_map_dtor_cb(struct map_cb_data *data)
+	{
+		auto *fdata = static_cast<fasttext_map_data *>(data->cur_data);
+		if (fdata) {
+			delete fdata->model;
+			delete fdata;
+		}
+	}
 
 public:
 	explicit fasttext_langdet(struct rspamd_config *cfg)
+		: cfg_(cfg)
 	{
 		const auto *ucl_obj = cfg->cfg_ucl_obj;
 		const auto *opts_section = ucl_object_find_key(ucl_obj, "lang_detection");
@@ -50,20 +200,11 @@ public:
 			if (model) {
 				const char *model_path = ucl_object_tostring(model);
 
-				if (access(model_path, R_OK) != 0) {
-					msg_err_config("fasttext model '%s' is not readable: %s",
-								   model_path, strerror(errno));
-					return;
-				}
-
-				auto result = rspamd::fasttext::fasttext_model::load(model_path);
-				if (result) {
-					model_.emplace(std::move(*result));
-					model_fname = std::string{model_path};
+				if (rspamd_map_is_map(model_path)) {
+					load_model_map(model_path);
 				}
 				else {
-					msg_err_config("cannot load fasttext model '%s': %s",
-								   model_path, result.error().error_message.data());
+					load_model_direct(model_path);
 				}
 			}
 		}
@@ -78,27 +219,29 @@ public:
 
 	auto is_enabled() const -> bool
 	{
-		return model_.has_value();
+		return get_model() != nullptr;
 	}
 
 	auto word2vec(const char *in, std::size_t len, std::vector<std::int32_t> &word_ngramms) const
 	{
-		if (!model_) {
+		auto *model = get_model();
+		if (!model) {
 			return;
 		}
 
-		model_->word2vec(std::string_view{in, len}, word_ngramms);
+		model->word2vec(std::string_view{in, len}, word_ngramms);
 	}
 
 	auto detect_language(std::vector<std::int32_t> &words, int k)
 		-> std::vector<std::pair<float, std::string>> *
 	{
-		if (!model_) {
+		auto *model = get_model();
+		if (!model) {
 			return nullptr;
 		}
 
 		std::vector<rspamd::fasttext::prediction> preds;
-		model_->predict(k, words, preds, 0.0f);
+		model->predict(k, words, preds, 0.0f);
 
 		auto *results = new std::vector<std::pair<float, std::string>>;
 		results->reserve(preds.size());
@@ -112,13 +255,14 @@ public:
 
 	auto model_info(void) const -> const std::string
 	{
-		if (!model_) {
+		auto *model = get_model();
+		if (!model) {
 			static const auto not_loaded = std::string{"fasttext model is not loaded"};
 			return not_loaded;
 		}
 		else {
 			return fmt::format("fasttext model {}: {} languages, {} tokens", model_fname,
-							   model_->get_nlabels(), model_->get_ntokens());
+							   model->get_nlabels(), model->get_ntokens());
 		}
 	}
 };

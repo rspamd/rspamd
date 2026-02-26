@@ -67,21 +67,28 @@ local function load_model(path)
   end
 
   if loaded_models[path] then
-    return loaded_models[path]
-  end
-
-  rspamd_logger.infox(rspamd_config, '%s: loading FastText model from %s', N, path)
-  local model = rspamd_fasttext.load(path)
-
-  if model and model:is_loaded() then
-    rspamd_logger.infox(rspamd_config, '%s: loaded FastText model %s, dimension=%s',
-      N, path, model:get_dimension())
-    loaded_models[path] = model
-    return model
-  else
-    rspamd_logger.errx(rspamd_config, '%s: failed to load FastText model from %s', N, path)
+    local cached = loaded_models[path]
+    if cached:is_loaded() then
+      return cached
+    end
+    -- Cached but map not ready yet
     return nil
   end
+
+  -- Use load_map for map-backed loading (supports HTTP URLs + file reload)
+  rspamd_logger.infox(rspamd_config, '%s: loading FastText model from %s', N, path)
+  local model = rspamd_fasttext.load_map(rspamd_config, path)
+
+  if model then
+    loaded_models[path] = model
+    if model:is_loaded() then
+      rspamd_logger.infox(rspamd_config, '%s: loaded FastText model %s, dimension=%s',
+        N, path, model:get_dimension())
+      return model
+    end
+  end
+
+  return nil
 end
 
 -- Collect all available models (for multi_model mode)
@@ -414,6 +421,17 @@ local function compute_conv1d_features(models, words, max_words, sif_a, opts)
 end
 
 neural_common.register_provider('fasttext_embed', {
+  init = function(pcfg)
+    -- Pre-register map-backed models at config time
+    if pcfg.model then
+      load_model(pcfg.model)
+    end
+    if pcfg.language_models then
+      for _, path in pairs(pcfg.language_models) do
+        load_model(path)
+      end
+    end
+  end,
   collect_async = function(task, ctx, cont)
     local pcfg = ctx.config or {}
 

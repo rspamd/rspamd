@@ -83,6 +83,18 @@ static gboolean rspamd_map_update_http_cached_file(struct rspamd_map *map,
 												   struct rspamd_map_backend *bk,
 												   struct http_map_data *htdata);
 
+static inline void
+rspamd_map_cache_file_path(struct rspamd_map_backend *bk,
+						   const char *cache_dir,
+						   char *path, gsize pathlen)
+{
+	unsigned char digest[rspamd_cryptobox_HASHBYTES];
+
+	rspamd_cryptobox_hash(digest, bk->uri, strlen(bk->uri), NULL, 0);
+	rspamd_snprintf(path, pathlen, "%s%c%*xs.map", cache_dir,
+					G_DIR_SEPARATOR, 20, digest);
+}
+
 unsigned int rspamd_map_log_id = (unsigned int) -1;
 RSPAMD_CONSTRUCTOR(rspamd_map_log_init)
 {
@@ -831,8 +843,25 @@ http_map_finish(struct rspamd_http_connection *conn,
 						 cbd->bk->uri,
 						 rspamd_inet_address_to_string_pretty(cbd->addr),
 						 payload_len, zout.pos, next_check_date);
-			map->read_callback(final_out, zout.pos, &cbd->periodic->cbdata, TRUE);
-			rspamd_map_save_http_cached_file(map, bk, cbd->data, final_out, zout.pos);
+			if (!rspamd_map_save_http_cached_file(map, bk, cbd->data, final_out, zout.pos)) {
+				msg_err_map("%s: failed to save cache file", bk->uri);
+				g_free(final_out);
+				MAP_RELEASE(cbd->shmem_data, "shmem_data");
+				goto err;
+			}
+
+			if (map->no_file_read) {
+				/* Pass cache file path; consumer mmaps at page-aligned offset */
+				char cache_path[PATH_MAX];
+				rspamd_map_cache_file_path(bk, map->cfg->maps_cache_dir,
+										   cache_path, sizeof(cache_path));
+				map->no_file_read_offset = RSPAMD_MAP_CACHE_HEADER_SIZE;
+				map->read_callback(cache_path, strlen(cache_path),
+								   &cbd->periodic->cbdata, TRUE);
+			}
+			else {
+				map->read_callback(final_out, zout.pos, &cbd->periodic->cbdata, TRUE);
+			}
 			g_free(final_out);
 		}
 		else {
@@ -840,8 +869,25 @@ http_map_finish(struct rspamd_http_connection *conn,
 						 cbd->bk->uri,
 						 rspamd_inet_address_to_string_pretty(cbd->addr),
 						 payload_len, next_check_date);
-			rspamd_map_save_http_cached_file(map, bk, cbd->data, payload, payload_len);
-			map->read_callback(payload, payload_len, &cbd->periodic->cbdata, TRUE);
+
+			if (!rspamd_map_save_http_cached_file(map, bk, cbd->data, payload, payload_len)) {
+				msg_err_map("%s: failed to save cache file", bk->uri);
+				MAP_RELEASE(cbd->shmem_data, "shmem_data");
+				goto err;
+			}
+
+			if (map->no_file_read) {
+				/* Pass cache file path; consumer mmaps at page-aligned offset */
+				char cache_path[PATH_MAX];
+				rspamd_map_cache_file_path(bk, map->cfg->maps_cache_dir,
+										   cache_path, sizeof(cache_path));
+				map->no_file_read_offset = RSPAMD_MAP_CACHE_HEADER_SIZE;
+				map->read_callback(cache_path, strlen(cache_path),
+								   &cbd->periodic->cbdata, TRUE);
+			}
+			else {
+				map->read_callback(payload, payload_len, &cbd->periodic->cbdata, TRUE);
+			}
 		}
 
 		MAP_RELEASE(cbd->shmem_data, "shmem_data");
@@ -1763,6 +1809,39 @@ rspamd_map_read_cached(struct rspamd_map *map, struct rspamd_map_backend *bk,
 
 	data = bk->data.hd;
 
+	if (map->no_file_read) {
+		/*
+		 * For no_file_read maps, the cache file was already written by the
+		 * controller process. Pass its path to the read callback.
+		 * The consumer mmaps the file at no_file_read_offset to skip the header.
+		 */
+		char cache_path[PATH_MAX];
+		struct stat st;
+
+		if (map->cfg->maps_cache_dir == NULL || map->cfg->maps_cache_dir[0] == '\0') {
+			msg_err_map("%s: no maps cache dir configured for no_file_read map", bk->uri);
+			return FALSE;
+		}
+
+		rspamd_map_cache_file_path(bk, map->cfg->maps_cache_dir,
+								   cache_path, sizeof(cache_path));
+
+		if (stat(cache_path, &st) == -1 ||
+			st.st_size <= (off_t) RSPAMD_MAP_CACHE_HEADER_SIZE) {
+			msg_info_map("%s: cache file %s not available yet", bk->uri, cache_path);
+			return FALSE;
+		}
+
+		map->no_file_read_offset = RSPAMD_MAP_CACHE_HEADER_SIZE;
+		msg_info_map("%s: read cached file %s, %uz bytes (offset %d)",
+					 bk->uri, cache_path,
+					 (gsize) (st.st_size - RSPAMD_MAP_CACHE_HEADER_SIZE),
+					 RSPAMD_MAP_CACHE_HEADER_SIZE);
+		map->read_callback(cache_path, strlen(cache_path),
+						   &periodic->cbdata, TRUE);
+		return TRUE;
+	}
+
 	in = rspamd_shmem_xmap(data->cache->shmem_name, PROT_READ, &mmap_len);
 
 	if (in == NULL) {
@@ -1894,7 +1973,6 @@ rspamd_map_has_http_cached_file(struct rspamd_map *map,
 								struct rspamd_map_backend *bk)
 {
 	char path[PATH_MAX];
-	unsigned char digest[rspamd_cryptobox_HASHBYTES];
 	struct rspamd_config *cfg = map->cfg;
 	struct stat st;
 
@@ -1902,9 +1980,7 @@ rspamd_map_has_http_cached_file(struct rspamd_map *map,
 		return FALSE;
 	}
 
-	rspamd_cryptobox_hash(digest, bk->uri, strlen(bk->uri), NULL, 0);
-	rspamd_snprintf(path, sizeof(path), "%s%c%*xs.map", cfg->maps_cache_dir,
-					G_DIR_SEPARATOR, 20, digest);
+	rspamd_map_cache_file_path(bk, cfg->maps_cache_dir, path, sizeof(path));
 
 	if (stat(path, &st) != -1 && st.st_size >
 									 sizeof(struct rspamd_http_file_data)) {
@@ -1922,7 +1998,6 @@ rspamd_map_save_http_cached_file(struct rspamd_map *map,
 								 gsize len)
 {
 	char path[PATH_MAX], temp_path[PATH_MAX];
-	unsigned char digest[rspamd_cryptobox_HASHBYTES];
 	struct rspamd_config *cfg = map->cfg;
 	int fd;
 	struct rspamd_http_file_data header;
@@ -1931,9 +2006,7 @@ rspamd_map_save_http_cached_file(struct rspamd_map *map,
 		return FALSE;
 	}
 
-	rspamd_cryptobox_hash(digest, bk->uri, strlen(bk->uri), NULL, 0);
-	rspamd_snprintf(path, sizeof(path), "%s%c%*xs.map", cfg->maps_cache_dir,
-					G_DIR_SEPARATOR, 20, digest);
+	rspamd_map_cache_file_path(bk, cfg->maps_cache_dir, path, sizeof(path));
 	rspamd_snprintf(temp_path, sizeof(temp_path), "%s.tmp.%d.%d", path,
 					(int) getpid(), (int) rspamd_get_calendar_ticks());
 
@@ -1952,20 +2025,43 @@ rspamd_map_save_http_cached_file(struct rspamd_map *map,
 		return FALSE;
 	}
 
+	memset(&header, 0, sizeof(header));
 	memcpy(header.magic, rspamd_http_file_magic, sizeof(rspamd_http_file_magic));
 	header.mtime = htdata->last_modified;
 	header.next_check = map->next_check;
-	header.data_off = sizeof(header);
+	header.data_off = RSPAMD_MAP_CACHE_HEADER_SIZE;
 
 	if (htdata->etag) {
-		header.data_off += RSPAMD_FSTRING_LEN(htdata->etag);
-		header.etag_len = RSPAMD_FSTRING_LEN(htdata->etag);
+		gsize max_etag = RSPAMD_MAP_CACHE_HEADER_SIZE - sizeof(header);
+
+		if (RSPAMD_FSTRING_LEN(htdata->etag) > max_etag) {
+			msg_warn_map("etag too long (%z > %z), truncating",
+						 RSPAMD_FSTRING_LEN(htdata->etag), max_etag);
+			header.etag_len = max_etag;
+		}
+		else {
+			header.etag_len = RSPAMD_FSTRING_LEN(htdata->etag);
+		}
 	}
 	else {
 		header.etag_len = 0;
 	}
 
-	if (write(fd, &header, sizeof(header)) != sizeof(header)) {
+	/*
+	 * Write the full header page: struct + etag + zero padding.
+	 * Data payload starts at page-aligned offset (4096) so consumers
+	 * can mmap the file at that offset directly.
+	 */
+	unsigned char header_page[RSPAMD_MAP_CACHE_HEADER_SIZE];
+	memset(header_page, 0, sizeof(header_page));
+	memcpy(header_page, &header, sizeof(header));
+
+	if (header.etag_len > 0) {
+		memcpy(header_page + sizeof(header),
+			   RSPAMD_FSTRING_DATA(htdata->etag), header.etag_len);
+	}
+
+	if (write(fd, header_page, sizeof(header_page)) != sizeof(header_page)) {
 		msg_err_map("cannot write file %s (header stage): %s", temp_path, strerror(errno));
 		rspamd_file_unlock(fd, FALSE);
 		close(fd);
@@ -1974,20 +2070,8 @@ rspamd_map_save_http_cached_file(struct rspamd_map *map,
 		return FALSE;
 	}
 
-	if (header.etag_len > 0) {
-		if (write(fd, RSPAMD_FSTRING_DATA(htdata->etag), header.etag_len) !=
-			header.etag_len) {
-			msg_err_map("cannot write file %s (etag stage): %s", temp_path, strerror(errno));
-			rspamd_file_unlock(fd, FALSE);
-			close(fd);
-			unlink(temp_path);
-
-			return FALSE;
-		}
-	}
-
-	/* Now write the rest */
-	if (write(fd, data, len) != len) {
+	/* Now write the payload */
+	if (write(fd, data, len) != (gssize) len) {
 		msg_err_map("cannot write file %s (data stage): %s", temp_path, strerror(errno));
 		rspamd_file_unlock(fd, FALSE);
 		close(fd);
@@ -2006,7 +2090,8 @@ rspamd_map_save_http_cached_file(struct rspamd_map *map,
 		return FALSE;
 	}
 
-	msg_info_map("saved data from %s in %s, %uz bytes", bk->uri, path, len + sizeof(header) + header.etag_len);
+	msg_info_map("saved data from %s in %s, %uz bytes",
+				 bk->uri, path, len + RSPAMD_MAP_CACHE_HEADER_SIZE);
 
 	return TRUE;
 }
@@ -2017,7 +2102,6 @@ rspamd_map_update_http_cached_file(struct rspamd_map *map,
 								   struct http_map_data *htdata)
 {
 	char path[PATH_MAX];
-	unsigned char digest[rspamd_cryptobox_HASHBYTES];
 	struct rspamd_config *cfg = map->cfg;
 	int fd;
 	struct rspamd_http_file_data header;
@@ -2026,9 +2110,7 @@ rspamd_map_update_http_cached_file(struct rspamd_map *map,
 		return FALSE;
 	}
 
-	rspamd_cryptobox_hash(digest, bk->uri, strlen(bk->uri), NULL, 0);
-	rspamd_snprintf(path, sizeof(path), "%s%c%*xs.map", cfg->maps_cache_dir,
-					G_DIR_SEPARATOR, 20, digest);
+	rspamd_map_cache_file_path(bk, cfg->maps_cache_dir, path, sizeof(path));
 
 	fd = rspamd_file_xopen(path, O_WRONLY,
 						   00600, FALSE);
@@ -2044,36 +2126,42 @@ rspamd_map_update_http_cached_file(struct rspamd_map *map,
 		return FALSE;
 	}
 
+	memset(&header, 0, sizeof(header));
 	memcpy(header.magic, rspamd_http_file_magic, sizeof(rspamd_http_file_magic));
 	header.mtime = htdata->last_modified;
 	header.next_check = map->next_check;
-	header.data_off = sizeof(header);
+	header.data_off = RSPAMD_MAP_CACHE_HEADER_SIZE;
 
 	if (htdata->etag) {
-		header.data_off += RSPAMD_FSTRING_LEN(htdata->etag);
-		header.etag_len = RSPAMD_FSTRING_LEN(htdata->etag);
+		gsize max_etag = RSPAMD_MAP_CACHE_HEADER_SIZE - sizeof(header);
+
+		if (RSPAMD_FSTRING_LEN(htdata->etag) > max_etag) {
+			header.etag_len = max_etag;
+		}
+		else {
+			header.etag_len = RSPAMD_FSTRING_LEN(htdata->etag);
+		}
 	}
 	else {
 		header.etag_len = 0;
 	}
 
-	if (write(fd, &header, sizeof(header)) != sizeof(header)) {
+	/* Write the full page-aligned header (only the header page, not payload) */
+	unsigned char header_page[RSPAMD_MAP_CACHE_HEADER_SIZE];
+	memset(header_page, 0, sizeof(header_page));
+	memcpy(header_page, &header, sizeof(header));
+
+	if (header.etag_len > 0) {
+		memcpy(header_page + sizeof(header),
+			   RSPAMD_FSTRING_DATA(htdata->etag), header.etag_len);
+	}
+
+	if (write(fd, header_page, sizeof(header_page)) != sizeof(header_page)) {
 		msg_err_map("cannot update file %s (header stage): %s", path, strerror(errno));
 		rspamd_file_unlock(fd, FALSE);
 		close(fd);
 
 		return FALSE;
-	}
-
-	if (header.etag_len > 0) {
-		if (write(fd, RSPAMD_FSTRING_DATA(htdata->etag), header.etag_len) !=
-			header.etag_len) {
-			msg_err_map("cannot update file %s (etag stage): %s", path, strerror(errno));
-			rspamd_file_unlock(fd, FALSE);
-			close(fd);
-
-			return FALSE;
-		}
 	}
 
 	rspamd_file_unlock(fd, FALSE);
@@ -2090,7 +2178,6 @@ rspamd_map_read_http_cached_file(struct rspamd_map *map,
 								 struct map_cb_data *cbdata)
 {
 	char path[PATH_MAX];
-	unsigned char digest[rspamd_cryptobox_HASHBYTES];
 	struct rspamd_config *cfg = map->cfg;
 	int fd;
 	struct stat st;
@@ -2100,9 +2187,7 @@ rspamd_map_read_http_cached_file(struct rspamd_map *map,
 		return FALSE;
 	}
 
-	rspamd_cryptobox_hash(digest, bk->uri, strlen(bk->uri), NULL, 0);
-	rspamd_snprintf(path, sizeof(path), "%s%c%*xs.map", cfg->maps_cache_dir,
-					G_DIR_SEPARATOR, 20, digest);
+	rspamd_map_cache_file_path(bk, cfg->maps_cache_dir, path, sizeof(path));
 
 	fd = rspamd_file_xopen(path, O_RDONLY, 00600, FALSE);
 
@@ -2129,11 +2214,18 @@ rspamd_map_read_http_cached_file(struct rspamd_map *map,
 
 	if (memcmp(header.magic, rspamd_http_file_magic,
 			   sizeof(rspamd_http_file_magic)) != 0) {
-		msg_warn_map("invalid or old version magic in file %s; ignore it", path);
-		rspamd_file_unlock(fd, FALSE);
-		close(fd);
+		if (memcmp(header.magic, rspamd_http_file_magic_old,
+				   sizeof(rspamd_http_file_magic_old)) == 0) {
+			msg_info_map("old version cache file %s; will be rewritten on next update", path);
+			/* Old format: data_off is header + etag, not page-aligned */
+		}
+		else {
+			msg_warn_map("invalid magic in file %s; ignore it", path);
+			rspamd_file_unlock(fd, FALSE);
+			close(fd);
 
-		return FALSE;
+			return FALSE;
+		}
 	}
 
 	double now = rspamd_get_calendar_ticks();
@@ -2180,83 +2272,96 @@ rspamd_map_read_http_cached_file(struct rspamd_map *map,
 	rspamd_file_unlock(fd, FALSE);
 	close(fd);
 
-	/* Now read file data */
-	/* Perform buffered read: fail-safe, but for encrypted files, we must read whole buffer */
-	if (bk->is_encrypted) {
-		gsize flen;
-		unsigned char *fbytes = rspamd_file_xmap(path, PROT_READ, &flen, TRUE);
-		if (!fbytes) {
-			return FALSE;
-		}
-		const unsigned char *enc = fbytes + header.data_off;
-		gsize enclen = flen - header.data_off;
-		unsigned char *dec = NULL;
-		gsize declen = 0;
-
-		if (!rspamd_map_secretbox_decrypt_buf(bk, enc, enclen, &dec, &declen)) {
-			munmap(fbytes, flen);
-			return FALSE;
-		}
-		/* If compressed, decompress after decryption */
-		if (bk->is_compressed) {
-			ZSTD_DStream *zstream;
-			ZSTD_inBuffer zin;
-			ZSTD_outBuffer zout;
-			unsigned char *out;
-			gsize outlen, r;
-
-			zstream = ZSTD_createDStream();
-			ZSTD_initDStream(zstream);
-
-			zin.pos = 0;
-			zin.src = dec;
-			zin.size = declen;
-
-			if ((outlen = ZSTD_getDecompressedSize(zin.src, zin.size)) == 0) {
-				outlen = ZSTD_DStreamOutSize();
-			}
-
-			out = g_malloc(outlen);
-
-			zout.dst = out;
-			zout.pos = 0;
-			zout.size = outlen;
-
-			while (zin.pos < zin.size) {
-				r = ZSTD_decompressStream(zstream, &zout, &zin);
-
-				if (ZSTD_isError(r)) {
-					ZSTD_freeDStream(zstream);
-					g_free(out);
-					rspamd_explicit_memzero(dec, declen);
-					g_free(dec);
-					munmap(fbytes, flen);
-					return FALSE;
-				}
-
-				if (zout.pos == zout.size) {
-					/* We need to extend output buffer */
-					zout.size = zout.size * 2 + 1;
-					out = g_realloc(zout.dst, zout.size);
-					zout.dst = out;
-				}
-			}
-
-			ZSTD_freeDStream(zstream);
-			map->read_callback(out, zout.pos, cbdata, TRUE);
-			g_free(out);
-		}
-		else {
-			map->read_callback(dec, declen, cbdata, TRUE);
-		}
-		rspamd_explicit_memzero(dec, declen);
-		g_free(dec);
-		munmap(fbytes, flen);
+	if (map->no_file_read) {
+		/*
+		 * For no_file_read maps, pass the cache file path to the consumer.
+		 * The consumer will mmap the file at no_file_read_offset to skip
+		 * the page-aligned cache header.
+		 */
+		map->no_file_read_offset = header.data_off;
+		msg_info_map("%s: passing cached file %s for no_file_read (offset %z)",
+					 bk->uri, path, (gsize) header.data_off);
+		map->read_callback(path, strlen(path), cbdata, TRUE);
 	}
 	else {
-		if (!read_map_file_chunks(map, cbdata, path,
-								  st.st_size - header.data_off, header.data_off)) {
-			return FALSE;
+		/* Now read file data */
+		/* Perform buffered read: fail-safe, but for encrypted files, we must read whole buffer */
+		if (bk->is_encrypted) {
+			gsize flen;
+			unsigned char *fbytes = rspamd_file_xmap(path, PROT_READ, &flen, TRUE);
+			if (!fbytes) {
+				return FALSE;
+			}
+			const unsigned char *enc = fbytes + header.data_off;
+			gsize enclen = flen - header.data_off;
+			unsigned char *dec = NULL;
+			gsize declen = 0;
+
+			if (!rspamd_map_secretbox_decrypt_buf(bk, enc, enclen, &dec, &declen)) {
+				munmap(fbytes, flen);
+				return FALSE;
+			}
+			/* If compressed, decompress after decryption */
+			if (bk->is_compressed) {
+				ZSTD_DStream *zstream;
+				ZSTD_inBuffer zin;
+				ZSTD_outBuffer zout;
+				unsigned char *out;
+				gsize outlen, r;
+
+				zstream = ZSTD_createDStream();
+				ZSTD_initDStream(zstream);
+
+				zin.pos = 0;
+				zin.src = dec;
+				zin.size = declen;
+
+				if ((outlen = ZSTD_getDecompressedSize(zin.src, zin.size)) == 0) {
+					outlen = ZSTD_DStreamOutSize();
+				}
+
+				out = g_malloc(outlen);
+
+				zout.dst = out;
+				zout.pos = 0;
+				zout.size = outlen;
+
+				while (zin.pos < zin.size) {
+					r = ZSTD_decompressStream(zstream, &zout, &zin);
+
+					if (ZSTD_isError(r)) {
+						ZSTD_freeDStream(zstream);
+						g_free(out);
+						rspamd_explicit_memzero(dec, declen);
+						g_free(dec);
+						munmap(fbytes, flen);
+						return FALSE;
+					}
+
+					if (zout.pos == zout.size) {
+						/* We need to extend output buffer */
+						zout.size = zout.size * 2 + 1;
+						out = g_realloc(zout.dst, zout.size);
+						zout.dst = out;
+					}
+				}
+
+				ZSTD_freeDStream(zstream);
+				map->read_callback(out, zout.pos, cbdata, TRUE);
+				g_free(out);
+			}
+			else {
+				map->read_callback(dec, declen, cbdata, TRUE);
+			}
+			rspamd_explicit_memzero(dec, declen);
+			g_free(dec);
+			munmap(fbytes, flen);
+		}
+		else {
+			if (!read_map_file_chunks(map, cbdata, path,
+									  st.st_size - header.data_off, header.data_off)) {
+				return FALSE;
+			}
 		}
 	}
 
@@ -3903,4 +4008,13 @@ void rspamd_map_trigger_hyperscan_compilation(struct rspamd_map *map)
 															NULL); /* cbdata */
 		}
 	}
+}
+
+gsize rspamd_map_get_no_file_read_offset(struct rspamd_map *map)
+{
+	if (map) {
+		return map->no_file_read_offset;
+	}
+
+	return 0;
 }

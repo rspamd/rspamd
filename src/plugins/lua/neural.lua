@@ -1174,7 +1174,7 @@ for k, r in pairs(rules) do
     rule_elt.max_inputs = nil
   end
 
-  -- Phase 4: basic provider config validation
+  -- Phase 4: basic provider config validation + init
   if rule_elt.providers and #rule_elt.providers > 0 then
     for i, pcfg in ipairs(rule_elt.providers) do
       if not (pcfg.type or pcfg.name) then
@@ -1183,6 +1183,11 @@ for k, r in pairs(rules) do
       if (pcfg.type == 'llm' or pcfg.name == 'llm') and not (pcfg.model or (rspamd_config:get_all_opt('gpt') or {}).model) then
         rspamd_logger.errx(rspamd_config,
           'llm provider in rule %s requires model; please set providers[i].model or gpt.model', k)
+      end
+      -- Call provider init at config time (for map registration etc.)
+      local prov = neural_common.get_provider(pcfg.type or pcfg.name)
+      if prov and prov.init then
+        prov.init(pcfg)
       end
     end
   end

@@ -70,6 +70,15 @@ enum rspamd_map_flags {
 };
 
 /**
+ * Get the payload offset for no_file_read maps.
+ * When the map callback receives a filename, the actual data starts at this
+ * offset within the file (0 for file backends, page-aligned for HTTP cache).
+ * @param map
+ * @return byte offset where payload begins
+ */
+gsize rspamd_map_get_no_file_read_offset(struct rspamd_map *map);
+
+/**
  * Add map from line
  */
 struct rspamd_map *rspamd_map_add(struct rspamd_config *cfg,
