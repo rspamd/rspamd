@@ -1490,6 +1490,7 @@ return {
   build_providers_meta = build_providers_meta,
   apply_normalization = apply_normalization,
   gen_unlock_cb = gen_unlock_cb,
+  get_provider = get_provider,
   get_rule_settings = get_rule_settings,
   load_scripts = load_scripts,
   module_config = module_config,
