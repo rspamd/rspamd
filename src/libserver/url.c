@@ -192,26 +192,44 @@ struct rspamd_url_flag_name {
 	{"html_displayed", RSPAMD_URL_FLAG_HTML_DISPLAYED, -1},
 	{"text", RSPAMD_URL_FLAG_FROM_TEXT, -1},
 	{"subject", RSPAMD_URL_FLAG_SUBJECT, -1},
-	{"host_encoded", RSPAMD_URL_FLAG_HOSTENCODED, -1},
-	{"schema_encoded", RSPAMD_URL_FLAG_SCHEMAENCODED, -1},
-	{"path_encoded", RSPAMD_URL_FLAG_PATHENCODED, -1},
-	{"query_encoded", RSPAMD_URL_FLAG_QUERYENCODED, -1},
-	{"missing_slashes", RSPAMD_URL_FLAG_MISSINGSLASHES, -1},
 	{"idn", RSPAMD_URL_FLAG_IDN, -1},
-	{"has_port", RSPAMD_URL_FLAG_HAS_PORT, -1},
-	{"has_user", RSPAMD_URL_FLAG_HAS_USER, -1},
-	{"schemaless", RSPAMD_URL_FLAG_SCHEMALESS, -1},
-	{"unnormalised", RSPAMD_URL_FLAG_UNNORMALISED, -1},
-	{"zw_spaces", RSPAMD_URL_FLAG_ZW_SPACES, -1},
 	{"url_displayed", RSPAMD_URL_FLAG_DISPLAY_URL, -1},
 	{"image", RSPAMD_URL_FLAG_IMAGE, -1},
 	{"query", RSPAMD_URL_FLAG_QUERY, -1},
 	{"content", RSPAMD_URL_FLAG_CONTENT, -1},
-	{"no_tld", RSPAMD_URL_FLAG_NO_TLD, -1},
-	{"truncated", RSPAMD_URL_FLAG_TRUNCATED, -1},
 	{"redirect_target", RSPAMD_URL_FLAG_REDIRECT_TARGET, -1},
-	{"invisible", RSPAMD_URL_FLAG_INVISIBLE, -1},
 	{"special", RSPAMD_URL_FLAG_SPECIAL, -1},
+};
+
+struct rspamd_url_obfuscation_flag_name {
+	const char *name;
+	int flag;
+	int hash;
+} url_obfuscation_flag_names[] = {
+	{"multiple_at", RSPAMD_URL_OBF_MULTIPLE_AT, -1},
+	{"backslashes", RSPAMD_URL_OBF_BACKSLASHES, -1},
+	{"ip_numeric", RSPAMD_URL_OBF_IP_NUMERIC, -1},
+	{"dot_tricks", RSPAMD_URL_OBF_DOT_TRICKS, -1},
+	{"missing_slashes", RSPAMD_URL_OBF_MISSING_SLASHES, -1},
+	{"has_password", RSPAMD_URL_OBF_HAS_PASSWORD, -1},
+	{"user_badchars", RSPAMD_URL_OBF_USER_BADCHARS, -1},
+	{"domain_in_user", RSPAMD_URL_OBF_DOMAIN_IN_USER, -1},
+	{"zw_spaces", RSPAMD_URL_OBF_ZW_SPACES, -1},
+	{"html_badchars", RSPAMD_URL_OBF_HTML_BADCHARS, -1},
+	{"host_encoded", RSPAMD_URL_OBF_HOST_ENCODED, -1},
+	{"phish_mismatch", RSPAMD_URL_OBF_PHISH_MISMATCH, -1},
+	{"lua_suspicious", RSPAMD_URL_OBF_LUA_SUSPICIOUS, -1},
+	{"double_slash_path", RSPAMD_URL_OBF_DOUBLE_SLASH_PATH, -1},
+	{"schema_encoded", RSPAMD_URL_OBF_SCHEMA_ENCODED, -1},
+	{"path_encoded", RSPAMD_URL_OBF_PATH_ENCODED, -1},
+	{"query_encoded", RSPAMD_URL_OBF_QUERY_ENCODED, -1},
+	{"has_port", RSPAMD_URL_OBF_HAS_PORT, -1},
+	{"has_user", RSPAMD_URL_OBF_HAS_USER, -1},
+	{"schemaless", RSPAMD_URL_OBF_SCHEMALESS, -1},
+	{"unnormalised", RSPAMD_URL_OBF_UNNORMALISED, -1},
+	{"no_tld", RSPAMD_URL_OBF_NO_TLD, -1},
+	{"truncated", RSPAMD_URL_OBF_TRUNCATED, -1},
+	{"invisible", RSPAMD_URL_OBF_INVISIBLE, -1},
 };
 
 
@@ -640,6 +658,24 @@ void rspamd_url_init(const char *tld_file)
 			}
 		}
 	}
+
+	/* Generate hashes for obfuscation flags */
+	for (int i = 0; i < G_N_ELEMENTS(url_obfuscation_flag_names); i++) {
+		url_obfuscation_flag_names[i].hash =
+			rspamd_cryptobox_fast_hash_specific(RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT,
+												url_obfuscation_flag_names[i].name,
+												strlen(url_obfuscation_flag_names[i].name), 0);
+	}
+	for (int i = 0; i < G_N_ELEMENTS(url_obfuscation_flag_names) - 1; i++) {
+		for (int j = i + 1; j < G_N_ELEMENTS(url_obfuscation_flag_names); j++) {
+			if (url_obfuscation_flag_names[i].hash == url_obfuscation_flag_names[j].hash) {
+				msg_err("obfuscation flag collision: both %s and %s map to %d",
+						url_obfuscation_flag_names[i].name, url_obfuscation_flag_names[j].name,
+						url_obfuscation_flag_names[i].hash);
+				abort();
+			}
+		}
+	}
 }
 
 #define SET_U(u, field)                             \
@@ -701,7 +737,9 @@ static int
 rspamd_mailto_parse(struct http_parser_url *u,
 					const char *str, gsize len,
 					char const **end,
-					enum rspamd_url_parse_flags parse_flags, unsigned int *flags)
+					enum rspamd_url_parse_flags parse_flags,
+					unsigned int *flags,
+					unsigned int *obf_flags)
 {
 	const char *p = str, *c = str, *last = str + len;
 	char t;
@@ -746,7 +784,7 @@ rspamd_mailto_parse(struct http_parser_url *u,
 				p++;
 			}
 			else {
-				*flags |= RSPAMD_URL_FLAG_MISSINGSLASHES;
+				*obf_flags |= RSPAMD_URL_OBF_MISSING_SLASHES;
 				st = parse_slash_slash;
 			}
 			break;
@@ -1038,6 +1076,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				 char const **end,
 				 enum rspamd_url_parse_flags parse_flags,
 				 unsigned int *flags,
+				 unsigned int *obf_flags,
 				 void *lua_state)
 {
 	const char *p = str, *c = str, *last = str + len, *slash = NULL,
@@ -1102,7 +1141,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 			}
 			else {
 				st = parse_slash_slash;
-				*(flags) |= RSPAMD_URL_FLAG_MISSINGSLASHES;
+				*(obf_flags) |= RSPAMD_URL_OBF_MISSING_SLASHES;
 			}
 			break;
 		case parse_slash:
@@ -1206,12 +1245,13 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 					st = parse_multiple_at;
 					user_seen = TRUE;
 					*flags |= RSPAMD_URL_FLAG_OBSCURED;
+					*obf_flags |= RSPAMD_URL_OBF_MULTIPLE_AT;
 
 					continue;
 				}
 
 				SET_U(u, UF_USERINFO);
-				*flags |= RSPAMD_URL_FLAG_HAS_USER;
+				*obf_flags |= RSPAMD_URL_OBF_HAS_USER;
 				st = parse_at;
 			}
 			else if (!g_ascii_isgraph(t)) {
@@ -1229,9 +1269,10 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				else if (lua_decision == RSPAMD_URL_LUA_FILTER_SUSPICIOUS) {
 					/* SUSPICIOUS: Mark as obscured for plugin analysis */
 					*flags |= RSPAMD_URL_FLAG_OBSCURED;
+					*obf_flags |= RSPAMD_URL_OBF_LUA_SUSPICIOUS;
 				}
 				/* ACCEPT or SUSPICIOUS: continue parsing */
-				*flags |= RSPAMD_URL_FLAG_HAS_USER;
+				*obf_flags |= RSPAMD_URL_OBF_HAS_USER;
 			}
 
 			p++;
@@ -1255,7 +1296,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				p--;
 				SET_U(u, UF_USERINFO);
 				p++;
-				*flags |= RSPAMD_URL_FLAG_HAS_USER;
+				*obf_flags |= RSPAMD_URL_OBF_HAS_USER;
 				st = parse_at;
 			}
 			else {
@@ -1270,7 +1311,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 					/* Eat semicolon */
 					u->field_data[UF_USERINFO].len--;
 				}
-				*flags |= RSPAMD_URL_FLAG_HAS_USER;
+				*obf_flags |= RSPAMD_URL_OBF_HAS_USER;
 				st = parse_at;
 			}
 			else {
@@ -1283,9 +1324,10 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 		case parse_password:
 			if (t == '@') {
 				/* XXX: password is not stored */
+				*obf_flags |= RSPAMD_URL_OBF_HAS_PASSWORD;
 				if (u != NULL) {
 					if (u->field_data[UF_USERINFO].len == 0 && password_start && user_start && password_start > user_start + 1) {
-						*flags |= RSPAMD_URL_FLAG_HAS_USER;
+						*obf_flags |= RSPAMD_URL_OBF_HAS_USER;
 						u->field_set |= 1u << (UF_USERINFO);
 						u->field_data[UF_USERINFO].len =
 							password_start - user_start - 1;
@@ -1308,6 +1350,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 
 			if (t == '@') {
 				*flags |= RSPAMD_URL_FLAG_OBSCURED;
+				*obf_flags |= RSPAMD_URL_OBF_MULTIPLE_AT;
 				p++;
 			}
 			else if (t == '[') {
@@ -1391,7 +1434,8 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 						if (!u_isalnum(uc)) {
 							/* Bad symbol */
 							if (IS_ZERO_WIDTH_SPACE(uc)) {
-								(*flags) |= RSPAMD_URL_FLAG_ZW_SPACES;
+								(*obf_flags) |= RSPAMD_URL_OBF_ZW_SPACES;
+								(*flags) |= RSPAMD_URL_FLAG_OBSCURED;
 							}
 							else {
 								if (!u_isgraph(uc)) {
@@ -1418,6 +1462,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 							/* We have to use all shit we are given here */
 							p++;
 							(*flags) |= RSPAMD_URL_FLAG_OBSCURED;
+							*obf_flags |= RSPAMD_URL_OBF_DOUBLE_SLASH_PATH;
 						}
 						else {
 							if (!(parse_flags & RSPAMD_URL_PARSE_CHECK)) {
@@ -1493,7 +1538,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				}
 				if (u != NULL) {
 					u->port = pt;
-					*flags |= RSPAMD_URL_FLAG_HAS_PORT;
+					*obf_flags |= RSPAMD_URL_OBF_HAS_PORT;
 				}
 				st = parse_suffix_slash;
 			}
@@ -1504,7 +1549,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				}
 				if (u != NULL) {
 					u->port = pt;
-					*flags |= RSPAMD_URL_FLAG_HAS_PORT;
+					*obf_flags |= RSPAMD_URL_OBF_HAS_PORT;
 				}
 
 				c = p + 1;
@@ -1517,7 +1562,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				}
 				if (u != NULL) {
 					u->port = pt;
-					*flags |= RSPAMD_URL_FLAG_HAS_PORT;
+					*obf_flags |= RSPAMD_URL_OBF_HAS_PORT;
 				}
 
 				c = p + 1;
@@ -1774,7 +1819,7 @@ rspamd_url_regen_from_inet_addr(struct rspamd_url *uri, const void *addr, int af
 		slen += INET6_ADDRSTRLEN;
 	}
 
-	if (uri->flags & RSPAMD_URL_FLAG_HAS_PORT) {
+	if (uri->ext && (uri->ext->obfuscation_flags & RSPAMD_URL_OBF_HAS_PORT)) {
 		slen += sizeof("65535") - 1;
 	}
 
@@ -1794,7 +1839,7 @@ rspamd_url_regen_from_inet_addr(struct rspamd_url *uri, const void *addr, int af
 	uri->flags |= RSPAMD_URL_FLAG_NUMERIC;
 
 	/* Reconstruct URL */
-	if (uri->flags & RSPAMD_URL_FLAG_HAS_PORT && uri->ext) {
+	if (uri->ext && (uri->ext->obfuscation_flags & RSPAMD_URL_OBF_HAS_PORT)) {
 		p = strbuf + r;
 		start_offset = p + 1;
 		r += rspamd_snprintf(strbuf + r, slen - r, ":%ud",
@@ -1974,6 +2019,7 @@ rspamd_url_maybe_regenerate_from_ip(struct rspamd_url *uri, rspamd_mempool_t *po
 				memcpy(&in4, &n, sizeof(in4));
 				rspamd_url_regen_from_inet_addr(uri, &in4, AF_INET, pool);
 				uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
+				rspamd_url_ensure_ext(uri, pool)->obfuscation_flags |= RSPAMD_URL_OBF_IP_NUMERIC;
 				ret = TRUE;
 			}
 			else if (end - c > (int) sizeof(buf) - 1) {
@@ -1982,6 +2028,7 @@ rspamd_url_maybe_regenerate_from_ip(struct rspamd_url *uri, rspamd_mempool_t *po
 				if (inet_pton(AF_INET6, buf, &in6) == 1) {
 					rspamd_url_regen_from_inet_addr(uri, &in6, AF_INET6, pool);
 					uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
+					rspamd_url_ensure_ext(uri, pool)->obfuscation_flags |= RSPAMD_URL_OBF_IP_NUMERIC;
 					ret = TRUE;
 				}
 			}
@@ -1993,7 +2040,8 @@ rspamd_url_maybe_regenerate_from_ip(struct rspamd_url *uri, rspamd_mempool_t *po
 
 static void
 rspamd_url_shift(struct rspamd_url *uri, gsize nlen,
-				 enum http_parser_url_fields field)
+				 enum http_parser_url_fields field,
+				 rspamd_mempool_t *pool)
 {
 	unsigned int old_shift, shift = 0;
 	int remain;
@@ -2015,7 +2063,7 @@ rspamd_url_shift(struct rspamd_url *uri, gsize nlen,
 		memmove(uri->string + uri->protocollen, uri->string + old_shift,
 				remain);
 		uri->urllen -= shift;
-		uri->flags |= RSPAMD_URL_FLAG_SCHEMAENCODED;
+		rspamd_url_ensure_ext(uri, pool)->obfuscation_flags |= RSPAMD_URL_OBF_SCHEMA_ENCODED;
 		break;
 	case UF_HOST:
 		if (nlen >= uri->hostlen) {
@@ -2033,7 +2081,7 @@ rspamd_url_shift(struct rspamd_url *uri, gsize nlen,
 				rspamd_url_host_unsafe(uri) + old_shift,
 				remain);
 		uri->urllen -= shift;
-		uri->flags |= RSPAMD_URL_FLAG_HOSTENCODED;
+		rspamd_url_ensure_ext(uri, pool)->obfuscation_flags |= RSPAMD_URL_OBF_HOST_ENCODED;
 		break;
 	case UF_PATH:
 		if (nlen >= uri->datalen) {
@@ -2051,7 +2099,7 @@ rspamd_url_shift(struct rspamd_url *uri, gsize nlen,
 				rspamd_url_data_unsafe(uri) + old_shift,
 				remain);
 		uri->urllen -= shift;
-		uri->flags |= RSPAMD_URL_FLAG_PATHENCODED;
+		rspamd_url_ensure_ext(uri, pool)->obfuscation_flags |= RSPAMD_URL_OBF_PATH_ENCODED;
 		break;
 	case UF_QUERY:
 		if (nlen >= uri->querylen) {
@@ -2069,7 +2117,7 @@ rspamd_url_shift(struct rspamd_url *uri, gsize nlen,
 				rspamd_url_query_unsafe(uri) + old_shift,
 				remain);
 		uri->urllen -= shift;
-		uri->flags |= RSPAMD_URL_FLAG_QUERYENCODED;
+		rspamd_url_ensure_ext(uri, pool)->obfuscation_flags |= RSPAMD_URL_OBF_QUERY_ENCODED;
 		break;
 	case UF_FRAGMENT:
 		if (nlen >= uri->fragmentlen) {
@@ -2182,7 +2230,7 @@ is_idna_label_dot(UChar ch)
  * In this case, it should be treated as obfuscation attempt.
  */
 static bool
-rspamd_url_remove_dots(struct rspamd_url *uri)
+rspamd_url_remove_dots(struct rspamd_url *uri, rspamd_mempool_t *pool)
 {
 	const char *hstart = rspamd_url_host_unsafe(uri);
 	char *t;
@@ -2220,7 +2268,7 @@ rspamd_url_remove_dots(struct rspamd_url *uri)
 	}
 
 	if (ret) {
-		rspamd_url_shift(uri, t - hstart, UF_HOST);
+		rspamd_url_shift(uri, t - hstart, UF_HOST, pool);
 	}
 
 	return ret;
@@ -2302,6 +2350,7 @@ rspamd_url_parse(struct rspamd_url *uri,
 	char *p;
 	const char *end;
 	unsigned int complen, ret, flags = 0;
+	unsigned int obf_flags = 0;
 	gsize unquoted_len = 0;
 
 	memset(uri, 0, sizeof(*uri));
@@ -2316,7 +2365,7 @@ rspamd_url_parse(struct rspamd_url *uri,
 	}
 
 	if (len >= G_MAXUINT16 / 2) {
-		flags |= RSPAMD_URL_FLAG_TRUNCATED;
+		obf_flags |= RSPAMD_URL_OBF_TRUNCATED;
 		len = G_MAXUINT16 / 2;
 	}
 
@@ -2327,7 +2376,7 @@ rspamd_url_parse(struct rspamd_url *uri,
 		/* For mailto: urls we also need to add slashes to make it a valid URL */
 		if (g_ascii_strncasecmp(p, "mailto:", sizeof("mailto:") - 1) == 0) {
 			ret = rspamd_mailto_parse(&u, uristring, len, &end, parse_flags,
-									  &flags);
+									  &flags, &obf_flags);
 		}
 		else if (g_ascii_strncasecmp(p, "tel:", sizeof("tel:") - 1) == 0 ||
 				 g_ascii_strncasecmp(p, "callto:", sizeof("callto:") - 1) == 0) {
@@ -2337,11 +2386,11 @@ rspamd_url_parse(struct rspamd_url *uri,
 		}
 		else {
 			ret = rspamd_web_parse(&u, uristring, len, &end, parse_flags,
-								   &flags, lua_state);
+								   &flags, &obf_flags, lua_state);
 		}
 	}
 	else {
-		ret = rspamd_web_parse(&u, uristring, len, &end, parse_flags, &flags, lua_state);
+		ret = rspamd_web_parse(&u, uristring, len, &end, parse_flags, &flags, &obf_flags, lua_state);
 	}
 
 	if (ret != 0) {
@@ -2355,7 +2404,7 @@ rspamd_url_parse(struct rspamd_url *uri,
 	uri->raw = p;
 	uri->rawlen = len;
 
-	if (flags & RSPAMD_URL_FLAG_MISSINGSLASHES) {
+	if (obf_flags & RSPAMD_URL_OBF_MISSING_SLASHES) {
 		len += 2;
 		uri->string = rspamd_mempool_alloc(pool, len + 1);
 		memcpy(uri->string, p, u.field_data[UF_SCHEMA].len);
@@ -2420,11 +2469,9 @@ rspamd_url_parse(struct rspamd_url *uri,
 
 	/* Port is 'special' in case of url_parser as it is not a part of UF_* macro logic */
 	if (u.port != 0) {
-		if (!uri->ext) {
-			uri->ext = rspamd_mempool_alloc0_type(pool, struct rspamd_url_ext);
-		}
-		uri->flags |= RSPAMD_URL_FLAG_HAS_PORT;
-		uri->ext->port = u.port;
+		struct rspamd_url_ext *ext = rspamd_url_ensure_ext(uri, pool);
+		ext->obfuscation_flags |= RSPAMD_URL_OBF_HAS_PORT;
+		ext->port = u.port;
 	}
 
 	if (!uri->hostlen) {
@@ -2435,14 +2482,14 @@ rspamd_url_parse(struct rspamd_url *uri,
 	unquoted_len = rspamd_url_decode(uri->string,
 									 uri->string,
 									 uri->protocollen);
-	rspamd_url_shift(uri, unquoted_len, UF_SCHEMA);
+	rspamd_url_shift(uri, unquoted_len, UF_SCHEMA, pool);
 	unquoted_len = rspamd_url_decode(rspamd_url_host_unsafe(uri),
 									 rspamd_url_host_unsafe(uri), uri->hostlen);
 
 	rspamd_url_normalise_propagate_flags(pool, rspamd_url_host_unsafe(uri),
-										 &unquoted_len, uri->flags);
+										 &unquoted_len, uri, uri->flags);
 
-	rspamd_url_shift(uri, unquoted_len, UF_HOST);
+	rspamd_url_shift(uri, unquoted_len, UF_HOST, pool);
 
 	/*
 	 * Remove extra slashes between host and path.
@@ -2502,8 +2549,9 @@ rspamd_url_parse(struct rspamd_url *uri,
 		}
 	}
 
-	if (rspamd_url_remove_dots(uri)) {
+	if (rspamd_url_remove_dots(uri, pool)) {
 		uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
+		rspamd_url_ensure_ext(uri, pool)->obfuscation_flags |= RSPAMD_URL_OBF_DOT_TRICKS;
 	}
 
 	if (uri->protocol & (PROTOCOL_HTTP | PROTOCOL_HTTPS | PROTOCOL_MAILTO | PROTOCOL_FTP | PROTOCOL_FILE)) {
@@ -2561,7 +2609,7 @@ rspamd_url_parse(struct rspamd_url *uri,
 	}
 
 	/* Final shift of lengths */
-	rspamd_url_shift(uri, norm_utf8_len, UF_HOST);
+	rspamd_url_shift(uri, norm_utf8_len, UF_HOST, pool);
 
 	/* Process data part */
 	if (uri->datalen) {
@@ -2569,13 +2617,13 @@ rspamd_url_parse(struct rspamd_url *uri,
 										 rspamd_url_data_unsafe(uri), uri->datalen);
 
 		rspamd_url_normalise_propagate_flags(pool, rspamd_url_data_unsafe(uri),
-											 &unquoted_len, uri->flags);
+											 &unquoted_len, uri, uri->flags);
 
-		rspamd_url_shift(uri, unquoted_len, UF_PATH);
+		rspamd_url_shift(uri, unquoted_len, UF_PATH, pool);
 		/* We now normalize path */
 		rspamd_normalize_path_inplace(rspamd_url_data_unsafe(uri),
 									  uri->datalen, &unquoted_len);
-		rspamd_url_shift(uri, unquoted_len, UF_PATH);
+		rspamd_url_shift(uri, unquoted_len, UF_PATH, pool);
 	}
 
 	if (uri->querylen) {
@@ -2584,8 +2632,8 @@ rspamd_url_parse(struct rspamd_url *uri,
 										 uri->querylen);
 
 		rspamd_url_normalise_propagate_flags(pool, rspamd_url_query_unsafe(uri),
-											 &unquoted_len, uri->flags);
-		rspamd_url_shift(uri, unquoted_len, UF_QUERY);
+											 &unquoted_len, uri, uri->flags);
+		rspamd_url_shift(uri, unquoted_len, UF_QUERY, pool);
 	}
 
 	if (uri->fragmentlen) {
@@ -2594,13 +2642,13 @@ rspamd_url_parse(struct rspamd_url *uri,
 										 uri->fragmentlen);
 
 		rspamd_url_normalise_propagate_flags(pool, rspamd_url_fragment_unsafe(uri),
-											 &unquoted_len, uri->flags);
-		rspamd_url_shift(uri, unquoted_len, UF_FRAGMENT);
+											 &unquoted_len, uri, uri->flags);
+		rspamd_url_shift(uri, unquoted_len, UF_FRAGMENT, pool);
 	}
 
 	rspamd_str_lc(uri->string, uri->protocollen);
 	unquoted_len = rspamd_str_lc_utf8(rspamd_url_host_unsafe(uri), uri->hostlen);
-	rspamd_url_shift(uri, unquoted_len, UF_HOST);
+	rspamd_url_shift(uri, unquoted_len, UF_HOST, pool);
 
 	if (uri->protocol == PROTOCOL_UNKNOWN) {
 		for (int i = 0; i < G_N_ELEMENTS(rspamd_url_protocols); i++) {
@@ -2686,12 +2734,12 @@ rspamd_url_parse(struct rspamd_url *uri,
 							uri->tldshift = uri->hostshift;
 							uri->tldlen = uri->hostlen;
 						}
-						else if (uri->flags & RSPAMD_URL_FLAG_SCHEMALESS) {
+						else if (uri->ext && (uri->ext->obfuscation_flags & RSPAMD_URL_OBF_SCHEMALESS)) {
 							/* Ignore urls with both no schema and no tld */
 							return URI_ERRNO_TLD_MISSING;
 						}
 
-						uri->flags |= RSPAMD_URL_FLAG_NO_TLD;
+						rspamd_url_ensure_ext(uri, pool)->obfuscation_flags |= RSPAMD_URL_OBF_NO_TLD;
 					}
 				}
 				else {
@@ -2700,7 +2748,7 @@ rspamd_url_parse(struct rspamd_url *uri,
 						return URI_ERRNO_TLD_MISSING;
 					}
 					else {
-						uri->flags |= RSPAMD_URL_FLAG_NO_TLD;
+						rspamd_url_ensure_ext(uri, pool)->obfuscation_flags |= RSPAMD_URL_OBF_NO_TLD;
 					}
 				}
 			}
@@ -2717,6 +2765,7 @@ rspamd_url_parse(struct rspamd_url *uri,
 				if (*pos == '\\') {
 					*pos = '/';
 					uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
+					rspamd_url_ensure_ext(uri, pool)->obfuscation_flags |= RSPAMD_URL_OBF_BACKSLASHES;
 				}
 				pos++;
 			}
@@ -2744,6 +2793,16 @@ rspamd_url_parse(struct rspamd_url *uri,
 			/* Hack, hack, hack */
 			uri->protocol = PROTOCOL_UNKNOWN;
 		}
+	}
+
+	/* Merge early-parser obfuscation flags into ext */
+	if (obf_flags != 0) {
+		struct rspamd_url_ext *ext = rspamd_url_ensure_ext(uri, pool);
+		ext->obfuscation_flags |= obf_flags;
+	}
+	/* Compute obfuscation count */
+	if (uri->ext && uri->ext->obfuscation_flags != 0) {
+		uri->ext->obfuscation_count = __builtin_popcount(uri->ext->obfuscation_flags);
 	}
 
 	return URI_ERRNO_OK;
@@ -3073,8 +3132,9 @@ url_web_end(struct url_callback_data *cb,
 		len = MIN(len, match->newline_pos - pos);
 	}
 
+	unsigned int obf_flags_check = 0;
 	if (rspamd_web_parse(NULL, pos, len, &last,
-						 RSPAMD_URL_PARSE_CHECK, &flags, NULL) != 0) {
+						 RSPAMD_URL_PARSE_CHECK, &flags, &obf_flags_check, NULL) != 0) {
 		return FALSE;
 	}
 
@@ -3149,10 +3209,11 @@ url_email_end(struct url_callback_data *cb,
 		len = MIN(len, match->newline_pos - pos);
 	}
 
+	unsigned int obf_flags_check = 0;
 	if (!match->prefix || match->prefix[0] == '\0') {
 		/* We have mailto:// at the beginning */
 		if (rspamd_mailto_parse(&u, pos, len, &last,
-								RSPAMD_URL_PARSE_CHECK, &flags) != 0) {
+								RSPAMD_URL_PARSE_CHECK, &flags, &obf_flags_check) != 0) {
 			return FALSE;
 		}
 
@@ -3561,7 +3622,7 @@ rspamd_url_trie_generic_callback_common(struct rspamd_multipattern *mp,
 
 		if (rc == URI_ERRNO_OK && url->hostlen > 0) {
 			if (cb->prefix_added) {
-				url->flags |= RSPAMD_URL_FLAG_SCHEMALESS;
+				rspamd_url_ensure_ext(url, pool)->obfuscation_flags |= RSPAMD_URL_OBF_SCHEMALESS;
 				cb->prefix_added = FALSE;
 			}
 
@@ -3932,7 +3993,7 @@ rspamd_url_task_subject_callback(struct rspamd_url *url, gsize start_offset,
 				query_url->flags |= (url->flags & RSPAMD_URL_FLAG_PROPAGATE_MASK);
 
 				if (prefix_added) {
-					query_url->flags |= RSPAMD_URL_FLAG_SCHEMALESS;
+					rspamd_url_ensure_ext(query_url, task->task_pool)->obfuscation_flags |= RSPAMD_URL_OBF_SCHEMALESS;
 				}
 
 				if (query_url->protocol == PROTOCOL_MAILTO) {
@@ -4374,7 +4435,7 @@ bool rspamd_url_set_add_or_increase(khash_t(rspamd_url_hash) * set,
 	if (k != kh_end(set)) {
 		/* Existing url */
 		struct rspamd_url *ex = kh_key(set, k);
-#define SUSPICIOUS_URL_FLAGS (RSPAMD_URL_FLAG_PHISHED | RSPAMD_URL_FLAG_OBSCURED | RSPAMD_URL_FLAG_ZW_SPACES)
+#define SUSPICIOUS_URL_FLAGS (RSPAMD_URL_FLAG_PHISHED | RSPAMD_URL_FLAG_OBSCURED)
 		if (enforce_replace) {
 			kh_key(set, k) = u;
 			u->count++;
@@ -4563,4 +4624,31 @@ int rspamd_url_cmp_qsort(const void *_u1, const void *_u2)
 							*u2 = *(struct rspamd_url **) _u2;
 
 	return rspamd_url_cmp(u1, u2);
+}
+
+const char *
+rspamd_url_obfuscation_flag_to_string(int flag)
+{
+	for (int i = 0; i < G_N_ELEMENTS(url_obfuscation_flag_names); i++) {
+		if (url_obfuscation_flag_names[i].flag & flag) {
+			return url_obfuscation_flag_names[i].name;
+		}
+	}
+
+	return NULL;
+}
+
+bool rspamd_url_obfuscation_flag_from_string(const char *str, int *flag)
+{
+	int h = rspamd_cryptobox_fast_hash_specific(RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT,
+												str, strlen(str), 0);
+
+	for (int i = 0; i < G_N_ELEMENTS(url_obfuscation_flag_names); i++) {
+		if (url_obfuscation_flag_names[i].hash == h) {
+			*flag |= url_obfuscation_flag_names[i].flag;
+			return true;
+		}
+	}
+
+	return false;
 }

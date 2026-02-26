@@ -983,11 +983,14 @@ rspamd_protocol_extended_url(struct rspamd_task *task,
 
 	ucl_object_insert_key(obj, flags, "flags", 0, false);
 
-	if (url->ext && url->ext->linked_url) {
-		encoded = rspamd_url_encode(url->ext->linked_url, &enclen, task->task_pool);
-		elt = rspamd_protocol_extended_url(task, url->ext->linked_url, encoded,
-										   enclen);
-		ucl_object_insert_key(obj, elt, "linked_url", 0, false);
+	if (url->ext) {
+		struct rspamd_url *linked = rspamd_url_get_linked(url);
+		if (linked) {
+			encoded = rspamd_url_encode(linked, &enclen, task->task_pool);
+			elt = rspamd_protocol_extended_url(task, linked, encoded,
+											   enclen);
+			ucl_object_insert_key(obj, elt, "linked_url", 0, false);
+		}
 	}
 
 	return obj;
