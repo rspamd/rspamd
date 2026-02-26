@@ -565,21 +565,41 @@ exports.add_text_footer = function(task, html_footer, text_footer)
 
       if boundary then
         if cur_boundary and boundary ~= cur_boundary then
-          -- Need to close boundary
-          out[#out + 1] = string.format('--%s--%s',
-              boundaries[#boundaries].boundary, newline_s)
-          -- Need to close previous boundary, if ct_subtype is related
-          if #boundaries > 1 and boundaries[#boundaries].ct_type == "multipart" and boundaries[#boundaries].ct_subtype == "related" then
+          
+          local has_more_parts = false
+          for j = i + 1, #parts do
+            if not parts[j]:is_multipart() and not parts[j]:is_message() then
+              has_more_parts = true
+              break
+            end
+          end
+          
+          if #boundaries > 1 or (#boundaries == 1 and not has_more_parts) then
             out[#out + 1] = string.format('--%s--%s',
-                boundaries[#boundaries - 1].boundary, newline_s)
+                boundaries[#boundaries].boundary, newline_s)
+            
+            if #boundaries > 1 and boundaries[#boundaries].ct_type == "multipart" and boundaries[#boundaries].ct_subtype == "related" then
+              out[#out + 1] = string.format('--%s--%s',
+                  boundaries[#boundaries - 1].boundary, newline_s)
+              table.remove(boundaries)
+            end
             table.remove(boundaries)
           end
-          table.remove(boundaries)
+          
           cur_boundary = boundary
         end
         out[#out + 1] = string.format('--%s',
             boundary)
       end
+      if append_footer and not skip_footer then
+        do_append_footer(task, part, append_footer,
+            parent and parent:is_multipart(), out, state)
+      else
+        out[#out + 1] = { part:get_raw_headers(), true }
+        out[#out + 1] = { part:get_raw_content(), false }
+      end
+    end
+  end
 
       if append_footer and not skip_footer then
         do_append_footer(task, part, append_footer,
