@@ -6,7 +6,8 @@ Documentation=https://rspamd.com/doc/
 [Service]
 LimitNOFILE=1048576
 NonBlocking=true
-ExecStart=/usr/bin/rspamd -c /etc/rspamd/rspamd.conf -f
+PIDFile=/run/rspamd/rspamd.pid
+ExecStart=/usr/bin/rspamd -c /etc/rspamd/rspamd.conf
 ExecReload=/bin/kill -HUP $MAINPID
 User=_rspamd
 RuntimeDirectory=rspamd
