@@ -855,7 +855,10 @@ local check_to_cc_id = rspamd_config:register_symbol {
       [5] = 'FIVE',
       [7] = 'SEVEN',
       [12] = 'TWELVE',
-      [50] = 'GT_50'
+      [50] = 'GT_50',
+      [100] = 'GT_100',
+      [200] = 'GT_200',
+      [500] = 'GT_500'
     }
     local def = 'ZERO'
     if (not to) then
@@ -863,7 +866,7 @@ local check_to_cc_id = rspamd_config:register_symbol {
     end
     -- Add symbol for recipient count
     local nrcpt = #to
-    for _, k in ipairs({ 1, 2, 3, 5, 7, 12, 50 }) do
+    for _, k in ipairs({ 1, 2, 3, 5, 7, 12, 50, 100, 200, 500 })
       if nrcpt >= k then
         def = cnts[k]
       end
@@ -945,7 +948,7 @@ rspamd_config:register_symbol {
   score = 0.0,
   parent = check_to_cc_id,
   type = 'virtual',
-  description = '3-5 recipients',
+  description = '3 or 4 recipients',
   group = 'headers',
 }
 rspamd_config:register_symbol {
@@ -953,7 +956,7 @@ rspamd_config:register_symbol {
   score = 0.0,
   parent = check_to_cc_id,
   type = 'virtual',
-  description = '5-7 recipients',
+  description = '5 or 6 recipients',
   group = 'headers',
 }
 rspamd_config:register_symbol {
@@ -969,7 +972,7 @@ rspamd_config:register_symbol {
   score = 0.0,
   parent = check_to_cc_id,
   type = 'virtual',
-  description = '12-50 recipients',
+  description = '12-49 recipients',
   group = 'headers',
 }
 rspamd_config:register_symbol {
@@ -977,7 +980,31 @@ rspamd_config:register_symbol {
   score = 0.0,
   parent = check_to_cc_id,
   type = 'virtual',
-  description = '50+ recipients',
+  description = '50-99 recipients',
+  group = 'headers',
+}
+rspamd_config:register_symbol {
+  name = 'RCPT_COUNT_GT_100',
+  score = 0.0,
+  parent = check_to_cc_id,
+  type = 'virtual',
+  description = '100-199 recipients',
+  group = 'headers',
+}
+rspamd_config:register_symbol {
+  name = 'RCPT_COUNT_GT_200',
+  score = 0.0,
+  parent = check_to_cc_id,
+  type = 'virtual',
+  description = '200-499 recipients',
+  group = 'headers',
+}
+rspamd_config:register_symbol {
+  name = 'RCPT_COUNT_GT_500',
+  score = 0.0,
+  parent = check_to_cc_id,
+  type = 'virtual',
+  description = '500+ recipients',
   group = 'headers',
 }
 
