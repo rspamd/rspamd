@@ -64,6 +64,9 @@ dump:option "-b --batch-size"
     :argname("<elts>")
     :convert(tonumber)
     :default(1000)
+dump:option "-S --classifier"
+    :description "Classifier name (required when multiple classifiers configured)"
+    :argname("<name>")
 
 
 -- Restore
@@ -102,6 +105,9 @@ migrate:option "-b --batch-size"
        :argname("<elts>")
        :convert(tonumber)
        :default(1000)
+migrate:option "-S --classifier"
+       :description "Classifier name (required when multiple classifiers configured)"
+       :argname("<name>")
 
 local function load_config(opts)
   local _r, err = rspamd_config:load_ucl(opts['config'])
@@ -217,7 +223,18 @@ local function check_redis_classifier(cls, cfg)
       end
     end
 
+    -- Derive classifier name: explicit name > first symbol
+    local cls_name = cls.name
+    if not cls_name then
+      if symbols[1] then
+        cls_name = symbols[1].symbol
+      else
+        cls_name = 'unknown'
+      end
+    end
+
     table.insert(classifiers, {
+      name = cls_name,
       symbol_spam = symbol_spam,
       symbol_ham = symbol_ham,
       symbols = symbols,
@@ -430,9 +447,45 @@ local function dump_pattern(conn, pattern, opts, out, key, class_labels)
   until cursor == 0
 end
 
-local function dump_handler(opts)
-  local patterns_seen = {}
+local function select_classifier(opts)
+  if #classifiers == 0 then
+    rspamd_logger.errx("no redis classifiers found in config")
+    os.exit(1)
+  end
+
+  if #classifiers == 1 then
+    return { classifiers[1] }
+  end
+
+  -- Multiple classifiers: require --classifier
+  if not opts.classifier then
+    local names = {}
+    for _, cls in ipairs(classifiers) do
+      local syms = {}
+      for _, s in ipairs(cls.symbols) do
+        syms[#syms + 1] = s.symbol
+      end
+      names[#names + 1] = string.format("  %s (symbols: %s)", cls.name, table.concat(syms, ', '))
+    end
+    rspamd_logger.errx("multiple classifiers found, use --classifier to select one:\n%s",
+        table.concat(names, '\n'))
+    os.exit(1)
+  end
+
   for _, cls in ipairs(classifiers) do
+    if cls.name == opts.classifier then
+      return { cls }
+    end
+  end
+
+  rspamd_logger.errx("classifier '%s' not found", opts.classifier)
+  os.exit(1)
+end
+
+local function dump_handler(opts)
+  local selected = select_classifier(opts)
+  local patterns_seen = {}
+  for _, cls in ipairs(selected) do
     -- Collect class labels for CDB packing
     local class_labels = {}
     for _, s in ipairs(cls.symbols) do
@@ -486,7 +539,7 @@ local function dump_handler(opts)
             ucl.to_format(keys, 'json-compact'))
       end
       for _, k in ipairs(keys) do
-        local pat = string.format('%s*_*', k)
+        local pat = string.format('%s_*', k)
         if not patterns_seen[pat] then
           conn:add_cmd('HGETALL', { k })
           local _ret, additional_keys = conn:exec()
@@ -676,6 +729,7 @@ return #keys
 ]]
 
 local function migrate_handler(opts)
+  local selected = select_classifier(opts)
   local stats = {
     checked = 0,
     correct = 0,
@@ -684,7 +738,7 @@ local function migrate_handler(opts)
     errors = 0,
   }
 
-  for _, cls in ipairs(classifiers) do
+  for _, cls in ipairs(selected) do
     local write_servers = cls.redis_params.write_servers
     if not write_servers then
       rspamd_logger.errx("no write servers configured, cannot migrate")
