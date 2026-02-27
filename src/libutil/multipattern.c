@@ -1223,6 +1223,11 @@ void rspamd_multipattern_get_hash(struct rspamd_multipattern *mp,
 		g_assert(hs_populate_platform(&plt) == HS_SUCCESS);
 		rspamd_cryptobox_hash_update(&hash_state, (void *) &plt, sizeof(plt));
 
+		/* Include serialization magic so version bumps invalidate cache */
+		gsize magic_len;
+		const unsigned char *magic = rspamd_hyperscan_get_magic(&magic_len);
+		rspamd_cryptobox_hash_update(&hash_state, magic, magic_len);
+
 		rspamd_cryptobox_hash_final(&hash_state, hash_out);
 		return;
 	}

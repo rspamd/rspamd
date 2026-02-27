@@ -679,6 +679,10 @@ void rspamd_re_cache_init(struct rspamd_re_cache *cache, struct rspamd_config *c
 			rspamd_cryptobox_hash_update(re_class->st,
 										 (gpointer) &re_class->num_local_re,
 										 sizeof(re_class->num_local_re));
+			/* Include serialization magic so version bumps invalidate cache */
+			rspamd_cryptobox_hash_update(re_class->st,
+										 rspamd_hs_magic,
+										 RSPAMD_HS_MAGIC_LEN);
 			rspamd_cryptobox_hash_final(re_class->st, hash_out);
 			rspamd_snprintf(re_class->hash, sizeof(re_class->hash), "%*xs",
 							(int) rspamd_cryptobox_HASHBYTES, hash_out);

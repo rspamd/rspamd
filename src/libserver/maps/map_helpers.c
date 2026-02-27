@@ -1411,6 +1411,12 @@ void rspamd_regexp_list_fin(struct map_cb_data *data, void **target)
 	else {
 		if (data->cur_data) {
 			re_map = data->cur_data;
+#ifdef WITH_HYPERSCAN
+			/* Include serialization magic so version bumps invalidate cache */
+			gsize magic_len;
+			const unsigned char *magic = rspamd_hyperscan_get_magic(&magic_len);
+			rspamd_cryptobox_hash_update(&re_map->hst, magic, magic_len);
+#endif
 			rspamd_cryptobox_hash_final(&re_map->hst, re_map->re_digest);
 			memcpy(&data->map->digest, re_map->re_digest, sizeof(data->map->digest));
 			rspamd_re_map_finalize(re_map);
