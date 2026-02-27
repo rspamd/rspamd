@@ -106,6 +106,7 @@ struct rspamd_re_class {
 	hs_scratch_t *hs_scratch;
 	int *hs_ids;
 	unsigned int nhs;
+	gboolean needs_recompile; /* set when stale blob detected */
 #endif
 };
 
@@ -2356,43 +2357,55 @@ rspamd_re_cache_exists_cb(gboolean success, const unsigned char *data, gsize len
 		struct rspamd_re_cache *cache = cbdata->cache;
 		int n = g_hash_table_size(re_class->re);
 
-		if (!lua_backend) {
-			rspamd_snprintf(path, sizeof(path), "%s%c%s.hs", cbdata->cache_dir,
-							G_DIR_SEPARATOR, re_class->hash);
-		}
-
-		if (re_class->type_len > 0) {
-			if (!cbdata->silent) {
-				msg_info_re_cache(
-					"skip already valid class %s(%*s) to cache %6s (%s), %d regexps%s%s%s",
-					rspamd_re_cache_type_to_string(re_class->type),
-					(int) re_class->type_len - 1,
-					re_class->type_data,
-					re_class->hash,
-					lua_backend ? "Lua backend" : path,
-					n,
-					cache->scope ? " for scope '" : "",
-					cache->scope ? cache->scope : "",
-					cache->scope ? "'" : "");
-			}
+		if (re_class->needs_recompile) {
+			/* Stale blob was detected during load, force recompilation */
+			msg_info_re_cache(
+				"forcing recompilation of class %s (%6s), %d regexps: "
+				"stale blob detected during previous load",
+				rspamd_re_cache_type_to_string(re_class->type),
+				re_class->hash, n);
+			re_class->needs_recompile = FALSE;
+			cbdata->state = RSPAMD_RE_CACHE_COMPILE_STATE_COMPILING;
 		}
 		else {
-			if (!cbdata->silent) {
-				msg_info_re_cache(
-					"skip already valid class %s to cache %6s (%s), %d regexps%s%s%s",
-					rspamd_re_cache_type_to_string(re_class->type),
-					re_class->hash,
-					lua_backend ? "Lua backend" : path,
-					n,
-					cache->scope ? " for scope '" : "",
-					cache->scope ? cache->scope : "",
-					cache->scope ? "'" : "");
+			if (!lua_backend) {
+				rspamd_snprintf(path, sizeof(path), "%s%c%s.hs", cbdata->cache_dir,
+								G_DIR_SEPARATOR, re_class->hash);
 			}
-		}
 
-		/* Skip compilation */
-		cbdata->state = RSPAMD_RE_CACHE_COMPILE_STATE_INIT;
-		cbdata->current_class = NULL;
+			if (re_class->type_len > 0) {
+				if (!cbdata->silent) {
+					msg_info_re_cache(
+						"skip already valid class %s(%*s) to cache %6s (%s), %d regexps%s%s%s",
+						rspamd_re_cache_type_to_string(re_class->type),
+						(int) re_class->type_len - 1,
+						re_class->type_data,
+						re_class->hash,
+						lua_backend ? "Lua backend" : path,
+						n,
+						cache->scope ? " for scope '" : "",
+						cache->scope ? cache->scope : "",
+						cache->scope ? "'" : "");
+				}
+			}
+			else {
+				if (!cbdata->silent) {
+					msg_info_re_cache(
+						"skip already valid class %s to cache %6s (%s), %d regexps%s%s%s",
+						rspamd_re_cache_type_to_string(re_class->type),
+						re_class->hash,
+						lua_backend ? "Lua backend" : path,
+						n,
+						cache->scope ? " for scope '" : "",
+						cache->scope ? cache->scope : "",
+						cache->scope ? "'" : "");
+				}
+			}
+
+			/* Skip compilation */
+			cbdata->state = RSPAMD_RE_CACHE_COMPILE_STATE_INIT;
+			cbdata->current_class = NULL;
+		}
 	}
 	else {
 		/* Not exists, proceed */
@@ -3762,6 +3775,7 @@ rspamd_re_cache_hs_load_cb(gboolean success, const unsigned char *data, gsize le
 			sctx->total_regexps += it->re_class->nhs;
 		}
 		else {
+			it->re_class->needs_recompile = TRUE;
 			sctx->all_loaded = FALSE;
 		}
 	}
