@@ -937,7 +937,7 @@ gboolean rspamd_hyperscan_create_shared_unser(const char *serialized_data,
 
 	return TRUE;
 }
-static const unsigned char rspamd_hs_magic[] = {'r', 's', 'h', 's', 'r', 'e', '1', '1'};
+static const unsigned char rspamd_hs_magic[] = {'r', 's', 'h', 's', 'r', 'e', '1', '2'};
 #define RSPAMD_HS_MAGIC_LEN (sizeof(rspamd_hs_magic))
 
 gboolean rspamd_hyperscan_serialize_with_header(hs_database_t *db,

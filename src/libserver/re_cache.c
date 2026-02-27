@@ -81,8 +81,8 @@ INIT_LOG_MODULE(re_cache)
 
 #ifdef WITH_HYPERSCAN
 #define RSPAMD_HS_MAGIC_LEN (sizeof(rspamd_hs_magic))
-static const unsigned char rspamd_hs_magic[] = {'r', 's', 'h', 's', 'r', 'e', '1', '1'},
-						   rspamd_hs_magic_vector[] = {'r', 's', 'h', 's', 'r', 'v', '1', '1'};
+static const unsigned char rspamd_hs_magic[] = {'r', 's', 'h', 's', 'r', 'e', '1', '2'},
+						   rspamd_hs_magic_vector[] = {'r', 's', 'h', 's', 'r', 'v', '1', '2'};
 #endif
 
 
@@ -95,6 +95,9 @@ struct rspamd_re_class {
 	GHashTable *re;
 	rspamd_cryptobox_hash_state_t *st;
 	struct rspamd_re_cache *cache; /* Back-reference to owning cache */
+	unsigned int ordinal;          /* dense sequential index among all classes */
+	unsigned int base_offset;      /* start position in global results[] array */
+	unsigned int num_local_re;     /* count of regexps in THIS class */
 
 	char hash[rspamd_cryptobox_HASHBYTES + 1];
 
@@ -489,12 +492,33 @@ void rspamd_re_cache_replace_scoped(struct rspamd_re_cache **cache_head, const c
 }
 
 static int
-rspamd_re_cache_sort_func(gconstpointer a, gconstpointer b)
+rspamd_re_cache_class_sort_func(gconstpointer a, gconstpointer b)
 {
-	struct rspamd_re_cache_elt *const *re1 = a, *const *re2 = b;
+	const struct rspamd_re_class *c1 = *(const struct rspamd_re_class *const *) a;
+	const struct rspamd_re_class *c2 = *(const struct rspamd_re_class *const *) b;
 
-	return rspamd_regexp_cmp(rspamd_regexp_get_id((*re1)->re),
-							 rspamd_regexp_get_id((*re2)->re));
+	if (c1->id < c2->id) {
+		return -1;
+	}
+	if (c1->id > c2->id) {
+		return 1;
+	}
+
+	return 0;
+}
+
+struct re_sort_entry {
+	rspamd_regexp_t *re;
+	struct rspamd_re_cache_elt *elt;
+};
+
+static int
+rspamd_re_sort_entry_cmp(gconstpointer a, gconstpointer b)
+{
+	const struct re_sort_entry *e1 = a, *e2 = b;
+
+	return rspamd_regexp_cmp(rspamd_regexp_get_id(e1->re),
+							 rspamd_regexp_get_id(e2->re));
 }
 
 void rspamd_re_cache_init(struct rspamd_re_cache *cache, struct rspamd_config *cfg)
@@ -511,77 +535,150 @@ void rspamd_re_cache_init(struct rspamd_re_cache *cache, struct rspamd_config *c
 	g_assert(cache != NULL);
 
 	rspamd_cryptobox_hash_init(&st_global, NULL, 0);
-	/* Resort all regexps */
-	g_ptr_array_sort(cache->re, rspamd_re_cache_sort_func);
 
-	for (i = 0; i < cache->re->len; i++) {
-		elt = g_ptr_array_index(cache->re, i);
-		re = elt->re;
-		re_class = rspamd_regexp_get_class(re);
-		g_assert(re_class != NULL);
-		rspamd_regexp_set_cache_id(re, i);
+	/*
+	 * Phase 1: Collect all classes into a sortable array and sort by class_id.
+	 * This gives a deterministic ordering independent of hash table iteration.
+	 */
+	unsigned int nclasses = g_hash_table_size(cache->re_classes);
+	GPtrArray *classes = g_ptr_array_sized_new(nclasses);
 
-		if (re_class->st == NULL) {
-			(void) !posix_memalign((void **) &re_class->st, RSPAMD_ALIGNOF(rspamd_cryptobox_hash_state_t),
-								   sizeof(*re_class->st));
-			g_assert(re_class->st != NULL);
-			rspamd_cryptobox_hash_init(re_class->st, NULL, 0);
+	g_hash_table_iter_init(&it, cache->re_classes);
+	while (g_hash_table_iter_next(&it, &k, &v)) {
+		g_ptr_array_add(classes, v);
+	}
+	g_ptr_array_sort(classes, rspamd_re_cache_class_sort_func);
+
+	/*
+	 * Phase 2: For each class (in sorted order), collect its regexps,
+	 * sort them by content hash, and assign deterministic global IDs.
+	 * IDs are grouped: class0 gets [0..M0-1], class1 gets [M0..M0+M1-1], etc.
+	 */
+	unsigned int total_re = cache->re->len;
+	unsigned int global_offset = 0;
+
+	/*
+	 * Build the new ordering into a temporary C array. We cannot use
+	 * g_ptr_array_free(cache->re, TRUE) because the GPtrArray has a
+	 * GDestroyNotify that would free the elements we still need.
+	 */
+	struct rspamd_re_cache_elt **new_order = g_new(struct rspamd_re_cache_elt *, total_re);
+
+	for (unsigned int ci = 0; ci < nclasses; ci++) {
+		re_class = g_ptr_array_index(classes, ci);
+		re_class->ordinal = ci;
+		re_class->base_offset = global_offset;
+
+		/* Collect regexps from this class's hash table */
+		unsigned int class_size = g_hash_table_size(re_class->re);
+		re_class->num_local_re = class_size;
+
+		GArray *entries = g_array_sized_new(FALSE, FALSE, sizeof(struct re_sort_entry), class_size);
+		GHashTableIter cit;
+		gpointer ck, cv;
+
+		g_hash_table_iter_init(&cit, re_class->re);
+		while (g_hash_table_iter_next(&cit, &ck, &cv)) {
+			re = cv;
+			uint64_t old_id = rspamd_regexp_get_cache_id(re);
+			struct re_sort_entry entry;
+			entry.re = re;
+
+			if (old_id < total_re) {
+				entry.elt = g_ptr_array_index(cache->re, old_id);
+			}
+			else {
+				entry.elt = NULL;
+			}
+
+			g_array_append_val(entries, entry);
 		}
 
-		/* Update hashes */
-		/* Id of re class */
-		rspamd_cryptobox_hash_update(re_class->st, (gpointer) &re_class->id,
-									 sizeof(re_class->id));
-		rspamd_cryptobox_hash_update(&st_global, (gpointer) &re_class->id,
-									 sizeof(re_class->id));
-		/* Id of re expression */
-		rspamd_cryptobox_hash_update(re_class->st, rspamd_regexp_get_id(re),
-									 rspamd_cryptobox_HASHBYTES);
-		rspamd_cryptobox_hash_update(&st_global, rspamd_regexp_get_id(re),
-									 rspamd_cryptobox_HASHBYTES);
-		/* PCRE flags */
-		fl = rspamd_regexp_get_pcre_flags(re);
-		rspamd_cryptobox_hash_update(re_class->st, (const unsigned char *) &fl,
-									 sizeof(fl));
-		rspamd_cryptobox_hash_update(&st_global, (const unsigned char *) &fl,
-									 sizeof(fl));
-		/* Rspamd flags */
-		fl = rspamd_regexp_get_flags(re);
-		rspamd_cryptobox_hash_update(re_class->st, (const unsigned char *) &fl,
-									 sizeof(fl));
-		rspamd_cryptobox_hash_update(&st_global, (const unsigned char *) &fl,
-									 sizeof(fl));
-		/* Limit of hits */
-		fl = rspamd_regexp_get_maxhits(re);
-		rspamd_cryptobox_hash_update(re_class->st, (const unsigned char *) &fl,
-									 sizeof(fl));
-		rspamd_cryptobox_hash_update(&st_global, (const unsigned char *) &fl,
-									 sizeof(fl));
-		/* Global index - only in global hash, not per-class (to avoid
-		 * class hash instability when other classes change) */
-		rspamd_cryptobox_hash_update(&st_global, (const unsigned char *) &i,
-									 sizeof(i));
+		/* Sort regexps within this class by content hash */
+		g_array_sort(entries, rspamd_re_sort_entry_cmp);
+
+		/* Initialize class hash state */
+		(void) !posix_memalign((void **) &re_class->st, RSPAMD_ALIGNOF(rspamd_cryptobox_hash_state_t),
+							   sizeof(*re_class->st));
+		g_assert(re_class->st != NULL);
+		rspamd_cryptobox_hash_init(re_class->st, NULL, 0);
+
+		/* Assign global IDs and store in new_order */
+		for (unsigned int j = 0; j < class_size; j++) {
+			struct re_sort_entry *entry = &g_array_index(entries, struct re_sort_entry, j);
+			unsigned int global_id = global_offset + j;
+
+			re = entry->re;
+			elt = entry->elt;
+			g_assert(elt != NULL);
+
+			rspamd_regexp_set_cache_id(re, global_id);
+			g_assert(global_id < total_re);
+			new_order[global_id] = elt;
+
+			/* Update hashes */
+			/* Id of re class */
+			rspamd_cryptobox_hash_update(re_class->st, (gpointer) &re_class->id,
+										 sizeof(re_class->id));
+			rspamd_cryptobox_hash_update(&st_global, (gpointer) &re_class->id,
+										 sizeof(re_class->id));
+			/* Id of re expression */
+			rspamd_cryptobox_hash_update(re_class->st, rspamd_regexp_get_id(re),
+										 rspamd_cryptobox_HASHBYTES);
+			rspamd_cryptobox_hash_update(&st_global, rspamd_regexp_get_id(re),
+										 rspamd_cryptobox_HASHBYTES);
+			/* PCRE flags */
+			fl = rspamd_regexp_get_pcre_flags(re);
+			rspamd_cryptobox_hash_update(re_class->st, (const unsigned char *) &fl,
+										 sizeof(fl));
+			rspamd_cryptobox_hash_update(&st_global, (const unsigned char *) &fl,
+										 sizeof(fl));
+			/* Rspamd flags */
+			fl = rspamd_regexp_get_flags(re);
+			rspamd_cryptobox_hash_update(re_class->st, (const unsigned char *) &fl,
+										 sizeof(fl));
+			rspamd_cryptobox_hash_update(&st_global, (const unsigned char *) &fl,
+										 sizeof(fl));
+			/* Limit of hits */
+			fl = rspamd_regexp_get_maxhits(re);
+			rspamd_cryptobox_hash_update(re_class->st, (const unsigned char *) &fl,
+										 sizeof(fl));
+			rspamd_cryptobox_hash_update(&st_global, (const unsigned char *) &fl,
+										 sizeof(fl));
+			/* Global index - only in global hash, not per-class */
+			rspamd_cryptobox_hash_update(&st_global, (const unsigned char *) &global_id,
+										 sizeof(global_id));
+		}
+
+		g_array_free(entries, TRUE);
+		global_offset += class_size;
 	}
+
+	/* Reorder cache->re in-place using the new ordering */
+	g_assert(global_offset == total_re);
+	for (i = 0; i < total_re; i++) {
+		cache->re->pdata[i] = new_order[i];
+	}
+	g_free(new_order);
+	cache->nre = total_re;
 
 	rspamd_cryptobox_hash_final(&st_global, hash_out);
 	rspamd_snprintf(cache->hash, sizeof(cache->hash), "%*xs",
 					(int) rspamd_cryptobox_HASHBYTES, hash_out);
 
-	/* Now finalize all classes */
-	g_hash_table_iter_init(&it, cache->re_classes);
-
-	while (g_hash_table_iter_next(&it, &k, &v)) {
-		re_class = v;
+	/* Finalize all class hashes */
+	for (unsigned int ci = 0; ci < nclasses; ci++) {
+		re_class = g_ptr_array_index(classes, ci);
 
 		if (re_class->st) {
 			/*
-			 * We finally update all classes with the number of expressions
-			 * in the cache to ensure that if even a single re has been changed
-			 * we won't be broken due to id mismatch
+			 * Include class-local regexp count in the hash so that
+			 * adding/removing a regexp in THIS class triggers recompilation,
+			 * but changes in OTHER classes do not.
 			 */
 			rspamd_cryptobox_hash_update(re_class->st,
-										 (gpointer) &cache->re->len,
-										 sizeof(cache->re->len));
+										 (gpointer) &re_class->num_local_re,
+										 sizeof(re_class->num_local_re));
 			rspamd_cryptobox_hash_final(re_class->st, hash_out);
 			rspamd_snprintf(re_class->hash, sizeof(re_class->hash), "%*xs",
 							(int) rspamd_cryptobox_HASHBYTES, hash_out);
@@ -589,6 +686,8 @@ void rspamd_re_cache_init(struct rspamd_re_cache *cache, struct rspamd_config *c
 			re_class->st = NULL;
 		}
 	}
+
+	g_ptr_array_free(classes, TRUE);
 
 	cache->L = cfg->lua_state;
 
@@ -865,6 +964,7 @@ struct rspamd_re_hyperscan_cbdata {
 	unsigned int count;
 	rspamd_regexp_t *re;
 	struct rspamd_task *task;
+	struct rspamd_re_class *re_class;
 };
 
 static int
@@ -882,25 +982,29 @@ rspamd_re_cache_hyperscan_cb(unsigned int id,
 
 	rt = cbdata->rt;
 	task = cbdata->task;
-	cache_elt = g_ptr_array_index(rt->cache->re, id);
+
+	/* Translate intra-class id to global id */
+	unsigned int global_id = cbdata->re_class->base_offset + id;
+	cache_elt = g_ptr_array_index(rt->cache->re, global_id);
 	maxhits = rspamd_regexp_get_maxhits(cache_elt->re);
 
 	if (cache_elt->match_type == RSPAMD_RE_CACHE_HYPERSCAN) {
 		if (rspamd_re_cache_check_lua_condition(task, cache_elt->re,
 												cbdata->ins[0], cbdata->lens[0], from, to, cache_elt->lua_cbref)) {
 			ret = 1;
-			setbit(rt->checked, id);
+			setbit(rt->checked, global_id);
 
-			if (maxhits == 0 || rt->results[id] < maxhits) {
-				rt->results[id] += ret;
+			if (maxhits == 0 || rt->results[global_id] < maxhits) {
+				rt->results[global_id] += ret;
 				rt->stat.regexp_matched++;
 			}
-			msg_debug_re_task("found regexp /%s/ using hyperscan only, total hits: %d",
-							  rspamd_regexp_get_pattern(cache_elt->re), rt->results[id]);
+			msg_debug_re_task("found regexp /%s/ using hyperscan, class %ud:%ud, total hits: %d",
+							  rspamd_regexp_get_pattern(cache_elt->re),
+							  cbdata->re_class->ordinal, id, rt->results[global_id]);
 		}
 	}
 	else {
-		if (!isset(rt->checked, id)) {
+		if (!isset(rt->checked, global_id)) {
 			processed = 0;
 
 			for (i = 0; i < cbdata->count; i++) {
@@ -911,7 +1015,7 @@ rspamd_re_cache_hyperscan_cb(unsigned int id,
 											 cbdata->lens[i],
 											 FALSE,
 											 cache_elt->lua_cbref);
-				setbit(rt->checked, id);
+				setbit(rt->checked, global_id);
 
 				processed += cbdata->lens[i];
 
@@ -1006,6 +1110,7 @@ rspamd_re_cache_process_regexp_data(struct rspamd_re_runtime *rt,
 			cbdata.lens = &lens[i];
 			cbdata.count = 1;
 			cbdata.task = task;
+			cbdata.re_class = re_class;
 
 			if ((hs_scan(rspamd_hyperscan_get_database(re_class->hs_db),
 						 in[i], lens[i], 0,
@@ -2528,7 +2633,7 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 			 */
 			if (rspamd_re_cache_is_finite(cache, re, hs_flags[i], cbdata->max_time)) {
 				hs_flags[i] |= HS_FLAG_PREFILTER;
-				hs_ids[i] = rspamd_regexp_get_cache_id(re);
+				hs_ids[i] = rspamd_regexp_get_cache_id(re) - re_class->base_offset;
 				hs_pats[i] = pat;
 				i++;
 			}
@@ -2537,7 +2642,7 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 			}
 		}
 		else {
-			hs_ids[i] = rspamd_regexp_get_cache_id(re);
+			hs_ids[i] = rspamd_regexp_get_cache_id(re) - re_class->base_offset;
 			hs_pats[i] = pat;
 			i++;
 			hs_free_database(test_db);
@@ -3554,30 +3659,17 @@ rspamd_re_cache_apply_hyperscan_blob(struct rspamd_re_cache *cache,
 		return FALSE;
 	}
 
-	/* Store ids */
+	/*
+	 * Store translated global IDs: blob contains intra-class IDs (0..M-1),
+	 * translate to global IDs using base_offset.
+	 */
 	re_class->hs_ids = g_malloc(sizeof(int) * n);
 	for (unsigned int i = 0; i < n; i++) {
-		re_class->hs_ids[i] = (int) ids[i];
-	}
-	re_class->nhs = (int) n;
-
-	/*
-	 * First validate all IDs point to regexps in this re_class.
-	 * We must do validation BEFORE setting any match_types, otherwise if
-	 * validation fails mid-loop, some regexps will have match_type=HYPERSCAN
-	 * but hs_scratch will be NULL.
-	 */
-	for (unsigned int i = 0; i < n; i++) {
-		if ((int) ids[i] < 0 || ids[i] >= (unsigned int) cache->re->len) {
-			continue;
-		}
-		struct rspamd_re_cache_elt *elt = g_ptr_array_index(cache->re, ids[i]);
-
-		/* Verify the regexp at this ID belongs to the current re_class */
-		if (rspamd_regexp_get_class(elt->re) != re_class) {
-			msg_info_re_cache("stale hyperscan cache for class %s: id %ud points to "
-							  "wrong re_class, will use PCRE until recompilation",
-							  re_class->hash, ids[i]);
+		/* Validate intra-class ID bounds */
+		if (ids[i] >= re_class->num_local_re) {
+			msg_info_re_cache("stale hyperscan cache for class %s: intra-class id %ud "
+							  "exceeds class size %ud, will use PCRE until recompilation",
+							  re_class->hash, ids[i], re_class->num_local_re);
 			hs_free_scratch(re_class->hs_scratch);
 			re_class->hs_scratch = NULL;
 			rspamd_hyperscan_free(re_class->hs_db, true);
@@ -3585,7 +3677,38 @@ rspamd_re_cache_apply_hyperscan_blob(struct rspamd_re_cache *cache,
 			g_free(re_class->hs_ids);
 			re_class->hs_ids = NULL;
 			re_class->nhs = 0;
-			/* Redis cache entry will expire or be overwritten on next compilation */
+			return FALSE;
+		}
+		re_class->hs_ids[i] = (int) (re_class->base_offset + ids[i]);
+	}
+	re_class->nhs = (int) n;
+
+	/*
+	 * Validate all translated IDs point to regexps in this re_class.
+	 * We must do validation BEFORE setting any match_types, otherwise if
+	 * validation fails mid-loop, some regexps will have match_type=HYPERSCAN
+	 * but hs_scratch will be NULL.
+	 */
+	for (unsigned int i = 0; i < n; i++) {
+		unsigned int global_id = re_class->hs_ids[i];
+
+		if (global_id >= (unsigned int) cache->re->len) {
+			continue;
+		}
+		struct rspamd_re_cache_elt *elt = g_ptr_array_index(cache->re, global_id);
+
+		/* Verify the regexp at this ID belongs to the current re_class */
+		if (rspamd_regexp_get_class(elt->re) != re_class) {
+			msg_info_re_cache("stale hyperscan cache for class %s: global id %ud points to "
+							  "wrong re_class, will use PCRE until recompilation",
+							  re_class->hash, global_id);
+			hs_free_scratch(re_class->hs_scratch);
+			re_class->hs_scratch = NULL;
+			rspamd_hyperscan_free(re_class->hs_db, true);
+			re_class->hs_db = NULL;
+			g_free(re_class->hs_ids);
+			re_class->hs_ids = NULL;
+			re_class->nhs = 0;
 			return FALSE;
 		}
 	}
@@ -3596,10 +3719,12 @@ rspamd_re_cache_apply_hyperscan_blob(struct rspamd_re_cache *cache,
 	 * don't try to use hyperscan with NULL scratch.
 	 */
 	for (unsigned int i = 0; i < n; i++) {
-		if ((int) ids[i] < 0 || ids[i] >= (unsigned int) cache->re->len) {
+		unsigned int global_id = re_class->hs_ids[i];
+
+		if (global_id >= (unsigned int) cache->re->len) {
 			continue;
 		}
-		struct rspamd_re_cache_elt *elt = g_ptr_array_index(cache->re, ids[i]);
+		struct rspamd_re_cache_elt *elt = g_ptr_array_index(cache->re, global_id);
 
 		if (flags[i] & HS_FLAG_PREFILTER) {
 			elt->match_type = RSPAMD_RE_CACHE_HYPERSCAN_PRE;
