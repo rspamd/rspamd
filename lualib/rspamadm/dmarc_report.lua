@@ -55,6 +55,11 @@ parser:option "-b --batch-size"
       :argname "<number>"
       :convert(tonumber)
       :default "10"
+parser:option "-w --batch-wait"
+      :description "Wait <batch-wait> seconds between batches"
+      :argname "<number>"
+      :convert(tonumber)
+      :default "0"
 
 parser:flag "-r --recheck-rua"
       :description "Re-check RUA addresses against exclude_rua_addresses map before sending"
@@ -436,6 +441,10 @@ local function send_reports_by_smtp(opts, reports, finish_cb)
         if args.next_start > #reports then
           finish_cb(reports_sent, reports_failed)
         else
+           if opts.batch_wait then
+              lua_util.debugm(N, 'sleeping %d seconds before next batch', opts.batch_wait)
+              os.execute("sleep " .. opts.batch_wait)
+           end
           args.cont_func(args.next_start)
         end
       end
@@ -718,6 +727,8 @@ local function handler(args)
   -- Normalize batch_size: floor to integer and clamp to >= 1
   -- Fractional values would break array indexing in batching loops
   opts.batch_size = math.max(1, math.floor(opts.batch_size or 10))
+  -- Normalize batch_wait: floor to integer and clamp to >= 0
+  opts.batch_wait = math.max(0, math.floor(opts.batch_wait or 0))
 
   pool = rspamd_mempool.create()
   load_config(opts)
