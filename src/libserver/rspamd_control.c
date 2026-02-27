@@ -1162,8 +1162,16 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 				else {
 					/* Legacy full cache update */
 
-					/* After getting this notice, we can clean up old hyperscan files */
-					rspamd_hyperscan_notice_loaded();
+					/*
+					 * Only enable cleanup if hyperscan is not disabled.
+					 * When disable_hyperscan is set, workers won't load databases
+					 * and thus won't notify main about known files via
+					 * RSPAMD_SRV_NOTICE_HYPERSCAN_CACHE. Enabling cleanup in that
+					 * case would cause main to delete all cached files on exit.
+					 */
+					if (!rspamd_main->cfg->disable_hyperscan) {
+						rspamd_hyperscan_notice_loaded();
+					}
 
 					msg_info_main("received hyperscan cache loaded");
 

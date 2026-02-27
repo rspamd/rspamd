@@ -2088,12 +2088,11 @@ rspamd_worker_hyperscan_ready(struct rspamd_main *rspamd_main,
 	rep.type = RSPAMD_CONTROL_HYPERSCAN_LOADED;
 	rep.id = cmd->id;
 
-	msg_debug_hyperscan("received hyperscan loaded notification, forced=%d",
-						cmd->cmd.hs_loaded.forced);
+	msg_info("received hyperscan loaded notification, forced=%d",
+			 cmd->cmd.hs_loaded.forced);
 
 	/* All file operations go through Lua backend */
 	g_assert(rspamd_hs_cache_has_lua_backend());
-	msg_debug_hyperscan("using async backend-based hyperscan loading");
 	rspamd_re_cache_load_hyperscan_scoped_async(cache, worker->srv->event_loop,
 												cache_dir, false);
 	rep.reply.hs_loaded.status = 0;
