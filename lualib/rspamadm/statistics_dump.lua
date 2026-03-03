@@ -48,6 +48,10 @@ parser:option "-b --batch-size"
     :convert(tonumber)
     :default(1000)
 
+parser:option "-S --classifier"
+    :description "Classifier name (required when multiple classifiers configured)"
+    :argname("<name>")
+
 -- Extract subcommand
 local dump = parser:command "dump d"
                    :description "Dump bayes statistics"
@@ -64,9 +68,6 @@ dump:option "-b --batch-size"
     :argname("<elts>")
     :convert(tonumber)
     :default(1000)
-dump:option "-S --classifier"
-    :description "Classifier name (required when multiple classifiers configured)"
-    :argname("<name>")
 
 
 -- Restore
@@ -105,9 +106,6 @@ migrate:option "-b --batch-size"
        :argname("<elts>")
        :convert(tonumber)
        :default(1000)
-migrate:option "-S --classifier"
-       :description "Classifier name (required when multiple classifiers configured)"
-       :argname("<name>")
 
 local function load_config(opts)
   local _r, err = rspamd_config:load_ucl(opts['config'])
@@ -643,10 +641,11 @@ local function execute_batch(batch, conns, opts)
 end
 
 local function restore_handler(opts)
+  local selected = select_classifier(opts)
   local files = opts.file or { '-' }
   local conns = {}
 
-  for _, cls in ipairs(classifiers) do
+  for _, cls in ipairs(selected) do
     local res, conn = lua_redis.redis_connect_sync(cls.redis_params, true)
 
     if not res then
