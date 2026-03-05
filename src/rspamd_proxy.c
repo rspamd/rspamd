@@ -124,6 +124,7 @@ struct rspamd_http_mirror {
 	gboolean compress;
 	gboolean ssl;
 	gboolean keepalive; /* Whether to use keepalive for this mirror */
+	gboolean follow_master; /* Tie mirror lifetime to master upstream */
 	enum rspamd_proxy_log_tag_type log_tag_type;
 	ucl_object_t *extra_headers;
 };
@@ -193,6 +194,7 @@ enum rspamd_backend_flags {
 	RSPAMD_BACKEND_REPLIED = 1 << 0,
 	RSPAMD_BACKEND_CLOSED = 1 << 1,
 	RSPAMD_BACKEND_PARSED = 1 << 2,
+	RSPAMD_BACKEND_FOLLOW_MASTER = 1 << 3,
 };
 
 struct rspamd_proxy_session;
@@ -868,6 +870,11 @@ rspamd_proxy_parse_mirror(rspamd_mempool_t *pool,
 	elt = ucl_object_lookup(obj, "timeout");
 	if (elt) {
 		ucl_object_todouble_safe(elt, &up->timeout);
+	}
+
+	elt = ucl_object_lookup(obj, "follow_master");
+	if (elt && ucl_object_toboolean(elt)) {
+		up->follow_master = TRUE;
 	}
 
 	/*
@@ -2032,6 +2039,12 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 						bk_conn->s = session;
 						bk_conn->name = m->name;
 						bk_conn->timeout = m->timeout;
+
+						if (m->follow_master) {
+							bk_conn->flags |= RSPAMD_BACKEND_FOLLOW_MASTER;
+							bk_conn->timeout = session->ctx->timeout;
+						}
+
 						bk_conn->parser_from_ref = m->parser_from_ref;
 						bk_conn->parser_to_ref = m->parser_to_ref;
 						bk_conn->backend_conn = conn;
@@ -2156,6 +2169,11 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 		bk_conn->s = session;
 		bk_conn->name = m->name;
 		bk_conn->timeout = m->timeout;
+
+		if (m->follow_master) {
+			bk_conn->flags |= RSPAMD_BACKEND_FOLLOW_MASTER;
+			bk_conn->timeout = session->ctx->timeout;
+		}
 
 		bk_conn->up = rspamd_upstream_get(m->u,
 										  RSPAMD_UPSTREAM_ROUND_ROBIN, NULL, 0);
@@ -2344,6 +2362,26 @@ proxy_client_write_error(struct rspamd_proxy_session *session, int code,
 }
 
 static void
+proxy_close_follow_master_mirrors(struct rspamd_proxy_session *session)
+{
+	if (session->mirror_conns == NULL) {
+		return;
+	}
+
+	for (unsigned int i = 0; i < session->mirror_conns->len; i++) {
+		struct rspamd_proxy_backend_connection *bk_conn =
+			g_ptr_array_index(session->mirror_conns, i);
+
+		if (bk_conn && (bk_conn->flags & RSPAMD_BACKEND_FOLLOW_MASTER) &&
+			!(bk_conn->flags & RSPAMD_BACKEND_CLOSED)) {
+			msg_debug_session("closing follow_master mirror %s", bk_conn->name);
+			proxy_backend_close_connection(bk_conn);
+			REF_RELEASE(session);
+		}
+	}
+}
+
+static void
 proxy_backend_master_error_handler(struct rspamd_http_connection *conn, GError *err)
 {
 	struct rspamd_proxy_backend_connection *bk_conn = conn->ud;
@@ -2373,6 +2411,8 @@ proxy_backend_master_error_handler(struct rspamd_http_connection *conn, GError *
 		msg_err_session("cannot connect to upstream, maximum retries "
 						"has been reached: %d",
 						session->retries);
+		/* Close follow_master mirrors since master is done */
+		proxy_close_follow_master_mirrors(session);
 		/* Terminate session immediately */
 		if (err) {
 			proxy_client_write_error(session, err->code, err->message);
@@ -2525,6 +2565,7 @@ proxy_backend_master_finish_handler(struct rspamd_http_connection *conn,
 			}
 		}
 
+		proxy_close_follow_master_mirrors(session);
 		REF_RELEASE(session);
 		rspamd_http_message_free(msg);
 	}
@@ -2547,6 +2588,7 @@ proxy_backend_master_finish_handler(struct rspamd_http_connection *conn,
 			proxy_request_compress(msg);
 		}
 
+		proxy_close_follow_master_mirrors(session);
 		rspamd_http_connection_write_message(session->client_conn,
 											 msg, NULL, passed_ct, session,
 											 bk_conn->timeout);
