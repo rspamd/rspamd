@@ -3646,6 +3646,14 @@ rspamd_create_dkim_sign_context(struct rspamd_task *task,
 	nctx->common.is_sign = true;
 
 	if (type != RSPAMD_DKIM_ARC_SEAL) {
+		if (headers == NULL || headers[0] == '\0') {
+			g_set_error(err,
+						DKIM_ERROR,
+						DKIM_SIGERROR_EMPTY_H,
+						"empty or NULL sign headers list");
+			return NULL;
+		}
+
 		if (!rspamd_dkim_parse_hdrlist_common(&nctx->common, headers,
 											  strlen(headers), true,
 											  err)) {

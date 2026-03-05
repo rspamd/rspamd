@@ -538,16 +538,34 @@ int dkim_module_config(struct rspamd_config *cfg, bool validate)
 	 */
 	if ((value =
 			 rspamd_config_get_module_opt(cfg, "dkim_signing", "sign_headers")) != NULL) {
-		dkim_module_ctx->sign_headers = ucl_object_tostring(value);
+		if (ucl_object_type(value) != UCL_STRING) {
+			msg_err_config("sign_headers in dkim_signing must be a colon-delimited string, got %s",
+						   ucl_object_type_to_string(ucl_object_type(value)));
+		}
+		else {
+			dkim_module_ctx->sign_headers = ucl_object_tostring(value);
+		}
 	}
 	else if ((value =
 				  rspamd_config_get_module_opt(cfg, "dkim", "sign_headers")) != NULL) {
-		dkim_module_ctx->sign_headers = ucl_object_tostring(value);
+		if (ucl_object_type(value) != UCL_STRING) {
+			msg_err_config("sign_headers in dkim must be a colon-delimited string, got %s",
+						   ucl_object_type_to_string(ucl_object_type(value)));
+		}
+		else {
+			dkim_module_ctx->sign_headers = ucl_object_tostring(value);
+		}
 	}
 
 	if ((value =
 			 rspamd_config_get_module_opt(cfg, "arc", "sign_headers")) != NULL) {
-		dkim_module_ctx->arc_sign_headers = ucl_object_tostring(value);
+		if (ucl_object_type(value) != UCL_STRING) {
+			msg_err_config("sign_headers in arc must be a colon-delimited string, got %s",
+						   ucl_object_type_to_string(ucl_object_type(value)));
+		}
+		else {
+			dkim_module_ctx->arc_sign_headers = ucl_object_tostring(value);
+		}
 	}
 
 	if (cache_size > 0) {
