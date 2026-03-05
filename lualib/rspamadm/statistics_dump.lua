@@ -326,6 +326,9 @@ local function dump_out(out, opts, last)
   end
 end
 
+-- Maximum commands per pipeline exec() to avoid Lua stack overflow
+local pipeline_max = 1000
+
 local function dump_cdb(out, opts, last, pattern, class_labels)
   local results = out[pattern]
 
@@ -383,22 +386,25 @@ local function dump_pattern(conn, pattern, opts, out, key, class_labels)
     local elts = results[2]
     local tokens = {}
 
-    for _, e in ipairs(elts) do
-      conn:add_cmd('HGETALL', { e })
-    end
-    -- This function returns many results, each for each command
-    -- So if we have batch 1000, then we would have 1000 tables in form
-    -- [result, {hash_content}]
-    local all_results = { conn:exec() }
-
-    for i = 1, #all_results, 2 do
-      local r, hash_content = all_results[i], all_results[i + 1]
-
-      if r then
-        -- List to a hash map
-        local data = redis_map_zip(hash_content)
-        tokens[#tokens + 1] = { key = elts[(i + 1) / 2], data = data }
+    -- Pipeline HGETALL in chunks to avoid stack overflow
+    for chunk_start = 1, #elts, pipeline_max do
+      local chunk_end = math.min(chunk_start + pipeline_max - 1, #elts)
+      for ei = chunk_start, chunk_end do
+        conn:add_cmd('HGETALL', { elts[ei] })
       end
+      local all_results = { conn:exec() }
+
+      for i = 1, #all_results, 2 do
+        local r, hash_content = all_results[i], all_results[i + 1]
+        if r then
+          local data = redis_map_zip(hash_content)
+          tokens[#tokens + 1] = {
+            key = elts[chunk_start + (i - 1) / 2],
+            data = data,
+          }
+        end
+      end
+      all_results = nil
     end
 
     -- Output keeping track of the commas
@@ -627,15 +633,20 @@ local function execute_batch(batch, conns, opts)
     end
   else
     for _, conn in ipairs(conns) do
-      for _, cmd in ipairs(cmd_pipe) do
-        local is_ok, err = conn:add_cmd(cmd[1], cmd[2])
+      -- Chunk commands to avoid stack overflow on large datasets
+      for i = 1, #cmd_pipe, pipeline_max do
+        local chunk_end = math.min(i + pipeline_max - 1, #cmd_pipe)
+        for j = i, chunk_end do
+          local is_ok, err = conn:add_cmd(cmd_pipe[j][1], cmd_pipe[j][2])
 
-        if not is_ok then
-          rspamd_logger.errx("cannot add command: %s with args: %s: %s", cmd[1], cmd[2], err)
+          if not is_ok then
+            rspamd_logger.errx("cannot add command: %s with args: %s: %s",
+                cmd_pipe[j][1], cmd_pipe[j][2], err)
+          end
         end
-      end
 
-      conn:exec()
+        conn:exec()
+      end
     end
   end
 end
@@ -682,6 +693,11 @@ local function restore_handler(opts)
       if cur_line % opts.batch_size == 0 then
         execute_batch(batch, conns, opts)
         batch = {}
+
+        if cur_line % (opts.batch_size * 10) == 0 then
+          collectgarbage('collect')
+          rspamd_logger.messagex("restored %s lines", cur_line)
+        end
       end
     end
 
@@ -695,37 +711,67 @@ local function restore_handler(opts)
   end
 end
 
--- Redis Lua scripts for migration
-local export_script = [[
-local result = redis.call('SCAN', ARGV[1], 'MATCH', ARGV[2], 'COUNT', ARGV[3])
-local cursor = result[1]
-local keys = result[2]
-local data = {}
-local key_names = {}
-for i, k in ipairs(keys) do
-  data[i] = {k, redis.call('HGETALL', k)}
-  key_names[i] = k
-end
-return {cursor, cmsgpack.pack(data), cmsgpack.pack(key_names)}
-]]
+-- Migrate a single prefix's token keys from source to target using pipelined commands.
+-- SCAN on source, pipeline HGETALL, pipeline HMSET to target, pipeline DEL on source.
+-- Returns number of tokens migrated.
+local function migrate_prefix_tokens(src_conn, dst_conn, prefix, batch_size, no_delete)
+  local scan_pattern = string.format('%s_*', prefix)
+  local cursor = "0"
+  local total_tokens = 0
 
-local import_script = [[
-local data = cmsgpack.unpack(ARGV[1])
-for _, entry in ipairs(data) do
-  if #entry[2] > 0 then
-    redis.call('HMSET', entry[1], unpack(entry[2]))
-  end
-end
-return #data
-]]
+  repeat
+    src_conn:add_cmd('SCAN', { cursor, 'MATCH', scan_pattern,
+                               'COUNT', tostring(batch_size) })
+    local ret, results = src_conn:exec()
 
-local delete_script = [[
-local keys = cmsgpack.unpack(ARGV[1])
-for _, k in ipairs(keys) do
-  redis.call('DEL', k)
+    if not ret then
+      rspamd_logger.errx("SCAN failed for %s: %s", prefix, results)
+      return total_tokens, true
+    end
+
+    cursor = results[1]
+    local keys = results[2]
+
+    if keys and #keys > 0 then
+      -- Pipeline HGETALL on source for this batch
+      for _, k in ipairs(keys) do
+        src_conn:add_cmd('HGETALL', { k })
+      end
+      local all_results = { src_conn:exec() }
+
+      -- Pipeline HMSET on target
+      local imported = 0
+      for i = 1, #all_results, 2 do
+        local r, hash_data = all_results[i], all_results[i + 1]
+        if r and hash_data and #hash_data > 0 then
+          local args = { keys[(i + 1) / 2] }
+          for _, v in ipairs(hash_data) do
+            args[#args + 1] = v
+          end
+          dst_conn:add_cmd('HMSET', args)
+          imported = imported + 1
+        end
+      end
+      all_results = nil -- release memory
+
+      if imported > 0 then
+        dst_conn:exec()
+      end
+
+      -- Pipeline DEL on source
+      if not no_delete then
+        for _, k in ipairs(keys) do
+          src_conn:add_cmd('DEL', { k })
+        end
+        src_conn:exec()
+      end
+
+      total_tokens = total_tokens + imported
+    end
+  until cursor == "0"
+
+  return total_tokens, false
 end
-return #keys
-]]
 
 local function migrate_handler(opts)
   local selected = select_classifier(opts)
@@ -768,11 +814,20 @@ local function migrate_handler(opts)
       }
     end
 
-    -- Migrate each symbol's keys
+    -- Build name→shard index for fast lookup
+    local shard_by_name = {}
+    for _, shard in ipairs(shard_map) do
+      shard_by_name[shard.name] = shard
+    end
+
+    -- Phase 1: Collect all prefixes from all shards, determine migration plan
     for _, s in ipairs(cls.symbols) do
       local sym = s.symbol
       rspamd_logger.messagex("processing symbol: %s", sym)
       local sym_keys = string.format("%s_keys", sym)
+
+      -- Collect prefixes per shard and classify
+      local misplaced = {} -- { {prefix, src_shard, dst_shard}, ... }
 
       for shard_idx, shard in ipairs(shard_map) do
         shard.conn:add_cmd('SMEMBERS', { sym_keys })
@@ -783,125 +838,91 @@ local function migrate_handler(opts)
               sym_keys, shard.name, prefixes)
           stats.errors = stats.errors + 1
         elseif prefixes and #prefixes > 0 then
-          rspamd_logger.messagex("  shard %s [%s/%s]: %s prefix key(s) for %s",
-              shard.name, shard_idx, #shard_map, #prefixes, sym)
+          rspamd_logger.messagex("  shard %s [%s/%s]: %s prefix(es)",
+              shard.name, shard_idx, #shard_map, #prefixes)
 
           for _, prefix in ipairs(prefixes) do
             stats.checked = stats.checked + 1
-
-            -- Determine which shard this prefix should live on
             local target_up = write_servers:get_upstream_by_hash(prefix)
             local target_name = target_up:get_name()
 
             if target_name == shard.name then
-              -- Already on the correct shard
               stats.correct = stats.correct + 1
             else
-              -- Find target connection
-              local target_conn
-              for _, ts in ipairs(shard_map) do
-                if ts.name == target_name then
-                  target_conn = ts.conn
-                  break
-                end
-              end
-
-              if not target_conn then
-                rspamd_logger.errx("    cannot find connection for target shard %s", target_name)
-                stats.errors = stats.errors + 1
-              else
-                rspamd_logger.messagex("    migrating prefix '%s': %s -> %s",
-                    prefix, shard.name, target_name)
-
-                if opts.dry_run then
-                  stats.migrated = stats.migrated + 1
-                else
-                  -- 1. Copy the prefix metadata hash
-                  shard.conn:add_cmd('HGETALL', { prefix })
-                  local hret, hdata = shard.conn:exec()
-
-                  if hret and hdata and #hdata > 0 then
-                    local hmset_args = { prefix }
-                    for _, v in ipairs(hdata) do
-                      hmset_args[#hmset_args + 1] = v
-                    end
-                    target_conn:add_cmd('HMSET', hmset_args)
-                    local mret, merr = target_conn:exec()
-                    if not mret then
-                      rspamd_logger.errx("    failed to copy metadata for %s: %s", prefix, merr)
-                      stats.errors = stats.errors + 1
-                    end
-                  end
-
-                  -- 2. Scan and migrate token keys in batches
-                  local scan_pattern = string.format('%s_*', prefix)
-                  local cursor = "0"
-
-                  repeat
-                    shard.conn:add_cmd('EVAL', {
-                      export_script, '0',
-                      cursor, scan_pattern, tostring(opts.batch_size)
-                    })
-                    local eret, eresults = shard.conn:exec()
-
-                    if not eret then
-                      rspamd_logger.errx("    export script failed for %s: %s", prefix, eresults)
-                      stats.errors = stats.errors + 1
-                      break
-                    end
-
-                    cursor = eresults[1]
-                    local packed_data = eresults[2]
-                    local packed_keys = eresults[3]
-
-                    -- Import to target
-                    if packed_data and #packed_data > 0 then
-                      target_conn:add_cmd('EVAL', {
-                        import_script, '0', packed_data
-                      })
-                      local iret, ires = target_conn:exec()
-
-                      if not iret then
-                        rspamd_logger.errx("    import script failed for %s: %s", prefix, ires)
-                        stats.errors = stats.errors + 1
-                      else
-                        stats.tokens = stats.tokens + (tonumber(ires) or 0)
-                      end
-                    end
-
-                    -- Delete from source (unless --no-delete)
-                    if not opts.no_delete and packed_keys and #packed_keys > 0 then
-                      shard.conn:add_cmd('EVAL', {
-                        delete_script, '0', packed_keys
-                      })
-                      local dret, derr = shard.conn:exec()
-                      if not dret then
-                        rspamd_logger.errx("    delete script failed for %s: %s", prefix, derr)
-                        stats.errors = stats.errors + 1
-                      end
-                    end
-                  until cursor == "0"
-
-                  -- 3. Update _keys sets
-                  target_conn:add_cmd('SADD', { sym_keys, prefix })
-                  target_conn:exec()
-
-                  shard.conn:add_cmd('SREM', { sym_keys, prefix })
-                  shard.conn:exec()
-
-                  -- 4. Delete source prefix hash (unless --no-delete)
-                  if not opts.no_delete then
-                    shard.conn:add_cmd('DEL', { prefix })
-                    shard.conn:exec()
-                  end
-
-                  stats.migrated = stats.migrated + 1
-                end
-              end
+              misplaced[#misplaced + 1] = {
+                prefix = prefix,
+                src = shard,
+                dst = shard_by_name[target_name],
+              }
             end
           end
         end
       end
+
+      if #misplaced == 0 then
+        rspamd_logger.messagex("  all prefixes on correct shards")
+      else
+        rspamd_logger.messagex("  %s prefix(es) need migration", #misplaced)
+      end
+
+      -- Phase 2: Migrate misplaced prefixes
+      for pi, m in ipairs(misplaced) do
+        if not m.dst then
+          rspamd_logger.errx("    cannot find target shard for prefix '%s'", m.prefix)
+          stats.errors = stats.errors + 1
+        else
+          rspamd_logger.messagex("    [%s/%s] '%s': %s -> %s",
+              pi, #misplaced, m.prefix, m.src.name, m.dst.name)
+
+          if not opts.dry_run then
+            -- Copy prefix metadata hash
+            m.src.conn:add_cmd('HGETALL', { m.prefix })
+            local hret, hdata = m.src.conn:exec()
+
+            if hret and hdata and #hdata > 0 then
+              local hmset_args = { m.prefix }
+              for _, v in ipairs(hdata) do
+                hmset_args[#hmset_args + 1] = v
+              end
+              m.dst.conn:add_cmd('HMSET', hmset_args)
+              m.dst.conn:exec()
+              hmset_args = nil
+            end
+            hdata = nil
+
+            -- Migrate token keys in pipelined batches
+            local tok_count, had_error = migrate_prefix_tokens(
+                m.src.conn, m.dst.conn, m.prefix, opts.batch_size, opts.no_delete)
+            stats.tokens = stats.tokens + tok_count
+
+            if had_error then
+              stats.errors = stats.errors + 1
+            end
+
+            -- Update _keys sets
+            m.dst.conn:add_cmd('SADD', { sym_keys, m.prefix })
+            m.dst.conn:exec()
+            m.src.conn:add_cmd('SREM', { sym_keys, m.prefix })
+            m.src.conn:exec()
+
+            -- Delete source prefix hash
+            if not opts.no_delete then
+              m.src.conn:add_cmd('DEL', { m.prefix })
+              m.src.conn:exec()
+            end
+          end
+
+          stats.migrated = stats.migrated + 1
+        end
+
+        -- Periodic GC to prevent memory bloat
+        if pi % 100 == 0 then
+          collectgarbage('collect')
+        end
+      end
+
+      misplaced = nil
+      collectgarbage('collect')
     end
   end
 
