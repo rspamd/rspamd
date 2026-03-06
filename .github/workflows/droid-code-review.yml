@@ -96,8 +96,9 @@ jobs:
           ## Step 3 — Defect qualification (only report findings that pass all criteria)
 
           Only report a finding if ALL of the following are true:
-          - It is a concrete, demonstrable defect in the changed lines (not a pre-existing issue)
-          - You are high-confidence (≥ 90 %) it is actually wrong, not merely unusual
+          - It is a concrete, demonstrable defect in the changed lines, or a pre-existing bug
+            that the new code newly exposes or makes reachable
+          - You can explain exactly why it is wrong (not merely unusual or unfamiliar)
           - It has a clear, identifiable impact: crash, data loss, memory leak, security
             vulnerability, silent incorrect behaviour, or definite API misuse
           - A specific, actionable fix exists
@@ -120,7 +121,8 @@ jobs:
           - Never use std::unordered_map or std::unordered_set — use ankerl::unordered_dense
 
           ### Logging format strings
-          - rspamd printf (src/libutil/printf.h) uses %s, %L, %D, %z — not standard printf
+          - rspamd uses its own printf implementation (see src/libutil/printf.h for the
+            full list of format specifiers) — it is NOT standard printf
           - Lua rspamd_logger uses %s for every argument type
           - Format strings must never come from untrusted input
 
@@ -168,7 +170,10 @@ jobs:
 
           Limits:
           - Post at most 5 comments in total; choose the highest-severity findings.
-          - If you have fewer than 2 high-confidence findings, post only an approval comment.
+          - If all findings are low-severity (no crash, leak, or security issue) and you have
+            fewer than 2, post only an approval comment.
+          - A single finding that involves a crash, memory leak, or security vulnerability is
+            always worth reporting — do not suppress it.
           - Never post test or exploratory API calls — every comment is immediately visible.
           EOF
 
@@ -176,10 +181,10 @@ jobs:
           echo "Running code review analysis and submitting results..."
           droid exec --auto high --model gpt5.4 -f prompt.txt
 
-      - name: Post review completion comment
-        if: ${{ success() }}
+      - name: Post failure notice
+        if: ${{ failure() }}
         run: |
-          gh pr comment ${{ github.event.issue.number }} --body "Code review completed successfully. The review has been submitted."
+          gh pr comment ${{ github.event.issue.number }} --body "⚠️ Automated code review failed to complete. Check the [workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
