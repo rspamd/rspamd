@@ -2126,14 +2126,6 @@ rspamd_map_update_http_cached_file(struct rspamd_map *map,
 		return FALSE;
 	}
 
-	if (lseek(fd, 0, SEEK_SET) == -1) {
-		msg_err_map("cannot seek file %s: %s", path, strerror(errno));
-		rspamd_file_unlock(fd, FALSE);
-		close(fd);
-
-		return FALSE;
-	}
-
 	memset(&header, 0, sizeof(header));
 	memcpy(header.magic, rspamd_http_file_magic, sizeof(rspamd_http_file_magic));
 	header.mtime = htdata->last_modified;
@@ -2177,7 +2169,6 @@ rspamd_map_update_http_cached_file(struct rspamd_map *map,
 
 	return TRUE;
 }
-
 
 static gboolean
 rspamd_map_read_http_cached_file(struct rspamd_map *map,
