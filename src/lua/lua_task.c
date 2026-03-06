@@ -2939,6 +2939,7 @@ struct rspamd_url_query_to_inject_cbd {
 	struct rspamd_task *task;
 	struct rspamd_url *url;
 	GPtrArray *mpart_urls;
+	uint32_t parent_flags;
 };
 
 static gboolean
@@ -2952,6 +2953,7 @@ inject_url_query_callback(struct rspamd_url *url, gsize start_offset,
 	task = cbd->task;
 
 	url->flags |= RSPAMD_URL_FLAG_QUERY;
+	url->flags |= (cbd->parent_flags & RSPAMD_URL_FLAG_PROPAGATE_MASK);
 
 	if (cbd->mpart_urls) {
 		g_ptr_array_add(cbd->mpart_urls, url);
@@ -2972,6 +2974,7 @@ inject_url_query(struct rspamd_task *task, struct rspamd_url *url,
 		cbd.task = task;
 		cbd.url = url;
 		cbd.mpart_urls = part_urls;
+		cbd.parent_flags = url->flags;
 
 		rspamd_url_find_multiple(task->task_pool,
 								 rspamd_url_query_unsafe(url), url->querylen,
