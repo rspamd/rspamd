@@ -2091,7 +2091,7 @@ rspamd_map_save_http_cached_file(struct rspamd_map *map,
 	}
 
 	msg_info_map("saved data from %s in %s, %uz bytes",
-				 bk->uri, path, len + RSPAMD_MAP_CACHE_HEADER_SIZE);
+				 bk->uri, path, len);
 
 	return TRUE;
 }
@@ -2171,6 +2171,55 @@ rspamd_map_update_http_cached_file(struct rspamd_map *map,
 }
 
 static gboolean
+rspamd_map_upgrade_http_cached_file(struct rspamd_map *map,
+									struct rspamd_map_backend *bk,
+									struct http_map_data *htdata,
+									goffset legacy_data_off)
+{
+	char path[PATH_MAX];
+	struct rspamd_config *cfg = map->cfg;
+	gsize flen;
+	unsigned char *fbytes;
+	const unsigned char *payload;
+	gsize payload_len;
+	gboolean ret = FALSE;
+
+	if (cfg->maps_cache_dir == NULL || cfg->maps_cache_dir[0] == '\0') {
+		return FALSE;
+	}
+
+	rspamd_map_cache_file_path(bk, cfg->maps_cache_dir, path, sizeof(path));
+	fbytes = rspamd_file_xmap(path, PROT_READ, &flen, TRUE);
+
+	if (fbytes == NULL) {
+		msg_err_map("cannot open legacy cache file %s: %s", path, strerror(errno));
+		return FALSE;
+	}
+
+	if (legacy_data_off < (goffset) sizeof(struct rspamd_http_file_data) ||
+		legacy_data_off >= (goffset) flen) {
+		msg_warn_map("legacy cache file %s has invalid data offset: %z, file size: %z",
+					 path, (gsize) legacy_data_off, flen);
+		goto end;
+	}
+
+	payload = fbytes + legacy_data_off;
+	payload_len = flen - legacy_data_off;
+
+	if (!rspamd_map_save_http_cached_file(map, bk, htdata, payload, payload_len)) {
+		goto end;
+	}
+
+	msg_info_map("upgraded legacy cache file %s to page-aligned format", path);
+	ret = TRUE;
+
+end:
+	munmap(fbytes, flen);
+
+	return ret;
+}
+
+static gboolean
 rspamd_map_read_http_cached_file(struct rspamd_map *map,
 								 struct rspamd_map_backend *bk,
 								 struct http_map_data *htdata,
@@ -2181,6 +2230,7 @@ rspamd_map_read_http_cached_file(struct rspamd_map *map,
 	int fd;
 	struct stat st;
 	struct rspamd_http_file_data header;
+	goffset legacy_data_off = -1;
 
 	if (cfg->maps_cache_dir == NULL || cfg->maps_cache_dir[0] == '\0') {
 		return FALSE;
@@ -2217,6 +2267,7 @@ rspamd_map_read_http_cached_file(struct rspamd_map *map,
 				   sizeof(rspamd_http_file_magic_old)) == 0) {
 			msg_info_map("old version cache file %s; will be rewritten on next update", path);
 			/* Old format: data_off is header + etag, not page-aligned */
+			legacy_data_off = header.data_off;
 		}
 		else {
 			msg_warn_map("invalid magic in file %s; ignore it", path);
@@ -2271,6 +2322,20 @@ rspamd_map_read_http_cached_file(struct rspamd_map *map,
 	rspamd_file_unlock(fd, FALSE);
 	close(fd);
 
+	if (legacy_data_off != -1) {
+		if (!rspamd_map_upgrade_http_cached_file(map, bk, htdata, legacy_data_off)) {
+			unlink(path);
+			return FALSE;
+		}
+
+		header.data_off = RSPAMD_MAP_CACHE_HEADER_SIZE;
+
+		if (stat(path, &st) == -1) {
+			msg_err_map("cannot stat upgraded cache file %s: %s", path, strerror(errno));
+			return FALSE;
+		}
+	}
+
 	if (map->no_file_read) {
 		/*
 		 * For no_file_read maps, pass the cache file path to the consumer.
@@ -2283,84 +2348,9 @@ rspamd_map_read_http_cached_file(struct rspamd_map *map,
 		map->read_callback(path, strlen(path), cbdata, TRUE);
 	}
 	else {
-		/* Now read file data */
-		/* Perform buffered read: fail-safe, but for encrypted files, we must read whole buffer */
-		if (bk->is_encrypted) {
-			gsize flen;
-			unsigned char *fbytes = rspamd_file_xmap(path, PROT_READ, &flen, TRUE);
-			if (!fbytes) {
-				return FALSE;
-			}
-			const unsigned char *enc = fbytes + header.data_off;
-			gsize enclen = flen - header.data_off;
-			unsigned char *dec = NULL;
-			gsize declen = 0;
-
-			if (!rspamd_map_secretbox_decrypt_buf(bk, enc, enclen, &dec, &declen)) {
-				munmap(fbytes, flen);
-				return FALSE;
-			}
-			/* If compressed, decompress after decryption */
-			if (bk->is_compressed) {
-				ZSTD_DStream *zstream;
-				ZSTD_inBuffer zin;
-				ZSTD_outBuffer zout;
-				unsigned char *out;
-				gsize outlen, r;
-
-				zstream = ZSTD_createDStream();
-				ZSTD_initDStream(zstream);
-
-				zin.pos = 0;
-				zin.src = dec;
-				zin.size = declen;
-
-				if ((outlen = ZSTD_getDecompressedSize(zin.src, zin.size)) == 0) {
-					outlen = ZSTD_DStreamOutSize();
-				}
-
-				out = g_malloc(outlen);
-
-				zout.dst = out;
-				zout.pos = 0;
-				zout.size = outlen;
-
-				while (zin.pos < zin.size) {
-					r = ZSTD_decompressStream(zstream, &zout, &zin);
-
-					if (ZSTD_isError(r)) {
-						ZSTD_freeDStream(zstream);
-						g_free(out);
-						rspamd_explicit_memzero(dec, declen);
-						g_free(dec);
-						munmap(fbytes, flen);
-						return FALSE;
-					}
-
-					if (zout.pos == zout.size) {
-						/* We need to extend output buffer */
-						zout.size = zout.size * 2 + 1;
-						out = g_realloc(zout.dst, zout.size);
-						zout.dst = out;
-					}
-				}
-
-				ZSTD_freeDStream(zstream);
-				map->read_callback(out, zout.pos, cbdata, TRUE);
-				g_free(out);
-			}
-			else {
-				map->read_callback(dec, declen, cbdata, TRUE);
-			}
-			rspamd_explicit_memzero(dec, declen);
-			g_free(dec);
-			munmap(fbytes, flen);
-		}
-		else {
-			if (!read_map_file_chunks(map, cbdata, path,
-									  st.st_size - header.data_off, header.data_off)) {
-				return FALSE;
-			}
+		if (!read_map_file_chunks(map, cbdata, path,
+								  st.st_size - header.data_off, header.data_off)) {
+			return FALSE;
 		}
 	}
 
