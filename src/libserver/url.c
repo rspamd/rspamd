@@ -3624,6 +3624,14 @@ struct rspamd_url_mimepart_cbdata {
 	uint32_t parent_flags;   /* Flags from outer URL to propagate to query URLs */
 };
 
+static inline void
+rspamd_mime_part_add_url(struct rspamd_mime_part *part, struct rspamd_url *url)
+{
+	if (part && part->urls) {
+		g_ptr_array_add(part->urls, url);
+	}
+}
+
 static gboolean
 rspamd_url_query_callback(struct rspamd_url *url, gsize start_offset,
 						  gsize end_offset, gpointer ud)
@@ -3655,10 +3663,9 @@ rspamd_url_query_callback(struct rspamd_url *url, gsize start_offset,
 	/* Propagate source/classification flags from the parent (outer) URL */
 	url->flags |= (cbd->parent_flags & RSPAMD_URL_FLAG_PROPAGATE_MASK);
 
+	rspamd_mime_part_add_url(cbd->part ? cbd->part->mime_part : NULL, url);
+
 	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false)) {
-		if (cbd->part && cbd->part->mime_part->urls) {
-			g_ptr_array_add(cbd->part->mime_part->urls, url);
-		}
 
 		url->part_order = cbd->cur_part_order++;
 
@@ -3727,14 +3734,16 @@ rspamd_url_text_part_callback(struct rspamd_url *url, gsize start_offset,
 		url->flags |= RSPAMD_URL_FLAG_FROM_TEXT;
 	}
 
-	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false) &&
-		cbd->part->mime_part->urls) {
+	rspamd_mime_part_add_url(cbd->part ? cbd->part->mime_part : NULL, url);
+
+	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false)) {
+		rspamd_mime_part_add_url(cbd->part ? cbd->part->mime_part : NULL, url);
+
 		url->part_order = cbd->cur_part_order++;
 
 		if (cbd->cur_url_order) {
 			url->order = (*cbd->cur_url_order)++;
 		}
-		g_ptr_array_add(cbd->part->mime_part->urls, url);
 	}
 
 	cbd->part->exceptions = g_list_prepend(
