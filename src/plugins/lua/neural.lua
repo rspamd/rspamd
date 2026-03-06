@@ -21,6 +21,7 @@ local lua_util = require "lua_util"
 local lua_verdict = require "lua_verdict"
 local neural_common = require "plugins/neural"
 local neural_learn = require "lua_neural_learn"
+local neural_external = require "lua_neural_external"
 local rspamd_kann = require "rspamd_kann"
 local rspamd_logger = require "rspamd_logger"
 local rspamd_tensor = require "rspamd_tensor"
@@ -746,6 +747,172 @@ local function load_new_ann(rule, ev_base, set, profile, min_diff)
   )
 end
 
+--- External model support functions
+
+-- Apply loaded external model to settings element
+-- @param rule neural rule configuration
+-- @param set settings element
+-- @param model parsed external model data
+-- @param ev_base event base (optional, for storing base model)
+local function apply_external_model(rule, set, model, ev_base)
+  local ext_cfg = rule.external_model
+  if not ext_cfg or not model then
+    return false
+  end
+
+  -- Load external ANN
+  local ext_ann, ann_err = neural_external.load_ann(model)
+  if not ext_ann then
+    rspamd_logger.errx(rspamd_config, 'failed to load external ANN for %s:%s: %s',
+      rule.prefix, set.name, ann_err or "unknown")
+    return false
+  end
+
+  -- Check if we have a local ANN to merge with
+  if set.ann and set.ann.ann then
+    -- Check architecture compatibility
+    local ok = ext_ann:is_compatible(set.ann.ann)
+    if not ok then
+      rspamd_logger.warnx(rspamd_config,
+        'external ANN architecture incompatible with local ANN for %s:%s, using external only',
+        rule.prefix, set.name)
+      set.ann.ann = ext_ann
+      set.ann.version = model.model_version or 1
+      set.ann.external_version = model.model_version
+      set.ann.external_source = ext_cfg.url
+      return true
+    end
+
+    -- Merge weights
+    local alpha = ext_cfg.merge_alpha or 0.5
+    local merged, merge_err = ext_ann:merge_weights(set.ann.ann, alpha)
+    if not merged then
+      rspamd_logger.errx(rspamd_config, 'failed to merge ANNs for %s:%s: %s',
+        rule.prefix, set.name, merge_err or "unknown")
+      return false
+    end
+
+    rspamd_logger.infox(rspamd_config,
+      'merged external model (version=%s, alpha=%s) with local ANN for %s:%s',
+      model.model_version, alpha, rule.prefix, set.name)
+
+    -- Update ANN reference
+    set.ann.ann = merged
+    set.ann.version = (set.ann.version or 0) + 1
+    set.ann.external_version = model.model_version
+    set.ann.external_source = ext_cfg.url
+
+    -- Store base model for future re-merge
+    if ev_base then
+      neural_external.store_base_model(rule.redis, ev_base, set.ann.redis_key, model, function(store_err)
+        if store_err then
+          rspamd_logger.warnx(rspamd_config, 'failed to store base model: %s', store_err)
+        end
+      end)
+    end
+  else
+    -- No local ANN, just use external
+    rspamd_logger.infox(rspamd_config,
+      'loaded external model (version=%s) as initial ANN for %s:%s',
+      model.model_version, rule.prefix, set.name)
+
+    set.ann = {
+      version = model.model_version or 1,
+      redis_key = neural_common.new_ann_key(rule, set, model.model_version or 1),
+      external_version = model.model_version,
+      external_source = ext_cfg.url,
+      ann = ext_ann,
+      providers_digest = ext_cfg.providers_digest,
+    }
+
+    -- Store base model for future re-merge
+    if ev_base then
+      neural_external.store_base_model(rule.redis, ev_base, set.ann.redis_key, model, function(store_err)
+        if store_err then
+          rspamd_logger.warnx(rspamd_config, 'failed to store base model: %s', store_err)
+        end
+      end)
+    end
+  end
+
+  -- Load PCA if present
+  local pca = neural_external.load_pca(model)
+  if pca then
+    set.ann.pca = pca
+  end
+
+  -- Copy normalization stats
+  if model.norm_stats then
+    set.ann.norm_stats = model.norm_stats
+  end
+
+  -- Copy ROC thresholds
+  if model.roc_thresholds then
+    set.ann.roc_thresholds = model.roc_thresholds
+  end
+
+  -- Update external model state
+  ext_cfg.last_version = model.model_version
+  ext_cfg.loaded = true
+
+  return true
+end
+
+-- Register external model map for a rule
+-- This should be called at config time
+-- @param rule neural rule configuration
+-- @return boolean success
+local function register_external_model_map(rule)
+  local ext_cfg = rule.external_model
+  if not ext_cfg or not ext_cfg.url then
+    return false
+  end
+
+  -- Store rule reference for callbacks
+  local rule_ref = rule
+
+  -- Map callback: called when external model is loaded/reloaded
+  local function on_model_load(model, err)
+    if err then
+      rspamd_logger.errx(rspamd_config, 'external model load failed for %s: %s',
+        rule_ref.prefix, err)
+      return
+    end
+
+    -- Apply model to all settings
+    for _, set in pairs(rule_ref.settings) do
+      if type(set) == 'table' then
+        apply_external_model(rule_ref, set, model, nil)
+      end
+    end
+  end
+
+  return neural_external.register_model_map(rspamd_config, rule, ext_cfg.providers_digest, on_model_load)
+end
+
+-- Check external model updates (called periodically by map infrastructure)
+-- This is now mostly handled by the map's automatic reload mechanism
+local function check_external_model(worker, cfg, ev_base, rule)
+  local ext_cfg = rule.external_model
+  if not ext_cfg then
+    return
+  end
+
+  -- Check if we have a cached model from the map
+  local cached_model = neural_external.get_cached_model(ext_cfg.url)
+  if cached_model and cached_model.model_version ~= ext_cfg.last_version then
+    rspamd_logger.infox(cfg, 'external model updated for %s: version %s -> %s',
+      rule.prefix, ext_cfg.last_version or 0, cached_model.model_version)
+
+    -- Apply to all settings
+    for _, set in pairs(rule.settings) do
+      if type(set) == 'table' then
+        apply_external_model(rule, set, cached_model, ev_base)
+      end
+    end
+  end
+end
+
 -- Used to check an element in Redis serialized as JSON
 -- for some specific rule + some specific setting
 -- This function tries to load more fresh or more specific ANNs in lieu of
@@ -1192,8 +1359,24 @@ for k, r in pairs(rules) do
     end
   end
 
+  -- External model configuration
+  if rule_elt.external_model then
+    local providers_digest = neural_common.providers_config_digest(rule_elt.providers, rule_elt)
+    rule_elt.external_model = neural_external.create_external_config(rule_elt, providers_digest)
+    if rule_elt.external_model then
+      rspamd_logger.infox(rspamd_config, "configured external model for rule %s: url=%s, merge_alpha=%s",
+        k, rule_elt.external_model.url, rule_elt.external_model.merge_alpha)
+    end
+  end
+
   rspamd_logger.infox(rspamd_config, "register ann rule %s", k)
   settings.rules[k] = rule_elt
+
+  -- Register external model map if configured
+  if rule_elt.external_model then
+    register_external_model_map(rule_elt)
+  end
+
   rspamd_config:set_metric_symbol({
     name = rule_elt.symbol_spam,
     score = 0.0,
@@ -1250,6 +1433,8 @@ for _, rule in pairs(settings.rules) do
         function(_, _)
           -- Clean old ANNs
           cleanup_anns(rule, cfg, ev_base)
+          -- Check for external model updates
+          check_external_model(worker, cfg, ev_base, rule)
           return check_anns(worker, cfg, ev_base, rule, maybe_train_existing_ann,
             'try_train_ann')
         end)

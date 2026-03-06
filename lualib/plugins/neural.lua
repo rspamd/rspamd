@@ -24,6 +24,7 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_tensor = require "rspamd_tensor"
 local rspamd_util = require "rspamd_util"
 local ucl = require "ucl"
+local neural_external = require "lua_neural_external"
 
 local N = 'neural'
 
@@ -76,6 +77,8 @@ local default_options = {
     per_provider_pca = false,    -- if true, apply PCA per provider before fusion (not active yet)
   },
   disable_symbols_input = false, -- when true, do not use symbols provider unless explicitly listed
+  -- External pretrained model support
+  external_model = nil,          -- external model configuration (see lua_neural_external)
 }
 
 -- Rule structure:
@@ -1506,4 +1509,6 @@ return {
   result_to_vector = result_to_vector,
   settings = settings,
   spawn_train = spawn_train,
+  -- External model support
+  neural_external = neural_external,
 }
