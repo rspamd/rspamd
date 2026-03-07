@@ -2939,6 +2939,7 @@ struct rspamd_url_query_to_inject_cbd {
 	struct rspamd_task *task;
 	struct rspamd_url *url;
 	GPtrArray *mpart_urls;
+	uint32_t parent_flags;
 };
 
 static gboolean
@@ -2952,10 +2953,13 @@ inject_url_query_callback(struct rspamd_url *url, gsize start_offset,
 	task = cbd->task;
 
 	url->flags |= RSPAMD_URL_FLAG_QUERY;
+	url->flags |= (cbd->parent_flags & RSPAMD_URL_FLAG_PROPAGATE_MASK);
 
-	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false) && cbd->mpart_urls) {
+	if (cbd->mpart_urls) {
 		g_ptr_array_add(cbd->mpart_urls, url);
 	}
+
+	rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false);
 
 	return TRUE;
 }
@@ -2970,6 +2974,7 @@ inject_url_query(struct rspamd_task *task, struct rspamd_url *url,
 		cbd.task = task;
 		cbd.url = url;
 		cbd.mpart_urls = part_urls;
+		cbd.parent_flags = url->flags;
 
 		rspamd_url_find_multiple(task->task_pool,
 								 rspamd_url_query_unsafe(url), url->querylen,
@@ -2997,10 +3002,10 @@ lua_task_inject_url(lua_State *L)
 					  rspamd_lua_check_udata_maybe(L, 3, rspamd_mimepart_classname));
 	}
 	if (task && task->message && url && url->url) {
-		if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false)) {
-			if (mpart && mpart->urls) {
-				inject_url_query(task, url->url, mpart->urls);
-			}
+		rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false);
+
+		if (mpart && mpart->urls) {
+			inject_url_query(task, url->url, mpart->urls);
 		}
 	}
 	else {
