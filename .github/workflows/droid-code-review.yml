@@ -179,7 +179,7 @@ jobs:
 
           # Run droid exec with the prompt
           echo "Running code review analysis and submitting results..."
-          droid exec --auto high --model gpt5.4 -f prompt.txt
+          droid exec --auto high --model gpt-5.4 -f prompt.txt
 
       - name: Post failure notice
         if: ${{ failure() }}
