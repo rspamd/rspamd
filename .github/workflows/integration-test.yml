@@ -17,6 +17,7 @@ on:
 jobs:
   integration-test:
     name: Integration & Load Test
+    if: github.event_name != 'schedule' || github.repository == 'rspamd/rspamd'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
