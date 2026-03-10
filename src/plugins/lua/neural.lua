@@ -783,10 +783,12 @@ local function apply_external_model(rule, set, model, ev_base)
       return true
     end
 
-    -- Merge weights
+    -- Merge weights (modifies ext_ann in place, returns boolean)
+    -- C merge: w_dst = (1-a)*w_dst + a*w_src, so to get alpha*ext + (1-alpha)*local
+    -- we pass (1 - alpha) as the C alpha parameter
     local alpha = ext_cfg.merge_alpha or 0.5
-    local merged, merge_err = ext_ann:merge_weights(set.ann.ann, alpha)
-    if not merged then
+    local merge_ok, merge_err = ext_ann:merge_weights(set.ann.ann, 1.0 - alpha)
+    if not merge_ok then
       rspamd_logger.errx(rspamd_config, 'failed to merge ANNs for %s:%s: %s',
         rule.prefix, set.name, merge_err or "unknown")
       return false
@@ -796,8 +798,8 @@ local function apply_external_model(rule, set, model, ev_base)
       'merged external model (version=%s, alpha=%s) with local ANN for %s:%s',
       model.model_version, alpha, rule.prefix, set.name)
 
-    -- Update ANN reference
-    set.ann.ann = merged
+    -- Update ANN reference (merge_weights modifies ext_ann in place)
+    set.ann.ann = ext_ann
     set.ann.version = (set.ann.version or 0) + 1
     set.ann.external_version = model.model_version
     set.ann.external_source = ext_cfg.url
@@ -823,6 +825,9 @@ local function apply_external_model(rule, set, model, ev_base)
       external_source = ext_cfg.url,
       ann = ext_ann,
       providers_digest = ext_cfg.providers_digest,
+      digest = 'external:' .. (model.model_version or '0'),
+      symbols = set.symbols,
+      distance = 0,
     }
 
     -- Store base model for future re-merge
