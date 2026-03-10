@@ -199,8 +199,11 @@ local function replies_check(task)
       rspamd_logger.errx(task, 'redis_get_cb error when reading data from %s: %s', addr:get_addr(), err)
       return
     end
+    if type(data) ~= 'string' then
+      return
+    end
     local recipients = check_recipient(data)
-    if type(data) == 'string' and recipients then
+    if recipients then
       -- Hash was found
       add_to_replies_set(recipients)
       task:insert_result(settings['symbol'], 1.0)
