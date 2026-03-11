@@ -167,11 +167,15 @@ LUA_FUNCTION_DEF(kann, destroy);
 LUA_FUNCTION_DEF(kann, save);
 LUA_FUNCTION_DEF(kann, train1);
 LUA_FUNCTION_DEF(kann, apply1);
+LUA_FUNCTION_DEF(kann, merge_weights);
+LUA_FUNCTION_DEF(kann, is_compatible);
 
 static luaL_reg rspamd_kann_m[] = {
 	LUA_INTERFACE_DEF(kann, save),
 	LUA_INTERFACE_DEF(kann, train1),
 	LUA_INTERFACE_DEF(kann, apply1),
+	LUA_INTERFACE_DEF(kann, merge_weights),
+	LUA_INTERFACE_DEF(kann, is_compatible),
 	{"__gc", lua_kann_destroy},
 	{NULL, NULL},
 };
@@ -1434,4 +1438,70 @@ lua_kann_apply1(lua_State *L)
 	}
 
 	return 1;
+}
+
+/***
+ * @function kann:merge_weights(other_ann, alpha)
+ * Merge weights from another ANN into this one using linear interpolation.
+ * w_new = (1 - alpha) * w_self + alpha * w_other
+ * @param {kann} other_ann source ANN to merge from
+ * @param {number} alpha weight for source ANN (0.0 - 1.0)
+ * @return {boolean} true on success, false on error
+ */
+static int
+lua_kann_merge_weights(lua_State *L)
+{
+	kann_t *self = lua_check_kann(L, 1);
+	kann_t *other = lua_check_kann(L, 2);
+	double alpha = luaL_checknumber(L, 3);
+
+	if (self && other) {
+		if (alpha < 0.0 || alpha > 1.0) {
+			return luaL_error(L, "alpha must be between 0.0 and 1.0, got %f", alpha);
+		}
+
+		/* Check compatibility first */
+		if (!kann_is_compatible(self, other)) {
+			lua_pushboolean(L, false);
+			lua_pushstring(L, "incompatible ANN architectures");
+			return 2;
+		}
+
+		int ret = kann_merge_weights(self, other, (float) alpha);
+
+		if (ret == 0) {
+			lua_pushboolean(L, true);
+			return 1;
+		}
+		else {
+			lua_pushboolean(L, false);
+			lua_pushstring(L, "merge failed");
+			return 2;
+		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments: two kann objects required");
+	}
+}
+
+/***
+ * @function kann:is_compatible(other_ann)
+ * Check if two ANNs have compatible architecture for weight merging.
+ * @param {kann} other_ann ANN to check compatibility with
+ * @return {boolean} true if compatible, false otherwise
+ */
+static int
+lua_kann_is_compatible(lua_State *L)
+{
+	kann_t *self = lua_check_kann(L, 1);
+	kann_t *other = lua_check_kann(L, 2);
+
+	if (self && other) {
+		int ret = kann_is_compatible(self, other);
+		lua_pushboolean(L, ret == 1);
+		return 1;
+	}
+	else {
+		return luaL_error(L, "invalid arguments: two kann objects required");
+	}
 }
