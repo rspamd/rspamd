@@ -12,3 +12,6 @@ Fuzzy Delete TCP Explicit
 
 Fuzzy Multi Flag TCP Explicit
   Fuzzy Multimessage Multi Flag Test
+
+Fuzzy Multi Flag Delete TCP Explicit
+  Fuzzy Multimessage Multi Flag Delete Test

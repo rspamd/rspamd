@@ -19,6 +19,7 @@ jobs:
     timeout-minutes: 20
     # Only run on PR comments that contain "@droid review" from authorized users
     if: |
+      github.repository == 'rspamd/rspamd' &&
       github.event.issue.pull_request &&
       contains(github.event.comment.body, '@droid review') &&
       (

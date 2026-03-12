@@ -1685,7 +1685,8 @@ fuzzy_tcp_read_handler(struct fuzzy_tcp_connection *conn)
 		/* State: 0xC000 - have length, reading data */
 		frame_len = conn->cur_frame_state & 0x3FFF;
 
-		if (frame_len > sizeof(struct rspamd_fuzzy_encrypted_reply)) {
+		if ((conn->encrypted && frame_len > sizeof(struct rspamd_fuzzy_encrypted_reply_v2)) ||
+			(!conn->encrypted && frame_len > sizeof(struct rspamd_fuzzy_reply_v2))) {
 			char error_buf[128];
 			rspamd_snprintf(error_buf, sizeof(error_buf), "invalid frame length: %d", (int) frame_len);
 			msg_err("fuzzy_tcp: invalid frame length %d from %s, closing",

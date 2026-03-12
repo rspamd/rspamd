@@ -39,7 +39,7 @@ constexpr std::int32_t MAX_SANE_ENTRIES = 50'000'000;
 constexpr std::int64_t MAX_SANE_MATRIX_ROWS = 500'000'000;
 constexpr std::int32_t MAX_SANE_CODESIZE = 500'000'000;
 constexpr std::int32_t MAX_SANE_BUCKET = 100'000'000;
-constexpr std::size_t MAX_SANE_STRING = 1024;
+constexpr std::size_t MAX_SANE_STRING = 8192;
 
 /* --- Binary reader: a cursor over memory-mapped data --- */
 /* Uses a fail-bit pattern instead of exceptions: once any read overflows,
