@@ -39,6 +39,7 @@ SET(LUASRC			  ${CMAKE_CURRENT_SOURCE_DIR}/lua_common.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_archive.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_classnames.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_shingles.cxx
-					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_fasttext.cxx)
+					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_fasttext.cxx
+					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_caseless_table.c)
 
 SET(RSPAMD_LUA ${LUASRC} PARENT_SCOPE)
