@@ -452,6 +452,8 @@ void luaopen_fasttext(lua_State *L);
 /* libarchive-based archive module */
 void luaopen_libarchive(lua_State *L);
 
+void luaopen_caseless_table(lua_State *L);
+
 void rspamd_lua_dostring(const char *line);
 
 double rspamd_lua_normalize(struct rspamd_config *cfg,
