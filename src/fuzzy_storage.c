@@ -79,8 +79,11 @@ worker_t fuzzy_worker = {
 static const uint64_t rspamd_fuzzy_storage_magic = 0x291a3253eb1b3ea5ULL;
 
 struct rspamd_fuzzy_tcp_frame {
-	uint16_t size_hdr;                           /* We have to write this as well */
-	struct rspamd_fuzzy_encrypted_reply payload; /* Payload */
+	uint16_t size_hdr; /* We have to write this as well */
+	union {
+		struct rspamd_fuzzy_encrypted_reply v1;
+		struct rspamd_fuzzy_encrypted_reply_v2 v2;
+	} payload; /* Payload - must be large enough for v2 replies */
 };
 
 struct fuzzy_tcp_reply_queue_elt {

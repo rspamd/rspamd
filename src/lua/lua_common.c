@@ -993,6 +993,7 @@ rspamd_lua_init(bool wipe_mem)
 	luaopen_libarchive(L);
 	luaopen_shingle(L);
 	luaopen_fasttext(L);
+	luaopen_caseless_table(L);
 #ifndef WITH_LUAJIT
 	rspamd_lua_add_preload(L, "bit", luaopen_bit);
 	lua_settop(L, 0);

@@ -47,7 +47,7 @@ parser:flag "-n --no-opt"
       :description "Do not reset reporting data/send reports"
 
 parser:argument "date"
-      :description "Date to process (today by default)"
+      :description "Date to process (yesterday by default)"
       :argname "<YYYYMMDD>"
       :args "*"
 parser:option "-b --batch-size"

@@ -562,6 +562,87 @@ kann_t *kann_load(const char *fn)
 	return ann;
 }
 
+/*******************************
+ *** @@MERGE: weight merging ***
+ ********************************/
+
+/**
+ * Merge weights from source ANN into destination ANN using linear interpolation.
+ * w_dst = (1 - alpha) * w_dst + alpha * w_src
+ *
+ * Both ANNs must have the same architecture (same number of variables and constants).
+ *
+ * @param dst   destination ANN (modified in place)
+ * @param src   source ANN (not modified)
+ * @param alpha weight for source ANN (0.0 - 1.0)
+ * @return 0 on success, -1 on error
+ */
+int kann_merge_weights(kann_t *dst, const kann_t *src, float alpha)
+{
+	int n_var_dst, n_var_src;
+	int n_const_dst, n_const_src;
+
+	if (!dst || !src) {
+		return -1;
+	}
+
+	n_var_dst = kad_size_var(dst->n, dst->v);
+	n_var_src = kad_size_var(src->n, src->v);
+	n_const_dst = kad_size_const(dst->n, dst->v);
+	n_const_src = kad_size_const(src->n, src->v);
+
+	/* Check architecture compatibility */
+	if (n_var_dst != n_var_src) {
+		return -1;
+	}
+
+	if (n_const_dst != n_const_src) {
+		/* Constants should match, but we can still merge weights */
+		(void) n_const_dst; /* suppress unused warning */
+	}
+
+	/* Merge variable weights (trainable parameters) */
+	for (int i = 0; i < n_var_dst; i++) {
+		dst->x[i] = (1.0f - alpha) * dst->x[i] + alpha * src->x[i];
+	}
+
+	return 0;
+}
+
+/**
+ * Check if two ANNs have compatible architecture for weight merging.
+ *
+ * @param a first ANN
+ * @param b second ANN
+ * @return 1 if compatible, 0 otherwise
+ */
+int kann_is_compatible(const kann_t *a, const kann_t *b)
+{
+	int n_var_a, n_var_b;
+
+	if (!a || !b) {
+		return 0;
+	}
+
+	n_var_a = kad_size_var(a->n, a->v);
+	n_var_b = kad_size_var(b->n, b->v);
+
+	if (n_var_a != n_var_b) {
+		return 0;
+	}
+
+	/* Check input/output dimensions */
+	if (kann_dim_in(a) != kann_dim_in(b)) {
+		return 0;
+	}
+
+	if (kann_dim_out(a) != kann_dim_out(b)) {
+		return 0;
+	}
+
+	return 1;
+}
+
 /**********************************************
  *** @@LAYER: layers and model generation ***
  **********************************************/

@@ -69,6 +69,7 @@ const char *rspamd_zstd_compress_classname = "rspamd{zstd_compress}";
 const char *rspamd_zstd_decompress_classname = "rspamd{zstd_decompress}";
 const char *rspamd_shingle_classname = "rspamd{shingle}";
 const char *rspamd_fasttext_classname = "rspamd{fasttext}";
+const char *rspamd_caseless_table_classname = "rspamd{caseless_table}";
 
 KHASH_INIT(rspamd_lua_static_classes, const char *, const char *, 1, rspamd_str_hash, rspamd_str_equal);
 
@@ -137,6 +138,7 @@ RSPAMD_CONSTRUCTOR(rspamd_lua_init_classnames)
 	CLASS_PUT_STR(zstd_decompress);
 	CLASS_PUT_STR(shingle);
 	CLASS_PUT_STR(fasttext);
+	CLASS_PUT_STR(caseless_table);
 
 	/* Check consistency */
 	g_assert(kh_size(lua_static_classes) == RSPAMD_MAX_LUA_CLASSES);
