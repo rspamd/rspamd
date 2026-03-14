@@ -306,7 +306,7 @@ local function clickhouse_main_row(res)
     'ListId',
     'Subject',
     'Digest',
-    'UUID',
+    'TaskUUID',
     -- 1.9.2 +
     'IsSpf',
     'MimeRecipients',
