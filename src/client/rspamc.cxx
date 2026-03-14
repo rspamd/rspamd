@@ -224,17 +224,20 @@ static void rspamc_stat_output(FILE *out, ucl_object_t *obj);
 static void
 rspamc_neural_learn_output(FILE *out, ucl_object_t *obj)
 {
-	bool is_success = true;
+	bool is_success = false;
+	bool have_explicit_success = false;
 	const char *filename = nullptr;
 	double scan_time = -1.0;
 	const char *redis_key = nullptr;
 	std::uintmax_t stored_bytes = 0;
 	bool have_stored = false;
+	bool is_scan_response = false;
 
 	if (obj != nullptr) {
 		const auto *ok = ucl_object_lookup(obj, "success");
 		if (ok) {
 			is_success = ucl_object_toboolean(ok);
+			have_explicit_success = true;
 		}
 		const auto *fn = ucl_object_lookup(obj, "filename");
 		if (fn) {
@@ -253,10 +256,24 @@ rspamc_neural_learn_output(FILE *out, ucl_object_t *obj)
 		if (rk) {
 			redis_key = ucl_object_tostring(rk);
 		}
+		/* Detect checkv2 scan response (has "default" or "action" key) */
+		if (ucl_object_lookup(obj, "default") || ucl_object_lookup(obj, "action")) {
+			is_scan_response = true;
+			is_success = true;
+		}
 	}
 
-	// First line: success
-	fprintf(out, "success = %s;\n", is_success ? "true" : "false");
+	if (is_scan_response) {
+		/* Training was submitted via scan (requires_scan mode) */
+		fprintf(out, "success = true;\n");
+		fprintf(out, "method = \"scan\";\n");
+	}
+	else if (have_explicit_success) {
+		fprintf(out, "success = %s;\n", is_success ? "true" : "false");
+	}
+	else {
+		fprintf(out, "success = false;\n");
+	}
 
 	// Then other fields in k = v; format
 	if (filename) {
@@ -2581,8 +2598,14 @@ static void rspamc_neural_config_cb(struct rspamd_client_connection *conn,
 		ucl_object_unref(result);
 	}
 	else if (err) {
-		/* Do not fail the whole run if config not available */
+		/* Do not fail the whole run if config not available;
+		 * fall back to scan-based learning (requires_scan=true default) */
 		neural_cfg_loaded = false;
+		if (!json && !compact) {
+			rspamc_print(stderr, "Note: could not fetch neural config ({}); "
+								 "using scan-based learning\n",
+						 err->message);
+		}
 	}
 
 	rspamd_client_destroy(conn);
@@ -2622,7 +2645,19 @@ rspamc_fetch_neural_config(struct ev_loop *ev_base, GQueue *attrs)
 	}
 
 	if (p != nullptr) {
-		port = strtoul(p + 1, nullptr, 10);
+		auto user_port = strtoul(p + 1, nullptr, 10);
+		/*
+		 * /plugins/neural/config is only available on the controller worker.
+		 * If the user specified the default scan port (11333), use the
+		 * controller port instead.  For any other user-specified port,
+		 * use it as-is (it might be a custom controller port).
+		 */
+		if (user_port == DEFAULT_PORT) {
+			port = DEFAULT_CONTROL_PORT;
+		}
+		else {
+			port = user_port;
+		}
 	}
 	else {
 		/* Default to controller port if not specified */
