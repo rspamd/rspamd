@@ -1146,6 +1146,18 @@ function M.filters.int(value)
 end
 
 ---
+-- Returns a list of {key, value} pairs from table *t*.
+-- @param t The table to get items from.
+-- @usage expand('{% for k, v in {a=1, b=2}|items %}{{ k }}={{ v }} {% endfor %}')
+-- @name filters.items
+function M.filters.items(t)
+  assert(t, 'input to filter "items" was nil instead of a table')
+  local result = {}
+  for k, v in pairs(t) do result[#result + 1] = {k, v} end
+  return result
+end
+
+---
 -- Returns a string that contains all the elements in table *t* (or all the
 -- attributes named *attribute* in *t*) separated by string *sep*.
 -- @param t The table to join.
@@ -1166,6 +1178,18 @@ function M.filters.join(t, sep, attribute)
   local attributes = {}
   for i = 1, #t do attributes[#attributes + 1] = ta[i] end
   return table.concat(attributes, sep)
+end
+
+---
+-- Returns a list of the keys in table *t*.
+-- @param t The table to get keys from.
+-- @usage expand('{{ {a=1, b=2}|keys|sort|join(",") }}')
+-- @name filters.keys
+function M.filters.keys(t)
+  assert(t, 'input to filter "keys" was nil instead of a table')
+  local result = {}
+  for k in pairs(t) do result[#result + 1] = k end
+  return result
 end
 
 ---
@@ -1255,6 +1279,50 @@ function M.filters.mapattr(t, attribute, filter, ...)
   local map = {}
   for i = 1, #t do map[i] = filter and f(ta[i], ...) or ta[i] end
   return map
+end
+
+---
+-- Returns the largest item from table *t*, optionally by *attribute*.
+-- @param t The table to find the maximum in.
+-- @param case_sensitive Optional flag for case sensitivity with strings.
+--   The default value is `false`.
+-- @param attribute Optional attribute of elements to compare.
+-- @usage expand('{{ {3, 1, 2}|max }}') --> 3
+-- @name filters.max
+function M.filters.max(t, case_sensitive, attribute)
+  assert(t, 'input to filter "max" was nil instead of a table')
+  local ta = attribute and attr_accessor(t, attribute) or t
+  local result, result_key = t[1], ta[1]
+  for i = 2, #t do
+    local key = ta[i]
+    local a, b = key, result_key
+    if type(a) == 'string' and not case_sensitive then a = a:lower() end
+    if type(b) == 'string' and not case_sensitive then b = b:lower() end
+    if a > b then result, result_key = t[i], key end
+  end
+  return result
+end
+
+---
+-- Returns the smallest item from table *t*, optionally by *attribute*.
+-- @param t The table to find the minimum in.
+-- @param case_sensitive Optional flag for case sensitivity with strings.
+--   The default value is `false`.
+-- @param attribute Optional attribute of elements to compare.
+-- @usage expand('{{ {3, 1, 2}|min }}') --> 1
+-- @name filters.min
+function M.filters.min(t, case_sensitive, attribute)
+  assert(t, 'input to filter "min" was nil instead of a table')
+  local ta = attribute and attr_accessor(t, attribute) or t
+  local result, result_key = t[1], ta[1]
+  for i = 2, #t do
+    local key = ta[i]
+    local a, b = key, result_key
+    if type(a) == 'string' and not case_sensitive then a = a:lower() end
+    if type(b) == 'string' and not case_sensitive then b = b:lower() end
+    if a < b then result, result_key = t[i], key end
+  end
+  return result
 end
 
 ---
@@ -1433,6 +1501,38 @@ function M.filters.slice(t, slices, fill)
 end
 
 ---
+-- Returns a list of substrings by splitting string *s* on separator *sep*.
+-- If *sep* is not given, splits on whitespace.
+-- @param s The string to split.
+-- @param sep Optional separator string to split on. Literal string matching is
+--   used (not patterns). If not given, splits on whitespace.
+-- @param max_splits Optional maximum number of splits to perform.
+-- @usage expand('{{ "a,b,c"|split(",")|string }}') --> {"a", "b", "c"}
+-- @name filters.split
+function M.filters.split(s, sep, max_splits)
+  assert(s, 'input to filter "split" was nil instead of a string')
+  local t = {}
+  if not sep then
+    for word in s:gmatch('%S+') do t[#t + 1] = word end
+    return t
+  end
+  local pos = 1
+  while true do
+    if max_splits and #t >= max_splits then
+      t[#t + 1] = s:sub(pos)
+      return t
+    end
+    local i, j = s:find(sep, pos, true)
+    if not i then
+      t[#t + 1] = s:sub(pos)
+      return t
+    end
+    t[#t + 1] = s:sub(pos, i - 1)
+    pos = j + 1
+  end
+end
+
+---
 -- Returns a copy of table or string *value* in sorted order by value (or by
 -- an attribute named *attribute*), depending on booleans *reverse* and
 -- *case_sensitive*.
@@ -1533,6 +1633,18 @@ function M.filters.title(s)
 end
 
 ---
+-- Returns value *value* serialized as a JSON string using UCL.
+-- @param value The value to serialize.
+-- @param indent Optional boolean to pretty-print with indentation.
+-- @usage expand('{{ {a=1, b=2}|tojson }}') --> {"a":1,"b":2}
+-- @name filters.tojson
+function M.filters.tojson(value, indent)
+  assert(value ~= nil, 'input to filter "tojson" was nil')
+  local ucl = require('ucl')
+  return ucl.to_format(value, indent and 'json' or 'json-compact')
+end
+
+---
 -- Returns a copy of string *s* truncated to *length* number of characters.
 -- Truncated strings end with '...' or string *delimiter*. If boolean
 -- *partial_words* is `false`, truncation will only happen at word boundaries.
@@ -1554,6 +1666,16 @@ function M.filters.truncate(s, length, partial_words, delimiter)
 end
 
 ---
+-- Returns a copy of string *s* with leading and trailing whitespace removed.
+-- @param s The string to trim.
+-- @usage expand('{{ "  foo  "|trim }}') --> "foo"
+-- @name filters.trim
+function M.filters.trim(s)
+  assert(s, 'input to filter "trim" was nil instead of a string')
+  return s:match('^%s*(.-)%s*$')
+end
+
+---
 -- Returns a copy of string *s* with all uppercase characters.
 -- @param s The string to uppercase.
 -- @usage expand('{{ "foo"|upper }}') --> FOO
@@ -1561,6 +1683,30 @@ end
 function M.filters.upper(s)
   assert(s, 'input to filter "upper" was nil instead of a string')
   return string.upper(s)
+end
+
+---
+-- Returns a copy of table *t* with duplicate elements removed.
+-- @param t The table to remove duplicates from.
+-- @param case_sensitive Optional flag for case sensitivity with strings.
+--   The default value is `false`.
+-- @param attribute Optional attribute of elements to use for uniqueness.
+-- @usage expand('{{ {1, 2, 1, 3}|unique|string }}') --> {1, 2, 3}
+-- @name filters.unique
+function M.filters.unique(t, case_sensitive, attribute)
+  assert(t, 'input to filter "unique" was nil instead of a table')
+  local seen = {}
+  local result = {}
+  local ta = attribute and attr_accessor(t, attribute) or t
+  for i = 1, #t do
+    local key = ta[i]
+    if type(key) == 'string' and not case_sensitive then key = key:lower() end
+    if not seen[key] then
+      seen[key] = true
+      result[#result + 1] = t[i]
+    end
+  end
+  return result
 end
 
 ---
@@ -1591,6 +1737,18 @@ function M.filters.urlencode(value)
     end
   end
   return table.concat(params, '&')
+end
+
+---
+-- Returns a list of the values in table *t*.
+-- @param t The table to get values from.
+-- @usage expand('{{ {a=1, b=2}|values|sort|join(",") }}') --> 1,2
+-- @name filters.values
+function M.filters.values(t)
+  assert(t, 'input to filter "values" was nil instead of a table')
+  local result = {}
+  for _, v in pairs(t) do result[#result + 1] = v end
+  return result
 end
 
 ---
@@ -1650,6 +1808,48 @@ end
 function M.filters.wordcount(s)
   assert(s, 'input to filter "wordcount" was nil instead of a string')
   return select(2, s:gsub('%S+', ''))
+end
+
+---
+-- Returns a copy of string *s* with text wrapped at *width* characters.
+-- @param s The string to wrap.
+-- @param width The column width to wrap at. The default value is `79`.
+-- @param break_long_words Optional flag indicating whether to break words
+--   longer than *width*. The default value is `true`.
+-- @param wrapstring Optional string to use for line breaks. The default value
+--   is '\n'.
+-- @usage expand('{{ "foo bar baz"|wordwrap(8) }}') --> "foo bar\nbaz"
+-- @name filters.wordwrap
+function M.filters.wordwrap(s, width, break_long_words, wrapstring)
+  assert(s, 'input to filter "wordwrap" was nil instead of a string')
+  width = width or 79
+  wrapstring = wrapstring or '\n'
+  if break_long_words == nil then break_long_words = true end
+  local lines = {}
+  local line = ''
+  for word in s:gmatch('%S+') do
+    if #line > 0 and #line + 1 + #word > width then
+      lines[#lines + 1] = line
+      line = ''
+    end
+    if #word > width and break_long_words then
+      if #line > 0 then
+        lines[#lines + 1] = line
+        line = ''
+      end
+      while #word > width do
+        lines[#lines + 1] = word:sub(1, width)
+        word = word:sub(width + 1)
+      end
+      line = word
+    elseif #line > 0 then
+      line = line .. ' ' .. word
+    else
+      line = word
+    end
+  end
+  if #line > 0 then lines[#lines + 1] = line end
+  return table.concat(lines, wrapstring)
 end
 
 ---
@@ -1806,5 +2006,142 @@ function M.tests.is_sameas(value, other) return value == other end
 function M.tests.is_escaped(value)
   return getmetatable(value) and getmetatable(value).__tostring ~= nil
 end
+
+---
+-- Returns whether or not value *value* is contained in *container*.
+-- If *container* is a string, checks for a substring match.
+-- If *container* is a table, checks if any element equals *value*.
+-- @param value The value to search for.
+-- @param container The string or table to search in.
+-- @usage expand('{% if is_in("foo", items) %}...{% endif %}')
+-- @name tests.is_in
+function M.tests.is_in(value, container)
+  if type(container) == 'string' then
+    return container:find(tostring(value), 1, true) ~= nil
+  elseif type(container) == 'table' then
+    for _, v in pairs(container) do
+      if v == value then return true end
+    end
+  end
+  return false
+end
+
+---
+-- Returns whether or not string *s* starts with string *prefix*.
+-- @param s The string to test.
+-- @param prefix The prefix to check for.
+-- @usage expand('{% if is_startswith(name, "foo") %}...{% endif %}')
+-- @name tests.is_startswith
+function M.tests.is_startswith(s, prefix)
+  if type(s) ~= 'string' then s = tostring(s) end
+  return s:sub(1, #prefix) == prefix
+end
+
+---
+-- Returns whether or not string *s* ends with string *suffix*.
+-- @param s The string to test.
+-- @param suffix The suffix to check for.
+-- @usage expand('{% if is_endswith(name, ".txt") %}...{% endif %}')
+-- @name tests.is_endswith
+function M.tests.is_endswith(s, suffix)
+  if type(s) ~= 'string' then s = tostring(s) end
+  if #suffix == 0 then return true end
+  return s:sub(-#suffix) == suffix
+end
+
+---
+-- Returns whether or not string *s* matches Lua pattern *pattern*.
+-- @param s The string to test.
+-- @param pattern The Lua pattern to match against.
+-- @usage expand('{% if is_match(name, "^%a+$") %}...{% endif %}')
+-- @name tests.is_match
+function M.tests.is_match(s, pattern)
+  if type(s) ~= 'string' then s = tostring(s) end
+  return s:find(pattern) ~= nil
+end
+
+---
+-- Returns whether or not value *value* is a boolean.
+-- @param value The value to test.
+-- @usage expand('{% if is_boolean(x) %}...{% endif %}')
+-- @name tests.is_boolean
+function M.tests.is_boolean(value) return type(value) == 'boolean' end
+
+---
+-- Returns whether or not value *value* is `true`.
+-- @param value The value to test.
+-- @usage expand('{% if is_true(x) %}...{% endif %}')
+-- @name tests.is_true
+function M.tests.is_true(value) return value == true end
+
+---
+-- Returns whether or not value *value* is `false`.
+-- @param value The value to test.
+-- @usage expand('{% if is_false(x) %}...{% endif %}')
+-- @name tests.is_false
+function M.tests.is_false(value) return value == false end
+
+---
+-- Returns whether or not value *value* is an integer number.
+-- @param value The value to test.
+-- @usage expand('{% if is_integer(x) %}...{% endif %}')
+-- @name tests.is_integer
+function M.tests.is_integer(value)
+  if type(value) ~= 'number' then return false end
+  return value == math.floor(value)
+end
+
+---
+-- Returns whether or not value *value* is a floating-point number.
+-- @param value The value to test.
+-- @usage expand('{% if is_float(x) %}...{% endif %}')
+-- @name tests.is_float
+function M.tests.is_float(value)
+  if type(value) ~= 'number' then return false end
+  return value ~= math.floor(value)
+end
+
+---
+-- Returns whether or not *value* equals *other*.
+-- @param value The value to test.
+-- @param other The value to compare with.
+-- @usage expand('{% if is_eq(x, 1) %}...{% endif %}')
+-- @name tests.is_eq
+function M.tests.is_eq(value, other) return value == other end
+
+---
+-- Returns whether or not *value* does not equal *other*.
+-- @param value The value to test.
+-- @param other The value to compare with.
+-- @name tests.is_ne
+function M.tests.is_ne(value, other) return value ~= other end
+
+---
+-- Returns whether or not *value* is less than *other*.
+-- @param value The value to test.
+-- @param other The value to compare with.
+-- @name tests.is_lt
+function M.tests.is_lt(value, other) return value < other end
+
+---
+-- Returns whether or not *value* is less than or equal to *other*.
+-- @param value The value to test.
+-- @param other The value to compare with.
+-- @name tests.is_le
+function M.tests.is_le(value, other) return value <= other end
+
+---
+-- Returns whether or not *value* is greater than *other*.
+-- @param value The value to test.
+-- @param other The value to compare with.
+-- @name tests.is_gt
+function M.tests.is_gt(value, other) return value > other end
+
+---
+-- Returns whether or not *value* is greater than or equal to *other*.
+-- @param value The value to test.
+-- @param other The value to compare with.
+-- @name tests.is_ge
+function M.tests.is_ge(value, other) return value >= other end
 
 return M
