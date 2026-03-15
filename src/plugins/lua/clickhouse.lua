@@ -89,6 +89,7 @@ local settings = {
   custom_rules = {},
   enable_digest = false,
   enable_uuid = true,
+
   exceptions = nil,
   retention = {
     enable = false,
@@ -152,7 +153,7 @@ CREATE TABLE IF NOT EXISTS rspamd
     AuthUser String COMMENT 'Username for authenticated SMTP client',
     SettingsId LowCardinality(String) COMMENT 'ID for the settings profile',
     Digest FixedString(32) COMMENT '[Deprecated]',
-    TaskUUID UUID CODEC(Delta, LZ4) COMMENT 'Native UUID v7 (RFC 9562) for task identification',
+    TaskUUID UUID COMMENT 'Native UUID v7 (RFC 9562) for task identification',
     SMTPFrom ALIAS if(From = '', '', concat(FromUser, '@', From)) COMMENT 'Return address (RFC5321.MailFrom)',
     SMTPRcpt ALIAS SMTPRecipients[1] COMMENT 'The first envelope recipient (RFC5321.RcptTo)',
     MIMEFrom ALIAS if(MimeFrom = '', '', concat(MimeUser, '@', MimeFrom)) COMMENT 'Address in From: header (RFC5322.From)',
@@ -261,9 +262,9 @@ local migrations = {
     [[INSERT INTO rspamd_version (Version) Values (9)]],
   },
   [9] = {
-    -- Add UUID column with Delta compression for efficient storage of time-ordered UUIDv7
+    -- Add UUID column
     [[ALTER TABLE rspamd
-      ADD COLUMN IF NOT EXISTS TaskUUID UUID CODEC(Delta, LZ4) AFTER Digest
+      ADD COLUMN IF NOT EXISTS TaskUUID UUID AFTER Digest
     ]],
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (10)]],
