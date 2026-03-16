@@ -777,6 +777,20 @@ local function insert_results(task, result, sel_part)
     end
   end
 
+  -- Store full GPT result in mempool for downstream plugins
+  local gpt_mempool = {
+    probability = result.probability,
+    reason = result.reason or '',
+    categories = result.categories or {},
+  }
+  if result.model then
+    gpt_mempool.model = result.model
+  end
+  local ok_mp, gpt_mp_json = pcall(ucl.to_format, gpt_mempool, 'json-compact')
+  if ok_mp then
+    task:get_mempool():set_variable('gpt_result', gpt_mp_json)
+  end
+
   local cache_key = redis_cache_key(sel_part)
   if cache_context and cache_key then
     lua_cache.cache_set(task, cache_key, result, cache_context)
@@ -824,11 +838,21 @@ local function check_consensus_and_insert_results(task, results, sel_part)
   local reason_text = reason_obj and reason_obj.reason or nil
   local reason_categories = reason_obj and reason_obj.categories or nil
 
+  -- Collect model names from all successful results
+  local model_names = {}
+  for _, result in ipairs(results) do
+    if result.success and result.model then
+      table.insert(model_names, result.model)
+    end
+  end
+  local models_str = #model_names > 0 and table.concat(model_names, ', ') or nil
+
   if nspam > nham and max_spam_prob > 0.75 then
     insert_results(task, {
         probability = max_spam_prob,
         reason = reason_text,
         categories = reason_categories,
+        model = models_str,
       },
       sel_part)
   elseif nham > nspam and max_ham_prob < 0.25 then
@@ -836,6 +860,7 @@ local function check_consensus_and_insert_results(task, results, sel_part)
         probability = max_ham_prob,
         reason = reason_text,
         categories = reason_categories,
+        model = models_str,
       },
       sel_part)
   else
@@ -850,6 +875,7 @@ local function check_consensus_and_insert_results(task, results, sel_part)
         probability = 0.5,
         reason = uncertain_reason,
         categories = { 'uncertain' },
+        model = models_str,
       },
       sel_part)
     task:insert_result('GPT_UNCERTAIN', 1.0)
