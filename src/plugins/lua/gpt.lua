@@ -204,6 +204,8 @@ local settings = {
   allow_passthrough = false,
   allow_ham = false,
   min_words = 10, -- minimum words for text part selection (0 = accept any length)
+  consensus_spam_threshold = 0.75, -- minimum spam probability for consensus
+  consensus_ham_threshold = 0.25, -- maximum ham probability for consensus
   json = false,
   extra_symbols = nil,
   cache_prefix = REDIS_PREFIX,
@@ -847,7 +849,7 @@ local function check_consensus_and_insert_results(task, results, sel_part)
   end
   local models_str = #model_names > 0 and table.concat(model_names, ', ') or nil
 
-  if nspam > nham and max_spam_prob > 0.75 then
+  if nspam > nham and max_spam_prob > settings.consensus_spam_threshold then
     insert_results(task, {
         probability = max_spam_prob,
         reason = reason_text,
@@ -855,7 +857,7 @@ local function check_consensus_and_insert_results(task, results, sel_part)
         model = models_str,
       },
       sel_part)
-  elseif nham > nspam and max_ham_prob < 0.25 then
+  elseif nham > nspam and max_ham_prob < settings.consensus_ham_threshold then
     insert_results(task, {
         probability = max_ham_prob,
         reason = reason_text,
