@@ -203,6 +203,7 @@ local settings = {
   symbols_to_trigger = nil, -- Exclude/include logic
   allow_passthrough = false,
   allow_ham = false,
+  min_words = 10, -- minimum words for text part selection (0 = accept any length)
   json = false,
   extra_symbols = nil,
   cache_prefix = REDIS_PREFIX,
@@ -400,21 +401,20 @@ local function default_condition(task)
     end
   end
 
-  -- Unified LLM input building (subject/from/urls/body one-line)
-  local model_cfg = settings.model_parameters[settings.model] or {}
-  local max_tokens = model_cfg.max_completion_tokens or model_cfg.max_tokens or 1000
-  local input_tbl, sel_part = llm_common.build_llm_input(task, {
-    max_tokens = max_tokens,
-    reply_trim_mode = settings.reply_trim_mode,
-  })
+  -- Get displayed text part with configurable min_words
+  local sel_part = lua_mime.get_displayed_text_part(task, settings.min_words)
   if not sel_part then
     return false, 'no text part found'
   end
+
+  -- Unified LLM input building (subject/from/urls/body one-line)
+  local model_cfg = settings.model_parameters[settings.model] or {}
+  local max_tokens = model_cfg.max_completion_tokens or model_cfg.max_tokens or 1000
+  local input_tbl = llm_common.build_llm_input(task, {
+    max_tokens = max_tokens,
+    reply_trim_mode = settings.reply_trim_mode,
+  })
   if not input_tbl then
-    local nwords = sel_part:get_words_count() or 0
-    if nwords < 5 then
-      return false, 'less than 5 words'
-    end
     return false, 'no content to send'
   end
   return true, input_tbl, sel_part
@@ -707,6 +707,9 @@ end
 local env_digest = nil
 
 local function redis_cache_key(sel_part)
+  if not sel_part then
+    return nil
+  end
   if not env_digest then
     local hasher = require "rspamd_cryptobox_hash"
     local digest = hasher.create()
@@ -774,12 +777,13 @@ local function insert_results(task, result, sel_part)
     end
   end
 
-  if cache_context then
-    lua_cache.cache_set(task, redis_cache_key(sel_part), result, cache_context)
+  local cache_key = redis_cache_key(sel_part)
+  if cache_context and cache_key then
+    lua_cache.cache_set(task, cache_key, result, cache_context)
   end
 
   -- Update long-term user/domain context after classification
-  if redis_params and settings.context then
+  if redis_params and settings.context and sel_part then
     llm_context.update_after_classification(task, redis_params, settings.context, result, sel_part, N)
   end
 end
@@ -860,6 +864,11 @@ end
 
 local function check_llm_cached(task, content, sel_part, context_snippet)
   local cache_key = redis_cache_key(sel_part)
+
+  if not cache_key or not cache_context then
+    check_llm_uncached(task, content, sel_part, context_snippet)
+    return
+  end
 
   lua_cache.cache_get(task, cache_key, cache_context, settings.timeout * 1.5, function()
     check_llm_uncached(task, content, sel_part, context_snippet)

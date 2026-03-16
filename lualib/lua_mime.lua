@@ -1253,12 +1253,14 @@ exports.remove_attachments = function(task, settings)
 end
 
 --[[[
--- @function lua_mime.get_displayed_text_part(task)
+-- @function lua_mime.get_displayed_text_part(task[, min_words])
 -- Returns the most relevant displayed content from an email
 -- @param {task} task Rspamd task object
+-- @param {number} min_words optional minimum word count threshold (default 10)
 -- @return {text_part} a selected part
 --]]
-exports.get_displayed_text_part = function(task)
+exports.get_displayed_text_part = function(task, min_words)
+  min_words = min_words or 10
   local text_parts = task:get_text_parts()
   if not text_parts then
     return nil
@@ -1289,16 +1291,14 @@ exports.get_displayed_text_part = function(task)
   -- Decision logic
   if html_part then
     local word_count = html_part:get_words_count() or 0
-    if word_count >= 10 then
-      -- Arbitrary minimum threshold, e.g. I believe it's minimum sane
+    if word_count >= min_words then
       return html_part
     end
   end
 
   if text_part then
     local word_count = text_part:get_words_count() or 0
-    if word_count >= 10 then
-      -- Arbitrary minimum threshold, e.g. I believe it's minimum sane
+    if word_count >= min_words then
       return text_part
     end
   end
