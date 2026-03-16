@@ -1,0 +1,28 @@
+FROM ghcr.io/rspamd/rspamd-build-docker:ubuntu-ci
+
+USER root
+
+ENV CTEST_OUTPUT_ON_FAILURE=1
+ENV RSPAMD_LUA_EXPENSIVE_TESTS=1
+
+WORKDIR /rspamd
+
+COPY . /rspamd/src
+
+RUN mkdir -p /rspamd/build && cd /rspamd/build \
+    && cmake \
+        -DCMAKE_INSTALL_PREFIX=/rspamd/install \
+        -DCMAKE_RULE_MESSAGES=OFF \
+        -DENABLE_COVERAGE=ON \
+        -DENABLE_LIBUNWIND=ON \
+        -DENABLE_HYPERSCAN=ON \
+        -DENABLE_LUAJIT=ON \
+        -GNinja \
+        /rspamd/src \
+    && ninja -j$(nproc) install \
+    && ninja -j$(nproc) rspamd-test \
+    && ninja -j$(nproc) rspamd-test-cxx
+
+WORKDIR /rspamd/build
+
+CMD ["ninja", "test"]
