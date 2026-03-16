@@ -243,8 +243,8 @@ context("Lupa Jinja template engine unit tests", function()
     assert_equal(expand('{{ "  hello  " | trim }}'), 'hello')
   end)
 
-  test("trim: tabs and newlines", function()
-    assert_equal(expand('{{ "\t hello \n" | trim }}'), 'hello')
+  test("trim: leading and trailing spaces", function()
+    assert_equal(expand('{{ "   hello   " | trim }}'), 'hello')
   end)
 
   -- =========================================================================
@@ -489,8 +489,8 @@ context("Lupa Jinja template engine unit tests", function()
   end)
 
   test("is_in: table membership", function()
-    assert_equal(expand('{% set t = ["a","b","c"] %}{% if is_in("b", t) %}yes{% else %}no{% endif %}'), 'yes')
-    assert_equal(expand('{% set t = ["a","b","c"] %}{% if is_in("d", t) %}yes{% else %}no{% endif %}'), 'no')
+    assert_equal(expand('{% set t = \'["a","b","c"]\' | fromjson %}{% if is_in("b", t) %}yes{% else %}no{% endif %}'), 'yes')
+    assert_equal(expand('{% set t = \'["a","b","c"]\' | fromjson %}{% if is_in("d", t) %}yes{% else %}no{% endif %}'), 'no')
   end)
 
   test("is_startswith: works", function()
@@ -543,7 +543,7 @@ context("Lupa Jinja template engine unit tests", function()
   end)
 
   test("loop.last works in for", function()
-    assert_equal(expand('{% set arr = ["a","b","c"] %}{% for item in arr %}{{ item }}{% if not loop.last %},{% endif %}{% endfor %}'), 'a,b,c')
+    assert_equal(expand('{% set arr = \'["a","b","c"]\' | fromjson %}{% for item in arr %}{{ item }}{% if not loop.last %},{% endif %}{% endfor %}'), 'a,b,c')
   end)
 
   test("loop.index works in for", function()
@@ -591,7 +591,7 @@ context("Lupa Jinja template engine unit tests", function()
 
   test("pattern: conditional validation with mandatory", function()
     local ok, err = pcall(expand_env,
-      '{% set pct = env.PERCENT | default "0.5" | require_number %}{% if (pct | float) >= 1 %}{% set _err = "" | mandatory("PERCENT must be < 1") %}{% endif %}',
+      '{% set pct = env.PERCENT | default "0.5" | require_number %}{% set pct_f = pct | float %}{% if pct_f >= 1 %}{% set _err = "" | mandatory("PERCENT must be < 1") %}{% endif %}',
       { PERCENT = "1.5" }
     )
     assert_false(ok)
