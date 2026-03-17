@@ -1645,6 +1645,22 @@ function M.filters.tojson(value, indent)
 end
 
 ---
+-- Parses a JSON string and returns a Lua table.
+-- @param s The JSON string to parse.
+-- @usage expand('{%- set obj = \'{"a":1}\' | fromjson %}{{ obj.a }}') --> 1
+-- @name filters.fromjson
+function M.filters.fromjson(s)
+  assert(s ~= nil and s ~= '', 'input to filter "fromjson" was nil or empty')
+  local ucl = require('ucl')
+  local parser = ucl.parser()
+  local ok, err = parser:parse_string(s)
+  if not ok then
+    error(string.format('fromjson: failed to parse: %s', err), 0)
+  end
+  return parser:get_object()
+end
+
+---
 -- Returns a copy of string *s* truncated to *length* number of characters.
 -- Truncated strings end with '...' or string *delimiter*. If boolean
 -- *partial_words* is `false`, truncation will only happen at word boundaries.
@@ -1868,7 +1884,222 @@ function M.filters.xmlattr(t)
   return table.concat(attributes, ' ')
 end
 
+-- Lupa validation filters.
+
+---
+-- Returns the value unchanged, but raises an error if the value is nil or empty.
+-- Use to enforce required env vars at config load time.
+-- @param s The value to validate.
+-- @param msg Optional error message (default: "value is required").
+-- @usage expand('{= env.API_KEY | mandatory("API_KEY is required") =}')
+-- @name filters.mandatory
+function M.filters.mandatory(s, msg)
+  if s == nil or s == '' then
+    error(msg or 'mandatory value is missing', 0)
+  end
+  return s
+end
+
+---
+-- Returns the value unchanged, but raises an error if the value is not a valid integer.
+-- @param s The value to validate.
+-- @param msg Optional error message.
+-- @usage expand('{%- set x = env.PORT | require_int("PORT must be an integer") %}')
+-- @name filters.require_int
+function M.filters.require_int(s, msg)
+  if s == nil or s == '' then
+    error(msg or 'require_int: value is missing', 0)
+  end
+  if not tonumber(s) or tonumber(s) ~= math.floor(tonumber(s)) then
+    error(msg or string.format('require_int: "%s" is not a valid integer', tostring(s)), 0)
+  end
+  return s
+end
+
+---
+-- Returns the value unchanged, but raises an error if the value is not a valid number.
+-- @param s The value to validate.
+-- @param msg Optional error message.
+-- @usage expand('{%- set x = env.PROB | require_number("PROB must be a number") %}')
+-- @name filters.require_number
+function M.filters.require_number(s, msg)
+  if s == nil or s == '' then
+    error(msg or 'require_number: value is missing', 0)
+  end
+  if not tonumber(s) then
+    error(msg or string.format('require_number: "%s" is not a valid number', tostring(s)), 0)
+  end
+  return s
+end
+
+---
+-- Returns the value unchanged, but raises an error if the value is not "true" or "false".
+-- @param s The value to validate.
+-- @param msg Optional error message.
+-- @usage expand('{%- set x = env.ENABLED | require_bool("ENABLED must be true or false") %}')
+-- @name filters.require_bool
+function M.filters.require_bool(s, msg)
+  if s == nil or s == '' then
+    error(msg or 'require_bool: value is missing', 0)
+  end
+  local valid = {['true']=1, ['false']=1, ['yes']=1, ['no']=1, ['on']=1, ['off']=1, ['1']=1, ['0']=1}
+  if not valid[tostring(s):lower()] then
+    error(msg or string.format('require_bool: "%s" is not a valid boolean (use true/false, yes/no, on/off, 1/0)', tostring(s)), 0)
+  end
+  return s
+end
+
+---
+-- Parses a duration string and returns seconds as a number.
+-- Validates the input and raises an error if not a valid duration.
+-- Accepted formats: number followed by ms, s, min, m, h, d, w, y (e.g. "500ms", "30s", "5min", "1h", "10d", "1w", "1y").
+-- Plain numbers are also accepted (treated as seconds).
+-- @param s The duration string to parse.
+-- @param msg Optional error message on invalid input.
+-- @usage expand('{%- set timeout = "5min" | require_duration %}') --> 300
+-- @usage expand('{%- set timeout = "2d" | require_duration %}') --> 172800
+-- @name filters.require_duration
+function M.filters.require_duration(s, msg)
+  if s == nil or s == '' then
+    error(msg or 'require_duration: value is missing', 0)
+  end
+  local str = tostring(s)
+  local num, unit = str:match('^(%d+%.?%d*)(.*)')
+  if not num then
+    error(msg or string.format('require_duration: "%s" is not a valid duration (use 30s, 5min, 1h, 10d)', str), 0)
+  end
+  num = tonumber(num)
+  unit = unit == '' and 's' or unit
+  local seconds
+  if unit == 'ms' then seconds = num / 1000
+  elseif unit == 's' then seconds = num
+  elseif unit == 'min' or unit == 'm' then seconds = num * 60
+  elseif unit == 'h' then seconds = num * 3600
+  elseif unit == 'd' then seconds = num * 86400
+  elseif unit == 'w' then seconds = num * 604800
+  elseif unit == 'y' then seconds = num * 31536000
+  else error(msg or string.format('require_duration: unknown unit "%s" in "%s" (use ms, s, min, h, d, w, y)', unit, str), 0)
+  end
+  return seconds
+end
+
+---
+-- Returns the value unchanged, but raises an error if the value is not valid JSON.
+-- @param s The value to validate.
+-- @param msg Optional error message.
+-- @usage expand('{%- set x = env.LIST | require_json("LIST must be valid JSON") %}')
+-- @name filters.require_json
+function M.filters.require_json(s, msg)
+  if s == nil or s == '' then
+    error(msg or 'require_json: value is missing', 0)
+  end
+  local ucl = require('ucl')
+  local parser = ucl.parser()
+  local ok, err = parser:parse_string(s)
+  if not ok then
+    error(msg or string.format('require_json: "%s" is not valid JSON: %s', tostring(s), err), 0)
+  end
+  return s
+end
+
+---
+-- Returns the value unchanged, but raises an error if the value is not a valid size string.
+-- Accepted formats: number followed by optional b, Kb, Mb, Gb suffix (case-insensitive).
+-- Plain numbers are also accepted (treated as bytes).
+-- @param s The value to validate.
+-- @param msg Optional error message.
+-- @usage expand('{%- set x = env.MAX_SIZE | require_size("MAX_SIZE must be a size like 150Mb") %}')
+-- @name filters.require_size
+function M.filters.require_size(s, msg)
+  if s == nil or s == '' then
+    error(msg or 'require_size: value is missing', 0)
+  end
+  local str = tostring(s)
+  local lower = str:lower()
+  local stripped = lower:gsub('gb$', ''):gsub('mb$', ''):gsub('kb$', ''):gsub('b$', '')
+  if tonumber(stripped) == nil or tonumber(stripped) < 0 then
+    error(msg or string.format('require_size: "%s" is not a valid size (use number with optional b, Kb, Mb, Gb suffix)', str), 0)
+  end
+  return s
+end
+
+---
+-- Converts a size string to bytes (number).
+-- Input: number with optional suffix Kb (1024), Mb (1024^2), Gb (1024^3). Case-insensitive.
+-- Plain numbers are treated as bytes.
+-- @param s The size string to convert.
+-- @usage expand('{%- set bytes = "150Mb" | tobytes %}') --> 157286400
+-- @name filters.tobytes
+function M.filters.tobytes(s)
+  if s == nil or s == '' then
+    error('tobytes: value is missing', 0)
+  end
+  local str = tostring(s)
+  local lower = str:lower()
+  local num, suffix = lower:match('^(%d+%.?%d*)(.*)')
+  if not num then
+    error(string.format('tobytes: "%s" is not a valid size', str), 0)
+  end
+  num = tonumber(num)
+  if suffix == '' or suffix == 'b' then return num
+  elseif suffix == 'kb' then return num * 1024
+  elseif suffix == 'mb' then return num * 1024 * 1024
+  elseif suffix == 'gb' then return num * 1024 * 1024 * 1024
+  else error(string.format('tobytes: unknown suffix "%s" in "%s"', suffix, str), 0)
+  end
+end
+
 -- Lupa tests.
+
+---
+-- Returns whether or not value *s* is valid JSON.
+-- @param s The value to test.
+-- @usage expand('{% if is_json(env.X) %}...{% endif %}')
+-- @name tests.is_json
+function M.tests.is_json(s)
+  if s == nil or s == '' then return false end
+  local ucl = require('ucl')
+  local parser = ucl.parser()
+  local ok = parser:parse_string(s)
+  return ok and true or false
+end
+
+---
+-- Returns whether or not value *s* is a valid size string.
+-- Accepts: plain numbers (bytes) or numbers with b, Kb, Mb, Gb suffix (case-insensitive).
+-- @param s The value to test.
+-- @usage expand('{% if is_size(env.MAX_SIZE) %}...{% endif %}')
+-- @name tests.is_size
+function M.tests.is_size(s)
+  if s == nil or s == '' then return false end
+  local lower = tostring(s):lower()
+  local stripped = lower:gsub('gb$', ''):gsub('mb$', ''):gsub('kb$', ''):gsub('b$', '')
+  return tonumber(stripped) ~= nil and tonumber(stripped) >= 0
+end
+
+---
+-- Returns whether or not value *s* is a UCL truthy boolean (true, yes, on, 1).
+-- Case-insensitive, matching UCL parser behavior.
+-- @param s The value to test.
+-- @usage expand('{% if is_true(env.ENABLED) %}...{% endif %}')
+-- @name tests.is_true
+function M.tests.is_true(s)
+  if s == nil then return false end
+  local truthy = {['true']=1, ['yes']=1, ['on']=1, ['1']=1}
+  return truthy[tostring(s):lower()] ~= nil
+end
+
+---
+-- Returns whether or not value *s* is a UCL falsy boolean (false, no, off, 0).
+-- Case-insensitive, matching UCL parser behavior.
+-- @param s The value to test.
+-- @usage expand('{% if is_false(env.ENABLED) %}...{% endif %}')
+-- @name tests.is_false
+function M.tests.is_false(s)
+  if s == nil then return false end
+  local falsy = {['false']=1, ['no']=1, ['off']=1, ['0']=1}
+  return falsy[tostring(s):lower()] ~= nil
+end
 
 ---
 -- Returns whether or not number *n* is odd.
@@ -1960,7 +2191,11 @@ function M.tests.is_table(value) return type(value) == 'table' end
 -- @param value The value to test.
 -- @usage expand('{% if is_number(x) %}...{% endif %}')
 -- @name tests.is_number
-function M.tests.is_number(value) return type(value) == 'number' end
+function M.tests.is_number(value)
+  if type(value) == 'number' then return true end
+  if type(value) == 'string' then return tonumber(value) ~= nil end
+  return false
+end
 
 ---
 -- Returns whether or not value *value* is a sequence, namely a table with
@@ -2068,27 +2303,14 @@ end
 function M.tests.is_boolean(value) return type(value) == 'boolean' end
 
 ---
--- Returns whether or not value *value* is `true`.
--- @param value The value to test.
--- @usage expand('{% if is_true(x) %}...{% endif %}')
--- @name tests.is_true
-function M.tests.is_true(value) return value == true end
-
----
--- Returns whether or not value *value* is `false`.
--- @param value The value to test.
--- @usage expand('{% if is_false(x) %}...{% endif %}')
--- @name tests.is_false
-function M.tests.is_false(value) return value == false end
-
----
 -- Returns whether or not value *value* is an integer number.
 -- @param value The value to test.
 -- @usage expand('{% if is_integer(x) %}...{% endif %}')
 -- @name tests.is_integer
 function M.tests.is_integer(value)
-  if type(value) ~= 'number' then return false end
-  return value == math.floor(value)
+  local n = type(value) == 'number' and value or tonumber(tostring(value))
+  if n == nil then return false end
+  return n == math.floor(n)
 end
 
 ---
@@ -2097,8 +2319,9 @@ end
 -- @usage expand('{% if is_float(x) %}...{% endif %}')
 -- @name tests.is_float
 function M.tests.is_float(value)
-  if type(value) ~= 'number' then return false end
-  return value ~= math.floor(value)
+  local n = type(value) == 'number' and value or tonumber(tostring(value))
+  if n == nil then return false end
+  return n ~= math.floor(n)
 end
 
 ---
