@@ -246,7 +246,8 @@ struct hs_helper_ctx {
 	/* Cache backend configuration */
 	char *cache_backend_str; /* Backend name from config: file, redis, http, lua */
 	enum hs_cache_backend_type cache_backend;
-	ucl_object_t *cache_config; /* Backend-specific configuration */
+	ucl_object_t *redis_config; /* Redis backend configuration */
+	ucl_object_t *http_config;  /* HTTP backend configuration */
 	int lua_backend_ref;        /* Lua reference to backend object */
 };
 
@@ -287,7 +288,8 @@ init_hs_helper(struct rspamd_config *cfg)
 	ctx->recompile_time = default_recompile_time;
 	ctx->cache_backend_str = NULL;
 	ctx->cache_backend = HS_CACHE_BACKEND_FILE;
-	ctx->cache_config = NULL;
+	ctx->redis_config = NULL;
+	ctx->http_config = NULL;
 	ctx->lua_backend_ref = LUA_NOREF;
 
 	rspamd_rcl_register_worker_option(cfg,
@@ -330,6 +332,22 @@ init_hs_helper(struct rspamd_config *cfg)
 									  G_STRUCT_OFFSET(struct hs_helper_ctx, cache_backend_str),
 									  0,
 									  "Cache backend: file, redis, http, or lua");
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "redis",
+									  rspamd_rcl_parse_struct_ucl,
+									  ctx,
+									  G_STRUCT_OFFSET(struct hs_helper_ctx, redis_config),
+									  0,
+									  "Redis backend configuration");
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "http",
+									  rspamd_rcl_parse_struct_ucl,
+									  ctx,
+									  G_STRUCT_OFFSET(struct hs_helper_ctx, http_config),
+									  0,
+									  "HTTP backend configuration");
 
 	return ctx;
 }
