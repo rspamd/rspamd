@@ -307,7 +307,7 @@ function exports.process_logs(log_file, start_time, end_time, callback, opts)
   end_time = exports.normalized_time(end_time or '')
   if end_time == '' then end_time = nil end
 
-  if log_file == '-' or log_file == '' then
+  if not log_file or log_file == '-' or log_file == '' then
     exports.iterate_log(io.stdin, start_time, end_time, callback, opts)
   else
     local err, st = rspamd_util.stat(log_file)
