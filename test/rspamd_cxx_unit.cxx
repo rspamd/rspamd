@@ -30,6 +30,7 @@
 #include "rspamd_cxx_unit_html_cta.hxx"
 #include "rspamd_cxx_unit_upstream_token_bucket.hxx"
 #include "rspamd_cxx_unit_upstream_ring_hash.hxx"
+#include "rspamd_cxx_unit_upstream_round_robin.hxx"
 #include "rspamd_cxx_unit_multipart.hxx"
 
 static gboolean verbose = false;

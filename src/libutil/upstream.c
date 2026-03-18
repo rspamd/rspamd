@@ -1824,10 +1824,62 @@ rspamd_upstream_get_round_robin(struct upstream_list *ups,
 		}
 	}
 
-	if (max_weight == 0) {
-		/* All upstreams have zero weight */
+	if (max_weight == 0 && use_cur) {
+		/*
+		 * All cur_weights have been exhausted. If any upstream has a
+		 * configured weight, reset all cur_weights to restart the
+		 * weighted round-robin cycle. Otherwise fall through to the
+		 * unweighted min_checked selection.
+		 */
+		gboolean any_weight = FALSE;
+
+		for (i = 0; i < ups->alive->len; i++) {
+			up = g_ptr_array_index(ups->alive, i);
+
+			if (up->weight > 0) {
+				any_weight = TRUE;
+				break;
+			}
+		}
+
+		if (any_weight) {
+			/* Reset all cur_weights and re-select */
+			for (i = 0; i < ups->alive->len; i++) {
+				up = g_ptr_array_index(ups->alive, i);
+				up->cur_weight = up->weight;
+			}
+
+			max_weight = 0;
+			selected = NULL;
+
+			for (i = 0; i < ups->alive->len; i++) {
+				up = g_ptr_array_index(ups->alive, i);
+
+				if (except != NULL && up == except) {
+					continue;
+				}
+
+				if (up->cur_weight > max_weight) {
+					selected = up;
+					max_weight = up->cur_weight;
+				}
+			}
+		}
+		else {
+			/* All weights are zero: use least-checked selection */
+			if (min_checked > G_MAXUINT / 2) {
+				for (i = 0; i < ups->alive->len; i++) {
+					up = g_ptr_array_index(ups->alive, i);
+					up->checked = 0;
+				}
+			}
+
+			selected = min_checked_sel;
+		}
+	}
+	else if (max_weight == 0) {
+		/* Non-weighted path (use_cur == FALSE) */
 		if (min_checked > G_MAXUINT / 2) {
-			/* Reset all checked counters to avoid overflow */
 			for (i = 0; i < ups->alive->len; i++) {
 				up = g_ptr_array_index(ups->alive, i);
 				up->checked = 0;
