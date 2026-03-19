@@ -54,11 +54,13 @@ local re_lua = rspamd_regexp.create(
   'id: <[^>]*>, from: <([^>]*)>: can autolearn (\\w+): score (-?[\\d.]+) ' ..
   '([^\\s,]+) (-?[\\d.]+), mime_rcpts: <([^>]*)>/')
 
--- C-side "autolearn confirmed" line (rspamd_stat_check_autolearn)
+-- C-side "autolearn confirmed" line (rspamd_stat_check_autolearn).
 -- Module is "proxy" for rspamd_proxy worker, "task" for normal worker.
+-- Matched only against the success messages, which start with "<MSG-ID>: autolearn",
+-- to avoid false positives from error messages emitted by the same function.
 -- Captures: req_id
 local re_confirmed = rspamd_regexp.create(
-  '/\\([^)]+\\) (<[0-9a-fA-F]+>); \\w+; rspamd_stat_check_autolearn:/')
+  '/\\([^)]+\\) (<[0-9a-fA-F]+>); \\w+; rspamd_stat_check_autolearn: <[^>]*>: autolearn /')
 
 -- Task result line for sender IP extraction (rspamd_task_write_log)
 -- Module is "proxy" for rspamd_proxy worker, "task" for normal worker.
