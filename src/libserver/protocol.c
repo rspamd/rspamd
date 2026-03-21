@@ -1399,6 +1399,125 @@ rspamd_scan_result_ucl(struct rspamd_task *task,
 	return obj;
 }
 
+/*
+ * Output a single milter add_header as "X-Milter-Add: Header: value\r\n".
+ * Position bracket [N] is included only when order > 0 (insert at position).
+ * Order <= 0 means append — no bracket needed.
+ */
+static void
+rspamd_ucl_output_milter_add_one(rspamd_fstring_t **out,
+								 const char *hdr_name,
+								 const ucl_object_t *hdr_obj)
+{
+	const ucl_object_t *hdr_value, *hdr_order;
+
+	hdr_value = ucl_object_lookup(hdr_obj, "value");
+	if (hdr_value == NULL || ucl_object_type(hdr_value) != UCL_STRING) {
+		return;
+	}
+
+	const char *value = ucl_object_tostring(hdr_value);
+	int order = -1;
+
+	hdr_order = ucl_object_lookup(hdr_obj, "order");
+	if (hdr_order) {
+		order = ucl_object_toint(hdr_order);
+	}
+
+	if (order > 0) {
+		rspamd_printf_fstring(out, "X-Milter-Add: %s[%d]: %s\r\n",
+							  hdr_name, order, value);
+	}
+	else {
+		rspamd_printf_fstring(out, "X-Milter-Add: %s: %s\r\n",
+							  hdr_name, value);
+	}
+}
+
+/*
+ * Output milter header operations for legacy protocol clients.
+ *
+ * Format:
+ *   X-Milter-Add: Header-Name: value          (append)
+ *   X-Milter-Add: Header-Name[N]: value       (insert at position N)
+ *   X-Milter-Del: Header-Name                 (remove all instances)
+ *   X-Milter-Del: Header-Name[N]              (remove Nth instance)
+ *
+ * Works for both compat mode (single object per header name)
+ * and non-compat mode (array of objects per header name).
+ */
+static void
+rspamd_ucl_output_milter_headers(const ucl_object_t *top,
+								 rspamd_fstring_t **out)
+{
+	const ucl_object_t *milter, *add_headers, *remove_headers;
+	const ucl_object_t *hdr, *hdr_elt;
+	ucl_object_iter_t iter = NULL, hdr_iter;
+
+	milter = ucl_object_lookup(top, "milter");
+	if (milter == NULL) {
+		milter = ucl_object_lookup(top, "rmilter");
+	}
+	if (milter == NULL) {
+		return;
+	}
+
+	/* Output add_headers */
+	add_headers = ucl_object_lookup(milter, "add_headers");
+	if (add_headers != NULL) {
+		while ((hdr = ucl_object_iterate(add_headers, &iter, true)) != NULL) {
+			const char *hdr_name = ucl_object_key(hdr);
+
+			if (hdr->type == UCL_OBJECT) {
+				rspamd_ucl_output_milter_add_one(out, hdr_name, hdr);
+			}
+			else if (hdr->type == UCL_ARRAY) {
+				hdr_iter = NULL;
+				while ((hdr_elt = ucl_object_iterate(hdr, &hdr_iter, true)) != NULL) {
+					if (hdr_elt->type == UCL_OBJECT) {
+						rspamd_ucl_output_milter_add_one(out, hdr_name, hdr_elt);
+					}
+				}
+			}
+		}
+	}
+
+	/* Output remove_headers */
+	remove_headers = ucl_object_lookup(milter, "remove_headers");
+	if (remove_headers != NULL) {
+		iter = NULL;
+		while ((hdr = ucl_object_iterate(remove_headers, &iter, true)) != NULL) {
+			const char *hdr_name = ucl_object_key(hdr);
+
+			if (hdr->type == UCL_INT) {
+				int64_t instance = ucl_object_toint(hdr);
+				if (instance == 0) {
+					rspamd_printf_fstring(out, "X-Milter-Del: %s\r\n", hdr_name);
+				}
+				else {
+					rspamd_printf_fstring(out, "X-Milter-Del: %s[%L]\r\n",
+										  hdr_name, instance);
+				}
+			}
+			else if (hdr->type == UCL_ARRAY) {
+				hdr_iter = NULL;
+				while ((hdr_elt = ucl_object_iterate(hdr, &hdr_iter, true)) != NULL) {
+					if (hdr_elt->type == UCL_INT) {
+						int64_t instance = ucl_object_toint(hdr_elt);
+						if (instance == 0) {
+							rspamd_printf_fstring(out, "X-Milter-Del: %s\r\n", hdr_name);
+						}
+						else {
+							rspamd_printf_fstring(out, "X-Milter-Del: %s[%L]\r\n",
+												  hdr_name, instance);
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 void rspamd_ucl_torspamc_output(const ucl_object_t *top,
 								rspamd_fstring_t **out)
 {
@@ -1439,6 +1558,45 @@ void rspamd_ucl_torspamc_output(const ucl_object_t *top,
 									  ucl_object_todouble(sym_score));
 			}
 		}
+
+		/* Extended symbol info: X-Symbol: name(score); description [opt1, opt2] */
+		iter = NULL;
+		while ((elt = ucl_object_iterate(symbols, &iter, true)) != NULL) {
+			if (elt->type == UCL_OBJECT) {
+				const ucl_object_t *sym_score, *sym_desc, *sym_opts, *opt_elt;
+				ucl_object_iter_t opt_iter;
+
+				sym_score = ucl_object_lookup(elt, "score");
+				sym_desc = ucl_object_lookup(elt, "description");
+				sym_opts = ucl_object_lookup(elt, "options");
+
+				rspamd_printf_fstring(out, "X-Symbol: %s(%.2f)",
+									  ucl_object_key(elt),
+									  ucl_object_todouble(sym_score));
+
+				if (sym_desc && ucl_object_type(sym_desc) == UCL_STRING) {
+					rspamd_printf_fstring(out, "; %s",
+										  ucl_object_tostring(sym_desc));
+				}
+
+				if (sym_opts && ucl_object_type(sym_opts) == UCL_ARRAY) {
+					rspamd_printf_fstring(out, " [");
+					opt_iter = NULL;
+					bool first = true;
+					while ((opt_elt = ucl_object_iterate(sym_opts, &opt_iter, true)) != NULL) {
+						if (ucl_object_type(opt_elt) == UCL_STRING) {
+							rspamd_printf_fstring(out, "%s%s",
+												  first ? "" : ", ",
+												  ucl_object_tostring(opt_elt));
+							first = false;
+						}
+					}
+					rspamd_printf_fstring(out, "]");
+				}
+
+				rspamd_printf_fstring(out, "\r\n");
+			}
+		}
 	}
 
 	elt = ucl_object_lookup(top, "messages");
@@ -1457,6 +1615,9 @@ void rspamd_ucl_torspamc_output(const ucl_object_t *top,
 		rspamd_printf_fstring(out, "Message-ID: %s\r\n",
 							  ucl_object_tostring(elt));
 	}
+
+	/* Output milter add_headers so legacy clients can access them */
+	rspamd_ucl_output_milter_headers(top, out);
 }
 
 void rspamd_ucl_tospamc_output(const ucl_object_t *top,
@@ -1493,6 +1654,9 @@ void rspamd_ucl_tospamc_output(const ucl_object_t *top,
 			*out = rspamd_fstring_append(*out, CRLF, 2);
 		}
 	}
+
+	/* Output milter add_headers so legacy clients can access them */
+	rspamd_ucl_output_milter_headers(top, out);
 }
 
 static void
