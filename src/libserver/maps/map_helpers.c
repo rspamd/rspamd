@@ -1898,6 +1898,24 @@ void rspamd_regexp_map_add_pending(struct rspamd_regexp_map_helper *re_map,
 										  sizeof(struct rspamd_regexp_map_pending));
 	}
 
+	/* Replace existing entry with the same name to avoid stale re_map pointers
+	 * after map reload (the old re_map gets destroyed but the pending entry
+	 * would still reference it, causing use-after-free) */
+	for (unsigned int i = 0; i < pending_regexp_maps->len; i++) {
+		struct rspamd_regexp_map_pending *existing;
+
+		existing = &g_array_index(pending_regexp_maps,
+								  struct rspamd_regexp_map_pending, i);
+		if (strcmp(existing->name, name) == 0) {
+			existing->re_map = re_map;
+			rspamd_regexp_map_get_hash(re_map, existing->hash);
+
+			msg_info_map("updated pending regexp map '%s' (%ud patterns) in compilation queue",
+						 name, re_map->regexps ? re_map->regexps->len : 0);
+			return;
+		}
+	}
+
 	entry.re_map = re_map;
 	entry.name = g_strdup(name);
 	rspamd_regexp_map_get_hash(re_map, entry.hash);

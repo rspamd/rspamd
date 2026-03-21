@@ -1322,6 +1322,24 @@ void rspamd_multipattern_add_pending(struct rspamd_multipattern *mp,
 										   sizeof(struct rspamd_multipattern_pending));
 	}
 
+	/* Replace existing entry with the same name to avoid stale mp pointers
+	 * after reload (the old mp gets destroyed but the pending entry
+	 * would still reference it, causing use-after-free) */
+	for (unsigned int i = 0; i < pending_compilations->len; i++) {
+		struct rspamd_multipattern_pending *existing;
+
+		existing = &g_array_index(pending_compilations,
+								  struct rspamd_multipattern_pending, i);
+		if (strcmp(existing->name, name) == 0) {
+			existing->mp = mp;
+			rspamd_multipattern_get_hash(mp, existing->hash);
+
+			msg_info("updated pending multipattern '%s' (%ud patterns) in compilation queue",
+					 name, mp->cnt);
+			return;
+		}
+	}
+
 	entry.mp = mp;
 	entry.name = g_strdup(name);
 	rspamd_multipattern_get_hash(mp, entry.hash);
