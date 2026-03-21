@@ -1161,9 +1161,9 @@ fuzzy_tcp_io_handler(int fd, short what, gpointer ud)
 
 			rspamd_upstream_ok(conn->server);
 
-			/* Now wait for both read and write events */
+			/* Start reading; only arm EV_WRITE if there's queued data */
 			rspamd_ev_watcher_reschedule(conn->event_loop, &conn->ev,
-										 EV_READ | EV_WRITE);
+										 g_queue_is_empty(conn->write_queue) ? EV_READ : EV_READ | EV_WRITE);
 
 			msg_debug("fuzzy_tcp: after reschedule - fd=%d, ev.io.fd=%d",
 					  conn->fd, (int) conn->ev.io.fd);
@@ -1177,11 +1177,6 @@ fuzzy_tcp_io_handler(int fd, short what, gpointer ud)
 	if (what & EV_READ && conn->connected) {
 		/* Handle read */
 		fuzzy_tcp_read_handler(conn);
-	}
-
-	/* Check for timed out pending requests */
-	if (conn->connected) {
-		fuzzy_tcp_check_pending_timeouts(conn->rule, conn->last_activity);
 	}
 
 	FUZZY_TCP_RELEASE(conn);
@@ -1267,8 +1262,8 @@ fuzzy_tcp_write_handler(struct fuzzy_tcp_connection *conn)
 		}
 	}
 
-	/* Queue is empty, no more data to write */
-	/* Might want to disable EV_WRITE here if needed */
+	/* Queue is empty, switch to read-only to avoid busy-looping on EV_WRITE */
+	rspamd_ev_watcher_reschedule(conn->event_loop, &conn->ev, EV_READ);
 }
 
 /**
