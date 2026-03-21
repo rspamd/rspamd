@@ -708,16 +708,16 @@ fuzzy_tcp_connection_unref(gpointer conn_ptr)
 
 /**
  * Refresh TCP connection timeout after successful I/O activity
- * This prevents active connections from timing out during data transfer
+ * This prevents active connections from timing out during data transfer.
+ * Uses ev_timer_again with a repeat interval for a single syscall instead
+ * of the stop/set/start triple.
  */
 static void
 fuzzy_tcp_refresh_timeout(struct fuzzy_tcp_connection *conn)
 {
 	if (conn->rule->tcp_timeout > 0 && ev_is_active(&conn->ev.tm)) {
-		/* Stop and restart timer to extend timeout */
-		ev_timer_stop(conn->event_loop, &conn->ev.tm);
-		ev_timer_set(&conn->ev.tm, conn->rule->tcp_timeout, 0.0);
-		ev_timer_start(conn->event_loop, &conn->ev.tm);
+		conn->ev.tm.repeat = conn->rule->tcp_timeout;
+		ev_timer_again(conn->event_loop, &conn->ev.tm);
 	}
 }
 
@@ -1191,6 +1191,7 @@ fuzzy_tcp_write_handler(struct fuzzy_tcp_connection *conn)
 {
 	struct fuzzy_tcp_write_buf *buf;
 	ssize_t r;
+	gboolean did_write = FALSE;
 
 	while ((buf = g_queue_peek_head(conn->write_queue)) != NULL) {
 		/* Write remaining data */
@@ -1246,9 +1247,7 @@ fuzzy_tcp_write_handler(struct fuzzy_tcp_connection *conn)
 		}
 
 		buf->bytes_written += r;
-
-		/* Refresh timeout after successful write - keeps connection alive during active data transfer */
-		fuzzy_tcp_refresh_timeout(conn);
+		did_write = TRUE;
 
 		if (buf->bytes_written >= buf->total_len) {
 			/* Buffer fully sent, remove from queue and free */
@@ -1260,6 +1259,11 @@ fuzzy_tcp_write_handler(struct fuzzy_tcp_connection *conn)
 			/* Partial write, wait for next event */
 			return;
 		}
+	}
+
+	/* Refresh timeout once after all writes, not per-buffer */
+	if (did_write) {
+		fuzzy_tcp_refresh_timeout(conn);
 	}
 
 	/* Queue is empty, switch to read-only to avoid busy-looping on EV_WRITE */
