@@ -63,6 +63,16 @@
 
 #include "rspamd_simdutf.h"
 
+/*
+ * Tune jemalloc for single-threaded, multi-process architecture:
+ * - narenas:1 — one arena is sufficient since workers are single-threaded
+ * - dirty_decay_ms:5000 — return dirty pages to OS faster than default (10s)
+ * - muzzy_decay_ms:30000 — hold muzzy (MADV_FREE) pages for 30s before release
+ */
+#ifdef WITH_JEMALLOC
+const char *malloc_conf = "narenas:1,dirty_decay_ms:5000,muzzy_decay_ms:30000";
+#endif
+
 /* 2 seconds to fork new process in place of dead one */
 #define SOFT_FORK_TIME 2
 
