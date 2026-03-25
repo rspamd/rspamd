@@ -58,6 +58,7 @@ enum rspamd_srv_type {
 	RSPAMD_SRV_MULTIPATTERN_LOADED, /* Multipattern HS compiled and ready */
 	RSPAMD_SRV_REGEXP_MAP_LOADED,   /* Regexp map HS compiled and ready */
 	RSPAMD_SRV_BUSY,                /* Worker is busy with long-running operation */
+	RSPAMD_SRV_RECOMPILE_REQUEST,   /* Worker requests hs_helper to recompile (stale cache) */
 };
 
 enum rspamd_log_pipe_type {
@@ -251,6 +252,9 @@ struct rspamd_srv_command {
 			gboolean is_busy;
 			char reason[32];
 		} busy;
+		struct {
+			unsigned int unused;
+		} recompile_request;
 	} cmd;
 };
 
@@ -291,6 +295,9 @@ struct rspamd_srv_reply {
 		struct {
 			int status;
 		} workers_spawned;
+		struct {
+			int status;
+		} recompile_request;
 	} reply;
 };
 

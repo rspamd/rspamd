@@ -249,6 +249,7 @@ struct hs_helper_ctx {
 	ucl_object_t *redis_config; /* Redis backend configuration */
 	ucl_object_t *http_config;  /* HTTP backend configuration */
 	int lua_backend_ref;        /* Lua reference to backend object */
+	ev_tstamp last_recompile_time; /* Timestamp of last recompile start for debounce */
 };
 
 /* Parse cache_backend string to enum */
@@ -792,6 +793,9 @@ rspamd_rs_compile(struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 	return TRUE;
 }
 
+/* Minimum interval between recompile requests to avoid thrashing */
+#define HS_RECOMPILE_DEBOUNCE_SEC 5.0
+
 static gboolean
 rspamd_hs_helper_reload(struct rspamd_main *rspamd_main,
 						struct rspamd_worker *worker, int fd,
@@ -802,11 +806,28 @@ rspamd_hs_helper_reload(struct rspamd_main *rspamd_main,
 	struct rspamd_control_reply rep;
 	struct hs_helper_ctx *ctx = ud;
 
-	msg_info("recompiling hyperscan expressions after receiving reload command");
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_RECOMPILE;
 	rep.id = cmd->id;
 	rep.reply.recompile.status = 0;
+
+	/* Debounce: skip if we recompiled very recently */
+	ev_tstamp now = ev_now(ctx->event_loop);
+	if (ctx->last_recompile_time > 0 &&
+		now - ctx->last_recompile_time < HS_RECOMPILE_DEBOUNCE_SEC) {
+		msg_info("ignoring recompile request, last recompile was %.1fs ago (debounce: %.1fs)",
+				 now - ctx->last_recompile_time, HS_RECOMPILE_DEBOUNCE_SEC);
+
+		if (write(fd, &rep, sizeof(rep)) != sizeof(rep)) {
+			msg_err("cannot write reply to the control socket: %s",
+					strerror(errno));
+		}
+
+		return TRUE;
+	}
+
+	ctx->last_recompile_time = now;
+	msg_info("recompiling hyperscan expressions after receiving reload command");
 
 	/* We write reply before actual recompilation as it takes a lot of time */
 	if (write(fd, &rep, sizeof(rep)) != sizeof(rep)) {

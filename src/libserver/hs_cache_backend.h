@@ -189,6 +189,18 @@ void rspamd_hs_cache_lua_exists_async(const char *cache_key,
 									  void *ud);
 
 /**
+ * Delete cache entry via Lua backend (asynchronous)
+ * @param cache_key unique cache key (hash)
+ * @param entity_name human-readable name of the entity (e.g., multimap name, re class)
+ * @param cb completion callback (may be NULL for fire-and-forget)
+ * @param ud userdata
+ */
+void rspamd_hs_cache_lua_delete_async(const char *cache_key,
+									  const char *entity_name,
+									  rspamd_hs_cache_async_cb cb,
+									  void *ud);
+
+/**
  * Load data from cache via Lua backend (synchronous)
  * Only works for backends that support synchronous operations (e.g., file backend).
  * For async-only backends (redis, http), returns FALSE immediately.

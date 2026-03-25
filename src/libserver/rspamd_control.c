@@ -1266,6 +1266,15 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 					worker->hb.busy_reason[0] = '\0';
 				}
 				break;
+			case RSPAMD_SRV_RECOMPILE_REQUEST:
+				msg_info_main("received hyperscan recompile request from worker %P",
+							  worker->pid);
+				rdata->rep.reply.recompile_request.status = 0;
+				memset(&wcmd, 0, sizeof(wcmd));
+				wcmd.type = RSPAMD_CONTROL_RECOMPILE;
+				rspamd_control_broadcast_cmd(rspamd_main, &wcmd, rfd,
+											 rspamd_control_ignore_io_handler, NULL, 0);
+				break;
 			case RSPAMD_SRV_HEALTH:
 				rspamd_fill_health_reply(rspamd_main, &rdata->rep);
 				break;
@@ -1843,6 +1852,9 @@ const char *rspamd_srv_command_to_string(enum rspamd_srv_type cmd)
 		break;
 	case RSPAMD_SRV_BUSY:
 		reply = "busy";
+		break;
+	case RSPAMD_SRV_RECOMPILE_REQUEST:
+		reply = "recompile_request";
 		break;
 	default:
 		break;

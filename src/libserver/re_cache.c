@@ -25,6 +25,7 @@
 #include "libutil/regexp.h"
 #include "libutil/heap.h"
 #include "lua/lua_common.h"
+#include "libserver/worker_util.h"
 #include "libstat/stat_api.h"
 #include "contrib/uthash/utlist.h"
 #include "lua/lua_classnames.h"
@@ -106,7 +107,6 @@ struct rspamd_re_class {
 	hs_scratch_t *hs_scratch;
 	int *hs_ids;
 	unsigned int nhs;
-	gboolean needs_recompile; /* set when stale blob detected */
 #endif
 };
 
@@ -2359,55 +2359,43 @@ rspamd_re_cache_exists_cb(gboolean success, const unsigned char *data, gsize len
 		struct rspamd_re_cache *cache = cbdata->cache;
 		int n = g_hash_table_size(re_class->re);
 
-		if (re_class->needs_recompile) {
-			/* Stale blob was detected during load, force recompilation */
-			msg_info_re_cache(
-				"forcing recompilation of class %s (%6s), %d regexps: "
-				"stale blob detected during previous load",
-				rspamd_re_cache_type_to_string(re_class->type),
-				re_class->hash, n);
-			re_class->needs_recompile = FALSE;
-			cbdata->state = RSPAMD_RE_CACHE_COMPILE_STATE_COMPILING;
+		if (!lua_backend) {
+			rspamd_snprintf(path, sizeof(path), "%s%c%s.hs", cbdata->cache_dir,
+							G_DIR_SEPARATOR, re_class->hash);
+		}
+
+		if (re_class->type_len > 0) {
+			if (!cbdata->silent) {
+				msg_info_re_cache(
+					"skip already valid class %s(%*s) to cache %6s (%s), %d regexps%s%s%s",
+					rspamd_re_cache_type_to_string(re_class->type),
+					(int) re_class->type_len - 1,
+					re_class->type_data,
+					re_class->hash,
+					lua_backend ? "Lua backend" : path,
+					n,
+					cache->scope ? " for scope '" : "",
+					cache->scope ? cache->scope : "",
+					cache->scope ? "'" : "");
+			}
 		}
 		else {
-			if (!lua_backend) {
-				rspamd_snprintf(path, sizeof(path), "%s%c%s.hs", cbdata->cache_dir,
-								G_DIR_SEPARATOR, re_class->hash);
+			if (!cbdata->silent) {
+				msg_info_re_cache(
+					"skip already valid class %s to cache %6s (%s), %d regexps%s%s%s",
+					rspamd_re_cache_type_to_string(re_class->type),
+					re_class->hash,
+					lua_backend ? "Lua backend" : path,
+					n,
+					cache->scope ? " for scope '" : "",
+					cache->scope ? cache->scope : "",
+					cache->scope ? "'" : "");
 			}
-
-			if (re_class->type_len > 0) {
-				if (!cbdata->silent) {
-					msg_info_re_cache(
-						"skip already valid class %s(%*s) to cache %6s (%s), %d regexps%s%s%s",
-						rspamd_re_cache_type_to_string(re_class->type),
-						(int) re_class->type_len - 1,
-						re_class->type_data,
-						re_class->hash,
-						lua_backend ? "Lua backend" : path,
-						n,
-						cache->scope ? " for scope '" : "",
-						cache->scope ? cache->scope : "",
-						cache->scope ? "'" : "");
-				}
-			}
-			else {
-				if (!cbdata->silent) {
-					msg_info_re_cache(
-						"skip already valid class %s to cache %6s (%s), %d regexps%s%s%s",
-						rspamd_re_cache_type_to_string(re_class->type),
-						re_class->hash,
-						lua_backend ? "Lua backend" : path,
-						n,
-						cache->scope ? " for scope '" : "",
-						cache->scope ? cache->scope : "",
-						cache->scope ? "'" : "");
-				}
-			}
-
-			/* Skip compilation */
-			cbdata->state = RSPAMD_RE_CACHE_COMPILE_STATE_INIT;
-			cbdata->current_class = NULL;
 		}
+
+		/* Skip compilation */
+		cbdata->state = RSPAMD_RE_CACHE_COMPILE_STATE_INIT;
+		cbdata->current_class = NULL;
 	}
 	else {
 		/* Not exists, proceed */
@@ -3770,14 +3758,19 @@ rspamd_re_cache_hs_load_cb(gboolean success, const unsigned char *data, gsize le
 {
 	struct rspamd_re_cache_hs_load_item *it = (struct rspamd_re_cache_hs_load_item *) ud;
 	struct rspamd_re_cache_hs_load_scope *sctx = it->scope_ctx;
+	struct rspamd_re_cache *cache = it->cache;
 
 	if (success && data && len > 0) {
-		if (rspamd_re_cache_apply_hyperscan_blob(it->cache, it->re_class, data, len, sctx->try_load)) {
+		if (rspamd_re_cache_apply_hyperscan_blob(cache, it->re_class, data, len, sctx->try_load)) {
 			sctx->loaded++;
 			sctx->total_regexps += it->re_class->nhs;
 		}
 		else {
-			it->re_class->needs_recompile = TRUE;
+			/* Blob is corrupt/stale - delete from cache so hs_helper recompiles */
+			msg_warn_re_cache("deleting stale hyperscan blob for class %s",
+							  it->re_class->hash);
+			rspamd_hs_cache_lua_delete_async(it->cache_key,
+											 "stale_blob_cleanup", NULL, NULL);
 			sctx->all_loaded = FALSE;
 		}
 	}
@@ -3792,7 +3785,6 @@ rspamd_re_cache_hs_load_cb(gboolean success, const unsigned char *data, gsize le
 	}
 
 	if (sctx->pending == 0) {
-		struct rspamd_re_cache *cache = sctx->cache;
 
 		if (sctx->loaded > 0) {
 			cache->hyperscan_loaded = sctx->all_loaded ? RSPAMD_HYPERSCAN_LOADED_FULL : RSPAMD_HYPERSCAN_LOADED_PARTIAL;
@@ -3821,6 +3813,22 @@ rspamd_re_cache_hs_load_cb(gboolean success, const unsigned char *data, gsize le
 							  cache->scope ? cache->scope : "",
 							  cache->scope ? "'" : "");
 		}
+
+		/* If some classes failed to load, request hs_helper to recompile */
+		if (!sctx->all_loaded && rspamd_current_worker &&
+			rspamd_current_worker->state == rspamd_worker_state_running) {
+			struct rspamd_srv_command srv_cmd;
+			memset(&srv_cmd, 0, sizeof(srv_cmd));
+			srv_cmd.type = RSPAMD_SRV_RECOMPILE_REQUEST;
+			rspamd_srv_send_command(rspamd_current_worker,
+									sctx->event_loop, &srv_cmd, -1, NULL, NULL);
+			msg_info_re_cache("requested hs_helper recompile due to %ud/%ud failed class loads%s%s%s",
+							  sctx->total - sctx->loaded, sctx->total,
+							  cache->scope ? " for scope '" : "",
+							  cache->scope ? cache->scope : "",
+							  cache->scope ? "'" : "");
+		}
+
 		g_free(sctx);
 	}
 
