@@ -482,6 +482,73 @@ void rspamd_hs_cache_lua_exists_async(const char *cache_key,
 	lua_settop(L, err_idx - 1);
 }
 
+void rspamd_hs_cache_lua_delete_async(const char *cache_key,
+									  const char *entity_name,
+									  rspamd_hs_cache_async_cb cb,
+									  void *ud)
+{
+	lua_State *L = lua_backend_L;
+	int err_idx;
+
+	msg_debug_hyperscan("delete_async: entity='%s', key=%s",
+						entity_name ? entity_name : "unknown", cache_key);
+
+	if (rspamd_current_worker && rspamd_current_worker->state != rspamd_worker_state_running) {
+		msg_debug_hyperscan("delete_async: worker terminating, skipping");
+		if (cb) cb(FALSE, NULL, 0, "worker is terminating", ud);
+		return;
+	}
+
+	if (!rspamd_hs_cache_has_lua_backend()) {
+		msg_debug_hyperscan("delete_async: no Lua backend");
+		if (cb) cb(FALSE, NULL, 0, "Lua backend not initialized", ud);
+		return;
+	}
+
+	lua_pushcfunction(L, rspamd_lua_traceback);
+	err_idx = lua_gettop(L);
+
+	/* Get backend object */
+	lua_rawgeti(L, LUA_REGISTRYINDEX, lua_backend_ref);
+	if (!lua_istable(L, -1)) {
+		lua_settop(L, err_idx - 1);
+		if (cb) cb(FALSE, NULL, 0, "Invalid Lua backend reference", ud);
+		return;
+	}
+
+	/* Get delete method */
+	lua_getfield(L, -1, "delete");
+	if (!lua_isfunction(L, -1)) {
+		lua_settop(L, err_idx - 1);
+		if (cb) cb(FALSE, NULL, 0, "Lua backend has no delete method", ud);
+		return;
+	}
+
+	/* Push self (backend object) */
+	lua_pushvalue(L, -2);
+	/* Push cache_key */
+	lua_pushstring(L, cache_key);
+	/* Push platform_id */
+	lua_pushstring(L, lua_backend_platform_id ? lua_backend_platform_id : "default");
+
+	/* Push callback wrapper with 4 upvalues: cb, ud, entity_name, cache_key */
+	lua_pushlightuserdata(L, (void *) cb);
+	lua_pushlightuserdata(L, ud);
+	lua_pushstring(L, entity_name ? entity_name : "unknown");
+	lua_pushstring(L, cache_key);
+	lua_pushcclosure(L, lua_hs_cache_async_callback, 4);
+
+	/* Call backend:delete(cache_key, platform_id, callback) */
+	if (lua_pcall(L, 4, 0, err_idx) != 0) {
+		const char *lua_err = lua_tostring(L, -1);
+		if (cb) cb(FALSE, NULL, 0, lua_err ? lua_err : "Lua call failed", ud);
+		lua_settop(L, err_idx - 1);
+		return;
+	}
+
+	lua_settop(L, err_idx - 1);
+}
+
 gboolean rspamd_hs_cache_lua_load_sync(const char *cache_key,
 									   const char *entity_name,
 									   unsigned char **data,
