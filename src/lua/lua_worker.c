@@ -43,6 +43,7 @@ LUA_FUNCTION_DEF(worker, is_scanner);
 LUA_FUNCTION_DEF(worker, is_primary_controller);
 LUA_FUNCTION_DEF(worker, spawn_process);
 LUA_FUNCTION_DEF(worker, get_mem_stats);
+LUA_FUNCTION_DEF(worker, get_mem_config);
 LUA_FUNCTION_DEF(worker, add_control_handler);
 
 const luaL_reg worker_reg[] = {
@@ -56,6 +57,7 @@ const luaL_reg worker_reg[] = {
 	LUA_INTERFACE_DEF(worker, is_scanner),
 	LUA_INTERFACE_DEF(worker, is_primary_controller),
 	LUA_INTERFACE_DEF(worker, get_mem_stats),
+	LUA_INTERFACE_DEF(worker, get_mem_config),
 	LUA_INTERFACE_DEF(worker, add_control_handler),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
@@ -466,6 +468,119 @@ lua_worker_get_mem_stats(lua_State *L)
 		malloc_stats_print(lua_worker_jemalloc_stats_cb, (void *) L, NULL);
 #else
 		lua_pushstring(L, "no stats, jemalloc support is required");
+#endif
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+/***
+ * @method worker:get_mem_config()
+ * Returns a table with jemalloc allocator configuration and memory statistics
+ * obtained via mallctl(). Returns nil if jemalloc support is not compiled in.
+ * @return {table} table with fields: allocated, active, metadata, resident, mapped, narenas, dirty_decay_ms, muzzy_decay_ms
+ */
+static int
+lua_worker_get_mem_config(lua_State *L)
+{
+	struct rspamd_worker *w = lua_check_worker(L, 1);
+
+	if (w) {
+#ifdef WITH_JEMALLOC
+		gsize sz, val;
+		unsigned uval;
+		ssize_t sval;
+		bool bval;
+		const char *sptr;
+
+		lua_createtable(L, 0, 3);
+
+		/* stats subtable */
+		lua_pushstring(L, "stats");
+		lua_createtable(L, 0, 5);
+
+		sz = sizeof(val);
+		if (mallctl("stats.allocated", &val, &sz, NULL, 0) == 0) {
+			lua_pushstring(L, "allocated");
+			lua_pushinteger(L, val);
+			lua_settable(L, -3);
+		}
+		if (mallctl("stats.active", &val, &sz, NULL, 0) == 0) {
+			lua_pushstring(L, "active");
+			lua_pushinteger(L, val);
+			lua_settable(L, -3);
+		}
+		if (mallctl("stats.metadata", &val, &sz, NULL, 0) == 0) {
+			lua_pushstring(L, "metadata");
+			lua_pushinteger(L, val);
+			lua_settable(L, -3);
+		}
+		if (mallctl("stats.resident", &val, &sz, NULL, 0) == 0) {
+			lua_pushstring(L, "resident");
+			lua_pushinteger(L, val);
+			lua_settable(L, -3);
+		}
+		if (mallctl("stats.mapped", &val, &sz, NULL, 0) == 0) {
+			lua_pushstring(L, "mapped");
+			lua_pushinteger(L, val);
+			lua_settable(L, -3);
+		}
+
+		lua_settable(L, -3); /* set stats */
+
+		/* config subtable */
+		lua_pushstring(L, "config");
+		lua_createtable(L, 0, 6);
+
+		sz = sizeof(uval);
+		if (mallctl("opt.narenas", &uval, &sz, NULL, 0) == 0) {
+			lua_pushstring(L, "narenas");
+			lua_pushinteger(L, uval);
+			lua_settable(L, -3);
+		}
+
+		sz = sizeof(sval);
+		if (mallctl("opt.dirty_decay_ms", &sval, &sz, NULL, 0) == 0) {
+			lua_pushstring(L, "dirty_decay_ms");
+			lua_pushinteger(L, sval);
+			lua_settable(L, -3);
+		}
+		if (mallctl("opt.muzzy_decay_ms", &sval, &sz, NULL, 0) == 0) {
+			lua_pushstring(L, "muzzy_decay_ms");
+			lua_pushinteger(L, sval);
+			lua_settable(L, -3);
+		}
+
+		sz = sizeof(bval);
+		if (mallctl("opt.tcache", &bval, &sz, NULL, 0) == 0) {
+			lua_pushstring(L, "tcache");
+			lua_pushboolean(L, bval);
+			lua_settable(L, -3);
+		}
+		if (mallctl("opt.background_thread", &bval, &sz, NULL, 0) == 0) {
+			lua_pushstring(L, "background_thread");
+			lua_pushboolean(L, bval);
+			lua_settable(L, -3);
+		}
+
+		sz = sizeof(sptr);
+		if (mallctl("opt.malloc_conf", &sptr, &sz, NULL, 0) == 0 && sptr) {
+			lua_pushstring(L, "malloc_conf");
+			lua_pushstring(L, sptr);
+			lua_settable(L, -3);
+		}
+
+		lua_settable(L, -3); /* set config */
+
+		/* version */
+		lua_pushstring(L, "version");
+		lua_pushstring(L, JEMALLOC_VERSION);
+		lua_settable(L, -3);
+#else
+		lua_pushnil(L);
 #endif
 	}
 	else {
