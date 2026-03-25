@@ -812,6 +812,7 @@ auto symcache::add_symbol_with_callback(std::string_view name,
 												 priority, func, user_data,
 												 real_type_pair.first, real_type_pair.second);
 
+	auto *raw_item = item.get();
 	items_by_symbol.emplace(item->get_name(), item.get());
 	get_item_specific_vector(*item).push_back(item.get());
 	items_by_id.emplace(id, std::move(item));// Takes ownership
@@ -820,6 +821,8 @@ auto symcache::add_symbol_with_callback(std::string_view name,
 		cksum = t1ha(name.data(), name.size(), cksum);
 		stats_symbols_count++;
 	}
+
+	apply_pending_settings(raw_item);
 
 	return id;
 }
@@ -857,11 +860,14 @@ auto symcache::add_virtual_symbol(std::string_view name, int parent_id, int flag
 												id,
 												std::string{name},
 												parent_id, real_type_pair.first, real_type_pair.second);
+	auto *raw_item = item.get();
 	const auto &parent = items_by_id[parent_id].get();
 	parent->add_child(item.get());
 	items_by_symbol.emplace(item->get_name(), item.get());
 	get_item_specific_vector(*item).push_back(item.get());
 	items_by_id.emplace(id, std::move(item));// Takes ownership
+
+	apply_pending_settings(raw_item);
 
 	return id;
 }
@@ -1225,9 +1231,9 @@ auto symcache::process_settings_elt(struct rspamd_config_settings_elt *elt) -> v
 				}
 			}
 			else {
-				msg_warn_cache("cannot find a symbol to disable %s "
-							   "when processing settings %ud (%s)",
-							   sym, id, elt->name);
+				pending_settings_ops[sym].push_back({elt, false});
+				msg_debug_cache("pending disable for unknown symbol %s in settings %ud (%s)",
+								sym, id, elt->name);
 			}
 		}
 	}
@@ -1266,12 +1272,64 @@ auto symcache::process_settings_elt(struct rspamd_config_settings_elt *elt) -> v
 								sym, id, elt->name);
 			}
 			else {
-				msg_warn_cache("cannot find a symbol to enable %s "
-							   "when processing settings %ud (%s)",
-							   sym, id, elt->name);
+				pending_settings_ops[sym].push_back({elt, true});
+				msg_debug_cache("pending enable for unknown symbol %s in settings %ud (%s)",
+								sym, id, elt->name);
 			}
 		}
 	}
+}
+
+auto symcache::apply_pending_settings(cache_item *item) -> void
+{
+	auto it = pending_settings_ops.find(std::string(item->get_name()));
+	if (it == pending_settings_ops.end()) {
+		return;
+	}
+
+	auto log_func = RSPAMD_LOG_FUNC;
+
+	for (const auto &op: it->second) {
+		auto id = op.elt->id;
+
+		if (op.is_enabled) {
+			if (item->is_virtual()) {
+				auto *parent = get_item_by_name_mut(item->get_name(), true);
+
+				if (parent) {
+					if (op.elt->symbols_disabled &&
+						ucl_object_lookup(op.elt->symbols_disabled, parent->symbol.data())) {
+						msg_err_cache_lambda("conflict in %s: cannot enable disabled symbol %s, "
+											 "wanted to enable symbol %s",
+											 op.elt->name, parent->symbol.data(), item->get_name().data());
+						continue;
+					}
+
+					parent->exec_only_ids.add_id(id);
+					msg_debug_cache_lambda("allow just execution of symbol %s for settings %ud (%s) (deferred)",
+										   parent->symbol.data(), id, op.elt->name);
+				}
+			}
+
+			item->allowed_ids.add_id(id);
+			msg_debug_cache_lambda("allow execution of symbol %s for settings %ud (%s) (deferred)",
+								   item->get_name().data(), id, op.elt->name);
+		}
+		else {
+			item->forbidden_ids.add_id(id);
+			if (item->is_virtual()) {
+				msg_debug_cache_lambda("deny virtual symbol %s for settings %ud (%s) (deferred); "
+									   "parent can still be executed",
+									   item->get_name().data(), id, op.elt->name);
+			}
+			else {
+				msg_debug_cache_lambda("deny symbol %s for settings %ud (%s) (deferred)",
+									   item->get_name().data(), id, op.elt->name);
+			}
+		}
+	}
+
+	pending_settings_ops.erase(it);
 }
 
 auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>> &elts) const -> double

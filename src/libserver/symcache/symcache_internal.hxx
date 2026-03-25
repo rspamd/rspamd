@@ -285,6 +285,13 @@ private:
 	std::unique_ptr<delayed_symbol_names> disabled_symbols;
 	std::unique_ptr<delayed_symbol_names> enabled_symbols;
 
+	/* Pending settings operations for symbols not yet registered */
+	struct pending_settings_op {
+		struct rspamd_config_settings_elt *elt;
+		bool is_enabled; /* true = symbols_enabled, false = symbols_disabled */
+	};
+	ankerl::unordered_dense::map<std::string, std::vector<pending_settings_op>> pending_settings_ops;
+
 	rspamd_mempool_t *static_pool;
 	std::uint64_t cksum;
 	double total_weight;
@@ -638,6 +645,12 @@ public:
 	 * @param elt
 	 */
 	auto process_settings_elt(struct rspamd_config_settings_elt *elt) -> void;
+
+	/**
+	 * Apply any pending settings operations for a newly registered symbol
+	 * @param item
+	 */
+	auto apply_pending_settings(cache_item *item) -> void;
 
 	/**
 	 * Returns maximum timeout that is requested by all rules
