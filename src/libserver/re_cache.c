@@ -3559,6 +3559,7 @@ struct rspamd_re_cache_hs_load_scope {
 	unsigned int loaded;
 	unsigned int total_regexps;
 	gboolean all_loaded;
+	gboolean had_deserialize_failure; /* at least one blob failed to deserialize */
 };
 
 static gboolean
@@ -3772,6 +3773,7 @@ rspamd_re_cache_hs_load_cb(gboolean success, const unsigned char *data, gsize le
 			rspamd_hs_cache_lua_delete_async(it->cache_key,
 											 "stale_blob_cleanup", NULL, NULL);
 			sctx->all_loaded = FALSE;
+			sctx->had_deserialize_failure = TRUE;
 		}
 	}
 	else {
@@ -3814,8 +3816,10 @@ rspamd_re_cache_hs_load_cb(gboolean success, const unsigned char *data, gsize le
 							  cache->scope ? "'" : "");
 		}
 
-		/* If some classes failed to load, request hs_helper to recompile */
-		if (!sctx->all_loaded && rspamd_current_worker &&
+		/* Only request recompile for deserialize failures (stale/corrupt blobs),
+		 * not for cache misses — avoids infinite recompile loop when hs_helper
+		 * genuinely cannot compile certain expressions */
+		if (sctx->had_deserialize_failure && rspamd_current_worker &&
 			rspamd_current_worker->state == rspamd_worker_state_running) {
 			struct rspamd_srv_command srv_cmd;
 			memset(&srv_cmd, 0, sizeof(srv_cmd));
