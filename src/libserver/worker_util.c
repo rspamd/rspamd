@@ -2088,13 +2088,25 @@ rspamd_worker_hyperscan_ready(struct rspamd_main *rspamd_main,
 	rep.type = RSPAMD_CONTROL_HYPERSCAN_LOADED;
 	rep.id = cmd->id;
 
-	msg_info("received hyperscan loaded notification, forced=%d",
-			 cmd->cmd.hs_loaded.forced);
+	msg_info("received hyperscan loaded notification, forced=%d, scope=%s",
+			 cmd->cmd.hs_loaded.forced,
+			 cmd->cmd.hs_loaded.scope[0] ? cmd->cmd.hs_loaded.scope : "(all)");
 
 	/* All file operations go through Lua backend */
 	g_assert(rspamd_hs_cache_has_lua_backend());
-	rspamd_re_cache_load_hyperscan_scoped_async(cache, worker->srv->event_loop,
-												cache_dir, false);
+
+	if (cmd->cmd.hs_loaded.scope[0] != '\0') {
+		/* Per-scope notification: only load the specific scope that was compiled */
+		rspamd_re_cache_load_hyperscan_single_scope_async(cache,
+														  cmd->cmd.hs_loaded.scope,
+														  worker->srv->event_loop,
+														  cache_dir, false);
+	}
+	else {
+		/* Final notification: load all scopes */
+		rspamd_re_cache_load_hyperscan_scoped_async(cache, worker->srv->event_loop,
+													cache_dir, false);
+	}
 	rep.reply.hs_loaded.status = 0;
 
 	if (write(fd, &rep, sizeof(rep)) != sizeof(rep)) {

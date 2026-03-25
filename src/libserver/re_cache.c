@@ -3903,6 +3903,78 @@ void rspamd_re_cache_load_hyperscan_scoped_async(struct rspamd_re_cache *cache_h
 		}
 	}
 }
+
+void rspamd_re_cache_load_hyperscan_single_scope_async(struct rspamd_re_cache *cache_head,
+													   const char *scope,
+													   struct ev_loop *event_loop,
+													   const char *cache_dir,
+													   bool try_load)
+{
+	struct rspamd_re_cache *cache = cache_head; /* needed by msg_*_re_cache macros */
+	struct rspamd_re_cache *cur;
+
+	if (!cache_head || !event_loop) {
+		return;
+	}
+
+	if (cache_head->disable_hyperscan) {
+		return;
+	}
+
+	g_assert(rspamd_hs_cache_has_lua_backend());
+
+	cur = rspamd_re_cache_find_scope(cache_head, scope);
+	if (!cur) {
+		msg_warn_re_cache("received hyperscan notification for unknown scope '%s', ignoring",
+						  scope ? scope : "default");
+		return;
+	}
+
+	/* Switch to the found scope's cache for subsequent logging */
+	cache = cur;
+
+	struct rspamd_re_cache_hs_load_scope *sctx = g_malloc0(sizeof(*sctx));
+	GHashTableIter it;
+	gpointer k, v;
+
+	sctx->cache = cur;
+	sctx->event_loop = event_loop;
+	sctx->try_load = try_load;
+	sctx->loaded = 0;
+	sctx->all_loaded = TRUE;
+
+	sctx->total = g_hash_table_size(cur->re_classes);
+	sctx->pending = sctx->total;
+
+	if (sctx->pending == 0) {
+		g_free(sctx);
+		return;
+	}
+
+	msg_info_re_cache("loading hyperscan for scope '%s' (%ud classes)",
+					  scope ? scope : "default", sctx->total);
+
+	g_hash_table_iter_init(&it, cur->re_classes);
+	while (g_hash_table_iter_next(&it, &k, &v)) {
+		struct rspamd_re_class *re_class = (struct rspamd_re_class *) v;
+		struct rspamd_re_cache_hs_load_item *item = g_malloc0(sizeof(*item));
+		item->scope_ctx = sctx;
+		item->cache = cur;
+		item->re_class = re_class;
+		item->cache_key = g_strdup(re_class->hash);
+		char entity_name[256];
+		if (re_class->type_len > 0) {
+			rspamd_snprintf(entity_name, sizeof(entity_name), "re_class:%s(%*s)",
+							rspamd_re_cache_type_to_string(re_class->type),
+							(int) re_class->type_len - 1, re_class->type_data);
+		}
+		else {
+			rspamd_snprintf(entity_name, sizeof(entity_name), "re_class:%s",
+							rspamd_re_cache_type_to_string(re_class->type));
+		}
+		rspamd_hs_cache_lua_load_async(item->cache_key, entity_name, rspamd_re_cache_hs_load_cb, item);
+	}
+}
 #endif
 
 void rspamd_re_cache_add_selector(struct rspamd_re_cache *cache,

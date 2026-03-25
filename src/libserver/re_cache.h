@@ -290,6 +290,17 @@ void rspamd_re_cache_load_hyperscan_scoped_async(struct rspamd_re_cache *cache_h
 												 bool try_load);
 
 /**
+ * Asynchronously load hyperscan cache for a single named scope.
+ * Used when a per-scope compilation notification arrives so that we don't
+ * attempt to load scopes that haven't been compiled yet.
+ */
+void rspamd_re_cache_load_hyperscan_single_scope_async(struct rspamd_re_cache *cache_head,
+													   const char *scope,
+													   struct ev_loop *event_loop,
+													   const char *cache_dir,
+													   bool try_load);
+
+/**
  * Compile expressions to the hyperscan tree for a single scope with locking
  */
 int rspamd_re_cache_compile_hyperscan_scoped_single(struct rspamd_re_cache *cache,
