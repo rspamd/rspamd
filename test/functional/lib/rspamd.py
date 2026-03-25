@@ -256,8 +256,14 @@ def rspamc(addr, port, filename):
     s.send(b"\r\n\r\n")
     s.send(mboxgoo)
     s.send(goo)
-    r = s.recv(2048)
-    return r.decode('utf-8')
+    data = b""
+    while True:
+        chunk = s.recv(32768)
+        if not chunk:
+            break
+        data += chunk
+    s.close()
+    return data.decode('utf-8')
 
 
 def Scan_File(filename, **headers):
@@ -511,8 +517,14 @@ def spamc(addr, port, filename):
     s.send(b"\r\n\r\n")
     s.send(goo)
     s.shutdown(socket.SHUT_WR)
-    r = s.recv(2048)
-    return r.decode('utf-8')
+    data = b""
+    while True:
+        chunk = s.recv(32768)
+        if not chunk:
+            break
+        data += chunk
+    s.close()
+    return data.decode('utf-8')
 
 
 def TCP_Connect(addr, port):
