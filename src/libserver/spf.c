@@ -764,10 +764,12 @@ spf_record_process_addr(struct spf_record *rec, struct spf_addr *addr, struct rd
 				   &reply->content.aaa.addr,
 				   sizeof(addr->addr6));
 			naddr->flags |= RSPAMD_SPF_FLAG_IPV6;
+			naddr->flags &= ~RSPAMD_SPF_FLAG_IPV4;
 		}
 		else if (reply->type == RDNS_REQUEST_A) {
 			memcpy(naddr->addr4, &reply->content.a.addr, sizeof(addr->addr4));
 			naddr->flags |= RSPAMD_SPF_FLAG_IPV4;
+			naddr->flags &= ~RSPAMD_SPF_FLAG_IPV6;
 		}
 		else {
 			msg_err_spf(
