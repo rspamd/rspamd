@@ -415,6 +415,7 @@ local function default_condition(task)
   local input_tbl = llm_common.build_llm_input(task, {
     max_tokens = max_tokens,
     reply_trim_mode = settings.reply_trim_mode,
+    min_words = settings.min_words,
   })
   if not input_tbl then
     return false, 'no content to send'

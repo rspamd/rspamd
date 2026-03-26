@@ -1269,6 +1269,7 @@ exports.get_displayed_text_part = function(task, min_words)
   local html_part
   local text_part
   local html_attachment
+  local text_attachment
 
   -- First pass: categorize parts
   for _, part in ipairs(text_parts) do
@@ -1280,10 +1281,11 @@ exports.get_displayed_text_part = function(task, min_words)
         text_part = text_part or part
       end
     else
-      -- Check for HTML attachments
       if part:is_html() and mp:get_length() < 102400 then
         -- 100KB limit, as long ones are likely not something that we should check
         html_attachment = part
+      elseif not part:is_html() and mp:get_length() < 102400 then
+        text_attachment = text_attachment or part
       end
     end
   end
@@ -1305,6 +1307,10 @@ exports.get_displayed_text_part = function(task, min_words)
 
   if html_attachment then
     return html_attachment
+  end
+
+  if text_attachment then
+    return text_attachment
   end
 
   -- Only short parts, but still let's try our best
@@ -1998,7 +2004,7 @@ exports.extract_text_limited = function(task, opts)
   }
 
   -- Get the most relevant text part
-  local part = exports.get_displayed_text_part(task)
+  local part = exports.get_displayed_text_part(task, opts.min_words)
   if not part then
     return {
       text = "",

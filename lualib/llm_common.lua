@@ -54,6 +54,7 @@ function M.build_llm_input(task, opts)
   local extraction_opts = {
     max_bytes = max_tokens * 6, -- Rough estimate
     max_words = max_tokens, -- Better estimate if available
+    min_words = opts.min_words,
     strip_quotes = trim_replies,
     strip_reply_headers = trim_replies,
     smart_trim = trim_replies,
