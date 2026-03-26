@@ -601,6 +601,23 @@ local function default_openai_plain_conversion(task, input)
   return
 end
 
+-- Extract message content from either native Ollama or OpenAI-compatible response
+-- Native Ollama: {message: {content: "..."}}
+-- OpenAI compat (/v1/chat/completions): {choices: [{message: {content: "..."}}]}
+local function ollama_extract_content(task, reply)
+  if type(reply.message) == 'table' and reply.message.content then
+    return reply.message.content
+  end
+  if type(reply.choices) == 'table' and type(reply.choices[1]) == 'table' then
+    local msg = reply.choices[1].message
+    if type(msg) == 'table' and msg.content then
+      return msg.content
+    end
+  end
+  rspamd_logger.errx(task, 'no message content in reply')
+  return nil
+end
+
 local function default_ollama_plain_conversion(task, input)
   local parser = ucl.parser()
   local res, err = parser:parse_string(input)
@@ -614,15 +631,9 @@ local function default_ollama_plain_conversion(task, input)
     return
   end
 
-  if type(reply.message) ~= 'table' then
-    rspamd_logger.errx(task, 'bad message in reply')
-    return
-  end
-
-  local first_message = reply.message.content
+  local first_message = ollama_extract_content(task, reply)
 
   if not first_message then
-    rspamd_logger.errx(task, 'no content in the first message')
     return
   end
 
@@ -656,15 +667,9 @@ local function default_ollama_json_conversion(task, input)
     return
   end
 
-  if type(reply.message) ~= 'table' then
-    rspamd_logger.errx(task, 'bad message in reply')
-    return
-  end
-
-  local first_message = reply.message.content
+  local first_message = ollama_extract_content(task, reply)
 
   if not first_message then
-    rspamd_logger.errx(task, 'no content in the first message')
     return
   end
 
