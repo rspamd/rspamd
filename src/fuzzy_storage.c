@@ -1863,6 +1863,11 @@ fuzzy_session_destroy(gpointer d)
 {
 	struct fuzzy_session *session = d;
 
+	/* Stop IO watcher if active (e.g. pending UDP write retry) */
+	if (ev_can_stop(&session->io)) {
+		ev_io_stop(session->ctx->event_loop, &session->io);
+	}
+
 	rspamd_inet_address_free(session->addr);
 	rspamd_explicit_memzero(session->nm, sizeof(session->nm));
 
