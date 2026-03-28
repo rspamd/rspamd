@@ -927,6 +927,8 @@ local function get_stat_tokens(task, cf)
   return res
 end
 
+exports._filename_to_tokens = filename_to_tokens
+
 exports.gen_stat_tokens = function(cfg)
   local stat_config = process_stat_config(cfg)
 
