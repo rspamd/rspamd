@@ -256,11 +256,10 @@ local checks = {}
 -- Check: User/password in URL
 function checks.user_password_analysis(task, url, cfg)
   local findings = {}
-  local url_flags_tab = rspamd_url.flags
-  local flags = url:get_flags_num()
+  local flags = url:get_flags()
 
   -- Check if user field present
-  if bit.band(flags, url_flags_tab.has_user) == 0 then
+  if not flags.has_user then
     return findings
   end
 
@@ -324,10 +323,9 @@ end
 -- Check: Numeric IP as hostname
 function checks.numeric_ip_analysis(task, url, cfg)
   local findings = {}
-  local url_flags_tab = rspamd_url.flags
-  local flags = url:get_flags_num()
+  local flags = url:get_flags()
 
-  if bit.band(flags, url_flags_tab.numeric) == 0 then
+  if not flags.numeric then
     return findings
   end
 
@@ -354,7 +352,7 @@ function checks.numeric_ip_analysis(task, url, cfg)
     })
   else
     -- Check if user present (more suspicious)
-    if bit.band(flags, url_flags_tab.has_user) ~= 0 then
+    if flags.has_user then
       table.insert(findings, {
         symbol = symbols.numeric_ip_user,
         options = { host }
@@ -381,8 +379,7 @@ end
 -- Check: TLD validation
 function checks.tld_analysis(task, url, cfg)
   local findings = {}
-  local url_flags_tab = rspamd_url.flags
-  local flags = url:get_flags_num()
+  local flags = url:get_flags()
   local host = url:get_host()
 
   if not host then
@@ -390,9 +387,9 @@ function checks.tld_analysis(task, url, cfg)
   end
 
   -- Check for missing TLD
-  if bit.band(flags, url_flags_tab.no_tld) ~= 0 then
+  if flags.no_tld then
     -- Skip if it's a numeric IP (handled separately)
-    if bit.band(flags, url_flags_tab.numeric) == 0 then
+    if not flags.numeric then
       lua_util.debugm(N, task, "URL has no TLD: %s", host)
       table.insert(findings, {
         symbol = symbols.no_tld,
@@ -431,11 +428,10 @@ end
 -- Check: Unicode anomalies
 function checks.unicode_analysis(task, url, cfg)
   local findings = {}
-  local url_flags_tab = rspamd_url.flags
-  local flags = url:get_flags_num()
+  local flags = url:get_flags()
 
   -- Check zero-width spaces (flag check only, no string needed)
-  if cfg.check_zero_width and bit.band(flags, url_flags_tab.zw_spaces) ~= 0 then
+  if cfg.check_zero_width and flags.zw_spaces then
     lua_util.debugm(N, task, "URL contains zero-width spaces")
     table.insert(findings, {
       symbol = symbols.zero_width,

@@ -23,9 +23,6 @@ local rspamd_parsers = require "rspamd_parsers"
 local rspamd_regexp = require "rspamd_regexp"
 local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
-local bit = require "bit"
-local rspamd_url = require "rspamd_url"
-local url_flags_tab = rspamd_url.flags
 
 -- Different text parts
 rspamd_config.R_PARTS_DIFFER = {
@@ -136,15 +133,12 @@ else
       local susp_urls = task:get_urls_filtered({ 'obscured', 'zw_spaces' })
 
       if susp_urls and susp_urls[1] then
-        local obs_flag = url_flags_tab.obscured
-        local zw_flag = url_flags_tab.zw_spaces
-
         for _, u in ipairs(susp_urls) do
-          local fl = u:get_flags_num()
-          if bit.band(fl, obs_flag) ~= 0 then
+          local fl = u:get_flags()
+          if fl.obscured then
             task:insert_result('R_SUSPICIOUS_URL', 1.0, u:get_host())
           end
-          if bit.band(fl, zw_flag) ~= 0 then
+          if fl.zw_spaces then
             task:insert_result('ZERO_WIDTH_SPACE_URL', 1.0, u:get_host())
           end
         end

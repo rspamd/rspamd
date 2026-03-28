@@ -28,6 +28,8 @@ struct lua_tree_cb_data {
 	int metatable_pos;
 	unsigned int flags_mask;
 	unsigned int flags_exclude_mask;
+	unsigned int obf_flags_mask;
+	unsigned int obf_flags_exclude_mask;
 	unsigned int protocols_mask;
 	enum {
 		url_flags_mode_include_any,
