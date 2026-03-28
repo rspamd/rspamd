@@ -578,6 +578,73 @@ local function process_stat_config(cfg)
   return res_config
 end
 
+-- Split a filename into multiple stat tokens for better generalization.
+-- Prefixes are passed by the caller to allow differentiation and backward compatibility:
+--   orig_prefix  -- applied to the full filename (case-preserved)
+--   ext_prefix   -- applied to the file extension (lowercased)
+--   part_prefix  -- applied to meaningful parts (lowercased)
+-- Purely numeric parts and parts shorter than 2 characters are discarded.
+local function filename_to_tokens(fname, orig_prefix, ext_prefix, part_prefix)
+  local tokens = {}
+
+  -- Original filename (case-preserved) as a whole token
+  table.insert(tokens, orig_prefix .. fname)
+
+  -- Extract extension: everything after the last dot (no spaces in extension),
+  -- requires at least one character before the dot
+  local ext = fname:match('^.+%.([^%.%s]+)$')
+  -- base: filename with the last extension stripped (byte arithmetic is correct
+  -- here because fname:sub uses byte positions and #ext is also in bytes)
+  local base = ext and fname:sub(1, #fname - #ext - 1) or fname
+
+  if ext then
+    local lext = util.lower_utf8(ext)
+    if util.strlen_utf8(lext) >= 2 then
+      table.insert(tokens, ext_prefix .. lext)
+    end
+    -- Double extension (e.g. "tar.gz", "pdf.exe"): strong signal for both
+    -- legitimate compound formats and malware disguise patterns
+    local prev_ext = base:match('^.+%.([^%.%s]+)$')
+    if prev_ext and util.strlen_utf8(prev_ext) >= 2 then
+      table.insert(tokens, ext_prefix .. util.lower_utf8(prev_ext .. '.' .. ext))
+    end
+  end
+
+  -- Split base by common filename delimiters (ASCII)
+  for part in base:gmatch('[^%-%_%s%.%#]+') do
+    -- Split each part further by the following boundaries (byte-level):
+    --   ASCII lowercase (97-122) -> ASCII uppercase (65-90): CamelCase, e.g. "InvoiceReport"
+    --   ASCII letter (65-90, 97-122) or UTF-8 continuation byte (128-191)
+    --     -> ASCII digit (48-57): letter/digit boundary, e.g. "temp36173", "апр26"
+    --   UTF-8 continuation bytes (128-191) are the last bytes of any multi-byte
+    --   Unicode character (Cyrillic, CJK, accented Latin, etc.), so this rule
+    --   correctly detects the boundary between any Unicode letter and an ASCII digit.
+    local sub_start = 1
+    for pos = 1, #part - 1 do
+      local cur_byte = part:byte(pos)
+      local next_byte = part:byte(pos + 1)
+      local is_split =
+        (cur_byte >= 97 and cur_byte <= 122 and next_byte >= 65 and next_byte <= 90) or
+        ((cur_byte >= 65 and cur_byte <= 90 or cur_byte >= 97 and cur_byte <= 122 or
+          cur_byte >= 128 and cur_byte <= 191) and
+         next_byte >= 48 and next_byte <= 57)
+      if is_split then
+        local sub = util.lower_utf8(part:sub(sub_start, pos))
+        if util.strlen_utf8(sub) >= 2 and not sub:match('^%d+$') then
+          table.insert(tokens, part_prefix .. sub)
+        end
+        sub_start = pos + 1
+      end
+    end
+    local sub = util.lower_utf8(part:sub(sub_start))
+    if util.strlen_utf8(sub) >= 2 and not sub:match('^%d+$') then
+      table.insert(tokens, part_prefix .. sub)
+    end
+  end
+
+  return tokens
+end
+
 local function get_mime_stat_tokens(task, res, i)
   local parts = task:get_parts() or {}
   local seen_multipart = false
@@ -601,11 +668,13 @@ local function get_mime_stat_tokens(task, res, i)
     end
 
     if fname then
-      rawset(res, i, "#f:" .. fname)
-      i = i + 1
-
-      lua_util.debugm("bayes", task, "added attachment: #f:%s",
-          fname)
+      local fname_tokens = filename_to_tokens(fname, "#f:", "#fe:", "#fp:")
+      for _, ft in ipairs(fname_tokens) do
+        rawset(res, i, ft)
+        i = i + 1
+      end
+      lua_util.debugm("bayes", task, "added attachment filename tokens: %s",
+          table.concat(fname_tokens, ", "))
     end
 
     if part:is_text() then
@@ -821,7 +890,7 @@ local function get_stat_tokens(task, cf)
       local fname = img:get_filename()
 
       if fname then
-        rawset(res, i, tostring(img:get_filename()))
+        rawset(res, i, fname)
         i = i + 1
       end
 
