@@ -3337,6 +3337,11 @@ rspamd_map_parse_backend(struct rspamd_config *cfg, const char *map_line)
 					hdata->rest = g_strdup("");
 				}
 			}
+			else {
+				/* No path in URL (e.g. https://host), default to "/" */
+				hdata->path = g_strdup("/");
+				hdata->rest = g_strdup("");
+			}
 
 			if (up.field_set & (1u << UF_USERINFO)) {
 				/* Create authorisation header for basic auth */
