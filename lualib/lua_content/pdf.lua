@@ -466,6 +466,27 @@ local function gen_text_grammar()
        end
     end
 
+    -- Strip null bytes and control characters from non-UTF-16 text.
+    -- PDF hex strings like <0041> produce raw bytes including \x00 which
+    -- are not meaningful in extracted text and cause false positives in
+    -- sa_raw_body rules matching \x00 patterns.
+    local has_control = false
+    for i = 1, len do
+      local b = s:byte(i)
+      if b == 0 or (b < 32 and b ~= 9 and b ~= 10 and b ~= 13) then
+        has_control = true
+        break
+      end
+    end
+
+    if has_control then
+      -- Remove null bytes and other control characters (keep tab, newline, carriage return)
+      s = s:gsub('[%z\1-\8\11\12\14-\31]', '')
+      if #s == 0 then
+        return ''
+      end
+    end
+
     return s
   end
 

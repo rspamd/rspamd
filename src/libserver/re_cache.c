@@ -1667,26 +1667,38 @@ rspamd_re_cache_exec_re(struct rspamd_task *task,
 			lenvec[0] = 0;
 		}
 
-		PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, text_part)
 		{
-			if (text_part->utf_stripped_content) {
-				scvec[i + 1] = (unsigned char *) text_part->utf_stripped_content->data;
-				lenvec[i + 1] = text_part->utf_stripped_content->len;
+			unsigned int real_cnt = 1; /* start at 1 for Subject */
 
-				if (!IS_TEXT_PART_UTF(text_part)) {
-					raw = TRUE;
+			PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, text_part)
+			{
+				/* Skip injected/computed parts (e.g. PDF extracted text) —
+				 * SA body should only scan original MIME text parts */
+				if (text_part->mime_part->flags & RSPAMD_MIME_PART_COMPUTED) {
+					continue;
 				}
-			}
-			else {
-				scvec[i + 1] = (unsigned char *) "";
-				lenvec[i + 1] = 0;
-			}
-		}
 
-		ret = rspamd_re_cache_process_regexp_data(rt, re,
-												  task, scvec, lenvec, cnt, raw, &processed_hyperscan);
-		msg_debug_re_task("checked sa body regexp: %s -> %d",
-						  rspamd_regexp_get_pattern(re), ret);
+				if (text_part->utf_stripped_content) {
+					scvec[real_cnt] = (unsigned char *) text_part->utf_stripped_content->data;
+					lenvec[real_cnt] = text_part->utf_stripped_content->len;
+
+					if (!IS_TEXT_PART_UTF(text_part)) {
+						raw = TRUE;
+					}
+				}
+				else {
+					scvec[real_cnt] = (unsigned char *) "";
+					lenvec[real_cnt] = 0;
+				}
+
+				real_cnt++;
+			}
+
+			ret = rspamd_re_cache_process_regexp_data(rt, re,
+													  task, scvec, lenvec, real_cnt, raw, &processed_hyperscan);
+			msg_debug_re_task("checked sa body regexp: %s -> %d",
+							  rspamd_regexp_get_pattern(re), ret);
+		}
 		g_free(scvec);
 		g_free(lenvec);
 		break;
@@ -1711,8 +1723,16 @@ rspamd_re_cache_exec_re(struct rspamd_task *task,
 			scvec = g_malloc(sizeof(*scvec) * cnt);
 			lenvec = g_malloc(sizeof(*lenvec) * cnt);
 
+			unsigned int real_cnt = 0;
+
 			for (i = 0; i < cnt; i++) {
 				text_part = g_ptr_array_index(MESSAGE_FIELD(task, text_parts), i);
+
+				/* Skip injected/computed parts (e.g. PDF extracted text) —
+				 * SA rawbody should only scan original MIME text parts */
+				if (text_part->mime_part->flags & RSPAMD_MIME_PART_COMPUTED) {
+					continue;
+				}
 
 				if (text_part->utf_raw_content != NULL &&
 					text_part->utf_raw_content->len > 0) {
@@ -1721,8 +1741,8 @@ rspamd_re_cache_exec_re(struct rspamd_task *task,
 					 * preserved. This is the correct representation for
 					 * SA rawbody matching.
 					 */
-					scvec[i] = text_part->utf_raw_content->data;
-					lenvec[i] = text_part->utf_raw_content->len;
+					scvec[real_cnt] = text_part->utf_raw_content->data;
+					lenvec[real_cnt] = text_part->utf_raw_content->len;
 
 					if (!IS_TEXT_PART_UTF(text_part)) {
 						raw = TRUE;
@@ -1733,20 +1753,24 @@ rspamd_re_cache_exec_re(struct rspamd_task *task,
 					 * Charset conversion failed; fall back to
 					 * transfer-decoded content in raw mode.
 					 */
-					scvec[i] = (unsigned char *) text_part->parsed.begin;
-					lenvec[i] = text_part->parsed.len;
+					scvec[real_cnt] = (unsigned char *) text_part->parsed.begin;
+					lenvec[real_cnt] = text_part->parsed.len;
 					raw = TRUE;
 				}
 				else {
-					scvec[i] = (unsigned char *) "";
-					lenvec[i] = 0;
+					scvec[real_cnt] = (unsigned char *) "";
+					lenvec[real_cnt] = 0;
 				}
+
+				real_cnt++;
 			}
 
-			ret = rspamd_re_cache_process_regexp_data(rt, re,
-													  task, scvec, lenvec, cnt, raw, &processed_hyperscan);
-			msg_debug_re_task("checked sa rawbody regexp: %s -> %d",
-							  rspamd_regexp_get_pattern(re), ret);
+			if (real_cnt > 0) {
+				ret = rspamd_re_cache_process_regexp_data(rt, re,
+														  task, scvec, lenvec, real_cnt, raw, &processed_hyperscan);
+				msg_debug_re_task("checked sa rawbody regexp: %s -> %d",
+								  rspamd_regexp_get_pattern(re), ret);
+			}
 			g_free(scvec);
 			g_free(lenvec);
 		}
