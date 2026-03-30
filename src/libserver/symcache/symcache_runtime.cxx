@@ -118,6 +118,31 @@ auto symcache_runtime::process_settings(struct rspamd_task *task, const symcache
 
 	const auto *enabled = ucl_object_lookup(task->settings, "symbols_enabled");
 
+	/*
+	 * Track force-enabled symbols: if settings_elt has a symbol in forbidden_ids
+	 * but the merged settings explicitly enable it, we need to override the bitset
+	 */
+	auto force_enable = [&](const char *sym) {
+		enable_symbol(task, cache, sym);
+
+		if (task->settings_elt) {
+			const auto *item = cache.get_item_by_name(sym, true);
+			if (item && item->forbidden_ids.check_id(task->settings_elt->id)) {
+				auto *force_ht = (GHashTable *) rspamd_mempool_get_variable(
+					task->task_pool, "force_enabled_ids");
+				if (!force_ht) {
+					force_ht = g_hash_table_new(g_direct_hash, g_direct_equal);
+					rspamd_mempool_set_variable(task->task_pool, "force_enabled_ids",
+												force_ht,
+												(rspamd_mempool_destruct_t) g_hash_table_unref);
+				}
+				g_hash_table_insert(force_ht, GINT_TO_POINTER(item->id), GINT_TO_POINTER(1));
+				msg_debug_cache_task("force-enable %s (id=%d) overriding settings_elt forbidden_ids",
+									 sym, item->id);
+			}
+		}
+	};
+
 	if (enabled) {
 		msg_debug_cache_task("disable all symbols as `symbols_enabled` is found");
 		/* Disable all symbols but selected */
@@ -126,7 +151,7 @@ auto symcache_runtime::process_settings(struct rspamd_task *task, const symcache
 		it = nullptr;
 
 		while ((cur = ucl_iterate_object(enabled, &it, true)) != nullptr) {
-			enable_symbol(task, cache, ucl_object_tostring(cur));
+			force_enable(ucl_object_tostring(cur));
 		}
 	}
 
@@ -136,7 +161,7 @@ auto symcache_runtime::process_settings(struct rspamd_task *task, const symcache
 		disable_all_symbols(SYMBOL_TYPE_EXPLICIT_DISABLE);
 	}
 	process_group(enabled, [&](const char *sym) {
-		enable_symbol(task, cache, sym);
+		force_enable(sym);
 	});
 
 	const auto *disabled = ucl_object_lookup(task->settings, "symbols_disabled");

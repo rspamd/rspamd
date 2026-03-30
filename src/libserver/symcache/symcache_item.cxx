@@ -362,13 +362,23 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 	/* Settings checks */
 	if (task->settings_elt != nullptr) {
 		if (forbidden_ids.check_id(task->settings_elt->id)) {
-			msg_debug_cache_task("deny %s of %s as it is forbidden for "
-								 "settings id %ud",
-								 what,
-								 symbol.c_str(),
-								 task->settings_elt->id);
+			/* Check if force-enabled by merged settings */
+			auto *force_ht = (GHashTable *) rspamd_mempool_get_variable(
+				task->task_pool, "force_enabled_ids");
+			if (force_ht && g_hash_table_contains(force_ht, GINT_TO_POINTER(id))) {
+				msg_debug_cache_task("allow %s of %s: force-enabled by merged "
+									 "settings overriding settings_elt forbidden_ids",
+									 what, symbol.c_str());
+			}
+			else {
+				msg_debug_cache_task("deny %s of %s as it is forbidden for "
+									 "settings id %ud",
+									 what,
+									 symbol.c_str(),
+									 task->settings_elt->id);
 
-			return false;
+				return false;
+			}
 		}
 
 		if (!(flags & SYMBOL_TYPE_EXPLICIT_DISABLE)) {
