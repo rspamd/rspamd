@@ -902,11 +902,9 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 }); /* End of kh_foreach_value */
 
 if (seen_settings_header && task->settings_elt) {
-	msg_warn_task("ignore settings id %s as settings header is also presented",
+	msg_info_task("both settings id %s and settings header are present, "
+				  "settings will be merged",
 				  task->settings_elt->name);
-	REF_RELEASE(task->settings_elt);
-
-	task->settings_elt = NULL;
 }
 
 if (!has_ip) {
@@ -2444,11 +2442,9 @@ rspamd_protocol_handle_metadata(struct rspamd_task *task,
 	/* settings (inline UCL object) */
 	elt = ucl_object_lookup(metadata, "settings");
 	if (elt && ucl_object_type(elt) == UCL_OBJECT) {
-		/* If both settings_id and settings are present, settings wins */
 		if (task->settings_elt) {
-			msg_warn_protocol("ignore settings_id because inline settings is also present");
-			REF_RELEASE(task->settings_elt);
-			task->settings_elt = NULL;
+			msg_info_protocol("both settings_id and inline settings present, "
+							  "settings will be merged");
 		}
 		task->settings = ucl_object_ref(elt);
 	}

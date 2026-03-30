@@ -44,11 +44,8 @@ local module_sym_id -- Main module symbol
 local function apply_settings(task, to_apply, id, name)
   local cached_name = task:cache_get('settings_name')
   if cached_name then
-    local cached_settings = task:cache_get('settings')
-    rspamd_logger.warnx(task, "cannot apply settings rule %s (id=%s):" ..
-        " settings has been already applied by rule %s (id=%s)",
-        name, id, cached_name, cached_settings.id)
-    return false
+    rspamd_logger.infox(task, "replacing settings rule %s with %s (id=%s)",
+        cached_name, name, id)
   end
 
   task:set_settings(to_apply)

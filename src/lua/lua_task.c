@@ -6210,10 +6210,10 @@ lua_task_set_settings(lua_State *L)
 	if (settings != NULL && task != NULL) {
 
 		if (task->settings) {
-			/* Do not allow to set settings on top of the existing ones */
-			ucl_object_unref(settings);
-
-			return luaL_error(L, "invalid invocation: settings has been already set");
+			/* Replace existing settings (will be handled by merge in the future) */
+			msg_info_task("replacing existing settings with new ones");
+			ucl_object_unref(task->settings);
+			task->settings = NULL;
 		}
 
 		metric_elt = ucl_object_lookup(settings, DEFAULT_METRIC);
