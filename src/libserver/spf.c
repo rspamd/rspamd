@@ -2674,7 +2674,7 @@ rspamd_spf_cache_domain(struct rspamd_task *task)
 	if (!addr || (addr->flags & RSPAMD_EMAIL_ADDR_EMPTY)) {
 		/* Get domain from helo */
 
-		if (task->helo) {
+		if (task->helo && task->helo[0] != '[') {
 			GString *fs = g_string_new("");
 
 			cred = rspamd_mempool_alloc(task->task_pool, sizeof(*cred));
@@ -2684,6 +2684,10 @@ rspamd_spf_cache_domain(struct rspamd_task *task)
 			cred->sender = fs->str;
 			rspamd_mempool_add_destructor(task->task_pool,
 										  rspamd_gstring_free_hard, fs);
+		}
+		else if (task->helo) {
+			/* IP address literals (e.g. [192.0.2.1]) cannot be used as SPF domain (RFC 7208 §2.3) */
+			msg_info_task("skip SPF check for IP address literal in HELO: %s", task->helo);
 		}
 	}
 	else {
