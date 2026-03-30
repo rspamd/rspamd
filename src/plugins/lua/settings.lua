@@ -41,21 +41,36 @@ local settings_initialized = false
 local max_pri = 0
 local module_sym_id -- Main module symbol
 
-local function apply_settings(task, to_apply, id, name)
-  local cached_name = task:cache_get('settings_name')
-  if cached_name then
-    rspamd_logger.infox(task, "replacing settings rule %s with %s (id=%s)",
-        cached_name, name, id)
+-- Settings layer levels (must match enum rspamd_settings_layer in C)
+local SETTINGS_LAYER = {
+  CONFIG = 0,
+  PROFILE = 1,
+  RULE = 2,
+  PER_USER = 3,
+  HTTP = 4,
+}
+
+-- Collect a settings layer for later merging
+local function collect_settings_layer(task, level, name, settings_id, to_apply)
+  local layers = task:cache_get('settings_layers')
+  if not layers then
+    layers = {}
   end
 
-  task:set_settings(to_apply)
-  task:cache_set('settings', to_apply)
-  task:cache_set('settings_name', name or 'unknown')
+  layers[#layers + 1] = {
+    level = level,
+    name = name or 'unknown',
+    settings_id = settings_id or 0,
+    apply = to_apply,
+  }
 
-  if id then
-    task:set_settings_id(id)
-  end
+  task:cache_set('settings_layers', layers)
+  lua_util.debugm(N, task, "collected settings layer %s (level=%s, id=%s)",
+      name, level, settings_id)
+end
 
+-- Apply Lua-side effects from merged settings (headers, flags, symbols, etc.)
+local function apply_settings_side_effects(task, to_apply)
   if to_apply['add_headers'] or to_apply['remove_headers'] then
     local rep = {
       add_headers = to_apply['add_headers'] or {},
@@ -99,6 +114,15 @@ local function apply_settings(task, to_apply, id, name)
     fun.each(function(category, message)
       task:append_message(message, category)
     end, to_apply.messages)
+  end
+end
+
+-- Legacy apply for single-layer case (backward compat)
+local function apply_settings(task, to_apply, id, name)
+  collect_settings_layer(task, SETTINGS_LAYER.RULE, name, id, to_apply)
+
+  if id then
+    task:set_settings_id(id)
   end
 
   return true
@@ -317,12 +341,12 @@ local function check_settings(task)
   local function maybe_apply_query_settings()
     if query_apply then
       if id_elt then
-        apply_settings(task, query_apply, id_elt.id, id_elt.name)
-        rspamd_logger.infox(task, "applied settings id %s(%s); priority %s",
+        collect_settings_layer(task, SETTINGS_LAYER.PROFILE, id_elt.name, id_elt.id, query_apply)
+        rspamd_logger.infox(task, "collected settings id %s(%s); priority %s",
             id_elt.name, id_elt.id, priority_to_string(priority))
       else
-        apply_settings(task, query_apply, nil, 'HTTP query')
-        rspamd_logger.infox(task, "applied settings from query; priority %s",
+        collect_settings_layer(task, SETTINGS_LAYER.HTTP, 'HTTP query', 0, query_apply)
+        rspamd_logger.infox(task, "collected settings from query; priority %s",
             priority_to_string(priority))
       end
     end
@@ -450,9 +474,9 @@ local function gen_settings_external_cb(name)
             name, ucl_err)
       else
         local obj = parser:get_object()
-        rspamd_logger.infox(task, "<%s> apply settings according to the external map %s",
+        rspamd_logger.infox(task, "<%s> collect settings from external map %s",
             name, task:get_message_id())
-        apply_settings(task, obj, nil, 'external_map')
+        collect_settings_layer(task, SETTINGS_LAYER.RULE, 'external_map:' .. name, 0, obj)
       end
     else
       rspamd_logger.infox(task, "<%s> no settings returned from the external map %s: %s (code = %s)",
@@ -1277,9 +1301,9 @@ local function gen_redis_callback(handler, id)
                   ucl_err)
             else
               local obj = parser:get_object()
-              rspamd_logger.infox(task, "<%s> apply settings according to redis rule %s",
+              rspamd_logger.infox(task, "<%s> collect settings from redis rule %s",
                   task:get_message_id(), id)
-              apply_settings(task, obj, nil, 'redis')
+              collect_settings_layer(task, SETTINGS_LAYER.PER_USER, 'redis:' .. tostring(id), 0, obj)
               break
             end
           end
@@ -1359,6 +1383,61 @@ module_sym_id = rspamd_config:register_symbol({
   type = 'prefilter',
   callback = check_settings,
   priority = lua_util.symbols_priorities.top,
+  flags = 'empty,nostat,explicit_disable,ignore_passthrough',
+})
+
+-- SETTINGS_APPLY runs after all settings collectors (SETTINGS_CHECK, REDIS_SETTINGS*)
+-- have finished, merges collected layers, and applies the result.
+-- Priority high (9) < top (10) ensures proper ordering via prefilter priority mechanism.
+rspamd_config:register_symbol({
+  name = 'SETTINGS_APPLY',
+  type = 'prefilter',
+  callback = function(task)
+    local layers = task:cache_get('settings_layers')
+    if not layers or #layers == 0 then
+      lua_util.debugm(N, task, "no settings layers collected, nothing to apply")
+      return
+    end
+
+    if #layers == 1 then
+      -- Single layer: apply directly without merge overhead
+      local layer = layers[1]
+      lua_util.debugm(N, task, "single settings layer %s, applying directly", layer.name)
+      task:set_settings(layer.apply)
+      if layer.settings_id and layer.settings_id ~= 0 then
+        task:set_settings_id(layer.settings_id)
+      end
+      apply_settings_side_effects(task, layer.apply)
+    else
+      -- Multiple layers: merge via C infrastructure
+      rspamd_logger.infox(task, "merging %s settings layers", #layers)
+
+      -- Also collect settings_id from the highest-priority layer that has one
+      local best_settings_id = nil
+      for _, layer in ipairs(layers) do
+        if layer.settings_id and layer.settings_id ~= 0 then
+          best_settings_id = layer.settings_id
+        end
+      end
+
+      local merged = task:merge_and_apply_settings(layers)
+      if merged then
+        if best_settings_id then
+          task:set_settings_id(best_settings_id)
+        end
+        -- Apply Lua-side effects from the merged result
+        local merged_settings = task:get_settings()
+        if merged_settings then
+          apply_settings_side_effects(task, merged_settings)
+        end
+      else
+        rspamd_logger.warnx(task, "settings merge returned no result")
+      end
+    end
+
+    task:cache_set('settings_applied', true)
+  end,
+  priority = lua_util.symbols_priorities.high,
   flags = 'empty,nostat,explicit_disable,ignore_passthrough',
 })
 
