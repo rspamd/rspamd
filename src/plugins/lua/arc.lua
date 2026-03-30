@@ -566,8 +566,9 @@ rspamd_config:register_symbol({
   groups = { 'arc' },
 })
 
-rspamd_config:register_dependency('ARC_CHECK', 'SPF_CHECK')
-rspamd_config:register_dependency('ARC_CHECK', 'DKIM_CHECK')
+-- Weak deps: ARC verification works without SPF/DKIM, just less info in AAR header
+rspamd_config:register_dependency('ARC_CHECK', 'SPF_CHECK', true)
+rspamd_config:register_dependency('ARC_CHECK', 'DKIM_CHECK', true)
 
 local function arc_sign_seal(task, params, header)
   local arc_seals = task:cache_get('arc-seals')

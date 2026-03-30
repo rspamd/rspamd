@@ -179,5 +179,5 @@ if type(settings.forbidden_ids) == 'table' then
 end
 
 rspamd_config:register_symbol(sym_reg_tbl)
--- Add dependency on DKIM checks
-rspamd_config:register_dependency(settings['symbol'], 'DKIM_CHECK')
+-- Add weak dependency on DKIM checks (signing works without it, just loses R_DKIM_REJECT suppression)
+rspamd_config:register_dependency(settings['symbol'], 'DKIM_CHECK', true)

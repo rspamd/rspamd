@@ -114,4 +114,5 @@ rspamd_config.BOUNCE = {
   group = 'headers',
 }
 
-rspamd_config:register_dependency('BOUNCE', 'SUBJ_BOUNCE_WORDS')
+-- Weak: BOUNCE can fire on sender pattern alone; subject match is an independent path
+rspamd_config:register_dependency('BOUNCE', 'SUBJ_BOUNCE_WORDS', true)

@@ -35,7 +35,14 @@ enum class cache_item_status : std::uint16_t {
 	started = 1,
 	pending = 2,
 	finished = 3,
+	disabled = 4, /* Disabled by settings; triggers cascade-disable for hard deps */
 };
+
+/* Check if an item status means "done" (finished or disabled) */
+static inline auto is_item_done(cache_item_status status) -> bool
+{
+	return status == cache_item_status::finished || status == cache_item_status::disabled;
+}
 /**
  * These items are saved within task structure and are used to track
  * symbols execution.

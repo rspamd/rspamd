@@ -2815,10 +2815,15 @@ lua_config_register_dependency(lua_State *L)
 	else {
 		child = luaL_checkstring(L, 2);
 		parent = luaL_checkstring(L, 3);
+		gboolean weak = FALSE;
+
+		if (lua_isboolean(L, 4)) {
+			weak = lua_toboolean(L, 4);
+		}
 
 		if (child != NULL && parent != NULL) {
 			rspamd_symcache_add_delayed_dependency(cfg->cache, child,
-												   parent);
+												   parent, weak);
 		}
 	}
 

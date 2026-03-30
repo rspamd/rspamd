@@ -241,9 +241,11 @@ void rspamd_symcache_inc_frequency(struct rspamd_symcache *_cache,
  * @param cache
  * @param from
  * @param to
+ * @param weak if TRUE, disabling the dependency does not cascade-disable the dependent
  */
 void rspamd_symcache_add_delayed_dependency(struct rspamd_symcache *cache,
-											const char *from, const char *to);
+											const char *from, const char *to,
+											gboolean weak);
 
 /**
  * Get abstract callback data for a symbol (or its parent symbol)

@@ -225,10 +225,11 @@ void rspamd_symcache_inc_frequency(struct rspamd_symcache *cache, struct rspamd_
 }
 
 void rspamd_symcache_add_delayed_dependency(struct rspamd_symcache *cache,
-											const char *from, const char *to)
+											const char *from, const char *to,
+											gboolean weak)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
-	real_cache->add_delayed_dependency(from, to);
+	real_cache->add_delayed_dependency(from, to, weak);
 }
 
 const char *

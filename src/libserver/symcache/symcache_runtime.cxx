@@ -174,7 +174,7 @@ auto symcache_runtime::disable_all_symbols(int skip_mask) -> void
 		auto *dyn_item = &dynamic_items[i];
 
 		if (!(item->get_flags() & skip_mask)) {
-			dyn_item->status = cache_item_status::finished;
+			dyn_item->status = cache_item_status::disabled;
 		}
 	}
 }
@@ -188,7 +188,7 @@ auto symcache_runtime::disable_symbol(struct rspamd_task *task, const symcache &
 		auto *dyn_item = get_dynamic_item(item->id);
 
 		if (dyn_item) {
-			dyn_item->status = cache_item_status::finished;
+			dyn_item->status = cache_item_status::disabled;
 			msg_debug_cache_task("disable execution of %s", name.data());
 
 			return true;
@@ -468,10 +468,11 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 	if (dyn_item->status != cache_item_status::not_started) {
 		/*
 		 * This can actually happen when deps span over different layers
+		 * or when items are cascade-disabled
 		 */
 		msg_debug_cache_task("skip already started %s(%d) symbol", item->symbol.c_str(), item->id);
 
-		return dyn_item->status == cache_item_status::finished;
+		return is_item_done(dyn_item->status);
 	}
 
 	/* Check has been started */
@@ -607,6 +608,24 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 
 			auto *dep_dyn_item = get_dynamic_item(dep.item->id);
 
+			if (dep_dyn_item->status == cache_item_status::disabled) {
+				/* Dependency was disabled by settings */
+				if (!dep.weak) {
+					/* Hard dependency disabled: cascade-disable this item */
+					dyn_item->status = cache_item_status::disabled;
+					msg_debug_cache_task_lambda("cascade disable %d(%s) because hard dependency "
+												"%d(%s) is disabled",
+												item->id, item->symbol.c_str(),
+												dest_id, dep.sym.c_str());
+					return true; /* Item is "done" (disabled) */
+				}
+				/* Weak dependency disabled: proceed without it */
+				msg_debug_cache_task_lambda("weak dependency %d(%s) for symbol %d(%s) is "
+											"disabled, proceeding",
+											dest_id, dep.sym.c_str(), item->id, item->symbol.c_str());
+				continue;
+			}
+
 			if (dep_dyn_item->status != cache_item_status::finished) {
 				if (dep_dyn_item->status == cache_item_status::not_started) {
 					/* Not started */
@@ -620,6 +639,18 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 							msg_debug_cache_task_lambda("delayed dependency %d(%s) for "
 														"symbol %d(%s)",
 														dest_id, dep.sym.c_str(), item->id, item->symbol.c_str());
+						}
+						else if (dep_dyn_item->status == cache_item_status::disabled) {
+							/* Dep was cascade-disabled during recursive check */
+							if (!dep.weak) {
+								dyn_item->status = cache_item_status::disabled;
+								msg_debug_cache_task_lambda("cascade disable %d(%s) because hard dependency "
+															"%d(%s) was cascade-disabled",
+															item->id, item->symbol.c_str(),
+															dest_id, dep.sym.c_str());
+								return true;
+							}
+							/* Weak dep: proceed */
 						}
 						else if (!process_symbol(task, cache, dep.item, dep_dyn_item)) {
 							/* Now started, but has events pending */
