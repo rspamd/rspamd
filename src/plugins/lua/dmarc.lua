@@ -745,8 +745,8 @@ rspamd_config:register_symbol({
 })
 
 -- Weak deps: DMARC falls back to DKIM-only or SPF-only alignment if the other is absent
-rspamd_config:register_dependency('DMARC_CHECK', settings.symbols['spf_allow_symbol'], true)
-rspamd_config:register_dependency('DMARC_CHECK', settings.symbols['dkim_allow_symbol'], true)
+rspamd_config:register_dependency('DMARC_CHECK', settings.symbols['spf_allow_symbol'])
+rspamd_config:register_dependency('DMARC_CHECK', settings.symbols['dkim_allow_symbol'])
 
 -- DMARC munging support
 if settings.munging then
@@ -796,8 +796,8 @@ if settings.munging then
 
   rspamd_config:register_dependency('DMARC_MUNGED', 'DMARC_CHECK')
   -- Weak: signing works without munging, just ensures proper header rewrite order
-  rspamd_config:register_dependency('DKIM_SIGNED', 'DMARC_MUNGED', true)
-  rspamd_config:register_dependency('ARC_SIGNED', 'DMARC_MUNGED', true)
+  rspamd_config:register_dependency('DKIM_SIGNED', 'DMARC_MUNGED')
+  rspamd_config:register_dependency('ARC_SIGNED', 'DMARC_MUNGED')
 
   rspamd_logger.infox(rspamd_config, 'enabled DMARC munging')
 end

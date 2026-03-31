@@ -182,11 +182,11 @@ struct cache_dependency {
 	cache_item *item;      /* Real dependency */
 	std::string sym;       /* Symbolic dep name */
 	int virtual_source_id; /* Virtual source */
-	bool weak;             /* Weak dep: don't cascade-disable when dep is disabled */
+	bool hard;             /* Hard dep: cascade-disable dependent when dep is disabled by settings */
 public:
 	/* Default piecewise constructor */
-	explicit cache_dependency(cache_item *_item, std::string _sym, int _vid, bool _weak = false)
-		: item(_item), sym(std::move(_sym)), virtual_source_id(_vid), weak(_weak)
+	explicit cache_dependency(cache_item *_item, std::string _sym, int _vid, bool _hard = false)
+		: item(_item), sym(std::move(_sym)), virtual_source_id(_vid), hard(_hard)
 	{
 	}
 };

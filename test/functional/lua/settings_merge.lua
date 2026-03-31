@@ -19,9 +19,9 @@ rspamd_config:register_symbol({
     return true, 'hard_dep'
   end
 })
-rspamd_config:register_dependency('MERGE_HARD_DEP', 'MERGE_TEST_BASIC')
+rspamd_config:register_dependency('MERGE_HARD_DEP', 'MERGE_TEST_BASIC', true)
 
--- Symbol with a WEAK dependency on MERGE_TEST_BASIC
+-- Symbol with a WEAK (default) dependency on MERGE_TEST_BASIC
 rspamd_config:register_symbol({
   name = 'MERGE_WEAK_DEP',
   score = 1.0,
@@ -30,7 +30,7 @@ rspamd_config:register_symbol({
     return true, 'weak_dep'
   end
 })
-rspamd_config:register_dependency('MERGE_WEAK_DEP', 'MERGE_TEST_BASIC', true)
+rspamd_config:register_dependency('MERGE_WEAK_DEP', 'MERGE_TEST_BASIC')
 
 -- Symbol in a separate group for group enable/disable tests
 rspamd_config:register_symbol({

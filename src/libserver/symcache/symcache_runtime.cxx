@@ -658,7 +658,7 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 
 			if (dep_dyn_item->status == cache_item_status::disabled) {
 				/* Dependency was disabled by settings */
-				if (!dep.weak) {
+				if (dep.hard) {
 					/* Hard dependency disabled: cascade-disable this item */
 					dyn_item->status = cache_item_status::disabled;
 					msg_debug_cache_task_lambda("cascade disable %d(%s) because hard dependency "
@@ -667,9 +667,9 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 												dest_id, dep.sym.c_str());
 					return true; /* Item is "done" (disabled) */
 				}
-				/* Weak dependency disabled: proceed without it */
-				msg_debug_cache_task_lambda("weak dependency %d(%s) for symbol %d(%s) is "
-											"disabled, proceeding",
+				/* Normal (weak) dependency disabled: proceed without it (backward compat) */
+				msg_debug_cache_task_lambda("dependency %d(%s) for symbol %d(%s) is "
+											"disabled, proceeding (not a hard dep)",
 											dest_id, dep.sym.c_str(), item->id, item->symbol.c_str());
 				continue;
 			}
@@ -690,7 +690,7 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 						}
 						else if (dep_dyn_item->status == cache_item_status::disabled) {
 							/* Dep was cascade-disabled during recursive check */
-							if (!dep.weak) {
+							if (dep.hard) {
 								dyn_item->status = cache_item_status::disabled;
 								msg_debug_cache_task_lambda("cascade disable %d(%s) because hard dependency "
 															"%d(%s) was cascade-disabled",

@@ -1213,7 +1213,7 @@ local function add_rbl(key, rbl, global_opts)
 
     if rbl.dkim then
       -- Weak: RBL has other query sources; DKIM-domain queries just won't happen
-      rspamd_config:register_dependency(check_sym, 'DKIM_CHECK', true)
+      rspamd_config:register_dependency(check_sym, 'DKIM_CHECK')
     end
 
     if rbl.require_symbols then

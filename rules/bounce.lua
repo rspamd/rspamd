@@ -115,4 +115,4 @@ rspamd_config.BOUNCE = {
 }
 
 -- Weak: BOUNCE can fire on sender pattern alone; subject match is an independent path
-rspamd_config:register_dependency('BOUNCE', 'SUBJ_BOUNCE_WORDS', true)
+rspamd_config:register_dependency('BOUNCE', 'SUBJ_BOUNCE_WORDS')

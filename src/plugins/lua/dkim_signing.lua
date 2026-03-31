@@ -180,4 +180,4 @@ end
 
 rspamd_config:register_symbol(sym_reg_tbl)
 -- Add weak dependency on DKIM checks (signing works without it, just loses R_DKIM_REJECT suppression)
-rspamd_config:register_dependency(settings['symbol'], 'DKIM_CHECK', true)
+rspamd_config:register_dependency(settings['symbol'], 'DKIM_CHECK')
