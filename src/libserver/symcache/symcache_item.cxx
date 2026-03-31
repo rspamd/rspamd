@@ -154,7 +154,7 @@ auto cache_item::process_deps(const symcache &cache) -> void
 				/* Create reverse deps for same-stage deps to enable eager processing */
 				if (same_stage) {
 					if (!dit->rdeps.contains(id)) {
-						dit->rdeps.emplace(id, cache_dependency{this, symbol, -1, dep.weak});
+						dit->rdeps.emplace(id, cache_dependency{this, symbol, -1, dep.hard});
 						msg_debug_cache("added reverse dependency from %d on %d (same stage)",
 										id, dit->id);
 					}
