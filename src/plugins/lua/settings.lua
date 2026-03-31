@@ -1457,13 +1457,13 @@ rspamd_config:register_symbol({
   flags = 'empty,nostat,explicit_disable,ignore_passthrough',
 })
 
--- SETTINGS_APPLY depends on SETTINGS_CHECK (waits for it to finish collecting)
-rspamd_config:register_dependency('SETTINGS_APPLY', 'SETTINGS_CHECK')
+-- Hard dep: SETTINGS_APPLY must wait for SETTINGS_CHECK to finish collecting
+rspamd_config:register_dependency('SETTINGS_APPLY', 'SETTINGS_CHECK', true)
 
--- Also depend on REDIS_SETTINGS symbols if redis is configured
+-- Also hard-depend on REDIS_SETTINGS symbols if redis is configured
 if redis_sym_names then
   for _, sym_name in ipairs(redis_sym_names) do
-    rspamd_config:register_dependency('SETTINGS_APPLY', sym_name)
+    rspamd_config:register_dependency('SETTINGS_APPLY', sym_name, true)
   end
 end
 

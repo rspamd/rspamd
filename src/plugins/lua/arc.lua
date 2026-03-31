@@ -951,11 +951,10 @@ end
 
 rspamd_config:register_symbol(sym_reg_tbl)
 
--- Do not sign unless checked
-rspamd_config:register_dependency(settings['sign_symbol'], 'ARC_CHECK')
--- We need to check dmarc before signing as we have to produce valid AAR header
--- see #3613
-rspamd_config:register_dependency(settings['sign_symbol'], 'DMARC_CHECK')
+-- Hard: ARC signing needs arc-seals cache from ARC_CHECK
+rspamd_config:register_dependency(settings['sign_symbol'], 'ARC_CHECK', true)
+-- Hard: ARC signing needs DMARC result for valid AAR header (#3613)
+rspamd_config:register_dependency(settings['sign_symbol'], 'DMARC_CHECK', true)
 
 if settings.adjust_dmarc and settings.whitelisted_signers_map then
   local function arc_dmarc_adjust_cb(task)
@@ -985,6 +984,7 @@ if settings.adjust_dmarc and settings.whitelisted_signers_map then
     callback = arc_dmarc_adjust_cb,
     type = 'callback',
   })
-  rspamd_config:register_dependency('ARC_DMARC_ADJUSTMENT', 'DMARC_CHECK')
-  rspamd_config:register_dependency('ARC_DMARC_ADJUSTMENT', 'ARC_CHECK')
+  -- Hard: reads both DMARC policy symbols and ARC trusted cache
+  rspamd_config:register_dependency('ARC_DMARC_ADJUSTMENT', 'DMARC_CHECK', true)
+  rspamd_config:register_dependency('ARC_DMARC_ADJUSTMENT', 'ARC_CHECK', true)
 end

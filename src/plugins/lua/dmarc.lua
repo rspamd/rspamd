@@ -794,7 +794,8 @@ if settings.munging then
     augmentations = { lua_util.dns_timeout_augmentation(rspamd_config) },
   })
 
-  rspamd_config:register_dependency('DMARC_MUNGED', 'DMARC_CHECK')
+  -- Hard: without DMARC policy there is nothing to munge
+  rspamd_config:register_dependency('DMARC_MUNGED', 'DMARC_CHECK', true)
   -- Weak: signing works without munging, just ensures proper header rewrite order
   rspamd_config:register_dependency('DKIM_SIGNED', 'DMARC_MUNGED')
   rspamd_config:register_dependency('ARC_SIGNED', 'DMARC_MUNGED')
