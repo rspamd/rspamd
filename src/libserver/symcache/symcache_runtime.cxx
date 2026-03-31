@@ -199,7 +199,13 @@ auto symcache_runtime::disable_all_symbols(int skip_mask) -> void
 		auto *dyn_item = &dynamic_items[i];
 
 		if (!(item->get_flags() & skip_mask)) {
-			dyn_item->status = cache_item_status::disabled;
+			/*
+			 * Use `finished` not `disabled`: this implements the "disable all,
+			 * then enable some" pattern from symbols_enabled/groups_enabled.
+			 * Using `disabled` would cascade-disable hard dependents, which is
+			 * wrong when an enabled symbol depends on a non-enabled one.
+			 */
+			dyn_item->status = cache_item_status::finished;
 		}
 	}
 }
