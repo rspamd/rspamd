@@ -19,6 +19,7 @@
 #include "cfg_file.h"
 #include "contrib/ankerl/unordered_dense.h"
 
+#include <algorithm>
 #include <string>
 #include <vector>
 

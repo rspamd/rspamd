@@ -34,6 +34,7 @@ local fun = require "fun"
 local rspamd_mempool = require "rspamd_mempool"
 
 local redis_params
+local redis_sym_names -- populated if redis settings are configured
 
 local settings = {}
 local N = "settings"
@@ -117,13 +118,22 @@ local function apply_settings_side_effects(task, to_apply)
   end
 end
 
--- Legacy apply for single-layer case (backward compat)
+-- Apply settings immediately AND collect for potential merge
 local function apply_settings(task, to_apply, id, name)
+  -- Collect for potential multi-layer merge
   collect_settings_layer(task, SETTINGS_LAYER.RULE, name, id, to_apply)
+
+  -- Also apply immediately for backward compatibility
+  -- (SETTINGS_APPLY will re-apply merged result if multiple layers exist)
+  task:set_settings(to_apply)
+  task:cache_set('settings', to_apply)
+  task:cache_set('settings_name', name or 'unknown')
 
   if id then
     task:set_settings_id(id)
   end
+
+  apply_settings_side_effects(task, to_apply)
 
   return true
 end
@@ -341,12 +351,17 @@ local function check_settings(task)
   local function maybe_apply_query_settings()
     if query_apply then
       if id_elt then
-        collect_settings_layer(task, SETTINGS_LAYER.PROFILE, id_elt.name, id_elt.id, query_apply)
-        rspamd_logger.infox(task, "collected settings id %s(%s); priority %s",
+        apply_settings(task, query_apply, id_elt.id, id_elt.name)
+        rspamd_logger.infox(task, "applied settings id %s(%s); priority %s",
             id_elt.name, id_elt.id, priority_to_string(priority))
       else
+        -- Collect at HTTP layer + apply immediately
         collect_settings_layer(task, SETTINGS_LAYER.HTTP, 'HTTP query', 0, query_apply)
-        rspamd_logger.infox(task, "collected settings from query; priority %s",
+        task:set_settings(query_apply)
+        task:cache_set('settings', query_apply)
+        task:cache_set('settings_name', 'HTTP query')
+        apply_settings_side_effects(task, query_apply)
+        rspamd_logger.infox(task, "applied settings from query; priority %s",
             priority_to_string(priority))
       end
     end
@@ -474,9 +489,14 @@ local function gen_settings_external_cb(name)
             name, ucl_err)
       else
         local obj = parser:get_object()
-        rspamd_logger.infox(task, "<%s> collect settings from external map %s",
+        rspamd_logger.infox(task, "<%s> apply settings from external map %s",
             name, task:get_message_id())
+        -- Collect for merge AND apply immediately
         collect_settings_layer(task, SETTINGS_LAYER.RULE, 'external_map:' .. name, 0, obj)
+        task:set_settings(obj)
+        task:cache_set('settings', obj)
+        task:cache_set('settings_name', 'external_map:' .. name)
+        apply_settings_side_effects(task, obj)
       end
     else
       rspamd_logger.infox(task, "<%s> no settings returned from the external map %s: %s (code = %s)",
@@ -1301,9 +1321,14 @@ local function gen_redis_callback(handler, id)
                   ucl_err)
             else
               local obj = parser:get_object()
-              rspamd_logger.infox(task, "<%s> collect settings from redis rule %s",
+              rspamd_logger.infox(task, "<%s> apply settings from redis rule %s",
                   task:get_message_id(), id)
+              -- Collect for merge AND apply immediately
               collect_settings_layer(task, SETTINGS_LAYER.PER_USER, 'redis:' .. tostring(id), 0, obj)
+              task:set_settings(obj)
+              task:cache_set('settings', obj)
+              task:cache_set('settings_name', 'redis:' .. tostring(id))
+              apply_settings_side_effects(task, obj)
               break
             end
           end
@@ -1366,15 +1391,18 @@ if redis_section then
     end
   end
 
+  redis_sym_names = {}
   fun.each(function(id, h)
+    local redis_sym_name = 'REDIS_SETTINGS' .. tostring(id)
     rspamd_config:register_symbol({
-      name = 'REDIS_SETTINGS' .. tostring(id),
+      name = redis_sym_name,
       type = 'prefilter',
       callback = gen_redis_callback(h, id),
       priority = lua_util.symbols_priorities.top,
       flags = 'empty,nostat',
       augmentations = { string.format("timeout=%f", redis_params.timeout or 0.0) },
     })
+    redis_sym_names[#redis_sym_names + 1] = redis_sym_name
   end, redis_key_handlers)
 end
 
@@ -1387,59 +1415,57 @@ module_sym_id = rspamd_config:register_symbol({
 })
 
 -- SETTINGS_APPLY runs after all settings collectors (SETTINGS_CHECK, REDIS_SETTINGS*)
--- have finished, merges collected layers, and applies the result.
--- Priority high (9) < top (10) ensures proper ordering via prefilter priority mechanism.
+-- via explicit dependencies. It merges multiple layers when present.
+-- Each collector also applies immediately for backward compat (single-layer case).
+-- SETTINGS_APPLY only re-applies when multiple layers need merging.
 rspamd_config:register_symbol({
   name = 'SETTINGS_APPLY',
   type = 'prefilter',
   callback = function(task)
     local layers = task:cache_get('settings_layers')
-    if not layers or #layers == 0 then
-      lua_util.debugm(N, task, "no settings layers collected, nothing to apply")
+    if not layers or #layers <= 1 then
+      -- Single layer (or none): already applied immediately by the collector
       return
     end
 
-    if #layers == 1 then
-      -- Single layer: apply directly without merge overhead
-      local layer = layers[1]
-      lua_util.debugm(N, task, "single settings layer %s, applying directly", layer.name)
-      task:set_settings(layer.apply)
+    -- Multiple layers: merge via C infrastructure and re-apply
+    rspamd_logger.infox(task, "merging %s settings layers", #layers)
+
+    -- Collect settings_id from the highest-priority layer that has one
+    local best_settings_id = nil
+    for _, layer in ipairs(layers) do
       if layer.settings_id and layer.settings_id ~= 0 then
-        task:set_settings_id(layer.settings_id)
-      end
-      apply_settings_side_effects(task, layer.apply)
-    else
-      -- Multiple layers: merge via C infrastructure
-      rspamd_logger.infox(task, "merging %s settings layers", #layers)
-
-      -- Also collect settings_id from the highest-priority layer that has one
-      local best_settings_id = nil
-      for _, layer in ipairs(layers) do
-        if layer.settings_id and layer.settings_id ~= 0 then
-          best_settings_id = layer.settings_id
-        end
-      end
-
-      local merged = task:merge_and_apply_settings(layers)
-      if merged then
-        if best_settings_id then
-          task:set_settings_id(best_settings_id)
-        end
-        -- Apply Lua-side effects from the merged result
-        local merged_settings = task:get_settings()
-        if merged_settings then
-          apply_settings_side_effects(task, merged_settings)
-        end
-      else
-        rspamd_logger.warnx(task, "settings merge returned no result")
+        best_settings_id = layer.settings_id
       end
     end
 
-    task:cache_set('settings_applied', true)
+    local merged = task:merge_and_apply_settings(layers)
+    if merged then
+      if best_settings_id then
+        task:set_settings_id(best_settings_id)
+      end
+      -- Apply Lua-side effects from the merged result
+      local merged_settings = task:get_settings()
+      if merged_settings then
+        apply_settings_side_effects(task, merged_settings)
+      end
+    else
+      rspamd_logger.warnx(task, "settings merge returned no result")
+    end
   end,
-  priority = lua_util.symbols_priorities.high,
+  priority = lua_util.symbols_priorities.top,
   flags = 'empty,nostat,explicit_disable,ignore_passthrough',
 })
+
+-- SETTINGS_APPLY depends on SETTINGS_CHECK (waits for it to finish collecting)
+rspamd_config:register_dependency('SETTINGS_APPLY', 'SETTINGS_CHECK')
+
+-- Also depend on REDIS_SETTINGS symbols if redis is configured
+if redis_sym_names then
+  for _, sym_name in ipairs(redis_sym_names) do
+    rspamd_config:register_dependency('SETTINGS_APPLY', sym_name)
+  end
+end
 
 local set_section = rspamd_config:get_all_opt("settings")
 

@@ -386,6 +386,16 @@ auto symcache_runtime::process_pre_postfilters(struct rspamd_task *task,
 				}
 			}
 
+			/* Check dependencies for pre/postfilters */
+			if (!item->deps.empty()) {
+				if (!check_item_deps(task, cache, item, dyn_item, false)) {
+					msg_debug_cache_task_lambda("blocked execution of %d(%s) in "
+												"pre/postfilter stage unless deps are resolved",
+												item->id, item->symbol.c_str());
+					return false;
+				}
+			}
+
 			return process_symbol(task, cache, item, dyn_item);
 		}
 
