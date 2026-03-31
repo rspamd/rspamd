@@ -48,7 +48,42 @@ struct layer_entry {
 	enum rspamd_settings_layer level;
 	std::string name;
 	uint32_t settings_id;
-	const ucl_object_t *settings; /* borrowed ref */
+	const ucl_object_t *settings;
+
+	layer_entry(enum rspamd_settings_layer _level, std::string _name,
+				uint32_t _id, const ucl_object_t *_settings)
+		: level(_level), name(std::move(_name)), settings_id(_id),
+		  settings(ucl_object_ref(_settings))
+	{
+	}
+	~layer_entry()
+	{
+		if (settings) {
+			ucl_object_unref(const_cast<ucl_object_t *>(settings));
+		}
+	}
+	layer_entry(const layer_entry &) = delete;
+	layer_entry &operator=(const layer_entry &) = delete;
+	layer_entry(layer_entry &&other) noexcept
+		: level(other.level), name(std::move(other.name)),
+		  settings_id(other.settings_id), settings(other.settings)
+	{
+		other.settings = nullptr;
+	}
+	layer_entry &operator=(layer_entry &&other) noexcept
+	{
+		if (this != &other) {
+			if (settings) {
+				ucl_object_unref(const_cast<ucl_object_t *>(settings));
+			}
+			level = other.level;
+			name = std::move(other.name);
+			settings_id = other.settings_id;
+			settings = other.settings;
+			other.settings = nullptr;
+		}
+		return *this;
+	}
 };
 
 struct rspamd_settings_merge_ctx {
@@ -84,11 +119,10 @@ rspamd_settings_merge_add_layer(struct rspamd_settings_merge_ctx *ctx,
 		return;
 	}
 
-	ctx->layers.push_back(layer_entry{
-		level,
-		name ? std::string(name) : std::string("unknown"),
-		settings_id,
-		settings});
+	ctx->layers.emplace_back(level,
+							 name ? std::string(name) : std::string("unknown"),
+							 settings_id,
+							 settings);
 
 	msg_debug_settings("added layer %d (%s) id=%ud", (int) level, name, settings_id);
 }
