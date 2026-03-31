@@ -30,6 +30,7 @@
 #include <string>
 #include <cstdint>
 #include <vector>
+#include <memory>
 #include <optional>
 
 #define msg_debug_stat_redis(...) rspamd_conditional_debug_fast(nullptr, nullptr,                                                 \
