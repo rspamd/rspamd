@@ -372,9 +372,8 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 	if (task->settings_elt != nullptr) {
 		if (forbidden_ids.check_id(task->settings_elt->id)) {
 			/* Check if force-enabled by merged settings */
-			auto *force_ht = (GHashTable *) rspamd_mempool_get_variable(
-				task->task_pool, "force_enabled_ids");
-			if (force_ht && g_hash_table_contains(force_ht, GINT_TO_POINTER(id))) {
+			auto *runtime = static_cast<symcache_runtime *>(task->symcache_runtime);
+			if (runtime && runtime->is_force_enabled(id)) {
 				msg_debug_cache_task("allow %s of %s: force-enabled by merged "
 									 "settings overriding settings_elt forbidden_ids",
 									 what, symbol.c_str());

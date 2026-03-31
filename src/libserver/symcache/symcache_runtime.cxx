@@ -128,15 +128,7 @@ auto symcache_runtime::process_settings(struct rspamd_task *task, const symcache
 		if (task->settings_elt) {
 			const auto *item = cache.get_item_by_name(sym, true);
 			if (item && item->forbidden_ids.check_id(task->settings_elt->id)) {
-				auto *force_ht = (GHashTable *) rspamd_mempool_get_variable(
-					task->task_pool, "force_enabled_ids");
-				if (!force_ht) {
-					force_ht = g_hash_table_new(g_direct_hash, g_direct_equal);
-					rspamd_mempool_set_variable(task->task_pool, "force_enabled_ids",
-												force_ht,
-												(rspamd_mempool_destruct_t) g_hash_table_unref);
-				}
-				g_hash_table_insert(force_ht, GINT_TO_POINTER(item->id), GINT_TO_POINTER(1));
+				add_force_enabled(item->id);
 				msg_debug_cache_task("force-enable %s (id=%d) overriding settings_elt forbidden_ids",
 									 sym, item->id);
 			}
@@ -191,6 +183,21 @@ auto symcache_runtime::savepoint_dtor(struct rspamd_task *task) -> void
 	msg_debug_cache_task("destroying savepoint");
 	/* Drop shared ownership */
 	order.reset();
+	delete force_enabled_ids;
+	force_enabled_ids = nullptr;
+}
+
+auto symcache_runtime::add_force_enabled(int id) -> void
+{
+	if (!force_enabled_ids) {
+		force_enabled_ids = new id_list();
+	}
+	force_enabled_ids->add_id(id);
+}
+
+auto symcache_runtime::is_force_enabled(int id) const -> bool
+{
+	return force_enabled_ids && force_enabled_ids->check_id(id);
 }
 
 auto symcache_runtime::disable_all_symbols(int skip_mask) -> void
