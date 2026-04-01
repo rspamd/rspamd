@@ -32,6 +32,7 @@
 #include "rspamd_cxx_unit_upstream_ring_hash.hxx"
 #include "rspamd_cxx_unit_upstream_round_robin.hxx"
 #include "rspamd_cxx_unit_multipart.hxx"
+#include "rspamd_cxx_unit_url_obfuscation.hxx"
 
 static gboolean verbose = false;
 static const GOptionEntry entries[] =

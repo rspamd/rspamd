@@ -179,7 +179,7 @@ context("URL check functions", function()
               v, k, uf[k], c[1], uf))
         end
         for k, v in pairs(uf) do
-          if k ~= 'url' and k ~= 'protocol' and k ~= 'tld' then
+          if k ~= 'url' and k ~= 'protocol' and k ~= 'tld' and k ~= 'obfuscation' then
             assert_not_nil(c[3][k], k .. ' should be absent but it is ' .. v .. ' in: ' .. c[1])
           end
         end
