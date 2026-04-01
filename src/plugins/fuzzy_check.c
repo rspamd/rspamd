@@ -2934,7 +2934,7 @@ int fuzzy_check_module_config(struct rspamd_config *cfg, bool validate)
 
 		/* We want that to check bad mime attachments */
 		rspamd_symcache_add_delayed_dependency(cfg->cache,
-											   "FUZZY_CALLBACK", "MIME_TYPES_CALLBACK");
+											   "FUZZY_CALLBACK", "MIME_TYPES_CALLBACK", FALSE);
 	}
 
 	if (fuzzy_module_ctx->fuzzy_rules == NULL) {

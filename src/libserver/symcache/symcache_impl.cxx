@@ -134,12 +134,14 @@ auto symcache::init() -> bool
 		else {
 
 			if (!disabled_ids.contains(real_source->id)) {
-				msg_debug_cache("delayed between %s(%d:%d) -> %s",
+				msg_debug_cache("delayed %sbetween %s(%d:%d) -> %s",
+								delayed_dep.hard ? "weak " : "",
 								delayed_dep.from.data(),
 								real_source->id, virt_source->id,
 								delayed_dep.to.data());
 				add_dependency(real_source->id, delayed_dep.to, real_destination->id,
-							   virt_source != real_source ? virt_source->id : -1);
+							   virt_source != real_source ? virt_source->id : -1,
+							   delayed_dep.hard);
 			}
 			else {
 				msg_debug_cache("no delayed between %s(%d:%d) -> %s; %s is disabled",
@@ -539,7 +541,7 @@ auto symcache::get_item_by_name_mut(std::string_view name, bool resolve_parent) 
 	return it->second;
 }
 
-auto symcache::add_dependency(int id_from, std::string_view to, int id_to, int virtual_id_from) -> void
+auto symcache::add_dependency(int id_from, std::string_view to, int id_to, int virtual_id_from, bool hard) -> void
 {
 	g_assert(id_from >= 0 && id_from < (int) items_by_id.size());
 	g_assert(id_to >= 0 && id_to < (int) items_by_id.size());
@@ -549,11 +551,12 @@ auto symcache::add_dependency(int id_from, std::string_view to, int id_to, int v
 	g_assert(dest.get() != nullptr);
 
 	if (!source->deps.contains(id_to)) {
-		msg_debug_cache("add dependency %s(%d) -> %s(%d)",
+		msg_debug_cache("add %sdependency %s(%d) -> %s(%d)",
+						hard ? "hard " : "",
 						source->symbol.c_str(), source->id, to.data(), dest->id);
 		source->deps.emplace(id_to, cache_dependency{dest.get(),
 													 std::string(to),
-													 -1});
+													 -1, hard});
 	}
 	else {
 		msg_debug_cache("duplicate dependency %s -> %s",
@@ -569,11 +572,12 @@ auto symcache::add_dependency(int id_from, std::string_view to, int id_to, int v
 		g_assert(vsource.get() != nullptr);
 
 		if (!vsource->deps.contains(id_to)) {
-			msg_debug_cache("add virtual dependency %s -> %s",
+			msg_debug_cache("add virtual %sdependency %s -> %s",
+							hard ? "hard " : "",
 							vsource->symbol.c_str(), to.data());
 			vsource->deps.emplace(id_to, cache_dependency{dest.get(),
 														  std::string(to),
-														  virtual_id_from});
+														  virtual_id_from, hard});
 		}
 		else {
 			msg_debug_cache("duplicate virtual dependency %s -> %s",

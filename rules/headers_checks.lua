@@ -392,6 +392,7 @@ rspamd_config:register_symbol {
   group = 'headers',
 }
 
+-- Weak: only one sub-check (REPLYTO_EMAIL_HAS_TITLE) needs FROM_NAME_HAS_TITLE
 rspamd_config:register_dependency('CHECK_REPLYTO', 'CHECK_FROM')
 
 local check_mime_id = rspamd_config:register_symbol {

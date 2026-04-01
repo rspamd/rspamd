@@ -118,6 +118,23 @@ auto symcache_runtime::process_settings(struct rspamd_task *task, const symcache
 
 	const auto *enabled = ucl_object_lookup(task->settings, "symbols_enabled");
 
+	/*
+	 * Track force-enabled symbols: if settings_elt has a symbol in forbidden_ids
+	 * but the merged settings explicitly enable it, we need to override the bitset
+	 */
+	auto force_enable = [&](const char *sym) {
+		enable_symbol(task, cache, sym);
+
+		if (task->settings_elt) {
+			const auto *item = cache.get_item_by_name(sym, true);
+			if (item && item->forbidden_ids.check_id(task->settings_elt->id)) {
+				add_force_enabled(item->id);
+				msg_debug_cache_task("force-enable %s (id=%d) overriding settings_elt forbidden_ids",
+									 sym, item->id);
+			}
+		}
+	};
+
 	if (enabled) {
 		msg_debug_cache_task("disable all symbols as `symbols_enabled` is found");
 		/* Disable all symbols but selected */
@@ -126,7 +143,7 @@ auto symcache_runtime::process_settings(struct rspamd_task *task, const symcache
 		it = nullptr;
 
 		while ((cur = ucl_iterate_object(enabled, &it, true)) != nullptr) {
-			enable_symbol(task, cache, ucl_object_tostring(cur));
+			force_enable(ucl_object_tostring(cur));
 		}
 	}
 
@@ -136,7 +153,7 @@ auto symcache_runtime::process_settings(struct rspamd_task *task, const symcache
 		disable_all_symbols(SYMBOL_TYPE_EXPLICIT_DISABLE);
 	}
 	process_group(enabled, [&](const char *sym) {
-		enable_symbol(task, cache, sym);
+		force_enable(sym);
 	});
 
 	const auto *disabled = ucl_object_lookup(task->settings, "symbols_disabled");
@@ -166,6 +183,21 @@ auto symcache_runtime::savepoint_dtor(struct rspamd_task *task) -> void
 	msg_debug_cache_task("destroying savepoint");
 	/* Drop shared ownership */
 	order.reset();
+	delete force_enabled_ids;
+	force_enabled_ids = nullptr;
+}
+
+auto symcache_runtime::add_force_enabled(int id) -> void
+{
+	if (!force_enabled_ids) {
+		force_enabled_ids = new id_list();
+	}
+	force_enabled_ids->add_id(id);
+}
+
+auto symcache_runtime::is_force_enabled(int id) const -> bool
+{
+	return force_enabled_ids && force_enabled_ids->check_id(id);
 }
 
 auto symcache_runtime::disable_all_symbols(int skip_mask) -> void
@@ -174,6 +206,12 @@ auto symcache_runtime::disable_all_symbols(int skip_mask) -> void
 		auto *dyn_item = &dynamic_items[i];
 
 		if (!(item->get_flags() & skip_mask)) {
+			/*
+			 * Use `finished` not `disabled`: this implements the "disable all,
+			 * then enable some" pattern from symbols_enabled/groups_enabled.
+			 * Using `disabled` would cascade-disable hard dependents, which is
+			 * wrong when an enabled symbol depends on a non-enabled one.
+			 */
 			dyn_item->status = cache_item_status::finished;
 		}
 	}
@@ -188,7 +226,7 @@ auto symcache_runtime::disable_symbol(struct rspamd_task *task, const symcache &
 		auto *dyn_item = get_dynamic_item(item->id);
 
 		if (dyn_item) {
-			dyn_item->status = cache_item_status::finished;
+			dyn_item->status = cache_item_status::disabled;
 			msg_debug_cache_task("disable execution of %s", name.data());
 
 			return true;
@@ -361,6 +399,16 @@ auto symcache_runtime::process_pre_postfilters(struct rspamd_task *task,
 				}
 			}
 
+			/* Check dependencies for pre/postfilters */
+			if (!item->deps.empty()) {
+				if (!check_item_deps(task, cache, item, dyn_item, false)) {
+					msg_debug_cache_task_lambda("blocked execution of %d(%s) in "
+												"pre/postfilter stage unless deps are resolved",
+												item->id, item->symbol.c_str());
+					return false;
+				}
+			}
+
 			return process_symbol(task, cache, item, dyn_item);
 		}
 
@@ -468,10 +516,11 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 	if (dyn_item->status != cache_item_status::not_started) {
 		/*
 		 * This can actually happen when deps span over different layers
+		 * or when items are cascade-disabled
 		 */
 		msg_debug_cache_task("skip already started %s(%d) symbol", item->symbol.c_str(), item->id);
 
-		return dyn_item->status == cache_item_status::finished;
+		return is_item_done(dyn_item->status);
 	}
 
 	/* Check has been started */
@@ -607,6 +656,24 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 
 			auto *dep_dyn_item = get_dynamic_item(dep.item->id);
 
+			if (dep_dyn_item->status == cache_item_status::disabled) {
+				/* Dependency was disabled by settings */
+				if (dep.hard) {
+					/* Hard dependency disabled: cascade-disable this item */
+					dyn_item->status = cache_item_status::disabled;
+					msg_debug_cache_task_lambda("cascade disable %d(%s) because hard dependency "
+												"%d(%s) is disabled",
+												item->id, item->symbol.c_str(),
+												dest_id, dep.sym.c_str());
+					return true; /* Item is "done" (disabled) */
+				}
+				/* Normal (weak) dependency disabled: proceed without it (backward compat) */
+				msg_debug_cache_task_lambda("dependency %d(%s) for symbol %d(%s) is "
+											"disabled, proceeding (not a hard dep)",
+											dest_id, dep.sym.c_str(), item->id, item->symbol.c_str());
+				continue;
+			}
+
 			if (dep_dyn_item->status != cache_item_status::finished) {
 				if (dep_dyn_item->status == cache_item_status::not_started) {
 					/* Not started */
@@ -620,6 +687,18 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 							msg_debug_cache_task_lambda("delayed dependency %d(%s) for "
 														"symbol %d(%s)",
 														dest_id, dep.sym.c_str(), item->id, item->symbol.c_str());
+						}
+						else if (dep_dyn_item->status == cache_item_status::disabled) {
+							/* Dep was cascade-disabled during recursive check */
+							if (dep.hard) {
+								dyn_item->status = cache_item_status::disabled;
+								msg_debug_cache_task_lambda("cascade disable %d(%s) because hard dependency "
+															"%d(%s) was cascade-disabled",
+															item->id, item->symbol.c_str(),
+															dest_id, dep.sym.c_str());
+								return true;
+							}
+							/* Weak dep: proceed */
 						}
 						else if (!process_symbol(task, cache, dep.item, dep_dyn_item)) {
 							/* Now started, but has events pending */

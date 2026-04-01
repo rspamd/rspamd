@@ -744,6 +744,7 @@ rspamd_config:register_symbol({
   type = 'virtual'
 })
 
+-- Weak deps: DMARC falls back to DKIM-only or SPF-only alignment if the other is absent
 rspamd_config:register_dependency('DMARC_CHECK', settings.symbols['spf_allow_symbol'])
 rspamd_config:register_dependency('DMARC_CHECK', settings.symbols['dkim_allow_symbol'])
 
@@ -793,8 +794,9 @@ if settings.munging then
     augmentations = { lua_util.dns_timeout_augmentation(rspamd_config) },
   })
 
-  rspamd_config:register_dependency('DMARC_MUNGED', 'DMARC_CHECK')
-  -- To avoid dkim signing issues
+  -- Hard: without DMARC policy there is nothing to munge
+  rspamd_config:register_dependency('DMARC_MUNGED', 'DMARC_CHECK', true)
+  -- Weak: signing works without munging, just ensures proper header rewrite order
   rspamd_config:register_dependency('DKIM_SIGNED', 'DMARC_MUNGED')
   rspamd_config:register_dependency('ARC_SIGNED', 'DMARC_MUNGED')
 

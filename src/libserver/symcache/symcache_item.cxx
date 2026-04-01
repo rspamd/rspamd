@@ -126,17 +126,17 @@ auto cache_item::process_deps(const symcache &cache) -> void
 			if (!dit->is_filter()) {
 				/*
 				 * Check sanity:
-				 * - filters -> prefilter dependency is OK and always satisfied
-				 * - postfilter -> (filter, prefilter) dep is ok
-				 * - idempotent -> (any) dep is OK
+				 * - same stage deps are OK (prefilter -> prefilter, etc.)
+				 * - natural order deps are OK (postfilter -> filter, filter -> prefilter)
 				 *
 				 * Otherwise, emit error
-				 * However, even if everything is fine this dep is useless ¯\_(ツ)_/¯
 				 */
 				auto ok_dep = false;
+				auto same_stage = false;
 
 				if (dit->get_type() == type) {
 					ok_dep = true;
+					same_stage = true;
 				}
 				else if (type < dit->get_type()) {
 					ok_dep = true;
@@ -150,6 +150,15 @@ auto cache_item::process_deps(const symcache &cache) -> void
 				}
 
 				dep.item = dit;
+
+				/* Create reverse deps for same-stage deps to enable eager processing */
+				if (same_stage) {
+					if (!dit->rdeps.contains(id)) {
+						dit->rdeps.emplace(id, cache_dependency{this, symbol, -1, dep.hard});
+						msg_debug_cache("added reverse dependency from %d on %d (same stage)",
+										id, dit->id);
+					}
+				}
 			}
 			else {
 				if (dit->id == id) {
@@ -362,13 +371,22 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 	/* Settings checks */
 	if (task->settings_elt != nullptr) {
 		if (forbidden_ids.check_id(task->settings_elt->id)) {
-			msg_debug_cache_task("deny %s of %s as it is forbidden for "
-								 "settings id %ud",
-								 what,
-								 symbol.c_str(),
-								 task->settings_elt->id);
+			/* Check if force-enabled by merged settings */
+			auto *runtime = static_cast<symcache_runtime *>(task->symcache_runtime);
+			if (runtime && runtime->is_force_enabled(id)) {
+				msg_debug_cache_task("allow %s of %s: force-enabled by merged "
+									 "settings overriding settings_elt forbidden_ids",
+									 what, symbol.c_str());
+			}
+			else {
+				msg_debug_cache_task("deny %s of %s as it is forbidden for "
+									 "settings id %ud",
+									 what,
+									 symbol.c_str(),
+									 task->settings_elt->id);
 
-			return false;
+				return false;
+			}
 		}
 
 		if (!(flags & SYMBOL_TYPE_EXPLICIT_DISABLE)) {
