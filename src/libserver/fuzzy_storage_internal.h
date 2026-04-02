@@ -32,6 +32,7 @@ struct map_cb_data;
 struct rspamd_rcl_section;
 struct rspamd_rcl_struct_parser;
 struct rspamd_control_command;
+typedef struct radix_tree_compressed radix_compressed_t;
 
 struct rspamd_main;
 struct rspamd_worker;
@@ -78,6 +79,11 @@ struct rspamd_leaky_bucket_elt {
 	rspamd_inet_addr_t *addr;
 	double last;
 	double cur;
+};
+
+struct rspamd_fuzzy_dynamic_ban {
+	double expire_ts; /* monotonic clock; 0.0 = never expires */
+	char reason[64];
 };
 
 static inline int64_t
@@ -146,6 +152,7 @@ struct rspamd_fuzzy_storage_ctx {
 	struct rspamd_radix_map_helper *update_ips;
 	struct rspamd_hash_map_helper *update_keys;
 	struct rspamd_radix_map_helper *blocked_ips;
+	radix_compressed_t *dynamic_blocked_nets;
 	struct rspamd_radix_map_helper *ratelimit_whitelist;
 	struct rspamd_radix_map_helper *delay_whitelist;
 
@@ -282,6 +289,12 @@ gboolean fuzzy_parse_keypair(rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 /* Ratelimit */
 void fuzzy_rl_bucket_free(gpointer p);
+
+gboolean rspamd_fuzzy_block_addr(struct rspamd_fuzzy_storage_ctx *ctx,
+								 const char *addr_str,
+								 unsigned int prefix_len,
+								 double expire_ts,
+								 const char *reason);
 
 enum rspamd_ratelimit_check_result rspamd_fuzzy_check_ratelimit_bucket(
 	struct rspamd_fuzzy_storage_ctx *ctx,

@@ -25,6 +25,8 @@
 #include "rspamd_control.h"
 #include "lua/lua_common.h"
 #include "contrib/uthash/utlist.h"
+#include "libutil/radix.h"
+#include "libutil/addr.h"
 
 #include <errno.h>
 #include <math.h>
@@ -405,6 +407,108 @@ rspamd_fuzzy_check_client(struct rspamd_fuzzy_storage_ctx *ctx,
 			return FALSE;
 		}
 	}
+
+	if (ctx->dynamic_blocked_nets != NULL) {
+		uintptr_t val = radix_find_compressed_addr(ctx->dynamic_blocked_nets, addr);
+
+		if (val != RADIX_NO_VALUE) {
+			struct rspamd_fuzzy_dynamic_ban *ban = (struct rspamd_fuzzy_dynamic_ban *) val;
+			double now = rspamd_get_ticks(FALSE);
+
+			if (ban->expire_ts == 0.0 || ban->expire_ts > now) {
+				rspamd_fuzzy_maybe_call_blacklisted(ctx, addr, "dynamic_blocked");
+				return FALSE;
+			}
+		}
+	}
+
+	return TRUE;
+}
+
+gboolean
+rspamd_fuzzy_block_addr(struct rspamd_fuzzy_storage_ctx *ctx,
+						const char *addr_str,
+						unsigned int prefix_len,
+						double expire_ts,
+						const char *reason)
+{
+	rspamd_inet_addr_t *addr;
+
+	if (!rspamd_parse_inet_address(&addr, addr_str, strlen(addr_str),
+								   RSPAMD_INET_ADDRESS_PARSE_NO_UNIX | RSPAMD_INET_ADDRESS_PARSE_NO_PORT)) {
+		msg_err("block_fuzzy_client: cannot parse address: %s", addr_str);
+		return FALSE;
+	}
+
+	/* Apply network mask to zero out host bits */
+	rspamd_inet_address_apply_mask(addr, prefix_len);
+
+	/* Allocate ban struct from the tree's memory pool so it is freed automatically
+	 * when the tree is destroyed at shutdown */
+	struct rspamd_fuzzy_dynamic_ban *new_ban =
+		rspamd_mempool_alloc0(radix_get_pool(ctx->dynamic_blocked_nets),
+							  sizeof(*new_ban));
+	new_ban->expire_ts = expire_ts;
+
+	if (reason != NULL) {
+		rspamd_strlcpy(new_ban->reason, reason, sizeof(new_ban->reason));
+	}
+
+	/* Build the 16-byte IPv6-mapped key and compute masklen */
+	const unsigned char *raw;
+	unsigned int klen = 0;
+	unsigned char key[16];
+	gsize masklen;
+
+	raw = rspamd_inet_address_get_hash_key(addr, &klen);
+
+	if (raw == NULL || klen == 0) {
+		rspamd_inet_address_free(addr);
+		return FALSE;
+	}
+
+	if (klen == 4) {
+		/* IPv4: map to ::ffff:a.b.c.d */
+		memset(key, 0, 10);
+		key[10] = 0xffu;
+		key[11] = 0xffu;
+		memcpy(key + 12, raw, 4);
+		if (prefix_len > 32) {
+			prefix_len = 32;
+		}
+		/* In the 128-bit IPv6-mapped form, the prefix occupies prefix_len+96 bits */
+		masklen = 32 - prefix_len; /* = 128 - (prefix_len + 96) */
+	}
+	else {
+		/* IPv6 */
+		memcpy(key, raw, 16);
+		if (prefix_len > 128) {
+			prefix_len = 128;
+		}
+		masklen = 128 - prefix_len;
+	}
+
+	uintptr_t old = radix_insert_compressed(ctx->dynamic_blocked_nets,
+											key, sizeof(key), masklen,
+											(uintptr_t) new_ban);
+
+	if (old != RADIX_NO_VALUE) {
+		/* Duplicate prefix: btrie was NOT updated (it returned the existing value).
+		 * Update the existing ban struct in-place so the same memory location now
+		 * reflects the new TTL and reason. new_ban is pool-allocated so it leaks
+		 * a tiny struct, but that is acceptable. */
+		struct rspamd_fuzzy_dynamic_ban *existing = (struct rspamd_fuzzy_dynamic_ban *) old;
+		existing->expire_ts = expire_ts;
+
+		if (reason != NULL) {
+			rspamd_strlcpy(existing->reason, reason, sizeof(existing->reason));
+		}
+	}
+
+	msg_info("dynamic block added for %s/%ud, expire_ts=%.0f, reason=%s",
+			 addr_str, prefix_len, expire_ts, reason ? reason : "");
+
+	rspamd_inet_address_free(addr);
 
 	return TRUE;
 }

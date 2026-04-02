@@ -38,6 +38,7 @@
 #include "contrib/uthash/utlist.h"
 #include "lua/lua_common.h"
 #include "unix-std.h"
+#include "libutil/radix.h"
 
 #include <math.h>
 
@@ -2700,6 +2701,44 @@ lua_fuzzy_add_blacklist_handler(lua_State *L)
 	return 0;
 }
 
+/*
+ * worker:block_fuzzy_client(addr_string, prefix_len[, expire_ts[, reason]])
+ *
+ * Dynamically block an IP address or CIDR network in this worker.
+ * expire_ts is an absolute monotonic timestamp (rspamd_util.get_time() + ttl).
+ * Pass nil or 0 for a permanent block (until worker restart).
+ * Lua callers can call get_time() once and pass the result to a batch of
+ * block calls — the C layer never calls get_time() itself.
+ *
+ * Returns: true on success; false, errmsg on parse failure.
+ */
+static int
+lua_fuzzy_block_client(lua_State *L)
+{
+	struct rspamd_worker **pwrk = (struct rspamd_worker **)
+		rspamd_lua_check_udata(L, 1, rspamd_worker_classname);
+
+	if (!pwrk) {
+		return luaL_error(L, "invalid self: worker expected");
+	}
+
+	struct rspamd_fuzzy_storage_ctx *ctx = (struct rspamd_fuzzy_storage_ctx *) (*pwrk)->ctx;
+
+	const char *addr_str = luaL_checkstring(L, 2);
+	unsigned int prefix_len = (unsigned int) luaL_checkinteger(L, 3);
+	double expire_ts = luaL_optnumber(L, 4, 0.0);
+	const char *reason = luaL_optstring(L, 5, "lua");
+
+	if (rspamd_fuzzy_block_addr(ctx, addr_str, prefix_len, expire_ts, reason)) {
+		lua_pushboolean(L, TRUE);
+		return 1;
+	}
+
+	lua_pushboolean(L, FALSE);
+	lua_pushfstring(L, "failed to parse address: %s", addr_str);
+	return 2;
+}
+
 gpointer
 init_fuzzy(struct rspamd_config *cfg)
 {
@@ -3251,6 +3290,7 @@ start_fuzzy(struct rspamd_worker *worker)
 	ctx->ratelimit_buckets = rspamd_lru_hash_new_full(ctx->max_buckets,
 													  NULL, fuzzy_rl_bucket_free,
 													  rspamd_inet_address_hash, rspamd_inet_address_equal);
+	ctx->dynamic_blocked_nets = radix_create_compressed("dynamic_blocked_nets");
 
 	rspamd_fuzzy_maybe_load_ratelimits(ctx);
 
@@ -3304,6 +3344,11 @@ start_fuzzy(struct rspamd_worker *worker)
 		.func = lua_fuzzy_add_blacklist_handler,
 	};
 	rspamd_lua_add_metamethod(ctx->cfg->lua_state, rspamd_worker_classname, &fuzzy_lua_reg);
+	fuzzy_lua_reg = (luaL_Reg) {
+		.name = "block_fuzzy_client",
+		.func = lua_fuzzy_block_client,
+	};
+	rspamd_lua_add_metamethod(ctx->cfg->lua_state, rspamd_worker_classname, &fuzzy_lua_reg);
 
 	rspamd_lua_run_postloads(ctx->cfg->lua_state, ctx->cfg, ctx->event_loop,
 							 worker);
@@ -3350,6 +3395,13 @@ start_fuzzy(struct rspamd_worker *worker)
 		}
 
 		rspamd_lru_hash_destroy(ctx->ratelimit_buckets);
+	}
+
+	if (ctx->dynamic_blocked_nets) {
+		/* Ban structs are pool-allocated inside the radix tree's pool,
+		 * so radix_destroy_compressed frees them all at once */
+		radix_destroy_compressed(ctx->dynamic_blocked_nets);
+		ctx->dynamic_blocked_nets = NULL;
 	}
 
 	struct rspamd_lua_fuzzy_script *cur, *tmp;
