@@ -413,7 +413,8 @@ rspamd_fuzzy_check_client(struct rspamd_fuzzy_storage_ctx *ctx,
 
 		if (val != RADIX_NO_VALUE) {
 			struct rspamd_fuzzy_dynamic_ban *ban = (struct rspamd_fuzzy_dynamic_ban *) val;
-			double now = rspamd_get_ticks(FALSE);
+			/* Use ev_now() — same wall-clock epoch as rspamd_util.get_time() in Lua */
+			double now = ev_now(ctx->event_loop);
 
 			if (ban->expire_ts == 0.0 || ban->expire_ts > now) {
 				rspamd_fuzzy_maybe_call_blacklisted(ctx, addr, "dynamic_blocked");
