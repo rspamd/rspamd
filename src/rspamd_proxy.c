@@ -2833,22 +2833,16 @@ rspamd_proxy_self_scan(struct rspamd_proxy_session *session)
 		}
 	}
 
-	/* Set global timeout for the task */
-	if (session->ctx->default_upstream->timeout > 0.0) {
+	/* Set global timeout for the task: use task_timeout (derived from
+	 * cfg->task_timeout) rather than default_upstream->timeout, which is the
+	 * milter/HTTP wire timeout and can be much larger (e.g. 120s) than the
+	 * intended task processing limit. */
+	if (!isnan(session->ctx->task_timeout) && session->ctx->task_timeout > 0.0) {
 		task->timeout_ev.data = task;
 		ev_timer_init(&task->timeout_ev, rspamd_task_timeout,
-					  session->ctx->default_upstream->timeout,
-					  session->ctx->default_upstream->timeout);
+					  session->ctx->task_timeout,
+					  session->ctx->task_timeout);
 		ev_timer_start(task->event_loop, &task->timeout_ev);
-	}
-	else if (session->ctx->has_self_scan) {
-		if (!isnan(session->ctx->task_timeout) && session->ctx->task_timeout > 0) {
-			task->timeout_ev.data = task;
-			ev_timer_init(&task->timeout_ev, rspamd_task_timeout,
-						  session->ctx->cfg->task_timeout,
-						  session->ctx->default_upstream->timeout);
-			ev_timer_start(task->event_loop, &task->timeout_ev);
-		}
 	}
 
 	session->master_conn->task = task;
