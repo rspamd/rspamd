@@ -108,19 +108,6 @@ local function get_trusted_ar_header(task)
 end
 
 local function parse_arc_header(hdr, target, is_aar)
-  -- Split elements by ';' and trim spaces
-  local arr = fun.totable(fun.map(
-    function(val)
-      return fun.totable(fun.map(lua_util.rspamd_str_trim,
-        fun.filter(function(v)
-            return v and #v > 0
-          end,
-          lua_util.rspamd_str_split(val.decoded, ';')
-        )
-      ))
-    end, hdr
-  ))
-
   -- v[1] is the key and v[2] is the value
   local function fill_arc_header_table(v, t)
     if v[1] and v[2] then
@@ -130,14 +117,20 @@ local function parse_arc_header(hdr, target, is_aar)
     end
   end
 
-  -- Now we have two tables in format:
-  -- [arc_header] -> [{arc_header1_elts}, {arc_header2_elts}...]
-  for i, elts in ipairs(arr) do
+  for i, val in ipairs(hdr) do
     if not target[i] then
       target[i] = {}
     end
+
     if not is_aar then
-      -- For normal ARC headers we split by kv pair, like k=v
+      -- For ARC-Seal / ARC-Message-Signature: split by ';' then by '='
+      local elts = fun.totable(fun.map(lua_util.rspamd_str_trim,
+        fun.filter(function(v)
+            return v and #v > 0
+          end,
+          lua_util.rspamd_str_split(val.decoded, ';')
+        )
+      ))
       fun.each(function(v)
           fill_arc_header_table(v, target[i])
         end,
@@ -146,27 +139,21 @@ local function parse_arc_header(hdr, target, is_aar)
         end, elts)
       )
     else
-      -- For AAR we check special case of i=%d and pass everything else to
-      -- AAR specific parser
-      for _, elt in ipairs(elts) do
-        if string.match(elt, "%s*i%s*=%s*%d+%s*") then
-          local pair = lua_util.rspamd_str_split(elt, '=')
-          fill_arc_header_table(pair, target[i])
-        else
-          -- Normal element
-          local ar_elt = lua_auth_results.parse_ar_element(elt)
-
-          if ar_elt then
-            if not target[i].ar then
-              target[i].ar = {}
-            end
-            table.insert(target[i].ar, ar_elt)
-          end
+      -- For AAR: use LPeg-based parser that respects comments and quoted
+      -- strings when splitting on ';' (fixes #5963)
+      local parsed = lua_auth_results.parse_aar_header(val.decoded)
+      if parsed then
+        if parsed.i then
+          target[i].i = parsed.i
+        end
+        if parsed.ar then
+          target[i].ar = parsed.ar
         end
       end
     end
-    target[i].header = hdr[i].decoded
-    target[i].raw_header = hdr[i].value
+
+    target[i].header = val.decoded
+    target[i].raw_header = val.value
   end
 
   -- sort by i= attribute
@@ -343,7 +330,7 @@ local function arc_callback(task)
           else
             task:cache_set(AR_TRUSTED_CACHE_KEY, cur_aar)
             local seen_dmarc
-            for _, ar in ipairs(cur_aar.ar) do
+            for _, ar in ipairs(cur_aar.ar or {}) do
               if ar.dmarc then
                 local dmarc_fwd = ar.dmarc
                 seen_dmarc = true
