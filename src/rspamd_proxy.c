@@ -3397,9 +3397,10 @@ proxy_accept_socket(EV_P_ ev_io *w, int revents)
 		}
 #endif
 
-		/* The milter library owns nfd and will close it; prevent
-		 * proxy_session_dtor from issuing a double-close. */
-		session->client_sock = -1;
+		/* The milter library dups the fd internally, so the original nfd
+		 * stays owned by the proxy session (via client_sock).
+		 * proxy_session_dtor will close client_sock when the session is
+		 * destroyed; the milter dtor closes its dup'd copy separately. */
 		rspamd_milter_handle_socket(nfd, 0.0,
 									session->pool,
 									ctx->event_loop,
