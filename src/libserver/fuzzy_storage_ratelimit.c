@@ -395,16 +395,15 @@ void rspamd_fuzzy_maybe_call_blacklisted(struct rspamd_fuzzy_storage_ctx *ctx,
 	rspamd_fuzzy_call_ratelimit_handlers(ctx, &cb_ctx);
 }
 
-gboolean
-rspamd_fuzzy_check_client(struct rspamd_fuzzy_storage_ctx *ctx,
-						  rspamd_inet_addr_t *addr)
+int rspamd_fuzzy_check_client(struct rspamd_fuzzy_storage_ctx *ctx,
+							  rspamd_inet_addr_t *addr)
 {
 	if (ctx->blocked_ips != NULL) {
 		if (rspamd_match_radix_map_addr(ctx->blocked_ips,
 										addr) != NULL) {
 
 			rspamd_fuzzy_maybe_call_blacklisted(ctx, addr, "blacklisted");
-			return FALSE;
+			return 503;
 		}
 	}
 
@@ -418,12 +417,12 @@ rspamd_fuzzy_check_client(struct rspamd_fuzzy_storage_ctx *ctx,
 
 			if (ban->expire_ts == 0.0 || ban->expire_ts > now) {
 				rspamd_fuzzy_maybe_call_blacklisted(ctx, addr, "dynamic_blocked");
-				return FALSE;
+				return ban->response_code > 0 ? ban->response_code : 503;
 			}
 		}
 	}
 
-	return TRUE;
+	return 0;
 }
 
 gboolean
@@ -431,7 +430,8 @@ rspamd_fuzzy_block_addr(struct rspamd_fuzzy_storage_ctx *ctx,
 						const char *addr_str,
 						unsigned int prefix_len,
 						double expire_ts,
-						const char *reason)
+						const char *reason,
+						int32_t response_code)
 {
 	rspamd_inet_addr_t *addr;
 
@@ -450,6 +450,7 @@ rspamd_fuzzy_block_addr(struct rspamd_fuzzy_storage_ctx *ctx,
 		rspamd_mempool_alloc0(radix_get_pool(ctx->dynamic_blocked_nets),
 							  sizeof(*new_ban));
 	new_ban->expire_ts = expire_ts;
+	new_ban->response_code = response_code;
 
 	if (reason != NULL) {
 		rspamd_strlcpy(new_ban->reason, reason, sizeof(new_ban->reason));

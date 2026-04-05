@@ -83,6 +83,7 @@ struct rspamd_leaky_bucket_elt {
 
 struct rspamd_fuzzy_dynamic_ban {
 	double expire_ts; /* monotonic clock; 0.0 = never expires */
+	int32_t response_code; /* fuzzy reply code; 0 = use default (503) */
 	char reason[64];
 };
 
@@ -294,7 +295,8 @@ gboolean rspamd_fuzzy_block_addr(struct rspamd_fuzzy_storage_ctx *ctx,
 								 const char *addr_str,
 								 unsigned int prefix_len,
 								 double expire_ts,
-								 const char *reason);
+								 const char *reason,
+								 int32_t response_code);
 
 enum rspamd_ratelimit_check_result rspamd_fuzzy_check_ratelimit_bucket(
 	struct rspamd_fuzzy_storage_ctx *ctx,
@@ -315,8 +317,13 @@ void rspamd_fuzzy_maybe_call_blacklisted(struct rspamd_fuzzy_storage_ctx *ctx,
 										 rspamd_inet_addr_t *addr,
 										 const char *reason);
 
-gboolean rspamd_fuzzy_check_client(struct rspamd_fuzzy_storage_ctx *ctx,
-								   rspamd_inet_addr_t *addr);
+/**
+ * Check if client is allowed to query the fuzzy storage.
+ * Returns 0 if the client is allowed, or a positive HTTP-like error code
+ * (e.g. 403, 503) if the client is blocked.
+ */
+int rspamd_fuzzy_check_client(struct rspamd_fuzzy_storage_ctx *ctx,
+							  rspamd_inet_addr_t *addr);
 
 ucl_object_t *rspamd_leaky_bucket_to_ucl(struct rspamd_leaky_bucket_elt *p_elt);
 void rspamd_fuzzy_maybe_load_ratelimits(struct rspamd_fuzzy_storage_ctx *ctx);

@@ -1272,8 +1272,9 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 		return;
 	}
 
-	if (!rspamd_fuzzy_check_client(session->ctx, session->addr)) {
-		result.v1.value = 503;
+	int block_code = rspamd_fuzzy_check_client(session->ctx, session->addr);
+	if (block_code > 0) {
+		result.v1.value = block_code;
 		result.v1.prob = 0.0f;
 		rspamd_fuzzy_make_reply(cmd, &result, NULL, session, send_flags);
 		return;
@@ -2702,13 +2703,12 @@ lua_fuzzy_add_blacklist_handler(lua_State *L)
 }
 
 /*
- * worker:block_fuzzy_client(addr_string, prefix_len[, expire_ts[, reason]])
+ * worker:block_fuzzy_client(addr_string, prefix_len[, expire_ts[, reason[, response_code]]])
  *
  * Dynamically block an IP address or CIDR network in this worker.
  * expire_ts is an absolute monotonic timestamp (rspamd_util.get_time() + ttl).
  * Pass nil or 0 for a permanent block (until worker restart).
- * Lua callers can call get_time() once and pass the result to a batch of
- * block calls — the C layer never calls get_time() itself.
+ * response_code is the fuzzy reply code (default 503); use 403 for ratelimits.
  *
  * Returns: true on success; false, errmsg on parse failure.
  */
@@ -2767,8 +2767,9 @@ lua_fuzzy_block_client(lua_State *L)
 	unsigned int prefix_len = (unsigned int) luaL_checkinteger(L, 3);
 	double expire_ts = luaL_optnumber(L, 4, 0.0);
 	const char *reason = luaL_optstring(L, 5, "lua");
+	int32_t response_code = (int32_t) luaL_optinteger(L, 6, 0);
 
-	if (rspamd_fuzzy_block_addr(ctx, addr_str, prefix_len, expire_ts, reason)) {
+	if (rspamd_fuzzy_block_addr(ctx, addr_str, prefix_len, expire_ts, reason, response_code)) {
 		lua_pushboolean(L, TRUE);
 		return 1;
 	}
