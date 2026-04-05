@@ -274,29 +274,80 @@ end
 
 exports.gen_auth_results = gen_auth_results
 
-local aar_elt_grammar
--- This function parses an ar element to a table of kv pairs that represents different
--- elements
-local function parse_ar_element(elt)
+-- Shared LPeg primitives for AR/AAR parsing (built once on first use)
+local ar_lpeg_atoms
 
-  if not aar_elt_grammar then
-    -- Generate grammar
-    local lpeg = require "lpeg"
-    local P = lpeg.P
-    local S = lpeg.S
-    local V = lpeg.V
-    local C = lpeg.C
-    local space = S(" ") ^ 0
-    local doublequoted = space * P '"' * ((1 - S '"\r\n\f\\') + (P '\\' * 1)) ^ 0 * '"' * space
-    local comment = space * P { "(" * ((1 - S "()") + V(1)) ^ 0 * ")" } * space
-    local name = C((1 - S('=(" ')) ^ 1) * space
-    local pair = lpeg.Cg(name * "=" * space * name) * space
-    aar_elt_grammar = lpeg.Cf(lpeg.Ct("") * (pair + comment + doublequoted) ^ 1, rawset)
+local function get_ar_lpeg_atoms()
+  if ar_lpeg_atoms then
+    return ar_lpeg_atoms
   end
 
-  return aar_elt_grammar:match(elt)
+  local lpeg = require "lpeg"
+  local P, S, V, C, Ct, Cg, Cf = lpeg.P, lpeg.S, lpeg.V, lpeg.C, lpeg.Ct, lpeg.Cg, lpeg.Cf
+
+  local space = S(" \t") ^ 0
+  local doublequoted = space * P '"' * ((1 - S '"\r\n\f\\') + (P '\\' * 1)) ^ 0 * '"' * space
+  local comment = space * P { "(" * ((1 - S "()") + V(1)) ^ 0 * ")" } * space
+  local name = C((1 - S('=(" \t')) ^ 1) * space
+  local pair = Cg(name * "=" * space * name) * space
+
+  -- Single AR element grammar: "dkim=pass (comment) header.d=example.com" → table
+  local elt_grammar = Cf(Ct("") * (pair + comment + doublequoted) ^ 1, rawset)
+
+  -- AAR header split grammar: splits on ";" while respecting comments and quotes.
+  -- Each captured element is the raw text between semicolons (trimmed).
+  local safe_char = (comment + doublequoted + (1 - S ";")) -- consume one "safe" token
+  local element = C(safe_char ^ 1) -- capture the raw text of one element
+  local sep = P ";" * space
+  local aar_split_grammar = Ct(space * element * (sep * element) ^ 0)
+
+  ar_lpeg_atoms = {
+    elt_grammar = elt_grammar,
+    aar_split_grammar = aar_split_grammar,
+  }
+  return ar_lpeg_atoms
+end
+
+-- Parse a single AR element (e.g. "dkim=pass header.d=example.com") into a kv table
+local function parse_ar_element(elt)
+  return get_ar_lpeg_atoms().elt_grammar:match(elt)
 end
 exports.parse_ar_element = parse_ar_element
+
+-- Split an AAR header value into elements by ";" while respecting comments and
+-- quoted strings, then parse each element.  Returns { i = <number>,
+-- ar = { {method=result, ...}, ... } } or nil on failure.
+local function parse_aar_header(decoded)
+  local atoms = get_ar_lpeg_atoms()
+  local elts = atoms.aar_split_grammar:match(decoded)
+  if not elts or #elts == 0 then
+    return nil
+  end
+
+  local result = {}
+
+  for _, raw_elt in ipairs(elts) do
+    local trimmed = raw_elt:match("^%s*(.-)%s*$")
+    if trimmed and #trimmed > 0 and trimmed:match("^i%s*=%s*%d+$") then
+      -- ARC instance tag
+      local v = trimmed:match("^i%s*=%s*(%d+)$")
+      result.i = v
+    else
+      -- Try to parse as an AR element (method=result prop=value ...)
+      local ar_elt = atoms.elt_grammar:match(trimmed)
+      if ar_elt then
+        if not result.ar then
+          result.ar = {}
+        end
+        table.insert(result.ar, ar_elt)
+      end
+      -- Elements without '=' (like authserv-id) are silently skipped
+    end
+  end
+
+  return result
+end
+exports.parse_aar_header = parse_aar_header
 
 local function get_ar_hostname(ar_value)
   if not ar_value or ar_value == '' then
