@@ -1,3 +1,22 @@
+4.0.1: 05 Apr 2026
+
+  ** Features **
+  * [Feature] Add settings merge infrastructure with layered collect-then-merge flow
+  * [Feature] Add weak dependencies and disabled status to symcache
+  * [Feature] Add force-enable override for settings conflicts
+  * [Feature] Add dynamic block API to fuzzy storage worker
+  * [Feature] Allow custom response codes for fuzzy dynamic blocks
+  * [Feature] Expose ratelimit_whitelist check to Lua via worker method
+
+  ** Bug fixes **
+  * [Fix] Keep original fd in proxy session after milter dup (fd leak since 4.0.0)
+  * [Fix] Use task_timeout instead of upstream timeout for proxy self-scan
+  * [Fix] Use LPeg grammar for AAR header parsing (#5963)
+  * [Fix] Use ev_now() instead of rspamd_get_ticks() for dynamic ban expiry
+  * [Fix] Enable deps in pre/postfilters and fix settings flow
+  * [Fix] Create rdeps for same-stage non-filter dependencies
+  * [Fix] Add missing #include <memory> in redis_backend.cxx
+
 4.0.0: 30 Mar 2026
 
   ** Incompatible changes **
