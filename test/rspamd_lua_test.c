@@ -100,10 +100,14 @@ rspamd_lua_test_func(void)
 
 	lua_newtable(L);
 
+	const char *tests_glob = "*.lua";
+	if (getenv("TESTS")) {
+		tests_glob = getenv("TESTS");
+	}
 	globbuf.gl_offs = 0;
-	len = strlen(dir) + sizeof("/unit/") + sizeof("*.lua");
+	len = strlen(dir) + sizeof("/unit/") + strlen(tests_glob);
 	pattern = g_malloc(len);
-	rspamd_snprintf(pattern, len, "%s/unit/%s", dir, "*.lua");
+	rspamd_snprintf(pattern, len, "%s/unit/%s", dir, tests_glob);
 
 	int lua_test_len = 0;
 	int inserted_file = 1;
