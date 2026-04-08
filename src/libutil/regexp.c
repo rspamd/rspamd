@@ -889,17 +889,21 @@ rspamd_regexp_search(const rspamd_regexp_t *re, const char *text, gsize len,
 
 			g_assert(g_array_get_element_size(captures) ==
 					 sizeof(struct rspamd_re_capture));
+			/* Remove empty captures at the end */
+			while (--novec >= 0 && (ovec[novec * 2] == junk || ovec[novec * 2] == PCRE2_UNSET)) {
+			}
+			novec++;
 			g_array_set_size(captures, novec);
 
 			for (i = 0; i < novec; i++) {
+				elt = &g_array_index(captures, struct rspamd_re_capture, i);
 				if (ovec[i * 2] != junk && ovec[i * 2] != PCRE2_UNSET) {
-					elt = &g_array_index(captures, struct rspamd_re_capture, i);
 					elt->p = mt + ovec[i * 2];
 					elt->len = (mt + ovec[i * 2 + 1]) - elt->p;
 				}
 				else {
-					g_array_set_size(captures, i);
-					break;
+					elt->p = "";
+					elt->len = 0;
 				}
 			}
 		}
