@@ -748,18 +748,21 @@ rspamd_regexp_search(const rspamd_regexp_t *re, const char *text, gsize len,
 
 			g_assert(g_array_get_element_size(captures) ==
 					 sizeof(struct rspamd_re_capture));
+			/* Remove empty captures at the end */
+			while (--rc >= 0 && (ovec[rc * 2] == junk || ovec[rc * 2] < 0)) {
+			}
+			rc++;
 			g_array_set_size(captures, rc);
 
 			for (i = 0; i < rc; i++) {
+				elt = &g_array_index(captures, struct rspamd_re_capture, i);
 				if (ovec[i * 2] != junk && ovec[i * 2] >= 0) {
-					elt = &g_array_index(captures, struct rspamd_re_capture, i);
 					elt->p = mt + ovec[i * 2];
 					elt->len = (mt + ovec[i * 2 + 1]) - elt->p;
 				}
 				else {
-					/* Runtime match returned fewer captures than expected */
-					g_array_set_size(captures, i);
-					break;
+					elt->p = "";
+					elt->len = 0;
 				}
 			}
 		}
