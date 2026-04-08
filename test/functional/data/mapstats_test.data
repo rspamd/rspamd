@@ -1,0 +1,5 @@
+2026-02-01 10:00:01.100 #1001(normal) <a1b2c3>; rspamd_task_write_log: id: <msg001@test.com>, qid: <Q001>, ip: 10.0.0.1, (no action): [2.0/15.0] [TEST_PLAIN(1.0){example.com;},R_SPF_ALLOW(-1.0)], len: 1000, time: 5.00ms
+2026-02-01 10:00:02.200 #1001(normal) <d4e5f6>; rspamd_task_write_log: id: <msg002@test.com>, qid: <Q002>, ip: 192.168.1.100, (no action): [3.0/15.0] [TEST_PLAIN(1.0){test.org;},TEST_IP(2.0){192.168.1.100;}], len: 2000, time: 8.00ms
+2026-02-01 10:00:03.300 #1001(normal) <g7h8i9>; rspamd_task_write_log: id: <msg003@test.com>, qid: <Q003>, ip: 10.0.0.3, (no action): [1.5/15.0] [TEST_RE(1.5){test-string-123;}], len: 3000, time: 6.00ms
+2026-02-01 10:00:04.400 #1001(normal) <j0k1l2>; rspamd_task_write_log: id: <msg004@test.com>, qid: <Q004>, ip: 10.0.0.4, (no action): [1.0/15.0] [TEST_PLAIN(1.0){example.com;}], len: 4000, time: 4.00ms
+2026-02-01 10:00:05.500 #1001(normal) <m3n4o5>; rspamd_task_write_log: id: <msg005@test.com>, qid: <Q005>, ip: 10.5.3.1, (no action): [2.0/15.0] [TEST_IP(2.0){10.5.3.1;}], len: 5000, time: 7.00ms

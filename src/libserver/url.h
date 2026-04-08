@@ -63,6 +63,16 @@ enum rspamd_url_flags {
 };
 #define RSPAMD_URL_MAX_FLAG_SHIFT (26u)
 
+/*
+ * Flags that should propagate from an outer (parent) URL to an inner URL
+ * extracted from its query string. These are source/classification flags
+ * that describe where the URL was found, not structural properties of the
+ * URL itself.
+ */
+#define RSPAMD_URL_FLAG_PROPAGATE_MASK                     \
+	(RSPAMD_URL_FLAG_FROM_TEXT | RSPAMD_URL_FLAG_CONTENT | \
+	 RSPAMD_URL_FLAG_SUBJECT | RSPAMD_URL_FLAG_INVISIBLE)
+
 struct rspamd_url_tag {
 	const char *data;
 	struct rspamd_url_tag *prev, *next;

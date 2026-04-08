@@ -270,8 +270,10 @@ int lua_compress_zlib_decompress(lua_State *L, bool is_gzip)
 				break;
 			}
 			else {
-				msg_err("cannot decompress data: %s (last error: %s)",
-						zError(rc), strm.msg);
+				if (rc != Z_NEED_DICT) {
+					msg_err("cannot decompress data: %s (last error: %s)",
+							zError(rc), strm.msg);
+				}
 				lua_pop(L, 1); /* Text will be freed here */
 				lua_pushnil(L);
 				inflateEnd(&strm);

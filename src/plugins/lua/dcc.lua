@@ -124,5 +124,5 @@ if rule then
   })
 else
   lua_util.disable_module(N, "config")
-  rspamd_logger.infox('DCC module not configured');
+  rspamd_logger.infox(rspamd_config, 'DCC module not configured');
 end

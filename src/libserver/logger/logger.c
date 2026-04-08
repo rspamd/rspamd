@@ -980,7 +980,7 @@ char *
 rspamd_log_line_hex_escape(const unsigned char *src, gsize srclen,
 						   char *dst, gsize dstlen)
 {
-	static const char hexdigests[16] = "0123456789ABCDEF";
+	static const char hexdigests[] = "0123456789ABCDEF";
 	char *d = dst;
 
 	static uint32_t escape[] = {

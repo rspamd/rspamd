@@ -94,6 +94,18 @@ extract:option "-F --words-format"
   full = "full",
 }
        :default "stem"
+extract:option "-L --limit"
+       :description "Maximum output size in bytes"
+       :argname("<bytes>")
+       :convert(tonumber)
+extract:flag "-Q --strip-quotes"
+       :description "Remove quoted content (lines starting with >)"
+extract:flag "-S --strip-signatures"
+       :description "Remove email signatures"
+extract:flag "-R --strip-reply-headers"
+       :description "Remove reply headers (On X wrote:, From: Sent:)"
+extract:flag "-T --smart-trim"
+       :description "Enable all text trimming heuristics"
 
 local stat = parser:command "stat st s"
                    :description "Extracts statistical data from MIME messages"
@@ -135,6 +147,8 @@ urls:flag "--count"
     :description "Print count of each printed element"
 urls:flag "-r --reverse"
     :description "Reverse sort order"
+urls:flag "--raw"
+    :description "Load as raw file (for PDFs and other non-email files)"
 
 local modify = parser:command "modify mod m"
                      :description "Modifies MIME message"
@@ -498,6 +512,37 @@ local function extract_handler(opts)
       opts.html = true
     end
 
+    -- Check if we use extract_text_limited options
+    if opts.limit or opts['strip_quotes'] or opts['strip_signatures'] or opts['smart_trim'] or opts['strip_reply_headers'] then
+        local res = lua_mime.extract_text_limited(task, {
+            max_bytes = opts.limit,
+            strip_quotes = opts['strip_quotes'],
+            strip_signatures = opts['strip_signatures'],
+            strip_reply_headers = opts['strip_reply_headers'],
+            smart_trim = opts['smart_trim']
+        })
+
+        if opts.json or opts.ucl then
+           table.insert(out_elts[fname], res)
+        else
+           if res.truncated then
+             table.insert(out_elts[fname], string.format("[Truncated] %s", res.text))
+           else
+             table.insert(out_elts[fname], res.text)
+           end
+
+           if opts.part then
+               table.insert(out_elts[fname], rspamd_logger.slog("Stats: %s", res.stats))
+           end
+        end
+
+        table.insert(out_elts[fname], "")
+        table.insert(tasks, task)
+
+        -- Skip normal processing
+        goto continue
+    end
+
     if opts.words then
       local how_words = opts['words_format'] or 'stem'
       table.insert(out_elts[fname], 'meta_words: ' ..
@@ -635,6 +680,8 @@ local function extract_handler(opts)
 
     table.insert(out_elts[fname], "")
     table.insert(tasks, task)
+
+    ::continue::
   end
 
   print_elts(out_elts, opts, process_func)
@@ -699,7 +746,7 @@ local function stat_handler(opts)
           local text = part:get_text()
 
           if text then
-            local digest, shingles = text:get_fuzzy_hashes(task:get_mempool())
+            local digest, shingles = text:get_fuzzy_hashes(task:get_mempool(), task:get_subject())
             table.insert(out_elts[fname], {
               digest = digest,
               shingles = shingles,
@@ -773,7 +820,8 @@ local function urls_handler(opts)
       end
     end
 
-    for _, u in ipairs(task:get_urls(true)) do
+    -- Use get_urls_filtered with nil params to get all URLs including content URLs
+    for _, u in ipairs(task:get_urls_filtered()) do
       process_url(u)
     end
 

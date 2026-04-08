@@ -66,17 +66,24 @@ KANN_LAYER_DEF(lstm);
 KANN_LAYER_DEF(gru);
 KANN_LAYER_DEF(conv2d);
 KANN_LAYER_DEF(conv1d);
+KANN_LAYER_DEF(max1d);
+KANN_LAYER_DEF(input3d);
 KANN_LAYER_DEF(cost);
+
+static int lua_kann_layer_layerdropout(lua_State *L); /* forward declaration */
 
 static luaL_reg rspamd_kann_layers_f[] = {
 	KANN_LAYER_INTERFACE(input),
 	KANN_LAYER_INTERFACE(dense),
 	KANN_LAYER_INTERFACE(layernorm),
+	{"dropout", lua_kann_layer_layerdropout}, /* manually registered - different naming */
 	KANN_LAYER_INTERFACE(rnn),
 	KANN_LAYER_INTERFACE(lstm),
 	KANN_LAYER_INTERFACE(gru),
 	KANN_LAYER_INTERFACE(conv2d),
 	KANN_LAYER_INTERFACE(conv1d),
+	KANN_LAYER_INTERFACE(max1d),
+	KANN_LAYER_INTERFACE(input3d),
 	KANN_LAYER_INTERFACE(cost),
 	{NULL, NULL},
 };
@@ -94,6 +101,7 @@ KANN_TRANSFORM_DEF(square);
 KANN_TRANSFORM_DEF(sigm);
 KANN_TRANSFORM_DEF(tanh);
 KANN_TRANSFORM_DEF(relu);
+KANN_TRANSFORM_DEF(gelu);
 KANN_TRANSFORM_DEF(softmax);
 KANN_TRANSFORM_DEF(1minus);
 KANN_TRANSFORM_DEF(exp);
@@ -110,6 +118,7 @@ static luaL_reg rspamd_kann_transform_f[] = {
 	KANN_TRANSFORM_INTERFACE(sigm),
 	KANN_TRANSFORM_INTERFACE(tanh),
 	KANN_TRANSFORM_INTERFACE(relu),
+	KANN_TRANSFORM_INTERFACE(gelu),
 	KANN_TRANSFORM_INTERFACE(softmax),
 	KANN_TRANSFORM_INTERFACE(1minus),
 	KANN_TRANSFORM_INTERFACE(exp),
@@ -158,11 +167,15 @@ LUA_FUNCTION_DEF(kann, destroy);
 LUA_FUNCTION_DEF(kann, save);
 LUA_FUNCTION_DEF(kann, train1);
 LUA_FUNCTION_DEF(kann, apply1);
+LUA_FUNCTION_DEF(kann, merge_weights);
+LUA_FUNCTION_DEF(kann, is_compatible);
 
 static luaL_reg rspamd_kann_m[] = {
 	LUA_INTERFACE_DEF(kann, save),
 	LUA_INTERFACE_DEF(kann, train1),
 	LUA_INTERFACE_DEF(kann, apply1),
+	LUA_INTERFACE_DEF(kann, merge_weights),
+	LUA_INTERFACE_DEF(kann, is_compatible),
 	{"__gc", lua_kann_destroy},
 	{NULL, NULL},
 };
@@ -609,8 +622,74 @@ lua_kann_layer_conv1d(lua_State *L)
 }
 
 /***
+ * @function kann.layer.max1d(in, kern_size, stride_size, pad_size[, flags])
+ * Creates 1D max pooling layer (for use after conv1d)
+ * @param {kann_node} in kann node (must be 3D: NCW)
+ * @param {int} kern_size kernel size (use width for global pooling)
+ * @param {int} stride_size stride
+ * @param {int} pad_size padding
+ * @param {table|int} flags optional flags
+ * @return {kann_node} kann node object (should be used to combine ANN)
+*/
+static int
+lua_kann_layer_max1d(lua_State *L)
+{
+	kad_node_t *in = lua_check_kann_node(L, 1);
+	int k_size = luaL_checkinteger(L, 2);
+	int stride = luaL_checkinteger(L, 3);
+	int pad = luaL_checkinteger(L, 4);
+
+	if (in != NULL) {
+		kad_node_t *t;
+		t = kad_max1d(in, k_size, stride, pad);
+
+		if (t == NULL) {
+			return luaL_error(L, "max1d requires 3D (NCW) input");
+		}
+
+		PROCESS_KAD_FLAGS(t, 5);
+		PUSH_KAD_NODE(t);
+	}
+	else {
+		return luaL_error(L, "invalid arguments, input, k, stride, pad required");
+	}
+
+	return 1;
+}
+
+/***
+ * @function kann.layer.input3d(channels, width[, flags])
+ * Creates a 3D input layer in NCW format (for conv1d networks)
+ * @param {int} channels number of channels (e.g. embedding dimension)
+ * @param {int} width sequence length (e.g. max words)
+ * @param {table|int} flags optional flags
+ * @return {kann_node} kann node object (should be used to combine ANN)
+*/
+static int
+lua_kann_layer_input3d(lua_State *L)
+{
+	int channels = luaL_checkinteger(L, 1);
+	int width = luaL_checkinteger(L, 2);
+
+	if (channels > 0 && width > 0) {
+		kad_node_t *t;
+
+		t = kad_feed(3, 1, channels, width);
+		t->ext_flag |= KANN_F_IN;
+
+		PROCESS_KAD_FLAGS(t, 3);
+		PUSH_KAD_NODE(t);
+	}
+	else {
+		return luaL_error(L, "invalid arguments, channels and width required");
+	}
+
+	return 1;
+}
+
+/***
  * @function kann.layer.cost(in, nout, cost_type[, flags])
- * Creates 1D convolution layer
+ * Creates cost layer
  * @param {kann_node} in kann node
  * @param {int} nout number of outputs
  * @param {int} cost_type see kann.cost table
@@ -706,6 +785,7 @@ LUA_UNARY_TRANSFORM_FUNC_IMPL(square)
 LUA_UNARY_TRANSFORM_FUNC_IMPL(sigm)
 LUA_UNARY_TRANSFORM_FUNC_IMPL(tanh)
 LUA_UNARY_TRANSFORM_FUNC_IMPL(relu)
+LUA_UNARY_TRANSFORM_FUNC_IMPL(gelu)
 LUA_UNARY_TRANSFORM_FUNC_IMPL(softmax)
 LUA_UNARY_TRANSFORM_FUNC_IMPL(1minus)
 LUA_UNARY_TRANSFORM_FUNC_IMPL(exp)
@@ -1358,4 +1438,70 @@ lua_kann_apply1(lua_State *L)
 	}
 
 	return 1;
+}
+
+/***
+ * @function kann:merge_weights(other_ann, alpha)
+ * Merge weights from another ANN into this one using linear interpolation.
+ * w_new = (1 - alpha) * w_self + alpha * w_other
+ * @param {kann} other_ann source ANN to merge from
+ * @param {number} alpha weight for source ANN (0.0 - 1.0)
+ * @return {boolean} true on success, false on error
+ */
+static int
+lua_kann_merge_weights(lua_State *L)
+{
+	kann_t *self = lua_check_kann(L, 1);
+	kann_t *other = lua_check_kann(L, 2);
+	double alpha = luaL_checknumber(L, 3);
+
+	if (self && other) {
+		if (alpha < 0.0 || alpha > 1.0) {
+			return luaL_error(L, "alpha must be between 0.0 and 1.0, got %f", alpha);
+		}
+
+		/* Check compatibility first */
+		if (!kann_is_compatible(self, other)) {
+			lua_pushboolean(L, false);
+			lua_pushstring(L, "incompatible ANN architectures");
+			return 2;
+		}
+
+		int ret = kann_merge_weights(self, other, (float) alpha);
+
+		if (ret == 0) {
+			lua_pushboolean(L, true);
+			return 1;
+		}
+		else {
+			lua_pushboolean(L, false);
+			lua_pushstring(L, "merge failed");
+			return 2;
+		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments: two kann objects required");
+	}
+}
+
+/***
+ * @function kann:is_compatible(other_ann)
+ * Check if two ANNs have compatible architecture for weight merging.
+ * @param {kann} other_ann ANN to check compatibility with
+ * @return {boolean} true if compatible, false otherwise
+ */
+static int
+lua_kann_is_compatible(lua_State *L)
+{
+	kann_t *self = lua_check_kann(L, 1);
+	kann_t *other = lua_check_kann(L, 2);
+
+	if (self && other) {
+		int ret = kann_is_compatible(self, other);
+		lua_pushboolean(L, ret == 1);
+		return 1;
+	}
+	else {
+		return luaL_error(L, "invalid arguments: two kann objects required");
+	}
 }

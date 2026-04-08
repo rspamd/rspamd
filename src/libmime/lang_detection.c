@@ -62,7 +62,7 @@ static const struct rspamd_language_unicode_match unicode_langs[] = {
 };
 
 /*
- * Top Languages 
+ * Top Languages
  */
 static const char *tier0_langs[] = {
 	"en",
@@ -882,6 +882,8 @@ rspamd_language_detector_init(struct rspamd_config *cfg)
 		ret->stop_words[i].mp = rspamd_multipattern_create(
 			RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8 |
 			RSPAMD_MULTIPATTERN_RE);
+		/* Use FALLBACK mode: ACISM first, async hyperscan compile later */
+		rspamd_multipattern_set_mode(ret->stop_words[i].mp, RSPAMD_MP_MODE_FALLBACK);
 #else
 		ret->stop_words[i].mp = rspamd_multipattern_create(
 			RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8);
@@ -917,11 +919,22 @@ rspamd_language_detector_init(struct rspamd_config *cfg)
 			rspamd_language_detector_process_chain(cfg, chain);
 		});
 
+		/* Compile with ACISM fallback, queue for async hyperscan via hs_helper */
 		if (!rspamd_multipattern_compile(ret->stop_words[i].mp, 0, &err)) {
 			msg_err_config("cannot compile stop words for %z language group: %e",
 						   i, err);
 			g_error_free(err);
 		}
+#ifdef WITH_HYPERSCAN
+		else if (rspamd_multipattern_get_state(ret->stop_words[i].mp) ==
+				 RSPAMD_MP_STATE_COMPILING) {
+			/* Cache miss - add to pending queue for hs_helper */
+			static const char *cat_names[] = {"latin", "cyrillic", "devanagari", "arab"};
+			char name[64];
+			rspamd_snprintf(name, sizeof(name), "stopwords_%s", cat_names[i]);
+			rspamd_multipattern_add_pending(ret->stop_words[i].mp, name);
+		}
+#endif
 
 		total += kh_size(ret->trigrams[i]);
 	}

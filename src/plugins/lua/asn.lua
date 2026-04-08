@@ -121,11 +121,11 @@ local configure_asn_module = function()
   if options['provider_type'] == 'rspamd' then
     if not options['provider_info'] and options['provider_info']['ip4'] and
         options['provider_info']['ip6'] then
-      rspamd_logger.errx("Missing required provider_info for rspamd")
+      rspamd_logger.errx(rspamd_config, "Missing required provider_info for rspamd")
       return false
     end
   else
-    rspamd_logger.errx("Unknown provider_type: %s", options['provider_type'])
+    rspamd_logger.errx(rspamd_config, "Unknown provider_type: %s", options['provider_type'])
     return false
   end
 

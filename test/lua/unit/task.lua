@@ -167,4 +167,63 @@ Thank you,
 
     task:destroy()
   end)
+
+  test("Part URLs are not deduplicated across MIME parts", function()
+    local msg = table.concat {
+      hdrs,
+      'Content-Type: multipart/alternative; boundary=XXX\n',
+      '\n',
+      '--XXX\n',
+      'Content-Type: text/plain\n',
+      '\n',
+      'Visit <http://example.com/a> and <http://example.com/b>\n',
+      '\n',
+      '--XXX\n',
+      'Content-Type: text/html\n',
+      '\n',
+      '<html><body>' ..
+        '<a href="http://example.com/a">A</a>' ..
+        '<a href="http://example.com/b">B</a>' ..
+      '</body></html>\n',
+      '\n',
+      '--XXX--\n',
+    }
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+
+    local parts = task:get_parts()
+    assert_true(#parts >= 2, "should have at least two MIME parts")
+
+    local function uniq_urls(part)
+      local seen = {}
+
+      return fun.totable(fun.filter(function(v)
+        if seen[v] then
+          return false
+        end
+
+        seen[v] = true
+        return true
+      end, fun.map(function(u)
+        return u:get_host() .. '/' .. u:get_path()
+      end, part:get_urls())))
+    end
+
+    assert_rspamd_table_eq_sorted({
+      actual = uniq_urls(parts[#parts - 1]),
+      expect = {
+        'example.com/a', 'example.com/b'
+      }
+    })
+
+    assert_rspamd_table_eq_sorted({
+      actual = uniq_urls(parts[#parts]),
+      expect = {
+        'example.com/a', 'example.com/b'
+      }
+    })
+
+    task:destroy()
+  end)
 end)

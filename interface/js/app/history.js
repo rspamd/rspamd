@@ -69,7 +69,7 @@ define(["jquery", "app/common", "app/libft", "footable"],
                 name: "score",
                 title: "Score",
                 style: {maxWidth: 110},
-                sortValue: function (val) { return Number(val.options.sortValue); }
+                sortValue: (val) => Number(val.options.sortValue)
             }, {
                 name: "symbols",
                 title: "Symbols",
@@ -86,13 +86,13 @@ define(["jquery", "app/common", "app/libft", "footable"],
                 title: "Scan time",
                 breakpoints: "md",
                 style: {maxWidth: 80},
-                sortValue: function (val) { return Number(val); }
+                sortValue: (val) => Number(val)
             }, {
                 sorted: true,
                 direction: "DESC",
                 name: "time",
                 title: "Time",
-                sortValue: function (val) { return Number(val.options.sortValue); }
+                sortValue: (val) => Number(val.options.sortValue)
             }, {
                 name: "user",
                 title: "Authenticated user",
@@ -184,6 +184,7 @@ define(["jquery", "app/common", "app/libft", "footable"],
                                     () => {
                                         $("#history .ft-columns-dropdown .btn-dropdown-apply").removeAttr("disabled");
                                         ui.updateHistoryControlsState();
+                                        if (version) libft.bindFuzzyHashButtons("history");
                                     });
                             });
                         }
@@ -207,7 +208,7 @@ define(["jquery", "app/common", "app/libft", "footable"],
                         name: "ts",
                         title: "Time",
                         style: {width: 300, maxWidth: 300},
-                        sortValue: function (val) { return Number(val.options.sortValue); }},
+                        sortValue: (val) => Number(val.options.sortValue)},
                     {name: "type",
                         title: "Worker type",
                         breakpoints: "md",

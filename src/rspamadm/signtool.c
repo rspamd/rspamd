@@ -539,9 +539,9 @@ rspamadm_signtool(int argc, char **argv, const struct rspamadm_command *cmd)
 			pk = rspamd_pubkey_from_base32(map, flen, RSPAMD_KEYPAIR_SIGN);
 
 			if (pk == NULL) {
-				rspamd_fprintf(stderr, "bad size %s: %ud, %ud expected\n",
+				rspamd_fprintf(stderr, "bad size %s: %z, %z expected\n",
 							   pubkey_file,
-							   (unsigned int) flen,
+							   flen,
 							   crypto_sign_publickeybytes());
 				exit(EXIT_FAILURE);
 			}
@@ -553,9 +553,9 @@ rspamadm_signtool(int argc, char **argv, const struct rspamadm_command *cmd)
 										   RSPAMD_KEYPAIR_SIGN);
 
 			if (pk == NULL) {
-				rspamd_fprintf(stderr, "bad size %s: %ud, %ud expected\n",
+				rspamd_fprintf(stderr, "bad size %s: %z, %z expected\n",
 							   pubkey_file,
-							   (unsigned int) strlen(pubkey),
+							   strlen(pubkey),
 							   crypto_sign_publickeybytes());
 				exit(EXIT_FAILURE);
 			}

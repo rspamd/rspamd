@@ -17,6 +17,8 @@
 #include "http_router.h"
 #include "http_connection.h"
 #include "http_private.h"
+#include "libserver/http_content_negotiation.h"
+#include "libserver/ssl_util.h"
 #include "libutil/regexp.h"
 #include "libutil/printf.h"
 #include "libserver/logger.h"
@@ -335,9 +337,20 @@ rspamd_http_router_finish_handler(struct rspamd_http_connection *conn,
 
 		encoding = rspamd_http_message_find_header(msg, "Accept-Encoding");
 
-		if (encoding && rspamd_substring_search(encoding->begin, encoding->len,
-												"gzip", 4) != -1) {
-			entry->support_gzip = TRUE;
+		if (encoding) {
+			if (rspamd_substring_search(encoding->begin, encoding->len,
+										"gzip", 4) != -1) {
+				entry->support_gzip = TRUE;
+				entry->compression_flags |= RSPAMD_HTTP_COMPRESS_GZIP;
+			}
+			if (rspamd_substring_search(encoding->begin, encoding->len,
+										"zstd", 4) != -1) {
+				entry->compression_flags |= RSPAMD_HTTP_COMPRESS_ZSTD;
+			}
+			if (rspamd_substring_search(encoding->begin, encoding->len,
+										"deflate", 7) != -1) {
+				entry->compression_flags |= RSPAMD_HTTP_COMPRESS_DEFLATE;
+			}
 		}
 
 		if (handler != NULL) {
@@ -503,8 +516,15 @@ void rspamd_http_router_add_regexp(struct rspamd_http_connection_router *router,
 	}
 }
 
-void rspamd_http_router_handle_socket(struct rspamd_http_connection_router *router,
-									  int fd, gpointer ud)
+void rspamd_http_router_set_ssl(struct rspamd_http_connection_router *router,
+								gpointer ssl_ctx)
+{
+	g_assert(router != NULL);
+	router->server_ssl_ctx = ssl_ctx;
+}
+
+void rspamd_http_router_handle_socket_ssl(struct rspamd_http_connection_router *router,
+										  int fd, gpointer ud, gboolean ssl)
 {
 	struct rspamd_http_connection_entry *conn;
 
@@ -524,8 +544,21 @@ void rspamd_http_router_handle_socket(struct rspamd_http_connection_router *rout
 		rspamd_http_connection_set_key(conn->conn, router->key);
 	}
 
-	rspamd_http_connection_read_message(conn->conn, conn, router->timeout);
+	if (ssl && router->server_ssl_ctx) {
+		rspamd_http_connection_accept_ssl(conn->conn, router->server_ssl_ctx,
+										  conn, router->timeout);
+	}
+	else {
+		rspamd_http_connection_read_message(conn->conn, conn, router->timeout);
+	}
+
 	DL_PREPEND(router->conns, conn);
+}
+
+void rspamd_http_router_handle_socket(struct rspamd_http_connection_router *router,
+									  int fd, gpointer ud)
+{
+	rspamd_http_router_handle_socket_ssl(router, fd, ud, FALSE);
 }
 
 void rspamd_http_router_free(struct rspamd_http_connection_router *router)
@@ -542,6 +575,10 @@ void rspamd_http_router_free(struct rspamd_http_connection_router *router)
 
 		if (router->key) {
 			rspamd_keypair_unref(router->key);
+		}
+
+		if (router->server_ssl_ctx) {
+			rspamd_ssl_ctx_free(router->server_ssl_ctx);
 		}
 
 		if (router->default_fs_path != NULL) {

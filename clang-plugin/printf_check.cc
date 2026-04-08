@@ -384,14 +384,12 @@ public:
 	bool VisitCallExpr(CallExpr *E)
 	{
 		if (E->getCalleeDecl() == nullptr) {
-			print_remark("cannot get callee decl",
-						 E, this->pcontext, this->ci);
+			/* Cannot resolve callee - skip silently (common for templates) */
 			return true;
 		}
 		auto callee = dyn_cast<NamedDecl>(E->getCalleeDecl());
 		if (callee == NULL) {
-			print_remark("cannot get named callee decl",
-						 E, this->pcontext, this->ci);
+			/* Not a named decl - skip silently */
 			return true;
 		}
 
@@ -766,6 +764,14 @@ check_struct_type(const Expr *arg, struct PrintfArgChecker *ctx,
 	}
 
 	auto struct_type = desugared_type->getAsStructureType();
+	if (!struct_type) {
+		/* Could be a C++ class or union, not a struct */
+		auto err_msg = std::string("not a struct type for ") + fmt + " arg: " +
+					   arg->getType().getAsString();
+		print_error(err_msg.c_str(),
+					arg, ctx->past, ctx->pci);
+		return false;
+	}
 	auto struct_decl = struct_type->getDecl();
 	auto struct_def = struct_decl->getNameAsString();
 

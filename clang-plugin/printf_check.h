@@ -17,6 +17,10 @@
 #define RSPAMD_PRINTF_CHECK_H
 
 #include <memory>
+
+/* Avoid conflict with LLVM's SANITIZER macro in Sanitizers.h */
+#undef SANITIZER
+
 #include "clang/AST/AST.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/Frontend/CompilerInstance.h"

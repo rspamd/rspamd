@@ -191,8 +191,51 @@ rspamd_regexp_post_process(rspamd_regexp_t *r)
 	PCRE2_UCHAR errstr[128];
 	int errcode;
 
+	/*
+	 * Check compiled pattern complexity before JIT to avoid crashes
+	 * in pcre2_jit_compile on pathological patterns (e.g., huge Unicode
+	 * character classes, deeply nested alternations).
+	 * PCRE2_INFO_SIZE returns the size of the compiled pattern — patterns
+	 * above ~64KB are risky for JIT. PCRE2_INFO_FRAMESIZE returns the
+	 * backtracking frame size — very large frames indicate complexity.
+	 */
+#define RSPAMD_RE_MAX_PCRE2_SIZE (1U << 16) /* 64 KB compiled size */
+#define RSPAMD_RE_MAX_FRAMESIZE (1U << 14)  /* 16 KB frame */
+#define RSPAMD_RE_MAX_CAPTURE_COUNT 128
+
 	if (can_jit) {
-		if ((errcode = pcre2_jit_compile(r->re, jit_flags)) < 0) {
+		gboolean jit_safe = TRUE;
+		gsize compiled_sz = 0;
+		gsize frame_sz = 0;
+		uint32_t capture_cnt = 0;
+
+		if (pcre2_pattern_info(r->re, PCRE2_INFO_SIZE, &compiled_sz) == 0 &&
+			compiled_sz > RSPAMD_RE_MAX_PCRE2_SIZE) {
+			msg_info("pattern too large for JIT (%z bytes): \"%s\"",
+					 compiled_sz, r->pattern);
+			jit_safe = FALSE;
+		}
+
+		if (jit_safe &&
+			pcre2_pattern_info(r->re, PCRE2_INFO_FRAMESIZE, &frame_sz) == 0 &&
+			frame_sz > RSPAMD_RE_MAX_FRAMESIZE) {
+			msg_info("pattern frame too large for JIT (%z bytes): \"%s\"",
+					 frame_sz, r->pattern);
+			jit_safe = FALSE;
+		}
+
+		if (jit_safe &&
+			pcre2_pattern_info(r->re, PCRE2_INFO_CAPTURECOUNT, &capture_cnt) == 0 &&
+			capture_cnt > RSPAMD_RE_MAX_CAPTURE_COUNT) {
+			msg_info("pattern has too many captures for JIT (%ud): \"%s\"",
+					 capture_cnt, r->pattern);
+			jit_safe = FALSE;
+		}
+
+		if (!jit_safe) {
+			r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
+		}
+		else if ((errcode = pcre2_jit_compile(r->re, jit_flags)) < 0) {
 			pcre2_get_error_message(errcode, errstr, G_N_ELEMENTS(errstr));
 			msg_err("jit compilation is not supported: %s; pattern: \"%s\"", errstr, r->pattern);
 			r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
@@ -213,7 +256,29 @@ rspamd_regexp_post_process(rspamd_regexp_t *r)
 	}
 
 	if (r->raw_re && r->re != r->raw_re && !(r->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT)) {
-		if ((errcode = pcre2_jit_compile(r->raw_re, jit_flags)) < 0) {
+		gboolean raw_jit_safe = TRUE;
+		gsize compiled_sz = 0;
+		gsize frame_sz = 0;
+
+		if (pcre2_pattern_info(r->raw_re, PCRE2_INFO_SIZE, &compiled_sz) == 0 &&
+			compiled_sz > RSPAMD_RE_MAX_PCRE2_SIZE) {
+			msg_info("raw pattern too large for JIT (%z bytes): \"%s\"",
+					 compiled_sz, r->pattern);
+			raw_jit_safe = FALSE;
+		}
+
+		if (raw_jit_safe &&
+			pcre2_pattern_info(r->raw_re, PCRE2_INFO_FRAMESIZE, &frame_sz) == 0 &&
+			frame_sz > RSPAMD_RE_MAX_FRAMESIZE) {
+			msg_info("raw pattern frame too large for JIT (%z bytes): \"%s\"",
+					 frame_sz, r->pattern);
+			raw_jit_safe = FALSE;
+		}
+
+		if (!raw_jit_safe) {
+			r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
+		}
+		else if ((errcode = pcre2_jit_compile(r->raw_re, jit_flags)) < 0) {
 			pcre2_get_error_message(errcode, errstr, G_N_ELEMENTS(errstr));
 			msg_debug("jit compilation is not supported for raw regexp: %s; pattern: \"%s\"", errstr, r->pattern);
 			r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
@@ -228,6 +293,9 @@ rspamd_regexp_post_process(rspamd_regexp_t *r)
 			}
 		}
 	}
+#undef RSPAMD_RE_MAX_PCRE2_SIZE
+#undef RSPAMD_RE_MAX_FRAMESIZE
+#undef RSPAMD_RE_MAX_CAPTURE_COUNT
 #endif
 
 #else

@@ -1,0 +1,4 @@
+/test-string-\d+/i # Test pattern
+/^foobar$/ # Exact match
+# Comment line
+/unused-pattern/ # Won't match

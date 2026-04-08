@@ -52,6 +52,10 @@ if confighelp then
   autolearn = true;
   # Reply conversion (lua code)
   reply_conversion = "xxx";
+  # Custom context augmentation (lua code returning function(task, content, callback))
+  # The callback receives a string to inject as additional context into the LLM prompt.
+  # Supports async operations (Redis, HTTP) — call callback(string) when ready.
+  # context_augment = "return function(task, content, cb) cb('Channel topic: programming') end";
   # URL for the API
   url = "https://api.openai.com/v1/chat/completions";
   # Check messages with passthrough result
@@ -171,6 +175,7 @@ local settings = {
   type = 'openai',
   api_key = nil,
   model = 'gpt-5-mini', -- or parallel model requests: [ 'gpt-5-mini', 'gpt-4o-mini' ],
+  reply_trim_mode = 'replies',
   model_parameters = {
     ["gpt-5-mini"] = {
       max_completion_tokens = 1000,
@@ -198,9 +203,13 @@ local settings = {
   symbols_to_trigger = nil, -- Exclude/include logic
   allow_passthrough = false,
   allow_ham = false,
+  min_words = 10, -- minimum words for text part selection (0 = accept any length)
+  consensus_spam_threshold = 0.75, -- minimum spam probability for consensus
+  consensus_ham_threshold = 0.25, -- maximum ham probability for consensus
   json = false,
   extra_symbols = nil,
   cache_prefix = REDIS_PREFIX,
+  context_augment = nil, -- Lua code returning function(task, content, callback) for custom context
   request_timeout = nil, -- Optional: pass request timeout to server (in seconds)
   -- user/domain context options (nested table forwarded to llm_context)
   context = {
@@ -394,18 +403,21 @@ local function default_condition(task)
     end
   end
 
-  -- Unified LLM input building (subject/from/urls/body one-line)
-  local model_cfg = settings.model_parameters[settings.model] or {}
-  local max_tokens = model_cfg.max_completion_tokens or model_cfg.max_tokens or 1000
-  local input_tbl, sel_part = llm_common.build_llm_input(task, { max_tokens = max_tokens })
+  -- Get displayed text part with configurable min_words
+  local sel_part = lua_mime.get_displayed_text_part(task, settings.min_words)
   if not sel_part then
     return false, 'no text part found'
   end
+
+  -- Unified LLM input building (subject/from/urls/body one-line)
+  local model_cfg = settings.model_parameters[settings.model] or {}
+  local max_tokens = model_cfg.max_completion_tokens or model_cfg.max_tokens or 1000
+  local input_tbl = llm_common.build_llm_input(task, {
+    max_tokens = max_tokens,
+    reply_trim_mode = settings.reply_trim_mode,
+    min_words = settings.min_words,
+  })
   if not input_tbl then
-    local nwords = sel_part:get_words_count() or 0
-    if nwords < 5 then
-      return false, 'less than 5 words'
-    end
     return false, 'no content to send'
   end
   return true, input_tbl, sel_part
@@ -589,6 +601,23 @@ local function default_openai_plain_conversion(task, input)
   return
 end
 
+-- Extract message content from either native Ollama or OpenAI-compatible response
+-- Native Ollama: {message: {content: "..."}}
+-- OpenAI compat (/v1/chat/completions): {choices: [{message: {content: "..."}}]}
+local function ollama_extract_content(task, reply)
+  if type(reply.message) == 'table' and reply.message.content then
+    return reply.message.content
+  end
+  if type(reply.choices) == 'table' and type(reply.choices[1]) == 'table' then
+    local msg = reply.choices[1].message
+    if type(msg) == 'table' and msg.content then
+      return msg.content
+    end
+  end
+  rspamd_logger.errx(task, 'no message content in reply')
+  return nil
+end
+
 local function default_ollama_plain_conversion(task, input)
   local parser = ucl.parser()
   local res, err = parser:parse_string(input)
@@ -602,15 +631,9 @@ local function default_ollama_plain_conversion(task, input)
     return
   end
 
-  if type(reply.message) ~= 'table' then
-    rspamd_logger.errx(task, 'bad message in reply')
-    return
-  end
-
-  local first_message = reply.message.content
+  local first_message = ollama_extract_content(task, reply)
 
   if not first_message then
-    rspamd_logger.errx(task, 'no content in the first message')
     return
   end
 
@@ -644,15 +667,9 @@ local function default_ollama_json_conversion(task, input)
     return
   end
 
-  if type(reply.message) ~= 'table' then
-    rspamd_logger.errx(task, 'bad message in reply')
-    return
-  end
-
-  local first_message = reply.message.content
+  local first_message = ollama_extract_content(task, reply)
 
   if not first_message then
-    rspamd_logger.errx(task, 'no content in the first message')
     return
   end
 
@@ -698,6 +715,9 @@ end
 local env_digest = nil
 
 local function redis_cache_key(sel_part)
+  if not sel_part then
+    return nil
+  end
   if not env_digest then
     local hasher = require "rspamd_cryptobox_hash"
     local digest = hasher.create()
@@ -765,12 +785,27 @@ local function insert_results(task, result, sel_part)
     end
   end
 
-  if cache_context then
-    lua_cache.cache_set(task, redis_cache_key(sel_part), result, cache_context)
+  -- Store full GPT result in mempool for downstream plugins
+  local gpt_mempool = {
+    probability = result.probability,
+    reason = result.reason or '',
+    categories = result.categories or {},
+  }
+  if result.model then
+    gpt_mempool.model = result.model
+  end
+  local ok_mp, gpt_mp_json = pcall(ucl.to_format, gpt_mempool, 'json-compact')
+  if ok_mp then
+    task:get_mempool():set_variable('gpt_result', gpt_mp_json)
+  end
+
+  local cache_key = redis_cache_key(sel_part)
+  if cache_context and cache_key then
+    lua_cache.cache_set(task, cache_key, result, cache_context)
   end
 
   -- Update long-term user/domain context after classification
-  if redis_params and settings.context then
+  if redis_params and settings.context and sel_part then
     llm_context.update_after_classification(task, redis_params, settings.context, result, sel_part, N)
   end
 end
@@ -811,18 +846,29 @@ local function check_consensus_and_insert_results(task, results, sel_part)
   local reason_text = reason_obj and reason_obj.reason or nil
   local reason_categories = reason_obj and reason_obj.categories or nil
 
-  if nspam > nham and max_spam_prob > 0.75 then
+  -- Collect model names from all successful results
+  local model_names = {}
+  for _, result in ipairs(results) do
+    if result.success and result.model then
+      table.insert(model_names, result.model)
+    end
+  end
+  local models_str = #model_names > 0 and table.concat(model_names, ', ') or nil
+
+  if nspam > nham and max_spam_prob > settings.consensus_spam_threshold then
     insert_results(task, {
         probability = max_spam_prob,
         reason = reason_text,
         categories = reason_categories,
+        model = models_str,
       },
       sel_part)
-  elseif nham > nspam and max_ham_prob < 0.25 then
+  elseif nham > nspam and max_ham_prob < settings.consensus_ham_threshold then
     insert_results(task, {
         probability = max_ham_prob,
         reason = reason_text,
         categories = reason_categories,
+        model = models_str,
       },
       sel_part)
   else
@@ -837,6 +883,7 @@ local function check_consensus_and_insert_results(task, results, sel_part)
         probability = 0.5,
         reason = uncertain_reason,
         categories = { 'uncertain' },
+        model = models_str,
       },
       sel_part)
     task:insert_result('GPT_UNCERTAIN', 1.0)
@@ -851,6 +898,11 @@ end
 
 local function check_llm_cached(task, content, sel_part, context_snippet)
   local cache_key = redis_cache_key(sel_part)
+
+  if not cache_key or not cache_context then
+    check_llm_uncached(task, content, sel_part, context_snippet)
+    return
+  end
 
   lua_cache.cache_get(task, cache_key, cache_context, settings.timeout * 1.5, function()
     check_llm_uncached(task, content, sel_part, context_snippet)
@@ -982,6 +1034,7 @@ local function openai_check(task, content, sel_part, context_snippet)
     upstream = settings.upstreams:get_upstream_round_robin()
     local http_params = {
       url = settings.url,
+      method = 'post',
       mime_type = 'application/json',
       timeout = settings.timeout,
       log_obj = task,
@@ -1118,6 +1171,7 @@ local function ollama_check(task, content, sel_part, context_snippet)
     upstream = settings.upstreams:get_upstream_round_robin()
     local http_params = {
       url = settings.url,
+      method = 'post',
       mime_type = 'application/json',
       timeout = settings.timeout,
       log_obj = task,
@@ -1189,23 +1243,28 @@ local function gpt_check(task)
 
   -- Check if we need to fetch search context
   local search_context_enabled = is_search_context_enabled_for_task(task)
+  local has_augment = settings.context_augment ~= nil
 
-  if context_enabled or search_context_enabled then
+  if context_enabled or search_context_enabled or has_augment then
     local pending_fetches = 0
     local user_context_snippet = nil
     local search_context_snippet = nil
+    local augment_context_snippet = nil
 
     local function maybe_proceed()
       if pending_fetches == 0 then
-        -- Combine contexts
-        local combined_context = nil
-        if user_context_snippet and search_context_snippet then
-          combined_context = user_context_snippet .. "\n\n" .. search_context_snippet
-        elseif user_context_snippet then
-          combined_context = user_context_snippet
-        elseif search_context_snippet then
-          combined_context = search_context_snippet
+        -- Combine all context snippets
+        local parts = {}
+        if user_context_snippet then
+          parts[#parts + 1] = user_context_snippet
         end
+        if search_context_snippet then
+          parts[#parts + 1] = search_context_snippet
+        end
+        if augment_context_snippet then
+          parts[#parts + 1] = augment_context_snippet
+        end
+        local combined_context = #parts > 0 and table.concat(parts, "\n\n") or nil
         proceed(combined_context)
       end
     end
@@ -1226,6 +1285,20 @@ local function gpt_check(task)
         pending_fetches = pending_fetches - 1
         maybe_proceed()
       end, N)
+    end
+
+    if has_augment then
+      pending_fetches = pending_fetches + 1
+      local ok, err = pcall(settings.context_augment, task, content, function(snippet)
+        augment_context_snippet = snippet
+        pending_fetches = pending_fetches - 1
+        maybe_proceed()
+      end)
+      if not ok then
+        rspamd_logger.errx(task, 'context_augment callback failed: %s', err)
+        pending_fetches = pending_fetches - 1
+        maybe_proceed()
+      end
     end
 
     -- If no fetches were initiated, proceed immediately
@@ -1291,6 +1364,16 @@ if opts then
     settings.reply_conversion = load(settings.reply_conversion)()
   else
     settings.reply_conversion = llm_type.conversion(settings.json)
+  end
+
+  if settings.context_augment then
+    local augment_fn, augment_err = load(settings.context_augment)
+    if augment_fn then
+      settings.context_augment = augment_fn()
+    else
+      rspamd_logger.warnx(rspamd_config, 'failed to compile context_augment: %s', augment_err)
+      settings.context_augment = nil
+    end
   end
 
   if not settings.api_key and llm_type.require_passkey then

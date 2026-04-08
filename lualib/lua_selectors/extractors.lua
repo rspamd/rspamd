@@ -452,7 +452,7 @@ the key name]],
     ['get_value'] = function(task, args)
       local hdr = task:get_request_header(args[1])
       if hdr then
-        return hdr, 'string'
+        return tostring(hdr), 'string'
       end
 
       return nil

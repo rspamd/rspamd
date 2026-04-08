@@ -57,9 +57,21 @@
 
 #ifdef WITH_HYPERSCAN
 #include "libserver/hyperscan_tools.h"
+#include "libserver/maps/map_helpers.h"
+#include "libutil/multipattern.h"
 #endif
 
 #include "rspamd_simdutf.h"
+
+/*
+ * Tune jemalloc for single-threaded, multi-process architecture:
+ * - narenas:1 — one arena is sufficient since workers are single-threaded
+ * - dirty_decay_ms:5000 — return dirty pages to OS faster than default (10s)
+ * - muzzy_decay_ms:30000 — hold muzzy (MADV_FREE) pages for 30s before release
+ */
+#ifdef WITH_JEMALLOC
+const char *malloc_conf = "narenas:1,dirty_decay_ms:5000,muzzy_decay_ms:30000";
+#endif
 
 /* 2 seconds to fork new process in place of dead one */
 #define SOFT_FORK_TIME 2
@@ -341,6 +353,11 @@ reread_config(struct rspamd_main *rspamd_main)
 	else {
 		rspamd_log_close(old_logger);
 		msg_info_main("replacing config");
+#ifdef WITH_HYPERSCAN
+		/* Clear pending multipatterns and regexp maps before releasing old config to avoid use-after-free */
+		rspamd_multipattern_clear_pending();
+		rspamd_regexp_map_clear_pending();
+#endif
 		CFG_REF_RELEASE(old_cfg);
 		rspamd_main->cfg->rspamd_user = rspamd_user;
 		rspamd_main->cfg->rspamd_group = rspamd_group;
@@ -701,6 +718,16 @@ spawn_workers(struct rspamd_main *rspamd_main, struct ev_loop *ev_base)
 										 strerror(errno));
 						}
 						else {
+							/* Propagate SSL flag to listen sockets */
+							if (bcf->is_ssl) {
+								GList *cur;
+
+								for (cur = ls; cur != NULL; cur = g_list_next(cur)) {
+									struct rspamd_worker_listen_socket *cur_ls =
+										(struct rspamd_worker_listen_socket *) cur->data;
+									cur_ls->is_ssl = true;
+								}
+							}
 							g_hash_table_insert(listen_sockets, (gpointer) key, ls);
 							listen_ok = TRUE;
 						}
@@ -784,7 +811,8 @@ kill_old_workers(gpointer key, gpointer value, gpointer unused)
 		w->state = rspamd_worker_state_terminating;
 		kill(w->pid, SIGUSR2);
 		ev_io_stop(rspamd_main->event_loop, &w->srv_ev);
-		g_hash_table_remove_all(w->control_events_pending);
+		ev_io_stop(rspamd_main->event_loop, &w->control_ev);
+		rspamd_control_pending_remove_all(w->control_events_pending);
 		msg_info_main("send signal to worker %P", w->pid);
 	}
 	else if (w->state != rspamd_worker_state_running) {
@@ -1199,7 +1227,8 @@ rspamd_cld_handler(EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 
 	/* Remove dead child form children list */
 	g_hash_table_remove(rspamd_main->workers, GSIZE_TO_POINTER(wrk->pid));
-	g_hash_table_remove_all(wrk->control_events_pending);
+	ev_io_stop(rspamd_main->event_loop, &wrk->control_ev);
+	rspamd_control_pending_remove_all(wrk->control_events_pending);
 
 	if (wrk->srv_pipe[0] != -1) {
 		/* Ugly workaround */
@@ -1241,7 +1270,7 @@ rspamd_cld_handler(EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 	}
 
 	REF_RELEASE(wrk->cf);
-	g_hash_table_unref(wrk->control_events_pending);
+	rspamd_control_pending_destroy(wrk->control_events_pending);
 	g_free(wrk);
 }
 
@@ -1356,11 +1385,7 @@ version(struct rspamd_main *rspamd_main)
 #else
 	rspamd_printf("BLAS enabled: FALSE\n");
 #endif
-#ifdef WITH_FASTTEXT
-	rspamd_printf("Fasttext enabled: TRUE\n");
-#else
-	rspamd_printf("Fasttext enabled: FALSE\n");
-#endif
+	rspamd_printf("Fasttext enabled: TRUE (built-in)\n");
 }
 
 static gboolean

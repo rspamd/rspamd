@@ -26,6 +26,7 @@
 #include "libserver/dkim.h"
 #include "libserver/task.h"
 #include "libserver/cfg_file_private.h"
+#include "libserver/settings_merge.h"
 #include "libmime/scan_result_private.h"
 #include "libstat/stat_api.h"
 #include "libserver/maps/map_helpers.h"
@@ -248,6 +249,8 @@ LUA_FUNCTION_DEF(task, append_message);
 /***
  * @method task:get_urls([need_emails|list_protos][, need_images])
  * Get all URLs found in a message. Telephone urls and emails are not included unless explicitly asked in `list_protos`
+ * Content URLs (extracted from PDF and other content types) are included by default unless
+ * `include_content_urls` global option is set to false.
  * @param {boolean} need_emails if `true` then return also email urls, this can be a comma separated string of protocols desired or a table (e.g. `mailto` or `telephone`)
  * @param {boolean} need_images return urls from images (<img src=...>) as well
  * @return {table rspamd_url} list of all urls found
@@ -495,6 +498,11 @@ LUA_FUNCTION_DEF(task, get_queue_id);
  * Returns ID of the task being processed.
  */
 LUA_FUNCTION_DEF(task, get_uid);
+/***
+ * @method task:get_uuid()
+ * Returns UUID v7 of the task (time-ordered, suitable for cross-system correlation).
+ */
+LUA_FUNCTION_DEF(task, get_uuid);
 /***
  * @method task:get_resolver()
  * Returns ready to use rspamd_resolver object suitable for making asynchronous DNS requests.
@@ -989,6 +997,15 @@ LUA_FUNCTION_DEF(task, set_settings);
 LUA_FUNCTION_DEF(task, set_settings_id);
 
 /***
+ * @method task:merge_and_apply_settings(layers)
+ * Merge multiple settings layers and apply the result.
+ * Each layer is a table: {level=N, name="str", settings_id=N, apply={...}}
+ * Layers are merged according to the settings merge rules.
+ * @param {table} layers array of layer tables
+ */
+LUA_FUNCTION_DEF(task, merge_and_apply_settings);
+
+/***
  * @method task:get_settings()
  * Gets users settings object for a task. The format of this object is described
  * [here](https://rspamd.com/doc/configuration/settings.html).
@@ -1362,6 +1379,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, get_received_headers),
 	LUA_INTERFACE_DEF(task, get_queue_id),
 	LUA_INTERFACE_DEF(task, get_uid),
+	LUA_INTERFACE_DEF(task, get_uuid),
 	LUA_INTERFACE_DEF(task, get_resolver),
 	LUA_INTERFACE_DEF(task, set_resolver),
 	LUA_INTERFACE_DEF(task, inc_dns_req),
@@ -1420,6 +1438,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, lookup_settings),
 	LUA_INTERFACE_DEF(task, get_settings_id),
 	LUA_INTERFACE_DEF(task, set_settings_id),
+	LUA_INTERFACE_DEF(task, merge_and_apply_settings),
 	LUA_INTERFACE_DEF(task, cache_get),
 	LUA_INTERFACE_DEF(task, cache_set),
 	LUA_INTERFACE_DEF(task, process_regexp),
@@ -2632,9 +2651,17 @@ lua_task_get_urls(lua_State *L)
 			return 1;
 		}
 
-		/* Exclude RSPAMD_URL_FLAG_CONTENT to preserve backward compatibility */
+		/*
+		 * By default, include content URLs if configured (default: true).
+		 * Always exclude image URLs unless explicitly requested.
+		 */
+		unsigned int default_flags = ~RSPAMD_URL_FLAG_IMAGE;
+		if (task->cfg && !task->cfg->include_content_urls) {
+			default_flags &= ~RSPAMD_URL_FLAG_CONTENT;
+		}
+
 		if (!lua_url_cbdata_fill(L, 2, &cb, default_protocols_mask,
-								 ~(RSPAMD_URL_FLAG_CONTENT | RSPAMD_URL_FLAG_IMAGE),
+								 default_flags,
 								 max_urls)) {
 			return luaL_error(L, "invalid arguments");
 		}
@@ -2923,6 +2950,7 @@ struct rspamd_url_query_to_inject_cbd {
 	struct rspamd_task *task;
 	struct rspamd_url *url;
 	GPtrArray *mpart_urls;
+	uint32_t parent_flags;
 };
 
 static gboolean
@@ -2936,10 +2964,13 @@ inject_url_query_callback(struct rspamd_url *url, gsize start_offset,
 	task = cbd->task;
 
 	url->flags |= RSPAMD_URL_FLAG_QUERY;
+	url->flags |= (cbd->parent_flags & RSPAMD_URL_FLAG_PROPAGATE_MASK);
 
-	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false) && cbd->mpart_urls) {
+	if (cbd->mpart_urls) {
 		g_ptr_array_add(cbd->mpart_urls, url);
 	}
+
+	rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false);
 
 	return TRUE;
 }
@@ -2954,6 +2985,7 @@ inject_url_query(struct rspamd_task *task, struct rspamd_url *url,
 		cbd.task = task;
 		cbd.url = url;
 		cbd.mpart_urls = part_urls;
+		cbd.parent_flags = url->flags;
 
 		rspamd_url_find_multiple(task->task_pool,
 								 rspamd_url_query_unsafe(url), url->querylen,
@@ -2981,10 +3013,10 @@ lua_task_inject_url(lua_State *L)
 					  rspamd_lua_check_udata_maybe(L, 3, rspamd_mimepart_classname));
 	}
 	if (task && task->message && url && url->url) {
-		if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false)) {
-			if (mpart && mpart->urls) {
-				inject_url_query(task, url->url, mpart->urls);
-			}
+		rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false);
+
+		if (mpart && mpart->urls) {
+			inject_url_query(task, url->url, mpart->urls);
 		}
 	}
 	else {
@@ -3095,8 +3127,17 @@ lua_task_get_emails(lua_State *L)
 				max_urls = task->cfg->max_lua_urls;
 			}
 
+			/*
+			 * By default, include content URLs if configured (default: true).
+			 * Always exclude image URLs unless explicitly requested.
+			 */
+			unsigned int default_flags = ~RSPAMD_URL_FLAG_IMAGE;
+			if (task->cfg && !task->cfg->include_content_urls) {
+				default_flags &= ~RSPAMD_URL_FLAG_CONTENT;
+			}
+
 			if (!lua_url_cbdata_fill(L, 2, &cb, PROTOCOL_MAILTO,
-									 ~(RSPAMD_URL_FLAG_CONTENT | RSPAMD_URL_FLAG_IMAGE),
+									 default_flags,
 									 max_urls)) {
 				return luaL_error(L, "invalid arguments");
 			}
@@ -3619,6 +3660,22 @@ lua_task_get_uid(lua_State *L)
 
 	if (task) {
 		lua_pushstring(L, task->task_pool->tag.uid);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_task_get_uuid(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+
+	if (task) {
+		lua_pushstring(L, task->task_uuid);
 	}
 	else {
 		return luaL_error(L, "invalid arguments");
@@ -6164,10 +6221,10 @@ lua_task_set_settings(lua_State *L)
 	if (settings != NULL && task != NULL) {
 
 		if (task->settings) {
-			/* Do not allow to set settings on top of the existing ones */
-			ucl_object_unref(settings);
-
-			return luaL_error(L, "invalid invocation: settings has been already set");
+			/* Replace existing settings (will be handled by merge in the future) */
+			msg_info_task("replacing existing settings with new ones");
+			ucl_object_unref(task->settings);
+			task->settings = NULL;
 		}
 
 		metric_elt = ucl_object_lookup(settings, DEFAULT_METRIC);
@@ -6306,6 +6363,133 @@ lua_task_set_settings(lua_State *L)
 	}
 
 	return 0;
+}
+
+static int
+lua_task_merge_and_apply_settings(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+
+	if (task == NULL || !lua_istable(L, 2)) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	struct rspamd_settings_merge_ctx *ctx =
+		rspamd_settings_merge_ctx_create(task->task_pool, task->cfg);
+
+	/* Iterate the layers table */
+	for (lua_pushnil(L); lua_next(L, 2); lua_pop(L, 1)) {
+		if (!lua_istable(L, -1)) {
+			continue;
+		}
+
+		lua_getfield(L, -1, "level");
+		int level = lua_tointeger(L, -1);
+		lua_pop(L, 1);
+
+		lua_getfield(L, -1, "name");
+		const char *name = lua_tostring(L, -1);
+		lua_pop(L, 1);
+
+		lua_getfield(L, -1, "settings_id");
+		uint32_t settings_id = lua_tointeger(L, -1);
+		lua_pop(L, 1);
+
+		lua_getfield(L, -1, "apply");
+		if (lua_istable(L, -1)) {
+			ucl_object_t *apply_obj = ucl_object_lua_import(L, lua_gettop(L));
+			if (apply_obj) {
+				rspamd_settings_merge_add_layer(ctx,
+												(enum rspamd_settings_layer) level,
+												name ? name : "unknown",
+												settings_id,
+												apply_obj);
+				ucl_object_unref(apply_obj);
+			}
+		}
+		lua_pop(L, 1); /* pop apply */
+	}
+
+	ucl_object_t *merged = rspamd_settings_merge_finalize(ctx);
+
+	if (merged) {
+		/* Apply via set_settings path */
+		if (task->settings) {
+			ucl_object_unref(task->settings);
+		}
+		task->settings = merged;
+
+		/* Apply actions overrides */
+		const ucl_object_t *act = ucl_object_lookup(task->settings, "actions");
+		if (act && ucl_object_type(act) == UCL_OBJECT) {
+			struct rspamd_scan_result *mres = task->result;
+			ucl_object_iter_t it = NULL;
+			const ucl_object_t *cur;
+
+			while ((cur = ucl_object_iterate(act, &it, true)) != NULL) {
+				const char *act_name = ucl_object_key(cur);
+				enum rspamd_action_type act_type;
+
+				if (!rspamd_action_from_str(act_name, &act_type)) {
+					act_type = -1;
+				}
+
+				for (unsigned int i = 0; i < mres->nactions; i++) {
+					struct rspamd_action_config *cur_act = &mres->actions_config[i];
+					gboolean matched = FALSE;
+
+					if (cur_act->action->action_type == METRIC_ACTION_CUSTOM && act_type == -1) {
+						matched = g_ascii_strcasecmp(act_name, cur_act->action->name) == 0;
+					}
+					else {
+						matched = cur_act->action->action_type == act_type;
+					}
+
+					if (matched) {
+						if (ucl_object_type(cur) == UCL_NULL) {
+							cur_act->flags |= RSPAMD_ACTION_RESULT_DISABLED;
+						}
+						else {
+							double act_score = ucl_object_todouble(cur);
+							if (isnan(act_score)) {
+								cur_act->flags |= RSPAMD_ACTION_RESULT_NO_THRESHOLD;
+							}
+							else {
+								cur_act->cur_limit = act_score;
+							}
+						}
+						break;
+					}
+				}
+			}
+		}
+
+		/* Apply variables */
+		const ucl_object_t *vars = ucl_object_lookup(task->settings, "variables");
+		if (vars && ucl_object_type(vars) == UCL_OBJECT) {
+			ucl_object_iter_t it = NULL;
+			const ucl_object_t *cur;
+
+			while ((cur = ucl_object_iterate(vars, &it, true)) != NULL) {
+				if (ucl_object_type(cur) == UCL_STRING) {
+					rspamd_mempool_set_variable(task->task_pool,
+												ucl_object_key(cur),
+												rspamd_mempool_strdup(task->task_pool,
+																	  ucl_object_tostring(cur)),
+												NULL);
+				}
+			}
+		}
+
+		rspamd_symcache_process_settings(task, task->cfg->cache);
+		lua_pushboolean(L, 1);
+	}
+	else {
+		lua_pushboolean(L, 0);
+	}
+
+	return 1;
 }
 
 static int

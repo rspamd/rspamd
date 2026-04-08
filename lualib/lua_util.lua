@@ -1170,7 +1170,7 @@ end
 - - prefix <string> cache prefix (default = nil)
 - - ignore_redirected <bool> (default = false)
 - - need_images <bool> (default = false)
-- - need_content <bool> (default = false)
+- - need_content <bool> (default = nil, uses global include_content_urls config which defaults to true)
 -- }
 -- Apply heuristic in extracting of urls from task, this function
 -- tries its best to extract specific number of urls from a task based on
@@ -1183,7 +1183,7 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
     esld_limit = 9999,
     need_emails = false,
     need_images = false,
-    need_content = false,
+    need_content = nil, -- nil means use global include_content_urls config (default: true)
     filter = nil,
     prefix = nil,
     ignore_ip = false,
@@ -1227,10 +1227,11 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
       if params.flags then
         cache_key_suffix = table.concat(params.flags) .. (params.flags_mode or '')
       else
+        -- Use tostring directly to distinguish nil (config default) from false (explicit exclude)
         cache_key_suffix = string.format('%s%s%s',
           tostring(params.need_emails or false),
           tostring(params.need_images or false),
-          tostring(params.need_content or false))
+          tostring(params.need_content)) -- nil = config default, false = explicit exclude
       end
       cache_key = string.format('sp_urls_%d%s', params.limit, cache_key_suffix)
     end
@@ -1674,6 +1675,62 @@ end
 exports.table_digest = table_digest
 
 ---[[[
+-- @function lua_util.unordered_table_digest(t)
+-- Returns a hash of table contents that is independent of iteration order.
+-- Uses XXH3 fast hash with XOR accumulation for O(n) performance.
+-- All value types (string, number, boolean, table) are included in the hash.
+-- @param {table} t input array or map
+-- @return {string} hex representation of the 64-bit hash
+--]]]
+local function unordered_table_digest(t)
+  local cr = require "rspamd_cryptobox"
+  local bit = require "bit"
+
+  -- Internal function that returns high/low 32-bit parts
+  local function digest_impl(tbl)
+    local acc_hi, acc_lo = 0, 0
+
+    if tbl[1] ~= nil then
+      -- Array: order matters, so include index in hash
+      for i, e in ipairs(tbl) do
+        local str
+        if type(e) == 'table' then
+          -- Recursively compute digest for nested table
+          str = tostring(i) .. '\0' .. digest_impl(e)
+        else
+          str = tostring(i) .. '\0' .. tostring(e)
+        end
+        local hi, lo = cr.fast_hash64(str)
+        acc_hi = bit.bxor(acc_hi, hi)
+        acc_lo = bit.bxor(acc_lo, lo)
+      end
+    else
+      -- Map: order doesn't matter, XOR all k-v hashes
+      for k, v in pairs(tbl) do
+        local str
+        if type(v) == 'table' then
+          -- Recursively compute digest for nested table
+          str = tostring(k) .. '\0' .. digest_impl(v)
+        else
+          str = tostring(k) .. '\0' .. tostring(v)
+        end
+        local hi, lo = cr.fast_hash64(str)
+        acc_hi = bit.bxor(acc_hi, hi)
+        acc_lo = bit.bxor(acc_lo, lo)
+      end
+    end
+
+    -- Return as hex string for nested calls
+    -- Use bit.tohex() which properly handles signed 32-bit values
+    return bit.tohex(acc_hi) .. bit.tohex(acc_lo)
+  end
+
+  return digest_impl(t)
+end
+
+exports.unordered_table_digest = unordered_table_digest
+
+---[[[
 -- @function lua_util.toboolean(v)
 -- Converts a string or a number to boolean
 -- @param {string|number} v
@@ -1693,7 +1750,9 @@ exports.toboolean = function(v)
     ['False'] = false,
   };
 
-  if type(v) == 'string' then
+  if type(v) == 'boolean' then
+    return v
+  elseif type(v) == 'string' then
     if true_t[v] == true then
       return true;
     elseif false_t[v] == false then

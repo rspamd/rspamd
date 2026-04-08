@@ -118,7 +118,7 @@ local function avast_check(task, content, digest, rule, maybe_part)
     local message_fd = rspamd_util.create_file(fname)
 
     if not message_fd then
-      rspamd_logger.errx('cannot store file for avast scan: %s', fname)
+      rspamd_logger.errx(task, 'cannot store file for avast scan: %s', fname)
       return
     end
 

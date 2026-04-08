@@ -135,9 +135,10 @@ using order_generation_ptr = std::shared_ptr<order_generation>;
 struct delayed_cache_dependency {
 	std::string from;
 	std::string to;
+	bool hard;
 
-	delayed_cache_dependency(std::string_view _from, std::string_view _to)
-		: from(_from), to(_to)
+	delayed_cache_dependency(std::string_view _from, std::string_view _to, bool _hard = false)
+		: from(_from), to(_to), hard(_hard)
 	{
 	}
 };
@@ -285,6 +286,13 @@ private:
 	std::unique_ptr<delayed_symbol_names> disabled_symbols;
 	std::unique_ptr<delayed_symbol_names> enabled_symbols;
 
+	/* Pending settings operations for symbols not yet registered */
+	struct pending_settings_op {
+		struct rspamd_config_settings_elt *elt;
+		bool is_enabled; /* true = symbols_enabled, false = symbols_disabled */
+	};
+	ankerl::unordered_dense::map<std::string, std::vector<pending_settings_op>> pending_settings_ops;
+
 	rspamd_mempool_t *static_pool;
 	std::uint64_t cksum;
 	double total_weight;
@@ -365,20 +373,20 @@ public:
 	 * @param virtual_id_from
 	 * @return
 	 */
-	auto add_dependency(int id_from, std::string_view to, int id_to, int virtual_id_from) -> void;
+	auto add_dependency(int id_from, std::string_view to, int id_to, int virtual_id_from, bool hard = false) -> void;
 
 	/**
 	 * Add a delayed dependency between symbols that will be resolved on the init stage
 	 * @param from
 	 * @param to
 	 */
-	auto add_delayed_dependency(std::string_view from, std::string_view to) -> void
+	auto add_delayed_dependency(std::string_view from, std::string_view to, bool hard = false) -> void
 	{
 		if (!delayed_deps) {
 			delayed_deps = std::make_unique<std::vector<delayed_cache_dependency>>();
 		}
 
-		delayed_deps->emplace_back(from, to);
+		delayed_deps->emplace_back(from, to, hard);
 	}
 
 	/**
@@ -638,6 +646,12 @@ public:
 	 * @param elt
 	 */
 	auto process_settings_elt(struct rspamd_config_settings_elt *elt) -> void;
+
+	/**
+	 * Apply any pending settings operations for a newly registered symbol
+	 * @param item
+	 */
+	auto apply_pending_settings(cache_item *item) -> void;
 
 	/**
 	 * Returns maximum timeout that is requested by all rules

@@ -174,10 +174,14 @@ local default_can_learn_settings = {
   },
   probability_check = {
     enabled = true,
-    variable = 'bayes_prob',
+    -- 'can_learn_prob' is written by the C layer (rspamd_stat_classifier_is_skipped)
+    -- before invoking this condition. It holds the per-classifier, per-class
+    -- probability so each classifier's can_learn decision is independent.
+    variable = 'can_learn_prob',
     ctype = 'double',
-    spam_min = 0.95,
-    ham_max = 0.05,
+    -- Unified threshold: >= min_prob means "already in this class, skip learning".
+    -- Replaces the old asymmetric spam_min/ham_max pair.
+    min_prob = 0.95,
     skip_for_unlearn = false,
     require_value = false,
   },
@@ -250,11 +254,6 @@ exports.unregister_autolearn_guard = function(name)
   unregister_guard(autolearn_guards, name)
 end
 
-local function format_probability_message(ctx, prob, cl)
-  local pct = math.abs((prob - 0.5) * 200.0)
-
-  return string.format('already in class %s; probability %.2f%%', cl, pct)
-end
 
 --- Determines if a message can be learned by Bayes
 -- @param task rspamd_task
@@ -363,22 +362,25 @@ exports.can_learn = function(task, is_spam, is_unlearn, overrides)
         if probability_opts.check and type(probability_opts.check) == 'function' then
           in_class, guard_msg = probability_opts.check(ctx, prob)
         else
-          if is_spam then
-            in_class = prob >= (probability_opts.spam_min or 0.95)
-          else
-            in_class = prob <= (probability_opts.ham_max or 0.05)
-          end
+          -- Unified check: high probability means the message is already confidently
+          -- in the target class (works for both binary spam/ham and multiclass).
+          -- can_learn_prob is set per-classifier by C so there is no cross-contamination.
+          in_class = prob >= (probability_opts.min_prob or
+                              probability_opts.spam_min or 0.95)
         end
 
         if in_class then
-          local cl = is_spam and 'spam' or 'ham'
+          -- class name is written by C before invoking this condition
+          local cl = task:get_mempool():get_variable('can_learn_class') or
+              (is_spam and 'spam' or 'ham')
           local reason
 
           if probability_opts.message_formatter and type(probability_opts.message_formatter) == 'function' then
             reason = probability_opts.message_formatter(ctx, prob, cl) or guard_msg
           end
 
-          reason = reason or guard_msg or format_probability_message(ctx, prob, cl)
+          reason = reason or guard_msg or
+              string.format('already in class %s; probability %.2f%%', cl, prob * 100.0)
 
           ctx.result.guard = 'probability_check'
           ctx.result.reason = reason

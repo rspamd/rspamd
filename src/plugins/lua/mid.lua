@@ -115,6 +115,7 @@ if opts then
             settings['symbol_known_no_mid'],
             settings['symbol_missing_mid']))
 
+    -- Weak: reads R_DKIM_ALLOW options but works without them
     rspamd_config:register_dependency('KNOWN_MID_CALLBACK', 'DKIM_CHECK')
   else
     rspamd_logger.infox(rspamd_config, 'source is not a valid map definition, disabling module')

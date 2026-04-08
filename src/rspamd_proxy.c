@@ -27,6 +27,7 @@
 #include "libmime/message.h"
 #include "rspamd.h"
 #include "libserver/worker_util.h"
+#include "libserver/ssl_util.h"
 #include "worker_private.h"
 #include "lua/lua_common.h"
 #include "keypairs_cache.h"
@@ -36,6 +37,8 @@
 #include "libserver/milter.h"
 #include "libserver/milter_internal.h"
 #include "libmime/lang_detection.h"
+#include "libmime/content_type.h"
+#include "libserver/multipart_form.h"
 
 #include <math.h>
 #include <string.h>
@@ -121,6 +124,7 @@ struct rspamd_http_mirror {
 	gboolean compress;
 	gboolean ssl;
 	gboolean keepalive; /* Whether to use keepalive for this mirror */
+	gboolean follow_master; /* Tie mirror lifetime to master upstream */
 	enum rspamd_proxy_log_tag_type log_tag_type;
 	ucl_object_t *extra_headers;
 };
@@ -178,12 +182,19 @@ struct rspamd_proxy_ctx {
 	/* Default log tag type for worker */
 	enum rspamd_proxy_log_tag_type log_tag_type;
 	struct rspamd_main *srv;
+	/* SSL cert */
+	char *ssl_cert;
+	/* SSL private key */
+	char *ssl_key;
+	/* Server SSL context */
+	gpointer server_ssl_ctx;
 };
 
 enum rspamd_backend_flags {
 	RSPAMD_BACKEND_REPLIED = 1 << 0,
 	RSPAMD_BACKEND_CLOSED = 1 << 1,
 	RSPAMD_BACKEND_PARSED = 1 << 2,
+	RSPAMD_BACKEND_FOLLOW_MASTER = 1 << 3,
 };
 
 struct rspamd_proxy_session;
@@ -203,6 +214,9 @@ struct rspamd_proxy_backend_connection {
 	int parser_from_ref;
 	int parser_to_ref;
 	struct rspamd_task *task;
+	gsize reserved_tokens; /* Tokens reserved for this request (token bucket) */
+	const char *body_data; /* Extracted body from multipart response */
+	gsize body_len;
 };
 
 enum rspamd_proxy_legacy_support {
@@ -571,11 +585,6 @@ rspamd_proxy_parse_upstream(rspamd_mempool_t *pool,
 		up->keepalive = TRUE;
 	}
 
-	elt = ucl_object_lookup_any(obj, "keepalive", "keep_alive", NULL);
-	if (elt && ucl_object_toboolean(elt)) {
-		up->keepalive = TRUE;
-	}
-
 	elt = ucl_object_lookup(obj, "hosts");
 
 	if (elt == NULL && !up->self_scan) {
@@ -644,6 +653,53 @@ rspamd_proxy_parse_upstream(rspamd_mempool_t *pool,
 	elt = ucl_object_lookup_any(obj, "log_tag", "log_tag_type", NULL);
 	if (elt && ucl_object_type(elt) == UCL_STRING) {
 		up->log_tag_type = rspamd_proxy_parse_log_tag_type(ucl_object_tostring(elt));
+	}
+
+	/* Parse token_bucket configuration for weighted load balancing */
+	elt = ucl_object_lookup(obj, "token_bucket");
+	if (elt != NULL && ucl_object_type(elt) == UCL_OBJECT && up->u != NULL) {
+		gsize max_tokens = 10000, scale = 1024, min_tokens = 1, base_cost = 10;
+		const ucl_object_t *tb_elt;
+
+		if ((tb_elt = ucl_object_lookup(elt, "max_tokens")) != NULL) {
+			max_tokens = ucl_object_toint(tb_elt);
+			if (max_tokens == 0) {
+				msg_warn_pool("token_bucket.max_tokens must be > 0, using default 10000");
+				max_tokens = 10000;
+			}
+		}
+		if ((tb_elt = ucl_object_lookup(elt, "scale")) != NULL) {
+			scale = ucl_object_toint(tb_elt);
+			if (scale == 0) {
+				msg_warn_pool("token_bucket.scale cannot be 0 (division by zero), using default 1024");
+				scale = 1024;
+			}
+		}
+		if ((tb_elt = ucl_object_lookup(elt, "min_tokens")) != NULL) {
+			min_tokens = ucl_object_toint(tb_elt);
+		}
+		if ((tb_elt = ucl_object_lookup(elt, "base_cost")) != NULL) {
+			base_cost = ucl_object_toint(tb_elt);
+		}
+
+		/* Validate relationships */
+		if (min_tokens > max_tokens) {
+			msg_warn_pool("token_bucket.min_tokens (%zu) > max_tokens (%zu), clamping",
+						  min_tokens, max_tokens);
+			min_tokens = max_tokens;
+		}
+		if (base_cost >= max_tokens) {
+			msg_warn_pool("token_bucket.base_cost (%zu) >= max_tokens (%zu), reducing to max/2",
+						  base_cost, max_tokens);
+			base_cost = max_tokens / 2;
+		}
+
+		/* Enable token bucket rotation and configure parameters */
+		rspamd_upstreams_set_rotation(up->u, RSPAMD_UPSTREAM_TOKEN_BUCKET);
+		rspamd_upstreams_set_token_bucket(up->u, max_tokens, scale, min_tokens, base_cost);
+
+		msg_info_pool_check("upstream %s: token_bucket enabled (max=%zu, scale=%zu, min=%zu, base=%zu)",
+							up->name, max_tokens, scale, min_tokens, base_cost);
 	}
 
 	/*
@@ -801,9 +857,24 @@ rspamd_proxy_parse_mirror(rspamd_mempool_t *pool,
 		up->compress = TRUE;
 	}
 
+	elt = ucl_object_lookup(obj, "ssl");
+	if (elt && ucl_object_toboolean(elt)) {
+		up->ssl = TRUE;
+	}
+
+	elt = ucl_object_lookup_any(obj, "keepalive", "keep_alive", NULL);
+	if (elt && ucl_object_toboolean(elt)) {
+		up->keepalive = TRUE;
+	}
+
 	elt = ucl_object_lookup(obj, "timeout");
 	if (elt) {
 		ucl_object_todouble_safe(elt, &up->timeout);
+	}
+
+	elt = ucl_object_lookup(obj, "follow_master");
+	if (elt && ucl_object_toboolean(elt)) {
+		up->follow_master = TRUE;
 	}
 
 	/*
@@ -1006,6 +1077,22 @@ init_rspamd_proxy(struct rspamd_config *cfg)
 									  "Allow only encrypted connections");
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
+									  "ssl_cert",
+									  rspamd_rcl_parse_struct_string,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_proxy_ctx, ssl_cert),
+									  0,
+									  "Path to SSL certificate chain file");
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "ssl_key",
+									  rspamd_rcl_parse_struct_string,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_proxy_ctx, ssl_key),
+									  0,
+									  "Path to SSL private key file");
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
 									  "upstream",
 									  rspamd_proxy_parse_upstream,
 									  ctx,
@@ -1119,6 +1206,12 @@ static void
 proxy_backend_close_connection(struct rspamd_proxy_backend_connection *conn)
 {
 	if (conn && !(conn->flags & RSPAMD_BACKEND_CLOSED)) {
+		/* Return any reserved tokens if not already returned (safety net) */
+		if (conn->reserved_tokens > 0 && conn->up) {
+			rspamd_upstream_return_tokens(conn->up, conn->reserved_tokens, FALSE);
+			conn->reserved_tokens = 0;
+		}
+
 		if (conn->backend_conn) {
 			rspamd_http_connection_reset(conn->backend_conn);
 			rspamd_http_connection_unref(conn->backend_conn);
@@ -1185,6 +1278,159 @@ proxy_backend_parse_results(struct rspamd_proxy_session *session,
 
 		conn->results = ucl_object_lua_import(L, -1);
 		lua_settop(L, 0);
+	}
+	else if (ct && rspamd_substring_search_caseless(ct->begin, ct->len,
+													"multipart/mixed", sizeof("multipart/mixed") - 1) != -1) {
+		/* V3 multipart/mixed response */
+		struct rspamd_content_type *parsed_ct = rspamd_content_type_parse(
+			ct->begin, ct->len, session->pool);
+
+		if (!parsed_ct || parsed_ct->boundary.len == 0) {
+			msg_err_session("cannot extract boundary from multipart Content-Type");
+			return FALSE;
+		}
+
+		struct rspamd_multipart_form_c *form = rspamd_multipart_form_parse(
+			in, inlen, parsed_ct->boundary.begin, parsed_ct->boundary.len);
+
+		if (!form) {
+			msg_err_session("cannot parse multipart/mixed response");
+			return FALSE;
+		}
+
+		const struct rspamd_multipart_entry_c *result_part =
+			rspamd_multipart_form_find(form, "result", sizeof("result") - 1);
+
+		if (!result_part) {
+			msg_err_session("no 'result' part in multipart response");
+			rspamd_multipart_form_free(form);
+			return FALSE;
+		}
+
+		const char *result_data = result_part->data;
+		gsize result_len = result_part->data_len;
+		unsigned char *decompressed = NULL;
+
+		/* Check for per-part zstd compression */
+		if (result_part->content_encoding &&
+			result_part->content_encoding_len > 0 &&
+			rspamd_substring_search_caseless(result_part->content_encoding,
+											 result_part->content_encoding_len,
+											 "zstd", 4) != -1) {
+			ZSTD_DStream *zstream = ZSTD_createDStream();
+			ZSTD_initDStream(zstream);
+			ZSTD_inBuffer zin = {result_data, result_len, 0};
+			gsize outlen = ZSTD_getDecompressedSize(result_data, result_len);
+			if (outlen == 0) outlen = ZSTD_DStreamOutSize();
+			decompressed = g_malloc(outlen);
+			ZSTD_outBuffer zout = {decompressed, outlen, 0};
+
+			while (zin.pos < zin.size) {
+				gsize r = ZSTD_decompressStream(zstream, &zout, &zin);
+				if (ZSTD_isError(r)) {
+					g_free(decompressed);
+					ZSTD_freeDStream(zstream);
+					rspamd_multipart_form_free(form);
+					msg_err_session("result decompression error: %s",
+									ZSTD_getErrorName(r));
+					return FALSE;
+				}
+				if (zout.pos == zout.size) {
+					zout.size *= 2;
+					decompressed = g_realloc(zout.dst, zout.size);
+					zout.dst = decompressed;
+				}
+			}
+			ZSTD_freeDStream(zstream);
+			result_data = (const char *) zout.dst;
+			result_len = zout.pos;
+		}
+
+		/* Parse UCL from result part */
+		parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
+
+		if (result_part->content_type &&
+			rspamd_substring_search_caseless(result_part->content_type,
+											 result_part->content_type_len,
+											 "msgpack", 7) != -1) {
+			ucl_parser_add_chunk_full(parser, (const unsigned char *) result_data,
+									  result_len,
+									  ucl_parser_get_default_priority(parser),
+									  UCL_DUPLICATE_APPEND, UCL_PARSE_MSGPACK);
+		}
+		else {
+			ucl_parser_add_chunk(parser, (const unsigned char *) result_data, result_len);
+		}
+
+		g_free(decompressed);
+
+		if (ucl_parser_get_error(parser)) {
+			msg_err_session("cannot parse result UCL: %s",
+							ucl_parser_get_error(parser));
+			ucl_parser_free(parser);
+			rspamd_multipart_form_free(form);
+			return FALSE;
+		}
+
+		conn->results = ucl_parser_get_object(parser);
+		ucl_parser_free(parser);
+
+		/* Extract optional body part for milter */
+		const struct rspamd_multipart_entry_c *body_part_entry =
+			rspamd_multipart_form_find(form, "body", sizeof("body") - 1);
+
+		if (body_part_entry && body_part_entry->data_len > 0) {
+			const char *bp_data = body_part_entry->data;
+			gsize bp_len = body_part_entry->data_len;
+
+			/* Check for per-part zstd compression on body */
+			if (body_part_entry->content_encoding &&
+				body_part_entry->content_encoding_len > 0 &&
+				rspamd_substring_search_caseless(body_part_entry->content_encoding,
+												 body_part_entry->content_encoding_len,
+												 "zstd", 4) != -1) {
+				ZSTD_DStream *zstream = ZSTD_createDStream();
+				ZSTD_initDStream(zstream);
+				ZSTD_inBuffer zin = {bp_data, bp_len, 0};
+				gsize outlen = ZSTD_getDecompressedSize(bp_data, bp_len);
+				if (outlen == 0) outlen = ZSTD_DStreamOutSize();
+				unsigned char *bp_decompressed = g_malloc(outlen);
+				ZSTD_outBuffer zout = {bp_decompressed, outlen, 0};
+				gboolean decompress_ok = TRUE;
+
+				while (zin.pos < zin.size) {
+					gsize r = ZSTD_decompressStream(zstream, &zout, &zin);
+					if (ZSTD_isError(r)) {
+						msg_warn_session("body decompression error: %s",
+										 ZSTD_getErrorName(r));
+						decompress_ok = FALSE;
+						break;
+					}
+					if (zout.pos == zout.size) {
+						zout.size *= 2;
+						bp_decompressed = g_realloc(zout.dst, zout.size);
+						zout.dst = bp_decompressed;
+					}
+				}
+				ZSTD_freeDStream(zstream);
+
+				if (decompress_ok) {
+					/* Copy to pool so it persists */
+					conn->body_data = rspamd_mempool_alloc(session->pool, zout.pos);
+					memcpy((void *) conn->body_data, zout.dst, zout.pos);
+					conn->body_len = zout.pos;
+				}
+				g_free(bp_decompressed);
+			}
+			else {
+				/* Uncompressed body — copy to pool */
+				conn->body_data = rspamd_mempool_alloc(session->pool, bp_len);
+				memcpy((void *) conn->body_data, bp_data, bp_len);
+				conn->body_len = bp_len;
+			}
+		}
+
+		rspamd_multipart_form_free(form);
 	}
 	else {
 		rspamd_ftok_t json_ct;
@@ -1342,7 +1588,13 @@ proxy_session_dtor(struct rspamd_proxy_session *session)
 		rspamd_mempool_delete(session->pool);
 	}
 
-	session->worker->nconns--;
+	/* For milter sessions nconns is decremented explicitly when the MTA TCP
+	 * connection closes (proxy_milter_finish_handler / proxy_milter_error_handler)
+	 * because proxy_session_refresh creates a new session per message — each
+	 * intermediate session would otherwise decrement nconns prematurely. */
+	if (!session->ctx->milter) {
+		session->worker->nconns--;
+	}
 
 	g_free(session);
 }
@@ -1787,6 +2039,12 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 						bk_conn->s = session;
 						bk_conn->name = m->name;
 						bk_conn->timeout = m->timeout;
+
+						if (m->follow_master) {
+							bk_conn->flags |= RSPAMD_BACKEND_FOLLOW_MASTER;
+							bk_conn->timeout = session->ctx->timeout;
+						}
+
 						bk_conn->parser_from_ref = m->parser_from_ref;
 						bk_conn->parser_to_ref = m->parser_to_ref;
 						bk_conn->backend_conn = conn;
@@ -1911,6 +2169,11 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 		bk_conn->s = session;
 		bk_conn->name = m->name;
 		bk_conn->timeout = m->timeout;
+
+		if (m->follow_master) {
+			bk_conn->flags |= RSPAMD_BACKEND_FOLLOW_MASTER;
+			bk_conn->timeout = session->ctx->timeout;
+		}
 
 		bk_conn->up = rspamd_upstream_get(m->u,
 										  RSPAMD_UPSTREAM_ROUND_ROBIN, NULL, 0);
@@ -2099,6 +2362,26 @@ proxy_client_write_error(struct rspamd_proxy_session *session, int code,
 }
 
 static void
+proxy_close_follow_master_mirrors(struct rspamd_proxy_session *session)
+{
+	if (session->mirror_conns == NULL) {
+		return;
+	}
+
+	for (unsigned int i = 0; i < session->mirror_conns->len; i++) {
+		struct rspamd_proxy_backend_connection *bk_conn =
+			g_ptr_array_index(session->mirror_conns, i);
+
+		if (bk_conn && (bk_conn->flags & RSPAMD_BACKEND_FOLLOW_MASTER) &&
+			!(bk_conn->flags & RSPAMD_BACKEND_CLOSED)) {
+			msg_debug_session("closing follow_master mirror %s", bk_conn->name);
+			proxy_backend_close_connection(bk_conn);
+			REF_RELEASE(session);
+		}
+	}
+}
+
+static void
 proxy_backend_master_error_handler(struct rspamd_http_connection *conn, GError *err)
 {
 	struct rspamd_proxy_backend_connection *bk_conn = conn->ud;
@@ -2113,6 +2396,13 @@ proxy_backend_master_error_handler(struct rspamd_http_connection *conn, GError *
 											  : "self-scan",
 					 err,
 					 session->ctx->max_retries - session->retries);
+
+	/* Return reserved tokens on error (token bucket load balancing) */
+	if (bk_conn->reserved_tokens > 0 && bk_conn->up) {
+		rspamd_upstream_return_tokens(bk_conn->up, bk_conn->reserved_tokens, FALSE);
+		bk_conn->reserved_tokens = 0;
+	}
+
 	rspamd_upstream_fail(bk_conn->up, FALSE, err ? err->message : "unknown");
 	proxy_backend_close_connection(session->master_conn);
 
@@ -2121,6 +2411,8 @@ proxy_backend_master_error_handler(struct rspamd_http_connection *conn, GError *
 		msg_err_session("cannot connect to upstream, maximum retries "
 						"has been reached: %d",
 						session->retries);
+		/* Close follow_master mirrors since master is done */
+		proxy_close_follow_master_mirrors(session);
 		/* Terminate session immediately */
 		if (err) {
 			proxy_client_write_error(session, err->code, err->message);
@@ -2215,6 +2507,12 @@ proxy_backend_master_finish_handler(struct rspamd_http_connection *conn,
 		}
 	}
 
+	/* Return reserved tokens on success (token bucket load balancing) */
+	if (bk_conn->reserved_tokens > 0 && bk_conn->up) {
+		rspamd_upstream_return_tokens(bk_conn->up, bk_conn->reserved_tokens, TRUE);
+		bk_conn->reserved_tokens = 0;
+	}
+
 	rspamd_upstream_ok(bk_conn->up);
 
 	/* Handle keepalive for master connection */
@@ -2236,7 +2534,14 @@ proxy_backend_master_finish_handler(struct rspamd_http_connection *conn,
 	if (session->client_milter_conn) {
 		nsession = proxy_session_refresh(session);
 
-		if (body_offset > 0) {
+		if (bk_conn->body_data && bk_conn->body_len > 0) {
+			/* Body extracted from multipart response (v3) */
+			rspamd_milter_send_task_results(nsession->client_milter_conn,
+											session->master_conn->results,
+											bk_conn->body_data,
+											bk_conn->body_len);
+		}
+		else if (body_offset > 0) {
 			rspamd_milter_send_task_results(nsession->client_milter_conn,
 											session->master_conn->results,
 											msg->body_buf.begin + body_offset,
@@ -2260,6 +2565,7 @@ proxy_backend_master_finish_handler(struct rspamd_http_connection *conn,
 			}
 		}
 
+		proxy_close_follow_master_mirrors(session);
 		REF_RELEASE(session);
 		rspamd_http_message_free(msg);
 	}
@@ -2282,6 +2588,7 @@ proxy_backend_master_finish_handler(struct rspamd_http_connection *conn,
 			proxy_request_compress(msg);
 		}
 
+		proxy_close_follow_master_mirrors(session);
 		rspamd_http_connection_write_message(session->client_conn,
 											 msg, NULL, passed_ct, session,
 											 bk_conn->timeout);
@@ -2333,6 +2640,12 @@ rspamd_proxy_scan_self_reply(struct rspamd_task *task)
 	case CMD_CHECK_V2:
 		rspamd_task_set_finish_time(task);
 		rspamd_protocol_http_reply(msg, task, &rep, out_type);
+		rspamd_protocol_write_log_pipe(task);
+		break;
+	case CMD_CHECK_V3:
+		rspamd_task_set_finish_time(task);
+		rep = rspamd_protocol_write_ucl(task, RSPAMD_PROTOCOL_DEFAULT | RSPAMD_PROTOCOL_URLS);
+		ctype = rspamd_protocol_http_reply_v3(msg, task);
 		rspamd_protocol_write_log_pipe(task);
 		break;
 	case CMD_PING:
@@ -2506,6 +2819,12 @@ rspamd_proxy_self_scan(struct rspamd_proxy_session *session)
 		if (task->cmd == CMD_PING || task->cmd == CMD_METRICS) {
 			task->flags |= RSPAMD_TASK_FLAG_SKIP;
 		}
+		else if (task->cmd == CMD_CHECK_V3) {
+			if (!rspamd_protocol_handle_v3_request(task, msg, data, len)) {
+				msg_err_task("cannot handle v3 request: %e", task->err);
+				task->flags |= RSPAMD_TASK_FLAG_SKIP;
+			}
+		}
 		else {
 			if (!rspamd_task_load_message(task, msg, data, len)) {
 				msg_err_task("cannot load message: %e", task->err);
@@ -2514,22 +2833,16 @@ rspamd_proxy_self_scan(struct rspamd_proxy_session *session)
 		}
 	}
 
-	/* Set global timeout for the task */
-	if (session->ctx->default_upstream->timeout > 0.0) {
+	/* Set global timeout for the task: use task_timeout (derived from
+	 * cfg->task_timeout) rather than default_upstream->timeout, which is the
+	 * milter/HTTP wire timeout and can be much larger (e.g. 120s) than the
+	 * intended task processing limit. */
+	if (!isnan(session->ctx->task_timeout) && session->ctx->task_timeout > 0.0) {
 		task->timeout_ev.data = task;
 		ev_timer_init(&task->timeout_ev, rspamd_task_timeout,
-					  session->ctx->default_upstream->timeout,
-					  session->ctx->default_upstream->timeout);
+					  session->ctx->task_timeout,
+					  session->ctx->task_timeout);
 		ev_timer_start(task->event_loop, &task->timeout_ev);
-	}
-	else if (session->ctx->has_self_scan) {
-		if (!isnan(session->ctx->task_timeout) && session->ctx->task_timeout > 0) {
-			task->timeout_ev.data = task;
-			ev_timer_init(&task->timeout_ev, rspamd_task_timeout,
-						  session->ctx->cfg->task_timeout,
-						  session->ctx->default_upstream->timeout);
-			ev_timer_start(task->event_loop, &task->timeout_ev);
-		}
 	}
 
 	session->master_conn->task = task;
@@ -2602,8 +2915,30 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 		gpointer hash_key = rspamd_inet_address_get_hash_key(session->client_addr,
 															 &hash_len);
 
-		if (session->ctx->max_retries > 1 &&
-			session->retries == session->ctx->max_retries) {
+		/* Initialize reserved_tokens to 0 */
+		session->master_conn->reserved_tokens = 0;
+
+		/* Check if token bucket algorithm is configured */
+		if (rspamd_upstreams_get_rotation(backend->u) == RSPAMD_UPSTREAM_TOKEN_BUCKET) {
+			/* Calculate message size for token bucket */
+			gsize message_size = 0;
+
+			if (session->map && session->map_len) {
+				message_size = session->map_len;
+			}
+			else if (session->client_message && session->client_message->body_buf.len > 0) {
+				message_size = session->client_message->body_buf.len;
+			}
+
+			/* Use token bucket selection */
+			session->master_conn->up = rspamd_upstream_get_token_bucket(
+				backend->u,
+				(session->retries > 0) ? session->master_conn->up : NULL,
+				message_size,
+				&session->master_conn->reserved_tokens);
+		}
+		else if (session->ctx->max_retries > 1 &&
+				 session->retries == session->ctx->max_retries) {
 
 			session->master_conn->up = rspamd_upstream_get_except(backend->u,
 																  session->master_conn->up,
@@ -2904,6 +3239,11 @@ proxy_milter_finish_handler(int fd,
 	if (rms->message == NULL || rms->message->len == 0) {
 		msg_info_session("finished milter connection");
 		proxy_backend_close_connection(session->master_conn);
+		/* MTA TCP connection is closing: this is the one authoritative
+		 * decrement for nconns.  proxy_session_dtor skips nconns-- for milter
+		 * because proxy_session_refresh creates a new session per message and
+		 * each intermediate session destruction must not touch the counter. */
+		session->worker->nconns--;
 		REF_RELEASE(session);
 	}
 	else {
@@ -2946,6 +3286,7 @@ proxy_milter_error_handler(int fd,
 						 err);
 		/* Terminate session immediately */
 		proxy_backend_close_connection(session->master_conn);
+		session->worker->nconns--;
 		REF_RELEASE(session);
 	}
 	else {
@@ -2955,6 +3296,7 @@ proxy_milter_error_handler(int fd,
 						 err);
 		/* Terminate session immediately */
 		proxy_backend_close_connection(session->master_conn);
+		session->worker->nconns--;
 		REF_RELEASE(session);
 	}
 }
@@ -3021,9 +3363,17 @@ proxy_accept_socket(EV_P_ ev_io *w, int revents)
 						 rspamd_inet_address_to_string(addr),
 						 rspamd_inet_address_get_port(addr));
 
-		rspamd_http_connection_read_message_shared(session->client_conn,
-												   session,
-												   session->ctx->timeout);
+		if (ctx->server_ssl_ctx && rspamd_worker_is_ssl_socket(worker, w->fd)) {
+			rspamd_http_connection_accept_ssl_shared(session->client_conn,
+													 ctx->server_ssl_ctx,
+													 session,
+													 session->ctx->timeout);
+		}
+		else {
+			rspamd_http_connection_read_message_shared(session->client_conn,
+													   session,
+													   session->ctx->timeout);
+		}
 	}
 	else {
 		msg_info_session("accepted milter connection from %s port %d",
@@ -3047,6 +3397,10 @@ proxy_accept_socket(EV_P_ ev_io *w, int revents)
 		}
 #endif
 
+		/* The milter library dups the fd internally, so the original nfd
+		 * stays owned by the proxy session (via client_sock).
+		 * proxy_session_dtor will close client_sock when the session is
+		 * destroyed; the milter dtor closes its dup'd copy separately. */
 		rspamd_milter_handle_socket(nfd, 0.0,
 									session->pool,
 									ctx->event_loop,
@@ -3109,6 +3463,23 @@ start_rspamd_proxy(struct rspamd_worker *worker)
 	rspamd_mempool_add_destructor(ctx->cfg->cfg_pool,
 								  (rspamd_mempool_destruct_t) rspamd_http_context_free,
 								  ctx->http_ctx);
+
+	if (rspamd_worker_has_ssl_socket(worker)) {
+		if (ctx->ssl_cert && ctx->ssl_key) {
+			ctx->server_ssl_ctx = rspamd_init_ssl_ctx_server(ctx->ssl_cert, ctx->ssl_key);
+
+			if (ctx->server_ssl_ctx) {
+				rspamd_ssl_ctx_config(ctx->cfg, ctx->server_ssl_ctx);
+				msg_info("enabled SSL for proxy worker");
+			}
+			else {
+				msg_err("failed to create SSL context for proxy worker");
+			}
+		}
+		else {
+			msg_err("ssl bind socket configured but ssl_cert or ssl_key is missing");
+		}
+	}
 
 	if (ctx->has_self_scan) {
 		/* Additional initialisation needed */

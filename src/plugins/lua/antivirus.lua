@@ -61,7 +61,7 @@ if confighelp then
       patterns {
         JUST_EICAR = "^Eicar-Test-Signature$";
       }
-      # `whitelist` points to a map of IP addresses. Mail from these addresses is not scanned.
+      # `whitelist` points to a map of virus names/signatures to ignore.
       whitelist = "/etc/rspamd/antivirus.wl";
       # Replace content that exactly matches the following string to the EICAR pattern
       # Useful for E2E testing when another party removes/blocks EICAR attachments

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "lua_common.h"
+#include "lua_caseless_table.h"
 #include "lua_thread_pool.h"
 #include "libserver/http/http_private.h"
 #include "libutil/upstream.h"
@@ -22,6 +23,10 @@
 #include "zlib.h"
 #include "utlist.h"
 #include "libserver/protocol_internal.h"
+
+/* HTTP-specific caseless table builder (defined in lua_caseless_table.c) */
+extern void rspamd_lua_caseless_table_push_from_http(lua_State *L,
+													 khash_t(rspamd_http_headers_hash) * headers);
 
 /***
  * @module rspamd_http
@@ -43,9 +48,10 @@ local function symbol_callback(task)
 
 		-- Process response
 		if code == 200 then
-			-- Process body and headers
-			for name, value in pairs(headers) do
-				-- Headers are lowercase
+			-- Process body and headers (caseless table)
+			-- Lookup is case-insensitive: headers['Content-Type'] == headers['content-type']
+			for name, value in headers:each() do
+				-- Original header case is preserved
 			end
 		end
 	end
@@ -347,7 +353,6 @@ lua_http_finish_handler(struct rspamd_http_connection *conn,
 						struct rspamd_http_message *msg)
 {
 	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *) conn->ud;
-	struct rspamd_http_header *h;
 	const char *body;
 	gsize body_len;
 
@@ -405,18 +410,8 @@ lua_http_finish_handler(struct rspamd_http_connection *conn,
 			lua_pushnil(L);
 		}
 	}
-	/* Headers */
-	lua_newtable(L);
-
-	kh_foreach_value(msg->headers, h, {
-		/*
-		 * Lowercase header name, as Lua cannot search in caseless matter
-		 */
-		rspamd_str_lc(h->combined->str, h->name.len);
-		lua_pushlstring(L, h->name.begin, h->name.len);
-		lua_pushlstring(L, h->value.begin, h->value.len);
-		lua_settable(L, -3);
-	});
+	/* Headers as caseless table */
+	rspamd_lua_caseless_table_push_from_http(L, msg->headers);
 
 	if (cbd->item) {
 		/* Replace watcher to deal with nested calls */
@@ -448,7 +443,6 @@ lua_http_resume_handler(struct rspamd_http_connection *conn,
 	lua_State *L = cbd->thread->lua_state;
 	const char *body;
 	gsize body_len;
-	struct rspamd_http_header *h;
 
 	if (err) {
 		lua_pushstring(L, err);
@@ -494,20 +488,9 @@ lua_http_resume_handler(struct rspamd_http_connection *conn,
 		}
 		lua_settable(L, -3);
 
-		/* headers */
+		/* headers as caseless table */
 		lua_pushliteral(L, "headers");
-		lua_newtable(L);
-
-		kh_foreach_value(msg->headers, h, {
-			/*
-			 * Lowercase header name, as Lua cannot search in caseless matter
-			 */
-			rspamd_str_lc(h->combined->str, h->name.len);
-			lua_pushlstring(L, h->name.begin, h->name.len);
-			lua_pushlstring(L, h->value.begin, h->value.len);
-			lua_settable(L, -3);
-		});
-
+		rspamd_lua_caseless_table_push_from_http(L, msg->headers);
 		lua_settable(L, -3);
 	}
 

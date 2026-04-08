@@ -34,6 +34,7 @@ local fun = require "fun"
 local rspamd_mempool = require "rspamd_mempool"
 
 local redis_params
+local redis_sym_names -- populated if redis settings are configured
 
 local settings = {}
 local N = "settings"
@@ -41,24 +42,36 @@ local settings_initialized = false
 local max_pri = 0
 local module_sym_id -- Main module symbol
 
-local function apply_settings(task, to_apply, id, name)
-  local cached_name = task:cache_get('settings_name')
-  if cached_name then
-    local cached_settings = task:cache_get('settings')
-    rspamd_logger.warnx(task, "cannot apply settings rule %s (id=%s):" ..
-        " settings has been already applied by rule %s (id=%s)",
-        name, id, cached_name, cached_settings.id)
-    return false
+-- Settings layer levels (must match enum rspamd_settings_layer in C)
+local SETTINGS_LAYER = {
+  CONFIG = 0,
+  PROFILE = 1,
+  RULE = 2,
+  PER_USER = 3,
+  HTTP = 4,
+}
+
+-- Collect a settings layer for later merging
+local function collect_settings_layer(task, level, name, settings_id, to_apply)
+  local layers = task:cache_get('settings_layers')
+  if not layers then
+    layers = {}
   end
 
-  task:set_settings(to_apply)
-  task:cache_set('settings', to_apply)
-  task:cache_set('settings_name', name or 'unknown')
+  layers[#layers + 1] = {
+    level = level,
+    name = name or 'unknown',
+    settings_id = settings_id or 0,
+    apply = to_apply,
+  }
 
-  if id then
-    task:set_settings_id(id)
-  end
+  task:cache_set('settings_layers', layers)
+  lua_util.debugm(N, task, "collected settings layer %s (level=%s, id=%s)",
+      name, level, settings_id)
+end
 
+-- Apply Lua-side effects from merged settings (headers, flags, symbols, etc.)
+local function apply_settings_side_effects(task, to_apply)
   if to_apply['add_headers'] or to_apply['remove_headers'] then
     local rep = {
       add_headers = to_apply['add_headers'] or {},
@@ -103,6 +116,24 @@ local function apply_settings(task, to_apply, id, name)
       task:append_message(message, category)
     end, to_apply.messages)
   end
+end
+
+-- Apply settings immediately AND collect for potential merge
+local function apply_settings(task, to_apply, id, name)
+  -- Collect for potential multi-layer merge
+  collect_settings_layer(task, SETTINGS_LAYER.RULE, name, id, to_apply)
+
+  -- Also apply immediately for backward compatibility
+  -- (SETTINGS_APPLY will re-apply merged result if multiple layers exist)
+  task:set_settings(to_apply)
+  task:cache_set('settings', to_apply)
+  task:cache_set('settings_name', name or 'unknown')
+
+  if id then
+    task:set_settings_id(id)
+  end
+
+  apply_settings_side_effects(task, to_apply)
 
   return true
 end
@@ -120,7 +151,7 @@ local function check_query_settings(task)
   if query_set then
 
     local parser = ucl.parser()
-    local res, err = parser:parse_text(query_set)
+    local res, err = parser:parse_text(tostring(query_set))
     if res then
       if settings_id then
         rspamd_logger.warnx(task, "both settings-id '%s' and settings headers are presented, ignore settings-id; ",
@@ -324,7 +355,12 @@ local function check_settings(task)
         rspamd_logger.infox(task, "applied settings id %s(%s); priority %s",
             id_elt.name, id_elt.id, priority_to_string(priority))
       else
-        apply_settings(task, query_apply, nil, 'HTTP query')
+        -- Collect at HTTP layer + apply immediately
+        collect_settings_layer(task, SETTINGS_LAYER.HTTP, 'HTTP query', 0, query_apply)
+        task:set_settings(query_apply)
+        task:cache_set('settings', query_apply)
+        task:cache_set('settings_name', 'HTTP query')
+        apply_settings_side_effects(task, query_apply)
         rspamd_logger.infox(task, "applied settings from query; priority %s",
             priority_to_string(priority))
       end
@@ -353,7 +389,7 @@ local function check_settings(task)
       -- No more selection logic
       return
     else
-      rspamd_logger.infox("cannot query selector to make external map request")
+      rspamd_logger.infox(task, "cannot query selector to make external map request")
     end
   end
 
@@ -401,15 +437,20 @@ local function check_settings(task)
 
             applied = true
           elseif s.rule.external_map then
-            local external_map = s.rule.external_map
-            local selector_result = external_map.selector(task)
-
-            if selector_result then
-              external_map.map:get_key(selector_result, nil, task)
-              -- No more selection logic
-              return
+            -- Skip external map query if settings were provided via header
+            if query_apply then
+              lua_util.debugm(N, task, "skip external map %s: settings provided via header", s.name)
             else
-              rspamd_logger.infox("cannot query selector to make external map request")
+              local external_map = s.rule.external_map
+              local selector_result = external_map.selector(task)
+
+              if selector_result then
+                external_map.map:get_key(selector_result, nil, task)
+                -- No more selection logic
+                return
+              else
+                rspamd_logger.infox(task, "cannot query selector to make external map request")
+              end
             end
           end
           if s.rule['symbols'] then
@@ -448,9 +489,14 @@ local function gen_settings_external_cb(name)
             name, ucl_err)
       else
         local obj = parser:get_object()
-        rspamd_logger.infox(task, "<%s> apply settings according to the external map %s",
+        rspamd_logger.infox(task, "<%s> apply settings from external map %s",
             name, task:get_message_id())
-        apply_settings(task, obj, nil, 'external_map')
+        -- Collect for merge AND apply immediately
+        collect_settings_layer(task, SETTINGS_LAYER.RULE, 'external_map:' .. name, 0, obj)
+        task:set_settings(obj)
+        task:cache_set('settings', obj)
+        task:cache_set('settings_name', 'external_map:' .. name)
+        apply_settings_side_effects(task, obj)
       end
     else
       rspamd_logger.infox(task, "<%s> no settings returned from the external map %s: %s (code = %s)",
@@ -971,7 +1017,7 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
       return function(task)
         local rh = task:get_request_header(hname)
         if rh then
-          return { rh }
+          return { tostring(rh) }
         end
         return {}
       end
@@ -1275,9 +1321,14 @@ local function gen_redis_callback(handler, id)
                   ucl_err)
             else
               local obj = parser:get_object()
-              rspamd_logger.infox(task, "<%s> apply settings according to redis rule %s",
+              rspamd_logger.infox(task, "<%s> apply settings from redis rule %s",
                   task:get_message_id(), id)
-              apply_settings(task, obj, nil, 'redis')
+              -- Collect for merge AND apply immediately
+              collect_settings_layer(task, SETTINGS_LAYER.PER_USER, 'redis:' .. tostring(id), 0, obj)
+              task:set_settings(obj)
+              task:cache_set('settings', obj)
+              task:cache_set('settings_name', 'redis:' .. tostring(id))
+              apply_settings_side_effects(task, obj)
               break
             end
           end
@@ -1340,15 +1391,18 @@ if redis_section then
     end
   end
 
+  redis_sym_names = {}
   fun.each(function(id, h)
+    local redis_sym_name = 'REDIS_SETTINGS' .. tostring(id)
     rspamd_config:register_symbol({
-      name = 'REDIS_SETTINGS' .. tostring(id),
+      name = redis_sym_name,
       type = 'prefilter',
       callback = gen_redis_callback(h, id),
       priority = lua_util.symbols_priorities.top,
       flags = 'empty,nostat',
       augmentations = { string.format("timeout=%f", redis_params.timeout or 0.0) },
     })
+    redis_sym_names[#redis_sym_names + 1] = redis_sym_name
   end, redis_key_handlers)
 end
 
@@ -1359,6 +1413,59 @@ module_sym_id = rspamd_config:register_symbol({
   priority = lua_util.symbols_priorities.top,
   flags = 'empty,nostat,explicit_disable,ignore_passthrough',
 })
+
+-- SETTINGS_APPLY runs after all settings collectors (SETTINGS_CHECK, REDIS_SETTINGS*)
+-- via explicit dependencies. It merges multiple layers when present.
+-- Each collector also applies immediately for backward compat (single-layer case).
+-- SETTINGS_APPLY only re-applies when multiple layers need merging.
+rspamd_config:register_symbol({
+  name = 'SETTINGS_APPLY',
+  type = 'prefilter',
+  callback = function(task)
+    local layers = task:cache_get('settings_layers')
+    if not layers or #layers <= 1 then
+      -- Single layer (or none): already applied immediately by the collector
+      return
+    end
+
+    -- Multiple layers: merge via C infrastructure and re-apply
+    rspamd_logger.infox(task, "merging %s settings layers", #layers)
+
+    -- Collect settings_id from the highest-priority layer that has one
+    local best_settings_id = nil
+    for _, layer in ipairs(layers) do
+      if layer.settings_id and layer.settings_id ~= 0 then
+        best_settings_id = layer.settings_id
+      end
+    end
+
+    local merged = task:merge_and_apply_settings(layers)
+    if merged then
+      if best_settings_id then
+        task:set_settings_id(best_settings_id)
+      end
+      -- Apply Lua-side effects from the merged result
+      local merged_settings = task:get_settings()
+      if merged_settings then
+        apply_settings_side_effects(task, merged_settings)
+      end
+    else
+      rspamd_logger.warnx(task, "settings merge returned no result")
+    end
+  end,
+  priority = lua_util.symbols_priorities.top,
+  flags = 'empty,nostat,explicit_disable,ignore_passthrough',
+})
+
+-- Hard dep: SETTINGS_APPLY must wait for SETTINGS_CHECK to finish collecting
+rspamd_config:register_dependency('SETTINGS_APPLY', 'SETTINGS_CHECK', true)
+
+-- Also hard-depend on REDIS_SETTINGS symbols if redis is configured
+if redis_sym_names then
+  for _, sym_name in ipairs(redis_sym_names) do
+    rspamd_config:register_dependency('SETTINGS_APPLY', sym_name, true)
+  end
+end
 
 local set_section = rspamd_config:get_all_opt("settings")
 

@@ -1,10 +1,10 @@
 -- Lua script to perform cache checking for bayes classification
 -- This script accepts the following parameters:
 -- key1 - cache id
--- key2 - configuration table in message pack
+-- argv1 - configuration table in message pack
 
 local cache_id = KEYS[1]
-local conf = cmsgpack.unpack(KEYS[2])
+local conf = cmsgpack.unpack(ARGV[1])
 cache_id = string.sub(cache_id, 1, conf.cache_elt_len)
 
 -- Try each prefix that is in Redis
@@ -13,7 +13,10 @@ for i = 0, conf.cache_max_keys do
   local have = redis.call('HGET', prefix, cache_id)
 
   if have then
-    return tonumber(have)
+    -- Return the raw string value (class name, e.g. "spam", "ham", "transactional").
+    -- Previously tonumber() was used here, but 64-bit integer class IDs exceed
+    -- Lua's 53-bit double precision, corrupting the value for multiclass classifiers.
+    return have
   end
 end
 

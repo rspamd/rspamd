@@ -50,6 +50,14 @@ SPF NA NXDOMAIN
   ...  Settings=${SETTINGS_SPF}
   Expect Symbol  R_SPF_NA
 
+SPF NA HELO IP LITERAL
+  [Documentation]  HELO IP address literals must yield R_SPF_NA, not R_SPF_DNSFAIL (RFC 7208 §2.3)
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=<>  Helo=[10.88.0.3]
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_NA
+  Do Not Expect Symbol  R_SPF_DNSFAIL
+
 SPF PERMFAIL UNRESOLVEABLE REDIRECT
   Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=8.8.8.8  From=x@fail4.org.org.za

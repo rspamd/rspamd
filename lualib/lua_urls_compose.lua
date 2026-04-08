@@ -229,7 +229,7 @@ end
 exports.add_composition_map = function(cfg, map_obj)
   local hash_key = map_obj
   if type(map_obj) == 'table' then
-    hash_key = lua_util.table_digest(map_obj)
+    hash_key = lua_util.unordered_table_digest(map_obj)
   end
 
   local map = maps_cache[hash_key]
@@ -263,7 +263,7 @@ exports.inject_composition_rules = function(cfg, rules)
   local hash_key = rules
   local rspamd_text = require "rspamd_text"
   if type(rules) == 'table' then
-    hash_key = lua_util.table_digest(rules)
+    hash_key = lua_util.unordered_table_digest(rules)
   end
 
   local map = maps_cache[hash_key]

@@ -30,6 +30,9 @@ local function check_violation(N, task, domain)
   if N == 'arc' then
     sym_check = 'ARC_REJECT'
   end
+  if domain then
+    domain = tostring(domain)
+  end
   if task:has_symbol(sym_check) then
     local sym = task:get_symbol(sym_check)[1]
     logger.infox(task, 'skip signing for %s: violation %s found: %s',
@@ -96,6 +99,10 @@ local function parse_dkim_http_headers(N, task, settings)
       return false, {}
     end
 
+    domain = tostring(domain)
+    selector = tostring(selector)
+    key = tostring(key)
+
     -- Now check if we need to check the existing auth
     local hdr = task:get_request_header(headers.sign_on_reject_header)
     if not hdr or tostring(hdr) == '0' or tostring(hdr) == 'false' then
@@ -106,9 +113,9 @@ local function parse_dkim_http_headers(N, task, settings)
 
     local p = {}
     local k = {
-      domain = tostring(domain),
-      rawkey = tostring(key),
-      selector = tostring(selector),
+      domain = domain,
+      rawkey = key,
+      selector = selector,
     }
     table.insert(p, k)
     return true, p

@@ -1506,6 +1506,7 @@ rspamd_rcl_classifier_handler(rspamd_mempool_t *pool,
 
 		if (has_explicit_classes) {
 			ccf->class_names = g_ptr_array_new();
+			bool has_custom_class = false;
 
 			cur = ccf->statfiles;
 			while (cur) {
@@ -1526,8 +1527,21 @@ rspamd_rcl_classifier_handler(rspamd_mempool_t *pool,
 						stcf->class_index = ccf->class_names->len;
 						g_ptr_array_add(ccf->class_names, g_strdup(stcf->class_name));
 					}
+
+					/* Detect genuinely multiclass: any class that is not spam/ham */
+					if (strcmp(stcf->class_name, "spam") != 0 &&
+						strcmp(stcf->class_name, "S") != 0 &&
+						strcmp(stcf->class_name, "ham") != 0 &&
+						strcmp(stcf->class_name, "H") != 0) {
+						has_custom_class = true;
+					}
 				}
 				cur = g_list_next(cur);
+			}
+
+			if (has_custom_class) {
+				ccf->flags |= RSPAMD_FLAG_CLASSIFIER_MULTICLASS;
+				msg_debug("classifier %s flagged as MULTICLASS", ccf->name ? ccf->name : "(unnamed)");
 			}
 		}
 	}
@@ -2117,6 +2131,12 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   G_STRUCT_OFFSET(struct rspamd_config, enable_url_rewrite),
 									   0,
 									   "Enable HTML URL rewriting");
+		rspamd_rcl_add_default_handler(sub,
+									   "include_content_urls",
+									   rspamd_rcl_parse_struct_boolean,
+									   G_STRUCT_OFFSET(struct rspamd_config, include_content_urls),
+									   0,
+									   "Include URLs extracted from content (PDF, etc.) in URL API calls (default: true)");
 		rspamd_rcl_add_default_handler(sub,
 									   "composites_inverted_index",
 									   rspamd_rcl_parse_struct_boolean,

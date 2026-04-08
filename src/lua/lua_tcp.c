@@ -2027,7 +2027,7 @@ lua_tcp_connect_sync(lua_State *L)
 	cbd = g_new0(struct lua_tcp_cbdata, 1);
 
 	if (task) {
-		static const char hexdigests[16] = "0123456789abcdef";
+		static const char hexdigests[] = "0123456789abcdef";
 
 		cfg = task->cfg;
 		ev_base = task->event_loop;

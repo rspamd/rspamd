@@ -619,7 +619,7 @@ lua_logger_out_str(lua_State *L, int pos,
 				   char *outbuf, gsize len,
 				   enum lua_logger_escape_type esc_type)
 {
-	static const char hexdigests[16] = "0123456789abcdef";
+	static const char hexdigests[] = "0123456789abcdef";
 	gsize slen;
 	const unsigned char *str = lua_tolstring(L, pos, &slen);
 	unsigned char c;

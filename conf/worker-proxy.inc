@@ -25,6 +25,15 @@ timeout = 60s;
 upstream "local" {
   default = yes;
   hosts = "localhost";
+
+  # Token bucket load balancing: distributes load based on message size
+  # and current backend utilization (useful with multiple backends)
+  token_bucket {
+    max_tokens = 10000;  # Maximum token capacity per backend
+    scale = 1024;        # Bytes per token (1KB = 1 token)
+    min_tokens = 1;      # Minimum tokens required for selection
+    base_cost = 10;      # Base cost per request regardless of size
+  }
 }
 
 count = 1; # Do not spawn too many processes of this type

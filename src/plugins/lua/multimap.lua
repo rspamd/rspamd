@@ -131,22 +131,7 @@ local function split_sa_line(str)
 end
 
 local function parse_sa_regexp(rule_symbol, re_expr)
-  -- Extract regexp and flags from /regexp/flags format
-  local re_str, flags = string.match(re_expr, '^/(.+)/([gimxsiu]*)$')
-  if not re_str then
-    re_str, flags = string.match(re_expr, '^m{(.+)}([gimxsiu]*)$')
-  end
-  if not re_str then
-    -- Try without delimiters
-    re_str = re_expr
-    flags = ''
-  end
-
-  if flags and flags ~= '' then
-    re_str = '(?' .. flags .. ')' .. re_str
-  end
-
-  local re = rspamd_regexp.create(re_str)
+  local re = rspamd_regexp.create(re_expr)
   if not re then
     rspamd_logger.errx(rspamd_config, 'cannot create regexp for %s: %s', rule_symbol, re_expr)
     return nil

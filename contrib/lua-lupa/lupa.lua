@@ -1146,6 +1146,18 @@ function M.filters.int(value)
 end
 
 ---
+-- Returns a list of {key, value} pairs from table *t*.
+-- @param t The table to get items from.
+-- @usage expand('{% for k, v in {a=1, b=2}|items %}{{ k }}={{ v }} {% endfor %}')
+-- @name filters.items
+function M.filters.items(t)
+  assert(t, 'input to filter "items" was nil instead of a table')
+  local result = {}
+  for k, v in pairs(t) do result[#result + 1] = {k, v} end
+  return result
+end
+
+---
 -- Returns a string that contains all the elements in table *t* (or all the
 -- attributes named *attribute* in *t*) separated by string *sep*.
 -- @param t The table to join.
@@ -1166,6 +1178,18 @@ function M.filters.join(t, sep, attribute)
   local attributes = {}
   for i = 1, #t do attributes[#attributes + 1] = ta[i] end
   return table.concat(attributes, sep)
+end
+
+---
+-- Returns a list of the keys in table *t*.
+-- @param t The table to get keys from.
+-- @usage expand('{{ {a=1, b=2}|keys|sort|join(",") }}')
+-- @name filters.keys
+function M.filters.keys(t)
+  assert(t, 'input to filter "keys" was nil instead of a table')
+  local result = {}
+  for k in pairs(t) do result[#result + 1] = k end
+  return result
 end
 
 ---
@@ -1255,6 +1279,50 @@ function M.filters.mapattr(t, attribute, filter, ...)
   local map = {}
   for i = 1, #t do map[i] = filter and f(ta[i], ...) or ta[i] end
   return map
+end
+
+---
+-- Returns the largest item from table *t*, optionally by *attribute*.
+-- @param t The table to find the maximum in.
+-- @param case_sensitive Optional flag for case sensitivity with strings.
+--   The default value is `false`.
+-- @param attribute Optional attribute of elements to compare.
+-- @usage expand('{{ {3, 1, 2}|max }}') --> 3
+-- @name filters.max
+function M.filters.max(t, case_sensitive, attribute)
+  assert(t, 'input to filter "max" was nil instead of a table')
+  local ta = attribute and attr_accessor(t, attribute) or t
+  local result, result_key = t[1], ta[1]
+  for i = 2, #t do
+    local key = ta[i]
+    local a, b = key, result_key
+    if type(a) == 'string' and not case_sensitive then a = a:lower() end
+    if type(b) == 'string' and not case_sensitive then b = b:lower() end
+    if a > b then result, result_key = t[i], key end
+  end
+  return result
+end
+
+---
+-- Returns the smallest item from table *t*, optionally by *attribute*.
+-- @param t The table to find the minimum in.
+-- @param case_sensitive Optional flag for case sensitivity with strings.
+--   The default value is `false`.
+-- @param attribute Optional attribute of elements to compare.
+-- @usage expand('{{ {3, 1, 2}|min }}') --> 1
+-- @name filters.min
+function M.filters.min(t, case_sensitive, attribute)
+  assert(t, 'input to filter "min" was nil instead of a table')
+  local ta = attribute and attr_accessor(t, attribute) or t
+  local result, result_key = t[1], ta[1]
+  for i = 2, #t do
+    local key = ta[i]
+    local a, b = key, result_key
+    if type(a) == 'string' and not case_sensitive then a = a:lower() end
+    if type(b) == 'string' and not case_sensitive then b = b:lower() end
+    if a < b then result, result_key = t[i], key end
+  end
+  return result
 end
 
 ---
@@ -1433,6 +1501,38 @@ function M.filters.slice(t, slices, fill)
 end
 
 ---
+-- Returns a list of substrings by splitting string *s* on separator *sep*.
+-- If *sep* is not given, splits on whitespace.
+-- @param s The string to split.
+-- @param sep Optional separator string to split on. Literal string matching is
+--   used (not patterns). If not given, splits on whitespace.
+-- @param max_splits Optional maximum number of splits to perform.
+-- @usage expand('{{ "a,b,c"|split(",")|string }}') --> {"a", "b", "c"}
+-- @name filters.split
+function M.filters.split(s, sep, max_splits)
+  assert(s, 'input to filter "split" was nil instead of a string')
+  local t = {}
+  if not sep then
+    for word in s:gmatch('%S+') do t[#t + 1] = word end
+    return t
+  end
+  local pos = 1
+  while true do
+    if max_splits and #t >= max_splits then
+      t[#t + 1] = s:sub(pos)
+      return t
+    end
+    local i, j = s:find(sep, pos, true)
+    if not i then
+      t[#t + 1] = s:sub(pos)
+      return t
+    end
+    t[#t + 1] = s:sub(pos, i - 1)
+    pos = j + 1
+  end
+end
+
+---
 -- Returns a copy of table or string *value* in sorted order by value (or by
 -- an attribute named *attribute*), depending on booleans *reverse* and
 -- *case_sensitive*.
@@ -1533,6 +1633,34 @@ function M.filters.title(s)
 end
 
 ---
+-- Returns value *value* serialized as a JSON string using UCL.
+-- @param value The value to serialize.
+-- @param indent Optional boolean to pretty-print with indentation.
+-- @usage expand('{{ {a=1, b=2}|tojson }}') --> {"a":1,"b":2}
+-- @name filters.tojson
+function M.filters.tojson(value, indent)
+  assert(value ~= nil, 'input to filter "tojson" was nil')
+  local ucl = require('ucl')
+  return ucl.to_format(value, indent and 'json' or 'json-compact')
+end
+
+---
+-- Parses a JSON string and returns a Lua table.
+-- @param s The JSON string to parse.
+-- @usage expand('{%- set obj = \'{"a":1}\' | fromjson %}{{ obj.a }}') --> 1
+-- @name filters.fromjson
+function M.filters.fromjson(s)
+  assert(s ~= nil and s ~= '', 'input to filter "fromjson" was nil or empty')
+  local ucl = require('ucl')
+  local parser = ucl.parser()
+  local ok, err = parser:parse_string(s)
+  if not ok then
+    error(string.format('fromjson: failed to parse: %s', err), 0)
+  end
+  return parser:get_object()
+end
+
+---
 -- Returns a copy of string *s* truncated to *length* number of characters.
 -- Truncated strings end with '...' or string *delimiter*. If boolean
 -- *partial_words* is `false`, truncation will only happen at word boundaries.
@@ -1554,6 +1682,16 @@ function M.filters.truncate(s, length, partial_words, delimiter)
 end
 
 ---
+-- Returns a copy of string *s* with leading and trailing whitespace removed.
+-- @param s The string to trim.
+-- @usage expand('{{ "  foo  "|trim }}') --> "foo"
+-- @name filters.trim
+function M.filters.trim(s)
+  assert(s, 'input to filter "trim" was nil instead of a string')
+  return s:match('^%s*(.-)%s*$')
+end
+
+---
 -- Returns a copy of string *s* with all uppercase characters.
 -- @param s The string to uppercase.
 -- @usage expand('{{ "foo"|upper }}') --> FOO
@@ -1561,6 +1699,30 @@ end
 function M.filters.upper(s)
   assert(s, 'input to filter "upper" was nil instead of a string')
   return string.upper(s)
+end
+
+---
+-- Returns a copy of table *t* with duplicate elements removed.
+-- @param t The table to remove duplicates from.
+-- @param case_sensitive Optional flag for case sensitivity with strings.
+--   The default value is `false`.
+-- @param attribute Optional attribute of elements to use for uniqueness.
+-- @usage expand('{{ {1, 2, 1, 3}|unique|string }}') --> {1, 2, 3}
+-- @name filters.unique
+function M.filters.unique(t, case_sensitive, attribute)
+  assert(t, 'input to filter "unique" was nil instead of a table')
+  local seen = {}
+  local result = {}
+  local ta = attribute and attr_accessor(t, attribute) or t
+  for i = 1, #t do
+    local key = ta[i]
+    if type(key) == 'string' and not case_sensitive then key = key:lower() end
+    if not seen[key] then
+      seen[key] = true
+      result[#result + 1] = t[i]
+    end
+  end
+  return result
 end
 
 ---
@@ -1591,6 +1753,18 @@ function M.filters.urlencode(value)
     end
   end
   return table.concat(params, '&')
+end
+
+---
+-- Returns a list of the values in table *t*.
+-- @param t The table to get values from.
+-- @usage expand('{{ {a=1, b=2}|values|sort|join(",") }}') --> 1,2
+-- @name filters.values
+function M.filters.values(t)
+  assert(t, 'input to filter "values" was nil instead of a table')
+  local result = {}
+  for _, v in pairs(t) do result[#result + 1] = v end
+  return result
 end
 
 ---
@@ -1653,6 +1827,48 @@ function M.filters.wordcount(s)
 end
 
 ---
+-- Returns a copy of string *s* with text wrapped at *width* characters.
+-- @param s The string to wrap.
+-- @param width The column width to wrap at. The default value is `79`.
+-- @param break_long_words Optional flag indicating whether to break words
+--   longer than *width*. The default value is `true`.
+-- @param wrapstring Optional string to use for line breaks. The default value
+--   is '\n'.
+-- @usage expand('{{ "foo bar baz"|wordwrap(8) }}') --> "foo bar\nbaz"
+-- @name filters.wordwrap
+function M.filters.wordwrap(s, width, break_long_words, wrapstring)
+  assert(s, 'input to filter "wordwrap" was nil instead of a string')
+  width = width or 79
+  wrapstring = wrapstring or '\n'
+  if break_long_words == nil then break_long_words = true end
+  local lines = {}
+  local line = ''
+  for word in s:gmatch('%S+') do
+    if #line > 0 and #line + 1 + #word > width then
+      lines[#lines + 1] = line
+      line = ''
+    end
+    if #word > width and break_long_words then
+      if #line > 0 then
+        lines[#lines + 1] = line
+        line = ''
+      end
+      while #word > width do
+        lines[#lines + 1] = word:sub(1, width)
+        word = word:sub(width + 1)
+      end
+      line = word
+    elseif #line > 0 then
+      line = line .. ' ' .. word
+    else
+      line = word
+    end
+  end
+  if #line > 0 then lines[#lines + 1] = line end
+  return table.concat(lines, wrapstring)
+end
+
+---
 -- Interprets table *t* as a list of XML attribute-value pairs, returning them
 -- as a properly formatted, space-separated string.
 -- @param t The table of XML attribute-value pairs.
@@ -1668,7 +1884,222 @@ function M.filters.xmlattr(t)
   return table.concat(attributes, ' ')
 end
 
+-- Lupa validation filters.
+
+---
+-- Returns the value unchanged, but raises an error if the value is nil or empty.
+-- Use to enforce required env vars at config load time.
+-- @param s The value to validate.
+-- @param msg Optional error message (default: "value is required").
+-- @usage expand('{= env.API_KEY | mandatory("API_KEY is required") =}')
+-- @name filters.mandatory
+function M.filters.mandatory(s, msg)
+  if s == nil or s == '' then
+    error(msg or 'mandatory value is missing', 0)
+  end
+  return s
+end
+
+---
+-- Returns the value unchanged, but raises an error if the value is not a valid integer.
+-- @param s The value to validate.
+-- @param msg Optional error message.
+-- @usage expand('{%- set x = env.PORT | require_int("PORT must be an integer") %}')
+-- @name filters.require_int
+function M.filters.require_int(s, msg)
+  if s == nil or s == '' then
+    error(msg or 'require_int: value is missing', 0)
+  end
+  if not tonumber(s) or tonumber(s) ~= math.floor(tonumber(s)) then
+    error(msg or string.format('require_int: "%s" is not a valid integer', tostring(s)), 0)
+  end
+  return s
+end
+
+---
+-- Returns the value unchanged, but raises an error if the value is not a valid number.
+-- @param s The value to validate.
+-- @param msg Optional error message.
+-- @usage expand('{%- set x = env.PROB | require_number("PROB must be a number") %}')
+-- @name filters.require_number
+function M.filters.require_number(s, msg)
+  if s == nil or s == '' then
+    error(msg or 'require_number: value is missing', 0)
+  end
+  if not tonumber(s) then
+    error(msg or string.format('require_number: "%s" is not a valid number', tostring(s)), 0)
+  end
+  return s
+end
+
+---
+-- Returns the value unchanged, but raises an error if the value is not "true" or "false".
+-- @param s The value to validate.
+-- @param msg Optional error message.
+-- @usage expand('{%- set x = env.ENABLED | require_bool("ENABLED must be true or false") %}')
+-- @name filters.require_bool
+function M.filters.require_bool(s, msg)
+  if s == nil or s == '' then
+    error(msg or 'require_bool: value is missing', 0)
+  end
+  local valid = {['true']=1, ['false']=1, ['yes']=1, ['no']=1, ['on']=1, ['off']=1, ['1']=1, ['0']=1}
+  if not valid[tostring(s):lower()] then
+    error(msg or string.format('require_bool: "%s" is not a valid boolean (use true/false, yes/no, on/off, 1/0)', tostring(s)), 0)
+  end
+  return s
+end
+
+---
+-- Parses a duration string and returns seconds as a number.
+-- Validates the input and raises an error if not a valid duration.
+-- Accepted formats: number followed by ms, s, min, m, h, d, w, y (e.g. "500ms", "30s", "5min", "1h", "10d", "1w", "1y").
+-- Plain numbers are also accepted (treated as seconds).
+-- @param s The duration string to parse.
+-- @param msg Optional error message on invalid input.
+-- @usage expand('{%- set timeout = "5min" | require_duration %}') --> 300
+-- @usage expand('{%- set timeout = "2d" | require_duration %}') --> 172800
+-- @name filters.require_duration
+function M.filters.require_duration(s, msg)
+  if s == nil or s == '' then
+    error(msg or 'require_duration: value is missing', 0)
+  end
+  local str = tostring(s)
+  local num, unit = str:match('^(%d+%.?%d*)(.*)')
+  if not num then
+    error(msg or string.format('require_duration: "%s" is not a valid duration (use 30s, 5min, 1h, 10d)', str), 0)
+  end
+  num = tonumber(num)
+  unit = unit == '' and 's' or unit
+  local seconds
+  if unit == 'ms' then seconds = num / 1000
+  elseif unit == 's' then seconds = num
+  elseif unit == 'min' or unit == 'm' then seconds = num * 60
+  elseif unit == 'h' then seconds = num * 3600
+  elseif unit == 'd' then seconds = num * 86400
+  elseif unit == 'w' then seconds = num * 604800
+  elseif unit == 'y' then seconds = num * 31536000
+  else error(msg or string.format('require_duration: unknown unit "%s" in "%s" (use ms, s, min, h, d, w, y)', unit, str), 0)
+  end
+  return seconds
+end
+
+---
+-- Returns the value unchanged, but raises an error if the value is not valid JSON.
+-- @param s The value to validate.
+-- @param msg Optional error message.
+-- @usage expand('{%- set x = env.LIST | require_json("LIST must be valid JSON") %}')
+-- @name filters.require_json
+function M.filters.require_json(s, msg)
+  if s == nil or s == '' then
+    error(msg or 'require_json: value is missing', 0)
+  end
+  local ucl = require('ucl')
+  local parser = ucl.parser()
+  local ok, err = parser:parse_string(s)
+  if not ok then
+    error(msg or string.format('require_json: "%s" is not valid JSON: %s', tostring(s), err), 0)
+  end
+  return s
+end
+
+---
+-- Returns the value unchanged, but raises an error if the value is not a valid size string.
+-- Accepted formats: number followed by optional b, Kb, Mb, Gb suffix (case-insensitive).
+-- Plain numbers are also accepted (treated as bytes).
+-- @param s The value to validate.
+-- @param msg Optional error message.
+-- @usage expand('{%- set x = env.MAX_SIZE | require_size("MAX_SIZE must be a size like 150Mb") %}')
+-- @name filters.require_size
+function M.filters.require_size(s, msg)
+  if s == nil or s == '' then
+    error(msg or 'require_size: value is missing', 0)
+  end
+  local str = tostring(s)
+  local lower = str:lower()
+  local stripped = lower:gsub('gb$', ''):gsub('mb$', ''):gsub('kb$', ''):gsub('b$', '')
+  if tonumber(stripped) == nil or tonumber(stripped) < 0 then
+    error(msg or string.format('require_size: "%s" is not a valid size (use number with optional b, Kb, Mb, Gb suffix)', str), 0)
+  end
+  return s
+end
+
+---
+-- Converts a size string to bytes (number).
+-- Input: number with optional suffix Kb (1024), Mb (1024^2), Gb (1024^3). Case-insensitive.
+-- Plain numbers are treated as bytes.
+-- @param s The size string to convert.
+-- @usage expand('{%- set bytes = "150Mb" | tobytes %}') --> 157286400
+-- @name filters.tobytes
+function M.filters.tobytes(s)
+  if s == nil or s == '' then
+    error('tobytes: value is missing', 0)
+  end
+  local str = tostring(s)
+  local lower = str:lower()
+  local num, suffix = lower:match('^(%d+%.?%d*)(.*)')
+  if not num then
+    error(string.format('tobytes: "%s" is not a valid size', str), 0)
+  end
+  num = tonumber(num)
+  if suffix == '' or suffix == 'b' then return num
+  elseif suffix == 'kb' then return num * 1024
+  elseif suffix == 'mb' then return num * 1024 * 1024
+  elseif suffix == 'gb' then return num * 1024 * 1024 * 1024
+  else error(string.format('tobytes: unknown suffix "%s" in "%s"', suffix, str), 0)
+  end
+end
+
 -- Lupa tests.
+
+---
+-- Returns whether or not value *s* is valid JSON.
+-- @param s The value to test.
+-- @usage expand('{% if is_json(env.X) %}...{% endif %}')
+-- @name tests.is_json
+function M.tests.is_json(s)
+  if s == nil or s == '' then return false end
+  local ucl = require('ucl')
+  local parser = ucl.parser()
+  local ok = parser:parse_string(s)
+  return ok and true or false
+end
+
+---
+-- Returns whether or not value *s* is a valid size string.
+-- Accepts: plain numbers (bytes) or numbers with b, Kb, Mb, Gb suffix (case-insensitive).
+-- @param s The value to test.
+-- @usage expand('{% if is_size(env.MAX_SIZE) %}...{% endif %}')
+-- @name tests.is_size
+function M.tests.is_size(s)
+  if s == nil or s == '' then return false end
+  local lower = tostring(s):lower()
+  local stripped = lower:gsub('gb$', ''):gsub('mb$', ''):gsub('kb$', ''):gsub('b$', '')
+  return tonumber(stripped) ~= nil and tonumber(stripped) >= 0
+end
+
+---
+-- Returns whether or not value *s* is a UCL truthy boolean (true, yes, on, 1).
+-- Case-insensitive, matching UCL parser behavior.
+-- @param s The value to test.
+-- @usage expand('{% if is_true(env.ENABLED) %}...{% endif %}')
+-- @name tests.is_true
+function M.tests.is_true(s)
+  if s == nil then return false end
+  local truthy = {['true']=1, ['yes']=1, ['on']=1, ['1']=1}
+  return truthy[tostring(s):lower()] ~= nil
+end
+
+---
+-- Returns whether or not value *s* is a UCL falsy boolean (false, no, off, 0).
+-- Case-insensitive, matching UCL parser behavior.
+-- @param s The value to test.
+-- @usage expand('{% if is_false(env.ENABLED) %}...{% endif %}')
+-- @name tests.is_false
+function M.tests.is_false(s)
+  if s == nil then return false end
+  local falsy = {['false']=1, ['no']=1, ['off']=1, ['0']=1}
+  return falsy[tostring(s):lower()] ~= nil
+end
 
 ---
 -- Returns whether or not number *n* is odd.
@@ -1760,7 +2191,11 @@ function M.tests.is_table(value) return type(value) == 'table' end
 -- @param value The value to test.
 -- @usage expand('{% if is_number(x) %}...{% endif %}')
 -- @name tests.is_number
-function M.tests.is_number(value) return type(value) == 'number' end
+function M.tests.is_number(value)
+  if type(value) == 'number' then return true end
+  if type(value) == 'string' then return tonumber(value) ~= nil end
+  return false
+end
 
 ---
 -- Returns whether or not value *value* is a sequence, namely a table with
@@ -1806,5 +2241,130 @@ function M.tests.is_sameas(value, other) return value == other end
 function M.tests.is_escaped(value)
   return getmetatable(value) and getmetatable(value).__tostring ~= nil
 end
+
+---
+-- Returns whether or not value *value* is contained in *container*.
+-- If *container* is a string, checks for a substring match.
+-- If *container* is a table, checks if any element equals *value*.
+-- @param value The value to search for.
+-- @param container The string or table to search in.
+-- @usage expand('{% if is_in("foo", items) %}...{% endif %}')
+-- @name tests.is_in
+function M.tests.is_in(value, container)
+  if type(container) == 'string' then
+    return container:find(tostring(value), 1, true) ~= nil
+  elseif type(container) == 'table' then
+    for _, v in pairs(container) do
+      if v == value then return true end
+    end
+  end
+  return false
+end
+
+---
+-- Returns whether or not string *s* starts with string *prefix*.
+-- @param s The string to test.
+-- @param prefix The prefix to check for.
+-- @usage expand('{% if is_startswith(name, "foo") %}...{% endif %}')
+-- @name tests.is_startswith
+function M.tests.is_startswith(s, prefix)
+  if type(s) ~= 'string' then s = tostring(s) end
+  return s:sub(1, #prefix) == prefix
+end
+
+---
+-- Returns whether or not string *s* ends with string *suffix*.
+-- @param s The string to test.
+-- @param suffix The suffix to check for.
+-- @usage expand('{% if is_endswith(name, ".txt") %}...{% endif %}')
+-- @name tests.is_endswith
+function M.tests.is_endswith(s, suffix)
+  if type(s) ~= 'string' then s = tostring(s) end
+  if #suffix == 0 then return true end
+  return s:sub(-#suffix) == suffix
+end
+
+---
+-- Returns whether or not string *s* matches Lua pattern *pattern*.
+-- @param s The string to test.
+-- @param pattern The Lua pattern to match against.
+-- @usage expand('{% if is_match(name, "^%a+$") %}...{% endif %}')
+-- @name tests.is_match
+function M.tests.is_match(s, pattern)
+  if type(s) ~= 'string' then s = tostring(s) end
+  return s:find(pattern) ~= nil
+end
+
+---
+-- Returns whether or not value *value* is a boolean.
+-- @param value The value to test.
+-- @usage expand('{% if is_boolean(x) %}...{% endif %}')
+-- @name tests.is_boolean
+function M.tests.is_boolean(value) return type(value) == 'boolean' end
+
+---
+-- Returns whether or not value *value* is an integer number.
+-- @param value The value to test.
+-- @usage expand('{% if is_integer(x) %}...{% endif %}')
+-- @name tests.is_integer
+function M.tests.is_integer(value)
+  local n = type(value) == 'number' and value or tonumber(tostring(value))
+  if n == nil then return false end
+  return n == math.floor(n)
+end
+
+---
+-- Returns whether or not value *value* is a floating-point number.
+-- @param value The value to test.
+-- @usage expand('{% if is_float(x) %}...{% endif %}')
+-- @name tests.is_float
+function M.tests.is_float(value)
+  local n = type(value) == 'number' and value or tonumber(tostring(value))
+  if n == nil then return false end
+  return n ~= math.floor(n)
+end
+
+---
+-- Returns whether or not *value* equals *other*.
+-- @param value The value to test.
+-- @param other The value to compare with.
+-- @usage expand('{% if is_eq(x, 1) %}...{% endif %}')
+-- @name tests.is_eq
+function M.tests.is_eq(value, other) return value == other end
+
+---
+-- Returns whether or not *value* does not equal *other*.
+-- @param value The value to test.
+-- @param other The value to compare with.
+-- @name tests.is_ne
+function M.tests.is_ne(value, other) return value ~= other end
+
+---
+-- Returns whether or not *value* is less than *other*.
+-- @param value The value to test.
+-- @param other The value to compare with.
+-- @name tests.is_lt
+function M.tests.is_lt(value, other) return value < other end
+
+---
+-- Returns whether or not *value* is less than or equal to *other*.
+-- @param value The value to test.
+-- @param other The value to compare with.
+-- @name tests.is_le
+function M.tests.is_le(value, other) return value <= other end
+
+---
+-- Returns whether or not *value* is greater than *other*.
+-- @param value The value to test.
+-- @param other The value to compare with.
+-- @name tests.is_gt
+function M.tests.is_gt(value, other) return value > other end
+
+---
+-- Returns whether or not *value* is greater than or equal to *other*.
+-- @param value The value to test.
+-- @param other The value to compare with.
+-- @name tests.is_ge
+function M.tests.is_ge(value, other) return value >= other end
 
 return M

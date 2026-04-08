@@ -10,5 +10,8 @@ Fuzzy Add TCP Explicit
 Fuzzy Delete TCP Explicit
   Fuzzy Multimessage Delete Test
 
-Fuzzy Overwrite TCP Explicit
-  Fuzzy Multimessage Overwrite Test
+Fuzzy Multi Flag TCP Explicit
+  Fuzzy Multimessage Multi Flag Test
+
+Fuzzy Multi Flag Delete TCP Explicit
+  Fuzzy Multimessage Multi Flag Delete Test

@@ -89,6 +89,8 @@ static gboolean compressed = TRUE;
 static gboolean profile = FALSE;
 static gboolean skip_images = FALSE;
 static gboolean skip_attachments = FALSE;
+static gboolean protocol_v3 = FALSE;
+static gboolean msgpack_mode = FALSE;
 static const char *pubkey = nullptr;
 static const char *user_agent = "rspamc";
 static const char *files_list = nullptr;
@@ -193,6 +195,10 @@ static GOptionEntry entries[] =
 		 "Skip images when learning/unlearning fuzzy", nullptr},
 		{"skip-attachments", '\0', 0, G_OPTION_ARG_NONE, &skip_attachments,
 		 "Skip attachments when learning/unlearning fuzzy", nullptr},
+		{"protocol-v3", '\0', 0, G_OPTION_ARG_NONE, &protocol_v3,
+		 "Use v3 multipart protocol (structured metadata, multipart response)", nullptr},
+		{"msgpack", '\0', 0, G_OPTION_ARG_NONE, &msgpack_mode,
+		 "Use msgpack for v3 metadata and response (requires --protocol-v3)", nullptr},
 		{"user-agent", 'U', 0, G_OPTION_ARG_STRING, &user_agent,
 		 "Use specific User-Agent instead of \"rspamc\"", nullptr},
 		{"files-list", '\0', 0, G_OPTION_ARG_FILENAME, &files_list,
@@ -218,17 +224,20 @@ static void rspamc_stat_output(FILE *out, ucl_object_t *obj);
 static void
 rspamc_neural_learn_output(FILE *out, ucl_object_t *obj)
 {
-	bool is_success = true;
+	bool is_success = false;
+	bool have_explicit_success = false;
 	const char *filename = nullptr;
 	double scan_time = -1.0;
 	const char *redis_key = nullptr;
 	std::uintmax_t stored_bytes = 0;
 	bool have_stored = false;
+	bool is_scan_response = false;
 
 	if (obj != nullptr) {
 		const auto *ok = ucl_object_lookup(obj, "success");
 		if (ok) {
 			is_success = ucl_object_toboolean(ok);
+			have_explicit_success = true;
 		}
 		const auto *fn = ucl_object_lookup(obj, "filename");
 		if (fn) {
@@ -247,10 +256,24 @@ rspamc_neural_learn_output(FILE *out, ucl_object_t *obj)
 		if (rk) {
 			redis_key = ucl_object_tostring(rk);
 		}
+		/* Detect checkv2 scan response (has "default" or "action" key) */
+		if (ucl_object_lookup(obj, "default") || ucl_object_lookup(obj, "action")) {
+			is_scan_response = true;
+			is_success = true;
+		}
 	}
 
-	// First line: success
-	fprintf(out, "success = %s;\n", is_success ? "true" : "false");
+	if (is_scan_response) {
+		/* Training was submitted via scan (requires_scan mode) */
+		fprintf(out, "success = true;\n");
+		fprintf(out, "method = \"scan\";\n");
+	}
+	else if (have_explicit_success) {
+		fprintf(out, "success = %s;\n", is_success ? "true" : "false");
+	}
+	else {
+		fprintf(out, "success = false;\n");
+	}
 
 	// Then other fields in k = v; format
 	if (filename) {
@@ -1564,6 +1587,9 @@ rspamc_counters_output(FILE *out, ucl_object_t *obj)
 	rspamc_print(out, " {} \n", emphasis_argument(dash_buf));
 	rspamc_print(out, "| {:<4} | {:<{}} | {:^7} | {:^13} | {:^7} |\n", "",
 				 "", max_len,
+				 "", "avg (stddev)", "");
+	rspamc_print(out, "| {:<4} | {:<{}} | {:^7} | {:^13} | {:^7} |\n", "",
+				 "", max_len,
 				 "", "hits/min", "");
 
 	for (const auto [i, cur]: rspamd::enumerate(counters_vec)) {
@@ -1579,7 +1605,7 @@ rspamc_counters_output(FILE *out, ucl_object_t *obj)
 
 			if (sym->len > max_len) {
 				rspamd_snprintf(sym_buf, sizeof(sym_buf), "%*s...",
-								(max_len - 3), ucl_object_tostring(sym));
+								(int) (max_len - 3), ucl_object_tostring(sym));
 				sym_name = sym_buf;
 			}
 			else {
@@ -2278,7 +2304,89 @@ rspamc_process_input(struct ev_loop *ev_base, const struct rspamc_command &cmd,
 		cbdata->cmd = cmd;
 		cbdata->filename = name;
 
-		if (cmd.need_input) {
+		if (protocol_v3 && cmd.need_input &&
+			(cmd.cmd == RSPAMC_COMMAND_SYMBOLS || cmd.cmd == RSPAMC_COMMAND_CHECK)) {
+			/* Build metadata UCL object from CLI options */
+			ucl_object_t *metadata = ucl_object_typed_new(UCL_OBJECT);
+
+			if (from) {
+				ucl_object_insert_key(metadata, ucl_object_fromstring(from),
+									  "from", 0, false);
+			}
+			if (rcpts) {
+				ucl_object_t *rcpt_arr = ucl_object_typed_new(UCL_ARRAY);
+				for (auto *rcpt = rcpts; *rcpt; rcpt++) {
+					ucl_array_append(rcpt_arr, ucl_object_fromstring(*rcpt));
+				}
+				ucl_object_insert_key(metadata, rcpt_arr, "rcpt", 0, false);
+			}
+			if (ip) {
+				ucl_object_insert_key(metadata, ucl_object_fromstring(ip),
+									  "ip", 0, false);
+			}
+			if (helo) {
+				ucl_object_insert_key(metadata, ucl_object_fromstring(helo),
+									  "helo", 0, false);
+			}
+			if (hostname) {
+				ucl_object_insert_key(metadata, ucl_object_fromstring(hostname),
+									  "hostname", 0, false);
+			}
+			if (user) {
+				ucl_object_insert_key(metadata, ucl_object_fromstring(user),
+									  "user", 0, false);
+			}
+			if (deliver_to) {
+				ucl_object_insert_key(metadata, ucl_object_fromstring(deliver_to),
+									  "deliver_to", 0, false);
+			}
+			if (queue_id) {
+				ucl_object_insert_key(metadata, ucl_object_fromstring(queue_id),
+									  "queue_id", 0, false);
+			}
+			if (log_tag) {
+				ucl_object_insert_key(metadata, ucl_object_fromstring(log_tag),
+									  "log_tag", 0, false);
+			}
+			if (!settings.empty()) {
+				/* Try to parse settings as UCL */
+				struct ucl_parser *sp = ucl_parser_new(UCL_PARSER_DEFAULT);
+				if (ucl_parser_add_string(sp, settings.c_str(), settings.size())) {
+					ucl_object_t *sobj = ucl_parser_get_object(sp);
+					ucl_object_insert_key(metadata, sobj, "settings", 0, false);
+				}
+				ucl_parser_free(sp);
+			}
+			if (raw) {
+				ucl_object_insert_key(metadata, ucl_object_frombool(true),
+									  "raw", 0, false);
+			}
+
+			/* Build flags array */
+			ucl_object_t *flags_arr = ucl_object_typed_new(UCL_ARRAY);
+			if (pass_all) {
+				ucl_array_append(flags_arr, ucl_object_fromstring("pass_all"));
+			}
+			if (extended_urls) {
+				ucl_array_append(flags_arr, ucl_object_fromstring("ext_urls"));
+			}
+			if (profile) {
+				ucl_array_append(flags_arr, ucl_object_fromstring("profile"));
+			}
+			if (ucl_array_size(flags_arr) > 0) {
+				ucl_object_insert_key(metadata, flags_arr, "flags", 0, false);
+			}
+			else {
+				ucl_object_unref(flags_arr);
+			}
+
+			rspamd_client_command_v3(conn, "checkv3", metadata, in,
+									 rspamc_client_cb, cbdata, compressed,
+									 msgpack_mode,
+									 cbdata->filename.c_str(), &err);
+			ucl_object_unref(metadata);
+		}
+		else if (cmd.need_input) {
 			const char *path = path_override.empty() ? cmd.path : path_override.c_str();
 			rspamd_client_command(conn, path, attrs, in, rspamc_client_cb,
 								  cbdata, compressed, dictionary, cbdata->filename.c_str(), &err);
@@ -2490,8 +2598,14 @@ static void rspamc_neural_config_cb(struct rspamd_client_connection *conn,
 		ucl_object_unref(result);
 	}
 	else if (err) {
-		/* Do not fail the whole run if config not available */
+		/* Do not fail the whole run if config not available;
+		 * fall back to scan-based learning (requires_scan=true default) */
 		neural_cfg_loaded = false;
+		if (!json && !compact) {
+			rspamc_print(stderr, "Note: could not fetch neural config ({}); "
+								 "using scan-based learning\n",
+						 err->message);
+		}
 	}
 
 	rspamd_client_destroy(conn);
@@ -2531,7 +2645,19 @@ rspamc_fetch_neural_config(struct ev_loop *ev_base, GQueue *attrs)
 	}
 
 	if (p != nullptr) {
-		port = strtoul(p + 1, nullptr, 10);
+		auto user_port = strtoul(p + 1, nullptr, 10);
+		/*
+		 * /plugins/neural/config is only available on the controller worker.
+		 * If the user specified the default scan port (11333), use the
+		 * controller port instead.  For any other user-specified port,
+		 * use it as-is (it might be a custom controller port).
+		 */
+		if (user_port == DEFAULT_PORT) {
+			port = DEFAULT_CONTROL_PORT;
+		}
+		else {
+			port = user_port;
+		}
 	}
 	else {
 		/* Default to controller port if not specified */

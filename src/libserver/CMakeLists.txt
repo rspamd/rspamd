@@ -1,5 +1,6 @@
 # Librspamdserver
 ADD_SUBDIRECTORY(css)
+ADD_SUBDIRECTORY(fasttext)
 SET(LIBRSPAMDSERVERSRC
         ${CMAKE_CURRENT_SOURCE_DIR}/cfg_utils.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/cfg_rcl.cxx
@@ -13,8 +14,13 @@ SET(LIBRSPAMDSERVERSRC
         ${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend/fuzzy_backend_sqlite.c
         ${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend/fuzzy_backend_redis.c
         ${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend/fuzzy_backend_noop.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_storage_keys.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_storage_ratelimit.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_storage_stat.c
         ${CMAKE_CURRENT_SOURCE_DIR}/milter.c
         ${CMAKE_CURRENT_SOURCE_DIR}/monitored.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/multipart_form.cxx
+        ${CMAKE_CURRENT_SOURCE_DIR}/multipart_response.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/protocol.c
         ${CMAKE_CURRENT_SOURCE_DIR}/re_cache.c
         ${CMAKE_CURRENT_SOURCE_DIR}/redis_pool.cxx
@@ -25,9 +31,11 @@ SET(LIBRSPAMDSERVERSRC
         ${CMAKE_CURRENT_SOURCE_DIR}/symcache/symcache_item.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/symcache/symcache_runtime.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/symcache/symcache_c.cxx
+        ${CMAKE_CURRENT_SOURCE_DIR}/settings_merge.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/task.c
         ${CMAKE_CURRENT_SOURCE_DIR}/url.c
         ${CMAKE_CURRENT_SOURCE_DIR}/worker_util.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/http_content_negotiation.c
         ${CMAKE_CURRENT_SOURCE_DIR}/logger/logger.c
         ${CMAKE_CURRENT_SOURCE_DIR}/logger/logger_file.c
         ${CMAKE_CURRENT_SOURCE_DIR}/logger/logger_syslog.c
@@ -47,6 +55,7 @@ SET(LIBRSPAMDSERVERSRC
         ${CMAKE_CURRENT_SOURCE_DIR}/html/html_url_rewrite_c.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/html/html_tests.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/hyperscan_tools.cxx
+        ${CMAKE_CURRENT_SOURCE_DIR}/hs_cache_backend.c
         ${CMAKE_CURRENT_SOURCE_DIR}/backtrace.cxx
         ${LIBCSSSRC})
 

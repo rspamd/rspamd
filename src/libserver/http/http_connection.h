@@ -345,6 +345,29 @@ void rspamd_http_connection_set_max_size(struct rspamd_http_connection *conn,
 
 void rspamd_http_connection_disable_encryption(struct rspamd_http_connection *conn);
 
+/**
+ * Accept SSL on an existing server connection. Performs the SSL handshake
+ * asynchronously and then starts HTTP message reading.
+ * @param conn server connection (already created via rspamd_http_connection_new_server)
+ * @param ssl_ctx server SSL context (from rspamd_init_ssl_ctx_server)
+ * @param ud opaque user data
+ * @param timeout handshake/IO timeout
+ * @return TRUE if handshake was initiated
+ */
+gboolean rspamd_http_connection_accept_ssl(struct rspamd_http_connection *conn,
+										   gpointer ssl_ctx,
+										   gpointer ud,
+										   ev_tstamp timeout);
+
+/**
+ * Accept SSL on an existing server connection with shared memory body.
+ * Same as rspamd_http_connection_accept_ssl but starts reading in shared mode.
+ */
+gboolean rspamd_http_connection_accept_ssl_shared(struct rspamd_http_connection *conn,
+												  gpointer ssl_ctx,
+												  gpointer ud,
+												  ev_tstamp timeout);
+
 #ifdef __cplusplus
 }
 #endif

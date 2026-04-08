@@ -204,8 +204,9 @@ struct rspamd_map {
 	bool non_trivial;  /* E.g. has http backends in active mode */
 	bool file_only;    /* No HTTP backends found */
 	bool static_only;  /* No need to check */
-	bool no_file_read; /* Do not read files */
+	bool no_file_read; /* Do not read files, pass filename to consumer */
 	bool seen;         /* This map has already been watched or pre-loaded */
+	gsize no_file_read_offset; /* Payload offset when consumer mmaps the file (0 for file, 4096 for HTTP cache) */
 	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
 	struct rspamd_map_shared_data *shared;
 	char tag[MEMPOOL_UID_LEN];
@@ -228,8 +229,21 @@ struct map_periodic_cbdata {
 	ref_entry_t ref;
 };
 
-static const char rspamd_http_file_magic[] =
+static const char rspamd_http_file_magic_old[] =
 	{'r', 'm', 'c', 'd', '2', '0', '0', '0'};
+static const char rspamd_http_file_magic[] =
+	{'r', 'm', 'c', 'd', '2', '0', '0', '1'};
+
+/*
+ * Page-aligned cache file header.
+ * The data payload always starts at RSPAMD_MAP_CACHE_HEADER_SIZE offset,
+ * so no_file_read consumers can mmap the file at that fixed offset.
+ * Etag (variable-length) is stored within the header page after the
+ * fixed fields; max etag length is RSPAMD_MAP_CACHE_HEADER_SIZE - sizeof(this struct).
+ * Size is 16K to satisfy mmap alignment on all common architectures
+ * (4K on x86_64, 16K on Apple Silicon aarch64).
+ */
+#define RSPAMD_MAP_CACHE_HEADER_SIZE 16384
 
 struct rspamd_http_file_data {
 	unsigned char magic[sizeof(rspamd_http_file_magic)];

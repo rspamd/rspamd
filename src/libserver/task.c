@@ -180,6 +180,8 @@ rspamd_task_new(struct rspamd_worker *worker,
 	new_task->event_loop = event_loop;
 	new_task->task_timestamp = ev_time();
 	new_task->time_real_finish = NAN;
+	rspamd_uuid_v7(new_task->task_uuid, new_task->task_pool->tag.uid,
+				   sizeof(new_task->task_pool->tag.uid), new_task->task_timestamp);
 
 	new_task->request_headers = kh_init(rspamd_req_headers_hash);
 	new_task->sock = -1;
@@ -418,7 +420,7 @@ rspamd_task_load_message(struct rspamd_task *task,
 	ft = "file";
 #endif
 
-	if (msg) {
+	if (msg && task->cmd != CMD_CHECK_V3) {
 		rspamd_protocol_handle_headers(task, msg);
 	}
 

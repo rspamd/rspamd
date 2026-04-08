@@ -1,0 +1,61 @@
+Return-Path: test@test.com
+From: TEST <test@test.com>
+To: Me <me@me.me>
+Subject: Calendar invite with HTML alternative
+MIME-Version: 1.0
+Date: Mon, 01 Jan 2024 00:00:00 +0000
+Message-ID: <alt-calendar@test.com>
+Content-Type: multipart/mixed; boundary="outer-boundary"
+
+--outer-boundary
+Content-Type: multipart/alternative; boundary="inner-boundary"
+
+--inner-boundary
+Content-Type: text/html; charset=utf-8
+
+<html>
+<body>
+<p>You are invited to a meeting.</p>
+<p>When: Monday, January 1, 2024</p>
+<p>Where: Conference Room A</p>
+</body>
+</html>
+
+--inner-boundary
+Content-Type: text/calendar; charset=utf-8; method=REQUEST
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+DTSTART:20240101T100000Z
+DTEND:20240101T110000Z
+SUMMARY:Team Meeting
+LOCATION:Conference Room A
+ORGANIZER:mailto:test@test.com
+ATTENDEE:mailto:me@me.me
+END:VEVENT
+END:VCALENDAR
+
+--inner-boundary--
+
+--outer-boundary
+Content-Type: application/ics; name="invite.ics"
+Content-Disposition: attachment; filename="invite.ics"
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+DTSTART:20240101T100000Z
+DTEND:20240101T110000Z
+SUMMARY:Team Meeting
+LOCATION:Conference Room A
+ORGANIZER:mailto:test@test.com
+ATTENDEE:mailto:me@me.me
+END:VEVENT
+END:VCALENDAR
+
+--outer-boundary--

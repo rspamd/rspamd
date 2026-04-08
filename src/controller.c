@@ -25,6 +25,7 @@
 #include "libstat/stat_api.h"
 #include "rspamd.h"
 #include "libserver/worker_util.h"
+#include "libserver/ssl_util.h"
 #include "worker_private.h"
 #include "lua/lua_common.h"
 #include "cryptobox.h"
@@ -139,8 +140,6 @@ struct rspamd_controller_worker_ctx {
 	struct rspamd_config *cfg;
 	/* END OF COMMON PART */
 	ev_tstamp timeout;
-	/* Whether we use ssl for this server */
-	gboolean use_ssl;
 	/* Webui password */
 	char *password;
 	/* Privileged password */
@@ -2012,9 +2011,10 @@ rspamd_controller_learn_fin_task(void *ud)
 
 	if (RSPAMD_TASK_IS_PROCESSED(task)) {
 		/* Successful learn */
+		const char *learn_class = rspamd_task_get_autolearn_class(task);
 		msg_info_task("<%s> learned message as %s: %s",
 					  rspamd_inet_address_to_string(session->from_addr),
-					  session->is_spam ? "spam" : "ham",
+					  learn_class ? learn_class : (session->is_spam ? "spam" : "ham"),
 					  MESSAGE_FIELD_CHECK(task, message_id));
 		rspamd_controller_send_string(conn_ent, "{\"success\":true}");
 		return TRUE;
@@ -2040,9 +2040,10 @@ rspamd_controller_learn_fin_task(void *ud)
 										 task->err->message);
 		}
 		else {
+			const char *learn_class = rspamd_task_get_autolearn_class(task);
 			msg_info_task("<%s> learned message as %s: %s",
 						  rspamd_inet_address_to_string(session->from_addr),
-						  session->is_spam ? "spam" : "ham",
+						  learn_class ? learn_class : (session->is_spam ? "spam" : "ham"),
 						  MESSAGE_FIELD_CHECK(task, message_id));
 			rspamd_controller_send_string(conn_ent, "{\"success\":true}");
 		}
@@ -2162,6 +2163,7 @@ rspamd_controller_handle_learn_common(
 	cl_header = rspamd_http_message_find_header(msg, "classifier");
 	if (cl_header) {
 		session->classifier = rspamd_mempool_ftokdup(session->pool, cl_header);
+		task->classifier = session->classifier;
 	}
 	else {
 		session->classifier = NULL;
@@ -2277,6 +2279,7 @@ rspamd_controller_handle_learnclass(
 	cl_header = rspamd_http_message_find_header(msg, "classifier");
 	if (cl_header) {
 		session->classifier = rspamd_mempool_ftokdup(session->pool, cl_header);
+		task->classifier = session->classifier;
 	}
 	else {
 		session->classifier = NULL;
@@ -2740,6 +2743,7 @@ rspamd_controller_handle_savemap(struct rspamd_http_connection_entry *conn_ent,
 struct rspamd_stat_cbdata {
 	struct rspamd_http_connection_entry *conn_ent;
 	struct rspamd_controller_worker_ctx *ctx;
+	struct rspamd_http_message *req_msg;
 	ucl_object_t *top;
 	ucl_object_t *stat;
 	struct rspamd_task *task;
@@ -2782,7 +2786,7 @@ rspamd_controller_stat_fin_task(void *ud)
 		ucl_object_insert_key(top, ar, "fuzzy_hashes", 0, false);
 	}
 
-	rspamd_controller_send_ucl(conn_ent, top);
+	rspamd_controller_send_ucl_negotiated(conn_ent, cbdata->req_msg, top);
 
 
 	return TRUE;
@@ -2795,6 +2799,9 @@ rspamd_controller_stat_cleanup_task(void *ud)
 
 	rspamd_task_free(cbdata->task);
 	ucl_object_unref(cbdata->top);
+	if (cbdata->req_msg) {
+		rspamd_http_message_unref(cbdata->req_msg);
+	}
 }
 
 /*
@@ -2833,6 +2840,7 @@ rspamd_controller_handle_stat_common(
 	cbdata->conn_ent = conn_ent;
 	cbdata->task = task;
 	cbdata->ctx = ctx;
+	cbdata->req_msg = rspamd_http_message_ref(msg);
 	top = ucl_object_typed_new(UCL_OBJECT);
 	cbdata->top = top;
 
@@ -3099,7 +3107,7 @@ rspamd_controller_metrics_fin_task(void *ud)
 	}
 
 	rspamd_printf_fstring(&output, "# EOF\n");
-	rspamd_controller_send_openmetrics(conn_ent, output);
+	rspamd_controller_send_openmetrics_negotiated(conn_ent, cbdata->req_msg, output);
 
 	return TRUE;
 }
@@ -3134,6 +3142,7 @@ rspamd_controller_handle_metrics_common(
 	cbdata->task = task;
 	cbdata->ctx = ctx;
 	cbdata->top = top;
+	cbdata->req_msg = rspamd_http_message_ref(msg);
 
 	task->s = rspamd_session_create(session->pool,
 									rspamd_controller_metrics_fin_task,
@@ -3554,8 +3563,9 @@ rspamd_controller_handle_lua_plugin(struct rspamd_http_connection_entry *conn_en
  * Bayes classifier list command handler:
  * request: /bayes/classifiers
  * headers: Password
- * reply: JSON array of Bayes classifier names
- *   Note: list is in reverse of declaration order (GList prepend).
+ * reply: JSON object with classifiers array containing metadata:
+ *   {classifiers: [{name, type, per_user, classes: [...]}, ...]}
+ *   Classifiers are listed in declaration order from config.
  */
 static int
 rspamd_controller_handle_bayes_classifiers(struct rspamd_http_connection_entry *conn_ent,
@@ -3563,24 +3573,71 @@ rspamd_controller_handle_bayes_classifiers(struct rspamd_http_connection_entry *
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct rspamd_controller_worker_ctx *ctx = session->ctx;
-	ucl_object_t *arr;
+	ucl_object_t *result, *classifiers_array, *classifier_obj, *classes_array;
 	struct rspamd_classifier_config *clc;
-	GList *cur;
+	GList *cur, *st_cur;
 
 	if (!rspamd_controller_check_password(conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 
-	arr = ucl_object_typed_new(UCL_ARRAY);
+	result = ucl_object_typed_new(UCL_OBJECT);
+	classifiers_array = ucl_object_typed_new(UCL_ARRAY);
+
+	/*
+	 * Iterate backwards to compensate for g_list_prepend() in config parser,
+	 * returning classifiers in declaration order from config file.
+	 */
 	cur = g_list_last(ctx->cfg->classifiers);
 	while (cur) {
 		clc = cur->data;
-		ucl_array_append(arr, ucl_object_fromstring(clc->name));
+
+		classifier_obj = ucl_object_typed_new(UCL_OBJECT);
+		ucl_object_insert_key(classifier_obj,
+				ucl_object_fromstring(clc->name),
+				"name", 0, false);
+		ucl_object_insert_key(classifier_obj,
+				ucl_object_fromstring(rspamd_classifier_type(clc)),
+				"type", 0, false);
+		ucl_object_insert_key(classifier_obj,
+				ucl_object_frombool(rspamd_classifier_is_per_user(clc)),
+				"per_user", 0, false);
+
+		/* Collect unique class names from statfiles.
+		 * Linear search is used since N < 10 in practice, avoiding hash table overhead. */
+		classes_array = ucl_object_typed_new(UCL_ARRAY);
+
+		st_cur = clc->statfiles;
+		while (st_cur) {
+			struct rspamd_statfile_config *stcf = st_cur->data;
+			if (stcf->class_name) {
+				gboolean seen = FALSE;
+				ucl_object_iter_t it = NULL;
+				const ucl_object_t *item;
+
+				while ((item = ucl_object_iterate(classes_array, &it, true)) != NULL) {
+					if (strcmp(ucl_object_tostring(item), stcf->class_name) == 0) {
+						seen = TRUE;
+						break;
+					}
+				}
+				if (!seen) {
+					ucl_array_append(classes_array, ucl_object_fromstring(stcf->class_name));
+				}
+			}
+			st_cur = g_list_next(st_cur);
+		}
+
+		ucl_object_insert_key(classifier_obj, classes_array, "classes", 0, false);
+		ucl_array_append(classifiers_array, classifier_obj);
+
 		cur = g_list_previous(cur);
 	}
 
-	rspamd_controller_send_ucl(conn_ent, arr);
-	ucl_object_unref(arr);
+	ucl_object_insert_key(result, classifiers_array, "classifiers", 0, false);
+
+	rspamd_controller_send_ucl(conn_ent, result);
+	ucl_object_unref(result);
 	return 0;
 }
 
@@ -3651,7 +3708,8 @@ rspamd_controller_accept_socket(EV_P_ ev_io *w, int revents)
 	session->wrk = worker;
 	worker->nconns++;
 
-	rspamd_http_router_handle_socket(ctx->http, nfd, session);
+	rspamd_http_router_handle_socket_ssl(ctx->http, nfd, session,
+										 rspamd_worker_is_ssl_socket(worker, w->fd));
 }
 
 static void
@@ -3715,21 +3773,12 @@ init_controller_worker(struct rspamd_config *cfg)
 
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
-									  "ssl",
-									  rspamd_rcl_parse_struct_boolean,
-									  ctx,
-									  G_STRUCT_OFFSET(struct rspamd_controller_worker_ctx, use_ssl),
-									  0,
-									  "Unimplemented");
-
-	rspamd_rcl_register_worker_option(cfg,
-									  type,
 									  "ssl_cert",
 									  rspamd_rcl_parse_struct_string,
 									  ctx,
 									  G_STRUCT_OFFSET(struct rspamd_controller_worker_ctx, ssl_cert),
 									  0,
-									  "Unimplemented");
+									  "Path to SSL certificate chain file");
 
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
@@ -3738,7 +3787,7 @@ init_controller_worker(struct rspamd_config *cfg)
 									  ctx,
 									  G_STRUCT_OFFSET(struct rspamd_controller_worker_ctx, ssl_key),
 									  0,
-									  "Unimplemented");
+									  "Path to SSL private key file");
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
 									  "timeout",
@@ -4110,6 +4159,24 @@ start_controller_worker(struct rspamd_worker *worker)
 	ctx->http = rspamd_http_router_new(rspamd_controller_error_handler,
 									   rspamd_controller_finish_handler, ctx->timeout,
 									   ctx->static_files_dir, ctx->http_ctx);
+
+	if (rspamd_worker_has_ssl_socket(worker)) {
+		if (ctx->ssl_cert && ctx->ssl_key) {
+			gpointer server_ssl_ctx = rspamd_init_ssl_ctx_server(ctx->ssl_cert, ctx->ssl_key);
+
+			if (server_ssl_ctx) {
+				rspamd_ssl_ctx_config(ctx->cfg, server_ssl_ctx);
+				rspamd_http_router_set_ssl(ctx->http, server_ssl_ctx);
+				msg_info_ctx("enabled SSL for controller worker");
+			}
+			else {
+				msg_err_ctx("failed to create SSL context for controller worker");
+			}
+		}
+		else {
+			msg_err_ctx("ssl bind socket configured but ssl_cert or ssl_key is missing");
+		}
+	}
 
 	/* Add callbacks for different methods */
 	rspamd_http_router_add_path(ctx->http,

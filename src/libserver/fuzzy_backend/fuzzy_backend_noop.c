@@ -35,11 +35,11 @@ void rspamd_fuzzy_backend_check_noop(struct rspamd_fuzzy_backend *bk,
 									 rspamd_fuzzy_check_cb cb, void *ud,
 									 void *subr_ud)
 {
-	struct rspamd_fuzzy_reply rep;
+	struct rspamd_fuzzy_multiflag_result mf_result;
 
 	if (cb) {
-		memset(&rep, 0, sizeof(rep));
-		cb(&rep, ud);
+		memset(&mf_result, 0, sizeof(mf_result));
+		cb(&mf_result, ud);
 	}
 
 	return;

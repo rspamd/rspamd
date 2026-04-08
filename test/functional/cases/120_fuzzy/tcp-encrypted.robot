@@ -10,8 +10,11 @@ Fuzzy Add TCP Encrypted
 Fuzzy Delete TCP Encrypted
   Fuzzy Multimessage Delete Test
 
-Fuzzy Overwrite TCP Encrypted
-  Fuzzy Multimessage Overwrite Test
+Fuzzy Multi Flag TCP Encrypted
+  Fuzzy Multimessage Multi Flag Test
+
+Fuzzy Multi Flag Delete TCP Encrypted
+  Fuzzy Multimessage Multi Flag Delete Test
 
 Fuzzy TCP Encrypted High Rate
   Fuzzy TCP High Rate Test

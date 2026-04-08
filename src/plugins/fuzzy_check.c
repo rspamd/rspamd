@@ -118,11 +118,13 @@ struct fuzzy_rule {
 	gboolean html_shingles;     /* Enable HTML fuzzy hashing */
 	gboolean text_hashes;       /* Enable/disable generation of text hashes */
 	unsigned int min_html_tags; /* Minimum tags for HTML hash */
+	gboolean html_ignore_domains; /* Ignore link domains in HTML structural tokens */
 	int learn_condition_cb;
 	uint32_t retransmits;
 	struct rspamd_hash_map_helper *skip_map;
 	struct fuzzy_ctx *ctx;
 	int lua_id;
+	gboolean server_supports_v2;
 
 	/* TCP configuration */
 	gboolean tcp_enabled;   /* Explicitly enable TCP */
@@ -161,6 +163,15 @@ struct fuzzy_ctx {
 	uint32_t retransmits;
 	gboolean enabled;
 };
+
+static inline uint8_t
+fuzzy_cmd_version(const struct fuzzy_rule *rule)
+{
+	if (rule->server_supports_v2) {
+		return 5; /* Native v5 after server confirmed v2 support */
+	}
+	return RSPAMD_FUZZY_VERSION | RSPAMD_FUZZY_V2_CAP; /* 4 | 0x10 = 0x14 */
+}
 
 enum fuzzy_result_type {
 	FUZZY_RESULT_TXT,
@@ -278,6 +289,7 @@ struct fuzzy_tcp_connection {
 #define FUZZY_CMD_FLAG_IMAGE (1 << 2)
 #define FUZZY_CMD_FLAG_CONTENT (1 << 3)
 #define FUZZY_CMD_FLAG_HTML (1 << 4)
+#define FUZZY_CMD_FLAG_HTML_DOMAINS (1 << 5)
 
 #define FUZZY_CHECK_FLAG_NOIMAGES (1 << 0)
 #define FUZZY_CHECK_FLAG_NOATTACHMENTS (1 << 1)
@@ -489,6 +501,10 @@ fuzzy_rule_apply_checks(struct fuzzy_rule *rule,
 			else if ((opt = ucl_object_lookup(cur, "weight")) != NULL) {
 				rule->html_weight = ucl_obj_todouble(opt);
 			}
+
+			if ((opt = ucl_object_lookup(cur, "ignore_link_domains")) != NULL) {
+				rule->html_ignore_domains = ucl_obj_toboolean(opt);
+			}
 		}
 		else {
 			/* Other checks are processed by lua_fuzzy; keep legacy behaviour */
@@ -533,6 +549,7 @@ fuzzy_rule_new(const char *default_symbol, rspamd_mempool_t *pool)
 	rule->html_shingles = FALSE;
 	rule->text_hashes = TRUE;
 	rule->min_html_tags = 10;
+	rule->html_ignore_domains = FALSE;
 
 	return rule;
 }
@@ -691,16 +708,16 @@ fuzzy_tcp_connection_unref(gpointer conn_ptr)
 
 /**
  * Refresh TCP connection timeout after successful I/O activity
- * This prevents active connections from timing out during data transfer
+ * This prevents active connections from timing out during data transfer.
+ * Uses ev_timer_again with a repeat interval for a single syscall instead
+ * of the stop/set/start triple.
  */
 static void
 fuzzy_tcp_refresh_timeout(struct fuzzy_tcp_connection *conn)
 {
 	if (conn->rule->tcp_timeout > 0 && ev_is_active(&conn->ev.tm)) {
-		/* Stop and restart timer to extend timeout */
-		ev_timer_stop(conn->event_loop, &conn->ev.tm);
-		ev_timer_set(&conn->ev.tm, conn->rule->tcp_timeout, 0.0);
-		ev_timer_start(conn->event_loop, &conn->ev.tm);
+		conn->ev.tm.repeat = conn->rule->tcp_timeout;
+		ev_timer_again(conn->event_loop, &conn->ev.tm);
 	}
 }
 
@@ -974,7 +991,7 @@ fuzzy_tcp_connection_cleanup(struct fuzzy_tcp_connection *conn, const char *reas
 	}
 
 	if (removed > 0 && task) {
-		msg_warn_task("fuzzy_tcp: cleaned up %u pending commands due to connection failure: %s",
+		msg_warn_task("fuzzy_tcp: cleaned up %ud pending commands due to connection failure: %s",
 					  removed, reason ? reason : "unknown");
 	}
 
@@ -1144,9 +1161,9 @@ fuzzy_tcp_io_handler(int fd, short what, gpointer ud)
 
 			rspamd_upstream_ok(conn->server);
 
-			/* Now wait for both read and write events */
+			/* Start reading; only arm EV_WRITE if there's queued data */
 			rspamd_ev_watcher_reschedule(conn->event_loop, &conn->ev,
-										 EV_READ | EV_WRITE);
+										 g_queue_is_empty(conn->write_queue) ? EV_READ : EV_READ | EV_WRITE);
 
 			msg_debug("fuzzy_tcp: after reschedule - fd=%d, ev.io.fd=%d",
 					  conn->fd, (int) conn->ev.io.fd);
@@ -1162,11 +1179,6 @@ fuzzy_tcp_io_handler(int fd, short what, gpointer ud)
 		fuzzy_tcp_read_handler(conn);
 	}
 
-	/* Check for timed out pending requests */
-	if (conn->connected) {
-		fuzzy_tcp_check_pending_timeouts(conn->rule, conn->last_activity);
-	}
-
 	FUZZY_TCP_RELEASE(conn);
 }
 
@@ -1179,6 +1191,7 @@ fuzzy_tcp_write_handler(struct fuzzy_tcp_connection *conn)
 {
 	struct fuzzy_tcp_write_buf *buf;
 	ssize_t r;
+	gboolean did_write = FALSE;
 
 	while ((buf = g_queue_peek_head(conn->write_queue)) != NULL) {
 		/* Write remaining data */
@@ -1234,9 +1247,7 @@ fuzzy_tcp_write_handler(struct fuzzy_tcp_connection *conn)
 		}
 
 		buf->bytes_written += r;
-
-		/* Refresh timeout after successful write - keeps connection alive during active data transfer */
-		fuzzy_tcp_refresh_timeout(conn);
+		did_write = TRUE;
 
 		if (buf->bytes_written >= buf->total_len) {
 			/* Buffer fully sent, remove from queue and free */
@@ -1250,8 +1261,13 @@ fuzzy_tcp_write_handler(struct fuzzy_tcp_connection *conn)
 		}
 	}
 
-	/* Queue is empty, no more data to write */
-	/* Might want to disable EV_WRITE here if needed */
+	/* Refresh timeout once after all writes, not per-buffer */
+	if (did_write) {
+		fuzzy_tcp_refresh_timeout(conn);
+	}
+
+	/* Queue is empty, switch to read-only to avoid busy-looping on EV_WRITE */
+	rspamd_ev_watcher_reschedule(conn->event_loop, &conn->ev, EV_READ);
 }
 
 /**
@@ -1372,13 +1388,17 @@ fuzzy_tcp_process_reply(struct fuzzy_tcp_connection *conn,
 						unsigned char *data, gsize len)
 {
 	struct rspamd_fuzzy_encrypted_reply encrep;
+	struct rspamd_fuzzy_encrypted_reply_v2 encrep_v2;
 	const struct rspamd_fuzzy_reply *rep;
+	const struct rspamd_fuzzy_reply_v2 *rep_v2 = NULL;
+	struct rspamd_fuzzy_reply synthetic_rep;
 	struct fuzzy_rule *rule = conn->rule;
 	unsigned int required_size;
 	struct fuzzy_tcp_pending_command *pending;
 	uint32_t tag;
+	gboolean is_v2 = FALSE;
 
-	/* Check if we have encryption */
+	/* Check minimum size — accept v1 as minimum */
 	if (conn->encrypted) {
 		required_size = sizeof(encrep);
 	}
@@ -1392,29 +1412,73 @@ fuzzy_tcp_process_reply(struct fuzzy_tcp_connection *conn,
 		return;
 	}
 
+	/* Detect v2 reply by size */
+	if (conn->encrypted && len >= sizeof(encrep_v2)) {
+		is_v2 = TRUE;
+	}
+	else if (!conn->encrypted && len >= sizeof(struct rspamd_fuzzy_reply_v2)) {
+		is_v2 = TRUE;
+	}
+
 	/* Decrypt if needed - use keys from connection */
 	if (conn->encrypted) {
-		memcpy(&encrep, data, sizeof(encrep));
-
 		/* Process keys through cache */
 		rspamd_keypair_cache_process(rule->ctx->keypairs_cache,
 									 conn->local_key, conn->peer_key);
 
-		/* Decrypt with connection keys */
-		if (!rspamd_cryptobox_decrypt_nm_inplace((unsigned char *) &encrep.rep,
-												 sizeof(encrep.rep),
-												 encrep.hdr.nonce,
-												 rspamd_pubkey_get_nm(conn->peer_key, conn->local_key),
-												 encrep.hdr.mac)) {
-			msg_warn("fuzzy_tcp: cannot decrypt reply from %s",
-					 rspamd_upstream_name(conn->server));
-			return;
-		}
+		if (is_v2) {
+			memcpy(&encrep_v2, data, sizeof(encrep_v2));
 
-		rep = &encrep.rep;
+			if (!rspamd_cryptobox_decrypt_nm_inplace((unsigned char *) &encrep_v2.rep,
+													 sizeof(encrep_v2.rep),
+													 encrep_v2.hdr.nonce,
+													 rspamd_pubkey_get_nm(conn->peer_key, conn->local_key),
+													 encrep_v2.hdr.mac)) {
+				msg_warn("fuzzy_tcp: cannot decrypt v2 reply from %s",
+						 rspamd_upstream_name(conn->server));
+				return;
+			}
+
+			rep_v2 = &encrep_v2.rep;
+			/* Build a v1-compatible rep from v2 for primary processing */
+			memset(&synthetic_rep, 0, sizeof(synthetic_rep));
+			synthetic_rep.v1 = rep_v2->v1;
+			memcpy(synthetic_rep.digest, rep_v2->digest, sizeof(synthetic_rep.digest));
+			synthetic_rep.ts = rep_v2->ts;
+			rep = &synthetic_rep;
+		}
+		else {
+			memcpy(&encrep, data, sizeof(encrep));
+
+			if (!rspamd_cryptobox_decrypt_nm_inplace((unsigned char *) &encrep.rep,
+													 sizeof(encrep.rep),
+													 encrep.hdr.nonce,
+													 rspamd_pubkey_get_nm(conn->peer_key, conn->local_key),
+													 encrep.hdr.mac)) {
+				msg_warn("fuzzy_tcp: cannot decrypt reply from %s",
+						 rspamd_upstream_name(conn->server));
+				return;
+			}
+
+			rep = &encrep.rep;
+		}
 	}
 	else {
-		rep = (const struct rspamd_fuzzy_reply *) data;
+		if (is_v2) {
+			rep_v2 = (const struct rspamd_fuzzy_reply_v2 *) data;
+			memset(&synthetic_rep, 0, sizeof(synthetic_rep));
+			synthetic_rep.v1 = rep_v2->v1;
+			memcpy(synthetic_rep.digest, rep_v2->digest, sizeof(synthetic_rep.digest));
+			synthetic_rep.ts = rep_v2->ts;
+			rep = &synthetic_rep;
+		}
+		else {
+			rep = (const struct rspamd_fuzzy_reply *) data;
+		}
+	}
+
+	if (is_v2) {
+		rule->server_supports_v2 = TRUE;
 	}
 
 	/* Extract tag and lookup pending command */
@@ -1435,8 +1499,26 @@ fuzzy_tcp_process_reply(struct fuzzy_tcp_connection *conn,
 	/* Process the reply - similar to UDP code in fuzzy_check_try_read */
 	if (rep->v1.prob > 0.5) {
 		if (pending->io->cmd.cmd == FUZZY_CHECK) {
+			/* Insert result for primary flag */
 			fuzzy_insert_result(pending->session, rep, &pending->io->cmd,
 								pending->io, rep->v1.flag);
+
+			/* Insert results for extra flags from v2 reply */
+			if (rep_v2 && rep_v2->n_extra_flags > 0) {
+				for (uint8_t ei = 0; ei < rep_v2->n_extra_flags && ei < RSPAMD_FUZZY_MAX_EXTRA_FLAGS; ei++) {
+					struct rspamd_fuzzy_reply extra_rep;
+					memset(&extra_rep, 0, sizeof(extra_rep));
+					extra_rep.v1.value = rep_v2->extra_flags[ei].value;
+					extra_rep.v1.flag = rep_v2->extra_flags[ei].flag;
+					extra_rep.v1.tag = rep->v1.tag;
+					extra_rep.v1.prob = rep->v1.prob;
+					memcpy(extra_rep.digest, rep_v2->digest, sizeof(extra_rep.digest));
+					extra_rep.ts = rep_v2->ts;
+
+					fuzzy_insert_result(pending->session, &extra_rep, &pending->io->cmd,
+										pending->io, extra_rep.v1.flag);
+				}
+			}
 		}
 		else if (pending->io->cmd.cmd == FUZZY_STAT) {
 			/*
@@ -1602,7 +1684,8 @@ fuzzy_tcp_read_handler(struct fuzzy_tcp_connection *conn)
 		/* State: 0xC000 - have length, reading data */
 		frame_len = conn->cur_frame_state & 0x3FFF;
 
-		if (frame_len > sizeof(struct rspamd_fuzzy_encrypted_reply)) {
+		if ((conn->encrypted && frame_len > sizeof(struct rspamd_fuzzy_encrypted_reply_v2)) ||
+			(!conn->encrypted && frame_len > sizeof(struct rspamd_fuzzy_reply_v2))) {
 			char error_buf[128];
 			rspamd_snprintf(error_buf, sizeof(error_buf), "invalid frame length: %d", (int) frame_len);
 			msg_err("fuzzy_tcp: invalid frame length %d from %s, closing",
@@ -2545,6 +2628,15 @@ int fuzzy_check_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 							   0);
 	rspamd_rcl_add_doc_by_path(cfg,
 							   "fuzzy_check.rule",
+							   "Ignore link domains in HTML structural tokens (for template-only matching)",
+							   "html_ignore_domains",
+							   UCL_BOOLEAN,
+							   NULL,
+							   0,
+							   "false",
+							   0);
+	rspamd_rcl_add_doc_by_path(cfg,
+							   "fuzzy_check.rule",
 							   "Content hashing checks configuration object (e.g. { text = { enabled = true; }, html = { enabled = true; } })",
 							   "checks",
 							   UCL_OBJECT,
@@ -2842,7 +2934,7 @@ int fuzzy_check_module_config(struct rspamd_config *cfg, bool validate)
 
 		/* We want that to check bad mime attachments */
 		rspamd_symcache_add_delayed_dependency(cfg->cache,
-											   "FUZZY_CALLBACK", "MIME_TYPES_CALLBACK");
+											   "FUZZY_CALLBACK", "MIME_TYPES_CALLBACK", FALSE);
 	}
 
 	if (fuzzy_module_ctx->fuzzy_rules == NULL) {
@@ -2958,7 +3050,7 @@ fuzzy_tcp_session_cleanup(struct fuzzy_client_session *session)
 	}
 
 	if (removed > 0 && session->task) {
-		msg_debug_fuzzy_check("fuzzy_tcp: cleaned up %u pending commands for finished session",
+		msg_debug_fuzzy_check("fuzzy_tcp: cleaned up %ud pending commands for finished session",
 							  removed);
 	}
 }
@@ -2981,10 +3073,12 @@ fuzzy_io_fin(void *ud)
 
 	if (session->commands) {
 		g_ptr_array_free(session->commands, TRUE);
+		session->commands = NULL;
 	}
 
 	if (session->results) {
 		g_ptr_array_free(session->results, TRUE);
+		session->results = NULL;
 	}
 
 	/* Only cleanup fd and ev_watcher for UDP sessions */
@@ -3078,7 +3172,7 @@ fuzzy_cmd_stat(struct fuzzy_rule *rule,
 	}
 
 	cmd->cmd = c;
-	cmd->version = RSPAMD_FUZZY_PLUGIN_VERSION;
+	cmd->version = fuzzy_cmd_version(rule);
 	cmd->shingles_count = 0;
 	cmd->tag = ottery_rand_uint32();
 
@@ -3135,7 +3229,7 @@ fuzzy_cmd_ping(struct fuzzy_rule *rule,
 
 
 	cmd->cmd = FUZZY_PING;
-	cmd->version = RSPAMD_FUZZY_PLUGIN_VERSION;
+	cmd->version = fuzzy_cmd_version(rule);
 	cmd->shingles_count = 0;
 	cmd->value = fuzzy_milliseconds_since_midnight(); /* Record timestamp */
 	cmd->tag = ottery_rand_uint32();
@@ -3197,7 +3291,7 @@ fuzzy_cmd_hash(struct fuzzy_rule *rule,
 	}
 
 	cmd->cmd = c;
-	cmd->version = RSPAMD_FUZZY_PLUGIN_VERSION;
+	cmd->version = fuzzy_cmd_version(rule);
 	cmd->shingles_count = 0;
 	cmd->tag = ottery_rand_uint32();
 
@@ -3626,7 +3720,7 @@ fuzzy_cmd_from_text_part(struct rspamd_task *task,
 	if (!short_text) {
 		shcmd->basic.tag = ottery_rand_uint32();
 		shcmd->basic.cmd = c;
-		shcmd->basic.version = RSPAMD_FUZZY_PLUGIN_VERSION;
+		shcmd->basic.version = fuzzy_cmd_version(rule);
 
 		if (c != FUZZY_CHECK) {
 			shcmd->basic.flag = flag;
@@ -3638,7 +3732,7 @@ fuzzy_cmd_from_text_part(struct rspamd_task *task,
 	else {
 		cmd->tag = ottery_rand_uint32();
 		cmd->cmd = c;
-		cmd->version = RSPAMD_FUZZY_PLUGIN_VERSION;
+		cmd->version = fuzzy_cmd_version(rule);
 
 		if (c != FUZZY_CHECK) {
 			cmd->flag = flag;
@@ -3696,7 +3790,8 @@ fuzzy_cmd_from_html_part(struct rspamd_task *task,
 						 int flag,
 						 uint32_t weight,
 						 struct rspamd_mime_text_part *part,
-						 struct rspamd_mime_part *mp)
+						 struct rspamd_mime_part *mp,
+						 gboolean ignore_link_domains)
 {
 	struct rspamd_fuzzy_shingle_cmd *shcmd = NULL;
 	struct rspamd_fuzzy_encrypted_shingle_cmd *encshcmd = NULL;
@@ -3755,8 +3850,9 @@ fuzzy_cmd_from_html_part(struct rspamd_task *task,
 	struct rspamd_cached_shingles **html_cached_ptr;
 
 	memcpy(&key_part, rule->shingles_key->str, sizeof(key_part));
-	rspamd_snprintf(html_cache_key, sizeof(html_cache_key), "%s%d_html",
-					rule->algorithm_str, key_part);
+	rspamd_snprintf(html_cache_key, sizeof(html_cache_key), "%s%d_html%s",
+					rule->algorithm_str, key_part,
+					ignore_link_domains ? "_nd" : "");
 
 	html_cached_ptr = (struct rspamd_cached_shingles **) rspamd_mempool_get_variable(
 		task->task_pool, html_cache_key);
@@ -3799,7 +3895,7 @@ fuzzy_cmd_from_html_part(struct rspamd_task *task,
 		html_sh = rspamd_shingles_from_html(part->html,
 											(const unsigned char *) rule->shingles_key->str, task->task_pool,
 											rspamd_shingles_default_filter, NULL,
-											rule->alg);
+											rule->alg, ignore_link_domains);
 
 		if (html_sh != NULL) {
 			/* Use structure shingles for fuzzy matching */
@@ -3833,7 +3929,7 @@ fuzzy_cmd_from_html_part(struct rspamd_task *task,
 
 	shcmd->basic.tag = ottery_rand_uint32();
 	shcmd->basic.cmd = c;
-	shcmd->basic.version = RSPAMD_FUZZY_PLUGIN_VERSION;
+	shcmd->basic.version = fuzzy_cmd_version(rule);
 
 	if (c != FUZZY_CHECK) {
 		shcmd->basic.flag = flag;
@@ -3935,7 +4031,7 @@ fuzzy_cmd_from_image_part (struct fuzzy_rule *rule,
 
 	shcmd->basic.tag = ottery_rand_uint32 ();
 	shcmd->basic.cmd = c;
-	shcmd->basic.version = RSPAMD_FUZZY_PLUGIN_VERSION;
+	shcmd->basic.version = fuzzy_cmd_version(rule);
 
 	if (c != FUZZY_CHECK) {
 		shcmd->basic.flag = flag;
@@ -3993,7 +4089,7 @@ fuzzy_cmd_from_data_part(struct fuzzy_rule *rule,
 	}
 
 	cmd->cmd = c;
-	cmd->version = RSPAMD_FUZZY_PLUGIN_VERSION;
+	cmd->version = fuzzy_cmd_version(rule);
 	if (c != FUZZY_CHECK) {
 		cmd->flag = flag;
 		cmd->value = weight;
@@ -4102,7 +4198,8 @@ fuzzy_cmd_vector_to_wire(int fd, GPtrArray *v)
 static const struct rspamd_fuzzy_reply *
 fuzzy_process_reply(unsigned char **pos, int *r, GPtrArray *req,
 					struct fuzzy_rule *rule, struct rspamd_fuzzy_cmd **pcmd,
-					struct fuzzy_cmd_io **pio)
+					struct fuzzy_cmd_io **pio,
+					const struct rspamd_fuzzy_reply_v2 **p_rep_v2)
 {
 	unsigned char *p = *pos;
 	int remain = *r;
@@ -4110,23 +4207,39 @@ fuzzy_process_reply(unsigned char **pos, int *r, GPtrArray *req,
 	struct fuzzy_cmd_io *io;
 	const struct rspamd_fuzzy_reply *rep;
 	struct rspamd_fuzzy_encrypted_reply encrep;
+	struct rspamd_fuzzy_encrypted_reply_v2 encrep_v2;
+	static struct rspamd_fuzzy_reply synthetic_rep;
 	gboolean found = FALSE;
+	gboolean is_v2 = FALSE;
 
+	if (p_rep_v2) {
+		*p_rep_v2 = NULL;
+	}
+
+	/* Use v1 size as minimum */
 	if (fuzzy_rule_has_encryption(rule)) {
 		required_size = sizeof(encrep);
 	}
 	else {
-		required_size = sizeof(*rep);
+		required_size = sizeof(struct rspamd_fuzzy_reply);
 	}
 
 	if (remain <= 0 || (unsigned int) remain < required_size) {
 		return NULL;
 	}
 
+	/* Detect v2 by available size */
+	if (fuzzy_rule_has_encryption(rule) && (unsigned int) remain >= sizeof(encrep_v2)) {
+		is_v2 = TRUE;
+	}
+	else if (!fuzzy_rule_has_encryption(rule) && (unsigned int) remain >= sizeof(struct rspamd_fuzzy_reply_v2)) {
+		is_v2 = TRUE;
+	}
+
 	if (fuzzy_rule_has_encryption(rule)) {
-		memcpy(&encrep, p, sizeof(encrep));
-		*pos += required_size;
-		*r -= required_size;
+		gsize actual_size = is_v2 ? sizeof(encrep_v2) : sizeof(encrep);
+		*pos += actual_size;
+		*r -= actual_size;
 
 		/* Try to decrypt with available keys, starting with read keys (more common) */
 		struct rspamd_cryptobox_keypair *local_keys[3];
@@ -4171,41 +4284,112 @@ fuzzy_process_reply(unsigned char **pos, int *r, GPtrArray *req,
 			}
 		}
 
-		/* Try decryption with each key pair */
-		for (i = 0; i < nkeys && !decrypted; i++) {
-			struct rspamd_fuzzy_encrypted_reply encrep_copy;
-			memcpy(&encrep_copy, &encrep, sizeof(encrep_copy));
+		if (is_v2) {
+			memcpy(&encrep_v2, p, sizeof(encrep_v2));
 
-			rspamd_keypair_cache_process(rule->ctx->keypairs_cache,
-										 local_keys[i], peer_keys[i]);
+			for (i = 0; i < (unsigned int) nkeys && !decrypted; i++) {
+				struct rspamd_fuzzy_encrypted_reply_v2 encrep_v2_copy;
+				memcpy(&encrep_v2_copy, &encrep_v2, sizeof(encrep_v2_copy));
 
-			if (rspamd_cryptobox_decrypt_nm_inplace((unsigned char *) &encrep_copy.rep,
-													sizeof(encrep_copy.rep),
-													encrep_copy.hdr.nonce,
-													rspamd_pubkey_get_nm(peer_keys[i], local_keys[i]),
-													encrep_copy.hdr.mac)) {
-				/* Successfully decrypted */
-				memcpy(&encrep, &encrep_copy, sizeof(encrep));
-				decrypted = TRUE;
-				break;
+				rspamd_keypair_cache_process(rule->ctx->keypairs_cache,
+											 local_keys[i], peer_keys[i]);
+
+				if (rspamd_cryptobox_decrypt_nm_inplace((unsigned char *) &encrep_v2_copy.rep,
+														sizeof(encrep_v2_copy.rep),
+														encrep_v2_copy.hdr.nonce,
+														rspamd_pubkey_get_nm(peer_keys[i], local_keys[i]),
+														encrep_v2_copy.hdr.mac)) {
+					memcpy(&encrep_v2, &encrep_v2_copy, sizeof(encrep_v2));
+					decrypted = TRUE;
+					break;
+				}
+			}
+
+			if (!decrypted) {
+				/* Fallback: try as v1 */
+				is_v2 = FALSE;
+				memcpy(&encrep, p, sizeof(encrep));
+
+				for (i = 0; i < (unsigned int) nkeys && !decrypted; i++) {
+					struct rspamd_fuzzy_encrypted_reply encrep_copy;
+					memcpy(&encrep_copy, &encrep, sizeof(encrep_copy));
+
+					rspamd_keypair_cache_process(rule->ctx->keypairs_cache,
+												 local_keys[i], peer_keys[i]);
+
+					if (rspamd_cryptobox_decrypt_nm_inplace((unsigned char *) &encrep_copy.rep,
+															sizeof(encrep_copy.rep),
+															encrep_copy.hdr.nonce,
+															rspamd_pubkey_get_nm(peer_keys[i], local_keys[i]),
+															encrep_copy.hdr.mac)) {
+						memcpy(&encrep, &encrep_copy, sizeof(encrep));
+						decrypted = TRUE;
+						break;
+					}
+				}
+
+				if (!decrypted) {
+					msg_info("cannot decrypt reply with any available keys");
+					return NULL;
+				}
+
+				memcpy(p, &encrep.rep, sizeof(encrep.rep));
+			}
+			else {
+				/* Copy decrypted v2 back and build synthetic v1 rep */
+				memcpy(p, &encrep_v2.rep, sizeof(encrep_v2.rep));
 			}
 		}
+		else {
+			memcpy(&encrep, p, sizeof(encrep));
 
-		if (!decrypted) {
-			msg_info("cannot decrypt reply with any available keys");
-			return NULL;
+			for (i = 0; i < (unsigned int) nkeys && !decrypted; i++) {
+				struct rspamd_fuzzy_encrypted_reply encrep_copy;
+				memcpy(&encrep_copy, &encrep, sizeof(encrep_copy));
+
+				rspamd_keypair_cache_process(rule->ctx->keypairs_cache,
+											 local_keys[i], peer_keys[i]);
+
+				if (rspamd_cryptobox_decrypt_nm_inplace((unsigned char *) &encrep_copy.rep,
+														sizeof(encrep_copy.rep),
+														encrep_copy.hdr.nonce,
+														rspamd_pubkey_get_nm(peer_keys[i], local_keys[i]),
+														encrep_copy.hdr.mac)) {
+					memcpy(&encrep, &encrep_copy, sizeof(encrep));
+					decrypted = TRUE;
+					break;
+				}
+			}
+
+			if (!decrypted) {
+				msg_info("cannot decrypt reply with any available keys");
+				return NULL;
+			}
+
+			memcpy(p, &encrep.rep, sizeof(encrep.rep));
 		}
-
-		/* Copy decrypted over the input wire */
-		memcpy(p, &encrep.rep, sizeof(encrep.rep));
 	}
 	else {
-
-		*pos += required_size;
-		*r -= required_size;
+		gsize actual_size = is_v2 ? sizeof(struct rspamd_fuzzy_reply_v2)
+								  : sizeof(struct rspamd_fuzzy_reply);
+		*pos += actual_size;
+		*r -= actual_size;
 	}
 
-	rep = (const struct rspamd_fuzzy_reply *) p;
+	if (is_v2) {
+		const struct rspamd_fuzzy_reply_v2 *rv2 = (const struct rspamd_fuzzy_reply_v2 *) p;
+		memset(&synthetic_rep, 0, sizeof(synthetic_rep));
+		synthetic_rep.v1 = rv2->v1;
+		memcpy(synthetic_rep.digest, rv2->digest, sizeof(synthetic_rep.digest));
+		synthetic_rep.ts = rv2->ts;
+		rep = &synthetic_rep;
+		if (p_rep_v2) {
+			*p_rep_v2 = rv2;
+		}
+	}
+	else {
+		rep = (const struct rspamd_fuzzy_reply *) p;
+	}
 	/*
 	 * Search for tag
 	 */
@@ -4293,8 +4477,16 @@ fuzzy_insert_result(struct fuzzy_client_session *session,
 			type = "img";
 			res->type = FUZZY_RESULT_IMG;
 		}
+		else if ((io->flags & FUZZY_CMD_FLAG_HTML_DOMAINS)) {
+			/* HTML domain-sensitive hash (structure + domains) */
+			nval *= sqrtf(rep->v1.prob);
+			nval *= session->rule->html_weight;
+
+			type = "htmld";
+			res->type = FUZZY_RESULT_HTML;
+		}
 		else if ((io->flags & FUZZY_CMD_FLAG_HTML)) {
-			/* HTML structural hash */
+			/* HTML structural hash (template mode, domains ignored) */
 			nval *= sqrtf(rep->v1.prob);
 			/* Apply HTML weight multiplier from rule config */
 			nval *= session->rule->html_weight;
@@ -4440,11 +4632,32 @@ fuzzy_check_try_read(struct fuzzy_client_session *session)
 
 		ret = 0;
 
+		const struct rspamd_fuzzy_reply_v2 *rep_v2 = NULL;
+
 		while ((rep = fuzzy_process_reply(&p, &r,
-										  session->commands, session->rule, &cmd, &io)) != NULL) {
+										  session->commands, session->rule, &cmd, &io, &rep_v2)) != NULL) {
+			if (rep_v2) {
+				session->rule->server_supports_v2 = TRUE;
+			}
 			if (rep->v1.prob > 0.5) {
 				if (cmd->cmd == FUZZY_CHECK) {
 					fuzzy_insert_result(session, rep, cmd, io, rep->v1.flag);
+
+					/* Insert extra flag results from v2 reply */
+					if (rep_v2 && rep_v2->n_extra_flags > 0) {
+						for (uint8_t ei = 0; ei < rep_v2->n_extra_flags && ei < RSPAMD_FUZZY_MAX_EXTRA_FLAGS; ei++) {
+							struct rspamd_fuzzy_reply extra_rep;
+							memset(&extra_rep, 0, sizeof(extra_rep));
+							extra_rep.v1.value = rep_v2->extra_flags[ei].value;
+							extra_rep.v1.flag = rep_v2->extra_flags[ei].flag;
+							extra_rep.v1.tag = rep->v1.tag;
+							extra_rep.v1.prob = rep->v1.prob;
+							memcpy(extra_rep.digest, rep_v2->digest, sizeof(extra_rep.digest));
+							extra_rep.ts = rep_v2->ts;
+
+							fuzzy_insert_result(session, &extra_rep, cmd, io, extra_rep.v1.flag);
+						}
+					}
 				}
 				else if (cmd->cmd == FUZZY_STAT) {
 					/*
@@ -4723,6 +4936,9 @@ fuzzy_tcp_timer_callback(EV_P_ ev_timer *w, int revents)
 
 	/* Check pending timeouts for all requests in this rule (periodic check) */
 	fuzzy_tcp_check_pending_timeouts(session->rule, now);
+	if (session->commands == NULL) {
+		return;
+	}
 
 	/* Check if all commands have been replied */
 	for (i = 0; i < session->commands->len; i++) {
@@ -5008,7 +5224,7 @@ fuzzy_controller_io_callback(int fd, short what, void *arg)
 			ret = return_want_more;
 
 			while ((rep = fuzzy_process_reply(&p, &r,
-											  session->commands, session->rule, &cmd, &io)) != NULL) {
+											  session->commands, session->rule, &cmd, &io, NULL)) != NULL) {
 				if ((map =
 						 g_hash_table_lookup(session->rule->mappings,
 											 GINT_TO_POINTER(rep->v1.flag))) == NULL) {
@@ -5025,6 +5241,9 @@ fuzzy_controller_io_callback(int fd, short what, void *arg)
 				if (io) {
 					if ((io->flags & FUZZY_CMD_FLAG_IMAGE)) {
 						ftype = "img";
+					}
+					else if ((io->flags & FUZZY_CMD_FLAG_HTML_DOMAINS)) {
+						ftype = "htmld";
 					}
 					else if ((io->flags & FUZZY_CMD_FLAG_HTML)) {
 						ftype = "html";
@@ -5284,11 +5503,27 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 						struct fuzzy_cmd_io *html_io;
 
 						html_io = fuzzy_cmd_from_html_part(task, rule, c, flag, value,
-														   part, mime_part);
+														   part, mime_part,
+														   rule->html_ignore_domains);
 
 						if (html_io) {
-							/* Add HTML hash as separate command */
+							/* Add HTML hash as separate command (template mode) */
 							g_ptr_array_add(res, html_io);
+						}
+
+						/* Generate domain-sensitive command when ignore_domains is on */
+						if (rule->html_ignore_domains) {
+							struct fuzzy_cmd_io *htmld_io;
+
+							htmld_io = fuzzy_cmd_from_html_part(task, rule, c, flag, value,
+																part, mime_part,
+																FALSE);
+
+							if (htmld_io) {
+								/* Mark as domain-sensitive HTML command */
+								htmld_io->flags |= FUZZY_CMD_FLAG_HTML_DOMAINS;
+								g_ptr_array_add(res, htmld_io);
+							}
 						}
 					}
 				}
@@ -6767,7 +7002,7 @@ fuzzy_lua_try_read(struct fuzzy_lua_session *session)
 		ret = 0;
 
 		while ((rep = fuzzy_process_reply(&p, &r,
-										  session->commands, session->rule, &cmd, &io)) != NULL) {
+										  session->commands, session->rule, &cmd, &io, NULL)) != NULL) {
 
 			if (rep->v1.prob > 0.5) {
 				if (cmd->cmd == FUZZY_PING) {

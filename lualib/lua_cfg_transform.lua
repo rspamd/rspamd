@@ -531,14 +531,16 @@ return function(cfg)
         -- max_score overrides hits_limit for backward compatibility
         -- This ensures local.d overrides using legacy max_score still work
         if rule.max_score then
-          rule.hits_limit = rule.max_score
+          -- Use tonumber() to extract the value, avoiding UCL object reference issues
+          -- that can cause circular linked list pointers and infinite loops
+          rule.hits_limit = tonumber(rule.max_score) or rule.max_score
           rule.max_score = nil
         end
         -- Also transform fuzzy_map entries
         if rule.fuzzy_map then
           for _, map_entry in pairs(rule.fuzzy_map) do
             if type(map_entry) == 'table' and map_entry.max_score then
-              map_entry.hits_limit = map_entry.max_score
+              map_entry.hits_limit = tonumber(map_entry.max_score) or map_entry.max_score
               map_entry.max_score = nil
             end
           end

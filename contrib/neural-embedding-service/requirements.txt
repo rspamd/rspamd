@@ -1,0 +1,19 @@
+# Rspamd Neural Embedding Service Dependencies
+#
+# Install: pip install -r requirements.txt
+
+# FastAPI web framework
+fastapi>=0.100.0
+
+# ASGI server
+uvicorn[standard]>=0.23.0
+
+# FastEmbed - CPU-optimized embedding inference via ONNX
+# Includes: onnxruntime, numpy, tokenizers
+fastembed>=0.2.0
+
+# Data validation
+pydantic>=2.0.0
+
+# Optional: production ASGI server
+# gunicorn>=21.0.0
