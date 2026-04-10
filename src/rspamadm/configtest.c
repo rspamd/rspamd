@@ -19,6 +19,7 @@
 #include "cfg_rcl.h"
 #include "rspamd.h"
 #include "lua/lua_common.h"
+#include "worker_util.h"
 
 static gboolean quiet = FALSE;
 static char *config = NULL;
@@ -151,6 +152,10 @@ rspamadm_configtest(int argc, char **argv, const struct rspamadm_command *cmd)
 											 cfg,
 											 FALSE)) {
 			ret = FALSE;
+		}
+
+		if (ret) {
+			rspamd_worker_check_and_adjust_timeout(cfg, cfg->task_timeout);
 		}
 
 		if (ret) {
