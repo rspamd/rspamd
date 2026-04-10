@@ -568,14 +568,17 @@ if opts then
   whitelist_domains_map = lua_map.rspamd_map_add(N, 'whitelist_domains_url',
       'map', 'Greylist whitelist domains map')
 
-  redis_params = lua_redis.parse_redis_server(N)
+  -- Pass opts with redis_timeout instead of the greylisting period (settings.timeout),
+  -- so lua_redis does not mistake the greylisting period for a Redis connection timeout.
+  -- redis.greylist.timeout or the global redis.timeout can still override this via
+  -- enrich_defaults since settings.redis_timeout equals lua_redis's default_timeout (1.0).
+  local redis_opts = lua_util.shallowcopy(opts)
+  redis_opts.timeout = settings.redis_timeout
+  redis_params = lua_redis.parse_redis_server(N, redis_opts)
   if not redis_params then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
     rspamd_lua_utils.disable_module(N, "redis")
   else
-    -- settings.timeout is the greylisting period, not a Redis connection timeout;
-    -- override to prevent it from being misused as such by lua_redis
-    redis_params.timeout = settings.redis_timeout
     lua_redis.register_prefix(settings.key_prefix .. 'b[a-z0-9]{20}', N,
         'Greylisting elements (body hashes)"', {
           type = 'string',
