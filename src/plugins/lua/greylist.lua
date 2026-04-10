@@ -574,6 +574,14 @@ if opts then
   -- enrich_defaults since settings.redis_timeout equals lua_redis's default_timeout (1.0).
   local redis_opts = lua_util.shallowcopy(opts)
   redis_opts.timeout = settings.redis_timeout
+  if redis_opts.redis then
+    -- When Redis is configured in a nested greylist.redis{} block, parse_redis_server
+    -- uses opts.redis and never reads opts.timeout, so propagate redis_timeout there too.
+    redis_opts.redis = lua_util.shallowcopy(redis_opts.redis)
+    if not redis_opts.redis.timeout then
+      redis_opts.redis.timeout = settings.redis_timeout
+    end
+  end
   redis_params = lua_redis.parse_redis_server(N, redis_opts)
   if not redis_params then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
