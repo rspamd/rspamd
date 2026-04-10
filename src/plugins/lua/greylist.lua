@@ -42,8 +42,10 @@ if confighelp then
 greylist {
   # Buckets expire (1 day by default)
   expire = 1d;
-  # Greylisting timeout
+  # Greylisting period (how long to greylist a new sender)
   timeout = 5m;
+  # Redis connection timeout in seconds
+  # redis_timeout = 1.0;
   # Redis prefix
   key_prefix = 'rg';
   # Use body hash up to this value of bytes for greylisting
@@ -79,7 +81,8 @@ local whitelist_domains_map
 local toint = math.ifloor or math.floor
 local settings = {
   expire = 86400, -- 1 day by default
-  timeout = 300, -- 5 minutes by default
+  timeout = 300, -- greylisting period: 5 minutes by default
+  redis_timeout = 1.0, -- Redis connection timeout in seconds
   key_prefix = 'rg', -- default hash name
   max_data_len = 10240, -- default data limit to hash
   message = 'Try again later', -- default greylisted message
@@ -570,6 +573,9 @@ if opts then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
     rspamd_lua_utils.disable_module(N, "redis")
   else
+    -- settings.timeout is the greylisting period, not a Redis connection timeout;
+    -- override to prevent it from being misused as such by lua_redis
+    redis_params.timeout = settings.redis_timeout
     lua_redis.register_prefix(settings.key_prefix .. 'b[a-z0-9]{20}', N,
         'Greylisting elements (body hashes)"', {
           type = 'string',
