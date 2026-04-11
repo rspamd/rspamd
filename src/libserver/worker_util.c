@@ -2668,7 +2668,7 @@ rspamd_worker_check_and_adjust_timeout(struct rspamd_config *cfg, double timeout
 	g_assert(tres != 0);
 
 	if (tres->max_timeout > timeout) {
-		msg_info_config("configured task_timeout %.2f is less than maximum symbols cache timeout %.2f; "
+		msg_warn_config("configured task_timeout %.2f is less than maximum symbols cache timeout %.2f; "
 						"some symbols can be terminated before checks",
 						timeout, tres->max_timeout);
 		GString *buf = g_string_sized_new(512);
@@ -2686,7 +2686,7 @@ rspamd_worker_check_and_adjust_timeout(struct rspamd_config *cfg, double timeout
 									  tres->items[i].timeout);
 			}
 		}
-		msg_info_config("list of top %d symbols by execution time: %v",
+		msg_warn_config("list of top %d symbols by execution time: %v",
 						(int) MIN(tres->nitems, max_displayed_items),
 						buf);
 
