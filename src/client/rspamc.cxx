@@ -649,7 +649,7 @@ rspamc_password_callback(const char *option_name,
 				value_view = std::string_view{map, locked_mmap->get_size()};
 				auto right = value_view.end() - 1;
 				for (; right > value_view.cbegin() && g_ascii_isspace(*right); --right);
-				std::string_view str{value_view.begin(), static_cast<size_t>(right - value_view.begin()) + 1};
+				std::string_view str{value_view.data(), static_cast<size_t>(right - value_view.begin()) + 1};
 				processed_passwd.assign(std::begin(str), std::end(str));
 				processed_passwd.push_back('\0'); /* Null-terminate for C part */
 			}

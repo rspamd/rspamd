@@ -147,7 +147,7 @@ const char *rspamd_css_unescape(rspamd_mempool_t *pool,
 								gsize *outlen)
 {
 	auto sv = rspamd::css::unescape_css(pool, {(const char *) begin, len});
-	const auto *v = sv.begin();
+	const auto *v = sv.data();
 
 	if (outlen) {
 		*outlen = sv.size();
