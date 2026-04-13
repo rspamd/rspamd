@@ -71,9 +71,11 @@ extern const char *rspamd_worker_classname;
 extern const char *rspamd_zstd_compress_classname;
 extern const char *rspamd_zstd_decompress_classname;
 extern const char *rspamd_shingle_classname;
+extern const char *rspamd_fasttext_classname;
+extern const char *rspamd_caseless_table_classname;
 
 /* Keep it consistent when adding new classes */
-#define RSPAMD_MAX_LUA_CLASSES 49
+#define RSPAMD_MAX_LUA_CLASSES 51
 
 /*
  * Return a static class name for a given name (only for known classes) or NULL

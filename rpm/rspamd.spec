@@ -217,6 +217,7 @@ systemctl --no-reload preset rspamd.service >/dev/null 2>&1 || :
 
 %{_bindir}/rspamd
 %{_bindir}/rspamd_stats
+%{_bindir}/mapstats
 %{_bindir}/rspamc
 %{_bindir}/rspamadm
 

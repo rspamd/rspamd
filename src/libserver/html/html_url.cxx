@@ -205,8 +205,8 @@ auto html_url_is_phished(rspamd_mempool_t *pool,
 			 */
 			gboolean obfuscation_found = FALSE;
 
-			if (text_data.size() > 4 && g_ascii_strncasecmp(text_data.begin(), "http", 4) == 0 &&
-				rspamd_substring_search(text_data.begin(), text_data.size(), "://", 3) != -1) {
+			if (text_data.size() > 4 && g_ascii_strncasecmp(text_data.data(), "http", 4) == 0 &&
+				rspamd_substring_search(text_data.data(), text_data.size(), "://", 3) != -1) {
 				/* Clearly an obfuscation attempt */
 				obfuscation_found = TRUE;
 			}

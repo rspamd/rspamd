@@ -154,12 +154,13 @@ rspamd_fuzzy_backend_check_sqlite(struct rspamd_fuzzy_backend *bk,
 								  void *subr_ud)
 {
 	struct rspamd_fuzzy_backend_sqlite *sq = subr_ud;
-	struct rspamd_fuzzy_reply rep;
+	struct rspamd_fuzzy_multiflag_result mf_result;
 
-	rep = rspamd_fuzzy_backend_sqlite_check(sq, cmd, bk->expire);
+	memset(&mf_result, 0, sizeof(mf_result));
+	mf_result.rep = rspamd_fuzzy_backend_sqlite_check(sq, cmd, bk->expire);
 
 	if (cb) {
-		cb(&rep, ud);
+		cb(&mf_result, ud);
 	}
 }
 

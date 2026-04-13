@@ -1277,6 +1277,7 @@ lua_config_get_all_opt(lua_State *L)
 }
 
 struct rspamd_lua_cached_config {
+	struct rspamd_config *cfg;
 	lua_State *L;
 	int ref;
 };
@@ -1286,7 +1287,9 @@ lua_config_ucl_dtor(gpointer p)
 {
 	struct rspamd_lua_cached_config *cached = p;
 
-	luaL_unref(cached->L, LUA_REGISTRYINDEX, cached->ref);
+	/* Use the config's main Lua state for unref, as cached->L may be
+	 * a thread/coroutine state that has been garbage collected */
+	luaL_unref(RSPAMD_LUA_CFG_STATE(cached->cfg), LUA_REGISTRYINDEX, cached->ref);
 }
 
 static int
@@ -1307,6 +1310,7 @@ lua_config_get_ucl(lua_State *L)
 				ucl_object_push_lua(L, cfg->cfg_ucl_obj, true);
 				lua_pushvalue(L, -1);
 				cached = rspamd_mempool_alloc(cfg->cfg_pool, sizeof(*cached));
+				cached->cfg = cfg;
 				cached->L = L;
 				cached->ref = luaL_ref(L, LUA_REGISTRYINDEX);
 				rspamd_mempool_set_variable(cfg->cfg_pool, "ucl_cached",
@@ -1362,6 +1366,7 @@ lua_config_get_classifier(lua_State *L)
 struct lua_callback_data {
 	uint64_t magic;
 	lua_State *L;
+	struct rspamd_config *cfg;
 	char *symbol;
 
 	union {
@@ -1386,7 +1391,9 @@ lua_destroy_cfg_symbol(gpointer ud)
 
 	/* Unref callback */
 	if (cd->cb_is_ref) {
-		luaL_unref(cd->L, LUA_REGISTRYINDEX, cd->callback.ref);
+		/* Use the config's main Lua state for unref, as cd->L may be
+		 * a thread/coroutine state that has been garbage collected */
+		luaL_unref(RSPAMD_LUA_CFG_STATE(cd->cfg), LUA_REGISTRYINDEX, cd->callback.ref);
 	}
 }
 
@@ -1762,6 +1769,7 @@ rspamd_register_symbol_fromlua(lua_State *L,
 		cd->cb_is_ref = TRUE;
 		cd->callback.ref = ref;
 		cd->L = L;
+		cd->cfg = cfg;
 
 		if (name) {
 			cd->symbol = rspamd_mempool_strdup(cfg->cfg_pool, name);
@@ -2807,10 +2815,16 @@ lua_config_register_dependency(lua_State *L)
 	else {
 		child = luaL_checkstring(L, 2);
 		parent = luaL_checkstring(L, 3);
+		/* Optional 4th arg: true = hard dep (cascade-disable when dep disabled) */
+		gboolean hard = FALSE;
+
+		if (lua_isboolean(L, 4)) {
+			hard = lua_toboolean(L, 4);
+		}
 
 		if (child != NULL && parent != NULL) {
 			rspamd_symcache_add_delayed_dependency(cfg->cache, child,
-												   parent);
+												   parent, hard);
 		}
 	}
 
@@ -2824,7 +2838,7 @@ lua_config_set_metric_symbol(lua_State *L)
 	struct rspamd_config *cfg = lua_check_config(L, 1);
 	const char *description = NULL,
 			   *group = NULL, *name = NULL, *flags_str = NULL;
-	double score;
+	double score = NAN;
 	gboolean one_shot = FALSE, one_param = FALSE;
 	GError *err = NULL;
 	double priority = 0.0;
@@ -3832,7 +3846,9 @@ struct rspamd_lua_periodic {
 static void
 lua_periodic_dtor(struct rspamd_lua_periodic *periodic)
 {
-	luaL_unref(periodic->L, LUA_REGISTRYINDEX, periodic->cbref);
+	/* Use the config's main Lua state for unref, as periodic->L may be
+	 * a thread/coroutine state that has been garbage collected */
+	luaL_unref(RSPAMD_LUA_CFG_STATE(periodic->cfg), LUA_REGISTRYINDEX, periodic->cbref);
 	ev_timer_stop(periodic->event_loop, &periodic->ev);
 }
 

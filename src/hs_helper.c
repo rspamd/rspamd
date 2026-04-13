@@ -16,6 +16,7 @@
 #include "config.h"
 #include "libutil/util.h"
 #include "libutil/multipattern.h"
+#include "libutil/ref.h"
 #include "libserver/cfg_file.h"
 #include "libserver/cfg_rcl.h"
 #include "libserver/worker_util.h"
@@ -245,8 +246,10 @@ struct hs_helper_ctx {
 	/* Cache backend configuration */
 	char *cache_backend_str; /* Backend name from config: file, redis, http, lua */
 	enum hs_cache_backend_type cache_backend;
-	ucl_object_t *cache_config; /* Backend-specific configuration */
+	ucl_object_t *redis_config; /* Redis backend configuration */
+	ucl_object_t *http_config;  /* HTTP backend configuration */
 	int lua_backend_ref;        /* Lua reference to backend object */
+	ev_tstamp last_recompile_time; /* Timestamp of last recompile start for debounce */
 };
 
 /* Parse cache_backend string to enum */
@@ -286,7 +289,8 @@ init_hs_helper(struct rspamd_config *cfg)
 	ctx->recompile_time = default_recompile_time;
 	ctx->cache_backend_str = NULL;
 	ctx->cache_backend = HS_CACHE_BACKEND_FILE;
-	ctx->cache_config = NULL;
+	ctx->redis_config = NULL;
+	ctx->http_config = NULL;
 	ctx->lua_backend_ref = LUA_NOREF;
 
 	rspamd_rcl_register_worker_option(cfg,
@@ -329,6 +333,22 @@ init_hs_helper(struct rspamd_config *cfg)
 									  G_STRUCT_OFFSET(struct hs_helper_ctx, cache_backend_str),
 									  0,
 									  "Cache backend: file, redis, http, or lua");
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "redis",
+									  rspamd_rcl_parse_struct_ucl,
+									  ctx,
+									  G_STRUCT_OFFSET(struct hs_helper_ctx, redis_config),
+									  0,
+									  "Redis backend configuration");
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "http",
+									  rspamd_rcl_parse_struct_ucl,
+									  ctx,
+									  G_STRUCT_OFFSET(struct hs_helper_ctx, http_config),
+									  0,
+									  "HTTP backend configuration");
 
 	return ctx;
 }
@@ -615,7 +635,11 @@ rspamd_rs_send_single_notification(struct rspamd_hs_helper_single_compile_cbdata
 	msg_debug_hyperscan("sent hyperscan loaded notification");
 
 	g_free(cbd);
-	ev_timer_again(ctx->event_loop, &ctx->recompile_timer);
+
+	/* Only restart periodic timer for non-file backends */
+	if (ctx->cache_backend != HS_CACHE_BACKEND_FILE) {
+		ev_timer_again(ctx->event_loop, &ctx->recompile_timer);
+	}
 }
 
 static void
@@ -769,6 +793,9 @@ rspamd_rs_compile(struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 	return TRUE;
 }
 
+/* Minimum interval between recompile requests to avoid thrashing */
+#define HS_RECOMPILE_DEBOUNCE_SEC 5.0
+
 static gboolean
 rspamd_hs_helper_reload(struct rspamd_main *rspamd_main,
 						struct rspamd_worker *worker, int fd,
@@ -779,10 +806,28 @@ rspamd_hs_helper_reload(struct rspamd_main *rspamd_main,
 	struct rspamd_control_reply rep;
 	struct hs_helper_ctx *ctx = ud;
 
-	msg_info("recompiling hyperscan expressions after receiving reload command");
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_RECOMPILE;
+	rep.id = cmd->id;
 	rep.reply.recompile.status = 0;
+
+	/* Debounce: skip if we recompiled very recently */
+	ev_tstamp now = ev_now(ctx->event_loop);
+	if (ctx->last_recompile_time > 0 &&
+		now - ctx->last_recompile_time < HS_RECOMPILE_DEBOUNCE_SEC) {
+		msg_info("ignoring recompile request, last recompile was %.1fs ago (debounce: %.1fs)",
+				 now - ctx->last_recompile_time, HS_RECOMPILE_DEBOUNCE_SEC);
+
+		if (write(fd, &rep, sizeof(rep)) != sizeof(rep)) {
+			msg_err("cannot write reply to the control socket: %s",
+					strerror(errno));
+		}
+
+		return TRUE;
+	}
+
+	ctx->last_recompile_time = now;
+	msg_info("recompiling hyperscan expressions after receiving reload command");
 
 	/* We write reply before actual recompilation as it takes a lot of time */
 	if (write(fd, &rep, sizeof(rep)) != sizeof(rep)) {
@@ -809,9 +854,23 @@ struct rspamd_hs_helper_mp_async_ctx {
 	struct rspamd_multipattern_pending *pending;
 	unsigned int count;
 	unsigned int idx;
+	gboolean compile_cb_called;
+	ev_timer deferred_timer; /* Timer for deferring next operation after error */
+	ref_entry_t ref;
 };
 
-static void rspamd_hs_helper_compile_pending_multipatterns_next(struct rspamd_hs_helper_mp_async_ctx *mpctx);
+static void
+rspamd_hs_helper_mp_async_ctx_dtor(void *p)
+{
+	struct rspamd_hs_helper_mp_async_ctx *mpctx = p;
+
+	/* Stop the deferred timer if it's somehow still active */
+	if (ev_is_active(&mpctx->deferred_timer)) {
+		ev_timer_stop(mpctx->ctx->event_loop, &mpctx->deferred_timer);
+	}
+	rspamd_multipattern_clear_pending();
+	g_free(mpctx);
+}
 
 static void
 rspamd_hs_helper_mp_send_notification(struct hs_helper_ctx *ctx,
@@ -829,6 +888,19 @@ rspamd_hs_helper_mp_send_notification(struct hs_helper_ctx *ctx,
 	msg_debug_hyperscan("sent multipattern loaded notification for '%s'", name);
 }
 
+static void rspamd_hs_helper_compile_pending_multipatterns_next(struct rspamd_hs_helper_mp_async_ctx *mpctx);
+
+static void
+rspamd_hs_helper_mp_deferred_next_cb(EV_P_ ev_timer *w, int revents)
+{
+	struct rspamd_hs_helper_mp_async_ctx *mpctx = (struct rspamd_hs_helper_mp_async_ctx *) w->data;
+
+	(void) revents;
+	ev_timer_stop(EV_A_ w);
+
+	rspamd_hs_helper_compile_pending_multipatterns_next(mpctx);
+}
+
 static void
 rspamd_hs_helper_mp_compiled_cb(struct rspamd_multipattern *mp,
 								gboolean success,
@@ -836,9 +908,17 @@ rspamd_hs_helper_mp_compiled_cb(struct rspamd_multipattern *mp,
 								void *ud)
 {
 	struct rspamd_hs_helper_mp_async_ctx *mpctx = ud;
-	struct rspamd_multipattern_pending *entry = &mpctx->pending[mpctx->idx];
+	struct rspamd_multipattern_pending *entry;
 
 	(void) mp;
+
+	if (mpctx->compile_cb_called) {
+		REF_RELEASE(mpctx);
+		return;
+	}
+	mpctx->compile_cb_called = TRUE;
+
+	entry = &mpctx->pending[mpctx->idx];
 	rspamd_worker_set_busy(mpctx->worker, mpctx->ctx->event_loop, NULL);
 
 	if (!success) {
@@ -849,7 +929,18 @@ rspamd_hs_helper_mp_compiled_cb(struct rspamd_multipattern *mp,
 	}
 
 	mpctx->idx++;
-	rspamd_hs_helper_compile_pending_multipatterns_next(mpctx);
+
+	/*
+	 * Defer the next operation to the next event loop iteration.
+	 * This is critical when the callback is invoked from an error path
+	 * (e.g., Redis timeout) - we need to let the error handling complete
+	 * fully before starting the next operation to avoid inconsistent state.
+	 */
+	mpctx->deferred_timer.data = mpctx;
+	ev_timer_init(&mpctx->deferred_timer, rspamd_hs_helper_mp_deferred_next_cb, 0.0, 0.0);
+	ev_timer_start(mpctx->ctx->event_loop, &mpctx->deferred_timer);
+
+	REF_RELEASE(mpctx);
 }
 
 static void
@@ -862,22 +953,47 @@ rspamd_hs_helper_mp_exists_cb(gboolean success,
 	struct rspamd_hs_helper_mp_async_ctx *mpctx = ud;
 	struct rspamd_multipattern_pending *entry = &mpctx->pending[mpctx->idx];
 	bool exists = (success && data == NULL && len == 1);
+	/*
+	 * Save entry data before any operation that might trigger ev_run,
+	 * as ev_run could process deferred timers that call
+	 * rspamd_multipattern_clear_pending() and free the pending array.
+	 */
+	struct rspamd_multipattern *mp = entry->mp;
+	const char *entry_name = entry->name;
 
 	(void) error;
 
 	if (exists) {
-		msg_debug_hyperscan("multipattern cache already exists for '%s', skipping compilation", entry->name);
-		rspamd_hs_helper_mp_send_notification(mpctx->ctx, mpctx->worker, entry->name);
+		msg_debug_hyperscan("multipattern cache already exists for '%s', skipping compilation", entry_name);
+		rspamd_hs_helper_mp_send_notification(mpctx->ctx, mpctx->worker, entry_name);
 		mpctx->idx++;
-		rspamd_hs_helper_compile_pending_multipatterns_next(mpctx);
+		/*
+		 * Defer the next operation to avoid nested Redis callbacks.
+		 * This ensures the current callback chain completes fully
+		 * before starting the next operation.
+		 */
+		mpctx->deferred_timer.data = mpctx;
+		ev_timer_init(&mpctx->deferred_timer, rspamd_hs_helper_mp_deferred_next_cb, 0.0, 0.0);
+		ev_timer_start(mpctx->ctx->event_loop, &mpctx->deferred_timer);
+		REF_RELEASE(mpctx);
 		return;
 	}
 
 	/* Need to compile+store */
 	rspamd_worker_set_busy(mpctx->worker, mpctx->ctx->event_loop, "compile multipattern");
-	rspamd_multipattern_compile_hs_to_cache_async(entry->mp, mpctx->ctx->hs_dir,
+	/*
+	 * DO NOT call ev_run() here - we're inside a Redis callback chain and
+	 * ev_run can trigger Lua GC which may try to finalize lua_redis userdata
+	 * while we're still processing. The busy notification will be sent on
+	 * the next event loop iteration after this callback returns.
+	 */
+	mpctx->compile_cb_called = FALSE;
+	REF_RETAIN(mpctx);
+	rspamd_multipattern_compile_hs_to_cache_async(mp, mpctx->ctx->hs_dir,
 												  mpctx->ctx->event_loop,
 												  rspamd_hs_helper_mp_compiled_cb, mpctx);
+	/* Release the reference from exists_async callback */
+	REF_RELEASE(mpctx);
 }
 
 static void
@@ -900,6 +1016,7 @@ rspamd_hs_helper_compile_pending_multipatterns_next(struct rspamd_hs_helper_mp_a
 		char cache_key[rspamd_cryptobox_HASHBYTES * 2 + 1];
 		rspamd_snprintf(cache_key, sizeof(cache_key), "%*xs",
 						(int) sizeof(entry->hash) / 2, entry->hash);
+		REF_RETAIN(mpctx);
 		rspamd_hs_cache_lua_exists_async(cache_key, entry->name,
 										 rspamd_hs_helper_mp_exists_cb, mpctx);
 		return;
@@ -917,6 +1034,8 @@ rspamd_hs_helper_compile_pending_multipatterns_next(struct rspamd_hs_helper_mp_a
 		}
 		else {
 			rspamd_worker_set_busy(mpctx->worker, mpctx->ctx->event_loop, "compile multipattern");
+			/* Flush the busy notification before blocking on compilation */
+			ev_run(mpctx->ctx->event_loop, EVRUN_NOWAIT);
 			if (!rspamd_multipattern_compile_hs_to_cache(entry->mp, mpctx->ctx->hs_dir, &err)) {
 				msg_err("failed to compile multipattern '%s': %e", entry->name, err);
 				if (err) g_error_free(err);
@@ -931,12 +1050,7 @@ rspamd_hs_helper_compile_pending_multipatterns_next(struct rspamd_hs_helper_mp_a
 	}
 
 done:
-	rspamd_multipattern_clear_pending();
-	for (unsigned int i = 0; i < mpctx->count; i++) {
-		/* names are freed by clear_pending */
-		(void) i;
-	}
-	g_free(mpctx);
+	REF_RELEASE(mpctx);
 }
 
 static void
@@ -960,6 +1074,7 @@ rspamd_hs_helper_compile_pending_multipatterns(struct hs_helper_ctx *ctx,
 	mpctx->pending = pending;
 	mpctx->count = count;
 	mpctx->idx = 0;
+	REF_INIT_RETAIN(mpctx, rspamd_hs_helper_mp_async_ctx_dtor);
 
 	rspamd_hs_helper_compile_pending_multipatterns_next(mpctx);
 }
@@ -974,9 +1089,19 @@ struct rspamd_hs_helper_remap_async_ctx {
 	struct rspamd_regexp_map_pending *pending;
 	unsigned int count;
 	unsigned int idx;
+	gboolean compile_cb_called;
+	ref_entry_t ref;
 };
 
 static void rspamd_hs_helper_compile_pending_regexp_maps_next(struct rspamd_hs_helper_remap_async_ctx *rmctx);
+
+static void
+rspamd_hs_helper_remap_async_ctx_dtor(void *p)
+{
+	struct rspamd_hs_helper_remap_async_ctx *rmctx = p;
+	rspamd_regexp_map_clear_pending();
+	g_free(rmctx);
+}
 
 static void
 rspamd_hs_helper_remap_send_notification(struct hs_helper_ctx *ctx,
@@ -1001,9 +1126,17 @@ rspamd_hs_helper_remap_compiled_cb(struct rspamd_regexp_map_helper *re_map,
 								   void *ud)
 {
 	struct rspamd_hs_helper_remap_async_ctx *rmctx = ud;
-	struct rspamd_regexp_map_pending *entry = &rmctx->pending[rmctx->idx];
+	struct rspamd_regexp_map_pending *entry;
 
 	(void) re_map;
+
+	if (rmctx->compile_cb_called) {
+		REF_RELEASE(rmctx);
+		return;
+	}
+	rmctx->compile_cb_called = TRUE;
+
+	entry = &rmctx->pending[rmctx->idx];
 	rspamd_worker_set_busy(rmctx->worker, rmctx->ctx->event_loop, NULL);
 
 	if (!success) {
@@ -1015,6 +1148,7 @@ rspamd_hs_helper_remap_compiled_cb(struct rspamd_regexp_map_helper *re_map,
 
 	rmctx->idx++;
 	rspamd_hs_helper_compile_pending_regexp_maps_next(rmctx);
+	REF_RELEASE(rmctx);
 }
 
 static void
@@ -1027,22 +1161,40 @@ rspamd_hs_helper_remap_exists_cb(gboolean success,
 	struct rspamd_hs_helper_remap_async_ctx *rmctx = ud;
 	struct rspamd_regexp_map_pending *entry = &rmctx->pending[rmctx->idx];
 	bool exists = (success && data == NULL && len == 1);
+	/*
+	 * Save entry data before any operation that might trigger ev_run,
+	 * as ev_run could process deferred timers that call
+	 * rspamd_regexp_map_clear_pending() and free the pending array.
+	 */
+	struct rspamd_regexp_map_helper *re_map = entry->re_map;
+	const char *entry_name = entry->name;
 
 	(void) error;
 
 	if (exists) {
-		msg_debug_hyperscan("regexp map cache already exists for '%s', skipping compilation", entry->name);
-		rspamd_hs_helper_remap_send_notification(rmctx->ctx, rmctx->worker, entry->name);
+		msg_debug_hyperscan("regexp map cache already exists for '%s', skipping compilation", entry_name);
+		rspamd_hs_helper_remap_send_notification(rmctx->ctx, rmctx->worker, entry_name);
 		rmctx->idx++;
 		rspamd_hs_helper_compile_pending_regexp_maps_next(rmctx);
+		REF_RELEASE(rmctx);
 		return;
 	}
 
 	/* Need to compile+store */
 	rspamd_worker_set_busy(rmctx->worker, rmctx->ctx->event_loop, "compile regexp map");
-	rspamd_regexp_map_compile_hs_to_cache_async(entry->re_map, rmctx->ctx->hs_dir,
+	/*
+	 * DO NOT call ev_run() here - we're inside a Redis callback chain and
+	 * ev_run can trigger Lua GC which may try to finalize lua_redis userdata
+	 * while we're still processing. The busy notification will be sent on
+	 * the next event loop iteration after this callback returns.
+	 */
+	rmctx->compile_cb_called = FALSE;
+	REF_RETAIN(rmctx);
+	rspamd_regexp_map_compile_hs_to_cache_async(re_map, rmctx->ctx->hs_dir,
 												rmctx->ctx->event_loop,
 												rspamd_hs_helper_remap_compiled_cb, rmctx);
+	/* Release the reference from exists_async callback */
+	REF_RELEASE(rmctx);
 }
 
 static void
@@ -1064,6 +1216,7 @@ rspamd_hs_helper_compile_pending_regexp_maps_next(struct rspamd_hs_helper_remap_
 		char cache_key[rspamd_cryptobox_HASHBYTES * 2 + 1];
 		rspamd_snprintf(cache_key, sizeof(cache_key), "%*xs",
 						(int) sizeof(entry->hash) / 2, entry->hash);
+		REF_RETAIN(rmctx);
 		rspamd_hs_cache_lua_exists_async(cache_key, entry->name,
 										 rspamd_hs_helper_remap_exists_cb, rmctx);
 		return;
@@ -1081,6 +1234,8 @@ rspamd_hs_helper_compile_pending_regexp_maps_next(struct rspamd_hs_helper_remap_
 		}
 		else {
 			rspamd_worker_set_busy(rmctx->worker, rmctx->ctx->event_loop, "compile regexp map");
+			/* Flush the busy notification before blocking on compilation */
+			ev_run(rmctx->ctx->event_loop, EVRUN_NOWAIT);
 			if (!rspamd_regexp_map_compile_hs_to_cache(entry->re_map, rmctx->ctx->hs_dir, &err)) {
 				msg_err("failed to compile regexp map '%s': %e", entry->name, err);
 				if (err) g_error_free(err);
@@ -1095,8 +1250,7 @@ rspamd_hs_helper_compile_pending_regexp_maps_next(struct rspamd_hs_helper_remap_
 	}
 
 done:
-	rspamd_regexp_map_clear_pending();
-	g_free(rmctx);
+	REF_RELEASE(rmctx);
 }
 
 static void
@@ -1120,6 +1274,7 @@ rspamd_hs_helper_compile_pending_regexp_maps(struct hs_helper_ctx *ctx,
 	rmctx->pending = pending;
 	rmctx->count = count;
 	rmctx->idx = 0;
+	REF_INIT_RETAIN(rmctx, rspamd_hs_helper_remap_async_ctx_dtor);
 
 	rspamd_hs_helper_compile_pending_regexp_maps_next(rmctx);
 }
@@ -1144,6 +1299,7 @@ rspamd_hs_helper_workers_spawned(struct rspamd_main *rspamd_main,
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_WORKERS_SPAWNED;
+	rep.id = cmd->id;
 	rep.reply.workers_spawned.status = 0;
 
 	/* Write reply */
@@ -1257,11 +1413,23 @@ start_hs_helper(struct rspamd_worker *worker)
 	rspamd_control_worker_add_cmd_handler(worker, RSPAMD_CONTROL_WORKERS_SPAWNED,
 										  rspamd_hs_helper_workers_spawned, ctx);
 
-	ctx->recompile_timer.data = worker;
-	tim = rspamd_time_jitter(ctx->recompile_time, 0);
-	msg_debug_hyperscan("setting up recompile timer for %.1f seconds", tim);
-	ev_timer_init(&ctx->recompile_timer, rspamd_hs_helper_timer, tim, 0.0);
-	ev_timer_start(ctx->event_loop, &ctx->recompile_timer);
+	/*
+	 * Periodic recompile timer is only useful for non-file backends (Redis, HTTP, Lua)
+	 * where another instance might have compiled new databases.
+	 * For file backend, recompilation is triggered by:
+	 * - Config reload (new process)
+	 * - Explicit RECOMPILE command (map updates)
+	 */
+	if (ctx->cache_backend != HS_CACHE_BACKEND_FILE) {
+		ctx->recompile_timer.data = worker;
+		tim = rspamd_time_jitter(ctx->recompile_time, 0);
+		msg_debug_hyperscan("setting up recompile timer for %.1f seconds", tim);
+		ev_timer_init(&ctx->recompile_timer, rspamd_hs_helper_timer, tim, 0.0);
+		ev_timer_start(ctx->event_loop, &ctx->recompile_timer);
+	}
+	else {
+		msg_debug_hyperscan("skipping periodic recompile timer for file backend");
+	}
 
 	msg_debug_hyperscan("hs_helper starting event loop");
 	ev_loop(ctx->event_loop, 0);

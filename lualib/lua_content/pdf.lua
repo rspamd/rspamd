@@ -102,6 +102,7 @@ local config = {
   min_js_fuzzy = 256, -- Minimum size of js to be considered as a fuzzy
   openaction_fuzzy_only = false, -- Generate fuzzy from all scripts
   max_pdf_objects = 10000, -- Maximum number of objects to be considered
+  min_obj_content_size = 32, -- Skip objects smaller than this (evasion padding)
   max_pdf_trailer = 10 * 1024 * 1024, -- Maximum trailer size (to avoid abuse)
   max_pdf_trailer_lines = 100, -- Maximum number of lines in pdf trailer
   pdf_process_timeout = 2.0, -- Timeout in seconds for processing
@@ -160,6 +161,21 @@ local function compile_tries()
   end
 end
 
+-- StandardEncoding/MacRomanEncoding ligature substitutions
+-- Applied only to rendered text, NOT to dictionary strings (URI values etc.)
+-- to avoid corrupting soft hyphens (U+00AD = byte 0xAD = \173) in URLs
+local function apply_ligature_substitutions(s)
+  if not s then return s end
+  s = s:gsub('\171', 'ff')
+  s = s:gsub('\172', 'ffi')
+  s = s:gsub('\173', 'ffl')
+  s = s:gsub('\174', 'fi')
+  s = s:gsub('\175', 'fl')
+  s = s:gsub('\222', 'fi')
+  s = s:gsub('\223', 'fl')
+  return s
+end
+
 -- Returns a table with generic grammar elements for PDF
 local function generic_grammar_elts()
   local P = lpeg.P
@@ -183,17 +199,6 @@ local function generic_grammar_elts()
       res = lua_util.unhex(s:sub(1, #s - 1)) .. lua_util.unhex((s:sub(#s) .. '0'))
     end
 
-    if res then
-      -- StandardEncoding/MacRomanEncoding ligature substitutions
-      res = res:gsub('\171', 'ff')
-      res = res:gsub('\172', 'ffi')
-      res = res:gsub('\173', 'ffl')
-      res = res:gsub('\174', 'fi')
-      res = res:gsub('\175', 'fl')
-      res = res:gsub('\222', 'fi')
-      res = res:gsub('\223', 'fl')
-    end
-
     return res
   end
 
@@ -215,15 +220,6 @@ local function generic_grammar_elts()
       return string.char(tonumber(cc:sub(2), 8) or 63)
     end
     s = s:gsub('\\%d%d?%d?', ue_octal)
-
-    -- StandardEncoding/MacRomanEncoding ligature substitutions
-    s = s:gsub('\171', 'ff')
-    s = s:gsub('\172', 'ffi')
-    s = s:gsub('\173', 'ffl')
-    s = s:gsub('\174', 'fi')
-    s = s:gsub('\175', 'fl')
-    s = s:gsub('\222', 'fi')
-    s = s:gsub('\223', 'fl')
 
     return s
   end
@@ -470,6 +466,27 @@ local function gen_text_grammar()
        end
     end
 
+    -- Strip null bytes and control characters from non-UTF-16 text.
+    -- PDF hex strings like <0041> produce raw bytes including \x00 which
+    -- are not meaningful in extracted text and cause false positives in
+    -- sa_raw_body rules matching \x00 patterns.
+    local has_control = false
+    for i = 1, len do
+      local b = s:byte(i)
+      if b == 0 or (b < 32 and b ~= 9 and b ~= 10 and b ~= 13) then
+        has_control = true
+        break
+      end
+    end
+
+    if has_control then
+      -- Remove null bytes and other control characters (keep tab, newline, carriage return)
+      s = s:gsub('[%z\1-\8\11\12\14-\31]', '')
+      if #s == 0 then
+        return ''
+      end
+    end
+
     return s
   end
 
@@ -489,6 +506,11 @@ local function gen_text_grammar()
         end
       end
       res = table.concat(tres)
+    end
+
+    -- Apply ligature substitutions for rendered text only (not dictionary strings like /URI)
+    if type(res) == 'string' then
+      res = apply_ligature_substitutions(res)
     end
 
     res = sanitize_pdf_text(res)
@@ -637,6 +659,8 @@ local function apply_pdf_filter(input, filt)
       return nil
     end
     return lua_util.unhex(to_decode)
+  elseif filt == 'ASCII85Decode' or filt == 'A85' then
+    return rspamd_util.decode_ascii85(input)
   end
 
   return nil
@@ -1194,21 +1218,42 @@ end
 -- set of objects
 local function extract_outer_objects(task, input, pdf)
   local start_pos, end_pos = 1, 1
-  local max_start_pos, max_end_pos
   local obj_count = 0
+  local stored = 0
+  local total_start = #pdf.start_objects
+  local total_end = #pdf.end_objects
 
-  max_start_pos = math.min(config.max_pdf_objects, #pdf.start_objects)
-  max_end_pos = math.min(config.max_pdf_objects, #pdf.end_objects)
   lua_util.debugm(N, task, "pdf: extract objects from %s start positions and %s end positions",
-      max_start_pos, max_end_pos)
+      total_start, total_end)
 
-  while start_pos <= max_start_pos and end_pos <= max_end_pos do
+  while start_pos <= total_start and end_pos <= total_end do
+    -- Timeout check every 500 iterations
+    if start_pos % 500 == 0 then
+      local now = rspamd_util.get_ticks()
+      if now >= pdf.end_timestamp then
+        pdf.timeout_processing = now - pdf.start_timestamp
+        lua_util.debugm(N, task, 'pdf: timeout extracting objects after %s seconds, ' ..
+            '%s stored, %s/%s positions',
+            pdf.timeout_processing, stored, start_pos, total_start)
+        break
+      end
+    end
+
     local first = pdf.start_objects[start_pos]
     local last = pdf.end_objects[end_pos]
 
     -- 7 is length of `endobj\n`
     if first + 6 < last then
       local len = last - first - 6
+
+      -- Only count non-tiny objects toward the limit; small objects (e.g. padding)
+      -- are still stored but don't consume the budget
+      if len >= config.min_obj_content_size then
+        if obj_count >= config.max_pdf_objects then
+          break
+        end
+        obj_count = obj_count + 1
+      end
 
       -- Also get the starting span and try to match it versus obj re to get numbers
       local obj_line_potential = first - 32
@@ -1224,6 +1269,7 @@ local function extract_outer_objects(task, input, pdf)
       local matches = object_re:search(obj_line_span, true, true)
 
       if matches and matches[1] then
+        stored = stored + 1
         local nobj = {
           start = first,
           len = len,
@@ -1231,7 +1277,7 @@ local function extract_outer_objects(task, input, pdf)
           major = tonumber(matches[1][2]),
           minor = tonumber(matches[1][3]),
         }
-        pdf.objects[obj_count + 1] = nobj
+        pdf.objects[stored] = nobj
         if nobj.major and nobj.minor then
           -- Add reference
           local ref = obj_ref(nobj.major, nobj.minor)
@@ -1240,7 +1286,6 @@ local function extract_outer_objects(task, input, pdf)
         end
       end
 
-      obj_count = obj_count + 1
       start_pos = start_pos + 1
       end_pos = end_pos + 1
     elseif first > last then
@@ -1250,19 +1295,33 @@ local function extract_outer_objects(task, input, pdf)
       end_pos = end_pos + 1
     end
   end
+
+  lua_util.debugm(N, task, 'pdf: stored %s objects (%s non-tiny toward limit) from %s positions',
+      stored, obj_count, total_start)
 end
 
 -- This function attaches streams to objects and processes outer pdf grammar
 local function attach_pdf_streams(task, input, pdf)
   if pdf.start_streams and pdf.end_streams then
     local start_pos, end_pos = 1, 1
-    local max_start_pos, max_end_pos
-
-    max_start_pos = math.min(config.max_pdf_objects, #pdf.start_streams)
-    max_end_pos = math.min(config.max_pdf_objects, #pdf.end_streams)
+    local total_start = #pdf.start_streams
+    local total_end = #pdf.end_streams
+    local iter_count = 0
 
     for _, obj in ipairs(pdf.objects) do
-      while start_pos <= max_start_pos and end_pos <= max_end_pos do
+      while start_pos <= total_start and end_pos <= total_end do
+        -- Timeout check every 500 iterations
+        iter_count = iter_count + 1
+        if iter_count % 500 == 0 then
+          local now = rspamd_util.get_ticks()
+          if now >= pdf.end_timestamp then
+            pdf.timeout_processing = now - pdf.start_timestamp
+            lua_util.debugm(N, task, 'pdf: timeout attaching streams after %s seconds',
+                pdf.timeout_processing)
+            return
+          end
+        end
+
         local first = pdf.start_streams[start_pos]
         local last = pdf.end_streams[end_pos]
         last = last - 10 -- Exclude endstream\n pattern

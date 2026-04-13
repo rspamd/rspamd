@@ -415,7 +415,8 @@ if redis_params then
     score = 0.0
   }
 
-  rspamd_config:register_dependency('BIMI_CHECK', 'DMARC_CHECK')
+  -- Hard: BIMI requires DMARC pass
+  rspamd_config:register_dependency('BIMI_CHECK', 'DMARC_CHECK', true)
 else
   lua_util.disable_module(N, "redis")
 end

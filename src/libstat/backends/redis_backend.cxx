@@ -30,6 +30,7 @@
 #include <string>
 #include <cstdint>
 #include <vector>
+#include <memory>
 #include <optional>
 
 #define msg_debug_stat_redis(...) rspamd_conditional_debug_fast(nullptr, nullptr,                                                 \
@@ -191,6 +192,10 @@ rspamd_redis_stat_quark(void)
 
 /*
  * Get the class label for a statfile (for multi-class support)
+ * Returns the Redis hash field name to use for this class.  "spam" and "ham"
+ * always map to the legacy single-char labels "S" and "H" so that existing
+ * Redis token data (stored under those field names) remains readable after a
+ * config migration from `spam = true/false` to explicit `class = "spam"/"ham"`.
  */
 static const char *
 get_class_label(struct rspamd_statfile_config *stcf)
@@ -201,11 +206,25 @@ get_class_label(struct rspamd_statfile_config *stcf)
 		if (label) {
 			return label;
 		}
-		/* If no label mapping found, use class name directly */
-		return stcf->class_name;
+		/* No mapping found — fall through to backward-compat checks below */
 	}
 
-	/* Fallback to legacy binary classification */
+	if (stcf->class_name) {
+		/* Map canonical binary class names to their legacy Redis field names */
+		if (strcmp(stcf->class_name, "spam") == 0) {
+			return "S";
+		}
+		if (strcmp(stcf->class_name, "ham") == 0) {
+			return "H";
+		}
+
+		/* True multiclass name (not spam/ham) — use the class name as the field */
+		if (!stcf->is_spam_converted) {
+			return stcf->class_name;
+		}
+	}
+
+	/* Final fallback: legacy binary is_spam flag */
 	return stcf->is_spam ? "S" : "H";
 }
 
@@ -792,7 +811,7 @@ msgpack_str_len(std::size_t len) -> std::size_t
 		return 3 + len;
 	}
 	else {
-		return 4 + len;
+		return 5 + len;
 	}
 }
 

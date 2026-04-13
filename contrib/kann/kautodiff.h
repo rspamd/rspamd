@@ -176,6 +176,7 @@ kad_node_t *kad_square(kad_node_t *x); /* f(x) = x^2                         (el
 kad_node_t *kad_sigm(kad_node_t *x);   /* f(x) = 1/(1+exp(-x))               (element-wise sigmoid) */
 kad_node_t *kad_tanh(kad_node_t *x);   /* f(x) = (1-exp(-2x)) / (1+exp(-2x)) (element-wise tanh) */
 kad_node_t *kad_relu(kad_node_t *x);   /* f(x) = max{0,x}                    (element-wise rectifier, aka ReLU) */
+kad_node_t *kad_gelu(kad_node_t *x);   /* f(x) = 0.5*x*(1+erf(x/sqrt(2)))    (element-wise GELU) */
 kad_node_t *kad_softmax(kad_node_t *x);/* f_i(x_1,...,x_n) = exp(x_i) / \sum_j exp(x_j) (softmax: tf.nn.softmax(x,dim=-1)) */
 kad_node_t *kad_1minus(kad_node_t *x); /* f(x) = 1 - x */
 kad_node_t *kad_exp(kad_node_t *x);    /* f(x) = exp(x) */

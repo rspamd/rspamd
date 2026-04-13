@@ -189,6 +189,18 @@ rspamd_parse_bind_line(struct rspamd_config *cfg,
 
 	auto bind_line = std::string_view{cnf->bind_line};
 
+	/* Check for trailing " ssl" suffix (case-insensitive) */
+	if (bind_line.size() > 4 &&
+		bind_line[bind_line.size() - 4] == ' ' &&
+		g_ascii_tolower(bind_line[bind_line.size() - 3]) == 's' &&
+		g_ascii_tolower(bind_line[bind_line.size() - 2]) == 's' &&
+		g_ascii_tolower(bind_line[bind_line.size() - 1]) == 'l') {
+		cnf->is_ssl = TRUE;
+		/* Strip the suffix for address parsing */
+		cnf->bind_line[bind_line.size() - 4] = '\0';
+		bind_line = std::string_view{cnf->bind_line};
+	}
+
 	if (bind_line.starts_with("systemd:")) {
 		/* The actual socket will be passed by systemd environment */
 		fdname = str + sizeof("systemd:") - 1;
@@ -209,7 +221,7 @@ rspamd_parse_bind_line(struct rspamd_config *cfg,
 		}
 	}
 	else {
-		if (rspamd_parse_host_port_priority(str, &cnf->addrs,
+		if (rspamd_parse_host_port_priority(cnf->bind_line, &cnf->addrs,
 											nullptr, &cnf->name, DEFAULT_BIND_PORT, TRUE, cfg->cfg_pool) == RSPAMD_PARSE_ADDR_FAIL) {
 			msg_err_config("cannot parse bind line: %s", str);
 			ret = FALSE;
@@ -352,6 +364,7 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 	cfg->enable_css_parser = true;
 	cfg->enable_mime_utf = false;
 	cfg->enable_url_rewrite = false;
+	cfg->include_content_urls = true; /* Include URLs from PDF/content by default */
 	cfg->url_rewrite_lua_func = nullptr;
 	cfg->composites_inverted_index = true; /* Enable inverted index by default */
 	cfg->composites_stats_always = false;  /* Use probabilistic sampling by default */
@@ -596,7 +609,7 @@ rspamd_config_process_var(struct rspamd_config *cfg, const rspamd_ftok_t *var,
 		else {
 			/* Load lua code and ensure that we have function ref returned */
 			if (!content || content->len == 0) {
-				msg_err_config("lua variable needs content: %T", &tok);
+				msg_err_config("lua variable needs content: %*s", (int) tok.size(), tok.data());
 				return FALSE;
 			}
 
@@ -1792,10 +1805,12 @@ rspamd_config_add_symbol(struct rspamd_config *cfg,
 				*sym_def->weight_ptr = score;
 				sym_def->score = score;
 				sym_def->priority = priority;
-				sym_def->flags &= ~RSPAMD_SYMBOL_FLAG_UNSCORED;
+				sym_def->flags = flags & ~RSPAMD_SYMBOL_FLAG_UNSCORED;
 			}
-
-			sym_def->flags = flags;
+			else {
+				/* Preserve UNSCORED flag when not setting a real score */
+				sym_def->flags = flags | (sym_def->flags & RSPAMD_SYMBOL_FLAG_UNSCORED);
+			}
 
 			if (nshots != 0) {
 				sym_def->nshots = nshots;

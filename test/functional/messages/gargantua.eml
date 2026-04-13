@@ -23556,4 +23556,23 @@ PtMl8z+eKcuwYg6Kh//WFxJpky/bbud1vxdTudsFQap/u1q50IBncAARTE1Hz6WVnXZBmEC3CoN9Xf02
 OutxkSe3/G7yn398gU28Royre16hUFz7UXiMrjFcra8MwOeyEKzA44FlZMpNMynjbMDP+L2JfJ/3rmGJ
 0YCJBxFcC867msO9wip2vP786vlLeC/fqKwSng==
 
+--XXX
+Content-Type: application/octet-stream
+Content-Transfer-Encoding: base64
+X-Real-Type: html-with-svg (should detect as html, not svg)
+
+PCFET0NUWVBFIGh0bWw+CjxodG1sPgo8aGVhZD4KICA8dGl0bGU+VGVzdCBIVE1MIHdpdGggU1ZH
+PC90aXRsZT4KPC9oZWFkPgo8Ym9keT4KICA8cD5UaGlzIGlzIEhUTUwgd2l0aCBlbWJlZGRlZCBT
+Vkc8L3A+CiAgPHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCI+CiAgICA8Y2lyY2xlIGN4PSI1
+MCIgY3k9IjUwIiByPSI0MCIgZmlsbD0icmVkIi8+CiAgPC9zdmc+CjwvYm9keT4KPC9odG1sPgo=
+
+--XXX
+Content-Type: application/octet-stream
+Content-Transfer-Encoding: base64
+X-Real-Type: svg
+
+PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIw
+MDAvc3ZnIj4KICA8Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI0MCIgZmlsbD0iYmx1ZSIvPgo8
+L3N2Zz4K
+
 --XXX--

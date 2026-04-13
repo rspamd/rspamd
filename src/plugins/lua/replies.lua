@@ -199,8 +199,11 @@ local function replies_check(task)
       rspamd_logger.errx(task, 'redis_get_cb error when reading data from %s: %s', addr:get_addr(), err)
       return
     end
+    if type(data) ~= 'string' then
+      return
+    end
     local recipients = check_recipient(data)
-    if type(data) == 'string' and recipients then
+    if recipients then
       -- Hash was found
       add_to_replies_set(recipients)
       task:insert_result(settings['symbol'], 1.0)
@@ -216,9 +219,9 @@ local function replies_check(task)
       end
     end
   end
-  -- If in-reply-to header not present return
+  -- If in-reply-to header not present or empty return
   in_reply_to = task:get_header_raw('in-reply-to')
-  if not in_reply_to then
+  if not in_reply_to or #in_reply_to == 0 then
     return
   end
   -- Create hash of in-reply-to and query redis
@@ -322,9 +325,9 @@ local function replies_check_cookie(task)
     end
   end
 
-  -- If in-reply-to header not present return
+  -- If in-reply-to header not present or empty return
   local irt = task:get_header('in-reply-to')
-  if irt == nil then
+  if not irt or #irt == 0 then
     return
   end
   local cr = require "rspamd_cryptobox"

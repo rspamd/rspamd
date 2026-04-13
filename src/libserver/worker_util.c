@@ -23,6 +23,7 @@
 #include "rspamd_control.h"
 #include "hs_cache_backend.h"
 #include "hyperscan_tools.h"
+#include "re_cache.h"
 #include "libserver/maps/map.h"
 #include "libserver/maps/map_private.h"
 #include "libserver/maps/map_helpers.h"
@@ -545,6 +546,32 @@ rspamd_prepare_worker(struct rspamd_worker *worker, const char *name,
 #ifdef WITH_HYPERSCAN
 	/* Ensure HS cache Lua backend is configured in this worker if hs_helper uses it */
 	rspamd_hs_cache_try_init_lua_backend(worker->srv->cfg, event_loop);
+
+	/*
+	 * Proactively try to load hyperscan on worker startup.
+	 * This handles the race condition where a worker starts after hs_helper
+	 * has already broadcast HYPERSCAN_LOADED - such workers would otherwise
+	 * never receive the notification and run without hyperscan.
+	 *
+	 * This is best-effort: loads what's available and valid, falls back to
+	 * PCRE for missing/stale patterns. Async notifications still handle updates.
+	 */
+	if (rspamd_hs_cache_has_lua_backend() && worker->srv->cfg->re_cache) {
+		const char *cache_dir = worker->srv->cfg->hs_cache_dir ? worker->srv->cfg->hs_cache_dir : RSPAMD_DBDIR "/";
+		enum rspamd_hyperscan_status hs_status;
+
+		hs_status = rspamd_re_cache_load_hyperscan_scoped(worker->srv->cfg->re_cache,
+														  cache_dir, true);
+		if (hs_status == RSPAMD_HYPERSCAN_LOADED_FULL) {
+			msg_info("worker startup: hyperscan fully loaded from cache");
+		}
+		else if (hs_status == RSPAMD_HYPERSCAN_LOADED_PARTIAL) {
+			msg_info("worker startup: hyperscan partially loaded, waiting for hs_helper");
+		}
+		else {
+			msg_debug("worker startup: no hyperscan available yet, waiting for hs_helper");
+		}
+	}
 #endif
 
 	/* Accept all sockets */
@@ -608,6 +635,9 @@ void rspamd_worker_stop_accept(struct rspamd_worker *worker)
 
 	g_hash_table_unref (worker->signal_events);
 #endif
+
+	/* Clean up srv_pipe context to prevent memory leaks */
+	rspamd_srv_pipe_cleanup();
 }
 
 static rspamd_fstring_t *
@@ -1450,8 +1480,7 @@ rspamd_fork_worker(struct rspamd_main *rspamd_main,
 	wrk->pid = fork();
 	wrk->cores_throttled = rspamd_main->cores_throttling;
 	wrk->term_handler = term_handler;
-	wrk->control_events_pending = g_hash_table_new_full(g_direct_hash, g_direct_equal,
-														NULL, rspamd_pending_control_free);
+	wrk->control_events_pending = rspamd_control_pending_new();
 
 	switch (wrk->pid) {
 	case 0:
@@ -2057,34 +2086,28 @@ rspamd_worker_hyperscan_ready(struct rspamd_main *rspamd_main,
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_HYPERSCAN_LOADED;
+	rep.id = cmd->id;
 
-	msg_debug_hyperscan("received hyperscan loaded notification, forced=%d",
-						cmd->cmd.hs_loaded.forced);
+	msg_info("received hyperscan loaded notification, forced=%d, scope=%s",
+			 cmd->cmd.hs_loaded.forced,
+			 cmd->cmd.hs_loaded.scope[0] ? cmd->cmd.hs_loaded.scope : "(all)");
 
-	if (rspamd_hs_cache_has_lua_backend()) {
-		msg_debug_hyperscan("using async backend-based hyperscan loading");
-		rspamd_re_cache_load_hyperscan_scoped_async(cache, worker->srv->event_loop,
-													cache_dir, false);
-		rep.reply.hs_loaded.status = 0;
+	/* All file operations go through Lua backend */
+	g_assert(rspamd_hs_cache_has_lua_backend());
+
+	if (cmd->cmd.hs_loaded.scope[0] != '\0') {
+		/* Per-scope notification: only load the specific scope that was compiled */
+		rspamd_re_cache_load_hyperscan_single_scope_async(cache,
+														  cmd->cmd.hs_loaded.scope,
+														  worker->srv->event_loop,
+														  cache_dir, false);
 	}
 	else {
-		/* File-based loading (legacy, synchronous) */
-		if (cmd->cmd.hs_loaded.scope[0] != '\0') {
-			const char *scope = cmd->cmd.hs_loaded.scope;
-			msg_debug_hyperscan("loading hyperscan expressions for scope '%s' after receiving compilation notice", scope);
-			rep.reply.hs_loaded.status = rspamd_re_cache_load_hyperscan_scoped(
-				cache, cache_dir, false);
-		}
-		else {
-			if (rspamd_re_cache_is_hs_loaded(cache) != RSPAMD_HYPERSCAN_LOADED_FULL ||
-				cmd->cmd.hs_loaded.forced) {
-				msg_debug_hyperscan("loading hyperscan expressions after receiving compilation notice: %s",
-									(rspamd_re_cache_is_hs_loaded(cache) != RSPAMD_HYPERSCAN_LOADED_FULL) ? "new db" : "forced update");
-				rep.reply.hs_loaded.status = rspamd_re_cache_load_hyperscan(
-					worker->srv->cfg->re_cache, cache_dir, false);
-			}
-		}
+		/* Final notification: load all scopes */
+		rspamd_re_cache_load_hyperscan_scoped_async(cache, worker->srv->event_loop,
+													cache_dir, false);
 	}
+	rep.reply.hs_loaded.status = 0;
 
 	if (write(fd, &rep, sizeof(rep)) != sizeof(rep)) {
 		msg_err("cannot write reply to the control socket: %s",
@@ -2112,33 +2135,23 @@ rspamd_worker_multipattern_ready(struct rspamd_main *rspamd_main,
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_MULTIPATTERN_LOADED;
+	rep.id = cmd->id;
 
 	msg_debug_hyperscan("received multipattern loaded notification for '%s'", name);
 
 	mp = rspamd_multipattern_find_pending(name);
 
 	if (mp != NULL) {
-		if (rspamd_hs_cache_has_lua_backend()) {
-			msg_debug_hyperscan("using async backend-based multipattern loading for '%s'", name);
-			struct rspamd_worker_mp_async_cbdata *cbd = g_malloc0(sizeof(*cbd));
-			cbd->name = g_strdup(name);
-			cbd->cache_dir = g_strdup(cache_dir);
-			cbd->mp = mp;
-			rspamd_multipattern_load_from_cache_async(mp, cache_dir, worker->srv->event_loop,
-													  rspamd_worker_multipattern_async_loaded, cbd);
-			rep.reply.hs_loaded.status = 0;
-		}
-		else {
-			if (rspamd_multipattern_load_from_cache(mp, cache_dir)) {
-				msg_debug_hyperscan("multipattern '%s' hot-swapped to hyperscan", name);
-				rep.reply.hs_loaded.status = 0;
-			}
-			else {
-				msg_warn("failed to load multipattern '%s' from cache, continuing with ACISM fallback",
-						 name);
-				rep.reply.hs_loaded.status = ENOENT;
-			}
-		}
+		/* All file operations go through Lua backend */
+		g_assert(rspamd_hs_cache_has_lua_backend());
+		msg_debug_hyperscan("using async backend-based multipattern loading for '%s'", name);
+		struct rspamd_worker_mp_async_cbdata *cbd = g_malloc0(sizeof(*cbd));
+		cbd->name = g_strdup(name);
+		cbd->cache_dir = g_strdup(cache_dir);
+		cbd->mp = mp;
+		rspamd_multipattern_load_from_cache_async(mp, cache_dir, worker->srv->event_loop,
+												  rspamd_worker_multipattern_async_loaded, cbd);
+		rep.reply.hs_loaded.status = 0;
 	}
 	else {
 		msg_warn("received multipattern notification for unknown '%s'", name);
@@ -2195,33 +2208,23 @@ rspamd_worker_regexp_map_ready(struct rspamd_main *rspamd_main,
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_REGEXP_MAP_LOADED;
+	rep.id = cmd->id;
 
 	msg_debug_hyperscan("received regexp map loaded notification for '%s'", name);
 
 	re_map = rspamd_regexp_map_find_pending(name);
 
 	if (re_map != NULL) {
-		if (rspamd_hs_cache_has_lua_backend()) {
-			msg_debug_hyperscan("using async backend-based regexp map loading for '%s'", name);
-			struct rspamd_worker_remap_async_cbdata *cbd = g_malloc0(sizeof(*cbd));
-			cbd->name = g_strdup(name);
-			cbd->cache_dir = g_strdup(cache_dir);
-			cbd->re_map = re_map;
-			rspamd_regexp_map_load_from_cache_async(re_map, cache_dir, worker->srv->event_loop,
-													rspamd_worker_regexp_map_async_loaded, cbd);
-			rep.reply.hs_loaded.status = 0;
-		}
-		else {
-			if (rspamd_regexp_map_load_from_cache(re_map, cache_dir)) {
-				msg_debug_hyperscan("regexp map '%s' hot-swapped to hyperscan", name);
-				rep.reply.hs_loaded.status = 0;
-			}
-			else {
-				msg_warn("failed to load regexp map '%s' from cache, continuing with PCRE fallback",
-						 name);
-				rep.reply.hs_loaded.status = ENOENT;
-			}
-		}
+		/* All file operations go through Lua backend */
+		g_assert(rspamd_hs_cache_has_lua_backend());
+		msg_debug_hyperscan("using async backend-based regexp map loading for '%s'", name);
+		struct rspamd_worker_remap_async_cbdata *cbd = g_malloc0(sizeof(*cbd));
+		cbd->name = g_strdup(name);
+		cbd->cache_dir = g_strdup(cache_dir);
+		cbd->re_map = re_map;
+		rspamd_regexp_map_load_from_cache_async(re_map, cache_dir, worker->srv->event_loop,
+												rspamd_worker_regexp_map_async_loaded, cbd);
+		rep.reply.hs_loaded.status = 0;
 	}
 	else {
 		msg_warn("received regexp map notification for unknown '%s'", name);
@@ -2262,6 +2265,7 @@ rspamd_worker_log_pipe_handler(struct rspamd_main *rspamd_main,
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_LOG_PIPE;
+	rep.id = cmd->id;
 
 	if (attached_fd != -1) {
 		lp = g_malloc0(sizeof(*lp));
@@ -2298,6 +2302,7 @@ rspamd_worker_monitored_handler(struct rspamd_main *rspamd_main,
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_MONITORED_CHANGE;
+	rep.id = cmd->id;
 
 	if (cmd->cmd.monitored_change.sender != getpid()) {
 		m = rspamd_monitored_by_tag(mctx, cmd->cmd.monitored_change.tag);
@@ -2572,6 +2577,22 @@ void rspamd_worker_init_controller(struct rspamd_worker *worker,
 
 	ctx = (struct rspamd_abstract_worker_ctx *) worker->ctx;
 	rspamd_controller_load_saved_stats(worker->srv, worker->srv->cfg);
+
+#ifdef WITH_HYPERSCAN
+	/* Controller also needs hyperscan handlers for hot-swap support */
+	rspamd_control_worker_add_cmd_handler(worker,
+										  RSPAMD_CONTROL_HYPERSCAN_LOADED,
+										  rspamd_worker_hyperscan_ready,
+										  NULL);
+	rspamd_control_worker_add_cmd_handler(worker,
+										  RSPAMD_CONTROL_MULTIPATTERN_LOADED,
+										  rspamd_worker_multipattern_ready,
+										  NULL);
+	rspamd_control_worker_add_cmd_handler(worker,
+										  RSPAMD_CONTROL_REGEXP_MAP_LOADED,
+										  rspamd_worker_regexp_map_ready,
+										  NULL);
+#endif
 
 	if (worker->index == 0) {
 		/* Enable periodics and other stuff */
@@ -2878,4 +2899,48 @@ rspamd_metrics_to_prometheus_string(const ucl_object_t *top)
 
 	/* Must be finalized and freed by caller */
 	return output;
+}
+
+gboolean
+rspamd_worker_is_ssl_socket(struct rspamd_worker *worker, int fd)
+{
+	GList *cur;
+	struct rspamd_worker_listen_socket *ls;
+
+	if (worker == NULL || worker->cf == NULL) {
+		return FALSE;
+	}
+
+	cur = worker->cf->listen_socks;
+
+	while (cur) {
+		ls = (struct rspamd_worker_listen_socket *) cur->data;
+
+		if (ls->fd == fd) {
+			return ls->is_ssl;
+		}
+
+		cur = g_list_next(cur);
+	}
+
+	return FALSE;
+}
+
+gboolean
+rspamd_worker_has_ssl_socket(struct rspamd_worker *worker)
+{
+	struct rspamd_worker_bind_conf *bcf;
+
+	if (worker == NULL || worker->cf == NULL) {
+		return FALSE;
+	}
+
+	LL_FOREACH(worker->cf->bind_conf, bcf)
+	{
+		if (bcf->is_ssl) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
 }

@@ -225,10 +225,11 @@ void rspamd_symcache_inc_frequency(struct rspamd_symcache *cache, struct rspamd_
 }
 
 void rspamd_symcache_add_delayed_dependency(struct rspamd_symcache *cache,
-											const char *from, const char *to)
+											const char *from, const char *to,
+											gboolean hard)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
-	real_cache->add_delayed_dependency(from, to);
+	real_cache->add_delayed_dependency(from, to, hard);
 }
 
 const char *
@@ -628,7 +629,7 @@ unsigned int rspamd_symcache_item_async_dec_full(struct rspamd_task *task,
 						 real_dyn_item->async_events, subsystem, loc);
 
 	if (G_UNLIKELY(real_dyn_item->async_events == 0)) {
-		msg_err_cache_task("INTERNAL ERROR: trying decrease async events counter for %s(%d) that is already zero; "
+		msg_err_cache_task("INTERNAL ERROR: trying decrease async events counter for %s(%d) that is already zero (events: %ud); "
 						   "subsystem %s (%s)",
 						   static_item->symbol.c_str(), static_item->id,
 						   real_dyn_item->async_events, subsystem, loc);

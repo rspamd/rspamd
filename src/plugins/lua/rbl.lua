@@ -1212,6 +1212,7 @@ local function add_rbl(key, rbl, global_opts)
     local check_sym = rbl.symbols_prefixes and rbl.symbol .. '_CHECK' or rbl.symbol
 
     if rbl.dkim then
+      -- Weak: RBL has other query sources; DKIM-domain queries just won't happen
       rspamd_config:register_dependency(check_sym, 'DKIM_CHECK')
     end
 

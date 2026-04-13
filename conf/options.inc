@@ -30,6 +30,11 @@ max_lua_urls = 1024;
 max_urls = 10240;
 max_recipients = 1024;
 
+# Include content URLs (extracted from PDF, etc.) in URL API calls by default
+# These are URLs found in document content that may be clickable links
+# Set to false to exclude them from task:get_urls and similar methods
+# include_content_urls = true;
+
 dns {
 	timeout = 1s;
 	sockets = 16;

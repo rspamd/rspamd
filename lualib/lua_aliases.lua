@@ -674,9 +674,12 @@ local function resolve_address_recursive(addr, opts)
 
   -- Convert to normalized form
   local email_str
+  local original_str
   if type(addr) == 'string' then
+    original_str = addr
     email_str = addr:lower()
   elseif type(addr) == 'table' and addr.addr then
+    original_str = addr.addr
     email_str = addr.addr:lower()
   else
     return addr, nil, { error = 'invalid address format' }
@@ -692,7 +695,7 @@ local function resolve_address_recursive(addr, opts)
   -- @param depth current recursion depth
   -- @param path current resolution path (for loop detection)
   -- @return array of canonical addresses
-  local function resolve_recursive(current_addr, depth, path)
+  local function resolve_recursive(current_addr, depth, path, orig)
     path = path or {}
     -- Check depth limit
     if depth > max_depth then
@@ -722,7 +725,7 @@ local function resolve_address_recursive(addr, opts)
 
     if not result then
       -- No more aliases, this is canonical
-      return { current_addr }
+      return { orig or current_addr }
     end
 
     -- Track rule application
@@ -770,7 +773,7 @@ local function resolve_address_recursive(addr, opts)
   end
 
   -- Start resolution
-  local canonical_addrs = resolve_recursive(email_str, 1)
+  local canonical_addrs = resolve_recursive(email_str, 1, nil, original_str)
 
   -- Build metadata
   local metadata = {

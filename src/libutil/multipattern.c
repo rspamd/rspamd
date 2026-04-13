@@ -124,16 +124,17 @@ rspamd_multipattern_escape_tld_hyperscan(const char *pattern, gsize slen,
 										 gsize *dst_len)
 {
 	gsize len;
-	const char *p, *prefix, *suffix;
+	const char *p, *prefix;
 	char *res;
 
 	/*
 	 * We understand the following cases
-	 * 1) blah -> \.blah(?:[^a-zA-Z0-9]|$)
-	 * 2) *.blah -> \.blah(?:[^a-zA-Z0-9]|$)
+	 * 1) blah -> \.blah
+	 * 2) *.blah -> \.blah
 	 *
-	 * Note: We use (?:[^a-zA-Z0-9]|$) instead of \b because \b requires
-	 * HS_FLAG_UCP which we don't set for TLD patterns.
+	 * Boundary checking (non-alphanumeric after TLD) is done in the
+	 * hyperscan callback (rspamd_multipattern_hs_cb), similar to ACISM.
+	 * This ensures match length doesn't include the boundary character.
 	 */
 
 	if (pattern[0] == '*') {
@@ -156,14 +157,9 @@ rspamd_multipattern_escape_tld_hyperscan(const char *pattern, gsize slen,
 		len = slen + strlen(prefix);
 	}
 
-	/* Match end of TLD: either non-alphanumeric or end of string */
-	suffix = "(?:[^a-zA-Z0-9]|$)";
-	len += strlen(suffix);
-
 	res = g_malloc(len + 1);
 	slen = rspamd_strlcpy(res, prefix, len + 1);
 	slen += rspamd_strlcpy(res + slen, p, len + 1 - slen);
-	slen += rspamd_strlcpy(res + slen, suffix, len + 1 - slen);
 
 	*dst_len = slen;
 
@@ -880,6 +876,18 @@ rspamd_multipattern_hs_cb(unsigned int id,
 			from = 0;
 		}
 
+		/* For TLD patterns, check word boundary at end of match (like ACISM callback) */
+		if (cbd->mp->pats != NULL && id < cbd->mp->pats->len) {
+			struct rspamd_acism_pat *pat = &g_array_index(cbd->mp->pats,
+														  struct rspamd_acism_pat, id);
+			if (pat->is_tld) {
+				if (to < cbd->len && g_ascii_isalnum(cbd->in[to])) {
+					/* TLD followed by alphanumeric - not a valid boundary */
+					return 0;
+				}
+			}
+		}
+
 		ret = cbd->cb(cbd->mp, id, from, to, cbd->in, cbd->len, cbd->ud);
 
 		cbd->nfound++;
@@ -1215,6 +1223,11 @@ void rspamd_multipattern_get_hash(struct rspamd_multipattern *mp,
 		g_assert(hs_populate_platform(&plt) == HS_SUCCESS);
 		rspamd_cryptobox_hash_update(&hash_state, (void *) &plt, sizeof(plt));
 
+		/* Include serialization magic so version bumps invalidate cache */
+		gsize magic_len;
+		const unsigned char *magic = rspamd_hyperscan_get_magic(&magic_len);
+		rspamd_cryptobox_hash_update(&hash_state, magic, magic_len);
+
 		rspamd_cryptobox_hash_final(&hash_state, hash_out);
 		return;
 	}
@@ -1307,6 +1320,24 @@ void rspamd_multipattern_add_pending(struct rspamd_multipattern *mp,
 	if (pending_compilations == NULL) {
 		pending_compilations = g_array_new(FALSE, FALSE,
 										   sizeof(struct rspamd_multipattern_pending));
+	}
+
+	/* Replace existing entry with the same name to avoid stale mp pointers
+	 * after reload (the old mp gets destroyed but the pending entry
+	 * would still reference it, causing use-after-free) */
+	for (unsigned int i = 0; i < pending_compilations->len; i++) {
+		struct rspamd_multipattern_pending *existing;
+
+		existing = &g_array_index(pending_compilations,
+								  struct rspamd_multipattern_pending, i);
+		if (strcmp(existing->name, name) == 0) {
+			existing->mp = mp;
+			rspamd_multipattern_get_hash(mp, existing->hash);
+
+			msg_info("updated pending multipattern '%s' (%ud patterns) in compilation queue",
+					 name, mp->cnt);
+			return;
+		}
 	}
 
 	entry.mp = mp;
@@ -1489,6 +1520,7 @@ struct rspamd_multipattern_hs_cache_async_ctx {
 	char *cache_key;
 	rspamd_multipattern_hs_cache_cb_t cb;
 	void *ud;
+	gboolean callback_processed;
 };
 
 static void
@@ -1512,7 +1544,16 @@ rspamd_multipattern_hs_cache_save_cb(gboolean success,
 	(void) data;
 	(void) len;
 
-	if (!success) {
+	if (ctx->callback_processed) {
+		return;
+	}
+	ctx->callback_processed = TRUE;
+
+	if (success) {
+		msg_info("saved hyperscan multipattern cache %s to Lua backend",
+				 ctx->cache_key ? ctx->cache_key : "(null)");
+	}
+	else {
 		g_set_error(&err, rspamd_multipattern_quark(), EIO,
 					"cannot save multipattern cache %s: %s",
 					ctx->cache_key ? ctx->cache_key : "(null)",
@@ -1540,17 +1581,8 @@ void rspamd_multipattern_compile_hs_to_cache_async(struct rspamd_multipattern *m
 
 	(void) event_loop;
 
-	if (!rspamd_hs_cache_has_lua_backend()) {
-		/* Legacy file-only path */
-		gboolean ok = rspamd_multipattern_compile_hs_to_cache(mp, cache_dir, &err);
-		if (cb) {
-			cb(mp, ok, err, ud);
-		}
-		if (err) {
-			g_error_free(err);
-		}
-		return;
-	}
+	/* All file operations go through Lua backend */
+	g_assert(rspamd_hs_cache_has_lua_backend());
 
 #ifdef WITH_HYPERSCAN
 	hs_platform_info_t plt;
@@ -1629,8 +1661,6 @@ void rspamd_multipattern_compile_hs_to_cache_async(struct rspamd_multipattern *m
 								   rspamd_multipattern_hs_cache_save_cb, ctx);
 
 	g_free(bytes);
-
-	msg_info("saved hyperscan multipattern database to Lua backend (%z bytes)", len);
 #else
 	if (cb) {
 		g_set_error(&err, rspamd_multipattern_quark(), ENOTSUP,
@@ -1795,22 +1825,16 @@ void rspamd_multipattern_load_from_cache_async(struct rspamd_multipattern *mp,
 	rspamd_snprintf(cache_key, sizeof(cache_key), "%*xs",
 					(int) rspamd_cryptobox_HASHBYTES / 2, hash);
 
-	if (rspamd_hs_cache_has_lua_backend()) {
-		struct rspamd_multipattern_load_ctx *ctx = g_malloc0(sizeof(*ctx));
-		ctx->mp = mp;
-		ctx->cache_dir = g_strdup(cache_dir);
-		ctx->cache_key = g_strdup(cache_key);
-		ctx->cb = cb;
-		ctx->ud = ud;
-		(void) event_loop;
-		rspamd_hs_cache_lua_load_async(ctx->cache_key, "multipattern", rspamd_multipattern_load_from_cache_cb, ctx);
-		return;
-	}
-
-	/* File backend fallback (synchronous) */
-	if (cb) {
-		cb(rspamd_multipattern_load_from_cache(mp, cache_dir), ud);
-	}
+	/* All file operations go through Lua backend */
+	g_assert(rspamd_hs_cache_has_lua_backend());
+	struct rspamd_multipattern_load_ctx *ctx = g_malloc0(sizeof(*ctx));
+	ctx->mp = mp;
+	ctx->cache_dir = g_strdup(cache_dir);
+	ctx->cache_key = g_strdup(cache_key);
+	ctx->cb = cb;
+	ctx->ud = ud;
+	(void) event_loop;
+	rspamd_hs_cache_lua_load_async(ctx->cache_key, "multipattern", rspamd_multipattern_load_from_cache_cb, ctx);
 #else
 	(void) mp;
 	(void) cache_dir;

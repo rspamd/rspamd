@@ -91,7 +91,7 @@ local function savapi_check(task, content, digest, rule)
     local message_fd = rspamd_util.create_file(fname)
 
     if not message_fd then
-      rspamd_logger.errx('cannot store file for savapi scan: %s', fname)
+      rspamd_logger.errx(task, 'cannot store file for savapi scan: %s', fname)
       return
     end
 

@@ -384,6 +384,15 @@ context("Selectors test", function()
       selector = "task_cache('cachevar2')",
       expect = {{"hello", "world"}}
     },
+
+    ["authenticated true"] = {
+      selector = "authenticated",
+      expect = {"true"}
+    },
+    ["received_count"] = {
+      selector = "received_count",
+      expect = {"2"}
+    },
   }
 
   for case_name, case in lua_util.spairs(cases_plain) do

@@ -1397,7 +1397,16 @@ struct rspamd_html_url_query_cbd {
 	khash_t(rspamd_url_hash) * url_set;
 	struct rspamd_url *url;
 	GPtrArray *part_urls;
+	uint32_t parent_flags; /* Flags from outer URL to propagate */
 };
+
+static inline auto
+html_part_add_url(GPtrArray *part_urls, struct rspamd_url *url) -> void
+{
+	if (part_urls) {
+		g_ptr_array_add(part_urls, url);
+	}
+}
 
 static gboolean
 html_url_query_callback(struct rspamd_url *url, gsize start_offset,
@@ -1422,8 +1431,11 @@ html_url_query_callback(struct rspamd_url *url, gsize start_offset,
 
 	url->flags |= RSPAMD_URL_FLAG_QUERY;
 
-	if (rspamd_url_set_add_or_increase(cbd->url_set, url, false) && cbd->part_urls) {
-		g_ptr_array_add(cbd->part_urls, url);
+	/* Propagate source/classification flags from the parent (outer) URL */
+	url->flags |= (cbd->parent_flags & RSPAMD_URL_FLAG_PROPAGATE_MASK);
+
+	if (rspamd_url_set_add_or_increase(cbd->url_set, url, false)) {
+		html_part_add_url(cbd->part_urls, url);
 	}
 
 	return TRUE;
@@ -1442,6 +1454,7 @@ html_process_query_url(rspamd_mempool_t *pool, struct rspamd_url *url,
 		qcbd.url_set = url_set;
 		qcbd.url = url;
 		qcbd.part_urls = part_urls;
+		qcbd.parent_flags = url->flags;
 
 		rspamd_url_find_multiple(pool,
 								 rspamd_url_query_unsafe(url), url->querylen,
@@ -1449,9 +1462,7 @@ html_process_query_url(rspamd_mempool_t *pool, struct rspamd_url *url,
 								 html_url_query_callback, &qcbd, L);
 	}
 
-	if (part_urls) {
-		g_ptr_array_add(part_urls, url);
-	}
+	html_part_add_url(part_urls, url);
 }
 
 static auto
@@ -1571,9 +1582,8 @@ html_process_img_tag(rspamd_mempool_t *pool,
 							existing->flags |= img->url->flags;
 							existing->count++;
 						}
-						else if (part_urls) {
-							/* New url */
-							g_ptr_array_add(part_urls, img->url);
+						else {
+							html_part_add_url(part_urls, img->url);
 						}
 					}
 				}
@@ -2177,7 +2187,7 @@ auto html_process_input(struct rspamd_task *task,
 	}
 
 	if (task->cfg && in->len > task->cfg->max_html_len) {
-		msg_notice_task("html input is too big: %z, limit is %z",
+		msg_notice_task("html input is too big: %ud, limit is %z",
 						in->len,
 						task->cfg->max_html_len);
 		process_size = task->cfg->max_html_len;
@@ -2373,9 +2383,7 @@ auto html_process_input(struct rspamd_task *task,
 						url->count++;
 					}
 				}
-				if (part_urls) {
-					g_ptr_array_add(part_urls, url);
-				}
+				html_part_add_url(part_urls, url);
 
 				/* Minimal link features collection */
 				hc->features.links.total_links++;

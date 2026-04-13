@@ -1,0 +1,17 @@
+DKIM-Signature: v=1; a=ed25519-sha256; c=relaxed/relaxed;
+ d=brokenkey.za.org; s=broken;
+ q=dns/txt; t=1528637909; h=from : to : subject : date;
+ bh=2jUSOH9NhtVGCQWNr9BrIAPreKQjO6Sn7XIkfJVOzv8=;
+ b=/gCrinpcQOoIfuHNQIbq4pgh9kyIK3AQUdt9OdqQehSwhEIug4D11Bus
+ Fa3bT3FY5OsU7ZbnKELq+eXdp1Q1Dw==
+From: Joe SixPack <joe@brokenkey.za.org>
+To: Suzie Q <suzie@shopping.example.net>
+Subject: Test broken key type
+Date: Fri, 11 Jul 2003 21:00:37 -0700 (PDT)
+Message-ID: <20030712040037.46341.5F8J@brokenkey.za.org>
+
+Hi.
+
+This message uses a broken DKIM key type (ed2014 instead of ed25519).
+
+Joe.

@@ -64,6 +64,16 @@ define(["jquery", "app/common", "app/libft"],
                 headers: scanTextHeaders,
                 success: function (neighbours_status) {
                     const json = neighbours_status[0].data;
+
+                    // Extract fuzzy_hashes from milter headers if available
+                    const fuzzyHeader = json.milter?.add_headers?.["X-Rspamd-Fuzzy"];
+                    if (fuzzyHeader?.value) {
+                        json.fuzzy_hashes = fuzzyHeader.value
+                            .split(",")
+                            .map((h) => h.trim())
+                            .filter((h) => h.length > 0);
+                    }
+
                     if (json.action) {
                         common.alertMessage("alert-success", "Data successfully scanned");
 
@@ -93,6 +103,7 @@ define(["jquery", "app/common", "app/libft"],
                                             enable_disable_scan_btn();
                                             $("#cleanScanHistory, #scan .ft-columns-dropdown .btn-dropdown-apply")
                                                 .removeAttr("disabled");
+                                            libft.bindFuzzyHashButtons("scan");
                                             $("html, body").animate({
                                                 scrollTop: $("#scanResult").offset().top
                                             }, 1000);
@@ -206,20 +217,32 @@ define(["jquery", "app/common", "app/libft"],
                 } else if (source === "compute-fuzzy") {
                     getFuzzyHashes(data);
                 } else {
-                    let headers = {};
-                    if (source === "learnham" || source === "learnspam") {
+                    const headers = {};
+                    const isBayesLearn = source === "learnham" || source === "learnspam" || source === "learnclass";
+
+                    if (isBayesLearn) {
                         const classifier = $("#classifier").val();
-                        if (classifier) headers = {classifier: classifier};
-                    } else if (source === "fuzzyadd") {
-                        headers = {
-                            flag: $("#fuzzyFlagText").val(),
-                            weight: $("#fuzzyWeightText").val()
-                        };
-                    } else if (source === "fuzzydel") {
-                        headers = {
-                            flag: $("#fuzzyFlagText").val(),
-                        };
+                        if (classifier) headers.classifier = classifier;
                     }
+
+                    if (source === "learnclass") {
+                        const bayesClass = $("#bayes-class").val();
+                        if (!bayesClass) {
+                            common.alertMessage("alert-danger", "Classifier has no classes configured");
+                            return false;
+                        }
+                        headers.class = bayesClass;
+                    }
+
+                    if (source === "fuzzyadd") {
+                        headers.flag = $("#fuzzyFlagText").val();
+                        headers.weight = $("#fuzzyWeightText").val();
+                    }
+
+                    if (source === "fuzzydel") {
+                        headers.flag = $("#fuzzyFlagText").val();
+                    }
+
                     uploadText(data, source, headers);
                 }
             } else {
@@ -314,6 +337,39 @@ define(["jquery", "app/common", "app/libft"],
             return false;
         }
 
+        // Switch UI mode based on selected classifier type
+        function updateBayesUI() {
+            const $classifier = $("#classifier");
+            const $class = $("#bayes-class");
+            const $binaryButtons = $("#binary-learn-buttons");
+            const $learnClassBtn = $("#learn-class-btn");
+
+            const selectedOption = $classifier.find("option:selected");
+            const classifierType = selectedOption.data("type");
+            const classes = selectedOption.data("classes");
+
+            if (classifierType === "multi-class") {
+                // Multi-class mode: show class dropdown and Learn button
+                $class.empty();
+                if (Array.isArray(classes) && classes.length > 0) {
+                    classes.forEach((cls) => {
+                        $class.append($("<option>", {value: cls, text: cls}));
+                    });
+                } else {
+                    // No classes available - this shouldn't happen with valid config
+                    $class.append($("<option>", {value: "", text: "No classes available"}));
+                }
+                $class.removeClass("d-none");
+                $binaryButtons.addClass("d-none");
+                $learnClassBtn.removeClass("d-none");
+            } else {
+                // Binary mode: show HAM/SPAM buttons
+                $class.addClass("d-none");
+                $binaryButtons.removeClass("d-none");
+                $learnClassBtn.addClass("d-none");
+            }
+        }
+
         ui.getClassifiers = function () {
             if (!common.read_only) {
                 const server = common.getServer();
@@ -323,11 +379,55 @@ define(["jquery", "app/common", "app/libft"],
                 // Skip request only if we already had options populated for this config/server
                 if (shouldSkipRequest(server, "classifiers") && hadOptions) return;
 
-                sel.empty().append($("<option>", {value: "", text: "All classifiers"}));
+                sel.empty();
 
                 common.query("bayes/classifiers", {
                     success: function (data) {
-                        data[0].data.forEach((c) => sel.append($("<option>", {value: c, text: c})));
+                        const response = data[0].data;
+                        // eslint-disable-next-line no-useless-assignment
+                        let classifiers = [];
+
+                        // Handle both old and new response formats
+                        if (Array.isArray(response)) {
+                            // Old format: ["classifier1", "classifier2"] - all binary
+                            classifiers = response.map((name) => ({
+                                name: name,
+                                type: "binary",
+                                per_user: false,
+                                classes: ["spam", "ham"]
+                            }));
+                        } else if (response?.classifiers) {
+                            // New format: {classifiers: [{name, type, per_user, classes}]}
+                            ({classifiers} = response);
+                        } else {
+                            // Unexpected response format
+                            common.alertMessage("alert-warning", "Unable to load classifiers list");
+                            return;
+                        }
+
+                        // Add "All classifiers" only if no multi-class classifiers present
+                        const hasMultiClass = classifiers.some((cl) => cl.type === "multi-class");
+                        if (!hasMultiClass) sel.append($("<option>", {value: "", text: "All classifiers"}));
+
+                        classifiers.forEach((cl) => {
+                            const badges = [];
+                            if (cl.type === "multi-class") badges.push("[multi-class]");
+                            if (cl.per_user) badges.push("[per-user]");
+                            const label = cl.name + (badges.length ? " " + badges.join(" ") : "");
+
+                            const $option = $("<option>", {
+                                value: cl.name,
+                                text: label
+                            });
+                            // Store metadata in jQuery data cache (not as DOM attributes)
+                            $option.data("type", cl.type);
+                            $option.data("per-user", cl.per_user);
+                            $option.data("classes", cl.classes || []);
+                            sel.append($option);
+                        });
+
+                        // Initialize UI state for the first classifier
+                        updateBayesUI();
                     },
                     server: server
                 });
@@ -339,12 +439,18 @@ define(["jquery", "app/common", "app/libft"],
             {
                 picker: "#fuzzy-flag-picker",
                 input: "#fuzzy-flag",
-                container: ($picker) => $picker.parent()
+                container: ($picker) => $picker.parent(),
+                includeReadOnly: true,
+                requiresWritable: false,
+                emptyText: "No fuzzy storages"
             },
             {
                 picker: "#fuzzyFlagText-picker",
                 input: "#fuzzyFlagText",
-                container: ($picker) => $picker.closest("div.card")
+                container: ($picker) => $picker.closest("div.card"),
+                includeReadOnly: false,
+                requiresWritable: true,
+                emptyText: "No writable storages"
             }
         ];
 
@@ -355,8 +461,10 @@ define(["jquery", "app/common", "app/libft"],
             });
         }
 
-        function setWidgetsDisabled(disable) {
-            fuzzyWidgets.forEach(({picker, container}) => {
+        function setWidgetsDisabled(disable, predicate = () => true) {
+            fuzzyWidgets.forEach((widget) => {
+                if (!predicate(widget)) return;
+                const {picker, container} = widget;
                 container($(picker))[disable ? "addClass" : "removeClass"]("disabled");
             });
         }
@@ -373,25 +481,30 @@ define(["jquery", "app/common", "app/libft"],
                     const hasWritableStorages = Object.keys(storages).some((name) => !storages[name].read_only);
 
                     toggleWidgets(true, false);
-                    setWidgetsDisabled(!hasWritableStorages);
+                    setWidgetsDisabled(!hasWritableStorages, (widget) => widget.requiresWritable);
 
-                    fuzzyWidgets.forEach(({picker, input}) => {
+                    fuzzyWidgets.forEach((widget) => {
+                        const {picker, input, includeReadOnly, emptyText} = widget;
                         const $sel = $(picker);
 
                         $sel.empty();
 
-                        if (hasWritableStorages) {
-                            Object.entries(storages).forEach(([name, info]) => {
-                                if (!info.read_only) {
-                                    Object.entries(info.flags).forEach(([symbol, val]) => {
-                                        $sel.append($("<option>", {value: val, text: `${name}:${symbol} (${val})`}));
-                                    });
-                                }
+                        const applicableStorages = Object.entries(storages)
+                            .filter(([, info]) => includeReadOnly || !info.read_only);
+
+                        applicableStorages.forEach(([name, info]) => {
+                            Object.entries(info.flags).forEach(([symbol, val]) => {
+                                $sel.append($("<option>", {value: val, text: `${name}:${symbol} (${val})`}));
                             });
+                        });
+
+                        if ($sel.children().length > 0) {
                             $(input).val($sel.val());
                             $sel.off("change").on("change", () => $(input).val($sel.val()));
                         } else {
-                            $sel.append($("<option>", {value: "", text: "No writable storages"}));
+                            $sel.append($("<option>", {value: "", text: emptyText}));
+                            $(input).val("");
+                            $sel.off("change");
                         }
                     });
                 },
@@ -417,6 +530,9 @@ define(["jquery", "app/common", "app/libft"],
                 server: server
             });
         };
+
+        // Initialize classifier dropdown change handler
+        $("#classifier").on("change", updateBayesUI);
 
         return ui;
     });

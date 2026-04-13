@@ -43,6 +43,7 @@ LUA_FUNCTION_DEF(worker, is_scanner);
 LUA_FUNCTION_DEF(worker, is_primary_controller);
 LUA_FUNCTION_DEF(worker, spawn_process);
 LUA_FUNCTION_DEF(worker, get_mem_stats);
+LUA_FUNCTION_DEF(worker, get_mem_config);
 LUA_FUNCTION_DEF(worker, add_control_handler);
 
 const luaL_reg worker_reg[] = {
@@ -56,6 +57,7 @@ const luaL_reg worker_reg[] = {
 	LUA_INTERFACE_DEF(worker, is_scanner),
 	LUA_INTERFACE_DEF(worker, is_primary_controller),
 	LUA_INTERFACE_DEF(worker, get_mem_stats),
+	LUA_INTERFACE_DEF(worker, get_mem_config),
 	LUA_INTERFACE_DEF(worker, add_control_handler),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
@@ -249,6 +251,7 @@ struct rspamd_control_cbdata {
 	struct ev_loop *event_loop;
 	struct rspamd_async_session *session;
 	enum rspamd_control_type cmd;
+	uint64_t cmd_id;
 	int cbref;
 	int fd;
 };
@@ -264,6 +267,7 @@ lua_worker_control_fin_session(void *ud)
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = cbd->cmd;
+	rep.id = cbd->cmd_id;
 
 	if (write(cbd->fd, &rep, sizeof(rep)) != sizeof(rep)) {
 		msg_err_pool("cannot write reply to the control socket: %s",
@@ -304,6 +308,7 @@ lua_worker_control_handler(struct rspamd_main *rspamd_main,
 									cbd);
 	cbd->session = session;
 	cbd->fd = fd;
+	cbd->cmd_id = cmd->id;
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
 	err_idx = lua_gettop(L);
@@ -472,12 +477,126 @@ lua_worker_get_mem_stats(lua_State *L)
 	return 1;
 }
 
+/***
+ * @method worker:get_mem_config()
+ * Returns a table with jemalloc allocator configuration and memory statistics
+ * obtained via mallctl(). Returns nil if jemalloc support is not compiled in.
+ * @return {table} table with fields: allocated, active, metadata, resident, mapped, narenas, dirty_decay_ms, muzzy_decay_ms
+ */
+static int
+lua_worker_get_mem_config(lua_State *L)
+{
+	struct rspamd_worker *w = lua_check_worker(L, 1);
+
+	if (w) {
+#ifdef WITH_JEMALLOC
+		gsize sz, val;
+		unsigned uval;
+		ssize_t sval;
+		bool bval;
+		const char *sptr;
+
+		lua_createtable(L, 0, 3);
+
+		/* stats subtable */
+		lua_pushstring(L, "stats");
+		lua_createtable(L, 0, 5);
+
+		sz = sizeof(val);
+		if (mallctl("stats.allocated", &val, &sz, NULL, 0) == 0) {
+			lua_pushstring(L, "allocated");
+			lua_pushinteger(L, val);
+			lua_settable(L, -3);
+		}
+		if (mallctl("stats.active", &val, &sz, NULL, 0) == 0) {
+			lua_pushstring(L, "active");
+			lua_pushinteger(L, val);
+			lua_settable(L, -3);
+		}
+		if (mallctl("stats.metadata", &val, &sz, NULL, 0) == 0) {
+			lua_pushstring(L, "metadata");
+			lua_pushinteger(L, val);
+			lua_settable(L, -3);
+		}
+		if (mallctl("stats.resident", &val, &sz, NULL, 0) == 0) {
+			lua_pushstring(L, "resident");
+			lua_pushinteger(L, val);
+			lua_settable(L, -3);
+		}
+		if (mallctl("stats.mapped", &val, &sz, NULL, 0) == 0) {
+			lua_pushstring(L, "mapped");
+			lua_pushinteger(L, val);
+			lua_settable(L, -3);
+		}
+
+		lua_settable(L, -3); /* set stats */
+
+		/* config subtable */
+		lua_pushstring(L, "config");
+		lua_createtable(L, 0, 6);
+
+		sz = sizeof(uval);
+		if (mallctl("opt.narenas", &uval, &sz, NULL, 0) == 0) {
+			lua_pushstring(L, "narenas");
+			lua_pushinteger(L, uval);
+			lua_settable(L, -3);
+		}
+
+		sz = sizeof(sval);
+		if (mallctl("opt.dirty_decay_ms", &sval, &sz, NULL, 0) == 0) {
+			lua_pushstring(L, "dirty_decay_ms");
+			lua_pushinteger(L, sval);
+			lua_settable(L, -3);
+		}
+		if (mallctl("opt.muzzy_decay_ms", &sval, &sz, NULL, 0) == 0) {
+			lua_pushstring(L, "muzzy_decay_ms");
+			lua_pushinteger(L, sval);
+			lua_settable(L, -3);
+		}
+
+		sz = sizeof(bval);
+		if (mallctl("opt.tcache", &bval, &sz, NULL, 0) == 0) {
+			lua_pushstring(L, "tcache");
+			lua_pushboolean(L, bval);
+			lua_settable(L, -3);
+		}
+		if (mallctl("opt.background_thread", &bval, &sz, NULL, 0) == 0) {
+			lua_pushstring(L, "background_thread");
+			lua_pushboolean(L, bval);
+			lua_settable(L, -3);
+		}
+
+		sz = sizeof(sptr);
+		if (mallctl("opt.malloc_conf", &sptr, &sz, NULL, 0) == 0 && sptr) {
+			lua_pushstring(L, "malloc_conf");
+			lua_pushstring(L, sptr);
+			lua_settable(L, -3);
+		}
+
+		lua_settable(L, -3); /* set config */
+
+		/* version */
+		lua_pushstring(L, "version");
+		lua_pushstring(L, JEMALLOC_VERSION);
+		lua_settable(L, -3);
+#else
+		lua_pushnil(L);
+#endif
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
 struct rspamd_lua_process_cbdata {
 	int sp[2];
 	int func_cbref;
 	int cb_cbref;
 	gboolean replied;
 	gboolean is_error;
+	gboolean dead; /* Set by SIGCHLD handler when child exits */
 	pid_t cpid;
 	lua_State *L;
 	uint64_t sz;
@@ -566,7 +685,7 @@ rspamd_lua_call_on_complete(lua_State *L,
 	}
 
 	if (data) {
-		lua_pushlstring(L, data, datalen);
+		lua_new_text(L, data, datalen, FALSE);
 	}
 	else {
 		lua_pushnil(L);
@@ -580,34 +699,13 @@ rspamd_lua_call_on_complete(lua_State *L,
 	lua_settop(L, err_idx - 1);
 }
 
-static gboolean
-rspamd_lua_cld_handler(struct rspamd_worker_signal_handler *sigh, void *ud)
+/* Helper to free cbdata resources */
+static void
+rspamd_lua_cbdata_free(struct rspamd_lua_process_cbdata *cbdata)
 {
-	struct rspamd_lua_process_cbdata *cbdata = ud;
 	struct rspamd_srv_command srv_cmd;
-	lua_State *L;
-	pid_t died;
-	int res = 0;
+	lua_State *L = cbdata->L;
 
-	/* Are we called by a correct children ? */
-	died = waitpid(cbdata->cpid, &res, WNOHANG);
-
-	if (died <= 0) {
-		/* Wait more */
-		return TRUE;
-	}
-
-	L = cbdata->L;
-	msg_info("handled SIGCHLD from %P", cbdata->cpid);
-
-	if (!cbdata->replied) {
-		/* We still need to call on_complete callback */
-		ev_io_stop(cbdata->event_loop, &cbdata->ev);
-		rspamd_lua_call_on_complete(cbdata->L, cbdata,
-									"Worker has died without reply", NULL, 0);
-	}
-
-	/* Free structures */
 	close(cbdata->sp[0]);
 	luaL_unref(L, LUA_REGISTRYINDEX, cbdata->func_cbref);
 	luaL_unref(L, LUA_REGISTRYINDEX, cbdata->cb_cbref);
@@ -626,6 +724,38 @@ rspamd_lua_cld_handler(struct rspamd_worker_signal_handler *sigh, void *ud)
 	rspamd_srv_send_command(cbdata->wrk, cbdata->event_loop, &srv_cmd, -1,
 							NULL, NULL);
 	g_free(cbdata);
+}
+
+static gboolean
+rspamd_lua_cld_handler(struct rspamd_worker_signal_handler *sigh, void *ud)
+{
+	struct rspamd_lua_process_cbdata *cbdata = ud;
+	pid_t died;
+	int res = 0;
+
+	/* Are we called by a correct children ? */
+	died = waitpid(cbdata->cpid, &res, WNOHANG);
+
+	if (died <= 0) {
+		/* Wait more */
+		return TRUE;
+	}
+
+	msg_info("handled SIGCHLD from %P", cbdata->cpid);
+	cbdata->dead = TRUE;
+
+	if (!cbdata->replied) {
+		/* Child died before sending reply - call callback with error and cleanup */
+		ev_io_stop(cbdata->event_loop, &cbdata->ev);
+		rspamd_lua_call_on_complete(cbdata->L, cbdata,
+									"Worker has died without reply", NULL, 0);
+		rspamd_lua_cbdata_free(cbdata);
+	}
+	else {
+		/* I/O handler already processed the reply but couldn't clean up
+		 * because the child wasn't dead yet at that point. Clean up now. */
+		rspamd_lua_cbdata_free(cbdata);
+	}
 
 	/* We are done with this SIGCHLD */
 	return FALSE;
@@ -647,11 +777,14 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 
 		if (r == 0) {
 			ev_io_stop(cbdata->event_loop, &cbdata->ev);
+			cbdata->replied = TRUE;
 			rspamd_lua_call_on_complete(cbdata->L, cbdata,
 										"Unexpected EOF", NULL, 0);
-			cbdata->replied = TRUE;
 			kill(cbdata->cpid, SIGTERM);
 
+			if (cbdata->dead) {
+				rspamd_lua_cbdata_free(cbdata);
+			}
 			return;
 		}
 		else if (r == -1) {
@@ -660,11 +793,14 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 			}
 			else {
 				ev_io_stop(cbdata->event_loop, &cbdata->ev);
+				cbdata->replied = TRUE;
 				rspamd_lua_call_on_complete(cbdata->L, cbdata,
 											strerror(errno), NULL, 0);
-				cbdata->replied = TRUE;
 				kill(cbdata->cpid, SIGTERM);
 
+				if (cbdata->dead) {
+					rspamd_lua_cbdata_free(cbdata);
+				}
 				return;
 			}
 		}
@@ -692,11 +828,14 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 
 		if (r == 0) {
 			ev_io_stop(cbdata->event_loop, &cbdata->ev);
+			cbdata->replied = TRUE;
 			rspamd_lua_call_on_complete(cbdata->L, cbdata,
 										"Unexpected EOF", NULL, 0);
-			cbdata->replied = TRUE;
 			kill(cbdata->cpid, SIGTERM);
 
+			if (cbdata->dead) {
+				rspamd_lua_cbdata_free(cbdata);
+			}
 			return;
 		}
 		else if (r == -1) {
@@ -705,11 +844,14 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 			}
 			else {
 				ev_io_stop(cbdata->event_loop, &cbdata->ev);
+				cbdata->replied = TRUE;
 				rspamd_lua_call_on_complete(cbdata->L, cbdata,
 											strerror(errno), NULL, 0);
-				cbdata->replied = TRUE;
 				kill(cbdata->cpid, SIGTERM);
 
+				if (cbdata->dead) {
+					rspamd_lua_cbdata_free(cbdata);
+				}
 				return;
 			}
 		}
@@ -720,6 +862,10 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 			char rep[4];
 
 			ev_io_stop(cbdata->event_loop, &cbdata->ev);
+			/* Mark as replied BEFORE calling callback to prevent SIGCHLD handler
+			 * from calling the callback again. The SIGCHLD handler will see
+			 * replied=TRUE and skip cleanup, leaving it for us to do. */
+			cbdata->replied = TRUE;
 			/* Finished reading data */
 			if (cbdata->is_error) {
 				cbdata->io_buf->str[cbdata->io_buf->len] = '\0';
@@ -731,12 +877,16 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 											NULL, cbdata->io_buf->str, cbdata->io_buf->len);
 			}
 
-			cbdata->replied = TRUE;
-
 			/* Write reply to the child */
 			rspamd_socket_blocking(cbdata->sp[0]);
 			memset(rep, 0, sizeof(rep));
 			(void) !write(cbdata->sp[0], rep, sizeof(rep));
+
+			/* If SIGCHLD already ran while we were in the callback,
+			 * the child is dead and we need to cleanup now */
+			if (cbdata->dead) {
+				rspamd_lua_cbdata_free(cbdata);
+			}
 		}
 	}
 }
@@ -791,9 +941,16 @@ lua_worker_spawn_process(lua_State *L)
 	cbdata->event_loop = actx->event_loop;
 	cbdata->sz = (uint64_t) -1;
 
+	/* Stop GC before fork to ensure a clean GC state in the child.
+	 * LuaJIT's incremental GC may be mid-cycle; the child would inherit
+	 * a partially-traversed gray list, causing GC thrashing or stalls
+	 * in the atomic phase when the child's first allocation triggers GC.
+	 */
+	lua_gc(L, LUA_GCSTOP, 0);
 	pid = fork();
 
 	if (pid == -1) {
+		lua_gc(L, LUA_GCRESTART, 0);
 		msg_err("cannot spawn process: %s", strerror(errno));
 		close(cbdata->sp[0]);
 		close(cbdata->sp[1]);
@@ -807,6 +964,10 @@ lua_worker_spawn_process(lua_State *L)
 		/* Child */
 		int rc;
 		char inbuf[4];
+
+		/* Complete any in-flight GC cycle and restart with a clean state */
+		lua_gc(L, LUA_GCCOLLECT, 0);
+		lua_gc(L, LUA_GCRESTART, 0);
 
 		rspamd_log_on_fork(w->cf->type, w->srv->cfg, w->srv->logger);
 		rc = ottery_init(w->srv->cfg->libs_ctx->ottery_cfg);
@@ -850,6 +1011,9 @@ lua_worker_spawn_process(lua_State *L)
 			exit(EXIT_FAILURE);
 		}
 	}
+
+	/* Parent: restart GC after fork */
+	lua_gc(L, LUA_GCRESTART, 0);
 
 	cbdata->cpid = pid;
 	cbdata->io_buf = g_string_sized_new(8);

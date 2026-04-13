@@ -93,14 +93,14 @@ struct lua_thread_pool {
 			thread_entry->task = NULL;
 			thread_entry->cfg = NULL;
 
-			msg_debug_lua_threads("%s: returned thread to the threads pool %ud items",
+			msg_debug_lua_threads("%s: returned thread to the threads pool %z items",
 								  loc,
 								  available_items.size());
 
 			available_items.push_back(thread_entry);
 		}
 		else {
-			msg_debug_lua_threads("%s: removed thread as thread pool has %ud items",
+			msg_debug_lua_threads("%s: removed thread as thread pool has %z items",
 								  loc,
 								  available_items.size());
 			thread_entry_free(L, thread_entry);

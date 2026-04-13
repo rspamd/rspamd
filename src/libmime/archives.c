@@ -783,20 +783,27 @@ rspamd_archive_process_rar(struct rspamd_task *task,
 					p + fname_len + extra_sz < end) {
 					/* Try to find encryption record in extra field */
 					const unsigned char *ex = p + fname_len;
+					const unsigned char *extra_end = ex + extra_sz;
 
-					while (ex < p + extra_sz) {
+					while (ex < extra_end) {
 						const unsigned char *t;
 						int64_t cur_sz = 0, sec_type = 0;
+						int vint_len;
 
-						r = rspamd_archive_rar_read_vint(ex, extra_sz, &cur_sz);
-						if (r == -1) {
+						vint_len = rspamd_archive_rar_read_vint(ex, extra_end - ex, &cur_sz);
+						if (vint_len == -1) {
 							msg_debug_archive("rar archive is invalid (bad vint)");
 							return;
 						}
 
-						t = ex + r;
+						if (cur_sz <= 0 || ex + vint_len + cur_sz > extra_end) {
+							msg_debug_archive("rar archive is invalid (bad extra record size)");
+							break;
+						}
 
-						r = rspamd_archive_rar_read_vint(t, extra_sz - r, &sec_type);
+						t = ex + vint_len;
+
+						r = rspamd_archive_rar_read_vint(t, cur_sz, &sec_type);
 						if (r == -1) {
 							msg_debug_archive("rar archive is invalid (bad vint)");
 							return;
@@ -808,7 +815,7 @@ rspamd_archive_process_rar(struct rspamd_task *task,
 							break;
 						}
 
-						ex += cur_sz;
+						ex += vint_len + cur_sz;
 					}
 				}
 			}
@@ -1143,7 +1150,11 @@ rspamd_7zip_read_folder(struct rspamd_task *task,
 		t = *p;
 		SZ_SKIP_BYTES(1);
 		sz = t & 0xF;
-		/* Codec ID */
+		/* Codec ID - validate bounds before reading */
+		if (end - p < (goffset) sz) {
+			msg_debug_archive("7zip archive is invalid (codec id truncated)");
+			return NULL;
+		}
 		tmp = 0;
 		for (j = 0; j < sz; j++) {
 			tmp <<= 8;

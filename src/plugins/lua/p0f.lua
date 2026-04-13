@@ -120,5 +120,5 @@ if rule then
   end
 else
   lua_util.disable_module(N, 'config')
-  rspamd_logger.infox('p0f module not configured');
+  rspamd_logger.infox(rspamd_config, 'p0f module not configured');
 end

@@ -110,6 +110,12 @@ local bucket_schema = T.table({
   symbol = T.string():optional():doc({ summary = "Custom symbol name" }),
   message = T.string():optional():doc({ summary = "Custom reject message" }),
   skip_soft_reject = T.boolean():optional():doc({ summary = "Skip soft reject" }),
+  ham_factor_rate = T.number():optional():doc({ summary = "Bucket-specific ham_factor_rate"}),
+  spam_factor_rate = T.number():optional():doc({ summary = "Bucket-specific spam_factor_rate"}),
+  ham_factor_burst = T.number():optional():doc({ summary = "Bucket-specific ham_factor_burst"}),
+  spam_factor_burst = T.number():optional():doc({ summary = "Bucket-specific spam_factor_burst"}),
+  max_rate_mult = T.number():optional():doc({ summary = "Bucket-specific rate multiplicator limit"}),
+  max_bucket_mult = T.number():optional():doc({ summary = "Bucket-specific bucket multiplicator limit"}),
 }):doc({ summary = "Ratelimit bucket configuration" })
 
 exports.parse_limit = function(name, data)

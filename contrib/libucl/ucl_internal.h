@@ -140,6 +140,7 @@ typedef SSIZE_T ssize_t;
  */
 
 #define UCL_MAX_RECURSION 16
+#define UCL_MAX_NESTING 1024
 #define UCL_TRASH_KEY 0
 #define UCL_TRASH_VALUE 1
 

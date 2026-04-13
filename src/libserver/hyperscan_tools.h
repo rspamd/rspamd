@@ -161,6 +161,15 @@ gboolean rspamd_hyperscan_validate_header(const char *data,
 										  gsize len,
 										  GError **err);
 
+/**
+ * Get the hyperscan serialization magic bytes.
+ * Used to include magic in hash computations so that version bumps
+ * invalidate cached databases.
+ * @param[out] len length of magic bytes
+ * @return pointer to magic bytes (static storage)
+ */
+const unsigned char *rspamd_hyperscan_get_magic(gsize *len);
+
 G_END_DECLS
 
 #endif

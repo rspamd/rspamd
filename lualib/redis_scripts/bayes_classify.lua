@@ -1,12 +1,12 @@
 -- Lua script to perform bayes classification (multi-class)
 -- This script accepts the following parameters:
 -- key1 - prefix for bayes tokens (e.g. for per-user classification)
--- key2 - class labels: table of all class labels as "TABLE:label1,label2,..."
--- key3 - set of tokens encoded in messagepack array of strings
+-- argv1 - class labels: table of all class labels as "TABLE:label1,label2,..."
+-- argv2 - set of tokens encoded in messagepack array of strings
 
 local prefix = KEYS[1]
-local class_labels_arg = KEYS[2]
-local input_tokens = cmsgpack.unpack(KEYS[3])
+local class_labels_arg = ARGV[1]
+local input_tokens = cmsgpack.unpack(ARGV[2])
 
 -- Parse class labels (always expect TABLE: format)
 local class_labels = {}

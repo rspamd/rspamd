@@ -35,7 +35,14 @@ enum class cache_item_status : std::uint16_t {
 	started = 1,
 	pending = 2,
 	finished = 3,
+	disabled = 4, /* Disabled by settings; triggers cascade-disable for hard deps */
 };
+
+/* Check if an item status means "done" (finished or disabled) */
+static inline auto is_item_done(cache_item_status status) -> bool
+{
+	return status == cache_item_status::finished || status == cache_item_status::disabled;
+}
 /**
  * These items are saved within task structure and are used to track
  * symbols execution.
@@ -72,6 +79,8 @@ class symcache_runtime {
 
 	struct cache_dynamic_item *cur_item;
 	order_generation_ptr order;
+	/* Symbol IDs force-enabled by merged settings (overrides settings_elt forbidden_ids) */
+	id_list *force_enabled_ids;
 	/* Dynamically expanded as needed */
 	mutable struct cache_dynamic_item dynamic_items[];
 	/* We allocate this structure merely in memory pool, so destructor is absent */
@@ -122,6 +131,19 @@ public:
 	 * @return
 	 */
 	auto enable_symbol(struct rspamd_task *task, const symcache &cache, std::string_view name) -> bool;
+
+	/**
+	 * Mark a symbol as force-enabled (overrides settings_elt forbidden_ids)
+	 * @param id symbol cache id
+	 */
+	auto add_force_enabled(int id) -> void;
+
+	/**
+	 * Check if a symbol is force-enabled
+	 * @param id symbol cache id
+	 * @return true if force-enabled
+	 */
+	auto is_force_enabled(int id) const -> bool;
 
 	/**
 	 * Checks if an item has been checked/disabled

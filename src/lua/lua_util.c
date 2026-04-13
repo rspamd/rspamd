@@ -14,13 +14,17 @@
  * limitations under the License.
  */
 #include "lua_common.h"
+#include "lua_thread_pool.h"
 #include "unix-std.h"
 #include "lua_compress.h"
 #include "libmime/email_addr.h"
 #include "libmime/content_type.h"
 #include "libmime/mime_headers.h"
 #include "libutil/hash.h"
+#include "libutil/str_util.h"
 #include "libserver/html/html.h"
+#include "libserver/hyperscan_tools.h"
+#include "libserver/async_session.h"
 
 #include "lua_parsers.h"
 
@@ -113,6 +117,14 @@ LUA_FUNCTION_DEF(util, decode_html_entities);
  * @return {rspamd_text} decoded data chunk
  */
 LUA_FUNCTION_DEF(util, decode_base64);
+
+/***
+ * @function util.decode_ascii85(input)
+ * Decodes data from ASCII85 (Base85) encoding used in PDF files
+ * @param {text or string} input data to decode
+ * @return {rspamd_text} decoded data chunk or nil on error
+ */
+LUA_FUNCTION_DEF(util, decode_ascii85);
 
 /***
  * @function util.encode_base32(input, [b32type = 'default'])
@@ -408,6 +420,25 @@ LUA_FUNCTION_DEF(util, create_file);
  * @return {boolean[,string]} true if a file was closed
  */
 LUA_FUNCTION_DEF(util, close_file);
+
+/***
+ * @function util.hyperscan_notice_known(fname)
+ * Notifies the hyperscan cache system that a file is known and should not be
+ * deleted during cleanup. This should be called when loading cached hyperscan
+ * databases from files.
+ *
+ * @param {string} fname path to the hyperscan cache file
+ */
+LUA_FUNCTION_DEF(util, hyperscan_notice_known);
+
+/***
+ * @function util.hyperscan_get_platform_id()
+ * Returns the platform identifier string for hyperscan cache keys.
+ * This includes the hyperscan version, platform tune, and CPU features.
+ *
+ * @return {string} platform identifier (e.g., "hs54_haswell_avx2_abc123")
+ */
+LUA_FUNCTION_DEF(util, hyperscan_get_platform_id);
 
 /***
  * @function util.random_hex(size)
@@ -763,6 +794,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF(util, decode_qp),
 	LUA_INTERFACE_DEF(util, decode_html_entities),
 	LUA_INTERFACE_DEF(util, decode_base64),
+	LUA_INTERFACE_DEF(util, decode_ascii85),
 	LUA_INTERFACE_DEF(util, encode_base32),
 	LUA_INTERFACE_DEF(util, decode_base32),
 	LUA_INTERFACE_DEF(util, decode_url),
@@ -793,6 +825,8 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF(util, unlock_file),
 	LUA_INTERFACE_DEF(util, create_file),
 	LUA_INTERFACE_DEF(util, close_file),
+	LUA_INTERFACE_DEF(util, hyperscan_notice_known),
+	LUA_INTERFACE_DEF(util, hyperscan_get_platform_id),
 	LUA_INTERFACE_DEF(util, random_hex),
 	LUA_INTERFACE_DEF(util, zstd_compress),
 	LUA_INTERFACE_DEF(util, zstd_decompress),
@@ -848,6 +882,7 @@ LUA_FUNCTION_DEF(ev_base, update_time);
 LUA_FUNCTION_DEF(ev_base, timestamp);
 LUA_FUNCTION_DEF(ev_base, pending_events);
 LUA_FUNCTION_DEF(ev_base, add_timer);
+LUA_FUNCTION_DEF(ev_base, sleep);
 
 static const struct luaL_reg ev_baselib_m[] = {
 	LUA_INTERFACE_DEF(ev_base, loop),
@@ -855,6 +890,7 @@ static const struct luaL_reg ev_baselib_m[] = {
 	LUA_INTERFACE_DEF(ev_base, timestamp),
 	LUA_INTERFACE_DEF(ev_base, pending_events),
 	LUA_INTERFACE_DEF(ev_base, add_timer),
+	LUA_INTERFACE_DEF(ev_base, sleep),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
@@ -1316,6 +1352,53 @@ lua_util_decode_base64(lua_State *L)
 									   &outlen);
 		t->len = outlen;
 		t->flags = RSPAMD_TEXT_FLAG_OWN;
+	}
+	else {
+		lua_pushnil(L);
+	}
+
+	return 1;
+}
+
+static int
+lua_util_decode_ascii85(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t;
+	const char *s = NULL;
+	gsize inlen = 0;
+	gssize outlen;
+
+	if (lua_type(L, 1) == LUA_TSTRING) {
+		s = luaL_checklstring(L, 1, &inlen);
+	}
+	else if (lua_type(L, 1) == LUA_TUSERDATA) {
+		t = lua_check_text(L, 1);
+
+		if (t != NULL) {
+			s = t->start;
+			inlen = t->len;
+		}
+	}
+
+	if (s != NULL && inlen > 0) {
+		/* ASCII85 expands 5 chars to 4 bytes, so output is at most (inlen * 4 / 5) + 4 */
+		gsize max_outlen = (inlen * 4 / 5) + 4;
+		unsigned char *buf = g_malloc(max_outlen);
+
+		outlen = rspamd_decode_ascii85_buf(s, inlen, buf, max_outlen);
+
+		if (outlen >= 0) {
+			t = lua_newuserdata(L, sizeof(*t));
+			rspamd_lua_setclass(L, rspamd_text_classname, -1);
+			t->start = (const char *) buf;
+			t->len = outlen;
+			t->flags = RSPAMD_TEXT_FLAG_OWN;
+		}
+		else {
+			g_free(buf);
+			lua_pushnil(L);
+		}
 	}
 	else {
 		lua_pushnil(L);
@@ -2188,6 +2271,37 @@ lua_util_close_file(lua_State *L)
 	else {
 		return luaL_error(L, "invalid arguments");
 	}
+
+	return 1;
+}
+
+static int
+lua_util_hyperscan_notice_known(lua_State *L)
+{
+	LUA_TRACE_POINT;
+#ifdef WITH_HYPERSCAN
+	const char *fname = luaL_checkstring(L, 1);
+
+	if (fname) {
+		rspamd_hyperscan_notice_known(fname);
+	}
+#else
+	(void) L;
+#endif
+
+	return 0;
+}
+
+static int
+lua_util_hyperscan_get_platform_id(lua_State *L)
+{
+	LUA_TRACE_POINT;
+#ifdef WITH_HYPERSCAN
+	const char *platform_id = rspamd_hyperscan_get_platform_id();
+	lua_pushstring(L, platform_id);
+#else
+	lua_pushstring(L, "no_hyperscan");
+#endif
 
 	return 1;
 }
@@ -4355,4 +4469,157 @@ lua_ev_base_add_timer(lua_State *L)
 	ev_timer_start(ev_base, &cbdata->ev);
 
 	return 0;
+}
+
+struct rspamd_ev_base_sleep_cbdata {
+	lua_State *L;
+	int cbref;
+	struct thread_entry *thread;
+	struct rspamd_async_session *session;
+	ev_timer ev;
+};
+
+/* Dummy finalizer for sleep session events - the timer handles cleanup */
+static void
+lua_ev_base_sleep_session_fin(gpointer ud)
+{
+	/* Nothing to do - timer callback handles everything */
+}
+
+static void
+lua_ev_base_sleep_cb(struct ev_loop *loop, struct ev_timer *t, int events)
+{
+	struct rspamd_ev_base_sleep_cbdata *cbdata =
+		(struct rspamd_ev_base_sleep_cbdata *) t->data;
+
+	ev_timer_stop(loop, t);
+
+	/* Remove session event if we registered one */
+	if (cbdata->session) {
+		rspamd_session_remove_event(cbdata->session,
+									lua_ev_base_sleep_session_fin, cbdata);
+	}
+
+	if (cbdata->cbref != -1) {
+		/* Async mode: call the callback */
+		lua_State *L = cbdata->L;
+
+		lua_pushcfunction(L, &rspamd_lua_traceback);
+		int err_idx = lua_gettop(L);
+		lua_rawgeti(L, LUA_REGISTRYINDEX, cbdata->cbref);
+
+		if (lua_pcall(L, 0, 0, err_idx) != 0) {
+			msg_err("call to sleep callback failed: %s", lua_tostring(L, -1));
+		}
+
+		lua_settop(L, err_idx - 1);
+		luaL_unref(L, LUA_REGISTRYINDEX, cbdata->cbref);
+	}
+	else if (cbdata->thread) {
+		/* Sync mode: resume the coroutine */
+		lua_thread_resume(cbdata->thread, 0);
+	}
+
+	g_free(cbdata);
+}
+
+/***
+ * @method ev_base:sleep(time[, callback])
+ * Sleep for the specified time. If callback is provided, it's called asynchronously
+ * after the timeout. If no callback, this yields the current coroutine and resumes
+ * it after the timeout (synchronous mode).
+ * @param {number} time timeout in seconds
+ * @param {function} callback optional callback for async mode
+ */
+/* Helper to get rspamadm_session from Lua globals if available */
+static struct rspamd_async_session *
+lua_get_rspamadm_session(lua_State *L)
+{
+	struct rspamd_async_session *session = NULL;
+
+	lua_getglobal(L, "rspamadm_session");
+
+	if (lua_type(L, -1) == LUA_TUSERDATA) {
+		void *ud = rspamd_lua_check_udata_maybe(L, -1, rspamd_session_classname);
+		if (ud) {
+			session = *((struct rspamd_async_session **) ud);
+		}
+	}
+
+	lua_pop(L, 1);
+	return session;
+}
+
+static int
+lua_ev_base_sleep(lua_State *L)
+{
+	struct ev_loop *ev_base;
+
+	ev_base = lua_check_ev_base(L, 1);
+
+	if (!lua_isnumber(L, 2)) {
+		return luaL_error(L, "invalid arguments: timeout expected");
+	}
+
+	double timeout = lua_tonumber(L, 2);
+
+	struct rspamd_ev_base_sleep_cbdata *cbdata = g_malloc0(sizeof(*cbdata));
+	cbdata->L = L;
+	cbdata->ev.data = cbdata;
+	cbdata->cbref = -1;
+	cbdata->thread = NULL;
+	cbdata->session = NULL;
+
+	/* Try to get rspamadm_session for session event tracking */
+	struct rspamd_async_session *session = lua_get_rspamadm_session(L);
+
+	if (lua_isfunction(L, 3)) {
+		/* Async mode with callback */
+		lua_pushvalue(L, 3);
+		cbdata->cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+		/* Register session event if available so wait_session_events waits for us */
+		if (session) {
+			cbdata->session = session;
+			rspamd_session_add_event(session,
+									 lua_ev_base_sleep_session_fin, cbdata, "lua sleep");
+		}
+
+		ev_timer_init(&cbdata->ev, lua_ev_base_sleep_cb, timeout, 0.0);
+		ev_timer_start(ev_base, &cbdata->ev);
+
+		return 0;
+	}
+	else {
+		/* Sync mode using coroutines - get config from global */
+		lua_getglobal(L, "rspamd_config");
+
+		if (lua_type(L, -1) == LUA_TUSERDATA) {
+			struct rspamd_config *cfg = lua_check_config(L, -1);
+			lua_pop(L, 1);
+
+			if (cfg && cfg->lua_thread_pool) {
+				cbdata->thread = lua_thread_pool_get_running_entry(cfg->lua_thread_pool);
+
+				/* Register session event if available so wait_session_events waits for us */
+				if (session) {
+					cbdata->session = session;
+					rspamd_session_add_event(session,
+											 lua_ev_base_sleep_session_fin, cbdata, "lua sleep");
+				}
+
+				ev_timer_init(&cbdata->ev, lua_ev_base_sleep_cb, timeout, 0.0);
+				ev_timer_start(ev_base, &cbdata->ev);
+
+				return lua_thread_yield(cbdata->thread, 0);
+			}
+		}
+		else {
+			lua_pop(L, 1);
+		}
+
+		/* No thread pool available, cannot do sync sleep */
+		g_free(cbdata);
+		return luaL_error(L, "sync sleep requires lua_thread_pool (use callback for async)");
+	}
 }

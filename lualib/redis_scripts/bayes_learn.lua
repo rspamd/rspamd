@@ -1,34 +1,34 @@
 -- Lua script to perform bayes learning (multi-class)
 -- This script accepts the following parameters:
 -- key1 - prefix for bayes tokens (e.g. for per-user classification)
--- key2 - class label string (e.g. "S", "H", "T")
--- key3 - string symbol
--- key4 - boolean is_unlearn
--- key5 - set of tokens encoded in messagepack array of strings
--- key6 - set of text tokens (if any) encoded in messagepack array of strings (size must be twice of `KEYS[5]`)
+-- argv1 - class label string (e.g. "S", "H", "T")
+-- argv2 - string symbol
+-- argv3 - boolean is_unlearn
+-- argv4 - set of tokens encoded in messagepack array of strings
+-- argv5 - set of text tokens (if any) encoded in messagepack array of strings (size must be twice of `ARGV[4]`)
 
 local prefix = KEYS[1]
-local class_label = KEYS[2]
-local symbol = KEYS[3]
-local is_unlearn = KEYS[4] == 'true' and true or false
-local input_tokens = cmsgpack.unpack(KEYS[5])
+local class_label = ARGV[1]
+local symbol = ARGV[2]
+local is_unlearn = ARGV[3] == 'true' and true or false
+local input_tokens = cmsgpack.unpack(ARGV[4])
 local text_tokens
 
-if KEYS[6] then
-  text_tokens = cmsgpack.unpack(KEYS[6])
+if ARGV[5] then
+  text_tokens = cmsgpack.unpack(ARGV[5])
 end
 
--- Handle backward compatibility for boolean values
-if class_label == 'true' then
-  class_label = 'S' -- spam
-elseif class_label == 'false' then
-  class_label = 'H' -- ham
+-- Handle RS_<ID> HASH booleans and full class name strings for backward compatibility
+if class_label == 'true' or class_label == 'spam' then
+  class_label = 'S'
+elseif class_label == 'false' or class_label == 'ham' then
+  class_label = 'H'
 end
 
 local hash_key = class_label
 local learned_key = 'learns_' .. string.lower(class_label)
 
--- Handle legacy keys for backward compatibility
+-- Handle RS HASH keys for backward compatibility
 if class_label == 'S' then
   learned_key = 'learns_spam'
 elseif class_label == 'H' then

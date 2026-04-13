@@ -19,6 +19,7 @@ Multi Setup
   Run Redis
   Run Dummy Http
   Run Dummy Https
+  Generate SSL Test Cert
   Rspamd Setup
 
 Multi Teardown
@@ -26,4 +27,15 @@ Multi Teardown
   Dummy Http Teardown
   Dummy Https Teardown
   Redis Teardown
+  SSL Cert Teardown
   Try Reap Zombies
+
+Generate SSL Test Cert
+  ${ssl_dir} =  Make Temporary Directory
+  ${cert}  ${key} =  Generate SSL Cert  ${ssl_dir}
+  Set Suite Variable  ${RSPAMD_SSL_CERT}  ${cert}
+  Set Suite Variable  ${RSPAMD_SSL_KEY}  ${key}
+  Set Suite Variable  ${SSL_TMPDIR}  ${ssl_dir}
+
+SSL Cert Teardown
+  Cleanup Temporary Directory  ${SSL_TMPDIR}

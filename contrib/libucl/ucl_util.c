@@ -2784,6 +2784,19 @@ ucl_object_iterate_with_error (const ucl_object_t *obj, ucl_object_iter_t *iter,
 	return NULL;
 }
 
+void ucl_object_iterate_end(const ucl_object_t *obj, ucl_object_iter_t *iter)
+{
+	if (iter == NULL || *iter == NULL) {
+		return;
+	}
+
+	if (obj != NULL && obj->type == UCL_OBJECT) {
+		ucl_hash_iterate_free(*iter);
+	}
+
+	*iter = NULL;
+}
+
 enum ucl_safe_iter_flags {
 	UCL_ITERATE_FLAG_UNDEFINED = 0,
 	UCL_ITERATE_FLAG_INSIDE_ARRAY,

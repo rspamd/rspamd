@@ -15,6 +15,7 @@ limitations under the License.
 ]]--
 
 local rspamd_tcp = require "rspamd_tcp"
+local rspamd_text = require "rspamd_text"
 local lua_util = require "lua_util"
 
 local exports = {}
@@ -107,9 +108,28 @@ local function sendmail(opts, message, callback)
     -- DATA stage
     local function data_done_cb(merr, mdata)
       if no_error_read(merr, mdata, '3') then
+        -- Normalize line endings to CRLF for SMTP compliance
+        local function normalize_to_crlf(msg)
+          if type(msg) == 'userdata' then
+            -- rspamd_text object
+            return msg:normalize_newlines("crlf")
+          elseif type(msg) == 'string' then
+            -- Convert string to text, normalize, back to string
+            local txt = rspamd_text.fromstring(msg)
+            txt:normalize_newlines("crlf")
+            return txt:str()
+          end
+          return msg
+        end
+
         if type(message) == 'string' or type(message) == 'userdata' then
+          message = normalize_to_crlf(message)
           conn:add_write(pre_quit_cb, { message, CRLF .. '.' .. CRLF })
         else
+          -- Array of chunks
+          for i = 1, #message do
+            message[i] = normalize_to_crlf(message[i])
+          end
           table.insert(message, CRLF .. '.' .. CRLF)
           conn:add_write(pre_quit_cb, message)
         end

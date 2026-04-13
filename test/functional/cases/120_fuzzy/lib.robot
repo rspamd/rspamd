@@ -109,7 +109,7 @@ Fuzzy Write Only No Check Test
   Scan File  ${message}
   Do Not Expect Symbol  ${FLAG1_SYMBOL}
 
-Fuzzy Overwrite Test
+Fuzzy Multi Flag Test
   [Arguments]  ${message}
   ${flag_numbers} =  Create List  ${RSPAMD_FLAG1_NUMBER}  ${RSPAMD_FLAG2_NUMBER}
   FOR  ${i}  IN  @{flag_numbers}
@@ -119,8 +119,33 @@ Fuzzy Overwrite Test
   END
   Sync Fuzzy Storage
   Scan File  ${message}
-  Do Not Expect Symbol  ${FLAG1_SYMBOL}
+  Expect Symbol  ${FLAG1_SYMBOL}
   Expect Symbol  ${FLAG2_SYMBOL}
+
+Fuzzy Multi Flag Delete Test
+  [Arguments]  ${message}
+  ${flag_numbers} =  Create List  ${RSPAMD_FLAG1_NUMBER}  ${RSPAMD_FLAG2_NUMBER}
+  FOR  ${i}  IN  @{flag_numbers}
+    ${result} =  Run Rspamc  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  -w  10
+    ...  -f  ${i}  fuzzy_add  ${message}
+    Check Rspamc  ${result}
+  END
+  Sync Fuzzy Storage
+  Scan File  ${message}
+  Expect Symbol  ${FLAG1_SYMBOL}
+  Expect Symbol  ${FLAG2_SYMBOL}
+  ${result} =  Run Rspamc  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  -f  ${RSPAMD_FLAG1_NUMBER}  fuzzy_del
+  ...  ${message}
+  Check Rspamc  ${result}
+  Sync Fuzzy Storage
+  Scan File  ${message}
+  Do Not Expect Symbol  ${FLAG1_SYMBOL}
+  Do Not Expect Symbol  ${FLAG2_SYMBOL}
+
+Fuzzy Multimessage Multi Flag Delete Test
+  FOR  ${i}  IN  @{MESSAGES}
+    Fuzzy Multi Flag Delete Test  ${i}
+  END
 
 Fuzzy Setup Encrypted
   [Arguments]  ${algorithm}
@@ -243,9 +268,9 @@ Fuzzy Multimessage Delete Test
     Fuzzy Delete Test  ${i}
   END
 
-Fuzzy Multimessage Overwrite Test
+Fuzzy Multimessage Multi Flag Test
   FOR  ${i}  IN  @{MESSAGES}
-    Fuzzy Overwrite Test  ${i}
+    Fuzzy Multi Flag Test  ${i}
   END
 
 Fuzzy Multimessage Write Only No Check Test

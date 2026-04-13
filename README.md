@@ -1,4 +1,4 @@
-# <a href="https://rspamd.com"><img src="https://rspamd.com/img/rspamd_logo_black.png" alt="Rspamd" width="220px"/></a>
+# <a href="https://rspamd.com"><img src="https://rspamd.com/rspamd_logo_black.png" alt="Rspamd" width="220px"/></a>
 
 [![GHA](https://github.com/rspamd/rspamd/actions/workflows/ci.yml/badge.svg)](https://github.com/rspamd/rspamd/actions/workflows/ci.yml)
 
@@ -12,23 +12,23 @@ such as URL black lists. Each message is analysed by Rspamd and given a verdict 
 Rspamd can act as a [Milter](https://en.wikipedia.org/wiki/Milter) allowing direct interaction with popular MTA systems, such as Postfix or Sendmail.
 
 Rspamd is designed to process hundreds of messages per second simultaneously, and provides a number of
-useful features including a comprehensive [Lua API](https://rspamd.com/doc/lua/) that allows access to messages processing in various aspects as well as [asynchronous](https://rspamd.com/doc/lua/sync_async.html) network API to access external resources, such as DNS, HTTP or even generic TCP/UDP services.
+useful features including a comprehensive [Lua API](https://docs.rspamd.com/lua/) that allows access to messages processing in various aspects as well as [asynchronous](https://docs.rspamd.com/developers/sync_async) network API to access external resources, such as DNS, HTTP or even generic TCP/UDP services.
 
 
 ## Getting Started
 
-A good starting point to study how to install and configure Rspamd is [the quick start guide](https://rspamd.com/doc/tutorials/quickstart.html).
+A good starting point to study how to install and configure Rspamd is [the quick start guide](https://docs.rspamd.com/tutorials/quickstart/).
 
-Rspamd is [packaged](https://rspamd.com/downloads.html) for the major Linux distributions, and is also available via [FreeBSD ports](https://freshports.org/mail/rspamd), NetBSD [pkgsrc](https://pkgsrc.org) and [OpenBSD ports](http://openports.se/mail/rspamd).
+Rspamd is [packaged](https://docs.rspamd.com/downloads/) for the major Linux distributions, and is also available via [FreeBSD ports](https://freshports.org/mail/rspamd), NetBSD [pkgsrc](https://pkgsrc.org) and [OpenBSD ports](http://openports.se/mail/rspamd).
 
 We advice to use packages provided by Rspamd project if available for your OS instead of packages that might be provided by some Linux distributives, as they are usually out of date and does not provide the desired spam filtering quality nor supported by Rspamd project.
 
 ## Spam filtering features
 
 Rspamd is shipped with various spam filtering modules and features enabled just out of the box.
-The full list of built-in modules could be found in the [Rspamd documentation](https://rspamd.com/doc/modules/).
+The full list of built-in modules could be found in the [Rspamd documentation](https://docs.rspamd.com/modules/).
 
-If that is not enough, Rspamd provides an extensive [Lua API](https://rspamd.com/doc/lua/) to write your own rules and plugins: <https://rspamd.com/doc/developers/writing_rules.html>
+If that is not enough, Rspamd provides an extensive [Lua API](https://docs.rspamd.com/lua/) to write your own rules and plugins: <https://docs.rspamd.com/developers/writing_rules/>
 
 ## License
 
@@ -51,4 +51,6 @@ See also the list of [contributors](AUTHORS.md) who participated in this project
 
 * Home site: <https://rspamd.com>
 * Development: <https://github.com/rspamd/rspamd>
-* Site repository: <https://github.com/rspamd/rspamd.com>
+* Documentation site: <https://docs.rspamd.com>
+* Documentation site repository: <https://github.com/rspamd/docs.rspamd.com>
+* Multimaps repository: <https://github.com/rspamd/maps>

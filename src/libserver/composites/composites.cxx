@@ -440,7 +440,7 @@ rspamd_composite_expr_parse(const char *line, gsize len,
 
 				if (re == nullptr) {
 					msg_err_pool("cannot create regexp from string %*s: %e",
-								 opt_len, opt_start, re_err);
+								 (int) opt_len, opt_start, re_err);
 
 					g_error_free(re_err);
 				}

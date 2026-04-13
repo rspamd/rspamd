@@ -29,6 +29,7 @@ jobs:
         include:
           - version: 1.45.3
             label: legacy
+            node-version: '22'
           - version: latest
             label: latest
     steps:
@@ -99,7 +100,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ matrix.node-version || 'lts/*' }}
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4

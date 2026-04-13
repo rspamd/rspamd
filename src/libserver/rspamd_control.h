@@ -58,6 +58,7 @@ enum rspamd_srv_type {
 	RSPAMD_SRV_MULTIPATTERN_LOADED, /* Multipattern HS compiled and ready */
 	RSPAMD_SRV_REGEXP_MAP_LOADED,   /* Regexp map HS compiled and ready */
 	RSPAMD_SRV_BUSY,                /* Worker is busy with long-running operation */
+	RSPAMD_SRV_RECOMPILE_REQUEST,   /* Worker requests hs_helper to recompile (stale cache) */
 };
 
 enum rspamd_log_pipe_type {
@@ -66,6 +67,7 @@ enum rspamd_log_pipe_type {
 
 struct rspamd_control_command {
 	enum rspamd_control_type type;
+	uint64_t id;
 	union {
 		struct {
 			unsigned int unused;
@@ -131,6 +133,7 @@ struct rspamd_control_command {
 
 struct rspamd_control_reply {
 	enum rspamd_control_type type;
+	uint64_t id;
 	union {
 		struct {
 			unsigned int conns;
@@ -222,7 +225,7 @@ struct rspamd_srv_command {
 		} health;
 		/* Used when a worker loads a valid hyperscan file */
 		struct {
-			char filename[64]; /* Just the filename, not full path */
+			char filename[80]; /* Just the filename: 64 hex hash + .hs.unser + null */
 		} hyperscan_cache_file;
 		/* Send when one worker has blocked some IP address */
 		struct {
@@ -249,6 +252,9 @@ struct rspamd_srv_command {
 			gboolean is_busy;
 			char reason[32];
 		} busy;
+		struct {
+			unsigned int unused;
+		} recompile_request;
 	} cmd;
 };
 
@@ -289,6 +295,9 @@ struct rspamd_srv_reply {
 		struct {
 			int status;
 		} workers_spawned;
+		struct {
+			int status;
+		} recompile_request;
 	} reply;
 };
 
@@ -369,10 +378,22 @@ const char *rspamd_control_command_to_string(enum rspamd_control_type cmd);
 const char *rspamd_srv_command_to_string(enum rspamd_srv_type cmd);
 
 /**
- * Used to cleanup pending events
- * @param p
+ * Create a new control events pending hash table
+ * @return opaque pointer to khash
  */
-void rspamd_pending_control_free(gpointer p);
+void *rspamd_control_pending_new(void);
+
+/**
+ * Destroy control events pending hash table
+ * @param p opaque pointer to khash
+ */
+void rspamd_control_pending_destroy(void *p);
+
+/**
+ * Remove all pending control events
+ * @param p opaque pointer to khash
+ */
+void rspamd_control_pending_remove_all(void *p);
 
 void rspamd_worker_set_busy(struct rspamd_worker *worker,
 							struct ev_loop *event_loop,

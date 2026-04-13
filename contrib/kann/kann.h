@@ -233,6 +233,10 @@ void kann_save(const char *fn, kann_t *ann);
 kann_t *kann_load_fp(FILE *fp);
 kann_t *kann_load(const char *fn);
 
+/* weight merging */
+int kann_merge_weights(kann_t *dst, const kann_t *src, float alpha);
+int kann_is_compatible(const kann_t *a, const kann_t *b);
+
 #ifdef __cplusplus
 }
 #endif

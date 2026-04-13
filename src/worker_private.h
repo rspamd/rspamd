@@ -55,6 +55,12 @@ struct rspamd_worker_ctx {
 	struct rspamd_http_context *http_ctx;
 	/* Language detector */
 	struct rspamd_lang_detector *lang_det;
+	/* SSL cert */
+	char *ssl_cert;
+	/* SSL private key */
+	char *ssl_key;
+	/* Server SSL context */
+	gpointer server_ssl_ctx;
 };
 
 /*

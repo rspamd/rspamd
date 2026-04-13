@@ -134,12 +134,14 @@ auto symcache::init() -> bool
 		else {
 
 			if (!disabled_ids.contains(real_source->id)) {
-				msg_debug_cache("delayed between %s(%d:%d) -> %s",
+				msg_debug_cache("delayed %sbetween %s(%d:%d) -> %s",
+								delayed_dep.hard ? "weak " : "",
 								delayed_dep.from.data(),
 								real_source->id, virt_source->id,
 								delayed_dep.to.data());
 				add_dependency(real_source->id, delayed_dep.to, real_destination->id,
-							   virt_source != real_source ? virt_source->id : -1);
+							   virt_source != real_source ? virt_source->id : -1,
+							   delayed_dep.hard);
 			}
 			else {
 				msg_debug_cache("no delayed between %s(%d:%d) -> %s; %s is disabled",
@@ -260,8 +262,8 @@ auto symcache::load_items() -> bool
 
 
 	if (cached_map->get_size() < (int) sizeof(symcache_header)) {
-		msg_info_cache("cannot use file %s, truncated: %z", cfg->cache_filename,
-					   errno, strerror(errno));
+		msg_info_cache("cannot use file %s, error: %s", cfg->cache_filename,
+					   strerror(errno));
 		return false;
 	}
 
@@ -373,7 +375,7 @@ auto symcache::load_items() -> bool
 template<typename T>
 static constexpr auto round_to_hundreds(T x)
 {
-	return (::floor(x) * 100.0) / 100.0;
+	return ::round(x * 100.0) / 100.0;
 }
 
 bool symcache::save_items() const
@@ -401,8 +403,8 @@ bool symcache::save_items() const
 	memcpy(hdr.magic, symcache_magic, sizeof(symcache_magic));
 
 	if (write(file_sink->get_fd(), &hdr, sizeof(hdr)) == -1) {
-		msg_err_cache("cannot write to file %s, error %d, %s", cfg->cache_filename,
-					  errno, strerror(errno));
+		msg_err_cache("cannot write to file %s, error %d, %s", cfg->cache_filename, errno,
+					  strerror(errno));
 
 		return false;
 	}
@@ -539,7 +541,7 @@ auto symcache::get_item_by_name_mut(std::string_view name, bool resolve_parent) 
 	return it->second;
 }
 
-auto symcache::add_dependency(int id_from, std::string_view to, int id_to, int virtual_id_from) -> void
+auto symcache::add_dependency(int id_from, std::string_view to, int id_to, int virtual_id_from, bool hard) -> void
 {
 	g_assert(id_from >= 0 && id_from < (int) items_by_id.size());
 	g_assert(id_to >= 0 && id_to < (int) items_by_id.size());
@@ -549,11 +551,12 @@ auto symcache::add_dependency(int id_from, std::string_view to, int id_to, int v
 	g_assert(dest.get() != nullptr);
 
 	if (!source->deps.contains(id_to)) {
-		msg_debug_cache("add dependency %s(%d) -> %s(%d)",
+		msg_debug_cache("add %sdependency %s(%d) -> %s(%d)",
+						hard ? "hard " : "",
 						source->symbol.c_str(), source->id, to.data(), dest->id);
 		source->deps.emplace(id_to, cache_dependency{dest.get(),
 													 std::string(to),
-													 -1});
+													 -1, hard});
 	}
 	else {
 		msg_debug_cache("duplicate dependency %s -> %s",
@@ -569,11 +572,12 @@ auto symcache::add_dependency(int id_from, std::string_view to, int id_to, int v
 		g_assert(vsource.get() != nullptr);
 
 		if (!vsource->deps.contains(id_to)) {
-			msg_debug_cache("add virtual dependency %s -> %s",
+			msg_debug_cache("add virtual %sdependency %s -> %s",
+							hard ? "hard " : "",
 							vsource->symbol.c_str(), to.data());
 			vsource->deps.emplace(id_to, cache_dependency{dest.get(),
 														  std::string(to),
-														  virtual_id_from});
+														  virtual_id_from, hard});
 		}
 		else {
 			msg_debug_cache("duplicate virtual dependency %s -> %s",
@@ -667,7 +671,7 @@ auto symcache::resort() -> void
 	 */
 	total_hits = 0;
 	auto used_items = ord->d.size();
-	msg_debug_cache("topologically sort %d filters", used_items);
+	msg_debug_cache("topologically sort %z filters", used_items);
 
 	for (const auto &it: ord->d) {
 		if (it->order == 0) {
@@ -812,6 +816,7 @@ auto symcache::add_symbol_with_callback(std::string_view name,
 												 priority, func, user_data,
 												 real_type_pair.first, real_type_pair.second);
 
+	auto *raw_item = item.get();
 	items_by_symbol.emplace(item->get_name(), item.get());
 	get_item_specific_vector(*item).push_back(item.get());
 	items_by_id.emplace(id, std::move(item));// Takes ownership
@@ -820,6 +825,8 @@ auto symcache::add_symbol_with_callback(std::string_view name,
 		cksum = t1ha(name.data(), name.size(), cksum);
 		stats_symbols_count++;
 	}
+
+	apply_pending_settings(raw_item);
 
 	return id;
 }
@@ -857,11 +864,14 @@ auto symcache::add_virtual_symbol(std::string_view name, int parent_id, int flag
 												id,
 												std::string{name},
 												parent_id, real_type_pair.first, real_type_pair.second);
+	auto *raw_item = item.get();
 	const auto &parent = items_by_id[parent_id].get();
 	parent->add_child(item.get());
 	items_by_symbol.emplace(item->get_name(), item.get());
 	get_item_specific_vector(*item).push_back(item.get());
 	items_by_id.emplace(id, std::move(item));// Takes ownership
+
+	apply_pending_settings(raw_item);
 
 	return id;
 }
@@ -1031,7 +1041,7 @@ auto symcache::counters() const -> ucl_object_t *
 	auto *top = ucl_object_typed_new(UCL_ARRAY);
 	constexpr const auto round_float = [](const auto x, const int digits) -> auto {
 		const auto power10 = ::pow(10, digits);
-		return (::floor(x * power10) / power10);
+		return (::round(x * power10) / power10);
 	};
 
 	for (auto &pair: items_by_symbol) {
@@ -1049,8 +1059,11 @@ auto symcache::counters() const -> ucl_object_t *
 									  ucl_object_fromdouble(round_float(item->st->weight, 3)),
 									  "weight", 0, false);
 				ucl_object_insert_key(obj,
-									  ucl_object_fromdouble(round_float(parent->st->avg_frequency, 3)),
+									  ucl_object_fromdouble(round_float(parent->st->avg_frequency, 6)),
 									  "frequency", 0, false);
+				ucl_object_insert_key(obj,
+									  ucl_object_fromdouble(round_float(::sqrt(parent->st->stddev_frequency), 6)),
+									  "frequency_stddev", 0, false);
 				ucl_object_insert_key(obj,
 									  ucl_object_fromint(parent->st->total_hits),
 									  "hits", 0, false);
@@ -1067,6 +1080,9 @@ auto symcache::counters() const -> ucl_object_t *
 									  "frequency", 0, false);
 				ucl_object_insert_key(obj,
 									  ucl_object_fromdouble(0.0),
+									  "frequency_stddev", 0, false);
+				ucl_object_insert_key(obj,
+									  ucl_object_fromdouble(0.0),
 									  "hits", 0, false);
 				ucl_object_insert_key(obj,
 									  ucl_object_fromdouble(0.0),
@@ -1078,8 +1094,11 @@ auto symcache::counters() const -> ucl_object_t *
 								  ucl_object_fromdouble(round_float(item->st->weight, 3)),
 								  "weight", 0, false);
 			ucl_object_insert_key(obj,
-								  ucl_object_fromdouble(round_float(item->st->avg_frequency, 3)),
+								  ucl_object_fromdouble(round_float(item->st->avg_frequency, 6)),
 								  "frequency", 0, false);
+			ucl_object_insert_key(obj,
+								  ucl_object_fromdouble(round_float(::sqrt(item->st->stddev_frequency), 6)),
+								  "frequency_stddev", 0, false);
 			ucl_object_insert_key(obj,
 								  ucl_object_fromint(item->st->total_hits),
 								  "hits", 0, false);
@@ -1216,9 +1235,9 @@ auto symcache::process_settings_elt(struct rspamd_config_settings_elt *elt) -> v
 				}
 			}
 			else {
-				msg_warn_cache("cannot find a symbol to disable %s "
-							   "when processing settings %ud (%s)",
-							   sym, id, elt->name);
+				pending_settings_ops[sym].push_back({elt, false});
+				msg_debug_cache("pending disable for unknown symbol %s in settings %ud (%s)",
+								sym, id, elt->name);
 			}
 		}
 	}
@@ -1257,12 +1276,64 @@ auto symcache::process_settings_elt(struct rspamd_config_settings_elt *elt) -> v
 								sym, id, elt->name);
 			}
 			else {
-				msg_warn_cache("cannot find a symbol to enable %s "
-							   "when processing settings %ud (%s)",
-							   sym, id, elt->name);
+				pending_settings_ops[sym].push_back({elt, true});
+				msg_debug_cache("pending enable for unknown symbol %s in settings %ud (%s)",
+								sym, id, elt->name);
 			}
 		}
 	}
+}
+
+auto symcache::apply_pending_settings(cache_item *item) -> void
+{
+	auto it = pending_settings_ops.find(std::string(item->get_name()));
+	if (it == pending_settings_ops.end()) {
+		return;
+	}
+
+	auto log_func = RSPAMD_LOG_FUNC;
+
+	for (const auto &op: it->second) {
+		auto id = op.elt->id;
+
+		if (op.is_enabled) {
+			if (item->is_virtual()) {
+				auto *parent = get_item_by_name_mut(item->get_name(), true);
+
+				if (parent) {
+					if (op.elt->symbols_disabled &&
+						ucl_object_lookup(op.elt->symbols_disabled, parent->symbol.data())) {
+						msg_err_cache_lambda("conflict in %s: cannot enable disabled symbol %s, "
+											 "wanted to enable symbol %s",
+											 op.elt->name, parent->symbol.data(), item->get_name().data());
+						continue;
+					}
+
+					parent->exec_only_ids.add_id(id);
+					msg_debug_cache_lambda("allow just execution of symbol %s for settings %ud (%s) (deferred)",
+										   parent->symbol.data(), id, op.elt->name);
+				}
+			}
+
+			item->allowed_ids.add_id(id);
+			msg_debug_cache_lambda("allow execution of symbol %s for settings %ud (%s) (deferred)",
+								   item->get_name().data(), id, op.elt->name);
+		}
+		else {
+			item->forbidden_ids.add_id(id);
+			if (item->is_virtual()) {
+				msg_debug_cache_lambda("deny virtual symbol %s for settings %ud (%s) (deferred); "
+									   "parent can still be executed",
+									   item->get_name().data(), id, op.elt->name);
+			}
+			else {
+				msg_debug_cache_lambda("deny symbol %s for settings %ud (%s) (deferred)",
+									   item->get_name().data(), id, op.elt->name);
+			}
+		}
+	}
+
+	pending_settings_ops.erase(it);
 }
 
 auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>> &elts) const -> double

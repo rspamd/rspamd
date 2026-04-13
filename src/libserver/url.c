@@ -3390,8 +3390,8 @@ rspamd_url_trie_callback(struct rspamd_multipattern *mp,
 
 		cb->start = m.m_begin;
 
-		if (pos > cb->fin) {
-			cb->fin = pos;
+		if (m.m_begin + m.m_len > cb->fin) {
+			cb->fin = m.m_begin + m.m_len;
 		}
 
 		return 1;
@@ -3549,8 +3549,8 @@ rspamd_url_trie_generic_callback_common(struct rspamd_multipattern *mp,
 
 		cb->start = m.m_begin;
 
-		if (pos > cb->fin) {
-			cb->fin = pos;
+		if (m.m_begin + m.m_len > cb->fin) {
+			cb->fin = m.m_begin + m.m_len;
 		}
 
 		url = rspamd_mempool_alloc0(pool, sizeof(struct rspamd_url));
@@ -3621,7 +3621,16 @@ struct rspamd_url_mimepart_cbdata {
 	gsize url_len;
 	uint16_t *cur_url_order; /* Global ordering */
 	uint16_t cur_part_order; /* Per part ordering */
+	uint32_t parent_flags;   /* Flags from outer URL to propagate to query URLs */
 };
+
+static inline void
+rspamd_mime_part_add_url(struct rspamd_mime_part *part, struct rspamd_url *url)
+{
+	if (part && part->urls) {
+		g_ptr_array_add(part->urls, url);
+	}
+}
 
 static gboolean
 rspamd_url_query_callback(struct rspamd_url *url, gsize start_offset,
@@ -3651,11 +3660,12 @@ rspamd_url_query_callback(struct rspamd_url *url, gsize start_offset,
 
 	url->flags |= RSPAMD_URL_FLAG_QUERY;
 
+	/* Propagate source/classification flags from the parent (outer) URL */
+	url->flags |= (cbd->parent_flags & RSPAMD_URL_FLAG_PROPAGATE_MASK);
+
+	rspamd_mime_part_add_url(cbd->part ? cbd->part->mime_part : NULL, url);
 
 	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false)) {
-		if (cbd->part && cbd->part->mime_part->urls) {
-			g_ptr_array_add(cbd->part->mime_part->urls, url);
-		}
 
 		url->part_order = cbd->cur_part_order++;
 
@@ -3712,16 +3722,28 @@ rspamd_url_text_part_callback(struct rspamd_url *url, gsize start_offset,
 		}
 	}
 
-	url->flags |= RSPAMD_URL_FLAG_FROM_TEXT;
+	/*
+	 * For computed/virtual parts (e.g., text extracted from PDF), use CONTENT flag
+	 * instead of FROM_TEXT. These URLs may be clickable links in the original document
+	 * rather than plain text URLs.
+	 */
+	if (cbd->part->mime_part->flags & RSPAMD_MIME_PART_COMPUTED) {
+		url->flags |= RSPAMD_URL_FLAG_CONTENT;
+	}
+	else {
+		url->flags |= RSPAMD_URL_FLAG_FROM_TEXT;
+	}
 
-	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false) &&
-		cbd->part->mime_part->urls) {
+	rspamd_mime_part_add_url(cbd->part ? cbd->part->mime_part : NULL, url);
+
+	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false)) {
+		rspamd_mime_part_add_url(cbd->part ? cbd->part->mime_part : NULL, url);
+
 		url->part_order = cbd->cur_part_order++;
 
 		if (cbd->cur_url_order) {
 			url->order = (*cbd->cur_url_order)++;
 		}
-		g_ptr_array_add(cbd->part->mime_part->urls, url);
 	}
 
 	cbd->part->exceptions = g_list_prepend(
@@ -3730,10 +3752,12 @@ rspamd_url_text_part_callback(struct rspamd_url *url, gsize start_offset,
 
 	/* We also search the query for additional url inside */
 	if (url->querylen > 0) {
+		struct rspamd_url_mimepart_cbdata qcbd = *cbd;
+		qcbd.parent_flags = url->flags;
 		rspamd_url_find_multiple(task->task_pool,
 								 rspamd_url_query_unsafe(url), url->querylen,
 								 RSPAMD_URL_FIND_ALL, NULL,
-								 rspamd_url_query_callback, cbd,
+								 rspamd_url_query_callback, &qcbd,
 								 task->cfg ? task->cfg->lua_state : NULL);
 	}
 
@@ -3907,10 +3931,14 @@ rspamd_url_task_subject_callback(struct rspamd_url *url, gsize start_offset,
 								  task->cfg ? task->cfg->lua_state : NULL);
 
 			if (rc == URI_ERRNO_OK &&
-				url->hostlen > 0) {
+				query_url->hostlen > 0) {
 				msg_debug_task("found url %s in query of url"
 							   " %*s",
 							   url_str, url->querylen, rspamd_url_query_unsafe(url));
+
+				query_url->flags |= RSPAMD_URL_FLAG_QUERY;
+				/* Propagate source/classification flags from the parent URL */
+				query_url->flags |= (url->flags & RSPAMD_URL_FLAG_PROPAGATE_MASK);
 
 				if (prefix_added) {
 					query_url->flags |= RSPAMD_URL_FLAG_SCHEMALESS;
@@ -4200,7 +4228,7 @@ rspamd_url_encode(struct rspamd_url *url, gsize *pdlen,
 				  rspamd_mempool_t *pool)
 {
 	unsigned char *dest, *d, *dend;
-	static const char hexdigests[16] = "0123456789ABCDEF";
+	static const char hexdigests[] = "0123456789ABCDEF";
 	unsigned int i;
 	gsize dlen = 0;
 

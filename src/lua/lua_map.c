@@ -747,6 +747,7 @@ int lua_config_add_map(lua_State *L)
 
 				return 1;
 			}
+			map->map = m;
 			m->lua_map = map;
 		}
 		else if (strcmp(type, "set") == 0) {
@@ -765,6 +766,7 @@ int lua_config_add_map(lua_State *L)
 
 				return 1;
 			}
+			map->map = m;
 			m->lua_map = map;
 		}
 		else if (strcmp(type, "map") == 0 || strcmp(type, "hash") == 0) {
@@ -783,6 +785,7 @@ int lua_config_add_map(lua_State *L)
 
 				return 1;
 			}
+			map->map = m;
 			m->lua_map = map;
 		}
 		else if (strcmp(type, "radix") == 0) {
@@ -801,6 +804,7 @@ int lua_config_add_map(lua_State *L)
 
 				return 1;
 			}
+			map->map = m;
 			m->lua_map = map;
 		}
 		else if (strcmp(type, "regexp") == 0) {
@@ -819,6 +823,7 @@ int lua_config_add_map(lua_State *L)
 
 				return 1;
 			}
+			map->map = m;
 			m->lua_map = map;
 		}
 		else if (strcmp(type, "regexp_multi") == 0) {
@@ -837,6 +842,7 @@ int lua_config_add_map(lua_State *L)
 
 				return 1;
 			}
+			map->map = m;
 			m->lua_map = map;
 		}
 		else if (strcmp(type, "glob") == 0) {
@@ -855,6 +861,7 @@ int lua_config_add_map(lua_State *L)
 
 				return 1;
 			}
+			map->map = m;
 			m->lua_map = map;
 		}
 		else if (strcmp(type, "glob_multi") == 0) {

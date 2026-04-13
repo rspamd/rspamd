@@ -770,6 +770,9 @@ rspamd_http_simple_client_helper(struct rspamd_http_connection *conn)
 	}
 }
 
+static inline void
+rspamd_http_connection_stop_watcher(struct rspamd_http_connection_private *priv);
+
 static void
 rspamd_http_write_helper(struct rspamd_http_connection *conn)
 {
@@ -856,6 +859,7 @@ rspamd_http_write_helper(struct rspamd_http_connection *conn)
 						err = g_error_new(HTTP_ERROR, 400,
 										  "HTTP parser error on early response: %s",
 										  http_errno_description(priv->parser.http_errno));
+						rspamd_http_connection_stop_watcher(priv);
 						rspamd_http_connection_ref(conn);
 						conn->error_handler(conn, err);
 						rspamd_http_connection_unref(conn);
@@ -870,6 +874,7 @@ rspamd_http_write_helper(struct rspamd_http_connection *conn)
 			}
 
 			err = g_error_new(HTTP_ERROR, 500, "IO write error: %s", strerror(saved_errno));
+			rspamd_http_connection_stop_watcher(priv);
 			rspamd_http_connection_ref(conn);
 			conn->error_handler(conn, err);
 			rspamd_http_connection_unref(conn);
@@ -981,10 +986,20 @@ static void
 rspamd_http_ssl_err_handler(gpointer ud, GError *err)
 {
 	struct rspamd_http_connection *conn = (struct rspamd_http_connection *) ud;
+	struct rspamd_http_connection_private *priv = conn->priv;
+
+	/* Error is terminal, stop watcher before delegating to user handler */
+	rspamd_http_connection_stop_watcher(priv);
 
 	rspamd_http_connection_ref(conn);
 	conn->error_handler(conn, err);
 	rspamd_http_connection_unref(conn);
+}
+
+static inline void
+rspamd_http_connection_stop_watcher(struct rspamd_http_connection_private *priv)
+{
+	rspamd_ev_watcher_stop(priv->ctx->event_loop, &priv->ev);
 }
 
 static void
@@ -1015,6 +1030,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 					sock_err != 0) {
 					err = g_error_new(HTTP_ERROR, 500,
 									  "Connection failed: %s", strerror(sock_err));
+					rspamd_http_connection_stop_watcher(priv);
 					conn->error_handler(conn, err);
 					g_error_free(err);
 
@@ -1069,6 +1085,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 				}
 
 				if (!conn->finished) {
+					rspamd_http_connection_stop_watcher(priv);
 					conn->error_handler(conn, err);
 				}
 				else {
@@ -1091,6 +1108,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 				err = g_error_new(HTTP_ERROR,
 								  400,
 								  "IO read error: unexpected EOF");
+				rspamd_http_connection_stop_watcher(priv);
 				conn->error_handler(conn, err);
 				g_error_free(err);
 			}
@@ -1105,6 +1123,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 								  500,
 								  "HTTP IO read error: %s",
 								  strerror(errno));
+				rspamd_http_connection_stop_watcher(priv);
 				conn->error_handler(conn, err);
 				g_error_free(err);
 			}
@@ -1129,6 +1148,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 									  http_errno_description(priv->parser.http_errno));
 
 					if (!conn->finished) {
+						rspamd_http_connection_stop_watcher(priv);
 						conn->error_handler(conn, err);
 					}
 					else {
@@ -1146,6 +1166,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 			else {
 				err = g_error_new(HTTP_ERROR, 408,
 								  "IO timeout");
+				rspamd_http_connection_stop_watcher(priv);
 				conn->error_handler(conn, err);
 				g_error_free(err);
 
@@ -1681,9 +1702,10 @@ rspamd_http_connection_encrypt_message(
 	outlen = priv->out[0].iov_len + priv->out[1].iov_len;
 	/*
 	 * Create segments from the following:
-	 * Method, [URL], CRLF, nheaders, CRLF, body
+	 * Method, [URL], CRLF, nheaders, CRLF, body segment(s)
 	 */
-	segments = g_new(struct rspamd_cryptobox_segment, hdrcount + 5);
+	gsize body_seg_count = (msg->body_iov_count > 0) ? msg->body_iov_count : (pbody ? 1 : 0);
+	segments = g_new(struct rspamd_cryptobox_segment, hdrcount + 4 + body_seg_count);
 
 	segments[0].data = pmethod;
 	segments[0].len = methodlen;
@@ -1718,7 +1740,13 @@ rspamd_http_connection_encrypt_message(
 segments[i].data = crlfp;
 segments[i++].len = 2;
 
-if (pbody) {
+if (msg->body_iov_count > 0) {
+	for (gsize j = 0; j < msg->body_iov_count; j++) {
+		segments[i].data = msg->body_iov[j].iov_base;
+		segments[i++].len = msg->body_iov[j].iov_len;
+	}
+}
+else if (pbody) {
 	segments[i].data = pbody;
 	segments[i++].len = bodylen;
 }
@@ -2246,7 +2274,12 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 	}
 
 	if (encrypted) {
-		if (msg->body_buf.len == 0) {
+		if (msg->body_iov_count > 0) {
+			pbody = NULL;
+			bodylen = msg->body_buf.len;
+			msg->method = HTTP_POST;
+		}
+		else if (msg->body_buf.len == 0) {
 			pbody = NULL;
 			bodylen = 0;
 			msg->method = HTTP_GET;
@@ -2267,7 +2300,7 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 			 * iov[6] = encrypted crlf
 			 * iov[7..n] = encrypted headers
 			 * iov[n + 1] = encrypted crlf
-			 * [iov[n + 2] = encrypted body]
+			 * [iov[n + 2..] = encrypted body segment(s)]
 			 */
 			priv->outlen = 7;
 			enclen = crypto_box_noncebytes() +
@@ -2286,7 +2319,7 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 			 * iov[7] = encrypted prelude
 			 * iov[8..n] = encrypted headers
 			 * iov[n + 1] = encrypted crlf
-			 * [iov[n + 2] = encrypted body]
+			 * [iov[n + 2..] = encrypted body segment(s)]
 			 */
 			priv->outlen = 8;
 
@@ -2320,12 +2353,26 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 		}
 
 		if (bodylen > 0) {
-			priv->outlen++;
+			if (msg->body_iov_count > 0) {
+				priv->outlen += msg->body_iov_count;
+			}
+			else {
+				priv->outlen++;
+			}
 		}
 	}
 	else {
 		if (msg->method < HTTP_SYMBOLS) {
-			if (msg->body_buf.len == 0 || allow_shared) {
+			if (msg->body_iov_count > 0) {
+				pbody = NULL;
+				bodylen = msg->body_buf.len;
+				priv->outlen = 2 + msg->body_iov_count;
+
+				if (msg->method == HTTP_INVALID) {
+					msg->method = HTTP_POST;
+				}
+			}
+			else if (msg->body_buf.len == 0 || allow_shared) {
 				pbody = NULL;
 				bodylen = 0;
 				priv->outlen = 2;
@@ -2454,7 +2501,13 @@ else
 	priv->wr_total -= 2;
 }
 
-if (pbody != NULL) {
+if (msg->body_iov_count > 0) {
+	for (gsize j = 0; j < msg->body_iov_count; j++) {
+		priv->out[i].iov_base = msg->body_iov[j].iov_base;
+		priv->out[i++].iov_len = msg->body_iov[j].iov_len;
+	}
+}
+else if (pbody != NULL) {
 	priv->out[i].iov_base = pbody;
 	priv->out[i++].iov_len = bodylen;
 }
@@ -2519,6 +2572,14 @@ if (conn->opts & RSPAMD_HTTP_CLIENT_SSL) {
 												   EV_WRITE | EV_READ);
 		}
 	}
+}
+else if (priv->ssl) {
+	/* Server-side SSL: connection already established, restore handlers */
+	rspamd_ssl_connection_restore_handlers(priv->ssl,
+										   rspamd_http_event_handler,
+										   rspamd_http_ssl_err_handler,
+										   conn,
+										   EV_WRITE);
 }
 else {
 	/* Watch for READ too on client to detect early server responses */
@@ -2843,4 +2904,91 @@ double rspamd_http_connection_keepalive_idle_timeout(struct rspamd_http_connecti
 {
 	struct rspamd_http_connection_private *priv = conn->priv;
 	return (priv->ka_idle_override > 0 ? priv->ka_idle_override : default_idle);
+}
+
+static void
+rspamd_http_ssl_accept_handler(int fd, short what, gpointer ud)
+{
+	struct rspamd_http_connection *conn = (struct rspamd_http_connection *) ud;
+	struct rspamd_http_connection_private *priv = conn->priv;
+
+	/* SSL handshake complete, start reading HTTP message */
+	rspamd_http_connection_read_message_common(conn, conn->ud, priv->timeout, 0);
+}
+
+static void
+rspamd_http_ssl_accept_shared_handler(int fd, short what, gpointer ud)
+{
+	struct rspamd_http_connection *conn = (struct rspamd_http_connection *) ud;
+	struct rspamd_http_connection_private *priv = conn->priv;
+
+	/* SSL handshake complete, start reading HTTP message with shared body */
+	rspamd_http_connection_read_message_common(conn, conn->ud, priv->timeout,
+											   RSPAMD_HTTP_FLAG_SHMEM);
+}
+
+static gboolean
+rspamd_http_connection_accept_ssl_common(struct rspamd_http_connection *conn,
+										 gpointer ssl_ctx,
+										 gpointer ud,
+										 ev_tstamp timeout,
+										 rspamd_ssl_handler_t accept_handler)
+{
+	struct rspamd_http_connection_private *priv = conn->priv;
+	GError *err;
+
+	g_assert(conn != NULL);
+	g_assert(ssl_ctx != NULL);
+
+	conn->ud = ud;
+	priv->timeout = timeout;
+
+	priv->ssl = rspamd_ssl_connection_new(ssl_ctx, priv->ctx->event_loop,
+										  FALSE, conn->log_tag);
+
+	if (priv->ssl == NULL) {
+		err = g_error_new(HTTP_ERROR, 400, "cannot create SSL connection");
+		rspamd_http_connection_ref(conn);
+		conn->error_handler(conn, err);
+		rspamd_http_connection_unref(conn);
+		g_error_free(err);
+		return FALSE;
+	}
+
+	if (!rspamd_ssl_accept_fd(priv->ssl, conn->fd, &priv->ev,
+							  timeout, accept_handler,
+							  rspamd_http_ssl_err_handler, conn)) {
+
+		err = g_error_new(HTTP_ERROR, 400,
+						  "ssl accept error: ssl error=%s, errno=%s",
+						  ERR_error_string(ERR_get_error(), NULL),
+						  strerror(errno));
+		rspamd_http_connection_ref(conn);
+		conn->error_handler(conn, err);
+		rspamd_http_connection_unref(conn);
+		g_error_free(err);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+gboolean
+rspamd_http_connection_accept_ssl(struct rspamd_http_connection *conn,
+								  gpointer ssl_ctx,
+								  gpointer ud,
+								  ev_tstamp timeout)
+{
+	return rspamd_http_connection_accept_ssl_common(conn, ssl_ctx, ud, timeout,
+													rspamd_http_ssl_accept_handler);
+}
+
+gboolean
+rspamd_http_connection_accept_ssl_shared(struct rspamd_http_connection *conn,
+										 gpointer ssl_ctx,
+										 gpointer ud,
+										 ev_tstamp timeout)
+{
+	return rspamd_http_connection_accept_ssl_common(conn, ssl_ctx, ud, timeout,
+													rspamd_http_ssl_accept_shared_handler);
 }

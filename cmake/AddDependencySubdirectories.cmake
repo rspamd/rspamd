@@ -45,7 +45,6 @@ function(AddDependencySubdirectories)
     add_subdirectory(contrib/libev)
     add_subdirectory(contrib/kann)
     add_subdirectory(contrib/google-ced)
-
     # Backward-cpp for stacktraces
     if (ENABLE_BACKWARD)
         add_subdirectory(contrib/backward-cpp)
@@ -90,6 +89,7 @@ function(AddDependencySubdirectories)
     list(APPEND RSPAMD_REQUIRED_LIBRARIES rspamd-ev)
     list(APPEND RSPAMD_REQUIRED_LIBRARIES rspamd-kann)
     list(APPEND RSPAMD_REQUIRED_LIBRARIES rspamd-ced)
+    list(APPEND RSPAMD_REQUIRED_LIBRARIES rspamd-fasttext)
 
     # Clang plugin (optional)
     if (ENABLE_CLANG_PLUGIN)

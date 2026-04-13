@@ -1,0 +1,50 @@
+# Rspamd Neural Embedding Service - GPU Version
+#
+# GPU-optimized embedding service using sentence-transformers + CUDA
+#
+# Build:
+#   docker build -f Dockerfile.gpu -t rspamd-embedding-service:gpu .
+#
+# Run:
+#   docker run --gpus all -p 8080:8080 rspamd-embedding-service:gpu
+
+FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
+
+# Build arguments - multilingual-e5-large recommended for GPU (100+ languages)
+ARG EMBEDDING_MODEL="intfloat/multilingual-e5-large"
+
+# Environment
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    EMBEDDING_MODEL=${EMBEDDING_MODEL} \
+    EMBEDDING_PORT=8080 \
+    EMBEDDING_HOST=0.0.0.0 \
+    EMBEDDING_DEVICE=cuda
+
+WORKDIR /app
+
+# Install Python dependencies for GPU
+COPY requirements-gpu.txt .
+RUN pip install --no-cache-dir -r requirements-gpu.txt
+
+# Pre-download model during build (recommended for vast.ai to avoid download on each run)
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${EMBEDDING_MODEL}')"
+
+# Copy application
+COPY embedding_service.py .
+
+# Non-root user
+RUN useradd -m -u 1000 embedding && chown -R embedding:embedding /app
+USER embedding
+
+# Expose port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"
+
+# Run with uvicorn
+CMD ["python", "embedding_service.py"]

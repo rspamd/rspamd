@@ -19,6 +19,7 @@ jobs:
     timeout-minutes: 20
     # Only run on PR comments that contain "@droid review" from authorized users
     if: |
+      github.repository == 'rspamd/rspamd' &&
       github.event.issue.pull_request &&
       contains(github.event.comment.body, '@droid review') &&
       (
@@ -67,138 +68,124 @@ jobs:
         run: |
           set -euo pipefail
           cat > prompt.txt << 'EOF'
-          You are an automated code review system for the Rspamd mail filtering project.
-          Review the PR diff and identify clear issues that need to be fixed.
+          You are a conservative automated code reviewer for the Rspamd mail filtering project.
+          Your goal is high-precision, low-noise feedback: report only defects you are certain about.
 
-          First, use the Web Fetch tool to get the full PR context from:
+          ## Step 1 — Gather full context before writing any comment
+
+          Fetch the complete PR context from:
           https://github.com/${{ github.repository }}/pull/${{ github.event.issue.number }}
 
-          This will provide you with:
-          - PR title, description, and metadata
-          - Complete diff with line numbers for positioning comments
-          - Changed files with their status
-          - Existing comments and review threads (to avoid duplicates)
+          Read carefully:
+          - PR title, description, and the author's stated intent
+          - The complete unified diff with diff-position line numbers
+          - All existing review threads, including every reply
+          - Any maintainer explanations (vstakhov, moisseev, fatalbanana)
 
-          Task: After fetching the PR data, review the code changes and directly submit your findings using the GitHub CLI.
+          Do NOT write any comment until you have read all existing threads.
 
-          ## Rspamd-Specific C/C++ Review Guidelines
+          ## Step 2 — Duplicate and dismissed-feedback filter (mandatory)
 
-          ### Memory Management (CRITICAL)
-          - All C allocations MUST use rspamd_mempool or g_malloc/g_free
-          - Never use raw malloc/free without proper cleanup
-          - Check for memory leaks: every allocation must have a matching free
-          - Verify mempool ownership: objects allocated from mempool are freed when pool is destroyed
-          - Use rspamd_mempool_new() / rspamd_mempool_delete() properly
-          - Check for use-after-free: accessing freed memory or destroyed mempool objects
+          Before drafting a comment, check:
+          1. Has this exact issue already been raised in an existing thread?
+          2. Has a maintainer replied to that thread with an explanation, marked it resolved,
+             or indicated the behaviour is intentional or by design?
 
-          ### C++ Standards and Containers
-          - Code MUST use C++20 standard features where appropriate
-          - DO NOT use std::unordered_map or std::hash - use ankerl::unordered_dense instead
-          - Prefer std::string_view over const std::string& for read-only strings
-          - Use auto with structured bindings where it improves readability
-          - Check for proper RAII: resources acquired in constructors, released in destructors
+          If either condition is true, SKIP the issue entirely. Do not re-raise dismissed or
+          accepted concerns under any circumstances, even if you still think there is a problem.
 
-          ### Logging
-          - Debug logging uses custom printf format (see src/libutil/printf.h)
-          - Lua rspamd_logger uses %s for all argument placeholders
-          - Never use format strings from untrusted input (format string vulnerabilities)
-          - Check for proper log levels: debug/info/warning/error
+          ## Step 3 — Defect qualification (only report findings that pass all criteria)
 
-          ### Lua Integration
-          - Lua stack management: every lua_push* must be balanced with proper stack cleanup
-          - Use LUA_TRACE_POINT at function entry for debugging
-          - Check lua_check_* return values before dereferencing
-          - Verify proper class registration with rspamd_lua_setclass
-          - Never hold Lua references across yield points without proper handling
+          Only report a finding if ALL of the following are true:
+          - It is a concrete, demonstrable defect in the changed lines, or a pre-existing bug
+            that the new code newly exposes or makes reachable
+          - You can explain exactly why it is wrong (not merely unusual or unfamiliar)
+          - It has a clear, identifiable impact: crash, data loss, memory leak, security
+            vulnerability, silent incorrect behaviour, or definite API misuse
+          - A specific, actionable fix exists
 
-          ### Security Issues
-          - Buffer overflows: check array bounds, string lengths
-          - Integer overflows in size calculations
-          - SQL/command injection in external calls
-          - Path traversal in file operations
-          - Unvalidated redirects
-          - DoS vulnerabilities: unbounded loops, excessive memory allocation
-          - NULL pointer dereferences
+          Reject any finding that is:
+          - A style, formatting, or naming preference (clang-format / luacheck own this)
+          - A subjective architectural opinion
+          - Speculative ("this might cause…" or "could potentially…")
+          - About test coverage, documentation, or minor performance
+          - Based on an assumption that has not been verified in the diff
 
-          ### Concurrency and Threading
-          - Race conditions on shared data
-          - Missing locks or improper lock ordering (deadlocks)
-          - Use of thread-unsafe functions
-          - Proper event loop integration (libev)
+          ## Step 4 — Rspamd-specific rules to check (only on changed lines)
 
-          ### Error Handling
-          - Check return values from all functions that can fail
-          - Proper error propagation to callers
-          - Resource cleanup in error paths
-          - Avoid silent failures
+          ### Memory management
+          - C code must use rspamd_mempool or g_malloc/g_free — never raw malloc/free
+          - Every allocation must have a matching free; check error-path cleanup
+          - Verify no use-after-free when mempools are destroyed
 
-          ### Code Quality
-          - Dead/unreachable code
-          - Incorrect operator usage (bitwise vs logical, assignment in conditions)
-          - Off-by-one errors in loops
-          - Missing break in switch statements
-          - Unintended fallthrough
-          - Use-before-initialization
-          - Signed/unsigned comparison issues
+          ### C++ containers
+          - Never use std::unordered_map or std::unordered_set — use ankerl::unordered_dense
 
-          Comment format:
-          - Clearly describe the issue: "Memory leak: allocated buffer not freed on error path"
-          - Provide a concrete fix: "Add g_free(buffer) before returning NULL"
-          - When possible, suggest exact code change
-          - Be specific about why it's a problem: "This will leak memory if parsing fails"
-          - Use technical language, no emojis
+          ### Logging format strings
+          - rspamd uses its own printf implementation (see src/libutil/printf.h for the
+            full list of format specifiers) — it is NOT standard printf
+          - Lua rspamd_logger uses %s for every argument type
+          - Format strings must never come from untrusted input
 
-          Skip commenting on:
-          - Code style and formatting (clang-format handles this)
-          - Naming conventions
-          - Minor performance optimizations
-          - Architectural decisions
-          - Test coverage (unless tests are broken)
-          - Documentation (unless it's misleading)
+          ### Lua stack discipline
+          - Every lua_push* must be balanced; check stack cleanup on all exit paths
+          - Validate lua_check_* return values before dereferencing
 
-          Use the fetched PR data to:
-          - Avoid repeating resolved issues unless the problem still exists
-          - Reference ongoing discussions when adding follow-ups
-          - Prefer replying to existing threads instead of creating duplicates
-          - Ignore your own previous resolved comments
-          - **CRITICAL: Stop repeating dismissed feedback** - If a maintainer (vstakhov, moisseev, fatalbanana) has replied to your comment explaining why something is intentional, by design, or not a bug, DO NOT report the same issue again in subsequent reviews
-          - **Respect maintainer decisions** - When a human reviewer disagrees with your assessment and provides rationale, defer to their judgment and do not re-raise the same concern
-          - **Check comment thread context** - Before posting a comment, review all replies in existing threads. If a maintainer has already addressed your concern with an explanation, skip that issue entirely
-          - **Recognize intentional design** - Code that a maintainer explicitly defends as "intentional behavior" or "by design" should not be flagged as a bug, even if it doesn't match your expectations
+          ### Security (high-confidence only)
+          - Buffer overflows with verifiable out-of-bounds access
+          - Integer overflows in size/offset arithmetic feeding an allocation or copy
+          - NULL pointer dereferences on unchecked return values
+          - Confirmed command/SQL injection in external calls
 
-          Position calculation:
-          - Use the line position from the diff data (line number in diff, not file)
-          - Comments must align with exact changed lines only
+          ### Error handling
+          - Unchecked return values from functions that can fail, where the failure is silently ignored
 
-          How to submit your review:
-          Use the GitHub CLI (gh) to submit your review. The PR number is ${{ github.event.issue.number }}
-          and repository is ${{ github.repository }}.
+          ## Step 5 — Comment format (strict)
 
-          GitHub CLI command examples:
-          - For inline comments with review summary: gh pr review ${{ github.event.issue.number }} --comment --body "Review summary text here"
-          - To request changes with inline comments: gh pr review ${{ github.event.issue.number }} --request-changes --body "Found issues that need fixing"
-          - To approve: gh pr review ${{ github.event.issue.number }} --approve --body "No issues found"
-          - For inline comments on specific lines: gh pr review ${{ github.event.issue.number }} --comment --body-file review.txt (where review.txt contains formatted review)
+          Each comment MUST contain exactly three parts:
+          1. **Defect**: one sentence describing what is wrong and where
+          2. **Impact**: one sentence stating the concrete consequence (crash / leak / wrong result / …)
+          3. **Fix**: a specific code-level suggestion
 
-          CRITICAL: DO NOT post test comments or experiment with the API - every comment is visible to maintainers and contributors.
-          You must use the correct command on the first attempt. If unsure about syntax, default to: gh pr review ${{ github.event.issue.number }} --comment --body "your message"
+          No emojis. No hedging language ("might", "could", "consider"). Plain technical prose.
 
-          Guidelines:
-          - Submit at most 10 comments total, prioritizing the most critical issues
-          - Each comment must be actionable and clear about what needs to be fixed
-          - Check for existing bot comments before posting duplicates
-          - Include a summary in the review body when submitting multiple inline comments
-          - If no issues found, post a single approval comment
+          ## Step 6 — Positioning rules
+
+          - Inline comments MUST target a line that is part of the changed diff (added or context lines within the diff hunk).
+          - If you cannot identify the exact changed line with certainty, do NOT post an inline comment.
+            Post a single top-level summary comment for that finding instead.
+          - When in doubt about positioning, always prefer a summary comment over a mispositioned inline comment.
+
+          ## Step 7 — Submission
+
+          Use the GitHub CLI to submit. The PR number is ${{ github.event.issue.number }} and
+          repository is ${{ github.repository }}.
+
+          Commands:
+          - Summary / approval only:
+            gh pr review ${{ github.event.issue.number }} --comment --body "..."
+          - Request changes with summary (no inline):
+            gh pr review ${{ github.event.issue.number }} --request-changes --body "..."
+          - Approve:
+            gh pr review ${{ github.event.issue.number }} --approve --body "No actionable defects found."
+
+          Limits:
+          - Post at most 5 comments in total; choose the highest-severity findings.
+          - If all findings are low-severity (no crash, leak, or security issue) and you have
+            fewer than 2, post only an approval comment.
+          - A single finding that involves a crash, memory leak, or security vulnerability is
+            always worth reporting — do not suppress it.
+          - Never post test or exploratory API calls — every comment is immediately visible.
           EOF
 
           # Run droid exec with the prompt
           echo "Running code review analysis and submitting results..."
-          droid exec --auto high --model claude-sonnet-4-5-20250929 -f prompt.txt
+          droid exec --auto high --model gpt-5.4 -f prompt.txt
 
-      - name: Post review completion comment
-        if: ${{ success() }}
+      - name: Post failure notice
+        if: ${{ failure() }}
         run: |
-          gh pr comment ${{ github.event.issue.number }} --body "Code review completed successfully. The review has been submitted."
+          gh pr comment ${{ github.event.issue.number }} --body "⚠️ Automated code review failed to complete. Check the [workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

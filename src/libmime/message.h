@@ -163,6 +163,7 @@ struct rspamd_mime_text_part {
 	rspamd_html_heap_storage_t *cta_urls; /**< cta_heap_t* for HTML parts, NULL for plain text */
 	GList *exceptions;                    /**< list of offsets of urls						*/
 	struct rspamd_mime_part *mime_part;
+	struct rspamd_mime_text_part *alt_text_part; /**< alternative text part (text for html, html for text) */
 
 	unsigned int flags;
 	unsigned int nlines;

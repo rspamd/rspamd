@@ -590,7 +590,54 @@ define(["jquery", "nprogress"],
                 updateErrorLogTable();
             });
 
-            // Copy to clipboard
+            // Copy to clipboard with fallback for HTTP
+            ui.copyToClipboard = function (text) {
+                // Try modern Clipboard API first (HTTPS only)
+                const clip = navigator.clipboard;
+                if (clip && clip.writeText) return clip.writeText(text);
+
+                // Fallback for HTTP or older browsers using execCommand
+                return new Promise((resolve, reject) => {
+                    const textarea = document.createElement("textarea");
+                    textarea.value = text;
+
+                    // Check if any modal is currently open
+                    const modal = document.querySelector(".modal.show");
+
+                    const modalBody = modal?.querySelector(".modal-body");
+                    if (modalBody) {
+                        // Inside open modal: use fixed positioning to avoid focus trap
+                        textarea.style.position = "fixed";
+                        textarea.style.top = "50%";
+                        textarea.style.left = "50%";
+                        textarea.style.opacity = "0";
+                        modalBody.appendChild(textarea);
+                    } else {
+                        // Outside modal: use absolute positioning off-screen
+                        textarea.style.position = "absolute";
+                        textarea.style.left = "-9999px";
+                        document.body.appendChild(textarea);
+                    }
+
+                    try {
+                        textarea.focus({preventScroll: true});
+                        textarea.select();
+                        const successful = document.execCommand("copy");
+                        textarea.remove();
+
+                        if (successful) {
+                            resolve();
+                        } else {
+                            reject(new Error("Copy command failed"));
+                        }
+                    } catch (err) {
+                        textarea.remove();
+                        reject(err);
+                    }
+                });
+            };
+
+            // Copy error log to clipboard
             $("#copyErrorLog").on("click", () => {
                 if (errorLog.errors.length === 0) return;
 
@@ -615,70 +662,7 @@ define(["jquery", "nprogress"],
                     });
                 }
 
-                // Copy to clipboard with fallback for HTTP
-                function copyToClipboard(text) {
-                    // Try modern Clipboard API first (HTTPS only)
-                    const clip = navigator.clipboard;
-                    if (clip && clip.writeText) return clip.writeText(text);
-
-                    // Fallback for HTTP or older browsers using execCommand
-                    return new Promise((resolve, reject) => {
-                        let textarea = null;
-                        function cleanup(o) {
-                            if (o && o.parentNode) o.parentNode.removeChild(o);
-                        }
-
-                        try {
-                            textarea = document.createElement("textarea");
-                            textarea.value = text;
-
-                            // Critical: must be visible and in viewport for some browsers
-                            textarea.style.position = "fixed";
-                            textarea.style.top = "50%";
-                            textarea.style.left = "50%";
-                            textarea.style.width = "1px";
-                            textarea.style.height = "1px";
-                            textarea.style.padding = "0";
-                            textarea.style.border = "none";
-                            textarea.style.outline = "none";
-                            textarea.style.boxShadow = "none";
-                            textarea.style.background = "transparent";
-                            textarea.style.zIndex = "99999";
-
-                            // Add to modal body instead of document.body to avoid focus trap
-                            const modalBody = document.querySelector("#errorLogModal .modal-body");
-                            if (modalBody) {
-                                modalBody.appendChild(textarea);
-                            } else {
-                                document.body.appendChild(textarea);
-                            }
-
-                            // Force reflow to ensure textarea is rendered
-                            textarea.offsetHeight; // eslint-disable-line no-unused-expressions
-
-                            // Select all text
-                            textarea.focus();
-                            textarea.select();
-                            textarea.setSelectionRange(0, textarea.value.length);
-
-                            // Execute copy immediately while focused
-                            const successful = document.execCommand("copy");
-
-                            cleanup(textarea);
-
-                            if (successful) {
-                                resolve();
-                            } else {
-                                reject(new Error("Copy command failed (execCommand returned false)"));
-                            }
-                        } catch (err) {
-                            cleanup(textarea);
-                            reject(err);
-                        }
-                    });
-                }
-
-                copyToClipboard(textToCopy)
+                ui.copyToClipboard(textToCopy)
                     .then(() => {
                         // Show success feedback
                         const btn = $("#copyErrorLog");

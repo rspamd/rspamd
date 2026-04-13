@@ -578,7 +578,7 @@ rspamd_xstrtoul(const char *s, gsize len, gulong *value)
 				v += c;
 			}
 		}
-		else if (c >= 'a' || c <= 'f') {
+		else if (c >= 'a' && c <= 'f') {
 			c = c - 'a' + 10;
 			if (v > cutoff || (v == cutoff && (uint8_t) c > cutlim)) {
 				/* Range error */
@@ -1450,7 +1450,7 @@ rspamd_encode_qp_fold(const unsigned char *in, gsize inlen, int str_len,
 	char *out;
 	int ch, last_sp;
 	const unsigned char *end = in + inlen, *p = in;
-	static const char hexdigests[16] = "0123456789ABCDEF";
+	static const char hexdigests[] = "0123456789ABCDEF";
 
 	while (p < end) {
 		ch = *p;
@@ -2503,7 +2503,7 @@ int rspamd_encode_hex_buf(const unsigned char *in, gsize inlen, char *out,
 {
 	char *o, *end;
 	const unsigned char *p;
-	static const char hexdigests[16] = "0123456789abcdef";
+	static const char hexdigests[] = "0123456789abcdef";
 
 	end = out + outlen;
 	o = out;
@@ -2932,6 +2932,106 @@ rspamd_decode_uue_buf(const char *in, gsize inlen,
 	return (o - out);
 }
 
+gssize
+rspamd_decode_ascii85_buf(const char *in, gsize inlen,
+						  unsigned char *out, gsize outlen)
+{
+	const char *p = in;
+	const char *end = in + inlen;
+	unsigned char *o = out;
+	unsigned char *out_end = out + outlen;
+	uint32_t tuple = 0;
+	int count = 0;
+
+	while (p < end) {
+		unsigned char c = *p++;
+
+		/* Skip whitespace */
+		if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f') {
+			continue;
+		}
+
+		/* Check for end marker '~>' */
+		if (c == '~') {
+			if (p < end && *p == '>') {
+				/* End of ASCII85 data */
+				break;
+			}
+			if (p >= end) {
+				/* '~' at end of buffer - treat as truncated end marker */
+				break;
+			}
+			/* Invalid: '~' followed by something other than '>' */
+			return -1;
+		}
+
+		/* Special case: 'z' represents 4 zero bytes */
+		if (c == 'z') {
+			if (count != 0) {
+				/* 'z' can only appear between complete groups */
+				return -1;
+			}
+			if (out_end - o < 4) {
+				return -1;
+			}
+			*o++ = 0;
+			*o++ = 0;
+			*o++ = 0;
+			*o++ = 0;
+			continue;
+		}
+
+		/* Valid ASCII85 characters are '!' (33) to 'u' (117) */
+		if (c < '!' || c > 'u') {
+			return -1;
+		}
+
+		/* Accumulate the value */
+		tuple = tuple * 85 + (c - '!');
+		count++;
+
+		if (count == 5) {
+			/* Output 4 bytes (big-endian) */
+			if (out_end - o < 4) {
+				return -1;
+			}
+			*o++ = (tuple >> 24) & 0xFF;
+			*o++ = (tuple >> 16) & 0xFF;
+			*o++ = (tuple >> 8) & 0xFF;
+			*o++ = tuple & 0xFF;
+			tuple = 0;
+			count = 0;
+		}
+	}
+
+	/* Handle final incomplete group */
+	if (count > 0) {
+		/* Pad with 'u' (84) to complete the group */
+		int padding = 5 - count;
+		for (int i = 0; i < padding; i++) {
+			tuple = tuple * 85 + 84;
+		}
+
+		/* Output (count - 1) bytes */
+		int out_bytes = count - 1;
+		if (out_end - o < out_bytes) {
+			return -1;
+		}
+
+		if (out_bytes >= 1) {
+			*o++ = (tuple >> 24) & 0xFF;
+		}
+		if (out_bytes >= 2) {
+			*o++ = (tuple >> 16) & 0xFF;
+		}
+		if (out_bytes >= 3) {
+			*o++ = (tuple >> 8) & 0xFF;
+		}
+	}
+
+	return o - out;
+}
+
 #define BITOP(a, b, op) \
 	((a)[(gsize) (b) / (8 * sizeof *(a))] op(gsize) 1 << ((gsize) (b) % (8 * sizeof *(a))))
 
@@ -3094,7 +3194,7 @@ rspamd_encode_qp2047_buf(const char *in, gsize inlen,
 						 char *out, gsize outlen)
 {
 	char *o = out, *end = out + outlen, c;
-	static const char hexdigests[16] = "0123456789ABCDEF";
+	static const char hexdigests[] = "0123456789ABCDEF";
 
 	while (inlen > 0 && o < end) {
 		c = *in;
@@ -3354,7 +3454,7 @@ rspamd_str_regexp_escape(const char *pattern, gsize slen,
 	const char *p, *end = pattern + slen;
 	char *res, *d, t, *tmp_utf = NULL, *dend;
 	gsize len;
-	static const char hexdigests[16] = "0123456789abcdef";
+	static const char hexdigests[] = "0123456789abcdef";
 
 	len = 0;
 	p = pattern;

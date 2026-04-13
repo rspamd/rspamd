@@ -165,6 +165,13 @@ struct rspamd_tokenizer_config {
  * No backend required for classifier
  */
 #define RSPAMD_FLAG_CLASSIFIER_NO_BACKEND (1 << 2)
+/*
+ * Set if classifier has at least one class that is neither "spam" nor "ham"
+ * (i.e. a genuinely multiclass classifier, not just a binary spam/ham one).
+ * When set, can_learn uses multiclass_result:<name> for probability checks
+ * instead of the legacy bayes_prob binary variable.
+ */
+#define RSPAMD_FLAG_CLASSIFIER_MULTICLASS (1 << 3)
 
 /**
  * Classifier config definition
@@ -196,6 +203,7 @@ struct rspamd_worker_bind_conf {
 	char *name;
 	char *bind_line;
 	gboolean is_systemd;
+	gboolean is_ssl;
 	struct rspamd_worker_bind_conf *next;
 };
 
@@ -377,6 +385,7 @@ struct rspamd_config {
 	gboolean enable_css_parser;                              /**< Enable css parsing in HTML							*/
 	gboolean enable_mime_utf;                                /**< Enable utf8 mime parsing							*/
 	gboolean enable_url_rewrite;                             /**< Enable HTML URL rewriting							*/
+	gboolean include_content_urls;                           /**< Include content URLs (from PDF etc) in API calls	*/
 
 	gboolean composites_inverted_index; /**< Use inverted index for composite lookup			*/
 	gboolean composites_stats_always;   /**< Always collect composite stats (not sampled)		*/

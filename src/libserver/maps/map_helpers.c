@@ -1411,6 +1411,12 @@ void rspamd_regexp_list_fin(struct map_cb_data *data, void **target)
 	else {
 		if (data->cur_data) {
 			re_map = data->cur_data;
+#ifdef WITH_HYPERSCAN
+			/* Include serialization magic so version bumps invalidate cache */
+			gsize magic_len;
+			const unsigned char *magic = rspamd_hyperscan_get_magic(&magic_len);
+			rspamd_cryptobox_hash_update(&re_map->hst, magic, magic_len);
+#endif
 			rspamd_cryptobox_hash_final(&re_map->hst, re_map->re_digest);
 			memcpy(&data->map->digest, re_map->re_digest, sizeof(data->map->digest));
 			rspamd_re_map_finalize(re_map);
@@ -1892,6 +1898,24 @@ void rspamd_regexp_map_add_pending(struct rspamd_regexp_map_helper *re_map,
 										  sizeof(struct rspamd_regexp_map_pending));
 	}
 
+	/* Replace existing entry with the same name to avoid stale re_map pointers
+	 * after map reload (the old re_map gets destroyed but the pending entry
+	 * would still reference it, causing use-after-free) */
+	for (unsigned int i = 0; i < pending_regexp_maps->len; i++) {
+		struct rspamd_regexp_map_pending *existing;
+
+		existing = &g_array_index(pending_regexp_maps,
+								  struct rspamd_regexp_map_pending, i);
+		if (strcmp(existing->name, name) == 0) {
+			existing->re_map = re_map;
+			rspamd_regexp_map_get_hash(re_map, existing->hash);
+
+			msg_info_map("updated pending regexp map '%s' (%ud patterns) in compilation queue",
+						 name, re_map->regexps ? re_map->regexps->len : 0);
+			return;
+		}
+	}
+
 	entry.re_map = re_map;
 	entry.name = g_strdup(name);
 	rspamd_regexp_map_get_hash(re_map, entry.hash);
@@ -2076,6 +2100,7 @@ struct rspamd_regexp_map_async_compile_ctx {
 	char *cache_dir;
 	unsigned char *serialized_db;
 	gsize serialized_len;
+	gboolean callback_processed;
 };
 
 static void
@@ -2090,6 +2115,11 @@ rspamd_regexp_map_async_store_cb(gboolean success,
 
 	(void) data;
 	(void) len;
+
+	if (ctx->callback_processed) {
+		return;
+	}
+	ctx->callback_processed = TRUE;
 
 	if (!success) {
 		g_set_error(&err, g_quark_from_static_string("regexp_map"), EINVAL,
@@ -2124,19 +2154,8 @@ void rspamd_regexp_map_compile_hs_to_cache_async(struct rspamd_regexp_map_helper
 
 	map = re_map->map;
 
-	if (!rspamd_hs_cache_has_lua_backend()) {
-		/* Synchronous file backend */
-		gboolean success = rspamd_regexp_map_compile_hs_to_cache(re_map, cache_dir, &err);
-		if (cb) {
-			cb(re_map, success, err, ud);
-		}
-		if (err) {
-			g_error_free(err);
-		}
-		return;
-	}
-
-	/* Async Lua backend path */
+	/* All file operations go through Lua backend */
+	g_assert(rspamd_hs_cache_has_lua_backend());
 	hs_platform_info_t plt;
 	hs_compile_error_t *hs_errors = NULL;
 	hs_database_t *db = NULL;
@@ -2285,6 +2304,7 @@ struct rspamd_regexp_map_async_load_ctx {
 	void (*cb)(gboolean success, void *ud);
 	void *ud;
 	char *cache_dir;
+	gboolean callback_processed;
 };
 
 static void
@@ -2295,8 +2315,14 @@ rspamd_regexp_map_async_load_cb(gboolean success,
 								void *ud)
 {
 	struct rspamd_regexp_map_async_load_ctx *ctx = ud;
-	struct rspamd_map *map = ctx->re_map->map;
+	struct rspamd_map *map;
 	gboolean result = FALSE;
+
+	if (ctx->callback_processed) {
+		return;
+	}
+	ctx->callback_processed = TRUE;
+	map = ctx->re_map->map;
 
 	if (!success || data == NULL || len == 0) {
 		msg_warn_map("failed to load regexp map from cache backend: %s",
@@ -2353,16 +2379,9 @@ void rspamd_regexp_map_load_from_cache_async(struct rspamd_regexp_map_helper *re
 	g_assert(re_map != NULL);
 	g_assert(cache_dir != NULL);
 
-	if (!rspamd_hs_cache_has_lua_backend()) {
-		/* Synchronous file backend */
-		gboolean success = rspamd_regexp_map_load_from_cache(re_map, cache_dir);
-		if (cb) {
-			cb(success, ud);
-		}
-		return;
-	}
+	/* All file operations go through Lua backend */
+	g_assert(rspamd_hs_cache_has_lua_backend());
 
-	/* Async Lua backend path */
 	char cache_key[rspamd_cryptobox_HASHBYTES * 2 + 1];
 	rspamd_snprintf(cache_key, sizeof(cache_key), "%*xs",
 					(int) rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);

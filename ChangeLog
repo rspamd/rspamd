@@ -1,3 +1,133 @@
+4.0.1: 05 Apr 2026
+
+  ** Features **
+  * [Feature] Add settings merge infrastructure with layered collect-then-merge flow
+  * [Feature] Add weak dependencies and disabled status to symcache
+  * [Feature] Add force-enable override for settings conflicts
+  * [Feature] Add dynamic block API to fuzzy storage worker
+  * [Feature] Allow custom response codes for fuzzy dynamic blocks
+  * [Feature] Expose ratelimit_whitelist check to Lua via worker method
+
+  ** Bug fixes **
+  * [Fix] Keep original fd in proxy session after milter dup (fd leak since 4.0.0)
+  * [Fix] Use task_timeout instead of upstream timeout for proxy self-scan
+  * [Fix] Use LPeg grammar for AAR header parsing (#5963)
+  * [Fix] Use ev_now() instead of rspamd_get_ticks() for dynamic ban expiry
+  * [Fix] Enable deps in pre/postfilters and fix settings flow
+  * [Fix] Create rdeps for same-stage non-filter dependencies
+  * [Fix] Add missing #include <memory> in redis_backend.cxx
+
+4.0.0: 30 Mar 2026
+
+  ** Incompatible changes **
+  * [Rework] Replace Jump Hash with Ring Hash (Ketama) for consistent upstream hashing;
+    per-user Bayes with Redis sharding requires migration via rspamadm statistics_dump migrate
+  * [Feature] Include content URLs by default in URL API calls (include_content_urls = true);
+    set include_content_urls = false in local.d/options.inc to restore old behavior
+  * [Feature] Auto-detect SSL from bind sockets, remove ssl = true worker option
+  * [Feature] Replace libfasttext with built-in mmap-based shim; ENABLE_FASTTEXT cmake option removed
+  * [Feature] Replace builtin_suspicious TLDs with map-based configuration (conf/maps.d/suspicious_tlds.inc)
+  * [Feature] Rename neural autolearn options to match RBL module naming
+  * [Feature] proxy: Enable token bucket load balancing by default
+  * [Conf] Disable Validity SenderScore RBLs by default (requires MyValidity account)
+  * [Fix] Make unknown and broken DKIM keys behaviour conforming to RFC
+
+  ** Major features **
+  * [Feature] Add /checkv3 multipart scan endpoint with per-part zstd compression
+  * [Feature] protocol: Zero-copy piecewise writev for v3 multipart responses
+  * [Feature] protocol: Add v3 multipart response parsing for proxy and body decompression
+  * [Feature] rspamc: Add --msgpack flag for v3 protocol
+  * [Feature] Pluggable async hyperscan cache backend with Redis storage support
+  * [Feature] Route all hyperscan cache operations through Lua backend
+  * [Feature] Use async hyperscan compilation for language detection stop words
+  * [Feature] Compile small hyperscan databases in memory without file caching
+  * [Feature] Add multi-flag fuzzy hash support with Lua-based Redis update path (epoch 12)
+  * [Feature] Add dual-mode HTML fuzzy: template matching + phishing detection (FUZZY_HTML_PHISHING)
+  * [Feature] Add shard migration and multi-class support to statistics_dump
+  * [Feature] Implement HTTPS server support for workers
+  * [Feature] proxy: Implement token bucket load balancing for upstreams
+  * [Feature] Expose milter headers and extended symbols in legacy RSPAMC/SPAMC protocol
+  * [Feature] Add native UUID v7 per task with Lua binding
+  * [Feature] Add UUID v7 column support to ClickHouse plugin
+  * [Feature] Sync UUID v7 random portion with Log-Tag header
+  * [Feature] Add structured formatter to metadata_exporter with zstd compression
+  * [Feature] arc: Add trusted_authserv_id option for reuse_auth_results
+  * [Feature] Add external pretrained neural model support
+  * [Feature] Fasttext embed: multi-model, mean+max pooling, SIF word weighting
+  * [Feature] Multi-layer funnel architecture for LLM embeddings
+  * [Feature] Add language-based model/URL selection for LLM embeddings
+  * [Feature] Add expression-based autolearn for neural LLM providers
+  * [Feature] Add rspamadm autolearnstats subcommand
+  * [Feature] Rewrite rspamd_stats.pl and mapstats.pl as rspamadm Lua subcommands
+  * [Feature] headers_checks: Add Reply-To address validity checks
+  * [Feature] Store matched fuzzy hashes in Redis history
+  * [Feature] Add HTTP content negotiation framework with zstd compression for /stat
+  * [Feature] Extend /stat and /bayes/classifiers endpoints with classifier metadata
+  * [Feature] WebUI: Add multi-class classifier support to learning UI
+  * [Feature] Split attachment filenames into sub-tokens for Bayes classifier
+  * [Feature] Make GPT consensus thresholds configurable with context_augment hook
+  * [Feature] Add follow_master option for proxy mirror connections
+  * [Feature] Per-class deterministic regexp IDs in re_cache
+  * [Feature] Add GELU activation and expose dropout in KANN bindings
+  * [Feature] Add ignore_link_domains option for HTML fuzzy rules
+  * [Feature] fuzzy_storage: Enhance blacklist handler with richer context
+  * [Feature] WebUI: Add fuzzy hash copy and delist buttons
+  * [Feature] Add worker:get_mem_config() Lua method for jemalloc stats
+  * [Feature] Add missing Jinja2 filters and tests to Lupa template engine
+
+  ** Bug fixes **
+  * [CritFix] Stop ev_io watcher in fuzzy UDP session destroy
+  * [Fix] Fix CPU busy-loop in fuzzy TCP client due to EV_WRITE not being cleared
+  * [Fix] Clear inherited address family flags when creating new SPF addr nodes
+  * [Fix] Weighted round-robin not respecting upstream weights across cycles
+  * [Fix] bypass RHEL/CentOS 10+ crypto-policies for SHA-1 DKIM verification
+  * [Fix] Fix EVP_PKEY_CTX memory leak in DKIM RSA signing
+  * [Fix] ratelimit: Fix compatibility with old records
+  * [Fix] Prevent SIGSEGV when sign_headers is not a string
+  * [Fix] lua_magic: Avoid misdetecting HTML with embedded SVG as SVG
+  * [Fix] Exclude injected parts from SA body/rawbody regexp scanning
+  * [Fix] Handle OpenAI-compatible response format in Ollama GPT module
+  * [Fix] Add text attachment fallback in get_displayed_text_part
+  * [Fix] Self-healing hyperscan cache: delete stale blobs and trigger recompile
+  * [Fix] Move binary data from KEYS to ARGV in fuzzy, neural, and Bayes Redis scripts
+  * [Fix] Prevent LuaJIT GC stalls after neural training
+  * [Fix] Backward-compatible version negotiation for multi-flag fuzzy
+  * [Fix] Defeat PDF object padding evasion in extract_outer_objects
+  * [Fix] Store small PDF objects without counting toward limit
+  * [Fix] Add ASCII85 decode support for PDF text extraction
+  * [Fix] PDF ligature substitution fix in text handler
+  * [Fix] Correct CSS duplicate property handling to use last declaration
+  * [Fix] Fix JSON emission for implicit arrays in libucl
+  * [Fix] Fasttext shim: fix quantized model support and hierarchical softmax
+  * [Fix] Fasttext shim: fix binary format parsing and harden against corrupt models
+  * [Fix] Rework alternative parts detection
+  * [Fix] R_PARTS_DIFFER: handle multipart/related, empty parts, and parts without words
+  * [Fix] Fix subprocess cleanup race in spawn_process SIGCHLD handler
+  * [Fix] Add PCRE2 complexity checks before JIT compilation
+  * [Fix] Remove unsupported Delta codec from ClickHouse UUID column
+  * [Fix] Clear pending multipatterns and regexp maps on config reload to prevent use-after-free
+  * [Fix] re_cache: Always use charset-converted content for SARAWBODY matching
+  * [Fix] re_cache: Respect disable_hyperscan option in loading functions
+  * [Fix] re_cache: Fix stale hyperscan ID handling during config reload
+  * [Fix] Defer settings application for symbols registered after settings init
+  * [Fix] Default map URL path to "/" when no path component is present
+  * [Fix] Skip HELO IP address literals for SPF domain resolution
+  * [Fix] Preserve content flags for injected query URLs
+  * [Fix] Preserve duplicate URLs across MIME parts
+  * [Fix] Refactor control socket to use ID-based request/reply matching
+  * [Fix] Reduce control message size to prevent sendmsg crash
+  * [Fix] Fix proxy mirror SSL/keepalive config parsing
+  * [Fix] Use OpenMetrics base name for counter TYPE declarations
+  * [Fix] Silence zlib preset dictionary inflate errors
+  * [Fix] Skip empty In-Reply-To header in replies check
+
+  ** Minor changes **
+  * [Minor] Tune jemalloc for single-threaded multi-process architecture
+  * [Minor] Backport ucl_object_iterate_end() from libucl to fix iterator leak
+  * [Conf] Add Redis backend example and configuration support for hs_helper worker
+  * [WebUI] Add frequency stddev column and units to symbols table
+  * [WebUI] Deduplicate fuzzy hashes in multipart messages
+
 3.14.3: 08 Jan 2026
   * [Feature] Add task registry for safe Lua task reference validation
   * [Feature] Add text quality analysis for PDF garbage filtering

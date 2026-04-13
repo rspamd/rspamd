@@ -75,6 +75,7 @@ local settings = {
   use_redis = false,
   key_prefix = 'arc_keys',       -- default hash name
   reuse_auth_results = false,    -- Reuse the existing authentication results
+  trusted_authserv_id = nil,     -- AuthservID to match when reusing auth results
   whitelisted_signers_map = nil, -- Trusted signers domains
   whitelist = nil,               -- Domains with broken ARC implementations to trust despite validation failures
   adjust_dmarc = true,           -- Adjust DMARC rejected policy for trusted forwarders
@@ -85,20 +86,28 @@ local settings = {
 -- To match normal AR
 local ar_settings = lua_auth_results.default_settings
 
-local function parse_arc_header(hdr, target, is_aar)
-  -- Split elements by ';' and trim spaces
-  local arr = fun.totable(fun.map(
-    function(val)
-      return fun.totable(fun.map(lua_util.rspamd_str_trim,
-        fun.filter(function(v)
-            return v and #v > 0
-          end,
-          lua_util.rspamd_str_split(val.decoded, ';')
-        )
-      ))
-    end, hdr
-  ))
+-- Get Authentication-Results header, optionally filtering by trusted authserv-id
+local function get_trusted_ar_header(task)
+  if settings.trusted_authserv_id then
+    local ar_headers = task:get_header_full('Authentication-Results')
+    if ar_headers then
+      for _, hdr in ipairs(ar_headers) do
+        local authserv_id = string.match(hdr.decoded, '^%s*([^;%s]+)')
+        if authserv_id and authserv_id == settings.trusted_authserv_id then
+          lua_util.debugm(N, task, 'found trusted AR header with authserv-id: %s', authserv_id)
+          return hdr.decoded
+        end
+      end
+      lua_util.debugm(N, task, 'no AR header matched trusted authserv-id: %s',
+          settings.trusted_authserv_id)
+    end
+    return nil
+  else
+    return task:get_header('Authentication-Results')
+  end
+end
 
+local function parse_arc_header(hdr, target, is_aar)
   -- v[1] is the key and v[2] is the value
   local function fill_arc_header_table(v, t)
     if v[1] and v[2] then
@@ -108,14 +117,20 @@ local function parse_arc_header(hdr, target, is_aar)
     end
   end
 
-  -- Now we have two tables in format:
-  -- [arc_header] -> [{arc_header1_elts}, {arc_header2_elts}...]
-  for i, elts in ipairs(arr) do
+  for i, val in ipairs(hdr) do
     if not target[i] then
       target[i] = {}
     end
+
     if not is_aar then
-      -- For normal ARC headers we split by kv pair, like k=v
+      -- For ARC-Seal / ARC-Message-Signature: split by ';' then by '='
+      local elts = fun.totable(fun.map(lua_util.rspamd_str_trim,
+        fun.filter(function(v)
+            return v and #v > 0
+          end,
+          lua_util.rspamd_str_split(val.decoded, ';')
+        )
+      ))
       fun.each(function(v)
           fill_arc_header_table(v, target[i])
         end,
@@ -124,27 +139,21 @@ local function parse_arc_header(hdr, target, is_aar)
         end, elts)
       )
     else
-      -- For AAR we check special case of i=%d and pass everything else to
-      -- AAR specific parser
-      for _, elt in ipairs(elts) do
-        if string.match(elt, "%s*i%s*=%s*%d+%s*") then
-          local pair = lua_util.rspamd_str_split(elt, '=')
-          fill_arc_header_table(pair, target[i])
-        else
-          -- Normal element
-          local ar_elt = lua_auth_results.parse_ar_element(elt)
-
-          if ar_elt then
-            if not target[i].ar then
-              target[i].ar = {}
-            end
-            table.insert(target[i].ar, ar_elt)
-          end
+      -- For AAR: use LPeg-based parser that respects comments and quoted
+      -- strings when splitting on ';' (fixes #5963)
+      local parsed = lua_auth_results.parse_aar_header(val.decoded)
+      if parsed then
+        if parsed.i then
+          target[i].i = parsed.i
+        end
+        if parsed.ar then
+          target[i].ar = parsed.ar
         end
       end
     end
-    target[i].header = hdr[i].decoded
-    target[i].raw_header = hdr[i].value
+
+    target[i].header = val.decoded
+    target[i].raw_header = val.value
   end
 
   -- sort by i= attribute
@@ -321,7 +330,7 @@ local function arc_callback(task)
           else
             task:cache_set(AR_TRUSTED_CACHE_KEY, cur_aar)
             local seen_dmarc
-            for _, ar in ipairs(cur_aar.ar) do
+            for _, ar in ipairs(cur_aar.ar or {}) do
               if ar.dmarc then
                 local dmarc_fwd = ar.dmarc
                 seen_dmarc = true
@@ -544,6 +553,7 @@ rspamd_config:register_symbol({
   groups = { 'arc' },
 })
 
+-- Weak deps: ARC verification works without SPF/DKIM, just less info in AAR header
 rspamd_config:register_dependency('ARC_CHECK', 'SPF_CHECK')
 rspamd_config:register_dependency('ARC_CHECK', 'DKIM_CHECK')
 
@@ -552,7 +562,7 @@ local function arc_sign_seal(task, params, header)
   local cur_auth_results
 
   if settings.reuse_auth_results then
-    local ar_header = task:get_header('Authentication-Results')
+    local ar_header = get_trusted_ar_header(task)
 
     if ar_header then
       lua_util.debugm(N, task, 'reuse authentication results header for ARC')
@@ -732,7 +742,7 @@ local function prepare_arc_selector(task, sel)
     end
 
     if settings.reuse_auth_results then
-      local ar_header = task:get_header('Authentication-Results')
+      local ar_header = get_trusted_ar_header(task)
 
       if ar_header then
         local arc_match = arc_result_from_ar(ar_header)
@@ -928,11 +938,10 @@ end
 
 rspamd_config:register_symbol(sym_reg_tbl)
 
--- Do not sign unless checked
-rspamd_config:register_dependency(settings['sign_symbol'], 'ARC_CHECK')
--- We need to check dmarc before signing as we have to produce valid AAR header
--- see #3613
-rspamd_config:register_dependency(settings['sign_symbol'], 'DMARC_CHECK')
+-- Hard: ARC signing needs arc-seals cache from ARC_CHECK
+rspamd_config:register_dependency(settings['sign_symbol'], 'ARC_CHECK', true)
+-- Hard: ARC signing needs DMARC result for valid AAR header (#3613)
+rspamd_config:register_dependency(settings['sign_symbol'], 'DMARC_CHECK', true)
 
 if settings.adjust_dmarc and settings.whitelisted_signers_map then
   local function arc_dmarc_adjust_cb(task)
@@ -962,6 +971,7 @@ if settings.adjust_dmarc and settings.whitelisted_signers_map then
     callback = arc_dmarc_adjust_cb,
     type = 'callback',
   })
-  rspamd_config:register_dependency('ARC_DMARC_ADJUSTMENT', 'DMARC_CHECK')
-  rspamd_config:register_dependency('ARC_DMARC_ADJUSTMENT', 'ARC_CHECK')
+  -- Hard: reads both DMARC policy symbols and ARC trusted cache
+  rspamd_config:register_dependency('ARC_DMARC_ADJUSTMENT', 'DMARC_CHECK', true)
+  rspamd_config:register_dependency('ARC_DMARC_ADJUSTMENT', 'ARC_CHECK', true)
 end

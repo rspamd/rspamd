@@ -481,14 +481,6 @@ void composites_manager::process_dependencies()
 					 (int) first_pass_composites.size(), (int) second_pass_composites.size());
 }
 
-/* Context for building inverted index */
-struct inverted_index_cbdata {
-	composites_manager *cm;
-	rspamd_composite *comp;
-	bool has_positive;
-	bool has_group_atom; /* Composite uses group matcher (g:, g+:, g-:) */
-};
-
 /*
  * Count NOT operations from atom to root to determine atom polarity.
  * Even number of NOTs = positive atom (must be true for expression to be true)
@@ -511,6 +503,97 @@ atom_is_negated(GNode *atom_node)
 	return (not_count & 1) != 0;
 }
 
+/* Extract the symbol name from an expression atom string, stripping prefixes (~, -, ^)
+ * and option brackets ([...]). Returns empty string for group matchers or invalid atoms. */
+static std::string
+extract_atom_symbol_name(const rspamd_expression_atom_t *atom)
+{
+	if (atom->str == nullptr || atom->len == 0) {
+		return {};
+	}
+
+	std::string_view atom_str(atom->str, atom->len);
+
+	/* Skip prefix characters (~, -, ^) */
+	size_t sym_start = 0;
+	while (sym_start < atom_str.size() &&
+		   (atom_str[sym_start] == '~' || atom_str[sym_start] == '-' || atom_str[sym_start] == '^')) {
+		++sym_start;
+	}
+
+	if (sym_start >= atom_str.size()) {
+		return {};
+	}
+
+	std::string_view remaining = atom_str.substr(sym_start);
+
+	/* Skip group matchers: g:, g+:, g-: */
+	if (remaining.size() >= 2 && remaining.substr(0, 2) == "g:") {
+		return {};
+	}
+	if (remaining.size() >= 3 && (remaining.substr(0, 3) == "g+:" || remaining.substr(0, 3) == "g-:")) {
+		return {};
+	}
+
+	/* Find end of symbol name (before '[' if present for options) */
+	auto bracket_pos = remaining.find('[');
+	if (bracket_pos != std::string_view::npos) {
+		return std::string(remaining.substr(0, bracket_pos));
+	}
+
+	return std::string(remaining);
+}
+
+/*
+ * Recursively collect all non-composite (leaf) positive atom symbol names
+ * for a composite. Handles transitive composite references with cycle detection.
+ */
+static void
+collect_leaf_atoms(composites_manager *cm, const rspamd_composite *comp,
+				   ankerl::unordered_dense::set<std::string> &leaf_atoms,
+				   ankerl::unordered_dense::set<int> &visited)
+{
+	if (visited.contains(comp->id)) {
+		return;
+	}
+	visited.insert(comp->id);
+
+	struct walk_data {
+		composites_manager *cm;
+		ankerl::unordered_dense::set<std::string> *leaves;
+		ankerl::unordered_dense::set<int> *visited;
+	} wd{cm, &leaf_atoms, &visited};
+
+	rspamd_expression_atom_foreach_ex(comp->expr, [](GNode *node, rspamd_expression_atom_t *atom, gpointer ud) {
+			auto *wd = reinterpret_cast<walk_data *>(ud);
+
+			if (atom_is_negated(node)) {
+				return;
+			}
+
+			auto sym = extract_atom_symbol_name(atom);
+			if (sym.empty()) {
+				return;
+			}
+
+			auto *ref = wd->cm->find(sym);
+			if (ref != nullptr) {
+				/* Atom is a composite reference - recurse into it */
+				collect_leaf_atoms(wd->cm, ref, *wd->leaves, *wd->visited);
+			}
+			else {
+				wd->leaves->insert(std::move(sym));
+			} }, &wd);
+}
+
+/* Context for building inverted index */
+struct inverted_index_cbdata {
+	composites_manager *cm;
+	rspamd_composite *comp;
+	bool has_positive;
+	bool has_group_atom; /* Composite uses group matcher (g:, g+:, g-:) */
+};
+
 static void
 inverted_index_atom_callback(GNode *atom_node, rspamd_expression_atom_t *atom, gpointer ud)
 {
@@ -526,42 +609,23 @@ inverted_index_atom_callback(GNode *atom_node, rspamd_expression_atom_t *atom, g
 		return;
 	}
 
-	/* Get the atom string with correct length */
+	/* Check for group matchers first (need to look at full atom string) */
 	std::string_view atom_str(atom->str, atom->len);
-
-	/* Skip prefix characters (~, -, ^) to find the symbol name */
 	size_t sym_start = 0;
 	while (sym_start < atom_str.size() &&
 		   (atom_str[sym_start] == '~' || atom_str[sym_start] == '-' || atom_str[sym_start] == '^')) {
 		++sym_start;
 	}
-
-	if (sym_start >= atom_str.size()) {
-		return;
+	if (sym_start < atom_str.size()) {
+		auto remaining = atom_str.substr(sym_start);
+		if ((remaining.size() >= 2 && remaining.substr(0, 2) == "g:") ||
+			(remaining.size() >= 3 && (remaining.substr(0, 3) == "g+:" || remaining.substr(0, 3) == "g-:"))) {
+			cbd->has_group_atom = true;
+			return;
+		}
 	}
 
-	std::string_view remaining = atom_str.substr(sym_start);
-
-	/* Check for group matchers: g:, g+:, g-: */
-	if (remaining.size() >= 2 && remaining.substr(0, 2) == "g:") {
-		cbd->has_group_atom = true;
-		return;
-	}
-	if (remaining.size() >= 3 && (remaining.substr(0, 3) == "g+:" || remaining.substr(0, 3) == "g-:")) {
-		cbd->has_group_atom = true;
-		return;
-	}
-
-	/* Find end of symbol name (before '[' if present for options) */
-	auto bracket_pos = remaining.find('[');
-	std::string symbol_name;
-	if (bracket_pos != std::string_view::npos) {
-		symbol_name = std::string(remaining.substr(0, bracket_pos));
-	}
-	else {
-		symbol_name = std::string(remaining);
-	}
-
+	auto symbol_name = extract_atom_symbol_name(atom);
 	if (symbol_name.empty()) {
 		return;
 	}
@@ -599,6 +663,80 @@ void composites_manager::build_inverted_index()
 				msg_debug_config("composite '%s' has only negated atoms, will always be checked",
 								 comp->sym.c_str());
 			}
+		}
+	}
+
+	/*
+	 * Resolve composite references in the inverted index.
+	 *
+	 * When a composite C references another composite D as an atom, the inverted
+	 * index will have an entry D -> [C]. But D is not in the scan result at lookup
+	 * time (it gets inserted during composite evaluation), so C would never be
+	 * activated via the fast path.
+	 *
+	 * Fix: for each composite-name key in the index, recursively find its leaf
+	 * (non-composite) atoms and propagate the dependents to those leaf atoms'
+	 * entries. Then remove the composite-name keys.
+	 */
+	ankerl::unordered_dense::set<std::string> composite_keys;
+	for (const auto &[sym, _]: symbol_to_composites) {
+		if (find(sym) != nullptr) {
+			composite_keys.insert(sym);
+		}
+	}
+
+	if (!composite_keys.empty()) {
+		msg_debug_config("resolving %d composite references in inverted index",
+						 (int) composite_keys.size());
+
+		for (const auto &comp_key: composite_keys) {
+			auto it = symbol_to_composites.find(comp_key);
+			if (it == symbol_to_composites.end()) {
+				continue;
+			}
+
+			auto dependents = it->second; /* Copy before modifying the map */
+			auto *ref_comp = find(comp_key);
+
+			/* Collect all leaf (non-composite) atoms reachable from this composite */
+			ankerl::unordered_dense::set<std::string> leaf_atoms;
+			ankerl::unordered_dense::set<int> visited;
+			collect_leaf_atoms(this, ref_comp, leaf_atoms, visited);
+
+			/* Propagate dependents to each leaf atom's index entry */
+			for (const auto &leaf: leaf_atoms) {
+				auto &entry = symbol_to_composites[leaf];
+				for (auto *dep: dependents) {
+					if (std::find(entry.begin(), entry.end(), dep) == entry.end()) {
+						entry.push_back(dep);
+					}
+				}
+			}
+
+			/*
+			 * If no leaf atoms found (e.g. composite depends only on other
+			 * composites with only negated/group atoms), ensure the dependent
+			 * composites are always checked.
+			 */
+			if (leaf_atoms.empty()) {
+				for (auto *dep: dependents) {
+					if (std::find(not_only_composites.begin(),
+								  not_only_composites.end(), dep) == not_only_composites.end()) {
+						not_only_composites.push_back(dep);
+						msg_debug_config("composite '%s' depends on composite '%s' "
+										 "with no leaf atoms, will always be checked",
+										 dep->sym.c_str(), comp_key.c_str());
+					}
+				}
+			}
+
+			/* Remove the composite-name key from the index */
+			symbol_to_composites.erase(comp_key);
+
+			msg_debug_config("resolved composite reference '%s': "
+							 "propagated %d dependents to %d leaf atoms",
+							 comp_key.c_str(), (int) dependents.size(),
+							 (int) leaf_atoms.size());
 		}
 	}
 

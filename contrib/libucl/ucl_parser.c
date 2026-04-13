@@ -1386,6 +1386,14 @@ ucl_parse_key(struct ucl_parser *parser, struct ucl_chunk *chunk,
 
 	p = chunk->pos;
 
+	if (p >= chunk->end) {
+		ucl_set_err(parser, UCL_ESYNTAX,
+					"unexpected end of input while parsing key",
+					&parser->err);
+		*end_of_object = true;
+		return true;
+	}
+
 	if (*p == '.' && !(parser->flags & UCL_PARSER_DISABLE_MACRO)) {
 		ucl_chunk_skipc(chunk, p);
 		parser->prev_state = parser->state;
@@ -1760,8 +1768,9 @@ ucl_parse_value(struct ucl_parser *parser, struct ucl_chunk *chunk)
 	p = chunk->pos;
 
 	/* Skip any spaces and comments */
-	if (ucl_test_character(*p, UCL_CHARACTER_WHITESPACE_UNSAFE) ||
-		(chunk->remain >= 2 && ucl_lex_is_comment(p[0], p[1]))) {
+	if (p < chunk->end &&
+		(ucl_test_character(*p, UCL_CHARACTER_WHITESPACE_UNSAFE) ||
+		 (chunk->remain >= 2 && ucl_lex_is_comment(p[0], p[1])))) {
 		while (p < chunk->end && ucl_test_character(*p, UCL_CHARACTER_WHITESPACE_UNSAFE)) {
 			ucl_chunk_skipc(chunk, p);
 		}
@@ -2260,6 +2269,13 @@ ucl_parse_macro_value(struct ucl_parser *parser,
 
 	p = chunk->pos;
 
+	if (p >= chunk->end) {
+		ucl_set_err(parser, UCL_ESYNTAX,
+					"unexpected end of input while parsing macro value",
+					&parser->err);
+		return false;
+	}
+
 	switch (*p) {
 	case '"':
 		/* We have macro value encoded in quotes */
@@ -2291,6 +2307,12 @@ ucl_parse_macro_value(struct ucl_parser *parser,
 				break;
 			}
 			ucl_chunk_skipc(chunk, p);
+		}
+		if (p >= chunk->end) {
+			ucl_set_err(parser, UCL_ESYNTAX,
+						"unterminated macro value, missing '}'",
+						&parser->err);
+			return false;
 		}
 		*macro_start = c;
 		*macro_len = p - c;
@@ -2344,7 +2366,7 @@ ucl_parse_macro_arguments(struct ucl_parser *parser,
 	saved.remain = chunk->remain;
 	p = chunk->pos;
 
-	if (*p != '(' || chunk->remain < 2) {
+	if (chunk->remain < 2 || *p != '(') {
 		return NULL;
 	}
 
