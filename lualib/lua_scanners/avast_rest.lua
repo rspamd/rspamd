@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-]]--
+]] --
 
 --[[[
 -- @module avast_rest
@@ -63,6 +63,10 @@ local function avastrest_configure(opts)
   end
 
   conf['upstreams'] = upstream_list.create(rspamd_config, conf['servers'], conf.use_https and 443 or 8080)
+
+  if not conf.symbol_skipped then
+    conf.symbol_skipped = opts.symbol .. '_SKIPPED'
+  end
 
   if conf['upstreams'] then
     lua_util.add_debug_alias('antivirus', conf.name)
@@ -154,13 +158,19 @@ local function avastrest_check(task, content, digest, rule, maybe_part)
 
       local issues = {}
       for _, issue in ipairs(issues_obj) do
-        table.insert(issues, issue["virus"])
+        if issue["virus"] then
+          table.insert(issues, issue["virus"])
+        else
+          cached = "SKIPPED"
+          common.yield_result(task, rule, issue['warning_str'] or 'Message skipped by scanner', 0.0, 'skipped',
+            maybe_part)
+        end
       end
 
       if #issues > 0 then
         cached = issues
         common.yield_result(task, rule, cached, 1.0, nil, maybe_part)
-      else
+      elseif not cached then
         cached = "OK"
         common.log_clean(task, rule)
       end
