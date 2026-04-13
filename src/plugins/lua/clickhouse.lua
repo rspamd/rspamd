@@ -98,6 +98,43 @@ local settings = {
     run_every = '7d',
   },
   extra_columns = {},
+  -- Inject a curated set of extra_columns from a named preset. Currently
+  -- supported: "outbound" (per-sender outbound traffic profiling columns:
+  -- languages, hour-of-day, envelope-from domain, recipient domains, etc.).
+  -- User-supplied entries with the same name take precedence. Schema
+  -- migration reuses the existing extra_columns path. Unset by default.
+  preset = nil,
+}
+
+-- Named dispatch table for curated `extra_columns` presets. Each preset is an
+-- array of entries using the same shape as user-supplied `extra_columns`
+-- entries (see processing below). Selectors in these tables must be
+-- expressible with the stock selectors that ship in rspamd master. Additional
+-- presets (e.g. "inbound", "compliance") can be added as new keys here.
+local extra_column_presets = {
+  outbound = {
+    {
+      name = 'Languages',
+      type = 'Array(LowCardinality(String))',
+      selector = 'languages',
+      default_value = {},
+      comment = 'outbound preset: detected languages of text parts',
+    },
+    {
+      name = 'ReceivedCount',
+      type = 'UInt16',
+      selector = 'received_count',
+      default_value = '0',
+      comment = 'outbound preset: number of Received headers (hop count)',
+    },
+    {
+      name = 'FuzzyDigest',
+      type = 'String',
+      selector = 'fuzzy_digest',
+      default_value = '',
+      comment = 'outbound preset: strong fuzzy digest of largest text part (for fan-out aggregations)',
+    },
+  },
 }
 
 --- @language SQL
@@ -1673,6 +1710,59 @@ if opts then
 
       settings.exceptions = maps_expressions.create(rspamd_config,
           settings.exceptions, N)
+    end
+
+    if settings.preset then
+      local preset_cols = extra_column_presets[settings.preset]
+      if not preset_cols then
+        rspamd_logger.errx(rspamd_config,
+            'clickhouse: unknown preset %s, ignoring', settings.preset)
+      else
+        -- Inject curated extra_columns from the named preset. User-supplied
+        -- entries with the same name take precedence, so we collect existing
+        -- names first. We support both array and map forms of user-supplied
+        -- extra_columns (the subsequent processing loop accepts either).
+        local existing_names = {}
+        if settings.extra_columns then
+          if settings.extra_columns[1] then
+            for _, c in ipairs(settings.extra_columns) do
+              if c.name then
+                existing_names[c.name] = true
+              end
+            end
+          else
+            for k, c in pairs(settings.extra_columns) do
+              existing_names[k] = true
+              if type(c) == 'table' and c.name then
+                existing_names[c.name] = true
+              end
+            end
+          end
+        else
+          settings.extra_columns = {}
+        end
+
+        local injected = {}
+        local is_array_form = settings.extra_columns[1] ~= nil
+            or next(settings.extra_columns) == nil
+        for _, preset in ipairs(preset_cols) do
+          if not existing_names[preset.name] then
+            -- Deep copy so we do not mutate the module-level preset table
+            local entry = lua_util.deepcopy(preset)
+            if is_array_form then
+              table.insert(settings.extra_columns, entry)
+            else
+              settings.extra_columns[preset.name] = entry
+            end
+            table.insert(injected, preset.name)
+          end
+        end
+        if #injected > 0 then
+          rspamd_logger.infox(rspamd_config,
+              'clickhouse: preset %s injected extra_columns: %s',
+              settings.preset, table.concat(injected, ', '))
+        end
+      end
     end
 
     if settings.extra_columns then
