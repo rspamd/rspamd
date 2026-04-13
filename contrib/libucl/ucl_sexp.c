@@ -62,6 +62,7 @@ bool ucl_parse_csexp(struct ucl_parser *parser)
 	ucl_object_t *obj;
 	struct ucl_stack *st;
 	uint64_t len = 0;
+	unsigned int depth = 0;
 	enum {
 		start_parse,
 		read_obrace,
@@ -95,6 +96,14 @@ bool ucl_parse_csexp(struct ucl_parser *parser)
 			break;
 
 		case read_obrace:
+			if (depth >= UCL_MAX_NESTING) {
+				ucl_create_err(&parser->err,
+							   "csexp nesting too deep (over %d)",
+							   UCL_MAX_NESTING);
+				state = parse_err;
+				continue;
+			}
+
 			st = calloc(1, sizeof(*st));
 
 			if (st == NULL) {
@@ -125,6 +134,7 @@ bool ucl_parse_csexp(struct ucl_parser *parser)
 				LL_PREPEND(parser->stack, st);
 			}
 
+			depth++;
 			p++;
 			NEXT_STATE;
 
@@ -217,6 +227,9 @@ bool ucl_parse_csexp(struct ucl_parser *parser)
 
 			free(st);
 			st = NULL;
+			if (depth > 0) {
+				depth--;
+			}
 			p++;
 			NEXT_STATE;
 			break;

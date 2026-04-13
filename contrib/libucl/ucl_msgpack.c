@@ -145,9 +145,9 @@ ucl_emitter_print_int_msgpack (struct ucl_emitter_context *ctx, int64_t val)
 		/* Bithack abs */
 		uval = ((val ^ (val >> 63)) - (val >> 63));
 
-		if (val > -(1 << 5)) {
+		if (val >= -32) {
 			len = 1;
-			buf[0] = (mask_negative | uval) & 0xff;
+			buf[0] = (uint8_t) (int8_t) val;
 		}
 		else if (uval <= INT8_MAX) {
 			uint8_t v = (uint8_t)val;
@@ -770,6 +770,18 @@ ucl_msgpack_get_container (struct ucl_parser *parser,
 		/*
 		 * Insert new container to the stack
 		 */
+		unsigned int depth = 0;
+		struct ucl_stack *sp;
+		for (sp = parser->stack; sp != NULL; sp = sp->next) {
+			depth++;
+		}
+		if (depth >= UCL_MAX_NESTING) {
+			ucl_create_err(&parser->err,
+						   "msgpack containers are nested too deep (over %d)",
+						   UCL_MAX_NESTING);
+			return NULL;
+		}
+
 		if (parser->stack == NULL) {
 			parser->stack = calloc (1, sizeof (struct ucl_stack));
 
@@ -1035,15 +1047,24 @@ ucl_msgpack_consume (struct ucl_parser *parser)
 				case 1:
 					len = *p;
 					break;
-				case 2:
-					len = FROM_BE16 (*(uint16_t *)p);
+				case 2: {
+					uint16_t v;
+					memcpy(&v, p, sizeof(v));
+					len = FROM_BE16(v);
 					break;
-				case 4:
-					len = FROM_BE32 (*(uint32_t *)p);
+				}
+				case 4: {
+					uint32_t v;
+					memcpy(&v, p, sizeof(v));
+					len = FROM_BE32(v);
 					break;
-				case 8:
-					len = FROM_BE64 (*(uint64_t *)p);
+				}
+				case 8: {
+					uint64_t v;
+					memcpy(&v, p, sizeof(v));
+					len = FROM_BE64(v);
 					break;
+				}
 				default:
 					ucl_create_err (&parser->err, "invalid length of the length field: %u",
 							(unsigned)obj_parser->len);
@@ -1179,13 +1200,13 @@ ucl_msgpack_consume (struct ucl_parser *parser)
 			}
 
 			key = p;
-			keylen = len;
 
-			if (keylen > remain || keylen == 0) {
+			if (len == 0 || (int64_t) len > remain) {
 				ucl_create_err (&parser->err, "too long or empty key");
 				return false;
 			}
 
+			keylen = len;
 			p += len;
 			remain -= len;
 
@@ -1461,7 +1482,7 @@ ucl_msgpack_parse_int (struct ucl_parser *parser,
 		len = 1;
 		break;
 	case msgpack_negative_fixint:
-		obj->value.iv = - (*pos & 0x1f);
+		obj->value.iv = (int8_t) *pos;
 		len = 1;
 		break;
 	case msgpack_uint8:
