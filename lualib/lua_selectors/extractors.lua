@@ -596,23 +596,12 @@ The first argument must be header name.]],
   -- Get strong fuzzy digest of the largest text part
   ['fuzzy_digest'] = {
     ['get_value'] = function(task)
-      local tps = task:get_text_parts() or E
-      local best, best_len
-      for _, p in ipairs(tps) do
-        local len = p:get_length() or 0
-        if not best_len or len > best_len then
-          best = p
-          best_len = len
-        end
-      end
+      local best = common.largest_text_part(task)
       if not best then
         return nil
       end
-      local ok, digest = pcall(function()
-        local d = best:get_fuzzy_hashes(task:get_mempool())
-        return d
-      end)
-      if not ok or not digest then
+      local digest = best:get_fuzzy_hashes(task:get_mempool())
+      if not digest then
         return nil
       end
       return digest, 'string'
@@ -623,22 +612,12 @@ Returns nil if the message has no usable text parts.]],
   -- Get fuzzy shingles of the largest text part
   ['fuzzy_shingles'] = {
     ['get_value'] = function(task)
-      local tps = task:get_text_parts() or E
-      local best, best_len
-      for _, p in ipairs(tps) do
-        local len = p:get_length() or 0
-        if not best_len or len > best_len then
-          best = p
-          best_len = len
-        end
-      end
+      local best = common.largest_text_part(task)
       if not best then
         return {}, 'string_list'
       end
-      local ok, _, shingles = pcall(function()
-        return best:get_fuzzy_hashes(task:get_mempool())
-      end)
-      if not ok or type(shingles) ~= 'table' then
+      local _, shingles = best:get_fuzzy_hashes(task:get_mempool())
+      if type(shingles) ~= 'table' then
         return {}, 'string_list'
       end
       local res = {}
@@ -655,8 +634,7 @@ Returns an empty list if the message has no usable text parts or shingles cannot
   -- Check if the message was submitted by an authenticated user
   ['authenticated'] = {
     ['get_value'] = function(task)
-      local auser = task:get_user()
-      if auser and #auser > 0 then
+      if task:get_user() then
         return 'true', 'string'
       end
       return 'false', 'string'
@@ -667,8 +645,7 @@ otherwise 'false'. Useful as a cheap proxy for outbound/submission traffic.]],
   -- Number of Received headers (hop count)
   ['received_count'] = {
     ['get_value'] = function(task)
-      local rh = task:get_received_headers() or E
-      return tostring(#rh), 'string'
+      return tostring(task:get_header_count('Received')), 'string'
     end,
     ['description'] = [[Get the number of Received headers as a string (hop count for the message).]],
   },

@@ -89,9 +89,24 @@ local function get_cached_or_raw_digest(task, idx, mime_part, args)
   return encode_digest(h, args)
 end
 
+-- Pick the text part with the largest content length on the task.
+-- Returns the text_part or nil if the task has no text parts.
+local function largest_text_part(task)
+  local best, best_len
+  for _, p in ipairs(task:get_text_parts() or {}) do
+    local len = p:get_length() or 0
+    if not best_len or len > best_len then
+      best = p
+      best_len = len
+    end
+  end
+  return best
+end
+
 exports.create_digest = create_digest
 exports.create_raw_digest = create_raw_digest
 exports.get_cached_or_raw_digest = get_cached_or_raw_digest
 exports.encode_digest = encode_digest
+exports.largest_text_part = largest_text_part
 
 return exports
