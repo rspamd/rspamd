@@ -17,6 +17,7 @@ limitations under the License.
 local fun = require 'fun'
 local meta_functions = require "lua_meta"
 local lua_util = require "lua_util"
+local lua_mime = require "lua_mime"
 local rspamd_util = require "rspamd_util"
 local rspamd_url = require "rspamd_url"
 local common = require "lua_selectors/common"
@@ -593,10 +594,10 @@ The first argument must be header name.]],
     end,
     ['description'] = 'Get hostname of the filter server',
   },
-  -- Get strong fuzzy digest of the largest text part
+  -- Get strong fuzzy digest of the displayed text part
   ['fuzzy_digest'] = {
     ['get_value'] = function(task)
-      local best = common.largest_text_part(task)
+      local best = lua_mime.get_displayed_text_part(task)
       if not best then
         return nil
       end
@@ -606,13 +607,13 @@ The first argument must be header name.]],
       end
       return digest, 'string'
     end,
-    ['description'] = [[Get strong fuzzy digest (hex string) of the largest text part by content length.
-Returns nil if the message has no usable text parts.]],
+    ['description'] = [[Get strong fuzzy digest (hex string) of the part an MUA would display
+(see lua_mime.get_displayed_text_part). Returns nil if the message has no usable text part.]],
   },
-  -- Get fuzzy shingles of the largest text part
+  -- Get fuzzy shingles of the displayed text part
   ['fuzzy_shingles'] = {
     ['get_value'] = function(task)
-      local best = common.largest_text_part(task)
+      local best = lua_mime.get_displayed_text_part(task)
       if not best then
         return {}, 'string_list'
       end
@@ -628,8 +629,9 @@ Returns nil if the message has no usable text parts.]],
       end
       return res, 'string_list'
     end,
-    ['description'] = [[Get list of fuzzy shingle hashes (as strings) for the largest text part by content length.
-Returns an empty list if the message has no usable text parts or shingles cannot be computed.]],
+    ['description'] = [[Get list of fuzzy shingle hashes (as strings) for the part an MUA would display
+(see lua_mime.get_displayed_text_part). Returns an empty list if no usable text part exists
+or shingles cannot be computed.]],
   },
   -- Check if the message was submitted by an authenticated user
   ['authenticated'] = {
