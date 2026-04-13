@@ -411,4 +411,8 @@ function exports.parse_arf(task)
   return result
 end
 
+-- Exposed for unit tests.
+exports._parse_field_blocks = parse_field_blocks
+exports._strip_angles = strip_angles
+
 return exports
