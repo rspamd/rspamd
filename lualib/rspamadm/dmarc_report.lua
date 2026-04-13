@@ -442,8 +442,8 @@ local function send_reports_by_smtp(opts, reports, finish_cb)
           finish_cb(reports_sent, reports_failed)
         else
            if opts.batch_wait then
-              lua_util.debugm(N, 'sleeping %d seconds before next batch', opts.batch_wait)
-              os.execute("sleep " .. opts.batch_wait)
+              lua_util.debugm(N, 'sleeping %d seconds before sending next batch', opts.batch_wait)
+              rspamadm_ev_base:sleep(opts.batch_wait)
            end
           args.cont_func(args.next_start)
         end
