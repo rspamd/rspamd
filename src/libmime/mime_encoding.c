@@ -736,6 +736,7 @@ set_part_binary(struct rspamd_task *task,
 				   charset);
 	SET_PART_RAW(text_part);
 	text_part->utf_raw_content = part_content;
+	text_part->real_charset = charset;
 }
 
 void rspamd_mime_text_part_maybe_convert(struct rspamd_task *task,
