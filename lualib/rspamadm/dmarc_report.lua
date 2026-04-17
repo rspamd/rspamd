@@ -685,7 +685,7 @@ local function process_report_date(opts, start_time, end_time, date)
     -- Force garbage collection after each batch to release Redis connections
     collectgarbage("collect")
 
-    if opts.batch_wait > 0 then
+    if batch_end < #results and opts.batch_wait > 0 then
       lua_util.debugm(N, 'sleeping %d seconds before preparing next batch', opts.batch_wait)
       rspamadm_ev_base:sleep(opts.batch_wait)
     end
