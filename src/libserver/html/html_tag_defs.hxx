@@ -139,7 +139,42 @@ static const auto html_tag_defs_array = rspamd::array_of(
 	TAG_DEF(Tag_UL, "ul", (CM_BLOCK | FL_BLOCK)),
 	TAG_DEF(Tag_VAR, "var", (CM_INLINE)),
 	TAG_DEF(Tag_XMP, "xmp", (CM_BLOCK)),
-	TAG_DEF(Tag_NEXTID, "nextid", (CM_HEAD | CM_EMPTY)));
+	TAG_DEF(Tag_NEXTID, "nextid", (CM_HEAD | CM_EMPTY)),
+
+	/* HTML5 additions */
+	TAG_DEF(Tag_ARTICLE, "article", (CM_BLOCK | FL_BLOCK)),
+	TAG_DEF(Tag_ASIDE, "aside", (CM_BLOCK | FL_BLOCK)),
+	TAG_DEF(Tag_AUDIO, "audio", (CM_INLINE | FL_HREF)),
+	TAG_DEF(Tag_BDI, "bdi", (CM_INLINE)),
+	TAG_DEF(Tag_CANVAS, "canvas", (CM_INLINE)),
+	TAG_DEF(Tag_DATA, "data", (CM_INLINE)),
+	TAG_DEF(Tag_DATALIST, "datalist", (CM_INLINE)),
+	TAG_DEF(Tag_DETAILS, "details", (CM_BLOCK | FL_BLOCK)),
+	TAG_DEF(Tag_DIALOG, "dialog", (CM_BLOCK | FL_BLOCK)),
+	TAG_DEF(Tag_EMBED, "embed", (CM_INLINE | CM_EMPTY | FL_HREF)),
+	TAG_DEF(Tag_FIGCAPTION, "figcaption", (CM_BLOCK)),
+	TAG_DEF(Tag_FIGURE, "figure", (CM_BLOCK | FL_BLOCK)),
+	TAG_DEF(Tag_FOOTER, "footer", (CM_BLOCK | FL_BLOCK)),
+	TAG_DEF(Tag_HEADER, "header", (CM_BLOCK | FL_BLOCK)),
+	TAG_DEF(Tag_HGROUP, "hgroup", (CM_BLOCK)),
+	TAG_DEF(Tag_KEYGEN, "keygen", (CM_INLINE | CM_EMPTY)),
+	TAG_DEF(Tag_MAIN, "main", (CM_BLOCK | FL_BLOCK)),
+	TAG_DEF(Tag_MARK, "mark", (CM_INLINE)),
+	TAG_DEF(Tag_METER, "meter", (CM_INLINE)),
+	TAG_DEF(Tag_NAV, "nav", (CM_BLOCK | FL_BLOCK)),
+	TAG_DEF(Tag_OUTPUT, "output", (CM_INLINE)),
+	TAG_DEF(Tag_PICTURE, "picture", (CM_INLINE)),
+	TAG_DEF(Tag_PROGRESS, "progress", (CM_INLINE)),
+	TAG_DEF(Tag_SECTION, "section", (CM_BLOCK | FL_BLOCK)),
+	TAG_DEF(Tag_SLOT, "slot", (CM_INLINE)),
+	TAG_DEF(Tag_SOURCE, "source", (CM_INLINE | CM_EMPTY | FL_HREF)),
+	TAG_DEF(Tag_SUMMARY, "summary", (CM_BLOCK)),
+	TAG_DEF(Tag_SVG, "svg", (CM_INLINE)),
+	TAG_DEF(Tag_TEMPLATE, "template", (CM_INLINE | CM_RAW)),
+	TAG_DEF(Tag_TIME, "time", (CM_INLINE)),
+	TAG_DEF(Tag_TRACK, "track", (CM_INLINE | CM_EMPTY | FL_HREF)),
+	TAG_DEF(Tag_VIDEO, "video", (CM_INLINE | FL_HREF)),
+	TAG_DEF(Tag_WBR, "wbr", (CM_INLINE | CM_EMPTY)));
 
 class html_tags_storage {
 	ankerl::unordered_dense::map<std::string_view, html_tag_def> tag_by_name;

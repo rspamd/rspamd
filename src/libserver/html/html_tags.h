@@ -125,6 +125,41 @@ typedef enum {
 	Tag_VAR,         /**< VAR */
 	Tag_XMP,         /**< XMP */
 	Tag_NEXTID,      /**< NEXTID */
+
+	/* HTML5 additions */
+	Tag_ARTICLE,    /**< ARTICLE */
+	Tag_ASIDE,      /**< ASIDE */
+	Tag_AUDIO,      /**< AUDIO */
+	Tag_BDI,        /**< BDI */
+	Tag_CANVAS,     /**< CANVAS */
+	Tag_DATA,       /**< DATA */
+	Tag_DATALIST,   /**< DATALIST */
+	Tag_DETAILS,    /**< DETAILS */
+	Tag_DIALOG,     /**< DIALOG */
+	Tag_EMBED,      /**< EMBED */
+	Tag_FIGCAPTION, /**< FIGCAPTION */
+	Tag_FIGURE,     /**< FIGURE */
+	Tag_FOOTER,     /**< FOOTER */
+	Tag_HEADER,     /**< HEADER */
+	Tag_HGROUP,     /**< HGROUP */
+	Tag_MAIN,       /**< MAIN */
+	Tag_MARK,       /**< MARK */
+	Tag_METER,      /**< METER */
+	Tag_NAV,        /**< NAV */
+	Tag_OUTPUT,     /**< OUTPUT */
+	Tag_PICTURE,    /**< PICTURE */
+	Tag_PROGRESS,   /**< PROGRESS */
+	Tag_SECTION,    /**< SECTION */
+	Tag_SLOT,       /**< SLOT */
+	Tag_SOURCE,     /**< SOURCE */
+	Tag_SUMMARY,    /**< SUMMARY */
+	Tag_SVG,        /**< SVG */
+	Tag_TEMPLATE,   /**< TEMPLATE */
+	Tag_TIME,       /**< TIME */
+	Tag_TRACK,      /**< TRACK */
+	Tag_VIDEO,      /**< VIDEO */
+	Tag_WBR,        /**< WBR */
+
 	Tag_MAX,
 
 	N_TAGS = -1 /**< Must be -1 */

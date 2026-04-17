@@ -31,6 +31,7 @@
 #include <math.h>
 
 #define UTF8_CHARSET "UTF-8"
+#define RSPAMD_BINARYENC_CHARSET "x-binaryenc"
 
 #define RSPAMD_CHARSET_FLAG_UTF (1 << 0)
 #define RSPAMD_CHARSET_FLAG_ASCII (1 << 1)
@@ -725,6 +726,19 @@ rspamd_mime_charset_utf_check(rspamd_ftok_t *charset,
 	return FALSE;
 }
 
+static void
+set_part_binary(struct rspamd_task *task,
+				struct rspamd_mime_text_part *text_part,
+				GByteArray *part_content,
+				const char *charset)
+{
+	msg_debug_task("text part contains binary data (detected charset: %s), skip conversion",
+				   charset);
+	SET_PART_RAW(text_part);
+	text_part->utf_raw_content = part_content;
+	text_part->real_charset = charset;
+}
+
 void rspamd_mime_text_part_maybe_convert(struct rspamd_task *task,
 										 struct rspamd_mime_text_part *text_part)
 {
@@ -771,6 +785,10 @@ void rspamd_mime_text_part_maybe_convert(struct rspamd_task *task,
 																	  text_part->parsed.len);
 
 			if (charset != NULL) {
+				if (g_ascii_strcasecmp(charset, RSPAMD_BINARYENC_CHARSET) == 0) {
+					set_part_binary(task, text_part, part_content, charset);
+					return;
+				}
 				msg_info_task("detected charset %s", charset);
 			}
 
@@ -794,6 +812,10 @@ void rspamd_mime_text_part_maybe_convert(struct rspamd_task *task,
 			if (need_charset_heuristic) {
 				charset = rspamd_mime_charset_find_by_content_maybe_split(part_content->data,
 																		  part_content->len);
+				if (charset != NULL && g_ascii_strcasecmp(charset, RSPAMD_BINARYENC_CHARSET) == 0) {
+					set_part_binary(task, text_part, part_content, charset);
+					return;
+				}
 				msg_info_task("detected charset: %s", charset);
 				checked = TRUE;
 				text_part->real_charset = charset;
@@ -839,6 +861,11 @@ void rspamd_mime_text_part_maybe_convert(struct rspamd_task *task,
 		}
 		else {
 			charset = charset_tok.begin;
+
+			if (g_ascii_strcasecmp(charset, RSPAMD_BINARYENC_CHARSET) == 0) {
+				set_part_binary(task, text_part, part_content, charset);
+				return;
+			}
 
 			if (!rspamd_mime_text_part_utf8_convert(task, text_part,
 													part_content, charset, &err)) {
