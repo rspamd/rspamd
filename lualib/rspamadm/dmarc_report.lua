@@ -441,10 +441,10 @@ local function send_reports_by_smtp(opts, reports, finish_cb)
         if args.next_start > #reports then
           finish_cb(reports_sent, reports_failed)
         else
-           if opts.batch_wait then
-              lua_util.debugm(N, 'sleeping %d seconds before sending next batch', opts.batch_wait)
-              rspamadm_ev_base:sleep(opts.batch_wait)
-           end
+          if opts.batch_wait then
+            lua_util.debugm(N, 'sleeping %d seconds before sending next batch', opts.batch_wait)
+            rspamadm_ev_base:sleep(opts.batch_wait)
+          end
           args.cont_func(args.next_start)
         end
       end
@@ -686,8 +686,8 @@ local function process_report_date(opts, start_time, end_time, date)
     collectgarbage("collect")
 
     if opts.batch_wait then
-       lua_util.debugm(N, 'sleeping %d seconds before preparing next batch', opts.batch_wait)
-       rspamadm_ev_base:sleep(opts.batch_wait)
+      lua_util.debugm(N, 'sleeping %d seconds before preparing next batch', opts.batch_wait)
+      rspamadm_ev_base:sleep(opts.batch_wait)
     end
   end
 
