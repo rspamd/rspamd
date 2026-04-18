@@ -386,7 +386,10 @@ rspamd_session_describe_pending(struct rspamd_async_session *session)
 	GString *out;
 	unsigned int total = 0;
 	unsigned int n_groups = 0;
-	unsigned int overflow_groups = 0;
+	/* Events that did not fit into the first RSPAMD_DUMP_MAX_GROUPS groups —
+	 * these may belong to any number of distinct groups; we cannot tell without
+	 * spending more memory, so we just report the event count. */
+	unsigned int overflow_events = 0;
 	unsigned int i;
 
 	struct dump_group {
@@ -426,7 +429,7 @@ rspamd_session_describe_pending(struct rspamd_async_session *session)
 				g->count = 0;
 			}
 			else {
-				overflow_groups++;
+				overflow_events++;
 			}
 		}
 
@@ -462,8 +465,8 @@ rspamd_session_describe_pending(struct rspamd_async_session *session)
 		rspamd_printf_gstring(out, "=%ud", g->count);
 	}
 
-	if (overflow_groups > 0) {
-		rspamd_printf_gstring(out, ", (+%ud more groups)", overflow_groups);
+	if (overflow_events > 0) {
+		rspamd_printf_gstring(out, ", (+%ud events not shown)", overflow_events);
 	}
 
 	return out;
