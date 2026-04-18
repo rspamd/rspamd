@@ -327,6 +327,18 @@ rspamd_symcache_item_stat(struct rspamd_symcache_item *item)
 	return real_item->st;
 }
 
+GString *
+rspamd_symcache_describe_inflight_symbols(struct rspamd_task *task)
+{
+	if (task == nullptr || task->symcache_runtime == nullptr) {
+		return nullptr;
+	}
+
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+
+	return cache_runtime->describe_inflight_symbols();
+}
+
 void rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,
 										const char *symbol,
 										ucl_object_t *this_sym_ucl)

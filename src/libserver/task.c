@@ -1936,6 +1936,59 @@ rspamd_task_stage_name(enum rspamd_task_stage stg)
 	return ret;
 }
 
+static const char *
+rspamd_task_session_item_name_resolver(gpointer ud)
+{
+	struct rspamd_task *task = ud;
+	struct rspamd_symcache_dynamic_item *item;
+
+	if (task == NULL) {
+		return NULL;
+	}
+
+	item = rspamd_symcache_get_cur_item(task);
+	if (item == NULL) {
+		return NULL;
+	}
+
+	return rspamd_symcache_dyn_item_name(task, item);
+}
+
+struct rspamd_async_session *
+rspamd_task_create_session(struct rspamd_task *task,
+						   rspamd_mempool_t *pool,
+						   session_finalizer_t fin,
+						   event_finalizer_t restore,
+						   event_finalizer_t cleanup)
+{
+	struct rspamd_async_session *s;
+
+	g_assert(task != NULL);
+
+	s = rspamd_session_create(pool, fin, restore, cleanup, task);
+	rspamd_session_set_item_name_resolver(s, rspamd_task_session_item_name_resolver);
+
+	return s;
+}
+
+static void
+rspamd_task_timeout_log_state(struct rspamd_task *task)
+{
+	GString *pending, *inflight;
+
+	pending = rspamd_session_describe_pending(task->s);
+	if (pending != NULL) {
+		msg_info_task("pending async events at timeout: %v", pending);
+		g_string_free(pending, TRUE);
+	}
+
+	inflight = rspamd_symcache_describe_inflight_symbols(task);
+	if (inflight != NULL) {
+		msg_info_task("inflight symbols at timeout: %v", inflight);
+		g_string_free(inflight, TRUE);
+	}
+}
+
 void rspamd_task_timeout(EV_P_ ev_timer *w, int revents)
 {
 	struct rspamd_task *task = (struct rspamd_task *) w->data;
@@ -1946,6 +1999,7 @@ void rspamd_task_timeout(EV_P_ ev_timer *w, int revents)
 					  "forced processing",
 					  ev_now(task->event_loop) - task->task_timestamp,
 					  w->repeat);
+		rspamd_task_timeout_log_state(task);
 
 		if (task->cfg->soft_reject_on_timeout) {
 			struct rspamd_action *action, *soft_reject;
@@ -1975,6 +2029,7 @@ void rspamd_task_timeout(EV_P_ ev_timer *w, int revents)
 		/* Postprocessing timeout */
 		msg_info_task("post-processing of task time out: %.1f second spent; forced processing",
 					  ev_now(task->event_loop) - task->task_timestamp);
+		rspamd_task_timeout_log_state(task);
 
 		if (task->cfg->soft_reject_on_timeout) {
 			struct rspamd_action *action, *soft_reject;

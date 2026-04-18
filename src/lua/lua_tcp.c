@@ -1217,6 +1217,7 @@ lua_tcp_plan_handler_event(struct lua_tcp_cbdata *cbd, gboolean can_read,
 	}
 	else {
 		if (hdl->type == LUA_WANT_READ) {
+			rspamd_session_event_update_label(cbd->async_ev, "tcp read");
 
 			/* We need to check if we have some leftover in the buffer */
 			if (cbd->in->len > 0) {
@@ -1247,6 +1248,7 @@ lua_tcp_plan_handler_event(struct lua_tcp_cbdata *cbd, gboolean can_read,
 			}
 		}
 		else if (hdl->type == LUA_WANT_WRITE) {
+			rspamd_session_event_update_label(cbd->async_ev, "tcp write");
 			/*
 			 * We need to plan write event if there is something in the
 			 * write request
@@ -1273,6 +1275,7 @@ lua_tcp_plan_handler_event(struct lua_tcp_cbdata *cbd, gboolean can_read,
 			}
 		}
 		else { /* LUA_WANT_CONNECT */
+			rspamd_session_event_update_label(cbd->async_ev, "tcp connect");
 			msg_debug_tcp("plan new connect");
 			rspamd_ev_watcher_reschedule(cbd->event_loop, &cbd->ev,
 										 EV_WRITE);
@@ -1286,13 +1289,7 @@ lua_tcp_register_event(struct lua_tcp_cbdata *cbd)
 	if (cbd->session) {
 		event_finalizer_t fin = IS_SYNC(cbd) ? lua_tcp_void_finalyser : lua_tcp_fin;
 
-		if (cbd->item) {
-			cbd->async_ev = rspamd_session_add_event_full(cbd->session, fin, cbd, M,
-														  rspamd_symcache_dyn_item_name(cbd->task, cbd->item));
-		}
-		else {
-			cbd->async_ev = rspamd_session_add_event(cbd->session, fin, cbd, M);
-		}
+		cbd->async_ev = rspamd_session_add_event(cbd->session, fin, cbd, M);
 
 		if (!cbd->async_ev) {
 			return FALSE;

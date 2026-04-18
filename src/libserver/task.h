@@ -415,6 +415,25 @@ const char *rspamd_task_stage_name(enum rspamd_task_stage stg);
  */
 void rspamd_task_timeout(EV_P_ ev_timer *w, int revents);
 
+/**
+ * Creates an async session owned by @task and wires up the default task
+ * diagnostics resolver (used to snapshot the currently-executing symbol name
+ * on every rspamd_session_add_event). All task-scoped sessions should be
+ * created through this helper instead of calling rspamd_session_create
+ * directly, otherwise timeout logs will be missing symbol context.
+ * @param task owning task; must be non-NULL
+ * @param pool memory pool for the session
+ * @param fin session-fin callback
+ * @param restore session-restore callback (or NULL)
+ * @param cleanup session-cleanup callback (or NULL)
+ */
+struct rspamd_async_session *
+rspamd_task_create_session(struct rspamd_task *task,
+						   rspamd_mempool_t *pool,
+						   session_finalizer_t fin,
+						   event_finalizer_t restore,
+						   event_finalizer_t cleanup);
+
 /*
  * Called on unexpected IO error (e.g. ECONNRESET)
  */

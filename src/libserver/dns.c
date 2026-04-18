@@ -268,10 +268,11 @@ rspamd_dns_resolver_request(struct rspamd_dns_resolver *resolver,
 
 	if (session) {
 		if (req != NULL) {
-			rspamd_session_add_event(session,
-									 (event_finalizer_t) rspamd_dns_fin_cb,
-									 reqdata,
-									 M);
+			rspamd_session_add_event_full(session,
+										  (event_finalizer_t) rspamd_dns_fin_cb,
+										  reqdata,
+										  M,
+										  rdns_strtype(type));
 		}
 	}
 

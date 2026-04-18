@@ -153,11 +153,10 @@ rspamd_worker_call_finish_handlers(struct rspamd_worker *worker)
 		task = rspamd_task_new(worker, cfg, NULL, NULL, ctx->event_loop, FALSE);
 		task->resolver = ctx->resolver;
 		task->flags |= RSPAMD_TASK_FLAG_PROCESSING;
-		task->s = rspamd_session_create(task->task_pool,
-										rspamd_worker_finalize,
-										NULL,
-										(event_finalizer_t) rspamd_task_free,
-										task);
+		task->s = rspamd_task_create_session(task, task->task_pool,
+											 rspamd_worker_finalize,
+											 NULL,
+											 (event_finalizer_t) rspamd_task_free);
 
 		DL_FOREACH(cfg->on_term_scripts, sc)
 		{

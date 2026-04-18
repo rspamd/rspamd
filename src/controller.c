@@ -1602,11 +1602,10 @@ rspamd_controller_handle_lua_history(lua_State *L,
 									   session->pool, ctx->lang_det, ctx->event_loop, FALSE);
 
 				task->resolver = ctx->resolver;
-				task->s = rspamd_session_create(session->pool,
-												rspamd_controller_history_lua_fin_task,
-												NULL,
-												(event_finalizer_t) rspamd_task_free,
-												task);
+				task->s = rspamd_task_create_session(task, session->pool,
+													 rspamd_controller_history_lua_fin_task,
+													 NULL,
+													 (event_finalizer_t) rspamd_task_free);
 				task->fin_arg = conn_ent;
 
 				ptask = lua_newuserdata(L, sizeof(*ptask));
@@ -1951,11 +1950,10 @@ rspamd_controller_handle_lua(struct rspamd_http_connection_entry *conn_ent,
 						   ctx->lang_det, ctx->event_loop, FALSE);
 
 	task->resolver = ctx->resolver;
-	task->s = rspamd_session_create(session->pool,
-									rspamd_controller_lua_fin_task,
-									NULL,
-									(event_finalizer_t) rspamd_task_free,
-									task);
+	task->s = rspamd_task_create_session(task, session->pool,
+										 rspamd_controller_lua_fin_task,
+										 NULL,
+										 (event_finalizer_t) rspamd_task_free);
 	task->fin_arg = conn_ent;
 	task->http_conn = rspamd_http_connection_ref(conn_ent->conn);
 	task->sock = -1;
@@ -2150,11 +2148,10 @@ rspamd_controller_handle_learn_common(
 	task->resolver = ctx->resolver;
 	/* Manual learn: ensure errors are propagated (not auto-learn semantics) */
 	task->flags &= ~RSPAMD_TASK_FLAG_LEARN_AUTO;
-	task->s = rspamd_session_create(session->pool,
-									rspamd_controller_learn_fin_task,
-									NULL,
-									(event_finalizer_t) rspamd_task_free,
-									task);
+	task->s = rspamd_task_create_session(task, session->pool,
+										 rspamd_controller_learn_fin_task,
+										 NULL,
+										 (event_finalizer_t) rspamd_task_free);
 	task->fin_arg = conn_ent;
 	task->http_conn = rspamd_http_connection_ref(conn_ent->conn);
 	task->sock = -1;
@@ -2266,11 +2263,10 @@ rspamd_controller_handle_learnclass(
 	task->resolver = ctx->resolver;
 	/* Manual learn: ensure errors are propagated (not auto-learn semantics) */
 	task->flags &= ~RSPAMD_TASK_FLAG_LEARN_AUTO;
-	task->s = rspamd_session_create(session->pool,
-									rspamd_controller_learn_fin_task,
-									NULL,
-									(event_finalizer_t) rspamd_task_free,
-									task);
+	task->s = rspamd_task_create_session(task, session->pool,
+										 rspamd_controller_learn_fin_task,
+										 NULL,
+										 (event_finalizer_t) rspamd_task_free);
 	task->fin_arg = conn_ent;
 	task->http_conn = rspamd_http_connection_ref(conn_ent->conn);
 	task->sock = -1;
@@ -2337,11 +2333,10 @@ rspamd_controller_handle_scan(struct rspamd_http_connection_entry *conn_ent,
 						   ctx->lang_det, ctx->event_loop, FALSE);
 
 	task->resolver = ctx->resolver;
-	task->s = rspamd_session_create(session->pool,
-									rspamd_controller_check_fin_task,
-									NULL,
-									(event_finalizer_t) rspamd_task_free,
-									task);
+	task->s = rspamd_task_create_session(task, session->pool,
+										 rspamd_controller_check_fin_task,
+										 NULL,
+										 (event_finalizer_t) rspamd_task_free);
 	task->fin_arg = conn_ent;
 	task->http_conn = rspamd_http_connection_ref(conn_ent->conn);
 	task->sock = conn_ent->conn->fd;
@@ -3493,11 +3488,10 @@ rspamd_controller_handle_lua_plugin(struct rspamd_http_connection_entry *conn_en
 						   ctx->lang_det, ctx->event_loop, FALSE);
 
 	task->resolver = ctx->resolver;
-	task->s = rspamd_session_create(session->pool,
-									rspamd_controller_lua_fin_task,
-									NULL,
-									(event_finalizer_t) rspamd_task_free,
-									task);
+	task->s = rspamd_task_create_session(task, session->pool,
+										 rspamd_controller_lua_fin_task,
+										 NULL,
+										 (event_finalizer_t) rspamd_task_free);
 	task->fin_arg = conn_ent;
 	task->http_conn = rspamd_http_connection_ref(conn_ent->conn);
 	;

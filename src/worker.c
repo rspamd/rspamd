@@ -165,8 +165,8 @@ rspamd_worker_body_handler(struct rspamd_http_connection *conn,
 								  session);
 
 	/* Set up async session */
-	task->s = rspamd_session_create(task->task_pool, rspamd_task_fin,
-									NULL, (event_finalizer_t) rspamd_task_free, task);
+	task->s = rspamd_task_create_session(task, task->task_pool, rspamd_task_fin,
+										 NULL, (event_finalizer_t) rspamd_task_free);
 
 	if (!rspamd_protocol_handle_request(task, msg)) {
 		msg_err_task("cannot handle request: %e", task->err);

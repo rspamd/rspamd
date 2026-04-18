@@ -544,6 +544,17 @@ rspamd_symcache_item_stat(struct rspamd_symcache_item *item);
  */
 void rspamd_symcache_enable_profile(struct rspamd_task *task);
 
+/**
+ * Builds a human-readable description of symbols that have been started but
+ * have not yet finished (i.e. are blocked on async events). Intended for use
+ * from timeout handlers so operators can see which rules stalled the task.
+ * Returns NULL if there are no inflight symbols. Caller owns the returned
+ * GString and MUST free it with g_string_free(..., TRUE).
+ * @param task
+ * @return
+ */
+GString *rspamd_symcache_describe_inflight_symbols(struct rspamd_task *task);
+
 struct rspamd_symcache_timeout_item {
 	double timeout;
 	const struct rspamd_symcache_item *item;

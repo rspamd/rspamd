@@ -236,6 +236,16 @@ public:
 			slow_status = slow_status::disabled;
 		}
 	}
+
+	/**
+	 * Builds a human-readable description of symbols that have been started but
+	 * have not yet finished (i.e. are waiting on async events: DNS, Redis, HTTP,
+	 * etc.). Intended to be used from timeout handlers to surface which rules
+	 * stalled the task.
+	 * @return newly allocated GString (caller must g_string_free) or nullptr if
+	 *         no inflight symbols
+	 */
+	auto describe_inflight_symbols() const -> GString *;
 };
 
 
