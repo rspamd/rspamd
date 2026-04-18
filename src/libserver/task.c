@@ -1936,6 +1936,29 @@ rspamd_task_stage_name(enum rspamd_task_stage stg)
 	return ret;
 }
 
+static void
+rspamd_task_timeout_log_state(struct rspamd_task *task)
+{
+	GString *evt_summary = NULL, *evt_details = NULL, *inflight = NULL;
+
+	rspamd_session_describe_pending(task->s, &evt_summary, &evt_details);
+
+	if (evt_summary != NULL) {
+		msg_info_task("pending async events at timeout: %v", evt_summary);
+		g_string_free(evt_summary, TRUE);
+	}
+	if (evt_details != NULL) {
+		msg_info_task("pending async event sources: %v", evt_details);
+		g_string_free(evt_details, TRUE);
+	}
+
+	inflight = rspamd_symcache_describe_inflight_symbols(task);
+	if (inflight != NULL) {
+		msg_info_task("inflight symbols at timeout: %v", inflight);
+		g_string_free(inflight, TRUE);
+	}
+}
+
 void rspamd_task_timeout(EV_P_ ev_timer *w, int revents)
 {
 	struct rspamd_task *task = (struct rspamd_task *) w->data;
@@ -1946,6 +1969,7 @@ void rspamd_task_timeout(EV_P_ ev_timer *w, int revents)
 					  "forced processing",
 					  ev_now(task->event_loop) - task->task_timestamp,
 					  w->repeat);
+		rspamd_task_timeout_log_state(task);
 
 		if (task->cfg->soft_reject_on_timeout) {
 			struct rspamd_action *action, *soft_reject;
@@ -1975,6 +1999,7 @@ void rspamd_task_timeout(EV_P_ ev_timer *w, int revents)
 		/* Postprocessing timeout */
 		msg_info_task("post-processing of task time out: %.1f second spent; forced processing",
 					  ev_now(task->event_loop) - task->task_timestamp);
+		rspamd_task_timeout_log_state(task);
 
 		if (task->cfg->soft_reject_on_timeout) {
 			struct rspamd_action *action, *soft_reject;

@@ -265,32 +265,19 @@ void rspamd_session_cleanup(struct rspamd_async_session *session, bool forced_cl
 		int ret;
 
 		if (ev->fin != NULL) {
-			if (forced_cleanup) {
-				msg_info_session("forced removed event on destroy: %p, subsystem: %s, scheduled from: %s",
-								 ev->user_data,
-								 ev->subsystem,
-								 ev->event_source);
-			}
-			else {
-				msg_debug_session("removed event on destroy: %p, subsystem: %s",
-								  ev->user_data,
-								  ev->subsystem);
-			}
+			msg_debug_session("%sremoved event on destroy: %p, subsystem: %s, scheduled from: %s",
+							  forced_cleanup ? "forced " : "",
+							  ev->user_data,
+							  ev->subsystem,
+							  ev->event_source);
 			ev->fin(ev->user_data);
 		}
 		else {
-			if (forced_cleanup) {
-				msg_info_session("NOT forced removed event on destroy - uncancellable: "
-								 "%p, subsystem: %s, scheduled from: %s",
-								 ev->user_data,
-								 ev->subsystem,
-								 ev->event_source);
-			}
-			else {
-				msg_debug_session("NOT removed event on destroy - uncancellable: %p, subsystem: %s",
-								  ev->user_data,
-								  ev->subsystem);
-			}
+			msg_debug_session("NOT %sremoved event on destroy - uncancellable: %p, subsystem: %s, scheduled from: %s",
+							  forced_cleanup ? "forced " : "",
+							  ev->user_data,
+							  ev->subsystem,
+							  ev->event_source);
 			/* Assume an event is uncancellable, move it to a new hash table */
 			kh_put(rspamd_events_hash, uncancellable_events, ev, &ret);
 		}
@@ -298,8 +285,9 @@ void rspamd_session_cleanup(struct rspamd_async_session *session, bool forced_cl
 
 	kh_destroy(rspamd_events_hash, session->events);
 	session->events = uncancellable_events;
-	if (forced_cleanup) {
-		msg_info_session("pending %d uncancellable events", kh_size(uncancellable_events));
+	if (forced_cleanup && kh_size(uncancellable_events) > 0) {
+		msg_info_session("pending %d uncancellable events after forced cleanup",
+						 kh_size(uncancellable_events));
 	}
 	else {
 		msg_debug_session("pending %d uncancellable events", kh_size(uncancellable_events));
@@ -346,6 +334,151 @@ unsigned int rspamd_session_events_pending(struct rspamd_async_session *session)
 
 	return npending;
 }
+
+#define RSPAMD_DUMP_MAX_SUBSYSTEMS 16
+#define RSPAMD_DUMP_MAX_SOURCES_PER_SUB 4
+
+void rspamd_session_describe_pending(struct rspamd_async_session *session,
+									 GString **summary_out,
+									 GString **details_out)
+{
+	struct rspamd_async_event *ev;
+	GString *summary, *details;
+	unsigned int total = 0;
+	unsigned int n_subsystems = 0;
+	unsigned int overflow_subsystems = 0;
+	unsigned int i, j;
+
+	struct dump_source {
+		const char *source;
+		unsigned int count;
+	};
+	struct dump_subsystem {
+		const char *name;
+		unsigned int count;
+		unsigned int distinct_sources;
+		unsigned int overflow_sources;
+		struct dump_source sources[RSPAMD_DUMP_MAX_SOURCES_PER_SUB];
+	} subsystems[RSPAMD_DUMP_MAX_SUBSYSTEMS];
+
+	if (summary_out) {
+		*summary_out = NULL;
+	}
+	if (details_out) {
+		*details_out = NULL;
+	}
+
+	if (session == NULL || kh_size(session->events) == 0) {
+		return;
+	}
+
+	kh_foreach_key(session->events, ev, {
+		const char *sub = ev->subsystem ? ev->subsystem : "(null)";
+		const char *src = ev->event_source ? ev->event_source : "(null)";
+		struct dump_subsystem *s = NULL;
+		struct dump_source *src_e = NULL;
+
+		total++;
+
+		for (i = 0; i < n_subsystems; i++) {
+			if (strcmp(subsystems[i].name, sub) == 0) {
+				s = &subsystems[i];
+				break;
+			}
+		}
+
+		if (s == NULL) {
+			if (n_subsystems < RSPAMD_DUMP_MAX_SUBSYSTEMS) {
+				s = &subsystems[n_subsystems++];
+				s->name = sub;
+				s->count = 0;
+				s->distinct_sources = 0;
+				s->overflow_sources = 0;
+			}
+			else {
+				overflow_subsystems++;
+			}
+		}
+
+		if (s != NULL) {
+			s->count++;
+
+			for (j = 0; j < s->distinct_sources; j++) {
+				if (strcmp(s->sources[j].source, src) == 0) {
+					src_e = &s->sources[j];
+					break;
+				}
+			}
+
+			if (src_e == NULL) {
+				if (s->distinct_sources < RSPAMD_DUMP_MAX_SOURCES_PER_SUB) {
+					src_e = &s->sources[s->distinct_sources++];
+					src_e->source = src;
+					src_e->count = 0;
+				}
+				else {
+					s->overflow_sources++;
+				}
+			}
+
+			if (src_e != NULL) {
+				src_e->count++;
+			}
+		}
+	});
+
+	if (total == 0) {
+		return;
+	}
+
+	summary = g_string_sized_new(128);
+	rspamd_printf_gstring(summary, "total=%ud; by subsystem: ", total);
+	for (i = 0; i < n_subsystems; i++) {
+		if (i > 0) {
+			g_string_append(summary, ", ");
+		}
+		rspamd_printf_gstring(summary, "%s=%ud",
+							  subsystems[i].name, subsystems[i].count);
+	}
+	if (overflow_subsystems > 0) {
+		rspamd_printf_gstring(summary, ", (+%ud more subsystems)",
+							  overflow_subsystems);
+	}
+
+	details = g_string_sized_new(256);
+	for (i = 0; i < n_subsystems; i++) {
+		if (i > 0) {
+			g_string_append(details, "; ");
+		}
+		rspamd_printf_gstring(details, "[%s:", subsystems[i].name);
+		for (j = 0; j < subsystems[i].distinct_sources; j++) {
+			rspamd_printf_gstring(details, " %s x%ud",
+								  subsystems[i].sources[j].source,
+								  subsystems[i].sources[j].count);
+		}
+		if (subsystems[i].overflow_sources > 0) {
+			rspamd_printf_gstring(details, " (+%ud more sources)",
+								  subsystems[i].overflow_sources);
+		}
+		g_string_append_c(details, ']');
+	}
+
+	if (summary_out) {
+		*summary_out = summary;
+	}
+	else {
+		g_string_free(summary, TRUE);
+	}
+	if (details_out) {
+		*details_out = details;
+	}
+	else {
+		g_string_free(details, TRUE);
+	}
+}
+
+#undef RSPAMD_DUMP_MAX_SUBSYSTEMS
+#undef RSPAMD_DUMP_MAX_SOURCES_PER_SUB
 
 rspamd_mempool_t *
 rspamd_session_mempool(struct rspamd_async_session *session)

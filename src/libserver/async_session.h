@@ -106,6 +106,23 @@ gboolean rspamd_session_pending(struct rspamd_async_session *session);
  */
 unsigned int rspamd_session_events_pending(struct rspamd_async_session *session);
 
+/**
+ * Builds human-readable descriptions of currently-pending async events grouped
+ * by subsystem. Produces two newly-allocated GStrings written to the out-params:
+ *   - *summary_out : compact counts, e.g. "total=10; by subsystem: rspamd dns=7, fuzzy_check=3"
+ *   - *details_out : distinct call-sites per subsystem, e.g. "[rspamd dns: /path/a.c:45 x5, /path/b.c:12 x2]; [fuzzy_check: /path/c.c:88 x3]"
+ * The caller owns both strings and MUST free them with g_string_free(..., TRUE).
+ * If there are no pending events, both out-params are set to NULL.
+ * Intended to be called from timeout handlers so the caller can log with the
+ * proper task module tag (msg_info_task).
+ * @param session session to dump
+ * @param summary_out receives the summary GString (may be NULL on return)
+ * @param details_out receives the detail GString (may be NULL on return)
+ */
+void rspamd_session_describe_pending(struct rspamd_async_session *session,
+									 GString **summary_out,
+									 GString **details_out);
+
 
 /**
  * Returns TRUE if an async session is currently destroying
