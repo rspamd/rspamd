@@ -1241,9 +1241,10 @@ lua_redis_make_request(lua_State *L)
 
 		if (ret == REDIS_OK) {
 			if (ud->s) {
-				rspamd_session_add_event(ud->s,
-										 lua_redis_fin, sp_ud,
-										 M);
+				rspamd_session_add_event_full(ud->s,
+											  lua_redis_fin, sp_ud,
+											  M,
+											  sp_ud->nargs > 0 ? sp_ud->args[0] : NULL);
 
 				if (ud->item) {
 					rspamd_symcache_item_async_inc(ud->task, ud->item, M);
@@ -1611,10 +1612,11 @@ lua_redis_add_cmd(lua_State *L)
 
 		if (ret == REDIS_OK) {
 			if (ud->s) {
-				rspamd_session_add_event(ud->s,
-										 lua_redis_fin,
-										 sp_ud,
-										 M);
+				rspamd_session_add_event_full(ud->s,
+											  lua_redis_fin,
+											  sp_ud,
+											  M,
+											  sp_ud->nargs > 0 ? sp_ud->args[0] : NULL);
 
 				if (ud->item) {
 					rspamd_symcache_item_async_inc(ud->task, ud->item, M);

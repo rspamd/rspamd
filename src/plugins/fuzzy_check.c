@@ -5717,7 +5717,8 @@ register_fuzzy_client_call(struct rspamd_task *task,
 				/* Mark that we used TCP for this request */
 				rule->rate_tracker.last_was_tcp = TRUE;
 
-				rspamd_session_add_event(task->s, fuzzy_io_fin, session, M);
+				rspamd_session_add_event_full(task->s, fuzzy_io_fin, session, M,
+											  rule->name);
 				session->item = rspamd_symcache_get_cur_item(task);
 
 				if (session->item) {
@@ -5795,7 +5796,8 @@ register_fuzzy_client_call(struct rspamd_task *task,
 				rspamd_ev_watcher_start(session->event_loop, &session->ev,
 										rule->io_timeout);
 
-				rspamd_session_add_event(task->s, fuzzy_io_fin, session, M);
+				rspamd_session_add_event_full(task->s, fuzzy_io_fin, session, M,
+											  rule->name);
 				session->item = rspamd_symcache_get_cur_item(task);
 
 				if (session->item) {
@@ -6294,10 +6296,11 @@ fuzzy_check_send_lua_learn(struct fuzzy_rule *rule,
 				rspamd_ev_watcher_start(s->event_loop, &s->ev,
 										rule->io_timeout);
 
-				rspamd_session_add_event(task->s,
-										 fuzzy_controller_lua_fin,
-										 s,
-										 M);
+				rspamd_session_add_event_full(task->s,
+											  fuzzy_controller_lua_fin,
+											  s,
+											  M,
+											  rule->name);
 
 				(*saved)++;
 				ret = 1;
@@ -7189,7 +7192,8 @@ fuzzy_lua_ping_storage(lua_State *L)
 			lua_pushvalue(L, 2);
 			session->cbref = luaL_ref(L, LUA_REGISTRYINDEX);
 
-			rspamd_session_add_event(task->s, fuzzy_lua_session_fin, session, M);
+			rspamd_session_add_event_full(task->s, fuzzy_lua_session_fin, session, M,
+										  rule_found->name);
 			rspamd_ev_watcher_init(&session->ev,
 								   sock,
 								   EV_WRITE,

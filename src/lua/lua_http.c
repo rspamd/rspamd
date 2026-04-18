@@ -557,8 +557,9 @@ lua_http_make_connection(struct lua_http_cbdata *cbd)
 		}
 
 		if (cbd->session) {
-			rspamd_session_add_event(cbd->session,
-									 (event_finalizer_t) lua_http_fin, cbd, M);
+			rspamd_session_add_event_full(cbd->session,
+										  (event_finalizer_t) lua_http_fin, cbd, M,
+										  cbd->host);
 			cbd->flags |= RSPAMD_LUA_HTTP_FLAG_RESOLVED;
 		}
 
