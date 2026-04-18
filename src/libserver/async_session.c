@@ -50,7 +50,10 @@ static struct rspamd_counter_data events_count;
 
 struct rspamd_async_event {
 	const char *subsystem;
-	const char *event_source;
+	/* Snapshotted at add-time via session->item_name_resolver. May be NULL. */
+	const char *item_name;
+	/* Caller-supplied human annotation. May be NULL. */
+	const char *label;
 	event_finalizer_t fin;
 	void *user_data;
 };
@@ -91,11 +94,20 @@ struct rspamd_async_session {
 	session_finalizer_t fin;
 	event_finalizer_t restore;
 	event_finalizer_t cleanup;
+	rspamd_session_item_name_resolver_t item_name_resolver;
 	khash_t(rspamd_events_hash) * events;
 	void *user_data;
 	rspamd_mempool_t *pool;
 	unsigned int flags;
 };
+
+void rspamd_session_set_item_name_resolver(struct rspamd_async_session *session,
+										   rspamd_session_item_name_resolver_t resolver)
+{
+	if (session != NULL) {
+		session->item_name_resolver = resolver;
+	}
+}
 
 static void
 rspamd_session_dtor(gpointer d)
@@ -135,7 +147,7 @@ rspamd_session_add_event_full(struct rspamd_async_session *session,
 							  event_finalizer_t fin,
 							  gpointer user_data,
 							  const char *subsystem,
-							  const char *event_source)
+							  const char *label)
 {
 	struct rspamd_async_event *new_event;
 	int ret;
@@ -158,14 +170,19 @@ rspamd_session_add_event_full(struct rspamd_async_session *session,
 	new_event->fin = fin;
 	new_event->user_data = user_data;
 	new_event->subsystem = subsystem;
-	new_event->event_source = event_source;
+	new_event->label = label;
+	new_event->item_name = NULL;
+	if (session->item_name_resolver != NULL) {
+		new_event->item_name = session->item_name_resolver(session->user_data);
+	}
 
 	msg_debug_session("added event: %p, pending %d (+1) events, "
-					  "subsystem: %s (%s)",
+					  "subsystem: %s, item: %s, label: %s",
 					  user_data,
 					  kh_size(session->events),
 					  subsystem,
-					  event_source);
+					  new_event->item_name ? new_event->item_name : "(none)",
+					  label ? label : "(none)");
 
 	kh_put(rspamd_events_hash, session->events, new_event, &ret);
 	g_assert(ret > 0);
@@ -173,10 +190,9 @@ rspamd_session_add_event_full(struct rspamd_async_session *session,
 	return new_event;
 }
 
-void rspamd_session_remove_event_full(struct rspamd_async_session *session,
-									  event_finalizer_t fin,
-									  void *ud,
-									  const char *event_source)
+void rspamd_session_remove_event(struct rspamd_async_session *session,
+								 event_finalizer_t fin,
+								 void *ud)
 {
 	struct rspamd_async_event search_ev, *found_ev;
 	khiter_t k;
@@ -197,12 +213,13 @@ void rspamd_session_remove_event_full(struct rspamd_async_session *session,
 	k = kh_get(rspamd_events_hash, session->events, &search_ev);
 	if (k == kh_end(session->events)) {
 
-		msg_err_session("cannot find event: %p(%p) from %s (%d total events)", fin, ud,
-						event_source, (int) kh_size(session->events));
+		msg_err_session("cannot find event: %p(%p) (%d total events)", fin, ud,
+						(int) kh_size(session->events));
 		kh_foreach_key(session->events, found_ev, {
-			msg_err_session("existing event %s (%s): %p(%p)",
+			msg_err_session("existing event subsystem=%s, item=%s, label=%s: %p(%p)",
 							found_ev->subsystem,
-							found_ev->event_source,
+							found_ev->item_name ? found_ev->item_name : "(none)",
+							found_ev->label ? found_ev->label : "(none)",
 							found_ev->fin,
 							found_ev->user_data);
 		});
@@ -212,12 +229,12 @@ void rspamd_session_remove_event_full(struct rspamd_async_session *session,
 
 	found_ev = kh_key(session->events, k);
 	msg_debug_session("removed event: %p, pending %d (-1) events, "
-					  "subsystem: %s (%s), added at %s",
+					  "subsystem: %s, item: %s, label: %s",
 					  ud,
 					  kh_size(session->events),
 					  found_ev->subsystem,
-					  event_source,
-					  found_ev->event_source);
+					  found_ev->item_name ? found_ev->item_name : "(none)",
+					  found_ev->label ? found_ev->label : "(none)");
 	kh_del(rspamd_events_hash, session->events, k);
 
 	/* Remove event */
@@ -265,19 +282,21 @@ void rspamd_session_cleanup(struct rspamd_async_session *session, bool forced_cl
 		int ret;
 
 		if (ev->fin != NULL) {
-			msg_debug_session("%sremoved event on destroy: %p, subsystem: %s, scheduled from: %s",
+			msg_debug_session("%sremoved event on destroy: %p, subsystem: %s, item: %s, label: %s",
 							  forced_cleanup ? "forced " : "",
 							  ev->user_data,
 							  ev->subsystem,
-							  ev->event_source);
+							  ev->item_name ? ev->item_name : "(none)",
+							  ev->label ? ev->label : "(none)");
 			ev->fin(ev->user_data);
 		}
 		else {
-			msg_debug_session("NOT %sremoved event on destroy - uncancellable: %p, subsystem: %s, scheduled from: %s",
+			msg_debug_session("NOT %sremoved event on destroy - uncancellable: %p, subsystem: %s, item: %s, label: %s",
 							  forced_cleanup ? "forced " : "",
 							  ev->user_data,
 							  ev->subsystem,
-							  ev->event_source);
+							  ev->item_name ? ev->item_name : "(none)",
+							  ev->label ? ev->label : "(none)");
 			/* Assume an event is uncancellable, move it to a new hash table */
 			kh_put(rspamd_events_hash, uncancellable_events, ev, &ret);
 		}
@@ -338,6 +357,18 @@ unsigned int rspamd_session_events_pending(struct rspamd_async_session *session)
 #define RSPAMD_DUMP_MAX_SUBSYSTEMS 16
 #define RSPAMD_DUMP_MAX_SOURCES_PER_SUB 4
 
+static inline bool
+rspamd_str_eq_nullable(const char *a, const char *b)
+{
+	if (a == b) {
+		return true;
+	}
+	if (a == NULL || b == NULL) {
+		return false;
+	}
+	return strcmp(a, b) == 0;
+}
+
 void rspamd_session_describe_pending(struct rspamd_async_session *session,
 									 GString **summary_out,
 									 GString **details_out)
@@ -347,10 +378,12 @@ void rspamd_session_describe_pending(struct rspamd_async_session *session,
 	unsigned int total = 0;
 	unsigned int n_subsystems = 0;
 	unsigned int overflow_subsystems = 0;
+	unsigned int total_detail_entries = 0;
 	unsigned int i, j;
 
 	struct dump_source {
-		const char *source;
+		const char *item_name;
+		const char *label;
 		unsigned int count;
 	};
 	struct dump_subsystem {
@@ -374,7 +407,8 @@ void rspamd_session_describe_pending(struct rspamd_async_session *session,
 
 	kh_foreach_key(session->events, ev, {
 		const char *sub = ev->subsystem ? ev->subsystem : "(null)";
-		const char *src = ev->event_source ? ev->event_source : "(null)";
+		const char *item = ev->item_name;
+		const char *lbl = ev->label;
 		struct dump_subsystem *s = NULL;
 		struct dump_source *src_e = NULL;
 
@@ -403,26 +437,32 @@ void rspamd_session_describe_pending(struct rspamd_async_session *session,
 		if (s != NULL) {
 			s->count++;
 
-			for (j = 0; j < s->distinct_sources; j++) {
-				if (strcmp(s->sources[j].source, src) == 0) {
-					src_e = &s->sources[j];
-					break;
+			/* Events without any annotation are counted in subsystem total
+			 * only — we do not emit a detail entry for them. */
+			if (item != NULL || lbl != NULL) {
+				for (j = 0; j < s->distinct_sources; j++) {
+					if (rspamd_str_eq_nullable(s->sources[j].item_name, item) &&
+						rspamd_str_eq_nullable(s->sources[j].label, lbl)) {
+						src_e = &s->sources[j];
+						break;
+					}
 				}
-			}
 
-			if (src_e == NULL) {
-				if (s->distinct_sources < RSPAMD_DUMP_MAX_SOURCES_PER_SUB) {
-					src_e = &s->sources[s->distinct_sources++];
-					src_e->source = src;
-					src_e->count = 0;
+				if (src_e == NULL) {
+					if (s->distinct_sources < RSPAMD_DUMP_MAX_SOURCES_PER_SUB) {
+						src_e = &s->sources[s->distinct_sources++];
+						src_e->item_name = item;
+						src_e->label = lbl;
+						src_e->count = 0;
+					}
+					else {
+						s->overflow_sources++;
+					}
 				}
-				else {
-					s->overflow_sources++;
-				}
-			}
 
-			if (src_e != NULL) {
-				src_e->count++;
+				if (src_e != NULL) {
+					src_e->count++;
+				}
 			}
 		}
 	});
@@ -445,22 +485,50 @@ void rspamd_session_describe_pending(struct rspamd_async_session *session,
 							  overflow_subsystems);
 	}
 
-	details = g_string_sized_new(256);
 	for (i = 0; i < n_subsystems; i++) {
-		if (i > 0) {
-			g_string_append(details, "; ");
+		total_detail_entries += subsystems[i].distinct_sources;
+	}
+
+	if (total_detail_entries == 0) {
+		details = NULL;
+	}
+	else {
+		bool first_sub = true;
+		details = g_string_sized_new(256);
+		for (i = 0; i < n_subsystems; i++) {
+			struct dump_subsystem *s = &subsystems[i];
+
+			if (s->distinct_sources == 0) {
+				continue;
+			}
+
+			if (!first_sub) {
+				g_string_append(details, "; ");
+			}
+			first_sub = false;
+			rspamd_printf_gstring(details, "[%s:", s->name);
+			for (j = 0; j < s->distinct_sources; j++) {
+				const char *it = s->sources[j].item_name;
+				const char *lb = s->sources[j].label;
+
+				g_string_append_c(details, ' ');
+				if (it != NULL && lb != NULL) {
+					rspamd_printf_gstring(details, "%s(%s)", it, lb);
+				}
+				else if (it != NULL) {
+					rspamd_printf_gstring(details, "%s", it);
+				}
+				else {
+					rspamd_printf_gstring(details, "%s", lb);
+				}
+				rspamd_printf_gstring(details, " x%ud", s->sources[j].count);
+			}
+			if (s->overflow_sources > 0) {
+				rspamd_printf_gstring(details, " (+%ud more)",
+									  s->overflow_sources);
+			}
+			g_string_append_c(details, ']');
 		}
-		rspamd_printf_gstring(details, "[%s:", subsystems[i].name);
-		for (j = 0; j < subsystems[i].distinct_sources; j++) {
-			rspamd_printf_gstring(details, " %s x%ud",
-								  subsystems[i].sources[j].source,
-								  subsystems[i].sources[j].count);
-		}
-		if (subsystems[i].overflow_sources > 0) {
-			rspamd_printf_gstring(details, " (+%ud more sources)",
-								  subsystems[i].overflow_sources);
-		}
-		g_string_append_c(details, ']');
 	}
 
 	if (summary_out) {
@@ -472,7 +540,7 @@ void rspamd_session_describe_pending(struct rspamd_async_session *session,
 	if (details_out) {
 		*details_out = details;
 	}
-	else {
+	else if (details != NULL) {
 		g_string_free(details, TRUE);
 	}
 }

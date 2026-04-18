@@ -1936,6 +1936,24 @@ rspamd_task_stage_name(enum rspamd_task_stage stg)
 	return ret;
 }
 
+const char *
+rspamd_task_session_item_name_resolver(gpointer ud)
+{
+	struct rspamd_task *task = ud;
+	struct rspamd_symcache_dynamic_item *item;
+
+	if (task == NULL) {
+		return NULL;
+	}
+
+	item = rspamd_symcache_get_cur_item(task);
+	if (item == NULL) {
+		return NULL;
+	}
+
+	return rspamd_symcache_dyn_item_name(task, item);
+}
+
 static void
 rspamd_task_timeout_log_state(struct rspamd_task *task)
 {

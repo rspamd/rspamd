@@ -416,6 +416,12 @@ const char *rspamd_task_stage_name(enum rspamd_task_stage stg);
 void rspamd_task_timeout(EV_P_ ev_timer *w, int revents);
 
 /*
+ * Resolver used by task's async session to snapshot the name of the currently
+ * executing symcache symbol (or NULL if none). Argument is the task pointer.
+ */
+const char *rspamd_task_session_item_name_resolver(gpointer ud);
+
+/*
  * Called on unexpected IO error (e.g. ECONNRESET)
  */
 void rspamd_worker_guard_handler(EV_P_ ev_io *w, int revents);

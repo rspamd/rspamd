@@ -1607,6 +1607,8 @@ rspamd_controller_handle_lua_history(lua_State *L,
 												NULL,
 												(event_finalizer_t) rspamd_task_free,
 												task);
+				rspamd_session_set_item_name_resolver(task->s,
+													  rspamd_task_session_item_name_resolver);
 				task->fin_arg = conn_ent;
 
 				ptask = lua_newuserdata(L, sizeof(*ptask));

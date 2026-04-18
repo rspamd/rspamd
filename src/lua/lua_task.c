@@ -8150,13 +8150,9 @@ lua_task_add_timer(lua_State *L)
 	cbdata->task = task;
 	cbdata->item = rspamd_symcache_get_cur_item(task);
 
+	cbdata->async_ev = rspamd_session_add_event(task->s, lua_timer_fin, cbdata, "timer");
 	if (cbdata->item) {
-		cbdata->async_ev = rspamd_session_add_event_full(task->s, lua_timer_fin, cbdata, "timer",
-														 rspamd_symcache_dyn_item_name(cbdata->task, cbdata->item));
 		rspamd_symcache_item_async_inc(task, cbdata->item, "timer");
-	}
-	else {
-		cbdata->async_ev = rspamd_session_add_event(task->s, lua_timer_fin, cbdata, "timer");
 	}
 
 	ev_timer_init(&cbdata->ev, lua_task_timer_cb, lua_tonumber(L, 2), 0.0);
