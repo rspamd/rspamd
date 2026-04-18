@@ -1936,7 +1936,7 @@ rspamd_task_stage_name(enum rspamd_task_stage stg)
 	return ret;
 }
 
-const char *
+static const char *
 rspamd_task_session_item_name_resolver(gpointer ud)
 {
 	struct rspamd_task *task = ud;
@@ -1954,20 +1954,32 @@ rspamd_task_session_item_name_resolver(gpointer ud)
 	return rspamd_symcache_dyn_item_name(task, item);
 }
 
+struct rspamd_async_session *
+rspamd_task_create_session(struct rspamd_task *task,
+						   rspamd_mempool_t *pool,
+						   session_finalizer_t fin,
+						   event_finalizer_t restore,
+						   event_finalizer_t cleanup)
+{
+	struct rspamd_async_session *s;
+
+	g_assert(task != NULL);
+
+	s = rspamd_session_create(pool, fin, restore, cleanup, task);
+	rspamd_session_set_item_name_resolver(s, rspamd_task_session_item_name_resolver);
+
+	return s;
+}
+
 static void
 rspamd_task_timeout_log_state(struct rspamd_task *task)
 {
-	GString *evt_summary = NULL, *evt_details = NULL, *inflight = NULL;
+	GString *pending, *inflight;
 
-	rspamd_session_describe_pending(task->s, &evt_summary, &evt_details);
-
-	if (evt_summary != NULL) {
-		msg_info_task("pending async events at timeout: %v", evt_summary);
-		g_string_free(evt_summary, TRUE);
-	}
-	if (evt_details != NULL) {
-		msg_info_task("pending async event sources: %v", evt_details);
-		g_string_free(evt_details, TRUE);
+	pending = rspamd_session_describe_pending(task->s);
+	if (pending != NULL) {
+		msg_info_task("pending async events at timeout: %v", pending);
+		g_string_free(pending, TRUE);
 	}
 
 	inflight = rspamd_symcache_describe_inflight_symbols(task);

@@ -125,25 +125,20 @@ gboolean rspamd_session_pending(struct rspamd_async_session *session);
 unsigned int rspamd_session_events_pending(struct rspamd_async_session *session);
 
 /**
- * Builds human-readable descriptions of currently-pending async events grouped
- * by subsystem. Produces two newly-allocated GStrings written to the out-params:
- *   - *summary_out : compact counts, e.g. "total=10; by subsystem: rspamd dns=7, fuzzy_check=3"
- *   - *details_out : within each subsystem, distinct (item, label) pairs with
- *                    counts, e.g. "[rspamd dns: RBL_FOO x5, SURBL_CHECK x2]; [rspamd lua tcp: RATELIMIT_CHECK(tcp write) x1]"
- * Events that have neither an owning item nor a label are counted in the summary
- * but omitted from the detail line. The caller owns both strings and MUST free
- * them with g_string_free(..., TRUE). If there are no pending events, both
- * out-params are set to NULL; if there are events but none of them carry
- * detail, details_out is set to NULL while summary_out is populated.
+ * Builds a single human-readable line describing all currently-pending async
+ * events, grouped by the (subsystem, item_name, label) triple. Each group is
+ * rendered as "<subsystem>[<item>/<label>]=N" when both item and label are
+ * known, degrading to "<subsystem>[<item>]=N", "<subsystem>[<label>]=N", or
+ * bare "<subsystem>=N" if fields are missing. Example output:
+ *   "total=5; rspamd dns[RBL_FOO]=3, rspamd dns[SURBL]=1, rspamd lua http[X]=1"
+ * Returns a newly-allocated GString that the caller MUST free with
+ * g_string_free(..., TRUE), or NULL if there are no pending events.
  * Intended to be called from timeout handlers so the caller can log with the
  * proper task module tag (msg_info_task).
  * @param session session to dump
- * @param summary_out receives the summary GString (may be NULL on return)
- * @param details_out receives the detail GString (may be NULL on return)
+ * @return newly-allocated GString or NULL
  */
-void rspamd_session_describe_pending(struct rspamd_async_session *session,
-									 GString **summary_out,
-									 GString **details_out);
+GString *rspamd_session_describe_pending(struct rspamd_async_session *session);
 
 
 /**

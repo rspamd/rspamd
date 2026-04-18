@@ -2800,8 +2800,8 @@ rspamd_proxy_self_scan(struct rspamd_proxy_session *session)
 
 	task->fin_arg = session;
 	task->resolver = session->ctx->resolver;
-	task->s = rspamd_session_create(task->task_pool, rspamd_proxy_task_fin,
-									NULL, (event_finalizer_t) rspamd_task_free, task);
+	task->s = rspamd_task_create_session(task, task->task_pool, rspamd_proxy_task_fin,
+										 NULL, (event_finalizer_t) rspamd_task_free);
 	data = rspamd_http_message_get_body(msg, &len);
 
 	if (session->backend->settings_id) {

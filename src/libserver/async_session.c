@@ -369,182 +369,99 @@ rspamd_str_eq_nullable(const char *a, const char *b)
 	return strcmp(a, b) == 0;
 }
 
-void rspamd_session_describe_pending(struct rspamd_async_session *session,
-									 GString **summary_out,
-									 GString **details_out)
+#define RSPAMD_DUMP_MAX_GROUPS 32
+
+GString *
+rspamd_session_describe_pending(struct rspamd_async_session *session)
 {
 	struct rspamd_async_event *ev;
-	GString *summary, *details;
+	GString *out;
 	unsigned int total = 0;
-	unsigned int n_subsystems = 0;
-	unsigned int overflow_subsystems = 0;
-	unsigned int total_detail_entries = 0;
-	unsigned int i, j;
+	unsigned int n_groups = 0;
+	unsigned int overflow_groups = 0;
+	unsigned int i;
 
-	struct dump_source {
+	struct dump_group {
+		const char *subsystem;
 		const char *item_name;
 		const char *label;
 		unsigned int count;
-	};
-	struct dump_subsystem {
-		const char *name;
-		unsigned int count;
-		unsigned int distinct_sources;
-		unsigned int overflow_sources;
-		struct dump_source sources[RSPAMD_DUMP_MAX_SOURCES_PER_SUB];
-	} subsystems[RSPAMD_DUMP_MAX_SUBSYSTEMS];
-
-	if (summary_out) {
-		*summary_out = NULL;
-	}
-	if (details_out) {
-		*details_out = NULL;
-	}
+	} groups[RSPAMD_DUMP_MAX_GROUPS];
 
 	if (session == NULL || kh_size(session->events) == 0) {
-		return;
+		return NULL;
 	}
 
 	kh_foreach_key(session->events, ev, {
 		const char *sub = ev->subsystem ? ev->subsystem : "(null)";
 		const char *item = ev->item_name;
 		const char *lbl = ev->label;
-		struct dump_subsystem *s = NULL;
-		struct dump_source *src_e = NULL;
+		struct dump_group *g = NULL;
 
 		total++;
 
-		for (i = 0; i < n_subsystems; i++) {
-			if (strcmp(subsystems[i].name, sub) == 0) {
-				s = &subsystems[i];
+		for (i = 0; i < n_groups; i++) {
+			if (strcmp(groups[i].subsystem, sub) == 0 &&
+				rspamd_str_eq_nullable(groups[i].item_name, item) &&
+				rspamd_str_eq_nullable(groups[i].label, lbl)) {
+				g = &groups[i];
 				break;
 			}
 		}
 
-		if (s == NULL) {
-			if (n_subsystems < RSPAMD_DUMP_MAX_SUBSYSTEMS) {
-				s = &subsystems[n_subsystems++];
-				s->name = sub;
-				s->count = 0;
-				s->distinct_sources = 0;
-				s->overflow_sources = 0;
+		if (g == NULL) {
+			if (n_groups < RSPAMD_DUMP_MAX_GROUPS) {
+				g = &groups[n_groups++];
+				g->subsystem = sub;
+				g->item_name = item;
+				g->label = lbl;
+				g->count = 0;
 			}
 			else {
-				overflow_subsystems++;
+				overflow_groups++;
 			}
 		}
 
-		if (s != NULL) {
-			s->count++;
-
-			/* Events without any annotation are counted in subsystem total
-			 * only — we do not emit a detail entry for them. */
-			if (item != NULL || lbl != NULL) {
-				for (j = 0; j < s->distinct_sources; j++) {
-					if (rspamd_str_eq_nullable(s->sources[j].item_name, item) &&
-						rspamd_str_eq_nullable(s->sources[j].label, lbl)) {
-						src_e = &s->sources[j];
-						break;
-					}
-				}
-
-				if (src_e == NULL) {
-					if (s->distinct_sources < RSPAMD_DUMP_MAX_SOURCES_PER_SUB) {
-						src_e = &s->sources[s->distinct_sources++];
-						src_e->item_name = item;
-						src_e->label = lbl;
-						src_e->count = 0;
-					}
-					else {
-						s->overflow_sources++;
-					}
-				}
-
-				if (src_e != NULL) {
-					src_e->count++;
-				}
-			}
+		if (g != NULL) {
+			g->count++;
 		}
 	});
 
 	if (total == 0) {
-		return;
+		return NULL;
 	}
 
-	summary = g_string_sized_new(128);
-	rspamd_printf_gstring(summary, "total=%ud; by subsystem: ", total);
-	for (i = 0; i < n_subsystems; i++) {
+	out = g_string_sized_new(256);
+	rspamd_printf_gstring(out, "total=%ud; ", total);
+
+	for (i = 0; i < n_groups; i++) {
+		const struct dump_group *g = &groups[i];
+
 		if (i > 0) {
-			g_string_append(summary, ", ");
+			g_string_append(out, ", ");
 		}
-		rspamd_printf_gstring(summary, "%s=%ud",
-							  subsystems[i].name, subsystems[i].count);
-	}
-	if (overflow_subsystems > 0) {
-		rspamd_printf_gstring(summary, ", (+%ud more subsystems)",
-							  overflow_subsystems);
-	}
 
-	for (i = 0; i < n_subsystems; i++) {
-		total_detail_entries += subsystems[i].distinct_sources;
-	}
-
-	if (total_detail_entries == 0) {
-		details = NULL;
-	}
-	else {
-		bool first_sub = true;
-		details = g_string_sized_new(256);
-		for (i = 0; i < n_subsystems; i++) {
-			struct dump_subsystem *s = &subsystems[i];
-
-			if (s->distinct_sources == 0) {
-				continue;
-			}
-
-			if (!first_sub) {
-				g_string_append(details, "; ");
-			}
-			first_sub = false;
-			rspamd_printf_gstring(details, "[%s:", s->name);
-			for (j = 0; j < s->distinct_sources; j++) {
-				const char *it = s->sources[j].item_name;
-				const char *lb = s->sources[j].label;
-
-				g_string_append_c(details, ' ');
-				if (it != NULL && lb != NULL) {
-					rspamd_printf_gstring(details, "%s(%s)", it, lb);
-				}
-				else if (it != NULL) {
-					rspamd_printf_gstring(details, "%s", it);
-				}
-				else {
-					rspamd_printf_gstring(details, "%s", lb);
-				}
-				rspamd_printf_gstring(details, " x%ud", s->sources[j].count);
-			}
-			if (s->overflow_sources > 0) {
-				rspamd_printf_gstring(details, " (+%ud more)",
-									  s->overflow_sources);
-			}
-			g_string_append_c(details, ']');
+		g_string_append(out, g->subsystem);
+		if (g->item_name != NULL && g->label != NULL) {
+			rspamd_printf_gstring(out, "[%s/%s]", g->item_name, g->label);
 		}
+		else if (g->item_name != NULL) {
+			rspamd_printf_gstring(out, "[%s]", g->item_name);
+		}
+		else if (g->label != NULL) {
+			rspamd_printf_gstring(out, "[%s]", g->label);
+		}
+		rspamd_printf_gstring(out, "=%ud", g->count);
 	}
 
-	if (summary_out) {
-		*summary_out = summary;
+	if (overflow_groups > 0) {
+		rspamd_printf_gstring(out, ", (+%ud more groups)", overflow_groups);
 	}
-	else {
-		g_string_free(summary, TRUE);
-	}
-	if (details_out) {
-		*details_out = details;
-	}
-	else if (details != NULL) {
-		g_string_free(details, TRUE);
-	}
+
+	return out;
 }
 
+#undef RSPAMD_DUMP_MAX_GROUPS
 #undef RSPAMD_DUMP_MAX_SUBSYSTEMS
 #undef RSPAMD_DUMP_MAX_SOURCES_PER_SUB
 
