@@ -83,6 +83,18 @@ rspamd_session_add_event_full(struct rspamd_async_session *session,
 	rspamd_session_add_event_full(session, fin, user_data, subsystem, NULL)
 
 /**
+ * Updates the label (human annotation) of an already-registered event.
+ * Intended for callers whose event is long-lived (e.g. a TCP connection)
+ * and whose "current operation" (read / write / connect) changes during
+ * the event's lifetime. The new label must remain valid until the event
+ * is removed or the label is updated again.
+ * @param ev event returned by rspamd_session_add_event[_full]; may be NULL (no-op)
+ * @param label new label or NULL to clear
+ */
+void rspamd_session_event_update_label(struct rspamd_async_event *ev,
+									   const char *label);
+
+/**
  * Remove normal event
  * @param session session object
  * @param fin final callback

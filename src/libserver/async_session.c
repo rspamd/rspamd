@@ -190,6 +190,14 @@ rspamd_session_add_event_full(struct rspamd_async_session *session,
 	return new_event;
 }
 
+void rspamd_session_event_update_label(struct rspamd_async_event *ev,
+									   const char *label)
+{
+	if (ev != NULL) {
+		ev->label = label;
+	}
+}
+
 void rspamd_session_remove_event(struct rspamd_async_session *session,
 								 event_finalizer_t fin,
 								 void *ud)
