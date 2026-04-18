@@ -104,6 +104,13 @@ bool rspamd_symcache_add_symbol_augmentation(struct rspamd_symcache *cache,
 
 	/* Handle empty or absent strings equally */
 	if (value == nullptr || value[0] == '\0') {
+		/* Check if augmentation uses "key=value" format */
+		const char *eq = strchr(augmentation, '=');
+		if (eq != nullptr && eq != augmentation && eq[1] != '\0') {
+			return item->add_augmentation(*real_cache,
+										  std::string_view{augmentation, static_cast<size_t>(eq - augmentation)},
+										  std::string_view{eq + 1});
+		}
 		return item->add_augmentation(*real_cache, augmentation, std::nullopt);
 	}
 

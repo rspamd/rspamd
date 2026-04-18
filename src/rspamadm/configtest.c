@@ -19,6 +19,7 @@
 #include "cfg_rcl.h"
 #include "rspamd.h"
 #include "lua/lua_common.h"
+#include "worker_util.h"
 
 static gboolean quiet = FALSE;
 static char *config = NULL;
@@ -151,6 +152,23 @@ rspamadm_configtest(int argc, char **argv, const struct rspamadm_command *cmd)
 											 cfg,
 											 FALSE)) {
 			ret = FALSE;
+		}
+
+		if (ret) {
+			rspamd_worker_check_and_adjust_timeout(cfg, cfg->task_timeout);
+			/* Also check per-worker task_timeout overrides */
+			for (GList *cur = cfg->workers; cur != NULL; cur = g_list_next(cur)) {
+				struct rspamd_worker_conf *wcf = (struct rspamd_worker_conf *) cur->data;
+				if (wcf->options) {
+					const ucl_object_t *to = ucl_object_lookup(wcf->options, "task_timeout");
+					if (to == NULL) {
+						to = ucl_object_lookup(wcf->options, "check_timeout");
+					}
+					if (to != NULL) {
+						rspamd_worker_check_and_adjust_timeout(cfg, ucl_object_todouble(to));
+					}
+				}
+			}
 		}
 
 		if (ret) {
