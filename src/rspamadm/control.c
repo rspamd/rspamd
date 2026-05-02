@@ -85,7 +85,8 @@ rspamadm_control_help(gboolean full_help, const struct rspamadm_command *cmd)
 				   "recompile - recompile hyperscan regexes\n"
 				   "fuzzystat - show fuzzy statistics\n"
 				   "fuzzysync - immediately sync fuzzy database to storage\n"
-				   "compositesstats - show composites processing statistics\n";
+				   "compositesstats - show composites processing statistics\n"
+				   "memstat - show memory usage statistics across all workers\n";
 	}
 	else {
 		help_str = "Manage rspamd main control interface";
@@ -136,6 +137,18 @@ rspamd_control_finish_handler(struct rspamd_http_connection *conn,
 											  &cbdata->argv[1],
 											  obj,
 											  "fuzzy_stat",
+											  TRUE);
+
+				rspamd_fstring_free(out);
+				ucl_object_unref(obj);
+				ucl_parser_free(parser);
+				goto end;
+			}
+			else if (strcmp(cbdata->path, "/memstat") == 0) {
+				rspamadm_execute_lua_ucl_subr(cbdata->argc - 1,
+											  &cbdata->argv[1],
+											  obj,
+											  "memstat",
 											  TRUE);
 
 				rspamd_fstring_free(out);
@@ -219,6 +232,10 @@ rspamadm_control(int argc, char **argv, const struct rspamadm_command *_cmd)
 	else if (g_ascii_strcasecmp(cmd, "compositesstats") == 0 ||
 			 g_ascii_strcasecmp(cmd, "composites_stats") == 0) {
 		path = "/compositesstats";
+	}
+	else if (g_ascii_strcasecmp(cmd, "memstat") == 0 ||
+			 g_ascii_strcasecmp(cmd, "mem_stat") == 0) {
+		path = "/memstat";
 	}
 	else {
 		rspamd_fprintf(stderr, "unknown command: %s\n", cmd);

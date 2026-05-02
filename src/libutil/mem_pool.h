@@ -374,6 +374,30 @@ void rspamd_mempool_stat(rspamd_mempool_stat_t *st);
 void rspamd_mempool_stat_reset(void);
 
 /**
+ * Per-callsite mempool statistics, aggregated from the rolling history
+ */
+typedef struct rspamd_mempool_entry_stat_s {
+	const char *src;            /**< callsite location string (file:line)    */
+	uint32_t cur_suggestion;    /**< current suggested pool size              */
+	uint32_t cur_elts;          /**< suggested number of preallocated elts    */
+	uint32_t cur_vars;          /**< suggested number of preallocated vars    */
+	uint32_t cur_dtors;         /**< suggested number of preallocated dtors   */
+	uint32_t avg_fragmentation; /**< average fragmentation across history     */
+	uint32_t avg_leftover;      /**< average leftover across history          */
+	uint32_t samples;           /**< number of valid samples used for averages */
+} rspamd_mempool_entry_stat_t;
+
+typedef void (*rspamd_mempool_entry_cb)(const rspamd_mempool_entry_stat_t *stat,
+										void *ud);
+
+/**
+ * Iterate over all currently registered mempool callsite entries.
+ * The callback is invoked synchronously for each entry; the rspamd_mempool_entry_stat_t
+ * pointer and its src field are valid only for the duration of the callback.
+ */
+void rspamd_mempool_entries_foreach(rspamd_mempool_entry_cb cb, void *ud);
+
+/**
  * Get optimal pool size based on page size for this system
  * @return size of memory page in system
  */

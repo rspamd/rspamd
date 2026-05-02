@@ -1105,6 +1105,28 @@ void rspamd_lua_start_gc(struct rspamd_config *cfg)
 	lua_gc(L, LUA_GCRESTART, 0);
 }
 
+gsize rspamd_lua_get_memory_used(lua_State *L)
+{
+	int kb;
+	int rem;
+
+	if (L == NULL) {
+		return 0;
+	}
+
+	kb = lua_gc(L, LUA_GCCOUNT, 0);
+	rem = lua_gc(L, LUA_GCCOUNTB, 0);
+
+	if (kb < 0) {
+		kb = 0;
+	}
+	if (rem < 0) {
+		rem = 0;
+	}
+
+	return (gsize) kb * 1024 + (gsize) rem;
+}
+
 
 void rspamd_plugins_table_push_elt(lua_State *L, const char *field_name,
 								   const char *new_elt)

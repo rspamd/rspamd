@@ -1026,6 +1026,46 @@ void rspamd_mempool_stat_reset(void)
 	}
 }
 
+void rspamd_mempool_entries_foreach(rspamd_mempool_entry_cb cb, void *ud)
+{
+	khiter_t k;
+
+	if (cb == NULL || mempool_entries == NULL) {
+		return;
+	}
+
+	for (k = kh_begin(mempool_entries); k != kh_end(mempool_entries); ++k) {
+		if (!kh_exist(mempool_entries, k)) {
+			continue;
+		}
+
+		struct rspamd_mempool_entry_point *elt = kh_value(mempool_entries, k);
+		rspamd_mempool_entry_stat_t st;
+		uint64_t sum_frag = 0;
+		uint64_t sum_left = 0;
+		unsigned int valid = 0;
+
+		for (unsigned int i = 0; i < G_N_ELEMENTS(elt->elts); i++) {
+			if (elt->elts[i].fragmentation != 0 || elt->elts[i].leftover != 0) {
+				sum_frag += elt->elts[i].fragmentation;
+				sum_left += elt->elts[i].leftover;
+				valid++;
+			}
+		}
+
+		st.src = elt->src;
+		st.cur_suggestion = elt->cur_suggestion;
+		st.cur_elts = elt->cur_elts;
+		st.cur_vars = elt->cur_vars;
+		st.cur_dtors = elt->cur_dtors;
+		st.samples = valid;
+		st.avg_fragmentation = valid ? (uint32_t) (sum_frag / valid) : 0;
+		st.avg_leftover = valid ? (uint32_t) (sum_left / valid) : 0;
+
+		cb(&st, ud);
+	}
+}
+
 gsize rspamd_mempool_suggest_size_(const char *loc)
 {
 	return 0;

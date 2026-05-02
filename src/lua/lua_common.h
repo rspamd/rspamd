@@ -251,6 +251,12 @@ void rspamd_lua_close(lua_State *L);
 void rspamd_lua_start_gc(struct rspamd_config *cfg);
 
 /**
+ * Returns the total amount of memory currently used by the Lua heap, in bytes.
+ * Combines LUA_GCCOUNT (kilobytes) and LUA_GCCOUNTB (bytes remainder).
+ */
+gsize rspamd_lua_get_memory_used(lua_State *L);
+
+/**
 * Sets field in a global variable
 * @param L
 * @param global_name
