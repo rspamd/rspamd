@@ -681,7 +681,7 @@ local function elastic_collect(task)
   if nlogs >= settings['limits']['max_rows'] * 10 then
     rspamd_logger.errx(task, 'row count limit exceeded 10x: %s rows (limit %s), discarding data',
         nlogs, settings['limits']['max_rows'])
-    buffer['logs'] = lua_util.newdeque()
+    buffer['logs'] = Queue:new()
     collectgarbage()
     return
   end
