@@ -44,6 +44,13 @@ dofile(local_rules .. '/content.lua')
 dofile(local_rules .. '/fuzzy_html_phishing.lua')
 dofile(local_rules .. '/controller/init.lua')
 
+-- Structured custom code: lua.local.d/{selectors,maps,regexps}/*.lua are loaded
+-- before rspamd.local.lua so end-user customisation can still override them.
+local lua_extras = require "lua_extras"
+for _, kind in ipairs({ 'selectors', 'maps', 'regexps' }) do
+  lua_extras.load_dir(rspamd_config, local_conf .. '/lua.local.d/' .. kind, kind)
+end
+
 if rspamd_util.file_exists(local_conf .. '/rspamd.local.lua') then
   dofile(local_conf .. '/rspamd.local.lua')
 else

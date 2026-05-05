@@ -1,0 +1,33 @@
+-- Custom selector definitions loaded by lua_extras at config time.
+--
+-- Each file in $LOCAL_CONFDIR/lua.local.d/selectors/*.lua must return a table
+-- where keys are selector names and values are either:
+--   * a function(task) returning the value, or
+--   * a full selector definition table:
+--       { get_value = function(task, args) ... end,
+--         description = '...',         -- optional
+--         type        = 'string',      -- optional, default 'string'
+--         args_schema = { ... } }      -- optional argument validation
+--
+-- Selectors registered here are available anywhere selectors are accepted
+-- (settings, multimap, ratelimit, redirector, classifiers, ...).
+
+return {
+  -- A trivial selector returning the message id with a fixed prefix.
+  example_msgid = function(task)
+    local mid = task:get_message_id()
+    if not mid then
+      return nil
+    end
+    return 'mid:' .. mid
+  end,
+
+  -- A selector with a description and explicit return type.
+  example_helo = {
+    description = 'SMTP HELO/EHLO string',
+    type        = 'string',
+    get_value   = function(task)
+      return task:get_helo()
+    end,
+  },
+}

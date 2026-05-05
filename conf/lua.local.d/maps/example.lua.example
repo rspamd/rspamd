@@ -1,0 +1,24 @@
+-- Custom map definitions loaded by lua_extras at config time.
+--
+-- Each file in $LOCAL_CONFDIR/lua.local.d/maps/*.lua must return a table
+-- where keys are map names and values are the argument table accepted by
+-- rspamd_config:add_map{...}, see https://rspamd.com/doc/lua/config.html.
+--
+-- Registered maps are stored in the global `rspamd_maps` table so other
+-- lua code can look them up by name.
+
+return {
+  -- A simple set map loaded from a file (URL can also be http(s):// etc).
+  example_local_domains = {
+    type        = 'set',
+    description = 'Locally hosted domains',
+    url         = '${LOCAL_CONFDIR}/local_domains.list',
+  },
+
+  -- A regexp map of keys to string values.
+  example_brand_regexps = {
+    type        = 'regexp',
+    description = 'Brand name regexps',
+    url         = '${LOCAL_CONFDIR}/brand_regexps.list',
+  },
+}
