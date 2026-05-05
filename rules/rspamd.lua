@@ -44,12 +44,14 @@ dofile(local_rules .. '/content.lua')
 dofile(local_rules .. '/fuzzy_html_phishing.lua')
 dofile(local_rules .. '/controller/init.lua')
 
--- Structured custom code: lua.local.d/{selectors,maps,regexps}/*.lua are loaded
+-- Structured custom code: lua.local.d/{maps,selectors,regexps}/*.lua are loaded
 -- before rspamd.local.lua so end-user customisation can still override them.
+-- The loader is two-phase: every file is read first, then entries are registered
+-- in maps -> selectors -> regexps order so cross-kind dependencies (e.g. a
+-- selector that captures rspamd_maps[name] or compiles an rspamd_regexp from a
+-- map) work via lua_extras.deferred(factory).
 local lua_extras = require "lua_extras"
-for _, kind in ipairs({ 'selectors', 'maps', 'regexps' }) do
-  lua_extras.load_dir(rspamd_config, local_conf .. '/lua.local.d/' .. kind, kind)
-end
+lua_extras.load_extras(rspamd_config, local_conf .. '/lua.local.d')
 
 if rspamd_util.file_exists(local_conf .. '/rspamd.local.lua') then
   dofile(local_conf .. '/rspamd.local.lua')

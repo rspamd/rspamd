@@ -17,12 +17,19 @@ limitations under the License.
 --[[[
 -- @module lua_extras
 -- Helpers and a directory loader for shipping custom selectors, maps and
--- regexp rules from $LOCAL_CONFDIR/lua.local.d/{selectors,maps,regexps}/*.lua
+-- regexp rules from $LOCAL_CONFDIR/lua.local.d/{maps,selectors,regexps}/*.lua
 -- without touching rspamd.local.lua.
 --
--- Each structured file is expected to `return` a table whose entries are
--- registered with the matching helper. Errors in any single file are logged
--- and do not abort startup.
+-- Loading is two-phase: phase 1 collects every entry from every file into
+-- staging buffers; phase 2 resolves and registers them in dependency order
+-- (maps -> selectors -> regexps). Entries that need to inspect siblings
+-- registered earlier in the same pass (typical example: a selector that
+-- captures `rspamd_maps[name]` or compiles an `rspamd_regexp` from map data)
+-- can wrap their definition in `lua_extras.deferred(factory_fn)` so the
+-- factory runs after all earlier-kind entries are registered.
+--
+-- Errors in any single file or entry are logged and skipped; they never
+-- abort startup.
 --]]
 
 local exports = {}
@@ -31,11 +38,38 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local lua_selectors = require "lua_selectors"
 
+local DEFERRED_MARKER = '__lua_extras_deferred'
+
+--[[[
+-- @function lua_extras.deferred(factory)
+-- Wraps a factory function so the loader calls it during phase 2, after all
+-- earlier-kind entries have been registered, and uses the returned table as
+-- the concrete definition. The factory receives `(cfg)`.
+--]]
+exports.deferred = function(factory)
+  if type(factory) ~= 'function' then
+    error('lua_extras.deferred: expected a function, got ' .. type(factory))
+  end
+  return { [DEFERRED_MARKER] = true, factory = factory }
+end
+
+local function is_deferred(v)
+  return type(v) == 'table' and v[DEFERRED_MARKER] == true
+end
+
 --[[[
 -- @function lua_extras.register_selector(cfg, name, def)
 -- Registers a selector extractor.
--- `def` may be a function (treated as `get_value`) or a full selector table
--- (`{ get_value = fn, description = '...', type = '...' }`).
+-- `def` may be:
+--   * a function - treated as `get_value`;
+--   * a full selector table - `{ get_value = fn, description = ..., type = ... }`.
+--
+-- An optional `re_selector` field opts the selector into the regexp DSL by
+-- calling `cfg:register_re_selector(name, selector_str, delimiter)` after the
+-- extractor is registered. It accepts either:
+--   * `true` - bind alias `name` to the selector pipeline `name` with delimiter ' ';
+--   * `{ selector = '<pipeline>', delimiter = ' ' }` - explicit binding.
+--
 -- Returns true on success, false on error.
 --]]
 exports.register_selector = function(cfg, name, def)
@@ -49,7 +83,36 @@ exports.register_selector = function(cfg, name, def)
     return false
   end
 
-  return lua_selectors.register_extractor(cfg, name, def)
+  local re_sel = def.re_selector
+  -- lua_selectors does not need this field
+  def.re_selector = nil
+
+  if not lua_selectors.register_extractor(cfg, name, def) then
+    return false
+  end
+
+  if re_sel then
+    local pipeline, delimiter
+    if re_sel == true then
+      pipeline, delimiter = name, ' '
+    elseif type(re_sel) == 'table' then
+      pipeline = re_sel.selector or name
+      delimiter = re_sel.delimiter or ' '
+    else
+      rspamd_logger.errx(cfg,
+          'lua_extras: bad re_selector for selector %s: expected true or table', name)
+      return true
+    end
+    local ok, err = pcall(function()
+      cfg:register_re_selector(name, pipeline, delimiter)
+    end)
+    if not ok then
+      rspamd_logger.errx(cfg,
+          'lua_extras: register_re_selector failed for %s: %s', name, err)
+    end
+  end
+
+  return true
 end
 
 --[[[
@@ -105,24 +168,18 @@ exports.register_regexp = function(cfg, symbol, def)
 end
 
 local kind_handlers = {
-  selectors = exports.register_selector,
   maps = exports.register_map,
+  selectors = exports.register_selector,
   regexps = exports.register_regexp,
 }
 
---[[[
--- @function lua_extras.load_dir(cfg, dir, kind)
--- Loads every *.lua file in `dir`, expecting each to return a table of
--- { name = def } pairs. Each pair is dispatched to the helper for `kind`
--- (one of 'selectors', 'maps', 'regexps'). Errors are logged and skipped.
---]]
-exports.load_dir = function(cfg, dir, kind)
-  local handler = kind_handlers[kind]
-  if not handler then
-    rspamd_logger.errx(cfg, 'lua_extras: unknown kind %s for dir %s', kind, dir)
-    return
-  end
+-- Resolution order for cross-kind dependencies:
+--   maps     - register first (no deps)
+--   selectors - may consume maps (rspamd_maps[name]) at definition or task time
+--   regexps  - may reference selectors via the {name} expansion syntax
+local KIND_ORDER = { 'maps', 'selectors', 'regexps' }
 
+local function preload_one_dir(cfg, dir, kind, sink)
   local files = rspamd_util.glob(dir .. '/*.lua') or {}
   -- Stable ordering across platforms
   table.sort(files)
@@ -144,10 +201,74 @@ exports.load_dir = function(cfg, dir, kind)
             rspamd_logger.errx(cfg,
                 'lua_extras: %s contains non-string key (kind=%s), skipped entry', path, kind)
           else
-            handler(cfg, name, def)
+            table.insert(sink, { name = name, def = def, path = path })
           end
         end
       end
+    end
+  end
+end
+
+local function resolve_entry(cfg, entry, kind)
+  local def = entry.def
+  if is_deferred(def) then
+    local ok, ret = pcall(def.factory, cfg)
+    if not ok then
+      rspamd_logger.errx(cfg,
+          'lua_extras: deferred factory for %s/%s in %s failed: %s',
+          kind, entry.name, entry.path, ret)
+      return nil
+    end
+    return ret
+  end
+  return def
+end
+
+--[[[
+-- @function lua_extras.load_extras(cfg, base_dir)
+-- Two-phase loader: globs `base_dir/{maps,selectors,regexps}/*.lua`,
+-- collects every returned entry, then registers them in dependency order
+-- (maps -> selectors -> regexps). Deferred entries (see lua_extras.deferred)
+-- are evaluated during phase 2 so they can see entries from earlier kinds.
+--]]
+exports.load_extras = function(cfg, base_dir)
+  local staged = {}
+  for _, kind in ipairs(KIND_ORDER) do
+    staged[kind] = {}
+    preload_one_dir(cfg, base_dir .. '/' .. kind, kind, staged[kind])
+  end
+
+  for _, kind in ipairs(KIND_ORDER) do
+    local handler = kind_handlers[kind]
+    for _, entry in ipairs(staged[kind]) do
+      local resolved = resolve_entry(cfg, entry, kind)
+      if resolved ~= nil then
+        handler(cfg, entry.name, resolved)
+      end
+    end
+  end
+end
+
+--[[[
+-- @function lua_extras.load_dir(cfg, dir, kind)
+-- Single-kind loader. Useful when a closed plugin or other code wants to
+-- ingest a structured directory of one specific kind. For the standard
+-- $LOCAL_CONFDIR/lua.local.d tree, prefer lua_extras.load_extras() which
+-- handles cross-kind ordering.
+--]]
+exports.load_dir = function(cfg, dir, kind)
+  local handler = kind_handlers[kind]
+  if not handler then
+    rspamd_logger.errx(cfg, 'lua_extras: unknown kind %s for dir %s', kind, dir)
+    return
+  end
+
+  local sink = {}
+  preload_one_dir(cfg, dir, kind, sink)
+  for _, entry in ipairs(sink) do
+    local resolved = resolve_entry(cfg, entry, kind)
+    if resolved ~= nil then
+      handler(cfg, entry.name, resolved)
     end
   end
 end

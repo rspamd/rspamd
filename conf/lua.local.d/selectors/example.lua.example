@@ -1,16 +1,21 @@
 -- Custom selector definitions loaded by lua_extras at config time.
 --
 -- Each file in $LOCAL_CONFDIR/lua.local.d/selectors/*.lua must return a table
--- where keys are selector names and values are either:
---   * a function(task) returning the value, or
+-- where keys are selector names and values are one of:
+--   * a function(task) returning the value (shortcut for { get_value = fn });
 --   * a full selector definition table:
 --       { get_value = function(task, args) ... end,
 --         description = '...',         -- optional
 --         type        = 'string',      -- optional, default 'string'
---         args_schema = { ... } }      -- optional argument validation
+--         args_schema = { ... } };     -- optional argument validation
+--   * lua_extras.deferred(function(cfg) return def end) when the definition
+--     needs to inspect entries from earlier kinds (typical: capture a map ref
+--     from rspamd_maps or compile an rspamd_regexp from map data).
 --
 -- Selectors registered here are available anywhere selectors are accepted
 -- (settings, multimap, ratelimit, redirector, classifiers, ...).
+
+local lua_extras = require "lua_extras"
 
 return {
   -- A trivial selector returning the message id with a fixed prefix.
@@ -30,4 +35,25 @@ return {
       return task:get_helo()
     end,
   },
+
+  -- A selector that captures a map registered by lua.local.d/maps/*.lua.
+  -- The factory runs after all maps are registered, so the closure binds the
+  -- live map object once instead of looking it up on every task.
+  example_from_in_local_domains = lua_extras.deferred(function(_cfg)
+    local domains = rspamd_maps['example_local_domains']
+    return {
+      description = 'matched local-domains map: <domain> or nil',
+      type        = 'string',
+      get_value   = function(task)
+        if not domains then
+          return nil
+        end
+        local from = task:get_from('mime')
+        if not from or not from[1] or not from[1].domain then
+          return nil
+        end
+        return domains:get_key(from[1].domain) and from[1].domain or nil
+      end,
+    }
+  end),
 }
