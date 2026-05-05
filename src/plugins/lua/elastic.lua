@@ -213,12 +213,18 @@ function Queue:get_all()
 end
 
 function Queue:pop()
+  -- queue already empty
   if self.first > self.last then
     return nil
   end
   local value = self.data[self.first]
   self.data[self.first] = nil
   self.first = self.first + 1
+  -- reset indices on drain so they don't grow without bound over the worker's lifetime
+  if self.first > self.last then
+    self.first = 1
+    self.last = 0
+  end
   return value
 end
 
