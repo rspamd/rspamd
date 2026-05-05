@@ -1,0 +1,28 @@
+-- Custom regexp rules loaded by lua_extras at config time.
+--
+-- Each file in $LOCAL_CONFDIR/lua.local.d/regexps/*.lua must return a table
+-- where keys are symbol names and values are regexp rule definitions equivalent
+-- to assigning into config['regexp'][SYMBOL] from rspamd.local.lua.
+--
+-- See https://rspamd.com/doc/developers/writing_rules.html for the full DSL.
+
+local re_from_foo = 'From=/foo@/H'
+local re_subject_blah = '/blah/P'
+
+return {
+  EXAMPLE_FROM_FOO = {
+    re          = re_from_foo,
+    score       = 1.2,
+    description = 'Sender contains foo@',
+  },
+
+  EXAMPLE_FROM_FOO_NO_BLAH = {
+    re          = string.format('(%s) && !(%s)', re_from_foo, re_subject_blah),
+    score       = 0.5,
+    description = 'foo@ sender without "blah" in subject',
+    -- Optional condition gating the rule:
+    condition   = function(task)
+      return task:has_from('mime')
+    end,
+  },
+}
