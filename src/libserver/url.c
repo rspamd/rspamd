@@ -1218,7 +1218,14 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				goto out;
 			}
 			else if (p - c > max_email_user) {
-				/* Oversized user field - consult Lua filter (fixes #5731) */
+				/*
+				 * Oversized user field is itself an obfuscation signal
+				 * (e.g. https://legit.com<lots-of-spaces>@evil.com/...),
+				 * so mark obscured regardless of what the Lua filter says.
+				 */
+				*flags |= RSPAMD_URL_FLAG_OBSCURED | RSPAMD_URL_FLAG_HAS_USER;
+
+				/* Consult Lua filter (fixes #5731) */
 				enum rspamd_url_lua_filter_result lua_decision =
 					rspamd_url_lua_consult(c, p - c, *flags, (lua_State *) lua_state);
 
@@ -1226,12 +1233,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 					/* REJECT: Lua says this is garbage, abort parsing */
 					goto out;
 				}
-				else if (lua_decision == RSPAMD_URL_LUA_FILTER_SUSPICIOUS) {
-					/* SUSPICIOUS: Mark as obscured for plugin analysis */
-					*flags |= RSPAMD_URL_FLAG_OBSCURED;
-				}
 				/* ACCEPT or SUSPICIOUS: continue parsing */
-				*flags |= RSPAMD_URL_FLAG_HAS_USER;
 			}
 
 			p++;
