@@ -664,32 +664,26 @@ local function url_redirector_handler(task)
   local selected = {}
   local seen = {}
 
-  local text_parts = task:get_text_parts()
-  if text_parts then
-    for _, part in ipairs(text_parts) do
-      if part:is_html() and part.get_cta_urls then
-        local cta_urls = part:get_cta_urls(settings.max_urls, true)
-        if cta_urls then
-          for _, url in ipairs(cta_urls) do
-            local host = url:get_host()
-            if host and settings.redirector_hosts_map:get_key(host) then
-              local key = tostring(url)
-              if not seen[key] then
-                lua_util.debugm(N, task, 'prefer CTA url %s for redirector', key)
-                table.insert(selected, url)
-                seen[key] = true
-                if #selected >= settings.max_urls then
-                  break
-                end
-              end
+  for _, part in ipairs(task:get_text_parts()) do
+    if part:is_html() then
+      for _, url in ipairs(part:get_cta_urls(settings.max_urls, true)) do
+        local host = url:get_host()
+        if host and settings.redirector_hosts_map:get_key(host) then
+          local key = tostring(url)
+          if not seen[key] then
+            lua_util.debugm(N, task, 'prefer CTA url %s for redirector', key)
+            table.insert(selected, url)
+            seen[key] = true
+            if #selected >= settings.max_urls then
+              break
             end
           end
         end
       end
+    end
 
-      if #selected >= settings.max_urls then
-        break
-      end
+    if #selected >= settings.max_urls then
+      break
     end
   end
 
