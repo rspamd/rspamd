@@ -349,6 +349,11 @@ step = function(task, orig_url, chain, seen, data, ntries, http_extended)
             -- gets re-cached, instead of giving up with a truncated chain.
             lua_util.debugm(N, task,
                 'cache miss for %s mid-walk, extending with live HTTP', last_str)
+            -- The prior ^hop iteration that appended `last` to the chain
+            -- set seen[last_str]=true; http_walk re-marks it on entry, so
+            -- clear here to avoid false-firing http_walk's cycle guard on
+            -- the very URL we're bridging to.
+            seen[last_str] = nil
             http_walk(task, orig_url, last, ntries + 1, chain, seen)
           else
             step(task, orig_url, chain, seen, d, ntries, http_extended)
@@ -434,11 +439,9 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
   -- Mirror the cache walk's cycle guard: a redirector loop A->B->A->B
   -- (e.g. login redirector flapping between two hosts) would otherwise
   -- chew through nested_limit and bloat the chain with alternating
-  -- entries. Skip the check at ntries==1 because url is the entry point
-  -- (orig_url on a fresh resolve, or the cached terminal that step()
-  -- just bridged from -- already added to seen).
+  -- entries.
   local url_str = tostring(url)
-  if ntries > 1 and seen[url_str] then
+  if seen[url_str] then
     lua_util.debugm(N, task, 'cycle in http walk at %s', url_str)
     apply_redirect_chain(task, chain)
     return
@@ -484,11 +487,10 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
           orig_url, loc, code)
 
       -- 'url' just returned 30x, so it's an intermediate. Save it
-      -- only when gating allows. Skip ntries==1: at fresh resolve url
-      -- is orig_url (already chain[1]); when extending past a cached
+      -- only when gating allows. When extending past a cached
       -- ^nested marker, url is the cached terminal that step() just
       -- appended to chain -- in both cases it's already the tail.
-      if ntries > 1 and should_save_hop(url) then
+      if should_save_hop(url) then
         chain_append(chain, url)
       end
 
