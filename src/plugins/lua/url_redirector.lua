@@ -443,7 +443,7 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
   local url_str = tostring(url)
   if seen[url_str] then
     lua_util.debugm(N, task, 'cycle in http walk at %s', url_str)
-    apply_redirect_chain(task, chain)
+    finalize_chain(task, chain, nil)
     return
   end
   seen[url_str] = true
