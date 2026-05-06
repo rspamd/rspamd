@@ -293,6 +293,17 @@ local redirection_codes = {
 local step
 local http_walk
 
+-- Terminal exit for step(): write back if we extended via HTTP this scan,
+-- else just apply. Hoisted as a free function so step()'s recursive cache
+-- hops don't allocate a fresh closure per call.
+local function step_finish(task, chain, http_extended)
+  if http_extended then
+    finalize_chain(task, chain, nil)
+  else
+    apply_redirect_chain(task, chain)
+  end
+end
+
 -- Walk a cached redirect chain. data is the Redis value for
 -- hash(chain[#chain]); pass nil to issue the GET. seen is the shared
 -- per-scan URL-string set (cache walk and http_walk write to it so
@@ -313,39 +324,31 @@ step = function(task, orig_url, chain, seen, data, ntries, http_extended)
   ntries = ntries or 0
   http_extended = http_extended or false
 
-  -- Exit helper: write back if we extended via HTTP this scan, else just apply.
-  local function finish()
-    if http_extended then
-      finalize_chain(task, chain, nil)
-    else
-      apply_redirect_chain(task, chain)
-    end
-  end
-
   if data == nil then
     local last = chain[#chain]
-    local next_key = cache_key_for_url(tostring(last))
+    local last_str = tostring(last)
+    local next_key = cache_key_for_url(last_str)
     local ret = lua_redis.redis_make_request(task,
         redis_params, next_key, false,
         function(e, d)
           if e then
             rspamd_logger.errx(task,
-                'redis error during chain walk at %s: %s', last, e)
-            finish()
+                'redis error during chain walk at %s: %s', last_str, e)
+            step_finish(task, chain, http_extended)
           elseif d == 'processing' then
             -- Another worker is currently resolving this hop; their write
             -- will populate the cache when they finish. Apply what we have
             -- and don't duplicate their HTTP work.
             lua_util.debugm(N, task,
-                'cache lock at %s mid-walk, applying partial chain', last)
-            finish()
+                'cache lock at %s mid-walk, applying partial chain', last_str)
+            step_finish(task, chain, http_extended)
           elseif type(d) ~= 'string' then
             -- True cache miss mid-walk: a previous chain link points to a
             -- URL whose own cache entry is gone (TTL expired or evicted).
             -- Resume live HTTP from this dead end so the chain rebuilds and
             -- gets re-cached, instead of giving up with a truncated chain.
             lua_util.debugm(N, task,
-                'cache miss for %s mid-walk, extending with live HTTP', last)
+                'cache miss for %s mid-walk, extending with live HTTP', last_str)
             http_walk(task, orig_url, last, ntries + 1, chain, seen)
           else
             step(task, orig_url, chain, seen, d, ntries, http_extended)
@@ -354,7 +357,7 @@ step = function(task, orig_url, chain, seen, data, ntries, http_extended)
         'GET', { next_key })
     if not ret then
       rspamd_logger.errx(task, 'cannot make redis request to walk chain')
-      finish()
+      step_finish(task, chain, http_extended)
     end
     return
   end
@@ -369,14 +372,14 @@ step = function(task, orig_url, chain, seen, data, ntries, http_extended)
 
   if seen[val] then
     lua_util.debugm(N, task, 'cycle in cached chain at %s', val)
-    finish()
+    step_finish(task, chain, http_extended)
     return
   end
 
   local hop = rspamd_url.create(task:get_mempool(), val,
       { 'redirect_target' })
   if not hop then
-    finish()
+    step_finish(task, chain, http_extended)
     return
   end
   chain_append(chain, hop)
@@ -402,7 +405,7 @@ step = function(task, orig_url, chain, seen, data, ntries, http_extended)
   end
 
   -- Plain terminal: chain fully resolved, apply (and persist if extended).
-  finish()
+  step_finish(task, chain, http_extended)
 end
 
 -- Live HTTP HEAD walk. ntries counts only HTTP requests; the cache walk
@@ -620,7 +623,7 @@ local function resolve_cached(task, orig_url)
       else
         lua_util.debugm(N, task,
             'failed to claim lock for %s (held by another worker or stale processing marker, ndata=%s); skipping this scan',
-            orig_url, tostring(ndata))
+            orig_url, ndata)
       end
     end
 
@@ -647,6 +650,15 @@ local function url_redirector_process_url(task, url)
 end
 
 local function url_redirector_handler(task)
+  -- task:has_urls returns (bool, count) without materialising the URL
+  -- table; bail out cheaply when the message has no URLs at all so we
+  -- skip the CTA scan and extract_specific_urls call entirely.
+  local has_urls, n_urls = task:has_urls()
+  if not has_urls then
+    lua_util.debugm(N, task, 'no URLs in task, skipping redirector resolution')
+    return
+  end
+
   local selected = {}
   local seen = {}
 
@@ -715,12 +727,9 @@ local function url_redirector_handler(task)
   end
 
   if #selected == 0 then
-    local task_urls = task:get_urls() or {}
-    if #task_urls > 0 then
-      lua_util.debugm(N, task,
-          'no URLs matched redirector_hosts_map (out of %d task URLs)',
-          #task_urls)
-    end
+    lua_util.debugm(N, task,
+        'no URLs matched redirector_hosts_map (out of %d task URLs)',
+        n_urls)
   end
 
   for _, u in ipairs(selected) do
