@@ -157,7 +157,6 @@ local settings = {
       content = true, -- include URLs found inside text/html content
       images = false, -- include URLs from <img src> attributes (noisy)
       emails = false, -- include mailto: URLs (rarely useful for phishing analysis)
-      sort = true, -- deterministic order, stable dedup, reproducible doc layout
       protocols = { 'http', 'https', 'ftp' }, -- protocols to collect
     },
   },
@@ -332,14 +331,13 @@ local function get_received_info(received_headers)
       end
       -- '...' is rspamd's "valid but unknown" placeholder; elastic's t_ip mapping rejects it,
       -- so guard against it here even though :is_valid() returns true for that case.
-      local ip_str
       local real_ip = received_header['real_ip']
-      if real_ip and real_ip:is_valid() and tostring(real_ip) ~= '...' then
-        ip_str = tostring(real_ip)
-      end
-      if ip_str and not seen_ips[ip_str] then
-        seen_ips[ip_str] = true
-        table.insert(ips, ip_str)
+      if real_ip and real_ip:is_valid() then
+        local s = tostring(real_ip)
+        if s ~= '...' and not seen_ips[s] then
+          seen_ips[s] = true
+          table.insert(ips, s)
+        end
       end
     end
   end
@@ -353,21 +351,20 @@ local function get_received_info(received_headers)
 end
 
 local function url_to_record(u, full_urls, count)
+  local host = u:get_host()
   local rec = {
-    etld = u:get_tld() or u:get_host(),
-    host = u:get_host(),
+    etld = u:get_tld() or host,
+    host = host,
     protocol = u:get_protocol(),
     count = count,
   }
   if full_urls then
-    rec.url = tostring(u:get_text())
+    rec.url = u:get_text()
   end
-  local flag_tbl = u:get_flags() or {}
   local flag_list = {}
-  for name, on in pairs(flag_tbl) do
-    if on then
-      table.insert(flag_list, name)
-    end
+  -- url:get_flags() only inserts keys for set bits; every value is true
+  for name in pairs(u:get_flags() or {}) do
+    table.insert(flag_list, name)
   end
   if #flag_list > 0 then
     rec.flags = flag_list
@@ -380,11 +377,11 @@ end
 -- merge into one entry with summed count.
 local function url_key(u, full_urls)
   if full_urls then
-    return tostring(u:get_text())
+    return u:get_text()
   end
   return (u:get_host() or '') .. '|' ..
       (u:get_protocol() or '') .. '|' ..
-      tostring(u:get_flags_num())
+      u:get_flags_num()
 end
 
 -- Collect, dedup, count, and sort URLs.
@@ -400,9 +397,10 @@ local function build_urls_metadata(urls, max_urls, full_urls, cta_keys, cta_mode
   local order = {}
   local total = 0
   for _, u in ipairs(urls) do
-    local is_cta = cta_keys and cta_keys[url_key(u, false)] or false
+    local nfkey = url_key(u, false)
+    local is_cta = cta_keys and cta_keys[nfkey] or false
     if not (is_cta and cta_mode == 'skip') then
-      local key = url_key(u, full_urls)
+      local key = full_urls and url_key(u, true) or nfkey
       local n = u:get_count() or 1
       total = total + n
       local entry = by_key[key]
@@ -469,13 +467,13 @@ local function collect_cta_urls(task)
   -- on get_cta_urls' return_original flag) would be marked CTA.
   local function add_with_chain(u)
     while u do
-      local key = tostring(u)
+      local key = u:get_text()
       if seen[key] then
         break
       end
       seen[key] = true
       table.insert(cta, u)
-      u = u:get_redirected() or nil
+      u = u:get_redirected()
     end
   end
 
@@ -517,10 +515,14 @@ local function elastic_send_data(flush_all, task, cfg, ev_base)
   local push_url
   local bulk_json
   local logs_to_send
+  -- captured so pop_first lands on the same Queue we read from, even if the
+  -- 10x-overflow guard later replaces buffer['logs'] with Queue:new()
+  -- between request start and callback firing.
+  local task_buffer = buffer['logs']
   if flush_all then
-    logs_to_send = buffer['logs']:get_all()
+    logs_to_send = task_buffer:get_all()
   else
-    logs_to_send = buffer['logs']:get_first(settings['limits']['max_rows'])
+    logs_to_send = task_buffer:get_first(settings['limits']['max_rows'])
   end
   nlogs_to_send = #logs_to_send -- actual size can be lower then max_rows
   if nlogs_to_send > 0 then
@@ -579,7 +581,7 @@ local function elastic_send_data(flush_all, task, cfg, ev_base)
     end
     -- proccess results
     if push_done then
-      buffer['logs']:pop_first(nlogs_to_send)
+      task_buffer:pop_first(nlogs_to_send)
       buffer['errors'] = 0
       upstream:ok()
     else
@@ -588,7 +590,7 @@ local function elastic_send_data(flush_all, task, cfg, ev_base)
         rspamd_logger.errx(log_object,
           'failed to send %s log lines, failed attempts: %s/%s, removing failed logs from bugger',
           nlogs_to_send, buffer['errors'], settings['limits']['max_fail'])
-        buffer['logs']:pop_first(nlogs_to_send)
+        task_buffer:pop_first(nlogs_to_send)
         buffer['errors'] = 0
       else
         buffer['errors'] = buffer['errors'] + 1
@@ -662,9 +664,12 @@ local function get_general_metadata(task)
   r.ip = '::'
   r.is_local = false
   local ip_addr = task:get_ip()
-  if ip_addr and ip_addr:is_valid() and tostring(ip_addr) ~= '...' then
-    r.is_local = ip_addr:is_local()
-    r.ip = tostring(ip_addr)
+  if ip_addr and ip_addr:is_valid() then
+    local s = tostring(ip_addr)
+    if s ~= '...' then
+      r.is_local = ip_addr:is_local()
+      r.ip = s
+    end
   end
 
   r.sender_ip = '::'
@@ -673,8 +678,11 @@ local function get_general_metadata(task)
     origin = origin:gsub('^%[', ''):gsub('%]:[0-9]+$', ''):gsub('%]$', '')
     local rspamd_ip = require "rspamd_ip"
     local origin_ip = rspamd_ip.from_string(origin)
-    if origin_ip and origin_ip:is_valid() and tostring(origin_ip) ~= '...' then
-      r.sender_ip = tostring(origin_ip)
+    if origin_ip and origin_ip:is_valid() then
+      local s = tostring(origin_ip)
+      if s ~= '...' then
+        r.sender_ip = s
+      end
     end
   end
 
