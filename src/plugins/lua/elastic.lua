@@ -363,7 +363,7 @@ local function url_to_record(u, full_urls, count)
   end
   local flag_list = {}
   -- url:get_flags() only inserts keys for set bits; every value is true
-  for name in pairs(u:get_flags() or {}) do
+  for name in pairs(u:get_flags()) do
     table.insert(flag_list, name)
   end
   if #flag_list > 0 then
@@ -477,13 +477,13 @@ local function collect_cta_urls(task)
     end
   end
 
-  local parts = task:get_text_parts() or {}
+  local parts = task:get_text_parts()
   for _, part in ipairs(parts) do
     if part:is_html() then
       -- original=true returns the source HTML CTA, not its linked_url
       -- one-hop-forward (the default), so the chain walk starts at the
       -- actual entry point of the CTA.
-      local part_cta = part:get_cta_urls({ original = true }) or {}
+      local part_cta = part:get_cta_urls({ original = true })
       for _, u in ipairs(part_cta) do
         add_with_chain(u)
       end
@@ -866,7 +866,7 @@ local function get_general_metadata(task)
   end
 
   if settings['collect_urls']['enabled'] then
-    local task_urls = task:get_urls(settings['collect_urls']['get_url_params']) or {}
+    local task_urls = task:get_urls(settings['collect_urls']['get_url_params'])
 
     local cta_urls = collect_cta_urls(task)
     local cta_keys = {}
