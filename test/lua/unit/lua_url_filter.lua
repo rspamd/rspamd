@@ -33,8 +33,11 @@ context("URL filter functions", function()
     { "http://user@host@example.com", 0, SUSPICIOUS, "multiple @ signs" },
     { "http://" .. string.rep("@", 25) .. "example.com", 0, REJECT, ">20 @ signs (reject)" },
 
-    -- Very long URLs
-    { "http://example.com/" .. string.rep("a", 2100), 0, REJECT, ">2048 char URL (reject)" },
+    -- Very long URLs: the legacy 2048 threshold dropped legitimate
+    -- userinfo-obfuscation phishing patterns; only catastrophic sizes
+    -- (>16 KiB) should now reject.
+    { "http://example.com/" .. string.rep("a", 2100), 0, ACCEPT, "2100 char URL (accept)" },
+    { "http://example.com/" .. string.rep("a", 17000), 0, REJECT, ">16384 char URL (reject)" },
 
     -- Control characters (should reject)
     { "http://example.com/\x00test", 0, REJECT, "URL with null byte" },
