@@ -1237,7 +1237,8 @@ rspamd_re_cache_process_selector(struct rspamd_task *task,
 
 
 			if (txt) {
-				msg_debug_re_cache("re selector %s returned 1 element", name);
+				msg_debug_re_cache("re selector %s returned 1 element of %z bytes",
+								   name, (size_t) txt->len);
 				sel_data = txt->start;
 				slen = txt->len;
 				*n = 1;
@@ -1254,8 +1255,7 @@ rspamd_re_cache_process_selector(struct rspamd_task *task,
 		}
 		else {
 			*n = rspamd_lua_table_size(L, -1);
-
-			msg_debug_re_cache("re selector %s returned %d elements", name, *n);
+			gsize total_bytes = 0;
 
 			if (*n > 0) {
 				*svec = g_malloc(sizeof(unsigned char *) * (*n));
@@ -1280,9 +1280,13 @@ rspamd_re_cache_process_selector(struct rspamd_task *task,
 					}
 
 					(*lenvec)[i] = slen;
+					total_bytes += slen;
 					lua_pop(L, 1);
 				}
 			}
+
+			msg_debug_re_cache("re selector %s returned %d elements, %z bytes total",
+							   name, *n, total_bytes);
 
 			/* Empty table is also a valid result */
 			result = TRUE;
