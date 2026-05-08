@@ -63,6 +63,17 @@ static GOptionEntry entries[] = {
 	 "Set IO timeout (1s by default)", NULL},
 	{NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL}};
 
+#define RSPAMADM_CONTROL_COMMAND_LIST                                  \
+	"Supported commands:\n"                                            \
+	"  stat            - show statistics\n"                            \
+	"  reload          - reload workers dynamic data\n"                \
+	"  reresolve       - resolve upstreams addresses\n"                \
+	"  recompile       - recompile hyperscan regexes\n"                \
+	"  fuzzystat       - show fuzzy statistics\n"                      \
+	"  fuzzysync       - immediately sync fuzzy database to storage\n" \
+	"  compositesstats - show composites processing statistics\n"      \
+	"  memstat         - show memory usage statistics across all workers\n"
+
 static const char *
 rspamadm_control_help(gboolean full_help, const struct rspamadm_command *cmd)
 {
@@ -77,16 +88,7 @@ rspamadm_control_help(gboolean full_help, const struct rspamadm_command *cmd)
 				   "-u: output ucl (default)\n"
 				   "-s: use the following socket instead of " RSPAMD_DBDIR "/rspamd.sock\n"
 				   "-t: set IO timeout (1.0 seconds default)\n"
-				   "--help: shows available options and commands\n\n"
-				   "Supported commands:\n"
-				   "stat - show statistics\n"
-				   "reload - reload workers dynamic data\n"
-				   "reresolve - resolve upstreams addresses\n"
-				   "recompile - recompile hyperscan regexes\n"
-				   "fuzzystat - show fuzzy statistics\n"
-				   "fuzzysync - immediately sync fuzzy database to storage\n"
-				   "compositesstats - show composites processing statistics\n"
-				   "memstat - show memory usage statistics across all workers\n";
+				   "--help: shows available options and commands\n\n" RSPAMADM_CONTROL_COMMAND_LIST;
 	}
 	else {
 		help_str = "Manage rspamd main control interface";
@@ -203,7 +205,8 @@ rspamadm_control(int argc, char **argv, const struct rspamadm_command *_cmd)
 	g_option_context_free(context);
 
 	if (argc <= 1) {
-		rspamd_fprintf(stderr, "command required\n");
+		rspamd_fprintf(stderr,
+					   "command required\n\n" RSPAMADM_CONTROL_COMMAND_LIST);
 		exit(EXIT_FAILURE);
 	}
 
@@ -238,7 +241,9 @@ rspamadm_control(int argc, char **argv, const struct rspamadm_command *_cmd)
 		path = "/memstat";
 	}
 	else {
-		rspamd_fprintf(stderr, "unknown command: %s\n", cmd);
+		rspamd_fprintf(stderr,
+					   "unknown command: %s\n\n" RSPAMADM_CONTROL_COMMAND_LIST,
+					   cmd);
 		exit(EXIT_FAILURE);
 	}
 
