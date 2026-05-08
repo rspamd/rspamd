@@ -293,6 +293,17 @@ local redirection_codes = {
 local step
 local http_walk
 
+-- Terminal exit for step(): write back if we extended via HTTP this scan,
+-- else just apply. Hoisted as a free function so step()'s recursive cache
+-- hops don't allocate a fresh closure per call.
+local function step_finish(task, chain, http_extended)
+  if http_extended then
+    finalize_chain(task, chain, nil)
+  else
+    apply_redirect_chain(task, chain)
+  end
+end
+
 -- Walk a cached redirect chain. data is the Redis value for
 -- hash(chain[#chain]); pass nil to issue the GET. seen is the shared
 -- per-scan URL-string set (cache walk and http_walk write to it so
@@ -301,25 +312,57 @@ local http_walk
 -- scan -- threaded through cache hops without change so the
 -- ^nested-bridge below hands http_walk the correct remaining budget,
 -- not a fresh nested_limit. Defaults to 0 for top-level cache walks.
-step = function(task, orig_url, chain, seen, data, ntries)
+--
+-- http_extended (default false): set to true when step() was entered
+-- via an http_walk splice (the chain has live-resolved entries that
+-- aren't in cache yet). At terminal/exit paths we then call
+-- finalize_chain (which writes back via cache_chain_to_redis) instead
+-- of just apply_redirect_chain, so the new chain links get persisted.
+-- For top-level cache walks (no HTTP this scan) we keep the cheap
+-- apply-only path to avoid redundant SETEX traffic.
+step = function(task, orig_url, chain, seen, data, ntries, http_extended)
   ntries = ntries or 0
+  http_extended = http_extended or false
+
   if data == nil then
     local last = chain[#chain]
-    local next_key = cache_key_for_url(tostring(last))
+    local last_str = tostring(last)
+    local next_key = cache_key_for_url(last_str)
     local ret = lua_redis.redis_make_request(task,
         redis_params, next_key, false,
         function(e, d)
-          if e or type(d) ~= 'string' or d == 'processing' then
-            -- Cache miss / lock mid-walk: apply what we have.
-            apply_redirect_chain(task, chain)
-            return
+          if e then
+            rspamd_logger.errx(task,
+                'redis error during chain walk at %s: %s', last_str, e)
+            step_finish(task, chain, http_extended)
+          elseif d == 'processing' then
+            -- Another worker is currently resolving this hop; their write
+            -- will populate the cache when they finish. Apply what we have
+            -- and don't duplicate their HTTP work.
+            lua_util.debugm(N, task,
+                'cache lock at %s mid-walk, applying partial chain', last_str)
+            step_finish(task, chain, http_extended)
+          elseif type(d) ~= 'string' then
+            -- True cache miss mid-walk: a previous chain link points to a
+            -- URL whose own cache entry is gone (TTL expired or evicted).
+            -- Resume live HTTP from this dead end so the chain rebuilds and
+            -- gets re-cached, instead of giving up with a truncated chain.
+            lua_util.debugm(N, task,
+                'cache miss for %s mid-walk, extending with live HTTP', last_str)
+            -- The prior ^hop iteration that appended `last` to the chain
+            -- set seen[last_str]=true; http_walk re-marks it on entry, so
+            -- clear here to avoid false-firing http_walk's cycle guard on
+            -- the very URL we're bridging to.
+            seen[last_str] = nil
+            http_walk(task, orig_url, last, ntries + 1, chain, seen)
+          else
+            step(task, orig_url, chain, seen, d, ntries, http_extended)
           end
-          step(task, orig_url, chain, seen, d, ntries)
         end,
         'GET', { next_key })
     if not ret then
       rspamd_logger.errx(task, 'cannot make redis request to walk chain')
-      apply_redirect_chain(task, chain)
+      step_finish(task, chain, http_extended)
     end
     return
   end
@@ -334,21 +377,21 @@ step = function(task, orig_url, chain, seen, data, ntries)
 
   if seen[val] then
     lua_util.debugm(N, task, 'cycle in cached chain at %s', val)
-    apply_redirect_chain(task, chain)
+    step_finish(task, chain, http_extended)
     return
   end
 
   local hop = rspamd_url.create(task:get_mempool(), val,
       { 'redirect_target' })
   if not hop then
-    apply_redirect_chain(task, chain)
+    step_finish(task, chain, http_extended)
     return
   end
   chain_append(chain, hop)
   seen[val] = true
 
   if prefix == 'hop' then
-    step(task, orig_url, chain, seen, nil, ntries)
+    step(task, orig_url, chain, seen, nil, ntries, http_extended)
     return
   end
 
@@ -366,8 +409,8 @@ step = function(task, orig_url, chain, seen, data, ntries)
     return
   end
 
-  -- Plain terminal: chain fully resolved, apply.
-  apply_redirect_chain(task, chain)
+  -- Plain terminal: chain fully resolved, apply (and persist if extended).
+  step_finish(task, chain, http_extended)
 end
 
 -- Live HTTP HEAD walk. ntries counts only HTTP requests; the cache walk
@@ -396,13 +439,11 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
   -- Mirror the cache walk's cycle guard: a redirector loop A->B->A->B
   -- (e.g. login redirector flapping between two hosts) would otherwise
   -- chew through nested_limit and bloat the chain with alternating
-  -- entries. Skip the check at ntries==1 because url is the entry point
-  -- (orig_url on a fresh resolve, or the cached terminal that step()
-  -- just bridged from -- already added to seen).
+  -- entries.
   local url_str = tostring(url)
-  if ntries > 1 and seen[url_str] then
+  if seen[url_str] then
     lua_util.debugm(N, task, 'cycle in http walk at %s', url_str)
-    apply_redirect_chain(task, chain)
+    finalize_chain(task, chain, nil)
     return
   end
   seen[url_str] = true
@@ -446,11 +487,10 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
           orig_url, loc, code)
 
       -- 'url' just returned 30x, so it's an intermediate. Save it
-      -- only when gating allows. Skip ntries==1: at fresh resolve url
-      -- is orig_url (already chain[1]); when extending past a cached
+      -- only when gating allows. When extending past a cached
       -- ^nested marker, url is the cached terminal that step() just
       -- appended to chain -- in both cases it's already the tail.
-      if ntries > 1 and should_save_hop(url) then
+      if should_save_hop(url) then
         chain_append(chain, url)
       end
 
@@ -484,7 +524,12 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
                   -- Pass current ntries so any onward ^nested-bridge
                   -- inside step counts HEADs already done in this
                   -- scan toward nested_limit, instead of resetting.
-                  step(task, orig_url, chain, seen, probe_data, ntries)
+                  -- http_extended=true so step's terminal path will
+                  -- finalize_chain (cache the newly-resolved live link
+                  -- from this http_walk to redir_url, otherwise the
+                  -- 'processing' marker at hash(orig_url) is never
+                  -- replaced with the actual chain).
+                  step(task, orig_url, chain, seen, probe_data, ntries, true)
                 else
                   http_walk(task, orig_url, redir_url, ntries + 1, chain, seen)
                 end
@@ -567,14 +612,20 @@ local function resolve_cached(task, orig_url)
     end
 
     -- Cache miss or 'processing': try to claim the lock and live-resolve.
-    -- If SET NX fails (another scan holds the lock), ndata != 'OK' and
-    -- we silently drop -- the other scan will populate the cache.
+    -- If SET NX fails (another scan holds the lock or a stale 'processing'
+    -- marker survives a crash), ndata != 'OK' and we drop this scan -- the
+    -- other holder will populate the cache, or the stale lock will expire
+    -- (EX = timeout + 1s) and the next scan will claim it.
     local function redis_reserve_cb(nerr, ndata)
       if nerr then
         rspamd_logger.errx(task,
             'got error while setting redirect keys: %s', nerr)
       elseif ndata == 'OK' then
         http_walk(task, orig_url, orig_url, 1, chain, seen)
+      else
+        lua_util.debugm(N, task,
+            'failed to claim lock for %s (held by another worker or stale processing marker, ndata=%s); skipping this scan',
+            orig_url, ndata)
       end
     end
 
@@ -601,35 +652,38 @@ local function url_redirector_process_url(task, url)
 end
 
 local function url_redirector_handler(task)
+  -- task:has_urls returns (bool, count) without materialising the URL
+  -- table; bail out cheaply when the message has no URLs at all so we
+  -- skip the CTA scan and extract_specific_urls call entirely.
+  local has_urls, n_urls = task:has_urls()
+  if not has_urls then
+    lua_util.debugm(N, task, 'no URLs in task, skipping redirector resolution')
+    return
+  end
+
   local selected = {}
   local seen = {}
 
-  local text_parts = task:get_text_parts()
-  if text_parts then
-    for _, part in ipairs(text_parts) do
-      if part:is_html() and part.get_cta_urls then
-        local cta_urls = part:get_cta_urls(settings.max_urls, true)
-        if cta_urls then
-          for _, url in ipairs(cta_urls) do
-            local host = url:get_host()
-            if host and settings.redirector_hosts_map:get_key(host) then
-              local key = tostring(url)
-              if not seen[key] then
-                lua_util.debugm(N, task, 'prefer CTA url %s for redirector', key)
-                table.insert(selected, url)
-                seen[key] = true
-                if #selected >= settings.max_urls then
-                  break
-                end
-              end
+  for _, part in ipairs(task:get_text_parts()) do
+    if part:is_html() then
+      for _, url in ipairs(part:get_cta_urls(settings.max_urls, true)) do
+        local host = url:get_host()
+        if host and settings.redirector_hosts_map:get_key(host) then
+          local key = tostring(url)
+          if not seen[key] then
+            lua_util.debugm(N, task, 'prefer CTA url %s for redirector', key)
+            table.insert(selected, url)
+            seen[key] = true
+            if #selected >= settings.max_urls then
+              break
             end
           end
         end
       end
+    end
 
-      if #selected >= settings.max_urls then
-        break
-      end
+    if #selected >= settings.max_urls then
+      break
     end
   end
 
@@ -666,6 +720,12 @@ local function url_redirector_handler(task)
         end
       end
     end
+  end
+
+  if #selected == 0 then
+    lua_util.debugm(N, task,
+        'no URLs matched redirector_hosts_map (out of %d task URLs)',
+        n_urls)
   end
 
   for _, u in ipairs(selected) do
