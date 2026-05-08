@@ -2944,6 +2944,44 @@ int fuzzy_check_module_config(struct rspamd_config *cfg, bool validate)
 	msg_info_config("init internal fuzzy_check module, %d rules loaded",
 					nrules);
 
+	/* Check for flag collisions across writable rules */
+	if (fuzzy_module_ctx->fuzzy_rules != NULL && fuzzy_module_ctx->fuzzy_rules->len > 1) {
+		GHashTable *writable_flag_rules = g_hash_table_new(g_direct_hash, g_direct_equal);
+		unsigned int ri;
+		struct fuzzy_rule *wrule;
+
+		PTR_ARRAY_FOREACH(fuzzy_module_ctx->fuzzy_rules, ri, wrule)
+		{
+			if (wrule->mode == fuzzy_rule_read_only) {
+				continue;
+			}
+
+			GHashTableIter flag_it;
+			gpointer fk, fv;
+			g_hash_table_iter_init(&flag_it, wrule->mappings);
+
+			while (g_hash_table_iter_next(&flag_it, &fk, &fv)) {
+				const char *existing_rule_name = g_hash_table_lookup(writable_flag_rules, fk);
+
+				if (existing_rule_name != NULL) {
+					msg_warn_config(
+						"fuzzy flag %d is used by both writable rules '%s' and '%s'; "
+						"write operations will be sent to all matching rules — "
+						"use unique flags or set `read_only = true` on rules that should not receive writes",
+						GPOINTER_TO_INT(fk),
+						existing_rule_name,
+						wrule->name ? wrule->name : "(unnamed)");
+				}
+				else {
+					g_hash_table_insert(writable_flag_rules, fk,
+										(gpointer) (wrule->name ? wrule->name : "(unnamed)"));
+				}
+			}
+		}
+
+		g_hash_table_destroy(writable_flag_rules);
+	}
+
 	/* Register global methods */
 	lua_getglobal(L, "rspamd_plugins");
 
