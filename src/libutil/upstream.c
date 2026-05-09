@@ -598,6 +598,22 @@ rspamd_upstream_update_addrs(struct upstream *upstream)
 	struct upstream_addr_elt *addr_elt, *naddr;
 
 	/*
+	 * Drained members exit early — drain has unlinked them from the
+	 * list; rebuilding addresses now would just leak the address array
+	 * once the member's dtor runs.
+	 */
+	if (upstream->is_draining) {
+		struct upstream_inet_addr_entry *cur_pending, *tmp_pending;
+		LL_FOREACH_SAFE(upstream->new_addrs, cur_pending, tmp_pending)
+		{
+			rspamd_inet_address_free(cur_pending->addr);
+			g_free(cur_pending);
+		}
+		upstream->new_addrs = NULL;
+		return;
+	}
+
+	/*
 	 * We need first of all get the saved port, since DNS gives us no
 	 * idea about what port has been used previously. For PENDING_RESOLVE
 	 * upstreams there is no prior address: use the port stashed at parse
@@ -754,6 +770,19 @@ rspamd_upstream_dns_cb(struct rdns_reply *reply, void *arg)
 	struct upstream *up = (struct upstream *) arg;
 	struct rdns_reply_entry *entry;
 	struct upstream_inet_addr_entry *up_ent;
+
+	/*
+	 * Drained SRV members may still receive their last A/AAAA reply
+	 * after drain. Don't accumulate addresses or call update_addrs —
+	 * the member is on its way out and any address mutation is wasted
+	 * work (and risks a UAF on the addrs array if drain races with the
+	 * callback).
+	 */
+	if (up->is_draining) {
+		up->dns_requests--;
+		REF_RELEASE(up);
+		return;
+	}
 
 	if (reply->code == RDNS_RC_NOERROR) {
 		entry = reply->entries;
@@ -922,6 +951,16 @@ rspamd_upstream_srv_drain_member(struct upstream *member)
 
 	member->is_draining = TRUE;
 
+	/*
+	 * If the member was mid-probe at drain time, clearing
+	 * half_open_inflight prevents the eventual fail/ok callback from
+	 * the inflight selector from advancing the probe state machine
+	 * (and the is_draining check in rspamd_upstream_ok blocks
+	 * re-activation as a belt-and-braces measure).
+	 */
+	member->half_open_inflight = 0;
+	member->next_probe_at = 0;
+
 	/* Stop any timer that might re-activate the member. */
 	if (member->ctx && member->ctx->event_loop && ev_can_stop(&member->ev)) {
 		ev_timer_stop(member->ctx->event_loop, &member->ev);
@@ -1005,21 +1044,31 @@ rspamd_upstream_srv_drain_member(struct upstream *member)
 	 * revive_time as the grace period — same TTL the rest of the system
 	 * already assumes for inactive upstreams.
 	 *
-	 * Without an event loop (tests, early startup), no inflight is
-	 * possible; we skip the timer and let REF_RELEASE below run the
-	 * dtor synchronously.
+	 * Without a configured event loop (tests, early startup, ctx mid-
+	 * teardown), no inflight is possible; we skip the timer and let
+	 * REF_RELEASE below run the dtor synchronously. The two conditions
+	 * — `event_loop` and `configured` — are checked together so we
+	 * never REF_RETAIN without guaranteeing the timer that releases
+	 * that ref will actually run.
 	 */
-	if (member->ctx && member->ctx->event_loop && ls != NULL) {
+	if (member->ctx && member->ctx->event_loop && member->ctx->configured &&
+		ls != NULL) {
 		double ntim = rspamd_time_jitter(ls->limits->revive_time,
 										 ls->limits->revive_time *
 											 ls->limits->revive_jitter);
 		REF_RETAIN(member);
 		ev_timer_init(&member->ev, rspamd_upstream_revive_cb, ntim, 0);
 		member->ev.data = member;
-		if (member->ctx->configured) {
-			ev_timer_start(member->ctx->event_loop, &member->ev);
-		}
+		ev_timer_start(member->ctx->event_loop, &member->ev);
 	}
+
+	/*
+	 * Now that the alive bookkeeping and grace timer are set up using
+	 * the local `ls`, sever the back-pointer so any callback that fires
+	 * later on this drained member sees a NULL ls and bails (revive_cb,
+	 * record_latency, return_tokens already guard on this).
+	 */
+	member->ls = NULL;
 
 	/* Release the original creation ref. */
 	REF_RELEASE(member);
@@ -1049,7 +1098,15 @@ void rspamd_upstream_srv_apply(struct upstream *parent,
 		return;
 	}
 
-	RSPAMD_UPSTREAM_LOCK(parent);
+	/*
+	 * No parent lock here on purpose. Both `srv_create_member` and
+	 * `srv_drain_member` take the list lock further down — locking the
+	 * parent first would invert the ls -> upstream order used everywhere
+	 * else (set_inactive, return_tokens, …) and deadlock thread-safe
+	 * builds. Mutations to `srv_members` are serialized by the event
+	 * loop (DNS replies don't run concurrently with each other on the
+	 * same parent), and tests are single-threaded.
+	 */
 
 	seen = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 
@@ -1112,8 +1169,6 @@ void rspamd_upstream_srv_apply(struct upstream *parent,
 	}
 	g_list_free(to_drain);
 	g_hash_table_unref(seen);
-
-	RSPAMD_UPSTREAM_UNLOCK(parent);
 }
 
 struct upstream *
@@ -1698,8 +1753,14 @@ void rspamd_upstream_ok(struct upstream *upstream)
 	if (upstream->inflight > 0) {
 		upstream->inflight--;
 	}
-	/* Success handling */
-	if (upstream->half_open_inflight > 0) {
+	/*
+	 * Success handling. Drained SRV members must not slip back into the
+	 * alive list through the half-open probe path: a member could have
+	 * been mid-probe at drain time, with an inflight selector still
+	 * holding its pointer; that selector's eventual ok() must not
+	 * undo the drain.
+	 */
+	if (upstream->half_open_inflight > 0 && !upstream->is_draining) {
 		/* Successful probe: mark alive and reset backoff */
 		upstream->half_open_inflight = 0;
 		upstream->probe_backoff = upstream->ls ? upstream->ls->limits->revive_time : default_revive_time;
@@ -1834,11 +1895,13 @@ rspamd_upstream_dtor(struct upstream *up)
 	}
 
 	/*
-	 * SRV parents own a hash table of "fqdn:port" → member upstream. The
-	 * members themselves carry their own refs and are freed independently
-	 * once their drain ref counts reach zero, so we only release the hash
-	 * itself here. Drain on rspamd_upstreams_destroy already cleared the
-	 * entries by the time the parent's dtor runs.
+	 * SRV parents own a hash table of "fqdn:port" → member upstream.
+	 * The hash's value-destroy is NULL by design: members are released
+	 * independently through `ls->ups` iteration in
+	 * `rspamd_upstreams_destroy` (or via the grace-timer ref drop after
+	 * a drain). Only the keys are freed by the hash unref. Calling
+	 * unref on a hash that still holds live entries is safe — only
+	 * the keys leak, not the upstream pointers.
 	 */
 	if (up->srv_members != NULL) {
 		g_hash_table_unref(up->srv_members);
