@@ -2075,6 +2075,26 @@ ev_set_allocator (void *(*cb)(void *ptr, long size) EV_NOEXCEPT) EV_NOEXCEPT
   alloc = cb;
 }
 
+/* RSPAMD LOCAL EXTENSION: process-global fake-clock hook for unit tests.
+ * When non-NULL, both ev_time() and get_clock() return the callback's value
+ * instead of reading the system clocks. See ev.h for the public API.
+ */
+static ev_fake_time_cb fake_time_cb = 0;
+
+ecb_cold
+void
+ev_set_fake_time_cb (ev_fake_time_cb cb) EV_NOEXCEPT
+{
+  fake_time_cb = cb;
+}
+
+ecb_cold
+ev_fake_time_cb
+ev_get_fake_time_cb (void) EV_NOEXCEPT
+{
+  return fake_time_cb;
+}
+
 inline_speed void *
 ev_realloc (void *ptr, long size)
 {
@@ -2202,6 +2222,10 @@ typedef struct
 ev_tstamp
 ev_time (void) EV_NOEXCEPT
 {
+  /* RSPAMD LOCAL EXTENSION: fake clock hook for unit tests. */
+  if (ecb_expect_false (fake_time_cb != 0))
+    return fake_time_cb ();
+
 #if EV_USE_REALTIME
   if (ecb_expect_true (have_realtime))
     {
@@ -2222,6 +2246,10 @@ ev_time (void) EV_NOEXCEPT
 inline_size ev_tstamp
 get_clock (void)
 {
+  /* RSPAMD LOCAL EXTENSION: fake clock hook for unit tests. */
+  if (ecb_expect_false (fake_time_cb != 0))
+    return fake_time_cb ();
+
 #if EV_USE_MONOTONIC
   if (ecb_expect_true (have_monotonic))
     {
@@ -5687,6 +5715,16 @@ void
 ev_now_update_if_cheap (EV_P) EV_NOEXCEPT
 {
 	if (have_cheap_timer) time_update (EV_A_ 1e100);
+}
+
+/* RSPAMD LOCAL EXTENSION: see ev.h. */
+void
+ev_now_resync (EV_P) EV_NOEXCEPT
+{
+	ev_rt_now = ev_time ();
+	mn_now    = get_clock ();
+	now_floor = mn_now;
+	rtmn_diff = ev_rt_now - mn_now;
 }
 
 int
