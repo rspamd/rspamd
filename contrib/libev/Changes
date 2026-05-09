@@ -1,5 +1,18 @@
 Revision history for libev, a high-performance and full-featured event loop.
 
+Rspamd local extensions (not present in upstream libev):
+        - ev_active_cnt: returns the loop's activecnt counter.
+        - ev_now_update_if_cheap: cheap variant of ev_now_update for paths
+          that need a fresh cached time but cannot afford a realtime read.
+        - ev_now_resync: force-resync the loop's cached realtime/monotonic
+          state from the current time sources, discarding interpolation.
+          Use after installing/removing a fake clock.
+        - ev_set_fake_time_cb / ev_get_fake_time_cb: process-global fake
+          clock hook for unit tests; when set, replaces both ev_time() and
+          the internal monotonic clock so timers and ev_now() advance under
+          test control. NULL by default; cost in production is one
+          predicted-false branch.
+
 4.25 Fri Dec 21 07:49:20 CET 2018
         - INCOMPATIBLE CHANGE: EV_THROW was renamed to EV_NOEXCEPT
           (EV_THROW sitll provided) and now uses noexcept on C++11 or newer.
