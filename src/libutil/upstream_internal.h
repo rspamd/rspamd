@@ -74,6 +74,15 @@ void rspamd_upstream_member_force_alive_for_test(struct upstream *member,
  */
 struct upstream *rspamd_upstream_srv_test_get_parent(struct upstream_list *ups);
 
+/*
+ * Install an event loop on the context without going through
+ * rspamd_upstreams_library_config (which requires a full rspamd_config).
+ * Test-only: lets unit tests drive ev_now() and timer firing through the
+ * libev fake-clock hook (see ev.h: ev_set_fake_time_cb).
+ */
+void rspamd_upstream_ctx_set_event_loop_for_test(struct upstream_ctx *ctx,
+												 struct ev_loop *event_loop);
+
 #ifdef __cplusplus
 }
 #endif

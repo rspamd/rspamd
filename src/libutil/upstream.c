@@ -315,6 +315,39 @@ static void rspamd_upstream_resolve_addrs(const struct upstream_list *ls,
 static void rspamd_upstream_set_inactive(struct upstream_list *ls,
 										 struct upstream *upstream);
 
+/*
+ * Time helpers. We use ev_now() — the loop's cached time — wherever an event
+ * loop is available, so all decisions in a single loop iteration agree on
+ * "now" and tests can drive time deterministically via the libev fake-clock
+ * hook. The rspamd_get_ticks() fallback covers paths that may run before the
+ * event loop is wired up (early init, unit tests of pure helpers).
+ */
+static inline double
+rspamd_upstream_now(const struct upstream *up)
+{
+	if (up->ctx && up->ctx->event_loop) {
+		return ev_now(up->ctx->event_loop);
+	}
+	return rspamd_get_ticks(FALSE);
+}
+
+/*
+ * Same as rspamd_upstream_now() but first refreshes the loop's cached
+ * monotonic time. Use on rare paths (e.g. fail handling) where multiple
+ * timestamps may be sampled in a single loop iteration and we want each
+ * sample to reflect actual elapsed time. The "_if_cheap" variant only
+ * touches the monotonic clock; no realtime read.
+ */
+static inline double
+rspamd_upstream_now_fresh(const struct upstream *up)
+{
+	if (up->ctx && up->ctx->event_loop) {
+		ev_now_update_if_cheap(up->ctx->event_loop);
+		return ev_now(up->ctx->event_loop);
+	}
+	return rspamd_get_ticks(FALSE);
+}
+
 void rspamd_upstreams_library_config(struct rspamd_config *cfg,
 									 struct upstream_ctx *ctx,
 									 struct ev_loop *event_loop,
@@ -1190,6 +1223,13 @@ rspamd_upstream_srv_test_get_parent(struct upstream_list *ups)
 	return NULL;
 }
 
+void rspamd_upstream_ctx_set_event_loop_for_test(struct upstream_ctx *ctx,
+												 struct ev_loop *event_loop)
+{
+	g_assert(ctx != NULL);
+	ctx->event_loop = event_loop;
+}
+
 void rspamd_upstream_member_force_alive_for_test(struct upstream *member,
 												 const char *ip_str)
 {
@@ -1627,7 +1667,7 @@ void rspamd_upstream_fail(struct upstream *upstream,
 	}
 
 	if (upstream->ctx && upstream->active_idx != -1 && upstream->ls) {
-		sec_cur = rspamd_get_ticks(FALSE);
+		sec_cur = rspamd_upstream_now_fresh(upstream);
 
 		RSPAMD_UPSTREAM_LOCK(upstream);
 		if (upstream->errors == 0) {
@@ -3456,15 +3496,6 @@ rspamd_upstream_refill_tokens(struct upstream *up,
 		}
 	}
 	up->last_refill_at = now;
-}
-
-static inline double
-rspamd_upstream_now(const struct upstream *up)
-{
-	if (up->ctx && up->ctx->event_loop) {
-		return ev_now(up->ctx->event_loop);
-	}
-	return rspamd_get_ticks(FALSE);
 }
 
 struct upstream *

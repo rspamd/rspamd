@@ -28,6 +28,8 @@
 
 #include "libutil/upstream.h"
 #include "libutil/upstream_internal.h"
+#include "rspamd_test_fake_time.hxx"
+#include "contrib/libev/ev.h"
 
 #include <map>
 #include <set>
@@ -40,10 +42,20 @@ struct ctx_holder {
 	struct upstream_ctx *ctx;
 	struct upstream_list *ups;
 	struct upstream *parent;
+	struct ev_loop *loop;
 
 	ctx_holder()
 	{
+		/*
+		 * Use a non-default loop so installing a fake clock in one test
+		 * can't bleed into anything that touches the default loop. The
+		 * loop never runs ev_run() in these tests; we only need it for
+		 * ev_now() to read through to our fake-clock hook.
+		 */
+		loop = ev_loop_new(EVFLAG_AUTO);
+		REQUIRE(loop != nullptr);
 		ctx = rspamd_upstreams_library_init();
+		rspamd_upstream_ctx_set_event_loop_for_test(ctx, loop);
 		ups = rspamd_upstreams_create(ctx);
 		rspamd_upstreams_set_rotation(ups, RSPAMD_UPSTREAM_ROUND_ROBIN);
 
@@ -61,6 +73,7 @@ struct ctx_holder {
 	{
 		rspamd_upstreams_destroy(ups);
 		rspamd_upstreams_library_unref(ctx);
+		ev_loop_destroy(loop);
 	}
 
 	ctx_holder(const ctx_holder &) = delete;
@@ -283,25 +296,20 @@ TEST_SUITE("upstream_srv")
 	{
 		ctx_holder t;
 		/*
-		 * Squeeze the error window so a few fails over a few tens of
-		 * ms cross the rate threshold. Defaults (4 errors / 10s) would
-		 * require multi-second sleeps to trigger in unit tests.
-		 */
-		/*
-		 * Rate-based inactive transition fires when:
-		 *   (sec_cur - last_fail) >= error_time  AND
-		 *   errors / elapsed > max_errors / error_time
-		 *
-		 * Pick aggressive limits so we comfortably exceed the threshold
-		 * even with macOS scheduler jitter on g_usleep.
+		 * Realistic defaults — the rate-window math is the same whether we
+		 * run in real or fake time, so there's no need to squeeze error_time
+		 * down to milliseconds. Five errors over a one-second budget with
+		 * max_errors=4 puts us comfortably past the rate threshold.
 		 */
 		rspamd_upstreams_set_limits(t.ups,
 									/* revive_time */ 60.0,
 									/* revive_jitter */ 0.4,
-									/* error_time */ 0.002,
+									/* error_time */ 1.0,
 									/* dns_timeout */ 1.0,
-									/* max_errors */ 1,
+									/* max_errors */ 4,
 									/* dns_retransmits */ 2);
+
+		rspamd_test::fake_clock clk(1000.0, t.loop);
 
 		t.apply({
 			{"a.example.com", 11335, 1, 10},
@@ -320,11 +328,12 @@ TEST_SUITE("upstream_srv")
 		 * Pre-refactor, the three SRV targets shared one error budget;
 		 * a burst here would have killed every target. With per-member
 		 * budgets, only `bad` crosses the rate threshold and exits the
-		 * alive list.
+		 * alive list. Each fail() advances virtual time by 100 ms so the
+		 * rate-window arithmetic sees real elapsed time without sleeping.
 		 */
 		for (int i = 0; i < 12; i++) {
 			rspamd_upstream_fail(bad, TRUE, "test");
-			g_usleep(1000); /* 1 ms — gives ample margin over error_time=2ms */
+			clk.advance(0.1);
 		}
 
 		/*
