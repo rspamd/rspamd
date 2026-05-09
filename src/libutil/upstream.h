@@ -48,6 +48,12 @@ enum rspamd_upstream_rotation {
 
 enum rspamd_upstream_flag {
 	RSPAMD_UPSTREAM_FLAG_NORESOLVE = (1 << 0),
+	/*
+	 * Upstream is an SRV "parent": a placeholder that owns SRV-derived
+	 * member upstreams. Never put into the alive list, never selected
+	 * directly; its only job is to host the lazy SRV re-resolve timer
+	 * and a hash table of members keyed by "fqdn:port".
+	 */
 	RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE = (1 << 1),
 	RSPAMD_UPSTREAM_FLAG_DNS = (1 << 2),
 	/*
@@ -57,6 +63,16 @@ enum rspamd_upstream_flag {
 	 * and the upstream becomes selectable.
 	 */
 	RSPAMD_UPSTREAM_FLAG_PENDING_RESOLVE = (1 << 3),
+	/*
+	 * SRV-derived member: a first-class upstream created by expanding a
+	 * single SRV target into its own struct upstream. Holds its own error
+	 * budget, latency EWMA, weight, addresses, and is selectable via the
+	 * normal rotation algorithms. Lifetime is bound to the parent's SRV
+	 * member table; on graceful drain (target gone from re-resolve), the
+	 * member is removed from selection and released after its inflight
+	 * refs drop.
+	 */
+	RSPAMD_UPSTREAM_FLAG_SRV_MEMBER = (1 << 4),
 };
 
 struct rspamd_config;
