@@ -48,6 +48,25 @@ Sync API TCP get request
 #  Check url  /request  post  HTTP_SYNC_EOF_post  hello post
 #  Check url  /content-length  post  HTTP_SYNC_CONTENT_post  hello post
 
+Phased timeouts on success path
+  Scan File  ${MESSAGE}
+  ...  Settings={symbols_enabled = [PHASED_TIMEOUT_TEST]}
+  Expect Symbol  PHASED_TCP_OK
+  Do Not Expect Symbol  PHASED_TCP_ERROR
+
+on_error fires on connect refused
+  Scan File  ${MESSAGE}
+  ...  Settings={symbols_enabled = [ON_ERROR_REFUSED_TEST]}
+  Expect Symbol  ON_ERROR_FIRED
+  Do Not Expect Symbol  ON_ERROR_REGULAR_CB_FIRED
+
+on_error not fired post-connect
+  Scan File  ${MESSAGE}
+  ...  Settings={symbols_enabled = [ON_ERROR_POST_CONNECT_TEST]}
+  Expect Symbol  POST_CONNECT_READ_TIMEOUT
+  Do Not Expect Symbol  POST_CONNECT_ON_ERROR_FIRED
+  Do Not Expect Symbol  POST_CONNECT_READ_OK
+
 *** Keywords ***
 Servers Setup
   Run Dummy Http
