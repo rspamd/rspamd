@@ -118,7 +118,7 @@ local function gen_auth_results(task, settings)
       ar_string = 'fail' -- imply failure, not neutral
     elseif dres.result == 'allow' then
       ar_string = 'pass'
-    elseif dres.result == 'bad record' or dres.result == 'permerror' then
+    elseif dres.result == 'bad record' or dres.result == 'permerror' or dres.result == 'permfail' then
       ar_string = 'permerror'
     elseif dres.result == 'tempfail' then
       ar_string = 'temperror'
