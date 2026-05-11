@@ -162,6 +162,7 @@ struct fuzzy_ctx {
 	int cleanup_rules_ref;
 	uint32_t retransmits;
 	gboolean enabled;
+	GHashTable *writable_flags; /* flag -> rule_name, for collision detection */
 };
 
 static inline uint8_t
@@ -2274,6 +2275,30 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 	rspamd_mempool_add_destructor(cfg->cfg_pool, fuzzy_free_rule,
 								  rule);
 
+	if (rule->mode != fuzzy_rule_read_only && fuzzy_module_ctx->writable_flags != NULL) {
+		GHashTableIter fit;
+		gpointer fk, fv;
+		g_hash_table_iter_init(&fit, rule->mappings);
+
+		while (g_hash_table_iter_next(&fit, &fk, &fv)) {
+			const char *existing = g_hash_table_lookup(fuzzy_module_ctx->writable_flags, fk);
+
+			if (existing != NULL) {
+				msg_warn_config(
+					"fuzzy flag %d is used by both writable rules '%s' and '%s'; "
+					"write operations will be sent to all matching rules — "
+					"use unique flags or set `read_only = true` on rules that should not receive writes",
+					GPOINTER_TO_INT(fk),
+					existing,
+					rule->name ? rule->name : "(unnamed)");
+			}
+			else {
+				g_hash_table_insert(fuzzy_module_ctx->writable_flags, fk,
+									(gpointer) (rule->name ? rule->name : "(unnamed)"));
+			}
+		}
+	}
+
 	return 0;
 }
 
@@ -2885,6 +2910,11 @@ int fuzzy_check_module_config(struct rspamd_config *cfg, bool validate)
 								 0,
 								 1,
 								 1);
+
+		fuzzy_module_ctx->writable_flags = g_hash_table_new(g_direct_hash, g_direct_equal);
+		rspamd_mempool_add_destructor(cfg->cfg_pool,
+									  (rspamd_mempool_destruct_t) g_hash_table_unref,
+									  fuzzy_module_ctx->writable_flags);
 
 		/*
 		 * Here we can have 2 possibilities:
