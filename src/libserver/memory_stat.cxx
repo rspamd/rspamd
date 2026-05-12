@@ -143,6 +143,16 @@ emit_mempool_info(ucl_object_t *parent)
 								  "avg_leftover", 0, false);
 			ucl_object_insert_key(e, ucl_object_fromint(st->samples),
 								  "samples", 0, false);
+			ucl_object_insert_key(e, ucl_object_fromint(st->pools_allocated),
+								  "pools_allocated", 0, false);
+			ucl_object_insert_key(e, ucl_object_fromint(st->pools_freed),
+								  "pools_freed", 0, false);
+			ucl_object_insert_key(e, ucl_object_fromint(st->chunks_allocated),
+								  "chunks_allocated", 0, false);
+			ucl_object_insert_key(e, ucl_object_fromint(st->bytes_allocated_total),
+								  "bytes_allocated_total", 0, false);
+			ucl_object_insert_key(e, ucl_object_fromint(st->bytes_currently_used),
+								  "bytes_currently_used", 0, false);
 
 			ucl_array_append(c->array, e);
 		},
@@ -173,10 +183,50 @@ emit_lua_info(ucl_object_t *parent, struct rspamd_config *cfg)
 }
 
 #ifdef WITH_JEMALLOC
-void jemalloc_text_cb(void *ud, const char *msg)
+void emit_jemalloc_arena(ucl_object_t *arr, unsigned int idx)
 {
-	auto *out = static_cast<rspamd_fstring_t **>(ud);
-	rspamd_printf_fstring(out, "%s", msg);
+	char path[128];
+
+	auto get_size = [&](const char *suffix) -> size_t {
+		size_t v = 0;
+		rspamd_snprintf(path, sizeof(path), "stats.arenas.%ud.%s", idx, suffix);
+		size_t sz = sizeof(v);
+		if (mallctl(path, &v, &sz, nullptr, 0) != 0) {
+			return 0;
+		}
+		return v;
+	};
+
+	size_t allocated = get_size("small.allocated") + get_size("large.allocated");
+	size_t mapped = get_size("mapped");
+
+	/* Only report arenas that actually hold something */
+	if (allocated == 0 && mapped == 0) {
+		return;
+	}
+
+	auto *a = ucl_object_typed_new(UCL_OBJECT);
+	ucl_object_insert_key(a, ucl_object_fromint(idx), "id", 0, false);
+	ucl_object_insert_key(a, ucl_object_fromint(allocated), "allocated", 0, false);
+	ucl_object_insert_key(a, ucl_object_fromint(get_size("small.allocated")),
+						  "small_allocated", 0, false);
+	ucl_object_insert_key(a, ucl_object_fromint(get_size("large.allocated")),
+						  "large_allocated", 0, false);
+	ucl_object_insert_key(a, ucl_object_fromint(mapped), "mapped", 0, false);
+	ucl_object_insert_key(a, ucl_object_fromint(get_size("retained")),
+						  "retained", 0, false);
+	ucl_object_insert_key(a, ucl_object_fromint(get_size("resident")),
+						  "resident", 0, false);
+	ucl_object_insert_key(a, ucl_object_fromint(get_size("pdirty") * (size_t) sysconf(_SC_PAGESIZE)),
+						  "dirty", 0, false);
+	ucl_object_insert_key(a, ucl_object_fromint(get_size("pmuzzy") * (size_t) sysconf(_SC_PAGESIZE)),
+						  "muzzy", 0, false);
+	ucl_object_insert_key(a, ucl_object_fromint(get_size("metadata.allocated")),
+						  "metadata", 0, false);
+	ucl_object_insert_key(a, ucl_object_fromint(get_size("nthreads")),
+						  "nthreads", 0, false);
+
+	ucl_array_append(arr, a);
 }
 #endif
 
@@ -217,16 +267,19 @@ emit_jemalloc_info(ucl_object_t *parent)
 	ucl_object_insert_key(obj, stats, "stats", 0, false);
 
 	auto *config = ucl_object_typed_new(UCL_OBJECT);
-
+	unsigned int narenas = 0;
 	{
-		unsigned int narenas = 0;
 		size_t sz = sizeof(narenas);
 		if (mallctl("opt.narenas", &narenas, &sz, nullptr, 0) == 0) {
 			ucl_object_insert_key(config, ucl_object_fromint(narenas), "narenas",
 								  0, false);
 		}
 	}
-
+	{
+		size_t page_sz = (size_t) sysconf(_SC_PAGESIZE);
+		ucl_object_insert_key(config, ucl_object_fromint(page_sz), "page_size",
+							  0, false);
+	}
 	{
 		ssize_t v = 0;
 		size_t sz = sizeof(v);
@@ -239,18 +292,29 @@ emit_jemalloc_info(ucl_object_t *parent)
 								  0, false);
 		}
 	}
+	{
+		const char *cfg_str = nullptr;
+		size_t sz = sizeof(cfg_str);
+		if (mallctl("version", &cfg_str, &sz, nullptr, 0) == 0 && cfg_str) {
+			ucl_object_insert_key(config, ucl_object_fromstring(cfg_str), "version",
+								  0, false);
+		}
+	}
 
 	ucl_object_insert_key(obj, config, "config", 0, false);
 
-	/* Capture the human-readable summary as well */
-	rspamd_fstring_t *text = rspamd_fstring_sized_new(4096);
-	malloc_stats_print(jemalloc_text_cb, &text, "Jmdablxe");
-	if (text->len > 0) {
-		ucl_object_insert_key(obj,
-							  ucl_object_fromlstring(text->str, text->len),
-							  "text", 0, false);
+	/*
+	 * Per-arena breakdown. We probe by index up to opt.narenas; arenas
+	 * that have never been populated are skipped.
+	 */
+	auto *arenas = ucl_object_typed_new(UCL_ARRAY);
+	if (narenas == 0) {
+		narenas = 32; /* sane upper bound when opt.narenas is unset */
 	}
-	rspamd_fstring_free(text);
+	for (unsigned int i = 0; i < narenas; i++) {
+		emit_jemalloc_arena(arenas, i);
+	}
+	ucl_object_insert_key(obj, arenas, "arenas", 0, false);
 
 	ucl_object_insert_key(parent, obj, "jemalloc", 0, false);
 #else

@@ -397,6 +397,11 @@ typedef struct rspamd_mempool_entry_stat_s {
 	uint32_t avg_fragmentation; /**< average fragmentation across history     */
 	uint32_t avg_leftover;      /**< average leftover across history          */
 	uint32_t samples;           /**< number of valid samples used for averages */
+	uint64_t pools_allocated;   /**< lifetime: pools allocated at this callsite */
+	uint64_t pools_freed;       /**< lifetime: pools freed at this callsite   */
+	uint64_t chunks_allocated;  /**< lifetime: chunks allocated at this callsite */
+	uint64_t bytes_allocated_total; /**< lifetime: bytes allocated for chains at this callsite */
+	uint64_t bytes_currently_used;  /**< current bytes held by live pool chains at this callsite */
 } rspamd_mempool_entry_stat_t;
 
 typedef void (*rspamd_mempool_entry_cb)(const rspamd_mempool_entry_stat_t *stat,

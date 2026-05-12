@@ -470,6 +470,14 @@ rspamd_mempool_new_(gsize size, const char *tag, int flags, const char *loc)
 	g_atomic_int_add(&mem_pool_stat->chunks_allocated, 1);
 	g_atomic_int_add(&mem_pool_stat_local.chunks_allocated, 1);
 
+	/* Per-callsite live counters */
+	if (entry) {
+		entry->pools_allocated++;
+		entry->chunks_allocated++;
+		entry->bytes_allocated_total += size;
+		entry->bytes_currently_used += size;
+	}
+
 	return new_pool;
 }
 
@@ -564,6 +572,13 @@ memory_pool_alloc_common(rspamd_mempool_t *pool, gsize size, gsize alignment,
 				pool->priv->entry->elts[pool->priv->entry->cur_elts].fragmentation += free;
 				new = rspamd_mempool_chain_new(size + pool->priv->elt_len, alignment,
 											   pool_type);
+			}
+
+			/* Per-callsite chunk accounting */
+			if (pool->priv->entry && new) {
+				pool->priv->entry->chunks_allocated++;
+				pool->priv->entry->bytes_allocated_total += new->slice_size;
+				pool->priv->entry->bytes_currently_used += new->slice_size;
 			}
 
 			/* Connect to pool subsystem */
@@ -998,6 +1013,8 @@ void rspamd_mempool_delete(rspamd_mempool_t *pool)
 		g_ptr_array_free(pool->priv->trash_stack, TRUE);
 	}
 
+	uint64_t freed_bytes = 0;
+
 	for (i = 0; i < G_N_ELEMENTS(pool->priv->pools); i++) {
 		if (pool->priv->pools[i]) {
 			LL_FOREACH_SAFE(pool->priv->pools[i], cur, tmp)
@@ -1008,6 +1025,8 @@ void rspamd_mempool_delete(rspamd_mempool_t *pool)
 								 -((int) cur->slice_size));
 				g_atomic_int_add(&mem_pool_stat->chunks_allocated, -1);
 				g_atomic_int_add(&mem_pool_stat_local.chunks_allocated, -1);
+
+				freed_bytes += cur->slice_size;
 
 				len = cur->slice_size + sizeof(struct _pool_chain);
 
@@ -1021,6 +1040,16 @@ void rspamd_mempool_delete(rspamd_mempool_t *pool)
 					}
 				}
 			}
+		}
+	}
+
+	if (pool->priv->entry && mempool_entries) {
+		pool->priv->entry->pools_freed++;
+		if (pool->priv->entry->bytes_currently_used >= freed_bytes) {
+			pool->priv->entry->bytes_currently_used -= freed_bytes;
+		}
+		else {
+			pool->priv->entry->bytes_currently_used = 0;
 		}
 	}
 
@@ -1102,6 +1131,11 @@ void rspamd_mempool_entries_foreach(rspamd_mempool_entry_cb cb, void *ud)
 		st.samples = valid;
 		st.avg_fragmentation = valid ? (uint32_t) (sum_frag / valid) : 0;
 		st.avg_leftover = valid ? (uint32_t) (sum_left / valid) : 0;
+		st.pools_allocated = elt->pools_allocated;
+		st.pools_freed = elt->pools_freed;
+		st.chunks_allocated = elt->chunks_allocated;
+		st.bytes_allocated_total = elt->bytes_allocated_total;
+		st.bytes_currently_used = elt->bytes_currently_used;
 
 		cb(&st, ud);
 	}
