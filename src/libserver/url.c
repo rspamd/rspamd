@@ -746,7 +746,7 @@ rspamd_mailto_parse(struct http_parser_url *u,
 				p++;
 			}
 			else {
-				*flags |= RSPAMD_URL_FLAG_MISSINGSLASHES;
+				/* mailto: is non-hierarchical (RFC 6068); // is not required */
 				st = parse_slash_slash;
 			}
 			break;
