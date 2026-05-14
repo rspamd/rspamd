@@ -3102,10 +3102,11 @@ rspamd_decode_qp2047_buf(const char *in, gsize inlen,
 			remain--;
 
 			if (remain == 0) {
+				/* Last '=' character without following hex digits */
 				if (end - o > 0) {
-					*o++ = *p;
-					break;
+					*o++ = '=';
 				}
+				break;
 			}
 		decode:
 			/* Decode character after '=' */
@@ -3170,6 +3171,14 @@ rspamd_decode_qp2047_buf(const char *in, gsize inlen,
 						p++;
 						/* Skip comparison, as we know that we have found match */
 						remain--;
+
+						if (remain == 0) {
+							/* Trailing '=' without hex digits */
+							if (end - o > 0) {
+								*o++ = '=';
+							}
+							break;
+						}
 						goto decode;
 					}
 					else {
