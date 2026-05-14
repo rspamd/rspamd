@@ -102,6 +102,18 @@ class MainHandler(tornado.web.RequestHandler):
         elif path == "/redirect4":
             # Send an HTTP redirect to the bind address of the server
             self.redirect(f"{self.request.protocol}://{self.request.host}/redirect3")
+        elif path == "/tel_redirect":
+            # Send an HTTP redirect to a tel: URL (non-HTTP scheme)
+            self.redirect("tel:88006007775")
+        elif path == "/mailto_redirect":
+            # Send an HTTP redirect to a mailto: URL (non-HTTP scheme)
+            self.redirect("mailto:user@example.net")
+        elif path == "/chain_intermediate_1":
+            # Intermediate hop to chain_to_tel2
+            self.redirect(f"{self.request.protocol}://{self.request.host}/chain_intermediate_2")
+        elif path == "/chain_intermediate_2":
+            # Final hop to a tel: URL
+            self.redirect("tel:88006007776")
         elif path == "/chain1":
             # Intermediate hop to chain2
             self.redirect(f"{self.request.protocol}://{self.request.host}/chain2")

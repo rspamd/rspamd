@@ -57,6 +57,7 @@ local settings = {
   user_agent = default_ua,
   redirector_symbol = nil, -- insert symbol if redirected url has been found
   redirector_symbol_nested = "URL_REDIRECTOR_NESTED", -- insert symbol if nested limit has been reached
+  redirector_symbol_non_http = "URL_REDIRECTOR_NON_HTTP", -- HTTP -> non-HTTP(S) redirect detected
   redirectors_only = true, -- follow merely redirectors
   top_urls_key = 'rdr:top_urls', -- key for top urls
   top_urls_count = 200, -- how many top urls to save
@@ -108,13 +109,17 @@ local function encode_url_for_redirect(url_str)
   return encoded
 end
 
--- Build a 'host1->host2->...' string from a chain of URL objects, used as
--- the symbol option for redirector_symbol_nested. Mirrors the format that
--- apply_redirect_chain emits for redirector_symbol.
+-- Build a 'host1->host2->...' string from a chain of URL objects.
+-- Includes scheme for non-HTTP(S) URLs to distinguish them.
 local function chain_hosts_string(chain)
   local hosts = {}
   for i = 1, #chain do
-    hosts[i] = chain[i]:get_host() or '?'
+    local proto = chain[i]:get_protocol()
+    if proto ~= 'http' and proto ~= 'https' then
+      hosts[i] = chain[i]:get_text()
+    else
+      hosts[i] = chain[i]:get_host() or '?'
+    end
   end
   return table.concat(hosts, '->')
 end
@@ -175,7 +180,10 @@ local function apply_redirect_chain(task, chain)
     chain[i]:set_redirected(chain[i + 1], mempool)
   end
   for i = 2, #chain do
-    task:inject_url(chain[i])
+    local proto = chain[i]:get_protocol()
+    if proto == 'http' or proto == 'https' then
+      task:inject_url(chain[i])
+    end
   end
   if settings.redirector_symbol then
     task:insert_result(settings.redirector_symbol, 1.0,
@@ -230,7 +238,7 @@ local function cache_chain_to_redis(task, chain, terminal_prefix)
 
   local function write_link(prev_url, next_url, marker)
     local link_key = cache_key_for_url(tostring(prev_url))
-    local next_str = tostring(next_url)
+    local next_str = next_url:get_text()
     local cache_value
     if marker then
       cache_value = string.format('^%s:%s', marker, next_str)
@@ -296,9 +304,9 @@ local http_walk
 -- Terminal exit for step(): write back if we extended via HTTP this scan,
 -- else just apply. Hoisted as a free function so step()'s recursive cache
 -- hops don't allocate a fresh closure per call.
-local function step_finish(task, chain, http_extended)
+local function step_finish(task, chain, http_extended, terminal_prefix)
   if http_extended then
-    finalize_chain(task, chain, nil)
+    finalize_chain(task, chain, terminal_prefix)
   else
     apply_redirect_chain(task, chain)
   end
@@ -369,7 +377,7 @@ step = function(task, orig_url, chain, seen, data, ntries, http_extended)
 
   local prefix, val = nil, data
   if data:sub(1, 1) == '^' then
-    local p, v = data:match('^%^(%a+):(.+)$')
+    local p, v = data:match('^%^([%w_]+):(.+)$')
     if p then
       prefix, val = p, v
     end
@@ -406,6 +414,15 @@ step = function(task, orig_url, chain, seen, data, ntries, http_extended)
     lua_util.debugm(N, task,
         'extending past cached ^nested:%s with live HTTP', val)
     http_walk(task, orig_url, hop, ntries + 1, chain, seen)
+    return
+  end
+
+  if prefix == 'non_http' then
+    local rscheme = hop:get_protocol() or val:match('^([^:]+)')
+    -- chain already includes hop (appended via chain_append above)
+    task:insert_result(settings.redirector_symbol_non_http, 1.0,
+        string.format('%s=%s', rscheme, chain_hosts_string(chain)))
+    step_finish(task, chain, http_extended, 'non_http')
     return
   end
 
@@ -495,6 +512,16 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
       end
 
       if redir_url then
+        local rscheme = redir_url:get_protocol()
+        if rscheme ~= 'http' and rscheme ~= 'https' then
+          lua_util.debugm(N, task, 'stop resolving redirects: %s has non-http(s) scheme %s', loc, rscheme)
+          chain_append(chain, redir_url)
+          task:insert_result(settings.redirector_symbol_non_http, 1.0,
+              string.format('%s=%s', rscheme, chain_hosts_string(chain)))
+          finalize_chain(task, chain, 'non_http')
+          return
+        end
+
         local should_follow
         if settings.redirectors_only then
           should_follow = settings.redirector_hosts_map:get_key(redir_url:get_host()) ~= nil
@@ -544,6 +571,21 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
           lua_util.debugm(N, task,
               'stop resolving redirects as %s is not a redirector', loc)
           chain_append(chain, redir_url)
+          finalize_chain(task, chain, nil)
+        end
+      elseif loc then
+        local raw_scheme = loc:match('^([A-Za-z][A-Za-z0-9+%-.]*):')
+        if raw_scheme and raw_scheme ~= 'http' and raw_scheme ~= 'https' then
+          lua_util.debugm(N, task, 'stop resolving redirects: %s has non-http(s) scheme %s (unparseable url)', loc, raw_scheme)
+          -- loc cannot be parsed into a URL object, so it cannot be appended to
+          -- chain or cached with a ^non_http marker. Emit the symbol now and cache
+          -- as a normal terminal; future scans within the TTL won't re-emit it.
+          task:insert_result(settings.redirector_symbol_non_http, 1.0,
+              string.format('%s=%s->%s', raw_scheme, chain_hosts_string(chain), loc))
+          finalize_chain(task, chain, nil)
+        else
+          lua_util.debugm(N, task, 'no location, headers: %s', headers)
+          chain_append(chain, url)
           finalize_chain(task, chain, nil)
         end
       else
@@ -784,6 +826,13 @@ if opts then
 
       rspamd_config:register_symbol {
         name = settings.redirector_symbol_nested,
+        type = 'virtual',
+        parent = id,
+        score = 0,
+      }
+
+      rspamd_config:register_symbol {
+        name = settings.redirector_symbol_non_http,
         type = 'virtual',
         parent = id,
         score = 0,

@@ -144,6 +144,14 @@ process_jpg_image(rspamd_mempool_t *pool, rspamd_ftok_t *data)
 	uint16_t h, w;
 	struct rspamd_image *img;
 
+	/*
+	 * Need room for the 2-byte SOI plus a marker (2 bytes) plus the
+	 * SOF fields (8 bytes) referenced as p[4..7] below.
+	 */
+	if (data->len < 12) {
+		return NULL;
+	}
+
 	img = rspamd_mempool_alloc0(pool, sizeof(struct rspamd_image));
 	img->type = IMAGE_TYPE_JPG;
 	img->data = data;
