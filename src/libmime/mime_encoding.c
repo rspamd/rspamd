@@ -244,8 +244,16 @@ rspamd_charset_normalize(char *in)
 	}
 
 	if (changed) {
-		memmove(in, begin, end - begin + 2);
-		*(end + 1) = '\0';
+		/*
+		 * Copy the trimmed content [begin..end] (length = end-begin+1)
+		 * and null-terminate at the shifted position. The previous
+		 * version copied one extra byte from past `end` and wrote the
+		 * terminator at the original (unshifted) offset, leaving stale
+		 * bytes in the result.
+		 */
+		size_t out_len = (size_t) (end - begin + 1);
+		memmove(in, begin, out_len);
+		in[out_len] = '\0';
 	}
 }
 
@@ -569,10 +577,15 @@ void rspamd_mime_charset_utf_enforce(char *in, gsize len)
 
 	while (p < end && len > 0 && (err_offset = rspamd_fast_utf8_validate(p, len)) > 0) {
 		err_offset--; /* As it returns it 1 indexed */
-		int32_t cur_offset = err_offset;
+		/*
+		 * Keep offsets as goffset (signed long) to avoid truncating to
+		 * int32_t on buffers >= 2 GiB: a negative cur_offset would make
+		 * `p += cur_offset` walk backwards.
+		 */
+		goffset cur_offset = err_offset;
 
-		while (cur_offset < len) {
-			int32_t tmp = cur_offset;
+		while (cur_offset < (goffset) len) {
+			goffset tmp = cur_offset;
 
 			U8_NEXT(p, cur_offset, len, uc);
 

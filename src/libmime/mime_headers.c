@@ -86,6 +86,13 @@ rspamd_mime_header_check_special(struct rspamd_task *task,
 		rh->decoded[len] = '\0'; /* Zero terminate after stripping */
 		/* Strip surrounding spaces */
 		rh->decoded = g_strstrip(rh->decoded);
+		/*
+		 * g_strstrip may memmove content forward and/or null-terminate
+		 * earlier, so re-acquire pointer/length to avoid scanning stale
+		 * bytes past the live content.
+		 */
+		p = rh->decoded;
+		len = strlen(p);
 		end = p + len;
 
 		if (*p == '<') {
