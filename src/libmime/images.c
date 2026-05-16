@@ -690,7 +690,7 @@ rspamd_image_process_part(struct rspamd_task *task, struct rspamd_mime_part *par
 		rh = rspamd_message_get_header_from_hash(part->raw_headers,
 												 "Content-Id", FALSE);
 
-		if (rh) {
+		if (rh && rh->decoded) {
 			cid = rh->decoded;
 
 			if (*cid == '<') {
