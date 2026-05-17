@@ -17,6 +17,7 @@ Rspamd was created by [Vsevolod Stakhov](https://github.com/vstakhov).
 
 ## Significant contributors
 
+* [Dmytro Alieksieiev](https://github.com/dragoangel)
 * [Steve Freegard](https://github.com/smfreegard)
 * [Alexey Savelyev](https://github.com/AlexeySa)
 * [Anna Stakhova](https://github.com/AnnaStakhova)
