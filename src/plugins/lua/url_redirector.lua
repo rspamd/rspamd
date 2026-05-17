@@ -62,6 +62,7 @@ local settings = {
   top_urls_key = 'rdr:top_urls', -- key for top urls
   top_urls_count = 200, -- how many top urls to save
   redirector_hosts_map = nil, -- check only those redirectors
+  redirector_get_urls_map = nil, -- list of regex patterns for which GET should be used instead of HEAD
   -- inject intermediate redirect hops into the task
   save_intermediate_redirs = {
     redirectors = false,
@@ -610,13 +611,20 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
   else
     ua = settings.user_agent[math.random(#settings.user_agent)]
   end
-  lua_util.debugm(N, task, 'query %s with user agent %s', tostring(url), ua)
+
+  local method = 'head'
+  if settings.redirector_get_urls_map
+      and settings.redirector_get_urls_map:get_key(url_str) then
+    method = 'get'
+  end
+  lua_util.debugm(N, task, 'query %s %s with user agent %s',
+      method, url_str, ua)
 
   local http_params = {
     headers = { ['User-Agent'] = ua },
-    url = tostring(url),
+    url = url_str,
     task = task,
-    method = 'head',
+    method = method,
     max_size = settings.max_size,
     opaque_body = true,
     no_ssl_verify = not settings.check_ssl,
@@ -805,6 +813,12 @@ if opts then
       local lua_maps = require "lua_maps"
       settings.redirector_hosts_map = lua_maps.map_add_from_ucl(settings.redirector_hosts_map,
           'set', 'Redirectors definitions')
+
+      if settings.redirector_get_urls_map then
+        settings.redirector_get_urls_map = lua_maps.map_add_from_ucl(
+            settings.redirector_get_urls_map, 'regexp',
+            'URL redirector: URLs to fetch with GET instead of HEAD')
+      end
 
       lua_redis.register_prefix(settings.key_prefix .. '[a-z0-9]{32}', N,
           'URL redirector hashes', {
