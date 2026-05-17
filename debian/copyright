@@ -77,8 +77,7 @@ Copyright: 2002-2015 Igor Sysoev
 License: BSD-2-Clause
 
 Files: src/plugins/lua/rbl.lua
-Copyright: 2011-2015, Vsevolod Stakhov <vsevolod@rspamd.com>
-           2013-2015, Andrew Lewis <nerf@judo.za.org>
+Copyright: 2013-2026, Vsevolod Stakhov <vsevolod@rspamd.com>
 License: Apache-2.0
 
 Files: doc/doxydown/*
