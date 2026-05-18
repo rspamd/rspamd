@@ -119,7 +119,7 @@ local function chain_hosts_string(chain)
     if proto ~= 'http' and proto ~= 'https' then
       hosts[i] = chain[i]:get_text()
     else
-      hosts[i] = chain[i]:get_host() or '?'
+      hosts[i] = chain[i]:get_host()
     end
   end
   return table.concat(hosts, '->')
@@ -239,7 +239,7 @@ local function cache_chain_to_redis(task, chain, terminal_prefix)
 
   local function write_link(prev_url, next_url, marker)
     local link_key = cache_key_for_url(tostring(prev_url))
-    local next_str = next_url:get_text()
+    local next_str = encode_url_for_redirect(next_url:get_text())
     local cache_value
     if marker then
       cache_value = string.format('^%s:%s', marker, next_str)
@@ -585,7 +585,7 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
               string.format('%s=%s->%s', raw_scheme, chain_hosts_string(chain), loc))
           finalize_chain(task, chain, nil)
         else
-          lua_util.debugm(N, task, 'no location, headers: %s', headers)
+          lua_util.debugm(N, task, 'failed to parse location %s, headers: %s', loc, headers)
           chain_append(chain, url)
           finalize_chain(task, chain, nil)
         end
@@ -744,6 +744,15 @@ local function url_redirector_handler(task)
       task = task,
       limit = remaining,
       filter = function(url)
+        -- task:get_urls()'s default protocol mask is HTTP|HTTPS|FILE|FTP.
+        -- We only follow HTTP(S); silently drop the rest at selection
+        -- rather than letting them reach http_walk and waste a HEAD
+        -- timeout. URL_REDIRECTOR_NON_HTTP is reserved for the case
+        -- where an HTTP redirect points at a non-HTTP scheme.
+        local proto = url:get_protocol()
+        if proto ~= 'http' and proto ~= 'https' then
+          return false
+        end
         local host = url:get_host()
         if host and settings.redirector_hosts_map:get_key(host) then
           local key = tostring(url)
