@@ -717,9 +717,21 @@ rspamd_fuzzy_make_reply(struct rspamd_fuzzy_cmd *cmd,
 
 			/* Extra flags from multiflag result */
 			if (mf_result) {
-				rep_v2->n_extra_flags = mf_result->n_extra_flags;
+				uint8_t n_extra = mf_result->n_extra_flags;
+				/*
+				 * rep_v2->extra_flags is fixed-size [RSPAMD_FUZZY_MAX_EXTRA_FLAGS].
+				 * All current backends bound n_extra_flags to this maximum, but
+				 * clamp defensively here so a future backend bug cannot turn
+				 * into an OOB write on the reply struct.
+				 */
+				if (G_UNLIKELY(n_extra > RSPAMD_FUZZY_MAX_EXTRA_FLAGS)) {
+					msg_warn("backend returned n_extra_flags=%d > max %d, clamping",
+							 (int) n_extra, (int) RSPAMD_FUZZY_MAX_EXTRA_FLAGS);
+					n_extra = RSPAMD_FUZZY_MAX_EXTRA_FLAGS;
+				}
+				rep_v2->n_extra_flags = n_extra;
 				memcpy(rep_v2->extra_flags, mf_result->extra_flags,
-					   sizeof(struct rspamd_fuzzy_flag_entry) * mf_result->n_extra_flags);
+					   sizeof(struct rspamd_fuzzy_flag_entry) * n_extra);
 			}
 
 			if (flags & RSPAMD_FUZZY_REPLY_DELAY) {
@@ -2036,6 +2048,17 @@ accept_fuzzy_socket(EV_P_ ev_io *w, int revents)
 	if (revents == EV_READ) {
 		ev_now_update_if_cheap(ctx->event_loop);
 		for (;;) {
+			/*
+			 * The kernel overwrites msg_namelen on each recvmsg/recvmmsg call
+			 * with the actual size of the received source address. If we don't
+			 * reset it back to the buffer capacity before the next call, the
+			 * kernel will treat that smaller value as the buffer size and
+			 * truncate a larger incoming address (e.g. IPv6 after IPv4),
+			 * leaving stale stack bytes mixed into the parsed sockaddr.
+			 */
+			for (int i = 0; i < MSGVEC_LEN; i++) {
+				MSG_FIELD(msg[i], msg_namelen) = salen;
+			}
 #ifdef HAVE_RECVMMSG
 			r = recvmmsg(w->fd, msg, MSGVEC_LEN, 0, NULL);
 #else
@@ -2235,7 +2258,22 @@ rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents)
 					uint16_t first_byte = session->cur_frame_state & 0xFF;
 					uint16_t second_byte = session->input_buf[processed_offset];
 					/* Reconstruct in little-endian byte order */
-					session->cur_frame_state = 0xC000 | (first_byte | (second_byte << 8));
+					uint16_t real_len = first_byte | (second_byte << 8);
+					/*
+					 * Length is stored in the low 14 bits of cur_frame_state
+					 * (top two bits are state flags). FUZZY_TCP_BUFFER_LENGTH
+					 * fits in 14 bits, so any value with bit 14 or 15 set is
+					 * invalid and would otherwise be silently masked off,
+					 * creating a protocol-smuggling primitive. Reject here.
+					 */
+					if (real_len == 0 || real_len > FUZZY_TCP_BUFFER_LENGTH) {
+						msg_err("invalid frame length %d from %s, closing connection",
+								(int) real_len,
+								rspamd_inet_address_to_string(session->common.addr));
+						REF_RELEASE(session);
+						return;
+					}
+					session->cur_frame_state = 0xC000 | real_len;
 					processed_offset++;
 				}
 				else {
