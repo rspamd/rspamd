@@ -1201,6 +1201,16 @@ lua_tcp_handler(int fd, short what, gpointer ud)
 			r = read(cbd->fd, inbuf, sizeof(inbuf));
 		}
 
+		/*
+		 * Read-only requests never receive an EV_WRITE for connect-complete
+		 * detection, so CONNECTED would otherwise stay unset and the
+		 * downstream FINISHED|CONNECTED gates on conn:close() leak refcounts.
+		 * Gating on r > 0 keeps pre-byte errors routed to on_error.
+		 */
+		if (r > 0 && !(cbd->flags & LUA_TCP_FLAG_CONNECTED)) {
+			cbd->flags |= LUA_TCP_FLAG_CONNECTED;
+		}
+
 		lua_tcp_process_read(cbd, inbuf, r);
 	}
 	else if (what == EV_WRITE) {
