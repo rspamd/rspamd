@@ -728,8 +728,8 @@ rspamd_mime_header_decode(rspamd_mempool_t *pool, const char *in,
 								token->len = pos + r;
 							}
 							else {
-								/* Cannot decode qp */
-								token->len -= tok_len;
+								/* Cannot decode qp: discard token, restore saved offset */
+								token->len = pos;
 							}
 						}
 						else {
@@ -738,8 +738,16 @@ rspamd_mime_header_decode(rspamd_mempool_t *pool, const char *in,
 								token->len = pos + tok_len;
 							}
 							else {
-								/* Cannot decode */
-								token->len -= tok_len;
+								/*
+								 * Cannot decode: discard this token. We must reset
+								 * to the saved offset rather than subtracting tok_len:
+								 * rspamd_cryptobox_base64_decode writes its *outlen
+								 * argument (tok_len) even on failure, so the value is
+								 * no longer the original token size. Leaving token->len
+								 * above pos would expose uninitialised heap bytes from
+								 * the freshly grown GByteArray in the decoded header.
+								 */
+								token->len = pos;
 							}
 						}
 
