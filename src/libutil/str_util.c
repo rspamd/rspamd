@@ -2296,7 +2296,7 @@ rspamd_string_find_eoh(GString *input, goffset *body_start)
 				 * if it is '\n', then we have \r\r\n sequence, that is NOT
 				 * double end of line
 				 */
-				if (p < end && p[1] == '\n') {
+				if (p + 1 < end && p[1] == '\n') {
 					p++;
 					state = got_lf;
 				}
