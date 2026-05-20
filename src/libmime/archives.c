@@ -891,15 +891,17 @@ rspamd_archive_7zip_read_vint(const unsigned char *start, gsize remain, uint64_t
 	else {
 		int cur_bit = 6, intlen = 1;
 		const unsigned char bmask = 0xFF;
-		uint64_t tgt;
+		uint64_t tgt = 0;
 
 		while (cur_bit > 0) {
 			if (!isset(&t, cur_bit)) {
 				if (remain >= intlen + 1) {
 					memcpy(&tgt, start + 1, intlen);
 					tgt = GUINT64_FROM_LE(tgt);
-					/* Shift back */
-					tgt >>= sizeof(tgt) - NBBY * intlen;
+					/*
+					 * tgt was zero-initialised, so it now holds the
+					 * intlen-byte little-endian value directly.
+					 */
 					/* Add masked value */
 					tgt += (uint64_t) (t & (bmask >> (NBBY - cur_bit)))
 						   << (NBBY * intlen);
