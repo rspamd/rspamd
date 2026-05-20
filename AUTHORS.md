@@ -9,14 +9,15 @@ Rspamd was created by [Vsevolod Stakhov](https://github.com/vstakhov).
 ## Developers
 
 * [Alexander Moisseev](https://github.com/moisseev)
-* [Andrew Lewis](https://github.com/fatalbanana)
 
 ## Alumni Developers
 
+* [Andrew Lewis](https://github.com/fatalbanana)
 * [Mikhail Galanin](https://github.com/negram)
 
 ## Significant contributors
 
+* [Dmytro Alieksieiev](https://github.com/dragoangel)
 * [Steve Freegard](https://github.com/smfreegard)
 * [Alexey Savelyev](https://github.com/AlexeySa)
 * [Anna Stakhova](https://github.com/AnnaStakhova)

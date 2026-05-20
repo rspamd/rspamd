@@ -444,18 +444,6 @@ rspamd_fuzzy_block_addr(struct rspamd_fuzzy_storage_ctx *ctx,
 	/* Apply network mask to zero out host bits */
 	rspamd_inet_address_apply_mask(addr, prefix_len);
 
-	/* Allocate ban struct from the tree's memory pool so it is freed automatically
-	 * when the tree is destroyed at shutdown */
-	struct rspamd_fuzzy_dynamic_ban *new_ban =
-		rspamd_mempool_alloc0(radix_get_pool(ctx->dynamic_blocked_nets),
-							  sizeof(*new_ban));
-	new_ban->expire_ts = expire_ts;
-	new_ban->response_code = response_code;
-
-	if (reason != NULL) {
-		rspamd_strlcpy(new_ban->reason, reason, sizeof(new_ban->reason));
-	}
-
 	/* Build the 16-byte IPv6-mapped key and compute masklen */
 	const unsigned char *raw;
 	unsigned int klen = 0;
@@ -490,21 +478,38 @@ rspamd_fuzzy_block_addr(struct rspamd_fuzzy_storage_ctx *ctx,
 		masklen = 128 - prefix_len;
 	}
 
-	uintptr_t old = radix_insert_compressed(ctx->dynamic_blocked_nets,
-											key, sizeof(key), masklen,
-											(uintptr_t) new_ban);
+	/* Look up the prefix first. On a hit, mutate the existing struct in place
+	 * and do not allocate — otherwise every duplicate ban (e.g. ban_sync
+	 * re-application, or per-cycle provisional refresh of an already-blocked
+	 * /24) leaks one rspamd_fuzzy_dynamic_ban (~80 B) into the radix mempool
+	 * with no way to reclaim it short of worker restart. */
+	uintptr_t old = radix_find_compressed(ctx->dynamic_blocked_nets,
+										  key, sizeof(key));
+	struct rspamd_fuzzy_dynamic_ban *ban;
 
 	if (old != RADIX_NO_VALUE) {
-		/* Duplicate prefix: btrie was NOT updated (it returned the existing value).
-		 * Update the existing ban struct in-place so the same memory location now
-		 * reflects the new TTL and reason. new_ban is pool-allocated so it leaks
-		 * a tiny struct, but that is acceptable. */
-		struct rspamd_fuzzy_dynamic_ban *existing = (struct rspamd_fuzzy_dynamic_ban *) old;
-		existing->expire_ts = expire_ts;
+		ban = (struct rspamd_fuzzy_dynamic_ban *) old;
+		ban->expire_ts = expire_ts;
+		ban->response_code = response_code;
 
 		if (reason != NULL) {
-			rspamd_strlcpy(existing->reason, reason, sizeof(existing->reason));
+			rspamd_strlcpy(ban->reason, reason, sizeof(ban->reason));
 		}
+	}
+	else {
+		/* New prefix — allocate from the radix mempool (freed at worker
+		 * shutdown when the tree is destroyed) and insert. */
+		ban = rspamd_mempool_alloc0(radix_get_pool(ctx->dynamic_blocked_nets),
+									sizeof(*ban));
+		ban->expire_ts = expire_ts;
+		ban->response_code = response_code;
+
+		if (reason != NULL) {
+			rspamd_strlcpy(ban->reason, reason, sizeof(ban->reason));
+		}
+
+		radix_insert_compressed(ctx->dynamic_blocked_nets,
+								key, sizeof(key), masklen, (uintptr_t) ban);
 	}
 
 	msg_info("dynamic block added for %s/%ud, expire_ts=%.0f, reason=%s",
