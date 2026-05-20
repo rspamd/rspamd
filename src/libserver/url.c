@@ -1849,6 +1849,10 @@ rspamd_url_maybe_regenerate_from_ip(struct rspamd_url *uri, rspamd_mempool_t *po
 	gboolean ret = FALSE, check_num = TRUE;
 	uint32_t n, dots, t = 0, i = 0, shift, nshift;
 
+	if (uri->hostlen == 0) {
+		return FALSE;
+	}
+
 	p = rspamd_url_host_unsafe(uri);
 	end = p + uri->hostlen;
 
@@ -1857,7 +1861,8 @@ rspamd_url_maybe_regenerate_from_ip(struct rspamd_url *uri, rspamd_mempool_t *po
 		end--;
 	}
 
-	while (*(end - 1) == '.' && end > p) {
+	/* Bound check must come first: an all-dots host walks end down to p */
+	while (end > p && *(end - 1) == '.') {
 		end--;
 	}
 
@@ -2445,6 +2450,16 @@ rspamd_url_parse(struct rspamd_url *uri,
 										 &unquoted_len, uri->flags);
 
 	rspamd_url_shift(uri, unquoted_len, UF_HOST);
+
+	/*
+	 * URL-decoding the host can collapse it to nothing (e.g. a host that
+	 * is just a truncated "%" escape decodes to zero bytes). The hostlen
+	 * check above runs before decoding, so re-check here to keep an empty
+	 * host out of the downstream host parsing.
+	 */
+	if (uri->hostlen == 0) {
+		return URI_ERRNO_HOST_MISSING;
+	}
 
 	/*
 	 * Remove extra slashes between host and path.
