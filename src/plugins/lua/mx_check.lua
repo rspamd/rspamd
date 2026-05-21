@@ -32,6 +32,7 @@ local rspamd_tcp = require "rspamd_tcp"
 local rspamd_util = require "rspamd_util"
 local lua_util = require "lua_util"
 local lua_redis = require "lua_redis"
+local lua_maps = require "lua_maps"
 
 local N = "mx_check"
 local CRLF = '\r\n'
@@ -60,6 +61,17 @@ local settings = {
   reject_null_mx = false,
   greylist_invalid = true,
 
+  -- run scope: by default mx_check skips authenticated and local-network
+  -- senders (they are our own traffic). ESP/outbound deployments can flip
+  -- these on to check outgoing mail too.
+  check_authorized = false,
+  check_local = false,
+
+  -- Testing only. When true, loopback (127/8, ::1) is treated as a normal
+  -- probeable address instead of a bogon, so the probe path can be exercised
+  -- against a local listener. NEVER enable this in production.
+  test_mode = false,
+
   -- maps / cache
   key_prefix = 'rmx',
   max_mx_a_records = 5,
@@ -82,10 +94,60 @@ local settings = {
   symbol_mx_nxdomain = 'MX_NXDOMAIN',
   symbol_mx_null = 'MX_NULL',
   symbol_mx_broken = 'MX_BROKEN',
+
+  -- IP-class symbols (Phase C: score 0, informational)
+  symbol_mx_local_only = 'MX_LOCAL_ONLY',
+  symbol_mx_local_mix = 'MX_LOCAL_MIX',
+  symbol_mx_bogon_only = 'MX_BOGON_ONLY',
+  symbol_mx_bogon_mix = 'MX_BOGON_MIX',
+  symbol_mx_skip = 'MX_SKIP',
 }
+
+-- RFC-defined address ranges, classified for MX-target probing. An MX RR
+-- resolving into LOCAL space is unprobeable from our vantage point (we would
+-- reach our own LAN, not the publisher's); one resolving into BOGON space has
+-- no legitimate meaning at all and is a packet-injection footgun. Both sets
+-- are a fixed correctness invariant and are deliberately not operator-tunable.
+local LOCAL_RANGES = {
+  '10.0.0.0/8',      -- RFC 1918 private
+  '172.16.0.0/12',   -- RFC 1918 private
+  '192.168.0.0/16',  -- RFC 1918 private
+  '100.64.0.0/10',   -- RFC 6598 CGNAT
+  'fc00::/7',        -- RFC 4193 IPv6 unique-local
+}
+local BOGON_RANGES = {
+  '0.0.0.0/8',       -- RFC 1122 "this network"
+  '127.0.0.0/8',     -- loopback (dropped from the set under test_mode)
+  '169.254.0.0/16',  -- RFC 3927 link-local (APIPA)
+  '192.0.0.0/24',    -- RFC 6890 IETF protocol assignments
+  '192.0.2.0/24',    -- RFC 5737 TEST-NET-1
+  '192.88.99.0/24',  -- RFC 7526 6to4 relay anycast (deprecated)
+  '198.18.0.0/15',   -- RFC 2544 benchmarking
+  '198.51.100.0/24', -- RFC 5737 TEST-NET-2
+  '203.0.113.0/24',  -- RFC 5737 TEST-NET-3
+  '224.0.0.0/4',     -- RFC 5771 IPv4 multicast
+  '240.0.0.0/4',     -- RFC 1112 reserved (incl. 255.255.255.255 broadcast)
+  '::/128',          -- IPv6 unspecified
+  '::1/128',         -- IPv6 loopback (dropped from the set under test_mode)
+  '64:ff9b::/96',    -- RFC 6052 NAT64
+  -- NB: the IPv4-mapped range ::ffff:0:0/96 is deliberately NOT listed.
+  -- rspamd's radix stores every IPv4 address as its v4-mapped form, so that
+  -- prefix would match all IPv4 traffic. v4-mapped IPv6 MX targets can only
+  -- arise once AAAA probing lands and must be rejected before the radix test.
+  '100::/64',        -- RFC 6666 IPv6 discard-only
+  '2001:db8::/32',   -- RFC 3849 IPv6 documentation
+  'fe80::/10',       -- IPv6 link-local
+  'ff00::/8',        -- IPv6 multicast
+}
+-- Loopback prefixes lifted out of the BOGON set when test_mode is on.
+local LOOPBACK_RANGES = { ['127.0.0.0/8'] = true, ['::1/128'] = true }
 
 local redis_params
 local exclude_domains
+local exclude_mxs
+local exclude_ips
+local local_map
+local bogon_map
 
 -- ---------------------------------------------------------------------------
 -- Cache layer (Redis-backed; falls back gracefully if Redis is unavailable
@@ -186,6 +248,24 @@ local function is_null_mx(results)
     return false
   end
   return r.name == '' or r.name == '.'
+end
+
+-- Classify resolved MX-target IPs into PUBLIC / LOCAL / BOGON buckets.
+-- Membership is mutually exclusive; anything that matches neither map is
+-- PUBLIC.  Range membership depends only on the IP, so it is recomputed per
+-- lookup rather than cached.
+local function partition_ips(ips)
+  local public, locals, bogons = {}, {}, {}
+  for _, ip in ipairs(ips) do
+    if bogon_map and bogon_map:get_key(ip) then
+      bogons[#bogons + 1] = ip
+    elseif local_map and local_map:get_key(ip) then
+      locals[#locals + 1] = ip
+    else
+      public[#public + 1] = ip
+    end
+  end
+  return public, locals, bogons
 end
 
 -- ---------------------------------------------------------------------------
@@ -395,6 +475,13 @@ local function emit_outcome(task, mx_domain, outcome, info)
     return
   end
 
+  if outcome == 'skip' then
+    -- The probe set was emptied by the exclude_ips filter; MX_SKIP has
+    -- already been emitted where the filter ran.  Neutral outcome — no
+    -- MX_INVALID, and no MX_MISSING noise for a deliberately skipped check.
+    return
+  end
+
   -- A-fallback path: today's module fires MX_MISSING whenever the MX RR is
   -- absent and we fell back to A, independent of the probe outcome.  Match
   -- that behaviour: emit MX_MISSING first, then fall through to the regular
@@ -427,6 +514,12 @@ local function emit_outcome(task, mx_domain, outcome, info)
   elseif outcome == 'broken' then
     task:insert_result(settings.symbol_mx_broken, 1.0, mx_domain)
     invalid_reason = 'broken mx'
+  elseif outcome == 'local_only' then
+    -- MX_LOCAL_ONLY was already emitted during IP classification.
+    invalid_reason = 'mx resolves only to private addresses'
+  elseif outcome == 'bogon_only' then
+    -- MX_BOGON_ONLY was already emitted during IP classification.
+    invalid_reason = 'mx resolves only to non-routable addresses'
   end
 
   if invalid_reason then
@@ -544,6 +637,57 @@ local function lookup(task, mx_domain, done)
     done(verdict, ctx)
   end
 
+  -- Classify one MX target's IP set, emit the IP-class symbols, drop the
+  -- operator-excluded IPs, and probe whatever public addresses remain.
+  -- Bogon and private addresses are never probed: probing them is meaningless
+  -- from our vantage point and, for bogons, a packet-injection footgun.
+  local function probe_ip_set(ips, on_result)
+    local public, locals, bogons = partition_ips(ips)
+
+    if #public == 0 then
+      -- Nothing probeable: the MX target resolves only into private and/or
+      -- non-routable space.
+      if #locals > 0 then
+        task:insert_result(settings.symbol_mx_local_only, 1.0, locals[1])
+      end
+      if #bogons > 0 then
+        task:insert_result(settings.symbol_mx_bogon_only, 1.0, bogons[1])
+      end
+      on_result(#bogons > 0 and 'bogon_only' or 'local_only', nil)
+      return
+    end
+
+    -- Mixed set: keep the public addresses, flag the rest as informational.
+    if #locals > 0 then
+      task:insert_result(settings.symbol_mx_local_mix, 1.0, locals[1])
+    end
+    if #bogons > 0 then
+      task:insert_result(settings.symbol_mx_bogon_mix, 1.0, bogons[1])
+    end
+
+    -- Operator skip filter: drop public IPs that match exclude_ips.
+    local probe_list = public
+    if exclude_ips then
+      probe_list = {}
+      local dropped
+      for _, ip in ipairs(public) do
+        if exclude_ips:get_key(ip) then
+          dropped = dropped or ip
+        else
+          probe_list[#probe_list + 1] = ip
+        end
+      end
+      if #probe_list == 0 then
+        -- The filter emptied the probe set — nothing left to check.
+        task:insert_result(settings.symbol_mx_skip, 1.0, dropped)
+        on_result('skip', nil)
+        return
+      end
+    end
+
+    step3(probe_list, on_result)
+  end
+
   -- step 2: walk the MX list in priority order.  For each MX, resolve its IP
   -- set (m: cache, else an A lookup) and probe it via step3.  A non-working
   -- verdict moves on to the next MX so a reachable backup MX still scores the
@@ -607,7 +751,7 @@ local function lookup(task, mx_domain, done)
             ip_strs[#ip_strs + 1] = addr:to_string()
           end
           cache_set(task, 'm', mx.name, encode_ip_list(ip_strs), settings.expire)
-          step3(ip_strs, on_mx_result)
+          probe_ip_set(ip_strs, on_mx_result)
         end,
       })
     end
@@ -629,6 +773,11 @@ local function lookup(task, mx_domain, done)
       end
 
       local mx = mx_list[idx]
+      if exclude_mxs and exclude_mxs:get_key(mx.name) then
+        -- Trusted MX host: short-circuit the whole domain with MX_WHITE.
+        done('white', { key = mx.name })
+        return
+      end
       cache_get(task, 'm', mx.name, function(err, data)
         if not err and type(data) == 'string' and #data > 0 then
           if data == 'nxd' or data == 'none' then
@@ -638,7 +787,7 @@ local function lookup(task, mx_domain, done)
           end
           local ips = decode_ip_list(data)
           if #ips > 0 then
-            step3(ips, on_mx_result)
+            probe_ip_set(ips, on_mx_result)
             return
           end
         end
@@ -683,7 +832,7 @@ local function lookup(task, mx_domain, done)
         end
         cache_set(task, 'd', mx_domain,
           'mx_miss:' .. encode_ip_list(ip_strs), settings.expire)
-        step3(ip_strs, finish_single)
+        probe_ip_set(ip_strs, finish_single)
       end,
     })
   end
@@ -741,7 +890,7 @@ local function lookup(task, mx_domain, done)
         step1_resolve_mx()
         return
       end
-      step3(ips, finish_single)
+      probe_ip_set(ips, finish_single)
       return
     end
     -- Unknown value; treat as miss.
@@ -755,7 +904,15 @@ end
 
 local function mx_check(task)
   local ip_addr = task:get_ip()
-  if task:get_user() or (ip_addr and ip_addr:is_local()) then
+  -- By default we only check inbound mail from untrusted senders. Authenticated
+  -- and local-network senders are our own traffic; ESP/outbound deployments
+  -- can opt into checking them via check_authorized / check_local.
+  if not settings.check_authorized and task:get_user() then
+    lua_util.debugm(N, task, 'skip mx check for an authenticated sender')
+    return
+  end
+  if not settings.check_local and ip_addr and ip_addr:is_local() then
+    lua_util.debugm(N, task, 'skip mx check for a local-network sender')
     return
   end
 
@@ -786,6 +943,7 @@ local function mx_check(task)
     -- `outcome` is one of:
     --   good | refused | timeout_connect | timeout_read | invalid
     --   error:<code> | nxdomain | null | broken | white
+    --   local_only | bogon_only | skip
     lua_util.debugm(N, task, 'mx_check verdict for %s: %s', mx_domain, outcome)
     emit_outcome(task, mx_domain, outcome, info)
   end)
@@ -880,6 +1038,11 @@ register_virtual(settings.symbol_mx_error)
 register_virtual(settings.symbol_mx_nxdomain)
 register_virtual(settings.symbol_mx_null)
 register_virtual(settings.symbol_mx_broken)
+register_virtual(settings.symbol_mx_local_only)
+register_virtual(settings.symbol_mx_local_mix)
+register_virtual(settings.symbol_mx_bogon_only)
+register_virtual(settings.symbol_mx_bogon_mix)
+register_virtual(settings.symbol_mx_skip)
 
 -- Primary metric symbols (today's scores).
 rspamd_config:set_metric_symbol({
@@ -935,6 +1098,11 @@ set_finer(settings.symbol_mx_error, 'MX target greeted with 4xx/5xx (real SMTP, 
 set_finer(settings.symbol_mx_nxdomain, 'Domain itself does not exist (NXDOMAIN)')
 set_finer(settings.symbol_mx_null, 'Domain published RFC 7505 Null MX')
 set_finer(settings.symbol_mx_broken, 'All MX RRs point at hostnames that do not resolve')
+set_finer(settings.symbol_mx_local_only, 'MX resolves only to private (RFC1918/CGNAT/ULA) addresses')
+set_finer(settings.symbol_mx_local_mix, 'MX resolves to a mix of public and private addresses')
+set_finer(settings.symbol_mx_bogon_only, 'MX resolves only to non-routable/reserved addresses')
+set_finer(settings.symbol_mx_bogon_mix, 'MX resolves to a mix of public and non-routable addresses')
+set_finer(settings.symbol_mx_skip, 'MX probe skipped: every candidate IP matched exclude_ips')
 
 if settings.exclude_domains then
   exclude_domains = rspamd_config:add_map {
@@ -942,4 +1110,36 @@ if settings.exclude_domains then
     description = 'Exclude specific domains from MX checks',
     url = settings.exclude_domains,
   }
+end
+
+-- Per-layer trust/skip maps (Phase C). exclude_mxs is a glob map so a bare
+-- hostname matches exactly while an explicit `*.foo` matches subdomains.
+if settings.exclude_mxs then
+  exclude_mxs = lua_maps.map_add_from_ucl(settings.exclude_mxs, 'glob',
+    'mx_check: trusted MX hostnames (bare = exact, *.glob = subdomains)')
+end
+if settings.exclude_ips then
+  exclude_ips = lua_maps.map_add_from_ucl(settings.exclude_ips, 'radix',
+    'mx_check: IP/CIDR ranges to drop from the probe set')
+end
+
+-- Module-private IP-class radix maps. test_mode lifts loopback out of the
+-- bogon set so the probe path stays exercisable against a local listener.
+do
+  local bogon_ranges = BOGON_RANGES
+  if settings.test_mode then
+    rspamd_logger.warnx(rspamd_config,
+      'mx_check: test_mode is ON — loopback is treated as probeable; '
+        .. 'do NOT use this in production')
+    bogon_ranges = {}
+    for _, r in ipairs(BOGON_RANGES) do
+      if not LOOPBACK_RANGES[r] then
+        bogon_ranges[#bogon_ranges + 1] = r
+      end
+    end
+  end
+  local_map = lua_maps.map_add_from_ucl(LOCAL_RANGES, 'radix',
+    'mx_check: private/CGNAT/ULA MX-target ranges')
+  bogon_map = lua_maps.map_add_from_ucl(bogon_ranges, 'radix',
+    'mx_check: non-routable/reserved MX-target ranges')
 end
