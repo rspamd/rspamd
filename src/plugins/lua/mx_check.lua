@@ -494,11 +494,14 @@ end
 local function lookup(task, mx_domain, done)
   local ctx = { mx_domain = mx_domain, mx_missing = false }
 
-  -- step 3: walk IP list, take first cached verdict, else probe the first one.
-  local function step3(ips)
-    if #ips == 0 then
+  -- step 3: resolve a verdict for one MX's IP set — the first cached i:
+  -- verdict wins, else probe the first IP.  The verdict and the IP that
+  -- produced it are handed to `on_result`; the caller decides whether to stop
+  -- or, for a multi-MX domain, fall through to the next MX host.
+  local function step3(ips, on_result)
+    if not ips or #ips == 0 then
       -- Should not happen — defensive.
-      done('invalid', ctx)
+      on_result('invalid', nil)
       return
     end
 
@@ -507,10 +510,9 @@ local function lookup(task, mx_domain, done)
       if i > #ips then
         -- All uncached; probe the first IP.
         local ip = ips[1]
-        local function on_probe(verdict, extra)
+        local function on_probe(verdict)
           cache_set(task, 'i', ip, verdict, ttl_for_verdict(verdict))
-          ctx.host = ip
-          done(verdict, ctx)
+          on_result(verdict, ip)
         end
         if settings.verify_greeting then
           probe_with_greeting(task, ip, on_probe)
@@ -523,9 +525,8 @@ local function lookup(task, mx_domain, done)
       local ip = ips[i]
       cache_get(task, 'i', ip, function(err, data)
         if not err and type(data) == 'string' and #data > 0 then
-          ctx.host = ip
           ctx.from_cache = true
-          done(data, ctx)
+          on_result(data, ip)
           return
         end
         i = i + 1
@@ -536,8 +537,18 @@ local function lookup(task, mx_domain, done)
     try_next()
   end
 
-  -- step 2: walk MX list, take first cached IP list; if every entry is broken,
-  -- emit MX_BROKEN.  If none cached, resolve A for the highest-priority MX.
+  -- Terminal step3 result handler for the single-IP-set paths (A-fallback and
+  -- the cached mx_miss: shortcut): there is no MX list to fall through to.
+  local function finish_single(verdict, host)
+    ctx.host = host
+    done(verdict, ctx)
+  end
+
+  -- step 2: walk the MX list in priority order.  For each MX, resolve its IP
+  -- set (m: cache, else an A lookup) and probe it via step3.  A non-working
+  -- verdict moves on to the next MX so a reachable backup MX still scores the
+  -- domain as MX_GOOD — only after every selected MX fails do we emit the
+  -- failure.  If no MX target resolves to an address at all, emit MX_BROKEN.
   local function step2(mx_list)
     table.sort(mx_list, function(a, b)
       return a.priority < b.priority -- RFC 5321: lowest preference first
@@ -551,116 +562,92 @@ local function lookup(task, mx_domain, done)
       mx_list = trimmed
     end
 
-    local i = 1
-    local broken_count = 0
+    local idx = 0
+    -- First non-working probe verdict, set once at least one MX was reachable.
+    -- Its absence at exhaustion means no MX target resolved at all (broken).
+    local first_fail
 
-    local function resolve_uncached()
-      -- Find the highest-priority MX without a cache entry; resolve A for it.
-      local target
-      for _, mx in ipairs(mx_list) do
-        if not mx._cache_checked or mx._cache_value == nil then
-          target = mx.name
-          break
-        end
-      end
-      if not target then
-        -- Everything was cache-broken.
-        cache_set(task, 'd', mx_domain, 'nxd', settings.expire_novalid)
-        done('broken', ctx)
+    local process_mx -- forward declaration
+
+    -- step3 result for the MX currently at `idx`.
+    local function on_mx_result(verdict, host)
+      if verdict == 'good' or lua_util.str_startswith(verdict, 'error:') then
+        -- A working MX (real SMTP, including a 4xx/5xx greeting): stop here so
+        -- a reachable backup MX still scores the domain as good.
+        ctx.host = host
+        done(verdict, ctx)
         return
       end
+      -- Non-working MX: remember the first failure, then try the next MX.
+      if not first_fail then
+        first_fail = verdict
+        ctx.host = host
+      end
+      process_mx()
+    end
 
+    -- Resolve A records for `mx`, cache them under m:, then probe via step3.
+    local function resolve_and_probe(mx)
       local r = task:get_resolver()
       r:resolve('a', {
-        name = target,
+        name = mx.name,
         task = task,
         forced = true,
         callback = function(_, _, results, err)
-          if err and err ~= DNS_ERR_NOREC and err ~= DNS_ERR_NXDOMAIN then
-            -- Soft DNS failure; treat as broken-reference for this host.
-            cache_set(task, 'm', target, 'nxd', settings.expire_novalid)
-            broken_count = broken_count + 1
-            if broken_count >= #mx_list then
-              done('broken', ctx)
-              return
-            end
-            -- Try next uncached MX.
-            for _, mx in ipairs(mx_list) do
-              if mx.name == target then
-                mx._cache_checked = true
-                mx._cache_value = 'nxd'
-              end
-            end
-            resolve_uncached()
+          if (err and err ~= DNS_ERR_NOREC and err ~= DNS_ERR_NXDOMAIN)
+              or not results or #results == 0 then
+            -- This MX target resolves to no address: a broken reference.
+            cache_set(task, 'm', mx.name, 'nxd', settings.expire_novalid)
+            process_mx()
             return
           end
-
-          if not results or #results == 0 then
-            cache_set(task, 'm', target, 'nxd', settings.expire_novalid)
-            broken_count = broken_count + 1
-            for _, mx in ipairs(mx_list) do
-              if mx.name == target then
-                mx._cache_checked = true
-                mx._cache_value = 'nxd'
-              end
-            end
-            if broken_count >= #mx_list then
-              done('broken', ctx)
-              return
-            end
-            resolve_uncached()
-            return
-          end
-
           lua_util.shuffle(results) -- match today's per-IP picking behaviour
           local ip_strs = {}
           for _, addr in ipairs(results) do
             ip_strs[#ip_strs + 1] = addr:to_string()
           end
-          cache_set(task, 'm', target, encode_ip_list(ip_strs), settings.expire)
-          step3(ip_strs)
+          cache_set(task, 'm', mx.name, encode_ip_list(ip_strs), settings.expire)
+          step3(ip_strs, on_mx_result)
         end,
       })
     end
 
-    local function step()
-      if i > #mx_list then
-        if broken_count >= #mx_list then
-          -- Every cached entry says the MX target doesn't resolve.
+    process_mx = function()
+      idx = idx + 1
+      if idx > #mx_list then
+        -- Every selected MX has been tried.
+        if first_fail then
+          -- At least one MX was reachable but none accepted the probe.
+          done(first_fail, ctx)
+        else
+          -- No MX target resolved to an address at all.  Not cached under d:
+          -- as 'nxd' on purpose — the domain and its MX RRs do exist, so a
+          -- later lookup must not be told the domain is NXDOMAIN.
           done('broken', ctx)
-          return
         end
-        resolve_uncached()
         return
       end
-      local mx = mx_list[i]
+
+      local mx = mx_list[idx]
       cache_get(task, 'm', mx.name, function(err, data)
-        i = i + 1
-        if err or type(data) ~= 'string' or #data == 0 then
-          mx._cache_checked = true
-          mx._cache_value = nil
-          step()
-          return
+        if not err and type(data) == 'string' and #data > 0 then
+          if data == 'nxd' or data == 'none' then
+            -- Cached: this MX target does not resolve.  Try the next MX.
+            process_mx()
+            return
+          end
+          local ips = decode_ip_list(data)
+          if #ips > 0 then
+            step3(ips, on_mx_result)
+            return
+          end
         end
-        if data == 'nxd' or data == 'none' then
-          mx._cache_checked = true
-          mx._cache_value = 'nxd'
-          broken_count = broken_count + 1
-          step()
-          return
-        end
-        -- Got a cached IP list; go to step 3.
-        local ips = decode_ip_list(data)
-        if #ips == 0 then
-          broken_count = broken_count + 1
-          step()
-          return
-        end
-        step3(ips)
+        -- Cache miss (or an unusable value): resolve A for this MX.
+        resolve_and_probe(mx)
       end)
     end
 
-    step()
+    process_mx()
   end
 
   -- step 1.5: A-fallback (no MX RR found at domain).
@@ -672,17 +659,21 @@ local function lookup(task, mx_domain, done)
       task = task,
       forced = true,
       callback = function(_, _, results, err)
-        if (err and err ~= DNS_ERR_NOREC) or not results or #results == 0 then
-          if err == DNS_ERR_NXDOMAIN then
-            -- Drop one level deeper: check eTLD via NS.  For Phase A simplicity
-            -- we treat eTLD NXDOMAIN as MX_NXDOMAIN; resolver returning
-            -- NXDOMAIN at this stage already means the domain doesn't exist.
-            cache_set(task, 'd', mx_domain, 'nxd', settings.expire_novalid)
-            done('nxdomain', ctx)
-            return
-          end
+        if err == DNS_ERR_NXDOMAIN then
+          -- The domain itself does not exist.
           cache_set(task, 'd', mx_domain, 'nxd', settings.expire_novalid)
           done('nxdomain', ctx)
+          return
+        end
+        if (err and err ~= DNS_ERR_NOREC) or not results or #results == 0 then
+          -- The domain exists but publishes neither MX nor A records (NODATA,
+          -- empty answer, or a soft resolver error): there is no mail
+          -- destination.  This is NOT NXDOMAIN, so we must not poison the
+          -- d-cache with 'nxd' — that would make later lookups emit
+          -- MX_NXDOMAIN for a domain that does exist.  Emit a missing/invalid
+          -- outcome instead; ctx.mx_missing makes emit_outcome fire MX_MISSING
+          -- alongside MX_INVALID, matching today's no-resolvable-MX behaviour.
+          done('invalid', ctx)
           return
         end
         lua_util.shuffle(results)
@@ -692,7 +683,7 @@ local function lookup(task, mx_domain, done)
         end
         cache_set(task, 'd', mx_domain,
           'mx_miss:' .. encode_ip_list(ip_strs), settings.expire)
-        step3(ip_strs)
+        step3(ip_strs, finish_single)
       end,
     })
   end
@@ -750,7 +741,7 @@ local function lookup(task, mx_domain, done)
         step1_resolve_mx()
         return
       end
-      step3(ips)
+      step3(ips, finish_single)
       return
     end
     -- Unknown value; treat as miss.
@@ -818,19 +809,37 @@ if not redis_params then
 end
 
 -- Honour deprecated keys: legacy `timeout` and `wait_for_greeting`.
+--
+-- This relies on the shipped modules.d/mx_check.conf NOT setting
+-- `connect_timeout` / `verify_greeting`: their defaults live in the `settings`
+-- table above, so `opts` carries the new keys only when an operator set them
+-- explicitly. If the shipped config pre-populated them, the merged `opts`
+-- would always carry them and a legacy alias in local.d would be silently
+-- ignored.
 do
   local legacy_timeout = opts.timeout
   local legacy_wfg = opts.wait_for_greeting
-  if legacy_timeout ~= nil and opts.connect_timeout == nil then
-    opts.connect_timeout = legacy_timeout
-    rspamd_logger.warnx(rspamd_config,
-      'mx_check: `timeout` is deprecated; use `connect_timeout` (mapped automatically)')
+  if legacy_timeout ~= nil then
+    if opts.connect_timeout == nil then
+      opts.connect_timeout = legacy_timeout
+      rspamd_logger.warnx(rspamd_config,
+        'mx_check: `timeout` is deprecated; use `connect_timeout` (mapped automatically)')
+    else
+      rspamd_logger.warnx(rspamd_config,
+        'mx_check: both `timeout` (deprecated) and `connect_timeout` are set; ignoring `timeout`')
+    end
   end
-  if legacy_wfg ~= nil and opts.verify_greeting == nil then
-    opts.verify_greeting = legacy_wfg
-    rspamd_logger.warnx(rspamd_config,
-      'mx_check: `wait_for_greeting` is deprecated; use `verify_greeting` (mapped automatically). '
-        .. 'Note: the new flag also adds multi-line banner parsing and reply-code validation.')
+  if legacy_wfg ~= nil then
+    if opts.verify_greeting == nil then
+      opts.verify_greeting = legacy_wfg
+      rspamd_logger.warnx(rspamd_config,
+        'mx_check: `wait_for_greeting` is deprecated; use `verify_greeting` (mapped automatically). '
+          .. 'Note: the new flag also adds multi-line banner parsing and reply-code validation.')
+    else
+      rspamd_logger.warnx(rspamd_config,
+        'mx_check: both `wait_for_greeting` (deprecated) and `verify_greeting` are set; '
+          .. 'ignoring `wait_for_greeting`')
+    end
   end
   opts.timeout = nil
   opts.wait_for_greeting = nil

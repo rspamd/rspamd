@@ -41,6 +41,12 @@ A-fallback (no MX, A points at closed port) emits MX_MISSING and MX_INVALID
   Expect Symbol  MX_MISSING
   Expect Symbol  MX_INVALID
 
+Domain with no MX and no A (NODATA) is not treated as NXDOMAIN
+  Scan File  ${MESSAGE}  From=test@noaddr.test  Settings=${SETTINGS}
+  Expect Symbol  MX_MISSING
+  Expect Symbol  MX_INVALID
+  Do Not Expect Symbol  MX_NXDOMAIN
+
 *** Keywords ***
 Mx Check Setup
   Rspamd Redis Setup
