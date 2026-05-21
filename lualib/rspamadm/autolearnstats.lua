@@ -45,6 +45,14 @@ parser:option "-x --exclude-logs"
   :argname "<n>"
   :default "0"
   :convert(tonumber)
+parser:option "--sort-by"
+  :description("Sort rows by column value, then by timestamp. " ..
+    "Sorting is lexicographic except for 'score' (numeric).")
+  :argname "<col>"
+  :choices {"verdict", "score", "ts", "tid", "ip", "from", "rcpts"}
+parser:flag "--group"
+  :description("Insert a blank separator line between groups of rows " ..
+    "with the same value in the --sort-by column")
 
 -- Lua-side "can autolearn" log line (lua_bayes_learn.lua)
 -- Module is always "lua" regardless of worker type.
@@ -217,6 +225,18 @@ local function process_logs(log_file, start_time, end_time, candidates, learned,
   end
 end
 
+local function make_sort_key_fns(ips)
+  return {
+    verdict = function(e) return e.c.verdict end,
+    score   = function(e) return tonumber(e.c.score) or 0 end,
+    ts      = function(e) return e.c.ts end,
+    tid     = function(e) return e.req_id:gsub('[<>]', '') end,
+    ip      = function(e) return ips[e.req_id] or '-' end,
+    from    = function(e) return e.c.from end,
+    rcpts   = function(e) return e.c.rcpts end,
+  }
+end
+
 local function handler(args)
   local res = parser:parse(args)
 
@@ -236,11 +256,31 @@ local function handler(args)
     }
   )
 
+  local sort_by          = res['sort_by']
+  local do_group         = res['group']
+  local effective_sort   = sort_by or 'ts'
+  local sort_key_fns     = make_sort_key_fns(ips)
+  local key_fn           = sort_key_fns[effective_sort]
+
   local sorted = {}
   for req_id, c in pairs(candidates) do
     table.insert(sorted, { req_id = req_id, c = c })
   end
-  table.sort(sorted, function(a, b) return a.c.ts < b.c.ts end)
+
+  -- Pre-compute sort keys: O(n) instead of O(n log n) calls inside comparator,
+  -- and reused by the group separator logic during rendering.
+  for _, entry in ipairs(sorted) do
+    entry.sort_key = key_fn(entry)
+  end
+
+  if effective_sort ~= 'ts' then
+    table.sort(sorted, function(a, b)
+      if a.sort_key ~= b.sort_key then return a.sort_key < b.sort_key end
+      return a.c.ts < b.c.ts
+    end)
+  else
+    table.sort(sorted, function(a, b) return a.sort_key < b.sort_key end)
+  end
 
   -- Compute column widths from actual data (plain values, no ANSI codes)
   local col = {
@@ -283,8 +323,16 @@ local function handler(args)
 
   local n_learned = 0
   local class_stats = {}
+  local prev_group_key = nil
 
   for _, entry in ipairs(sorted) do
+    if do_group then
+      if prev_group_key ~= nil and entry.sort_key ~= prev_group_key then
+        io.write('\n')
+      end
+      prev_group_key = entry.sort_key
+    end
+
     local req_id = entry.req_id
     local c = entry.c
     local tid     = req_id:gsub('[<>]', '')
@@ -344,9 +392,10 @@ local exports = {
   handler = handler,
   description = parser._description,
   name = 'autolearnstats',
-  _pad     = pad,
-  _cell    = cell,
-  _MAX_COL = MAX_COL,
+  _pad              = pad,
+  _cell             = cell,
+  _MAX_COL          = MAX_COL,
+  _make_sort_key_fns = make_sort_key_fns,
 }
 
 return exports
