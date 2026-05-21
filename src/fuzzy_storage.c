@@ -131,6 +131,19 @@ struct fuzzy_tcp_session {
 struct fuzzy_peer_request {
 	ev_io io_ev;
 	struct fuzzy_peer_cmd cmd;
+	/* ctx is set (and the request linked into ctx->pending_peer_requests) only
+	 * while the write watcher is registered, so synchronous-success requests
+	 * skip the list bookkeeping. */
+	struct rspamd_fuzzy_storage_ctx *ctx;
+	struct fuzzy_peer_request *prev;
+	struct fuzzy_peer_request *next;
+	gsize written; /* bytes of cmd already sent on the peer pipe */
+};
+
+enum fuzzy_peer_send_status {
+	FUZZY_PEER_SEND_DONE = 0, /* fully sent */
+	FUZZY_PEER_SEND_AGAIN,    /* short write or EAGAIN/EWOULDBLOCK/EINTR */
+	FUZZY_PEER_SEND_FATAL,    /* unrecoverable write error */
 };
 
 struct rspamd_updates_cbdata {
@@ -704,9 +717,21 @@ rspamd_fuzzy_make_reply(struct rspamd_fuzzy_cmd *cmd,
 
 			/* Extra flags from multiflag result */
 			if (mf_result) {
-				rep_v2->n_extra_flags = mf_result->n_extra_flags;
+				uint8_t n_extra = mf_result->n_extra_flags;
+				/*
+				 * rep_v2->extra_flags is fixed-size [RSPAMD_FUZZY_MAX_EXTRA_FLAGS].
+				 * All current backends bound n_extra_flags to this maximum, but
+				 * clamp defensively here so a future backend bug cannot turn
+				 * into an OOB write on the reply struct.
+				 */
+				if (G_UNLIKELY(n_extra > RSPAMD_FUZZY_MAX_EXTRA_FLAGS)) {
+					msg_warn("backend returned n_extra_flags=%d > max %d, clamping",
+							 (int) n_extra, (int) RSPAMD_FUZZY_MAX_EXTRA_FLAGS);
+					n_extra = RSPAMD_FUZZY_MAX_EXTRA_FLAGS;
+				}
+				rep_v2->n_extra_flags = n_extra;
 				memcpy(rep_v2->extra_flags, mf_result->extra_flags,
-					   sizeof(struct rspamd_fuzzy_flag_entry) * mf_result->n_extra_flags);
+					   sizeof(struct rspamd_fuzzy_flag_entry) * n_extra);
 			}
 
 			if (flags & RSPAMD_FUZZY_REPLY_DELAY) {
@@ -864,31 +889,62 @@ rspamd_fuzzy_make_reply(struct rspamd_fuzzy_cmd *cmd,
 	rspamd_fuzzy_write_reply(session);
 }
 
-static gboolean
+static enum fuzzy_peer_send_status
 fuzzy_peer_try_send(int fd, struct fuzzy_peer_request *up_req)
 {
+	const unsigned char *p = (const unsigned char *) &up_req->cmd + up_req->written;
+	gsize remaining = sizeof(up_req->cmd) - up_req->written;
 	gssize r;
 
-	r = write(fd, &up_req->cmd, sizeof(up_req->cmd));
+	r = write(fd, p, remaining);
 
-	if (r != sizeof(up_req->cmd)) {
-		return FALSE;
+	if (r > 0) {
+		up_req->written += (gsize) r;
+		if (up_req->written == sizeof(up_req->cmd)) {
+			return FUZZY_PEER_SEND_DONE;
+		}
+		/* Short write — kernel buffer probably filled; resume from up_req->written. */
+		return FUZZY_PEER_SEND_AGAIN;
 	}
 
-	return TRUE;
+	if (r == 0) {
+		/* write(2) only returns 0 if asked to write 0 bytes; not expected here */
+		return FUZZY_PEER_SEND_AGAIN;
+	}
+
+	if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+		return FUZZY_PEER_SEND_AGAIN;
+	}
+
+	return FUZZY_PEER_SEND_FATAL;
+}
+
+static void
+fuzzy_peer_request_release(struct fuzzy_peer_request *up_req)
+{
+	if (up_req->ctx != NULL) {
+		DL_DELETE(up_req->ctx->pending_peer_requests, up_req);
+	}
+	g_free(up_req);
 }
 
 static void
 fuzzy_peer_send_io(EV_P_ ev_io *w, int revents)
 {
 	struct fuzzy_peer_request *up_req = (struct fuzzy_peer_request *) w->data;
+	enum fuzzy_peer_send_status status = fuzzy_peer_try_send(w->fd, up_req);
 
-	if (!fuzzy_peer_try_send(w->fd, up_req)) {
+	if (status == FUZZY_PEER_SEND_AGAIN) {
+		/* Leave the watcher running; libev will fire again when the pipe is writable. */
+		return;
+	}
+
+	if (status == FUZZY_PEER_SEND_FATAL) {
 		msg_err("cannot send update request to the peer: %s", strerror(errno));
 	}
 
 	ev_io_stop(EV_A_ w);
-	g_free(up_req);
+	fuzzy_peer_request_release(up_req);
 }
 
 static void
@@ -1107,13 +1163,23 @@ rspamd_fuzzy_check_callback(struct rspamd_fuzzy_multiflag_result *mf_result, voi
 					   sizeof(up_req->cmd.cmd.shingle.sgl));
 			}
 
-			if (!fuzzy_peer_try_send(session->ctx->peer_fd, up_req)) {
+			enum fuzzy_peer_send_status sst = fuzzy_peer_try_send(
+				session->ctx->peer_fd, up_req);
+
+			if (sst == FUZZY_PEER_SEND_DONE) {
+				g_free(up_req);
+			}
+			else if (sst == FUZZY_PEER_SEND_AGAIN) {
+				up_req->ctx = session->ctx;
+				DL_APPEND(session->ctx->pending_peer_requests, up_req);
 				up_req->io_ev.data = up_req;
 				ev_io_init(&up_req->io_ev, fuzzy_peer_send_io,
 						   session->ctx->peer_fd, EV_WRITE);
 				ev_io_start(session->ctx->event_loop, &up_req->io_ev);
 			}
 			else {
+				msg_err("cannot send update request to the peer: %s",
+						strerror(errno));
 				g_free(up_req);
 			}
 		}
@@ -1465,13 +1531,23 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 					ptr = is_shingle ? (gpointer) &up_req->cmd.cmd.shingle : (gpointer) &up_req->cmd.cmd.normal;
 					memcpy(ptr, cmd, up_len);
 
-					if (!fuzzy_peer_try_send(session->ctx->peer_fd, up_req)) {
+					enum fuzzy_peer_send_status sst = fuzzy_peer_try_send(
+						session->ctx->peer_fd, up_req);
+
+					if (sst == FUZZY_PEER_SEND_DONE) {
+						g_free(up_req);
+					}
+					else if (sst == FUZZY_PEER_SEND_AGAIN) {
+						up_req->ctx = session->ctx;
+						DL_APPEND(session->ctx->pending_peer_requests, up_req);
 						up_req->io_ev.data = up_req;
 						ev_io_init(&up_req->io_ev, fuzzy_peer_send_io,
 								   session->ctx->peer_fd, EV_WRITE);
 						ev_io_start(session->ctx->event_loop, &up_req->io_ev);
 					}
 					else {
+						msg_err("cannot send update request to the peer: %s",
+								strerror(errno));
 						g_free(up_req);
 					}
 				}
@@ -1972,6 +2048,17 @@ accept_fuzzy_socket(EV_P_ ev_io *w, int revents)
 	if (revents == EV_READ) {
 		ev_now_update_if_cheap(ctx->event_loop);
 		for (;;) {
+			/*
+			 * The kernel overwrites msg_namelen on each recvmsg/recvmmsg call
+			 * with the actual size of the received source address. If we don't
+			 * reset it back to the buffer capacity before the next call, the
+			 * kernel will treat that smaller value as the buffer size and
+			 * truncate a larger incoming address (e.g. IPv6 after IPv4),
+			 * leaving stale stack bytes mixed into the parsed sockaddr.
+			 */
+			for (int i = 0; i < MSGVEC_LEN; i++) {
+				MSG_FIELD(msg[i], msg_namelen) = salen;
+			}
 #ifdef HAVE_RECVMMSG
 			r = recvmmsg(w->fd, msg, MSGVEC_LEN, 0, NULL);
 #else
@@ -2171,7 +2258,22 @@ rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents)
 					uint16_t first_byte = session->cur_frame_state & 0xFF;
 					uint16_t second_byte = session->input_buf[processed_offset];
 					/* Reconstruct in little-endian byte order */
-					session->cur_frame_state = 0xC000 | (first_byte | (second_byte << 8));
+					uint16_t real_len = first_byte | (second_byte << 8);
+					/*
+					 * Length is stored in the low 14 bits of cur_frame_state
+					 * (top two bits are state flags). FUZZY_TCP_BUFFER_LENGTH
+					 * fits in 14 bits, so any value with bit 14 or 15 set is
+					 * invalid and would otherwise be silently masked off,
+					 * creating a protocol-smuggling primitive. Reject here.
+					 */
+					if (real_len == 0 || real_len > FUZZY_TCP_BUFFER_LENGTH) {
+						msg_err("invalid frame length %d from %s, closing connection",
+								(int) real_len,
+								rspamd_inet_address_to_string(session->common.addr));
+						REF_RELEASE(session);
+						return;
+					}
+					session->cur_frame_state = 0xC000 | real_len;
 					processed_offset++;
 				}
 				else {
@@ -3378,6 +3480,22 @@ start_fuzzy(struct rspamd_worker *worker)
 		 * so radix_destroy_compressed frees them all at once */
 		radix_destroy_compressed(ctx->dynamic_blocked_nets);
 		ctx->dynamic_blocked_nets = NULL;
+	}
+
+	/* Drain any peer-pipe write requests that were waiting for the write
+	 * watcher to fire. The event loop has already broken out of ev_loop on
+	 * non-update workers, so these watchers will never fire on their own and
+	 * the up_req allocations would leak. */
+	{
+		struct fuzzy_peer_request *pr, *pr_tmp;
+		DL_FOREACH_SAFE(ctx->pending_peer_requests, pr, pr_tmp)
+		{
+			if (ev_can_stop(&pr->io_ev)) {
+				ev_io_stop(ctx->event_loop, &pr->io_ev);
+			}
+			DL_DELETE(ctx->pending_peer_requests, pr);
+			g_free(pr);
+		}
 	}
 
 	struct rspamd_lua_fuzzy_script *cur, *tmp;

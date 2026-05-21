@@ -717,6 +717,59 @@ local function pending_train_key(rule, set)
     settings.prefix, rule.prefix, set.name)
 end
 
+-- Check whether a candidate profile (loaded from the zset) is compatible with
+-- the running rule/set configuration for the purposes of loading the trained
+-- ANN.  Compatibility is governed by the vector schema fingerprint:
+--
+--   * has_providers + disable_symbols_input: symbols never enter the input
+--     vector, so providers_digest alone is authoritative. Symbol-list drift
+--     is ignored (dist = 0 when providers_digest matches).
+--   * has_providers (hybrid mode): providers_digest must match (otherwise the
+--     fused vector dimensions differ); symbol drift is tolerated and surfaced
+--     as the returned dist for the caller's tie-breaking.
+--   * pure symbols (no providers): legacy Levenshtein-tolerance — accept when
+--     dist < 30% of |set.symbols|.
+--
+-- Profiles trained with providers are rejected for pure-symbol rules (mixed
+-- vector schemas) and vice versa.
+--
+-- Returns (compatible_bool, dist_number).  `dist` is math.huge on rejection.
+local function is_profile_compatible(rule, set, profile_elt, current_providers_digest)
+  if not profile_elt then return false, math.huge end
+  local has_providers = rule.providers and #rule.providers > 0
+
+  if has_providers then
+    if not current_providers_digest or not profile_elt.providers_digest then
+      return false, math.huge
+    end
+    if profile_elt.providers_digest ~= current_providers_digest then
+      return false, math.huge
+    end
+    if rule.disable_symbols_input then
+      return true, 0
+    end
+    local dist = 0
+    if profile_elt.symbols and set.symbols then
+      dist = lua_util.distance_sorted(profile_elt.symbols, set.symbols)
+    end
+    return true, dist
+  end
+
+  -- Pure symbols mode: reject profiles trained with providers (vector schemas
+  -- would be incompatible).
+  if profile_elt.providers_digest then
+    return false, math.huge
+  end
+  if not profile_elt.symbols or not set.symbols then
+    return false, math.huge
+  end
+  local dist = lua_util.distance_sorted(profile_elt.symbols, set.symbols)
+  if dist >= #set.symbols * 0.3 then
+    return false, dist
+  end
+  return true, dist
+end
+
 -- Compute a stable digest for providers configuration
 local function providers_config_digest(providers_cfg, rule)
   if not providers_cfg then return nil end
@@ -1495,6 +1548,7 @@ return {
   gen_unlock_cb = gen_unlock_cb,
   get_provider = get_provider,
   get_rule_settings = get_rule_settings,
+  is_profile_compatible = is_profile_compatible,
   load_scripts = load_scripts,
   module_config = module_config,
   new_ann_key = new_ann_key,

@@ -236,7 +236,7 @@ auto css_tokeniser::consume_ident(bool allow_number) -> struct css_parser_token 
 						/* Single \ + char */
 						break;
 					}
-				} while (i < input.size());
+				} while (i + 1 < input.size());
 			}
 			else if (c == '(') {
 				/* Function or url token */

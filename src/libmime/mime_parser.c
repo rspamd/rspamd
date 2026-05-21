@@ -329,7 +329,7 @@ rspamd_mime_part_get_cte_heuristic(struct rspamd_task *task,
 			}
 		}
 		else if (memcmp(p, "begin-base64 ", sizeof("begin-base64 ") - 1) == 0) {
-			uue_start = p + sizeof("begin ") - 1;
+			uue_start = p + sizeof("begin-base64 ") - 1;
 
 			while (uue_start < end && g_ascii_isspace(*uue_start)) {
 				uue_start++;
@@ -882,7 +882,9 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 				if (p7) {
 					ct_nid = OBJ_obj2nid(p7->type);
 
-					if (ct_nid == NID_pkcs7_signed) {
+					if (ct_nid == NID_pkcs7_signed && p7->d.sign &&
+						p7->d.sign->contents &&
+						p7->d.sign->contents->type) {
 						PKCS7 *p7_signed_content = p7->d.sign->contents;
 
 						ct_nid = OBJ_obj2nid(p7_signed_content->type);
@@ -1173,6 +1175,10 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 	if (hdr != NULL) {
 		DL_FOREACH(hdr, cur)
 		{
+			if (!cur->value) {
+				continue;
+			}
+
 			ct = rspamd_content_type_parse(cur->value, strlen(cur->value),
 										   task->task_pool);
 
@@ -1821,6 +1827,10 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 	else {
 		DL_FOREACH(hdr, cur)
 		{
+			if (!cur->value) {
+				continue;
+			}
+
 			ct = rspamd_content_type_parse(cur->value, strlen(cur->value),
 										   task->task_pool);
 
@@ -1878,6 +1888,9 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 	}
 
 	if (ret != RSPAMD_MIME_PARSE_OK) {
+		if (nst != st) {
+			rspamd_mime_parse_stack_free(nst);
+		}
 		return ret;
 	}
 

@@ -31,7 +31,7 @@ rdns_decompress_label (uint8_t *begin, uint16_t *len, uint16_t max)
 {
 	uint16_t offset = (*len);
 
-	if (offset > max) {
+	if (offset >= max) {
 		return NULL;
 	}
 	*len = *(begin + offset);
@@ -169,6 +169,10 @@ rdns_parse_labels (struct rdns_resolver *resolver,
 					rdns_info  ("invalid pointer in DNS packet");
 					return false;
 				}
+				if (l + *l + 1 > end) {
+					rdns_info("invalid DNS label: compressed data overruns the packet");
+					return false;
+				}
 				begin = l;
 				length = end - begin;
 				p = l + *l + 1;
@@ -182,6 +186,10 @@ rdns_parse_labels (struct rdns_resolver *resolver,
 			}
 		}
 		else {
+			if (p + llen + 1 > end) {
+				rdns_info("invalid DNS label: data overruns the packet");
+				return false;
+			}
 			namelen += llen;
 			p += llen + 1;
 			labels ++;

@@ -204,7 +204,7 @@ local function normalize_obfuscated_text(text, max_len)
   return lua_util.str_trim(text)
 end
 
-local function extract_url_from_normalized(text)
+local function extract_url_from_normalized(text, obf_type)
   if not text or #text == 0 then
     return nil, nil
   end
@@ -225,7 +225,11 @@ local function extract_url_from_normalized(text)
   if naked then
     -- Validate: must have valid TLD (at least 2 chars)
     local tld = naked:match("%.([%a][%w%-]*)$")
-    if tld and #tld >= 2 and #tld <= 10 then
+    -- For word_dot matches, require TLD >= 3 chars to avoid false positives:
+    -- 2-char country TLDs (.so, .to, .me, .in, .us etc.) overlap with common
+    -- English words and produce false positives in normal prose.
+    local min_tld = (obf_type == 'word_dot') and 3 or 2
+    if tld and #tld >= min_tld and #tld <= 10 then
       -- Additional check: must not be too many dots (likely random text)
       local _, dot_count = naked:gsub("%.", "")
       if dot_count <= 4 then
@@ -841,7 +845,7 @@ if settings.enabled and settings.checks.obfuscated_text and settings.checks.obfu
             return 0
           end
 
-          local extracted_url = extract_url_from_normalized(normalized)
+          local extracted_url = extract_url_from_normalized(normalized, obf_type)
           if not extracted_url then
             return 0
           end
