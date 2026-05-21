@@ -94,6 +94,13 @@ local function pad(s, n)
   return s .. string.rep(' ', n - len)
 end
 
+local MAX_COL = 60
+
+local function cell(s, n)
+  if #s > n then s = s:sub(1, n - 2) .. '..' end
+  return pad(s, n)
+end
+
 local function iterate_bayes_log(handle, start_time, end_time, candidates, learned, ips)
   local ts_format = nil
 
@@ -254,6 +261,8 @@ local function handler(args)
     col.from    = math.max(col.from,    #c.from)
     col.rcpts   = math.max(col.rcpts,   #c.rcpts)
   end
+  col.from  = math.min(col.from,  MAX_COL)
+  col.rcpts = math.min(col.rcpts, MAX_COL)
 
   local sep = '  '
 
@@ -266,11 +275,10 @@ local function handler(args)
     col.ts + #sep + col.tid + #sep + col.ip + #sep + col.from + #sep + col.rcpts
 
   -- Header: [L]  Verd  Score  Timestamp  Task  IP  From  Recipients
-  io.write(string.format("%-3s" .. sep .. "%-" .. col.verdict .. "s" .. sep ..
-    "%-" .. col.score .. "s" .. sep .. "%-" .. col.ts .. "s" .. sep ..
-    "%-" .. col.tid .. "s" .. sep .. "%-" .. col.ip .. "s" .. sep ..
-    "%-" .. col.from .. "s" .. sep .. "%-" .. col.rcpts .. "s\n",
-    '', 'Verd', 'Score', 'Timestamp', 'Task', 'IP', 'From', 'Recipients'))
+  io.write(pad('', 3) .. sep .. pad('Verd', col.verdict) .. sep ..
+    pad('Score', col.score) .. sep .. pad('Timestamp', col.ts) .. sep ..
+    pad('Task', col.tid) .. sep .. pad('IP', col.ip) .. sep ..
+    pad('From', col.from) .. sep .. 'Recipients\n')
   io.write(string.rep('-', sep_width) .. '\n')
 
   local n_learned = 0
@@ -302,8 +310,8 @@ local function handler(args)
       pad(c.ts,     col.ts)      .. sep ..
       pad(tid,      col.tid)     .. sep ..
       pad(from_ip,  col.ip)     .. sep ..
-      pad(c.from,   col.from)   .. sep ..
-      c.rcpts .. '\n'
+      cell(c.from,   col.from)  .. sep ..
+      cell(c.rcpts,  col.rcpts) .. '\n'
     )
   end
 
@@ -331,8 +339,14 @@ local function handler(args)
   end
 end
 
-return {
+-- Exposed for unit tests.
+local exports = {
   handler = handler,
   description = parser._description,
-  name = 'autolearnstats'
+  name = 'autolearnstats',
+  _pad     = pad,
+  _cell    = cell,
+  _MAX_COL = MAX_COL,
 }
+
+return exports
