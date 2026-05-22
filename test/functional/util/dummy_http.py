@@ -89,6 +89,11 @@ class MainHandler(tornado.web.RequestHandler):
             raise tornado.web.HTTPError(404)
 
     def head(self, path):
+        # Log the request headers in the exact order they arrived on the
+        # wire so functional tests can assert on header presence and order
+        # (used by the url_redirector stealth fingerprint test).
+        hdrs = ", ".join(f"{k}={v}" for k, v in self.request.headers.get_all())
+        print(f"dummy_http.py: HEAD {path} headers: {hdrs}", file=sys.stderr)
         self.set_header("Content-Type", "text/plain")
         if path == "/redirect1":
             # Send an HTTP redirect to the bind address of the server
