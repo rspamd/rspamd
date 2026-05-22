@@ -28,14 +28,32 @@ local N = "url_redirector"
 
 -- Some popular UA
 local default_ua = {
+  -- Search-engine and link crawlers
   'Mozilla/5.0 (compatible; Yahoo! Slurp; http://help.yahoo.com/help/us/ysearch/slurp)',
   'Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)',
-  'Wget/1.9.1',
-  'Mozilla/5.0 (Android; Linux armv7l; rv:9.0) Gecko/20111216 Firefox/9.0 Fennec/9.0',
-  'Mozilla/5.0 (Windows NT 5.2; RW; rv:7.0a1) Gecko/20091211 SeaMonkey/9.23a1pre',
-  'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; AS; rv:11.0) like Gecko',
-  'W3C-checklink/4.5 [4.160] libwww-perl/5.823',
-  'Lynx/2.8.8dev.3 libwww-FM/2.14 SSL-MM/1.4.1',
+  'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+  'Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)',
+  'Mozilla/5.0 (compatible; DuckDuckBot-Https/1.1; https://duckduckgo.com/duckduckbot)',
+  -- Modern desktop browsers
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14.7; rv:150.0) Gecko/20100101 Firefox/150.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5 Safari/605.1.15',
+  -- Modern mobile browsers
+  'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Mobile Safari/537.36',
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 26_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5 Mobile/15E148 Safari/604.1',
+  -- CLI fetchers / link checkers
+  'Wget/1.25.0',
+  'curl/8.20.0',
+  'W3C-checklink/4.81 [4.176] libwww-perl/6.83',
+  'Lynx/2.9.2 libwww-FM/2.14 SSL-MM/1.4.1 OpenSSL/3.0.20',
+  -- HTTP client libraries (PHP / Go / Python)
+  'GuzzleHttp/7.10.0 curl/8.20.0 PHP/8.3.31',
+  'Go-http-client/2.0',
+  'python-requests/2.34.2',
+  'Python-urllib/3.14',
 }
 
 local redis_params
