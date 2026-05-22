@@ -950,7 +950,7 @@ if opts then
     else
       local lua_maps = require "lua_maps"
       settings.redirector_hosts_map = lua_maps.map_add_from_ucl(settings.redirector_hosts_map,
-          'set', 'Redirectors definitions')
+          'glob', 'Redirectors definitions (glob: bare names match exactly, *.foo matches subs)')
 
       if settings.redirector_get_urls_map then
         settings.redirector_get_urls_map = lua_maps.map_add_from_ucl(
