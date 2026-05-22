@@ -196,6 +196,12 @@ local function s3_aws_callback(task)
       secret_key = settings.s3_secret_key,
       method = 'PUT',
     }, content)
+    local s3_upstream = settings.upstreams:get_upstream_round_robin()
+    if not s3_upstream then
+      rspamd_logger.warnx(task,
+          'no S3 upstream available for %s; falling back to URL-only connect',
+          path)
+    end
     rspamd_http.request({
       url = uri .. path,
       task = task,
@@ -203,7 +209,7 @@ local function s3_aws_callback(task)
       body = content,
       callback = gen_s3_http_callback(path, 'structured message'),
       headers = hdrs,
-      upstream = settings.upstreams:get_upstream_round_robin(),
+      upstream = s3_upstream,
       timeout = settings.s3_timeout,
     })
 
@@ -219,10 +225,16 @@ local function s3_aws_callback(task)
         secret_key = settings.s3_secret_key,
         method = 'PUT',
       }, part_content)
+      local part_upstream = settings.upstreams:get_upstream_round_robin()
+      if not part_upstream then
+        rspamd_logger.warnx(task,
+            'no S3 upstream available for part %s; falling back to URL-only connect',
+            ref)
+      end
       rspamd_http.request({
         url = uri .. ref,
         task = task,
-        upstream = settings.upstreams:get_upstream_round_robin(),
+        upstream = part_upstream,
         method = 'PUT',
         body = part_content,
         callback = gen_s3_http_callback(ref, 'part content'),

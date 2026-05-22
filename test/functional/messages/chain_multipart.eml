@@ -1,0 +1,11 @@
+MIME-Version: 1.0
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+<html>
+<body>
+<p>Test message with redirect chains</p>
+<a href="http://127.0.0.1:18080/chain1">Chain 1</a>
+<a href="http://127.0.0.1:18080/redirect2">Redirect 2</a>
+</body>
+</html>

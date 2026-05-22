@@ -2125,6 +2125,13 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   G_STRUCT_OFFSET(struct rspamd_config, enable_mime_utf),
 									   0,
 									   "Enable UTF8 mode for mime");
+		/* Alias matching the Lua API name rspamd_config:is_mime_utf8() */
+		rspamd_rcl_add_default_handler(sub,
+									   "enable_mime_utf8",
+									   rspamd_rcl_parse_struct_boolean,
+									   G_STRUCT_OFFSET(struct rspamd_config, enable_mime_utf),
+									   0,
+									   "Enable UTF8 mode for mime (alias of enable_mime_utf)");
 		rspamd_rcl_add_default_handler(sub,
 									   "enable_url_rewrite",
 									   rspamd_rcl_parse_struct_boolean,

@@ -2429,7 +2429,14 @@ rspamd_protocol_handle_metadata(struct rspamd_task *task,
 	/* deliver_to */
 	elt = ucl_object_lookup(metadata, "deliver_to");
 	if (elt && ucl_object_type(elt) == UCL_STRING) {
-		task->deliver_to = rspamd_mempool_strdup(task->task_pool, ucl_object_tostring(elt));
+		size_t deliver_len;
+		const char *deliver_str = ucl_object_tolstring(elt, &deliver_len);
+
+		if (deliver_len > 0) {
+			rspamd_ftok_t deliver_tok = {.begin = deliver_str, .len = deliver_len};
+			/* Match v2 Deliver-To header semantics: strip <...> braces */
+			task->deliver_to = rspamd_protocol_escape_braces(task, &deliver_tok);
+		}
 	}
 
 	/* settings_id */
@@ -2444,9 +2451,40 @@ rspamd_protocol_handle_metadata(struct rspamd_task *task,
 	if (elt && ucl_object_type(elt) == UCL_OBJECT) {
 		if (task->settings_elt) {
 			msg_info_protocol("both settings_id and inline settings present, "
-							  "settings will be merged");
+							  "inline settings will take precedence");
 		}
-		task->settings = ucl_object_ref(elt);
+
+		/*
+		 * Serialize the inline UCL settings to JSON and synthesize a 'settings'
+		 * request header so the existing settings.lua check_query_settings
+		 * pipeline picks them up and runs the apply path uniformly with the v2
+		 * Settings HTTP header. Without this, action thresholds, symbols
+		 * enable/disable lists, subject rewriting, etc. would never take
+		 * effect on /checkv3.
+		 */
+		size_t json_len = 0;
+		unsigned char *json = ucl_object_emit_len(elt, UCL_EMIT_JSON_COMPACT,
+												  &json_len);
+
+		if (json && json_len > 0) {
+			char *val_dup = rspamd_mempool_alloc(task->task_pool, json_len);
+			memcpy(val_dup, json, json_len);
+
+			rspamd_ftok_t *name_tok = rspamd_mempool_alloc(task->task_pool,
+														   sizeof(*name_tok));
+			rspamd_ftok_t *val_tok = rspamd_mempool_alloc(task->task_pool,
+														  sizeof(*val_tok));
+
+			RSPAMD_FTOK_ASSIGN(name_tok, SETTINGS_HEADER);
+			val_tok->begin = val_dup;
+			val_tok->len = json_len;
+
+			rspamd_task_add_request_header(task, name_tok, val_tok);
+		}
+
+		if (json) {
+			free(json);
+		}
 	}
 
 	/* tls.cipher - sets SSL flag */
@@ -2574,6 +2612,53 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 	gsize boundary_len = 0;
 	const char *body_data = chunk;
 	gsize body_len = len;
+
+	/*
+	 * Register every HTTP request header as a task request header so Lua
+	 * code can retrieve arbitrary client-supplied headers via
+	 * task:get_request_header(), matching v2 semantics.  This must also
+	 * happen before response serialization, since the v3 reply path reads
+	 * Accept / Accept-Encoding through the same API.
+	 *
+	 * Skip Shm / Shm-Offset / Shm-Length: at the HTTP level these carry the
+	 * proxy-to-upstream body transfer, but as task request headers they
+	 * would collide with the metadata-synthesized "shm" zero-copy message
+	 * pointer and make rspamd_task_load_message pick the wrong source.
+	 */
+	for (khiter_t kit = kh_begin(msg->headers); kit != kh_end(msg->headers); ++kit) {
+		if (!kh_exist(msg->headers, kit)) {
+			continue;
+		}
+
+		struct rspamd_http_header *header = kh_val(msg->headers, kit);
+		struct rspamd_http_header *h;
+
+		DL_FOREACH(header, h)
+		{
+			if ((h->name.len == 3 &&
+				 rspamd_lc_cmp(h->name.begin, "shm", 3) == 0) ||
+				(h->name.len == 10 &&
+				 (rspamd_lc_cmp(h->name.begin, "shm-offset", 10) == 0 ||
+				  rspamd_lc_cmp(h->name.begin, "shm-length", 10) == 0))) {
+				continue;
+			}
+
+			char *ntok;
+			rspamd_ftok_t *hn_tok, *hv_tok;
+
+			ntok = rspamd_mempool_ftokdup(task->task_pool, &h->name);
+			hn_tok = rspamd_mempool_alloc(task->task_pool, sizeof(*hn_tok));
+			hn_tok->begin = ntok;
+			hn_tok->len = h->name.len;
+
+			ntok = rspamd_mempool_ftokdup(task->task_pool, &h->value);
+			hv_tok = rspamd_mempool_alloc(task->task_pool, sizeof(*hv_tok));
+			hv_tok->begin = ntok;
+			hv_tok->len = h->value.len;
+
+			rspamd_task_add_request_header(task, hn_tok, hv_tok);
+		}
+	}
 
 	/*
 	 * When the proxy forwards to a local upstream, it uses shared memory

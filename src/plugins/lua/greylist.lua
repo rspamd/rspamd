@@ -42,8 +42,10 @@ if confighelp then
 greylist {
   # Buckets expire (1 day by default)
   expire = 1d;
-  # Greylisting timeout
+  # Greylisting period (how long to greylist a new sender)
   timeout = 5m;
+  # Redis connection timeout in seconds
+  # redis_timeout = 1.0;
   # Redis prefix
   key_prefix = 'rg';
   # Use body hash up to this value of bytes for greylisting
@@ -79,7 +81,8 @@ local whitelist_domains_map
 local toint = math.ifloor or math.floor
 local settings = {
   expire = 86400, -- 1 day by default
-  timeout = 300, -- 5 minutes by default
+  timeout = 300, -- greylisting period: 5 minutes by default
+  redis_timeout = 1.0, -- Redis connection timeout in seconds
   key_prefix = 'rg', -- default hash name
   max_data_len = 10240, -- default data limit to hash
   message = 'Try again later', -- default greylisted message
@@ -565,7 +568,21 @@ if opts then
   whitelist_domains_map = lua_map.rspamd_map_add(N, 'whitelist_domains_url',
       'map', 'Greylist whitelist domains map')
 
-  redis_params = lua_redis.parse_redis_server(N)
+  -- Pass opts with redis_timeout instead of the greylisting period (settings.timeout),
+  -- so lua_redis does not mistake the greylisting period for a Redis connection timeout.
+  -- redis.greylist.timeout or the global redis.timeout can still override this via
+  -- enrich_defaults since settings.redis_timeout equals lua_redis's default_timeout (1.0).
+  local redis_opts = lua_util.shallowcopy(opts)
+  redis_opts.timeout = settings.redis_timeout
+  if redis_opts.redis then
+    -- When Redis is configured in a nested greylist.redis{} block, parse_redis_server
+    -- uses opts.redis and never reads opts.timeout, so propagate redis_timeout there too.
+    redis_opts.redis = lua_util.shallowcopy(redis_opts.redis)
+    if not redis_opts.redis.timeout then
+      redis_opts.redis.timeout = settings.redis_timeout
+    end
+  end
+  redis_params = lua_redis.parse_redis_server(N, redis_opts)
   if not redis_params then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
     rspamd_lua_utils.disable_module(N, "redis")

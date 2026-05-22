@@ -83,6 +83,15 @@ static khash_t(mempool_entry) *mempool_entries = NULL;
 
 /* Internal statistic */
 static rspamd_mempool_stat_t *mem_pool_stat = NULL;
+/*
+ * Per-process counters that mirror mem_pool_stat. Unlike the shared mmap
+ * above (which is created with MAP_ANON|MAP_SHARED in the parent before
+ * fork and therefore aggregates allocations across every worker), this
+ * struct lives in the BSS and is duplicated on fork, so each worker keeps
+ * its own running totals. The mirror is updated alongside every shared
+ * counter mutation.
+ */
+static rspamd_mempool_stat_t mem_pool_stat_local;
 /* Environment variable */
 static gboolean env_checked = FALSE;
 static gboolean always_malloc = FALSE;
@@ -219,7 +228,9 @@ rspamd_mempool_chain_new(gsize size, gsize alignment, enum rspamd_mempool_chain_
 #error No mmap methods are defined
 #endif
 		g_atomic_int_inc(&mem_pool_stat->shared_chunks_allocated);
+		g_atomic_int_inc(&mem_pool_stat_local.shared_chunks_allocated);
 		g_atomic_int_add(&mem_pool_stat->bytes_allocated, total_size);
+		g_atomic_int_add(&mem_pool_stat_local.bytes_allocated, total_size);
 	}
 	else {
 #ifdef HAVE_MALLOC_SIZE
@@ -237,7 +248,9 @@ rspamd_mempool_chain_new(gsize size, gsize alignment, enum rspamd_mempool_chain_
 		chain = map;
 		chain->begin = ((uint8_t *) chain) + sizeof(struct _pool_chain);
 		g_atomic_int_add(&mem_pool_stat->bytes_allocated, total_size);
+		g_atomic_int_add(&mem_pool_stat_local.bytes_allocated, total_size);
 		g_atomic_int_inc(&mem_pool_stat->chunks_allocated);
+		g_atomic_int_inc(&mem_pool_stat_local.chunks_allocated);
 	}
 
 	chain->pos = align_ptr(chain->begin, alignment);
@@ -428,6 +441,7 @@ rspamd_mempool_new_(gsize size, const char *tag, int flags, const char *loc)
 	new_pool->tag.uid[enc_len] = '\0';
 
 	mem_pool_stat->pools_allocated++;
+	mem_pool_stat_local.pools_allocated++;
 
 	/* Now we can attach one chunk to speed up simple allocations */
 	struct _pool_chain *nchain;
@@ -451,7 +465,18 @@ rspamd_mempool_new_(gsize size, const char *tag, int flags, const char *loc)
 	/* Adjust stats */
 	g_atomic_int_add(&mem_pool_stat->bytes_allocated,
 					 (int) size);
+	g_atomic_int_add(&mem_pool_stat_local.bytes_allocated,
+					 (int) size);
 	g_atomic_int_add(&mem_pool_stat->chunks_allocated, 1);
+	g_atomic_int_add(&mem_pool_stat_local.chunks_allocated, 1);
+
+	/* Per-callsite live counters */
+	if (entry) {
+		entry->pools_allocated++;
+		entry->chunks_allocated++;
+		entry->bytes_allocated_total += size;
+		entry->bytes_currently_used += size;
+	}
 
 	return new_pool;
 }
@@ -539,11 +564,21 @@ memory_pool_alloc_common(rspamd_mempool_t *pool, gsize size, gsize alignment,
 			}
 			else {
 				mem_pool_stat->oversized_chunks++;
+				mem_pool_stat_local.oversized_chunks++;
 				g_atomic_int_add(&mem_pool_stat->fragmented_size,
+								 free);
+				g_atomic_int_add(&mem_pool_stat_local.fragmented_size,
 								 free);
 				pool->priv->entry->elts[pool->priv->entry->cur_elts].fragmentation += free;
 				new = rspamd_mempool_chain_new(size + pool->priv->elt_len, alignment,
 											   pool_type);
+			}
+
+			/* Per-callsite chunk accounting */
+			if (pool->priv->entry && new) {
+				pool->priv->entry->chunks_allocated++;
+				pool->priv->entry->bytes_allocated_total += new->slice_size;
+				pool->priv->entry->bytes_currently_used += new->slice_size;
 			}
 
 			/* Connect to pool subsystem */
@@ -978,13 +1013,20 @@ void rspamd_mempool_delete(rspamd_mempool_t *pool)
 		g_ptr_array_free(pool->priv->trash_stack, TRUE);
 	}
 
+	uint64_t freed_bytes = 0;
+
 	for (i = 0; i < G_N_ELEMENTS(pool->priv->pools); i++) {
 		if (pool->priv->pools[i]) {
 			LL_FOREACH_SAFE(pool->priv->pools[i], cur, tmp)
 			{
 				g_atomic_int_add(&mem_pool_stat->bytes_allocated,
 								 -((int) cur->slice_size));
+				g_atomic_int_add(&mem_pool_stat_local.bytes_allocated,
+								 -((int) cur->slice_size));
 				g_atomic_int_add(&mem_pool_stat->chunks_allocated, -1);
+				g_atomic_int_add(&mem_pool_stat_local.chunks_allocated, -1);
+
+				freed_bytes += cur->slice_size;
 
 				len = cur->slice_size + sizeof(struct _pool_chain);
 
@@ -1001,7 +1043,18 @@ void rspamd_mempool_delete(rspamd_mempool_t *pool)
 		}
 	}
 
+	if (pool->priv->entry && mempool_entries) {
+		pool->priv->entry->pools_freed++;
+		if (pool->priv->entry->bytes_currently_used >= freed_bytes) {
+			pool->priv->entry->bytes_currently_used -= freed_bytes;
+		}
+		else {
+			pool->priv->entry->bytes_currently_used = 0;
+		}
+	}
+
 	g_atomic_int_inc(&mem_pool_stat->pools_freed);
+	g_atomic_int_inc(&mem_pool_stat_local.pools_freed);
 	POOL_MTX_UNLOCK();
 	free(pool); /* allocated by posix_memalign */
 }
@@ -1023,6 +1076,68 @@ void rspamd_mempool_stat_reset(void)
 {
 	if (mem_pool_stat != NULL) {
 		memset(mem_pool_stat, 0, sizeof(rspamd_mempool_stat_t));
+	}
+	memset(&mem_pool_stat_local, 0, sizeof(mem_pool_stat_local));
+}
+
+void rspamd_mempool_stat_local(rspamd_mempool_stat_t *st)
+{
+	if (st == NULL) {
+		return;
+	}
+
+	st->pools_allocated = mem_pool_stat_local.pools_allocated;
+	st->pools_freed = mem_pool_stat_local.pools_freed;
+	st->shared_chunks_allocated = mem_pool_stat_local.shared_chunks_allocated;
+	st->bytes_allocated = mem_pool_stat_local.bytes_allocated;
+	st->chunks_allocated = mem_pool_stat_local.chunks_allocated;
+	st->chunks_freed = mem_pool_stat_local.chunks_freed;
+	st->oversized_chunks = mem_pool_stat_local.oversized_chunks;
+	st->fragmented_size = mem_pool_stat_local.fragmented_size;
+}
+
+void rspamd_mempool_entries_foreach(rspamd_mempool_entry_cb cb, void *ud)
+{
+	khiter_t k;
+
+	if (cb == NULL || mempool_entries == NULL) {
+		return;
+	}
+
+	for (k = kh_begin(mempool_entries); k != kh_end(mempool_entries); ++k) {
+		if (!kh_exist(mempool_entries, k)) {
+			continue;
+		}
+
+		struct rspamd_mempool_entry_point *elt = kh_value(mempool_entries, k);
+		rspamd_mempool_entry_stat_t st;
+		uint64_t sum_frag = 0;
+		uint64_t sum_left = 0;
+		unsigned int valid = 0;
+
+		for (unsigned int i = 0; i < G_N_ELEMENTS(elt->elts); i++) {
+			if (elt->elts[i].fragmentation != 0 || elt->elts[i].leftover != 0) {
+				sum_frag += elt->elts[i].fragmentation;
+				sum_left += elt->elts[i].leftover;
+				valid++;
+			}
+		}
+
+		st.src = elt->src;
+		st.cur_suggestion = elt->cur_suggestion;
+		st.cur_elts = elt->cur_elts;
+		st.cur_vars = elt->cur_vars;
+		st.cur_dtors = elt->cur_dtors;
+		st.samples = valid;
+		st.avg_fragmentation = valid ? (uint32_t) (sum_frag / valid) : 0;
+		st.avg_leftover = valid ? (uint32_t) (sum_left / valid) : 0;
+		st.pools_allocated = elt->pools_allocated;
+		st.pools_freed = elt->pools_freed;
+		st.chunks_allocated = elt->chunks_allocated;
+		st.bytes_allocated_total = elt->bytes_allocated_total;
+		st.bytes_currently_used = elt->bytes_currently_used;
+
+		cb(&st, ud);
 	}
 }
 

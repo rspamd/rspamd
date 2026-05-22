@@ -746,7 +746,7 @@ rspamd_mailto_parse(struct http_parser_url *u,
 				p++;
 			}
 			else {
-				*flags |= RSPAMD_URL_FLAG_MISSINGSLASHES;
+				/* mailto: is non-hierarchical (RFC 6068); // is not required */
 				st = parse_slash_slash;
 			}
 			break;
@@ -1218,7 +1218,14 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				goto out;
 			}
 			else if (p - c > max_email_user) {
-				/* Oversized user field - consult Lua filter (fixes #5731) */
+				/*
+				 * Oversized user field is itself an obfuscation signal
+				 * (e.g. https://legit.com<lots-of-spaces>@evil.com/...),
+				 * so mark obscured regardless of what the Lua filter says.
+				 */
+				*flags |= RSPAMD_URL_FLAG_OBSCURED | RSPAMD_URL_FLAG_HAS_USER;
+
+				/* Consult Lua filter (fixes #5731) */
 				enum rspamd_url_lua_filter_result lua_decision =
 					rspamd_url_lua_consult(c, p - c, *flags, (lua_State *) lua_state);
 
@@ -1226,12 +1233,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 					/* REJECT: Lua says this is garbage, abort parsing */
 					goto out;
 				}
-				else if (lua_decision == RSPAMD_URL_LUA_FILTER_SUSPICIOUS) {
-					/* SUSPICIOUS: Mark as obscured for plugin analysis */
-					*flags |= RSPAMD_URL_FLAG_OBSCURED;
-				}
 				/* ACCEPT or SUSPICIOUS: continue parsing */
-				*flags |= RSPAMD_URL_FLAG_HAS_USER;
 			}
 
 			p++;
@@ -1847,6 +1849,10 @@ rspamd_url_maybe_regenerate_from_ip(struct rspamd_url *uri, rspamd_mempool_t *po
 	gboolean ret = FALSE, check_num = TRUE;
 	uint32_t n, dots, t = 0, i = 0, shift, nshift;
 
+	if (uri->hostlen == 0) {
+		return FALSE;
+	}
+
 	p = rspamd_url_host_unsafe(uri);
 	end = p + uri->hostlen;
 
@@ -1855,7 +1861,8 @@ rspamd_url_maybe_regenerate_from_ip(struct rspamd_url *uri, rspamd_mempool_t *po
 		end--;
 	}
 
-	while (*(end - 1) == '.' && end > p) {
+	/* Bound check must come first: an all-dots host walks end down to p */
+	while (end > p && *(end - 1) == '.') {
 		end--;
 	}
 
@@ -2443,6 +2450,16 @@ rspamd_url_parse(struct rspamd_url *uri,
 										 &unquoted_len, uri->flags);
 
 	rspamd_url_shift(uri, unquoted_len, UF_HOST);
+
+	/*
+	 * URL-decoding the host can collapse it to nothing (e.g. a host that
+	 * is just a truncated "%" escape decodes to zero bytes). The hostlen
+	 * check above runs before decoding, so re-check here to keep an empty
+	 * host out of the downstream host parsing.
+	 */
+	if (uri->hostlen == 0) {
+		return URI_ERRNO_HOST_MISSING;
+	}
 
 	/*
 	 * Remove extra slashes between host and path.

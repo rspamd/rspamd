@@ -753,6 +753,8 @@ void rspamd_fuzzy_backend_check_redis(struct rspamd_fuzzy_backend *bk,
 							 0);
 
 	if (up == NULL) {
+		msg_err_redis_session("cannot select fuzzy redis upstream: "
+							  "all backends are dead or pending DNS resolution");
 		rspamd_fuzzy_redis_session_dtor(session, TRUE);
 		if (cb) {
 			memset(&mf_result, 0, sizeof(mf_result));
@@ -901,6 +903,8 @@ void rspamd_fuzzy_backend_count_redis(struct rspamd_fuzzy_backend *bk,
 							 0);
 
 	if (up == NULL) {
+		msg_err_redis_session("cannot select fuzzy redis upstream for count: "
+							  "all backends are dead or pending DNS resolution");
 		rspamd_fuzzy_redis_session_dtor(session, TRUE);
 		if (cb) {
 			cb(0, ud);
@@ -1047,6 +1051,8 @@ void rspamd_fuzzy_backend_version_redis(struct rspamd_fuzzy_backend *bk,
 							 0);
 
 	if (up == NULL) {
+		msg_err_redis_session("cannot select fuzzy redis upstream for version: "
+							  "all backends are dead or pending DNS resolution");
 		rspamd_fuzzy_redis_session_dtor(session, TRUE);
 		if (cb) {
 			cb(0, ud);

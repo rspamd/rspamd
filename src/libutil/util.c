@@ -36,6 +36,8 @@
 #include <mach/mach_init.h>
 #include <mach/thread_act.h>
 #include <mach/mach_port.h>
+#include <mach/task.h>
+#include <mach/task_info.h>
 #endif
 /* poll */
 #ifdef HAVE_POLL_H
@@ -1416,8 +1418,7 @@ restart:
 	/* Restore terminal state */
 	if (memcmp(&term, &oterm, sizeof(term)) != 0) {
 		while (tcsetattr(input, TCSAFLUSH, &oterm) == -1 &&
-			   errno == EINTR && !saved_signo[SIGTTOU])
-			;
+			   errno == EINTR && !saved_signo[SIGTTOU]);
 	}
 
 	/* Restore signal handlers */
@@ -2825,4 +2826,119 @@ void rspamd_normalize_path_inplace(char *path, unsigned int len, gsize *nlen)
 	if (nlen) {
 		*nlen = (o - path);
 	}
+}
+
+#ifdef __linux__
+static gboolean
+rspamd_proc_mem_info_linux(struct rspamd_proc_mem_info *info)
+{
+	FILE *f;
+	char line[256];
+	gboolean got_rss = FALSE;
+
+	f = fopen("/proc/self/status", "r");
+	if (f == NULL) {
+		return FALSE;
+	}
+
+	while (fgets(line, sizeof(line), f) != NULL) {
+		uint64_t val_kb = 0;
+
+		/*
+		 * All Vm* / Rss* fields in /proc/self/status are reported in kB.
+		 * Format: "<Field>:\t<value> kB\n"
+		 */
+		if (sscanf(line, "VmSize: %" SCNu64 " kB", &val_kb) == 1) {
+			info->vm_size = val_kb * 1024;
+		}
+		else if (sscanf(line, "VmRSS: %" SCNu64 " kB", &val_kb) == 1) {
+			info->vm_rss = val_kb * 1024;
+			got_rss = TRUE;
+		}
+		else if (sscanf(line, "VmData: %" SCNu64 " kB", &val_kb) == 1) {
+			info->vm_data = val_kb * 1024;
+		}
+		else if (sscanf(line, "VmStk: %" SCNu64 " kB", &val_kb) == 1) {
+			info->vm_stack = val_kb * 1024;
+		}
+		else if (sscanf(line, "VmExe: %" SCNu64 " kB", &val_kb) == 1) {
+			info->vm_text = val_kb * 1024;
+		}
+		else if (sscanf(line, "VmLib: %" SCNu64 " kB", &val_kb) == 1) {
+			info->vm_lib = val_kb * 1024;
+		}
+		else if (sscanf(line, "VmPTE: %" SCNu64 " kB", &val_kb) == 1) {
+			info->vm_pte = val_kb * 1024;
+		}
+		else if (sscanf(line, "RssAnon: %" SCNu64 " kB", &val_kb) == 1) {
+			info->rss_anon = val_kb * 1024;
+		}
+		else if (sscanf(line, "RssFile: %" SCNu64 " kB", &val_kb) == 1) {
+			info->rss_file = val_kb * 1024;
+		}
+		else if (sscanf(line, "RssShmem: %" SCNu64 " kB", &val_kb) == 1) {
+			info->rss_shmem = val_kb * 1024;
+		}
+	}
+
+	fclose(f);
+	return got_rss;
+}
+#endif
+
+#ifdef __APPLE__
+static gboolean
+rspamd_proc_mem_info_macos(struct rspamd_proc_mem_info *info)
+{
+	struct mach_task_basic_info ti;
+	mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
+
+	if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO,
+				  (task_info_t) &ti, &count) != KERN_SUCCESS) {
+		return FALSE;
+	}
+
+	info->vm_size = ti.virtual_size;
+	info->vm_rss = ti.resident_size;
+	return TRUE;
+}
+#endif
+
+gboolean rspamd_get_process_memory_info(struct rspamd_proc_mem_info *info)
+{
+	if (info == NULL) {
+		return FALSE;
+	}
+
+	memset(info, 0, sizeof(*info));
+
+#if defined(__linux__)
+	if (rspamd_proc_mem_info_linux(info)) {
+		return TRUE;
+	}
+#elif defined(__APPLE__)
+	if (rspamd_proc_mem_info_macos(info)) {
+		return TRUE;
+	}
+#endif
+
+	/* Fallback: use getrusage to fill at least vm_rss */
+#ifdef HAVE_RUSAGE_SELF
+	{
+		struct rusage ru;
+
+		if (getrusage(RUSAGE_SELF, &ru) == 0) {
+#ifdef __APPLE__
+			/* macOS reports ru_maxrss in bytes */
+			info->vm_rss = (uint64_t) ru.ru_maxrss;
+#else
+			/* Most Unixes report ru_maxrss in kilobytes */
+			info->vm_rss = (uint64_t) ru.ru_maxrss * 1024;
+#endif
+			return TRUE;
+		}
+	}
+#endif
+
+	return FALSE;
 }

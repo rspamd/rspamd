@@ -24,6 +24,7 @@
 #include "utlist.h"
 #include "khash.h"
 #include "composites/composites.h"
+#include "memory_stat.h"
 
 #ifdef HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
@@ -84,6 +85,7 @@ static const struct rspamd_control_cmd_match {
 	{.name = {.begin = "/fuzzystat", .len = sizeof("/fuzzystat") - 1}, .type = RSPAMD_CONTROL_FUZZY_STAT},
 	{.name = {.begin = "/fuzzysync", .len = sizeof("/fuzzysync") - 1}, .type = RSPAMD_CONTROL_FUZZY_SYNC},
 	{.name = {.begin = "/compositesstats", .len = sizeof("/compositesstats") - 1}, .type = RSPAMD_CONTROL_COMPOSITES_STATS},
+	{.name = {.begin = "/memstat", .len = sizeof("/memstat") - 1}, .type = RSPAMD_CONTROL_MEMORY_STAT},
 };
 
 static void rspamd_control_ignore_io_handler(int fd, short what, void *ud);
@@ -185,6 +187,9 @@ rspamd_control_write_reply(struct rspamd_control_session *session)
 	unsigned int total_conns = 0;
 	/* Composites stats aggregation */
 	uint64_t total_checked_slow = 0, total_checked_fast = 0, total_matched = 0;
+	/* Memory stat aggregation */
+	uint64_t total_rss_kb = 0, total_lua_kb = 0, total_mempool_bytes = 0,
+			 total_jemalloc_allocated = 0;
 
 	rep = ucl_object_typed_new(UCL_OBJECT);
 	workers = ucl_object_typed_new(UCL_OBJECT);
@@ -294,6 +299,43 @@ rspamd_control_write_reply(struct rspamd_control_session *session)
 			total_checked_fast += elt->reply.reply.composites_stats.checked_fast;
 			total_matched += elt->reply.reply.composites_stats.matched;
 			break;
+		case RSPAMD_CONTROL_MEMORY_STAT:
+			ucl_object_insert_key(cur,
+								  ucl_object_fromint(elt->reply.reply.memory_stat.status),
+								  "status", 0, false);
+			ucl_object_insert_key(cur,
+								  ucl_object_fromint(elt->reply.reply.memory_stat.rss_kb),
+								  "rss_kb", 0, false);
+			ucl_object_insert_key(cur,
+								  ucl_object_fromint(elt->reply.reply.memory_stat.lua_kb),
+								  "lua_kb", 0, false);
+			ucl_object_insert_key(cur,
+								  ucl_object_fromint(elt->reply.reply.memory_stat.mempool_bytes),
+								  "mempool_bytes", 0, false);
+			ucl_object_insert_key(cur,
+								  ucl_object_fromint(elt->reply.reply.memory_stat.jemalloc_allocated),
+								  "jemalloc_allocated", 0, false);
+
+			if (elt->attached_fd != -1) {
+				parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
+
+				if (ucl_parser_add_fd(parser, elt->attached_fd)) {
+					ucl_object_insert_key(cur, ucl_parser_get_object(parser),
+										  "data", 0, false);
+				}
+				else {
+					ucl_object_insert_key(cur,
+										  ucl_object_fromstring(ucl_parser_get_error(parser)),
+										  "error", 0, false);
+				}
+				ucl_parser_free(parser);
+			}
+
+			total_rss_kb += elt->reply.reply.memory_stat.rss_kb;
+			total_lua_kb += elt->reply.reply.memory_stat.lua_kb;
+			total_mempool_bytes += elt->reply.reply.memory_stat.mempool_bytes;
+			total_jemalloc_allocated += elt->reply.reply.memory_stat.jemalloc_allocated;
+			break;
 		default:
 			break;
 		}
@@ -323,6 +365,18 @@ rspamd_control_write_reply(struct rspamd_control_session *session)
 		ucl_object_insert_key(cur, ucl_object_fromint(total_checked_slow), "checked_slow", 0, false);
 		ucl_object_insert_key(cur, ucl_object_fromint(total_checked_fast), "checked_fast", 0, false);
 		ucl_object_insert_key(cur, ucl_object_fromint(total_matched), "matched", 0, false);
+
+		ucl_object_insert_key(rep, cur, "total", 0, false);
+	}
+	else if (session->cmd.type == RSPAMD_CONTROL_MEMORY_STAT) {
+		/* Total memory stats */
+		cur = ucl_object_typed_new(UCL_OBJECT);
+		ucl_object_insert_key(cur, ucl_object_fromint(total_rss_kb), "rss_kb", 0, false);
+		ucl_object_insert_key(cur, ucl_object_fromint(total_lua_kb), "lua_kb", 0, false);
+		ucl_object_insert_key(cur, ucl_object_fromint(total_mempool_bytes),
+							  "mempool_bytes", 0, false);
+		ucl_object_insert_key(cur, ucl_object_fromint(total_jemalloc_allocated),
+							  "jemalloc_allocated", 0, false);
 
 		ucl_object_insert_key(rep, cur, "total", 0, false);
 	}
@@ -769,6 +823,17 @@ rspamd_control_default_cmd_handler(int fd,
 	rspamd_main = cd->worker->srv;
 
 	switch (cmd->type) {
+	case RSPAMD_CONTROL_MEMORY_STAT:
+		/*
+		 * Memory stat needs to attach a file descriptor with the full UCL
+		 * dump, so it has its own send path and bypasses the trailing
+		 * write() below.
+		 */
+		rspamd_memory_stat_collect_and_send(rspamd_main, cd->worker, fd, cmd);
+		if (attached_fd != -1) {
+			close(attached_fd);
+		}
+		return;
 	case RSPAMD_CONTROL_STAT:
 		if (getrusage(RUSAGE_SELF, &rusg) == -1) {
 			msg_err_main("cannot get rusage stats: %s",

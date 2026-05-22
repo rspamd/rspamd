@@ -140,6 +140,8 @@ struct rspamd_lua_fuzzy_script {
 	struct rspamd_lua_fuzzy_script *next;
 };
 
+struct fuzzy_peer_request;
+
 struct rspamd_fuzzy_storage_ctx {
 	uint64_t magic;
 	struct ev_loop *event_loop;
@@ -185,6 +187,10 @@ struct rspamd_fuzzy_storage_ctx {
 	unsigned int updates_failed;
 	unsigned int updates_maxfail;
 	int peer_fd;
+	/* Doubly-linked list of peer requests whose write watcher is registered
+	 * but has not yet completed. Walked at worker shutdown so pending
+	 * up_reqs don't leak when the event loop stops before they fire. */
+	struct fuzzy_peer_request *pending_peer_requests;
 
 	unsigned int leaky_bucket_ttl;
 	unsigned int leaky_bucket_mask;

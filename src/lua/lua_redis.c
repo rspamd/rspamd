@@ -131,6 +131,9 @@ struct lua_redis_request_specific_userdata {
 	unsigned int nargs;
 	char **args;
 	gsize *arglens;
+	/* NUL-terminated copy of args[0] for diagnostic labels; args[0] itself is
+	 * sized to arglens[0] and is not NUL-terminated */
+	char *cmd;
 	struct lua_redis_userdata *common_ud;
 	struct lua_redis_ctx *ctx;
 	struct lua_redis_request_specific_userdata *next;
@@ -223,6 +226,7 @@ lua_redis_dtor(struct lua_redis_ctx *ctx)
 	LL_FOREACH_SAFE(ud->specific, cur, tmp)
 	{
 		lua_redis_free_args(cur->args, cur->arglens, cur->nargs);
+		g_free(cur->cmd);
 
 		if (cur->cbref != -1) {
 			luaL_unref(ud->cfg->lua_state, LUA_REGISTRYINDEX, cur->cbref);
@@ -1215,6 +1219,7 @@ lua_redis_make_request(lua_State *L)
 		lua_gettable(L, -2);
 		cmd = lua_tostring(L, -1);
 		lua_pop(L, 1);
+		sp_ud->cmd = g_strdup(cmd);
 
 		lua_pushstring(L, "timeout");
 		lua_gettable(L, 1);
@@ -1241,9 +1246,10 @@ lua_redis_make_request(lua_State *L)
 
 		if (ret == REDIS_OK) {
 			if (ud->s) {
-				rspamd_session_add_event(ud->s,
-										 lua_redis_fin, sp_ud,
-										 M);
+				rspamd_session_add_event_full(ud->s,
+											  lua_redis_fin, sp_ud,
+											  M,
+											  sp_ud->cmd);
 
 				if (ud->item) {
 					rspamd_symcache_item_async_inc(ud->task, ud->item, M);
@@ -1579,6 +1585,7 @@ lua_redis_add_cmd(lua_State *L)
 		}
 
 		sp_ud->ctx = ctx;
+		sp_ud->cmd = g_strdup(cmd);
 
 		lua_redis_parse_args(L, args_pos, cmd, &sp_ud->args,
 							 &sp_ud->arglens, &sp_ud->nargs);
@@ -1611,10 +1618,11 @@ lua_redis_add_cmd(lua_State *L)
 
 		if (ret == REDIS_OK) {
 			if (ud->s) {
-				rspamd_session_add_event(ud->s,
-										 lua_redis_fin,
-										 sp_ud,
-										 M);
+				rspamd_session_add_event_full(ud->s,
+											  lua_redis_fin,
+											  sp_ud,
+											  M,
+											  sp_ud->cmd);
 
 				if (ud->item) {
 					rspamd_symcache_item_async_inc(ud->task, ud->item, M);

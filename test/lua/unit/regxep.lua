@@ -42,6 +42,14 @@ context("Regexp unit tests", function()
       {'Body=(\\S+)(?: Fuz1=(\\S+))?(?: Fuz2=(\\S+))?',
       'mc-filter4 1120; Body=1 Fuz1=2 mc-filter4 1120; Body=1 Fuz1=2 Fuz2=3',
       {'Body=1 Fuz1=2', '1', '2'}, {'Body=1 Fuz1=2 Fuz2=3', '1', '2', '3'}},
+      -- discard empty captures at the end: we don't want an empty capture corresponding to (et)?
+      {'(\\S*atch)(et)?', 'Match the hatch', {'Match', 'Match'}, {'hatch', 'hatch'}},
+      -- there once was a bug where an empty capture interrupted storing captures,
+      -- thus the second match was only {'capetians do halt captaining', 'capetians'}
+      {'(cap\\S*) do *(not)? halt (cap\\S*)',
+      'empty captures do not halt capturing but dead capetians do halt captaining',
+      {'captures do not halt capturing', 'captures', 'not', 'capturing'},
+      {'capetians do halt captaining', 'capetians', '', 'captaining'}},
     }
     for _,c in ipairs(cases) do
       local r = re.create_cached(c[1])

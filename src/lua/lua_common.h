@@ -170,6 +170,19 @@ struct rspamd_lua_map {
 struct rspamd_lua_upstream {
 	struct upstream *up;
 	int upref;
+	/*
+	 * Inflight bookkeeping for the C-side P2C load comparator. acquired is
+	 * set when this wrapper holds the inflight reference produced by a
+	 * get_* call (round-robin / hashed / master-slave). retired is set the
+	 * first time :ok or :fail is called. If acquired && !retired at __gc
+	 * time, the destructor calls rspamd_upstream_release so abandoned
+	 * selections don't permanently skew P2C scoring. Wrappers handed out
+	 * by all_upstreams() or watch callbacks set acquired = 0 and the
+	 * destructor leaves inflight alone. Bitfields keep the wrapper at
+	 * sizeof(ptr) + 8 instead of bloating it with two padded gint slots.
+	 */
+	unsigned int acquired : 1;
+	unsigned int retired : 1;
 };
 
 /* Common utility functions */
@@ -236,6 +249,12 @@ lua_State *rspamd_lua_init(bool wipe_mem);
 void rspamd_lua_close(lua_State *L);
 
 void rspamd_lua_start_gc(struct rspamd_config *cfg);
+
+/**
+ * Returns the total amount of memory currently used by the Lua heap, in bytes.
+ * Combines LUA_GCCOUNT (kilobytes) and LUA_GCCOUNTB (bytes remainder).
+ */
+gsize rspamd_lua_get_memory_used(lua_State *L);
 
 /**
 * Sets field in a global variable

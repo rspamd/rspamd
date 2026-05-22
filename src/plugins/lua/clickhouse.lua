@@ -98,6 +98,43 @@ local settings = {
     run_every = '7d',
   },
   extra_columns = {},
+  -- Inject a curated set of extra_columns from a named preset. Currently
+  -- supported: "outbound" (per-sender outbound traffic profiling columns:
+  -- languages, hour-of-day, envelope-from domain, recipient domains, etc.).
+  -- User-supplied entries with the same name take precedence. Schema
+  -- migration reuses the existing extra_columns path. Unset by default.
+  preset = nil,
+}
+
+-- Named dispatch table for curated `extra_columns` presets. Each preset is an
+-- array of entries using the same shape as user-supplied `extra_columns`
+-- entries (see processing below). Selectors in these tables must be
+-- expressible with the stock selectors that ship in rspamd master. Additional
+-- presets (e.g. "inbound", "compliance") can be added as new keys here.
+local extra_column_presets = {
+  outbound = {
+    {
+      name = 'Languages',
+      type = 'Array(LowCardinality(String))',
+      selector = 'languages',
+      default_value = {},
+      comment = 'outbound preset: detected languages of text parts',
+    },
+    {
+      name = 'ReceivedCount',
+      type = 'UInt16',
+      selector = 'received_count',
+      default_value = '0',
+      comment = 'outbound preset: number of Received headers (hop count)',
+    },
+    {
+      name = 'FuzzyDigest',
+      type = 'String',
+      selector = 'fuzzy_digest',
+      default_value = '',
+      comment = 'outbound preset: strong fuzzy digest of largest text part (for fan-out aggregations)',
+    },
+  },
 }
 
 --- @language SQL
@@ -440,6 +477,12 @@ end
 local function clickhouse_send_data(task, ev_base, why, gen_rows, cust_rows, extra_rows)
   local log_object = task or rspamd_config
   local upstream = settings.upstream:get_upstream_round_robin()
+  if not upstream then
+    rspamd_logger.errx(log_object,
+        "no clickhouse upstream available (DNS pending or all dead); skipping send (%s)",
+        why)
+    return
+  end
   local ip_addr = upstream:get_addr():to_string(true)
   rspamd_logger.infox(log_object, "trying to send %s rows to clickhouse server %s; started as %s",
       #gen_rows + #cust_rows, ip_addr, why)
@@ -1136,6 +1179,12 @@ end
 local function do_remove_partition(ev_base, cfg, table_name, partition, method_override)
   lua_util.debugm(N, rspamd_config, "removing partition %s.%s", table_name, partition)
   local upstream = settings.upstream:get_upstream_round_robin()
+  if not upstream then
+    rspamd_logger.errx(rspamd_config,
+        "no clickhouse upstream available; cannot remove partition %s.%s",
+        table_name, partition)
+    return
+  end
   local remove_partition_sql = "ALTER TABLE ${table_name} ${remove_method} PARTITION '${partition}'"
   local method = method_override or settings.retention.method
   local remove_method = (method == 'drop') and 'DROP' or 'DETACH'
@@ -1293,6 +1342,11 @@ local function clickhouse_remove_old_partitions(cfg, ev_base)
   end
 
   local upstream = settings.upstream:get_upstream_round_robin()
+  if not upstream then
+    rspamd_logger.errx(rspamd_config,
+        "no clickhouse upstream available; cannot run retention pass")
+    return false
+  end
   local partition_to_remove_sql = "SELECT partition, table " ..
       "FROM system.parts WHERE table IN ('${tables}') " ..
       "GROUP BY partition, table " ..
@@ -1540,6 +1594,12 @@ local function check_rspamd_table(upstream, ev_base, cfg)
 end
 
 local function check_clickhouse_upstream(upstream, ev_base, cfg)
+  if not upstream:get_addr() then
+    rspamd_logger.infox(rspamd_config,
+        'skipping clickhouse upstream %s: address not resolved yet',
+        upstream:get_name())
+    return
+  end
   local ch_params = {
     ev_base = ev_base,
     config = cfg,
@@ -1673,6 +1733,59 @@ if opts then
 
       settings.exceptions = maps_expressions.create(rspamd_config,
           settings.exceptions, N)
+    end
+
+    if settings.preset then
+      local preset_cols = extra_column_presets[settings.preset]
+      if not preset_cols then
+        rspamd_logger.errx(rspamd_config,
+            'clickhouse: unknown preset %s, ignoring', settings.preset)
+      else
+        -- Inject curated extra_columns from the named preset. User-supplied
+        -- entries with the same name take precedence, so we collect existing
+        -- names first. We support both array and map forms of user-supplied
+        -- extra_columns (the subsequent processing loop accepts either).
+        local existing_names = {}
+        if settings.extra_columns then
+          if settings.extra_columns[1] then
+            for _, c in ipairs(settings.extra_columns) do
+              if c.name then
+                existing_names[c.name] = true
+              end
+            end
+          else
+            for k, c in pairs(settings.extra_columns) do
+              existing_names[k] = true
+              if type(c) == 'table' and c.name then
+                existing_names[c.name] = true
+              end
+            end
+          end
+        else
+          settings.extra_columns = {}
+        end
+
+        local injected = {}
+        local is_array_form = settings.extra_columns[1] ~= nil
+            or next(settings.extra_columns) == nil
+        for _, preset in ipairs(preset_cols) do
+          if not existing_names[preset.name] then
+            -- Deep copy so we do not mutate the module-level preset table
+            local entry = lua_util.deepcopy(preset)
+            if is_array_form then
+              table.insert(settings.extra_columns, entry)
+            else
+              settings.extra_columns[preset.name] = entry
+            end
+            table.insert(injected, preset.name)
+          end
+        end
+        if #injected > 0 then
+          rspamd_logger.infox(rspamd_config,
+              'clickhouse: preset %s injected extra_columns: %s',
+              settings.preset, table.concat(injected, ', '))
+        end
+      end
     end
 
     if settings.extra_columns then

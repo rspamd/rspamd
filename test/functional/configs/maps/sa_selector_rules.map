@@ -24,10 +24,15 @@ selector SA_SEL_URL_TLD specific_urls({need_content = true, limit = 10}):get_tld
 # Selector negation (use domain to avoid addr formatting quirks)
 selector SA_SEL_NOT_CORP from:domain !~ /^corp\.example$/i
 
+# Brand-impersonation pattern: display name matches but domain does not.
+selector SA_SEL_BOFA_DISPLAY from:name =~ /bank\s+of\s+america/i
+selector SA_SEL_BOFA_NOT_DOMAIN from:domain !~ /bankofamerica\.com$/i
+
 # Meta rules combining atoms and selectors
 meta SA_META_AND SA_HDR_SUBJ & SA_BODY_SIMPLE & SA_SEL_FROM_DOM
 meta SA_META_OR SA_URI_SHORT | SA_SEL_URL_TLD
 meta SA_META_COMPLEX (SA_BODY_SIMPLE & SA_SEL_NOT_CORP) | SA_RAW_SIMPLE
+meta SA_META_BOFA_SPOOF SA_SEL_BOFA_DISPLAY & SA_SEL_BOFA_NOT_DOMAIN
 
 # Scores
 score SA_HDR_SUBJ 1.0
@@ -38,9 +43,12 @@ score SA_FULL_BOUNDARY 0.5
 score SA_SEL_FROM_DOM 1.0
 score SA_SEL_URL_TLD 1.0
 score SA_SEL_NOT_CORP 0.5
+score SA_SEL_BOFA_DISPLAY 1.0
+score SA_SEL_BOFA_NOT_DOMAIN 0.5
 score SA_META_AND 2.5
 score SA_META_OR 2.0
 score SA_META_COMPLEX 2.0
+score SA_META_BOFA_SPOOF 6.0
 
 # Descriptions
 describe SA_HDR_SUBJ Subject matches test subject
@@ -51,6 +59,9 @@ describe SA_FULL_BOUNDARY Header boundary present
 describe SA_SEL_FROM_DOM From domain equals example.com
 describe SA_SEL_URL_TLD URL tld equals example.com
 describe SA_SEL_NOT_CORP From address is not corp.example
+describe SA_SEL_BOFA_DISPLAY From display name matches Bank of America
+describe SA_SEL_BOFA_NOT_DOMAIN From domain is not bankofamerica.com
 describe SA_META_AND Header+Body+Selector combo
 describe SA_META_OR URI or URL TLD selector
 describe SA_META_COMPLEX Complex combination with negation
+describe SA_META_BOFA_SPOOF Bank of America display name with mismatched domain

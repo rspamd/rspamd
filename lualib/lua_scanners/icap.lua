@@ -166,7 +166,10 @@ end
 
 local function icap_check(task, content, digest, rule, maybe_part)
   local function icap_check_uncached ()
-    local upstream = rule.upstreams:get_upstream_round_robin()
+    local upstream = common.get_upstream_or_fail(task, rule, maybe_part)
+    if not upstream then
+      return
+    end
     local addr = upstream:get_addr()
     local retransmits = rule.retransmits
     local http_headers = {}
@@ -218,6 +221,11 @@ local function icap_check(task, content, digest, rule, maybe_part)
 
           -- Select a different upstream!
           upstream = rule.upstreams:get_upstream_round_robin()
+          if not upstream then
+            common.yield_result(task, rule, 'no upstream available for retry', 0.0,
+                'fail', maybe_part)
+            return
+          end
           addr = upstream:get_addr()
 
           lua_util.debugm(rule.name, task, '%s: retry IP: %s:%s',
@@ -239,7 +247,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
         end
       end
 
-      local function get_req_headers()                
+      local function get_req_headers()
         local in_client_ip = task:get_from_ip()
         local in_client_ip_str = in_client_ip:to_string()
         local req_hlen = 2

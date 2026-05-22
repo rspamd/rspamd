@@ -1,6 +1,5 @@
 --[[
-Copyright (c) 2022, Vsevolod Stakhov <vsevolod@rspamd.com>
-Copyright (c) 2015-2016, Andrew Lewis <nerf@judo.za.org>
+Copyright (c) 2015-2026, Vsevolod Stakhov <vsevolod@rspamd.com>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -295,8 +294,10 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
       end
 
       -- Prepare and send redis report element
+      -- math.floor is required: task:get_date returns a fractional double and
+      -- PUC-Rio Lua 5.3+ rejects non-integer floats as the second arg to os.date
       local period = os.date('%Y%m%d',
-        task:get_date({ format = 'connect', gmt = false }))
+        math.floor(task:get_date({ format = 'connect', gmt = false })))
 
       -- Dmarc domain key must include dmarc domain, rua and period
       local dmarc_domain_key = table.concat(

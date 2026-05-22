@@ -63,6 +63,17 @@ static GOptionEntry entries[] = {
 	 "Set IO timeout (1s by default)", NULL},
 	{NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL}};
 
+#define RSPAMADM_CONTROL_COMMAND_LIST                                  \
+	"Supported commands:\n"                                            \
+	"  stat            - show statistics\n"                            \
+	"  reload          - reload workers dynamic data\n"                \
+	"  reresolve       - resolve upstreams addresses\n"                \
+	"  recompile       - recompile hyperscan regexes\n"                \
+	"  fuzzystat       - show fuzzy statistics\n"                      \
+	"  fuzzysync       - immediately sync fuzzy database to storage\n" \
+	"  compositesstats - show composites processing statistics\n"      \
+	"  memstat         - show memory usage statistics across all workers\n"
+
 static const char *
 rspamadm_control_help(gboolean full_help, const struct rspamadm_command *cmd)
 {
@@ -77,15 +88,7 @@ rspamadm_control_help(gboolean full_help, const struct rspamadm_command *cmd)
 				   "-u: output ucl (default)\n"
 				   "-s: use the following socket instead of " RSPAMD_DBDIR "/rspamd.sock\n"
 				   "-t: set IO timeout (1.0 seconds default)\n"
-				   "--help: shows available options and commands\n\n"
-				   "Supported commands:\n"
-				   "stat - show statistics\n"
-				   "reload - reload workers dynamic data\n"
-				   "reresolve - resolve upstreams addresses\n"
-				   "recompile - recompile hyperscan regexes\n"
-				   "fuzzystat - show fuzzy statistics\n"
-				   "fuzzysync - immediately sync fuzzy database to storage\n"
-				   "compositesstats - show composites processing statistics\n";
+				   "--help: shows available options and commands\n\n" RSPAMADM_CONTROL_COMMAND_LIST;
 	}
 	else {
 		help_str = "Manage rspamd main control interface";
@@ -143,6 +146,18 @@ rspamd_control_finish_handler(struct rspamd_http_connection *conn,
 				ucl_parser_free(parser);
 				goto end;
 			}
+			else if (strcmp(cbdata->path, "/memstat") == 0) {
+				rspamadm_execute_lua_ucl_subr(cbdata->argc - 1,
+											  &cbdata->argv[1],
+											  obj,
+											  "memstat",
+											  TRUE);
+
+				rspamd_fstring_free(out);
+				ucl_object_unref(obj);
+				ucl_parser_free(parser);
+				goto end;
+			}
 			else {
 				rspamd_ucl_emit_fstring(obj, UCL_EMIT_CONFIG, &out);
 			}
@@ -190,7 +205,8 @@ rspamadm_control(int argc, char **argv, const struct rspamadm_command *_cmd)
 	g_option_context_free(context);
 
 	if (argc <= 1) {
-		rspamd_fprintf(stderr, "command required\n");
+		rspamd_fprintf(stderr,
+					   "command required\n\n" RSPAMADM_CONTROL_COMMAND_LIST);
 		exit(EXIT_FAILURE);
 	}
 
@@ -220,8 +236,14 @@ rspamadm_control(int argc, char **argv, const struct rspamadm_command *_cmd)
 			 g_ascii_strcasecmp(cmd, "composites_stats") == 0) {
 		path = "/compositesstats";
 	}
+	else if (g_ascii_strcasecmp(cmd, "memstat") == 0 ||
+			 g_ascii_strcasecmp(cmd, "mem_stat") == 0) {
+		path = "/memstat";
+	}
 	else {
-		rspamd_fprintf(stderr, "unknown command: %s\n", cmd);
+		rspamd_fprintf(stderr,
+					   "unknown command: %s\n\n" RSPAMADM_CONTROL_COMMAND_LIST,
+					   cmd);
 		exit(EXIT_FAILURE);
 	}
 

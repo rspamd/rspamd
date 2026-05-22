@@ -17,6 +17,7 @@ limitations under the License.
 local fun = require 'fun'
 local meta_functions = require "lua_meta"
 local lua_util = require "lua_util"
+local lua_mime = require "lua_mime"
 local rspamd_util = require "rspamd_util"
 local rspamd_url = require "rspamd_url"
 local common = require "lua_selectors/common"
@@ -592,6 +593,63 @@ The first argument must be header name.]],
       return HOSTNAME, 'string'
     end,
     ['description'] = 'Get hostname of the filter server',
+  },
+  -- Get strong fuzzy digest of the displayed text part
+  ['fuzzy_digest'] = {
+    ['get_value'] = function(task)
+      local best = lua_mime.get_displayed_text_part(task)
+      if not best then
+        return nil
+      end
+      local digest = best:get_fuzzy_hashes(task:get_mempool())
+      if not digest then
+        return nil
+      end
+      return digest, 'string'
+    end,
+    ['description'] = [[Get strong fuzzy digest (hex string) of the part an MUA would display
+(see lua_mime.get_displayed_text_part). Returns nil if the message has no usable text part.]],
+  },
+  -- Get fuzzy shingles of the displayed text part
+  ['fuzzy_shingles'] = {
+    ['get_value'] = function(task)
+      local best = lua_mime.get_displayed_text_part(task)
+      if not best then
+        return {}, 'string_list'
+      end
+      local _, shingles = best:get_fuzzy_hashes(task:get_mempool())
+      if type(shingles) ~= 'table' then
+        return {}, 'string_list'
+      end
+      local res = {}
+      for _, s in ipairs(shingles) do
+        if type(s) == 'table' and s[1] then
+          table.insert(res, tostring(s[1]))
+        end
+      end
+      return res, 'string_list'
+    end,
+    ['description'] = [[Get list of fuzzy shingle hashes (as strings) for the part an MUA would display
+(see lua_mime.get_displayed_text_part). Returns an empty list if no usable text part exists
+or shingles cannot be computed.]],
+  },
+  -- Check if the message was submitted by an authenticated user
+  ['authenticated'] = {
+    ['get_value'] = function(task)
+      if task:get_user() then
+        return 'true', 'string'
+      end
+      return 'false', 'string'
+    end,
+    ['description'] = [[Returns the string 'true' if the task has an authenticated user,
+otherwise 'false'. Useful as a cheap proxy for outbound/submission traffic.]],
+  },
+  -- Number of Received headers (hop count)
+  ['received_count'] = {
+    ['get_value'] = function(task)
+      return tostring(task:get_header_count('Received')), 'string'
+    end,
+    ['description'] = [[Get the number of Received headers as a string (hop count for the message).]],
   },
 }
 

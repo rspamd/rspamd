@@ -2203,6 +2203,10 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 			if (err) {
 				g_error_free(err);
 			}
+			/* Selection happened but no request will be sent: retire the
+			 * inflight counter so P2C scoring isn't skewed by abandoned
+			 * picks. */
+			rspamd_upstream_release(bk_conn->up);
 			continue;
 		}
 
@@ -2800,8 +2804,8 @@ rspamd_proxy_self_scan(struct rspamd_proxy_session *session)
 
 	task->fin_arg = session;
 	task->resolver = session->ctx->resolver;
-	task->s = rspamd_session_create(task->task_pool, rspamd_proxy_task_fin,
-									NULL, (event_finalizer_t) rspamd_task_free, task);
+	task->s = rspamd_task_create_session(task, task->task_pool, rspamd_proxy_task_fin,
+										 NULL, (event_finalizer_t) rspamd_task_free);
 	data = rspamd_http_message_get_body(msg, &len);
 
 	if (session->backend->settings_id) {
@@ -2984,6 +2988,10 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 				g_error_free(err);
 			}
 
+			/* Selection succeeded but no request will be sent: retire the
+			 * inflight counter so P2C scoring isn't skewed by abandoned
+			 * picks. */
+			rspamd_upstream_release(session->master_conn->up);
 			goto err; /* No fallback here */
 		}
 

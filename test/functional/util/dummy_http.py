@@ -89,6 +89,11 @@ class MainHandler(tornado.web.RequestHandler):
             raise tornado.web.HTTPError(404)
 
     def head(self, path):
+        # Log the request headers in the exact order they arrived on the
+        # wire so functional tests can assert on header presence and order
+        # (used by the url_redirector stealth fingerprint test).
+        hdrs = ", ".join(f"{k}={v}" for k, v in self.request.headers.get_all())
+        print(f"dummy_http.py: HEAD {path} headers: {hdrs}", file=sys.stderr)
         self.set_header("Content-Type", "text/plain")
         if path == "/redirect1":
             # Send an HTTP redirect to the bind address of the server
@@ -96,12 +101,36 @@ class MainHandler(tornado.web.RequestHandler):
         elif path == "/redirect2":
             # Send an HTTP redirect to the bind address of the server
             self.redirect(f"{self.request.protocol}://{self.request.host}/redirect1")
-        elif self.path == "/redirect3":
+        elif path == "/redirect3":
             # Send an HTTP redirect to the bind address of the server
             self.redirect(f"{self.request.protocol}://{self.request.host}/redirect4")
-        elif self.path == "/redirect4":
+        elif path == "/redirect4":
             # Send an HTTP redirect to the bind address of the server
             self.redirect(f"{self.request.protocol}://{self.request.host}/redirect3")
+        elif path == "/tel_redirect":
+            # Send an HTTP redirect to a tel: URL (non-HTTP scheme)
+            self.redirect("tel:88006007775")
+        elif path == "/mailto_redirect":
+            # Send an HTTP redirect to a mailto: URL (non-HTTP scheme)
+            self.redirect("mailto:user@example.net")
+        elif path == "/chain_intermediate_1":
+            # Intermediate hop to chain_to_tel2
+            self.redirect(f"{self.request.protocol}://{self.request.host}/chain_intermediate_2")
+        elif path == "/chain_intermediate_2":
+            # Final hop to a tel: URL
+            self.redirect("tel:88006007776")
+        elif path == "/chain1":
+            # Intermediate hop to chain2
+            self.redirect(f"{self.request.protocol}://{self.request.host}/chain2")
+        elif path == "/chain2":
+            # Intermediate hop to chain3
+            self.redirect(f"{self.request.protocol}://{self.request.host}/chain3")
+        elif path == "/chain3":
+            # Final hop
+            self.redirect(f"{self.request.protocol}://{self.request.host}/hello")
+        elif path == "/slow":
+            # Slow redirect
+            self.redirect(f"{self.request.protocol}://{self.request.host}/hello")
         else:
             self.send_response(200)
         self.set_header("Content-Type", "text/plain")

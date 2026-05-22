@@ -31,6 +31,7 @@
 #include <math.h>
 
 #define UTF8_CHARSET "UTF-8"
+#define RSPAMD_BINARYENC_CHARSET "x-binaryenc"
 
 #define RSPAMD_CHARSET_FLAG_UTF (1 << 0)
 #define RSPAMD_CHARSET_FLAG_ASCII (1 << 1)
@@ -243,8 +244,16 @@ rspamd_charset_normalize(char *in)
 	}
 
 	if (changed) {
-		memmove(in, begin, end - begin + 2);
-		*(end + 1) = '\0';
+		/*
+		 * Copy the trimmed content [begin..end] (length = end-begin+1)
+		 * and null-terminate at the shifted position. The previous
+		 * version copied one extra byte from past `end` and wrote the
+		 * terminator at the original (unshifted) offset, leaving stale
+		 * bytes in the result.
+		 */
+		size_t out_len = (size_t) (end - begin + 1);
+		memmove(in, begin, out_len);
+		in[out_len] = '\0';
 	}
 }
 
@@ -568,10 +577,15 @@ void rspamd_mime_charset_utf_enforce(char *in, gsize len)
 
 	while (p < end && len > 0 && (err_offset = rspamd_fast_utf8_validate(p, len)) > 0) {
 		err_offset--; /* As it returns it 1 indexed */
-		int32_t cur_offset = err_offset;
+		/*
+		 * Keep offsets as goffset (signed long) to avoid truncating to
+		 * int32_t on buffers >= 2 GiB: a negative cur_offset would make
+		 * `p += cur_offset` walk backwards.
+		 */
+		goffset cur_offset = err_offset;
 
-		while (cur_offset < len) {
-			int32_t tmp = cur_offset;
+		while (cur_offset < (goffset) len) {
+			goffset tmp = cur_offset;
 
 			U8_NEXT(p, cur_offset, len, uc);
 
@@ -725,6 +739,19 @@ rspamd_mime_charset_utf_check(rspamd_ftok_t *charset,
 	return FALSE;
 }
 
+static void
+set_part_binary(struct rspamd_task *task,
+				struct rspamd_mime_text_part *text_part,
+				GByteArray *part_content,
+				const char *charset)
+{
+	msg_debug_task("text part contains binary data (detected charset: %s), skip conversion",
+				   charset);
+	SET_PART_RAW(text_part);
+	text_part->utf_raw_content = part_content;
+	text_part->real_charset = charset;
+}
+
 void rspamd_mime_text_part_maybe_convert(struct rspamd_task *task,
 										 struct rspamd_mime_text_part *text_part)
 {
@@ -771,6 +798,10 @@ void rspamd_mime_text_part_maybe_convert(struct rspamd_task *task,
 																	  text_part->parsed.len);
 
 			if (charset != NULL) {
+				if (g_ascii_strcasecmp(charset, RSPAMD_BINARYENC_CHARSET) == 0) {
+					set_part_binary(task, text_part, part_content, charset);
+					return;
+				}
 				msg_info_task("detected charset %s", charset);
 			}
 
@@ -794,6 +825,10 @@ void rspamd_mime_text_part_maybe_convert(struct rspamd_task *task,
 			if (need_charset_heuristic) {
 				charset = rspamd_mime_charset_find_by_content_maybe_split(part_content->data,
 																		  part_content->len);
+				if (charset != NULL && g_ascii_strcasecmp(charset, RSPAMD_BINARYENC_CHARSET) == 0) {
+					set_part_binary(task, text_part, part_content, charset);
+					return;
+				}
 				msg_info_task("detected charset: %s", charset);
 				checked = TRUE;
 				text_part->real_charset = charset;
@@ -839,6 +874,11 @@ void rspamd_mime_text_part_maybe_convert(struct rspamd_task *task,
 		}
 		else {
 			charset = charset_tok.begin;
+
+			if (g_ascii_strcasecmp(charset, RSPAMD_BINARYENC_CHARSET) == 0) {
+				set_part_binary(task, text_part, part_content, charset);
+				return;
+			}
 
 			if (!rspamd_mime_text_part_utf8_convert(task, text_part,
 													part_content, charset, &err)) {

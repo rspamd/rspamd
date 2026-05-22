@@ -88,6 +88,10 @@ struct rspamd_storage_shmem {
  */
 #define RSPAMD_HTTP_FLAG_WANT_SSL (1 << 9)
 /**
+ * Emit headers on the wire in insertion order instead of hash order
+ */
+#define RSPAMD_HTTP_FLAG_ORDERED_HEADERS (1 << 10)
+/**
  * Options for HTTP connection
  */
 enum rspamd_http_options {

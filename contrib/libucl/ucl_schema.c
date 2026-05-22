@@ -990,7 +990,9 @@ ucl_schema_validate (const ucl_object_t *schema,
 		}
 		else {
 			/* Reset error */
-			err->code = UCL_SCHEMA_OK;
+			if (err != NULL) {
+				err->code = UCL_SCHEMA_OK;
+			}
 		}
 	}
 
@@ -1019,7 +1021,9 @@ ucl_schema_validate (const ucl_object_t *schema,
 		}
 		else {
 			/* Reset error */
-			err->code = UCL_SCHEMA_OK;
+			if (err != NULL) {
+				err->code = UCL_SCHEMA_OK;
+			}
 		}
 	}
 

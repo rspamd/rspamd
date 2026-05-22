@@ -1,0 +1,12 @@
+From: "Bank of America Alerts" <alerts@evil-spoof.example.org>
+To: test@example.com
+Subject: Important account notice
+Date: Fri, 01 Jan 2021 00:00:00 +0000
+Message-ID: <sa-spoof-1@example.org>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+This message has a Bank of America display name but the From domain
+does not belong to Bank of America. Used to validate the SA-style
+selector =~ / !~ atoms and meta combination.

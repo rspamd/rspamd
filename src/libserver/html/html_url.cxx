@@ -20,6 +20,7 @@
 #include "libserver/logger.h"
 #include "rspamd.h"
 
+#include <algorithm>
 #include <unicode/idna.h>
 
 namespace rspamd::html {
@@ -205,8 +206,8 @@ auto html_url_is_phished(rspamd_mempool_t *pool,
 			 */
 			gboolean obfuscation_found = FALSE;
 
-			if (text_data.size() > 4 && g_ascii_strncasecmp(text_data.begin(), "http", 4) == 0 &&
-				rspamd_substring_search(text_data.begin(), text_data.size(), "://", 3) != -1) {
+			if (text_data.size() > 4 && g_ascii_strncasecmp(text_data.data(), "http", 4) == 0 &&
+				rspamd_substring_search(text_data.data(), text_data.size(), "://", 3) != -1) {
 				/* Clearly an obfuscation attempt */
 				obfuscation_found = TRUE;
 			}
@@ -475,6 +476,25 @@ auto html_process_url(rspamd_mempool_t *pool, std::string_view &input, lua_State
 				/* Ignore urls with both no schema and no tld */
 				return std::nullopt;
 			}
+		}
+
+		/*
+		 * Preserve the verbatim (trimmed) href as url->raw so that get_raw()
+		 * returns the URL text as it appeared in the message rather than the
+		 * partially percent-decoded scratch buffer used for parsing.  Without
+		 * this, when the same URL appears in both the HTML and plain-text
+		 * parts, the HTML variant wins deduplication (HTML parts are processed
+		 * first) and get_raw() would return the decoded form (issue #5986).
+		 * The copy lives in the task mempool, matching the URL's lifetime.
+		 */
+		const auto raw_cap = std::min<gsize>(sz, G_MAXUINT16 / 2);
+		auto *original_raw = rspamd_mempool_alloc_buffer(pool, raw_cap + 1);
+		memcpy(original_raw, trimmed, raw_cap);
+		original_raw[raw_cap] = '\0';
+		url->raw = original_raw;
+		url->rawlen = (uint16_t) raw_cap;
+		if (raw_cap < sz) {
+			url->flags |= RSPAMD_URL_FLAG_TRUNCATED;
 		}
 
 		decoded = url->string;

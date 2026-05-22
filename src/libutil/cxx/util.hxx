@@ -144,19 +144,18 @@ inline auto string_foreach_delim(const S &input, const D &delim, const F &functo
 template<class S, typename std::enable_if_t<std::is_constructible_v<std::string_view, S>, bool> = true>
 inline auto string_split_on(const S &input, std::string_view::value_type chr) -> std::pair<std::string_view, std::string_view>
 {
-	auto pos = std::find(std::begin(input), std::end(input), chr);
+	std::string_view sv{input};
+	auto pos = sv.find(chr);
 
-	if (pos != input.end()) {
-		auto first = std::string_view{std::begin(input), static_cast<std::size_t>(std::distance(std::begin(input), pos))};
-		while (*pos == chr && pos != input.end()) {
-			++pos;
-		}
-		auto last = std::string_view{pos, static_cast<std::size_t>(std::distance(pos, std::end(input)))};
+	if (pos != std::string_view::npos) {
+		auto first = sv.substr(0, pos);
+		auto rest = sv.find_first_not_of(chr, pos);
+		auto last = rest != std::string_view::npos ? sv.substr(rest) : std::string_view{};
 
 		return {first, last};
 	}
 
-	return {std::string_view{input}, std::string_view{}};
+	return {sv, std::string_view{}};
 }
 
 /**

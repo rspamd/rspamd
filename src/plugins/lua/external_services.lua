@@ -108,28 +108,46 @@ local function add_scanner_rule(sym, opts)
     return nil
   end
 
+  -- Resolve symbol names up-front so a failed configure() can still register
+  -- the fail symbol and surface the misconfiguration on every scan.
+  local symbol = opts.symbol or sym:upper()
+  local symbol_fail = opts.symbol_fail or (symbol .. '_FAIL')
+  local symbol_encrypted = opts.symbol_encrypted or (symbol .. '_ENCRYPTED')
+  local symbol_macro = opts.symbol_macro or (symbol .. '_MACRO')
+
   local rule = cfg.configure(opts)
 
   if not rule then
-    rspamd_logger.errx(rspamd_config, 'cannot configure %s for %s',
-        opts.type, rule.symbol or sym:upper())
-    return nil
+    rspamd_logger.errx(rspamd_config,
+        'cannot configure %s for %s; registering fail-only rule that always emits %s',
+        opts.type, symbol, symbol_fail)
+
+    local fail_reason = string.format('%s: configuration failed (see startup log)',
+        opts.type)
+
+    local stub_rule = {
+      type = opts.type,
+      name = opts.name or sym,
+      symbol = symbol,
+      symbol_fail = symbol_fail,
+      symbol_encrypted = symbol_encrypted,
+      symbol_macro = symbol_macro,
+      log_prefix = opts.name or sym,
+      configuration_failed = true,
+    }
+
+    local function fail_cb(task)
+      task:insert_result(symbol_fail, 1.0, fail_reason)
+    end
+
+    return fail_cb, stub_rule
   end
 
   rule.type = opts.type
-  -- Fill missing symbols
-  if not rule.symbol then
-    rule.symbol = sym:upper()
-  end
-  if not rule.symbol_fail then
-    rule.symbol_fail = rule.symbol .. '_FAIL'
-  end
-  if not rule.symbol_encrypted then
-    rule.symbol_encrypted = rule.symbol .. '_ENCRYPTED'
-  end
-  if not rule.symbol_macro then
-    rule.symbol_macro = rule.symbol .. '_MACRO'
-  end
+  rule.symbol = symbol
+  rule.symbol_fail = symbol_fail
+  rule.symbol_encrypted = symbol_encrypted
+  rule.symbol_macro = symbol_macro
 
   rule.redis_params = redis_params
 

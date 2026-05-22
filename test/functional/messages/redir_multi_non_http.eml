@@ -1,0 +1,8 @@
+Content-type: text/html
+
+<html>
+<body>
+<a href="http://127.0.0.1:18080/tel_redirect">Call us</a>
+<a href="http://127.0.0.1:18080/mailto_redirect">Email us</a>
+</body>
+</html>

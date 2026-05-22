@@ -557,17 +557,9 @@ lua_http_make_connection(struct lua_http_cbdata *cbd)
 		}
 
 		if (cbd->session) {
-			if (cbd->item) {
-				rspamd_session_add_event_full(cbd->session,
-											  (event_finalizer_t) lua_http_fin, cbd,
-											  M,
-											  rspamd_symcache_dyn_item_name(cbd->task, cbd->item));
-			}
-			else {
-				rspamd_session_add_event(cbd->session,
-										 (event_finalizer_t) lua_http_fin, cbd,
-										 M);
-			}
+			rspamd_session_add_event_full(cbd->session,
+										  (event_finalizer_t) lua_http_fin, cbd, M,
+										  cbd->host);
 			cbd->flags |= RSPAMD_LUA_HTTP_FLAG_RESOLVED;
 		}
 
@@ -694,30 +686,90 @@ lua_http_push_headers(lua_State *L, struct rspamd_http_message *msg)
 {
 	const char *name, *value;
 	int i, sz;
+	int tbl = lua_gettop(L);
 
-	lua_pushnil(L);
-	while (lua_next(L, -2) != 0) {
+	/*
+	 * Two accepted shapes for the headers table:
+	 *  - map:  { ['Name'] = 'value', ['Name'] = {'v1', 'v2'} }  -- order undefined
+	 *  - list: { {'Name', 'value'}, {'Name', {'v1', 'v2'}} }    -- order preserved
+	 * The list shape sets RSPAMD_HTTP_FLAG_ORDERED_HEADERS so the HTTP client
+	 * emits headers on the wire in exactly the order they are listed (used to
+	 * mimic a real browser's header order). It is detected by a non-nil
+	 * integer key 1 whose value is itself a table.
+	 */
+	lua_rawgeti(L, tbl, 1);
+	if (lua_type(L, -1) == LUA_TTABLE) {
+		lua_pop(L, 1);
 
-		lua_pushvalue(L, -2);
-		name = lua_tostring(L, -1);
-		sz = rspamd_lua_table_size(L, -2);
-		if (sz != 0 && name != NULL) {
-			for (i = 1; i <= sz; i++) {
-				lua_rawgeti(L, -2, i);
-				value = lua_tostring(L, -1);
-				if (value != NULL) {
+		msg->flags |= RSPAMD_HTTP_FLAG_ORDERED_HEADERS;
+		sz = rspamd_lua_table_size(L, tbl);
+
+		for (i = 1; i <= sz; i++) {
+			lua_rawgeti(L, tbl, i); /* pair { name, value } */
+
+			if (lua_type(L, -1) == LUA_TTABLE) {
+				int pair = lua_gettop(L);
+				int vsz, j;
+
+				lua_rawgeti(L, pair, 1);
+				name = lua_tostring(L, -1);
+				lua_pop(L, 1);
+
+				lua_rawgeti(L, pair, 2);
+				vsz = rspamd_lua_table_size(L, -1);
+
+				if (name != NULL) {
+					if (vsz != 0) {
+						/* Duplicated header: value is a list of strings */
+						for (j = 1; j <= vsz; j++) {
+							lua_rawgeti(L, -1, j);
+							value = lua_tostring(L, -1);
+							if (value != NULL) {
+								rspamd_http_message_add_header(msg, name, value);
+							}
+							lua_pop(L, 1);
+						}
+					}
+					else {
+						value = lua_tostring(L, -1);
+						if (value != NULL) {
+							rspamd_http_message_add_header(msg, name, value);
+						}
+					}
+				}
+				lua_pop(L, 1); /* value */
+			}
+
+			lua_pop(L, 1); /* pair */
+		}
+	}
+	else {
+		lua_pop(L, 1);
+
+		lua_pushnil(L);
+		while (lua_next(L, tbl) != 0) {
+
+			lua_pushvalue(L, -2);
+			name = lua_tostring(L, -1);
+			sz = rspamd_lua_table_size(L, -2);
+			if (sz != 0 && name != NULL) {
+				for (i = 1; i <= sz; i++) {
+					lua_rawgeti(L, -2, i);
+					value = lua_tostring(L, -1);
+					if (value != NULL) {
+						rspamd_http_message_add_header(msg, name, value);
+					}
+					lua_pop(L, 1);
+				}
+			}
+			else {
+				value = lua_tostring(L, -2);
+				if (name != NULL && value != NULL) {
 					rspamd_http_message_add_header(msg, name, value);
 				}
-				lua_pop(L, 1);
 			}
+			lua_pop(L, 2);
 		}
-		else {
-			value = lua_tostring(L, -2);
-			if (name != NULL && value != NULL) {
-				rspamd_http_message_add_header(msg, name, value);
-			}
-		}
-		lua_pop(L, 2);
 	}
 }
 
@@ -737,7 +789,7 @@ lua_http_push_headers(lua_State *L, struct rspamd_http_message *msg)
  * @param {string} url specifies URL for a request in the standard URI form (e.g. 'http://example.com/path')
  * @param {function} callback specifies callback function in format  `function (err_message, code, body, headers)` that is called on HTTP request completion. if this parameter is missing, the function performs "pseudo-synchronous" call (see [Synchronous and Asynchronous API overview](/doc/developers/sync_async.html#API-example-http-module)
  * @param {task} task if called from symbol handler it is generally a good idea to use the common task objects: event base, DNS resolver and events session
- * @param {table} headers optional headers in form `[name='value']` or `[name=['value1', 'value2']]` to duplicate a header with multiple values
+ * @param {table} headers optional headers in form `[name='value']` or `[name=['value1', 'value2']]` to duplicate a header with multiple values. A list form `{{'name', 'value'}, {'name', {'value1', 'value2'}}}` is also accepted and preserves the header order on the wire
  * @param {string} mime_type MIME type of the HTTP content (for example, `text/html`)
  * @param {string/text} body full body content, can be opaque `rspamd{text}` to avoid data copying
  * @param {number} timeout floating point request timeout value in seconds (default is 5.0 seconds)

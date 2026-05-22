@@ -304,6 +304,10 @@ local function handle_neural_profile(args)
     table.insert(conditions, string.format("Date = '%s'", query_day))
     local query = string.format(query_fmt, table.concat(conditions, ' AND '), limit)
     local upstream = args.upstream:get_upstream_round_robin()
+    if not upstream then
+      io.stderr:write('No clickhouse upstream available (DNS pending or all dead)\n')
+      os.exit(1)
+    end
     local err = lua_clickhouse.select_sync(upstream, args, http_params, query, process_row)
     if err ~= nil then
       io.stderr:write(string.format('Error querying Clickhouse: %s\n', err))
@@ -447,6 +451,10 @@ local function handle_neural_train(args)
       table.insert(conditions, string.format("Date = '%s'", query_day))
       local query = string.format(query_fmt, args.column_name_vector, table.concat(conditions, ' AND '), limit)
       local upstream = args.upstream:get_upstream_round_robin()
+      if not upstream then
+        io.stderr:write('No clickhouse upstream available (DNS pending or all dead)\n')
+        os.exit(1)
+      end
       local err = lua_clickhouse.select_sync(upstream, args, http_params, query, process_row)
       if err ~= nil then
         io.stderr:write(string.format('Error querying Clickhouse: %s\n', err))

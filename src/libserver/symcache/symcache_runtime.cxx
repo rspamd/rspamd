@@ -974,4 +974,56 @@ auto symcache_runtime::get_item_by_dynamic_item(cache_dynamic_item *dyn_item) co
 	return nullptr;
 }
 
+auto symcache_runtime::describe_inflight_symbols() const -> GString *
+{
+	GString *out = nullptr;
+	unsigned int nshown = 0;
+	unsigned int nsuppressed = 0;
+	constexpr unsigned int MAX_ITEMS_SHOWN = 32;
+
+	if (items_inflight == 0) {
+		return nullptr;
+	}
+
+	for (auto [i, item]: rspamd::enumerate(order->d)) {
+		auto *dyn_item = &dynamic_items[i];
+
+		if (dyn_item->status != cache_item_status::started) {
+			continue;
+		}
+
+		if (nshown >= MAX_ITEMS_SHOWN) {
+			nsuppressed++;
+			continue;
+		}
+
+		if (out == nullptr) {
+			out = g_string_sized_new(128);
+		}
+		else {
+			g_string_append(out, ", ");
+		}
+
+		const auto &name = item->get_name();
+		if (dyn_item->start_msec > 0) {
+			rspamd_printf_gstring(out, "%*s (async=%ud, started=%ud ms)",
+								  (int) name.size(), name.data(),
+								  (unsigned int) dyn_item->async_events,
+								  (unsigned int) dyn_item->start_msec);
+		}
+		else {
+			rspamd_printf_gstring(out, "%*s (async=%ud)",
+								  (int) name.size(), name.data(),
+								  (unsigned int) dyn_item->async_events);
+		}
+		nshown++;
+	}
+
+	if (nsuppressed > 0 && out != nullptr) {
+		rspamd_printf_gstring(out, " (+%ud more)", nsuppressed);
+	}
+
+	return out;
+}
+
 }// namespace rspamd::symcache

@@ -104,6 +104,13 @@ bool rspamd_symcache_add_symbol_augmentation(struct rspamd_symcache *cache,
 
 	/* Handle empty or absent strings equally */
 	if (value == nullptr || value[0] == '\0') {
+		/* Check if augmentation uses "key=value" format */
+		const char *eq = strchr(augmentation, '=');
+		if (eq != nullptr && eq != augmentation && eq[1] != '\0') {
+			return item->add_augmentation(*real_cache,
+										  std::string_view{augmentation, static_cast<size_t>(eq - augmentation)},
+										  std::string_view{eq + 1});
+		}
 		return item->add_augmentation(*real_cache, augmentation, std::nullopt);
 	}
 
@@ -325,6 +332,18 @@ rspamd_symcache_item_stat(struct rspamd_symcache_item *item)
 {
 	auto *real_item = C_API_SYMCACHE_ITEM(item);
 	return real_item->st;
+}
+
+GString *
+rspamd_symcache_describe_inflight_symbols(struct rspamd_task *task)
+{
+	if (task == nullptr || task->symcache_runtime == nullptr) {
+		return nullptr;
+	}
+
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+
+	return cache_runtime->describe_inflight_symbols();
 }
 
 void rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,

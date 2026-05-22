@@ -553,6 +553,17 @@ EV_API_DECL void ev_set_allocator (void *(*cb)(void *ptr, long size) EV_NOEXCEPT
  */
 EV_API_DECL void ev_set_syserr_cb (void (*cb)(const char *msg) EV_NOEXCEPT) EV_NOEXCEPT;
 
+/* RSPAMD LOCAL EXTENSION:
+ * Install a process-global fake clock callback used by ev_time() and the
+ * internal monotonic clock read. When set, the callback's return value
+ * replaces both the realtime and monotonic clock sources, so timers and
+ * ev_now()/ev_now_update() advance under test control. Pass NULL to
+ * restore the system clocks. Intended for unit tests only.
+ */
+typedef ev_tstamp (*ev_fake_time_cb)(void);
+EV_API_DECL void ev_set_fake_time_cb (ev_fake_time_cb cb) EV_NOEXCEPT;
+EV_API_DECL ev_fake_time_cb ev_get_fake_time_cb (void) EV_NOEXCEPT;
+
 #if EV_MULTIPLICITY
 
 /* the default loop is the only one that handles signals and child watchers */
@@ -602,6 +613,13 @@ EV_API_DECL void ev_now_update (EV_P) EV_NOEXCEPT; /* update event loop time */
  * are used in system.
  */
 EV_API_DECL void ev_now_update_if_cheap (EV_P) EV_NOEXCEPT;
+/* RSPAMD LOCAL EXTENSION:
+ * Force-resync the loop's cached realtime/monotonic state from the current
+ * time sources, discarding any interpolation state. Use after installing
+ * or removing a fake clock via ev_set_fake_time_cb(), or after any other
+ * large discontinuity in the clock source.
+ */
+EV_API_DECL void ev_now_resync (EV_P) EV_NOEXCEPT;
 
 #if EV_WALK_ENABLE
 /* walk (almost) all watchers in the loop of a given type, invoking the */

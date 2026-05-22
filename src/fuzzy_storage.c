@@ -93,6 +93,12 @@ struct fuzzy_tcp_reply_queue_elt {
 	struct fuzzy_tcp_reply_queue_elt *prev, *next; /* Link */
 };
 
+/*
+ * Connection-level state for a TCP fuzzy session. Per-command state
+ * (parsed cmd, key retain, extensions buffer, decrypt nm, ip_stat) lives
+ * on the per-frame `struct fuzzy_session` and dies with it — never copy
+ * it onto the long-lived TCP session.
+ */
 struct fuzzy_common_session {
 	struct rspamd_fuzzy_storage_ctx *ctx;
 	int fd;
@@ -100,14 +106,6 @@ struct fuzzy_common_session {
 	ev_tstamp timestamp;
 	struct rspamd_worker *worker;
 	rspamd_inet_addr_t *addr;
-
-	enum rspamd_fuzzy_epoch epoch;
-	enum fuzzy_cmd_type cmd_type;
-	struct rspamd_fuzzy_shingle_cmd cmd;
-	struct fuzzy_key *key;
-	struct rspamd_fuzzy_cmd_extension *extensions;
-	struct fuzzy_key_stat *ip_stat;
-	unsigned char nm[rspamd_cryptobox_MAX_NMBYTES];
 };
 
 struct fuzzy_tcp_session {
@@ -123,7 +121,6 @@ struct fuzzy_tcp_session {
 	uint16_t cur_frame_state;
 	uint16_t bytes_unprocessed;
 
-	/* Common with UDP session */
 	struct fuzzy_common_session common;
 	ref_entry_t ref;
 
@@ -131,16 +128,22 @@ struct fuzzy_tcp_session {
 	unsigned char input_buf[FUZZY_TCP_BUFFER_LENGTH];
 };
 
-struct fuzzy_udp_session {
-	/* Common fields with TCP session */
-	struct fuzzy_common_session common;
-	struct rspamd_fuzzy_encrypted_reply reply; /* Again: contains everything */
-	ref_entry_t ref;
-};
-
 struct fuzzy_peer_request {
 	ev_io io_ev;
 	struct fuzzy_peer_cmd cmd;
+	/* ctx is set (and the request linked into ctx->pending_peer_requests) only
+	 * while the write watcher is registered, so synchronous-success requests
+	 * skip the list bookkeeping. */
+	struct rspamd_fuzzy_storage_ctx *ctx;
+	struct fuzzy_peer_request *prev;
+	struct fuzzy_peer_request *next;
+	gsize written; /* bytes of cmd already sent on the peer pipe */
+};
+
+enum fuzzy_peer_send_status {
+	FUZZY_PEER_SEND_DONE = 0, /* fully sent */
+	FUZZY_PEER_SEND_AGAIN,    /* short write or EAGAIN/EWOULDBLOCK/EINTR */
+	FUZZY_PEER_SEND_FATAL,    /* unrecoverable write error */
 };
 
 struct rspamd_updates_cbdata {
@@ -151,7 +154,6 @@ struct rspamd_updates_cbdata {
 };
 
 static void rspamd_fuzzy_write_reply(struct fuzzy_session *session);
-static void rspamd_fuzzy_udp_write_reply(struct fuzzy_udp_session *session);
 static bool rspamd_fuzzy_tcp_write_reply(struct fuzzy_tcp_session *session,
 										 struct fuzzy_tcp_reply_queue_elt *reply);
 static gboolean rspamd_fuzzy_process_updates_queue(struct rspamd_fuzzy_storage_ctx *ctx,
@@ -715,9 +717,21 @@ rspamd_fuzzy_make_reply(struct rspamd_fuzzy_cmd *cmd,
 
 			/* Extra flags from multiflag result */
 			if (mf_result) {
-				rep_v2->n_extra_flags = mf_result->n_extra_flags;
+				uint8_t n_extra = mf_result->n_extra_flags;
+				/*
+				 * rep_v2->extra_flags is fixed-size [RSPAMD_FUZZY_MAX_EXTRA_FLAGS].
+				 * All current backends bound n_extra_flags to this maximum, but
+				 * clamp defensively here so a future backend bug cannot turn
+				 * into an OOB write on the reply struct.
+				 */
+				if (G_UNLIKELY(n_extra > RSPAMD_FUZZY_MAX_EXTRA_FLAGS)) {
+					msg_warn("backend returned n_extra_flags=%d > max %d, clamping",
+							 (int) n_extra, (int) RSPAMD_FUZZY_MAX_EXTRA_FLAGS);
+					n_extra = RSPAMD_FUZZY_MAX_EXTRA_FLAGS;
+				}
+				rep_v2->n_extra_flags = n_extra;
 				memcpy(rep_v2->extra_flags, mf_result->extra_flags,
-					   sizeof(struct rspamd_fuzzy_flag_entry) * mf_result->n_extra_flags);
+					   sizeof(struct rspamd_fuzzy_flag_entry) * n_extra);
 			}
 
 			if (flags & RSPAMD_FUZZY_REPLY_DELAY) {
@@ -875,31 +889,62 @@ rspamd_fuzzy_make_reply(struct rspamd_fuzzy_cmd *cmd,
 	rspamd_fuzzy_write_reply(session);
 }
 
-static gboolean
+static enum fuzzy_peer_send_status
 fuzzy_peer_try_send(int fd, struct fuzzy_peer_request *up_req)
 {
+	const unsigned char *p = (const unsigned char *) &up_req->cmd + up_req->written;
+	gsize remaining = sizeof(up_req->cmd) - up_req->written;
 	gssize r;
 
-	r = write(fd, &up_req->cmd, sizeof(up_req->cmd));
+	r = write(fd, p, remaining);
 
-	if (r != sizeof(up_req->cmd)) {
-		return FALSE;
+	if (r > 0) {
+		up_req->written += (gsize) r;
+		if (up_req->written == sizeof(up_req->cmd)) {
+			return FUZZY_PEER_SEND_DONE;
+		}
+		/* Short write — kernel buffer probably filled; resume from up_req->written. */
+		return FUZZY_PEER_SEND_AGAIN;
 	}
 
-	return TRUE;
+	if (r == 0) {
+		/* write(2) only returns 0 if asked to write 0 bytes; not expected here */
+		return FUZZY_PEER_SEND_AGAIN;
+	}
+
+	if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+		return FUZZY_PEER_SEND_AGAIN;
+	}
+
+	return FUZZY_PEER_SEND_FATAL;
+}
+
+static void
+fuzzy_peer_request_release(struct fuzzy_peer_request *up_req)
+{
+	if (up_req->ctx != NULL) {
+		DL_DELETE(up_req->ctx->pending_peer_requests, up_req);
+	}
+	g_free(up_req);
 }
 
 static void
 fuzzy_peer_send_io(EV_P_ ev_io *w, int revents)
 {
 	struct fuzzy_peer_request *up_req = (struct fuzzy_peer_request *) w->data;
+	enum fuzzy_peer_send_status status = fuzzy_peer_try_send(w->fd, up_req);
 
-	if (!fuzzy_peer_try_send(w->fd, up_req)) {
+	if (status == FUZZY_PEER_SEND_AGAIN) {
+		/* Leave the watcher running; libev will fire again when the pipe is writable. */
+		return;
+	}
+
+	if (status == FUZZY_PEER_SEND_FATAL) {
 		msg_err("cannot send update request to the peer: %s", strerror(errno));
 	}
 
 	ev_io_stop(EV_A_ w);
-	g_free(up_req);
+	fuzzy_peer_request_release(up_req);
 }
 
 static void
@@ -1118,13 +1163,23 @@ rspamd_fuzzy_check_callback(struct rspamd_fuzzy_multiflag_result *mf_result, voi
 					   sizeof(up_req->cmd.cmd.shingle.sgl));
 			}
 
-			if (!fuzzy_peer_try_send(session->ctx->peer_fd, up_req)) {
+			enum fuzzy_peer_send_status sst = fuzzy_peer_try_send(
+				session->ctx->peer_fd, up_req);
+
+			if (sst == FUZZY_PEER_SEND_DONE) {
+				g_free(up_req);
+			}
+			else if (sst == FUZZY_PEER_SEND_AGAIN) {
+				up_req->ctx = session->ctx;
+				DL_APPEND(session->ctx->pending_peer_requests, up_req);
 				up_req->io_ev.data = up_req;
 				ev_io_init(&up_req->io_ev, fuzzy_peer_send_io,
 						   session->ctx->peer_fd, EV_WRITE);
 				ev_io_start(session->ctx->event_loop, &up_req->io_ev);
 			}
 			else {
+				msg_err("cannot send update request to the peer: %s",
+						strerror(errno));
 				g_free(up_req);
 			}
 		}
@@ -1476,13 +1531,23 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 					ptr = is_shingle ? (gpointer) &up_req->cmd.cmd.shingle : (gpointer) &up_req->cmd.cmd.normal;
 					memcpy(ptr, cmd, up_len);
 
-					if (!fuzzy_peer_try_send(session->ctx->peer_fd, up_req)) {
+					enum fuzzy_peer_send_status sst = fuzzy_peer_try_send(
+						session->ctx->peer_fd, up_req);
+
+					if (sst == FUZZY_PEER_SEND_DONE) {
+						g_free(up_req);
+					}
+					else if (sst == FUZZY_PEER_SEND_AGAIN) {
+						up_req->ctx = session->ctx;
+						DL_APPEND(session->ctx->pending_peer_requests, up_req);
 						up_req->io_ev.data = up_req;
 						ev_io_init(&up_req->io_ev, fuzzy_peer_send_io,
 								   session->ctx->peer_fd, EV_WRITE);
 						ev_io_start(session->ctx->event_loop, &up_req->io_ev);
 					}
 					else {
+						msg_err("cannot send update request to the peer: %s",
+								strerror(errno));
 						g_free(up_req);
 					}
 				}
@@ -1923,44 +1988,7 @@ fuzzy_tcp_session_destroy(gpointer d)
 
 	close(session->common.fd);
 	rspamd_inet_address_free(session->common.addr);
-	rspamd_explicit_memzero(session->common.nm, sizeof(session->common.nm));
 	session->common.worker->nconns--;
-
-	if (session->common.ip_stat) {
-		REF_RELEASE(session->common.ip_stat);
-	}
-
-	if (session->common.extensions) {
-		g_free(session->common.extensions);
-	}
-
-	if (session->common.key) {
-		REF_RELEASE(session->common.key);
-	}
-
-	g_free(session);
-}
-
-static void
-fuzzy_udp_session_destroy(gpointer d)
-{
-	struct fuzzy_udp_session *session = d;
-
-	rspamd_inet_address_free(session->common.addr);
-	rspamd_explicit_memzero(session->common.nm, sizeof(session->common.nm));
-	session->common.worker->nconns--;
-
-	if (session->common.ip_stat) {
-		REF_RELEASE(session->common.ip_stat);
-	}
-
-	if (session->common.extensions) {
-		g_free(session->common.extensions);
-	}
-
-	if (session->common.key) {
-		REF_RELEASE(session->common.key);
-	}
 
 	g_free(session);
 }
@@ -2020,6 +2048,17 @@ accept_fuzzy_socket(EV_P_ ev_io *w, int revents)
 	if (revents == EV_READ) {
 		ev_now_update_if_cheap(ctx->event_loop);
 		for (;;) {
+			/*
+			 * The kernel overwrites msg_namelen on each recvmsg/recvmmsg call
+			 * with the actual size of the received source address. If we don't
+			 * reset it back to the buffer capacity before the next call, the
+			 * kernel will treat that smaller value as the buffer size and
+			 * truncate a larger incoming address (e.g. IPv6 after IPv4),
+			 * leaving stale stack bytes mixed into the parsed sockaddr.
+			 */
+			for (int i = 0; i < MSGVEC_LEN; i++) {
+				MSG_FIELD(msg[i], msg_namelen) = salen;
+			}
 #ifdef HAVE_RECVMMSG
 			r = recvmmsg(w->fd, msg, MSGVEC_LEN, 0, NULL);
 #else
@@ -2219,7 +2258,22 @@ rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents)
 					uint16_t first_byte = session->cur_frame_state & 0xFF;
 					uint16_t second_byte = session->input_buf[processed_offset];
 					/* Reconstruct in little-endian byte order */
-					session->cur_frame_state = 0xC000 | (first_byte | (second_byte << 8));
+					uint16_t real_len = first_byte | (second_byte << 8);
+					/*
+					 * Length is stored in the low 14 bits of cur_frame_state
+					 * (top two bits are state flags). FUZZY_TCP_BUFFER_LENGTH
+					 * fits in 14 bits, so any value with bit 14 or 15 set is
+					 * invalid and would otherwise be silently masked off,
+					 * creating a protocol-smuggling primitive. Reject here.
+					 */
+					if (real_len == 0 || real_len > FUZZY_TCP_BUFFER_LENGTH) {
+						msg_err("invalid frame length %d from %s, closing connection",
+								(int) real_len,
+								rspamd_inet_address_to_string(session->common.addr));
+						REF_RELEASE(session);
+						return;
+					}
+					session->cur_frame_state = 0xC000 | real_len;
 					processed_offset++;
 				}
 				else {
@@ -2240,49 +2294,29 @@ rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents)
 
 			/* Check if we have complete frame */
 			if (session->bytes_unprocessed - processed_offset >= frame_len) {
-				/* Create heap-allocated session for async processing */
+				/*
+				 * Per-frame command session. Owns its own key retain,
+				 * extensions buffer, ip_stat retain, and decrypt nm —
+				 * fuzzy_session_destroy releases all of that when this
+				 * cmd_session is dropped. Do NOT cache any of it on the
+				 * long-lived TCP session: that turned the per-frame
+				 * allocations into per-frame leaks.
+				 */
 				struct fuzzy_session *cmd_session = g_malloc0(sizeof(*cmd_session));
 				REF_INIT_RETAIN(cmd_session, fuzzy_session_destroy);
 
-				/* Copy data from TCP session to command session */
 				cmd_session->worker = session->common.worker;
 				cmd_session->addr = rspamd_inet_address_copy(session->common.addr, NULL);
 				cmd_session->ctx = session->common.ctx;
 				cmd_session->fd = session->common.fd;
 				cmd_session->timestamp = session->common.timestamp;
-				cmd_session->key = session->common.key;
-				cmd_session->ip_stat = session->common.ip_stat;
-				memcpy(cmd_session->nm, session->common.nm, sizeof(cmd_session->nm));
 
-				/* Retain references to shared objects */
-				if (cmd_session->key) {
-					REF_RETAIN(cmd_session->key);
-				}
-				if (cmd_session->ip_stat) {
-					REF_RETAIN(cmd_session->ip_stat);
-				}
-				/* Don't increment nconns here - TCP session already counted the connection */
-
-				/* Set TCP session pointer so replies go to TCP queue */
+				/* Replies go to the TCP queue, not the socket directly */
 				cmd_session->tcp_session = session;
-				REF_RETAIN(session); /* TCP session must live until command is processed */
+				REF_RETAIN(session); /* released by fuzzy_session_destroy */
 
 				if (rspamd_fuzzy_cmd_from_wire(session->input_buf + processed_offset,
 											   frame_len, cmd_session)) {
-					/* Copy parsed data back to TCP session for tracking */
-					session->common.epoch = cmd_session->epoch;
-					session->common.cmd_type = cmd_session->cmd_type;
-					memcpy(&session->common.cmd, &cmd_session->cmd, sizeof(session->common.cmd));
-
-					/* Transfer ownership of key and extensions to TCP session */
-					/* Clear cmd_session pointers to avoid double-free */
-					session->common.key = cmd_session->key;
-					session->common.extensions = cmd_session->extensions;
-					cmd_session->key = NULL;
-					cmd_session->extensions = NULL;
-					memcpy(session->common.nm, cmd_session->nm, sizeof(session->common.nm));
-
-					/* Process command - replies will go to TCP queue via tcp_session pointer */
 					rspamd_fuzzy_process_command(cmd_session);
 				}
 				else {
@@ -2290,10 +2324,8 @@ rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents)
 					msg_debug_fuzzy_storage("invalid TCP fuzzy command of size %d received from %s",
 											(int) frame_len,
 											rspamd_inet_address_to_string(session->common.addr));
-					/* Note: Don't release session here - cmd_session holds a reference and will release it */
 				}
 
-				/* Release our reference - session will be freed when all callbacks complete */
 				REF_RELEASE(cmd_session);
 
 				processed_offset += frame_len;
@@ -2374,7 +2406,8 @@ accept_tcp_socket(EV_P_ ev_io *w, int revents)
 	}
 
 	/* Check if client is allowed */
-	if (!rspamd_fuzzy_check_client(ctx, addr)) {
+	int block_code = rspamd_fuzzy_check_client(ctx, addr);
+	if (block_code > 0) {
 		msg_info("refusing TCP connection from %s (blacklisted)",
 				 rspamd_inet_address_to_string(addr));
 		rspamd_inet_address_free(addr);
@@ -3447,6 +3480,22 @@ start_fuzzy(struct rspamd_worker *worker)
 		 * so radix_destroy_compressed frees them all at once */
 		radix_destroy_compressed(ctx->dynamic_blocked_nets);
 		ctx->dynamic_blocked_nets = NULL;
+	}
+
+	/* Drain any peer-pipe write requests that were waiting for the write
+	 * watcher to fire. The event loop has already broken out of ev_loop on
+	 * non-update workers, so these watchers will never fire on their own and
+	 * the up_req allocations would leak. */
+	{
+		struct fuzzy_peer_request *pr, *pr_tmp;
+		DL_FOREACH_SAFE(ctx->pending_peer_requests, pr, pr_tmp)
+		{
+			if (ev_can_stop(&pr->io_ev)) {
+				ev_io_stop(ctx->event_loop, &pr->io_ev);
+			}
+			DL_DELETE(ctx->pending_peer_requests, pr);
+			g_free(pr);
+		}
 	}
 
 	struct rspamd_lua_fuzzy_script *cur, *tmp;

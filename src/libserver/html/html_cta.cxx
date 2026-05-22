@@ -415,7 +415,10 @@ static auto compute_penalty(const html_tag &tag,
 		penalty += 0.3f;
 	}
 
-	if (url.protocol == PROTOCOL_MAILTO || url.protocol == PROTOCOL_FTP) {
+	if (url.protocol == PROTOCOL_MAILTO) {
+		penalty += 0.15f;
+	}
+	else if (url.protocol == PROTOCOL_FTP) {
 		penalty += 0.05f;
 	}
 

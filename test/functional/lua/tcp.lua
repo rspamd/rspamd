@@ -276,4 +276,101 @@ rspamd_config:register_symbol({
   no_squeeze = true,
   flags = 'coro',
 })
+
+-- [[ Phased timeouts: connect_timeout / read_timeout / write_timeout opt the
+--    request into per-phase budgets. Verify a normal request completes when
+--    these are set instead of `timeout`. ]]
+local function phased_timeout_symbol(task)
+  local function read_cb(err, data, _)
+    if err then
+      task:insert_result('PHASED_TCP_ERROR', 1.0, tostring(err))
+    else
+      task:insert_result('PHASED_TCP_OK', 1.0, tostring(data))
+    end
+  end
+  rspamd_tcp:request({
+    task = task,
+    callback = read_cb,
+    host = '127.0.0.1',
+    data = {'GET /request HTTP/1.1\r\nHost: 127.0.0.1:18080\r\nConnection: close\r\n\r\n'},
+    read = true,
+    port = 18080,
+    connect_timeout = 2.0,
+    read_timeout = 2.0,
+    write_timeout = 2.0,
+  })
+end
+
+-- [[ on_error: connect to a closed port. The on_error callback must fire and
+--    the regular `callback` must NOT receive the error (proving the queue-walk
+--    fanout is suppressed in connect-phase). ]]
+local function on_error_refused_symbol(task)
+  local function regular_cb(err, _, _)
+    -- This MUST NOT fire when on_error is registered and connect fails.
+    task:insert_result('ON_ERROR_REGULAR_CB_FIRED', 1.0, tostring(err))
+  end
+  local function err_cb(err, _)
+    task:insert_result('ON_ERROR_FIRED', 1.0, tostring(err))
+  end
+  rspamd_tcp:request({
+    task = task,
+    callback = regular_cb,
+    on_error = err_cb,
+    host = '127.0.0.1',
+    port = 1,            -- closed port: connection refused
+    read = false,
+    connect_timeout = 1.0,
+  })
+end
+
+-- [[ on_error post-CONNECTED: connect succeeds (real HTTP server), then the
+--    read times out. on_error must NOT fire; the read callback receives the
+--    error as before. ]]
+local function on_error_post_connect_symbol(task)
+  local function read_cb(err, _, _)
+    if err then
+      task:insert_result('POST_CONNECT_READ_TIMEOUT', 1.0, tostring(err))
+    else
+      task:insert_result('POST_CONNECT_READ_OK', 1.0)
+    end
+  end
+  local function err_cb(err, _)
+    -- This MUST NOT fire because the error happens after CONNECTED is set.
+    task:insert_result('POST_CONNECT_ON_ERROR_FIRED', 1.0, tostring(err))
+  end
+  rspamd_tcp:request({
+    task = task,
+    callback = read_cb,
+    on_error = err_cb,
+    host = '127.0.0.1',
+    port = 18080,
+    -- /timeout sleeps 4s before responding. read_timeout=0.5 forces the read
+    -- side to time out after the connect succeeds.
+    data = {'GET /timeout HTTP/1.1\r\nHost: 127.0.0.1:18080\r\nConnection: close\r\n\r\n'},
+    read = true,
+    stop_pattern = '\r\n\r\n',
+    connect_timeout = 2.0,
+    read_timeout = 0.5,
+    write_timeout = 2.0,
+  })
+end
+
+rspamd_config:register_symbol({
+  name = 'PHASED_TIMEOUT_TEST',
+  score = 1.0,
+  callback = phased_timeout_symbol,
+  no_squeeze = true,
+})
+rspamd_config:register_symbol({
+  name = 'ON_ERROR_REFUSED_TEST',
+  score = 1.0,
+  callback = on_error_refused_symbol,
+  no_squeeze = true,
+})
+rspamd_config:register_symbol({
+  name = 'ON_ERROR_POST_CONNECT_TEST',
+  score = 1.0,
+  callback = on_error_post_connect_symbol,
+  no_squeeze = true,
+})
 -- ]]

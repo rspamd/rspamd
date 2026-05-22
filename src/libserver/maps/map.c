@@ -3757,7 +3757,7 @@ rspamd_map_add_from_ucl(struct rspamd_config *cfg,
 		}
 
 		if (map->backends->len == 0) {
-			msg_err_config("map has no urls to be loaded: empty list");
+			msg_err_config("map '%s' has no urls to be loaded: empty list", description);
 			goto err;
 		}
 	}
@@ -3782,7 +3782,7 @@ rspamd_map_add_from_ucl(struct rspamd_config *cfg,
 
 		elt = ucl_object_lookup_any(obj, "upstreams", "url", "urls", NULL);
 		if (elt == NULL) {
-			msg_err_config("map has no urls to be loaded: no elt");
+			msg_err_config("map '%s' has no urls to be loaded: no elt", description);
 			goto err;
 		}
 
@@ -3814,7 +3814,7 @@ rspamd_map_add_from_ucl(struct rspamd_config *cfg,
 			ucl_object_iterate_free(it);
 
 			if (map->backends->len == 0) {
-				msg_err_config("map has no urls to be loaded: empty object list");
+				msg_err_config("map '%s' has no urls to be loaded: empty object list", description);
 				goto err;
 			}
 		}
@@ -3832,12 +3832,12 @@ rspamd_map_add_from_ucl(struct rspamd_config *cfg,
 		}
 
 		if (!map->backends || map->backends->len == 0) {
-			msg_err_config("map has no urls to be loaded: no valid backends");
+			msg_err_config("map '%s' has no urls to be loaded: no valid backends", description);
 			goto err;
 		}
 	}
 	else {
-		msg_err_config("map has invalid type for value: %s",
+		msg_err_config("map '%s' has invalid type for value: %s", description,
 					   ucl_object_type_to_string(ucl_object_type(obj)));
 		goto err;
 	}
