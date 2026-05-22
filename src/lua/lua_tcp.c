@@ -2025,24 +2025,34 @@ lua_tcp_request(lua_State *L)
 	}
 
 	/*
-	 * Two shapes need an explicit LUA_WANT_CONNECT marker so that EV_WRITE
-	 * is armed for the dial and LUA_TCP_FLAG_CONNECTED is set in the proper
-	 * connect-phase path:
+	 * Always seat an explicit LUA_WANT_CONNECT marker at the queue head so
+	 * the dial gets its own EV_WRITE arming under `connect_timeout`, and
+	 * LUA_TCP_FLAG_CONNECTED is set in the proper connect-phase path. Three
+	 * shapes need this:
 	 *
 	 *   1. Pure probe (empty queue, only on_connect/on_error registered):
-	 *      without the marker plan_handler_event would tear the session down
-	 *      before the dial completes.
+	 *      without the marker plan_handler_event would tear the session
+	 *      down before the dial completes.
 	 *
-	 *   2. Read-without-prior-write (queue head is LUA_WANT_READ): without
+	 *   2. Read-without-prior-write (queue head LUA_WANT_READ): without
 	 *      the marker plan_handler_event arms EV_READ with read_timeout
 	 *      straight away, the socket-writable connect signal is never
 	 *      consumed, LUA_TCP_FLAG_CONNECTED stays unset, and any pre-byte
 	 *      error/timeout misroutes to on_error (looking like a connect
 	 *      failure) -- plus FINISHED|CONNECTED gates on conn:close() leak
-	 *      refcounts. The natural connect detection that LUA_WANT_WRITE
-	 *      gets for free (writes require socket-writable) is missing here.
+	 *      refcounts.
 	 *
-	 * In both shapes the marker is shifted in lua_tcp_connect_helper once
+	 *   3. Write-first (queue head LUA_WANT_WRITE): EV_WRITE is naturally
+	 *      armed (writes require socket-writable), so connect-error
+	 *      *routing* already worked. But the timer was armed with
+	 *      `write_timeout`, not `connect_timeout` -- so a black-holed SYN
+	 *      sat under the write budget and the caller's `connect_timeout`
+	 *      setting was silently ignored. The marker re-arms the timer
+	 *      under `connect_timeout`; after the dial resolves,
+	 *      plan_handler_event re-arms EV_WRITE under `write_timeout` for
+	 *      the actual write.
+	 *
+	 * In every shape the marker is shifted in lua_tcp_connect_helper once
 	 * the connect resolves.
 	 */
 	if (g_queue_get_length(cbd->handlers) == 0) {
@@ -2053,12 +2063,9 @@ lua_tcp_request(lua_State *L)
 		}
 	}
 	else {
-		struct lua_tcp_handler *first = g_queue_peek_head(cbd->handlers);
-		if (first != NULL && first->type == LUA_WANT_READ) {
-			struct lua_tcp_handler *ch = g_malloc0(sizeof(*ch));
-			ch->type = LUA_WANT_CONNECT;
-			g_queue_push_head(cbd->handlers, ch);
-		}
+		struct lua_tcp_handler *ch = g_malloc0(sizeof(*ch));
+		ch->type = LUA_WANT_CONNECT;
+		g_queue_push_head(cbd->handlers, ch);
 	}
 
 	cbd->connect_cb = conn_cbref;
