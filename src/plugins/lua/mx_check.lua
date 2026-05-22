@@ -817,12 +817,14 @@ local function emit_outcome(task, mx_domain, outcome, info, src)
   end
 
   if outcome == 'bad_mx' then
-    task:insert_result(p .. settings.symbol_mx_bad, 1.0, info.key or mx_domain)
+    task:insert_result(p .. settings.symbol_mx_bad,
+      info.weight_mult or 1.0, info.key or mx_domain)
     return
   end
 
   if outcome == 'bad_ip' then
-    task:insert_result(p .. settings.symbol_mx_ip_bad, 1.0, info.key or mx_domain)
+    task:insert_result(p .. settings.symbol_mx_ip_bad,
+      info.weight_mult or 1.0, info.key or mx_domain)
     return
   end
 
@@ -1069,13 +1071,15 @@ local function lookup(task, mx_domain, src, done)
 
     -- bad_ips: any public IP matching short-circuits with MX_IP_BAD. Checked
     -- before exclude_ips so an IP in both is treated as bad (punish wins
-    -- over skip). Reports the first matching IP/CIDR for triage.
+    -- over skip). The matched IP is reported as the symbol option; an
+    -- optional numeric token after the entry ("1.2.3.4 5", "1.2.3.0/24 0.5")
+    -- becomes a weight multiplier on top of the group score, default 1.0.
     if bad_ips then
       for _, ip in ipairs(public_ips) do
         local m = bad_ips:get_key(ip)
         if m then
-          local key = (type(m) == 'string' and #m > 0) and m or ip
-          done('bad_ip', { key = key })
+          local mult = (type(m) == 'string') and tonumber(m) or nil
+          done('bad_ip', { key = ip, weight_mult = mult })
           return
         end
       end
@@ -1192,11 +1196,15 @@ local function lookup(task, mx_domain, src, done)
     -- bad_mxs: any matching MX hostname short-circuits with MX_BAD. Checked
     -- before exclude_mxs so a hostname listed in both is treated as bad
     -- (punish wins over trust); operators shouldn't list the same name in
-    -- both anyway.
+    -- both anyway. An optional numeric token after the glob entry
+    -- ("trapmx.example.com 3", "*.bad.example 0.5") becomes a weight
+    -- multiplier on top of the group score; default 1.0.
     if bad_mxs then
       for _, mx in ipairs(mx_list) do
-        if bad_mxs:get_key(mx.name) then
-          done('bad_mx', { key = mx.name })
+        local m = bad_mxs:get_key(mx.name)
+        if m then
+          local mult = (type(m) == 'string') and tonumber(m) or nil
+          done('bad_mx', { key = mx.name, weight_mult = mult })
           return
         end
       end
