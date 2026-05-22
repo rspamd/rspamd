@@ -572,6 +572,7 @@ void rspamd_http_message_add_header_len(struct rspamd_http_message *msg,
 		hdr->name.len = nlen;
 		hdr->value.begin = hdr->combined->str + nlen + 2;
 		hdr->value.len = vlen;
+		hdr->order = msg->header_cnt++;
 
 		k = kh_put(rspamd_http_headers_hash, msg->headers, &hdr->name,
 				   &r);
@@ -616,6 +617,7 @@ void rspamd_http_message_add_header_fstr(struct rspamd_http_message *msg,
 		hdr->name.len = nlen;
 		hdr->value.begin = hdr->combined->str + nlen + 2;
 		hdr->value.len = vlen;
+		hdr->order = msg->header_cnt++;
 
 		k = kh_put(rspamd_http_headers_hash, msg->headers, &hdr->name,
 				   &r);

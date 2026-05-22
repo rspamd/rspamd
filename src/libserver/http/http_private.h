@@ -36,6 +36,9 @@ struct rspamd_http_header {
 	rspamd_fstring_t *combined;
 	rspamd_ftok_t name;
 	rspamd_ftok_t value;
+	/* Insertion order, used to emit headers deterministically when
+	 * RSPAMD_HTTP_FLAG_ORDERED_HEADERS is set on the message */
+	unsigned int order;
 	struct rspamd_http_header *prev, *next;
 };
 
@@ -86,6 +89,8 @@ struct rspamd_http_message {
 	int code;
 	enum http_method method;
 	int flags;
+	/* Monotonic counter stamped onto each header as it is added */
+	unsigned int header_cnt;
 	ref_entry_t ref;
 };
 
