@@ -846,16 +846,18 @@ lua_tcp_connect_helper(struct lua_tcp_cbdata *cbd)
 
 	if (cbd->thread == NULL) {
 		/*
-		 * Async pure-connect probe: the LUA_WANT_CONNECT marker was queued only
-		 * to keep plan_handler_event from finishing the session before the
-		 * socket completes the dial. The on_connect callback (if any) was
-		 * already fired in lua_tcp_handler when LUA_TCP_FLAG_CONNECTED got
-		 * set; shift the marker and re-plan so the now-empty queue triggers
-		 * the FINISHED tear-down.
+		 * Async path: the LUA_WANT_CONNECT marker was queued either as a
+		 * pure-connect probe (queue empty after shift -> FINISHED tear-down)
+		 * or ahead of a LUA_WANT_READ for connect-phase detection on a
+		 * read-without-write request (queue head is now the read handler).
+		 * The on_connect callback (if any) was already fired in
+		 * lua_tcp_handler when LUA_TCP_FLAG_CONNECTED got set; shift the
+		 * marker and re-plan with can_read/can_write enabled so any remaining
+		 * handler gets armed correctly.
 		 */
 		msg_debug_tcp("tcp connected (async probe)");
 		lua_tcp_shift_handler(cbd);
-		lua_tcp_plan_handler_event(cbd, FALSE, FALSE);
+		lua_tcp_plan_handler_event(cbd, TRUE, TRUE);
 		return;
 	}
 
@@ -2023,19 +2025,47 @@ lua_tcp_request(lua_State *L)
 	}
 
 	/*
-	 * Pure-probe shape: caller wants to verify TCP connectivity (and/or be
-	 * notified of connect-phase errors via on_error) without queueing any
-	 * read or write. Push a LUA_WANT_CONNECT marker so plan_handler_event
-	 * arms the EV_WRITE watcher; the marker is shifted in
-	 * lua_tcp_connect_helper once the connect resolves. Without this,
-	 * plan_handler_event would see an empty queue and tear the session down
-	 * before the dial ever completes.
+	 * Always seat an explicit LUA_WANT_CONNECT marker at the queue head so
+	 * the dial gets its own EV_WRITE arming under `connect_timeout`, and
+	 * LUA_TCP_FLAG_CONNECTED is set in the proper connect-phase path. Three
+	 * shapes need this:
+	 *
+	 *   1. Pure probe (empty queue, only on_connect/on_error registered):
+	 *      without the marker plan_handler_event would tear the session
+	 *      down before the dial completes.
+	 *
+	 *   2. Read-without-prior-write (queue head LUA_WANT_READ): without
+	 *      the marker plan_handler_event arms EV_READ with read_timeout
+	 *      straight away, the socket-writable connect signal is never
+	 *      consumed, LUA_TCP_FLAG_CONNECTED stays unset, and any pre-byte
+	 *      error/timeout misroutes to on_error (looking like a connect
+	 *      failure) -- plus FINISHED|CONNECTED gates on conn:close() leak
+	 *      refcounts.
+	 *
+	 *   3. Write-first (queue head LUA_WANT_WRITE): EV_WRITE is naturally
+	 *      armed (writes require socket-writable), so connect-error
+	 *      *routing* already worked. But the timer was armed with
+	 *      `write_timeout`, not `connect_timeout` -- so a black-holed SYN
+	 *      sat under the write budget and the caller's `connect_timeout`
+	 *      setting was silently ignored. The marker re-arms the timer
+	 *      under `connect_timeout`; after the dial resolves,
+	 *      plan_handler_event re-arms EV_WRITE under `write_timeout` for
+	 *      the actual write.
+	 *
+	 * In every shape the marker is shifted in lua_tcp_connect_helper once
+	 * the connect resolves.
 	 */
-	if (g_queue_get_length(cbd->handlers) == 0 &&
-		(conn_cbref != -1 || error_cbref != -1)) {
+	if (g_queue_get_length(cbd->handlers) == 0) {
+		if (conn_cbref != -1 || error_cbref != -1) {
+			struct lua_tcp_handler *ch = g_malloc0(sizeof(*ch));
+			ch->type = LUA_WANT_CONNECT;
+			g_queue_push_tail(cbd->handlers, ch);
+		}
+	}
+	else {
 		struct lua_tcp_handler *ch = g_malloc0(sizeof(*ch));
 		ch->type = LUA_WANT_CONNECT;
-		g_queue_push_tail(cbd->handlers, ch);
+		g_queue_push_head(cbd->handlers, ch);
 	}
 
 	cbd->connect_cb = conn_cbref;
