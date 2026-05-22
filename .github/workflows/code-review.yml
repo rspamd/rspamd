@@ -1,11 +1,11 @@
-name: Droid Code Review
+name: Code Review
 
 on:
   issue_comment:
     types: [created]
 
 concurrency:
-  group: droid-review-${{ github.event.issue.number }}
+  group: code-review-${{ github.event.issue.number }}
   cancel-in-progress: true
 
 permissions:
@@ -16,12 +16,15 @@ permissions:
 jobs:
   code-review:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    # Only run on PR comments that contain "@droid review" from authorized users
+    timeout-minutes: 25
+    # Only run on PR comments that contain "@review" from authorized users.
+    # The comment may optionally name a z.ai GLM model: "@review",
+    # "@review glm-4.7", "@review glm-5" or "@review z-ai/glm-5.1"
+    # (provider prefix is stripped). Default: glm-5.1.
     if: |
       github.repository == 'rspamd/rspamd' &&
       github.event.issue.pull_request &&
-      contains(github.event.comment.body, '@droid review') &&
+      contains(github.event.comment.body, '@review') &&
       (
         github.event.comment.user.login == 'vstakhov' ||
         github.event.comment.user.login == 'moisseev' ||
@@ -39,31 +42,75 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Parse requested model
+        id: parse
+        env:
+          # Passed via env (never interpolated into the script) to avoid
+          # shell injection from arbitrary comment text.
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          # First whitespace-delimited token after "@review" (case-insensitive),
+          # normalised to lowercase. A provider prefix such as "z-ai/" is
+          # stripped, so a bare id ("glm-5.1") and an OpenRouter-style id
+          # ("z-ai/glm-5.1") both resolve to the z.ai model id.
+          # z.ai GLM models: glm-5.1 (flagship), glm-5-turbo (fast), glm-5,
+          # glm-4.7, glm-4.6.
+          MODEL=$(printf '%s' "$COMMENT_BODY" \
+            | grep -ioE '@review[[:space:]]+[A-Za-z0-9._/-]+' \
+            | head -n1 \
+            | awk '{print $2}' \
+            | tr '[:upper:]' '[:lower:]' || true)
+          MODEL="${MODEL##*/}"
+          if [ -z "$MODEL" ]; then
+            MODEL="glm-5.1"
+          fi
+          echo "Requested review model: $MODEL"
+          echo "model=$MODEL" >> "$GITHUB_OUTPUT"
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Checkout PR branch
-        run: |
-          gh pr checkout ${{ github.event.issue.number }}
+        run: gh pr checkout ${{ github.event.issue.number }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install Droid CLI
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Claude Code CLI
         run: |
-          curl -fsSL https://app.factory.ai/cli | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          "$HOME/.local/bin/droid" --version
+          npm install -g @anthropic-ai/claude-code
+          claude --version
 
       - name: Configure git identity
         run: |
-          git config user.name "Droid Code Reviewer"
-          git config user.email "droid@factory.ai"
+          git config user.name "Code Reviewer"
+          git config user.email "noreply@rspamd.com"
 
       - name: Perform automated code review
         env:
-          FACTORY_API_KEY: ${{ secrets.FACTORY_API_KEY }}
+          # Claude Code talks to z.ai's Anthropic-compatible endpoint.
+          ANTHROPIC_BASE_URL: https://api.z.ai/api/anthropic
+          ANTHROPIC_AUTH_TOKEN: ${{ secrets.ZAI_API_KEY }}
+          # Pin every model slot to a real z.ai GLM model so no "claude-*"
+          # alias can ever reach the endpoint. The reviewer runs on the
+          # requested model; background/fast tasks use glm-5-turbo.
+          ANTHROPIC_MODEL: ${{ steps.parse.outputs.model }}
+          ANTHROPIC_DEFAULT_OPUS_MODEL: ${{ steps.parse.outputs.model }}
+          ANTHROPIC_DEFAULT_SONNET_MODEL: ${{ steps.parse.outputs.model }}
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: glm-5-turbo
+          ANTHROPIC_SMALL_FAST_MODEL: glm-5-turbo
+          DISABLE_AUTOUPDATER: "1"
+          DISABLE_TELEMETRY: "1"
+          DISABLE_ERROR_REPORTING: "1"
+          DISABLE_BUG_COMMAND: "1"
+          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
@@ -71,16 +118,31 @@ jobs:
           You are a conservative automated code reviewer for the Rspamd mail filtering project.
           Your goal is high-precision, low-noise feedback: report only defects you are certain about.
 
+          You are running as the model "${{ steps.parse.outputs.model }}" served by z.ai.
+
           ## Step 1 — Gather full context before writing any comment
 
-          Fetch the complete PR context from:
-          https://github.com/${{ github.repository }}/pull/${{ github.event.issue.number }}
+          You are reviewing pull request #${{ github.event.issue.number }} of
+          ${{ github.repository }}. The PR branch is already checked out in the
+          current working directory.
+
+          Use the GitHub CLI (gh) to gather context. Run, at minimum:
+          - gh pr view ${{ github.event.issue.number }} --json title,body,author,headRefName,baseRefName
+          - gh pr diff ${{ github.event.issue.number }}
+          - gh api repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}/comments
+            (inline review comments)
+          - gh api repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}/reviews
+            (review summaries)
+          - gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments
+            (issue-level comments)
 
           Read carefully:
           - PR title, description, and the author's stated intent
           - The complete unified diff with diff-position line numbers
           - All existing review threads, including every reply
           - Any maintainer explanations (vstakhov, moisseev, fatalbanana)
+
+          You may also read files in the working tree for additional context.
 
           Do NOT write any comment until you have read all existing threads.
 
@@ -169,6 +231,9 @@ jobs:
           - Approve:
             gh pr review ${{ github.event.issue.number }} --approve --body "No actionable defects found."
 
+          End the review body with the line:
+          _Automated review by Claude Code (${{ steps.parse.outputs.model }} via z.ai)._
+
           Limits:
           - Post at most 5 comments in total; choose the highest-severity findings.
           - If all findings are low-severity (no crash, leak, or security issue) and you have
@@ -178,9 +243,12 @@ jobs:
           - Never post test or exploratory API calls — every comment is immediately visible.
           EOF
 
-          # Run droid exec with the prompt
-          echo "Running code review analysis and submitting results..."
-          droid exec --auto high --model gpt-5.5 -f prompt.txt
+          echo "Running code review with model: ${{ steps.parse.outputs.model }}"
+          claude -p "$(cat prompt.txt)" \
+            --model "${{ steps.parse.outputs.model }}" \
+            --dangerously-skip-permissions \
+            --max-turns 60 \
+            2>&1 | tee review-output.log
 
       - name: Post failure notice
         if: ${{ failure() }}
@@ -211,10 +279,9 @@ jobs:
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4
         with:
-          name: droid-review-debug-${{ github.run_id }}
+          name: code-review-debug-${{ github.run_id }}
           path: |
             prompt.txt
-            ${{ runner.home }}/.factory/logs/droid-log-single.log
-            ${{ runner.home }}/.factory/logs/console.log
+            review-output.log
           if-no-files-found: ignore
           retention-days: 7
