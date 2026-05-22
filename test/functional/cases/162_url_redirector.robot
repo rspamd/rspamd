@@ -24,6 +24,15 @@ RESOLVE URLS CACHED
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
   Expect Extended URL  http://127.0.0.1:18080/hello
 
+STEALTH FINGERPRINT HEADERS
+  # The live HEAD requests issued by RESOLVE URLS are logged by the dummy
+  # HTTP server together with their request headers. Verify the redirector
+  # sends a coherent browser fingerprint (not just a bare User-Agent) and
+  # that the header order chosen by the profile is preserved on the wire.
+  ${log} =  Get File  /tmp/dummy_http.log
+  Should Contain  ${log}  Sec-Fetch-Mode
+  Should Match Regexp  ${log}  HEAD [^\n]*headers: [^\n]*Accept[^\n]*Sec-Fetch-Mode
+
 *** Keywords ***
 Urlredirector Setup
   Run Dummy Http

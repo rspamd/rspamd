@@ -26,34 +26,118 @@ local lua_util = require "lua_util"
 local lua_redis = require "lua_redis"
 local N = "url_redirector"
 
--- Some popular UA
-local default_ua = {
-  -- Search-engine and link crawlers
-  'Mozilla/5.0 (compatible; Yahoo! Slurp; http://help.yahoo.com/help/us/ysearch/slurp)',
-  'Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)',
-  'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-  'Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)',
-  'Mozilla/5.0 (compatible; DuckDuckBot-Https/1.1; https://duckduckgo.com/duckduckbot)',
-  -- Modern desktop browsers
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14.7; rv:150.0) Gecko/20100101 Firefox/150.0',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5 Safari/605.1.15',
-  -- Modern mobile browsers
-  'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Mobile Safari/537.36',
-  'Mozilla/5.0 (iPhone; CPU iPhone OS 26_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5 Mobile/15E148 Safari/604.1',
-  -- CLI fetchers / link checkers
-  'Wget/1.25.0',
-  'curl/8.20.0',
-  'W3C-checklink/4.81 [4.176] libwww-perl/6.83',
-  'Lynx/2.9.2 libwww-FM/2.14 SSL-MM/1.4.1 OpenSSL/3.0.20',
-  -- HTTP client libraries (PHP / Go / Python)
-  'GuzzleHttp/7.10.0 curl/8.20.0 PHP/8.3.31',
-  'Go-http-client/2.0',
-  'python-requests/2.34.2',
-  'Python-urllib/3.14',
+-- Coherent browser fingerprint profiles.
+--
+-- The url_redirector resolves shortened/redirector URLs by issuing HTTP
+-- requests. Sites that cloak (serve different content to bots) commonly
+-- key on a missing or inconsistent header set, so a lone User-Agent
+-- string is the weakest possible disguise. Each profile instead bundles
+-- a User-Agent with the exact header set, values and order that the
+-- matching real browser sends, keeping the request internally consistent
+-- (e.g. Chrome carries `sec-ch-ua` client hints; Firefox and Safari do
+-- not).
+--
+-- `headers` is an ordered list of {name, value} pairs. rspamd_http keeps
+-- this order on the wire (RSPAMD_HTTP_FLAG_ORDERED_HEADERS); the Host
+-- header and request line are emitted by the HTTP client itself. One
+-- profile is picked per task so every hop of every chain shares a single
+-- identity, the way a real browser would.
+
+-- The Accept header all Chromium-based browsers send on a navigation.
+local chromium_accept = 'text/html,application/xhtml+xml,' ..
+    'application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,' ..
+    'application/signed-exchange;v=b3;q=0.7'
+
+local default_profiles = {
+  {
+    name = 'chrome_win',
+    headers = {
+      { 'Connection', 'keep-alive' },
+      { 'sec-ch-ua', '"Not)A;Brand";v="8", "Chromium";v="148", "Google Chrome";v="148"' },
+      { 'sec-ch-ua-mobile', '?0' },
+      { 'sec-ch-ua-platform', '"Windows"' },
+      { 'Upgrade-Insecure-Requests', '1' },
+      { 'User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36' },
+      { 'Accept', chromium_accept },
+      { 'Sec-Fetch-Site', 'none' },
+      { 'Sec-Fetch-Mode', 'navigate' },
+      { 'Sec-Fetch-User', '?1' },
+      { 'Sec-Fetch-Dest', 'document' },
+      { 'Accept-Encoding', 'gzip, deflate, br, zstd' },
+      { 'Accept-Language', 'en-US,en;q=0.9' },
+    },
+  },
+  {
+    name = 'chrome_mac',
+    headers = {
+      { 'Connection', 'keep-alive' },
+      { 'sec-ch-ua', '"Not)A;Brand";v="8", "Chromium";v="148", "Google Chrome";v="148"' },
+      { 'sec-ch-ua-mobile', '?0' },
+      { 'sec-ch-ua-platform', '"macOS"' },
+      { 'Upgrade-Insecure-Requests', '1' },
+      { 'User-Agent',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36' },
+      { 'Accept', chromium_accept },
+      { 'Sec-Fetch-Site', 'none' },
+      { 'Sec-Fetch-Mode', 'navigate' },
+      { 'Sec-Fetch-User', '?1' },
+      { 'Sec-Fetch-Dest', 'document' },
+      { 'Accept-Encoding', 'gzip, deflate, br, zstd' },
+      { 'Accept-Language', 'en-US,en;q=0.9' },
+    },
+  },
+  {
+    name = 'edge_win',
+    headers = {
+      { 'Connection', 'keep-alive' },
+      { 'sec-ch-ua', '"Not)A;Brand";v="8", "Chromium";v="148", "Microsoft Edge";v="148"' },
+      { 'sec-ch-ua-mobile', '?0' },
+      { 'sec-ch-ua-platform', '"Windows"' },
+      { 'Upgrade-Insecure-Requests', '1' },
+      { 'User-Agent',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0' },
+      { 'Accept', chromium_accept },
+      { 'Sec-Fetch-Site', 'none' },
+      { 'Sec-Fetch-Mode', 'navigate' },
+      { 'Sec-Fetch-User', '?1' },
+      { 'Sec-Fetch-Dest', 'document' },
+      { 'Accept-Encoding', 'gzip, deflate, br, zstd' },
+      { 'Accept-Language', 'en-US,en;q=0.9' },
+    },
+  },
+  {
+    -- Firefox sends no sec-ch-ua client hints and uses a different
+    -- header order and Accept set than Chromium.
+    name = 'firefox_win',
+    headers = {
+      { 'User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0' },
+      { 'Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' },
+      { 'Accept-Language', 'en-US,en;q=0.5' },
+      { 'Accept-Encoding', 'gzip, deflate, br, zstd' },
+      { 'Connection', 'keep-alive' },
+      { 'Upgrade-Insecure-Requests', '1' },
+      { 'Sec-Fetch-Dest', 'document' },
+      { 'Sec-Fetch-Mode', 'navigate' },
+      { 'Sec-Fetch-Site', 'none' },
+      { 'Sec-Fetch-User', '?1' },
+      { 'Priority', 'u=0, i' },
+    },
+  },
+  {
+    -- Safari also omits sec-ch-ua and sends a leaner header set.
+    name = 'safari_mac',
+    headers = {
+      { 'Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' },
+      { 'Accept-Encoding', 'gzip, deflate, br' },
+      { 'Connection', 'keep-alive' },
+      { 'User-Agent',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5 Safari/605.1.15' },
+      { 'Accept-Language', 'en-US,en;q=0.9' },
+      { 'Sec-Fetch-Site', 'none' },
+      { 'Sec-Fetch-Mode', 'navigate' },
+      { 'Sec-Fetch-Dest', 'document' },
+    },
+  },
 }
 
 local redis_params
@@ -72,7 +156,13 @@ local settings = {
   check_ssl = false, -- check ssl certificates
   max_urls = 5, -- how many urls to check (CTA checked in first place)
   max_size = 10 * 1024, -- maximum body to process
-  user_agent = default_ua,
+  -- Optional operator override. When set (a string, or a list of
+  -- strings picked at random) the module sends a single User-Agent
+  -- header and skips fingerprint profiles entirely. Leave unset to use
+  -- the coherent browser profiles below.
+  user_agent = nil,
+  -- Browser fingerprint profiles used when user_agent is not set.
+  fingerprint_profiles = default_profiles,
   redirector_symbol = nil, -- insert symbol if redirected url has been found
   redirector_symbol_nested = "URL_REDIRECTOR_NESTED", -- insert symbol if nested limit has been reached
   redirector_symbol_non_http = "URL_REDIRECTOR_NON_HTTP", -- HTTP -> non-HTTP(S) redirect detected
@@ -623,23 +713,13 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
     finalize_chain(task, chain, nil)
   end
 
-  local ua
-  if type(settings.user_agent) == 'string' then
-    ua = settings.user_agent
-  else
-    ua = settings.user_agent[math.random(#settings.user_agent)]
-  end
-
   local method = 'head'
   if settings.redirector_get_urls_map
       and settings.redirector_get_urls_map:get_key(url_str) then
     method = 'get'
   end
-  lua_util.debugm(N, task, 'query %s %s with user agent %s',
-      method, url_str, ua)
 
   local http_params = {
-    headers = { ['User-Agent'] = ua },
     url = url_str,
     task = task,
     method = method,
@@ -648,6 +728,37 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
     no_ssl_verify = not settings.check_ssl,
     callback = http_callback,
   }
+
+  if settings.user_agent then
+    -- Operator override: a single User-Agent header, no fingerprint.
+    local ua = settings.user_agent
+    if type(ua) ~= 'string' then
+      ua = ua[math.random(#ua)]
+    end
+    http_params.headers = { ['User-Agent'] = ua }
+    lua_util.debugm(N, task, 'query %s %s with user agent %s',
+        method, url_str, ua)
+  else
+    -- Stealth: one coherent browser fingerprint per task, reused by
+    -- every hop of every chain so the identity stays consistent.
+    local profile = task:cache_get('url_redirector_profile')
+    if not profile then
+      local profiles = settings.fingerprint_profiles
+      if profiles and #profiles > 0 then
+        profile = profiles[math.random(#profiles)]
+        task:cache_set('url_redirector_profile', profile)
+      end
+    end
+    if profile then
+      http_params.headers = profile.headers
+      lua_util.debugm(N, task, 'query %s %s with %s fingerprint',
+          method, url_str, profile.name)
+    else
+      lua_util.debugm(N, task, 'query %s %s (no fingerprint profile)',
+          method, url_str)
+    end
+  end
+
   apply_http_timeout(http_params)
   rspamd_http.request(http_params)
 end
