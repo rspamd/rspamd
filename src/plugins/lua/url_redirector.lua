@@ -80,6 +80,7 @@ local settings = {
   top_urls_key = 'rdr:top_urls', -- key for top urls
   top_urls_count = 200, -- how many top urls to save
   redirector_hosts_map = nil, -- check only those redirectors
+  redirector_get_urls_map = nil, -- list of regex patterns for which GET should be used instead of HEAD
   -- inject intermediate redirect hops into the task
   save_intermediate_redirs = {
     redirectors = false,
@@ -136,7 +137,7 @@ local function chain_hosts_string(chain)
     if proto ~= 'http' and proto ~= 'https' then
       hosts[i] = chain[i]:get_text()
     else
-      hosts[i] = chain[i]:get_host() or '?'
+      hosts[i] = chain[i]:get_host()
     end
   end
   return table.concat(hosts, '->')
@@ -256,7 +257,7 @@ local function cache_chain_to_redis(task, chain, terminal_prefix)
 
   local function write_link(prev_url, next_url, marker)
     local link_key = cache_key_for_url(tostring(prev_url))
-    local next_str = next_url:get_text()
+    local next_str = encode_url_for_redirect(next_url:get_text())
     local cache_value
     if marker then
       cache_value = string.format('^%s:%s', marker, next_str)
@@ -602,7 +603,7 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
               string.format('%s=%s->%s', raw_scheme, chain_hosts_string(chain), loc))
           finalize_chain(task, chain, nil)
         else
-          lua_util.debugm(N, task, 'no location, headers: %s', headers)
+          lua_util.debugm(N, task, 'failed to parse location %s, headers: %s', loc, headers)
           chain_append(chain, url)
           finalize_chain(task, chain, nil)
         end
@@ -628,13 +629,20 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
   else
     ua = settings.user_agent[math.random(#settings.user_agent)]
   end
-  lua_util.debugm(N, task, 'query %s with user agent %s', tostring(url), ua)
+
+  local method = 'head'
+  if settings.redirector_get_urls_map
+      and settings.redirector_get_urls_map:get_key(url_str) then
+    method = 'get'
+  end
+  lua_util.debugm(N, task, 'query %s %s with user agent %s',
+      method, url_str, ua)
 
   local http_params = {
     headers = { ['User-Agent'] = ua },
-    url = tostring(url),
+    url = url_str,
     task = task,
-    method = 'head',
+    method = method,
     max_size = settings.max_size,
     opaque_body = true,
     no_ssl_verify = not settings.check_ssl,
@@ -754,6 +762,15 @@ local function url_redirector_handler(task)
       task = task,
       limit = remaining,
       filter = function(url)
+        -- task:get_urls()'s default protocol mask is HTTP|HTTPS|FILE|FTP.
+        -- We only follow HTTP(S); silently drop the rest at selection
+        -- rather than letting them reach http_walk and waste a HEAD
+        -- timeout. URL_REDIRECTOR_NON_HTTP is reserved for the case
+        -- where an HTTP redirect points at a non-HTTP scheme.
+        local proto = url:get_protocol()
+        if proto ~= 'http' and proto ~= 'https' then
+          return false
+        end
         local host = url:get_host()
         if host and settings.redirector_hosts_map:get_key(host) then
           local key = tostring(url)
@@ -823,6 +840,12 @@ if opts then
       local lua_maps = require "lua_maps"
       settings.redirector_hosts_map = lua_maps.map_add_from_ucl(settings.redirector_hosts_map,
           'set', 'Redirectors definitions')
+
+      if settings.redirector_get_urls_map then
+        settings.redirector_get_urls_map = lua_maps.map_add_from_ucl(
+            settings.redirector_get_urls_map, 'regexp',
+            'URL redirector: URLs to fetch with GET instead of HEAD')
+      end
 
       lua_redis.register_prefix(settings.key_prefix .. '[a-z0-9]{32}', N,
           'URL redirector hashes', {
