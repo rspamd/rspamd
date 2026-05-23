@@ -32,7 +32,8 @@ import time
 from contextlib import asynccontextmanager
 from typing import List, Optional, Union
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel
 
 # FastEmbed - CPU-optimized ONNX inference
@@ -49,6 +50,16 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = os.getenv('EMBEDDING_MODEL', 'BAAI/bge-small-en-v1.5')
 DEFAULT_PORT = int(os.getenv('EMBEDDING_PORT', '8080'))
 DEFAULT_HOST = os.getenv('EMBEDDING_HOST', '0.0.0.0')
+API_KEY = os.getenv('EMBEDDING_API_KEY', '')
+
+# API key authentication (enforced when EMBEDDING_API_KEY is set)
+_api_key_header = APIKeyHeader(name='X-API-Key', auto_error=False)
+
+
+async def verify_api_key(api_key: str = Depends(_api_key_header)):
+    """Require a valid API key when EMBEDDING_API_KEY is configured."""
+    if API_KEY and api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 # Global model instance
 model: Optional[TextEmbedding] = None
@@ -157,7 +168,7 @@ def count_tokens(text: str) -> int:
     return int(len(text.split()) * 1.3)
 
 
-@app.post("/api/embeddings", response_model=OllamaEmbeddingResponse)
+@app.post("/api/embeddings", response_model=OllamaEmbeddingResponse, dependencies=[Depends(verify_api_key)])
 async def ollama_embeddings(request: OllamaEmbeddingRequest) -> OllamaEmbeddingResponse:
     """
     Ollama-compatible embedding endpoint.
@@ -173,7 +184,7 @@ async def ollama_embeddings(request: OllamaEmbeddingRequest) -> OllamaEmbeddingR
     return OllamaEmbeddingResponse(embedding=embedding)
 
 
-@app.post("/v1/embeddings", response_model=OpenAIEmbeddingResponse)
+@app.post("/v1/embeddings", response_model=OpenAIEmbeddingResponse, dependencies=[Depends(verify_api_key)])
 async def openai_embeddings(request: OpenAIEmbeddingRequest) -> OpenAIEmbeddingResponse:
     """
     OpenAI-compatible embedding endpoint.
