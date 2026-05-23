@@ -1658,26 +1658,26 @@ local redis_to = (redis_params and redis_params.timeout) or 0.0
 local budget = settings.connect_timeout + settings.read_timeout
     + dns_to + redis_to
 
+-- Stable callback parent. All per-source variants (envelope-from, MIME From,
+-- Reply-To) register as virtual children of MX_CHECK so symbols_enabled or
+-- disabled toggles and group / dependency declarations operate on a single
+-- name that doesn't shift with symbols renames via settings.
 local id = rspamd_config:register_symbol({
-  name = settings.symbol_prefix_from .. settings.symbol_bad_mx,
-  type = 'normal',
+  name = 'MX_CHECK',
+  type = 'callback',
   callback = mx_check,
   flags = 'empty',
   augmentations = { string.format("timeout=%f", budget) },
 })
 
--- Register the 3 source variants per symbol; skip the callback-parent
--- (envelope-from variant) to avoid duplicate registration.
 local function register_all_sources(base_name)
   local prefixes = {
     settings.symbol_prefix_from,
     settings.symbol_prefix_mime_from,
     settings.symbol_prefix_reply_to,
   }
-  for i, prefix in ipairs(prefixes) do
-    if i ~= 1 then
-      rspamd_config:register_symbol({ name = prefix .. base_name, type = 'virtual', parent = id })
-    end
+  for _, prefix in ipairs(prefixes) do
+    rspamd_config:register_symbol({ name = prefix .. base_name, type = 'virtual', parent = id })
   end
 end
 
