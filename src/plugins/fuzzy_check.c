@@ -2180,7 +2180,13 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 						  strlen(shingles_key_str), NULL, 0);
 	rule->shingles_key->len = 16;
 
-	if (rspamd_upstreams_count(rule->read_servers) == 0) {
+	/*
+	 * Use the *total* count so a rule whose only entry is an SRV
+	 * placeholder (service=...) loads cleanly; rspamd_upstreams_count
+	 * would return 0 here because the SRV parent isn't a dispatchable
+	 * upstream until async resolution materialises members.
+	 */
+	if (rspamd_upstreams_count_total(rule->read_servers) == 0) {
 		msg_err_config("no servers defined for fuzzy rule with name: %s",
 					   rule->name);
 		return -1;
