@@ -763,8 +763,16 @@ local function is_profile_compatible(rule, set, profile_elt, current_providers_d
   if not profile_elt.symbols or not set.symbols then
     return false, math.huge
   end
+  -- Accept profiles whose symbol list still overlaps the current one by at
+  -- least 50% (i.e. Levenshtein drift < 50% of |set.symbols|). The previous
+  -- 30% threshold rejected the old profile on every modest config change
+  -- and inference went completely dark until a new ANN trained from scratch
+  -- (weeks under realistic class imbalance). With this looser cap the worker
+  -- keeps using the old profile's redis_key -- and crucially its OWN symbol
+  -- list, since result_to_vector uses profile.symbols -- so the trained
+  -- weights stay correctly indexed against the features that produced them.
   local dist = lua_util.distance_sorted(profile_elt.symbols, set.symbols)
-  if dist >= #set.symbols * 0.3 then
+  if dist >= #set.symbols * 0.5 then
     return false, dist
   end
   return true, dist

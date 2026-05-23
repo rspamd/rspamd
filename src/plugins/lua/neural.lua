@@ -85,12 +85,19 @@ local function new_ann_profile(task, rule, set, version)
     else
       rspamd_logger.infox(task, 'created new ANN profile for %s:%s, data stored at prefix %s',
         rule.prefix, set.name, profile.redis_key)
-      -- If a prior profile with the same providers_digest holds trained
-      -- weights, carry them over into the fresh profile key.  This prevents
-      -- a symcache-driven profile rotation from abandoning a still-valid
-      -- ANN whenever the input vector schema is decided by providers
-      -- (rather than the symbol list).
-      if providers_digest then
+      -- Carry weights from a prior profile (same providers_digest, different
+      -- symbol-list digest) into the fresh profile key ONLY when the input
+      -- vector schema is decided entirely by providers -- i.e. when
+      -- disable_symbols_input is set. In hybrid mode (providers + symbols)
+      -- the symbol portion of the vector reshapes with symbol drift, and
+      -- load_new_ann then sets set.ann.symbols = profile.symbols (= current
+      -- symbol list), so copied weights would be indexed against features
+      -- they were never trained against -- silent garbage at inference.
+      -- For hybrid mode is_profile_compatible already routes inference to
+      -- the prior profile entry, which carries its own (older) symbol list
+      -- and therefore keeps weights correctly aligned at inference time;
+      -- skipping carryover is the right behaviour.
+      if providers_digest and rule.disable_symbols_input then
         maybe_carryover_ann(task, rule, set, ann_key, providers_digest)
       end
     end
