@@ -1396,12 +1396,33 @@ local function process_rules_settings()
 
     table.sort(selt.symbols)
 
-    selt.digest = lua_util.table_digest(selt.symbols)
+    -- Profile digest -- forms part of the Redis key holding the trained ANN
+    -- (rn_<rule>_<settings>_<digest>_<v>). It MUST be stable across config
+    -- changes that don't alter the model's input-vector schema; otherwise
+    -- the trained ANN is abandoned and inference silently degrades until a
+    -- new sample set retrains it (weeks under realistic class imbalance).
+    --
+    -- With disable_symbols_input + providers, symbols never enter the input
+    -- vector (see is_profile_compatible above); the architecture is fully
+    -- determined by providers + fusion + max_inputs config. Hashing the
+    -- unrelated symbol catalogue here used to rotate the digest whenever
+    -- any rspamd symbol was added/removed elsewhere (a new RBL, multimap
+    -- rule, etc.), and operators had to manually COPY the Redis key over
+    -- to the new digest to recover.
+    local has_providers = rule.providers and #rule.providers > 0
+    local digest_source
+    if has_providers and rule.disable_symbols_input then
+      selt.digest = providers_config_digest(rule.providers, rule)
+      digest_source = 'providers'
+    else
+      selt.digest = lua_util.table_digest(selt.symbols)
+      digest_source = 'symbols'
+    end
     selt.prefix = redis_ann_prefix(rule, selt.name)
 
     rspamd_logger.messagex(rspamd_config,
-      'use NN prefix for rule %s; settings id "%s"; symbols digest: "%s"',
-      selt.prefix, selt.name, selt.digest)
+      'use NN prefix for rule %s; settings id "%s"; %s digest: "%s"',
+      selt.prefix, selt.name, digest_source, selt.digest)
 
     lua_redis.register_prefix(selt.prefix, N,
       string.format('NN prefix for rule "%s"; settings id "%s"',
