@@ -1664,6 +1664,7 @@ local budget = settings.connect_timeout + settings.read_timeout
 -- name that doesn't shift with symbols renames via settings.
 local id = rspamd_config:register_symbol({
   name = 'MX_CHECK',
+  group = 'mx',
   type = 'callback',
   callback = mx_check,
   flags = 'empty',
