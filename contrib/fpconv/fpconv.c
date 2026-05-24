@@ -468,27 +468,30 @@ static inline int emit_fixed_digits (char *digits, int ndigits,
 						/* Round at the truncation point */
 						if (precision < (unsigned)ndigits) {
 							ndigits = round_at_ex(digits, ndigits,
-									orig_offset + precision, &carry);
+									precision, &carry);
 						}
 
 						if (carry) {
 							/*
 							 * Carry overflowed into integer
 							 * part (e.g. 0.96 → 1.0).
-							 * Result is "1.[0]{precision}".
+							 * The leading '0' + orig_offset zeros
+							 * become "1" followed by
+							 * orig_offset+precision-1 zeros.
 							 */
 							dest[0] = '1';
 							dest[1] = '.';
-							memset(dest + 2, '0', precision);
+							memset(dest + 2, '0',
+									orig_offset + precision);
 
-							return precision + 2;
+							return orig_offset + precision + 2;
 						}
 
 						dest[0] = '0';
 						dest[1] = '.';
 						memset(dest + 2, '0', orig_offset);
 						memcpy(dest + orig_offset + 2,
-								digits + orig_offset, precision);
+								digits, precision);
 
 						return precision + 2 + orig_offset;
 					}
