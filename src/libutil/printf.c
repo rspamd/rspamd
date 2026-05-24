@@ -663,6 +663,7 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 			bytes = 0;
 			humanize = 0;
 			frac_width = 0;
+			bool frac_specified = false;
 			slen = -1;
 
 			while (*fmt >= '0' && *fmt <= '9') {
@@ -716,6 +717,7 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 					continue;
 				case '.':
 					fmt++;
+					frac_specified = true;
 
 					if (*fmt == '*') {
 						d = (int) va_arg(args, int);
@@ -979,7 +981,9 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 
 			case 'f':
 				f = (double) va_arg(args, double);
-				slen = fpconv_dtoa(f, dtoabuf, frac_width, false);
+				slen = fpconv_dtoa(f, dtoabuf,
+						frac_specified ? frac_width : FPCONV_PRECISION_ALL,
+						false);
 
 				RSPAMD_PRINTF_APPEND(dtoabuf, slen);
 
@@ -987,14 +991,18 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 
 			case 'g':
 				f = (double) va_arg(args, double);
-				slen = fpconv_dtoa(f, dtoabuf, 0, true);
+				slen = fpconv_dtoa(f, dtoabuf,
+						frac_specified ? frac_width : FPCONV_PRECISION_ALL,
+						true);
 				RSPAMD_PRINTF_APPEND(dtoabuf, slen);
 
 				continue;
 
 			case 'F':
 				f = (double) va_arg(args, long double);
-				slen = fpconv_dtoa(f, dtoabuf, frac_width, false);
+				slen = fpconv_dtoa(f, dtoabuf,
+						frac_specified ? frac_width : FPCONV_PRECISION_ALL,
+						false);
 
 				RSPAMD_PRINTF_APPEND(dtoabuf, slen);
 
@@ -1002,7 +1010,9 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 
 			case 'G':
 				f = (double) va_arg(args, long double);
-				slen = fpconv_dtoa(f, dtoabuf, 0, true);
+				slen = fpconv_dtoa(f, dtoabuf,
+						frac_specified ? frac_width : FPCONV_PRECISION_ALL,
+						true);
 				RSPAMD_PRINTF_APPEND(dtoabuf, slen);
 
 				continue;
