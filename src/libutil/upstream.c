@@ -1911,6 +1911,21 @@ gsize rspamd_upstreams_count(struct upstream_list *ups)
 	return n;
 }
 
+gsize rspamd_upstreams_count_total(struct upstream_list *ups)
+{
+	if (ups == NULL) {
+		return 0;
+	}
+
+	/*
+	 * Includes SRV parent placeholders. Used by "is anything configured"
+	 * gates that run at config-load time, before async SRV resolution has
+	 * populated members; a parent-only list must read non-empty here or
+	 * the rule would be rejected on every fresh start.
+	 */
+	return ups->ups->len;
+}
+
 gsize rspamd_upstreams_alive(struct upstream_list *ups)
 {
 	return ups != NULL ? ups->alive->len : 0;

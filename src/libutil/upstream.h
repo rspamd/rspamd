@@ -183,11 +183,22 @@ void rspamd_upstreams_set_rotation(struct upstream_list *ups,
 void rspamd_upstreams_destroy(struct upstream_list *ups);
 
 /**
- * Returns count of upstreams in a list
+ * Returns count of upstreams in a list. SRV parent placeholders are excluded
+ * (they are not selectable themselves); use this when sizing the dispatchable
+ * cluster (e.g. weight calculations, output table preallocation).
  * @param ups
  * @return
  */
 gsize rspamd_upstreams_count(struct upstream_list *ups);
+
+/**
+ * Returns the total count of configured upstreams, including SRV parents that
+ * have not yet been resolved into members. Use this for "is anything configured
+ * at all" checks at config-load time, before async SRV resolution has run.
+ * @param ups
+ * @return
+ */
+gsize rspamd_upstreams_count_total(struct upstream_list *ups);
 
 /**
  * Returns the number of upstreams in the list
