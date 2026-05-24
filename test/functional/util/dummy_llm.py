@@ -6,8 +6,7 @@ import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import dummy_killer
-
-PID = "/tmp/dummy_llm.pid"
+import dummy_pidfile
 
 
 def make_embedding(text: str, dim: int = 32):
@@ -63,10 +62,11 @@ if __name__ == "__main__":
             port = int(sys.argv[1])
         else:
             port = 18080
+        pid_path = sys.argv[2] if alen > 2 else dummy_pidfile.pid_path('llm', port)
         print(f"dummy_llm.py: Starting server on 127.0.0.1:{port}", file=sys.stderr)
         server = HTTPServer(("127.0.0.1", port), EmbeddingHandler)
-        dummy_killer.write_pid(PID)
-        print(f"dummy_llm.py: PID file written to {PID}", file=sys.stderr)
+        dummy_killer.write_pid(pid_path)
+        print(f"dummy_llm.py: PID file written to {pid_path}", file=sys.stderr)
         print(f"dummy_llm.py: Server started successfully", file=sys.stderr)
         server.serve_forever()
     except KeyboardInterrupt:

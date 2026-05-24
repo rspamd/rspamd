@@ -4,6 +4,7 @@ Suite Teardown  Urlredirector Config Teardown
 Library         Process
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Test Tags       notparallel
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***

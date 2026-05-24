@@ -522,47 +522,53 @@ Run Control Command JSON
   [Return]  ${result}
 
 Run Dummy Http
-  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py  -pf  /tmp/dummy_http.pid
-  ...  stderr=/tmp/dummy_http.log  stdout=/tmp/dummy_http.log
-  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_http.pid  timeout=2 second
+  ${pid} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_http-${RSPAMD_PORT_DUMMY_HTTP}.pid
+  ${log} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_http-${RSPAMD_PORT_DUMMY_HTTP}.log
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py  -pf  ${pid}  -p  ${RSPAMD_PORT_DUMMY_HTTP}
+  ...  stderr=${log}  stdout=${log}
+  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  ${pid}  timeout=2 second
   IF  '${status}' == 'FAIL'
-    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_http.log
+    ${logstatus}  ${out} =  Run Keyword And Ignore Error  Get File  ${log}
     IF  '${logstatus}' == 'PASS'
-      Log  dummy_http.py failed to start. Log output:\n${log}  level=ERROR
+      Log  dummy_http.py failed to start. Log output:\n${out}  level=ERROR
     ELSE
-      Log  dummy_http.py failed to start. No log file found at /tmp/dummy_http.log  level=ERROR
+      Log  dummy_http.py failed to start. No log file found at ${log}  level=ERROR
     END
     Fail  dummy_http.py did not create PID file in 2 seconds
   END
-  Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_HTTP_PROC=${result}
+  Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_HTTP_PROC=${result}  DUMMY_HTTP_LOG=${log}
 
 Run Dummy Https
+  ${pid} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_https-${RSPAMD_PORT_DUMMY_HTTPS}.pid
+  ${log} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_https-${RSPAMD_PORT_DUMMY_HTTPS}.log
   ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py
   ...  -c  ${RSPAMD_TESTDIR}/util/server.pem  -k  ${RSPAMD_TESTDIR}/util/server.pem
-  ...  -pf  /tmp/dummy_https.pid  -p  18081
-  ...  stderr=/tmp/dummy_https.log  stdout=/tmp/dummy_https.log
-  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_https.pid  timeout=2 second
+  ...  -pf  ${pid}  -p  ${RSPAMD_PORT_DUMMY_HTTPS}
+  ...  stderr=${log}  stdout=${log}
+  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  ${pid}  timeout=2 second
   IF  '${status}' == 'FAIL'
-    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_https.log
+    ${logstatus}  ${out} =  Run Keyword And Ignore Error  Get File  ${log}
     IF  '${logstatus}' == 'PASS'
-      Log  dummy_https.py failed to start. Log output:\n${log}  level=ERROR
+      Log  dummy_https.py failed to start. Log output:\n${out}  level=ERROR
     ELSE
-      Log  dummy_https.py failed to start. No log file found at /tmp/dummy_https.log  level=ERROR
+      Log  dummy_https.py failed to start. No log file found at ${log}  level=ERROR
     END
     Fail  dummy_https.py did not create PID file in 2 seconds
   END
   Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_HTTPS_PROC=${result}
 
 Run Dummy Llm
-  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_llm.py  18080
-  ...  stderr=/tmp/dummy_llm.log  stdout=/tmp/dummy_llm.log
-  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_llm.pid  timeout=2 second
+  ${pid} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_llm-${RSPAMD_PORT_DUMMY_HTTP}.pid
+  ${log} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_llm-${RSPAMD_PORT_DUMMY_HTTP}.log
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_llm.py  ${RSPAMD_PORT_DUMMY_HTTP}  ${pid}
+  ...  stderr=${log}  stdout=${log}
+  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  ${pid}  timeout=2 second
   IF  '${status}' == 'FAIL'
-    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_llm.log
+    ${logstatus}  ${out} =  Run Keyword And Ignore Error  Get File  ${log}
     IF  '${logstatus}' == 'PASS'
-      Log  dummy_llm.py failed to start. Log output:\n${log}  level=ERROR
+      Log  dummy_llm.py failed to start. Log output:\n${out}  level=ERROR
     ELSE
-      Log  dummy_llm.py failed to start. No log file found at /tmp/dummy_llm.log  level=ERROR
+      Log  dummy_llm.py failed to start. No log file found at ${log}  level=ERROR
     END
     Fail  dummy_llm.py did not create PID file in 2 seconds
   END
@@ -581,15 +587,17 @@ Dummy Https Teardown
   Wait For Process  ${DUMMY_HTTPS_PROC}
 
 Run Dummy Http Early Response
-  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http_early_response.py  -pf  /tmp/dummy_http_early.pid  -p  18083
-  ...  stderr=/tmp/dummy_http_early.log  stdout=/tmp/dummy_http_early.log
-  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_http_early.pid  timeout=2 second
+  ${pid} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_http_early-${RSPAMD_PORT_DUMMY_HTTP_EARLY}.pid
+  ${log} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_http_early-${RSPAMD_PORT_DUMMY_HTTP_EARLY}.log
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http_early_response.py  -pf  ${pid}  -p  ${RSPAMD_PORT_DUMMY_HTTP_EARLY}
+  ...  stderr=${log}  stdout=${log}
+  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  ${pid}  timeout=2 second
   IF  '${status}' == 'FAIL'
-    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_http_early.log
+    ${logstatus}  ${out} =  Run Keyword And Ignore Error  Get File  ${log}
     IF  '${logstatus}' == 'PASS'
-      Log  dummy_http_early_response.py failed to start. Log output:\n${log}  level=ERROR
+      Log  dummy_http_early_response.py failed to start. Log output:\n${out}  level=ERROR
     ELSE
-      Log  dummy_http_early_response.py failed to start. No log file found at /tmp/dummy_http_early.log  level=ERROR
+      Log  dummy_http_early_response.py failed to start. No log file found at ${log}  level=ERROR
     END
     Fail  dummy_http_early_response.py did not create PID file in 2 seconds
   END

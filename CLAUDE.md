@@ -9,6 +9,9 @@ Use `/build-and-test` to build and run all unit tests. Manual steps:
 - C/C++ tests: `~/rspamd.build/test/rspamd-test-cxx`
 - Lua tests: `~/rspamd.build/test/rspamd-test -p /rspamd/lua`
 - Lua lint: `luacheck src/plugins/lua/ lualib/ rules/` (from project root)
+- Functional tests (serial): `cd ~/rspamd.build && RSPAMD_INSTALLROOT=~/rspamd.install robot test/functional/cases`
+- Functional tests (parallel): `cd ~/rspamd.build && RSPAMD_INSTALLROOT=~/rspamd.install test/functional/run-parallel.sh --processes 4` (requires `pip install robotframework-pabot`)
+  - Worker isolation: ports shift per worker (base + index*100), each worker gets its own `/tmp/rspamd-functional-<index>/` for sockets/pidfiles, driven by `PABOTEXECUTIONPOOLID` in `test/functional/lib/vars.py`
 
 ## Code Style
 

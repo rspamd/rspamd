@@ -4,6 +4,7 @@ Suite Teardown   Servers Teardown
 Library          Process
 Library          ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource         ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Test Tags       notparallel
 Variables        ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
@@ -80,11 +81,13 @@ Servers Teardown
 
 Run Dummy Ssl
   [Arguments]
-  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_ssl.py  ${RSPAMD_TESTDIR}/util/server.pem
-  Wait Until Created  /tmp/dummy_ssl.pid  timeout=2 second
+  ${pid} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_ssl-${RSPAMD_PORT_DUMMY_SSL}.pid
+  Set Suite Variable  ${DUMMY_SSL_PID_FILE}  ${pid}
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_ssl.py  ${RSPAMD_TESTDIR}/util/server.pem  ${RSPAMD_PORT_DUMMY_SSL}  ${pid}
+  Wait Until Created  ${pid}  timeout=2 second
 
 Teardown Dummy Ssl
-  ${ssl_pid} =  Get File  /tmp/dummy_ssl.pid
+  ${ssl_pid} =  Get File  ${DUMMY_SSL_PID_FILE}
   Shutdown Process With Children  ${ssl_pid}
 
 Check url

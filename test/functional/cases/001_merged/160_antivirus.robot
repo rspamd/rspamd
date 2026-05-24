@@ -49,7 +49,7 @@ FPROT MISS
 
 FPROT HIT - PATTERN
   ${process1} =  Run Dummy Fprot  ${RSPAMD_PORT_FPROT}  1
-  ${process2} =  Run Dummy Fprot  ${RSPAMD_PORT_FPROT2_DUPLICATE}  1  /tmp/dummy_fprot_dupe.pid
+  ${process2} =  Run Dummy Fprot  ${RSPAMD_PORT_FPROT2_DUPLICATE}  1  ${RSPAMD_TMP_PREFIX}/dummy_fprot_dupe-${RSPAMD_PORT_FPROT2_DUPLICATE}.pid
   Scan File  ${MESSAGE}
   ...  Settings=${SETTINGS_FPROT}
   Expect Symbol  FPROT_EICAR
@@ -122,16 +122,16 @@ Run Dummy
   [Return]  ${process}
 
 Run Dummy Clam
-  [Arguments]  ${port}  ${found}=  ${pid}=/tmp/dummy_clamav.pid
+  [Arguments]  ${port}  ${found}=  ${pid}=${RSPAMD_TMP_PREFIX}/dummy_clamav-${port}.pid
   ${process} =  Run Dummy  ${RSPAMD_TESTDIR}/util/dummy_clam.py  ${port}  ${found}  ${pid}
   [Return]  ${process}
 
 Run Dummy Fprot
-  [Arguments]  ${port}  ${found}=  ${pid}=/tmp/dummy_fprot.pid
+  [Arguments]  ${port}  ${found}=  ${pid}=${RSPAMD_TMP_PREFIX}/dummy_fprot-${port}.pid
   ${process} =  Run Dummy  ${RSPAMD_TESTDIR}/util/dummy_fprot.py  ${port}  ${found}  ${pid}
   [Return]  ${process}
 
 Run Dummy Avast
-  [Arguments]  ${port}  ${found}=  ${pid}=/tmp/dummy_avast.pid
+  [Arguments]  ${port}  ${found}=  ${pid}=${RSPAMD_TMP_PREFIX}/dummy_avast-${port}.pid
   ${process} =  Run Dummy  ${RSPAMD_TESTDIR}/util/dummy_avast.py  ${port}  ${found}  ${pid}
   [Return]  ${process}
