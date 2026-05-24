@@ -416,8 +416,19 @@ Rspamd Startup Check
   ${handle} =  Get Process Object
   ${res} =  Evaluate  $handle.poll()
   IF  ${res} != None
-    ${stderr} =  Get File  ${RSPAMD_TMPDIR}/rspamd.stderr
-    Fail  Process Is Gone, stderr: ${stderr}
+    # rspamd exited; rspamd.stderr typically only has the early
+    # "loading configuration" line because the real logger is set up
+    # later. The actual cause lives in rspamd.log -- include both and
+    # the exit code so failures aren't just opaque.
+    ${stderr} =  Get File  ${RSPAMD_TMPDIR}/rspamd.stderr  encoding_errors=ignore
+    ${log_exists} =  Run Keyword And Return Status  File Should Exist  ${RSPAMD_TMPDIR}/rspamd.log
+    IF  ${log_exists}
+      ${log_full} =  Get File  ${RSPAMD_TMPDIR}/rspamd.log  encoding_errors=ignore
+      ${log_tail} =  Evaluate  "\\n".join($log_full.splitlines()[-80:])
+    ELSE
+      ${log_tail} =  Set Variable  <rspamd.log was never created>
+    END
+    Fail  Process Is Gone (rc=${res}, port=${check_port}, tmpdir=${RSPAMD_TMPDIR})\n--- stderr ---\n${stderr}\n--- rspamd.log (tail) ---\n${log_tail}
   END
   ${ping} =  Run Keyword And Return Status  Ping Rspamd  ${RSPAMD_LOCAL_ADDR}  ${check_port}
   [Return]  ${ping}
