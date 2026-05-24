@@ -309,10 +309,14 @@ static inline int round_up_digits (char *digits, int ndigits)
  * If digits[round_pos] >= '5', carry into digits[0..round_pos-1].
  * Returns the new total number of digits (may increase by 1 on carry).
  * `total` is the current number of valid digits in the array.
+ * If `carry_overflow` is non-NULL, sets it to 1 when a full carry
+ * shifts the digits right (prepending '1'), 0 otherwise.
  */
-static inline int round_at (char *digits, int total, int round_pos)
+static inline int round_at_ex (char *digits, int total, int round_pos,
+		int *carry_overflow)
 {
 	if (round_pos >= total || digits[round_pos] < '5') {
+		if (carry_overflow) *carry_overflow = 0;
 		return total;
 	}
 
@@ -325,6 +329,7 @@ static inline int round_at (char *digits, int total, int round_pos)
 		 * regardless of scale — e.g. 0.5→1, 0.05→1, 5→1).
 		 */
 		digits[0] = '1';
+		if (carry_overflow) *carry_overflow = 0;
 		return 1;
 	}
 
@@ -337,6 +342,7 @@ static inline int round_at (char *digits, int total, int round_pos)
 	while (i >= 0) {
 		if (digits[i] < '9') {
 			digits[i]++;
+			if (carry_overflow) *carry_overflow = 0;
 			return new_total;
 		}
 		digits[i] = '0';
@@ -346,7 +352,13 @@ static inline int round_at (char *digits, int total, int round_pos)
 	/* Full carry: shift right and prepend '1' */
 	memmove(digits + 1, digits, new_total);
 	digits[0] = '1';
+	if (carry_overflow) *carry_overflow = 1;
 	return new_total + 1;
+}
+
+static inline int round_at (char *digits, int total, int round_pos)
+{
+	return round_at_ex(digits, total, round_pos, NULL);
 }
 
 /*
@@ -444,23 +456,37 @@ static inline int emit_fixed_digits (char *digits, int ndigits,
 
 			if (to_print <= FPCONV_BUFLEN - 3) {
 				offset = -offset;
-				dest[0] = '0';
-				dest[1] = '.';
-				memset(dest + 2, '0', offset);
 
 				if (precision) {
-					/* The case where offset > precision is covered previously */
 					unsigned orig_offset = offset;
 
 					precision -= offset;
 
 					if (precision <= (unsigned)ndigits) {
+						int carry = 0;
+
 						/* Round at the truncation point */
 						if (precision < (unsigned)ndigits) {
-							ndigits = round_at(digits, ndigits,
-									orig_offset + precision);
+							ndigits = round_at_ex(digits, ndigits,
+									orig_offset + precision, &carry);
 						}
 
+						if (carry) {
+							/*
+							 * Carry overflowed into integer
+							 * part (e.g. 0.96 → 1.0).
+							 * Result is "1.[0]{precision}".
+							 */
+							dest[0] = '1';
+							dest[1] = '.';
+							memset(dest + 2, '0', precision);
+
+							return precision + 2;
+						}
+
+						dest[0] = '0';
+						dest[1] = '.';
+						memset(dest + 2, '0', orig_offset);
 						memcpy(dest + orig_offset + 2,
 								digits + orig_offset, precision);
 
@@ -468,6 +494,9 @@ static inline int emit_fixed_digits (char *digits, int ndigits,
 					}
 					else {
 						/* Expand */
+						dest[0] = '0';
+						dest[1] = '.';
+						memset(dest + 2, '0', offset);
 						memcpy(dest + offset + 2, digits, ndigits);
 						precision -= ndigits;
 						memset(dest + offset + 2 + ndigits, '0', precision);
@@ -476,6 +505,9 @@ static inline int emit_fixed_digits (char *digits, int ndigits,
 					}
 				}
 				else {
+					dest[0] = '0';
+					dest[1] = '.';
+					memset(dest + 2, '0', offset);
 					memcpy(dest + offset + 2, digits, ndigits);
 				}
 
@@ -511,36 +543,57 @@ static inline int emit_fixed_digits (char *digits, int ndigits,
 					return offset;
 				}
 
-				memcpy(d, digits, offset);
-				d += offset;
-				*d++ = '.';
-
 				ndigits -= offset;
 
 				if (precision) {
 					if (!trim && (unsigned)ndigits >= precision) {
-						/* Round at the truncation point */
+						/* Round first, then emit */
 						int round_pos = offset + precision;
-						int orig_total = ndigits + offset;
+						int orig_offset = offset;
+						int carry = 0;
 
-						int total = round_at(digits, orig_total,
-								round_pos);
+						ndigits = round_at_ex(digits,
+								ndigits + offset, round_pos,
+								&carry);
 
-						if (total > orig_total) {
+						if (carry) {
 							/*
-							 * Carry added a new digit in the integer
-							 * part (e.g. 9.95 -> 10.0).
+							 * Carry added a digit to the
+							 * integer part (e.g. 9.96 → 10.0).
+							 * Integer part is now orig_offset+1
+							 * digits long.
 							 */
-							memcpy(dest, digits, total);
+							int new_int = orig_offset + 1;
+							memcpy(d, digits, new_int);
+							d += new_int;
+							*d++ = '.';
+							/* Fractional digits from the carry result */
+							int frac_avail = ndigits - new_int;
+							if (frac_avail > 0) {
+								memcpy(d, digits + new_int,
+										frac_avail);
+								d += frac_avail;
+								precision -= frac_avail;
+							}
+							memset(d, '0', precision);
+							d += precision;
 
-							return total;
+							return d - dest;
 						}
 
-						memcpy(d, digits + offset, precision);
+						memcpy(d, digits, orig_offset);
+						d += orig_offset;
+						*d++ = '.';
+						memcpy(d, digits + orig_offset, precision);
 						d += precision;
+
+						return d - dest;
 					}
 					else if (trim) {
 						/* Emit all available fractional digits */
+						memcpy(d, digits, offset);
+						d += offset;
+						*d++ = '.';
 						memcpy(d, digits + offset, ndigits);
 						d += ndigits;
 
@@ -550,6 +603,9 @@ static inline int emit_fixed_digits (char *digits, int ndigits,
 					}
 					else {
 						/* Expand */
+						memcpy(d, digits, offset);
+						d += offset;
+						*d++ = '.';
 						memcpy(d, digits + offset, ndigits);
 						precision -= ndigits;
 						d += ndigits;
@@ -566,6 +622,9 @@ static inline int emit_fixed_digits (char *digits, int ndigits,
 					}
 				}
 				else {
+					memcpy(d, digits, offset);
+					d += offset;
+					*d++ = '.';
 					memcpy(d, digits + offset, ndigits);
 					d += ndigits;
 				}
