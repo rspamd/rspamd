@@ -404,12 +404,20 @@ Run Rspamd
 
   Export Scoped Variables  ${RSPAMD_SCOPE}  RSPAMD_PROCESS=${result}
 
-  # Confirm worker is reachable
+  # Confirm worker is reachable. The original loop used CONTINUE on
+  # success, which meant it kept polling for the full 37 iterations
+  # even after the first successful ping. Break on success so the
+  # caller sees a tight startup; the trailing Sleep then gives the
+  # remaining workers (controller, rspamd_proxy) a brief grace
+  # period to finish registering with the main process before tests
+  # run. Without this margin the first `rspamadm control stat` call
+  # in 001_merged returns an empty workers list under load.
   FOR    ${index}    IN RANGE    37
     ${ok} =  Rspamd Startup Check  ${check_port}
-    IF  ${ok}  CONTINUE
+    IF  ${ok}    BREAK
     Sleep  0.4s
   END
+  Sleep  0.5s
 
 Rspamd Startup Check
   [Arguments]  ${check_port}=${RSPAMD_PORT_NORMAL}
