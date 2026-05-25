@@ -32,7 +32,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import List, Optional, Union
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 # FastEmbed - CPU-optimized ONNX inference
@@ -49,6 +49,13 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = os.getenv('EMBEDDING_MODEL', 'BAAI/bge-small-en-v1.5')
 DEFAULT_PORT = int(os.getenv('EMBEDDING_PORT', '8080'))
 DEFAULT_HOST = os.getenv('EMBEDDING_HOST', '0.0.0.0')
+API_KEY = os.getenv('EMBEDDING_API_KEY', '')
+
+
+async def verify_api_key(authorization: Optional[str] = Header(None)) -> None:
+    """Verify Bearer token if EMBEDDING_API_KEY is configured."""
+    if API_KEY and authorization != f"Bearer {API_KEY}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 # Global model instance
 model: Optional[TextEmbedding] = None
@@ -131,6 +138,7 @@ app = FastAPI(
     description="CPU-optimized embedding service for Rspamd neural plugin",
     version="1.0.0",
     lifespan=lifespan,
+    dependencies=[Depends(verify_api_key)],
 )
 
 
