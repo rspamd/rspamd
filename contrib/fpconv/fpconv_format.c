@@ -200,7 +200,7 @@ emit_fixed_digits (char *digits, int ndigits,
 	if (K < 0) {
 		if (offset <= 0) {
 			if (precision && !trim) {
-				if (-offset >= (int)precision) {
+				if (-offset > (int)precision) {
 					/* Just print 0.[0]{precision} */
 					dest[0] = '0';
 					dest[1] = '.';
@@ -252,8 +252,37 @@ emit_fixed_digits (char *digits, int ndigits,
 
 				if (precision) {
 					unsigned orig_offset = offset;
+					unsigned total_frac = precision;
 
 					precision -= offset;
+
+					if (precision == 0) {
+						/*
+						 * All fractional digits are leading zeros.
+						 * Check if the first significant digit rounds up.
+						 */
+						if (digits[0] >= '5') {
+							unsigned new_leading = orig_offset - 1;
+							dest[0] = '0';
+							dest[1] = '.';
+							memset(dest + 2, '0', new_leading);
+							dest[2 + new_leading] = '1';
+							unsigned trailing = total_frac - new_leading - 1;
+
+							if (trailing > 0) {
+								memset(dest + 3 + new_leading, '0',
+										trailing);
+							}
+
+							return total_frac + 2;
+						}
+
+						dest[0] = '0';
+						dest[1] = '.';
+						memset(dest + 2, '0', total_frac);
+
+						return total_frac + 2;
+					}
 
 					if (precision <= (unsigned)ndigits) {
 						int carry = 0;
@@ -265,21 +294,44 @@ emit_fixed_digits (char *digits, int ndigits,
 						}
 
 						if (carry) {
-							dest[0] = '1';
-							dest[1] = '.';
-							memset(dest + 2, '0',
-									orig_offset + precision);
+							if (orig_offset == 0) {
+								/*
+								 * Carry crossed to integer part
+								 * (e.g. 0.999 -> 1.00)
+								 */
+								dest[0] = '1';
+								dest[1] = '.';
+								memset(dest + 2, '0', total_frac);
+							}
+							else {
+								/*
+								 * Carry within fractional part
+								 * (e.g. 0.0999 -> 0.10)
+								 */
+								unsigned new_leading = orig_offset - 1;
+								dest[0] = '0';
+								dest[1] = '.';
+								memset(dest + 2, '0', new_leading);
+								memcpy(dest + 2 + new_leading,
+										digits, ndigits);
+								unsigned emitted = new_leading + ndigits;
 
-							return orig_offset + precision + 2;
+								if (emitted < total_frac) {
+									memset(dest + 2 + emitted, '0',
+											total_frac - emitted);
+								}
+							}
+
+							return total_frac + 2;
 						}
 
 						dest[0] = '0';
 						dest[1] = '.';
 						memset(dest + 2, '0', orig_offset);
-						memcpy(dest + orig_offset + 2,
+						memcpy(dest + 2 + orig_offset,
 								digits, precision);
 
-						return precision + 2 + orig_offset;
+						return total_frac + 2;
 					}
 					else {
 						/* Expand */

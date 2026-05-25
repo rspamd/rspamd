@@ -139,6 +139,36 @@ TEST_SUITE("fpconv")
 		std::string nan_result = dtoa(0.0 / 0.0);
 		CHECK(nan_result == "nan");
 	}
+
+	TEST_CASE("fpconv_dtoa rounding when leading zeros equal precision")
+	{
+		/*
+		 * Defect 1 regression: -offset == precision.
+		 * The first significant digit >= '5' must round up.
+		 */
+		CHECK(dtoa(0.005, 2) == "0.01");
+		CHECK(dtoa(0.004, 2) == "0.00");
+		CHECK(dtoa(0.06, 1) == "0.1");
+		CHECK(dtoa(0.04, 1) == "0.0");
+		CHECK(dtoa(0.0005, 3) == "0.001");
+		CHECK(dtoa(0.0004, 3) == "0.000");
+	}
+
+	TEST_CASE("fpconv_dtoa carry within fractional part")
+	{
+		/*
+		 * Defect 2 regression: carry propagates within the
+		 * fractional part without crossing the integer boundary.
+		 */
+		CHECK(dtoa(0.0999, 2) == "0.10");
+		CHECK(dtoa(0.095, 2) == "0.10");
+		CHECK(dtoa(0.094, 2) == "0.09");
+		CHECK(dtoa(0.00999, 3) == "0.010");
+		CHECK(dtoa(0.0095, 3) == "0.010");
+		/* Carry that DOES cross to integer (for contrast) */
+		CHECK(dtoa(0.999, 2) == "1.00");
+		CHECK(dtoa(0.995, 2) == "1.00");
+	}
 }
 
 #endif
