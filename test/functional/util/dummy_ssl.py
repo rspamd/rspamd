@@ -7,12 +7,11 @@ import sys
 import time
 
 import dummy_killer
+import dummy_pidfile
 import socketserver
 
-PORT = 14433
+DEFAULT_PORT = 14433
 HOST_NAME = '127.0.0.1'
-
-PID = "/tmp/dummy_ssl.pid"
 
 class SSLTCPHandler(socketserver.StreamRequestHandler):
     def handle(self):
@@ -45,8 +44,8 @@ class SSL_TCP_Server(socketserver.ThreadingMixIn, socketserver.TCPServer):
             self.server_bind()
             self.server_activate()
 
-    def run(self):
-        dummy_killer.write_pid(PID)
+    def run(self, pid_path):
+        dummy_killer.write_pid(pid_path)
         try:
             self.serve_forever()
         except KeyboardInterrupt:
@@ -61,6 +60,9 @@ class SSL_TCP_Server(socketserver.ThreadingMixIn, socketserver.TCPServer):
         self.server_close()
 
 if __name__ == '__main__':
-    server = SSL_TCP_Server((HOST_NAME, PORT), SSLTCPHandler, sys.argv[1], sys.argv[1])
+    # argv: pemfile [port] [pid_path]
+    port = int(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_PORT
+    pid_path = sys.argv[3] if len(sys.argv) > 3 else dummy_pidfile.pid_path('ssl', port)
+    server = SSL_TCP_Server((HOST_NAME, port), SSLTCPHandler, sys.argv[1], sys.argv[1])
     dummy_killer.setup_killer(server, server.stop)
-    server.run()
+    server.run(pid_path)

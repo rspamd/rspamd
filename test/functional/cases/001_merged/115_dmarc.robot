@@ -152,13 +152,13 @@ Get DMARC Report Key
   [Arguments]  ${domain}  ${rua}
   ${today} =  Get Current Date  result_format=%Y%m%d
   ${report_key} =  Set Variable  dmarc_rpt;${domain};${rua};${today}
-  [Return]  ${report_key}
+  RETURN    ${report_key}
 
 Get DMARC Index Key
   [Documentation]  Generate the DMARC index key for today
   ${today} =  Get Current Date  result_format=%Y%m%d
   ${idx_key} =  Set Variable  dmarc_idx;${today}
-  [Return]  ${idx_key}
+  RETURN    ${idx_key}
 
 Redis Key Exists
   [Documentation]  Check if a Redis key exists
@@ -166,7 +166,7 @@ Redis Key Exists
   ${result} =  Run Process  redis-cli  -h  ${RSPAMD_REDIS_ADDR}  -p  ${RSPAMD_REDIS_PORT}
   ...  EXISTS  ${key}
   Should Be Equal As Integers  ${result.rc}  0
-  [Return]  ${result.stdout}
+  RETURN    ${result.stdout}
 
 Redis Get Set Members
   [Documentation]  Get all members of a Redis set
@@ -174,7 +174,7 @@ Redis Get Set Members
   ${result} =  Run Process  redis-cli  -h  ${RSPAMD_REDIS_ADDR}  -p  ${RSPAMD_REDIS_PORT}
   ...  SMEMBERS  ${key}
   Should Be Equal As Integers  ${result.rc}  0
-  [Return]  ${result.stdout}
+  RETURN    ${result.stdout}
 
 Redis Get Sorted Set Members
   [Documentation]  Get all members of a Redis sorted set
@@ -182,4 +182,4 @@ Redis Get Sorted Set Members
   ${result} =  Run Process  redis-cli  -h  ${RSPAMD_REDIS_ADDR}  -p  ${RSPAMD_REDIS_PORT}
   ...  ZRANGE  ${key}  0  -1
   Should Be Equal As Integers  ${result.rc}  0
-  [Return]  ${result.stdout}
+  RETURN    ${result.stdout}

@@ -7,7 +7,11 @@
 
 local lua_extras = require "lua_extras"
 
-local tmpdir = os.getenv('TMPDIR') or '/tmp'
+-- Prefer the per-suite RSPAMD_TMPDIR so parallel pabot workers don't
+-- race on a shared /tmp/lua_extras_test path. Fall back to TMPDIR /
+-- /tmp for ad-hoc invocations.
+local tmpdir = (rspamd_env and rspamd_env.TMPDIR)
+  or os.getenv('RSPAMD_TMPDIR') or os.getenv('TMPDIR') or '/tmp'
 local base = tmpdir .. '/lua_extras_test'
 
 -- Always start clean
