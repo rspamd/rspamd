@@ -407,17 +407,34 @@ Run Rspamd
   # Confirm worker is reachable. The original loop used CONTINUE on
   # success, which meant it kept polling for the full 37 iterations
   # even after the first successful ping. Break on success so the
-  # caller sees a tight startup; the trailing Sleep then gives the
-  # remaining workers (controller, rspamd_proxy) a brief grace
-  # period to finish registering with the main process before tests
-  # run. Without this margin the first `rspamadm control stat` call
-  # in 001_merged returns an empty workers list under load.
+  # caller sees a tight startup.
   FOR    ${index}    IN RANGE    37
     ${ok} =  Rspamd Startup Check  ${check_port}
     IF  ${ok}    BREAK
     Sleep  0.4s
   END
-  Sleep  0.5s
+  # rspamd ping succeeds as soon as the controller binds, but the
+  # workers list isn't populated until each worker has registered
+  # back with the main process. Under parallel pabot + the
+  # concurrent serial phase that gap can stretch out and the first
+  # `rspamadm control stat` call in 099_control returns empty.
+  # If the controller exposes a unix socket in TMPDIR, poll it
+  # until stat actually contains "workers" before letting tests run.
+  ${sock_path} =  Set Variable  ${RSPAMD_TMPDIR}/rspamd.sock
+  ${sock_exists} =  Run Keyword And Return Status  File Should Exist  ${sock_path}
+  IF    ${sock_exists}
+    Wait Until Keyword Succeeds  30x  0.2s  Verify Controller Workers Registered  ${sock_path}
+  END
+
+Verify Controller Workers Registered
+  [Documentation]  Used by Run Rspamd to wait until the controller
+  ...              has published its workers list to the local
+  ...              control socket. Cheap when fast, retried up to
+  ...              ~6s when rspamd is starting under CPU contention.
+  [Arguments]  ${sock}
+  ${result} =  Run Process  ${RSPAMADM}  control  -s  ${sock}  stat  timeout=2s
+  Should Be Equal As Integers  ${result.rc}  0
+  Should Contain  ${result.stdout}  workers
 
 Rspamd Startup Check
   [Arguments]  ${check_port}=${RSPAMD_PORT_NORMAL}

@@ -125,6 +125,15 @@ jobs:
           ROBOT_PID=$!
           wait $PABOT_PID;  PARALLEL_RC=$?
           wait $ROBOT_PID;  SERIAL_RC=$?
+          # Merge the two phases into one unified report at the
+          # build root (build/output.xml, log.html, report.html) --
+          # this matches the artifact shape master serial produces,
+          # so reviewers see a single total instead of two halves.
+          # --nostatusrc: merging itself never affects step exit code.
+          if [ -f parallel/output.xml ] && [ -f serial/output.xml ]; then
+            rebot --nostatusrc --outputdir . --output output.xml \
+              parallel/output.xml serial/output.xml || true
+          fi
           set -e
           core_files=$(find /var/tmp/ -name '*.core')
           for core in $core_files; do exe=$(gdb --batch -ex 'info proc mappings' -c $core | tail -1 | awk '{print $5}'); gdb --batch -ex 'bt' -c $core $exe; echo '---'; done
