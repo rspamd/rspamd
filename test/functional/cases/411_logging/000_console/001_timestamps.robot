@@ -20,5 +20,9 @@ EMPTY TEST
 Console Timestamps Teardown
   Touch  ${RSPAMD_TMPDIR}/rspamd.log
   Rspamd Teardown
-  ${log} =  Get File  ${EXECDIR}/robot-save/rspamd.stderr.last
+  # robot-save/rspamd.stderr.last is the cross-suite "last run" copy
+  # of whatever rspamd.stderr was last torn down; under pabot another
+  # worker can overwrite it between Rspamd Teardown saving it and us
+  # reading it. The per-suite save_run_results destination is stable.
+  ${log} =  Get File  ${EXECDIR}/robot-save/${SUITE_NAME}/rspamd.stderr
   Should Match Regexp  ${log}  \\n\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}  #\\d+\\(main\\) lua; lua_cfg_transform\\.lua:\\d+: overriding actions from the legacy metric settings\\n
