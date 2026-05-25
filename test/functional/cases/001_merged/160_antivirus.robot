@@ -119,19 +119,19 @@ Run Dummy
   Log To Console  ${res.stdout}
   Log To Console  ${res.stderr}
   Fail  Dummy server failed to start
-  [Return]  ${process}
+  RETURN    ${process}
 
 Run Dummy Clam
   [Arguments]  ${port}  ${found}=  ${pid}=${RSPAMD_TMP_PREFIX}/dummy_clamav-${port}.pid
   ${process} =  Run Dummy  ${RSPAMD_TESTDIR}/util/dummy_clam.py  ${port}  ${found}  ${pid}
-  [Return]  ${process}
+  RETURN    ${process}
 
 Run Dummy Fprot
   [Arguments]  ${port}  ${found}=  ${pid}=${RSPAMD_TMP_PREFIX}/dummy_fprot-${port}.pid
   ${process} =  Run Dummy  ${RSPAMD_TESTDIR}/util/dummy_fprot.py  ${port}  ${found}  ${pid}
-  [Return]  ${process}
+  RETURN    ${process}
 
 Run Dummy Avast
   [Arguments]  ${port}  ${found}=  ${pid}=${RSPAMD_TMP_PREFIX}/dummy_avast-${port}.pid
   ${process} =  Run Dummy  ${RSPAMD_TESTDIR}/util/dummy_avast.py  ${port}  ${found}  ${pid}
-  [Return]  ${process}
+  RETURN    ${process}

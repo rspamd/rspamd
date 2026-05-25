@@ -413,16 +413,23 @@ Run Rspamd
     IF  ${ok}    BREAK
     Sleep  0.4s
   END
-  # rspamd ping succeeds as soon as the controller binds, but the
-  # workers list isn't populated until each worker has registered
-  # back with the main process. Under parallel pabot + the
-  # concurrent serial phase that gap can stretch out and the first
-  # `rspamadm control stat` call in 099_control returns empty.
-  # If the controller exposes a unix socket in TMPDIR, poll it
-  # until stat actually contains "workers" before letting tests run.
+  # rspamd ping succeeds as soon as the controller binds its HTTP
+  # socket, but for suites whose config includes options.inc the
+  # main process also creates a unix control socket at
+  # $DBDIR/rspamd.sock, and the workers list isn't populated there
+  # until each worker has registered back with main. Under parallel
+  # pabot + concurrent serial robot that gap can stretch out and
+  # the first `rspamadm control stat` in 099_control returns empty.
+  #
+  # If the suite's config produces a control socket, wait until
+  # `rspamadm control stat` actually contains "workers" before
+  # letting tests run. If it never does (minimal configs without
+  # options.inc), proceed without the extra check -- those suites
+  # don't talk to the control socket anyway.
   ${sock_path} =  Set Variable  ${RSPAMD_TMPDIR}/rspamd.sock
-  ${sock_exists} =  Run Keyword And Return Status  File Should Exist  ${sock_path}
-  IF    ${sock_exists}
+  ${sock_ready} =  Run Keyword And Return Status
+  ...    Wait Until Created  ${sock_path}  timeout=2s
+  IF    ${sock_ready}
     Wait Until Keyword Succeeds  30x  0.2s  Verify Controller Workers Registered  ${sock_path}
   END
 
@@ -430,7 +437,8 @@ Verify Controller Workers Registered
   [Documentation]  Used by Run Rspamd to wait until the controller
   ...              has published its workers list to the local
   ...              control socket. Cheap when fast, retried up to
-  ...              ~6s when rspamd is starting under CPU contention.
+  ...              ~6s when rspamd is starting under CPU contention
+  ...              (4 pabot workers + concurrent serial robot).
   [Arguments]  ${sock}
   ${result} =  Run Process  ${RSPAMADM}  control  -s  ${sock}  stat  timeout=2s
   Should Be Equal As Integers  ${result.rc}  0
@@ -456,7 +464,7 @@ Rspamd Startup Check
     Fail  Process Is Gone (rc=${res}, port=${check_port}, tmpdir=${RSPAMD_TMPDIR})\n--- stderr ---\n${stderr}\n--- rspamd.log (tail) ---\n${log_tail}
   END
   ${ping} =  Run Keyword And Return Status  Ping Rspamd  ${RSPAMD_LOCAL_ADDR}  ${check_port}
-  [Return]  ${ping}
+  RETURN    ${ping}
 
 Rspamadm Setup
   ${RSPAMADM_TMPDIR} =  Make Temporary Directory
@@ -472,7 +480,7 @@ Rspamadm
   ...  --var\=DBDIR\=${RSPAMADM_TMPDIR}
   ...  --var\=LOCAL_CONFDIR\=/nonexistent
   ...  @{args}
-  [Return]  ${result}
+  RETURN    ${result}
 
 Run Nginx
   ${template} =  Get File  ${RSPAMD_TESTDIR}/configs/nginx.conf
@@ -513,18 +521,18 @@ Run Rspamc
     ...  @{args}  env:LD_LIBRARY_PATH=${RSPAMD_TESTDIR}/../../contrib/aho-corasick
   END
   Log  ${result.stdout}
-  [Return]  ${result}
+  RETURN    ${result}
 
 Scan File By Reference
   [Arguments]  ${filename}  &{headers}
   Set To Dictionary  ${headers}  File=${filename}
   ${result} =  Scan File  /dev/null  &{headers}
-  [Return]  ${result}
+  RETURN    ${result}
 
 Scan Message With Rspamc
   [Arguments]  ${msg_file}  @{vargs}
   ${result} =  Run Rspamc  -p  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_NORMAL}  @{vargs}  ${msg_file}
-  [Return]  ${result}
+  RETURN    ${result}
 
 Sync Fuzzy Storage
   [Arguments]  @{vargs}
@@ -546,7 +554,7 @@ Run Control Command
   ...  ${socket}  ${command}  timeout=10s
   Log  ${result.stdout}
   Log  ${result.stderr}
-  [Return]  ${result}
+  RETURN    ${result}
 
 Run Control Command JSON
   [Documentation]  Run a control socket command and return JSON result
@@ -555,7 +563,7 @@ Run Control Command JSON
   ...  ${socket}  ${command}  timeout=10s
   Log  ${result.stdout}
   Log  ${result.stderr}
-  [Return]  ${result}
+  RETURN    ${result}
 
 Run Dummy Http
   ${pid} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_http-${RSPAMD_PORT_DUMMY_HTTP}.pid

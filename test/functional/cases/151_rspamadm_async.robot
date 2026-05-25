@@ -58,4 +58,4 @@ Prepare temp directory
   ${config} =  Replace Variables  ${config}
   Log  ${config}
   Create File  ${tmpdir}/rspamd.conf  ${config}
-  [Return]  ${tmpdir}
+  RETURN    ${tmpdir}
