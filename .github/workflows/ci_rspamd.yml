@@ -106,6 +106,11 @@ jobs:
           ulimit -s unlimited
           mkdir -p parallel serial
           set +e
+          # Each phase writes its own stdout+stderr to a log file so
+          # the two never interleave; we cat them in order at the
+          # end so the GH Actions step output reads sequentially
+          # (parallel-phase summary first, then serial-phase) even
+          # though the two ran concurrently and saved wall-clock.
           RSPAMD_INSTALLROOT=${GITHUB_WORKSPACE}/install pabot \
             --processes 4 \
             --outputdir ${GITHUB_WORKSPACE}/build/parallel \
@@ -113,7 +118,8 @@ jobs:
             --removekeywords wuks \
             --exclude isbroken \
             --exclude notparallel \
-            ${GITHUB_WORKSPACE}/src/test/functional/cases &
+            ${GITHUB_WORKSPACE}/src/test/functional/cases \
+            > ${GITHUB_WORKSPACE}/build/phase1-parallel.log 2>&1 &
           PABOT_PID=$!
           RSPAMD_INSTALLROOT=${GITHUB_WORKSPACE}/install robot \
             --outputdir ${GITHUB_WORKSPACE}/build/serial \
@@ -121,18 +127,27 @@ jobs:
             --removekeywords wuks \
             --exclude isbroken \
             --include notparallel \
-            ${GITHUB_WORKSPACE}/src/test/functional/cases &
+            ${GITHUB_WORKSPACE}/src/test/functional/cases \
+            > ${GITHUB_WORKSPACE}/build/phase2-serial.log 2>&1 &
           ROBOT_PID=$!
           wait $PABOT_PID;  PARALLEL_RC=$?
           wait $ROBOT_PID;  SERIAL_RC=$?
+          echo "::group::Phase 1 (pabot, parallel-safe suites) -- rc=$PARALLEL_RC"
+          cat ${GITHUB_WORKSPACE}/build/phase1-parallel.log
+          echo "::endgroup::"
+          echo "::group::Phase 2 (robot, notparallel suites) -- rc=$SERIAL_RC"
+          cat ${GITHUB_WORKSPACE}/build/phase2-serial.log
+          echo "::endgroup::"
           # Merge the two phases into one unified report at the
           # build root (build/output.xml, log.html, report.html) --
           # this matches the artifact shape master serial produces,
           # so reviewers see a single total instead of two halves.
           # --nostatusrc: merging itself never affects step exit code.
           if [ -f parallel/output.xml ] && [ -f serial/output.xml ]; then
+            echo "::group::Merge parallel + serial outputs"
             rebot --nostatusrc --outputdir . --output output.xml \
               parallel/output.xml serial/output.xml || true
+            echo "::endgroup::"
           fi
           set -e
           core_files=$(find /var/tmp/ -name '*.core')
@@ -155,6 +170,7 @@ jobs:
             ${{ env.CONTAINER_WORKSPACE }}/build/parallel/*.*ml
             ${{ env.CONTAINER_WORKSPACE }}/build/serial/*.*ml
             ${{ env.CONTAINER_WORKSPACE }}/build/*.*ml
+            ${{ env.CONTAINER_WORKSPACE }}/build/phase*.log
           retention-days: 1
 
       - name: Upload rspamd logs
