@@ -3,6 +3,7 @@ Suite Setup     Rspamd Setup
 Suite Teardown  Rspamd Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Test Tags       notparallel
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***

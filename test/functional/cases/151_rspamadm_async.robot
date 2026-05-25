@@ -38,6 +38,11 @@ Redis client
 *** Keywords ***
 
 Rspamadm test Setup
+  # Make per-worker ports (RSPAMD_REDIS_PORT etc.) visible to the
+  # rspamadm subprocess. Run Rspamd usually does this, but this suite
+  # only spins up redis + dummy_http and the rspamadm lua client
+  # script reads its target port from the env.
+  Export Rspamd Variables To Environment
   Run Dummy Http
   Run Redis
 
@@ -53,4 +58,4 @@ Prepare temp directory
   ${config} =  Replace Variables  ${config}
   Log  ${config}
   Create File  ${tmpdir}/rspamd.conf  ${config}
-  [Return]  ${tmpdir}
+  RETURN    ${tmpdir}

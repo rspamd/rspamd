@@ -67,7 +67,7 @@ p0f NO MATCH
 p0f BAD QUERY
   Run Dummy p0f  ${RSPAMD_P0F_SOCKET}  windows  bad_query
   Scan File  ${MESSAGE}  IP=1.1.1.7
-  Expect Symbol With Exact Options  P0F_FAIL  Malformed Query: /tmp/p0f.sock
+  Expect Symbol With Exact Options  P0F_FAIL  Malformed Query: ${RSPAMD_P0F_SOCKET}
   Do Not Expect Symbol  WINDOWS
   Shutdown p0f
 
@@ -88,10 +88,15 @@ p0f Teardown
   Terminate All Processes    kill=True
 
 Shutdown p0f
-  ${p0f_pid} =  Get File if exists  /tmp/dummy_p0f.pid
+  # dummy_p0f derives its pidfile from the socket basename; mirror that here.
+  ${sockname} =  Evaluate  os.path.basename($RSPAMD_P0F_SOCKET)  modules=os
+  ${pidfile} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_p0f-${sockname}.pid
+  ${p0f_pid} =  Get File if exists  ${pidfile}
   Run Keyword if  ${p0f_pid}  Shutdown Process With Children  ${p0f_pid}
 
 Run Dummy p0f
   [Arguments]  ${socket}=${RSPAMD_P0F_SOCKET}  ${os}=linux  ${status}=ok
+  ${sockname} =  Evaluate  os.path.basename($socket)  modules=os
+  ${pidfile} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_p0f-${sockname}.pid
   ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_p0f.py  ${socket}  ${os}  ${status}
-  Wait Until Created  /tmp/dummy_p0f.pid
+  Wait Until Created  ${pidfile}

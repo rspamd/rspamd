@@ -5,6 +5,13 @@
 local rspamd_udp = require "rspamd_udp"
 local logger = require "rspamd_logger"
 
+-- Ports come from the test harness (vars.py -> per-pabot-worker slot).
+-- rspamd_env strips the RSPAMD_ prefix, so RSPAMD_PORT_DUMMY_UDP becomes
+-- env.PORT_DUMMY_UDP. Fall back to the historical literal so the script
+-- still runs when used outside the harness.
+local udp_port = tonumber(rspamd_env and rspamd_env.PORT_DUMMY_UDP) or 5005
+local udp_fail_port = udp_port + 1
+
 -- [[ old fashioned callback api ]]
 local function simple_udp_async_symbol(task)
   logger.errx(task, 'udp_symbol: begin')
@@ -22,7 +29,7 @@ local function simple_udp_async_symbol(task)
     callback = udp_cb,
     host = '127.0.0.1',
     data = {'hello', 'world'},
-    port = 5005,
+    port = udp_port,
   })
 end
 
@@ -38,7 +45,7 @@ local function send_only_udp(task)
     task = task,
     host = '127.0.0.1',
     data = {'hoho'},
-    port = 5005,
+    port = udp_port,
   }) then
 
     task:insert_result('UDP_SENDTO', 1.0)
@@ -67,7 +74,7 @@ local function udp_failed_cb(task)
     callback = udp_cb,
     host = '127.0.0.1',
     data = {'hello', 'world'},
-    port = 5006,
+    port = udp_fail_port,
     retransmits = 2,
     timeout = 0.1,
   })
