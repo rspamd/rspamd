@@ -87,18 +87,19 @@ jobs:
             || pip install robotframework-pabot
 
       - name: Run functional tests
-        # Two phases:
+        # Two phases run concurrently:
         #   1. pabot, --processes 4, suites NOT tagged `notparallel` (worker
-        #      isolation via PABOTEXECUTIONPOOLID -> port offset + per-worker
-        #      /tmp prefix, see test/functional/lib/vars.py).
+        #      isolation via the vars.py file-based slot allocator -> port
+        #      offset + per-worker /tmp prefix).
         #   2. plain robot, suites tagged `notparallel`. These suites still
         #      bake dummy_http / dummy_llm / dummy_http_early port numbers
         #      into Lua test scripts and a handful of configs, so they only
-        #      work on the worker-0 port range; running them serially after
-        #      the parallel batch sidesteps the collision.
-        #
-        # Each phase writes to its own outputdir so artifacts stay separate;
-        # we exit non-zero if either phase failed.
+        #      work on a single worker's port range.
+        # Both phases claim disjoint slots from vars.py so their rspamds
+        # don't collide. Running them in parallel (rather than sequentially)
+        # drops wall-clock from ~4:00 to ~max(phase1, phase2) ~2:20.
+        # Each phase writes to its own outputdir; we exit non-zero if
+        # either phase failed.
         run: |
           cd ${GITHUB_WORKSPACE}/build
           ulimit -c unlimited
@@ -112,16 +113,18 @@ jobs:
             --removekeywords wuks \
             --exclude isbroken \
             --exclude notparallel \
-            ${GITHUB_WORKSPACE}/src/test/functional/cases
-          PARALLEL_RC=$?
+            ${GITHUB_WORKSPACE}/src/test/functional/cases &
+          PABOT_PID=$!
           RSPAMD_INSTALLROOT=${GITHUB_WORKSPACE}/install robot \
             --outputdir ${GITHUB_WORKSPACE}/build/serial \
             -v RSPAMD_USER:root -v RSPAMD_GROUP:root \
             --removekeywords wuks \
             --exclude isbroken \
             --include notparallel \
-            ${GITHUB_WORKSPACE}/src/test/functional/cases
-          SERIAL_RC=$?
+            ${GITHUB_WORKSPACE}/src/test/functional/cases &
+          ROBOT_PID=$!
+          wait $PABOT_PID;  PARALLEL_RC=$?
+          wait $ROBOT_PID;  SERIAL_RC=$?
           set -e
           core_files=$(find /var/tmp/ -name '*.core')
           for core in $core_files; do exe=$(gdb --batch -ex 'info proc mappings' -c $core | tail -1 | awk '{print $5}'); gdb --batch -ex 'bt' -c $core $exe; echo '---'; done
