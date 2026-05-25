@@ -4,7 +4,7 @@
 #include <sys/param.h>
 
 #include "fpconv_format.h"
-#include "fpconv.h"
+#include "contrib/fpconv/fpconv.h"
 
 /*
  * Grisu2 produces at most 17 significant digits, so any explicit

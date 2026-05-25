@@ -1,7 +1,7 @@
 #ifndef FPCONV_FORMAT_H
 #define FPCONV_FORMAT_H
 
-#include "fpconv.h"
+#include "contrib/fpconv/fpconv.h"
 
 /*
  * Sentinel precision: emit all significant digits, then trim trailing zeros.

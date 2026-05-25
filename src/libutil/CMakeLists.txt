@@ -4,6 +4,7 @@ SET(LIBRSPAMDUTILSRC
 				${CMAKE_CURRENT_SOURCE_DIR}/libev_helper.c
 				${CMAKE_CURRENT_SOURCE_DIR}/expression.c
 				${CMAKE_CURRENT_SOURCE_DIR}/fstring.c
+				${CMAKE_CURRENT_SOURCE_DIR}/fpconv_format.c
 				${CMAKE_CURRENT_SOURCE_DIR}/hash.c
 				${CMAKE_CURRENT_SOURCE_DIR}/mem_pool.c
 				${CMAKE_CURRENT_SOURCE_DIR}/printf.c

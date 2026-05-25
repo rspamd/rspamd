@@ -21,7 +21,7 @@
 #include "doctest/doctest.h"
 
 extern "C" {
-#include "contrib/fpconv/fpconv_format.h"
+#include "libutil/fpconv_format.h"
 }
 
 #include <string>

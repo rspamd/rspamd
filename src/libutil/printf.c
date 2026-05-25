@@ -40,7 +40,7 @@
 
 #include "printf.h"
 #include "str_util.h"
-#include "contrib/fpconv/fpconv_format.h"
+#include "fpconv_format.h"
 
 /**
  * From FreeBSD libutil code
