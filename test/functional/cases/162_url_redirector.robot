@@ -4,6 +4,7 @@ Suite Teardown  Urlredirector Teardown
 Library         Process
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Test Tags       notparallel
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
@@ -29,7 +30,7 @@ STEALTH FINGERPRINT HEADERS
   # HTTP server together with their request headers. Verify the redirector
   # sends a coherent browser fingerprint (not just a bare User-Agent) and
   # that the header order chosen by the profile is preserved on the wire.
-  ${log} =  Get File  /tmp/dummy_http.log
+  ${log} =  Get File  ${DUMMY_HTTP_LOG}
   Should Contain  ${log}  Sec-Fetch-Mode
   Should Match Regexp  ${log}  HEAD [^\n]*headers: [^\n]*Accept[^\n]*Sec-Fetch-Mode
 

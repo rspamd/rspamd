@@ -404,23 +404,67 @@ Run Rspamd
 
   Export Scoped Variables  ${RSPAMD_SCOPE}  RSPAMD_PROCESS=${result}
 
-  # Confirm worker is reachable
+  # Confirm worker is reachable. The original loop used CONTINUE on
+  # success, which meant it kept polling for the full 37 iterations
+  # even after the first successful ping. Break on success so the
+  # caller sees a tight startup.
   FOR    ${index}    IN RANGE    37
     ${ok} =  Rspamd Startup Check  ${check_port}
-    IF  ${ok}  CONTINUE
+    IF  ${ok}    BREAK
     Sleep  0.4s
   END
+  # rspamd ping succeeds as soon as the controller binds its HTTP
+  # socket, but for suites whose config includes options.inc the
+  # main process also creates a unix control socket at
+  # $DBDIR/rspamd.sock, and the workers list isn't populated there
+  # until each worker has registered back with main. Under parallel
+  # pabot + concurrent serial robot that gap can stretch out and
+  # the first `rspamadm control stat` in 099_control returns empty.
+  #
+  # If the suite's config produces a control socket, wait until
+  # `rspamadm control stat` actually contains "workers" before
+  # letting tests run. If it never does (minimal configs without
+  # options.inc), proceed without the extra check -- those suites
+  # don't talk to the control socket anyway.
+  ${sock_path} =  Set Variable  ${RSPAMD_TMPDIR}/rspamd.sock
+  ${sock_ready} =  Run Keyword And Return Status
+  ...    Wait Until Created  ${sock_path}  timeout=2s
+  IF    ${sock_ready}
+    Wait Until Keyword Succeeds  30x  0.2s  Verify Controller Workers Registered  ${sock_path}
+  END
+
+Verify Controller Workers Registered
+  [Documentation]  Used by Run Rspamd to wait until the controller
+  ...              has published its workers list to the local
+  ...              control socket. Cheap when fast, retried up to
+  ...              ~6s when rspamd is starting under CPU contention
+  ...              (4 pabot workers + concurrent serial robot).
+  [Arguments]  ${sock}
+  ${result} =  Run Process  ${RSPAMADM}  control  -s  ${sock}  stat  timeout=2s
+  Should Be Equal As Integers  ${result.rc}  0
+  Should Contain  ${result.stdout}  workers
 
 Rspamd Startup Check
   [Arguments]  ${check_port}=${RSPAMD_PORT_NORMAL}
   ${handle} =  Get Process Object
   ${res} =  Evaluate  $handle.poll()
   IF  ${res} != None
-    ${stderr} =  Get File  ${RSPAMD_TMPDIR}/rspamd.stderr
-    Fail  Process Is Gone, stderr: ${stderr}
+    # rspamd exited; rspamd.stderr typically only has the early
+    # "loading configuration" line because the real logger is set up
+    # later. The actual cause lives in rspamd.log -- include both and
+    # the exit code so failures aren't just opaque.
+    ${stderr} =  Get File  ${RSPAMD_TMPDIR}/rspamd.stderr  encoding_errors=ignore
+    ${log_exists} =  Run Keyword And Return Status  File Should Exist  ${RSPAMD_TMPDIR}/rspamd.log
+    IF  ${log_exists}
+      ${log_full} =  Get File  ${RSPAMD_TMPDIR}/rspamd.log  encoding_errors=ignore
+      ${log_tail} =  Evaluate  "\\n".join($log_full.splitlines()[-80:])
+    ELSE
+      ${log_tail} =  Set Variable  <rspamd.log was never created>
+    END
+    Fail  Process Is Gone (rc=${res}, port=${check_port}, tmpdir=${RSPAMD_TMPDIR})\n--- stderr ---\n${stderr}\n--- rspamd.log (tail) ---\n${log_tail}
   END
   ${ping} =  Run Keyword And Return Status  Ping Rspamd  ${RSPAMD_LOCAL_ADDR}  ${check_port}
-  [Return]  ${ping}
+  RETURN    ${ping}
 
 Rspamadm Setup
   ${RSPAMADM_TMPDIR} =  Make Temporary Directory
@@ -436,7 +480,7 @@ Rspamadm
   ...  --var\=DBDIR\=${RSPAMADM_TMPDIR}
   ...  --var\=LOCAL_CONFDIR\=/nonexistent
   ...  @{args}
-  [Return]  ${result}
+  RETURN    ${result}
 
 Run Nginx
   ${template} =  Get File  ${RSPAMD_TESTDIR}/configs/nginx.conf
@@ -477,18 +521,18 @@ Run Rspamc
     ...  @{args}  env:LD_LIBRARY_PATH=${RSPAMD_TESTDIR}/../../contrib/aho-corasick
   END
   Log  ${result.stdout}
-  [Return]  ${result}
+  RETURN    ${result}
 
 Scan File By Reference
   [Arguments]  ${filename}  &{headers}
   Set To Dictionary  ${headers}  File=${filename}
   ${result} =  Scan File  /dev/null  &{headers}
-  [Return]  ${result}
+  RETURN    ${result}
 
 Scan Message With Rspamc
   [Arguments]  ${msg_file}  @{vargs}
   ${result} =  Run Rspamc  -p  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_NORMAL}  @{vargs}  ${msg_file}
-  [Return]  ${result}
+  RETURN    ${result}
 
 Sync Fuzzy Storage
   [Arguments]  @{vargs}
@@ -510,7 +554,7 @@ Run Control Command
   ...  ${socket}  ${command}  timeout=10s
   Log  ${result.stdout}
   Log  ${result.stderr}
-  [Return]  ${result}
+  RETURN    ${result}
 
 Run Control Command JSON
   [Documentation]  Run a control socket command and return JSON result
@@ -519,50 +563,56 @@ Run Control Command JSON
   ...  ${socket}  ${command}  timeout=10s
   Log  ${result.stdout}
   Log  ${result.stderr}
-  [Return]  ${result}
+  RETURN    ${result}
 
 Run Dummy Http
-  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py  -pf  /tmp/dummy_http.pid
-  ...  stderr=/tmp/dummy_http.log  stdout=/tmp/dummy_http.log
-  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_http.pid  timeout=2 second
+  ${pid} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_http-${RSPAMD_PORT_DUMMY_HTTP}.pid
+  ${log} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_http-${RSPAMD_PORT_DUMMY_HTTP}.log
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py  -pf  ${pid}  -p  ${RSPAMD_PORT_DUMMY_HTTP}
+  ...  stderr=${log}  stdout=${log}
+  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  ${pid}  timeout=2 second
   IF  '${status}' == 'FAIL'
-    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_http.log
+    ${logstatus}  ${out} =  Run Keyword And Ignore Error  Get File  ${log}
     IF  '${logstatus}' == 'PASS'
-      Log  dummy_http.py failed to start. Log output:\n${log}  level=ERROR
+      Log  dummy_http.py failed to start. Log output:\n${out}  level=ERROR
     ELSE
-      Log  dummy_http.py failed to start. No log file found at /tmp/dummy_http.log  level=ERROR
+      Log  dummy_http.py failed to start. No log file found at ${log}  level=ERROR
     END
     Fail  dummy_http.py did not create PID file in 2 seconds
   END
-  Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_HTTP_PROC=${result}
+  Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_HTTP_PROC=${result}  DUMMY_HTTP_LOG=${log}
 
 Run Dummy Https
+  ${pid} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_https-${RSPAMD_PORT_DUMMY_HTTPS}.pid
+  ${log} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_https-${RSPAMD_PORT_DUMMY_HTTPS}.log
   ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py
   ...  -c  ${RSPAMD_TESTDIR}/util/server.pem  -k  ${RSPAMD_TESTDIR}/util/server.pem
-  ...  -pf  /tmp/dummy_https.pid  -p  18081
-  ...  stderr=/tmp/dummy_https.log  stdout=/tmp/dummy_https.log
-  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_https.pid  timeout=2 second
+  ...  -pf  ${pid}  -p  ${RSPAMD_PORT_DUMMY_HTTPS}
+  ...  stderr=${log}  stdout=${log}
+  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  ${pid}  timeout=2 second
   IF  '${status}' == 'FAIL'
-    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_https.log
+    ${logstatus}  ${out} =  Run Keyword And Ignore Error  Get File  ${log}
     IF  '${logstatus}' == 'PASS'
-      Log  dummy_https.py failed to start. Log output:\n${log}  level=ERROR
+      Log  dummy_https.py failed to start. Log output:\n${out}  level=ERROR
     ELSE
-      Log  dummy_https.py failed to start. No log file found at /tmp/dummy_https.log  level=ERROR
+      Log  dummy_https.py failed to start. No log file found at ${log}  level=ERROR
     END
     Fail  dummy_https.py did not create PID file in 2 seconds
   END
   Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_HTTPS_PROC=${result}
 
 Run Dummy Llm
-  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_llm.py  18080
-  ...  stderr=/tmp/dummy_llm.log  stdout=/tmp/dummy_llm.log
-  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_llm.pid  timeout=2 second
+  ${pid} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_llm-${RSPAMD_PORT_DUMMY_HTTP}.pid
+  ${log} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_llm-${RSPAMD_PORT_DUMMY_HTTP}.log
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_llm.py  ${RSPAMD_PORT_DUMMY_HTTP}  ${pid}
+  ...  stderr=${log}  stdout=${log}
+  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  ${pid}  timeout=2 second
   IF  '${status}' == 'FAIL'
-    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_llm.log
+    ${logstatus}  ${out} =  Run Keyword And Ignore Error  Get File  ${log}
     IF  '${logstatus}' == 'PASS'
-      Log  dummy_llm.py failed to start. Log output:\n${log}  level=ERROR
+      Log  dummy_llm.py failed to start. Log output:\n${out}  level=ERROR
     ELSE
-      Log  dummy_llm.py failed to start. No log file found at /tmp/dummy_llm.log  level=ERROR
+      Log  dummy_llm.py failed to start. No log file found at ${log}  level=ERROR
     END
     Fail  dummy_llm.py did not create PID file in 2 seconds
   END
@@ -581,15 +631,17 @@ Dummy Https Teardown
   Wait For Process  ${DUMMY_HTTPS_PROC}
 
 Run Dummy Http Early Response
-  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http_early_response.py  -pf  /tmp/dummy_http_early.pid  -p  18083
-  ...  stderr=/tmp/dummy_http_early.log  stdout=/tmp/dummy_http_early.log
-  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_http_early.pid  timeout=2 second
+  ${pid} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_http_early-${RSPAMD_PORT_DUMMY_HTTP_EARLY}.pid
+  ${log} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_http_early-${RSPAMD_PORT_DUMMY_HTTP_EARLY}.log
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http_early_response.py  -pf  ${pid}  -p  ${RSPAMD_PORT_DUMMY_HTTP_EARLY}
+  ...  stderr=${log}  stdout=${log}
+  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  ${pid}  timeout=2 second
   IF  '${status}' == 'FAIL'
-    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_http_early.log
+    ${logstatus}  ${out} =  Run Keyword And Ignore Error  Get File  ${log}
     IF  '${logstatus}' == 'PASS'
-      Log  dummy_http_early_response.py failed to start. Log output:\n${log}  level=ERROR
+      Log  dummy_http_early_response.py failed to start. Log output:\n${out}  level=ERROR
     ELSE
-      Log  dummy_http_early_response.py failed to start. No log file found at /tmp/dummy_http_early.log  level=ERROR
+      Log  dummy_http_early_response.py failed to start. No log file found at ${log}  level=ERROR
     END
     Fail  dummy_http_early_response.py did not create PID file in 2 seconds
   END

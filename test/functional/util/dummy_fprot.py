@@ -7,8 +7,7 @@ import socketserver
 import sys
 
 import dummy_killer
-
-PID = "/tmp/dummy_fprot.pid"
+import dummy_pidfile
 
 class MyTCPHandler(socketserver.BaseRequestHandler):
 
@@ -28,15 +27,18 @@ if __name__ == "__main__":
     if alen > 1:
         port = int(sys.argv[1])
         if alen >= 4:
-            PID = sys.argv[3]
+            pid_path = sys.argv[3]
             foundvirus = bool(sys.argv[2])
         elif alen >= 3:
+            pid_path = dummy_pidfile.pid_path('fprot', port)
             foundvirus = bool(sys.argv[2])
         else:
+            pid_path = dummy_pidfile.pid_path('fprot', port)
             foundvirus = False
     else:
         port = 10200
         foundvirus = False
+        pid_path = dummy_pidfile.pid_path('fprot', port)
 
     server = socketserver.TCPServer((HOST, port), MyTCPHandler, bind_and_activate=False)
     server.allow_reuse_address = True
@@ -45,7 +47,7 @@ if __name__ == "__main__":
     server.server_activate()
 
     dummy_killer.setup_killer(server)
-    dummy_killer.write_pid(PID)
+    dummy_killer.write_pid(pid_path)
 
     try:
         server.handle_request()

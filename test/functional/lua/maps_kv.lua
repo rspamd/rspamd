@@ -82,9 +82,13 @@ rspamd_config:register_symbol({
   end,
 })
 
+-- dummy_http port comes from the test harness; rspamd_env strips the
+-- RSPAMD_ prefix so env.PORT_DUMMY_HTTP carries the per-pabot-worker
+-- slot value. Default to the historical literal for ad-hoc runs.
+local dummy_http_port = tonumber(rspamd_env and rspamd_env.PORT_DUMMY_HTTP) or 18080
 local simple_ext_map = lua_maps.map_add_from_ucl({
   external = true,
-  backend = "http://127.0.0.1:18080/map-simple",
+  backend = string.format("http://127.0.0.1:%d/map-simple", dummy_http_port),
   method = "body",
   encode = "json",
 }, '', 'external map')
