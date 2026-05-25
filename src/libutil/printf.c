@@ -40,7 +40,7 @@
 
 #include "printf.h"
 #include "str_util.h"
-#include "contrib/fpconv/fpconv.h"
+#include "contrib/fpconv/fpconv_format.h"
 
 /**
  * From FreeBSD libutil code
@@ -981,7 +981,7 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 
 			case 'f':
 				f = (double) va_arg(args, double);
-				slen = fpconv_dtoa(f, dtoabuf,
+				slen = fpconv_format_dtoa(f, dtoabuf,
 						frac_specified ? frac_width : FPCONV_PRECISION_ALL,
 						false);
 
@@ -991,7 +991,7 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 
 			case 'g':
 				f = (double) va_arg(args, double);
-				slen = fpconv_dtoa(f, dtoabuf,
+				slen = fpconv_format_dtoa(f, dtoabuf,
 						frac_specified ? frac_width : FPCONV_PRECISION_ALL,
 						true);
 				RSPAMD_PRINTF_APPEND(dtoabuf, slen);
@@ -1000,7 +1000,7 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 
 			case 'F':
 				f = (double) va_arg(args, long double);
-				slen = fpconv_dtoa(f, dtoabuf,
+				slen = fpconv_format_dtoa(f, dtoabuf,
 						frac_specified ? frac_width : FPCONV_PRECISION_ALL,
 						false);
 
@@ -1010,7 +1010,7 @@ glong rspamd_vprintf_common(rspamd_printf_append_func func,
 
 			case 'G':
 				f = (double) va_arg(args, long double);
-				slen = fpconv_dtoa(f, dtoabuf,
+				slen = fpconv_format_dtoa(f, dtoabuf,
 						frac_specified ? frac_width : FPCONV_PRECISION_ALL,
 						true);
 				RSPAMD_PRINTF_APPEND(dtoabuf, slen);

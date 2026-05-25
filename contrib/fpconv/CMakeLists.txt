@@ -1,4 +1,4 @@
-SET(FPCONVSRC            fpconv.c)
+SET(FPCONVSRC            fpconv.c fpconv_format.c)
 
 SET(FTPCONV_COMPILE_FLAGS "-DRSPAMD_LIB")
 

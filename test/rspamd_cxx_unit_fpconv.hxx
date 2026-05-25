@@ -21,7 +21,7 @@
 #include "doctest/doctest.h"
 
 extern "C" {
-#include "contrib/fpconv/fpconv.h"
+#include "contrib/fpconv/fpconv_format.h"
 }
 
 #include <string>
@@ -34,7 +34,7 @@ TEST_SUITE("fpconv")
 	static std::string dtoa(double d, unsigned precision = 0, bool scientific = false)
 	{
 		char buf[FPCONV_BUFLEN];
-		int len = fpconv_dtoa(d, buf, precision, scientific);
+		int len = fpconv_format_dtoa(d, buf, precision, scientific);
 		return std::string(buf, len);
 	}
 
