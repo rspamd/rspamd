@@ -9,14 +9,19 @@ ${SETTINGS_NOSYMBOLS}  {symbols_enabled = []}
 
 *** Test Cases ***
 Controller SSL - stat
-  [Documentation]  Fetch /stat over HTTPS from the controller SSL port
-  @{result} =  HTTPS  GET  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_CONTROLLER_SSL}  /stat
-  Should Be Equal As Integers  ${result}[0]  200
+  [Documentation]  Fetch /stat over HTTPS from the controller SSL port.
+  ...              rspamd registers workers with main slightly before
+  ...              the controller's SSL listener finishes its OpenSSL
+  ...              init and starts accepting connections; when this
+  ...              test is the first one against a fresh rspamd the
+  ...              SSL port may briefly refuse. Retry until it serves.
+  Wait Until Keyword Succeeds  15x  0.4s
+  ...  Fetch HTTPS And Expect 200  ${RSPAMD_PORT_CONTROLLER_SSL}  /stat
 
 Controller SSL - errors
   [Documentation]  Fetch /errors over HTTPS from the controller SSL port
-  @{result} =  HTTPS  GET  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_CONTROLLER_SSL}  /errors
-  Should Be Equal As Integers  ${result}[0]  200
+  Wait Until Keyword Succeeds  15x  0.4s
+  ...  Fetch HTTPS And Expect 200  ${RSPAMD_PORT_CONTROLLER_SSL}  /errors
 
 Controller plain still works alongside SSL
   [Documentation]  Plain HTTP controller port must still work when SSL port is also configured
@@ -37,3 +42,9 @@ Normal worker plain still works alongside SSL
   [Documentation]  Plain HTTP normal port must still work when SSL port is also configured
   Scan File  ${GTUBE}  Settings=${SETTINGS_NOSYMBOLS}
   Expect Symbol  GTUBE
+
+*** Keywords ***
+Fetch HTTPS And Expect 200
+  [Arguments]  ${port}  ${path}
+  @{result} =  HTTPS  GET  ${RSPAMD_LOCAL_ADDR}  ${port}  ${path}
+  Should Be Equal As Integers  ${result}[0]  200
