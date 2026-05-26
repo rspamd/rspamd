@@ -18,7 +18,10 @@
 #define RSPAMD_COMPOSITES_INTERNAL_HXX
 #pragma once
 
+#include <memory>
 #include <string>
+#include <vector>
+#include "contrib/ankerl/unordered_dense.h"
 #include "libutil/expression.h"
 #include "libutil/util.h"
 #include "libutil/cxx/hash_util.hxx"
@@ -50,6 +53,43 @@ struct rspamd_composite {
 	rspamd_composite_policy policy;
 	bool second_pass;        /**< true if this composite needs second pass evaluation */
 	bool has_positive_atoms; /**< true if composite has at least one non-negated atom */
+	bool disabled;           /**< true if composite is a placeholder stub (evaluates to false) */
+};
+
+/**
+ * A composites generation: an immutable-once-published snapshot of all
+ * composites and their precomputed evaluation indices.
+ *
+ * The manager holds one current generation. On dynamic map reloads a new
+ * generation is built off-line and atomically swapped in; in-flight tasks
+ * keep using their snapshot (held via shared_ptr in composites_data).
+ */
+struct composites_generation {
+	ankerl::unordered_dense::map<std::string,
+								 std::shared_ptr<rspamd_composite>,
+								 rspamd::smart_str_hash, rspamd::smart_str_equal>
+		composites;
+	/* Ownership of every composite belongs here (including duplicates) */
+	std::vector<std::shared_ptr<rspamd_composite>> all_composites;
+
+	/* Two-phase evaluation buckets */
+	std::vector<rspamd_composite *> first_pass_composites;
+	std::vector<rspamd_composite *> second_pass_composites;
+
+	/* Inverted index: symbol -> composites that contain this symbol as positive atom */
+	ankerl::unordered_dense::map<std::string, std::vector<rspamd_composite *>,
+								 rspamd::smart_str_hash, rspamd::smart_str_equal>
+		symbol_to_composites;
+	/* Composites that have only negated atoms or group matchers (must always be checked) */
+	std::vector<rspamd_composite *> not_only_composites;
+
+	uint64_t generation_id = 0;
+
+	auto find(std::string_view name) const -> const rspamd_composite *
+	{
+		auto found = composites.find(std::string(name));
+		return found != composites.end() ? found->second.get() : nullptr;
+	}
 };
 
 #define COMPOSITE_MANAGER_FROM_PTR(ptr) (reinterpret_cast<rspamd::composites::composites_manager *>(ptr))
@@ -68,29 +108,51 @@ struct composites_stats {
 class composites_manager {
 public:
 	composites_manager(struct rspamd_config *_cfg)
-		: cfg(_cfg), use_inverted_index(true)
+		: cfg(_cfg),
+		  current_gen(std::make_shared<composites_generation>()),
+		  use_inverted_index(true)
 	{
 		rspamd_mempool_add_destructor(_cfg->cfg_pool, composites_manager_dtor, this);
 	}
 
 	auto size(void) const -> std::size_t
 	{
-		return all_composites.size();
+		return current_gen->all_composites.size();
 	}
 
 	auto find(std::string_view name) const -> const rspamd_composite *
 	{
-		auto found = composites.find(std::string(name));
+		return current_gen->find(name);
+	}
 
-		if (found != composites.end()) {
-			return found->second.get();
-		}
-
-		return nullptr;
+	/**
+	 * Snapshot the current generation. Callers (tasks) keep this shared_ptr
+	 * alive for the duration of evaluation so a concurrent reload cannot
+	 * pull the rug out from under them.
+	 */
+	auto snapshot_generation() const -> std::shared_ptr<composites_generation>
+	{
+		return current_gen;
 	}
 
 	auto add_composite(std::string_view, const ucl_object_t *, bool silent_duplicate) -> rspamd_composite *;
 	auto add_composite(std::string_view name, std::string_view expression, bool silent_duplicate, double score = NAN) -> rspamd_composite *;
+
+	/* Allocate a fresh monotonic composite id (stable across generations) */
+	auto next_id() -> int
+	{
+		return next_composite_id++;
+	}
+
+	auto get_cfg() const -> struct rspamd_config *
+	{
+		return cfg;
+	}
+
+	auto current() const -> composites_generation *
+	{
+		return current_gen.get();
+	}
 
 private:
 	~composites_manager() = default;
@@ -102,38 +164,27 @@ private:
 	auto new_composite(std::string_view composite_name, rspamd_expression *expr,
 					   std::string_view composite_expression) -> auto
 	{
-		auto &composite = all_composites.emplace_back(std::make_shared<rspamd_composite>());
+		auto &gen = *current_gen;
+		auto &composite = gen.all_composites.emplace_back(std::make_shared<rspamd_composite>());
 		composite->expr = expr;
-		composite->id = all_composites.size() - 1;
+		composite->id = next_id();
 		composite->str_expr = composite_expression;
 		composite->sym = composite_name;
 		composite->second_pass = false; /* Initially all composites are first pass */
+		composite->disabled = false;
 
-		composites[composite->sym] = composite;
+		gen.composites[composite->sym] = composite;
 
 		return composite;
 	}
 
-	ankerl::unordered_dense::map<std::string,
-								 std::shared_ptr<rspamd_composite>, rspamd::smart_str_hash, rspamd::smart_str_equal>
-		composites;
-	/* Store all composites here, even if we have duplicates */
-	std::vector<std::shared_ptr<rspamd_composite>> all_composites;
-
 	struct rspamd_config *cfg;
+	int next_composite_id = 0;
+
+	/* The live generation. Replaced on dynamic-map reload via publish_generation(). */
+	std::shared_ptr<composites_generation> current_gen;
 
 public:
-	/* Two-phase evaluation: composites are split into first and second pass */
-	std::vector<rspamd_composite *> first_pass_composites;  /* Evaluated during COMPOSITES stage */
-	std::vector<rspamd_composite *> second_pass_composites; /* Evaluated during COMPOSITES_POST stage */
-
-	/* Inverted index: symbol -> composites that contain this symbol as positive atom */
-	ankerl::unordered_dense::map<std::string, std::vector<rspamd_composite *>,
-								 rspamd::smart_str_hash, rspamd::smart_str_equal>
-		symbol_to_composites;
-	/* Composites that have only negated atoms (must always be checked) */
-	std::vector<rspamd_composite *> not_only_composites;
-
 	/* Configuration flags */
 	bool use_inverted_index; /**< Use inverted index for fast composite lookup (default: true) */
 
@@ -147,13 +198,6 @@ public:
 	/* Mark symbols used in whitelist composites (negative score) as FINE */
 	void mark_whitelist_dependencies();
 };
-
-/**
- * Precompute atom types (ATOM_COMPOSITE vs ATOM_PLAIN) for all composites.
- * This eliminates lazy lookups during expression evaluation.
- * Should be called after all composites are registered.
- */
-void rspamd_composites_resolve_atom_types(composites_manager *cm);
 
 }// namespace rspamd::composites
 
