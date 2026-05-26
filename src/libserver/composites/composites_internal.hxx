@@ -154,6 +154,89 @@ public:
 		return current_gen.get();
 	}
 
+	/**
+	 * Snapshot current_gen as base_gen — every future staging generation
+	 * starts from a clone of base_gen. Called once after static config has
+	 * been loaded and the first round of process_dependencies /
+	 * build_inverted_index / mark_whitelist_dependencies has completed.
+	 */
+	auto pin_base_generation() -> void
+	{
+		base_gen = current_gen;
+	}
+
+	auto get_base_generation() const -> std::shared_ptr<composites_generation>
+	{
+		return base_gen;
+	}
+
+	/**
+	 * Build a fresh staging generation off the pinned base. Composites from
+	 * base_gen are cloned (new shared_ptr, fresh id, flags reset) so the
+	 * staging can run process_dependencies / build_inverted_index without
+	 * mutating composites that in-flight tasks may still be observing.
+	 *
+	 * Callers (the dynamic-map fin callback) layer the map's composites on
+	 * top, then call publish_generation().
+	 */
+	auto build_staging() -> std::shared_ptr<composites_generation>;
+
+	/**
+	 * Apply a single UCL composite definition to a staging generation.
+	 * Parses the expression, creates a fresh composite struct, replaces any
+	 * existing entry under this name, and updates cfg->symbols so scoring
+	 * and FINE-flag propagation see the dynamic composite. Returns the new
+	 * composite or nullptr on parse/validation failure.
+	 */
+	auto add_composite_to_staging(composites_generation &staging,
+								  std::string_view name,
+								  const ucl_object_t *obj) -> rspamd_composite *;
+
+	/**
+	 * Replace the composite under `name` in `staging` with a disabled stub
+	 * (or insert one if the name was unknown). Returns true if a stub was
+	 * (re)created.
+	 */
+	auto disable_in_staging(composites_generation &staging,
+							const std::string &name) -> bool;
+
+	/**
+	 * Publish a staging generation as current:
+	 *  - register new composite names with the symcache + cfg->symbols
+	 *  - update ever_seen_names
+	 *  - bump the resort generation on the symcache
+	 *  - run process_dependencies / build_inverted_index / mark_whitelist
+	 *  - atomically swap current_gen
+	 *
+	 * Single-threaded libev makes the swap a plain assignment; in-flight
+	 * tasks keep their snapshot alive via shared_ptr.
+	 */
+	auto publish_generation(std::shared_ptr<composites_generation> staging) -> void;
+
+	/**
+	 * Capture current_gen as the static-config base. Subsequent
+	 * build_staging() calls clone from this snapshot. Populates
+	 * ever_seen_names from the static composites so they aren't
+	 * re-registered with the symcache on first dynamic publish. Idempotent
+	 * — calling more than once is a no-op.
+	 */
+	auto seal_static_load() -> void;
+
+	/**
+	 * Returns the set of composite names this manager has ever published.
+	 * Map handlers consult this to materialise disabled stubs for names
+	 * that previously existed and have now been removed.
+	 */
+	auto ever_seen() const -> const ankerl::unordered_dense::set<std::string> &
+	{
+		return ever_seen_names;
+	}
+
+	auto allocate_generation_id() -> uint64_t
+	{
+		return ++next_gen_id;
+	}
+
 private:
 	~composites_manager() = default;
 	static void composites_manager_dtor(void *ptr)
@@ -180,9 +263,28 @@ private:
 
 	struct rspamd_config *cfg;
 	int next_composite_id = 0;
+	uint64_t next_gen_id = 0;
 
 	/* The live generation. Replaced on dynamic-map reload via publish_generation(). */
 	std::shared_ptr<composites_generation> current_gen;
+
+	/* Snapshot of the static-config generation, taken after config-load.
+	 * Every staging generation is cloned from this. */
+	std::shared_ptr<composites_generation> base_gen;
+
+	/* Names this manager has ever published (static or dynamic). Monotonic.
+	 * Used to (a) gate one-time symcache + cfg->symbols registration and
+	 * (b) help map handlers materialise disabled stubs for vanished names. */
+	ankerl::unordered_dense::set<std::string> ever_seen_names;
+
+	/* The composite shared_ptr each name was first registered with in the
+	 * symcache. The symcache stores raw cbdata; pinning the shared_ptr here
+	 * guarantees it never dangles even when later generations replace the
+	 * composite under the same name. Static composites are already pinned
+	 * via base_gen → all_composites so this map only fills in for
+	 * dynamic-only names. */
+	ankerl::unordered_dense::map<std::string, std::shared_ptr<rspamd_composite>>
+		symcache_pinned;
 
 public:
 	/* Configuration flags */
