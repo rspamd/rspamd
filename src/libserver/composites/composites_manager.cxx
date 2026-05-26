@@ -362,7 +362,7 @@ symbol_needs_second_pass(struct rspamd_config *cfg, const char *symbol_name)
 struct composite_dep_cbdata {
 	struct rspamd_config *cfg;
 	bool needs_second_pass;
-	composites_manager *cm;
+	composites_generation *gen;
 };
 
 static void
@@ -385,8 +385,9 @@ composite_dep_callback(const rspamd_ftok_t *atom, gpointer ud)
 		return;
 	}
 
-	/* Check if this is a reference to another composite */
-	if (auto *dep_comp = cbd->cm->find(atom_str); dep_comp != nullptr) {
+	/* Check if this is a reference to another composite within the
+	 * generation being built */
+	if (auto *dep_comp = cbd->gen->find(atom_str); dep_comp != nullptr) {
 		/* Dependency on another composite - will be handled in transitive pass */
 		return;
 	}
@@ -401,11 +402,10 @@ composite_dep_callback(const rspamd_ftok_t *atom, gpointer ud)
 	}
 }
 
-void composites_manager::process_dependencies()
+void composites_manager::process_dependencies(composites_generation &gen)
 {
 	ankerl::unordered_dense::set<rspamd_composite *> second_pass_set;
 	bool changed;
-	auto &gen = *current_gen;
 
 	msg_debug_config("analyzing composite dependencies for two-phase evaluation (gen %L)",
 					 (int64_t) gen.generation_id);
@@ -426,7 +426,7 @@ void composites_manager::process_dependencies()
 
 	/* First pass: mark composites that directly depend on postfilters/stats */
 	for (auto *comp: gen.first_pass_composites) {
-		composite_dep_cbdata cbd{cfg, false, this};
+		composite_dep_cbdata cbd{cfg, false, &gen};
 
 		rspamd_expression_atom_foreach(comp->expr,
 									   composite_dep_callback,
@@ -451,15 +451,15 @@ void composites_manager::process_dependencies()
 
 			/* Helper struct for lambda capture */
 			struct trans_check_data {
-				composites_manager *cm;
+				composites_generation *gen;
 				ankerl::unordered_dense::set<rspamd_composite *> *second_pass_set;
 				bool *has_dep;
-			} trans_data{this, &second_pass_set, &has_second_pass_dep};
+			} trans_data{&gen, &second_pass_set, &has_second_pass_dep};
 
 			rspamd_expression_atom_foreach(comp->expr, [](const rspamd_ftok_t *atom, gpointer ud) {
 											   auto *data = reinterpret_cast<trans_check_data *>(ud);
 											   std::string_view atom_str(atom->begin, atom->len);
-											   if (auto *dep_comp = data->cm->find(atom_str); dep_comp != nullptr) {
+											   if (auto *dep_comp = data->gen->find(atom_str); dep_comp != nullptr) {
 												   /* Cast away const since we know this points to a modifiable composite */
 												   if (data->second_pass_set->contains(const_cast<rspamd_composite *>(dep_comp))) {
 													   *data->has_dep = true;
@@ -561,7 +561,7 @@ extract_atom_symbol_name(const rspamd_expression_atom_t *atom)
  * for a composite. Handles transitive composite references with cycle detection.
  */
 static void
-collect_leaf_atoms(composites_manager *cm, const rspamd_composite *comp,
+collect_leaf_atoms(composites_generation &gen, const rspamd_composite *comp,
 				   ankerl::unordered_dense::set<std::string> &leaf_atoms,
 				   ankerl::unordered_dense::set<int> &visited)
 {
@@ -571,10 +571,10 @@ collect_leaf_atoms(composites_manager *cm, const rspamd_composite *comp,
 	visited.insert(comp->id);
 
 	struct walk_data {
-		composites_manager *cm;
+		composites_generation *gen;
 		ankerl::unordered_dense::set<std::string> *leaves;
 		ankerl::unordered_dense::set<int> *visited;
-	} wd{cm, &leaf_atoms, &visited};
+	} wd{&gen, &leaf_atoms, &visited};
 
 	rspamd_expression_atom_foreach_ex(comp->expr, [](GNode *node, rspamd_expression_atom_t *atom, gpointer ud) {
 			auto *wd = reinterpret_cast<walk_data *>(ud);
@@ -588,10 +588,10 @@ collect_leaf_atoms(composites_manager *cm, const rspamd_composite *comp,
 				return;
 			}
 
-			auto *ref = wd->cm->find(sym);
+			auto *ref = wd->gen->find(sym);
 			if (ref != nullptr) {
 				/* Atom is a composite reference - recurse into it */
-				collect_leaf_atoms(wd->cm, ref, *wd->leaves, *wd->visited);
+				collect_leaf_atoms(*wd->gen, ref, *wd->leaves, *wd->visited);
 			}
 			else {
 				wd->leaves->insert(std::move(sym));
@@ -600,7 +600,7 @@ collect_leaf_atoms(composites_manager *cm, const rspamd_composite *comp,
 
 /* Context for building inverted index */
 struct inverted_index_cbdata {
-	composites_manager *cm;
+	composites_generation *gen;
 	rspamd_composite *comp;
 	bool has_positive;
 	bool has_group_atom; /* Composite uses group matcher (g:, g+:, g-:) */
@@ -645,15 +645,12 @@ inverted_index_atom_callback(GNode *atom_node, rspamd_expression_atom_t *atom, g
 	/* Mark that we have at least one positive atom */
 	cbd->has_positive = true;
 
-	/* Add to inverted index (always the manager's *current* generation, which
-	 * is what build_inverted_index operates on) */
-	cbd->cm->current()->symbol_to_composites[symbol_name].push_back(cbd->comp);
+	/* Add to inverted index in the generation being built */
+	cbd->gen->symbol_to_composites[symbol_name].push_back(cbd->comp);
 }
 
-void composites_manager::build_inverted_index()
+void composites_manager::build_inverted_index(composites_generation &gen)
 {
-	auto &gen = *current_gen;
-
 	msg_debug_config("building inverted index for %d composites (gen %L)",
 					 (int) gen.all_composites.size(), (int64_t) gen.generation_id);
 
@@ -667,7 +664,7 @@ void composites_manager::build_inverted_index()
 			continue;
 		}
 
-		inverted_index_cbdata cbd{this, comp.get(), false, false};
+		inverted_index_cbdata cbd{&gen, comp.get(), false, false};
 
 		rspamd_expression_atom_foreach_ex(comp->expr, inverted_index_atom_callback, &cbd);
 
@@ -705,7 +702,7 @@ void composites_manager::build_inverted_index()
 	 */
 	ankerl::unordered_dense::set<std::string> composite_keys;
 	for (const auto &[sym, _]: gen.symbol_to_composites) {
-		if (find(sym) != nullptr) {
+		if (gen.find(sym) != nullptr) {
 			composite_keys.insert(sym);
 		}
 	}
@@ -721,12 +718,12 @@ void composites_manager::build_inverted_index()
 			}
 
 			auto dependents = it->second; /* Copy before modifying the map */
-			auto *ref_comp = find(comp_key);
+			auto *ref_comp = gen.find(comp_key);
 
 			/* Collect all leaf (non-composite) atoms reachable from this composite */
 			ankerl::unordered_dense::set<std::string> leaf_atoms;
 			ankerl::unordered_dense::set<int> visited;
-			collect_leaf_atoms(this, ref_comp, leaf_atoms, visited);
+			collect_leaf_atoms(gen, ref_comp, leaf_atoms, visited);
 
 			/* Propagate dependents to each leaf atom's index entry */
 			for (const auto &leaf: leaf_atoms) {
@@ -824,10 +821,9 @@ whitelist_atom_callback(const rspamd_ftok_t *atom, gpointer ud)
 	}
 }
 
-void composites_manager::mark_whitelist_dependencies()
+void composites_manager::mark_whitelist_dependencies(composites_generation &gen)
 {
 	ankerl::unordered_dense::set<std::string> fine_symbols;
-	auto &gen = *current_gen;
 
 	msg_debug_config("analyzing whitelist composites for FINE symbol marking (gen %L)",
 					 (int64_t) gen.generation_id);

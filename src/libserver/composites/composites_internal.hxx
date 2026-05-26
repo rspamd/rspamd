@@ -191,12 +191,31 @@ public:
 	/* Statistics (updated probabilistically for performance) */
 	composites_stats stats{};
 
-	/* Analyze composite dependencies and split into first/second pass vectors */
-	void process_dependencies();
-	/* Build inverted index for fast composite lookup */
-	void build_inverted_index();
-	/* Mark symbols used in whitelist composites (negative score) as FINE */
-	void mark_whitelist_dependencies();
+	/* Analyze composite dependencies and split a generation into first/second
+	 * pass vectors. The no-arg form operates on current_gen for compatibility
+	 * with config-load wiring. */
+	void process_dependencies(composites_generation &gen);
+	void process_dependencies()
+	{
+		process_dependencies(*current_gen);
+	}
+
+	/* Build inverted index for fast composite lookup in the given generation. */
+	void build_inverted_index(composites_generation &gen);
+	void build_inverted_index()
+	{
+		build_inverted_index(*current_gen);
+	}
+
+	/* Mark symbols used in whitelist composites (negative score) as FINE.
+	 * Always operates against the manager's cfg symcache; the generation
+	 * argument selects which whitelist composites contribute to the
+	 * FINE-symbol set. */
+	void mark_whitelist_dependencies(composites_generation &gen);
+	void mark_whitelist_dependencies()
+	{
+		mark_whitelist_dependencies(*current_gen);
+	}
 };
 
 }// namespace rspamd::composites
