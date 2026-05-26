@@ -1808,41 +1808,26 @@ bogon_ip_map = lua_maps.map_add_from_ucl(bogon_cidrs, 'radix',
   'mx_check BOGON ranges (loopback, link-local, TEST-NET, multicast, etc.)')
 
 if settings.exclude_domains then
-  exclude_domains = rspamd_config:add_map {
-    type = 'glob',
-    description = 'Exclude specific domains from MX checks',
-    url = settings.exclude_domains,
-  }
+  exclude_domains = lua_maps.map_add('mx_check', 'exclude_domains', 'glob',
+    'Exclude specific domains from MX checks')
 end
 
 if settings.exclude_mxs then
-  exclude_mxs = rspamd_config:add_map {
-    type = 'glob',
-    description = 'Exclude specific MX hostnames from MX checks (m-layer trust)',
-    url = settings.exclude_mxs,
-  }
+  exclude_mxs = lua_maps.map_add('mx_check', 'exclude_mxs', 'glob',
+    'Exclude specific MX hostnames from MX checks (m-layer trust)')
 end
 
 if settings.exclude_ips then
-  exclude_ips = rspamd_config:add_map {
-    type = 'radix',
-    description = 'Exclude specific IPs/CIDRs from MX probing (i-layer skip)',
-    url = settings.exclude_ips,
-  }
+  exclude_ips = lua_maps.map_add('mx_check', 'exclude_ips', 'radix',
+    'Exclude specific IPs/CIDRs from MX probing (i-layer skip)')
 end
 
 if settings.bad_mxs then
-  bad_mxs = rspamd_config:add_map {
-    type = 'glob',
-    description = 'Punish specific MX hostnames (short-circuits with MX_BAD)',
-    url = settings.bad_mxs,
-  }
+  bad_mxs = lua_maps.map_add('mx_check', 'bad_mxs', 'glob',
+    'Punish specific MX hostnames (short-circuits with MX_BAD)')
 end
 
 if settings.bad_ips then
-  bad_ips = rspamd_config:add_map {
-    type = 'radix',
-    description = 'Punish specific IPs/CIDRs (short-circuits with MX_IP_BAD)',
-    url = settings.bad_ips,
-  }
+  bad_ips = lua_maps.map_add('mx_check', 'bad_ips', 'radix',
+    'Punish specific IPs/CIDRs (short-circuits with MX_IP_BAD)')
 end

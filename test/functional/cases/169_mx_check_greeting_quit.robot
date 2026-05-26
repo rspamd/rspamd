@@ -19,7 +19,7 @@ ${SLOW_STATUS}        /tmp/dummy_smtp_greeting_slow.status
 
 *** Test Cases ***
 Multi-line greeting with send_quit=true emits MX_GOOD with QUIT after final line
-  Scan File  ${MESSAGE}  From=test@greetingsmtp.test  Settings=${SETTINGS}
+  Scan File  ${MESSAGE}  From=test@multigreetsmtp.test  Settings=${SETTINGS}
   Expect Symbol  MX_GOOD
   Sleep  0.5s
   ${status} =  Get File  ${PROPER_STATUS}
@@ -44,10 +44,10 @@ Start Greeting Dummy
   Wait Until Created  /tmp/dummy_smtp_${pid_suffix}.pid  timeout=2 second
 
 Mx Quit Setup
-  Start Greeting Dummy  127.0.0.2  0.2  ${PROPER_STATUS}  greeting_proper
+  Start Greeting Dummy  127.0.0.6  0.2  ${PROPER_STATUS}  greeting_proper
   Start Greeting Dummy  127.0.0.5  2.0  ${SLOW_STATUS}    greeting_slow
   Rspamd Redis Setup
 
 Mx Quit Teardown
-  Terminate All Processes  kill=True
   Rspamd Redis Teardown
+  Terminate All Processes  kill=True

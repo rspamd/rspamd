@@ -63,5 +63,5 @@ Mx Greeting Setup
   Rspamd Redis Setup
 
 Mx Greeting Teardown
-  Terminate All Processes  kill=True
   Rspamd Redis Teardown
+  Terminate All Processes  kill=True
