@@ -36,9 +36,7 @@ struct event_loop;
 struct rspamd_dns_resolver {
 	struct rdns_resolver *r;
 	struct ev_loop *event_loop;
-	rspamd_lru_hash_t *fails_cache;
 	void *uidna;
-	double fails_cache_time;
 	struct upstream_list *ups;
 	struct rspamd_config *cfg;
 	double request_timeout;
