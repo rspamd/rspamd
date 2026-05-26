@@ -62,12 +62,6 @@ struct rspamd_dns_request_ud {
 	struct rdns_reply *reply;
 };
 
-struct rspamd_dns_fail_cache_entry {
-	const char *name;
-	int32_t namelen;
-	enum rdns_request_type type;
-};
-
 static const int8_t ascii_dns_table[128] = {
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
@@ -82,30 +76,6 @@ static const int8_t ascii_dns_table[128] = {
 	/* LATIN SMALL LETTER A..LATIN SMALL LETTER Z */
 	-1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1};
-
-static unsigned int
-rspamd_dns_fail_hash(gconstpointer ptr)
-{
-	struct rspamd_dns_fail_cache_entry *elt =
-		(struct rspamd_dns_fail_cache_entry *) ptr;
-
-	/* We don't care about type when doing hashing */
-	return rspamd_cryptobox_fast_hash(elt->name, elt->namelen,
-									  rspamd_hash_seed());
-}
-
-static gboolean
-rspamd_dns_fail_equal(gconstpointer p1, gconstpointer p2)
-{
-	struct rspamd_dns_fail_cache_entry *e1 = (struct rspamd_dns_fail_cache_entry *) p1,
-									   *e2 = (struct rspamd_dns_fail_cache_entry *) p2;
-
-	if (e1->type == e2->type && e1->namelen == e2->namelen) {
-		return memcmp(e1->name, e2->name, e1->namelen) == 0;
-	}
-
-	return FALSE;
-}
 
 static void
 rspamd_dns_fin_cb(gpointer arg)
@@ -152,32 +122,6 @@ rspamd_dns_callback(struct rdns_reply *reply, gpointer ud)
 
 
 	if (reqdata->session) {
-		if (reply->code == RDNS_RC_SERVFAIL &&
-			reqdata->task &&
-			reqdata->task->resolver->fails_cache) {
-
-			/* Add to cache... */
-			const char *name = reqdata->req->requested_names[0].name;
-			char *target;
-			gsize namelen;
-			struct rspamd_dns_fail_cache_entry *nentry;
-
-			/* Allocate in a single entry to allow further free in a single call */
-			namelen = strlen(name);
-			nentry = g_malloc(sizeof(nentry) + namelen + 1);
-			target = ((char *) nentry) + sizeof(nentry);
-			rspamd_strlcpy(target, name, namelen + 1);
-			nentry->type = reqdata->req->requested_names[0].type;
-			nentry->name = target;
-			nentry->namelen = namelen;
-
-			/* Rdns request is retained there */
-			rspamd_lru_hash_insert(reqdata->task->resolver->fails_cache,
-								   nentry, rdns_request_retain(reply->request),
-								   reqdata->task->task_timestamp,
-								   reqdata->task->resolver->fails_cache_time);
-		}
-
 		/*
 		 * Ref event to avoid double unref by
 		 * event removing
@@ -292,31 +236,6 @@ rspamd_dns_resolver_request(struct rspamd_dns_resolver *resolver,
 	return reqdata;
 }
 
-struct rspamd_dns_cached_delayed_cbdata {
-	struct rspamd_task *task;
-	dns_callback_type cb;
-	gpointer ud;
-	ev_timer tm;
-	struct rdns_request *req;
-};
-
-static void
-rspamd_fail_cache_cb(EV_P_ ev_timer *w, int revents)
-{
-	struct rspamd_dns_cached_delayed_cbdata *cbd =
-		(struct rspamd_dns_cached_delayed_cbdata *) w->data;
-	struct rdns_reply fake_reply;
-
-	ev_timer_stop(EV_A_ w);
-	memset(&fake_reply, 0, sizeof(fake_reply));
-	fake_reply.code = RDNS_RC_SERVFAIL;
-	fake_reply.request = cbd->req;
-	fake_reply.resolver = cbd->req->resolver;
-	fake_reply.requested_name = cbd->req->requested_names[0].name;
-	cbd->cb(&fake_reply, cbd->ud);
-	rdns_request_release(cbd->req);
-}
-
 static gboolean
 make_dns_request_task_common(struct rspamd_task *task,
 							 dns_callback_type cb,
@@ -329,35 +248,6 @@ make_dns_request_task_common(struct rspamd_task *task,
 
 	if (!forced && task->dns_requests >= task->cfg->dns_max_requests) {
 		return FALSE;
-	}
-
-	if (task->resolver->fails_cache) {
-		/* Search in failures cache */
-		struct rspamd_dns_fail_cache_entry search;
-		struct rdns_request *req;
-
-		search.name = name;
-		search.namelen = strlen(name);
-		search.type = type;
-
-		if ((req = rspamd_lru_hash_lookup(task->resolver->fails_cache,
-										  &search, task->task_timestamp)) != NULL) {
-			/*
-			 * We need to reply with SERVFAIL again to the API, so add a special
-			 * timer, uh-oh, and fire it
-			 */
-			struct rspamd_dns_cached_delayed_cbdata *cbd =
-				rspamd_mempool_alloc0(task->task_pool, sizeof(*cbd));
-
-			ev_timer_init(&cbd->tm, rspamd_fail_cache_cb, 0.0, 0.0);
-			cbd->task = task;
-			cbd->cb = cb;
-			cbd->ud = ud;
-			cbd->req = rdns_request_retain(req);
-			cbd->tm.data = cbd;
-
-			return TRUE;
-		}
 	}
 
 	reqdata = rspamd_dns_resolver_request(
@@ -809,9 +699,7 @@ rspamd_dns_resolver_config_ucl(struct rspamd_config *cfg,
 							   struct rspamd_dns_resolver *dns_resolver,
 							   const ucl_object_t *dns_section)
 {
-	const ucl_object_t *fake_replies, *fails_cache_size, *fails_cache_time,
-		*hosts;
-	static const ev_tstamp default_fails_cache_time = 10.0;
+	const ucl_object_t *fake_replies, *hosts;
 
 	/* Process fake replies */
 	fake_replies = ucl_object_lookup_any(dns_section, "fake_records",
@@ -853,22 +741,6 @@ rspamd_dns_resolver_config_ucl(struct rspamd_config *cfg,
 	else {
 		msg_err_config("invalid type for hosts parameter: %s",
 					   ucl_object_type_to_string(ucl_object_type(hosts)));
-	}
-
-	fails_cache_size = ucl_object_lookup(dns_section, "fails_cache_size");
-	if (fails_cache_size && ucl_object_type(fails_cache_size) == UCL_INT) {
-
-		dns_resolver->fails_cache_time = default_fails_cache_time;
-		fails_cache_time = ucl_object_lookup(dns_section, "fails_cache_time");
-
-		if (fails_cache_time) {
-			dns_resolver->fails_cache_time = ucl_object_todouble(fails_cache_time);
-		}
-
-		dns_resolver->fails_cache = rspamd_lru_hash_new_full(
-			ucl_object_toint(fails_cache_size),
-			g_free, (GDestroyNotify) rdns_request_release,
-			rspamd_dns_fail_hash, rspamd_dns_fail_equal);
 	}
 }
 
@@ -986,10 +858,6 @@ void rspamd_dns_resolver_deinit(struct rspamd_dns_resolver *resolver)
 
 		if (resolver->ups) {
 			rspamd_upstreams_destroy(resolver->ups);
-		}
-
-		if (resolver->fails_cache) {
-			rspamd_lru_hash_destroy(resolver->fails_cache);
 		}
 
 		uidna_close(resolver->uidna);
