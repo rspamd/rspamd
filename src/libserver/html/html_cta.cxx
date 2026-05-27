@@ -540,6 +540,14 @@ void rspamd_html_process_cta_urls(struct rspamd_mime_text_part *text_part,
          */
 		float weight = rspamd_html_url_button_weight(text_part->html, u);
 
+		/* A query-extracted URL (e.g. a wrapper's real target in ?u=...) owns no
+         * tag, so it has no weight; inherit its parent's so the real
+         * destination is also a CTA. */
+		if (weight <= 0.0 && (u->flags & RSPAMD_URL_FLAG_QUERY) &&
+			u->ext && u->ext->linked_url && u->ext->linked_url != u) {
+			weight = rspamd_html_url_button_weight(text_part->html, u->ext->linked_url);
+		}
+
 		if (weight > 0.0) {
 			if (rspamd_heap_size(rspamd_html_heap_storage, heap_ptr) < max_cta) {
 				rspamd_html_cta_entry entry = {

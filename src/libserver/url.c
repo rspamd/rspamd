@@ -3771,9 +3771,8 @@ rspamd_url_text_part_callback(struct rspamd_url *url, gsize start_offset,
 	if (url->querylen > 0) {
 		struct rspamd_url_mimepart_cbdata qcbd = *cbd;
 		qcbd.parent_flags = url->flags;
-		rspamd_url_find_multiple(task->task_pool,
-								 rspamd_url_query_unsafe(url), url->querylen,
-								 RSPAMD_URL_FIND_ALL, NULL,
+		rspamd_url_find_in_query(task->task_pool, url,
+								 RSPAMD_URL_FIND_ALL,
 								 rspamd_url_query_callback, &qcbd,
 								 task->cfg ? task->cfg->lua_state : NULL);
 	}
@@ -3856,6 +3855,63 @@ void rspamd_url_find_multiple(rspamd_mempool_t *pool,
 	}
 }
 
+void rspamd_url_find_in_query(rspamd_mempool_t *pool,
+							  struct rspamd_url *url,
+							  enum rspamd_url_find_type how,
+							  url_insert_function func,
+							  gpointer ud,
+							  void *lua_state)
+{
+	const char *raw, *query, *end, *p, *c;
+
+	if (url->raw == NULL || url->rawlen == 0) {
+		return;
+	}
+
+	/*
+	 * Use the raw (percent-encoded) query: an embedded URL's own separators are
+	 * %26/%3B there, so splitting on literal '&'/';' bounds it to its parameter
+	 * instead of greedily reading into the following parameters.
+	 */
+	raw = url->raw;
+	query = memchr(raw, '?', url->rawlen);
+	if (query == NULL) {
+		return;
+	}
+	query++; /* skip '?' */
+	end = raw + url->rawlen;
+
+	{
+		const char *frag = memchr(query, '#', end - query);
+		if (frag != NULL) {
+			end = frag;
+		}
+	}
+
+	p = query;
+	c = query;
+	while (p <= end) {
+		if (p == end || *p == '&' || *p == ';') {
+			if (p > c) {
+				/* Parameter [c, p): scan the value after the first '=' */
+				const char *eq = memchr(c, '=', p - c);
+				const char *vstart = eq ? eq + 1 : c;
+				gsize vlen = p - vstart;
+
+				if (vlen > 0) {
+					char *decoded = rspamd_mempool_alloc(pool, vlen + 1);
+					gsize dlen = rspamd_url_decode(decoded, vstart, vlen);
+					decoded[dlen] = '\0';
+					rspamd_url_find_multiple(pool, decoded, dlen, how, NULL,
+											 func, ud, lua_state);
+				}
+			}
+			c = p + 1;
+		}
+		p++;
+	}
+}
+
 void rspamd_url_find_single(rspamd_mempool_t *pool,
 							const char *in,
 							gsize inlen,
@@ -3912,15 +3968,40 @@ void rspamd_url_find_single(rspamd_mempool_t *pool,
 }
 
 
+struct rspamd_url_subject_query_cbd {
+	struct rspamd_task *task;
+	uint32_t parent_flags;
+};
+
+static gboolean
+rspamd_url_subject_query_callback(struct rspamd_url *query_url, gsize start_offset,
+								  gsize end_offset, gpointer ud)
+{
+	struct rspamd_url_subject_query_cbd *cbd = ud;
+	struct rspamd_task *task = cbd->task;
+
+	if (query_url->hostlen == 0) {
+		return TRUE;
+	}
+
+	query_url->flags |= RSPAMD_URL_FLAG_QUERY;
+	/* Propagate source/classification flags from the parent URL */
+	query_url->flags |= (cbd->parent_flags & RSPAMD_URL_FLAG_PROPAGATE_MASK);
+
+	if (query_url->protocol == PROTOCOL_MAILTO && query_url->userlen == 0) {
+		return TRUE;
+	}
+
+	rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), query_url, false);
+
+	return TRUE;
+}
+
 gboolean
 rspamd_url_task_subject_callback(struct rspamd_url *url, gsize start_offset,
 								 gsize end_offset, gpointer ud)
 {
 	struct rspamd_task *task = ud;
-	char *url_str = NULL;
-	struct rspamd_url *query_url;
-	int rc;
-	gboolean prefix_added;
 
 	/* It is just a displayed URL, we should not check it for certain things */
 	url->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED | RSPAMD_URL_FLAG_SUBJECT;
@@ -3935,42 +4016,14 @@ rspamd_url_task_subject_callback(struct rspamd_url *url, gsize start_offset,
 
 	/* We also search the query for additional url inside */
 	if (url->querylen > 0) {
-		if (rspamd_url_find(task->task_pool, rspamd_url_query_unsafe(url), url->querylen,
-							&url_str, RSPAMD_URL_FIND_ALL, NULL, &prefix_added)) {
-
-			query_url = rspamd_mempool_alloc0(task->task_pool,
-											  sizeof(struct rspamd_url));
-			rc = rspamd_url_parse(query_url,
-								  url_str,
-								  strlen(url_str),
-								  task->task_pool,
-								  RSPAMD_URL_PARSE_TEXT,
-								  task->cfg ? task->cfg->lua_state : NULL);
-
-			if (rc == URI_ERRNO_OK &&
-				query_url->hostlen > 0) {
-				msg_debug_task("found url %s in query of url"
-							   " %*s",
-							   url_str, url->querylen, rspamd_url_query_unsafe(url));
-
-				query_url->flags |= RSPAMD_URL_FLAG_QUERY;
-				/* Propagate source/classification flags from the parent URL */
-				query_url->flags |= (url->flags & RSPAMD_URL_FLAG_PROPAGATE_MASK);
-
-				if (prefix_added) {
-					query_url->flags |= RSPAMD_URL_FLAG_SCHEMALESS;
-				}
-
-				if (query_url->protocol == PROTOCOL_MAILTO) {
-					if (query_url->userlen == 0) {
-						return TRUE;
-					}
-				}
-
-				rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls),
-											   query_url, false);
-			}
-		}
+		struct rspamd_url_subject_query_cbd qcbd = {
+			.task = task,
+			.parent_flags = url->flags,
+		};
+		rspamd_url_find_in_query(task->task_pool, url,
+								 RSPAMD_URL_FIND_ALL,
+								 rspamd_url_subject_query_callback, &qcbd,
+								 task->cfg ? task->cfg->lua_state : NULL);
 	}
 
 	return TRUE;

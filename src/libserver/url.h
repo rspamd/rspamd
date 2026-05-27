@@ -273,6 +273,27 @@ void rspamd_url_find_single(rspamd_mempool_t *pool,
 							gpointer ud);
 
 /**
+ * Find URLs embedded in the query parameters of `url`. Unlike
+ * rspamd_url_find_multiple, this walks the url's raw (still percent-encoded)
+ * query, splits it on the parameter separators '&' and ';', and decodes each
+ * value before scanning it. This bounds an embedded URL to its own parameter
+ * (its internal separators are %26/%3B at that point) instead of greedily
+ * swallowing the following parameters.
+ * @param pool
+ * @param url url whose query is scanned
+ * @param how
+ * @param func callback invoked for each url found
+ * @param ud
+ * @param lua_state Lua state for consultation (may be NULL)
+ */
+void rspamd_url_find_in_query(rspamd_mempool_t *pool,
+							  struct rspamd_url *url,
+							  enum rspamd_url_find_type how,
+							  url_insert_function func,
+							  gpointer ud,
+							  void *lua_state);
+
+/**
  * Generic callback to insert URLs into rspamd_task
  * @param url
  * @param start_offset

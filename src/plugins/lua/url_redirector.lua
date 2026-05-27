@@ -233,12 +233,16 @@ local function chain_hosts_string(chain)
   return table.concat(hosts, '->')
 end
 
--- Compute the per-URL Redis cache key. Hashing the URL string keeps keys
--- fixed-length and free of URL-unsafe characters; using tostring() (rather
--- than :get_raw()) keeps the hash stable across the write-then-read cycle
--- when chain values are roundtripped through rspamd_url.create.
+-- Mixed into the hashed cache key; bump on incompatible value-format changes
+-- so old-format entries hash elsewhere and get re-resolved, not misread.
+-- v1: value is the raw (percent-encoded) URL, not the decoded text.
+local cache_format_version = 'v1:'
+
+-- Per-URL Redis cache key: hash the URL (fixed-length, URL-safe). tostring()
+-- (not get_raw) keeps the hash stable across the write-then-read round-trip.
 local function cache_key_for_url(url_str)
-  return settings.key_prefix .. hash.create(url_str):base32():sub(1, 32)
+  return settings.key_prefix ..
+      hash.create(cache_format_version .. url_str):base32():sub(1, 32)
 end
 
 -- Whether an intermediate hop should be saved (in cache and task URL set)
@@ -347,7 +351,9 @@ local function cache_chain_to_redis(task, chain, terminal_prefix)
 
   local function write_link(prev_url, next_url, marker)
     local link_key = cache_key_for_url(tostring(prev_url))
-    local next_str = encode_url_for_redirect(next_url:get_text())
+    -- Cache the raw (percent-encoded) form: keeps query boundaries intact so
+    -- cached hops re-parse identically to live ones, and it is already URL-safe.
+    local next_str = next_url:get_raw()
     local cache_value
     if marker then
       cache_value = string.format('^%s:%s', marker, next_str)
@@ -565,7 +571,8 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
   -- Mirror the cache walk's cycle guard: a redirector loop A->B->A->B
   -- (e.g. login redirector flapping between two hosts) would otherwise
   -- chew through nested_limit and bloat the chain with alternating
-  -- entries.
+  -- entries. tostring() (not get_raw): the cycle guard, cache key and
+  -- GET-map match need a stable identity that collapses encoding variants;
   local url_str = tostring(url)
   if seen[url_str] then
     lua_util.debugm(N, task, 'cycle in http walk at %s', url_str)
@@ -719,8 +726,12 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
     method = 'get'
   end
 
+  -- Request the raw (percent-encoded) URL: the decoded form would let a wrapper
+  -- mis-split its ?u=https%3A%2F%2F... target at the now-literal '&' and truncate.
+  local request_url = url:get_raw()
+
   local http_params = {
-    url = url_str,
+    url = request_url,
     task = task,
     method = method,
     max_size = settings.max_size,

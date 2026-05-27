@@ -131,6 +131,55 @@ is_transfer_proto(struct rspamd_url *u) -> bool
 	return (u->protocol & (PROTOCOL_HTTP | PROTOCOL_HTTPS | PROTOCOL_FTP)) != 0;
 }
 
+struct query_target_match_cbd {
+	rspamd_mempool_t *pool;
+	std::string_view disp_tld;
+	bool matched;
+};
+
+static gboolean
+html_query_target_cb(struct rspamd_url *url, gsize start_offset,
+					  gsize end_offset, gpointer ud)
+{
+	auto *cbd = static_cast<query_target_match_cbd *>(ud);
+
+	if (!is_transfer_proto(url) || url->tldlen == 0) {
+		return TRUE; /* keep scanning the query for other urls */
+	}
+
+	auto qtld = convert_idna_hostname_maybe(cbd->pool, url, true);
+	if (sv_equals(qtld, cbd->disp_tld) ||
+		rspamd_url_is_subdomain(qtld, cbd->disp_tld) ||
+		rspamd_url_is_subdomain(cbd->disp_tld, qtld)) {
+		cbd->matched = true;
+	}
+
+	return TRUE;
+}
+
+/*
+ * True if the href's query embeds a URL whose registered domain matches the
+ * displayed text (a wrapper/redirector pointing at the shown domain, e.g.
+ * linkprotect?a=https://disp.tld) - so the host mismatch is not phishing.
+ */
+static auto
+html_href_query_targets_display(rspamd_mempool_t *pool,
+								struct rspamd_url *href_url,
+								std::string_view disp_tld,
+								lua_State *L) -> bool
+{
+	if (href_url->querylen == 0 || disp_tld.empty()) {
+		return false;
+	}
+
+	query_target_match_cbd cbd{pool, disp_tld, false};
+	rspamd_url_find_multiple(pool, rspamd_url_query_unsafe(href_url),
+							 href_url->querylen, RSPAMD_URL_FIND_ALL, NULL,
+							 html_query_target_cb, &cbd, L);
+
+	return cbd.matched;
+}
+
 auto html_url_is_phished(rspamd_mempool_t *pool,
 						 struct rspamd_url *href_url,
 						 std::string_view text_data,
@@ -182,7 +231,8 @@ auto html_url_is_phished(rspamd_mempool_t *pool,
 					if (!sv_equals(disp_tok, href_tok)) {
 						/* Check if one url is a subdomain for another */
 
-						if (!rspamd_url_is_subdomain(disp_tok, href_tok)) {
+						if (!rspamd_url_is_subdomain(disp_tok, href_tok) &&
+							!html_href_query_targets_display(pool, href_url, disp_tok, L)) {
 							href_url->flags |= RSPAMD_URL_FLAG_PHISHED;
 							text_url->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
 
