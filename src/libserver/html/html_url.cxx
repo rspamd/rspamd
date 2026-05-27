@@ -131,36 +131,33 @@ is_transfer_proto(struct rspamd_url *u) -> bool
 	return (u->protocol & (PROTOCOL_HTTP | PROTOCOL_HTTPS | PROTOCOL_FTP)) != 0;
 }
 
-struct query_target_match_cbd {
-	rspamd_mempool_t *pool;
-	std::string_view disp_tld;
-	bool matched;
+struct query_target_scan_cbd {
+	unsigned int count;        /* embedded URLs at this level */
+	struct rspamd_url *single; /* the sole embedded URL, when count == 1 */
 };
 
 static gboolean
 html_query_target_cb(struct rspamd_url *url, gsize start_offset,
 					  gsize end_offset, gpointer ud)
 {
-	auto *cbd = static_cast<query_target_match_cbd *>(ud);
+	auto *cbd = static_cast<query_target_scan_cbd *>(ud);
 
 	if (!is_transfer_proto(url) || url->tldlen == 0) {
 		return TRUE; /* keep scanning the query for other urls */
 	}
 
-	auto qtld = convert_idna_hostname_maybe(cbd->pool, url, true);
-	if (sv_equals(qtld, cbd->disp_tld) ||
-		rspamd_url_is_subdomain(qtld, cbd->disp_tld) ||
-		rspamd_url_is_subdomain(cbd->disp_tld, qtld)) {
-		cbd->matched = true;
-	}
+	cbd->count++;
+	cbd->single = url;
 
 	return TRUE;
 }
 
 /*
- * True if the href's query embeds a URL whose registered domain matches the
- * displayed text (a wrapper/redirector pointing at the shown domain, e.g.
- * linkprotect?a=https://disp.tld) - so the host mismatch is not phishing.
+ * True if the href is a single-target wrapper/redirector whose (possibly nested)
+ * leaf URL matches the displayed domain - so the host mismatch is not phishing.
+ * Follows one embedded URL per query level (e.g. linkprotect?a=https://disp.tld,
+ * or a wrapper whose target is itself a wrapper); any level holding more than
+ * one embedded URL is ambiguous and never suppresses.
  */
 static auto
 html_href_query_targets_display(rspamd_mempool_t *pool,
@@ -168,16 +165,41 @@ html_href_query_targets_display(rspamd_mempool_t *pool,
 								std::string_view disp_tld,
 								lua_State *L) -> bool
 {
-	if (href_url->querylen == 0 || disp_tld.empty()) {
+	if (disp_tld.empty()) {
 		return false;
 	}
 
-	query_target_match_cbd cbd{pool, disp_tld, false};
-	rspamd_url_find_multiple(pool, rspamd_url_query_unsafe(href_url),
-							 href_url->querylen, RSPAMD_URL_FIND_ALL, NULL,
-							 html_query_target_cb, &cbd, L);
+	struct rspamd_url *leaf = nullptr;
+	struct rspamd_url *cur = href_url;
+	for (unsigned int depth = 0; depth < RSPAMD_URL_QUERY_MAX_NESTING; depth++) {
+		if (cur->querylen == 0) {
+			break;
+		}
 
-	return cbd.matched;
+		query_target_scan_cbd cbd{0, nullptr};
+		rspamd_url_find_multiple(pool, rspamd_url_query_unsafe(cur),
+								 cur->querylen, RSPAMD_URL_FIND_ALL, NULL,
+								 html_query_target_cb, &cbd, L);
+
+		if (cbd.count == 0) {
+			break;
+		}
+		if (cbd.count != 1) {
+			return false; /* ambiguous: more than one embedded url at this level */
+		}
+
+		leaf = cbd.single; /* descend into the single embedded url */
+		cur = cbd.single;
+	}
+
+	if (leaf == nullptr) {
+		return false;
+	}
+
+	auto leaf_tld = convert_idna_hostname_maybe(pool, leaf, true);
+	return sv_equals(leaf_tld, disp_tld) ||
+		   rspamd_url_is_subdomain(leaf_tld, disp_tld) ||
+		   rspamd_url_is_subdomain(disp_tld, leaf_tld);
 }
 
 auto html_url_is_phished(rspamd_mempool_t *pool,

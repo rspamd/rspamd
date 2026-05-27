@@ -66,6 +66,7 @@ LUA_FUNCTION_DEF(url, is_subject);
 LUA_FUNCTION_DEF(url, get_phished);
 LUA_FUNCTION_DEF(url, set_redirected);
 LUA_FUNCTION_DEF(url, get_count);
+LUA_FUNCTION_DEF(url, get_query_embedded_urls);
 LUA_FUNCTION_DEF(url, get_visible);
 LUA_FUNCTION_DEF(url, get_hash);
 LUA_FUNCTION_DEF(url, create);
@@ -99,6 +100,7 @@ static const struct luaL_reg urllib_m[] = {
 
 	LUA_INTERFACE_DEF(url, get_visible),
 	LUA_INTERFACE_DEF(url, get_count),
+	LUA_INTERFACE_DEF(url, get_query_embedded_urls),
 	LUA_INTERFACE_DEF(url, get_hash),
 	LUA_INTERFACE_DEF(url, get_flags),
 	LUA_INTERFACE_DEF(url, get_flags_num),
@@ -780,6 +782,27 @@ lua_url_get_count(lua_State *L)
 
 	if (url != NULL && url->url != NULL) {
 		lua_pushinteger(L, url->url->count);
+	}
+	else {
+		lua_pushnil(L);
+	}
+
+	return 1;
+}
+
+/***
+ * @method url:get_query_embedded_urls()
+ * Get the number of URLs found embedded in this URL's query string
+ * @return {number} count of query-embedded URLs (0 if none)
+ */
+static int
+lua_url_get_query_embedded_urls(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_url *url = lua_check_url(L, 1);
+
+	if (url != NULL && url->url != NULL) {
+		lua_pushinteger(L, url->url->ext ? url->url->ext->query_embedded_urls : 0);
 	}
 	else {
 		lua_pushnil(L);

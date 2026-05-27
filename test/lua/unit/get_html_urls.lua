@@ -335,4 +335,95 @@ Content-Type: text/html
     task:destroy()
   end)
 
+  test("Query-embedded URL extraction is bounded by its parameter", function()
+    local msg = [[
+From: test@example.com
+To: nobody@example.com
+Subject: test
+Content-Type: text/html
+
+<html><body>
+<a href="http://wrap.example/r?u=http%3A%2F%2Fdest.example%2F&b=x&c=y">link</a>
+</body></html>
+]]
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+
+    task:process_message()
+
+    local found
+    for _, u in ipairs(task:get_urls() or {}) do
+      if u:get_host() == "dest.example" then
+        found = u:get_text()
+      end
+    end
+
+    assert_not_nil(found, "embedded query URL should be extracted")
+    assert_equal("http://dest.example/", found,
+        "embedded URL must stop at the parameter boundary, not swallow &b=x&c=y")
+
+    task:destroy()
+  end)
+
+  test("Query-embedded URL inherits CTA from its parent href", function()
+    local msg = [[
+From: test@example.com
+To: nobody@example.com
+Subject: test
+Content-Type: text/html
+
+<html><body>
+<a href="http://wrap.example/r?u=http%3A%2F%2Fdest.example%2F">Click here to continue</a>
+</body></html>
+]]
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+
+    task:process_message()
+
+    local found_cta = false
+    for _, part in ipairs(task:get_text_parts() or {}) do
+      if part:is_html() then
+        for _, u in ipairs(part:get_cta_urls({ original = true }) or {}) do
+          if u:get_host() == "dest.example" then
+            found_cta = true
+          end
+        end
+      end
+    end
+
+    assert_true(found_cta,
+        "query-extracted destination should inherit CTA from its parent href")
+
+    task:destroy()
+  end)
+
+  test("Nested query-embedded URLs are followed to the leaf", function()
+    -- href wraps mid, whose (escaped) query wraps deep
+    local msg = [[
+From: test@example.com
+To: nobody@example.com
+Subject: test
+Content-Type: text/html
+
+<html><body>
+<a href="http://wrap.example/r?u=http%3A%2F%2Fmid.example%2F%3Fv%3Dhttp%253A%252F%252Fdeep.example%252F">link</a>
+</body></html>
+]]
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+
+    task:process_message()
+
+    local hosts = {}
+    for _, u in ipairs(task:get_urls() or {}) do
+      hosts[u:get_host()] = true
+    end
+
+    assert_true(hosts["mid.example"], "first-level embedded URL should be extracted")
+    assert_true(hosts["deep.example"], "nested embedded URL should be extracted")
+
+    task:destroy()
+  end)
+
 end)
