@@ -2,33 +2,20 @@
 #define FPCONV_H
 
 #define FPCONV_BUFLEN 32
-/* Fast and accurate double to string conversion based on Florian Loitsch's
- * Grisu-algorithm[1].
- *
- * Input:
- * fp -> the double to convert, dest -> destination buffer.
- * The generated string will never be longer than 24 characters.
- * Make sure to pass a pointer to at least 24 bytes of memory.
- * The emitted string will not be null terminated.
- *
- * Output:
- * The number of written characters.
- *
- * Exemplary usage:
- *
- * void print(double d)
- * {
- *      char buf[24 + 1] // plus null terminator
- *      int str_len = fpconv_dtoa(d, buf);
- *
- *      buf[str_len] = '\0';
- *      printf("%s", buf);
- * }
- *
- */
 
-int fpconv_dtoa(double fp, char dest[FPCONV_BUFLEN], unsigned precision,
-		bool scientific);
+/* Return codes from fpconv_grisu2 */
+#define FPCONV_GRISU_ZERO (-1)
+#define FPCONV_GRISU_INF  (-2)
+#define FPCONV_GRISU_NAN  (-3)
+
+/*
+ * Raw grisu2 decomposition for external formatters.
+ * digits[] receives the significant-digit characters (not null-terminated).
+ * *K receives the decimal exponent.
+ * *is_negative is set to 1 for negative values (including -0.0), 0 otherwise.
+ * Returns the number of significant digits (>0), or a FPCONV_GRISU_* code (<0).
+ */
+int fpconv_grisu2(double d, char digits[18], int *K, int *is_negative);
 
 #endif
 
