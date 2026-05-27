@@ -343,7 +343,7 @@ Subject: test
 Content-Type: text/html
 
 <html><body>
-<a href="http://wrap.example/r?u=http%3A%2F%2Fdest.example%2F&b=x&c=y">link</a>
+<a href="http://wrap.com/r?u=http%3A%2F%2Fdest.com%2F&b=x&c=y">link</a>
 </body></html>
 ]]
     local res, task = rspamd_task.load_from_string(msg, rspamd_config)
@@ -353,13 +353,13 @@ Content-Type: text/html
 
     local found
     for _, u in ipairs(task:get_urls() or {}) do
-      if u:get_host() == "dest.example" then
+      if u:get_host() == "dest.com" then
         found = u:get_text()
       end
     end
 
     assert_not_nil(found, "embedded query URL should be extracted")
-    assert_equal("http://dest.example/", found,
+    assert_equal("http://dest.com/", found,
         "embedded URL must stop at the parameter boundary, not swallow &b=x&c=y")
 
     task:destroy()
@@ -373,7 +373,7 @@ Subject: test
 Content-Type: text/html
 
 <html><body>
-<a href="http://wrap.example/r?u=http%3A%2F%2Fdest.example%2F">Click here to continue</a>
+<a href="http://wrap.com/r?u=http%3A%2F%2Fdest.com%2F">Click here to continue</a>
 </body></html>
 ]]
     local res, task = rspamd_task.load_from_string(msg, rspamd_config)
@@ -385,7 +385,7 @@ Content-Type: text/html
     for _, part in ipairs(task:get_text_parts() or {}) do
       if part:is_html() then
         for _, u in ipairs(part:get_cta_urls({ original = true }) or {}) do
-          if u:get_host() == "dest.example" then
+          if u:get_host() == "dest.com" then
             found_cta = true
           end
         end
@@ -407,7 +407,7 @@ Subject: test
 Content-Type: text/html
 
 <html><body>
-<a href="http://wrap.example/r?u=http%3A%2F%2Fmid.example%2F%3Fv%3Dhttp%253A%252F%252Fdeep.example%252F">link</a>
+<a href="http://wrap.com/r?u=http%3A%2F%2Fmid.com%2F%3Fv%3Dhttp%253A%252F%252Fdeep.com%252F">link</a>
 </body></html>
 ]]
     local res, task = rspamd_task.load_from_string(msg, rspamd_config)
@@ -420,8 +420,8 @@ Content-Type: text/html
       hosts[u:get_host()] = true
     end
 
-    assert_true(hosts["mid.example"], "first-level embedded URL should be extracted")
-    assert_true(hosts["deep.example"], "nested embedded URL should be extracted")
+    assert_true(hosts["mid.com"], "first-level embedded URL should be extracted")
+    assert_true(hosts["deep.com"], "nested embedded URL should be extracted")
 
     task:destroy()
   end)
